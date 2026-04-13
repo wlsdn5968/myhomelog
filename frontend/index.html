@@ -436,8 +436,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
           백엔드 서버 URL
           <span class="sm-badge" id="badgeSrv">확인 중</span>
         </div>
-        <input class="sm-inp" id="sm_api" placeholder="https://myhomelog.vercel.app/api">
-        <div class="sm-hint">로컬: http://localhost:3001/api<br>배포: https://myhomelog.vercel.app/api</div>
+        <input class="sm-inp" id="sm_api" placeholder="/api">
+        <div class="sm-hint">기본값 /api (자동). 로컬 테스트 시: http://localhost:3001/api</div>
       </div>
       <div class="sm-row">
         <div class="sm-lbl">
@@ -468,7 +468,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 
 <script>
 // ── CONFIG & STATE ─────────────────────────────────────────
-const DEFAULT_API = 'https://myhomelog.vercel.app/api';
+const DEFAULT_API = '/api';
 let CFG = {
   api: localStorage.getItem('cfg_api') || DEFAULT_API,
   naverKey: localStorage.getItem('cfg_naver') || '',
