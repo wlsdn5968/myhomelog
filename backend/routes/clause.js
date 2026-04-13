@@ -5,7 +5,7 @@
 const express = require('express');
 const router = express.Router();
 const { callAI } = require('../services/aiService');
-const { cache } = require('../server');
+const cache = require('../cache');
 
 router.post('/', async (req, res) => {
   const { aptName, area, price, ltv, houseStatus, isFirstBuyer, buildYear, issues } = req.body;

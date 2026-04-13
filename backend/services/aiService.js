@@ -16,7 +16,7 @@ try {
 }
 
 const axios = require('axios');
-const { cache } = require('../server');
+const cache = require('../cache');
 
 // ── 시스템 프롬프트 ────────────────────────────────────────
 const SYSTEM_PROMPT = `당신은 대한민국 주거용 부동산 전문 AI 컨설턴트 '집길(JipGil)'입니다.

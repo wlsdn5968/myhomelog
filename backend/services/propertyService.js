@@ -6,7 +6,7 @@
 const axios = require('axios');
 const { callAI } = require('./aiService');
 const { getTransactionsByApt, analyzeTransactions, LAWD_CODES } = require('./transactionService');
-const { cache } = require('../server');
+const cache = require('../cache');
 
 /**
  * 사용자 조건 기반 AI 매물 추천 생성

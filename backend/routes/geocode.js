@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const axios = require('axios');
-const { cache } = require('../server');
+const cache = require('../cache');
 
 // POST /api/geocode  - 단건
 router.post('/', async (req, res) => {

@@ -7,17 +7,12 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
-const NodeCache = require('node-cache');
 const dotenv = require('dotenv');
 
 dotenv.config();
 
 const app = express();
-const cache = new NodeCache({
-  stdTTL: parseInt(process.env.CACHE_TTL_SECONDS || '3600'),
-  checkperiod: 600,
-  maxKeys: 500,
-});
+const cache = require('./cache');
 
 // ── 보안 미들웨어 ──────────────────────────────────────────
 app.use(helmet({
@@ -117,10 +112,14 @@ app.use((req, res) => {
   res.status(404).json({ error: '요청한 리소스를 찾을 수 없습니다.' });
 });
 
-const PORT = process.env.PORT || 3001;
-app.listen(PORT, () => {
-  console.log(`✅ 내집로그 서버 실행 중: http://localhost:${PORT}`);
-  console.log(`   환경: ${process.env.NODE_ENV}`);
-});
+// Vercel 서버리스 환경에서는 listen 불필요
+if (process.env.VERCEL !== '1') {
+  const PORT = process.env.PORT || 3001;
+  app.listen(PORT, () => {
+    console.log(`✅ 내집로그 서버 실행 중: http://localhost:${PORT}`);
+    console.log(`   환경: ${process.env.NODE_ENV}`);
+  });
+}
 
-module.exports = { app, cache };
+module.exports = app;
+module.exports.cache = cache;
