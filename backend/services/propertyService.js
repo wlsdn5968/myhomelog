@@ -42,7 +42,7 @@ async function getAIRecommendations(userCondition) {
 
 위 조건에서 매수를 검토할 만한 서울/경기 구 이름과 법정동코드 5자리를 JSON 배열로 반환해.
 형식: [{"gu":"노원구","lawdCd":"11350","reason":"예산 내 역세권 단지 다수"},...]
-최대 5개, 코드만 정확하게, JSON만 출력 (```없이).`;
+최대 5개, 코드만 정확하게, JSON만 출력 (\`\`\` 없이).`;
 
   let targetRegions = [];
   try {
