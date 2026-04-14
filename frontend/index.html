@@ -255,6 +255,72 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 @media(max-width:1100px){.rp{width:290px}}
 @media(max-width:900px){.lp{width:260px}.rp{display:none}}
 @media(max-width:700px){.lp{display:none}}
+
+/* 목업 경고 배너 */
+.mock-banner{display:none;background:#7A2E0C;color:#fff;font-size:11px;font-weight:600;text-align:center;padding:6px 16px;z-index:400;flex-shrink:0;gap:8px;align-items:center;justify-content:center}
+.mock-banner.show{display:flex}
+.mock-banner a{color:#FFD0B5;text-decoration:underline;cursor:pointer}
+
+/* 면책 footer */
+.legal-footer{flex-shrink:0;background:var(--s2);border-top:1px solid var(--bd);padding:6px 18px;font-size:10px;color:var(--t3);line-height:1.7;text-align:center}
+
+/* 특약 뷰 */
+.clause-view{flex:1;overflow-y:auto;padding:22px;display:none;flex-direction:column;gap:0}
+.clause-view.active{display:flex}
+.cv-hero{background:linear-gradient(135deg,var(--acc),var(--accD));color:#fff;border-radius:var(--r);padding:20px 22px;margin-bottom:18px}
+.cv-hero h2{font-size:18px;font-weight:800;margin-bottom:4px}
+.cv-hero p{font-size:11px;opacity:.85;line-height:1.6}
+.cv-form{background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--sh)}
+.cv-form h3{font-size:13px;font-weight:700;margin-bottom:13px;color:var(--t1)}
+.cv-r3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:9px}
+.cv-r2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px}
+.cv-result{background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:16px;box-shadow:var(--sh)}
+.cv-result-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
+.cv-result-title{font-size:13px;font-weight:700}
+.pdf-btn{padding:6px 14px;background:var(--acc);color:#fff;border:none;border-radius:18px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:5px}
+.pdf-btn:hover{background:var(--accD)}
+.cv-section{margin-bottom:14px}
+.cv-section-title{font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.6px;text-transform:uppercase;margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--bd)}
+.cv-card{border:1px solid var(--bd);border-radius:var(--rs);margin-bottom:7px;overflow:hidden}
+.cv-card-hdr{padding:8px 12px;display:flex;align-items:center;justify-content:space-between;background:var(--s1)}
+.cv-card-hdr.essential{background:var(--accL);border-bottom:1px solid #F0C0AC}
+.cv-card-title{font-size:12px;font-weight:700}
+.cv-card-body{padding:10px 12px}
+.cv-card-content{font-size:11px;line-height:1.75;background:var(--s2);border-radius:6px;padding:8px 10px;margin-bottom:6px;white-space:pre-wrap;word-break:break-all}
+.cv-card-reason{font-size:10px;color:var(--t3);line-height:1.5}
+.cv-caution{background:var(--ambL);border:1px solid #E8C08A;border-radius:var(--rs);padding:10px 12px;font-size:11px;color:var(--amb);line-height:1.65}
+
+/* 복비 계산기 뷰 */
+.biz-view{flex:1;overflow-y:auto;padding:22px;display:none;flex-direction:column;gap:0}
+.biz-view.active{display:flex}
+.biz-section{background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--sh)}
+.biz-section h3{font-size:13px;font-weight:700;margin-bottom:13px}
+.comm-result{margin-top:12px;display:none}
+.comm-result.show{display:block}
+.comm-tier{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12px}
+.comm-tier:last-child{border-bottom:none}
+.comm-label{color:var(--t2)}.comm-val{font-weight:700;color:var(--acc)}
+.comm-strat{margin-top:10px;background:var(--a2L);border:1px solid #AECAEA;border-radius:var(--rs);padding:10px 12px;font-size:11px;color:#144080;line-height:1.7}
+
+/* 모바일 하단 탭 */
+.bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--bd);z-index:500;box-shadow:0 -2px 12px rgba(0,0,0,.08)}
+.bnav-inner{display:flex}
+.bnav-item{flex:1;padding:10px 4px 8px;text-align:center;cursor:pointer;font-size:9px;font-weight:600;color:var(--t3);border:none;background:transparent;font-family:inherit;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:3px}
+.bnav-item.on{color:var(--acc)}
+.bnav-icon{font-size:18px;line-height:1}
+
+@media(max-width:700px){
+  .lp{display:none}
+  .bnav{display:block}
+  body{padding-bottom:60px}
+  .legal-footer{margin-bottom:60px}
+  .htabs{display:none}
+  html,body{overflow:auto}
+}
+@media(max-width:480px){
+  .cv-r3{grid-template-columns:1fr 1fr}
+  header{padding:0 12px;gap:7px}
+}
 </style>
 </head>
 <body>
@@ -265,6 +331,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <button class="htab on" onclick="sv('map',this)">🗺 지도</button>
     <button class="htab" onclick="sv('list',this)">📋 목록</button>
     <button class="htab" onclick="sv('calc',this)">🧮 대출계산</button>
+    <button class="htab" onclick="sv('clause',this)">✍ 특약생성</button>
+    <button class="htab" onclick="sv('biz',this)">💰 복비계산</button>
   </div>
   <div class="hml">
     <div class="rpill"><div class="hdot"></div>10.15 규제</div>
@@ -272,6 +340,12 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <button class="hbtn" id="settingsBtn" onclick="openSettings()">⚙ API 설정</button>
   </div>
 </header>
+
+<!-- 목업 경고 배너 -->
+<div class="mock-banner" id="mockBanner">
+  ⚠ 실거래가 API 미연동 — 표시되는 매물 데이터는 실제 시세가 아닙니다.
+  <a onclick="openSettings()">API 설정하기 →</a>
+</div>
 
 <div class="app">
 
@@ -404,6 +478,110 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 </div>
 </div>
 
+<!-- 특약 생성 전용 뷰 -->
+<div class="clause-view" id="view-clause">
+  <div class="cv-hero">
+    <h2>✍ AI 맞춤 특약 생성</h2>
+    <p>매물 정보를 입력하면 30초 안에 필수 특약·권장 특약을 자동 생성합니다.<br>실무 판례 기반 · 계약서에 바로 사용 가능한 정확한 문구</p>
+  </div>
+  <div class="cv-form">
+    <h3>매물 기본 정보</h3>
+    <div class="cv-r2">
+      <div><label class="lbl">단지명 *</label><input class="inp" id="cl_apt" placeholder="예: 래미안 대치팰리스"></div>
+      <div><label class="lbl">지역</label><input class="inp" id="cl_area" placeholder="예: 강남구 대치동"></div>
+    </div>
+    <div class="cv-r3">
+      <div><label class="lbl">매수가 (억)</label><input class="inp" id="cl_price" type="number" placeholder="10.5" step="0.1"></div>
+      <div><label class="lbl">면적 (㎡)</label><input class="inp" id="cl_area2" type="number" placeholder="84.9"></div>
+      <div><label class="lbl">준공연도</label><input class="inp" id="cl_year" type="number" placeholder="2010"></div>
+    </div>
+    <div class="cv-r2">
+      <div>
+        <label class="lbl">주택 보유 상황</label>
+        <div class="chips" id="cl-h" style="margin-top:4px">
+          <span class="chip on" onclick="cp(this,'cl-h')">무주택</span>
+          <span class="chip" onclick="cp(this,'cl-h')">1주택</span>
+          <span class="chip" onclick="cp(this,'cl-h')">2주택+</span>
+        </div>
+      </div>
+      <div>
+        <label class="lbl">생애 최초</label>
+        <div class="chips" id="cl-f" style="margin-top:4px">
+          <span class="chip on" onclick="cp(this,'cl-f')">예</span>
+          <span class="chip" onclick="cp(this,'cl-f')">아니오</span>
+        </div>
+      </div>
+    </div>
+    <div class="mb9"><label class="lbl">특이사항 (선택)</label><input class="inp" id="cl_issues" placeholder="예: 누수 이력, 전세 낀 매물, 재건축 추진 중..."></div>
+    <button class="abtn acc" id="clBtn" onclick="genClause()" style="margin-top:4px">
+      <div class="spin" id="clSp"></div><span id="clTx">✍ 특약 자동 생성 (30초)</span>
+    </button>
+  </div>
+  <div class="cv-result" id="cl_result" style="display:none">
+    <div class="cv-result-hdr">
+      <span class="cv-result-title" id="cl_result_title">특약 생성 결과</span>
+      <button class="pdf-btn" onclick="exportClausePDF()">🖨 PDF 출력</button>
+    </div>
+    <div id="cl_output"></div>
+  </div>
+</div>
+
+<!-- 복비 계산기 뷰 -->
+<div class="biz-view" id="view-biz">
+  <div class="biz-section">
+    <h3>💰 중개보수(복비) 계산기</h3>
+    <p style="font-size:11px;color:var(--t3);margin-bottom:13px">공인중개사법 시행규칙 기준 · 2025년 현행</p>
+    <div class="cv-r2" style="margin-bottom:9px">
+      <div><label class="lbl">거래금액 (억)</label><input class="inp" id="biz_price" type="number" placeholder="8.5" step="0.1" oninput="calcComm()"></div>
+      <div>
+        <label class="lbl">거래 유형</label>
+        <div class="chips" id="biz-type" style="margin-top:4px">
+          <span class="chip on" onclick="cp(this,'biz-type');calcComm()">매매</span>
+          <span class="chip" onclick="cp(this,'biz-type');calcComm()">전세</span>
+          <span class="chip" onclick="cp(this,'biz-type');calcComm()">월세</span>
+        </div>
+      </div>
+    </div>
+    <div class="comm-result" id="commResult">
+      <div class="cv-section-title" style="margin-top:8px">법정 상한 요율표</div>
+      <div id="commTiers"></div>
+      <div class="comm-strat" id="commStrat"></div>
+    </div>
+  </div>
+  <div class="biz-section">
+    <h3>📋 계약 전 필수 체크리스트</h3>
+    <div id="checkList" style="font-size:12px;line-height:2.1;color:var(--t2)">
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 대출 사전심사 완료 (가계약 전 필수)</label>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 대출 불가 시 계약금 반환 특약 삽입</label>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 실거래가 동호수별 비교 (국토부 실거래가 앱)</label>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 매도인 급매 사유 파악 → 가격 협상 레버리지</label>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> RR(로열동·로열호) 여부 확인</label>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 토지거래허가구역 여부 확인 (2년 실거주 의무)</label>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 전세대출 보유 여부 → 즉시 회수 리스크 확인</label>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 복비 계약 전 협상 (법정 상한 이하)</label>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 잔금일 월초~중순 설정 (금융 스케줄 유리)</label>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 취득세 신고 기한 확인 (취득일로부터 60일)</label>
+    </div>
+  </div>
+</div>
+
+<!-- 모바일 하단 탭 -->
+<nav class="bnav" id="bnav">
+  <div class="bnav-inner">
+    <button class="bnav-item on" onclick="sv('map',this)" data-view="map"><div class="bnav-icon">🗺</div>지도</button>
+    <button class="bnav-item" onclick="sv('list',this)" data-view="list"><div class="bnav-icon">📋</div>목록</button>
+    <button class="bnav-item" onclick="sv('clause',this)" data-view="clause"><div class="bnav-icon">✍</div>특약</button>
+    <button class="bnav-item" onclick="sv('calc',this)" data-view="calc"><div class="bnav-icon">🧮</div>대출</button>
+    <button class="bnav-item" onclick="sv('chat',this)" data-view="chat"><div class="bnav-icon">💬</div>AI상담</button>
+  </div>
+</nav>
+
+<!-- 면책 고지 -->
+<footer class="legal-footer">
+  본 서비스는 「자본시장법」상 투자자문업 등록 서비스가 아닙니다. 모든 정보는 참고용이며 실제 투자 의사결정의 법적 책임은 이용자 본인에게 있습니다.
+  대출 가능 여부는 반드시 금융기관에서 확인하세요. 규제 정보는 수시 변경될 수 있으며 최신 정보는 금융위원회·국토교통부를 확인하세요.
+</footer>
+
 <!-- DETAIL MODAL -->
 <div class="dmbg" id="DM">
   <div class="dm">
@@ -487,7 +665,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('sm_ai').value=CFG.aiKey;
   updateBadges();
   cl();
-  chkAPI();
+  chkAPI().then(ok=>{if(ok)checkMolit();});
   if(CFG.naverKey) loadNaverMap();
   else loadLeaflet();
 });
@@ -963,12 +1141,176 @@ function getLat(area,i){if(!area)return 37.545+(i*.02);for(const[k,v]of Object.e
 function getLng(area,i){if(!area)return 127.0+(i*.02);for(const[k,v]of Object.entries(AC)){if(area.includes(k))return v[1]+(Math.random()-.5)*.008;}return 127.0+(i*.01)+(Math.random()-.5)*.02;}
 
 // ── VIEW SWITCH ───────────────────────────────────────────
+const VIEW_DISPLAY={map:'flex',list:'grid',calc:'flex',clause:'flex',biz:'flex'};
 function sv(v,btn){
-  ['map','list','calc'].forEach(id=>{const el=document.getElementById('view-'+id);if(el)el.style.display=id===v?'flex':'none';});
-  document.querySelectorAll('.htab').forEach((b,i)=>b.classList.toggle('on',['map','list','calc'][i]===v));
+  Object.entries(VIEW_DISPLAY).forEach(([id,disp])=>{
+    const el=document.getElementById('view-'+id);
+    if(el)el.style.display=id===v?disp:'none';
+  });
+  // 모바일: chat 뷰는 .rp 패널 표시 (미디어쿼리 override)
+  const rp=document.querySelector('.rp');
+  if(rp){
+    if(v==='chat')rp.style.setProperty('display','flex','important');
+    else if(window.innerWidth<=900)rp.style.setProperty('display','none','important');
+    else rp.style.removeProperty('display');
+  }
+  // 헤더 탭 활성화 (순서: map,list,calc,clause,biz)
+  const htabOrder=['map','list','calc','clause','biz'];
+  document.querySelectorAll('.htab').forEach((b,i)=>b.classList.toggle('on',htabOrder[i]===v));
+  // 모바일 하단 탭 활성화
+  document.querySelectorAll('.bnav-item').forEach(b=>b.classList.toggle('on',b.dataset.view===v));
   if(v==='list')renderListGrid();
 }
 function ts(id){document.getElementById(id)?.classList.toggle('cl');}
+
+// ── MOLIT 상태 확인 ────────────────────────────────────────
+async function checkMolit(){
+  try{
+    const r=await fetch(`${CFG.api}/transactions?lawdCd=11350&dealYm=202412`,{signal:AbortSignal.timeout(4000)});
+    if(r.status===503){
+      const d=await r.json();
+      if(d.code==='MOLIT_KEY_MISSING')document.getElementById('mockBanner').classList.add('show');
+    }
+  }catch{/* 서버 오프라인이면 배너 표시 불필요 */}
+}
+
+// ── 특약 생성 ─────────────────────────────────────────────
+async function genClause(){
+  const apt=document.getElementById('cl_apt').value.trim();
+  if(!apt){toast('단지명을 입력하세요');return;}
+  const btn=document.getElementById('clBtn'),sp=document.getElementById('clSp'),tx=document.getElementById('clTx');
+  btn.classList.add('ld');sp.style.display='block';tx.textContent='AI 생성 중...';
+  const body={
+    aptName:apt,
+    area:document.getElementById('cl_area').value.trim(),
+    price:parseFloat(document.getElementById('cl_price').value)||0,
+    excluUseAr:parseFloat(document.getElementById('cl_area2').value)||0,
+    buildYear:parseInt(document.getElementById('cl_year').value)||0,
+    houseStatus:gct('cl-h'),
+    isFirstBuyer:gct('cl-f')==='예',
+    issues:document.getElementById('cl_issues').value.trim(),
+  };
+  try{
+    const r=await fetch(`${CFG.api}/clause`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(35000)});
+    if(!r.ok)throw new Error(`HTTP ${r.status}`);
+    renderClauseResult(await r.json(),apt);
+  }catch(e){
+    renderClauseResult(null,apt);
+    toast('AI 연결 실패 — 기본 특약 표시');
+  }
+  btn.classList.remove('ld');sp.style.display='none';tx.textContent='✍ 특약 자동 생성 (30초)';
+}
+
+function renderClauseResult(d,aptName){
+  if(!d)d={
+    essential:[
+      {title:'대출 미승인 시 계약금 반환',content:'본 계약은 매수인의 주택담보대출 승인을 조건으로 하며, 대출이 미승인될 경우 매수인은 계약을 해제할 수 있고 매도인은 계약금 전액을 즉시 반환한다.',reason:'대출 규제 강화 — 사전심사 필수'},
+      {title:'전입 의무 이행 (규제지역)',content:'매수인은 잔금 납부 후 6개월 이내에 해당 주택에 전입신고를 완료한다.',reason:'2025.10.15 이후 규제지역 6개월 전입 의무'},
+      {title:'하자 수리 책임',content:'잔금 지급 전 매수인이 요청하는 시설 하자(누수·균열·전기·배관)에 대해 매도인이 잔금일 전까지 수리 완료한다.',reason:'준공 20년+ 단지 하자 가능성 대비'},
+    ],
+    recommended:[
+      {title:'기존 대출 말소 확인',content:'매도인은 잔금일 전까지 해당 부동산의 모든 담보 대출을 말소하고 등기부등본으로 확인한다.',reason:'근저당 미말소 시 선순위 피해'},
+    ],
+    caution:'계약 전 등기부등본 최신본 확인 필수. 잔금일 월초~중순 권장. 복비 계약 전 협상.'
+  };
+  document.getElementById('cl_result_title').textContent=`${aptName} 맞춤 특약 (필수 ${d.essential?.length||0}개 · 권장 ${d.recommended?.length||0}개)`;
+  const mkCard=(arr,badge)=>(arr||[]).map(c=>`<div class="cv-card">
+    <div class="cv-card-hdr${badge==='e'?' essential':''}">
+      <span class="cv-card-title">${c.title}</span>
+      <div style="display:flex;gap:5px;align-items:center">
+        <span class="rtag ${badge==='e'?'r':'y'}">${badge==='e'?'필수':'권장'}</span>
+        <button class="cpybtn" onclick="cpT(\`${c.content.replace(/`/g,"'").replace(/\n/g,' ')}\`)">복사</button>
+      </div>
+    </div>
+    <div class="cv-card-body">
+      <div class="cv-card-content">${c.content}</div>
+      <div class="cv-card-reason">💡 ${c.reason}</div>
+    </div>
+  </div>`).join('');
+  document.getElementById('cl_output').innerHTML=`
+    ${d.caution?`<div class="cv-caution" style="margin-bottom:12px">⚠ ${d.caution}</div>`:''}
+    <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:7px">필수 특약</div>
+    ${mkCard(d.essential,'e')}
+    <div style="font-size:11px;font-weight:700;color:var(--amb);margin:12px 0 7px">권장 특약</div>
+    ${mkCard(d.recommended,'r')}
+    <div class="cv-caution" style="margin-top:8px;background:var(--a2L);border-color:#AECAEA;color:#144080">특약은 공인중개사·법무사와 최종 검토 후 사용하세요.</div>`;
+  document.getElementById('cl_result').style.display='block';
+  document.getElementById('cl_result').scrollIntoView({behavior:'smooth',block:'start'});
+}
+
+function exportClausePDF(){
+  const title=document.getElementById('cl_result_title').textContent;
+  const content=document.getElementById('cl_output').innerHTML;
+  const w=window.open('','_blank');
+  if(!w){toast('팝업 차단 해제 후 다시 시도하세요');return;}
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${title}</title>
+  <style>
+    body{font-family:'Malgun Gothic',sans-serif;padding:28px;font-size:13px;line-height:1.7;color:#18160F}
+    h1{font-size:16px;font-weight:700;margin-bottom:4px;color:#C84B18}
+    .sub{font-size:11px;color:#98938A;margin-bottom:20px}
+    .cv-card{border:1px solid #E2DDD5;border-radius:8px;margin-bottom:8px;overflow:hidden;page-break-inside:avoid}
+    .cv-card-hdr{padding:8px 12px;background:#F0EDE7;display:flex;justify-content:space-between}
+    .cv-card-hdr.essential{background:#FAE9E2;border-bottom:1px solid #F0C0AC}
+    .cv-card-title{font-size:12px;font-weight:700}
+    .cv-card-body{padding:10px 12px}
+    .cv-card-content{font-size:11px;line-height:1.75;background:#F4F2ED;border-radius:6px;padding:8px 10px;margin-bottom:6px;white-space:pre-wrap}
+    .cv-card-reason{font-size:10px;color:#98938A}
+    .cv-caution{background:#FAF0E2;border:1px solid #E8C08A;border-radius:8px;padding:10px 12px;font-size:11px;color:#9A5510;margin-bottom:12px}
+    .rtag{display:inline-block;padding:2px 6px;border-radius:8px;font-size:10px;font-weight:700}
+    .rtag.r{background:#FAEBEB;color:#A82525}.rtag.y{background:#FAF0E2;color:#9A5510}
+    .cpybtn{display:none}
+    footer{margin-top:24px;font-size:10px;color:#98938A;border-top:1px solid #E2DDD5;padding-top:8px}
+  </style></head><body>
+  <h1>${title}</h1>
+  <div class="sub">내집로그 AI 특약 생성 · ${new Date().toLocaleDateString('ko-KR')}</div>
+  ${content}
+  <footer>본 특약은 참고용이며 실제 계약 시 공인중개사·법무사와 검토하세요. ©내집로그</footer>
+  </body></html>`);
+  w.document.close();
+  setTimeout(()=>w.print(),500);
+}
+
+// ── 복비 계산기 ────────────────────────────────────────────
+function calcComm(){
+  const price=parseFloat(document.getElementById('biz_price').value)||0;
+  const type=gct('biz-type');
+  if(!price){document.getElementById('commResult').classList.remove('show');return;}
+  const priceW=price*10000; // 만원 단위
+  let tiers;
+  if(type==='매매'){
+    tiers=[
+      {label:'5천만 미만',min:0,max:5000,rate:0.006,cap:25},
+      {label:'5천만 ~ 2억',min:5000,max:20000,rate:0.005,cap:80},
+      {label:'2억 ~ 9억',min:20000,max:90000,rate:0.004,cap:null},
+      {label:'9억 ~ 12억',min:90000,max:120000,rate:0.005,cap:null},
+      {label:'12억 ~ 15억',min:120000,max:150000,rate:0.006,cap:null},
+      {label:'15억 이상',min:150000,max:Infinity,rate:0.007,cap:null},
+    ];
+  } else {
+    tiers=[
+      {label:'5천만 미만',min:0,max:5000,rate:0.005,cap:20},
+      {label:'5천만 ~ 1억',min:5000,max:10000,rate:0.004,cap:30},
+      {label:'1억 ~ 3억',min:10000,max:30000,rate:0.003,cap:null},
+      {label:'3억 ~ 6억',min:30000,max:60000,rate:0.004,cap:null},
+      {label:'6억 이상',min:60000,max:Infinity,rate:0.008,cap:null},
+    ];
+  }
+  const tier=tiers.find(t=>priceW>t.min&&priceW<=t.max)||tiers[tiers.length-1];
+  let comm=priceW*tier.rate;
+  if(tier.cap)comm=Math.min(comm,tier.cap);
+  const commMax=Math.round(comm),commNeg=Math.round(comm*0.7);
+  document.getElementById('commTiers').innerHTML=tiers.map(t=>{
+    const cur=t===tier;
+    const rs=t.max===Infinity?`${(t.rate*100).toFixed(1)}% (협의가능)`:`${(t.rate*100).toFixed(1)}%${t.cap?` 한도 ${t.cap}만`:''}`;
+    return`<div class="comm-tier"><span class="comm-label">${t.label}</span><span class="comm-val" style="${cur?'color:var(--acc);font-weight:800':''}">${cur?'▶ ':''} ${rs}</span></div>`;
+  }).join('');
+  document.getElementById('commStrat').innerHTML=`
+    <div style="font-size:12px;font-weight:700;margin-bottom:6px">📌 ${price}억 ${type} 기준 적용 요율: ${(tier.rate*100).toFixed(1)}%</div>
+    <div>법정 상한 복비: <b style="color:var(--acc)">${commMax.toLocaleString()}만원</b> (VAT 별도)</div>
+    <div>협상 목표가: <b style="color:var(--grn)">${commNeg.toLocaleString()}만원</b> 이하 권장</div>
+    <div style="font-size:10px;margin-top:5px">💡 법정 상한 이하 협상 가능 — 계약서 작성 전 협의 필수 (공인중개사법 제32조)</div>`;
+  document.getElementById('commResult').classList.add('show');
+}
 
 // ── API STATUS ────────────────────────────────────────────
 async function chkAPI(){
