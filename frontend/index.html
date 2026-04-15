@@ -3,8 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="내집로그 — AI 기반 아파트 매수 전략 컨설팅. 실거래가 분석, 대출 계산, 맞춤 특약">
-<title>내집로그 — AI 부동산 컨설팅</title>
+<meta name="description" content="내집로그 — 아파트 실거래가 조회·분석 서비스. 매수 비용 계산, 특약 초안 예시, 대출 한도 참고">
+<title>내집로그 — 부동산 데이터 분석</title>
 <style>
 :root{
   --bg:#F4F2ED;--s0:#fff;--s1:#F8F6F2;--s2:#F0EDE7;
@@ -376,13 +376,46 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 .bk-btn{padding:4px 11px;border-radius:18px;font-size:11px;font-weight:600;border:1px solid var(--bd);background:var(--s1);cursor:pointer;font-family:inherit;transition:all .15s;color:var(--t2)}
 .bk-btn:hover{border-color:var(--amb);color:var(--amb)}
 .bk-btn.on{background:var(--ambL);border-color:var(--amb);color:var(--amb)}
-.bk-item{padding:9px 13px;border-bottom:1px solid var(--bd);cursor:pointer;display:flex;align-items:center;gap:7px;transition:background .15s}
+.bk-item{padding:8px 13px 4px;border-bottom:1px solid var(--bd);cursor:pointer;display:flex;align-items:flex-start;gap:7px;transition:background .15s;flex-direction:column}
 .bk-item:hover{background:var(--s1)}
+.bk-item-row{display:flex;align-items:center;gap:7px;width:100%}
 .bk-name{font-size:12px;font-weight:700;flex:1}
 .bk-price{font-size:11px;color:var(--acc);font-weight:700;white-space:nowrap}
 .bk-del{width:18px;height:18px;border:none;background:none;cursor:pointer;color:var(--t3);font-size:13px;flex-shrink:0;border-radius:50%;transition:all .15s}
 .bk-del:hover{background:var(--redL);color:var(--red)}
 .bk-empty{padding:14px;text-align:center;color:var(--t3);font-size:11px;line-height:1.9}
+.bk-alert-row{display:flex;align-items:center;gap:5px;width:100%;padding-bottom:7px}
+.bk-alert-inp{width:80px;padding:3px 7px;border:1px solid var(--bd);border-radius:var(--rs);font-size:10px;font-family:inherit;color:var(--t1);background:var(--s1);outline:none}
+.bk-alert-inp:focus{border-color:var(--acc)}
+.bk-alert-set{padding:3px 8px;font-size:10px;font-weight:700;background:var(--accL);color:var(--acc);border:1px solid #EAB8A0;border-radius:var(--rs);cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0}
+.bk-alert-tag{font-size:9px;padding:1px 6px;border-radius:10px;font-weight:600;white-space:nowrap}
+.bk-alert-tag.set{background:var(--a2L);color:var(--a2);border:1px solid #AECAEA}
+.bk-alert-tag.hit{background:var(--grnL);color:var(--grn);border:1px solid #B0D9BE;animation:blink 1.5s infinite}
+.bk-visit-dot{width:6px;height:6px;border-radius:50%;background:var(--a2);flex-shrink:0;margin-top:3px}
+
+/* ── 임장 노트 ──────────────────────────────────────────── */
+.fn-section{margin-bottom:14px}
+.fn-title{font-size:11px;font-weight:700;color:var(--t2);margin-bottom:7px}
+.fn-checklist{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.fn-check{display:flex;align-items:center;gap:6px;padding:7px 10px;border:1px solid var(--bd);border-radius:var(--rs);cursor:pointer;background:var(--s1);transition:all .15s;font-size:11px;color:var(--t2);user-select:none}
+.fn-check:hover{border-color:var(--acc)}.fn-check.on{border-color:var(--grn);background:var(--grnL);color:var(--grn)}
+.fn-stars{display:flex;gap:5px}
+.fn-star{font-size:22px;cursor:pointer;transition:all .1s;color:var(--bd2);line-height:1}
+.fn-star.on{color:#F5A623}
+.fn-date,.fn-memo{width:100%;padding:7px 11px;border:1px solid var(--bd);border-radius:var(--rs);font-size:12px;background:var(--s1);color:var(--t1);outline:none;font-family:inherit;transition:border-color .15s}
+.fn-date:focus,.fn-memo:focus{border-color:var(--acc);background:#fff}
+.fn-memo{resize:vertical;min-height:80px;line-height:1.6}
+.fn-save{padding:8px 20px;background:var(--acc);color:#fff;border:none;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
+.fn-save:hover{background:var(--accD)}.fn-save:active{transform:scale(.97)}
+.fn-saved-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:10px;background:var(--grnL);color:var(--grn);border:1px solid #B0D9BE}
+
+/* ── 계약 타임라인 ──────────────────────────────────────── */
+.deal-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--rs);padding:10px 13px;margin-bottom:7px}
+.deal-apt{font-size:12px;font-weight:700;margin-bottom:7px}
+.deal-row{display:flex;justify-content:space-between;align-items:center;font-size:11px;padding:3px 0;border-bottom:1px solid var(--bd)}
+.deal-row:last-child{border-bottom:none}
+.deal-lbl{color:var(--t3)}
+.deal-day{font-weight:700}.deal-day.soon{color:var(--red)}.deal-day.ok{color:var(--grn)}
 </style>
 </head>
 <body>
@@ -418,6 +451,23 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <div class="sh" onclick="ts('s0')"><span class="st">⭐ 관심 단지</span><span id="bkCnt" style="color:var(--amb);font-size:11px;font-weight:700">0</span><span class="sa">▲</span></div>
     <div class="sb" style="padding:0" id="bkList">
       <div class="bk-empty">관심 단지를 추가하면<br>여기서 빠르게 확인할 수 있어요</div>
+    </div>
+  </div>
+
+  <!-- 계약 타임라인 섹션 -->
+  <div class="sec cl" id="s-deal">
+    <div class="sh" onclick="ts('s-deal')"><span class="st">📅 계약 타임라인</span><span class="sa">▲</span></div>
+    <div class="sb" id="dealTracker">
+      <div style="font-size:11px;color:var(--t3);margin-bottom:10px">계약금·잔금 일정을 입력하면 D-day를 알려드립니다.</div>
+      <label class="lbl">단지명</label>
+      <input class="inp mb9" id="deal-apt" placeholder="예: 래미안 OO">
+      <div class="r2">
+        <div><label class="lbl">계약일</label><input class="inp" id="deal-contract" type="date" onchange="renderDealDays()"></div>
+        <div><label class="lbl">잔금일</label><input class="inp" id="deal-balance" type="date" onchange="renderDealDays()"></div>
+      </div>
+      <div id="deal-days" style="margin-top:8px"></div>
+      <button class="abtn acc" style="margin-top:8px" onclick="saveDeal()">저장</button>
+      <div id="deal-saved" style="margin-top:10px"></div>
     </div>
   </div>
 
@@ -648,8 +698,10 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 
 <!-- 면책 고지 -->
 <footer class="legal-footer">
-  본 서비스는 「자본시장법」상 투자자문업 등록 서비스가 아닙니다. 모든 정보는 참고용이며 실제 투자 의사결정의 법적 책임은 이용자 본인에게 있습니다.
-  대출 가능 여부는 반드시 금융기관에서 확인하세요. 규제 정보는 수시 변경될 수 있으며 최신 정보는 금융위원회·국토교통부를 확인하세요.
+  본 서비스는 부동산 공공 데이터를 조회·가공하는 <strong>정보 분석 서비스</strong>이며, 「자본시장법」상 투자자문업·「공인중개사법」상 중개업에 해당하지 않습니다.
+  모든 분석 결과는 참고용이며 투자·계약 의사결정의 법적 책임은 이용자 본인에게 있습니다.
+  대출 한도는 반드시 금융기관에서 확인하고, 특약 초안은 공인중개사·법무사의 검토 후 사용하세요.
+  규제 정보는 수시 변경될 수 있으며 최신 정보는 금융위원회·국토교통부에서 확인하세요.
 </footer>
 
 <!-- DETAIL MODAL -->
@@ -666,8 +718,9 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       <button class="rtab on" onclick="stb(this,'t0')">📊 종합의견</button>
       <button class="rtab" onclick="stb(this,'t1')">📈 실거래가</button>
       <button class="rtab" onclick="stb(this,'t2')">⚠ 리스크</button>
-      <button class="rtab" onclick="stb(this,'t3')">📝 맞춤특약</button>
+      <button class="rtab" onclick="stb(this,'t3')">📝 특약 초안</button>
       <button class="rtab" onclick="stb(this,'t4')">🎯 매수신호</button>
+      <button class="rtab" onclick="stb(this,'t5')">🏃 임장노트</button>
     </div>
     <div class="rpanel">
       <div class="tp on" id="t0"></div>
@@ -675,6 +728,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       <div class="tp" id="t2"></div>
       <div class="tp" id="t3"></div>
       <div class="tp" id="t4"></div>
+      <div class="tp" id="t5"></div>
     </div>
   </div>
 </div>
@@ -746,6 +800,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   cl();
   chkAPI().then(ok=>{if(ok)checkMolit();});
   renderBookmarks();
+  renderSavedDeals();
   if(CFG.naverKey) loadNaverMap();
   else loadLeaflet();
 });
@@ -1094,11 +1149,10 @@ function showDetail(p){
     <div class="ibox y" style="margin-top:12px">국토부 공공 API 기반. API 키 미설정 시 추정값.</div>`;
 
   document.getElementById('t2').innerHTML=`<div class="tld"><div class="tsp"></div>AI 리스크 분석 중...</div>`;
-  document.getElementById('t3').innerHTML=`<div class="tld"><div class="tsp"></div>AI 특약 생성 중...</div>`;
+  document.getElementById('t3').innerHTML=`<div class="tld"><div class="tsp"></div>AI 특약 초안 생성 중...</div>`;
   document.getElementById('t4').innerHTML=`<div class="tld"><div class="tsp"></div>매수 신호 분석 중...</div>`;
   document.querySelectorAll('.rtab').forEach((b,i)=>b.classList.toggle('on',i===0));
   document.querySelectorAll('.tp').forEach((t,i)=>t.classList.toggle('on',i===0));
-  // 북마크 버튼 상태 업데이트
   currentDetail=p;
   const bks=getBookmarks();
   const isBk=bks.some(b=>b.aptName===p.aptName);
@@ -1106,6 +1160,7 @@ function showDetail(p){
   bkBtn.textContent=isBk?'⭐ 관심 중':'⭐ 관심 추가';
   bkBtn.classList.toggle('on',isBk);
   document.getElementById('DM').classList.add('open');
+  renderFieldNote(p); // 임장 노트는 즉시 렌더 (로컬 데이터)
   loadRisk(p);loadClause(p);loadAnalysis(p);
 }
 
@@ -1314,18 +1369,33 @@ function renderBookmarks(){
     el.innerHTML='<div class="bk-empty">관심 단지를 추가하면<br>여기서 빠르게 확인할 수 있어요</div>';
     return;
   }
-  el.innerHTML=bks.map((b,i)=>`
-    <div class="bk-item" onclick="openBookmark(${i})">
-      <div><div class="bk-name">${b.aptName}</div><div style="font-size:10px;color:var(--t3)">${b.area}</div></div>
-      <span class="bk-price">${b.avgPrice?b.avgPrice.toFixed(1)+'억':''}</span>
-      <button class="bk-del" onclick="delBookmark(event,${i})">✕</button>
-    </div>`).join('');
+  el.innerHTML=bks.map((b,i)=>{
+    const alerts=getAlerts();
+    const target=alerts[b.aptName];
+    const hasVisit=!!(getNoteForApt(b.aptName)?.visitDate);
+    const priceNow=b.avgPrice||0;
+    const isHit=target&&priceNow>0&&priceNow<=target;
+    const alertHtml=`<div class="bk-alert-row" onclick="event.stopPropagation()">
+      <span style="font-size:10px;color:var(--t3);flex-shrink:0">목표가</span>
+      <input class="bk-alert-inp" type="number" step="0.1" placeholder="억" value="${target||''}" id="bk-alert-${i}" oninput="event.stopPropagation()">
+      <button class="bk-alert-set" onclick="setAlert('${b.aptName}',document.getElementById('bk-alert-${i}').value)">설정</button>
+      ${target?`<span class="bk-alert-tag ${isHit?'hit':'set'}">${isHit?'🎯 목표가':'▼'+target+'억'}</span>`:''}
+    </div>`;
+    return`<div class="bk-item" onclick="openBookmark(${i})">
+      <div class="bk-item-row">
+        ${hasVisit?'<div class="bk-visit-dot" title="임장 기록 있음"></div>':''}
+        <div><div class="bk-name">${b.aptName}</div><div style="font-size:10px;color:var(--t3)">${b.area}</div></div>
+        <span class="bk-price">${priceNow?priceNow.toFixed(1)+'억':''}</span>
+        <button class="bk-del" onclick="delBookmark(event,${i})">✕</button>
+      </div>
+      ${alertHtml}
+    </div>`;
+  }).join('');
 }
 
 function openBookmark(i){
   const bks=getBookmarks();
   const b=bks[i];if(!b)return;
-  // props에 이미 있으면 showDetail, 없으면 간이 객체 생성
   const found=props.find(p=>p.aptName===b.aptName);
   if(found){showDetail(found);}
   else{showDetail({aptName:b.aptName,area:b.area,avgPrice:b.avgPrice,score:60,tags:[],txHistory:[]});}
@@ -1339,6 +1409,181 @@ function delBookmark(e,i){
     document.getElementById('bkToggle').classList.remove('on');
   }
   toast('관심 단지 삭제');
+}
+
+// ── 가격 알림 ─────────────────────────────────────────────
+const ALERT_KEY='mhl_alerts';
+function getAlerts(){try{return JSON.parse(localStorage.getItem(ALERT_KEY)||'{}')}catch{return{}}}
+function setAlert(aptName,val){
+  const a=getAlerts();
+  const v=parseFloat(val);
+  if(v>0){a[aptName]=v;toast(`🎯 목표가 ${v}억 설정 완료`);}
+  else{delete a[aptName];toast('목표가 해제');}
+  localStorage.setItem(ALERT_KEY,JSON.stringify(a));
+  renderBookmarks();
+}
+
+// ── 임장 노트 ─────────────────────────────────────────────
+const NOTE_KEY='mhl_notes';
+function getAllNotes(){try{return JSON.parse(localStorage.getItem(NOTE_KEY)||'{}')}catch{return{}}}
+function getNoteForApt(n){return getAllNotes()[n]||null}
+function saveNoteForApt(n,d){const all=getAllNotes();all[n]=d;localStorage.setItem(NOTE_KEY,JSON.stringify(all))}
+function deleteNoteForApt(n){const all=getAllNotes();delete all[n];localStorage.setItem(NOTE_KEY,JSON.stringify(all))}
+
+const FN_CHECKS=[
+  {id:'light',icon:'☀️',label:'채광 양호'},
+  {id:'noise',icon:'🔇',label:'소음 낮음'},
+  {id:'park', icon:'🚗',label:'주차 여유'},
+  {id:'elev', icon:'🛗',label:'엘리베이터'},
+  {id:'mgmt', icon:'🔧',label:'관리 양호'},
+  {id:'store',icon:'🏪',label:'편의시설'},
+  {id:'school',icon:'🏫',label:'학교 근접'},
+  {id:'trans',icon:'🚇',label:'교통 편리'},
+];
+
+function renderFieldNote(p){
+  const n=p.aptName;
+  const saved=getNoteForApt(n)||{};
+  const sc=saved.checks||[];
+  const rating=saved.rating||0;
+  const memo=saved.memo||'';
+  const vd=saved.visitDate||'';
+  const hasNote=sc.length>0||memo.trim()||vd;
+  const safeId=n.replace(/[^a-zA-Z0-9가-힣]/g,'_');
+
+  const checksHtml=FN_CHECKS.map(c=>`
+    <div class="fn-check ${sc.includes(c.id)?'on':''}" id="fnc-${safeId}-${c.id}" onclick="toggleFnCheck('${n}','${c.id}','${safeId}')">
+      <span>${c.icon}</span>${c.label}
+    </div>`).join('');
+
+  const starsHtml=[1,2,3,4,5].map(i=>`
+    <span class="fn-star ${i<=rating?'on':''}" id="fns-${safeId}-${i}" onclick="setFnRating('${n}',${i},'${safeId}')">★</span>`).join('');
+
+  document.getElementById('t5').innerHTML=`
+    <div class="fn-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
+        <div class="fn-title">📋 임장 체크리스트</div>
+        ${hasNote?'<span class="fn-saved-badge">✓ 기록 있음</span>':''}
+      </div>
+      <div class="fn-checklist">${checksHtml}</div>
+    </div>
+    <div class="fn-section">
+      <div class="fn-title">⭐ 종합 평점</div>
+      <div class="fn-stars">${starsHtml}</div>
+    </div>
+    <div class="fn-section">
+      <div class="fn-title">📅 방문일</div>
+      <input type="date" class="fn-date" id="fn-date-${safeId}" value="${vd}">
+    </div>
+    <div class="fn-section">
+      <div class="fn-title">📝 메모</div>
+      <textarea class="fn-memo" id="fn-memo-${safeId}" placeholder="채광, 소음, 주변 분위기, 기억할 것들...">${memo}</textarea>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between">
+      <button class="fn-save" onclick="saveFieldNote('${n}','${safeId}')">저장</button>
+      ${hasNote?`<button onclick="clearFieldNote('${n}')" style="background:none;border:none;font-size:11px;color:var(--t3);cursor:pointer;font-family:inherit;padding:6px">기록 삭제</button>`:''}
+    </div>
+    <div class="ibox b" style="margin-top:12px;font-size:10px">💾 이 기기 브라우저에만 저장됩니다. 추후 계정 로그인 시 클라우드 동기화를 제공할 예정입니다.</div>`;
+}
+
+function toggleFnCheck(aptName,checkId,safeId){
+  const saved=getNoteForApt(aptName)||{};
+  const sc=saved.checks||[];
+  const idx=sc.indexOf(checkId);
+  if(idx>=0)sc.splice(idx,1);else sc.push(checkId);
+  saved.checks=sc;
+  saveNoteForApt(aptName,saved);
+  const el=document.getElementById(`fnc-${safeId}-${checkId}`);
+  if(el)el.classList.toggle('on',sc.includes(checkId));
+}
+
+function setFnRating(aptName,rating,safeId){
+  const saved=getNoteForApt(aptName)||{};
+  saved.rating=rating;
+  saveNoteForApt(aptName,saved);
+  for(let i=1;i<=5;i++){
+    const el=document.getElementById(`fns-${safeId}-${i}`);
+    if(el)el.classList.toggle('on',i<=rating);
+  }
+}
+
+function saveFieldNote(aptName,safeId){
+  const saved=getNoteForApt(aptName)||{};
+  saved.memo=(document.getElementById(`fn-memo-${safeId}`)?.value||'').trim();
+  saved.visitDate=document.getElementById(`fn-date-${safeId}`)?.value||'';
+  saved.savedAt=Date.now();
+  saveNoteForApt(aptName,saved);
+  toast('✓ 임장 노트 저장 완료');
+  renderBookmarks(); // 방문 도트 갱신
+}
+
+function clearFieldNote(aptName){
+  if(!confirm('임장 기록을 삭제할까요?'))return;
+  deleteNoteForApt(aptName);
+  toast('임장 기록 삭제');
+  if(currentDetail)renderFieldNote(currentDetail);
+  renderBookmarks();
+}
+
+// ── 계약 타임라인 ──────────────────────────────────────────
+const DEAL_KEY='mhl_deals';
+function getDeals(){try{return JSON.parse(localStorage.getItem(DEAL_KEY)||'[]')}catch{return[]}}
+function saveDeals(d){localStorage.setItem(DEAL_KEY,JSON.stringify(d))}
+
+function getDday(dateStr){
+  if(!dateStr)return null;
+  const diff=new Date(dateStr)-new Date();
+  return Math.ceil(diff/(1000*60*60*24));
+}
+
+function renderDealDays(){
+  const contract=document.getElementById('deal-contract')?.value;
+  const balance=document.getElementById('deal-balance')?.value;
+  const el=document.getElementById('deal-days');if(!el)return;
+  const rows=[];
+  if(contract){const d=getDday(contract);rows.push(`<div class="deal-row"><span class="deal-lbl">계약일</span><span class="deal-day ${d!==null&&d<=7?'soon':'ok'}">${d!==null?(d===0?'오늘':d>0?`D-${d}`:`D+${Math.abs(d)}`):''}</span></div>`);}
+  if(balance){const d=getDday(balance);rows.push(`<div class="deal-row"><span class="deal-lbl">잔금일</span><span class="deal-day ${d!==null&&d<=30?'soon':'ok'}">${d!==null?(d===0?'오늘':d>0?`D-${d}`:`D+${Math.abs(d)}`):''}</span></div>`);}
+  if(balance){
+    const bd=getDday(balance);
+    if(bd!==null){
+      const tips=[
+        {at:60,msg:'📋 법무사 예약 시작 권장'},
+        {at:30,msg:'🏦 잔금 대출 실행 신청'},
+        {at:14,msg:'📄 등기 서류 준비 시작'},
+      ];
+      const activeTip=tips.find(t=>bd<=t.at&&bd>0);
+      if(activeTip)rows.push(`<div class="ibox y" style="margin-top:6px;font-size:10px">${activeTip.msg}</div>`);
+    }
+  }
+  el.innerHTML=rows.join('');
+}
+
+function saveDeal(){
+  const apt=(document.getElementById('deal-apt')?.value||'').trim();
+  const contract=document.getElementById('deal-contract')?.value;
+  const balance=document.getElementById('deal-balance')?.value;
+  if(!apt||(!contract&&!balance)){toast('단지명과 날짜를 입력하세요');return;}
+  const deals=getDeals().filter(d=>d.apt!==apt);
+  deals.unshift({apt,contract,balance,savedAt:Date.now()});
+  saveDeals(deals);
+  toast('📅 계약 일정 저장 완료');
+  renderSavedDeals();
+}
+
+function renderSavedDeals(){
+  const deals=getDeals();
+  const el=document.getElementById('deal-saved');if(!el)return;
+  if(!deals.length){el.innerHTML='';return;}
+  el.innerHTML=deals.slice(0,3).map(d=>{
+    const contractD=d.contract?getDday(d.contract):null;
+    const balanceD=d.balance?getDday(d.balance):null;
+    const fmtD=(n)=>n===null?'-':n===0?'오늘':n>0?`D-${n}`:`완료`;
+    return`<div class="deal-card">
+      <div class="deal-apt">${d.apt}</div>
+      ${d.contract?`<div class="deal-row"><span class="deal-lbl">계약일</span><span class="deal-day ${contractD!==null&&contractD<=7&&contractD>0?'soon':'ok'}">${fmtD(contractD)}</span></div>`:''}
+      ${d.balance?`<div class="deal-row"><span class="deal-lbl">잔금일</span><span class="deal-day ${balanceD!==null&&balanceD<=30&&balanceD>0?'soon':'ok'}">${fmtD(balanceD)}</span></div>`:''}
+    </div>`;
+  }).join('');
 }
 
 async function loadRisk(p){
