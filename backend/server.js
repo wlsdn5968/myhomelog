@@ -75,6 +75,7 @@ const propertiesRouter = require('./routes/properties');
 const regulationsRouter = require('./routes/regulations');
 const clauseRouter = require('./routes/clause');
 const geocodeRouter = require('./routes/geocode');
+const analysisRouter = require('./routes/analysis');
 
 app.use('/api/chat', chatLimiter, chatRouter);
 app.use('/api/transactions', dataLimiter, transactionRouter);
@@ -82,6 +83,7 @@ app.use('/api/properties', dataLimiter, propertiesRouter);
 app.use('/api/regulations', regulationsRouter);
 app.use('/api/clause', chatLimiter, clauseRouter);
 app.use('/api/geocode', dataLimiter, geocodeRouter);
+app.use('/api/analysis', dataLimiter, analysisRouter);
 
 // 헬스체크
 app.get('/api/health', (req, res) => {

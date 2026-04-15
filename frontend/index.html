@@ -321,6 +321,68 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   .cv-r3{grid-template-columns:1fr 1fr}
   header{padding:0 12px;gap:7px}
 }
+
+/* ── 매수 신호등 ─────────────────────────────────────────── */
+.sig-hero{display:flex;align-items:center;gap:14px;padding:14px;border-radius:var(--r);margin-bottom:14px;border:1px solid var(--bd)}
+.sig-hero.green{background:var(--grnL);border-color:#B0D9BE}
+.sig-hero.yellow{background:var(--ambL);border-color:#E4C080}
+.sig-hero.red{background:var(--redL);border-color:#EEC8C8}
+.sig-dot{width:44px;height:44px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px}
+.sig-dot.green{background:var(--grn)}.sig-dot.yellow{background:var(--amb)}.sig-dot.red{background:var(--red)}
+.sig-label{font-size:15px;font-weight:800}.sig-sub{font-size:11px;opacity:.75;margin-top:2px}
+.sig-conds{display:flex;flex-direction:column;gap:7px;margin-bottom:14px}
+.sig-cond{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--rs);border:1px solid var(--bd);background:var(--s1)}
+.sig-pip{width:10px;height:10px;border-radius:50%;flex-shrink:0}
+.sig-pip.green{background:var(--grn)}.sig-pip.yellow{background:var(--amb)}.sig-pip.red{background:var(--red)}
+.sig-clabel{font-size:11px;font-weight:700;width:68px;flex-shrink:0;color:var(--t2)}
+.sig-cdesc{font-size:11px;color:var(--t2);line-height:1.4}
+
+/* ── 갭 / 전세가율 ─────────────────────────────────────── */
+.gap-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.gap-card{background:var(--s1);border:1px solid var(--bd);border-radius:var(--rs);padding:11px 13px}
+.gap-lbl{font-size:10px;color:var(--t3);margin-bottom:3px}
+.gap-val{font-size:18px;font-weight:700;color:var(--acc)}
+.gap-sub{font-size:10px;color:var(--t2);margin-top:2px}
+.jeonse-list{margin-top:4px}
+.ji{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bd);font-size:11px}
+.ji:last-child{border-bottom:none}
+.ji-d{color:var(--t3)}.ji-v{font-weight:700;color:var(--a2)}
+
+/* ── 가격 위치 백분위 바 ────────────────────────────────── */
+.pct-wrap{margin-bottom:14px}
+.pct-bar-bg{height:10px;background:var(--s2);border-radius:5px;position:relative;margin:7px 0 4px;overflow:visible}
+.pct-bar-fill{height:100%;border-radius:5px;transition:width .5s ease;background:linear-gradient(90deg,var(--grn),var(--amb),var(--red))}
+.pct-pin{position:absolute;top:-4px;width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid var(--acc);transform:translateX(-50%);box-shadow:var(--sh)}
+.pct-labels{display:flex;justify-content:space-between;font-size:9px;color:var(--t3)}
+.pct-result{font-size:12px;font-weight:700;margin-top:5px}
+
+/* ── 월별 거래량 차트 ───────────────────────────────────── */
+.vol-chart{margin-bottom:14px}
+.vol-bars{display:flex;align-items:flex-end;gap:5px;height:54px;margin-bottom:4px}
+.vol-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.vol-bar{width:100%;background:var(--a2);border-radius:3px 3px 0 0;min-height:3px;transition:height .4s ease}
+.vol-bar-label{font-size:8px;color:var(--t3);white-space:nowrap}
+.vol-bar-cnt{font-size:9px;font-weight:700;color:var(--a2)}
+
+/* ── 실투자금 계산기 ────────────────────────────────────── */
+.cost-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
+.cost-row{display:flex;justify-content:space-between;padding:5px 9px;background:var(--s1);border-radius:6px;font-size:11px}
+.cost-lbl{color:var(--t2)}.cost-val{font-weight:700}
+.cost-total{background:var(--accL);border:1px solid #F0C0AC;border-radius:var(--rs);padding:10px 13px;display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+.cost-total-lbl{font-size:11px;font-weight:700;color:var(--accD)}
+.cost-total-val{font-size:20px;font-weight:800;color:var(--acc)}
+
+/* ── 북마크 ─────────────────────────────────────────────── */
+.bk-btn{padding:4px 11px;border-radius:18px;font-size:11px;font-weight:600;border:1px solid var(--bd);background:var(--s1);cursor:pointer;font-family:inherit;transition:all .15s;color:var(--t2)}
+.bk-btn:hover{border-color:var(--amb);color:var(--amb)}
+.bk-btn.on{background:var(--ambL);border-color:var(--amb);color:var(--amb)}
+.bk-item{padding:9px 13px;border-bottom:1px solid var(--bd);cursor:pointer;display:flex;align-items:center;gap:7px;transition:background .15s}
+.bk-item:hover{background:var(--s1)}
+.bk-name{font-size:12px;font-weight:700;flex:1}
+.bk-price{font-size:11px;color:var(--acc);font-weight:700;white-space:nowrap}
+.bk-del{width:18px;height:18px;border:none;background:none;cursor:pointer;color:var(--t3);font-size:13px;flex-shrink:0;border-radius:50%;transition:all .15s}
+.bk-del:hover{background:var(--redL);color:var(--red)}
+.bk-empty{padding:14px;text-align:center;color:var(--t3);font-size:11px;line-height:1.9}
 </style>
 </head>
 <body>
@@ -351,6 +413,14 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 
 <!-- LEFT -->
 <div class="lp"><div class="lpsc">
+  <!-- 북마크 섹션 -->
+  <div class="sec" id="s0">
+    <div class="sh" onclick="ts('s0')"><span class="st">⭐ 관심 단지</span><span id="bkCnt" style="color:var(--amb);font-size:11px;font-weight:700">0</span><span class="sa">▲</span></div>
+    <div class="sb" style="padding:0" id="bkList">
+      <div class="bk-empty">관심 단지를 추가하면<br>여기서 빠르게 확인할 수 있어요</div>
+    </div>
+  </div>
+
   <div class="sec" id="s1">
     <div class="sh" onclick="ts('s1')"><span class="st">내 상황</span><span class="sa">▲</span></div>
     <div class="sb">
@@ -585,18 +655,26 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 <!-- DETAIL MODAL -->
 <div class="dmbg" id="DM">
   <div class="dm">
-    <div class="dmhdr"><span class="dmtit" id="dmT">리포트</span><button class="dmx" onclick="cDM()">✕</button></div>
+    <div class="dmhdr">
+      <span class="dmtit" id="dmT">리포트</span>
+      <div style="display:flex;gap:7px;align-items:center">
+        <button class="bk-btn" id="bkToggle" onclick="toggleBookmark()">⭐ 관심 추가</button>
+        <button class="dmx" onclick="cDM()">✕</button>
+      </div>
+    </div>
     <div class="rtabs">
       <button class="rtab on" onclick="stb(this,'t0')">📊 종합의견</button>
       <button class="rtab" onclick="stb(this,'t1')">📈 실거래가</button>
       <button class="rtab" onclick="stb(this,'t2')">⚠ 리스크</button>
       <button class="rtab" onclick="stb(this,'t3')">📝 맞춤특약</button>
+      <button class="rtab" onclick="stb(this,'t4')">🎯 매수신호</button>
     </div>
     <div class="rpanel">
       <div class="tp on" id="t0"></div>
       <div class="tp" id="t1"></div>
       <div class="tp" id="t2"></div>
       <div class="tp" id="t3"></div>
+      <div class="tp" id="t4"></div>
     </div>
   </div>
 </div>
@@ -655,6 +733,7 @@ let CFG = {
 let props=[], mapObj=null, overlays=[], flt='all';
 let chatH=[], chatLd=false;
 let naverReady=false, mapTypeNormal=true;
+let currentDetail=null; // 현재 열린 상세 매물
 
 // ── INIT ──────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded',()=>{
@@ -666,6 +745,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   updateBadges();
   cl();
   chkAPI().then(ok=>{if(ok)checkMolit();});
+  renderBookmarks();
   if(CFG.naverKey) loadNaverMap();
   else loadLeaflet();
 });
@@ -1015,14 +1095,218 @@ function showDetail(p){
 
   document.getElementById('t2').innerHTML=`<div class="tld"><div class="tsp"></div>AI 리스크 분석 중...</div>`;
   document.getElementById('t3').innerHTML=`<div class="tld"><div class="tsp"></div>AI 특약 생성 중...</div>`;
+  document.getElementById('t4').innerHTML=`<div class="tld"><div class="tsp"></div>매수 신호 분석 중...</div>`;
   document.querySelectorAll('.rtab').forEach((b,i)=>b.classList.toggle('on',i===0));
   document.querySelectorAll('.tp').forEach((t,i)=>t.classList.toggle('on',i===0));
+  // 북마크 버튼 상태 업데이트
+  currentDetail=p;
+  const bks=getBookmarks();
+  const isBk=bks.some(b=>b.aptName===p.aptName);
+  const bkBtn=document.getElementById('bkToggle');
+  bkBtn.textContent=isBk?'⭐ 관심 중':'⭐ 관심 추가';
+  bkBtn.classList.toggle('on',isBk);
   document.getElementById('DM').classList.add('open');
-  loadRisk(p);loadClause(p);
+  loadRisk(p);loadClause(p);loadAnalysis(p);
 }
 
 function stb(btn,id){document.querySelectorAll('.rtab').forEach(b=>b.classList.remove('on'));document.querySelectorAll('.tp').forEach(t=>t.classList.remove('on'));btn.classList.add('on');document.getElementById(id).classList.add('on');}
-function cDM(){document.getElementById('DM').classList.remove('open');}
+function cDM(){document.getElementById('DM').classList.remove('open');currentDetail=null;}
+
+// ── 매수 신호 분석 로드 ───────────────────────────────────
+async function loadAnalysis(p){
+  const lawdCd=p.lawdCd||p.txHistory?.[0]?.lawdCd||'';
+  try{
+    const url=`${CFG.api}/analysis?aptName=${encodeURIComponent(p.aptName)}&area=${encodeURIComponent(p.area||'')}&price=${p.avgPrice||0}${lawdCd?'&lawdCd='+lawdCd:''}`;
+    const r=await fetch(url,{signal:AbortSignal.timeout(20000)});
+    if(!r.ok)throw new Error('fail');
+    renderAnalysis(await r.json(),p);
+  }catch{
+    renderAnalysisFallback(p);
+  }
+}
+
+function renderAnalysis(d,p){
+  const sig=d.buySignal||{};
+  const sigEmoji={green:'🟢',yellow:'🟡',red:'🔴'};
+  const sc=sig.signal||'yellow';
+
+  // ① 신호등 히어로
+  const heroHtml=`<div class="sig-hero ${sc}">
+    <div class="sig-dot ${sc}">${sigEmoji[sc]}</div>
+    <div><div class="sig-label">${sig.signalDesc||'분석 중'}</div>
+    <div class="sig-sub">${sig.score||0}/${sig.maxScore||6}점 · ${d.txCount||0}건 거래 분석</div></div>
+  </div>`;
+
+  // ② 3개 조건
+  const condsHtml=`<div class="sig-conds">${(sig.conditions||[]).map(c=>`
+    <div class="sig-cond">
+      <div class="sig-pip ${c.status}"></div>
+      <div class="sig-clabel">${c.label}</div>
+      <div class="sig-cdesc">${c.desc}</div>
+    </div>`).join('')}</div>`;
+
+  // ③ 가격 위치 백분위
+  let pctHtml='';
+  if(d.percentile!==null&&d.percentile!==undefined){
+    const pct=d.percentile;
+    const pctColor=pct<=30?'var(--grn)':pct<=65?'var(--amb)':'var(--red)';
+    const pctDesc=pct<=30?'저렴한 구간 — 협상 우위':pct<=65?'시세 수준':'고가 구간 — 협상 여지 있음';
+    pctHtml=`<div class="pct-wrap">
+      <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:4px">📍 가격 위치 (최근 1년 거래 대비)</div>
+      <div class="pct-bar-bg">
+        <div class="pct-bar-fill" style="width:100%"></div>
+        <div class="pct-pin" style="left:${pct}%"></div>
+      </div>
+      <div class="pct-labels"><span>최저가</span><span>중간</span><span>최고가</span></div>
+      <div class="pct-result" style="color:${pctColor}">하위 ${pct}% — ${pctDesc}</div>
+    </div>`;
+  }
+
+  // ④ 월별 거래량 차트
+  let volHtml='';
+  const vol=d.monthlyVolume||[];
+  if(vol.length>0){
+    const maxVol=Math.max(...vol.map(v=>v.count),1);
+    volHtml=`<div class="vol-chart">
+      <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px">📊 월별 거래량 추이</div>
+      <div class="vol-bars">${vol.map(v=>{
+        const h=Math.max(Math.round((v.count/maxVol)*50),3);
+        return`<div class="vol-bar-wrap">
+          <div class="vol-bar-cnt">${v.count}</div>
+          <div class="vol-bar" style="height:${h}px"></div>
+          <div class="vol-bar-label">${v.month.slice(5)}</div>
+        </div>`;
+      }).join('')}</div>
+    </div>`;
+  }
+
+  // ⑤ 갭 / 전세가율
+  let gapHtml='';
+  const g=d.gapData||{};
+  if(g.jeonseRate!==null&&g.jeonseRate!==undefined){
+    gapHtml=`<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:7px">🏠 전세가율 · 갭 분석</div>
+    <div class="gap-grid">
+      <div class="gap-card"><div class="gap-lbl">전세가율</div><div class="gap-val" style="color:${g.jeonseRate>=60?'var(--grn)':g.jeonseRate>=45?'var(--amb)':'var(--red)'}">${g.jeonseRate}%</div><div class="gap-sub">${g.jeonseRate>=60?'역전세 위험 낮음':g.jeonseRate>=45?'보통':'역전세 주의'}</div></div>
+      <div class="gap-card"><div class="gap-lbl">갭 (실투자금 기준)</div><div class="gap-val">${g.gap}억</div><div class="gap-sub">매매 ${g.avgSale}억 / 전세 ${g.avgJeonse}억</div></div>
+    </div>
+    ${(d.recentJeonseTx||[]).length>0?`<div style="font-size:10px;font-weight:700;color:var(--t3);margin-bottom:5px">최근 전세 거래</div>
+    <div class="jeonse-list">${(d.recentJeonseTx||[]).slice(0,4).map(t=>`<div class="ji"><span class="ji-d">${t.dealYear}.${String(t.dealMonth).padStart(2,'0')} ${t.floor}층</span><span class="ji-v">${(t.deposit/10000).toFixed(2)}억</span></div>`).join('')}</div>`:''}`;
+  } else if(!d.molitAvailable){
+    gapHtml=`<div class="ibox y">MOLIT API 키 설정 후 전세가율·갭 분석이 활성화됩니다.</div>`;
+  }
+
+  // ⑥ 실투자금 계산기
+  const loanAmt=getLoanAmt();
+  const houseS=gct('ch-h');
+  const isF=gct('ch-f')==='예';
+  const pr=p.avgPrice||0;
+  const costHtml=calcTotalCostHTML(pr,loanAmt,houseS,isF);
+
+  document.getElementById('t4').innerHTML=`
+    ${heroHtml}${condsHtml}${pctHtml}${volHtml}${gapHtml}
+    <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 7px">💰 실투자금 총비용 계산</div>
+    ${costHtml}
+    <div class="ibox b" style="margin-top:10px;font-size:10px">취득세·복비·등기비 포함 추정치. 실제 비용은 계약 조건에 따라 다를 수 있습니다.</div>`;
+}
+
+function renderAnalysisFallback(p){
+  const loanAmt=getLoanAmt();
+  document.getElementById('t4').innerHTML=`
+    <div class="ibox y" style="margin-bottom:12px">백엔드 연결 시 실거래가 기반 신호 분석이 제공됩니다.</div>
+    <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:7px">💰 실투자금 총비용 계산</div>
+    ${calcTotalCostHTML(p.avgPrice||0,loanAmt,gct('ch-h'),gct('ch-f')==='예')}`;
+}
+
+function calcTotalCostHTML(price,loan,houseStatus,isFirstBuyer){
+  if(!price)return`<div class="ibox y">매수가 정보 없음</div>`;
+  // 취득세율
+  let rate;
+  if(houseStatus==='2주택+')rate=0.08;
+  else if(houseStatus==='1주택')rate=price<=6?.01:price<=9?.02:.03;
+  else rate=isFirstBuyer&&price<=1.5?.008:price<=6?.01:price<=9?.02:.03;
+  const pw=price*10000;
+  const acq=Math.round(pw*rate);
+  const edu=Math.round(acq*.1);
+  const spcl=rate<=.01?0:Math.round(pw*.002);
+  let cr=price<.5?.006:price<2?.005:price<9?.004:price<12?.005:price<15?.006:.007;
+  const comm=Math.round(pw*cr);
+  const reg=Math.round(pw*.0015+20);
+  const gap=Math.max(0,price-(loan||0));
+  const total=Math.round(gap*10000)+acq+edu+spcl+comm+reg;
+  const fmt=v=>parseFloat((v/10000).toFixed(2))+'억';
+  return`<div class="cost-grid">
+    <div class="cost-row"><span class="cost-lbl">매매가 - 대출</span><span class="cost-val">${gap.toFixed(2)}억</span></div>
+    <div class="cost-row"><span class="cost-lbl">취득세 (${Math.round(rate*1000)/10}%)</span><span class="cost-val">${fmt(acq)}</span></div>
+    <div class="cost-row"><span class="cost-lbl">지방교육세</span><span class="cost-val">${fmt(edu)}</span></div>
+    <div class="cost-row"><span class="cost-lbl">공인중개사 복비</span><span class="cost-val">${fmt(comm)}</span></div>
+    <div class="cost-row"><span class="cost-lbl">등기비 (추정)</span><span class="cost-val">${fmt(reg)}</span></div>
+    ${spcl>0?`<div class="cost-row"><span class="cost-lbl">농어촌특별세</span><span class="cost-val">${fmt(spcl)}</span></div>`:''}
+  </div>
+  <div class="cost-total">
+    <span class="cost-total-lbl">필요 현금 총액</span>
+    <span class="cost-total-val">${parseFloat((total/10000).toFixed(2))}억</span>
+  </div>`;
+}
+
+// ── 북마크 ────────────────────────────────────────────────
+const BK_KEY='mhl_bookmarks';
+function getBookmarks(){try{return JSON.parse(localStorage.getItem(BK_KEY)||'[]');}catch{return[];}}
+function saveBookmarks(bks){localStorage.setItem(BK_KEY,JSON.stringify(bks));}
+
+function toggleBookmark(){
+  if(!currentDetail)return;
+  const p=currentDetail;
+  let bks=getBookmarks();
+  const idx=bks.findIndex(b=>b.aptName===p.aptName);
+  if(idx>=0){
+    bks.splice(idx,1);
+    toast('관심 단지 해제');
+    document.getElementById('bkToggle').textContent='⭐ 관심 추가';
+    document.getElementById('bkToggle').classList.remove('on');
+  } else {
+    bks.unshift({aptName:p.aptName,area:p.area||'',avgPrice:p.avgPrice||0,lawdCd:p.txHistory?.[0]?.lawdCd||'',savedAt:Date.now()});
+    toast('⭐ 관심 단지 추가 완료');
+    document.getElementById('bkToggle').textContent='⭐ 관심 중';
+    document.getElementById('bkToggle').classList.add('on');
+  }
+  saveBookmarks(bks);
+  renderBookmarks();
+}
+
+function renderBookmarks(){
+  const bks=getBookmarks();
+  document.getElementById('bkCnt').textContent=bks.length||'0';
+  const el=document.getElementById('bkList');
+  if(!bks.length){
+    el.innerHTML='<div class="bk-empty">관심 단지를 추가하면<br>여기서 빠르게 확인할 수 있어요</div>';
+    return;
+  }
+  el.innerHTML=bks.map((b,i)=>`
+    <div class="bk-item" onclick="openBookmark(${i})">
+      <div><div class="bk-name">${b.aptName}</div><div style="font-size:10px;color:var(--t3)">${b.area}</div></div>
+      <span class="bk-price">${b.avgPrice?b.avgPrice.toFixed(1)+'억':''}</span>
+      <button class="bk-del" onclick="delBookmark(event,${i})">✕</button>
+    </div>`).join('');
+}
+
+function openBookmark(i){
+  const bks=getBookmarks();
+  const b=bks[i];if(!b)return;
+  // props에 이미 있으면 showDetail, 없으면 간이 객체 생성
+  const found=props.find(p=>p.aptName===b.aptName);
+  if(found){showDetail(found);}
+  else{showDetail({aptName:b.aptName,area:b.area,avgPrice:b.avgPrice,score:60,tags:[],txHistory:[]});}
+}
+
+function delBookmark(e,i){
+  e.stopPropagation();
+  const bks=getBookmarks();bks.splice(i,1);saveBookmarks(bks);renderBookmarks();
+  if(currentDetail&&currentDetail.aptName===document.getElementById('dmT').textContent){
+    document.getElementById('bkToggle').textContent='⭐ 관심 추가';
+    document.getElementById('bkToggle').classList.remove('on');
+  }
+  toast('관심 단지 삭제');
+}
 
 async function loadRisk(p){
   try{
