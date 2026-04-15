@@ -19,21 +19,66 @@ function getLawdCdFromArea(area) {
   return null;
 }
 
+// ── 데이터 신뢰도 등급 ────────────────────────────────────
+// NONE: 신호 불가 / LOW: 신호 숨기고 범위만 / MED: 경고 포함 / HIGH: 풀 표시
+function getDataReliability(saleTxCount, jeonseTxCount) {
+  if (saleTxCount < 4)  return 'NONE';
+  if (saleTxCount < 10) return 'LOW';
+  if (saleTxCount < 30) return 'MED';
+  return 'HIGH';
+}
+
+// ── 이상 거래 필터 (±30% 초과 제거) ─────────────────────
+function filterAnomalies(transactions) {
+  if (!transactions || transactions.length < 3) return { filtered: transactions || [], anomalyCount: 0 };
+  const prices = transactions.map(t => t.dealAmount).sort((a, b) => a - b);
+  const median = prices[Math.floor(prices.length / 2)];
+  const lower = median * 0.7;
+  const upper = median * 1.3;
+  const filtered = transactions.filter(t => t.dealAmount >= lower && t.dealAmount <= upper);
+  return { filtered, anomalyCount: transactions.length - filtered.length };
+}
+
 // ── 가격 위치 백분위 ──────────────────────────────────────
 // transactions: dealAmount 만원 단위 배열
 // currentPrice: 만원 단위
 function calcPricePercentile(transactions, currentPrice) {
-  if (!transactions || transactions.length < 3) return null;
-  const prices = transactions.map(t => t.dealAmount).sort((a, b) => a - b);
+  if (!transactions || transactions.length < 10) return null;
+  const { filtered } = filterAnomalies(transactions);
+  if (filtered.length < 10) return null;
+  const prices = filtered.map(t => t.dealAmount).sort((a, b) => a - b);
   const below = prices.filter(p => p <= currentPrice).length;
   return Math.round((below / prices.length) * 100);
+}
+
+// ── 계절 성수기 여부 감지 ─────────────────────────────────
+// 이사 성수기(3·4·9·10월) 포함 시 거래량 추이에 편향 가능
+function detectSeasonalBias(transactions) {
+  const peakMonths = [3, 4, 9, 10];
+  const now = new Date();
+  // 최근 3개월 구간에 성수기 월이 있는지 확인
+  const recentMonths = [];
+  for (let i = 0; i < 3; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    recentMonths.push(d.getMonth() + 1);
+  }
+  const hasPeak = recentMonths.some(m => peakMonths.includes(m));
+  const prevMonths = [];
+  for (let i = 3; i < 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    prevMonths.push(d.getMonth() + 1);
+  }
+  const prevHasPeak = prevMonths.some(m => peakMonths.includes(m));
+  // 한쪽만 성수기면 편향 가능
+  return hasPeak !== prevHasPeak;
 }
 
 // ── 거래량 추이 신호 ──────────────────────────────────────
 // 최근 3개월 vs 이전 3개월 비교
 function calcVolumeSignal(transactions) {
-  if (!transactions || transactions.length < 2) return 'neutral';
+  if (!transactions || transactions.length < 2) return { signal: 'neutral', seasonalBias: false };
   const now = new Date();
+  const seasonalBias = detectSeasonalBias(transactions);
 
   function monthsAgo(t) {
     const d = new Date(t.dealYear, t.dealMonth - 1);
@@ -46,11 +91,13 @@ function calcVolumeSignal(transactions) {
     return m > 3 && m <= 6;
   }).length;
 
-  if (prev === 0) return recent > 0 ? 'up' : 'neutral';
-  const ratio = recent / prev;
-  if (ratio >= 1.2) return 'up';
-  if (ratio <= 0.7) return 'down';
-  return 'neutral';
+  let signal;
+  if (prev === 0) signal = recent > 0 ? 'up' : 'neutral';
+  else {
+    const ratio = recent / prev;
+    signal = ratio >= 1.2 ? 'up' : ratio <= 0.7 ? 'down' : 'neutral';
+  }
+  return { signal, seasonalBias };
 }
 
 // ── 전세가율 + 갭 계산 ────────────────────────────────────
@@ -72,55 +119,63 @@ function calcGap(saleTx, jeonseT) {
   return { jeonseRate, gap, avgSale, avgJeonse };
 }
 
-// ── 3개 지표 종합 매수 신호 ───────────────────────────────
-function calcBuySignal(percentile, volumeSignal, jeonseRate) {
+// ── 3개 지표 종합 신호 ────────────────────────────────────
+// volumeSignalObj: { signal, seasonalBias }
+function calcBuySignal(percentile, volumeSignalObj, jeonseRate) {
   let score = 0;
   const conditions = [];
+  const vs = typeof volumeSignalObj === 'object' ? volumeSignalObj : { signal: volumeSignalObj, seasonalBias: false };
+  const { signal: volSignal, seasonalBias } = vs;
 
   // ① 가격 위치 백분위
   if (percentile !== null) {
     if (percentile <= 30) {
       score += 2;
-      conditions.push({ label: '가격 위치', status: 'green', desc: `최근 1년 하위 ${percentile}% — 저렴한 구간` });
+      conditions.push({ label: '가격 위치', status: 'green', desc: `최근 1년 하위 ${percentile}% — 시세 하단 구간` });
     } else if (percentile <= 65) {
       score += 1;
-      conditions.push({ label: '가격 위치', status: 'yellow', desc: `최근 1년 ${percentile}% — 시세 수준` });
+      conditions.push({ label: '가격 위치', status: 'yellow', desc: `최근 1년 ${percentile}% 구간 — 시세 수준` });
     } else {
-      conditions.push({ label: '가격 위치', status: 'red', desc: `최근 1년 상위 ${100 - percentile}% — 고가 구간` });
+      conditions.push({ label: '가격 위치', status: 'red', desc: `최근 1년 상위 ${100 - percentile}% — 시세 상단 구간` });
     }
   }
 
   // ② 거래량 추이
   const volMap = {
-    up:      { score: 2, status: 'green',  desc: '최근 3개월 거래 증가 — 매수세 확대' },
+    up:      { score: 2, status: 'green',  desc: '최근 3개월 거래 증가' },
     neutral: { score: 1, status: 'yellow', desc: '거래량 변화 없음 — 관망세' },
-    down:    { score: 0, status: 'red',    desc: '거래량 감소 — 가격 하락 선행 가능성' },
+    down:    { score: 0, status: 'red',    desc: '거래량 감소' },
   };
-  const vol = volMap[volumeSignal] || volMap.neutral;
+  const vol = volMap[volSignal] || volMap.neutral;
   score += vol.score;
-  conditions.push({ label: '거래량 추이', status: vol.status, desc: vol.desc });
+  const volDesc = seasonalBias ? vol.desc + ' ⚠️ 이사 성수기 영향 가능' : vol.desc;
+  conditions.push({ label: '거래량 추이', status: vol.status, desc: volDesc, seasonalBias });
 
   // ③ 전세가율
   if (jeonseRate !== null) {
     if (jeonseRate >= 60) {
       score += 2;
-      conditions.push({ label: '전세가율', status: 'green', desc: `${jeonseRate}% — 실수요 탄탄, 갭투자 리스크 낮음` });
+      conditions.push({ label: '전세가율', status: 'green', desc: `${jeonseRate}% — 실수요 비중 높음` });
     } else if (jeonseRate >= 45) {
       score += 1;
       conditions.push({ label: '전세가율', status: 'yellow', desc: `${jeonseRate}% — 보통 수준` });
     } else {
-      conditions.push({ label: '전세가율', status: 'red', desc: `${jeonseRate}% — 낮음. 역전세 주의` });
+      conditions.push({ label: '전세가율', status: 'red', desc: `${jeonseRate}% — 낮음. 역전세 위험 확인 필요` });
     }
   }
 
   const maxScore = conditions.length * 2;
   const ratio = maxScore > 0 ? score / maxScore : 0.5;
-  let signal, signalDesc;
-  if (ratio >= 0.67) { signal = 'green';  signalDesc = '매수 검토 구간'; }
-  else if (ratio >= 0.34) { signal = 'yellow'; signalDesc = '관망 권장'; }
-  else { signal = 'red'; signalDesc = '리스크 주의'; }
+  const metCount = conditions.filter(c => c.status === 'green').length;
+  const totalCount = conditions.length;
 
-  return { signal, signalDesc, score, maxScore, conditions };
+  // 법적 리스크 줄인 중립 문구 — 투자 권유 표현 제거
+  let signal, signalDesc;
+  if (ratio >= 0.67) { signal = 'green';  signalDesc = `${totalCount}개 조건 중 ${metCount}개 긍정`; }
+  else if (ratio >= 0.34) { signal = 'yellow'; signalDesc = `${totalCount}개 조건 중 ${metCount}개 긍정`; }
+  else { signal = 'red'; signalDesc = `${totalCount}개 조건 중 ${metCount}개 긍정`; }
+
+  return { signal, signalDesc, score, maxScore, conditions, metCount, totalCount };
 }
 
 // ── 실투자금 총비용 계산 ──────────────────────────────────
@@ -210,12 +265,25 @@ async function analyzeApt(lawdCd, aptName, currentPrice) {
     }
   }
 
+  // 신뢰도 등급
+  const reliability = getDataReliability(saleTx.length, jeonseT.length);
+
   // 가격 단위: currentPrice=억 → 만원 변환
   const priceW = (currentPrice || 0) * 10000;
-  const percentile = saleTx.length >= 3 ? calcPricePercentile(saleTx, priceW) : null;
-  const volumeSignal = calcVolumeSignal(saleTx);
+
+  // 이상거래 필터 (±30%)
+  const { filtered: filteredTx, anomalyCount } = filterAnomalies(saleTx);
+
+  // 신뢰도가 NONE이면 백분위·신호 계산 불가
+  const percentile = reliability !== 'NONE' ? calcPricePercentile(filteredTx, priceW) : null;
+  const volumeSignalObj = calcVolumeSignal(saleTx);
   const gapData = calcGap(saleTx, jeonseT);
-  const buySignal = calcBuySignal(percentile, volumeSignal, gapData.jeonseRate);
+
+  // LOW 이상일 때만 신호 계산 (NONE은 null)
+  const buySignal = reliability !== 'NONE'
+    ? calcBuySignal(percentile, volumeSignalObj, gapData.jeonseRate)
+    : null;
+
   const monthlyVolume = buildMonthlyVolume(saleTx);
 
   const result = {
@@ -223,12 +291,16 @@ async function analyzeApt(lawdCd, aptName, currentPrice) {
     lawdCd,
     currentPrice,
     molitAvailable,
+    reliability,
+    anomalyCount,
     percentile,
-    volumeSignal,
+    volumeSignal: volumeSignalObj.signal,
+    volumeSeasonalBias: volumeSignalObj.seasonalBias,
     gapData,
     buySignal,
     monthlyVolume,
     txCount: saleTx.length,
+    filteredTxCount: filteredTx.length,
     jeonseCount: jeonseT.length,
     recentJeonseTx: jeonseT.slice(0, 5),
   };

@@ -329,7 +329,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 .sig-hero.red{background:var(--redL);border-color:#EEC8C8}
 .sig-dot{width:44px;height:44px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px}
 .sig-dot.green{background:var(--grn)}.sig-dot.yellow{background:var(--amb)}.sig-dot.red{background:var(--red)}
-.sig-label{font-size:15px;font-weight:800}.sig-sub{font-size:11px;opacity:.75;margin-top:2px}
+.sig-label{font-size:15px;font-weight:800}.sig-label.muted{color:var(--t2);font-weight:600}.sig-sub{font-size:11px;opacity:.75;margin-top:2px}
 .sig-conds{display:flex;flex-direction:column;gap:7px;margin-bottom:14px}
 .sig-cond{display:flex;align-items:center;gap:9px;padding:9px 12px;border-radius:var(--rs);border:1px solid var(--bd);background:var(--s1)}
 .sig-pip{width:10px;height:10px;border-radius:50%;flex-shrink:0}
@@ -1126,31 +1126,61 @@ async function loadAnalysis(p){
 }
 
 function renderAnalysis(d,p){
-  const sig=d.buySignal||{};
-  const sigEmoji={green:'🟢',yellow:'🟡',red:'🔴'};
-  const sc=sig.signal||'yellow';
+  const sig=d.buySignal;
+  const reliability=d.reliability||'NONE';
+  const relLabel={NONE:'데이터 부족',LOW:'표본 부족',MED:'참고용',HIGH:'신뢰 가능'}[reliability]||'';
+  const relColor={NONE:'var(--t3)',LOW:'var(--red)',MED:'var(--amb)',HIGH:'var(--grn)'}[reliability]||'var(--t3)';
 
-  // ① 신호등 히어로
-  const heroHtml=`<div class="sig-hero ${sc}">
-    <div class="sig-dot ${sc}">${sigEmoji[sc]}</div>
-    <div><div class="sig-label">${sig.signalDesc||'분석 중'}</div>
-    <div class="sig-sub">${sig.score||0}/${sig.maxScore||6}점 · ${d.txCount||0}건 거래 분석</div></div>
-  </div>`;
+  // ─ 신뢰도 배너
+  const reliabilityBanner=(reliability==='NONE'||reliability==='LOW')?`
+    <div class="ibox r" style="margin-bottom:12px;font-size:11px">
+      <strong>⚠️ 표본 부족 (${d.txCount||0}건)</strong> — 신호등이 표시되지 않습니다.
+      거래 데이터가 ${reliability==='NONE'?'4건 미만':'10건 미만'}이면 통계적으로 신뢰하기 어렵습니다.
+    </div>`:
+    (reliability==='MED'?`<div class="ibox y" style="margin-bottom:10px;font-size:10px">⚠️ 거래 ${d.txCount}건 기준 — 적은 표본으로 오차 가능. 참고 용도로만 활용하세요.</div>`:
+    d.anomalyCount>0?`<div class="ibox b" style="margin-bottom:10px;font-size:10px">ℹ️ 이상 거래 ${d.anomalyCount}건 제외 후 분석 (±30% 초과 가격)</div>`:'');
 
-  // ② 3개 조건
-  const condsHtml=`<div class="sig-conds">${(sig.conditions||[]).map(c=>`
-    <div class="sig-cond">
-      <div class="sig-pip ${c.status}"></div>
-      <div class="sig-clabel">${c.label}</div>
-      <div class="sig-cdesc">${c.desc}</div>
-    </div>`).join('')}</div>`;
+  // ─ 신호등 히어로 (NONE/LOW = 회색)
+  let heroHtml='';
+  if(!sig||reliability==='NONE'||reliability==='LOW'){
+    heroHtml=`<div class="sig-hero" style="background:var(--s1);border-color:var(--bd)">
+      <div class="sig-dot" style="background:var(--bd2);color:var(--t2)">⬜</div>
+      <div><div class="sig-label" style="color:var(--t2)">데이터 부족</div>
+      <div class="sig-sub">${d.txCount||0}건 거래 — 신호 생성 불가</div></div>
+    </div>`;
+  } else {
+    const sc=sig.signal||'yellow';
+    const sigEmoji={green:'🟢',yellow:'🟡',red:'🔴'};
+    const sigRatioText=`${sig.metCount||0}/${sig.totalCount||3}개 조건 충족`;
+    heroHtml=`<div class="sig-hero ${sc}">
+      <div class="sig-dot ${sc}">${sigEmoji[sc]}</div>
+      <div>
+        <div class="sig-label">${sigRatioText}</div>
+        <div class="sig-sub">${d.filteredTxCount||d.txCount||0}건 분석 · <span style="color:${relColor}">${relLabel}</span></div>
+      </div>
+    </div>`;
+  }
 
-  // ③ 가격 위치 백분위
+  // ─ 3개 조건 (신호 있을 때만)
+  let condsHtml='';
+  if(sig&&reliability!=='NONE'){
+    condsHtml=`<div class="sig-conds">${(sig.conditions||[]).map(c=>`
+      <div class="sig-cond">
+        <div class="sig-pip ${c.status}"></div>
+        <div class="sig-clabel">${c.label}</div>
+        <div class="sig-cdesc">${c.desc}</div>
+      </div>`).join('')}</div>`;
+  }
+
+  // ─ 가격 위치 백분위
   let pctHtml='';
-  if(d.percentile!==null&&d.percentile!==undefined){
+  if(d.percentile!==null&&d.percentile!==undefined&&reliability!=='NONE'){
     const pct=d.percentile;
+    const basedOn=d.filteredTxCount||d.txCount||0;
     const pctColor=pct<=30?'var(--grn)':pct<=65?'var(--amb)':'var(--red)';
-    const pctDesc=pct<=30?'저렴한 구간 — 협상 우위':pct<=65?'시세 수준':'고가 구간 — 협상 여지 있음';
+    const pctDesc=pct<=30?'시세 하단 구간':pct<=65?'시세 중간 구간':'시세 상단 구간';
+    // 신뢰 구간 표시 (LOW/MED는 ±15% 범위 힌트)
+    const rangeHint=reliability==='HIGH'?'':`(${Math.max(0,pct-15)}~${Math.min(100,pct+15)}% 구간 추정)`;
     pctHtml=`<div class="pct-wrap">
       <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:4px">📍 가격 위치 (최근 1년 거래 대비)</div>
       <div class="pct-bar-bg">
@@ -1158,15 +1188,16 @@ function renderAnalysis(d,p){
         <div class="pct-pin" style="left:${pct}%"></div>
       </div>
       <div class="pct-labels"><span>최저가</span><span>중간</span><span>최고가</span></div>
-      <div class="pct-result" style="color:${pctColor}">하위 ${pct}% — ${pctDesc}</div>
+      <div class="pct-result" style="color:${pctColor}">하위 ${pct}% — ${pctDesc} ${rangeHint}<br><span style="font-size:10px;color:var(--t3)">${basedOn}건 기준${d.anomalyCount>0?' (이상거래 '+d.anomalyCount+'건 제외)':''}</span></div>
     </div>`;
   }
 
-  // ④ 월별 거래량 차트
+  // ─ 월별 거래량 차트
   let volHtml='';
   const vol=d.monthlyVolume||[];
   if(vol.length>0){
     const maxVol=Math.max(...vol.map(v=>v.count),1);
+    const seasonNote=d.volumeSeasonalBias?`<div class="ibox y" style="margin-top:6px;font-size:10px">⚠️ 이사 성수기(3·4·9·10월)가 비교 구간에 포함돼 거래량 추이가 실제보다 왜곡될 수 있습니다.</div>`:'';
     volHtml=`<div class="vol-chart">
       <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px">📊 월별 거래량 추이</div>
       <div class="vol-bars">${vol.map(v=>{
@@ -1176,18 +1207,19 @@ function renderAnalysis(d,p){
           <div class="vol-bar" style="height:${h}px"></div>
           <div class="vol-bar-label">${v.month.slice(5)}</div>
         </div>`;
-      }).join('')}</div>
+      }).join('')}</div>${seasonNote}
     </div>`;
   }
 
-  // ⑤ 갭 / 전세가율
+  // ─ 갭 / 전세가율
   let gapHtml='';
   const g=d.gapData||{};
   if(g.jeonseRate!==null&&g.jeonseRate!==undefined){
     gapHtml=`<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:7px">🏠 전세가율 · 갭 분석</div>
+    <div class="ibox b" style="margin-bottom:7px;font-size:10px">전세 ${d.jeonseCount||0}건 기준. 갱신계약 포함 시 실제 시세와 다를 수 있습니다.</div>
     <div class="gap-grid">
-      <div class="gap-card"><div class="gap-lbl">전세가율</div><div class="gap-val" style="color:${g.jeonseRate>=60?'var(--grn)':g.jeonseRate>=45?'var(--amb)':'var(--red)'}">${g.jeonseRate}%</div><div class="gap-sub">${g.jeonseRate>=60?'역전세 위험 낮음':g.jeonseRate>=45?'보통':'역전세 주의'}</div></div>
-      <div class="gap-card"><div class="gap-lbl">갭 (실투자금 기준)</div><div class="gap-val">${g.gap}억</div><div class="gap-sub">매매 ${g.avgSale}억 / 전세 ${g.avgJeonse}억</div></div>
+      <div class="gap-card"><div class="gap-lbl">전세가율</div><div class="gap-val" style="color:${g.jeonseRate>=60?'var(--grn)':g.jeonseRate>=45?'var(--amb)':'var(--red)'}">${g.jeonseRate}%</div><div class="gap-sub">${g.jeonseRate>=60?'역전세 위험 낮음':g.jeonseRate>=45?'보통':'역전세 위험 확인 필요'}</div></div>
+      <div class="gap-card"><div class="gap-lbl">갭 (매매-전세)</div><div class="gap-val">${g.gap}억</div><div class="gap-sub">매매 ${g.avgSale}억 / 전세 ${g.avgJeonse}억</div></div>
     </div>
     ${(d.recentJeonseTx||[]).length>0?`<div style="font-size:10px;font-weight:700;color:var(--t3);margin-bottom:5px">최근 전세 거래</div>
     <div class="jeonse-list">${(d.recentJeonseTx||[]).slice(0,4).map(t=>`<div class="ji"><span class="ji-d">${t.dealYear}.${String(t.dealMonth).padStart(2,'0')} ${t.floor}층</span><span class="ji-v">${(t.deposit/10000).toFixed(2)}억</span></div>`).join('')}</div>`:''}`;
@@ -1195,7 +1227,7 @@ function renderAnalysis(d,p){
     gapHtml=`<div class="ibox y">MOLIT API 키 설정 후 전세가율·갭 분석이 활성화됩니다.</div>`;
   }
 
-  // ⑥ 실투자금 계산기
+  // ─ 실투자금 계산기
   const loanAmt=getLoanAmt();
   const houseS=gct('ch-h');
   const isF=gct('ch-f')==='예';
@@ -1203,10 +1235,10 @@ function renderAnalysis(d,p){
   const costHtml=calcTotalCostHTML(pr,loanAmt,houseS,isF);
 
   document.getElementById('t4').innerHTML=`
-    ${heroHtml}${condsHtml}${pctHtml}${volHtml}${gapHtml}
+    ${reliabilityBanner}${heroHtml}${condsHtml}${pctHtml}${volHtml}${gapHtml}
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 7px">💰 실투자금 총비용 계산</div>
     ${costHtml}
-    <div class="ibox b" style="margin-top:10px;font-size:10px">취득세·복비·등기비 포함 추정치. 실제 비용은 계약 조건에 따라 다를 수 있습니다.</div>`;
+    <div class="ibox b" style="margin-top:10px;font-size:10px">⚠️ 취득세·복비·등기비 포함 <strong>추정치</strong>입니다. 실제 비용은 계약 조건·법무사·지역에 따라 ±1,500만원 이상 달라질 수 있으며, 투자 결정에 단독 사용하지 마세요.</div>`;
 }
 
 function renderAnalysisFallback(p){
@@ -1243,9 +1275,10 @@ function calcTotalCostHTML(price,loan,houseStatus,isFirstBuyer){
     ${spcl>0?`<div class="cost-row"><span class="cost-lbl">농어촌특별세</span><span class="cost-val">${fmt(spcl)}</span></div>`:''}
   </div>
   <div class="cost-total">
-    <span class="cost-total-lbl">필요 현금 총액</span>
-    <span class="cost-total-val">${parseFloat((total/10000).toFixed(2))}억</span>
-  </div>`;
+    <span class="cost-total-lbl">필요 현금 총액 (추정)</span>
+    <span class="cost-total-val">약 ${parseFloat((total/10000).toFixed(2))}억</span>
+  </div>
+  <div style="font-size:10px;color:var(--t3);margin-top:5px">± 약 1,500만원 오차 가능 (법무사 수수료·지역별 차이)</div>`;
 }
 
 // ── 북마크 ────────────────────────────────────────────────
