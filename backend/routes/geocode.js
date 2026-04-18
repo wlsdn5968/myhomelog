@@ -3,6 +3,30 @@ const router = express.Router();
 const axios = require('axios');
 const cache = require('../cache');
 
+// 임시 디버그: Kakao 응답 원문 확인
+router.get('/debug', async (req, res) => {
+  const key = process.env.KAKAO_REST_API_KEY;
+  if (!key) return res.json({ error: 'no key' });
+  try {
+    const r = await axios.get('https://dapi.kakao.com/v2/local/search/keyword.json', {
+      headers: { Authorization: `KakaoAK ${key}` },
+      params: { query: '강남구 역삼동', size: 1 },
+      timeout: 5000,
+      validateStatus: () => true,
+    });
+    res.json({
+      status: r.status,
+      headers: r.headers,
+      keyHead: key.substring(0, 8) + '...',
+      keyLen: key.length,
+      keyHasWhitespace: /\s/.test(key),
+      data: r.data,
+    });
+  } catch (e) {
+    res.json({ error: e.message, code: e.code });
+  }
+});
+
 // POST /api/geocode  - 단건
 router.post('/', async (req, res) => {
   const { aptName, area } = req.body;
