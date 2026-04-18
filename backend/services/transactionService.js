@@ -6,7 +6,7 @@
 const axios = require('axios');
 const cache = require('../cache');
 
-const MOLIT_DETAIL_URL = 'http://openapi.molit.go.kr/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptTradeDev';
+const MOLIT_DETAIL_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
 
 // 서울/경기 주요 구 법정동코드 (앞 5자리)
 const LAWD_CODES = {

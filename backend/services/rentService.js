@@ -6,7 +6,7 @@ const axios = require('axios');
 const cache = require('../cache');
 
 const MOLIT_RENT_URL =
-  'http://openapi.molit.go.kr:8081/OpenAPI_ToolInstallPackage/service/rest/RTMSOBJSvc/getRTMSDataSvcAptRent';
+  'https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent';
 
 function isMolitKeyMissing() {
   const key = process.env.MOLIT_API_KEY;
