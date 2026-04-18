@@ -32,7 +32,7 @@ async function getRentTransactions(lawdCd, dealYm) {
     params: {
       serviceKey: process.env.MOLIT_API_KEY,
       LAWD_CD: lawdCd,
-      DEAL_YM: dealYm,
+      DEAL_YMD: dealYm,
       pageNo: 1,
       numOfRows: 200,
       _type: 'json',

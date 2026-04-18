@@ -17,27 +17,10 @@ function handleMolitError(err, res) {
 
 // GET /api/transactions?lawdCd=11350&dealYm=202503
 router.get('/', validateTransactionQuery, async (req, res) => {
-  const { lawdCd, dealYm, aptName, debug } = req.query;
+  const { lawdCd, dealYm, aptName } = req.query;
   if (!lawdCd || !dealYm) return res.status(400).json({ error: 'lawdCd, dealYm 필수' });
 
   try {
-    if (debug === '1') {
-      const axios = require('axios');
-      // Test both DEAL_YM and DEAL_YMD parameter names
-      const callApi = (params) => axios.get('https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev', {
-        params: { serviceKey: process.env.MOLIT_API_KEY, LAWD_CD: lawdCd, pageNo: 1, numOfRows: 3, _type: 'json', ...params },
-        timeout: 10000, validateStatus: () => true,
-      });
-      const [a, b] = await Promise.all([
-        callApi({ DEAL_YM: dealYm }),
-        callApi({ DEAL_YMD: dealYm }),
-      ]);
-      return res.json({
-        debug: true,
-        with_DEAL_YM: { totalCount: a.data?.response?.body?.totalCount, sampleItem: a.data?.response?.body?.items?.item?.[0] || a.data?.response?.body?.items?.item || null },
-        with_DEAL_YMD: { totalCount: b.data?.response?.body?.totalCount, sampleItem: b.data?.response?.body?.items?.item?.[0] || b.data?.response?.body?.items?.item || null },
-      });
-    }
     const list = aptName
       ? await getTransactionsByApt(lawdCd, aptName)
       : await getTransactions(lawdCd, dealYm);
