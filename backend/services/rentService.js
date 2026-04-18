@@ -35,6 +35,7 @@ async function getRentTransactions(lawdCd, dealYm) {
       DEAL_YM: dealYm,
       pageNo: 1,
       numOfRows: 200,
+      _type: 'json',
     },
     timeout: 10000,
     headers: { Accept: 'application/json' },

@@ -50,6 +50,7 @@ async function getTransactions(lawdCd, dealYm) {
         DEAL_YM: dealYm,
         pageNo: 1,
         numOfRows: 100,
+        _type: 'json',
       },
       timeout: 10000,
       headers: { Accept: 'application/json' },
