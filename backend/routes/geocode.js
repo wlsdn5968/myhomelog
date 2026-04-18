@@ -31,33 +31,14 @@ async function kakaoGeocode(key, aptName, area) {
 
 // POST /api/geocode  - 단건
 router.post('/', async (req, res) => {
-  const { aptName, area, debug } = req.body;
+  const { aptName, area } = req.body;
   if (!aptName) return res.status(400).json({ error: 'aptName 필수' });
   const query = `${area||''} ${aptName}`.trim();
   const ck = `geo:${query}`;
   const hit = cache.get(ck);
-  if (hit && !debug) return res.json({ ...hit, fromCache: true });
+  if (hit) return res.json({ ...hit, fromCache: true });
   const key = process.env.KAKAO_REST_API_KEY;
   if (!key || key === 'your_kakao_rest_key') return res.json({ lat: null, lng: null, error: 'KAKAO_REST_API_KEY 미설정' });
-  if (debug) {
-    const headers = { Authorization: `KakaoAK ${key}` };
-    const tries = [
-      { url: 'https://dapi.kakao.com/v2/local/search/keyword.json', q: `${area||''} ${aptName}`.trim() },
-      { url: 'https://dapi.kakao.com/v2/local/search/keyword.json', q: aptName },
-      { url: 'https://dapi.kakao.com/v2/local/search/address.json',  q: `${area||''} ${aptName}`.trim() },
-      { url: 'https://dapi.kakao.com/v2/local/search/address.json',  q: area || '' },
-    ];
-    const trace = [];
-    for (const t of tries) {
-      if (!t.q) { trace.push({...t, skipped: true}); continue; }
-      try {
-        const r = await axios.get(t.url, { headers, params: { query: t.q, size: 1 }, timeout: 5000, validateStatus: () => true });
-        const d = r.data?.documents?.[0];
-        trace.push({ url: t.url.split('/').pop(), q: t.q, status: r.status, found: !!d, hasDocs: r.data?.documents?.length, dataKeys: Object.keys(r.data || {}), errorMsg: r.data?.message });
-      } catch (e) { trace.push({ url: t.url, q: t.q, error: e.message }); }
-    }
-    return res.json({ debug: true, trace });
-  }
   const out = await kakaoGeocode(key, aptName, area);
   if (!out) return res.json({ lat: null, lng: null, error: '결과없음' });
   cache.set(ck, out, 86400);
