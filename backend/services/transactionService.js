@@ -56,6 +56,17 @@ async function getTransactions(lawdCd, dealYm) {
       headers: { Accept: 'application/json' },
     });
 
+    // 임시 디버그: 응답 구조 확인
+    const raw = response.data;
+    console.log('[MOLIT DEBUG]', {
+      type: typeof raw,
+      keys: typeof raw === 'object' ? Object.keys(raw || {}).slice(0, 5) : null,
+      headerCode: raw?.response?.header?.resultCode,
+      headerMsg: raw?.response?.header?.resultMsg,
+      bodyKeys: raw?.response?.body ? Object.keys(raw.response.body) : null,
+      itemsType: typeof raw?.response?.body?.items,
+      sample: typeof raw === 'string' ? raw.substring(0, 200) : null,
+    });
     const items = response.data?.response?.body?.items?.item;
     const list = Array.isArray(items) ? items : items ? [items] : [];
 
