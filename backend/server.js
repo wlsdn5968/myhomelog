@@ -12,6 +12,10 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const app = express();
+
+// Vercel/프록시 환경에서 X-Forwarded-For 신뢰 (express-rate-limit 호환)
+app.set('trust proxy', 1);
+
 const cache = require('./cache');
 
 // ── 보안 미들웨어 ──────────────────────────────────────────
