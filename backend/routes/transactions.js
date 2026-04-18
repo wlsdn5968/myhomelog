@@ -23,17 +23,19 @@ router.get('/', validateTransactionQuery, async (req, res) => {
   try {
     if (debug === '1') {
       const axios = require('axios');
-      const r = await axios.get('https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev', {
-        params: { serviceKey: process.env.MOLIT_API_KEY, LAWD_CD: lawdCd, DEAL_YM: dealYm, pageNo: 1, numOfRows: 5, _type: 'json' },
+      // Test both DEAL_YM and DEAL_YMD parameter names
+      const callApi = (params) => axios.get('https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev', {
+        params: { serviceKey: process.env.MOLIT_API_KEY, LAWD_CD: lawdCd, pageNo: 1, numOfRows: 3, _type: 'json', ...params },
         timeout: 10000, validateStatus: () => true,
       });
+      const [a, b] = await Promise.all([
+        callApi({ DEAL_YM: dealYm }),
+        callApi({ DEAL_YMD: dealYm }),
+      ]);
       return res.json({
         debug: true,
-        status: r.status,
-        contentType: r.headers['content-type'],
-        dataType: typeof r.data,
-        dataKeys: typeof r.data === 'object' && r.data ? Object.keys(r.data) : null,
-        sample: typeof r.data === 'string' ? r.data.substring(0, 800) : r.data,
+        with_DEAL_YM: { totalCount: a.data?.response?.body?.totalCount, sampleItem: a.data?.response?.body?.items?.item?.[0] || a.data?.response?.body?.items?.item || null },
+        with_DEAL_YMD: { totalCount: b.data?.response?.body?.totalCount, sampleItem: b.data?.response?.body?.items?.item?.[0] || b.data?.response?.body?.items?.item || null },
       });
     }
     const list = aptName
