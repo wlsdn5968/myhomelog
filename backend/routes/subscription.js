@@ -13,7 +13,7 @@ const router = express.Router();
 const axios = require('axios');
 const cache = require('../cache');
 
-const APT_LTTOT_URL = 'http://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail';
+const APT_LTTOT_URL = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail';
 
 function isKeyMissing() {
   const key = process.env.MOLIT_API_KEY;
@@ -87,7 +87,10 @@ router.get('/', async (req, res) => {
     cache.set(cacheKey, out, 21600); // 6시간
     res.json({ ...out, fromCache: false });
   } catch (e) {
-    console.error('[Subscription] API 실패:', e.message);
+    const detail = e.response?.status
+      ? `HTTP ${e.response.status} ${JSON.stringify(e.response.data || {}).slice(0,200)}`
+      : e.code || e.message;
+    console.error('[Subscription] API 실패:', detail);
     res.status(502).json({
       error: '청약 정보 조회 일시 실패',
       hint: '잠시 후 다시 시도하거나 청약Home(applyhome.co.kr)에서 직접 확인',
