@@ -43,23 +43,32 @@ async function getTransactions(lawdCd, dealYm) {
   if (cached) return cached;
 
   try {
-    const response = await axios.get(MOLIT_DETAIL_URL, {
-      params: {
-        serviceKey: process.env.MOLIT_API_KEY,
-        LAWD_CD: lawdCd,
-        DEAL_YMD: dealYm,
-        pageNo: 1,
-        numOfRows: 100,
-        _type: 'json',
-      },
-      timeout: 10000,
-      headers: { Accept: 'application/json' },
-    });
+    // 페이지네이션: 한 번에 1000건, 최대 3페이지(=3000건) 조회
+    const allItems = [];
+    for (let page = 1; page <= 3; page++) {
+      const response = await axios.get(MOLIT_DETAIL_URL, {
+        params: {
+          serviceKey: process.env.MOLIT_API_KEY,
+          LAWD_CD: lawdCd,
+          DEAL_YMD: dealYm,
+          pageNo: page,
+          numOfRows: 1000,
+          _type: 'json',
+        },
+        timeout: 12000,
+        headers: { Accept: 'application/json' },
+      });
 
-    const items = response.data?.response?.body?.items?.item;
-    const list = Array.isArray(items) ? items : items ? [items] : [];
+      const body = response.data?.response?.body;
+      const items = body?.items?.item;
+      const list = Array.isArray(items) ? items : items ? [items] : [];
+      allItems.push(...list);
 
-    const result = list.map(item => ({
+      const totalCount = parseInt(body?.totalCount || '0');
+      if (allItems.length >= totalCount || list.length < 1000) break;
+    }
+
+    const result = allItems.map(item => ({
       aptName: item.aptNm?.trim() || '',
       sigungu: item.sggNm?.trim() || '',
       umdNm: item.umdNm?.trim() || '',
