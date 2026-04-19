@@ -524,7 +524,11 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <div class="sb">
       <div class="mb9"><span class="lbl">주택 보유</span><div class="chips" id="ch-h"><span class="chip on" onclick="cp(this,'ch-h')">무주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택</span><span class="chip" onclick="cp(this,'ch-h')">2주택+</span></div></div>
       <div class="mb9"><span class="lbl">생애 최초</span><div class="chips" id="ch-f"><span class="chip on" onclick="cp(this,'ch-f')">예</span><span class="chip" onclick="cp(this,'ch-f')">아니오</span></div></div>
-      <div class="mb9"><span class="lbl">희망 지역</span><div class="chips" id="ch-r"><span class="chip on" onclick="cp(this,'ch-r')">서울</span><span class="chip" onclick="cp(this,'ch-r')">경기</span><span class="chip" onclick="cp(this,'ch-r')">인천</span><span class="chip" onclick="cp(this,'ch-r')">지방</span></div></div>
+      <div class="mb9"><span class="lbl">희망 지역</span>
+        <div class="chips" id="ch-r"><span class="chip on" onclick="cp(this,'ch-r')">서울</span><span class="chip" onclick="cp(this,'ch-r')">경기</span><span class="chip" onclick="cp(this,'ch-r')">인천</span><span class="chip" onclick="cp(this,'ch-r')">지방</span></div>
+        <div style="font-size:10px;color:var(--t3);margin:4px 0 3px">세부 구 선택 (선택 시 그 지역만 분석 — 미선택 시 광역의 인기 구 분석)</div>
+        <div class="chips" id="ch-r-sub" style="margin-top:2px"></div>
+      </div>
       <div class="mb9"><span class="lbl">학군 중요도</span><div class="chips" id="ch-sc"><span class="chip" onclick="cp(this,'ch-sc')">학군 중요</span><span class="chip on" onclick="cp(this,'ch-sc')">보통</span></div></div>
       <div class="r2"><div><label class="lbl">매수가 (억)</label><input class="inp" id="bp" type="number" placeholder="6.8" step="0.1" oninput="cl()"></div><div><label class="lbl">현금 (억)</label><input class="inp" id="mc" type="number" placeholder="3.5" step="0.1" oninput="cl()"></div></div>
       <div class="r2"><div><label class="lbl">연 소득 (만원)</label><input class="inp" id="inc" type="number" placeholder="5000" oninput="cl()"></div><div><label class="lbl">직장 위치 / 관심 구</label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
@@ -916,6 +920,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('it').textContent=gt();
   // 잔존 BYOK 키 정리 (이전 사용자)
   ['cfg_api','cfg_naver','cfg_ai'].forEach(k=>localStorage.removeItem(k));
+  populateRegionSub('서울'); // 초기 광역 chips 채우기
   cl();
   chkAPI().then(ok=>{if(ok)checkMolit();});
   renderBookmarks();
@@ -1301,7 +1306,7 @@ async function doSearch(){
     maxBudget:parseFloat(document.getElementById('bp').value)||7,
     myCash:parseFloat(document.getElementById('mc').value)||3,
     availableLoan:getLoanAmt(),
-    region:gct('ch-r'),houseStatus:gct('ch-h'),
+    region:getRegionForSearch(),houseStatus:gct('ch-h'),
     isFirstBuyer:gct('ch-f')==='예',
     schoolNeeded:gct('ch-sc')==='학군 중요',
     workplaceArea:document.getElementById('wp').value.trim(),
@@ -1959,7 +1964,28 @@ function cpT(t){navigator.clipboard.writeText(t).then(()=>toast('특약 복사 �
 
 // ── LOAN ─────────────────────────────────────────────────
 function gct(id){return document.querySelector(`#${id} .chip.on`)?.textContent.trim()||'';}
-function cp(el,id){document.querySelector(`#${id}`).querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');cl();dc();}
+const REGION_SUB = {
+  '서울': ['강남구','서초구','송파구','강동구','마포구','용산구','성동구','노원구','도봉구','강북구','은평구','구로구','금천구','강서구','양천구','영등포구','관악구','동작구','성북구','동대문구','광진구','중랑구','서대문구','종로구','중구'],
+  '경기': ['과천','광명','분당','판교','평촌','안양','수지','용인','하남','미사','영통','수원','일산','고양','의왕','시흥'],
+  '인천': ['연수(송도)','남동','부평','계양','서구','미추홀'],
+  '지방': ['해운대','수영','수성','유성','광주서구'],
+};
+function populateRegionSub(wide){
+  const sub=document.getElementById('ch-r-sub');
+  if(!sub) return;
+  sub.innerHTML=(REGION_SUB[wide]||[]).map(g=>`<span class="chip" onclick="cpSub(this)">${g}</span>`).join('');
+}
+function cpSub(el){
+  const wasOn=el.classList.contains('on');
+  el.parentNode.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+  if(!wasOn) el.classList.add('on');
+}
+function getRegionForSearch(){
+  const wide=gct('ch-r');
+  const sub=document.querySelector('#ch-r-sub .chip.on')?.textContent.trim()||'';
+  return sub ? `${wide} ${sub}` : wide;
+}
+function cp(el,id){document.querySelector(`#${id}`).querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');if(id==='ch-r')populateRegionSub(el.textContent.trim());cl();dc();}
 function getLoanAmt(){const r=calcC();return r?r.fin:0;}
 function calcC(){
   const buy=parseFloat(document.getElementById('bp')?.value)||0,cash=parseFloat(document.getElementById('mc')?.value)||0,inc=parseFloat(document.getElementById('inc')?.value)||0;
