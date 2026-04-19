@@ -28,11 +28,13 @@ const REGION_KEYWORDS = {
   '서울': ['11680','11650','11710','11440','11200','11680'], // 인기 5개구
 };
 
-function pickRegions(userRegion = '', maxBudget = 0) {
+function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '') {
   const r = (userRegion || '').replace(/\s+/g,'');
-  // 1) 사용자 입력에 일치하는 지역 우선
+  const wp = (workplaceArea || '').replace(/\s+/g,'');
+  const combined = r + ' ' + wp; // workplaceArea도 매칭 후보에 포함
+  // 1) 사용자 입력(지역명·직장위치)에 일치하는 구 우선
   for (const [kw, codes] of Object.entries(REGION_KEYWORDS)) {
-    if (kw !== '서울' && r.includes(kw)) {
+    if (kw !== '서울' && kw !== '경기' && combined.includes(kw)) {
       return codes.map(c => ({ lawdCd: c, name: kw }));
     }
   }
@@ -92,8 +94,8 @@ async function getAIRecommendations(userCondition) {
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
-  // Step 1: 키워드 기반 빠른 지역 결정 (AI 호출 X)
-  const targetRegions = pickRegions(region, maxBudget);
+  // Step 1: 키워드 기반 빠른 지역 결정 (AI 호출 X) — 직장위치도 매칭에 활용
+  const targetRegions = pickRegions(region, maxBudget, workplaceArea);
 
   // Step 2: 병렬 실거래가 조회
   const txArrays = await Promise.all(

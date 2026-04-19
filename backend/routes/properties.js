@@ -4,24 +4,6 @@ const { getAIRecommendations } = require('../services/propertyService');
 const { getAptBasisInfo } = require('../services/aptInfoService');
 const { validatePropertySearch } = require('../middleware/validation');
 
-// GET /api/properties/_debug?region=...&maxBudget=...
-// 디버그: pickRegions 결과만 빠르게 확인
-router.get('/_debug', async (req, res) => {
-  const { pickRegions } = require('../services/propertyService');
-  const region = (req.query.region || '').toString();
-  const maxBudget = parseFloat(req.query.maxBudget || '0');
-  const regions = pickRegions ? pickRegions(region, maxBudget) : null;
-  res.json({
-    receivedRegion: region,
-    receivedRegionBytes: Buffer.from(region, 'utf8').toString('hex'),
-    regionLen: region.length,
-    regionNFC: region.normalize ? region.normalize('NFC') : null,
-    nfcEqualsKeyword: region.normalize ? region.normalize('NFC').includes('노원') : null,
-    rawIncludesNowon: region.includes('노원'),
-    pickedRegions: regions,
-  });
-});
-
 // GET /api/properties/info?aptSeq=A13559101
 // 단지 기본정보 (총세대수·동수·준공일자 등)
 router.get('/info', async (req, res) => {
