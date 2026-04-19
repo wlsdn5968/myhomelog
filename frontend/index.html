@@ -906,7 +906,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 // BYOK 제거: 모든 API 호출은 항상 자체 백엔드를 경유. 사용자는 키를 입력할 필요가 없음.
 const DEFAULT_API = '/api';
 let CFG = { api: DEFAULT_API };
-let props=[], mapObj=null, overlays=[], flt='all';
+let props=[], mapObj=null, overlays=[], flt='all', searchMeta=null;
 let chatH=[], chatLd=false;
 let naverReady=false, mapTypeNormal=true;
 let currentDetail=null; // 현재 열린 상세 매물
@@ -1321,6 +1321,11 @@ async function doSearch(){
     } else {
       const data=await res.json();
       props=(data.recommendations||[]).map((p,i)=>({...p,lat:getLat(p.area,i),lng:getLng(p.area,i),type:p.ltv?.includes('40')?'regulated':'non'}));
+      searchMeta={
+        regions:(data.targetRegions||[]).map(r=>r.name).filter(Boolean),
+        totalTx:data.totalTxAnalyzed||0,
+        inBudget:data.inBudgetCount||0,
+      };
       success=true;
     }
   }catch(e){
@@ -1360,7 +1365,10 @@ function renderPList(){
 function renderListGrid(){
   const g=document.getElementById('view-list');
   if(!props.length){g.innerHTML='<div style="padding:20px;color:var(--t3);font-size:12px">AI 매물 검색을 먼저 실행해주세요</div>';return;}
-  const banner=`<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;color:var(--red);font-size:11px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아닙니다.</u> 아래 점수·신호는 과거 실거래 통계 정리이며, 미래 가격(상승·하락)을 예측·보장하지 않습니다. 모든 의사결정 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>`;
+  const metaLine = searchMeta && searchMeta.regions.length
+    ? `<div style="margin:10px 14px 0;padding:8px 12px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;color:#1B4F8A;font-size:11px;line-height:1.55">📊 <b>분석 지역:</b> ${searchMeta.regions.join(', ')} · <b>최근 6개월 실거래</b> ${searchMeta.totalTx.toLocaleString()}건 중 예산 범위 ${searchMeta.inBudget.toLocaleString()}건 분석</div>`
+    : '';
+  const banner=`${metaLine}<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;color:var(--red);font-size:11px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아닙니다.</u> 아래 점수·신호는 과거 실거래 통계 정리이며, 미래 가격(상승·하락)을 예측·보장하지 않습니다. 모든 의사결정 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>`;
   g.innerHTML=banner+props.map((p,i)=>{
     const tags=(p.tags||[]).slice(0,3).map(t=>`<span class="ptag ${typeof t==='object'?t.c||'gy':'gy'}">${typeof t==='object'?t.t||t:t}</span>`).join('');
     const s=p.score||60,lv=s>=75?'safe':s>=50?'warn':'danger',lt=s>=75?'안전':s>=50?'보통':'위험';
