@@ -1253,7 +1253,11 @@ async function loadSubs(){
     const r = await fetch(url, {signal: AbortSignal.timeout(10000)});
     const d = await r.json();
     if(!r.ok){
-      box.innerHTML = `<div style="padding:24px;text-align:center;color:var(--t3)">${d.error || '청약 정보 조회 실패'}<br><span style="font-size:11px">${d.hint || ''}</span></div>`;
+      box.innerHTML = `<div style="padding:24px;text-align:center;color:var(--t3);line-height:1.7">
+        <div style="font-size:13px;color:var(--t2);margin-bottom:6px">${d.error || '청약 정보 조회 실패'}</div>
+        <div style="font-size:11px;margin-bottom:10px">${d.hint || ''}</div>
+        <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="display:inline-block;padding:7px 14px;background:var(--acc);color:#fff;border-radius:7px;font-size:11px;text-decoration:none">청약Home 바로가기 ↗</a>
+      </div>`;
       box.dataset.loaded = '1';
       return;
     }

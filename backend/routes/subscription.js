@@ -87,10 +87,19 @@ router.get('/', async (req, res) => {
     cache.set(cacheKey, out, 21600); // 6시간
     res.json({ ...out, fromCache: false });
   } catch (e) {
-    const detail = e.response?.status
-      ? `HTTP ${e.response.status} ${JSON.stringify(e.response.data || {}).slice(0,200)}`
-      : e.code || e.message;
+    const status = e.response?.status;
+    const data = e.response?.data || {};
+    const detail = status ? `HTTP ${status} ${JSON.stringify(data).slice(0,200)}` : (e.code || e.message);
     console.error('[Subscription] API 실패:', detail);
+
+    // odcloud "등록되지 않은 인증키" (-4) → 청약 데이터셋 별도 구독 필요
+    if (status === 400 && (data.code === -4 || /등록되지 않은/.test(data.msg || ''))) {
+      return res.status(503).json({
+        error: '청약 데이터 API 별도 구독 필요',
+        hint: '관리자: data.go.kr에서 "한국부동산원_청약Home APT 분양정보 조회 서비스" 활용신청 후 동일 MOLIT_API_KEY 사용 가능',
+        externalLink: 'https://www.applyhome.co.kr',
+      });
+    }
     res.status(502).json({
       error: '청약 정보 조회 일시 실패',
       hint: '잠시 후 다시 시도하거나 청약Home(applyhome.co.kr)에서 직접 확인',
