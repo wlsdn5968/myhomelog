@@ -3,8 +3,54 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<meta name="description" content="내집로그 — 아파트 실거래가 조회·분석 서비스. 매수 비용 계산, 특약 초안 예시, 대출 한도 참고">
-<title>내집로그 — 부동산 데이터 분석</title>
+<meta name="description" content="내집로그 — 국토부 실거래가 기반 아파트 분석. 매수 비용·LTV·DSR·전세가율·갭·특약초안까지 한 화면에. 매수 추천 아님(참고용).">
+<meta name="keywords" content="아파트 실거래가, 부동산 분석, LTV 계산, DSR, 전세가율, 매수 비용, 부동산 특약, 임장 체크리스트">
+<meta name="robots" content="index, follow">
+<meta name="author" content="내집로그">
+<link rel="canonical" href="https://myhomelog.vercel.app/">
+
+<!-- Open Graph -->
+<meta property="og:type" content="website">
+<meta property="og:title" content="내집로그 — 실거래가로 보는 부동산 의사결정 도구">
+<meta property="og:description" content="국토부 실거래가·LTV·DSR·전세가율을 한 화면에. 매수 추천 아님(참고용 정보 도구).">
+<meta property="og:url" content="https://myhomelog.vercel.app/">
+<meta property="og:site_name" content="내집로그">
+<meta property="og:locale" content="ko_KR">
+<meta property="og:image" content="https://myhomelog.vercel.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+
+<!-- Twitter Card -->
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="내집로그 — 실거래가로 보는 부동산 의사결정 도구">
+<meta name="twitter:description" content="국토부 실거래가·LTV·DSR·전세가율을 한 화면에. 매수 추천 아님(참고용).">
+
+<!-- JSON-LD 구조화 데이터 -->
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "WebApplication",
+  "name": "내집로그",
+  "alternateName": "MyHomeLog",
+  "applicationCategory": "FinanceApplication",
+  "operatingSystem": "Web",
+  "url": "https://myhomelog.vercel.app/",
+  "description": "국토부 실거래가 기반 부동산 데이터 분석 도구. 매수 비용·LTV·DSR·전세가율·갭 분석·특약 초안 제공. 매수·매도 추천이 아닌 참고용 정보 서비스.",
+  "inLanguage": "ko-KR",
+  "offers": {
+    "@type": "Offer",
+    "price": "0",
+    "priceCurrency": "KRW"
+  },
+  "disclaimer": "본 서비스는 매수·매도를 추천하지 않으며, 모든 의사결정의 책임은 이용자 본인에게 있습니다. 가격 하락에 따른 손실은 운영자가 책임지지 않습니다.",
+  "publisher": {
+    "@type": "Organization",
+    "name": "내집로그"
+  }
+}
+</script>
+
+<title>내집로그 — 실거래가로 보는 부동산 의사결정 도구</title>
 <style>
 :root{
   --bg:#F4F2ED;--s0:#fff;--s1:#F8F6F2;--s2:#F0EDE7;
@@ -428,9 +474,11 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <button class="htab" onclick="sv('calc',this)">🧮 대출계산</button>
     <button class="htab" onclick="sv('clause',this)">✍ 특약생성</button>
     <button class="htab" onclick="sv('biz',this)">💰 복비계산</button>
+    <button class="htab" onclick="sv('news',this)">📰 뉴스</button>
   </div>
   <div class="hml">
     <div class="rpill"><div class="hdot"></div>10.15 규제</div>
+    <span class="hst" id="quotaPill" style="background:var(--ambL);color:var(--amb);display:none">⚡ 5/5</span>
     <span class="hst off" id="apiSt">확인 중...</span>
     <button class="hbtn" id="settingsBtn" onclick="openSettings()">ⓘ 정보</button>
   </div>
@@ -685,6 +733,26 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
 </div>
 
+<!-- 부동산 뉴스 뷰 -->
+<div class="biz-view" id="view-news" style="display:none">
+  <div class="biz-section">
+    <h3>📰 부동산 뉴스</h3>
+    <p style="font-size:11px;color:var(--t3);margin-bottom:13px">언론사 원문 링크 · 본 서비스는 단순 인덱싱 (저작권은 각 언론사)</p>
+    <div class="chips" id="news-cat" style="margin-bottom:14px">
+      <span class="chip on" data-cat="hot" onclick="loadNews(this)">🔥 인기</span>
+      <span class="chip" data-cat="policy" onclick="loadNews(this)">📋 정책·규제</span>
+      <span class="chip" data-cat="region" onclick="loadNews(this)">🗺 지역별</span>
+      <span class="chip" data-cat="reno" onclick="loadNews(this)">🏗 재건축·재개발</span>
+    </div>
+    <div id="newsList" style="font-size:12px;line-height:1.7;color:var(--t2)">
+      <div style="padding:30px 0;text-align:center;color:var(--t3)">뉴스 로딩 중...</div>
+    </div>
+    <div style="margin-top:14px;padding:10px 12px;background:var(--ambL);border:1px solid #E8D2A8;border-radius:8px;font-size:10.5px;color:var(--amb);line-height:1.6">
+      ⚠ 뉴스 헤드라인은 시장 분위기 참고용이며, <strong>특정 단지·시점의 매수 판단 근거가 되어서는 안 됩니다.</strong> 언론 보도는 시점·관점에 따라 편향될 수 있습니다.
+    </div>
+  </div>
+</div>
+
 <!-- 모바일 하단 탭 -->
 <nav class="bnav" id="bnav">
   <div class="bnav-inner">
@@ -698,11 +766,62 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 
 <!-- 면책 고지 -->
 <footer class="legal-footer">
-  본 서비스는 부동산 공공 데이터를 조회·가공하는 <strong>정보 분석 서비스</strong>이며, 「자본시장법」상 투자자문업·「공인중개사법」상 중개업에 해당하지 않습니다.
-  모든 분석 결과는 참고용이며 투자·계약 의사결정의 법적 책임은 이용자 본인에게 있습니다.
-  대출 한도는 반드시 금융기관에서 확인하고, 특약 초안은 공인중개사·법무사의 검토 후 사용하세요.
-  규제 정보는 수시 변경될 수 있으며 최신 정보는 금융위원회·국토교통부에서 확인하세요.
+  ⚠ <strong>본 서비스는 매수·매도를 권유하거나 추천하지 않습니다.</strong> 모든 가격 분석·신호·점수는 과거 실거래 데이터의 통계적 정리이며, <strong>미래 가격을 예측하거나 보장하지 않습니다.</strong> 부동산 가격은 하락할 수 있으며, 그로 인한 손실의 책임은 전적으로 이용자 본인에게 있습니다.<br>
+  본 서비스는 부동산 공공 데이터를 조회·가공하는 <strong>정보 분석 도구</strong>이며, 「자본시장법」상 투자자문업·「공인중개사법」상 중개업에 해당하지 않습니다. 대출 한도는 반드시 금융기관에서, 특약·계약은 공인중개사·법무사 검토를, 세금은 세무사 상담을 받으세요. 규제·세제는 수시 변경되며 최신 정보는 금융위원회·국토교통부·국세청에서 확인하세요.
+  <a href="javascript:openTerms()" style="color:var(--acc);text-decoration:underline">전체 이용약관·면책조항 보기</a>
 </footer>
+
+<!-- 약관 모달 -->
+<div class="smbg" id="TM" style="z-index:9998">
+  <div class="smbox" style="max-width:560px;max-height:80vh">
+    <div class="smhdr">
+      <span class="smtit">📜 이용약관 및 면책조항</span>
+      <button class="smx" onclick="closeTerms()">✕</button>
+    </div>
+    <div class="smbody" id="tmBody" style="overflow-y:auto;max-height:65vh">
+      <div style="font-size:12px;line-height:1.8;color:var(--t1)">
+        <h3 style="font-size:14px;margin:8px 0 6px;color:var(--red)">⚠ 가장 중요한 고지</h3>
+        <div style="background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;padding:12px;margin-bottom:14px;font-weight:600;color:var(--red)">
+          내집로그는 <u>매수·매도를 권유하거나 가격을 예측하는 서비스가 아닙니다.</u><br>
+          제공되는 모든 점수·신호등(🟢🟡🔴)·추천 매물·분석 코멘트는 <u>과거 실거래 데이터를 통계적으로 정리한 참고 정보</u>일 뿐이며, <u>미래 가격의 상승 또는 하락을 시사하지 않습니다.</u><br>
+          부동산 가격은 거시경제·금리·정책·심리 등 다양한 요인에 의해 <u>언제든 큰 폭으로 하락할 수 있으며</u>, 본 서비스를 참고한 결과로 발생한 모든 금전적 손실(매매 차손, 대출 이자, 세금, 기회비용 등)에 대해 <strong>운영자는 일체의 책임을 지지 않습니다.</strong>
+        </div>
+
+        <h3 style="font-size:13px;margin:14px 0 4px">1. 서비스의 성격</h3>
+        <p>본 서비스는 「자본시장과 금융투자업에 관한 법률」에 따른 <strong>투자자문업·투자일임업이 아니며</strong>, 「공인중개사법」에 따른 <strong>중개업·중개보조업이 아닙니다.</strong> 「부동산 거래신고 등에 관한 법률」에 따른 <strong>부동산 거래의 알선·표시·광고가 아닙니다.</strong></p>
+
+        <h3 style="font-size:13px;margin:14px 0 4px">2. 데이터의 한계</h3>
+        <ul style="padding-left:18px">
+          <li>실거래가는 국토교통부 공공데이터를 사용하나, <strong>신고 지연·취소·정정에 따라 변동</strong>될 수 있습니다.</li>
+          <li>거래 4건 미만 단지는 통계적 의미가 약하며, 데이터 신뢰도(NONE/LOW/MED/HIGH)를 별도 표시합니다.</li>
+          <li>이상거래(±30% 이탈) 필터링·계절 편향 경고를 적용하나, <strong>모든 비정상 패턴을 걸러내지는 못합니다.</strong></li>
+          <li>좌표·면적·연식 등은 카카오 Local API/MOLIT 응답을 그대로 표시하며, <strong>실제와 다를 수 있습니다.</strong></li>
+        </ul>
+
+        <h3 style="font-size:13px;margin:14px 0 4px">3. AI 분석의 한계</h3>
+        <p>AI(Anthropic Claude) 응답은 학습 데이터·확률 모델 기반이며 <strong>오류·환각(hallucination)이 발생할 수 있습니다.</strong> 모든 AI 출력은 사실관계 확인 없이 의사결정에 사용해서는 안 됩니다.</p>
+
+        <h3 style="font-size:13px;margin:14px 0 4px">4. 대출·세금·계약 관련</h3>
+        <ul style="padding-left:18px">
+          <li>대출 한도·DSR 계산은 <strong>참고치</strong>이며 실제 한도는 금융기관 심사로 결정됩니다.</li>
+          <li>취득세·양도세·재산세 추정은 <strong>참고치</strong>이며 실제 세액은 세무사·관할 세무서 확인이 필요합니다.</li>
+          <li>특약 초안은 <strong>법적 효력이 없는 예시</strong>이며 공인중개사·법무사 검토 없이 사용하지 마세요.</li>
+        </ul>
+
+        <h3 style="font-size:13px;margin:14px 0 4px">5. 책임의 제한</h3>
+        <p>운영자는 본 서비스 이용으로 발생한 직접·간접·결과적 손해(매매 차손, 대출 이자, 세금, 기회비용, 정신적 손해 등)에 대해 <strong>고의·중과실이 없는 한 어떠한 책임도 부담하지 않습니다.</strong> 이용자는 본 서비스를 보조 도구로만 사용하고, 최종 의사결정은 반드시 본인의 판단과 전문가(공인중개사·세무사·법무사·금융기관) 자문을 거쳐 수행해야 합니다.</p>
+
+        <h3 style="font-size:13px;margin:14px 0 4px">6. 동의</h3>
+        <p>본 서비스를 이용함으로써 위 사항에 모두 <strong>동의한 것으로 간주</strong>됩니다.</p>
+
+        <div style="margin-top:14px;padding:8px;background:var(--s1);border-radius:6px;font-size:10px;color:var(--t3);text-align:center">
+          최종 갱신: 2026.04 · 문의: support@myhomelog.local
+        </div>
+      </div>
+      <button class="sm-save" onclick="closeTerms()">확인</button>
+    </div>
+  </div>
+</div>
 
 <!-- DETAIL MODAL -->
 <div class="dmbg" id="DM">
@@ -710,6 +829,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <div class="dmhdr">
       <span class="dmtit" id="dmT">리포트</span>
       <div style="display:flex;gap:7px;align-items:center">
+        <button class="bk-btn" id="shareBtn" onclick="shareCurrent()" title="이 단지 분석 공유">🔗 공유</button>
         <button class="bk-btn" id="bkToggle" onclick="toggleBookmark()">⭐ 관심 추가</button>
         <button class="dmx" onclick="cDM()">✕</button>
       </div>
@@ -802,8 +922,11 @@ window.addEventListener('DOMContentLoaded',()=>{
   renderSavedDeals();
   loadLeaflet(); // 카카오 정식 키 미연동 환경 대비, 기본은 OSM. 좌표는 백엔드 카카오 geocode로 보정.
 
-  // 첫 방문자 온보딩
-  if(!localStorage.getItem('mhl_onboarded')){
+  // 공유 URL 진입 처리
+  setTimeout(handleShareUrl, 300);
+
+  // 첫 방문자 온보딩 (공유 링크로 들어온 경우는 스킵)
+  if(!localStorage.getItem('mhl_onboarded') && !new URLSearchParams(location.search).get('apt')){
     setTimeout(()=>startOnboarding(),400);
   }
 });
@@ -870,7 +993,27 @@ const OB_STEPS=[
         <option value="다주택">다주택자</option>
       </select>
     </div>`,
-    next:'추천 받기 →'
+    next:'다음 →'
+  },
+  {
+    title:'⚠ 시작 전 꼭 확인해주세요',
+    body:`<div style="padding:4px 0;font-size:12px;line-height:1.7;color:var(--t1)">
+      <div style="background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;padding:12px;margin-bottom:12px;color:var(--red);font-weight:600">
+        내집로그는 <u>매수·매도를 추천하지 않습니다.</u><br>
+        제공되는 점수·신호등은 <u>과거 실거래 통계 정리</u>이며, <u>미래 가격을 예측하거나 보장하지 않습니다.</u>
+      </div>
+      <ul style="padding-left:18px;color:var(--t2);font-size:11px;line-height:1.8">
+        <li>부동산 가격은 <strong>하락할 수 있으며</strong>, 손실 책임은 이용자 본인에게 있습니다.</li>
+        <li>대출은 금융기관, 세금은 세무사, 계약은 공인중개사·법무사의 확인을 반드시 거치세요.</li>
+        <li>AI 응답은 오류가 있을 수 있어 <strong>사실 확인 없이</strong> 의사결정에 사용 금지.</li>
+      </ul>
+      <label style="display:flex;align-items:flex-start;gap:8px;margin-top:14px;padding:10px;background:var(--s1);border-radius:8px;cursor:pointer;font-size:12px">
+        <input type="checkbox" id="ob_agree" style="margin-top:2px;flex-shrink:0">
+        <span>위 내용을 모두 읽고 이해했으며, <strong>본 서비스를 참고용으로만 사용</strong>하고 모든 의사결정의 책임이 저에게 있음에 동의합니다.</span>
+      </label>
+      <div style="text-align:center;margin-top:8px"><a href="javascript:openTerms()" style="font-size:10px;color:var(--t3);text-decoration:underline">전체 이용약관·면책조항 보기</a></div>
+    </div>`,
+    next:'동의하고 시작 →'
   },
 ];
 
@@ -899,7 +1042,6 @@ function nextOnboarding(){
     const r=document.getElementById('ob_region')?.value;
     const h=document.getElementById('ob_house')?.value;
     if(r){
-      // ch-r 그룹에서 일치 라벨 클릭
       document.querySelectorAll('#ch-r .ch').forEach(el=>{
         if(r.includes(el.textContent.trim()) || el.textContent.trim().includes(r))el.classList.add('on');
         else el.classList.remove('on');
@@ -911,11 +1053,16 @@ function nextOnboarding(){
       });
     }
   }
+  // 마지막 동의 단계 검증
+  if(_obStep===3){
+    const agreed=document.getElementById('ob_agree')?.checked;
+    if(!agreed){toast('서비스 이용 동의가 필요해요');return;}
+    localStorage.setItem('mhl_legal_agreed', new Date().toISOString());
+  }
   _obStep++;
   if(_obStep>=OB_STEPS.length){
     localStorage.setItem('mhl_onboarded','1');
     document.getElementById('OB').classList.remove('open');
-    // 자동으로 검색 실행
     setTimeout(()=>{
       const btn=document.getElementById('srchBtn');
       if(typeof doSearch==='function')doSearch();
@@ -924,6 +1071,60 @@ function nextOnboarding(){
     return;
   }
   renderOnboarding();
+}
+
+// 약관 모달
+function openTerms(){document.getElementById('TM').classList.add('open');}
+function closeTerms(){document.getElementById('TM').classList.remove('open');}
+
+// ── 부동산 뉴스 ───────────────────────────────────────
+async function loadNews(btn){
+  let cat='hot';
+  if(btn){
+    document.querySelectorAll('#news-cat .chip').forEach(c=>c.classList.remove('on'));
+    btn.classList.add('on');
+    cat=btn.dataset.cat||'hot';
+  }
+  const list=document.getElementById('newsList');
+  list.innerHTML='<div style="padding:30px 0;text-align:center;color:var(--t3)">⏳ 뉴스 불러오는 중...</div>';
+  try{
+    const r=await fetch(`${CFG.api}/news?cat=${cat}`,{signal:AbortSignal.timeout(8000)});
+    const d=await r.json();
+    if(!d.items||!d.items.length){list.innerHTML='<div style="padding:30px 0;text-align:center;color:var(--t3)">표시할 뉴스가 없어요.</div>';return;}
+    const fmtDate=(s)=>{try{const dt=new Date(s);return `${dt.getMonth()+1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;}catch{return '';}};
+    list.innerHTML=d.items.map(n=>`
+      <a href="${n.link}" target="_blank" rel="noopener noreferrer nofollow" style="display:block;padding:12px 14px;border:1px solid var(--bd);border-radius:8px;margin-bottom:8px;text-decoration:none;color:var(--t1);background:var(--s0);transition:all .15s" onmouseover="this.style.borderColor='var(--acc)';this.style.background='var(--s1)'" onmouseout="this.style.borderColor='var(--bd)';this.style.background='var(--s0)'">
+        <div style="font-size:13px;font-weight:600;line-height:1.5;margin-bottom:5px">${n.title}</div>
+        <div style="font-size:11px;color:var(--t2);line-height:1.5;margin-bottom:5px">${n.description||''}</div>
+        <div style="font-size:10px;color:var(--t3)">📰 ${n.source||'언론사'} · ${fmtDate(n.pubDate)} · 원문 보기 ↗</div>
+      </a>
+    `).join('') + `<div style="margin-top:10px;padding:8px;background:var(--s1);border-radius:6px;font-size:10px;color:var(--t3);text-align:center">출처: ${d.source} · ${d.count}건 · 30분마다 갱신</div>`;
+    list.dataset.loaded='1';
+  }catch(e){
+    list.innerHTML='<div style="padding:30px 0;text-align:center;color:var(--red);font-size:12px">뉴스를 불러오지 못했어요. 잠시 후 다시 시도해주세요.</div>';
+  }
+}
+
+// 사용량 표시 갱신 (헤더 pill + 정보 모달)
+function updateQuota(usage){
+  if(!usage)return;
+  const pill=document.getElementById('quotaPill');
+  const info=document.getElementById('usageInfo');
+  if(pill){
+    pill.style.display='inline-flex';
+    pill.textContent=`⚡ ${usage.remaining}/${usage.limit}`;
+    if(usage.remaining<=1){pill.style.background='var(--redL)';pill.style.color='var(--red)';}
+    else if(usage.remaining<=2){pill.style.background='var(--ambL)';pill.style.color='var(--amb)';}
+    else{pill.style.background='var(--grnL)';pill.style.color='var(--grn)';}
+    pill.title=`오늘 무료 검색 ${usage.used}/${usage.limit}회 사용 — 매일 자정 리셋`;
+  }
+  if(info)info.textContent=`오늘 ${usage.used}/${usage.limit}회 사용 (남은 무료 검색 ${usage.remaining}회) · 매일 자정 리셋`;
+}
+async function refreshQuota(){
+  try{
+    const r=await fetch(`${CFG.api}/health`,{signal:AbortSignal.timeout(3000)});
+    if(r.ok){const d=await r.json();updateQuota(d.usage);}
+  }catch{}
 }
 
 // ── MAP INIT ─────────────────────────────────────────────
@@ -1085,9 +1286,16 @@ async function batchGeocode(items){
 }
 
 // ── SEARCH ───────────────────────────────────────────────
+function searchStep(label,n){
+  const tx=document.getElementById('srchTx');
+  if(tx)tx.textContent=`${n}/3 ${label}`;
+  showHint(`⏳ ${n}/3 — ${label}`,3000);
+}
+
 async function doSearch(){
   const btn=document.getElementById('srchBtn'),sp=document.getElementById('srchSp'),tx=document.getElementById('srchTx');
-  btn.classList.add('ld');sp.style.display='block';tx.textContent='AI 분석 중...';
+  btn.classList.add('ld');sp.style.display='block';
+  searchStep('조건 정리 중...', 1);
 
   const body={
     maxBudget:parseFloat(document.getElementById('bp').value)||7,
@@ -1102,6 +1310,8 @@ async function doSearch(){
 
   let success=false;
   try{
+    setTimeout(()=>{if(btn.classList.contains('ld'))searchStep('국토부 실거래가 조회 중...', 2);}, 600);
+    setTimeout(()=>{if(btn.classList.contains('ld'))searchStep('AI 분석·점수 계산 중...', 3);}, 3500);
     const res=await fetch(`${CFG.api}/properties/recommend`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
     if(res.status===429){
       const j=await res.json().catch(()=>({}));
@@ -1130,6 +1340,7 @@ async function doSearch(){
     });
   }
   btn.classList.remove('ld');sp.style.display='none';tx.textContent='🤖 AI 맞춤 매물 검색';
+  refreshQuota();
 }
 
 // ── PROP LIST ────────────────────────────────────────────
@@ -1149,7 +1360,8 @@ function renderPList(){
 function renderListGrid(){
   const g=document.getElementById('view-list');
   if(!props.length){g.innerHTML='<div style="padding:20px;color:var(--t3);font-size:12px">AI 매물 검색을 먼저 실행해주세요</div>';return;}
-  g.innerHTML=props.map((p,i)=>{
+  const banner=`<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;color:var(--red);font-size:11px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아닙니다.</u> 아래 점수·신호는 과거 실거래 통계 정리이며, 미래 가격(상승·하락)을 예측·보장하지 않습니다. 모든 의사결정 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>`;
+  g.innerHTML=banner+props.map((p,i)=>{
     const tags=(p.tags||[]).slice(0,3).map(t=>`<span class="ptag ${typeof t==='object'?t.c||'gy':'gy'}">${typeof t==='object'?t.t||t:t}</span>`).join('');
     const s=p.score||60,lv=s>=75?'safe':s>=50?'warn':'danger',lt=s>=75?'안전':s>=50?'보통':'위험';
     return`<div class="lcard" onclick="showDetail(props[${i}])">
@@ -1189,10 +1401,11 @@ function showDetail(p){
 
   document.getElementById('t0').innerHTML=`
     <div class="gbw">${gSVG(s,90)}
-      <div class="gi"><div class="gi-t">AI 투자점수 ${s}/100</div><span class="lvl ${lv}">${lt}</span>
+      <div class="gi"><div class="gi-t">데이터 종합 점수 ${s}/100</div><span class="lvl ${lv}">${lt}</span>
         <div class="gi-s">${p.area||''} | ${p.buildYear||''}년 | LTV ${p.ltv||'?'} | 최대 ${p.maxLoan||'LTV기준'}</div>
       </div>
     </div>
+    <div style="background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;padding:9px 11px;margin:8px 0 10px;font-size:11px;color:var(--red);font-weight:600;line-height:1.5">⚠ 점수·신호는 <u>과거 실거래 통계 정리</u>이며 매수 추천이 아닙니다. 가격 하락 위험은 본인이 부담합니다.</div>
     <div class="rg2">
       <div class="rc"><div class="rcl">현재 평균가</div><div class="rcv" style="color:var(--acc)">${(p.avgPrice||0).toFixed(2)}억</div></div>
       <div class="rc"><div class="rcl">가격 범위</div><div class="rcv">${(p.minPrice||0).toFixed(1)}~${(p.maxPrice||0).toFixed(1)}억</div></div>
@@ -1228,7 +1441,46 @@ function showDetail(p){
 }
 
 function stb(btn,id){document.querySelectorAll('.rtab').forEach(b=>b.classList.remove('on'));document.querySelectorAll('.tp').forEach(t=>t.classList.remove('on'));btn.classList.add('on');document.getElementById(id).classList.add('on');}
-function cDM(){document.getElementById('DM').classList.remove('open');currentDetail=null;}
+function cDM(){document.getElementById('DM').classList.remove('open');currentDetail=null;
+  // URL의 ?apt= 파라미터 정리
+  if(history.replaceState){const u=new URL(location.href);u.searchParams.delete('apt');u.searchParams.delete('area');history.replaceState(null,'',u);}
+}
+
+// ── 공유 URL ───────────────────────────────────────────
+async function shareCurrent(){
+  if(!currentDetail){toast('공유할 매물이 없어요');return;}
+  const u=new URL(location.origin+location.pathname);
+  u.searchParams.set('apt', currentDetail.aptName);
+  if(currentDetail.area)u.searchParams.set('area', currentDetail.area);
+  const url=u.toString();
+  const title=`${currentDetail.aptName} — 내집로그 데이터 분석`;
+  const text=`${currentDetail.aptName} (${currentDetail.area||''}) — 평균 ${(currentDetail.avgPrice||0).toFixed(2)}억 / 점수 ${currentDetail.score||60}점\n※ 매수 추천이 아니며 참고용 정보입니다.`;
+  // Web Share API (모바일)
+  if(navigator.share){
+    try{await navigator.share({title,text,url});return;}catch(e){if(e.name==='AbortError')return;}
+  }
+  // Fallback: 클립보드 복사
+  try{
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    toast('🔗 링크 복사 완료 — 붙여넣기로 공유하세요');
+  }catch{
+    prompt('이 링크를 복사하세요:', url);
+  }
+  if(history.replaceState)history.replaceState(null,'',url);
+}
+
+// 진입 시 ?apt= 파라미터 처리 → 자동 상세 표시
+function handleShareUrl(){
+  const sp=new URLSearchParams(location.search);
+  const apt=sp.get('apt');
+  if(!apt)return;
+  const area=sp.get('area')||'';
+  // props에 이미 있으면 즉시 표시, 없으면 가상 매물로 임시 생성
+  const found=props.find(p=>p.aptName===apt);
+  if(found){showDetail(found);return;}
+  // 검색 결과가 아직 없을 때: 단지명·지역만으로 stub 매물 표시
+  showDetail({aptName:apt, area, avgPrice:0, minPrice:0, maxPrice:0, score:60, ltv:'?', maxLoan:'?', pros:'공유 링크로 진입했어요. 정확한 분석은 아래 AI 매물 검색을 실행해주세요.', cons:'', strategy:'', tags:[], txHistory:[]});
+}
 
 // ── 매수 신호 분석 로드 ───────────────────────────────────
 async function loadAnalysis(p){
@@ -1766,7 +2018,7 @@ function getLat(area,i){if(!area)return 37.545+(i*.02);for(const[k,v]of Object.e
 function getLng(area,i){if(!area)return 127.0+(i*.02);for(const[k,v]of Object.entries(AC)){if(area.includes(k))return v[1]+(Math.random()-.5)*.008;}return 127.0+(i*.01)+(Math.random()-.5)*.02;}
 
 // ── VIEW SWITCH ───────────────────────────────────────────
-const VIEW_DISPLAY={map:'flex',list:'grid',calc:'flex',clause:'flex',biz:'flex'};
+const VIEW_DISPLAY={map:'flex',list:'grid',calc:'flex',clause:'flex',biz:'flex',news:'flex'};
 function sv(v,btn){
   Object.entries(VIEW_DISPLAY).forEach(([id,disp])=>{
     const el=document.getElementById('view-'+id);
@@ -1779,12 +2031,13 @@ function sv(v,btn){
     else if(window.innerWidth<=900)rp.style.setProperty('display','none','important');
     else rp.style.removeProperty('display');
   }
-  // 헤더 탭 활성화 (순서: map,list,calc,clause,biz)
-  const htabOrder=['map','list','calc','clause','biz'];
+  // 헤더 탭 활성화 (순서: map,list,calc,clause,biz,news)
+  const htabOrder=['map','list','calc','clause','biz','news'];
   document.querySelectorAll('.htab').forEach((b,i)=>b.classList.toggle('on',htabOrder[i]===v));
   // 모바일 하단 탭 활성화
   document.querySelectorAll('.bnav-item').forEach(b=>b.classList.toggle('on',b.dataset.view===v));
   if(v==='list')renderListGrid();
+  if(v==='news' && !document.getElementById('newsList').dataset.loaded){loadNews();}
 }
 function ts(id){document.getElementById(id)?.classList.toggle('cl');}
 
@@ -1948,10 +2201,9 @@ async function chkAPI(){
       cs.textContent='● 온라인';cs.style.color='var(--grn)';
       ce && ce.classList.remove('show');
       if(bs){bs.textContent='연결됨';bs.className='sm-badge';}
-      // 사용 한도 표시
+      // 사용 한도 표시 (모달 + 헤더 pill)
       if(d.usage){
-        const u=document.getElementById('usageInfo');
-        if(u)u.textContent=`오늘 ${d.usage.used}/${d.usage.limit}회 사용 (남은 무료 검색 ${d.usage.remaining}회)`;
+        updateQuota(d.usage);
       }
       return true;
     }
@@ -1965,10 +2217,46 @@ async function chkAPI(){
 }
 
 // ── CHAT ─────────────────────────────────────────────────
-const SYS=`당신은 내집로그 AI 부동산 컨설턴트. 2025.10.15 규제 기준:
+const SYS=`당신은 내집로그 AI 부동산 정보 분석 도우미. 2025.10.15 규제 기준:
 서울25구+경기12곳 규제지역 | 무주택 LTV 40% | 생애최초 70%(전입의무) | 비규제 70%
 한도: 15억↓6억/15~25억4억/25억↑2억 | DSR 은행40%/2금융50% | 스트레스+1.5%p | 토허구역 2년 실거주
-결론→근거→실행 순서. 수치기반. 불확실=확인필요. 세무/법무=전문가권유.`;
+
+[필수 응답 규칙 — 위반 금지]
+1. 절대 "사세요/사라/매수 추천/오를 것" 등 매수 권유 표현 금지. "현재 데이터로 보면 ~한 특징이 있어요" 식 중립 서술만.
+2. 절대 미래 가격을 예측·보장하지 않음. "오를 것" "떨어질 것" 등 단정 금지. "과거 N개월 추이는 ~" 식 사실 진술만.
+3. 모든 답변 끝에 "본 답변은 참고 정보이며 매수·매도 추천이 아닙니다. 가격 하락 위험은 본인이 부담하세요." 한 줄 추가.
+4. 대출/세금/계약은 반드시 "금융기관/세무사/공인중개사·법무사 확인 필수" 명시.
+5. 결론→근거→확인필요사항 순서. 수치 기반. 불확실 시 "확인 필요" 솔직히 표시.`;
+
+// 사용자 조건 + 추천 매물 컨텍스트 자동 주입 (P0-5)
+function buildChatContext(){
+  const ctx={};
+  // 사용자 입력 조건
+  ctx.userProfile={
+    maxBudget:parseFloat(document.getElementById('bp')?.value)||null,
+    myCash:parseFloat(document.getElementById('mc')?.value)||null,
+    region:gct('ch-r')||null,
+    houseStatus:gct('ch-h')||null,
+    isFirstBuyer:gct('ch-f')==='예',
+    schoolNeeded:gct('ch-sc')==='학군 중요',
+    workplaceArea:document.getElementById('wp')?.value?.trim()||null,
+  };
+  // 현재 상세 보고 있는 매물 (최우선)
+  if(currentDetail){
+    ctx.focusProperty={
+      aptName:currentDetail.aptName, area:currentDetail.area,
+      avgPrice:currentDetail.avgPrice, score:currentDetail.score, ltv:currentDetail.ltv,
+      buildYear:currentDetail.buildYear,
+    };
+  }
+  // 최근 추천 매물 상위 5
+  if(props && props.length){
+    ctx.recommendedProperties=props.slice(0,5).map(p=>({
+      aptName:p.aptName, area:p.area, avgPrice:p.avgPrice, score:p.score, ltv:p.ltv,
+    }));
+  }
+  return ctx;
+}
 
 async function sM(){
   if(chatLd)return;
@@ -1976,10 +2264,11 @@ async function sM(){
   el.value='';el.style.height='auto';addMsg('user',txt);chatH.push({role:'user',content:txt});chatLd=true;showTyp();
   document.getElementById('cErr').classList.remove('show');
   let replied=false;
+  const sessionContext=buildChatContext();
 
-  // 백엔드 단일 경로 (BYOK 제거)
+  // 백엔드 단일 경로 (BYOK 제거) — 매물·조건 컨텍스트 자동 첨부
   try{
-    const r=await fetch(`${CFG.api}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:txt,context:{history:chatH.slice(-18)}}),signal:AbortSignal.timeout(30000)});
+    const r=await fetch(`${CFG.api}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:txt,context:{history:chatH.slice(-18), session:sessionContext}}),signal:AbortSignal.timeout(30000)});
     if(r.status===429){
       const j=await r.json().catch(()=>({}));
       rmTyp();

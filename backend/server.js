@@ -80,6 +80,7 @@ const regulationsRouter = require('./routes/regulations');
 const clauseRouter = require('./routes/clause');
 const geocodeRouter = require('./routes/geocode');
 const analysisRouter = require('./routes/analysis');
+const newsRouter = require('./routes/news');
 
 // 일일 무료 한도 (BYOK 제거에 따른 무료 체험 정책)
 const { dailyLimit, getUsage } = require('./middleware/dailyLimit');
@@ -93,6 +94,7 @@ app.use('/api/regulations', regulationsRouter);
 app.use('/api/clause', chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat' }), clauseRouter);
 app.use('/api/geocode', dataLimiter, geocodeRouter);
 app.use('/api/analysis', dataLimiter, analysisRouter);
+app.use('/api/news', dataLimiter, newsRouter);
 
 // 헬스체크 (사용 한도 잔량 포함 — 프론트 사용 한도 표시에 사용)
 app.get('/api/health', (req, res) => {
