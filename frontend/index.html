@@ -742,6 +742,11 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <div class="biz-section">
     <h3>📰 부동산 뉴스</h3>
     <p style="font-size:11px;color:var(--t3);margin-bottom:13px">언론사 원문 링크 · 본 서비스는 단순 인덱싱 (저작권은 각 언론사)</p>
+    <div id="newsSummary" style="margin-bottom:14px;padding:13px 14px;background:linear-gradient(135deg,#F9F4EC,#F1EADE);border:1px solid #E1D5BE;border-radius:10px;display:none">
+      <div style="font-size:10.5px;color:var(--amb);font-weight:700;margin-bottom:6px;letter-spacing:0.3px">📅 오늘의 부동산 3줄 시황 <span style="color:var(--t3);font-weight:500" id="newsSummaryTime"></span></div>
+      <div id="newsSummaryLines" style="font-size:12px;line-height:1.85;color:var(--t1)"></div>
+      <div style="font-size:9.5px;color:var(--t3);margin-top:6px;line-height:1.5">AI가 뉴스 헤드라인을 중립적으로 정리 · 매수·매도 추천이 아닙니다</div>
+    </div>
     <div class="chips" id="news-cat" style="margin-bottom:14px">
       <span class="chip on" data-cat="hot" onclick="loadNews(this)">🔥 인기</span>
       <span class="chip" data-cat="policy" onclick="loadNews(this)">📋 정책·규제</span>
@@ -1105,8 +1110,31 @@ async function loadNews(btn){
       </a>
     `).join('') + `<div style="margin-top:10px;padding:8px;background:var(--s1);border-radius:6px;font-size:10px;color:var(--t3);text-align:center">출처: ${d.source} · ${d.count}건 · 30분마다 갱신</div>`;
     list.dataset.loaded='1';
+    // 핫 카테고리일 때만 AI 3줄 시황 자동 로드 (첫 로드 시 1회)
+    if(cat==='hot' && !document.getElementById('newsSummary').dataset.loaded){
+      loadNewsSummary();
+    }
   }catch(e){
     list.innerHTML='<div style="padding:30px 0;text-align:center;color:var(--red);font-size:12px">뉴스를 불러오지 못했어요. 잠시 후 다시 시도해주세요.</div>';
+  }
+}
+
+// AI 3줄 시황 요약 (핫 뉴스 로드 후 호출)
+async function loadNewsSummary(){
+  const box=document.getElementById('newsSummary');
+  if(!box) return;
+  try{
+    const r=await fetch(`${CFG.api}/news/summary`,{signal:AbortSignal.timeout(15000)});
+    const d=await r.json();
+    if(!d.summary || !d.summary.length) return;
+    const lines = Array.isArray(d.summary) ? d.summary : [d.summary];
+    document.getElementById('newsSummaryLines').innerHTML = lines.map(l=>`<div>${l}</div>`).join('');
+    const t=d.updatedAt?new Date(d.updatedAt):new Date();
+    document.getElementById('newsSummaryTime').textContent = `· ${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')} 기준`;
+    box.style.display='block';
+    box.dataset.loaded='1';
+  }catch(e){
+    // 요약 실패는 조용히 숨김 (뉴스 본체는 정상)
   }
 }
 
