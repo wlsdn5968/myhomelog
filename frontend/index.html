@@ -432,7 +432,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <div class="hml">
     <div class="rpill"><div class="hdot"></div>10.15 규제</div>
     <span class="hst off" id="apiSt">확인 중...</span>
-    <button class="hbtn" id="settingsBtn" onclick="openSettings()">⚙ API 설정</button>
+    <button class="hbtn" id="settingsBtn" onclick="openSettings()">ⓘ 정보</button>
   </div>
 </header>
 
@@ -917,8 +917,8 @@ function nextOnboarding(){
     document.getElementById('OB').classList.remove('open');
     // 자동으로 검색 실행
     setTimeout(()=>{
-      const btn=document.querySelector('button.aibtn,#aiBtn,[onclick*="findP"]');
-      if(typeof findP==='function')findP();
+      const btn=document.getElementById('srchBtn');
+      if(typeof doSearch==='function')doSearch();
       else if(btn)btn.click();
     },300);
     return;
