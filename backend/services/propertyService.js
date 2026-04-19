@@ -216,4 +216,4 @@ function getStaticFallback(budget, region) {
   }];
 }
 
-module.exports = { getAIRecommendations };
+module.exports = { getAIRecommendations, pickRegions };
