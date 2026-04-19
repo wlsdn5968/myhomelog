@@ -119,15 +119,17 @@ async function getAIRecommendations(userCondition) {
   if (cached) return { ...cached, fromCache: true };
 
   // Step 1: 키워드 기반 빠른 지역 결정 (AI 호출 X) — 직장위치도 매칭에 활용
-  const targetRegions = pickRegions(region, maxBudget, workplaceArea);
+  // 최대 3개 지역으로 제한 (Vercel function timeout 보호)
+  const targetRegions = pickRegions(region, maxBudget, workplaceArea).slice(0, 3);
 
-  // Step 2: 병렬 실거래가 조회
-  const txArrays = await Promise.all(
-    targetRegions.map(r => getTransactionsByApt(r.lawdCd, '').catch(err => {
-      console.error(`[PropertyService] ${r.name} 조회 실패:`, err.message);
-      return [];
-    }))
-  );
+  // Step 2: 병렬 실거래가 조회 — 부분 실패 허용
+  const txArrays = await Promise.allSettled(
+    targetRegions.map(r => getTransactionsByApt(r.lawdCd, ''))
+  ).then(results => results.map((r, i) => {
+    if (r.status === 'fulfilled') return r.value;
+    console.error(`[PropertyService] ${targetRegions[i].name} 조회 실패:`, r.reason?.message);
+    return [];
+  }));
   const allTx = txArrays.flat();
   const analyzed = analyzeTransactions(allTx);
 
@@ -147,11 +149,11 @@ async function getAIRecommendations(userCondition) {
     return { recommendations: getStaticFallback(maxBudget, region), targetRegions, fromCache: false };
   }
 
-  // Step 4: 거래량 가중 정렬 (환금성 우선) — 상위 12건만 AI 분석
+  // Step 4: 거래량 가중 정렬 (환금성 우선) — 상위 8건만 AI 분석 (속도 우선)
   const ranked = inBudget
     .map(a => ({ ...a, score: a.dealCount * 10 + (a.buildYear || 1990) * 0.01 }))
     .sort((x, y) => y.score - x.score)
-    .slice(0, 12);
+    .slice(0, 8);
 
   // Step 5: AI 분석 (정보 정리·해석만, 추천/예측 금지)
   const analysisPrompt = `다음 실거래 데이터에서 사용자 조건에 부합하는 단지 5곳을 골라 객관적 정보로 정리해줘. 추천·매수권유·가격예측 표현 절대 금지. 데이터 정리·중립 분석만.

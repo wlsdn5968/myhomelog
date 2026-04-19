@@ -1349,6 +1349,10 @@ async function doSearch(){
     if(res.status===429){
       const j=await res.json().catch(()=>({}));
       toast(j.message || '오늘의 무료 검색을 모두 사용했어요. 내일 다시 이용해주세요.');
+    } else if(res.status===502 || res.status===504){
+      toast('⏱ 국토부 실거래가 서버 응답 지연. 30초 후 다시 시도해주세요.');
+    } else if(res.status===500){
+      toast('⚠ 일시적 서버 오류. 다른 지역/예산으로 시도하거나 잠시 후 다시 시도해주세요.');
     } else if(!res.ok){
       throw new Error(`HTTP ${res.status}`);
     } else {
