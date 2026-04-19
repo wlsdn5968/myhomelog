@@ -737,39 +737,44 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 <div class="smbg" id="SM">
   <div class="smbox">
     <div class="smhdr">
-      <span class="smtit">⚙ API 설정</span>
+      <span class="smtit">⚙ 서비스 정보</span>
       <button class="smx" onclick="closeSM()">✕</button>
     </div>
     <div class="smbody">
       <div class="sm-row">
         <div class="sm-lbl">
-          백엔드 서버 URL
+          서버 상태
           <span class="sm-badge" id="badgeSrv">확인 중</span>
         </div>
-        <input class="sm-inp" id="sm_api" placeholder="/api">
-        <div class="sm-hint">기본값 /api (자동). 로컬 테스트 시: http://localhost:3001/api</div>
+        <div class="sm-hint">실거래가·AI 분석은 자동으로 백엔드 서버를 통해 동작합니다. 별도 설정이 필요하지 않습니다.</div>
       </div>
       <div class="sm-row">
-        <div class="sm-lbl">
-          네이버 지도 Client ID
-          <span class="sm-badge no" id="badgeNaver">미설정</span>
-        </div>
-        <input class="sm-inp" id="sm_naver" placeholder="네이버 클라우드 플랫폼 Client ID">
+        <div class="sm-lbl">사용 한도</div>
+        <div class="sm-hint" id="usageInfo">하루 5회 무료 검색 가능 (회원가입 시 무제한 — 출시 예정)</div>
+      </div>
+      <div class="sm-row">
+        <div class="sm-lbl">데이터 출처</div>
         <div class="sm-hint">
-          <a class="sm-link" href="https://console.ncloud.com" target="_blank">console.ncloud.com</a> → Application Services → Maps → 앱 등록<br>
-          도메인 등록 필수 (localhost:3000 포함)
+          · 실거래가: 국토교통부 (data.go.kr)<br>
+          · 좌표: 카카오맵 Local API<br>
+          · AI 분석: Anthropic Claude
         </div>
       </div>
-      <div class="sm-row">
-        <div class="sm-lbl">
-          Anthropic API Key (직접 모드)
-          <span class="sm-badge no" id="badgeAI">미설정</span>
-        </div>
-        <input class="sm-inp" id="sm_ai" type="password" placeholder="sk-ant-...  (백엔드 없을 때 사용)">
-        <div class="sm-hint">백엔드 서버 없이 직접 Claude API 호출 시 필요.<br>⚠ 실서비스에서는 반드시 백엔드 경유 권장</div>
-      </div>
-      <button class="sm-save" onclick="saveSettings()">저장 및 적용</button>
+      <button class="sm-save" onclick="closeSM()">확인</button>
       <div class="sm-status" id="smStatus"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ONBOARDING MODAL -->
+<div class="smbg" id="OB" style="z-index:9999">
+  <div class="smbox" style="max-width:440px">
+    <div class="smhdr">
+      <span class="smtit" id="obTit">🏠 내집로그에 오신 걸 환영해요</span>
+      <button class="smx" onclick="skipOnboarding()">건너뛰기</button>
+    </div>
+    <div class="smbody" id="obBody">
+      <!-- step content rendered by JS -->
     </div>
   </div>
 </div>
@@ -778,12 +783,9 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 
 <script>
 // ── CONFIG & STATE ─────────────────────────────────────────
+// BYOK 제거: 모든 API 호출은 항상 자체 백엔드를 경유. 사용자는 키를 입력할 필요가 없음.
 const DEFAULT_API = '/api';
-let CFG = {
-  api: localStorage.getItem('cfg_api') || DEFAULT_API,
-  naverKey: localStorage.getItem('cfg_naver') || '',
-  aiKey: localStorage.getItem('cfg_ai') || '',
-};
+let CFG = { api: DEFAULT_API };
 let props=[], mapObj=null, overlays=[], flt='all';
 let chatH=[], chatLd=false;
 let naverReady=false, mapTypeNormal=true;
@@ -792,71 +794,143 @@ let currentDetail=null; // 현재 열린 상세 매물
 // ── INIT ──────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('it').textContent=gt();
-  // settings 입력창 초기값
-  document.getElementById('sm_api').value=CFG.api;
-  document.getElementById('sm_naver').value=CFG.naverKey;
-  document.getElementById('sm_ai').value=CFG.aiKey;
-  updateBadges();
+  // 잔존 BYOK 키 정리 (이전 사용자)
+  ['cfg_api','cfg_naver','cfg_ai'].forEach(k=>localStorage.removeItem(k));
   cl();
   chkAPI().then(ok=>{if(ok)checkMolit();});
   renderBookmarks();
   renderSavedDeals();
-  if(CFG.naverKey) loadNaverMap();
-  else loadLeaflet();
+  loadLeaflet(); // 카카오 정식 키 미연동 환경 대비, 기본은 OSM. 좌표는 백엔드 카카오 geocode로 보정.
+
+  // 첫 방문자 온보딩
+  if(!localStorage.getItem('mhl_onboarded')){
+    setTimeout(()=>startOnboarding(),400);
+  }
 });
 
 // ── SETTINGS ─────────────────────────────────────────────
 function openSettings(){document.getElementById('SM').classList.add('open');}
 function closeSM(){document.getElementById('SM').classList.remove('open');}
 
-async function saveSettings(){
-  const api=document.getElementById('sm_api').value.trim()||DEFAULT_API;
-  const naver=document.getElementById('sm_naver').value.trim();
-  const ai=document.getElementById('sm_ai').value.trim();
-  CFG={api,naverKey:naver,aiKey:ai};
-  localStorage.setItem('cfg_api',api);
-  localStorage.setItem('cfg_naver',naver);
-  localStorage.setItem('cfg_ai',ai);
-  updateBadges();
+// ── ONBOARDING ───────────────────────────────────────────
+let _obStep=0;
+const OB_STEPS=[
+  {
+    title:'🏠 내집로그에 오신 걸 환영해요',
+    body:`<div style="padding:8px 0;line-height:1.6;font-size:13px;color:var(--t1)">
+      <div style="margin-bottom:10px"><b>실거래가 + AI 분석</b>으로 내 조건에 맞는 아파트를 추천해드려요.</div>
+      <ul style="padding-left:18px;color:var(--t2);font-size:12px">
+        <li>국토교통부 실거래가 데이터 (매일 갱신)</li>
+        <li>LTV·DSR·세금까지 한눈에</li>
+        <li>2025.10.15 규제 기준 반영</li>
+      </ul>
+      <div style="margin-top:14px;padding:10px;background:var(--bg2);border-radius:8px;font-size:11px;color:var(--t3)">⏱ 30초만 알려주시면 맞춤 매물 5곳을 보여드려요</div>
+    </div>`,
+    next:'시작하기 →'
+  },
+  {
+    title:'1️⃣ 예산을 알려주세요',
+    body:`<div style="padding:6px 0">
+      <div style="font-size:12px;color:var(--t2);margin-bottom:8px">총 매수 예산 (자기자본 + 대출)</div>
+      <select id="ob_budget" class="sm-inp" style="margin-bottom:14px">
+        <option value="5">~5억</option>
+        <option value="7" selected>5~7억</option>
+        <option value="10">7~10억</option>
+        <option value="15">10~15억</option>
+        <option value="20">15억 이상</option>
+      </select>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:8px">자기자본 (현금)</div>
+      <select id="ob_cash" class="sm-inp">
+        <option value="2">~2억</option>
+        <option value="3" selected>2~3억</option>
+        <option value="5">3~5억</option>
+        <option value="8">5~8억</option>
+        <option value="12">8억 이상</option>
+      </select>
+    </div>`,
+    next:'다음 →'
+  },
+  {
+    title:'2️⃣ 관심 지역을 선택하세요',
+    body:`<div style="padding:6px 0">
+      <div style="font-size:12px;color:var(--t2);margin-bottom:8px">희망 지역</div>
+      <select id="ob_region" class="sm-inp" style="margin-bottom:14px">
+        <option value="강남4구">강남·서초·송파·강동</option>
+        <option value="마용성">마포·용산·성동</option>
+        <option value="노도강">노원·도봉·강북</option>
+        <option value="금관구">금천·관악·구로</option>
+        <option value="분당과천">성남분당·과천·하남</option>
+        <option value="서울전체" selected>서울 전체</option>
+        <option value="경기">경기 (수도권)</option>
+      </select>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:8px">주택 보유 현황</div>
+      <select id="ob_house" class="sm-inp">
+        <option value="무주택" selected>무주택 (생애최초 가능)</option>
+        <option value="1주택">1주택자 (갈아타기)</option>
+        <option value="다주택">다주택자</option>
+      </select>
+    </div>`,
+    next:'추천 받기 →'
+  },
+];
 
-  const st=document.getElementById('smStatus');
-  st.className='sm-status';st.style.display='none';
-
-  // 서버 체크
-  const ok=await chkAPI();
-  if(ok){
-    st.textContent='✅ 저장 완료. 서버 연결 확인됨.';
-    st.className='sm-status ok';
-  } else {
-    st.textContent='저장 완료. 서버 미연결 — AI 직접 모드로 동작.';
-    st.className='sm-status err';
-  }
-  st.style.display='block';
-
-  // 네이버 지도 재로드
-  if(naver && !naverReady){
-    setTimeout(()=>{location.reload();},1500);
-  }
-  setTimeout(()=>closeSM(),2000);
+function startOnboarding(){_obStep=0;document.getElementById('OB').classList.add('open');renderOnboarding();}
+function skipOnboarding(){
+  localStorage.setItem('mhl_onboarded','1');
+  document.getElementById('OB').classList.remove('open');
 }
-
-function updateBadges(){
-  const bs=document.getElementById('badgeSrv');
-  const bn=document.getElementById('badgeNaver');
-  const ba=document.getElementById('badgeAI');
-  bn.textContent=CFG.naverKey?'설정됨':'미설정';
-  bn.className='sm-badge'+(CFG.naverKey?'':' no');
-  ba.textContent=CFG.aiKey?'설정됨':'미설정';
-  ba.className='sm-badge'+(CFG.aiKey?'':' no');
+function renderOnboarding(){
+  const s=OB_STEPS[_obStep];
+  document.getElementById('obTit').textContent=s.title;
+  document.getElementById('obBody').innerHTML=
+    s.body+
+    `<button class="sm-save" onclick="nextOnboarding()">${s.next}</button>`+
+    (_obStep>0?`<div style="text-align:center;margin-top:8px"><a style="font-size:11px;color:var(--t3);cursor:pointer" onclick="_obStep--;renderOnboarding()">← 이전</a></div>`:'');
+}
+function nextOnboarding(){
+  // 입력값 저장
+  if(_obStep===1){
+    const b=document.getElementById('ob_budget')?.value;
+    const c=document.getElementById('ob_cash')?.value;
+    if(b)document.getElementById('bp').value=b;
+    if(c)document.getElementById('mc').value=c;
+  }
+  if(_obStep===2){
+    const r=document.getElementById('ob_region')?.value;
+    const h=document.getElementById('ob_house')?.value;
+    if(r){
+      // ch-r 그룹에서 일치 라벨 클릭
+      document.querySelectorAll('#ch-r .ch').forEach(el=>{
+        if(r.includes(el.textContent.trim()) || el.textContent.trim().includes(r))el.classList.add('on');
+        else el.classList.remove('on');
+      });
+    }
+    if(h){
+      document.querySelectorAll('#ch-h .ch').forEach(el=>{
+        el.classList.toggle('on', el.textContent.trim()===h);
+      });
+    }
+  }
+  _obStep++;
+  if(_obStep>=OB_STEPS.length){
+    localStorage.setItem('mhl_onboarded','1');
+    document.getElementById('OB').classList.remove('open');
+    // 자동으로 검색 실행
+    setTimeout(()=>{
+      const btn=document.querySelector('button.aibtn,#aiBtn,[onclick*="findP"]');
+      if(typeof findP==='function')findP();
+      else if(btn)btn.click();
+    },300);
+    return;
+  }
+  renderOnboarding();
 }
 
 // ── MAP INIT ─────────────────────────────────────────────
+// (네이버 지도는 향후 P2에서 NCP Maps 전환 검토 — 현재는 OSM + 카카오 geocode 백엔드 보정 사용)
 function loadNaverMap(){
-  const sc=document.createElement('script');
-  sc.src=`https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${CFG.naverKey}&submodules=geocoder`;
-  sc.onload=initNaverMap;
-  sc.onerror=()=>{toast('네이버 지도 키 오류 — OpenStreetMap으로 전환');loadLeaflet();};
-  document.head.appendChild(sc);
+  // 호환용 함수 (현재는 호출되지 않음)
+  loadLeaflet();
 }
 
 function initNaverMap(){
@@ -884,9 +958,6 @@ function initLeaflet(){
   mapObj=L.map('mapEl',{center:[37.565,127.02],zoom:12});
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(mapObj);
   mapObj._isLeaflet=true;
-  if(!CFG.naverKey){
-    showHint('⚙ API 설정에서 네이버 지도 키를 입력하면 한국 지도로 전환됩니다',4000);
-  }
 }
 
 // ── GAUGE ────────────────────────────────────────────────
@@ -1032,26 +1103,18 @@ async function doSearch(){
   let success=false;
   try{
     const res=await fetch(`${CFG.api}/properties/recommend`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
-    if(!res.ok)throw new Error(`HTTP ${res.status}`);
-    const data=await res.json();
-    props=(data.recommendations||[]).map((p,i)=>({...p,lat:getLat(p.area,i),lng:getLng(p.area,i),type:p.ltv?.includes('40')?'regulated':'non'}));
-    success=true;
-  }catch(e){
-    // 직접 AI 모드
-    if(CFG.aiKey){
-      try{
-        const prompt=`사용자조건: 예산 ${body.maxBudget}억 / 지역 ${body.region} / ${body.houseStatus} / 생애최초 ${body.isFirstBuyer?'Y':'N'} / 학군 ${body.schoolNeeded?'중요':'보통'}
-실제 서울/경기 아파트 5곳 추천. JSON배열만 반환(마크다운없이):
-[{"rank":1,"aptName":"단지명","area":"시구동","avgPrice":숫자,"minPrice":숫자,"maxPrice":숫자,"buildYear":숫자,"score":숫자,"ltv":"40%(규제)","maxLoan":"6억","pros":"장점","cons":"단점","strategy":"전략","tags":["태그1","태그2"],"txHistory":[{"dealYear":2025,"dealMonth":3,"dealAmount":65000,"floor":10}]}]`;
-        const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':CFG.aiKey,'anthropic-version':'2023-06-01'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:2000,messages:[{role:'user',content:prompt}]})});
-        const d=await r.json();
-        props=JSON.parse((d.content?.[0]?.text||'[]').replace(/```json|```/g,'').trim()).map((p,i)=>({...p,lat:getLat(p.area,i),lng:getLng(p.area,i),type:p.ltv?.includes('40')?'regulated':'non'}));
-        success=true;
-        toast('직접 AI 모드로 검색 완료');
-      }catch(e2){toast('검색 실패: '+e2.message);}
+    if(res.status===429){
+      const j=await res.json().catch(()=>({}));
+      toast(j.message || '오늘의 무료 검색을 모두 사용했어요. 내일 다시 이용해주세요.');
+    } else if(!res.ok){
+      throw new Error(`HTTP ${res.status}`);
     } else {
-      toast('⚙ API 설정에서 서버 URL 또는 AI 키를 입력해주세요');
+      const data=await res.json();
+      props=(data.recommendations||[]).map((p,i)=>({...p,lat:getLat(p.area,i),lng:getLng(p.area,i),type:p.ltv?.includes('40')?'regulated':'non'}));
+      success=true;
     }
+  }catch(e){
+    toast('일시적인 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
   }
 
   if(success){
@@ -1880,17 +1943,22 @@ async function chkAPI(){
   try{
     const r=await fetch(`${CFG.api}/health`,{signal:AbortSignal.timeout(3000)});
     if(r.ok){
+      const d=await r.json().catch(()=>({}));
       el.textContent='● 서버 연결됨';el.className='hst on';
       cs.textContent='● 온라인';cs.style.color='var(--grn)';
-      ce.classList.remove('show');
+      ce && ce.classList.remove('show');
       if(bs){bs.textContent='연결됨';bs.className='sm-badge';}
+      // 사용 한도 표시
+      if(d.usage){
+        const u=document.getElementById('usageInfo');
+        if(u)u.textContent=`오늘 ${d.usage.used}/${d.usage.limit}회 사용 (남은 무료 검색 ${d.usage.remaining}회)`;
+      }
       return true;
     }
     throw new Error('not ok');
   }catch{
     el.textContent='● 서버 오프라인';el.className='hst off';
     cs.textContent='● 오프라인';cs.style.color='var(--red)';
-    if(CFG.aiKey)ce.classList.add('show');
     if(bs){bs.textContent='오프라인';bs.className='sm-badge no';}
     return false;
   }
@@ -1909,27 +1977,24 @@ async function sM(){
   document.getElementById('cErr').classList.remove('show');
   let replied=false;
 
-  // 백엔드 우선
+  // 백엔드 단일 경로 (BYOK 제거)
   try{
     const r=await fetch(`${CFG.api}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:txt,context:{history:chatH.slice(-18)}}),signal:AbortSignal.timeout(30000)});
-    if(!r.ok)throw new Error('err');
-    const d=await r.json();rmTyp();chatH.push({role:'assistant',content:d.reply});addMsg('ai',d.reply);
-    document.getElementById('cSt').textContent='● 온라인';document.getElementById('cSt').style.color='var(--grn)';
-    replied=true;
+    if(r.status===429){
+      const j=await r.json().catch(()=>({}));
+      rmTyp();
+      addMsg('ai', j.message || '오늘의 AI 채팅 한도를 모두 사용했어요. 내일 다시 이용해주세요.');
+      replied=true;
+    } else if(!r.ok){
+      throw new Error('err');
+    } else {
+      const d=await r.json();rmTyp();chatH.push({role:'assistant',content:d.reply});addMsg('ai',d.reply);
+      document.getElementById('cSt').textContent='● 온라인';document.getElementById('cSt').style.color='var(--grn)';
+      replied=true;
+    }
   }catch{}
 
-  // 직접 AI fallback
-  if(!replied&&CFG.aiKey){
-    try{
-      const r=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json','x-api-key':CFG.aiKey,'anthropic-version':'2023-06-01'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,system:SYS,messages:chatH.slice(-20)})});
-      const d=await r.json();rmTyp();
-      const rep=d.content?.[0]?.text||'응답 실패';
-      chatH.push({role:'assistant',content:rep});addMsg('ai',rep);
-      replied=true;
-    }catch(e){rmTyp();addMsg('ai','AI 응답 실패: '+e.message);}
-  }
-
-  if(!replied){rmTyp();document.getElementById('cErr').classList.add('show');addMsg('ai','⚙ API 설정에서 서버 URL 또는 Anthropic API 키를 입력해주세요.');}
+  if(!replied){rmTyp();addMsg('ai','일시적인 오류가 발생했어요. 잠시 후 다시 시도해주세요.');}
   chatLd=false;
 }
 

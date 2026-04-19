@@ -81,21 +81,32 @@ const clauseRouter = require('./routes/clause');
 const geocodeRouter = require('./routes/geocode');
 const analysisRouter = require('./routes/analysis');
 
-app.use('/api/chat', chatLimiter, chatRouter);
+// 일일 무료 한도 (BYOK 제거에 따른 무료 체험 정책)
+const { dailyLimit, getUsage } = require('./middleware/dailyLimit');
+const DAILY_SEARCH_LIMIT = parseInt(process.env.DAILY_SEARCH_LIMIT || '5');
+const DAILY_CHAT_LIMIT = parseInt(process.env.DAILY_CHAT_LIMIT || '15');
+
+app.use('/api/chat', chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat' }), chatRouter);
 app.use('/api/transactions', dataLimiter, transactionRouter);
-app.use('/api/properties', dataLimiter, propertiesRouter);
+app.use('/api/properties', dataLimiter, dailyLimit({ limit: DAILY_SEARCH_LIMIT, scope: 'search' }), propertiesRouter);
 app.use('/api/regulations', regulationsRouter);
-app.use('/api/clause', chatLimiter, clauseRouter);
+app.use('/api/clause', chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat' }), clauseRouter);
 app.use('/api/geocode', dataLimiter, geocodeRouter);
 app.use('/api/analysis', dataLimiter, analysisRouter);
 
-// 헬스체크
+// 헬스체크 (사용 한도 잔량 포함 — 프론트 사용 한도 표시에 사용)
 app.get('/api/health', (req, res) => {
+  const used = getUsage(req, 'search');
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     env: process.env.NODE_ENV,
     cache: { keys: cache.keys().length, stats: cache.getStats() },
+    usage: {
+      used,
+      limit: DAILY_SEARCH_LIMIT,
+      remaining: Math.max(0, DAILY_SEARCH_LIMIT - used),
+    },
   });
 });
 
