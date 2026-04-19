@@ -475,6 +475,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <button class="htab" onclick="sv('clause',this)">✍ 특약생성</button>
     <button class="htab" onclick="sv('biz',this)">💰 복비계산</button>
     <button class="htab" onclick="sv('news',this)">📰 뉴스</button>
+    <button class="htab" onclick="sv('subs',this)">📅 청약</button>
   </div>
   <div class="hml">
     <div class="rpill"><div class="hdot"></div>10.15 규제</div>
@@ -594,6 +595,11 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 <div class="cp calcv" id="view-calc" style="display:none">
   <h2>상세 대출 시뮬레이터</h2>
   <p>2025.10.15 규제 기준 · 참고용 — 실제 한도는 금융기관 필수 확인</p>
+  <div style="background:linear-gradient(135deg,#FFF5E6,#FFF9F0);border:1px solid #E8C896;border-radius:10px;padding:13px 15px;margin-bottom:14px;max-width:520px">
+    <div style="font-size:11px;font-weight:700;color:#8B6914;margin-bottom:9px;letter-spacing:.3px">📅 부동산 정책 타임라인 <span style="font-weight:500;color:var(--t3);font-size:10px">· 다가오는 일정 자동 카운트</span></div>
+    <div id="policyTimeline" style="display:flex;flex-direction:column;gap:7px"></div>
+    <div style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.5">출처: 금융위원회·국토교통부 발표 · 시행 일자는 변경될 수 있으니 공식 공고 확인 권고</div>
+  </div>
   <div style="background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:17px;margin-bottom:14px;max-width:520px;box-shadow:var(--sh)">
     <div class="r2"><div><label class="lbl">매수가(억)</label><input class="inp" id="c_b" type="number" placeholder="7.0" oninput="dc()"></div><div><label class="lbl">연소득(만)</label><input class="inp" id="c_i" type="number" placeholder="5000" oninput="dc()"></div></div>
     <div class="r2"><div><label class="lbl">금리(%)</label><input class="inp" id="c_r" type="number" placeholder="4.0" step="0.1" oninput="dc()"></div><div><label class="lbl">기간(년)</label><input class="inp" id="c_y" type="number" placeholder="30" oninput="dc()"></div></div>
@@ -762,6 +768,40 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
 </div>
 
+<div class="biz-view" id="view-subs" style="display:none">
+  <div class="biz-section">
+    <h3>📅 청약 캘린더</h3>
+    <p style="font-size:11px;color:var(--t3);margin-bottom:13px">한국부동산원 청약Home APT 분양정보 · 신청 전 <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="color:var(--acc)">applyhome.co.kr</a>에서 최종 확인 필수</p>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center">
+      <span class="lbl" style="margin:0">지역</span>
+      <div class="chips" id="subs-sido">
+        <span class="chip on" data-sido="" onclick="cpSubs(this,'sido')">전국</span>
+        <span class="chip" data-sido="서울" onclick="cpSubs(this,'sido')">서울</span>
+        <span class="chip" data-sido="경기" onclick="cpSubs(this,'sido')">경기</span>
+        <span class="chip" data-sido="인천" onclick="cpSubs(this,'sido')">인천</span>
+        <span class="chip" data-sido="부산" onclick="cpSubs(this,'sido')">부산</span>
+        <span class="chip" data-sido="대구" onclick="cpSubs(this,'sido')">대구</span>
+        <span class="chip" data-sido="대전" onclick="cpSubs(this,'sido')">대전</span>
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:14px;align-items:center">
+      <span class="lbl" style="margin:0">기간</span>
+      <div class="chips" id="subs-days">
+        <span class="chip" data-days="30" onclick="cpSubs(this,'days')">30일</span>
+        <span class="chip on" data-days="60" onclick="cpSubs(this,'days')">60일</span>
+        <span class="chip" data-days="90" onclick="cpSubs(this,'days')">90일</span>
+        <span class="chip" data-days="180" onclick="cpSubs(this,'days')">180일</span>
+      </div>
+    </div>
+    <div id="subsList" style="font-size:12px;line-height:1.6;color:var(--t2)">
+      <div style="padding:30px 0;text-align:center;color:var(--t3)">청약 일정 로딩 중...</div>
+    </div>
+    <div style="margin-top:14px;padding:10px 12px;background:var(--ambL);border:1px solid #E8D2A8;border-radius:8px;font-size:10.5px;color:var(--amb);line-height:1.6">
+      ⚠ 청약 정보는 한국부동산원 공식 발표를 기준으로 갱신되나, <strong>실제 신청 전 청약Home에서 최종 확인 필수.</strong> 본 서비스는 정보 인덱싱만 제공하며 신청·당첨을 보장하지 않습니다.
+    </div>
+  </div>
+</div>
+
 <!-- 모바일 하단 탭 -->
 <nav class="bnav" id="bnav">
   <div class="bnav-inner">
@@ -926,6 +966,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   // 잔존 BYOK 키 정리 (이전 사용자)
   ['cfg_api','cfg_naver','cfg_ai'].forEach(k=>localStorage.removeItem(k));
   populateRegionSub('서울'); // 초기 광역 chips 채우기
+  renderPolicyTimeline(); // 정책 타임라인 렌더
   cl();
   chkAPI().then(ok=>{if(ok)checkMolit();});
   renderBookmarks();
@@ -1087,6 +1128,37 @@ function nextOnboarding(){
 function openTerms(){document.getElementById('TM').classList.add('open');}
 function closeTerms(){document.getElementById('TM').classList.remove('open');}
 
+// ── 정책 타임라인 ─────────────────────────────────────
+const POLICY_TIMELINE = [
+  { date:'2025-10-15', title:'규제지역 확대·DSR 강화 시행', desc:'서울 25개구 + 경기 12곳 토지거래허가구역', tag:'규제', color:'#C44' },
+  { date:'2025-10-29', title:'1주택자 전세대출 이자 DSR 반영', desc:'전세대출 이자도 총부채상환비율에 포함', tag:'대출', color:'#B47' },
+  { date:'2026-01-01', title:'은행권 주담대 위험가중치 15%→20%', desc:'은행 주담대 공급 위축·금리 상승 압력', tag:'금융', color:'#947' },
+  { date:'2026-07-01', title:'스트레스 DSR 4단계 시행 검토', desc:'금리 상승 시뮬레이션 가산폭 확대 예고(추정)', tag:'예고', color:'#777' },
+];
+
+function renderPolicyTimeline(){
+  const box=document.getElementById('policyTimeline');
+  if(!box) return;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const items=POLICY_TIMELINE.map(p=>{
+    const d=new Date(p.date+'T00:00:00');
+    const days=Math.floor((d-today)/86400000);
+    const past=days<0;
+    const dayLabel=past?`D+${Math.abs(days)}`:days===0?'D-DAY':`D-${days}`;
+    const dayBg=past?'#E8E8E8':days<=30?p.color:'#999';
+    const dayColor=past?'#888':'#fff';
+    const opacity=past?'.55':'1';
+    return `<div style="display:flex;align-items:center;gap:10px;opacity:${opacity}">
+      <div style="min-width:54px;height:30px;background:${dayBg};color:${dayColor};border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">${dayLabel}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:var(--t1);line-height:1.35"><span style="display:inline-block;padding:1px 6px;background:${p.color}22;color:${p.color};border-radius:3px;font-size:9.5px;font-weight:700;margin-right:5px;vertical-align:1px">${p.tag}</span>${p.title}</div>
+        <div style="font-size:10.5px;color:var(--t3);line-height:1.4;margin-top:1px">${p.desc} · ${p.date}</div>
+      </div>
+    </div>`;
+  }).join('');
+  box.innerHTML=items;
+}
+
 // ── 부동산 뉴스 ───────────────────────────────────────
 async function loadNews(btn){
   let cat='hot';
@@ -1135,6 +1207,84 @@ async function loadNewsSummary(){
     box.dataset.loaded='1';
   }catch(e){
     // 요약 실패는 조용히 숨김 (뉴스 본체는 정상)
+  }
+}
+
+// ── 청약 캘린더 ────────────────────────────────────────────
+function cpSubs(el, kind){
+  const parent = el.parentElement;
+  parent.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  loadSubs();
+}
+function fmtSubsDate(s){
+  // YYYYMMDD or YYYY-MM-DD → MM/DD
+  if(!s) return '-';
+  const t = String(s).replace(/[^0-9]/g,'');
+  if(t.length<8) return s;
+  return `${t.slice(4,6)}/${t.slice(6,8)}`;
+}
+function fmtMoveIn(s){
+  // YYYYMM
+  if(!s) return '-';
+  const t = String(s).replace(/[^0-9]/g,'');
+  if(t.length<6) return s;
+  return `${t.slice(0,4)}.${t.slice(4,6)}`;
+}
+function dDayLabel(s){
+  if(!s) return '';
+  const t = String(s).replace(/[^0-9]/g,'');
+  if(t.length<8) return '';
+  const d = new Date(`${t.slice(0,4)}-${t.slice(4,6)}-${t.slice(6,8)}T00:00:00`);
+  const diff = Math.ceil((d - new Date()) / 86400000);
+  if(diff < 0) return `<span style="color:var(--t3)">접수 마감</span>`;
+  if(diff === 0) return `<span style="color:var(--red);font-weight:700">D-DAY</span>`;
+  if(diff <= 7) return `<span style="color:var(--red);font-weight:700">D-${diff}</span>`;
+  if(diff <= 30) return `<span style="color:var(--amb);font-weight:700">D-${diff}</span>`;
+  return `<span style="color:var(--t2)">D-${diff}</span>`;
+}
+async function loadSubs(){
+  const sido = document.querySelector('#subs-sido .chip.on')?.dataset.sido || '';
+  const days = document.querySelector('#subs-days .chip.on')?.dataset.days || '60';
+  const box = document.getElementById('subsList');
+  box.innerHTML = `<div style="padding:30px 0;text-align:center;color:var(--t3)">청약 일정 로딩 중...</div>`;
+  try{
+    const url = `${CFG.api}/subscription?sido=${encodeURIComponent(sido)}&days=${days}`;
+    const r = await fetch(url, {signal: AbortSignal.timeout(10000)});
+    const d = await r.json();
+    if(!r.ok){
+      box.innerHTML = `<div style="padding:24px;text-align:center;color:var(--t3)">${d.error || '청약 정보 조회 실패'}<br><span style="font-size:11px">${d.hint || ''}</span></div>`;
+      box.dataset.loaded = '1';
+      return;
+    }
+    if(!d.items || !d.items.length){
+      box.innerHTML = `<div style="padding:24px;text-align:center;color:var(--t3)">${d.sido} 향후 ${d.days}일 이내 분양 일정이 없습니다.</div>`;
+      box.dataset.loaded = '1';
+      return;
+    }
+    const cards = d.items.map(it=>`
+      <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 14px;margin-bottom:8px;box-shadow:var(--sh)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
+          <div style="font-size:13px;font-weight:700;color:var(--t1);flex:1;line-height:1.3">${it.name}</div>
+          <div style="font-size:11px;white-space:nowrap">${dDayLabel(it.receiveStart)}</div>
+        </div>
+        <div style="font-size:11px;color:var(--t3);margin-bottom:6px">${it.area || ''} · ${it.address || ''}</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:10.5px;color:var(--t2)">
+          <div><span style="color:var(--t3)">접수</span> ${fmtSubsDate(it.receiveStart)}~${fmtSubsDate(it.receiveEnd)}</div>
+          <div><span style="color:var(--t3)">당첨발표</span> ${fmtSubsDate(it.announceDate)}</div>
+          <div><span style="color:var(--t3)">입주예정</span> ${fmtMoveIn(it.moveInPlanned)}</div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;padding-top:7px;border-top:1px solid var(--bdL,var(--bd))">
+          <span style="font-size:10.5px;color:var(--t3)">시공: ${it.builder || '미상'} · 공급 ${it.sales || '-'}세대</span>
+          ${it.detailUrl ? `<a href="${it.detailUrl}" target="_blank" rel="noopener" style="font-size:10.5px;color:var(--acc);text-decoration:none">공고 ↗</a>` : ''}
+        </div>
+      </div>
+    `).join('');
+    const head = `<div style="font-size:11px;color:var(--t3);margin-bottom:9px">📍 ${d.sido} · 향후 ${d.days}일 · 총 <strong style="color:var(--acc)">${d.count}건</strong>${d.fromCache?' · 캐시':''}</div>`;
+    box.innerHTML = head + cards;
+    box.dataset.loaded = '1';
+  }catch(e){
+    box.innerHTML = `<div style="padding:24px;text-align:center;color:var(--t3)">청약 일정 로딩 실패. 잠시 후 다시 시도해주세요.</div>`;
   }
 }
 
@@ -2084,7 +2234,7 @@ function getLat(area,i){if(!area)return 37.545+(i*.02);for(const[k,v]of Object.e
 function getLng(area,i){if(!area)return 127.0+(i*.02);for(const[k,v]of Object.entries(AC)){if(area.includes(k))return v[1]+(Math.random()-.5)*.008;}return 127.0+(i*.01)+(Math.random()-.5)*.02;}
 
 // ── VIEW SWITCH ───────────────────────────────────────────
-const VIEW_DISPLAY={map:'flex',list:'grid',calc:'flex',clause:'flex',biz:'flex',news:'flex'};
+const VIEW_DISPLAY={map:'flex',list:'grid',calc:'flex',clause:'flex',biz:'flex',news:'flex',subs:'flex'};
 function sv(v,btn){
   Object.entries(VIEW_DISPLAY).forEach(([id,disp])=>{
     const el=document.getElementById('view-'+id);
@@ -2098,12 +2248,13 @@ function sv(v,btn){
     else rp.style.removeProperty('display');
   }
   // 헤더 탭 활성화 (순서: map,list,calc,clause,biz,news)
-  const htabOrder=['map','list','calc','clause','biz','news'];
+  const htabOrder=['map','list','calc','clause','biz','news','subs'];
   document.querySelectorAll('.htab').forEach((b,i)=>b.classList.toggle('on',htabOrder[i]===v));
   // 모바일 하단 탭 활성화
   document.querySelectorAll('.bnav-item').forEach(b=>b.classList.toggle('on',b.dataset.view===v));
   if(v==='list')renderListGrid();
   if(v==='news' && !document.getElementById('newsList').dataset.loaded){loadNews();}
+  if(v==='subs' && !document.getElementById('subsList').dataset.loaded){loadSubs();}
 }
 function ts(id){document.getElementById(id)?.classList.toggle('cl');}
 
