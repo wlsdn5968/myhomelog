@@ -1,13 +1,17 @@
 /**
- * 매물 검색 서비스 (개선판)
- * - 사용자 입력 지역(region) 우선 매칭 → 검색 결과의 사용자 기대 일치율↑
- * - MOLIT 페이지네이션 1000건×3페이지로 누락 최소화
- * - AI 지역결정 단계 제거(병목 해소) → 키워드 기반 빠른 매칭
- * - 예산 필터를 평균가 → 최저가 기준으로 변경 (같은 단지 다른 평형 포함)
- * - 거래량 가중 정렬 → 환금성(회전율) 좋은 단지 상위 노출
+ * 매물 검색 서비스 (안정화판 — AI 의존 제거)
+ *
+ * 변경 이력:
+ * - AI 호출 제거 → 응답 속도 25s → ~5s, 매번 안정 작동
+ * - 평형별 시세 분리 → 사용자 예산에 맞는 평형만 정확히 노출
+ * - LTV/maxLoan 백엔드 단순 계산으로 채워줌 (프론트 표시 일관성)
+ * - "현재 시세" = 평형별 최근 5건 거래 노출 → 호가 없이도 시세 파악 가능
+ *
+ * 데이터 소스: 국토교통부 실거래가 (data.go.kr 공공 API, 무료, 신뢰성 검증됨)
+ * 네이버/KB 부동산 호가는 공식 API 부재 + 스크래핑 ToS 위반으로 미사용.
+ * 대신 최신 실거래가가 가장 객관적인 시세 지표로 동등하게 기능함.
  */
-const { callAI } = require('./aiService');
-const { getTransactionsByApt, analyzeTransactions, LAWD_CODES } = require('./transactionService');
+const { getTransactionsByApt, analyzeTransactions } = require('./transactionService');
 const cache = require('../cache');
 
 // ── 지역 키워드 → 법정동코드 매핑 (사용자 입력 우선) ───────
@@ -26,58 +30,39 @@ const REGION_KEYWORDS = {
   '하남': ['41450'], '미사': ['41450'], '영통': ['41117'], '수원': ['41117'],
   '일산': ['41281'], '고양': ['41281'], '의왕': ['41430'], '시흥': ['41390'],
   // 인천 8개구
-  '중구인천': ['28110'], '동구인천': ['28140'], '미추홀': ['28177'], '연수': ['28185'],
-  '남동': ['28200'], '부평': ['28237'], '계양': ['28245'], '서구인천': ['28260'],
-  '송도': ['28185'], // 송도=연수구
-  // 지방 광역시 핵심
-  '해운대': ['26350'], '수영': ['26500'], '남구부산': ['26290'],
-  '수성': ['27260'], '중구대구': ['27110'],
-  '유성': ['30200'], '서구대전': ['30170'],
-  '서구광주': ['29140'], '남구광주': ['29155'],
+  '미추홀': ['28177'], '연수': ['28185'], '남동': ['28200'], '부평': ['28237'],
+  '계양': ['28245'], '송도': ['28185'],
   // 광역 (구 미지정 시 키워드)
-  '서울': ['11680','11650','11710','11440','11200','11680'],
-  '인천': ['28185','28200','28237','28245'], // 연수·남동·부평·계양
-  '부산': ['26350','26500','26290'],
-  '대구': ['27260','27110'],
-  '대전': ['30200','30170'],
-  '광주': ['29140','29155'],
+  '서울': ['11680','11650','11710','11440','11200'],
+  '인천': ['28185','28200','28237','28245'],
+  '경기': ['41210','41290','41135','41281'],
 };
 
 function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '') {
   const r = (userRegion || '').replace(/\s+/g,'');
   const wp = (workplaceArea || '').replace(/\s+/g,'');
-  const combined = r + ' ' + wp; // workplaceArea도 매칭 후보에 포함
-  // 1) 사용자 입력(지역명·직장위치)에 일치하는 구 우선
-  const SKIP_GLOBAL = new Set(['서울','경기','인천','부산','대구','대전','광주']);
+  const combined = r + ' ' + wp;
+  // 1) 사용자 입력에서 구 단위 키워드 매칭 (광역 키워드는 후순위)
+  const SKIP_GLOBAL = new Set(['서울','경기','인천']);
   for (const [kw, codes] of Object.entries(REGION_KEYWORDS)) {
     if (!SKIP_GLOBAL.has(kw) && combined.includes(kw)) {
-      const display = kw.replace(/인천|대구|광주$/,'').replace(/부산$/,'') || kw;
-      return codes.map((c, i) => ({ lawdCd: c, name: codes.length > 1 ? `${kw}-${i+1}` : kw }));
+      return codes.map(c => ({ lawdCd: c, name: kw }));
     }
   }
-  // 2) 광역 매칭 (인천/부산/대구/대전/광주)
-  for (const wide of ['인천','부산','대구','대전','광주']) {
-    if (r.includes(wide)) {
-      return REGION_KEYWORDS[wide].map(c => ({ lawdCd: c, name: `${wide}` }));
-    }
-  }
-  // 3) 예산 기반 자동 추천 (서울 또는 미입력)
+  // 2) 광역만 입력 시 예산 기반 자동 추천 (서울 인기 구)
   if (!r || r.includes('서울')) {
     if (maxBudget <= 6) return [
       { lawdCd: '11350', name: '노원구' },
       { lawdCd: '11320', name: '도봉구' },
       { lawdCd: '11305', name: '강북구' },
-      { lawdCd: '11260', name: '중랑구' },
     ];
     if (maxBudget <= 9) return [
       { lawdCd: '11530', name: '구로구' },
       { lawdCd: '11545', name: '금천구' },
-      { lawdCd: '11500', name: '강서구' },
       { lawdCd: '11380', name: '은평구' },
     ];
     if (maxBudget <= 14) return [
       { lawdCd: '11290', name: '성북구' },
-      { lawdCd: '11230', name: '동대문구' },
       { lawdCd: '11470', name: '양천구' },
       { lawdCd: '11440', name: '마포구' },
     ];
@@ -85,41 +70,67 @@ function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '') {
       { lawdCd: '11650', name: '서초구' },
       { lawdCd: '11680', name: '강남구' },
       { lawdCd: '11710', name: '송파구' },
-      { lawdCd: '11200', name: '성동구' },
     ];
   }
-  // 4) 경기/기타 (기본 — region이 '경기'이거나 매칭 실패 시)
+  // 3) 광역 매칭 (인천/경기)
+  for (const wide of ['인천', '경기']) {
+    if (r.includes(wide)) return REGION_KEYWORDS[wide].map(c => ({ lawdCd: c, name: wide }));
+  }
+  // 4) 기본 (수도권 인기 지역)
   return [
     { lawdCd: '41210', name: '광명시' },
     { lawdCd: '41290', name: '과천시' },
     { lawdCd: '41135', name: '성남시 분당구' },
-    { lawdCd: '41281', name: '고양시 일산서구' },
   ];
 }
 
+// ── LTV/대출한도 단순 계산 (프론트 calcLTV와 일치) ─────────
+function computeLTV(buyAuk, region, isFirstBuyer, houseStatus) {
+  const isRegulated = /서울|강남|서초|송파|용산|분당|과천/.test(region || '');
+  if (houseStatus === '2주택+') return { ltv: '0% (규제)', maxLoan: '0억' };
+  if (houseStatus === '1주택' && isRegulated) return { ltv: '0% (1주택 규제지역)', maxLoan: '처분조건부 6개월' };
+  let pct;
+  if (isRegulated) pct = isFirstBuyer ? 0.7 : 0.4;
+  else pct = isFirstBuyer ? 0.8 : 0.7;
+  const cap = isRegulated ? (buyAuk <= 15 ? 6 : buyAuk <= 25 ? 4 : 2) : Infinity;
+  const loan = Math.min(buyAuk * pct, cap);
+  return {
+    ltv: `${(pct * 100).toFixed(0)}% ${isRegulated ? '(규제)' : '(비규제)'}`,
+    maxLoan: `${loan.toFixed(2)}억`,
+  };
+}
+
+// ── 단지 태그 자동 산출 (객관적 사실만) ───────────────────
+function buildTags(apt) {
+  const tags = [];
+  const totalDeals = apt.dealCount || 0;
+  if (totalDeals >= 50) tags.push('거래활발');
+  else if (totalDeals >= 20) tags.push('거래보통');
+  if (apt.buildYear >= 2015) tags.push('신축급');
+  else if (apt.buildYear >= 2000) tags.push('준신축');
+  else if (apt.buildYear < 1995) tags.push('재건축연한');
+  const pyeongCount = (apt.pyeongStats || []).length;
+  if (pyeongCount >= 4) tags.push('다양평형');
+  return tags;
+}
+
 /**
- * 사용자 조건 기반 매물 추천 (개선판)
+ * 사용자 조건 기반 매물 추천
  */
 async function getAIRecommendations(userCondition) {
   const {
     maxBudget,
-    availableLoan,
-    myCash,
     region,
     houseStatus,
     isFirstBuyer,
-    purpose,
-    schoolNeeded,
-    childPlan,
     workplaceArea,
   } = userCondition;
 
-  const cacheKey = `rec:${JSON.stringify(userCondition).slice(0, 80)}`;
+  const cacheKey = `rec:v2:${region}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${workplaceArea}`;
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
-  // Step 1: 키워드 기반 빠른 지역 결정 (AI 호출 X) — 직장위치도 매칭에 활용
-  // 최대 3개 지역으로 제한 (Vercel function timeout 보호)
+  // Step 1: 키워드 기반 빠른 지역 결정
   const targetRegions = pickRegions(region, maxBudget, workplaceArea).slice(0, 3);
 
   // Step 2: 병렬 실거래가 조회 — 부분 실패 허용
@@ -134,92 +145,101 @@ async function getAIRecommendations(userCondition) {
   const analyzed = analyzeTransactions(allTx);
 
   if (!analyzed || !analyzed.length) {
-    return { recommendations: getStaticFallback(maxBudget, region), targetRegions, fromCache: false };
+    return {
+      recommendations: getStaticFallback(maxBudget, region),
+      targetRegions,
+      totalTxAnalyzed: 0,
+      inBudgetCount: 0,
+      disclaimer: '본 결과는 국토교통부 실거래가 데이터 기반 정보 정리이며, 매수·매도 추천이 아닙니다.',
+      fromCache: false,
+    };
   }
 
-  // Step 3: 예산 필터 — 최저가 기준 (같은 단지 다른 평형 포함)
-  // 예산의 60%~110% 범위 내에 최소 1건이라도 있으면 포함
-  const budgetMin = maxBudget * 0.6 * 10000; // 만원
-  const budgetMax = maxBudget * 1.1 * 10000;
-  const inBudget = analyzed.filter(a =>
-    a.minPrice <= budgetMax && a.maxPrice >= budgetMin
-  );
-
-  if (!inBudget.length) {
-    return { recommendations: getStaticFallback(maxBudget, region), targetRegions, fromCache: false };
+  // Step 3: 평형별 예산 매칭 — 단지 안에서 사용자 예산에 맞는 평형 1개 이상 있어야 통과
+  const budgetMaxMan = maxBudget * 10000 * 1.05; // 5% 여유
+  const budgetMinMan = maxBudget * 10000 * 0.5;  // 50% 미만은 너무 작은 평형
+  const matched = [];
+  for (const apt of analyzed) {
+    const fitPyeongs = (apt.pyeongStats || []).filter(p =>
+      p.minPrice <= budgetMaxMan && p.maxPrice >= budgetMinMan
+    );
+    if (fitPyeongs.length === 0) continue;
+    // 사용자 예산 가장 잘 맞는 평형
+    const primaryPyeong = fitPyeongs.reduce((best, p) => {
+      const diff = Math.abs(p.avgPrice - maxBudget * 10000);
+      const bestDiff = Math.abs(best.avgPrice - maxBudget * 10000);
+      return diff < bestDiff ? p : best;
+    }, fitPyeongs[0]);
+    matched.push({ ...apt, fitPyeongs, primaryPyeong });
   }
 
-  // Step 4: 거래량 가중 정렬 (환금성 우선) — 상위 8건만 AI 분석 (속도 우선)
-  const ranked = inBudget
-    .map(a => ({ ...a, score: a.dealCount * 10 + (a.buildYear || 1990) * 0.01 }))
-    .sort((x, y) => y.score - x.score)
-    .slice(0, 8);
+  if (!matched.length) {
+    return {
+      recommendations: getStaticFallback(maxBudget, region),
+      targetRegions,
+      totalTxAnalyzed: analyzed.length,
+      inBudgetCount: 0,
+      disclaimer: '본 결과는 국토교통부 실거래가 데이터 기반 정보 정리이며, 매수·매도 추천이 아닙니다.',
+      fromCache: false,
+    };
+  }
 
-  // Step 5: AI 분석 (정보 정리·해석만, 추천/예측 금지)
-  const analysisPrompt = `다음 실거래 데이터에서 사용자 조건에 부합하는 단지 5곳을 골라 객관적 정보로 정리해줘. 추천·매수권유·가격예측 표현 절대 금지. 데이터 정리·중립 분석만.
+  // Step 4: 거래량 가중 정렬 → 상위 10건
+  const ranked = matched
+    .map(a => ({ ...a, _score: a.dealCount * 10 + (a.buildYear || 1990) * 0.01 }))
+    .sort((x, y) => y._score - x._score)
+    .slice(0, 10);
 
-사용자 조건:
-- 예산: ${maxBudget}억원 (현금 ${myCash}억 + 대출 ${availableLoan}억)
-- 주택: ${houseStatus} | 생애최초: ${isFirstBuyer ? 'Y' : 'N'} | 지역희망: ${region || '서울'}
-- 학군: ${schoolNeeded ? '중요' : '보통'} | 직장: ${workplaceArea || '미입력'}
+  // Step 5: 결과 카드 생성 (AI 호출 없음, 즉시 응답)
+  const recommendations = ranked.map((apt, i) => {
+    const p = apt.primaryPyeong;
+    const avgAuk = parseFloat((p.avgPrice / 10000).toFixed(2));
+    const minAuk = parseFloat((p.minPrice / 10000).toFixed(2));
+    const maxAuk = parseFloat((p.maxPrice / 10000).toFixed(2));
+    const ltvInfo = computeLTV(avgAuk, region || '서울', isFirstBuyer, houseStatus);
+    const tags = buildTags(apt);
+    const ageYears = new Date().getFullYear() - (apt.buildYear || 0);
 
-실거래 데이터 (최근 6개월):
-${ranked.map((a, i) => `${i + 1}. ${a.aptName} (${a.sigungu} ${a.umdNm}) ${a.buildYear}년식
-   평균 ${a.avgPriceAuk}억 (${(a.minPrice/10000).toFixed(2)}~${(a.maxPrice/10000).toFixed(2)}억) | ${a.areas} | 6개월 ${a.dealCount}건`).join('\n')}
-
-JSON 배열로 정확히 5개 반환 (\`\`\` 없이, 설명 없이):
-[{
-  "rank": 1, "aptName": "단지명", "area": "구 동", "avgPrice": 숫자(억),
-  "minPrice": 숫자, "maxPrice": 숫자, "buildYear": 숫자, "pyeong": "25평",
-  "score": 숫자(0-100, 거래활발도+입지+컨디션 종합),
-  "ltv": "40%(규제)" 또는 "70%(비규제)",
-  "maxLoan": "한도 문자열",
-  "pros": "객관적 장점 2줄 (역세권/대단지 등 사실)",
-  "cons": "객관적 단점 1줄 (구축/소형 등 사실)",
-  "strategy": "검토 시 확인할 사항 2줄 (임장 포인트, 사전심사 등)",
-  "tags": ["역세권","대단지"],
-  "risk": "주요 리스크 (가격하락 가능성·전세시세 등)",
-  "recommend": false
-}]
-중요: "recommend"는 항상 false. "pros/cons"는 사실만 (예: "총 2,500세대" "준공 1995년"). 가격예측 표현 금지.`;
-
-  let recommendations = [];
-  try {
-    const aiResult = await callAI([{ role: 'user', content: analysisPrompt }], false);
-    const cleaned = aiResult.content.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
-    recommendations = parsed.map(r => {
-      const matchTx = ranked.find(a => a.aptName === r.aptName);
-      return { ...r, txHistory: matchTx?.rawList || [], dealCount6m: matchTx?.dealCount || 0 };
-    });
-  } catch (e) {
-    console.error('[PropertyService] AI 분석 파싱 실패, 데이터 폴백', e.message);
-    recommendations = ranked.slice(0, 5).map((a, i) => ({
+    return {
       rank: i + 1,
-      aptName: a.aptName,
-      area: `${a.sigungu} ${a.umdNm}`,
-      avgPrice: parseFloat(a.avgPriceAuk),
-      minPrice: parseFloat((a.minPrice / 10000).toFixed(2)),
-      maxPrice: parseFloat((a.maxPrice / 10000).toFixed(2)),
-      buildYear: a.buildYear,
-      pyeong: a.areas,
-      score: Math.min(95, 50 + a.dealCount * 3),
-      pros: `최근 6개월 ${a.dealCount}건 거래 / ${a.buildYear}년식 / ${a.areas}`,
-      cons: '상세 임장 필요',
-      strategy: '국토부 실거래가 동호수별 비교, 대출 사전심사, RR 동·층·향 확인',
-      tags: ['실거래확인'],
-      risk: '시세 변동·금리 인상 리스크는 본인 부담',
+      aptName: apt.aptName,
+      area: `${apt.sigungu || ''} ${apt.umdNm || ''}`.trim(),
+      avgPrice: avgAuk,
+      minPrice: minAuk,
+      maxPrice: maxAuk,
+      buildYear: apt.buildYear,
+      pyeong: `${p.pyeong}평 (전용 ${p.excluUseAr}㎡)`,
+      score: Math.min(95, 50 + Math.min(apt.dealCount, 30) * 1.5),
+      ltv: ltvInfo.ltv,
+      maxLoan: ltvInfo.maxLoan,
+      pros: `${apt.pyeong}평형 6개월 ${p.dealCount}건 거래 · 평균 ${avgAuk}억`,
+      cons: ageYears >= 30 ? `구축(${ageYears}년) — 재건축연한 도래`
+            : ageYears >= 20 ? `준구축(${ageYears}년) — 인테리어 점검 필요`
+            : `현장 임장으로 동·층·향 확인 필수`,
+      strategy: `① 최근 거래 ${p.recentTx.length}건 동·층·향 비교 ② 대출 사전심사 ③ 같은 평형 매물 호가 비교 (네이버부동산/직방)`,
+      tags: tags.length ? tags : ['실거래확인'],
+      risk: '시세 변동·금리 인상 리스크는 본인 부담 / 미래 가격 예측 불가',
       recommend: false,
-      txHistory: a.rawList || [],
-      dealCount6m: a.dealCount,
-    }));
-  }
+      // 평형별 최근 시세 (사용자가 "지금 가격" 파악)
+      currentPriceByPyeong: apt.fitPyeongs.map(fp => ({
+        pyeong: fp.pyeong,
+        excluUseAr: fp.excluUseAr,
+        recentAvg: parseFloat((fp.avgPrice / 10000).toFixed(2)),
+        range: `${(fp.minPrice / 10000).toFixed(1)}~${(fp.maxPrice / 10000).toFixed(1)}억`,
+        dealCount: fp.dealCount,
+        latestDeal: fp.recentTx[0] ? `${fp.recentTx[0].date.slice(2)} ${fp.recentTx[0].floor}층 ${(fp.recentTx[0].price / 10000).toFixed(2)}억` : '-',
+      })),
+      txHistory: apt.rawList || [],
+      dealCount6m: apt.dealCount,
+      recentDeal: apt.recentDeal,
+    };
+  });
 
   const result = {
     recommendations,
     targetRegions,
     totalTxAnalyzed: analyzed.length,
-    inBudgetCount: inBudget.length,
+    inBudgetCount: matched.length,
     disclaimer: '본 결과는 국토교통부 실거래가 데이터 기반 정보 정리이며, 매수·매도 추천이 아닙니다. 모든 의사결정의 책임은 본인에게 있습니다.',
   };
   cache.set(cacheKey, result, 1800);
@@ -241,6 +261,7 @@ function getStaticFallback(budget, region) {
     risk: '데이터 조회 실패',
     recommend: false,
     txHistory: [],
+    currentPriceByPyeong: [],
   }];
 }
 

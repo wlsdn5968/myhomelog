@@ -131,7 +131,9 @@ async function getTransactionsByApt(lawdCd, aptName) {
 }
 
 /**
- * 지역별 평균 시세 분석
+ * 지역별 시세 분석 — 단지 + 평형별 분리
+ * 같은 단지여도 평형별 가격차가 크므로(예: 41㎡ 4억 vs 84㎡ 12억)
+ * 평형별 시세를 별도 산출해 예산 매칭 정확도↑
  */
 function analyzeTransactions(transactions) {
   if (!transactions || !transactions.length) return [];
@@ -143,22 +145,56 @@ function analyzeTransactions(transactions) {
   }
 
   return Object.entries(byApt).map(([name, list]) => {
-    const prices = list.map(t => t.dealAmount);
-    const areas = [...new Set(list.map(t => Math.round(t.excluUseAr / 3.3)))];
+    // 정렬: 최신 거래가 먼저
+    const sorted = [...list].sort((a, b) => {
+      const da = a.dealYear * 10000 + a.dealMonth * 100 + a.dealDay;
+      const db = b.dealYear * 10000 + b.dealMonth * 100 + b.dealDay;
+      return db - da;
+    });
+    const prices = sorted.map(t => t.dealAmount);
     const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+
+    // 평형별 그룹화 (평 단위로 반올림)
+    const byPyeong = {};
+    for (const t of sorted) {
+      const py = Math.round(t.excluUseAr / 3.3);
+      if (!byPyeong[py]) byPyeong[py] = [];
+      byPyeong[py].push(t);
+    }
+    const pyeongStats = Object.entries(byPyeong).map(([py, txs]) => {
+      const ps = txs.map(t => t.dealAmount);
+      return {
+        pyeong: parseInt(py),
+        excluUseAr: parseFloat((txs[0].excluUseAr).toFixed(2)),
+        dealCount: txs.length,
+        avgPrice: Math.round(ps.reduce((a, b) => a + b, 0) / ps.length), // 만원
+        minPrice: Math.min(...ps),
+        maxPrice: Math.max(...ps),
+        recentTx: txs.slice(0, 5).map(t => ({
+          date: `${t.dealYear}.${String(t.dealMonth).padStart(2, '0')}.${String(t.dealDay).padStart(2, '0')}`,
+          floor: t.floor,
+          price: t.dealAmount, // 만원
+          excluUseAr: t.excluUseAr,
+        })),
+      };
+    }).sort((a, b) => a.pyeong - b.pyeong);
+
     return {
       aptName: name,
-      sigungu: list[0].sigungu,
-      umdNm: list[0].umdNm,
-      buildYear: list[0].buildYear,
-      dealCount: list.length,
+      sigungu: sorted[0].sigungu,
+      umdNm: sorted[0].umdNm,
+      buildYear: sorted[0].buildYear,
+      lawdCd: sorted[0].lawdCd,
+      aptSeq: sorted[0].aptSeq,
+      dealCount: sorted.length,
       avgPrice: avg,
       minPrice: Math.min(...prices),
       maxPrice: Math.max(...prices),
       avgPriceAuk: (avg / 10000).toFixed(2),
-      areas: areas.join('·') + '평',
-      recentDeal: `${list[0].dealYear}.${String(list[0].dealMonth).padStart(2, '0')}`,
-      rawList: list.slice(0, 10),
+      areas: pyeongStats.map(p => p.pyeong).join('·') + '평',
+      recentDeal: `${sorted[0].dealYear}.${String(sorted[0].dealMonth).padStart(2, '0')}.${String(sorted[0].dealDay).padStart(2, '0')}`,
+      pyeongStats,
+      rawList: sorted.slice(0, 10),
     };
   }).sort((a, b) => b.dealCount - a.dealCount);
 }

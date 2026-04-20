@@ -1574,7 +1574,8 @@ function renderListGrid(){
       </div>
       <div style="padding:12px 14px">
         <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:7px">${tags}</div>
-        <div style="font-size:11px;color:var(--t2);line-height:1.65">${(p.pros||'').substring(0,62)}...</div>
+        <div style="font-size:11px;color:var(--t2);line-height:1.65;margin-bottom:6px">${(p.pros||'').substring(0,62)}${(p.pros||'').length>62?'...':''}</div>
+        ${(p.currentPriceByPyeong||[]).length?`<div style="font-size:10.5px;color:var(--t3);background:#F7F9FC;border-radius:6px;padding:5px 8px;line-height:1.5">📐 ${p.currentPriceByPyeong.slice(0,3).map(cp=>`<b style="color:var(--t2)">${cp.pyeong}평</b> ${cp.recentAvg}억`).join(' · ')}</div>`:''}
       </div>
     </div>`;
   }).join('');
@@ -1617,8 +1618,25 @@ function showDetail(p){
   const txH=(p.txHistory||[]).slice(0,10).map(t=>`<div class="txi"><span class="txd">${t.dealYear}.${String(t.dealMonth||1).padStart(2,'0')}</span><span class="txf">${t.floor||'?'}층</span><span class="txp">${((t.dealAmount||0)/10000).toFixed(2)}억</span></div>`).join('')||'<div style="padding:10px 0;color:var(--t3);font-size:11px">실거래 데이터 없음</div>';
   const ph=p.priceHistory||[{y:'2021',p:100},{y:'2022',p:112},{y:'2023',p:90},{y:'2024',p:87},{y:'2025',p:93}];
   const mx=Math.max(...ph.map(h=>h.p),1);
+  // 평형별 현재 시세 (최근 거래 기반)
+  const pyeongHtml = (p.currentPriceByPyeong||[]).length
+    ? `<div style="font-size:11px;font-weight:700;color:var(--t2);margin:0 0 8px">📐 평형별 현재 시세 <span style="font-weight:500;color:var(--t3)">· 최근 6개월 실거래 평균</span></div>
+       <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
+         ${p.currentPriceByPyeong.map(cp=>`
+           <div style="background:#F7F9FC;border:1px solid var(--bd);border-radius:8px;padding:9px 11px">
+             <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
+               <span style="font-size:12px;font-weight:700;color:var(--t1)">${cp.pyeong}평 (전용 ${cp.excluUseAr}㎡)</span>
+               <span style="font-size:13px;font-weight:800;color:var(--acc)">${cp.recentAvg}억</span>
+             </div>
+             <div style="font-size:10.5px;color:var(--t3);line-height:1.5">
+               범위 ${cp.range} · 최근 ${cp.dealCount}건 · 직전: ${cp.latestDeal}
+             </div>
+           </div>`).join('')}
+       </div>`
+    : '';
   document.getElementById('t1').innerHTML=`
-    <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px">최근 실거래가</div>${txH}
+    ${pyeongHtml}
+    <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px">최근 실거래가 (전체 평형)</div>${txH}
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 8px">연도별 시세 지수</div>
     ${ph.map(h=>`<div class="br"><div class="bry">${h.y}</div><div class="brb"><div class="brf" style="width:${Math.round(h.p/mx*100)}%"></div></div><div class="brv">${h.p}</div></div>`).join('')}
     <div class="ibox y" style="margin-top:12px">국토부 공공 API 기반. API 키 미설정 시 추정값.</div>`;
