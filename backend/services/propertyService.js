@@ -124,9 +124,15 @@ async function getAIRecommendations(userCondition) {
     houseStatus,
     isFirstBuyer,
     workplaceArea,
+    minArea, // 평 단위 (예: 18)
+    maxArea, // 평 단위 (예: 35)
   } = userCondition;
 
-  const cacheKey = `rec:v2:${region}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${workplaceArea}`;
+  // 기본 최소 15평 (오피스텔·초소형 제외)
+  const minPy = parseInt(minArea) || 15;
+  const maxPy = parseInt(maxArea) || 60;
+
+  const cacheKey = `rec:v3:${region}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${workplaceArea}:${minPy}:${maxPy}`;
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
@@ -161,6 +167,7 @@ async function getAIRecommendations(userCondition) {
   const matched = [];
   for (const apt of analyzed) {
     const fitPyeongs = (apt.pyeongStats || []).filter(p =>
+      p.pyeong >= minPy && p.pyeong <= maxPy &&
       p.minPrice <= budgetMaxMan && p.maxPrice >= budgetMinMan
     );
     if (fitPyeongs.length === 0) continue;
@@ -212,7 +219,7 @@ async function getAIRecommendations(userCondition) {
       score: Math.min(95, 50 + Math.min(apt.dealCount, 30) * 1.5),
       ltv: ltvInfo.ltv,
       maxLoan: ltvInfo.maxLoan,
-      pros: `${apt.pyeong}평형 6개월 ${p.dealCount}건 거래 · 평균 ${avgAuk}억`,
+      pros: `${p.pyeong}평형 6개월 ${p.dealCount}건 거래 · 평균 ${avgAuk}억 · ${apt.buildYear||'?'}년식`,
       cons: ageYears >= 30 ? `구축(${ageYears}년) — 재건축연한 도래`
             : ageYears >= 20 ? `준구축(${ageYears}년) — 인테리어 점검 필요`
             : `현장 임장으로 동·층·향 확인 필수`,

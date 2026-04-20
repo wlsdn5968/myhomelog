@@ -531,6 +531,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         <div class="chips" id="ch-r-sub" style="margin-top:2px"></div>
       </div>
       <div class="mb9"><span class="lbl">학군 중요도</span><div class="chips" id="ch-sc"><span class="chip" onclick="cp(this,'ch-sc')">학군 중요</span><span class="chip on" onclick="cp(this,'ch-sc')">보통</span></div></div>
+      <div class="mb9"><span class="lbl">희망 평형</span><div class="chips" id="ch-py"><span class="chip" onclick="cp(this,'ch-py')">소형 15~22평</span><span class="chip on" onclick="cp(this,'ch-py')">중형 23~33평</span><span class="chip" onclick="cp(this,'ch-py')">대형 34평+</span><span class="chip" onclick="cp(this,'ch-py')">전체</span></div></div>
       <div class="r2"><div><label class="lbl">매수가 (억)</label><input class="inp" id="bp" type="number" placeholder="6.8" step="0.1" oninput="cl()"></div><div><label class="lbl">현금 (억)</label><input class="inp" id="mc" type="number" placeholder="3.5" step="0.1" oninput="cl()"></div></div>
       <div class="r2"><div><label class="lbl">연 소득 (만원)</label><input class="inp" id="inc" type="number" placeholder="5000" oninput="cl()"></div><div><label class="lbl">직장 위치 / 관심 구</label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
       <button class="abtn acc" onclick="cl()">대출 한도 계산</button>
@@ -1493,6 +1494,7 @@ async function doSearch(){
     schoolNeeded:gct('ch-sc')==='학군 중요',
     workplaceArea:document.getElementById('wp').value.trim(),
     purpose:'실거주',
+    ...pyRange(),
   };
 
   let success=false;
@@ -2188,6 +2190,13 @@ function getRegionForSearch(){
   const wide=gct('ch-r');
   const sub=document.querySelector('#ch-r-sub .chip.on')?.textContent.trim()||'';
   return sub ? `${wide} ${sub}` : wide;
+}
+function pyRange(){
+  const sel=gct('ch-py');
+  if(sel.startsWith('소형')) return {minArea:15,maxArea:22};
+  if(sel.startsWith('중형')) return {minArea:23,maxArea:33};
+  if(sel.startsWith('대형')) return {minArea:34,maxArea:60};
+  return {minArea:15,maxArea:60}; // 전체
 }
 function cp(el,id){document.querySelector(`#${id}`).querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');if(id==='ch-r')populateRegionSub(el.textContent.trim());cl();dc();}
 function getLoanAmt(){const r=calcC();return r?r.fin:0;}
