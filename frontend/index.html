@@ -190,6 +190,12 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 
 /* RIGHT CHAT */
 .rp{width:340px;flex-shrink:0;display:flex;flex-direction:column;border-left:1px solid var(--bd);background:var(--s0)}
+/* .rp 오버레이 (플로팅 💬 버튼에서 호출) */
+.rp.rp-overlay{position:fixed;right:20px;bottom:84px;top:auto;width:360px;max-width:calc(100vw - 40px);height:min(560px,calc(100vh - 120px));z-index:900;border:1px solid var(--bd);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.22);overflow:hidden}
+/* 플로팅 AI 버튼 */
+.fab-ai{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border-radius:50%;background:var(--acc);color:#fff;border:none;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:24px;box-shadow:0 6px 18px rgba(0,0,0,.22);z-index:850;transition:transform .15s,box-shadow .15s}
+.fab-ai:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.28)}
+@media(max-width:700px){.fab-ai{bottom:72px;right:16px;width:52px;height:52px;font-size:22px}}
 .chdr{padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 .ctit{font-size:12px;font-weight:700}.cst{font-size:11px;font-weight:600}
 .cmsgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
@@ -266,6 +272,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 
 /* CALC */
 .calcv{overflow-y:auto;padding:22px}
+/* 풀너비 뷰(특약/대출계산/복비/뉴스/청약): 사이드패널 숨김 시 가독성 위해 내부 컨텐츠를 중앙 정렬 */
+.calcv>*,.clause-view>*,.biz-view>*{max-width:1040px;margin-left:auto;margin-right:auto;width:100%}
 .calcv h2{font-size:16px;font-weight:700;margin-bottom:4px}.calcv p{font-size:11px;color:var(--t3);margin-bottom:18px}
 
 /* SETTINGS MODAL */
@@ -2265,18 +2273,41 @@ function getLat(area,i){if(!area)return 37.545+(i*.02);for(const[k,v]of Object.e
 function getLng(area,i){if(!area)return 127.0+(i*.02);for(const[k,v]of Object.entries(AC)){if(area.includes(k))return v[1]+(Math.random()-.5)*.008;}return 127.0+(i*.01)+(Math.random()-.5)*.02;}
 
 // ── VIEW SWITCH ───────────────────────────────────────────
-const VIEW_DISPLAY={map:'flex',list:'grid',calc:'flex',clause:'flex',biz:'flex',news:'flex',subs:'flex'};
+// 탭별 메타: display(뷰 표시 형식), lp(좌측패널 표시), rp(우측 AI채팅 표시)
+const VIEW_DISPLAY={
+  map:   {display:'flex', lp:true,  rp:true},
+  list:  {display:'grid', lp:true,  rp:false},
+  calc:  {display:'flex', lp:false, rp:false},
+  clause:{display:'flex', lp:false, rp:false},
+  biz:   {display:'flex', lp:false, rp:false},
+  news:  {display:'flex', lp:false, rp:false},
+  subs:  {display:'flex', lp:false, rp:false},
+};
+let _rpOverlay=false; // 플로팅 챗 버튼으로 .rp 강제 표시 상태
 function sv(v,btn){
-  Object.entries(VIEW_DISPLAY).forEach(([id,disp])=>{
+  Object.entries(VIEW_DISPLAY).forEach(([id,meta])=>{
     const el=document.getElementById('view-'+id);
-    if(el)el.style.display=id===v?disp:'none';
+    if(el)el.style.display=id===v?meta.display:'none';
   });
-  // 모바일: chat 뷰는 .rp 패널 표시 (미디어쿼리 override)
+  _rpOverlay=false; // 탭 전환 시 오버레이 초기화
+  const meta=VIEW_DISPLAY[v]||{lp:true,rp:true};
+  // .lp 토글 (모바일에서는 미디어쿼리가 우선)
+  const lp=document.querySelector('.lp');
+  if(lp){
+    if(meta.lp && window.innerWidth>700) lp.style.removeProperty('display');
+    else lp.style.setProperty('display','none','important');
+  }
+  // .rp 토글
   const rp=document.querySelector('.rp');
   if(rp){
-    if(v==='chat')rp.style.setProperty('display','flex','important');
-    else if(window.innerWidth<=900)rp.style.setProperty('display','none','important');
-    else rp.style.removeProperty('display');
+    if(v==='chat') rp.style.setProperty('display','flex','important');
+    else if(meta.rp && window.innerWidth>900) rp.style.removeProperty('display');
+    else rp.style.setProperty('display','none','important');
+  }
+  // 플로팅 AI 버튼: .rp 숨긴 탭에서만 노출 (chat, map 제외)
+  const fab=document.getElementById('fabAI');
+  if(fab){
+    fab.style.display = (v!=='chat' && !meta.rp) ? 'flex' : 'none';
   }
   // 헤더 탭 활성화 (순서: map,list,calc,clause,biz,news)
   const htabOrder=['map','list','calc','clause','biz','news','subs'];
@@ -2286,6 +2317,19 @@ function sv(v,btn){
   if(v==='list')renderListGrid();
   if(v==='news' && !document.getElementById('newsList').dataset.loaded){loadNews();}
   if(v==='subs' && !document.getElementById('subsList').dataset.loaded){loadSubs();}
+}
+// 플로팅 AI 버튼: .rp 오버레이 토글
+function toggleRpOverlay(){
+  const rp=document.querySelector('.rp');
+  if(!rp)return;
+  _rpOverlay=!_rpOverlay;
+  if(_rpOverlay){
+    rp.classList.add('rp-overlay');
+    rp.style.setProperty('display','flex','important');
+  } else {
+    rp.classList.remove('rp-overlay');
+    rp.style.setProperty('display','none','important');
+  }
 }
 function ts(id){document.getElementById(id)?.classList.toggle('cl');}
 
@@ -2553,5 +2597,7 @@ function toast(m){const t=document.getElementById('tst');t.textContent=m;t.class
 document.getElementById('DM').addEventListener('click',e=>{if(e.target.id==='DM')cDM();});
 document.getElementById('SM').addEventListener('click',e=>{if(e.target.id==='SM')closeSM();});
 </script>
+<!-- 플로팅 AI 버튼: .rp 숨김 탭에서만 노출 -->
+<button id="fabAI" class="fab-ai" title="AI 부동산 컨설턴트" onclick="toggleRpOverlay()">💬</button>
 </body>
 </html>
