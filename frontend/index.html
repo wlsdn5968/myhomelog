@@ -492,9 +492,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <button class="htab" onclick="sv('list',this)">📋 목록</button>
     <button class="htab" onclick="sv('calc',this)">🧮 대출계산</button>
     <button class="htab" onclick="sv('clause',this)">✍ 특약생성</button>
-    <button class="htab" onclick="sv('biz',this)">💰 복비계산</button>
     <button class="htab" onclick="sv('news',this)">📰 뉴스</button>
-    <button class="htab" onclick="sv('subs',this)">📅 청약</button>
+    <button class="htab" onclick="sv('subs',this)">📅 청약<span style="background:var(--amb);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px;vertical-align:middle">BETA</span></button>
   </div>
   <div class="hml">
     <div class="rpill"><div class="hdot"></div>10.15 규제</div>
@@ -648,6 +647,14 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:9px">금리 시나리오별 월 원리금</div>
       <div id="scnC"></div>
     </div>
+    <div id="co_cta" style="display:none"></div>
+  </div>
+  <div style="max-width:520px;margin-top:18px;padding:14px 16px;background:#fff;border:1px solid var(--bd);border-radius:var(--r);box-shadow:var(--sh)">
+    <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:10px">📌 계약 직전 도구</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+      <button class="abtn" style="margin:0;background:#FFF7E6;color:#8B6914;border:1px solid #E8C896;font-size:12px" onclick="sv('biz')">💰 복비 계산기</button>
+      <button class="abtn" style="margin:0;background:#EEF4FF;color:var(--a2);border:1px solid #C9DCF5;font-size:12px" onclick="sv('biz');setTimeout(()=>document.getElementById('checkList')?.scrollIntoView({behavior:'smooth',block:'start'}),200)">📋 계약 체크리스트</button>
+    </div>
   </div>
 </div>
 
@@ -710,10 +717,20 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         </div>
       </div>
     </div>
-    <div class="mb9"><label class="lbl">특이사항 (선택)</label><input class="inp" id="cl_issues" placeholder="예: 누수 이력, 전세 낀 매물, 재건축 추진 중..."></div>
+    <div class="mb9"><label class="lbl">특이사항 (선택)</label><input class="inp" id="cl_issues" placeholder="예: 누수 이력, 전세 낀 매물, 재건축 추진 중...">
+      <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">
+        <span class="chip" onclick="addClauseIssue('누수 이력')">+ 누수 이력</span>
+        <span class="chip" onclick="addClauseIssue('전세 끼고 매수')">+ 전세 끼고 매수</span>
+        <span class="chip" onclick="addClauseIssue('세입자 승계')">+ 세입자 승계</span>
+        <span class="chip" onclick="addClauseIssue('재건축 추진 중')">+ 재건축</span>
+        <span class="chip" onclick="addClauseIssue('주차장 협소')">+ 주차 협소</span>
+        <span class="chip" onclick="addClauseIssue('베란다 확장')">+ 확장</span>
+      </div>
+    </div>
     <button class="abtn acc" id="clBtn" onclick="genClause()" style="margin-top:4px">
       <div class="spin" id="clSp"></div><span id="clTx">✍ 특약 자동 생성 (30초)</span>
     </button>
+    <div id="cl_hist"></div>
   </div>
   <div class="cv-result" id="cl_result" style="display:none">
     <div class="cv-result-hdr">
@@ -724,8 +741,9 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
 </div>
 
-<!-- 복비 계산기 뷰 -->
+<!-- 복비 계산기 뷰 (대출계산 탭에서 진입) -->
 <div class="biz-view" id="view-biz">
+  <div style="margin-bottom:12px"><button class="abtn" style="margin:0;width:auto;padding:6px 12px;font-size:11px;background:transparent;color:var(--t2);border:1px solid var(--bd)" onclick="sv('calc')">← 대출 계산으로</button></div>
   <div class="biz-section">
     <h3>💰 중개보수(복비) 계산기</h3>
     <p style="font-size:11px;color:var(--t3);margin-bottom:13px">공인중개사법 시행규칙 기준 · 2025년 현행</p>
@@ -991,6 +1009,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   chkAPI().then(ok=>{if(ok)checkMolit();});
   renderBookmarks();
   renderSavedDeals();
+  renderClauseHistory();
   loadLeaflet(); // 카카오 정식 키 미연동 환경 대비, 기본은 OSM. 좌표는 백엔드 카카오 geocode로 보정.
 
   // 공유 URL 진입 처리
@@ -1273,10 +1292,11 @@ async function loadSubs(){
     const r = await fetch(url, {signal: AbortSignal.timeout(10000)});
     const d = await r.json();
     if(!r.ok){
-      box.innerHTML = `<div style="padding:24px;text-align:center;color:var(--t3);line-height:1.7">
-        <div style="font-size:13px;color:var(--t2);margin-bottom:6px">${d.error || '청약 정보 조회 실패'}</div>
-        <div style="font-size:11px;margin-bottom:10px">${d.hint || ''}</div>
-        <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="display:inline-block;padding:7px 14px;background:var(--acc);color:#fff;border-radius:7px;font-size:11px;text-decoration:none">청약Home 바로가기 ↗</a>
+      box.innerHTML = `<div style="padding:30px 20px;text-align:center;color:var(--t3);line-height:1.7;background:linear-gradient(135deg,#FFF5E6,#FFF9F0);border:1px solid #E8C896;border-radius:12px">
+        <div style="font-size:34px;margin-bottom:8px">📅</div>
+        <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px">청약 캘린더 연동 준비 중</div>
+        <div style="font-size:11.5px;color:var(--t2);margin-bottom:14px;line-height:1.6">정부 청약 데이터 API 구독 절차 진행 중입니다.<br>지금은 청약Home에서 직접 확인해주세요.</div>
+        <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="display:inline-block;padding:9px 18px;background:var(--acc);color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;box-shadow:var(--sh)">🏠 청약Home 바로가기 ↗</a>
       </div>`;
       box.dataset.loaded = '1';
       return;
@@ -1576,7 +1596,18 @@ function renderPList(){
 
 function renderListGrid(){
   const g=document.getElementById('view-list');
-  if(!props.length){g.innerHTML='<div style="padding:20px;color:var(--t3);font-size:12px">AI 매물 검색을 먼저 실행해주세요</div>';return;}
+  if(!props.length){
+    g.innerHTML=`<div style="grid-column:1/-1;padding:50px 20px;text-align:center;color:var(--t3)">
+      <div style="font-size:48px;margin-bottom:14px">🏠</div>
+      <div style="font-size:15px;font-weight:700;color:var(--t1);margin-bottom:6px">아직 검색 결과가 없어요</div>
+      <div style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:18px">왼쪽 <b>"내 상황"</b> 입력 후 <b>🤖 AI 맞춤 매물 검색</b>을 누르면<br>국토부 실거래가 기반으로 추천 매물이 나타납니다.</div>
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="abtn acc" style="margin:0;padding:8px 16px;font-size:12px;width:auto" onclick="quickSearchPreset('서울 7억 무주택')">⚡ 빠른 검색: 서울 7억 무주택</button>
+        <button class="abtn a2" style="margin:0;padding:8px 16px;font-size:12px;width:auto" onclick="quickSearchPreset('경기 5억 생애최초')">⚡ 경기 5억 생애최초</button>
+      </div>
+    </div>`;
+    return;
+  }
   const metaLine = searchMeta && searchMeta.regions.length
     ? `<div style="margin:10px 14px 0;padding:8px 12px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;color:#1B4F8A;font-size:11px;line-height:1.55">📊 <b>분석 지역:</b> ${searchMeta.regions.join(', ')} · <b>최근 6개월 실거래</b> ${searchMeta.totalTx.toLocaleString()}건 중 예산 범위 ${searchMeta.inBudget.toLocaleString()}건 분석</div>`
     : '';
@@ -1634,6 +1665,10 @@ function showDetail(p){
     ${p.pros?`<div class="ibox g"><b>장점:</b> ${p.pros}</div>`:''}
     ${p.cons?`<div class="ibox r"><b>단점:</b> ${p.cons}</div>`:''}
     ${p.strategy?`<div class="ibox b"><b>전략:</b> ${p.strategy}</div>`:''}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
+      <button class="abtn a2" style="margin:0;font-size:11px" onclick="goCalcFromDetail(${p.avgPrice||0})">🧮 대출 계산</button>
+      <button class="abtn" style="margin:0;font-size:11px;background:#EEF4FF;color:var(--a2);border:1px solid #C9DCF5" onclick="goClauseFromCurrentDetail()">✍ 특약 만들기</button>
+    </div>
     <button class="abtn acc" style="margin-top:6px" onclick="askP('${encodeURIComponent(p.aptName)}','${p.avgPrice||0}','${p.area||''}');cDM()">🤖 AI에게 상세 전략 묻기</button>`;
 
   const txH=(p.txHistory||[]).slice(0,10).map(t=>`<div class="txi"><span class="txd">${t.dealYear}.${String(t.dealMonth||1).padStart(2,'0')}</span><span class="txf">${t.floor||'?'}층</span><span class="txp">${((t.dealAmount||0)/10000).toFixed(2)}억</span></div>`).join('')||'<div style="padding:10px 0;color:var(--t3);font-size:11px">실거래 데이터 없음</div>';
@@ -2277,6 +2312,146 @@ function dc(){
   const mos=[0,.01,.02].map(d2=>fin>0?Math.round(fin*1e8*(rate+d2)/12/(1-Math.pow(1+(rate+d2)/12,-n))/10000):0);
   const mx=Math.max(...mos,1);
   document.getElementById('scnC').innerHTML=mos.map((m,i)=>`<div class="br"><div class="bry">${((rate+[0,.01,.02][i])*100).toFixed(1)}%</div><div class="brb"><div class="brf" style="width:${Math.round(m/mx*100)}%"></div></div><div class="brv">${m}만</div></div>`).join('');
+  // CTA: 이 예산으로 매물 찾기
+  const ctaEl=document.getElementById('co_cta');
+  if(ctaEl && buy>0 && ltv>0){
+    ctaEl.style.display='block';
+    ctaEl.innerHTML=`<button class="abtn a2" style="margin-top:10px" onclick="searchWithBudget(${buy},${cash||0},${fin||0},'${house}','${isF}','${regS}')">🔎 이 예산(${buy}억)으로 매물 찾기 →</button>`;
+  }
+}
+// 대출계산 → 지도 검색 컨텍스트 전달
+function searchWithBudget(buy,cash,loan,house,isFirst,regStr){
+  // 내 상황 섹션에 값 채움
+  const bpEl=document.getElementById('bp');if(bpEl)bpEl.value=buy;
+  const mcEl=document.getElementById('mc');if(mcEl)mcEl.value=cash;
+  // 주택보유 칩 선택
+  ['ch-h','ch-f'].forEach(gid=>{});
+  const setChip=(gid,val)=>{document.querySelectorAll('#'+gid+' .chip').forEach(c=>c.classList.toggle('on',c.textContent.trim()===val));};
+  setChip('ch-h',house);
+  setChip('ch-f',isFirst==='true'||isFirst===true?'예':'아니오');
+  // 지역 매핑
+  if(regStr.includes('서울'))setChip('ch-r','서울');
+  else if(regStr==='지방')setChip('ch-r','지방');
+  else setChip('ch-r','경기');
+  // 탭 전환 후 검색 실행
+  sv('map',document.querySelectorAll('.htab')[0]);
+  setTimeout(()=>{if(typeof doSearch==='function')doSearch();},200);
+  toast('💨 예산 기준 매물 검색 시작');
+}
+// 상세 모달 → 특약 생성 (currentDetail 전역 사용, quote 이스케이프 회피)
+function goClauseFromCurrentDetail(){
+  const p=currentDetail;if(!p){toast('매물 정보 없음');return;}
+  goClauseFromDetail(p.aptName||'', p.area||'', p.avgPrice||0, p.excluUseAr||0, p.buildYear||0);
+}
+// 상세 모달 → 특약 생성 컨텍스트 전달
+function goClauseFromDetail(aptName,area,price,excluUseAr,buildYear){
+  sv('clause',document.querySelectorAll('.htab')[3]);
+  setTimeout(()=>{
+    const set=(id,val)=>{const e=document.getElementById(id);if(e&&val!==undefined&&val!==null)e.value=val;};
+    set('cl_apt',aptName);
+    set('cl_area',area||'');
+    set('cl_price',price?(price).toFixed(2):'');
+    set('cl_area2',excluUseAr||'');
+    set('cl_year',buildYear||'');
+    if(typeof cDM==='function')cDM();
+    document.getElementById('cl_apt')?.scrollIntoView({behavior:'smooth',block:'center'});
+    toast('✍ 매물 정보 자동 입력됨 — 생성 버튼 클릭');
+  },180);
+}
+// 상세 모달 → 대출 계산 컨텍스트 전달
+function goCalcFromDetail(price){
+  sv('calc',document.querySelectorAll('.htab')[2]);
+  setTimeout(()=>{
+    const cb=document.getElementById('c_b');if(cb&&price){cb.value=price.toFixed(2);}
+    if(typeof cDM==='function')cDM();
+    if(typeof dc==='function')dc();
+    document.getElementById('c_b')?.scrollIntoView({behavior:'smooth',block:'center'});
+    toast('🧮 매수가 자동 입력됨');
+  },180);
+}
+// 특약 생성 완료 → 관심단지 저장
+function saveClauseAptToBookmark(){
+  const apt=document.getElementById('cl_apt').value.trim();
+  const area=document.getElementById('cl_area').value.trim();
+  const price=parseFloat(document.getElementById('cl_price').value)||0;
+  if(!apt){toast('단지명이 필요합니다');return;}
+  const bks=getBookmarks();
+  if(bks.some(b=>b.aptName===apt)){toast('이미 관심 단지에 등록됨');return;}
+  bks.push({aptName:apt,area,avgPrice:price,addedAt:Date.now()});
+  saveBookmarks(bks);renderBookmarks();
+  toast('⭐ 관심 단지에 저장됨');
+}
+// ── 특약 히스토리 ─────────────────────────────────────────
+const CLAUSE_HIST_KEY='mhl_clause_history';
+function getClauseHistory(){try{return JSON.parse(localStorage.getItem(CLAUSE_HIST_KEY)||'[]');}catch{return[];}}
+function saveClauseHistory(){
+  const apt=document.getElementById('cl_apt').value.trim();if(!apt)return;
+  const html=document.getElementById('cl_output').innerHTML;
+  const title=document.getElementById('cl_result_title').textContent;
+  const item={
+    id:Date.now(), aptName:apt, title,
+    inputs:{
+      apt, area:document.getElementById('cl_area').value.trim(),
+      price:document.getElementById('cl_price').value,
+      excluUseAr:document.getElementById('cl_area2').value,
+      buildYear:document.getElementById('cl_year').value,
+      house:gct('cl-h'), isFirst:gct('cl-f'),
+      issues:document.getElementById('cl_issues').value.trim(),
+    },
+    html, savedAt:Date.now(),
+  };
+  const arr=getClauseHistory();
+  // 같은 단지명 있으면 갱신
+  const exi=arr.findIndex(x=>x.aptName===apt);
+  if(exi>=0)arr.splice(exi,1);
+  arr.unshift(item);
+  if(arr.length>5)arr.length=5;
+  localStorage.setItem(CLAUSE_HIST_KEY,JSON.stringify(arr));
+  renderClauseHistory();
+}
+function renderClauseHistory(){
+  const el=document.getElementById('cl_hist');if(!el)return;
+  const arr=getClauseHistory();
+  if(!arr.length){el.innerHTML='';return;}
+  el.innerHTML=`<div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 8px">💾 최근 생성 (${arr.length}/5)</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px">${arr.map(it=>`
+      <div style="background:#fff;border:1px solid var(--bd);border-radius:7px;padding:6px 10px;font-size:11px;display:flex;align-items:center;gap:6px">
+        <span style="cursor:pointer;font-weight:600" onclick="loadClauseHistory(${it.id})" title="다시 불러오기">${it.aptName}</span>
+        <button onclick="delClauseHistory(${it.id})" style="background:transparent;border:none;cursor:pointer;color:var(--t3);font-size:12px;padding:0 2px">✕</button>
+      </div>`).join('')}</div>`;
+}
+function loadClauseHistory(id){
+  const it=getClauseHistory().find(x=>x.id===id);if(!it)return;
+  const set=(eid,val)=>{const e=document.getElementById(eid);if(e)e.value=val||'';};
+  set('cl_apt',it.inputs.apt);set('cl_area',it.inputs.area);set('cl_price',it.inputs.price);
+  set('cl_area2',it.inputs.excluUseAr);set('cl_year',it.inputs.buildYear);set('cl_issues',it.inputs.issues);
+  const setChip=(gid,val)=>{document.querySelectorAll('#'+gid+' .chip').forEach(c=>c.classList.toggle('on',c.textContent.trim()===val));};
+  setChip('cl-h',it.inputs.house);setChip('cl-f',it.inputs.isFirst);
+  document.getElementById('cl_result_title').textContent=it.title;
+  document.getElementById('cl_output').innerHTML=it.html;
+  document.getElementById('cl_result').style.display='block';
+  document.getElementById('cl_result').scrollIntoView({behavior:'smooth',block:'start'});
+  toast('💾 히스토리 불러옴');
+}
+function delClauseHistory(id){
+  const arr=getClauseHistory().filter(x=>x.id!==id);
+  localStorage.setItem(CLAUSE_HIST_KEY,JSON.stringify(arr));
+  renderClauseHistory();
+}
+function addClauseIssue(txt){
+  const e=document.getElementById('cl_issues');if(!e)return;
+  const cur=e.value.trim();
+  if(cur.includes(txt))return;
+  e.value=cur?cur+', '+txt:txt;
+}
+// 빈 상태 빠른 검색 프리셋
+function quickSearchPreset(preset){
+  const setChip=(gid,val)=>{document.querySelectorAll('#'+gid+' .chip').forEach(c=>c.classList.toggle('on',c.textContent.trim()===val));};
+  if(preset.includes('서울')){setChip('ch-r','서울');document.getElementById('bp').value='7';document.getElementById('mc').value='3';}
+  else if(preset.includes('경기')){setChip('ch-r','경기');document.getElementById('bp').value='5';document.getElementById('mc').value='2';}
+  setChip('ch-h','무주택');
+  setChip('ch-f',preset.includes('생애최초')?'예':'아니오');
+  if(typeof doSearch==='function')doSearch();
 }
 
 // ── COORDS FALLBACK ───────────────────────────────────────
@@ -2291,7 +2466,7 @@ const VIEW_DISPLAY={
   list:  {display:'grid', lp:true,  rp:false},
   calc:  {display:'flex', lp:false, rp:false},
   clause:{display:'flex', lp:false, rp:false},
-  biz:   {display:'flex', lp:false, rp:false},
+  biz:   {display:'flex', lp:false, rp:false}, // 흡수됨 - htab에서 제거. calc 내부 링크 또는 deep-link 호환
   news:  {display:'flex', lp:false, rp:false},
   subs:  {display:'flex', lp:false, rp:false},
 };
@@ -2331,7 +2506,7 @@ function sv(v,btn){
   const bmPop=document.getElementById('bmPop');
   if(bmPop) bmPop.classList.remove('on');
   // 헤더 탭 활성화 (순서: map,list,calc,clause,biz,news)
-  const htabOrder=['map','list','calc','clause','biz','news','subs'];
+  const htabOrder=['map','list','calc','clause','news','subs'];
   document.querySelectorAll('.htab').forEach((b,i)=>b.classList.toggle('on',htabOrder[i]===v));
   // 모바일 하단 탭 활성화
   document.querySelectorAll('.bnav-item').forEach(b=>b.classList.toggle('on',b.dataset.view===v));
@@ -2445,7 +2620,11 @@ function renderClauseResult(d,aptName){
     ${mkCard(d.essential,'e')}
     <div style="font-size:11px;font-weight:700;color:var(--amb);margin:12px 0 7px">권장 특약</div>
     ${mkCard(d.recommended,'r')}
-    <div class="cv-caution" style="margin-top:8px;background:var(--a2L);border-color:#AECAEA;color:#144080">특약은 공인중개사·법무사와 최종 검토 후 사용하세요.</div>`;
+    <div class="cv-caution" style="margin-top:8px;background:var(--a2L);border-color:#AECAEA;color:#144080">특약은 공인중개사·법무사와 최종 검토 후 사용하세요.</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
+      <button class="abtn" style="margin:0;background:#FFF7E6;color:#8B6914;border:1px solid #E8C896" onclick="saveClauseAptToBookmark()">⭐ 관심 단지로 저장</button>
+      <button class="abtn a2" style="margin:0" onclick="saveClauseHistory();toast('💾 히스토리 저장 완료')">💾 이 특약 히스토리 저장</button>
+    </div>`;
   document.getElementById('cl_result').style.display='block';
   document.getElementById('cl_result').scrollIntoView({behavior:'smooth',block:'start'});
 }
