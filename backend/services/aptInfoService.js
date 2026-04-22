@@ -40,9 +40,14 @@ async function getAptBasisInfo(aptSeq) {
       timeout: 8000,
     });
     const item = r.data?.response?.body?.item || null;
+    const resultCode = r.data?.response?.header?.resultCode;
+    if (!item && resultCode && resultCode !== '00') {
+      console.error(`[aptInfoService] getAptBasisInfo ${aptSeq} resultCode=${resultCode} msg=${r.data?.response?.header?.resultMsg}`);
+    }
     cache.set(cacheKey, item, 86400 * 30); // 30일
     return item;
   } catch (e) {
+    console.error(`[aptInfoService] getAptBasisInfo ${aptSeq} 실패:`, e.response?.status, e.message);
     cache.set(cacheKey, null, 3600); // 실패도 1시간 캐시 (스팸 방지)
     return null;
   }
@@ -107,6 +112,10 @@ async function getAptListBySgg(sigunguCode) {
       const body = r.data?.response?.body;
       const items = body?.item;
       const list = Array.isArray(items) ? items : items ? [items] : [];
+      const resultCode = r.data?.response?.header?.resultCode;
+      if (!list.length && resultCode && resultCode !== '00') {
+        console.error(`[aptInfoService] getAptListBySgg ${sigunguCode} p${pageNo} resultCode=${resultCode} msg=${r.data?.response?.header?.resultMsg}`);
+      }
       if (!list.length) break;
       all.push(...list);
       if (list.length < 200) break; // 마지막 페이지

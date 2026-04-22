@@ -98,6 +98,89 @@ app.use('/api/analysis', dataLimiter, analysisRouter);
 app.use('/api/news', dataLimiter, newsRouter);
 app.use('/api/subscription', dataLimiter, subscriptionRouter);
 
+// ── API 활성화 진단 (공개 — 데이터 소스 현황 확인용) ────
+app.get('/api/health/apis', async (req, res) => {
+  const axios = require('axios');
+  const molit = process.env.MOLIT_API_KEY;
+  const kakao = process.env.KAKAO_REST_API_KEY;
+  const checks = { molit_key: !!molit, kakao_key: !!kakao };
+
+  // 1) MOLIT 실거래가 (활성 필수)
+  if (molit) {
+    try {
+      const r = await axios.get('https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev', {
+        params: { serviceKey: molit, LAWD_CD: '11350', DEAL_YMD: '202604', pageNo: 1, numOfRows: 1, _type: 'json' },
+        timeout: 6000,
+      });
+      checks.molit_transaction = r.data?.response?.header?.resultCode === '00' || r.data?.response?.header?.resultCode === undefined;
+    } catch (e) { checks.molit_transaction = false; }
+  }
+
+  // 2) K-apt 단지 리스트 (AptListService3)
+  if (molit) {
+    try {
+      const r = await axios.get('https://apis.data.go.kr/1613000/AptListService3/getSigunguAptList3', {
+        params: { serviceKey: molit, sigunguCode: '11350', numOfRows: 1, pageNo: 1, _type: 'json' },
+        timeout: 6000,
+      });
+      const code = r.data?.response?.header?.resultCode;
+      checks.kapt_list = code === '00';
+      checks.kapt_list_msg = code !== '00' ? r.data?.response?.header?.resultMsg : undefined;
+    } catch (e) { checks.kapt_list = false; checks.kapt_list_msg = e.message; }
+  }
+
+  // 3) K-apt 단지 기본정보 (AptBasisInfoServiceV3)
+  if (molit) {
+    try {
+      const r = await axios.get('https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3', {
+        params: { serviceKey: molit, kaptCode: 'A10020255', _type: 'json' },
+        timeout: 6000,
+      });
+      const code = r.data?.response?.header?.resultCode;
+      checks.kapt_basis = code === '00';
+      checks.kapt_basis_msg = code !== '00' ? r.data?.response?.header?.resultMsg : undefined;
+    } catch (e) { checks.kapt_basis = false; checks.kapt_basis_msg = e.message; }
+  }
+
+  // 4) Kakao 로컬 키워드 검색
+  if (kakao) {
+    try {
+      const r = await axios.get('https://dapi.kakao.com/v2/local/search/keyword.json', {
+        headers: { Authorization: `KakaoAK ${kakao}` },
+        params: { query: '강남역', size: 1 },
+        timeout: 5000,
+      });
+      checks.kakao_keyword = (r.data?.meta?.total_count || 0) > 0;
+    } catch (e) { checks.kakao_keyword = false; checks.kakao_keyword_err = e.response?.status || e.message; }
+  }
+
+  // 5) Kakao 카테고리 검색 (주변시설)
+  if (kakao) {
+    try {
+      const r = await axios.get('https://dapi.kakao.com/v2/local/search/category.json', {
+        headers: { Authorization: `KakaoAK ${kakao}` },
+        params: { category_group_code: 'SC4', x: 127.06, y: 37.65, radius: 500 },
+        timeout: 5000,
+      });
+      checks.kakao_category = (r.data?.meta?.total_count || 0) >= 0;
+    } catch (e) { checks.kakao_category = false; }
+  }
+
+  // 6) Kakao 모빌리티 directions
+  if (kakao) {
+    try {
+      const r = await axios.get('https://apis-navi.kakaomobility.com/v1/directions', {
+        headers: { Authorization: `KakaoAK ${kakao}` },
+        params: { origin: '127.06,37.65', destination: '127.03,37.50', priority: 'RECOMMEND' },
+        timeout: 6000,
+      });
+      checks.kakao_mobility = !!r.data?.routes?.[0]?.summary?.duration;
+    } catch (e) { checks.kakao_mobility = false; checks.kakao_mobility_err = e.response?.status || e.message; }
+  }
+
+  res.json({ timestamp: new Date().toISOString(), checks });
+});
+
 // 헬스체크 (사용 한도 잔량 포함 — 프론트 사용 한도 표시에 사용)
 app.get('/api/health', (req, res) => {
   const used = getUsage(req, 'search');
