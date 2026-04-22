@@ -105,8 +105,8 @@ async function getTransactionsByApt(lawdCd, aptName) {
 
   const now = new Date();
   const months = [];
-  // 최근 4개월만 조회 (속도 우선, 거래량 분석엔 충분)
-  for (let i = 0; i < 4; i++) {
+  // 최근 6개월 조회 — 거래 희소 단지까지 커버
+  for (let i = 0; i < 6; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
   }

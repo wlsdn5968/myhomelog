@@ -10,8 +10,9 @@
 const axios = require('axios');
 const cache = require('../cache');
 
-const APT_BASIS_URL = 'http://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3';
-const APT_LIST_URL = 'http://apis.data.go.kr/1613000/AptListService3/getRoadnameAptList3';
+const APT_BASIS_URL = 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3';
+const APT_LIST_URL = 'https://apis.data.go.kr/1613000/AptListService3/getRoadnameAptList3';
+const APT_LIST_SGG_URL = 'https://apis.data.go.kr/1613000/AptListService3/getSigunguAptList3';
 
 function isKeyMissing() {
   const key = process.env.MOLIT_API_KEY;
@@ -75,4 +76,48 @@ async function findAptByRoadName(bjdCode) {
   }
 }
 
-module.exports = { getAptBasisInfo, findAptByRoadName };
+/**
+ * 시군구 단위 전체 단지 목록 조회 (핵심 신규)
+ * 거래 없는 단지까지 포함한 완전한 목록 — 매물 다양성 확보
+ *
+ * @param {string} sigunguCode 법정동 5자리 (예: '11350')
+ * @returns {Promise<Array<{kaptCode,kaptName,as1,as2,as3,as4,bjdCode,doroJuso}>>}
+ */
+async function getAptListBySgg(sigunguCode) {
+  if (!sigunguCode || isKeyMissing()) return [];
+  const cacheKey = `aptlist-sgg:${sigunguCode}`;
+  const cached = cache.get(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const all = [];
+    // 페이지당 최대 200건, 강남·송파 등 대단지 구는 1500개 이상이므로 10페이지까지
+    for (let pageNo = 1; pageNo <= 10; pageNo++) {
+      const r = await axios.get(APT_LIST_SGG_URL, {
+        params: {
+          serviceKey: process.env.MOLIT_API_KEY,
+          sigunguCode,
+          numOfRows: 200,
+          pageNo,
+          _type: 'json',
+        },
+        timeout: 8000,
+        headers: { Accept: 'application/json' },
+      });
+      const body = r.data?.response?.body;
+      const items = body?.item;
+      const list = Array.isArray(items) ? items : items ? [items] : [];
+      if (!list.length) break;
+      all.push(...list);
+      if (list.length < 200) break; // 마지막 페이지
+    }
+    cache.set(cacheKey, all, 86400 * 7); // 7일 — 단지 리스트는 거의 안 바뀜
+    return all;
+  } catch (e) {
+    console.error(`[aptInfoService] getAptListBySgg 실패 (${sigunguCode}):`, e.message);
+    cache.set(cacheKey, [], 1800); // 실패 시 30분 짧게 캐시
+    return [];
+  }
+}
+
+module.exports = { getAptBasisInfo, findAptByRoadName, getAptListBySgg };

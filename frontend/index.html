@@ -1557,6 +1557,8 @@ async function doSearch(){
         regions:(data.targetRegions||[]).map(r=>r.name).filter(Boolean),
         totalTx:data.totalTxAnalyzed||0,
         inBudget:data.inBudgetCount||0,
+        totalAptsInRegion:data.totalAptsInRegion||0,
+        referenceCount:data.referenceCount||0,
       };
       success=true;
     }
@@ -1609,14 +1611,16 @@ function renderListGrid(){
     return;
   }
   const metaLine = searchMeta && searchMeta.regions.length
-    ? `<div style="margin:10px 14px 0;padding:8px 12px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;color:#1B4F8A;font-size:11px;line-height:1.55">📊 <b>분석 지역:</b> ${searchMeta.regions.join(', ')} · <b>최근 6개월 실거래</b> ${searchMeta.totalTx.toLocaleString()}건 중 예산 범위 ${searchMeta.inBudget.toLocaleString()}건 분석</div>`
+    ? `<div style="margin:10px 14px 0;padding:8px 12px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;color:#1B4F8A;font-size:11px;line-height:1.55">📊 <b>분석 지역:</b> ${searchMeta.regions.join(', ')} · 전체 단지 <b>${(searchMeta.totalAptsInRegion||0).toLocaleString()}개</b> 중 예산 실거래 매치 <b>${searchMeta.inBudget.toLocaleString()}건</b>${searchMeta.referenceCount?` + 참고 매물 ${searchMeta.referenceCount}건`:''} · 최근 6개월 실거래 ${searchMeta.totalTx.toLocaleString()}건 분석</div>`
     : '';
   const banner=`${metaLine}<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;color:var(--red);font-size:11px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아닙니다.</u> 아래 점수·신호는 과거 실거래 통계 정리이며, 미래 가격(상승·하락)을 예측·보장하지 않습니다. 모든 의사결정 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>`;
   g.innerHTML=banner+props.map((p,i)=>{
     const tags=(p.tags||[]).slice(0,3).map(t=>`<span class="ptag ${typeof t==='object'?t.c||'gy':'gy'}">${typeof t==='object'?t.t||t:t}</span>`).join('');
     const s=p.score||60,lv=s>=75?'safe':s>=50?'warn':'danger',lt=s>=75?'안전':s>=50?'보통':'위험';
-    return`<div class="lcard" onclick="showDetail(props[${i}])">
-      <div class="lc-top" style="background:${p.ltv?.includes('40')?'var(--accL)':'var(--a2L)'}">
+    const refBadge = p.isReference ? `<span style="position:absolute;top:6px;right:6px;background:#E6E6EE;color:var(--t2);font-size:9px;font-weight:700;padding:2px 6px;border-radius:4px">참고</span>` : '';
+    return`<div class="lcard" onclick="showDetail(props[${i}])" style="position:relative;${p.isReference?'opacity:.85':''}">
+      ${refBadge}
+      <div class="lc-top" style="background:${p.isReference?'#F5F5F7':p.ltv?.includes('40')?'var(--accL)':'var(--a2L)'}">
         <div class="lc-name">${p.aptName}</div><div class="lc-area">${p.area||''} | ${p.buildYear||''}년</div>
         <div class="lc-g">${gSVG(s,50)}
           <div><div style="font-size:17px;font-weight:800;color:${gc(s)}">${(p.avgPrice||0).toFixed(2)}억</div>

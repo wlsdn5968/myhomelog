@@ -12,6 +12,7 @@
  * 대신 최신 실거래가가 가장 객관적인 시세 지표로 동등하게 기능함.
  */
 const { getTransactionsByApt, analyzeTransactions } = require('./transactionService');
+const { getAptListBySgg } = require('./aptInfoService');
 const cache = require('../cache');
 
 // ── 지역 키워드 → 법정동코드 매핑 (사용자 입력 우선) ───────
@@ -132,23 +133,30 @@ async function getAIRecommendations(userCondition) {
   const minPy = parseInt(minArea) || 15;
   const maxPy = parseInt(maxArea) || 60;
 
-  const cacheKey = `rec:v3:${region}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${workplaceArea}:${minPy}:${maxPy}`;
+  const cacheKey = `rec:v4:${region}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${workplaceArea}:${minPy}:${maxPy}`;
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
   // Step 1: 키워드 기반 빠른 지역 결정
   const targetRegions = pickRegions(region, maxBudget, workplaceArea).slice(0, 3);
 
-  // Step 2: 병렬 실거래가 조회 — 부분 실패 허용
-  const txArrays = await Promise.allSettled(
-    targetRegions.map(r => getTransactionsByApt(r.lawdCd, ''))
-  ).then(results => results.map((r, i) => {
-    if (r.status === 'fulfilled') return r.value;
-    console.error(`[PropertyService] ${targetRegions[i].name} 조회 실패:`, r.reason?.message);
-    return [];
-  }));
+  // Step 2: 병렬 조회 — (a) 시군구 전체 단지 목록 + (b) 실거래 내역
+  const [aptListArrays, txArrays] = await Promise.all([
+    Promise.allSettled(
+      targetRegions.map(r => getAptListBySgg(r.lawdCd))
+    ).then(results => results.map(r => r.status === 'fulfilled' ? r.value : [])),
+    Promise.allSettled(
+      targetRegions.map(r => getTransactionsByApt(r.lawdCd, ''))
+    ).then(results => results.map((r, i) => {
+      if (r.status === 'fulfilled') return r.value;
+      console.error(`[PropertyService] ${targetRegions[i].name} 조회 실패:`, r.reason?.message);
+      return [];
+    })),
+  ]);
+  const allAptList = aptListArrays.flat();
   const allTx = txArrays.flat();
   const analyzed = analyzeTransactions(allTx);
+  console.log(`[PropertyService] 전체 단지: ${allAptList.length}개, 실거래 있는 단지: ${analyzed.length}개`);
 
   if (!analyzed || !analyzed.length) {
     return {
@@ -180,22 +188,52 @@ async function getAIRecommendations(userCondition) {
     matched.push({ ...apt, fitPyeongs, primaryPyeong });
   }
 
-  if (!matched.length) {
+  // Step 3b: 거래 없는 단지 추가 — K-apt 전체 단지 리스트 중 matched에 없는 항목
+  // 주변 단지 시세로 예상가 추정해 "참고 매물"로 노출 (매물 다양성↑)
+  const matchedNames = new Set(matched.map(m => m.aptName.replace(/\s/g, '')));
+  const dongAvgMan = {}; // umdNm → avgPriceMan (같은 동 실거래 평균)
+  for (const apt of matched) {
+    const dong = apt.umdNm;
+    if (!dong) continue;
+    if (!dongAvgMan[dong]) dongAvgMan[dong] = { sum: 0, cnt: 0 };
+    dongAvgMan[dong].sum += apt.primaryPyeong.avgPrice;
+    dongAvgMan[dong].cnt += 1;
+  }
+  const dongAvg = Object.fromEntries(
+    Object.entries(dongAvgMan).map(([k, v]) => [k, Math.round(v.sum / v.cnt)])
+  );
+  const noTxApts = [];
+  for (const a of allAptList) {
+    const nm = (a.kaptName || a.aptName || '').trim();
+    if (!nm) continue;
+    const nmKey = nm.replace(/\s/g, '');
+    if (matchedNames.has(nmKey)) continue;
+    // 동명 추정 (as4 또는 as3가 umdNm)
+    const dong = a.as4 || a.as3 || '';
+    const est = dongAvg[dong] || 0;
+    // 예산 맞는 추정가가 있을 때만 포함 (너무 벗어나면 스팸)
+    if (!est) continue;
+    if (est < budgetMinMan || est > budgetMaxMan) continue;
+    noTxApts.push({ ...a, _estPriceMan: est, _dong: dong, _noTx: true });
+  }
+
+  if (!matched.length && !noTxApts.length) {
     return {
       recommendations: getStaticFallback(maxBudget, region),
       targetRegions,
       totalTxAnalyzed: analyzed.length,
       inBudgetCount: 0,
+      totalAptsInRegion: allAptList.length,
       disclaimer: '본 결과는 국토교통부 실거래가 데이터 기반 정보 정리이며, 매수·매도 추천이 아닙니다.',
       fromCache: false,
     };
   }
 
-  // Step 4: 거래량 가중 정렬 → 상위 10건
+  // Step 4: 거래량 가중 정렬 → 실거래 단지 우선 상위 15건
   const ranked = matched
     .map(a => ({ ...a, _score: a.dealCount * 10 + (a.buildYear || 1990) * 0.01 }))
     .sort((x, y) => y._score - x._score)
-    .slice(0, 10);
+    .slice(0, 15);
 
   // Step 5: 결과 카드 생성 (AI 호출 없음, 즉시 응답)
   const recommendations = ranked.map((apt, i) => {
@@ -242,11 +280,47 @@ async function getAIRecommendations(userCondition) {
     };
   });
 
+  // Step 5b: 거래 없는 참고 단지 추가 (예산 범위 & 같은 동 평균가 있는 것만)
+  const extraRefs = noTxApts.slice(0, 15).map((a, i) => {
+    const nm = (a.kaptName || a.aptName || '').trim();
+    const estAuk = parseFloat((a._estPriceMan / 10000).toFixed(2));
+    const ltvInfo = computeLTV(estAuk, region || '서울', isFirstBuyer, houseStatus);
+    return {
+      rank: recommendations.length + i + 1,
+      aptName: nm,
+      area: `${a.as2 || ''} ${a._dong || ''}`.trim(),
+      avgPrice: estAuk,
+      minPrice: estAuk,
+      maxPrice: estAuk,
+      buildYear: null,
+      pyeong: '평형 정보 없음 (참고가)',
+      score: 40, // 추정값이므로 점수 낮게
+      ltv: ltvInfo.ltv,
+      maxLoan: ltvInfo.maxLoan,
+      pros: `${a._dong} 인근 단지 평균가 기준 추정 · 최근 6개월 실거래는 없음`,
+      cons: '최근 거래 데이터 부족 — 호가/시세는 별도 확인 필요',
+      strategy: '① 네이버부동산·KB시세에서 현재 호가 교차검증 ② 동·평형별 정확한 시세는 중개사 문의 ③ 최근 거래 없는 단지는 매도호가 ≠ 실매매가 격차 클 수 있음',
+      tags: ['참고매물', '추정가'],
+      risk: '최근 실거래 부재로 추정값 신뢰도 낮음. 반드시 현장·호가 확인.',
+      recommend: false,
+      aptSeq: a.kaptCode,
+      currentPriceByPyeong: [],
+      txHistory: [],
+      dealCount6m: 0,
+      recentDeal: '최근 6개월 거래 없음',
+      isReference: true, // 프론트에서 구분 표시 가능
+    };
+  });
+
+  const finalRecs = [...recommendations, ...extraRefs];
+
   const result = {
-    recommendations,
+    recommendations: finalRecs,
     targetRegions,
     totalTxAnalyzed: analyzed.length,
+    totalAptsInRegion: allAptList.length,
     inBudgetCount: matched.length,
+    referenceCount: extraRefs.length,
     disclaimer: '본 결과는 국토교통부 실거래가 데이터 기반 정보 정리이며, 매수·매도 추천이 아닙니다. 모든 의사결정의 책임은 본인에게 있습니다.',
   };
   cache.set(cacheKey, result, 1800);
