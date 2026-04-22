@@ -62,8 +62,9 @@ async function getTransactions(lawdCd, dealYm) {
     const header = response.data?.response?.header;
     const items = body?.items?.item;
     const allItems = Array.isArray(items) ? items : items ? [items] : [];
-    // MOLIT API 결과 코드 확인 — '00' 이 아니면 명확히 로깅 (키 미승인·쿼터초과·서버오류 원인 식별)
-    if (header && header.resultCode && header.resultCode !== '00') {
+    // MOLIT API 결과 코드 확인 — 성공 코드 '00'(구) / '000'(신) 외에는 명확히 로깅
+    const OK_CODES = new Set(['00', '000']);
+    if (header && header.resultCode && !OK_CODES.has(header.resultCode)) {
       console.error(`[transactionService] MOLIT ${lawdCd}/${dealYm} resultCode=${header.resultCode} msg=${header.resultMsg}`);
     } else if (!header && typeof response.data === 'string') {
       console.error(`[transactionService] MOLIT ${lawdCd}/${dealYm} non-JSON response:`, response.data.slice(0, 200));

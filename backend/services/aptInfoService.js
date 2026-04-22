@@ -41,7 +41,7 @@ async function getAptBasisInfo(aptSeq) {
     });
     const item = r.data?.response?.body?.item || null;
     const resultCode = r.data?.response?.header?.resultCode;
-    if (!item && resultCode && resultCode !== '00') {
+    if (!item && resultCode && resultCode !== '00' && resultCode !== '000') {
       console.error(`[aptInfoService] getAptBasisInfo ${aptSeq} resultCode=${resultCode} msg=${r.data?.response?.header?.resultMsg}`);
     }
     cache.set(cacheKey, item, 86400 * 30); // 30일
@@ -113,7 +113,7 @@ async function getAptListBySgg(sigunguCode) {
       const items = body?.item;
       const list = Array.isArray(items) ? items : items ? [items] : [];
       const resultCode = r.data?.response?.header?.resultCode;
-      if (!list.length && resultCode && resultCode !== '00') {
+      if (!list.length && resultCode && resultCode !== '00' && resultCode !== '000') {
         console.error(`[aptInfoService] getAptListBySgg ${sigunguCode} p${pageNo} resultCode=${resultCode} msg=${r.data?.response?.header?.resultMsg}`);
       }
       if (!list.length) break;

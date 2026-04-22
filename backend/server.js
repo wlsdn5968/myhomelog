@@ -119,7 +119,8 @@ app.get('/api/health/apis', async (req, res) => {
       const code = r.data?.response?.header?.resultCode;
       const msg = r.data?.response?.header?.resultMsg;
       const rawType = typeof r.data;
-      checks.molit_transaction = code === '00';
+      // 성공 코드: '00' (구버전) 또는 '000' (신버전 MOLIT)
+      checks.molit_transaction = code === '00' || code === '000';
       checks.molit_transaction_code = code;
       checks.molit_transaction_msg = msg;
       // 일부 API가 XML로 응답하거나 에러 페이지를 HTML로 주는 경우 감지
@@ -141,9 +142,10 @@ app.get('/api/health/apis', async (req, res) => {
         timeout: 6000,
       });
       const code = r.data?.response?.header?.resultCode;
-      checks.kapt_list = code === '00';
-      checks.kapt_list_msg = code !== '00' ? r.data?.response?.header?.resultMsg : undefined;
-    } catch (e) { checks.kapt_list = false; checks.kapt_list_msg = e.message; }
+      checks.kapt_list = code === '00' || code === '000';
+      checks.kapt_list_code = code;
+      checks.kapt_list_msg = r.data?.response?.header?.resultMsg;
+    } catch (e) { checks.kapt_list = false; checks.kapt_list_err = e.response?.status ? `HTTP ${e.response.status}` : e.message; }
   }
 
   // 3) K-apt 단지 기본정보 (AptBasisInfoServiceV3)
@@ -155,7 +157,7 @@ app.get('/api/health/apis', async (req, res) => {
         headers: { Accept: 'application/json' },
       });
       const code = r.data?.response?.header?.resultCode;
-      checks.kapt_basis = code === '00';
+      checks.kapt_basis = code === '00' || code === '000';
       checks.kapt_basis_code = code;
       checks.kapt_basis_msg = r.data?.response?.header?.resultMsg;
       if (!code) {
