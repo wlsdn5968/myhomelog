@@ -30,27 +30,45 @@ async function getAptBasisInfo(aptSeq) {
   const cached = cache.get(cacheKey);
   if (cached !== undefined) return cached;
 
-  try {
-    const r = await axios.get(APT_BASIS_URL, {
-      params: {
-        serviceKey: process.env.MOLIT_API_KEY,
-        kaptCode: aptSeq,
-        _type: 'json',
-      },
-      timeout: 8000,
-    });
-    const item = r.data?.response?.body?.item || null;
-    const resultCode = r.data?.response?.header?.resultCode;
-    if (!item && resultCode && resultCode !== '00' && resultCode !== '000') {
-      console.error(`[aptInfoService] getAptBasisInfo ${aptSeq} resultCode=${resultCode} msg=${r.data?.response?.header?.resultMsg}`);
+  // 1회 재시도 — K-apt 서버가 간헐적으로 5xx 반환 (특히 피크시간)
+  const attempt = async () => axios.get(APT_BASIS_URL, {
+    params: {
+      serviceKey: process.env.MOLIT_API_KEY,
+      kaptCode: aptSeq,
+      _type: 'json',
+    },
+    timeout: 8000,
+  });
+
+  let r, lastErr;
+  for (let i = 0; i < 2; i++) {
+    try {
+      r = await attempt();
+      break;
+    } catch (e) {
+      lastErr = e;
+      // 5xx/timeout만 재시도, 4xx는 즉시 포기
+      const status = e.response?.status;
+      if (status && status >= 400 && status < 500) break;
+      if (i === 0) await new Promise(res => setTimeout(res, 400));
     }
-    cache.set(cacheKey, item, 86400 * 30); // 30일
-    return item;
-  } catch (e) {
-    console.error(`[aptInfoService] getAptBasisInfo ${aptSeq} 실패:`, e.response?.status, e.message);
-    cache.set(cacheKey, null, 3600); // 실패도 1시간 캐시 (스팸 방지)
+  }
+
+  if (!r) {
+    console.error(`[aptInfoService] getAptBasisInfo ${aptSeq} 재시도 후 실패:`, lastErr?.response?.status, lastErr?.message);
+    // 실패는 짧게 캐시해 다음 요청에서 재시도 기회 부여
+    cache.set(cacheKey, null, 600); // 10분
     return null;
   }
+
+  const item = r.data?.response?.body?.item || null;
+  const resultCode = r.data?.response?.header?.resultCode;
+  if (!item && resultCode && resultCode !== '00' && resultCode !== '000') {
+    console.error(`[aptInfoService] getAptBasisInfo ${aptSeq} resultCode=${resultCode} msg=${r.data?.response?.header?.resultMsg}`);
+  }
+  // 성공 결과만 30일 캐시. null 도 짧게 캐시(10분).
+  cache.set(cacheKey, item, item ? 86400 * 30 : 600);
+  return item;
 }
 
 /**

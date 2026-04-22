@@ -299,6 +299,11 @@ async function getAIRecommendations(userCondition) {
     // 동명 없이도 찾을 수 있도록 fallback 키 저장 (같은 이름 여러 개면 첫 매칭 유지)
     if (!kaptCodeMap.has(nm)) kaptCodeMap.set(nm, a.kaptCode);
   }
+  // allAptList 인덱스 (kaptCode → 원본 엔트리) — K-apt basis 실패 시 fallback 용
+  const allAptByCode = new Map();
+  for (const a of allAptList) {
+    if (a.kaptCode) allAptByCode.set(a.kaptCode, a);
+  }
   const enriched = await Promise.allSettled(
     recommendations.map(async (rec, i) => {
       const apt = ranked[i];
@@ -306,7 +311,27 @@ async function getAIRecommendations(userCondition) {
       const kaptCode = kaptCodeMap.get(`${nmKey}|${apt.umdNm || ''}`) || kaptCodeMap.get(nmKey);
       if (!kaptCode) return rec;
       const info = await getAptBasisInfo(kaptCode);
-      if (!info) return rec;
+      // Fallback: info 없으면 allAptList 기본 데이터로 최소 facility 구성 (주소·kaptCode 노출)
+      if (!info) {
+        const basic = allAptByCode.get(kaptCode);
+        if (!basic) return rec;
+        return {
+          ...rec,
+          facility: {
+            kaptCode,
+            totalHouseholds: 0,
+            dongCount: 0,
+            parkingTotal: 0,
+            parkingRatio: null,
+            builtDate: null,
+            heatType: null,
+            mgrType: null,
+            address: basic.doroJuso || basic.as1 || null,
+            floorAreaRatio: null,
+            _partial: true, // 프론트: 부분 데이터 표시 플래그
+          },
+        };
+      }
       const totalHouseholds = parseInt(info.kaptdaCnt) || 0;
       const parkingTotal = parseInt(info.kaptdPcnt) || 0;
       const parkingRatio = totalHouseholds > 0 && parkingTotal > 0

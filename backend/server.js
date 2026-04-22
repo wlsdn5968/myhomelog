@@ -82,6 +82,7 @@ const geocodeRouter = require('./routes/geocode');
 const analysisRouter = require('./routes/analysis');
 const newsRouter = require('./routes/news');
 const subscriptionRouter = require('./routes/subscription');
+const shareRouter = require('./routes/share');
 
 // 일일 무료 한도 (BYOK 제거에 따른 무료 체험 정책)
 const { dailyLimit, getUsage } = require('./middleware/dailyLimit');
@@ -97,6 +98,8 @@ app.use('/api/geocode', dataLimiter, geocodeRouter);
 app.use('/api/analysis', dataLimiter, analysisRouter);
 app.use('/api/news', dataLimiter, newsRouter);
 app.use('/api/subscription', dataLimiter, subscriptionRouter);
+// 공유 딥링크 — 크롤러용 OG 메타 치환 (HTML 서빙)
+app.use('/share', shareRouter);
 
 // ── API 활성화 진단 (공개 — 데이터 소스 현황 확인용) ────
 app.get('/api/health/apis', async (req, res) => {

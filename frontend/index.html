@@ -1022,6 +1022,9 @@ window.addEventListener('DOMContentLoaded',()=>{
   // 공유 URL 진입 처리
   setTimeout(handleShareUrl, 300);
 
+  // 북마크 가격 자동 새로고침 (6시간 이상된 것만, 목표가 달성 배너)
+  setTimeout(()=>{if(typeof refreshBookmarkPrices==='function')refreshBookmarkPrices();}, 1800);
+
   // 첫 방문자 온보딩 (공유 링크로 들어온 경우는 스킵)
   const sp=new URLSearchParams(location.search);
   if(!localStorage.getItem('mhl_onboarded') && !sp.get('apt') && !restored){
@@ -1845,7 +1848,8 @@ function cDM(){document.getElementById('DM').classList.remove('open');currentDet
 // ── 공유 URL ───────────────────────────────────────────
 async function shareCurrent(){
   if(!currentDetail){toast('공유할 매물이 없어요');return;}
-  const u=new URL(location.origin+location.pathname);
+  // 공유 URL은 /share 경로 — 서버에서 OG 메타 동적 치환 (카카오톡·슬랙 링크 프리뷰용)
+  const u=new URL(location.origin+'/share');
   u.searchParams.set('apt', currentDetail.aptName);
   if(currentDetail.area)u.searchParams.set('area', currentDetail.area);
   const url=u.toString();
@@ -2139,12 +2143,18 @@ function renderBookmarks(){
     const hasVisit=!!(getNoteForApt(b.aptName)?.visitDate);
     const priceNow=b.avgPrice||0;
     const isHit=target&&priceNow>0&&priceNow<=target;
+    const lc=b.lastChecked?` · 최근 ${new Date(b.lastChecked).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'})}`:'';
     const alertHtml=`<div class="bk-alert-row" onclick="event.stopPropagation()">
       <span style="font-size:10px;color:var(--t3);flex-shrink:0">목표가</span>
       <input class="bk-alert-inp" type="number" step="0.1" placeholder="억" value="${target||''}" id="bk-alert-${i}" oninput="event.stopPropagation()">
       <button class="bk-alert-set" onclick="setAlert('${b.aptName}',document.getElementById('bk-alert-${i}').value)">설정</button>
       ${target?`<span class="bk-alert-tag ${isHit?'hit':'set'}">${isHit?'🎯 목표가':'▼'+target+'억'}</span>`:''}
-    </div>`;
+    </div>
+    <div class="bk-memo-row" onclick="event.stopPropagation()" style="display:flex;gap:4px;margin-top:4px">
+      <input type="text" placeholder="메모 (왜 이 가격?)" maxlength="40" value="${(b.memo||'').replace(/"/g,'&quot;')}" id="bk-memo-${i}" oninput="event.stopPropagation()" style="flex:1;font-size:10.5px;padding:3px 6px;border:1px solid var(--bd);border-radius:5px;background:#fff;color:var(--t2)">
+      <button onclick="saveBookmarkMemo(${i},document.getElementById('bk-memo-${i}').value)" style="font-size:10px;padding:3px 8px;background:#F0F2F7;border:1px solid var(--bd);border-radius:5px;cursor:pointer;color:var(--t2)">저장</button>
+    </div>
+    ${lc?`<div style="font-size:9.5px;color:var(--t3);margin-top:3px;padding-left:2px">📊 ${b.lastCheckedCount||0}건${lc}</div>`:''}`;
     return`<div class="bk-item" onclick="openBookmark(${i})">
       <div class="bk-item-row">
         ${hasVisit?'<div class="bk-visit-dot" title="임장 기록 있음"></div>':''}
@@ -2174,6 +2184,12 @@ function delBookmark(e,i){
   }
   toast('관심 단지 삭제');
 }
+function saveBookmarkMemo(i,val){
+  const bks=getBookmarks();if(!bks[i])return;
+  bks[i].memo=(val||'').slice(0,40);
+  saveBookmarks(bks);renderBookmarks();
+  toast('📝 메모 저장');
+}
 
 // ── 가격 알림 ─────────────────────────────────────────────
 const ALERT_KEY='mhl_alerts';
@@ -2185,6 +2201,62 @@ function setAlert(aptName,val){
   else{delete a[aptName];toast('목표가 해제');}
   localStorage.setItem(ALERT_KEY,JSON.stringify(a));
   renderBookmarks();
+}
+
+// ── 북마크 가격 자동 새로고침 + 목표가 달성 배너 ───────────
+// 진입 시 한 번 호출 (24h 이상 지난 북마크만 갱신)
+async function refreshBookmarkPrices(){
+  const bks=getBookmarks();
+  if(!bks.length)return;
+  const alerts=getAlerts();
+  const hits=[]; // 목표가 달성 (이전엔 초과 → 현재 이하)
+  let updated=false;
+  const STALE_MS=6*3600*1000; // 6시간 이상 지났으면 갱신
+  for(const b of bks){
+    if(b.lastChecked && (Date.now()-b.lastChecked < STALE_MS))continue;
+    try{
+      let lawdCd=b.lawdCd;
+      if(!lawdCd && b.area){lawdCd=await resolveLawdCdFromArea(b.area);}
+      if(!lawdCd)continue;
+      const qs=new URLSearchParams({lawdCd,dealYm:currentYm(),aptName:b.aptName});
+      const r=await fetch(`${CFG.api}/transactions?${qs}`,{signal:AbortSignal.timeout(10000)});
+      if(!r.ok)continue;
+      const j=await r.json();
+      const items=j.items||[];
+      if(!items.length){
+        // 거래 없음 — lastChecked만 갱신해 재호출 스팸 방지
+        b.lastChecked=Date.now();b.lastCheckedCount=0;updated=true;
+        continue;
+      }
+      const prices=items.map(t=>t.dealAmount/10000);
+      const newAvg=+(prices.reduce((s,x)=>s+x,0)/prices.length).toFixed(2);
+      const prev=b.avgPrice||0;
+      const target=alerts[b.aptName];
+      if(target && newAvg<=target && prev>target){
+        hits.push({name:b.aptName,target,price:newAvg,prev});
+      }
+      b.avgPrice=newAvg;
+      b.lawdCd=lawdCd;
+      b.lastChecked=Date.now();
+      b.lastCheckedCount=items.length;
+      updated=true;
+    }catch{}
+  }
+  if(updated){saveBookmarks(bks);renderBookmarks();}
+  if(hits.length)showAlertBanner(hits);
+}
+function showAlertBanner(hits){
+  const existing=document.getElementById('alertBanner');if(existing)existing.remove();
+  const b=document.createElement('div');
+  b.id='alertBanner';
+  b.style.cssText='position:fixed;top:14px;left:14px;right:14px;max-width:520px;margin:0 auto;z-index:9999;background:linear-gradient(135deg,#FFF5E6,#FFE4C4);border:1px solid #E8A868;border-radius:12px;padding:14px 18px;box-shadow:0 4px 16px rgba(0,0,0,.14);font-size:13px;font-family:inherit';
+  b.innerHTML=`<button onclick="document.getElementById('alertBanner').remove()" style="float:right;background:transparent;border:none;font-size:18px;cursor:pointer;color:#8B5A2B;padding:0 6px;line-height:1">✕</button>
+    <div style="font-weight:700;color:#8B5A2B;margin-bottom:6px">🎯 목표가 달성 알림 (${hits.length}건)</div>
+    ${hits.map(h=>`<div style="color:#5C3817;line-height:1.6;font-size:12px;margin-bottom:2px">・ <b>${h.name}</b> — 현재 평균 ${h.price}억 (이전 ${h.prev?h.prev.toFixed(2)+'억':'?'} / 목표 ${h.target}억 이하)</div>`).join('')}
+    <div style="margin-top:8px;font-size:10px;color:#8B5A2B">※ 국토부 실거래 최근 평균가 기준. 매수 추천 아님.</div>`;
+  document.body.appendChild(b);
+  // 15초 후 자동 숨김
+  setTimeout(()=>{b.style.transition='opacity .5s';b.style.opacity='0';setTimeout(()=>b.remove(),500);},15000);
 }
 
 // ── 임장 노트 ─────────────────────────────────────────────
