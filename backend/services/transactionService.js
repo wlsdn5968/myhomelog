@@ -42,7 +42,7 @@ async function getTransactions(lawdCd, dealYm) {
 
   const cacheKey = `tx:${lawdCd}:${dealYm}`;
   const cached = cache.get(cacheKey);
-  if (cached) return cached;
+  if (cached !== undefined) return cached || []; // null/[] 캐시도 hit 처리
 
   try {
     // 1페이지(1000건)만 조회 — 대부분 한 달 단일 구 거래는 1000건 미만
@@ -90,6 +90,8 @@ async function getTransactions(lawdCd, dealYm) {
     return result;
   } catch (err) {
     if (err.code === 'MOLIT_KEY_MISSING') throw err;
+    // 에러 캐시 5분 — 일시적 5xx/timeout 시 매 요청마다 외부 API 두드리는 부하 방지
+    cache.set(cacheKey, [], 300);
     const apiErr = new Error(`국토부 API 호출 실패: ${err.message}`);
     apiErr.code = 'MOLIT_API_ERROR';
     apiErr.status = 502;

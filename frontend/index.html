@@ -1886,10 +1886,8 @@ async function handleShareUrl(){
   try{
     const lawdCd=await resolveLawdCdFromArea(area);
     if(!lawdCd)return;
-    const r=await fetch(`${CFG.api}/transactions?lawdCd=${lawdCd}&dealYm=${currentYm()}&aptName=${encodeURIComponent(apt)}`,{signal:AbortSignal.timeout(12000)});
-    if(!r.ok)return;
-    const j=await r.json();
-    const items=j.items||[];
+    // 최근 3개월 합산 — 현재 달은 MOLIT 신고 지연으로 거래 거의 없음
+    const items=await fetchRecentTx(lawdCd, apt);
     if(!items.length)return;
     // 최근 평균 계산
     const prices=items.map(t=>t.dealAmount/10000); // 억
@@ -1915,6 +1913,26 @@ async function handleShareUrl(){
 function currentYm(){
   const d=new Date();
   return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+// YYYYMM N개월 전 (MOLIT 신고 30일 지연 대응 — 직전 달이 가장 데이터 풍부)
+function prevYm(monthsBack){
+  const d=new Date();
+  d.setDate(1);
+  d.setMonth(d.getMonth()-monthsBack);
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+// 최근 3개월 거래 합산 fetch — 평균가 산출 시 표본 수 확보
+async function fetchRecentTx(lawdCd, aptName){
+  const months=[prevYm(1), prevYm(2), prevYm(3)];
+  const results=await Promise.allSettled(months.map(ym=>{
+    const qs=new URLSearchParams({lawdCd,dealYm:ym,aptName});
+    return fetch(`${CFG.api}/transactions?${qs}`,{signal:AbortSignal.timeout(10000)}).then(r=>r.ok?r.json():null);
+  }));
+  const items=[];
+  for(const r of results){
+    if(r.status==='fulfilled' && r.value && Array.isArray(r.value.items)) items.push(...r.value.items);
+  }
+  return items;
 }
 // area 문자열 → lawdCd (API 호출로 해결)
 async function resolveLawdCdFromArea(area){
@@ -2218,11 +2236,8 @@ async function refreshBookmarkPrices(){
       let lawdCd=b.lawdCd;
       if(!lawdCd && b.area){lawdCd=await resolveLawdCdFromArea(b.area);}
       if(!lawdCd)continue;
-      const qs=new URLSearchParams({lawdCd,dealYm:currentYm(),aptName:b.aptName});
-      const r=await fetch(`${CFG.api}/transactions?${qs}`,{signal:AbortSignal.timeout(10000)});
-      if(!r.ok)continue;
-      const j=await r.json();
-      const items=j.items||[];
+      // 최근 3개월 합산 — 현재 달은 신고 지연으로 표본 부족
+      const items=await fetchRecentTx(lawdCd, b.aptName);
       if(!items.length){
         // 거래 없음 — lastChecked만 갱신해 재호출 스팸 방지
         b.lastChecked=Date.now();b.lastCheckedCount=0;updated=true;

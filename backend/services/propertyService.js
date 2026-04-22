@@ -136,7 +136,10 @@ async function getAIRecommendations(userCondition) {
   const minPy = parseInt(minArea) || 15;
   const maxPy = parseInt(maxArea) || 60;
 
-  const cacheKey = `rec:v5:${region}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${workplaceArea}:${minPy}:${maxPy}`;
+  // NFC 정규화 — Mac(NFD) ↔ Windows(NFC) 캐시 분리 방지
+  const normReg = String(region || '').normalize('NFC').trim();
+  const normWp = String(workplaceArea || '').normalize('NFC').trim();
+  const cacheKey = `rec:v5:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}`;
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
@@ -358,10 +361,15 @@ async function getAIRecommendations(userCondition) {
         tags: Array.from(new Set(moreTags)),
       };
     })
-  ).then(results => results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean));
+  ).then(results => results.map((r, idx) => {
+    // 부분 실패 시 원본 rec 유지 (facility 전체 손실 방지) — 길이 보장
+    if (r.status === 'fulfilled' && r.value) return r.value;
+    if (r.reason) console.error(`[PropertyService] enrich ${recommendations[idx]?.aptName} 실패:`, r.reason?.message);
+    return recommendations[idx];
+  }));
 
-  // 응답에는 enriched 사용 (실패한 것은 원본 rec 유지됨)
-  const enrichedRecs = enriched.length === recommendations.length ? enriched : recommendations;
+  // enrich는 항상 recommendations 와 길이 동일 — 그대로 사용
+  const enrichedRecs = enriched;
 
   // Step 5b: 거래 없는 참고 단지 추가 (예산 범위 & 같은 동 평균가 있는 것만)
   const extraRefs = noTxApts.slice(0, 15).map((a, i) => {

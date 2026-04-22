@@ -110,7 +110,7 @@ async function getAptListBySgg(sigunguCode) {
   if (!sigunguCode || isKeyMissing()) return [];
   const cacheKey = `aptlist-sgg:${sigunguCode}`;
   const cached = cache.get(cacheKey);
-  if (cached) return cached;
+  if (cached !== undefined) return cached || []; // 빈 배열 캐시도 hit 처리
 
   try {
     const all = [];
