@@ -640,7 +640,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       <div class="li" style="border-radius:var(--rs)"><div class="lil">월원리금</div><div class="liv" id="co_m">—</div></div>
       <div class="li" style="border-radius:var(--rs)"><div class="lil">부족자금</div><div class="liv" id="co_n">—</div></div>
       <div class="li" style="border-radius:var(--rs)"><div class="lil">LTV비율</div><div class="liv" id="co_p">—</div></div>
-      <div class="li" style="border-radius:var(--rs)"><div class="lil">DTI추정</div><div class="liv" id="co_t">—</div></div>
+      <div class="li" style="border-radius:var(--rs)"><div class="lil">DSR추정 <span style="font-size:9px;color:var(--t3);font-weight:500">(한도 40%)</span></div><div class="liv" id="co_t">—</div></div>
     </div>
     <div class="wbox" id="co_w" style="margin-bottom:12px"></div>
     <div style="background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:14px;box-shadow:var(--sh)">
@@ -1012,11 +1012,19 @@ window.addEventListener('DOMContentLoaded',()=>{
   renderClauseHistory();
   loadLeaflet(); // 카카오 정식 키 미연동 환경 대비, 기본은 OSM. 좌표는 백엔드 카카오 geocode로 보정.
 
+  // URL 쿼리로 검색 조건 복원 (공유 링크 · 뒤로가기)
+  const restored=restoreSearchFromUrl();
+  if(restored){
+    // 조건 복원됐으면 바로 검색 실행하지 않고 토스트만 — 사용자가 버튼 클릭해야 재검색
+    setTimeout(()=>{if(typeof toast==='function')toast('🔗 공유 링크 조건 복원 — AI 매물 검색 버튼을 눌러주세요');},500);
+  }
+
   // 공유 URL 진입 처리
   setTimeout(handleShareUrl, 300);
 
   // 첫 방문자 온보딩 (공유 링크로 들어온 경우는 스킵)
-  if(!localStorage.getItem('mhl_onboarded') && !new URLSearchParams(location.search).get('apt')){
+  const sp=new URLSearchParams(location.search);
+  if(!localStorage.getItem('mhl_onboarded') && !sp.get('apt') && !restored){
     setTimeout(()=>startOnboarding(),400);
   }
 });
@@ -1535,6 +1543,8 @@ async function doSearch(){
     purpose:'실거주',
     ...pyRange(),
   };
+  // 검색 조건을 URL 쿼리에 기록 (공유/뒤로가기용)
+  persistSearchToUrl(body);
 
   let success=false;
   try{
@@ -1649,6 +1659,79 @@ function selP(i){
 }
 function showDetailById(n){const p=props.find(x=>x.aptName===decodeURIComponent(n));if(p)showDetail(p);}
 
+// ── 시세 추이 차트 (SVG) ─────────────────────────────────
+// txHistory를 월별 평균으로 집계 (최근 24개월, 거래 있는 월만)
+function buildPriceTrend(txHistory){
+  if(!Array.isArray(txHistory)||!txHistory.length)return[];
+  const buckets={};
+  for(const t of txHistory){
+    const y=t.dealYear,m=t.dealMonth;
+    if(!y||!m)continue;
+    const key=`${y}-${String(m).padStart(2,'0')}`;
+    if(!buckets[key])buckets[key]={sum:0,n:0,y,m};
+    buckets[key].sum+=(t.dealAmount||0);
+    buckets[key].n++;
+  }
+  const rows=Object.values(buckets).map(b=>({
+    label:`${String(b.y).slice(2)}.${String(b.m).padStart(2,'0')}`,
+    sortKey:b.y*12+b.m,
+    avgAuk:(b.sum/b.n)/10000, // 만원 → 억
+    count:b.n,
+  })).sort((a,b)=>a.sortKey-b.sortKey);
+  return rows.slice(-24);
+}
+// SVG 라인 + 점 차트 (반응형, inline style — 기존 CSS에 의존 X)
+function renderPriceChart(rows){
+  const W=320,H=120,pad={t:12,r:10,b:26,l:30};
+  const innerW=W-pad.l-pad.r, innerH=H-pad.t-pad.b;
+  const vals=rows.map(r=>r.avgAuk);
+  const vMin=Math.min(...vals), vMax=Math.max(...vals);
+  const range=Math.max(vMax-vMin, 0.1);
+  const x=(i)=>pad.l+(rows.length===1?innerW/2:innerW*i/(rows.length-1));
+  const y=(v)=>pad.t+innerH*(1-(v-vMin)/range);
+  const pts=rows.map((r,i)=>[x(i),y(r.avgAuk)]);
+  const pathD=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
+  const areaD=pathD+` L ${pts[pts.length-1][0].toFixed(1)} ${(pad.t+innerH).toFixed(1)} L ${pts[0][0].toFixed(1)} ${(pad.t+innerH).toFixed(1)} Z`;
+  // X축 레이블: 데이터 포인트가 많으면 일부만
+  const xLabelEvery=rows.length<=8?1:rows.length<=14?2:Math.ceil(rows.length/8);
+  const xLabels=rows.map((r,i)=>(i%xLabelEvery===0||i===rows.length-1)?
+    `<text x="${x(i).toFixed(1)}" y="${(H-8).toFixed(1)}" text-anchor="middle" fill="#888" font-size="9">${r.label}</text>`:'').join('');
+  // Y축: min/max만 표시
+  const yLabels=`
+    <text x="${pad.l-4}" y="${(pad.t+4).toFixed(1)}" text-anchor="end" fill="#888" font-size="9">${vMax.toFixed(1)}</text>
+    <text x="${pad.l-4}" y="${(pad.t+innerH).toFixed(1)}" text-anchor="end" fill="#888" font-size="9">${vMin.toFixed(1)}</text>`;
+  const dots=pts.map((p,i)=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.5" fill="#2E7DF0"><title>${rows[i].label}: ${rows[i].avgAuk.toFixed(2)}억 (${rows[i].count}건)</title></circle>`).join('');
+  const first=rows[0].avgAuk, last=rows[rows.length-1].avgAuk;
+  const delta=last-first, deltaPct=first>0?(delta/first*100):0;
+  const deltaColor=delta>0.05?'#D94545':delta<-0.05?'#2A8F3F':'#888';
+  const arrow=delta>0.05?'▲':delta<-0.05?'▼':'→';
+  return `
+  <div style="background:#fff;border:1px solid var(--bd);border-radius:8px;padding:10px 8px 6px">
+    <svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">
+      <defs>
+        <linearGradient id="pcGrad" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#2E7DF0" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="#2E7DF0" stop-opacity="0"/>
+        </linearGradient>
+      </defs>
+      <path d="${areaD}" fill="url(#pcGrad)" stroke="none"/>
+      <path d="${pathD}" fill="none" stroke="#2E7DF0" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+      ${dots}
+      ${yLabels}
+      ${xLabels}
+    </svg>
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px 0;font-size:10.5px;color:var(--t3)">
+      <span>${rows[0].label} ~ ${rows[rows.length-1].label} · ${rows.length}개월</span>
+      <span style="color:${deltaColor};font-weight:700">${arrow} ${delta>=0?'+':''}${delta.toFixed(2)}억 (${deltaPct>=0?'+':''}${deltaPct.toFixed(1)}%)</span>
+    </div>
+  </div>`;
+}
+// 레거시: 서버가 priceHistory(지수)로 내려주는 경우만 사용
+function renderLegacyPriceBars(ph){
+  const mx=Math.max(...ph.map(h=>h.p),1);
+  return ph.map(h=>`<div class="br"><div class="bry">${h.y}</div><div class="brb"><div class="brf" style="width:${Math.round(h.p/mx*100)}%"></div></div><div class="brv">${h.p}</div></div>`).join('');
+}
+
 // ── DETAIL MODAL ─────────────────────────────────────────
 function showDetail(p){
   if(!p)return;
@@ -1682,8 +1765,13 @@ function showDetail(p){
     <button class="abtn acc" style="margin-top:6px" onclick="askP('${encodeURIComponent(p.aptName)}','${p.avgPrice||0}','${p.area||''}');cDM()">🤖 AI에게 상세 전략 묻기</button>`;
 
   const txH=(p.txHistory||[]).slice(0,10).map(t=>`<div class="txi"><span class="txd">${t.dealYear}.${String(t.dealMonth||1).padStart(2,'0')}</span><span class="txf">${t.floor||'?'}층</span><span class="txp">${((t.dealAmount||0)/10000).toFixed(2)}억</span></div>`).join('')||'<div style="padding:10px 0;color:var(--t3);font-size:11px">실거래 데이터 없음</div>';
-  const ph=p.priceHistory||[{y:'2021',p:100},{y:'2022',p:112},{y:'2023',p:90},{y:'2024',p:87},{y:'2025',p:93}];
-  const mx=Math.max(...ph.map(h=>h.p),1);
+  // 시세 추이: txHistory 기반 월별 평균 (최대 24개월), 부족하면 서버 priceHistory, 그것도 없으면 숨김
+  const trendData = buildPriceTrend(p.txHistory||[]);
+  const trendHtml = trendData.length>=2
+    ? renderPriceChart(trendData)
+    : (p.priceHistory && p.priceHistory.length>=2
+        ? renderLegacyPriceBars(p.priceHistory)
+        : '<div style="font-size:11px;color:var(--t3);padding:10px 0">시세 추이 데이터 부족 (거래 2개월 이상 필요)</div>');
   // 평형별 현재 시세 (최근 거래 기반)
   const pyeongHtml = (p.currentPriceByPyeong||[]).length
     ? `<div style="font-size:11px;font-weight:700;color:var(--t2);margin:0 0 8px">📐 평형별 현재 시세 <span style="font-weight:500;color:var(--t3)">· 최근 6개월 실거래 평균</span></div>
@@ -1703,9 +1791,9 @@ function showDetail(p){
   document.getElementById('t1').innerHTML=`
     ${pyeongHtml}
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px">최근 실거래가 (전체 평형)</div>${txH}
-    <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 8px">연도별 시세 지수</div>
-    ${ph.map(h=>`<div class="br"><div class="bry">${h.y}</div><div class="brb"><div class="brf" style="width:${Math.round(h.p/mx*100)}%"></div></div><div class="brv">${h.p}</div></div>`).join('')}
-    <div class="ibox y" style="margin-top:12px">국토부 공공 API 기반. API 키 미설정 시 추정값.</div>`;
+    <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 8px">📈 월별 시세 추이 <span style="font-weight:500;color:var(--t3)">· 최근 실거래 평균</span></div>
+    ${trendHtml}
+    <div class="ibox y" style="margin-top:12px">국토부 공공 API 기반. 거래 없는 월은 보간하지 않습니다.</div>`;
 
   document.getElementById('t2').innerHTML=`<div class="tld"><div class="tsp"></div>AI 리스크 분석 중...</div>`;
   document.getElementById('t3').innerHTML=`<div class="tld"><div class="tsp"></div>AI 특약 초안 생성 중...</div>`;
@@ -1777,17 +1865,69 @@ async function shareCurrent(){
   if(history.replaceState)history.replaceState(null,'',url);
 }
 
-// 진입 시 ?apt= 파라미터 처리 → 자동 상세 표시
-function handleShareUrl(){
+// 진입 시 ?apt= 파라미터 처리 → 자동 상세 표시 (딥링크)
+async function handleShareUrl(){
   const sp=new URLSearchParams(location.search);
   const apt=sp.get('apt');
   if(!apt)return;
   const area=sp.get('area')||'';
-  // props에 이미 있으면 즉시 표시, 없으면 가상 매물로 임시 생성
+  // 탭 타이틀 동기화 (브라우저·북마크 가독성)
+  document.title=`${apt}${area?` · ${area}`:''} — 내집로그 분석`;
+  // props에 이미 있으면 즉시 표시
   const found=props.find(p=>p.aptName===apt);
   if(found){showDetail(found);return;}
-  // 검색 결과가 아직 없을 때: 단지명·지역만으로 stub 매물 표시
-  showDetail({aptName:apt, area, avgPrice:0, minPrice:0, maxPrice:0, score:60, ltv:'?', maxLoan:'?', pros:'공유 링크로 진입했어요. 정확한 분석은 아래 AI 매물 검색을 실행해주세요.', cons:'', strategy:'', tags:[], txHistory:[]});
+  // stub 매물 즉시 표시 (로딩 느낌)
+  showDetail({aptName:apt, area, avgPrice:0, minPrice:0, maxPrice:0, score:60, ltv:'?', maxLoan:'?', pros:'공유 링크로 진입 — 실거래 데이터 조회 중...', cons:'', strategy:'', tags:[], txHistory:[]});
+  // area에서 구 추출 → lawdCd 매핑 후 실거래 조회 시도
+  try{
+    const lawdCd=await resolveLawdCdFromArea(area);
+    if(!lawdCd)return;
+    const r=await fetch(`${CFG.api}/transactions?lawdCd=${lawdCd}&dealYm=${currentYm()}&aptName=${encodeURIComponent(apt)}`,{signal:AbortSignal.timeout(12000)});
+    if(!r.ok)return;
+    const j=await r.json();
+    const items=j.items||[];
+    if(!items.length)return;
+    // 최근 평균 계산
+    const prices=items.map(t=>t.dealAmount/10000); // 억
+    const avg=prices.reduce((a,b)=>a+b,0)/prices.length;
+    const aptEnriched={
+      aptName:apt, area:items[0].sigungu ? `${items[0].sigungu} ${items[0].umdNm||''}`.trim() : area,
+      avgPrice:+avg.toFixed(2),
+      minPrice:+Math.min(...prices).toFixed(2),
+      maxPrice:+Math.max(...prices).toFixed(2),
+      buildYear:items[0].buildYear||0,
+      score:60, ltv:'?', maxLoan:'?',
+      pros:`최근 6개월 실거래 ${items.length}건 · 평균 ${avg.toFixed(2)}억`,
+      cons:'', strategy:'공유 링크 조회 — 정밀 분석은 내 조건을 입력 후 AI 매물 검색을 실행해주세요.',
+      tags:[], txHistory:items.slice(0,30), lawdCd,
+    };
+    // 현재 열린 상세가 동일 단지면 재렌더
+    if(currentDetail && currentDetail.aptName===apt){
+      showDetail(aptEnriched);
+    }
+  }catch{/* 조용히 실패 — stub 유지 */}
+}
+// YYYYMM 현재
+function currentYm(){
+  const d=new Date();
+  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}`;
+}
+// area 문자열 → lawdCd (API 호출로 해결)
+async function resolveLawdCdFromArea(area){
+  if(!area)return null;
+  // 백엔드의 /api/transactions/codes 에서 매핑 로드
+  try{
+    if(!window._lawdMap){
+      const r=await fetch(`${CFG.api}/transactions/codes`);
+      if(r.ok){const j=await r.json();window._lawdMap=j.codes||{};}
+    }
+    const map=window._lawdMap||{};
+    // area 내 구 이름 부분매치
+    for(const [name,code] of Object.entries(map)){
+      if(area.includes(name))return code;
+    }
+  }catch{}
+  return null;
 }
 
 // ── 매수 신호 분석 로드 ───────────────────────────────────
@@ -2294,6 +2434,63 @@ function pyRange(){
   if(sel.startsWith('대형')) return {minArea:34,maxArea:60};
   return {minArea:15,maxArea:60}; // 전체
 }
+// ── 검색 조건 ↔ URL 쿼리 동기화 ────────────────────────────
+function persistSearchToUrl(body){
+  if(!history.replaceState)return;
+  try{
+    const u=new URL(location.href);
+    const s=u.searchParams;
+    // 기존 검색 키는 모두 제거 후 재설정
+    ['budget','cash','region','house','first','school','py','wp','apt','area'].forEach(k=>s.delete(k));
+    if(body.maxBudget)s.set('budget',String(body.maxBudget));
+    if(body.myCash)s.set('cash',String(body.myCash));
+    if(body.region)s.set('region',body.region);
+    if(body.houseStatus)s.set('house',body.houseStatus);
+    if(body.isFirstBuyer)s.set('first','1');
+    if(body.schoolNeeded)s.set('school','1');
+    const pyChip=gct('ch-py');if(pyChip)s.set('py',pyChip);
+    if(body.workplaceArea)s.set('wp',body.workplaceArea);
+    history.replaceState(null,'',u.toString());
+  }catch(e){/* no-op */}
+}
+function restoreSearchFromUrl(){
+  try{
+    const s=new URLSearchParams(location.search);
+    if(![...s.keys()].some(k=>['budget','cash','region','house','first','school','py','wp'].includes(k)))return false;
+    const setChip=(gid,val)=>{
+      if(!val)return;
+      let matched=false;
+      document.querySelectorAll('#'+gid+' .chip').forEach(c=>{
+        const on=c.textContent.trim()===val;
+        c.classList.toggle('on',on);
+        if(on)matched=true;
+      });
+      return matched;
+    };
+    const budget=s.get('budget');if(budget&&document.getElementById('bp'))document.getElementById('bp').value=budget;
+    const cash=s.get('cash');if(cash&&document.getElementById('mc'))document.getElementById('mc').value=cash;
+    const wp=s.get('wp');if(wp&&document.getElementById('wp'))document.getElementById('wp').value=wp;
+    const house=s.get('house');if(house)setChip('ch-h',house);
+    setChip('ch-f',s.get('first')==='1'?'예':'아니오');
+    setChip('ch-sc',s.get('school')==='1'?'학군 중요':'보통');
+    const py=s.get('py');if(py)setChip('ch-py',py);
+    const region=s.get('region');
+    if(region){
+      const parts=region.split(/\s+/);
+      const wide=parts[0],sub=parts.slice(1).join(' ');
+      setChip('ch-r',wide);
+      populateRegionSub(wide);
+      if(sub){
+        // 생성된 서브 chip 중 매칭
+        document.querySelectorAll('#ch-r-sub .chip').forEach(c=>{
+          if(c.textContent.trim()===sub)c.classList.add('on');
+        });
+      }
+    }
+    cl();
+    return true;
+  }catch(e){return false;}
+}
 function cp(el,id){document.querySelector(`#${id}`).querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');if(id==='ch-r')populateRegionSub(el.textContent.trim());cl();dc();}
 function getLoanAmt(){const r=calcC();return r?r.fin:0;}
 function calcC(){
@@ -2340,7 +2537,11 @@ function dc(){
   const lL=Math.min(buy*ltv,cap),n=yrs*12,mr=rate/12,smr=(rate+(isR?.015:.0075))/12;
   let dL=0;
   if(inc>0){const mx=inc*10000*.4/12-ex*10000;if(mx>0)dL=Math.round(mx*(1-Math.pow(1+smr,-n))/smr/1e8*100)/100;}
-  const fin=Math.min(lL,dL>0?dL:lL),mo=fin>0?Math.round(fin*1e8*mr/(1-Math.pow(1+mr,-n))/10000):0,need=Math.max(0,buy-cash-fin),dti=inc>0?Math.round(mo/(inc*10000/12)*100):0;
+  const fin=Math.min(lL,dL>0?dL:lL),mo=fin>0?Math.round(fin*1e8*mr/(1-Math.pow(1+mr,-n))/10000):0,need=Math.max(0,buy-cash-fin);
+  // DSR = (신규 월원리금 + 기존 월원리금) × 12 / 연소득 × 100
+  // mo, ex, inc 모두 만원 단위 → 순수 비율 계산
+  const dsr=inc>0?Math.round((mo+ex)*12/inc*100):0;
+  const dsrExceed=dsr>40;
   document.getElementById('co').style.display='block';
   document.getElementById('co_l').textContent=ltv===0?'불가':lL.toFixed(2)+'억';
   document.getElementById('co_d').textContent=dL>0?dL.toFixed(2)+'억':'소득필요';
@@ -2348,8 +2549,13 @@ function dc(){
   document.getElementById('co_m').textContent=mo?mo+'만원':'—';
   document.getElementById('co_n').textContent=need>0?need.toFixed(2)+'억 부족':'충분';
   document.getElementById('co_p').textContent=buy>0?Math.round(fin/buy*100)+'%':'—';
-  document.getElementById('co_t').textContent=dti?dti+'%':'—';
-  document.getElementById('co_w').textContent=warn;
+  const dsrEl=document.getElementById('co_t');
+  if(dsrEl){
+    dsrEl.textContent=dsr?dsr+'%':'—';
+    dsrEl.style.color=dsrExceed?'var(--red)':dsr>=35?'var(--amb)':'';
+  }
+  const dsrNote=dsr>0?(dsrExceed?` · ⛔ DSR ${dsr}% 초과 (한도 40%) — 대출 거절 가능`:dsr>=35?` · ⚠ DSR ${dsr}% — 한도 근접`:` · ✅ DSR ${dsr}% 여유`):'';
+  document.getElementById('co_w').textContent=(warn||'')+dsrNote;
   const mos=[0,.01,.02].map(d2=>fin>0?Math.round(fin*1e8*(rate+d2)/12/(1-Math.pow(1+(rate+d2)/12,-n))/10000):0);
   const mx=Math.max(...mos,1);
   document.getElementById('scnC').innerHTML=mos.map((m,i)=>`<div class="br"><div class="bry">${((rate+[0,.01,.02][i])*100).toFixed(1)}%</div><div class="brb"><div class="brf" style="width:${Math.round(m/mx*100)}%"></div></div><div class="brv">${m}만</div></div>`).join('');
