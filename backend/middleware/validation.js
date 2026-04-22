@@ -58,21 +58,26 @@ function validateTransactionQuery(req, res, next) {
   next();
 }
 
-// 매물 검색 검증
+// 매물 검색 검증 — POST body 기반 (일부 엔드포인트는 query string)
 function validatePropertySearch(req, res, next) {
-  const { query, minPrice, maxPrice, region } = req.query;
+  // POST /recommend 은 body, GET 엔드포인트는 query
+  const src = req.method === 'POST' ? (req.body || {}) : (req.query || {});
+  const { query, minPrice, maxPrice, region } = src;
 
-  if (query) req.query.query = sanitizeString(query, 100);
+  if (query) src.query = sanitizeString(query, 100);
+  if (minPrice !== undefined) src.minPrice = sanitizeNumber(minPrice, 0, 999);
+  if (maxPrice !== undefined) src.maxPrice = sanitizeNumber(maxPrice, 0, 999);
 
-  req.query.minPrice = sanitizeNumber(minPrice, 0, 999);
-  req.query.maxPrice = sanitizeNumber(maxPrice, 0, 999);
-
-  const allowedRegions = [
-    '서울', '경기', '인천', '부산', '대구', '광주', '대전', '울산', '세종',
-    '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'
-  ];
-  if (region && !allowedRegions.includes(region)) {
-    return res.status(400).json({ error: '유효하지 않은 지역입니다.' });
+  // 광역 키워드 화이트리스트 — "서울 강북구" 같은 복합 입력도 허용
+  const allowedWide = ['서울','경기','인천','부산','대구','광주','대전','울산','세종',
+    '강원','충북','충남','전북','전남','경북','경남','제주'];
+  if (region) {
+    const normalized = String(region).normalize('NFC').trim();
+    src.region = normalized;
+    const passesWide = allowedWide.some(w => normalized.includes(w));
+    if (!passesWide) {
+      return res.status(400).json({ error: '유효하지 않은 지역입니다.', region: normalized });
+    }
   }
   next();
 }

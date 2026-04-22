@@ -54,8 +54,9 @@ async function getCarMinutes(originLat, originLng, destLat, destLng) {
  */
 async function getTransitMinutes(originLat, originLng, destLat, destLng) {
   const car = await getCarMinutes(originLat, originLng, destLat, destLng);
-  if (car == null) return null;
-  return Math.round(car * 1.6 + 5);
+  if (car == null || !Number.isFinite(car)) return null;
+  const mins = Math.round(car * 1.6 + 5);
+  return Number.isFinite(mins) ? mins : null;
 }
 
 /**
@@ -77,7 +78,7 @@ async function countNearby(lat, lng, categoryCode, radius = 800) {
       timeout: 5000,
     });
     const cnt = r.data?.meta?.total_count || 0;
-    cache.set(ck, cnt, 86400 * 7);
+    cache.set(ck, cnt, 86400 * 3);
     return cnt;
   } catch (e) {
     return 0;

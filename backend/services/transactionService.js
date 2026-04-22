@@ -7,6 +7,8 @@ const axios = require('axios');
 const cache = require('../cache');
 
 const MOLIT_DETAIL_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
+// MOLIT API 성공 코드: '00'(구버전) 또는 '000'(신버전) — 다른 서비스에서도 재사용
+const MOLIT_OK_CODES = new Set(['00', '000']);
 
 // 서울/경기 주요 구 법정동코드 (앞 5자리)
 const LAWD_CODES = {
@@ -63,8 +65,7 @@ async function getTransactions(lawdCd, dealYm) {
     const items = body?.items?.item;
     const allItems = Array.isArray(items) ? items : items ? [items] : [];
     // MOLIT API 결과 코드 확인 — 성공 코드 '00'(구) / '000'(신) 외에는 명확히 로깅
-    const OK_CODES = new Set(['00', '000']);
-    if (header && header.resultCode && !OK_CODES.has(header.resultCode)) {
+    if (header && header.resultCode && !MOLIT_OK_CODES.has(header.resultCode)) {
       console.error(`[transactionService] MOLIT ${lawdCd}/${dealYm} resultCode=${header.resultCode} msg=${header.resultMsg}`);
     } else if (!header && typeof response.data === 'string') {
       console.error(`[transactionService] MOLIT ${lawdCd}/${dealYm} non-JSON response:`, response.data.slice(0, 200));

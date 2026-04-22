@@ -40,9 +40,12 @@ const REGION_KEYWORDS = {
 };
 
 function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '') {
-  const r = (userRegion || '').replace(/\s+/g,'');
-  const wp = (workplaceArea || '').replace(/\s+/g,'');
+  // Unicode NFC 정규화 — 일부 OS(Mac)/브라우저에서 한글이 NFD(분해형)로 전달돼
+  // "강북" 같은 NFC 키워드와 문자열 비교 실패하는 버그 방지
+  const r = String(userRegion || '').normalize('NFC').replace(/\s+/g,'');
+  const wp = String(workplaceArea || '').normalize('NFC').replace(/\s+/g,'');
   const combined = r + ' ' + wp;
+  console.log(`[pickRegions] region="${userRegion}" → r="${r}" wp="${wp}" budget=${maxBudget}`);
   // 1) 사용자 입력에서 구 단위 키워드 매칭 (광역 키워드는 후순위)
   const SKIP_GLOBAL = new Set(['서울','경기','인천']);
   for (const [kw, codes] of Object.entries(REGION_KEYWORDS)) {
@@ -190,7 +193,7 @@ async function getAIRecommendations(userCondition) {
 
   // Step 3b: 거래 없는 단지 추가 — K-apt 전체 단지 리스트 중 matched에 없는 항목
   // 주변 단지 시세로 예상가 추정해 "참고 매물"로 노출 (매물 다양성↑)
-  const matchedNames = new Set(matched.map(m => m.aptName.replace(/\s/g, '')));
+  const matchedNames = new Set(matched.map(m => (m.aptName || '').replace(/\s/g, '')).filter(Boolean));
   const dongAvgMan = {}; // umdNm → avgPriceMan (같은 동 실거래 평균)
   for (const apt of matched) {
     const dong = apt.umdNm;
@@ -283,12 +286,26 @@ async function getAIRecommendations(userCondition) {
   });
 
   // Step 5a: 단지 기본정보 bulk 조회 — 세대수·주차비율·연식·관리방식
-  // K-apt AptBasisInfoServiceV3 (이미 캐시됨, 30일) — 첫 호출만 ~3초, 이후 즉시
+  // K-apt AptBasisInfoServiceV3는 kaptCode(예: "A10020255")를 요구하지만
+  // MOLIT 실거래의 aptSeq(예: "11350-102")와 형식이 다름.
+  // → allAptList(getSigunguAptList3)의 kaptName+dong 매칭으로 실제 kaptCode 해결
+  const kaptCodeMap = new Map(); // normalizedName+dong → kaptCode
+  const normalizeName = (s) => (s || '').replace(/\s/g, '').toLowerCase();
+  for (const a of allAptList) {
+    const nm = normalizeName(a.kaptName || a.aptName || '');
+    if (!nm || !a.kaptCode) continue;
+    const dong = a.as4 || a.as3 || '';
+    kaptCodeMap.set(`${nm}|${dong}`, a.kaptCode);
+    // 동명 없이도 찾을 수 있도록 fallback 키 저장 (같은 이름 여러 개면 첫 매칭 유지)
+    if (!kaptCodeMap.has(nm)) kaptCodeMap.set(nm, a.kaptCode);
+  }
   const enriched = await Promise.allSettled(
     recommendations.map(async (rec, i) => {
-      const seq = ranked[i].aptSeq;
-      if (!seq) return rec;
-      const info = await getAptBasisInfo(seq);
+      const apt = ranked[i];
+      const nmKey = normalizeName(apt.aptName);
+      const kaptCode = kaptCodeMap.get(`${nmKey}|${apt.umdNm || ''}`) || kaptCodeMap.get(nmKey);
+      if (!kaptCode) return rec;
+      const info = await getAptBasisInfo(kaptCode);
       if (!info) return rec;
       const totalHouseholds = parseInt(info.kaptdaCnt) || 0;
       const parkingTotal = parseInt(info.kaptdPcnt) || 0;
@@ -302,7 +319,7 @@ async function getAIRecommendations(userCondition) {
       return {
         ...rec,
         facility: {
-          aptSeq: seq,
+          kaptCode,
           totalHouseholds,
           dongCount: parseInt(info.kaptDongCnt) || 0,
           parkingTotal,
