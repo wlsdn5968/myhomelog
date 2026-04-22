@@ -105,15 +105,32 @@ app.get('/api/health/apis', async (req, res) => {
   const kakao = process.env.KAKAO_REST_API_KEY;
   const checks = { molit_key: !!molit, kakao_key: !!kakao };
 
-  // 1) MOLIT 실거래가 (활성 필수)
+  // 1) MOLIT 실거래가 (활성 필수) — 최근 완료된 달 사용 (당월은 데이터 없을 수 있음)
   if (molit) {
     try {
+      const d = new Date();
+      const prev = new Date(d.getFullYear(), d.getMonth() - 1, 1);
+      const ym = `${prev.getFullYear()}${String(prev.getMonth() + 1).padStart(2, '0')}`;
       const r = await axios.get('https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev', {
-        params: { serviceKey: molit, LAWD_CD: '11350', DEAL_YMD: '202604', pageNo: 1, numOfRows: 1, _type: 'json' },
+        params: { serviceKey: molit, LAWD_CD: '11350', DEAL_YMD: ym, pageNo: 1, numOfRows: 1, _type: 'json' },
         timeout: 6000,
+        headers: { Accept: 'application/json' },
       });
-      checks.molit_transaction = r.data?.response?.header?.resultCode === '00' || r.data?.response?.header?.resultCode === undefined;
-    } catch (e) { checks.molit_transaction = false; }
+      const code = r.data?.response?.header?.resultCode;
+      const msg = r.data?.response?.header?.resultMsg;
+      const rawType = typeof r.data;
+      checks.molit_transaction = code === '00';
+      checks.molit_transaction_code = code;
+      checks.molit_transaction_msg = msg;
+      // 일부 API가 XML로 응답하거나 에러 페이지를 HTML로 주는 경우 감지
+      if (!code) {
+        checks.molit_transaction_raw = typeof r.data === 'string' ? String(r.data).slice(0, 300) : rawType;
+      }
+      checks.molit_transaction_ymd = ym;
+    } catch (e) {
+      checks.molit_transaction = false;
+      checks.molit_transaction_err = e.response?.status ? `HTTP ${e.response.status}` : e.message;
+    }
   }
 
   // 2) K-apt 단지 리스트 (AptListService3)
@@ -135,11 +152,19 @@ app.get('/api/health/apis', async (req, res) => {
       const r = await axios.get('https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3', {
         params: { serviceKey: molit, kaptCode: 'A10020255', _type: 'json' },
         timeout: 6000,
+        headers: { Accept: 'application/json' },
       });
       const code = r.data?.response?.header?.resultCode;
       checks.kapt_basis = code === '00';
-      checks.kapt_basis_msg = code !== '00' ? r.data?.response?.header?.resultMsg : undefined;
-    } catch (e) { checks.kapt_basis = false; checks.kapt_basis_msg = e.message; }
+      checks.kapt_basis_code = code;
+      checks.kapt_basis_msg = r.data?.response?.header?.resultMsg;
+      if (!code) {
+        checks.kapt_basis_raw = typeof r.data === 'string' ? String(r.data).slice(0, 300) : typeof r.data;
+      }
+    } catch (e) {
+      checks.kapt_basis = false;
+      checks.kapt_basis_err = e.response?.status ? `HTTP ${e.response.status}` : e.message;
+    }
   }
 
   // 4) Kakao 로컬 키워드 검색
