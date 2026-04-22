@@ -5,15 +5,22 @@
 const express = require('express');
 const router = express.Router();
 const { callAI } = require('../services/aiService');
+const { getCitationsForIssues } = require('../services/legalService');
 const cache = require('../cache');
 
 router.post('/', async (req, res) => {
   const { aptName, area, price, ltv, houseStatus, isFirstBuyer, buildYear, issues } = req.body;
   if (!aptName) return res.status(400).json({ error: 'aptName 필수' });
 
-  const cacheKey = `clause:${aptName}:${price}:${houseStatus}`;
+  const cacheKey = `clause:v2:${aptName}:${price}:${houseStatus}:${issues||''}`;
   const cached = cache.get(cacheKey);
   if (cached) return res.json({ ...cached, fromCache: true });
+
+  // 이슈 키워드 → 관련 법령·조문 인용 자동 수집
+  const citations = getCitationsForIssues(issues || '');
+  const citationText = citations.length
+    ? `\n관련 법령 (특약 근거):\n${citations.map(c => `- ${c.law} ${c.article} (${c.title}): ${c.summary}`).join('\n')}\n`
+    : '';
 
   const prompt = `다음 아파트 매수 계약에 필요한 맞춤 특약문구를 생성해줘.
 
@@ -24,7 +31,7 @@ router.post('/', async (req, res) => {
 - 매수자: ${houseStatus} / 생애최초: ${isFirstBuyer ? 'Y' : 'N'}
 - 대출 규제: LTV ${ltv}
 - 특이사항: ${issues || '없음'}
-
+${citationText}
 아래 JSON 형식으로만 반환 (\`\`\` 없이):
 {
   "essential": [
@@ -44,6 +51,7 @@ recommended: 상황에 따라 추가할 특약 2~3개
     const result = await callAI([{ role: 'user', content: prompt }], false);
     const cleaned = result.content.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(cleaned);
+    parsed.citations = citations; // 프론트에 법령 인용 같이 전달
     cache.set(cacheKey, parsed, 7200);
     res.json(parsed);
   } catch (e) {

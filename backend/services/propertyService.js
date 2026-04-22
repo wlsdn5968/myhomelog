@@ -12,7 +12,7 @@
  * 대신 최신 실거래가가 가장 객관적인 시세 지표로 동등하게 기능함.
  */
 const { getTransactionsByApt, analyzeTransactions } = require('./transactionService');
-const { getAptListBySgg } = require('./aptInfoService');
+const { getAptListBySgg, getAptBasisInfo } = require('./aptInfoService');
 const cache = require('../cache');
 
 // ── 지역 키워드 → 법정동코드 매핑 (사용자 입력 우선) ───────
@@ -133,7 +133,7 @@ async function getAIRecommendations(userCondition) {
   const minPy = parseInt(minArea) || 15;
   const maxPy = parseInt(maxArea) || 60;
 
-  const cacheKey = `rec:v4:${region}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${workplaceArea}:${minPy}:${maxPy}`;
+  const cacheKey = `rec:v5:${region}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${workplaceArea}:${minPy}:${maxPy}`;
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
@@ -248,6 +248,8 @@ async function getAIRecommendations(userCondition) {
     return {
       rank: i + 1,
       aptName: apt.aptName,
+      aptSeq: apt.aptSeq,
+      lawdCd: apt.lawdCd,
       area: `${apt.sigungu || ''} ${apt.umdNm || ''}`.trim(),
       avgPrice: avgAuk,
       minPrice: minAuk,
@@ -279,6 +281,45 @@ async function getAIRecommendations(userCondition) {
       recentDeal: apt.recentDeal,
     };
   });
+
+  // Step 5a: 단지 기본정보 bulk 조회 — 세대수·주차비율·연식·관리방식
+  // K-apt AptBasisInfoServiceV3 (이미 캐시됨, 30일) — 첫 호출만 ~3초, 이후 즉시
+  const enriched = await Promise.allSettled(
+    recommendations.map(async (rec, i) => {
+      const seq = ranked[i].aptSeq;
+      if (!seq) return rec;
+      const info = await getAptBasisInfo(seq);
+      if (!info) return rec;
+      const totalHouseholds = parseInt(info.kaptdaCnt) || 0;
+      const parkingTotal = parseInt(info.kaptdPcnt) || 0;
+      const parkingRatio = totalHouseholds > 0 && parkingTotal > 0
+        ? parseFloat((parkingTotal / totalHouseholds).toFixed(2)) : null;
+      // 추가 태그
+      const moreTags = [...(rec.tags || [])];
+      if (parkingRatio && parkingRatio >= 1.2) moreTags.push('주차여유');
+      if (totalHouseholds >= 1000) moreTags.push('대단지');
+      else if (totalHouseholds >= 500) moreTags.push('중대단지');
+      return {
+        ...rec,
+        facility: {
+          aptSeq: seq,
+          totalHouseholds,
+          dongCount: parseInt(info.kaptDongCnt) || 0,
+          parkingTotal,
+          parkingRatio, // 세대당 주차대수
+          builtDate: info.kaptUsedate || null,
+          heatType: info.codeHeatNm || null,
+          mgrType: info.codeMgrNm || null,
+          address: info.doroJuso || info.codeAptNm || null,
+          floorAreaRatio: info.kaptTarea || null,
+        },
+        tags: Array.from(new Set(moreTags)),
+      };
+    })
+  ).then(results => results.map(r => r.status === 'fulfilled' ? r.value : null).filter(Boolean));
+
+  // 응답에는 enriched 사용 (실패한 것은 원본 rec 유지됨)
+  const enrichedRecs = enriched.length === recommendations.length ? enriched : recommendations;
 
   // Step 5b: 거래 없는 참고 단지 추가 (예산 범위 & 같은 동 평균가 있는 것만)
   const extraRefs = noTxApts.slice(0, 15).map((a, i) => {
@@ -312,7 +353,7 @@ async function getAIRecommendations(userCondition) {
     };
   });
 
-  const finalRecs = [...recommendations, ...extraRefs];
+  const finalRecs = [...enrichedRecs, ...extraRefs];
 
   const result = {
     recommendations: finalRecs,

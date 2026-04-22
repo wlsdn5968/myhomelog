@@ -1666,6 +1666,12 @@ function showDetail(p){
       <div class="rc"><div class="rcl">현재 평균가</div><div class="rcv" style="color:var(--acc)">${(p.avgPrice||0).toFixed(2)}억</div></div>
       <div class="rc"><div class="rcl">가격 범위</div><div class="rcv">${(p.minPrice||0).toFixed(1)}~${(p.maxPrice||0).toFixed(1)}억</div></div>
     </div>
+    ${p.facility?`<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
+      <div style="font-weight:700;color:var(--t1);margin-bottom:4px">🏢 단지 기본정보</div>
+      ${p.facility.totalHouseholds?`총 ${p.facility.totalHouseholds.toLocaleString()}세대`:''}${p.facility.dongCount?` · ${p.facility.dongCount}개동`:''}${p.facility.parkingRatio?` · 주차 세대당 ${p.facility.parkingRatio}대`:''}${p.facility.builtDate?` · 사용승인 ${p.facility.builtDate.slice(0,4)}.${p.facility.builtDate.slice(4,6)}`:''}${p.facility.heatType?` · ${p.facility.heatType}`:''}
+      ${p.facility.address?`<br><span style="font-size:10px;color:var(--t3)">${p.facility.address}</span>`:''}
+    </div>`:''}
+    <div id="amenityBox" style="font-size:11px;color:var(--t3);margin:4px 0 8px">🗺️ 주변 편의시설 조회 중...</div>
     ${p.pros?`<div class="ibox g"><b>장점:</b> ${p.pros}</div>`:''}
     ${p.cons?`<div class="ibox r"><b>단점:</b> ${p.cons}</div>`:''}
     ${p.strategy?`<div class="ibox b"><b>전략:</b> ${p.strategy}</div>`:''}
@@ -1714,7 +1720,32 @@ function showDetail(p){
   bkBtn.classList.toggle('on',isBk);
   document.getElementById('DM').classList.add('open');
   renderFieldNote(p); // 임장 노트는 즉시 렌더 (로컬 데이터)
-  loadRisk(p);loadClause(p);loadAnalysis(p);
+  loadRisk(p);loadClause(p);loadAnalysis(p);loadAmenities(p);
+}
+
+// ── 주변 편의시설 + 통근시간 비동기 로드 ────────────
+async function loadAmenities(p){
+  const box=document.getElementById('amenityBox');if(!box)return;
+  try{
+    // 단지 좌표 조회
+    const g=await fetch(`${CFG.api}/geocode`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({aptName:p.aptName,area:p.area})}).then(r=>r.json()).catch(()=>null);
+    if(!g||!g.lat){box.style.display='none';return;}
+    const [near,tran]=await Promise.all([
+      fetch(`${CFG.api}/properties/nearby?lat=${g.lat}&lng=${g.lng}`).then(r=>r.json()).catch(()=>null),
+      (async()=>{
+        const wp=document.getElementById('wp')?.value?.trim();
+        if(!wp)return null;
+        return fetch(`${CFG.api}/properties/transit`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({aptLat:g.lat,aptLng:g.lng,workplace:wp})}).then(r=>r.json()).catch(()=>null);
+      })()
+    ]);
+    if(!near||!near.available){box.style.display='none';return;}
+    const tranHtml=tran&&tran.available?`<div style="margin-top:4px;font-weight:600;color:var(--a2)">🚇 ${tran.destinationName} 통근: 대중교통 ~${tran.transitMinutes}분 / 차량 ~${tran.carMinutes}분</div>`:'';
+    box.innerHTML=`<div style="background:#F0F7F0;border:1px solid #CFE5CF;border-radius:8px;padding:9px 11px;line-height:1.6">
+      <div style="font-weight:700;color:var(--t1)">🗺️ 주변 (반경 800m~1km)</div>
+      <div>🏫 학교 ${near.school}곳 · 🚇 지하철역 ${near.subway}곳 · 🛒 대형마트 ${near.mart}곳 · 🏥 병원 ${near.hospital}곳 · 🏪 편의점 ${near.cvs}곳</div>
+      ${tranHtml}
+    </div>`;
+  }catch{box.style.display='none';}
 }
 
 function stb(btn,id){document.querySelectorAll('.rtab').forEach(b=>b.classList.remove('on'));document.querySelectorAll('.tp').forEach(t=>t.classList.remove('on'));btn.classList.add('on');document.getElementById(id).classList.add('on');}
@@ -2219,11 +2250,17 @@ function renderClause(d){
     <div class="ccard-h"><span class="ccard-t">${c.title}</span><div style="display:flex;gap:5px;align-items:center"><span class="rtag ${badge==='e'?'r':'y'}">${badge==='e'?'필수':'권장'}</span><button class="cpybtn" onclick="cpT(\`${c.content.replace(/`/g,"'").replace(/\n/g,' ')}\`)">복사</button></div></div>
     <div class="ccard-b"><div class="ccard-ct">${c.content}</div><div class="ccard-r">💡 ${c.reason}</div></div>
   </div>`).join('');
+  const citeHtml = (d.citations&&d.citations.length)?`
+    <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 6px">📚 관련 법령 근거</div>
+    <div style="background:#FAFAFD;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:6px">
+      ${d.citations.map(c=>`<div style="font-size:11px;line-height:1.5"><b style="color:var(--a2)">${c.law} ${c.article}</b> <span style="color:var(--t3)">· ${c.title}</span><br><span style="color:var(--t2)">${c.summary}</span></div>`).join('')}
+    </div>`:'';
   document.getElementById('t3').innerHTML=`
     ${d.caution?`<div class="ibox y" style="margin-bottom:12px"><b>주의:</b> ${d.caution}</div>`:''}
     <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px">필수 특약</div>${mkC(d.essential,'e')}
     <div style="font-size:11px;font-weight:700;color:var(--amb);margin:12px 0 8px">권장 특약</div>${mkC(d.recommended,'r')}
-    <div class="ibox b">특약은 공인중개사·법무사와 최종 검토 후 사용하세요.</div>`;
+    ${citeHtml}
+    <div class="ibox b" style="margin-top:10px">특약·법령 인용은 참고용이며, 최종 계약 전 공인중개사·법무사 검토 필수.</div>`;
 }
 function cpT(t){navigator.clipboard.writeText(t).then(()=>toast('특약 복사 완료 ✅')).catch(()=>toast('복사 실패'));}
 

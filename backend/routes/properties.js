@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getAIRecommendations } = require('../services/propertyService');
 const { getAptBasisInfo } = require('../services/aptInfoService');
+const { getNearbyAmenities, getTransitMinutes, getCarMinutes, keywordToCoord } = require('../services/kakaoService');
 const { validatePropertySearch } = require('../middleware/validation');
 
 // GET /api/properties/info?aptSeq=A13559101
@@ -52,6 +53,39 @@ router.post('/recommend', validatePropertySearch, async (req, res) => {
   });
 
   res.json(result);
+});
+
+// GET /api/properties/nearby?lat=..&lng=..  주변 편의시설 카운트
+router.get('/nearby', async (req, res) => {
+  const lat = parseFloat(req.query.lat);
+  const lng = parseFloat(req.query.lng);
+  if (isNaN(lat) || isNaN(lng)) return res.status(400).json({ error: 'lat,lng 필수' });
+  const data = await getNearbyAmenities(lat, lng);
+  if (!data) return res.json({ available: false });
+  res.json({ available: true, ...data });
+});
+
+// POST /api/properties/transit  단지→직장 통근시간
+// body: { aptLat, aptLng, workplace }  workplace는 키워드(주소 또는 장소명)
+router.post('/transit', async (req, res) => {
+  const { aptLat, aptLng, workplace } = req.body;
+  if (!aptLat || !aptLng || !workplace) {
+    return res.status(400).json({ error: 'aptLat,aptLng,workplace 필수' });
+  }
+  const dest = await keywordToCoord(workplace);
+  if (!dest) return res.json({ available: false, error: '직장 좌표 조회 실패' });
+  const [carMin, transitMin] = await Promise.all([
+    getCarMinutes(parseFloat(aptLat), parseFloat(aptLng), dest.lat, dest.lng),
+    getTransitMinutes(parseFloat(aptLat), parseFloat(aptLng), dest.lat, dest.lng),
+  ]);
+  res.json({
+    available: carMin != null,
+    destinationName: dest.name,
+    destinationLat: dest.lat,
+    destinationLng: dest.lng,
+    carMinutes: carMin,
+    transitMinutes: transitMin,
+  });
 });
 
 module.exports = router;
