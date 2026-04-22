@@ -117,9 +117,14 @@ async function keywordToCoord(keyword) {
     });
     const d = r.data?.documents?.[0];
     const out = d ? { lat: parseFloat(d.y), lng: parseFloat(d.x), name: d.place_name || d.address_name } : null;
-    cache.set(ck, out, 86400 * 30);
+    // 결과 없음은 짧게만 캐시 (24h) — API 일시 이슈 시 장기 캐시 방지
+    cache.set(ck, out, out ? 86400 * 30 : 86400);
+    if (!out) {
+      console.warn(`[kakaoService] keywordToCoord "${q}" 결과없음 (total=${r.data?.meta?.total_count}, status=${r.status})`);
+    }
     return out;
   } catch (e) {
+    console.error(`[kakaoService] keywordToCoord "${q}" 실패:`, e.response?.status, e.response?.data?.message || e.message);
     return null;
   }
 }

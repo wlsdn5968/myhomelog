@@ -12,11 +12,13 @@ async function kakaoGeocode(key, aptName, area) {
     { url: 'https://dapi.kakao.com/v2/local/search/address.json',  q: `${area||''} ${aptName}`.trim() },
     { url: 'https://dapi.kakao.com/v2/local/search/address.json',  q: area || '' },
   ];
+  const attempts = [];
   for (const t of tries) {
     if (!t.q) continue;
     try {
       const r = await axios.get(t.url, { headers, params: { query: t.q, size: 1 }, timeout: 5000 });
       const d = r.data?.documents?.[0];
+      attempts.push({ url: t.url.split('/').pop(), q: t.q, total: r.data?.meta?.total_count || 0, status: r.status });
       if (d) {
         return {
           lat: parseFloat(d.y), lng: parseFloat(d.x),
@@ -24,8 +26,11 @@ async function kakaoGeocode(key, aptName, area) {
           placeName: d.place_name,
         };
       }
-    } catch { /* try next */ }
+    } catch (e) {
+      attempts.push({ url: t.url.split('/').pop(), q: t.q, err: e.response?.status ? `HTTP ${e.response.status} ${e.response?.data?.message||''}` : e.message });
+    }
   }
+  console.warn(`[geocode] "${aptName}" / "${area}" 결과없음 시도=${JSON.stringify(attempts)}`);
   return null;
 }
 
