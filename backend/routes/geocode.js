@@ -34,27 +34,6 @@ async function kakaoGeocode(key, aptName, area) {
   return null;
 }
 
-// GET /api/geocode/_debug?q=강남역  — Kakao 응답 원본 노출 (임시 진단용)
-router.get('/_debug', async (req, res) => {
-  const q = String(req.query.q || '').trim();
-  const key = process.env.KAKAO_REST_API_KEY;
-  if (!key) return res.json({ error: 'no key' });
-  const out = {};
-  for (const path of ['keyword', 'address']) {
-    try {
-      const r = await axios.get(`https://dapi.kakao.com/v2/local/search/${path}.json`, {
-        headers: { Authorization: `KakaoAK ${key}` },
-        params: { query: q, size: 1 },
-        timeout: 5000,
-      });
-      out[path] = { status: r.status, total: r.data?.meta?.total_count, first: r.data?.documents?.[0] };
-    } catch (e) {
-      out[path] = { err: e.response?.status ? `HTTP ${e.response.status}` : e.message, body: e.response?.data };
-    }
-  }
-  res.json({ q, out });
-});
-
 // POST /api/geocode  - 단건
 router.post('/', async (req, res) => {
   const { aptName, area } = req.body;
