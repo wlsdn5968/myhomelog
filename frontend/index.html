@@ -195,7 +195,18 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 /* 플로팅 AI 버튼 */
 .fab-ai{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border-radius:50%;background:var(--acc);color:#fff;border:none;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:24px;box-shadow:0 6px 18px rgba(0,0,0,.22);z-index:850;transition:transform .15s,box-shadow .15s}
 .fab-ai:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.28)}
-@media(max-width:700px){.fab-ai{bottom:72px;right:16px;width:52px;height:52px;font-size:22px}}
+/* 플로팅 관심단지 버튼 */
+.fab-bm{position:fixed;right:24px;bottom:92px;width:48px;height:48px;border-radius:50%;background:#fff;color:#333;border:1px solid var(--bd);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.15);z-index:850;transition:transform .15s,box-shadow .15s;position:fixed}
+.fab-bm:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.20)}
+.fab-bm .fab-bm-cnt{position:absolute;top:-4px;right:-4px;background:var(--amb,#f5a623);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #fff}
+/* 관심단지 popover */
+.bm-pop{position:fixed;right:24px;bottom:150px;width:320px;max-width:calc(100vw - 40px);max-height:min(460px,calc(100vh - 200px));background:#fff;border:1px solid var(--bd);border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,.2);z-index:860;display:none;flex-direction:column;overflow:hidden}
+.bm-pop.on{display:flex}
+.bm-pop-hdr{padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;background:var(--s0)}
+.bm-pop-close{background:transparent;border:none;cursor:pointer;font-size:16px;color:var(--t3);padding:2px 6px;border-radius:4px}
+.bm-pop-close:hover{background:var(--s1)}
+.bm-pop-body{flex:1;overflow-y:auto}
+@media(max-width:700px){.fab-ai{bottom:72px;right:16px;width:52px;height:52px;font-size:22px}.fab-bm{bottom:132px;right:16px}.bm-pop{bottom:186px;right:16px}}
 .chdr{padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 .ctit{font-size:12px;font-weight:700}.cst{font-size:11px;font-weight:600}
 .cmsgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
@@ -321,9 +332,9 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 /* 특약 뷰 */
 .clause-view{flex:1;overflow-y:auto;padding:22px;display:none;flex-direction:column;gap:0}
 .clause-view.active{display:flex}
-.cv-hero{background:linear-gradient(135deg,var(--acc),var(--accD));color:#fff;border-radius:var(--r);padding:20px 22px;margin-bottom:18px}
-.cv-hero h2{font-size:18px;font-weight:800;margin-bottom:4px}
-.cv-hero p{font-size:11px;opacity:.85;line-height:1.6}
+.cv-hero{background:linear-gradient(135deg,var(--acc),var(--accD));color:#fff;border-radius:10px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.cv-hero h2{font-size:14px;font-weight:700;margin:0}
+.cv-hero p{font-size:11px;opacity:.88;line-height:1.4;margin:0;flex:1;min-width:220px}
 .cv-form{background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--sh)}
 .cv-form h3{font-size:13px;font-weight:700;margin-bottom:13px;color:var(--t1)}
 .cv-r3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:9px}
@@ -669,7 +680,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 <div class="clause-view" id="view-clause">
   <div class="cv-hero">
     <h2>✍ AI 맞춤 특약 생성</h2>
-    <p>매물 정보를 입력하면 30초 안에 필수 특약·권장 특약을 자동 생성합니다.<br>실무 판례 기반 · 계약서에 바로 사용 가능한 정확한 문구</p>
+    <p>매물 정보 입력 → 30초 내 필수·권장 특약 자동 생성 (실무 판례 기반)</p>
   </div>
   <div class="cv-form">
     <h3>매물 기본 정보</h3>
@@ -1906,6 +1917,7 @@ function toggleBookmark(){
 function renderBookmarks(){
   const bks=getBookmarks();
   document.getElementById('bkCnt').textContent=bks.length||'0';
+  const fbc=document.getElementById('fabBmCnt');if(fbc)fbc.textContent=bks.length||'0';
   const el=document.getElementById('bkList');
   if(!bks.length){
     el.innerHTML='<div class="bk-empty">관심 단지를 추가하면<br>여기서 빠르게 확인할 수 있어요</div>';
@@ -2309,6 +2321,15 @@ function sv(v,btn){
   if(fab){
     fab.style.display = (v!=='chat' && !meta.rp) ? 'flex' : 'none';
   }
+  // 플로팅 관심단지 버튼: .lp 숨긴 탭에서만 노출
+  const fabBm=document.getElementById('fabBM');
+  if(fabBm){
+    fabBm.style.display = (!meta.lp || window.innerWidth<=700) ? 'flex' : 'none';
+    try{ document.getElementById('fabBmCnt').textContent = (getBookmarks()||[]).length||'0'; }catch(e){}
+  }
+  // popover 닫기 (탭 전환 시)
+  const bmPop=document.getElementById('bmPop');
+  if(bmPop) bmPop.classList.remove('on');
   // 헤더 탭 활성화 (순서: map,list,calc,clause,biz,news)
   const htabOrder=['map','list','calc','clause','biz','news','subs'];
   document.querySelectorAll('.htab').forEach((b,i)=>b.classList.toggle('on',htabOrder[i]===v));
@@ -2317,6 +2338,27 @@ function sv(v,btn){
   if(v==='list')renderListGrid();
   if(v==='news' && !document.getElementById('newsList').dataset.loaded){loadNews();}
   if(v==='subs' && !document.getElementById('subsList').dataset.loaded){loadSubs();}
+}
+// 플로팅 관심단지 popover 토글
+function toggleBmPop(){
+  const pop=document.getElementById('bmPop');
+  if(!pop)return;
+  const open=pop.classList.toggle('on');
+  if(open){
+    const bks=(typeof getBookmarks==='function'?getBookmarks():[])||[];
+    const body=document.getElementById('bmPopList');
+    if(!bks.length){
+      body.innerHTML='<div style="padding:24px 16px;text-align:center;color:var(--t3);font-size:11px;line-height:1.6">관심 단지를 추가하면<br>여기서 빠르게 확인할 수 있어요</div>';
+    } else {
+      body.innerHTML=bks.map((b,i)=>{
+        const priceNow=b.avgPrice||0;
+        return `<div style="padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px" onclick="openBookmark(${i});toggleBmPop();">
+          <div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.aptName}</div><div style="font-size:10px;color:var(--t3)">${b.area||''}</div></div>
+          ${priceNow?`<span style="font-size:11px;font-weight:700;color:var(--acc);flex-shrink:0">${priceNow.toFixed(1)}억</span>`:''}
+        </div>`;
+      }).join('');
+    }
+  }
 }
 // 플로팅 AI 버튼: .rp 오버레이 토글
 function toggleRpOverlay(){
@@ -2599,5 +2641,12 @@ document.getElementById('SM').addEventListener('click',e=>{if(e.target.id==='SM'
 </script>
 <!-- 플로팅 AI 버튼: .rp 숨김 탭에서만 노출 -->
 <button id="fabAI" class="fab-ai" title="AI 부동산 컨설턴트" onclick="toggleRpOverlay()">💬</button>
+<!-- 플로팅 관심단지 버튼: .lp 숨김 탭에서만 노출 -->
+<button id="fabBM" class="fab-bm" title="관심 단지" onclick="toggleBmPop()">⭐<span class="fab-bm-cnt" id="fabBmCnt">0</span></button>
+<!-- 관심단지 popover -->
+<div id="bmPop" class="bm-pop">
+  <div class="bm-pop-hdr"><span>⭐ 관심 단지</span><button class="bm-pop-close" onclick="toggleBmPop()">✕</button></div>
+  <div class="bm-pop-body" id="bmPopList"></div>
+</div>
 </body>
 </html>
