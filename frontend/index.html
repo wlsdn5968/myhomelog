@@ -1167,6 +1167,13 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         <div class="sm-lbl">동기화 상태</div>
         <div class="sm-hint" id="umSync">—</div>
       </div>
+      <div class="sm-row" style="margin-top:6px">
+        <div class="sm-lbl" style="display:flex;justify-content:space-between;align-items:center">
+          <span>🕘 최근 검색</span>
+          <button id="umHistClr" onclick="clearMySearchHistory()" style="background:none;border:none;color:var(--t3);font-size:10px;cursor:pointer;text-decoration:underline">전체 삭제</button>
+        </div>
+        <div id="umHistList" class="sm-hint" style="margin-top:4px;max-height:160px;overflow-y:auto">로딩 중...</div>
+      </div>
       <button class="sm-save" onclick="logout()" style="background:var(--t2)">로그아웃</button>
       <div class="sm-status" id="umStatus"></div>
     </div>
@@ -1246,6 +1253,71 @@ function openUserMenu(){
     ? '✅ ' + new Date(parseInt(localStorage.getItem('mhl_bookmarks_synced_at'))).toLocaleString('ko-KR')
     : '아직 동기화 안됨';
   document.getElementById('UM').classList.add('open');
+  loadMySearchHistory(); // 최근 검색 로드
+}
+
+// ── 최근 검색 (search_history) ───────────────────────────
+async function loadMySearchHistory(){
+  const box = document.getElementById('umHistList');
+  if(!box) return;
+  const A = window.MHL?.auth;
+  if(!A?.user || !A?.session?.access_token){
+    box.innerHTML = '<span style="color:var(--t3)">로그인하면 검색 이력이 여기 표시됩니다.</span>';
+    return;
+  }
+  box.textContent = '로딩 중...';
+  try {
+    const r = await fetch('/api/search/history', {
+      headers: { 'Authorization':'Bearer ' + A.session.access_token },
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const { history } = await r.json();
+    if(!history || !history.length){
+      box.innerHTML = '<span style="color:var(--t3)">아직 검색 이력이 없어요. 매물 검색·단지 분석을 하면 여기 쌓여요.</span>';
+      return;
+    }
+    const typeIcon = { recommend:'🎯', kapt:'🏢', address:'📍', keyword:'🔎' };
+    box.innerHTML = history.slice(0, 15).map(h => {
+      const q = (h.query||'').replace(/[<>&"]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[s]));
+      const dt = new Date(h.created_at);
+      const rel = _relTime(dt);
+      const cnt = (typeof h.result_count === 'number') ? ` · ${h.result_count}건` : '';
+      return `<div style="padding:6px 4px;border-bottom:1px solid var(--bd);font-size:11px;display:flex;justify-content:space-between;gap:6px;align-items:center">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${typeIcon[h.query_type]||'•'} ${q}</span>
+        <span style="color:var(--t3);font-size:10px;white-space:nowrap">${rel}${cnt}</span>
+      </div>`;
+    }).join('');
+  } catch(e){
+    console.warn('[search history] 로드 실패', e);
+    box.innerHTML = '<span style="color:var(--t3)">이력 로드 실패 — 잠시 후 다시 시도해주세요.</span>';
+  }
+}
+
+function _relTime(d){
+  const diff = (Date.now() - d.getTime()) / 1000;
+  if(diff < 60) return '방금';
+  if(diff < 3600) return Math.floor(diff/60) + '분 전';
+  if(diff < 86400) return Math.floor(diff/3600) + '시간 전';
+  if(diff < 86400*7) return Math.floor(diff/86400) + '일 전';
+  return d.toLocaleDateString('ko-KR');
+}
+
+async function clearMySearchHistory(){
+  const A = window.MHL?.auth;
+  if(!A?.user || !A?.session?.access_token) return;
+  if(!confirm('최근 검색 이력을 전부 삭제할까요? (되돌릴 수 없음)')) return;
+  try {
+    const r = await fetch('/api/search/history', {
+      method:'DELETE',
+      headers: { 'Authorization':'Bearer ' + A.session.access_token },
+    });
+    if(!r.ok && r.status !== 204) throw new Error('HTTP ' + r.status);
+    toast('🗑 검색 이력 삭제 완료');
+    loadMySearchHistory();
+  } catch(e){
+    console.warn('[search history] 삭제 실패', e);
+    toast('삭제 실패 — 잠시 후 다시 시도해주세요.');
+  }
 }
 function closeUserMenu(){ document.getElementById('UM').classList.remove('open'); }
 
@@ -2232,6 +2304,8 @@ async function handleShareUrl(){
     if(!lawdCd)return;
     // 최근 3개월 합산 — 현재 달은 MOLIT 신고 지연으로 거래 거의 없음
     const items=await fetchRecentTx(lawdCd, apt);
+    // 공유 링크 진입 — 단지명 검색으로 기록 (실거래 0건이어도 사용자가 그 단지를 찾았다는 신호)
+    _logSearch('kapt', apt, items.length);
     if(!items.length)return;
     // 최근 평균 계산
     const prices=items.map(t=>t.dealAmount/10000); // 억
@@ -3594,7 +3668,12 @@ async function sM(){
 }
 
 function sQ(t){document.getElementById('cIn').value=t;sM();}
-function askP(n,pr,a){sQ(`${decodeURIComponent(n)}(${a}, ${pr}억) 매수 전략과 리스크 상세 분석해줘`);}
+function askP(n,pr,a){
+  const apt=decodeURIComponent(n);
+  // AI 에 단지 분석 요청 = 강한 관심 신호 → kapt 검색으로 기록
+  _logSearch('kapt', apt, 1);
+  sQ(`${apt}(${a}, ${pr}억) 매수 전략과 리스크 상세 분석해줘`);
+}
 function hk(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sM();}}
 function ah(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,90)+'px';}
 function gt(){const n=new Date();return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');}
