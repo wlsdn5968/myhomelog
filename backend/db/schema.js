@@ -65,4 +65,45 @@ const chatMessages = pgTable('chat_messages', {
   sessionCreatedIdx: index('idx_chat_messages_session').on(t.sessionId, t.createdAt),
 }));
 
-module.exports = { bookmarks, searchHistory, chatSessions, chatMessages };
+// ── Phase 3: 결제/구독 ────────────────────────────────────
+const userBilling = pgTable('user_billing', {
+  userId: uuid('user_id').primaryKey(),
+  plan: text('plan').notNull().default('free'),
+  status: text('status').notNull().default('active'),
+  tossBillingKey: text('toss_billing_key'),
+  tossCustomerKey: text('toss_customer_key'),
+  currentPeriodStart: timestamp('current_period_start', { withTimezone: true }),
+  currentPeriodEnd: timestamp('current_period_end', { withTimezone: true }),
+  canceledAt: timestamp('canceled_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+const payments = pgTable('payments', {
+  id: uuid('id').primaryKey().defaultRandom(),
+  userId: uuid('user_id').notNull(),
+  orderId: text('order_id').notNull().unique(),
+  tossPaymentKey: text('toss_payment_key'),
+  amount: numeric('amount').notNull(),
+  currency: text('currency').notNull().default('KRW'),
+  status: text('status').notNull().default('requested'),
+  plan: text('plan').notNull(),
+  method: text('method'),
+  failureReason: text('failure_reason'),
+  rawResponse: jsonb('raw_response'),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  approvedAt: timestamp('approved_at', { withTimezone: true }),
+}, (t) => ({
+  userCreatedIdx: index('idx_payments_user_created').on(t.userId, t.createdAt),
+}));
+
+const billingPlans = pgTable('billing_plans', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  priceKrw: integer('price_krw').notNull(),
+  features: jsonb('features').notNull().default([]),
+  active: integer('active').notNull().default(1), // drizzle 은 boolean 도 지원하지만 CI drift 방지 위해 SQL 원형 유지
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
+module.exports = { bookmarks, searchHistory, chatSessions, chatMessages, userBilling, payments, billingPlans };
