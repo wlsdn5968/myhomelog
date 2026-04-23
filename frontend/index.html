@@ -1295,34 +1295,68 @@ function _updateAuthUi(session){
   }
 }
 
-// localStorage 북마크 → DB 1회 이관 (멱등 — 서버에서 upsert)
+// 로그인 시 동작:
+//  1) localStorage 북마크를 서버에 1회 push (멱등 upsert) — 다른 기기에 없는 것 보존
+//  2) 서버에서 전체 pull → localStorage 교체 (다른 기기에서 추가한 것 반영)
+//  3) renderBookmarks 재실행
 async function _migrateBookmarksOnce(){
   const A = window.MHL?.auth;
   if(!A?.user || !A?.session?.access_token) return;
   const userId = A.user.id;
   const flagKey = 'mhl_bookmarks_migrated:' + userId;
-  if(localStorage.getItem(flagKey)) return; // 이미 이관됨
-  const items = (typeof getBookmarks==='function' ? getBookmarks() : []).map(b => ({
-    kapt_code: b.aptName,         // 레거시: aptName 을 unique key 로 사용
-    display_name: b.aptName,
-    address: b.area || null,
-    memo: b.memo || null,
-    tags: [],
-  }));
-  if(items.length === 0){ localStorage.setItem(flagKey, '1'); return; }
+  const local = (typeof getBookmarks==='function' ? getBookmarks() : []);
+
   try {
-    const r = await fetch('/api/bookmarks/migrate', {
-      method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
-      body: JSON.stringify({ items }),
+    // ── 1) PUSH (1회만 — 새 유저라면 빈 배열이라도 OK) ──
+    if(!localStorage.getItem(flagKey)){
+      const items = local.map(b => ({
+        kapt_code: b.aptName,
+        display_name: b.aptName,
+        address: b.area || null,
+        memo: b.memo || null,
+        tags: [],
+      }));
+      const r = await fetch('/api/bookmarks/migrate', {
+        method:'POST',
+        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
+        body: JSON.stringify({ items }),
+      });
+      if(!r.ok) throw new Error('migrate HTTP ' + r.status);
+      const j = await r.json();
+      localStorage.setItem(flagKey, '1');
+      if(j.migrated > 0) toast('☁ 북마크 ' + j.migrated + '개 업로드 완료');
+    }
+
+    // ── 2) PULL — 서버 전체 가져와서 localStorage 교체 ──
+    const pr = await fetch('/api/bookmarks', {
+      headers:{ 'Authorization':'Bearer ' + A.session.access_token },
     });
-    if(!r.ok) throw new Error('HTTP ' + r.status);
-    const j = await r.json();
-    localStorage.setItem(flagKey, '1');
+    if(!pr.ok) throw new Error('pull HTTP ' + pr.status);
+    const pj = await pr.json();
+    const serverList = (pj.bookmarks || []).map(b => ({
+      aptName: b.display_name,
+      area: b.address || '',
+      avgPrice: 0,
+      lawdCd: '',
+      savedAt: new Date(b.created_at).getTime(),
+      memo: b.memo || '',
+      _serverId: b.id,
+    }));
+
+    // 서버가 source of truth — localStorage 의 가격/lawdCd 가 더 최신일 수 있으므로 머지
+    const localByName = Object.fromEntries(local.map(b => [b.aptName, b]));
+    const merged = serverList.map(s => ({
+      ...s,
+      avgPrice: localByName[s.aptName]?.avgPrice || 0,
+      lawdCd: localByName[s.aptName]?.lawdCd || '',
+      lastChecked: localByName[s.aptName]?.lastChecked,
+      lastCheckedCount: localByName[s.aptName]?.lastCheckedCount,
+    }));
+    localStorage.setItem(BK_KEY, JSON.stringify(merged));
     localStorage.setItem('mhl_bookmarks_synced_at', String(Date.now()));
-    if(j.migrated > 0) toast('☁ 북마크 ' + j.migrated + '개 동기화 완료');
+    if(typeof renderBookmarks === 'function') renderBookmarks();
   } catch(e){
-    console.warn('[bookmarks migrate] 실패 — 다음 로그인 때 재시도', e);
+    console.warn('[bookmarks sync] 실패 — 다음 로그인 때 재시도', e);
     if(window.Sentry) window.Sentry.captureException(e);
   }
 }
@@ -2430,7 +2464,69 @@ function calcTotalCostHTML(price,loan,houseStatus,isFirstBuyer){
 // ── 북마크 ────────────────────────────────────────────────
 const BK_KEY='mhl_bookmarks';
 function getBookmarks(){try{return JSON.parse(localStorage.getItem(BK_KEY)||'[]');}catch{return[];}}
-function saveBookmarks(bks){localStorage.setItem(BK_KEY,JSON.stringify(bks));}
+
+// saveBookmarks: localStorage 가 즉시 쓰기 (sync) — 로그인 시 백그라운드 서버 동기화
+// 동기화 실패해도 UI 는 영향 X. 다음 saveBookmarks 호출 시 또는 로그인 시 재시도.
+let _syncTimer=null;
+let _syncInflight=false;
+function saveBookmarks(bks){
+  localStorage.setItem(BK_KEY,JSON.stringify(bks));
+  _scheduleBookmarkSync();
+}
+
+function _scheduleBookmarkSync(){
+  // 디바운스 800ms — 연속 클릭(toggle/memo) 합치기
+  if(_syncTimer) clearTimeout(_syncTimer);
+  _syncTimer = setTimeout(_pushBookmarksToServer, 800);
+}
+
+async function _pushBookmarksToServer(){
+  const A = window.MHL?.auth;
+  if(!A?.user || !A?.session?.access_token) return; // 비로그인 — 동기화 X
+  if(_syncInflight) { _scheduleBookmarkSync(); return; } // 진행 중이면 다시 예약
+  _syncInflight = true;
+  _setSyncBadge('syncing');
+  try {
+    const items = getBookmarks().map(b => ({
+      kapt_code: b.aptName,
+      display_name: b.aptName,
+      address: b.area || null,
+      memo: b.memo || null,
+      tags: [],
+    }));
+    const r = await fetch('/api/bookmarks/migrate', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
+      body: JSON.stringify({ items }),
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    localStorage.setItem('mhl_bookmarks_synced_at', String(Date.now()));
+    _setSyncBadge('ok');
+  } catch(e){
+    console.warn('[bookmark sync] 실패', e);
+    _setSyncBadge('err');
+    if(window.Sentry) window.Sentry.captureException(e);
+  } finally {
+    _syncInflight = false;
+  }
+}
+
+function _setSyncBadge(state){
+  // 헤더 유저 버튼 옆에 작은 인디케이터 — DOM 없으면 생성
+  let el = document.getElementById('syncBadge');
+  if(!el){
+    const userBtn = document.getElementById('userBtn');
+    if(!userBtn) return;
+    el = document.createElement('span');
+    el.id = 'syncBadge';
+    el.style.cssText = 'font-size:10px;margin-left:4px;color:var(--t3)';
+    userBtn.appendChild(el);
+  }
+  if(state === 'syncing') el.textContent = '↻';
+  else if(state === 'ok') { el.textContent = '✓'; setTimeout(()=>{ if(el.textContent==='✓') el.textContent=''; }, 2000); }
+  else if(state === 'err') el.textContent = '⚠';
+  else el.textContent = '';
+}
 
 function toggleBookmark(){
   if(!currentDetail)return;
