@@ -2742,6 +2742,24 @@ async function _deleteBookmarkOnServer(id){
   }
 }
 
+// avg_price 한 필드만 패치 (refreshBookmarkPrices 후 서버 동기화)
+// fire-and-forget — 실패해도 로컬엔 이미 저장돼 있어서 다음 refresh 에 재시도됨.
+async function _patchBookmarkAvgPriceOnServer(serverId, avgPrice){
+  const A = window.MHL?.auth;
+  if(!A?.user || !A?.session?.access_token || !serverId) return;
+  if(typeof avgPrice !== 'number' || !isFinite(avgPrice)) return;
+  try {
+    const r = await fetch('/api/bookmarks/' + encodeURIComponent(serverId), {
+      method:'PATCH',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
+      body: JSON.stringify({ avg_price: avgPrice }),
+    });
+    if(!r.ok && r.status !== 404) throw new Error('PATCH HTTP ' + r.status);
+  } catch(e){
+    console.warn('[bookmark avg_price] 동기화 실패', e);
+  }
+}
+
 // 검색 이력 기록 — fire-and-forget. 비로그인/실패 시 조용히 무시.
 // 서버 RLS 가 자기 것만 INSERT 허용하므로 user_id 위조 불가.
 function _logSearch(queryType, query, resultCount){
@@ -2810,6 +2828,10 @@ async function refreshBookmarkPrices(){
       b.lastChecked=Date.now();
       b.lastCheckedCount=items.length;
       updated=true;
+      // 서버 avg_price 동기화 (fire-and-forget) — 값이 실제로 변했을 때만
+      if(b._serverId && prev !== newAvg){
+        _patchBookmarkAvgPriceOnServer(b._serverId, newAvg);
+      }
     }catch{}
   }
   if(updated){saveBookmarks(bks);renderBookmarks();}
