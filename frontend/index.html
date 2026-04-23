@@ -1300,7 +1300,7 @@ async function loadMySearchHistory(){
     }
     const typeIcon = { recommend:'🎯', kapt:'🏢', address:'📍', keyword:'🔎' };
     box.innerHTML = history.slice(0, 15).map(h => {
-      const q = (h.query||'').replace(/[<>&"]/g, s => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[s]));
+      const q = _escHtml(h.query||'');
       const dt = new Date(h.created_at);
       const rel = _relTime(dt);
       const cnt = (typeof h.result_count === 'number') ? ` · ${h.result_count}건` : '';
@@ -3782,7 +3782,7 @@ async function openChatHistory(){
       return;
     }
     box.innerHTML = sessions.map(s => {
-      const title = (s.title||'새 대화').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+      const title = _escHtml(s.title||'새 대화');
       const rel = _relTime(new Date(s.last_message_at));
       const active = s.id === _chatSessionId ? 'background:var(--bg2);' : '';
       return `<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:9px 8px;border-bottom:1px solid var(--bd);${active}">
@@ -3881,9 +3881,13 @@ function askP(n,pr,a){
 function hk(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sM();}}
 function ah(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,90)+'px';}
 function gt(){const n=new Date();return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');}
+// HTML escape — XSS 방어용 (AI/사용자/세션 복원 메시지 공통)
+function _escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 function addMsg(role,text){
   const c=document.getElementById('cMsgs'),d=document.createElement('div');d.className='msg '+role;
-  d.innerHTML=`<div class="ava ${role}">${role==='ai'?'AI':'나'}</div><div><div class="bbl">${text.replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>')}</div><div class="mt">${gt()}</div></div>`;
+  // XSS 방어: 먼저 escape → 그 다음 \n→<br>, **bold** 변환 (이스케이프된 ** 는 안전)
+  const safe=_escHtml(text).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>');
+  d.innerHTML=`<div class="ava ${role}">${role==='ai'?'AI':'나'}</div><div><div class="bbl">${safe}</div><div class="mt">${gt()}</div></div>`;
   c.appendChild(d);c.scrollTop=c.scrollHeight;
 }
 function showTyp(){const c=document.getElementById('cMsgs'),d=document.createElement('div');d.className='msg ai';d.id='ty';d.innerHTML=`<div class="ava ai">AI</div><div><div class="typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div></div>`;c.appendChild(d);c.scrollTop=c.scrollHeight;}
