@@ -62,6 +62,10 @@ jobs:
           find backend api -name '*.js' -not -path '*/node_modules/*' -print0 \
             | xargs -0 -n1 node --check
 
+      - name: Deps-sync check (root vs backend package.json)
+        # 루트 package.json 에 누락된 외부 require → 프로덕션 함수 MODULE_NOT_FOUND 예방
+        run: node scripts/check-deps-sync.js
+
       - name: JSON config validate
         run: |
           set -e
@@ -91,3 +95,18 @@ jobs:
           # 개인/팀 무료 사용 — 라이선스 키 불필요
           GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'true'
           GITLEAKS_ENABLE_SUMMARY: 'true'
+
+  prod-smoke:
+    name: Production Smoke Test
+    # master push(=squash merge) 직후에만 실행 — PR/feature 브랜치엔 스킵
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    needs: [syntax-check]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Wait for Vercel prod redeploy (up to 5min) + probe /api/health
+        run: bash scripts/prod-smoke.sh
+        env:
+          SMOKE_HOST: https://myhomelog.vercel.app
