@@ -4,6 +4,53 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>내집로그 — 결제/구독</title>
+<!-- Sentry (프론트) — DSN 주입 시 자동 활성화. Browser DSN 은 공개 안전 설계. -->
+<meta name="sentry-dsn" content="https://a9f4f42233be2799aa2b8e12849191eb@o4511268863672320.ingest.us.sentry.io/4511269602394112">
+<meta name="sentry-environment" content="production">
+<meta name="sentry-traces-sample-rate" content="0.1">
+<script>
+(function bootstrapSentry(){
+  try{
+    var dsn = document.querySelector('meta[name="sentry-dsn"]')?.content?.trim();
+    if (!dsn) return;
+    var env = document.querySelector('meta[name="sentry-environment"]')?.content || 'production';
+    var tsr = parseFloat(document.querySelector('meta[name="sentry-traces-sample-rate"]')?.content || '0.1');
+    var s = document.createElement('script');
+    s.src = 'https://browser.sentry-cdn.com/8.40.0/bundle.tracing.min.js';
+    s.crossOrigin = 'anonymous';
+    s.onload = function(){
+      if (!window.Sentry) return;
+      window.Sentry.init({
+        dsn: dsn,
+        environment: env,
+        tracesSampleRate: tsr,
+        sendDefaultPii: false,
+        integrations: [ window.Sentry.browserTracingIntegration?.() ].filter(Boolean),
+        beforeSend: function(event){
+          try {
+            if (event.request && event.request.url) {
+              event.request.url = event.request.url.replace(
+                /([?&](serviceKey|apiKey|token)=)[^&]+/gi, '$1[Filtered]'
+              );
+            }
+          } catch(_){}
+          return event;
+        },
+        ignoreErrors: [
+          'ResizeObserver loop limit exceeded',
+          'ResizeObserver loop completed with undelivered notifications',
+          'Non-Error promise rejection captured',
+        ],
+      });
+      // billing 페이지 전용 태그 — 결제 플로우 오류 분리 추적
+      try { window.Sentry.setTag('page', 'billing'); } catch(_){}
+    };
+    s.onerror = function(){};
+    document.head.appendChild(s);
+  } catch(_){}
+})();
+</script>
+
 <!-- Supabase 공개 설정 — index.html 과 동일한 meta 태그 (세션 storage 공유) -->
 <meta name="supabase-url" content="https://brxorvxdfrbxcavufspe.supabase.co">
 <meta name="supabase-publishable-key" content="sb_publishable_fqEpRTSJjPrwwhN8j4JqNA_zhTEzDDo">
