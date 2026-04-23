@@ -2,7 +2,7 @@
   "name": "myhomelog",
   "version": "1.0.0",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.24.0",
+    "@anthropic-ai/sdk": "^0.90.0",
     "@sentry/node": "^8.55.1",
     "@supabase/supabase-js": "^2.104.0",
     "@upstash/ratelimit": "^2.0.8",
