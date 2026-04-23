@@ -41,6 +41,17 @@ function userScopedClient(accessToken) {
   });
 }
 
+// ── GET /billing/config — 공개 (클라이언트 설정) ──────────
+// 프론트가 Toss Widget 초기화에 필요한 clientKey 를 꺼내는 엔드포인트
+// tossClientKey 는 공개돼도 됨 (test_ck_* / live_ck_* 가 설계상 프론트 노출용)
+// secret 여부만 노출 — 서버 확인 가능 상태인지 신호
+router.get('/config', (req, res) => {
+  res.json({
+    tossClientKey: process.env.TOSS_CLIENT_KEY || null,
+    confirmEnabled: !!process.env.TOSS_SECRET_KEY,
+  });
+});
+
 // ── GET /billing/plans — 공개 (인증 불필요) ───────────────
 // 요금제 메타는 RLS 로 공개 SELECT 허용되어 있으므로 publishable 키로 충분
 router.get('/plans', async (req, res, next) => {

@@ -1,0 +1,361 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>내집로그 — 결제/구독</title>
+<!-- Supabase 공개 설정 — index.html 과 동일한 meta 태그 (세션 storage 공유) -->
+<meta name="supabase-url" content="https://brxorvxdfrbxcavufspe.supabase.co">
+<meta name="supabase-publishable-key" content="sb_publishable_fqEpRTSJjPrwwhN8j4JqNA_zhTEzDDo">
+<style>
+  :root{--bg:#F7F8FB;--bg2:#EEF1F6;--t1:#222;--t2:#4a5159;--t3:#8a9099;--bd:#DDE2EA;--acc:#2A6DF4;--acc2:#0D46C2;--safe:#1F9D55;--warn:#D08700;--danger:#C4402A;--redL:#FDEEEE;--grL:#EAF7EE;}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--t1);font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif}
+  .wrap{max-width:720px;margin:0 auto;padding:18px 16px 80px}
+  .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .hdr h1{font-size:20px;margin:0;font-weight:800}
+  .hdr a{color:var(--acc);font-size:13px;text-decoration:none}
+  .card{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:18px;margin-bottom:14px}
+  .me-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
+  .me-lbl{font-size:12px;color:var(--t3)}
+  .me-val{font-size:14px;font-weight:700;color:var(--t1)}
+  .plan{border:1px solid var(--bd);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#fff}
+  .plan.on{border-color:var(--acc);box-shadow:0 0 0 3px rgba(42,109,244,.12)}
+  .plan-hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
+  .plan-nm{font-size:16px;font-weight:800}
+  .plan-pr{font-size:18px;font-weight:800;color:var(--acc)}
+  .plan-pr small{font-size:11px;color:var(--t3);font-weight:500;margin-left:2px}
+  .plan-ft{font-size:12px;color:var(--t2);line-height:1.7;list-style:none;padding:0;margin:6px 0 10px}
+  .plan-ft li::before{content:'✓ ';color:var(--safe);font-weight:700}
+  .btn{display:block;width:100%;padding:12px;border:none;border-radius:8px;background:var(--acc);color:#fff;font-size:14px;font-weight:700;cursor:pointer}
+  .btn:hover{background:var(--acc2)}
+  .btn:disabled{background:#C5CDD9;cursor:not-allowed}
+  .btn-sec{background:var(--bg2);color:var(--t1);border:1px solid var(--bd)}
+  .btn-sec:hover{background:#E3E8F0}
+  .btn-dng{background:var(--danger)}
+  .status{padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.6;margin-bottom:12px}
+  .status.info{background:#EEF4FF;color:var(--acc2);border:1px solid #C9DCF5}
+  .status.warn{background:#FFF6E3;color:var(--warn);border:1px solid #F0D998}
+  .status.err{background:var(--redL);color:var(--danger);border:1px solid #EEC8C8}
+  .status.ok{background:var(--grL);color:var(--safe);border:1px solid #C4E5CD}
+  .note{font-size:11px;color:var(--t3);line-height:1.5;margin-top:10px}
+  .sp{display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:sp .9s linear infinite;vertical-align:middle;margin-right:6px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+  #widgetArea{min-height:120px}
+  #agreementArea{min-height:60px;margin-top:10px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hdr">
+    <h1>💳 결제·구독</h1>
+    <a href="/">← 홈으로</a>
+  </div>
+
+  <div id="statusBox"></div>
+
+  <!-- 내 구독 상태 -->
+  <div class="card" id="meCard" style="display:none">
+    <div class="me-row"><span class="me-lbl">현재 플랜</span><span class="me-val" id="mePlan">—</span></div>
+    <div class="me-row"><span class="me-lbl">상태</span><span class="me-val" id="meStatus">—</span></div>
+    <div class="me-row" id="mePeriodRow" style="display:none"><span class="me-lbl">다음 결제일</span><span class="me-val" id="mePeriod">—</span></div>
+    <button id="cancelBtn" class="btn btn-sec" style="margin-top:10px;display:none" onclick="cancelSubscription()">구독 해지</button>
+  </div>
+
+  <!-- 플랜 목록 (결제 대상 선택) -->
+  <div id="plansView">
+    <div id="plansList"></div>
+  </div>
+
+  <!-- Toss Widget 결제 영역 (플랜 선택 후 표시) -->
+  <div id="checkoutView" class="card" style="display:none">
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px" id="coTitle">결제 준비 중...</div>
+    <div id="widgetArea"></div>
+    <div id="agreementArea"></div>
+    <button id="payBtn" class="btn" style="margin-top:12px;display:none">결제하기</button>
+    <button class="btn btn-sec" style="margin-top:6px" onclick="backToPlans()">← 돌아가기</button>
+  </div>
+
+  <div class="note">
+    결제는 Toss Payments 가 처리합니다. 카드 정보는 저희 서버에 저장되지 않습니다.<br>
+    결제 전 <a href="/terms.html" style="color:var(--acc)">이용약관</a>·<a href="/privacy.html" style="color:var(--acc)">개인정보 처리방침</a> 을 확인하세요.
+  </div>
+</div>
+
+<!-- Supabase SDK (auth 토큰 필요) -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<!-- Toss Payments Widget SDK v2 -->
+<script src="https://js.tosspayments.com/v2/standard"></script>
+<script>
+// ── 상태 ────────────────────────────────────────────────
+let authSession = null;
+let tossClientKey = null;
+let confirmEnabled = false;
+let plansCache = [];
+let widget = null;
+let currentPlan = null;
+
+// ── 유틸 ────────────────────────────────────────────────
+function setStatus(type, html){
+  const box = document.getElementById('statusBox');
+  if(!html){ box.innerHTML = ''; return; }
+  box.innerHTML = `<div class="status ${type}">${html}</div>`;
+}
+function escapeHtml(s){ return String(s||'').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+function fmtKrw(n){ return (n||0).toLocaleString('ko-KR') + '원'; }
+function fmtDate(iso){ if(!iso) return '—'; return new Date(iso).toLocaleDateString('ko-KR'); }
+
+// ── Supabase auth 로드 (index.html 과 동일한 meta 태그 + storageKey) ─
+async function loadAuth(){
+  try {
+    const url = document.querySelector('meta[name="supabase-url"]')?.content?.trim();
+    const key = document.querySelector('meta[name="supabase-publishable-key"]')?.content?.trim();
+    if(!url || !key) return null;
+    // storageKey 'mhl-auth-session' 을 index.html 과 공유 → 홈에서 로그인한 세션 그대로 사용
+    const sb = supabase.createClient(url, key, {
+      auth:{
+        persistSession:true,
+        autoRefreshToken:true,
+        detectSessionInUrl:false,
+        storage: window.localStorage,
+        storageKey: 'mhl-auth-session',
+        flowType: 'pkce',
+      },
+    });
+    const { data:{ session } } = await sb.auth.getSession();
+    return session;
+  } catch(e){
+    console.warn('[auth] 로드 실패', e);
+    return null;
+  }
+}
+
+// ── 초기화 ──────────────────────────────────────────────
+async function init(){
+  // 1) 인증 세션
+  authSession = await loadAuth();
+
+  // 2) billing/config — Toss clientKey
+  try {
+    const cfg = await fetch('/api/billing/config').then(r => r.json());
+    tossClientKey = cfg.tossClientKey;
+    confirmEnabled = cfg.confirmEnabled;
+  } catch(e){ console.warn('[billing config] 실패', e); }
+
+  if(!tossClientKey){
+    setStatus('warn', '⚙ 결제 시스템 설정 중 (관리자 환경변수 미설정) — 플랜만 조회 가능해요.');
+  } else if(!confirmEnabled){
+    setStatus('warn', '⚙ 결제 승인 서버 설정 미완료 — 결제는 곧 활성화됩니다.');
+  }
+
+  // 3) URL 쿼리 — 결제 성공/실패 콜백 처리
+  const sp = new URLSearchParams(location.search);
+  const result = sp.get('result');
+  if(result === 'success'){
+    return handleSuccess(sp);
+  }
+  if(result === 'fail'){
+    return handleFail(sp);
+  }
+
+  // 4) 일반 진입: 플랜 목록 + 내 구독
+  await Promise.all([loadPlans(), loadMe()]);
+}
+
+// ── 플랜 목록 ───────────────────────────────────────────
+async function loadPlans(){
+  try {
+    const { plans } = await fetch('/api/billing/plans').then(r => r.json());
+    plansCache = plans || [];
+    renderPlans();
+  } catch(e){
+    document.getElementById('plansList').innerHTML = '<div class="status err">플랜 로드 실패 — 잠시 후 다시 시도해주세요.</div>';
+  }
+}
+function renderPlans(){
+  const list = document.getElementById('plansList');
+  list.innerHTML = plansCache.map(p => {
+    const features = Array.isArray(p.features) ? p.features : [];
+    const isFree = p.price_krw === 0;
+    const priceStr = isFree ? '무료' : fmtKrw(p.price_krw);
+    const cta = isFree
+      ? '<button class="btn btn-sec" disabled>현재 플랜</button>'
+      : `<button class="btn" onclick="startCheckout('${escapeHtml(p.id)}')">${escapeHtml(p.name)} 구독하기</button>`;
+    return `<div class="plan" data-plan="${escapeHtml(p.id)}">
+      <div class="plan-hd">
+        <span class="plan-nm">${escapeHtml(p.name)}</span>
+        <span class="plan-pr">${priceStr}${isFree?'':'<small>/월</small>'}</span>
+      </div>
+      <ul class="plan-ft">${features.map(f => `<li>${escapeHtml(f)}</li>`).join('')}</ul>
+      ${cta}
+    </div>`;
+  }).join('');
+}
+
+// ── 내 구독 상태 ─────────────────────────────────────────
+async function loadMe(){
+  if(!authSession){ document.getElementById('meCard').style.display = 'none'; return; }
+  try {
+    const r = await fetch('/api/billing/me', {
+      headers:{ 'Authorization':'Bearer ' + authSession.access_token },
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const me = await r.json();
+    document.getElementById('meCard').style.display = '';
+    document.getElementById('mePlan').textContent = (me.plan || 'free').toUpperCase();
+    document.getElementById('meStatus').textContent = me.status === 'active' ? '✅ 활성'
+      : me.status === 'canceled' ? '⚠ 해지됨 (기간 말까지 유효)' : me.status || '—';
+    if(me.current_period_end){
+      document.getElementById('mePeriodRow').style.display = '';
+      document.getElementById('mePeriod').textContent = fmtDate(me.current_period_end);
+    }
+    if(me.plan && me.plan !== 'free' && me.status === 'active'){
+      document.getElementById('cancelBtn').style.display = '';
+    }
+  } catch(e){
+    console.warn('[billing me] 실패', e);
+  }
+}
+
+// ── 결제 시작 ───────────────────────────────────────────
+async function startCheckout(planId){
+  if(!authSession){
+    setStatus('warn', '🔐 결제하려면 먼저 <a href="/">홈에서 로그인</a>해주세요.');
+    return;
+  }
+  if(!tossClientKey){
+    setStatus('warn', '⚙ 결제 시스템 준비 중 — 잠시 후 다시 시도해주세요.');
+    return;
+  }
+  currentPlan = plansCache.find(p => p.id === planId);
+  if(!currentPlan){ setStatus('err', '플랜을 찾을 수 없습니다.'); return; }
+
+  setStatus('info', '<span class="sp"></span> 주문 생성 중...');
+  let order;
+  try {
+    const r = await fetch('/api/billing/checkout', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + authSession.access_token },
+      body: JSON.stringify({ plan: planId }),
+    });
+    if(!r.ok){
+      const err = await r.json().catch(()=>({}));
+      throw new Error(err.error || 'HTTP ' + r.status);
+    }
+    order = await r.json();
+  } catch(e){
+    setStatus('err', '주문 생성 실패: ' + escapeHtml(e.message));
+    return;
+  }
+
+  // Toss Widget 렌더
+  setStatus('');
+  document.getElementById('plansView').style.display = 'none';
+  document.getElementById('checkoutView').style.display = '';
+  document.getElementById('coTitle').textContent = `${currentPlan.name} 플랜 · ${fmtKrw(order.amount)}`;
+  document.getElementById('widgetArea').innerHTML = '';
+  document.getElementById('agreementArea').innerHTML = '';
+
+  try {
+    const tossPayments = TossPayments(tossClientKey);
+    widget = tossPayments.widgets({ customerKey: order.customerKey });
+    await widget.setAmount({ currency:'KRW', value: order.amount });
+    await widget.renderPaymentMethods({ selector:'#widgetArea', variantKey:'DEFAULT' });
+    await widget.renderAgreement({ selector:'#agreementArea', variantKey:'AGREEMENT' });
+
+    const payBtn = document.getElementById('payBtn');
+    payBtn.style.display = '';
+    payBtn.disabled = false;
+    payBtn.textContent = `${fmtKrw(order.amount)} 결제하기`;
+    payBtn.onclick = async () => {
+      payBtn.disabled = true;
+      try {
+        await widget.requestPayment({
+          orderId: order.orderId,
+          orderName: `내집로그 ${currentPlan.name} 플랜`,
+          successUrl: location.origin + '/billing?result=success',
+          failUrl: location.origin + '/billing?result=fail',
+          customerEmail: authSession.user?.email,
+        });
+      } catch(e){
+        setStatus('err', '결제 요청 실패: ' + escapeHtml(e.message));
+        payBtn.disabled = false;
+      }
+    };
+  } catch(e){
+    setStatus('err', '결제 위젯 초기화 실패: ' + escapeHtml(e.message));
+  }
+}
+
+function backToPlans(){
+  document.getElementById('plansView').style.display = '';
+  document.getElementById('checkoutView').style.display = 'none';
+  setStatus('');
+  widget = null;
+  currentPlan = null;
+}
+
+// ── 결제 성공 콜백 ───────────────────────────────────────
+async function handleSuccess(sp){
+  const paymentKey = sp.get('paymentKey');
+  const orderId = sp.get('orderId');
+  const amount = Number(sp.get('amount'));
+  if(!paymentKey || !orderId || !amount){
+    setStatus('err', '결제 정보가 올바르지 않습니다. (paymentKey/orderId/amount 누락)');
+    return;
+  }
+  if(!authSession){
+    setStatus('err', '🔐 세션이 만료되었습니다. 다시 로그인 후 확인해주세요.');
+    return;
+  }
+  setStatus('info', '<span class="sp"></span> 결제 승인 처리 중...');
+  try {
+    const r = await fetch('/api/billing/confirm', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + authSession.access_token },
+      body: JSON.stringify({ paymentKey, orderId, amount }),
+    });
+    const data = await r.json();
+    if(!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
+    setStatus('ok', `✅ 결제 완료! <b>${escapeHtml((data.plan||'').toUpperCase())}</b> 플랜이 활성화됐어요. <a href="/">홈으로 돌아가기</a>`);
+    // URL 정리 — 새로고침 시 재전송 방지
+    history.replaceState(null, '', '/billing');
+    await loadMe();
+    await loadPlans();
+  } catch(e){
+    setStatus('err', '❌ 결제 승인 실패: ' + escapeHtml(e.message) + '<br>결제가 되었는데 오류가 표시된다면 고객센터에 문의해주세요.');
+  }
+}
+
+// ── 결제 실패 콜백 ───────────────────────────────────────
+function handleFail(sp){
+  const code = sp.get('code') || '알 수 없음';
+  const msg = sp.get('message') || '결제가 취소되었거나 실패했습니다.';
+  setStatus('err', `❌ 결제 실패 (${escapeHtml(code)}): ${escapeHtml(msg)}`);
+  history.replaceState(null, '', '/billing');
+  loadPlans();
+  loadMe();
+}
+
+// ── 구독 해지 ────────────────────────────────────────────
+async function cancelSubscription(){
+  if(!authSession) return;
+  if(!confirm('구독을 해지할까요? (현재 결제 주기 말까지는 계속 사용 가능)')) return;
+  try {
+    const r = await fetch('/api/billing/cancel', {
+      method:'POST',
+      headers:{ 'Authorization':'Bearer ' + authSession.access_token },
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    setStatus('ok', '✅ 해지 완료 — 현재 결제 주기 말까지는 계속 이용할 수 있어요.');
+    await loadMe();
+  } catch(e){
+    setStatus('err', '해지 실패: ' + escapeHtml(e.message));
+  }
+}
+
+// 부팅
+init();
+</script>
+</body>
+</html>
