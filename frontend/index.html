@@ -1916,6 +1916,8 @@ async function doSearch(){
         referenceCount:data.referenceCount||0,
       };
       success=true;
+      // 로그인 사용자면 검색 이력 기록 (fire-and-forget — 실패해도 UX 영향 X)
+      _logSearch('recommend', body.region || '', (data.recommendations||[]).length);
     }
   }catch(e){
     toast('일시적인 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
@@ -2642,6 +2644,22 @@ async function _deleteBookmarkOnServer(id){
     console.warn('[bookmark delete] 실패', e);
     if(window.Sentry) window.Sentry.captureException(e);
   }
+}
+
+// 검색 이력 기록 — fire-and-forget. 비로그인/실패 시 조용히 무시.
+// 서버 RLS 가 자기 것만 INSERT 허용하므로 user_id 위조 불가.
+function _logSearch(queryType, query, resultCount){
+  const A = window.MHL?.auth;
+  if(!A?.user || !A?.session?.access_token) return; // 비로그인 — 이력 기록 X
+  if(!query) return; // 빈 쿼리 의미 없음
+  fetch('/api/search/history', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
+    body: JSON.stringify({ query, queryType, resultCount }),
+  }).catch(e => {
+    // 조용히 실패 — 사용자 경험엔 영향 없음
+    console.warn('[search history] 기록 실패', e);
+  });
 }
 function saveBookmarkMemo(i,val){
   const bks=getBookmarks();if(!bks[i])return;
