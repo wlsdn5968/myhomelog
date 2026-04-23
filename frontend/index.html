@@ -104,6 +104,98 @@
 })();
 </script>
 
+<!-- ── Supabase Auth + DB 클라이언트 부트스트랩 ───────────────
+     URL/Publishable Key 는 공개 안전 (RLS 가 데이터 보호).
+     SERVICE_ROLE 절대 여기 넣지 말 것 — 서버 전용.
+     SDK 로드 실패 시 stub 모드 (window.MHL.auth 가 no-op).  -->
+<meta name="supabase-url" content="https://brxorvxdfrbxcavufspe.supabase.co">
+<meta name="supabase-publishable-key" content="sb_publishable_fqEpRTSJjPrwwhN8j4JqNA_zhTEzDDo">
+<script>
+window.MHL = window.MHL || {};
+window.MHL.auth = window.MHL.auth || {
+  ready: false,
+  client: null,
+  user: null,
+  session: null,
+  // 핵심 메서드 — SDK 로드 전 호출 시 에러 대신 false 반환
+  isLoggedIn(){ return !!this.user; },
+  async getSession(){ return this.session; },
+  async signInWithGoogle(){ console.warn('[MHL.auth] SDK 미로드'); return null; },
+  async signInWithEmail(){ console.warn('[MHL.auth] SDK 미로드'); return null; },
+  async signOut(){ console.warn('[MHL.auth] SDK 미로드'); return null; },
+  // 세션 변경 리스너 등록 (UI 갱신용) — SDK 로드 후 자동 실행됨
+  _listeners: [],
+  onChange(fn){ this._listeners.push(fn); if (this.ready) fn(this.session); },
+  _emit(){ for (const fn of this._listeners) { try { fn(this.session); } catch(_){} } },
+};
+
+(function bootstrapSupabase(){
+  try{
+    var url = document.querySelector('meta[name="supabase-url"]')?.content?.trim();
+    var key = document.querySelector('meta[name="supabase-publishable-key"]')?.content?.trim();
+    if (!url || !key) return; // stub 모드
+    var s = document.createElement('script');
+    // Supabase JS v2 UMD — window.supabase.createClient 노출
+    s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js';
+    s.crossOrigin = 'anonymous';
+    s.onload = function(){
+      try {
+        var sb = window.supabase.createClient(url, key, {
+          auth: {
+            persistSession: true,
+            autoRefreshToken: true,
+            detectSessionInUrl: true,  // OAuth 콜백 URL 자동 처리
+            storage: window.localStorage,
+            storageKey: 'mhl-auth-session',
+            flowType: 'pkce',           // PKCE — SPA 권장
+          },
+        });
+        var A = window.MHL.auth;
+        A.client = sb;
+        A.ready = true;
+
+        // 세션 초기화 + 변경 리스너
+        sb.auth.getSession().then(function(r){
+          A.session = r.data?.session || null;
+          A.user = A.session?.user || null;
+          A._emit();
+        });
+        sb.auth.onAuthStateChange(function(event, session){
+          A.session = session || null;
+          A.user = session?.user || null;
+          if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'SIGNED_OUT') {
+            A._emit();
+          }
+        });
+
+        // 메서드 실제 구현으로 대체
+        A.signInWithGoogle = async function(){
+          var redirectTo = window.location.origin + window.location.pathname;
+          return sb.auth.signInWithOAuth({
+            provider: 'google',
+            options: { redirectTo, queryParams: { access_type: 'offline', prompt: 'consent' } },
+          });
+        };
+        A.signInWithEmail = async function(email){
+          // Magic link (비밀번호 없음 — UX 단순 + 보안 ↑)
+          return sb.auth.signInWithOtp({
+            email: String(email || '').trim(),
+            options: { emailRedirectTo: window.location.origin + window.location.pathname },
+          });
+        };
+        A.signOut = async function(){ return sb.auth.signOut(); };
+        A.getAccessToken = function(){ return A.session?.access_token || null; };
+      } catch(e){
+        console.warn('[MHL.auth] init 실패', e);
+        if (window.Sentry) window.Sentry.captureException(e);
+      }
+    };
+    s.onerror = function(){ console.warn('[MHL.auth] SDK CDN 로드 실패 — stub 모드 유지'); };
+    document.head.appendChild(s);
+  } catch(_){ /* 앱 동작 저해 금지 */ }
+})();
+</script>
+
 <style>
 :root{
   --bg:#F4F2ED;--s0:#fff;--s1:#F8F6F2;--s2:#F0EDE7;
