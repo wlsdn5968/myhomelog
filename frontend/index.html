@@ -1315,6 +1315,7 @@ async function _migrateBookmarksOnce(){
         address: b.area || null,
         memo: b.memo || null,
         tags: [],
+        avg_price: (typeof b.avgPrice === 'number' && b.avgPrice > 0) ? b.avgPrice : null,
       }));
       const r = await fetch('/api/bookmarks/migrate', {
         method:'POST',
@@ -1336,7 +1337,7 @@ async function _migrateBookmarksOnce(){
     const serverList = (pj.bookmarks || []).map(b => ({
       aptName: b.display_name,
       area: b.address || '',
-      avgPrice: 0,
+      avgPrice: b.avg_price ? parseFloat(b.avg_price) : 0,
       lawdCd: '',
       savedAt: new Date(b.created_at).getTime(),
       memo: b.memo || '',
@@ -1344,10 +1345,11 @@ async function _migrateBookmarksOnce(){
     }));
 
     // 서버가 source of truth — localStorage 의 가격/lawdCd 가 더 최신일 수 있으므로 머지
+    // 로컬 avgPrice 가 0 이 아니면 우선 사용 (가장 최근 조회값), 아니면 서버값 fallback
     const localByName = Object.fromEntries(local.map(b => [b.aptName, b]));
     const merged = serverList.map(s => ({
       ...s,
-      avgPrice: localByName[s.aptName]?.avgPrice || 0,
+      avgPrice: (localByName[s.aptName]?.avgPrice > 0) ? localByName[s.aptName].avgPrice : (s.avgPrice || 0),
       lawdCd: localByName[s.aptName]?.lawdCd || '',
       lastChecked: localByName[s.aptName]?.lastChecked,
       lastCheckedCount: localByName[s.aptName]?.lastCheckedCount,
@@ -2487,12 +2489,14 @@ async function _pushBookmarksToServer(){
   _syncInflight = true;
   _setSyncBadge('syncing');
   try {
-    const items = getBookmarks().map(b => ({
+    const current = getBookmarks();
+    const items = current.map(b => ({
       kapt_code: b.aptName,
       display_name: b.aptName,
       address: b.area || null,
       memo: b.memo || null,
       tags: [],
+      avg_price: (typeof b.avgPrice === 'number' && b.avgPrice > 0) ? b.avgPrice : null,
     }));
     const r = await fetch('/api/bookmarks/migrate', {
       method:'POST',
@@ -2500,6 +2504,18 @@ async function _pushBookmarksToServer(){
       body: JSON.stringify({ items }),
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    // 서버가 돌려준 items 로 _serverId 를 채워넣는다 (aptName 매칭)
+    if(Array.isArray(j.items) && j.items.length){
+      const serverByName = Object.fromEntries(j.items.map(s => [s.kapt_code, s.id]));
+      const latest = getBookmarks(); // 푸시 도중 또 변경됐을 수 있으므로 최신 재조회
+      let changed = false;
+      latest.forEach(b => {
+        const sid = serverByName[b.aptName];
+        if(sid && b._serverId !== sid){ b._serverId = sid; changed = true; }
+      });
+      if(changed) localStorage.setItem(BK_KEY, JSON.stringify(latest));
+    }
     localStorage.setItem('mhl_bookmarks_synced_at', String(Date.now()));
     _setSyncBadge('ok');
   } catch(e){
@@ -2534,7 +2550,9 @@ function toggleBookmark(){
   let bks=getBookmarks();
   const idx=bks.findIndex(b=>b.aptName===p.aptName);
   if(idx>=0){
+    const removed = bks[idx];
     bks.splice(idx,1);
+    if(removed?._serverId){ _deleteBookmarkOnServer(removed._serverId).catch(()=>{}); }
     toast('관심 단지 해제');
     document.getElementById('bkToggle').textContent='⭐ 관심 추가';
     document.getElementById('bkToggle').classList.remove('on');
@@ -2597,12 +2615,33 @@ function openBookmark(i){
 
 function delBookmark(e,i){
   e.stopPropagation();
-  const bks=getBookmarks();bks.splice(i,1);saveBookmarks(bks);renderBookmarks();
+  const bks=getBookmarks();
+  const removed = bks[i];
+  bks.splice(i,1);
+  saveBookmarks(bks);
+  renderBookmarks();
+  // 서버에 _serverId 가 있으면 명시적 DELETE (upsert 기반 push 는 삭제 불가)
+  if(removed?._serverId){ _deleteBookmarkOnServer(removed._serverId).catch(()=>{}); }
   if(currentDetail&&currentDetail.aptName===document.getElementById('dmT').textContent){
     document.getElementById('bkToggle').textContent='⭐ 관심 추가';
     document.getElementById('bkToggle').classList.remove('on');
   }
   toast('관심 단지 삭제');
+}
+
+async function _deleteBookmarkOnServer(id){
+  const A = window.MHL?.auth;
+  if(!A?.user || !A?.session?.access_token) return; // 비로그인 — 서버엔 없으므로 skip
+  try {
+    const r = await fetch('/api/bookmarks/' + encodeURIComponent(id), {
+      method:'DELETE',
+      headers:{ 'Authorization':'Bearer ' + A.session.access_token },
+    });
+    if(!r.ok && r.status !== 404) throw new Error('DELETE HTTP ' + r.status);
+  } catch(e){
+    console.warn('[bookmark delete] 실패', e);
+    if(window.Sentry) window.Sentry.captureException(e);
+  }
 }
 function saveBookmarkMemo(i,val){
   const bks=getBookmarks();if(!bks[i])return;

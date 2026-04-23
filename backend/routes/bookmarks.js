@@ -44,7 +44,7 @@ router.get('/', async (req, res, next) => {
     const sb = userScopedClient(req.accessToken);
     const { data, error } = await sb
       .from('bookmarks')
-      .select('id, kapt_code, display_name, address, memo, tags, created_at, updated_at')
+      .select('id, kapt_code, display_name, address, memo, tags, avg_price, created_at, updated_at')
       .order('created_at', { ascending: false });
     if (error) throw error;
     res.json({ bookmarks: data || [] });
@@ -54,7 +54,7 @@ router.get('/', async (req, res, next) => {
 // ── POST: 신규 북마크 ────────────────────────────────────
 router.post('/', async (req, res, next) => {
   try {
-    const { kapt_code, display_name, address, memo, tags } = req.body || {};
+    const { kapt_code, display_name, address, memo, tags, avg_price } = req.body || {};
     if (!kapt_code || !display_name) {
       return res.status(400).json({ error: 'kapt_code, display_name 필수' });
     }
@@ -68,6 +68,7 @@ router.post('/', async (req, res, next) => {
         address: address || null,
         memo: memo || null,
         tags: Array.isArray(tags) ? tags.slice(0, 20).map(String) : [],
+        avg_price: typeof avg_price === 'number' && isFinite(avg_price) ? avg_price : null,
       })
       .select()
       .single();
@@ -83,12 +84,13 @@ router.post('/', async (req, res, next) => {
 router.patch('/:id', async (req, res, next) => {
   try {
     const id = String(req.params.id);
-    const { memo, tags, display_name, address } = req.body || {};
+    const { memo, tags, display_name, address, avg_price } = req.body || {};
     const patch = {};
     if (memo !== undefined) patch.memo = memo || null;
     if (tags !== undefined) patch.tags = Array.isArray(tags) ? tags.slice(0, 20).map(String) : [];
     if (display_name !== undefined) patch.display_name = String(display_name).trim();
     if (address !== undefined) patch.address = address || null;
+    if (avg_price !== undefined) patch.avg_price = typeof avg_price === 'number' && isFinite(avg_price) ? avg_price : null;
     if (Object.keys(patch).length === 0) {
       return res.status(400).json({ error: '업데이트할 필드 없음' });
     }
@@ -133,20 +135,22 @@ router.post('/migrate', async (req, res, next) => {
         address: it.address || null,
         memo: it.memo || null,
         tags: Array.isArray(it.tags) ? it.tags.slice(0, 20).map(String) : [],
+        avg_price: typeof it.avg_price === 'number' && isFinite(it.avg_price) ? it.avg_price : null,
       }));
 
-    if (rows.length === 0) return res.json({ migrated: 0, skipped: items.length });
+    if (rows.length === 0) return res.json({ migrated: 0, skipped: items.length, items: [] });
 
     const sb = userScopedClient(req.accessToken);
     // upsert on (user_id, kapt_code) — 중복은 갱신 (PIPA 관점에서 user_id 일치만 보장)
+    // 반환 컬럼: 클라가 _serverId 매핑할 수 있도록 전체 필드 반환
     const { data, error } = await sb
       .from('bookmarks')
       .upsert(rows, { onConflict: 'user_id,kapt_code', ignoreDuplicates: false })
-      .select('id');
+      .select('id, kapt_code, display_name, address, memo, tags, avg_price, created_at, updated_at');
     if (error) throw error;
 
     logger.info({ userId: req.user.id, migrated: data?.length || 0 }, '북마크 이관');
-    res.json({ migrated: data?.length || 0, skipped: items.length - rows.length });
+    res.json({ migrated: data?.length || 0, skipped: items.length - rows.length, items: data || [] });
   } catch (e) { next(e); }
 });
 

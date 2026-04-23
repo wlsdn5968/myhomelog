@@ -11,7 +11,7 @@
  *   2) 이 파일에 대응 스키마 추가
  *   3) (선택) drizzle-kit introspect 로 SQL → 스키마 역생성 검증
  */
-const { pgTable, uuid, text, timestamp, integer, jsonb, index, uniqueIndex } = require('drizzle-orm/pg-core');
+const { pgTable, uuid, text, timestamp, integer, jsonb, numeric, index, uniqueIndex } = require('drizzle-orm/pg-core');
 
 // auth.users 는 Supabase 가 관리하는 스키마 — FK 용으로만 참조 (쿼리 X)
 // Drizzle 은 public 스키마 외 테이블 참조 시 authSchema 로 분리 가능하지만
@@ -25,6 +25,7 @@ const bookmarks = pgTable('bookmarks', {
   address: text('address'),
   memo: text('memo'),
   tags: text('tags').array().notNull().default([]),
+  avgPrice: numeric('avg_price'), // 억 단위, nullable
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({
