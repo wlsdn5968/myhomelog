@@ -1660,13 +1660,19 @@ async function loadNews(btn){
     const d=await r.json();
     if(!d.items||!d.items.length){list.innerHTML='<div style="padding:30px 0;text-align:center;color:var(--t3)">표시할 뉴스가 없어요.</div>';return;}
     const fmtDate=(s)=>{try{const dt=new Date(s);return `${dt.getMonth()+1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;}catch{return '';}};
+    // XSS 방어: 백엔드 stripHtml 이 entity 를 디코드하므로 프론트에서 반드시 재-escape 필요
+    // link 도 javascript:/data: 스킴 차단 (http/https 만 허용)
+    const safeLink = (u) => {
+      try { const url = new URL(u); return /^https?:$/.test(url.protocol) ? url.href : '#'; }
+      catch { return '#'; }
+    };
     list.innerHTML=d.items.map(n=>`
-      <a href="${n.link}" target="_blank" rel="noopener noreferrer nofollow" style="display:block;padding:12px 14px;border:1px solid var(--bd);border-radius:8px;margin-bottom:8px;text-decoration:none;color:var(--t1);background:var(--s0);transition:all .15s" onmouseover="this.style.borderColor='var(--acc)';this.style.background='var(--s1)'" onmouseout="this.style.borderColor='var(--bd)';this.style.background='var(--s0)'">
-        <div style="font-size:13px;font-weight:600;line-height:1.5;margin-bottom:5px">${n.title}</div>
-        <div style="font-size:11px;color:var(--t2);line-height:1.5;margin-bottom:5px">${n.description||''}</div>
-        <div style="font-size:10px;color:var(--t3)">📰 ${n.source||'언론사'} · ${fmtDate(n.pubDate)} · 원문 보기 ↗</div>
+      <a href="${_escHtml(safeLink(n.link))}" target="_blank" rel="noopener noreferrer nofollow" style="display:block;padding:12px 14px;border:1px solid var(--bd);border-radius:8px;margin-bottom:8px;text-decoration:none;color:var(--t1);background:var(--s0);transition:all .15s" onmouseover="this.style.borderColor='var(--acc)';this.style.background='var(--s1)'" onmouseout="this.style.borderColor='var(--bd)';this.style.background='var(--s0)'">
+        <div style="font-size:13px;font-weight:600;line-height:1.5;margin-bottom:5px">${_escHtml(n.title)}</div>
+        <div style="font-size:11px;color:var(--t2);line-height:1.5;margin-bottom:5px">${_escHtml(n.description||'')}</div>
+        <div style="font-size:10px;color:var(--t3)">📰 ${_escHtml(n.source||'언론사')} · ${_escHtml(fmtDate(n.pubDate))} · 원문 보기 ↗</div>
       </a>
-    `).join('') + `<div style="margin-top:10px;padding:8px;background:var(--s1);border-radius:6px;font-size:10px;color:var(--t3);text-align:center">출처: ${d.source} · ${d.count}건 · 30분마다 갱신</div>`;
+    `).join('') + `<div style="margin-top:10px;padding:8px;background:var(--s1);border-radius:6px;font-size:10px;color:var(--t3);text-align:center">출처: ${_escHtml(d.source||'')} · ${Number(d.count)||0}건 · 30분마다 갱신</div>`;
     list.dataset.loaded='1';
     // 핫 카테고리일 때만 AI 3줄 시황 자동 로드 (첫 로드 시 1회)
     if(cat==='hot' && !document.getElementById('newsSummary').dataset.loaded){
@@ -1686,7 +1692,8 @@ async function loadNewsSummary(){
     const d=await r.json();
     if(!d.summary || !d.summary.length) return;
     const lines = Array.isArray(d.summary) ? d.summary : [d.summary];
-    document.getElementById('newsSummaryLines').innerHTML = lines.map(l=>`<div>${l}</div>`).join('');
+    // XSS 방어: AI 생성 요약 — 반드시 escape
+    document.getElementById('newsSummaryLines').innerHTML = lines.map(l=>`<div>${_escHtml(l)}</div>`).join('');
     const t=d.updatedAt?new Date(d.updatedAt):new Date();
     document.getElementById('newsSummaryTime').textContent = `· ${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')} 기준`;
     box.style.display='block';
