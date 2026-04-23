@@ -807,7 +807,14 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 
 <!-- RIGHT CHAT -->
 <div class="rp">
-  <div class="chdr"><span class="ctit">AI 부동산 컨설턴트</span><span class="cst off" id="cSt">● 연결 중...</span></div>
+  <div class="chdr">
+    <span class="ctit">AI 부동산 컨설턴트</span>
+    <span style="display:flex;gap:6px;align-items:center">
+      <button id="chatHistBtn" onclick="openChatHistory()" title="대화 이력" style="background:none;border:none;color:var(--t2);cursor:pointer;font-size:13px;padding:2px 6px;display:none">🕘</button>
+      <button id="chatNewBtn" onclick="newChatSession()" title="새 대화" style="background:none;border:none;color:var(--t2);cursor:pointer;font-size:13px;padding:2px 6px;display:none">✚</button>
+      <span class="cst off" id="cSt">● 연결 중...</span>
+    </span>
+  </div>
   <div class="cmsgs" id="cMsgs">
     <div class="msg ai"><div class="ava ai">AI</div><div>
       <div class="bbl">안녕하세요! 내집로그 AI입니다 👋<br><br><b>2025.10.15 규제</b> 기준으로 상담드려요.<br><br>⚙ <b>API 설정</b>에서 키를 입력하면<br>네이버 지도 + AI 검색이 활성화돼요!</div>
@@ -1177,6 +1184,20 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       <a href="/billing" class="sm-save" style="text-decoration:none;text-align:center;display:block;background:var(--acc);color:#fff;margin-bottom:6px">💳 결제/구독 관리</a>
       <button class="sm-save" onclick="logout()" style="background:var(--t2)">로그아웃</button>
       <div class="sm-status" id="umStatus"></div>
+    </div>
+  </div>
+</div>
+
+<!-- CHAT HISTORY MODAL -->
+<div class="smbg" id="CH">
+  <div class="smbox" style="max-width:420px">
+    <div class="smhdr">
+      <span class="smtit">🗨️ 대화 이력</span>
+      <button class="smx" onclick="closeChatHistory()">✕</button>
+    </div>
+    <div class="smbody">
+      <div id="chList" style="max-height:380px;overflow-y:auto;font-size:12px">로딩 중...</div>
+      <button class="sm-save" style="margin-top:10px" onclick="newChatSession(true);closeChatHistory()">+ 새 대화 시작</button>
     </div>
   </div>
 </div>
@@ -3709,8 +3730,124 @@ function _persistChatMessage(sid, role, content){
 if (window.MHL?.auth) {
   window.MHL.auth.onChange?.((session) => {
     if (!session) _chatSessionId = null;
+    _toggleChatHistoryButtons(!!session);
   });
+  // 페이지 로드 시 이미 세션 있으면 버튼 노출
+  setTimeout(() => _toggleChatHistoryButtons(!!window.MHL?.auth?.session), 1000);
 }
+function _toggleChatHistoryButtons(loggedIn){
+  const h = document.getElementById('chatHistBtn');
+  const n = document.getElementById('chatNewBtn');
+  if(h) h.style.display = loggedIn ? '' : 'none';
+  if(n) n.style.display = loggedIn ? '' : 'none';
+}
+
+// ── 대화 이력 UI ───────────────────────────────────────────
+async function openChatHistory(){
+  const A = window.MHL?.auth;
+  if(!A?.user || !A?.session?.access_token){ toast('로그인 후 이용 가능합니다.'); return; }
+  document.getElementById('CH').classList.add('open');
+  const box = document.getElementById('chList');
+  box.textContent = '로딩 중...';
+  try {
+    const r = await fetch('/api/chat/sessions', {
+      headers:{ 'Authorization':'Bearer ' + A.session.access_token },
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const { sessions } = await r.json();
+    if(!sessions || !sessions.length){
+      box.innerHTML = '<div style="color:var(--t3);padding:20px 4px;text-align:center">저장된 대화가 없어요.<br>질문을 보내면 자동으로 이력에 남아요.</div>';
+      return;
+    }
+    box.innerHTML = sessions.map(s => {
+      const title = (s.title||'새 대화').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c]));
+      const rel = _relTime(new Date(s.last_message_at));
+      const active = s.id === _chatSessionId ? 'background:var(--bg2);' : '';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;padding:9px 8px;border-bottom:1px solid var(--bd);${active}">
+        <button onclick="loadChatSession('${s.id}')" style="flex:1;text-align:left;background:none;border:none;cursor:pointer;font-size:12px;color:var(--t1);padding:0">
+          <div style="font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${title}</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:2px">${rel}</div>
+        </button>
+        <button onclick="deleteChatSession('${s.id}',event)" title="삭제" style="background:none;border:none;color:var(--t3);cursor:pointer;font-size:14px;padding:4px 6px">🗑</button>
+      </div>`;
+    }).join('');
+  } catch(e){
+    console.warn('[chat history] 로드 실패', e);
+    box.innerHTML = '<div style="color:var(--danger)">이력 로드 실패</div>';
+  }
+}
+function closeChatHistory(){ document.getElementById('CH').classList.remove('open'); }
+
+async function loadChatSession(sid){
+  const A = window.MHL?.auth;
+  if(!A?.user || !A?.session?.access_token) return;
+  try {
+    const r = await fetch(`/api/chat/sessions/${sid}/messages`, {
+      headers:{ 'Authorization':'Bearer ' + A.session.access_token },
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const { messages } = await r.json();
+    // 채팅창 리셋 + 재렌더
+    const container = document.getElementById('cMsgs');
+    container.innerHTML = '';
+    chatH = [];
+    _chatSessionId = sid;
+    for(const m of (messages||[])){
+      if(m.role === 'system') continue; // 컨텍스트 주입용 시스템성 메시지는 숨김
+      chatH.push({ role: m.role, content: m.content });
+      addMsg(m.role === 'assistant' ? 'ai' : 'user', m.content);
+    }
+    closeChatHistory();
+    toast('💬 대화 불러옴');
+  } catch(e){
+    console.warn('[chat history] 세션 로드 실패', e);
+    toast('불러오기 실패');
+  }
+}
+
+async function deleteChatSession(sid, ev){
+  ev?.stopPropagation();
+  if(!confirm('이 대화를 삭제할까요? (되돌릴 수 없음)')) return;
+  const A = window.MHL?.auth;
+  if(!A?.user || !A?.session?.access_token) return;
+  try {
+    const r = await fetch(`/api/chat/sessions/${sid}`, {
+      method:'DELETE',
+      headers:{ 'Authorization':'Bearer ' + A.session.access_token },
+    });
+    if(!r.ok && r.status !== 204) throw new Error('HTTP ' + r.status);
+    if(_chatSessionId === sid){
+      _chatSessionId = null;
+      // 현재 열려있던 세션이면 채팅창 리셋
+      document.getElementById('cMsgs').innerHTML = '';
+      chatH = [];
+    }
+    openChatHistory(); // 재로드
+    toast('🗑 삭제 완료');
+  } catch(e){
+    console.warn('[chat history] 삭제 실패', e);
+    toast('삭제 실패');
+  }
+}
+
+function newChatSession(skipConfirm){
+  // 대화창 리셋 — 다음 메시지부터 새 세션 lazy 생성
+  if(!skipConfirm && chatH.length && !confirm('현재 대화를 종료하고 새로 시작할까요? (기존 대화는 이력에 저장됩니다)')) return;
+  _chatSessionId = null;
+  chatH = [];
+  const container = document.getElementById('cMsgs');
+  container.innerHTML = `<div class="msg ai"><div class="ava ai">AI</div><div>
+    <div class="bbl">💬 새 대화를 시작합니다. 무엇이든 물어보세요!</div>
+    <div class="mt">${gt()}</div>
+  </div></div>`;
+  toast('✨ 새 대화 시작');
+}
+
+// 채팅 이력 모달 바깥 클릭 닫기
+document.addEventListener('DOMContentLoaded', () => {
+  const ch = document.getElementById('CH');
+  if(ch) ch.addEventListener('click', e => { if(e.target.id === 'CH') closeChatHistory(); });
+});
 
 function sQ(t){document.getElementById('cIn').value=t;sM();}
 function askP(n,pr,a){
