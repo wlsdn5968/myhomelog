@@ -644,6 +644,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <div class="rpill"><div class="hdot"></div>10.15 규제</div>
     <span class="hst" id="quotaPill" style="background:var(--ambL);color:var(--amb);display:none">⚡ 5/5</span>
     <span class="hst off" id="apiSt">확인 중...</span>
+    <button class="hbtn" id="loginBtn" onclick="openLogin()" title="로그인하면 북마크가 기기 간 동기화돼요">로그인</button>
+    <button class="hbtn" id="userBtn" onclick="openUserMenu()" style="display:none">👤 <span id="userBadge"></span></button>
     <button class="hbtn" id="settingsBtn" onclick="openSettings()">ⓘ 정보</button>
   </div>
 </header>
@@ -1118,6 +1120,59 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
 </div>
 
+<!-- LOGIN MODAL -->
+<div class="smbg" id="LM">
+  <div class="smbox" style="max-width:420px">
+    <div class="smhdr">
+      <span class="smtit">🔐 내집로그 로그인</span>
+      <button class="smx" onclick="closeLogin()">✕</button>
+    </div>
+    <div class="smbody">
+      <div class="sm-hint" style="margin-bottom:12px">
+        로그인하면 북마크·메모가 모든 기기에서 동기화됩니다. <b>저장된 데이터는 본인만 조회 가능</b>합니다 (Postgres RLS).
+      </div>
+
+      <button class="sm-save" id="lmGoogle" onclick="loginGoogle()" style="background:#4285F4;margin-bottom:8px">
+        🔍 Google 로 계속하기
+      </button>
+      <div style="text-align:center;font-size:11px;color:var(--t3);margin:6px 0">또는</div>
+
+      <label class="lbl">이메일 (Magic Link)</label>
+      <input class="inp mb9" type="email" id="lmEmail" placeholder="you@example.com" autocomplete="email">
+      <button class="sm-save" onclick="loginEmail()">메일로 로그인 링크 받기</button>
+
+      <div class="sm-status" id="lmStatus"></div>
+      <div style="font-size:10px;color:var(--t3);margin-top:14px;line-height:1.5">
+        · 비밀번호 없음 (이메일 일회용 링크 또는 Google OAuth)<br>
+        · 회원탈퇴 시 모든 데이터 즉시 삭제 (PIPA/GDPR 준수)<br>
+        · 이메일 외 추가 정보 수집하지 않습니다.
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- USER MENU MODAL -->
+<div class="smbg" id="UM">
+  <div class="smbox" style="max-width:380px">
+    <div class="smhdr">
+      <span class="smtit">👤 내 계정</span>
+      <button class="smx" onclick="closeUserMenu()">✕</button>
+    </div>
+    <div class="smbody">
+      <div class="sm-row">
+        <div class="sm-lbl">이메일</div>
+        <div class="sm-hint" id="umEmail">—</div>
+      </div>
+      <div class="sm-row">
+        <div class="sm-lbl">동기화 상태</div>
+        <div class="sm-hint" id="umSync">—</div>
+      </div>
+      <button class="sm-save" onclick="logout()" style="background:var(--t2)">로그아웃</button>
+      <div class="sm-status" id="umStatus"></div>
+    </div>
+  </div>
+</div>
+
 <!-- ONBOARDING MODAL -->
 <div class="smbg" id="OB" style="z-index:9999">
   <div class="smbox" style="max-width:440px">
@@ -1180,6 +1235,112 @@ window.addEventListener('DOMContentLoaded',()=>{
 // ── SETTINGS ─────────────────────────────────────────────
 function openSettings(){document.getElementById('SM').classList.add('open');}
 function closeSM(){document.getElementById('SM').classList.remove('open');}
+
+// ── AUTH (로그인/세션) ───────────────────────────────────
+function openLogin(){ document.getElementById('LM').classList.add('open'); document.getElementById('lmStatus').textContent=''; }
+function closeLogin(){ document.getElementById('LM').classList.remove('open'); }
+function openUserMenu(){
+  const A = window.MHL?.auth;
+  document.getElementById('umEmail').textContent = A?.user?.email || '—';
+  document.getElementById('umSync').textContent = localStorage.getItem('mhl_bookmarks_synced_at')
+    ? '✅ ' + new Date(parseInt(localStorage.getItem('mhl_bookmarks_synced_at'))).toLocaleString('ko-KR')
+    : '아직 동기화 안됨';
+  document.getElementById('UM').classList.add('open');
+}
+function closeUserMenu(){ document.getElementById('UM').classList.remove('open'); }
+
+async function loginGoogle(){
+  const A = window.MHL?.auth;
+  if(!A?.ready){ document.getElementById('lmStatus').textContent='⚠ 인증 SDK 로드 중...'; return; }
+  document.getElementById('lmStatus').textContent='Google 인증창으로 이동 중...';
+  try { await A.signInWithGoogle(); } catch(e){ document.getElementById('lmStatus').textContent='❌ ' + (e.message||e); }
+}
+async function loginEmail(){
+  const A = window.MHL?.auth;
+  if(!A?.ready){ document.getElementById('lmStatus').textContent='⚠ 인증 SDK 로드 중...'; return; }
+  const email = document.getElementById('lmEmail').value.trim();
+  if(!email || !email.includes('@')){ document.getElementById('lmStatus').textContent='이메일 주소를 확인해주세요.'; return; }
+  document.getElementById('lmStatus').textContent='메일 발송 중...';
+  try {
+    const { error } = await A.signInWithEmail(email);
+    if(error) throw error;
+    document.getElementById('lmStatus').textContent = '✉ ' + email + ' 으로 로그인 링크를 보냈어요. 메일함을 확인하세요.';
+  } catch(e){
+    document.getElementById('lmStatus').textContent = '❌ ' + (e.message||e);
+  }
+}
+async function logout(){
+  const A = window.MHL?.auth;
+  if(!A?.ready) return;
+  await A.signOut();
+  closeUserMenu();
+  toast('로그아웃 완료');
+}
+
+// 세션 변경 시 헤더 UI + 자동 마이그레이션
+function _updateAuthUi(session){
+  const loginBtn = document.getElementById('loginBtn');
+  const userBtn = document.getElementById('userBtn');
+  const badge = document.getElementById('userBadge');
+  if(session?.user){
+    loginBtn.style.display='none';
+    userBtn.style.display='';
+    badge.textContent = (session.user.email||'').split('@')[0].slice(0,12);
+    closeLogin();
+    // 첫 로그인 시 localStorage 북마크 자동 이관
+    _migrateBookmarksOnce();
+  } else {
+    loginBtn.style.display='';
+    userBtn.style.display='none';
+  }
+}
+
+// localStorage 북마크 → DB 1회 이관 (멱등 — 서버에서 upsert)
+async function _migrateBookmarksOnce(){
+  const A = window.MHL?.auth;
+  if(!A?.user || !A?.session?.access_token) return;
+  const userId = A.user.id;
+  const flagKey = 'mhl_bookmarks_migrated:' + userId;
+  if(localStorage.getItem(flagKey)) return; // 이미 이관됨
+  const items = (typeof getBookmarks==='function' ? getBookmarks() : []).map(b => ({
+    kapt_code: b.aptName,         // 레거시: aptName 을 unique key 로 사용
+    display_name: b.aptName,
+    address: b.area || null,
+    memo: b.memo || null,
+    tags: [],
+  }));
+  if(items.length === 0){ localStorage.setItem(flagKey, '1'); return; }
+  try {
+    const r = await fetch('/api/bookmarks/migrate', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
+      body: JSON.stringify({ items }),
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    localStorage.setItem(flagKey, '1');
+    localStorage.setItem('mhl_bookmarks_synced_at', String(Date.now()));
+    if(j.migrated > 0) toast('☁ 북마크 ' + j.migrated + '개 동기화 완료');
+  } catch(e){
+    console.warn('[bookmarks migrate] 실패 — 다음 로그인 때 재시도', e);
+    if(window.Sentry) window.Sentry.captureException(e);
+  }
+}
+
+// SDK 준비되면 onChange 등록 — DOM 준비 후 안전하게
+window.addEventListener('DOMContentLoaded', ()=>{
+  const tryHook = () => {
+    if(window.MHL?.auth){
+      window.MHL.auth.onChange(_updateAuthUi);
+      // 이미 세션 있으면 즉시 반영
+      if(window.MHL.auth.session) _updateAuthUi(window.MHL.auth.session);
+    }
+  };
+  tryHook();
+  // SDK 가 비동기 로드 → 잠시 후 재시도
+  setTimeout(tryHook, 800);
+  setTimeout(tryHook, 2500);
+});
 
 // ── ONBOARDING ───────────────────────────────────────────
 let _obStep=0;
