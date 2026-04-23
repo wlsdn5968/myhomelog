@@ -92,6 +92,7 @@ const subscriptionRouter = require('./routes/subscription');
 const shareRouter = require('./routes/share');
 const bookmarksRouter = require('./routes/bookmarks');
 const searchRouter = require('./routes/search');
+const billingRouter = require('./routes/billing');
 
 // 일일 무료 한도 (BYOK 제거에 따른 무료 체험 정책)
 const { dailyLimit, getUsage } = require('./middleware/dailyLimit');
@@ -111,6 +112,8 @@ app.use('/api/subscription', dataLimiter, subscriptionRouter);
 app.use('/api/bookmarks', dataLimiter, bookmarksRouter);
 // 검색 이력 (Supabase 백엔드 — JWT 필수, RLS 적용)
 app.use('/api/search', dataLimiter, searchRouter);
+// 결제/구독 (Toss Payments — JWT 필수, service_role 전용 쓰기)
+app.use('/api/billing', dataLimiter, billingRouter);
 // 공유 딥링크 — 크롤러용 OG 메타 치환 (HTML 서빙)
 app.use('/share', shareRouter);
 
