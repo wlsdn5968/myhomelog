@@ -9,6 +9,7 @@
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/index.js" },
     { "src": "/share(.*)", "dest": "/api/index.js" },
+    { "src": "/billing(/.*)?", "dest": "/frontend/billing.html" },
     { "src": "/(.*)", "dest": "/frontend/index.html" }
   ]
 }
