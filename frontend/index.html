@@ -3647,6 +3647,9 @@ async function sM(){
   let replied=false;
   const sessionContext=buildChatContext();
 
+  // 로그인 상태면 메시지 persist (fire-and-forget — UX 블로킹 없음)
+  _ensureChatSession(txt).then(sid => { if(sid) _persistChatMessage(sid,'user',txt); });
+
   // 백엔드 단일 경로 (BYOK 제거) — 매물·조건 컨텍스트 자동 첨부
   try{
     const r=await fetch(`${CFG.api}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:txt,context:{history:chatH.slice(-18), session:sessionContext}}),signal:AbortSignal.timeout(30000)});
@@ -3661,11 +3664,52 @@ async function sM(){
       const d=await r.json();rmTyp();chatH.push({role:'assistant',content:d.reply});addMsg('ai',d.reply);
       document.getElementById('cSt').textContent='● 온라인';document.getElementById('cSt').style.color='var(--grn)';
       replied=true;
+      // 어시스턴트 응답도 persist
+      if(_chatSessionId) _persistChatMessage(_chatSessionId,'assistant',d.reply);
     }
   }catch{}
 
   if(!replied){rmTyp();addMsg('ai','일시적인 오류가 발생했어요. 잠시 후 다시 시도해주세요.');}
   chatLd=false;
+}
+
+// ── 채팅 세션 persistence (fire-and-forget, 비로그인 시 no-op) ─
+let _chatSessionId = null;
+async function _ensureChatSession(firstMsg){
+  const A = window.MHL?.auth;
+  if(!A?.user || !A?.session?.access_token) return null;
+  if(_chatSessionId) return _chatSessionId;
+  // 제목 = 첫 메시지 앞 30자
+  const title = (firstMsg||'새 대화').trim().slice(0, 30);
+  try {
+    const r = await fetch('/api/chat/sessions', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
+      body: JSON.stringify({ title }),
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const s = await r.json();
+    _chatSessionId = s.id;
+    return _chatSessionId;
+  } catch(e){
+    console.warn('[chat session] 생성 실패', e);
+    return null;
+  }
+}
+function _persistChatMessage(sid, role, content){
+  const A = window.MHL?.auth;
+  if(!A?.user || !A?.session?.access_token || !sid) return;
+  fetch(`/api/chat/sessions/${sid}/messages`, {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
+    body: JSON.stringify({ role, content }),
+  }).catch(e => console.warn('[chat message] 저장 실패', e));
+}
+// 로그아웃/세션 교체 시 로컬 세션 ID 초기화 — 다른 사용자 세션에 쓰기 방지
+if (window.MHL?.auth) {
+  window.MHL.auth.onChange?.((session) => {
+    if (!session) _chatSessionId = null;
+  });
 }
 
 function sQ(t){document.getElementById('cIn').value=t;sM();}

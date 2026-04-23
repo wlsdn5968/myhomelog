@@ -93,12 +93,15 @@ const shareRouter = require('./routes/share');
 const bookmarksRouter = require('./routes/bookmarks');
 const searchRouter = require('./routes/search');
 const billingRouter = require('./routes/billing');
+const chatSessionsRouter = require('./routes/chatSessions');
 
 // 일일 무료 한도 (BYOK 제거에 따른 무료 체험 정책)
 const { dailyLimit, getUsage } = require('./middleware/dailyLimit');
 const DAILY_SEARCH_LIMIT = parseInt(process.env.DAILY_SEARCH_LIMIT || '5');
 const DAILY_CHAT_LIMIT = parseInt(process.env.DAILY_CHAT_LIMIT || '15');
 
+// 채팅 세션/메시지 저장 (Supabase — JWT 필수, RLS 적용) — /api/chat 보다 먼저 마운트
+app.use('/api/chat/sessions', dataLimiter, chatSessionsRouter);
 app.use('/api/chat', chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat' }), chatRouter);
 app.use('/api/transactions', dataLimiter, transactionRouter);
 app.use('/api/properties', dataLimiter, dailyLimit({ limit: DAILY_SEARCH_LIMIT, scope: 'search' }), propertiesRouter);
