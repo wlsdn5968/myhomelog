@@ -91,6 +91,7 @@ const newsRouter = require('./routes/news');
 const subscriptionRouter = require('./routes/subscription');
 const shareRouter = require('./routes/share');
 const bookmarksRouter = require('./routes/bookmarks');
+const searchRouter = require('./routes/search');
 
 // 일일 무료 한도 (BYOK 제거에 따른 무료 체험 정책)
 const { dailyLimit, getUsage } = require('./middleware/dailyLimit');
@@ -108,6 +109,8 @@ app.use('/api/news', dataLimiter, newsRouter);
 app.use('/api/subscription', dataLimiter, subscriptionRouter);
 // 북마크 (Supabase 백엔드 — JWT 필수, RLS 적용)
 app.use('/api/bookmarks', dataLimiter, bookmarksRouter);
+// 검색 이력 (Supabase 백엔드 — JWT 필수, RLS 적용)
+app.use('/api/search', dataLimiter, searchRouter);
 // 공유 딥링크 — 크롤러용 OG 메타 치환 (HTML 서빙)
 app.use('/share', shareRouter);
 
