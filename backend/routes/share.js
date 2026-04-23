@@ -11,6 +11,7 @@
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const logger = require('../logger');
 const router = express.Router();
 
 const HTML_PATH = path.join(__dirname, '..', '..', 'frontend', 'index.html');
@@ -21,7 +22,7 @@ function loadHtml() {
     cachedHtml = fs.readFileSync(HTML_PATH, 'utf8');
     return cachedHtml;
   } catch (e) {
-    console.error('[share] index.html 로드 실패:', HTML_PATH, e.message);
+    logger.error({ err: e, htmlPath: HTML_PATH }, 'share: index.html 로드 실패');
     return null;
   }
 }

@@ -1,0 +1,93 @@
+name: CI
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  install-audit:
+    name: Install & Audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root deps (npm ci)
+        run: npm ci --no-audit --no-fund
+
+      - name: npm audit (high+ only, production)
+        # 개발 의존성 취약점은 별도 정책 — 프로덕션 빌드 반영분만 게이트
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Install backend deps
+        working-directory: backend
+        run: npm ci --no-audit --no-fund
+
+      - name: npm audit backend
+        working-directory: backend
+        run: npm audit --omit=dev --audit-level=high
+
+  syntax-check:
+    name: Syntax Check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    needs: install-audit
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Node syntax check (backend + api)
+        # node --check 는 파싱 오류만 잡음 — ESLint 대체가 아니라 최소 안전망
+        run: |
+          set -e
+          find backend api -name '*.js' -not -path '*/node_modules/*' -print0 \
+            | xargs -0 -n1 node --check
+
+      - name: JSON config validate
+        run: |
+          set -e
+          for f in package.json backend/package.json vercel.json railway.json; do
+            [ -f "$f" ] && node -e "JSON.parse(require('fs').readFileSync('$f','utf8'))" && echo "ok: $f"
+          done
+
+      - name: HTML basic sanity (frontend/index.html exists & <html> present)
+        run: |
+          test -f frontend/index.html
+          grep -q '<html' frontend/index.html
+          grep -q '</html>' frontend/index.html
+
+  gitleaks:
+    name: Secret Scan (gitleaks)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # gitleaks 가 과거 커밋까지 스캔
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # 개인/팀 무료 사용 — 라이선스 키 불필요
+          GITLEAKS_ENABLE_UPLOAD_ARTIFACT: 'true'
+          GITLEAKS_ENABLE_SUMMARY: 'true'

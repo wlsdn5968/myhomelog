@@ -14,6 +14,7 @@
 const { getTransactionsByApt, analyzeTransactions } = require('./transactionService');
 const { getAptListBySgg, getAptBasisInfo } = require('./aptInfoService');
 const cache = require('../cache');
+const logger = require('../logger');
 
 // ── 지역 키워드 → 법정동코드 매핑 (사용자 입력 우선) ───────
 const REGION_KEYWORDS = {
@@ -45,7 +46,7 @@ function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '') {
   const r = String(userRegion || '').normalize('NFC').replace(/\s+/g,'');
   const wp = String(workplaceArea || '').normalize('NFC').replace(/\s+/g,'');
   const combined = r + ' ' + wp;
-  console.log(`[pickRegions] region="${userRegion}" → r="${r}" wp="${wp}" budget=${maxBudget}`);
+  logger.debug({ userRegion, r, wp, maxBudget }, 'pickRegions 진입');
   // 1) 사용자 입력에서 구 단위 키워드 매칭 (광역 키워드는 후순위)
   const SKIP_GLOBAL = new Set(['서울','경기','인천']);
   for (const [kw, codes] of Object.entries(REGION_KEYWORDS)) {
@@ -155,14 +156,18 @@ async function getAIRecommendations(userCondition) {
       targetRegions.map(r => getTransactionsByApt(r.lawdCd, ''))
     ).then(results => results.map((r, i) => {
       if (r.status === 'fulfilled') return r.value;
-      console.error(`[PropertyService] ${targetRegions[i].name} 조회 실패:`, r.reason?.message);
+      logger.warn({
+        region: targetRegions[i].name, errMsg: r.reason?.message,
+      }, 'PropertyService 지역별 거래 조회 실패');
       return [];
     })),
   ]);
   const allAptList = aptListArrays.flat();
   const allTx = txArrays.flat();
   const analyzed = analyzeTransactions(allTx);
-  console.log(`[PropertyService] 전체 단지: ${allAptList.length}개, 실거래 있는 단지: ${analyzed.length}개`);
+  logger.info({
+    aptListTotal: allAptList.length, analyzedCount: analyzed.length,
+  }, 'PropertyService 지역 집계 완료');
 
   if (!analyzed || !analyzed.length) {
     return {
@@ -364,7 +369,11 @@ async function getAIRecommendations(userCondition) {
   ).then(results => results.map((r, idx) => {
     // 부분 실패 시 원본 rec 유지 (facility 전체 손실 방지) — 길이 보장
     if (r.status === 'fulfilled' && r.value) return r.value;
-    if (r.reason) console.error(`[PropertyService] enrich ${recommendations[idx]?.aptName} 실패:`, r.reason?.message);
+    if (r.reason) {
+      logger.warn({
+        aptName: recommendations[idx]?.aptName, errMsg: r.reason?.message,
+      }, 'PropertyService enrich 실패 (원본 rec 유지)');
+    }
     return recommendations[idx];
   }));
 

@@ -5,6 +5,7 @@
  * - 응답 캐싱 (동일 질문 반복 방지)
  */
 const Anthropic = require('@anthropic-ai/sdk');
+const logger = require('../logger');
 
 // SDK는 별도 설치: npm install @anthropic-ai/sdk
 // 없을 경우 axios fallback 사용
@@ -12,7 +13,7 @@ let anthropicClient;
 try {
   anthropicClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 } catch (e) {
-  console.warn('Anthropic SDK 미설치, axios fallback 사용');
+  logger.warn({ err: e }, 'Anthropic SDK 미설치, axios fallback 사용');
 }
 
 const axios = require('axios');
@@ -109,7 +110,7 @@ async function callAI(messages, useCache = true) {
   if (useCache && messages.length === 1) {
     const cached = cache.get(cacheKey);
     if (cached) {
-      console.log(`[AI] 캐시 히트: ${cacheKey}`);
+      logger.debug({ cacheKey }, 'AI 캐시 히트');
       return { ...cached, fromCache: true };
     }
   }

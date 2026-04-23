@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const cache = require('../cache');
+const logger = require('../logger');
 
 // Kakao 좌표 조회: keyword → address fallback
 async function kakaoGeocode(key, aptName, area) {
@@ -30,7 +31,7 @@ async function kakaoGeocode(key, aptName, area) {
       attempts.push({ url: t.url.split('/').pop(), q: t.q, err: e.response?.status ? `HTTP ${e.response.status} ${e.response?.data?.message||''}` : e.message });
     }
   }
-  console.warn(`[geocode] "${aptName}" / "${area}" 결과없음 시도=${JSON.stringify(attempts)}`);
+  logger.warn({ source: 'geocode', aptName, area, attempts }, 'Kakao geocode 결과 없음');
   return null;
 }
 

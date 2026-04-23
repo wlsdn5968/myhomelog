@@ -51,6 +51,59 @@
 </script>
 
 <title>내집로그 — 실거래가로 보는 부동산 의사결정 도구</title>
+
+<!-- ── Sentry (프론트) — DSN 주입 시 자동 활성화 ─────────────
+     활성화 방법: 아래 content="" 에 Sentry Browser 프로젝트 DSN 입력.
+     미입력 시 fetch 실패 → 앱 정상 동작 (stub 모드).
+     ※ Browser DSN 은 공개되어도 안전한 설계 (rate limit + origin 체크).  -->
+<meta name="sentry-dsn" content="">
+<meta name="sentry-environment" content="production">
+<meta name="sentry-traces-sample-rate" content="0.1">
+<script>
+(function bootstrapSentry(){
+  try{
+    var dsn = document.querySelector('meta[name="sentry-dsn"]')?.content?.trim();
+    if (!dsn) return; // stub 모드 — no-op
+    var env = document.querySelector('meta[name="sentry-environment"]')?.content || 'production';
+    var tsr = parseFloat(document.querySelector('meta[name="sentry-traces-sample-rate"]')?.content || '0.1');
+    var s = document.createElement('script');
+    s.src = 'https://browser.sentry-cdn.com/8.40.0/bundle.tracing.min.js';
+    s.crossOrigin = 'anonymous';
+    s.integrity = ''; // SRI 는 버전 픽스 시 추가 권장
+    s.onload = function(){
+      if (!window.Sentry) return;
+      window.Sentry.init({
+        dsn: dsn,
+        environment: env,
+        tracesSampleRate: tsr,
+        // PII 최소화 — 기본 off, 필요 시 개별 캡쳐 수동
+        sendDefaultPii: false,
+        integrations: [ window.Sentry.browserTracingIntegration?.() ].filter(Boolean),
+        beforeSend: function(event){
+          try {
+            // URL 쿼리스트링의 serviceKey/apiKey/token 스크러빙
+            if (event.request && event.request.url) {
+              event.request.url = event.request.url.replace(
+                /([?&](serviceKey|apiKey|token)=)[^&]+/gi, '$1[Filtered]'
+              );
+            }
+          } catch(_){}
+          return event;
+        },
+        // 노이즈 감축
+        ignoreErrors: [
+          'ResizeObserver loop limit exceeded',
+          'ResizeObserver loop completed with undelivered notifications',
+          'Non-Error promise rejection captured',
+        ],
+      });
+    };
+    s.onerror = function(){ /* CDN 실패 시 조용히 스킵 */ };
+    document.head.appendChild(s);
+  } catch(_){ /* 절대 앱 동작 저해하지 않음 */ }
+})();
+</script>
+
 <style>
 :root{
   --bg:#F4F2ED;--s0:#fff;--s1:#F8F6F2;--s2:#F0EDE7;
