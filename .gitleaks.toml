@@ -1,0 +1,48 @@
+# gitleaks 커스텀 설정 — https://github.com/gitleaks/gitleaks
+# 기본 규칙 세트를 상속하고 프로젝트 특화 규칙/예외만 추가
+[extend]
+useDefault = true
+
+# ── 프로젝트 특화 규칙 ──────────────────────────────────────
+# MOLIT / Kakao 같은 공공 API 키도 누출되면 한도 탈취당하므로 감지
+[[rules]]
+id = "korea-public-data-service-key"
+description = "data.go.kr serviceKey (MOLIT/K-apt 등) 평문 노출"
+regex = '''(?i)serviceKey\s*[:=]\s*["']?[A-Za-z0-9%+/=]{60,}["']?'''
+tags = ["key", "data.go.kr"]
+
+[[rules]]
+id = "kakao-rest-api-key"
+description = "Kakao REST API Key (KakaoAK ...)"
+regex = '''(?i)KakaoAK\s+[a-f0-9]{32}'''
+tags = ["key", "kakao"]
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API Key"
+regex = '''sk-ant-[a-zA-Z0-9_-]{40,}'''
+tags = ["key", "anthropic"]
+
+[[rules]]
+id = "github-pat-in-url"
+description = "GitHub PAT 이 remote URL 에 평문으로 포함 (gho_/ghp_/ghs_)"
+regex = '''https://(gh[oups]_[A-Za-z0-9]{30,})@github\.com'''
+tags = ["key", "github"]
+
+# ── 전역 allowlist ──────────────────────────────────────────
+[allowlist]
+description = "스캔 제외 대상"
+paths = [
+  '''node_modules/''',
+  '''package-lock\.json$''',
+  '''\.min\.js$''',
+  '''dist/''',
+]
+
+# 테스트/문서용 더미 키는 흔히 'your_*_key' 형태로 쓰므로 예외
+regexes = [
+  '''your_[a-z_]+_key''',
+  '''example[-_]?key''',
+  '''REPLACE[-_]ME''',
+  '''xxx+''',
+]

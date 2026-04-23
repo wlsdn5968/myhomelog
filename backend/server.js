@@ -3,13 +3,20 @@
  * 보안: Helmet + CORS + Rate Limiting + Input Validation
  * 캐시: node-cache (Redis 전환 가능)
  */
+// ⚠️ Sentry 는 다른 어떤 import 보다 먼저 (v8 auto-instrumentation)
+// api/index.js 에서 먼저 로드되지만, 로컬 `npm run dev` 진입점도 방어적으로 중복 로드
+require('./sentry');
+
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
-const rateLimit = require('express-rate-limit');
 const dotenv = require('dotenv');
+const { makeRateLimiter } = require('./middleware/rateLimit');
 
 dotenv.config();
+
+const logger = require('./logger');
+const { maskIp } = require('./logger');
 
 const app = express();
 
@@ -46,28 +53,28 @@ app.use(cors({
 
 app.use(express.json({ limit: '50kb' }));
 
-// ── Rate Limiting ──────────────────────────────────────────
-const generalLimiter = rateLimit({
-  windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000'),
-  max: parseInt(process.env.RATE_LIMIT_MAX || '60'),
-  message: { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
-  standardHeaders: true,
-  legacyHeaders: false,
+// ── Rate Limiting (Upstash Redis 분산 + in-memory fallback) ─
+// 3개 스코프 분리: general(전체) / chat(AI) / data(외부 API 쿼터 보호)
+const generalLimiter = makeRateLimiter({
+  limit: parseInt(process.env.RATE_LIMIT_MAX || '60'),
+  windowSec: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000') / 1000,
+  scope: 'general',
+  message: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
 });
 
-// AI 채팅은 별도 더 엄격한 제한
-const chatLimiter = rateLimit({
-  windowMs: 60000,
-  max: 20,
-  message: { error: 'AI 채팅 요청 한도를 초과했습니다. 1분 후 다시 시도해주세요.' },
-  keyGenerator: (req) => req.ip + ':chat',
+const chatLimiter = makeRateLimiter({
+  limit: 20,
+  windowSec: 60,
+  scope: 'chat',
+  keySuffix: ':chat',
+  message: 'AI 채팅 요청 한도를 초과했습니다. 1분 후 다시 시도해주세요.',
 });
 
-// 실거래가 조회도 별도 제한 (공공 API 쿼터 보호)
-const dataLimiter = rateLimit({
-  windowMs: 60000,
-  max: 30,
-  message: { error: '데이터 조회 한도 초과. 잠시 후 다시 시도해주세요.' },
+const dataLimiter = makeRateLimiter({
+  limit: 30,
+  windowSec: 60,
+  scope: 'data',
+  message: '데이터 조회 한도 초과. 잠시 후 다시 시도해주세요.',
 });
 
 app.use('/api/', generalLimiter);
@@ -212,8 +219,9 @@ app.get('/api/health/apis', async (req, res) => {
 });
 
 // 헬스체크 (사용 한도 잔량 포함 — 프론트 사용 한도 표시에 사용)
-app.get('/api/health', (req, res) => {
-  const used = getUsage(req, 'search');
+// getUsage 가 Redis 연동으로 async 가 되었으므로 핸들러도 async
+app.get('/api/health', async (req, res) => {
+  const used = await getUsage(req, 'search');
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -227,12 +235,21 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// ── Sentry 에러 핸들러 (우리 에러 핸들러보다 먼저) ─────────
+// v8 는 setupExpressErrorHandler 로 모든 라우트 에러를 자동 캡쳐
+const Sentry = require('@sentry/node');
+Sentry.setupExpressErrorHandler(app);
+
 // ── 전역 에러 핸들러 ───────────────────────────────────────
 app.use((err, req, res, next) => {
-  // 에러 로그는 서버에만, 클라이언트엔 최소 정보만
-  console.error(`[${new Date().toISOString()}] ${err.message}`, {
-    url: req.url, method: req.method, ip: req.ip,
-  });
+  // 에러 로그는 서버에만, 클라이언트엔 최소 정보만 — IP 는 /24 마스킹 (PII 최소화)
+  logger.error({
+    err,
+    url: req.url,
+    method: req.method,
+    ip: maskIp(req.ip),
+    status: err.status || 500,
+  }, '요청 처리 실패');
   const status = err.status || 500;
   res.status(status).json({
     error: process.env.NODE_ENV === 'production'
@@ -250,8 +267,7 @@ app.use((req, res) => {
 if (process.env.VERCEL !== '1') {
   const PORT = process.env.PORT || 3001;
   app.listen(PORT, () => {
-    console.log(`✅ 내집로그 서버 실행 중: http://localhost:${PORT}`);
-    console.log(`   환경: ${process.env.NODE_ENV}`);
+    logger.info({ port: PORT, env: process.env.NODE_ENV }, '내집로그 서버 시작');
   });
 }
 

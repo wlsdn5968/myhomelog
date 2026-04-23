@@ -90,7 +90,7 @@ router.get('/', async (req, res) => {
     const status = e.response?.status;
     const data = e.response?.data || {};
     const detail = status ? `HTTP ${status} ${JSON.stringify(data).slice(0,200)}` : (e.code || e.message);
-    console.error('[Subscription] API 실패:', detail);
+    require('../logger').error({ source: 'subscription', status, detail }, '청약 API 실패');
 
     // odcloud "등록되지 않은 인증키" (-4) → 청약 데이터셋 별도 구독 필요
     if (status === 400 && (data.code === -4 || /등록되지 않은/.test(data.msg || ''))) {

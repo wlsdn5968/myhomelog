@@ -1,6 +1,55 @@
+# Dependencies
 node_modules/
-.env
-.DS_Store
-*.log
 
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Build / Deploy
 .vercel
+dist/
+build/
+.next/
+out/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+logs/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.swp
+*.swo
+
+# Coverage / Test
+coverage/
+.nyc_output/
+*.lcov
+
+# Runtime / Cache
+.cache/
+.eslintcache
+.parcel-cache/
+.turbo/
+
+# Supabase (곧 도입)
+supabase/.branches/
+supabase/.temp/
+
+# Claude / AI tooling local state
+.claude/
+
+# Secrets (paranoid double-guard — .env 외에 흔한 실수 경로)
+*.pem
+*.key
+secrets.json
+credentials.json

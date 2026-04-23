@@ -5,6 +5,7 @@
  */
 const axios = require('axios');
 const cache = require('../cache');
+const logger = require('../logger');
 
 const MOLIT_DETAIL_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
 // MOLIT API 성공 코드: '00'(구버전) 또는 '000'(신버전) — 다른 서비스에서도 재사용
@@ -66,9 +67,15 @@ async function getTransactions(lawdCd, dealYm) {
     const allItems = Array.isArray(items) ? items : items ? [items] : [];
     // MOLIT API 결과 코드 확인 — 성공 코드 '00'(구) / '000'(신) 외에는 명확히 로깅
     if (header && header.resultCode && !MOLIT_OK_CODES.has(header.resultCode)) {
-      console.error(`[transactionService] MOLIT ${lawdCd}/${dealYm} resultCode=${header.resultCode} msg=${header.resultMsg}`);
+      logger.warn({
+        source: 'molit', lawdCd, dealYm,
+        resultCode: header.resultCode, resultMsg: header.resultMsg,
+      }, 'MOLIT 거래 조회 비정상 응답코드');
     } else if (!header && typeof response.data === 'string') {
-      console.error(`[transactionService] MOLIT ${lawdCd}/${dealYm} non-JSON response:`, response.data.slice(0, 200));
+      logger.warn({
+        source: 'molit', lawdCd, dealYm,
+        sample: String(response.data).slice(0, 200),
+      }, 'MOLIT 거래 비-JSON 응답');
     }
 
     const result = allItems.map(item => ({

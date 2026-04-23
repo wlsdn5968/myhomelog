@@ -164,7 +164,7 @@ ${titles.slice(0, 20).map((t, i) => `${i+1}. ${t}`).join('\n')}
     cache.set(cacheKey, out, 10800); // 3시간
     res.json({ ...out, fromCache: false });
   } catch (e) {
-    console.error('[News Summary] AI 요약 실패:', e.message);
+    require('../logger').error({ err: e, source: 'news-summary' }, '뉴스 AI 요약 실패');
     res.json({
       summary: ['📌 오늘 뉴스를 불러왔어요. 상세는 아래 목록을 확인하세요.'],
       updatedAt: new Date().toISOString(),

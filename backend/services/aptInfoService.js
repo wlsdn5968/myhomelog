@@ -9,6 +9,7 @@
  */
 const axios = require('axios');
 const cache = require('../cache');
+const logger = require('../logger');
 
 const APT_BASIS_URL = 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3';
 const APT_LIST_URL = 'https://apis.data.go.kr/1613000/AptListService3/getRoadnameAptList3';
@@ -55,7 +56,10 @@ async function getAptBasisInfo(aptSeq) {
   }
 
   if (!r) {
-    console.error(`[aptInfoService] getAptBasisInfo ${aptSeq} 재시도 후 실패:`, lastErr?.response?.status, lastErr?.message);
+    logger.warn({
+      source: 'kapt-basis', aptSeq,
+      status: lastErr?.response?.status, errMsg: lastErr?.message,
+    }, 'K-apt 단지 기본정보 재시도 후 실패');
     // 실패는 짧게 캐시해 다음 요청에서 재시도 기회 부여
     cache.set(cacheKey, null, 600); // 10분
     return null;
@@ -64,7 +68,10 @@ async function getAptBasisInfo(aptSeq) {
   const item = r.data?.response?.body?.item || null;
   const resultCode = r.data?.response?.header?.resultCode;
   if (!item && resultCode && resultCode !== '00' && resultCode !== '000') {
-    console.error(`[aptInfoService] getAptBasisInfo ${aptSeq} resultCode=${resultCode} msg=${r.data?.response?.header?.resultMsg}`);
+    logger.warn({
+      source: 'kapt-basis', aptSeq, resultCode,
+      resultMsg: r.data?.response?.header?.resultMsg,
+    }, 'K-apt 단지 기본정보 비정상 응답코드');
   }
   // 성공 결과만 30일 캐시. null 도 짧게 캐시(10분).
   cache.set(cacheKey, item, item ? 86400 * 30 : 600);
@@ -132,7 +139,10 @@ async function getAptListBySgg(sigunguCode) {
       const list = Array.isArray(items) ? items : items ? [items] : [];
       const resultCode = r.data?.response?.header?.resultCode;
       if (!list.length && resultCode && resultCode !== '00' && resultCode !== '000') {
-        console.error(`[aptInfoService] getAptListBySgg ${sigunguCode} p${pageNo} resultCode=${resultCode} msg=${r.data?.response?.header?.resultMsg}`);
+        logger.warn({
+          source: 'kapt-list-sgg', sigunguCode, pageNo, resultCode,
+          resultMsg: r.data?.response?.header?.resultMsg,
+        }, 'K-apt 시군구 단지목록 비정상 응답코드');
       }
       if (!list.length) break;
       all.push(...list);
@@ -141,7 +151,9 @@ async function getAptListBySgg(sigunguCode) {
     cache.set(cacheKey, all, 86400 * 7); // 7일 — 단지 리스트는 거의 안 바뀜
     return all;
   } catch (e) {
-    console.error(`[aptInfoService] getAptListBySgg 실패 (${sigunguCode}):`, e.message);
+    logger.error({
+      source: 'kapt-list-sgg', sigunguCode, err: e,
+    }, 'K-apt 시군구 단지목록 조회 실패');
     cache.set(cacheKey, [], 1800); // 실패 시 30분 짧게 캐시
     return [];
   }

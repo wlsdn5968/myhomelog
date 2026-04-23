@@ -1,0 +1,63 @@
+version: 2
+updates:
+  # 루트 (Vercel serverless 배포 진입점이 루트 package.json 사용)
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    open-pull-requests-limit: 5
+    labels:
+      - "deps"
+    commit-message:
+      prefix: "chore(deps)"
+      include: "scope"
+    groups:
+      # minor/patch 는 한 PR 로 묶어 리뷰 부담 최소화
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      # 메이저 업그레이드는 따로 PR 받아 수동 검토
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # 백엔드 (동일 의존성 스택이지만 별도 lock 파일 존재)
+  - package-ecosystem: "npm"
+    directory: "/backend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    open-pull-requests-limit: 5
+    labels:
+      - "deps"
+      - "backend"
+    commit-message:
+      prefix: "chore(deps/backend)"
+      include: "scope"
+    groups:
+      minor-and-patch:
+        update-types:
+          - "minor"
+          - "patch"
+    ignore:
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+
+  # GitHub Actions 자체 버전 관리
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "09:00"
+      timezone: "Asia/Seoul"
+    labels:
+      - "ci"
+    commit-message:
+      prefix: "chore(ci)"
