@@ -3,13 +3,27 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 60,
-      "includeFiles": "frontend/index.html"
+      "includeFiles": "frontend/index.html",
+      "excludeFiles": "{**/*.test.js,**/*.spec.js,**/test/**,**/tests/**,**/__tests__/**,**/*.md,**/CHANGELOG*,**/LICENSE*,**/README*,**/.git/**,**/.github/**,**/.vscode/**,**/.idea/**,**/coverage/**,**/.nyc_output/**,**/docs/**,**/examples/**,**/example/**,**/sample/**,**/samples/**,**/.env*,**/tsconfig*.json,**/jest.config*,**/.eslintrc*,**/.prettierrc*,**/*.map,**/node_modules/typescript/**,**/node_modules/@types/**,**/node_modules/.bin/**,supabase/**,scripts/**,frontend/billing.html,frontend/privacy.html,frontend/terms.html,frontend/refund.html}"
     }
   },
   "routes": [
     { "src": "/api/(.*)", "dest": "/api/index.js" },
     { "src": "/share(.*)", "dest": "/api/index.js" },
     { "src": "/billing(/.*)?", "dest": "/frontend/billing.html" },
+    { "src": "/privacy(\\.html)?", "dest": "/frontend/privacy.html" },
+    { "src": "/terms(\\.html)?", "dest": "/frontend/terms.html" },
+    { "src": "/refund(\\.html)?", "dest": "/frontend/refund.html" },
     { "src": "/(.*)", "dest": "/frontend/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/cron/retention",
+      "schedule": "0 18 * * *"
+    },
+    {
+      "path": "/api/cron/molit-ingest",
+      "schedule": "0 17 * * *"
+    }
   ]
 }

@@ -1,15 +1,27 @@
 /**
  * 입력 검증 미들웨어
  * 모든 사용자 입력은 여기서 sanitize
+ *
+ * 설계:
+ *   - LLM 프롬프트·DB 저장 전 sanitize 로는 "HTML escape" 가 맞다.
+ *     특수문자 제거(과거 방식)는 "3.5 <= 금리" 같은 수식/비교 질문을 훼손.
+ *   - HTML 렌더링 시점(프론트) 에서 다시 한번 escape (defense-in-depth).
+ *   - 유니코드 정규화(NFKC) + 제어문자 제거 + 길이 바이트 기준 제한.
  */
 
-// 허용 문자 목록 기반 sanitize (XSS 방지)
+const HTML_ESCAPE_MAP = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+
 function sanitizeString(str, maxLen = 500) {
   if (typeof str !== 'string') return '';
-  return str
-    .slice(0, maxLen)
-    .replace(/[<>'"]/g, '') // 기본 XSS 제거
-    .trim();
+  // 1) Unicode 정규화 (전각→반각 등 homograph 공격 방어)
+  let s = str.normalize('NFKC');
+  // 2) 제어문자 제거 (\x00-\x1F, \x7F)
+  s = s.replace(/[\x00-\x1F\x7F]/g, '');
+  // 3) 길이 제한 (문자 단위)
+  s = s.slice(0, maxLen);
+  // 4) HTML escape — 제거 대신 안전한 치환
+  s = s.replace(/[&<>"']/g, c => HTML_ESCAPE_MAP[c]);
+  return s.trim();
 }
 
 function sanitizeNumber(val, min, max) {
@@ -58,7 +70,7 @@ function validateTransactionQuery(req, res, next) {
   next();
 }
 
-// 매물 검색 검증 — POST body 기반 (일부 엔드포인트는 query string)
+// 단지 검색 검증 — POST body 기반 (일부 엔드포인트는 query string)
 function validatePropertySearch(req, res, next) {
   // POST /recommend 은 body, GET 엔드포인트는 query
   const src = req.method === 'POST' ? (req.body || {}) : (req.query || {});

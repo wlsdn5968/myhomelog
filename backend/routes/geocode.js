@@ -3,6 +3,7 @@ const router = express.Router();
 const axios = require('axios');
 const cache = require('../cache');
 const logger = require('../logger');
+const { isValidKoreaCoord } = require('../utils/geo');
 
 // Kakao 좌표 조회: keyword → address fallback
 async function kakaoGeocode(key, aptName, area) {
@@ -21,8 +22,15 @@ async function kakaoGeocode(key, aptName, area) {
       const d = r.data?.documents?.[0];
       attempts.push({ url: t.url.split('/').pop(), q: t.q, total: r.data?.meta?.total_count || 0, status: r.status });
       if (d) {
+        const lat = parseFloat(d.y);
+        const lng = parseFloat(d.x);
+        // Phase 1.9: 한반도 범위 밖 좌표는 무시 — 동명 외국 지명, 잘못된 0,0 등 차단
+        if (!isValidKoreaCoord(lat, lng)) {
+          attempts.push({ skipped: 'out_of_korea', lat, lng });
+          continue;
+        }
         return {
-          lat: parseFloat(d.y), lng: parseFloat(d.x),
+          lat, lng,
           address: d.address_name || d.address?.address_name,
           placeName: d.place_name,
         };

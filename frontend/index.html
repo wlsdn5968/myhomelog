@@ -42,7 +42,7 @@
     "price": "0",
     "priceCurrency": "KRW"
   },
-  "disclaimer": "본 서비스는 매수·매도를 추천하지 않으며, 모든 의사결정의 책임은 이용자 본인에게 있습니다. 가격 하락에 따른 손실은 운영자가 책임지지 않습니다.",
+  "disclaimer": "본 서비스는 매수·매도를 추천하지 않으며, 정보 제공만을 목적으로 합니다. 운영자의 고의 또는 중대한 과실이 없는 한 이용자의 의사결정 결과에 대한 책임은 이용자 본인에게 있습니다.",
   "publisher": {
     "@type": "Organization",
     "name": "내집로그"
@@ -211,7 +211,14 @@ window.MHL.auth = window.MHL.auth || {
   --sh2:0 4px 24px rgba(0,0,0,.14);
 }
 *{box-sizing:border-box;margin:0;padding:0}
+/* A11y: 키보드 탐색 시만 포커스 링 표시 (마우스 클릭 시 방해 없음) */
+*:focus{outline:none}
+*:focus-visible{outline:2px solid var(--acc);outline-offset:2px;border-radius:4px}
 html,body{height:100%;overflow:hidden}
+/* iOS Safari — 주소 표시줄 숨김 시 100vh 오차 방지. dvh 지원 브라우저에서만 적용. */
+@supports (height: 100dvh){
+  html,body{height:100dvh}
+}
 body{font-family:'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;background:var(--bg);color:var(--t1);font-size:14px;line-height:1.6;display:flex;flex-direction:column}
 
 /* HEADER */
@@ -532,7 +539,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   header{padding:0 12px;gap:7px}
 }
 
-/* ── 매수 신호등 ─────────────────────────────────────────── */
+/* ── 가격 위치 시그널 (Price Location Signal) ────────────── */
 .sig-hero{display:flex;align-items:center;gap:14px;padding:14px;border-radius:var(--r);margin-bottom:14px;border:1px solid var(--bd)}
 .sig-hero.green{background:var(--grnL);border-color:#B0D9BE}
 .sig-hero.yellow{background:var(--ambL);border-color:#E4C080}
@@ -626,6 +633,37 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 .deal-row:last-child{border-bottom:none}
 .deal-lbl{color:var(--t3)}
 .deal-day{font-weight:700}.deal-day.soon{color:var(--red)}.deal-day.ok{color:var(--grn)}
+
+/* ── Phase 3.2: 모바일 UX 강화 ────────────────────────────
+   - iOS Safari: input font-size < 16px → 자동 줌 인 발생 (UX 파괴)
+   - 터치 타겟: WCAG 2.5.5 AAA 권장 44×44 CSS px (Apple HIG 동일)
+   - safe-area: iPhone notch/홈바 영역 침범 방지
+   - 100dvh: 모바일 브라우저 chrome 가변 높이 대응 (vh 의 한계 해결)
+*/
+@supports (height: 100dvh) {
+  .rp.rp-overlay { height: min(560px, calc(100dvh - 120px)); }
+  .bm-pop { max-height: min(460px, calc(100dvh - 200px)); }
+}
+@media (max-width: 640px) {
+  /* iOS 자동 줌 방지 — input/textarea/select 모두 16px 이상 강제 */
+  .inp, input[type="text"], input[type="email"], input[type="number"], input[type="tel"], input[type="search"], textarea, select {
+    font-size: 16px !important;
+  }
+  /* 터치 타겟 44×44 — WCAG 2.5.5 권장 (모든 클릭 가능 요소) */
+  button, .btn, .hbtn, .rtab, .smx, .dmx, a.sm-save, .lbl-btn, .fab-ai {
+    min-height: 44px;
+    min-width: 44px;
+  }
+  /* iOS 홈바 안전 영역 — 하단 고정 버튼/푸터 */
+  .legal-footer, .fab-ai, footer.legal-footer {
+    padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
+  }
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+/* tap-highlight 색상 토닝 다운 (회색 → 브랜드 톤) */
+* { -webkit-tap-highlight-color: rgba(42,109,244,.12); }
 </style>
 </head>
 <body>
@@ -642,7 +680,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
   <div class="hml">
     <div class="rpill"><div class="hdot"></div>10.15 규제</div>
-    <span class="hst" id="quotaPill" style="background:var(--ambL);color:var(--amb);display:none">⚡ 5/5</span>
+    <span class="hst" id="quotaPill" style="background:var(--ambL);color:var(--amb);display:none" title="일일 무료 검색 잔여">⚡ 5/5</span>
+    <span class="hst" id="aiPill" style="background:var(--bg2);color:var(--t2);display:none" title="AI 채팅 잔여 (무료 플랜)">🤖 —</span>
     <span class="hst off" id="apiSt">확인 중...</span>
     <button class="hbtn" id="loginBtn" onclick="openLogin()" title="로그인하면 북마크가 기기 간 동기화돼요">로그인</button>
     <button class="hbtn" id="userBtn" onclick="openUserMenu()" style="display:none">👤 <span id="userBadge"></span></button>
@@ -652,7 +691,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 
 <!-- 목업 경고 배너 -->
 <div class="mock-banner" id="mockBanner">
-  ⚠ 실거래가 API 미연동 — 표시되는 매물 데이터는 실제 시세가 아닙니다.
+  ⚠ 실거래가 API 미연동 — 표시되는 단지 데이터는 실제 시세가 아닙니다.
   <a onclick="openSettings()">API 설정하기 →</a>
 </div>
 
@@ -697,8 +736,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       </div>
       <div class="mb9"><span class="lbl">학군 중요도</span><div class="chips" id="ch-sc"><span class="chip" onclick="cp(this,'ch-sc')">학군 중요</span><span class="chip on" onclick="cp(this,'ch-sc')">보통</span></div></div>
       <div class="mb9"><span class="lbl">희망 평형</span><div class="chips" id="ch-py"><span class="chip" onclick="cp(this,'ch-py')">소형 15~22평</span><span class="chip on" onclick="cp(this,'ch-py')">중형 23~33평</span><span class="chip" onclick="cp(this,'ch-py')">대형 34평+</span><span class="chip" onclick="cp(this,'ch-py')">전체</span></div></div>
-      <div class="r2"><div><label class="lbl">매수가 (억)</label><input class="inp" id="bp" type="number" placeholder="6.8" step="0.1" oninput="cl()"></div><div><label class="lbl">현금 (억)</label><input class="inp" id="mc" type="number" placeholder="3.5" step="0.1" oninput="cl()"></div></div>
-      <div class="r2"><div><label class="lbl">연 소득 (만원)</label><input class="inp" id="inc" type="number" placeholder="5000" oninput="cl()"></div><div><label class="lbl">직장 위치 / 관심 구</label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
+      <div class="r2"><div><label class="lbl" for="bp">매수가 (억)</label><input class="inp" id="bp" type="number" inputmode="decimal" placeholder="6.8" step="0.1" oninput="cl()"></div><div><label class="lbl" for="mc">현금 (억)</label><input class="inp" id="mc" type="number" inputmode="decimal" placeholder="3.5" step="0.1" oninput="cl()"></div></div>
+      <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 / 관심 구</label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
       <button class="abtn acc" onclick="cl()">대출 한도 계산</button>
       <div id="lr" style="display:none"><div class="lbox">
         <div style="font-size:10px;color:var(--t2);margin-bottom:2px">최대 대출 한도</div>
@@ -712,7 +751,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         <div class="wbox" id="lW"></div>
       </div></div>
       <button class="abtn a2" id="srchBtn" onclick="doSearch()">
-        <div class="spin" id="srchSp"></div><span id="srchTx">🤖 AI 맞춤 매물 검색</span>
+        <div class="spin" id="srchSp"></div><span id="srchTx">🤖 AI 맞춤 단지 검색</span>
       </button>
     </div>
   </div>
@@ -733,8 +772,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
 
   <div class="sec" id="s3" style="border-bottom:none">
-    <div class="sh" onclick="ts('s3')"><span class="st">추천 매물</span><span id="pCnt" style="color:var(--acc);font-size:11px;font-weight:700">0건</span><span class="sa">▲</span></div>
-    <div id="pList"><div style="padding:20px;text-align:center;color:var(--t3);font-size:12px;line-height:2.1">AI 매물 검색을 실행하면<br>국토부 실거래가 기반으로<br>실시간 추천됩니다</div></div>
+    <div class="sh" onclick="ts('s3')"><span class="st">추천 단지</span><span id="pCnt" style="color:var(--acc);font-size:11px;font-weight:700">0건</span><span class="sa">▲</span></div>
+    <div id="pList"><div style="padding:20px;text-align:center;color:var(--t3);font-size:12px;line-height:2.1">AI 단지 검색을 실행하면<br>국토부 실거래가 기반으로<br>실시간 추천됩니다</div></div>
   </div>
 </div></div>
 
@@ -767,9 +806,9 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <div style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.5">출처: 금융위원회·국토교통부 발표 · 시행 일자는 변경될 수 있으니 공식 공고 확인 권고</div>
   </div>
   <div style="background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:17px;margin-bottom:14px;max-width:520px;box-shadow:var(--sh)">
-    <div class="r2"><div><label class="lbl">매수가(억)</label><input class="inp" id="c_b" type="number" placeholder="7.0" oninput="dc()"></div><div><label class="lbl">연소득(만)</label><input class="inp" id="c_i" type="number" placeholder="5000" oninput="dc()"></div></div>
-    <div class="r2"><div><label class="lbl">금리(%)</label><input class="inp" id="c_r" type="number" placeholder="4.0" step="0.1" oninput="dc()"></div><div><label class="lbl">기간(년)</label><input class="inp" id="c_y" type="number" placeholder="30" oninput="dc()"></div></div>
-    <div class="r2"><div><label class="lbl">기존 월원리금(만)</label><input class="inp" id="c_e" type="number" placeholder="0" oninput="dc()"></div><div><label class="lbl">보유현금(억)</label><input class="inp" id="c_c" type="number" placeholder="3.0" oninput="dc()"></div></div>
+    <div class="r2"><div><label class="lbl" for="c_b">매수가(억)</label><input class="inp" id="c_b" type="number" inputmode="decimal" placeholder="7.0" oninput="dc()"></div><div><label class="lbl" for="c_i">연소득(만)</label><input class="inp" id="c_i" type="number" inputmode="decimal" placeholder="5000" oninput="dc()"></div></div>
+    <div class="r2"><div><label class="lbl" for="c_r">금리(%)</label><input class="inp" id="c_r" type="number" inputmode="decimal" placeholder="4.0" step="0.1" oninput="dc()"></div><div><label class="lbl" for="c_y">기간(년)</label><input class="inp" id="c_y" type="number" inputmode="decimal" placeholder="30" oninput="dc()"></div></div>
+    <div class="r2"><div><label class="lbl" for="c_e">기존 월원리금(만)</label><input class="inp" id="c_e" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div><div><label class="lbl" for="c_c">보유현금(억)</label><input class="inp" id="c_c" type="number" inputmode="decimal" placeholder="3.0" oninput="dc()"></div></div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:11px">
       <div><span class="lbl">주택보유</span><div class="chips" id="cc-h"><span class="chip on" onclick="cp(this,'cc-h')">무주택</span><span class="chip" onclick="cp(this,'cc-h')">1주택</span><span class="chip" onclick="cp(this,'cc-h')">2주택+</span></div></div>
       <div><span class="lbl">생애최초</span><div class="chips" id="cc-f"><span class="chip on" onclick="cp(this,'cc-f')">예</span><span class="chip" onclick="cp(this,'cc-f')">아니오</span></div></div>
@@ -808,10 +847,10 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 <!-- RIGHT CHAT -->
 <div class="rp">
   <div class="chdr">
-    <span class="ctit">AI 부동산 컨설턴트</span>
+    <span class="ctit">AI 데이터 도우미</span>
     <span style="display:flex;gap:6px;align-items:center">
-      <button id="chatHistBtn" onclick="openChatHistory()" title="대화 이력" style="background:none;border:none;color:var(--t2);cursor:pointer;font-size:13px;padding:2px 6px;display:none">🕘</button>
-      <button id="chatNewBtn" onclick="newChatSession()" title="새 대화" style="background:none;border:none;color:var(--t2);cursor:pointer;font-size:13px;padding:2px 6px;display:none">✚</button>
+      <button id="chatHistBtn" onclick="openChatHistory()" title="대화 이력" aria-label="저장된 대화 이력 열기" style="background:none;border:none;color:var(--t2);cursor:pointer;font-size:13px;padding:2px 6px;display:none">🕘</button>
+      <button id="chatNewBtn" onclick="newChatSession()" title="새 대화" aria-label="새 대화 시작" style="background:none;border:none;color:var(--t2);cursor:pointer;font-size:13px;padding:2px 6px;display:none">✚</button>
       <span class="cst off" id="cSt">● 연결 중...</span>
     </span>
   </div>
@@ -831,8 +870,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
   <div id="cErr" class="cerr">⚠ 서버 오프라인 — 직접 AI 모드로 동작 중</div>
   <div class="cir">
-    <textarea class="ci" id="cIn" placeholder="질문 입력... (Shift+Enter 줄바꿈)" rows="1" onkeydown="hk(event)" oninput="ah(this)"></textarea>
-    <button class="cs" onclick="sM()"><svg viewBox="0 0 24 24"><path d="M2 21L23 12 2 3v7l15 2-15 2z"/></svg></button>
+    <textarea class="ci" id="cIn" placeholder="질문 입력... (Shift+Enter 줄바꿈)" rows="1" onkeydown="hk(event)" oninput="ah(this)" aria-label="AI 도우미에게 질문 입력"></textarea>
+    <button class="cs" onclick="sM()" aria-label="질문 전송" title="전송"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 21L23 12 2 3v7l15 2-15 2z"/></svg></button>
   </div>
 </div>
 </div>
@@ -841,18 +880,18 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 <div class="clause-view" id="view-clause">
   <div class="cv-hero">
     <h2>✍ AI 맞춤 특약 생성</h2>
-    <p>매물 정보 입력 → 30초 내 필수·권장 특약 자동 생성 (실무 판례 기반)</p>
+    <p>매매 정보 입력 → 30초 내 필수·권장 특약 자동 생성 (실무 판례 기반)</p>
   </div>
   <div class="cv-form">
-    <h3>매물 기본 정보</h3>
+    <h3>매매 기본 정보</h3>
     <div class="cv-r2">
-      <div><label class="lbl">단지명 *</label><input class="inp" id="cl_apt" placeholder="예: 래미안 대치팰리스"></div>
-      <div><label class="lbl">지역</label><input class="inp" id="cl_area" placeholder="예: 강남구 대치동"></div>
+      <div><label class="lbl" for="cl_apt">단지명 *</label><input class="inp" id="cl_apt" placeholder="예: 래미안 대치팰리스"></div>
+      <div><label class="lbl" for="cl_area">지역</label><input class="inp" id="cl_area" placeholder="예: 강남구 대치동"></div>
     </div>
     <div class="cv-r3">
-      <div><label class="lbl">매수가 (억)</label><input class="inp" id="cl_price" type="number" placeholder="10.5" step="0.1"></div>
-      <div><label class="lbl">면적 (㎡)</label><input class="inp" id="cl_area2" type="number" placeholder="84.9"></div>
-      <div><label class="lbl">준공연도</label><input class="inp" id="cl_year" type="number" placeholder="2010"></div>
+      <div><label class="lbl" for="cl_price">매수가 (억)</label><input class="inp" id="cl_price" type="number" inputmode="decimal" placeholder="10.5" step="0.1"></div>
+      <div><label class="lbl" for="cl_area2">면적 (㎡)</label><input class="inp" id="cl_area2" type="number" inputmode="decimal" placeholder="84.9"></div>
+      <div><label class="lbl" for="cl_year">준공연도</label><input class="inp" id="cl_year" type="number" inputmode="decimal" placeholder="2010"></div>
     </div>
     <div class="cv-r2">
       <div>
@@ -871,7 +910,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         </div>
       </div>
     </div>
-    <div class="mb9"><label class="lbl">특이사항 (선택)</label><input class="inp" id="cl_issues" placeholder="예: 누수 이력, 전세 낀 매물, 재건축 추진 중...">
+    <div class="mb9"><label class="lbl" for="cl_issues">특이사항 (선택)</label><input class="inp" id="cl_issues" placeholder="예: 누수 이력, 전세 낀 집, 재건축 추진 중...">
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-top:6px">
         <span class="chip" onclick="addClauseIssue('누수 이력')">+ 누수 이력</span>
         <span class="chip" onclick="addClauseIssue('전세 끼고 매수')">+ 전세 끼고 매수</span>
@@ -902,7 +941,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <h3>💰 중개보수(복비) 계산기</h3>
     <p style="font-size:11px;color:var(--t3);margin-bottom:13px">공인중개사법 시행규칙 기준 · 2025년 현행</p>
     <div class="cv-r2" style="margin-bottom:9px">
-      <div><label class="lbl">거래금액 (억)</label><input class="inp" id="biz_price" type="number" placeholder="8.5" step="0.1" oninput="calcComm()"></div>
+      <div><label class="lbl">거래금액 (억)</label><input class="inp" id="biz_price" type="number" inputmode="decimal" placeholder="8.5" step="0.1" oninput="calcComm()"></div>
       <div>
         <label class="lbl">거래 유형</label>
         <div class="chips" id="biz-type" style="margin-top:4px">
@@ -1005,11 +1044,13 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
 </nav>
 
-<!-- 면책 고지 -->
+<!-- 정보 제공 안내 -->
 <footer class="legal-footer">
-  ⚠ <strong>본 서비스는 매수·매도를 권유하거나 추천하지 않습니다.</strong> 모든 가격 분석·신호·점수는 과거 실거래 데이터의 통계적 정리이며, <strong>미래 가격을 예측하거나 보장하지 않습니다.</strong> 부동산 가격은 하락할 수 있으며, 그로 인한 손실의 책임은 전적으로 이용자 본인에게 있습니다.<br>
-  본 서비스는 부동산 공공 데이터를 조회·가공하는 <strong>정보 분석 도구</strong>이며, 「자본시장법」상 투자자문업·「공인중개사법」상 중개업에 해당하지 않습니다. 대출 한도는 반드시 금융기관에서, 특약·계약은 공인중개사·법무사 검토를, 세금은 세무사 상담을 받으세요. 규제·세제는 수시 변경되며 최신 정보는 금융위원회·국토교통부·국세청에서 확인하세요.
-  <a href="javascript:openTerms()" style="color:var(--acc);text-decoration:underline">전체 이용약관·면책조항 보기</a>
+  ⚠ <strong>본 서비스는 매수·매도를 권유하거나 추천하지 않습니다.</strong> 모든 가격 분석·시그널·점수는 과거 실거래 데이터의 통계적 정리이며, <strong>미래 가격을 예측하거나 보장하지 않습니다.</strong> 부동산 가격은 하락할 수 있으며, 본 서비스를 참고한 의사결정의 결과에 대해 운영자는 「약관의 규제에 관한 법률」에 따라 운영자의 고의 또는 중대한 과실이 없는 한 책임을 지지 않습니다.<br>
+  본 서비스는 부동산 공공 데이터를 조회·가공하는 <strong>정보 제공 도구</strong>이며, 「자본시장법」상 투자자문업·「공인중개사법」상 중개업에 해당하지 않습니다. 대출 한도는 반드시 금융기관에서, 특약·계약은 공인중개사·법무사 검토를, 세금은 세무사 상담을 받으세요. 규제·세제는 수시 변경되며 최신 정보는 금융위원회·국토교통부·국세청에서 확인하세요.
+  <a href="/terms.html" style="color:var(--acc);text-decoration:underline">이용약관</a>
+  · <a href="/privacy.html" style="color:var(--acc);text-decoration:underline">개인정보 처리방침</a>
+  · <a href="/refund.html" style="color:var(--acc);text-decoration:underline">환불 정책</a>
 </footer>
 
 <!-- 약관 모달 -->
@@ -1017,15 +1058,15 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <div class="smbox" style="max-width:560px;max-height:80vh">
     <div class="smhdr">
       <span class="smtit">📜 이용약관 및 면책조항</span>
-      <button class="smx" onclick="closeTerms()">✕</button>
+      <button class="smx" onclick="closeTerms()" aria-label="이용약관 닫기" title="닫기">✕</button>
     </div>
     <div class="smbody" id="tmBody" style="overflow-y:auto;max-height:65vh">
       <div style="font-size:12px;line-height:1.8;color:var(--t1)">
         <h3 style="font-size:14px;margin:8px 0 6px;color:var(--red)">⚠ 가장 중요한 고지</h3>
         <div style="background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;padding:12px;margin-bottom:14px;font-weight:600;color:var(--red)">
           내집로그는 <u>매수·매도를 권유하거나 가격을 예측하는 서비스가 아닙니다.</u><br>
-          제공되는 모든 점수·신호등(🟢🟡🔴)·추천 매물·분석 코멘트는 <u>과거 실거래 데이터를 통계적으로 정리한 참고 정보</u>일 뿐이며, <u>미래 가격의 상승 또는 하락을 시사하지 않습니다.</u><br>
-          부동산 가격은 거시경제·금리·정책·심리 등 다양한 요인에 의해 <u>언제든 큰 폭으로 하락할 수 있으며</u>, 본 서비스를 참고한 결과로 발생한 모든 금전적 손실(매매 차손, 대출 이자, 세금, 기회비용 등)에 대해 <strong>운영자는 일체의 책임을 지지 않습니다.</strong>
+          제공되는 모든 점수·신호등(🟢🟡🔴)·추천 단지·분석 코멘트는 <u>과거 실거래 데이터를 통계적으로 정리한 참고 정보</u>일 뿐이며, <u>미래 가격의 상승 또는 하락을 시사하지 않습니다.</u><br>
+          부동산 가격은 거시경제·금리·정책·심리 등 다양한 요인에 의해 <u>언제든 큰 폭으로 하락할 수 있으며</u>, 본 서비스를 참고한 결과로 발생한 금전적 손실(매매 차손, 대출 이자, 세금, 기회비용 등)에 대해 <strong>운영자의 고의 또는 중대한 과실이 없는 한 운영자는 책임을 지지 않습니다.</strong> (「약관의 규제에 관한 법률」 제7조에 따른 책임 제한)
         </div>
 
         <h3 style="font-size:13px;margin:14px 0 4px">1. 서비스의 성격</h3>
@@ -1052,11 +1093,16 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         <h3 style="font-size:13px;margin:14px 0 4px">5. 책임의 제한</h3>
         <p>운영자는 본 서비스 이용으로 발생한 직접·간접·결과적 손해(매매 차손, 대출 이자, 세금, 기회비용, 정신적 손해 등)에 대해 <strong>고의·중과실이 없는 한 어떠한 책임도 부담하지 않습니다.</strong> 이용자는 본 서비스를 보조 도구로만 사용하고, 최종 의사결정은 반드시 본인의 판단과 전문가(공인중개사·세무사·법무사·금융기관) 자문을 거쳐 수행해야 합니다.</p>
 
-        <h3 style="font-size:13px;margin:14px 0 4px">6. 동의</h3>
-        <p>본 서비스를 이용함으로써 위 사항에 모두 <strong>동의한 것으로 간주</strong>됩니다.</p>
+        <h3 style="font-size:13px;margin:14px 0 4px">6. 추가 정책 문서</h3>
+        <p>구체적인 권리·의무·환불 정책은 별도 문서를 참조하세요.</p>
+        <ul style="padding-left:18px">
+          <li><a href="/terms.html" style="color:var(--acc)" target="_blank">이용약관 전문</a></li>
+          <li><a href="/privacy.html" style="color:var(--acc)" target="_blank">개인정보 처리방침</a></li>
+          <li><a href="/refund.html" style="color:var(--acc)" target="_blank">환불 정책</a></li>
+        </ul>
 
         <div style="margin-top:14px;padding:8px;background:var(--s1);border-radius:6px;font-size:10px;color:var(--t3);text-align:center">
-          최종 갱신: 2026.04 · 문의: support@myhomelog.local
+          최종 갱신: 2026.04 · 문의: privacy@myhomelog.app
         </div>
       </div>
       <button class="sm-save" onclick="closeTerms()">확인</button>
@@ -1072,7 +1118,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       <div style="display:flex;gap:7px;align-items:center">
         <button class="bk-btn" id="shareBtn" onclick="shareCurrent()" title="이 단지 분석 공유">🔗 공유</button>
         <button class="bk-btn" id="bkToggle" onclick="toggleBookmark()">⭐ 관심 추가</button>
-        <button class="dmx" onclick="cDM()">✕</button>
+        <button class="dmx" onclick="cDM()" aria-label="리포트 닫기" title="닫기">✕</button>
       </div>
     </div>
     <div class="rtabs">
@@ -1080,7 +1126,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       <button class="rtab" onclick="stb(this,'t1')">📈 실거래가</button>
       <button class="rtab" onclick="stb(this,'t2')">⚠ 리스크</button>
       <button class="rtab" onclick="stb(this,'t3')">📝 특약 초안</button>
-      <button class="rtab" onclick="stb(this,'t4')">🎯 매수신호</button>
+      <button class="rtab" onclick="stb(this,'t4')">🎯 가격 시그널</button>
       <button class="rtab" onclick="stb(this,'t5')">🏃 임장노트</button>
     </div>
     <div class="rpanel">
@@ -1099,7 +1145,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <div class="smbox">
     <div class="smhdr">
       <span class="smtit">⚙ 서비스 정보</span>
-      <button class="smx" onclick="closeSM()">✕</button>
+      <button class="smx" onclick="closeSM()" aria-label="서비스 정보 닫기" title="닫기">✕</button>
     </div>
     <div class="smbody">
       <div class="sm-row">
@@ -1132,11 +1178,31 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <div class="smbox" style="max-width:420px">
     <div class="smhdr">
       <span class="smtit">🔐 내집로그 로그인</span>
-      <button class="smx" onclick="closeLogin()">✕</button>
+      <button class="smx" onclick="closeLogin()" aria-label="로그인 창 닫기" title="닫기">✕</button>
     </div>
     <div class="smbody">
       <div class="sm-hint" style="margin-bottom:12px">
         로그인하면 북마크·메모가 모든 기기에서 동기화됩니다. <b>저장된 데이터는 본인만 조회 가능</b>합니다 (Postgres RLS).
+      </div>
+
+      <!-- 필수 동의 체크박스 (PIPA + 약관규제법 준수 — 명시적 개별 동의) -->
+      <div style="background:var(--bg2);border-radius:8px;padding:10px 12px;margin-bottom:10px;font-size:11px;line-height:1.7">
+        <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;margin-bottom:4px">
+          <input type="checkbox" id="lmAgreeAge" style="margin-top:3px;flex-shrink:0">
+          <span><b>(필수)</b> 만 14세 이상입니다.</span>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;margin-bottom:4px">
+          <input type="checkbox" id="lmAgreeTerms" style="margin-top:3px;flex-shrink:0">
+          <span><b>(필수)</b> <a href="/terms.html" target="_blank" style="color:var(--acc);text-decoration:underline">이용약관</a>에 동의합니다.</span>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;margin-bottom:4px">
+          <input type="checkbox" id="lmAgreePrivacy" style="margin-top:3px;flex-shrink:0">
+          <span><b>(필수)</b> <a href="/privacy.html" target="_blank" style="color:var(--acc);text-decoration:underline">개인정보 처리방침</a>에 동의합니다.</span>
+        </label>
+        <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer">
+          <input type="checkbox" id="lmAgreeIntl" style="margin-top:3px;flex-shrink:0">
+          <span><b>(필수)</b> 개인정보의 <b>국외이전</b>(미국 — Supabase·Vercel·Anthropic)에 동의합니다.</span>
+        </label>
       </div>
 
       <button class="sm-save" id="lmGoogle" onclick="loginGoogle()" style="background:#4285F4;margin-bottom:8px">
@@ -1163,7 +1229,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <div class="smbox" style="max-width:380px">
     <div class="smhdr">
       <span class="smtit">👤 내 계정</span>
-      <button class="smx" onclick="closeUserMenu()">✕</button>
+      <button class="smx" onclick="closeUserMenu()" aria-label="계정 메뉴 닫기" title="닫기">✕</button>
     </div>
     <div class="smbody">
       <div class="sm-row">
@@ -1182,6 +1248,16 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         <div id="umHistList" class="sm-hint" style="margin-top:4px;max-height:160px;overflow-y:auto">로딩 중...</div>
       </div>
       <a href="/billing" class="sm-save" style="text-decoration:none;text-align:center;display:block;background:var(--acc);color:#fff;margin-bottom:6px">💳 결제/구독 관리</a>
+      <div class="sm-row" style="margin-top:8px;border-top:1px solid var(--bd);padding-top:8px">
+        <div class="sm-lbl">개인정보 자기결정권 (PIPA 제35·36조 / GDPR Art.15·17·22)</div>
+        <div id="umDeletionBanner" style="display:none;margin:6px 0;padding:8px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:11px;color:#856404"></div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <button class="sm-save" onclick="exportMyAccount()" aria-label="내 데이터 다운로드" style="flex:1;background:var(--bg2);color:var(--t1);border:1px solid var(--bd);font-size:11px">📥 내 데이터 다운로드</button>
+          <button class="sm-save" onclick="deleteMyAccount()" aria-label="회원 탈퇴" style="flex:1;background:var(--bg2);color:var(--red);border:1px solid var(--red);font-size:11px">🗑 회원 탈퇴</button>
+        </div>
+        <button class="sm-save" onclick="showAutomatedDecisionExplain()" aria-label="자동화 결정 설명" style="margin-top:6px;background:var(--bg2);color:var(--t1);border:1px solid var(--bd);font-size:11px;width:100%">🤖 자동화 결정 로직 설명 (GDPR Art.22)</button>
+        <button class="sm-save" id="umRestoreBtn" onclick="restoreMyAccount()" aria-label="계정 복구" style="display:none;margin-top:6px;background:var(--acc);color:#fff;width:100%">♻ 계정 복구 (탈퇴 철회)</button>
+      </div>
       <button class="sm-save" onclick="logout()" style="background:var(--t2)">로그아웃</button>
       <div class="sm-status" id="umStatus"></div>
     </div>
@@ -1193,7 +1269,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <div class="smbox" style="max-width:420px">
     <div class="smhdr">
       <span class="smtit">🗨️ 대화 이력</span>
-      <button class="smx" onclick="closeChatHistory()">✕</button>
+      <button class="smx" onclick="closeChatHistory()" aria-label="대화 이력 닫기" title="닫기">✕</button>
     </div>
     <div class="smbody">
       <div id="chList" style="max-height:380px;overflow-y:auto;font-size:12px">로딩 중...</div>
@@ -1215,6 +1291,48 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
 </div>
 
+<!-- AUTOMATED DECISION EXPLANATION MODAL (GDPR Art.22 / PIPA) -->
+<div class="smbg" id="ADM" style="z-index:9997">
+  <div class="smbox" style="max-width:540px">
+    <div class="smhdr">
+      <span class="smtit">🤖 자동화 결정 로직 설명</span>
+      <button class="smx" onclick="closeAutomatedDecisionModal()" aria-label="닫기" title="닫기">✕</button>
+    </div>
+    <div class="smbody">
+      <p style="font-size:11px;color:var(--t3);margin:0 0 10px 0;line-height:1.5">
+        GDPR Art.22 / PIPA 제37조의2 에 따라, 본 서비스가 자동으로 내리는 결정의 로직·근거·사용자 권리를 아래와 같이 공개합니다.
+      </p>
+      <div id="admBody" style="font-size:12px;line-height:1.6;color:var(--t1);max-height:60vh;overflow-y:auto">
+        로딩 중...
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- QUOTA EXHAUSTED MODAL — daily + monthly budget 공용 -->
+<div class="smbg" id="QM" style="z-index:9998">
+  <div class="smbox" style="max-width:420px">
+    <div class="smhdr">
+      <span class="smtit" id="qmTit">⚡ AI 한도 도달</span>
+      <button class="smx" onclick="closeQuotaModal()" aria-label="닫기" title="닫기">✕</button>
+    </div>
+    <div class="smbody">
+      <p id="qmMsg" style="margin:0 0 12px 0;font-size:13px;line-height:1.6;color:var(--t1)">무료 플랜 한도에 도달했어요.</p>
+      <div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:12px">
+        <div style="font-size:12px;color:var(--t2);margin-bottom:6px">💎 Pro 플랜으로 업그레이드</div>
+        <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--t1)">
+          <li>AI 채팅 <strong>무제한</strong></li>
+          <li>특약·리스크 분석 <strong>무제한</strong></li>
+          <li>고급 분석 우선 접근</li>
+        </ul>
+      </div>
+      <a href="/billing" class="sm-save" style="display:block;text-align:center;background:var(--acc);color:#fff;text-decoration:none;padding:12px;font-size:14px;font-weight:600">💳 구독 플랜 보기</a>
+      <button class="sm-save" onclick="closeQuotaModal()" style="background:var(--bg2);color:var(--t2);border:1px solid var(--bd);margin-top:6px">닫기</button>
+      <div id="qmReset" style="font-size:11px;color:var(--t3);text-align:center;margin-top:8px"></div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="tst"></div>
 
 <script>
@@ -1225,7 +1343,7 @@ let CFG = { api: DEFAULT_API };
 let props=[], mapObj=null, overlays=[], flt='all', searchMeta=null;
 let chatH=[], chatLd=false;
 let naverReady=false, mapTypeNormal=true;
-let currentDetail=null; // 현재 열린 상세 매물
+let currentDetail=null; // 현재 열린 상세 단지
 
 // ── INIT ──────────────────────────────────────────────────
 window.addEventListener('DOMContentLoaded',()=>{
@@ -1245,7 +1363,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   const restored=restoreSearchFromUrl();
   if(restored){
     // 조건 복원됐으면 바로 검색 실행하지 않고 토스트만 — 사용자가 버튼 클릭해야 재검색
-    setTimeout(()=>{if(typeof toast==='function')toast('🔗 공유 링크 조건 복원 — AI 매물 검색 버튼을 눌러주세요');},500);
+    setTimeout(()=>{if(typeof toast==='function')toast('🔗 공유 링크 조건 복원 — AI 단지 검색 버튼을 눌러주세요');},500);
   }
 
   // 공유 URL 진입 처리
@@ -1266,7 +1384,11 @@ function openSettings(){document.getElementById('SM').classList.add('open');}
 function closeSM(){document.getElementById('SM').classList.remove('open');}
 
 // ── AUTH (로그인/세션) ───────────────────────────────────
-function openLogin(){ document.getElementById('LM').classList.add('open'); document.getElementById('lmStatus').textContent=''; }
+function openLogin(){
+  document.getElementById('LM').classList.add('open');
+  document.getElementById('lmStatus').textContent='';
+  _restoreConsentCheckboxes();
+}
 function closeLogin(){ document.getElementById('LM').classList.remove('open'); }
 function openUserMenu(){
   const A = window.MHL?.auth;
@@ -1276,6 +1398,7 @@ function openUserMenu(){
     : '아직 동기화 안됨';
   document.getElementById('UM').classList.add('open');
   loadMySearchHistory(); // 최근 검색 로드
+  checkDeletionStatus(); // 계정 삭제 예약 여부 확인 → 복구 버튼/배너 갱신
 }
 
 // ── 최근 검색 (search_history) ───────────────────────────
@@ -1295,7 +1418,7 @@ async function loadMySearchHistory(){
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const { history } = await r.json();
     if(!history || !history.length){
-      box.innerHTML = '<span style="color:var(--t3)">아직 검색 이력이 없어요. 매물 검색·단지 분석을 하면 여기 쌓여요.</span>';
+      box.innerHTML = '<span style="color:var(--t3)">아직 검색 이력이 없어요. 단지 검색·분석을 하면 여기 쌓여요.</span>';
       return;
     }
     const typeIcon = { recommend:'🎯', kapt:'🏢', address:'📍', keyword:'🔎' };
@@ -1343,13 +1466,48 @@ async function clearMySearchHistory(){
 }
 function closeUserMenu(){ document.getElementById('UM').classList.remove('open'); }
 
+// 4개 필수 동의 체크 — 미체크 시 false 반환하고 사용자에게 안내
+function _checkConsent(){
+  const ids = ['lmAgreeAge','lmAgreeTerms','lmAgreePrivacy','lmAgreeIntl'];
+  const labels = ['만 14세 이상','이용약관','개인정보 처리방침','국외이전'];
+  for(let i=0;i<ids.length;i++){
+    const el = document.getElementById(ids[i]);
+    if(!el || !el.checked){
+      document.getElementById('lmStatus').textContent = '⚠ 「' + labels[i] + '」 동의가 필요합니다.';
+      el?.focus();
+      return false;
+    }
+  }
+  // 동의 시각·버전 기록 (감사 로그용)
+  try {
+    localStorage.setItem('mhl_consent', JSON.stringify({
+      v: '1.0', at: new Date().toISOString(),
+      age: true, terms: true, privacy: true, intl: true,
+    }));
+  } catch(_){}
+  return true;
+}
+// 모달 열릴 때 이전 동의 복원 (UX 편의 — 법적 동의는 매 로그인 갱신)
+function _restoreConsentCheckboxes(){
+  try {
+    const c = JSON.parse(localStorage.getItem('mhl_consent') || 'null');
+    if(c && c.v === '1.0'){
+      ['lmAgreeAge','lmAgreeTerms','lmAgreePrivacy','lmAgreeIntl'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.checked = true;
+      });
+    }
+  } catch(_){}
+}
 async function loginGoogle(){
+  if(!_checkConsent()) return;
   const A = window.MHL?.auth;
   if(!A?.ready){ document.getElementById('lmStatus').textContent='⚠ 인증 SDK 로드 중...'; return; }
   document.getElementById('lmStatus').textContent='Google 인증창으로 이동 중...';
   try { await A.signInWithGoogle(); } catch(e){ document.getElementById('lmStatus').textContent='❌ ' + (e.message||e); }
 }
 async function loginEmail(){
+  if(!_checkConsent()) return;
   const A = window.MHL?.auth;
   if(!A?.ready){ document.getElementById('lmStatus').textContent='⚠ 인증 SDK 로드 중...'; return; }
   const email = document.getElementById('lmEmail').value.trim();
@@ -1371,6 +1529,193 @@ async function logout(){
   toast('로그아웃 완료');
 }
 
+// ── 개인정보 자기결정권 (PIPA 제35조 열람권) ────────────────
+// 백엔드 /api/account/export 가 본인 데이터 전부 JSON 으로 반환 → 브라우저 다운로드
+async function exportMyAccount(){
+  const A = window.MHL?.auth;
+  if(!A?.ready){ toast('먼저 로그인해주세요'); return; }
+  const session = A.getSession ? await A.getSession() : null;
+  const token = session?.access_token;
+  if(!token){ toast('세션 만료 — 다시 로그인해주세요'); return; }
+  const status = document.getElementById('umStatus');
+  if(status) status.textContent = '데이터 수집 중...';
+  try {
+    const r = await fetch('/api/account/export', {
+      headers: { Authorization: 'Bearer ' + token },
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `myhomelog_export_${Date.now()}.json`;
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+    if(status) status.textContent = '✅ 다운로드 완료';
+    toast('내 데이터가 JSON 파일로 저장되었어요');
+  } catch(e){
+    if(status) status.textContent = '❌ ' + (e.message||e);
+    toast('다운로드 실패');
+  }
+}
+
+// ── 개인정보 자기결정권 (PIPA 제36조 삭제권 / GDPR Art.17) ──
+// 30일 유예 소프트 삭제: 요청 시점엔 데이터 유지, 30일 내 /restore 로 철회 가능.
+// 유예기간 만료 시 서버 cron 이 cascade + 익명화 + auth.users 실삭제.
+async function deleteMyAccount(){
+  const A = window.MHL?.auth;
+  if(!A?.ready){ toast('먼저 로그인해주세요'); return; }
+  const session = A.getSession ? await A.getSession() : null;
+  const token = session?.access_token;
+  if(!token){ toast('세션 만료 — 다시 로그인해주세요'); return; }
+  const ok1 = confirm('정말로 회원 탈퇴를 진행할까요?\n\n· 오늘부터 30일 유예기간이 시작됩니다\n· 유예기간 내에는 모든 세션이 만료되고 로그인 시 "복구" 버튼이 표시됩니다\n· 유예기간 종료 후 북마크·검색 이력·대화가 영구 삭제됩니다\n· 결제 이력은 전자상거래법상 5년간 익명 보관됩니다');
+  if(!ok1) return;
+  const typed = prompt('확인을 위해 대문자로 "DELETE" 를 입력해주세요');
+  if(typed !== 'DELETE'){ toast('취소되었습니다'); return; }
+  const status = document.getElementById('umStatus');
+  if(status) status.textContent = '계정 삭제 예약 진행 중...';
+  try {
+    const r = await fetch('/api/account/delete', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ confirm: 'DELETE' }),
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    const dt = j.scheduled_hard_delete_at ? new Date(j.scheduled_hard_delete_at) : null;
+    const ds = dt ? dt.toLocaleDateString('ko-KR') : '30일 후';
+    if(status) status.textContent = '✅ ' + (j.message || '예약 완료');
+    // 로컬 데이터도 정리 후 로그아웃 — 서버는 이미 전역 signOut 완료
+    try { localStorage.clear(); } catch(_){ }
+    if(A.signOut) await A.signOut();
+    closeUserMenu();
+    setTimeout(()=>{
+      alert(`회원 탈퇴가 예약되었습니다.\n영구 삭제 예정일: ${ds}\n\n그 전까지는 재로그인 후 "복구" 버튼으로 즉시 철회할 수 있습니다.`);
+      location.href = '/';
+    }, 300);
+  } catch(e){
+    if(status) status.textContent = '❌ ' + (e.message||e);
+    toast('삭제 요청 실패 — 잠시 후 다시 시도해주세요');
+  }
+}
+
+// ── 계정 복구 (유예기간 내 철회) ──────────────────────────
+async function restoreMyAccount(){
+  const A = window.MHL?.auth;
+  if(!A?.ready){ toast('먼저 로그인해주세요'); return; }
+  const session = A.getSession ? await A.getSession() : null;
+  const token = session?.access_token;
+  if(!token){ toast('세션 만료 — 다시 로그인해주세요'); return; }
+  if(!confirm('계정 탈퇴를 철회하고 정상 이용 상태로 돌아갈까요?')) return;
+  const status = document.getElementById('umStatus');
+  if(status) status.textContent = '복구 진행 중...';
+  try {
+    const r = await fetch('/api/account/restore', {
+      method: 'POST',
+      headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+    });
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
+    if(status) status.textContent = '✅ ' + (j.message || '복구 완료');
+    toast('계정이 복구되었습니다');
+    // 배너 숨기고 상태 갱신
+    const banner = document.getElementById('umDeletionBanner');
+    const btn = document.getElementById('umRestoreBtn');
+    if(banner) banner.style.display = 'none';
+    if(btn) btn.style.display = 'none';
+  } catch(e){
+    if(status) status.textContent = '❌ ' + (e.message||e);
+    toast('복구 실패');
+  }
+}
+
+// ── 자동화 결정 설명 (GDPR Art.22) ─────────────────────
+async function showAutomatedDecisionExplain(){
+  const A = window.MHL?.auth;
+  if(!A?.ready){ toast('먼저 로그인해주세요'); return; }
+  const session = A.getSession ? await A.getSession() : null;
+  const token = session?.access_token;
+  if(!token){ toast('세션 만료 — 다시 로그인해주세요'); return; }
+  document.getElementById('ADM')?.classList.add('open');
+  const body = document.getElementById('admBody');
+  if(body) body.textContent = '로딩 중...';
+  try {
+    const r = await fetch('/api/account/automated-decision/explain', {
+      headers: { Authorization: 'Bearer ' + token },
+    });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    if(body) body.innerHTML = _renderAutomatedDecision(j);
+  } catch(e){
+    if(body) body.textContent = '불러오기 실패: ' + (e.message||e);
+  }
+}
+function closeAutomatedDecisionModal(){ document.getElementById('ADM')?.classList.remove('open'); }
+
+function _renderAutomatedDecision(j){
+  const esc = (s) => _escHtml(String(s==null?'':s));
+  let h = '';
+  if(j._meta){
+    h += `<div style="background:var(--bg2);padding:8px;border-radius:6px;margin-bottom:10px;font-size:11px;color:var(--t2)">
+      <strong>근거 법령:</strong> ${(j._meta.basis||[]).map(esc).join(' / ')}<br>
+      <strong>최종 업데이트:</strong> ${esc(j._meta.lastUpdated)}<br>
+      <strong>처리자:</strong> ${esc(j._meta.dataController)}
+    </div>`;
+  }
+  (j.decisions||[]).forEach(d => {
+    h += `<div style="border:1px solid var(--bd);border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="font-weight:700;color:var(--acc);margin-bottom:4px">${esc(d.name)}</div>
+      <div style="font-size:11px;color:var(--t2);margin-bottom:6px">${esc(d.purpose)}</div>
+      ${d.method ? `<div><strong>방법:</strong> ${esc(d.method)}</div>` : ''}
+      ${d.formula ? `<div style="font-family:monospace;background:var(--bg2);padding:4px 6px;border-radius:4px;margin:4px 0;font-size:11px">${esc(d.formula)}</div>` : ''}
+      ${d.factors && d.factors.length ? `<div style="margin-top:6px"><strong>사용 데이터(factor):</strong><ul style="margin:4px 0 0 18px;padding:0">${d.factors.map(f=>`<li>${esc(f.name)}${f.source?' <span style="color:var(--t3)">(출처: '+esc(f.source)+')</span>':''}${f.rationale?'<br><span style="color:var(--t2);font-size:11px">— '+esc(f.rationale)+'</span>':''}</li>`).join('')}</ul></div>` : ''}
+      ${d.safeguards && d.safeguards.length ? `<div style="margin-top:6px"><strong>안전장치:</strong><ul style="margin:4px 0 0 18px;padding:0">${d.safeguards.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
+      ${d.notShown && d.notShown.length ? `<div style="margin-top:6px"><strong>제공하지 않는 것:</strong><ul style="margin:4px 0 0 18px;padding:0;color:var(--t2)">${d.notShown.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
+      ${d.notUsed && d.notUsed.length ? `<div style="margin-top:6px"><strong>사용하지 않는 데이터:</strong><ul style="margin:4px 0 0 18px;padding:0;color:var(--t2)">${d.notUsed.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
+      ${d.disclaimer ? `<div style="margin-top:6px;font-size:11px;color:var(--amb)">⚠ ${esc(d.disclaimer)}</div>` : ''}
+      ${d.recourse ? `<div style="margin-top:6px;font-size:11px;color:var(--t2)">↻ ${esc(d.recourse)}</div>` : ''}
+      ${d.humanOversight ? `<div style="margin-top:6px;font-size:11px;color:var(--t2)">👁 ${esc(d.humanOversight)}</div>` : ''}
+    </div>`;
+  });
+  if(j.userRights){
+    h += `<div style="background:var(--bg2);padding:10px;border-radius:6px;margin-top:8px">
+      <div style="font-weight:700;margin-bottom:6px">사용자 권리</div>
+      <ul style="margin:0;padding-left:18px;font-size:11px;line-height:1.8">
+        ${Object.entries(j.userRights).map(([k,v])=>`<li><strong>${esc(k)}:</strong> ${esc(v)}</li>`).join('')}
+      </ul>
+    </div>`;
+  }
+  return h;
+}
+
+// ── 유저 메뉴 열릴 때 삭제 상태 조회 + 배너 표시 ───────────
+async function checkDeletionStatus(){
+  const A = window.MHL?.auth;
+  if(!A?.ready) return;
+  const session = A.getSession ? await A.getSession() : null;
+  const token = session?.access_token;
+  if(!token) return;
+  try {
+    const r = await fetch('/api/account/deletion-status', { headers: { Authorization: 'Bearer ' + token } });
+    if(!r.ok) return;
+    const j = await r.json();
+    const banner = document.getElementById('umDeletionBanner');
+    const btn = document.getElementById('umRestoreBtn');
+    if(!banner || !btn) return;
+    if(j.request && j.request.status === 'pending'){
+      const dt = new Date(j.request.scheduled_hard_delete_at);
+      const ds = dt.toLocaleString('ko-KR');
+      const daysLeft = Math.max(0, Math.ceil((dt.getTime() - Date.now()) / 86400000));
+      banner.textContent = `⚠ 계정 삭제 예약됨 — ${ds} 영구 삭제 예정 (${daysLeft}일 남음). 아래 "복구" 버튼으로 철회 가능합니다.`;
+      banner.style.display = 'block';
+      btn.style.display = 'block';
+    } else {
+      banner.style.display = 'none';
+      btn.style.display = 'none';
+    }
+  } catch(_){ /* silent */ }
+}
+
 // 세션 변경 시 헤더 UI + 자동 마이그레이션
 function _updateAuthUi(session){
   const loginBtn = document.getElementById('loginBtn');
@@ -1381,12 +1726,40 @@ function _updateAuthUi(session){
     userBtn.style.display='';
     badge.textContent = (session.user.email||'').split('@')[0].slice(0,12);
     closeLogin();
-    // 첫 로그인 시 localStorage 북마크 자동 이관
-    _migrateBookmarksOnce();
+    // 계정 삭제 예약 상태면 복구 안내 모달 — 북마크 이관 전 선행 체크
+    _checkPendingDeletionOnLogin(session).then((pending) => {
+      if(!pending) _migrateBookmarksOnce();
+    });
   } else {
     loginBtn.style.display='';
     userBtn.style.display='none';
   }
+}
+
+// 로그인 직후 /deletion-status 조회 → pending 이면 즉시 복구 안내
+async function _checkPendingDeletionOnLogin(session){
+  try {
+    const r = await fetch('/api/account/deletion-status', {
+      headers: { Authorization: 'Bearer ' + session.access_token },
+    });
+    if(!r.ok) return false;
+    const j = await r.json();
+    if(j.request && j.request.status === 'pending'){
+      const dt = new Date(j.request.scheduled_hard_delete_at);
+      const ds = dt.toLocaleString('ko-KR');
+      const daysLeft = Math.max(0, Math.ceil((dt.getTime() - Date.now()) / 86400000));
+      // 비동기적으로 사용자 주의 — 차단하지 않고 안내만
+      setTimeout(() => {
+        if(confirm(`⚠ 이 계정은 삭제 예약 상태입니다.\n영구 삭제 예정: ${ds} (${daysLeft}일 남음)\n\n지금 복구하시겠습니까? "확인" 을 누르면 즉시 철회되고 정상 이용이 가능합니다.`)){
+          restoreMyAccount();
+        } else {
+          openUserMenu();
+        }
+      }, 200);
+      return true;
+    }
+  } catch(_){ /* silent */ }
+  return false;
 }
 
 // 로그인 시 동작:
@@ -1484,7 +1857,7 @@ const OB_STEPS=[
         <li>LTV·DSR·세금까지 한눈에</li>
         <li>2025.10.15 규제 기준 반영</li>
       </ul>
-      <div style="margin-top:14px;padding:10px;background:var(--bg2);border-radius:8px;font-size:11px;color:var(--t3)">⏱ 30초만 알려주시면 맞춤 매물 5곳을 보여드려요</div>
+      <div style="margin-top:14px;padding:10px;background:var(--bg2);border-radius:8px;font-size:11px;color:var(--t3)">⏱ 30초만 알려주시면 맞춤 단지 5곳을 보여드려요</div>
     </div>`,
     next:'시작하기 →'
   },
@@ -1803,10 +2176,63 @@ function updateQuota(usage){
 }
 async function refreshQuota(){
   try{
-    const r=await fetch(`${CFG.api}/health`,{signal:AbortSignal.timeout(3000)});
-    if(r.ok){const d=await r.json();updateQuota(d.usage);}
+    const A = window.MHL?.auth;
+    const headers = {};
+    const tok = A?.session?.access_token;
+    if(tok) headers['Authorization'] = 'Bearer ' + tok;
+    const r=await fetch(`${CFG.api}/health`,{headers, signal:AbortSignal.timeout(3000)});
+    if(r.ok){
+      const d=await r.json();
+      updateQuota(d.usage);
+      if(d.chat) updateAiPill(d.chat);
+      // 월 예산 90% 초과 시 선제적 경고 (아직 차단 전)
+      if(d.monthlyBudget && !d.monthlyBudget.exceeded && d.monthlyBudget.remainingPct <= 10){
+        const pill = document.getElementById('aiPill');
+        if(pill) pill.title += `\n⚠ 월 예산 ${100-d.monthlyBudget.remainingPct}% 소진 — 초과 시 서비스 제한`;
+      }
+    }
   }catch{}
 }
+
+// AI 채팅 전용 pill — 무료 15회/일 기준. /api/health 응답의 chatUsage 필드 사용.
+function updateAiPill(usage){
+  if(!usage) return;
+  const pill = document.getElementById('aiPill');
+  if(!pill) return;
+  pill.style.display='inline-flex';
+  pill.textContent = `🤖 ${usage.remaining}/${usage.limit}회`;
+  if(usage.remaining <= 1){ pill.style.background='var(--redL)'; pill.style.color='var(--red)'; }
+  else if(usage.remaining <= 3){ pill.style.background='var(--ambL)'; pill.style.color='var(--amb)'; }
+  else { pill.style.background='var(--bg2)'; pill.style.color='var(--t2)'; }
+  pill.title = `오늘 AI 채팅 ${usage.used}/${usage.limit}회 사용 — 매일 자정 리셋`;
+  pill.onclick = () => openQuotaModal('info', `오늘 AI 채팅 ${usage.used}/${usage.limit}회 사용 중`);
+  pill.style.cursor = 'pointer';
+}
+
+// ── 한도 모달 (daily / monthly / info) ───────────────────
+function openQuotaModal(reason, msg, resetAt){
+  const tit = document.getElementById('qmTit');
+  const msgEl = document.getElementById('qmMsg');
+  const resetEl = document.getElementById('qmReset');
+  if(reason === 'monthly'){
+    if(tit) tit.textContent = '💰 이번 달 AI 한도 도달';
+    if(msgEl) msgEl.textContent = msg || '무료 플랜 월간 AI 사용 한도에 도달했어요. 다음 달 1일에 초기화됩니다.';
+    if(resetEl && resetAt){
+      const d = new Date(resetAt);
+      resetEl.textContent = `초기화: ${d.toLocaleString('ko-KR')}`;
+    } else if(resetEl) resetEl.textContent = '';
+  } else if(reason === 'daily'){
+    if(tit) tit.textContent = '⚡ 오늘의 AI 한도 도달';
+    if(msgEl) msgEl.textContent = msg || '무료 플랜 일일 AI 사용 한도에 도달했어요. 내일 자정에 초기화됩니다.';
+    if(resetEl) resetEl.textContent = '매일 자정(KST) 자동 초기화';
+  } else {
+    if(tit) tit.textContent = '⚡ 무료 플랜 사용량';
+    if(msgEl) msgEl.textContent = msg || '';
+    if(resetEl) resetEl.textContent = '';
+  }
+  document.getElementById('QM')?.classList.add('open');
+}
+function closeQuotaModal(){ document.getElementById('QM')?.classList.remove('open'); }
 
 // ── MAP INIT ─────────────────────────────────────────────
 // (네이버 지도는 향후 P2에서 NCP Maps 전환 검토 — 현재는 OSM + 카카오 geocode 백엔드 보정 사용)
@@ -2008,13 +2434,21 @@ async function doSearch(){
       throw new Error(`HTTP ${res.status}`);
     } else {
       const data=await res.json();
-      props=(data.recommendations||[]).map((p,i)=>({...p,lat:getLat(p.area,i),lng:getLng(p.area,i),type:p.ltv?.includes('40')?'regulated':'non'}));
+      // 좌표 정책: 백엔드가 DB 캐시 + Kakao 로 해결한 lat/lng 를 우선 사용.
+      // 해결 실패(null) 는 마커 생략 처리 — 잘못된 위치 표시보다 "없음"이 낫다.
+      // 서버 좌표가 전혀 없는 구버전 응답 호환용으로 구명 LUT(AC)만 최후 폴백.
+      props=(data.recommendations||[]).map((p,i)=>{
+        const lat = (p.lat!=null) ? Number(p.lat) : getLat(p.area,i);
+        const lng = (p.lng!=null) ? Number(p.lng) : getLng(p.area,i);
+        return {...p, lat, lng, type:p.ltv?.includes('40')?'regulated':'non'};
+      });
       searchMeta={
         regions:(data.targetRegions||[]).map(r=>r.name).filter(Boolean),
         totalTx:data.totalTxAnalyzed||0,
         inBudget:data.inBudgetCount||0,
         totalAptsInRegion:data.totalAptsInRegion||0,
         referenceCount:data.referenceCount||0,
+        coordMissingCount:data.coordMissingCount||0,
       };
       success=true;
       // 로그인 사용자면 검색 이력 기록 (fire-and-forget — 실패해도 UX 영향 X)
@@ -2025,18 +2459,40 @@ async function doSearch(){
   }
 
   if(success){
+    // ── 재검색 시 이전 상태 리셋 (Bug #1 해결) ──────────────
+    // 1) 열려 있던 상세 리포트(DETAIL MODAL) 닫기 — 이전 단지 컨텍스트 잔존 방지
+    // 2) 맵 오버레이가 쌓이는 문제는 renderMarkers 가 처리하지만
+    //    AI 챗 세션은 lazy 생성이므로 "신규 검색 = 새 컨텍스트" 로 자동 분리.
+    //    기존 대화가 있으면 서버에 이력 저장된 상태로 남기고 세션만 끊음.
+    try { cDM(); } catch(_){}
+    if (typeof _chatSessionId !== 'undefined' && _chatSessionId) {
+      // 기존 대화는 보존, 다음 메시지부터 새 세션으로
+      _chatSessionId = null;
+    }
     renderPList();renderMarkers(props);renderListGrid();
     document.getElementById('pCnt').textContent=props.length+'건';
     sv('map',document.querySelector('.htab'));
-    toast(`✅ ${props.length}개 매물 추천 완료`);
-    // 카카오 지오코딩으로 좌표 보정
-    batchGeocode(props).then(geoMap=>{
-      let updated=false;
-      props.forEach(p=>{if(geoMap[p.aptName]){p.lat=geoMap[p.aptName].lat;p.lng=geoMap[p.aptName].lng;updated=true;}});
-      if(updated){renderMarkers(props);showHint('📍 실좌표 업데이트 완료');}
-    });
+    const missed = searchMeta.coordMissingCount||0;
+    toast(missed>0
+      ? `✅ ${props.length}개 단지 추천 · 좌표 미해결 ${missed}건 (마커 생략)`
+      : `✅ ${props.length}개 단지 추천 완료`);
+    // 백엔드 좌표 해결 실패분만 추가 지오코딩 보정 (네트워크 단건 폴백)
+    const needGeo = props.filter(p => p.lat==null || p.lng==null);
+    if (needGeo.length) {
+      batchGeocode(needGeo).then(geoMap=>{
+        let updated=false;
+        props.forEach(p=>{
+          if((p.lat==null||p.lng==null) && geoMap[p.aptName]){
+            p.lat=geoMap[p.aptName].lat;
+            p.lng=geoMap[p.aptName].lng;
+            updated=true;
+          }
+        });
+        if(updated){renderMarkers(props);showHint('📍 좌표 보정 완료');}
+      });
+    }
   }
-  btn.classList.remove('ld');sp.style.display='none';tx.textContent='🤖 AI 맞춤 매물 검색';
+  btn.classList.remove('ld');sp.style.display='none';tx.textContent='🤖 AI 맞춤 단지 검색';
   refreshQuota();
 }
 
@@ -2072,7 +2528,7 @@ function renderListGrid(){
     g.innerHTML=`<div style="grid-column:1/-1;padding:50px 20px;text-align:center;color:var(--t3)">
       <div style="font-size:48px;margin-bottom:14px">🏠</div>
       <div style="font-size:15px;font-weight:700;color:var(--t1);margin-bottom:6px">아직 검색 결과가 없어요</div>
-      <div style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:18px">왼쪽 <b>"내 상황"</b> 입력 후 <b>🤖 AI 맞춤 매물 검색</b>을 누르면<br>국토부 실거래가 기반으로 추천 매물이 나타납니다.</div>
+      <div style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:18px">왼쪽 <b>"내 상황"</b> 입력 후 <b>🤖 AI 맞춤 단지 검색</b>을 누르면<br>국토부 실거래가 기반으로 추천 단지가 나타납니다.</div>
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="abtn acc" style="margin:0;padding:8px 16px;font-size:12px;width:auto" onclick="quickSearchPreset('서울 7억 무주택')">⚡ 빠른 검색: 서울 7억 무주택</button>
         <button class="abtn a2" style="margin:0;padding:8px 16px;font-size:12px;width:auto" onclick="quickSearchPreset('경기 5억 생애최초')">⚡ 경기 5억 생애최초</button>
@@ -2081,7 +2537,7 @@ function renderListGrid(){
     return;
   }
   const metaLine = searchMeta && searchMeta.regions.length
-    ? `<div style="margin:10px 14px 0;padding:8px 12px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;color:#1B4F8A;font-size:11px;line-height:1.55">📊 <b>분석 지역:</b> ${_escHtml(searchMeta.regions.map(String).join(', '))} · 전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> 중 예산 실거래 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b>${searchMeta.referenceCount?` + 참고 매물 ${Number(searchMeta.referenceCount)||0}건`:''} · 최근 6개월 실거래 ${(Number(searchMeta.totalTx)||0).toLocaleString()}건 분석</div>`
+    ? `<div style="margin:10px 14px 0;padding:8px 12px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;color:#1B4F8A;font-size:11px;line-height:1.55">📊 <b>분석 지역:</b> ${_escHtml(searchMeta.regions.map(String).join(', '))} · 전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> 중 예산 실거래 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b>${searchMeta.referenceCount?` + 참고 단지 ${Number(searchMeta.referenceCount)||0}건`:''} · 최근 6개월 실거래 ${(Number(searchMeta.totalTx)||0).toLocaleString()}건 분석</div>`
     : '';
   const banner=`${metaLine}<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;color:var(--red);font-size:11px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아닙니다.</u> 아래 점수·신호는 과거 실거래 통계 정리이며, 미래 가격(상승·하락)을 예측·보장하지 않습니다. 모든 의사결정 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>`;
   g.innerHTML=banner+props.map((p,i)=>{
@@ -2259,7 +2715,7 @@ function showDetail(p){
 
   document.getElementById('t2').innerHTML=`<div class="tld"><div class="tsp"></div>AI 리스크 분석 중...</div>`;
   document.getElementById('t3').innerHTML=`<div class="tld"><div class="tsp"></div>AI 특약 초안 생성 중...</div>`;
-  document.getElementById('t4').innerHTML=`<div class="tld"><div class="tsp"></div>매수 신호 분석 중...</div>`;
+  document.getElementById('t4').innerHTML=`<div class="tld"><div class="tsp"></div>가격 시그널 분석 중...</div>`;
   document.querySelectorAll('.rtab').forEach((b,i)=>b.classList.toggle('on',i===0));
   document.querySelectorAll('.tp').forEach((t,i)=>t.classList.toggle('on',i===0));
   currentDetail=p;
@@ -2306,7 +2762,7 @@ function cDM(){document.getElementById('DM').classList.remove('open');currentDet
 
 // ── 공유 URL ───────────────────────────────────────────
 async function shareCurrent(){
-  if(!currentDetail){toast('공유할 매물이 없어요');return;}
+  if(!currentDetail){toast('공유할 단지가 없어요');return;}
   // 공유 URL은 /share 경로 — 서버에서 OG 메타 동적 치환 (카카오톡·슬랙 링크 프리뷰용)
   const u=new URL(location.origin+'/share');
   u.searchParams.set('apt', currentDetail.aptName);
@@ -2339,7 +2795,7 @@ async function handleShareUrl(){
   // props에 이미 있으면 즉시 표시
   const found=props.find(p=>p.aptName===apt);
   if(found){showDetail(found);return;}
-  // stub 매물 즉시 표시 (로딩 느낌)
+  // stub 단지 즉시 표시 (로딩 느낌)
   showDetail({aptName:apt, area, avgPrice:0, minPrice:0, maxPrice:0, score:60, ltv:'?', maxLoan:'?', pros:'공유 링크로 진입 — 실거래 데이터 조회 중...', cons:'', strategy:'', tags:[], txHistory:[]});
   // area에서 구 추출 → lawdCd 매핑 후 실거래 조회 시도
   try{
@@ -2361,7 +2817,7 @@ async function handleShareUrl(){
       buildYear:items[0].buildYear||0,
       score:60, ltv:'?', maxLoan:'?',
       pros:`최근 6개월 실거래 ${items.length}건 · 평균 ${avg.toFixed(2)}억`,
-      cons:'', strategy:'공유 링크 조회 — 정밀 분석은 내 조건을 입력 후 AI 매물 검색을 실행해주세요.',
+      cons:'', strategy:'공유 링크 조회 — 정밀 분석은 내 조건을 입력 후 AI 단지 검색을 실행해주세요.',
       tags:[], txHistory:items.slice(0,30), lawdCd,
     };
     // 현재 열린 상세가 동일 단지면 재렌더
@@ -2413,7 +2869,7 @@ async function resolveLawdCdFromArea(area){
   return null;
 }
 
-// ── 매수 신호 분석 로드 ───────────────────────────────────
+// ── 가격 시그널 분석 로드 ───────────────────────────────────
 async function loadAnalysis(p){
   const lawdCd=p.lawdCd||p.txHistory?.[0]?.lawdCd||'';
   try{
@@ -2703,7 +3159,7 @@ function renderBookmarks(){
     const lc=b.lastChecked?` · 최근 ${new Date(b.lastChecked).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'})}`:'';
     const alertHtml=`<div class="bk-alert-row" onclick="event.stopPropagation()">
       <span style="font-size:10px;color:var(--t3);flex-shrink:0">목표가</span>
-      <input class="bk-alert-inp" type="number" step="0.1" placeholder="억" value="${target||''}" id="bk-alert-${i}" oninput="event.stopPropagation()">
+      <input class="bk-alert-inp" type="number" inputmode="decimal" step="0.1" placeholder="억" value="${target||''}" id="bk-alert-${i}" oninput="event.stopPropagation()">
       <button class="bk-alert-set" onclick="setAlert('${b.aptName}',document.getElementById('bk-alert-${i}').value)">설정</button>
       ${target?`<span class="bk-alert-tag ${isHit?'hit':'set'}">${isHit?'🎯 목표가':'▼'+target+'억'}</span>`:''}
     </div>
@@ -3244,11 +3700,11 @@ function dc(){
   const mos=[0,.01,.02].map(d2=>fin>0?Math.round(fin*1e8*(rate+d2)/12/(1-Math.pow(1+(rate+d2)/12,-n))/10000):0);
   const mx=Math.max(...mos,1);
   document.getElementById('scnC').innerHTML=mos.map((m,i)=>`<div class="br"><div class="bry">${((rate+[0,.01,.02][i])*100).toFixed(1)}%</div><div class="brb"><div class="brf" style="width:${Math.round(m/mx*100)}%"></div></div><div class="brv">${m}만</div></div>`).join('');
-  // CTA: 이 예산으로 매물 찾기
+  // CTA: 이 예산으로 단지 찾기
   const ctaEl=document.getElementById('co_cta');
   if(ctaEl && buy>0 && ltv>0){
     ctaEl.style.display='block';
-    ctaEl.innerHTML=`<button class="abtn a2" style="margin-top:10px" onclick="searchWithBudget(${buy},${cash||0},${fin||0},'${house}','${isF}','${regS}')">🔎 이 예산(${buy}억)으로 매물 찾기 →</button>`;
+    ctaEl.innerHTML=`<button class="abtn a2" style="margin-top:10px" onclick="searchWithBudget(${buy},${cash||0},${fin||0},'${house}','${isF}','${regS}')">🔎 이 예산(${buy}억)으로 단지 찾기 →</button>`;
   }
 }
 // 대출계산 → 지도 검색 컨텍스트 전달
@@ -3268,11 +3724,11 @@ function searchWithBudget(buy,cash,loan,house,isFirst,regStr){
   // 탭 전환 후 검색 실행
   sv('map',document.querySelectorAll('.htab')[0]);
   setTimeout(()=>{if(typeof doSearch==='function')doSearch();},200);
-  toast('💨 예산 기준 매물 검색 시작');
+  toast('💨 예산 기준 단지 검색 시작');
 }
 // 상세 모달 → 특약 생성 (currentDetail 전역 사용, quote 이스케이프 회피)
 function goClauseFromCurrentDetail(){
-  const p=currentDetail;if(!p){toast('매물 정보 없음');return;}
+  const p=currentDetail;if(!p){toast('단지 정보 없음');return;}
   goClauseFromDetail(p.aptName||'', p.area||'', p.avgPrice||0, p.excluUseAr||0, p.buildYear||0);
 }
 // 상세 모달 → 특약 생성 컨텍스트 전달
@@ -3287,7 +3743,7 @@ function goClauseFromDetail(aptName,area,price,excluUseAr,buildYear){
     set('cl_year',buildYear||'');
     if(typeof cDM==='function')cDM();
     document.getElementById('cl_apt')?.scrollIntoView({behavior:'smooth',block:'center'});
-    toast('✍ 매물 정보 자동 입력됨 — 생성 버튼 클릭');
+    toast('✍ 매매 정보 자동 입력됨 — 생성 버튼 클릭');
   },180);
 }
 // 상세 모달 → 대출 계산 컨텍스트 전달
@@ -3386,10 +3842,19 @@ function quickSearchPreset(preset){
   if(typeof doSearch==='function')doSearch();
 }
 
-// ── COORDS FALLBACK ───────────────────────────────────────
+// ── COORDS (백엔드 확정 좌표 신뢰 원칙) ────────────────────
+// 기존 하드코딩 구명 → 중심좌표 + 랜덤 jitter 방식은 제거 (Bug #2 원인):
+//   - 구명 키워드 매칭 실패 시 서울 중심(37.545,127.0)으로 떨어져
+//     은평구 단지가 용산·한강 근처에 표시되는 경계 침범 버그.
+//   - 같은 단지가 재렌더마다 랜덤 위치로 움직여 이상 시그널 발생.
+// 현재: 백엔드 propertyService 가 DB geocache + Kakao 지오코딩으로
+//       확정된 lat/lng 를 응답에 포함. 프론트는 그대로 사용, null 이면 그리지 않음.
+// 구명 LUT 은 저장된 쿼리 문자열 진입(/?apt=...&area=...) 에서 좌표 없이 진입한
+// 단건 케이스용 최후 비상 폴백. 항상 구 중심 고정값, jitter 금지.
 const AC={노원:[37.655,127.056],도봉:[37.668,127.047],성북:[37.606,127.017],동대문:[37.574,127.040],중랑:[37.606,127.093],강북:[37.637,127.025],서대문:[37.579,126.936],마포:[37.566,126.901],은평:[37.618,126.928],양천:[37.517,126.867],강서:[37.551,126.850],구로:[37.495,126.888],금천:[37.457,126.895],영등포:[37.526,126.896],동작:[37.511,126.940],관악:[37.478,126.951],강동:[37.530,127.124],송파:[37.514,127.106],강남:[37.518,127.047],서초:[37.483,127.032],용산:[37.540,126.994],광명:[37.478,126.864],과천:[37.429,126.988],성남:[37.419,127.126],하남:[37.540,127.215],안양:[37.394,126.958],수원:[37.263,127.028],인천:[37.456,126.705]};
-function getLat(area,i){if(!area)return 37.545+(i*.02);for(const[k,v]of Object.entries(AC)){if(area.includes(k))return v[0]+(Math.random()-.5)*.008;}return 37.545+(i*.015)+(Math.random()-.5)*.02;}
-function getLng(area,i){if(!area)return 127.0+(i*.02);for(const[k,v]of Object.entries(AC)){if(area.includes(k))return v[1]+(Math.random()-.5)*.008;}return 127.0+(i*.01)+(Math.random()-.5)*.02;}
+// 진단 로그 (한 번만) — 좌표 없는 단지 진단용. p.lat/lng 가 null 이면 마커 생략이 정상.
+function getLat(area,i){ if(!area)return null; for(const[k,v]of Object.entries(AC)){ if(area.includes(k))return v[0]; } return null; }
+function getLng(area,i){ if(!area)return null; for(const[k,v]of Object.entries(AC)){ if(area.includes(k))return v[1]; } return null; }
 
 // ── VIEW SWITCH ───────────────────────────────────────────
 // 탭별 메타: display(뷰 표시 형식), lp(좌측패널 표시), rp(우측 AI채팅 표시)
@@ -3475,10 +3940,32 @@ function toggleRpOverlay(){
   if(_rpOverlay){
     rp.classList.add('rp-overlay');
     rp.style.setProperty('display','flex','important');
+    // Phase 3.3: AI 채팅 잔량 안내
+    _renderChatQuotaHint();
   } else {
     rp.classList.remove('rp-overlay');
     rp.style.setProperty('display','none','important');
   }
+}
+async function _renderChatQuotaHint(){
+  try {
+    const r = await fetch(`${CFG.api}/health`, { signal: AbortSignal.timeout(3000) });
+    if(!r.ok) return;
+    const d = await r.json();
+    if(!d.chat) return;
+    const c = document.getElementById('cMsgs');
+    if(!c) return;
+    // 중복 방지 — 같은 세션 내 한 번만
+    if(c.querySelector('[data-quota-hint]')) return;
+    const div = document.createElement('div');
+    div.dataset.quotaHint = '1';
+    const lvl = d.chat.remaining <= 2 ? 'red' : d.chat.remaining <= 5 ? 'amb' : 'grn';
+    const bg = lvl === 'red' ? '#FDEEEE' : lvl === 'amb' ? '#FFF6E3' : '#EAF7EE';
+    const fg = lvl === 'red' ? '#C4402A' : lvl === 'amb' ? '#7a5500' : '#0f5d2f';
+    div.style.cssText = `background:${bg};color:${fg};border-radius:6px;padding:6px 9px;margin:6px 0;font-size:11px;line-height:1.5`;
+    div.textContent = `💡 오늘 AI 채팅 ${d.chat.remaining}/${d.chat.limit}회 남음 — 매일 자정 리셋`;
+    c.insertBefore(div, c.firstChild);
+  } catch(_){}
 }
 function ts(id){document.getElementById(id)?.classList.toggle('cl');}
 
@@ -3673,7 +4160,7 @@ const SYS=`당신은 내집로그 AI 부동산 정보 분석 도우미. 2025.10.
 4. 대출/세금/계약은 반드시 "금융기관/세무사/공인중개사·법무사 확인 필수" 명시.
 5. 결론→근거→확인필요사항 순서. 수치 기반. 불확실 시 "확인 필요" 솔직히 표시.`;
 
-// 사용자 조건 + 추천 매물 컨텍스트 자동 주입 (P0-5)
+// 사용자 조건 + 추천 단지 컨텍스트 자동 주입 (P0-5)
 function buildChatContext(){
   const ctx={};
   // 사용자 입력 조건
@@ -3686,7 +4173,7 @@ function buildChatContext(){
     schoolNeeded:gct('ch-sc')==='학군 중요',
     workplaceArea:document.getElementById('wp')?.value?.trim()||null,
   };
-  // 현재 상세 보고 있는 매물 (최우선)
+  // 현재 상세 보고 있는 단지 (최우선)
   if(currentDetail){
     ctx.focusProperty={
       aptName:currentDetail.aptName, area:currentDetail.area,
@@ -3694,7 +4181,7 @@ function buildChatContext(){
       buildYear:currentDetail.buildYear,
     };
   }
-  // 최근 추천 매물 상위 5
+  // 최근 추천 단지 상위 5
   if(props && props.length){
     ctx.recommendedProperties=props.slice(0,5).map(p=>({
       aptName:p.aptName, area:p.area, avgPrice:p.avgPrice, score:p.score, ltv:p.ltv,
@@ -3714,13 +4201,17 @@ async function sM(){
   // 로그인 상태면 메시지 persist (fire-and-forget — UX 블로킹 없음)
   _ensureChatSession(txt).then(sid => { if(sid) _persistChatMessage(sid,'user',txt); });
 
-  // 백엔드 단일 경로 (BYOK 제거) — 매물·조건 컨텍스트 자동 첨부
+  // 백엔드 단일 경로 (BYOK 제거) — 단지·조건 컨텍스트 자동 첨부
   try{
     const r=await fetch(`${CFG.api}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:txt,context:{history:chatH.slice(-18), session:sessionContext}}),signal:AbortSignal.timeout(30000)});
     if(r.status===429){
       const j=await r.json().catch(()=>({}));
       rmTyp();
-      addMsg('ai', j.message || '오늘의 AI 채팅 한도를 모두 사용했어요. 내일 다시 이용해주세요.');
+      // code 로 구분: budget_exceeded(월간) vs daily_quota(일간). 둘 다 구독 모달로 유도.
+      const reason = j.code === 'budget_exceeded' ? 'monthly' : 'daily';
+      const resetAt = j.budget?.resetAt || null;
+      addMsg('ai', (j.error || j.message || '무료 플랜 한도에 도달했어요.') + '\n\n💎 Pro 플랜이면 무제한으로 이용할 수 있어요.');
+      openQuotaModal(reason, j.error || j.message, resetAt);
       replied=true;
     } else if(!r.ok){
       throw new Error('err');
@@ -3760,13 +4251,27 @@ async function _ensureChatSession(firstMsg){
     return null;
   }
 }
+// crypto.randomUUID 폴백 — 구형 사파리 (iOS <15.4) 대비
+function _genUuid(){
+  if (window.crypto?.randomUUID) return window.crypto.randomUUID();
+  // RFC 4122 v4 호환 폴백 (getRandomValues 사용)
+  const b = new Uint8Array(16);
+  (window.crypto || window.msCrypto).getRandomValues(b);
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, x => x.toString(16).padStart(2,'0')).join('');
+  return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+}
+
+// Phase 4.3 멱등성: 클라이언트가 메시지마다 UUID 발급 → 더블탭/재시도에도 1행만 INSERT
 function _persistChatMessage(sid, role, content){
   const A = window.MHL?.auth;
   if(!A?.user || !A?.session?.access_token || !sid) return;
+  const clientMsgId = _genUuid();
   fetch(`/api/chat/sessions/${sid}/messages`, {
     method:'POST',
     headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
-    body: JSON.stringify({ role, content }),
+    body: JSON.stringify({ role, content, clientMsgId }),
   }).catch(e => console.warn('[chat message] 저장 실패', e));
 }
 // 로그아웃/세션 교체 시 로컬 세션 ID 초기화 — 다른 사용자 세션에 쓰기 방지
@@ -3904,11 +4409,19 @@ function ah(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,
 function gt(){const n=new Date();return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');}
 // HTML escape — XSS 방어용 (AI/사용자/세션 복원 메시지 공통)
 function _escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+// Phase 2.14: AI 응답에 항상 부착되는 공통 정보 배지 — 표시광고법·자본시장법 안전장치
+function _renderAIBadge(){
+  return `<div style="background:#FFF6E3;border:1px solid #F0D998;border-radius:6px;padding:6px 8px;margin-top:6px;font-size:10px;color:#7a5500;line-height:1.5">
+    ⚠ 본 응답은 <b>참고 정보</b>이며 매수·매도 추천이 아닙니다. AI는 환각(hallucination)이 발생할 수 있어 사실 확인이 필요합니다. 대출·세무·계약 사항은 반드시 금융기관·세무사·공인중개사 확인 필수.
+  </div>`;
+}
 function addMsg(role,text){
   const c=document.getElementById('cMsgs'),d=document.createElement('div');d.className='msg '+role;
   // XSS 방어: 먼저 escape → 그 다음 \n→<br>, **bold** 변환 (이스케이프된 ** 는 안전)
   const safe=_escHtml(text).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>');
-  d.innerHTML=`<div class="ava ${role}">${role==='ai'?'AI':'나'}</div><div><div class="bbl">${safe}</div><div class="mt">${gt()}</div></div>`;
+  // AI 응답에는 매번 안내 배지 부착 (Phase 2.14)
+  const badge = role === 'ai' ? _renderAIBadge() : '';
+  d.innerHTML=`<div class="ava ${role}">${role==='ai'?'AI':'나'}</div><div><div class="bbl">${safe}</div>${badge}<div class="mt">${gt()}</div></div>`;
   c.appendChild(d);c.scrollTop=c.scrollHeight;
 }
 function showTyp(){const c=document.getElementById('cMsgs'),d=document.createElement('div');d.className='msg ai';d.id='ty';d.innerHTML=`<div class="ava ai">AI</div><div><div class="typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div></div>`;c.appendChild(d);c.scrollTop=c.scrollHeight;}
@@ -3920,7 +4433,7 @@ document.getElementById('DM').addEventListener('click',e=>{if(e.target.id==='DM'
 document.getElementById('SM').addEventListener('click',e=>{if(e.target.id==='SM')closeSM();});
 </script>
 <!-- 플로팅 AI 버튼: .rp 숨김 탭에서만 노출 -->
-<button id="fabAI" class="fab-ai" title="AI 부동산 컨설턴트" onclick="toggleRpOverlay()">💬</button>
+<button id="fabAI" class="fab-ai" title="AI 데이터 도우미" aria-label="AI 데이터 도우미 열기" onclick="toggleRpOverlay()">💬</button>
 <!-- 플로팅 관심단지 버튼: .lp 숨김 탭에서만 노출 -->
 <button id="fabBM" class="fab-bm" title="관심 단지" onclick="toggleBmPop()">⭐<span class="fab-bm-cnt" id="fabBmCnt">0</span></button>
 <!-- 관심단지 popover -->

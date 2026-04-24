@@ -4,12 +4,77 @@
  * API 신청: data.go.kr → '아파트매매 실거래가 상세자료' 검색 → 활용신청
  */
 const axios = require('axios');
+const { createClient } = require('@supabase/supabase-js');
 const cache = require('../cache');
 const logger = require('../logger');
 
 const MOLIT_DETAIL_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
 // MOLIT API 성공 코드: '00'(구버전) 또는 '000'(신버전) — 다른 서비스에서도 재사용
 const MOLIT_OK_CODES = new Set(['00', '000']);
+
+// DB 사용 여부 — Supabase 설정되어 있고, MOLIT_DB_FIRST 가 'false' 가 아니면 DB 우선
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const DB_FIRST = (process.env.MOLIT_DB_FIRST !== 'false')
+  && !!SUPABASE_URL && !!SUPABASE_SERVICE_ROLE_KEY;
+
+function dbClient() {
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+
+/**
+ * DB 에서 region-month 거래 조회. molit_ingest_runs 로 ingest 이력 확인.
+ * 이력 없거나 rows 0 이면 null 반환 → 호출자가 MOLIT API fallback 트리거.
+ */
+async function getTransactionsFromDb(lawdCd, dealYm) {
+  const admin = dbClient();
+  if (!admin) return null;
+  try {
+    // 이 region-month 가 한 번이라도 성공적으로 ingest 됐는지 확인
+    const run = await admin
+      .from('molit_ingest_runs')
+      .select('status, rows_fetched, finished_at')
+      .eq('lawd_cd', lawdCd)
+      .eq('deal_ym', dealYm)
+      .eq('status', 'ok')
+      .order('finished_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (run.error || !run.data) return null; // 아직 ingest 안 됨 → API fallback
+
+    const dy = parseInt(dealYm.slice(0, 4), 10);
+    const dm = parseInt(dealYm.slice(4, 6), 10);
+    const { data, error } = await admin
+      .from('molit_transactions')
+      .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq')
+      .eq('lawd_cd', lawdCd)
+      .eq('deal_year', dy)
+      .eq('deal_month', dm)
+      .order('deal_date', { ascending: false })
+      .limit(1000);
+    if (error) throw error;
+    return (data || []).map(r => ({
+      aptName: r.apt_name,
+      sigungu: r.sigungu || '',
+      umdNm: r.umd_nm || '',
+      excluUseAr: Number(r.exclu_use_ar) || 0,
+      buildYear: r.build_year || 0,
+      floor: r.floor || 0,
+      dealYear: r.deal_year,
+      dealMonth: r.deal_month,
+      dealDay: r.deal_day,
+      dealAmount: Number(r.deal_amount) || 0,
+      lawdCd: r.lawd_cd || lawdCd,
+      aptSeq: r.apt_seq || '',
+    }));
+  } catch (e) {
+    logger.warn({ err: e.message, lawdCd, dealYm }, 'molit DB 조회 실패 → API fallback');
+    return null;
+  }
+}
 
 // 서울/경기 주요 구 법정동코드 (앞 5자리)
 const LAWD_CODES = {
@@ -34,6 +99,20 @@ function isMolitKeyMissing() {
  * 실거래가 조회 (월별)
  */
 async function getTransactions(lawdCd, dealYm) {
+  const cacheKey = `tx:${lawdCd}:${dealYm}`;
+  const cached = cache.get(cacheKey);
+  if (cached !== undefined) return cached || []; // null/[] 캐시도 hit 처리
+
+  // ── DB-first: ingest 된 region-month 은 DB 로만 응답 (latency ~20ms) ──
+  if (DB_FIRST) {
+    const fromDb = await getTransactionsFromDb(lawdCd, dealYm);
+    if (fromDb && fromDb.length > 0) {
+      cache.set(cacheKey, fromDb, 3600); // 1h (다음 cron 갱신 전까지 유효)
+      return fromDb;
+    }
+    // fromDb === null (미ingest 또는 실패) 또는 빈 배열 → API fallback 으로 진행
+  }
+
   if (isMolitKeyMissing()) {
     const err = new Error('국토부 실거래가 API 키가 설정되지 않았습니다. data.go.kr에서 무료 발급 후 환경변수 MOLIT_API_KEY에 설정하세요.');
     err.code = 'MOLIT_KEY_MISSING';
@@ -41,57 +120,99 @@ async function getTransactions(lawdCd, dealYm) {
     throw err;
   }
 
-  const cacheKey = `tx:${lawdCd}:${dealYm}`;
-  const cached = cache.get(cacheKey);
-  if (cached !== undefined) return cached || []; // null/[] 캐시도 hit 처리
-
   try {
-    // 1페이지(1000건)만 조회 — 대부분 한 달 단일 구 거래는 1000건 미만
-    // (강남 같은 예외 케이스는 다른 페이지에서 누락되지만 timeout 보호 우선)
-    const response = await axios.get(MOLIT_DETAIL_URL, {
-      params: {
-        serviceKey: process.env.MOLIT_API_KEY,
-        LAWD_CD: lawdCd,
-        DEAL_YMD: dealYm,
-        pageNo: 1,
-        numOfRows: 1000,
-        _type: 'json',
-      },
-      timeout: 7000,
-      headers: { Accept: 'application/json' },
-    });
+    // ── 페이징 완전 구현 ────────────────────────────────────
+    // 기존: 1페이지(1000건)만 → 강남·송파·성동 등 월 1000+건 거래 구에서 최근 거래 누락
+    // 개선: 최대 10페이지(1만건) 까지 순차 조회. totalCount 기반 조기 종료.
+    // 왜 10페이지 상한: 서울 최대 월 거래 구(강남)도 통상 1500~2500건 수준
+    //                  → 10페이지는 충분한 안전마진. Serverless 타임아웃 방어 상한.
+    const MAX_PAGES = 10;
+    const NUM_ROWS = 1000;
+    const allItems = [];
+    let header = null;
+    let totalCount = null;
+    let cancelledCount = 0;
 
-    const body = response.data?.response?.body;
-    const header = response.data?.response?.header;
-    const items = body?.items?.item;
-    const allItems = Array.isArray(items) ? items : items ? [items] : [];
-    // MOLIT API 결과 코드 확인 — 성공 코드 '00'(구) / '000'(신) 외에는 명확히 로깅
-    if (header && header.resultCode && !MOLIT_OK_CODES.has(header.resultCode)) {
-      logger.warn({
-        source: 'molit', lawdCd, dealYm,
-        resultCode: header.resultCode, resultMsg: header.resultMsg,
-      }, 'MOLIT 거래 조회 비정상 응답코드');
-    } else if (!header && typeof response.data === 'string') {
-      logger.warn({
-        source: 'molit', lawdCd, dealYm,
-        sample: String(response.data).slice(0, 200),
-      }, 'MOLIT 거래 비-JSON 응답');
+    for (let pageNo = 1; pageNo <= MAX_PAGES; pageNo++) {
+      const response = await axios.get(MOLIT_DETAIL_URL, {
+        params: {
+          serviceKey: process.env.MOLIT_API_KEY,
+          LAWD_CD: lawdCd,
+          DEAL_YMD: dealYm,
+          pageNo,
+          numOfRows: NUM_ROWS,
+          _type: 'json',
+        },
+        timeout: 7000,
+        headers: { Accept: 'application/json' },
+      });
+
+      const body = response.data?.response?.body;
+      header = response.data?.response?.header || header;
+      totalCount = body?.totalCount != null ? parseInt(body.totalCount, 10) : totalCount;
+      const items = body?.items?.item;
+      const pageItems = Array.isArray(items) ? items : items ? [items] : [];
+
+      if (header && header.resultCode && !MOLIT_OK_CODES.has(header.resultCode)) {
+        logger.warn({
+          source: 'molit', lawdCd, dealYm, pageNo,
+          resultCode: header.resultCode, resultMsg: header.resultMsg,
+        }, 'MOLIT 거래 조회 비정상 응답코드');
+        break; // 에러 응답이면 페이지 루프 중단
+      } else if (!header && typeof response.data === 'string') {
+        logger.warn({
+          source: 'molit', lawdCd, dealYm, pageNo,
+          sample: String(response.data).slice(0, 200),
+        }, 'MOLIT 거래 비-JSON 응답');
+        break;
+      }
+
+      allItems.push(...pageItems);
+
+      // 페이지가 덜 채워졌거나 totalCount 초과 시 종료
+      if (pageItems.length < NUM_ROWS) break;
+      if (totalCount != null && allItems.length >= totalCount) break;
     }
 
-    const result = allItems.map(item => ({
-      aptName: item.aptNm?.trim() || '',
-      sigungu: item.sggNm?.trim() || '',
-      umdNm: item.umdNm?.trim() || '',
-      excluUseAr: parseFloat(item.excluUseAr) || 0,
-      buildYear: parseInt(item.buildYear) || 0,
-      floor: parseInt(item.floor) || 0,
-      dealYear: parseInt(item.dealYear) || 0,
-      dealMonth: parseInt(item.dealMonth) || 0,
-      dealDay: parseInt(item.dealDay) || 0,
-      dealAmount: parseInt((item.dealAmount || '0').replace(/,/g, '')) || 0,
-      lawdCd: item.regionCode || lawdCd,
-      aptSeq: item.aptSeq || '',
-    }));
+    if (totalCount != null && allItems.length < totalCount) {
+      logger.warn({
+        source: 'molit', lawdCd, dealYm,
+        fetched: allItems.length, total: totalCount, maxPages: MAX_PAGES,
+      }, 'MOLIT 거래 일부 페이징 미완료 — MAX_PAGES 상한 도달');
+    }
+
+    // ── 해제(취소) 거래 필터링 ───────────────────────────
+    // MOLIT 응답에 cdealType 이 있으면 해제 거래. 기본 제외.
+    // 왜 제외: 네이버는 취소된 거래를 숨기지만 MOLIT 은 해제 플래그만 달고 유지 →
+    //          필터 안 하면 "네이버엔 없는 거래가 여기엔 있다" 는 불일치 원인 (Bug #3)
+    const result = allItems
+      .filter(item => {
+        const cancelled = String(item.cdealType || '').trim();
+        if (cancelled) {
+          cancelledCount++;
+          return false;
+        }
+        return true;
+      })
+      .map(item => ({
+        aptName: item.aptNm?.trim() || '',
+        sigungu: item.sggNm?.trim() || '',
+        umdNm: item.umdNm?.trim() || '',
+        excluUseAr: parseFloat(item.excluUseAr) || 0,
+        buildYear: parseInt(item.buildYear) || 0,
+        floor: parseInt(item.floor) || 0,
+        dealYear: parseInt(item.dealYear) || 0,
+        dealMonth: parseInt(item.dealMonth) || 0,
+        dealDay: parseInt(item.dealDay) || 0,
+        dealAmount: parseInt((item.dealAmount || '0').replace(/,/g, '')) || 0,
+        lawdCd: item.regionCode || lawdCd,
+        aptSeq: item.aptSeq || '',
+      }));
+
+    if (cancelledCount > 0) {
+      logger.info({ source: 'molit', lawdCd, dealYm, cancelledCount, activeCount: result.length },
+        'MOLIT 해제 거래 필터링');
+    }
 
     cache.set(cacheKey, result, 86400);
     return result;

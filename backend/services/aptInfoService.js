@@ -108,7 +108,7 @@ async function findAptByRoadName(bjdCode) {
 
 /**
  * 시군구 단위 전체 단지 목록 조회 (핵심 신규)
- * 거래 없는 단지까지 포함한 완전한 목록 — 매물 다양성 확보
+ * 거래 없는 단지까지 포함한 완전한 목록 — 단지 다양성 확보
  *
  * @param {string} sigunguCode 법정동 5자리 (예: '11350')
  * @returns {Promise<Array<{kaptCode,kaptName,as1,as2,as3,as4,bjdCode,doroJuso}>>}

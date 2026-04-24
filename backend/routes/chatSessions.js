@@ -128,11 +128,13 @@ router.get('/sessions/:id/messages', async (req, res, next) => {
 });
 
 // ── POST /sessions/:id/messages ───────────────────────────
-// body: { role, content, meta? }
+// body: { role, content, meta?, clientMsgId? }
+// Phase 4.3: clientMsgId(UUID) 전송 시 같은 (session, clientMsgId) 중복 INSERT → 기존 행 반환 (idempotent)
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 router.post('/sessions/:id/messages', async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { role, content, meta } = req.body || {};
+    const { role, content, meta, clientMsgId } = req.body || {};
     if (!role || !ALLOWED_ROLES.has(role)) {
       return res.status(400).json({ error: `role 은 ${[...ALLOWED_ROLES].join('|')} 중 하나` });
     }
@@ -140,15 +142,41 @@ router.post('/sessions/:id/messages', async (req, res, next) => {
       return res.status(400).json({ error: 'content 필수 (string)' });
     }
     const trimmed = content.slice(0, MAX_CONTENT_LEN);
+    const validClientId = clientMsgId && UUID_RE.test(String(clientMsgId).trim()) ? String(clientMsgId).trim() : null;
     const sb = userScopedClient(req.accessToken);
 
+    // Idempotency: 같은 client_msg_id 가 이미 있으면 그 행을 그대로 반환
+    if (validClientId) {
+      const { data: existing } = await sb
+        .from('chat_messages')
+        .select('id, created_at')
+        .eq('session_id', id)
+        .eq('client_msg_id', validClientId)
+        .maybeSingle();
+      if (existing) {
+        return res.status(200).json({ id: existing.id, createdAt: existing.created_at, dedup: true });
+      }
+    }
+
     // 메시지 INSERT — RLS WITH CHECK 가 세션 소유권 검증
+    const insertRow = { session_id: id, role, content: trimmed, meta: meta || {} };
+    if (validClientId) insertRow.client_msg_id = validClientId;
     const { data: msg, error: msgErr } = await sb
       .from('chat_messages')
-      .insert({ session_id: id, role, content: trimmed, meta: meta || {} })
+      .insert(insertRow)
       .select('id, created_at')
       .single();
     if (msgErr) {
+      // 23505 = unique_violation (client_msg_id 동시 INSERT race) — 기존 행 재조회
+      if (msgErr.code === '23505' && validClientId) {
+        const { data: row } = await sb
+          .from('chat_messages')
+          .select('id, created_at')
+          .eq('session_id', id)
+          .eq('client_msg_id', validClientId)
+          .maybeSingle();
+        if (row) return res.status(200).json({ id: row.id, createdAt: row.created_at, dedup: true });
+      }
       // RLS 위반이면 42501 / 세션 없음이면 23503
       if (msgErr.code === '42501' || msgErr.code === '23503') {
         return res.status(404).json({ error: '세션 없음 (또는 권한 없음)' });

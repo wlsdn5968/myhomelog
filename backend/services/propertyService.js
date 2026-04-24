@@ -1,5 +1,5 @@
 /**
- * 매물 검색 서비스 (안정화판 — AI 의존 제거)
+ * 단지 검색 서비스 (안정화판 — AI 의존 제거)
  *
  * 변경 이력:
  * - AI 호출 제거 → 응답 속도 25s → ~5s, 매번 안정 작동
@@ -13,6 +13,7 @@
  */
 const { getTransactionsByApt, analyzeTransactions } = require('./transactionService');
 const { getAptListBySgg, getAptBasisInfo } = require('./aptInfoService');
+const { resolveCoordBatch } = require('./geocodeCacheService');
 const cache = require('../cache');
 const logger = require('../logger');
 
@@ -90,6 +91,8 @@ function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '') {
 }
 
 // ── LTV/대출한도 단순 계산 (프론트 calcLTV와 일치) ─────────
+// 규제지역 판정은 regulations_snapshot 의 regulatedRegions.* 기준과 동일해야 함.
+// per-row 호출 성능상 inline regex 유지. 정부 개정 시 아래 regex 와 스냅샷 동시 갱신.
 function computeLTV(buyAuk, region, isFirstBuyer, houseStatus) {
   const isRegulated = /서울|강남|서초|송파|용산|분당|과천/.test(region || '');
   if (houseStatus === '2주택+') return { ltv: '0% (규제)', maxLoan: '0억' };
@@ -120,7 +123,7 @@ function buildTags(apt) {
 }
 
 /**
- * 사용자 조건 기반 매물 추천
+ * 사용자 조건 기반 단지 추천
  */
 async function getAIRecommendations(userCondition) {
   const {
@@ -199,36 +202,15 @@ async function getAIRecommendations(userCondition) {
     matched.push({ ...apt, fitPyeongs, primaryPyeong });
   }
 
-  // Step 3b: 거래 없는 단지 추가 — K-apt 전체 단지 리스트 중 matched에 없는 항목
-  // 주변 단지 시세로 예상가 추정해 "참고 매물"로 노출 (매물 다양성↑)
-  const matchedNames = new Set(matched.map(m => (m.aptName || '').replace(/\s/g, '')).filter(Boolean));
-  const dongAvgMan = {}; // umdNm → avgPriceMan (같은 동 실거래 평균)
-  for (const apt of matched) {
-    const dong = apt.umdNm;
-    if (!dong) continue;
-    if (!dongAvgMan[dong]) dongAvgMan[dong] = { sum: 0, cnt: 0 };
-    dongAvgMan[dong].sum += apt.primaryPyeong.avgPrice;
-    dongAvgMan[dong].cnt += 1;
-  }
-  const dongAvg = Object.fromEntries(
-    Object.entries(dongAvgMan).map(([k, v]) => [k, Math.round(v.sum / v.cnt)])
-  );
-  const noTxApts = [];
-  for (const a of allAptList) {
-    const nm = (a.kaptName || a.aptName || '').trim();
-    if (!nm) continue;
-    const nmKey = nm.replace(/\s/g, '');
-    if (matchedNames.has(nmKey)) continue;
-    // 동명 추정 (as4 또는 as3가 umdNm)
-    const dong = a.as4 || a.as3 || '';
-    const est = dongAvg[dong] || 0;
-    // 예산 맞는 추정가가 있을 때만 포함 (너무 벗어나면 스팸)
-    if (!est) continue;
-    if (est < budgetMinMan || est > budgetMaxMan) continue;
-    noTxApts.push({ ...a, _estPriceMan: est, _dong: dong, _noTx: true });
-  }
+  // ⚠ 2026-04-25: "참고 단지(거래 없는 단지)" 기능 제거
+  // 제거 사유:
+  //   - 같은 동 평균가로 예상가를 추정하는 로직은 신뢰도 낮음 (최근 거래 없는 단지는
+  //     대개 거래 단절 이유가 있음 — 재건축·세대합병·불리한 입지 등).
+  //   - 프론트 지도에 섞여 표시되면서 "실거래 근거 있는 추천"과 구분이 어려움 → UX 혼란.
+  //   - 좌표 역시 as2/_dong 기반 fallback 으로 구 경계를 넘기는 사례 있음 (Bug #2).
+  //   - 재도입 시 별도 섹션/별색 마커로 시각 구분 + 추정가 신뢰구간 표기 필요.
 
-  if (!matched.length && !noTxApts.length) {
+  if (!matched.length) {
     return {
       recommendations: getStaticFallback(maxBudget, region),
       targetRegions,
@@ -274,7 +256,7 @@ async function getAIRecommendations(userCondition) {
       cons: ageYears >= 30 ? `구축(${ageYears}년) — 재건축연한 도래`
             : ageYears >= 20 ? `준구축(${ageYears}년) — 인테리어 점검 필요`
             : `현장 임장으로 동·층·향 확인 필수`,
-      strategy: `① 최근 거래 ${p.recentTx.length}건 동·층·향 비교 ② 대출 사전심사 ③ 같은 평형 매물 호가 비교 (네이버부동산/직방)`,
+      strategy: `① 최근 거래 ${p.recentTx.length}건 동·층·향 비교 ② 대출 사전심사 ③ 같은 평형 호가 비교 (네이버부동산/직방)`,
       tags: tags.length ? tags : ['실거래확인'],
       risk: '시세 변동·금리 인상 리스크는 본인 부담 / 미래 가격 예측 불가',
       recommend: false,
@@ -380,47 +362,46 @@ async function getAIRecommendations(userCondition) {
   // enrich는 항상 recommendations 와 길이 동일 — 그대로 사용
   const enrichedRecs = enriched;
 
-  // Step 5b: 거래 없는 참고 단지 추가 (예산 범위 & 같은 동 평균가 있는 것만)
-  const extraRefs = noTxApts.slice(0, 15).map((a, i) => {
-    const nm = (a.kaptName || a.aptName || '').trim();
-    const estAuk = parseFloat((a._estPriceMan / 10000).toFixed(2));
-    const ltvInfo = computeLTV(estAuk, region || '서울', isFirstBuyer, houseStatus);
+  // Step 6: 좌표 해결 — DB 캐시 우선, miss 시 Kakao 지오코딩.
+  // 여기서 lat/lng 를 채워야 프론트가 fallback/jitter 없이 정확한 위치에 마커를 찍는다.
+  // (기존 버그: 프론트 getLat/getLng 의 구명 키워드 매칭 실패 시 서울 중심 근처로 떨어져
+  //  은평구 단지가 용산/한강 근처에 표시됨 → Bug #2 의 근본 원인)
+  const coordInputs = enrichedRecs.map((rec, i) => {
+    const apt = ranked[i];
     return {
-      rank: recommendations.length + i + 1,
-      aptName: nm,
-      area: `${a.as2 || ''} ${a._dong || ''}`.trim(),
-      avgPrice: estAuk,
-      minPrice: estAuk,
-      maxPrice: estAuk,
-      buildYear: null,
-      pyeong: '평형 정보 없음 (참고가)',
-      score: 40, // 추정값이므로 점수 낮게
-      ltv: ltvInfo.ltv,
-      maxLoan: ltvInfo.maxLoan,
-      pros: `${a._dong} 인근 단지 평균가 기준 추정 · 최근 6개월 실거래는 없음`,
-      cons: '최근 거래 데이터 부족 — 호가/시세는 별도 확인 필요',
-      strategy: '① 네이버부동산·KB시세에서 현재 호가 교차검증 ② 동·평형별 정확한 시세는 중개사 문의 ③ 최근 거래 없는 단지는 매도호가 ≠ 실매매가 격차 클 수 있음',
-      tags: ['참고매물', '추정가'],
-      risk: '최근 실거래 부재로 추정값 신뢰도 낮음. 반드시 현장·호가 확인.',
-      recommend: false,
-      aptSeq: a.kaptCode,
-      currentPriceByPyeong: [],
-      txHistory: [],
-      dealCount6m: 0,
-      recentDeal: '최근 6개월 거래 없음',
-      isReference: true, // 프론트에서 구분 표시 가능
+      kaptCode: rec.facility?.kaptCode || null,
+      aptName: rec.aptName,
+      sigungu: apt.sigungu || '',
+      umdNm: apt.umdNm || '',
+      address: rec.facility?.address || null,
     };
   });
-
-  const finalRecs = [...enrichedRecs, ...extraRefs];
+  const coords = await resolveCoordBatch(coordInputs, 4);
+  const withCoords = enrichedRecs.map((rec, i) => {
+    const c = coords[i];
+    return {
+      ...rec,
+      lat: c?.lat ?? null,
+      lng: c?.lng ?? null,
+      // 좌표 출처 — 프론트에서 "정확" 마커와 fallback 구분 가능
+      coordSource: c ? 'geocache' : null,
+    };
+  });
+  const missingCoords = withCoords.filter(r => r.lat == null).length;
+  if (missingCoords > 0) {
+    logger.info({ total: withCoords.length, missing: missingCoords },
+      'propertyService: 일부 단지 좌표 해결 실패 — 프론트에서 마커 생략');
+  }
 
   const result = {
-    recommendations: finalRecs,
+    recommendations: withCoords,
     targetRegions,
     totalTxAnalyzed: analyzed.length,
     totalAptsInRegion: allAptList.length,
     inBudgetCount: matched.length,
-    referenceCount: extraRefs.length,
+    // 참고단지 기능 제거 (2026-04-25) — 하위 호환 위해 0 유지
+    referenceCount: 0,
+    coordMissingCount: missingCoords,
     disclaimer: '본 결과는 국토교통부 실거래가 데이터 기반 정보 정리이며, 매수·매도 추천이 아닙니다. 모든 의사결정의 책임은 본인에게 있습니다.',
   };
   cache.set(cacheKey, result, 1800);

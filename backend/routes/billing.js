@@ -177,6 +177,13 @@ router.post('/confirm', async (req, res, next) => {
     if (Number(pay.amount) !== Number(amount)) {
       logger.warn({ userId: req.user.id, orderId, expected: pay.amount, got: amount },
         '결제 금액 불일치 — 위조 가능성');
+      // Phase 1.2: 금액 위조 시도 시 동일 orderId 재사용 차단.
+      // 이렇게 안 막으면 attacker 가 올바른 금액으로 재시도 → Toss Idempotency-Key 가
+      // 첫 실패 응답을 반복하지 않고 성공 처리할 여지가 생긴다.
+      await admin.from('payments').update({
+        status: 'failed',
+        failure_reason: `amount_mismatch: expected=${pay.amount} got=${amount}`,
+      }).eq('order_id', orderId);
       return res.status(400).json({ error: '결제 금액 불일치' });
     }
 
@@ -231,6 +238,140 @@ router.post('/confirm', async (req, res, next) => {
     logger.info({ userId: req.user.id, plan: pay.plan, orderId }, '결제 승인 완료');
     res.json({ status: 'captured', plan: pay.plan });
   } catch (e) { next(e); }
+});
+
+// ── POST /billing/webhook — Toss 결제 상태 변경 알림 ──────
+// 역할: /billing/confirm 클라이언트 리다이렉트가 소실돼도 (유저가 탭 종료 등)
+//       서버 DB 와 Toss 간 상태 정합성 복구.
+// 인증:
+//   1) Toss 가 HMAC 서명을 공식 제공하지 않으므로, 바디의 paymentKey 로
+//      Toss REST API (/v1/payments/{paymentKey}) 를 TOSS_SECRET_KEY 로 재조회.
+//      → 이 재조회 성공 자체가 "Toss 가 실제로 발생시킨 이벤트" 임을 증명.
+//   2) 선택적: TOSS_WEBHOOK_SECRET 이 있으면 헤더 `X-Webhook-Secret` 비교
+//      (운영자가 Toss 대시보드에서 정적 헤더 설정 시 이중 방어)
+//
+// 멱등성: payments.status 가 이미 captured 이면 no-op.
+// 실패 이벤트(expired/canceled/aborted)도 동일하게 DB 반영.
+router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
+  try {
+    // (선택적) 정적 헤더 검증
+    const expectedSecret = process.env.TOSS_WEBHOOK_SECRET;
+    if (expectedSecret) {
+      const got = req.get('x-webhook-secret') || req.get('X-Webhook-Secret');
+      if (!got || got !== expectedSecret) {
+        logger.warn({ ip: req.ip }, 'Toss webhook: 정적 시크릿 불일치');
+        return res.status(401).json({ error: 'unauthorized' });
+      }
+    }
+
+    const { eventType, data } = req.body || {};
+    // Toss 표준 payload: { eventType: 'PAYMENT_STATUS_CHANGED', data: { paymentKey, orderId, status, ... } }
+    // 일부 구버전은 body 자체가 payment object — 둘 다 수용
+    const p = data && data.paymentKey ? data : req.body;
+    const paymentKey = p?.paymentKey;
+    const orderId = p?.orderId;
+    if (!paymentKey || !orderId) {
+      return res.status(400).json({ error: 'paymentKey, orderId 필수' });
+    }
+
+    if (!TOSS_SECRET_KEY) {
+      logger.error('TOSS_SECRET_KEY 미설정 — webhook 인증 불가');
+      return res.status(503).json({ error: 'server misconfigured' });
+    }
+
+    // Toss 서버에 실제 결제 상태 재조회 (이게 사실상 서명 검증 역할)
+    const basic = Buffer.from(TOSS_SECRET_KEY + ':').toString('base64');
+    let tossData;
+    try {
+      const r = await axios.get(`${TOSS_API_BASE}/v1/payments/${encodeURIComponent(paymentKey)}`, {
+        headers: { Authorization: `Basic ${basic}` },
+        timeout: 8000,
+      });
+      tossData = r.data;
+    } catch (err) {
+      logger.warn({ paymentKey, orderId, err: err.response?.data || err.message },
+        'Toss 재조회 실패 — webhook 신뢰 불가');
+      return res.status(400).json({ error: 'toss verify failed' });
+    }
+
+    // 재조회 결과의 orderId 가 body 와 일치해야 함
+    if (tossData.orderId !== orderId) {
+      logger.error({ bodyOrderId: orderId, tossOrderId: tossData.orderId }, 'webhook orderId 불일치');
+      return res.status(400).json({ error: 'orderId mismatch' });
+    }
+
+    const admin = getSupabaseAdmin();
+    if (!admin) return res.status(503).json({ error: 'DB unavailable' });
+
+    // DB row 찾기
+    const { data: pay, error: payErr } = await admin
+      .from('payments')
+      .select('*')
+      .eq('order_id', orderId)
+      .maybeSingle();
+    if (payErr) throw payErr;
+    if (!pay) {
+      logger.warn({ orderId }, 'webhook: payments row 없음');
+      // 200 반환 — Toss 가 재시도하지 않도록 (우리 시스템 문제지 Toss 문제 아님)
+      return res.json({ ok: true, note: 'unknown order' });
+    }
+
+    const tossStatus = tossData.status; // DONE, CANCELED, EXPIRED, ABORTED, WAITING_FOR_DEPOSIT 등
+
+    // 멱등: 이미 최종 상태인 경우 재처리 X
+    if (pay.status === 'captured' && tossStatus === 'DONE') {
+      return res.json({ ok: true, note: 'already captured' });
+    }
+
+    // 금액 검증 (confirm 과 동일 방어선)
+    if (Number(pay.amount) !== Number(tossData.totalAmount || tossData.balanceAmount || 0)) {
+      logger.warn({ orderId, expected: pay.amount, got: tossData.totalAmount },
+        'webhook: 금액 불일치');
+      await admin.from('payments').update({
+        status: 'failed',
+        failure_reason: `webhook_amount_mismatch: expected=${pay.amount} got=${tossData.totalAmount}`,
+      }).eq('order_id', orderId);
+      return res.status(400).json({ error: 'amount mismatch' });
+    }
+
+    if (tossStatus === 'DONE') {
+      // 성공 반영 — /confirm 과 동일 작업. 클라이언트 confirm 이 먼저 왔어도 멱등.
+      await admin.from('payments').update({
+        status: 'captured',
+        toss_payment_key: paymentKey,
+        method: tossData.method || null,
+        approved_at: tossData.approvedAt || new Date().toISOString(),
+        raw_response: tossData,
+      }).eq('order_id', orderId);
+
+      const now = new Date();
+      const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      await admin.from('user_billing').upsert({
+        user_id: pay.user_id,
+        plan: pay.plan,
+        status: 'active',
+        current_period_start: now.toISOString(),
+        current_period_end: periodEnd.toISOString(),
+        canceled_at: null,
+      }, { onConflict: 'user_id' });
+
+      logger.info({ orderId, userId: pay.user_id, source: 'webhook' }, '결제 승인 완료 (webhook)');
+    } else if (['CANCELED', 'EXPIRED', 'ABORTED'].includes(tossStatus)) {
+      await admin.from('payments').update({
+        status: 'failed',
+        failure_reason: `toss_${tossStatus.toLowerCase()}`,
+        raw_response: tossData,
+      }).eq('order_id', orderId);
+      logger.info({ orderId, tossStatus }, '결제 실패/취소 (webhook)');
+    }
+    // WAITING_FOR_DEPOSIT 등 중간 상태는 별도 처리 없이 200 반환
+
+    return res.json({ ok: true, status: tossStatus });
+  } catch (e) {
+    logger.error({ err: e }, 'webhook 처리 예외');
+    // 500 을 주면 Toss 가 재시도함 — 의도됨
+    return res.status(500).json({ error: 'internal' });
+  }
 });
 
 // ── POST /billing/cancel — 구독 해지 (다음 결제일까지 유효) ──

@@ -10,6 +10,7 @@
 const axios = require('axios');
 const cache = require('../cache');
 const logger = require('../logger');
+const { isValidKoreaCoord } = require('../utils/geo');
 
 const KAKAO_DIRECTIONS = 'https://apis-navi.kakaomobility.com/v1/directions';
 const KAKAO_CAT = 'https://dapi.kakao.com/v2/local/search/category.json';
@@ -118,7 +119,17 @@ async function keywordToCoord(keyword) {
       timeout: 5000,
     });
     const d = r.data?.documents?.[0];
-    const out = d ? { lat: parseFloat(d.y), lng: parseFloat(d.x), name: d.place_name || d.address_name } : null;
+    let out = null;
+    if (d) {
+      const lat = parseFloat(d.y);
+      const lng = parseFloat(d.x);
+      // Phase 1.9: 한반도 범위 검증 — "강남" 같은 키워드가 외국 지명으로 잡히는 경우 차단
+      if (isValidKoreaCoord(lat, lng)) {
+        out = { lat, lng, name: d.place_name || d.address_name };
+      } else {
+        logger.warn({ source: 'kakao-keyword', query: q, lat, lng }, 'Kakao 결과 한반도 범위 밖 — 무시');
+      }
+    }
     // 결과 없음은 짧게만 캐시 (24h) — API 일시 이슈 시 장기 캐시 방지
     cache.set(ck, out, out ? 86400 * 30 : 86400);
     if (!out) {

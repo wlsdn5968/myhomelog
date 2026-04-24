@@ -80,20 +80,37 @@ async function readUsage(key) {
   }
 }
 
+/**
+ * 식별자 결정 — 로그인 사용자는 userId, 비로그인은 IP
+ *
+ * 이유:
+ *   - IP 기반은 NAT/회사망/모바일 캐리어 IP 공유로 다수 사용자에게 누명을 씌움
+ *   - 로그인 사용자는 user.id 가 안정 PK 라 더 공정·정확
+ *   - 비로그인은 IP 외엔 안정 식별자 없음 → 기존 동작 유지
+ */
+function getLimitIdentity(req) {
+  if (req.user?.id) return { kind: 'u', value: String(req.user.id) };
+  return { kind: 'i', value: getClientIp(req) };
+}
+
 function dailyLimit({ limit = 5, scope = 'global' } = {}) {
   return async function (req, res, next) {
     // 헬스체크/조회성 GET 등은 카운팅하지 않음
     if (req.method === 'GET' && scope !== 'chat') return next();
 
-    const ip = getClientIp(req);
-    const key = `dl:${scope}:${todayKey()}:${ip}`;
+    const id = getLimitIdentity(req);
+    // 키 포맷: dl:{scope}:{yyyymmdd}:{u|i}:{value}
+    // - u: 로그인 사용자 (userId)
+    // - i: 비로그인 (IP)
+    const key = `dl:${scope}:${todayKey()}:${id.kind}:${id.value}`;
     const ttl = secondsUntilMidnight();
 
     // 1) 선 조회 — limit 초과 여부 판단
     const currentUsed = await readUsage(key);
     if (currentUsed >= limit) {
       logger.info({
-        scope, limit, used: currentUsed, ip: maskIp(ip),
+        scope, limit, used: currentUsed,
+        identity: id.kind === 'u' ? `u:${id.value}` : `i:${maskIp(id.value)}`,
       }, 'daily limit exceeded');
       return res.status(429).json({
         error: 'DAILY_LIMIT_EXCEEDED',
@@ -115,9 +132,9 @@ function dailyLimit({ limit = 5, scope = 'global' } = {}) {
 }
 
 async function getUsage(req, scope = 'search') {
-  const ip = getClientIp(req);
-  const key = `dl:${scope}:${todayKey()}:${ip}`;
+  const id = getLimitIdentity(req);
+  const key = `dl:${scope}:${todayKey()}:${id.kind}:${id.value}`;
   return readUsage(key);
 }
 
-module.exports = { dailyLimit, getUsage, getClientIp };
+module.exports = { dailyLimit, getUsage, getClientIp, getLimitIdentity };

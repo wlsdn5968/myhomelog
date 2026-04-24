@@ -8,7 +8,7 @@
 ## 서비스 소개
 
 - 2025.10.15 규제 기준 실시간 LTV·DSR 대출 계산
-- 국토부 실거래가 API 기반 AI 매물 추천
+- 국토부 실거래가 API 기반 AI 단지 추천
 - 네이버 지도 + 카카오 지오코딩으로 정확한 위치 표시
 - 내집스캔 스타일 리포트 (종합의견 / 실거래가 / 리스크 / 맞춤특약)
 
@@ -113,7 +113,7 @@ railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 | Method | Path | 설명 |
 |--------|------|------|
 | POST | /api/chat | AI 채팅 |
-| POST | /api/properties/recommend | AI 매물 추천 |
+| POST | /api/properties/recommend | AI 단지 추천 |
 | GET | /api/transactions | 실거래가 조회 |
 | GET | /api/regulations | 현행 규제 정보 |
 | POST | /api/clause | 맞춤 특약 생성 |

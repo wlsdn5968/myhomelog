@@ -1,10 +1,10 @@
 /**
  * POST /api/clause
- * 매물 조건 기반 맞춤 특약문구 AI 자동 생성
+ * 매매 조건 기반 맞춤 특약문구 AI 자동 생성
  */
 const express = require('express');
 const router = express.Router();
-const { callAI } = require('../services/aiService');
+const { callAI, BudgetExceededError } = require('../services/aiService');
 const { getCitationsForIssues } = require('../services/legalService');
 const cache = require('../cache');
 
@@ -24,7 +24,7 @@ router.post('/', async (req, res) => {
 
   const prompt = `다음 아파트 매수 계약에 필요한 맞춤 특약문구를 생성해줘.
 
-매물 정보:
+매매 정보:
 - 단지: ${aptName} (${area})
 - 매수가: ${price}억원
 - 준공: ${buildYear}년
@@ -48,13 +48,16 @@ recommended: 상황에 따라 추가할 특약 2~3개
 실제 계약서에 바로 쓸 수 있는 정확한 문구로 작성.`;
 
   try {
-    const result = await callAI([{ role: 'user', content: prompt }], false);
+    const result = await callAI([{ role: 'user', content: prompt }], false, { userId: req.user?.id });
     const cleaned = result.content.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(cleaned);
     parsed.citations = citations; // 프론트에 법령 인용 같이 전달
     cache.set(cacheKey, parsed, 7200);
     res.json(parsed);
   } catch (e) {
+    if (e instanceof BudgetExceededError) {
+      return res.status(429).json({ error: '이번 달 AI 사용 한도에 도달했어요.', code: 'budget_exceeded', budget: e.info });
+    }
     res.status(502).json({ error: '특약 생성 실패', detail: e.message });
   }
 });
@@ -70,7 +73,7 @@ router.post('/risk', async (req, res) => {
 
   const prompt = `다음 아파트 매수 시 발생 가능한 리스크 시나리오를 분석해줘.
 
-매물: ${aptName} (${area}) / 매수가 ${price}억 / ${buildYear}년 / LTV ${ltv} / AI점수 ${score}/100
+대상 단지: ${aptName} (${area}) / 매수가 ${price}억 / ${buildYear}년 / LTV ${ltv} / AI점수 ${score}/100
 
 JSON만 반환 (\`\`\` 없이):
 {
@@ -89,12 +92,15 @@ JSON만 반환 (\`\`\` 없이):
 리스크 3~4개, 현실적이고 구체적으로.`;
 
   try {
-    const result = await callAI([{ role: 'user', content: prompt }], false);
+    const result = await callAI([{ role: 'user', content: prompt }], false, { userId: req.user?.id });
     const cleaned = result.content.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(cleaned);
     cache.set(cacheKey, parsed, 7200);
     res.json(parsed);
   } catch (e) {
+    if (e instanceof BudgetExceededError) {
+      return res.status(429).json({ error: '이번 달 AI 사용 한도에 도달했어요.', code: 'budget_exceeded', budget: e.info });
+    }
     res.status(502).json({ error: '리스크 분석 실패' });
   }
 });

@@ -25,6 +25,17 @@ if (dsn) {
       ? `myhomelog@${process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7)}`
       : undefined,
 
+    // ── 명시적 integrations — v8 auto 로드 외 추가 제어 ───────
+    // @sentry/node 는 v8 에서 대부분 auto-enabled 지만, Express 경로에서
+    // setupExpressErrorHandler 가 httpIntegration / expressIntegration 을
+    // 이미 활용하므로 기본 자동 로드에 의존. 여기서는 **노이즈 감축** 용으로
+    // console breadcrumb 끄고, requestData 를 명시적으로 PII 차단 모드로 고정.
+    integrations: (defaultIntegrations) => [
+      // auto-loaded http/express/requestData/onUncaughtException 등 유지
+      ...defaultIntegrations.filter(i => i.name !== 'Console'),
+      // Console breadcrumb 제외 → stdout 로그는 pino 로만 감. Sentry 에 중복 X.
+    ],
+
     // 트레이싱 (성능 모니터링) — 비용 때문에 10% 만
     tracesSampleRate: parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE || '0.1'),
 

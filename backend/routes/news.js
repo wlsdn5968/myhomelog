@@ -34,13 +34,19 @@ async function fetchNaverNews(query, display = 10) {
     params: { query, display, sort: 'date' },
     timeout: 5000,
   });
-  return (r.data?.items || []).map(it => ({
-    title: stripHtml(it.title),
-    description: stripHtml(it.description).slice(0, 180),
-    link: it.originallink || it.link,
-    pubDate: it.pubDate,
-    source: 'naver',
-  }));
+  // Phase 2.15: 본문 인용은 90자 이내 + 말줄임 처리 — 저작권법 인용 범위(필요 최소한) 준수.
+  // 180자는 displacive summary 위험 (네이버 뉴스 API 약관 + 저작권법 28조).
+  return (r.data?.items || []).map(it => {
+    const desc = stripHtml(it.description);
+    const short = desc.length > 90 ? desc.slice(0, 90) + '…' : desc;
+    return {
+      title: stripHtml(it.title),
+      description: short,
+      link: it.originallink || it.link,
+      pubDate: it.pubDate,
+      source: 'naver',
+    };
+  });
 }
 
 // RSS Fallback — 네이버 부동산 메인 RSS (간단한 XML 파싱)
@@ -59,7 +65,9 @@ async function fetchRssFallback() {
       const title = (block.match(/<title>([\s\S]*?)<\/title>/)?.[1] || '').replace(/<!\[CDATA\[|\]\]>/g, '');
       const link = (block.match(/<link>([\s\S]*?)<\/link>/)?.[1] || '');
       const pubDate = (block.match(/<pubDate>([\s\S]*?)<\/pubDate>/)?.[1] || '');
-      const desc = (block.match(/<description>([\s\S]*?)<\/description>/)?.[1] || '').replace(/<!\[CDATA\[|\]\]>/g, '').replace(/<[^>]+>/g, '').slice(0, 180);
+      // Phase 2.15: 90자 인용 한도 (RSS도 동일 정책)
+      let desc = (block.match(/<description>([\s\S]*?)<\/description>/)?.[1] || '').replace(/<!\[CDATA\[|\]\]>/g, '').replace(/<[^>]+>/g, '');
+      if (desc.length > 90) desc = desc.slice(0, 90) + '…';
       const source = (block.match(/<source[^>]*>([\s\S]*?)<\/source>/)?.[1] || 'Google News');
       items.push({ title: stripHtml(title), description: desc, link, pubDate, source });
     }
@@ -153,7 +161,7 @@ ${titles.slice(0, 20).map((t, i) => `${i+1}. ${t}`).join('\n')}
 - JSON만 반환 (\`\`\` 없이): {"lines":["...","...","..."]}`;
 
   try {
-    const result = await callAI([{ role: 'user', content: prompt }], false);
+    const result = await callAI([{ role: 'user', content: prompt }], false, { userId: req.user?.id });
     const cleaned = result.content.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(cleaned);
     const out = {

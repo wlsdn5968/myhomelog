@@ -26,13 +26,51 @@ app.set('trust proxy', 1);
 const cache = require('./cache');
 
 // ── 보안 미들웨어 ──────────────────────────────────────────
+// CSP 정책:
+//   - scriptSrc 에 'unsafe-inline' 이 필요 (index.html 에 3900줄 인라인 <script> 존재).
+//     nonce 주입은 Phase 4 이후(Next.js 마이그) 에 도입.
+//   - 외부 연결 대상을 화이트리스트로 좁혀 attack surface 최소화.
+//   - connectSrc 에 Supabase·Toss·Sentry 도메인 명시 (XHR/Fetch 탈출 방지).
+//   - frameSrc 는 Toss Widget 용으로만 허용.
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
-      scriptSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      connectSrc: ["'self'"],
+      scriptSrc: [
+        "'self'",
+        "'unsafe-inline'", // index.html 인라인 스크립트 (Phase 4 이후 nonce 로 교체)
+        'https://browser.sentry-cdn.com',
+        'https://cdn.jsdelivr.net',
+        'https://unpkg.com',
+        'https://js.tosspayments.com',
+      ],
+      scriptSrcAttr: ["'unsafe-inline'"], // onclick="" 등 인라인 핸들러
+      styleSrc: [
+        "'self'",
+        "'unsafe-inline'", // 인라인 style + <style> 블록
+        'https://unpkg.com', // leaflet.css
+      ],
+      imgSrc: [
+        "'self'",
+        'data:',
+        'blob:',
+        'https://*.tile.openstreetmap.org',
+        'https://myhomelog.vercel.app',
+      ],
+      connectSrc: [
+        "'self'",
+        'https://*.supabase.co',
+        'wss://*.supabase.co',
+        'https://api.tosspayments.com',
+        'https://*.ingest.sentry.io',
+        'https://*.ingest.us.sentry.io',
+      ],
+      frameSrc: ["'self'", 'https://js.tosspayments.com', 'https://*.tosspayments.com'],
+      fontSrc: ["'self'", 'data:'],
+      objectSrc: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      upgradeInsecureRequests: [],
     },
   },
   crossOriginEmbedderPolicy: false,
@@ -94,22 +132,28 @@ const bookmarksRouter = require('./routes/bookmarks');
 const searchRouter = require('./routes/search');
 const billingRouter = require('./routes/billing');
 const chatSessionsRouter = require('./routes/chatSessions');
+const accountRouter = require('./routes/account');
+const cronRouter = require('./routes/cron');
+const automatedDecisionRouter = require('./routes/automatedDecision');
 
 // 일일 무료 한도 (BYOK 제거에 따른 무료 체험 정책)
 const { dailyLimit, getUsage } = require('./middleware/dailyLimit');
+const { optionalAuth } = require('./middleware/auth');
 const DAILY_SEARCH_LIMIT = parseInt(process.env.DAILY_SEARCH_LIMIT || '5');
 const DAILY_CHAT_LIMIT = parseInt(process.env.DAILY_CHAT_LIMIT || '15');
 
 // 채팅 세션/메시지 저장 (Supabase — JWT 필수, RLS 적용) — /api/chat 보다 먼저 마운트
 app.use('/api/chat/sessions', dataLimiter, chatSessionsRouter);
-app.use('/api/chat', chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat' }), chatRouter);
+// AI 엔드포인트: optionalAuth 를 앞단에 — 로그인 유저는 userId 기반 dailyLimit + 월 예산 가드,
+// 비로그인은 IP 기반 dailyLimit 만 (월 예산은 로그인 유저 한정).
+app.use('/api/chat', optionalAuth, chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat' }), chatRouter);
 app.use('/api/transactions', dataLimiter, transactionRouter);
 app.use('/api/properties', dataLimiter, dailyLimit({ limit: DAILY_SEARCH_LIMIT, scope: 'search' }), propertiesRouter);
 app.use('/api/regulations', regulationsRouter);
-app.use('/api/clause', chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat' }), clauseRouter);
+app.use('/api/clause', optionalAuth, chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat' }), clauseRouter);
 app.use('/api/geocode', dataLimiter, geocodeRouter);
 app.use('/api/analysis', dataLimiter, analysisRouter);
-app.use('/api/news', dataLimiter, newsRouter);
+app.use('/api/news', optionalAuth, dataLimiter, newsRouter);
 app.use('/api/subscription', dataLimiter, subscriptionRouter);
 // 북마크 (Supabase 백엔드 — JWT 필수, RLS 적용)
 app.use('/api/bookmarks', dataLimiter, bookmarksRouter);
@@ -117,11 +161,34 @@ app.use('/api/bookmarks', dataLimiter, bookmarksRouter);
 app.use('/api/search', dataLimiter, searchRouter);
 // 결제/구독 (Toss Payments — JWT 필수, service_role 전용 쓰기)
 app.use('/api/billing', dataLimiter, billingRouter);
+// 계정 데이터 자기결정권 (PIPA 제35·36조 / GDPR Art.15·17) — JWT 필수
+// GDPR Art.22 / PIPA 자동화 결정 설명권 — JWT 필수 (account 보다 먼저 마운트: prefix 세부 우선)
+app.use('/api/account/automated-decision', dataLimiter, automatedDecisionRouter);
+app.use('/api/account', dataLimiter, accountRouter);
+// Cron 엔드포인트 — Vercel Cron 에서 호출 (CRON_SECRET 필수)
+app.use('/api/cron', cronRouter);
 // 공유 딥링크 — 크롤러용 OG 메타 치환 (HTML 서빙)
 app.use('/share', shareRouter);
 
-// ── API 활성화 진단 (공개 — 데이터 소스 현황 확인용) ────
+// ── API 활성화 진단 (운영자 전용 — x-health-key 헤더 필수) ────
+// Phase 1.8: 과거 공개 엔드포인트는 외부 API 쿼터(MOLIT 1만/일, Kakao 30만/일) 소진 공격에 노출 →
+//   1) HEALTH_API_KEY 환경변수 미설정 시 404 (production 기본 차단)
+//   2) 헤더 불일치 시 404 (존재 자체 비공개)
+//   3) 인증 통과 시에도 30초 결과 캐시 — 폭주 방지
 app.get('/api/health/apis', async (req, res) => {
+  const expected = process.env.HEALTH_API_KEY;
+  const provided = req.headers['x-health-key'];
+  if (!expected || provided !== expected) {
+    return res.status(404).json({ error: 'Not Found' });
+  }
+
+  // 30초 결과 캐시 — 같은 운영자가 새로고침해도 외부 API 안 때림
+  const HEALTH_CACHE_KEY = 'health:apis:v1';
+  const cached = cache.get(HEALTH_CACHE_KEY);
+  if (cached) {
+    return res.json({ ...cached, fromCache: true });
+  }
+
   const axios = require('axios');
   const molit = process.env.MOLIT_API_KEY;
   const kakao = process.env.KAKAO_REST_API_KEY;
@@ -227,23 +294,52 @@ app.get('/api/health/apis', async (req, res) => {
     } catch (e) { checks.kakao_mobility = false; checks.kakao_mobility_err = e.response?.status || e.message; }
   }
 
-  res.json({ timestamp: new Date().toISOString(), checks });
+  const result = { timestamp: new Date().toISOString(), checks };
+  cache.set(HEALTH_CACHE_KEY, result, 30); // 30s
+  res.json(result);
 });
 
 // 헬스체크 (사용 한도 잔량 포함 — 프론트 사용 한도 표시에 사용)
 // getUsage 가 Redis 연동으로 async 가 되었으므로 핸들러도 async
-app.get('/api/health', async (req, res) => {
-  const used = await getUsage(req, 'search');
+// Phase 3.3 + 4.9: 검색·AI 일일 잔량 + 월 예산 잔여 동시 반환 — 헤더 pill / 구독 CTA 용
+const budgetService = require('./services/budgetService');
+app.get('/api/health', optionalAuth, async (req, res) => {
+  const [searchUsed, chatUsed] = await Promise.all([
+    getUsage(req, 'search'),
+    getUsage(req, 'chat'),
+  ]);
+
+  // 월 예산 (로그인 사용자 한정)
+  let monthlyBudget = null;
+  if (req.user?.id) {
+    const b = await budgetService.checkBudget(req.user.id);
+    if (b) {
+      monthlyBudget = {
+        usedUsd: (b.usedX1000 / 1000 / 1000).toFixed(3),
+        limitUsd: (b.limitX1000 / 1000 / 1000).toFixed(2),
+        remainingPct: Math.max(0, Math.round((1 - b.usedX1000 / b.limitX1000) * 100)),
+        resetAt: b.resetAt.toISOString(),
+        exceeded: !b.allowed,
+      };
+    }
+  }
+
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     env: process.env.NODE_ENV,
     cache: { keys: cache.keys().length, stats: cache.getStats() },
     usage: {
-      used,
+      used: searchUsed,
       limit: DAILY_SEARCH_LIMIT,
-      remaining: Math.max(0, DAILY_SEARCH_LIMIT - used),
+      remaining: Math.max(0, DAILY_SEARCH_LIMIT - searchUsed),
     },
+    chat: {
+      used: chatUsed,
+      limit: DAILY_CHAT_LIMIT,
+      remaining: Math.max(0, DAILY_CHAT_LIMIT - chatUsed),
+    },
+    monthlyBudget,
   });
 });
 

@@ -119,6 +119,23 @@
     <div style="font-size:13px;font-weight:700;margin-bottom:10px" id="coTitle">결제 준비 중...</div>
     <div id="widgetArea"></div>
     <div id="agreementArea"></div>
+
+    <!-- 결제 직전 명시적 동의 — 전자상거래법·약관규제법 준수 -->
+    <div id="myConsentBox" style="background:var(--bg2);border-radius:8px;padding:12px;margin-top:12px;font-size:12px;line-height:1.7;display:none">
+      <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;margin-bottom:6px">
+        <input type="checkbox" id="cnRefund" style="margin-top:3px;flex-shrink:0">
+        <span><b>(필수)</b> <a href="/refund.html" target="_blank" style="color:var(--acc);text-decoration:underline">환불 정책</a>을 확인했고 이에 동의합니다. 결제 후 7일 이내·미사용 시 전액 환불 가능하며, 사용 시작 시 일할 정산됨을 이해했습니다.</span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;margin-bottom:6px" id="cnAutoPayWrap">
+        <input type="checkbox" id="cnAutoPay" style="margin-top:3px;flex-shrink:0">
+        <span id="cnAutoPayText"><b>(필수)</b> 매월 자동 결제(구독 갱신)에 동의합니다. 언제든지 「내 계정 → 구독 해지」에서 해지할 수 있습니다.</span>
+      </label>
+      <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer">
+        <input type="checkbox" id="cnTerms" style="margin-top:3px;flex-shrink:0">
+        <span><b>(필수)</b> <a href="/terms.html" target="_blank" style="color:var(--acc);text-decoration:underline">이용약관</a> 및 <a href="/privacy.html" target="_blank" style="color:var(--acc);text-decoration:underline">개인정보 처리방침</a>에 동의합니다.</span>
+      </label>
+    </div>
+
     <button id="payBtn" class="btn" style="margin-top:12px;display:none">결제하기</button>
     <button class="btn btn-sec" style="margin-top:6px" onclick="backToPlans()">← 돌아가기</button>
   </div>
@@ -310,11 +327,37 @@ async function startCheckout(planId){
     await widget.renderPaymentMethods({ selector:'#widgetArea', variantKey:'DEFAULT' });
     await widget.renderAgreement({ selector:'#agreementArea', variantKey:'AGREEMENT' });
 
+    // 동의 박스 표시 + 자동결제 항목은 구독형(월/연/시즌)일 때만 표시
+    const consentBox = document.getElementById('myConsentBox');
+    const autoWrap = document.getElementById('cnAutoPayWrap');
+    consentBox.style.display = '';
+    const isRecurring = currentPlan && (currentPlan.billing_cycle === 'month' || currentPlan.billing_cycle === 'year' || currentPlan.recurring === true);
+    autoWrap.style.display = isRecurring ? '' : 'none';
+    // 단건 결제이면 자동결제 체크 강제 통과
+    if(!isRecurring) document.getElementById('cnAutoPay').checked = true;
+
     const payBtn = document.getElementById('payBtn');
     payBtn.style.display = '';
     payBtn.disabled = false;
     payBtn.textContent = `${fmtKrw(order.amount)} 결제하기`;
     payBtn.onclick = async () => {
+      // 결제 직전 명시적 동의 검사 — 약관규제법 제5조 준수
+      const ids = ['cnRefund','cnAutoPay','cnTerms'];
+      const labels = ['환불 정책','자동 결제','이용약관·개인정보 처리방침'];
+      for(let i=0;i<ids.length;i++){
+        const el = document.getElementById(ids[i]);
+        if(!el || !el.checked){
+          setStatus('err', '⚠ 「' + labels[i] + '」 동의가 필요합니다.');
+          el?.focus();
+          return;
+        }
+      }
+      // 동의 시각·플랜 기록 (감사 로그)
+      try {
+        const log = JSON.parse(localStorage.getItem('mhl_billing_consent') || '[]');
+        log.push({ at: new Date().toISOString(), plan: currentPlan?.id, orderId: order.orderId, v: '1.0' });
+        localStorage.setItem('mhl_billing_consent', JSON.stringify(log.slice(-50)));
+      } catch(_){}
       payBtn.disabled = true;
       try {
         await widget.requestPayment({
@@ -337,6 +380,13 @@ async function startCheckout(planId){
 function backToPlans(){
   document.getElementById('plansView').style.display = '';
   document.getElementById('checkoutView').style.display = 'none';
+  // 동의 체크박스 초기화 — 다음 결제 시 명시적 재동의 받기
+  ['cnRefund','cnAutoPay','cnTerms'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.checked = false;
+  });
+  const cb = document.getElementById('myConsentBox');
+  if(cb) cb.style.display = 'none';
   setStatus('');
   widget = null;
   currentPlan = null;
