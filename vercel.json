@@ -4,7 +4,7 @@
     "api/index.js": {
       "maxDuration": 60,
       "includeFiles": "frontend/index.html",
-      "excludeFiles": "{**/*.test.js,**/*.spec.js,**/test/**,**/tests/**,**/__tests__/**,**/*.md,**/CHANGELOG*,**/LICENSE*,**/README*,**/.git/**,**/.github/**,**/.vscode/**,**/.idea/**,**/coverage/**,**/.nyc_output/**,**/docs/**,**/examples/**,**/example/**,**/sample/**,**/samples/**,**/.env*,**/tsconfig*.json,**/jest.config*,**/.eslintrc*,**/.prettierrc*,**/*.map,**/node_modules/typescript/**,**/node_modules/@types/**,**/node_modules/.bin/**,supabase/**,scripts/**,frontend/billing.html,frontend/privacy.html,frontend/terms.html,frontend/refund.html}"
+      "excludeFiles": "{**/*.{test,spec}.js,**/{test,tests,__tests__,docs,coverage}/**,**/*.{md,map},**/.env*,**/.{git,github,vscode,idea}/**,supabase/**,scripts/**,frontend/{billing,privacy,terms,refund}.html,**/node_modules/{typescript,@types,.bin}/**}"
     }
   },
   "routes": [
