@@ -1534,6 +1534,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   renderSavedDeals();
   renderClauseHistory();
   loadLeaflet(); // 카카오 정식 키 미연동 환경 대비, 기본은 OSM. 좌표는 백엔드 카카오 geocode로 보정.
+  // P0 (Phase 2 3-2): 첫 진입 시 인기 단지 마커 prefill — 빈 지도 첫인상 차단
+  setTimeout(() => { if (typeof loadPopularMarkers === 'function') loadPopularMarkers(); }, 1500);
 
   // URL 쿼리로 검색 조건 복원 (공유 링크 · 뒤로가기)
   const restored=restoreSearchFromUrl();
@@ -3086,22 +3088,22 @@ function renderAnalysis(d,p){
     d.anomalyCount>0?`<div class="ibox b" style="margin-bottom:10px;font-size:10px">ℹ️ 이상 거래 ${d.anomalyCount}건 제외 후 분석 (±30% 초과 가격)</div>`:'');
 
   // ─ 시세 위치 요약 (NONE/LOW = 회색)
-  // P1 D2: "신호등" 메타포 → 사실 진술. 매수 신호 framing 제거 → 자본시장법 risk 차단.
-  // green/yellow/red 색상은 데이터 가독성 위해 유지하되 라벨은 "조건 충족"이 아닌 "데이터 부합"으로.
+  // P1 D2 + Phase 2 6: 자본시장법 risk + a11y (색약 8% 보호) — 색상에만 의존 X.
   let heroHtml='';
   if(!sig||reliability==='NONE'||reliability==='LOW'){
-    heroHtml=`<div class="sig-hero" style="background:var(--s1);border-color:var(--bd)">
-      <div class="sig-dot" style="background:var(--bd2);color:var(--t2)">○</div>
+    heroHtml=`<div class="sig-hero" role="status" aria-label="시세 요약 보류 — 표본 부족" style="background:var(--s1);border-color:var(--bd)">
+      <div class="sig-dot" style="background:var(--bd2);color:var(--t2)" aria-hidden="true">○</div>
       <div><div class="sig-label" style="color:var(--t2)">표본 부족 — 시세 요약 보류</div>
       <div class="sig-sub">${d.txCount||0}건 거래 — 통계적 의미 부족 (8건 이상 필요)</div></div>
     </div>`;
   } else {
     const sc=sig.signal||'yellow';
-    // 이모지 제거 → 사실 도트로. tone 우선 표기 (active/neutral/cautious)
-    const dot = {green:'●',yellow:'●',red:'●'}[sc] || '●';
+    // a11y: 색약자(8%)도 구분 가능 — 도형(●▲■) + 텍스트 병기
+    const shape = {green:'● 활발', yellow:'▲ 보통', red:'■ 신중'}[sc] || '● 보통';
+    const ariaTone = {green:'시장 데이터 활발', yellow:'시장 데이터 보통', red:'시장 데이터 신중'}[sc] || '';
     const sigRatioText = `시세 위치 요약: ${sig.metCount||0}/${sig.totalCount||3}개 데이터 부합`;
-    heroHtml=`<div class="sig-hero ${sc}">
-      <div class="sig-dot ${sc}" style="font-size:18px">${dot}</div>
+    heroHtml=`<div class="sig-hero ${sc}" role="status" aria-label="${ariaTone} — ${sigRatioText}">
+      <div class="sig-dot ${sc}" style="font-size:13px;font-weight:800;padding:0 8px;min-width:60px;text-align:center" aria-hidden="true">${shape}</div>
       <div>
         <div class="sig-label">${sigRatioText}</div>
         <div class="sig-sub">${d.filteredTxCount||d.txCount||0}건 분석 · <span style="color:${relColor}">${relLabel}</span> · <span style="color:var(--t3)">매수 추천 아님 (정보 정리)</span></div>
@@ -4577,6 +4579,48 @@ function exportClausePDF(){
   </body></html>`);
   w.document.close();
   setTimeout(()=>w.print(),500);
+}
+
+// ── 인기 단지 마커 prefill (P0 Phase 2 3-2) ───────────────
+// 첫 진입 시 빈 지도 → "왜 정보 없지?" 이탈 트리거 차단.
+// /api/search/popular 에서 최근 60일 거래량 top 단지 가져와 지도 마커 표시.
+let _popularMarkersLoaded = false;
+async function loadPopularMarkers() {
+  if (_popularMarkersLoaded) return;
+  _popularMarkersLoaded = true;
+  try {
+    const r = await fetch(`${CFG.api}/search/popular?limit=12`, { signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return;
+    const j = await r.json();
+    const popular = j.results || [];
+    if (!popular.length) return;
+    // Leaflet 마커 생성 (initLeaflet 후 leafletMap 전역 사용)
+    if (typeof leafletMap === 'undefined' || !leafletMap) return;
+    if (!window._popMarkers) window._popMarkers = [];
+    popular.forEach(p => {
+      try {
+        const m = L.marker([p.lat, p.lng], {
+          title: p.aptName,
+          icon: L.divIcon({
+            className: 'pop-marker',
+            html: `<div style="background:#FFE082;border:2px solid #C18A2C;border-radius:14px;padding:3px 7px;font-size:10.5px;font-weight:700;color:#7A4F0E;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.18)">🔥 ${_escHtml(p.aptName).slice(0,12)}</div>`,
+            iconSize: [120, 28],
+            iconAnchor: [60, 14],
+          }),
+        });
+        m.bindPopup(`
+          <div style="font-size:12px;line-height:1.6">
+            <div style="font-weight:700">${_escHtml(p.aptName)}</div>
+            <div style="font-size:10.5px;color:#888">${_escHtml(p.sigungu||'')} ${_escHtml(p.umdNm||'')} · ${p.buildYear||'?'}년</div>
+            <div style="font-size:10.5px;color:#444;margin-top:4px">최근 60일 거래 <b>${p.dealCount60d}건</b></div>
+            <button onclick='goSearchResult(${JSON.stringify({aptName:p.aptName,sigungu:p.sigungu,umdNm:p.umdNm,lawdCd:p.lawdCd,buildYear:p.buildYear,recentDealDate:p.recentDealDate}).replace(/'/g,"&#39;")})' style="margin-top:6px;padding:5px 10px;background:#2A6DF4;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer">상세 보기 →</button>
+          </div>
+        `);
+        m.addTo(leafletMap);
+        window._popMarkers.push(m);
+      } catch(_) {}
+    });
+  } catch(_) { _popularMarkersLoaded = false; /* 다음 진입 시 재시도 */ }
 }
 
 // ── 헤더 단지·동명 검색 (P0 Phase 2 시나리오 A) ───────────

@@ -90,6 +90,74 @@ router.get('/apt', async (req, res) => {
   }
 });
 
+// ── GET: 인기 단지 (마커 prefill) — 인증 불필요 ──────────
+// P0 (Phase 2 3-2): 첫 진입 시 빈 지도 첫인상 차단.
+// 최근 60일 거래량 top 단지 + apt_geocache 좌표 보유 단지.
+router.get('/popular', async (req, res) => {
+  const limit = Math.min(parseInt(req.query.limit) || 12, 30);
+  const admin = adminClient();
+  if (!admin) return res.status(503).json({ error: '서비스 일시 불가' });
+  try {
+    // 최근 60일 + 인기 구 (서울 핵심) + 좌표 있는 단지만
+    const { data, error } = await admin.rpc('search_popular_apts', { p_limit: limit }).single().then(
+      r => ({ data: r.data ? [r.data] : [], error: r.error }),
+      () => ({ data: null, error: { message: 'rpc fallback' } })
+    ).catch(() => ({ data: null, error: { message: 'rpc fallback' } }));
+    // RPC 실패 시 단순 query fallback
+    if (error || !data) {
+      const sinceIso = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+      const { data: rows, error: e2 } = await admin
+        .from('molit_transactions')
+        .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date, deal_amount')
+        .gte('deal_date', sinceIso)
+        .in('sigungu', ['강남구','서초구','송파구','마포구','성동구','용산구','강동구'])
+        .order('deal_date', { ascending: false })
+        .limit(200);
+      if (e2) throw e2;
+      // apt_name 별 거래수 집계
+      const byApt = {};
+      for (const r of (rows||[])) {
+        const k = `${r.apt_name}|${r.sigungu}|${r.umd_nm}`;
+        if (!byApt[k]) byApt[k] = { ...r, count: 0, latest: r.deal_date };
+        byApt[k].count++;
+        if (r.deal_date > byApt[k].latest) byApt[k].latest = r.deal_date;
+      }
+      const top = Object.values(byApt).sort((a,b) => b.count - a.count).slice(0, limit);
+      // apt_geocache 좌표 join
+      const names = top.map(t => t.apt_name);
+      const { data: coords } = await admin.from('apt_geocache')
+        .select('apt_name, sigungu, umd_nm, lat, lng')
+        .in('apt_name', names);
+      const coordMap = new Map();
+      for (const c of (coords||[])) {
+        coordMap.set(`${c.apt_name}|${c.sigungu||''}|${c.umd_nm||''}`, c);
+      }
+      const out = top.map(t => {
+        const c = coordMap.get(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`)
+               || coordMap.get(`${t.apt_name}|${t.sigungu||''}|`)
+               || [...coordMap.values()].find(x => x.apt_name === t.apt_name);
+        return {
+          aptName: t.apt_name,
+          sigungu: t.sigungu,
+          umdNm: t.umd_nm,
+          lawdCd: t.lawd_cd,
+          buildYear: t.build_year,
+          recentDealDate: t.latest,
+          dealCount60d: t.count,
+          avgDealAmount: t.deal_amount,
+          lat: c?.lat ? Number(c.lat) : null,
+          lng: c?.lng ? Number(c.lng) : null,
+        };
+      }).filter(x => x.lat && x.lng);
+      return res.json({ results: out });
+    }
+    res.json({ results: data });
+  } catch (e) {
+    logger.warn({ err: e.message }, '인기 단지 조회 실패');
+    res.status(500).json({ error: '조회 실패' });
+  }
+});
+
 router.use(requireAuth);
 
 // ── POST: 검색 1건 기록 ────────────────────────────────────
