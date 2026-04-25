@@ -22,6 +22,7 @@
  *     → 비용 미기록은 있지만 응답은 정상 반환. 모니터링 알람으로 대처.
  */
 const { getSupabaseAdmin } = require('../db/client');
+const { getActivePlan, getLimitsForPlan } = require('./planService');
 const logger = require('../logger');
 
 // Claude Sonnet 4 가격 (마이크로달러 per 1M tokens)
@@ -70,6 +71,11 @@ async function checkBudget(userId) {
   const admin = getSupabaseAdmin();
   if (!admin) return null;
 
+  // Phase 3 (2026-04-25): Pro/Team 플랜 별 한도 적용 — 결제 가치 보장 + Pro 단일 사용자 손실 차단
+  const plan = await getActivePlan(userId);
+  const planLimits = getLimitsForPlan(plan);
+  const limitX1000 = Math.round(planLimits.monthlyAiUsd * 1000 * 1000);
+
   const mkey = monthKey();
   try {
     const { data, error } = await admin
@@ -81,10 +87,11 @@ async function checkBudget(userId) {
     if (error) throw error;
     const usedX1000 = data?.cost_usd_x1000 || 0;
     return {
-      allowed: usedX1000 < DEFAULT_MONTHLY_X1000,
+      allowed: usedX1000 < limitX1000,
       usedX1000,
-      limitX1000: DEFAULT_MONTHLY_X1000,
+      limitX1000,
       resetAt: nextMonthFirst(),
+      plan,
     };
   } catch (e) {
     logger.warn({ err: e.message, userId }, 'budget 조회 실패 — pass-through');

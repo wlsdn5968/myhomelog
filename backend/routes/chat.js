@@ -100,7 +100,23 @@ router.post('/', validateChatInput, async (req, res) => {
         budget: err.info,
       });
     }
-    return res.status(502).json({ error: err.message });
+    // Phase 3 (2026-04-25): Anthropic 장애 친절 안내 (단일 의존 — fallback 없음)
+    // axios/SDK 에러 메시지를 그대로 노출하면 사용자 혼란. 명확한 안내 + 대체 경로 제시.
+    const isUpstream = err.status === 529        // overloaded
+                   || err.status === 503         // service unavailable
+                   || err.status === 502         // bad gateway
+                   || /timeout|ECONNRESET|ENOTFOUND|fetch failed/i.test(String(err.message));
+    logger.error({
+      err: err.message, status: err.status,
+      userId: req.user?.id || null,
+    }, 'AI 호출 실패');
+    return res.status(503).json({
+      code: isUpstream ? 'ai_upstream_down' : 'ai_error',
+      error: isUpstream
+        ? 'AI 서비스가 일시 점검 중이에요. 보통 5~10분 내 복구돼요. 단지 검색·LTV 계산·청약 정보는 정상 이용 가능합니다.'
+        : 'AI 응답 생성 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.',
+      retryAfterSec: isUpstream ? 300 : 30,
+    });
   }
 
   // P1 (2026-04-25): 출력 필터 — 매수/매도 단언, 가격 예측, 절대 표현 차단

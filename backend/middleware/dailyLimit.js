@@ -94,32 +94,52 @@ function getLimitIdentity(req) {
 }
 
 // P1 (Phase 2 8-2 2026-04-25): 로그인 사용자 보너스 한도
-// 비로그인 IP 카운트 (NAT 공유 risk) → 로그인 시 +N회 추가 → 가입 인센티브.
-// 비로그인 한도 도달 시 응답에 "로그인하면 +N회" 힌트 포함 → frontend inline 안내.
+// Phase 3 (2026-04-25): Pro/Team 플랜 별 한도 분기 — 결제 가치 보장.
+//   비로그인: limit (예: 5)
+//   로그인 free: limit + loggedInBonus (예: 15)
+//   로그인 pro:  planLimits.dailyChat / dailySearch (예: 100/50)
+//   로그인 team: planLimits (예: 300/150)
+const { getActivePlan, getLimitsForPlan } = require('../services/planService');
+
 function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
   return async function (req, res, next) {
     if (req.method === 'GET' && scope !== 'chat') return next();
 
     const id = getLimitIdentity(req);
-    // 로그인 시 effective limit = base + bonus
-    const effectiveLimit = req.user?.id ? (limit + (loggedInBonus || 0)) : limit;
+
+    // Phase 3: Pro/Team 플랜 한도 우선 적용. Free 는 기존 base+bonus.
+    let effectiveLimit = req.user?.id ? (limit + (loggedInBonus || 0)) : limit;
+    let plan = 'free';
+    if (req.user?.id) {
+      plan = await getActivePlan(req.user.id);
+      if (plan !== 'free') {
+        const planLimits = getLimitsForPlan(plan);
+        const planScopeKey = scope === 'chat' ? 'dailyChat' : 'dailySearch';
+        if (planLimits[planScopeKey]) effectiveLimit = planLimits[planScopeKey];
+      }
+    }
+
     const key = `dl:${scope}:${todayKey()}:${id.kind}:${id.value}`;
     const ttl = secondsUntilMidnight();
 
     const currentUsed = await readUsage(key);
     if (currentUsed >= effectiveLimit) {
       logger.info({
-        scope, limit: effectiveLimit, used: currentUsed,
+        scope, limit: effectiveLimit, used: currentUsed, plan,
         identity: id.kind === 'u' ? `u:${id.value}` : `i:${maskIp(id.value)}`,
       }, 'daily limit exceeded');
       const isAnonymous = !req.user?.id;
+      const isPaid = plan === 'pro' || plan === 'team';
       return res.status(429).json({
         error: 'DAILY_LIMIT_EXCEEDED',
-        message: isAnonymous && loggedInBonus > 0
+        message: isPaid
+          ? `오늘 ${plan === 'pro' ? '프로' : '팀'} 플랜 ${scope === 'chat' ? 'AI 채팅' : '단지 검색'} 한도(${effectiveLimit}회)를 모두 사용했어요. 내일 다시 이용해주세요.`
+          : isAnonymous && loggedInBonus > 0
           ? `오늘 무료 ${scope === 'chat' ? 'AI 채팅' : '단지 검색'} ${effectiveLimit}회를 모두 사용했어요. 로그인하면 ${loggedInBonus}회를 추가로 받을 수 있어요.`
           : `오늘의 무료 ${scope === 'chat' ? 'AI 채팅' : '단지 검색'} 한도(${effectiveLimit}회)를 모두 사용했어요. 내일 다시 이용해주세요.`,
         used: currentUsed,
         limit: effectiveLimit,
+        plan,
         resetIn: ttl,
         canBoostByLogin: isAnonymous && loggedInBonus > 0,
         bonusOnLogin: loggedInBonus || 0,
@@ -130,6 +150,7 @@ function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
     res.setHeader('X-Daily-Limit', String(effectiveLimit));
     res.setHeader('X-Daily-Remaining', String(Math.max(0, effectiveLimit - used)));
     res.setHeader('X-Daily-Store', source);
+    res.setHeader('X-Plan', plan);
     next();
   };
 }

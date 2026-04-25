@@ -246,6 +246,10 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 .hbtn{padding:5px 12px;border-radius:18px;font-size:11px;border:1px solid var(--bd);background:var(--s1);color:var(--t2);cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
 .hbtn:hover{border-color:var(--acc);color:var(--acc)}
+/* Phase 3 (2026-04-25): "AI 특약 생성" 헤더 CTA 강조 — 호갱노노 무료 도구 대비 단일 가치 */
+.hbtn-cta{background:linear-gradient(135deg,#FF6B35 0%,#F7931E 100%);color:#fff!important;border-color:#FF6B35;font-weight:700}
+.hbtn-cta:hover{background:linear-gradient(135deg,#E55A2B 0%,#E08416 100%);color:#fff!important;border-color:#E55A2B;transform:translateY(-1px);box-shadow:0 2px 6px rgba(255,107,53,.3)}
+@media(max-width:560px){.hbtn-cta{display:none}}
 .hst{font-size:11px;font-weight:600;padding:4px 10px;border-radius:18px;white-space:nowrap}
 .hst.on{background:var(--grnL);color:var(--grn)}.hst.off{background:var(--redL);color:var(--red)}
 
@@ -386,8 +390,9 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 .tdot{width:5px;height:5px;border-radius:50%;background:var(--t3);animation:td 1.2s infinite}
 .tdot:nth-child(2){animation-delay:.2s}.tdot:nth-child(3){animation-delay:.4s}
 @keyframes td{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
-.qa{padding:7px 10px;border-top:1px solid var(--bd);display:flex;flex-wrap:wrap;gap:5px;flex-shrink:0}
-.qb{padding:3px 9px;border-radius:18px;font-size:11px;border:1px solid var(--bd);background:var(--s1);color:var(--t2);cursor:pointer;font-family:inherit;transition:all .15s}
+.qa{padding:7px 10px;border-top:1px solid var(--bd);display:flex;flex-wrap:wrap;gap:5px;flex-shrink:0;background:#FAFCFF}
+.qb{padding:5px 11px;border-radius:18px;font-size:11.5px;font-weight:600;border:1px solid #C9DCF5;background:#EEF4FF;color:#1F4F9C;cursor:pointer;font-family:inherit;transition:all .15s}
+.qb:hover{background:#DCE9FA;border-color:#A8C4ED;transform:translateY(-1px)}
 .qb:hover{border-color:var(--acc);color:var(--acc);background:var(--accL)}
 .cir{padding:8px 10px;border-top:1px solid var(--bd);display:flex;gap:7px;align-items:flex-end;flex-shrink:0}
 .ci{flex:1;padding:7px 11px;border:1px solid var(--bd);border-radius:18px;font-size:12px;font-family:inherit;color:var(--t1);background:var(--s1);outline:none;resize:none;min-height:36px;max-height:90px;transition:border-color .15s}
@@ -532,8 +537,12 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 /* 모바일 하단 탭 */
 .bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--bd);z-index:500;box-shadow:0 -2px 12px rgba(0,0,0,.08)}
 .bnav-inner{display:flex}
-.bnav-item{flex:1;padding:10px 4px 8px;text-align:center;cursor:pointer;font-size:9px;font-weight:600;color:var(--t3);border:none;background:transparent;font-family:inherit;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:3px}
+.bnav-item{flex:1;padding:10px 4px 8px;text-align:center;cursor:pointer;font-size:9px;font-weight:600;color:var(--t3);border:none;background:transparent;font-family:inherit;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative}
 .bnav-item.on{color:var(--acc)}
+/* Phase 3 (2026-04-25): "AI 특약 생성" 단일 가치 강조 — 무료 도구 대비 차별화 핵심 */
+.bnav-item.bnav-feature{color:#1F4F9C}
+.bnav-item.bnav-feature.on{color:var(--acc)}
+.bnav-tag{position:absolute;top:4px;right:8px;background:linear-gradient(135deg,#FF6B35,#F7931E);color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:6px;line-height:1.2}
 .bnav-icon{font-size:18px;line-height:1}
 
 /* P0 Phase 2 R3-B (2026-04-25): 모바일 햄버거 drawer + 검색바 풀폭 + AI floating */
@@ -727,6 +736,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <span class="hst" id="quotaPill" style="background:var(--ambL);color:var(--amb);display:none" title="🤖 단지 검색·AI 분석 무료 한도 (오늘 자정 reset)" aria-label="AI 검색 무료 한도">🔎 검색 5/5</span>
     <span class="hst" id="aiPill" style="background:var(--bg2);color:var(--t2);display:none" title="💬 AI 채팅 무료 한도 (오늘 자정 reset)" aria-label="AI 채팅 무료 한도">💬 채팅 —/15</span>
     <span class="hst off" id="apiSt">확인 중...</span>
+    <!-- Phase 3 (2026-04-25): "AI 특약 생성" 단일 가치 CTA — 호갱노노/직방 대비 차별화 핵심 -->
+    <button class="hbtn hbtn-cta" id="ctaClauseBtn" onclick="sv('clause')" title="AI가 부동산 특약을 만들어드려요 (변호사 검토 권장)" aria-label="AI 특약 생성으로 이동">✍ AI 특약</button>
     <button class="hbtn" id="loginBtn" onclick="openLogin()" title="로그인하면 북마크가 기기 간 동기화돼요">로그인</button>
     <button class="hbtn" id="userBtn" onclick="openUserMenu()" style="display:none">👤 <span id="userBadge"></span></button>
     <button class="hbtn" id="settingsBtn" onclick="openSettings()">ⓘ 정보</button>
@@ -924,7 +935,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
   <div class="cmsgs" id="cMsgs">
     <div class="msg ai"><div class="ava ai">AI</div><div>
-      <div class="bbl">안녕하세요! 내집로그 AI입니다 👋<br><br><b>2025.10.15 규제</b> 기준으로 부동산 데이터를 정리해드려요.<br><br>💡 무엇이 궁금하세요?<br>예) "강남 9억 무주택 LTV?"<br>"공덕동 시세 알려줘"<br>"역전세 위험은?"<br><br><span style="font-size:10px;color:var(--t3)">※ 매수·매도 추천이 아닌 정보 정리 도구</span></div>
+      <div class="bbl">안녕하세요! 내집로그 AI입니다 👋<br><br><b>2025.10.15 규제</b> 기준으로 부동산 데이터를 정리해드려요.<br><br>💡 <b>아래 6개 버튼</b>으로 빠르게 시작하거나 직접 입력하세요:<br><span style="font-size:10.5px;color:var(--t2)">대출계산 / 갈아타기 / 재건축 / 규제요약 / 특약 / RR전략</span><br><br><span style="font-size:10px;color:var(--t3)">※ 매수·매도 추천이 아닌 정보 정리 도구</span></div>
       <div class="mt" id="it"></div>
     </div></div>
   </div>
@@ -938,7 +949,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
   <div id="cErr" class="cerr">⚠ 서버 오프라인 — 직접 AI 모드로 동작 중</div>
   <div class="cir">
-    <textarea class="ci" id="cIn" placeholder="질문 입력... (Shift+Enter 줄바꿈)" rows="1" onkeydown="hk(event)" oninput="ah(this)" aria-label="AI 도우미에게 질문 입력"></textarea>
+    <textarea class="ci" id="cIn" placeholder="직접 입력하거나 위 버튼 클릭 (Shift+Enter 줄바꿈)" rows="1" onkeydown="hk(event)" oninput="ah(this)" aria-label="AI 도우미에게 질문 입력"></textarea>
     <button class="cs" onclick="sM()" aria-label="질문 전송" title="전송"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 21L23 12 2 3v7l15 2-15 2z"/></svg></button>
   </div>
 </div>
@@ -1191,7 +1202,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <div class="bnav-inner">
     <button class="bnav-item on" onclick="sv('map',this)" data-view="map"><div class="bnav-icon">🗺</div>지도</button>
     <button class="bnav-item" onclick="sv('list',this)" data-view="list"><div class="bnav-icon">📋</div>목록</button>
-    <button class="bnav-item" onclick="sv('clause',this)" data-view="clause"><div class="bnav-icon">✍</div>특약</button>
+    <button class="bnav-item bnav-feature" onclick="sv('clause',this)" data-view="clause" title="AI가 부동산 특약을 만들어드려요" aria-label="AI 특약 생성"><div class="bnav-icon">✍</div>특약 <span class="bnav-tag">AI</span></button>
     <button class="bnav-item" onclick="sv('calc',this)" data-view="calc"><div class="bnav-icon">🧮</div>대출</button>
     <button class="bnav-item" onclick="sv('chat',this)" data-view="chat"><div class="bnav-icon">💬</div>AI상담</button>
   </div>
@@ -5009,6 +5020,14 @@ async function sM(){
         openQuotaModal(reason, j.error || j.message, resetAt);
       }
       replied=true;
+    } else if(r.status===503){
+      // Phase 3 (2026-04-25): Anthropic 단일 의존 — 장애 시 친절 안내 + 대체 경로
+      const j=await r.json().catch(()=>({}));
+      rmTyp();
+      const isUpstream = j.code === 'ai_upstream_down';
+      addMsg('ai', (j.error || 'AI 응답 생성 중 오류가 발생했어요.') +
+        (isUpstream ? '\n\n💡 그 동안 사이드바 "내 상황 입력 → 단지 검색" 또는 "역전세 시뮬레이터" 는 정상 사용 가능합니다.' : ''));
+      replied=true;
     } else if(!r.ok){
       throw new Error('err');
     } else {
@@ -5217,8 +5236,49 @@ function addMsg(role,text){
   const safe=_escHtml(text).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>');
   // AI 응답에는 매번 안내 배지 부착 (Phase 2.14)
   const badge = role === 'ai' ? _renderAIBadge() : '';
-  d.innerHTML=`<div class="ava ${role}">${role==='ai'?'AI':'나'}</div><div><div class="bbl">${safe}</div>${badge}<div class="mt">${gt()}</div></div>`;
+  // Phase 3 (2026-04-25): AI 답변 👍/👎 피드백 (사용자/세션 페어 추적용)
+  // chatH 의 마지막 user 메시지가 있을 때만 (인사 메시지·에러 메시지 제외)
+  let fb = '';
+  if (role === 'ai' && Array.isArray(chatH) && chatH.length > 0) {
+    const lastUser = [...chatH].reverse().find(m => m.role === 'user');
+    if (lastUser?.content) {
+      const fid = 'fb_' + Date.now() + '_' + Math.random().toString(36).slice(2,7);
+      fb = `<div class="ai-fb" data-fid="${fid}" style="margin-top:6px;font-size:10.5px;color:var(--t3)">
+        <span style="margin-right:6px">이 답변이 도움됐나요?</span>
+        <button class="ai-fb-btn" onclick="sendAIFeedback(this,1,'${fid}')" title="도움됐어요" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;cursor:pointer;margin-right:3px">👍</button>
+        <button class="ai-fb-btn" onclick="sendAIFeedback(this,-1,'${fid}')" title="아니에요" style="background:none;border:1px solid var(--bd);border-radius:4px;padding:2px 8px;cursor:pointer">👎</button>
+        <span class="ai-fb-thx" style="display:none;margin-left:8px;color:var(--grn)">감사합니다 — 더 정확한 답변에 활용할게요</span>
+      </div>`;
+      // dataset 으로 원본 메시지 보존 (XSS 방어 — innerHTML 인젝션 차단)
+      setTimeout(() => {
+        const el = document.querySelector(`[data-fid="${fid}"]`);
+        if (el) {
+          el.dataset.userMsg = lastUser.content;
+          el.dataset.replyPreview = String(text).slice(0, 200);
+        }
+      }, 0);
+    }
+  }
+  d.innerHTML=`<div class="ava ${role}">${role==='ai'?'AI':'나'}</div><div><div class="bbl">${safe}</div>${badge}${fb}<div class="mt">${gt()}</div></div>`;
   c.appendChild(d);c.scrollTop=c.scrollHeight;
+}
+
+// Phase 3: AI 피드백 전송 — fire-and-forget, UI 즉시 thanks
+async function sendAIFeedback(btn, rating, fid) {
+  const wrap = document.querySelector(`[data-fid="${fid}"]`);
+  if (!wrap) return;
+  const userMsg = wrap.dataset.userMsg || '';
+  const replyPreview = wrap.dataset.replyPreview || '';
+  wrap.querySelectorAll('.ai-fb-btn').forEach(b => { b.disabled = true; b.style.opacity = '0.4'; });
+  btn.style.background = rating === 1 ? '#E8F5EE' : '#FCEAEA';
+  const thx = wrap.querySelector('.ai-fb-thx');
+  if (thx) thx.style.display = 'inline';
+  try {
+    await fetch(`${CFG.api}/feedback/ai`, {
+      method: 'POST', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ rating, messageText: userMsg, replyPreview, source: 'chat' }),
+    });
+  } catch (_) {}
 }
 function showTyp(){const c=document.getElementById('cMsgs'),d=document.createElement('div');d.className='msg ai';d.id='ty';d.innerHTML=`<div class="ava ai">AI</div><div><div class="typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div></div>`;c.appendChild(d);c.scrollTop=c.scrollHeight;}
 function rmTyp(){document.getElementById('ty')?.remove();}

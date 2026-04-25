@@ -235,6 +235,12 @@ router.post('/confirm', async (req, res, next) => {
       canceled_at: null,
     }, { onConflict: 'user_id' });
 
+    // Phase 3 (2026-04-25): plan 캐시 invalidate — dailyLimit/budget 즉시 신규 한도 적용
+    try {
+      const { invalidatePlanCache } = require('../services/planService');
+      invalidatePlanCache(req.user.id);
+    } catch (_) {}
+
     logger.info({ userId: req.user.id, plan: pay.plan, orderId }, '결제 승인 완료');
     res.json({ status: 'captured', plan: pay.plan });
   } catch (e) { next(e); }
@@ -355,6 +361,11 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
         canceled_at: null,
       }, { onConflict: 'user_id' });
 
+      try {
+        const { invalidatePlanCache } = require('../services/planService');
+        invalidatePlanCache(pay.user_id);
+      } catch (_) {}
+
       logger.info({ orderId, userId: pay.user_id, source: 'webhook' }, '결제 승인 완료 (webhook)');
     } else if (['CANCELED', 'EXPIRED', 'ABORTED'].includes(tossStatus)) {
       await admin.from('payments').update({
@@ -384,6 +395,10 @@ router.post('/cancel', async (req, res, next) => {
       canceled_at: new Date().toISOString(),
     }).eq('user_id', req.user.id);
     if (error) throw error;
+    try {
+      const { invalidatePlanCache } = require('../services/planService');
+      invalidatePlanCache(req.user.id);
+    } catch (_) {}
     logger.info({ userId: req.user.id }, '구독 해지');
     res.json({ ok: true });
   } catch (e) { next(e); }
