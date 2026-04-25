@@ -14,6 +14,7 @@
 const { getTransactionsByApt, analyzeTransactions } = require('./transactionService');
 const { getAptListBySgg, getAptBasisInfo } = require('./aptInfoService');
 const { resolveCoordBatch } = require('./geocodeCacheService');
+const { resolveSchoolsBatch } = require('./schoolService');
 const { isRegulatedRegion, getRegulatedKeywords, SEOUL_GU_KEYWORDS } = require('./regulationsService');
 const cache = require('../cache');
 const logger = require('../logger');
@@ -400,6 +401,24 @@ async function getAIRecommendations(userCondition) {
     };
   });
   const coords = await resolveCoordBatch(coordInputs, 4);
+
+  // P1 (Phase 2 후속, 2026-04-25): 학군 데이터 — 좌표 확보된 단지만 학교 검색.
+  // 카카오 keyword "초/중/고등학교" 반경 1km, 종류별 3개 = 9개 이내. DB 캐시 90일.
+  // 학업성취도는 차후 학교알리미 API (사용자 키 발급 필요) 통합.
+  const schoolInputs = enrichedRecs.map((rec, i) => {
+    const c = coords[i];
+    const apt = ranked[i];
+    return {
+      kaptCode: rec.facility?.kaptCode || null,
+      aptName: rec.aptName,
+      sigungu: apt.sigungu || '',
+      umdNm: apt.umdNm || '',
+      lat: c?.lat,
+      lng: c?.lng,
+    };
+  });
+  const schoolsArr = await resolveSchoolsBatch(schoolInputs, 3);
+
   const withCoords = enrichedRecs.map((rec, i) => {
     const c = coords[i];
     return {
@@ -408,6 +427,8 @@ async function getAIRecommendations(userCondition) {
       lng: c?.lng ?? null,
       // 좌표 출처 — 프론트에서 "정확" 마커와 fallback 구분 가능
       coordSource: c ? 'geocache' : null,
+      // 학군: 종류별 가까운 학교 (학업성취도 X — 사실 나열만)
+      nearbySchools: schoolsArr[i] || [],
     };
   });
   const missingCoords = withCoords.filter(r => r.lat == null).length;

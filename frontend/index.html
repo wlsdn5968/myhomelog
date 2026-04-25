@@ -781,9 +781,14 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <div class="sb">
       <div class="mb9"><span class="lbl">주택 보유</span><div class="chips" id="ch-h"><span class="chip on" onclick="cp(this,'ch-h')">무주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택 (처분조건부)</span><span class="chip" onclick="cp(this,'ch-h')">2주택+</span></div></div>
       <div class="mb9"><span class="lbl">생애 최초</span><div class="chips" id="ch-f"><span class="chip on" onclick="cp(this,'ch-f')">예</span><span class="chip" onclick="cp(this,'ch-f')">아니오</span></div></div>
-      <!-- P1 D4 (2026-04-25): 정책자금 자격 chip — 무주택자 한도 과소 계산 차단 -->
-      <div class="mb9"><span class="lbl">신혼부부 (혼인 7년 이내)</span><div class="chips" id="ch-nw"><span class="chip" onclick="cp(this,'ch-nw')">예</span><span class="chip on" onclick="cp(this,'ch-nw')">아니오</span></div></div>
-      <div class="mb9"><span class="lbl">신생아 출산 (2년 이내)</span><div class="chips" id="ch-nb"><span class="chip" onclick="cp(this,'ch-nb')">예</span><span class="chip on" onclick="cp(this,'ch-nb')">아니오</span></div></div>
+      <!-- P1 (Phase 2 후속, 2026-04-25): 정책자금 자격 chip — 인지 부하 절감 위해 접기.
+           해당자(신혼/신생아)만 펼쳐서 응답. 디폴트 '아니오' 라 미펼침이어도 계산 정상. -->
+      <details style="margin-bottom:9px"><summary style="cursor:pointer;font-size:11px;color:var(--t2);user-select:none;list-style:none">▸ 정책자금 자격 (신혼·신생아 해당 시)</summary>
+        <div style="margin-top:6px;padding-left:4px;border-left:2px solid var(--bd)">
+          <div class="mb9"><span class="lbl">신혼부부 (혼인 7년 이내)</span><div class="chips" id="ch-nw"><span class="chip" onclick="cp(this,'ch-nw')">예</span><span class="chip on" onclick="cp(this,'ch-nw')">아니오</span></div></div>
+          <div class="mb9"><span class="lbl">신생아 출산 (2년 이내)</span><div class="chips" id="ch-nb"><span class="chip" onclick="cp(this,'ch-nb')">예</span><span class="chip on" onclick="cp(this,'ch-nb')">아니오</span></div></div>
+        </div>
+      </details>
       <div class="mb9"><span class="lbl">희망 지역</span>
         <div class="chips" id="ch-r"><span class="chip on" onclick="cp(this,'ch-r')">서울</span><span class="chip" onclick="cp(this,'ch-r')">경기</span><span class="chip" onclick="cp(this,'ch-r')">인천</span><span class="chip" onclick="cp(this,'ch-r')">지방</span></div>
         <div style="font-size:10px;color:var(--t3);margin:4px 0 3px">세부 구 선택 (선택 시 그 지역만 분석 — 미선택 시 광역의 인기 구 분석)</div>
@@ -2890,6 +2895,25 @@ function showDetail(p){
       ${p.facility.address?`<br><span style="font-size:10px;color:var(--t3)">${p.facility.address}</span>`:''}
     </div>`:''}
     <div id="amenityBox" style="font-size:11px;color:var(--t3);margin:4px 0 8px">🗺️ 주변 편의시설 조회 중...</div>
+    ${(()=>{
+      // P1 (Phase 2 후속, 2026-04-25): 학군 표시 — 카카오 keyword 기반 사실 나열만 (학업성취도 X)
+      const sch = Array.isArray(p.nearbySchools) ? p.nearbySchools : [];
+      if (!sch.length) return '';
+      const byT = { '초': sch.filter(s=>s.type==='초'), '중': sch.filter(s=>s.type==='중'), '고': sch.filter(s=>s.type==='고') };
+      const cells = ['초','중','고'].map(t => {
+        if (!byT[t].length) return `<div class="gap-card"><div class="gap-lbl">${t}등학교</div><div class="gap-val" style="color:var(--t3);font-size:13px">없음</div><div class="gap-sub">반경 1km 내</div></div>`;
+        const top = byT[t][0];
+        const more = byT[t].length > 1 ? ` +${byT[t].length-1}` : '';
+        return `<div class="gap-card"><div class="gap-lbl">${t}등학교 (가장 가까운)</div><div class="gap-val" style="font-size:14px">${_escHtml(top.name)}${more}</div><div class="gap-sub">${top.distance_m}m</div></div>`;
+      }).join('');
+      const list = sch.map(s => `<span style="display:inline-block;background:#F0F4FA;border:1px solid #D5E1EE;border-radius:4px;padding:2px 6px;margin:1px;font-size:10px">${_escHtml(s.name)} <span style="color:var(--t3)">${s.distance_m}m</span></span>`).join('');
+      return `<div style="margin:8px 0">
+        <div style="font-size:11px;font-weight:700;color:var(--t1);margin-bottom:4px">🏫 주변 학교 (반경 1km · 카카오맵 기준)</div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px">${cells}</div>
+        <div style="font-size:10px;line-height:1.7">${list}</div>
+        <div style="font-size:9.5px;color:var(--t3);margin-top:3px">※ 학교 위치만 — 학업성취도·진학률·통학구역은 본 데이터에 없음. 학교알리미(schoolinfo.go.kr) 별도 확인.</div>
+      </div>`;
+    })()}
     ${p.pros?`<div class="ibox g"><b>장점:</b> ${p.pros}</div>`:''}
     ${p.cons?`<div class="ibox r"><b>단점:</b> ${p.cons}</div>`:''}
     ${p.strategy?`<div class="ibox b"><b>전략:</b> ${p.strategy}</div>`:''}

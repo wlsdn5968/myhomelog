@@ -222,9 +222,20 @@ async function analyzeProperty(propertyData, transactions) {
 최근 실거래 내역:
 ${transactions.slice(0, 5).map(t => `- ${t.dealYear}.${String(t.dealMonth).padStart(2,'0')} | ${t.dealAmount}만원 | ${t.floor}층`).join('\n')}
 
+${(() => {
+  // P1 (Phase 2 후속, 2026-04-25): 학군 데이터 — 카카오 keyword 기반 위치만 (성취도 X)
+  const sch = Array.isArray(propertyData.nearbySchools) ? propertyData.nearbySchools : [];
+  if (!sch.length) return '주변 학교 데이터: 없음 (반경 1km 내)';
+  const list = sch.map(s => `- ${s.type}: ${s.name} (${s.distance_m}m)`).join('\n');
+  return `주변 학교 (반경 1km · 카카오맵 기준 위치만 — 학업성취도/진학률/통학구역 데이터 없음):
+${list}
+
+⚠ "학군 좋다/나쁘다" 같은 정성적 평가 금지. 학교 위치·거리만 사실 진술.`;
+})()}
+
 정리 항목 (모두 중립 서술 — "현재 데이터로는 ~한 특징이 있다" 식):
 1. 가격 위치 — 동일 평형 최근 거래 평균 대비 현재가의 위치 (저/중간/고가 구간 중 어디 위치)
-2. 입지 데이터 — 역세권·학군·업무지구 접근성 (사실 나열)
+2. 입지 데이터 — 역세권·업무지구 접근성 + 주변 학교 위치 (사실 나열만, 학군 평가 금지)
 3. 거주 적합도 체크리스트 — 평형/연식/세대수 기준 기본 항목 점검
 4. 현행 LTV·DSR 기준 매수 시 자금 계획 시뮬레이션 (참고치, 금융기관 확인 필수 명시)
 5. 확인이 필요한 리스크 3가지 (사실 기반)
