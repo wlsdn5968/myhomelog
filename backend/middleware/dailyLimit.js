@@ -93,39 +93,42 @@ function getLimitIdentity(req) {
   return { kind: 'i', value: getClientIp(req) };
 }
 
-function dailyLimit({ limit = 5, scope = 'global' } = {}) {
+// P1 (Phase 2 8-2 2026-04-25): 로그인 사용자 보너스 한도
+// 비로그인 IP 카운트 (NAT 공유 risk) → 로그인 시 +N회 추가 → 가입 인센티브.
+// 비로그인 한도 도달 시 응답에 "로그인하면 +N회" 힌트 포함 → frontend inline 안내.
+function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
   return async function (req, res, next) {
-    // 헬스체크/조회성 GET 등은 카운팅하지 않음
     if (req.method === 'GET' && scope !== 'chat') return next();
 
     const id = getLimitIdentity(req);
-    // 키 포맷: dl:{scope}:{yyyymmdd}:{u|i}:{value}
-    // - u: 로그인 사용자 (userId)
-    // - i: 비로그인 (IP)
+    // 로그인 시 effective limit = base + bonus
+    const effectiveLimit = req.user?.id ? (limit + (loggedInBonus || 0)) : limit;
     const key = `dl:${scope}:${todayKey()}:${id.kind}:${id.value}`;
     const ttl = secondsUntilMidnight();
 
-    // 1) 선 조회 — limit 초과 여부 판단
     const currentUsed = await readUsage(key);
-    if (currentUsed >= limit) {
+    if (currentUsed >= effectiveLimit) {
       logger.info({
-        scope, limit, used: currentUsed,
+        scope, limit: effectiveLimit, used: currentUsed,
         identity: id.kind === 'u' ? `u:${id.value}` : `i:${maskIp(id.value)}`,
       }, 'daily limit exceeded');
+      const isAnonymous = !req.user?.id;
       return res.status(429).json({
         error: 'DAILY_LIMIT_EXCEEDED',
-        message: `오늘의 무료 ${scope === 'chat' ? 'AI 채팅' : '검색'} 한도(${limit}회)를 모두 사용했어요. 내일 다시 이용해주세요.`,
+        message: isAnonymous && loggedInBonus > 0
+          ? `오늘 무료 ${scope === 'chat' ? 'AI 채팅' : '단지 검색'} ${effectiveLimit}회를 모두 사용했어요. 로그인하면 ${loggedInBonus}회를 추가로 받을 수 있어요.`
+          : `오늘의 무료 ${scope === 'chat' ? 'AI 채팅' : '단지 검색'} 한도(${effectiveLimit}회)를 모두 사용했어요. 내일 다시 이용해주세요.`,
         used: currentUsed,
-        limit,
+        limit: effectiveLimit,
         resetIn: ttl,
+        canBoostByLogin: isAnonymous && loggedInBonus > 0,
+        bonusOnLogin: loggedInBonus || 0,
       });
     }
 
-    // 2) 증가 — atomic
     const { used, source } = await incrementUsage(key, ttl);
-
-    res.setHeader('X-Daily-Limit', String(limit));
-    res.setHeader('X-Daily-Remaining', String(Math.max(0, limit - used)));
+    res.setHeader('X-Daily-Limit', String(effectiveLimit));
+    res.setHeader('X-Daily-Remaining', String(Math.max(0, effectiveLimit - used)));
     res.setHeader('X-Daily-Store', source);
     next();
   };
