@@ -121,6 +121,7 @@ window.MHL.auth = window.MHL.auth || {
   isLoggedIn(){ return !!this.user; },
   async getSession(){ return this.session; },
   async signInWithGoogle(){ console.warn('[MHL.auth] SDK 미로드'); return null; },
+  async signInWithKakao(){ console.warn('[MHL.auth] SDK 미로드'); return null; },
   async signInWithEmail(){ console.warn('[MHL.auth] SDK 미로드'); return null; },
   async signOut(){ console.warn('[MHL.auth] SDK 미로드'); return null; },
   // 세션 변경 리스너 등록 (UI 갱신용) — SDK 로드 후 자동 실행됨
@@ -174,6 +175,15 @@ window.MHL.auth = window.MHL.auth || {
           return sb.auth.signInWithOAuth({
             provider: 'google',
             options: { redirectTo, queryParams: { access_type: 'offline', prompt: 'consent' } },
+          });
+        };
+        // 카카오 OAuth — 한국 부동산 사용자 90%+ 카카오 사용. retention 핵심.
+        // Supabase Dashboard → Authentication → Providers → Kakao 활성화 + REST API 키 등록 필요.
+        A.signInWithKakao = async function(){
+          var redirectTo = window.location.origin + window.location.pathname;
+          return sb.auth.signInWithOAuth({
+            provider: 'kakao',
+            options: { redirectTo },
           });
         };
         A.signInWithEmail = async function(email){
@@ -1205,12 +1215,15 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         </label>
       </div>
 
+      <button class="sm-save" id="lmKakao" onclick="loginKakao()" style="background:#FEE500;color:#191919;margin-bottom:8px;font-weight:700">
+        💬 카카오로 계속하기
+      </button>
       <button class="sm-save" id="lmGoogle" onclick="loginGoogle()" style="background:#4285F4;margin-bottom:8px">
         🔍 Google 로 계속하기
       </button>
       <div style="text-align:center;font-size:11px;color:var(--t3);margin:6px 0">또는</div>
 
-      <label class="lbl">이메일 (Magic Link)</label>
+      <label class="lbl">이메일 (Magic Link — 별도 설정 불필요)</label>
       <input class="inp mb9" type="email" id="lmEmail" placeholder="you@example.com" autocomplete="email">
       <button class="sm-save" onclick="loginEmail()">메일로 로그인 링크 받기</button>
 
@@ -1352,6 +1365,43 @@ window.addEventListener('DOMContentLoaded',()=>{
   ['cfg_api','cfg_naver','cfg_ai'].forEach(k=>localStorage.removeItem(k));
   populateRegionSub('서울'); // 초기 광역 chips 채우기
   renderPolicyTimeline(); // 정책 타임라인 렌더
+  // OAuth 콜백 error param 친절 안내 (Supabase provider 비활성화·취소 등)
+  // 기존: Supabase 도메인에서 raw JSON 에러 페이지 → 사용자가 막힘
+  // 개선: callback 시 URL 에 error 있으면 토스트 + 로그인 모달 자동 오픈
+  try {
+    var _qs = new URLSearchParams(window.location.search);
+    var _hash = window.location.hash || '';
+    var oauthError = _qs.get('error') || _qs.get('error_code') || '';
+    var oauthDesc  = _qs.get('error_description') || _qs.get('msg') || '';
+    if (!oauthError && _hash.indexOf('error') !== -1) {
+      // hash 형식 (#error=...&error_description=...)
+      var _hp = new URLSearchParams(_hash.replace(/^#/, ''));
+      oauthError = _hp.get('error') || _hp.get('error_code') || '';
+      oauthDesc  = _hp.get('error_description') || _hp.get('msg') || '';
+    }
+    if (oauthError) {
+      var msg = '로그인 실패: ' + decodeURIComponent(oauthDesc || oauthError);
+      if (/provider is not enabled|Unsupported provider/i.test(oauthDesc || oauthError)) {
+        msg = '⚠ 해당 소셜 로그인 방식이 아직 활성화되지 않았어요. 이메일 로그인을 사용해주세요.';
+      } else if (/access_denied|user.*denied|cancel/i.test(oauthDesc || oauthError)) {
+        msg = '로그인이 취소되었어요. 다시 시도하시거나 다른 방식을 선택해주세요.';
+      }
+      setTimeout(function(){
+        if (typeof toast === 'function') toast(msg);
+        var lm = document.getElementById('loginM');
+        if (lm) lm.style.display = 'flex';
+        var st = document.getElementById('lmStatus');
+        if (st) st.textContent = '❌ ' + msg;
+      }, 200);
+      // URL 정리 (error param 제거 → 새로고침 시 메시지 반복 방지)
+      try {
+        var u = new URL(window.location.href);
+        ['error','error_code','error_description','msg'].forEach(function(k){ u.searchParams.delete(k); });
+        u.hash = '';
+        history.replaceState(null, '', u.toString());
+      } catch(_) {}
+    }
+  } catch(_) {}
   // 규제지역 키워드 부팅 시 1회 로드 — calcLTV 정확도 (P0 핫픽스 2026-04-25)
   // 기존 calcLTV 는 region==='서울'||region==='경기' 단순 매칭 →
   // 일산·동두천·화성 등 경기 비규제까지 규제로 묶이고, 반대로 lawd 누락된
@@ -1511,6 +1561,13 @@ async function loginGoogle(){
   if(!A?.ready){ document.getElementById('lmStatus').textContent='⚠ 인증 SDK 로드 중...'; return; }
   document.getElementById('lmStatus').textContent='Google 인증창으로 이동 중...';
   try { await A.signInWithGoogle(); } catch(e){ document.getElementById('lmStatus').textContent='❌ ' + (e.message||e); }
+}
+async function loginKakao(){
+  if(!_checkConsent()) return;
+  const A = window.MHL?.auth;
+  if(!A?.ready){ document.getElementById('lmStatus').textContent='⚠ 인증 SDK 로드 중...'; return; }
+  document.getElementById('lmStatus').textContent='카카오 인증창으로 이동 중...';
+  try { await A.signInWithKakao(); } catch(e){ document.getElementById('lmStatus').textContent='❌ ' + (e.message||e); }
 }
 async function loginEmail(){
   if(!_checkConsent()) return;
