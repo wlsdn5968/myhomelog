@@ -17,7 +17,7 @@
 const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
 const logger = require('../logger');
-const { LAWD_CODES } = require('../services/transactionService');
+const { LAWD_CODES, LAWD_CODE_TO_NAME } = require('../services/transactionService');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 // Vercel env 가 'service_role' 짧은 이름으로 추가될 수 있어 fallback (D1 ETL 운영 호환)
@@ -34,33 +34,7 @@ const BATCH_INSERT_SIZE = 500;
 
 function adminClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    // 진단 로그 (length 만 — 값 노출 없음)
-    logger.error({
-      hasUrl: !!SUPABASE_URL,
-      urlLen: SUPABASE_URL ? SUPABASE_URL.length : 0,
-      hasKey: !!SUPABASE_SERVICE_ROLE_KEY,
-      keyLen: SUPABASE_SERVICE_ROLE_KEY ? SUPABASE_SERVICE_ROLE_KEY.length : 0,
-      keyEnvVarPresent: 'SUPABASE_SERVICE_ROLE_KEY' in process.env,
-      shortNamePresent: 'service_role' in process.env,
-    }, 'adminClient: env 진단');
     throw new Error('Supabase service_role 미설정 — ETL 불가');
-  }
-  // 진단: URL host + key 형식 한 번 로그 (값 mask, 비교용)
-  try {
-    const u = new URL(SUPABASE_URL);
-    const k = SUPABASE_SERVICE_ROLE_KEY;
-    const dotCount = (k.match(/\./g) || []).length;
-    logger.warn({
-      urlHost: u.host,
-      keyLen: k.length,
-      keyPrefix: k.slice(0, 4),
-      keySuffix: k.slice(-4),
-      keyDotCount: dotCount,
-      keyLooksJwt: k.startsWith('eyJ') && dotCount === 2,
-      keyLooksNew: k.startsWith('sb_'),
-    }, 'adminClient: 키/URL 진단 (mask)');
-  } catch (e) {
-    logger.error({ err: e.message }, 'adminClient: URL 파싱 실패');
   }
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
@@ -117,24 +91,6 @@ async function fetchRegionMonth(lawdCd, dealYm) {
         return { list, total };
       } catch (e) {
         lastErr = e;
-        // 진단: 마지막 retry 직전에 axios 에러 raw 응답 한번만 로그 (값 노출 최소화)
-        if (attempt === MAX_RETRY) {
-          const rd = e?.response?.data;
-          let bodyPreview = null;
-          if (typeof rd === 'string') bodyPreview = rd.slice(0, 300);
-          else if (rd) {
-            try { bodyPreview = JSON.stringify(rd).slice(0, 300); } catch (_) { bodyPreview = '[unserializable]'; }
-          }
-          logger.error({
-            molitErrMsg: e.message,
-            status: e?.response?.status,
-            bodyPreview,
-            keyLen: MOLIT_API_KEY ? MOLIT_API_KEY.length : 0,
-            keyHasPlus: MOLIT_API_KEY ? MOLIT_API_KEY.includes('+') : false,
-            keyHasPercent: MOLIT_API_KEY ? MOLIT_API_KEY.includes('%') : false,
-            keyHasEqual: MOLIT_API_KEY ? MOLIT_API_KEY.includes('=') : false,
-          }, 'MOLIT axios fail (진단)');
-        }
         if (attempt < MAX_RETRY) {
           const delay = 300 * Math.pow(2, attempt - 1);
           await new Promise(r => setTimeout(r, delay));
@@ -164,7 +120,8 @@ async function fetchRegionMonth(lawdCd, dealYm) {
         lawd_cd: item.regionCode || lawdCd,
         apt_seq: item.aptSeq || null,
         apt_name: (item.aptNm || '').trim(),
-        sigungu: (item.sggNm || '').trim() || null,
+        // MOLIT 응답이 sggNm 빈값인 경우 LAWD_CODE 역매핑으로 채움 (popular/검색 필터 동작 위해)
+        sigungu: (item.sggNm || '').trim() || LAWD_CODE_TO_NAME[item.sggCd || lawdCd] || null,
         umd_nm: (item.umdNm || '').trim() || null,
         exclu_use_ar: parseFloat(item.excluUseAr) || 0,
         build_year: parseInt(item.buildYear) || null,
@@ -236,17 +193,6 @@ async function ingestOne(admin, lawdCd, dealYm) {
 
     return { ok: true, lawdCd, dealYm, fetched: rows.length, inserted };
   } catch (e) {
-    // 진단: error origin 정확히 파악 (값 노출 없음)
-    logger.error({
-      lawdCd, dealYm,
-      errMsg: e?.message,
-      errName: e?.constructor?.name,
-      errCode: e?.code,
-      errStatus: e?.status || e?.statusCode,
-      errDetails: e?.details,
-      errHint: e?.hint,
-      stackTop: e?.stack ? String(e.stack).split('\n')[1] : null,
-    }, 'ingestOne 실패 (진단)');
     await admin.from('molit_ingest_runs')
       .update({
         status: 'error',

@@ -385,4 +385,9 @@ function analyzeTransactions(transactions) {
   }).sort((a, b) => b.dealCount - a.dealCount);
 }
 
-module.exports = { getTransactions, getTransactionsByApt, analyzeTransactions, LAWD_CODES };
+// 역매핑 — lawd_cd → 구이름 (ETL sigungu 채우기 / 검색 필터에서 사용)
+const LAWD_CODE_TO_NAME = Object.fromEntries(
+  Object.entries(LAWD_CODES).map(([name, code]) => [code, name])
+);
+
+module.exports = { getTransactions, getTransactionsByApt, analyzeTransactions, LAWD_CODES, LAWD_CODE_TO_NAME };
