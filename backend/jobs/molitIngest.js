@@ -100,6 +100,24 @@ async function fetchRegionMonth(lawdCd, dealYm) {
         return { list, total };
       } catch (e) {
         lastErr = e;
+        // 진단: 마지막 retry 직전에 axios 에러 raw 응답 한번만 로그 (값 노출 최소화)
+        if (attempt === MAX_RETRY) {
+          const rd = e?.response?.data;
+          let bodyPreview = null;
+          if (typeof rd === 'string') bodyPreview = rd.slice(0, 300);
+          else if (rd) {
+            try { bodyPreview = JSON.stringify(rd).slice(0, 300); } catch (_) { bodyPreview = '[unserializable]'; }
+          }
+          logger.error({
+            molitErrMsg: e.message,
+            status: e?.response?.status,
+            bodyPreview,
+            keyLen: MOLIT_API_KEY ? MOLIT_API_KEY.length : 0,
+            keyHasPlus: MOLIT_API_KEY ? MOLIT_API_KEY.includes('+') : false,
+            keyHasPercent: MOLIT_API_KEY ? MOLIT_API_KEY.includes('%') : false,
+            keyHasEqual: MOLIT_API_KEY ? MOLIT_API_KEY.includes('=') : false,
+          }, 'MOLIT axios fail (진단)');
+        }
         if (attempt < MAX_RETRY) {
           const delay = 300 * Math.pow(2, attempt - 1);
           await new Promise(r => setTimeout(r, delay));
