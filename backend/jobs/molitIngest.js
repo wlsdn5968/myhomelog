@@ -45,6 +45,23 @@ function adminClient() {
     }, 'adminClient: env 진단');
     throw new Error('Supabase service_role 미설정 — ETL 불가');
   }
+  // 진단: URL host + key 형식 한 번 로그 (값 mask, 비교용)
+  try {
+    const u = new URL(SUPABASE_URL);
+    const k = SUPABASE_SERVICE_ROLE_KEY;
+    const dotCount = (k.match(/\./g) || []).length;
+    logger.warn({
+      urlHost: u.host,
+      keyLen: k.length,
+      keyPrefix: k.slice(0, 4),
+      keySuffix: k.slice(-4),
+      keyDotCount: dotCount,
+      keyLooksJwt: k.startsWith('eyJ') && dotCount === 2,
+      keyLooksNew: k.startsWith('sb_'),
+    }, 'adminClient: 키/URL 진단 (mask)');
+  } catch (e) {
+    logger.error({ err: e.message }, 'adminClient: URL 파싱 실패');
+  }
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
