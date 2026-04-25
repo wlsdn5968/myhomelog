@@ -27,8 +27,9 @@ const MOLIT_API_KEY = process.env.MOLIT_API_KEY;
 const MOLIT_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
 const MOLIT_OK_CODES = new Set(['00', '000']);
 
-// 동시 API 호출 제한 — MOLIT 무료 키 rate limit 고려 (초당 ~3)
-const API_CONCURRENCY = 2;
+// 동시 API 호출 제한 — MOLIT 무료 키 rate limit 고려 (초당 ~3).
+// Phase 4 (2026-04-26): 32 region → 82 region 확대로 worker 늘림 (3). MOLIT 키 한도(초당 ~3) 안에서 안전.
+const API_CONCURRENCY = 3;
 const CIRCUIT_BREAK_CONSECUTIVE_FAILURES = 3;
 const BATCH_INSERT_SIZE = 500;
 

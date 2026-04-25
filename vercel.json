@@ -2,7 +2,7 @@
   "version": 2,
   "functions": {
     "api/index.js": {
-      "maxDuration": 60,
+      "maxDuration": 300,
       "includeFiles": "frontend/index.html",
       "excludeFiles": "{**/*.{test,spec}.js,**/{test,tests,__tests__,docs,coverage}/**,**/*.{md,map},**/.env*,**/.{git,github,vscode,idea}/**,supabase/**,scripts/**,frontend/{billing,privacy,terms,refund}.html,**/node_modules/{typescript,@types,.bin}/**}"
     }
