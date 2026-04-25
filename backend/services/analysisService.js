@@ -53,19 +53,18 @@ function calcPricePercentile(transactions, currentPrice) {
 
 // ── 계절 성수기 여부 감지 ─────────────────────────────────
 // 이사 성수기(3·4·9·10월) 포함 시 거래량 추이에 편향 가능
-function detectSeasonalBias(transactions) {
+function detectSeasonalBias(anchor) {
   const peakMonths = [3, 4, 9, 10];
-  const now = new Date();
-  // 최근 3개월 구간에 성수기 월이 있는지 확인
+  // anchor 기준 최근 3개월 구간 vs 이전 3개월 구간의 성수기 포함 여부
   const recentMonths = [];
   for (let i = 0; i < 3; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const d = new Date(anchor.getFullYear(), anchor.getMonth() - i, 1);
     recentMonths.push(d.getMonth() + 1);
   }
   const hasPeak = recentMonths.some(m => peakMonths.includes(m));
   const prevMonths = [];
   for (let i = 3; i < 6; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const d = new Date(anchor.getFullYear(), anchor.getMonth() - i, 1);
     prevMonths.push(d.getMonth() + 1);
   }
   const prevHasPeak = prevMonths.some(m => peakMonths.includes(m));
@@ -74,20 +73,41 @@ function detectSeasonalBias(transactions) {
 }
 
 // ── 거래량 추이 신호 ──────────────────────────────────────
-// 최근 3개월 vs 이전 3개월 비교
+// P1 (2026-04-25): MOLIT 시차 보정 — now() 대신 데이터 최신 deal_date 를 anchor.
+//   - 이유: MOLIT 신고 의무 30일 + 반영 ~2주 → "now-3개월" 윈도우엔 최근 1개월이 비어
+//     "4월 거래량 ↓" 같은 시차 착시. anchor 기준으로 비교 윈도우 자동 shift.
+//   - anchor 60일 이상 옛날이면 dataStale=true → 신호 보류, 신뢰도 LOW 처리.
 function calcVolumeSignal(transactions) {
   if (!transactions || transactions.length < 2) return { signal: 'neutral', seasonalBias: false };
-  const now = new Date();
-  const seasonalBias = detectSeasonalBias(transactions);
 
-  function monthsAgo(t) {
-    const d = new Date(t.dealYear, t.dealMonth - 1);
-    return (now - d) / (1000 * 60 * 60 * 24 * 30);
+  // 데이터 최신 거래일 = anchor
+  let anchorMs = 0;
+  for (const t of transactions) {
+    const ms = new Date(t.dealYear, (t.dealMonth || 1) - 1, t.dealDay || 1).getTime();
+    if (ms > anchorMs) anchorMs = ms;
+  }
+  const anchor = new Date(anchorMs);
+  const daysSinceAnchor = Math.round((Date.now() - anchorMs) / (1000 * 60 * 60 * 24));
+
+  // anchor 가 60일 이상 옛날 → 데이터 자체 stale, 신호 의미 없음
+  if (daysSinceAnchor > 60) {
+    return { signal: 'neutral', seasonalBias: false, dataStale: true,
+             anchorDate: anchor.toISOString().slice(0, 10), daysSinceAnchor };
   }
 
-  const recent = transactions.filter(t => monthsAgo(t) <= 3).length;
+  const seasonalBias = detectSeasonalBias(anchor);
+
+  function monthsBeforeAnchor(t) {
+    const d = new Date(t.dealYear, (t.dealMonth || 1) - 1, t.dealDay || 1);
+    return (anchorMs - d.getTime()) / (1000 * 60 * 60 * 24 * 30);
+  }
+
+  const recent = transactions.filter(t => {
+    const m = monthsBeforeAnchor(t);
+    return m >= 0 && m <= 3;
+  }).length;
   const prev = transactions.filter(t => {
-    const m = monthsAgo(t);
+    const m = monthsBeforeAnchor(t);
     return m > 3 && m <= 6;
   }).length;
 
@@ -97,7 +117,8 @@ function calcVolumeSignal(transactions) {
     const ratio = recent / prev;
     signal = ratio >= 1.2 ? 'up' : ratio <= 0.7 ? 'down' : 'neutral';
   }
-  return { signal, seasonalBias };
+  return { signal, seasonalBias, dataStale: false,
+           anchorDate: anchor.toISOString().slice(0, 10), daysSinceAnchor };
 }
 
 // ── 전세가율 + 갭 계산 ────────────────────────────────────
@@ -175,7 +196,26 @@ function calcBuySignal(percentile, volumeSignalObj, jeonseRate) {
   else if (ratio >= 0.34) { signal = 'yellow'; signalDesc = `${totalCount}개 조건 중 ${metCount}개 긍정`; }
   else { signal = 'red'; signalDesc = `${totalCount}개 조건 중 ${metCount}개 긍정`; }
 
-  return { signal, signalDesc, score, maxScore, conditions, metCount, totalCount };
+  // ── P1 핫픽스 (2026-04-25): 가격 veto rule ─────────────────
+  // 가격 상단(percentile>65)이면:
+  //   1) green 신호여도 최대 yellow 로 강등 (vetoApplied=true)
+  //   2) signal 등급과 무관하게 "시세 상단" 경고 desc 추가 — 사용자가 "왜 yellow 인지" 인지
+  // 이유: "시세 상단 매수는 아무리 좋은 신호여도 비싸게 사는 것" — 사용자 출구 막힘.
+  // disclaimer 만으로 방어되지 않는 confidence 트리거 차단 (감사 보고서 Top-4 리스크).
+  const originalSignal = signal;
+  let vetoApplied = false;
+  if (percentile !== null && percentile > 65) {
+    if (signal === 'green') {
+      signal = 'yellow';
+      vetoApplied = signal !== originalSignal;
+    }
+    // green/yellow 모두 사용자에게 시세 상단 경고 (red 는 이미 강한 경고이므로 중복 회피)
+    if (signal !== 'red') {
+      signalDesc += ' · ⚠ 시세 상단 — 매수 단가 주의';
+    }
+  }
+
+  return { signal, signalDesc, score, maxScore, conditions, metCount, totalCount, vetoApplied };
 }
 
 // ── 실투자금 총비용 계산 ──────────────────────────────────
@@ -296,6 +336,10 @@ async function analyzeApt(lawdCd, aptName, currentPrice) {
     percentile,
     volumeSignal: volumeSignalObj.signal,
     volumeSeasonalBias: volumeSignalObj.seasonalBias,
+    // P1 (2026-04-25): MOLIT 시차 보정 결과 노출 — 프론트가 "최근 거래일 N일 전" 표시
+    volumeAnchorDate: volumeSignalObj.anchorDate || null,
+    volumeDaysSinceAnchor: volumeSignalObj.daysSinceAnchor != null ? volumeSignalObj.daysSinceAnchor : null,
+    volumeDataStale: !!volumeSignalObj.dataStale,
     gapData,
     buySignal,
     monthlyVolume,
@@ -309,4 +353,8 @@ async function analyzeApt(lawdCd, aptName, currentPrice) {
   return { ...result, fromCache: false };
 }
 
-module.exports = { analyzeApt, calcTotalCost, getLawdCdFromArea };
+module.exports = {
+  analyzeApt, calcTotalCost, getLawdCdFromArea,
+  // 테스트·디버그 용 — 외부 호출 금지
+  _internals: { calcBuySignal, calcVolumeSignal, calcPricePercentile, filterAnomalies, detectSeasonalBias, getDataReliability, calcGap },
+};

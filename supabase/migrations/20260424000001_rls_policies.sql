@@ -138,7 +138,7 @@ ALTER TABLE public.billing_plans ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS billing_plans_select_all ON public.billing_plans;
 CREATE POLICY billing_plans_select_all ON public.billing_plans
   FOR SELECT TO anon, authenticated
-  USING (active = 1);
+  USING (active = true);  -- 실제 schema 는 boolean (이전 phase3 migration 기준)
 
 -- ── 검증 쿼리 (적용 후 실행 권장) ──────────────────────────────────────
 -- SELECT schemaname, tablename, rowsecurity FROM pg_tables

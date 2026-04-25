@@ -2959,11 +2959,19 @@ function renderAnalysis(d,p){
   }
 
   // ─ 월별 거래량 차트
+  // P1 (2026-04-25): MOLIT 시차 보정 — anchor 기준 최근 거래일 노출
   let volHtml='';
   const vol=d.monthlyVolume||[];
   if(vol.length>0){
     const maxVol=Math.max(...vol.map(v=>v.count),1);
     const seasonNote=d.volumeSeasonalBias?`<div class="ibox y" style="margin-top:6px;font-size:10px">⚠️ 이사 성수기(3·4·9·10월)가 비교 구간에 포함돼 거래량 추이가 실제보다 왜곡될 수 있습니다.</div>`:'';
+    // 최근 거래일 정보 — MOLIT 시차 인지
+    const anchorNote = d.volumeAnchorDate
+      ? `<div style="font-size:10px;color:var(--t3);margin-top:6px">📅 최근 거래일: ${d.volumeAnchorDate} (${d.volumeDaysSinceAnchor}일 전) — MOLIT 신고 30일 + 반영 ~2주 시차 고려</div>`
+      : '';
+    const staleNote = d.volumeDataStale
+      ? `<div class="ibox r" style="margin-top:6px;font-size:10px">⚠️ 최근 60일 신규 거래 없음 — 거래량 추이 신호 보류 (데이터 stale)</div>`
+      : '';
     volHtml=`<div class="vol-chart">
       <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px">📊 월별 거래량 추이</div>
       <div class="vol-bars">${vol.map(v=>{
@@ -2973,7 +2981,7 @@ function renderAnalysis(d,p){
           <div class="vol-bar" style="height:${h}px"></div>
           <div class="vol-bar-label">${v.month.slice(5)}</div>
         </div>`;
-      }).join('')}</div>${seasonNote}
+      }).join('')}</div>${anchorNote}${seasonNote}${staleNote}
     </div>`;
   }
 

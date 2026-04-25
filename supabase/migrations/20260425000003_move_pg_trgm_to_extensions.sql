@@ -1,0 +1,22 @@
+-- ============================================================================
+-- 보안 advisor 후속 처리 — pg_trgm extension 을 public → extensions schema 로 이동
+--
+-- 배경:
+--   - Supabase database-linter 가 0014_extension_in_public 경고
+--   - public schema 에 extension 함수가 있으면 사용자 함수와 충돌·schema 위장 위험
+--
+-- 조치:
+--   - pg_trgm 은 relocatable extension — ALTER 한 줄로 함수·op class 모두 이동
+--   - 기존 인덱스 (idx_molit_aptname_trgm) 는 gin_trgm_ops 를 reference 만 하므로
+--     자동 따라감. DROP/CREATE 불필요.
+--
+-- 검증:
+--   - SELECT n.nspname FROM pg_extension e JOIN pg_namespace n ON e.extnamespace=n.oid
+--       WHERE e.extname='pg_trgm';  -- 'extensions' 반환되어야
+--   - SELECT * FROM molit_transactions WHERE apt_name % '래미안' LIMIT 5;
+--     -- 인덱스 정상 작동 확인
+--
+-- 참고: https://supabase.com/docs/guides/database/database-linter?lint=0014_extension_in_public
+-- ============================================================================
+
+ALTER EXTENSION pg_trgm SET SCHEMA extensions;
