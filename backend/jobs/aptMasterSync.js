@@ -110,8 +110,13 @@ async function syncOneSgg(admin, lawdCd) {
       break;
     }
     const body = r.data?.response?.body;
-    const items = body?.items?.item;
-    const list = Array.isArray(items) ? items : items ? [items] : [];
+    // AptInfo 응답: body.items 가 직접 배열 (MOLIT 의 items.item 래핑 없음)
+    const itemsRaw = body?.items;
+    const list = Array.isArray(itemsRaw)
+      ? itemsRaw
+      : (itemsRaw?.item
+          ? (Array.isArray(itemsRaw.item) ? itemsRaw.item : [itemsRaw.item])
+          : []);
     if (!list.length) break;
     all.push(...list);
     if (list.length < PAGE_SIZE) break;
