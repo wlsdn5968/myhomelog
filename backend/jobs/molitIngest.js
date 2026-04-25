@@ -34,6 +34,15 @@ const BATCH_INSERT_SIZE = 500;
 
 function adminClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    // 진단 로그 (length 만 — 값 노출 없음)
+    logger.error({
+      hasUrl: !!SUPABASE_URL,
+      urlLen: SUPABASE_URL ? SUPABASE_URL.length : 0,
+      hasKey: !!SUPABASE_SERVICE_ROLE_KEY,
+      keyLen: SUPABASE_SERVICE_ROLE_KEY ? SUPABASE_SERVICE_ROLE_KEY.length : 0,
+      keyEnvVarPresent: 'SUPABASE_SERVICE_ROLE_KEY' in process.env,
+      shortNamePresent: 'service_role' in process.env,
+    }, 'adminClient: env 진단');
     throw new Error('Supabase service_role 미설정 — ETL 불가');
   }
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
