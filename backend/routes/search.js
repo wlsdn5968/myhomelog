@@ -20,6 +20,7 @@ const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const { requireAuth } = require('../middleware/auth');
 const logger = require('../logger');
+const { resolveCoordBatch } = require('../services/geocodeCacheService');
 
 const router = express.Router();
 
@@ -124,7 +125,7 @@ router.get('/popular', async (req, res) => {
         if (r.deal_date > byApt[k].latest) byApt[k].latest = r.deal_date;
       }
       const top = Object.values(byApt).sort((a,b) => b.count - a.count).slice(0, limit);
-      // apt_geocache 좌표 join
+      // apt_geocache 좌표 join (DB 우선)
       const names = top.map(t => t.apt_name);
       const { data: coords } = await admin.from('apt_geocache')
         .select('apt_name, sigungu, umd_nm, lat, lng')
@@ -133,6 +134,27 @@ router.get('/popular', async (req, res) => {
       for (const c of (coords||[])) {
         coordMap.set(`${c.apt_name}|${c.sigungu||''}|${c.umd_nm||''}`, c);
       }
+
+      // P0 (2026-04-25 Phase 2 후속): 좌표 lazy fill — 인기 단지 중 캐시 miss 만 즉시 geocode.
+      //   apt_geocache 가 cold start 시 비어 있으면 popular 마커가 영원히 안 뜸 →
+      //   첫 호출만 ~3s 추가 (12건 × 카카오 200~500ms, concurrency=4) 후엔 캐시 hit.
+      const missing = [];
+      for (const t of top) {
+        const k = `${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`;
+        if (!coordMap.has(k) && ![...coordMap.values()].find(x => x.apt_name === t.apt_name)) {
+          missing.push(t);
+        }
+      }
+      if (missing.length) {
+        const filled = await resolveCoordBatch(missing.map(t => ({
+          aptName: t.apt_name, sigungu: t.sigungu, umdNm: t.umd_nm,
+        })), 4);
+        missing.forEach((t, i) => {
+          const f = filled[i];
+          if (f) coordMap.set(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`, f);
+        });
+      }
+
       const out = top.map(t => {
         const c = coordMap.get(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`)
                || coordMap.get(`${t.apt_name}|${t.sigungu||''}|`)
