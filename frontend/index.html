@@ -688,6 +688,11 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <button class="htab" onclick="sv('news',this)">📰 뉴스</button>
     <button class="htab" onclick="sv('subs',this)">📅 청약<span style="background:var(--amb);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px;vertical-align:middle">BETA</span></button>
   </div>
+  <!-- P0 (2026-04-25 Phase 2 시나리오 A): 단지명·동명 직접 검색바 -->
+  <div class="hsearch" style="position:relative;flex:1;max-width:320px;margin:0 8px">
+    <input id="hSearchInput" class="inp" type="text" placeholder="🔎 단지명·동명 검색 (예: 공덕래미안, 공덕동)" style="margin:0;font-size:12px;padding:7px 10px" oninput="onHeaderSearchInput(this.value)" onkeydown="onHeaderSearchKey(event)" onfocus="if(this.value)onHeaderSearchInput(this.value)" onblur="setTimeout(()=>document.getElementById('hSearchDrop').style.display='none',200)" autocomplete="off">
+    <div id="hSearchDrop" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--bd);border-radius:8px;margin-top:3px;max-height:360px;overflow-y:auto;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,0.12)"></div>
+  </div>
   <div class="hml">
     <div class="rpill"><div class="hdot"></div>10.15 규제</div>
     <span class="hst" id="quotaPill" style="background:var(--ambL);color:var(--amb);display:none" title="일일 무료 검색 잔여">⚡ 5/5</span>
@@ -4572,6 +4577,66 @@ function exportClausePDF(){
   </body></html>`);
   w.document.close();
   setTimeout(()=>w.print(),500);
+}
+
+// ── 헤더 단지·동명 검색 (P0 Phase 2 시나리오 A) ───────────
+// 호갱노노 핵심 사용 패턴 따라잡기 — 사용자가 "공덕"만 입력하면
+// 단지명·동명 매칭 결과 즉시 노출 → 클릭 시 상세 모달.
+let _hSearchTimer = null;
+let _hSearchAbort = null;
+async function onHeaderSearchInput(q) {
+  const drop = document.getElementById('hSearchDrop');
+  if (!drop) return;
+  q = String(q || '').trim();
+  if (q.length < 1) { drop.style.display = 'none'; return; }
+  if (_hSearchTimer) clearTimeout(_hSearchTimer);
+  if (_hSearchAbort) _hSearchAbort.abort();
+  _hSearchTimer = setTimeout(async () => {
+    try {
+      _hSearchAbort = new AbortController();
+      const r = await fetch(`${CFG.api}/search/apt?q=${encodeURIComponent(q)}&limit=10`, { signal: _hSearchAbort.signal });
+      if (!r.ok) throw new Error('fail');
+      const j = await r.json();
+      const results = j.results || [];
+      if (results.length === 0) {
+        drop.innerHTML = `<div style="padding:14px;text-align:center;color:var(--t3);font-size:11.5px">'${_escHtml(q)}' 검색 결과 없음<br><span style="font-size:10px">단지명·동명을 정확히 입력해보세요 (예: 공덕래미안, 공덕동)</span></div>`;
+      } else {
+        drop.innerHTML = results.map((r,i) => `
+          <div class="hsearch-item" data-idx="${i}" onclick='goSearchResult(${JSON.stringify(r).replace(/'/g,"&#39;")})' style="padding:9px 12px;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:12px;line-height:1.5" onmouseover="this.style.background='#F4F8FF'" onmouseout="this.style.background='#fff'">
+            <div style="font-weight:700;color:var(--t1)">${_escHtml(r.aptName)}</div>
+            <div style="font-size:10.5px;color:var(--t3)">${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')} · ${r.buildYear||'?'}년 · 최근 거래 ${(r.recentDealDate||'').slice(0,10)}</div>
+          </div>`).join('');
+      }
+      drop.style.display = 'block';
+    } catch(e) {
+      if (e.name === 'AbortError') return;
+      drop.innerHTML = `<div style="padding:14px;text-align:center;color:var(--red);font-size:11px">검색 실패 — 잠시 후 재시도</div>`;
+      drop.style.display = 'block';
+    }
+  }, 250); // 250ms debounce
+}
+function onHeaderSearchKey(e) {
+  if (e.key === 'Escape') { document.getElementById('hSearchDrop').style.display='none'; e.target.blur(); }
+}
+function goSearchResult(r) {
+  // 검색 결과 클릭 → 단지 상세 모달 열기 (showDetail 사용)
+  const drop = document.getElementById('hSearchDrop');
+  if (drop) drop.style.display='none';
+  const input = document.getElementById('hSearchInput');
+  if (input) input.value = r.aptName;
+  // showDetail에 필요한 최소 필드 구성 — 분석 데이터는 모달에서 추가 fetch
+  const p = {
+    aptName: r.aptName,
+    area: `${r.sigungu||''} ${r.umdNm||''}`.trim(),
+    avgPrice: 0, // 모달에서 fetch 후 보정
+    score: 0,
+    ltv: '', maxLoan: '',
+    buildYear: r.buildYear || 0,
+    lawdCd: r.lawdCd,
+    txHistory: [{ lawdCd: r.lawdCd }],
+  };
+  if (typeof showDetail === 'function') showDetail(p);
+  else toast('단지 상세 화면을 열 수 없어요');
 }
 
 // ── 청약 가점 계산기 (P1 D 감사 4) ────────────────────────

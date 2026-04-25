@@ -38,6 +38,58 @@ function userScopedClient(accessToken) {
   });
 }
 
+// ── GET: 단지명·동명 검색 (자동완성) — 인증 불필요 (공개 데이터) ──
+// P0 (2026-04-25 Phase 2 시나리오 A): 호갱노노 핵심 사용 패턴 — 단지명 직접 검색.
+// molit_transactions 의 pg_trgm 인덱스 (idx_molit_aptname_trgm) 활용 — ILIKE 고속.
+function adminClient() {
+  if (!SUPABASE_URL) return null;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY
+           || process.env.SUPABASE_ANON_KEY
+           || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) return null;
+  return createClient(SUPABASE_URL, key, {
+    auth: { persistSession: false, autoRefreshToken: false },
+  });
+}
+router.get('/apt', async (req, res) => {
+  const q = String(req.query.q || '').trim();
+  const limit = Math.min(parseInt(req.query.limit) || 10, 30);
+  if (q.length < 1) return res.json({ results: [] });
+  const admin = adminClient();
+  if (!admin) return res.status(503).json({ error: '검색 서비스 일시 불가' });
+  try {
+    // 단지명 + 동명 동시 매칭 — 사용자가 "공덕" 입력 시 "공덕동" + "공덕래미안" 모두 노출
+    // DISTINCT 처리 + 최근 거래일 우선
+    const { data, error } = await admin
+      .from('molit_transactions')
+      .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date')
+      .or(`apt_name.ilike.%${q}%,umd_nm.ilike.%${q}%`)
+      .order('deal_date', { ascending: false })
+      .limit(limit * 5); // 중복 제거 후 상위 limit 추출
+    if (error) throw error;
+    const seen = new Set();
+    const out = [];
+    for (const row of (data || [])) {
+      const key = `${row.apt_name}|${row.sigungu}|${row.umd_nm}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push({
+        aptName: row.apt_name,
+        sigungu: row.sigungu,
+        umdNm: row.umd_nm,
+        lawdCd: row.lawd_cd,
+        buildYear: row.build_year,
+        recentDealDate: row.deal_date,
+      });
+      if (out.length >= limit) break;
+    }
+    res.json({ results: out, query: q });
+  } catch (e) {
+    logger.warn({ err: e.message, q }, '단지 검색 실패');
+    res.status(500).json({ error: '검색 실패', detail: e.message });
+  }
+});
+
 router.use(requireAuth);
 
 // ── POST: 검색 1건 기록 ────────────────────────────────────
