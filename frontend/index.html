@@ -246,10 +246,16 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 .hbtn{padding:5px 12px;border-radius:18px;font-size:11px;border:1px solid var(--bd);background:var(--s1);color:var(--t2);cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
 .hbtn:hover{border-color:var(--acc);color:var(--acc)}
-/* Phase 3 (2026-04-25): "AI 특약 생성" 헤더 CTA 강조 — 호갱노노 무료 도구 대비 단일 가치 */
+/* Phase 3 (2026-04-25/26): "AI 특약 생성" 헤더 CTA 강조 — 호갱노노 무료 도구 대비 단일 가치.
+   모바일 70% 사용자에게도 핵심 가치 노출 위해 텍스트 생략 + 아이콘만 유지. */
 .hbtn-cta{background:linear-gradient(135deg,#FF6B35 0%,#F7931E 100%);color:#fff!important;border-color:#FF6B35;font-weight:700}
 .hbtn-cta:hover{background:linear-gradient(135deg,#E55A2B 0%,#E08416 100%);color:#fff!important;border-color:#E55A2B;transform:translateY(-1px);box-shadow:0 2px 6px rgba(255,107,53,.3)}
-@media(max-width:560px){.hbtn-cta{display:none}}
+.hbtn-cta .cta-icon{display:inline}
+.hbtn-cta .cta-text{display:inline}
+@media(max-width:560px){
+  .hbtn-cta{padding:5px 8px;font-size:13px}
+  .hbtn-cta .cta-text{display:none}
+}
 .hst{font-size:11px;font-weight:600;padding:4px 10px;border-radius:18px;white-space:nowrap}
 .hst.on{background:var(--grnL);color:var(--grn)}.hst.off{background:var(--redL);color:var(--red)}
 
@@ -736,8 +742,9 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <span class="hst" id="quotaPill" style="background:var(--ambL);color:var(--amb);display:none" title="🤖 단지 검색·AI 분석 무료 한도 (오늘 자정 reset)" aria-label="AI 검색 무료 한도">🔎 검색 5/5</span>
     <span class="hst" id="aiPill" style="background:var(--bg2);color:var(--t2);display:none" title="💬 AI 채팅 무료 한도 (오늘 자정 reset)" aria-label="AI 채팅 무료 한도">💬 채팅 —/15</span>
     <span class="hst off" id="apiSt">확인 중...</span>
-    <!-- Phase 3 (2026-04-25): "AI 특약 생성" 단일 가치 CTA — 호갱노노/직방 대비 차별화 핵심 -->
-    <button class="hbtn hbtn-cta" id="ctaClauseBtn" onclick="sv('clause')" title="AI가 부동산 특약을 만들어드려요 (변호사 검토 권장)" aria-label="AI 특약 생성으로 이동">✍ AI 특약</button>
+    <!-- Phase 3 (2026-04-25/26): "AI 특약 생성" 단일 가치 CTA — 호갱노노/직방 대비 차별화 핵심.
+         모바일에서는 텍스트 생략 (✍ 만), PC에서는 풀 텍스트. -->
+    <button class="hbtn hbtn-cta" id="ctaClauseBtn" onclick="sv('clause')" title="AI가 부동산 특약을 만들어드려요 (변호사 검토 권장)" aria-label="AI 특약 생성으로 이동"><span class="cta-icon">✍</span><span class="cta-text"> AI 특약</span></button>
     <button class="hbtn" id="loginBtn" onclick="openLogin()" title="로그인하면 북마크가 기기 간 동기화돼요">로그인</button>
     <button class="hbtn" id="userBtn" onclick="openUserMenu()" style="display:none">👤 <span id="userBadge"></span></button>
     <button class="hbtn" id="settingsBtn" onclick="openSettings()">ⓘ 정보</button>
