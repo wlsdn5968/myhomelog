@@ -19,47 +19,87 @@ const { createClient } = require('@supabase/supabase-js');
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// 하드코딩 fallback — DB 없이도 최소 작동 (dev / DB 장애 대비)
-const FALLBACK = {
-  lastUpdated: '2025-10-16',
-  source: '금융위원회 2025.10.15 주택시장 안정화 대책',
-  sourceUrl: 'https://fsc.go.kr',
-  regulatedRegions: {
-    seoul: '서울 전 지역 (25개 구)',
-    gyeonggi: [
-      '과천시', '광명시', '성남시 분당구', '성남시 수정구', '성남시 중원구',
-      '수원시 영통구', '수원시 장안구', '수원시 팔달구', '안양시 동안구',
-      '용인시 수지구', '의왕시', '하남시',
+// 하드코딩 fallback — DB 없이도 최소 작동 (dev / DB 장애 / Vercel env 누락 대비)
+// P1 (2026-04-25): key 별 fallback 분리 — 기존 단일 FALLBACK 은 housing 만 반환해서
+//   acquisition_tax_2025 호출 시에도 housing 데이터가 응답되어 frontend 가
+//   tax.acquisitionTax 를 못 찾는 버그 수정.
+const FALLBACK_BY_KEY = {
+  housing_loan_2025: {
+    lastUpdated: '2025-10-16',
+    source: '금융위원회 2025.10.15 주택시장 안정화 대책',
+    sourceUrl: 'https://fsc.go.kr',
+    regulatedRegions: {
+      seoul: '서울 전 지역 (25개 구)',
+      gyeonggi: [
+        '과천시', '광명시', '성남시 분당구', '성남시 수정구', '성남시 중원구',
+        '수원시 영통구', '수원시 장안구', '수원시 팔달구', '안양시 동안구',
+        '용인시 수지구', '의왕시', '하남시',
+      ],
+    },
+    ltvTable: [
+      { condition: '무주택 — 규제지역', ltv: 40, cap: [{ under: 15, max: 6 }, { under: 25, max: 4 }, { over: 25, max: 2 }] },
+      { condition: '생애최초 — 규제지역', ltv: 70, cap: [{ under: 999, max: 6 }], note: '6개월 이내 전입 의무' },
+      { condition: '무주택 — 비규제', ltv: 70, cap: null },
+      { condition: '생애최초 — 비규제', ltv: 80, cap: null },
+      { condition: '지방 생애최초', ltv: 80, cap: null },
+      { condition: '1주택 추가 매수 (규제)', ltv: 0, cap: null, note: '처분조건부 6개월 시 무주택 동일' },
+      { condition: '2주택 이상', ltv: 0, cap: null, note: '규제지역·수도권 구입 불가' },
     ],
+    dsrRules: {
+      bankDSR: 40, secondFinanceDSR: 50,
+      stressDSRMetro: 1.5, stressDSRLocal: 0.75, stressFloorMetroRegulated: 3.0,
+      maxTerm: 30, threshold: 100000000,
+    },
+    additionalRules: [
+      '전세대출 보유자: 규제지역 3억 초과 아파트 취득 시 전세대출 즉시 회수',
+      '신용대출 1억 초과 보유자: 대출 실행 후 1년간 규제지역 주택 구입 제한',
+      '1주택자 전세대출 이자: DSR 반영 (2025.10.29~)',
+      '토지거래허가구역: 취득 후 2년 실거주 의무, 갭투자 금지',
+      '전세보증 비율: 수도권 80% (기존 90% → 강화)',
+      '은행권 주담대 위험가중치: 15% → 20% (2026.1월~)',
+    ],
+    disclaimer: '규제는 수시 변경됩니다. 최종 대출 가능 여부는 금융기관에서 반드시 확인하세요.',
   },
-  ltvTable: [
-    { condition: '무주택 — 규제지역', ltv: 40, cap: [{ under: 15, max: 6 }, { under: 25, max: 4 }, { over: 25, max: 2 }] },
-    { condition: '생애최초 — 규제지역', ltv: 70, cap: [{ under: 999, max: 6 }], note: '6개월 이내 전입 의무' },
-    { condition: '무주택 — 비규제', ltv: 70, cap: null },
-    { condition: '생애최초 — 비규제', ltv: 80, cap: null },
-    { condition: '지방 생애최초', ltv: 80, cap: null },
-    { condition: '1주택 추가 매수 (규제)', ltv: 0, cap: null, note: '처분조건부 6개월 시 무주택 동일' },
-    { condition: '2주택 이상', ltv: 0, cap: null, note: '규제지역·수도권 구입 불가' },
-  ],
-  dsrRules: {
-    bankDSR: 40,
-    secondFinanceDSR: 50,
-    stressDSRMetro: 1.5,
-    stressDSRLocal: 0.75,
-    stressFloorMetroRegulated: 3.0,
-    maxTerm: 30,
-    threshold: 100000000,
+  acquisition_tax_2025: {
+    lastUpdated: '2026-04-25',
+    source: '지방세법 제11조 + 공인중개사법 시행규칙 별표1',
+    sourceUrl: 'https://www.law.go.kr/법령/지방세법',
+    acquisitionTax: {
+      noHouse: {
+        firstBuyerDiscount: { underAuk: 1.5, rate: 0.008, note: '생애최초 1.5억 이하 50% 감면' },
+        tiers: [
+          { underAuk: 6,   rate: 0.01 },
+          { underAuk: 9,   rate: 0.02 },
+          { underAuk: 999, rate: 0.03 },
+        ],
+      },
+      oneHouse: {
+        tiers: [
+          { underAuk: 6,   rate: 0.01 },
+          { underAuk: 9,   rate: 0.02 },
+          { underAuk: 999, rate: 0.03 },
+        ],
+      },
+      twoHousePlus: { rate: 0.08, note: '조정대상지역 다주택 중과 8%' },
+    },
+    eduTaxRate:       0.1,
+    spclTaxRate:      0.002,
+    spclTaxThreshold: 0.01,
+    commission: [
+      { underAuk: 0.5, rate: 0.006 },
+      { underAuk: 2,   rate: 0.005 },
+      { underAuk: 9,   rate: 0.004 },
+      { underAuk: 12,  rate: 0.005 },
+      { underAuk: 15,  rate: 0.006 },
+      { underAuk: 999, rate: 0.007 },
+    ],
+    regFee: { rate: 0.0015, baseManwon: 20 },
+    disclaimer: '취득세·복비·등기비는 매년 변경되며, 본 계산은 추정치입니다. 실제 비용은 ±1,500만원 이상 차이 가능. 최종 금액은 세무사·법무사 확인 필수.',
   },
-  additionalRules: [
-    '전세대출 보유자: 규제지역 3억 초과 아파트 취득 시 전세대출 즉시 회수',
-    '신용대출 1억 초과 보유자: 대출 실행 후 1년간 규제지역 주택 구입 제한',
-    '1주택자 전세대출 이자: DSR 반영 (2025.10.29~)',
-    '토지거래허가구역: 취득 후 2년 실거주 의무, 갭투자 금지',
-    '전세보증 비율: 수도권 80% (기존 90% → 강화)',
-    '은행권 주담대 위험가중치: 15% → 20% (2026.1월~)',
-  ],
-  disclaimer: '규제는 수시 변경됩니다. 최종 대출 가능 여부는 금융기관에서 반드시 확인하세요.',
 };
+
+// 하위 호환 — 기존 import { FALLBACK } 코드 (housing 만 반환)
+const FALLBACK = FALLBACK_BY_KEY.housing_loan_2025;
 
 function adminClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
@@ -80,8 +120,9 @@ async function getSnapshot(key = 'housing_loan_2025') {
   const admin = adminClient();
   if (!admin) {
     // DB 미설정 — 로컬 개발이거나 env 누락. fallback 만 반환.
-    cache.set(cacheKey, { data: FALLBACK, source: 'fallback' }, 60);
-    return { data: FALLBACK, source: 'fallback' };
+    const fb = FALLBACK_BY_KEY[key] || null;
+    cache.set(cacheKey, { data: fb, source: 'fallback' }, 60);
+    return { data: fb, source: 'fallback' };
   }
 
   try {
@@ -112,8 +153,9 @@ async function getSnapshot(key = 'housing_loan_2025') {
     return out;
   } catch (e) {
     logger.warn({ err: e.message, key }, 'regulations_snapshot 조회 실패 — fallback 사용');
-    cache.set(cacheKey, { data: FALLBACK, source: 'fallback' }, 60);
-    return { data: FALLBACK, source: 'fallback' };
+    const fb = FALLBACK_BY_KEY[key] || null;
+    cache.set(cacheKey, { data: fb, source: 'fallback' }, 60);
+    return { data: fb, source: 'fallback' };
   }
 }
 
