@@ -761,7 +761,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         <div class="wbox" id="lW"></div>
       </div></div>
       <button class="abtn a2" id="srchBtn" onclick="doSearch()">
-        <div class="spin" id="srchSp"></div><span id="srchTx">🤖 AI 맞춤 단지 검색</span>
+        <div class="spin" id="srchSp"></div><span id="srchTx">🤖 실거래 기반 단지 정리</span>
       </button>
     </div>
   </div>
@@ -889,8 +889,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 <!-- 특약 생성 전용 뷰 -->
 <div class="clause-view" id="view-clause">
   <div class="cv-hero">
-    <h2>✍ AI 맞춤 특약 생성</h2>
-    <p>매매 정보 입력 → 30초 내 필수·권장 특약 자동 생성 (실무 판례 기반)</p>
+    <h2>✍ AI 특약 초안 생성</h2>
+    <p>매매 정보 입력 → 법령 인용 + AI 작성 특약 초안 (변호사·공인중개사 검토 필수)</p>
   </div>
   <div class="cv-form">
     <h3>매매 기본 정보</h3>
@@ -931,7 +931,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       </div>
     </div>
     <button class="abtn acc" id="clBtn" onclick="genClause()" style="margin-top:4px">
-      <div class="spin" id="clSp"></div><span id="clTx">✍ 특약 자동 생성 (30초)</span>
+      <div class="spin" id="clSp"></div><span id="clTx">✍ 특약 초안 생성</span>
     </button>
     <div id="cl_hist"></div>
   </div>
@@ -1085,13 +1085,21 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         <h3 style="font-size:13px;margin:14px 0 4px">2. 데이터의 한계</h3>
         <ul style="padding-left:18px">
           <li>실거래가는 국토교통부 공공데이터를 사용하나, <strong>신고 지연·취소·정정에 따라 변동</strong>될 수 있습니다.</li>
-          <li>거래 4건 미만 단지는 통계적 의미가 약하며, 데이터 신뢰도(NONE/LOW/MED/HIGH)를 별도 표시합니다.</li>
-          <li>이상거래(±30% 이탈) 필터링·계절 편향 경고를 적용하나, <strong>모든 비정상 패턴을 걸러내지는 못합니다.</strong></li>
+          <li>거래 8건 미만 단지는 통계적 의미가 약하며(95% 신뢰구간 ±20% 이상), 데이터 신뢰도(NONE/LOW/MED/HIGH)를 별도 표시합니다.</li>
+          <li>이상거래 필터링(MAD 기반)·계절 편향 경고·시간 가중 평균을 적용하나, <strong>모든 비정상 패턴을 걸러내지는 못합니다.</strong></li>
+          <li><strong>층·향(RR/저층) 자동 보정 불가</strong> — MOLIT 데이터는 층 정보만 제공, 동·향(남향/북향) 정보 부재. 표시되는 시세는 동일 평형 평균이며 실제 매물의 동·층·향에 따라 ±5~15% 차이 가능. 임장 확인 필수.</li>
           <li>좌표·면적·연식 등은 카카오 Local API/MOLIT 응답을 그대로 표시하며, <strong>실제와 다를 수 있습니다.</strong></li>
         </ul>
 
-        <h3 style="font-size:13px;margin:14px 0 4px">3. AI 분석의 한계</h3>
+        <h3 style="font-size:13px;margin:14px 0 4px">3. AI 분석의 한계 — 환각(Hallucination) 위험</h3>
         <p>AI(Anthropic Claude) 응답은 학습 데이터·확률 모델 기반이며 <strong>오류·환각(hallucination)이 발생할 수 있습니다.</strong> 모든 AI 출력은 사실관계 확인 없이 의사결정에 사용해서는 안 됩니다.</p>
+        <p><strong>특약·리스크·시세 분석에서 AI가 잘못된 법령 인용·존재하지 않는 판례·잘못된 수치를 출력할 가능성</strong>이 존재합니다. 운영자는 다음 사항에 대해 별도 면책됩니다:</p>
+        <ul style="padding-left:18px">
+          <li>AI 환각으로 발생한 잘못된 특약 문구·법령 인용·세금 계산·대출 한도 추정으로 인한 손해</li>
+          <li>외부 위탁사(Anthropic·Sentry·Vercel·Supabase·Toss Payments)의 장애·데이터 손실·정책 변경으로 인한 손해</li>
+          <li>국토교통부·금융위원회·한국부동산원 등 데이터 출처의 정정·변경·지연으로 인한 손해</li>
+        </ul>
+        <p>이용자는 AI가 생성한 모든 콘텐츠를 변호사·공인중개사·세무사·금융기관에 별도 검증한 후에만 사용해야 합니다.</p>
 
         <h3 style="font-size:13px;margin:14px 0 4px">4. 대출·세금·계약 관련</h3>
         <ul style="padding-left:18px">
@@ -1230,8 +1238,10 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 
       <div class="sm-status" id="lmStatus"></div>
       <div style="font-size:10px;color:var(--t3);margin-top:14px;line-height:1.5">
-        · 비밀번호 없음 (이메일 일회용 링크 또는 Google OAuth)<br>
-        · 회원탈퇴 시 모든 데이터 즉시 삭제 (PIPA/GDPR 준수)<br>
+        · 비밀번호 없음 (이메일 일회용 링크 또는 소셜 OAuth)<br>
+        · 회원탈퇴 신청 시 30일 유예 후 데이터 삭제 (실수·해킹 복구 보호)<br>
+        · 단, 결제·동의·법적 보존 의무 기록은 전자상거래법 등 관련 법령에 따라 5년간 보관<br>
+        · 외부 위탁 처리(Anthropic·Sentry·Vercel) 데이터는 위탁사 정책에 따라 추가 30~90일 보존<br>
         · 이메일 외 추가 정보 수집하지 않습니다.
       </div>
     </div>
@@ -2556,7 +2566,7 @@ async function doSearch(){
       });
     }
   }
-  btn.classList.remove('ld');sp.style.display='none';tx.textContent='🤖 AI 맞춤 단지 검색';
+  btn.classList.remove('ld');sp.style.display='none';tx.textContent='🤖 실거래 기반 단지 정리';
   refreshQuota();
 }
 
@@ -2592,7 +2602,7 @@ function renderListGrid(){
     g.innerHTML=`<div style="grid-column:1/-1;padding:50px 20px;text-align:center;color:var(--t3)">
       <div style="font-size:48px;margin-bottom:14px">🏠</div>
       <div style="font-size:15px;font-weight:700;color:var(--t1);margin-bottom:6px">아직 검색 결과가 없어요</div>
-      <div style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:18px">왼쪽 <b>"내 상황"</b> 입력 후 <b>🤖 AI 맞춤 단지 검색</b>을 누르면<br>국토부 실거래가 기반으로 추천 단지가 나타납니다.</div>
+      <div style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:18px">왼쪽 <b>"내 상황"</b> 입력 후 <b>🤖 실거래 기반 단지 정리</b>을 누르면<br>국토부 실거래가 기반으로 단지 정보가 정리됩니다 (매수 추천 아님 — 정보 정리 도구).</div>
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="abtn acc" style="margin:0;padding:8px 16px;font-size:12px;width:auto" onclick="quickSearchPreset('서울 7억 무주택')">⚡ 빠른 검색: 서울 7억 무주택</button>
         <button class="abtn a2" style="margin:0;padding:8px 16px;font-size:12px;width:auto" onclick="quickSearchPreset('경기 5억 생애최초')">⚡ 경기 5억 생애최초</button>
@@ -2955,11 +2965,11 @@ function renderAnalysis(d,p){
   const relLabel={NONE:'데이터 부족',LOW:'표본 부족',MED:'표본 보통',HIGH:'표본 충분'}[reliability]||'';
   const relColor={NONE:'var(--t3)',LOW:'var(--red)',MED:'var(--amb)',HIGH:'var(--grn)'}[reliability]||'var(--t3)';
 
-  // ─ 신뢰도 배너
+  // ─ 신뢰도 배너 (P1: 임계값 8/25/60 — Wilson 95% CI)
   const reliabilityBanner=(reliability==='NONE'||reliability==='LOW')?`
     <div class="ibox r" style="margin-bottom:12px;font-size:11px">
       <strong>⚠️ 표본 부족 (${d.txCount||0}건)</strong> — 신호등이 표시되지 않습니다.
-      거래 데이터가 ${reliability==='NONE'?'4건 미만':'10건 미만'}이면 통계적으로 신뢰하기 어렵습니다.
+      거래 데이터가 ${reliability==='NONE'?'8건 미만':'25건 미만'}이면 통계적 신뢰 폭이 ±20% 이상으로 매수 단가 판단에 부적합합니다.
     </div>`:
     (reliability==='MED'?`<div class="ibox y" style="margin-bottom:10px;font-size:10px">⚠️ 거래 ${d.txCount}건 기준 — 적은 표본으로 오차 가능. 참고 용도로만 활용하세요.</div>`:
     d.anomalyCount>0?`<div class="ibox b" style="margin-bottom:10px;font-size:10px">ℹ️ 이상 거래 ${d.anomalyCount}건 제외 후 분석 (±30% 초과 가격)</div>`:'');
@@ -3013,6 +3023,7 @@ function renderAnalysis(d,p){
     const rangeText = `(95% 신뢰 구간 ${lo}~${hi}%, 표본 ${d.percentileN || basedOn}건)`;
     pctHtml=`<div class="pct-wrap">
       <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:4px">📍 가격 위치 (최근 1년 거래 대비)</div>
+      <div style="font-size:10px;color:var(--amb);margin-bottom:4px">⚠ MOLIT 데이터는 층·향(RR/저층) 자동 보정 불가 — 임장 시 동·층·향 확인 필수</div>
       <div class="pct-bar-bg">
         <div class="pct-bar-fill" style="width:100%"></div>
         <!-- 신뢰 구간 표시 박스 -->
@@ -3869,8 +3880,9 @@ function cl(){
   document.getElementById('lV').textContent=`LTV ${Math.round(r.ltv*100)}% | 상한 ${r.cap===Infinity?'없음':r.cap+'억'}`;
   document.getElementById('lD').textContent=r.dL>0?r.dL.toFixed(2)+'억':'소득 입력 필요';
   document.getElementById('lN').textContent=r.need>0?'+'+r.need.toFixed(2)+'억 부족':'충분';
-  document.getElementById('lS').textContent=r.isR?'+1.5%p':'+0.75%p';
-  document.getElementById('lM').textContent=r.mo>0?'~'+r.mo+'만원':'—';
+  document.getElementById('lS').textContent=(r.isR?'+1.5%p':'+0.75%p')+' (3단계 시행 2025.7~)';
+  // P1 (감사 2-4): 원리금균등 30년 명시
+  document.getElementById('lM').textContent=r.mo>0?'~'+r.mo+'만원 (원리금균등 30년)':'—';
   document.getElementById('lW').textContent=r.warn;
 }
 function dc(){
@@ -4216,7 +4228,7 @@ async function genClause(){
     renderClauseResult(null,apt);
     toast('AI 연결 실패 — 기본 특약 표시');
   }
-  btn.classList.remove('ld');sp.style.display='none';tx.textContent='✍ 특약 자동 생성 (30초)';
+  btn.classList.remove('ld');sp.style.display='none';tx.textContent='✍ 특약 초안 생성';
 }
 
 function renderClauseResult(d,aptName){

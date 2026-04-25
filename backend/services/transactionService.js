@@ -269,10 +269,42 @@ async function getTransactionsByApt(lawdCd, aptName) {
   return sorted;
 }
 
+// ── 통계 헬퍼 (P1 2026-04-25) ───────────────────────────────────
+// 감사 보고서 1-3 (🔴 치명):
+//   - 기존: 단순 산술평균. 30억 이상치 1건이 8억 단지 평균 +10% 왜곡.
+//   - 개선: trimmed mean (상하 10% 제거) + median 동시 노출.
+//   - 시간 가중: 최근 거래에 가중치 (90일 half-life) — 6개월 전 가격이 현재 시세 행세하는 문제 차단.
+//   - 층 보정 안내: 1층/탑층 프리미엄/디스카운트는 MOLIT 데이터로 자동 보정 어려움 → "임장 확인 필수" 라벨.
+function _median(sorted) {
+  if (!sorted.length) return 0;
+  const m = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[m] : Math.round((sorted[m - 1] + sorted[m]) / 2);
+}
+function _trimmedMean(values, trimRatio = 0.1) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const cut = Math.floor(sorted.length * trimRatio);
+  const trimmed = sorted.slice(cut, sorted.length - cut);
+  if (!trimmed.length) return Math.round(sorted.reduce((a, b) => a + b, 0) / sorted.length);
+  return Math.round(trimmed.reduce((a, b) => a + b, 0) / trimmed.length);
+}
+// 시간 가중 평균 — 최근 거래일수록 높은 가중치 (반감기 90일)
+function _weightedMean(transactions) {
+  if (!transactions.length) return 0;
+  const now = Date.now();
+  let totalW = 0, sumW = 0;
+  for (const t of transactions) {
+    const d = new Date(t.dealYear, (t.dealMonth || 1) - 1, t.dealDay || 1).getTime();
+    const daysAgo = Math.max(0, (now - d) / (1000 * 60 * 60 * 24));
+    const w = Math.exp(-daysAgo / 90); // half-life 90일
+    sumW += w * t.dealAmount;
+    totalW += w;
+  }
+  return totalW > 0 ? Math.round(sumW / totalW) : 0;
+}
+
 /**
  * 지역별 시세 분석 — 단지 + 평형별 분리
- * 같은 단지여도 평형별 가격차가 크므로(예: 41㎡ 4억 vs 84㎡ 12억)
- * 평형별 시세를 별도 산출해 예산 매칭 정확도↑
  */
 function analyzeTransactions(transactions) {
   if (!transactions || !transactions.length) return [];
@@ -284,16 +316,19 @@ function analyzeTransactions(transactions) {
   }
 
   return Object.entries(byApt).map(([name, list]) => {
-    // 정렬: 최신 거래가 먼저
     const sorted = [...list].sort((a, b) => {
       const da = a.dealYear * 10000 + a.dealMonth * 100 + a.dealDay;
       const db = b.dealYear * 10000 + b.dealMonth * 100 + b.dealDay;
       return db - da;
     });
     const prices = sorted.map(t => t.dealAmount);
-    const avg = Math.round(prices.reduce((a, b) => a + b, 0) / prices.length);
+    const sortedPrices = [...prices].sort((a, b) => a - b);
+    // P1: 단순 평균 → trimmed mean (상하 10% 제거) + median + 시간 가중
+    //     기본 avgPrice 는 weighted (사용자 노출용 — 가장 현재 시세 근접)
+    const avg = _weightedMean(sorted);
+    const median = _median(sortedPrices);
+    const trimmed = _trimmedMean(prices, 0.1);
 
-    // 평형별 그룹화 (평 단위로 반올림)
     const byPyeong = {};
     for (const t of sorted) {
       const py = Math.round(t.excluUseAr / 3.3);
@@ -302,17 +337,25 @@ function analyzeTransactions(transactions) {
     }
     const pyeongStats = Object.entries(byPyeong).map(([py, txs]) => {
       const ps = txs.map(t => t.dealAmount);
+      const psSorted = [...ps].sort((a, b) => a - b);
+      // 층 분포 — 1층(low)/탑층(high) 비율 노출 → 사용자에게 "RR 보정 안 됨" 인지
+      const floors = txs.map(t => t.floor || 0).filter(f => f > 0);
+      const minFloor = floors.length ? Math.min(...floors) : null;
+      const maxFloor = floors.length ? Math.max(...floors) : null;
       return {
         pyeong: parseInt(py),
         excluUseAr: parseFloat((txs[0].excluUseAr).toFixed(2)),
         dealCount: txs.length,
-        avgPrice: Math.round(ps.reduce((a, b) => a + b, 0) / ps.length), // 만원
+        avgPrice:    _weightedMean(txs), // 시간 가중 평균 (사용자 노출 기본)
+        medianPrice: _median(psSorted),  // 중앙값 (이상치 강건)
+        trimmedAvgPrice: _trimmedMean(ps, 0.1),
         minPrice: Math.min(...ps),
         maxPrice: Math.max(...ps),
+        floorRange: minFloor !== null ? { min: minFloor, max: maxFloor } : null,
         recentTx: txs.slice(0, 5).map(t => ({
           date: `${t.dealYear}.${String(t.dealMonth).padStart(2, '0')}.${String(t.dealDay).padStart(2, '0')}`,
           floor: t.floor,
-          price: t.dealAmount, // 만원
+          price: t.dealAmount,
           excluUseAr: t.excluUseAr,
         })),
       };
@@ -326,7 +369,9 @@ function analyzeTransactions(transactions) {
       lawdCd: sorted[0].lawdCd,
       aptSeq: sorted[0].aptSeq,
       dealCount: sorted.length,
-      avgPrice: avg,
+      avgPrice: avg,           // 시간 가중 (사용자 노출)
+      medianPrice: median,     // 중앙값
+      trimmedAvgPrice: trimmed,// trimmed mean (상하 10% 제거)
       minPrice: Math.min(...prices),
       maxPrice: Math.max(...prices),
       avgPriceAuk: (avg / 10000).toFixed(2),
@@ -334,6 +379,8 @@ function analyzeTransactions(transactions) {
       recentDeal: `${sorted[0].dealYear}.${String(sorted[0].dealMonth).padStart(2, '0')}.${String(sorted[0].dealDay).padStart(2, '0')}`,
       pyeongStats,
       rawList: sorted.slice(0, 10),
+      // P1 (2026-04-25): 층·향 자동 보정 불가 — 사용자에게 "RR/저층 임장 필수" 인지 강제
+      floorAdjustmentNote: 'MOLIT 데이터는 층별 가격 변동(저층 -3%·탑층 +5%·RR 프리미엄)을 자동 보정할 수 없습니다. 동·층·향은 임장 확인 필수.',
     };
   }).sort((a, b) => b.dealCount - a.dealCount);
 }

@@ -9,8 +9,39 @@ const logger = require('../logger');
  * POST /api/chat
  * AI 채팅 엔드포인트
  */
+// PIPA 제3조 (최소수집 원칙) — 사용자가 챗에 입력한 민감 PII 는 Anthropic 으로
+// 보내지 않고 즉시 차단. 챗봇 답변에 주민번호·계좌·카드 정보가 필요한 경우는 없음.
+const PII_PATTERNS = {
+  ssn:        { re: /\b\d{6}\s*-?\s*[1-4]\d{6}\b/g,                label: '주민등록번호' },
+  phone:      { re: /\b01[016789]\s*-?\s*\d{3,4}\s*-?\s*\d{4}\b/g, label: '휴대전화번호' },
+  bankAcct:   { re: /\b\d{3,6}\s*-?\s*\d{2,6}\s*-?\s*\d{2,7}\b/g,  label: '계좌번호' },
+  cardNumber: { re: /\b\d{4}\s*-?\s*\d{4}\s*-?\s*\d{4}\s*-?\s*\d{4}\b/g, label: '카드번호' },
+  passport:   { re: /\b[A-Z]\d{8}\b/g,                              label: '여권번호' },
+};
+function detectPII(text) {
+  const t = String(text || '');
+  const found = [];
+  for (const [k, { re, label }] of Object.entries(PII_PATTERNS)) {
+    if (re.test(t)) found.push(label);
+    re.lastIndex = 0;
+  }
+  return found;
+}
+
 router.post('/', validateChatInput, async (req, res) => {
   const { message, context } = req.body;
+
+  // PII 차단 — Anthropic 으로 보내기 전 즉시 reject
+  const piiFound = detectPII(message);
+  if (piiFound.length > 0) {
+    logger.warn({ source: 'chat-pii-block', userId: req.user?.id || null, types: piiFound },
+      '챗 메시지 PII 감지 — 처리 중단');
+    return res.status(400).json({
+      error: `메시지에 개인정보(${piiFound.join(', ')})가 포함되어 있어 처리하지 않았어요. 해당 정보를 제거하고 다시 보내주세요.`,
+      code: 'pii_blocked',
+      types: piiFound,
+    });
+  }
 
   // 사용자 세션 컨텍스트(현재 보고있는 단지·조건)를 첫 시스템성 메시지로 주입
   const sessionMessages = [];

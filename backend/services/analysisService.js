@@ -20,11 +20,23 @@ function getLawdCdFromArea(area) {
 }
 
 // ── 데이터 신뢰도 등급 ────────────────────────────────────
-// NONE: 신호 불가 / LOW: 신호 숨기고 범위만 / MED: 경고 포함 / HIGH: 풀 표시
+// 2026-04-25 P1 (감사 보고서 1-2): 임의 4/10/30 임계값 → Wilson 95% CI 근사 기반
+//   - HIGH (n>=60): ±5% 폭 보장
+//   - MED  (n>=25): ±10% 폭
+//   - LOW  (n>=8):  ±20% 폭 (신호 숨김)
+//   - NONE (n<8):   통계적 의미 없음
+// jeonseTxCount 도 검사 — 매매만 충분해도 전세 표본 부족 시 jeonseRate 무의미.
 function getDataReliability(saleTxCount, jeonseTxCount) {
-  if (saleTxCount < 4)  return 'NONE';
-  if (saleTxCount < 10) return 'LOW';
-  if (saleTxCount < 30) return 'MED';
+  if (saleTxCount < 8)  return 'NONE';
+  if (saleTxCount < 25) return 'LOW';
+  if (saleTxCount < 60) return 'MED';
+  return 'HIGH';
+}
+// 전세 표본 별도 등급 — calcGap 신뢰성 판정용
+function getJeonseReliability(jeonseTxCount) {
+  if (!jeonseTxCount || jeonseTxCount < 4)  return 'NONE';
+  if (jeonseTxCount < 12) return 'LOW';
+  if (jeonseTxCount < 30) return 'MED';
   return 'HIGH';
 }
 
@@ -87,15 +99,20 @@ function filterAnomalies(transactions) {
 //   - 호출 측: percentileObj.value 만 쓰면 기존 동작 유지
 //   - 사용자 노출: low~high 범위로 "하위 13~43%" 식 표기 → 표본 부족 정직 노출
 function calcPricePercentile(transactions, currentPrice) {
-  if (!transactions || transactions.length < 10) return null;
+  // 2026-04-25 P1 (감사 1-2): 최소 8건 (Wilson 95% CI ±20%) 확보 시만 계산.
+  if (!transactions || transactions.length < 8) return null;
   const { filtered } = filterAnomalies(transactions);
-  if (filtered.length < 10) return null;
+  if (filtered.length < 8) return null;
   const prices = filtered.map(t => t.dealAmount).sort((a, b) => a - b);
   const below = prices.filter(p => p <= currentPrice).length;
   const value = Math.round((below / prices.length) * 100);
   const n = filtered.length;
-  // 표본 크기 → 신뢰 폭. n≥30 → ±5%, 10≤n<30 → ±15% (Wilson 95% CI 근사)
-  const margin = n >= 30 ? 5 : 15;
+  // 표본 크기 → 신뢰 폭 (Wilson 95% CI 근사):
+  //   n>=60: ±5%, n>=25: ±10%, n>=8: ±20%
+  let margin;
+  if (n >= 60)      margin = 5;
+  else if (n >= 25) margin = 10;
+  else              margin = 20;
   return {
     value,
     low: Math.max(0, value - margin),
@@ -414,8 +431,9 @@ async function analyzeApt(lawdCd, aptName, currentPrice) {
     }
   }
 
-  // 신뢰도 등급
+  // 신뢰도 등급 (매매 + 전세 별도)
   const reliability = getDataReliability(saleTx.length, jeonseT.length);
+  const jeonseReliability = getJeonseReliability(jeonseT.length);
 
   // 가격 단위: currentPrice=억 → 만원 변환
   const priceW = (currentPrice || 0) * 10000;
@@ -442,6 +460,7 @@ async function analyzeApt(lawdCd, aptName, currentPrice) {
     currentPrice,
     molitAvailable,
     reliability,
+    jeonseReliability,
     anomalyCount,
     percentile,
     // P1 (2026-04-25): 표본 기반 신뢰 구간 — 프론트가 "하위 13~43% 범위" 표기
