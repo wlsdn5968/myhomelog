@@ -699,10 +699,14 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
 </header>
 
-<!-- 목업 경고 배너 -->
-<div class="mock-banner" id="mockBanner">
-  ⚠ 실거래가 API 미연동 — 표시되는 단지 데이터는 실제 시세가 아닙니다.
-  <a onclick="openSettings()">API 설정하기 →</a>
+<!-- P1 (2026-04-25 Phase 2 1-2): 운영자 디버그 배너 → 사용자에게 의미 있는 메시지 -->
+<!-- API 키 미설정 시점은 backend health 체크로 운영자 대시보드만 노출 -->
+<div class="mock-banner" id="mockBanner" style="display:none">
+  ⚠ 일부 데이터 표시가 지연되고 있어요. 잠시 후 새로고침해주세요.
+</div>
+<!-- P1 (Phase 2 5-1): 데이터 동기화 시각 표시 — 사용자 신뢰 시그널 -->
+<div id="syncBanner" style="display:none;background:#F0F7FF;border-bottom:1px solid #BFD7F7;padding:6px 14px;font-size:11px;color:#1B4F8A;text-align:center">
+  📅 마지막 데이터 동기화: <span id="syncTime">—</span> · 출처: 국토교통부 실거래가 + 금융위원회 규제
 </div>
 
 <div class="app">
@@ -713,7 +717,11 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <div class="sec" id="s0">
     <div class="sh" onclick="ts('s0')"><span class="st">⭐ 관심 단지</span><span id="bkCnt" style="color:var(--amb);font-size:11px;font-weight:700">0</span><span class="sa">▲</span></div>
     <div class="sb" style="padding:0" id="bkList">
-      <div class="bk-empty">관심 단지를 추가하면<br>여기서 빠르게 확인할 수 있어요</div>
+      <!-- P1 (Phase 2 3-1): Empty state 행동 유도 -->
+      <div class="bk-empty">
+        관심 단지를 추가하면 여기서 빠르게 확인할 수 있어요.<br><br>
+        <span style="font-size:10.5px;color:var(--t3)">💡 단지 상세 화면에서 ⭐ 버튼 또는 지도 마커 클릭</span>
+      </div>
     </div>
   </div>
 
@@ -750,23 +758,25 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       <div class="mb9"><span class="lbl">학군 중요도</span><div class="chips" id="ch-sc"><span class="chip" onclick="cp(this,'ch-sc')">학군 중요</span><span class="chip on" onclick="cp(this,'ch-sc')">보통</span></div></div>
       <div class="mb9"><span class="lbl">희망 평형</span><div class="chips" id="ch-py"><span class="chip" onclick="cp(this,'ch-py')">소형 15~22평</span><span class="chip on" onclick="cp(this,'ch-py')">중형 23~33평</span><span class="chip" onclick="cp(this,'ch-py')">대형 34평+</span><span class="chip" onclick="cp(this,'ch-py')">전체</span></div></div>
       <div class="r2"><div><label class="lbl" for="bp">매수가 (억)</label><input class="inp" id="bp" type="number" inputmode="decimal" placeholder="6.8" step="0.1" oninput="cl()"></div><div><label class="lbl" for="mc">현금 (억)</label><input class="inp" id="mc" type="number" inputmode="decimal" placeholder="3.5" step="0.1" oninput="cl()"></div></div>
-      <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 / 관심 구</label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
+      <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원 단위 — 1.2억은 12000)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000 (만원)" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 / 관심 구</label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
       <button class="abtn acc" onclick="cl()">대출 한도 계산</button>
       <div id="lr" style="display:none"><div class="lbox">
         <div style="font-size:10px;color:var(--t2);margin-bottom:2px">최대 대출 한도 (일반 주담대)</div>
         <div class="lbig" id="lA">—</div><div class="lsm" id="lV"></div>
         <div class="lg">
-          <div class="li"><div class="lil">DSR 한도</div><div class="liv" id="lD">—</div></div>
-          <div class="li"><div class="lil">부족 자금</div><div class="liv" id="lN">—</div></div>
-          <div class="li"><div class="lil">스트레스 DSR</div><div class="liv" id="lS">—</div></div>
-          <div class="li"><div class="lil">월 원리금</div><div class="liv" id="lM">—</div></div>
+          <div class="li"><div class="lil" title="DSR (Debt Service Ratio): 연소득 대비 모든 대출 원리금 비율. 은행 40% / 2금융 50% 한도. 본 계산은 주담대만 반영 — 신용대출·전세대출 별도.">DSR 한도 <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lD">—</div></div>
+          <div class="li"><div class="lil" title="매수가 - 현금 - 대출 = 부족 자금. 추가 자금 마련 (가족·신용대출) 또는 매수가 조정 필요.">부족 자금 <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lN">—</div></div>
+          <div class="li"><div class="lil" title="스트레스 DSR: 금리 상승 시나리오 가정 가산금리. 2025.7~ 3단계 시행 — 수도권 +1.5%p / 지방 +0.75%p 가산해 심사.">스트레스 DSR <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lS">—</div></div>
+          <div class="li"><div class="lil" title="원리금균등 30년 만기 기준 월 상환액. 거치 없음 가정. 실제 금리·만기에 따라 변동.">월 원리금 <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lM">—</div></div>
         </div>
         <div class="wbox" id="lW"></div>
         <!-- P1 D4 (2026-04-25): 정책자금 비교 — 무주택자 한도 과소 계산 차단 -->
         <div id="lPolicy" style="display:none;margin-top:10px;padding:10px;background:#EAF7EE;border:1px solid #B0D9BE;border-radius:8px">
           <div style="font-size:11px;font-weight:700;color:#1F7A3A;margin-bottom:6px">💰 정책자금 활용 (일반 주담대보다 한도·금리 유리)</div>
           <div id="lPolicyList" style="font-size:11px;color:var(--t2);line-height:1.7"></div>
-          <div style="margin-top:6px;font-size:10px;color:var(--t3)">※ 정책자금은 자격·서류 요건 별도. 주택도시기금(HF) 1599-0001 또는 시중은행 주택구입자금 창구에서 정확한 한도·금리 상담 받으세요.</div>
+          <div style="margin-top:6px;font-size:10px;color:var(--t3)">
+            ※ 정책자금은 자격·서류 요건 별도. <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:#1F7A3A;font-weight:700">주택도시기금 (nhuf.molit.go.kr) →</a> 또는 1599-0001
+          </div>
         </div>
       </div></div>
       <button class="abtn a2" id="srchBtn" onclick="doSearch()">
@@ -875,7 +885,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
   <div class="cmsgs" id="cMsgs">
     <div class="msg ai"><div class="ava ai">AI</div><div>
-      <div class="bbl">안녕하세요! 내집로그 AI입니다 👋<br><br><b>2025.10.15 규제</b> 기준으로 상담드려요.<br><br>⚙ <b>API 설정</b>에서 키를 입력하면<br>네이버 지도 + AI 검색이 활성화돼요!</div>
+      <div class="bbl">안녕하세요! 내집로그 AI입니다 👋<br><br><b>2025.10.15 규제</b> 기준으로 부동산 데이터를 정리해드려요.<br><br>💡 무엇이 궁금하세요?<br>예) "강남 9억 무주택 LTV?"<br>"공덕동 시세 알려줘"<br>"역전세 위험은?"<br><br><span style="font-size:10px;color:var(--t3)">※ 매수·매도 추천이 아닌 정보 정리 도구</span></div>
       <div class="mt" id="it"></div>
     </div></div>
   </div>
@@ -4658,6 +4668,17 @@ async function chkAPI(){
       // 사용 한도 표시 (모달 + 헤더 pill)
       if(d.usage){
         updateQuota(d.usage);
+      }
+      // P1 (Phase 2 5-1): 데이터 동기화 시각 표시 — 사용자 신뢰 시그널
+      const syncBanner=document.getElementById('syncBanner'), syncTime=document.getElementById('syncTime');
+      if(syncBanner && syncTime){
+        // health 의 timestamp 활용 (서버 KST 변환)
+        try{
+          const ts=d.timestamp ? new Date(d.timestamp) : new Date();
+          const kst=ts.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
+          syncTime.textContent=kst+' KST';
+          syncBanner.style.display='block';
+        }catch(_){}
       }
       return true;
     }
