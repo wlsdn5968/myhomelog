@@ -153,13 +153,15 @@ async function ingestOne(admin, lawdCd, dealYm) {
     const rows = await fetchRegionMonth(lawdCd, dealYm);
     let inserted = 0;
 
-    // batch INSERT … ON CONFLICT (dedup_key) DO NOTHING
-    // Supabase JS 는 upsert(onConflict) 지원 — dedup_key 는 GENERATED 이므로 ignoreDuplicates 로 충분.
+    // batch UPSERT … ON CONFLICT (dedup_key) DO UPDATE
+    // P0 (D1, 2026-04-25 감사 1-1): 정정거래 처리 — dedup_key 가 deal_amount 제외로 변경되어
+    // 같은 거래가 정정되면 동일 dedup_key 로 들어옴 → ignoreDuplicates:false 로 deal_amount 갱신.
+    // 사용자에게 동일 단지·일자에 거래 2건 노출되던 문제 해결.
     for (let i = 0; i < rows.length; i += BATCH_INSERT_SIZE) {
       const chunk = rows.slice(i, i + BATCH_INSERT_SIZE);
       const { error, count } = await admin
         .from('molit_transactions')
-        .upsert(chunk, { onConflict: 'dedup_key', ignoreDuplicates: true, count: 'exact' });
+        .upsert(chunk, { onConflict: 'dedup_key', ignoreDuplicates: false, count: 'exact' });
       if (error) throw error;
       inserted += (count ?? chunk.length);
     }
