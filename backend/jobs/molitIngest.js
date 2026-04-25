@@ -195,13 +195,27 @@ async function ingestOne(admin, lawdCd, dealYm) {
   const runId = runRes.data?.id;
 
   try {
-    const rows = await fetchRegionMonth(lawdCd, dealYm);
-    let inserted = 0;
+    const rawRows = await fetchRegionMonth(lawdCd, dealYm);
 
+    // P0 (D1 후속, 2026-04-25): batch 내 dedup_key 충돌 방지.
+    //   dedup_key 가 deal_amount 제외로 변경된 후, MOLIT 한 응답 안에 같은 (apt,면적,일자,층)
+    //   조합이 둘 이상 등장 (정정 전/후 두 row). PostgreSQL ON CONFLICT DO UPDATE 는
+    //   같은 statement 안의 같은 conflict 키 두 번 처리 불가 (errCode 21000).
+    //   해결: JS 에서 미리 dedup. 후행 row 우선 (정정 후 데이터로 추정).
+    //   dedup 키는 SQL GENERATED dedup_key 와 동일 컴포넌트 사용 (해시 전 raw key).
+    const seen = new Map();
+    for (const r of rawRows) {
+      const k = (r.apt_seq || `${r.apt_name}:${r.umd_nm || ''}`)
+        + '|' + r.exclu_use_ar
+        + '|' + r.deal_year + '-' + r.deal_month + '-' + r.deal_day
+        + '|' + (r.floor || 0);
+      seen.set(k, r); // 같은 키면 후행 덮어씀
+    }
+    const rows = Array.from(seen.values());
+
+    let inserted = 0;
     // batch UPSERT … ON CONFLICT (dedup_key) DO UPDATE
-    // P0 (D1, 2026-04-25 감사 1-1): 정정거래 처리 — dedup_key 가 deal_amount 제외로 변경되어
-    // 같은 거래가 정정되면 동일 dedup_key 로 들어옴 → ignoreDuplicates:false 로 deal_amount 갱신.
-    // 사용자에게 동일 단지·일자에 거래 2건 노출되던 문제 해결.
+    // ignoreDuplicates:false 로 deal_amount 갱신 (정정거래 처리).
     for (let i = 0; i < rows.length; i += BATCH_INSERT_SIZE) {
       const chunk = rows.slice(i, i + BATCH_INSERT_SIZE);
       const { error, count } = await admin
