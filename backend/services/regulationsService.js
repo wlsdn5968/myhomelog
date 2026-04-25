@@ -17,7 +17,7 @@ const logger = require('../logger');
 const { createClient } = require('@supabase/supabase-js');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
 
 // 하드코딩 fallback — DB 없이도 최소 작동 (dev / DB 장애 / Vercel env 누락 대비)
 // P1 (2026-04-25): key 별 fallback 분리 — 기존 단일 FALLBACK 은 housing 만 반환해서

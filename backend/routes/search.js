@@ -45,7 +45,8 @@ function adminClient() {
   if (!SUPABASE_URL) return null;
   const key = process.env.SUPABASE_PUBLISHABLE_KEY
            || process.env.SUPABASE_ANON_KEY
-           || process.env.SUPABASE_SERVICE_ROLE_KEY;
+           || process.env.SUPABASE_SERVICE_ROLE_KEY
+           || process.env.service_role;
   if (!key) return null;
   return createClient(SUPABASE_URL, key, {
     auth: { persistSession: false, autoRefreshToken: false },

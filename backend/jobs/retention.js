@@ -28,7 +28,7 @@ const { createClient } = require('@supabase/supabase-js');
 const logger = require('../logger');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
 
 const SEARCH_HISTORY_RETENTION_MONTHS = 12;
 const CHAT_RETENTION_MONTHS = 24;

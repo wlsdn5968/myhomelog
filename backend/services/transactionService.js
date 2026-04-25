@@ -14,7 +14,7 @@ const MOLIT_OK_CODES = new Set(['00', '000']);
 
 // DB 사용 여부 — Supabase 설정되어 있고, MOLIT_DB_FIRST 가 'false' 가 아니면 DB 우선
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
 const DB_FIRST = (process.env.MOLIT_DB_FIRST !== 'false')
   && !!SUPABASE_URL && !!SUPABASE_SERVICE_ROLE_KEY;
 
