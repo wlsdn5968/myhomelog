@@ -205,6 +205,17 @@ async function ingestOne(admin, lawdCd, dealYm) {
 
     return { ok: true, lawdCd, dealYm, fetched: rows.length, inserted };
   } catch (e) {
+    // 진단: error origin 정확히 파악 (값 노출 없음)
+    logger.error({
+      lawdCd, dealYm,
+      errMsg: e?.message,
+      errName: e?.constructor?.name,
+      errCode: e?.code,
+      errStatus: e?.status || e?.statusCode,
+      errDetails: e?.details,
+      errHint: e?.hint,
+      stackTop: e?.stack ? String(e.stack).split('\n')[1] : null,
+    }, 'ingestOne 실패 (진단)');
     await admin.from('molit_ingest_runs')
       .update({
         status: 'error',
