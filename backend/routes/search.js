@@ -60,18 +60,31 @@ router.get('/apt', async (req, res) => {
   const admin = adminClient();
   if (!admin) return res.status(503).json({ error: '검색 서비스 일시 불가' });
   try {
-    // 단지명 + 동명 동시 매칭 — 사용자가 "공덕" 입력 시 "공덕동" + "공덕래미안" 모두 노출
-    // DISTINCT 처리 + 최근 거래일 우선
-    const { data, error } = await admin
-      .from('molit_transactions')
-      .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date')
-      .or(`apt_name.ilike.%${q}%,umd_nm.ilike.%${q}%`)
-      .order('deal_date', { ascending: false })
-      .limit(limit * 5); // 중복 제거 후 상위 limit 추출
-    if (error) throw error;
+    // Phase 4 (2026-04-26): molit_transactions + apt_master 두 출처 병합 검색.
+    //   1) molit: 실거래 있는 단지 (recent deal_date·build_year 노출 — 우선)
+    //   2) apt_master: 거래 0건 단지도 검색에 노출 (기존엔 영원히 안 나옴)
+    //   같은 단지가 두 출처에 모두 있으면 molit 우선 (거래 정보 풍부).
+    const [molitRes, masterRes] = await Promise.all([
+      admin.from('molit_transactions')
+        .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date')
+        .or(`apt_name.ilike.%${q}%,umd_nm.ilike.%${q}%`)
+        .order('deal_date', { ascending: false })
+        .limit(limit * 5),
+      admin.from('apt_master')
+        .select('apt_name, sigungu, umd_nm, lawd_cd, kapt_code')
+        .or(`apt_name.ilike.%${q}%,umd_nm.ilike.%${q}%`)
+        .limit(limit * 3),
+    ]);
+    if (molitRes.error) throw molitRes.error;
+    if (masterRes.error) {
+      // apt_master 미존재/접근 실패는 fallback (molit 만 사용)
+      logger.warn({ err: masterRes.error.message }, 'apt_master 조회 실패 — molit only');
+    }
+
     const seen = new Set();
     const out = [];
-    for (const row of (data || [])) {
+    // molit 우선 (실거래 있는 단지)
+    for (const row of (molitRes.data || [])) {
       const key = `${row.apt_name}|${row.sigungu}|${row.umd_nm}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -82,8 +95,28 @@ router.get('/apt', async (req, res) => {
         lawdCd: row.lawd_cd,
         buildYear: row.build_year,
         recentDealDate: row.deal_date,
+        source: 'molit',
       });
       if (out.length >= limit) break;
+    }
+    // apt_master 보충 (거래 0건 단지)
+    if (out.length < limit) {
+      for (const row of (masterRes.data || [])) {
+        const key = `${row.apt_name}|${row.sigungu}|${row.umd_nm}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        out.push({
+          aptName: row.apt_name,
+          sigungu: row.sigungu,
+          umdNm: row.umd_nm,
+          lawdCd: row.lawd_cd,
+          buildYear: null,
+          recentDealDate: null,
+          kaptCode: row.kapt_code,
+          source: 'master',
+        });
+        if (out.length >= limit) break;
+      }
     }
     res.json({ results: out, query: q });
   } catch (e) {

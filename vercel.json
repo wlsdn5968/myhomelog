@@ -24,6 +24,10 @@
     {
       "path": "/api/cron/molit-ingest",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/apt-master-sync",
+      "schedule": "0 18 * * 1"
     }
   ]
 }

@@ -17,6 +17,7 @@ const express = require('express');
 const logger = require('../logger');
 const { run: runRetention } = require('../jobs/retention');
 const { runMolitIngest } = require('../jobs/molitIngest');
+const { runAptMasterSync } = require('../jobs/aptMasterSync');
 
 const router = express.Router();
 
@@ -75,5 +76,21 @@ async function handleMolitIngest(req, res) {
 }
 router.post('/molit-ingest', handleMolitIngest);
 router.get('/molit-ingest', handleMolitIngest);
+
+// ── 단지 마스터 동기화 (Phase 4, 2026-04-26) ────────────────
+// 주 1회 (월 03:00 KST) — AptInfo 로 sgg 별 단지 목록 적재 (멱등).
+async function handleAptMasterSync(req, res) {
+  try {
+    const started = Date.now();
+    const summary = await runAptMasterSync();
+    logger.info({ durationMs: Date.now() - started, summary }, 'cron/apt-master-sync OK');
+    res.json({ ok: true, summary });
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'cron/apt-master-sync 실패');
+    res.status(500).json({ error: e.message });
+  }
+}
+router.post('/apt-master-sync', handleAptMasterSync);
+router.get('/apt-master-sync', handleAptMasterSync);
 
 module.exports = router;
