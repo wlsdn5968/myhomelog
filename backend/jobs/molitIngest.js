@@ -42,15 +42,20 @@ function adminClient() {
   });
 }
 
-/** 최근 2개월 YYYYMM (이번 달 + 지난 달) */
-function recentYearMonths() {
+/**
+ * 최근 N개월 YYYYMM (이번 달 ~ N-1개월 전)
+ * Phase 4 (2026-04-26): 파라미터화 — 기본 3개월 (정정거래 + 늦게 등록된 거래 보정).
+ *   admin/backfill 시 12개월 등 큰 값 가능. months × region 처리시간 고려.
+ *   maxDuration 300s 안에서 안전한 최대치는 약 6개월 × 82 region.
+ */
+function recentYearMonths(months = 3) {
   const now = new Date();
-  const months = [];
-  for (let i = 0; i < 2; i++) {
+  const out = [];
+  for (let i = 0; i < months; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
+    out.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
-  return months;
+  return out;
 }
 
 /**
@@ -206,13 +211,24 @@ async function ingestOne(admin, lawdCd, dealYm) {
 }
 
 /** 전체 실행 — Vercel Cron entrypoint 에서 호출 */
-async function runMolitIngest() {
+/**
+ * @param {Object} opts
+ * @param {number} [opts.months=3] - 적재할 개월 수 (이번 달부터 거꾸로)
+ * @param {number} [opts.offsetMonths=0] - 시작 offset (예: offset=6, months=6 → 6~12개월 전)
+ *   Backfill 분할 호출용 (한 번에 12개월 실행 시 maxDuration 부족 → 6개월씩 2번)
+ */
+async function runMolitIngest(opts = {}) {
+  const monthsCount = Math.max(1, Math.min(parseInt(opts.months) || 3, 24));
+  const offsetMonths = Math.max(0, parseInt(opts.offsetMonths) || 0);
+
   if (!MOLIT_API_KEY || MOLIT_API_KEY === 'your_molit_api_key') {
     logger.warn('MOLIT_API_KEY 미설정 — ETL skip');
     return { skipped: true, reason: 'MOLIT_API_KEY missing' };
   }
   const admin = adminClient();
-  const months = recentYearMonths();
+  // offset 적용: recentYearMonths(N) 다음 N개 만 사용 (slice)
+  const allMonths = recentYearMonths(monthsCount + offsetMonths);
+  const months = allMonths.slice(offsetMonths);
   const regions = Object.entries(LAWD_CODES);
 
   const started = Date.now();
@@ -252,10 +268,11 @@ async function runMolitIngest() {
     source: 'molit-ingest',
     regions: regions.length,
     months: months.length,
+    monthsRange: months.length ? `${months[months.length-1]}~${months[0]}` : null,
     ok, err, skipped,
     elapsedMs,
   }, 'MOLIT ETL 완료');
-  return { ok, err, skipped, elapsedMs, results };
+  return { ok, err, skipped, elapsedMs, monthsCount: months.length, monthsRange: months.length ? `${months[months.length-1]}~${months[0]}` : null, results };
 }
 
 module.exports = { runMolitIngest };

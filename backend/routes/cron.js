@@ -64,9 +64,17 @@ router.get('/retention', async (req, res) => {
 async function handleMolitIngest(req, res) {
   try {
     const started = Date.now();
-    const summary = await runMolitIngest();
-    logger.info({ durationMs: Date.now() - started, summary: {
+    // Phase 4 (2026-04-26): backfill 지원 — ?months=12&offsetMonths=0 등
+    //   기본 cron: 최근 3개월 (정정거래 + 늦게 등록 거래 보정)
+    //   12개월 backfill 분할 예: ?months=6&offsetMonths=0 (최근 6) + ?months=6&offsetMonths=6 (그 이전 6)
+    const opts = {
+      months: req.query.months ? parseInt(req.query.months) : undefined,
+      offsetMonths: req.query.offsetMonths ? parseInt(req.query.offsetMonths) : undefined,
+    };
+    const summary = await runMolitIngest(opts);
+    logger.info({ durationMs: Date.now() - started, opts, summary: {
       ok: summary.ok, err: summary.err, skipped: summary.skipped,
+      monthsRange: summary.monthsRange,
     }}, 'cron/molit-ingest OK');
     res.json({ ok: true, summary });
   } catch (e) {
