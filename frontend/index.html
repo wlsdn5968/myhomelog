@@ -2913,6 +2913,8 @@ function showDetail(p){
       ${p.facility.address?`<br><span style="font-size:10px;color:var(--t3)">${p.facility.address}</span>`:''}
     </div>`:''}
     <div id="amenityBox" style="font-size:11px;color:var(--t3);margin:4px 0 8px">🗺️ 주변 편의시설 조회 중...</div>
+    <div id="facilityBox" style="margin:4px 0 8px"></div>
+    <div id="altAptBox" style="margin:4px 0 8px"></div>
     ${(()=>{
       // P1 (Phase 2 후속, 2026-04-25): 학군 표시 — 카카오 keyword 기반 사실 나열만 (학업성취도 X)
       const sch = Array.isArray(p.nearbySchools) ? p.nearbySchools : [];
@@ -2985,7 +2987,61 @@ function showDetail(p){
   bkBtn.classList.toggle('on',isBk);
   document.getElementById('DM').classList.add('open');
   renderFieldNote(p); // 임장 노트는 즉시 렌더 (로컬 데이터)
-  loadRisk(p);loadClause(p);loadAnalysis(p);loadAmenities(p);
+  loadRisk(p);loadClause(p);loadAnalysis(p);loadAmenities(p);loadFacility(p);
+}
+
+// ── 단지 facility 풍부화 (Phase 4, 2026-04-26) ────────────
+//   apt_master.kapt_code 매칭 → AptInfo 호출 → 세대수·시공사·주차·교통·거주성 점수
+//   같은 동의 다른 MOLIT 단지명도 함께 표시 (alias 후보 — 사용자 직접 확인용)
+async function loadFacility(p){
+  const fbox=document.getElementById('facilityBox');
+  const abox=document.getElementById('altAptBox');
+  if(!fbox)return;
+  try{
+    const sigungu = p.sigungu || (p._raw?.sigungu) || '';
+    const umdNm = p.umdNm || (p._raw?.umdNm) || '';
+    const params = new URLSearchParams({ aptName: p.aptName||'', sigungu, umdNm });
+    const r = await fetch(`${CFG.api}/search/facility?${params}`).then(r=>r.json()).catch(()=>null);
+    if(!r) { fbox.style.display='none'; if(abox)abox.style.display='none'; return; }
+
+    // facility 표시 (raw jsonb — AptInfo 응답 구조 다양해 안전하게 처리)
+    if (r.facility?.raw) {
+      const f = r.facility.raw;
+      const householdCount = f.kaptdaCnt || f.householdCount || f.kaptCount || null;
+      const completionDate = f.useAprDay || f.completionDate || null;
+      const constructionCompany = f.kaptBcompany || f.constructionCompany || f.bcompany || null;
+      const totalDong = f.kaptDongCnt || f.dongCount || null;
+      const parkingTotal = f.kaptdPcnt || f.parkingTotal || null;
+      const heatType = f.codeHeatNm || f.heatType || null;
+      const items = [];
+      if (householdCount) items.push(`총 ${Number(householdCount).toLocaleString()}세대`);
+      if (totalDong) items.push(`${totalDong}개동`);
+      if (parkingTotal) items.push(`주차 ${Number(parkingTotal).toLocaleString()}대`);
+      if (completionDate) items.push(`사용승인 ${String(completionDate).slice(0,4)}.${String(completionDate).slice(4,6)}`);
+      if (heatType) items.push(heatType);
+      const officialName = r.facility.official && r.facility.official !== p.aptName
+        ? `<span style="color:var(--t3);font-size:10px"> (정식명: ${_escHtml(r.facility.official)})</span>` : '';
+      fbox.innerHTML = `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6">
+        <div style="font-weight:700;color:var(--t1);margin-bottom:4px">🏢 단지 기본정보 (공공데이터포털 AptInfo)${officialName}</div>
+        ${items.join(' · ')}
+        ${constructionCompany?`<br><span style="font-size:10px">시공: ${_escHtml(constructionCompany)}</span>`:''}
+      </div>`;
+    } else {
+      fbox.style.display='none';
+    }
+
+    // 같은 동의 alias 후보 — MOLIT 이 면적군별로 분리 신고한 케이스 안내
+    if (abox && Array.isArray(r.altCandidates) && r.altCandidates.length > 0) {
+      const list = r.altCandidates.map(a =>
+        `<span style="display:inline-block;background:#FFF7E6;border:1px solid #F0D6A2;border-radius:4px;padding:2px 7px;margin:1px;font-size:10.5px;cursor:pointer" onclick="goSearchResult('${encodeURIComponent(a.aptName)}')">${_escHtml(a.aptName)}${a.buildYear?` <span style="color:var(--t3)">${a.buildYear}년</span>`:''}</span>`
+      ).join('');
+      abox.innerHTML = `<div style="background:#FFF9EE;border:1px solid #F0D6A2;border-radius:8px;padding:8px 11px;font-size:11px;line-height:1.6">
+        <div style="font-weight:700;color:#7A4F0E;margin-bottom:3px">📌 같은 동의 다른 신고명</div>
+        <div style="font-size:10.5px;color:var(--t2);margin-bottom:4px">MOLIT 가 면적군·차수별로 분리 신고한 경우 같은 단지가 여러 이름일 수 있어요. 클릭해 비교하세요.</div>
+        ${list}
+      </div>`;
+    } else if(abox) abox.style.display='none';
+  }catch{ fbox.style.display='none'; if(abox)abox.style.display='none'; }
 }
 
 // ── 주변 편의시설 + 통근시간 비동기 로드 ────────────

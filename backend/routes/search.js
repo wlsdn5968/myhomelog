@@ -21,6 +21,7 @@ const { createClient } = require('@supabase/supabase-js');
 const { requireAuth } = require('../middleware/auth');
 const logger = require('../logger');
 const { resolveCoordBatch } = require('../services/geocodeCacheService');
+const { resolveFacility } = require('../services/aptFacilityService');
 
 const router = express.Router();
 
@@ -272,6 +273,50 @@ router.delete('/history', async (req, res, next) => {
     logger.info({ userId: req.user.id }, '검색 이력 전체 삭제');
     res.status(204).end();
   } catch (e) { next(e); }
+});
+
+// ── GET /api/search/facility — 단지 상세 풍부화 (Phase 4, 2026-04-26) ──
+//   ?aptName=&sigungu=&umdNm= → apt_master.kapt_code 매칭 → AptInfo 호출 → 캐시
+//   응답: { kaptCode, official, facility:{ ... } } 또는 null
+//
+//   추가: 같은 (sigungu, umdNm) 의 다른 MOLIT 단지명 (alias 후보) 노출
+//        — 사용자가 "공릉풍림아이원" 클릭 시 "풍림아파트A·B 도 같은 단지일 수 있음" 안내.
+//        매핑은 사용자 판단 (자동 매핑은 false positive 위험).
+router.get('/facility', async (req, res) => {
+  const aptName = String(req.query.aptName || '').trim();
+  const sigungu = String(req.query.sigungu || '').trim() || null;
+  const umdNm = String(req.query.umdNm || '').trim() || null;
+  if (!aptName) return res.status(400).json({ error: 'aptName 필수' });
+
+  const admin = adminClient();
+  if (!admin) return res.status(503).json({ error: '서비스 일시 불가' });
+
+  try {
+    const facility = await resolveFacility({ aptName, sigungu, umdNm });
+
+    // 같은 동의 다른 MOLIT 단지명 — alias 후보 (사용자 표시용)
+    let altCandidates = [];
+    if (sigungu && umdNm) {
+      const { data: alts } = await admin
+        .from('molit_transactions')
+        .select('apt_name, build_year')
+        .eq('sigungu', sigungu)
+        .eq('umd_nm', umdNm)
+        .neq('apt_name', aptName)
+        .limit(50);
+      const seen = new Set();
+      for (const r of (alts || [])) {
+        if (seen.has(r.apt_name)) continue;
+        seen.add(r.apt_name);
+        altCandidates.push({ aptName: r.apt_name, buildYear: r.build_year });
+        if (altCandidates.length >= 8) break;
+      }
+    }
+    res.json({ facility, altCandidates });
+  } catch (e) {
+    logger.warn({ err: e.message, aptName }, 'facility 조회 실패');
+    res.status(500).json({ error: 'facility 조회 실패' });
+  }
 });
 
 module.exports = router;
