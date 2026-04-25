@@ -536,17 +536,41 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 .bnav-item.on{color:var(--acc)}
 .bnav-icon{font-size:18px;line-height:1}
 
+/* P0 Phase 2 R3-B (2026-04-25): 모바일 햄버거 drawer + 검색바 풀폭 + AI floating */
+.hamb{display:none;background:transparent;border:none;cursor:pointer;padding:8px;font-size:20px;color:var(--t1)}
+.drawer-bg{display:none;position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.5);z-index:9990;animation:fadeIn .2s}
+.drawer-bg.open{display:block}
+.drawer-bg.open + .lp{transform:translateX(0)!important}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes slideIn{from{transform:translateX(-100%)}to{transform:translateX(0)}}
+
 @media(max-width:700px){
-  .lp{display:none}
+  .lp{
+    display:block!important;
+    position:fixed;top:0;left:0;bottom:0;width:85%;max-width:340px;
+    z-index:9991;background:#fff;box-shadow:2px 0 12px rgba(0,0,0,0.15);
+    transform:translateX(-100%);transition:transform .25s ease;
+    overflow-y:auto;overflow-x:hidden;
+  }
+  .lp.open{transform:translateX(0)}
   .bnav{display:block}
   body{padding-bottom:60px}
   .legal-footer{margin-bottom:60px}
   .htabs{display:none}
+  .hamb{display:inline-flex;align-items:center;justify-content:center}
+  .hsearch{flex:1!important;max-width:none!important;margin:0 6px!important}
+  .hsearch input{font-size:13px!important}
+  /* 헤더 우측 hml: 모바일에선 핵심 버튼만 (10.15 / 로그인) */
+  .hml .hst#quotaPill,.hml .hst#aiPill,.hml .hst#apiSt,.hml #settingsBtn{display:none!important}
+  .hml .rpill{display:none}
   html,body{overflow:auto}
 }
 @media(max-width:480px){
   .cv-r3{grid-template-columns:1fr 1fr}
-  header{padding:0 12px;gap:7px}
+  header{padding:0 8px;gap:5px}
+  .logo .ltxt{display:none}
+  /* 검색 placeholder 짧게 */
+  .hsearch input::placeholder{content:"🔎 단지 검색"}
 }
 
 /* ── 가격 위치 시그널 (Price Location Signal) ────────────── */
@@ -678,7 +702,12 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 </head>
 <body>
 
+<!-- P0 Phase 2 R3-B (2026-04-25): 모바일 drawer 백그라운드 -->
+<div class="drawer-bg" id="drawerBg" onclick="closeDrawer()" aria-hidden="true"></div>
+
 <header>
+  <!-- 모바일 햄버거 — 사이드바 (내 상황 입력) drawer 토글 -->
+  <button class="hamb" onclick="toggleDrawer()" aria-label="메뉴 열기" title="내 상황 / 관심단지 / 계약타임라인">☰</button>
   <a class="logo" href="/"><div class="lmark">집</div><div class="ltxt">내집<em>로그</em></div></a>
   <div class="htabs">
     <button class="htab on" onclick="sv('map',this)">🗺 지도</button>
@@ -4580,6 +4609,34 @@ function exportClausePDF(){
   w.document.close();
   setTimeout(()=>w.print(),500);
 }
+
+// ── 모바일 drawer 토글 (P0 Phase 2 R3-B-2) ────────────────
+// 모바일에서 사이드바(.lp) 가 숨겨지면 사용자가 입력 자체 못 함 → drawer 로 슬라이드.
+function toggleDrawer() {
+  const lp = document.querySelector('.lp');
+  const bg = document.getElementById('drawerBg');
+  if (!lp || !bg) return;
+  const opening = !lp.classList.contains('open');
+  lp.classList.toggle('open', opening);
+  bg.classList.toggle('open', opening);
+  document.body.style.overflow = opening ? 'hidden' : '';
+}
+function closeDrawer() {
+  document.querySelector('.lp')?.classList.remove('open');
+  document.getElementById('drawerBg')?.classList.remove('open');
+  document.body.style.overflow = '';
+}
+// 사이드바 내부 button/input 사용 후 자동 닫기 (검색·계산 후)
+document.addEventListener('click', (e) => {
+  if (window.innerWidth > 700) return;
+  const lp = document.querySelector('.lp');
+  if (!lp || !lp.classList.contains('open')) return;
+  // "대출 한도 계산" / "실거래 기반 단지 정리" 버튼 누르면 결과 보러 닫기
+  const t = e.target;
+  if (t.closest && (t.closest('.abtn.acc') || t.closest('.abtn.a2'))) {
+    setTimeout(closeDrawer, 200);
+  }
+});
 
 // ── 인기 단지 마커 prefill (P0 Phase 2 3-2) ───────────────
 // 첫 진입 시 빈 지도 → "왜 정보 없지?" 이탈 트리거 차단.
