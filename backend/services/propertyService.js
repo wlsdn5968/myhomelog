@@ -14,6 +14,7 @@
 const { getTransactionsByApt, analyzeTransactions } = require('./transactionService');
 const { getAptListBySgg, getAptBasisInfo } = require('./aptInfoService');
 const { resolveCoordBatch } = require('./geocodeCacheService');
+const { isRegulatedRegion, getRegulatedKeywords, SEOUL_GU_KEYWORDS } = require('./regulationsService');
 const cache = require('../cache');
 const logger = require('../logger');
 
@@ -90,11 +91,15 @@ function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '') {
   ];
 }
 
-// ── LTV/대출한도 단순 계산 (프론트 calcLTV와 일치) ─────────
-// 규제지역 판정은 regulations_snapshot 의 regulatedRegions.* 기준과 동일해야 함.
-// per-row 호출 성능상 inline regex 유지. 정부 개정 시 아래 regex 와 스냅샷 동시 갱신.
-function computeLTV(buyAuk, region, isFirstBuyer, houseStatus) {
-  const isRegulated = /서울|강남|서초|송파|용산|분당|과천/.test(region || '');
+// ── LTV/대출한도 단순 계산 ─────────────────────────────
+// 2026-04-25: regulations_snapshot 단일 소스화 (Top-1 P0 핫픽스).
+//   - 기존: inline regex `/서울|강남|서초|송파|용산|분당|과천/` →
+//     광명·하남·의왕·성남(수정/중원)·수원(영통/장안/팔달)·안양(동안)·
+//     용인(수지) 등 10개 경기 규제지역 누락 → LTV 70% 오표기 →
+//     사용자가 계약금 걸고 은행 가서 실제 40% 만 나오는 손실 시나리오.
+//   - 개선: 호출자가 미리 isRegulatedRegion() 으로 boolean 만 계산해서
+//     주입 → per-row 비용은 0 (closure 변수 read 만), 정확도는 snapshot 기준.
+function computeLTV(buyAuk, isRegulated, isFirstBuyer, houseStatus) {
   if (houseStatus === '2주택+') return { ltv: '0% (규제)', maxLoan: '0억' };
   if (houseStatus === '1주택' && isRegulated) return { ltv: '0% (1주택 규제지역)', maxLoan: '처분조건부 6개월' };
   let pct;
@@ -229,12 +234,28 @@ async function getAIRecommendations(userCondition) {
     .slice(0, 15);
 
   // Step 5: 결과 카드 생성 (AI 호출 없음, 즉시 응답)
+  // 규제지역 키워드 1회 조회 → 단지별 sigungu 기준으로 정확하게 LTV 계산.
+  // (snapshot in-process 캐시 hit 시 비용 무시 가능)
+  const { keywords: regKeywords, seoulRegulated } = await getRegulatedKeywords();
+  const matchRegulated = (sigunguStr) => {
+    const r = String(sigunguStr || '').normalize('NFC').trim();
+    if (!r) return false;
+    if (seoulRegulated) {
+      if (r.includes('서울')) return true;
+      for (const gu of SEOUL_GU_KEYWORDS) if (r.includes(gu)) return true;
+    }
+    for (const kw of regKeywords) if (r.includes(kw)) return true;
+    return false;
+  };
+
   const recommendations = ranked.map((apt, i) => {
     const p = apt.primaryPyeong;
     const avgAuk = parseFloat((p.avgPrice / 10000).toFixed(2));
     const minAuk = parseFloat((p.minPrice / 10000).toFixed(2));
     const maxAuk = parseFloat((p.maxPrice / 10000).toFixed(2));
-    const ltvInfo = computeLTV(avgAuk, region || '서울', isFirstBuyer, houseStatus);
+    // 단지 실제 위치(MOLIT sggNm)로 규제 판정 — 사용자 입력 region 보다 정확
+    const aptIsRegulated = matchRegulated(apt.sigungu || region || '');
+    const ltvInfo = computeLTV(avgAuk, aptIsRegulated, isFirstBuyer, houseStatus);
     const tags = buildTags(apt);
     const ageYears = new Date().getFullYear() - (apt.buildYear || 0);
 

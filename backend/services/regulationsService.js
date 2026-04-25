@@ -117,4 +117,82 @@ async function getSnapshot(key = 'housing_loan_2025') {
   }
 }
 
-module.exports = { getSnapshot, FALLBACK };
+/**
+ * 규제지역 매칭 키워드 set 반환 (substring 매칭용).
+ *
+ * 왜 이게 필요한가:
+ *   - 기존: propertyService.computeLTV / 프론트 calcLTV 가 정규식
+ *     `/서울|강남|서초|송파|용산|분당|과천/` 으로 규제지역 판정 → snapshot 의
+ *     "성남시 분당구","광명시","하남시","의왕시" 등 10개 경기 규제지역이 누락되어
+ *     LTV 70% 로 오표기 → 사용자가 계약금 걸고 은행 가서 실제 40% 만 나오는
+ *     **수억원 손실 시나리오**.
+ *   - 개선: snapshot 의 regulatedRegions 를 "성남시 분당구" 같은 풀 네임 + 공백 제거 +
+ *     핵심 키워드("분당","과천","광명") 변형으로 set 화 → substring 매칭으로 강건.
+ *
+ * 한계 (인정):
+ *   - "중구"는 서울/부산/대구 모두 존재 — 단독 입력 시 모호. 사용자 입력에
+ *     광역명이 함께 있으면 정확. (향후: lawdCd 기반 매칭으로 완전화)
+ */
+async function getRegulatedKeywords() {
+  const cacheKey = 'reg:keywords:v2';
+  const hit = cache.get(cacheKey);
+  if (hit) return hit;
+
+  const { data } = await getSnapshot('housing_loan_2025');
+  const reg = data?.regulatedRegions || {};
+  const keywords = new Set();
+  const seoulRegulated = !!reg.seoul; // "서울 전 지역" 명시 시 서울 전체 규제
+
+  const gyeonggi = Array.isArray(reg.gyeonggi) ? reg.gyeonggi : [];
+  for (const fullName of gyeonggi) {
+    const trimmed = String(fullName || '').trim();
+    if (!trimmed) continue;
+    keywords.add(trimmed);
+    keywords.add(trimmed.replace(/\s+/g, ''));
+    const tokens = trimmed.split(/\s+/);
+    for (const tok of tokens) {
+      const core = tok.replace(/(시|구|군)$/, '');
+      if (core && core.length >= 2) keywords.add(core);
+    }
+  }
+
+  const out = { keywords: Array.from(keywords), seoulRegulated };
+  cache.set(cacheKey, out, 600); // 10분 — getSnapshot 과 동일 TTL
+  return out;
+}
+
+// 서울 25개 자치구 키워드 — snapshot.seoul = "서울 전 지역" 일 때 매칭용
+// (snapshot 에 25개 명시 안 돼있으므로 코드 상수로 보완)
+const SEOUL_GU_KEYWORDS = [
+  '강남','강동','강북','강서','관악','광진','구로','금천','노원',
+  '도봉','동대문','동작','마포','서대문','서초','성동','성북','송파','양천',
+  '영등포','용산','은평','종로','중랑',
+];
+
+/**
+ * 사용자 입력 region 문자열이 규제지역인지 판단 (async — snapshot 캐시 hit 시 즉시).
+ *   - "서울"/"강남"/"송파" 등 → true
+ *   - "분당"/"과천"/"광명"/"수지"/"하남"/"의왕" 등 → true
+ *   - "일산"/"동두천"/"화성"/"인천" 등 → false
+ *   - 빈 문자열 → false (보수적)
+ */
+async function isRegulatedRegion(regionStr) {
+  const r = String(regionStr || '').normalize('NFC').trim();
+  if (!r) return false;
+  const { keywords, seoulRegulated } = await getRegulatedKeywords();
+
+  if (seoulRegulated) {
+    if (r.includes('서울')) return true;
+    for (const gu of SEOUL_GU_KEYWORDS) if (r.includes(gu)) return true;
+  }
+  for (const kw of keywords) if (r.includes(kw)) return true;
+  return false;
+}
+
+module.exports = {
+  getSnapshot,
+  FALLBACK,
+  getRegulatedKeywords,
+  isRegulatedRegion,
+  SEOUL_GU_KEYWORDS,
+};
