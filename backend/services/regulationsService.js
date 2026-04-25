@@ -101,9 +101,18 @@ const FALLBACK_BY_KEY = {
 // 하위 호환 — 기존 import { FALLBACK } 코드 (housing 만 반환)
 const FALLBACK = FALLBACK_BY_KEY.housing_loan_2025;
 
-function adminClient() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+// P1 (2026-04-25): regulations_snapshot 은 RLS "public_read" 정책으로 anon 접근 가능.
+// → service_role 불필요. publishable key 우선 사용 (defense in depth: 권한 최소화).
+// → service_role 은 fallback (dev 환경에서 publishable key 미설정 시).
+// 이전: service_role 만 시도 → Vercel production env 에 service_role 없으면 fallback 으로 떨어져
+//       매번 코드 변경 + 재배포 필요. publishable key 만으로 snapshot 읽기 가능 — 운영 효율 ↑.
+function snapshotClient() {
+  if (!SUPABASE_URL) return null;
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY
+           || process.env.SUPABASE_ANON_KEY
+           || SUPABASE_SERVICE_ROLE_KEY;
+  if (!key) return null;
+  return createClient(SUPABASE_URL, key, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 }
@@ -117,7 +126,7 @@ async function getSnapshot(key = 'housing_loan_2025') {
   const hit = cache.get(cacheKey);
   if (hit) return hit;
 
-  const admin = adminClient();
+  const admin = snapshotClient();
   if (!admin) {
     // DB 미설정 — 로컬 개발이거나 env 누락. fallback 만 반환.
     const fb = FALLBACK_BY_KEY[key] || null;
