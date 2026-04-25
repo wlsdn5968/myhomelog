@@ -24,15 +24,14 @@ const { LAWD_CODES, LAWD_CODE_TO_NAME } = require('../services/transactionServic
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
 
-// 공공데이터포털 API (data.go.kr) — AptInfo 전용 키 (별도 발급 — MOLIT 키와 다를 수 있음)
+// 공공데이터포털 API (data.go.kr) — AptInfo 전용 키 (별도 발급)
 const APT_INFO_KEY = process.env.APT_INFO_API_KEY || process.env.MOLIT_API_KEY;
-const APT_LIST_URL = 'https://apis.data.go.kr/1613000/AptListService3/getRoadnameAptList3';
-// 주의: AptInfo 공식 endpoint 는 kapt 코드 체계 (apartmentCode) 와 도로명/지번 조회 분리.
-// MCP 시범 결과: AptInfo-get_apt_list(sgg_code) 가 기준. 직접 HTTP 호출은 API 명세 확인 필요.
-// → 공식 endpoint 검증 안 된 상태로 호출 시 실패 가능. 보수적 fallback: MCP 도구 없이 도전.
+// 시군구 코드 기반 단지 목록 endpoint (getSigunguAptList3)
+const APT_LIST_URL = 'https://apis.data.go.kr/1613000/AptListService3/getSigunguAptList3';
 
 const PAGE_SIZE = 100;
-const MAX_PAGES = 20; // sgg 당 최대 2000개 (실제론 100~300개)
+const MAX_PAGES = 20;
+let _diagLogged = false; // 한 번만 진단 로그 (전체 backfill 동안)
 
 function adminClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -73,10 +72,38 @@ async function syncOneSgg(admin, lawdCd) {
         headers: { Accept: 'application/json' },
       });
     } catch (e) {
+      // 진단 (1회만): axios 에러 raw — 4xx/5xx 시 message+status+body
+      if (!_diagLogged) {
+        _diagLogged = true;
+        const rd = e?.response?.data;
+        const bodyPreview = typeof rd === 'string' ? rd.slice(0, 400) : JSON.stringify(rd || {}).slice(0, 400);
+        logger.error({
+          lawdCd, pageNo,
+          status: e?.response?.status,
+          msg: e.message,
+          bodyPreview,
+          keyLen: APT_INFO_KEY ? APT_INFO_KEY.length : 0,
+          keyHasPercent: APT_INFO_KEY ? APT_INFO_KEY.includes('%') : null,
+        }, 'AptInfo axios 진단 (1회)');
+      }
       logger.warn({ err: e.message, lawdCd, pageNo }, 'AptInfo 페이지 호출 실패');
       break;
     }
     const header = r.data?.response?.header;
+    // 진단 (1회만): 응답 raw 한번만 로깅 (구조 파악)
+    if (!_diagLogged) {
+      _diagLogged = true;
+      const rawData = r.data;
+      const preview = typeof rawData === 'string' ? rawData.slice(0, 600) : JSON.stringify(rawData || {}).slice(0, 600);
+      logger.warn({
+        lawdCd, pageNo,
+        url: APT_LIST_URL,
+        keyLen: APT_INFO_KEY ? APT_INFO_KEY.length : 0,
+        keyHasPercent: APT_INFO_KEY ? APT_INFO_KEY.includes('%') : null,
+        contentType: r.headers?.['content-type'],
+        responsePreview: preview,
+      }, 'AptInfo 응답 진단 (1회)');
+    }
     if (header?.resultCode && !['00', '000'].includes(header.resultCode)) {
       logger.warn({ lawdCd, pageNo, code: header.resultCode, msg: header.resultMsg },
         'AptInfo 응답 비정상');
