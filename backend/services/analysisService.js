@@ -210,9 +210,14 @@ function calcGap(saleTx, jeonseT) {
   return { jeonseRate, gap, avgSale, avgJeonse };
 }
 
-// ── 3개 지표 종합 신호 ────────────────────────────────────
+// ── 3개 지표 종합 시세 위치 요약 ─────────────────────────
+// 2026-04-25 P1 (감사 6번): 자본시장법 27조 risk 차단
+//   - 함수명 calcBuySignal → summarizeMarketSignal (매수 신호 framing 제거)
+//   - 응답 필드 buySignal → marketSummary (디퓨전, 신호 단어 제거)
+//   - signal 키워드 (green/yellow/red) → tone (active/neutral/cautious)
+//   - 단, 광범위 frontend 변경 회피 위해 buySignal 필드도 alias 로 동시 반환 (호환성)
 // volumeSignalObj: { signal, seasonalBias }
-function calcBuySignal(percentile, volumeSignalObj, jeonseRate) {
+function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate) {
   let score = 0;
   const conditions = [];
   const vs = typeof volumeSignalObj === 'object' ? volumeSignalObj : { signal: volumeSignalObj, seasonalBias: false };
@@ -298,8 +303,19 @@ function calcBuySignal(percentile, volumeSignalObj, jeonseRate) {
     }
   }
 
-  return { signal, signalDesc, score, maxScore, conditions, metCount, totalCount, vetoApplied };
+  // 자본시장법 risk 차단: signal/signalDesc 는 호환성 유지, 추가로 tone 필드 노출
+  // tone: 'active' (긍정 다수) / 'neutral' / 'cautious' (부정 다수)
+  // → 신호등 매수/매도 framing 제거, 시장 분위기 요약으로 어휘 변환
+  const tone = signal === 'green' ? 'active' : signal === 'yellow' ? 'neutral' : 'cautious';
+  return {
+    signal, signalDesc, score, maxScore, conditions, metCount, totalCount, vetoApplied,
+    tone,
+    summaryDesc: signalDesc.replace('긍정', '데이터 부합'),
+  };
 }
+
+// 하위 호환 alias — 외부 import 코드가 있을 경우 대비
+const calcBuySignal = summarizeMarketSignal;
 
 // ── 실투자금 총비용 계산 ──────────────────────────────────
 // P1 (2026-04-25): regulations_snapshot('acquisition_tax_2025') 단일 소스화.
@@ -447,10 +463,12 @@ async function analyzeApt(lawdCd, aptName, currentPrice) {
   const volumeSignalObj = calcVolumeSignal(saleTx);
   const gapData = calcGap(saleTx, jeonseT);
 
-  // LOW 이상일 때만 신호 계산 (NONE은 null)
-  const buySignal = reliability !== 'NONE'
-    ? calcBuySignal(percentile, volumeSignalObj, gapData.jeonseRate)
+  // LOW 이상일 때만 시세 위치 요약 계산 (NONE은 null)
+  // P1 (2026-04-25 D2): buySignal → marketSummary alias 동시 노출 (호환성)
+  const marketSummary = reliability !== 'NONE'
+    ? summarizeMarketSignal(percentile, volumeSignalObj, gapData.jeonseRate)
     : null;
+  const buySignal = marketSummary; // 하위 호환
 
   const monthlyVolume = buildMonthlyVolume(saleTx);
 
@@ -474,7 +492,8 @@ async function analyzeApt(lawdCd, aptName, currentPrice) {
     volumeDaysSinceAnchor: volumeSignalObj.daysSinceAnchor != null ? volumeSignalObj.daysSinceAnchor : null,
     volumeDataStale: !!volumeSignalObj.dataStale,
     gapData,
-    buySignal,
+    buySignal,                              // 하위 호환 (frontend 기존 코드)
+    marketSummary,                          // P1 D2 (자본시장법 risk 차단) 신규 명칭
     monthlyVolume,
     txCount: saleTx.length,
     filteredTxCount: filteredTx.length,

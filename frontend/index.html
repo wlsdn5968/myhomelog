@@ -739,6 +739,9 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <div class="sb">
       <div class="mb9"><span class="lbl">주택 보유</span><div class="chips" id="ch-h"><span class="chip on" onclick="cp(this,'ch-h')">무주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택</span><span class="chip" onclick="cp(this,'ch-h')">2주택+</span></div></div>
       <div class="mb9"><span class="lbl">생애 최초</span><div class="chips" id="ch-f"><span class="chip on" onclick="cp(this,'ch-f')">예</span><span class="chip" onclick="cp(this,'ch-f')">아니오</span></div></div>
+      <!-- P1 D4 (2026-04-25): 정책자금 자격 chip — 무주택자 한도 과소 계산 차단 -->
+      <div class="mb9"><span class="lbl">신혼부부 (혼인 7년 이내)</span><div class="chips" id="ch-nw"><span class="chip" onclick="cp(this,'ch-nw')">예</span><span class="chip on" onclick="cp(this,'ch-nw')">아니오</span></div></div>
+      <div class="mb9"><span class="lbl">신생아 출산 (2년 이내)</span><div class="chips" id="ch-nb"><span class="chip" onclick="cp(this,'ch-nb')">예</span><span class="chip on" onclick="cp(this,'ch-nb')">아니오</span></div></div>
       <div class="mb9"><span class="lbl">희망 지역</span>
         <div class="chips" id="ch-r"><span class="chip on" onclick="cp(this,'ch-r')">서울</span><span class="chip" onclick="cp(this,'ch-r')">경기</span><span class="chip" onclick="cp(this,'ch-r')">인천</span><span class="chip" onclick="cp(this,'ch-r')">지방</span></div>
         <div style="font-size:10px;color:var(--t3);margin:4px 0 3px">세부 구 선택 (선택 시 그 지역만 분석 — 미선택 시 광역의 인기 구 분석)</div>
@@ -750,7 +753,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 / 관심 구</label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
       <button class="abtn acc" onclick="cl()">대출 한도 계산</button>
       <div id="lr" style="display:none"><div class="lbox">
-        <div style="font-size:10px;color:var(--t2);margin-bottom:2px">최대 대출 한도</div>
+        <div style="font-size:10px;color:var(--t2);margin-bottom:2px">최대 대출 한도 (일반 주담대)</div>
         <div class="lbig" id="lA">—</div><div class="lsm" id="lV"></div>
         <div class="lg">
           <div class="li"><div class="lil">DSR 한도</div><div class="liv" id="lD">—</div></div>
@@ -759,6 +762,12 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
           <div class="li"><div class="lil">월 원리금</div><div class="liv" id="lM">—</div></div>
         </div>
         <div class="wbox" id="lW"></div>
+        <!-- P1 D4 (2026-04-25): 정책자금 비교 — 무주택자 한도 과소 계산 차단 -->
+        <div id="lPolicy" style="display:none;margin-top:10px;padding:10px;background:#EAF7EE;border:1px solid #B0D9BE;border-radius:8px">
+          <div style="font-size:11px;font-weight:700;color:#1F7A3A;margin-bottom:6px">💰 정책자금 활용 (일반 주담대보다 한도·금리 유리)</div>
+          <div id="lPolicyList" style="font-size:11px;color:var(--t2);line-height:1.7"></div>
+          <div style="margin-top:6px;font-size:10px;color:var(--t3)">※ 정책자금은 자격·서류 요건 별도. 주택도시기금(HF) 1599-0001 또는 시중은행 주택구입자금 창구에서 정확한 한도·금리 상담 받으세요.</div>
+        </div>
       </div></div>
       <button class="abtn a2" id="srchBtn" onclick="doSearch()">
         <div class="spin" id="srchSp"></div><span id="srchTx">🤖 실거래 기반 단지 정리</span>
@@ -3066,13 +3075,52 @@ function renderAnalysis(d,p){
   let gapHtml='';
   const g=d.gapData||{};
   if(g.jeonseRate!==null&&g.jeonseRate!==undefined){
+    // P1 D3 (2026-04-25): 갭투자 역전세 시뮬레이터 — 사용자 자산 직격 방어
+    // 강남·송파 갭투자 7억 → 2년 후 전세가 -15% → 1억 부족 시나리오
+    // jeonseAmount 데이터 기반으로 -10/-15/-20% 시 부족분 즉시 계산
+    const aptKey = (d.aptName || 'apt').replace(/[^a-zA-Z0-9가-힣]/g, '_');
+    const jeonseSimHtml = `
+    <details style="margin-top:10px;background:#FFF6E6;border:1px solid #F0D6A2;border-radius:8px;padding:9px 11px">
+      <summary style="cursor:pointer;font-size:11px;font-weight:700;color:#7A4F0E;list-style:none">⚠️ 역전세 시뮬레이터 — 만기 시 보증금 반환 시나리오 (클릭)</summary>
+      <div style="margin-top:8px;font-size:10.5px;color:var(--t2);line-height:1.6">
+        현재 전세 보증금: <b>${g.avgJeonse}억</b><br>
+        2년 후 전세 시세 변동을 가정해 보증금 반환 자금 부족분을 미리 시뮬레이션합니다.
+        <table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:10.5px">
+          <thead><tr style="background:#FAEED4">
+            <th style="padding:4px 6px;text-align:left;border-bottom:1px solid #F0D6A2">시나리오</th>
+            <th style="padding:4px 6px;text-align:right;border-bottom:1px solid #F0D6A2">2년 후 전세</th>
+            <th style="padding:4px 6px;text-align:right;border-bottom:1px solid #F0D6A2">반환 부족분</th>
+          </tr></thead>
+          <tbody>
+            ${[-5,-10,-15,-20,-25].map(pct => {
+              const newJeonse = parseFloat((g.avgJeonse * (1 + pct/100)).toFixed(2));
+              const shortage = parseFloat((g.avgJeonse - newJeonse).toFixed(2));
+              const sevColor = pct <= -15 ? '#A82525' : pct <= -10 ? '#9A5510' : 'var(--t2)';
+              return `<tr>
+                <td style="padding:4px 6px;color:${sevColor}">${pct}% (${pct<=-15?'심각':pct<=-10?'중':'경'})</td>
+                <td style="padding:4px 6px;text-align:right">${newJeonse}억</td>
+                <td style="padding:4px 6px;text-align:right;font-weight:700;color:${sevColor}">+${shortage}억 자금 필요</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>
+        <div style="margin-top:8px;padding:7px 9px;background:#FAEBEB;border-left:3px solid #C84B18;border-radius:4px;font-size:10px;color:#A82525;line-height:1.6">
+          <b>⚠ 사용자가 부담하는 위험</b>: 만기 시 부족분만큼 신용대출 / 매각 강제. 신용대출 1억 초과 시 1년간 규제지역 추가 매수 제한.<br>
+          <b>전세대출 보유자</b>: 규제지역 3억 초과 매수 시 전세대출 즉시 회수 (보증금 반환 자금 별도 마련 필수).<br>
+          <b>토지거래허가구역</b>(강남 일부·송파·용산): 2년 실거주 의무 → <b>갭투자 사실상 금지</b>.
+        </div>
+        <div style="margin-top:6px;font-size:9.5px;color:var(--t3)">※ 본 시뮬은 보증금만 단순 변동률 적용 (전세수요·금리·정책 변수 미반영). 실제 역전세 발생 시 추가 비용·소송 가능.</div>
+      </div>
+    </details>`;
+
     gapHtml=`<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:7px">🏠 전세가율 · 갭 분석</div>
     <div class="ibox b" style="margin-bottom:7px;font-size:10px">전세 ${d.jeonseCount||0}건 기준. 갱신계약 포함 시 실제 시세와 다를 수 있습니다.</div>
     <div class="gap-grid">
       <div class="gap-card"><div class="gap-lbl">전세가율</div><div class="gap-val" style="color:${g.jeonseRate>=60?'var(--grn)':g.jeonseRate>=45?'var(--amb)':'var(--red)'}">${g.jeonseRate}%</div><div class="gap-sub">${g.jeonseRate>=60?'역전세 위험 낮음':g.jeonseRate>=45?'보통':'역전세 위험 확인 필요'}</div></div>
       <div class="gap-card"><div class="gap-lbl">갭 (매매-전세)</div><div class="gap-val">${g.gap}억</div><div class="gap-sub">매매 ${g.avgSale}억 / 전세 ${g.avgJeonse}억</div></div>
     </div>
-    ${(d.recentJeonseTx||[]).length>0?`<div style="font-size:10px;font-weight:700;color:var(--t3);margin-bottom:5px">최근 전세 거래</div>
+    ${jeonseSimHtml}
+    ${(d.recentJeonseTx||[]).length>0?`<div style="font-size:10px;font-weight:700;color:var(--t3);margin:10px 0 5px">최근 전세 거래</div>
     <div class="jeonse-list">${(d.recentJeonseTx||[]).slice(0,4).map(t=>`<div class="ji"><span class="ji-d">${t.dealYear}.${String(t.dealMonth).padStart(2,'0')} ${t.floor}층</span><span class="ji-v">${(t.deposit/10000).toFixed(2)}억</span></div>`).join('')}</div>`:''}`;
   } else if(!d.molitAvailable){
     gapHtml=`<div class="ibox y">MOLIT API 키 설정 후 전세가율·갭 분석이 활성화됩니다.</div>`;
@@ -3854,7 +3902,75 @@ function calcC(){
   const buy=parseFloat(document.getElementById('bp')?.value)||0,cash=parseFloat(document.getElementById('mc')?.value)||0,inc=parseFloat(document.getElementById('inc')?.value)||0;
   if(!buy)return null;
   // P0 핫픽스: wide+sub 합친 region 전달 → 광명·하남·일산 같은 sub 단위 정확 매칭
-  return calcLTV(buy,cash,inc,200,gct('ch-h'),gct('ch-f')==='예',getRegionForSearch());
+  const r = calcLTV(buy,cash,inc,200,gct('ch-h'),gct('ch-f')==='예',getRegionForSearch());
+  // P1 D4 (2026-04-25): 정책자금 비교 — 무주택 한도 과소 계산 차단
+  if (r) {
+    r.policyLoan = computePolicyLoan({
+      buy, income: inc,
+      isFirstBuyer: gct('ch-f') === '예',
+      isNewlywed:   gct('ch-nw') === '예',
+      hasNewborn:   gct('ch-nb') === '예',
+      houseStatus:  gct('ch-h'),
+    });
+  }
+  return r;
+}
+
+// P1 D4: 정책자금 4종 계산 — 일반 주담대보다 한도·금리 유리
+//   - 보금자리:    소득 7천↓, 주택 6억↓, LTV 70%, 한도 5억, 금리 ~4%
+//   - 디딤돌:      소득 6천↓ (생초 7천), 주택 5억↓, LTV 70%, 한도 2.5억, 금리 ~3%
+//   - 신혼 디딤돌: 소득 7천↓ (혼인 7년↓), 한도 4억, 금리 ~2.8%
+//   - 신생아 특례: 소득 1.3억↓ (2년 내 출산), 주택 9억↓, LTV 80%, 한도 5억, 금리 ~2.5%
+// 모두 무주택 + 본인 거주 의무. 입력은 만원 단위 income.
+function computePolicyLoan({ buy, income, isFirstBuyer, isNewlywed, hasNewborn, houseStatus }) {
+  if (houseStatus !== '무주택') return { eligible: [], maxLoan: 0, bestName: null, note: '정책자금은 무주택자만 신청 가능' };
+  const eligible = [];
+
+  // 1) 신생아 특례 (가장 유리 — 1순위)
+  if (hasNewborn && income > 0 && income <= 13000 && buy <= 9) {
+    eligible.push({
+      name: '신생아 특례',
+      maxLoan: Math.min(5, buy * 0.8),
+      ltv: 80, rate: '1.6~3.3%',
+      note: '2년 내 출산 부부, 부부합산 1.3억 이하. 1자녀 1년·2자녀 2년 추가 적용.',
+    });
+  }
+  // 2) 신혼 디딤돌
+  if (isNewlywed && income > 0 && income <= 7000 && buy <= 5) {
+    eligible.push({
+      name: '신혼 디딤돌',
+      maxLoan: Math.min(4, buy * 0.7),
+      ltv: 70, rate: '1.8~3.1%',
+      note: '혼인 7년 이내, 부부합산 7천만원 이하, 주택가격 5억 이하.',
+    });
+  }
+  // 3) 일반 디딤돌 (생초 7천만, 그 외 6천만)
+  const dimdolIncomeCap = isFirstBuyer ? 7000 : 6000;
+  if (income > 0 && income <= dimdolIncomeCap && buy <= 5) {
+    eligible.push({
+      name: '디딤돌',
+      maxLoan: Math.min(2.5, buy * 0.7),
+      ltv: 70, rate: '2.0~3.3%',
+      note: `부부합산 ${dimdolIncomeCap}만원 이하, 주택가격 5억 이하.`,
+    });
+  }
+  // 4) 보금자리론
+  if (income > 0 && income <= 7000 && buy <= 6) {
+    eligible.push({
+      name: '보금자리론',
+      maxLoan: Math.min(5, buy * 0.7),
+      ltv: 70, rate: '3.6~4.2%',
+      note: '부부합산 7천만원 이하, 주택가격 6억 이하.',
+    });
+  }
+
+  const maxItem = eligible.reduce((best, x) => (!best || x.maxLoan > best.maxLoan) ? x : best, null);
+  return {
+    eligible,
+    maxLoan: maxItem ? maxItem.maxLoan : 0,
+    bestName: maxItem ? maxItem.name : null,
+    note: eligible.length === 0 ? '정책자금 자격 없음 (소득·주택가격 기준 초과 또는 무주택 아님)' : null,
+  };
 }
 function calcLTV(buy,cash,inc,mo,house,isF,region){
   // 2026-04-25 P0 핫픽스: regulations_snapshot 기반 매칭 (Bug #4 — LTV 오계산)
@@ -3884,6 +4000,31 @@ function cl(){
   // P1 (감사 2-4): 원리금균등 30년 명시
   document.getElementById('lM').textContent=r.mo>0?'~'+r.mo+'만원 (원리금균등 30년)':'—';
   document.getElementById('lW').textContent=r.warn;
+  // P1 D4 (2026-04-25): 정책자금 결과 표시
+  const lp = document.getElementById('lPolicy');
+  const lpList = document.getElementById('lPolicyList');
+  if (lp && lpList && r.policyLoan) {
+    const pl = r.policyLoan;
+    if (pl.eligible.length > 0) {
+      lp.style.display = 'block';
+      const generalMax = r.fin || 0;
+      const policyMax = pl.maxLoan;
+      const better = policyMax > generalMax;
+      lpList.innerHTML = `
+        ${better ? `<div style="background:#FFF6E6;border-left:3px solid #C18A2C;padding:6px 9px;border-radius:4px;margin-bottom:6px;font-size:10.5px;color:#7A4F0E">⚠ <b>정책자금 활용 시 ${(policyMax-generalMax).toFixed(2)}억 더 받을 수 있어요</b> (일반 ${generalMax.toFixed(2)}억 → 정책 ${policyMax.toFixed(2)}억)</div>` : ''}
+        ${pl.eligible.map((e,i) => `<div style="padding:5px 0;${i>0?'border-top:1px dotted var(--bd)':''}">
+          <div><b style="color:#1F7A3A">${e.name}</b> · LTV ${e.ltv}% · 한도 <b>${e.maxLoan.toFixed(2)}억</b> · 금리 ${e.rate}</div>
+          <div style="font-size:10px;color:var(--t3);margin-top:2px">${e.note}</div>
+        </div>`).join('')}
+        ${pl.bestName ? `<div style="margin-top:6px;padding-top:6px;border-top:1px solid #B0D9BE;font-size:10.5px;color:#1F7A3A"><b>추천 1순위</b>: ${pl.bestName} (한도 ${pl.maxLoan.toFixed(2)}억)</div>` : ''}
+      `;
+    } else if (pl.note) {
+      lp.style.display = 'block';
+      lpList.innerHTML = `<div style="color:var(--t3);font-size:10.5px">${pl.note}</div>`;
+    } else {
+      lp.style.display = 'none';
+    }
+  }
 }
 function dc(){
   const buy=parseFloat(document.getElementById('c_b')?.value)||0;
@@ -4277,12 +4418,26 @@ function exportClausePDF(){
   const content=document.getElementById('cl_output').innerHTML;
   const w=window.open('','_blank');
   if(!w){toast('팝업 차단 해제 후 다시 시도하세요');return;}
+  // P1 D5 (2026-04-25): 약관규제법 + 표시광고법 방어선 — PDF 워터마크 + 페이지 푸터 강제
+  // 사용자가 PDF 를 그대로 계약서에 박는 사고 방어. footer 만으로는 일부 페이지에만 노출.
+  // → 사선 워터마크 (page-break-inside 무시 + position:fixed) + @media print 강제 표시.
   w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${title}</title>
   <style>
-    body{font-family:'Malgun Gothic',sans-serif;padding:28px;font-size:13px;line-height:1.7;color:#18160F}
+    @page { margin: 24mm 16mm; @bottom-center { content: "AI 생성 초안 · 법적 효력 없음 · 변호사·공인중개사 검토 필수 · " counter(page) "/" counter(pages); font-size: 9px; color: #C84B18; } }
+    body{font-family:'Malgun Gothic',sans-serif;padding:28px;font-size:13px;line-height:1.7;color:#18160F;position:relative}
+    /* ── 워터마크 (사선) ── */
+    body::before{content:"AI 생성 초안";position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-32deg);font-size:120px;color:rgba(200,75,24,0.12);pointer-events:none;z-index:0;font-weight:900;white-space:nowrap;letter-spacing:8px}
+    body::after{content:"법적 효력 없음";position:fixed;top:55%;left:50%;transform:translate(-50%,0) rotate(-32deg);font-size:36px;color:rgba(200,75,24,0.18);pointer-events:none;z-index:0;font-weight:700;white-space:nowrap;letter-spacing:4px}
+    @media print {
+      body::before, body::after { display: block !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    }
+    /* 컨텐츠는 워터마크 위에 */
+    h1, .sub, .cv-card, .cv-caution, footer, .legal-banner { position: relative; z-index: 1; }
     h1{font-size:16px;font-weight:700;margin-bottom:4px;color:#C84B18}
-    .sub{font-size:11px;color:#98938A;margin-bottom:20px}
-    .cv-card{border:1px solid #E2DDD5;border-radius:8px;margin-bottom:8px;overflow:hidden;page-break-inside:avoid}
+    .sub{font-size:11px;color:#98938A;margin-bottom:14px}
+    .legal-banner{background:#FAEBEB;border:2px solid #C84B18;border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:#A82525;line-height:1.7}
+    .legal-banner b{font-size:13px;display:block;margin-bottom:4px}
+    .cv-card{border:1px solid #E2DDD5;border-radius:8px;margin-bottom:8px;overflow:hidden;page-break-inside:avoid;background:#fff}
     .cv-card-hdr{padding:8px 12px;background:#F0EDE7;display:flex;justify-content:space-between}
     .cv-card-hdr.essential{background:#FAE9E2;border-bottom:1px solid #F0C0AC}
     .cv-card-title{font-size:12px;font-weight:700}
@@ -4293,12 +4448,20 @@ function exportClausePDF(){
     .rtag{display:inline-block;padding:2px 6px;border-radius:8px;font-size:10px;font-weight:700}
     .rtag.r{background:#FAEBEB;color:#A82525}.rtag.y{background:#FAF0E2;color:#9A5510}
     .cpybtn{display:none}
-    footer{margin-top:24px;font-size:10px;color:#98938A;border-top:1px solid #E2DDD5;padding-top:8px}
+    footer{margin-top:24px;font-size:10px;color:#98938A;border-top:1px solid #E2DDD5;padding-top:8px;line-height:1.7}
+    footer b{color:#A82525}
   </style></head><body>
   <h1>${title}</h1>
-  <div class="sub">내집로그 AI 특약 생성 · ${new Date().toLocaleDateString('ko-KR')}</div>
+  <div class="sub">내집로그 AI 특약 초안 · ${new Date().toLocaleDateString('ko-KR')}</div>
+  <div class="legal-banner">
+    <b>⚠ 본 문서는 AI 가 생성한 초안이며 법적 효력이 없습니다.</b>
+    실제 계약 체결 전 반드시 <b>변호사·공인중개사·법무사</b> 검토를 받으세요. 본 초안의 오류·환각으로 인한 손해는 운영자가 책임지지 않습니다.
+  </div>
   ${content}
-  <footer>본 특약은 참고용이며 실제 계약 시 공인중개사·법무사와 검토하세요. ©내집로그</footer>
+  <footer>
+    <b>면책</b>: 본 특약은 AI 가 생성한 초안이며 법적 효력이 없습니다. 실제 계약서 작성 전 변호사·공인중개사·법무사 검토는 필수이며, 본 초안의 오류·환각·법령 변경으로 인한 손해(매매 차손·계약 분쟁·세금 등)에 대해 운영자(내집로그)는 어떠한 책임도 부담하지 않습니다.<br>
+    출력일시: ${new Date().toLocaleString('ko-KR')} · ©내집로그 (https://myhomelog.vercel.app)
+  </footer>
   </body></html>`);
   w.document.close();
   setTimeout(()=>w.print(),500);
