@@ -737,7 +737,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <div class="sec" id="s1">
     <div class="sh" onclick="ts('s1')"><span class="st">내 상황</span><span class="sa">▲</span></div>
     <div class="sb">
-      <div class="mb9"><span class="lbl">주택 보유</span><div class="chips" id="ch-h"><span class="chip on" onclick="cp(this,'ch-h')">무주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택</span><span class="chip" onclick="cp(this,'ch-h')">2주택+</span></div></div>
+      <div class="mb9"><span class="lbl">주택 보유</span><div class="chips" id="ch-h"><span class="chip on" onclick="cp(this,'ch-h')">무주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택 (처분조건부)</span><span class="chip" onclick="cp(this,'ch-h')">2주택+</span></div></div>
       <div class="mb9"><span class="lbl">생애 최초</span><div class="chips" id="ch-f"><span class="chip on" onclick="cp(this,'ch-f')">예</span><span class="chip" onclick="cp(this,'ch-f')">아니오</span></div></div>
       <!-- P1 D4 (2026-04-25): 정책자금 자격 chip — 무주택자 한도 과소 계산 차단 -->
       <div class="mb9"><span class="lbl">신혼부부 (혼인 7년 이내)</span><div class="chips" id="ch-nw"><span class="chip" onclick="cp(this,'ch-nw')">예</span><span class="chip on" onclick="cp(this,'ch-nw')">아니오</span></div></div>
@@ -970,6 +970,17 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         </div>
       </div>
     </div>
+    <!-- P1 D 추가 (2026-04-25 감사 5): 부동산 종류 — 주택 외(오피스텔·상가·토지)는 별도 요율 -->
+    <div class="cv-r2" style="margin-bottom:9px">
+      <div>
+        <label class="lbl">부동산 종류</label>
+        <div class="chips" id="biz-prop" style="margin-top:4px">
+          <span class="chip on" onclick="cp(this,'biz-prop');calcComm()">주택 (아파트·빌라·단독)</span>
+          <span class="chip" onclick="cp(this,'biz-prop');calcComm()">오피스텔 (주거용)</span>
+          <span class="chip" onclick="cp(this,'biz-prop');calcComm()">주택 외 (오피스텔 비주거·상가·토지)</span>
+        </div>
+      </div>
+    </div>
     <div class="comm-result" id="commResult">
       <div class="cv-section-title" style="margin-top:8px">법정 상한 요율표</div>
       <div id="commTiers"></div>
@@ -1046,6 +1057,80 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <div id="subsList" style="font-size:12px;line-height:1.6;color:var(--t2)">
       <div style="padding:30px 0;text-align:center;color:var(--t3)">청약 일정 로딩 중...</div>
     </div>
+
+    <!-- P1 D 추가 (2026-04-25 감사 4): 청약 가점 계산기 -->
+    <details style="margin-top:18px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;padding:11px 13px">
+      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:#1B4F8A;list-style:none">🎯 청약 가점 계산기 (총 84점 만점) — 클릭</summary>
+      <div style="margin-top:10px;font-size:11px;color:var(--t2);line-height:1.7">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label class="lbl">무주택 기간 (1점·1년당 2점·최대 32점)</label>
+            <select class="inp" id="cs_noHome" onchange="calcSubsScore()">
+              <option value="0">0년 (유주택)</option>
+              <option value="2">1년 미만 (2점)</option>
+              <option value="4">1~2년 (4점)</option>
+              <option value="6">2~3년 (6점)</option>
+              <option value="8">3~4년 (8점)</option>
+              <option value="10">4~5년 (10점)</option>
+              <option value="12">5~6년 (12점)</option>
+              <option value="14">6~7년 (14점)</option>
+              <option value="16">7~8년 (16점)</option>
+              <option value="18">8~9년 (18점)</option>
+              <option value="20">9~10년 (20점)</option>
+              <option value="22">10~11년 (22점)</option>
+              <option value="24">11~12년 (24점)</option>
+              <option value="26">12~13년 (26점)</option>
+              <option value="28">13~14년 (28점)</option>
+              <option value="30">14~15년 (30점)</option>
+              <option value="32">15년 이상 (32점)</option>
+            </select>
+          </div>
+          <div>
+            <label class="lbl">부양가족 (5점+5점/명·최대 35점)</label>
+            <select class="inp" id="cs_dep" onchange="calcSubsScore()">
+              <option value="5">0명 (본인만, 5점)</option>
+              <option value="10">1명 (10점)</option>
+              <option value="15">2명 (15점)</option>
+              <option value="20">3명 (20점)</option>
+              <option value="25">4명 (25점)</option>
+              <option value="30">5명 (30점)</option>
+              <option value="35">6명 이상 (35점)</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-bottom:10px">
+          <label class="lbl">청약통장 가입기간 (1점·1년당 1점·최대 17점)</label>
+          <select class="inp" id="cs_bank" onchange="calcSubsScore()">
+            <option value="1">6개월 미만 (1점)</option>
+            <option value="2">6개월~1년 (2점)</option>
+            <option value="3">1~2년 (3점)</option>
+            <option value="4">2~3년 (4점)</option>
+            <option value="5">3~4년 (5점)</option>
+            <option value="6">4~5년 (6점)</option>
+            <option value="7">5~6년 (7점)</option>
+            <option value="8">6~7년 (8점)</option>
+            <option value="9">7~8년 (9점)</option>
+            <option value="10">8~9년 (10점)</option>
+            <option value="11">9~10년 (11점)</option>
+            <option value="12">10~11년 (12점)</option>
+            <option value="13">11~12년 (13점)</option>
+            <option value="14">12~13년 (14점)</option>
+            <option value="15">13~14년 (15점)</option>
+            <option value="16">14~15년 (16점)</option>
+            <option value="17">15년 이상 (17점)</option>
+          </select>
+        </div>
+        <div id="cs_result" style="margin-top:12px;padding:11px 13px;background:#fff;border-radius:8px;border:1px solid #BFD7F7">
+          <div style="font-size:13px;font-weight:800;color:#1B4F8A">총 가점: <span id="cs_total">8</span>점 / 84점</div>
+          <div style="font-size:10.5px;color:var(--t2);margin-top:5px;line-height:1.7" id="cs_tier">예상 당첨 가능 분양: <b>참고치</b> — 실제 당첨 커트라인은 청약Home 공고 확인.</div>
+        </div>
+        <div style="font-size:9.5px;color:var(--t3);margin-top:8px;line-height:1.6">
+          ※ 본 계산기는 일반공급 가점제 기준 (특별공급은 별도 자격). 실제 가점은 <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="color:var(--acc)">청약Home</a> 마이페이지에서 확인 가능.<br>
+          ※ 무주택 기간은 만 30세 이후·혼인 후 기간 중 늦은 시점부터 계산.
+        </div>
+      </div>
+    </details>
+
     <div style="margin-top:14px;padding:10px 12px;background:var(--ambL);border:1px solid #E8D2A8;border-radius:8px;font-size:10.5px;color:var(--amb);line-height:1.6">
       ⚠ 청약 정보는 한국부동산원 공식 발표를 기준으로 갱신되나, <strong>실제 신청 전 청약Home에서 최종 확인 필수.</strong> 본 서비스는 정보 인덱싱만 제공하며 신청·당첨을 보장하지 않습니다.
     </div>
@@ -2967,7 +3052,9 @@ async function loadAnalysis(p){
 }
 
 function renderAnalysis(d,p){
-  const sig=d.buySignal;
+  // P1 D2 (2026-04-25 감사 6): 자본시장법 27조 risk 차단 — marketSummary 우선, buySignal fallback
+  // 백엔드는 두 필드 모두 노출 (alias). frontend도 신규 명칭 우선 사용.
+  const sig=d.marketSummary||d.buySignal;
   const reliability=d.reliability||'NONE';
   // 신뢰도 라벨 — "신뢰 가능" 같은 confidence 어휘는 데이터 자체가 아니라
   // 서비스 판단 전체의 신뢰로 전이될 수 있어 사실 진술로 변경 (P1, 2026-04-25)
@@ -2983,23 +3070,26 @@ function renderAnalysis(d,p){
     (reliability==='MED'?`<div class="ibox y" style="margin-bottom:10px;font-size:10px">⚠️ 거래 ${d.txCount}건 기준 — 적은 표본으로 오차 가능. 참고 용도로만 활용하세요.</div>`:
     d.anomalyCount>0?`<div class="ibox b" style="margin-bottom:10px;font-size:10px">ℹ️ 이상 거래 ${d.anomalyCount}건 제외 후 분석 (±30% 초과 가격)</div>`:'');
 
-  // ─ 신호등 히어로 (NONE/LOW = 회색)
+  // ─ 시세 위치 요약 (NONE/LOW = 회색)
+  // P1 D2: "신호등" 메타포 → 사실 진술. 매수 신호 framing 제거 → 자본시장법 risk 차단.
+  // green/yellow/red 색상은 데이터 가독성 위해 유지하되 라벨은 "조건 충족"이 아닌 "데이터 부합"으로.
   let heroHtml='';
   if(!sig||reliability==='NONE'||reliability==='LOW'){
     heroHtml=`<div class="sig-hero" style="background:var(--s1);border-color:var(--bd)">
-      <div class="sig-dot" style="background:var(--bd2);color:var(--t2)">⬜</div>
-      <div><div class="sig-label" style="color:var(--t2)">데이터 부족</div>
-      <div class="sig-sub">${d.txCount||0}건 거래 — 신호 생성 불가</div></div>
+      <div class="sig-dot" style="background:var(--bd2);color:var(--t2)">○</div>
+      <div><div class="sig-label" style="color:var(--t2)">표본 부족 — 시세 요약 보류</div>
+      <div class="sig-sub">${d.txCount||0}건 거래 — 통계적 의미 부족 (8건 이상 필요)</div></div>
     </div>`;
   } else {
     const sc=sig.signal||'yellow';
-    const sigEmoji={green:'🟢',yellow:'🟡',red:'🔴'};
-    const sigRatioText=`${sig.metCount||0}/${sig.totalCount||3}개 조건 충족`;
+    // 이모지 제거 → 사실 도트로. tone 우선 표기 (active/neutral/cautious)
+    const dot = {green:'●',yellow:'●',red:'●'}[sc] || '●';
+    const sigRatioText = `시세 위치 요약: ${sig.metCount||0}/${sig.totalCount||3}개 데이터 부합`;
     heroHtml=`<div class="sig-hero ${sc}">
-      <div class="sig-dot ${sc}">${sigEmoji[sc]}</div>
+      <div class="sig-dot ${sc}" style="font-size:18px">${dot}</div>
       <div>
         <div class="sig-label">${sigRatioText}</div>
-        <div class="sig-sub">${d.filteredTxCount||d.txCount||0}건 분석 · <span style="color:${relColor}">${relLabel}</span></div>
+        <div class="sig-sub">${d.filteredTxCount||d.txCount||0}건 분석 · <span style="color:${relColor}">${relLabel}</span> · <span style="color:var(--t3)">매수 추천 아님 (정보 정리)</span></div>
       </div>
     </div>`;
   }
@@ -3977,9 +4067,16 @@ function calcLTV(buy,cash,inc,mo,house,isF,region){
   // 기존: region==='서울'||region==='경기' → 일산·동두천도 규제, 광명·하남·의왕은 매칭 누락 가능
   // 개선: window.__REG_KW (snapshot 키워드) 로 정확 매칭. 미로드 시 fallback 보수적.
   const isR=isRegFront(region),isLoc=region==='지방';
+  // P1 D 추가 (2026-04-25 감사 2-5): 처분조건부 = 무주택 LTV 적용 (6개월 내 기존 처분 약정)
+  const isDispose = house === '1주택 (처분조건부)';
   let ltv=0,cap=Infinity,warn='';
   if(house==='2주택+'){ltv=0;warn='⚠ 2주택+ 규제지역·수도권 주담대 완전 금지';}
-  else if(house==='1주택'){ltv=isR?0:.7;warn=isR?'⚠ 1주택 규제지역 추가 대출 불가 (처분조건부 6개월 가능)':'';}
+  else if(house==='1주택'){ltv=isR?0:.7;warn=isR?'⚠ 1주택 규제지역 추가 대출 불가 — 「1주택 (처분조건부)」 chip 선택 시 무주택 한도 적용':'';}
+  else if(isDispose){
+    // 처분조건부 6개월 약정 → 무주택 동일 LTV
+    ltv=isLoc?(isF?.8:.7):!isR?(isF?.8:.7):(isF?.7:.4);
+    warn='ℹ 처분조건부 적용 — 6개월 내 기존 주택 처분 약정 필수. 위반 시 대출 회수.';
+  }
   else{ltv=isLoc?(isF?.8:.7):!isR?(isF?.8:.7):(isF?.7:.4);warn=isR&&isF?'✅ 생애최초 LTV 70% — 6개월 전입의무':isR?'⚠ 무주택 규제지역 LTV 40% (2025.10.15~)':'';}
   if(isR)cap=buy<=15?6:buy<=25?4:2;
   const lL=Math.min(buy*ltv,cap),rt=isR?.055:.0475;
@@ -4467,14 +4564,52 @@ function exportClausePDF(){
   setTimeout(()=>w.print(),500);
 }
 
+// ── 청약 가점 계산기 (P1 D 감사 4) ────────────────────────
+// 일반공급 가점제 84점 만점 = 무주택 32 + 부양가족 35 + 청약통장 17
+// 실제 청약 커트라인 통계 (한국부동산원 2024-2025 평균):
+//   - 서울 인기 분양: 65점+ (평균)
+//   - 수도권 일반: 50~60점
+//   - 지방 일반: 30~50점
+function calcSubsScore(){
+  const noHome = parseInt(document.getElementById('cs_noHome')?.value) || 0;
+  const dep    = parseInt(document.getElementById('cs_dep')?.value) || 5;
+  const bank   = parseInt(document.getElementById('cs_bank')?.value) || 1;
+  const total = noHome + dep + bank;
+  const totalEl = document.getElementById('cs_total');
+  if (totalEl) totalEl.textContent = total;
+  const tierEl = document.getElementById('cs_tier');
+  if (!tierEl) return;
+  let tier;
+  if (total >= 70) tier = '<b style="color:#1F7A3A">상위권</b> — 서울 인기 단지 일반공급 안정권 (커트라인 평균 65~70점)';
+  else if (total >= 60) tier = '<b style="color:#1F7A3A">중상위권</b> — 서울 일반 단지·수도권 인기 분양 도전 가능';
+  else if (total >= 50) tier = '<b style="color:#9A5510">중위권</b> — 수도권 일반·지방 인기 분양 도전 가능. 서울은 어려움';
+  else if (total >= 35) tier = '<b style="color:#9A5510">중하위권</b> — 지방 일반 분양 도전 권장. 특별공급(생초/신혼/신생아) 활용 필수';
+  else tier = '<b style="color:#A82525">하위권</b> — 일반공급 어려움. <b>특별공급(생초·신혼·다자녀·신생아)</b> 또는 <b>추첨제 단지</b> 노리기 권장';
+  tierEl.innerHTML = `예상 당첨 가능 분양: ${tier}<br><span style="font-size:10px;color:var(--t3)">※ 실제 커트라인은 단지·시점·평형별 다름. <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="color:var(--acc)">청약Home</a> 공고 필수 확인.</span>`;
+}
+
 // ── 복비 계산기 ────────────────────────────────────────────
+// P1 D 추가 (2026-04-25): 주택/오피스텔/주택 외 분기 + VAT 별도 표기 강화
 function calcComm(){
   const price=parseFloat(document.getElementById('biz_price').value)||0;
   const type=gct('biz-type');
+  const prop=gct('biz-prop')||'주택 (아파트·빌라·단독)';
   if(!price){document.getElementById('commResult').classList.remove('show');return;}
   const priceW=price*10000; // 만원 단위
   let tiers;
-  if(type==='매매'){
+  // 주택 외 (상가·토지·오피스텔 비주거): 매매/임대 모두 0.9% 이내 협의 (공인중개사법 시행규칙 별표1)
+  if(prop==='주택 외 (오피스텔 비주거·상가·토지)'){
+    tiers=[
+      {label:'전 구간 (협의)',min:0,max:Infinity,rate:0.009,cap:null,note:'0.9% 이내 협의'},
+    ];
+  } else if(prop==='오피스텔 (주거용)'){
+    // 주거용 오피스텔: 매매 0.5% / 임대 0.4% (공인중개사법 시행규칙 별표2)
+    if(type==='매매'){
+      tiers=[{label:'전 구간',min:0,max:Infinity,rate:0.005,cap:null,note:'0.5% (협의 가능)'}];
+    } else {
+      tiers=[{label:'전 구간',min:0,max:Infinity,rate:0.004,cap:null,note:'0.4% (협의 가능)'}];
+    }
+  } else if(type==='매매'){
     tiers=[
       {label:'5천만 미만',min:0,max:5000,rate:0.006,cap:25},
       {label:'5천만 ~ 2억',min:5000,max:20000,rate:0.005,cap:80},

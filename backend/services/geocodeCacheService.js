@@ -77,6 +77,36 @@ async function getFromDb(key) {
   }
 }
 
+// P1 (2026-04-25 감사 13): Kakao 일일 호출 모니터링
+//   - 무료 한도: 100,000건/일 (앱당). 초과 시 다음 날까지 좌표 마커 미표시 → "지도 안 떠요" 이탈.
+//   - 600K 도달 시 (실제론 60K) Sentry alert + audit_log 기록.
+//   - 카운터는 in-process — serverless instance 별로 분산되지만 단일 인스턴스 폭주 감지엔 충분.
+const KAKAO_DAILY_THRESHOLD = 60000; // 60K 도달 시 경고 (안전 마진 40%)
+let _kakaoCallCount = 0;
+let _kakaoCountResetAt = new Date().setHours(24, 0, 0, 0); // 자정 reset
+let _kakaoAlertSent = false;
+function _trackKakaoCall() {
+  const now = Date.now();
+  if (now >= _kakaoCountResetAt) {
+    _kakaoCallCount = 0;
+    _kakaoAlertSent = false;
+    _kakaoCountResetAt = new Date(now).setHours(24, 0, 0, 0);
+  }
+  _kakaoCallCount += 1;
+  if (!_kakaoAlertSent && _kakaoCallCount >= KAKAO_DAILY_THRESHOLD) {
+    _kakaoAlertSent = true;
+    logger.error({
+      source: 'kakao-quota-warning',
+      callsToday: _kakaoCallCount,
+      threshold: KAKAO_DAILY_THRESHOLD,
+      resetAt: new Date(_kakaoCountResetAt).toISOString(),
+    }, '⚠ Kakao API 일일 호출 60K 도달 — 100K 무료 한도 임박');
+  }
+}
+function getKakaoUsageStats() {
+  return { callsToday: _kakaoCallCount, threshold: KAKAO_DAILY_THRESHOLD, resetAt: new Date(_kakaoCountResetAt).toISOString() };
+}
+
 /** Kakao 다중 쿼리 폴백 — 가장 정확한 매칭을 위해 여러 형태로 시도 */
 async function kakaoGeocode({ aptName, sigungu, umdNm, address }) {
   if (!KAKAO_ENABLED) return null;
@@ -96,6 +126,7 @@ async function kakaoGeocode({ aptName, sigungu, umdNm, address }) {
 
   for (const t of tries) {
     try {
+      _trackKakaoCall();
       const r = await axios.get(t.url, {
         headers, params: { query: t.q, size: 1 }, timeout: 5000,
       });
@@ -183,4 +214,4 @@ async function resolveCoordBatch(apts, concurrency = 4) {
   return results;
 }
 
-module.exports = { resolveCoord, resolveCoordBatch };
+module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats };

@@ -101,14 +101,16 @@ function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '') {
 //     주입 → per-row 비용은 0 (closure 변수 read 만), 정확도는 snapshot 기준.
 function computeLTV(buyAuk, isRegulated, isFirstBuyer, houseStatus) {
   if (houseStatus === '2주택+') return { ltv: '0% (규제)', maxLoan: '0억' };
-  if (houseStatus === '1주택' && isRegulated) return { ltv: '0% (1주택 규제지역)', maxLoan: '처분조건부 6개월' };
+  // P1 (감사 2-5): 처분조건부 = 무주택 LTV 적용. 1주택 일반은 규제지역 0%.
+  const isDispose = houseStatus === '1주택 (처분조건부)';
+  if (houseStatus === '1주택' && isRegulated) return { ltv: '0% (1주택 규제지역)', maxLoan: '처분조건부 chip 선택 시 무주택 한도' };
   let pct;
   if (isRegulated) pct = isFirstBuyer ? 0.7 : 0.4;
   else pct = isFirstBuyer ? 0.8 : 0.7;
   const cap = isRegulated ? (buyAuk <= 15 ? 6 : buyAuk <= 25 ? 4 : 2) : Infinity;
   const loan = Math.min(buyAuk * pct, cap);
   return {
-    ltv: `${(pct * 100).toFixed(0)}% ${isRegulated ? '(규제)' : '(비규제)'}`,
+    ltv: `${(pct * 100).toFixed(0)}% ${isRegulated ? '(규제)' : '(비규제)'}${isDispose ? ' · 처분조건부' : ''}`,
     maxLoan: `${loan.toFixed(2)}억`,
   };
 }
