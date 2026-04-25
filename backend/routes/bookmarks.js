@@ -38,6 +38,33 @@ function userScopedClient(accessToken) {
 // 모든 라우트 인증 필수
 router.use(requireAuth);
 
+// ── kapt_code normalize ────────────────────────────────────
+// P1 (2026-04-25): 동명 단지(래미안 등) 충돌 방지
+//   - 기존: 프론트가 `b.aptName` 을 kapt_code 로 보냄 → "래미안" UNIQUE 충돌로
+//     서로 다른 구의 동일명 단지를 한 사용자가 두 번 저장 불가
+//   - 개선: 정확한 식별자 (K-apt code 또는 MOLIT aptSeq) 우선,
+//     없으면 (이름+주소) 합성 키로 정규화
+//   - 백엔드 단일 normalize 로 프론트 변경 없이도 안전망
+//
+// 매칭 규칙 (우선순위):
+//   1) ^[A-Z]\d{6,}$       — K-apt 공식 (예: A10020255)
+//   2) ^\d{5}-\d+$          — MOLIT aptSeq (예: 11680-102)
+//   3) composite:NAME|ADDR  — 이미 정규화된 합성 키 (프론트가 미리 만든 경우)
+//   4) 그 외                 — display_name+address 로 composite 생성
+function _normCompositePart(s) {
+  return String(s || '').normalize('NFC').replace(/\s+/g, '').toLowerCase();
+}
+function normalizeKaptCode(item) {
+  const raw = String(item.kapt_code || '').trim();
+  if (!raw) return null;
+  if (/^[A-Z]\d{6,}$/.test(raw)) return raw;
+  if (/^\d{5}-\d+$/.test(raw)) return raw;
+  if (raw.startsWith('composite:')) return raw;
+  const name = item.display_name || raw;
+  const addr = item.address || '';
+  return `composite:${_normCompositePart(name)}|${_normCompositePart(addr)}`;
+}
+
 // ── GET: 본인 북마크 전체 ─────────────────────────────────
 router.get('/', async (req, res, next) => {
   try {
@@ -59,11 +86,13 @@ router.post('/', async (req, res, next) => {
       return res.status(400).json({ error: 'kapt_code, display_name 필수' });
     }
     const sb = userScopedClient(req.accessToken);
+    const normalizedKapt = normalizeKaptCode({ kapt_code, display_name, address });
+    if (!normalizedKapt) return res.status(400).json({ error: 'kapt_code 정규화 실패' });
     const { data, error } = await sb
       .from('bookmarks')
       .insert({
         user_id: req.user.id, // RLS 가 동일성 검증
-        kapt_code: String(kapt_code).trim(),
+        kapt_code: normalizedKapt,
         display_name: String(display_name).trim(),
         address: address || null,
         memo: memo || null,
@@ -130,13 +159,14 @@ router.post('/migrate', async (req, res, next) => {
       .filter(it => it && it.kapt_code && it.display_name)
       .map(it => ({
         user_id: req.user.id,
-        kapt_code: String(it.kapt_code).trim(),
+        kapt_code: normalizeKaptCode(it),  // P1: 동명 단지 충돌 방지
         display_name: String(it.display_name).trim(),
         address: it.address || null,
         memo: it.memo || null,
         tags: Array.isArray(it.tags) ? it.tags.slice(0, 20).map(String) : [],
         avg_price: typeof it.avg_price === 'number' && isFinite(it.avg_price) ? it.avg_price : null,
-      }));
+      }))
+      .filter(r => r.kapt_code);  // normalize 실패 항목 제외
 
     if (rows.length === 0) return res.json({ migrated: 0, skipped: items.length, items: [] });
 

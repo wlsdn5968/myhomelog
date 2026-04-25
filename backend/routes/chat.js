@@ -1,7 +1,9 @@
 const express = require('express');
 const router = express.Router();
 const { callAI, BudgetExceededError } = require('../services/aiService');
+const { filterAdviceOutput } = require('../services/aiOutputFilter');
 const { validateChatInput } = require('../middleware/validation');
+const logger = require('../logger');
 
 /**
  * POST /api/chat
@@ -70,8 +72,21 @@ router.post('/', validateChatInput, async (req, res) => {
     return res.status(502).json({ error: err.message });
   }
 
+  // P1 (2026-04-25): 출력 필터 — 매수/매도 단언, 가격 예측, 절대 표현 차단
+  // SYS prompt 만으로는 LLM hallucination 100% 차단 불가 → 마지막 방어선
+  const filtered = filterAdviceOutput(result.content);
+  if (filtered.filtered) {
+    logger.warn({
+      source: 'ai-output-filter',
+      userId: req.user?.id || null,
+      matched: filtered.matched,
+      replyHead: String(result.content).slice(0, 200),
+    }, 'AI 응답 단언 표현 감지 → fallback 적용');
+  }
+
   res.json({
-    reply: result.content,
+    reply: filtered.text,
+    filtered: filtered.filtered || undefined,  // 프론트가 표시 여부 결정 가능
     fromCache: result.fromCache || false,
     usage: process.env.NODE_ENV === 'development' ? result.usage : undefined,
   });

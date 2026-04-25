@@ -2939,22 +2939,30 @@ function renderAnalysis(d,p){
   }
 
   // ─ 가격 위치 백분위
+  // P1 (2026-04-25): 백엔드 percentileLow/High (Wilson 95% CI 근사) 사용
+  //   - 표본 n>=30 → ±5% / 10<=n<30 → ±15%
+  //   - 단일 % 만 표시했던 정밀도 착시 차단 (감사 보고서 1-1, 트리거 3)
+  //   - HIGH 등급도 ±5% 범위로 정직 노출
   let pctHtml='';
   if(d.percentile!==null&&d.percentile!==undefined&&reliability!=='NONE'){
     const pct=d.percentile;
     const basedOn=d.filteredTxCount||d.txCount||0;
     const pctColor=pct<=30?'var(--grn)':pct<=65?'var(--amb)':'var(--red)';
     const pctDesc=pct<=30?'시세 하단 구간':pct<=65?'시세 중간 구간':'시세 상단 구간';
-    // 신뢰 구간 표시 (LOW/MED는 ±15% 범위 힌트)
-    const rangeHint=reliability==='HIGH'?'':`(${Math.max(0,pct-15)}~${Math.min(100,pct+15)}% 구간 추정)`;
+    // 백엔드가 제공하는 신뢰 구간 사용 (없으면 fallback ±15%)
+    const lo = (d.percentileLow !== null && d.percentileLow !== undefined) ? d.percentileLow : Math.max(0, pct - 15);
+    const hi = (d.percentileHigh !== null && d.percentileHigh !== undefined) ? d.percentileHigh : Math.min(100, pct + 15);
+    const rangeText = `(95% 신뢰 구간 ${lo}~${hi}%, 표본 ${d.percentileN || basedOn}건)`;
     pctHtml=`<div class="pct-wrap">
       <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:4px">📍 가격 위치 (최근 1년 거래 대비)</div>
       <div class="pct-bar-bg">
         <div class="pct-bar-fill" style="width:100%"></div>
+        <!-- 신뢰 구간 표시 박스 -->
+        <div style="position:absolute;left:${lo}%;width:${hi-lo}%;top:0;bottom:0;background:rgba(0,0,0,0.07);border-left:1px dashed var(--t3);border-right:1px dashed var(--t3)"></div>
         <div class="pct-pin" style="left:${pct}%"></div>
       </div>
       <div class="pct-labels"><span>최저가</span><span>중간</span><span>최고가</span></div>
-      <div class="pct-result" style="color:${pctColor}">하위 ${pct}% — ${pctDesc} ${rangeHint}<br><span style="font-size:10px;color:var(--t3)">${basedOn}건 기준${d.anomalyCount>0?' (이상거래 '+d.anomalyCount+'건 제외)':''}</span></div>
+      <div class="pct-result" style="color:${pctColor}">하위 ${pct}% — ${pctDesc}<br><span style="font-size:10px;color:var(--t3)">${rangeText}${d.anomalyCount>0?' · 이상거래 '+d.anomalyCount+'건 제외':''}</span></div>
     </div>`;
   }
 
@@ -3023,23 +3031,64 @@ function renderAnalysisFallback(p){
     ${calcTotalCostHTML(p.avgPrice||0,loanAmt,gct('ch-h'),gct('ch-f')==='예')}`;
 }
 
+// P1 (2026-04-25): regulations_snapshot.acquisition_tax_2025 단일 소스화
+//   - window.__TAX_CONFIG (loadRegulatedKeywords 에서 함께 로드) 가 있으면 사용
+//   - 없으면 하드코딩 fallback (offline · 캐시 미로드 시 backwards-compat)
+//   - total → totalLow ~ totalHigh 범위 표기 (감사 보고서 트리거 7 — 단일 숫자 정밀도 착시 차단)
+function _pickTierRate(tiers, priceAuk, fallbackRate){
+  for (const t of (tiers||[])) {
+    if (priceAuk < (t.underAuk||0)) return t.rate ?? fallbackRate;
+  }
+  return fallbackRate;
+}
 function calcTotalCostHTML(price,loan,houseStatus,isFirstBuyer){
   if(!price)return`<div class="ibox y">매수가 정보 없음</div>`;
-  // 취득세율
+  const tc = window.__TAX_CONFIG;
+
+  // ── 취득세율 ──
   let rate;
-  if(houseStatus==='2주택+')rate=0.08;
-  else if(houseStatus==='1주택')rate=price<=6?.01:price<=9?.02:.03;
-  else rate=isFirstBuyer&&price<=1.5?.008:price<=6?.01:price<=9?.02:.03;
+  if (tc?.acquisitionTax) {
+    const at = tc.acquisitionTax;
+    if (houseStatus==='2주택+') rate = at.twoHousePlus?.rate ?? 0.08;
+    else if (houseStatus==='1주택') rate = _pickTierRate(at.oneHouse?.tiers, price, 0.03);
+    else {
+      const fb = at.noHouse?.firstBuyerDiscount;
+      if (isFirstBuyer && fb && price <= fb.underAuk) rate = fb.rate;
+      else rate = _pickTierRate(at.noHouse?.tiers, price, 0.03);
+    }
+  } else {
+    if(houseStatus==='2주택+')rate=0.08;
+    else if(houseStatus==='1주택')rate=price<=6?.01:price<=9?.02:.03;
+    else rate=isFirstBuyer&&price<=1.5?.008:price<=6?.01:price<=9?.02:.03;
+  }
+
+  const eduRate  = tc?.eduTaxRate       ?? 0.1;
+  const spclRate = tc?.spclTaxRate      ?? 0.002;
+  const spclThr  = tc?.spclTaxThreshold ?? 0.01;
   const pw=price*10000;
   const acq=Math.round(pw*rate);
-  const edu=Math.round(acq*.1);
-  const spcl=rate<=.01?0:Math.round(pw*.002);
-  let cr=price<.5?.006:price<2?.005:price<9?.004:price<12?.005:price<15?.006:.007;
+  const edu=Math.round(acq*eduRate);
+  const spcl=rate<=spclThr?0:Math.round(pw*spclRate);
+
+  // ── 중개 수수료 ──
+  let cr;
+  if (tc?.commission) cr = _pickTierRate(tc.commission, price, 0.007);
+  else cr = price<.5?.006:price<2?.005:price<9?.004:price<12?.005:price<15?.006:.007;
   const comm=Math.round(pw*cr);
-  const reg=Math.round(pw*.0015+20);
+
+  // ── 등기비 ──
+  const regRate = tc?.regFee?.rate ?? 0.0015;
+  const regBase = tc?.regFee?.baseManwon ?? 20;
+  const reg=Math.round(pw*regRate+regBase);
+
   const gap=Math.max(0,price-(loan||0));
   const total=Math.round(gap*10000)+acq+edu+spcl+comm+reg;
+  const marginW = 1500; // ±1,500만원
   const fmt=v=>parseFloat((v/10000).toFixed(2))+'억';
+  const totalLowAuk  = parseFloat(((total - marginW)/10000).toFixed(2));
+  const totalHighAuk = parseFloat(((total + marginW)/10000).toFixed(2));
+  const sourceTag = tc ? '' : ` <span style="font-size:9px;color:var(--t3)">(캐시 미로드 — 기본값 사용)</span>`;
+
   return`<div class="cost-grid">
     <div class="cost-row"><span class="cost-lbl">매매가 - 대출</span><span class="cost-val">${gap.toFixed(2)}억</span></div>
     <div class="cost-row"><span class="cost-lbl">취득세 (${Math.round(rate*1000)/10}%)</span><span class="cost-val">${fmt(acq)}</span></div>
@@ -3049,10 +3098,10 @@ function calcTotalCostHTML(price,loan,houseStatus,isFirstBuyer){
     ${spcl>0?`<div class="cost-row"><span class="cost-lbl">농어촌특별세</span><span class="cost-val">${fmt(spcl)}</span></div>`:''}
   </div>
   <div class="cost-total">
-    <span class="cost-total-lbl">필요 현금 총액 (추정)</span>
-    <span class="cost-total-val">약 ${parseFloat((total/10000).toFixed(2))}억</span>
+    <span class="cost-total-lbl">필요 현금 (추정 범위)${sourceTag}</span>
+    <span class="cost-total-val">약 ${totalLowAuk}~${totalHighAuk}억</span>
   </div>
-  <div style="font-size:10px;color:var(--t3);margin-top:5px">± 약 1,500만원 오차 가능 (법무사 수수료·지역별 차이)</div>`;
+  <div style="font-size:10px;color:var(--t3);margin-top:5px">※ ±1,500만원 추정 오차 — 법무사 수수료·지역·계약 조건에 따라 달라집니다. 최종 금액은 세무사·법무사 확인 필수.</div>`;
 }
 
 // ── 북마크 ────────────────────────────────────────────────
@@ -3082,8 +3131,10 @@ async function _pushBookmarksToServer(){
   _setSyncBadge('syncing');
   try {
     const current = getBookmarks();
+    // P1 (2026-04-25): 정확한 식별자 우선 — 동명 단지 충돌 방지
+    //   백엔드도 normalizeKaptCode 로 한 번 더 정규화 (이중 안전망)
     const items = current.map(b => ({
-      kapt_code: b.aptName,
+      kapt_code: b.aptKey || b.kaptCode || b.aptSeq || b.aptName,
       display_name: b.aptName,
       address: b.area || null,
       memo: b.memo || null,
@@ -3099,11 +3150,20 @@ async function _pushBookmarksToServer(){
     const j = await r.json();
     // 서버가 돌려준 items 로 _serverId 를 채워넣는다 (aptName 매칭)
     if(Array.isArray(j.items) && j.items.length){
-      const serverByName = Object.fromEntries(j.items.map(s => [s.kapt_code, s.id]));
+      // P1: 백엔드 normalize 결과(kapt_code)로 매핑 — 프론트도 동일 정규화 적용
+      const _normPart = s => String(s||'').normalize('NFC').replace(/\s+/g,'').toLowerCase();
+      const _expectedKapt = b => {
+        const raw = b.aptKey || b.kaptCode || b.aptSeq || b.aptName || '';
+        if (/^[A-Z]\d{6,}$/.test(raw)) return raw;
+        if (/^\d{5}-\d+$/.test(raw)) return raw;
+        if (String(raw).startsWith('composite:')) return raw;
+        return `composite:${_normPart(b.aptName)}|${_normPart(b.area)}`;
+      };
+      const serverByKapt = Object.fromEntries(j.items.map(s => [s.kapt_code, s.id]));
       const latest = getBookmarks(); // 푸시 도중 또 변경됐을 수 있으므로 최신 재조회
       let changed = false;
       latest.forEach(b => {
-        const sid = serverByName[b.aptName];
+        const sid = serverByKapt[_expectedKapt(b)];
         if(sid && b._serverId !== sid){ b._serverId = sid; changed = true; }
       });
       if(changed) localStorage.setItem(BK_KEY, JSON.stringify(latest));
@@ -3136,11 +3196,24 @@ function _setSyncBadge(state){
   else el.textContent = '';
 }
 
+// P1 (2026-04-25): 단지 식별자 우선순위 — 동명 단지(래미안) 충돌 방지
+//   1) facility.kaptCode (K-apt 공식)
+//   2) aptSeq (MOLIT)
+//   3) composite:이름|주소 (정규화)
+function _aptKey(p){
+  if (p.facility?.kaptCode) return String(p.facility.kaptCode);
+  if (p.aptSeq) return String(p.aptSeq);
+  const norm = s => String(s||'').normalize('NFC').replace(/\s+/g,'').toLowerCase();
+  return `composite:${norm(p.aptName)}|${norm(p.area)}`;
+}
+
 function toggleBookmark(){
   if(!currentDetail)return;
   const p=currentDetail;
+  const key = _aptKey(p);
   let bks=getBookmarks();
-  const idx=bks.findIndex(b=>b.aptName===p.aptName);
+  // P1: aptKey 우선 매칭, 없으면 레거시 aptName fallback
+  const idx=bks.findIndex(b => b.aptKey ? b.aptKey === key : b.aptName === p.aptName);
   if(idx>=0){
     const removed = bks[idx];
     bks.splice(idx,1);
@@ -3149,7 +3222,16 @@ function toggleBookmark(){
     document.getElementById('bkToggle').textContent='⭐ 관심 추가';
     document.getElementById('bkToggle').classList.remove('on');
   } else {
-    bks.unshift({aptName:p.aptName,area:p.area||'',avgPrice:p.avgPrice||0,lawdCd:p.txHistory?.[0]?.lawdCd||'',savedAt:Date.now()});
+    bks.unshift({
+      aptKey: key,                                // P1: 정확한 식별자
+      kaptCode: p.facility?.kaptCode || null,
+      aptSeq: p.aptSeq || null,
+      aptName: p.aptName,
+      area: p.area||'',
+      avgPrice: p.avgPrice||0,
+      lawdCd: p.txHistory?.[0]?.lawdCd||'',
+      savedAt: Date.now(),
+    });
     toast('⭐ 관심 단지 추가 완료');
     document.getElementById('bkToggle').textContent='⭐ 관심 중';
     document.getElementById('bkToggle').classList.add('on');
@@ -3591,6 +3673,8 @@ async function loadRegulatedKeywords(){
       }
     }
     window.__REG_KW = { keywords: Array.from(set), seoulRegulated };
+    // P1 (2026-04-25): 세제 스냅샷도 함께 캐시 — calcTotalCostHTML 에서 사용
+    if (d.tax) window.__TAX_CONFIG = d.tax;
     // 이미 입력된 buy 값 있으면 표기 갱신
     if (typeof cl === 'function') cl();
   }catch(_){ /* 부팅 fetch 실패 시 fallback 사용 */ }
@@ -3762,8 +3846,11 @@ function dc(){
     dsrEl.textContent=dsr?dsr+'%':'—';
     dsrEl.style.color=dsrExceed?'var(--red)':dsr>=35?'var(--amb)':'';
   }
+  // P1 (2026-04-25): DSR disclaimer 명시 — 본 계산은 주담대 원리금만 반영
+  // 신용대출·전세대출·기타 부채 미반영 → 금융기관 실제 DSR 은 더 높을 수 있음
   const dsrNote=dsr>0?(dsrExceed?` · ⛔ DSR ${dsr}% 초과 (한도 40%) — 대출 거절 가능`:dsr>=35?` · ⚠ DSR ${dsr}% — 한도 근접`:` · ✅ DSR ${dsr}% 여유`):'';
-  document.getElementById('co_w').textContent=(warn||'')+dsrNote;
+  const dsrDisclaimer = dsr>0 ? ' · ℹ 신용대출·전세대출 미반영 — 금융기관 실제값 다를 수 있음' : '';
+  document.getElementById('co_w').textContent=(warn||'')+dsrNote+dsrDisclaimer;
   const mos=[0,.01,.02].map(d2=>fin>0?Math.round(fin*1e8*(rate+d2)/12/(1-Math.pow(1+(rate+d2)/12,-n))/10000):0);
   const mx=Math.max(...mos,1);
   document.getElementById('scnC').innerHTML=mos.map((m,i)=>`<div class="br"><div class="bry">${((rate+[0,.01,.02][i])*100).toFixed(1)}%</div><div class="brb"><div class="brf" style="width:${Math.round(m/mx*100)}%"></div></div><div class="brv">${m}만</div></div>`).join('');
