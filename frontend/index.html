@@ -2617,6 +2617,52 @@ function initLeaflet(){
   mapObj=L.map('mapEl',{center:[37.565,127.02],zoom:12});
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(mapObj);
   mapObj._isLeaflet=true;
+  // Phase 4 (2026-04-26): 영역 panning 시 "이 영역 단지 보기" 버튼 노출 — 호갱노노 패턴
+  let _pannBtn = null;
+  mapObj.on('moveend', () => {
+    const z = mapObj.getZoom();
+    if (z < 13) { if (_pannBtn) _pannBtn.style.display = 'none'; return; }
+    if (!_pannBtn) {
+      _pannBtn = document.createElement('button');
+      _pannBtn.style.cssText = 'position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:1000;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:24px;font-size:12px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,0.2);cursor:pointer;font-family:inherit';
+      _pannBtn.textContent = '🔄 이 영역 단지 보기';
+      _pannBtn.onclick = () => {
+        const b = mapObj.getBounds();
+        loadAptsInBounds(b.getSouth(), b.getWest(), b.getNorth(), b.getEast());
+        _pannBtn.style.display = 'none';
+      };
+      const mapEl = document.getElementById('mapEl');
+      if (mapEl) mapEl.appendChild(_pannBtn);
+    }
+    _pannBtn.style.display = 'block';
+  });
+}
+
+// Phase 4: 영역 단지 fetch — search/popular 비슷한 endpoint (지역 bounds 기반)
+async function loadAptsInBounds(south, west, north, east) {
+  toast('이 영역 단지 조회 중...');
+  try {
+    const url = `${CFG.api}/search/in-bounds?south=${south}&west=${west}&north=${north}&east=${east}&limit=50`;
+    const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
+    if (!r.ok) { toast('영역 검색 실패'); return; }
+    const j = await r.json();
+    const list = j.results || [];
+    if (!list.length) { toast('이 영역에 거래 데이터 없음'); return; }
+    // props에 직접 매핑 + renderMarkers
+    props = list.map(p => ({
+      aptName: p.aptName, sigungu: p.sigungu, umdNm: p.umdNm,
+      area: `${p.sigungu||''} ${p.umdNm||''}`.trim(),
+      avgPrice: p.avgPrice || 0, score: 60, ltv: '', maxLoan: '',
+      buildYear: p.buildYear, lawdCd: p.lawdCd,
+      lat: p.lat, lng: p.lng,
+      type: 'non',
+    }));
+    renderMarkers(props);
+    if (typeof renderListGrid === 'function') renderListGrid();
+    toast(`✅ ${props.length}개 단지 표시`);
+  } catch (e) {
+    toast('영역 검색 실패: ' + e.message);
+  }
 }
 
 // ── GAUGE ────────────────────────────────────────────────

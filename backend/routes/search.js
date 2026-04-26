@@ -215,6 +215,68 @@ router.get('/popular', async (req, res) => {
   }
 });
 
+// ── GET /api/search/in-bounds — 지도 영역 단지 조회 (Phase 4, 2026-04-26) ──
+//   ?south=&west=&north=&east=&limit= → apt_geocache 좌표 기반 영역 필터
+//   사용자가 지도 panning 후 "이 영역 단지 보기" 클릭 → 호갱노노 패턴
+router.get('/in-bounds', async (req, res) => {
+  const south = parseFloat(req.query.south);
+  const west = parseFloat(req.query.west);
+  const north = parseFloat(req.query.north);
+  const east = parseFloat(req.query.east);
+  const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+  if (!south || !west || !north || !east) return res.status(400).json({ error: 'bounds 필수' });
+  if (north - south > 1 || east - west > 1) return res.status(400).json({ error: '영역 너무 큼 (1도 이내)' });
+
+  const admin = adminClient();
+  if (!admin) return res.status(503).json({ error: '서비스 일시 불가' });
+
+  try {
+    // apt_geocache 좌표 범위 필터 + molit_transactions 평균가 join
+    const { data: coords, error } = await admin
+      .from('apt_geocache')
+      .select('apt_name, sigungu, umd_nm, lat, lng')
+      .gte('lat', south).lte('lat', north)
+      .gte('lng', west).lte('lng', east)
+      .limit(limit);
+    if (error) throw error;
+    if (!coords?.length) return res.json({ results: [] });
+
+    // 단지별 최근 거래 평균가 fetch
+    const names = [...new Set(coords.map(c => c.apt_name))];
+    const { data: txs } = await admin
+      .from('molit_transactions')
+      .select('apt_name, deal_amount, build_year, deal_date, lawd_cd')
+      .in('apt_name', names)
+      .gte('deal_date', new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0,10))
+      .order('deal_date', { ascending: false })
+      .limit(500);
+    const aptStats = {};
+    for (const t of (txs || [])) {
+      if (!aptStats[t.apt_name]) aptStats[t.apt_name] = { sum: 0, n: 0, buildYear: t.build_year, lawdCd: t.lawd_cd };
+      aptStats[t.apt_name].sum += t.deal_amount || 0;
+      aptStats[t.apt_name].n++;
+    }
+
+    const out = coords.map(c => {
+      const s = aptStats[c.apt_name];
+      return {
+        aptName: c.apt_name,
+        sigungu: c.sigungu,
+        umdNm: c.umd_nm,
+        lat: Number(c.lat),
+        lng: Number(c.lng),
+        avgPrice: s ? +(s.sum / s.n / 10000).toFixed(2) : 0,
+        buildYear: s?.buildYear || null,
+        lawdCd: s?.lawdCd || null,
+      };
+    });
+    res.json({ results: out, count: out.length });
+  } catch (e) {
+    logger.warn({ err: e.message }, '영역 검색 실패');
+    res.status(500).json({ error: '영역 검색 실패' });
+  }
+});
+
 // ── GET /api/search/facility — 단지 상세 풍부화 (Phase 4, 2026-04-26) ──
 //   인증 불필요 (단지 공공정보) — requireAuth 앞에 마운트
 router.get('/facility', async (req, res) => {
