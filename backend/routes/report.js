@@ -118,18 +118,14 @@ router.post('/generate', async (req, res) => {
     try {
       parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
     } catch (e) {
-      // 진단용: message 에 응답 prefix 직접 포함 (Vercel logs 가 message column 만 짧게 보여줌)
-      const previewForMsg = cleaned.slice(0, 200).replace(/\s+/g, ' ');
+      // 진단 로그 — sample_head/tail 은 운영자 디버그용 유지 (response body 의 _debug 는 제거)
       logger.error({
         err: e.message,
         sample_head: cleaned.slice(0, 800),
         sample_tail: cleaned.slice(-400),
         cleaned_len: cleaned.length,
-      }, `보고서 AI JSON 파싱 실패 RAW="${previewForMsg}"`);
-      return res.status(502).json({
-        error: '보고서 생성 실패 — AI 응답 형식 오류',
-        _debug: { sample: cleaned.slice(0, 1500), len: cleaned.length, parseError: e.message },
-      });
+      }, '보고서 AI JSON 파싱 실패');
+      return res.status(502).json({ error: '보고서 생성 실패 — AI 응답 형식 오류' });
     }
 
     const out = {
@@ -176,9 +172,10 @@ async function fetchCandidateApts(admin, input, limit) {
   else if (pyeong.includes('중형')) { minSqm = 76; maxSqm = 109; }
   else if (pyeong.includes('대형')) { minSqm = 110; maxSqm = 200; }
 
-  // 가격 범위 (예산 ±20%)
+  // 가격 범위 — 예산 -30% ~ +20% (사용자 피드백: 2~3억 초과는 부담)
+  // Phase 5+ (2026-04-26): maxAmt 1.30 → 1.20 (9억 예산 기준 10.8억까지만 후보)
   const minAmt = Math.round(buy * 0.7 * 10000);
-  const maxAmt = Math.round(buy * 1.3 * 10000);
+  const maxAmt = Math.round(buy * 1.2 * 10000);
 
   // 지역 필터 — sigungu 기반 (region이 sigungu 직접 또는 광역시일 수 있음)
   let q = admin.from('molit_transactions')
@@ -255,9 +252,10 @@ async function fetchCandidateApts(admin, input, limit) {
 /** AI prompt 빌드 — 사용자 입력 + 정책 + 단지 정보 */
 function buildReportPrompt(input, policy, candidates) {
   const aptList = candidates.map((c, i) => {
+    const householdsStr = (c.households && Number.isFinite(c.households)) ? `${c.households}세대` : '미상';
     return `${i + 1}. ${c.apt_name} (${c.sigungu} ${c.umd_nm})
-   - 준공: ${c.build_year || '?'}년
-   - 세대수: ${c.households || '?'}세대
+   - 준공: ${c.build_year || '미상'}년
+   - 세대수: ${householdsStr}
    - 평형: ${c.areas.map(a => `${a}㎡(${Math.round(a / 3.3)}평)`).join(', ')}
    - 최근 6개월 평균가: ${(c.avgPrice / 10000).toFixed(2)}억원 (${c.n}건 거래)
    - 최근 거래일: ${c.latest}`;
@@ -288,8 +286,17 @@ ${aptList}
 
 ## 작성 지침
 1. coreMessages — 회원님 가구 상황 기반 핵심 방향 3줄
-2. checklist — 매수·갈아타기 체크리스트 5~6개 + 별점
-3. apartments — 위 후보 단지 7개 그대로 (rank·name·area·buildYear·households·ratio·location·pros·cons·priceFit·recommendation)
+2. checklist — 매수·갈아타기 체크리스트 5~7개 + 별점 + 짧은 근거 (필수)
+   ★★★ = 회원님 1순위(${input.priority || '환금성'}) 직접 부합 + 데이터로 입증
+   ★★  = 보조 항목 부합 또는 부분 입증
+   ★   = 일반 권고 사항
+   각 항목 형식: {"text":"항목명 — 근거 (최대 15자)", "stars":N}
+   예: {"text":"회전율 — 6개월 17건·대단지", "stars":3}
+        {"text":"역세권 — 7호선 도보 8분", "stars":3}
+        {"text":"준공연도 — 1999년 노후도 중간", "stars":2}
+3. apartments — 위 후보 단지 그대로 (rank·name·areaSqm·areaPyeong·buildYear·households·ratio·location·pros·cons·priceFit·recommendation)
+   - name 형식: "단지명 (시군구 동)" — 예: "한양아파트 (노원구 상계동)" — 동명 누락 금지 (사용자 식별용)
+   - households: 입력 데이터의 세대수 그대로 사용. "미상"이면 "미상"으로 표기 (NaN/null 금지)
    - priceFit: "매수가 ${input.maxBudget}억 vs 단지 평균 X억 (X% 초과/일치/여유)" — 단순 비교만
    - recommendation: "검토 권장" 또는 "예산 초과 — 다른 단지 비교 권장" — 매수 추천 X
 4. longTermView — 자녀 시점 기반 갈아타기 시나리오 (가격 수치 X, 권역만)

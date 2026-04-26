@@ -839,7 +839,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       </div>
       <div class="mb9"><span class="lbl">학군 중요도</span><div class="chips" id="ch-sc"><span class="chip" onclick="cp(this,'ch-sc')">학군 중요</span><span class="chip on" onclick="cp(this,'ch-sc')">보통</span></div></div>
       <!-- Phase 5-A (2026-04-26): 보고서 정확도 향상 입력 — 자녀·거주기간·우선순위 -->
-      <details style="margin-bottom:9px"><summary style="cursor:pointer;font-size:11px;color:var(--t2);user-select:none;list-style:none">▸ 보고서 정확도 향상 (자녀·거주기간·우선순위)</summary>
+      <!-- Phase 5+ (2026-04-26): default open + summary 강조 — 사용자가 입력 칸이 없는 줄 알았던 UX 이슈 fix -->
+      <details open style="margin-bottom:9px;background:var(--accL);border:1px solid #F0C0AC;border-radius:6px;padding:8px 10px"><summary style="cursor:pointer;font-size:11.5px;font-weight:700;color:var(--acc);user-select:none">📊 보고서 입력 (자녀·거주기간·우선순위)</summary>
         <div style="margin-top:6px;padding-left:4px;border-left:2px solid var(--bd)">
           <div class="mb9"><span class="lbl">자녀 계획</span>
             <div class="chips" id="ch-kid">
@@ -863,13 +864,17 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
               <span class="chip" onclick="cp(this,'ch-pri')">역세권</span>
               <span class="chip on" onclick="cp(this,'ch-pri')">환금성</span>
               <span class="chip" onclick="cp(this,'ch-pri')">조용함</span>
+              <span class="chip" onclick="cp(this,'ch-pri')">교통</span>
+              <span class="chip" onclick="cp(this,'ch-pri')">신축</span>
+              <span class="chip" onclick="cp(this,'ch-pri')">재건축</span>
+              <span class="chip" onclick="cp(this,'ch-pri')">갭투자</span>
             </div>
           </div>
         </div>
       </details>
       <div class="mb9"><span class="lbl">희망 평형</span><div class="chips" id="ch-py"><span class="chip" onclick="cp(this,'ch-py')">소형 15~22평</span><span class="chip on" onclick="cp(this,'ch-py')">중형 23~33평</span><span class="chip" onclick="cp(this,'ch-py')">대형 34평+</span><span class="chip" onclick="cp(this,'ch-py')">전체</span></div></div>
       <div class="r2"><div><label class="lbl" for="bp">매수가 (억 단위)</label><input class="inp" id="bp" type="number" inputmode="decimal" placeholder="예: 6.8 (6억 8천)" step="0.1" oninput="cl()"></div><div><label class="lbl" for="mc">자기 자본 (억 단위)</label><input class="inp" id="mc" type="number" inputmode="decimal" placeholder="예: 3.5 (3억 5천)" step="0.1" oninput="cl()"></div></div>
-      <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원 단위 — 1.2억은 12000)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000 (만원)" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 / 관심 구</label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
+      <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원 단위 — 1.2억은 12000)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000 (만원)" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 / 관심 구 <span style="color:var(--t3);font-weight:400">(보고서 통근시간 분석)</span></label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
       <button class="abtn acc" onclick="cl()">대출 한도 계산</button>
       <div id="lr" style="display:none"><div class="lbox">
         <div style="font-size:10px;color:var(--t2);margin-bottom:2px">최대 대출 한도 (일반 주담대)</div>
@@ -2589,7 +2594,7 @@ function _renderReport(data) {
         <div style="font-size:13px;font-weight:700;color:var(--t1)">${a.rank}. ${_escHtml(a.name)} ${a.areaPyeong ? `<span style="font-weight:500;color:var(--t2);font-size:12px">${a.areaPyeong}평 (${a.areaSqm}㎡)</span>` : ''}</div>
       </div>
       <div style="font-size:11px;color:var(--t3);margin-bottom:6px">
-        준공 ${a.buildYear || '?'} · ${a.households ? `${Number(a.households).toLocaleString()}세대` : '세대수 미상'}
+        ${(()=>{const hN=Number(a.households);const hStr=(a.households && Number.isFinite(hN)) ? `${hN.toLocaleString()}세대` : '세대수 미상';return `준공 ${a.buildYear || '?'} · ${hStr}`;})()}
       </div>
       <div style="font-size:11.5px;color:var(--t2);line-height:1.7">
         <div>📍 <b>입지</b>: ${_escHtml(a.location || '')}</div>
@@ -5260,6 +5265,12 @@ function sv(v,btn){
     if(el)el.style.display=id===v?meta.display:'none';
   });
   _rpOverlay=false; // 탭 전환 시 오버레이 초기화
+  // Phase 5+ (2026-04-26): 보고서 탭에서는 #s3 (추천 단지 0건 — AI 단지 검색 기능 안내) hide — 보고서와 무관해서 노이즈
+  const s3 = document.getElementById('s3');
+  if (s3) {
+    if (v === 'report') s3.style.setProperty('display', 'none', 'important');
+    else s3.style.removeProperty('display');
+  }
   const meta=VIEW_DISPLAY[v]||{lp:true,rp:true};
   // .lp 토글 (모바일에서는 미디어쿼리가 우선)
   const lp=document.querySelector('.lp');
