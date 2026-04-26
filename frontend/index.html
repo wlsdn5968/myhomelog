@@ -744,10 +744,12 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <div id="hSearchDrop" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--bd);border-radius:8px;margin-top:3px;max-height:360px;overflow-y:auto;z-index:99999;box-shadow:0 6px 24px rgba(0,0,0,0.18)"></div>
   </div>
   <div class="hml">
-    <div class="rpill"><div class="hdot"></div>10.15 규제</div>
+    <!-- Phase 4: 클릭 → 규제 요약 모달 -->
+    <div class="rpill" onclick="openRegSummary()" style="cursor:pointer" title="2025.10.15 규제 요약 보기"><div class="hdot"></div>10.15 규제</div>
     <span class="hst" id="quotaPill" style="background:var(--ambL);color:var(--amb);display:none" title="🤖 단지 검색·AI 분석 무료 한도 (오늘 자정 reset)" aria-label="AI 검색 무료 한도">🔎 검색 5/5</span>
     <span class="hst" id="aiPill" style="background:var(--bg2);color:var(--t2);display:none" title="💬 AI 채팅 무료 한도 (오늘 자정 reset)" aria-label="AI 채팅 무료 한도">💬 채팅 —/15</span>
-    <span class="hst off" id="apiSt">확인 중...</span>
+    <!-- Phase 4 (2026-04-26): 서버 정상 시 hide, 장애 시만 빨간 표시 — "항상 초록"의 의미 없음 해소 -->
+    <span class="hst off" id="apiSt" style="display:none">확인 중...</span>
     <!-- Phase 3 (2026-04-25/26): "AI 특약 생성" 단일 가치 CTA — 호갱노노/직방 대비 차별화 핵심.
          모바일에서는 텍스트 생략 (✍ 만), PC에서는 풀 텍스트. -->
     <button class="hbtn hbtn-cta" id="ctaClauseBtn" onclick="sv('clause')" title="AI가 부동산 특약을 만들어드려요 (변호사 검토 권장)" aria-label="AI 특약 생성으로 이동"><span class="cta-icon">✍</span><span class="cta-text"> AI 특약</span></button>
@@ -972,7 +974,12 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 <div class="clause-view" id="view-clause">
   <div class="cv-hero">
     <h2>✍ AI 특약 초안 생성</h2>
-    <p>매매 정보 입력 → 법령 인용 + AI 작성 특약 초안 (변호사·공인중개사 검토 필수)</p>
+    <p>매매 정보 입력 → 법령 인용 + AI 작성 특약 초안</p>
+  </div>
+  <!-- Phase 4 (2026-04-26): 무료 한도 사전 표시 + 검토 안내 prominent -->
+  <div style="background:#FFF7E6;border:1px solid #E8C896;border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:11px;line-height:1.6;color:#8B6914">
+    💡 <b>무료 1일 1회</b> · <b>Pro 무제한</b> | <b>⚠ 생성 후 반드시 변호사·공인중개사 검토 필수</b><br>
+    <span style="font-size:10px">검토 의뢰: <a href="https://www.kabl.kr" target="_blank" rel="noopener" style="color:#8B6914;text-decoration:underline">대한변호사협회 (kabl.kr)</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:#8B6914;text-decoration:underline">한국공인중개사협회 (kar.or.kr)</a></span>
   </div>
   <div class="cv-form">
     <h3>매매 기본 정보</h3>
@@ -1092,6 +1099,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       <span class="chip" data-cat="policy" onclick="loadNews(this)">📋 정책·규제</span>
       <span class="chip" data-cat="region" onclick="loadNews(this)">🗺 지역별</span>
       <span class="chip" data-cat="reno" onclick="loadNews(this)">🏗 재건축·재개발</span>
+      <span class="chip" data-cat="lease" onclick="loadNews(this)">🏠 전세·임대</span>
+      <span class="chip" data-cat="tax" onclick="loadNews(this)">💰 세제</span>
     </div>
     <div id="newsList" style="font-size:12px;line-height:1.7;color:var(--t2)">
       <div style="padding:30px 0;text-align:center;color:var(--t3)">뉴스 로딩 중...</div>
@@ -1463,6 +1472,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       <button class="smx" onclick="closeChatHistory()" aria-label="대화 이력 닫기" title="닫기">✕</button>
     </div>
     <div class="smbody">
+      <!-- Phase 4 (2026-04-26): 이력 검색 — 100+ 누적 시 핵심 -->
+      <input id="chHistFilter" type="text" placeholder="🔍 제목 검색 (예: 강남, 래미안)" style="width:100%;padding:7px 11px;border:1px solid var(--bd);border-radius:6px;font-size:12px;margin-bottom:8px;font-family:inherit" oninput="filterChatHistory(this.value)">
       <div id="chList" style="max-height:380px;overflow-y:auto;font-size:12px">로딩 중...</div>
       <button class="sm-save" style="margin-top:10px" onclick="newChatSession(true);closeChatHistory()">+ 새 대화 시작</button>
     </div>
@@ -2228,6 +2239,42 @@ function nextOnboarding(){
 
 // 약관 모달
 function openTerms(){document.getElementById('TM').classList.add('open');}
+
+// Phase 4 (2026-04-26): 10.15 규제 요약 모달 — 헤더 배지 클릭 시 규제 핵심 표 노출
+function openRegSummary(){
+  let m = document.getElementById('regSummaryModal');
+  if (!m) {
+    m = document.createElement('div');
+    m.id = 'regSummaryModal';
+    m.className = 'dmbg';
+    m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
+    m.innerHTML = `<div style="background:#fff;border-radius:12px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto;padding:20px 22px;box-shadow:0 12px 40px rgba(0,0,0,0.3)">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+        <h3 style="margin:0;font-size:16px;color:var(--t1)">📋 2025.10.15 부동산 규제 요약</h3>
+        <button onclick="document.getElementById('regSummaryModal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--t3)">✕</button>
+      </div>
+      <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px">
+        <thead><tr style="background:var(--s1)"><th style="padding:8px;text-align:left;border-bottom:1px solid var(--bd)">구분</th><th style="padding:8px;border-bottom:1px solid var(--bd)">LTV</th><th style="padding:8px;border-bottom:1px solid var(--bd)">한도/조건</th></tr></thead>
+        <tbody>
+          <tr><td style="padding:8px;border-bottom:1px solid var(--bd)"><b>무주택 규제</b></td><td style="padding:8px;color:var(--red);font-weight:700;text-align:center;border-bottom:1px solid var(--bd)">40%</td><td style="padding:8px;font-size:11px;border-bottom:1px solid var(--bd)">15억↓ 6억 / ~25억 4억 / 25억↑ 2억</td></tr>
+          <tr><td style="padding:8px;border-bottom:1px solid var(--bd)">생애최초 규제</td><td style="padding:8px;color:var(--amb);font-weight:700;text-align:center;border-bottom:1px solid var(--bd)">70%</td><td style="padding:8px;font-size:11px;border-bottom:1px solid var(--bd)">6억 한도 + 6개월 전입의무</td></tr>
+          <tr><td style="padding:8px;border-bottom:1px solid var(--bd)">비규제</td><td style="padding:8px;color:var(--grn);font-weight:700;text-align:center;border-bottom:1px solid var(--bd)">70%</td><td style="padding:8px;font-size:11px;border-bottom:1px solid var(--bd)">LTV 한도 자유</td></tr>
+          <tr><td style="padding:8px;border-bottom:1px solid var(--bd)">1주택+ 추가</td><td style="padding:8px;color:var(--red);font-weight:700;text-align:center;border-bottom:1px solid var(--bd)">0%</td><td style="padding:8px;font-size:11px;border-bottom:1px solid var(--bd)">대출 불가</td></tr>
+          <tr><td style="padding:8px">지방 생애최초</td><td style="padding:8px;color:var(--grn);font-weight:700;text-align:center">80%</td><td style="padding:8px;font-size:11px">LTV 완화</td></tr>
+        </tbody>
+      </table>
+      <div style="background:#FFF7E6;border:1px solid #E8C896;border-radius:8px;padding:10px 12px;font-size:11px;color:#8B6914;line-height:1.6;margin-bottom:10px">
+        <b>DSR</b>: 은행 40% / 2금융 50% · 스트레스 +1.5%p (수도권) · 만기 30년<br>
+        <b>규제지역</b>: 서울 25구 + 경기 12곳 (과천·광명·성남 분당 등)<br>
+        <b>토허구역</b>: 2년 실거주 의무 (강남·송파·용산 일부)<br>
+        <b>전세대출</b>: 보유자 규제지역 3억 초과 매수 시 즉시 회수
+      </div>
+      <div style="font-size:10px;color:var(--t3);text-align:center">출처: 금융위원회 2025.10.15 주택시장 안정화 대책 · 변경 가능 — 금융기관 최종 확인 필수</div>
+    </div>`;
+    m.addEventListener('click', e => { if (e.target === m) m.remove(); });
+    document.body.appendChild(m);
+  }
+}
 function closeTerms(){document.getElementById('TM').classList.remove('open');}
 
 // ── 정책 타임라인 ─────────────────────────────────────
@@ -3261,10 +3308,12 @@ function renderAnalysis(d,p){
     const shape = {green:'● 활발', yellow:'▲ 보통', red:'■ 신중'}[sc] || '● 보통';
     const ariaTone = {green:'시장 데이터 활발', yellow:'시장 데이터 보통', red:'시장 데이터 신중'}[sc] || '';
     const sigRatioText = `시세 위치 요약: ${sig.metCount||0}/${sig.totalCount||3}개 데이터 부합`;
+    // Phase 4 (2026-04-26): 시그널 ⓘ 툴팁 — 사용자가 "활발=매수적기" 오해 방지
+    const tipText = '신호등 의미: ● 활발/▲ 보통/■ 신중 = 거래량·가격 통계 요약. ⚠ 매수 시점 추천 아님 — 데이터 분포만.';
     heroHtml=`<div class="sig-hero ${sc}" role="status" aria-label="${ariaTone} — ${sigRatioText}">
       <div class="sig-dot ${sc}" style="font-size:13px;font-weight:800;padding:0 8px;min-width:60px;text-align:center" aria-hidden="true">${shape}</div>
-      <div>
-        <div class="sig-label">${sigRatioText}</div>
+      <div style="flex:1">
+        <div class="sig-label">${sigRatioText} <span style="cursor:help;color:var(--t3);font-size:10px;margin-left:4px" title="${_escHtml(tipText)}">ⓘ</span></div>
         <div class="sig-sub">${d.filteredTxCount||d.txCount||0}건 분석 · <span style="color:${relColor}">${relLabel}</span> · <span style="color:var(--t3)">매수 추천 아님 (정보 정리)</span></div>
       </div>
     </div>`;
@@ -4874,7 +4923,28 @@ async function onHeaderSearchInput(q) {
       const j = await r.json();
       const results = j.results || [];
       if (results.length === 0) {
-        drop.innerHTML = `<div style="padding:14px;text-align:center;color:var(--t3);font-size:11.5px">'${_escHtml(q)}' 검색 결과 없음<br><span style="font-size:10px">단지명·동명을 정확히 입력해보세요 (예: 공덕래미안, 공덕동)</span></div>`;
+        // Phase 4 (2026-04-26): 0건 시 행동 유도 강화 — 사용자가 다른 검색 시도하기 쉽게.
+        // 자동 fuzzy: 입력 첫 2글자로 재검색 (예: '공덕레미안' → '공덕' 으로 재시도)
+        let suggestionHtml = '';
+        if (q.length >= 3) {
+          try {
+            const shortQ = q.slice(0, 2);
+            const r2 = await fetch(`${CFG.api}/search/apt?q=${encodeURIComponent(shortQ)}&limit=5`).then(r=>r.json()).catch(()=>null);
+            const sims = r2?.results || [];
+            if (sims.length) {
+              suggestionHtml = `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg2);text-align:left">
+                <div style="font-size:10.5px;color:var(--t2);font-weight:600;margin-bottom:6px">💡 비슷한 검색어 결과:</div>
+                ${sims.map(r => `<div onclick='goSearchResult(${JSON.stringify(r).replace(/'/g,"&#39;")})' style="padding:6px 8px;cursor:pointer;font-size:11px;border-radius:4px" onmouseover="this.style.background='#F4F8FF'" onmouseout="this.style.background='transparent'"><b>${_escHtml(r.aptName)}</b> <span style="color:var(--t3)">${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')}</span></div>`).join('')}
+              </div>`;
+            }
+          } catch(_) {}
+        }
+        drop.innerHTML = `<div style="padding:14px;color:var(--t3);font-size:11.5px;text-align:center">
+          <div style="font-size:24px;margin-bottom:6px">🔍</div>
+          <div><b>'${_escHtml(q)}'</b> 검색 결과 없음</div>
+          <div style="font-size:10.5px;margin-top:4px;color:var(--t2)">동명만 입력해보세요 (예: 공덕동, 마포구)</div>
+          ${suggestionHtml}
+        </div>`;
       } else {
         drop.innerHTML = results.map((r,i) => `
           <div class="hsearch-item" data-idx="${i}" onclick='goSearchResult(${JSON.stringify(r).replace(/'/g,"&#39;")})' style="padding:9px 12px;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:12px;line-height:1.5" onmouseover="this.style.background='#F4F8FF'" onmouseout="this.style.background='#fff'">
@@ -4904,6 +4974,7 @@ async function goSearchResult(r) {
   // Phase 4 (2026-04-26): 거래 fetch 후 모달 열기 — 'undefined.01' 빈 객체 버그 fix.
   // 정확 매칭 거래 (lawdCd + aptName) 6개월. 0건이면 빈 배열 → '실거래 데이터 없음' 표시.
   let txHistory = [], avgPrice = 0, minPrice = 0, maxPrice = 0;
+  let _aliasUsed = null; // master 단지의 자동 alias 거래 표시용
   try {
     const now = new Date();
     const ym = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -4911,6 +4982,28 @@ async function goSearchResult(r) {
     const t = await fetch(url, { signal: AbortSignal.timeout(10000) }).then(rs => rs.ok ? rs.json() : null);
     if (t?.items?.length) {
       txHistory = t.items.slice(0, 30);
+    }
+
+    // Phase 4: master 단지 (거래 0건) → facility/altCandidates 자동 fetch + 첫 alias 거래 채움
+    if (!txHistory.length && r.source === 'master' && r.sigungu && r.umdNm) {
+      const fac = await fetch(`${CFG.api}/search/facility?aptName=${encodeURIComponent(r.aptName)}&sigungu=${encodeURIComponent(r.sigungu)}&umdNm=${encodeURIComponent(r.umdNm)}`)
+        .then(rs => rs.ok ? rs.json() : null).catch(() => null);
+      const alts = fac?.altCandidates || [];
+      if (alts.length) {
+        // 첫 alias 단지의 거래 가져오기 (사용자에게 "공릉풍림아이원 → 풍림아파트A 거래로 표시" 안내)
+        for (const alt of alts) {
+          const altUrl = `${CFG.api}/transactions?lawdCd=${r.lawdCd}&aptName=${encodeURIComponent(alt.aptName)}&dealYm=${ym}`;
+          const at = await fetch(altUrl, { signal: AbortSignal.timeout(8000) }).then(rs => rs.ok ? rs.json() : null);
+          if (at?.items?.length) {
+            txHistory = at.items.slice(0, 30);
+            _aliasUsed = alt.aptName;
+            break;
+          }
+        }
+      }
+    }
+
+    if (txHistory.length) {
       const prices = txHistory.map(x => Number(x.dealAmount) || 0).filter(x => x > 0);
       if (prices.length) {
         avgPrice = prices.reduce((a,b) => a+b, 0) / prices.length / 10000;
@@ -4932,8 +5025,12 @@ async function goSearchResult(r) {
     lawdCd: r.lawdCd,
     txHistory,
     _fromSearch: true,
-    _isMaster: r.source === 'master', // master 단지면 모달에서 alias 카드 prominent
+    _isMaster: r.source === 'master',
+    _aliasUsed, // master → 첫 alias 자동 표시 시 단지명 (예: "풍림아파트A")
   };
+  if (_aliasUsed) {
+    setTimeout(() => toast(`💡 '${r.aptName}' → MOLIT 신고명 '${_aliasUsed}' 거래 ${txHistory.length}건 표시`), 600);
+  }
   if (typeof showDetail === 'function') showDetail(p);
   else toast('단지 상세 화면을 열 수 없어요');
 }
@@ -5031,7 +5128,8 @@ async function chkAPI(){
     const r=await fetch(`${CFG.api}/health`,{signal:AbortSignal.timeout(3000)});
     if(r.ok){
       const d=await r.json().catch(()=>({}));
-      el.textContent='● 서버 연결됨';el.className='hst on';
+      // Phase 4: 정상 시 apiSt hide, 장애 시만 표시
+      el.style.display='none';
       cs.textContent='● 온라인';cs.style.color='var(--grn)';
       ce && ce.classList.remove('show');
       if(bs){bs.textContent='연결됨';bs.className='sm-badge';}
@@ -5054,7 +5152,10 @@ async function chkAPI(){
     }
     throw new Error('not ok');
   }catch{
+    // Phase 4: 장애 시 빨간 표시 + display block
     el.textContent='● 서버 오프라인';el.className='hst off';
+    el.style.display='inline-flex';
+    el.style.background='var(--redL)';el.style.color='var(--red)';
     cs.textContent='● 오프라인';cs.style.color='var(--red)';
     if(bs){bs.textContent='오프라인';bs.className='sm-badge no';}
     return false;
@@ -5257,6 +5358,16 @@ async function openChatHistory(){
   }
 }
 function closeChatHistory(){ document.getElementById('CH').classList.remove('open'); }
+
+// Phase 4 (2026-04-26): 챗 이력 검색 — title 부분 매칭 (case-insensitive)
+function filterChatHistory(q) {
+  const norm = String(q || '').toLowerCase().trim();
+  const items = document.querySelectorAll('#chList > div');
+  items.forEach(it => {
+    const title = it.querySelector('div[style*="font-weight"]')?.textContent || '';
+    it.style.display = (!norm || title.toLowerCase().includes(norm)) ? '' : 'none';
+  });
+}
 
 async function loadChatSession(sid){
   const A = window.MHL?.auth;
