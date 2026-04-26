@@ -2533,9 +2533,13 @@ async function generateReport() {
   result.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t3);font-size:12px">📊 회원님 가구 상황 분석 중...<br>정부 정책 + 단지 데이터 + AI 분석 통합 진행</div>';
 
   try {
+    // Phase 5+ (2026-04-26): 로그인 사용자는 Authorization 헤더 추가 — 서버에서 user.id/email 인식 → admin/Pro plan 한도 적용
+    const headers = { 'Content-Type': 'application/json' };
+    const tok = A?.session?.access_token;
+    if (tok) headers['Authorization'] = 'Bearer ' + tok;
     const r = await fetch(`${CFG.api}/report/generate`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       body: JSON.stringify({
         maxBudget: buy, myCash: cash, annualIncome: inc, region,
         houseStatus, isFirstBuyer, pyeong, schoolNeeded,
