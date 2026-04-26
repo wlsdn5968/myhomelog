@@ -2534,6 +2534,7 @@ async function generateReport() {
 
   try {
     // Phase 5+ (2026-04-26): 로그인 사용자는 Authorization 헤더 추가 — 서버에서 user.id/email 인식 → admin/Pro plan 한도 적용
+    const A = window.MHL?.auth;
     const headers = { 'Content-Type': 'application/json' };
     const tok = A?.session?.access_token;
     if (tok) headers['Authorization'] = 'Bearer ' + tok;
