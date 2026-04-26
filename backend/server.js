@@ -179,6 +179,69 @@ app.use('/api/cron', cronRouter);
 // 공유 딥링크 — 크롤러용 OG 메타 치환 (HTML 서빙)
 app.use('/share', shareRouter);
 
+// ── Phase 8+ (2026-04-26): KAPT API 키 진단 — admin user 만 접근 ──
+// APT_INFO_API_KEY 와 MOLIT_API_KEY 두 키로 각각 KAPT 호출 → 어느 게 활용신청 됐는지 확인
+app.get('/api/admin/kapt-diag', require('./middleware/auth').requireAuth, async (req, res) => {
+  const { getActivePlan } = require('./services/planService');
+  const plan = await getActivePlan(req.user.id);
+  if (plan !== 'admin') return res.status(403).json({ error: 'admin only' });
+
+  const axios = require('axios');
+  const APT_INFO_KEY = process.env.APT_INFO_API_KEY;
+  const MOLIT_KEY = process.env.MOLIT_API_KEY;
+  const TEST_KAPT = 'A10020255'; // 강남 한 단지 (server.js 의 다른 healthcheck 와 동일)
+  const URL = 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3';
+
+  async function probe(label, key) {
+    if (!key) return { label, exists: false };
+    const result = { label, exists: true, keyLen: key.length, keyPrefix: key.slice(0, 6), keyHasPercent: key.includes('%') };
+    try {
+      const r = await axios.get(URL, {
+        params: { serviceKey: key, kaptCode: TEST_KAPT, _type: 'json' },
+        timeout: 8000,
+        headers: { Accept: 'application/json' },
+      });
+      result.httpStatus = r.status;
+      result.dataType = typeof r.data;
+      if (typeof r.data === 'string') {
+        result.bodyPreview = r.data.slice(0, 300);
+      } else {
+        result.resultCode = r.data?.response?.header?.resultCode;
+        result.resultMsg = r.data?.response?.header?.resultMsg;
+        result.hasItem = !!(r.data?.response?.body?.item);
+      }
+    } catch (e) {
+      result.error = e.response?.status ? `HTTP ${e.response.status}` : e.message;
+      const rd = e.response?.data;
+      result.errBody = typeof rd === 'string' ? rd.slice(0, 300) : rd ? JSON.stringify(rd).slice(0, 300) : null;
+    }
+    return result;
+  }
+
+  const [aptInfoResult, molitResult] = await Promise.all([
+    probe('APT_INFO_API_KEY', APT_INFO_KEY),
+    probe('MOLIT_API_KEY', MOLIT_KEY),
+  ]);
+
+  const sameKey = APT_INFO_KEY && MOLIT_KEY && APT_INFO_KEY === MOLIT_KEY;
+
+  res.json({
+    sameKey,
+    APT_INFO_API_KEY: aptInfoResult,
+    MOLIT_API_KEY: molitResult,
+    diagnosis: (() => {
+      const a = aptInfoResult, m = molitResult;
+      if (!a.exists && !m.exists) return '두 키 모두 미설정';
+      const aOk = a.exists && (a.resultCode === '000' || a.resultCode === '00');
+      const mOk = m.exists && (m.resultCode === '000' || m.resultCode === '00');
+      if (aOk && mOk) return '둘 다 동작 — 정상';
+      if (aOk) return 'APT_INFO_API_KEY 만 동작 — 코드는 이미 우선 사용 중. 별 문제 없음';
+      if (mOk) return 'MOLIT_API_KEY 만 동작 — APT_INFO_API_KEY 가 활용신청 안 된 키. ENV 에서 APT_INFO_API_KEY 제거하면 fallback 으로 MOLIT 사용';
+      return '둘 다 실패 — KAPT 단지정보 활용신청을 둘 다 안 한 상태. data.go.kr 에서 AptBasisInfoServiceV3 활용신청 필요';
+    })(),
+  });
+});
+
 // ── API 활성화 진단 (운영자 전용 — x-health-key 헤더 필수) ────
 // Phase 1.8: 과거 공개 엔드포인트는 외부 API 쿼터(MOLIT 1만/일, Kakao 30만/일) 소진 공격에 노출 →
 //   1) HEALTH_API_KEY 환경변수 미설정 시 404 (production 기본 차단)
