@@ -172,8 +172,10 @@ async function callAI(messages, useCache = true, opts = {}) {
   }
 
   // Phase 3.1: Anthropic Prompt Caching (~86% input cost 절감)
+  // Phase 5+ (2026-04-26): claude-sonnet-4-20250514 deprecated → claude-sonnet-4-5 (latest stable alias)
+  // ENV override: ANTHROPIC_MODEL 로 특정 버전 고정 가능
   const payload = {
-    model: 'claude-sonnet-4-20250514',
+    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5',
     max_tokens: 1500,
     system: [
       { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
