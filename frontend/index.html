@@ -736,7 +736,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <button class="htab" onclick="sv('calc',this)">🧮 대출계산</button>
     <button class="htab" onclick="sv('clause',this)">✍ 특약생성</button>
     <button class="htab" onclick="sv('news',this)">📰 뉴스</button>
-    <button class="htab" onclick="sv('subs',this)">📅 청약<span style="background:var(--amb);color:#fff;font-size:9px;font-weight:700;padding:1px 5px;border-radius:4px;margin-left:4px;vertical-align:middle">BETA</span></button>
+    <button class="htab" onclick="sv('subs',this)">📅 청약</button>
   </div>
   <!-- P0 (2026-04-25 Phase 2 시나리오 A): 단지명·동명 직접 검색바 -->
   <div class="hsearch" style="position:relative;flex:1;max-width:320px;margin:0 8px">
@@ -803,8 +803,12 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
 
   <div class="sec" id="s1">
-    <div class="sh" onclick="ts('s1')"><span class="st">내 상황</span><span class="sa">▲</span></div>
+    <div class="sh" onclick="ts('s1')"><span class="st">내 상황</span><span id="srcProg" style="margin-left:auto;font-size:10.5px;color:var(--t3);font-weight:600">0/3 완료</span><span class="sa">▲</span></div>
     <div class="sb">
+      <!-- Phase 4 (2026-04-26): 입력 wizard — 핵심 3개 (보유·예산·지역) 진행률 표시 -->
+      <div style="background:#F0F7FF;border:1px solid #BFD7F7;border-radius:6px;padding:7px 10px;margin-bottom:10px;font-size:10.5px;color:#1B4F8A;line-height:1.55">
+        💡 <b>핵심 3개</b>만 입력하면 단지 검색 가능: <b>주택 보유 · 매수가 · 희망지역</b>
+      </div>
       <div class="mb9"><span class="lbl">주택 보유</span><div class="chips" id="ch-h"><span class="chip on" onclick="cp(this,'ch-h')">무주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택 (처분조건부)</span><span class="chip" onclick="cp(this,'ch-h')">2주택+</span></div></div>
       <div class="mb9"><span class="lbl">생애 최초</span><div class="chips" id="ch-f"><span class="chip on" onclick="cp(this,'ch-f')">예</span><span class="chip" onclick="cp(this,'ch-f')">아니오</span></div></div>
       <!-- P1 (Phase 2 후속, 2026-04-25): 정책자금 자격 chip — 인지 부하 절감 위해 접기.
@@ -903,6 +907,11 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <div class="r2"><div><label class="lbl" for="c_b">매수가(억)</label><input class="inp" id="c_b" type="number" inputmode="decimal" placeholder="7.0" oninput="dc()"></div><div><label class="lbl" for="c_i">연소득(만)</label><input class="inp" id="c_i" type="number" inputmode="decimal" placeholder="5000" oninput="dc()"></div></div>
     <div class="r2"><div><label class="lbl" for="c_r">금리(%)</label><input class="inp" id="c_r" type="number" inputmode="decimal" placeholder="4.0" step="0.1" oninput="dc()"></div><div><label class="lbl" for="c_y">기간(년)</label><input class="inp" id="c_y" type="number" inputmode="decimal" placeholder="30" oninput="dc()"></div></div>
     <div class="r2"><div><label class="lbl" for="c_e">기존 월원리금(만)</label><input class="inp" id="c_e" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div><div><label class="lbl" for="c_c">보유현금(억)</label><input class="inp" id="c_c" type="number" inputmode="decimal" placeholder="3.0" oninput="dc()"></div></div>
+    <!-- Phase 4 (2026-04-26): 신용대출/전세대출 잔액 — DSR 정확 계산 위해 -->
+    <div class="r2">
+      <div><label class="lbl" for="c_cl" title="신용대출 원금 잔액 — 만원 단위. DSR 한도 차감.">신용대출 잔액(만) <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></label><input class="inp" id="c_cl" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div>
+      <div><label class="lbl" for="c_jl" title="전세대출 잔액 — 만원 단위. 규제지역 3억 초과 매수 시 즉시 회수 대상.">전세대출 잔액(만) <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></label><input class="inp" id="c_jl" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div>
+    </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:11px">
       <div><span class="lbl">주택보유</span><div class="chips" id="cc-h"><span class="chip on" onclick="cp(this,'cc-h')">무주택</span><span class="chip" onclick="cp(this,'cc-h')">1주택</span><span class="chip" onclick="cp(this,'cc-h')">2주택+</span></div></div>
       <div><span class="lbl">생애최초</span><div class="chips" id="cc-f"><span class="chip on" onclick="cp(this,'cc-f')">예</span><span class="chip" onclick="cp(this,'cc-f')">아니오</span></div></div>
@@ -929,6 +938,41 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     </div>
     <div id="co_cta" style="display:none"></div>
   </div>
+
+  <!-- Phase 4 (2026-04-26): 정책자금 4종 비교 표 — 무주택자 한도 과소 계산 차단 -->
+  <div style="max-width:520px;margin-top:18px;padding:14px 16px;background:#EAF7EE;border:1px solid #B0D9BE;border-radius:var(--r);box-shadow:var(--sh)">
+    <div style="font-size:12px;font-weight:700;color:#1F7A3A;margin-bottom:8px">💰 정책자금 4종 비교 (일반 주담대보다 한도·금리 유리)</div>
+    <table style="width:100%;font-size:11px;border-collapse:collapse">
+      <thead><tr style="background:#fff;color:#1F7A3A">
+        <th style="padding:6px 4px;text-align:left;border-bottom:1px solid #B0D9BE">상품</th>
+        <th style="padding:6px 4px;border-bottom:1px solid #B0D9BE">소득</th>
+        <th style="padding:6px 4px;border-bottom:1px solid #B0D9BE">집값</th>
+        <th style="padding:6px 4px;border-bottom:1px solid #B0D9BE">한도</th>
+        <th style="padding:6px 4px;border-bottom:1px solid #B0D9BE">금리</th>
+      </tr></thead>
+      <tbody style="color:var(--t2)">
+        <tr><td style="padding:5px 4px;border-bottom:1px solid #B0D9BE"><b>보금자리론</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;font-weight:700">5억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">3.6~4.2%</td></tr>
+        <tr><td style="padding:5px 4px;border-bottom:1px solid #B0D9BE"><b>디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">6천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">5억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;font-weight:700">2.5억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;color:#1F7A3A;font-weight:700">2.0~3.3%</td></tr>
+        <tr><td style="padding:5px 4px;border-bottom:1px solid #B0D9BE"><b>신혼 디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;font-weight:700">4억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;color:#1F7A3A;font-weight:700">1.8~3.1%</td></tr>
+        <tr><td style="padding:5px 4px"><b>신생아 특례</b></td><td style="text-align:center;padding:5px 4px">1.3억↓</td><td style="text-align:center;padding:5px 4px">9억↓</td><td style="text-align:center;padding:5px 4px;font-weight:700">5억</td><td style="text-align:center;padding:5px 4px;color:#1F7A3A;font-weight:700">1.6~3.3%</td></tr>
+      </tbody>
+    </table>
+    <div style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.5">※ 정책자금은 자격·서류 요건 별도. <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:#1F7A3A;font-weight:700">주택도시기금 (nhuf.molit.go.kr) →</a> · 1599-0001<br>※ 신생아 특례 LTV 80% — 일반 주담대 40% 대비 압도적 유리. 2년 내 출산 가구 필수 확인.</div>
+  </div>
+
+  <!-- Phase 4 (2026-04-26): 부족 자금 해결 시나리오 -->
+  <div style="max-width:520px;margin-top:14px;padding:14px 16px;background:#FFF7E6;border:1px solid #E8C896;border-radius:var(--r);box-shadow:var(--sh)">
+    <div style="font-size:12px;font-weight:700;color:#8B6914;margin-bottom:8px">💸 부족 자금 발생 시 — 합법 해결 시나리오</div>
+    <div style="font-size:11px;color:var(--t2);line-height:1.7">
+      <div style="margin-bottom:6px"><b>1. 신용대출 추가</b> — DSR 여유 시 가능. 1억 한도 + 1년간 규제지역 매수 제한 (10.15 규제). 평균 금리 6%·만기 5년.</div>
+      <div style="margin-bottom:6px"><b>2. 마이너스 통장</b> — 일시 대응. 한도 5천만 ~ 1억. 변동 금리 7~8%, 사용 분만 이자.</div>
+      <div style="margin-bottom:6px"><b>3. 가족 차용</b> — <b>차용증·이자 약정 필수</b> (증여세 회피 의심 차단). 연 1.6% 이상 이자, 매월 이체 기록 보존. 2.17억 초과 시 증여세 신고.</div>
+      <div style="margin-bottom:6px"><b>4. 매수가 조정 / 평형 변경</b> — 부족분만큼 작은 평형/구축. 가장 안전.</div>
+      <div><b>5. 지역 변경</b> — 비규제 지역 = LTV 70% (규제 40% 대비 1.75배). 한도 자체가 다름.</div>
+    </div>
+    <div style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.5">※ 본 안내는 정보 정리이며 세무·법무 자문이 아닙니다. 가족 차용은 세무사 상담 필수 (<b>국세청 차용증 양식</b> 또는 변호사 작성 권장).</div>
+  </div>
+
   <div style="max-width:520px;margin-top:18px;padding:14px 16px;background:#fff;border:1px solid var(--bd);border-radius:var(--r);box-shadow:var(--sh)">
     <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:10px">📌 계약 직전 도구</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
@@ -1205,6 +1249,22 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         <div id="cs_result" style="margin-top:12px;padding:11px 13px;background:#fff;border-radius:8px;border:1px solid #BFD7F7">
           <div style="font-size:13px;font-weight:800;color:#1B4F8A">총 가점: <span id="cs_total">8</span>점 / 84점</div>
           <div style="font-size:10.5px;color:var(--t2);margin-top:5px;line-height:1.7" id="cs_tier">예상 당첨 가능 분양: <b>참고치</b> — 실제 당첨 커트라인은 청약Home 공고 확인.</div>
+        </div>
+        <!-- Phase 4 (2026-04-26): 당첨 커트라인 통계 — 한국부동산원 2024-2025 평균 -->
+        <div style="margin-top:10px;padding:9px 11px;background:#FFF7E6;border-radius:8px;border:1px solid #E8C896">
+          <div style="font-size:11px;font-weight:700;color:#8B6914;margin-bottom:6px">📊 최근 당첨 커트라인 통계 (한국부동산원 2024-2025 평균)</div>
+          <table style="width:100%;font-size:10.5px;color:var(--t2);border-collapse:collapse">
+            <tbody>
+              <tr><td style="padding:3px 0">서울 강남·서초·송파 인기 단지</td><td style="text-align:right;font-weight:700;color:#A82525">68~75점</td></tr>
+              <tr><td style="padding:3px 0">서울 일반 (강북·노원·도봉 등)</td><td style="text-align:right;font-weight:700;color:#A82525">55~65점</td></tr>
+              <tr><td style="padding:3px 0">경기 인기 (분당·판교·과천)</td><td style="text-align:right;font-weight:700;color:#9A5510">58~67점</td></tr>
+              <tr><td style="padding:3px 0">경기 일반 (수원·용인·고양)</td><td style="text-align:right;font-weight:700;color:#9A5510">45~55점</td></tr>
+              <tr><td style="padding:3px 0">인천 송도·청라</td><td style="text-align:right;font-weight:700;color:#9A5510">50~60점</td></tr>
+              <tr><td style="padding:3px 0">지방 광역시 인기</td><td style="text-align:right;font-weight:700;color:#1F7A3A">40~55점</td></tr>
+              <tr><td style="padding:3px 0">지방 일반</td><td style="text-align:right;font-weight:700;color:#1F7A3A">25~45점</td></tr>
+            </tbody>
+          </table>
+          <div style="font-size:9.5px;color:var(--t3);margin-top:5px;line-height:1.4">※ 단지·평형·시점별 편차 큼. 특별공급(생초·신혼·다자녀·신생아)은 별도 자격. 출처: 한국부동산원 청약Home 통계</div>
         </div>
         <div style="font-size:9.5px;color:var(--t3);margin-top:8px;line-height:1.6">
           ※ 본 계산기는 일반공급 가점제 기준 (특별공급은 별도 자격). 실제 가점은 <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="color:var(--acc)">청약Home</a> 마이페이지에서 확인 가능.<br>
@@ -2830,13 +2890,45 @@ function renderListGrid(){
   const metaLine = searchMeta && searchMeta.regions.length
     ? `<div style="margin:10px 14px 0;padding:8px 12px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;color:#1B4F8A;font-size:11px;line-height:1.55">📊 <b>분석 지역:</b> ${_escHtml(searchMeta.regions.map(String).join(', '))} · 전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> 중 예산 실거래 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b> · 최근 6개월 실거래 ${(Number(searchMeta.totalTx)||0).toLocaleString()}건 분석</div>`
     : '';
-  const banner=`${metaLine}<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;color:var(--red);font-size:11px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아닙니다.</u> 아래 점수·신호는 과거 실거래 통계 정리이며, 미래 가격(상승·하락)을 예측·보장하지 않습니다. 모든 의사결정 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>`;
-  // Phase 4 (2026-04-26): 렌더 안전망 — 카드 매핑 fail 시 사용자가 빈 화면 보지 않도록.
+  const banner=`${metaLine}<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;color:var(--red);font-size:11px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아닙니다.</u> 아래 점수·신호는 과거 실거래 통계 정리이며, 미래 가격(상승·하락)을 예측·보장하지 않습니다. 모든 의사결정 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>
+  <!-- Phase 4 (2026-04-26): 정렬·필터 — 추천 결과 비교 핵심 -->
+  <div style="margin:0 14px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
+    <span style="font-size:11px;color:var(--t2);font-weight:600">정렬</span>
+    <select id="lstSort" onchange="renderListGrid()" style="padding:5px 9px;border:1px solid var(--bd);border-radius:6px;font-size:11.5px;background:#fff;cursor:pointer;font-family:inherit">
+      <option value="score">점수 높은 순</option>
+      <option value="priceAsc">가격 낮은 순</option>
+      <option value="priceDesc">가격 높은 순</option>
+      <option value="newBuild">신축 우선</option>
+      <option value="oldBuild">구축 우선</option>
+    </select>
+    <span style="font-size:11px;color:var(--t2);font-weight:600;margin-left:6px">필터</span>
+    <button id="lstFltAll" onclick="setLstFilter('all', this)" style="padding:5px 11px;border:1px solid var(--acc);background:var(--acc);color:#fff;border-radius:18px;font-size:11px;cursor:pointer">전체</button>
+    <button id="lstFltReg" onclick="setLstFilter('regulated', this)" style="padding:5px 11px;border:1px solid var(--bd);background:#fff;color:var(--t2);border-radius:18px;font-size:11px;cursor:pointer">규제 LTV40</button>
+    <button id="lstFltNon" onclick="setLstFilter('non', this)" style="padding:5px 11px;border:1px solid var(--bd);background:#fff;color:var(--t2);border-radius:18px;font-size:11px;cursor:pointer">비규제 LTV70</button>
+    <span style="margin-left:auto;font-size:10.5px;color:var(--t3)">총 ${props.length}건</span>
+  </div>`;
+  // Phase 4 (2026-04-26): 렌더 안전망 + 정렬·필터.
   let cardsHtml = '';
   try {
-    cardsHtml = props.map((p,i)=>{
-      if (!p || !p.aptName) return ''; // 잘못된 카드 skip
-      return _renderListCard(p, i);
+    // 필터 적용
+    const flt = window._lstFlt || 'all';
+    let filtered = props.slice();
+    if (flt === 'regulated') filtered = filtered.filter(p => p.ltv?.includes('40'));
+    else if (flt === 'non') filtered = filtered.filter(p => !p.ltv?.includes('40'));
+    // 정렬 적용
+    const sort = document.getElementById('lstSort')?.value || 'score';
+    const sortFn = {
+      score: (a,b) => (Number(b.score)||0) - (Number(a.score)||0),
+      priceAsc: (a,b) => (Number(a.avgPrice)||0) - (Number(b.avgPrice)||0),
+      priceDesc: (a,b) => (Number(b.avgPrice)||0) - (Number(a.avgPrice)||0),
+      newBuild: (a,b) => (Number(b.buildYear)||0) - (Number(a.buildYear)||0),
+      oldBuild: (a,b) => (Number(a.buildYear)||9999) - (Number(b.buildYear)||9999),
+    }[sort] || sortFn?.score;
+    filtered.sort(sortFn);
+    cardsHtml = filtered.map((p,_i)=>{
+      if (!p || !p.aptName) return '';
+      const realIdx = props.indexOf(p);
+      return _renderListCard(p, realIdx);
     }).filter(Boolean).join('');
     if (!cardsHtml) {
       cardsHtml = `<div style="grid-column:1/-1;padding:30px 20px;text-align:center;color:var(--t3)">
@@ -2854,6 +2946,25 @@ function renderListGrid(){
   }
   g.innerHTML = banner + cardsHtml;
   return;
+}
+
+// Phase 4 (2026-04-26): 목록 필터 toggle
+function setLstFilter(f, btn) {
+  window._lstFlt = f;
+  ['lstFltAll','lstFltReg','lstFltNon'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) {
+      el.style.background = '#fff';
+      el.style.color = 'var(--t2)';
+      el.style.borderColor = 'var(--bd)';
+    }
+  });
+  if (btn) {
+    btn.style.background = 'var(--acc)';
+    btn.style.color = '#fff';
+    btn.style.borderColor = 'var(--acc)';
+  }
+  renderListGrid();
 }
 
 // 카드 1개 렌더 (renderListGrid 에서 분리 — 안전망 활용)
@@ -4211,7 +4322,26 @@ function restoreSearchFromUrl(){
     return true;
   }catch(e){return false;}
 }
-function cp(el,id){document.querySelector(`#${id}`).querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');if(id==='ch-r')populateRegionSub(el.textContent.trim());cl();dc();}
+function cp(el,id){document.querySelector(`#${id}`).querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');if(id==='ch-r')populateRegionSub(el.textContent.trim());cl();dc();_updateInputProgress();}
+
+// Phase 4 (2026-04-26): 사이드바 wizard 진행률 — 핵심 3개 (보유·예산·지역)
+function _updateInputProgress() {
+  try {
+    const el = document.getElementById('srcProg');
+    if (!el) return;
+    let n = 0;
+    if (document.querySelector('#ch-h .chip.on')) n++;
+    const bp = parseFloat(document.getElementById('bp')?.value);
+    if (bp > 0) n++;
+    if (document.querySelector('#ch-r .chip.on')) n++;
+    el.textContent = `${n}/3 완료`;
+    el.style.color = n === 3 ? 'var(--grn)' : (n >= 1 ? 'var(--amb)' : 'var(--t3)');
+  } catch (_) {}
+}
+// 입력값 변경 시도 자동 갱신
+document.addEventListener('input', e => {
+  if (e.target?.id === 'bp' || e.target?.id === 'mc' || e.target?.id === 'inc') _updateInputProgress();
+});
 function getLoanAmt(){const r=calcC();return r?r.fin:0;}
 function calcC(){
   const buy=parseFloat(document.getElementById('bp')?.value)||0,cash=parseFloat(document.getElementById('mc')?.value)||0,inc=parseFloat(document.getElementById('inc')?.value)||0;
@@ -4352,6 +4482,12 @@ function dc(){
   const buy=parseFloat(document.getElementById('c_b')?.value)||0;
   if(!buy){document.getElementById('co').style.display='none';return;}
   const inc=parseFloat(document.getElementById('c_i')?.value)||0,rate=(parseFloat(document.getElementById('c_r')?.value)||4)/100,yrs=parseInt(document.getElementById('c_y')?.value)||30,ex=parseFloat(document.getElementById('c_e')?.value)||0,cash=parseFloat(document.getElementById('c_c')?.value)||0;
+  // Phase 4 (2026-04-26): 신용대출/전세대출 잔액 → 추정 월원리금 환산해 ex 에 합산
+  // 신용대출 평균 금리 6%·만기 5년, 전세대출 평균 4%·만기 2년 보수적 가정
+  const cl=parseFloat(document.getElementById('c_cl')?.value)||0;
+  const jl=parseFloat(document.getElementById('c_jl')?.value)||0;
+  const _est=(amt,r,y)=>amt>0?Math.round(amt*(r/12)/(1-Math.pow(1+r/12,-y*12))):0;
+  const exAdded = ex + _est(cl, 0.06, 5) + _est(jl, 0.04, 2);
   const house=gct('cc-h'),isF=gct('cc-f')==='예',regS=gct('cc-r');
   const isR=regS.includes('규제')&&regS!=='비규제',isLoc=regS==='지방';
   let ltv=0,cap=Infinity,warn='';
@@ -4361,11 +4497,10 @@ function dc(){
   if(isR)cap=buy<=15?6:buy<=25?4:2;
   const lL=Math.min(buy*ltv,cap),n=yrs*12,mr=rate/12,smr=(rate+(isR?.015:.0075))/12;
   let dL=0;
-  if(inc>0){const mx=inc*10000*.4/12-ex*10000;if(mx>0)dL=Math.round(mx*(1-Math.pow(1+smr,-n))/smr/1e8*100)/100;}
+  if(inc>0){const mx=inc*10000*.4/12-exAdded*10000;if(mx>0)dL=Math.round(mx*(1-Math.pow(1+smr,-n))/smr/1e8*100)/100;}
   const fin=Math.min(lL,dL>0?dL:lL),mo=fin>0?Math.round(fin*1e8*mr/(1-Math.pow(1+mr,-n))/10000):0,need=Math.max(0,buy-cash-fin);
-  // DSR = (신규 월원리금 + 기존 월원리금) × 12 / 연소득 × 100
-  // mo, ex, inc 모두 만원 단위 → 순수 비율 계산
-  const dsr=inc>0?Math.round((mo+ex)*12/inc*100):0;
+  // DSR = (신규 월원리금 + 기존+신용+전세대출 추정 월원리금) × 12 / 연소득 × 100
+  const dsr=inc>0?Math.round((mo+exAdded)*12/inc*100):0;
   const dsrExceed=dsr>40;
   document.getElementById('co').style.display='block';
   document.getElementById('co_l').textContent=ltv===0?'불가':lL.toFixed(2)+'억';
