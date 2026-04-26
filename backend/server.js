@@ -189,33 +189,42 @@ app.get('/api/admin/kapt-diag', require('./middleware/auth').requireAuth, async 
   const axios = require('axios');
   const APT_INFO_KEY = process.env.APT_INFO_API_KEY;
   const MOLIT_KEY = process.env.MOLIT_API_KEY;
-  const TEST_KAPT = 'A10020255'; // 강남 한 단지 (server.js 의 다른 healthcheck 와 동일)
-  const URL = 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3';
+  const TEST_KAPT = 'A10020255';
+  // Phase 8+ (2026-04-26): V4 endpoint 가 정식. V3 도 비교 호출
+  const URLS = [
+    { ver: 'V4', url: 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusBassInfoV4' },
+    { ver: 'V3', url: 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3' },
+  ];
 
   async function probe(label, key) {
     if (!key) return { label, exists: false };
-    const result = { label, exists: true, keyLen: key.length, keyPrefix: key.slice(0, 6), keyHasPercent: key.includes('%') };
-    try {
-      const r = await axios.get(URL, {
-        params: { serviceKey: key, kaptCode: TEST_KAPT, _type: 'json' },
-        timeout: 8000,
-        headers: { Accept: 'application/json' },
-      });
-      result.httpStatus = r.status;
-      result.dataType = typeof r.data;
-      if (typeof r.data === 'string') {
-        result.bodyPreview = r.data.slice(0, 300);
-      } else {
-        result.resultCode = r.data?.response?.header?.resultCode;
-        result.resultMsg = r.data?.response?.header?.resultMsg;
-        result.hasItem = !!(r.data?.response?.body?.item);
+    const out = { label, exists: true, keyLen: key.length, keyPrefix: key.slice(0, 6), keyHasPercent: key.includes('%'), versions: {} };
+    for (const { ver, url } of URLS) {
+      try {
+        const r = await axios.get(url, {
+          params: { serviceKey: key, kaptCode: TEST_KAPT, _type: 'json' },
+          timeout: 8000,
+          headers: { Accept: 'application/json' },
+        });
+        const v = { httpStatus: r.status, dataType: typeof r.data };
+        if (typeof r.data === 'string') {
+          v.bodyPreview = r.data.slice(0, 200);
+        } else {
+          v.resultCode = r.data?.response?.header?.resultCode;
+          v.resultMsg = r.data?.response?.header?.resultMsg;
+          v.hasItem = !!(r.data?.response?.body?.item);
+          // V4 응답 구조 확인용 — body 의 키들 노출
+          if (r.data?.response?.body) v.bodyKeys = Object.keys(r.data.response.body).slice(0, 8);
+        }
+        out.versions[ver] = v;
+      } catch (e) {
+        out.versions[ver] = {
+          error: e.response?.status ? `HTTP ${e.response.status}` : e.message,
+          errBody: typeof e.response?.data === 'string' ? e.response.data.slice(0, 200) : null,
+        };
       }
-    } catch (e) {
-      result.error = e.response?.status ? `HTTP ${e.response.status}` : e.message;
-      const rd = e.response?.data;
-      result.errBody = typeof rd === 'string' ? rd.slice(0, 300) : rd ? JSON.stringify(rd).slice(0, 300) : null;
     }
-    return result;
+    return out;
   }
 
   const [aptInfoResult, molitResult] = await Promise.all([
@@ -232,12 +241,12 @@ app.get('/api/admin/kapt-diag', require('./middleware/auth').requireAuth, async 
     diagnosis: (() => {
       const a = aptInfoResult, m = molitResult;
       if (!a.exists && !m.exists) return '두 키 모두 미설정';
-      const aOk = a.exists && (a.resultCode === '000' || a.resultCode === '00');
-      const mOk = m.exists && (m.resultCode === '000' || m.resultCode === '00');
-      if (aOk && mOk) return '둘 다 동작 — 정상';
-      if (aOk) return 'APT_INFO_API_KEY 만 동작 — 코드는 이미 우선 사용 중. 별 문제 없음';
-      if (mOk) return 'MOLIT_API_KEY 만 동작 — APT_INFO_API_KEY 가 활용신청 안 된 키. ENV 에서 APT_INFO_API_KEY 제거하면 fallback 으로 MOLIT 사용';
-      return '둘 다 실패 — KAPT 단지정보 활용신청을 둘 다 안 한 상태. data.go.kr 에서 AptBasisInfoServiceV3 활용신청 필요';
+      const isOk = (v) => v && (v.resultCode === '000' || v.resultCode === '00') && v.hasItem;
+      const aV4 = isOk(a.versions?.V4), aV3 = isOk(a.versions?.V3);
+      const mV4 = isOk(m.versions?.V4), mV3 = isOk(m.versions?.V3);
+      if (aV4 || mV4) return 'V4 endpoint 동작 — aptFacilityService 코드가 V4 우선 시도하므로 정상';
+      if (aV3 || mV3) return 'V3 만 동작 (V4 활용신청 누락 가능). 코드는 V4→V3 fallback 이라 동작은 함';
+      return '두 endpoint 모두 실패 — 키 또는 활용신청 문제. errBody 확인 필요';
     })(),
   });
 });

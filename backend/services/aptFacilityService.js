@@ -19,8 +19,10 @@ const logger = require('../logger');
 
 const APT_INFO_KEY = process.env.APT_INFO_API_KEY || process.env.MOLIT_API_KEY;
 // AptInfo 기본정보 endpoint 후보 — 첫 호출 시 동작하는 것 발견하면 이후 캐시 사용.
-// V3 가 표준이지만 일부 키는 V1/V2 만 활성. 실패 시 다음으로 fallback.
+// Phase 8+ (2026-04-26): 사용자 활용신청 endpoint V4 가 표준. V3/V2/V1 fallback.
 const FACILITY_ENDPOINTS = [
+  'https://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusBassInfoV4',
+  'http://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusBassInfoV4',
   'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3',
   'http://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3',
   'https://apis.data.go.kr/1613000/AptBasisInfoServiceV2/getAphusBassInfoV2',
