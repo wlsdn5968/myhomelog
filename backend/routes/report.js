@@ -137,6 +137,16 @@ router.post('/generate', async (req, res) => {
     // 안전망: markdown 강조 표기 (** __ ##) 자동 제거 — prompt 가 금지해도 가끔 새어나옴
     stripMarkdownDeep(parsed);
 
+    // Phase 7 (2026-04-26): AI 응답 apartments 에 backend 의 objectiveFacts 주입
+    //   AI 가 생성하지 않는 객관 데이터 — backend 가 직접 매칭해서 보장
+    if (Array.isArray(parsed.apartments)) {
+      parsed.apartments.forEach((a, i) => {
+        const c = candidates[i];
+        if (c?.objectiveFacts) a.objectiveFacts = c.objectiveFacts;
+        if (c?.score != null) a.matchScore = c.score;
+      });
+    }
+
     const out = {
       report: parsed,
       policyContext: policyData,
@@ -218,7 +228,86 @@ function aptNameMatchScore(a, b) {
   return best;
 }
 
-/** 점수 계산 — priority + 가구상황 + 예산 fit + 데이터 품질 */
+// ── Phase 7 (2026-04-26): 객관 데이터 분류 helper ──
+// 우리 DB + KAPT API 만으로 가능한 객관 fact. 외부 의존성 0.
+// 절대 Tier(S+/A) 매기지 X — 사용자 priority 가중치의 보조 역할.
+
+/** 행정구 위계 — 강남3구·마용성광·외곽 */
+function getDistrictTier(sigungu) {
+  if (!sigungu) return { tier: '기타', bonus: 0 };
+  if (['강남구', '서초구', '송파구'].includes(sigungu)) return { tier: '강남3구', bonus: 12 };
+  if (['마포구', '용산구', '성동구', '광진구'].includes(sigungu)) return { tier: '마용성광', bonus: 8 };
+  if (['영등포구', '양천구', '강동구'].includes(sigungu)) return { tier: '서울 핵심구', bonus: 6 };
+  if (sigungu.endsWith('구') && sigungu.length <= 4) return { tier: '서울 외곽구', bonus: 3 };
+  if (['과천시', '분당구', '판교'].some(k => sigungu.includes(k))) return { tier: '분당·과천·판교', bonus: 7 };
+  return { tier: '기타', bonus: 0 };
+}
+
+/** 시공사 브랜드 등급 분류 (KAPT facility.kaptBcompany) */
+function getBuilderTier(builder) {
+  if (!builder) return { tier: '미상', bonus: 0 };
+  const b = String(builder).replace(/\s+/g, '');
+  // 1군 프리미엄
+  if (/(아크로|디에이치|르엘|푸르지오써밋)/.test(b)) return { tier: '1군 프리미엄', bonus: 8 };
+  // 1군 일반
+  if (/(힐스테이트|래미안|자이|롯데캐슬|푸르지오|아이파크|더샵|디오슬|디에트르|쌍용|두산위브)/.test(b))
+    return { tier: '1군', bonus: 5 };
+  // 2군
+  if (/(SK뷰|에스케이|이편한세상|꿈에그린|한화|호반|반도|제일)/.test(b)) return { tier: '2군', bonus: 3 };
+  // 중견
+  if (/(우미|중흥|금호|계룡|신영|동문|벽산)/.test(b)) return { tier: '중견', bonus: 2 };
+  return { tier: '일반', bonus: 1 };
+}
+
+/** 세대수 등급 보너스 (대단지 가산) */
+function getHouseholdBonus(n) {
+  if (!n || !Number.isFinite(Number(n))) return 0;
+  const v = Number(n);
+  if (v >= 3000) return 15;
+  if (v >= 2000) return 12;
+  if (v >= 1000) return 9;
+  if (v >= 500) return 5;
+  if (v >= 300) return 2;
+  return 0;
+}
+
+/** 주차 대수/세대 (KAPT facility.kaptdPcnt / kaptdaCnt) */
+function getParkingBonus(parkingTotal, households) {
+  const p = Number(parkingTotal), h = Number(households);
+  if (!p || !h) return { ratio: null, bonus: 0 };
+  const ratio = p / h;
+  if (ratio >= 1.3) return { ratio: ratio.toFixed(2), bonus: 8 };
+  if (ratio >= 1.0) return { ratio: ratio.toFixed(2), bonus: 5 };
+  if (ratio >= 0.7) return { ratio: ratio.toFixed(2), bonus: 2 };
+  return { ratio: ratio.toFixed(2), bonus: 0 };
+}
+
+/** 노후도 점수 (입주 경과년수) */
+function getAgeBonus(buildYear) {
+  if (!buildYear) return { years: null, bonus: 0 };
+  const years = new Date().getFullYear() - Number(buildYear);
+  if (years <= 5) return { years, bonus: 8 };
+  if (years <= 10) return { years, bonus: 6 };
+  if (years <= 15) return { years, bonus: 4 };
+  if (years <= 20) return { years, bonus: 2 };
+  return { years, bonus: 0 };
+}
+
+/** 규제지역 페널티 (가산이 아닌 감산) */
+function getRegulationPenalty(sigungu) {
+  if (!sigungu) return { status: '미확인', bonus: 0 };
+  // 2025.10.15 기준 강화 규제지역
+  if (['강남구', '서초구', '송파구', '용산구'].includes(sigungu)) {
+    return { status: '투기과열·토허구역 일부', bonus: -8 };
+  }
+  // 서울 25구는 모두 조정대상
+  if (sigungu.endsWith('구') && sigungu.length <= 4) {
+    return { status: '조정대상지역', bonus: -3 };
+  }
+  return { status: '비규제', bonus: 0 };
+}
+
+/** 점수 계산 — priority + 가구상황 + 예산 fit + 데이터 품질 + 객관 항목 (Phase 7) */
 function computeAptScore(c, ctx) {
   const r = {};
   let total = 0;
@@ -275,15 +364,56 @@ function computeAptScore(c, ctx) {
     r.budget_fit = 12; total += 12;
   }
 
-  // 4) 데이터 품질
-  if (c.households) { r.data_households = 5; total += 5; }
-  if (c.build_year) { r.data_build_year = 5; total += 5; }
-
-  // 5) 거래량 (기본 점수)
+  // 4) 거래량 (기본 점수) — 1차 계산 시점에 항상 있음
   r.transactions = c.n;
   total += c.n;
 
+  // ※ 데이터 품질 + 객관 항목은 KAPT 호출 후 별도 함수에서 추가 (computeObjectiveScore)
+
   return { total: Math.round(total), breakdown: r };
+}
+
+/** Phase 7: 객관 데이터 점수 추가 — KAPT API 호출 후 별도 적용 */
+function applyObjectiveScore(c) {
+  // c.score, c.scoreBreakdown 이 이미 1차 계산되어 있다고 가정
+  const r = c.scoreBreakdown;
+
+  // 데이터 품질 보너스
+  if (c.households && !r.data_households) { r.data_households = 5; c.score += 5; }
+  if (c.build_year && !r.data_build_year) { r.data_build_year = 5; c.score += 5; }
+
+  // 객관 데이터 항목 — KAPT facility + sigungu 활용
+  const district = getDistrictTier(c.sigungu);
+  if (district.bonus && !r['객관_행정구위계']) { r['객관_행정구위계'] = district.bonus; c.score += district.bonus; }
+
+  const builder = getBuilderTier(c.kaptInfo?.builder);
+  if (builder.bonus && !r['객관_시공사']) { r['객관_시공사'] = builder.bonus; c.score += builder.bonus; }
+
+  const hhBonus = getHouseholdBonus(c.households);
+  if (hhBonus && !r['객관_세대수']) { r['객관_세대수'] = hhBonus; c.score += hhBonus; }
+
+  const parking = getParkingBonus(c.kaptInfo?.parking, c.households);
+  if (parking.bonus && !r['객관_주차']) { r['객관_주차'] = parking.bonus; c.score += parking.bonus; }
+
+  const age = getAgeBonus(c.build_year);
+  if (age.bonus && !r['객관_노후도']) { r['객관_노후도'] = age.bonus; c.score += age.bonus; }
+
+  const reg = getRegulationPenalty(c.sigungu);
+  if (reg.bonus && !r['객관_규제']) { r['객관_규제'] = reg.bonus; c.score += reg.bonus; }
+
+  // 객관 fact 객체 — UI/PDF 노출용 (점수와 별개로 사용자에게 보여줌)
+  c.objectiveFacts = {
+    district: district.tier,
+    builder: c.kaptInfo?.builder ? `${c.kaptInfo.builder} (${builder.tier})` : null,
+    households: c.households || null,
+    age_years: age.years,
+    parking_per_household: parking.ratio,
+    parking_total: c.kaptInfo?.parking || null,
+    regulation: reg.status,
+    transactions_6mo: c.n,
+  };
+
+  c.score = Math.round(c.score);
 }
 
 /** 추천 단지 후보 fetch — molit + apt_master 통합 + 점수 매칭 + 다양성 */
@@ -412,17 +542,14 @@ async function fetchCandidateApts(admin, input, limit) {
     }
   }));
 
-  // 데이터 품질 보너스 재계산 (households/build_year 채워졌으면 +5씩)
+  // Phase 7 (2026-04-26): KAPT 호출 후 객관 점수 + objectiveFacts 적용
   for (const c of out) {
-    if (c.households && !c.scoreBreakdown.data_households) {
-      c.scoreBreakdown.data_households = 5;
-      c.score += 5;
-    }
-    if (c.build_year && !c.scoreBreakdown.data_build_year) {
-      c.scoreBreakdown.data_build_year = 5;
-      c.score += 5;
-    }
+    applyObjectiveScore(c);
   }
+  // 점수 재정렬 (객관 점수 추가로 순위 변동 가능)
+  out.sort((a, b) => b.score - a.score);
+  // rank 재할당
+  out.forEach((c, i) => { c.rank = i + 1; });
 
   // 진단 로그 — 운영자가 매칭 추적
   logger.info({
@@ -436,19 +563,26 @@ async function fetchCandidateApts(admin, input, limit) {
   return out;
 }
 
-/** AI prompt 빌드 — 사용자 입력 + 정책 + 단지 정보 + 점수 breakdown */
+/** AI prompt 빌드 — 사용자 입력 + 정책 + 단지 정보 + 점수 breakdown + 객관 fact (Phase 7) */
 function buildReportPrompt(input, policy, candidates) {
   const aptList = candidates.map((c, i) => {
-    const householdsStr = (c.households && Number.isFinite(c.households)) ? `${c.households}세대` : '미상';
-    const displayName = c.master_name || c.apt_name; // 정식 단지명 우선 (예: '휘경주공1단지')
+    const householdsStr = (c.households && Number.isFinite(Number(c.households))) ? `${c.households}세대` : '미상';
+    const displayName = c.master_name || c.apt_name;
     const breakdownStr = Object.entries(c.scoreBreakdown || {})
       .map(([k, v]) => `${k}=${v}`).join(', ');
+    const facts = c.objectiveFacts || {};
+    const factsList = [
+      facts.district ? `행정구위계: ${facts.district}` : null,
+      facts.builder ? `시공사: ${facts.builder}` : null,
+      facts.parking_per_household ? `주차: 세대당 ${facts.parking_per_household}대 (총 ${facts.parking_total})` : null,
+      facts.age_years != null ? `노후도: ${facts.age_years}년차` : null,
+      facts.regulation ? `규제: ${facts.regulation}` : null,
+    ].filter(Boolean).join(' | ');
     return `${i + 1}. ${displayName} (${c.sigungu} ${c.umd_nm})
-   - 준공: ${c.build_year || '미상'}년
-   - 세대수: ${householdsStr}
+   - 준공: ${c.build_year || '미상'}년 / 세대수: ${householdsStr}
    - 평형: ${c.areas.map(a => `${a}㎡(${Math.round(a / 3.3)}평)`).join(', ')}
-   - 최근 6개월 평균가: ${(c.avgPrice / 10000).toFixed(2)}억원 (${c.n}건 거래)
-   - 최근 거래일: ${c.latest}
+   - 최근 6개월 평균가: ${(c.avgPrice / 10000).toFixed(2)}억원 (${c.n}건 거래, 최근 ${c.latest})
+   - 객관 fact: ${factsList || '데이터 부족'}
    - 매칭 점수: ${c.score}점 (${breakdownStr})`;
   }).join('\n\n');
 
@@ -491,6 +625,7 @@ ${aptList}
    - priceFit: "매수가 ${input.maxBudget}억 vs 단지 평균 X억 (X% 초과/일치/여유)" — 단순 비교만
    - recommendation: "검토 권장" 또는 "예산 초과 — 다른 단지 비교 권장" — 매수 추천 X
    - matchReason: 매칭 점수 breakdown 을 자연스러운 한 줄로 풀어 씀 (예: "1순위 환금성 부합(거래활발 60점) + 예산 적합(30점)") — 사용자 투명성 핵심
+   ※ pros/cons/location 작성 시 위 '객관 fact' 의 시공사·세대수·주차·노후도·규제 정보를 적극 활용 (예: pros 에 "삼성 1군 브랜드, 세대당 1.3대 주차" 같이 구체적 fact 인용)
    ★ 응답 길이 절약: location/pros/cons/recommendation/matchReason 각각 60자 이내, ratio 30자 이내 (응답 토큰 부족시 잘림 방지)
 4. longTermView — 자녀 시점 기반 갈아타기 시나리오 (가격 수치 X, 권역만)
 5. tips — 실무 TIP 5~6개 (회전율·RR·복비·잔금·임장)
