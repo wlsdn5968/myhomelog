@@ -2604,6 +2604,7 @@ function _renderReport(data) {
         <div>✅ <b>장점</b>: ${_escHtml(a.pros || '')}</div>
         <div>⚠ <b>단점</b>: ${_escHtml(a.cons || '')}</div>
         <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--bg2)">💰 <b>예산 매칭</b>: ${_escHtml(a.priceFit || '')}</div>
+        ${a.matchReason ? `<div style="font-size:10.5px;color:var(--t3);background:var(--s1);border-radius:4px;padding:4px 8px;margin-top:4px">🏆 <b>왜 이 순위?</b> ${_escHtml(a.matchReason)}</div>` : ''}
         <div style="color:var(--acc);font-weight:600">📌 ${_escHtml(a.recommendation || '')}</div>
       </div>
     </div>
@@ -2723,6 +2724,7 @@ function _downloadReportPDF() {
         <div>✅ <b>장점</b>: ${esc(a.pros||'')}</div>
         <div>⚠ <b>단점</b>: ${esc(a.cons||'')}</div>
         <div class="apt-fit">💰 <b>예산 매칭</b>: ${esc(a.priceFit||'')}</div>
+        ${a.matchReason ? `<div class="apt-match">🏆 <b>왜 이 순위?</b> ${esc(a.matchReason)}</div>` : ''}
         <div class="apt-rec">📌 ${esc(a.recommendation||'')}</div>
       </div>
     </div>`;
@@ -2770,6 +2772,7 @@ function _downloadReportPDF() {
       .apt-body { font-size: 9.5pt; line-height: 1.65; color: #3A3530; }
       .apt-body div { margin-bottom: 1px; }
       .apt-fit { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #E8E5E0; }
+      .apt-match { font-size: 8.5pt; color: #6B5F4D; background: #F8F6F0; border-radius: 3px; padding: 3px 6px; margin-top: 3px; }
       .apt-rec { color: #C84B18; font-weight: 600; margin-top: 2px; }
       .longterm { background: #F0F7FF; border: 1px solid #BFD7F7; border-radius: 5px; padding: 9px 13px; font-size: 10pt; line-height: 1.7; color: #1B4F8A; }
       .longterm-warn { font-size: 8.5pt; color: #98938A; margin-top: 5px; }

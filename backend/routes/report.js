@@ -191,105 +191,264 @@ async function getPolicyContext() {
   };
 }
 
-/** 추천 단지 후보 fetch — molit + apt_master 통합 */
+// Phase 6 (2026-04-26): 추천 엔진 v2 — 점수 기반 매칭 + 구 다양성 보장 + 토큰 기반 master 매칭
+
+/** 단지명 토큰 추출 (sliding window 길이 2~4) — '주공1' vs '휘경주공1단지' 매칭용 */
+function extractAptTokens(name) {
+  const cleaned = String(name||'').replace(/\s+/g, '').replace(/아파트$/, '');
+  const tokens = new Set();
+  for (let len = 4; len >= 2; len--) {
+    for (let i = 0; i <= cleaned.length - len; i++) {
+      tokens.add(cleaned.substring(i, i + len));
+    }
+  }
+  return Array.from(tokens);
+}
+
+/** 두 단지명의 매칭 점수 (가장 긴 공통 토큰 길이) */
+function aptNameMatchScore(a, b) {
+  const at = extractAptTokens(a);
+  const bSet = new Set(extractAptTokens(b));
+  let best = 0;
+  for (const t of at) {
+    if (bSet.has(t) && t.length > best) best = t.length;
+  }
+  return best;
+}
+
+/** 점수 계산 — priority + 가구상황 + 예산 fit + 데이터 품질 */
+function computeAptScore(c, ctx) {
+  const r = {};
+  let total = 0;
+  const p = ctx.priority;
+
+  // 1) priority 가중치
+  if (p === '환금성') {
+    const sub = c.n * 4 + (c.households >= 500 ? 25 : (c.households >= 300 ? 12 : 0));
+    r.priority_환금성 = sub; total += sub;
+  } else if (p === '학군') {
+    const goodSchoolGu = ['양천구', '강남구', '서초구', '송파구', '노원구', '광진구'];
+    const sub = goodSchoolGu.includes(c.sigungu) ? 35 : 5;
+    r.priority_학군 = sub; total += sub;
+  } else if (p === '역세권') {
+    const sub = c.n >= 12 ? 20 : (c.n >= 8 ? 12 : 5);
+    r.priority_역세권 = sub; total += sub;
+  } else if (p === '신축') {
+    const sub = c.build_year >= 2018 ? 35 : (c.build_year >= 2012 ? 18 : 0);
+    r.priority_신축 = sub; total += sub;
+  } else if (p === '재건축') {
+    const sub = (c.build_year && c.build_year <= 1995) ? 30 : (c.build_year && c.build_year <= 2000 ? 12 : 0);
+    r.priority_재건축 = sub; total += sub;
+  } else if (p === '교통') {
+    const sub = c.n >= 10 ? 18 : 6;
+    r.priority_교통 = sub; total += sub;
+  } else if (p === '조용함') {
+    const quietGu = ['도봉구', '강북구', '중랑구', '은평구', '금천구'];
+    const sub = quietGu.includes(c.sigungu) ? 18 : 3;
+    r.priority_조용함 = sub; total += sub;
+  } else if (p === '갭투자') {
+    const sub = c.n >= 10 ? 12 : 3;
+    r.priority_갭투자 = sub; total += sub;
+  }
+
+  // 2) 가구 상황 보너스
+  if (ctx.kidPlan === '초등' || ctx.kidPlan === '중등+') {
+    const goodSchoolGu = ['양천구', '강남구', '서초구', '송파구', '노원구', '광진구'];
+    if (goodSchoolGu.includes(c.sigungu)) {
+      r.kids_school_bonus = 20; total += 20;
+    }
+  }
+  if (ctx.stayYears === '10년+' && c.build_year >= 2010) {
+    r.long_stay_bonus = 10; total += 10;
+  }
+  if (ctx.isFirstBuyer && c.avgPrice <= 90000) {
+    r.first_buyer_bonus = 5; total += 5;
+  }
+
+  // 3) 예산 fit
+  const ratio = c.avgPrice / (ctx.buy * 10000);
+  if (ratio >= 0.9 && ratio <= 1.1) {
+    r.budget_fit = 30; total += 30;
+  } else if (ratio >= 0.8 && ratio <= 1.2) {
+    r.budget_fit = 12; total += 12;
+  }
+
+  // 4) 데이터 품질
+  if (c.households) { r.data_households = 5; total += 5; }
+  if (c.build_year) { r.data_build_year = 5; total += 5; }
+
+  // 5) 거래량 (기본 점수)
+  r.transactions = c.n;
+  total += c.n;
+
+  return { total: Math.round(total), breakdown: r };
+}
+
+/** 추천 단지 후보 fetch — molit + apt_master 통합 + 점수 매칭 + 다양성 */
 async function fetchCandidateApts(admin, input, limit) {
   const buy = parseFloat(input.maxBudget) || 0;
   const region = String(input.region || '').trim();
   const pyeong = String(input.pyeong || '').trim();
+  const ctx = {
+    buy,
+    priority: String(input.priority || '환금성').trim(),
+    kidPlan: String(input.kidPlan || '없음').trim(),
+    stayYears: String(input.stayYears || '5~10년').trim(),
+    isFirstBuyer: !!input.isFirstBuyer,
+  };
 
-  // 평형 범위 (예: '중형 23~33평' → sqm 76~109)
+  // 평형 범위
   let minSqm = 0, maxSqm = 999;
   if (pyeong.includes('소형')) { minSqm = 50; maxSqm = 75; }
   else if (pyeong.includes('중형')) { minSqm = 76; maxSqm = 109; }
   else if (pyeong.includes('대형')) { minSqm = 110; maxSqm = 200; }
 
-  // 가격 범위 — 예산 -30% ~ +20% (사용자 피드백: 2~3억 초과는 부담)
-  // Phase 5+ (2026-04-26): maxAmt 1.30 → 1.20 (9억 예산 기준 10.8억까지만 후보)
   const minAmt = Math.round(buy * 0.7 * 10000);
   const maxAmt = Math.round(buy * 1.2 * 10000);
 
-  // 지역 필터 — sigungu 기반 (region이 sigungu 직접 또는 광역시일 수 있음)
+  // 지역
   let q = admin.from('molit_transactions')
     .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, exclu_use_ar, deal_amount, deal_date, apt_seq')
     .gte('exclu_use_ar', minSqm).lte('exclu_use_ar', maxSqm)
     .gte('deal_amount', minAmt).lte('deal_amount', maxAmt)
     .gte('deal_date', new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
 
-  // 지역 매칭 — 시/구 단위 우선 (예: "서울 노원구" → sigungu LIKE '%노원구%')
-  // Phase 5+ (2026-04-26): 이전엔 광역만 보고 lawd_cd '11%' 매칭해서 노원구 요청에도
-  // 중구/동대문구 같은 거래 활발 지역이 우선 매칭되던 버그 수정.
   const guMatch = region.match(/([가-힣]+구)/);
-  if (guMatch) {
-    q = q.like('sigungu', `%${guMatch[1]}%`);
-  } else if (region.includes('서울')) {
-    q = q.like('lawd_cd', '11%');
-  } else if (region.includes('경기')) {
-    q = q.like('lawd_cd', '41%');
-  } else if (region.includes('인천')) {
-    q = q.like('lawd_cd', '28%');
-  }
+  if (guMatch) q = q.like('sigungu', `%${guMatch[1]}%`);
+  else if (region.includes('서울')) q = q.like('lawd_cd', '11%');
+  else if (region.includes('경기')) q = q.like('lawd_cd', '41%');
+  else if (region.includes('인천')) q = q.like('lawd_cd', '28%');
 
-  const { data: txs, error } = await q.limit(500);
+  // Phase 6: 광역 검색 시 후보 풀 확장 (1500건 → 단지 다양성 확보)
+  const { data: txs, error } = await q.limit(1500);
   if (error) throw error;
 
-  // apt_seq 기준 그룹 (단지별 평균가·거래수)
+  // 단지 그룹화 + build_year mode (최빈값) 산출
   const byApt = {};
   for (const t of (txs || [])) {
     const key = `${t.apt_name}|${t.sigungu}|${t.umd_nm}`;
     if (!byApt[key]) byApt[key] = {
       apt_name: t.apt_name, sigungu: t.sigungu, umd_nm: t.umd_nm,
-      lawd_cd: t.lawd_cd, build_year: t.build_year,
+      lawd_cd: t.lawd_cd,
       sum: 0, n: 0, areas: new Set(), latest: t.deal_date,
+      buildYearCnt: {},
     };
     byApt[key].sum += t.deal_amount;
     byApt[key].n++;
     byApt[key].areas.add(Math.round(t.exclu_use_ar));
     if (t.deal_date > byApt[key].latest) byApt[key].latest = t.deal_date;
+    if (t.build_year) {
+      byApt[key].buildYearCnt[t.build_year] = (byApt[key].buildYearCnt[t.build_year] || 0) + 1;
+    }
   }
 
-  // 거래 활발 순 정렬 + 상위 N
-  const ranked = Object.values(byApt)
+  let pool = Object.values(byApt)
     .filter(a => a.n >= 1)
-    .map(a => ({
-      ...a,
-      avgPrice: a.sum / a.n,
-      areas: [...a.areas].sort((x, y) => x - y),
-    }))
-    .sort((a, b) => b.n - a.n)
-    .slice(0, limit);
+    .map(a => {
+      // build_year 우선순위 #2: molit 거래 최빈값
+      const entries = Object.entries(a.buildYearCnt);
+      const mode = entries.length
+        ? entries.reduce((m, [y, c]) => c > m[1] ? [y, c] : m, ['', 0])[0]
+        : null;
+      return {
+        apt_name: a.apt_name, sigungu: a.sigungu, umd_nm: a.umd_nm,
+        lawd_cd: a.lawd_cd, n: a.n, latest: a.latest,
+        avgPrice: a.sum / a.n,
+        areas: [...a.areas].sort((x, y) => x - y),
+        build_year: mode ? Number(mode) : null,
+        households: null,
+        master_matched: false,
+      };
+    });
 
-  // apt_master 풍부화 (가능한 경우)
-  if (ranked.length) {
-    const names = ranked.map(r => r.apt_name);
+  // apt_master 토큰 매칭 — sigungu+umd_nm 같은 후보 중 단지명 토큰 매칭
+  if (pool.length) {
+    const sigunguList = Array.from(new Set(pool.map(p => p.sigungu).filter(Boolean)));
+    const umdList = Array.from(new Set(pool.map(p => p.umd_nm).filter(Boolean)));
+
     const { data: masters } = await admin
       .from('apt_master')
       .select('apt_name, sigungu, umd_nm, kapt_code, facility')
-      .in('apt_name', names);
-    const masterMap = new Map();
+      .in('sigungu', sigunguList)
+      .in('umd_nm', umdList);
+
+    const mastersByKey = {};
     for (const m of (masters || [])) {
-      masterMap.set(`${m.apt_name}|${m.sigungu}|${m.umd_nm}`, m);
+      const k = `${m.sigungu}|${m.umd_nm}`;
+      if (!mastersByKey[k]) mastersByKey[k] = [];
+      mastersByKey[k].push(m);
     }
-    for (const r of ranked) {
-      const m = masterMap.get(`${r.apt_name}|${r.sigungu}|${r.umd_nm}`);
-      if (m?.facility) {
-        r.households = m.facility.kaptdaCnt || m.facility.householdCount || null;
+
+    for (const r of pool) {
+      const candidates = mastersByKey[`${r.sigungu}|${r.umd_nm}`] || [];
+      let best = null, bestScore = 0;
+      for (const m of candidates) {
+        const score = aptNameMatchScore(r.apt_name, m.apt_name);
+        if (score >= 2 && score > bestScore) {
+          bestScore = score;
+          best = m;
+        }
+      }
+      if (best?.facility) {
+        const f = best.facility;
+        r.households = f.kaptdaCnt || f.householdCount || f.kaptCount || null;
+        // build_year 우선순위 #1: master facility.kaptUsedate (KAPT 공식 사용승인일)
+        const useDate = f.kaptUsedate || f.kaptUseDate || f.useApprovalDate;
+        if (useDate) {
+          const ys = String(useDate).slice(0, 4);
+          if (/^\d{4}$/.test(ys)) r.build_year = Number(ys); // master 가 우선
+        }
+        r.master_matched = true;
+        r.master_name = best.apt_name; // 정식 단지명 (예: '휘경주공1단지')
       }
     }
   }
 
-  return ranked;
+  // 점수 계산
+  for (const c of pool) {
+    const s = computeAptScore(c, ctx);
+    c.score = s.total;
+    c.scoreBreakdown = s.breakdown;
+  }
+
+  // 점수 정렬 + 다양성 (한 sigungu 최대 3개)
+  pool.sort((a, b) => b.score - a.score);
+  const out = [];
+  const guCnt = {};
+  for (const c of pool) {
+    if (out.length >= limit) break;
+    const cnt = guCnt[c.sigungu] || 0;
+    if (cnt >= 3) continue;
+    guCnt[c.sigungu] = cnt + 1;
+    out.push(c);
+  }
+
+  // 진단 로그 — 운영자가 매칭 추적
+  logger.info({
+    region, priority: ctx.priority, pool_size: pool.length,
+    selected: out.map(c => ({
+      name: c.apt_name, sigungu: c.sigungu, score: c.score,
+      n: c.n, master_matched: c.master_matched,
+    })),
+  }, '보고서 후보 매칭 (Phase 6)');
+
+  return out;
 }
 
-/** AI prompt 빌드 — 사용자 입력 + 정책 + 단지 정보 */
+/** AI prompt 빌드 — 사용자 입력 + 정책 + 단지 정보 + 점수 breakdown */
 function buildReportPrompt(input, policy, candidates) {
   const aptList = candidates.map((c, i) => {
     const householdsStr = (c.households && Number.isFinite(c.households)) ? `${c.households}세대` : '미상';
-    return `${i + 1}. ${c.apt_name} (${c.sigungu} ${c.umd_nm})
+    const displayName = c.master_name || c.apt_name; // 정식 단지명 우선 (예: '휘경주공1단지')
+    const breakdownStr = Object.entries(c.scoreBreakdown || {})
+      .map(([k, v]) => `${k}=${v}`).join(', ');
+    return `${i + 1}. ${displayName} (${c.sigungu} ${c.umd_nm})
    - 준공: ${c.build_year || '미상'}년
    - 세대수: ${householdsStr}
    - 평형: ${c.areas.map(a => `${a}㎡(${Math.round(a / 3.3)}평)`).join(', ')}
    - 최근 6개월 평균가: ${(c.avgPrice / 10000).toFixed(2)}억원 (${c.n}건 거래)
-   - 최근 거래일: ${c.latest}`;
+   - 최근 거래일: ${c.latest}
+   - 매칭 점수: ${c.score}점 (${breakdownStr})`;
   }).join('\n\n');
 
   // REPORT_SYSTEM_PROMPT 는 callAI options.system 으로 전달됨 (중복 제거)
@@ -325,11 +484,12 @@ ${aptList}
    예: {"text":"회전율 — 6개월 17건·대단지", "stars":3}
         {"text":"역세권 — 7호선 도보 8분", "stars":3}
         {"text":"준공연도 — 1999년 노후도 중간", "stars":2}
-3. apartments — 위 후보 단지 그대로 (rank·name·areaSqm·areaPyeong·buildYear·households·ratio·location·pros·cons·priceFit·recommendation)
+3. apartments — 위 후보 단지 그대로 (rank·name·areaSqm·areaPyeong·buildYear·households·ratio·location·pros·cons·priceFit·recommendation·matchReason)
    - name 형식: "단지명 (시군구 동)" — 예: "한양아파트 (노원구 상계동)" — 동명 누락 금지 (사용자 식별용)
    - households: 입력 데이터의 세대수 그대로 사용. "미상"이면 "미상"으로 표기 (NaN/null 금지)
    - priceFit: "매수가 ${input.maxBudget}억 vs 단지 평균 X억 (X% 초과/일치/여유)" — 단순 비교만
    - recommendation: "검토 권장" 또는 "예산 초과 — 다른 단지 비교 권장" — 매수 추천 X
+   - matchReason: 매칭 점수 breakdown 을 자연스러운 한 줄로 풀어 씀 (예: "1순위 환금성 부합(거래활발 60점) + 예산 적합(30점)") — 사용자 투명성 핵심
 4. longTermView — 자녀 시점 기반 갈아타기 시나리오 (가격 수치 X, 권역만)
 5. tips — 실무 TIP 5~6개 (회전율·RR·복비·잔금·임장)
 
