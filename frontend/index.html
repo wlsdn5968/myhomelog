@@ -2558,6 +2558,8 @@ async function generateReport() {
       throw new Error(j.error || `HTTP ${r.status}`);
     }
     const data = await r.json();
+    // PDF 출력용 입력 정보 저장 (보고서 응답에는 input 없음 — frontend 가 보유)
+    window._lastReportInput = { maxBudget: buy, myCash: cash, region, pyeong, priority, kidPlan, stayYears, houseStatus };
     _renderReport(data);
   } catch (e) {
     result.innerHTML = `<div style="padding:30px;text-align:center;color:var(--red);font-size:12px">보고서 생성 실패: ${_escHtml(e.message)}<br><span style="font-size:10px;color:var(--t3)">잠시 후 다시 시도해주세요</span></div>`;
@@ -2690,9 +2692,135 @@ function _addAllReportAptsToBookmarks() {
 }
 
 function _downloadReportPDF() {
-  // window.print 활용 (인쇄 → PDF 저장 OS 기능)
-  toast('인쇄 대화상자에서 "PDF로 저장" 선택');
-  setTimeout(() => window.print(), 600);
+  // Phase 5+ (2026-04-26): 새 창 패턴 — 메인 페이지 UI (헤더·사이드바·플로팅챗 등) 영향 0
+  // 이전: window.print() — 헤더·사이드바·하단탭·toast 다 인쇄됨 → 보기 안 좋음 + 내용 잘림
+  const data = window._lastReport;
+  if (!data) { toast('먼저 보고서를 생성하세요'); return; }
+  const inp = window._lastReportInput || {};
+  const r = data.report || {};
+  const policy = data.policyContext || {};
+  const w = window.open('', '_blank');
+  if (!w) { toast('팝업 차단 해제 후 다시 시도하세요'); return; }
+
+  const esc = (s) => String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const ts = new Date(data.generatedAt || Date.now()).toLocaleString('ko-KR');
+
+  const coreHtml = (r.coreMessages || []).map(m => `<li>${esc(m)}</li>`).join('');
+  const checklistHtml = (r.checklist || []).map(c => {
+    const n = Math.max(1, Math.min(3, c.stars||1));
+    const stars = '★'.repeat(n) + '☆'.repeat(3-n);
+    return `<div class="ck"><span class="ckstars">${stars}</span> ${esc(c.text||'')}</div>`;
+  }).join('');
+  const aptsHtml = (r.apartments || []).map(a => {
+    const hN = Number(a.households);
+    const hStr = (a.households && Number.isFinite(hN)) ? `${hN.toLocaleString()}세대` : '세대수 미상';
+    return `<div class="apt">
+      <div class="apt-name">${a.rank||''}. ${esc(a.name||'')} ${a.areaPyeong ? `<span class="apt-area">${a.areaPyeong}평 (${a.areaSqm}㎡)</span>` : ''}</div>
+      <div class="apt-meta">준공 ${a.buildYear||'?'} · ${hStr}</div>
+      <div class="apt-body">
+        <div>📍 <b>입지</b>: ${esc(a.location||'')}</div>
+        <div>💡 <b>특징</b>: ${esc(a.ratio||'')}</div>
+        <div>✅ <b>장점</b>: ${esc(a.pros||'')}</div>
+        <div>⚠ <b>단점</b>: ${esc(a.cons||'')}</div>
+        <div class="apt-fit">💰 <b>예산 매칭</b>: ${esc(a.priceFit||'')}</div>
+        <div class="apt-rec">📌 ${esc(a.recommendation||'')}</div>
+      </div>
+    </div>`;
+  }).join('');
+  const tipsHtml = (r.tips || []).map(t => `<li>${esc(t)}</li>`).join('');
+
+  const inputLine = [
+    inp.maxBudget ? `매수가 ${inp.maxBudget}억` : null,
+    inp.myCash ? `자기자본 ${inp.myCash}억` : null,
+    inp.region ? `지역 ${esc(inp.region)}` : null,
+    inp.pyeong ? `평형 ${esc(inp.pyeong)}` : null,
+    inp.priority ? `1순위 ${esc(inp.priority)}` : null,
+  ].filter(Boolean).join(' · ');
+
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
+    <title>내집로그 1Page 컨설팅 보고서</title>
+    <style>
+      @page { margin: 16mm 14mm; @bottom-center { content: "내집로그 1Page 컨설팅 · 매수·매도 추천 X · 미래 예측 X · " counter(page) "/" counter(pages); font-size: 8.5pt; color: #98938A; } }
+      * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      body { font-family: 'Malgun Gothic','맑은 고딕',sans-serif; padding: 0; margin: 0; font-size: 10.5pt; line-height: 1.55; color: #18160F; }
+      h1 { font-size: 17pt; font-weight: 700; margin: 0 0 4px; color: #C84B18; letter-spacing: -0.3px; }
+      .meta { font-size: 9pt; color: #98938A; margin-bottom: 12px; padding-bottom: 7px; border-bottom: 1px solid #E2DDD5; }
+      .meta b { color: #18160F; }
+      .sec { margin-bottom: 11px; page-break-inside: avoid; }
+      .sec-title { font-size: 11.5pt; font-weight: 700; color: #18160F; margin-bottom: 6px; padding-left: 5px; border-left: 3px solid #C84B18; }
+      .core { background: #FFFAF0; border: 1px solid #E8C896; border-radius: 5px; padding: 9px 13px; }
+      .core ol { margin: 0; padding-left: 20px; font-size: 10.5pt; line-height: 1.7; }
+      .core li { margin-bottom: 3px; }
+      .policy { background: #F8F8F6; border: 1px solid #E2DDD5; border-radius: 5px; padding: 9px 13px; font-size: 9.5pt; line-height: 1.7; }
+      .policy-note { font-size: 8.5pt; color: #98938A; margin-top: 4px; }
+      .ck { padding: 3px 4px; font-size: 10pt; border-bottom: 1px dashed #E8E5E0; line-height: 1.5; }
+      .ck:last-child { border-bottom: none; }
+      .ckstars { color: #D4922A; font-weight: 700; min-width: 38px; display: inline-block; font-size: 10pt; }
+      .apt { border: 1px solid #E2DDD5; border-radius: 5px; padding: 9px 13px; margin-bottom: 7px; page-break-inside: avoid; background: #fff; }
+      .apt-name { font-size: 11pt; font-weight: 700; margin-bottom: 3px; color: #18160F; }
+      .apt-area { font-size: 9.5pt; font-weight: 500; color: #98938A; }
+      .apt-meta { font-size: 9pt; color: #98938A; margin-bottom: 5px; }
+      .apt-body { font-size: 9.5pt; line-height: 1.65; color: #3A3530; }
+      .apt-body div { margin-bottom: 1px; }
+      .apt-fit { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #E8E5E0; }
+      .apt-rec { color: #C84B18; font-weight: 600; margin-top: 2px; }
+      .longterm { background: #F0F7FF; border: 1px solid #BFD7F7; border-radius: 5px; padding: 9px 13px; font-size: 10pt; line-height: 1.7; color: #1B4F8A; }
+      .longterm-warn { font-size: 8.5pt; color: #98938A; margin-top: 5px; }
+      .tips ul { margin: 0; padding-left: 20px; font-size: 9.5pt; line-height: 1.7; }
+      .tips li { margin-bottom: 2px; }
+      .disclaimer { margin-top: 14px; padding: 9px 13px; background: #FAEBEB; border: 1px solid #C84B18; border-radius: 5px; font-size: 8.5pt; color: #A82525; line-height: 1.6; page-break-inside: avoid; }
+      .disclaimer b { display: block; margin-bottom: 3px; font-size: 9pt; }
+      @media print { body { padding: 0; margin: 0; } .noprint { display: none !important; } }
+      .noprint { position: fixed; top: 16px; right: 16px; padding: 8px 14px; background: #C84B18; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 9999; }
+    </style>
+  </head><body>
+    <button class="noprint" onclick="window.print()">🖨 PDF 저장</button>
+    <h1>📊 내집로그 1Page 컨설팅 보고서</h1>
+    <div class="meta">생성 ${esc(ts)}${inputLine ? ` · <b>${inputLine}</b>` : ''}</div>
+
+    <div class="sec">
+      <div class="sec-title">🎯 핵심 방향 (회원님 가구 상황 기반)</div>
+      <div class="core"><ol>${coreHtml}</ol></div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">📜 현재 부동산 정책 환경 (${esc(policy.snapshot||'')})</div>
+      <div class="policy">
+        • <b>규제지역</b>: ${esc(policy.regulatedAreas||'')}<br>
+        • <b>토지거래허가</b>: ${esc(policy.landTrade||'')}<br>
+        • <b>정책자금 종류</b>: ${(policy.policyLoans||[]).join(' · ')}
+        <div class="policy-note">※ ${esc(policy.note||'')} · 자세한 자격·신청은 ${esc(policy.policyContact||'')}</div>
+      </div>
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">✅ 매수·갈아타기 체크리스트</div>
+      ${checklistHtml}
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🏘 회원님 조건 부합 단지 ${(r.apartments||[]).length}개</div>
+      ${aptsHtml}
+    </div>
+
+    <div class="sec">
+      <div class="sec-title">🔁 갈아타기 관점 (장기)</div>
+      <div class="longterm">${esc(r.longTermView||'')}<div class="longterm-warn">⚠ 미래 가격 예측 X. 정성적 안내만.</div></div>
+    </div>
+
+    <div class="sec tips">
+      <div class="sec-title">💡 매수 실무 TIP</div>
+      <ul>${tipsHtml}</ul>
+    </div>
+
+    <div class="disclaimer">
+      <b>⚠ 본 보고서는 정보 정리이며 투자자문업·중개업·대출모집인업이 아닙니다.</b>
+      매수·매도 추천 X · 미래 가격 예측 X · 대출 알선 X. 모든 의사결정과 책임은 본인에게 있습니다.
+    </div>
+
+    <script>setTimeout(()=>window.print(), 500);</script>
+  </body></html>`);
+  w.document.close();
 }
 
 // Phase 4 (2026-04-26): 10.15 규제 요약 모달 — 헤더 배지 클릭 시 규제 핵심 표 노출
