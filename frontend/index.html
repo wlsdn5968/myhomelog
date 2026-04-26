@@ -737,6 +737,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <button class="htab" onclick="sv('clause',this)">✍ 특약생성</button>
     <button class="htab" onclick="sv('news',this)">📰 뉴스</button>
     <button class="htab" onclick="sv('subs',this)">📅 청약</button>
+    <button class="htab" onclick="sv('guide',this)" style="opacity:0.85" title="처음이세요? 3분 가이드">📖 사용법</button>
   </div>
   <!-- P0 (2026-04-25 Phase 2 시나리오 A): 단지명·동명 직접 검색바 -->
   <div class="hsearch" style="position:relative;flex:1;max-width:320px;margin:0 8px">
@@ -1275,6 +1276,119 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 
     <div style="margin-top:14px;padding:10px 12px;background:var(--ambL);border:1px solid #E8D2A8;border-radius:8px;font-size:10.5px;color:var(--amb);line-height:1.6">
       ⚠ 청약 정보는 한국부동산원 공식 발표를 기준으로 갱신되나, <strong>실제 신청 전 청약Home에서 최종 확인 필수.</strong> 본 서비스는 정보 인덱싱만 제공하며 신청·당첨을 보장하지 않습니다.
+    </div>
+  </div>
+</div>
+
+<!-- 사용법 탭 (Phase 4, 2026-04-26) — 8섹션 가이드 -->
+<div class="biz-view" id="view-guide" style="display:none">
+  <div class="biz-section" style="max-width:780px;margin:0 auto">
+    <h3 style="margin:0 0 4px">📖 내집로그 사용법</h3>
+    <p style="font-size:11.5px;color:var(--t3);margin:0 0 18px">3분 안에 핵심 가치 체험 + 자주 묻는 답</p>
+
+    <!-- 1. 30초 가이드 -->
+    <div style="background:linear-gradient(135deg,#FFF5E6,#FFFAF0);border:1px solid #E8C896;border-radius:12px;padding:16px 18px;margin-bottom:18px">
+      <div style="font-size:13px;font-weight:800;color:#8B6914;margin-bottom:8px">🚀 30초 가이드 — 처음이세요?</div>
+      <div style="font-size:12px;color:var(--t1);line-height:1.8">
+        1. 좌측 사이드바에 <b>주택 보유 / 매수가 / 희망지역</b> 3개만 입력 → "🤖 실거래 기반 단지 정리" 클릭<br>
+        2. 추천 단지 카드 → 클릭하면 <b>실거래가·평형·시세 추이·리스크</b> 모두 볼 수 있어요<br>
+        3. 마음에 드는 단지 → ⭐ 관심 추가 → 임장노트 작성<br>
+        4. 계약 직전 → <b>✍ AI 특약 초안</b> 생성 → 변호사 검토
+      </div>
+      <button class="abtn acc" style="margin-top:12px;padding:8px 16px;width:auto;font-size:12px" onclick="sv('map')">🗺 지금 지도부터 시작하기 →</button>
+    </div>
+
+    <!-- 2. 단지 검색 -->
+    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px" open>
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">🔍 단지 검색 — 호갱노노처럼</summary>
+      <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
+        <b>방법 1. 헤더 검색바</b> — "공덕래미안" 또는 "공덕동" 입력 → 자동완성에서 클릭<br>
+        <b>방법 2. 지도 panning</b> — 지도 이동 후 "🔄 이 영역 단지 보기" 버튼<br>
+        <b>방법 3. 사이드바 입력 → 추천</b> — 매수가·지역 기반 AI 추천 15개<br><br>
+        <span style="background:#F0F7FF;border:1px solid #BFD7F7;border-radius:6px;padding:6px 10px;display:inline-block;font-size:11px;color:#1B4F8A">💡 단지 클릭 → <b>실거래가 탭</b>에서 평형 chip 으로 자기 예산 평형만 필터 가능</span>
+      </div>
+    </details>
+
+    <!-- 3. 대출 한도 계산 -->
+    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">🧮 대출 한도 계산 — 2025.10.15 규제 반영</summary>
+      <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
+        매수가·연소득·기존 대출(신용·전세) 입력 → <b>LTV·DSR·추천 한도·월 원리금</b> 즉시 계산<br>
+        <b>정책자금 4종 비교</b>: 보금자리·디딤돌·신혼 디딤돌·신생아 특례 (한도·금리)<br>
+        <b>부족 자금 시나리오</b>: 신용대출·마이너스·가족 차용 등 합법 해결 5가지<br><br>
+        <span style="font-size:11px;color:var(--t3)">⚠ 본 계산은 참고용. 실제 한도는 금융기관 심사로 결정됩니다.</span>
+        <button class="abtn a2" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px" onclick="sv('calc')">🧮 대출 계산 열기 →</button>
+      </div>
+    </details>
+
+    <!-- 4. AI 특약 (핵심 가치 강조) -->
+    <details style="background:linear-gradient(135deg,#FFF7F0,#fff);border:2px solid #FF6B35;border-radius:10px;padding:13px 16px;margin-bottom:10px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:800;color:#FF6B35;list-style:none">✍ AI 특약 초안 생성 — 이 서비스의 핵심</summary>
+      <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
+        매매 정보 입력 → <b>법령 인용 + 매수자 보호 특약 초안 5~8개</b> 자동 생성<br>
+        누수·전세 끼고 매수·세입자 승계·재건축 추진 등 상황별 chip 선택<br><br>
+        <b>가치</b>: 변호사 상담 30만원 → <b>무료 1일 1회 / Pro 9,900원/월 무제한</b><br>
+        <b>법적 안전</b>: 모든 초안은 <span style="color:var(--red);font-weight:600">변호사·공인중개사 최종 검토 필수</span><br><br>
+        <span style="background:#FFF7E6;border:1px solid #E8C896;border-radius:6px;padding:6px 10px;display:inline-block;font-size:11px;color:#8B6914">💡 검토 의뢰: <a href="https://www.kabl.kr" target="_blank" rel="noopener" style="color:#8B6914;text-decoration:underline">대한변호사협회</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:#8B6914;text-decoration:underline">한국공인중개사협회</a></span>
+        <button class="abtn" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px;background:#FF6B35;color:#fff;border:none" onclick="sv('clause')">✍ 특약 만들어보기 →</button>
+      </div>
+    </details>
+
+    <!-- 5. AI 챗 -->
+    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">🤖 AI 챗봇 활용</summary>
+      <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
+        우측 또는 💬 버튼 → AI 도우미. <b>6개 빠른 질문 버튼</b> + 직접 입력 가능<br>
+        단지 클릭 후 챗에 질문하면 <b>그 단지 정보가 자동 컨텍스트</b> (예: "이 단지 LTV 얼마?")<br>
+        무료 일 15회 / 로그인 일 25회 / Pro 일 100회<br><br>
+        <span style="font-size:11px;color:var(--t3)">⚠ 주민번호·계좌·카드번호 입력 자동 차단 (PIPA 준수). AI 답변은 참고용 — 매수·매도 추천 X.</span>
+      </div>
+    </details>
+
+    <!-- 6. 관심 단지 + 임장노트 -->
+    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">⭐ 관심 단지 + 임장노트</summary>
+      <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
+        <b>관심 단지</b>: 단지 상세에서 ⭐ 클릭 → 좌측 사이드바에 누적<br>
+        <b>임장노트</b>: 단지 상세 → 임장노트 탭 → 체크리스트·평점·메모·방문일<br>
+        <b>비로그인</b>: 이 기기 브라우저에만 저장<br>
+        <b>로그인</b>: <span style="color:var(--grn);font-weight:600">클라우드 자동 동기화 (모든 기기 공유)</span>
+      </div>
+    </details>
+
+    <!-- 7. 청약·뉴스·계약 타임라인 -->
+    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">📅 청약 · 뉴스 · 계약 타임라인 (부가 도구)</summary>
+      <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
+        <b>📅 청약</b>: 한국부동산원 청약Home 일정 + 가점 계산기 (84점) + 지역별 당첨 커트라인 통계<br>
+        <b>📰 뉴스</b>: 부동산 뉴스 6개 카테고리 + 매일 자정 갱신 + AI 3줄 시황<br>
+        <b>📅 계약 타임라인</b>: 좌측 사이드바 — 계약일·잔금일 입력 → D-day 자동 계산
+      </div>
+    </details>
+
+    <!-- 8. FAQ + 면책 -->
+    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">❓ 자주 묻는 질문 + 면책 안내</summary>
+      <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
+        <b>Q. 데이터는 어디서 오나요?</b><br>
+        국토교통부 실거래가 (data.go.kr) + 한국부동산원 청약Home + 카카오맵 좌표/학교/편의시설.<br><br>
+        <b>Q. 단지 정식명과 거래 신고명이 달라요</b><br>
+        MOLIT가 면적군별로 분리 신고하는 경우 (예: '풍림아파트A·B') 가 있어요. 우리는 정식명 (예: '공릉풍림아이원') 클릭 시 모든 신고명 거래 자동 통합해서 보여드립니다.<br><br>
+        <b>Q. AI 답변이 틀린 것 같아요</b><br>
+        답변 옆 👍/👎 클릭 → 운영자 주간 리뷰 → 패턴 개선. AI 답변은 항상 <b>참고용</b>이며 의사결정 책임은 본인에게 있습니다.<br><br>
+        <b>Q. Pro 결제는 어떻게?</b><br>
+        billing 페이지 (사업자등록 완료 후 활성화 예정). 현재는 무료 사용 가능.<br><br>
+        <span style="background:var(--redL);border:1px solid #EEC8C8;border-radius:6px;padding:8px 10px;display:block;font-size:11px;color:var(--red);font-weight:600;line-height:1.6">⚠ <u>본 서비스는 매수·매도를 권유하지 않습니다.</u> 모든 분석·시그널은 과거 실거래 통계 정리이며 미래 가격을 보장하지 않습니다. 자본시장법상 투자자문업·공인중개사법상 중개업에 해당하지 않습니다.</span>
+      </div>
+    </details>
+
+    <!-- 9. 피드백 -->
+    <div style="background:#F0F7FF;border:1px solid #BFD7F7;border-radius:10px;padding:13px 16px;margin-top:18px;text-align:center">
+      <div style="font-size:12px;color:#1B4F8A;font-weight:700;margin-bottom:6px">💬 피드백 환영</div>
+      <div style="font-size:11.5px;color:var(--t2);line-height:1.7">
+        버그 발견·개선 제안: AI 챗에 직접 알려주세요 (👍/👎 + 코멘트)<br>
+        <span style="font-size:10.5px;color:var(--t3)">데이터 출처: 국토교통부 · 한국부동산원 · 카카오맵 · Anthropic Claude</span>
+      </div>
     </div>
   </div>
 </div>
@@ -4857,9 +4971,10 @@ const VIEW_DISPLAY={
   list:  {display:'grid', lp:true,  rp:false},
   calc:  {display:'flex', lp:false, rp:false},
   clause:{display:'flex', lp:false, rp:false},
-  biz:   {display:'flex', lp:false, rp:false}, // 흡수됨 - htab에서 제거. calc 내부 링크 또는 deep-link 호환
+  biz:   {display:'flex', lp:false, rp:false},
   news:  {display:'flex', lp:false, rp:false},
   subs:  {display:'flex', lp:false, rp:false},
+  guide: {display:'flex', lp:false, rp:false}, // Phase 4 (2026-04-26): 사용법 탭
 };
 let _rpOverlay=false; // 플로팅 챗 버튼으로 .rp 강제 표시 상태
 function sv(v,btn){
