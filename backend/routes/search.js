@@ -119,6 +119,61 @@ router.get('/apt', async (req, res) => {
         if (out.length >= limit) break;
       }
     }
+
+    // Phase 4 (2026-04-26): master 단지 buildYear/recentDealDate 토큰 매칭 자동 채우기
+    // 사용자 지적: '왜 ?년 이지? 정보 못 찾았냐?' — apt_master 에 build_year 컬럼 없음.
+    // 같은 (lawd_cd, umd_nm) molit_transactions 중 토큰 매칭 단지의 buildYear/dealDate 사용.
+    const masterEmpty = out.filter(r => r.source === 'master' && !r.buildYear && r.lawdCd && r.umdNm);
+    if (masterEmpty.length) {
+      // 같은 (lawd_cd, umd_nm) 그룹 별 1번 fetch
+      const groups = {};
+      for (const r of masterEmpty) {
+        const gk = `${r.lawdCd}|${r.umdNm}`;
+        if (!groups[gk]) groups[gk] = { lawdCd: r.lawdCd, umdNm: r.umdNm, items: [] };
+        groups[gk].items.push(r);
+      }
+      await Promise.all(Object.values(groups).map(async g => {
+        const { data: txs } = await admin
+          .from('molit_transactions')
+          .select('apt_name, build_year, deal_date')
+          .eq('lawd_cd', g.lawdCd).eq('umd_nm', g.umdNm)
+          .order('deal_date', { ascending: false })
+          .limit(200);
+        if (!txs?.length) return;
+        // distinct apt_name (가장 최근 거래의 build_year 사용)
+        const aptInfo = {};
+        for (const t of txs) {
+          if (!aptInfo[t.apt_name]) aptInfo[t.apt_name] = { build_year: t.build_year, deal_date: t.deal_date };
+        }
+        for (const m of g.items) {
+          // 정식명에서 핵심 토큰 추출 (3글자 이상)
+          const baseName = m.aptName
+            .replace(new RegExp(`^(${m.sigungu||''}|${m.umdNm||''})\\s*`, 'g'), '')
+            .replace(/\s+/g, '');
+          const tokens = [];
+          for (let len = 4; len >= 3; len--) {
+            for (let i = 0; i <= baseName.length - len; i++) {
+              const t = baseName.substring(i, i + len);
+              if (!tokens.includes(t)) tokens.push(t);
+            }
+          }
+          // 최고 점수 단지 찾기
+          let best = null, bestScore = 0;
+          for (const [aptName, info] of Object.entries(aptInfo)) {
+            let score = 0;
+            for (const tok of tokens) {
+              if (aptName.includes(tok)) score = Math.max(score, tok.length);
+            }
+            if (score > bestScore) { best = info; bestScore = score; }
+          }
+          if (best && bestScore >= 3) {
+            m.buildYear = best.build_year;
+            m.recentDealDate = best.deal_date;
+          }
+        }
+      }));
+    }
+
     res.json({ results: out, query: q });
   } catch (e) {
     logger.warn({ err: e.message, q }, '단지 검색 실패');
