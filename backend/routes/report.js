@@ -108,13 +108,14 @@ router.post('/generate', async (req, res) => {
     // 3) AI prompt 작성
     const prompt = buildReportPrompt(userInput, policyData, candidates);
 
-    // 4) AI 호출 — REPORT_SYSTEM_PROMPT 를 system 으로 명시 전달 (default chat system 이 평문 답변 강제하는 문제 회피)
-    //    max_tokens 4500 — 2500 으로는 7단지 풀 정보 시 JSON 잘림 (실측: 3815자에서 array 미닫힘)
-    //    frontend timeout 120s 와 페어링 (Claude Sonnet 4.5 + 4500 토큰 ≒ 40~70s)
+    // 4) AI 호출 — REPORT_SYSTEM_PROMPT 를 system 으로 명시 전달
+    //    Phase 6 (2026-04-26): max_tokens 4500 → 6500
+    //    matchReason 필드 추가 + 단지 다양성 확장 후 6087자에서 또 잘림 (실측 logs)
+    //    frontend timeout 120s 와 페어링 (Claude Sonnet 4.5 + 6500 토큰 ≒ 60~90s)
     const result = await callAI(
       [{ role: 'user', content: prompt }],
       false,
-      { userId, system: REPORT_SYSTEM_PROMPT, maxTokens: 4500 }
+      { userId, system: REPORT_SYSTEM_PROMPT, maxTokens: 6500 }
     );
     const cleaned = String(result.content || '').replace(/```json|```/g, '').trim();
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
@@ -490,6 +491,7 @@ ${aptList}
    - priceFit: "매수가 ${input.maxBudget}억 vs 단지 평균 X억 (X% 초과/일치/여유)" — 단순 비교만
    - recommendation: "검토 권장" 또는 "예산 초과 — 다른 단지 비교 권장" — 매수 추천 X
    - matchReason: 매칭 점수 breakdown 을 자연스러운 한 줄로 풀어 씀 (예: "1순위 환금성 부합(거래활발 60점) + 예산 적합(30점)") — 사용자 투명성 핵심
+   ★ 응답 길이 절약: location/pros/cons/recommendation/matchReason 각각 60자 이내, ratio 30자 이내 (응답 토큰 부족시 잘림 방지)
 4. longTermView — 자녀 시점 기반 갈아타기 시나리오 (가격 수치 X, 권역만)
 5. tips — 실무 TIP 5~6개 (회전율·RR·복비·잔금·임장)
 
