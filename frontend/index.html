@@ -3177,7 +3177,51 @@ function showDetail(p){
     </div>
     <button class="abtn acc" style="margin-top:6px" onclick="askP('${encodeURIComponent(p.aptName)}','${p.avgPrice||0}','${p.area||''}');cDM()">🤖 AI에게 상세 전략 묻기</button>`;
 
-  const txH=(p.txHistory||[]).slice(0,10).map(t=>`<div class="txi"><span class="txd">${t.dealYear}.${String(t.dealMonth||1).padStart(2,'0')}</span><span class="txf">${t.floor||'?'}층</span><span class="txp">${((t.dealAmount||0)/10000).toFixed(2)}억</span></div>`).join('')||'<div style="padding:10px 0;color:var(--t3);font-size:11px">실거래 데이터 없음</div>';
+  // Phase 4 (2026-04-26): 평형 표시 + 표시 갯수 30개 + 평형별 그룹 통계
+  // 사용자 지적: "면적/평형 모르고 가격만 나열 = 의미 없음"
+  const txAll = (p.txHistory||[]);
+  // 평형별 통계 (n>=2 그룹만)
+  const byArea = {};
+  for (const t of txAll) {
+    const sqm = Math.round(Number(t.excluUseAr) || 0);
+    if (!sqm) continue;
+    const py = Math.round(sqm / 3.3);
+    const key = `${sqm}㎡(${py}평)`;
+    if (!byArea[key]) byArea[key] = { sqm, py, prices: [], aliases: new Set() };
+    byArea[key].prices.push(Number(t.dealAmount) || 0);
+    if (t._aliasFrom) byArea[key].aliases.add(t._aliasFrom);
+  }
+  const areaSummaryHtml = Object.entries(byArea)
+    .filter(([,v]) => v.prices.length > 0)
+    .sort((a,b) => a[1].sqm - b[1].sqm)
+    .map(([k,v]) => {
+      const avg = v.prices.reduce((a,b)=>a+b,0) / v.prices.length / 10000;
+      const min = Math.min(...v.prices) / 10000;
+      const max = Math.max(...v.prices) / 10000;
+      const aliasNote = v.aliases.size ? ` <span style="color:var(--t3);font-size:9.5px">(${[...v.aliases].join('·')})</span>` : '';
+      return `<div style="display:flex;justify-content:space-between;padding:5px 8px;background:#F7F9FC;border-radius:6px;margin-bottom:3px;font-size:11px">
+        <span><b>${k}</b> · <span style="color:var(--t3)">${v.prices.length}건</span>${aliasNote}</span>
+        <span><b style="color:var(--acc)">${avg.toFixed(2)}억</b> <span style="color:var(--t3);font-size:10px">(${min.toFixed(1)}~${max.toFixed(1)})</span></span>
+      </div>`;
+    }).join('');
+
+  const txH = txAll.slice(0,30).map(t => {
+    const sqm = Math.round(Number(t.excluUseAr) || 0);
+    const py = sqm ? Math.round(sqm / 3.3) : 0;
+    const areaTag = sqm ? `<span class="txf" style="color:var(--a2);font-weight:600">${sqm}㎡(${py}평)</span>` : '';
+    const aliasTag = t._aliasFrom ? `<span style="color:var(--t3);font-size:9.5px;margin-left:4px">[${_escHtml(t._aliasFrom)}]</span>` : '';
+    return `<div class="txi" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--bg2)">
+      <span class="txd" style="color:var(--t3);font-size:10.5px;min-width:55px">${t.dealYear}.${String(t.dealMonth||1).padStart(2,'0')}.${String(t.dealDay||1).padStart(2,'0')}</span>
+      ${areaTag}
+      <span class="txf" style="color:var(--t2);font-size:10.5px">${t.floor||'?'}층</span>
+      <span class="txp" style="margin-left:auto;font-weight:700;color:var(--acc)">${((t.dealAmount||0)/10000).toFixed(2)}억</span>
+      ${aliasTag}
+    </div>`;
+  }).join('') || '<div style="padding:10px 0;color:var(--t3);font-size:11px">실거래 데이터 없음</div>';
+
+  const txHFull = areaSummaryHtml
+    ? `<div style="margin-bottom:10px"><div style="font-size:10.5px;color:var(--t2);font-weight:700;margin-bottom:5px">📐 평형별 평균 (${txAll.length}건)</div>${areaSummaryHtml}</div>${txH}`
+    : txH;
   // 시세 추이: txHistory 기반 월별 평균 (최대 24개월), 부족하면 서버 priceHistory, 그것도 없으면 숨김
   const trendData = buildPriceTrend(p.txHistory||[]);
   const trendHtml = trendData.length>=2
@@ -3203,7 +3247,7 @@ function showDetail(p){
     : '';
   document.getElementById('t1').innerHTML=`
     ${pyeongHtml}
-    <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px">최근 실거래가 (전체 평형)</div>${txH}
+    <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px">최근 실거래가 <span style="font-weight:500;color:var(--t3)">· 평형별 평균 + 개별 거래 (최대 30건)</span></div>${txHFull}
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 8px">📈 월별 시세 추이 <span style="font-weight:500;color:var(--t3)">· 최근 실거래 평균</span></div>
     ${trendHtml}
     <div class="ibox y" style="margin-top:12px">국토부 공공 API 기반. 거래 없는 월은 보간하지 않습니다.</div>`;
@@ -5184,22 +5228,37 @@ async function goSearchResult(r) {
       txHistory = t.items.slice(0, 30);
     }
 
-    // Phase 4: master 단지 (거래 0건) → facility/altCandidates 자동 fetch + 첫 alias 거래 채움
+    // Phase 4 (2026-04-26): master 단지 (거래 0건) → 모든 alias 거래 통합 (이전: 첫 1개만)
+    // 사용자 케이스: 공릉풍림아이원 = 풍림아파트A + 풍림아파트B (면적군 분리 신고)
+    // 모두 합쳐야 정확. 매칭은 같은 (lawd_cd, umd_nm) + facility altCandidates.
     if (!txHistory.length && r.source === 'master' && r.sigungu && r.umdNm) {
       const fac = await fetch(`${CFG.api}/search/facility?aptName=${encodeURIComponent(r.aptName)}&sigungu=${encodeURIComponent(r.sigungu)}&umdNm=${encodeURIComponent(r.umdNm)}`)
         .then(rs => rs.ok ? rs.json() : null).catch(() => null);
       const alts = fac?.altCandidates || [];
-      if (alts.length) {
-        // 첫 alias 단지의 거래 가져오기 (사용자에게 "공릉풍림아이원 → 풍림아파트A 거래로 표시" 안내)
-        for (const alt of alts) {
-          const altUrl = `${CFG.api}/transactions?lawdCd=${r.lawdCd}&aptName=${encodeURIComponent(alt.aptName)}&dealYm=${ym}`;
-          const at = await fetch(altUrl, { signal: AbortSignal.timeout(8000) }).then(rs => rs.ok ? rs.json() : null);
-          if (at?.items?.length) {
-            txHistory = at.items.slice(0, 30);
-            _aliasUsed = alt.aptName;
-            break;
-          }
+      const usedAliases = [];
+      // 모든 alias 의 거래 병렬 fetch (top 5개 안전 한도)
+      const altResults = await Promise.all(alts.slice(0, 5).map(alt =>
+        fetch(`${CFG.api}/transactions?lawdCd=${r.lawdCd}&aptName=${encodeURIComponent(alt.aptName)}&dealYm=${ym}`, { signal: AbortSignal.timeout(8000) })
+          .then(rs => rs.ok ? rs.json() : null).catch(() => null)
+          .then(at => ({ alt, items: at?.items || [] }))
+      ));
+      const merged = [];
+      for (const { alt, items } of altResults) {
+        if (items.length) {
+          // 각 거래에 _aliasFrom 표기 (어느 신고명에서 왔는지)
+          for (const it of items) merged.push({ ...it, _aliasFrom: alt.aptName });
+          usedAliases.push(alt.aptName);
         }
+      }
+      // 거래일 내림차순 정렬
+      merged.sort((a,b) => {
+        const da = a.dealYear*10000 + a.dealMonth*100 + a.dealDay;
+        const db = b.dealYear*10000 + b.dealMonth*100 + b.dealDay;
+        return db - da;
+      });
+      if (merged.length) {
+        txHistory = merged.slice(0, 50); // 10 → 50 으로 확장
+        _aliasUsed = usedAliases.join(', ');
       }
     }
 
