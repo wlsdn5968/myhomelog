@@ -4076,7 +4076,7 @@ function renderFieldNote(p){
       <button class="fn-save" onclick="saveFieldNote('${n}','${safeId}')">저장</button>
       ${hasNote?`<button onclick="clearFieldNote('${n}')" style="background:none;border:none;font-size:11px;color:var(--t3);cursor:pointer;font-family:inherit;padding:6px">기록 삭제</button>`:''}
     </div>
-    <div class="ibox b" style="margin-top:12px;font-size:10px">💾 이 기기 브라우저에만 저장됩니다. 추후 계정 로그인 시 클라우드 동기화를 제공할 예정입니다.</div>`;
+    <div class="ibox b" style="margin-top:12px;font-size:10px">💾 비로그인: 이 기기 브라우저에만 저장 · 로그인: 클라우드 자동 동기화 (모든 기기 공유)</div>`;
 }
 
 function toggleFnCheck(aptName,checkId,safeId){
@@ -4107,7 +4107,26 @@ function saveFieldNote(aptName,safeId){
   saved.savedAt=Date.now();
   saveNoteForApt(aptName,saved);
   toast('✓ 임장 노트 저장 완료');
-  renderBookmarks(); // 방문 도트 갱신
+  renderBookmarks();
+  // Phase 4 (2026-04-26): 로그인 사용자는 클라우드 동기화 (fire-and-forget)
+  _syncFieldNote(aptName, saved);
+}
+
+async function _syncFieldNote(aptName, saved) {
+  const A = window.MHL?.auth;
+  if (!A?.user || !A?.session?.access_token) return; // 비로그인은 localStorage 만
+  try {
+    await fetch(`${CFG.api}/field-notes/${encodeURIComponent(aptName)}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + A.session.access_token },
+      body: JSON.stringify({
+        checks: saved.checks || [],
+        rating: saved.rating || 0,
+        memo: saved.memo || '',
+        visitDate: saved.visitDate || null,
+      }),
+    });
+  } catch (_) {} // 실패해도 사용자 흐름 영향 없음
 }
 
 function clearFieldNote(aptName){
