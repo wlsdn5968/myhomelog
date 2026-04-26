@@ -174,11 +174,13 @@ async function callAI(messages, useCache = true, opts = {}) {
   // Phase 3.1: Anthropic Prompt Caching (~86% input cost 절감)
   // Phase 5+ (2026-04-26): claude-sonnet-4-20250514 deprecated → claude-sonnet-4-5 (latest stable alias)
   // ENV override: ANTHROPIC_MODEL 로 특정 버전 고정 가능
+  // Phase 5+ (2026-04-26): opts.system 으로 system prompt override 지원 — 보고서/특약 등 JSON 응답 강제 시 별도 system 필요
+  const systemText = opts.system || SYSTEM_PROMPT;
   const payload = {
     model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5',
-    max_tokens: 1500,
+    max_tokens: opts.maxTokens || 1500,
     system: [
-      { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: systemText, cache_control: { type: 'ephemeral' } },
     ],
     messages,
   };

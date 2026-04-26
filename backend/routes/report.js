@@ -104,15 +104,25 @@ router.post('/generate', async (req, res) => {
     // 3) AI prompt 작성
     const prompt = buildReportPrompt(userInput, policyData, candidates);
 
-    // 4) AI 호출 (cache_control 시스템 프롬프트)
-    const result = await callAI([{ role: 'user', content: prompt }], false, { userId });
+    // 4) AI 호출 — REPORT_SYSTEM_PROMPT 를 system 으로 명시 전달 (default chat system 이 평문 답변 강제하는 문제 회피)
+    //    max_tokens 4000 (보고서 5섹션 + 7개 단지 풀 정보 — default 1500 으론 잘림)
+    const result = await callAI(
+      [{ role: 'user', content: prompt }],
+      false,
+      { userId, system: REPORT_SYSTEM_PROMPT, maxTokens: 4000 }
+    );
     const cleaned = String(result.content || '').replace(/```json|```/g, '').trim();
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     let parsed;
     try {
       parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
     } catch (e) {
-      logger.error({ err: e.message, sample: cleaned.slice(0, 300) }, '보고서 AI JSON 파싱 실패');
+      logger.error({
+        err: e.message,
+        sample_head: cleaned.slice(0, 800),
+        sample_tail: cleaned.slice(-400),
+        cleaned_len: cleaned.length,
+      }, '보고서 AI JSON 파싱 실패');
       return res.status(502).json({ error: '보고서 생성 실패 — AI 응답 형식 오류' });
     }
 
@@ -242,9 +252,8 @@ function buildReportPrompt(input, policy, candidates) {
    - 최근 거래일: ${c.latest}`;
   }).join('\n\n');
 
-  return `${REPORT_SYSTEM_PROMPT}
-
-## 회원님 가구 상황
+  // REPORT_SYSTEM_PROMPT 는 callAI options.system 으로 전달됨 (중복 제거)
+  return `## 회원님 가구 상황
 - 매수가: ${input.maxBudget}억
 - 자기자본: ${input.myCash || '?'}억
 - 보유 주택: ${input.houseStatus || '?'}
