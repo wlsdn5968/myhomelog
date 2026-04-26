@@ -18,9 +18,17 @@ const cache = require('../cache');
 const logger = require('../logger');
 
 const APT_INFO_KEY = process.env.APT_INFO_API_KEY || process.env.MOLIT_API_KEY;
-const FACILITY_URL = 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3';
+// AptInfo 기본정보 endpoint 후보 — 첫 호출 시 동작하는 것 발견하면 이후 캐시 사용.
+// V3 가 표준이지만 일부 키는 V1/V2 만 활성. 실패 시 다음으로 fallback.
+const FACILITY_ENDPOINTS = [
+  'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3',
+  'https://apis.data.go.kr/1613000/AptBasisInfoServiceV2/getAphusBassInfoV2',
+  'https://apis.data.go.kr/1613000/AptBasisInfoService/getAphusBassInfo',
+  'https://apis.data.go.kr/1611000/AptBasisInfoServiceV3/getAphusBassInfoV3',
+];
 const CACHE_TTL_DAYS = 90;
 let _diagLogged = false;
+let _workingEndpoint = null; // 최초 1회 발견 시 캐시 (cold start 마다 재탐색)
 
 function admin() { return getSupabaseAdmin(); }
 
@@ -48,42 +56,66 @@ async function findMaster(aptName, sigungu, umdNm) {
   return null;
 }
 
-/** AptInfo 단지 기본정보 호출 — 응답 구조 raw 그대로 jsonb 저장 */
-async function fetchFromApi(kaptCode) {
-  if (!APT_INFO_KEY) return null;
+/** 한 endpoint 시도 — 성공 시 raw item, 실패 시 null + 진단 로그 */
+async function tryEndpoint(url, kaptCode) {
   let r;
   try {
-    r = await axios.get(FACILITY_URL, {
+    r = await axios.get(url, {
       params: { serviceKey: APT_INFO_KEY, kaptCode, _type: 'json' },
       timeout: 8000,
       headers: { Accept: 'application/json' },
     });
   } catch (e) {
-    if (!_diagLogged) {
-      _diagLogged = true;
-      const rd = e?.response?.data;
-      logger.error({
-        kaptCode, status: e?.response?.status, msg: e.message,
-        bodyPreview: typeof rd === 'string' ? rd.slice(0,400) : JSON.stringify(rd||{}).slice(0,400),
-      }, 'facility API 진단 (1회)');
-    }
-    return null;
+    const status = e?.response?.status;
+    const rd = e?.response?.data;
+    const bodyPreview = typeof rd === 'string' ? rd.slice(0, 200) : JSON.stringify(rd || {}).slice(0, 200);
+    return { ok: false, reason: `HTTP ${status}`, bodyPreview };
   }
-  // 진단 1회: 응답 구조
-  if (!_diagLogged) {
-    _diagLogged = true;
-    const preview = JSON.stringify(r.data || {}).slice(0, 600);
-    logger.warn({ kaptCode, contentType: r.headers?.['content-type'], preview }, 'facility 응답 진단 (1회)');
+  // XML 응답 가능성 — string 인 경우 짧게 반환 (진단용)
+  if (typeof r.data === 'string') {
+    const preview = r.data.slice(0, 300);
+    return { ok: false, reason: 'non-json', bodyPreview: preview };
   }
   const header = r.data?.response?.header;
-  if (header?.resultCode && !['00','000'].includes(header.resultCode)) {
-    logger.warn({ kaptCode, code: header.resultCode, msg: header.resultMsg }, 'facility 응답 비정상');
-    return null;
+  if (header?.resultCode && !['00', '000'].includes(header.resultCode)) {
+    return { ok: false, reason: `code ${header.resultCode}: ${header.resultMsg}`, bodyPreview: '' };
   }
-  // body.item 또는 body.items 직접 — AptInfo 형식 다양
   const body = r.data?.response?.body;
-  const item = body?.item || (Array.isArray(body?.items) ? body.items[0] : body?.items?.item);
-  return item || null;
+  // item 1개 직접 또는 items 안에 1개
+  const item = body?.item
+    || (Array.isArray(body?.items) ? body.items[0] : body?.items?.item)
+    || body; // V1 은 body 자체가 item 일 수도
+  if (!item || (typeof item === 'object' && Object.keys(item).length === 0)) {
+    return { ok: false, reason: 'empty body', bodyPreview: JSON.stringify(r.data).slice(0,200) };
+  }
+  return { ok: true, item };
+}
+
+/** AptInfo 단지 기본정보 호출 — fallback 체인 */
+async function fetchFromApi(kaptCode) {
+  if (!APT_INFO_KEY) return null;
+  // 작동하는 endpoint 발견 시 이후 그것만 사용 (cold start 안에서)
+  const order = _workingEndpoint
+    ? [_workingEndpoint, ...FACILITY_ENDPOINTS.filter(u => u !== _workingEndpoint)]
+    : FACILITY_ENDPOINTS;
+  const attempts = [];
+  for (const url of order) {
+    const r = await tryEndpoint(url, kaptCode);
+    attempts.push({ url: url.split('/').slice(-2).join('/'), ok: r.ok, reason: r.reason });
+    if (r.ok) {
+      _workingEndpoint = url;
+      if (!_diagLogged) {
+        _diagLogged = true;
+        logger.warn({ kaptCode, working: url, attempts }, 'facility endpoint 발견');
+      }
+      return r.item;
+    }
+  }
+  if (!_diagLogged) {
+    _diagLogged = true;
+    logger.error({ kaptCode, attempts }, 'facility 모든 endpoint 실패 — 진단');
+  }
+  return null;
 }
 
 /**
