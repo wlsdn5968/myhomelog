@@ -3177,19 +3177,19 @@ function showDetail(p){
     </div>
     <button class="abtn acc" style="margin-top:6px" onclick="askP('${encodeURIComponent(p.aptName)}','${p.avgPrice||0}','${p.area||''}');cDM()">🤖 AI에게 상세 전략 묻기</button>`;
 
-  // Phase 4 (2026-04-26): 평형 표시 + 표시 갯수 30개 + 평형별 그룹 통계
-  // 사용자 지적: "면적/평형 모르고 가격만 나열 = 의미 없음"
+  // Phase 4 (2026-04-26): 평형 표시 + 단일 단지로 통합 표시 (MOLIT 신고명 라벨 제거)
+  // 사용자 지적: "공릉풍림아이원 거래만 보여달라. A/B 라벨 의미 없음."
+  // 통합: master + alias 거래 모두 정식 단지명 (예: "공릉풍림아이원") 으로 단일 표시.
   const txAll = (p.txHistory||[]);
-  // 평형별 통계 (n>=2 그룹만)
+  // 평형별 통계 (n>=1 그룹)
   const byArea = {};
   for (const t of txAll) {
     const sqm = Math.round(Number(t.excluUseAr) || 0);
     if (!sqm) continue;
     const py = Math.round(sqm / 3.3);
     const key = `${sqm}㎡(${py}평)`;
-    if (!byArea[key]) byArea[key] = { sqm, py, prices: [], aliases: new Set() };
+    if (!byArea[key]) byArea[key] = { sqm, py, prices: [] };
     byArea[key].prices.push(Number(t.dealAmount) || 0);
-    if (t._aliasFrom) byArea[key].aliases.add(t._aliasFrom);
   }
   const areaSummaryHtml = Object.entries(byArea)
     .filter(([,v]) => v.prices.length > 0)
@@ -3198,9 +3198,8 @@ function showDetail(p){
       const avg = v.prices.reduce((a,b)=>a+b,0) / v.prices.length / 10000;
       const min = Math.min(...v.prices) / 10000;
       const max = Math.max(...v.prices) / 10000;
-      const aliasNote = v.aliases.size ? ` <span style="color:var(--t3);font-size:9.5px">(${[...v.aliases].join('·')})</span>` : '';
       return `<div style="display:flex;justify-content:space-between;padding:5px 8px;background:#F7F9FC;border-radius:6px;margin-bottom:3px;font-size:11px">
-        <span><b>${k}</b> · <span style="color:var(--t3)">${v.prices.length}건</span>${aliasNote}</span>
+        <span><b>${k}</b> · <span style="color:var(--t3)">${v.prices.length}건</span></span>
         <span><b style="color:var(--acc)">${avg.toFixed(2)}억</b> <span style="color:var(--t3);font-size:10px">(${min.toFixed(1)}~${max.toFixed(1)})</span></span>
       </div>`;
     }).join('');
@@ -3209,13 +3208,11 @@ function showDetail(p){
     const sqm = Math.round(Number(t.excluUseAr) || 0);
     const py = sqm ? Math.round(sqm / 3.3) : 0;
     const areaTag = sqm ? `<span class="txf" style="color:var(--a2);font-weight:600">${sqm}㎡(${py}평)</span>` : '';
-    const aliasTag = t._aliasFrom ? `<span style="color:var(--t3);font-size:9.5px;margin-left:4px">[${_escHtml(t._aliasFrom)}]</span>` : '';
     return `<div class="txi" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--bg2)">
       <span class="txd" style="color:var(--t3);font-size:10.5px;min-width:55px">${t.dealYear}.${String(t.dealMonth||1).padStart(2,'0')}.${String(t.dealDay||1).padStart(2,'0')}</span>
       ${areaTag}
       <span class="txf" style="color:var(--t2);font-size:10.5px">${t.floor||'?'}층</span>
       <span class="txp" style="margin-left:auto;font-weight:700;color:var(--acc)">${((t.dealAmount||0)/10000).toFixed(2)}억</span>
-      ${aliasTag}
     </div>`;
   }).join('') || '<div style="padding:10px 0;color:var(--t3);font-size:11px">실거래 데이터 없음</div>';
 
@@ -3308,17 +3305,9 @@ async function loadFacility(p){
       fbox.style.display='none';
     }
 
-    // 같은 동의 alias 후보 — MOLIT 이 면적군별로 분리 신고한 케이스 안내
-    if (abox && Array.isArray(r.altCandidates) && r.altCandidates.length > 0) {
-      const list = r.altCandidates.map(a =>
-        `<span style="display:inline-block;background:#FFF7E6;border:1px solid #F0D6A2;border-radius:4px;padding:2px 7px;margin:1px;font-size:10.5px;cursor:pointer" onclick="goSearchResult('${encodeURIComponent(a.aptName)}')">${_escHtml(a.aptName)}${a.buildYear?` <span style="color:var(--t3)">${a.buildYear}년</span>`:''}</span>`
-      ).join('');
-      abox.innerHTML = `<div style="background:#FFF9EE;border:1px solid #F0D6A2;border-radius:8px;padding:8px 11px;font-size:11px;line-height:1.6">
-        <div style="font-weight:700;color:#7A4F0E;margin-bottom:3px">📌 같은 동의 다른 신고명</div>
-        <div style="font-size:10.5px;color:var(--t2);margin-bottom:4px">MOLIT 가 면적군·차수별로 분리 신고한 경우 같은 단지가 여러 이름일 수 있어요. 클릭해 비교하세요.</div>
-        ${list}
-      </div>`;
-    } else if(abox) abox.style.display='none';
+    // Phase 4 (2026-04-26): alias 카드 제거 — 사용자 혼란 ("A/B 가 뭔지 모름")
+    // 통합 거래는 이미 실거래가 탭에 표시 (정식 단지명으로). 안내 카드 불필요.
+    if (abox) abox.style.display='none';
   }catch{ fbox.style.display='none'; if(abox)abox.style.display='none'; }
 }
 
@@ -5287,9 +5276,7 @@ async function goSearchResult(r) {
     _isMaster: r.source === 'master',
     _aliasUsed, // master → 첫 alias 자동 표시 시 단지명 (예: "풍림아파트A")
   };
-  if (_aliasUsed) {
-    setTimeout(() => toast(`💡 '${r.aptName}' → MOLIT 신고명 '${_aliasUsed}' 거래 ${txHistory.length}건 표시`), 600);
-  }
+  // Phase 4 (2026-04-26): alias 토스트 제거 — 사용자 혼란 차단. 거래 자체만 표시.
   if (typeof showDetail === 'function') showDetail(p);
   else toast('단지 상세 화면을 열 수 없어요');
 }

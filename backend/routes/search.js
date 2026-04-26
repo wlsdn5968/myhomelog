@@ -326,11 +326,16 @@ router.get('/facility', async (req, res) => {
         for (const tok of tokens) {
           if (tok.length >= 3 && r.apt_name.includes(tok)) score = Math.max(score, tok.length);
         }
-        candidates.push({ aptName: r.apt_name, buildYear: r.build_year, _score: score });
+        // Phase 4 (2026-04-26): score >= 3 (3글자 이상 매칭) 만 진짜 alias 후보.
+        // 이전: score 0도 포함 → '67디벨리움', '건영아파트' 같은 무관 단지가 alias 매칭됨.
+        // '공릉풍림아이원' 의 '풍림아' (3글자) 가 '풍림아파트A/B' 와 매칭 — 정확.
+        if (score >= 3) {
+          candidates.push({ aptName: r.apt_name, buildYear: r.build_year, _score: score });
+        }
       }
-      // 점수 ↓ → 단지명 ↑ 정렬, 상위 12개
+      // 점수 ↓ → 단지명 ↑ 정렬, 상위 8개 (12 → 8 — false positive 차단)
       candidates.sort((a, b) => b._score - a._score || a.aptName.localeCompare(b.aptName));
-      altCandidates = candidates.slice(0, 12).map(({ _score, ...c }) => c);
+      altCandidates = candidates.slice(0, 8).map(({ _score, ...c }) => c);
     }
     res.json({ facility, altCandidates });
   } catch (e) {
