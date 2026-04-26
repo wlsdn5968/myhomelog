@@ -3052,12 +3052,41 @@ function showDetailById(n){const p=props.find(x=>x.aptName===decodeURIComponent(
 
 // ── 시세 추이 차트 (SVG) ─────────────────────────────────
 // txHistory를 월별 평균으로 집계 (최근 24개월, 거래 있는 월만)
-function buildPriceTrend(txHistory){
+// Phase 4 (2026-04-26): 차트 평형 선택 — chip 클릭 시 그 평형만 차트 재렌더
+function _selectTrendArea(sqm, btn) {
+  window._curTrendArea = sqm;
+  // chip 토글
+  document.querySelectorAll('.trend-area-chip').forEach(c => {
+    c.style.background = '#fff';
+    c.style.color = 'var(--t2)';
+    c.style.borderColor = 'var(--bd)';
+  });
+  if (btn) {
+    btn.style.background = 'var(--acc)';
+    btn.style.color = '#fff';
+    btn.style.borderColor = 'var(--acc)';
+  }
+  // 차트 재렌더
+  const box = document.getElementById('trendChartBox');
+  if (!box) return;
+  const td = buildPriceTrend(window._curTrendApt || [], sqm);
+  box.innerHTML = td.length >= 2
+    ? renderPriceChart(td)
+    : `<div style="font-size:11px;color:var(--t3);padding:10px 0">${sqm}㎡(${Math.round(sqm/3.3)}평) 시세 추이 데이터 부족 (거래 2개월 이상)</div>`;
+}
+
+// Phase 4 (2026-04-26): areaSqm 인자 — 특정 평형만 필터 (없으면 전체 평균 — 의미 약함)
+function buildPriceTrend(txHistory, areaSqm){
   if(!Array.isArray(txHistory)||!txHistory.length)return[];
   const buckets={};
   for(const t of txHistory){
     const y=t.dealYear,m=t.dealMonth;
     if(!y||!m)continue;
+    // 평형 필터 — areaSqm 지정 시 그 면적(±2㎡)만
+    if (areaSqm) {
+      const sqm = Math.round(Number(t.excluUseAr) || 0);
+      if (Math.abs(sqm - areaSqm) > 2) continue;
+    }
     const key=`${y}-${String(m).padStart(2,'0')}`;
     if(!buckets[key])buckets[key]={sum:0,n:0,y,m};
     buckets[key].sum+=(t.dealAmount||0);
@@ -3066,7 +3095,7 @@ function buildPriceTrend(txHistory){
   const rows=Object.values(buckets).map(b=>({
     label:`${String(b.y).slice(2)}.${String(b.m).padStart(2,'0')}`,
     sortKey:b.y*12+b.m,
-    avgAuk:(b.sum/b.n)/10000, // 만원 → 억
+    avgAuk:(b.sum/b.n)/10000,
     count:b.n,
   })).sort((a,b)=>a.sortKey-b.sortKey);
   return rows.slice(-24);
@@ -3219,13 +3248,36 @@ function showDetail(p){
   const txHFull = areaSummaryHtml
     ? `<div style="margin-bottom:10px"><div style="font-size:10.5px;color:var(--t2);font-weight:700;margin-bottom:5px">📐 평형별 평균 (${txAll.length}건)</div>${areaSummaryHtml}</div>${txH}`
     : txH;
-  // 시세 추이: txHistory 기반 월별 평균 (최대 24개월), 부족하면 서버 priceHistory, 그것도 없으면 숨김
-  const trendData = buildPriceTrend(p.txHistory||[]);
-  const trendHtml = trendData.length>=2
-    ? renderPriceChart(trendData)
-    : (p.priceHistory && p.priceHistory.length>=2
-        ? renderLegacyPriceBars(p.priceHistory)
-        : '<div style="font-size:11px;color:var(--t3);padding:10px 0">시세 추이 데이터 부족 (거래 2개월 이상 필요)</div>');
+  // Phase 4 (2026-04-26): 평형 선택 chip + 그 평형만 차트 — 사용자 지적 (전체 평균 의미 약함)
+  // 가장 거래 많은 평형을 default 로 선택. txAll 의 distinct sqm 추출.
+  const _areaCounts = {};
+  for (const t of (p.txHistory||[])) {
+    const sqm = Math.round(Number(t.excluUseAr) || 0);
+    if (sqm) _areaCounts[sqm] = (_areaCounts[sqm] || 0) + 1;
+  }
+  const _areaList = Object.entries(_areaCounts)
+    .map(([s, n]) => ({ sqm: parseInt(s), n }))
+    .sort((a, b) => b.n - a.n);
+  const _defaultArea = _areaList[0]?.sqm || 0;
+  // 전역에 단지 trend 데이터 보관 (chip 클릭 핸들러용)
+  window._curTrendApt = p.txHistory || [];
+  window._curTrendArea = _defaultArea;
+
+  function _trendHtml(area) {
+    const td = buildPriceTrend(window._curTrendApt, area);
+    if (td.length >= 2) return renderPriceChart(td);
+    return `<div style="font-size:11px;color:var(--t3);padding:10px 0">${area ? `${area}㎡(${Math.round(area/3.3)}평) ` : ''}시세 추이 데이터 부족 (거래 2개월 이상)</div>`;
+  }
+  const _areaChipsHtml = _areaList.length
+    ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 10px">${
+        _areaList.map((a, i) => {
+          const py = Math.round(a.sqm / 3.3);
+          const onClass = a.sqm === _defaultArea ? 'background:var(--acc);color:#fff;border-color:var(--acc)' : 'background:#fff;color:var(--t2);border-color:var(--bd)';
+          return `<button class="trend-area-chip" data-sqm="${a.sqm}" onclick="_selectTrendArea(${a.sqm}, this)" style="padding:4px 10px;border-radius:14px;border:1px solid var(--bd);font-size:11px;cursor:pointer;font-family:inherit;${onClass}">${a.sqm}㎡(${py}평) <span style="opacity:0.7;font-size:9.5px">${a.n}건</span></button>`;
+        }).join('')
+      }</div>`
+    : '';
+  const trendHtml = `${_areaChipsHtml}<div id="trendChartBox">${_trendHtml(_defaultArea)}</div>`;
   // 평형별 현재 시세 (최근 거래 기반)
   const pyeongHtml = (p.currentPriceByPyeong||[]).length
     ? `<div style="font-size:11px;font-weight:700;color:var(--t2);margin:0 0 8px">📐 평형별 현재 시세 <span style="font-weight:500;color:var(--t3)">· 최근 6개월 실거래 평균</span></div>
@@ -3245,7 +3297,7 @@ function showDetail(p){
   document.getElementById('t1').innerHTML=`
     ${pyeongHtml}
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px">최근 실거래가 <span style="font-weight:500;color:var(--t3)">· 평형별 평균 + 개별 거래 (최대 30건)</span></div>${txHFull}
-    <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 8px">📈 월별 시세 추이 <span style="font-weight:500;color:var(--t3)">· 최근 실거래 평균</span></div>
+    <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 4px">📈 월별 시세 추이 <span style="font-weight:500;color:var(--t3)">· 평형을 선택하세요</span></div>
     ${trendHtml}
     <div class="ibox y" style="margin-top:12px">국토부 공공 API 기반. 거래 없는 월은 보간하지 않습니다.</div>`;
 
