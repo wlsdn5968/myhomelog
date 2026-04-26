@@ -34,11 +34,35 @@ let _workingEndpoint = null; // 최초 1회 발견 시 캐시 (cold start 마다
 
 function admin() { return getSupabaseAdmin(); }
 
+/** Phase 8+ (2026-04-26): 토큰 매칭 (sliding 2~4) — '한진(609-1)' vs '돈암한신한진아파트' 매칭 */
+function tokenize(name) {
+  const cleaned = String(name || '')
+    .replace(/\([^)]*\)/g, '') // 괄호 제거 (예: "한진(609-1)" → "한진")
+    .replace(/\s+/g, '')
+    .replace(/아파트$/, '')
+    .replace(/^\d+/, '');       // 선두 숫자 제거
+  const tokens = new Set();
+  for (let len = 4; len >= 2; len--) {
+    for (let i = 0; i <= cleaned.length - len; i++) {
+      tokens.add(cleaned.substring(i, i + len));
+    }
+  }
+  return Array.from(tokens);
+}
+
+function nameMatchScore(a, b) {
+  const at = tokenize(a);
+  const bSet = new Set(tokenize(b));
+  let best = 0;
+  for (const t of at) if (bSet.has(t) && t.length > best) best = t.length;
+  return best;
+}
+
 /** apt_name + sigungu + umd_nm 으로 apt_master 매칭 → kapt_code */
 async function findMaster(aptName, sigungu, umdNm) {
   const a = admin();
   if (!a || !aptName) return null;
-  // 정확 매칭 우선
+  // 1) 정확 매칭
   let q = a.from('apt_master')
     .select('kapt_code, apt_name, sigungu, umd_nm, facility, facility_fetched_at')
     .eq('apt_name', aptName);
@@ -46,16 +70,39 @@ async function findMaster(aptName, sigungu, umdNm) {
   if (umdNm) q = q.eq('umd_nm', umdNm);
   const { data } = await q.maybeSingle();
   if (data) return data;
-  // 정확 매칭 실패 — 같은 (sigungu, umd_nm) 의 부분 매칭 시도 (apt_name 부분 ILIKE)
-  if (sigungu && umdNm) {
-    const { data: partial } = await a.from('apt_master')
-      .select('kapt_code, apt_name, sigungu, umd_nm, facility, facility_fetched_at')
-      .eq('sigungu', sigungu).eq('umd_nm', umdNm)
-      .ilike('apt_name', `%${aptName}%`)
-      .limit(1).maybeSingle();
-    return partial || null;
+
+  if (!sigungu || !umdNm) return null;
+
+  // 2) 부분 매칭 ILIKE — molit 가 더 길 때 ('래미안엘파인아파트' 안에 master '래미안엘파인')
+  //    선두/말미 키워드 추출 (괄호·아파트·숫자 제거 후)
+  const stripped = String(aptName).replace(/\([^)]*\)/g, '').replace(/\s+/g, '').replace(/아파트$/, '');
+  if (stripped) {
+    // 양방향 시도
+    const directions = [
+      a.from('apt_master').select('kapt_code, apt_name, sigungu, umd_nm, facility, facility_fetched_at')
+        .eq('sigungu', sigungu).eq('umd_nm', umdNm).ilike('apt_name', `%${stripped}%`).limit(1),
+    ];
+    for (const dir of directions) {
+      const { data: partial } = await dir.maybeSingle();
+      if (partial) return partial;
+    }
   }
-  return null;
+
+  // 3) 토큰 매칭 — 같은 sigungu+umd_nm 의 모든 master 가져와서 sliding 토큰 비교
+  //    ("한진(609-1)" vs "돈암한신한진아파트" → 토큰 "한진" score 2 매칭)
+  const { data: candidates } = await a.from('apt_master')
+    .select('kapt_code, apt_name, sigungu, umd_nm, facility, facility_fetched_at')
+    .eq('sigungu', sigungu).eq('umd_nm', umdNm)
+    .limit(80);
+  let best = null, bestScore = 0;
+  for (const m of (candidates || [])) {
+    const score = nameMatchScore(aptName, m.apt_name);
+    if (score >= 2 && score > bestScore) {
+      bestScore = score;
+      best = m;
+    }
+  }
+  return best;
 }
 
 /** 한 endpoint 시도 — 성공 시 raw item, 실패 시 null + 진단 로그 */

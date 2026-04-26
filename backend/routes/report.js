@@ -245,19 +245,29 @@ function getDistrictTier(sigungu) {
   return { tier: '기타', bonus: 0 };
 }
 
-/** 시공사 브랜드 등급 분류 (KAPT facility.kaptBcompany) */
+/** 시공사 브랜드 등급 분류 (KAPT facility.kaptBcompany)
+ *  Phase 8++ (2026-04-26): PDF5 검증 — 태영(데시앙)·한신공영·우미린 등 누락 보강
+ */
 function getBuilderTier(builder) {
   if (!builder) return { tier: '미상', bonus: 0 };
-  const b = String(builder).replace(/\s+/g, '');
+  const b = String(builder).replace(/\s+/g, '').replace(/[()주식회사㈜]/g, '');
   // 1군 프리미엄
-  if (/(아크로|디에이치|르엘|푸르지오써밋)/.test(b)) return { tier: '1군 프리미엄', bonus: 8 };
-  // 1군 일반
-  if (/(힐스테이트|래미안|자이|롯데캐슬|푸르지오|아이파크|더샵|디오슬|디에트르|쌍용|두산위브)/.test(b))
+  if (/(아크로|디에이치|르엘|푸르지오써밋|반포자이|래미안첼리투스)/.test(b)) return { tier: '1군 프리미엄', bonus: 8 };
+  // 1군 일반 — 시공사명 또는 브랜드명 모두 매칭
+  if (/(힐스테이트|래미안|자이|롯데캐슬|푸르지오|아이파크|더샵|디오슬|디에트르|두산위브|위브)/.test(b))
+    return { tier: '1군', bonus: 5 };
+  // 시공사명 직접 (1군에 해당하는 회사들)
+  if (/(삼성물산|GS건설|현대건설|현대산업|HDC|대림|DL|대우|롯데건설|포스코|두산|쌍용|한화건설)/.test(b))
+    return { tier: '1군', bonus: 5 };
+  // 데시앙(태영)·우디안(한신)·꿈에그린(한라)·우미린(우미)·반도유보라(반도) 등 1군 일반급
+  if (/(태영|한신공영|한라건설|한신건설|동부건설|효성|코오롱)/.test(b))
     return { tier: '1군', bonus: 5 };
   // 2군
-  if (/(SK뷰|에스케이|이편한세상|꿈에그린|한화|호반|반도|제일)/.test(b)) return { tier: '2군', bonus: 3 };
+  if (/(SK뷰|에스케이|이편한세상|꿈에그린|한화|호반|반도|제일|풍림|경남|벽산건설)/.test(b)) return { tier: '2군', bonus: 3 };
   // 중견
-  if (/(우미|중흥|금호|계룡|신영|동문|벽산)/.test(b)) return { tier: '중견', bonus: 2 };
+  if (/(우미|중흥|금호|계룡|신영|동문|벽산|성원|이수)/.test(b)) return { tier: '중견', bonus: 2 };
+  // 공공(LH·SH·대한주택공사)
+  if (/(대한주택공사|LH|한국토지주택|SH공사|서울주택)/.test(b)) return { tier: '공공', bonus: 2 };
   return { tier: '일반', bonus: 1 };
 }
 
