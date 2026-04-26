@@ -2531,11 +2531,11 @@ async function generateReport() {
     자녀 ${_escHtml(kidPlan)} · 거주 ${_escHtml(stayYears)} · 1순위 <b>${_escHtml(priority)}</b>
   `;
 
-  // 생성 시작
+  // 생성 시작 (Phase 6: max_tokens 6500 + 후보 풀 1500건 → 60~90초 소요)
   btn.disabled = true;
   sp.style.display = 'inline-block';
-  tx.textContent = ' 보고서 생성 중... (10~20초)';
-  result.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t3);font-size:12px">📊 회원님 가구 상황 분석 중...<br>정부 정책 + 단지 데이터 + AI 분석 통합 진행</div>';
+  tx.textContent = ' 보고서 생성 중... (60~90초)';
+  result.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t3);font-size:12px">📊 회원님 가구 상황 분석 중... (60~90초 소요)<br><span style="font-size:11px">단지 후보 1500건 → 점수 매칭 → 정부 정책 + AI 분석 통합</span></div>';
 
   try {
     // Phase 5+ (2026-04-26): 로그인 사용자는 Authorization 헤더 추가 — 서버에서 user.id/email 인식 → admin/Pro plan 한도 적용
