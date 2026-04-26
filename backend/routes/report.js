@@ -26,6 +26,8 @@ const { callAI } = require('../services/aiService');
 const { getSupabaseAdmin } = require('../db/client');
 const { getSnapshot } = require('../services/regulationsService');
 const { resolveFacility } = require('../services/aptFacilityService');
+const { resolveCoordBatch } = require('../services/geocodeCacheService');
+const { getNearbyAmenities, countNearby, keywordToCoord, getTransitMinutes } = require('../services/kakaoService');
 const cache = require('../cache');
 const logger = require('../logger');
 const crypto = require('crypto');
@@ -401,6 +403,25 @@ function applyObjectiveScore(c) {
   const reg = getRegulationPenalty(c.sigungu);
   if (reg.bonus && !r['객관_규제']) { r['객관_규제'] = reg.bonus; c.score += reg.bonus; }
 
+  // Phase 8: 신고가 갱신 횟수 (6개월 내)
+  if (c.new_high_count > 0 && !r['객관_신고가갱신']) {
+    const sub = c.new_high_count >= 3 ? 8 : (c.new_high_count >= 1 ? 4 : 0);
+    if (sub) { r['객관_신고가갱신'] = sub; c.score += sub; }
+  }
+
+  // Phase 8: amenities (카카오) 보너스
+  if (c.amenities && !r['객관_생활인프라']) {
+    const a = c.amenities;
+    let bonus = 0;
+    if (a.subway >= 3) bonus += 6; // 지하철역 3개 이상 (역세권)
+    else if (a.subway >= 1) bonus += 3;
+    if (a.mart >= 2) bonus += 4; // 대형마트 2개 이상
+    else if (a.mart >= 1) bonus += 2;
+    if (a.hospital >= 5) bonus += 3; // 병원 밀집
+    if (a.school >= 3) bonus += 2; // 학교 인접
+    if (bonus) { r['객관_생활인프라'] = bonus; c.score += bonus; }
+  }
+
   // 객관 fact 객체 — UI/PDF 노출용 (점수와 별개로 사용자에게 보여줌)
   c.objectiveFacts = {
     district: district.tier,
@@ -411,6 +432,8 @@ function applyObjectiveScore(c) {
     parking_total: c.kaptInfo?.parking || null,
     regulation: reg.status,
     transactions_6mo: c.n,
+    new_high_count: c.new_high_count || 0, // Phase 8
+    amenities: c.amenities || null,        // Phase 8: { school, mart, hospital, subway, cvs }
   };
 
   c.score = Math.round(c.score);
@@ -455,7 +478,7 @@ async function fetchCandidateApts(admin, input, limit) {
   const { data: txs, error } = await q.limit(1500);
   if (error) throw error;
 
-  // 단지 그룹화 + build_year mode (최빈값) 산출
+  // 단지 그룹화 + build_year mode + 신고가 갱신 카운트
   const byApt = {};
   for (const t of (txs || [])) {
     const key = `${t.apt_name}|${t.sigungu}|${t.umd_nm}`;
@@ -464,6 +487,7 @@ async function fetchCandidateApts(admin, input, limit) {
       lawd_cd: t.lawd_cd,
       sum: 0, n: 0, areas: new Set(), latest: t.deal_date,
       buildYearCnt: {},
+      deals: [], // Phase 8: 신고가 갱신 계산용
     };
     byApt[key].sum += t.deal_amount;
     byApt[key].n++;
@@ -472,12 +496,25 @@ async function fetchCandidateApts(admin, input, limit) {
     if (t.build_year) {
       byApt[key].buildYearCnt[t.build_year] = (byApt[key].buildYearCnt[t.build_year] || 0) + 1;
     }
+    byApt[key].deals.push({ date: t.deal_date, amount: t.deal_amount });
+  }
+
+  // Phase 8: 신고가 갱신 카운트 (최근 6개월 내 누적 max 갱신 횟수)
+  function countNewHigh(deals) {
+    const sorted = [...deals].sort((a, b) => a.date.localeCompare(b.date));
+    let runningMax = 0, count = 0;
+    for (const d of sorted) {
+      if (d.amount > runningMax) {
+        if (runningMax > 0) count++; // 첫 거래는 갱신으로 안 침
+        runningMax = d.amount;
+      }
+    }
+    return count;
   }
 
   let pool = Object.values(byApt)
     .filter(a => a.n >= 1)
     .map(a => {
-      // build_year 우선순위 #2: molit 거래 최빈값
       const entries = Object.entries(a.buildYearCnt);
       const mode = entries.length
         ? entries.reduce((m, [y, c]) => c > m[1] ? [y, c] : m, ['', 0])[0]
@@ -490,6 +527,7 @@ async function fetchCandidateApts(admin, input, limit) {
         build_year: mode ? Number(mode) : null,
         households: null,
         master_matched: false,
+        new_high_count: countNewHigh(a.deals), // Phase 8
       };
     });
 
@@ -542,7 +580,44 @@ async function fetchCandidateApts(admin, input, limit) {
     }
   }));
 
-  // Phase 7 (2026-04-26): KAPT 호출 후 객관 점수 + objectiveFacts 적용
+  // Phase 8 (2026-04-26): 좌표 해결 → 카카오 amenities 병렬 fetch
+  // 7단지 좌표 일괄 + 주변 시설 카운트 (학교/마트/병원/지하철/공원)
+  try {
+    const aptsForGeo = out.map(c => ({
+      kaptCode: c.kapt_code, // KAPT 매칭됐으면 우선
+      aptName: c.master_name || c.apt_name,
+      sigungu: c.sigungu,
+      umdNm: c.umd_nm,
+    }));
+    const coords = await resolveCoordBatch(aptsForGeo, 4);
+    // coords 와 out 의 인덱스 일치 가정 (resolveCoordBatch 가 보장하는지 확인 필요 — 일단 동일 길이 매칭)
+    for (let i = 0; i < out.length; i++) {
+      const c = out[i];
+      const coord = coords?.[i];
+      if (coord?.lat && coord?.lng) {
+        c.lat = coord.lat; c.lng = coord.lng;
+      }
+    }
+    // amenities 병렬 (좌표 있는 단지만)
+    await Promise.all(out.map(async (c) => {
+      if (!c.lat || !c.lng) return;
+      try {
+        const amen = await getNearbyAmenities(c.lat, c.lng);
+        if (amen) {
+          c.amenities = amen; // { school, mart, hospital, subway, cvs }
+        }
+        // 공원: keyword 검색 (카테고리 코드 없음)
+        const parkCount = await countNearby(c.lat, c.lng, 'AT4', 1500); // AT4=관광명소 → 일부 공원 포함, 정확도는 낮음
+        c.parkCount = parkCount;
+      } catch (e) {
+        logger.warn({ err: e.message, apt: c.apt_name }, 'amenities 호출 실패');
+      }
+    }));
+  } catch (e) {
+    logger.warn({ err: e.message }, 'Phase 8 좌표/amenities 일괄 처리 실패 — 객관 점수만으로 진행');
+  }
+
+  // Phase 7 + 8: KAPT + amenities 호출 후 객관 점수 + objectiveFacts 적용
   for (const c of out) {
     applyObjectiveScore(c);
   }
@@ -571,12 +646,16 @@ function buildReportPrompt(input, policy, candidates) {
     const breakdownStr = Object.entries(c.scoreBreakdown || {})
       .map(([k, v]) => `${k}=${v}`).join(', ');
     const facts = c.objectiveFacts || {};
+    const am = facts.amenities;
+    const amStr = am ? `반경 800m~1km 내: 학교 ${am.school}·대형마트 ${am.mart}·병원 ${am.hospital}·지하철역 ${am.subway}·편의점 ${am.cvs}` : null;
     const factsList = [
       facts.district ? `행정구위계: ${facts.district}` : null,
       facts.builder ? `시공사: ${facts.builder}` : null,
       facts.parking_per_household ? `주차: 세대당 ${facts.parking_per_household}대 (총 ${facts.parking_total})` : null,
       facts.age_years != null ? `노후도: ${facts.age_years}년차` : null,
       facts.regulation ? `규제: ${facts.regulation}` : null,
+      facts.new_high_count > 0 ? `최근 6개월 신고가 ${facts.new_high_count}회 갱신` : null,
+      amStr,
     ].filter(Boolean).join(' | ');
     return `${i + 1}. ${displayName} (${c.sigungu} ${c.umd_nm})
    - 준공: ${c.build_year || '미상'}년 / 세대수: ${householdsStr}

@@ -2531,11 +2531,11 @@ async function generateReport() {
     자녀 ${_escHtml(kidPlan)} · 거주 ${_escHtml(stayYears)} · 1순위 <b>${_escHtml(priority)}</b>
   `;
 
-  // 생성 시작 (Phase 6+: max_tokens 6500 + 후보 풀 1500 + KAPT API 7단지 병렬 → 60~110초)
+  // 생성 시작 (Phase 8: + 카카오 좌표/amenities → 70~120초)
   btn.disabled = true;
   sp.style.display = 'inline-block';
-  tx.textContent = ' 보고서 생성 중... (60~110초)';
-  result.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t3);font-size:12px">📊 회원님 가구 상황 분석 중... (60~110초)<br><span style="font-size:11px">단지 1500건 → 점수 매칭 → KAPT 공식 세대수 조회 → AI 분석</span></div>';
+  tx.textContent = ' 보고서 생성 중... (70~120초)';
+  result.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t3);font-size:12px">📊 회원님 가구 상황 분석 중... (70~120초)<br><span style="font-size:11px">단지 1500건 → KAPT 세대수 → 카카오 주변 편의시설 → AI 분석</span></div>';
 
   try {
     // Phase 5+ (2026-04-26): 로그인 사용자는 Authorization 헤더 추가 — 서버에서 user.id/email 인식 → admin/Pro plan 한도 적용
@@ -2551,7 +2551,7 @@ async function generateReport() {
         houseStatus, isFirstBuyer, pyeong, schoolNeeded,
         kidPlan, stayYears, priority, workplaceArea,
       }),
-      signal: AbortSignal.timeout(150000),  // Phase 6+ 120s → 150s (KAPT API 7단지 + Claude 응답 여유)
+      signal: AbortSignal.timeout(180000),  // Phase 8: 150s → 180s (KAPT + 카카오 amenities + Claude)
     });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
@@ -2604,7 +2604,7 @@ function _renderReport(data) {
         <div>✅ <b>장점</b>: ${_escHtml(a.pros || '')}</div>
         <div>⚠ <b>단점</b>: ${_escHtml(a.cons || '')}</div>
         <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--bg2)">💰 <b>예산 매칭</b>: ${_escHtml(a.priceFit || '')}</div>
-        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${_escHtml(f.district)}</b>`:null,f.builder?`시공사 <b>${_escHtml(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${f.parking_per_household}대</b>`:null,f.regulation?`규제 <b>${_escHtml(f.regulation)}</b>`:null].filter(Boolean);if(!items.length)return '';return `<div style="font-size:10.5px;color:var(--t2);background:#F5F2EC;border:1px solid #E2DDD5;border-radius:5px;padding:6px 9px;margin-top:5px">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${a.matchScore?` <span style="color:var(--acc);font-weight:600">· 매칭 ${a.matchScore}점</span>`:''}</div>`;})()}
+        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${_escHtml(f.district)}</b>`:null,f.builder?`시공사 <b>${_escHtml(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${f.parking_per_household}대</b>`:null,f.regulation?`규제 <b>${_escHtml(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>6개월 ${f.new_high_count}회 갱신</b>`:null].filter(Boolean);const am=f.amenities;const amStr=am?`반경 800m~1km: 지하철 <b>${am.subway}</b>·마트 <b>${am.mart}</b>·병원 <b>${am.hospital}</b>·학교 <b>${am.school}</b>`:'';if(!items.length && !amStr)return '';return `<div style="font-size:10.5px;color:var(--t2);background:#F5F2EC;border:1px solid #E2DDD5;border-radius:5px;padding:6px 9px;margin-top:5px">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` <span style="color:var(--acc);font-weight:600">· 매칭 ${a.matchScore}점</span>`:''}</div>`;})()}
         ${a.matchReason ? `<div style="font-size:10.5px;color:var(--t3);background:var(--s1);border-radius:4px;padding:4px 8px;margin-top:4px">🏆 <b>왜 이 순위?</b> ${_escHtml(a.matchReason)}</div>` : ''}
         <div style="color:var(--acc);font-weight:600">📌 ${_escHtml(a.recommendation || '')}</div>
       </div>
@@ -2725,7 +2725,7 @@ function _downloadReportPDF() {
         <div>✅ <b>장점</b>: ${esc(a.pros||'')}</div>
         <div>⚠ <b>단점</b>: ${esc(a.cons||'')}</div>
         <div class="apt-fit">💰 <b>예산 매칭</b>: ${esc(a.priceFit||'')}</div>
-        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${esc(f.district)}</b>`:null,f.builder?`시공사 <b>${esc(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${f.parking_per_household}대</b>`:null,f.regulation?`규제 <b>${esc(f.regulation)}</b>`:null].filter(Boolean);if(!items.length)return '';return `<div class="apt-objfacts">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${a.matchScore?` · 매칭 <b>${a.matchScore}점</b>`:''}</div>`;})()}
+        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${esc(f.district)}</b>`:null,f.builder?`시공사 <b>${esc(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${f.parking_per_household}대</b>`:null,f.regulation?`규제 <b>${esc(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>6개월 ${f.new_high_count}회</b>`:null].filter(Boolean);const am=f.amenities;const amStr=am?`반경 800m~1km: 지하철 <b>${am.subway}</b>·마트 <b>${am.mart}</b>·병원 <b>${am.hospital}</b>·학교 <b>${am.school}</b>`:'';if(!items.length && !amStr)return '';return `<div class="apt-objfacts">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` · 매칭 <b>${a.matchScore}점</b>`:''}</div>`;})()}
         ${a.matchReason ? `<div class="apt-match">🏆 <b>왜 이 순위?</b> ${esc(a.matchReason)}</div>` : ''}
         <div class="apt-rec">📌 ${esc(a.recommendation||'')}</div>
       </div>
