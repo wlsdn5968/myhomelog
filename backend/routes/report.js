@@ -25,6 +25,7 @@ const express = require('express');
 const { callAI } = require('../services/aiService');
 const { getSupabaseAdmin } = require('../db/client');
 const { getSnapshot } = require('../services/regulationsService');
+const { resolveFacility } = require('../services/aptFacilityService');
 const cache = require('../cache');
 const logger = require('../logger');
 const crypto = require('crypto');
@@ -362,58 +363,16 @@ async function fetchCandidateApts(admin, input, limit) {
       };
     });
 
-  // apt_master 토큰 매칭 — sigungu+umd_nm 같은 후보 중 단지명 토큰 매칭
-  if (pool.length) {
-    const sigunguList = Array.from(new Set(pool.map(p => p.sigungu).filter(Boolean)));
-    const umdList = Array.from(new Set(pool.map(p => p.umd_nm).filter(Boolean)));
-
-    const { data: masters } = await admin
-      .from('apt_master')
-      .select('apt_name, sigungu, umd_nm, kapt_code, facility')
-      .in('sigungu', sigunguList)
-      .in('umd_nm', umdList);
-
-    const mastersByKey = {};
-    for (const m of (masters || [])) {
-      const k = `${m.sigungu}|${m.umd_nm}`;
-      if (!mastersByKey[k]) mastersByKey[k] = [];
-      mastersByKey[k].push(m);
-    }
-
-    for (const r of pool) {
-      const candidates = mastersByKey[`${r.sigungu}|${r.umd_nm}`] || [];
-      let best = null, bestScore = 0;
-      for (const m of candidates) {
-        const score = aptNameMatchScore(r.apt_name, m.apt_name);
-        if (score >= 2 && score > bestScore) {
-          bestScore = score;
-          best = m;
-        }
-      }
-      if (best?.facility) {
-        const f = best.facility;
-        r.households = f.kaptdaCnt || f.householdCount || f.kaptCount || null;
-        // build_year 우선순위 #1: master facility.kaptUsedate (KAPT 공식 사용승인일)
-        const useDate = f.kaptUsedate || f.kaptUseDate || f.useApprovalDate;
-        if (useDate) {
-          const ys = String(useDate).slice(0, 4);
-          if (/^\d{4}$/.test(ys)) r.build_year = Number(ys); // master 가 우선
-        }
-        r.master_matched = true;
-        r.master_name = best.apt_name; // 정식 단지명 (예: '휘경주공1단지')
-      }
-    }
-  }
-
-  // 점수 계산
+  // 점수 계산 (master 매칭 전, 거래 데이터 기반 1차 점수)
+  // → 다양성 강제 후 상위 N개만 facility 호출 (API 호출 비용 절감)
   for (const c of pool) {
     const s = computeAptScore(c, ctx);
     c.score = s.total;
     c.scoreBreakdown = s.breakdown;
   }
-
-  // 점수 정렬 + 다양성 (한 sigungu 최대 3개)
   pool.sort((a, b) => b.score - a.score);
+
+  // 다양성 강제 (한 sigungu 최대 3개) — 상위 limit 개 선정
   const out = [];
   const guCnt = {};
   for (const c of pool) {
@@ -422,6 +381,47 @@ async function fetchCandidateApts(admin, input, limit) {
     if (cnt >= 3) continue;
     guCnt[c.sigungu] = cnt + 1;
     out.push(c);
+  }
+
+  // Phase 6+ (2026-04-26): KAPT API 통합 — 선정된 N개 단지만 facility 병렬 fetch
+  //   resolveFacility() 가 ILIKE 토큰 매칭 + KAPT API + DB 캐시 (90일) 다 처리.
+  //   첫 호출: API 호출 → DB 저장 (응답 +5~10초). 두 번째: cache hit (0초).
+  await Promise.all(out.map(async (c) => {
+    try {
+      const f = await resolveFacility({ aptName: c.apt_name, sigungu: c.sigungu, umdNm: c.umd_nm });
+      if (f?.raw) {
+        const raw = f.raw;
+        c.households = raw.kaptdaCnt || raw.householdCount || raw.kaptCount || null;
+        // build_year 우선순위 #1: KAPT 공식 사용승인일
+        const useDate = raw.kaptUsedate || raw.kaptUseDate || raw.useApprovalDate;
+        if (useDate) {
+          const ys = String(useDate).slice(0, 4);
+          if (/^\d{4}$/.test(ys)) c.build_year = Number(ys);
+        }
+        c.master_matched = true;
+        c.master_name = f.official; // 정식 단지명 (예: '답십리동서울한양')
+        // 추가 풍부화: 시공사·주차·승강기 (AI prompt 활용)
+        c.kaptInfo = {
+          builder: raw.kaptBcompany || raw.bcompany || null,
+          parking: raw.kaptdPcnt || raw.parkingCount || null,
+          elevators: raw.kaptdEcapa || null,
+        };
+      }
+    } catch (e) {
+      logger.warn({ err: e.message, apt: c.apt_name }, 'facility 호출 실패 (단지 1개)');
+    }
+  }));
+
+  // 데이터 품질 보너스 재계산 (households/build_year 채워졌으면 +5씩)
+  for (const c of out) {
+    if (c.households && !c.scoreBreakdown.data_households) {
+      c.scoreBreakdown.data_households = 5;
+      c.score += 5;
+    }
+    if (c.build_year && !c.scoreBreakdown.data_build_year) {
+      c.scoreBreakdown.data_build_year = 5;
+      c.score += 5;
+    }
   }
 
   // 진단 로그 — 운영자가 매칭 추적
