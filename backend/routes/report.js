@@ -187,8 +187,13 @@ async function fetchCandidateApts(admin, input, limit) {
     .gte('deal_amount', minAmt).lte('deal_amount', maxAmt)
     .gte('deal_date', new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
 
-  // 지역 매칭 (간단)
-  if (region.includes('서울')) {
+  // 지역 매칭 — 시/구 단위 우선 (예: "서울 노원구" → sigungu LIKE '%노원구%')
+  // Phase 5+ (2026-04-26): 이전엔 광역만 보고 lawd_cd '11%' 매칭해서 노원구 요청에도
+  // 중구/동대문구 같은 거래 활발 지역이 우선 매칭되던 버그 수정.
+  const guMatch = region.match(/([가-힣]+구)/);
+  if (guMatch) {
+    q = q.like('sigungu', `%${guMatch[1]}%`);
+  } else if (region.includes('서울')) {
     q = q.like('lawd_cd', '11%');
   } else if (region.includes('경기')) {
     q = q.like('lawd_cd', '41%');
