@@ -105,11 +105,11 @@ router.post('/generate', async (req, res) => {
     const prompt = buildReportPrompt(userInput, policyData, candidates);
 
     // 4) AI 호출 — REPORT_SYSTEM_PROMPT 를 system 으로 명시 전달 (default chat system 이 평문 답변 강제하는 문제 회피)
-    //    max_tokens 4000 (보고서 5섹션 + 7개 단지 풀 정보 — default 1500 으론 잘림)
+    //    max_tokens 2500 — 4000 은 응답 시간 60s+ 로 frontend abort. 보고서 5섹션 + 7단지엔 충분
     const result = await callAI(
       [{ role: 'user', content: prompt }],
       false,
-      { userId, system: REPORT_SYSTEM_PROMPT, maxTokens: 4000 }
+      { userId, system: REPORT_SYSTEM_PROMPT, maxTokens: 2500 }
     );
     const cleaned = String(result.content || '').replace(/```json|```/g, '').trim();
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);

@@ -2546,7 +2546,7 @@ async function generateReport() {
         houseStatus, isFirstBuyer, pyeong, schoolNeeded,
         kidPlan, stayYears, priority, workplaceArea,
       }),
-      signal: AbortSignal.timeout(60000),
+      signal: AbortSignal.timeout(120000),  // Phase 5+ 60s → 120s (Claude 응답 + 후처리 여유)
     });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
