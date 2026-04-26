@@ -132,9 +132,37 @@ router.get('/summary', async (req, res) => {
   const hit = cache.get(cacheKey);
   if (hit) return res.json({ ...hit, fromCache: true });
 
-  // 뉴스 원본 캐시 재활용
-  const hot = cache.get('news:hot');
-  const policy = cache.get('news:policy');
+  // Phase 4 (2026-04-26): Vercel serverless 인스턴스별 cache 분리 문제 fix.
+  // `/news?cat=hot` 호출한 인스턴스와 `/news/summary` 호출한 인스턴스가 다르면 cache miss
+  // → 사용자가 뉴스 탭 정상 진입 후에도 fallback "준비되지 않았어요" 표시되던 root cause.
+  // 해결: cache 우선, 없으면 직접 fetch (lazy chain).
+  let hot = cache.get('news:hot');
+  let policy = cache.get('news:policy');
+
+  async function _fetchCat(catKey, perKwLimit) {
+    const kws = KEYWORDS[catKey] || [];
+    try {
+      const results = await Promise.all(kws.map(k => fetchNaverNews(k, perKwLimit).catch(() => null)));
+      if (results.every(r => r === null)) {
+        return { items: await fetchRssFallback() };
+      }
+      const seen = new Set();
+      const items = [];
+      for (const it of results.flat().filter(Boolean)) {
+        if (seen.has(it.link)) continue;
+        seen.add(it.link);
+        items.push(it);
+      }
+      items.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
+      return { items: items.slice(0, 15) };
+    } catch {
+      return { items: [] };
+    }
+  }
+
+  if (!hot?.items?.length) hot = await _fetchCat('hot', 6);
+  if (!policy?.items?.length) policy = await _fetchCat('policy', 4);
+
   let titles = [];
   [hot, policy].forEach(h => {
     if (h?.items) titles.push(...h.items.slice(0, 8).map(i => i.title));
@@ -142,7 +170,7 @@ router.get('/summary', async (req, res) => {
 
   if (titles.length === 0) {
     return res.json({
-      summary: '오늘의 뉴스 데이터가 아직 준비되지 않았어요. 뉴스 탭을 먼저 열어주세요.',
+      summary: ['📌 뉴스 데이터를 가져오지 못했어요. 잠시 후 다시 시도해주세요.'],
       updatedAt: new Date().toISOString(),
       fromCache: false,
     });
