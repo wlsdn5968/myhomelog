@@ -2729,6 +2729,10 @@ function _downloadReportPDF() {
   }).join('');
   const tipsHtml = (r.tips || []).map(t => `<li>${esc(t)}</li>`).join('');
 
+  // HTML parser 가 외부 script 태그 안의 닫는태그 literal 을 종료로 인식하는 문제 회피 (split 방식)
+  const SCR_OPEN = '<scr' + 'ipt>';
+  const SCR_CLOSE = '<\/scr' + 'ipt>';
+
   const inputLine = [
     inp.maxBudget ? `매수가 ${inp.maxBudget}억` : null,
     inp.myCash ? `자기자본 ${inp.myCash}억` : null,
@@ -2818,7 +2822,7 @@ function _downloadReportPDF() {
       매수·매도 추천 X · 미래 가격 예측 X · 대출 알선 X. 모든 의사결정과 책임은 본인에게 있습니다.
     </div>
 
-    <script>setTimeout(()=>window.print(), 500);</script>
+    ${SCR_OPEN}setTimeout(()=>window.print(), 500);${SCR_CLOSE}
   </body></html>`);
   w.document.close();
 }
