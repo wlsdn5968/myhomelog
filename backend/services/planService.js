@@ -14,6 +14,13 @@ const { getSupabaseAdmin } = require('../db/client');
 const cache = require('../cache');
 const logger = require('../logger');
 
+// Phase 5+ (2026-04-26): 관리자 화이트리스트 — 무제한 사용 (운영자 본인용)
+// ADMIN_EMAILS 환경변수 (콤마구분) 로 운영, 미설정 시 기본 운영자 이메일 사용
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'wlsdn5968@gmail.com')
+  .split(',')
+  .map(s => s.trim().toLowerCase())
+  .filter(Boolean);
+
 /** 사용자 활성 plan 조회 — 60초 메모리 캐시 (모든 chat 요청마다 DB 조회 비용 차단) */
 async function getActivePlan(userId) {
   if (!userId) return 'free';
@@ -26,6 +33,21 @@ async function getActivePlan(userId) {
     cache.set(memKey, 'free', 60);
     return 'free';
   }
+
+  // 관리자 체크 — auth.users 에서 email 조회 후 화이트리스트 매칭
+  if (ADMIN_EMAILS.length > 0) {
+    try {
+      const { data } = await admin.auth.admin.getUserById(userId);
+      const email = data?.user?.email?.toLowerCase();
+      if (email && ADMIN_EMAILS.includes(email)) {
+        cache.set(memKey, 'admin', 60);
+        return 'admin';
+      }
+    } catch (e) {
+      logger.warn({ err: e.message, userId }, 'planService: admin email 조회 실패 — 일반 plan 으로 진행');
+    }
+  }
+
   try {
     const { data } = await admin
       .from('user_billing')
@@ -58,6 +80,8 @@ const PLAN_LIMITS = {
   free: { dailyChat: 15,  dailySearch: 5,  monthlyAiUsd: 0.5 },  // 무료: 약 20 호출 (보호용)
   pro:  { dailyChat: 100, dailySearch: 50, monthlyAiUsd: 25 },   // 9900원: 약 1000 호출
   team: { dailyChat: 300, dailySearch: 150, monthlyAiUsd: 75 },  // 29900원: 약 3000 호출
+  // 관리자 — 무제한 (운영자 본인용. Anthropic 비용은 본인 책임)
+  admin: { dailyChat: Infinity, dailySearch: Infinity, monthlyAiUsd: Infinity },
 };
 
 function getLimitsForPlan(plan) {

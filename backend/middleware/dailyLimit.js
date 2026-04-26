@@ -119,6 +119,14 @@ function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
       }
     }
 
+    // Phase 5+ (2026-04-26): 관리자 무제한 — 한도 체크 자체 skip + 사용량 카운트도 안 올림
+    if (plan === 'admin') {
+      res.setHeader('X-Daily-Limit', 'unlimited');
+      res.setHeader('X-Daily-Remaining', 'unlimited');
+      res.setHeader('X-Plan', 'admin');
+      return next();
+    }
+
     const key = `dl:${scope}:${todayKey()}:${id.kind}:${id.value}`;
     const ttl = secondsUntilMidnight();
 

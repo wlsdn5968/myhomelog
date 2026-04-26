@@ -73,6 +73,12 @@ async function checkBudget(userId) {
 
   // Phase 3 (2026-04-25): Pro/Team 플랜 별 한도 적용 — 결제 가치 보장 + Pro 단일 사용자 손실 차단
   const plan = await getActivePlan(userId);
+
+  // Phase 5+ (2026-04-26): admin 무제한 — 월 예산 체크도 skip
+  if (plan === 'admin') {
+    return { allowed: true, usedX1000: 0, limitX1000: Number.MAX_SAFE_INTEGER, resetAt: nextMonthFirst(), plan };
+  }
+
   const planLimits = getLimitsForPlan(plan);
   const limitX1000 = Math.round(planLimits.monthlyAiUsd * 1000 * 1000);
 
