@@ -117,13 +117,18 @@ router.post('/generate', async (req, res) => {
     try {
       parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
     } catch (e) {
+      // 진단용: message 에 응답 prefix 직접 포함 (Vercel logs 가 message column 만 짧게 보여줌)
+      const previewForMsg = cleaned.slice(0, 200).replace(/\s+/g, ' ');
       logger.error({
         err: e.message,
         sample_head: cleaned.slice(0, 800),
         sample_tail: cleaned.slice(-400),
         cleaned_len: cleaned.length,
-      }, '보고서 AI JSON 파싱 실패');
-      return res.status(502).json({ error: '보고서 생성 실패 — AI 응답 형식 오류' });
+      }, `보고서 AI JSON 파싱 실패 RAW="${previewForMsg}"`);
+      return res.status(502).json({
+        error: '보고서 생성 실패 — AI 응답 형식 오류',
+        _debug: { sample: cleaned.slice(0, 1500), len: cleaned.length, parseError: e.message },
+      });
     }
 
     const out = {
