@@ -2784,29 +2784,54 @@ function renderListGrid(){
     ? `<div style="margin:10px 14px 0;padding:8px 12px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;color:#1B4F8A;font-size:11px;line-height:1.55">📊 <b>분석 지역:</b> ${_escHtml(searchMeta.regions.map(String).join(', '))} · 전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> 중 예산 실거래 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b> · 최근 6개월 실거래 ${(Number(searchMeta.totalTx)||0).toLocaleString()}건 분석</div>`
     : '';
   const banner=`${metaLine}<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;color:var(--red);font-size:11px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아닙니다.</u> 아래 점수·신호는 과거 실거래 통계 정리이며, 미래 가격(상승·하락)을 예측·보장하지 않습니다. 모든 의사결정 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>`;
-  g.innerHTML=banner+props.map((p,i)=>{
-    const tags=_renderPTags(p.tags, 3);
-    // 점수 라벨: "안전/위험" 같은 confidence 어휘는 disclaimer 와 충돌 → 사실 진술로 변경
-    // (P1 — 사용자 과신 트리거 완화. 2026-04-25)
-    const s=Number(p.score)||60,lv=s>=75?'safe':s>=50?'warn':'danger',lt=s>=75?'거래활발':s>=50?'거래보통':'거래적음';
-    const prosRaw = String(p.pros||'');
-    const prosClamped = prosRaw.length>62 ? prosRaw.substring(0,62)+'...' : prosRaw;
-    return`<div class="lcard" onclick="showDetail(props[${i}])" style="position:relative">
-      <div class="lc-top" style="background:${p.ltv?.includes('40')?'var(--accL)':'var(--a2L)'}">
-        <div class="lc-name">${_escHtml(p.aptName||'')}</div><div class="lc-area">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년</div>
-        <div class="lc-g">${gSVG(s,50)}
-          <div><div style="font-size:17px;font-weight:800;color:${gc(s)}">${(Number(p.avgPrice)||0).toFixed(2)}억</div>
-          <span class="lvl ${lv}">${lt}</span>
-          <div style="font-size:10px;color:var(--t2);margin-top:2px">LTV ${_escHtml(p.ltv||'?')} | 최대 ${_escHtml(p.maxLoan||'LTV기준')}</div></div>
-        </div>
-      </div>
-      <div style="padding:12px 14px">
-        <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:7px">${tags}</div>
-        <div style="font-size:11px;color:var(--t2);line-height:1.65;margin-bottom:6px">${_escHtml(prosClamped)}</div>
-        ${(p.currentPriceByPyeong||[]).length?`<div style="font-size:10.5px;color:var(--t3);background:#F7F9FC;border-radius:6px;padding:5px 8px;line-height:1.5">📐 ${p.currentPriceByPyeong.slice(0,3).map(cp=>`<b style="color:var(--t2)">${_escHtml(cp.pyeong)}평</b> ${_escHtml(cp.recentAvg)}억`).join(' · ')}</div>`:''}
-      </div>
+  // Phase 4 (2026-04-26): 렌더 안전망 — 카드 매핑 fail 시 사용자가 빈 화면 보지 않도록.
+  let cardsHtml = '';
+  try {
+    cardsHtml = props.map((p,i)=>{
+      if (!p || !p.aptName) return ''; // 잘못된 카드 skip
+      return _renderListCard(p, i);
+    }).filter(Boolean).join('');
+    if (!cardsHtml) {
+      cardsHtml = `<div style="grid-column:1/-1;padding:30px 20px;text-align:center;color:var(--t3)">
+        <div style="font-size:32px;margin-bottom:10px">📭</div>
+        <div style="font-size:13px;font-weight:600;color:var(--t1);margin-bottom:6px">분석은 됐지만 표시할 단지가 없어요</div>
+        <div style="font-size:11px;line-height:1.6">예산·지역 조건에 맞는 단지가 부족합니다. 매수가를 조금 늘리거나 인접 구도 추가해보세요.</div>
+      </div>`;
+    }
+  } catch (e) {
+    console.error('renderListGrid map error:', e, props.slice(0,3));
+    cardsHtml = `<div style="grid-column:1/-1;padding:30px 20px;text-align:center;color:var(--red)">
+      <div style="font-size:13px;font-weight:600;margin-bottom:4px">목록 표시 중 오류</div>
+      <div style="font-size:11px">${_escHtml(String(e.message||e).slice(0,200))}</div>
     </div>`;
-  }).join('');
+  }
+  g.innerHTML = banner + cardsHtml;
+  return;
+}
+
+// 카드 1개 렌더 (renderListGrid 에서 분리 — 안전망 활용)
+function _renderListCard(p, i) {
+  const tags = _renderPTags(p.tags, 3);
+  const s = Number(p.score) || 60;
+  const lv = s >= 75 ? 'safe' : s >= 50 ? 'warn' : 'danger';
+  const lt = s >= 75 ? '거래활발' : s >= 50 ? '거래보통' : '거래적음';
+  const prosRaw = String(p.pros || '');
+  const prosClamped = prosRaw.length > 62 ? prosRaw.substring(0,62) + '...' : prosRaw;
+  return `<div class="lcard" onclick="showDetail(props[${i}])" style="position:relative">
+    <div class="lc-top" style="background:${p.ltv?.includes('40')?'var(--accL)':'var(--a2L)'}">
+      <div class="lc-name">${_escHtml(p.aptName||'')}</div><div class="lc-area">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년</div>
+      <div class="lc-g">${gSVG(s,50)}
+        <div><div style="font-size:17px;font-weight:800;color:${gc(s)}">${(Number(p.avgPrice)||0).toFixed(2)}억</div>
+        <span class="lvl ${lv}">${lt}</span>
+        <div style="font-size:10px;color:var(--t2);margin-top:2px">LTV ${_escHtml(p.ltv||'?')} | 최대 ${_escHtml(p.maxLoan||'LTV기준')}</div></div>
+      </div>
+    </div>
+    <div style="padding:12px 14px">
+      <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:7px">${tags}</div>
+      <div style="font-size:11px;color:var(--t2);line-height:1.65;margin-bottom:6px">${_escHtml(prosClamped)}</div>
+      ${(p.currentPriceByPyeong||[]).length?`<div style="font-size:10.5px;color:var(--t3);background:#F7F9FC;border-radius:6px;padding:5px 8px;line-height:1.5">📐 ${p.currentPriceByPyeong.slice(0,3).map(cp=>`<b style="color:var(--t2)">${_escHtml(cp.pyeong)}평</b> ${_escHtml(cp.recentAvg)}억`).join(' · ')}</div>`:''}
+    </div>
+  </div>`;
 }
 
 function selP(i){
