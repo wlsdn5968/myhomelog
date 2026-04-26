@@ -22,9 +22,9 @@ const APT_INFO_KEY = process.env.APT_INFO_API_KEY || process.env.MOLIT_API_KEY;
 // V3 가 표준이지만 일부 키는 V1/V2 만 활성. 실패 시 다음으로 fallback.
 const FACILITY_ENDPOINTS = [
   'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3',
+  'http://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3',
   'https://apis.data.go.kr/1613000/AptBasisInfoServiceV2/getAphusBassInfoV2',
   'https://apis.data.go.kr/1613000/AptBasisInfoService/getAphusBassInfo',
-  'https://apis.data.go.kr/1611000/AptBasisInfoServiceV3/getAphusBassInfoV3',
 ];
 const CACHE_TTL_DAYS = 90;
 let _diagLogged = false;
@@ -68,7 +68,7 @@ async function tryEndpoint(url, kaptCode) {
   } catch (e) {
     const status = e?.response?.status;
     const rd = e?.response?.data;
-    const bodyPreview = typeof rd === 'string' ? rd.slice(0, 200) : JSON.stringify(rd || {}).slice(0, 200);
+    const bodyPreview = typeof rd === 'string' ? rd.slice(0, 800) : JSON.stringify(rd || {}).slice(0, 800);
     return { ok: false, reason: `HTTP ${status}`, bodyPreview };
   }
   // XML 응답 가능성 — string 인 경우 짧게 반환 (진단용)
@@ -113,7 +113,13 @@ async function fetchFromApi(kaptCode) {
   }
   if (!_diagLogged) {
     _diagLogged = true;
-    logger.error({ kaptCode, attempts }, 'facility 모든 endpoint 실패 — 진단');
+    // 첫 attempt 의 bodyPreview 도 로그 (full)
+    const firstFail = attempts[0];
+    logger.error({
+      kaptCode, attempts,
+      keyLen: APT_INFO_KEY ? APT_INFO_KEY.length : 0,
+      keyHasPercent: APT_INFO_KEY ? APT_INFO_KEY.includes('%') : null,
+    }, 'facility 모든 endpoint 실패 — 진단');
   }
   return null;
 }
