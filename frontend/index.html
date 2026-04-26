@@ -733,8 +733,9 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <div class="htabs">
     <button class="htab on" onclick="sv('map',this)">🗺 지도</button>
     <button class="htab" onclick="sv('list',this)">📋 목록</button>
+    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서">📊 보고서 <span style="background:#FF6B35;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:top">NEW</span></button>
     <button class="htab" onclick="sv('calc',this)">🧮 대출계산</button>
-    <button class="htab" onclick="sv('clause',this)">✍ 특약생성</button>
+    <button class="htab" onclick="sv('clause',this)">✍ 특약</button>
     <button class="htab" onclick="sv('news',this)">📰 뉴스</button>
     <button class="htab" onclick="sv('subs',this)">📅 청약</button>
     <button class="htab" onclick="sv('guide',this)" style="opacity:0.85" title="처음이세요? 3분 가이드">📖 사용법</button>
@@ -751,9 +752,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <span class="hst" id="aiPill" style="background:var(--bg2);color:var(--t2);display:none" title="💬 AI 채팅 무료 한도 (오늘 자정 reset)" aria-label="AI 채팅 무료 한도">💬 채팅 —/15</span>
     <!-- Phase 4 (2026-04-26): 서버 정상 시 hide, 장애 시만 빨간 표시 — "항상 초록"의 의미 없음 해소 -->
     <span class="hst off" id="apiSt" style="display:none">확인 중...</span>
-    <!-- Phase 3 (2026-04-25/26): "AI 특약 생성" 단일 가치 CTA — 호갱노노/직방 대비 차별화 핵심.
-         모바일에서는 텍스트 생략 (✍ 만), PC에서는 풀 텍스트. -->
-    <button class="hbtn hbtn-cta" id="ctaClauseBtn" onclick="sv('clause')" title="AI가 부동산 특약을 만들어드려요 (변호사 검토 권장)" aria-label="AI 특약 생성으로 이동"><span class="cta-icon">✍</span><span class="cta-text"> AI 특약</span></button>
+    <!-- Phase 5 (2026-04-26): 핵심 USP = 1page 보고서. AI 특약 CTA 제거. -->
+    <button class="hbtn hbtn-cta" id="ctaReportBtn" onclick="sv('report')" title="회원님 가구 맞춤 1page 컨설팅 보고서 자동 생성" aria-label="맞춤 보고서 생성으로 이동"><span class="cta-icon">📊</span><span class="cta-text"> 맞춤 보고서</span></button>
     <button class="hbtn" id="loginBtn" onclick="openLogin()" title="로그인하면 북마크가 기기 간 동기화돼요">로그인</button>
     <button class="hbtn" id="userBtn" onclick="openUserMenu()" style="display:none">👤 <span id="userBadge"></span></button>
     <button class="hbtn" id="settingsBtn" onclick="openSettings()">ⓘ 정보</button>
@@ -826,6 +826,35 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         <div class="chips" id="ch-r-sub" style="margin-top:2px"></div>
       </div>
       <div class="mb9"><span class="lbl">학군 중요도</span><div class="chips" id="ch-sc"><span class="chip" onclick="cp(this,'ch-sc')">학군 중요</span><span class="chip on" onclick="cp(this,'ch-sc')">보통</span></div></div>
+      <!-- Phase 5-A (2026-04-26): 보고서 정확도 향상 입력 — 자녀·거주기간·우선순위 -->
+      <details style="margin-bottom:9px"><summary style="cursor:pointer;font-size:11px;color:var(--t2);user-select:none;list-style:none">▸ 보고서 정확도 향상 (자녀·거주기간·우선순위)</summary>
+        <div style="margin-top:6px;padding-left:4px;border-left:2px solid var(--bd)">
+          <div class="mb9"><span class="lbl">자녀 계획</span>
+            <div class="chips" id="ch-kid">
+              <span class="chip on" onclick="cp(this,'ch-kid')">없음</span>
+              <span class="chip" onclick="cp(this,'ch-kid')">예정</span>
+              <span class="chip" onclick="cp(this,'ch-kid')">0~6세</span>
+              <span class="chip" onclick="cp(this,'ch-kid')">초등</span>
+              <span class="chip" onclick="cp(this,'ch-kid')">중등+</span>
+            </div>
+          </div>
+          <div class="mb9"><span class="lbl">거주 기간 목표</span>
+            <div class="chips" id="ch-stay">
+              <span class="chip" onclick="cp(this,'ch-stay')">3년 이하</span>
+              <span class="chip on" onclick="cp(this,'ch-stay')">5~10년</span>
+              <span class="chip" onclick="cp(this,'ch-stay')">10년+</span>
+            </div>
+          </div>
+          <div class="mb9"><span class="lbl">우선순위 (1순위 선택)</span>
+            <div class="chips" id="ch-pri">
+              <span class="chip" onclick="cp(this,'ch-pri')">학군</span>
+              <span class="chip" onclick="cp(this,'ch-pri')">역세권</span>
+              <span class="chip on" onclick="cp(this,'ch-pri')">환금성</span>
+              <span class="chip" onclick="cp(this,'ch-pri')">조용함</span>
+            </div>
+          </div>
+        </div>
+      </details>
       <div class="mb9"><span class="lbl">희망 평형</span><div class="chips" id="ch-py"><span class="chip" onclick="cp(this,'ch-py')">소형 15~22평</span><span class="chip on" onclick="cp(this,'ch-py')">중형 23~33평</span><span class="chip" onclick="cp(this,'ch-py')">대형 34평+</span><span class="chip" onclick="cp(this,'ch-py')">전체</span></div></div>
       <div class="r2"><div><label class="lbl" for="bp">매수가 (억 단위)</label><input class="inp" id="bp" type="number" inputmode="decimal" placeholder="예: 6.8 (6억 8천)" step="0.1" oninput="cl()"></div><div><label class="lbl" for="mc">자기 자본 (억 단위)</label><input class="inp" id="mc" type="number" inputmode="decimal" placeholder="예: 3.5 (3억 5천)" step="0.1" oninput="cl()"></div></div>
       <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원 단위 — 1.2억은 12000)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000 (만원)" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 / 관심 구</label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
@@ -1280,22 +1309,44 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
 </div>
 
+<!-- Phase 5 (2026-04-26): 1Page 컨설팅 보고서 — 핵심 USP -->
+<div class="biz-view" id="view-report" style="display:none">
+  <div class="biz-section" style="max-width:820px;margin:0 auto">
+    <h3 style="margin:0 0 4px">📊 회원님 가구 맞춤 단지 분석 보고서</h3>
+    <p style="font-size:11.5px;color:var(--t3);margin:0 0 14px">사용자 자금·가족·우선순위 자동 매칭 · 정부 정책 최신 반영 · 비공개</p>
+
+    <!-- 입력 요약 + 생성 버튼 -->
+    <div id="reportInputSummary" style="background:#F0F7FF;border:1px solid #BFD7F7;border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:11.5px;color:var(--t1);line-height:1.7"></div>
+
+    <button class="abtn acc" id="reportGenBtn" onclick="generateReport()" style="margin:0 0 14px;padding:11px 18px;font-size:13px;width:100%;max-width:380px">
+      <span id="reportGenSp" class="spin" style="display:none"></span><span id="reportGenTx">📊 맞춤 보고서 생성하기</span>
+    </button>
+
+    <!-- 보고서 결과 영역 -->
+    <div id="reportResult"></div>
+
+    <div style="margin-top:14px;padding:11px 13px;background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;font-size:10.5px;color:var(--red);line-height:1.6">
+      ⚠ 본 보고서는 정보 정리이며 <b>투자자문업·중개업·대출모집인업이 아닙니다.</b> 매수·매도 추천 X, 미래 가격 예측 X, 대출 알선 X. 모든 의사결정과 책임은 본인에게 있습니다.
+    </div>
+  </div>
+</div>
+
 <!-- 사용법 탭 (Phase 4, 2026-04-26) — 8섹션 가이드 -->
 <div class="biz-view" id="view-guide" style="display:none">
   <div class="biz-section" style="max-width:780px;margin:0 auto">
     <h3 style="margin:0 0 4px">📖 내집로그 사용법</h3>
     <p style="font-size:11.5px;color:var(--t3);margin:0 0 18px">3분 안에 핵심 가치 체험 + 자주 묻는 답</p>
 
-    <!-- 1. 30초 가이드 -->
+    <!-- 1. 30초 가이드 — Phase 5: 보고서 중심 -->
     <div style="background:linear-gradient(135deg,#FFF5E6,#FFFAF0);border:1px solid #E8C896;border-radius:12px;padding:16px 18px;margin-bottom:18px">
       <div style="font-size:13px;font-weight:800;color:#8B6914;margin-bottom:8px">🚀 30초 가이드 — 처음이세요?</div>
       <div style="font-size:12px;color:var(--t1);line-height:1.8">
-        1. 좌측 사이드바에 <b>주택 보유 / 매수가 / 희망지역</b> 3개만 입력 → "🤖 실거래 기반 단지 정리" 클릭<br>
-        2. 추천 단지 카드 → 클릭하면 <b>실거래가·평형·시세 추이·리스크</b> 모두 볼 수 있어요<br>
-        3. 마음에 드는 단지 → ⭐ 관심 추가 → 임장노트 작성<br>
-        4. 계약 직전 → <b>✍ AI 특약 초안</b> 생성 → 변호사 검토
+        1. 좌측 사이드바에 <b>주택 보유 / 매수가 / 희망지역</b> 3개만 입력<br>
+        2. 헤더 <b>📊 보고서</b> 클릭 → "맞춤 보고서 생성" → AI가 회원님 가구 상황에 맞는 <b>1page 컨설팅 보고서</b> 자동 생성<br>
+        3. 보고서 안 추천 단지 클릭 → 실거래가·평형·시세 추이 상세 확인<br>
+        4. 마음에 드는 단지 → ⭐ 관심 추가 → 임장노트 작성
       </div>
-      <button class="abtn acc" style="margin-top:12px;padding:8px 16px;width:auto;font-size:12px" onclick="sv('map')">🗺 지금 지도부터 시작하기 →</button>
+      <button class="abtn acc" style="margin-top:12px;padding:8px 16px;width:auto;font-size:12px" onclick="sv('report')">📊 지금 보고서 받기 →</button>
     </div>
 
     <!-- 2. 단지 검색 -->
@@ -1321,16 +1372,26 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       </div>
     </details>
 
-    <!-- 4. AI 특약 (핵심 가치 강조) -->
-    <details style="background:linear-gradient(135deg,#FFF7F0,#fff);border:2px solid #FF6B35;border-radius:10px;padding:13px 16px;margin-bottom:10px">
-      <summary style="cursor:pointer;font-size:13px;font-weight:800;color:#FF6B35;list-style:none">✍ AI 특약 초안 생성 — 이 서비스의 핵심</summary>
+    <!-- Phase 5: 핵심 가치 = 1page 보고서 (AI 특약 자리에 강조 디자인 이동) -->
+    <details style="background:linear-gradient(135deg,#FFF7F0,#fff);border:2px solid #FF6B35;border-radius:10px;padding:13px 16px;margin-bottom:10px" open>
+      <summary style="cursor:pointer;font-size:13px;font-weight:800;color:#FF6B35;list-style:none">📊 1Page 컨설팅 보고서 — 이 서비스의 핵심 (NEW)</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
-        매매 정보 입력 → <b>법령 인용 + 매수자 보호 특약 초안 5~8개</b> 자동 생성<br>
-        누수·전세 끼고 매수·세입자 승계·재건축 추진 등 상황별 chip 선택<br><br>
-        <b>가치</b>: 변호사 상담 30만원 → <b>무료 1일 1회 / Pro 9,900원/월 무제한</b><br>
-        <b>법적 안전</b>: 모든 초안은 <span style="color:var(--red);font-weight:600">변호사·공인중개사 최종 검토 필수</span><br><br>
-        <span style="background:#FFF7E6;border:1px solid #E8C896;border-radius:6px;padding:6px 10px;display:inline-block;font-size:11px;color:#8B6914">💡 검토 의뢰: <a href="https://www.kabl.kr" target="_blank" rel="noopener" style="color:#8B6914;text-decoration:underline">대한변호사협회</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:#8B6914;text-decoration:underline">한국공인중개사협회</a></span>
-        <button class="abtn" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px;background:#FF6B35;color:#fff;border:none" onclick="sv('clause')">✍ 특약 만들어보기 →</button>
+        사용자 자금·자녀·거주기간·우선순위 → <b>AI가 컨설턴트 톤으로 1page 보고서 자동 생성</b><br>
+        포함: 회원님 핵심 방향 3줄 · 정부 정책 환경 · 매수 체크리스트 · 조건 부합 단지 7개 (단지별 컨설팅 코멘트) · 갈아타기 시나리오 · 매수 TIP<br><br>
+        <b>차별화</b>: 호갱노노/직방 = 시세 검색만, 우리 = AI 컨설턴트 보고서<br>
+        <b>가성비</b>: 부동산 컨설턴트 1회 30만원 → <b>무료 1일 1회 / Pro 9,900원/월 무제한</b><br>
+        <b>다운로드</b>: PDF로 가족·중개사와 공유 가능<br><br>
+        <span style="background:#FFF7E6;border:1px solid #E8C896;border-radius:6px;padding:6px 10px;display:inline-block;font-size:11px;color:#8B6914">⚠ 본 보고서는 정보 정리이며 투자자문업·중개업·대출모집인업 X. 매수·매도 추천 X.</span>
+        <button class="abtn" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px;background:#FF6B35;color:#fff;border:none" onclick="sv('report')">📊 보고서 만들어보기 →</button>
+      </div>
+    </details>
+
+    <!-- ✍ AI 특약 (보조 도구로 강등) -->
+    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">✍ AI 특약 초안 (보조 도구)</summary>
+      <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
+        계약 직전 단지 결정 후 → 매수 정보 입력 → AI 특약 초안<br>
+        ⚠ <b>변호사·공인중개사 최종 검토 필수</b> — <a href="https://www.kabl.kr" target="_blank" rel="noopener" style="color:var(--acc)">대한변호사협회</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:var(--acc)">한국공인중개사협회</a>
       </div>
     </details>
 
@@ -1398,7 +1459,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <div class="bnav-inner">
     <button class="bnav-item on" onclick="sv('map',this)" data-view="map"><div class="bnav-icon">🗺</div>지도</button>
     <button class="bnav-item" onclick="sv('list',this)" data-view="list"><div class="bnav-icon">📋</div>목록</button>
-    <button class="bnav-item bnav-feature" onclick="sv('clause',this)" data-view="clause" title="AI가 부동산 특약을 만들어드려요" aria-label="AI 특약 생성"><div class="bnav-icon">✍</div>특약 <span class="bnav-tag">AI</span></button>
+    <button class="bnav-item bnav-feature" onclick="sv('report',this)" data-view="report" title="회원님 가구 맞춤 1page 컨설팅 보고서" aria-label="맞춤 보고서"><div class="bnav-icon">📊</div>보고서 <span class="bnav-tag">NEW</span></button>
     <button class="bnav-item" onclick="sv('calc',this)" data-view="calc"><div class="bnav-icon">🧮</div>대출</button>
     <button class="bnav-item" onclick="sv('chat',this)" data-view="chat"><div class="bnav-icon">💬</div>AI상담</button>
   </div>
@@ -2413,6 +2474,204 @@ function nextOnboarding(){
 
 // 약관 모달
 function openTerms(){document.getElementById('TM').classList.add('open');}
+
+// Phase 5 (2026-04-26): 1Page 컨설팅 보고서 — 핵심 USP
+async function generateReport() {
+  const btn = document.getElementById('reportGenBtn');
+  const sp = document.getElementById('reportGenSp');
+  const tx = document.getElementById('reportGenTx');
+  const result = document.getElementById('reportResult');
+  const summary = document.getElementById('reportInputSummary');
+
+  // 입력 수집 (사이드바 chip + input)
+  const buy = parseFloat(document.getElementById('bp')?.value) || 0;
+  const cash = parseFloat(document.getElementById('mc')?.value) || 0;
+  const inc = parseFloat(document.getElementById('inc')?.value) || 0;
+  const region = getRegionForSearch();
+  const houseStatus = gct('ch-h');
+  const isFirstBuyer = gct('ch-f') === '예';
+  const pyeong = gct('ch-py');
+  const schoolNeeded = gct('ch-sc') === '학군 중요';
+  const kidPlan = gct('ch-kid') || '없음';
+  const stayYears = gct('ch-stay') || '5~10년';
+  const priority = gct('ch-pri') || '환금성';
+  const workplaceArea = (document.getElementById('wp')?.value || '').trim();
+
+  if (!buy || buy <= 0) {
+    alert('매수가를 입력해주세요 (좌측 사이드바)');
+    return;
+  }
+  if (!region) {
+    alert('희망 지역을 선택해주세요');
+    return;
+  }
+
+  // 입력 요약
+  summary.innerHTML = `
+    📋 <b>입력 조건</b><br>
+    매수가 <b>${buy}억</b> · 자기자본 ${cash || '?'}억 · 지역 <b>${_escHtml(region)}</b><br>
+    보유 ${_escHtml(houseStatus||'?')} · 생애최초 ${isFirstBuyer ? '예' : '아니오'} · 평형 ${_escHtml(pyeong||'전체')}<br>
+    자녀 ${_escHtml(kidPlan)} · 거주 ${_escHtml(stayYears)} · 1순위 <b>${_escHtml(priority)}</b>
+  `;
+
+  // 생성 시작
+  btn.disabled = true;
+  sp.style.display = 'inline-block';
+  tx.textContent = ' 보고서 생성 중... (10~20초)';
+  result.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t3);font-size:12px">📊 회원님 가구 상황 분석 중...<br>정부 정책 + 단지 데이터 + AI 분석 통합 진행</div>';
+
+  try {
+    const r = await fetch(`${CFG.api}/report/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        maxBudget: buy, myCash: cash, annualIncome: inc, region,
+        houseStatus, isFirstBuyer, pyeong, schoolNeeded,
+        kidPlan, stayYears, priority, workplaceArea,
+      }),
+      signal: AbortSignal.timeout(60000),
+    });
+    if (!r.ok) {
+      const j = await r.json().catch(() => ({}));
+      throw new Error(j.error || `HTTP ${r.status}`);
+    }
+    const data = await r.json();
+    _renderReport(data);
+  } catch (e) {
+    result.innerHTML = `<div style="padding:30px;text-align:center;color:var(--red);font-size:12px">보고서 생성 실패: ${_escHtml(e.message)}<br><span style="font-size:10px;color:var(--t3)">잠시 후 다시 시도해주세요</span></div>`;
+  } finally {
+    btn.disabled = false;
+    sp.style.display = 'none';
+    tx.textContent = '📊 다시 생성하기';
+  }
+}
+
+function _renderReport(data) {
+  const r = data.report || {};
+  const policy = data.policyContext || {};
+  const result = document.getElementById('reportResult');
+
+  const coreHtml = (r.coreMessages || []).map((m, i) =>
+    `<div style="display:flex;gap:8px;margin-bottom:6px;font-size:12px;line-height:1.7">
+      <span style="color:var(--acc);font-weight:700;flex-shrink:0">${i+1}.</span>
+      <span>${_escHtml(m)}</span>
+    </div>`
+  ).join('');
+
+  const checklistHtml = (r.checklist || []).map(c => {
+    const stars = '★'.repeat(c.stars || 1) + '☆'.repeat(Math.max(0, 3 - (c.stars || 1)));
+    return `<div style="display:flex;gap:8px;padding:5px 0;font-size:12px;border-bottom:1px dashed var(--bg2)">
+      <span style="color:var(--amb);font-weight:700;min-width:36px">${stars}</span>
+      <span>${_escHtml(c.text)}</span>
+    </div>`;
+  }).join('');
+
+  const aptsHtml = (r.apartments || []).map(a => `
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
+        <div style="font-size:13px;font-weight:700;color:var(--t1)">${a.rank}. ${_escHtml(a.name)} ${a.areaPyeong ? `<span style="font-weight:500;color:var(--t2);font-size:12px">${a.areaPyeong}평 (${a.areaSqm}㎡)</span>` : ''}</div>
+      </div>
+      <div style="font-size:11px;color:var(--t3);margin-bottom:6px">
+        준공 ${a.buildYear || '?'} · ${a.households ? `${Number(a.households).toLocaleString()}세대` : '세대수 미상'}
+      </div>
+      <div style="font-size:11.5px;color:var(--t2);line-height:1.7">
+        <div>📍 <b>입지</b>: ${_escHtml(a.location || '')}</div>
+        <div>💡 <b>특징</b>: ${_escHtml(a.ratio || '')}</div>
+        <div>✅ <b>장점</b>: ${_escHtml(a.pros || '')}</div>
+        <div>⚠ <b>단점</b>: ${_escHtml(a.cons || '')}</div>
+        <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--bg2)">💰 <b>예산 매칭</b>: ${_escHtml(a.priceFit || '')}</div>
+        <div style="color:var(--acc);font-weight:600">📌 ${_escHtml(a.recommendation || '')}</div>
+      </div>
+    </div>
+  `).join('');
+
+  const tipsHtml = (r.tips || []).map(t =>
+    `<li style="margin-bottom:5px">${_escHtml(t)}</li>`
+  ).join('');
+
+  result.innerHTML = `
+    <!-- 핵심 방향 3줄 -->
+    <div style="background:linear-gradient(135deg,#FFF7E6,#FFFAF0);border:1px solid #E8C896;border-radius:10px;padding:13px 15px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:#8B6914;margin-bottom:8px">🎯 핵심 방향 (회원님 가구 상황 기반)</div>
+      ${coreHtml}
+    </div>
+
+    <!-- 정부 정책 환경 -->
+    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--t1);list-style:none">📜 현재 부동산 정책 환경 (${_escHtml(policy.snapshot || '')})</summary>
+      <div style="margin-top:8px;font-size:11.5px;color:var(--t2);line-height:1.8">
+        <div>• <b>규제지역</b>: ${_escHtml(policy.regulatedAreas || '')}</div>
+        <div>• <b>토지거래허가</b>: ${_escHtml(policy.landTrade || '')}</div>
+        <div>• <b>정책자금 종류</b>: ${(policy.policyLoans || []).join(' · ')}</div>
+        <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--bg2);font-size:10.5px;color:var(--t3)">
+          ※ ${_escHtml(policy.note || '')}<br>
+          ※ 자세한 자격·신청은 <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:var(--acc)">${_escHtml(policy.policyContact || '')}</a>
+        </div>
+      </div>
+    </details>
+
+    <!-- 매수 체크리스트 -->
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 15px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px">✅ 매수·갈아타기 체크리스트</div>
+      ${checklistHtml}
+    </div>
+
+    <!-- 단지 후보 -->
+    <div style="font-size:13px;font-weight:700;color:var(--t1);margin:14px 0 8px">🏘 회원님 조건 부합 단지 ${(r.apartments || []).length}개</div>
+    ${aptsHtml}
+
+    <!-- 갈아타기 시나리오 -->
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 15px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:6px">🔁 갈아타기 관점 (장기)</div>
+      <div style="font-size:11.5px;color:var(--t2);line-height:1.8">${_escHtml(r.longTermView || '')}</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:5px">⚠ 미래 가격 예측 X. 정성적 안내만.</div>
+    </div>
+
+    <!-- 매수 TIP -->
+    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 15px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:6px">💡 매수 실무 TIP</div>
+      <ul style="margin:0;padding-left:18px;font-size:11.5px;color:var(--t2);line-height:1.8">${tipsHtml}</ul>
+    </div>
+
+    <!-- 액션 -->
+    <div style="background:#F0F7FF;border:1px solid #BFD7F7;border-radius:10px;padding:13px 15px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:#1B4F8A;margin-bottom:8px">📌 다음 액션</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px">
+        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:#fff;border:1px solid #BFD7F7;color:#1B4F8A" onclick="_addAllReportAptsToBookmarks()">⭐ ${(r.apartments || []).length}단지 모두 관심 추가</button>
+        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:#fff;border:1px solid #BFD7F7;color:#1B4F8A" onclick="_downloadReportPDF()">🖨 PDF 다운로드</button>
+        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:#fff;border:1px solid #BFD7F7;color:#1B4F8A" onclick="sv('calc')">🧮 별도 대출 계산기</button>
+      </div>
+    </div>
+
+    <div style="font-size:10px;color:var(--t3);margin-top:8px;text-align:center">생성: ${_escHtml(data.generatedAt || '')}</div>
+  `;
+  // 보고서 데이터 저장 (PDF·관심추가용)
+  window._lastReport = data;
+}
+
+function _addAllReportAptsToBookmarks() {
+  const r = window._lastReport?.report;
+  if (!r?.apartments?.length) return toast('보고서가 없어요');
+  let added = 0;
+  for (const a of r.apartments) {
+    try {
+      const bks = getBookmarks();
+      if (!bks.some(b => b.aptName === a.name)) {
+        bks.push({ aptName: a.name, area: a.areaPyeong + '평', addedAt: Date.now() });
+        localStorage.setItem('mhl_bookmarks', JSON.stringify(bks));
+        added++;
+      }
+    } catch (_) {}
+  }
+  toast(`✅ ${added}단지 관심 추가 완료`);
+  if (typeof renderBookmarks === 'function') renderBookmarks();
+}
+
+function _downloadReportPDF() {
+  // window.print 활용 (인쇄 → PDF 저장 OS 기능)
+  toast('인쇄 대화상자에서 "PDF로 저장" 선택');
+  setTimeout(() => window.print(), 600);
+}
 
 // Phase 4 (2026-04-26): 10.15 규제 요약 모달 — 헤더 배지 클릭 시 규제 핵심 표 노출
 function openRegSummary(){
@@ -4974,7 +5233,8 @@ const VIEW_DISPLAY={
   biz:   {display:'flex', lp:false, rp:false},
   news:  {display:'flex', lp:false, rp:false},
   subs:  {display:'flex', lp:false, rp:false},
-  guide: {display:'flex', lp:false, rp:false}, // Phase 4 (2026-04-26): 사용법 탭
+  guide: {display:'flex', lp:false, rp:false},
+  report:{display:'flex', lp:true,  rp:false}, // Phase 5 — 핵심 USP. lp 유지 (사이드바 입력)
 };
 let _rpOverlay=false; // 플로팅 챗 버튼으로 .rp 강제 표시 상태
 function sv(v,btn){
