@@ -455,7 +455,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 .tsp{width:15px;height:15px;border:2px solid var(--bd);border-top-color:var(--acc);border-radius:50%;animation:sp .7s linear infinite}
 
 /* CALC */
-.calcv{overflow-y:auto;padding:22px}
+.calcv{overflow-y:auto;padding:12px 22px 22px}
 /* 풀너비 뷰(특약/대출계산/복비/뉴스/청약): 사이드패널 숨김 시 가독성 위해 내부 컨텐츠를 중앙 정렬 */
 .calcv>*,.clause-view>*,.biz-view>*{max-width:1040px;margin-left:auto;margin-right:auto;width:100%}
 .calcv h2{font-size:16px;font-weight:700;margin-bottom:4px}.calcv p{font-size:11px;color:var(--t3);margin-bottom:18px}
@@ -501,9 +501,13 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 
 /* 면책 footer */
 .legal-footer{flex-shrink:0;background:var(--s2);border-top:1px solid var(--bd);padding:6px 18px;font-size:10px;color:var(--t3);line-height:1.7;text-align:center}
+/* Phase 4 (2026-04-26): 모바일 면책 축소 — 지도 가림 차단 */
+@media(max-width:700px){
+  .legal-footer{padding:5px 10px!important;font-size:8.5px!important;line-height:1.4!important;max-height:88px;overflow-y:auto}
+}
 
-/* 특약 뷰 */
-.clause-view{flex:1;overflow-y:auto;padding:22px;display:none;flex-direction:column;gap:0}
+/* 특약 뷰 — Phase 4: 상단 빈 공간 제거 (padding 22px → 12px) */
+.clause-view{flex:1;overflow-y:auto;padding:12px 22px 22px;display:none;flex-direction:column;gap:0}
 .clause-view.active{display:flex}
 .cv-hero{background:linear-gradient(135deg,var(--acc),var(--accD));color:#fff;border-radius:10px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .cv-hero h2{font-size:14px;font-weight:700;margin:0}
@@ -529,7 +533,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 .cv-caution{background:var(--ambL);border:1px solid #E8C08A;border-radius:var(--rs);padding:10px 12px;font-size:11px;color:var(--amb);line-height:1.65}
 
 /* 복비 계산기 뷰 */
-.biz-view{flex:1;overflow-y:auto;padding:22px;display:none;flex-direction:column;gap:0}
+.biz-view{flex:1;overflow-y:auto;padding:12px 22px 22px;display:none;flex-direction:column;gap:0}
 .biz-view.active{display:flex}
 .biz-section{background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--sh)}
 .biz-section h3{font-size:13px;font-weight:700;margin-bottom:13px}
@@ -562,12 +566,13 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 @media(max-width:700px){
   .lp{
     display:block!important;
-    position:fixed;top:0;left:0;bottom:0;width:85%;max-width:340px;
-    z-index:9991;background:#fff;box-shadow:2px 0 12px rgba(0,0,0,0.15);
+    position:fixed!important;top:0;left:0;bottom:0;width:85%;max-width:340px;
+    z-index:9999!important;background:#fff;box-shadow:2px 0 12px rgba(0,0,0,0.15);
     transform:translateX(-100%);transition:transform .25s ease;
     overflow-y:auto;overflow-x:hidden;
+    visibility:visible;
   }
-  .lp.open{transform:translateX(0)}
+  .lp.open{transform:translateX(0)!important}
   .bnav{display:block}
   body{padding-bottom:60px}
   .legal-footer{margin-bottom:60px}
@@ -735,7 +740,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <!-- P0 (2026-04-25 Phase 2 시나리오 A): 단지명·동명 직접 검색바 -->
   <div class="hsearch" style="position:relative;flex:1;max-width:320px;margin:0 8px">
     <input id="hSearchInput" class="inp" type="text" placeholder="🔎 단지명·동명 검색 (예: 공덕래미안, 공덕동)" style="margin:0;font-size:12px;padding:7px 10px" oninput="onHeaderSearchInput(this.value)" onkeydown="onHeaderSearchKey(event)" onfocus="if(this.value)onHeaderSearchInput(this.value)" onblur="setTimeout(()=>document.getElementById('hSearchDrop').style.display='none',200)" autocomplete="off">
-    <div id="hSearchDrop" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--bd);border-radius:8px;margin-top:3px;max-height:360px;overflow-y:auto;z-index:9999;box-shadow:0 6px 24px rgba(0,0,0,0.12)"></div>
+    <div id="hSearchDrop" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid var(--bd);border-radius:8px;margin-top:3px;max-height:360px;overflow-y:auto;z-index:99999;box-shadow:0 6px 24px rgba(0,0,0,0.18)"></div>
   </div>
   <div class="hml">
     <div class="rpill"><div class="hdot"></div>10.15 규제</div>
@@ -4863,22 +4868,46 @@ async function onHeaderSearchInput(q) {
 function onHeaderSearchKey(e) {
   if (e.key === 'Escape') { document.getElementById('hSearchDrop').style.display='none'; e.target.blur(); }
 }
-function goSearchResult(r) {
+async function goSearchResult(r) {
   // 검색 결과 클릭 → 단지 상세 모달 열기 (showDetail 사용)
   const drop = document.getElementById('hSearchDrop');
   if (drop) drop.style.display='none';
   const input = document.getElementById('hSearchInput');
   if (input) input.value = r.aptName;
-  // showDetail에 필요한 최소 필드 구성 — 분석 데이터는 모달에서 추가 fetch
+  toast('실거래 데이터 조회 중...');
+
+  // Phase 4 (2026-04-26): 거래 fetch 후 모달 열기 — 'undefined.01' 빈 객체 버그 fix.
+  // 정확 매칭 거래 (lawdCd + aptName) 6개월. 0건이면 빈 배열 → '실거래 데이터 없음' 표시.
+  let txHistory = [], avgPrice = 0, minPrice = 0, maxPrice = 0;
+  try {
+    const now = new Date();
+    const ym = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
+    const url = `${CFG.api}/transactions?lawdCd=${r.lawdCd}&aptName=${encodeURIComponent(r.aptName)}&dealYm=${ym}`;
+    const t = await fetch(url, { signal: AbortSignal.timeout(10000) }).then(rs => rs.ok ? rs.json() : null);
+    if (t?.items?.length) {
+      txHistory = t.items.slice(0, 30);
+      const prices = txHistory.map(x => Number(x.dealAmount) || 0).filter(x => x > 0);
+      if (prices.length) {
+        avgPrice = prices.reduce((a,b) => a+b, 0) / prices.length / 10000;
+        minPrice = Math.min(...prices) / 10000;
+        maxPrice = Math.max(...prices) / 10000;
+      }
+    }
+  } catch (_) {}
+
   const p = {
     aptName: r.aptName,
+    sigungu: r.sigungu,
+    umdNm: r.umdNm,
     area: `${r.sigungu||''} ${r.umdNm||''}`.trim(),
-    avgPrice: 0, // 모달에서 fetch 후 보정
-    score: 0,
+    avgPrice, minPrice, maxPrice,
+    score: avgPrice > 0 ? 60 : 0,
     ltv: '', maxLoan: '',
     buildYear: r.buildYear || 0,
     lawdCd: r.lawdCd,
-    txHistory: [{ lawdCd: r.lawdCd }],
+    txHistory,
+    _fromSearch: true,
+    _isMaster: r.source === 'master', // master 단지면 모달에서 alias 카드 prominent
   };
   if (typeof showDetail === 'function') showDetail(p);
   else toast('단지 상세 화면을 열 수 없어요');
