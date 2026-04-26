@@ -234,13 +234,13 @@ function aptNameMatchScore(a, b) {
 // 우리 DB + KAPT API 만으로 가능한 객관 fact. 외부 의존성 0.
 // 절대 Tier(S+/A) 매기지 X — 사용자 priority 가중치의 보조 역할.
 
-/** 행정구 위계 — 강남3구·마용성광·외곽 (사용자 보편 선호도 반영, Phase 9 강화) */
+/** 행정구 위계 (Phase 9.1: SQL 진단 후 추가 강화 — 9억 예산에 핵심권 단지 다수 존재 확인 */
 function getDistrictTier(sigungu) {
   if (!sigungu) return { tier: '기타', bonus: 0 };
-  if (['강남구', '서초구', '송파구'].includes(sigungu)) return { tier: '강남3구', bonus: 35 };
-  if (['마포구', '용산구', '성동구', '광진구'].includes(sigungu)) return { tier: '마용성광', bonus: 25 };
-  if (['양천구', '영등포구', '강동구'].includes(sigungu)) return { tier: '서울 핵심구', bonus: 15 };
-  if (['과천시', '분당구', '판교'].some(k => sigungu.includes(k))) return { tier: '분당·과천·판교', bonus: 22 };
+  if (['강남구', '서초구', '송파구'].includes(sigungu)) return { tier: '강남3구', bonus: 60 };
+  if (['마포구', '용산구', '성동구', '광진구'].includes(sigungu)) return { tier: '마용성광', bonus: 50 };
+  if (['양천구', '영등포구', '강동구'].includes(sigungu)) return { tier: '서울 핵심구', bonus: 30 };
+  if (['과천시', '분당구', '판교'].some(k => sigungu.includes(k))) return { tier: '분당·과천·판교', bonus: 35 };
   if (sigungu.endsWith('구') && sigungu.length <= 4) return { tier: '서울 외곽구', bonus: 5 };
   return { tier: '기타', bonus: 0 };
 }
@@ -252,14 +252,14 @@ function getBuilderTier(builder) {
   if (!builder) return { tier: '미상', bonus: 0 };
   const b = String(builder).replace(/\s+/g, '').replace(/[()주식회사㈜]/g, '');
   // 1군 프리미엄
-  if (/(아크로|디에이치|르엘|푸르지오써밋|반포자이|래미안첼리투스)/.test(b)) return { tier: '1군 프리미엄', bonus: 20 };
+  if (/(아크로|디에이치|르엘|푸르지오써밋|반포자이|래미안첼리투스)/.test(b)) return { tier: '1군 프리미엄', bonus: 30 };
   // 1군 일반 — 시공사명 또는 브랜드명 모두 매칭
   if (/(힐스테이트|래미안|자이|롯데캐슬|푸르지오|아이파크|더샵|디오슬|디에트르|두산위브|위브)/.test(b))
-    return { tier: '1군', bonus: 15 };
+    return { tier: '1군', bonus: 20 };
   if (/(삼성물산|GS건설|현대건설|현대산업|HDC|대림|DL|대우|롯데건설|포스코|두산|쌍용|한화건설)/.test(b))
-    return { tier: '1군', bonus: 15 };
+    return { tier: '1군', bonus: 20 };
   if (/(태영|한신공영|한라건설|한신건설|동부건설|효성|코오롱)/.test(b))
-    return { tier: '1군', bonus: 15 };
+    return { tier: '1군', bonus: 20 };
   // 2군
   if (/(SK뷰|에스케이|이편한세상|꿈에그린|한화|호반|반도|제일|풍림|경남|벽산건설)/.test(b)) return { tier: '2군', bonus: 8 };
   // 중견
@@ -324,9 +324,9 @@ function computeAptScore(c, ctx) {
   let total = 0;
   const p = ctx.priority;
 
-  // 1) priority 가중치
+  // 1) priority 가중치 (Phase 9.1: 환금성 가중치 n*4 → n*1.5 — 외곽 거래활발이 핵심권 못 이기던 문제)
   if (p === '환금성') {
-    const sub = c.n * 4 + (c.households >= 500 ? 25 : (c.households >= 300 ? 12 : 0));
+    const sub = Math.round(c.n * 1.5) + (c.households >= 500 ? 25 : (c.households >= 300 ? 12 : 0));
     r.priority_환금성 = sub; total += sub;
   } else if (p === '학군') {
     const goodSchoolGu = ['양천구', '강남구', '서초구', '송파구', '노원구', '광진구'];
