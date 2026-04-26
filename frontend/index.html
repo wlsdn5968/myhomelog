@@ -3052,7 +3052,7 @@ function showDetailById(n){const p=props.find(x=>x.aptName===decodeURIComponent(
 
 // ── 시세 추이 차트 (SVG) ─────────────────────────────────
 // txHistory를 월별 평균으로 집계 (최근 24개월, 거래 있는 월만)
-// Phase 4 (2026-04-26): 차트 평형 선택 — chip 클릭 시 그 평형만 차트 재렌더
+// Phase 4 (2026-04-26): 평형 chip — 거래 리스트 + 차트 둘 다 필터
 function _selectTrendArea(sqm, btn) {
   window._curTrendArea = sqm;
   // chip 토글
@@ -3066,11 +3066,20 @@ function _selectTrendArea(sqm, btn) {
     btn.style.color = '#fff';
     btn.style.borderColor = 'var(--acc)';
   }
-  // 차트 재렌더
-  const box = document.getElementById('trendChartBox');
-  if (!box) return;
+  // 1) 거래 리스트 재렌더 (txListBox)
+  const listBox = document.getElementById('txListBox');
+  if (listBox && typeof window._renderTxList === 'function') {
+    listBox.innerHTML = window._renderTxList(sqm);
+  }
+  // 2) 차트 재렌더 (trendChartBox)
+  const chartBox = document.getElementById('trendChartBox');
+  if (!chartBox) return;
+  if (!sqm) {
+    chartBox.innerHTML = '<div style="font-size:11px;color:var(--t3);padding:14px 8px;text-align:center;background:#FAFCFF;border:1px dashed var(--bd);border-radius:8px">📊 위 평형 chip 을 클릭하면 그 평형의 월별 시세 추이가 표시돼요</div>';
+    return;
+  }
   const td = buildPriceTrend(window._curTrendApt || [], sqm);
-  box.innerHTML = td.length >= 2
+  chartBox.innerHTML = td.length >= 2
     ? renderPriceChart(td)
     : `<div style="font-size:11px;color:var(--t3);padding:10px 0">${sqm}㎡(${Math.round(sqm/3.3)}평) 시세 추이 데이터 부족 (거래 2개월 이상)</div>`;
 }
@@ -3206,11 +3215,10 @@ function showDetail(p){
     </div>
     <button class="abtn acc" style="margin-top:6px" onclick="askP('${encodeURIComponent(p.aptName)}','${p.avgPrice||0}','${p.area||''}');cDM()">🤖 AI에게 상세 전략 묻기</button>`;
 
-  // Phase 4 (2026-04-26): 평형 표시 + 단일 단지로 통합 표시 (MOLIT 신고명 라벨 제거)
-  // 사용자 지적: "공릉풍림아이원 거래만 보여달라. A/B 라벨 의미 없음."
-  // 통합: master + alias 거래 모두 정식 단지명 (예: "공릉풍림아이원") 으로 단일 표시.
+  // Phase 4 (2026-04-26): 평형 표시 + 단일 단지 통합 표시
+  // 평형별 평균 카드 = 모든 평형 (개요)
+  // 개별 거래 + 차트 = 평형 chip 으로 필터 (사용자 예산에 맞는 평형만)
   const txAll = (p.txHistory||[]);
-  // 평형별 통계 (n>=1 그룹)
   const byArea = {};
   for (const t of txAll) {
     const sqm = Math.round(Number(t.excluUseAr) || 0);
@@ -3233,23 +3241,34 @@ function showDetail(p){
       </div>`;
     }).join('');
 
-  const txH = txAll.slice(0,30).map(t => {
-    const sqm = Math.round(Number(t.excluUseAr) || 0);
-    const py = sqm ? Math.round(sqm / 3.3) : 0;
-    const areaTag = sqm ? `<span class="txf" style="color:var(--a2);font-weight:600">${sqm}㎡(${py}평)</span>` : '';
-    return `<div class="txi" style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--bg2)">
-      <span class="txd" style="color:var(--t3);font-size:10.5px;min-width:55px">${t.dealYear}.${String(t.dealMonth||1).padStart(2,'0')}.${String(t.dealDay||1).padStart(2,'0')}</span>
-      ${areaTag}
-      <span class="txf" style="color:var(--t2);font-size:10.5px">${t.floor||'?'}층</span>
-      <span class="txp" style="margin-left:auto;font-weight:700;color:var(--acc)">${((t.dealAmount||0)/10000).toFixed(2)}억</span>
-    </div>`;
-  }).join('') || '<div style="padding:10px 0;color:var(--t3);font-size:11px">실거래 데이터 없음</div>';
+  // 단일 _renderTxList: 평형 필터(0=전체) 적용해 거래 리스트 HTML 반환
+  // window 에 expose — chip 클릭 시 호출
+  window._txAllForFilter = txAll;
+  function _renderTxList(area) {
+    const filtered = area
+      ? txAll.filter(t => Math.abs((Math.round(Number(t.excluUseAr)||0)) - area) <= 2)
+      : txAll;
+    if (!filtered.length) return '<div style="padding:10px 0;color:var(--t3);font-size:11px">해당 평형 거래 없음</div>';
+    return filtered.slice(0,30).map(t => {
+      const sqm = Math.round(Number(t.excluUseAr) || 0);
+      const py = sqm ? Math.round(sqm / 3.3) : 0;
+      const areaTag = sqm ? `<span style="color:var(--a2);font-weight:600">${sqm}㎡(${py}평)</span>` : '';
+      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--bg2)">
+        <span style="color:var(--t3);font-size:10.5px;min-width:55px">${t.dealYear}.${String(t.dealMonth||1).padStart(2,'0')}.${String(t.dealDay||1).padStart(2,'0')}</span>
+        ${areaTag}
+        <span style="color:var(--t2);font-size:10.5px">${t.floor||'?'}층</span>
+        <span style="margin-left:auto;font-weight:700;color:var(--acc)">${((t.dealAmount||0)/10000).toFixed(2)}억</span>
+      </div>`;
+    }).join('') + (filtered.length > 30 ? `<div style="text-align:center;color:var(--t3);font-size:10px;padding:6px">+${filtered.length - 30}건 더 있음</div>` : '');
+  }
+  window._renderTxList = _renderTxList;
 
-  const txHFull = areaSummaryHtml
-    ? `<div style="margin-bottom:10px"><div style="font-size:10.5px;color:var(--t2);font-weight:700;margin-bottom:5px">📐 평형별 평균 (${txAll.length}건)</div>${areaSummaryHtml}</div>${txH}`
-    : txH;
-  // Phase 4 (2026-04-26): 평형 선택 chip + 그 평형만 차트 — 사용자 지적 (전체 평균 의미 약함)
-  // 가장 거래 많은 평형을 default 로 선택. txAll 의 distinct sqm 추출.
+  // areaSummaryHtml 만 (chip + 거래 리스트는 별도 위치)
+  const summaryHtml = areaSummaryHtml
+    ? `<div style="margin-bottom:10px"><div style="font-size:10.5px;color:var(--t2);font-weight:700;margin-bottom:5px">📐 평형별 평균 (${txAll.length}건)</div>${areaSummaryHtml}</div>`
+    : '';
+  // Phase 4 (2026-04-26): 평형 chip — 거래 리스트 + 차트 둘 다 필터
+  // "전체" 추가 — 사용자 첫 진입 시 전체 거래 보기, 관심 평형 클릭 시 그것만
   const _areaCounts = {};
   for (const t of (p.txHistory||[])) {
     const sqm = Math.round(Number(t.excluUseAr) || 0);
@@ -3257,27 +3276,26 @@ function showDetail(p){
   }
   const _areaList = Object.entries(_areaCounts)
     .map(([s, n]) => ({ sqm: parseInt(s), n }))
-    .sort((a, b) => b.n - a.n);
-  const _defaultArea = _areaList[0]?.sqm || 0;
-  // 전역에 단지 trend 데이터 보관 (chip 클릭 핸들러용)
+    .sort((a, b) => a.sqm - b.sqm); // 면적 오름차순 (작은 평형부터)
+  // default = 0 (전체) — 사용자가 모든 평형 보고 자기 예산 평형 클릭
   window._curTrendApt = p.txHistory || [];
-  window._curTrendArea = _defaultArea;
+  window._curTrendArea = 0;
 
   function _trendHtml(area) {
+    if (!area) return '<div style="font-size:11px;color:var(--t3);padding:14px 8px;text-align:center;background:#FAFCFF;border:1px dashed var(--bd);border-radius:8px">📊 위 평형 chip 을 클릭하면 그 평형의 월별 시세 추이가 표시돼요</div>';
     const td = buildPriceTrend(window._curTrendApt, area);
     if (td.length >= 2) return renderPriceChart(td);
-    return `<div style="font-size:11px;color:var(--t3);padding:10px 0">${area ? `${area}㎡(${Math.round(area/3.3)}평) ` : ''}시세 추이 데이터 부족 (거래 2개월 이상)</div>`;
+    return `<div style="font-size:11px;color:var(--t3);padding:10px 0">${area}㎡(${Math.round(area/3.3)}평) 시세 추이 데이터 부족 (거래 2개월 이상)</div>`;
   }
   const _areaChipsHtml = _areaList.length
-    ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 10px">${
-        _areaList.map((a, i) => {
+    ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 10px">
+        <button class="trend-area-chip" data-sqm="0" onclick="_selectTrendArea(0, this)" style="padding:4px 10px;border-radius:14px;border:1px solid var(--acc);font-size:11px;cursor:pointer;font-family:inherit;background:var(--acc);color:#fff">전체 ${(p.txHistory||[]).length}건</button>
+        ${_areaList.map(a => {
           const py = Math.round(a.sqm / 3.3);
-          const onClass = a.sqm === _defaultArea ? 'background:var(--acc);color:#fff;border-color:var(--acc)' : 'background:#fff;color:var(--t2);border-color:var(--bd)';
-          return `<button class="trend-area-chip" data-sqm="${a.sqm}" onclick="_selectTrendArea(${a.sqm}, this)" style="padding:4px 10px;border-radius:14px;border:1px solid var(--bd);font-size:11px;cursor:pointer;font-family:inherit;${onClass}">${a.sqm}㎡(${py}평) <span style="opacity:0.7;font-size:9.5px">${a.n}건</span></button>`;
-        }).join('')
-      }</div>`
+          return `<button class="trend-area-chip" data-sqm="${a.sqm}" onclick="_selectTrendArea(${a.sqm}, this)" style="padding:4px 10px;border-radius:14px;border:1px solid var(--bd);font-size:11px;cursor:pointer;font-family:inherit;background:#fff;color:var(--t2)">${a.sqm}㎡(${py}평) <span style="opacity:0.7;font-size:9.5px">${a.n}건</span></button>`;
+        }).join('')}
+      </div>`
     : '';
-  const trendHtml = `${_areaChipsHtml}<div id="trendChartBox">${_trendHtml(_defaultArea)}</div>`;
   // 평형별 현재 시세 (최근 거래 기반)
   const pyeongHtml = (p.currentPriceByPyeong||[]).length
     ? `<div style="font-size:11px;font-weight:700;color:var(--t2);margin:0 0 8px">📐 평형별 현재 시세 <span style="font-weight:500;color:var(--t3)">· 최근 6개월 실거래 평균</span></div>
@@ -3296,9 +3314,13 @@ function showDetail(p){
     : '';
   document.getElementById('t1').innerHTML=`
     ${pyeongHtml}
-    <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px">최근 실거래가 <span style="font-weight:500;color:var(--t3)">· 평형별 평균 + 개별 거래 (최대 30건)</span></div>${txHFull}
-    <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 4px">📈 월별 시세 추이 <span style="font-weight:500;color:var(--t3)">· 평형을 선택하세요</span></div>
-    ${trendHtml}
+    <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px">📐 평형별 평균</div>${summaryHtml}
+    <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 4px">🔍 평형 필터 <span style="font-weight:500;color:var(--t3)">· 클릭 시 아래 거래·차트 둘 다 필터</span></div>
+    ${_areaChipsHtml}
+    <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 8px">📋 개별 거래 <span style="font-weight:500;color:var(--t3)">(최대 30건)</span></div>
+    <div id="txListBox">${_renderTxList(0)}</div>
+    <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 4px">📈 월별 시세 추이</div>
+    <div id="trendChartBox">${_trendHtml(0)}</div>
     <div class="ibox y" style="margin-top:12px">국토부 공공 API 기반. 거래 없는 월은 보간하지 않습니다.</div>`;
 
   document.getElementById('t2').innerHTML=`<div class="tld"><div class="tsp"></div>AI 리스크 분석 중...</div>`;
