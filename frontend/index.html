@@ -2738,6 +2738,9 @@ function _downloadReportPDF() {
     inp.myCash ? `자기자본 ${inp.myCash}억` : null,
     inp.region ? `지역 ${esc(inp.region)}` : null,
     inp.pyeong ? `평형 ${esc(inp.pyeong)}` : null,
+    inp.houseStatus ? `보유 ${esc(inp.houseStatus)}` : null,
+    inp.kidPlan ? `자녀 ${esc(inp.kidPlan)}` : null,
+    inp.stayYears ? `거주 ${esc(inp.stayYears)}` : null,
     inp.priority ? `1순위 ${esc(inp.priority)}` : null,
   ].filter(Boolean).join(' · ');
 
