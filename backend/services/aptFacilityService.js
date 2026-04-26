@@ -101,7 +101,7 @@ async function fetchFromApi(kaptCode) {
   const attempts = [];
   for (const url of order) {
     const r = await tryEndpoint(url, kaptCode);
-    attempts.push({ url: url.split('/').slice(-2).join('/'), ok: r.ok, reason: r.reason });
+    attempts.push({ url: url.split('/').slice(-2).join('/'), ok: r.ok, reason: r.reason, body: r.bodyPreview });
     if (r.ok) {
       _workingEndpoint = url;
       if (!_diagLogged) {
