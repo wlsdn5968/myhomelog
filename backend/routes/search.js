@@ -292,6 +292,9 @@ router.get('/facility', async (req, res) => {
     const facility = await resolveFacility({ aptName, sigungu, umdNm });
 
     // 같은 동의 다른 MOLIT 단지명 — alias 후보 (사용자 표시용)
+    // Phase 4 (2026-04-26): 토큰 매칭 우선순위 — 정식명 핵심 단어가 MOLIT 신고명에 포함되면
+    //   같은 단지일 가능성 높음 (예: '공릉풍림아이원' 의 '풍림' → '풍림아파트A/B' 우선).
+    //   이전: 거래량 순 50건 안에 풍림아파트B(14건) 누락 → 사용자 거래 누락.
     let altCandidates = [];
     if (sigungu && umdNm) {
       const { data: alts } = await admin
@@ -300,14 +303,34 @@ router.get('/facility', async (req, res) => {
         .eq('sigungu', sigungu)
         .eq('umd_nm', umdNm)
         .neq('apt_name', aptName)
-        .limit(50);
+        .limit(500);
       const seen = new Set();
+      // 정식명에서 핵심 토큰 추출 (행정구역 prefix 제거 후 길이 2+ 단어들)
+      const baseName = aptName
+        .replace(new RegExp(`^(${sigungu}|${umdNm})\\s*`, 'g'), '')
+        .replace(/\s+/g, '');
+      // 부분 문자열 (3+ 글자) 추출 — '공릉풍림아이원' → ['풍림', '아이원', '풍림아이원']
+      const tokens = [];
+      for (let len = 4; len >= 2; len--) {
+        for (let i = 0; i <= baseName.length - len; i++) {
+          const t = baseName.substring(i, i + len);
+          if (!tokens.includes(t)) tokens.push(t);
+        }
+      }
+      const candidates = [];
       for (const r of (alts || [])) {
         if (seen.has(r.apt_name)) continue;
         seen.add(r.apt_name);
-        altCandidates.push({ aptName: r.apt_name, buildYear: r.build_year });
-        if (altCandidates.length >= 8) break;
+        // 토큰 매칭 점수 — 더 긴 토큰 매칭 = 우선
+        let score = 0;
+        for (const tok of tokens) {
+          if (tok.length >= 3 && r.apt_name.includes(tok)) score = Math.max(score, tok.length);
+        }
+        candidates.push({ aptName: r.apt_name, buildYear: r.build_year, _score: score });
       }
+      // 점수 ↓ → 단지명 ↑ 정렬, 상위 12개
+      candidates.sort((a, b) => b._score - a._score || a.aptName.localeCompare(b.aptName));
+      altCandidates = candidates.slice(0, 12).map(({ _score, ...c }) => c);
     }
     res.json({ facility, altCandidates });
   } catch (e) {
