@@ -191,7 +191,9 @@ ${titles.slice(0, 20).map((t, i) => `${i+1}. ${t}`).join('\n')}
   try {
     const result = await callAI([{ role: 'user', content: prompt }], false, { userId: req.user?.id });
     const cleaned = result.content.replace(/```json|```/g, '').trim();
-    const parsed = JSON.parse(cleaned);
+    // Phase 4 (2026-04-26): AI 가 JSON 뒤에 추가 텍스트 붙이는 경우 대응 — 첫 { 부터 마지막 } 까지만 추출.
+    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
     const out = {
       summary: Array.isArray(parsed.lines) ? parsed.lines : [],
       updatedAt: new Date().toISOString(),
