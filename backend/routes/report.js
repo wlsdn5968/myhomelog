@@ -409,16 +409,20 @@ function applyObjectiveScore(c) {
     if (sub) { r['객관_신고가갱신'] = sub; c.score += sub; }
   }
 
-  // Phase 8: amenities (카카오) 보너스
+  // Phase 8+: amenities (카카오 1.2~2km 반경) 보너스 — 종합병원·공원 키워드 검색 적용
   if (c.amenities && !r['객관_생활인프라']) {
     const a = c.amenities;
     let bonus = 0;
-    if (a.subway >= 3) bonus += 6; // 지하철역 3개 이상 (역세권)
+    if (a.subway >= 3) bonus += 6;       // 지하철역 3개+ (다중 노선)
     else if (a.subway >= 1) bonus += 3;
-    if (a.mart >= 2) bonus += 4; // 대형마트 2개 이상
+    if (a.mart >= 2) bonus += 4;          // 대형마트 2개+
     else if (a.mart >= 1) bonus += 2;
-    if (a.hospital >= 5) bonus += 3; // 병원 밀집
-    if (a.school >= 3) bonus += 2; // 학교 인접
+    if (a.hospital >= 2) bonus += 4;      // 종합병원 2개+ (응급의료 가능)
+    else if (a.hospital >= 1) bonus += 2;
+    if (a.school >= 5) bonus += 3;        // 학교 5개+ (학군 권역)
+    else if (a.school >= 2) bonus += 1;
+    if (a.park >= 3) bonus += 3;          // 공원 3개+ (그린 인프라)
+    else if (a.park >= 1) bonus += 1;
     if (bonus) { r['객관_생활인프라'] = bonus; c.score += bonus; }
   }
 
@@ -604,11 +608,8 @@ async function fetchCandidateApts(admin, input, limit) {
       try {
         const amen = await getNearbyAmenities(c.lat, c.lng);
         if (amen) {
-          c.amenities = amen; // { school, mart, hospital, subway, cvs }
+          c.amenities = amen; // { school, mart, hospital(종합병원), subway, cvs, park }
         }
-        // 공원: keyword 검색 (카테고리 코드 없음)
-        const parkCount = await countNearby(c.lat, c.lng, 'AT4', 1500); // AT4=관광명소 → 일부 공원 포함, 정확도는 낮음
-        c.parkCount = parkCount;
       } catch (e) {
         logger.warn({ err: e.message, apt: c.apt_name }, 'amenities 호출 실패');
       }
@@ -647,7 +648,7 @@ function buildReportPrompt(input, policy, candidates) {
       .map(([k, v]) => `${k}=${v}`).join(', ');
     const facts = c.objectiveFacts || {};
     const am = facts.amenities;
-    const amStr = am ? `반경 800m~1km 내: 학교 ${am.school}·대형마트 ${am.mart}·병원 ${am.hospital}·지하철역 ${am.subway}·편의점 ${am.cvs}` : null;
+    const amStr = am ? `반경 1.2~2km: 학교 ${am.school}·마트 ${am.mart}·종합병원 ${am.hospital}·지하철역 ${am.subway}·공원 ${am.park||0}` : null;
     const factsList = [
       facts.district ? `행정구위계: ${facts.district}` : null,
       facts.builder ? `시공사: ${facts.builder}` : null,

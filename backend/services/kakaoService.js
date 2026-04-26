@@ -88,18 +88,42 @@ async function countNearby(lat, lng, categoryCode, radius = 800) {
 }
 
 /**
+ * 키워드 검색 카운트 (반경 m) — 카테고리 없는 시설 (종합병원·공원 등)
+ */
+async function countNearbyKeyword(lat, lng, keyword, radius = 1200) {
+  if (isKeyMissing()) return 0;
+  const ck = `kkkw:cnt:${lat.toFixed(4)},${lng.toFixed(4)}:${keyword}:${radius}`;
+  const cached = cache.get(ck);
+  if (cached !== undefined) return cached;
+  try {
+    const r = await axios.get(KAKAO_KEY_SEARCH, {
+      headers: { Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}` },
+      params: { query: keyword, x: lng, y: lat, radius, size: 15 },
+      timeout: 5000,
+    });
+    const cnt = r.data?.meta?.total_count || 0;
+    cache.set(ck, cnt, 86400 * 3);
+    return cnt;
+  } catch (e) {
+    return 0;
+  }
+}
+
+/**
  * 한 단지 좌표에 대해 주요 시설 카운트 일괄
+ * Phase 8+ (2026-04-26): 반경 1200m (도보 15분), 종합병원/공원은 keyword 검색
  */
 async function getNearbyAmenities(lat, lng) {
   if (lat == null || lng == null) return null;
-  const [school, mart, hospital, subway, cvs] = await Promise.all([
-    countNearby(lat, lng, 'SC4', 800),
-    countNearby(lat, lng, 'MT1', 1000),
-    countNearby(lat, lng, 'HP8', 1000),
-    countNearby(lat, lng, 'SW8', 800),
-    countNearby(lat, lng, 'CS2', 500),
+  const [school, mart, hospital_general, subway, cvs, park] = await Promise.all([
+    countNearby(lat, lng, 'SC4', 1200),         // 학교 (초중고)
+    countNearby(lat, lng, 'MT1', 1500),         // 대형마트
+    countNearbyKeyword(lat, lng, '종합병원', 2000),  // 종합병원 (HP8 의원 노이즈 제거)
+    countNearby(lat, lng, 'SW8', 1200),         // 지하철역
+    countNearby(lat, lng, 'CS2', 500),          // 편의점
+    countNearbyKeyword(lat, lng, '공원', 1200),  // 공원
   ]);
-  return { school, mart, hospital, subway, cvs };
+  return { school, mart, hospital: hospital_general, subway, cvs, park };
 }
 
 /**
@@ -152,6 +176,7 @@ module.exports = {
   getCarMinutes,
   getTransitMinutes,
   countNearby,
+  countNearbyKeyword,
   getNearbyAmenities,
   keywordToCoord,
 };
