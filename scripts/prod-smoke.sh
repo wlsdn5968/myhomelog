@@ -39,12 +39,26 @@ fi
 # Phase 2 후속: 핵심 endpoint 회귀 — 한 번씩만 (cold start 후 부팅 검증)
 fail=0
 
-echo "[smoke] /api/search/apt?q=래미안 회귀..."
-sa_code=$(curl -sS -o /tmp/sa.json -w "%{http_code}" --max-time 12 "$HOST/api/search/apt?q=%EB%9E%98%EB%AF%B8%EC%95%88&limit=3" || echo 000)
-if [ "$sa_code" = "200" ] && grep -q '"results"' /tmp/sa.json; then
-  echo "[smoke] /api/search/apt PASS"
-else
-  echo "[smoke] /api/search/apt FAIL ($sa_code)"; cat /tmp/sa.json; fail=1
+# /api/search/apt — Supabase statement_timeout (8s) 가 cold start 시 도달 가능.
+# curl --max-time 만 늘려도 DB 측 timeout 강제 → retry 로 cold→warm 전환 흡수.
+# 운영 직접 호출은 1.75~3.35s 정상. GitHub Actions runner cold start false positive 방지.
+echo "[smoke] /api/search/apt?q=래미안 회귀 (3회 retry, 5s backoff)..."
+sa_pass=0
+sa_code=000
+for attempt in 1 2 3; do
+  sa_code=$(curl -sS -o /tmp/sa.json -w "%{http_code}" --max-time 20 "$HOST/api/search/apt?q=%EB%9E%98%EB%AF%B8%EC%95%88&limit=3" || echo 000)
+  if [ "$sa_code" = "200" ] && grep -q '"results"' /tmp/sa.json; then
+    echo "[smoke] /api/search/apt PASS (attempt $attempt)"
+    sa_pass=1
+    break
+  fi
+  echo "[smoke] /api/search/apt attempt $attempt: $sa_code, retry in 5s..."
+  [ "$attempt" -lt 3 ] && sleep 5
+done
+if [ "$sa_pass" != "1" ]; then
+  echo "[smoke] /api/search/apt FAIL (3 attempts exhausted, last code=$sa_code)"
+  cat /tmp/sa.json
+  fail=1
 fi
 
 echo "[smoke] /api/search/popular 회귀..."
