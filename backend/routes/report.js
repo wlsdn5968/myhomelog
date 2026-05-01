@@ -675,7 +675,11 @@ async function fetchCandidateApts(admin, input, limit) {
 function buildReportPrompt(input, policy, candidates) {
   const aptList = candidates.map((c, i) => {
     const householdsStr = (c.households && Number.isFinite(Number(c.households))) ? `${c.households}세대` : '미상';
-    const displayName = c.master_name || c.apt_name;
+    // RISK-6 fix (2026-05-02): displayName 단순화 — c.master_name (KAPT facility 매칭 결과) 무시
+    //   문제: master_name 매칭이 잘못되면 다른 단지의 정식명이 displayName 으로 노출 → 사용자에게
+    //         "마포한강아이파크 (실제는 휴먼빌) 평균 7.95억" 같은 거짓 정보.
+    //   해결: c.apt_name 만 표시 — 거래 데이터의 실제 단지명. KAPT score 임계 3 상향과 동시 적용.
+    const displayName = c.apt_name;
     const breakdownStr = Object.entries(c.scoreBreakdown || {})
       .map(([k, v]) => `${k}=${v}`).join(', ');
     const facts = c.objectiveFacts || {};

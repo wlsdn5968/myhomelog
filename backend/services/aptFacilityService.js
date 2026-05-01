@@ -89,7 +89,12 @@ async function findMaster(aptName, sigungu, umdNm) {
   }
 
   // 3) 토큰 매칭 — 같은 sigungu+umd_nm 의 모든 master 가져와서 sliding 토큰 비교
-  //    ("한진(609-1)" vs "돈암한신한진아파트" → 토큰 "한진" score 2 매칭)
+  //    ("한진(609-1)" vs "돈암한신한진아파트" → 토큰 "한진" score 2 매칭) ← 너무 느슨
+  //
+  // RISK-6 fix (2026-05-02): score 임계 2 → 3 으로 상향
+  //   사례: "휴먼빌"(평균 8.92억) 같은 단지가 master "마포한강아이파크"(평균 15.81억) 와
+  //   "마포" 2글자 공통만으로 score=2 통과 → wrong match → 보고서에 잘못된 단지명·평균가 노출.
+  //   3글자 이상 공통 (예: "래미안", "푸르지", "아이파") 있어야 매칭 — false-positive 차단.
   const { data: candidates } = await a.from('apt_master')
     .select('kapt_code, apt_name, sigungu, umd_nm, facility, facility_fetched_at')
     .eq('sigungu', sigungu).eq('umd_nm', umdNm)
@@ -97,7 +102,7 @@ async function findMaster(aptName, sigungu, umdNm) {
   let best = null, bestScore = 0;
   for (const m of (candidates || [])) {
     const score = nameMatchScore(aptName, m.apt_name);
-    if (score >= 2 && score > bestScore) {
+    if (score >= 3 && score > bestScore) { // RISK-6: 2 → 3 상향
       bestScore = score;
       best = m;
     }
