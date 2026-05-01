@@ -233,46 +233,9 @@ async function callAI(messages, useCache = true, opts = {}) {
   return result;
 }
 
-// ── 단지 AI 분석 ───────────────────────────────────────────
-async function analyzeProperty(propertyData, transactions) {
-  const cacheKey = `prop:${propertyData.aptName}:${propertyData.region}`;
-  const cached = cache.get(cacheKey);
-  if (cached) return { ...cached, fromCache: true };
+// Phase B-8 (2026-05-01): analyzeProperty 함수 제거 — dead code (호출처 0건 검증).
+//   원래 단지별 AI 분석 용도로 정의됐으나 propertyService 가 결정론적 분석으로 전환된 후 호출 안 됨.
+//   유지비용: 코드 부채 + 잠재 호출 시 입력 비용 risk. 제거가 안전.
+//   필요 시 git history 에서 복원 (commit 직전 ~30일 보존).
 
-  const prompt = `다음 단지에 대해 객관적 데이터를 정리해줘 (매수·매도 추천 금지, 별점·★ 표기 금지):
-
-단지명: ${propertyData.aptName}
-위치: ${propertyData.sigungu} ${propertyData.umdNm || ''}
-면적: ${propertyData.excluUseAr}㎡ (약 ${Math.round(propertyData.excluUseAr / 3.3)}평)
-준공연도: ${propertyData.buildYear}년
-거래금액: ${propertyData.dealAmount}만원 (${(propertyData.dealAmount / 10000).toFixed(2)}억원)
-층수: ${propertyData.floor}층
-
-최근 실거래 내역:
-${transactions.slice(0, 5).map(t => `- ${t.dealYear}.${String(t.dealMonth).padStart(2,'0')} | ${t.dealAmount}만원 | ${t.floor}층`).join('\n')}
-
-${(() => {
-  // P1 (Phase 2 후속, 2026-04-25): 학군 데이터 — 카카오 keyword 기반 위치만 (성취도 X)
-  const sch = Array.isArray(propertyData.nearbySchools) ? propertyData.nearbySchools : [];
-  if (!sch.length) return '주변 학교 데이터: 없음 (반경 1km 내)';
-  const list = sch.map(s => `- ${s.type}: ${s.name} (${s.distance_m}m)`).join('\n');
-  return `주변 학교 (반경 1km · 카카오맵 기준 위치만 — 학업성취도/진학률/통학구역 데이터 없음):
-${list}
-
-⚠ "학군 좋다/나쁘다" 같은 정성적 평가 금지. 학교 위치·거리만 사실 진술.`;
-})()}
-
-정리 항목 (모두 중립 서술 — "현재 데이터로는 ~한 특징이 있다" 식):
-1. 가격 위치 — 동일 평형 최근 거래 평균 대비 현재가의 위치 (저/중간/고가 구간 중 어디 위치)
-2. 입지 데이터 — 역세권·업무지구 접근성 + 주변 학교 위치 (사실 나열만, 학군 평가 금지)
-3. 거주 적합도 체크리스트 — 평형/연식/세대수 기준 기본 항목 점검
-4. 현행 LTV·DSR 기준 매수 시 자금 계획 시뮬레이션 (참고치, 금융기관 확인 필수 명시)
-5. 확인이 필요한 리스크 3가지 (사실 기반)
-6. 답변 마지막 한 줄 필수: "본 답변은 참고 정보이며 매수·매도 추천이 아닙니다. 가격 하락 위험은 본인이 부담합니다."`;
-
-  const result = await callAI([{ role: 'user', content: prompt }], false);
-  cache.set(cacheKey, result, 7200); // 2시간
-  return result;
-}
-
-module.exports = { callAI, analyzeProperty, SYSTEM_PROMPT, BudgetExceededError };
+module.exports = { callAI, SYSTEM_PROMPT, BudgetExceededError };
