@@ -696,8 +696,8 @@ function buildReportPrompt(input, policy, candidates) {
     ].filter(Boolean).join(' | ');
     return `${i + 1}. ${displayName} (${c.sigungu} ${c.umd_nm})
    - 준공: ${c.build_year || '미상'}년 / 세대수: ${householdsStr}
-   - 평형: ${c.areas.map(a => `${a}㎡(${Math.round(a / 3.3)}평)`).join(', ')}
-   - 최근 6개월 평균가: ${(c.avgPrice / 10000).toFixed(2)}억원 (${c.n}건 거래, 최근 ${c.latest})
+   - 회원님 평형대 (${c.areas.map(a => `${a}㎡(${Math.round(a / 3.3)}평)`).join(', ')}) 만 노출됨
+   - 회원님 평형대 평균가: ${(c.avgPrice / 10000).toFixed(2)}억원 (해당 평형 ${c.n}건 거래, 최근 ${c.latest})
    - 객관 fact: ${factsList || '데이터 부족'}
    - 매칭 점수: ${c.score}점 (${breakdownStr})`;
   }).join('\n\n');
@@ -738,13 +738,20 @@ ${aptList}
 3. apartments — 위 후보 단지 그대로 (rank·name·areaSqm·areaPyeong·buildYear·households·ratio·location·pros·cons·priceFit·recommendation·matchReason)
    - name 형식: "단지명 (시군구 동)" — 예: "한양아파트 (노원구 상계동)" — 동명 누락 금지 (사용자 식별용)
    - households: 입력 데이터의 세대수 그대로 사용. "미상"이면 "미상"으로 표기 (NaN/null 금지)
-   - priceFit: "매수가 ${input.maxBudget}억 vs 단지 평균 X억 (X% 초과/일치/여유)" — 단순 비교만
+   - priceFit: "매수가 ${input.maxBudget}억 vs 회원님 평형대 평균 X억 (X% 초과/일치/여유)" — 단순 비교만. "단지 평균"이라고 쓰지 말고 "회원님 평형대 평균"이라고 정확히 표기 (단지 전체 평형의 평균이 아니라 회원님 입력 평형대 거래 평균이기 때문)
    - recommendation: "검토 권장" 또는 "예산 초과 — 다른 단지 비교 권장" — 매수 추천 X
    - matchReason: 매칭 점수 breakdown 을 자연스러운 한 줄로 풀어 씀 (예: "1순위 환금성 부합(거래활발 60점) + 예산 적합(30점)") — 사용자 투명성 핵심
+   - location: 입력 데이터의 amenities (지하철·학교·마트·병원·공원 카운트) + 행정구위계만 인용. 도보 거리·구체적 역명·지형(평지/경사) 임의 추정 X (입력 데이터에 없음). "역세권"·"학교 17곳" 같이 카운트 기반 표현만 허용.
    ※ pros/cons/location 작성 시 위 '객관 fact' 의 시공사·세대수·주차·노후도·규제 정보를 적극 활용 (예: pros 에 "삼성 1군 브랜드, 세대당 1.3대 주차" 같이 구체적 fact 인용)
    ★ 응답 길이 절약: location/pros/cons/recommendation/matchReason 각각 60자 이내, ratio 30자 이내 (응답 토큰 부족시 잘림 방지)
 4. longTermView — 자녀 시점 기반 갈아타기 시나리오 (가격 수치 X, 권역만)
 5. tips — 실무 TIP 5~6개 (회전율·RR·복비·잔금·임장)
+
+[환각 차단 절대 규칙]
+- 입력 데이터에 없는 거리(km, 도보 분), 지형(평지·경사), 정확한 역명·노선 번호, 재개발 일정 임의 추정 X
+- 입력 데이터의 amenities 카운트 (지하철 N개, 마트 N개 등) 만 인용 가능
+- 시공사/세대수가 입력에 없으면 "미상" 표기 (임의 보강 X)
+- 회원님 평형대 평균이 단지 전체 평균이 아님 — 모든 평균 표기에 "회원님 평형대" 명시
 
 JSON만 반환. 다른 텍스트 X.`;
 }
