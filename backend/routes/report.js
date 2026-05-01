@@ -34,15 +34,14 @@ const crypto = require('crypto');
 
 const router = express.Router();
 
-const REPORT_SYSTEM_PROMPT = `당신은 대한민국 부동산 컨설턴트입니다. 회원님 가구 상황에 맞는 1page 단지 분석 보고서를 작성합니다.
-
-## 절대 위반 금지 (법적 안전)
-1. ⛔ "추천", "사세요", "매수하세요" 등 권유 표현 금지. 대신 "조건 부합 단지", "탐색 후보" 사용.
-2. ⛔ 미래 가격 예측 금지 ("N억 오를 것", "5년 후 N억"). 정성적 안내만 ("자녀 학교 시기 갈아타기 권장").
-3. ⛔ 대출 알선·소개 금지. "이 은행 가세요", "신용대출 받으세요" 금지.
-   대출 한도·DSR 분석은 보고서에 포함 X. 정책자금은 "이런 게 있다" 정보만.
-4. ⛔ 자본시장법상 투자자문업·공인중개사법상 중개업 표현 금지.
-5. ⛔ 본 보고서는 정보 정리이며 투자자문 아님 명시 필수.
+// Phase B-2 (2026-05-01): REPORT_SYSTEM_PROMPT → REPORT_SPECIFIC 으로 변환.
+//   SHARED_BASE (services/aiService.js) 가 callAI 안에서 자동 prepend → endpoint 간 cache 공유.
+//   REPORT_SPECIFIC 만 report 전용 톤·출력 형식 정의 (~800 토큰).
+//   기존 절대 금지 5개는 SHARED_BASE 의 10개 rule 에 통합됨.
+const REPORT_SPECIFIC = `## 추가 규칙 (보고서 응답)
+- ⛔ "추천", "사세요", "매수하세요" 등 권유 표현 금지. 대신 "조건 부합 단지", "탐색 후보" 사용.
+- ⛔ 미래 가격 예측 금지 ("N억 오를 것", "5년 후 N억"). 정성적 안내만 ("자녀 학교 시기 갈아타기 권장").
+- ⛔ 대출 한도·DSR 분석은 보고서에 포함 X. 정책자금은 "이런 게 있다" 정보만.
 
 ## 톤
 - "회원님" 호칭 사용 (친근하고 전문적)
@@ -118,28 +117,26 @@ router.post('/generate', async (req, res) => {
     // 3) AI prompt 작성
     const prompt = buildReportPrompt(userInput, policyData, candidates);
 
-    // 4) AI 호출 — REPORT_SYSTEM_PROMPT 를 system 으로 명시 전달
+    // 4) AI 호출 — REPORT_SPECIFIC 을 systemSpecific 으로 명시 전달
     //    Phase 6 (2026-04-26): 4500 → 6500 (단지 확장 후 6087자 잘림 실측 대응)
     //    Phase B-1 (2026-04-29): 출력 분량 제약 강화 + 6500 → 5500 (1차 조정, -15%)
-    //      - 1주 회귀 모니터 후 cleaned_len 95% 임계 도달 0건이면 5000 추가 축소 검토
-    //      - 5%+ 도달 시 6000 복원 (품질 우선)
+    //    Phase B-2 (2026-05-01): SHARED_BASE + REPORT_SPECIFIC 분리 — endpoint 간 cache 공유 + ttl 1h
     //    frontend timeout 180s 와 페어링 (Sonnet 4.5 + 5500 토큰 ≒ 50~80s)
     const result = await callAI(
       [{ role: 'user', content: prompt }],
       false,
-      { userId, system: REPORT_SYSTEM_PROMPT, maxTokens: 5500 }
+      { userId, systemSpecific: REPORT_SPECIFIC, maxTokens: 5500 }
     );
     const cleaned = String(result.content || '').replace(/```json|```/g, '').trim();
 
-    // Phase B-1 회귀 모니터: 출력이 max_tokens 95%(=5200자) 도달 시 alert
-    //   1주 측정 후 임계 분기:
-    //     0건 → 5000 추가 축소 검토 / 1~5% → 5500 유지 / 5%+ → 6000 복원
-    if (cleaned.length > 5200) {
+    // Phase B-2 (2026-05-01): char 기반 → token 기반 임계 (시나리오 B 5723 char vs 4167 token 단위 불일치 fix)
+    //   max_tokens 5500 의 95% = 5225 token. cleaned_len 도 진단용으로 함께 기록.
+    if ((result.usage?.output_tokens || 0) > 5225) {
       logger.warn({
         cleaned_len: cleaned.length,
         usage: result.usage,
         max_tokens: 5500,
-        threshold: 5200,
+        threshold_tokens: 5225,
       }, '보고서 출력이 max_tokens 95% 도달 — 잘림 risk');
     }
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
