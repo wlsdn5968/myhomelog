@@ -191,7 +191,13 @@ async function callAI(messages, useCache = true, opts = {}) {
       { type: 'text', text: opts.system, cache_control: { type: 'ephemeral', ttl: '1h' } },
     ];
   } else {
-    const specific = opts.systemSpecific || SYSTEM_SPECIFIC_DEFAULT;
+    let specific = opts.systemSpecific || SYSTEM_SPECIFIC_DEFAULT;
+    // Phase B-7 (2026-05-01): opts.systemAppend — 동적 컨텍스트(chat 의 sessionContext 등)를 default 뒤에 append.
+    //   같은 사용자 동일 컨텍스트면 1h cache_read 적중 (두 번째 메시지부터 input 토큰 -30%).
+    //   컨텍스트 변경 시 cache_creation 1회 → 이후 1시간 cache_read.
+    if (opts.systemAppend) {
+      specific = specific + '\n\n' + opts.systemAppend;
+    }
     systemBlocks = [
       { type: 'text', text: SHARED_BASE, cache_control: { type: 'ephemeral', ttl: '1h' } },
       { type: 'text', text: specific, cache_control: { type: 'ephemeral', ttl: '1h' } },
