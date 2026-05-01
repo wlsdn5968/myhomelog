@@ -4841,30 +4841,42 @@ function renderSavedDeals(){
   }).join('');
 }
 
-async function loadRisk(p){
+// Phase B-3 (2026-05-01): clause + risk 통합 — 한 fetch 로 t2(리스크) + t3(특약) 동시 채움.
+//   기존: loadClause() + loadRisk() 두 fetch (LLM 2회) → 통합 1 fetch (LLM -50%).
+//   cache 도 통합 (단지 단위, 세션 메모리). 두 탭 클릭 시 cache hit.
+let _clauseRiskCache = null;
+let _clauseRiskCacheKey = null;
+
+async function loadClauseAndRisk(p){
+  const key=`${p.aptName}:${p.avgPrice||p.price}`;
+  if(_clauseRiskCache&&_clauseRiskCacheKey===key){renderClause(_clauseRiskCache);renderRisk(_clauseRiskCache);return _clauseRiskCache;}
   try{
-    const r=await fetch(`${CFG.api}/clause/risk`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({aptName:p.aptName,area:p.area,price:p.avgPrice||p.price,buildYear:p.buildYear,ltv:p.ltv,score:p.score})});
+    const r=await fetch(`${CFG.api}/clause`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({aptName:p.aptName,area:p.area,price:p.avgPrice||p.price,ltv:p.ltv,houseStatus:gct('ch-h'),isFirstBuyer:gct('ch-f')==='예',buildYear:p.buildYear,score:p.score})});
     if(!r.ok)throw new Error('fail');
     const d=await r.json();
-    const lm={높음:'danger',중간:'warn',낮음:'safe'};
-    document.getElementById('t2').innerHTML=`
-      <div class="ibox ${d.overallRisk==='높음'?'r':d.overallRisk==='보통'?'y':'g'}" style="margin-bottom:12px"><b>종합 리스크:</b> ${d.summary||''}</div>
-      ${(d.risks||[]).map(r=>`<div class="rcard"><div class="rcard-top"><span class="lvl ${lm[r.level]||'warn'}">${r.level}</span><div class="rcard-t">${r.title}</div><div class="rcard-p">${r.probability||''}</div></div><div class="rcard-b">${r.scenario}</div><div class="rcard-c">💡 ${r.countermeasure}</div></div>`).join('')}`;
-  }catch{
+    _clauseRiskCache=d;_clauseRiskCacheKey=key;
+    renderClause(d);renderRisk(d);
+    return d;
+  }catch{renderClause(null);renderRisk(null);}
+}
+
+// 기존 호출자 (loadClause/loadRisk) — 통합 함수에 위임 (backward compat)
+async function loadRisk(p){return loadClauseAndRisk(p);}
+async function loadClause(p){return loadClauseAndRisk(p);}
+
+function renderRisk(d){
+  if(!d||!d.risks){
     document.getElementById('t2').innerHTML=`
       <div class="ibox y">백엔드 연결 시 AI 실시간 분석 제공</div>
       <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">시세 하락 리스크</div></div><div class="rcard-b">매수 후 금리 인상/규제 강화 시 단기 조정 가능성.</div><div class="rcard-c">💡 5년 이상 보유, 전세 전환 플랜B 수립</div></div>
       <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">대출 규제 추가 강화</div></div><div class="rcard-b">갈아타기 시점 LTV 추가 규제 가능성.</div><div class="rcard-c">💡 상호금융권(DSR 50%) 사전 상담</div></div>
       <div class="rcard"><div class="rcard-top"><span class="lvl safe">낮음</span><div class="rcard-t">환금성 리스크</div></div><div class="rcard-b">세대수 적을 경우 매도 시 거래 부재.</div><div class="rcard-c">💡 RR(로열동·로열호) 매수</div></div>`;
+    return;
   }
-}
-
-async function loadClause(p){
-  try{
-    const r=await fetch(`${CFG.api}/clause`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({aptName:p.aptName,area:p.area,price:p.avgPrice||p.price,ltv:p.ltv,houseStatus:gct('ch-h'),isFirstBuyer:gct('ch-f')==='예',buildYear:p.buildYear})});
-    if(!r.ok)throw new Error('fail');
-    renderClause(await r.json());
-  }catch{renderClause(null);}
+  const lm={높음:'danger',중간:'warn',낮음:'safe'};
+  document.getElementById('t2').innerHTML=`
+    <div class="ibox ${d.overallRisk==='높음'?'r':d.overallRisk==='보통'?'y':'g'}" style="margin-bottom:12px"><b>종합 리스크:</b> ${d.summary||''}</div>
+    ${(d.risks||[]).map(r=>`<div class="rcard"><div class="rcard-top"><span class="lvl ${lm[r.level]||'warn'}">${r.level}</span><div class="rcard-t">${r.title}</div><div class="rcard-p">${r.probability||''}</div></div><div class="rcard-b">${r.scenario}</div><div class="rcard-c">💡 ${r.countermeasure}</div></div>`).join('')}`;
 }
 
 function renderClause(d){
