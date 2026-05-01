@@ -232,7 +232,7 @@ html,body{height:100%;overflow:hidden}
 body{font-family:'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;background:var(--bg);color:var(--t1);font-size:14px;line-height:1.6;display:flex;flex-direction:column}
 
 /* HEADER */
-header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;height:54px;display:flex;align-items:center;padding:0 18px;gap:10px;z-index:300;box-shadow:var(--sh)}
+header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;height:54px;display:flex;align-items:center;padding:0 18px;gap:10px;z-index:1000;position:relative;box-shadow:var(--sh)}
 .logo{display:flex;align-items:center;gap:7px;text-decoration:none;flex-shrink:0}
 .lmark{width:30px;height:30px;background:var(--acc);border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:15px}
 .ltxt{font-size:17px;font-weight:700;color:var(--t1);letter-spacing:-.3px}
@@ -755,9 +755,9 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     <button class="htab" onclick="sv('guide',this)" style="opacity:0.85" title="처음이세요? 3분 가이드">📖 사용법</button>
   </div>
   <!-- P0 (2026-04-25 Phase 2 시나리오 A): 단지명·동명 직접 검색바 -->
-  <div class="hsearch" style="position:relative;flex:1;max-width:320px;margin:0 8px">
-    <input id="hSearchInput" class="inp" type="text" placeholder="🔎 단지명·동명 검색 (예: 공덕래미안, 공덕동)" style="margin:0;font-size:12px;padding:7px 10px" oninput="onHeaderSearchInput(this.value)" onkeydown="onHeaderSearchKey(event)" onfocus="if(this.value)onHeaderSearchInput(this.value)" onblur="setTimeout(()=>document.getElementById('hSearchDrop').style.display='none',200)" autocomplete="off">
-    <div id="hSearchDrop" style="display:none;position:absolute;top:100%;left:0;width:380px;max-width:calc(100vw - 40px);background:#fff;border:1px solid var(--bd);border-radius:8px;margin-top:3px;max-height:520px;overflow-y:auto;z-index:99999;box-shadow:0 6px 24px rgba(0,0,0,0.18)"></div>
+  <div class="hsearch" style="position:relative;flex:1;max-width:480px;margin:0 8px">
+    <input id="hSearchInput" class="inp" type="text" placeholder="🔎 단지명·동명 검색 (예: 마포래미안푸르지오, 공덕동)" style="margin:0;font-size:12px;padding:7px 10px" oninput="onHeaderSearchInput(this.value)" onkeydown="onHeaderSearchKey(event)" onfocus="if(this.value)onHeaderSearchInput(this.value)" onblur="setTimeout(()=>document.getElementById('hSearchDrop').style.display='none',200)" autocomplete="off">
+    <div id="hSearchDrop" style="display:none;position:absolute;top:100%;left:0;width:100%;max-width:calc(100vw - 40px);background:#fff;border:1px solid var(--bd);border-radius:8px;margin-top:3px;max-height:520px;overflow-y:auto;z-index:99999;box-shadow:0 6px 24px rgba(0,0,0,0.18)"></div>
   </div>
   <div class="hml">
     <!-- Phase 4: 클릭 → 규제 요약 모달 -->
