@@ -757,7 +757,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <!-- P0 (2026-04-25 Phase 2 시나리오 A): 단지명·동명 직접 검색바 -->
   <div class="hsearch" style="position:relative;flex:1;max-width:320px;margin:0 8px">
     <input id="hSearchInput" class="inp" type="text" placeholder="🔎 단지명·동명 검색 (예: 공덕래미안, 공덕동)" style="margin:0;font-size:12px;padding:7px 10px" oninput="onHeaderSearchInput(this.value)" onkeydown="onHeaderSearchKey(event)" onfocus="if(this.value)onHeaderSearchInput(this.value)" onblur="setTimeout(()=>document.getElementById('hSearchDrop').style.display='none',200)" autocomplete="off">
-    <div id="hSearchDrop" style="display:none;position:absolute;top:100%;left:0;width:520px;max-width:calc(100vw - 40px);background:#fff;border:1px solid var(--bd);border-radius:8px;margin-top:3px;max-height:480px;overflow-y:auto;z-index:99999;box-shadow:0 6px 24px rgba(0,0,0,0.18)"></div>
+    <div id="hSearchDrop" style="display:none;position:absolute;top:100%;left:0;width:380px;max-width:calc(100vw - 40px);background:#fff;border:1px solid var(--bd);border-radius:8px;margin-top:3px;max-height:520px;overflow-y:auto;z-index:99999;box-shadow:0 6px 24px rgba(0,0,0,0.18)"></div>
   </div>
   <div class="hml">
     <!-- Phase 4: 클릭 → 규제 요약 모달 -->
@@ -5812,9 +5812,9 @@ async function onHeaderSearchInput(q) {
         </div>`;
       } else {
         drop.innerHTML = results.map((r,i) => `
-          <div class="hsearch-item" data-idx="${i}" onclick='goSearchResult(${JSON.stringify(r).replace(/'/g,"&#39;")})' style="padding:9px 12px;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:12px;line-height:1.5" onmouseover="this.style.background='#F4F8FF'" onmouseout="this.style.background='#fff'">
+          <div class="hsearch-item" data-idx="${i}" onclick='goSearchResult(${JSON.stringify(r).replace(/'/g,"&#39;")})' style="padding:7px 11px;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:12px;line-height:1.4" onmouseover="this.style.background='#F4F8FF'" onmouseout="this.style.background='#fff'">
             <div style="font-weight:700;color:var(--t1)">${_escHtml(r.aptName)}</div>
-            <div style="font-size:10.5px;color:var(--t3)">${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')} · ${r.buildYear||'?'}년 · 최근 거래 ${(r.recentDealDate||'').slice(0,10)}</div>
+            <div style="font-size:10.5px;color:var(--t3);margin-top:2px">${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')} · ${r.buildYear||'?'}년 · ${(r.recentDealDate||'').slice(0,10)}</div>
           </div>`).join('');
       }
       drop.style.display = 'block';
