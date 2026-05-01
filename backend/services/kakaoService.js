@@ -8,6 +8,7 @@
  * 대중교통 시간은 자동차 시간 × 1.6 으로 근사 (실서비스 검증 필요).
  */
 const axios = require('axios');
+const { createClient } = require('@supabase/supabase-js');
 const cache = require('../cache');
 const logger = require('../logger');
 const { isValidKoreaCoord } = require('../utils/geo');
@@ -15,6 +16,45 @@ const { isValidKoreaCoord } = require('../utils/geo');
 const KAKAO_DIRECTIONS = 'https://apis-navi.kakaomobility.com/v1/directions';
 const KAKAO_CAT = 'https://dapi.kakao.com/v2/local/search/category.json';
 const KAKAO_KEY_SEARCH = 'https://dapi.kakao.com/v2/local/search/keyword.json';
+
+// Phase B-6 (2026-05-01): apt_amenities DB 캐시 — Vercel scale-out 시 fresh 호출 -90%.
+//   좌표 4자리(~11m) 정규화 → 인접 단지가 같은 cache 공유.
+//   migration 미적용 시 silent fail → in-memory cache 만 동작 (graceful fallback).
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
+const DB_ENABLED = !!SUPABASE_URL && !!SUPABASE_SERVICE_ROLE_KEY;
+
+function _dbClient() {
+  if (!DB_ENABLED) return null;
+  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+}
+
+async function _dbGetAmenityCount(cacheKey) {
+  const a = _dbClient();
+  if (!a) return null;
+  try {
+    const { data } = await a.from('apt_amenities').select('count, fetched_at').eq('cache_key', cacheKey).maybeSingle();
+    if (!data) return null;
+    const ageDays = (Date.now() - new Date(data.fetched_at).getTime()) / (1000 * 60 * 60 * 24);
+    if (ageDays > 90) return null;
+    return data.count;
+  } catch (e) {
+    return null;
+  }
+}
+
+async function _dbSetAmenityCount(cacheKey, lat, lng, category, radius, count) {
+  const a = _dbClient();
+  if (!a) return;
+  try {
+    await a.from('apt_amenities').upsert(
+      { cache_key: cacheKey, lat, lng, category, radius, count, fetched_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { onConflict: 'cache_key' }
+    );
+  } catch (e) {
+    // silent fail — DB 미설정 또는 migration 미적용
+  }
+}
 
 function isKeyMissing() {
   const k = process.env.KAKAO_REST_API_KEY;
@@ -67,9 +107,21 @@ async function getTransitMinutes(originLat, originLng, destLat, destLng) {
  */
 async function countNearby(lat, lng, categoryCode, radius = 800) {
   if (isKeyMissing()) return 0;
-  const ck = `kkcat:${lat.toFixed(4)},${lng.toFixed(4)}:${categoryCode}:${radius}`;
+  // Phase B-6: 좌표 4자리(~11m) 정규화 → DB cache 공유
+  const lat4 = Number(lat.toFixed(4));
+  const lng4 = Number(lng.toFixed(4));
+  const cacheKey = `${lat4},${lng4}:${categoryCode}:${radius}`;
+  const ck = `kkcat:${cacheKey}`;
+  // 1) in-memory cache 우선
   const cached = cache.get(ck);
   if (cached !== undefined) return cached;
+  // 2) DB cache (Phase B-6: scale-out 호환)
+  const fromDb = await _dbGetAmenityCount(cacheKey);
+  if (fromDb !== null) {
+    cache.set(ck, fromDb, 86400 * 3);
+    return fromDb;
+  }
+  // 3) Kakao API
   try {
     const r = await axios.get(KAKAO_CAT, {
       headers: { Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}` },
@@ -81,6 +133,8 @@ async function countNearby(lat, lng, categoryCode, radius = 800) {
     });
     const cnt = r.data?.meta?.total_count || 0;
     cache.set(ck, cnt, 86400 * 3);
+    // fire-and-forget DB save
+    _dbSetAmenityCount(cacheKey, lat4, lng4, categoryCode, radius, cnt).catch(() => {});
     return cnt;
   } catch (e) {
     return 0;
@@ -92,9 +146,18 @@ async function countNearby(lat, lng, categoryCode, radius = 800) {
  */
 async function countNearbyKeyword(lat, lng, keyword, radius = 1200) {
   if (isKeyMissing()) return 0;
-  const ck = `kkkw:cnt:${lat.toFixed(4)},${lng.toFixed(4)}:${keyword}:${radius}`;
+  // Phase B-6: 좌표 정규화 + DB cache
+  const lat4 = Number(lat.toFixed(4));
+  const lng4 = Number(lng.toFixed(4));
+  const cacheKey = `${lat4},${lng4}:kw:${keyword}:${radius}`;
+  const ck = `kkkw:cnt:${cacheKey}`;
   const cached = cache.get(ck);
   if (cached !== undefined) return cached;
+  const fromDb = await _dbGetAmenityCount(cacheKey);
+  if (fromDb !== null) {
+    cache.set(ck, fromDb, 86400 * 3);
+    return fromDb;
+  }
   try {
     const r = await axios.get(KAKAO_KEY_SEARCH, {
       headers: { Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}` },
@@ -103,6 +166,7 @@ async function countNearbyKeyword(lat, lng, keyword, radius = 1200) {
     });
     const cnt = r.data?.meta?.total_count || 0;
     cache.set(ck, cnt, 86400 * 3);
+    _dbSetAmenityCount(cacheKey, lat4, lng4, `kw:${keyword}`, radius, cnt).catch(() => {});
     return cnt;
   } catch (e) {
     return 0;
