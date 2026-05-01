@@ -108,13 +108,16 @@ function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
     const id = getLimitIdentity(req);
 
     // Phase 3: Pro/Team 플랜 한도 우선 적용. Free 는 기존 base+bonus.
+    // Phase B-5 (2026-05-01): scope 'report' 추가 — /api/report 별도 한도
     let effectiveLimit = req.user?.id ? (limit + (loggedInBonus || 0)) : limit;
     let plan = 'free';
     if (req.user?.id) {
       plan = await getActivePlan(req.user.id);
       if (plan !== 'free') {
         const planLimits = getLimitsForPlan(plan);
-        const planScopeKey = scope === 'chat' ? 'dailyChat' : 'dailySearch';
+        const planScopeKey = scope === 'chat' ? 'dailyChat'
+                          : scope === 'report' ? 'dailyReport'
+                          : 'dailySearch';
         if (planLimits[planScopeKey]) effectiveLimit = planLimits[planScopeKey];
       }
     }
@@ -138,13 +141,17 @@ function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
       }, 'daily limit exceeded');
       const isAnonymous = !req.user?.id;
       const isPaid = plan === 'pro' || plan === 'team';
+      // Phase B-5: scope 'report' 추가
+      const scopeName = scope === 'chat' ? 'AI 채팅'
+                       : scope === 'report' ? '컨설팅 보고서'
+                       : '단지 검색';
       return res.status(429).json({
         error: 'DAILY_LIMIT_EXCEEDED',
         message: isPaid
-          ? `오늘 ${plan === 'pro' ? '프로' : '팀'} 플랜 ${scope === 'chat' ? 'AI 채팅' : '단지 검색'} 한도(${effectiveLimit}회)를 모두 사용했어요. 내일 다시 이용해주세요.`
+          ? `오늘 ${plan === 'pro' ? '프로' : '팀'} 플랜 ${scopeName} 한도(${effectiveLimit}회)를 모두 사용했어요. 내일 다시 이용해주세요.`
           : isAnonymous && loggedInBonus > 0
-          ? `오늘 무료 ${scope === 'chat' ? 'AI 채팅' : '단지 검색'} ${effectiveLimit}회를 모두 사용했어요. 로그인하면 ${loggedInBonus}회를 추가로 받을 수 있어요.`
-          : `오늘의 무료 ${scope === 'chat' ? 'AI 채팅' : '단지 검색'} 한도(${effectiveLimit}회)를 모두 사용했어요. 내일 다시 이용해주세요.`,
+          ? `오늘 무료 ${scopeName} ${effectiveLimit}회를 모두 사용했어요. 로그인하면 ${loggedInBonus}회를 추가로 받을 수 있어요.`
+          : `오늘의 무료 ${scopeName} 한도(${effectiveLimit}회)를 모두 사용했어요. 내일 다시 이용해주세요.`,
         used: currentUsed,
         limit: effectiveLimit,
         plan,

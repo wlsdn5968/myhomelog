@@ -74,14 +74,20 @@ async function getActivePlan(userId) {
  * Plan 별 일/월 한도 (rate limit / budget cap)
  * - dailyChat: scope='chat' 의 base limit
  * - dailySearch: scope='search' 의 base limit
+ * - dailyReport: scope='report' 의 base limit (Phase B-5: 보고서 비용 4배 단가 → 별도 scope)
  * - monthlyAiUsd: budgetService 가 검사하는 월 예산 (USD)
+ *
+ * Phase B-4 (2026-05-01): pro/team monthlyAiUsd 재조정 — 적자 마진 -300% → 흑자 전환
+ *   pro: $25 → $10 (가격 ₩9900≒$7.4 의 135% — 마진 보호)
+ *   team: $75 → $30 (가격 ₩29900≒$22 의 136%)
  */
 const PLAN_LIMITS = {
-  free: { dailyChat: 15,  dailySearch: 5,  monthlyAiUsd: 0.5 },  // 무료: 약 20 호출 (보호용)
-  pro:  { dailyChat: 100, dailySearch: 50, monthlyAiUsd: 25 },   // 9900원: 약 1000 호출
-  team: { dailyChat: 300, dailySearch: 150, monthlyAiUsd: 75 },  // 29900원: 약 3000 호출
+  free: { dailyChat: 15,  dailySearch: 5,  dailyReport: 1,  monthlyAiUsd: 0.5 },  // 무료: 보호용
+  pro:  { dailyChat: 100, dailySearch: 50, dailyReport: 5,  monthlyAiUsd: 10 },    // 9900원: 적자 차단
+  team: { dailyChat: 300, dailySearch: 150, dailyReport: 15, monthlyAiUsd: 30 },   // 29900원: 적자 차단
   // 관리자 — 무제한 (운영자 본인용. Anthropic 비용은 본인 책임)
-  admin: { dailyChat: Infinity, dailySearch: Infinity, monthlyAiUsd: Infinity },
+  // ※ 자가소비 폭주 방지 모니터링은 Phase C-1 (사용량 대시보드) 에서 처리
+  admin: { dailyChat: Infinity, dailySearch: Infinity, dailyReport: Infinity, monthlyAiUsd: Infinity },
 };
 
 function getLimitsForPlan(plan) {

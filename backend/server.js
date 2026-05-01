@@ -169,7 +169,9 @@ app.use('/api/feedback', dataLimiter, require('./routes/feedback'));
 // 임장노트 클라우드 동기화 (Phase 4 — 기존 localStorage → DB sync)
 app.use('/api/field-notes', dataLimiter, require('./routes/fieldNotes'));
 // Phase 5 (2026-04-26): 1Page 컨설팅 보고서 자동 생성 — 핵심 USP
-app.use('/api/report', optionalAuth, chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat', loggedInBonus: 10 }), require('./routes/report'));
+// Phase B-5 (2026-05-01): chat scope → 별도 'report' scope. 비용 4배 단가에 맞는 한도 분리.
+//   비로그인: 0 (로그인 유도) / 로그인 free: 1/일 (체험) / pro: 5/일 / team: 15/일
+app.use('/api/report', optionalAuth, chatLimiter, dailyLimit({ limit: 0, scope: 'report', loggedInBonus: 1 }), require('./routes/report'));
 // 계정 데이터 자기결정권 (PIPA 제35·36조 / GDPR Art.15·17) — JWT 필수
 // GDPR Art.22 / PIPA 자동화 결정 설명권 — JWT 필수 (account 보다 먼저 마운트: prefix 세부 우선)
 app.use('/api/account/automated-decision', dataLimiter, automatedDecisionRouter);
