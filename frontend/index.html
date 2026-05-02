@@ -1707,7 +1707,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         </div>
         <div id="umHistList" class="sm-hint" style="margin-top:4px;max-height:160px;overflow-y:auto">로딩 중...</div>
       </div>
-      <a href="/billing" class="sm-save" style="text-decoration:none;text-align:center;display:block;background:var(--acc);color:#fff;margin-bottom:6px">💳 결제/구독 관리</a>
+      <a href="/billing" class="sm-save" onclick="try{window.va&&window.va('event',{name:'billing_click',data:{from:'settings'}})}catch(_){}" style="text-decoration:none;text-align:center;display:block;background:var(--acc);color:#fff;margin-bottom:6px">💳 결제/구독 관리</a>
       <div class="sm-row" style="margin-top:8px;border-top:1px solid var(--bd);padding-top:8px">
         <div class="sm-lbl">개인정보 자기결정권 (PIPA 제35·36조 / GDPR Art.15·17·22)</div>
         <div id="umDeletionBanner" style="display:none;margin:6px 0;padding:8px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:11px;color:#856404"></div>
@@ -1788,7 +1788,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
           <li>고급 분석 우선 접근</li>
         </ul>
       </div>
-      <a href="/billing" class="sm-save" style="display:block;text-align:center;background:var(--acc);color:#fff;text-decoration:none;padding:12px;font-size:14px;font-weight:600">💳 구독 플랜 보기</a>
+      <a href="/billing" class="sm-save" onclick="try{window.va&&window.va('event',{name:'billing_click',data:{from:'mobile_menu'}})}catch(_){}" style="display:block;text-align:center;background:var(--acc);color:#fff;text-decoration:none;padding:12px;font-size:14px;font-weight:600">💳 구독 플랜 보기</a>
       <button class="sm-save" onclick="closeQuotaModal()" style="background:var(--bg2);color:var(--t2);border:1px solid var(--bd);margin-top:6px">닫기</button>
       <div id="qmReset" style="font-size:11px;color:var(--t3);text-align:center;margin-top:8px"></div>
     </div>
@@ -2568,8 +2568,12 @@ async function generateReport() {
     const data = await r.json();
     // PDF 출력용 입력 정보 저장 (보고서 응답에는 input 없음 — frontend 가 보유)
     window._lastReportInput = { maxBudget: buy, myCash: cash, region, pyeong, priority, kidPlan, stayYears, houseStatus };
+    // Day 1-② Vercel Analytics — REPORT_GENERATE 성공 funnel event
+    try { window.va && window.va('event', { name: 'report_generate_success', data: { region, priority, isFirstBuyer: !!isFirstBuyer } }); } catch(_){}
     _renderReport(data);
   } catch (e) {
+    // Day 1-② REPORT_GENERATE 실패 event (이탈 원인 분석용)
+    try { window.va && window.va('event', { name: 'report_generate_fail', data: { error: String(e.message || '').slice(0, 60) } }); } catch(_){}
     result.innerHTML = `<div style="padding:30px;text-align:center;color:var(--red);font-size:12px">보고서 생성 실패: ${_escHtml(e.message)}<br><span style="font-size:10px;color:var(--t3)">잠시 후 다시 시도해주세요</span></div>`;
   } finally {
     btn.disabled = false;
@@ -3708,6 +3712,8 @@ function renderLegacyPriceBars(ph){
 // ── DETAIL MODAL ─────────────────────────────────────────
 function showDetail(p){
   if(!p)return;
+  // Day 1-② Vercel Analytics — APT_DETAIL funnel event (단지 상세 클릭)
+  try { window.va && window.va('event', { name: 'apt_detail_open', data: { aptName: String(p.aptName||'').slice(0,40), sigungu: p.sigungu||'' } }); } catch(_){}
   document.getElementById('dmT').textContent=p.aptName;
   // 점수 라벨 사실 진술화 (P1, 2026-04-25)
   const s=p.score||60,lv=s>=75?'safe':s>=50?'warn':'danger',lt=s>=75?'거래활발':s>=50?'거래보통':'거래적음';
@@ -5835,6 +5841,8 @@ function onHeaderSearchKey(e) {
   if (e.key === 'Escape') { document.getElementById('hSearchDrop').style.display='none'; e.target.blur(); }
 }
 async function goSearchResult(r) {
+  // Day 1-② Vercel Analytics — SEARCH_APT funnel event (검색 결과 클릭 = 검색 성공)
+  try { window.va && window.va('event', { name: 'search_apt_click', data: { aptName: String(r.aptName||'').slice(0,40), sigungu: r.sigungu||'' } }); } catch(_){}
   // 검색 결과 클릭 → 단지 상세 모달 열기 (showDetail 사용)
   const drop = document.getElementById('hSearchDrop');
   if (drop) drop.style.display='none';
