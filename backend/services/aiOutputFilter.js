@@ -26,11 +26,12 @@
 const FORBIDDEN_PATTERNS = [
   // 매수 권유 (단언)
   { name: 'buy_imperative',  re: /사세요|사야\s*합니다|사면\s*됩니다|사면\s*돼요|매수하세요|구매하세요|구입하세요/ },
-  // MOB-AUDIT-2026-05-03: 부정문 false-positive 차단 — "매수를 추천드리지 않습니다" 등 부정 lookbehind
-  { name: 'buy_recommend',   re: /(?<!않|어렵|곤란|아니|못|말|없|지)(?:매수|구매)[이를을]?\s*추천(드립|합)?/ },
+  // MOB-AUDIT-2026-05-03 (revised): 부정 표현은 "추천" 뒤에 다양한 형태로 옴 → 함수에서 추가 부정 검증 (filterAdviceOutput 내부)
+  //   regex 는 1차 매칭만, 부정 키워드 후속 30자 검사로 false-positive 차단 (단언 vs 부정 정확화)
+  { name: 'buy_recommend',   re: /(?:매수|구매)[이를을]?\s*추천(드립|합)?/ },
   // 매도 권유 (단언)
   { name: 'sell_imperative', re: /파세요|파시면|매도하세요|처분하세요|팔아야\s*합니다/ },
-  { name: 'sell_recommend',  re: /(?<!않|어렵|곤란|아니|못|말|없|지)(?:매도)[이를을]?\s*추천(드립|합)?|처분[이를을]?\s*권/ },
+  { name: 'sell_recommend',  re: /(?:매도)[이를을]?\s*추천(드립|합)?|처분[이를을]?\s*권/ },
   // 가격 단언 (확정적 미래) — MOB-AUDIT: 과거·인용 lookbehind 추가 (예: "오를 것이라는 기대" 통과)
   { name: 'price_up',   re: /(?<!기대|예상|전망|이라는|이라고|던|었|였)(?:오를|상승할|올라갈)\s*(것|거)(입니다|이에요|예요|에요)/ },
   { name: 'price_down', re: /(?<!기대|예상|전망|이라는|이라고|던|었|였)(?:떨어질|하락할|내릴)\s*(것|거)(입니다|이에요|예요|에요)/ },
@@ -63,13 +64,26 @@ const FALLBACK_REPLY =
  *   matched: string[],   // 매칭된 패턴 이름 (운영 로그용)
  * }}
  */
+// MOB-AUDIT-2026-05-03: 매수/매도 추천 매칭 시 뒤 30자 안에 부정 키워드 있으면 통과 (false-positive 차단)
+//   예) "매수를 추천드리지 않습니다" / "매수 추천이 어렵습니다" / "매수를 추천하지 못합니다" → PASS
+const _NEGATION_RE = /않|못|어렵|곤란|불가|마세요|마십시오|아닙|아닌|없다|없습|없어/;
+function _hasNegationAfter(txt, fromIdx, span = 30) {
+  return _NEGATION_RE.test(txt.slice(fromIdx, fromIdx + span));
+}
+
 function filterAdviceOutput(reply) {
   if (!reply || typeof reply !== 'string') {
     return { text: reply, filtered: false, matched: [] };
   }
   const matched = [];
   for (const { name, re } of FORBIDDEN_PATTERNS) {
-    if (re.test(reply)) matched.push(name);
+    const m = re.exec(reply);
+    if (!m) continue;
+    // 매수/매도/처분 추천 매칭 시 뒤 30자 부정 검증 — 단언 vs 부정 정확화
+    if (name === 'buy_recommend' || name === 'sell_recommend') {
+      if (_hasNegationAfter(reply, m.index + m[0].length)) continue;
+    }
+    matched.push(name);
   }
   if (matched.length > 0) {
     return { text: FALLBACK_REPLY, filtered: true, matched };
