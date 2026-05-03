@@ -52,6 +52,13 @@
 
 <title>내집로그 — 실거래가로 보는 부동산 의사결정 도구</title>
 
+<!-- MOB-AUDIT-2026-05-03: LCP 최적화 — 첫 paint 직후 사용되는 외부 리소스 preconnect/preload -->
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preconnect" href="https://unpkg.com" crossorigin>
+<link rel="preconnect" href="https://browser.sentry-cdn.com" crossorigin>
+<link rel="preconnect" href="https://brxorvxdfrbxcavufspe.supabase.co" crossorigin>
+<link rel="dns-prefetch" href="https://api.iconify.design">
+
 <!-- ── Sentry (프론트) — DSN 주입 시 자동 활성화 ─────────────
      활성화 방법: 아래 content="" 에 Sentry Browser 프로젝트 DSN 입력.
      미입력 시 fetch 실패 → 앱 정상 동작 (stub 모드).

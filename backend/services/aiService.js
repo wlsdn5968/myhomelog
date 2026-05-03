@@ -220,6 +220,26 @@ async function callAI(messages, useCache = true, opts = {}) {
     model: response.model,
   };
 
+  // MOB-AUDIT-2026-05-03: prompt cache 적중률 운영 모니터링 — 비용 50%+ 절감 효과 측정
+  //   cache_creation_input_tokens > 0 = miss (1회만 ↑) / cache_read_input_tokens > 0 = hit (90% 절감)
+  try {
+    const u = response.usage || {};
+    const cacheRead = u.cache_read_input_tokens || 0;
+    const cacheCreation = u.cache_creation_input_tokens || 0;
+    const baseInput = u.input_tokens || 0;
+    const totalInput = cacheRead + cacheCreation + baseInput;
+    const hitPct = totalInput > 0 ? Math.round((cacheRead / totalInput) * 100) : 0;
+    logger.info({
+      model: response.model,
+      input: baseInput,
+      cache_creation: cacheCreation,
+      cache_read: cacheRead,
+      output: u.output_tokens || 0,
+      cache_hit_pct: hitPct,
+      endpoint: opts.systemSpecific ? 'specific' : (opts.system ? 'legacy' : 'default'),
+    }, 'AI usage');
+  } catch(_){}
+
   // ── 2) post-call 사용량 기록 (fire-and-forget, 실패해도 응답은 정상) ──
   if (userId && response.usage) {
     budget.recordUsage(userId, response.usage).catch(() => { /* already logged */ });
