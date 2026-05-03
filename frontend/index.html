@@ -576,7 +576,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 /* Phase 3 (2026-04-25): "AI 특약 생성" 단일 가치 강조 — 무료 도구 대비 차별화 핵심 */
 .bnav-item.bnav-feature{color:#1F4F9C}
 .bnav-item.bnav-feature.on{color:var(--acc)}
-.bnav-tag{position:absolute;top:4px;right:8px;background:linear-gradient(135deg,#FF6B35,#F7931E);color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:6px;line-height:1.2}
+.bnav-tag{position:absolute;top:4px;right:8px;background:linear-gradient(135deg,#FF6B35,#F7931E);color:#fff;font-size:10px;font-weight:700;padding:1px 4px;border-radius:6px;line-height:1.2}
 .bnav-icon{font-size:18px;line-height:1}
 
 /* P0 Phase 2 R3-B (2026-04-25): 모바일 햄버거 drawer + 검색바 풀폭 + AI floating */
@@ -658,7 +658,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 .vol-bars{display:flex;align-items:flex-end;gap:5px;height:54px;margin-bottom:4px}
 .vol-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
 .vol-bar{width:100%;background:var(--a2);border-radius:3px 3px 0 0;min-height:3px;transition:height .4s ease}
-.vol-bar-label{font-size:8px;color:var(--t3);white-space:nowrap}
+.vol-bar-label{font-size:10px;color:var(--t3);white-space:nowrap}
 .vol-bar-cnt{font-size:9px;font-weight:700;color:var(--a2)}
 
 /* ── 실투자금 계산기 ────────────────────────────────────── */
@@ -764,7 +764,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <div class="htabs">
     <button class="htab on" onclick="sv('map',this)">🗺 지도</button>
     <button class="htab" onclick="sv('list',this)">📋 목록</button>
-    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서">📊 보고서 <span style="background:#FF6B35;color:#fff;font-size:8px;font-weight:700;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:top">NEW</span></button>
+    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서">📊 보고서 <span style="background:#FF6B35;color:#fff;font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:top">NEW</span></button>
     <button class="htab" onclick="sv('calc',this)">🧮 대출계산</button>
     <button class="htab" onclick="sv('clause',this)">✍ 특약</button>
     <button class="htab" onclick="sv('news',this)">📰 뉴스</button>
@@ -1313,7 +1313,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
           </select>
         </div>
         <div id="cs_result" style="margin-top:12px;padding:11px 13px;background:#fff;border-radius:8px;border:1px solid #BFD7F7">
-          <div style="font-size:13px;font-weight:800;color:#1B4F8A">총 가점: <span id="cs_total">8</span>점 / 84점</div>
+          <!-- STAB-A P1#33 (2026-05-03): 초기값 "8" misleading → "—" 입력 전엔 빈 표시 -->
+          <div style="font-size:13px;font-weight:800;color:#1B4F8A">총 가점: <span id="cs_total">—</span>점 / 84점</div>
           <div style="font-size:10.5px;color:var(--t2);margin-top:5px;line-height:1.7" id="cs_tier">예상 당첨 가능 분양: <b>참고치</b> — 실제 당첨 커트라인은 청약Home 공고 확인.</div>
         </div>
         <!-- Phase 4 (2026-04-26): 당첨 커트라인 통계 — 한국부동산원 2024-2025 평균 -->
@@ -1622,7 +1623,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       </div>
       <div class="sm-row">
         <div class="sm-lbl">사용 한도</div>
-        <div class="sm-hint" id="usageInfo">하루 5회 무료 검색 가능 (회원가입 시 무제한 — 출시 예정)</div>
+        <!-- STAB-A P1#25 (2026-05-03): 한도 가독성 강화 — 비로그인·로그인 차이 명시 -->
+        <div class="sm-hint" id="usageInfo">로그인 X: 5회/일 · 로그인: 25회/일 (단지 검색). 매일 자정 리셋. 매수특약·AI 채팅은 별도 한도.</div>
       </div>
       <div class="sm-row">
         <div class="sm-lbl">데이터 출처</div>
@@ -2040,16 +2042,27 @@ async function loginKakao(){
 async function loginEmail(){
   if(!_checkConsent()) return;
   const A = window.MHL?.auth;
-  if(!A?.ready){ document.getElementById('lmStatus').textContent='⚠ 인증 SDK 로드 중...'; return; }
+  const st = document.getElementById('lmStatus');
+  if(!A?.ready){ st.textContent='⚠ 인증 SDK 로드 중... 잠시 후 다시 눌러주세요.'; return; }
   const email = document.getElementById('lmEmail').value.trim();
-  if(!email || !email.includes('@')){ document.getElementById('lmStatus').textContent='이메일 주소를 확인해주세요.'; return; }
-  document.getElementById('lmStatus').textContent='메일 발송 중...';
+  if(!email || !email.includes('@')){ st.textContent='✉ 올바른 이메일 주소를 입력해주세요.'; return; }
+  st.textContent='메일 발송 중...';
   try {
     const { error } = await A.signInWithEmail(email);
     if(error) throw error;
-    document.getElementById('lmStatus').textContent = '✉ ' + email + ' 으로 로그인 링크를 보냈어요. 메일함을 확인하세요.';
+    st.textContent = '✉ ' + email + ' 으로 로그인 링크를 보냈어요. 메일함(스팸함 포함)을 확인하세요.';
   } catch(e){
-    document.getElementById('lmStatus').textContent = '❌ ' + (e.message||e);
+    // MOB-2 (2026-05-03): rate limit·네트워크·일반 에러 분기 — 사용자 친화 메시지 + 대체 경로
+    const msg = String(e?.message || e || '').toLowerCase();
+    if (/rate.?limit|too.?many.?requests|429/.test(msg)) {
+      st.innerHTML = '⏰ 메일 발송 한도에 도달했어요 (시간당 ~4건). 약 1시간 후 다시 시도하시거나, 위 <b>Google 로 계속하기</b> 버튼을 사용해주세요.';
+    } else if (/network|fetch|failed|offline/.test(msg)) {
+      st.textContent = '🌐 인터넷 연결을 확인하고 다시 시도해주세요.';
+    } else if (/invalid.?email|email.?address/.test(msg)) {
+      st.textContent = '✉ 이메일 주소 형식이 올바르지 않아요.';
+    } else {
+      st.textContent = '❌ 메일 발송 실패 — 잠시 후 다시 시도하시거나 Google 로그인을 사용해주세요.';
+    }
   }
 }
 async function logout(){
@@ -2559,8 +2572,9 @@ async function generateReport() {
   // 생성 시작 (Phase 8: + 카카오 좌표/amenities → 70~120초)
   btn.disabled = true;
   sp.style.display = 'inline-block';
-  tx.textContent = ' 보고서 생성 중... (70~120초)';
-  result.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t3);font-size:12px">📊 회원님 가구 상황 분석 중... (70~120초)<br><span style="font-size:11px">단지 1500건 → KAPT 세대수 → 카카오 주변 편의시설 → AI 분석</span></div>';
+  // STAB-A P1#19 (2026-05-03): "70~120초" → "1~3분" — backend timeout 180s 와 일치, 사용자 기대 정확화
+  tx.textContent = ' 보고서 생성 중... (1~3분)';
+  result.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t3);font-size:12px">📊 회원님 가구 상황 분석 중... (1~3분 소요)<br><span style="font-size:11px">단지 1500건 → KAPT 세대수 → 카카오 주변 편의시설 → AI 분석</span></div>';
 
   try {
     // Phase 5+ (2026-04-26): 로그인 사용자는 Authorization 헤더 추가 — 서버에서 user.id/email 인식 → admin/Pro plan 한도 적용
@@ -3269,7 +3283,7 @@ function gSVG(score,sz){
     </svg>
     <div class="gn" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
       <div style="font-size:${sz<50?11:sz<80?14:22}px;font-weight:800;color:${c};line-height:1">${score}</div>
-      <div style="font-size:8px;color:var(--t3);margin-top:1px">점</div>
+      <div style="font-size:10px;color:var(--t3);margin-top:1px">점</div>
     </div>
   </div>`;
 }
@@ -3377,7 +3391,11 @@ async function batchGeocode(items){
     const d=await r.json();
     const map={};(d.results||[]).forEach(r=>{if(r.lat&&r.lng)map[r.id]={lat:r.lat,lng:r.lng};});
     return map;
-  }catch{return {};}
+  }catch(e){
+    // STAB-A P1#41 (2026-05-03): fetch 실패 시 사용자 인지 가능한 toast (조용한 실패 차단)
+    if (typeof toast === 'function') toast('📍 좌표 조회 일시 오류 — 일부 마커 미표시될 수 있어요.');
+    return {};
+  }
   finally{gs.style.display='none';}
 }
 
@@ -5522,8 +5540,8 @@ function sv(v,btn){
   // popover 닫기 (탭 전환 시)
   const bmPop=document.getElementById('bmPop');
   if(bmPop) bmPop.classList.remove('on');
-  // 헤더 탭 활성화 (순서: map,list,calc,clause,biz,news)
-  const htabOrder=['map','list','calc','clause','news','subs'];
+  // 헤더 탭 활성화 — STAB-A P1#22 (2026-05-03): report·guide 누락 fix (실제 8개 탭 순서 일치)
+  const htabOrder=['map','list','report','calc','clause','news','subs','guide'];
   document.querySelectorAll('.htab').forEach((b,i)=>b.classList.toggle('on',htabOrder[i]===v));
   // 모바일 하단 탭 활성화
   document.querySelectorAll('.bnav-item').forEach(b=>b.classList.toggle('on',b.dataset.view===v));
@@ -5760,6 +5778,25 @@ function _enhanceA11y() {
   const sd = document.getElementById('hSearchDrop');
   if (sd && !sd.getAttribute('role')) sd.setAttribute('role', 'listbox');
 }
+// STAB-A P1#34 (2026-05-03): Escape 키로 모든 모달 닫기 — a11y 키보드 사용자 + 일반 사용자 편의
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  // 열린 모달 우선순위 (위쪽이 나중에 열림 → 먼저 닫음)
+  const closers = [
+    { id: 'QM', fn: 'closeQuotaModal' },  // quota 모달 (z-index 9998)
+    { id: 'DM', fn: 'cDM' },              // 단지 상세
+    { id: 'SM', fn: 'closeSM' },          // 설정
+    { id: 'UM', fn: 'closeUserMenu' },    // 계정 메뉴
+    { id: 'LM', fn: 'closeLogin' },       // 로그인
+  ];
+  for (const { id, fn } of closers) {
+    const el = document.getElementById(id);
+    if (el && el.classList.contains('open')) {
+      const closer = window[fn];
+      if (typeof closer === 'function') { closer(); return; } // 한 번에 하나만 닫음
+    }
+  }
+});
 // 부팅 시 + DOM 변경 시 (chip 동적 추가) 재실행
 window.addEventListener('DOMContentLoaded', () => setTimeout(_enhanceA11y, 100));
 // MutationObserver — chip 동적 추가 감지 (검색 결과·세부구·플랜 목록 등)
