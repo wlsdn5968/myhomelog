@@ -65,12 +65,15 @@ router.get('/apt', async (req, res) => {
     //   1) molit: 실거래 있는 단지 (recent deal_date·build_year 노출 — 우선)
     //   2) apt_master: 거래 0건 단지도 검색에 노출 (기존엔 영원히 안 나옴)
     //   같은 단지가 두 출처에 모두 있으면 molit 우선 (거래 정보 풍부).
+    // Phase 10 (2026-05-03): limit*5 → limit*15 — dedupe 후 다양성 확보 + 거래량 기반 인기 정렬
+    //   기존: 같은 단지 거래 50건이면 50 row 다 fetch → dedupe 후 1단지만, 다른 단지 못 봄
+    //   변경: limit*15 fetch → 단지별 카운트 + 최근 거래 → (count desc, recent desc) 복합 정렬
     const [molitRes, masterRes] = await Promise.all([
       admin.from('molit_transactions')
         .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date')
         .or(`apt_name.ilike.%${q}%,umd_nm.ilike.%${q}%`)
         .order('deal_date', { ascending: false })
-        .limit(limit * 5),
+        .limit(limit * 15),
       admin.from('apt_master')
         .select('apt_name, sigungu, umd_nm, lawd_cd, kapt_code')
         .or(`apt_name.ilike.%${q}%,umd_nm.ilike.%${q}%`)
@@ -82,10 +85,22 @@ router.get('/apt', async (req, res) => {
       logger.warn({ err: masterRes.error.message }, 'apt_master 조회 실패 — molit only');
     }
 
+    // Phase 10: 거래량 카운트 (인기 정렬) + 첫 row (가장 최근) 보존
+    const aptMap = new Map(); // key → { count, firstRow }
+    for (const row of (molitRes.data || [])) {
+      const key = `${row.apt_name}|${row.sigungu}|${row.umd_nm}`;
+      const cur = aptMap.get(key);
+      if (cur) { cur.count++; }
+      else { aptMap.set(key, { count: 1, firstRow: row }); }
+    }
+    // 정렬: (a) 거래량 desc, (b) 최근 거래 desc — 인기 + 최신성 균형
+    const sortedMolit = Array.from(aptMap.values())
+      .sort((a, b) => (b.count - a.count) || (String(b.firstRow.deal_date||'').localeCompare(String(a.firstRow.deal_date||''))));
+
     const seen = new Set();
     const out = [];
-    // molit 우선 (실거래 있는 단지)
-    for (const row of (molitRes.data || [])) {
+    // molit 우선 (실거래 있는 단지) — 인기순
+    for (const { count, firstRow: row } of sortedMolit) {
       const key = `${row.apt_name}|${row.sigungu}|${row.umd_nm}`;
       if (seen.has(key)) continue;
       seen.add(key);
@@ -96,6 +111,7 @@ router.get('/apt', async (req, res) => {
         lawdCd: row.lawd_cd,
         buildYear: row.build_year,
         recentDealDate: row.deal_date,
+        dealCount: count, // Phase 10: 거래량 노출 — frontend 인기 배지 가능
         source: 'molit',
       });
       if (out.length >= limit) break;

@@ -6036,11 +6036,15 @@ async function onHeaderSearchInput(q) {
           ${suggestionHtml}${_mapCta}
         </div>`;
       } else {
-        drop.innerHTML = results.map((r,i) => `
-          <div class="hsearch-item" data-idx="${i}" role="option" tabindex="0" aria-label="${_escHtml(r.aptName)} ${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')}" onclick='goSearchResult(${JSON.stringify(r).replace(/'/g,"&#39;")})' style="padding:7px 11px;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:12px;line-height:1.4" onmouseover="this.style.background='#F4F8FF'" onmouseout="this.style.background='#fff'">
-            <div style="font-weight:700;color:var(--t1)">${_escHtml(r.aptName)}</div>
-            <div style="font-size:10.5px;color:var(--t3);margin-top:2px">${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')} · ${r.buildYear||'?'}년 · ${(r.recentDealDate||'').slice(0,10)}</div>
-          </div>`).join('');
+        drop.innerHTML = results.map((r,i) => {
+          // Phase 10 (2026-05-03): 거래량 인기 배지 — count 5건 이상 시 🔥, 10건 이상 시 🔥🔥
+          const _hot = (r.dealCount >= 10) ? ' 🔥🔥' : (r.dealCount >= 5 ? ' 🔥' : '');
+          const _cntStr = r.dealCount ? ` · ${r.dealCount}건` : '';
+          return `<div class="hsearch-item" data-idx="${i}" role="option" tabindex="0" aria-label="${_escHtml(r.aptName)} ${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')}" onclick='goSearchResult(${JSON.stringify(r).replace(/'/g,"&#39;")})' style="padding:7px 11px;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:12px;line-height:1.4" onmouseover="this.style.background='#F4F8FF'" onmouseout="this.style.background='#fff'">
+            <div style="font-weight:700;color:var(--t1)">${_escHtml(r.aptName)}${_hot}</div>
+            <div style="font-size:10.5px;color:var(--t3);margin-top:2px">${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')} · ${r.buildYear||'?'}년 · ${(r.recentDealDate||'').slice(0,10)}${_cntStr}</div>
+          </div>`;
+        }).join('');
       }
       drop.style.display = 'block';
     } catch(e) {
