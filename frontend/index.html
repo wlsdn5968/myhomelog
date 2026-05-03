@@ -2568,7 +2568,16 @@ async function generateReport() {
     });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
-      throw new Error(j.error || `HTTP ${r.status}`);
+      // MOB-4 (2026-05-03): j.message (사용자 친화) 우선, j.error (코드) fallback.
+      //   기존: e.message = "DAILY_LIMIT_EXCEEDED" 같은 코드만 노출 → "보고서 생성 실패: DAILY_LIMIT_EXCEEDED"
+      //   변경: j.message 우선 → "오늘의 무료 컨설팅 보고서 한도(0회)를 모두 사용했어요" 노출.
+      const err = new Error(j.message || j.error || `HTTP ${r.status}`);
+      err.code = j.error || null;
+      err.status = r.status;
+      err.canBoostByLogin = !!j.canBoostByLogin;
+      err.bonusOnLogin = j.bonusOnLogin || 0;
+      err.plan = j.plan || null;
+      throw err;
     }
     const data = await r.json();
     // PDF 출력용 입력 정보 저장 (보고서 응답에는 input 없음 — frontend 가 보유)
@@ -2578,8 +2587,25 @@ async function generateReport() {
     _renderReport(data);
   } catch (e) {
     // Day 1-② REPORT_GENERATE 실패 event (이탈 원인 분석용)
-    try { window.va && window.va('event', { name: 'report_generate_fail', data: { error: String(e.message || '').slice(0, 60) } }); } catch(_){}
-    result.innerHTML = `<div style="padding:30px;text-align:center;color:var(--red);font-size:12px">보고서 생성 실패: ${_escHtml(e.message)}<br><span style="font-size:10px;color:var(--t3)">잠시 후 다시 시도해주세요</span></div>`;
+    try { window.va && window.va('event', { name: 'report_generate_fail', data: { error: String(e.code || e.message || '').slice(0, 60) } }); } catch(_){}
+    // MOB-4 (2026-05-03): 한도 초과 시 비로그인 → 로그인 CTA, 로그인 free → 안내, AbortError → 타임아웃 메시지
+    let titleMsg = e.message || '보고서를 생성하지 못했어요.';
+    let extraHtml = '';
+    if (e.name === 'AbortError' || /aborted|timeout/i.test(String(e.message))) {
+      titleMsg = '응답 시간이 너무 길어 중단했어요 (3분).';
+      extraHtml = `<div style="font-size:11px;color:var(--t2);margin-top:8px">단지 데이터·AI 처리 둘 다 부하가 큰 시간일 수 있어요. 잠시 후 다시 시도해주세요.</div>`;
+    } else if (e.code === 'DAILY_LIMIT_EXCEEDED') {
+      if (e.canBoostByLogin) {
+        extraHtml = `<button onclick="openLogin&&openLogin()" style="margin-top:14px;padding:9px 18px;background:var(--acc);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🔓 로그인하고 +${e.bonusOnLogin || 1}회 추가로 받기</button>`;
+      } else {
+        extraHtml = `<div style="font-size:11px;color:var(--t2);margin-top:8px">매일 자정에 한도가 리셋돼요. ${e.plan === 'free' ? 'Pro 플랜 출시 시 무제한으로 이용 가능합니다.' : ''}</div>`;
+      }
+    } else if (e.status === 503) {
+      extraHtml = `<div style="font-size:11px;color:var(--t2);margin-top:8px">AI 서비스가 일시 점검 중일 수 있어요. 단지 검색·LTV 계산은 정상 이용 가능합니다.</div>`;
+    } else {
+      extraHtml = `<div style="font-size:11px;color:var(--t3);margin-top:8px">잠시 후 다시 시도해주세요.</div>`;
+    }
+    result.innerHTML = `<div style="padding:30px;text-align:center;color:var(--red);font-size:13px;line-height:1.6">📊 ${_escHtml(titleMsg)}${extraHtml}</div>`;
   } finally {
     btn.disabled = false;
     sp.style.display = 'none';
@@ -3405,7 +3431,14 @@ async function doSearch(){
       _logSearch('recommend', body.region || '', (data.recommendations||[]).length);
     }
   }catch(e){
-    toast('일시적인 오류가 발생했어요. 잠시 후 다시 시도해주세요.');
+    // MOB-3 (2026-05-03): 단지 검색 catch — 네트워크 vs 타임아웃 vs 일반 에러 구분
+    if (e?.name === 'AbortError') {
+      toast('🔍 검색 응답이 너무 길어요. 잠시 후 다시 시도해주세요.');
+    } else if (/Failed to fetch|NetworkError|Load failed/i.test(String(e?.message))) {
+      toast('🌐 인터넷 연결을 확인해주세요.');
+    } else {
+      toast('🔍 검색 일시 오류 — 잠시 후 다시 시도해주세요.');
+    }
   }
 
   if(success){
@@ -6130,7 +6163,8 @@ async function sM(){
       // P1 (Phase 2 8-2): 비로그인 IP 한도 도달 시 → 모달 대신 inline 가입 유도 안내
       const reason = j.code === 'budget_exceeded' ? 'monthly' : 'daily';
       const resetAt = j.budget?.resetAt || null;
-      let aiMsg = j.error || j.message || '무료 플랜 한도에 도달했어요.';
+      // MOB-4 (2026-05-03): j.message (사용자 친화) 우선 — j.error 는 보통 코드 (DAILY_LIMIT_EXCEEDED 등)
+      let aiMsg = j.message || j.error || '무료 플랜 한도에 도달했어요.';
       if (j.canBoostByLogin) {
         // 비로그인 사용자 → 가입 유도 (Pro 강요 X)
         aiMsg += `\n\n🔓 로그인만 해도 +${j.bonusOnLogin}회 추가로 받을 수 있어요. (이메일 1회만 인증)`;
@@ -6141,7 +6175,7 @@ async function sM(){
       } else {
         // 로그인 사용자 또는 Pro 미설정: 기존 모달
         addMsg('ai', aiMsg + '\n\n💎 Pro 플랜이면 무제한으로 이용할 수 있어요.');
-        openQuotaModal(reason, j.error || j.message, resetAt);
+        openQuotaModal(reason, j.message || j.error, resetAt);
       }
       replied=true;
     } else if(r.status===503){
@@ -6163,7 +6197,11 @@ async function sM(){
     }
   }catch{}
 
-  if(!replied){rmTyp();addMsg('ai','일시적인 오류가 발생했어요. 잠시 후 다시 시도해주세요.');}
+  // MOB-3 (2026-05-03): generic catch fallback — 더 구체적 안내 + 대체 경로 제시
+  if(!replied){
+    rmTyp();
+    addMsg('ai','💬 AI 응답을 받지 못했어요.\n\n네트워크 또는 서버 일시 오류일 수 있어요. 잠시 후 다시 시도해주세요.\n\n그동안 좌측 사이드바의 "내 상황 입력 → 단지 검색" 또는 상단 "🧮 대출계산"·"📊 보고서" 는 정상 이용 가능합니다.');
+  }
   chatLd=false;
 }
 
