@@ -1494,11 +1494,11 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 <!-- 모바일 하단 탭 -->
 <nav class="bnav" id="bnav">
   <div class="bnav-inner">
-    <button class="bnav-item on" onclick="sv('map',this)" data-view="map"><div class="bnav-icon">🗺</div>지도</button>
-    <button class="bnav-item" onclick="sv('list',this)" data-view="list"><div class="bnav-icon">📋</div>목록</button>
+    <button class="bnav-item on" onclick="sv('map',this)" data-view="map" aria-label="지도 보기"><div class="bnav-icon">🗺</div>지도</button>
+    <button class="bnav-item" onclick="sv('list',this)" data-view="list" aria-label="단지 목록"><div class="bnav-icon">📋</div>목록</button>
     <button class="bnav-item bnav-feature" onclick="sv('report',this)" data-view="report" title="회원님 가구 맞춤 1page 컨설팅 보고서" aria-label="맞춤 보고서"><div class="bnav-icon">📊</div>보고서 <span class="bnav-tag">NEW</span></button>
-    <button class="bnav-item" onclick="sv('calc',this)" data-view="calc"><div class="bnav-icon">🧮</div>대출</button>
-    <button class="bnav-item" onclick="sv('chat',this)" data-view="chat"><div class="bnav-icon">💬</div>AI상담</button>
+    <button class="bnav-item" onclick="sv('calc',this)" data-view="calc" aria-label="대출 한도 계산"><div class="bnav-icon">🧮</div>대출</button>
+    <button class="bnav-item" onclick="sv('chat',this)" data-view="chat" aria-label="AI 상담"><div class="bnav-icon">💬</div>AI상담</button>
   </div>
 </nav>
 
@@ -1961,7 +1961,7 @@ async function loadMySearchHistory(){
     }).join('');
   } catch(e){
     console.warn('[search history] 로드 실패', e);
-    box.innerHTML = '<span style="color:var(--t3)">이력 로드 실패 — 잠시 후 다시 시도해주세요.</span>';
+    box.innerHTML = '<span style="color:var(--t3)">이력 로드 실패 — 잠시 후 다시 시도해주세요</span>';
   }
 }
 
@@ -1988,7 +1988,7 @@ async function clearMySearchHistory(){
     loadMySearchHistory();
   } catch(e){
     console.warn('[search history] 삭제 실패', e);
-    toast('삭제 실패 — 잠시 후 다시 시도해주세요.');
+    toast('삭제 실패 — 잠시 후 다시 시도해주세요');
   }
 }
 function closeUserMenu(){ document.getElementById('UM').classList.remove('open'); }
@@ -3125,7 +3125,7 @@ async function loadSubs(){
     box.innerHTML = head + cards;
     box.dataset.loaded = '1';
   }catch(e){
-    box.innerHTML = `<div style="padding:24px;text-align:center;color:var(--t3)">청약 일정 로딩 실패. 잠시 후 다시 시도해주세요.</div>`;
+    box.innerHTML = `<div style="padding:24px;text-align:center;color:var(--t3)">청약 일정 로딩 실패 — 잠시 후 다시 시도해주세요</div>`;
   }
 }
 
@@ -5828,6 +5828,15 @@ document.addEventListener('keydown', (e) => {
     }
   }
 });
+// MOB-AUDIT-2026-05-03: backdrop 영역 클릭 시 모달 닫기 — 모바일 사용자 한 번에 닫기 편의
+//   .smbg 자체 클릭 (= backdrop) 만 잡고 .smbox 내부 클릭은 무시 (event.target 으로 분기)
+document.addEventListener('click', (e) => {
+  const t = e.target;
+  if (!t || !t.classList) return;
+  if (t.classList.contains('smbg') && t.classList.contains('open')) {
+    t.classList.remove('open');
+  }
+});
 // 부팅 시 + DOM 변경 시 (chip 동적 추가) 재실행
 window.addEventListener('DOMContentLoaded', () => setTimeout(_enhanceA11y, 100));
 // MutationObserver — chip 동적 추가 감지 (검색 결과·세부구·플랜 목록 등)
@@ -5867,9 +5876,14 @@ document.addEventListener('click', (e) => {
 // ── 인기 단지 마커 prefill (P0 Phase 2 3-2) ───────────────
 // 첫 진입 시 빈 지도 → "왜 정보 없지?" 이탈 트리거 차단.
 // /api/search/popular 에서 최근 60일 거래량 top 단지 가져와 지도 마커 표시.
+// MOB-AUDIT-2026-05-03: fail 후 즉시 retry 가능 → 네트워크 깜박임 시 fetch 폭주 risk
+//   → 5분 backoff 추가 (마지막 시도 timestamp 검증)
 let _popularMarkersLoaded = false;
+let _popularMarkersFailedAt = 0;
 async function loadPopularMarkers() {
   if (_popularMarkersLoaded) return;
+  // 마지막 fail 후 5분 미경과면 skip
+  if (_popularMarkersFailedAt && (Date.now() - _popularMarkersFailedAt < 5 * 60 * 1000)) return;
   _popularMarkersLoaded = true;
   try {
     const r = await fetch(`${CFG.api}/search/popular?limit=12`, { signal: AbortSignal.timeout(8000) });
@@ -5904,7 +5918,10 @@ async function loadPopularMarkers() {
         window._popMarkers.push(m);
       } catch(_) {}
     });
-  } catch(_) { _popularMarkersLoaded = false; /* 다음 진입 시 재시도 */ }
+  } catch(_) {
+    _popularMarkersLoaded = false;
+    _popularMarkersFailedAt = Date.now(); /* 5분 backoff */
+  }
 }
 
 // ── 헤더 단지·동명 검색 (P0 Phase 2 시나리오 A) ───────────
@@ -5951,7 +5968,7 @@ async function onHeaderSearchInput(q) {
         </div>`;
       } else {
         drop.innerHTML = results.map((r,i) => `
-          <div class="hsearch-item" data-idx="${i}" onclick='goSearchResult(${JSON.stringify(r).replace(/'/g,"&#39;")})' style="padding:7px 11px;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:12px;line-height:1.4" onmouseover="this.style.background='#F4F8FF'" onmouseout="this.style.background='#fff'">
+          <div class="hsearch-item" data-idx="${i}" role="option" tabindex="0" aria-label="${_escHtml(r.aptName)} ${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')}" onclick='goSearchResult(${JSON.stringify(r).replace(/'/g,"&#39;")})' style="padding:7px 11px;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:12px;line-height:1.4" onmouseover="this.style.background='#F4F8FF'" onmouseout="this.style.background='#fff'">
             <div style="font-weight:700;color:var(--t1)">${_escHtml(r.aptName)}</div>
             <div style="font-size:10.5px;color:var(--t3);margin-top:2px">${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')} · ${r.buildYear||'?'}년 · ${(r.recentDealDate||'').slice(0,10)}</div>
           </div>`).join('');
