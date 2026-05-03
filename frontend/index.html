@@ -1076,7 +1076,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
   <div class="cmsgs" id="cMsgs">
     <div class="msg ai"><div class="ava ai">AI</div><div>
-      <div class="bbl">안녕하세요! 내집로그 AI입니다 👋<br><br><b>2025.10.15 규제</b> 기준으로 부동산 데이터를 정리해드려요.<br><br>💡 <b>아래 6개 버튼</b>으로 빠르게 시작하거나 직접 입력하세요:<br><span style="font-size:10.5px;color:var(--t2)">대출계산 / 갈아타기 / 재건축 / 규제요약 / 특약 / RR전략</span><br><br><span style="font-size:10px;color:var(--t3)">※ 매수·매도 추천이 아닌 정보 정리 도구</span></div>
+      <div class="bbl">안녕하세요 👋 부동산 정보를 정리해드려요.<br><br>↓ <b>빠른 시작</b> 또는 직접 질문<br><span style="font-size:10px;color:var(--t3)">※ 매수·매도 추천 X · 정보 정리 도구</span></div>
       <div class="mt" id="it"></div>
     </div></div>
   </div>
@@ -1090,7 +1090,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   </div>
   <div id="cErr" class="cerr">⚠ 서버 오프라인 — 직접 AI 모드로 동작 중</div>
   <div class="cir">
-    <textarea class="ci" id="cIn" placeholder="직접 입력하거나 위 버튼 클릭 (Shift+Enter 줄바꿈)" rows="1" onkeydown="hk(event)" oninput="ah(this)" aria-label="AI 도우미에게 질문 입력"></textarea>
+    <textarea class="ci" id="cIn" placeholder="질문 입력 (Shift+Enter 줄바꿈)" rows="1" onkeydown="hk(event)" oninput="ah(this)" aria-label="AI 도우미에게 질문 입력"></textarea>
     <button class="cs" onclick="sM()" aria-label="질문 전송" title="전송"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 21L23 12 2 3v7l15 2-15 2z"/></svg></button>
   </div>
 </div>
@@ -1519,12 +1519,13 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 </nav>
 
 <!-- 정보 제공 안내 -->
+<!-- STAB-AUDIT #53 (2026-05-03): 600자+ → 1줄 요약 + "전문 보기" 모달 — 모바일 가독성 ↑ -->
 <footer class="legal-footer">
-  ⚠ <strong>본 서비스는 매수·매도를 권유하거나 추천하지 않습니다.</strong> 모든 가격 분석·시그널·점수는 과거 실거래 데이터의 통계적 정리이며, <strong>미래 가격을 예측하거나 보장하지 않습니다.</strong> 부동산 가격은 하락할 수 있으며, 본 서비스를 참고한 의사결정의 결과에 대해 운영자는 「약관의 규제에 관한 법률」에 따라 운영자의 고의 또는 중대한 과실이 없는 한 책임을 지지 않습니다.<br>
-  본 서비스는 부동산 공공 데이터를 조회·가공하는 <strong>정보 제공 도구</strong>이며, 「자본시장법」상 투자자문업·「공인중개사법」상 중개업에 해당하지 않습니다. 대출 한도는 반드시 금융기관에서, 특약·계약은 공인중개사·법무사 검토를, 세금은 세무사 상담을 받으세요. 규제·세제는 수시 변경되며 최신 정보는 금융위원회·국토교통부·국세청에서 확인하세요.
-  <a href="/terms.html" style="color:var(--acc);text-decoration:underline">이용약관</a>
-  · <a href="/privacy.html" style="color:var(--acc);text-decoration:underline">개인정보 처리방침</a>
-  · <a href="/refund.html" style="color:var(--acc);text-decoration:underline">환불 정책</a>
+  ⚠ <strong>매수·매도 추천 X · 미래 가격 예측 X.</strong> 의사결정 책임은 본인.
+  <a href="javascript:openTerms()" style="color:var(--acc);text-decoration:underline;cursor:pointer">전문 보기</a>
+  · <a href="/terms.html" style="color:var(--acc);text-decoration:underline">이용약관</a>
+  · <a href="/privacy.html" style="color:var(--acc);text-decoration:underline">개인정보</a>
+  · <a href="/refund.html" style="color:var(--acc);text-decoration:underline">환불</a>
 </footer>
 
 <!-- 약관 모달 -->
@@ -1899,7 +1900,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   renderClauseHistory();
   loadLeaflet(); // 카카오 정식 키 미연동 환경 대비, 기본은 OSM. 좌표는 백엔드 카카오 geocode로 보정.
   // P0 (Phase 2 3-2): 첫 진입 시 인기 단지 마커 prefill — 빈 지도 첫인상 차단
-  setTimeout(() => { if (typeof loadPopularMarkers === 'function') loadPopularMarkers(); }, 1500);
+  // STAB-AUDIT #80 (2026-05-03): 1500 → 100ms — 첫 사용자 빈 지도 인상 1.5초 → 즉시
+  setTimeout(() => { if (typeof loadPopularMarkers === 'function') loadPopularMarkers(); }, 100);
 
   // URL 쿼리로 검색 조건 복원 (공유 링크 · 뒤로가기)
   const restored=restoreSearchFromUrl();
