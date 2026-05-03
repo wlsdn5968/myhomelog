@@ -179,11 +179,19 @@ window.MHL.auth = window.MHL.auth || {
         };
         // 카카오 OAuth — 한국 부동산 사용자 90%+ 카카오 사용. retention 핵심.
         // Supabase Dashboard → Authentication → Providers → Kakao 활성화 + REST API 키 등록 필요.
+        // MOB-1 fix (2026-05-03): scope 명시 — Supabase default 의 account_email 제거.
+        //   배경: 카카오 정책 (2024~) 일반 앱 (사업자등록 X) 은 이메일 동의 항목 활성화 불가.
+        //         Supabase default 가 account_email 요청 → 카카오 콘솔에 미등록 → KOE205 발생.
+        //   해결: scope 명시 'profile_nickname profile_image' 만 — 콘솔에 등록된 항목만 요청.
+        //   영향: auth.users.email NULL — 베타 단계 영향 0. 비즈 앱 전환 후 account_email 추가 가능.
         A.signInWithKakao = async function(){
           var redirectTo = window.location.origin + window.location.pathname;
           return sb.auth.signInWithOAuth({
             provider: 'kakao',
-            options: { redirectTo },
+            options: {
+              redirectTo,
+              scopes: 'profile_nickname profile_image',
+            },
           });
         };
         A.signInWithEmail = async function(email){
