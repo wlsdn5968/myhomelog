@@ -2033,6 +2033,13 @@ async function loginGoogle(){
   try { await A.signInWithGoogle(); } catch(e){ document.getElementById('lmStatus').textContent='❌ ' + (e.message||e); }
 }
 async function loginKakao(){
+  // MOB-FIX-2026-05-03: 카카오 OAuth 임시 비활성 (사업자등록 후 복원 — .local-notes/MOB_KAKAO_DECISION_20260503.md)
+  // 브라우저 캐시된 옛 버전이 #lmKakao 클릭해도 KOE205 안 보이도록 친화 alert 후 return
+  const _st=document.getElementById('lmStatus');
+  if(_st)_st.textContent='⏰ 카카오 로그인은 현재 점검 중이에요. Google 또는 이메일을 사용해주세요.';
+  alert('카카오 로그인은 현재 점검 중이에요.\n\nGoogle 로그인 또는 이메일(매직링크)을 사용해주세요.\n\n(사업자등록 완료 후 재활성화 예정)');
+  return;
+  // 아래는 사업자등록 후 활성화 시 위 5줄 제거하면 정상 동작
   if(!_checkConsent()) return;
   const A = window.MHL?.auth;
   if(!A?.ready){ document.getElementById('lmStatus').textContent='⚠ 인증 SDK 로드 중...'; return; }
@@ -3429,7 +3436,11 @@ async function doSearch(){
   try{
     setTimeout(()=>{if(btn.classList.contains('ld'))searchStep('국토부 실거래가 조회 중...', 2);}, 600);
     setTimeout(()=>{if(btn.classList.contains('ld'))searchStep('AI 분석·점수 계산 중...', 3);}, 3500);
-    const res=await fetch(`${CFG.api}/properties/recommend`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
+    // MOB-FIX-2026-05-03: 로그인 사용자 토큰 주입 → backend 가 user 한도(10/일) 적용 (이전: anonymous 5/일 잘못 적용)
+    const _hdr={'Content-Type':'application/json'};
+    const _tok=window.MHL?.auth?.session?.access_token;
+    if(_tok)_hdr['Authorization']='Bearer '+_tok;
+    const res=await fetch(`${CFG.api}/properties/recommend`,{method:'POST',headers:_hdr,body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
     if(res.status===429){
       const j=await res.json().catch(()=>({}));
       toast(j.message || '오늘의 무료 검색을 모두 사용했어요. 내일 다시 이용해주세요.');
@@ -4017,7 +4028,11 @@ async function loadAmenities(p){
       (async()=>{
         const wp=document.getElementById('wp')?.value?.trim();
         if(!wp)return null;
-        return fetch(`${CFG.api}/properties/transit`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({aptLat:g.lat,aptLng:g.lng,workplace:wp})}).then(r=>r.json()).catch(()=>null);
+        // MOB-FIX-2026-05-03: 로그인 토큰 주입 (한도 user 분기 적용)
+        const _h={'Content-Type':'application/json'};
+        const _t=window.MHL?.auth?.session?.access_token;
+        if(_t)_h['Authorization']='Bearer '+_t;
+        return fetch(`${CFG.api}/properties/transit`,{method:'POST',headers:_h,body:JSON.stringify({aptLat:g.lat,aptLng:g.lng,workplace:wp})}).then(r=>r.json()).catch(()=>null);
       })()
     ]);
     if(!near||!near.available){box.style.display='none';return;}
