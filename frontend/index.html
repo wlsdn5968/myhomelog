@@ -2433,7 +2433,7 @@ const OB_STEPS=[
         <li>LTV·DSR·세금까지 한눈에</li>
         <li>2025.10.15 규제 기준 반영</li>
       </ul>
-      <div style="margin-top:14px;padding:10px;background:var(--bg2);border-radius:8px;font-size:11px;color:var(--t3)">⏱ 30초만 알려주시면 맞춤 단지 5곳을 보여드려요</div>
+      <div style="margin-top:14px;padding:10px;background:var(--bg2);border-radius:8px;font-size:11px;color:var(--t3)">⏱ 1분만 알려주시면 맞춤 단지 5곳을 보여드려요 (4단계, 건너뛰기 가능)</div>
     </div>`,
     next:'시작하기 →'
   },
@@ -2503,10 +2503,18 @@ const OB_STEPS=[
   },
 ];
 
-function startOnboarding(){_obStep=0;document.getElementById('OB').classList.add('open');renderOnboarding();}
+function startOnboarding(){
+  _obStep=0;
+  document.getElementById('OB').classList.add('open');
+  renderOnboarding();
+  // Phase 11 (2026-05-03): funnel — onboarding 시작 추적
+  try { window.va && window.va('event', { name: 'onboarding_start' }); } catch(_){}
+}
 function skipOnboarding(){
   localStorage.setItem('mhl_onboarded','1');
   document.getElementById('OB').classList.remove('open');
+  // Phase 11: skip funnel — 어느 단계에서 이탈했는지 측정
+  try { window.va && window.va('event', { name: 'onboarding_skip', data: { step: _obStep } }); } catch(_){}
 }
 function renderOnboarding(){
   const s=OB_STEPS[_obStep];
@@ -2549,6 +2557,8 @@ function nextOnboarding(){
   if(_obStep>=OB_STEPS.length){
     localStorage.setItem('mhl_onboarded','1');
     document.getElementById('OB').classList.remove('open');
+    // Phase 11 (2026-05-03): funnel — onboarding 완주 (가장 critical conversion)
+    try { window.va && window.va('event', { name: 'onboarding_complete' }); } catch(_){}
     setTimeout(()=>{
       const btn=document.getElementById('srchBtn');
       if(typeof doSearch==='function')doSearch();
@@ -2556,6 +2566,8 @@ function nextOnboarding(){
     },300);
     return;
   }
+  // Phase 11: 단계 진행 funnel (어느 단계가 마찰 가장 큰지)
+  try { window.va && window.va('event', { name: 'onboarding_step', data: { step: _obStep } }); } catch(_){}
   renderOnboarding();
 }
 
