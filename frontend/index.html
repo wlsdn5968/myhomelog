@@ -6566,7 +6566,9 @@ function newChatSession(skipConfirm){
     <div class="bbl">💬 새 대화를 시작합니다. 무엇이든 물어보세요!</div>
     <div class="mt">${gt()}</div>
   </div></div>`;
-  toast('✨ 새 대화 시작');
+  // STAB-AUDIT #66 (2026-05-03): "이전 대화는 이력에 저장됨 (🕘 클릭)" 안내 — 사용자 컨텍스트 잃은 인지 부족 fix
+  const _hasHist = window.MHL?.auth?.user;
+  toast(_hasHist ? '✨ 새 대화 (이전은 🕘 이력에 저장됨)' : '✨ 새 대화 (로그인하면 이력 저장)');
 }
 
 // 채팅 이력 모달 바깥 클릭 닫기
@@ -6639,12 +6641,17 @@ async function sendAIFeedback(btn, rating, fid) {
   if (thx) thx.style.display = 'inline';
   try {
     // STAB-A P1#16 (2026-05-03): timeout 5초 — fire-and-forget hang 누적 차단
-    await fetch(`${CFG.api}/feedback/ai`, {
+    const r = await fetch(`${CFG.api}/feedback/ai`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ rating, messageText: userMsg, replyPreview, source: 'chat' }),
       signal: AbortSignal.timeout(5000),
     });
-  } catch (_) {}
+    // STAB-AUDIT #74 (2026-05-03): 실패 시 사용자 인지 — 피드백 누락 안내
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+  } catch (_) {
+    // 사용자에게 silent — UX 흐름 끊지 않되 thanks 메시지를 fail 안내로 교체
+    if (thx) thx.textContent = '⚠ 피드백 전송 실패 — 잠시 후 다시 시도';
+  }
 }
 function showTyp(){const c=document.getElementById('cMsgs'),d=document.createElement('div');d.className='msg ai';d.id='ty';d.innerHTML=`<div class="ava ai">AI</div><div><div class="typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div></div>`;c.appendChild(d);c.scrollTop=c.scrollHeight;}
 function rmTyp(){document.getElementById('ty')?.remove();}
