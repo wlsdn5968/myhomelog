@@ -181,77 +181,13 @@ app.use('/api/cron', cronRouter);
 // 공유 딥링크 — 크롤러용 OG 메타 치환 (HTML 서빙)
 app.use('/share', shareRouter);
 
-// ── Phase 8+ (2026-04-26): KAPT API 키 진단 — admin user 만 접근 ──
-// APT_INFO_API_KEY 와 MOLIT_API_KEY 두 키로 각각 KAPT 호출 → 어느 게 활용신청 됐는지 확인
-app.get('/api/admin/kapt-diag', require('./middleware/auth').requireAuth, async (req, res) => {
-  const { getActivePlan } = require('./services/planService');
-  const plan = await getActivePlan(req.user.id);
-  if (plan !== 'admin') return res.status(403).json({ error: 'admin only' });
-
-  const axios = require('axios');
-  const APT_INFO_KEY = process.env.APT_INFO_API_KEY;
-  const MOLIT_KEY = process.env.MOLIT_API_KEY;
-  const TEST_KAPT = 'A10020255';
-  // Phase 8+ (2026-04-26): V4 endpoint 가 정식. V3 도 비교 호출
-  const URLS = [
-    { ver: 'V4', url: 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusBassInfoV4' },
-    { ver: 'V3', url: 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3' },
-  ];
-
-  async function probe(label, key) {
-    if (!key) return { label, exists: false };
-    const out = { label, exists: true, keyLen: key.length, keyPrefix: key.slice(0, 6), keyHasPercent: key.includes('%'), versions: {} };
-    for (const { ver, url } of URLS) {
-      try {
-        const r = await axios.get(url, {
-          params: { serviceKey: key, kaptCode: TEST_KAPT, _type: 'json' },
-          timeout: 8000,
-          headers: { Accept: 'application/json' },
-        });
-        const v = { httpStatus: r.status, dataType: typeof r.data };
-        if (typeof r.data === 'string') {
-          v.bodyPreview = r.data.slice(0, 200);
-        } else {
-          v.resultCode = r.data?.response?.header?.resultCode;
-          v.resultMsg = r.data?.response?.header?.resultMsg;
-          v.hasItem = !!(r.data?.response?.body?.item);
-          // V4 응답 구조 확인용 — body 의 키들 노출
-          if (r.data?.response?.body) v.bodyKeys = Object.keys(r.data.response.body).slice(0, 8);
-        }
-        out.versions[ver] = v;
-      } catch (e) {
-        out.versions[ver] = {
-          error: e.response?.status ? `HTTP ${e.response.status}` : e.message,
-          errBody: typeof e.response?.data === 'string' ? e.response.data.slice(0, 200) : null,
-        };
-      }
-    }
-    return out;
-  }
-
-  const [aptInfoResult, molitResult] = await Promise.all([
-    probe('APT_INFO_API_KEY', APT_INFO_KEY),
-    probe('MOLIT_API_KEY', MOLIT_KEY),
-  ]);
-
-  const sameKey = APT_INFO_KEY && MOLIT_KEY && APT_INFO_KEY === MOLIT_KEY;
-
-  res.json({
-    sameKey,
-    APT_INFO_API_KEY: aptInfoResult,
-    MOLIT_API_KEY: molitResult,
-    diagnosis: (() => {
-      const a = aptInfoResult, m = molitResult;
-      if (!a.exists && !m.exists) return '두 키 모두 미설정';
-      const isOk = (v) => v && (v.resultCode === '000' || v.resultCode === '00') && v.hasItem;
-      const aV4 = isOk(a.versions?.V4), aV3 = isOk(a.versions?.V3);
-      const mV4 = isOk(m.versions?.V4), mV3 = isOk(m.versions?.V3);
-      if (aV4 || mV4) return 'V4 endpoint 동작 — aptFacilityService 코드가 V4 우선 시도하므로 정상';
-      if (aV3 || mV3) return 'V3 만 동작 (V4 활용신청 누락 가능). 코드는 V4→V3 fallback 이라 동작은 함';
-      return '두 endpoint 모두 실패 — 키 또는 활용신청 문제. errBody 확인 필요';
-    })(),
-  });
-});
+// STAB-3 (2026-05-03): /api/admin/kapt-diag endpoint 제거
+//   사유: KAPT API 키 진단용 임시 endpoint. 활용신청 확인 후 역할 종료.
+//        - 운영 단계에서 사용 빈도 0
+//        - 잠재 정보 leak (API 키 prefix·길이 노출)
+//        - admin only 라도 외부 노출면 production 에 둘 이유 없음
+//        - 필요 시 git history 에서 복원 가능 (server.js commit 7개 이전)
+//   영향: 운영자 본인 외 사용자 0건 (admin only 였음).
 
 // ── API 활성화 진단 (운영자 전용 — x-health-key 헤더 필수) ────
 // Phase 1.8: 과거 공개 엔드포인트는 외부 API 쿼터(MOLIT 1만/일, Kakao 30만/일) 소진 공격에 노출 →

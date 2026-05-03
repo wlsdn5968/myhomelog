@@ -58,6 +58,16 @@ function nameMatchScore(a, b) {
   return best;
 }
 
+/** STAB-2 (2026-05-03 / RISK-6 fix C): 정규화 후 길이 — wrong match 차단 보조 */
+function normalizedLen(s) {
+  return String(s || '')
+    .replace(/\([^)]*\)/g, '')
+    .replace(/\s+/g, '')
+    .replace(/아파트$/, '')
+    .replace(/^\d+/, '')
+    .length;
+}
+
 /** apt_name + sigungu + umd_nm 으로 apt_master 매칭 → kapt_code */
 async function findMaster(aptName, sigungu, umdNm) {
   const a = admin();
@@ -100,11 +110,31 @@ async function findMaster(aptName, sigungu, umdNm) {
     .eq('sigungu', sigungu).eq('umd_nm', umdNm)
     .limit(80);
   let best = null, bestScore = 0;
+  // STAB-2 (2026-05-03 / RISK-6 fix C): score >= 3 만으로는 4글자 공통 토큰 false-positive 잔존.
+  //   사례: '마포한강제이스카이' (9) ↔ master '마포한강 아이파크' (정규화 8) score=4 통과 → wrong match.
+  //   해결: score / min(len) >= 0.6 비율 검증 추가. 짧은 단지명일수록 비율 자연 높아 OK.
+  //   - '공덕래미안자이' (8) ↔ '공덕래미안자이아파트' (정규화 8): score=8, ratio=1.0 → 통과 ✅
+  //   - '마포한강제이스카이' (9) ↔ '마포한강아이파크' (정규화 8): score=4, ratio=0.5 → 차단 ✅
+  //   - '휴먼빌' (3) ↔ '망원휴먼빌아파트' (정규화 6): score=3, ratio=1.0 → 통과 ✅ (정상 매칭)
   for (const m of (candidates || [])) {
     const score = nameMatchScore(aptName, m.apt_name);
-    if (score >= 3 && score > bestScore) { // RISK-6: 2 → 3 상향
+    if (score < 3) continue; // 기존 RISK-6 fix B
+    const minLen = Math.min(normalizedLen(aptName), normalizedLen(m.apt_name));
+    const ratio = minLen > 0 ? score / minLen : 0;
+    if (ratio < 0.6) continue; // STAB-2 fix C — 비율 검증
+    if (score > bestScore) {
       bestScore = score;
       best = m;
+    }
+  }
+  // 매칭 신뢰도 낮으면 운영자 모니터링용 warn (호출량 적은 경로라 부담 낮음)
+  if (best) {
+    const aLen = normalizedLen(aptName);
+    const bLen = normalizedLen(best.apt_name);
+    const r = bestScore / Math.min(aLen, bLen);
+    if (r < 0.75) {
+      logger.warn({ aptName, master: best.apt_name, score: bestScore, ratio: r.toFixed(2) },
+                  'KAPT 매칭 신뢰도 낮음 (RISK-6 모니터)');
     }
   }
   return best;

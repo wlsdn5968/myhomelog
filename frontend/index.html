@@ -216,6 +216,9 @@ window.MHL.auth = window.MHL.auth || {
   --grn:#177038;--grnL:#E5F3EB;
   --red:#A82525;--redL:#FAEBEB;
   --amb:#9A5510;--ambL:#FAF0E2;
+  /* STAB-A P0#2 (2026-05-03): 8+ 위치에서 사용되던 미정의 변수 추가 — 회색 배경 transparent 차단 */
+  --bg2:#EEF1F6;            /* quota pill·계정메뉴·동의박스 보조 배경 */
+  --danger:#A82525;          /* 위험 alert (= --red 와 동일 톤, 별칭) */
   --r:12px;--rs:8px;
   --sh:0 1px 4px rgba(0,0,0,.08);
   --sh2:0 4px 24px rgba(0,0,0,.14);
@@ -1556,7 +1559,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         </ul>
 
         <div style="margin-top:14px;padding:8px;background:var(--s1);border-radius:6px;font-size:10px;color:var(--t3);text-align:center">
-          최종 갱신: 2026.04 · 문의: privacy@myhomelog.app
+          최종 갱신: 2026.04 · 문의: wlsdn5968@gmail.com
         </div>
       </div>
       <button class="sm-save" onclick="closeTerms()">확인</button>
@@ -1837,7 +1840,9 @@ window.addEventListener('DOMContentLoaded',()=>{
       }
       setTimeout(function(){
         if (typeof toast === 'function') toast(msg);
-        var lm = document.getElementById('loginM');
+        // STAB-A P0#5 (2026-05-03): 잘못된 ID 'loginM' → 실제 'LM' (라인 1631 정의)
+        //   기존: OAuth 실패 후 "다시 시도" 모달 못 열림 → 사용자 막힘
+        var lm = document.getElementById('LM');
         if (lm) lm.style.display = 'flex';
         var st = document.getElementById('lmStatus');
         if (st) st.textContent = '❌ ' + msg;
@@ -3900,7 +3905,8 @@ async function loadFacility(p){
     const sigungu = p.sigungu || (p._raw?.sigungu) || '';
     const umdNm = p.umdNm || (p._raw?.umdNm) || '';
     const params = new URLSearchParams({ aptName: p.aptName||'', sigungu, umdNm });
-    const r = await fetch(`${CFG.api}/search/facility?${params}`).then(r=>r.json()).catch(()=>null);
+    // STAB-A P1#11 (2026-05-03): timeout 8초 — facilityBox 무한 로딩 차단
+    const r = await fetch(`${CFG.api}/search/facility?${params}`, { signal: AbortSignal.timeout(8000) }).then(r=>r.json()).catch(()=>null);
     if(!r) { fbox.style.display='none'; if(abox)abox.style.display='none'; return; }
 
     // facility 표시 (raw jsonb — AptInfo 응답 구조 다양해 안전하게 처리)
@@ -3940,10 +3946,11 @@ async function loadAmenities(p){
   const box=document.getElementById('amenityBox');if(!box)return;
   try{
     // 단지 좌표 조회
-    const g=await fetch(`${CFG.api}/geocode`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({aptName:p.aptName,area:p.area})}).then(r=>r.json()).catch(()=>null);
+    // STAB-A P1#12 (2026-05-03): timeout 8초 — 주변 편의시설/통근시간 무한 로딩 차단
+    const g=await fetch(`${CFG.api}/geocode`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({aptName:p.aptName,area:p.area}),signal:AbortSignal.timeout(8000)}).then(r=>r.json()).catch(()=>null);
     if(!g||!g.lat){box.style.display='none';return;}
     const [near,tran]=await Promise.all([
-      fetch(`${CFG.api}/properties/nearby?lat=${g.lat}&lng=${g.lng}`).then(r=>r.json()).catch(()=>null),
+      fetch(`${CFG.api}/properties/nearby?lat=${g.lat}&lng=${g.lng}`, { signal: AbortSignal.timeout(8000) }).then(r=>r.json()).catch(()=>null),
       (async()=>{
         const wp=document.getElementById('wp')?.value?.trim();
         if(!wp)return null;
@@ -4063,7 +4070,8 @@ async function resolveLawdCdFromArea(area){
   // 백엔드의 /api/transactions/codes 에서 매핑 로드
   try{
     if(!window._lawdMap){
-      const r=await fetch(`${CFG.api}/transactions/codes`);
+      // STAB-A P1#13 (2026-05-03): timeout 5초 — 공유 링크 진입 시 stub 영구 상태 차단
+      const r=await fetch(`${CFG.api}/transactions/codes`, { signal: AbortSignal.timeout(5000) });
       if(r.ok){const j=await r.json();window._lawdMap=j.codes||{};}
     }
     const map=window._lawdMap||{};
@@ -4773,6 +4781,7 @@ async function _syncFieldNote(aptName, saved) {
   const A = window.MHL?.auth;
   if (!A?.user || !A?.session?.access_token) return; // 비로그인은 localStorage 만
   try {
+    // STAB-A P1#14 (2026-05-03): timeout 8초 — fire-and-forget 이지만 hang 시 메모리 leak 차단
     await fetch(`${CFG.api}/field-notes/${encodeURIComponent(aptName)}`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + A.session.access_token },
@@ -4782,6 +4791,7 @@ async function _syncFieldNote(aptName, saved) {
         memo: saved.memo || '',
         visitDate: saved.visitDate || null,
       }),
+      signal: AbortSignal.timeout(8000),
     });
   } catch (_) {} // 실패해도 사용자 흐름 영향 없음
 }
@@ -4865,7 +4875,8 @@ async function loadClauseAndRisk(p){
   const key=`${p.aptName}:${p.avgPrice||p.price}`;
   if(_clauseRiskCache&&_clauseRiskCacheKey===key){renderClause(_clauseRiskCache);renderRisk(_clauseRiskCache);return _clauseRiskCache;}
   try{
-    const r=await fetch(`${CFG.api}/clause`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({aptName:p.aptName,area:p.area,price:p.avgPrice||p.price,ltv:p.ltv,houseStatus:gct('ch-h'),isFirstBuyer:gct('ch-f')==='예',buildYear:p.buildYear,score:p.score})});
+    // STAB-A P0#3 (2026-05-03): AbortSignal.timeout(35000) — backend 30초+ 응답 시 무한 로딩 차단
+    const r=await fetch(`${CFG.api}/clause`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({aptName:p.aptName,area:p.area,price:p.avgPrice||p.price,ltv:p.ltv,houseStatus:gct('ch-h'),isFirstBuyer:gct('ch-f')==='예',buildYear:p.buildYear,score:p.score}),signal:AbortSignal.timeout(35000)});
     if(!r.ok)throw new Error('fail');
     const d=await r.json();
     _clauseRiskCache=d;_clauseRiskCacheKey=key;
@@ -5685,7 +5696,9 @@ function _enhanceA11y() {
     }
   });
   // 주요 모달에 dialog 시맨틱
-  ['loginM', 'detailM', 'usMenu', 'mock-banner', 'quotaM'].forEach(id => {
+  // STAB-A P0#4 (2026-05-03): 잘못된 ID (loginM/detailM/usMenu/quotaM) → 실제 ID (LM/DM/UM/QM/SM)
+  //   기존: 모든 모달 role=dialog 부여 실패 → 스크린리더 모달 인식 불가 (정보통신접근성법 risk)
+  ['LM', 'DM', 'UM', 'SM', 'QM', 'mockBanner'].forEach(id => {
     const el = document.getElementById(id);
     if (el && !el.getAttribute('role')) {
       el.setAttribute('role', 'dialog');
@@ -5751,8 +5764,9 @@ async function loadPopularMarkers() {
     const j = await r.json();
     const popular = j.results || [];
     if (!popular.length) return;
-    // Leaflet 마커 생성 (initLeaflet 후 leafletMap 전역 사용)
-    if (typeof leafletMap === 'undefined' || !leafletMap) return;
+    // Leaflet 마커 생성 (initLeaflet 후 mapObj 전역 사용)
+    // STAB-A P0#1 (2026-05-03): leafletMap (미정의) → mapObj — 인기 단지 마커 prefill 첫 사용자 빈 지도 fix
+    if (typeof mapObj === 'undefined' || !mapObj) return;
     if (!window._popMarkers) window._popMarkers = [];
     popular.forEach(p => {
       try {
@@ -5773,7 +5787,7 @@ async function loadPopularMarkers() {
             <button onclick='goSearchResult(${JSON.stringify({aptName:p.aptName,sigungu:p.sigungu,umdNm:p.umdNm,lawdCd:p.lawdCd,buildYear:p.buildYear,recentDealDate:p.recentDealDate}).replace(/'/g,"&#39;")})' style="margin-top:6px;padding:5px 10px;background:#2A6DF4;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer">상세 보기 →</button>
           </div>
         `);
-        m.addTo(leafletMap);
+        m.addTo(mapObj);
         window._popMarkers.push(m);
       } catch(_) {}
     });
@@ -6394,9 +6408,11 @@ async function sendAIFeedback(btn, rating, fid) {
   const thx = wrap.querySelector('.ai-fb-thx');
   if (thx) thx.style.display = 'inline';
   try {
+    // STAB-A P1#16 (2026-05-03): timeout 5초 — fire-and-forget hang 누적 차단
     await fetch(`${CFG.api}/feedback/ai`, {
       method: 'POST', headers: {'Content-Type':'application/json'},
       body: JSON.stringify({ rating, messageText: userMsg, replyPreview, source: 'chat' }),
+      signal: AbortSignal.timeout(5000),
     });
   } catch (_) {}
 }
