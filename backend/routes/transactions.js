@@ -12,7 +12,11 @@ function handleMolitError(err, res) {
       guide: 'data.go.kr → "아파트매매 실거래가 상세자료" 검색 → 활용신청 (무료, 자동승인)',
     });
   }
-  return res.status(err.status || 500).json({ error: err.message });
+  // MOB-AUDIT-2026-05-03: production 에선 generic — 내부 에러 누출 차단
+  const isProd = process.env.NODE_ENV === 'production';
+  return res.status(err.status || 500).json({
+    error: isProd ? '실거래 데이터 조회 실패. 잠시 후 다시 시도해주세요.' : err.message,
+  });
 }
 
 // GET /api/transactions?lawdCd=11350&dealYm=202503

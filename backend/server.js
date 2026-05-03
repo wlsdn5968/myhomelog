@@ -139,8 +139,10 @@ const automatedDecisionRouter = require('./routes/automatedDecision');
 // 일일 무료 한도 (BYOK 제거에 따른 무료 체험 정책)
 const { dailyLimit, getUsage } = require('./middleware/dailyLimit');
 const { optionalAuth } = require('./middleware/auth');
-const DAILY_SEARCH_LIMIT = parseInt(process.env.DAILY_SEARCH_LIMIT || '5');
-const DAILY_CHAT_LIMIT = parseInt(process.env.DAILY_CHAT_LIMIT || '15');
+// MOB-AUDIT-2026-05-03: parseInt NaN 검증 — env 오타(DAILY_SEARCH_LIMITS 등) 시 NaN → 모든 사용자 차단 차단
+const _parseIntSafe = (v, def) => { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? n : def; };
+const DAILY_SEARCH_LIMIT = _parseIntSafe(process.env.DAILY_SEARCH_LIMIT, 5);
+const DAILY_CHAT_LIMIT = _parseIntSafe(process.env.DAILY_CHAT_LIMIT, 15);
 
 // 채팅 세션/메시지 저장 (Supabase — JWT 필수, RLS 적용) — /api/chat 보다 먼저 마운트
 app.use('/api/chat/sessions', dataLimiter, chatSessionsRouter);

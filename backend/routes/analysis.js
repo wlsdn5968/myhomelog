@@ -20,7 +20,12 @@ router.get('/', async (req, res) => {
     const result = await analyzeApt(lawdCd, aptName, parseFloat(price) || 0);
     res.json(result);
   } catch (err) {
-    res.status(err.status || 500).json({ error: err.message, code: err.code });
+    // MOB-AUDIT-2026-05-03: production 에선 generic 메시지 — 내부 에러 노출 차단
+    const isProd = process.env.NODE_ENV === 'production';
+    res.status(err.status || 500).json({
+      error: isProd ? '분석 중 오류가 발생했어요.' : err.message,
+      code: err.code,
+    });
   }
 });
 

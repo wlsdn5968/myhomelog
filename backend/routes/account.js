@@ -29,6 +29,8 @@ const { createClient } = require('@supabase/supabase-js');
 const { requireAuth } = require('../middleware/auth');
 const { writeAudit } = require('../middleware/auditLog');
 const logger = require('../logger');
+// MOB-AUDIT-2026-05-03: maskIp import 누락 — line 154 호출 시 ReferenceError → 회원 탈퇴 500 → P0
+const { maskIp } = require('../logger');
 
 const router = express.Router();
 

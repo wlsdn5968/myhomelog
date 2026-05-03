@@ -177,7 +177,11 @@ router.post('/generate', async (req, res) => {
     res.json({ ...out, fromCache: false });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, '보고서 생성 실패');
-    res.status(500).json({ error: e.message });
+    // MOB-AUDIT-2026-05-03: production 에선 generic 메시지 — stack 내부 정보 누출 차단
+    const isProd = process.env.NODE_ENV === 'production';
+    res.status(500).json({
+      error: isProd ? '보고서 생성 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.' : e.message,
+    });
   }
 });
 

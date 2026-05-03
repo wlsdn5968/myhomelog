@@ -177,7 +177,12 @@ router.get('/apt', async (req, res) => {
     res.json({ results: out, query: q });
   } catch (e) {
     logger.warn({ err: e.message, q }, '단지 검색 실패');
-    res.status(500).json({ error: '검색 실패', detail: e.message });
+    // MOB-AUDIT-2026-05-03: production 에선 detail 제거 — 내부 에러 누출 차단
+    const isProd = process.env.NODE_ENV === 'production';
+    res.status(500).json({
+      error: '검색 실패',
+      ...(isProd ? {} : { detail: e.message }),
+    });
   }
 });
 

@@ -1940,6 +1940,7 @@ async function loadMySearchHistory(){
   try {
     const r = await fetch('/api/search/history', {
       headers: { 'Authorization':'Bearer ' + A.session.access_token },
+      signal: AbortSignal.timeout(10000),
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const { history } = await r.json();
@@ -2093,6 +2094,7 @@ async function exportMyAccount(){
   try {
     const r = await fetch('/api/account/export', {
       headers: { Authorization: 'Bearer ' + token },
+      signal: AbortSignal.timeout(15000),
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const blob = await r.blob();
@@ -2130,6 +2132,7 @@ async function deleteMyAccount(){
       method: 'POST',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
       body: JSON.stringify({ confirm: 'DELETE' }),
+      signal: AbortSignal.timeout(15000),
     });
     const j = await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
@@ -2137,7 +2140,8 @@ async function deleteMyAccount(){
     const ds = dt ? dt.toLocaleDateString('ko-KR') : '30일 후';
     if(status) status.textContent = '✅ ' + (j.message || '예약 완료');
     // 로컬 데이터도 정리 후 로그아웃 — 서버는 이미 전역 signOut 완료
-    try { localStorage.clear(); } catch(_){ }
+    // MOB-AUDIT-2026-05-03: STAB #39 — localStorage.clear() 는 다른 탭의 mhl_ 외 키도 모두 날림 (race) → mhl_ prefix 한정
+    try { for (const k of Object.keys(localStorage)) { if (k.startsWith('mhl_') || k.startsWith('cfg_') || k.startsWith('mhl-')) localStorage.removeItem(k); } } catch(_){ }
     if(A.signOut) await A.signOut();
     closeUserMenu();
     setTimeout(()=>{
@@ -2164,6 +2168,7 @@ async function restoreMyAccount(){
     const r = await fetch('/api/account/restore', {
       method: 'POST',
       headers: { Authorization: 'Bearer ' + token, 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(10000),
     });
     const j = await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(j.error || ('HTTP ' + r.status));
@@ -2193,6 +2198,7 @@ async function showAutomatedDecisionExplain(){
   try {
     const r = await fetch('/api/account/automated-decision/explain', {
       headers: { Authorization: 'Bearer ' + token },
+      signal: AbortSignal.timeout(10000),
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const j = await r.json();
@@ -2247,7 +2253,7 @@ async function checkDeletionStatus(){
   const token = session?.access_token;
   if(!token) return;
   try {
-    const r = await fetch('/api/account/deletion-status', { headers: { Authorization: 'Bearer ' + token } });
+    const r = await fetch('/api/account/deletion-status', { headers: { Authorization: 'Bearer ' + token }, signal: AbortSignal.timeout(8000) });
     if(!r.ok) return;
     const j = await r.json();
     const banner = document.getElementById('umDeletionBanner');
@@ -2292,6 +2298,7 @@ async function _checkPendingDeletionOnLogin(session){
   try {
     const r = await fetch('/api/account/deletion-status', {
       headers: { Authorization: 'Bearer ' + session.access_token },
+      signal: AbortSignal.timeout(8000),
     });
     if(!r.ok) return false;
     const j = await r.json();
@@ -2339,6 +2346,7 @@ async function _migrateBookmarksOnce(){
         method:'POST',
         headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
         body: JSON.stringify({ items }),
+        signal: AbortSignal.timeout(15000),
       });
       if(!r.ok) throw new Error('migrate HTTP ' + r.status);
       const j = await r.json();
@@ -2349,6 +2357,7 @@ async function _migrateBookmarksOnce(){
     // ── 2) PULL — 서버 전체 가져와서 localStorage 교체 ──
     const pr = await fetch('/api/bookmarks', {
       headers:{ 'Authorization':'Bearer ' + A.session.access_token },
+      signal: AbortSignal.timeout(10000),
     });
     if(!pr.ok) throw new Error('pull HTTP ' + pr.status);
     const pj = await pr.json();
@@ -3390,9 +3399,11 @@ async function batchGeocode(items){
   const gs=document.getElementById('geoSt');
   gs.style.display='inline';
   try{
+    // MOB-AUDIT-2026-05-03: timeout 누락 — geocode/batch 무한 hang 시 좌표 정확화 영원 미반영
     const r=await fetch(`${CFG.api}/geocode/batch`,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({items:items.map(p=>({id:p.aptName,aptName:p.aptName,area:p.area}))}),
+      signal:AbortSignal.timeout(15000),
     });
     if(!r.ok)return {};
     const d=await r.json();
@@ -3590,13 +3601,15 @@ function renderListGrid(){
     else if (flt === 'non') filtered = filtered.filter(p => !p.ltv?.includes('40'));
     // 정렬 적용
     const sort = document.getElementById('lstSort')?.value || 'score';
-    const sortFn = {
+    // MOB-AUDIT-2026-05-03: STAB #21 — `sortFn?.score` 가 자기 자신 참조 (선언 중) → 알 수 없는 sort 키 입력 시 undefined → 정렬 안 됨
+    const _sortMap = {
       score: (a,b) => (Number(b.score)||0) - (Number(a.score)||0),
       priceAsc: (a,b) => (Number(a.avgPrice)||0) - (Number(b.avgPrice)||0),
       priceDesc: (a,b) => (Number(b.avgPrice)||0) - (Number(a.avgPrice)||0),
       newBuild: (a,b) => (Number(b.buildYear)||0) - (Number(a.buildYear)||0),
       oldBuild: (a,b) => (Number(a.buildYear)||9999) - (Number(b.buildYear)||9999),
-    }[sort] || sortFn?.score;
+    };
+    const sortFn = _sortMap[sort] || _sortMap.score;
     filtered.sort(sortFn);
     cardsHtml = filtered.map((p,_i)=>{
       if (!p || !p.aptName) return '';
@@ -4588,10 +4601,12 @@ function renderBookmarks(){
     const priceNow=b.avgPrice||0;
     const isHit=target&&priceNow>0&&priceNow<=target;
     const lc=b.lastChecked?` · 최근 ${new Date(b.lastChecked).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'})}`:'';
+    // MOB-AUDIT-2026-05-03: 단지명에 ' 또는 < > 포함 시 onclick 깨짐 + XSS 잠재 → JSON.stringify + _escHtml 이중 안전
+    const _aptNameJs = JSON.stringify(b.aptName).replace(/</g,'\\u003c').replace(/>/g,'\\u003e');
     const alertHtml=`<div class="bk-alert-row" onclick="event.stopPropagation()">
       <span style="font-size:10px;color:var(--t3);flex-shrink:0">목표가</span>
       <input class="bk-alert-inp" type="number" inputmode="decimal" step="0.1" placeholder="억" value="${target||''}" id="bk-alert-${i}" oninput="event.stopPropagation()">
-      <button class="bk-alert-set" onclick="setAlert('${b.aptName}',document.getElementById('bk-alert-${i}').value)">설정</button>
+      <button class="bk-alert-set" onclick="setAlert(${_aptNameJs},document.getElementById('bk-alert-${i}').value)">설정</button>
       ${target?`<span class="bk-alert-tag ${isHit?'hit':'set'}">${isHit?'🎯 목표가':'▼'+target+'억'}</span>`:''}
     </div>
     <div class="bk-memo-row" onclick="event.stopPropagation()" style="display:flex;gap:4px;margin-top:4px">
@@ -4642,6 +4657,7 @@ async function _deleteBookmarkOnServer(id){
     const r = await fetch('/api/bookmarks/' + encodeURIComponent(id), {
       method:'DELETE',
       headers:{ 'Authorization':'Bearer ' + A.session.access_token },
+      signal: AbortSignal.timeout(10000),
     });
     if(!r.ok && r.status !== 404) throw new Error('DELETE HTTP ' + r.status);
   } catch(e){
@@ -6282,6 +6298,7 @@ async function _ensureChatSession(firstMsg){
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
       body: JSON.stringify({ title }),
+      signal: AbortSignal.timeout(10000),
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const s = await r.json();
@@ -6313,6 +6330,7 @@ function _persistChatMessage(sid, role, content){
     method:'POST',
     headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
     body: JSON.stringify({ role, content, clientMsgId }),
+    signal: AbortSignal.timeout(10000),
   }).catch(e => console.warn('[chat message] 저장 실패', e));
 }
 // 로그아웃/세션 교체 시 로컬 세션 ID 초기화 — 다른 사용자 세션에 쓰기 방지
@@ -6341,6 +6359,7 @@ async function openChatHistory(){
   try {
     const r = await fetch('/api/chat/sessions', {
       headers:{ 'Authorization':'Bearer ' + A.session.access_token },
+      signal: AbortSignal.timeout(10000),
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const { sessions } = await r.json();
@@ -6383,6 +6402,7 @@ async function loadChatSession(sid){
   try {
     const r = await fetch(`/api/chat/sessions/${sid}/messages`, {
       headers:{ 'Authorization':'Bearer ' + A.session.access_token },
+      signal: AbortSignal.timeout(10000),
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const { messages } = await r.json();
@@ -6413,6 +6433,7 @@ async function deleteChatSession(sid, ev){
     const r = await fetch(`/api/chat/sessions/${sid}`, {
       method:'DELETE',
       headers:{ 'Authorization':'Bearer ' + A.session.access_token },
+      signal: AbortSignal.timeout(10000),
     });
     if(!r.ok && r.status !== 204) throw new Error('HTTP ' + r.status);
     if(_chatSessionId === sid){
