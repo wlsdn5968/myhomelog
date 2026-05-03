@@ -158,6 +158,20 @@ async function getSnapshot(key = 'housing_loan_2025') {
       sourceUrl: data.source_url,
       effectiveDate: data.source_effective_date,
     };
+    // MOB-AUDIT-2026-05-03: stale 감지 — source_effective_date 가 180일 초과 시 운영자 알림
+    //   부동산 정책은 6개월 주기로 변경 — 자동 갱신 X 라 운영자가 새 row insert 책임
+    //   (현재 acquisition_tax_2025: 487일 / housing_loan_2025: 200일 = stale 의심)
+    try {
+      const eff = data.source_effective_date ? new Date(data.source_effective_date) : null;
+      if (eff) {
+        const daysSince = Math.floor((Date.now() - eff.getTime()) / 86400000);
+        if (daysSince > 180) {
+          logger.warn({ key, days_since_effective: daysSince, effectiveDate: data.source_effective_date },
+            'regulations_snapshot stale — 운영자 갱신 필요 (6개월 초과)');
+        }
+        out.daysSinceEffective = daysSince;
+      }
+    } catch(_){}
     cache.set(cacheKey, out, 600); // 10분
     return out;
   } catch (e) {
