@@ -23,6 +23,8 @@ const crypto = require('crypto');
 const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
 const { requireAuth } = require('../middleware/auth');
+// MOB-AUDIT-2026-05-03: 결제 실패는 사용자 직격 → Sentry 즉시 알림 (logger.error 외 추가)
+const Sentry = require('@sentry/node');
 const { getSupabaseAdmin } = require('../db/client');
 const logger = require('../logger');
 
@@ -211,6 +213,7 @@ router.post('/confirm', async (req, res, next) => {
         .update({ status: 'failed', failure_reason: data.message || err.message, raw_response: data })
         .eq('order_id', orderId);
       logger.error({ userId: req.user.id, orderId, status, data }, 'Toss confirm 실패');
+      try { Sentry.captureException(new Error(data.message || 'Toss confirm 실패'), { tags: { route: 'billing.confirm' }, extra: { orderId, status } }); } catch(_){}
       return res.status(status).json({ error: data.message || '결제 승인 실패', code: data.code });
     }
 
@@ -380,6 +383,7 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
     return res.json({ ok: true, status: tossStatus });
   } catch (e) {
     logger.error({ err: e }, 'webhook 처리 예외');
+    try { Sentry.captureException(e, { tags: { route: 'billing.webhook' } }); } catch(_){}
     // 500 을 주면 Toss 가 재시도함 — 의도됨
     return res.status(500).json({ error: 'internal' });
   }

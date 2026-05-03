@@ -345,10 +345,15 @@ app.get('/api/health', optionalAuth, async (req, res) => {
     }
   }
 
+  // MOB-AUDIT-2026-05-03: STAB #42 — ai_ready·deploy version 추가 (운영자 키 만료·배포 추적)
+  const _aiReady = !!process.env.ANTHROPIC_API_KEY;
+  const _deploy = process.env.VERCEL_GIT_COMMIT_SHA ? process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7) : null;
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     env: process.env.NODE_ENV,
+    deploy: _deploy,
+    ai_ready: _aiReady,
     cache: { keys: cache.keys().length, stats: cache.getStats() },
     usage: {
       used: searchUsed,

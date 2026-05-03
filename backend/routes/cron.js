@@ -18,6 +18,8 @@ const logger = require('../logger');
 const { run: runRetention } = require('../jobs/retention');
 const { runMolitIngest } = require('../jobs/molitIngest');
 const { runAptMasterSync } = require('../jobs/aptMasterSync');
+// MOB-AUDIT-2026-05-03: cron 실패는 운영자 즉시 알림 — Sentry capture (logger.error 외 추가)
+const Sentry = require('@sentry/node');
 
 const router = express.Router();
 
@@ -45,6 +47,7 @@ router.post('/retention', async (req, res) => {
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/retention 실패');
+    try { Sentry.captureException(e, { tags: { route: 'cron.retention' } }); } catch(_){}
     res.status(500).json({ error: e.message });
   }
 });
@@ -79,6 +82,7 @@ async function handleMolitIngest(req, res) {
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/molit-ingest 실패');
+    try { Sentry.captureException(e, { tags: { route: 'cron.molit-ingest' } }); } catch(_){}
     res.status(500).json({ error: e.message });
   }
 }
@@ -95,6 +99,7 @@ async function handleAptMasterSync(req, res) {
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/apt-master-sync 실패');
+    try { Sentry.captureException(e, { tags: { route: 'cron.apt-master-sync' } }); } catch(_){}
     res.status(500).json({ error: e.message });
   }
 }
