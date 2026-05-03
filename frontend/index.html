@@ -6001,11 +6001,21 @@ async function onHeaderSearchInput(q) {
         try { window.va && window.va('event', { name: 'search_zero_result', data: { q: q.slice(0, 30) } }); } catch(_){}
         // Phase 4 (2026-04-26): 0건 시 행동 유도 강화 — 사용자가 다른 검색 시도하기 쉽게.
         // 자동 fuzzy: 입력 첫 2글자로 재검색 (예: '공덕레미안' → '공덕' 으로 재시도)
+        // Phase 8B (2026-05-03): 어절 분리 fallback — "강남구 대치동 한양" → 마지막 어절 "한양" 으로 재검색
         let suggestionHtml = '';
-        if (q.length >= 3) {
+        // (a) 어절 분리 fallback — 마지막 어절이 단지명일 가능성 (구·동 제거)
+        const _terms = q.split(/\s+/).filter(Boolean);
+        const _lastTerm = _terms[_terms.length - 1];
+        let _fallbackQ = null;
+        if (_lastTerm && _lastTerm !== q && _lastTerm.length >= 2) {
+          _fallbackQ = _lastTerm;
+        } else if (q.length >= 3) {
+          // (b) 첫 2글자 fuzzy (기존)
+          _fallbackQ = q.slice(0, 2);
+        }
+        if (_fallbackQ) {
           try {
-            const shortQ = q.slice(0, 2);
-            const r2 = await fetch(`${CFG.api}/search/apt?q=${encodeURIComponent(shortQ)}&limit=5`).then(r=>r.json()).catch(()=>null);
+            const r2 = await fetch(`${CFG.api}/search/apt?q=${encodeURIComponent(_fallbackQ)}&limit=5`).then(r=>r.json()).catch(()=>null);
             const sims = r2?.results || [];
             if (sims.length) {
               suggestionHtml = `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg2);text-align:left">
@@ -6015,11 +6025,15 @@ async function onHeaderSearchInput(q) {
             }
           } catch(_) {}
         }
+        // Phase 8B: 0건 + fuzzy 0건 시 "지도에서 직접 찾기" CTA — 사용자 막다른 길 차단
+        const _mapCta = !suggestionHtml
+          ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg2)"><button onclick="document.getElementById('hSearchInput').value='';document.getElementById('hSearchDrop').style.display='none';sv&&sv('map');" style="padding:6px 14px;background:var(--acc);color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">🗺 지도에서 직접 찾기</button></div>`
+          : '';
         drop.innerHTML = `<div style="padding:14px;color:var(--t3);font-size:11.5px;text-align:center">
           <div style="font-size:24px;margin-bottom:6px">🔍</div>
           <div><b>'${_escHtml(q)}'</b> 검색 결과 없음</div>
           <div style="font-size:10.5px;margin-top:4px;color:var(--t2)">동명만 입력해보세요 (예: 공덕동, 마포구)</div>
-          ${suggestionHtml}
+          ${suggestionHtml}${_mapCta}
         </div>`;
       } else {
         drop.innerHTML = results.map((r,i) => `
