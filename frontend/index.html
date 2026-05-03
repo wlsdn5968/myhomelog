@@ -6269,6 +6269,20 @@ async function chkAPI(){
           const ts=d.timestamp ? new Date(d.timestamp) : new Date();
           const kst=ts.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
           syncTime.textContent=kst+' KST';
+          // Phase 15 (2026-05-03): 정책 stale 시 사용자에게 안내 (legal 보호 + 운영자 알림 보완)
+          //   regulations.X.stale === true 면 syncBanner 색상 → 노란색 + 안내 텍스트 추가
+          let _staleNote = '';
+          const reg = d.regulations || {};
+          const _staleKeys = [];
+          if (reg.housing_loan?.stale) _staleKeys.push('주담대');
+          if (reg.acquisition_tax?.stale) _staleKeys.push('취득세');
+          if (_staleKeys.length) {
+            _staleNote = ` · ⚠ ${_staleKeys.join('·')} 정책은 갱신 검토 중`;
+            syncBanner.style.background = '#FFF6E3';
+            syncBanner.style.borderBottomColor = '#F0D998';
+            syncBanner.style.color = '#7A5500';
+          }
+          syncBanner.innerHTML = `📅 마지막 데이터 동기화: <span id="syncTime">${kst} KST</span> · 출처: 국토교통부 실거래가 + 금융위원회 규제${_staleNote}`;
           syncBanner.style.display='block';
         }catch(_){}
       }
