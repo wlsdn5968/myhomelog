@@ -2630,6 +2630,8 @@ async function generateReport() {
   } catch (e) {
     // Day 1-② REPORT_GENERATE 실패 event (이탈 원인 분석용)
     try { window.va && window.va('event', { name: 'report_generate_fail', data: { error: String(e.code || e.message || '').slice(0, 60) } }); } catch(_){}
+    // MOB-AUDIT-2026-05-03: race fix — 두 번째 보고서 실패 후 PDF 클릭 시 첫 보고서 PDF 출력 차단
+    window._lastReport = null;
     // MOB-4 (2026-05-03): 한도 초과 시 비로그인 → 로그인 CTA, 로그인 free → 안내, AbortError → 타임아웃 메시지
     let titleMsg = e.message || '보고서를 생성하지 못했어요.';
     let extraHtml = '';
@@ -2689,7 +2691,10 @@ function _renderReport(data) {
         <div>✅ <b>장점</b>: ${_escHtml(a.pros || '')}</div>
         <div>⚠ <b>단점</b>: ${_escHtml(a.cons || '')}</div>
         <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--bg2)">💰 <b>예산 매칭</b>: ${_escHtml(a.priceFit || '')}</div>
-        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${_escHtml(f.district)}</b>`:null,f.builder?`시공사 <b>${_escHtml(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${f.parking_per_household}대</b>`:null,f.regulation?`규제 <b>${_escHtml(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>6개월 ${f.new_high_count}회 갱신</b>`:null].filter(Boolean);const am=f.amenities;const amStr=am?`반경 1.2~2km: 지하철 <b>${am.subway}</b>·마트 <b>${am.mart}</b>·종합병원 <b>${am.hospital}</b>·학교 <b>${am.school}</b>·공원 <b>${am.park||0}</b>`:'';if(!items.length && !amStr)return '';return `<div style="font-size:10.5px;color:var(--t2);background:#F5F2EC;border:1px solid #E2DDD5;border-radius:5px;padding:6px 9px;margin-top:5px">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` <span style="color:var(--acc);font-weight:600">· 매칭 ${a.matchScore}점</span>`:''}</div>`;})()}
+        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${_escHtml(f.district)}</b>`:null,f.builder?`시공사 <b>${_escHtml(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${f.parking_per_household}대</b>`:null,f.regulation?`규제 <b>${_escHtml(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>6개월 ${f.new_high_count}회 갱신</b>`:null].filter(Boolean);const am=f.amenities;
+        /* MOB-AUDIT-2026-05-03: amenities 0 vs undefined 구분 — 좌표 호출 실패 시 "지하철 0개" 오해 차단 */
+        const _amOk = am && (am.subway != null || am.mart != null || am.hospital != null || am.school != null);
+        const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${am.subway??'?'}</b>·마트 <b>${am.mart??'?'}</b>·종합병원 <b>${am.hospital??'?'}</b>·학교 <b>${am.school??'?'}</b>·공원 <b>${am.park??'?'}</b>`:(am?'주변 편의시설 좌표 미해결':'');if(!items.length && !amStr)return '';return `<div style="font-size:10.5px;color:var(--t2);background:#F5F2EC;border:1px solid #E2DDD5;border-radius:5px;padding:6px 9px;margin-top:5px">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` <span style="color:var(--acc);font-weight:600">· 매칭 ${a.matchScore}점</span>`:''}</div>`;})()}
         ${a.matchReason ? `<div style="font-size:10.5px;color:var(--t3);background:var(--s1);border-radius:4px;padding:4px 8px;margin-top:4px">🏆 <b>왜 이 순위?</b> ${_escHtml(a.matchReason)}</div>` : ''}
         <div style="color:var(--acc);font-weight:600">📌 ${_escHtml(a.recommendation || '')}</div>
       </div>
@@ -5837,6 +5842,23 @@ document.addEventListener('click', (e) => {
     t.classList.remove('open');
   }
 });
+// MOB-AUDIT-2026-05-03: 모바일 폰에서 Chrome "데스크톱 사이트 요청" 활성화 시 PC layout 노출 → 운영자 모바일 캡처 분석
+//   touch device + 폰 UA + window.innerWidth > 900 → 데스크톱 모드 의심 → toast 안내 (사용자 자율 — 강제 X)
+//   1회 표시 후 localStorage 로 dismiss (재방문 시 noise X)
+window.addEventListener('load', () => {
+  setTimeout(() => {
+    try {
+      if (localStorage.getItem('mhl_desktop_mode_warned') === '1') return;
+      const isTouch = (navigator.maxTouchPoints || 0) > 0;
+      const isMobileUA = /android|iphone|ipad|mobile/i.test(navigator.userAgent);
+      const widthIsLarge = window.innerWidth > 900;
+      if (isTouch && isMobileUA && widthIsLarge) {
+        toast('💡 모바일 화면을 보려면 Chrome 메뉴 → "데스크톱 사이트" 체크 해제');
+        try { localStorage.setItem('mhl_desktop_mode_warned', '1'); } catch(_){}
+      }
+    } catch(_){}
+  }, 2500);
+});
 // 부팅 시 + DOM 변경 시 (chip 동적 추가) 재실행
 window.addEventListener('DOMContentLoaded', () => setTimeout(_enhanceA11y, 100));
 // MutationObserver — chip 동적 추가 감지 (검색 결과·세부구·플랜 목록 등)
@@ -6253,7 +6275,8 @@ async function sM(){
 
   // 백엔드 단일 경로 (BYOK 제거) — 단지·조건 컨텍스트 자동 첨부
   try{
-    const r=await fetch(`${CFG.api}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:txt,context:{history:chatH.slice(-18), session:sessionContext}}),signal:AbortSignal.timeout(30000)});
+    // MOB-AUDIT-2026-05-03: chat timeout 30s → 60s — Sonnet 4.5 가 1500 token 답변 시 25~30s 빈번
+    const r=await fetch(`${CFG.api}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:txt,context:{history:chatH.slice(-18), session:sessionContext}}),signal:AbortSignal.timeout(60000)});
     if(r.status===429){
       const j=await r.json().catch(()=>({}));
       rmTyp();
@@ -6506,8 +6529,9 @@ function _renderAIBadge(){
 }
 function addMsg(role,text){
   const c=document.getElementById('cMsgs'),d=document.createElement('div');d.className='msg '+role;
-  // XSS 방어: 먼저 escape → 그 다음 \n→<br>, **bold** 변환 (이스케이프된 ** 는 안전)
-  const safe=_escHtml(text).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>');
+  // XSS 방어: 먼저 escape → 그 다음 \n→<br>, **bold** 변환, ## 헤더 변환 (이스케이프된 ** ## 는 안전)
+  // MOB-AUDIT-2026-05-03: AI 답변에 `## 핵심 결론` 노출 시 plain text → <b> 변환
+  const safe=_escHtml(text).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/(?:^|<br>)#{1,4}\s+(.+?)(?=<br>|$)/g, (m,$1)=>(m.startsWith('<br>')?'<br>':'')+'<b>'+$1+'</b>');
   // AI 응답에는 매번 안내 배지 부착 (Phase 2.14)
   const badge = role === 'ai' ? _renderAIBadge() : '';
   // Phase 3 (2026-04-25): AI 답변 👍/👎 피드백 (사용자/세션 페어 추적용)

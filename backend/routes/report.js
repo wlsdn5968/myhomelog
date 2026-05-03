@@ -76,7 +76,7 @@ const REPORT_SPECIFIC = `## 추가 규칙 (보고서 응답)
       "location": "역세권·학교·평지",
       "pros": "장점 1줄",
       "cons": "단점 1줄",
-      "priceFit": "매수가 7억 vs 단지 평균 8.1억 (16% 초과)",
+      "priceFit": "매수가 7억 vs 회원님 평형대 평균 8.1억 (16% 초과)",
       "recommendation": "검토 시 21평 또는 다른 단지 비교 권장"
     }
   ],
@@ -97,7 +97,10 @@ router.post('/generate', async (req, res) => {
   }
 
   // 캐시 키 — 동일 입력 30분 캐시
-  const cacheKey = `report:${crypto.createHash('sha256').update(JSON.stringify(userInput)).digest('hex').slice(0, 16)}`;
+  // MOB-AUDIT-2026-05-03: JSON.stringify 의 key 순서 비결정성 → 동일 입력 두 번째 호출이 fresh 가 될 수 있음
+  //   → keys sort 후 stringify (결정성 보장) — 비용 절감
+  const _sortedInput = Object.keys(userInput).sort().reduce((o, k) => { o[k] = userInput[k]; return o; }, {});
+  const cacheKey = `report:${crypto.createHash('sha256').update(JSON.stringify(_sortedInput)).digest('hex').slice(0, 16)}`;
   const hit = cache.get(cacheKey);
   if (hit) return res.json({ ...hit, fromCache: true });
 
@@ -139,10 +142,24 @@ router.post('/generate', async (req, res) => {
         threshold_tokens: 5225,
       }, '보고서 출력이 max_tokens 95% 도달 — 잘림 risk');
     }
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
+    // MOB-AUDIT-2026-05-03: 그리디 매칭 → 응답 끝 부가 텍스트 시 invalid JSON
+    //   → balanced brace counter 로 정확 매칭 (첫 { 부터 brace 0 도달 위치까지)
+    let jsonStr = cleaned;
+    const _firstBrace = cleaned.indexOf('{');
+    if (_firstBrace >= 0) {
+      let depth = 0, inStr = false, esc = false, end = -1;
+      for (let i = _firstBrace; i < cleaned.length; i++) {
+        const ch = cleaned[i];
+        if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; }
+        else if (ch === '"') inStr = true;
+        else if (ch === '{') depth++;
+        else if (ch === '}') { depth--; if (depth === 0) { end = i; break; } }
+      }
+      if (end >= 0) jsonStr = cleaned.slice(_firstBrace, end + 1);
+    }
     let parsed;
     try {
-      parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
+      parsed = JSON.parse(jsonStr);
     } catch (e) {
       // 진단 로그 — sample_head/tail 은 운영자 디버그용 유지 (response body 의 _debug 는 제거)
       logger.error({
@@ -710,6 +727,7 @@ function buildReportPrompt(input, policy, candidates) {
   return `## 회원님 가구 상황
 - 매수가: ${input.maxBudget}억
 - 자기자본: ${input.myCash || '?'}억
+- 연소득: ${input.annualIncome ? input.annualIncome + '만원' : '미입력'} (참고용 — DSR 계산은 사이드바 대출계산 탭)
 - 보유 주택: ${input.houseStatus || '?'}
 - 생애 최초: ${input.isFirstBuyer ? '예' : '아니오'}
 - 희망 지역: ${input.region}
