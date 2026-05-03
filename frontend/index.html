@@ -1931,6 +1931,20 @@ window.addEventListener('DOMContentLoaded',()=>{
     }
   } catch(_){}
 
+  // Phase 17 (2026-05-03): 세션 길이 측정 (visibility 변경 시점) — retention/이탈 분석
+  //   사용자가 탭 떠나는 시점 measure → 평균 세션 길이 = 사용자 가치 측정
+  try {
+    const _sessionStart = Date.now();
+    let _sessionReported = false;
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'hidden' && !_sessionReported && window.va) {
+        _sessionReported = true;
+        const durSec = Math.round((Date.now() - _sessionStart) / 1000);
+        try { window.va('event', { name: 'session_duration', data: { sec: durSec, durBucket: durSec < 30 ? '<30s' : (durSec < 120 ? '30s-2m' : (durSec < 600 ? '2m-10m' : '>10m')) } }); } catch(_){}
+      }
+    });
+  } catch(_){}
+
   // 첫 방문자 온보딩 (공유 링크로 들어온 경우는 스킵)
   const sp=new URLSearchParams(location.search);
   if(!localStorage.getItem('mhl_onboarded') && !sp.get('apt') && !restored){
