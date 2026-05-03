@@ -6355,9 +6355,14 @@ async function sM(){
       let aiMsg = j.message || j.error || '무료 플랜 한도에 도달했어요.';
       if (j.canBoostByLogin) {
         // 비로그인 사용자 → 가입 유도 (Pro 강요 X)
-        aiMsg += `\n\n🔓 로그인만 해도 +${j.bonusOnLogin}회 추가로 받을 수 있어요. (이메일 1회만 인증)`;
+        // STAB-AUDIT #67 + #72 (2026-05-03): 비로그인 챗 한도 도달 시 inline 로그인 버튼 + 이력 가치 강조
+        aiMsg += `\n\n🔓 로그인하면 +${j.bonusOnLogin}회 + 대화 이력 자동 저장 (이메일 1회만 인증)`;
         addMsg('ai', aiMsg);
-        // 모달 대신 inline 안내 + 로그인 버튼 강조
+        // STAB #72: 인라인 로그인 CTA 추가 — header 의 로그인 버튼은 작아서 attention 약함
+        const _loginCtaHtml = `<button onclick="openLogin&&openLogin()" style="margin-top:8px;padding:9px 18px;background:var(--acc);color:#fff;border:none;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(42,109,244,0.25)">🔓 로그인하고 +${j.bonusOnLogin}회 받기</button>`;
+        const _lastMsg = document.getElementById('cMsgs')?.lastChild?.querySelector('.bbl');
+        if (_lastMsg) _lastMsg.insertAdjacentHTML('beforeend', '<br>' + _loginCtaHtml);
+        // 헤더 로그인 버튼 강조 (기존)
         const lb = document.getElementById('loginBtn');
         if (lb) { lb.style.boxShadow='0 0 0 3px rgba(42,109,244,.35)'; setTimeout(()=>{lb.style.boxShadow='';},2500); }
       } else {
