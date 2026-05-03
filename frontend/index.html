@@ -1916,6 +1916,21 @@ window.addEventListener('DOMContentLoaded',()=>{
   // 북마크 가격 자동 새로고침 (6시간 이상된 것만, 목표가 달성 배너)
   setTimeout(()=>{if(typeof refreshBookmarkPrices==='function')refreshBookmarkPrices();}, 1800);
 
+  // Phase 16 (2026-05-03): funnel 시작점 — first_load event (운영자 측정 base rate)
+  //   data: 신규/재방문 + 진입 source (referrer or utm)
+  try {
+    if (window.va) {
+      const isReturning = !!localStorage.getItem('mhl_visited');
+      try { localStorage.setItem('mhl_visited', '1'); } catch(_){}
+      const ref = document.referrer ? new URL(document.referrer).hostname : 'direct';
+      window.va('event', { name: 'first_load', data: {
+        type: isReturning ? 'returning' : 'new',
+        ref: ref.slice(0, 40),
+        loggedIn: !!window.MHL?.auth?.user,
+      } });
+    }
+  } catch(_){}
+
   // 첫 방문자 온보딩 (공유 링크로 들어온 경우는 스킵)
   const sp=new URLSearchParams(location.search);
   if(!localStorage.getItem('mhl_onboarded') && !sp.get('apt') && !restored){
