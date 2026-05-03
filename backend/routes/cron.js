@@ -18,6 +18,7 @@ const logger = require('../logger');
 const { run: runRetention } = require('../jobs/retention');
 const { runMolitIngest } = require('../jobs/molitIngest');
 const { runAptMasterSync } = require('../jobs/aptMasterSync');
+const { run: runRegulationsCheck } = require('../jobs/regulationsCheck');
 // MOB-AUDIT-2026-05-03: cron 실패는 운영자 즉시 알림 — Sentry capture (logger.error 외 추가)
 const Sentry = require('@sentry/node');
 
@@ -105,5 +106,22 @@ async function handleAptMasterSync(req, res) {
 }
 router.post('/apt-master-sync', handleAptMasterSync);
 router.get('/apt-master-sync', handleAptMasterSync);
+
+// ── Phase 18 (2026-05-04): regulations stale 자동 검증 ───────
+// 매주 월 04:00 KST — apt-master-sync 직후
+async function handleRegulationsCheck(req, res) {
+  try {
+    const started = Date.now();
+    const summary = await runRegulationsCheck();
+    logger.info({ durationMs: Date.now() - started, summary }, 'cron/regulations-check OK');
+    res.json({ ok: true, summary });
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'cron/regulations-check 실패');
+    try { Sentry.captureException(e, { tags: { route: 'cron.regulations-check' } }); } catch(_){}
+    res.status(500).json({ error: e.message });
+  }
+}
+router.post('/regulations-check', handleRegulationsCheck);
+router.get('/regulations-check', handleRegulationsCheck);
 
 module.exports = router;
