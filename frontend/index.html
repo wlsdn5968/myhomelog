@@ -173,6 +173,15 @@ window.MHL.auth = window.MHL.auth || {
           A.user = session?.user || null;
           if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'SIGNED_OUT') {
             A._emit();
+            // MOB-AUDIT-2026-05-03: funnel — 로그인 성공/로그아웃 추적 (운영자 전환율 측정)
+            try {
+              if (event === 'SIGNED_IN' && window.va) {
+                const provider = session?.user?.app_metadata?.provider || 'unknown';
+                window.va('event', { name: 'login_success', data: { provider } });
+              } else if (event === 'SIGNED_OUT' && window.va) {
+                window.va('event', { name: 'logout' });
+              }
+            } catch(_){}
           }
         });
 
@@ -2649,7 +2658,9 @@ async function generateReport() {
       if (e.canBoostByLogin) {
         extraHtml = `<button onclick="openLogin&&openLogin()" style="margin-top:14px;padding:9px 18px;background:var(--acc);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🔓 로그인하고 +${e.bonusOnLogin || 1}회 추가로 받기</button>`;
       } else {
-        extraHtml = `<div style="font-size:11px;color:var(--t2);margin-top:8px">매일 자정에 한도가 리셋돼요. ${e.plan === 'free' ? 'Pro 플랜 출시 시 무제한으로 이용 가능합니다.' : ''}</div>`;
+        // MOB-AUDIT-2026-05-03: 로그인 사용자 한도 도달 시 Pro 출시 알림 mailto 노출 — 가입 funnel 활성
+        const _proMailto = e.plan === 'free' ? `<br><a href="mailto:wlsdn5968@gmail.com?subject=내집로그%20Pro%20출시%20알림%20신청&body=Pro%20플랜%20출시%20시%20알림%20부탁드립니다." style="color:var(--acc);text-decoration:underline" onclick="try{window.va&&window.va('event',{name:'pro_mailto_click',data:{from:'report_limit'}})}catch(_){}">📧 Pro 출시 알림 신청</a>` : '';
+        extraHtml = `<div style="font-size:11px;color:var(--t2);margin-top:8px">매일 자정에 한도가 리셋돼요. ${e.plan === 'free' ? 'Pro 플랜 출시 시 무제한으로 이용 가능합니다.' : ''}${_proMailto}</div>`;
       }
     } else if (e.status === 503) {
       extraHtml = `<div style="font-size:11px;color:var(--t2);margin-top:8px">AI 서비스가 일시 점검 중일 수 있어요. 단지 검색·LTV 계산은 정상 이용 가능합니다.</div>`;
@@ -4603,6 +4614,8 @@ function toggleBookmark(){
     toast('⭐ 관심 단지 추가 완료');
     document.getElementById('bkToggle').textContent='⭐ 관심 중';
     document.getElementById('bkToggle').classList.add('on');
+    // MOB-AUDIT-2026-05-03: funnel — 북마크 추가 (사용자 retention 시그널)
+    try { window.va && window.va('event', { name: 'bookmark_add', data: { aptName: String(p.aptName||'').slice(0,40), sigungu: p.sigungu || p.area || '' } }); } catch(_){}
   }
   saveBookmarks(bks);
   renderBookmarks();
@@ -5984,6 +5997,8 @@ async function onHeaderSearchInput(q) {
       const j = await r.json();
       const results = j.results || [];
       if (results.length === 0) {
+        // MOB-AUDIT-2026-05-03: funnel — 0건 검색 추적 (사용자 이탈 원인 분석)
+        try { window.va && window.va('event', { name: 'search_zero_result', data: { q: q.slice(0, 30) } }); } catch(_){}
         // Phase 4 (2026-04-26): 0건 시 행동 유도 강화 — 사용자가 다른 검색 시도하기 쉽게.
         // 자동 fuzzy: 입력 첫 2글자로 재검색 (예: '공덕레미안' → '공덕' 으로 재시도)
         let suggestionHtml = '';
@@ -6284,6 +6299,8 @@ function buildChatContext(){
 async function sM(){
   if(chatLd)return;
   const el=document.getElementById('cIn'),txt=el.value.trim();if(!txt)return;
+  // MOB-AUDIT-2026-05-03: funnel — 첫 채팅 송신 추적 (사용자 첫 5분 funnel)
+  if (chatH.length === 0) { try { window.va && window.va('event', { name: 'chat_first_send', data: { msgLen: txt.length } }); } catch(_){} }
   el.value='';el.style.height='auto';addMsg('user',txt);chatH.push({role:'user',content:txt});chatLd=true;showTyp();
   document.getElementById('cErr').classList.remove('show');
   let replied=false;
