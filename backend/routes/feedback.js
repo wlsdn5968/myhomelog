@@ -13,6 +13,8 @@
  */
 const express = require('express');
 const crypto = require('crypto');
+// MOB-AUDIT-2026-05-03: feedback insert 실패 시 사용자엔 200 응답 → 운영자 정량 데이터 누락
+const Sentry = require('@sentry/node');
 const { getSupabaseAdmin } = require('../db/client');
 const { optionalAuth } = require('../middleware/auth');
 const logger = require('../logger');
@@ -62,6 +64,8 @@ router.post('/ai', optionalAuth, async (req, res) => {
     return res.json({ ok: true, persisted: true });
   } catch (e) {
     logger.warn({ err: e.message }, 'feedback insert 실패');
+    // MOB-AUDIT-2026-05-03: insert fail 누적 시 운영자 알림 — Sentry capture
+    try { Sentry.captureException(e, { tags: { route: 'feedback.ai', persisted: 'false' } }); } catch(_){}
     return res.json({ ok: true, persisted: false }); // 사용자 흐름엔 성공 처리
   }
 });

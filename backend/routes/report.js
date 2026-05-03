@@ -368,8 +368,11 @@ function computeAptScore(c, ctx) {
     const sub = Math.round(c.n * 1.5) + (c.households >= 500 ? 25 : (c.households >= 300 ? 12 : 0));
     r.priority_환금성 = sub; total += sub;
   } else if (p === '학군') {
-    const goodSchoolGu = ['양천구', '강남구', '서초구', '송파구', '노원구', '광진구'];
-    const sub = goodSchoolGu.includes(c.sigungu) ? 35 : 5;
+    // MOB-AUDIT-2026-05-03: 외곽 학군 우선순위 사용자에게 ★★★ 0개 risk → 부분 매칭 보강
+    //   양천·강남·서초·송파·노원·광진 (35) / 마포·용산·성동·영등포·중구·종로 (18) / 외 (8)
+    const topSchoolGu = ['양천구', '강남구', '서초구', '송파구', '노원구', '광진구'];
+    const midSchoolGu = ['마포구', '용산구', '성동구', '영등포구', '중구', '종로구', '동작구', '강동구'];
+    const sub = topSchoolGu.includes(c.sigungu) ? 35 : (midSchoolGu.includes(c.sigungu) ? 18 : 8);
     r.priority_학군 = sub; total += sub;
   } else if (p === '역세권') {
     const sub = c.n >= 12 ? 20 : (c.n >= 8 ? 12 : 5);
@@ -606,7 +609,9 @@ async function fetchCandidateApts(admin, input, limit) {
 
   // Phase 9: 다양성 강제 제거 — 한 구에 몰려도 OK. 사용자 의도: "최적 매물 우선"
   //   상위 limit*2 개 후보를 KAPT 호출 대상으로 (API 호출 비용 절감)
-  const out = pool.slice(0, Math.min(limit * 2, 14));
+  // MOB-AUDIT-2026-05-03: priority 매칭 점수 ≥ 임계 단지가 7개 미만일 risk → 후보 풀 14 → 20 확장
+  //   cache 적중률 90%+ 라 실제 비용 영향 미미. 외곽 사용자 priority 부분 매칭 후보 발견율 ↑
+  const out = pool.slice(0, Math.min(limit * 3, 20));
 
   // Phase 6+ (2026-04-26): KAPT API 통합 — 선정된 N개 단지만 facility 병렬 fetch
   //   resolveFacility() 가 ILIKE 토큰 매칭 + KAPT API + DB 캐시 (90일) 다 처리.
