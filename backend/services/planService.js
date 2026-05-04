@@ -15,8 +15,9 @@ const cache = require('../cache');
 const logger = require('../logger');
 
 // Phase 5+ (2026-04-26): 관리자 화이트리스트 — 무제한 사용 (운영자 본인용)
-// ADMIN_EMAILS 환경변수 (콤마구분) 로 운영, 미설정 시 기본 운영자 이메일 사용
-const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || 'wlsdn5968@gmail.com')
+// ADMIN_EMAILS 환경변수 (콤마구분) 로 운영, 미설정 시 빈 배열 (whitelist 비활성)
+// P1-15 (2026-05-04): 기본값 'wlsdn5968@gmail.com' 하드코딩 제거 — production env 없으면 운영자 이메일 노출 risk
+const ADMIN_EMAILS = (process.env.ADMIN_EMAILS || '')
   .split(',')
   .map(s => s.trim().toLowerCase())
   .filter(Boolean);

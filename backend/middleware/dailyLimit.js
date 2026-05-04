@@ -133,10 +133,14 @@ function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
     const key = `dl:${scope}:${todayKey()}:${id.kind}:${id.value}`;
     const ttl = secondsUntilMidnight();
 
-    const currentUsed = await readUsage(key);
-    if (currentUsed >= effectiveLimit) {
+    // P1-5 (2026-05-04): race condition fix — read-then-incr 사이 동시 요청이 둘 다 통과 risk
+    //   기존: readUsage → if (currentUsed >= limit) reject → incr
+    //         동시 2 요청이 readUsage 4 만 보고 둘 다 incr → used=6 (limit 5 우회)
+    //   변경: incr 먼저 (atomic) → 후속 체크 시 used > limit 면 거부 (1회 over 허용 — 무해)
+    const { used, source } = await incrementUsage(key, ttl);
+    if (used > effectiveLimit) {
       logger.info({
-        scope, limit: effectiveLimit, used: currentUsed, plan,
+        scope, limit: effectiveLimit, used, plan,
         identity: id.kind === 'u' ? `u:${id.value}` : `i:${maskIp(id.value)}`,
       }, 'daily limit exceeded');
       const isAnonymous = !req.user?.id;
@@ -152,7 +156,7 @@ function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
           : isAnonymous && loggedInBonus > 0
           ? `오늘 무료 ${scopeName} ${effectiveLimit}회를 모두 사용했어요. 로그인하면 ${loggedInBonus}회를 추가로 받을 수 있어요.`
           : `오늘의 무료 ${scopeName} 한도(${effectiveLimit}회)를 모두 사용했어요. 내일 다시 이용해주세요.`,
-        used: currentUsed,
+        used,
         limit: effectiveLimit,
         plan,
         resetIn: ttl,
@@ -160,8 +164,6 @@ function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
         bonusOnLogin: loggedInBonus || 0,
       });
     }
-
-    const { used, source } = await incrementUsage(key, ttl);
     res.setHeader('X-Daily-Limit', String(effectiveLimit));
     res.setHeader('X-Daily-Remaining', String(Math.max(0, effectiveLimit - used)));
     res.setHeader('X-Daily-Store', source);

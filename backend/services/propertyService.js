@@ -106,8 +106,16 @@ function computeLTV(buyAuk, isRegulated, isFirstBuyer, houseStatus) {
   const isDispose = houseStatus === '1주택 (처분조건부)';
   if (houseStatus === '1주택' && isRegulated) return { ltv: '0% (1주택 규제지역)', maxLoan: '처분조건부 chip 선택 시 무주택 한도' };
   let pct;
-  if (isRegulated) pct = isFirstBuyer ? 0.7 : 0.4;
-  else pct = isFirstBuyer ? 0.8 : 0.7;
+  // P1-2 (2026-05-04): 처분조건부면 isFirstBuyer 와 무관하게 무주택 LTV 적용
+  //   기존: 처분조건부 + isFirstBuyer X → pct=0.4 (잘못 — 처분조건부는 무주택 70%)
+  //   변경: isDispose 우선 분기
+  if (isDispose) {
+    pct = isRegulated ? 0.7 : 0.8; // 처분조건부 = 무주택 LTV
+  } else if (isRegulated) {
+    pct = isFirstBuyer ? 0.7 : 0.4;
+  } else {
+    pct = isFirstBuyer ? 0.8 : 0.7;
+  }
   const cap = isRegulated ? (buyAuk <= 15 ? 6 : buyAuk <= 25 ? 4 : 2) : Infinity;
   const loan = Math.min(buyAuk * pct, cap);
   return {

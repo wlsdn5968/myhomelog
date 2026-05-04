@@ -167,8 +167,12 @@ async function callAI(messages, useCache = true, opts = {}) {
   }
 
   // 캐시 키: SHA-256 hex (Phase 1.7 — base64.slice(0,40) 충돌 제거)
+  // P1-3 (2026-05-04): cache key 에 systemSpecific + systemAppend 포함
+  //   기존: lastMsg 만 → report 의 JSON 응답이 chat 의 같은 lastMsg 에 cache hit 충돌
+  //   변경: 전체 컨텍스트 hash (system 다르면 다른 cache)
   const lastMsg = messages[messages.length - 1]?.content || '';
-  const cacheKey = `ai:${crypto.createHash('sha256').update(lastMsg).digest('hex')}`;
+  const cacheCtx = (opts.systemSpecific || '') + '|' + (opts.systemAppend || '') + '|' + (opts.system || '') + '|' + lastMsg;
+  const cacheKey = `ai:${crypto.createHash('sha256').update(cacheCtx).digest('hex')}`;
 
   if (useCache && messages.length === 1) {
     const cached = cache.get(cacheKey);
