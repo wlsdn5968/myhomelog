@@ -39,6 +39,10 @@
     {
       "path": "/api/cron/regulations-auto-fetch",
       "schedule": "0 6 * * 2"
+    },
+    {
+      "path": "/api/health",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
