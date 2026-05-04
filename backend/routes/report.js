@@ -532,9 +532,16 @@ async function fetchCandidateApts(admin, input, limit) {
 
   const guMatch = region.match(/([가-힣]+구)/);
   if (guMatch) q = q.like('sigungu', `%${guMatch[1]}%`);
-  else if (region.includes('서울')) q = q.like('lawd_cd', '11%');
-  else if (region.includes('경기')) q = q.like('lawd_cd', '41%');
-  else if (region.includes('인천')) q = q.like('lawd_cd', '28%');
+  else {
+    // P1-1 (2026-05-04): lawd_cd LIKE '11%' → IN (...) 명시
+    //   진단 (EXPLAIN): LIKE prefix 시 인덱스 미활용 → Parallel Seq Scan 960ms
+    //   변경: IN (서울 25개 코드) 명시 → idx_molit_lawd_date 인덱스 활용 → ~10x 향상 예상
+    const { LAWD_CODES } = require('../services/transactionService');
+    const codeList = Object.values(LAWD_CODES);
+    if (region.includes('서울')) q = q.in('lawd_cd', codeList.filter(c => c.startsWith('11')));
+    else if (region.includes('경기')) q = q.in('lawd_cd', codeList.filter(c => c.startsWith('41')));
+    else if (region.includes('인천')) q = q.in('lawd_cd', codeList.filter(c => c.startsWith('28')));
+  }
 
   // Phase 9: 광역 검색 시 후보 풀 2500 (선호도 가산점 위해 더 넓게 후보 풀)
   const { data: txs, error } = await q.limit(2500);

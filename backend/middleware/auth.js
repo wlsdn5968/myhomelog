@@ -95,7 +95,16 @@ async function verifyToken(token) {
     const microExp = Date.now() + TTL_MS;
     const expiresAt = jwtExp ? Math.min(jwtExp, microExp) : microExp;
     TOKEN_CACHE.set(token, { user, deletionPending, expiresAt });
-    if (TOKEN_CACHE.size > 1000) {
+    // P1-13 (2026-05-04): LRU eviction — size 1500+ 시 가장 오래된 200개 강제 제거
+    //   기존: 만료된 것만 sweep → 1000+ valid 토큰 누적 시 매 요청마다 cleanup loop (성능 저하)
+    //   변경: 1500+ 도달 시 oldest 200 evict (Map iteration 순서 = insertion 순서)
+    if (TOKEN_CACHE.size > 1500) {
+      let evicted = 0;
+      for (const k of TOKEN_CACHE.keys()) {
+        TOKEN_CACHE.delete(k);
+        if (++evicted >= 200) break;
+      }
+    } else if (TOKEN_CACHE.size > 1000) {
       const cutoff = Date.now();
       for (const [k, v] of TOKEN_CACHE) {
         if (v.expiresAt < cutoff) TOKEN_CACHE.delete(k);
