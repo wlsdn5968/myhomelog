@@ -370,9 +370,13 @@ function computeAptScore(c, ctx) {
   } else if (p === '학군') {
     // MOB-AUDIT-2026-05-03: 외곽 학군 우선순위 사용자에게 ★★★ 0개 risk → 부분 매칭 보강
     //   양천·강남·서초·송파·노원·광진 (35) / 마포·용산·성동·영등포·중구·종로 (18) / 외 (8)
+    // P1-9 (2026-05-04): 학원 핵심 동 단위 추가 보너스 (대치·목동·잠실·중계·반포 등)
+    //   양천구 ≠ 목동만, 강남구 ≠ 대치동만 — 동 단위 매칭으로 정확화
     const topSchoolGu = ['양천구', '강남구', '서초구', '송파구', '노원구', '광진구'];
     const midSchoolGu = ['마포구', '용산구', '성동구', '영등포구', '중구', '종로구', '동작구', '강동구'];
-    const sub = topSchoolGu.includes(c.sigungu) ? 35 : (midSchoolGu.includes(c.sigungu) ? 18 : 8);
+    const topSchoolDong = ['대치동', '목동', '잠실동', '중계동', '반포동', '서초동', '여의도동', '도곡동'];
+    let sub = topSchoolGu.includes(c.sigungu) ? 35 : (midSchoolGu.includes(c.sigungu) ? 18 : 8);
+    if (topSchoolDong.includes(c.umd_nm)) sub += 10; // 핵심 동 가산점
     r.priority_학군 = sub; total += sub;
   } else if (p === '역세권') {
     const sub = c.n >= 12 ? 20 : (c.n >= 8 ? 12 : 5);

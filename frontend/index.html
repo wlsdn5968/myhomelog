@@ -2635,6 +2635,11 @@ async function generateReport() {
     alert('희망 지역을 선택해주세요');
     return;
   }
+  // P1-14: 미지원 광역도 사전 차단 — backend 0건 후 generic error 차단
+  if (typeof _isUnsupportedRegion === 'function' && _isUnsupportedRegion(region)) {
+    alert('현재 서울·경기·인천 + 광역시 (부산·대구·광주·대전·울산) 만 지원합니다.\n\n지방 광역도는 향후 데이터 확장 시 지원 예정입니다.');
+    return;
+  }
 
   // 입력 요약
   summary.innerHTML = `
@@ -5178,6 +5183,15 @@ function getRegionForSearch(){
   const wide=gct('ch-r');
   const sub=document.querySelector('#ch-r-sub .chip.on')?.textContent.trim()||'';
   return sub ? `${wide} ${sub}` : wide;
+}
+// P1-14 (2026-05-04): LAWD_CODES 광역 (강원·충북·충남·전북·전남·경북·경남·제주) 미지원
+//   사용자가 미지원 지역 입력 시 사전 차단 — backend 데이터 0건 후 "조회 실패" 차단
+function _isUnsupportedRegion(region) {
+  if (!region) return false;
+  const unsupported = ['강원','충북','충남','전북','전남','경북','경남','제주','세종','광주','대전','대구','울산','부산'];
+  // 단, 부산·대구·광주·대전·울산은 LAWD_CODES 에 일부 있음 — 정밀 매칭은 backend
+  // 광역도 (강원·충북·충남·전북·전남·경북·경남·제주) 만 frontend 사전 차단
+  return /강원|충북|충남|전북|전남|경북|경남|제주/.test(region);
 }
 function pyRange(){
   const sel=gct('ch-py');

@@ -233,7 +233,6 @@ async function runMolitIngest(opts = {}) {
 
   const started = Date.now();
   const results = [];
-  let consecutiveFailures = 0;
 
   // 동시 2 region-month 병렬 — MOLIT rate limit 존중
   const queue = [];
@@ -243,17 +242,21 @@ async function runMolitIngest(opts = {}) {
     }
   }
 
+  // P1-4 (2026-05-04): cron worker race fix — consecutiveFailures shared
+  //   기존: 다른 worker 의 성공이 다른 worker 의 실패 카운터 reset → 회로차단 동작 X
+  //   변경: worker-local consecutiveFailures (closure 안)
   async function worker() {
+    let localFailures = 0;
     while (queue.length) {
       const job = queue.shift();
       if (!job) break;
-      if (consecutiveFailures >= CIRCUIT_BREAK_CONSECUTIVE_FAILURES) {
+      if (localFailures >= CIRCUIT_BREAK_CONSECUTIVE_FAILURES) {
         results.push({ ...job, skipped: true, reason: 'circuit_break' });
         continue;
       }
       const r = await ingestOne(admin, job.lawdCd, job.ym);
-      if (r.ok) consecutiveFailures = 0;
-      else consecutiveFailures += 1;
+      if (r.ok) localFailures = 0;
+      else localFailures += 1;
       results.push({ region: job.name, ...r });
     }
   }

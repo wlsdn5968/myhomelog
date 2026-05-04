@@ -297,7 +297,10 @@ async function getTransactionsByApt(lawdCd, aptName) {
     return db - da;
   });
 
-  cache.set(cacheKey, sorted, 3600);
+  // P1-12 (2026-05-04): cache TTL 3600s → 1800s (30분)
+  //   기존: 1시간 — 신규 거래 발생 시 1시간 stale data 노출
+  //   변경: 30분 — 매일 17:00 UTC molit-ingest 후 30분이면 모든 사용자가 최신 받음
+  cache.set(cacheKey, sorted, 1800);
   return sorted;
 }
 

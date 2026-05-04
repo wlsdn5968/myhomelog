@@ -98,15 +98,24 @@ function filterAnomalies(transactions) {
 //   - 개선: { value, low, high, n } — 표본별 ±5% (n≥30) / ±15% (10≤n<30)
 //   - 호출 측: percentileObj.value 만 쓰면 기존 동작 유지
 //   - 사용자 노출: low~high 범위로 "하위 13~43%" 식 표기 → 표본 부족 정직 노출
-function calcPricePercentile(transactions, currentPrice) {
+function calcPricePercentile(transactions, currentPrice, currentArea = null) {
   // 2026-04-25 P1 (감사 1-2): 최소 8건 (Wilson 95% CI ±20%) 확보 시만 계산.
   if (!transactions || transactions.length < 8) return null;
   const { filtered } = filterAnomalies(transactions);
   if (filtered.length < 8) return null;
-  const prices = filtered.map(t => t.dealAmount).sort((a, b) => a - b);
+  // P1-10 (2026-05-04): 평형 기반 필터 — 84㎡ 가격을 39㎡ 분포에 비교 시 잘못된 백분위
+  //   currentArea 명시 시 ±10% 평형만 사용 (다른 평형 섞임 차단)
+  //   currentArea 없으면 기존 동작 (전체 분포)
+  let areaFiltered = filtered;
+  if (currentArea && currentArea > 0) {
+    const minA = currentArea * 0.9, maxA = currentArea * 1.1;
+    const f = filtered.filter(t => (t.excluUseAr || 0) >= minA && (t.excluUseAr || 0) <= maxA);
+    if (f.length >= 8) areaFiltered = f; // 충분하면 평형 분리, 부족 시 fallback
+  }
+  const prices = areaFiltered.map(t => t.dealAmount).sort((a, b) => a - b);
   const below = prices.filter(p => p <= currentPrice).length;
   const value = Math.round((below / prices.length) * 100);
-  const n = filtered.length;
+  const n = areaFiltered.length;
   // 표본 크기 → 신뢰 폭 (Wilson 95% CI 근사):
   //   n>=60: ±5%, n>=25: ±10%, n>=8: ±20%
   let margin;
