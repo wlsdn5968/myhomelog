@@ -416,6 +416,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 .bm-pop-close:hover{background:var(--s1)}
 .bm-pop-body{flex:1;overflow-y:auto}
 @media(max-width:700px){.fab-ai{bottom:72px;right:16px;width:52px;height:52px;font-size:22px}.fab-bm{bottom:132px;right:16px}.bm-pop{bottom:186px;right:16px}}
+/* Agent UX #8 (2026-05-04): metaLine 모바일 줄 분리 (가로 스크롤 차단) */
+@media(max-width:600px){.meta-line{font-size:10.5px!important;padding:7px 10px!important}.meta-line>div{margin-bottom:2px}}
 /* Agent UX P0-3 (2026-05-04): iPhone SE 568px 화면에서 fab-bm 가 화면 밖 잘림 → safe-area + max() 보강 */
 @supports (padding: max(0px)) {
   @media(max-width:700px){
@@ -813,6 +815,20 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   <!-- P0 (2026-04-25 Phase 2 시나리오 A): 단지명·동명 직접 검색바 -->
   <div class="hsearch" style="position:relative;flex:1;max-width:480px;margin:0 8px">
     <input id="hSearchInput" class="inp" type="text" placeholder="🔎 단지명·동명 검색 (예: 마포래미안푸르지오, 공덕동)" style="margin:0;font-size:12px;padding:7px 10px" oninput="onHeaderSearchInput(this.value)" onkeydown="onHeaderSearchKey(event)" onfocus="if(this.value)onHeaderSearchInput(this.value)" onblur="setTimeout(()=>document.getElementById('hSearchDrop').style.display='none',200)" autocomplete="off">
+    <script>
+    // Agent UX #11 (2026-05-04): 모바일 ≤480px placeholder 잘림 → JS 로 단순화
+    (function _adjustHSearchPlaceholder(){
+      try {
+        const inp = document.getElementById('hSearchInput');
+        if (!inp) return;
+        const adjust = () => {
+          inp.placeholder = window.innerWidth < 480 ? '🔎 단지 검색' : '🔎 단지명·동명 검색 (예: 마포래미안푸르지오, 공덕동)';
+        };
+        adjust();
+        window.addEventListener('resize', adjust);
+      } catch(_){}
+    })();
+    </script>
     <div id="hSearchDrop" style="display:none;position:absolute;top:100%;left:0;width:100%;max-width:calc(100vw - 40px);background:#fff;border:1px solid var(--bd);border-radius:8px;margin-top:3px;max-height:520px;overflow-y:auto;z-index:99999;box-shadow:0 6px 24px rgba(0,0,0,0.18)"></div>
   </div>
   <div class="hml">
@@ -1730,7 +1746,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       <div style="text-align:center;font-size:11px;color:var(--t3);margin:6px 0">또는</div>
 
       <label class="lbl">이메일 (Magic Link — 별도 설정 불필요)</label>
-      <input class="inp mb9" type="email" id="lmEmail" placeholder="you@example.com" autocomplete="email">
+      <input class="inp mb9" type="email" id="lmEmail" placeholder="이메일 (예: hong@gmail.com)" autocomplete="email" inputmode="email">
       <button class="sm-save" onclick="loginEmail()">메일로 로그인 링크 받기</button>
 
       <div class="sm-status" id="lmStatus"></div>
@@ -2197,7 +2213,33 @@ async function deleteMyAccount(){
   if(!token){ toast('세션 만료 — 다시 로그인해주세요'); return; }
   const ok1 = confirm('정말로 회원 탈퇴를 진행할까요?\n\n· 오늘부터 30일 유예기간이 시작됩니다\n· 유예기간 내에는 모든 세션이 만료되고 로그인 시 "복구" 버튼이 표시됩니다\n· 유예기간 종료 후 북마크·검색 이력·대화가 영구 삭제됩니다\n· 결제 이력은 전자상거래법상 5년간 익명 보관됩니다');
   if(!ok1) return;
-  const typed = prompt('확인을 위해 대문자로 "DELETE" 를 입력해주세요');
+  // STAB-AUDIT #38 (2026-05-04): prompt() → 모달 input 교체 — 모바일 UX 개선
+  //   기존 prompt() 는 모바일에서 키보드 가림 + 한국어 IME 자주 깨짐
+  //   변경: 동적 모달 (smbg + smbox) — 모바일 키보드와 함께 정상 노출
+  const typed = await new Promise((resolve) => {
+    const modal = document.createElement('div');
+    modal.className = 'smbg open';
+    modal.style.cssText = 'z-index:99999;display:flex';
+    modal.innerHTML = `<div class="smbox" style="max-width:380px;padding:18px">
+      <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:var(--red)">🗑 회원 탈퇴 최종 확인</div>
+      <div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.6">취소할 수 없는 작업입니다.<br>아래에 <b>대문자 DELETE</b> 를 입력하세요.</div>
+      <input type="text" id="_delConfirmInp" class="inp" placeholder="DELETE" autocomplete="off" autocapitalize="characters" style="margin-bottom:12px;font-family:monospace;letter-spacing:2px">
+      <div style="display:flex;gap:8px">
+        <button class="sm-save" id="_delConfirmCancel" style="flex:1;background:var(--bg2);color:var(--t1);border:1px solid var(--bd)">취소</button>
+        <button class="sm-save" id="_delConfirmOk" style="flex:1;background:var(--red);color:#fff">탈퇴 진행</button>
+      </div>
+    </div>`;
+    document.body.appendChild(modal);
+    const inp = modal.querySelector('#_delConfirmInp');
+    const ok = modal.querySelector('#_delConfirmOk');
+    const cancel = modal.querySelector('#_delConfirmCancel');
+    setTimeout(()=>inp.focus(), 100);
+    const cleanup = (val) => { document.body.removeChild(modal); resolve(val); };
+    ok.onclick = () => cleanup(inp.value);
+    cancel.onclick = () => cleanup(null);
+    inp.onkeydown = (e) => { if (e.key === 'Enter') cleanup(inp.value); if (e.key === 'Escape') cleanup(null); };
+    modal.onclick = (e) => { if (e.target === modal) cleanup(null); };
+  });
   if(typed !== 'DELETE'){ toast('취소되었습니다'); return; }
   const status = document.getElementById('umStatus');
   if(status) status.textContent = '계정 삭제 예약 진행 중...';
@@ -3680,8 +3722,9 @@ function renderListGrid(){
     </div>`;
     return;
   }
+  // Agent UX #8 (2026-05-04): 모바일 가로 스크롤 차단 — flex column 으로 줄 분리
   const metaLine = searchMeta && searchMeta.regions.length
-    ? `<div style="margin:10px 14px 0;padding:8px 12px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;color:#1B4F8A;font-size:11px;line-height:1.55">📊 <b>분석 지역:</b> ${_escHtml(searchMeta.regions.map(String).join(', '))} · 전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> 중 예산 실거래 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b> · 최근 6개월 실거래 ${(Number(searchMeta.totalTx)||0).toLocaleString()}건 분석</div>`
+    ? `<div class="meta-line" style="margin:10px 14px 0;padding:8px 12px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;color:#1B4F8A;font-size:11px;line-height:1.55"><div>📊 <b>분석 지역:</b> ${_escHtml(searchMeta.regions.map(String).join(', '))}</div><div>전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> · 예산 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b></div><div>최근 6개월 실거래 ${(Number(searchMeta.totalTx)||0).toLocaleString()}건 분석</div></div>`
     : '';
   const banner=`${metaLine}<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;color:var(--red);font-size:11px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아닙니다.</u> 아래 점수·신호는 과거 실거래 통계 정리이며, 미래 가격(상승·하락)을 예측·보장하지 않습니다. 모든 의사결정 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>
   <!-- Phase 4 (2026-04-26): 정렬·필터 — 추천 결과 비교 핵심 -->
@@ -4702,7 +4745,8 @@ function renderBookmarks(){
   const fbc=document.getElementById('fabBmCnt');if(fbc)fbc.textContent=bks.length||'0';
   const el=document.getElementById('bkList');
   if(!bks.length){
-    el.innerHTML='<div class="bk-empty">관심 단지를 추가하면<br>여기서 빠르게 확인할 수 있어요</div>';
+    // Agent UX #25 (2026-05-04): empty state 두 곳 (HTML 직접 + JS) 일관성 — JS 도 hint 추가
+    el.innerHTML='<div class="bk-empty">관심 단지를 추가하면<br>여기서 빠르게 확인할 수 있어요.<br><br><span style="font-size:10.5px;color:var(--t3)">💡 단지 상세 → ⭐ 또는 지도 마커 → ⭐</span></div>';
     return;
   }
   el.innerHTML=bks.map((b,i)=>{
@@ -5292,11 +5336,21 @@ function _updateInputProgress() {
     const el = document.getElementById('srcProg');
     if (!el) return;
     let n = 0;
-    if (document.querySelector('#ch-h .chip.on')) n++;
-    const bp = parseFloat(document.getElementById('bp')?.value);
-    if (bp > 0) n++;
-    if (document.querySelector('#ch-r .chip.on')) n++;
-    el.textContent = `${n}/3 완료`;
+    const checks = {
+      house: !!document.querySelector('#ch-h .chip.on'),
+      budget: parseFloat(document.getElementById('bp')?.value) > 0,
+      region: !!document.querySelector('#ch-r .chip.on'),
+    };
+    if (checks.house) n++;
+    if (checks.budget) n++;
+    if (checks.region) n++;
+    // Agent UX #13 (2026-05-04): 모바일 hover tooltip 작동 X → 텍스트 항상 표기
+    //   미입력 항목 명시 (사용자가 무엇 입력해야 하는지 즉시 인지)
+    const missing = [];
+    if (!checks.house) missing.push('보유');
+    if (!checks.budget) missing.push('매수가');
+    if (!checks.region) missing.push('지역');
+    el.textContent = n === 3 ? '✅ 입력 완료' : `${n}/3 (${missing.join('·')} 입력)`;
     el.style.color = n === 3 ? 'var(--grn)' : (n >= 1 ? 'var(--amb)' : 'var(--t3)');
   } catch (_) {}
 }
@@ -5402,9 +5456,20 @@ function calcLTV(buy,cash,inc,mo,house,isF,region){
   const fin=dL>0?Math.min(lL,dL):lL,mo2=fin>0?Math.round(fin*1e8*rt/12/(1-Math.pow(1+rt/12,-360))/10000):0,need=Math.max(0,buy-cash-fin);
   return{ltv,lL,dL,fin,mo:mo2,need,warn,isR,cap};
 }
-function cl(){
+// Agent UX #7 (2026-05-04): cl() 매 글자 입력 시 호출 → "3" 만 쳐도 30억 잘못 표시
+//   debounce 250ms — 입력 멈춘 후 계산 (사용자 의도 완성)
+let _clTimer = null;
+function _cl_now(){
   const buy=parseFloat(document.getElementById('bp')?.value)||0;
   if(!buy){document.getElementById('lr').style.display='none';return;}
+  // 본 cl() 본체는 cl_inner 로 분리 — debounce 호출용
+  return cl_inner(buy);
+}
+function cl(){
+  if (_clTimer) clearTimeout(_clTimer);
+  _clTimer = setTimeout(_cl_now, 250);
+}
+function cl_inner(buy){
   const r=calcC();document.getElementById('lr').style.display='block';
   document.getElementById('lA').textContent=r.ltv===0?'0원 (불가)':r.fin.toFixed(2)+'억';
   document.getElementById('lV').textContent=`LTV ${Math.round(r.ltv*100)}% | 상한 ${r.cap===Infinity?'없음':r.cap+'억'}`;
@@ -5712,7 +5777,7 @@ function toggleBmPop(){
     const bks=(typeof getBookmarks==='function'?getBookmarks():[])||[];
     const body=document.getElementById('bmPopList');
     if(!bks.length){
-      body.innerHTML='<div style="padding:24px 16px;text-align:center;color:var(--t3);font-size:11px;line-height:1.6">관심 단지를 추가하면<br>여기서 빠르게 확인할 수 있어요</div>';
+      body.innerHTML='<div style="padding:24px 16px;text-align:center;color:var(--t3);font-size:11px;line-height:1.6">관심 단지를 추가하면<br>여기서 빠르게 확인할 수 있어요.<br><br><span style="font-size:10.5px">💡 단지 상세 → ⭐ 또는 지도 마커 → ⭐</span></div>';
     } else {
       body.innerHTML=bks.map((b,i)=>{
         const priceNow=b.avgPrice||0;
