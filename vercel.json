@@ -32,6 +32,10 @@
     {
       "path": "/api/cron/regulations-check",
       "schedule": "0 19 * * 1"
+    },
+    {
+      "path": "/api/cron/regulations-auto-fetch",
+      "schedule": "0 6 * * 2"
     }
   ]
 }

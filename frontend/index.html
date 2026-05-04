@@ -6086,10 +6086,15 @@ async function onHeaderSearchInput(q) {
   if (q.length < 1) { drop.style.display = 'none'; return; }
   if (_hSearchTimer) clearTimeout(_hSearchTimer);
   if (_hSearchAbort) _hSearchAbort.abort();
+  // MOB-AUDIT-2026-05-04: 사용자 빠른 타이핑 시 fetch 폭주 차단 + 응답 늦음 인지 차단
+  // debounce 150ms — 입력 중지 0.15초 후 fetch (사용자 체감 빠름)
   _hSearchTimer = setTimeout(async () => {
     try {
       _hSearchAbort = new AbortController();
+      // 8초 timeout — 사용자가 빠른 응답 원함, 8초 이상이면 정상 응답 X
+      const _hSearchTo = setTimeout(() => _hSearchAbort.abort(), 8000);
       const r = await fetch(`${CFG.api}/search/apt?q=${encodeURIComponent(q)}&limit=10`, { signal: _hSearchAbort.signal });
+      clearTimeout(_hSearchTo);
       if (!r.ok) throw new Error('fail');
       const j = await r.json();
       const results = j.results || [];

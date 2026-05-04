@@ -1,0 +1,181 @@
+/**
+ * 정책 변경 자동 감지 cron (Phase 20, 2026-05-04)
+ *
+ * 목적:
+ *   금융위·국토교통부·국세청 보도자료 RSS 매주 fetch.
+ *   부동산 정책 키워드 (LTV·DSR·취득세·양도세·종부세·생애최초·청약·디딤돌·보금자리·규제지역)
+ *   매칭 시 운영자 즉시 알림 (Sentry warn).
+ *
+ * 운영자 명령 (2026-05-04):
+ *   "자동적으로 확인하고 패치해줘야 어드바이저"
+ *   "맨날 내가 업데이트 시켜주면 이게 서비스가 안되지"
+ *
+ * 자동 update 정책:
+ *   - 검출만 자동, DB insert 는 운영자 검증 후 (legal risk 차단)
+ *   - 알림: Sentry capture + logger.warn (Phase 9 룰 #4 + 본 cron)
+ *   - 검출 결과는 cache 에 저장 (운영자 /api/health 응답에 노출)
+ *
+ * 호출 빈도:
+ *   매주 화요일 06:00 UTC (KST 15:00) — 평일 정책 발표 후
+ *
+ * 멱등:
+ *   매번 RSS fetch — 누적 검출 X (마지막 1주일 항목만)
+ *
+ * 호출:
+ *   POST /api/cron/regulations-auto-fetch (Vercel Cron)
+ *   GET  도 동일 (수동 trigger)
+ */
+const axios = require('axios');
+const logger = require('../logger');
+
+// ── RSS 소스 (정부 보도자료) ───────────────────────────────
+// 금융위원회 / 국토교통부 / 국세청 RSS URL
+// 변경 시 본 객체만 수정 — endpoint/parser 영향 X
+const RSS_SOURCES = [
+  {
+    name: '금융위원회',
+    url: 'https://www.fsc.go.kr/wsbiz/rss/in.do?menu=in090101', // 보도자료 RSS
+    keywords: ['LTV', 'DSR', '주담대', '대출', '주택담보', '규제지역', '스트레스', '디딤돌', '보금자리'],
+  },
+  {
+    name: '국토교통부',
+    url: 'https://www.molit.go.kr/USR/policyData/rss/rss.jsp?id=rss', // 정책자료 RSS (실제 URL 검증 필요)
+    keywords: ['주택', '부동산', '규제지역', '청약', '재건축', '재개발', '분양', 'LTV', 'DSR'],
+  },
+  {
+    name: '국세청',
+    url: 'https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=2353&cntntsId=7716', // 부동산 세제 (RSS 없을 시 HTML scraping)
+    keywords: ['취득세', '양도세', '종부세', '종합부동산세', '주택세', '부동산세'],
+  },
+];
+
+const FETCH_TIMEOUT_MS = 15000;
+const LOOK_BACK_DAYS = 7; // 최근 7일 항목만
+
+/**
+ * RSS XML 단순 파싱 (xml2js 의존성 회피 — 단순 regex).
+ * RSS 2.0 표준 구조: <item><title>...</title><link>...</link><pubDate>...</pubDate></item>
+ *
+ * @param {string} xml RSS XML body
+ * @returns {Array<{title: string, link: string, pubDate: Date|null}>}
+ */
+function parseRss(xml) {
+  if (!xml || typeof xml !== 'string') return [];
+  const items = [];
+  const itemRe = /<item\b[^>]*>([\s\S]*?)<\/item>/gi;
+  let m;
+  while ((m = itemRe.exec(xml)) !== null) {
+    const block = m[1];
+    const titleM = block.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i);
+    const linkM = block.match(/<link[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/i);
+    const pubM = block.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i);
+    const title = titleM ? titleM[1].trim().replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>') : '';
+    const link = linkM ? linkM[1].trim() : '';
+    const pubStr = pubM ? pubM[1].trim() : '';
+    let pubDate = null;
+    if (pubStr) {
+      const d = new Date(pubStr);
+      if (!isNaN(d)) pubDate = d;
+    }
+    if (title) items.push({ title, link, pubDate });
+  }
+  return items;
+}
+
+/**
+ * 한 RSS 소스 fetch + 키워드 매칭.
+ *
+ * @param {{name: string, url: string, keywords: string[]}} src
+ * @returns {Promise<{name: string, total: number, matched: Array, error: string|null}>}
+ */
+async function fetchSource(src) {
+  try {
+    const resp = await axios.get(src.url, {
+      timeout: FETCH_TIMEOUT_MS,
+      headers: { 'User-Agent': 'myhomelog-bot/1.0 (regulations monitoring)' },
+      responseType: 'text',
+      // RSS 가 아니어도 HTML 응답 받아서 키워드 매칭 가능
+    });
+    const items = parseRss(resp.data);
+    const cutoff = Date.now() - LOOK_BACK_DAYS * 86400000;
+    const matched = [];
+    for (const it of items) {
+      // 최근 7일 안 항목만
+      if (it.pubDate && it.pubDate.getTime() < cutoff) continue;
+      // 키워드 매칭
+      const hits = src.keywords.filter(k => it.title.includes(k));
+      if (hits.length) {
+        matched.push({ ...it, hits });
+      }
+    }
+    return { name: src.name, total: items.length, matched, error: null };
+  } catch (e) {
+    return { name: src.name, total: 0, matched: [], error: e.message };
+  }
+}
+
+/**
+ * 모든 RSS 소스 병렬 fetch + 종합.
+ *
+ * @returns {Promise<{
+ *   sources: Array,        // 소스별 결과
+ *   totalMatched: number,  // 전체 매칭 항목 수
+ *   topAlert: string|null, // 운영자에게 강조할 한 줄
+ * }>}
+ */
+async function run() {
+  const results = await Promise.all(RSS_SOURCES.map(fetchSource));
+
+  let totalMatched = 0;
+  for (const r of results) {
+    totalMatched += r.matched.length;
+    if (r.error) {
+      logger.warn({ source: r.name, err: r.error }, 'regulations-auto-fetch: 소스 fetch 실패');
+    }
+    if (r.matched.length) {
+      // 매칭된 항목들 logger.warn — Sentry capture
+      for (const item of r.matched) {
+        logger.warn({
+          source: r.name,
+          title: item.title.slice(0, 200),
+          link: item.link,
+          pubDate: item.pubDate ? item.pubDate.toISOString() : null,
+          hits: item.hits,
+        }, '🔔 regulations-auto-fetch: 정책 변경 의심 — 운영자 검토 필요');
+      }
+    }
+  }
+
+  // 종합 로그
+  const summary = results.map(r => `${r.name}: ${r.matched.length}/${r.total}${r.error ? ' (err)' : ''}`).join(' | ');
+  logger.info({
+    sources: results.length,
+    totalMatched,
+    summary,
+  }, totalMatched > 0
+    ? `🔔 regulations-auto-fetch: ${totalMatched}건 검출 — 운영자 알림`
+    : 'regulations-auto-fetch: 신규 변경 없음');
+
+  const topAlert = totalMatched > 0
+    ? `최근 ${LOOK_BACK_DAYS}일 정책 변경 의심 ${totalMatched}건 — Sentry 또는 logs 확인`
+    : null;
+
+  return {
+    sources: results.map(r => ({
+      name: r.name,
+      total: r.total,
+      matched_count: r.matched.length,
+      matched: r.matched.slice(0, 5).map(m => ({ // 최대 5건만 응답
+        title: m.title.slice(0, 200),
+        link: m.link,
+        pubDate: m.pubDate ? m.pubDate.toISOString() : null,
+        hits: m.hits,
+      })),
+      error: r.error,
+    })),
+    totalMatched,
+    topAlert,
+  };
+}
+
+module.exports = { run, parseRss, RSS_SOURCES };

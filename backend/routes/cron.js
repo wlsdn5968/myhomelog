@@ -19,6 +19,7 @@ const { run: runRetention } = require('../jobs/retention');
 const { runMolitIngest } = require('../jobs/molitIngest');
 const { runAptMasterSync } = require('../jobs/aptMasterSync');
 const { run: runRegulationsCheck } = require('../jobs/regulationsCheck');
+const { run: runRegulationsAutoFetch } = require('../jobs/regulationsAutoFetch');
 // MOB-AUDIT-2026-05-03: cron 실패는 운영자 즉시 알림 — Sentry capture (logger.error 외 추가)
 const Sentry = require('@sentry/node');
 
@@ -123,5 +124,22 @@ async function handleRegulationsCheck(req, res) {
 }
 router.post('/regulations-check', handleRegulationsCheck);
 router.get('/regulations-check', handleRegulationsCheck);
+
+// ── Phase 20 (2026-05-04): regulations 자동 fetch (정부 RSS) ──
+// 매주 화 06:00 UTC (KST 15:00) — 평일 정책 발표 후
+async function handleRegulationsAutoFetch(req, res) {
+  try {
+    const started = Date.now();
+    const summary = await runRegulationsAutoFetch();
+    logger.info({ durationMs: Date.now() - started, totalMatched: summary.totalMatched }, 'cron/regulations-auto-fetch OK');
+    res.json({ ok: true, summary });
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'cron/regulations-auto-fetch 실패');
+    try { Sentry.captureException(e, { tags: { route: 'cron.regulations-auto-fetch' } }); } catch(_){}
+    res.status(500).json({ error: e.message });
+  }
+}
+router.post('/regulations-auto-fetch', handleRegulationsAutoFetch);
+router.get('/regulations-auto-fetch', handleRegulationsAutoFetch);
 
 module.exports = router;

@@ -68,12 +68,13 @@ router.get('/apt', async (req, res) => {
     // Phase 10 (2026-05-03): limit*5 → limit*15 — dedupe 후 다양성 확보 + 거래량 기반 인기 정렬
     //   기존: 같은 단지 거래 50건이면 50 row 다 fetch → dedupe 후 1단지만, 다른 단지 못 봄
     //   변경: limit*15 fetch → 단지별 카운트 + 최근 거래 → (count desc, recent desc) 복합 정렬
+    // MOB-AUDIT-2026-05-04: 운영자 보고 "공덕 입력 시 늦음" → limit*15 → limit*10 (속도 ↑, 다양성 약간 ↓)
     const [molitRes, masterRes] = await Promise.all([
       admin.from('molit_transactions')
         .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date')
         .or(`apt_name.ilike.%${q}%,umd_nm.ilike.%${q}%`)
         .order('deal_date', { ascending: false })
-        .limit(limit * 15),
+        .limit(limit * 10),
       admin.from('apt_master')
         .select('apt_name, sigungu, umd_nm, lawd_cd, kapt_code')
         .or(`apt_name.ilike.%${q}%,umd_nm.ilike.%${q}%`)
@@ -333,19 +334,26 @@ router.get('/in-bounds', async (req, res) => {
       aptStats[t.apt_name].n++;
     }
 
+    // MOB-AUDIT-2026-05-04: 거래 0건 단지 (apt_geocache 에 좌표만 있고 molit 매칭 X) 는
+    //   avgPrice 0.00억 으로 노출되어 사용자 오인 → 결과에서 제외 (legal 보호)
+    //   필요 시 frontend 에 "거래 정보 없음" 별도 표시 추가 가능
     const out = coords.map(c => {
       const s = aptStats[c.apt_name];
+      if (!s || !s.n || !s.sum) return null; // 거래 0건 → 제외
+      const avg = +(s.sum / s.n / 10000).toFixed(2);
+      if (!avg || avg <= 0) return null;
       return {
         aptName: c.apt_name,
         sigungu: c.sigungu,
         umdNm: c.umd_nm,
         lat: Number(c.lat),
         lng: Number(c.lng),
-        avgPrice: s ? +(s.sum / s.n / 10000).toFixed(2) : 0,
-        buildYear: s?.buildYear || null,
-        lawdCd: s?.lawdCd || null,
+        avgPrice: avg,
+        dealCount: s.n,
+        buildYear: s.buildYear || null,
+        lawdCd: s.lawdCd || null,
       };
-    });
+    }).filter(Boolean);
     res.json({ results: out, count: out.length });
   } catch (e) {
     logger.warn({ err: e.message }, '영역 검색 실패');
