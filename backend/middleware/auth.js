@@ -59,6 +59,20 @@ async function checkDeletionPending(userId) {
   }
 }
 
+// P0-1 (2026-05-04): JWT exp claim 디코드 — cache TTL 이 JWT 만료 후로 연장되는 우회 차단
+function _jwtExpMs(token) {
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) return null;
+    // base64url → base64
+    const b64 = payload.replace(/-/g, '+').replace(/_/g, '/').padEnd(payload.length + (4 - payload.length % 4) % 4, '=');
+    const json = JSON.parse(Buffer.from(b64, 'base64').toString('utf8'));
+    return typeof json.exp === 'number' ? json.exp * 1000 : null;
+  } catch (_) {
+    return null;
+  }
+}
+
 async function verifyToken(token) {
   const cached = TOKEN_CACHE.get(token);
   if (cached && cached.expiresAt > Date.now()) {
@@ -74,7 +88,13 @@ async function verifyToken(token) {
     const user = { id: data.user.id, email: data.user.email };
     const deletionPending = await checkDeletionPending(user.id);
 
-    TOKEN_CACHE.set(token, { user, deletionPending, expiresAt: Date.now() + TTL_MS });
+    // P0-1: cache TTL = min(jwt exp, micro-cache TTL) — JWT 만료 후 5초 우회 차단
+    //   기존: expiresAt = Date.now() + TTL_MS → JWT 만료된 토큰도 5초 동안 통과
+    //   변경: JWT exp 가 더 빠르면 그것 채택 (만료 즉시 cache invalidate)
+    const jwtExp = _jwtExpMs(token);
+    const microExp = Date.now() + TTL_MS;
+    const expiresAt = jwtExp ? Math.min(jwtExp, microExp) : microExp;
+    TOKEN_CACHE.set(token, { user, deletionPending, expiresAt });
     if (TOKEN_CACHE.size > 1000) {
       const cutoff = Date.now();
       for (const [k, v] of TOKEN_CACHE) {

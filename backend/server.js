@@ -85,7 +85,8 @@ app.use(cors({
     cb(new Error('CORS 차단: 허용되지 않은 출처'));
   },
   credentials: true,
-  methods: ['GET', 'POST'],
+  // P0-2 (2026-05-04): PATCH/DELETE/PUT 추가 — 북마크/임장노트/챗 세션 수정·삭제 100% 차단 fix
+  methods: ['GET', 'POST', 'PATCH', 'DELETE', 'PUT', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 

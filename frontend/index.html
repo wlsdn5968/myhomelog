@@ -5072,9 +5072,11 @@ function renderRisk(d){
     return;
   }
   const lm={높음:'danger',중간:'warn',낮음:'safe'};
+  // P0-4 (2026-05-04): AI 응답 (clause/risk) 의 모든 필드 _escHtml — XSS via prompt injection 차단
+  //   기존: ${r.scenario} 등 raw innerHTML → AI 가 <img onerror=...> 출력 시 모든 사용자 세션 탈취 risk
   document.getElementById('t2').innerHTML=`
-    <div class="ibox ${d.overallRisk==='높음'?'r':d.overallRisk==='보통'?'y':'g'}" style="margin-bottom:12px"><b>종합 리스크:</b> ${d.summary||''}</div>
-    ${(d.risks||[]).map(r=>`<div class="rcard"><div class="rcard-top"><span class="lvl ${lm[r.level]||'warn'}">${r.level}</span><div class="rcard-t">${r.title}</div><div class="rcard-p">${r.probability||''}</div></div><div class="rcard-b">${r.scenario}</div><div class="rcard-c">💡 ${r.countermeasure}</div></div>`).join('')}`;
+    <div class="ibox ${d.overallRisk==='높음'?'r':d.overallRisk==='보통'?'y':'g'}" style="margin-bottom:12px"><b>종합 리스크:</b> ${_escHtml(d.summary||'')}</div>
+    ${(d.risks||[]).map(r=>`<div class="rcard"><div class="rcard-top"><span class="lvl ${lm[r.level]||'warn'}">${_escHtml(r.level||'')}</span><div class="rcard-t">${_escHtml(r.title||'')}</div><div class="rcard-p">${_escHtml(r.probability||'')}</div></div><div class="rcard-b">${_escHtml(r.scenario||'')}</div><div class="rcard-c">💡 ${_escHtml(r.countermeasure||'')}</div></div>`).join('')}`;
 }
 
 function renderClause(d){
@@ -5087,9 +5089,10 @@ function renderClause(d){
     recommended:[{title:'기존 대출 말소 확인',content:'매도인은 잔금일 전까지 해당 부동산의 모든 담보 대출을 말소하고 등기부등본으로 확인한다.',reason:'근저당 미말소 시 선순위 피해'}],
     caution:'계약 전 등기부등본 최신본 확인 필수. 잔금일 월초~중순 권장. 복비 계약 전 협상.'
   };
+  // P0-4 (2026-05-04): clause content/title/reason XSS escape — AI prompt injection 차단
   const mkC=(arr,badge)=>(arr||[]).map(c=>`<div class="ccard">
-    <div class="ccard-h"><span class="ccard-t">${c.title}</span><div style="display:flex;gap:5px;align-items:center"><span class="rtag ${badge==='e'?'r':'y'}">${badge==='e'?'필수':'권장'}</span><button class="cpybtn" onclick="cpT(\`${c.content.replace(/`/g,"'").replace(/\n/g,' ')}\`)">복사</button></div></div>
-    <div class="ccard-b"><div class="ccard-ct">${c.content}</div><div class="ccard-r">💡 ${c.reason}</div></div>
+    <div class="ccard-h"><span class="ccard-t">${_escHtml(c.title||'')}</span><div style="display:flex;gap:5px;align-items:center"><span class="rtag ${badge==='e'?'r':'y'}">${badge==='e'?'필수':'권장'}</span><button class="cpybtn" onclick="cpT(\`${(c.content||'').replace(/`/g,"'").replace(/\\/g,'\\\\').replace(/\n/g,' ')}\`)">복사</button></div></div>
+    <div class="ccard-b"><div class="ccard-ct">${_escHtml(c.content||'')}</div><div class="ccard-r">💡 ${_escHtml(c.reason||'')}</div></div>
   </div>`).join('');
   const citeHtml = (d.citations&&d.citations.length)?`
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 6px">📚 관련 법령 근거</div>

@@ -461,7 +461,9 @@ async function analyzeApt(lawdCd, aptName, currentPrice) {
   const percentileObj = reliability !== 'NONE' ? calcPricePercentile(filteredTx, priceW) : null;
   const percentile = percentileObj?.value ?? null;
   const volumeSignalObj = calcVolumeSignal(saleTx);
-  const gapData = calcGap(saleTx, jeonseT);
+  // P0-3 (2026-05-04): saleTx (filter X) → filteredTx (이상거래 제외)
+  //   기존: outlier 1건 30억 → 평균 +18% 왜곡 → 잘못된 전세가율 → 매수 신호 RED 오판
+  const gapData = calcGap(filteredTx, jeonseT);
 
   // LOW 이상일 때만 시세 위치 요약 계산 (NONE은 null)
   // P1 (2026-04-25 D2): buySignal → marketSummary alias 동시 노출 (호환성)

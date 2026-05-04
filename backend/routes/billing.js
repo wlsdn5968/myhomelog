@@ -217,14 +217,23 @@ router.post('/confirm', async (req, res, next) => {
       return res.status(status).json({ error: data.message || '결제 승인 실패', code: data.code });
     }
 
-    // 3) payments row 업데이트
-    await admin.from('payments').update({
+    // 3) payments row 업데이트 — atomic CAS (status='requested' 인 경우만 captured 로 전환)
+    //   P0-5 (2026-05-04): webhook 과 confirm 동시 처리 race 차단
+    //   기존: .eq('order_id', orderId) → webhook 이 먼저 captured 시 confirm 이 다시 captured 덮어씀
+    //   변경: .eq('status', 'requested') 추가 → 첫 처리만 성공
+    const { data: capRows, error: capErr } = await admin.from('payments').update({
       status: 'captured',
       toss_payment_key: paymentKey,
       method: tossData.method || null,
       approved_at: tossData.approvedAt || new Date().toISOString(),
       raw_response: tossData,
-    }).eq('order_id', orderId);
+    }).eq('order_id', orderId).eq('status', 'requested').select();
+    if (capErr) throw capErr;
+    if (!capRows || capRows.length === 0) {
+      // webhook 이 이미 처리함 — 멱등 응답
+      logger.info({ userId: req.user.id, orderId }, 'confirm: 이미 처리됨 (멱등)');
+      return res.json({ status: 'captured', plan: pay.plan, note: 'already processed' });
+    }
 
     // 4) user_billing upsert — 한 달 구독 (MVP)
     const now = new Date();
@@ -345,13 +354,19 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
 
     if (tossStatus === 'DONE') {
       // 성공 반영 — /confirm 과 동일 작업. 클라이언트 confirm 이 먼저 왔어도 멱등.
-      await admin.from('payments').update({
+      // P0-5 (2026-05-04): atomic CAS — status='requested' 인 경우만 captured 로 전환
+      //   확정 후 confirm 이 또 capture 시도해도 0 row update → 무영향 (멱등)
+      const { data: capRows } = await admin.from('payments').update({
         status: 'captured',
         toss_payment_key: paymentKey,
         method: tossData.method || null,
         approved_at: tossData.approvedAt || new Date().toISOString(),
         raw_response: tossData,
-      }).eq('order_id', orderId);
+      }).eq('order_id', orderId).eq('status', 'requested').select();
+      if (!capRows || capRows.length === 0) {
+        logger.info({ orderId }, 'webhook: 이미 captured (멱등 — confirm 이 먼저 처리)');
+        return res.json({ ok: true, status: tossStatus, note: 'already captured' });
+      }
 
       const now = new Date();
       const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
