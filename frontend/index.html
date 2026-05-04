@@ -479,6 +479,16 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   /* 모바일 swipe hint — 첫 진입 시 우측에 fade gradient */
   .rtabs::after{content:'';position:absolute;right:14px;top:0;bottom:0;width:30px;background:linear-gradient(to right, transparent, var(--s0));pointer-events:none}
   .rpanel{position:relative}
+  /* Phase 35 #3 (2026-05-04): 모바일 상세 모달 우측 공백 회귀 fix — edge-to-edge */
+  .dmbg{padding:0!important;align-items:stretch!important}
+  .dm{max-width:100%!important;border-radius:0!important;max-height:100vh!important;height:100vh}
+  .rpanel{padding:12px!important}
+  .dmhdr{padding:12px 14px!important}
+  .apt-sticky-summary{padding:8px 12px!important}
+  /* 챗 답변 우측 공백 fix — bbl 90% → 95% */
+  .bbl{max-width:95%!important}
+  /* CTA 보고서 버튼 모바일 — 상세모달 위 z-index 충돌 방지 + DM 열려도 클릭 가능 */
+  /* Phase 35 #5: ctaReportBtn 모바일에서 헤더에 박혀 있되 z-index 낮춤 */
 }
 /* Phase 33 #3 (2026-05-04): 단지 sticky header "한줄 요약" — 12 element 스크롤 시 항상 노출 */
 .apt-sticky-summary{position:sticky;top:0;z-index:50;background:var(--s0);border-bottom:1px solid var(--bd);padding:8px 14px;font-size:12px;color:var(--t1);display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
@@ -3413,13 +3423,26 @@ function initLeaflet(){
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(mapObj);
   mapObj._isLeaflet=true;
   // Phase 4 (2026-04-26): 영역 panning 시 "이 영역 단지 보기" 버튼 노출 — 호갱노노 패턴
+  // Phase 35 #1 (2026-05-04): z-index 1000 → 350 (.dmbg 400 보다 아래) + DM open 시 hide
   let _pannBtn = null;
+  window._pannBtnHide = () => { if (_pannBtn) _pannBtn.style.display = 'none'; };
+  window._pannBtnShow = () => {
+    if (!_pannBtn || !mapObj) return;
+    const dmOpen = document.getElementById('DM')?.classList.contains('open');
+    const admOpen = document.getElementById('ADM')?.classList.contains('open');
+    if (dmOpen || admOpen) return; // 다른 모달 떠 있으면 노출 안 함
+    if (mapObj.getZoom && mapObj.getZoom() >= 13) _pannBtn.style.display = 'block';
+  };
   mapObj.on('moveend', () => {
     const z = mapObj.getZoom();
     if (z < 13) { if (_pannBtn) _pannBtn.style.display = 'none'; return; }
+    // 모달 열려 있으면 버튼 표시 X (회귀 fix)
+    const dmOpen = document.getElementById('DM')?.classList.contains('open');
+    const admOpen = document.getElementById('ADM')?.classList.contains('open');
+    if (dmOpen || admOpen) { if (_pannBtn) _pannBtn.style.display = 'none'; return; }
     if (!_pannBtn) {
       _pannBtn = document.createElement('button');
-      _pannBtn.style.cssText = 'position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:1000;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:24px;font-size:12px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,0.2);cursor:pointer;font-family:inherit';
+      _pannBtn.style.cssText = 'position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:350;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:24px;font-size:12px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,0.2);cursor:pointer;font-family:inherit';
       _pannBtn.textContent = '🔄 이 영역 단지 보기';
       _pannBtn.onclick = () => {
         const b = mapObj.getBounds();
@@ -3444,10 +3467,16 @@ async function loadAptsInBounds(south, west, north, east) {
     const list = j.results || [];
     if (!list.length) { toast('이 영역에 거래 데이터 없음'); return; }
     // props에 직접 매핑 + renderMarkers
+    // Phase 35 #2 (2026-05-04): score:60 hardcode 제거 → _areaSearch flag + dealCount 노출
+    //   기존: 모든 마커 "60점" 표시 → 의미 없음, 사용자 혼란
+    //   변경: area 검색 마커는 거래량 기반 visual cue (가격만 + dealCount)
     props = list.map(p => ({
       aptName: p.aptName, sigungu: p.sigungu, umdNm: p.umdNm,
       area: `${p.sigungu||''} ${p.umdNm||''}`.trim(),
-      avgPrice: p.avgPrice || 0, score: 60, ltv: '', maxLoan: '',
+      avgPrice: p.avgPrice || 0,
+      dealCount: p.dealCount || p.cnt || 0, // 거래 건수 (마커 표시)
+      _areaSearch: true, // 마커 렌더 시 "60점" 대신 거래량 표시
+      ltv: '', maxLoan: '',
       buildYear: p.buildYear, lawdCd: p.lawdCd,
       lat: p.lat, lng: p.lng,
       type: 'non',
@@ -3484,12 +3513,16 @@ const clsColor={reg:'var(--acc)',non:'var(--a2)',recon:'var(--amb)'};
 
 function mkNaverOverlay(p){
   const cls=getMarkerCls(p),pr=(p.avgPrice||p.price||0).toFixed(1);
+  // Phase 35 #2 (2026-05-04): area 검색 마커는 "60점" 대신 거래량 (dealCount) 표시
+  const subTxt = p._areaSearch
+    ? (p.dealCount > 0 ? `${p.dealCount}건` : '신규')
+    : `${p.score||60}점`;
   const ov=new naver.maps.CustomOverlay({
     position:new naver.maps.LatLng(p.lat,p.lng),
     content:`<div class="nmap-pin" ondblclick="showDetailById('${encodeURIComponent(p.aptName)}')">
       <div class="nmap-bub ${cls}">
         <div class="nmap-pr ${cls}">${pr}억</div>
-        <div class="nmap-sc">${p.score||60}점</div>
+        <div class="nmap-sc">${subTxt}</div>
       </div>
     </div>`,
     anchor:new naver.maps.Point(29,38),
@@ -3524,9 +3557,13 @@ function mkNaverIW(p){
 function mkLeafletMkr(p){
   const cls=getMarkerCls(p),pr=(p.avgPrice||p.price||0).toFixed(1),s=p.score||60;
   const c=clsColor[cls];
+  // Phase 35 #2 (2026-05-04): area 검색 마커는 "60점" 대신 거래량 (dealCount) 표시
+  const subTxt = p._areaSearch
+    ? (p.dealCount > 0 ? `${p.dealCount}건` : '신규')
+    : `${s}점`;
   const icon=L.divIcon({
     className:'',
-    html:`<div class="nmap-pin"><div class="nmap-bub ${cls}"><div class="nmap-pr ${cls}">${pr}억</div><div class="nmap-sc">${s}점</div></div></div>`,
+    html:`<div class="nmap-pin"><div class="nmap-bub ${cls}"><div class="nmap-pr ${cls}">${pr}억</div><div class="nmap-sc">${subTxt}</div></div></div>`,
     iconAnchor:[29,38],
   });
   const m=L.marker([p.lat,p.lng],{icon}).addTo(mapObj);
@@ -4168,6 +4205,8 @@ function showDetail(p){
   bkBtn.textContent=isBk?'⭐ 관심 중':'⭐ 관심 추가';
   bkBtn.classList.toggle('on',isBk);
   document.getElementById('DM').classList.add('open');
+  // Phase 35 #1 (2026-05-04): 모달 열림 시 "이 영역 단지 보기" 버튼 hide (모달 가림 회귀 fix)
+  try { window._pannBtnHide && window._pannBtnHide(); } catch(_){}
   renderFieldNote(p); // 임장 노트는 즉시 렌더 (로컬 데이터)
   loadRisk(p);loadClause(p);loadAnalysis(p);loadAmenities(p);loadFacility(p);
 }
@@ -4253,6 +4292,8 @@ function stb(btn,id){document.querySelectorAll('.rtab').forEach(b=>b.classList.r
 function cDM(){document.getElementById('DM').classList.remove('open');currentDetail=null;
   // URL의 ?apt= 파라미터 정리
   if(history.replaceState){const u=new URL(location.href);u.searchParams.delete('apt');u.searchParams.delete('area');history.replaceState(null,'',u);}
+  // Phase 35 #1 (2026-05-04): DM 닫힘 시 _pannBtn 다시 노출 가능 (zoom>=13 + 모달 X 일 때만)
+  try { window._pannBtnShow && window._pannBtnShow(); } catch(_){}
 }
 
 // ── 공유 URL ───────────────────────────────────────────
@@ -5759,6 +5800,15 @@ const VIEW_DISPLAY={
 };
 let _rpOverlay=false; // 플로팅 챗 버튼으로 .rp 강제 표시 상태
 function sv(v,btn){
+  // Phase 35 #5 (2026-05-04): DM 모달 열린 상태에서 헤더 탭 (특히 주황 보고서) 클릭 시 모달 close
+  //   기존 회귀: 모바일에서 헤더 보고서 버튼 클릭해도 DM 가린 채로 view 전환 → "동작 X" 보임
+  //   변경: sv() 호출 시 항상 DM/ADM/SM/LM 등 모달 닫기 (탭 전환 = 새 컨텍스트 진입)
+  try {
+    const dm = document.getElementById('DM');
+    if (dm && dm.classList.contains('open')) { try { cDM(); } catch(_){ dm.classList.remove('open'); } }
+    const adm = document.getElementById('ADM');
+    if (adm && adm.classList.contains('open')) adm.classList.remove('open');
+  } catch(_){}
   Object.entries(VIEW_DISPLAY).forEach(([id,meta])=>{
     const el=document.getElementById('view-'+id);
     if(el)el.style.display=id===v?meta.display:'none';
