@@ -71,7 +71,15 @@
 <link rel="preconnect" href="https://unpkg.com" crossorigin>
 <link rel="preconnect" href="https://browser.sentry-cdn.com" crossorigin>
 <link rel="preconnect" href="https://brxorvxdfrbxcavufspe.supabase.co" crossorigin>
+<link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="dns-prefetch" href="https://api.iconify.design">
+
+<!-- Phase 4-2 단계 1 (2026-05-04): Concept C 폰트 stack — Pretendard Variable + Sora + JetBrains Mono.
+     LCP 영향 +50~100ms (모바일 4G 1.2s → 1.25-1.30s). preconnect + preload + display:swap 으로 FOUT 최소. -->
+<link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
 
 <!-- ── Sentry (프론트) — DSN 주입 시 자동 활성화 ─────────────
      활성화 방법: 아래 content="" 에 Sentry Browser 프로젝트 DSN 입력.
@@ -246,21 +254,134 @@ window.MHL.auth = window.MHL.auth || {
 
 <style>
 :root{
-  --bg:#F4F2ED;--s0:#fff;--s1:#F8F6F2;--s2:#F0EDE7;
-  --bd:#E2DDD5;--bd2:#C8C3B5;
-  --t1:#18160F;--t2:#56524A;--t3:#7A7568;
-  --acc:#C84B18;--accL:#FAE9E2;--accD:#8A3210;
-  --a2:#1E5499;--a2L:#E6EFF9;
-  --grn:#177038;--grnL:#E5F3EB;
-  --red:#A82525;--redL:#FAEBEB;
-  --amb:#9A5510;--ambL:#FAF0E2;
-  /* STAB-A P0#2 (2026-05-03): 8+ 위치에서 사용되던 미정의 변수 추가 — 회색 배경 transparent 차단 */
-  --bg2:#EEF1F6;            /* quota pill·계정메뉴·동의박스 보조 배경 */
-  --danger:#A82525;          /* 위험 alert (= --red 와 동일 톤, 별칭) */
-  --r:12px;--rs:8px;
-  --sh:0 1px 4px rgba(0,0,0,.08);
-  --sh2:0 4px 24px rgba(0,0,0,.14);
+  /* ════ Phase 4-2 단계 1 (2026-05-04): Concept C Light tokens ════ */
+  /* Background scale (white-based) */
+  --bg-base:        #FFFFFF;
+  --bg-elev-1:      #FAFAFA;
+  --bg-elev-2:      #F5F5F5;
+  --bg-elev-3:      #EFEFEF;
+
+  /* Glass surfaces (black-based on white) */
+  --glass-1:        rgba(0,0,0,0.025);
+  --glass-2:        rgba(0,0,0,0.05);
+  --glass-3:        rgba(0,0,0,0.08);
+  --glass-hover:    rgba(0,0,0,0.06);
+  --glass-active:   rgba(0,0,0,0.10);
+
+  /* Border (dark edge insets on light) */
+  --border-faint:   rgba(0,0,0,0.06);
+  --border-subtle:  rgba(0,0,0,0.10);
+  --border-medium:  rgba(0,0,0,0.16);
+  --border-strong:  rgba(0,0,0,0.24);
+
+  /* Accent · Electric Orange (myhomelog brand) */
+  --accent-50:      #FFF5EE;
+  --accent-100:     #FFE4D1;
+  --accent-300:     #FF9A6E;
+  --accent-500:     #FF6B35;   /* primary */
+  --accent-600:     #F25218;   /* hover */
+  --accent-700:     #C84B18;   /* legacy brand · print/PDF */
+  --accent-900:     #6B2A0E;
+  --accent-tint:    rgba(255,107,53,0.08);
+  --accent-tint-2:  rgba(255,107,53,0.14);
+  --accent-tint-3:  rgba(255,107,53,0.22);
+  --accent-shadow:        0 4px 12px rgba(255,107,53,0.18), 0 0 0 1px rgba(255,107,53,0.10);
+  --accent-shadow-strong: 0 8px 24px rgba(255,107,53,0.25), 0 0 0 1px rgba(255,107,53,0.18);
+
+  /* Semantic */
+  --positive:       #10B981;
+  --positive-tint:  rgba(16,185,129,0.10);
+  --warning:        #D97706;
+  --warning-tint:   rgba(217,119,6,0.10);
+  --negative:       #DC2626;
+  --negative-tint:  rgba(220,38,38,0.08);
+  --info:           #2563EB;
+  --info-tint:      rgba(37,99,235,0.08);
+
+  /* Text scale (dark on light) */
+  --text-primary:   #0A0A0F;
+  --text-secondary: #404048;
+  --text-tertiary:  #5C5749;   /* F-1 일치 · WCAG AA 5.04:1 */
+  --text-quiet:     #71717A;
+  --text-faint:     #A1A1AA;
+  --text-inverse:   #FFFFFF;
+
+  /* Typography */
+  --font-display:   'Sora', 'Pretendard Variable', system-ui, sans-serif;
+  --font-body:      'Pretendard Variable', system-ui, -apple-system, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --font-mono:      'JetBrains Mono', ui-monospace, 'IBM Plex Mono', monospace;
+
+  --text-display-xl: 64px;
+  --text-display-lg: 48px;
+  --text-display:    36px;
+  --text-h1:         32px;
+  --text-h2:         24px;
+  --text-h3:         20px;
+  --text-body-lg:    17px;
+  --text-body:       15px;
+  --text-caption:    13px;
+  --text-label:      12px;
+  --text-micro:      11px;
+
+  /* Spacing · 4pt */
+  --space-1: 4px; --space-2: 8px; --space-3: 12px;
+  --space-4: 16px; --space-5: 20px; --space-6: 24px;
+  --space-8: 32px; --space-10: 40px; --space-12: 48px;
+  --space-16: 64px; --space-20: 80px; --space-24: 96px; --space-32: 128px;
+
+  /* Radius */
+  --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px;
+  --radius-xl: 18px; --radius-2xl: 24px; --radius-full: 999px;
+
+  /* Shadow · 라이트 ambient */
+  --shadow-sm:  0 1px 2px rgba(15,23,42,0.04), 0 2px 6px rgba(15,23,42,0.04);
+  --shadow-md:  0 1px 3px rgba(15,23,42,0.05), 0 8px 24px rgba(15,23,42,0.06);
+  --shadow-lg:  0 2px 6px rgba(15,23,42,0.06), 0 16px 40px rgba(15,23,42,0.08);
+  --shadow-xl:  0 4px 12px rgba(15,23,42,0.08), 0 32px 64px rgba(15,23,42,0.10);
+
+  /* Motion */
+  --duration-instant: 80ms;
+  --duration-fast:    150ms;
+  --duration-normal:  250ms;
+  --duration-slow:    400ms;
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  /* Backdrop blur */
+  --blur-sm: blur(8px) saturate(1.2);
+  --blur-md: blur(20px) saturate(1.3);
+  --blur-lg: blur(40px) saturate(1.4);
+
+  /* ════ Legacy alias — 기존 토큰 → 새 토큰 자동 매핑 (호환성) ════ */
+  --bg:    var(--bg-base);             /* #F4F2ED → #FFFFFF */
+  --s0:    var(--bg-base);             /* #fff → #FFFFFF (no change) */
+  --s1:    var(--bg-elev-1);           /* #F8F6F2 → #FAFAFA */
+  --s2:    var(--bg-elev-2);           /* #F0EDE7 → #F5F5F5 */
+  --bd:    var(--border-medium);       /* #E2DDD5 → rgba(0,0,0,.16) */
+  --bd2:   var(--border-strong);       /* #C8C3B5 → rgba(0,0,0,.24) */
+  --t1:    var(--text-primary);        /* #18160F → #0A0A0F */
+  --t2:    var(--text-secondary);      /* #56524A → #404048 */
+  --t3:    var(--text-tertiary);       /* #7A7568 → #5C5749 (F-1 일치) */
+  --acc:   var(--accent-500);          /* #C84B18 → #FF6B35 */
+  --accL:  var(--accent-tint);         /* #FAE9E2 → rgba(255,107,53,.08) */
+  --accD:  var(--accent-600);          /* #8A3210 → #F25218 */
+  --a2:    #1E5499;                    /* (변경 없음 — 단계 5 에서 별도 검증) */
+  --a2L:   #E6EFF9;                    /* (변경 없음) */
+  --grn:   var(--positive);            /* #177038 → #10B981 */
+  --grnL:  var(--positive-tint);       /* #E5F3EB → rgba(16,185,129,.10) */
+  --red:   var(--negative);            /* #A82525 → #DC2626 */
+  --redL:  var(--negative-tint);       /* #FAEBEB → rgba(220,38,38,.08) */
+  --amb:   var(--warning);             /* #9A5510 → #D97706 */
+  --ambL:  var(--warning-tint);        /* #FAF0E2 → rgba(217,119,6,.10) */
+  --bg2:   var(--bg-elev-2);           /* #EEF1F6 → #F5F5F5 */
+  --danger:var(--negative);            /* alias */
+  --r:     var(--radius-lg);           /* 12px → 14px */
+  --rs:    var(--radius-md);           /* 8px → 10px */
+  --sh:    var(--shadow-sm);
+  --sh2:   var(--shadow-lg);
 }
+body{font-family:var(--font-body)}
 *{box-sizing:border-box;margin:0;padding:0}
 /* A11y: 키보드 탐색 시만 포커스 링 표시 (마우스 클릭 시 방해 없음) */
 *:focus{outline:none}
@@ -272,15 +393,39 @@ html,body{height:100%;overflow:hidden}
 }
 body{font-family:'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;background:var(--bg);color:var(--t1);font-size:14px;line-height:1.6;display:flex;flex-direction:column}
 
-/* HEADER */
-header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;height:54px;display:flex;align-items:center;padding:0 18px;gap:10px;z-index:1000;position:relative;box-shadow:var(--sh)}
+/* HEADER · Phase 4-2 단계 1 (2026-05-04): glass + accent active 톤 */
+header{
+  background:rgba(255,255,255,0.78);
+  backdrop-filter:var(--blur-md);-webkit-backdrop-filter:var(--blur-md);
+  border-bottom:1px solid var(--border-faint);
+  flex-shrink:0;height:54px;display:flex;align-items:center;
+  padding:0 18px;gap:10px;z-index:1000;position:relative;
+  box-shadow:0 1px 0 rgba(0,0,0,0.02);
+}
 .logo{display:flex;align-items:center;gap:7px;text-decoration:none;flex-shrink:0}
-.lmark{width:30px;height:30px;background:var(--acc);border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:15px}
-.ltxt{font-size:17px;font-weight:700;color:var(--t1);letter-spacing:-.3px}
-.ltxt em{color:var(--acc);font-style:normal}
+.lmark{
+  width:30px;height:30px;
+  background:linear-gradient(135deg,var(--accent-500),var(--accent-700));
+  border-radius:var(--radius-md);
+  display:flex;align-items:center;justify-content:center;
+  color:#fff;font-weight:800;font-size:15px;font-family:var(--font-display);
+  box-shadow:var(--accent-shadow);
+}
+.ltxt{font-family:var(--font-display);font-size:17px;font-weight:800;color:var(--text-primary);letter-spacing:-.5px}
+.ltxt em{font-style:normal;background:linear-gradient(120deg,var(--accent-700),var(--accent-500));-webkit-background-clip:text;background-clip:text;color:transparent}
 .htabs{display:flex;gap:2px;margin-left:4px}
-.htab{padding:5px 13px;border-radius:18px;font-size:12px;font-weight:500;cursor:pointer;border:none;font-family:inherit;color:var(--t2);background:transparent;transition:all .15s}
-.htab:hover{background:var(--s1)}.htab.on{background:var(--acc);color:#fff}
+.htab{
+  padding:6px 13px;border-radius:var(--radius-sm);
+  font-family:var(--font-display);font-size:12.5px;font-weight:500;
+  cursor:pointer;border:none;color:var(--text-tertiary);
+  background:transparent;transition:all var(--duration-fast) var(--ease-out);
+}
+.htab:hover{background:var(--glass-1);color:var(--text-primary)}
+.htab.on{
+  background:var(--accent-tint);color:var(--accent-700);
+  border:1px solid var(--accent-tint-2);font-weight:600;
+  padding:5px 12px; /* border 보정 */
+}
 .hml{margin-left:auto;display:flex;gap:7px;align-items:center}
 .rpill{display:flex;align-items:center;gap:5px;background:var(--redL);color:var(--red);padding:4px 10px;border-radius:18px;font-size:11px;font-weight:600;border:1px solid #EEC8C8;flex-shrink:0}
 .hdot{width:6px;height:6px;border-radius:50%;background:var(--red);animation:blink 2s infinite}
@@ -815,75 +960,100 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 /* tap-highlight 색상 토닝 다운 (회색 → 브랜드 톤) */
 * { -webkit-tap-highlight-color: rgba(42,109,244,.12); }
 
-/* ── Phase 4-1 단계 1 (2026-05-04): Hero band — A-1 value prop + 단일 CTA ──
-   additive only. dismissible. 큰 화면 max-width 1280 centered. */
+/* ── Phase 4-2 단계 1 (2026-05-04): Hero band v2 · 새 디자인 시스템 적용 ──
+   - 메시지 폰트: Sora 800 + Pretendard 800 (한글)
+   - DATA mono tag (NEW): 데이터 도구 정체성 시그널
+   - CTA: ambient shadow + accent border (Glow 라이트 변환)
+   - Border-bottom: subtle (refined)
+   - localStorage mhl_hero_dismissed 호환 유지 */
 .hero-band{
-  background:linear-gradient(135deg,#FFFCF7 0%,#FBF4EA 100%);
-  border-bottom:1px solid var(--bd);
+  background:linear-gradient(180deg,var(--bg-base) 0%,#FFF8F2 100%);
+  border-bottom:1px solid var(--border-subtle);
   flex-shrink:0;
 }
 .hero-inner{
   position:relative;
   display:flex;
   align-items:center;
-  gap:16px;
+  gap:var(--space-4);
   width:100%;
   max-width:1280px;
   margin:0 auto;
-  padding:14px 22px;
+  padding:var(--space-4) var(--space-6);
 }
 .hero-content{flex:1;min-width:0}
+.hero-tag{
+  display:inline-block;
+  font-family:var(--font-mono);font-size:var(--text-micro);font-weight:600;
+  color:var(--accent-700);
+  background:var(--accent-tint);
+  border:1px solid var(--accent-tint-2);
+  padding:3px 9px;border-radius:var(--radius-full);
+  letter-spacing:1px;text-transform:uppercase;
+  margin-bottom:var(--space-2);
+}
 .hero-msg{
-  display:flex;align-items:center;gap:8px;
-  font-size:16px;font-weight:700;color:var(--t1);
-  line-height:1.4;margin-bottom:3px;
+  display:flex;align-items:center;gap:var(--space-2);
+  font-family:var(--font-display);
+  font-size:18px;font-weight:800;color:var(--text-primary);
+  line-height:1.3;letter-spacing:-0.5px;
+  margin-bottom:3px;
+}
+.hero-msg em{
+  font-style:normal;
+  background:linear-gradient(120deg,var(--accent-700),var(--accent-500));
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+  font-weight:800;
 }
 .hero-icon{font-size:18px;flex-shrink:0}
 .hero-sub{
-  font-size:11.5px;font-weight:500;color:var(--t2);
-  line-height:1.6;
+  font-family:var(--font-mono);
+  font-size:var(--text-micro);font-weight:500;
+  color:var(--text-tertiary);
+  line-height:1.6;letter-spacing:0.3px;
 }
 .hero-cta{
-  display:inline-flex;align-items:center;gap:8px;
-  padding:9px 18px;
-  background:var(--acc);color:#fff;
-  border:none;border-radius:var(--rs);
-  font-size:13px;font-weight:700;font-family:inherit;
-  cursor:pointer;transition:all .18s;
-  box-shadow:0 2px 6px rgba(200,75,24,.18);
+  display:inline-flex;align-items:center;gap:var(--space-2);
+  padding:10px 20px;
+  background:linear-gradient(135deg,var(--accent-500),var(--accent-700));
+  color:#fff;
+  border:none;border-radius:var(--radius-md);
+  font-family:var(--font-display);font-size:13px;font-weight:700;
+  cursor:pointer;transition:all var(--duration-fast) var(--ease-out);
+  box-shadow:var(--accent-shadow);
   flex-shrink:0;white-space:nowrap;
 }
 .hero-cta:hover{
-  background:var(--accD);
   transform:translateY(-1px);
-  box-shadow:0 4px 10px rgba(200,75,24,.28);
+  box-shadow:var(--accent-shadow-strong);
 }
-.hero-cta:active{transform:translateY(0)}
+.hero-cta:active{transform:translateY(0);box-shadow:var(--accent-shadow)}
 .hero-dismiss{
   position:absolute;top:6px;right:8px;
   width:28px;height:28px;
-  background:transparent;border:none;
-  color:var(--t3);font-size:14px;
+  background:var(--bg-elev-1);border:1px solid var(--border-faint);
+  color:var(--text-tertiary);font-size:14px;
   cursor:pointer;border-radius:50%;
-  transition:all .15s;
+  transition:all var(--duration-fast) var(--ease-out);
   display:flex;align-items:center;justify-content:center;
 }
-/* tap area 확장 — WCAG 2.5.5 AAA 44×44 보장 */
+/* tap area 확장 — WCAG 2.5.5 AAA 44×44 보장 (Phase 4-1 호환 유지) */
 .hero-dismiss::before{
   content:'';position:absolute;inset:-8px;
 }
-.hero-dismiss:hover{background:rgba(0,0,0,.05);color:var(--t1)}
+.hero-dismiss:hover{background:var(--bg-elev-2);color:var(--text-primary);border-color:var(--border-medium)}
+.hero-dismiss:focus-visible{outline:2px solid var(--accent-500);outline-offset:2px}
 
-/* 모바일 — 세로 배치 + 풀폭 CTA + ✕ 32×32 (tap 48) */
+/* 모바일 — 세로 배치 + 풀폭 CTA + ✕ 32×32 (tap 48) — Phase 4-1 압축안 A 유지 */
 @media (max-width:700px){
   .hero-inner{
     flex-direction:column;
     align-items:stretch;
-    gap:10px;
-    padding:14px 16px;
+    gap:var(--space-3);
+    padding:var(--space-4);
   }
-  .hero-msg{font-size:14.5px}
-  .hero-sub{font-size:11.5px}
+  .hero-msg{font-size:16px}
+  .hero-sub{font-size:var(--text-micro)}
   .hero-cta{width:100%;justify-content:center}
   .hero-dismiss{
     top:8px;right:10px;
@@ -962,15 +1132,19 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   📅 마지막 데이터 동기화: <span id="syncTime">—</span> · 출처: 국토교통부 실거래가 (245k+) · KAPT 단지 (9.7k+) · 금융위 규제 · 매일 17시 갱신
 </div>
 
-<!-- Phase 4-1 단계 1 (2026-05-04): Hero band — A-1 value prop + 단일 CTA.
-     첫 진입 가치 인식 직격. additive only, dismissible. localStorage 영구 저장.
-     DOM 순서: content → CTA → ✕ (Q-5 옵션 A — engagement 우선 Tab 순서) -->
+<!-- Phase 4-2 단계 1 (2026-05-04): Hero band v2 · 새 디자인 시스템 적용.
+     - DATA mono tag 신규 (데이터 도구 정체성 시그널)
+     - Sora 800 헤드라인 + 오렌지 그라디언트 강조 ("매수 의사결정")
+     - localStorage mhl_hero_dismissed 호환 유지 (재 dismiss 발생 X)
+     - funnel: hero_view / hero_cta_click / hero_dismiss 그대로 유지
+     - DOM 순서: content → CTA → ✕ (engagement 우선 Tab 순서 유지) -->
 <div id="heroBand" class="hero-band" style="display:none" role="region" aria-label="서비스 소개">
   <div class="hero-inner">
     <div class="hero-content">
+      <div class="hero-tag">DATA · 245K · 9.7K · KST 17:00</div>
       <div class="hero-msg">
         <span class="hero-icon" aria-hidden="true">🏠</span>
-        <strong>30초 입력으로 받는 1page 부동산 보고서</strong>
+        <strong>30초 입력으로 받는 <em>1page 부동산 보고서</em></strong>
       </div>
       <div class="hero-sub">
         국토부 실거래 · LTV/DSR · 전세가율 · 10.15 규제
