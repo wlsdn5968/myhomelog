@@ -79,11 +79,23 @@ router.get('/', async (req, res, next) => {
 });
 
 // ── POST: 신규 북마크 ────────────────────────────────────
+// P1 (Agent 3차 audit, 2026-05-04): bookmarks PII 차단 — memo/address 에 주민번호·계좌 입력 차단
+//   사용자 음성 입력 시 무심결 PII 입력 → DB 평문 저장 + JSON export 시 노출 risk
+const _PII_RE = /(\d{6}\s*-\s*[1-4]\d{6}|\d{3,4}-\d{3,4}-\d{4}|\d{4}-\d{2,4}-\d{2,4}-\d{4})/;
+function _detectPII(s) { return typeof s === 'string' && _PII_RE.test(s); }
+
 router.post('/', async (req, res, next) => {
   try {
     const { kapt_code, display_name, address, memo, tags, avg_price } = req.body || {};
     if (!kapt_code || !display_name) {
       return res.status(400).json({ error: 'kapt_code, display_name 필수' });
+    }
+    // P1 (Agent 3차): PII 차단 + 길이 제한
+    if (_detectPII(memo) || _detectPII(address)) {
+      return res.status(400).json({
+        error: '메모·주소에 주민번호·계좌·카드 같은 개인정보는 입력하지 말아주세요.',
+        code: 'pii_blocked',
+      });
     }
     const sb = userScopedClient(req.accessToken);
     const normalizedKapt = normalizeKaptCode({ kapt_code, display_name, address });
@@ -94,8 +106,8 @@ router.post('/', async (req, res, next) => {
         user_id: req.user.id, // RLS 가 동일성 검증
         kapt_code: normalizedKapt,
         display_name: String(display_name).trim(),
-        address: address || null,
-        memo: memo || null,
+        address: address ? String(address).slice(0, 200) : null, // 길이 제한
+        memo: memo ? String(memo).slice(0, 500) : null, // P1: 500자 제한
         tags: Array.isArray(tags) ? tags.slice(0, 20).map(String) : [],
         avg_price: typeof avg_price === 'number' && isFinite(avg_price) ? avg_price : null,
       })

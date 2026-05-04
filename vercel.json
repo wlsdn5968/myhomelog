@@ -30,11 +30,11 @@
     },
     {
       "path": "/api/cron/apt-master-sync",
-      "schedule": "0 18 * * 1"
+      "schedule": "0 20 * * 1"
     },
     {
       "path": "/api/cron/regulations-check",
-      "schedule": "0 19 * * 1"
+      "schedule": "0 21 * * 1"
     },
     {
       "path": "/api/cron/regulations-auto-fetch",

@@ -237,8 +237,15 @@ router.post('/confirm', async (req, res, next) => {
     }
 
     // 4) user_billing upsert — 한 달 구독 (MVP)
+    // P0 (Agent 3차 audit, 2026-05-04): 잔여 기간 누적 — 만료 전 재결제 시 잔여일 손실 차단
+    //   기존: period_end = now + 30 → 25일차 재결제 시 5일 LOSS (분쟁 risk)
+    //   변경: 기존 period_end 가 미래면 그것 + 30일 (이중 결제 시 30+30=60)
     const now = new Date();
-    const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+    const { data: existing } = await admin.from('user_billing').select('current_period_end').eq('user_id', req.user.id).maybeSingle();
+    const baseTime = (existing?.current_period_end && new Date(existing.current_period_end) > now)
+      ? new Date(existing.current_period_end)
+      : now;
+    const periodEnd = new Date(baseTime.getTime() + 30 * 24 * 60 * 60 * 1000);
     await admin.from('user_billing').upsert({
       user_id: req.user.id,
       plan: pay.plan,
@@ -369,8 +376,13 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
         return res.json({ ok: true, status: tossStatus, note: 'already captured' });
       }
 
+      // P0 (Agent 3차 audit, 2026-05-04): 잔여 기간 누적 — webhook 도 동일 처리
       const now = new Date();
-      const periodEnd = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
+      const { data: existing } = await admin.from('user_billing').select('current_period_end').eq('user_id', pay.user_id).maybeSingle();
+      const baseTime = (existing?.current_period_end && new Date(existing.current_period_end) > now)
+        ? new Date(existing.current_period_end)
+        : now;
+      const periodEnd = new Date(baseTime.getTime() + 30 * 24 * 60 * 60 * 1000);
       await admin.from('user_billing').upsert({
         user_id: pay.user_id,
         plan: pay.plan,

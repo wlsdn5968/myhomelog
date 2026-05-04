@@ -28,7 +28,14 @@ class BudgetExceededError extends Error {
 
 let anthropicClient;
 try {
-  anthropicClient = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  // P0 (Agent 3차 audit, 2026-05-04): timeout 명시 — SDK default 600s 가 Vercel maxDuration 300s 와 충돌
+  //   기존: timeout 옵션 없음 → SDK 가 600s 대기 → Vercel 함수 강제 종료 → 사용자 502 + 비용 누적
+  //   변경: timeout 60s + maxRetries 2 → 함수 timeout 전에 retry 또는 명확 에러
+  anthropicClient = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    timeout: 60000, // 60s
+    maxRetries: 2,
+  });
 } catch (e) {
   // 부팅 시점 경고만 — callAI 호출 시 명확한 에러 발생.
   logger.error({ err: e }, 'Anthropic SDK 초기화 실패 — ANTHROPIC_API_KEY 확인 필요');

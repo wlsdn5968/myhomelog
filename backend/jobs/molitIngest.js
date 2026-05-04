@@ -226,6 +226,16 @@ async function runMolitIngest(opts = {}) {
     return { skipped: true, reason: 'MOLIT_API_KEY missing' };
   }
   const admin = adminClient();
+  // P1 (Agent 3차 audit, 2026-05-04): stale 'running' 정리 — Vercel timeout 시 잔존 row 무한 grow
+  //   15분+ 'running' 상태면 timeout 으로 간주하고 정리
+  try {
+    await admin.from('molit_ingest_runs')
+      .update({ status: 'timeout', finished_at: new Date().toISOString() })
+      .eq('status', 'running')
+      .lt('started_at', new Date(Date.now() - 15 * 60 * 1000).toISOString());
+  } catch (e) {
+    logger.warn({ err: e.message }, 'molit_ingest_runs stale 정리 실패 (계속 진행)');
+  }
   // offset 적용: recentYearMonths(N) 다음 N개 만 사용 (slice)
   const allMonths = recentYearMonths(monthsCount + offsetMonths);
   const months = allMonths.slice(offsetMonths);

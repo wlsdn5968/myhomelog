@@ -196,6 +196,16 @@ router.post('/generate', async (req, res) => {
     cache.set(cacheKey, out, 1800); // 30분
     res.json({ ...out, fromCache: false });
   } catch (e) {
+    // P0 (Agent 3차 audit, 2026-05-04): BudgetExceededError 처리 누락 → Pro 가입 funnel 차단
+    //   chat.js / clause.js 는 처리됨. report.js 만 generic 500 → 사용자 "오류" 만 인지.
+    const { BudgetExceededError } = require('../services/aiService');
+    if (e instanceof BudgetExceededError) {
+      return res.status(429).json({
+        code: 'budget_exceeded',
+        error: '이번 달 AI 사용 한도에 도달했어요. 다음 달 1일에 리셋됩니다.',
+        budget: e.info,
+      });
+    }
     logger.error({ err: e.message, stack: e.stack }, '보고서 생성 실패');
     // MOB-AUDIT-2026-05-03: production 에선 generic 메시지 — stack 내부 정보 누출 차단
     const isProd = process.env.NODE_ENV === 'production';
