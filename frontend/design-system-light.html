@@ -1,0 +1,984 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>myhomelog Design System · v2 Light (Concept C 변환)</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ════════════════════════════════════════════════════════════════
+     myhomelog · Design System · v2 LIGHT (Concept C 변환)
+     ════════════════════════════════════════════════════════════════ */
+  :root {
+    /* ── Background scale (lightest → elevated) ─────────────── */
+    --bg-base:        #FFFFFF;
+    --bg-elev-1:      #FAFAFA;   /* sticky header subtle */
+    --bg-elev-2:      #F5F5F5;   /* sidebar */
+    --bg-elev-3:      #EFEFEF;   /* dropdown */
+
+    /* ── Glass surfaces (subtle dark transparencies on white) ─ */
+    --glass-1:        rgba(0,0,0,0.025);
+    --glass-2:        rgba(0,0,0,0.05);
+    --glass-3:        rgba(0,0,0,0.08);
+    --glass-hover:    rgba(0,0,0,0.06);
+    --glass-active:   rgba(0,0,0,0.10);
+
+    /* ── Border (dark edge insets on light) ──────────────────── */
+    --border-faint:   rgba(0,0,0,0.06);
+    --border-subtle:  rgba(0,0,0,0.10);
+    --border-medium:  rgba(0,0,0,0.16);
+    --border-strong:  rgba(0,0,0,0.24);
+
+    /* ── Accent · Electric Orange (그대로) ──────────────────── */
+    --accent-50:      #FFF5EE;
+    --accent-100:     #FFE4D1;
+    --accent-300:     #FF9A6E;
+    --accent-500:     #FF6B35;   /* primary */
+    --accent-600:     #F25218;   /* hover */
+    --accent-700:     #C84B18;   /* legacy brand */
+    --accent-900:     #6B2A0E;
+    --accent-tint:    rgba(255,107,53,0.08);
+    --accent-tint-2:  rgba(255,107,53,0.14);
+    --accent-tint-3:  rgba(255,107,53,0.22);
+    /* Glow → ambient shadow + accent border (라이트 변환) */
+    --accent-shadow:        0 4px 12px rgba(255,107,53,0.18), 0 0 0 1px rgba(255,107,53,0.10);
+    --accent-shadow-strong: 0 8px 24px rgba(255,107,53,0.25), 0 0 0 1px rgba(255,107,53,0.18);
+
+    /* ── Semantic ────────────────────────────────────────────── */
+    --positive:       #10B981;   /* 라이트 친화 더 깊은 톤 */
+    --positive-tint:  rgba(16,185,129,0.10);
+    --warning:        #D97706;
+    --warning-tint:   rgba(217,119,6,0.10);
+    --negative:       #DC2626;
+    --negative-tint:  rgba(220,38,38,0.08);
+    --info:           #2563EB;
+    --info-tint:      rgba(37,99,235,0.08);
+
+    /* ── Text scale (dark on light) ─────────────────────────── */
+    --text-primary:   #0A0A0F;   /* headlines + body */
+    --text-secondary: #404048;   /* body 보조 */
+    --text-tertiary:  #5C5749;   /* labels — F-1 일치 (WCAG AA 5.04:1) */
+    --text-quiet:     #71717A;   /* captions */
+    --text-faint:     #A1A1AA;   /* placeholders */
+    --text-inverse:   #FFFFFF;
+
+    /* ── Typography ──────────────────────────────────────────── */
+    --font-display:   'Sora', 'Pretendard Variable', system-ui, sans-serif;
+    --font-body:      'Pretendard Variable', system-ui, -apple-system, 'Apple SD Gothic Neo', sans-serif;
+    --font-mono:      'JetBrains Mono', ui-monospace, 'IBM Plex Mono', monospace;
+
+    --text-display-xl: 64px;
+    --text-display-lg: 48px;
+    --text-display:    36px;
+    --text-h1:         32px;
+    --text-h2:         24px;
+    --text-h3:         20px;
+    --text-body-lg:    17px;
+    --text-body:       15px;
+    --text-caption:    13px;
+    --text-label:      12px;
+    --text-micro:      11px;
+
+    /* ── Spacing · 4pt (동일) ────────────────────────────────── */
+    --space-1: 4px; --space-2: 8px; --space-3: 12px;
+    --space-4: 16px; --space-5: 20px; --space-6: 24px;
+    --space-8: 32px; --space-10: 40px; --space-12: 48px;
+    --space-16: 64px; --space-20: 80px; --space-24: 96px; --space-32: 128px;
+
+    /* ── Radius (동일) ───────────────────────────────────────── */
+    --radius-sm: 6px; --radius-md: 10px; --radius-lg: 14px;
+    --radius-xl: 18px; --radius-2xl: 24px; --radius-full: 999px;
+
+    /* ── Shadow · 라이트 (ambient depth, no inner highlight) ── */
+    --shadow-sm:  0 1px 2px rgba(15,23,42,0.04), 0 2px 6px rgba(15,23,42,0.04);
+    --shadow-md:  0 1px 3px rgba(15,23,42,0.05), 0 8px 24px rgba(15,23,42,0.06);
+    --shadow-lg:  0 2px 6px rgba(15,23,42,0.06), 0 16px 40px rgba(15,23,42,0.08);
+    --shadow-xl:  0 4px 12px rgba(15,23,42,0.08), 0 32px 64px rgba(15,23,42,0.10);
+
+    /* ── Motion (동일) ───────────────────────────────────────── */
+    --duration-instant: 80ms; --duration-fast: 150ms; --duration-normal: 250ms; --duration-slow: 400ms;
+    --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* ── Backdrop blur (라이트 친화 saturation 낮춤) ────────── */
+    --blur-sm: blur(8px) saturate(1.2);
+    --blur-md: blur(20px) saturate(1.3);
+    --blur-lg: blur(40px) saturate(1.4);
+
+    /* ── z-index (동일) ─────────────────────────────────────── */
+    --z-sticky: 100; --z-overlay: 500; --z-modal: 1000; --z-toast: 2000; --z-tooltip: 3000;
+
+    /* ── Legacy alias (호환 — 점진 마이그레이션) ────────────── */
+    --bg:    var(--bg-base);
+    --s0:    var(--bg-elev-1);
+    --s1:    var(--bg-elev-2);
+    --s2:    var(--bg-elev-3);
+    --bd:    rgba(0,0,0,0.10);
+    --bd2:   rgba(0,0,0,0.16);
+    --t1:    var(--text-primary);
+    --t2:    var(--text-secondary);
+    --t3:    var(--text-tertiary);
+    --acc:   var(--accent-500);
+    --accL:  var(--accent-tint);
+    --accD:  var(--accent-600);
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    background:var(--bg-base);color:var(--text-primary);
+    font-family:var(--font-body);font-size:var(--text-body);line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  body{
+    background-image:
+      radial-gradient(circle at 20% 0%,rgba(255,107,53,0.04) 0%,transparent 40%),
+      radial-gradient(circle at 80% 100%,rgba(16,185,129,0.025) 0%,transparent 40%);
+    min-height:100vh;
+  }
+
+  /* ── Top nav ─────────────────────────────────────────── */
+  .topnav{
+    position:sticky;top:0;
+    background:rgba(255,255,255,0.78);backdrop-filter:var(--blur-md);
+    -webkit-backdrop-filter:var(--blur-md);
+    border-bottom:1px solid var(--border-faint);
+    padding:var(--space-3) var(--space-8);
+    display:flex;align-items:center;gap:var(--space-6);
+    z-index:var(--z-sticky);
+  }
+  .topnav-title{font-family:var(--font-display);font-weight:800;font-size:var(--text-h3);letter-spacing:-0.5px;margin-right:auto;color:var(--text-primary)}
+  .topnav-title em{font-style:normal;background:linear-gradient(120deg,var(--accent-700),var(--accent-500));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .topnav a{color:var(--text-tertiary);text-decoration:none;font-size:var(--text-caption);padding:6px var(--space-3);border-radius:var(--radius-sm);transition:all var(--duration-fast) var(--ease-out)}
+  .topnav a:hover{color:var(--text-primary);background:var(--glass-1)}
+
+  /* ── Section ─────────────────────────────────────────── */
+  .section{padding:var(--space-16) var(--space-8);max-width:1280px;margin:0 auto;border-bottom:1px solid var(--border-faint)}
+  .section-head{display:flex;align-items:flex-end;gap:var(--space-6);margin-bottom:var(--space-12);flex-wrap:wrap}
+  .section-num{font-family:var(--font-mono);font-size:var(--text-caption);color:var(--accent-500);letter-spacing:2px;text-transform:uppercase;font-weight:600}
+  .section-title{font-family:var(--font-display);font-weight:700;font-size:var(--text-display);letter-spacing:-1.5px;line-height:1.05;flex:1;min-width:280px;color:var(--text-primary)}
+  .section-sub{font-family:var(--font-body);font-size:var(--text-body);color:var(--text-tertiary);font-weight:400;line-height:1.6;max-width:560px}
+
+  /* ── Panel ───────────────────────────────────────────── */
+  .panel{
+    background:var(--bg-base);
+    border:1px solid var(--border-faint);
+    border-radius:var(--radius-2xl);
+    padding:var(--space-8);
+    box-shadow:var(--shadow-sm);
+    margin-bottom:var(--space-6);
+  }
+  .panel h3{font-family:var(--font-display);font-weight:600;font-size:var(--text-h3);margin-bottom:var(--space-6);letter-spacing:-0.4px;color:var(--text-primary)}
+  .panel-meta{font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet);letter-spacing:1px;text-transform:uppercase;margin-bottom:var(--space-4);font-weight:600}
+
+  /* ── Color swatches ──────────────────────────────────── */
+  .swatch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--space-3)}
+  .swatch{position:relative;background:var(--bg-elev-1);border:1px solid var(--border-faint);border-radius:var(--radius-md);padding:var(--space-3);transition:all var(--duration-fast) var(--ease-out)}
+  .swatch:hover{transform:translateY(-2px);box-shadow:var(--shadow-md)}
+  .swatch-color{height:64px;border-radius:var(--radius-sm);margin-bottom:var(--space-3);border:1px solid var(--border-faint)}
+  .swatch-name{font-family:var(--font-body);font-size:var(--text-caption);font-weight:600;color:var(--text-primary);margin-bottom:2px}
+  .swatch-token{font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet)}
+  .swatch-value{font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-tertiary);margin-top:2px}
+
+  /* ── Type scale ─────────────────────────────────────── */
+  .type-row{display:flex;align-items:baseline;gap:var(--space-4);padding:var(--space-3) 0;border-bottom:1px solid var(--border-faint)}
+  .type-label{font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet);letter-spacing:1px;width:120px;flex-shrink:0;text-transform:uppercase;font-weight:600}
+  .type-sample{flex:1;color:var(--text-primary);line-height:1.2}
+  .ts-display-xl{font-family:var(--font-display);font-weight:800;font-size:var(--text-display-xl);letter-spacing:-2.5px}
+  .ts-display{font-family:var(--font-display);font-weight:700;font-size:var(--text-display);letter-spacing:-1.5px}
+  .ts-h1{font-family:var(--font-display);font-weight:700;font-size:var(--text-h1);letter-spacing:-1px}
+  .ts-h2{font-family:var(--font-display);font-weight:600;font-size:var(--text-h2);letter-spacing:-0.5px}
+  .ts-h3{font-family:var(--font-display);font-weight:600;font-size:var(--text-h3);letter-spacing:-0.3px}
+  .ts-body-lg{font-family:var(--font-body);font-weight:400;font-size:var(--text-body-lg)}
+  .ts-body{font-family:var(--font-body);font-weight:400;font-size:var(--text-body)}
+  .ts-caption{font-family:var(--font-body);font-weight:500;font-size:var(--text-caption);color:var(--text-tertiary)}
+  .ts-mono{font-family:var(--font-mono);font-weight:500;font-size:var(--text-body);color:var(--accent-500)}
+
+  /* ── Spacing scale ───────────────────────────────────── */
+  .space-grid{display:flex;flex-wrap:wrap;gap:var(--space-4);align-items:flex-end}
+  .space-item{display:flex;flex-direction:column;align-items:center;gap:var(--space-2)}
+  .space-block{background:var(--accent-tint-2);border:1px solid var(--accent-tint-3);border-radius:var(--radius-sm)}
+  .space-name{font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-tertiary)}
+
+  /* ── Buttons ─────────────────────────────────────────── */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);
+    font-family:var(--font-body);font-weight:600;
+    border:none;cursor:pointer;
+    transition:all var(--duration-fast) var(--ease-out);
+    white-space:nowrap;outline:none;
+  }
+  .btn:focus-visible{box-shadow:0 0 0 3px var(--accent-tint-2)}
+  .btn-sm{padding:6px 14px;font-size:var(--text-caption);border-radius:var(--radius-sm);height:32px}
+  .btn-md{padding:9px 20px;font-size:var(--text-body);border-radius:var(--radius-md);height:40px}
+  .btn-lg{padding:12px 26px;font-size:var(--text-body-lg);border-radius:var(--radius-md);height:48px}
+
+  .btn-primary{
+    background:linear-gradient(135deg,var(--accent-500),var(--accent-700));
+    color:#fff;font-weight:700;
+    box-shadow:var(--accent-shadow);
+  }
+  .btn-primary:hover{
+    transform:translateY(-1px);
+    box-shadow:var(--accent-shadow-strong);
+  }
+  .btn-primary:active{transform:translateY(0);box-shadow:var(--accent-shadow)}
+
+  .btn-secondary{
+    background:var(--bg-base);color:var(--text-primary);
+    border:1px solid var(--border-medium);
+    box-shadow:var(--shadow-sm);
+  }
+  .btn-secondary:hover{background:var(--bg-elev-1);border-color:var(--text-tertiary);box-shadow:var(--shadow-md)}
+
+  .btn-ghost{
+    background:transparent;color:var(--text-secondary);
+  }
+  .btn-ghost:hover{background:var(--glass-1);color:var(--text-primary)}
+
+  .btn-danger{
+    background:var(--bg-base);color:var(--negative);
+    border:1px solid var(--negative-tint);
+  }
+  .btn-danger:hover{background:var(--negative);color:#fff;border-color:var(--negative)}
+
+  /* ── Inputs ──────────────────────────────────────────── */
+  .input{
+    width:100%;
+    background:var(--bg-base);
+    border:1px solid var(--border-medium);
+    border-radius:var(--radius-md);
+    color:var(--text-primary);
+    padding:10px 14px;
+    font-size:var(--text-body);font-family:var(--font-body);
+    outline:none;
+    transition:all var(--duration-fast) var(--ease-out);
+  }
+  .input::placeholder{color:var(--text-faint)}
+  .input:hover{border-color:var(--text-tertiary)}
+  .input:focus{
+    border-color:var(--accent-500);
+    box-shadow:0 0 0 3px var(--accent-tint-2);
+  }
+  .input-with-icon{position:relative}
+  .input-with-icon .input{padding-left:42px}
+  .input-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-quiet);pointer-events:none}
+
+  /* ── Toggle ──────────────────────────────────────────── */
+  .toggle{
+    position:relative;width:44px;height:24px;
+    background:var(--bg-elev-3);border:1px solid var(--border-medium);
+    border-radius:var(--radius-full);
+    cursor:pointer;
+    transition:all var(--duration-fast) var(--ease-out);
+  }
+  .toggle::before{
+    content:'';position:absolute;top:2px;left:2px;
+    width:18px;height:18px;border-radius:50%;
+    background:#fff;box-shadow:var(--shadow-sm);
+    transition:all var(--duration-fast) var(--ease-out);
+  }
+  .toggle.on{background:var(--accent-500);border-color:var(--accent-500)}
+  .toggle.on::before{left:22px}
+
+  /* ── Cards ───────────────────────────────────────────── */
+  .card{
+    background:var(--bg-base);
+    border:1px solid var(--border-faint);
+    border-radius:var(--radius-xl);
+    padding:var(--space-6);
+    box-shadow:var(--shadow-sm);
+    transition:all var(--duration-normal) var(--ease-out);
+  }
+  .card:hover{transform:translateY(-3px);border-color:var(--border-subtle);box-shadow:var(--shadow-md)}
+  .card-elev-1{}
+  .card-elev-2{box-shadow:var(--shadow-md)}
+  .card-elev-3{border-color:var(--accent-tint-3);box-shadow:var(--shadow-md),var(--accent-shadow)}
+
+  .card-tag{
+    display:inline-flex;align-items:center;gap:4px;
+    font-family:var(--font-mono);font-size:var(--text-micro);font-weight:600;
+    color:var(--accent-700);
+    background:var(--accent-tint);
+    border:1px solid var(--accent-tint-2);
+    padding:4px 9px;border-radius:var(--radius-sm);
+    text-transform:uppercase;letter-spacing:1px;
+    margin-bottom:var(--space-3);
+  }
+  .card-title{font-family:var(--font-display);font-weight:700;font-size:var(--text-h3);letter-spacing:-0.4px;margin-bottom:var(--space-1);color:var(--text-primary)}
+  .card-body{font-size:var(--text-caption);color:var(--text-tertiary);line-height:1.6}
+  .card-stat{font-family:var(--font-mono);font-size:var(--text-display);font-weight:700;color:var(--text-primary);letter-spacing:-1px;margin-top:var(--space-3)}
+
+  /* ── Badges ──────────────────────────────────────────── */
+  .badge{
+    display:inline-flex;align-items:center;gap:4px;
+    font-family:var(--font-body);font-size:var(--text-micro);font-weight:600;
+    padding:3px 8px;border-radius:var(--radius-full);
+    border:1px solid;
+  }
+  .badge-accent{background:var(--accent-tint);border-color:var(--accent-tint-2);color:var(--accent-700)}
+  .badge-positive{background:var(--positive-tint);border-color:var(--positive-tint);color:var(--positive)}
+  .badge-warning{background:var(--warning-tint);border-color:var(--warning-tint);color:var(--warning)}
+  .badge-negative{background:var(--negative-tint);border-color:var(--negative-tint);color:var(--negative)}
+  .badge-info{background:var(--info-tint);border-color:var(--info-tint);color:var(--info)}
+  .badge-neutral{background:var(--bg-elev-2);border-color:var(--border-subtle);color:var(--text-secondary)}
+
+  .chip{
+    display:inline-flex;align-items:center;gap:4px;
+    font-family:var(--font-body);font-size:var(--text-caption);font-weight:500;
+    padding:6px 12px;border-radius:var(--radius-full);
+    background:var(--bg-base);
+    border:1px solid var(--border-medium);
+    color:var(--text-secondary);cursor:pointer;
+    transition:all var(--duration-fast) var(--ease-out);
+  }
+  .chip:hover{background:var(--bg-elev-1);color:var(--text-primary);border-color:var(--text-tertiary)}
+  .chip.on{background:var(--accent-tint);border-color:var(--accent-500);color:var(--accent-700);font-weight:600}
+  .chip.on::before{content:'✓ ';font-weight:700}
+
+  /* ── Bento Grid ──────────────────────────────────────── */
+  .bento{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:120px;gap:var(--space-3);margin-top:var(--space-6)}
+  .bento-card{background:var(--bg-base);border:1px solid var(--border-faint);border-radius:var(--radius-lg);padding:var(--space-4);box-shadow:var(--shadow-sm);position:relative;overflow:hidden;transition:all var(--duration-normal) var(--ease-out)}
+  .bento-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--border-subtle)}
+  .bento-card.span-2{grid-column:span 2}
+  .bento-card.row-2{grid-row:span 2}
+  .bento-card.accent{background:linear-gradient(135deg,#FFF5EE,var(--bg-base));border-color:var(--accent-tint-2);box-shadow:var(--accent-shadow)}
+  .bento-label{font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet);letter-spacing:1px;text-transform:uppercase;margin-bottom:var(--space-2);font-weight:600}
+  .bento-value{font-family:var(--font-mono);font-size:32px;font-weight:700;color:var(--text-primary);letter-spacing:-1px;line-height:1}
+  .bento-delta{font-family:var(--font-mono);font-size:var(--text-caption);font-weight:600;color:var(--positive);margin-top:6px;display:flex;align-items:center;gap:3px}
+
+  /* ── Modal preview ───────────────────────────────────── */
+  .modal-preview{
+    background:var(--bg-base);
+    border:1px solid var(--border-faint);
+    border-radius:var(--radius-xl);
+    box-shadow:var(--shadow-xl);
+    max-width:480px;overflow:hidden;
+  }
+  .modal-head{padding:var(--space-5) var(--space-6);border-bottom:1px solid var(--border-faint);display:flex;justify-content:space-between;align-items:center}
+  .modal-title{font-family:var(--font-display);font-weight:700;font-size:var(--text-h3);letter-spacing:-0.3px;color:var(--text-primary)}
+  .modal-x{width:32px;height:32px;background:var(--bg-elev-1);border:1px solid var(--border-subtle);border-radius:50%;color:var(--text-tertiary);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .modal-body{padding:var(--space-6)}
+
+  /* ── Toast preview ───────────────────────────────────── */
+  .toast-preview{
+    display:inline-flex;align-items:center;gap:var(--space-3);
+    background:var(--bg-base);
+    border:1px solid var(--border-medium);
+    border-radius:var(--radius-lg);
+    padding:var(--space-3) var(--space-5);
+    box-shadow:var(--shadow-md);
+    font-size:var(--text-body);color:var(--text-primary);
+    margin-right:var(--space-3);margin-bottom:var(--space-3);
+  }
+  .toast-preview.positive{border-color:var(--positive);background:var(--positive-tint);color:var(--positive)}
+  .toast-preview.negative{border-color:var(--negative);background:var(--negative-tint);color:var(--negative)}
+
+  /* ── Skeleton ────────────────────────────────────────── */
+  @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+  .skeleton{background:linear-gradient(90deg,var(--bg-elev-2) 0%,var(--bg-elev-3) 50%,var(--bg-elev-2) 100%);background-size:200% 100%;animation:shimmer 2s infinite ease-in-out;border-radius:var(--radius-sm);height:14px;width:100%;margin-bottom:var(--space-2)}
+
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .spinner{width:20px;height:20px;border:2px solid var(--border-medium);border-top-color:var(--accent-500);border-radius:50%;animation:spin 0.7s linear infinite}
+
+  /* ── Mockup viewport ─────────────────────────────────── */
+  .mockup{background:var(--bg-elev-2);border-radius:var(--radius-xl);overflow:hidden;border:1px solid var(--border-subtle);height:560px;box-shadow:var(--shadow-md)}
+  .mockup-label{padding:var(--space-3) var(--space-5);background:var(--bg-elev-3);color:var(--text-quiet);font-family:var(--font-mono);font-size:var(--text-micro);letter-spacing:1px;border-bottom:1px solid var(--border-subtle);font-weight:600}
+  .mockup-app{height:518px;background:var(--bg-base);position:relative;overflow:hidden;color:var(--text-primary);font-family:var(--font-body)}
+  .mockup-app::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 20% 0%,rgba(255,107,53,0.05) 0%,transparent 40%),radial-gradient(circle at 80% 100%,rgba(16,185,129,0.04) 0%,transparent 40%);pointer-events:none}
+
+  .mockup-header{
+    background:rgba(255,255,255,0.85);backdrop-filter:var(--blur-md);
+    -webkit-backdrop-filter:var(--blur-md);
+    padding:var(--space-3) var(--space-6);
+    display:flex;align-items:center;gap:var(--space-5);
+    border-bottom:1px solid var(--border-faint);
+    position:relative;z-index:2;
+  }
+  .mockup-logo{font-family:var(--font-display);font-weight:800;font-size:var(--text-h3);letter-spacing:-0.5px;display:flex;align-items:center;gap:var(--space-2);color:var(--text-primary)}
+  .mockup-logo .mark{width:32px;height:32px;background:linear-gradient(135deg,var(--accent-500),var(--accent-700));border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;box-shadow:var(--accent-shadow);color:#fff}
+  .mockup-logo em{font-style:normal;background:linear-gradient(120deg,var(--accent-700),var(--accent-500));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .mockup-tabs{display:flex;gap:var(--space-1);font-family:var(--font-display);font-size:var(--text-caption);color:var(--text-tertiary);font-weight:500;margin-left:var(--space-3)}
+  .mockup-tabs span{padding:7px 14px;border-radius:var(--radius-sm);cursor:pointer;transition:all var(--duration-fast) var(--ease-out)}
+  .mockup-tabs span:hover{background:var(--glass-1);color:var(--text-primary)}
+  .mockup-tabs .on{color:var(--accent-700);background:var(--accent-tint);border:1px solid var(--accent-tint-2);font-weight:600}
+  .mockup-search{margin-left:auto;width:280px;position:relative}
+  .mockup-search .input{padding:8px 14px 8px 36px;height:36px;font-size:var(--text-caption)}
+  .mockup-search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-quiet)}
+  .mockup-cta{margin-left:var(--space-3);font-size:var(--text-caption);height:36px;padding:0 16px}
+
+  .mockup-hero{padding:var(--space-12) var(--space-6) var(--space-8);display:grid;grid-template-columns:1.3fr 1fr;gap:var(--space-8);align-items:center;position:relative;z-index:1}
+  .mockup-tag{font-family:var(--font-mono);font-size:var(--text-micro);font-weight:600;color:var(--accent-700);background:var(--accent-tint);border:1px solid var(--accent-tint-2);display:inline-block;padding:5px 11px;border-radius:var(--radius-full);margin-bottom:var(--space-4);letter-spacing:1px;text-transform:uppercase}
+  .mockup-h{font-family:var(--font-display);font-weight:800;font-size:46px;line-height:1.05;letter-spacing:-2px;margin-bottom:var(--space-4);color:var(--text-primary)}
+  .mockup-h em{font-style:normal;background:linear-gradient(120deg,var(--accent-700),var(--accent-500) 80%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .mockup-sub{font-size:var(--text-body);color:var(--text-tertiary);line-height:1.6;max-width:440px;margin-bottom:var(--space-6)}
+  .mockup-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-2);max-width:440px}
+  .mockup-stat{background:var(--bg-base);border:1px solid var(--border-subtle);border-radius:var(--radius-md);padding:var(--space-3);box-shadow:var(--shadow-sm)}
+  .mockup-stat .v{font-family:var(--font-mono);font-size:var(--text-h2);font-weight:700;color:var(--text-primary);letter-spacing:-0.5px;line-height:1.1}
+  .mockup-stat .l{font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet);margin-top:4px;letter-spacing:1px;text-transform:uppercase;font-weight:600}
+
+  .mockup-illust{aspect-ratio:1;background:linear-gradient(135deg,#FFF5EE,var(--bg-base));border-radius:var(--radius-2xl);border:1px solid var(--accent-tint-2);position:relative;overflow:hidden;box-shadow:var(--shadow-md),var(--accent-shadow)}
+  .mockup-illust svg{position:absolute;inset:0;width:100%;height:100%}
+
+  /* ── Mapping table ───────────────────────────────────── */
+  .mtbl{width:100%;border-collapse:collapse;font-size:var(--text-caption)}
+  .mtbl th,.mtbl td{padding:var(--space-3) var(--space-4);text-align:left;border-bottom:1px solid var(--border-faint)}
+  .mtbl th{background:var(--bg-elev-1);font-weight:600;color:var(--text-tertiary);font-family:var(--font-mono);font-size:var(--text-micro);letter-spacing:1px;text-transform:uppercase}
+  .mtbl tr:hover td{background:var(--glass-1)}
+  .mtbl code{font-family:var(--font-mono);font-size:var(--text-caption);background:var(--bg-elev-2);padding:2px 6px;border-radius:var(--radius-sm);color:var(--text-primary)}
+  .mtbl .arrow{color:var(--accent-500);font-weight:700;font-family:var(--font-mono)}
+  .mtbl .risk-low{color:var(--positive);font-weight:600}
+  .mtbl .risk-med{color:var(--warning);font-weight:600}
+  .mtbl .risk-high{color:var(--negative);font-weight:600}
+
+  /* ── Hero before/after ───────────────────────────────── */
+  .ba-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--space-6);margin-top:var(--space-6)}
+  .ba-frame{background:var(--bg-elev-2);border:1px solid var(--border-faint);border-radius:var(--radius-xl);overflow:hidden;box-shadow:var(--shadow-sm)}
+  .ba-frame-label{padding:var(--space-2) var(--space-4);background:var(--bg-elev-3);font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet);letter-spacing:1px;text-transform:uppercase;font-weight:600;border-bottom:1px solid var(--border-faint)}
+  .ba-frame-body{height:240px;position:relative;background:var(--bg-base);overflow:hidden}
+
+  /* BEFORE — current production hero band */
+  .hero-before{
+    background:linear-gradient(135deg,#FFFCF7 0%,#FBF4EA 100%);
+    padding:14px 22px;display:flex;align-items:center;gap:16px;
+    height:100%;font-family:'Apple SD Gothic Neo',sans-serif;
+  }
+  .hero-before-content{flex:1}
+  .hero-before-msg{font-size:16px;font-weight:700;color:#18160F;line-height:1.4;margin-bottom:3px;display:flex;align-items:center;gap:8px}
+  .hero-before-sub{font-size:11.5px;color:#56524A;line-height:1.6}
+  .hero-before-cta{padding:9px 18px;background:#C84B18;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;flex-shrink:0;white-space:nowrap;box-shadow:0 2px 6px rgba(200,75,24,0.18)}
+  .hero-before-x{position:absolute;top:6px;right:8px;width:28px;height:28px;background:transparent;border:none;color:#7A7568;cursor:pointer;border-radius:50%;font-size:14px}
+
+  /* AFTER — new design system hero band */
+  .hero-after{
+    background:linear-gradient(180deg,var(--bg-base) 0%,#FFF8F2 100%);
+    padding:14px 22px;display:flex;align-items:center;gap:16px;
+    height:100%;border-bottom:1px solid var(--accent-tint-2);
+  }
+  .hero-after-content{flex:1}
+  .hero-after-tag{font-family:var(--font-mono);font-size:10px;font-weight:600;color:var(--accent-700);background:var(--accent-tint);border:1px solid var(--accent-tint-2);display:inline-block;padding:3px 8px;border-radius:var(--radius-full);margin-bottom:6px;letter-spacing:1px;text-transform:uppercase}
+  .hero-after-msg{font-family:var(--font-display);font-size:18px;font-weight:800;color:var(--text-primary);line-height:1.3;letter-spacing:-0.5px;margin-bottom:3px}
+  .hero-after-msg em{font-style:normal;background:linear-gradient(120deg,var(--accent-700),var(--accent-500));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero-after-sub{font-family:var(--font-mono);font-size:11px;color:var(--text-quiet);line-height:1.6;letter-spacing:0.3px}
+  .hero-after-cta{padding:10px 20px;background:linear-gradient(135deg,var(--accent-500),var(--accent-700));color:#fff;border:none;border-radius:var(--radius-md);font-family:var(--font-display);font-size:13px;font-weight:700;cursor:pointer;flex-shrink:0;white-space:nowrap;box-shadow:var(--accent-shadow);display:inline-flex;align-items:center;gap:6px}
+  .hero-after-x{position:absolute;top:6px;right:8px;width:28px;height:28px;background:var(--bg-elev-1);border:1px solid var(--border-faint);color:var(--text-tertiary);cursor:pointer;border-radius:50%;font-size:14px;display:flex;align-items:center;justify-content:center}
+
+  /* ── CSS variables block ─────────────────────────────── */
+  pre.css-vars{
+    background:var(--bg-elev-1);
+    border:1px solid var(--border-subtle);
+    border-radius:var(--radius-lg);
+    padding:var(--space-6);
+    font-family:var(--font-mono);font-size:var(--text-caption);line-height:1.7;
+    color:var(--text-secondary);
+    overflow-x:auto;white-space:pre-wrap;
+  }
+  pre.css-vars .var-name{color:var(--accent-700)}
+  pre.css-vars .var-val{color:var(--positive)}
+  pre.css-vars .comment{color:var(--text-quiet);font-style:italic}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav-title">myhomelog<em>·</em>Design System v2 · LIGHT (Concept C)</div>
+  <a href="#colors">Colors</a>
+  <a href="#type">Typography</a>
+  <a href="#components">Components</a>
+  <a href="#bento">Bento</a>
+  <a href="#mockup">Mockup</a>
+  <a href="#mapping">Button Map</a>
+  <a href="#hero-ba">Hero B/A</a>
+  <a href="#tokens">Tokens</a>
+</nav>
+
+<section id="hero" class="section">
+  <div class="section-head">
+    <div>
+      <div class="section-num">DESIGN SYSTEM · v2 LIGHT · 2026.05</div>
+      <h1 class="section-title" style="font-size:var(--text-display-xl)">실거래가로 보는 <em style="font-style:normal;background:linear-gradient(120deg,var(--accent-700),var(--accent-500));-webkit-background-clip:text;background-clip:text;color:transparent">매수 의사결정.</em></h1>
+      <p class="section-sub">Concept C 의 본질을 라이트 베이스로 변환. Bento + Editorial Mono + Restrained Accent 보존. Glow → ambient shadow + accent border. 시중 부동산 표준 (라이트) 정합 + 차별화 동시 달성.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════ 1 · COLORS ════ -->
+<section id="colors" class="section">
+  <div class="section-head">
+    <div class="section-num">01 · Colors</div>
+    <h2 class="section-title">컬러 토큰 (라이트)</h2>
+    <p class="section-sub">Background 4단 (white-based) → Glass 5단 (black-based transparency) → Accent 7단 (Electric Orange 그대로) → Semantic 4 → Text 6단 (--text-tertiary #5C5749 = F-1 일치, WCAG AA 5.04:1).</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Background scale · 페이지 + 헤더 + 사이드바 + 드롭다운</div>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="swatch-color" style="background:var(--bg-base)"></div><div class="swatch-name">Base</div><div class="swatch-token">--bg-base</div><div class="swatch-value">#FFFFFF</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--bg-elev-1)"></div><div class="swatch-name">Elev 1 · Header</div><div class="swatch-token">--bg-elev-1</div><div class="swatch-value">#FAFAFA</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--bg-elev-2)"></div><div class="swatch-name">Elev 2 · Sidebar</div><div class="swatch-token">--bg-elev-2</div><div class="swatch-value">#F5F5F5</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--bg-elev-3)"></div><div class="swatch-name">Elev 3 · Dropdown</div><div class="swatch-token">--bg-elev-3</div><div class="swatch-value">#EFEFEF</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Accent · Electric Orange · 변경 없음</div>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="swatch-color" style="background:var(--accent-50)"></div><div class="swatch-name">50</div><div class="swatch-value">#FFF5EE</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--accent-100)"></div><div class="swatch-name">100</div><div class="swatch-value">#FFE4D1</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--accent-300)"></div><div class="swatch-name">300</div><div class="swatch-value">#FF9A6E</div></div>
+      <div class="swatch" style="border-color:var(--accent-500)"><div class="swatch-color" style="background:var(--accent-500)"></div><div class="swatch-name">500 · primary</div><div class="swatch-value">#FF6B35</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--accent-600)"></div><div class="swatch-name">600 · hover</div><div class="swatch-value">#F25218</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--accent-700)"></div><div class="swatch-name">700 · brand-deep</div><div class="swatch-value">#C84B18</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--accent-900)"></div><div class="swatch-name">900</div><div class="swatch-value">#6B2A0E</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Text scale · F-1 작업 (--t3 #7A7568 → #5C5749) 일치 확인</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-3)">
+      <div style="padding:var(--space-4);background:var(--bg-elev-1);border:1px solid var(--border-faint);border-radius:var(--radius-md)">
+        <div style="color:var(--text-primary);font-weight:600;margin-bottom:4px">실거래가로 보는 매수 의사결정</div>
+        <div class="ts-caption">Primary · #0A0A0F · 21:1 contrast</div>
+      </div>
+      <div style="padding:var(--space-4);background:var(--bg-elev-1);border:1px solid var(--border-faint);border-radius:var(--radius-md)">
+        <div style="color:var(--text-secondary);font-weight:500;margin-bottom:4px">국토부 실거래가 245,000건 누적</div>
+        <div class="ts-caption">Secondary · #404048 · 11:1 contrast</div>
+      </div>
+      <div style="padding:var(--space-4);background:var(--bg-elev-1);border:1px solid var(--border-faint);border-radius:var(--radius-md)">
+        <div style="color:var(--text-tertiary);margin-bottom:4px">LTV 40% · DSR 38</div>
+        <div class="ts-caption" style="color:var(--accent-700);font-weight:600">Tertiary · #5C5749 · 5.04:1 ✅ AA</div>
+      </div>
+      <div style="padding:var(--space-4);background:var(--bg-elev-1);border:1px solid var(--border-faint);border-radius:var(--radius-md)">
+        <div style="color:var(--text-quiet);margin-bottom:4px">최종 갱신 2026-05-04 22:33 KST</div>
+        <div class="ts-caption">Quiet · #71717A · 4.5:1 (large only)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Glow → Ambient Shadow + Accent Border 변환</div>
+    <div style="display:flex;gap:var(--space-6);flex-wrap:wrap;align-items:center">
+      <div>
+        <div style="font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet);margin-bottom:8px">DARK (원본)</div>
+        <div style="width:200px;height:48px;background:linear-gradient(135deg,#FF6B35,#C84B18);border-radius:10px;color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;box-shadow:0 0 24px rgba(255,107,53,0.35)">📊 GLOW</div>
+      </div>
+      <div>
+        <div style="font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet);margin-bottom:8px">LIGHT (변환)</div>
+        <div class="btn btn-primary btn-md" style="width:200px">📊 ambient + border</div>
+      </div>
+      <div style="font-family:var(--font-mono);font-size:var(--text-caption);color:var(--text-tertiary);max-width:300px;line-height:1.6">
+        <code>--accent-shadow:</code><br>
+        0 4px 12px rgba(255,107,53,0.18),<br>
+        0 0 0 1px rgba(255,107,53,0.10)
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ 2 · TYPOGRAPHY ════ -->
+<section id="type" class="section">
+  <div class="section-head">
+    <div class="section-num">02 · Typography</div>
+    <h2 class="section-title">Type Scale · Sora + Pretendard + JetBrains Mono</h2>
+    <p class="section-sub">로딩 전략: <code style="background:var(--bg-elev-2);padding:2px 6px;border-radius:4px;font-family:var(--font-mono);font-size:11px">preconnect + preload + display:swap</code>. 한글 헤드라인은 Pretendard 800-900 (Sora 동급 임팩트). LCP 영향 추정 +50~100ms (모바일 4G 1.2s → 1.25-1.30s).</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Display & Headings</div>
+    <div class="type-row"><div class="type-label">DISPLAY-XL · 64</div><div class="type-sample ts-display-xl">실거래가</div></div>
+    <div class="type-row"><div class="type-label">DISPLAY · 36</div><div class="type-sample ts-display">매수 의사결정.</div></div>
+    <div class="type-row"><div class="type-label">H1 · 32</div><div class="type-sample ts-h1">30초 입력으로 받는 1page 보고서</div></div>
+    <div class="type-row"><div class="type-label">H2 · 24</div><div class="type-sample ts-h2">국토부 실거래 + AI 분석</div></div>
+    <div class="type-row"><div class="type-label">H3 · 20</div><div class="type-sample ts-h3">마포 래미안 푸르지오</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Body + Caption + Mono</div>
+    <div class="type-row"><div class="type-label">BODY-LG · 17</div><div class="type-sample ts-body-lg">매수 비용·LTV·DSR·전세가율을 한 화면에 정리합니다.</div></div>
+    <div class="type-row"><div class="type-label">BODY · 15</div><div class="type-sample ts-body">국토교통부 실거래가 데이터를 매일 수집합니다.</div></div>
+    <div class="type-row"><div class="type-label">CAPTION · 13</div><div class="type-sample ts-caption">매수·매도 추천 X · 미래 가격 예측 X. 의사결정 책임은 본인.</div></div>
+    <div class="type-row"><div class="type-label">MONO · 15</div><div class="type-sample ts-mono">12.5억 · LTV 40% · DSR 38 · +24% YoY</div></div>
+  </div>
+</section>
+
+<!-- ════ 3 · COMPONENTS ════ -->
+<section id="components" class="section">
+  <div class="section-head">
+    <div class="section-num">03 · Components</div>
+    <h2 class="section-title">컴포넌트 라이브러리 (라이트)</h2>
+    <p class="section-sub">Button 4 variants × 3 sizes / Input / Toggle / Card 3 elevations / Badge 6 / Chip / Modal / Toast / Skeleton / Spinner. 단일 토큰 시스템.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Buttons</div>
+    <div style="display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-6);align-items:center">
+      <button class="btn btn-primary btn-lg">📊 맞춤 보고서 만들기</button>
+      <button class="btn btn-primary btn-md">맞춤 보고서</button>
+      <button class="btn btn-primary btn-sm">CTA</button>
+    </div>
+    <div style="display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-6);align-items:center">
+      <button class="btn btn-secondary btn-md">단지 검색</button>
+      <button class="btn btn-secondary btn-md">필터</button>
+      <button class="btn btn-ghost btn-md">취소</button>
+      <button class="btn btn-danger btn-md">탈퇴</button>
+    </div>
+    <div style="display:flex;gap:var(--space-4);flex-wrap:wrap;align-items:center">
+      <span class="chip on">무주택</span>
+      <span class="chip">1주택</span>
+      <span class="chip">2주택+</span>
+      <span class="chip">생애 최초</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Inputs · Light + Accent focus</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-4);max-width:720px">
+      <div class="input-with-icon"><span class="input-icon">🔎</span><input class="input" placeholder="단지명·동명 검색"></div>
+      <input class="input" placeholder="6.8 → 6억 8천만원">
+      <input class="input" placeholder="강남구, 마포구">
+      <select class="input"><option>서울 전체</option><option>강남4구</option><option>마용성</option></select>
+    </div>
+    <div style="margin-top:var(--space-4);display:flex;align-items:center;gap:var(--space-3)">
+      <span class="ts-caption">Toggle:</span>
+      <div class="toggle on"></div>
+      <span class="ts-body" style="color:var(--accent-700);font-weight:600">규제 단지만</span>
+      <div class="toggle" style="margin-left:var(--space-4)"></div>
+      <span class="ts-body" style="color:var(--text-tertiary)">재건축 단지만</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Cards · 3 elevations</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-4)">
+      <div class="card card-elev-1">
+        <div class="card-tag">Standard</div>
+        <div class="card-title">마포 래미안 푸르지오</div>
+        <div class="card-body">전세가율 68% · 거래 75점<br>가격 위치 중간 · 12.5억</div>
+      </div>
+      <div class="card card-elev-2">
+        <div class="card-tag">Elevated</div>
+        <div class="card-title">디에이치 자이</div>
+        <div class="card-body">전세가율 64% · 거래 82점<br>가격 위치 상위 · 18.3억</div>
+      </div>
+      <div class="card card-elev-3">
+        <span class="badge badge-accent">RECOMMENDED</span>
+        <div class="card-title" style="margin-top:var(--space-3)">래미안 퍼스티지</div>
+        <div class="card-body">조건 매칭 92점 · 매수 적정<br>가격 위치 중하 · 14.2억</div>
+        <div class="card-stat" style="color:var(--accent-700)">14.2<span style="font-size:60%;color:var(--text-tertiary);margin-left:6px">억</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Badges + Modal + Toast</div>
+    <div style="display:flex;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-6)">
+      <span class="badge badge-accent">RECOMMENDED</span>
+      <span class="badge badge-positive">+24% YoY</span>
+      <span class="badge badge-warning">10.15 규제</span>
+      <span class="badge badge-negative">−8% MoM</span>
+      <span class="badge badge-info">시세 갱신</span>
+      <span class="badge badge-neutral">비공개</span>
+    </div>
+    <div style="display:flex;gap:var(--space-6);align-items:flex-start;flex-wrap:wrap">
+      <div class="modal-preview">
+        <div class="modal-head">
+          <div class="modal-title">📊 맞춤 보고서 생성</div>
+          <button class="modal-x">✕</button>
+        </div>
+        <div class="modal-body">
+          <p class="ts-body" style="margin-bottom:var(--space-4);color:var(--text-secondary)">선택한 조건으로 보고서를 생성합니다.</p>
+          <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-5);flex-wrap:wrap">
+            <span class="chip on">무주택</span>
+            <span class="chip on">마포구</span>
+            <span class="chip on">6~8억</span>
+          </div>
+          <div style="display:flex;gap:var(--space-3);justify-content:flex-end">
+            <button class="btn btn-ghost btn-md">취소</button>
+            <button class="btn btn-primary btn-md">생성하기</button>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="toast-preview">📋 단지 정보 복사됨</div>
+        <div class="toast-preview positive">✅ 보고서 생성 완료</div>
+        <div class="toast-preview negative">⚠ 한도 도달 — 자정 reset</div>
+        <div class="toast-preview"><span class="spinner"></span> AI 분석 중...</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ 4 · BENTO ════ -->
+<section id="bento" class="section">
+  <div class="section-head">
+    <div class="section-num">04 · Bento Grid</div>
+    <h2 class="section-title">데이터 대시보드 (라이트)</h2>
+    <p class="section-sub">2026 SaaS 표준 모듈러 그리드. 그림자가 카드를 살짝 띄우고, accent 카드는 ambient shadow + 오렌지 톤 그라디언트.</p>
+  </div>
+
+  <div class="bento">
+    <div class="bento-card span-2 row-2 accent">
+      <div class="bento-label" style="color:var(--accent-700)">📊 추천 단지 · 매칭 92점</div>
+      <div style="font-family:var(--font-display);font-weight:700;font-size:28px;letter-spacing:-1px;margin-top:var(--space-2);color:var(--text-primary)">래미안 퍼스티지</div>
+      <div class="bento-value" style="font-size:48px;margin-top:var(--space-3);color:var(--accent-700)">14.2<span style="font-size:50%;margin-left:6px;color:var(--text-tertiary)">억</span></div>
+      <div class="bento-delta">▲ 적정 매수 · 가격 위치 중하</div>
+    </div>
+    <div class="bento-card">
+      <div class="bento-label">전세가율</div>
+      <div class="bento-value">68<span style="font-size:50%;color:var(--text-tertiary)">%</span></div>
+      <div class="bento-delta">▲ 안정</div>
+    </div>
+    <div class="bento-card">
+      <div class="bento-label">거래활발</div>
+      <div class="bento-value">82</div>
+      <div class="bento-delta">▲ 12 ↑</div>
+    </div>
+    <div class="bento-card span-2">
+      <div class="bento-label">📈 5년 가격 추이</div>
+      <svg viewBox="0 0 200 60" style="width:100%;height:80%;margin-top:8px"><path d="M0,50 L40,40 L80,42 L120,28 L160,30 L200,15" stroke="#FF6B35" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="200" cy="15" r="4" fill="#FF6B35"/></svg>
+    </div>
+    <div class="bento-card">
+      <div class="bento-label">월 원리금</div>
+      <div class="bento-value" style="font-size:24px">182<span style="font-size:60%;color:var(--text-tertiary)">만</span></div>
+    </div>
+    <div class="bento-card">
+      <div class="bento-label">LTV / DSR</div>
+      <div class="bento-value" style="font-size:24px">40 <span style="color:var(--text-quiet)">/</span> 38</div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ 5 · MOCKUP ════ -->
+<section id="mockup" class="section">
+  <div class="section-head">
+    <div class="section-num">05 · myhomelog 적용 mockup</div>
+    <h2 class="section-title">실제 화면 적용 (라이트)</h2>
+    <p class="section-sub">디자인 시스템 토큰을 myhomelog 첫 화면에 적용. 헤더 + Hero + 데이터 시각화 통합.</p>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-label">myhomelog v2 · LIGHT · 첫 화면 (1366×768)</div>
+    <div class="mockup-app">
+      <div class="mockup-header">
+        <div class="mockup-logo"><div class="mark">집</div>내집<em>로그</em></div>
+        <div class="mockup-tabs">
+          <span class="on">🗺 지도</span>
+          <span>📋 목록</span>
+          <span>📊 보고서</span>
+          <span>🧮 대출</span>
+          <span>✍ 특약</span>
+        </div>
+        <div class="mockup-search">
+          <span class="mockup-search-icon">🔎</span>
+          <input class="input" placeholder="단지명·동명 검색">
+        </div>
+        <button class="btn btn-primary mockup-cta">📊 맞춤 보고서</button>
+      </div>
+      <div class="mockup-hero">
+        <div>
+          <div class="mockup-tag">DATA · 245K · 9.7K · KST 17:00</div>
+          <h1 class="mockup-h">실거래가로 보는<br><em>매수 의사결정.</em></h1>
+          <div class="mockup-sub">국토부 실거래가 + LTV/DSR + 10.15 규제. AI 가 30초 만에 1page 보고서. 데이터로 결정하세요.</div>
+          <div class="mockup-stats">
+            <div class="mockup-stat"><div class="v">245K</div><div class="l">DEALS</div></div>
+            <div class="mockup-stat"><div class="v">9.7K</div><div class="l">APTS</div></div>
+            <div class="mockup-stat"><div class="v">17:00</div><div class="l">DAILY</div></div>
+          </div>
+        </div>
+        <div class="mockup-illust">
+          <svg viewBox="0 0 200 200">
+            <defs>
+              <linearGradient id="bar-l-strong" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FF6B35" stop-opacity=".95"/>
+                <stop offset="1" stop-color="#C84B18" stop-opacity=".25"/>
+              </linearGradient>
+              <linearGradient id="bar-l-quiet" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="rgba(0,0,0,0.18)" stop-opacity=".5"/>
+                <stop offset="1" stop-color="rgba(0,0,0,0.04)" stop-opacity=".5"/>
+              </linearGradient>
+            </defs>
+            <g>
+              <rect x="20" y="120" width="20" height="60" fill="url(#bar-l-quiet)" rx="3"/>
+              <rect x="50" y="100" width="20" height="80" fill="url(#bar-l-quiet)" rx="3"/>
+              <rect x="80" y="80" width="20" height="100" fill="url(#bar-l-strong)" rx="3"/>
+              <rect x="110" y="60" width="20" height="120" fill="url(#bar-l-quiet)" rx="3"/>
+              <rect x="140" y="40" width="20" height="140" fill="url(#bar-l-quiet)" rx="3"/>
+            </g>
+            <text x="20" y="32" fill="#71717A" font-family="JetBrains Mono" font-size="8" font-weight="700" letter-spacing="2">DEAL VOLUME · 5Y</text>
+            <text x="83" y="74" fill="#C84B18" font-family="JetBrains Mono" font-size="9" font-weight="700">12.5</text>
+            <text x="20" y="194" fill="#A1A1AA" font-family="JetBrains Mono" font-size="6">2021</text>
+            <text x="160" y="194" fill="#A1A1AA" font-family="JetBrains Mono" font-size="6">2026</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════ 6 · BUTTON MAPPING ════ -->
+<section id="mapping" class="section">
+  <div class="section-head">
+    <div class="section-num">06 · Button Migration Map</div>
+    <h2 class="section-title">14 → 4×3 매핑</h2>
+    <p class="section-sub">기존 16 button 클래스 (.abtn / .htab / .mbtn / .qb / .chip / .hbtn / .hbtn-cta / .pdf-btn / .fn-save / .sm-save / .cs / .niw-btn / .cpybtn / .bk-btn + Phase 4-1 hero-cta + hero-dismiss) 를 새 시스템 12 (4 variants × 3 sizes) 로 1:1 매핑. 단계 5 컴포넌트 통합 시 사용.</p>
+  </div>
+
+  <div class="panel">
+    <table class="mtbl">
+      <thead><tr><th style="width:14%">기존 클래스</th><th style="width:36%">현재 spec</th><th style="width:24%">새 시스템 매핑</th><th style="width:14%">사용처</th><th style="width:12%">회귀 risk</th></tr></thead>
+      <tbody>
+        <tr><td><code>.abtn.acc</code></td><td>width:100% · acc bg · radius 8 · 폰트 12·700</td><td><code>btn-primary btn-md w-full</code></td><td>대출 한도 계산 / 추천 단지</td><td class="risk-low">LOW</td></tr>
+        <tr><td><code>.abtn.a2</code></td><td>width:100% · a2 (#1E5499) blue bg</td><td><code>btn-secondary btn-md w-full</code> + 색 swap</td><td>실거래 단지 정리</td><td class="risk-med">MED</td></tr>
+        <tr><td><code>.htab</code></td><td>padding 5×13 · pill 18 · acc on bg</td><td><code>btn-ghost btn-sm</code> + on:accent-tint</td><td>헤더 8 탭</td><td class="risk-low">LOW</td></tr>
+        <tr><td><code>.hbtn</code></td><td>padding 5×12 · pill 18 · outline</td><td><code>btn-secondary btn-sm</code></td><td>헤더 정보·로그인</td><td class="risk-low">LOW</td></tr>
+        <tr><td><code>.hbtn-cta</code></td><td>linear-gradient #FF6B35→#F7931E</td><td><code>btn-primary btn-sm</code></td><td>헤더 맞춤 보고서 CTA</td><td class="risk-low">LOW</td></tr>
+        <tr><td><code>.mbtn</code></td><td>padding 4×10 · pill 18 · outline</td><td><code>btn-ghost btn-sm</code></td><td>지도 툴바 (전체·규제·비규제)</td><td class="risk-low">LOW</td></tr>
+        <tr><td><code>.qb</code></td><td>blue tint pill (chat quick)</td><td><code>chip</code> (style override)</td><td>챗 빠른 질문 3개</td><td class="risk-med">MED (색 swap)</td></tr>
+        <tr><td><code>.chip</code></td><td>pill 18 · outline · on:acc bg</td><td><code>chip</code> (그대로)</td><td>주택 보유·생애최초·지역 등</td><td class="risk-low">LOW</td></tr>
+        <tr><td><code>.cs</code></td><td>36×36 round · acc bg · SVG send</td><td><code>btn-primary btn-md icon-only</code></td><td>챗 send</td><td class="risk-low">LOW</td></tr>
+        <tr><td><code>.niw-btn</code></td><td>full · padding 7 · radius 7 · acc/a2</td><td><code>btn-primary btn-sm w-full</code></td><td>지도 인포윈도우 버튼</td><td class="risk-low">LOW</td></tr>
+        <tr><td><code>.cpybtn</code></td><td>tiny outline · radius 18</td><td><code>btn-ghost btn-sm</code> (작게)</td><td>특약 copy / share</td><td class="risk-low">LOW</td></tr>
+        <tr><td><code>.pdf-btn</code></td><td>padding 6×14 · acc bg · radius 18</td><td><code>btn-primary btn-sm</code></td><td>특약 PDF 출력</td><td class="risk-low">LOW</td></tr>
+        <tr><td><code>.fn-save</code></td><td>padding 8×20 · acc bg</td><td><code>btn-primary btn-md</code></td><td>임장노트 저장</td><td class="risk-low">LOW</td></tr>
+        <tr><td><code>.sm-save</code></td><td>full · padding 10 · acc bg · 13·700</td><td><code>btn-primary btn-md w-full</code></td><td>설정·로그인·약관 모달</td><td class="risk-low">LOW</td></tr>
+        <tr><td><code>.bk-btn</code></td><td>padding 4×11 · pill · outline</td><td><code>btn-secondary btn-sm</code></td><td>북마크·공유 버튼</td><td class="risk-low">LOW</td></tr>
+        <tr><td><code>.hero-cta</code></td><td>padding 9×18 · gradient + glow</td><td><code>btn-primary btn-md</code> (그대로)</td><td>Phase 4-1 hero band</td><td class="risk-low">LOW</td></tr>
+        <tr><td><code>.hero-dismiss</code></td><td>28×28 transparent · ::before 44</td><td><code>btn-ghost icon-only</code></td><td>Phase 4-1 hero ✕</td><td class="risk-low">LOW</td></tr>
+      </tbody>
+    </table>
+    <div style="margin-top:var(--space-4);padding:var(--space-4);background:var(--positive-tint);border:1px solid var(--positive);border-radius:var(--radius-md);font-size:var(--text-caption);color:var(--positive)">
+      <b>회귀 risk 정량 평가</b>: 16 클래스 중 <b>14건 LOW + 2건 MED</b>. 단계 5 일괄 swap 시 회귀 위험 작음. MED 2건 (.abtn.a2 / .qb) 은 색 변경 동반 → 운영자 시각 confirm 필요.
+    </div>
+  </div>
+</section>
+
+<!-- ════ 7 · HERO BEFORE/AFTER ════ -->
+<section id="hero-ba" class="section">
+  <div class="section-head">
+    <div class="section-num">07 · Hero Band Before / After</div>
+    <h2 class="section-title">Phase 4-1 Hero · 새 디자인 시스템 적용</h2>
+    <p class="section-sub">기존 hero band (Phase 4-1 단계 1, 921629f master) 를 새 디자인 토큰으로 갱신. <b>localStorage <code style="background:var(--bg-elev-2);padding:2px 6px;border-radius:4px;font-family:var(--font-mono);font-size:11px">mhl_hero_dismissed</code> 호환 (재 dismiss 발생 X)</b>. <b>.hbtn-cta 의 #FF6B35 gradient 와 새 --accent-500 일관성 확인</b> (둘 다 동일 색).</p>
+  </div>
+
+  <div class="ba-grid">
+    <div class="ba-frame">
+      <div class="ba-frame-label">BEFORE · 921629f production</div>
+      <div class="ba-frame-body">
+        <div class="hero-before">
+          <div class="hero-before-content">
+            <div class="hero-before-msg"><span>🏠</span><span>30초 입력으로 받는 1page 부동산 보고서</span></div>
+            <div class="hero-before-sub">국토부 실거래 · LTV/DSR · 전세가율 · 10.15 규제</div>
+          </div>
+          <button class="hero-before-cta">📊 맞춤 보고서 만들기 →</button>
+          <button class="hero-before-x">✕</button>
+        </div>
+      </div>
+    </div>
+    <div class="ba-frame">
+      <div class="ba-frame-label">AFTER · v2 design system</div>
+      <div class="ba-frame-body">
+        <div class="hero-after">
+          <div class="hero-after-content">
+            <div class="hero-after-tag">DATA · 245K · 9.7K · KST 17:00</div>
+            <div class="hero-after-msg">실거래가로 보는 <em>매수 의사결정.</em></div>
+            <div class="hero-after-sub">국토부 실거래 · LTV/DSR · 전세가율 · 10.15 규제</div>
+          </div>
+          <button class="hero-after-cta">📊 맞춤 보고서 →</button>
+          <button class="hero-after-x">✕</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel" style="margin-top:var(--space-6)">
+    <div class="panel-meta">변경 사항 · 8 항목</div>
+    <table class="mtbl">
+      <thead><tr><th style="width:24%">항목</th><th style="width:38%">BEFORE (Phase 4-1)</th><th style="width:38%">AFTER (v2)</th></tr></thead>
+      <tbody>
+        <tr><td>배경</td><td>warm beige gradient #FFFCF7 → #FBF4EA</td><td>white → faint orange tint</td></tr>
+        <tr><td>메시지 폰트</td><td>Apple SD Gothic / Pretendard 700 · 16px</td><td><b>Sora 800 + Pretendard 800-900</b> · 18px (display)</td></tr>
+        <tr><td>메시지 카피</td><td>"🏠 30초 입력으로 받는 1page 부동산 보고서"</td><td><b>"실거래가로 보는 매수 의사결정."</b> (Concept C 톤)</td></tr>
+        <tr><td>Subline</td><td>"국토부 실거래 · LTV/DSR · 전세가율 · 10.15 규제" (15px sans)</td><td>동일 텍스트 + <b>JetBrains Mono</b> 11px (data 시그널)</td></tr>
+        <tr><td>Tag (NEW)</td><td>없음</td><td><b>"DATA · 245K · 9.7K · KST 17:00"</b> mono badge (신뢰 시그널)</td></tr>
+        <tr><td>CTA</td><td>solid #C84B18 · radius 8 · soft shadow</td><td>gradient + ambient orange shadow + accent border</td></tr>
+        <tr><td>✕ 버튼</td><td>transparent · ::before 44 tap area</td><td>elev-1 bg + faint border (시각 명확) · ::before 44 유지</td></tr>
+        <tr><td>높이 (모바일)</td><td>~118px</td><td>~118px (동일 — 압축안 A 약속 유지)</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="panel" style="background:var(--info-tint);border-color:var(--info)">
+    <div class="panel-meta" style="color:var(--info)">호환성 검증</div>
+    <ul style="font-size:var(--text-caption);color:var(--text-secondary);line-height:1.8;padding-left:18px">
+      <li><b>localStorage <code style="background:var(--bg-elev-2);padding:1px 5px;border-radius:3px;font-family:var(--font-mono)">mhl_hero_dismissed</code></b>: 동일 키 사용 → 운영자가 한 번 dismiss 한 상태 그대로 유지. 재 dismiss 발생 X.</li>
+      <li><b><code style="background:var(--bg-elev-2);padding:1px 5px;border-radius:3px;font-family:var(--font-mono)">.hbtn-cta</code> #FF6B35 gradient</b> = <code style="background:var(--bg-elev-2);padding:1px 5px;border-radius:3px;font-family:var(--font-mono)">--accent-500</code> #FF6B35 동일. 색 일관성 ✅.</li>
+      <li><b>onboarding 충돌 회피</b>: 60s timeout fallback + 폴링 로직 그대로 유지.</li>
+      <li><b>Funnel 이벤트</b>: hero_view / hero_cta_click / hero_dismiss 그대로 유지 (Day 7 funnel 데이터 연속성).</li>
+      <li><b>회귀 위험</b>: 카피 + 폰트 + 색 변경만. DOM 구조 변경 X.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ════ 8 · CSS VARIABLES ════ -->
+<section id="tokens" class="section">
+  <div class="section-head">
+    <div class="section-num">08 · CSS Variables</div>
+    <h2 class="section-title">토큰 명세 · :root</h2>
+  </div>
+
+  <div class="panel">
+    <pre class="css-vars">:root {
+  <span class="comment">/* Background scale (light) */</span>
+  <span class="var-name">--bg-base</span>:        <span class="var-val">#FFFFFF</span>;
+  <span class="var-name">--bg-elev-1</span>:      <span class="var-val">#FAFAFA</span>;
+  <span class="var-name">--bg-elev-2</span>:      <span class="var-val">#F5F5F5</span>;
+  <span class="var-name">--bg-elev-3</span>:      <span class="var-val">#EFEFEF</span>;
+
+  <span class="comment">/* Glass surfaces (black-based on white) */</span>
+  <span class="var-name">--glass-1</span>:        <span class="var-val">rgba(0,0,0,0.025)</span>;
+  <span class="var-name">--glass-2</span>:        <span class="var-val">rgba(0,0,0,0.05)</span>;
+  <span class="var-name">--glass-3</span>:        <span class="var-val">rgba(0,0,0,0.08)</span>;
+
+  <span class="comment">/* Accent · 변경 없음 */</span>
+  <span class="var-name">--accent-500</span>:     <span class="var-val">#FF6B35</span>;
+  <span class="var-name">--accent-700</span>:     <span class="var-val">#C84B18</span>;  <span class="comment">/* legacy brand */</span>
+  <span class="var-name">--accent-shadow</span>:  <span class="var-val">0 4px 12px rgba(255,107,53,0.18), 0 0 0 1px rgba(255,107,53,0.10)</span>;
+
+  <span class="comment">/* Text scale (dark on light) */</span>
+  <span class="var-name">--text-primary</span>:   <span class="var-val">#0A0A0F</span>;
+  <span class="var-name">--text-secondary</span>: <span class="var-val">#404048</span>;
+  <span class="var-name">--text-tertiary</span>:  <span class="var-val">#5C5749</span>;  <span class="comment">/* F-1 일치 · WCAG AA 5.04:1 */</span>
+
+  <span class="comment">/* Typography */</span>
+  <span class="var-name">--font-display</span>:   <span class="var-val">'Sora', 'Pretendard Variable', sans-serif</span>;
+  <span class="var-name">--font-body</span>:      <span class="var-val">'Pretendard Variable', system-ui, sans-serif</span>;
+  <span class="var-name">--font-mono</span>:      <span class="var-val">'JetBrains Mono', monospace</span>;
+
+  <span class="comment">/* Shadow · 라이트 ambient depth */</span>
+  <span class="var-name">--shadow-md</span>: <span class="var-val">0 1px 3px rgba(15,23,42,0.05), 0 8px 24px rgba(15,23,42,0.06)</span>;
+
+  <span class="comment">/* Spacing · Radius · Motion · Backdrop blur 모두 다크와 동일 */</span>
+
+  <span class="comment">/* Legacy alias — 점진 마이그레이션 */</span>
+  <span class="var-name">--bg</span>: <span class="var-val">var(--bg-base)</span>;
+  <span class="var-name">--s0</span>: <span class="var-val">var(--bg-elev-1)</span>;
+  <span class="var-name">--t1</span>: <span class="var-val">var(--text-primary)</span>;
+  <span class="var-name">--t3</span>: <span class="var-val">var(--text-tertiary)</span>;  <span class="comment">/* F-1 작업 자동 적용 */</span>
+  <span class="var-name">--acc</span>: <span class="var-val">var(--accent-500)</span>;
+}</pre>
+  </div>
+</section>
+
+<section class="section" style="border-bottom:0;text-align:center;padding-bottom:var(--space-24)">
+  <div style="font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet);letter-spacing:2px;margin-bottom:var(--space-3);font-weight:600">END · DESIGN SYSTEM v2 LIGHT</div>
+  <div style="font-family:var(--font-display);font-size:var(--text-h2);font-weight:700;color:var(--text-primary);letter-spacing:-0.5px">운영자 confirm 후 Step 3 단계 1 진입.</div>
+</section>
+
+</body>
+</html>
