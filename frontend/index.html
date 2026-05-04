@@ -5943,6 +5943,9 @@ if (window.MutationObserver) {
 
 // ── 모바일 drawer 토글 (P0 Phase 2 R3-B-2) ────────────────
 // 모바일에서 사이드바(.lp) 가 숨겨지면 사용자가 입력 자체 못 함 → drawer 로 슬라이드.
+// MOB-AUDIT-2026-05-04: 운영자 보고 — "메뉴 클릭 시 검은 그림자만, .lp 안 보임"
+//   원인 추정: .lp.open 의 transform CSS 적용 우선순위 충돌 또는 캐시 미반영
+//   해결: inline style 직접 설정 — CSS rule 무관하게 강제 적용 (가장 robust)
 function toggleDrawer() {
   const lp = document.querySelector('.lp');
   const bg = document.getElementById('drawerBg');
@@ -5950,10 +5953,18 @@ function toggleDrawer() {
   const opening = !lp.classList.contains('open');
   lp.classList.toggle('open', opening);
   bg.classList.toggle('open', opening);
+  // CRITICAL: inline transform 강제 — CSS class 미반영 시 안전장치
+  // PC 환경에선 햄버거 hidden 이라 호출 안 됨 → 안전
+  lp.style.transform = opening ? 'translateX(0)' : 'translateX(-100%)';
+  lp.style.visibility = 'visible';
   document.body.style.overflow = opening ? 'hidden' : '';
 }
 function closeDrawer() {
-  document.querySelector('.lp')?.classList.remove('open');
+  const lp = document.querySelector('.lp');
+  if (lp) {
+    lp.classList.remove('open');
+    lp.style.transform = 'translateX(-100%)';
+  }
   document.getElementById('drawerBg')?.classList.remove('open');
   document.body.style.overflow = '';
 }
