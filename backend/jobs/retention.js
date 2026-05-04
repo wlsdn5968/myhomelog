@@ -152,12 +152,22 @@ async function runChatRetention(admin) {
   cutoff.setMonth(cutoff.getMonth() - CHAT_RETENTION_MONTHS);
   try {
     // chat_sessions 삭제 → chat_messages ON DELETE CASCADE 로 함께 삭제
+    // P2-7 (2026-05-04): 활성 사용자 (last_message_at 최근 30일 이내) 면제
+    //   기존: created_at 24개월+ 무조건 삭제 → 활성 사용자 옛 chat 도 파기 (PIPA 위반 가능)
+    //   변경: 활성 사용자는 최근 활동 시점 기준 면제 — 비활성 사용자만 24개월 cutoff
+    const activeCutoff = new Date();
+    activeCutoff.setDate(activeCutoff.getDate() - 30); // 최근 30일 활동 = 활성
     const { error, count } = await admin
       .from('chat_sessions')
       .delete({ count: 'exact' })
-      .lt('created_at', cutoff.toISOString());
+      .lt('created_at', cutoff.toISOString())
+      .lt('last_message_at', activeCutoff.toISOString()); // 활성 면제
     if (error) throw error;
-    logger.info({ deleted: count, cutoff: cutoff.toISOString() }, 'retention: chat 파기');
+    logger.info({
+      deleted: count,
+      cutoff: cutoff.toISOString(),
+      activeExempt: activeCutoff.toISOString(),
+    }, 'retention: chat 파기 (활성 사용자 면제)');
     return { deleted: count ?? 0 };
   } catch (e) {
     logger.error({ err: e.message }, 'retention: chat 파기 실패');

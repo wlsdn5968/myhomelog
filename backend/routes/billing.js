@@ -177,14 +177,15 @@ router.post('/confirm', async (req, res, next) => {
       return res.json({ status: 'captured', plan: pay.plan }); // 멱등
     }
     if (Number(pay.amount) !== Number(amount)) {
-      logger.warn({ userId: req.user.id, orderId, expected: pay.amount, got: amount },
+      // P2-5 (2026-05-04): 정확 금액 log 제외 — PIPA 제3조 최소수집 원칙
+      //   기존: expected=X got=Y 정확 값 → 로그 누적 시 결제 PII 노출
+      //   변경: 'mismatch' 만 기록 (정확 값은 admin DB query 로만 확인)
+      logger.warn({ userId: req.user.id, orderId, mismatch: true },
         '결제 금액 불일치 — 위조 가능성');
       // Phase 1.2: 금액 위조 시도 시 동일 orderId 재사용 차단.
-      // 이렇게 안 막으면 attacker 가 올바른 금액으로 재시도 → Toss Idempotency-Key 가
-      // 첫 실패 응답을 반복하지 않고 성공 처리할 여지가 생긴다.
       await admin.from('payments').update({
         status: 'failed',
-        failure_reason: `amount_mismatch: expected=${pay.amount} got=${amount}`,
+        failure_reason: 'amount_mismatch', // P2-5: 정확 값 제외
       }).eq('order_id', orderId);
       return res.status(400).json({ error: '결제 금액 불일치' });
     }

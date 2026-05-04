@@ -6475,10 +6475,13 @@ async function sM(){
       if (j.canBoostByLogin) {
         // 비로그인 사용자 → 가입 유도 (Pro 강요 X)
         // STAB-AUDIT #67 + #72 (2026-05-03): 비로그인 챗 한도 도달 시 inline 로그인 버튼 + 이력 가치 강조
+        // P2-4 (2026-05-04): drawer 가 열려 있으면 inline CTA click 차단 — drawer 자동 close
+        if (typeof closeDrawer === 'function') closeDrawer();
         aiMsg += `\n\n🔓 로그인하면 +${j.bonusOnLogin}회 + 대화 이력 자동 저장 (이메일 1회만 인증)`;
         addMsg('ai', aiMsg);
         // STAB #72: 인라인 로그인 CTA 추가 — header 의 로그인 버튼은 작아서 attention 약함
-        const _loginCtaHtml = `<button onclick="openLogin&&openLogin()" style="margin-top:8px;padding:9px 18px;background:var(--acc);color:#fff;border:none;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(42,109,244,0.25)">🔓 로그인하고 +${j.bonusOnLogin}회 받기</button>`;
+        // P2-4: position:relative + z-index 100000 추가 (drawer 9990 보다 위)
+        const _loginCtaHtml = `<button onclick="openLogin&&openLogin()" style="margin-top:8px;padding:9px 18px;background:var(--acc);color:#fff;border:none;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(42,109,244,0.25);position:relative;z-index:100000">🔓 로그인하고 +${j.bonusOnLogin}회 받기</button>`;
         const _lastMsg = document.getElementById('cMsgs')?.lastChild?.querySelector('.bbl');
         if (_lastMsg) _lastMsg.insertAdjacentHTML('beforeend', '<br>' + _loginCtaHtml);
         // 헤더 로그인 버튼 강조 (기존)
@@ -6499,7 +6502,7 @@ async function sM(){
         (isUpstream ? '\n\n💡 그 동안 사이드바 "내 상황 입력 → 단지 검색" 또는 "역전세 시뮬레이터" 는 정상 사용 가능합니다.' : ''));
       replied=true;
     } else if(!r.ok){
-      throw new Error('err');
+      throw new Error('http_' + r.status);
     } else {
       const d=await r.json();rmTyp();chatH.push({role:'assistant',content:d.reply});addMsg('ai',d.reply);
       document.getElementById('cSt').textContent='● 온라인';document.getElementById('cSt').style.color='var(--grn)';
@@ -6507,7 +6510,23 @@ async function sM(){
       // 어시스턴트 응답도 persist
       if(_chatSessionId) _persistChatMessage(_chatSessionId,'assistant',d.reply);
     }
-  }catch{}
+  }catch(e){
+    // P2-1 (2026-05-04): silent catch → 에러 종류별 분기
+    rmTyp();
+    if (replied) return; // 이미 응답함 (post-render 에러)
+    const msg = String(e?.name || '') + '|' + String(e?.message || '');
+    let userMsg;
+    if (/AbortError|timeout/i.test(msg)) {
+      userMsg = '⏱ 응답 시간 초과 (60초). 잠시 후 다시 시도해주세요.';
+    } else if (/Failed to fetch|NetworkError|network/i.test(msg)) {
+      userMsg = '📡 네트워크 연결 확인 후 다시 시도해주세요.';
+    } else if (/CORS/i.test(msg)) {
+      userMsg = '🔒 일시 접근 제한. 잠시 후 다시 시도해주세요.';
+    } else {
+      userMsg = '⚠ 일시 오류 — 잠시 후 다시 시도해주세요.';
+    }
+    addMsg('ai', userMsg);
+  }
 
   // MOB-3 (2026-05-03): generic catch fallback — 더 구체적 안내 + 대체 경로 제시
   if(!replied){

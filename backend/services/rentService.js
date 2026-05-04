@@ -145,11 +145,12 @@ async function getRentTransactions(lawdCd, dealYm) {
 }
 
 /**
- * 단지별 최근 6개월 전세 거래 조회 (월세=0인 건만)
+ * 단지별 최근 6개월 전세 거래 조회 (전세 + 환산 반전세)
  *
- * 한계: 반전세(monthlyRent > 0) 는 제외 — 환산보증금 계산 별도 필요.
- *       강남·마포 같은 반전세 비중 높은 구는 표본 축소될 수 있음.
- *       (향후 개선: 반전세를 환산보증금으로 포함하는 옵션)
+ * P2-6 (2026-05-04): 반전세 (monthlyRent > 0) 환산보증금으로 포함
+ *   환산공식: 환산보증금 = 보증금 + (월세 × 100)  — 일반 시장 표준
+ *   강남·마포 같은 반전세 비중 높은 구의 표본 ↑ → 갭 계산 정확도 향상
+ *   t.deposit (만원) → t._convertedDeposit 필드 추가 (호출자가 사용)
  */
 async function getJeonseByApt(lawdCd, aptName) {
   const now = new Date();
@@ -166,10 +167,16 @@ async function getJeonseByApt(lawdCd, aptName) {
   const flat = allResults.flat();
   const query = aptName.replace(/\s/g, '');
 
-  const filtered = flat.filter(t =>
-    t.monthlyRent === 0 && // 전세만
-    t.aptName.replace(/\s/g, '').includes(query)
-  );
+  // P2-6: 전세 + 반전세 모두 포함 — 반전세는 환산보증금으로 변환
+  const filtered = flat
+    .filter(t => t.aptName.replace(/\s/g, '').includes(query))
+    .map(t => {
+      const isJeonse = t.monthlyRent === 0;
+      const convertedDeposit = isJeonse
+        ? (t.deposit || 0)
+        : (t.deposit || 0) + (t.monthlyRent || 0) * 100; // 환산공식
+      return { ...t, _convertedDeposit: convertedDeposit, _isHalfJeonse: !isJeonse };
+    });
 
   return filtered.sort((a, b) => {
     const da = a.dealYear * 10000 + a.dealMonth * 100 + a.dealDay;

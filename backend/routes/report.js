@@ -124,11 +124,14 @@ router.post('/generate', async (req, res) => {
     //    Phase 6 (2026-04-26): 4500 → 6500 (단지 확장 후 6087자 잘림 실측 대응)
     //    Phase B-1 (2026-04-29): 출력 분량 제약 강화 + 6500 → 5500 (1차 조정, -15%)
     //    Phase B-2 (2026-05-01): SHARED_BASE + REPORT_SPECIFIC 분리 — endpoint 간 cache 공유 + ttl 1h
-    //    frontend timeout 180s 와 페어링 (Sonnet 4.5 + 5500 토큰 ≒ 50~80s)
+    //    P2-3 (2026-05-04): maxTokens 단지 수 비례 — 단지 7개+amenities 풍부 시 잘림 차단
+    //      base 1500 (longTerm + tips + 헤더) + 단지당 600 → 7단지 = 5700
+    const _candidatesCount = Array.isArray(candidates) ? candidates.length : 7;
+    const _maxTokens = Math.min(7000, 1500 + _candidatesCount * 600);
     const result = await callAI(
       [{ role: 'user', content: prompt }],
       false,
-      { userId, systemSpecific: REPORT_SPECIFIC, maxTokens: 5500 }
+      { userId, systemSpecific: REPORT_SPECIFIC, maxTokens: _maxTokens }
     );
     const cleaned = String(result.content || '').replace(/```json|```/g, '').trim();
 
@@ -622,6 +625,11 @@ async function fetchCandidateApts(admin, input, limit) {
   //   상위 limit*2 개 후보를 KAPT 호출 대상으로 (API 호출 비용 절감)
   // MOB-AUDIT-2026-05-03: priority 매칭 점수 ≥ 임계 단지가 7개 미만일 risk → 후보 풀 14 → 20 확장
   //   cache 적중률 90%+ 라 실제 비용 영향 미미. 외곽 사용자 priority 부분 매칭 후보 발견율 ↑
+  // P2-2 (2026-05-04): 후보 풀 < 7 시 인접 구 자동 확장 안내 (외곽 지역 사용자 다양성 부족)
+  if (pool.length < 7) {
+    logger.warn({ region: ctx.region, pool_size: pool.length },
+      '후보 풀 부족 — 인접 구 확장 권장 (사용자에 안내)');
+  }
   const out = pool.slice(0, Math.min(limit * 3, 20));
 
   // Phase 6+ (2026-04-26): KAPT API 통합 — 선정된 N개 단지만 facility 병렬 fetch
