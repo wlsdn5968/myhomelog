@@ -20,6 +20,8 @@ const { runMolitIngest } = require('../jobs/molitIngest');
 const { runAptMasterSync } = require('../jobs/aptMasterSync');
 const { run: runRegulationsCheck } = require('../jobs/regulationsCheck');
 const { run: runRegulationsAutoFetch } = require('../jobs/regulationsAutoFetch');
+// Phase 37 (2026-05-04): AI 기반 정책 자동 분석 + 제안 SQL 생성
+const { runFullCheck: runRegulationsAiCheck } = require('../jobs/regulationsAiCheck');
 const { run: runAuditPrune } = require('../jobs/auditPrune');
 // MOB-AUDIT-2026-05-03: cron 실패는 운영자 즉시 알림 — Sentry capture (logger.error 외 추가)
 const Sentry = require('@sentry/node');
@@ -126,14 +128,19 @@ async function handleRegulationsCheck(req, res) {
 router.post('/regulations-check', handleRegulationsCheck);
 router.get('/regulations-check', handleRegulationsCheck);
 
-// ── Phase 20 (2026-05-04): regulations 자동 fetch (정부 RSS) ──
+// ── Phase 20 + 37 (2026-05-04): regulations 자동 fetch + AI 분석 ──
 // 매주 화 06:00 UTC (KST 15:00) — 평일 정책 발표 후
+// Phase 37: RSS fetch (Phase 20) + Claude AI 분석 + 제안 SQL 생성
 async function handleRegulationsAutoFetch(req, res) {
   try {
     const started = Date.now();
-    const summary = await runRegulationsAutoFetch();
-    logger.info({ durationMs: Date.now() - started, totalMatched: summary.totalMatched }, 'cron/regulations-auto-fetch OK');
-    res.json({ ok: true, summary });
+    const result = await runRegulationsAiCheck();
+    logger.info({
+      durationMs: Date.now() - started,
+      totalMatched: result.rssResults.totalMatched,
+      aiHighConfidence: result.aiResults.highConfidenceCount,
+    }, 'cron/regulations-auto-fetch OK');
+    res.json({ ok: true, ...result });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/regulations-auto-fetch 실패');
     try { Sentry.captureException(e, { tags: { route: 'cron.regulations-auto-fetch' } }); } catch(_){}
