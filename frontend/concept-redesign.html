@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>myhomelog Redesign Concepts — A·B·C</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
+<link rel="preconnect" href="https://rsms.me/">
+<link rel="stylesheet" href="https://rsms.me/inter/inter.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Serif:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&family=Geist:wght@400;500;600;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'Pretendard Variable',Pretendard,system-ui,sans-serif;background:#1a1a1a;color:#f5f5f5;line-height:1.5}
+  .nav{position:sticky;top:0;background:#0a0a0a;padding:14px 32px;display:flex;gap:20px;z-index:100;border-bottom:1px solid #333}
+  .nav a{color:#888;text-decoration:none;font-size:13px;padding:6px 14px;border-radius:8px;transition:.2s}
+  .nav a:hover{color:#fff;background:#222}
+  .nav .title{font-weight:700;color:#fff;margin-right:auto;font-size:14px}
+  .concept{padding:60px 48px;border-bottom:1px solid #333;min-height:100vh}
+  .concept-header{display:flex;align-items:flex-end;gap:24px;margin-bottom:48px;flex-wrap:wrap}
+  .concept-letter{font-size:120px;font-weight:900;line-height:.85;color:#fff;font-family:'IBM Plex Serif',serif}
+  .concept-title{flex:1;min-width:280px}
+  .concept-title h2{font-size:34px;font-weight:700;color:#fff;margin-bottom:8px;letter-spacing:-.5px}
+  .concept-title .subtitle{font-size:15px;color:#888;font-style:italic}
+  .concept-title .ref{font-size:13px;color:#666;margin-top:10px;font-family:'IBM Plex Mono',monospace}
+  .concept-body{display:grid;grid-template-columns:1fr 1fr;gap:32px;align-items:flex-start}
+  .panel{background:#111;border-radius:16px;padding:28px;border:1px solid #2a2a2a}
+  .panel h3{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;color:#666;margin-bottom:16px}
+  .palette{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:8px}
+  .swatch{aspect-ratio:1;border-radius:10px;display:flex;align-items:flex-end;padding:8px;font-size:9px;font-weight:600;font-family:'JetBrains Mono',monospace}
+  .palette-meta{display:grid;grid-template-columns:repeat(7,1fr);gap:8px;font-size:9px;color:#666;text-align:center;margin-top:4px}
+  .typescale{display:flex;flex-direction:column;gap:6px}
+  .typescale .row{display:flex;align-items:baseline;gap:14px;border-bottom:1px solid #222;padding-bottom:6px}
+  .typescale .label{font-size:9px;color:#666;font-family:'JetBrains Mono',monospace;width:60px;flex-shrink:0;letter-spacing:.5px}
+  .components{display:flex;flex-direction:column;gap:18px}
+  .comp-row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+  .mockup{grid-column:1/-1;background:#fff;border-radius:16px;padding:0;overflow:hidden;border:1px solid #2a2a2a}
+  .mockup-frame{padding:0;height:520px;overflow:hidden;position:relative}
+  .mockup-label{padding:14px 22px;background:#111;color:#888;font-size:11px;font-family:'JetBrains Mono',monospace;letter-spacing:.5px;border-bottom:1px solid #2a2a2a}
+
+  /* ============ OPTION A — Editorial Real-Estate Magazine ============ */
+  .opt-a{--paper:#FBF9F4;--ink:#0E0E0E;--cinnabar:#C03727;--cinnabar-dim:#A02E20;--quiet:#6E6760;--line:#E1DBD2;--surface:#F4EFE6}
+  .opt-a .swatch:nth-child(1){background:#FBF9F4;color:#0E0E0E}
+  .opt-a .swatch:nth-child(2){background:#F4EFE6;color:#0E0E0E}
+  .opt-a .swatch:nth-child(3){background:#E1DBD2;color:#0E0E0E}
+  .opt-a .swatch:nth-child(4){background:#6E6760;color:#fff}
+  .opt-a .swatch:nth-child(5){background:#0E0E0E;color:#fff}
+  .opt-a .swatch:nth-child(6){background:#C03727;color:#fff}
+  .opt-a .swatch:nth-child(7){background:#A02E20;color:#fff}
+  .opt-a .ts-display{font-family:'IBM Plex Serif',serif;font-weight:700;color:#fff;font-size:48px;letter-spacing:-1px}
+  .opt-a .ts-h1{font-family:'IBM Plex Serif',serif;font-weight:700;color:#fff;font-size:32px}
+  .opt-a .ts-h2{font-family:'IBM Plex Serif',serif;font-weight:600;color:#fff;font-size:22px}
+  .opt-a .ts-body{font-family:'Pretendard Variable',sans-serif;font-size:15px;color:#ddd}
+  .opt-a .ts-mono{font-family:'IBM Plex Mono',monospace;font-size:14px;color:#bbb}
+  .opt-a .btn-primary{background:#C03727;color:#fff;padding:11px 20px;border:0;border-radius:0;font-family:'Pretendard Variable',sans-serif;font-weight:600;font-size:14px;letter-spacing:.5px;cursor:pointer;text-transform:uppercase}
+  .opt-a .btn-primary:hover{background:#A02E20}
+  .opt-a .btn-secondary{background:transparent;color:#fff;padding:10px 19px;border:1.5px solid #fff;border-radius:0;font-family:'Pretendard Variable',sans-serif;font-weight:600;font-size:14px;letter-spacing:.5px;cursor:pointer;text-transform:uppercase}
+  .opt-a .input{background:#1a1a1a;border:0;border-bottom:1.5px solid #444;color:#fff;padding:10px 0;font-size:14px;font-family:'IBM Plex Serif',serif;width:240px;outline:none}
+  .opt-a .input:focus{border-bottom-color:#C03727}
+  .opt-a .card{background:#fff;color:#0E0E0E;padding:24px;border-radius:0;border-top:3px solid #C03727;width:300px}
+  .opt-a .card-tag{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:1.5px;color:#C03727;text-transform:uppercase;margin-bottom:8px}
+  .opt-a .card-title{font-family:'IBM Plex Serif',serif;font-size:22px;font-weight:600;line-height:1.2;margin-bottom:6px}
+  .opt-a .card-body{font-size:13px;color:#6E6760;line-height:1.6}
+  .opt-a .mock-app{background:var(--paper);color:var(--ink);font-family:'Pretendard Variable',sans-serif;height:520px;display:flex;flex-direction:column}
+  .opt-a .mock-header{background:var(--paper);padding:14px 28px;display:flex;align-items:center;border-bottom:1px solid var(--line);gap:24px}
+  .opt-a .mock-logo{font-family:'IBM Plex Serif',serif;font-size:22px;font-weight:700;letter-spacing:-.5px}
+  .opt-a .mock-logo em{color:var(--cinnabar);font-style:italic}
+  .opt-a .mock-tabs{display:flex;gap:24px;font-size:12px;color:var(--quiet);margin-left:24px;text-transform:uppercase;letter-spacing:1px;font-weight:500}
+  .opt-a .mock-tabs .on{color:var(--ink);border-bottom:2px solid var(--cinnabar);padding-bottom:4px}
+  .opt-a .mock-cta{margin-left:auto;background:var(--ink);color:#fff;padding:8px 18px;font-size:11px;text-transform:uppercase;letter-spacing:1px;font-weight:600}
+  .opt-a .mock-hero{padding:48px 28px;background:var(--paper);border-bottom:1px solid var(--line);display:grid;grid-template-columns:1.4fr 1fr;gap:40px;align-items:center}
+  .opt-a .mock-tag{font-family:'IBM Plex Mono',monospace;font-size:10px;letter-spacing:2px;color:var(--cinnabar);text-transform:uppercase;margin-bottom:14px}
+  .opt-a .mock-h{font-family:'IBM Plex Serif',serif;font-size:48px;font-weight:700;line-height:1.05;letter-spacing:-1.2px;margin-bottom:14px}
+  .opt-a .mock-h em{font-style:italic;color:var(--cinnabar)}
+  .opt-a .mock-sub{font-size:14px;color:var(--quiet);line-height:1.6;max-width:380px;margin-bottom:22px}
+  .opt-a .mock-meta{display:flex;gap:18px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--quiet);text-transform:uppercase;letter-spacing:1.5px}
+  .opt-a .mock-meta b{color:var(--ink);font-weight:600;font-size:13px;display:block;font-family:'IBM Plex Serif',serif;text-transform:none;letter-spacing:0}
+  .opt-a .mock-illust{aspect-ratio:1;background:linear-gradient(135deg,#F4EFE6 0%,#E1DBD2 100%);border:1px solid var(--line);position:relative;overflow:hidden}
+  .opt-a .mock-illust svg{position:absolute;inset:0;width:100%;height:100%}
+
+  /* ============ OPTION B — Toss-Style Trust Minimal ============ */
+  .opt-b{--bg:#FFFFFF;--surface:#F8FAFC;--surface2:#F1F5F9;--ink:#0F172A;--quiet:#64748B;--primary:#2563EB;--primary-hov:#1D4ED8;--success:#10B981;--line:#E2E8F0}
+  .opt-b .swatch:nth-child(1){background:#FFFFFF;color:#0F172A;border:1px solid #E2E8F0}
+  .opt-b .swatch:nth-child(2){background:#F8FAFC;color:#0F172A}
+  .opt-b .swatch:nth-child(3){background:#E2E8F0;color:#0F172A}
+  .opt-b .swatch:nth-child(4){background:#64748B;color:#fff}
+  .opt-b .swatch:nth-child(5){background:#0F172A;color:#fff}
+  .opt-b .swatch:nth-child(6){background:#2563EB;color:#fff}
+  .opt-b .swatch:nth-child(7){background:#10B981;color:#fff}
+  .opt-b .ts-display{font-family:'Pretendard Variable',sans-serif;font-weight:800;color:#fff;font-size:48px;letter-spacing:-2px}
+  .opt-b .ts-h1{font-family:'Pretendard Variable',sans-serif;font-weight:700;color:#fff;font-size:32px;letter-spacing:-1px}
+  .opt-b .ts-h2{font-family:'Pretendard Variable',sans-serif;font-weight:600;color:#fff;font-size:22px;letter-spacing:-.5px}
+  .opt-b .ts-body{font-family:'Pretendard Variable',sans-serif;font-size:15px;color:#ddd;font-weight:400}
+  .opt-b .ts-mono{font-family:'JetBrains Mono',monospace;font-size:14px;color:#bbb;font-weight:500}
+  .opt-b .btn-primary{background:#2563EB;color:#fff;padding:11px 20px;border:0;border-radius:10px;font-family:'Pretendard Variable',sans-serif;font-weight:600;font-size:14px;cursor:pointer;box-shadow:0 1px 3px rgba(37,99,235,.3),0 4px 14px rgba(37,99,235,.15)}
+  .opt-b .btn-primary:hover{background:#1D4ED8;transform:translateY(-1px);box-shadow:0 2px 6px rgba(37,99,235,.4),0 8px 20px rgba(37,99,235,.2)}
+  .opt-b .btn-secondary{background:#F1F5F9;color:#0F172A;padding:11px 20px;border:0;border-radius:10px;font-family:'Pretendard Variable',sans-serif;font-weight:600;font-size:14px;cursor:pointer}
+  .opt-b .input{background:#F8FAFC;border:1.5px solid #E2E8F0;border-radius:10px;color:#0F172A;padding:11px 16px;font-size:14px;font-family:'Pretendard Variable',sans-serif;width:240px;outline:none;font-weight:500}
+  .opt-b .input:focus{border-color:#2563EB;background:#fff;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
+  .opt-b .card{background:#fff;color:#0F172A;padding:24px;border-radius:16px;width:300px;box-shadow:0 1px 3px rgba(15,23,42,.06),0 12px 32px rgba(15,23,42,.06);border:1px solid #F1F5F9}
+  .opt-b .card-tag{font-family:'Pretendard Variable',sans-serif;font-size:11px;font-weight:600;color:#2563EB;background:#EFF6FF;display:inline-block;padding:3px 9px;border-radius:6px;margin-bottom:10px}
+  .opt-b .card-title{font-size:20px;font-weight:700;line-height:1.3;margin-bottom:6px;letter-spacing:-.4px}
+  .opt-b .card-body{font-size:13px;color:#64748B;line-height:1.6}
+  .opt-b .mock-app{background:var(--bg);color:var(--ink);font-family:'Pretendard Variable',sans-serif;height:520px;display:flex;flex-direction:column}
+  .opt-b .mock-header{background:#fff;padding:14px 28px;display:flex;align-items:center;border-bottom:1px solid var(--line);gap:24px;box-shadow:0 1px 0 rgba(15,23,42,.04)}
+  .opt-b .mock-logo{font-size:18px;font-weight:800;letter-spacing:-.5px;display:flex;align-items:center;gap:8px}
+  .opt-b .mock-logo .mark{width:30px;height:30px;background:linear-gradient(135deg,#2563EB,#3B82F6);border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:800}
+  .opt-b .mock-tabs{display:flex;gap:4px;font-size:13px;color:var(--quiet);margin-left:16px;font-weight:500}
+  .opt-b .mock-tabs span{padding:7px 14px;border-radius:8px;cursor:pointer}
+  .opt-b .mock-tabs .on{color:var(--primary);background:#EFF6FF;font-weight:600}
+  .opt-b .mock-cta{margin-left:auto;background:var(--primary);color:#fff;padding:9px 18px;border-radius:10px;font-size:13px;font-weight:600;box-shadow:0 1px 3px rgba(37,99,235,.3),0 6px 16px rgba(37,99,235,.18)}
+  .opt-b .mock-hero{padding:56px 28px 40px;background:linear-gradient(180deg,#F8FAFC 0%,#fff 100%);border-bottom:1px solid var(--line);display:grid;grid-template-columns:1.3fr 1fr;gap:36px;align-items:center}
+  .opt-b .mock-tag{font-size:12px;font-weight:600;color:var(--primary);background:#EFF6FF;display:inline-block;padding:5px 11px;border-radius:20px;margin-bottom:18px}
+  .opt-b .mock-h{font-size:42px;font-weight:800;line-height:1.15;letter-spacing:-1.5px;margin-bottom:14px}
+  .opt-b .mock-h em{font-style:normal;background:linear-gradient(120deg,#2563EB,#3B82F6);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .opt-b .mock-sub{font-size:15px;color:var(--quiet);line-height:1.6;max-width:420px;margin-bottom:24px;font-weight:500}
+  .opt-b .mock-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .opt-b .mock-stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px;text-align:left}
+  .opt-b .mock-stat .v{font-size:22px;font-weight:800;letter-spacing:-.5px;color:var(--ink);font-family:'JetBrains Mono',monospace}
+  .opt-b .mock-stat .l{font-size:11px;color:var(--quiet);margin-top:2px;font-weight:500}
+  .opt-b .mock-illust{aspect-ratio:1;background:linear-gradient(135deg,#EFF6FF 0%,#DBEAFE 100%);border-radius:24px;border:1px solid var(--line);position:relative;overflow:hidden;box-shadow:0 1px 3px rgba(15,23,42,.04),0 24px 48px rgba(37,99,235,.08)}
+  .opt-b .mock-illust svg{position:absolute;inset:0;width:100%;height:100%}
+
+  /* ============ OPTION C — Modern Data-Lab Dark ============ */
+  .opt-c{--bg:#0A0A0F;--surface:rgba(255,255,255,0.04);--surface2:rgba(255,255,255,0.08);--ink:#F4F4F5;--quiet:#A1A1AA;--accent:#FF6B35;--accent-hov:#FF8556;--positive:#4ADE80;--negative:#F87171;--line:rgba(255,255,255,0.08)}
+  .opt-c .swatch:nth-child(1){background:#0A0A0F;color:#fff;border:1px solid rgba(255,255,255,0.08)}
+  .opt-c .swatch:nth-child(2){background:#18181B;color:#fff}
+  .opt-c .swatch:nth-child(3){background:#27272A;color:#fff}
+  .opt-c .swatch:nth-child(4){background:#A1A1AA;color:#000}
+  .opt-c .swatch:nth-child(5){background:#FF6B35;color:#fff}
+  .opt-c .swatch:nth-child(6){background:#4ADE80;color:#000}
+  .opt-c .swatch:nth-child(7){background:#F87171;color:#000}
+  .opt-c .ts-display{font-family:'Sora',sans-serif;font-weight:800;color:#fff;font-size:48px;letter-spacing:-2px}
+  .opt-c .ts-h1{font-family:'Sora',sans-serif;font-weight:700;color:#fff;font-size:32px;letter-spacing:-1px}
+  .opt-c .ts-h2{font-family:'Sora',sans-serif;font-weight:600;color:#fff;font-size:22px;letter-spacing:-.5px}
+  .opt-c .ts-body{font-family:'Pretendard Variable',sans-serif;font-size:15px;color:#ddd;font-weight:400}
+  .opt-c .ts-mono{font-family:'JetBrains Mono',monospace;font-size:14px;color:#FF6B35;font-weight:500}
+  .opt-c .btn-primary{background:linear-gradient(135deg,#FF6B35,#F7931E);color:#fff;padding:11px 22px;border:0;border-radius:10px;font-family:'Sora',sans-serif;font-weight:700;font-size:14px;cursor:pointer;box-shadow:0 0 0 1px rgba(255,107,53,.4) inset,0 8px 24px rgba(255,107,53,.25)}
+  .opt-c .btn-primary:hover{transform:translateY(-2px);box-shadow:0 0 0 1px rgba(255,107,53,.6) inset,0 12px 36px rgba(255,107,53,.4)}
+  .opt-c .btn-secondary{background:rgba(255,255,255,0.06);color:#fff;padding:11px 20px;border:1px solid rgba(255,255,255,0.12);border-radius:10px;font-family:'Sora',sans-serif;font-weight:600;font-size:14px;cursor:pointer;backdrop-filter:blur(20px)}
+  .opt-c .input{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.1);border-radius:10px;color:#fff;padding:11px 16px;font-size:14px;font-family:'Pretendard Variable',sans-serif;width:240px;outline:none;backdrop-filter:blur(20px)}
+  .opt-c .input:focus{border-color:#FF6B35;background:rgba(255,107,53,.04);box-shadow:0 0 0 3px rgba(255,107,53,.12)}
+  .opt-c .card{background:linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.02));color:#fff;padding:24px;border-radius:16px;width:300px;border:1px solid rgba(255,255,255,0.08);backdrop-filter:blur(40px);box-shadow:0 1px 0 rgba(255,255,255,0.06) inset,0 24px 48px rgba(0,0,0,0.4)}
+  .opt-c .card-tag{font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;color:#FF6B35;background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.2);display:inline-block;padding:3px 9px;border-radius:6px;margin-bottom:10px;letter-spacing:.5px;text-transform:uppercase}
+  .opt-c .card-title{font-family:'Sora',sans-serif;font-size:20px;font-weight:700;line-height:1.25;margin-bottom:6px;letter-spacing:-.4px}
+  .opt-c .card-body{font-size:13px;color:#A1A1AA;line-height:1.6}
+  .opt-c .mock-app{background:var(--bg);color:var(--ink);font-family:'Pretendard Variable',sans-serif;height:520px;display:flex;flex-direction:column;position:relative;overflow:hidden}
+  .opt-c .mock-app::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 20% 0%,rgba(255,107,53,.12) 0%,transparent 40%),radial-gradient(circle at 80% 100%,rgba(74,222,128,.08) 0%,transparent 40%);pointer-events:none}
+  .opt-c .mock-header{background:rgba(10,10,15,0.72);backdrop-filter:blur(40px);padding:14px 28px;display:flex;align-items:center;border-bottom:1px solid rgba(255,255,255,0.06);gap:24px;position:relative;z-index:1}
+  .opt-c .mock-logo{font-family:'Sora',sans-serif;font-size:18px;font-weight:800;letter-spacing:-.5px;display:flex;align-items:center;gap:8px}
+  .opt-c .mock-logo .mark{width:30px;height:30px;background:linear-gradient(135deg,#FF6B35,#F7931E);border-radius:9px;display:flex;align-items:center;justify-content:center;color:#fff;font-size:14px;font-weight:900;box-shadow:0 4px 16px rgba(255,107,53,.4)}
+  .opt-c .mock-tabs{display:flex;gap:4px;font-size:13px;color:var(--quiet);margin-left:16px;font-family:'Sora',sans-serif;font-weight:500}
+  .opt-c .mock-tabs span{padding:7px 14px;border-radius:8px;cursor:pointer}
+  .opt-c .mock-tabs .on{color:var(--accent);background:rgba(255,107,53,.1);border:1px solid rgba(255,107,53,.2);font-weight:600}
+  .opt-c .mock-cta{margin-left:auto;background:linear-gradient(135deg,#FF6B35,#F7931E);color:#fff;padding:9px 18px;border-radius:10px;font-size:13px;font-weight:700;font-family:'Sora',sans-serif;box-shadow:0 8px 24px rgba(255,107,53,.3)}
+  .opt-c .mock-hero{padding:48px 28px;display:grid;grid-template-columns:1.3fr 1fr;gap:36px;align-items:center;position:relative;z-index:1;flex:1}
+  .opt-c .mock-tag{font-family:'JetBrains Mono',monospace;font-size:11px;font-weight:600;color:var(--accent);background:rgba(255,107,53,.08);border:1px solid rgba(255,107,53,.2);display:inline-block;padding:5px 11px;border-radius:20px;margin-bottom:18px;letter-spacing:1px;text-transform:uppercase}
+  .opt-c .mock-h{font-family:'Sora',sans-serif;font-size:44px;font-weight:800;line-height:1.1;letter-spacing:-1.8px;margin-bottom:14px}
+  .opt-c .mock-h em{font-style:normal;background:linear-gradient(120deg,#FF6B35,#FFA463);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .opt-c .mock-sub{font-size:15px;color:var(--quiet);line-height:1.6;max-width:420px;margin-bottom:24px;font-weight:400}
+  .opt-c .mock-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+  .opt-c .mock-stat{background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:14px;padding:14px;text-align:left;backdrop-filter:blur(20px)}
+  .opt-c .mock-stat .v{font-family:'JetBrains Mono',monospace;font-size:22px;font-weight:700;letter-spacing:-.5px;color:#fff}
+  .opt-c .mock-stat .l{font-size:11px;color:var(--quiet);margin-top:2px;font-family:'Sora',sans-serif;font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+  .opt-c .mock-illust{aspect-ratio:1;background:linear-gradient(135deg,rgba(255,107,53,.15),rgba(74,222,128,.08));border-radius:24px;border:1px solid rgba(255,255,255,0.08);position:relative;overflow:hidden;backdrop-filter:blur(40px);box-shadow:0 1px 0 rgba(255,255,255,0.06) inset,0 32px 64px rgba(0,0,0,0.6)}
+  .opt-c .mock-illust svg{position:absolute;inset:0;width:100%;height:100%}
+
+  /* shared illustration helpers */
+  .grid-bg{position:absolute;inset:0;background-image:linear-gradient(rgba(0,0,0,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(0,0,0,.04) 1px,transparent 1px);background-size:24px 24px}
+</style>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="title">myhomelog · 리디자인 컨셉 보드</div>
+  <a href="#a">A · Editorial Magazine</a>
+  <a href="#b">B · Trust Minimal</a>
+  <a href="#c">C · Data Lab Dark</a>
+</nav>
+
+<!-- ════════════════════ OPTION A ════════════════════ -->
+<section id="a" class="concept opt-a">
+  <header class="concept-header">
+    <div class="concept-letter">A</div>
+    <div class="concept-title">
+      <h2>Editorial Real-Estate Magazine</h2>
+      <div class="subtitle">"부동산 데이터를 신문처럼 — 읽는 즐거움과 권위"</div>
+      <div class="ref">REF · NYT Real Estate · Monocle · Bloomberg Magazine · 조선일보 머니</div>
+    </div>
+  </header>
+
+  <div class="concept-body">
+    <!-- 컬러 팔레트 -->
+    <div class="panel">
+      <h3>Color Palette · Newsprint × Cinnabar</h3>
+      <div class="palette">
+        <div class="swatch">FBF9F4</div>
+        <div class="swatch">F4EFE6</div>
+        <div class="swatch">E1DBD2</div>
+        <div class="swatch">6E6760</div>
+        <div class="swatch">0E0E0E</div>
+        <div class="swatch">C03727</div>
+        <div class="swatch">A02E20</div>
+      </div>
+      <div class="palette-meta">
+        <span>Paper</span><span>Surface</span><span>Line</span><span>Quiet</span><span>Ink</span><span>Cinnabar</span><span>Cinn-D</span>
+      </div>
+    </div>
+
+    <!-- 타이포 스케일 -->
+    <div class="panel">
+      <h3>Type Scale · IBM Plex Serif × Pretendard</h3>
+      <div class="typescale">
+        <div class="row"><span class="label">DISPLAY</span><span class="ts-display">실거래가</span></div>
+        <div class="row"><span class="label">H1 / 32</span><span class="ts-h1">30초 1page 보고서</span></div>
+        <div class="row"><span class="label">H2 / 22</span><span class="ts-h2">국토부 실거래 분석</span></div>
+        <div class="row"><span class="label">BODY / 15</span><span class="ts-body">매수 의사결정을 정리합니다</span></div>
+        <div class="row"><span class="label">MONO / 14</span><span class="ts-mono">12.5억 · LTV 40% · DSR 38</span></div>
+      </div>
+    </div>
+
+    <!-- 컴포넌트 -->
+    <div class="panel">
+      <h3>Components · 각진 / 활자 / 절제</h3>
+      <div class="components">
+        <div class="comp-row">
+          <button class="btn-primary">맞춤 보고서</button>
+          <button class="btn-secondary">단지 검색</button>
+        </div>
+        <div class="comp-row">
+          <input class="input" placeholder="단지명 · 동명 검색">
+        </div>
+        <div class="comp-row">
+          <div class="card">
+            <div class="card-tag">RECOMMENDED</div>
+            <div class="card-title">마포 래미안 푸르지오</div>
+            <div class="card-body">전세가율 68% · 거래활발 75점<br>가격 위치 중간 · 최근 12.5억</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 핵심 정신 -->
+    <div class="panel">
+      <h3>Design Principle · 출판물의 권위</h3>
+      <div style="font-size:13px;color:#bbb;line-height:1.7">
+        <p style="margin-bottom:10px"><b style="color:#fff;font-family:'IBM Plex Serif',serif;font-size:15px">Generous Whitespace.</b> 신문 1면처럼 여백이 권위를 만듭니다. 데이터 표는 읽기 좋고, 카드는 정렬 흐름이 명확합니다.</p>
+        <p style="margin-bottom:10px"><b style="color:#fff;font-family:'IBM Plex Serif',serif;font-size:15px">Restrained Color.</b> Cinnabar 한 색만 강조 — 다른 모든 것은 ink·paper·quiet. 톤이 차분해서 데이터가 main character.</p>
+        <p><b style="color:#fff;font-family:'IBM Plex Serif',serif;font-size:15px">Editorial Rhythm.</b> Mono 폰트로 숫자, Serif 폰트로 헤드, Sans 로 본문. 활자가 위계를 만듭니다.</p>
+      </div>
+    </div>
+
+    <!-- mockup -->
+    <div class="mockup">
+      <div class="mockup-label">A · myhomelog 적용 mockup — 첫 화면 (1366×768)</div>
+      <div class="mockup-frame">
+        <div class="mock-app">
+          <div class="mock-header">
+            <div class="mock-logo">내집<em>로그</em></div>
+            <div class="mock-tabs">
+              <span class="on">지도</span>
+              <span>목록</span>
+              <span>보고서</span>
+              <span>대출</span>
+              <span>특약</span>
+            </div>
+            <div class="mock-cta">맞춤 보고서</div>
+          </div>
+          <div class="mock-hero">
+            <div>
+              <div class="mock-tag">VOL.04 · MAY 2026</div>
+              <h1 class="mock-h">실거래가로 읽는<br><em>매수 의사결정.</em></h1>
+              <div class="mock-sub">국토교통부 실거래가 245,000건 · LTV/DSR 자동 계산 · 2025.10.15 규제 즉시 반영. 컨설팅 보고서 30초 안에.</div>
+              <div class="mock-meta">
+                <div><b>245,123</b>거래</div>
+                <div><b>9,761</b>단지</div>
+                <div><b>17:00</b>매일 갱신</div>
+              </div>
+            </div>
+            <div class="mock-illust">
+              <div class="grid-bg"></div>
+              <svg viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet">
+                <g stroke="#0E0E0E" fill="none" stroke-width="1">
+                  <rect x="20" y="120" width="20" height="60"/>
+                  <rect x="50" y="100" width="20" height="80"/>
+                  <rect x="80" y="80" width="20" height="100"/>
+                  <rect x="110" y="60" width="20" height="120"/>
+                  <rect x="140" y="40" width="20" height="140"/>
+                </g>
+                <g fill="#C03727">
+                  <rect x="80" y="80" width="20" height="100"/>
+                </g>
+                <line x1="0" y1="180" x2="200" y2="180" stroke="#0E0E0E" stroke-width="1.5"/>
+                <text x="20" y="32" fill="#0E0E0E" font-family="IBM Plex Serif" font-size="9" font-weight="700" letter-spacing="2">PRICE INDEX 2024–2026</text>
+                <text x="83" y="76" fill="#C03727" font-family="IBM Plex Mono" font-size="7" font-weight="700">12.5</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════ OPTION B ════════════════════ -->
+<section id="b" class="concept opt-b" style="background:#0a0a14">
+  <header class="concept-header">
+    <div class="concept-letter" style="color:#3B82F6">B</div>
+    <div class="concept-title">
+      <h2>Toss-Style Trust Minimal</h2>
+      <div class="subtitle">"한국 fintech 표준 — 깔끔함이 신뢰다"</div>
+      <div class="ref">REF · Toss · Linear · Vercel · Stripe · 카카오페이</div>
+    </div>
+  </header>
+
+  <div class="concept-body">
+    <div class="panel">
+      <h3>Color Palette · Slate × Royal Blue</h3>
+      <div class="palette">
+        <div class="swatch">FFFFFF</div>
+        <div class="swatch">F8FAFC</div>
+        <div class="swatch">E2E8F0</div>
+        <div class="swatch">64748B</div>
+        <div class="swatch">0F172A</div>
+        <div class="swatch">2563EB</div>
+        <div class="swatch">10B981</div>
+      </div>
+      <div class="palette-meta">
+        <span>BG</span><span>Surface</span><span>Line</span><span>Quiet</span><span>Ink</span><span>Primary</span><span>Success</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Type Scale · Pretendard 단일 가족</h3>
+      <div class="typescale">
+        <div class="row"><span class="label">DISPLAY</span><span class="ts-display">실거래가</span></div>
+        <div class="row"><span class="label">H1 / 32</span><span class="ts-h1">30초 1page 보고서</span></div>
+        <div class="row"><span class="label">H2 / 22</span><span class="ts-h2">국토부 실거래 분석</span></div>
+        <div class="row"><span class="label">BODY / 15</span><span class="ts-body">매수 의사결정을 정리합니다</span></div>
+        <div class="row"><span class="label">MONO / 14</span><span class="ts-mono">12.5억 · LTV 40% · DSR 38</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Components · 둥근 / 부드러운 그림자 / 신뢰</h3>
+      <div class="components">
+        <div class="comp-row">
+          <button class="btn-primary">📊 맞춤 보고서</button>
+          <button class="btn-secondary">단지 검색</button>
+        </div>
+        <div class="comp-row">
+          <input class="input" placeholder="🔎 단지명 · 동명 검색">
+        </div>
+        <div class="comp-row">
+          <div class="card">
+            <div class="card-tag">추천</div>
+            <div class="card-title">마포 래미안 푸르지오</div>
+            <div class="card-body">전세가율 68% · 거래활발 75점<br>가격 위치 중간 · 최근 12.5억</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Design Principle · 깔끔함 = 신뢰</h3>
+      <div style="font-size:13px;color:#bbb;line-height:1.7">
+        <p style="margin-bottom:10px"><b style="color:#3B82F6;font-weight:700">Soft Shadows.</b> 그림자는 depth, not decoration. 카드가 살짝 떠 있어 hover 시 더 떠오릅니다.</p>
+        <p style="margin-bottom:10px"><b style="color:#3B82F6;font-weight:700">Generous Padding.</b> 24px / 32px 표준. 한국 사용자가 익숙한 Toss 톤. 답답하지 않은 정확성.</p>
+        <p><b style="color:#3B82F6;font-weight:700">Brand Gradient.</b> Blue → Light Blue. CTA 와 brand mark 에만 한정 사용. 데이터는 모노톤.</p>
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-label">B · myhomelog 적용 mockup — 첫 화면 (1366×768)</div>
+      <div class="mockup-frame">
+        <div class="mock-app">
+          <div class="mock-header">
+            <div class="mock-logo"><div class="mark">집</div>내집로그</div>
+            <div class="mock-tabs">
+              <span class="on">🗺 지도</span>
+              <span>📋 목록</span>
+              <span>📊 보고서</span>
+              <span>🧮 대출</span>
+              <span>✍ 특약</span>
+            </div>
+            <div class="mock-cta">📊 맞춤 보고서</div>
+          </div>
+          <div class="mock-hero">
+            <div>
+              <div class="mock-tag">📊 30초 입력 · AI 보고서</div>
+              <h1 class="mock-h">실거래가로 보는<br><em>매수 의사결정.</em></h1>
+              <div class="mock-sub">국토부 실거래가 245,000건 · LTV/DSR 자동 · 2025.10.15 규제 반영. 30초 입력으로 1page 보고서를 받으세요.</div>
+              <div class="mock-stats">
+                <div class="mock-stat"><div class="v">245K+</div><div class="l">거래</div></div>
+                <div class="mock-stat"><div class="v">9.7K+</div><div class="l">단지</div></div>
+                <div class="mock-stat"><div class="v">17:00</div><div class="l">매일 갱신</div></div>
+              </div>
+            </div>
+            <div class="mock-illust">
+              <svg viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                  <linearGradient id="bg-b" x1="0" y1="0" x2="1" y2="1">
+                    <stop offset="0" stop-color="#2563EB" stop-opacity=".15"/>
+                    <stop offset="1" stop-color="#3B82F6" stop-opacity=".05"/>
+                  </linearGradient>
+                </defs>
+                <rect width="200" height="200" fill="url(#bg-b)"/>
+                <g stroke="#2563EB" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20,150 L50,130 L80,140 L110,100 L140,110 L170,70" />
+                </g>
+                <g fill="#2563EB">
+                  <circle cx="20" cy="150" r="4"/>
+                  <circle cx="50" cy="130" r="4"/>
+                  <circle cx="80" cy="140" r="4"/>
+                  <circle cx="110" cy="100" r="4"/>
+                  <circle cx="140" cy="110" r="4"/>
+                  <circle cx="170" cy="70" r="6" fill="#fff" stroke="#2563EB" stroke-width="3"/>
+                </g>
+                <text x="20" y="40" fill="#0F172A" font-family="Pretendard" font-size="10" font-weight="700">📊 5년 거래량 추이</text>
+                <text x="155" y="60" fill="#2563EB" font-family="JetBrains Mono" font-size="8" font-weight="700">+24%</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════ OPTION C ════════════════════ -->
+<section id="c" class="concept opt-c">
+  <header class="concept-header">
+    <div class="concept-letter" style="color:#FF6B35;font-family:'Sora',sans-serif">C</div>
+    <div class="concept-title">
+      <h2>Modern Data-Lab Dark</h2>
+      <div class="subtitle">"2026 trend 정면 — 다크 + 글래스 + bento"</div>
+      <div class="ref">REF · Linear · Vercel Dashboard · Notion 2026 · Bloomberg Terminal</div>
+    </div>
+  </header>
+
+  <div class="concept-body">
+    <div class="panel">
+      <h3>Color Palette · Black × Electric Orange</h3>
+      <div class="palette">
+        <div class="swatch">0A0A0F</div>
+        <div class="swatch">18181B</div>
+        <div class="swatch">27272A</div>
+        <div class="swatch">A1A1AA</div>
+        <div class="swatch">FF6B35</div>
+        <div class="swatch">4ADE80</div>
+        <div class="swatch">F87171</div>
+      </div>
+      <div class="palette-meta">
+        <span>BG</span><span>Surface</span><span>Elev</span><span>Quiet</span><span>Accent</span><span>+</span><span>−</span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Type Scale · Sora × Pretendard × JetBrains Mono</h3>
+      <div class="typescale">
+        <div class="row"><span class="label">DISPLAY</span><span class="ts-display">실거래가</span></div>
+        <div class="row"><span class="label">H1 / 32</span><span class="ts-h1">30초 1page 보고서</span></div>
+        <div class="row"><span class="label">H2 / 22</span><span class="ts-h2">국토부 실거래 분석</span></div>
+        <div class="row"><span class="label">BODY / 15</span><span class="ts-body">매수 의사결정을 정리합니다</span></div>
+        <div class="row"><span class="label">MONO / 14</span><span class="ts-mono">12.5억 · LTV 40% · DSR 38</span></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Components · 글래스 / 그라디언트 CTA / 모노 숫자</h3>
+      <div class="components">
+        <div class="comp-row">
+          <button class="btn-primary">📊 맞춤 보고서</button>
+          <button class="btn-secondary">단지 검색</button>
+        </div>
+        <div class="comp-row">
+          <input class="input" placeholder="단지명 · 동명 검색">
+        </div>
+        <div class="comp-row">
+          <div class="card">
+            <div class="card-tag">RECOMMENDED</div>
+            <div class="card-title">마포 래미안 푸르지오</div>
+            <div class="card-body">전세가율 68% · 거래활발 75점<br>가격 위치 중간 · 최근 12.5억</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h3>Design Principle · 데이터 분석가의 도구</h3>
+      <div style="font-size:13px;color:#bbb;line-height:1.7">
+        <p style="margin-bottom:10px"><b style="color:#FF6B35;font-weight:700;font-family:'Sora',sans-serif">Glass Surfaces.</b> blur(40px) + 1px 가장자리 light. 다크 위에 떠 있는 카드 효과. 실제 데이터에 집중.</p>
+        <p style="margin-bottom:10px"><b style="color:#FF6B35;font-weight:700;font-family:'Sora',sans-serif">Bento Grid.</b> 보고서·대시보드는 박스 격자. 정보가 한눈에 정리. SaaS 표준.</p>
+        <p><b style="color:#FF6B35;font-weight:700;font-family:'Sora',sans-serif">Motion as Signal.</b> 숫자 변화는 부드럽게 increment. hover 는 1-2px 떠오름. 절제된 모션.</p>
+      </div>
+    </div>
+
+    <div class="mockup">
+      <div class="mockup-label">C · myhomelog 적용 mockup — 첫 화면 (1366×768)</div>
+      <div class="mockup-frame">
+        <div class="mock-app">
+          <div class="mock-header">
+            <div class="mock-logo"><div class="mark">집</div>내집<span style="background:linear-gradient(90deg,#FF6B35,#F7931E);-webkit-background-clip:text;background-clip:text;color:transparent">로그</span></div>
+            <div class="mock-tabs">
+              <span class="on">🗺 지도</span>
+              <span>📋 목록</span>
+              <span>📊 보고서</span>
+              <span>🧮 대출</span>
+              <span>✍ 특약</span>
+            </div>
+            <div class="mock-cta">📊 맞춤 보고서</div>
+          </div>
+          <div class="mock-hero">
+            <div>
+              <div class="mock-tag">DATA · 245K · 9.7K · KST 17:00</div>
+              <h1 class="mock-h">실거래가로 보는<br><em>매수 의사결정.</em></h1>
+              <div class="mock-sub">국토부 실거래가 + LTV/DSR + 10.15 규제. AI가 30초 만에 1page 보고서. 데이터로 결정하세요.</div>
+              <div class="mock-stats">
+                <div class="mock-stat"><div class="v">245K</div><div class="l">DEALS</div></div>
+                <div class="mock-stat"><div class="v">9.7K</div><div class="l">APTS</div></div>
+                <div class="mock-stat"><div class="v">17:00</div><div class="l">DAILY</div></div>
+              </div>
+            </div>
+            <div class="mock-illust">
+              <svg viewBox="0 0 200 200" preserveAspectRatio="xMidYMid meet">
+                <defs>
+                  <linearGradient id="bar-c" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#FF6B35" stop-opacity=".9"/>
+                    <stop offset="1" stop-color="#FF6B35" stop-opacity=".2"/>
+                  </linearGradient>
+                  <linearGradient id="bar-c-quiet" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0" stop-color="#fff" stop-opacity=".18"/>
+                    <stop offset="1" stop-color="#fff" stop-opacity=".04"/>
+                  </linearGradient>
+                </defs>
+                <g>
+                  <rect x="20" y="120" width="20" height="60" fill="url(#bar-c-quiet)" rx="3"/>
+                  <rect x="50" y="100" width="20" height="80" fill="url(#bar-c-quiet)" rx="3"/>
+                  <rect x="80" y="80" width="20" height="100" fill="url(#bar-c)" rx="3"/>
+                  <rect x="110" y="60" width="20" height="120" fill="url(#bar-c-quiet)" rx="3"/>
+                  <rect x="140" y="40" width="20" height="140" fill="url(#bar-c-quiet)" rx="3"/>
+                </g>
+                <text x="20" y="32" fill="#A1A1AA" font-family="JetBrains Mono" font-size="8" font-weight="600" letter-spacing="2">DEAL VOLUME · 5Y</text>
+                <text x="83" y="74" fill="#FF6B35" font-family="JetBrains Mono" font-size="9" font-weight="700">12.5</text>
+                <text x="83" y="194" fill="#A1A1AA" font-family="JetBrains Mono" font-size="6">2024</text>
+              </svg>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+</body>
+</html>
