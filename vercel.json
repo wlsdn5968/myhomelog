@@ -18,6 +18,7 @@
     { "src": "/robots\\.txt", "dest": "/frontend/robots.txt", "headers": { "Content-Type": "text/plain" } },
     { "src": "/manifest\\.json", "dest": "/frontend/manifest.json", "headers": { "Content-Type": "application/manifest+json" } },
     { "src": "/concept-redesign(\\.html)?", "dest": "/frontend/concept-redesign.html" },
+    { "src": "/design-system(\\.html)?", "dest": "/frontend/design-system.html" },
     { "src": "/(.*)", "dest": "/frontend/index.html" }
   ],
   "crons": [

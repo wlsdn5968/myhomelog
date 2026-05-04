@@ -1,0 +1,952 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>myhomelog Design System · Concept C</title>
+<link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  /* ════════════════════════════════════════════════════════════════
+     myhomelog · Design System · Concept C — Modern Data-Lab Dark
+     ════════════════════════════════════════════════════════════════ */
+  :root {
+    /* ── Background scale (deepest → elevated) ─────────────── */
+    --bg-base:        #0A0A0F;   /* page background */
+    --bg-elev-1:      #0F0F15;   /* sticky header */
+    --bg-elev-2:      #14141C;   /* sidebar */
+    --bg-elev-3:      #1A1A24;   /* dropdown */
+
+    /* ── Glass surfaces (overlays with backdrop-filter) ───── */
+    --glass-1:        rgba(255,255,255,0.035);
+    --glass-2:        rgba(255,255,255,0.06);
+    --glass-3:        rgba(255,255,255,0.085);
+    --glass-hover:    rgba(255,255,255,0.10);
+    --glass-active:   rgba(255,255,255,0.13);
+
+    /* ── Border (light edge insets) ───────────────────────── */
+    --border-faint:   rgba(255,255,255,0.06);
+    --border-subtle:  rgba(255,255,255,0.10);
+    --border-medium:  rgba(255,255,255,0.16);
+    --border-strong:  rgba(255,255,255,0.24);
+
+    /* ── Accent · Electric Orange (myhomelog brand) ───────── */
+    --accent-50:      #FFF5EE;
+    --accent-100:     #FFE4D1;
+    --accent-300:     #FF9A6E;
+    --accent-500:     #FF6B35;   /* primary — buttons, links, focus */
+    --accent-600:     #F25218;   /* hover */
+    --accent-700:     #C84B18;   /* legacy brand (print, PDF) */
+    --accent-900:     #6B2A0E;
+    --accent-tint:    rgba(255,107,53,0.10);
+    --accent-tint-2:  rgba(255,107,53,0.18);
+    --accent-tint-3:  rgba(255,107,53,0.30);
+    --accent-glow:    0 0 0 1px rgba(255,107,53,0.4) inset, 0 8px 24px rgba(255,107,53,0.25);
+    --accent-glow-strong: 0 0 0 1px rgba(255,107,53,0.6) inset, 0 12px 36px rgba(255,107,53,0.4);
+
+    /* ── Semantic colors ──────────────────────────────────── */
+    --positive:       #4ADE80;
+    --positive-tint:  rgba(74,222,128,0.10);
+    --warning:        #FCD34D;
+    --warning-tint:   rgba(252,211,77,0.10);
+    --negative:       #F87171;
+    --negative-tint:  rgba(248,113,113,0.10);
+    --info:           #60A5FA;
+    --info-tint:      rgba(96,165,250,0.10);
+
+    /* ── Text scale (high → low) ──────────────────────────── */
+    --text-primary:   #F4F4F5;   /* headlines, body */
+    --text-secondary: #D4D4D8;   /* secondary body */
+    --text-tertiary:  #A1A1AA;   /* labels, meta */
+    --text-quiet:     #71717A;   /* captions */
+    --text-faint:     #52525B;   /* disabled, placeholders */
+    --text-inverse:   #0A0A0F;   /* on accent backgrounds */
+
+    /* ── Typography scale ─────────────────────────────────── */
+    --font-display:   'Sora', 'Pretendard Variable', sans-serif;
+    --font-body:      'Pretendard Variable', system-ui, sans-serif;
+    --font-mono:      'JetBrains Mono', 'IBM Plex Mono', ui-monospace, monospace;
+
+    --text-display-xl: 64px;   /* hero — desktop */
+    --text-display-lg: 48px;   /* major section */
+    --text-display:    36px;   /* page title */
+    --text-h1:         32px;
+    --text-h2:         24px;
+    --text-h3:         20px;
+    --text-body-lg:    17px;
+    --text-body:       15px;
+    --text-caption:    13px;
+    --text-label:      12px;
+    --text-micro:      11px;
+
+    /* ── Spacing · 4pt baseline grid ──────────────────────── */
+    --space-1:  4px;
+    --space-2:  8px;
+    --space-3:  12px;
+    --space-4:  16px;
+    --space-5:  20px;
+    --space-6:  24px;
+    --space-8:  32px;
+    --space-10: 40px;
+    --space-12: 48px;
+    --space-16: 64px;
+    --space-20: 80px;
+    --space-24: 96px;
+    --space-32: 128px;
+
+    /* ── Border radius ────────────────────────────────────── */
+    --radius-sm:   6px;
+    --radius-md:   10px;
+    --radius-lg:   14px;
+    --radius-xl:   18px;
+    --radius-2xl:  24px;
+    --radius-full: 999px;
+
+    /* ── Shadows · dark-mode (inner highlight + ambient) ─── */
+    --shadow-sm:   0 1px 0 rgba(255,255,255,0.04) inset, 0 4px 12px rgba(0,0,0,0.3);
+    --shadow-md:   0 1px 0 rgba(255,255,255,0.05) inset, 0 8px 24px rgba(0,0,0,0.4);
+    --shadow-lg:   0 1px 0 rgba(255,255,255,0.06) inset, 0 16px 40px rgba(0,0,0,0.5);
+    --shadow-xl:   0 1px 0 rgba(255,255,255,0.08) inset, 0 32px 64px rgba(0,0,0,0.6);
+    --glow-orange: 0 0 24px rgba(255,107,53,0.35);
+    --glow-positive: 0 0 24px rgba(74,222,128,0.25);
+
+    /* ── Motion ───────────────────────────────────────────── */
+    --duration-instant: 80ms;
+    --duration-fast:    150ms;
+    --duration-normal:  250ms;
+    --duration-slow:    400ms;
+    --duration-slower:  600ms;
+    --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+    --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+    --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+    /* ── Backdrop blur scale ──────────────────────────────── */
+    --blur-sm:  blur(8px) saturate(1.4);
+    --blur-md:  blur(20px) saturate(1.6);
+    --blur-lg:  blur(40px) saturate(1.8);
+
+    /* ── z-index scale ────────────────────────────────────── */
+    --z-base:    0;
+    --z-raised:  10;
+    --z-sticky:  100;
+    --z-overlay: 500;
+    --z-modal:   1000;
+    --z-toast:   2000;
+    --z-tooltip: 3000;
+  }
+
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{
+    background:var(--bg-base);color:var(--text-primary);
+    font-family:var(--font-body);font-size:var(--text-body);line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+    overflow-x:hidden;
+  }
+  body{
+    background-image:
+      radial-gradient(circle at 20% 0%,rgba(255,107,53,0.08) 0%,transparent 40%),
+      radial-gradient(circle at 80% 100%,rgba(74,222,128,0.04) 0%,transparent 40%);
+    min-height:100vh;
+  }
+
+  /* ── Top nav ──────────────────────────────────────────────── */
+  .topnav{
+    position:sticky;top:0;
+    background:rgba(10,10,15,0.72);backdrop-filter:var(--blur-md);
+    -webkit-backdrop-filter:var(--blur-md);
+    border-bottom:1px solid var(--border-faint);
+    padding:var(--space-3) var(--space-8);
+    display:flex;align-items:center;gap:var(--space-6);
+    z-index:var(--z-sticky);
+  }
+  .topnav-title{font-family:var(--font-display);font-weight:800;font-size:var(--text-h3);letter-spacing:-0.5px;margin-right:auto}
+  .topnav-title em{font-style:normal;background:linear-gradient(120deg,var(--accent-500),var(--accent-300));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .topnav a{color:var(--text-tertiary);text-decoration:none;font-size:var(--text-caption);padding:6px var(--space-3);border-radius:var(--radius-sm);transition:all var(--duration-fast) var(--ease-out)}
+  .topnav a:hover{color:var(--text-primary);background:var(--glass-1)}
+
+  /* ── Section ──────────────────────────────────────────────── */
+  .section{padding:var(--space-16) var(--space-8);max-width:1280px;margin:0 auto;border-bottom:1px solid var(--border-faint)}
+  .section-head{display:flex;align-items:flex-end;gap:var(--space-6);margin-bottom:var(--space-12);flex-wrap:wrap}
+  .section-num{font-family:var(--font-mono);font-size:var(--text-caption);color:var(--accent-500);letter-spacing:2px;text-transform:uppercase}
+  .section-title{font-family:var(--font-display);font-weight:700;font-size:var(--text-display);letter-spacing:-1.5px;line-height:1.05;flex:1;min-width:280px}
+  .section-sub{font-family:var(--font-body);font-size:var(--text-body);color:var(--text-tertiary);font-weight:400;letter-spacing:0;line-height:1.6;max-width:560px}
+
+  /* ── Panel (glass card) ──────────────────────────────────── */
+  .panel{
+    background:linear-gradient(180deg,var(--glass-2),var(--glass-1));
+    border:1px solid var(--border-faint);
+    border-radius:var(--radius-2xl);
+    padding:var(--space-8);
+    backdrop-filter:var(--blur-lg);
+    -webkit-backdrop-filter:var(--blur-lg);
+    box-shadow:var(--shadow-md);
+    margin-bottom:var(--space-6);
+  }
+  .panel h3{font-family:var(--font-display);font-weight:600;font-size:var(--text-h3);margin-bottom:var(--space-6);letter-spacing:-0.4px}
+  .panel-meta{font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet);letter-spacing:1px;text-transform:uppercase;margin-bottom:var(--space-4)}
+
+  /* ── Color swatches ──────────────────────────────────────── */
+  .swatch-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:var(--space-3)}
+  .swatch{position:relative;background:var(--glass-1);border:1px solid var(--border-faint);border-radius:var(--radius-md);padding:var(--space-3);transition:all var(--duration-fast) var(--ease-out)}
+  .swatch:hover{transform:translateY(-2px);background:var(--glass-2);box-shadow:var(--shadow-sm)}
+  .swatch-color{height:64px;border-radius:var(--radius-sm);margin-bottom:var(--space-3);border:1px solid var(--border-faint)}
+  .swatch-name{font-family:var(--font-body);font-size:var(--text-caption);font-weight:600;color:var(--text-primary);margin-bottom:2px}
+  .swatch-token{font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet)}
+  .swatch-value{font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-tertiary);margin-top:2px}
+
+  /* ── Type scale ──────────────────────────────────────────── */
+  .type-row{display:flex;align-items:baseline;gap:var(--space-4);padding:var(--space-3) 0;border-bottom:1px solid var(--border-faint)}
+  .type-label{font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet);letter-spacing:1px;width:120px;flex-shrink:0;text-transform:uppercase}
+  .type-sample{flex:1;color:var(--text-primary);line-height:1.2}
+  .ts-display-xl{font-family:var(--font-display);font-weight:800;font-size:var(--text-display-xl);letter-spacing:-2.5px}
+  .ts-display{font-family:var(--font-display);font-weight:700;font-size:var(--text-display);letter-spacing:-1.5px}
+  .ts-h1{font-family:var(--font-display);font-weight:700;font-size:var(--text-h1);letter-spacing:-1px}
+  .ts-h2{font-family:var(--font-display);font-weight:600;font-size:var(--text-h2);letter-spacing:-0.5px}
+  .ts-h3{font-family:var(--font-display);font-weight:600;font-size:var(--text-h3);letter-spacing:-0.3px}
+  .ts-body-lg{font-family:var(--font-body);font-weight:400;font-size:var(--text-body-lg)}
+  .ts-body{font-family:var(--font-body);font-weight:400;font-size:var(--text-body)}
+  .ts-caption{font-family:var(--font-body);font-weight:500;font-size:var(--text-caption);color:var(--text-tertiary)}
+  .ts-mono{font-family:var(--font-mono);font-weight:500;font-size:var(--text-body);color:var(--accent-500)}
+
+  /* ── Spacing scale ───────────────────────────────────────── */
+  .space-grid{display:flex;flex-wrap:wrap;gap:var(--space-4);align-items:flex-end}
+  .space-item{display:flex;flex-direction:column;align-items:center;gap:var(--space-2)}
+  .space-block{background:var(--accent-tint-2);border:1px solid var(--accent-tint-3);border-radius:var(--radius-sm)}
+  .space-name{font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-tertiary)}
+
+  /* ── Buttons ─────────────────────────────────────────────── */
+  .btn{
+    display:inline-flex;align-items:center;justify-content:center;gap:var(--space-2);
+    font-family:var(--font-body);font-weight:600;
+    border:none;cursor:pointer;
+    transition:all var(--duration-fast) var(--ease-out);
+    white-space:nowrap;outline:none;
+  }
+  .btn:focus-visible{box-shadow:0 0 0 3px var(--accent-tint-2)}
+  .btn-sm{padding:6px 14px;font-size:var(--text-caption);border-radius:var(--radius-sm);height:32px}
+  .btn-md{padding:9px 20px;font-size:var(--text-body);border-radius:var(--radius-md);height:40px}
+  .btn-lg{padding:12px 26px;font-size:var(--text-body-lg);border-radius:var(--radius-md);height:48px}
+
+  .btn-primary{
+    background:linear-gradient(135deg,var(--accent-500),var(--accent-700));
+    color:#fff;font-weight:700;
+    box-shadow:var(--accent-glow);
+  }
+  .btn-primary:hover{
+    transform:translateY(-1px);
+    box-shadow:var(--accent-glow-strong);
+    background:linear-gradient(135deg,var(--accent-500),var(--accent-600));
+  }
+  .btn-primary:active{transform:translateY(0);box-shadow:var(--accent-glow)}
+
+  .btn-secondary{
+    background:var(--glass-2);color:var(--text-primary);
+    border:1px solid var(--border-subtle);
+    backdrop-filter:var(--blur-sm);
+    -webkit-backdrop-filter:var(--blur-sm);
+  }
+  .btn-secondary:hover{background:var(--glass-hover);border-color:var(--border-medium)}
+
+  .btn-ghost{
+    background:transparent;color:var(--text-secondary);
+  }
+  .btn-ghost:hover{background:var(--glass-1);color:var(--text-primary)}
+
+  .btn-danger{
+    background:var(--negative-tint);color:var(--negative);
+    border:1px solid var(--negative-tint);
+  }
+  .btn-danger:hover{background:var(--negative);color:#fff;border-color:var(--negative)}
+
+  /* ── Inputs ──────────────────────────────────────────────── */
+  .input{
+    width:100%;
+    background:var(--glass-1);
+    border:1px solid var(--border-subtle);
+    border-radius:var(--radius-md);
+    color:var(--text-primary);
+    padding:10px 14px;
+    font-size:var(--text-body);font-family:var(--font-body);
+    outline:none;
+    transition:all var(--duration-fast) var(--ease-out);
+    backdrop-filter:var(--blur-sm);
+    -webkit-backdrop-filter:var(--blur-sm);
+  }
+  .input::placeholder{color:var(--text-faint)}
+  .input:hover{border-color:var(--border-medium);background:var(--glass-2)}
+  .input:focus{
+    border-color:var(--accent-500);
+    background:var(--accent-tint);
+    box-shadow:0 0 0 3px var(--accent-tint-2);
+  }
+  .input-with-icon{position:relative}
+  .input-with-icon .input{padding-left:42px}
+  .input-icon{position:absolute;left:14px;top:50%;transform:translateY(-50%);color:var(--text-quiet);pointer-events:none}
+
+  /* ── Toggle ──────────────────────────────────────────────── */
+  .toggle{
+    position:relative;width:44px;height:24px;
+    background:var(--glass-2);border:1px solid var(--border-subtle);
+    border-radius:var(--radius-full);
+    cursor:pointer;
+    transition:all var(--duration-fast) var(--ease-out);
+  }
+  .toggle::before{
+    content:'';position:absolute;top:2px;left:2px;
+    width:18px;height:18px;border-radius:50%;
+    background:var(--text-tertiary);
+    transition:all var(--duration-fast) var(--ease-out);
+  }
+  .toggle.on{background:var(--accent-tint-3);border-color:var(--accent-500)}
+  .toggle.on::before{left:22px;background:var(--accent-500)}
+
+  /* ── Cards ───────────────────────────────────────────────── */
+  .card{
+    background:linear-gradient(180deg,var(--glass-2),var(--glass-1));
+    border:1px solid var(--border-faint);
+    border-radius:var(--radius-xl);
+    padding:var(--space-6);
+    backdrop-filter:var(--blur-md);
+    -webkit-backdrop-filter:var(--blur-md);
+    box-shadow:var(--shadow-sm);
+    transition:all var(--duration-normal) var(--ease-out);
+  }
+  .card:hover{transform:translateY(-3px);border-color:var(--border-subtle);box-shadow:var(--shadow-md)}
+  .card-elev-1{}
+  .card-elev-2{background:linear-gradient(180deg,var(--glass-3),var(--glass-2));box-shadow:var(--shadow-md)}
+  .card-elev-3{background:linear-gradient(180deg,var(--glass-3),var(--glass-2));border-color:var(--accent-tint-2);box-shadow:var(--shadow-lg),var(--glow-orange)}
+
+  .card-tag{
+    display:inline-flex;align-items:center;gap:4px;
+    font-family:var(--font-mono);font-size:var(--text-micro);font-weight:600;
+    color:var(--accent-500);
+    background:var(--accent-tint);
+    border:1px solid var(--accent-tint-2);
+    padding:4px 9px;border-radius:var(--radius-sm);
+    text-transform:uppercase;letter-spacing:1px;
+    margin-bottom:var(--space-3);
+  }
+  .card-title{font-family:var(--font-display);font-weight:700;font-size:var(--text-h3);letter-spacing:-0.4px;margin-bottom:var(--space-1)}
+  .card-body{font-size:var(--text-caption);color:var(--text-tertiary);line-height:1.6}
+  .card-stat{font-family:var(--font-mono);font-size:var(--text-display);font-weight:700;color:var(--text-primary);letter-spacing:-1px;margin-top:var(--space-3)}
+
+  /* ── Badges / Tags / Chips ───────────────────────────────── */
+  .badge{
+    display:inline-flex;align-items:center;gap:4px;
+    font-family:var(--font-body);font-size:var(--text-micro);font-weight:600;
+    padding:3px 8px;border-radius:var(--radius-full);
+    border:1px solid;
+  }
+  .badge-accent{background:var(--accent-tint);border-color:var(--accent-tint-2);color:var(--accent-500)}
+  .badge-positive{background:var(--positive-tint);border-color:var(--positive-tint);color:var(--positive)}
+  .badge-warning{background:var(--warning-tint);border-color:var(--warning-tint);color:var(--warning)}
+  .badge-negative{background:var(--negative-tint);border-color:var(--negative-tint);color:var(--negative)}
+  .badge-info{background:var(--info-tint);border-color:var(--info-tint);color:var(--info)}
+  .badge-neutral{background:var(--glass-2);border-color:var(--border-subtle);color:var(--text-secondary)}
+
+  .chip{
+    display:inline-flex;align-items:center;gap:4px;
+    font-family:var(--font-body);font-size:var(--text-caption);font-weight:500;
+    padding:6px 12px;border-radius:var(--radius-full);
+    background:var(--glass-1);
+    border:1px solid var(--border-subtle);
+    color:var(--text-secondary);cursor:pointer;
+    transition:all var(--duration-fast) var(--ease-out);
+  }
+  .chip:hover{background:var(--glass-2);color:var(--text-primary)}
+  .chip.on{background:var(--accent-tint-2);border-color:var(--accent-500);color:var(--accent-500);font-weight:600}
+  .chip.on::before{content:'✓ ';font-weight:700}
+
+  /* ── Bento Grid (sample dashboard) ───────────────────────── */
+  .bento{display:grid;grid-template-columns:repeat(4,1fr);grid-auto-rows:120px;gap:var(--space-3);margin-top:var(--space-6)}
+  .bento-card{background:linear-gradient(180deg,var(--glass-2),var(--glass-1));border:1px solid var(--border-faint);border-radius:var(--radius-lg);padding:var(--space-4);backdrop-filter:var(--blur-md);-webkit-backdrop-filter:var(--blur-md);position:relative;overflow:hidden;transition:all var(--duration-normal) var(--ease-out)}
+  .bento-card:hover{border-color:var(--border-subtle);transform:translateY(-2px)}
+  .bento-card.span-2{grid-column:span 2}
+  .bento-card.row-2{grid-row:span 2}
+  .bento-card.accent{background:linear-gradient(135deg,var(--accent-tint-2),var(--accent-tint));border-color:var(--accent-tint-2)}
+  .bento-label{font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet);letter-spacing:1px;text-transform:uppercase;margin-bottom:var(--space-2)}
+  .bento-value{font-family:var(--font-mono);font-size:32px;font-weight:700;color:var(--text-primary);letter-spacing:-1px;line-height:1}
+  .bento-delta{font-family:var(--font-mono);font-size:var(--text-caption);font-weight:600;color:var(--positive);margin-top:6px;display:flex;align-items:center;gap:3px}
+
+  /* ── Modal preview ───────────────────────────────────────── */
+  .modal-preview{
+    background:linear-gradient(180deg,var(--glass-3),var(--glass-2));
+    border:1px solid var(--border-medium);
+    border-radius:var(--radius-xl);
+    backdrop-filter:var(--blur-lg);-webkit-backdrop-filter:var(--blur-lg);
+    box-shadow:var(--shadow-xl);
+    max-width:480px;
+    overflow:hidden;
+  }
+  .modal-head{padding:var(--space-5) var(--space-6);border-bottom:1px solid var(--border-faint);display:flex;justify-content:space-between;align-items:center}
+  .modal-title{font-family:var(--font-display);font-weight:700;font-size:var(--text-h3);letter-spacing:-0.3px}
+  .modal-x{width:32px;height:32px;background:var(--glass-2);border:1px solid var(--border-subtle);border-radius:50%;color:var(--text-tertiary);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px}
+  .modal-body{padding:var(--space-6)}
+
+  /* ── Toast preview ───────────────────────────────────────── */
+  .toast-preview{
+    display:inline-flex;align-items:center;gap:var(--space-3);
+    background:linear-gradient(180deg,var(--glass-3),var(--glass-2));
+    border:1px solid var(--border-medium);
+    border-radius:var(--radius-lg);
+    padding:var(--space-3) var(--space-5);
+    backdrop-filter:var(--blur-lg);-webkit-backdrop-filter:var(--blur-lg);
+    box-shadow:var(--shadow-md);
+    font-size:var(--text-body);
+    margin-right:var(--space-3);margin-bottom:var(--space-3);
+  }
+  .toast-preview.positive{border-color:rgba(74,222,128,0.3)}
+  .toast-preview.negative{border-color:rgba(248,113,113,0.3)}
+
+  /* ── Skeleton ────────────────────────────────────────────── */
+  @keyframes shimmer{0%{background-position:-200% 0}100%{background-position:200% 0}}
+  .skeleton{background:linear-gradient(90deg,var(--glass-1) 0%,var(--glass-3) 50%,var(--glass-1) 100%);background-size:200% 100%;animation:shimmer 2s infinite ease-in-out;border-radius:var(--radius-sm);height:14px;width:100%;margin-bottom:var(--space-2)}
+
+  /* ── Spinner ─────────────────────────────────────────────── */
+  @keyframes spin{to{transform:rotate(360deg)}}
+  .spinner{width:20px;height:20px;border:2px solid var(--border-subtle);border-top-color:var(--accent-500);border-radius:50%;animation:spin 0.7s linear infinite}
+
+  /* ── Mockup viewport ─────────────────────────────────────── */
+  .mockup{background:#fff;border-radius:var(--radius-xl);overflow:hidden;border:1px solid var(--border-faint);height:560px}
+  .mockup-label{padding:var(--space-3) var(--space-5);background:var(--bg-elev-1);color:var(--text-quiet);font-family:var(--font-mono);font-size:var(--text-micro);letter-spacing:1px;border-bottom:1px solid var(--border-faint)}
+  .mockup-app{height:518px;background:var(--bg-base);position:relative;overflow:hidden;color:var(--text-primary);font-family:var(--font-body)}
+  .mockup-app::before{content:'';position:absolute;inset:0;background:radial-gradient(circle at 20% 0%,rgba(255,107,53,0.10) 0%,transparent 40%),radial-gradient(circle at 80% 100%,rgba(74,222,128,0.06) 0%,transparent 40%);pointer-events:none}
+
+  .mockup-header{
+    background:rgba(10,10,15,0.72);backdrop-filter:var(--blur-md);
+    -webkit-backdrop-filter:var(--blur-md);
+    padding:var(--space-3) var(--space-6);
+    display:flex;align-items:center;gap:var(--space-5);
+    border-bottom:1px solid var(--border-faint);
+    position:relative;z-index:2;
+  }
+  .mockup-logo{font-family:var(--font-display);font-weight:800;font-size:var(--text-h3);letter-spacing:-0.5px;display:flex;align-items:center;gap:var(--space-2)}
+  .mockup-logo .mark{width:32px;height:32px;background:linear-gradient(135deg,var(--accent-500),var(--accent-700));border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:900;box-shadow:var(--glow-orange)}
+  .mockup-logo em{font-style:normal;background:linear-gradient(120deg,var(--accent-500),var(--accent-300));-webkit-background-clip:text;background-clip:text;color:transparent}
+  .mockup-tabs{display:flex;gap:var(--space-1);font-family:var(--font-display);font-size:var(--text-caption);color:var(--text-tertiary);font-weight:500;margin-left:var(--space-3)}
+  .mockup-tabs span{padding:7px 14px;border-radius:var(--radius-sm);cursor:pointer;transition:all var(--duration-fast) var(--ease-out)}
+  .mockup-tabs span:hover{background:var(--glass-1);color:var(--text-primary)}
+  .mockup-tabs .on{color:var(--accent-500);background:var(--accent-tint);border:1px solid var(--accent-tint-2);font-weight:600}
+  .mockup-search{margin-left:auto;width:280px;position:relative}
+  .mockup-search .input{padding:8px 14px 8px 36px;height:36px;font-size:var(--text-caption)}
+  .mockup-search-icon{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:var(--text-quiet)}
+  .mockup-cta{margin-left:var(--space-3);font-size:var(--text-caption);height:36px;padding:0 16px}
+  .mockup-meta{margin-left:var(--space-3);display:flex;gap:var(--space-2);align-items:center}
+  .mockup-meta .badge{font-family:var(--font-mono)}
+
+  .mockup-hero{padding:var(--space-12) var(--space-6) var(--space-8);display:grid;grid-template-columns:1.3fr 1fr;gap:var(--space-8);align-items:center;position:relative;z-index:1}
+  .mockup-tag{font-family:var(--font-mono);font-size:var(--text-micro);font-weight:600;color:var(--accent-500);background:var(--accent-tint);border:1px solid var(--accent-tint-2);display:inline-block;padding:5px 11px;border-radius:var(--radius-full);margin-bottom:var(--space-4);letter-spacing:1px;text-transform:uppercase}
+  .mockup-h{font-family:var(--font-display);font-weight:800;font-size:46px;line-height:1.05;letter-spacing:-2px;margin-bottom:var(--space-4)}
+  .mockup-h em{font-style:normal;background:linear-gradient(120deg,var(--accent-500),var(--accent-300) 80%);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .mockup-sub{font-size:var(--text-body);color:var(--text-tertiary);line-height:1.6;max-width:440px;margin-bottom:var(--space-6)}
+  .mockup-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-2);max-width:440px}
+  .mockup-stat{background:var(--glass-1);border:1px solid var(--border-faint);border-radius:var(--radius-md);padding:var(--space-3);backdrop-filter:var(--blur-sm)}
+  .mockup-stat .v{font-family:var(--font-mono);font-size:var(--text-h2);font-weight:700;color:var(--text-primary);letter-spacing:-0.5px;line-height:1.1}
+  .mockup-stat .l{font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet);margin-top:4px;letter-spacing:1px;text-transform:uppercase}
+
+  .mockup-illust{aspect-ratio:1;background:linear-gradient(135deg,rgba(255,107,53,0.18),rgba(74,222,128,0.06));border-radius:var(--radius-2xl);border:1px solid var(--border-subtle);position:relative;overflow:hidden;backdrop-filter:var(--blur-lg);box-shadow:0 1px 0 rgba(255,255,255,0.06) inset,0 32px 64px rgba(0,0,0,0.5)}
+  .mockup-illust svg{position:absolute;inset:0;width:100%;height:100%}
+
+  /* CSS variables block */
+  pre.css-vars{
+    background:rgba(0,0,0,0.4);
+    border:1px solid var(--border-faint);
+    border-radius:var(--radius-lg);
+    padding:var(--space-6);
+    font-family:var(--font-mono);font-size:var(--text-caption);line-height:1.7;
+    color:var(--text-secondary);
+    overflow-x:auto;
+    white-space:pre-wrap;
+  }
+  pre.css-vars .var-name{color:var(--accent-300)}
+  pre.css-vars .var-val{color:var(--positive)}
+  pre.css-vars .comment{color:var(--text-quiet);font-style:italic}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav-title">myhomelog<em>·</em>Design System · Concept C</div>
+  <a href="#colors">Colors</a>
+  <a href="#type">Typography</a>
+  <a href="#space">Spacing</a>
+  <a href="#components">Components</a>
+  <a href="#bento">Bento</a>
+  <a href="#mockup">Mockup</a>
+  <a href="#tokens">Tokens</a>
+</nav>
+
+<section id="hero" class="section">
+  <div class="section-head">
+    <div>
+      <div class="section-num">DESIGN SYSTEM · v1.0 · 2026.05</div>
+      <h1 class="section-title" style="font-size:var(--text-display-xl)">데이터 분석가의 <em style="font-style:normal;background:linear-gradient(120deg,var(--accent-500),var(--accent-300));-webkit-background-clip:text;background-clip:text;color:transparent">부동산 도구.</em></h1>
+      <p class="section-sub">myhomelog v2 — Modern Data-Lab Dark. Glassmorphism + Bento + Editorial Mono. 데이터가 main character. 첫 인상부터 "와" 가 나오는 시중 프리미엄 SaaS 톤.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════ 1 · COLORS ════════════════════ -->
+<section id="colors" class="section">
+  <div class="section-head">
+    <div class="section-num">01 · Colors</div>
+    <h2 class="section-title">컬러 토큰</h2>
+    <p class="section-sub">Background scale (4단계) → Glass surfaces (5단계) → Border (4단계) → Accent (5단계) → Semantic (4) → Text (6단계). 다크 베이스 + 1 strong accent + restrained semantic.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Background scale · 페이지 + 헤더 + 사이드바 + 드롭다운</div>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="swatch-color" style="background:var(--bg-base)"></div><div class="swatch-name">Base</div><div class="swatch-token">--bg-base</div><div class="swatch-value">#0A0A0F</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--bg-elev-1)"></div><div class="swatch-name">Elev 1 · Header</div><div class="swatch-token">--bg-elev-1</div><div class="swatch-value">#0F0F15</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--bg-elev-2)"></div><div class="swatch-name">Elev 2 · Sidebar</div><div class="swatch-token">--bg-elev-2</div><div class="swatch-value">#14141C</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--bg-elev-3)"></div><div class="swatch-name">Elev 3 · Dropdown</div><div class="swatch-token">--bg-elev-3</div><div class="swatch-value">#1A1A24</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Accent · Electric Orange · myhomelog brand</div>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="swatch-color" style="background:var(--accent-50)"></div><div class="swatch-name">50</div><div class="swatch-token">--accent-50</div><div class="swatch-value">#FFF5EE</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--accent-100)"></div><div class="swatch-name">100</div><div class="swatch-token">--accent-100</div><div class="swatch-value">#FFE4D1</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--accent-300)"></div><div class="swatch-name">300</div><div class="swatch-token">--accent-300</div><div class="swatch-value">#FF9A6E</div></div>
+      <div class="swatch" style="border-color:var(--accent-500)"><div class="swatch-color" style="background:var(--accent-500)"></div><div class="swatch-name">500 · primary</div><div class="swatch-token">--accent-500</div><div class="swatch-value">#FF6B35</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--accent-600)"></div><div class="swatch-name">600 · hover</div><div class="swatch-token">--accent-600</div><div class="swatch-value">#F25218</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--accent-700)"></div><div class="swatch-name">700 · brand-deep</div><div class="swatch-token">--accent-700</div><div class="swatch-value">#C84B18</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--accent-900)"></div><div class="swatch-name">900</div><div class="swatch-token">--accent-900</div><div class="swatch-value">#6B2A0E</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Semantic · 의미 4종</div>
+    <div class="swatch-grid">
+      <div class="swatch"><div class="swatch-color" style="background:var(--positive)"></div><div class="swatch-name">Positive</div><div class="swatch-token">--positive</div><div class="swatch-value">#4ADE80 · 거래활발 · +%</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--warning)"></div><div class="swatch-name">Warning</div><div class="swatch-token">--warning</div><div class="swatch-value">#FCD34D · 규제 · stale</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--negative)"></div><div class="swatch-name">Negative</div><div class="swatch-token">--negative</div><div class="swatch-value">#F87171 · 역전세 · −%</div></div>
+      <div class="swatch"><div class="swatch-color" style="background:var(--info)"></div><div class="swatch-name">Info</div><div class="swatch-token">--info</div><div class="swatch-value">#60A5FA · 안내</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Text scale · 6단계</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-3)">
+      <div style="padding:var(--space-4);background:var(--glass-1);border:1px solid var(--border-faint);border-radius:var(--radius-md)">
+        <div style="color:var(--text-primary);font-weight:600;margin-bottom:4px">실거래가로 보는 매수 의사결정</div>
+        <div class="ts-caption">Primary · #F4F4F5 · headlines + body</div>
+      </div>
+      <div style="padding:var(--space-4);background:var(--glass-1);border:1px solid var(--border-faint);border-radius:var(--radius-md)">
+        <div style="color:var(--text-secondary);font-weight:500;margin-bottom:4px">국토부 실거래가 245,000건 누적</div>
+        <div class="ts-caption">Secondary · #D4D4D8 · body 보조</div>
+      </div>
+      <div style="padding:var(--space-4);background:var(--glass-1);border:1px solid var(--border-faint);border-radius:var(--radius-md)">
+        <div style="color:var(--text-tertiary);margin-bottom:4px">LTV 40% · DSR 38</div>
+        <div class="ts-caption">Tertiary · #A1A1AA · labels + meta</div>
+      </div>
+      <div style="padding:var(--space-4);background:var(--glass-1);border:1px solid var(--border-faint);border-radius:var(--radius-md)">
+        <div style="color:var(--text-quiet);margin-bottom:4px">최종 갱신 2026-05-04 22:33 KST</div>
+        <div class="ts-caption">Quiet · #71717A · captions</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════ 2 · TYPOGRAPHY ════════════════════ -->
+<section id="type" class="section">
+  <div class="section-head">
+    <div class="section-num">02 · Typography</div>
+    <h2 class="section-title">Type Scale · 8단계</h2>
+    <p class="section-sub"><span style="color:var(--accent-500);font-family:var(--font-display);font-weight:700">Sora</span> (display) + <span style="color:var(--accent-300);font-family:var(--font-body);font-weight:700">Pretendard Variable</span> (body, 한글) + <span style="color:var(--positive);font-family:var(--font-mono);font-weight:600">JetBrains Mono</span> (numbers). 한국어 헤드라인은 Pretendard 800-900 으로 Sora 와 같은 임팩트 구현.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Display & Headings · Sora + Pretendard 800-900</div>
+    <div class="type-row"><div class="type-label">DISPLAY-XL · 64</div><div class="type-sample ts-display-xl">실거래가</div></div>
+    <div class="type-row"><div class="type-label">DISPLAY · 36</div><div class="type-sample ts-display">매수 의사결정.</div></div>
+    <div class="type-row"><div class="type-label">H1 · 32</div><div class="type-sample ts-h1">30초 입력으로 받는 1page 보고서</div></div>
+    <div class="type-row"><div class="type-label">H2 · 24</div><div class="type-sample ts-h2">국토부 실거래 + AI 분석</div></div>
+    <div class="type-row"><div class="type-label">H3 · 20</div><div class="type-sample ts-h3">마포 래미안 푸르지오</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Body + Caption + Mono · Pretendard + JetBrains Mono</div>
+    <div class="type-row"><div class="type-label">BODY-LG · 17</div><div class="type-sample ts-body-lg">매수 비용·LTV·DSR·전세가율을 한 화면에 정리합니다.</div></div>
+    <div class="type-row"><div class="type-label">BODY · 15</div><div class="type-sample ts-body">국토교통부 실거래가 데이터를 매일 수집하여 신뢰도 높은 분석을 제공합니다.</div></div>
+    <div class="type-row"><div class="type-label">CAPTION · 13</div><div class="type-sample ts-caption">매수·매도 추천 X · 미래 가격 예측 X. 의사결정 책임은 본인.</div></div>
+    <div class="type-row"><div class="type-label">MONO · 15</div><div class="type-sample ts-mono">12.5억 · LTV 40% · DSR 38 · +24% YoY</div></div>
+  </div>
+</section>
+
+<!-- ════════════════════ 3 · SPACING + RADIUS + SHADOW ════════════════════ -->
+<section id="space" class="section">
+  <div class="section-head">
+    <div class="section-num">03 · Spacing · Radius · Shadow</div>
+    <h2 class="section-title">간격 · 모서리 · 그림자</h2>
+    <p class="section-sub">4pt baseline grid (4·8·12·16·24·32·48·64·96·128). Border radius 6/10/14/18/24/full. Dark-mode shadow = inner highlight + ambient depth.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Spacing scale · 4pt baseline</div>
+    <div class="space-grid">
+      <div class="space-item"><div class="space-block" style="width:4px;height:48px"></div><div class="space-name">--space-1<br>4px</div></div>
+      <div class="space-item"><div class="space-block" style="width:8px;height:48px"></div><div class="space-name">--space-2<br>8px</div></div>
+      <div class="space-item"><div class="space-block" style="width:12px;height:48px"></div><div class="space-name">--space-3<br>12px</div></div>
+      <div class="space-item"><div class="space-block" style="width:16px;height:48px"></div><div class="space-name">--space-4<br>16px</div></div>
+      <div class="space-item"><div class="space-block" style="width:20px;height:48px"></div><div class="space-name">--space-5<br>20px</div></div>
+      <div class="space-item"><div class="space-block" style="width:24px;height:48px"></div><div class="space-name">--space-6<br>24px</div></div>
+      <div class="space-item"><div class="space-block" style="width:32px;height:48px"></div><div class="space-name">--space-8<br>32px</div></div>
+      <div class="space-item"><div class="space-block" style="width:48px;height:48px"></div><div class="space-name">--space-12<br>48px</div></div>
+      <div class="space-item"><div class="space-block" style="width:64px;height:48px"></div><div class="space-name">--space-16<br>64px</div></div>
+      <div class="space-item"><div class="space-block" style="width:96px;height:48px"></div><div class="space-name">--space-24<br>96px</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Border radius</div>
+    <div style="display:flex;gap:var(--space-4);flex-wrap:wrap;align-items:flex-end">
+      <div style="text-align:center"><div style="width:80px;height:60px;background:var(--accent-tint-2);border:1px solid var(--accent-tint-3);border-radius:var(--radius-sm);margin-bottom:var(--space-2)"></div><div class="space-name">sm · 6</div></div>
+      <div style="text-align:center"><div style="width:80px;height:60px;background:var(--accent-tint-2);border:1px solid var(--accent-tint-3);border-radius:var(--radius-md);margin-bottom:var(--space-2)"></div><div class="space-name">md · 10</div></div>
+      <div style="text-align:center"><div style="width:80px;height:60px;background:var(--accent-tint-2);border:1px solid var(--accent-tint-3);border-radius:var(--radius-lg);margin-bottom:var(--space-2)"></div><div class="space-name">lg · 14</div></div>
+      <div style="text-align:center"><div style="width:80px;height:60px;background:var(--accent-tint-2);border:1px solid var(--accent-tint-3);border-radius:var(--radius-xl);margin-bottom:var(--space-2)"></div><div class="space-name">xl · 18</div></div>
+      <div style="text-align:center"><div style="width:80px;height:60px;background:var(--accent-tint-2);border:1px solid var(--accent-tint-3);border-radius:var(--radius-2xl);margin-bottom:var(--space-2)"></div><div class="space-name">2xl · 24</div></div>
+      <div style="text-align:center"><div style="width:80px;height:60px;background:var(--accent-tint-2);border:1px solid var(--accent-tint-3);border-radius:var(--radius-full);margin-bottom:var(--space-2)"></div><div class="space-name">full</div></div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Shadows · dark-mode (inner highlight + ambient)</div>
+    <div style="display:flex;gap:var(--space-6);flex-wrap:wrap">
+      <div style="text-align:center"><div style="width:120px;height:80px;background:var(--bg-elev-2);border:1px solid var(--border-faint);border-radius:var(--radius-md);box-shadow:var(--shadow-sm);margin-bottom:var(--space-2)"></div><div class="space-name">sm</div></div>
+      <div style="text-align:center"><div style="width:120px;height:80px;background:var(--bg-elev-2);border:1px solid var(--border-faint);border-radius:var(--radius-md);box-shadow:var(--shadow-md);margin-bottom:var(--space-2)"></div><div class="space-name">md</div></div>
+      <div style="text-align:center"><div style="width:120px;height:80px;background:var(--bg-elev-2);border:1px solid var(--border-faint);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);margin-bottom:var(--space-2)"></div><div class="space-name">lg</div></div>
+      <div style="text-align:center"><div style="width:120px;height:80px;background:var(--bg-elev-2);border:1px solid var(--border-faint);border-radius:var(--radius-md);box-shadow:var(--shadow-xl);margin-bottom:var(--space-2)"></div><div class="space-name">xl</div></div>
+      <div style="text-align:center"><div style="width:120px;height:80px;background:linear-gradient(135deg,var(--accent-500),var(--accent-700));border-radius:var(--radius-md);box-shadow:var(--glow-orange);margin-bottom:var(--space-2)"></div><div class="space-name">glow-orange</div></div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════ 4 · COMPONENTS ════════════════════ -->
+<section id="components" class="section">
+  <div class="section-head">
+    <div class="section-num">04 · Components</div>
+    <h2 class="section-title">컴포넌트 라이브러리</h2>
+    <p class="section-sub">Button (4 variants × 3 sizes) · Input · Toggle · Card (3 elevations) · Badge · Tag/Chip · Modal · Toast · Skeleton · Spinner. 모두 단일 토큰 시스템.</p>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Buttons · Primary (gradient + glow) · Secondary (glass) · Ghost · Danger</div>
+    <div style="display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-6);align-items:center">
+      <button class="btn btn-primary btn-lg">📊 맞춤 보고서 만들기</button>
+      <button class="btn btn-primary btn-md">맞춤 보고서</button>
+      <button class="btn btn-primary btn-sm">CTA</button>
+    </div>
+    <div style="display:flex;gap:var(--space-4);flex-wrap:wrap;margin-bottom:var(--space-6);align-items:center">
+      <button class="btn btn-secondary btn-md">단지 검색</button>
+      <button class="btn btn-secondary btn-md">필터</button>
+      <button class="btn btn-ghost btn-md">취소</button>
+      <button class="btn btn-danger btn-md">탈퇴</button>
+    </div>
+    <div style="display:flex;gap:var(--space-4);flex-wrap:wrap;align-items:center">
+      <button class="btn btn-secondary btn-sm">+ 관심 단지</button>
+      <span class="chip on">✓ 무주택</span>
+      <span class="chip">1주택</span>
+      <span class="chip">2주택+</span>
+      <span class="chip">생애 최초</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Inputs · Glass + accent focus</div>
+    <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:var(--space-4);max-width:720px">
+      <div class="input-with-icon">
+        <span class="input-icon">🔎</span>
+        <input class="input" placeholder="단지명·동명 검색">
+      </div>
+      <input class="input" placeholder="6.8 → 6억 8천만원">
+      <input class="input" placeholder="강남구, 마포구">
+      <select class="input"><option>서울 전체</option><option>강남4구</option><option>마용성</option></select>
+    </div>
+    <div style="margin-top:var(--space-4);display:flex;align-items:center;gap:var(--space-3)">
+      <span class="ts-caption">Toggle:</span>
+      <div class="toggle on"></div>
+      <span class="ts-body" style="color:var(--accent-500)">규제 단지만</span>
+      <div class="toggle" style="margin-left:var(--space-4)"></div>
+      <span class="ts-body" style="color:var(--text-tertiary)">재건축 단지만</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Cards · 3 elevations</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:var(--space-4)">
+      <div class="card card-elev-1">
+        <div class="card-tag">Standard</div>
+        <div class="card-title">마포 래미안 푸르지오</div>
+        <div class="card-body">전세가율 68% · 거래 75점<br>가격 위치 중간 · 12.5억</div>
+      </div>
+      <div class="card card-elev-2">
+        <div class="card-tag">Elevated</div>
+        <div class="card-title">디에이치 자이</div>
+        <div class="card-body">전세가율 64% · 거래 82점<br>가격 위치 상위 · 18.3억</div>
+      </div>
+      <div class="card card-elev-3">
+        <span class="badge badge-accent">RECOMMENDED</span>
+        <div class="card-title" style="margin-top:var(--space-3)">래미안 퍼스티지</div>
+        <div class="card-body">조건 매칭 92점 · 매수 적정<br>가격 위치 중하 · 14.2억</div>
+        <div class="card-stat">14.2<span style="font-size:60%;color:var(--text-tertiary);margin-left:6px">억</span></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Badges</div>
+    <div style="display:flex;gap:var(--space-3);flex-wrap:wrap;margin-bottom:var(--space-6)">
+      <span class="badge badge-accent">RECOMMENDED</span>
+      <span class="badge badge-positive">+24% YoY</span>
+      <span class="badge badge-warning">10.15 규제</span>
+      <span class="badge badge-negative">−8% MoM</span>
+      <span class="badge badge-info">시세 갱신</span>
+      <span class="badge badge-neutral">비공개</span>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Modal · Glass overlay + ambient depth</div>
+    <div class="modal-preview">
+      <div class="modal-head">
+        <div class="modal-title">📊 맞춤 보고서 생성</div>
+        <button class="modal-x" aria-label="닫기">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="ts-body" style="margin-bottom:var(--space-4)">선택한 조건으로 보고서를 생성합니다.</p>
+        <div style="display:flex;gap:var(--space-2);margin-bottom:var(--space-5);flex-wrap:wrap">
+          <span class="chip on">✓ 무주택</span>
+          <span class="chip on">✓ 마포구</span>
+          <span class="chip on">✓ 6~8억</span>
+        </div>
+        <div style="display:flex;gap:var(--space-3);justify-content:flex-end">
+          <button class="btn btn-ghost btn-md">취소</button>
+          <button class="btn btn-primary btn-md">생성하기</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Toast · 4 variants</div>
+    <div>
+      <div class="toast-preview">📋 단지 정보 복사됨</div>
+      <div class="toast-preview positive">✅ 보고서 생성 완료</div>
+      <div class="toast-preview negative">⚠ 한도 도달 — 내일 자정 reset</div>
+      <div class="toast-preview"><span class="spinner"></span> AI 분석 중...</div>
+    </div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-meta">Skeleton · loading state</div>
+    <div style="max-width:480px">
+      <div class="skeleton" style="width:60%;height:24px;margin-bottom:var(--space-3)"></div>
+      <div class="skeleton"></div>
+      <div class="skeleton"></div>
+      <div class="skeleton" style="width:80%"></div>
+      <div class="skeleton" style="width:40%;margin-bottom:var(--space-4)"></div>
+      <div style="display:flex;gap:var(--space-3)">
+        <div class="skeleton" style="width:80px;height:32px;border-radius:var(--radius-sm)"></div>
+        <div class="skeleton" style="width:80px;height:32px;border-radius:var(--radius-sm)"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════ 5 · BENTO GRID ════════════════════ -->
+<section id="bento" class="section">
+  <div class="section-head">
+    <div class="section-num">05 · Bento Grid</div>
+    <h2 class="section-title">Bento — 데이터 대시보드 패턴</h2>
+    <p class="section-sub">2026 SaaS 표준 모듈러 그리드. 보고서·통계·관심단지 카드를 한 화면에 정리. 4×3 base grid + spans.</p>
+  </div>
+
+  <div class="bento">
+    <div class="bento-card span-2 row-2 accent">
+      <div class="bento-label">📊 추천 단지 · 매칭 92점</div>
+      <div style="font-family:var(--font-display);font-weight:700;font-size:28px;letter-spacing:-1px;margin-top:var(--space-2)">래미안 퍼스티지</div>
+      <div class="bento-value" style="font-size:48px;margin-top:var(--space-3)">14.2<span style="font-size:50%;margin-left:6px;color:var(--text-tertiary)">억</span></div>
+      <div class="bento-delta">▲ 적정 매수 · 가격 위치 중하</div>
+    </div>
+    <div class="bento-card">
+      <div class="bento-label">전세가율</div>
+      <div class="bento-value">68<span style="font-size:50%">%</span></div>
+      <div class="bento-delta">▲ 안정</div>
+    </div>
+    <div class="bento-card">
+      <div class="bento-label">거래활발</div>
+      <div class="bento-value">82</div>
+      <div class="bento-delta">▲ 12 ↑</div>
+    </div>
+    <div class="bento-card span-2">
+      <div class="bento-label">📈 5년 가격 추이</div>
+      <svg viewBox="0 0 200 60" style="width:100%;height:80%;margin-top:8px"><path d="M0,50 L40,40 L80,42 L120,28 L160,30 L200,15" stroke="#FF6B35" stroke-width="2" fill="none" stroke-linecap="round"/><circle cx="200" cy="15" r="4" fill="#FF6B35"/></svg>
+    </div>
+    <div class="bento-card">
+      <div class="bento-label">월 원리금</div>
+      <div class="bento-value" style="font-size:24px">182<span style="font-size:60%">만</span></div>
+    </div>
+    <div class="bento-card">
+      <div class="bento-label">LTV / DSR</div>
+      <div class="bento-value" style="font-size:24px">40 <span style="color:var(--text-quiet)">/</span> 38</div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════ 6 · MOCKUP ════════════════════ -->
+<section id="mockup" class="section">
+  <div class="section-head">
+    <div class="section-num">06 · myhomelog 적용 mockup</div>
+    <h2 class="section-title">실제 화면 적용</h2>
+    <p class="section-sub">디자인 시스템 토큰을 myhomelog 첫 화면에 적용한 모습. 헤더 · Hero · 데이터 시각화 모두 통합.</p>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-label">myhomelog v2 · 첫 화면 (1366×768) · concept-c-mockup</div>
+    <div class="mockup-app">
+      <div class="mockup-header">
+        <div class="mockup-logo"><div class="mark">집</div>내집<em>로그</em></div>
+        <div class="mockup-tabs">
+          <span class="on">🗺 지도</span>
+          <span>📋 목록</span>
+          <span>📊 보고서</span>
+          <span>🧮 대출</span>
+          <span>✍ 특약</span>
+        </div>
+        <div class="mockup-search">
+          <span class="mockup-search-icon">🔎</span>
+          <input class="input" placeholder="단지명·동명 검색">
+        </div>
+        <button class="btn btn-primary mockup-cta">📊 맞춤 보고서</button>
+      </div>
+      <div class="mockup-hero">
+        <div>
+          <div class="mockup-tag">DATA · 245K · 9.7K · KST 17:00</div>
+          <h1 class="mockup-h">실거래가로 보는<br><em>매수 의사결정.</em></h1>
+          <div class="mockup-sub">국토부 실거래가 + LTV/DSR + 10.15 규제. AI 가 30초 만에 1page 보고서. 데이터로 결정하세요.</div>
+          <div class="mockup-stats">
+            <div class="mockup-stat"><div class="v">245K</div><div class="l">DEALS</div></div>
+            <div class="mockup-stat"><div class="v">9.7K</div><div class="l">APTS</div></div>
+            <div class="mockup-stat"><div class="v">17:00</div><div class="l">DAILY</div></div>
+          </div>
+        </div>
+        <div class="mockup-illust">
+          <svg viewBox="0 0 200 200">
+            <defs>
+              <linearGradient id="bar-c-strong" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#FF6B35" stop-opacity=".95"/>
+                <stop offset="1" stop-color="#FF6B35" stop-opacity=".25"/>
+              </linearGradient>
+              <linearGradient id="bar-c-quiet" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stop-color="#fff" stop-opacity=".18"/>
+                <stop offset="1" stop-color="#fff" stop-opacity=".04"/>
+              </linearGradient>
+            </defs>
+            <g>
+              <rect x="20" y="120" width="20" height="60" fill="url(#bar-c-quiet)" rx="3"/>
+              <rect x="50" y="100" width="20" height="80" fill="url(#bar-c-quiet)" rx="3"/>
+              <rect x="80" y="80" width="20" height="100" fill="url(#bar-c-strong)" rx="3"/>
+              <rect x="110" y="60" width="20" height="120" fill="url(#bar-c-quiet)" rx="3"/>
+              <rect x="140" y="40" width="20" height="140" fill="url(#bar-c-quiet)" rx="3"/>
+            </g>
+            <text x="20" y="32" fill="#A1A1AA" font-family="JetBrains Mono" font-size="8" font-weight="600" letter-spacing="2">DEAL VOLUME · 5Y</text>
+            <text x="83" y="74" fill="#FF6B35" font-family="JetBrains Mono" font-size="9" font-weight="700">12.5</text>
+            <text x="20" y="194" fill="#71717A" font-family="JetBrains Mono" font-size="6">2021</text>
+            <text x="160" y="194" fill="#71717A" font-family="JetBrains Mono" font-size="6">2026</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════ 7 · CSS VARIABLES (TOKENS) ════════════════════ -->
+<section id="tokens" class="section">
+  <div class="section-head">
+    <div class="section-num">07 · CSS Variables</div>
+    <h2 class="section-title">토큰 명세 · :root</h2>
+    <p class="section-sub">단계 1 적용 시 frontend/index.html :root 에 그대로 추가. 기존 토큰 (--bg/--acc/--t1 등) 은 호환을 위해 alias 로 매핑.</p>
+  </div>
+
+  <div class="panel">
+    <pre class="css-vars">:root {
+  <span class="comment">/* Background scale */</span>
+  <span class="var-name">--bg-base</span>:        <span class="var-val">#0A0A0F</span>;
+  <span class="var-name">--bg-elev-1</span>:      <span class="var-val">#0F0F15</span>;
+  <span class="var-name">--bg-elev-2</span>:      <span class="var-val">#14141C</span>;
+  <span class="var-name">--bg-elev-3</span>:      <span class="var-val">#1A1A24</span>;
+
+  <span class="comment">/* Glass surfaces */</span>
+  <span class="var-name">--glass-1</span>:        <span class="var-val">rgba(255,255,255,0.035)</span>;
+  <span class="var-name">--glass-2</span>:        <span class="var-val">rgba(255,255,255,0.06)</span>;
+  <span class="var-name">--glass-3</span>:        <span class="var-val">rgba(255,255,255,0.085)</span>;
+
+  <span class="comment">/* Accent · Electric Orange */</span>
+  <span class="var-name">--accent-500</span>:     <span class="var-val">#FF6B35</span>;  <span class="comment">/* primary */</span>
+  <span class="var-name">--accent-600</span>:     <span class="var-val">#F25218</span>;  <span class="comment">/* hover */</span>
+  <span class="var-name">--accent-700</span>:     <span class="var-val">#C84B18</span>;  <span class="comment">/* legacy brand */</span>
+
+  <span class="comment">/* Semantic */</span>
+  <span class="var-name">--positive</span>:       <span class="var-val">#4ADE80</span>;
+  <span class="var-name">--warning</span>:        <span class="var-val">#FCD34D</span>;
+  <span class="var-name">--negative</span>:       <span class="var-val">#F87171</span>;
+
+  <span class="comment">/* Text scale */</span>
+  <span class="var-name">--text-primary</span>:   <span class="var-val">#F4F4F5</span>;
+  <span class="var-name">--text-secondary</span>: <span class="var-val">#D4D4D8</span>;
+  <span class="var-name">--text-tertiary</span>:  <span class="var-val">#A1A1AA</span>;
+  <span class="var-name">--text-quiet</span>:     <span class="var-val">#71717A</span>;
+
+  <span class="comment">/* Typography */</span>
+  <span class="var-name">--font-display</span>:   <span class="var-val">'Sora', 'Pretendard Variable', sans-serif</span>;
+  <span class="var-name">--font-body</span>:      <span class="var-val">'Pretendard Variable', system-ui, sans-serif</span>;
+  <span class="var-name">--font-mono</span>:      <span class="var-val">'JetBrains Mono', monospace</span>;
+
+  <span class="comment">/* Spacing · 4pt grid */</span>
+  <span class="var-name">--space-1</span>: <span class="var-val">4px</span>;  <span class="var-name">--space-2</span>: <span class="var-val">8px</span>;  <span class="var-name">--space-3</span>: <span class="var-val">12px</span>;
+  <span class="var-name">--space-4</span>: <span class="var-val">16px</span>; <span class="var-name">--space-6</span>: <span class="var-val">24px</span>; <span class="var-name">--space-8</span>: <span class="var-val">32px</span>;
+  <span class="var-name">--space-12</span>: <span class="var-val">48px</span>; <span class="var-name">--space-16</span>: <span class="var-val">64px</span>;
+
+  <span class="comment">/* Radius */</span>
+  <span class="var-name">--radius-sm</span>: <span class="var-val">6px</span>; <span class="var-name">--radius-md</span>: <span class="var-val">10px</span>; <span class="var-name">--radius-lg</span>: <span class="var-val">14px</span>;
+  <span class="var-name">--radius-xl</span>: <span class="var-val">18px</span>; <span class="var-name">--radius-2xl</span>: <span class="var-val">24px</span>;
+
+  <span class="comment">/* Shadow + glow */</span>
+  <span class="var-name">--shadow-md</span>:   <span class="var-val">0 1px 0 rgba(255,255,255,0.05) inset, 0 8px 24px rgba(0,0,0,0.4)</span>;
+  <span class="var-name">--glow-orange</span>: <span class="var-val">0 0 24px rgba(255,107,53,0.35)</span>;
+
+  <span class="comment">/* Motion */</span>
+  <span class="var-name">--duration-fast</span>:   <span class="var-val">150ms</span>;
+  <span class="var-name">--duration-normal</span>: <span class="var-val">250ms</span>;
+  <span class="var-name">--ease-out</span>:        <span class="var-val">cubic-bezier(0.16, 1, 0.3, 1)</span>;
+
+  <span class="comment">/* Backdrop blur */</span>
+  <span class="var-name">--blur-md</span>:  <span class="var-val">blur(20px) saturate(1.6)</span>;
+  <span class="var-name">--blur-lg</span>:  <span class="var-val">blur(40px) saturate(1.8)</span>;
+
+  <span class="comment">/* Legacy alias (호환용 — 점진적 마이그레이션) */</span>
+  <span class="var-name">--bg</span>:    <span class="var-val">var(--bg-base)</span>;
+  <span class="var-name">--s0</span>:    <span class="var-val">var(--bg-elev-1)</span>;
+  <span class="var-name">--s1</span>:    <span class="var-val">var(--bg-elev-2)</span>;
+  <span class="var-name">--t1</span>:    <span class="var-val">var(--text-primary)</span>;
+  <span class="var-name">--t2</span>:    <span class="var-val">var(--text-secondary)</span>;
+  <span class="var-name">--t3</span>:    <span class="var-val">var(--text-tertiary)</span>;
+  <span class="var-name">--acc</span>:   <span class="var-val">var(--accent-500)</span>;
+  <span class="var-name">--accD</span>:  <span class="var-val">var(--accent-600)</span>;
+}</pre>
+  </div>
+</section>
+
+<section class="section" style="border-bottom:0;text-align:center;padding-bottom:var(--space-24)">
+  <div style="font-family:var(--font-mono);font-size:var(--text-micro);color:var(--text-quiet);letter-spacing:2px;margin-bottom:var(--space-3)">END · DESIGN SYSTEM v1.0</div>
+  <div style="font-family:var(--font-display);font-size:var(--text-h2);font-weight:700;color:var(--text-primary);letter-spacing:-0.5px">운영자 confirm 후 Step 3 단계 1 진입.</div>
+</section>
+
+</body>
+</html>
