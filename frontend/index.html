@@ -814,6 +814,82 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 }
 /* tap-highlight 색상 토닝 다운 (회색 → 브랜드 톤) */
 * { -webkit-tap-highlight-color: rgba(42,109,244,.12); }
+
+/* ── Phase 4-1 단계 1 (2026-05-04): Hero band — A-1 value prop + 단일 CTA ──
+   additive only. dismissible. 큰 화면 max-width 1280 centered. */
+.hero-band{
+  background:linear-gradient(135deg,#FFFCF7 0%,#FBF4EA 100%);
+  border-bottom:1px solid var(--bd);
+  flex-shrink:0;
+}
+.hero-inner{
+  position:relative;
+  display:flex;
+  align-items:center;
+  gap:16px;
+  width:100%;
+  max-width:1280px;
+  margin:0 auto;
+  padding:14px 22px;
+}
+.hero-content{flex:1;min-width:0}
+.hero-msg{
+  display:flex;align-items:center;gap:8px;
+  font-size:16px;font-weight:700;color:var(--t1);
+  line-height:1.4;margin-bottom:3px;
+}
+.hero-icon{font-size:18px;flex-shrink:0}
+.hero-sub{
+  font-size:11.5px;font-weight:500;color:var(--t2);
+  line-height:1.6;
+}
+.hero-cta{
+  display:inline-flex;align-items:center;gap:8px;
+  padding:9px 18px;
+  background:var(--acc);color:#fff;
+  border:none;border-radius:var(--rs);
+  font-size:13px;font-weight:700;font-family:inherit;
+  cursor:pointer;transition:all .18s;
+  box-shadow:0 2px 6px rgba(200,75,24,.18);
+  flex-shrink:0;white-space:nowrap;
+}
+.hero-cta:hover{
+  background:var(--accD);
+  transform:translateY(-1px);
+  box-shadow:0 4px 10px rgba(200,75,24,.28);
+}
+.hero-cta:active{transform:translateY(0)}
+.hero-dismiss{
+  position:absolute;top:6px;right:8px;
+  width:28px;height:28px;
+  background:transparent;border:none;
+  color:var(--t3);font-size:14px;
+  cursor:pointer;border-radius:50%;
+  transition:all .15s;
+  display:flex;align-items:center;justify-content:center;
+}
+/* tap area 확장 — WCAG 2.5.5 AAA 44×44 보장 */
+.hero-dismiss::before{
+  content:'';position:absolute;inset:-8px;
+}
+.hero-dismiss:hover{background:rgba(0,0,0,.05);color:var(--t1)}
+
+/* 모바일 — 세로 배치 + 풀폭 CTA + ✕ 32×32 (tap 48) */
+@media (max-width:700px){
+  .hero-inner{
+    flex-direction:column;
+    align-items:stretch;
+    gap:10px;
+    padding:14px 16px;
+  }
+  .hero-msg{font-size:14.5px}
+  .hero-sub{font-size:11.5px}
+  .hero-cta{width:100%;justify-content:center}
+  .hero-dismiss{
+    top:8px;right:10px;
+    width:32px;height:32px;
+  }
+}
 </style>
 <!-- Vercel Web Analytics — 30일 검증 모드 계측 (2026-05-02 ~ 2026-06-01) -->
 <!-- Day 30 후 GO/PIVOT/STOP 결정에 사용 — 그 전엔 funnel 데이터만 수집 -->
@@ -884,6 +960,27 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 <!-- Phase 33 #6 (2026-05-04): seoulsubway 영감 — 데이터량 + 갱신 주기 명시 (신뢰도 ↑) -->
 <div id="syncBanner" style="display:none;background:#F0F7FF;border-bottom:1px solid #BFD7F7;padding:6px 14px;font-size:11px;color:#1B4F8A;text-align:center">
   📅 마지막 데이터 동기화: <span id="syncTime">—</span> · 출처: 국토교통부 실거래가 (245k+) · KAPT 단지 (9.7k+) · 금융위 규제 · 매일 17시 갱신
+</div>
+
+<!-- Phase 4-1 단계 1 (2026-05-04): Hero band — A-1 value prop + 단일 CTA.
+     첫 진입 가치 인식 직격. additive only, dismissible. localStorage 영구 저장.
+     DOM 순서: content → CTA → ✕ (Q-5 옵션 A — engagement 우선 Tab 순서) -->
+<div id="heroBand" class="hero-band" style="display:none" role="region" aria-label="서비스 소개">
+  <div class="hero-inner">
+    <div class="hero-content">
+      <div class="hero-msg">
+        <span class="hero-icon" aria-hidden="true">🏠</span>
+        <strong>30초 입력으로 받는 1page 부동산 보고서</strong>
+      </div>
+      <div class="hero-sub">
+        국토부 실거래 · LTV/DSR · 전세가율 · 10.15 규제
+      </div>
+    </div>
+    <button class="hero-cta" onclick="_heroFunnel('cta_click'); sv('report');" aria-label="맞춤 보고서 만들기">
+      <span aria-hidden="true">📊</span> 맞춤 보고서 만들기 <span aria-hidden="true">→</span>
+    </button>
+    <button class="hero-dismiss" onclick="dismissHero()" aria-label="안내 닫기" title="닫기">✕</button>
+  </div>
 </div>
 
 <div class="app">
@@ -2026,6 +2123,65 @@ window.addEventListener('DOMContentLoaded',()=>{
     setTimeout(()=>startOnboarding(),400);
   }
 });
+
+// ── Phase 4-1 단계 1 (2026-05-04): Hero band 노출/dismiss 로직 ──
+//   - 첫 방문자: onboarding 모달 닫힌 후 노출 (충돌 회피 — 폴링 방식)
+//   - 재방문자: 로드 후 즉시 노출 (600ms 지연)
+//   - dismiss: localStorage 영구 저장 ('mhl_hero_dismissed')
+//   - funnel: hero_view / hero_cta_click / hero_dismiss
+//   - 60s safety timeout: onboarding 무한 대기 차단 + fallback 노출
+function _heroFunnel(action){
+  try { window.va && window.va('event', { name: 'hero_' + action }); } catch(_){}
+}
+function dismissHero(){
+  try { localStorage.setItem('mhl_hero_dismissed', '1'); } catch(_){}
+  const el = document.getElementById('heroBand');
+  if (el) el.style.display = 'none';
+  _heroFunnel('dismiss');
+}
+function _showHeroNow(){
+  const el = document.getElementById('heroBand');
+  if (el && el.style.display !== 'flex') {
+    el.style.display = 'flex';
+    _heroFunnel('view');
+  }
+}
+function _maybeShowHero(){
+  try {
+    if (localStorage.getItem('mhl_hero_dismissed') === '1') return;
+    const obEl = document.getElementById('OB');
+    const isOnboarding = localStorage.getItem('mhl_onboarded') !== '1';
+    if (isOnboarding && obEl) {
+      // 폴링: OB 가 열렸다 닫힐 때까지 대기 (200ms tick)
+      let opened = false;
+      const checker = setInterval(() => {
+        const isOpen = obEl.classList.contains('open');
+        if (isOpen) opened = true;
+        if (opened && !isOpen) {
+          clearInterval(checker);
+          setTimeout(_showHeroNow, 200);
+        }
+      }, 200);
+      // 60s safety timeout — onboarding 무한 대기 차단 + fallback 노출
+      setTimeout(() => {
+        clearInterval(checker);
+        // timeout 도달 시 onboarding 가 닫혔을 가능성 ↑ → fallback hero 노출
+        if (obEl && !obEl.classList.contains('open')) {
+          _showHeroNow();
+        }
+      }, 60000);
+      return;
+    }
+    _showHeroNow();
+  } catch(_){}
+}
+// 페이지 로드 후 600ms — onboarding 400ms + 렌더 200ms 여유
+function _initHero(){ setTimeout(_maybeShowHero, 600); }
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', _initHero);
+} else {
+  _initHero();
+}
 
 // ── SETTINGS ─────────────────────────────────────────────
 function openSettings(){document.getElementById('SM').classList.add('open');}
