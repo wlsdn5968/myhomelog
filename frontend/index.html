@@ -5950,7 +5950,10 @@ if (window.MutationObserver) {
 function toggleDrawer() {
   const lp = document.querySelector('.lp');
   const bg = document.getElementById('drawerBg');
-  if (!lp || !bg) return;
+  if (!lp || !bg) {
+    if (typeof toast === 'function') toast('🚨 .lp 또는 drawerBg DOM 없음 (cache 문제)');
+    return;
+  }
   const opening = !lp.classList.contains('open');
   lp.classList.toggle('open', opening);
   bg.classList.toggle('open', opening);
@@ -5971,6 +5974,7 @@ function toggleDrawer() {
       transform: 'translateX(0)',
       transition: 'transform .25s ease',
       visibility: 'visible',
+      opacity: '1',
       overflowY: 'auto',
       overflowX: 'hidden',
     });
@@ -5982,6 +5986,14 @@ function toggleDrawer() {
       background: 'rgba(0,0,0,0.5)',
       zIndex: '9990',
     });
+    // MOB-AUDIT-2026-05-04 (3차 fix): 진단 toast — 운영자 캐시·viewport 검증용 (1주일 임시)
+    setTimeout(() => {
+      const r = lp.getBoundingClientRect();
+      const t = getComputedStyle(lp).transform;
+      const msg = `vw:${innerWidth} lp:${r.left.toFixed(0)},${r.top.toFixed(0)} ${r.width.toFixed(0)}x${r.height.toFixed(0)} z:${getComputedStyle(lp).zIndex}`;
+      if (typeof toast === 'function') toast(msg);
+      console.log('[drawer]', msg, 'transform:', t);
+    }, 100);
   } else {
     lp.style.transform = 'translateX(-100%)';
     // 250ms 후 inline style 제거 — 다음 사용 시 CSS 미디어쿼리 자연스럽게
