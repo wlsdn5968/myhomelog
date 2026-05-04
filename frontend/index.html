@@ -244,7 +244,7 @@ window.MHL.auth = window.MHL.auth || {
 :root{
   --bg:#F4F2ED;--s0:#fff;--s1:#F8F6F2;--s2:#F0EDE7;
   --bd:#E2DDD5;--bd2:#C8C3B5;
-  --t1:#18160F;--t2:#56524A;--t3:#98938A;
+  --t1:#18160F;--t2:#56524A;--t3:#7A7568;
   --acc:#C84B18;--accL:#FAE9E2;--accD:#8A3210;
   --a2:#1E5499;--a2L:#E6EFF9;
   --grn:#177038;--grnL:#E5F3EB;
@@ -416,6 +416,19 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 .bm-pop-close:hover{background:var(--s1)}
 .bm-pop-body{flex:1;overflow-y:auto}
 @media(max-width:700px){.fab-ai{bottom:72px;right:16px;width:52px;height:52px;font-size:22px}.fab-bm{bottom:132px;right:16px}.bm-pop{bottom:186px;right:16px}}
+/* Agent UX P0-3 (2026-05-04): iPhone SE 568px 화면에서 fab-bm 가 화면 밖 잘림 → safe-area + max() 보강 */
+@supports (padding: max(0px)) {
+  @media(max-width:700px){
+    .fab-ai{bottom:max(72px, calc(env(safe-area-inset-bottom) + 56px))}
+    .fab-bm{bottom:max(132px, calc(env(safe-area-inset-bottom) + 116px))}
+    .bm-pop{bottom:max(186px, calc(env(safe-area-inset-bottom) + 170px))}
+  }
+}
+/* Agent UX P0-1 모바일 4열 → 2열 (계산 결과 자릿수 잘림 차단) */
+@media(max-width:480px){.co-grid{grid-template-columns:repeat(2,1fr)!important}}
+/* Agent UX P1 #20: chip focus 시각 표시 (색약자 대응 + 키보드 navigation) */
+.chip:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.chip.on::before{content:'✓ ';font-weight:700} /* 색약자 시각 cue */
 .chdr{padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 .ctit{font-size:12px;font-weight:700}.cst{font-size:11px;font-weight:600}
 .cmsgs{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
@@ -885,7 +898,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       <div class="mb9"><span class="lbl">학군 중요도</span><div class="chips" id="ch-sc"><span class="chip" onclick="cp(this,'ch-sc')">학군 중요</span><span class="chip on" onclick="cp(this,'ch-sc')">보통</span></div></div>
       <!-- Phase 5-A (2026-04-26): 보고서 정확도 향상 입력 — 자녀·거주기간·우선순위 -->
       <!-- Phase 5+ (2026-04-26): default open + summary 강조 — 사용자가 입력 칸이 없는 줄 알았던 UX 이슈 fix -->
-      <details open style="margin-bottom:9px;background:var(--accL);border:1px solid #F0C0AC;border-radius:6px;padding:8px 10px"><summary style="cursor:pointer;font-size:11.5px;font-weight:700;color:var(--acc);user-select:none">📊 보고서 입력 (자녀·거주기간·우선순위)</summary>
+      <!-- STAB-AUDIT #78 (2026-05-04): 보고서 입력 default closed — 첫 진입 시 인지 부하 ↓ -->
+      <details style="margin-bottom:9px;background:var(--accL);border:1px solid #F0C0AC;border-radius:6px;padding:8px 10px"><summary style="cursor:pointer;font-size:11.5px;font-weight:700;color:var(--acc);user-select:none">📊 보고서 입력 (자녀·거주기간·우선순위) — 클릭</summary>
         <div style="margin-top:6px;padding-left:4px;border-left:2px solid var(--bd)">
           <div class="mb9"><span class="lbl">자녀 계획</span>
             <div class="chips" id="ch-kid">
@@ -918,7 +932,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         </div>
       </details>
       <div class="mb9"><span class="lbl">희망 평형</span><div class="chips" id="ch-py"><span class="chip" onclick="cp(this,'ch-py')">소형 15~22평</span><span class="chip on" onclick="cp(this,'ch-py')">중형 23~33평</span><span class="chip" onclick="cp(this,'ch-py')">대형 34평+</span><span class="chip" onclick="cp(this,'ch-py')">전체</span></div></div>
-      <div class="r2"><div><label class="lbl" for="bp">매수가 (억 단위)</label><input class="inp" id="bp" type="number" inputmode="decimal" placeholder="예: 6.8 (6억 8천)" step="0.1" oninput="cl()"></div><div><label class="lbl" for="mc">자기 자본 (억 단위)</label><input class="inp" id="mc" type="number" inputmode="decimal" placeholder="예: 3.5 (3억 5천)" step="0.1" oninput="cl()"></div></div>
+      <!-- Agent UX P0-5 (2026-05-04): placeholder 단위 명확화 (만원 vs 억 혼동 차단) -->
+      <div class="r2"><div><label class="lbl" for="bp">매수가 <span style="color:var(--acc);font-weight:600">(억)</span></label><input class="inp" id="bp" type="number" inputmode="decimal" placeholder="6.8 → 6억 8천만원" step="0.1" min="0.1" max="500" oninput="cl()" title="단위: 억. 예) 6억 8천만원은 6.8 입력"></div><div><label class="lbl" for="mc">자기 자본 <span style="color:var(--acc);font-weight:600">(억)</span></label><input class="inp" id="mc" type="number" inputmode="decimal" placeholder="3.5 → 3억 5천만원" step="0.1" min="0" max="500" oninput="cl()" title="단위: 억"></div></div>
       <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원 단위 — 1.2억은 12000)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000 (만원)" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 / 관심 구 <span style="color:var(--t3);font-weight:400">(보고서 통근시간 분석)</span></label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
       <button class="abtn acc" onclick="cl()">대출 한도 계산</button>
       <div id="lr" style="display:none"><div class="lbox">
@@ -1017,7 +1032,8 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
       <div class="li" style="border-radius:var(--rs);padding:12px"><div class="lil">DSR한도</div><div style="font-size:18px;font-weight:700;color:var(--a2)" id="co_d">—</div></div>
       <div class="li" style="border-radius:var(--rs);padding:12px"><div class="lil">추천한도</div><div style="font-size:18px;font-weight:700;color:var(--grn)" id="co_f">—</div></div>
     </div>
-    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:12px">
+    <!-- Agent UX P0-1 (2026-05-04): 모바일 ≤480px 4열 → 2열 (셀당 70px → 자릿수 잘림 차단) -->
+    <div class="co-grid" style="display:grid;grid-template-columns:repeat(4,1fr);gap:7px;margin-bottom:12px">
       <div class="li" style="border-radius:var(--rs)"><div class="lil">월원리금</div><div class="liv" id="co_m">—</div></div>
       <div class="li" style="border-radius:var(--rs)"><div class="lil">부족자금</div><div class="liv" id="co_n">—</div></div>
       <div class="li" style="border-radius:var(--rs)"><div class="lil">LTV비율</div><div class="liv" id="co_p">—</div></div>
@@ -1091,12 +1107,10 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     </div></div>
   </div>
   <div class="qa">
+    <!-- STAB-AUDIT #44 (2026-05-04): 챗 빠른 질문 6→3 핵심만 (인지 부하 ↓) -->
     <button class="qb" onclick="sQ('서울 7억 무주택 대출 한도 알려줘')">대출계산</button>
-    <button class="qb" onclick="sQ('갈아타기 5년 전략 알려줘')">갈아타기</button>
-    <button class="qb" onclick="sQ('재건축 vs 신축 뭐가 나아요?')">재건축</button>
     <button class="qb" onclick="sQ('10.15 대책 핵심 3가지 요약')">규제요약</button>
-    <button class="qb" onclick="sQ('가계약 시 필수 특약 알려줘')">특약</button>
-    <button class="qb" onclick="sQ('RR이 뭔가요?')">RR전략</button>
+    <button class="qb" onclick="sQ('가계약 시 필수 특약 알려줘')">특약 초안</button>
   </div>
   <div id="cErr" class="cerr">⚠ 서버 오프라인 — 직접 AI 모드로 동작 중</div>
   <div class="cir">
@@ -1277,8 +1291,9 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
     </div>
 
     <!-- P1 D 추가 (2026-04-25 감사 4): 청약 가점 계산기 -->
-    <details style="margin-top:18px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;padding:11px 13px">
-      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:#1B4F8A;list-style:none">🎯 청약 가점 계산기 (총 84점 만점) — 클릭</summary>
+    <!-- STAB-AUDIT #77 (2026-05-04): 청약 가점 default open — 사용자 발견 어려움 → 첫 노출 -->
+    <details open style="margin-top:18px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;padding:11px 13px">
+      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:#1B4F8A;list-style:none">🎯 청약 가점 계산기 (총 84점 만점)</summary>
       <div style="margin-top:10px;font-size:11px;color:var(--t2);line-height:1.7">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
           <div>
@@ -1530,12 +1545,14 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 
 <!-- 정보 제공 안내 -->
 <!-- STAB-AUDIT #53 (2026-05-03): 600자+ → 1줄 요약 + "전문 보기" 모달 — 모바일 가독성 ↑ -->
+<!-- Agent UX #22 (2026-05-04): footer 에 © 표기 추가 — 브랜드 신뢰도 -->
 <footer class="legal-footer">
   ⚠ <strong>매수·매도 추천 X · 미래 가격 예측 X.</strong> 의사결정 책임은 본인.
   <a href="javascript:openTerms()" style="color:var(--acc);text-decoration:underline;cursor:pointer">전문 보기</a>
   · <a href="/terms.html" style="color:var(--acc);text-decoration:underline">이용약관</a>
   · <a href="/privacy.html" style="color:var(--acc);text-decoration:underline">개인정보</a>
   · <a href="/refund.html" style="color:var(--acc);text-decoration:underline">환불</a>
+  · © 2026 내집로그
 </footer>
 
 <!-- 약관 모달 -->
