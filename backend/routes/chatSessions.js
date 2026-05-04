@@ -116,11 +116,15 @@ router.get('/sessions/:id/messages', async (req, res, next) => {
     const { id } = req.params;
     const sb = userScopedClient(req.accessToken);
     // RLS 가 세션 소유권 확인해줌 — 존재성만 별도로 안 묻고 바로 messages 조회
+    // Phase 34 #7 (2026-05-04, Agent 3차 #7): tie-break — 동일 microsecond 시 id 순서로 결정성 보장
+    //   기존: .order('created_at', asc) — same microsecond user-assistant 쌍 비결정 정렬 risk
+    //   변경: .order('id', asc) 추가 — UUID 정렬 안정 (insertion 시간 tie 시 일관성)
     const { data, error } = await sb
       .from('chat_messages')
       .select('id, role, content, meta, created_at')
       .eq('session_id', id)
       .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
       .limit(MESSAGES_LIMIT);
     if (error) throw error;
     res.json({ messages: data || [] });
