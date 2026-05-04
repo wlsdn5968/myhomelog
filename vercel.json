@@ -14,6 +14,9 @@
     { "src": "/privacy(\\.html)?", "dest": "/frontend/privacy.html" },
     { "src": "/terms(\\.html)?", "dest": "/frontend/terms.html" },
     { "src": "/refund(\\.html)?", "dest": "/frontend/refund.html" },
+    { "src": "/sitemap\\.xml", "dest": "/frontend/sitemap.xml", "headers": { "Content-Type": "application/xml" } },
+    { "src": "/robots\\.txt", "dest": "/frontend/robots.txt", "headers": { "Content-Type": "text/plain" } },
+    { "src": "/manifest\\.json", "dest": "/frontend/manifest.json", "headers": { "Content-Type": "application/manifest+json" } },
     { "src": "/(.*)", "dest": "/frontend/index.html" }
   ],
   "crons": [

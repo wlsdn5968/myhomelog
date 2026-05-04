@@ -1,0 +1,37 @@
+{
+  "name": "내집로그 — 실거래가 부동산 분석",
+  "short_name": "내집로그",
+  "description": "국토부 실거래가 + AI 분석. 매수 비용·LTV·DSR·전세가율·1page 컨설팅 보고서. 매수 추천 아님 (참고용).",
+  "start_url": "/?utm_source=pwa",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#FFFFFF",
+  "theme_color": "#C84B18",
+  "lang": "ko-KR",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/og.png",
+      "sizes": "1200x630",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "categories": ["finance", "productivity", "lifestyle"],
+  "shortcuts": [
+    {
+      "name": "1page 보고서",
+      "short_name": "보고서",
+      "description": "AI 맞춤 컨설팅 보고서",
+      "url": "/?view=report",
+      "icons": [{ "src": "/og.png", "sizes": "1200x630" }]
+    },
+    {
+      "name": "AI 챗",
+      "short_name": "AI 상담",
+      "description": "부동산 정보 AI 챗",
+      "url": "/?view=chat",
+      "icons": [{ "src": "/og.png", "sizes": "1200x630" }]
+    }
+  ]
+}
