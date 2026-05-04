@@ -5948,10 +5948,15 @@ if (window.MutationObserver) {
 //   2차 fix (이번): inline style 로 ALL 속성 강제 — CSS 충돌·캐시·미디어쿼리 무관
 //   PC 환경에선 햄버거 hidden 이라 호출 안 됨 → 안전
 function toggleDrawer() {
+  // MOB-AUDIT-2026-05-04 (4차 fix): transform 의존 제거 — left 사용 (CSS transform 충돌 차단)
+  // 운영자 보고: 캐시 X / 시크릿·일반창 동일 / 모든 탭 동일 → 코드 본질 충돌 의심
+  // 강제 toast — 햄버거 click 자체 작동 검증
+  if (typeof toast === 'function') toast('🔧 메뉴 열기 (vw:' + window.innerWidth + ')');
+
   const lp = document.querySelector('.lp');
   const bg = document.getElementById('drawerBg');
   if (!lp || !bg) {
-    if (typeof toast === 'function') toast('🚨 .lp 또는 drawerBg DOM 없음 (cache 문제)');
+    alert('⚠ .lp 또는 drawerBg DOM 없음 (cache 또는 ad-blocker 의심)');
     return;
   }
   const opening = !lp.classList.contains('open');
@@ -5959,44 +5964,44 @@ function toggleDrawer() {
   bg.classList.toggle('open', opening);
 
   if (opening) {
-    // ALL 속성 inline 강제 — 어떤 CSS 충돌도 무관
+    // 4차 fix: transform 무력화 + left 로 위치 결정 (CSS .lp{transform:translateX(-100%)} 우회)
     Object.assign(lp.style, {
       display: 'block',
       position: 'fixed',
       top: '0',
-      left: '0',
+      left: '0',         // transform 대신 left 로 화면 안 위치
+      right: 'auto',
       bottom: '0',
       width: '85%',
       maxWidth: '340px',
+      height: '100vh',
       zIndex: '99999',
       background: '#ffffff',
-      boxShadow: '2px 0 12px rgba(0,0,0,0.15)',
-      transform: 'translateX(0)',
-      transition: 'transform .25s ease',
+      boxShadow: '2px 0 12px rgba(0,0,0,0.25)',
+      transform: 'none',  // CSS transform 무력화
       visibility: 'visible',
       opacity: '1',
       overflowY: 'auto',
       overflowX: 'hidden',
     });
-    // backdrop 도 강제 (혹시 .drawer-bg.open CSS 도 충돌)
     Object.assign(bg.style, {
       display: 'block',
       position: 'fixed',
       top: '0', left: '0', right: '0', bottom: '0',
+      width: '100%', height: '100vh',
       background: 'rgba(0,0,0,0.5)',
       zIndex: '9990',
+      opacity: '1',
     });
-    // MOB-AUDIT-2026-05-04 (3차 fix): 진단 toast — 운영자 캐시·viewport 검증용 (1주일 임시)
+    // 진단 toast — 운영자 보고용 (1주일 임시)
     setTimeout(() => {
       const r = lp.getBoundingClientRect();
-      const t = getComputedStyle(lp).transform;
-      const msg = `vw:${innerWidth} lp:${r.left.toFixed(0)},${r.top.toFixed(0)} ${r.width.toFixed(0)}x${r.height.toFixed(0)} z:${getComputedStyle(lp).zIndex}`;
+      const msg = `lp:${r.left.toFixed(0)},${r.top.toFixed(0)} ${r.width.toFixed(0)}x${r.height.toFixed(0)} z:${getComputedStyle(lp).zIndex}`;
       if (typeof toast === 'function') toast(msg);
-      console.log('[drawer]', msg, 'transform:', t);
-    }, 100);
+    }, 200);
   } else {
-    lp.style.transform = 'translateX(-100%)';
-    // 250ms 후 inline style 제거 — 다음 사용 시 CSS 미디어쿼리 자연스럽게
+    // 4차: left 기반 close — left 음수로 화면 밖
+    lp.style.left = '-100%';
     setTimeout(() => {
       lp.removeAttribute('style');
       bg.removeAttribute('style');
