@@ -65,20 +65,21 @@ router.get('/apt', async (req, res) => {
     //   1) molit: 실거래 있는 단지 (recent deal_date·build_year 노출 — 우선)
     //   2) apt_master: 거래 0건 단지도 검색에 노출 (기존엔 영원히 안 나옴)
     //   같은 단지가 두 출처에 모두 있으면 molit 우선 (거래 정보 풍부).
-    // Phase 10 (2026-05-03): limit*5 → limit*15 — dedupe 후 다양성 확보 + 거래량 기반 인기 정렬
-    //   기존: 같은 단지 거래 50건이면 50 row 다 fetch → dedupe 후 1단지만, 다른 단지 못 봄
-    //   변경: limit*15 fetch → 단지별 카운트 + 최근 거래 → (count desc, recent desc) 복합 정렬
-    // MOB-AUDIT-2026-05-04: 운영자 보고 "공덕 입력 시 늦음" → limit*15 → limit*10 (속도 ↑, 다양성 약간 ↓)
+    // Phase 21 (2026-05-04): SQL 병목 fix — OR 조건 제거 (umd_nm 인덱스 없음)
+    //   진단 (EXPLAIN): apt_name ILIKE OR umd_nm ILIKE → Full Seq Scan (244k rows, 2.3s)
+    //   원인: idx_molit_aptname_trgm GIN 있으나 umd_nm GIN 없음 → OR 시 둘 다 인덱스 X
+    //   변경: molit_transactions 는 apt_name 만 (인덱스 활용 → ~50ms),
+    //         umd_nm (동명) 검색은 apt_master 에 위임 (이미 idx_apt_master_umd_trgm 있음)
     const [molitRes, masterRes] = await Promise.all([
       admin.from('molit_transactions')
         .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date')
-        .or(`apt_name.ilike.%${q}%,umd_nm.ilike.%${q}%`)
+        .ilike('apt_name', `%${q}%`)  // OR 제거 — apt_name 만 (인덱스 활용)
         .order('deal_date', { ascending: false })
         .limit(limit * 10),
       admin.from('apt_master')
         .select('apt_name, sigungu, umd_nm, lawd_cd, kapt_code')
-        .or(`apt_name.ilike.%${q}%,umd_nm.ilike.%${q}%`)
-        .limit(limit * 3),
+        .or(`apt_name.ilike.%${q}%,umd_nm.ilike.%${q}%`)  // apt_master 는 작아서 OR OK (9.7k rows)
+        .limit(limit * 5),  // umd_nm 검색 보강 위해 *3 → *5
     ]);
     if (molitRes.error) throw molitRes.error;
     if (masterRes.error) {
