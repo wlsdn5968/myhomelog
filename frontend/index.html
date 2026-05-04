@@ -5943,9 +5943,10 @@ if (window.MutationObserver) {
 
 // ── 모바일 drawer 토글 (P0 Phase 2 R3-B-2) ────────────────
 // 모바일에서 사이드바(.lp) 가 숨겨지면 사용자가 입력 자체 못 함 → drawer 로 슬라이드.
-// MOB-AUDIT-2026-05-04: 운영자 보고 — "메뉴 클릭 시 검은 그림자만, .lp 안 보임"
-//   원인 추정: .lp.open 의 transform CSS 적용 우선순위 충돌 또는 캐시 미반영
-//   해결: inline style 직접 설정 — CSS rule 무관하게 강제 적용 (가장 robust)
+// MOB-AUDIT-2026-05-04 (revised): 운영자 보고 "검은 그림자만 + 메뉴 안 보임"
+//   1차 fix (d242092): inline transform 강제 — 효과 X (운영자 재보고)
+//   2차 fix (이번): inline style 로 ALL 속성 강제 — CSS 충돌·캐시·미디어쿼리 무관
+//   PC 환경에선 햄버거 hidden 이라 호출 안 됨 → 안전
 function toggleDrawer() {
   const lp = document.querySelector('.lp');
   const bg = document.getElementById('drawerBg');
@@ -5953,19 +5954,56 @@ function toggleDrawer() {
   const opening = !lp.classList.contains('open');
   lp.classList.toggle('open', opening);
   bg.classList.toggle('open', opening);
-  // CRITICAL: inline transform 강제 — CSS class 미반영 시 안전장치
-  // PC 환경에선 햄버거 hidden 이라 호출 안 됨 → 안전
-  lp.style.transform = opening ? 'translateX(0)' : 'translateX(-100%)';
-  lp.style.visibility = 'visible';
+
+  if (opening) {
+    // ALL 속성 inline 강제 — 어떤 CSS 충돌도 무관
+    Object.assign(lp.style, {
+      display: 'block',
+      position: 'fixed',
+      top: '0',
+      left: '0',
+      bottom: '0',
+      width: '85%',
+      maxWidth: '340px',
+      zIndex: '99999',
+      background: '#ffffff',
+      boxShadow: '2px 0 12px rgba(0,0,0,0.15)',
+      transform: 'translateX(0)',
+      transition: 'transform .25s ease',
+      visibility: 'visible',
+      overflowY: 'auto',
+      overflowX: 'hidden',
+    });
+    // backdrop 도 강제 (혹시 .drawer-bg.open CSS 도 충돌)
+    Object.assign(bg.style, {
+      display: 'block',
+      position: 'fixed',
+      top: '0', left: '0', right: '0', bottom: '0',
+      background: 'rgba(0,0,0,0.5)',
+      zIndex: '9990',
+    });
+  } else {
+    lp.style.transform = 'translateX(-100%)';
+    // 250ms 후 inline style 제거 — 다음 사용 시 CSS 미디어쿼리 자연스럽게
+    setTimeout(() => {
+      lp.removeAttribute('style');
+      bg.removeAttribute('style');
+    }, 300);
+  }
   document.body.style.overflow = opening ? 'hidden' : '';
 }
 function closeDrawer() {
   const lp = document.querySelector('.lp');
+  const bg = document.getElementById('drawerBg');
   if (lp) {
     lp.classList.remove('open');
     lp.style.transform = 'translateX(-100%)';
+    setTimeout(() => lp.removeAttribute('style'), 300);
   }
-  document.getElementById('drawerBg')?.classList.remove('open');
+  if (bg) {
+    bg.classList.remove('open');
+    setTimeout(() => bg.removeAttribute('style'), 300);
+  }
   document.body.style.overflow = '';
 }
 // 사이드바 내부 button/input 사용 후 자동 닫기 (검색·계산 후)
