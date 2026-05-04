@@ -5948,28 +5948,22 @@ if (window.MutationObserver) {
 //   2차 fix (이번): inline style 로 ALL 속성 강제 — CSS 충돌·캐시·미디어쿼리 무관
 //   PC 환경에선 햄버거 hidden 이라 호출 안 됨 → 안전
 function toggleDrawer() {
-  // MOB-AUDIT-2026-05-04 (4차 fix): transform 의존 제거 — left 사용 (CSS transform 충돌 차단)
-  // 운영자 보고: 캐시 X / 시크릿·일반창 동일 / 모든 탭 동일 → 코드 본질 충돌 의심
-  // 강제 toast — 햄버거 click 자체 작동 검증
-  if (typeof toast === 'function') toast('🔧 메뉴 열기 (vw:' + window.innerWidth + ')');
-
+  // MOB-AUDIT-2026-05-04 (4차 fix verified): 운영자 검증 통과 (vw:392, lp:0,0 정상 슬라이드)
+  // CSS transform 충돌 가능성 차단 위해 inline left 기반 위치 결정 (transform:none 강제)
   const lp = document.querySelector('.lp');
   const bg = document.getElementById('drawerBg');
-  if (!lp || !bg) {
-    alert('⚠ .lp 또는 drawerBg DOM 없음 (cache 또는 ad-blocker 의심)');
-    return;
-  }
+  if (!lp || !bg) return;
   const opening = !lp.classList.contains('open');
   lp.classList.toggle('open', opening);
   bg.classList.toggle('open', opening);
 
   if (opening) {
-    // 4차 fix: transform 무력화 + left 로 위치 결정 (CSS .lp{transform:translateX(-100%)} 우회)
+    // ALL 속성 inline 강제 — left 기반 (transform 의존 X)
     Object.assign(lp.style, {
       display: 'block',
       position: 'fixed',
       top: '0',
-      left: '0',         // transform 대신 left 로 화면 안 위치
+      left: '0',
       right: 'auto',
       bottom: '0',
       width: '85%',
@@ -5978,7 +5972,7 @@ function toggleDrawer() {
       zIndex: '99999',
       background: '#ffffff',
       boxShadow: '2px 0 12px rgba(0,0,0,0.25)',
-      transform: 'none',  // CSS transform 무력화
+      transform: 'none',
       visibility: 'visible',
       opacity: '1',
       overflowY: 'auto',
@@ -5993,12 +5987,6 @@ function toggleDrawer() {
       zIndex: '9990',
       opacity: '1',
     });
-    // 진단 toast — 운영자 보고용 (1주일 임시)
-    setTimeout(() => {
-      const r = lp.getBoundingClientRect();
-      const msg = `lp:${r.left.toFixed(0)},${r.top.toFixed(0)} ${r.width.toFixed(0)}x${r.height.toFixed(0)} z:${getComputedStyle(lp).zIndex}`;
-      if (typeof toast === 'function') toast(msg);
-    }, 200);
   } else {
     // 4차: left 기반 close — left 음수로 화면 밖
     lp.style.left = '-100%';
