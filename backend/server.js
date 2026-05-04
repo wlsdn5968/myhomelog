@@ -91,6 +91,33 @@ app.use(cors({
 
 app.use(express.json({ limit: '50kb' }));
 
+// ── Phase 19 (2026-05-04): access log middleware ──────────────
+// 모든 /api/* 요청의 method/path/status/duration 표준 logger 출력.
+// pino 사용 — Sentry breadcrumb 자동 인덱싱 (운영자 디버깅 가속).
+// 정적 파일·health 는 noise 차단 (제외).
+app.use('/api/', (req, res, next) => {
+  const start = Date.now();
+  const path = req.originalUrl || req.url;
+  // /api/health 는 빈번 (cron·monitoring) — log noise 차단
+  if (path.startsWith('/api/health')) return next();
+  res.on('finish', () => {
+    const dur = Date.now() - start;
+    const slow = dur > 3000;
+    const errored = res.statusCode >= 500;
+    const meta = {
+      method: req.method,
+      path: path.split('?')[0], // query string 제거 (PII risk)
+      status: res.statusCode,
+      durationMs: dur,
+      userId: req.user?.id ? String(req.user.id).slice(0, 8) : null,
+    };
+    if (errored) logger.error(meta, 'access');
+    else if (slow) logger.warn(meta, 'access slow');
+    else logger.info(meta, 'access');
+  });
+  next();
+});
+
 // ── Rate Limiting (Upstash Redis 분산 + in-memory fallback) ─
 // 3개 스코프 분리: general(전체) / chat(AI) / data(외부 API 쿼터 보호)
 const generalLimiter = makeRateLimiter({
