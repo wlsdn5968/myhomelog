@@ -20,6 +20,7 @@ const { runMolitIngest } = require('../jobs/molitIngest');
 const { runAptMasterSync } = require('../jobs/aptMasterSync');
 const { run: runRegulationsCheck } = require('../jobs/regulationsCheck');
 const { run: runRegulationsAutoFetch } = require('../jobs/regulationsAutoFetch');
+const { run: runAuditPrune } = require('../jobs/auditPrune');
 // MOB-AUDIT-2026-05-03: cron 실패는 운영자 즉시 알림 — Sentry capture (logger.error 외 추가)
 const Sentry = require('@sentry/node');
 
@@ -141,5 +142,21 @@ async function handleRegulationsAutoFetch(req, res) {
 }
 router.post('/regulations-auto-fetch', handleRegulationsAutoFetch);
 router.get('/regulations-auto-fetch', handleRegulationsAutoFetch);
+
+// ── Phase 33 #5 (2026-05-04): audit_log 자동 정리 (pg_cron fallback) ──
+async function handleAuditPrune(req, res) {
+  try {
+    const started = Date.now();
+    const summary = await runAuditPrune();
+    logger.info({ durationMs: Date.now() - started, summary }, 'cron/audit-prune OK');
+    res.json({ ok: true, summary });
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'cron/audit-prune 실패');
+    try { Sentry.captureException(e, { tags: { route: 'cron.audit-prune' } }); } catch(_){}
+    res.status(500).json({ error: e.message });
+  }
+}
+router.post('/audit-prune', handleAuditPrune);
+router.get('/audit-prune', handleAuditPrune);
 
 module.exports = router;

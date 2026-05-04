@@ -470,6 +470,21 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
 .rtabs{display:flex;border-bottom:1px solid var(--bd);padding:0 14px;gap:2px;flex-shrink:0}
 .rtab{padding:9px 14px;font-size:12px;font-weight:500;color:var(--t3);border:none;background:transparent;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;font-family:inherit;transition:all .15s;white-space:nowrap}
 .rtab.on{color:var(--acc);border-bottom-color:var(--acc)}
+/* Phase 33 #2 (2026-05-04): 모바일 6 탭 가로 스크롤 → priority 3 + "더보기" overflow scroll */
+@media(max-width:600px){
+  .rtabs{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+  .rtab{padding:9px 10px;font-size:11.5px;flex-shrink:0}
+  /* 우선순위 3개 (종합·실거래·리스크) 강조 — 나머지는 스와이프 */
+  .rtab[onclick*=\"t0\"], .rtab[onclick*=\"t1\"], .rtab[onclick*=\"t2\"]{font-weight:700}
+  /* 모바일 swipe hint — 첫 진입 시 우측에 fade gradient */
+  .rtabs::after{content:'';position:absolute;right:14px;top:0;bottom:0;width:30px;background:linear-gradient(to right, transparent, var(--s0));pointer-events:none}
+  .rpanel{position:relative}
+}
+/* Phase 33 #3 (2026-05-04): 단지 sticky header "한줄 요약" — 12 element 스크롤 시 항상 노출 */
+.apt-sticky-summary{position:sticky;top:0;z-index:50;background:var(--s0);border-bottom:1px solid var(--bd);padding:8px 14px;font-size:12px;color:var(--t1);display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
+.apt-sticky-summary>span{white-space:nowrap}
+.apt-sticky-summary .ass-name{color:var(--acc);font-weight:700}
+.apt-sticky-summary .ass-sep{color:var(--t3);font-weight:400}
 .rpanel{flex:1;overflow-y:auto;padding:16px}
 .rpanel::-webkit-scrollbar{width:4px}.rpanel::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:2px}
 .tp{display:none}.tp.on{display:block}
@@ -852,8 +867,9 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
   ⚠ 일부 데이터 표시가 지연되고 있어요. 잠시 후 새로고침해주세요.
 </div>
 <!-- P1 (Phase 2 5-1): 데이터 동기화 시각 표시 — 사용자 신뢰 시그널 -->
+<!-- Phase 33 #6 (2026-05-04): seoulsubway 영감 — 데이터량 + 갱신 주기 명시 (신뢰도 ↑) -->
 <div id="syncBanner" style="display:none;background:#F0F7FF;border-bottom:1px solid #BFD7F7;padding:6px 14px;font-size:11px;color:#1B4F8A;text-align:center">
-  📅 마지막 데이터 동기화: <span id="syncTime">—</span> · 출처: 국토교통부 실거래가 + 금융위원회 규제
+  📅 마지막 데이터 동기화: <span id="syncTime">—</span> · 출처: 국토교통부 실거래가 (245k+) · KAPT 단지 (9.7k+) · 금융위 규제 · 매일 17시 갱신
 </div>
 
 <div class="app">
@@ -897,6 +913,9 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         💡 <b>핵심 3개</b>만 입력하면 단지 검색 가능: <b>주택 보유 · 매수가 · 희망지역</b>
       </div>
       <div class="mb9"><span class="lbl">주택 보유</span><div class="chips" id="ch-h"><span class="chip on" onclick="cp(this,'ch-h')">무주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택 (처분조건부)</span><span class="chip" onclick="cp(this,'ch-h')">2주택+</span></div></div>
+      <!-- Phase 33 #1 (2026-05-04): 매수가/자본 — 핵심 wizard 3 (보유·매수가·지역) 순서 정합 -->
+      <!-- 기존: 보고서 details 안 (사용자가 chip 누르다 못 찾음) → 이 위치로 이동 -->
+      <div class="r2"><div><label class="lbl" for="bp">매수가 <span style="color:var(--acc);font-weight:600">(억)</span></label><input class="inp" id="bp" type="number" inputmode="decimal" placeholder="6.8 → 6억 8천만원" step="0.1" min="0.1" max="500" oninput="cl()" title="단위: 억. 예) 6억 8천만원은 6.8 입력"></div><div><label class="lbl" for="mc">자기 자본 <span style="color:var(--acc);font-weight:600">(억)</span></label><input class="inp" id="mc" type="number" inputmode="decimal" placeholder="3.5 → 3억 5천만원" step="0.1" min="0" max="500" oninput="cl()" title="단위: 억"></div></div>
       <div class="mb9"><span class="lbl">생애 최초</span><div class="chips" id="ch-f"><span class="chip on" onclick="cp(this,'ch-f')">예</span><span class="chip" onclick="cp(this,'ch-f')">아니오</span></div></div>
       <!-- P1 (Phase 2 후속, 2026-04-25): 정책자금 자격 chip — 인지 부하 절감 위해 접기.
            해당자(신혼/신생아)만 펼쳐서 응답. 디폴트 '아니오' 라 미펼침이어도 계산 정상. -->
@@ -948,8 +967,7 @@ header{background:var(--s0);border-bottom:1px solid var(--bd);flex-shrink:0;heig
         </div>
       </details>
       <div class="mb9"><span class="lbl">희망 평형</span><div class="chips" id="ch-py"><span class="chip" onclick="cp(this,'ch-py')">소형 15~22평</span><span class="chip on" onclick="cp(this,'ch-py')">중형 23~33평</span><span class="chip" onclick="cp(this,'ch-py')">대형 34평+</span><span class="chip" onclick="cp(this,'ch-py')">전체</span></div></div>
-      <!-- Agent UX P0-5 (2026-05-04): placeholder 단위 명확화 (만원 vs 억 혼동 차단) -->
-      <div class="r2"><div><label class="lbl" for="bp">매수가 <span style="color:var(--acc);font-weight:600">(억)</span></label><input class="inp" id="bp" type="number" inputmode="decimal" placeholder="6.8 → 6억 8천만원" step="0.1" min="0.1" max="500" oninput="cl()" title="단위: 억. 예) 6억 8천만원은 6.8 입력"></div><div><label class="lbl" for="mc">자기 자본 <span style="color:var(--acc);font-weight:600">(억)</span></label><input class="inp" id="mc" type="number" inputmode="decimal" placeholder="3.5 → 3억 5천만원" step="0.1" min="0" max="500" oninput="cl()" title="단위: 억"></div></div>
+      <!-- Phase 33 #1: 매수가/자본 위로 이동됨 (line ~901). 여기엔 연소득/직장만 유지 -->
       <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원 단위 — 1.2억은 12000)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000 (만원)" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 / 관심 구 <span style="color:var(--t3);font-weight:400">(보고서 통근시간 분석)</span></label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
       <button class="abtn acc" onclick="cl()">대출 한도 계산</button>
       <div id="lr" style="display:none"><div class="lbox">
@@ -2921,6 +2939,11 @@ function _addAllReportAptsToBookmarks() {
 function _downloadReportPDF() {
   // Phase 5+ (2026-04-26): 새 창 패턴 — 메인 페이지 UI (헤더·사이드바·플로팅챗 등) 영향 0
   // 이전: window.print() — 헤더·사이드바·하단탭·toast 다 인쇄됨 → 보기 안 좋음 + 내용 잘림
+  // Phase 33 #4 (2026-05-04): iOS Safari window.print() 빈 화면 → 안내 toast
+  const _isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+  if (_isIOS) {
+    toast('📱 iOS: 보고서 화면 → 공유(↑) → "PDF로 출력" 선택');
+  }
   const data = window._lastReport;
   if (!data) { toast('먼저 보고서를 생성하세요'); return; }
   const inp = window._lastReportInput || {};
@@ -3961,6 +3984,22 @@ function showDetail(p){
   document.getElementById('dmT').textContent=p.aptName;
   // 점수 라벨 사실 진술화 (P1, 2026-04-25)
   const s=p.score||60,lv=s>=75?'safe':s>=50?'warn':'danger',lt=s>=75?'거래활발':s>=50?'거래보통':'거래적음';
+
+  // Phase 33 #3 (2026-05-04): 단지 상세 sticky header — 12 element 스크롤 시 한눈 인지
+  // dmhdr 다음 + rtabs 위에 sticky summary 삽입
+  try {
+    let _ass = document.getElementById('aptStickySummary');
+    if (!_ass) {
+      _ass = document.createElement('div');
+      _ass.id = 'aptStickySummary';
+      _ass.className = 'apt-sticky-summary';
+      document.querySelector('#DM .rtabs')?.parentNode?.insertBefore(_ass, document.querySelector('#DM .rtabs'));
+    }
+    _ass.innerHTML = `<span class="ass-name">${_escHtml(p.aptName||'')}</span>` +
+      (p.area ? `<span class="ass-sep">·</span><span>${_escHtml(p.area)}</span>` : '') +
+      (p.avgPrice ? `<span class="ass-sep">·</span><span style="color:var(--acc)">${(p.avgPrice).toFixed(2)}억</span>` : '') +
+      `<span class="ass-sep">·</span><span class="lvl ${lv}" style="font-size:10.5px;padding:1px 6px">${s}점 ${lt}</span>`;
+  } catch(_){}
 
   document.getElementById('t0').innerHTML=`
     <div class="gbw">${gSVG(s,90)}
