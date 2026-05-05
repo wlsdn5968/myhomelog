@@ -559,6 +559,12 @@ header{
 .lvl.safe{background:var(--grnL);color:var(--grn)}.lvl.warn{background:var(--ambL);color:var(--amb)}.lvl.danger{background:var(--redL);color:var(--red)}
 /* Phase 4-3 후 sprint 점수 환각 fix (2026-05-05): score 없을 때 정직 안내 */
 .lvl.unknown{background:var(--glass-2);color:var(--text-tertiary)}
+/* KB 인사이트 1+2 (2026-05-06): buildYear 기반 신축·정비 라벨 (사실만, 확정 표현 X) */
+.ass-age{font-family:var(--font-mono);font-size:10.5px;font-weight:600;padding:1px 7px;border-radius:var(--radius-full);letter-spacing:.2px;white-space:nowrap}
+.ass-age.new{background:var(--accent-tint);color:var(--accent-700);border:1px solid var(--accent-tint-2)}
+.ass-age.semi{background:var(--warning-tint);color:var(--warning)}
+.ass-age.recon{background:var(--info-tint);color:var(--info)}
+.ass-age.remod{background:var(--glass-2);color:var(--text-tertiary)}
 .score-pending{background:var(--bg-elev-1);border:1px solid var(--accent-tint-2);border-radius:var(--radius-lg);padding:24px 20px;text-align:center;margin-bottom:14px}
 .score-pending .sp-icon{font-size:32px;margin-bottom:8px}
 .score-pending .sp-title{font-family:var(--font-display);font-size:17px;font-weight:800;color:var(--text-primary);margin-bottom:8px;letter-spacing:-.3px}
@@ -4741,12 +4747,24 @@ function showDetail(p){
       _ass.className = 'apt-sticky-summary';
       document.querySelector('#DM .rtabs')?.parentNode?.insertBefore(_ass, document.querySelector('#DM .rtabs'));
     }
+    // KB 인사이트 1+2 (2026-05-06): buildYear 기반 라벨 (사실만 + 가능성 명시, 확정 표현 X)
+    const _by = Number(p.buildYear);
+    const _curYear = new Date().getFullYear();
+    const _age = (_by && !isNaN(_by) && _by > 1900) ? (_curYear - _by) : null;
+    let _ageLabel = '';
+    if (_age != null) {
+      if (_age <= 5) _ageLabel = `<span class="ass-sep">·</span><span class="ass-age new">✨ 신축</span>`;
+      else if (_age <= 10) _ageLabel = `<span class="ass-sep">·</span><span class="ass-age semi">준신축</span>`;
+      else if (_age >= 30) _ageLabel = `<span class="ass-sep">·</span><span class="ass-age recon" title="재건축 가능 시점 — 사업 추진은 단지별 결정 필요">🏗 재건축 검토</span>`;
+      else if (_age >= 20) _ageLabel = `<span class="ass-sep">·</span><span class="ass-age remod" title="리모델링 가능 시점 — 사업 추진은 단지별 결정 필요">🛠 리모델링 검토</span>`;
+    }
     _ass.innerHTML = `<span class="ass-name">${_escHtml(p.aptName||'')}</span>` +
       (p.area ? `<span class="ass-sep">·</span><span>${_escHtml(p.area)}</span>` : '') +
       (p.avgPrice ? `<span class="ass-sep">·</span><span style="color:var(--acc)">${(p.avgPrice).toFixed(2)}억</span>` : '') +
       (_hasScore
         ? `<span class="ass-sep">·</span><span class="lvl ${lv}" style="font-size:10.5px;padding:1px 6px">${s}점 ${lt}</span>`
-        : `<span class="ass-sep">·</span><span class="lvl unknown" style="font-size:10.5px;padding:1px 6px">${lt}</span>`);
+        : `<span class="ass-sep">·</span><span class="lvl unknown" style="font-size:10.5px;padding:1px 6px">${lt}</span>`) +
+      _ageLabel;
   } catch(_){}
 
   // 점수 환각 fix: score 없으면 "분석 대기" 카드 + 사이드바 진입 유도 CTA (60 fallback 제거)
@@ -6162,7 +6180,16 @@ function restoreSearchFromUrl(){
     return true;
   }catch(e){return false;}
 }
-function cp(el,id){document.querySelector(`#${id}`).querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));el.classList.add('on');if(id==='ch-r')populateRegionSub(el.textContent.trim());cl();dc();_updateInputProgress();}
+function cp(el,id){
+  document.querySelector(`#${id}`).querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
+  el.classList.add('on');
+  if(id==='ch-r')populateRegionSub(el.textContent.trim());
+  // KB 인사이트 3 (2026-05-06): 2주택+ 선택 시 양도세 중과 알림 (regulationsService 출처)
+  if(id==='ch-h' && el.textContent.trim()==='2주택+'){
+    if(typeof toast==='function') toast('⚠ 2026.1.1 다주택자 양도세 중과 시행 — 매도 시 양도세 가산 (출처: 금융위 10·15 대책)');
+  }
+  cl();dc();_updateInputProgress();
+}
 
 // Phase 4 (2026-04-26): 사이드바 wizard 진행률 — 핵심 3개 (보유·예산·지역)
 function _updateInputProgress() {
