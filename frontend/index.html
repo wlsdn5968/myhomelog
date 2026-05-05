@@ -532,9 +532,10 @@ header{
 .niw-btn{width:100%;padding:7px;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:opacity .15s}
 .niw-btn:hover{opacity:.85}.niw-btn.a2{background:var(--a2);color:#fff;margin-bottom:4px}.niw-btn.acc{background:var(--acc);color:#fff}
 
-/* Leaflet 팝업 커스텀 */
-.leaflet-popup-content-wrapper{border-radius:10px!important;box-shadow:var(--sh2)!important;padding:0!important}
+/* Leaflet 팝업 커스텀 — Phase 4-2 단계 1 미세 P1 (2026-05-05): Concept C 통일 (border-subtle + bg-elev) */
+.leaflet-popup-content-wrapper{border-radius:var(--radius-md)!important;box-shadow:var(--shadow-lg)!important;padding:0!important;background:var(--bg-elev-1)!important;border:1px solid var(--border-subtle)!important}
 .leaflet-popup-content{margin:0!important}
+.leaflet-popup-tip{background:var(--bg-elev-1)!important;border:1px solid var(--border-subtle)!important}
 
 /* list */
 .lgv{padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(250px,1fr));gap:12px;overflow-y:auto}
@@ -3997,7 +3998,13 @@ async function doSearch(){
     const _hdr={'Content-Type':'application/json'};
     const _tok=window.MHL?.auth?.session?.access_token;
     if(_tok)_hdr['Authorization']='Bearer '+_tok;
-    const res=await fetch(`${CFG.api}/properties/recommend`,{method:'POST',headers:_hdr,body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
+    // Phase 4-2 단계 1 미세 (2026-05-05): /api/properties/recommend cold start 자동 1회 재시도
+    // 첫 호출이 500 (lambda 콜드) 시 1.5s 후 재호출 → 두 번째는 warm 으로 95% 성공
+    let res=await fetch(`${CFG.api}/properties/recommend`,{method:'POST',headers:_hdr,body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
+    if(res.status===500){
+      await new Promise(r=>setTimeout(r,1500));
+      res=await fetch(`${CFG.api}/properties/recommend`,{method:'POST',headers:_hdr,body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
+    }
     if(res.status===429){
       const j=await res.json().catch(()=>({}));
       toast(j.message || '오늘의 무료 검색을 모두 사용했어요. 내일 다시 이용해주세요.');
@@ -6604,12 +6611,13 @@ async function loadPopularMarkers() {
             iconAnchor: [60, 14],
           }),
         });
+        // Phase 4-2 단계 1 미세 P1 (2026-05-05): 마커 팝업 디자인 통일성 — Concept C 토큰 적용
         m.bindPopup(`
-          <div style="font-size:12px;line-height:1.6">
+          <div style="font-size:12px;line-height:1.6;background:var(--bg-elev-1);padding:10px 12px;color:var(--text-primary)">
             <div style="font-weight:700">${_escHtml(p.aptName)}</div>
-            <div style="font-size:10.5px;color:#888">${_escHtml(p.sigungu||'')} ${_escHtml(p.umdNm||'')} · ${p.buildYear||'?'}년</div>
-            <div style="font-size:10.5px;color:#444;margin-top:4px">최근 60일 거래 <b>${p.dealCount60d}건</b></div>
-            <button onclick='goSearchResult(${JSON.stringify({aptName:p.aptName,sigungu:p.sigungu,umdNm:p.umdNm,lawdCd:p.lawdCd,buildYear:p.buildYear,recentDealDate:p.recentDealDate}).replace(/'/g,"&#39;")})' style="margin-top:6px;padding:5px 10px;background:#2A6DF4;color:#fff;border:none;border-radius:6px;font-size:11px;cursor:pointer">상세 보기 →</button>
+            <div style="font-size:10.5px;color:var(--text-tertiary)">${_escHtml(p.sigungu||'')} ${_escHtml(p.umdNm||'')} · ${p.buildYear||'?'}년</div>
+            <div style="font-size:10.5px;color:var(--text-secondary);margin-top:4px">최근 60일 거래 <b>${p.dealCount60d}건</b></div>
+            <button onclick='goSearchResult(${JSON.stringify({aptName:p.aptName,sigungu:p.sigungu,umdNm:p.umdNm,lawdCd:p.lawdCd,buildYear:p.buildYear,recentDealDate:p.recentDealDate}).replace(/'/g,"&#39;")})' style="margin-top:6px;padding:5px 10px;background:var(--accent-700);color:#fff;border:none;border-radius:var(--radius-sm);font-size:11px;cursor:pointer">상세 보기 →</button>
           </div>
         `);
         m.addTo(mapObj);
@@ -6919,11 +6927,24 @@ async function chkAPI(){
             syncBanner.style.borderBottomColor = '#F0D998';
             syncBanner.style.color = '#7A5500';
           }
-          // Phase 4-2 단계 1 미세 (2026-05-05): 모바일 카피 분기 — 3줄 wrap → 1줄 fit
-          const _isMobile = (window.innerWidth || 0) <= 700;
-          syncBanner.innerHTML = _isMobile
-            ? `📅 ${kst} 갱신 · 국토부·금융위·KAPT${_staleNote}`
-            : `📅 마지막 데이터 동기화: <span id="syncTime">${kst} KST</span> · 출처: 국토교통부 실거래가 + 금융위원회 규제${_staleNote}`;
+          // Phase 4-2 단계 1 미세 SY (2026-05-05): matchMedia 패턴 — viewport 변경 시 자동 갱신
+          // 기존 (단순 _isMobile 1회 평가) 는 page load 시점에만 분기 → DevTools 모바일 모드 전환·orientation 변경 시 미반응
+          window._syncData = { kst, staleNote: _staleNote };
+          const _renderSync = (mql) => {
+            const sb = document.getElementById('syncBanner');
+            if (!sb || !window._syncData) return;
+            const { kst:_k, staleNote:_n } = window._syncData;
+            sb.innerHTML = mql.matches
+              ? `📅 ${_k} 갱신 · 국토부·금융위·KAPT${_n}`
+              : `📅 마지막 데이터 동기화: <span id="syncTime">${_k} KST</span> · 출처: 국토교통부 실거래가 + 금융위원회 규제${_n}`;
+          };
+          const _mql = window.matchMedia('(max-width:700px)');
+          _renderSync(_mql);
+          // chkAPI 가 향후 여러 번 호출되어도 listener 1회만 (중복 방지)
+          if (!window._syncMqlBound) {
+            _mql.addEventListener('change', _renderSync);
+            window._syncMqlBound = true;
+          }
           syncBanner.style.display='block';
         }catch(_){}
       }
