@@ -20,6 +20,8 @@
     { "src": "/concept-redesign(\\.html)?", "dest": "/frontend/concept-redesign.html" },
     { "src": "/design-system(\\.html)?", "dest": "/frontend/design-system.html" },
     { "src": "/design-system-light(\\.html)?", "dest": "/frontend/design-system-light.html" },
+    { "src": "/landing-mockup(\\.html)?", "dest": "/frontend/landing-mockup.html" },
+    { "src": "/landing(\\.html)?", "dest": "/frontend/landing.html" },
     { "src": "/(.*)", "dest": "/frontend/index.html" }
   ],
   "crons": [

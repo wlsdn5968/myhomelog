@@ -1,0 +1,207 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>myhomelog 랜딩 mockup — 8 viewport 견본</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Sora:wght@600;700;800&display=swap">
+<style>
+:root{
+  --bg:#0F0F12;
+  --bg2:#1A1A1F;
+  --line:rgba(255,255,255,0.08);
+  --t1:#FAFAFA;
+  --t2:#9CA3AF;
+  --t3:#6B7280;
+  --acc:#FF6B35;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{
+  background:var(--bg);
+  color:var(--t1);
+  font-family:'JetBrains Mono','SF Mono',monospace;
+  padding:32px 20px 80px;
+  min-height:100vh;
+}
+.head{
+  max-width:1400px;margin:0 auto 32px;
+  display:flex;flex-direction:column;gap:6px;
+}
+.head h1{
+  font-family:'Sora',sans-serif;
+  font-size:22px;font-weight:800;letter-spacing:-.5px;
+  color:var(--t1);
+}
+.head .sub{font-size:11px;color:var(--t2);letter-spacing:.5px}
+.head .meta{font-size:10px;color:var(--t3);margin-top:8px}
+.head a{color:var(--acc);text-decoration:none}
+.head a:hover{text-decoration:underline}
+.legend{
+  display:flex;gap:16px;margin-top:14px;flex-wrap:wrap;
+  font-size:10px;color:var(--t2);
+}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{
+  width:8px;height:8px;border-radius:50%;
+  background:var(--acc);display:inline-block;
+}
+
+.grid{
+  max-width:1400px;margin:0 auto;
+  display:flex;flex-wrap:wrap;gap:36px;
+  justify-content:center;
+}
+
+.frame{
+  display:flex;flex-direction:column;
+  align-items:flex-start;gap:10px;
+}
+.label{
+  font-size:10px;font-weight:600;
+  color:var(--t2);
+  letter-spacing:1.2px;text-transform:uppercase;
+  display:flex;align-items:center;gap:8px;
+}
+.label .badge{
+  font-family:'Sora',sans-serif;
+  font-size:9px;
+  background:var(--bg2);
+  border:1px solid var(--line);
+  padding:2px 7px;border-radius:99px;
+  color:var(--t3);text-transform:none;letter-spacing:.3px;
+}
+
+.scale-host{
+  position:relative;overflow:hidden;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:#fff;
+  box-shadow:0 8px 32px rgba(0,0,0,.6),0 0 0 1px rgba(255,255,255,.02);
+}
+.scaled{
+  border:none;display:block;
+  transform-origin:top left;
+}
+
+.section-title{
+  max-width:1400px;margin:48px auto 18px;
+  font-family:'Sora',sans-serif;
+  font-size:13px;font-weight:600;
+  color:var(--t2);
+  letter-spacing:1.5px;text-transform:uppercase;
+  border-top:1px solid var(--line);
+  padding-top:18px;
+}
+
+.tip{
+  max-width:1400px;margin:48px auto 0;
+  padding:18px 22px;
+  background:var(--bg2);
+  border:1px solid var(--line);
+  border-radius:10px;
+  font-size:11.5px;color:var(--t2);line-height:1.7;
+}
+.tip b{color:var(--t1);font-weight:600}
+</style>
+</head>
+<body>
+
+<div class="head">
+  <h1>myhomelog 랜딩 mockup — 8 viewport 견본</h1>
+  <div class="sub">Phase 4-3 Step 2 mockup · 라이트 베이스 + Concept C 100% 준수 · 2026-05-05</div>
+  <div class="meta">실제 페이지 직접 보기: <a href="/landing" target="_blank">/landing</a> (단일 viewport, 본인 디바이스 width 적용)</div>
+  <div class="legend">
+    <span><i></i> Accent #FF6B35</span>
+    <span>Sora 800-900 + Pretendard 800 (한글)</span>
+    <span>JetBrains Mono (숫자·메타)</span>
+    <span>Bento 12-col grid → 2-col → 1-col</span>
+  </div>
+</div>
+
+<div class="section-title">DESKTOP</div>
+
+<div class="grid">
+
+  <div class="frame">
+    <div class="label">1920×1080 <span class="badge">scale 50%</span></div>
+    <div class="scale-host" style="width:960px;height:540px">
+      <iframe src="/landing" class="scaled" style="width:1920px;height:1080px;transform:scale(0.5)" loading="lazy"></iframe>
+    </div>
+  </div>
+
+  <div class="frame">
+    <div class="label">1366×768 <span class="badge">scale 65%</span></div>
+    <div class="scale-host" style="width:888px;height:499px">
+      <iframe src="/landing" class="scaled" style="width:1366px;height:768px;transform:scale(0.65)" loading="lazy"></iframe>
+    </div>
+  </div>
+
+  <div class="frame">
+    <div class="label">1280×720 <span class="badge">scale 70%</span></div>
+    <div class="scale-host" style="width:896px;height:504px">
+      <iframe src="/landing" class="scaled" style="width:1280px;height:720px;transform:scale(0.7)" loading="lazy"></iframe>
+    </div>
+  </div>
+
+</div>
+
+<div class="section-title">TABLET</div>
+
+<div class="grid">
+
+  <div class="frame">
+    <div class="label">1024×768 <span class="badge">scale 70%</span></div>
+    <div class="scale-host" style="width:717px;height:538px">
+      <iframe src="/landing" class="scaled" style="width:1024px;height:768px;transform:scale(0.7)" loading="lazy"></iframe>
+    </div>
+  </div>
+
+  <div class="frame">
+    <div class="label">768×1024 <span class="badge">scale 60%</span></div>
+    <div class="scale-host" style="width:461px;height:614px">
+      <iframe src="/landing" class="scaled" style="width:768px;height:1024px;transform:scale(0.6)" loading="lazy"></iframe>
+    </div>
+  </div>
+
+</div>
+
+<div class="section-title">MOBILE</div>
+
+<div class="grid">
+
+  <div class="frame">
+    <div class="label">414×896 <span class="badge">scale 80%</span></div>
+    <div class="scale-host" style="width:331px;height:717px">
+      <iframe src="/landing" class="scaled" style="width:414px;height:896px;transform:scale(0.8)" loading="lazy"></iframe>
+    </div>
+  </div>
+
+  <div class="frame">
+    <div class="label">375×667 <span class="badge">scale 80%</span></div>
+    <div class="scale-host" style="width:300px;height:534px">
+      <iframe src="/landing" class="scaled" style="width:375px;height:667px;transform:scale(0.8)" loading="lazy"></iframe>
+    </div>
+  </div>
+
+  <div class="frame">
+    <div class="label">360×640 <span class="badge">scale 80%</span></div>
+    <div class="scale-host" style="width:288px;height:512px">
+      <iframe src="/landing" class="scaled" style="width:360px;height:640px;transform:scale(0.8)" loading="lazy"></iframe>
+    </div>
+  </div>
+
+</div>
+
+<div class="tip">
+  <b>참고</b><br>
+  · 8 frame 모두 동일한 <code>/landing</code> 페이지 임베드. 각 viewport width 에 따라 CSS @media 자연 분기 작동 (실제 핸드폰 시뮬레이션 정확).<br>
+  · scale transform 으로 이 페이지에서 작게 표시. 실제 디바이스 비율은 100%.<br>
+  · 실제 Production 진입 흐름 (옵션 A2): localStorage <code>mhl_landing_seen</code> 첫 방문 시만 <code>/landing</code> 노출.<br>
+  · 데이터: 정적 fallback 즉시 노출 + <code>/api/health</code> + <code>/api/search/popular</code> async 갱신 (옵션 C 하이브리드).<br>
+  · 시각 confirm 후 Step 3 코드 구현 (index.html view-landing 추가 + sv() 분기).
+</div>
+
+</body>
+</html>
