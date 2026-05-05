@@ -55,6 +55,7 @@ app.use(helmet({
         'data:',
         'blob:',
         'https://*.tile.openstreetmap.org',
+        'https://server.arcgisonline.com',
         'https://myhomelog.vercel.app',
       ],
       connectSrc: [

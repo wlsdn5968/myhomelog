@@ -4206,18 +4206,65 @@ function renderMarkers(data){
   });
 }
 
-function fm(t,btn){flt=t;document.querySelectorAll('.mbtn').forEach(b=>b.classList.remove('on'));btn.classList.add('on');renderMarkers(props);}
+function fm(t,btn){
+  // Phase 4-3 UX-1 (2026-05-05): 검색 안 한 상태에서 클릭 시 toast 안내 (인기단지 마커는 ltv/type 데이터 없어 필터 불가)
+  if(!props||!props.length){
+    if(typeof toast==='function') toast('🔎 먼저 사이드바에서 단지 검색을 해주세요. 검색 결과에 필터 적용됩니다.');
+    return;
+  }
+  flt=t;
+  document.querySelectorAll('.mbtn').forEach(b=>b.classList.remove('on'));
+  btn.classList.add('on');
+  renderMarkers(props);
+}
 
 function rv(){
   if(!mapObj)return;
-  if(mapObj._isLeaflet)mapObj.setView([37.565,127.02],12);
+  // Phase 4-3 UX-3 (2026-05-05): setView → flyTo (부드러운 zoom·이동 애니메이션, 사용자 작동 인지 ↑)
+  if(mapObj._isLeaflet)mapObj.flyTo([37.565,127.02],12,{duration:0.8});
   else mapObj.setCenter(new naver.maps.LatLng(37.565,127.02));
 }
 
 function togMapType(){
   const btn=document.getElementById('mtBtn');
   if(!mapObj)return;
-  if(mapObj._isLeaflet){showHint('네이버 지도 API 키 필요 (⚙ 설정)');return;}
+  // Phase 4-3 UX-2 (2026-05-05): Leaflet 모드에서 Esri World Imagery tile swap (네이버 키 미필요)
+  // - 기존: showHint('네이버 지도 API 키 필요') = 사용자 인지 약함
+  // - 변경: Esri 무료 위성 tile (라이선스 OK, attribution 추가)
+  if(mapObj._isLeaflet){
+    try{
+      // 기존 tile layer 찾기
+      let osm=null, esri=null;
+      mapObj.eachLayer(l=>{
+        if(l._url){
+          if(l._url.includes('tile.openstreetmap')) osm=l;
+          else if(l._url.includes('arcgisonline')) esri=l;
+        }
+      });
+      if(window._mapTypeIsSat){
+        // 위성 → 일반: Esri 제거 + OSM 추가
+        if(esri) mapObj.removeLayer(esri);
+        if(!osm){
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+            attribution:'© OpenStreetMap',maxZoom:19
+          }).addTo(mapObj);
+        }
+        btn.textContent='위성지도';
+        window._mapTypeIsSat=false;
+      } else {
+        // 일반 → 위성: OSM 제거 + Esri 추가
+        if(osm) mapObj.removeLayer(osm);
+        L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{
+          attribution:'© Esri · World Imagery',maxZoom:19
+        }).addTo(mapObj);
+        btn.textContent='일반지도';
+        window._mapTypeIsSat=true;
+      }
+    }catch(e){
+      if(typeof toast==='function') toast('⚠ 위성지도 전환 실패 — 잠시 후 다시 시도');
+    }
+    return;
+  }
   if(mapTypeNormal){mapObj.setMapTypeId(naver.maps.MapTypeId.HYBRID);btn.textContent='일반지도';}
   else{mapObj.setMapTypeId(naver.maps.MapTypeId.NORMAL);btn.textContent='위성지도';}
   mapTypeNormal=!mapTypeNormal;
