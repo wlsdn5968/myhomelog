@@ -524,13 +524,19 @@ header{
 .nmap-bub.reg::after{background:var(--acc)}.nmap-bub.non::after{background:var(--a2)}.nmap-bub.recon::after{background:var(--amb)}
 
 /* 인포윈도우 */
-.niw{font-family:inherit;min-width:205px;padding:14px 15px}
-.niw-n{font-size:13px;font-weight:700;margin-bottom:3px}.niw-pr{font-size:16px;font-weight:800;color:var(--acc);margin-bottom:3px}
-.niw-m{font-size:10px;color:var(--t2);margin-bottom:7px}
-.niw-g{display:flex;align-items:center;gap:8px;padding:7px 9px;background:var(--s1);border-radius:8px;margin-bottom:8px}
-.niw-tags{display:flex;gap:3px;flex-wrap:wrap;margin-bottom:9px}
-.niw-btn{width:100%;padding:7px;border:none;border-radius:7px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:opacity .15s}
-.niw-btn:hover{opacity:.85}.niw-btn.a2{background:var(--a2);color:#fff;margin-bottom:4px}.niw-btn.acc{background:var(--acc);color:#fff}
+/* Phase 4-3 후 sprint C-2 P3 (2026-05-05): 마커 팝업 디자인 시스템 풀 적용 */
+.niw{font-family:var(--font-body);min-width:215px;padding:var(--space-4) var(--space-4)}
+.niw-n{font-family:var(--font-display);font-size:14px;font-weight:800;color:var(--text-primary);letter-spacing:-.3px;margin-bottom:3px}
+.niw-pr{font-family:var(--font-mono);font-size:17px;font-weight:700;color:var(--accent-700);letter-spacing:-.5px;margin-bottom:4px}
+.niw-m{font-family:var(--font-mono);font-size:10.5px;color:var(--text-tertiary);letter-spacing:.2px;margin-bottom:8px}
+.niw-g{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg-elev-2);border:1px solid var(--border-faint);border-radius:var(--radius-sm);margin-bottom:8px}
+.niw-tags{display:flex;gap:4px;flex-wrap:wrap;margin-bottom:10px}
+.niw-btn{width:100%;padding:8px;border:none;border-radius:var(--radius-sm);font-family:var(--font-display);font-size:11.5px;font-weight:700;cursor:pointer;transition:all 200ms cubic-bezier(0.16,1,0.3,1)}
+.niw-btn:hover{transform:translateY(-1px)}
+.niw-btn.a2{background:var(--accent-tint);color:var(--accent-700);border:1px solid var(--accent-tint-2);margin-bottom:5px}
+.niw-btn.a2:hover{background:var(--accent-tint-2)}
+.niw-btn.acc{background:linear-gradient(135deg,var(--accent-500),var(--accent-700));color:#fff;box-shadow:var(--accent-shadow)}
+.niw-btn.acc:hover{box-shadow:var(--accent-shadow-strong)}
 
 /* Leaflet 팝업 커스텀 — Phase 4-2 단계 1 미세 P1 (2026-05-05): Concept C 통일 (border-subtle + bg-elev) */
 .leaflet-popup-content-wrapper{border-radius:var(--radius-md)!important;box-shadow:var(--shadow-lg)!important;padding:0!important;background:var(--bg-elev-1)!important;border:1px solid var(--border-subtle)!important}
@@ -4159,14 +4165,15 @@ function mkNaverOverlay(p){
 
 function mkNaverIW(p){
   // 점수 라벨 사실 진술화 (P1, 2026-04-25): "안전/위험" → "거래활발/거래보통/거래적음"
+  // Phase 4-3 후 sprint C-2 P3 (2026-05-05): 디자인 시스템 풀 적용 + "AI 점수" → "데이터 종합 점수" (단지 모달 t0 단어 일치)
   const s=p.score||60,lv=s>=75?'safe':s>=50?'warn':'danger',lt=s>=75?'거래활발':s>=50?'거래보통':'거래적음';
   const tags=(p.tags||[]).slice(0,3).map(t=>`<span class="ptag ${typeof t==='object'?t.c||'gy':'gy'}">${typeof t==='object'?t.t||t:t}</span>`).join('');
-  return`<div style="background:#fff;border-radius:10px;box-shadow:0 4px 20px rgba(0,0,0,.14);overflow:hidden">
+  return`<div style="background:var(--bg-elev-1);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);border:1px solid var(--border-subtle);overflow:hidden">
     <div class="niw">
       <div class="niw-n">${p.aptName}</div>
       <div class="niw-pr">${(p.avgPrice||p.price||0).toFixed(2)}억</div>
-      <div class="niw-m">${p.area||''} | ${p.buildYear||''}년 | LTV ${p.ltv||'?'}</div>
-      <div class="niw-g">${gSVG(s,38)}<div><div style="font-size:11px;font-weight:700">AI 점수 ${s}/100</div><span class="lvl ${lv}" style="font-size:10px;padding:2px 7px">${lt}</span></div></div>
+      <div class="niw-m">${p.area||''} · ${p.buildYear||''}년 · LTV ${p.ltv||'?'}</div>
+      <div class="niw-g">${gSVG(s,38)}<div><div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text-primary)">데이터 종합 점수 ${s}/100</div><span class="lvl ${lv}" style="font-family:var(--font-mono);font-size:10px;padding:2px 7px;font-weight:600">${lt}</span></div></div>
       <div class="niw-tags">${tags}</div>
       <button class="niw-btn a2" onclick="showDetailById('${encodeURIComponent(p.aptName)}')">📊 상세 리포트</button>
       <button class="niw-btn acc" onclick="askP('${encodeURIComponent(p.aptName)}','${p.avgPrice||0}','${p.area||''}')">🤖 AI 전략 묻기</button>
@@ -6091,6 +6098,24 @@ function restoreSearchFromUrl(){
           if(c.textContent.trim()===sub)c.classList.add('on');
         });
       }
+    }
+    // Phase 4-3 후 sprint C-3 (2026-05-05): URL 진입자 + budget/cash 미입력 시 입력 유도
+    // 옵션 3 (privacy) 부수 효과: budget·cash URL 제외 → URL 공유 진입자 미입력 가능
+    // → 사용자에게 자연스러운 안내 (toast + scroll + focus + 강조 효과)
+    const _hasBudget = !!(s.get('budget')||_stB);
+    const _hasCash = !!(s.get('cash')||_stC);
+    if(!_hasBudget || !_hasCash){
+      setTimeout(()=>{
+        try{
+          const bp=document.getElementById('bp');
+          if(!bp || (bp.value && parseFloat(bp.value)>0)) return;
+          bp.scrollIntoView({behavior:'smooth',block:'center'});
+          bp.style.transition='box-shadow 300ms cubic-bezier(0.16,1,0.3,1)';
+          bp.style.boxShadow='0 0 0 3px var(--accent-tint-2)';
+          setTimeout(()=>{bp.style.boxShadow='';try{bp.focus();}catch(_){}},1800);
+          if(typeof toast==='function') toast('💡 매수가·자기자본 입력 시 LTV·DSR·정책자금 자동 계산');
+        }catch(_){}
+      },800);
     }
     cl();
     return true;
