@@ -3244,6 +3244,9 @@ const OB_STEPS=[
 ];
 
 function startOnboarding(){
+  // Phase 4-3 회귀 fix R1 (2026-05-05): _showLanding 의 mhl_onboarded='1' set 후에도
+  // setTimeout 이 이미 등록된 상태라 startOnboarding 호출됨 → 내부 check 로 모달 차단
+  if (localStorage.getItem('mhl_onboarded') === '1') return;
   _obStep=0;
   document.getElementById('OB').classList.add('open');
   renderOnboarding();
