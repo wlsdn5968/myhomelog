@@ -1131,7 +1131,7 @@ header{
 <!-- P1 (Phase 2 5-1): 데이터 동기화 시각 표시 — 사용자 신뢰 시그널 -->
 <!-- Phase 33 #6 (2026-05-04): seoulsubway 영감 — 데이터량 + 갱신 주기 명시 (신뢰도 ↑) -->
 <div id="syncBanner" style="display:none;background:#F0F7FF;border-bottom:1px solid #BFD7F7;padding:6px 14px;font-size:11px;color:#1B4F8A;text-align:center">
-  📅 마지막 데이터 동기화: <span id="syncTime">—</span> · 출처: 국토교통부 실거래가 (245k+) · KAPT 단지 (9.7k+) · 금융위 규제 · 매일 17시 갱신
+  📅 마지막 데이터 동기화: <span id="syncTime">—</span> · 출처: 국토교통부 실거래가 (245k+) · KAPT 단지 (9.7k+) · 금융위 규제 · 매일 자동 갱신
 </div>
 
 <!-- Phase 4-2 단계 1 (2026-05-04): Hero band v2 · 새 디자인 시스템 적용.
@@ -1143,7 +1143,7 @@ header{
 <div id="heroBand" class="hero-band" style="display:none" role="region" aria-label="서비스 소개">
   <div class="hero-inner">
     <div class="hero-content">
-      <div class="hero-tag">DATA · 245K · 9.7K · KST 17:00</div>
+      <div class="hero-tag">DATA · 245K · 9.7K · DAILY</div>
       <div class="hero-msg">
         <span class="hero-icon" aria-hidden="true">🏠</span>
         <strong>30초 입력으로 받는 <em>1page 부동산 보고서</em></strong>
@@ -2522,16 +2522,23 @@ function _showLanding(){
   try {
     sv('landing');
     _landingFunnel('view');
+    // Phase 4-3 회귀 fix 1a (2026-05-05): 환영 모달 흡수 — 랜딩이 첫 방문자 환영 역할
+    try { localStorage.setItem('mhl_onboarded', '1'); } catch(_){}
     _landingAsyncRefresh();
   } catch(_){}
 }
 function _landingDismiss(action){
   try { localStorage.setItem('mhl_landing_seen', '1'); } catch(_){}
+  // Phase 4-3 회귀 fix 3a (2026-05-05): 랜딩 본 사용자 = Hero band 도 본 효과
+  // → mhl_hero_dismissed 자동 set (중복 메시지·보고서 view layout 깨짐 동시 해소)
+  try { localStorage.setItem('mhl_hero_dismissed', '1'); } catch(_){}
   _landingFunnel(action);
   try { sv('map'); } catch(_){}
 }
 function _landingCTA(type){
   try { localStorage.setItem('mhl_landing_seen', '1'); } catch(_){}
+  // Phase 4-3 회귀 fix 3a (2026-05-05): Hero band 자동 dismiss (랜딩 흡수)
+  try { localStorage.setItem('mhl_hero_dismissed', '1'); } catch(_){}
   _landingFunnel('cta_' + type + '_click');
   try {
     if (type === 'primary' || type === 'bottom') sv('report');
