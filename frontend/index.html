@@ -3966,7 +3966,7 @@ async function refreshQuota(){
     const headers = {};
     const tok = A?.session?.access_token;
     if(tok) headers['Authorization'] = 'Bearer ' + tok;
-    const r=await fetch(`${CFG.api}/health`,{headers, signal:AbortSignal.timeout(3000)});
+    const r=await fetch(`${CFG.api}/health`,{headers, signal:AbortSignal.timeout(5000)});
     if(r.ok){
       const d=await r.json();
       updateQuota(d.usage);
@@ -6614,7 +6614,7 @@ function toggleRpOverlay(){
 }
 async function _renderChatQuotaHint(){
   try {
-    const r = await fetch(`${CFG.api}/health`, { signal: AbortSignal.timeout(3000) });
+    const r = await fetch(`${CFG.api}/health`, { signal: AbortSignal.timeout(5000) });
     if(!r.ok) return;
     const d = await r.json();
     if(!d.chat) return;
