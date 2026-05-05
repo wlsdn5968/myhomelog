@@ -557,6 +557,15 @@ header{
 .lc-g{display:flex;align-items:center;gap:10px}
 .lvl{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:18px;font-size:10px;font-weight:700}
 .lvl.safe{background:var(--grnL);color:var(--grn)}.lvl.warn{background:var(--ambL);color:var(--amb)}.lvl.danger{background:var(--redL);color:var(--red)}
+/* Phase 4-3 후 sprint 점수 환각 fix (2026-05-05): score 없을 때 정직 안내 */
+.lvl.unknown{background:var(--glass-2);color:var(--text-tertiary)}
+.score-pending{background:var(--bg-elev-1);border:1px solid var(--accent-tint-2);border-radius:var(--radius-lg);padding:24px 20px;text-align:center;margin-bottom:14px}
+.score-pending .sp-icon{font-size:32px;margin-bottom:8px}
+.score-pending .sp-title{font-family:var(--font-display);font-size:17px;font-weight:800;color:var(--text-primary);margin-bottom:8px;letter-spacing:-.3px}
+.score-pending .sp-msg{font-size:12.5px;color:var(--text-secondary);line-height:1.65;margin-bottom:16px}
+.score-pending .sp-cta{padding:10px 22px;background:linear-gradient(135deg,var(--accent-500),var(--accent-700));color:#fff;border:none;border-radius:var(--radius-md);font-family:var(--font-display);font-size:13px;font-weight:700;cursor:pointer;box-shadow:var(--accent-shadow);transition:all 200ms cubic-bezier(0.16,1,0.3,1)}
+.score-pending .sp-cta:hover{transform:translateY(-1px);box-shadow:var(--accent-shadow-strong)}
+.score-pending .sp-meta{margin-top:12px;font-family:var(--font-mono);font-size:10.5px;color:var(--text-tertiary)}
 
 /* RIGHT CHAT */
 .rp{width:340px;flex-shrink:0;display:flex;flex-direction:column;border-left:1px solid var(--bd);background:var(--s0)}
@@ -4145,9 +4154,10 @@ const clsColor={reg:'var(--acc)',non:'var(--a2)',recon:'var(--amb)'};
 function mkNaverOverlay(p){
   const cls=getMarkerCls(p),pr=(p.avgPrice||p.price||0).toFixed(1);
   // Phase 35 #2 (2026-05-04): area 검색 마커는 "60점" 대신 거래량 (dealCount) 표시
+  // 점수 환각 fix (2026-05-05): score 없으면 거래량 또는 '단지' 표시 (60 fallback 제거)
   const subTxt = p._areaSearch
     ? (p.dealCount > 0 ? `${p.dealCount}건` : '신규')
-    : `${p.score||60}점`;
+    : (p.score != null ? `${p.score}점` : (p.dealCount60d ? `${p.dealCount60d}건` : '단지'));
   const ov=new naver.maps.CustomOverlay({
     position:new naver.maps.LatLng(p.lat,p.lng),
     content:`<div class="nmap-pin" ondblclick="showDetailById('${encodeURIComponent(p.aptName)}')">
@@ -4171,14 +4181,21 @@ function mkNaverOverlay(p){
 function mkNaverIW(p){
   // 점수 라벨 사실 진술화 (P1, 2026-04-25): "안전/위험" → "거래활발/거래보통/거래적음"
   // Phase 4-3 후 sprint C-2 P3 (2026-05-05): 디자인 시스템 풀 적용 + "AI 점수" → "데이터 종합 점수" (단지 모달 t0 단어 일치)
-  const s=p.score||60,lv=s>=75?'safe':s>=50?'warn':'danger',lt=s>=75?'거래활발':s>=50?'거래보통':'거래적음';
+  // 점수 환각 fix (2026-05-05): score 없으면 "분석 대기" 안내 (60 fallback 제거)
+  const _hasS = p.score != null;
+  const s = _hasS ? Number(p.score) : null;
+  const lv = _hasS ? (s>=75?'safe':s>=50?'warn':'danger') : 'unknown';
+  const lt = _hasS ? (s>=75?'거래활발':s>=50?'거래보통':'거래적음') : '분석 대기';
   const tags=(p.tags||[]).slice(0,3).map(t=>`<span class="ptag ${typeof t==='object'?t.c||'gy':'gy'}">${typeof t==='object'?t.t||t:t}</span>`).join('');
+  const scoreLabel = _hasS
+    ? `${gSVG(s,38)}<div><div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text-primary)">데이터 종합 점수 ${s}/100</div><span class="lvl ${lv}" style="font-family:var(--font-mono);font-size:10px;padding:2px 7px;font-weight:600">${lt}</span></div>`
+    : `<div style="font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);line-height:1.5">📊 데이터 분석 대기<br><span style="font-size:10px">사이드바 검색 후 분석</span></div>`;
   return`<div style="background:var(--bg-elev-1);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);border:1px solid var(--border-subtle);overflow:hidden">
     <div class="niw">
       <div class="niw-n">${p.aptName}</div>
       <div class="niw-pr">${(p.avgPrice||p.price||0).toFixed(2)}억</div>
       <div class="niw-m">${p.area||''} · ${p.buildYear||''}년 · LTV ${p.ltv||'?'}</div>
-      <div class="niw-g">${gSVG(s,38)}<div><div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text-primary)">데이터 종합 점수 ${s}/100</div><span class="lvl ${lv}" style="font-family:var(--font-mono);font-size:10px;padding:2px 7px;font-weight:600">${lt}</span></div></div>
+      <div class="niw-g">${scoreLabel}</div>
       <div class="niw-tags">${tags}</div>
       <button class="niw-btn a2" onclick="showDetailById('${encodeURIComponent(p.aptName)}')">📊 상세 리포트</button>
       <button class="niw-btn acc" onclick="askP('${encodeURIComponent(p.aptName)}','${p.avgPrice||0}','${p.area||''}')">🤖 AI 전략 묻기</button>
@@ -4187,12 +4204,13 @@ function mkNaverIW(p){
 }
 
 function mkLeafletMkr(p){
-  const cls=getMarkerCls(p),pr=(p.avgPrice||p.price||0).toFixed(1),s=p.score||60;
+  const cls=getMarkerCls(p),pr=(p.avgPrice||p.price||0).toFixed(1);
   const c=clsColor[cls];
   // Phase 35 #2 (2026-05-04): area 검색 마커는 "60점" 대신 거래량 (dealCount) 표시
+  // 점수 환각 fix (2026-05-05): score 없으면 거래량 또는 '단지' (60 fallback 제거)
   const subTxt = p._areaSearch
     ? (p.dealCount > 0 ? `${p.dealCount}건` : '신규')
-    : `${s}점`;
+    : (p.score != null ? `${p.score}점` : (p.dealCount60d ? `${p.dealCount60d}건` : '단지'));
   const icon=L.divIcon({
     className:'',
     html:`<div class="nmap-pin"><div class="nmap-bub ${cls}"><div class="nmap-pr ${cls}">${pr}억</div><div class="nmap-sc">${subTxt}</div></div></div>`,
@@ -4553,16 +4571,18 @@ function setLstFilter(f, btn) {
 // 카드 1개 렌더 (renderListGrid 에서 분리 — 안전망 활용)
 function _renderListCard(p, i) {
   const tags = _renderPTags(p.tags, 3);
-  const s = Number(p.score) || 60;
-  const lv = s >= 75 ? 'safe' : s >= 50 ? 'warn' : 'danger';
-  const lt = s >= 75 ? '거래활발' : s >= 50 ? '거래보통' : '거래적음';
+  // 점수 환각 fix (2026-05-05): score 없으면 'unknown' (60 fallback 제거)
+  const _hasS = p.score != null;
+  const s = _hasS ? Number(p.score) : null;
+  const lv = _hasS ? (s >= 75 ? 'safe' : s >= 50 ? 'warn' : 'danger') : 'unknown';
+  const lt = _hasS ? (s >= 75 ? '거래활발' : s >= 50 ? '거래보통' : '거래적음') : '분석 대기';
   const prosRaw = String(p.pros || '');
   const prosClamped = prosRaw.length > 62 ? prosRaw.substring(0,62) + '...' : prosRaw;
   return `<div class="lcard" onclick="showDetail(props[${i}])" style="position:relative">
     <div class="lc-top" style="background:${p.ltv?.includes('40')?'var(--accL)':'var(--a2L)'}">
       <div class="lc-name">${_escHtml(p.aptName||'')}</div><div class="lc-area">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년</div>
-      <div class="lc-g">${gSVG(s,50)}
-        <div><div style="font-size:17px;font-weight:800;color:${gc(s)}">${(Number(p.avgPrice)||0).toFixed(2)}억</div>
+      <div class="lc-g">${gSVG(s||0,50)}
+        <div><div style="font-size:17px;font-weight:800;color:${_hasS?gc(s):'var(--text-tertiary)'}">${(Number(p.avgPrice)||0).toFixed(2)}억</div>
         <span class="lvl ${lv}">${lt}</span>
         <div style="font-size:10px;color:var(--t2);margin-top:2px">LTV ${_escHtml(p.ltv||'?')} | 최대 ${_escHtml(p.maxLoan||'LTV기준')}</div></div>
       </div>
@@ -4705,7 +4725,11 @@ function showDetail(p){
   try { window.va && window.va('event', { name: 'apt_detail_open', data: { aptName: String(p.aptName||'').slice(0,40), sigungu: p.sigungu||'' } }); } catch(_){}
   document.getElementById('dmT').textContent=p.aptName;
   // 점수 라벨 사실 진술화 (P1, 2026-04-25)
-  const s=p.score||60,lv=s>=75?'safe':s>=50?'warn':'danger',lt=s>=75?'거래활발':s>=50?'거래보통':'거래적음';
+  // 점수 환각 fix (2026-05-05): score 없으면 "분석 대기" (60 fallback 제거 — 90% 사용자 환각 차단)
+  const _hasScore = p.score != null;
+  const s = _hasScore ? Number(p.score) : null;
+  const lv = _hasScore ? (s>=75?'safe':s>=50?'warn':'danger') : 'unknown';
+  const lt = _hasScore ? (s>=75?'거래활발':s>=50?'거래보통':'거래적음') : '분석 대기';
 
   // Phase 33 #3 (2026-05-04): 단지 상세 sticky header — 12 element 스크롤 시 한눈 인지
   // dmhdr 다음 + rtabs 위에 sticky summary 삽입
@@ -4720,15 +4744,27 @@ function showDetail(p){
     _ass.innerHTML = `<span class="ass-name">${_escHtml(p.aptName||'')}</span>` +
       (p.area ? `<span class="ass-sep">·</span><span>${_escHtml(p.area)}</span>` : '') +
       (p.avgPrice ? `<span class="ass-sep">·</span><span style="color:var(--acc)">${(p.avgPrice).toFixed(2)}억</span>` : '') +
-      `<span class="ass-sep">·</span><span class="lvl ${lv}" style="font-size:10.5px;padding:1px 6px">${s}점 ${lt}</span>`;
+      (_hasScore
+        ? `<span class="ass-sep">·</span><span class="lvl ${lv}" style="font-size:10.5px;padding:1px 6px">${s}점 ${lt}</span>`
+        : `<span class="ass-sep">·</span><span class="lvl unknown" style="font-size:10.5px;padding:1px 6px">${lt}</span>`);
   } catch(_){}
 
+  // 점수 환각 fix: score 없으면 "분석 대기" 카드 + 사이드바 진입 유도 CTA (60 fallback 제거)
+  const _scoreSection = _hasScore
+    ? `<div class="gbw">${gSVG(s,90)}
+        <div class="gi"><div class="gi-t">데이터 종합 점수 ${s}/100</div><span class="lvl ${lv}">${lt}</span>
+          <div class="gi-s">${p.area||''} | ${p.buildYear||''}년 | LTV ${p.ltv||'?'} | 최대 ${p.maxLoan||'LTV기준'}</div>
+        </div>
+      </div>`
+    : `<div class="score-pending">
+        <div class="sp-icon">📊</div>
+        <div class="sp-title">데이터 분석 대기</div>
+        <div class="sp-msg">사이드바에서 매수가·자기자본·희망지역 입력 후<br>"맞춤 보고서"를 받으면 정확한 점수가 분석됩니다.</div>
+        <button class="sp-cta" onclick="cDM();sv('report');setTimeout(()=>{const lp=document.querySelector('.lp');if(lp)lp.scrollTo({top:0,behavior:'smooth'});},100)">📊 맞춤 보고서 만들기 →</button>
+        <div class="sp-meta">${p.area||''}${p.buildYear?' · '+p.buildYear+'년':''}${p.ltv?' · LTV '+p.ltv:''}</div>
+      </div>`;
   document.getElementById('t0').innerHTML=`
-    <div class="gbw">${gSVG(s,90)}
-      <div class="gi"><div class="gi-t">데이터 종합 점수 ${s}/100</div><span class="lvl ${lv}">${lt}</span>
-        <div class="gi-s">${p.area||''} | ${p.buildYear||''}년 | LTV ${p.ltv||'?'} | 최대 ${p.maxLoan||'LTV기준'}</div>
-      </div>
-    </div>
+    ${_scoreSection}
     <div style="background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;padding:9px 11px;margin:8px 0 10px;font-size:11px;color:var(--red);font-weight:600;line-height:1.5">⚠ 점수·신호는 <u>과거 실거래 통계 정리</u>이며 매수 추천이 아닙니다. 가격 하락 위험은 본인이 부담합니다.</div>
     <div class="rg2">
       <div class="rc"><div class="rcl">현재 평균가</div><div class="rcv" style="color:var(--acc)">${(p.avgPrice||0).toFixed(2)}억</div></div>
