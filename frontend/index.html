@@ -2532,6 +2532,9 @@ function _landingDismiss(action){
   // Phase 4-3 회귀 fix 3a (2026-05-05): 랜딩 본 사용자 = Hero band 도 본 효과
   // → mhl_hero_dismissed 자동 set (중복 메시지·보고서 view layout 깨짐 동시 해소)
   try { localStorage.setItem('mhl_hero_dismissed', '1'); } catch(_){}
+  // Phase 4-3 회귀 fix R2 (2026-05-05): localStorage 만으로는 chkAPI 다음 호출 전까지 element 잔존
+  // → heroBand element.style.display='none' 직접 set (dismissHero 와 동일 정책)
+  try { const _h = document.getElementById('heroBand'); if (_h) _h.style.display = 'none'; } catch(_){}
   _landingFunnel(action);
   try { sv('map'); } catch(_){}
 }
@@ -2539,6 +2542,8 @@ function _landingCTA(type){
   try { localStorage.setItem('mhl_landing_seen', '1'); } catch(_){}
   // Phase 4-3 회귀 fix 3a (2026-05-05): Hero band 자동 dismiss (랜딩 흡수)
   try { localStorage.setItem('mhl_hero_dismissed', '1'); } catch(_){}
+  // Phase 4-3 회귀 fix R2 (2026-05-05): heroBand element 직접 hide
+  try { const _h = document.getElementById('heroBand'); if (_h) _h.style.display = 'none'; } catch(_){}
   _landingFunnel('cta_' + type + '_click');
   try {
     if (type === 'primary' || type === 'bottom') sv('report');
