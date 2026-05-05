@@ -1045,12 +1045,13 @@ header{
 .hero-dismiss:focus-visible{outline:2px solid var(--accent-500);outline-offset:2px}
 
 /* 모바일 — 세로 배치 + 풀폭 CTA + ✕ 32×32 (tap 48) — Phase 4-1 압축안 A 유지 */
+/* Phase 4-2 단계 1 미세 (2026-05-05): padding --space-4 → --space-3 (16→12, Hero 160→152px) */
 @media (max-width:700px){
   .hero-inner{
     flex-direction:column;
     align-items:stretch;
     gap:var(--space-3);
-    padding:var(--space-4);
+    padding:var(--space-3);
   }
   .hero-msg{font-size:16px}
   .hero-sub{font-size:var(--text-micro)}
@@ -5693,21 +5694,35 @@ function persistSearchToUrl(body){
     const s=u.searchParams;
     // 기존 검색 키는 모두 제거 후 재설정
     ['budget','cash','region','house','first','school','py','wp','apt','area'].forEach(k=>s.delete(k));
-    if(body.maxBudget)s.set('budget',String(body.maxBudget));
-    if(body.myCash)s.set('cash',String(body.myCash));
+    // Phase 4-2 단계 1 미세 (2026-05-05): 민감 항목 (budget·cash·wp) URL 제외 — privacy
+    // → localStorage 만 (URL 공유 시 본인 자산·자기자본·근무지 노출 차단)
+    try{
+      if(body.maxBudget) localStorage.setItem('mhl_search_budget', String(body.maxBudget));
+      if(body.myCash) localStorage.setItem('mhl_search_cash', String(body.myCash));
+      if(body.workplaceArea) localStorage.setItem('mhl_search_wp', String(body.workplaceArea));
+    }catch(_){}
+    // 비민감 항목 → URL 유지 (공유 편의 보존)
     if(body.region)s.set('region',body.region);
     if(body.houseStatus)s.set('house',body.houseStatus);
     if(body.isFirstBuyer)s.set('first','1');
     if(body.schoolNeeded)s.set('school','1');
     const pyChip=gct('ch-py');if(pyChip)s.set('py',pyChip);
-    if(body.workplaceArea)s.set('wp',body.workplaceArea);
     history.replaceState(null,'',u.toString());
   }catch(e){/* no-op */}
 }
 function restoreSearchFromUrl(){
   try{
     const s=new URLSearchParams(location.search);
-    if(![...s.keys()].some(k=>['budget','cash','region','house','first','school','py','wp'].includes(k)))return false;
+    // Phase 4-2 단계 1 미세 (2026-05-05): 민감 항목 (budget·cash·wp) localStorage fallback
+    let _stB=null,_stC=null,_stW=null;
+    try{
+      _stB=localStorage.getItem('mhl_search_budget');
+      _stC=localStorage.getItem('mhl_search_cash');
+      _stW=localStorage.getItem('mhl_search_wp');
+    }catch(_){}
+    const _hasUrl=[...s.keys()].some(k=>['budget','cash','region','house','first','school','py','wp'].includes(k));
+    const _hasStored=!!(_stB||_stC||_stW);
+    if(!_hasUrl && !_hasStored)return false;
     const setChip=(gid,val)=>{
       if(!val)return;
       let matched=false;
@@ -5718,9 +5733,10 @@ function restoreSearchFromUrl(){
       });
       return matched;
     };
-    const budget=s.get('budget');if(budget&&document.getElementById('bp'))document.getElementById('bp').value=budget;
-    const cash=s.get('cash');if(cash&&document.getElementById('mc'))document.getElementById('mc').value=cash;
-    const wp=s.get('wp');if(wp&&document.getElementById('wp'))document.getElementById('wp').value=wp;
+    // 민감 항목: URL legacy fallback 우선, 없으면 localStorage (옵션 3 — privacy 우선)
+    const budget=s.get('budget')||_stB;if(budget&&document.getElementById('bp'))document.getElementById('bp').value=budget;
+    const cash=s.get('cash')||_stC;if(cash&&document.getElementById('mc'))document.getElementById('mc').value=cash;
+    const wp=s.get('wp')||_stW;if(wp&&document.getElementById('wp'))document.getElementById('wp').value=wp;
     const house=s.get('house');if(house)setChip('ch-h',house);
     setChip('ch-f',s.get('first')==='1'?'예':'아니오');
     setChip('ch-sc',s.get('school')==='1'?'학군 중요':'보통');
@@ -6869,7 +6885,8 @@ function calcComm(){
 async function chkAPI(){
   const el=document.getElementById('apiSt'),cs=document.getElementById('cSt'),ce=document.getElementById('cErr'),bs=document.getElementById('badgeSrv');
   try{
-    const r=await fetch(`${CFG.api}/health`,{signal:AbortSignal.timeout(3000)});
+    // Phase 4-2 단계 1 미세 (2026-05-05): Vercel Lambda cold start 대응 — 3s → 5s
+    const r=await fetch(`${CFG.api}/health`,{signal:AbortSignal.timeout(5000)});
     if(r.ok){
       const d=await r.json().catch(()=>({}));
       // Phase 4: 정상 시 apiSt hide, 장애 시만 표시
@@ -6902,7 +6919,11 @@ async function chkAPI(){
             syncBanner.style.borderBottomColor = '#F0D998';
             syncBanner.style.color = '#7A5500';
           }
-          syncBanner.innerHTML = `📅 마지막 데이터 동기화: <span id="syncTime">${kst} KST</span> · 출처: 국토교통부 실거래가 + 금융위원회 규제${_staleNote}`;
+          // Phase 4-2 단계 1 미세 (2026-05-05): 모바일 카피 분기 — 3줄 wrap → 1줄 fit
+          const _isMobile = (window.innerWidth || 0) <= 700;
+          syncBanner.innerHTML = _isMobile
+            ? `📅 ${kst} 갱신 · 국토부·금융위·KAPT${_staleNote}`
+            : `📅 마지막 데이터 동기화: <span id="syncTime">${kst} KST</span> · 출처: 국토교통부 실거래가 + 금융위원회 규제${_staleNote}`;
           syncBanner.style.display='block';
         }catch(_){}
       }
