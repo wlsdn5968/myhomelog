@@ -708,7 +708,7 @@ header{
 .tsp{width:15px;height:15px;border:2px solid var(--bd);border-top-color:var(--acc);border-radius:50%;animation:sp .7s linear infinite}
 
 /* CALC */
-.calcv{position:absolute;top:0;left:0;right:0;bottom:0;overflow-y:auto;padding:10px 22px 22px;background:var(--bg);z-index:1}
+.calcv{position:absolute;top:84px;left:0;right:0;bottom:0;overflow-y:auto;padding:10px 22px 22px;background:var(--bg);z-index:1}
 /* 풀너비 뷰(특약/대출계산/복비/뉴스/청약): 사이드패널 숨김 시 가독성 위해 내부 컨텐츠를 중앙 정렬 */
 .calcv>*,.clause-view>*,.biz-view>*{max-width:1040px;margin-left:auto;margin-right:auto;width:100%}
 .calcv h2{font-size:16px;font-weight:700;margin-bottom:4px}.calcv p{font-size:11px;color:var(--t3);margin-bottom:18px}
@@ -761,7 +761,7 @@ header{
 
 /* 특약 뷰 — Phase 4 (2026-04-26): absolute fill 로 위 빈 공간 완전 차단.
    .app{position:relative} 와 짝. 위 큰 여백 root cause = flex 자식 정렬 문제. */
-.clause-view{position:absolute;top:0;left:0;right:0;bottom:0;overflow-y:auto;padding:10px 22px 22px;display:none;flex-direction:column;gap:0;background:var(--bg);z-index:1}
+.clause-view{position:absolute;top:84px;left:0;right:0;bottom:0;overflow-y:auto;padding:10px 22px 22px;display:none;flex-direction:column;gap:0;background:var(--bg);z-index:1}
 .clause-view.active{display:flex}
 .cv-hero{background:linear-gradient(135deg,var(--acc),var(--accD));color:#fff;border-radius:10px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .cv-hero h2{font-size:14px;font-weight:700;margin:0}
