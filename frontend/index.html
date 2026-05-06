@@ -787,7 +787,11 @@ header{
 .cv-caution{background:var(--ambL);border:1px solid #E8C08A;border-radius:var(--rs);padding:10px 12px;font-size:11px;color:var(--amb);line-height:1.65}
 
 /* 복비 계산기 뷰 */
-.biz-view{position:absolute;top:0;left:0;right:0;bottom:0;overflow-y:auto;padding:10px 22px 22px;display:none;flex-direction:column;gap:0;background:var(--bg);z-index:1}
+/* STAB-AUDIT-2026-05-07 (운영자 발견): .biz-view top:0 + HEADER z:1000 → 보고서·뉴스·청약·사용법 탭 위쪽 ~84px 잘림.
+   header(54) + syncBanner(30) = 84px 가 view 위에 그려져 첫 child 헤더가 가림.
+   변경: top:0 → top:84px (header + syncBanner 합).
+   syncBanner dismiss 시 30px 빈 공간 발생하나, 환각·잘림 보다 안전. */
+.biz-view{position:absolute;top:84px;left:0;right:0;bottom:0;overflow-y:auto;padding:10px 22px 22px;display:none;flex-direction:column;gap:0;background:var(--bg);z-index:1}
 .biz-view.active{display:flex}
 /* Phase 5 (2026-04-26): view-report 는 .biz-view 클래스를 쓰지만 사이드바(.lp)와 함께 표시되어야 함
    주의: .biz-view 들은 모두 BODY 직계 자식이고, .lp 는 .app(BODY 자식) 안에 있음 → flex item 으로 만들면 .lp 아래로 떨어짐
