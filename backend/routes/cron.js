@@ -23,6 +23,8 @@ const { run: runRegulationsAutoFetch } = require('../jobs/regulationsAutoFetch')
 // Phase 37 (2026-05-04): AI 기반 정책 자동 분석 + 제안 SQL 생성
 const { runFullCheck: runRegulationsAiCheck } = require('../jobs/regulationsAiCheck');
 const { run: runAuditPrune } = require('../jobs/auditPrune');
+// STAB-AUDIT-2026-05-06: apt_geocache 점진 백필 (172 → 16K 점진 채우기)
+const { run: runGeocacheBackfill } = require('../jobs/geocacheBackfill');
 // MOB-AUDIT-2026-05-03: cron 실패는 운영자 즉시 알림 — Sentry capture (logger.error 외 추가)
 const Sentry = require('@sentry/node');
 
@@ -165,5 +167,28 @@ async function handleAuditPrune(req, res) {
 }
 router.post('/audit-prune', handleAuditPrune);
 router.get('/audit-prune', handleAuditPrune);
+
+// ── STAB-AUDIT-2026-05-06: apt_geocache 점진 백필 ─────────────
+// 매 30분 실행 — 50건/tick × 48 tick = 2400건/일 → 16K 단지 ~7일 완전 백필
+// Kakao 사용량: 50/30분 × 24h × 30 = 72K/월 (무료 30만건의 24%)
+// 운영자 발견 (2026-05-06): apt_geocache 172/16,044 = 1% coverage → 99% 마커 미표시
+async function handleGeocacheBackfill(req, res) {
+  try {
+    const started = Date.now();
+    const opts = {
+      chunk: req.query.chunk ? parseInt(req.query.chunk) : undefined,
+      daysBack: req.query.daysBack ? parseInt(req.query.daysBack) : undefined,
+    };
+    const summary = await runGeocacheBackfill(opts);
+    logger.info({ durationMs: Date.now() - started, summary }, 'cron/geocache-backfill OK');
+    res.json({ ok: true, summary });
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'cron/geocache-backfill 실패');
+    try { Sentry.captureException(e, { tags: { route: 'cron.geocache-backfill' } }); } catch(_){}
+    res.status(500).json({ error: e.message });
+  }
+}
+router.post('/geocache-backfill', handleGeocacheBackfill);
+router.get('/geocache-backfill', handleGeocacheBackfill);
 
 module.exports = router;
