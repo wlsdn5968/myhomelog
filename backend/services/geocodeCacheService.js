@@ -128,17 +128,32 @@ async function kakaoGeocode({ aptName, sigungu, umdNm, address }) {
     try {
       _trackKakaoCall();
       const r = await axios.get(t.url, {
-        headers, params: { query: t.q, size: 1 }, timeout: 5000,
+        headers, params: { query: t.q, size: 5 }, timeout: 5000,  // size 1 → 5 (정확 매칭 후보 보강)
       });
-      const d = r.data?.documents?.[0];
-      if (!d) continue;
-      const lat = parseFloat(d.y);
-      const lng = parseFloat(d.x);
-      if (!isValidKoreaCoord(lat, lng)) continue;  // 한반도 범위 밖 차단
+      const docs = r.data?.documents || [];
+      if (!docs.length) continue;
+
+      // STAB-AUDIT-2026-05-06 (운영자 발견): 동명이지 단지 환각 차단.
+      //   "대우" 검색 시 Kakao 첫 결과가 "구로구 고척동 대우" (요청 sigungu="성동구") → 잘못된 좌표.
+      //   변경: 결과 후보 중 sigungu 일치 row 만 수락. 일치 없으면 다음 query 후보로.
+      //   sgg 미지정 (검색 fallback `${name}` only) 인 경우는 검증 X — 좌표 정확성 보장 X.
+      let chosen = null;
+      for (const d of docs) {
+        const lat = parseFloat(d.y);
+        const lng = parseFloat(d.x);
+        if (!isValidKoreaCoord(lat, lng)) continue;
+        const addrText = d.address_name || d.address?.address_name || '';
+        // sgg 명시 시 address 가 sgg 포함하는지 검증 (환각 차단)
+        if (sgg && !addrText.includes(sgg)) continue;
+        chosen = { d, lat, lng, addrText };
+        break;
+      }
+      if (!chosen) continue;
+
       return {
-        lat, lng,
-        address: d.address_name || d.address?.address_name || addr,
-        placeName: d.place_name || name,
+        lat: chosen.lat, lng: chosen.lng,
+        address: chosen.addrText || addr,
+        placeName: chosen.d.place_name || name,
       };
     } catch (e) {
       // 일시 실패 — 다음 후보로 계속 진행
