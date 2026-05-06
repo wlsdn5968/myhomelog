@@ -250,10 +250,15 @@ router.get('/popular', async (req, res) => {
       // P0 (2026-04-25 Phase 2 후속): 좌표 lazy fill — 인기 단지 중 캐시 miss 만 즉시 geocode.
       //   apt_geocache 가 cold start 시 비어 있으면 popular 마커가 영원히 안 뜸 →
       //   첫 호출만 ~3s 추가 (12건 × 카카오 200~500ms, concurrency=4) 후엔 캐시 hit.
+      // STAB-AUDIT-2026-05-06 (운영자 발견): 동명이지 단지 환각 차단
+      //   "대우" 17곳·"현대" 64곳·"벽산" 15곳 등 같은 단지명 다중 위치 → apt_name only fallback 시
+      //   다른 구 좌표 매칭 (예: 성동구 금호동4가 "대우" → 구로구 고척동 좌표).
+      //   변경: missing 판정과 결과 매핑 모두 (apt_name|sigungu|umd_nm) 정확 키만 허용.
+      //   대신 lazy fill 으로 정확한 (sigungu, umd_nm) 키워드로 Kakao 재검색 → apt_geocache 자동 백필.
       const missing = [];
       for (const t of top) {
         const k = `${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`;
-        if (!coordMap.has(k) && ![...coordMap.values()].find(x => x.apt_name === t.apt_name)) {
+        if (!coordMap.has(k)) {  // apt_name only fallback 제거 — 정확 키만 hit
           missing.push(t);
         }
       }
@@ -268,9 +273,9 @@ router.get('/popular', async (req, res) => {
       }
 
       const out = top.map(t => {
-        const c = coordMap.get(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`)
-               || coordMap.get(`${t.apt_name}|${t.sigungu||''}|`)
-               || [...coordMap.values()].find(x => x.apt_name === t.apt_name);
+        // 환각 차단 (2026-05-06): apt_name only fallback 제거.
+        //   매칭 X 시 lat/lng null → filter 단계에서 자동 제외 (잘못된 마커 표시 X).
+        const c = coordMap.get(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`);
         return {
           aptName: t.apt_name,
           sigungu: t.sigungu,

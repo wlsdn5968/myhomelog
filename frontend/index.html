@@ -4309,6 +4309,10 @@ function togMapType(){
 function showHint(m,d=2200){const e=document.getElementById('mhint');e.textContent=m;e.classList.remove('h');setTimeout(()=>e.classList.add('h'),d);}
 
 // ── KAKAO GEOCODE BATCH ───────────────────────────────────
+// STAB-AUDIT-2026-05-06: 동명이지 단지 환각 차단 — id 와 sigungu·umdNm 추가 전달
+//   이전: id=aptName → 동명 단지 (예 "대우" 17곳) 같은 키로 매핑 → 첫 결과로 덮어씀
+//   변경: id=(aptName|sigungu|umdNm) + backend Kakao 검색에 sigungu 검증 강제
+function _geoKey(p){return `${p.aptName}|${p.sigungu||''}|${p.umdNm||''}`;}
 async function batchGeocode(items){
   const gs=document.getElementById('geoSt');
   gs.style.display='inline';
@@ -4316,7 +4320,13 @@ async function batchGeocode(items){
     // MOB-AUDIT-2026-05-03: timeout 누락 — geocode/batch 무한 hang 시 좌표 정확화 영원 미반영
     const r=await fetch(`${CFG.api}/geocode/batch`,{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({items:items.map(p=>({id:p.aptName,aptName:p.aptName,area:p.area}))}),
+      body:JSON.stringify({items:items.map(p=>({
+        id:_geoKey(p),
+        aptName:p.aptName,
+        sigungu:p.sigungu||null,
+        umdNm:p.umdNm||null,
+        area:p.area||null,
+      }))}),
       signal:AbortSignal.timeout(15000),
     });
     if(!r.ok)return {};
@@ -4437,9 +4447,11 @@ async function doSearch(){
       batchGeocode(needGeo).then(geoMap=>{
         let updated=false;
         props.forEach(p=>{
-          if((p.lat==null||p.lng==null) && geoMap[p.aptName]){
-            p.lat=geoMap[p.aptName].lat;
-            p.lng=geoMap[p.aptName].lng;
+          // STAB-AUDIT-2026-05-06: aptName only 매핑 → (aptName|sigungu|umdNm) 정확 키
+          const k=_geoKey(p);
+          if((p.lat==null||p.lng==null) && geoMap[k]){
+            p.lat=geoMap[k].lat;
+            p.lng=geoMap[k].lng;
             updated=true;
           }
         });
