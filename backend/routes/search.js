@@ -20,8 +20,13 @@ const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const { requireAuth } = require('../middleware/auth');
 const logger = require('../logger');
-const { resolveCoordBatch } = require('../services/geocodeCacheService');
+const { resolveCoordBatch, resolveCoord } = require('../services/geocodeCacheService');
 const { resolveFacility } = require('../services/aptFacilityService');
+const { resolveSchools } = require('../services/schoolService');
+// STAB-AUDIT-2026-05-07 P1: 학교알리미 NEIS API 통합 — 학생수·학급수
+const { resolveSchoolNeisBatch } = require('../services/schoolNeisService');
+// STAB-AUDIT-2026-05-07 P2: 학구도 (배정 초·중) 매핑
+const { resolveSchoolDistrict } = require('../services/schoolDistrictService');
 
 const router = express.Router();
 
@@ -381,6 +386,35 @@ router.get('/facility', async (req, res) => {
   try {
     const facility = await resolveFacility({ aptName, sigungu, umdNm });
 
+    // STAB-AUDIT-2026-05-07 P0+P1+P2: 학교 정보 통합 (검색 path 풍부화)
+    //   - P0 카카오맵: 반경 1km 학교 list (이름·거리·종류)
+    //   - P1 학교알리미 NEIS: 학생수·학급수·교사수 (학교명 매칭)
+    //   - P2 학구도: 단지 좌표 → 배정 초·중 (서울 우선)
+    let nearbySchools = [];
+    let schoolDistrict = null;
+    try {
+      const coord = await resolveCoord({
+        kaptCode: facility?.kaptCode,
+        aptName, sigungu, umdNm,
+        address: facility?.raw?.doroJuso || facility?.raw?.kaptAddr,
+      });
+      if (coord?.lat && coord?.lng) {
+        // P0: 반경 1km 학교 fetch (병렬 P1·P2 와 함께)
+        const [schools, district] = await Promise.all([
+          resolveSchools({ kaptCode: facility?.kaptCode, aptName, sigungu, umdNm, lat: coord.lat, lng: coord.lng }),
+          resolveSchoolDistrict({ lat: coord.lat, lng: coord.lng, sigungu, umdNm }),
+        ]);
+        // P1: 학교알리미 NEIS 풍부화 (학생수·학급수)
+        const enriched = schools && schools.length
+          ? await resolveSchoolNeisBatch(schools, sigungu)
+          : [];
+        nearbySchools = enriched;
+        schoolDistrict = district;
+      }
+    } catch (schoolErr) {
+      logger.debug({ err: schoolErr.message, aptName }, '학교 데이터 조회 실패 (무시)');
+    }
+
     // 같은 동의 다른 MOLIT 단지명 — alias 후보 (사용자 표시용)
     // Phase 4 (2026-04-26): 토큰 매칭 우선순위 — 정식명 핵심 단어가 MOLIT 신고명에 포함되면
     //   같은 단지일 가능성 높음 (예: '공릉풍림아이원' 의 '풍림' → '풍림아파트A/B' 우선).
@@ -427,7 +461,7 @@ router.get('/facility', async (req, res) => {
       candidates.sort((a, b) => b._score - a._score || a.aptName.localeCompare(b.aptName));
       altCandidates = candidates.slice(0, 8).map(({ _score, ...c }) => c);
     }
-    res.json({ facility, altCandidates });
+    res.json({ facility, altCandidates, nearbySchools, schoolDistrict });
   } catch (e) {
     logger.warn({ err: e.message, aptName }, 'facility 조회 실패');
     res.status(500).json({ error: 'facility 조회 실패' });
