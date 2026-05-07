@@ -4986,7 +4986,16 @@ async function loadFacility(p){
       const f = r.facility.raw;
       const householdCount = f.kaptdaCnt || f.householdCount || f.kaptCount || null;
       const completionDate = f.useAprDay || f.completionDate || null;
-      const constructionCompany = f.kaptBcompany || f.constructionCompany || f.bcompany || null;
+      // STAB-AUDIT-2026-05-07: K-apt API kaptBcompany raw 데이터 깨짐 사례 발견
+      //   "두산건설" 사이에 URL 끼어든 형태: "두산건https://www.k-apt.go.kr/...설"
+      //   kaptAcompany (시공사) 가 정상 데이터 — 우선 사용 + URL pattern sanitize
+      const _sanitizeCompany = v => {
+        if (!v) return null;
+        // URL 패턴 (http://... 또는 www....) 제거 + 공백 정리
+        const cleaned = String(v).replace(/https?:\/\/[^\s]+/g, '').replace(/www\.[^\s]+/g, '').replace(/\s+/g, ' ').trim();
+        return cleaned || null;
+      };
+      const constructionCompany = _sanitizeCompany(f.kaptAcompany) || _sanitizeCompany(f.kaptBcompany) || _sanitizeCompany(f.constructionCompany) || _sanitizeCompany(f.bcompany) || null;
       const totalDong = f.kaptDongCnt || f.dongCount || null;
       const parkingTotal = f.kaptdPcnt || f.parkingTotal || null;
       const heatType = f.codeHeatNm || f.heatType || null;
@@ -5087,7 +5096,8 @@ async function handleShareUrl(){
   const found=props.find(p=>p.aptName===apt);
   if(found){showDetail(found);return;}
   // stub 단지 즉시 표시 (로딩 느낌)
-  showDetail({aptName:apt, area, avgPrice:0, minPrice:0, maxPrice:0, score:60, ltv:'?', maxLoan:'?', pros:'공유 링크로 진입 — 실거래 데이터 조회 중...', cons:'', strategy:'', tags:[], txHistory:[]});
+  // STAB-AUDIT-2026-05-07: score=60 환각 차단 → null (분석 대기 표시)
+  showDetail({aptName:apt, area, avgPrice:0, minPrice:0, maxPrice:0, score:null, ltv:null, maxLoan:null, pros:'공유 링크로 진입 — 실거래 데이터 조회 중...', cons:'', strategy:'', tags:[], txHistory:[]});
   // area에서 구 추출 → lawdCd 매핑 후 실거래 조회 시도
   try{
     const lawdCd=await resolveLawdCdFromArea(area);
@@ -5106,7 +5116,8 @@ async function handleShareUrl(){
       minPrice:+Math.min(...prices).toFixed(2),
       maxPrice:+Math.max(...prices).toFixed(2),
       buildYear:items[0].buildYear||0,
-      score:60, ltv:'?', maxLoan:'?',
+      // STAB-AUDIT-2026-05-07: 공유 링크 score=60 환각 차단 → null
+      score:null, ltv:null, maxLoan:null,
       pros:`최근 6개월 실거래 ${items.length}건 · 평균 ${avg.toFixed(2)}억`,
       cons:'', strategy:'공유 링크 조회 — 정밀 분석은 내 조건을 입력 후 AI 단지 검색을 실행해주세요.',
       tags:[], txHistory:items.slice(0,30), lawdCd,
@@ -7230,8 +7241,12 @@ async function goSearchResult(r) {
     umdNm: r.umdNm,
     area: `${r.sigungu||''} ${r.umdNm||''}`.trim(),
     avgPrice, minPrice, maxPrice,
-    score: avgPrice > 0 ? 60 : 0,
-    ltv: '', maxLoan: '',
+    // STAB-AUDIT-2026-05-07: 검색 → click path score=60 환각 차단
+    //   추천 path는 사용자 매칭 점수 (95 등), 검색 path는 default 60 → 환각.
+    //   score=null 으로 변경 → showDetail 의 _hasScore 분기 → "분석 대기" 표시 (다른 path 와 일관).
+    //   ltv/maxLoan 도 '' → null (계산 안 된 상태 명시).
+    score: null,
+    ltv: null, maxLoan: null,
     buildYear: r.buildYear || 0,
     lawdCd: r.lawdCd,
     txHistory,
