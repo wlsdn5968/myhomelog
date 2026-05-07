@@ -126,15 +126,14 @@ async function kakaoSearchSchools(lat, lng) {
         // category_name 으로 필터: "교육,학교"
         const cat = d.category_name || '';
         if (!cat.includes('학교')) continue;
-        // STAB-AUDIT-2026-05-07: 부속 시설 (행정실·체육관·교무실·후문 등) 학교 본관과 통합
-        //   "서울가산초등학교 행정실"·"서울가산초등학교 체육관" → "서울가산초등학교" 1개로 dedupe
-        //   호갱노노 패턴: 학교 1개 = 1 row (사용자 noise 차단)
-        const baseName = String(d.place_name || '')
-          .replace(/\s+(행정실|교무실|체육관|강당|도서관|급식실|음악실|미술실|과학실|컴퓨터실|어학실|보건실|후문|정문|동문|서문|남문|북문|중앙문|입구|출구|시설관|운동장)$/i, '')
-          .trim();
+        // STAB-AUDIT-2026-05-07 운영자 ASSERT: 부속 시설 (행정실·체육관·교무실·후문 등) 자체 표시 X
+        //   "서울가산초등학교 행정실/체육관/교무실" 같은 row 는 사용자 무가치 noise.
+        //   학교 본관 (이름이 부속 시설 키워드로 끝나지 않는) row 만 응답 포함.
+        const placeName = String(d.place_name || '');
+        const isAuxFacility = /\s+(행정실|교무실|체육관|강당|도서관|급식실|음악실|미술실|과학실|컴퓨터실|어학실|보건실|후문|정문|동문|서문|남문|북문|중앙문|입구|출구|시설관|운동장|본관)$/i.test(placeName);
+        if (isAuxFacility) continue; // 부속 시설은 응답에서 완전 제외
         all.push({
-          name: baseName,
-          rawName: d.place_name, // dedupe 후 sanity check 용
+          name: placeName,
           type,
           distance_m: distanceM(lat, lng, sLat, sLng),
           lat: sLat,
