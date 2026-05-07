@@ -209,6 +209,9 @@ app.use('/api/account/automated-decision', dataLimiter, automatedDecisionRouter)
 app.use('/api/account', dataLimiter, accountRouter);
 // Cron 엔드포인트 — Vercel Cron 에서 호출 (CRON_SECRET 필수)
 app.use('/api/cron', cronRouter);
+// 관리자 전용 엔드포인트 — ADMIN_EMAILS 화이트리스트 인증
+// STAB-AUDIT-2026-05-07: geocache 백필 즉시 trigger 등 (cron 다음 tick 전 운영자 직접 호출)
+app.use('/api/admin', dataLimiter, require('./routes/admin'));
 // 공유 딥링크 — 크롤러용 OG 메타 치환 (HTML 서빙)
 app.use('/share', shareRouter);
 
