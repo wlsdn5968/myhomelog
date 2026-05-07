@@ -42,7 +42,7 @@
     },
     {
       "path": "/api/cron/geocache-backfill",
-      "schedule": "0 4 * * *"
+      "schedule": "0 * * * *"
     }
   ]
 }

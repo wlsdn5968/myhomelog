@@ -5022,33 +5022,26 @@ async function loadFacility(p){
     //   호갱노노/네이버 부동산 수준 학교 정보 — 호스트별 (초/중/고) + 거리 + 학생수 + 배정 가능성
     const sbox = document.getElementById('schoolBox');
     if (sbox && Array.isArray(r.nearbySchools) && r.nearbySchools.length) {
-      // STAB-AUDIT-2026-05-07: 학교명 dedupe (cache된 raw 데이터에도 적용)
-      //   부속 시설 ("행정실"·"체육관"·"교무실"·"후문" 등) 통합 → 학교 1개 = 1 row
-      const _schoolBaseName = n => String(n||'').replace(/\s+(행정실|교무실|체육관|강당|도서관|급식실|음악실|미술실|과학실|컴퓨터실|어학실|보건실|후문|정문|동문|서문|남문|북문|중앙문|입구|출구|시설관|운동장|본관)$/i, '').trim();
-      const _seenSchool = new Set();
-      const byT = { '초': [], '중': [], '고': [] };
-      const sortedSchools = [...r.nearbySchools].sort((a,b) => (a.distance_m||0) - (b.distance_m||0));
-      for (const raw of sortedSchools) {
-        const baseName = _schoolBaseName(raw.name);
-        const key = `${raw.type}:${baseName}`;
-        if (_seenSchool.has(key)) continue;
-        _seenSchool.add(key);
-        if (byT[raw.type]) byT[raw.type].push({ ...raw, name: baseName });
+      // STAB-AUDIT-2026-05-07 운영자 ASSERT: "행정실·체육관·교무실 표시 X. 학교 1개 = 거리 1줄만"
+      //   1) 부속 시설 row 자체 frontend 에서도 필터 (DB cache 90일 raw 데이터 대비)
+      //   2) 종류별 가장 가까운 학교 1개 만 표시 (추가 row noise 제거)
+      const _isAuxFacility = n => /\s+(행정실|교무실|체육관|강당|도서관|급식실|음악실|미술실|과학실|컴퓨터실|어학실|보건실|후문|정문|동문|서문|남문|북문|중앙문|입구|출구|시설관|운동장|본관)$/i.test(String(n||''));
+      const byT = { '초': null, '중': null, '고': null };
+      const sortedSchools = [...r.nearbySchools]
+        .filter(s => !_isAuxFacility(s.name)) // 부속 시설 응답 제거
+        .sort((a,b) => (a.distance_m||0) - (b.distance_m||0));
+      for (const s of sortedSchools) {
+        if (byT[s.type] === null) byT[s.type] = s; // 종류별 첫 row (가장 가까운) 만
       }
-      // 종류별 가까운 1-3개 카드 (호갱노노 패턴)
+      // 종류별 1개 카드 — 학교명 + 거리만 (정직)
       const renderType = (t, label) => {
-        const list = (byT[t] || []).sort((a,b) => (a.distance_m||0) - (b.distance_m||0)).slice(0, 3);
-        if (!list.length) return `<div style="background:#fff;border:1px solid var(--bd);border-radius:6px;padding:8px;font-size:11px"><div style="color:var(--t3);font-size:10px;margin-bottom:2px">${label} (반경 1km)</div><div style="color:var(--t3);font-size:11px">없음</div></div>`;
-        const top = list[0];
-        const rest = list.slice(1).map(s => `<div style="font-size:10px;color:var(--t3);margin-top:2px">${_escHtml(s.name)} · ${s.distance_m}m${s.neis?.foundationType?' · '+_escHtml(s.neis.foundationType):''}</div>`).join('');
+        const top = byT[t];
+        if (!top) return `<div style="background:#fff;border:1px solid var(--bd);border-radius:6px;padding:8px;font-size:11px"><div style="color:var(--t3);font-size:10px;margin-bottom:2px">${label}</div><div style="color:var(--t3);font-size:11px">반경 1km 내 없음</div></div>`;
         const neisInfo = top.neis?.foundationType ? ` <span style="color:var(--t3);font-size:9.5px">(${_escHtml(top.neis.foundationType)})</span>` : '';
-        // 배정 가능성 표시 (Phase 1 fallback) — 가장 가까운 초·중 1개
-        const assigned = (t === '초' || t === '중') ? `<span style="background:#E8F2FF;color:#0B5ED7;font-size:9.5px;padding:1px 5px;border-radius:8px;margin-left:4px">배정 가능성</span>` : '';
         return `<div style="background:#fff;border:1px solid var(--bd);border-radius:6px;padding:8px;font-size:11px">
-          <div style="color:var(--t3);font-size:10px;margin-bottom:3px">${label} (반경 1km)${assigned}</div>
+          <div style="color:var(--t3);font-size:10px;margin-bottom:3px">${label}</div>
           <div style="font-weight:600;color:var(--t1)">${_escHtml(top.name)}${neisInfo}</div>
           <div style="font-size:10px;color:var(--t3)">${top.distance_m}m</div>
-          ${rest}
         </div>`;
       };
       sbox.innerHTML = `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6;margin-top:8px">
@@ -5058,7 +5051,7 @@ async function loadFacility(p){
           ${renderType('중', '중학교')}
           ${renderType('고', '고등학교')}
         </div>
-        <div style="font-size:9.5px;color:var(--t3);margin-top:6px">※ "배정 가능성" = 가장 가까운 학교 (학구도 정확 매핑 미적용 — 학구도 매년 변동). 정확 배정은 <a href="https://schoolinfo.go.kr" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">학교알리미(schoolinfo.go.kr)</a> 또는 시·도 교육청 학구도 검색에서 별도 확인.</div>
+        <div style="font-size:9.5px;color:var(--t3);margin-top:6px">※ 가장 가까운 학교 거리 (학구도 정확 매핑 미적용 — 학구도 매년 변동). 배정 학교는 <a href="https://schoolinfo.go.kr" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">학교알리미(schoolinfo.go.kr)</a> 또는 시·도 교육청에서 확인.</div>
       </div>`;
       sbox.style.display='block';
     } else if (sbox) {
