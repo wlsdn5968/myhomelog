@@ -9,7 +9,7 @@
 
 - 2025.10.15 규제 기준 실시간 LTV·DSR 대출 계산
 - 국토부 실거래가 API 기반 AI 단지 추천
-- 네이버 지도 + 카카오 지오코딩으로 정확한 위치 표시
+- Leaflet + OpenStreetMap 지도 (위성: Esri World Imagery) + 카카오 지오코딩으로 위치 표시
 - 내집스캔 스타일 리포트 (종합의견 / 실거래가 / 리스크 / 맞춤특약)
 
 ---
@@ -40,7 +40,7 @@ ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 | 국토부 실거래가 | [data.go.kr](https://www.data.go.kr) 검색: "아파트매매 실거래가 상세자료" | ✅ 무료 |
 | 카카오 지오코딩 | [developers.kakao.com](https://developers.kakao.com) → REST API 키 | ✅ 무료 (월 30만건) |
 | Anthropic Claude | [console.anthropic.com](https://console.anthropic.com) | 유료 (사용량 기반) |
-| 네이버 지도 | [console.ncloud.com](https://console.ncloud.com) → Maps | 월 100만건 무료 |
+| 네이버 지도 | [console.ncloud.com](https://console.ncloud.com) → Maps | 월 100만건 무료 (선택, 현재 미사용 — Leaflet/OSM 기본) |
 
 ### 3. 백엔드 실행
 
@@ -61,15 +61,11 @@ python3 -m http.server 3000
 
 또는 VS Code Live Server / npx serve 사용
 
-### 5. 네이버 지도 연동 (선택)
+### 5. 네이버 지도 연동 (선택, 현재 미사용)
 
-`frontend/index.html` 다음 주석 해제 후 `YOUR_NAVER_CLIENT_ID` 교체:
+현재 기본 구현은 Leaflet + OpenStreetMap (위성지도는 Esri World Imagery tile). 네이버 지도는 향후 옵션으로 검토 중이며 필수 아님.
 
-```html
-<script src="https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=YOUR_NAVER_CLIENT_ID&submodules=geocoder"></script>
-```
-
-네이버 클라우드 플랫폼 → Application → Maps → 웹 서비스 URL 등록 필수
+기본 동작은 카카오 좌표 검색/캐시(`backend/services/geocodeCacheService.js`) + Leaflet 마커로 처리됨.
 
 ---
 

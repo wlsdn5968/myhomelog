@@ -637,7 +637,8 @@ async function fetchCandidateApts(admin, input, limit) {
   //   cache 적중률 90%+ 라 실제 비용 영향 미미. 외곽 사용자 priority 부분 매칭 후보 발견율 ↑
   // P2-2 (2026-05-04): 후보 풀 < 7 시 인접 구 자동 확장 안내 (외곽 지역 사용자 다양성 부족)
   if (pool.length < 7) {
-    logger.warn({ region: ctx.region, pool_size: pool.length },
+    // STAB-AUDIT-2026-05-07 (m-1 fix): ctx 에 region 키 없음 → 함수 scope 'region' 변수 직접 사용
+    logger.warn({ region, pool_size: pool.length },
       '후보 풀 부족 — 인접 구 확장 권장 (사용자에 안내)');
   }
   const out = pool.slice(0, Math.min(limit * 3, 20));

@@ -34,7 +34,16 @@ function getRateLimitIdentity(req) {
 }
 
 // chat 등 비용 수반 scope 는 기본 fail-closed 처리 (호출자가 명시해도 강제 덮어씀)
-const COST_SENSITIVE_SCOPES = new Set(['chat']);
+//
+// STAB-AUDIT-2026-05-07 (M-8): 'report'·'clause' 추가
+// 한계 명시 — 현재 동작상 실효 변경은 없다:
+//   /api/chat, /api/clause, /api/report 모두 server.js 의 단일 chatLimiter instance
+//   (scope='chat') 를 공유하므로, 'chat' 만으로도 fail-closed 가 이미 적용됨.
+//   따라서 'report'·'clause' 추가는 향후 별도 limiter (reportLimiter·clauseLimiter)
+//   생성 시 자동 fail-closed 유도하는 예방적·문서적 의미.
+//   server.js 의 chatLimiter 단일 인스턴스 구조를 분리하지 않는 이상 본 set 의 추가
+//   항목은 런타임 동작에 영향 없음.
+const COST_SENSITIVE_SCOPES = new Set(['chat', 'report', 'clause']);
 
 /**
  * @param {Object} opts
