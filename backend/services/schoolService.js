@@ -126,8 +126,15 @@ async function kakaoSearchSchools(lat, lng) {
         // category_name 으로 필터: "교육,학교"
         const cat = d.category_name || '';
         if (!cat.includes('학교')) continue;
+        // STAB-AUDIT-2026-05-07: 부속 시설 (행정실·체육관·교무실·후문 등) 학교 본관과 통합
+        //   "서울가산초등학교 행정실"·"서울가산초등학교 체육관" → "서울가산초등학교" 1개로 dedupe
+        //   호갱노노 패턴: 학교 1개 = 1 row (사용자 noise 차단)
+        const baseName = String(d.place_name || '')
+          .replace(/\s+(행정실|교무실|체육관|강당|도서관|급식실|음악실|미술실|과학실|컴퓨터실|어학실|보건실|후문|정문|동문|서문|남문|북문|중앙문|입구|출구|시설관|운동장)$/i, '')
+          .trim();
         all.push({
-          name: d.place_name,
+          name: baseName,
+          rawName: d.place_name, // dedupe 후 sanity check 용
           type,
           distance_m: distanceM(lat, lng, sLat, sLng),
           lat: sLat,
@@ -140,10 +147,17 @@ async function kakaoSearchSchools(lat, lng) {
     }
   }
 
-  // 거리순 정렬, 종류별 최대 3개씩 = 9개 이내
+  // STAB-AUDIT-2026-05-07: 거리순 정렬 + 학교명 dedupe (부속 시설 통합 후 같은 학교 1개만)
+  //   ex) "서울가산초등학교 행정실/체육관/본관" → 모두 "서울가산초등학교" 로 dedupe
+  //   가장 가까운 거리 row 만 보존 (정문/입구가 보통 가까움)
   const byType = { 초: [], 중: [], 고: [] };
+  const seen = new Set();
   for (const s of all.sort((a,b) => a.distance_m - b.distance_m)) {
-    if (byType[s.type] && byType[s.type].length < 3) byType[s.type].push(s);
+    if (!byType[s.type]) continue;
+    const dedupeKey = `${s.type}:${s.name}`;
+    if (seen.has(dedupeKey)) continue;       // 같은 학교 이미 추가됨 (더 먼 부속 시설은 skip)
+    seen.add(dedupeKey);
+    if (byType[s.type].length < 3) byType[s.type].push(s);
   }
   return [...byType.초, ...byType.중, ...byType.고];
 }

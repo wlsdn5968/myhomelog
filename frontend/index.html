@@ -5022,9 +5022,18 @@ async function loadFacility(p){
     //   호갱노노/네이버 부동산 수준 학교 정보 — 호스트별 (초/중/고) + 거리 + 학생수 + 배정 가능성
     const sbox = document.getElementById('schoolBox');
     if (sbox && Array.isArray(r.nearbySchools) && r.nearbySchools.length) {
+      // STAB-AUDIT-2026-05-07: 학교명 dedupe (cache된 raw 데이터에도 적용)
+      //   부속 시설 ("행정실"·"체육관"·"교무실"·"후문" 등) 통합 → 학교 1개 = 1 row
+      const _schoolBaseName = n => String(n||'').replace(/\s+(행정실|교무실|체육관|강당|도서관|급식실|음악실|미술실|과학실|컴퓨터실|어학실|보건실|후문|정문|동문|서문|남문|북문|중앙문|입구|출구|시설관|운동장|본관)$/i, '').trim();
+      const _seenSchool = new Set();
       const byT = { '초': [], '중': [], '고': [] };
-      for (const s of r.nearbySchools) {
-        if (byT[s.type]) byT[s.type].push(s);
+      const sortedSchools = [...r.nearbySchools].sort((a,b) => (a.distance_m||0) - (b.distance_m||0));
+      for (const raw of sortedSchools) {
+        const baseName = _schoolBaseName(raw.name);
+        const key = `${raw.type}:${baseName}`;
+        if (_seenSchool.has(key)) continue;
+        _seenSchool.add(key);
+        if (byT[raw.type]) byT[raw.type].push({ ...raw, name: baseName });
       }
       // 종류별 가까운 1-3개 카드 (호갱노노 패턴)
       const renderType = (t, label) => {
