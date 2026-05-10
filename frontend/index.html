@@ -2770,7 +2770,7 @@ function _checkConsent(){
       return false;
     }
   }
-  // 동의 시각·버전 기록 (감사 로그용)
+  // 동의 시각·버전 기록 (클라이언트 — 서버 기록은 호출자가 redirect 전 별도 호출)
   try {
     localStorage.setItem('mhl_consent', JSON.stringify({
       v: '1.0', at: new Date().toISOString(),
@@ -2778,6 +2778,44 @@ function _checkConsent(){
     }));
   } catch(_){}
   return true;
+}
+// CONSENT-AUDIT-2026-05-10 (검토자 fix): OAuth redirect 전에 짧은 timeout 으로 서버 audit 기록 await.
+//   이전 fire-and-forget 구현은 _checkConsent 직후 곧바로 A.signInWithGoogle() 호출되어
+//   redirect 시점에 fetch 가 브라우저에 의해 abort 되어 서버 audit row 가 안 남는 문제.
+//   timeout 1200ms — 사용자 UX 거의 영향 X (Anthropic 호출 등 다른 await 보다 짧음).
+//   실패/timeout 시 console.warn + 진행 유지 — OAuth 흐름 차단하면 비즈니스 critical.
+async function _recordConsentAudit() {
+  let consentVersion = '1.0';
+  let ts = new Date().toISOString();
+  try {
+    const c = JSON.parse(localStorage.getItem('mhl_consent') || '{}');
+    if (c && typeof c.v === 'string') consentVersion = c.v;
+    if (c && typeof c.at === 'string') ts = c.at;
+  } catch(_){}
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 1200);
+    try {
+      // CONSENT-AUDIT-2026-05-10 (검토자 fix 2): fetch 는 HTTP error status 에서 throw 하지 않음 →
+      //   r.ok 명시 검증으로 400/500 응답을 조용히 묻지 않게 console.warn 남김 (fail-open 유지).
+      const r = await fetch('/api/account/consent', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          age14Plus: true, terms: true, privacy: true, intlTransfer: true,
+          version: consentVersion, ts,
+        }),
+        signal: ctrl.signal,
+      });
+      if (!r.ok) {
+        console.warn('[consent] 서버 기록 비정상 응답 (진행 유지)', 'status=' + r.status);
+      }
+    } finally {
+      clearTimeout(tid);
+    }
+  } catch(e) {
+    console.warn('[consent] 서버 기록 실패 (진행 유지)', e?.message || e);
+  }
 }
 // 모달 열릴 때 이전 동의 복원 (UX 편의 — 법적 동의는 매 로그인 갱신)
 function _restoreConsentCheckboxes(){
@@ -2796,6 +2834,8 @@ async function loginGoogle(){
   const A = window.MHL?.auth;
   if(!A?.ready){ document.getElementById('lmStatus').textContent='⚠ 인증 SDK 로드 중...'; return; }
   document.getElementById('lmStatus').textContent='Google 인증창으로 이동 중...';
+  // CONSENT-AUDIT-2026-05-10 (검토자 fix): redirect 전에 서버 audit 기록 await — fire-and-forget abort 회피.
+  await _recordConsentAudit();
   try { await A.signInWithGoogle(); } catch(e){ document.getElementById('lmStatus').textContent='❌ ' + (e.message||e); }
 }
 async function loginKakao(){
@@ -2820,6 +2860,10 @@ async function loginEmail(){
   const email = document.getElementById('lmEmail').value.trim();
   if(!email || !email.includes('@')){ st.textContent='✉ 올바른 이메일 주소를 입력해주세요.'; return; }
   st.textContent='메일 발송 중...';
+  // CONSENT-AUDIT-2026-05-10 (검토자 fix): magic-link 발송 전에 서버 audit 기록 await.
+  //   email 인증은 OAuth redirect 안 함 (서버에서 매직링크 메일만 발송) → fetch abort risk 는 redirect 보다 낮지만,
+  //   loginGoogle 과 일관성 + 응답 도착 전 페이지 이탈 가능성 고려해 await.
+  await _recordConsentAudit();
   try {
     const { error } = await A.signInWithEmail(email);
     if(error) throw error;

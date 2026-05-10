@@ -59,6 +59,48 @@ function adminClient() {
 
 // writeAudit: 공용 미들웨어 (backend/middleware/auditLog.js) 사용
 
+// ── POST /api/account/consent ──────────────────────────────
+// PIPA 제29조 / GDPR Art.30 — 동의 시점·항목·버전 서버 audit trail
+//
+// 배경 (CONSENT-AUDIT-2026-05-10):
+//   - frontend `_checkConsent()` 가 4개 필수 동의 (만 14세 / 이용약관 / 개인정보 / 국외이전)
+//     를 검증하고 localStorage 에만 저장 → 분쟁 시 client-only 증빙은 위·변조 가능.
+//   - 본 endpoint 는 동일 4 flag 를 서버 audit_log 에 기록 (consent.accept).
+//   - OAuth 시작 *전* 시점이라 비로그인 호출 (Authorization 헤더 X) → user_id=null 가능.
+//     audit_log 스키마는 user_id NULLABLE (anonymous 허용) — migration 20260424000002 line 17.
+//   - 보존: prune_audit_log() 화이트리스트에 'consent.accept' 포함 (migration ...000004 line 38).
+//     JS fallback (jobs/auditPrune.js) 도 본 작업에서 동일 예외 적용.
+//
+// 정책:
+//   - 4 flag 모두 true 가 아니면 400 — frontend 가 검증 통과 후에만 호출하도록 설계되었지만
+//     서버에서도 신뢰 X (인젝션 방어).
+//   - audit 기록 실패는 fail-open — 사용자 OAuth 흐름 막으면 비즈니스 critical.
+//     baseline 은 서버 기록 0 → 실패해도 baseline 보다 나쁘지 않음.
+//
+// 의도적으로 router.use(requireAuth) **앞에** 정의 — consent 는 OAuth 시작 전 시점 호출.
+router.post('/consent', async (req, res) => {
+  const { age14Plus, terms, privacy, intlTransfer, version, ts } = req.body || {};
+  if (age14Plus !== true || terms !== true || privacy !== true || intlTransfer !== true) {
+    return res.status(400).json({
+      error: '필수 동의 항목이 누락되었습니다.',
+      code: 'invalid_consent',
+    });
+  }
+  const meta = {
+    age14Plus: true,
+    terms: true,
+    privacy: true,
+    intlTransfer: true,
+    version: typeof version === 'string' ? version.slice(0, 32) : null,
+    clientTs: typeof ts === 'string' ? ts.slice(0, 64) : null,
+    serverTs: new Date().toISOString(),
+  };
+  // writeAudit 가 user_id (req.user?.id || null) · ip_masked · user_agent 자동 수집.
+  // 인증 미들웨어 부재 → req.user 는 undefined → user_id null 기록 (anonymous, IP+UA 로 식별).
+  await writeAudit(req, 'consent.accept', 'consent', null, meta);
+  res.json({ ok: true });
+});
+
 router.use(requireAuth);
 
 // ── GET /api/account/export ────────────────────────────────

@@ -23,6 +23,7 @@
  */
 const express = require('express');
 const { callAI } = require('../services/aiService');
+const { filterAdviceOutputDeep, REPORT_FILTER_FIELDS } = require('../services/aiOutputFilter');
 const { getSupabaseAdmin } = require('../db/client');
 const { getSnapshot } = require('../services/regulationsService');
 const { resolveFacility } = require('../services/aptFacilityService');
@@ -176,6 +177,21 @@ router.post('/generate', async (req, res) => {
 
     // 안전망: markdown 강조 표기 (** __ ##) 자동 제거 — prompt 가 금지해도 가끔 새어나옴
     stripMarkdownDeep(parsed);
+
+    // FILTER-UNIFY-2026-05-10 (M-3 β): chat.js 의 filterAdviceOutput 과 대칭.
+    //   sanitize 직후 + backend objectiveFacts 주입 직전에 적용 — backend 주입 데이터는 검사 X.
+    //   매칭 시 해당 필드 string 만 안내 텍스트로 교체 (응답 통째 거부 X — 사용자 경험 보호).
+    //   matched 패턴명 ('buy_imperative' 등) 은 내부 정책 정보 → 서버 logger 만, client 응답엔 boolean flag 만.
+    const _filterRes = filterAdviceOutputDeep(parsed, REPORT_FILTER_FIELDS);
+    if (_filterRes.filtered) {
+      logger.warn({
+        source: 'ai-output-filter-deep',
+        endpoint: 'report',
+        userId: userId || null,
+        matched: _filterRes.matched,
+      }, 'AI 응답 단언 표현 감지 → report JSON 필드 교체');
+      parsed._filtered = true;
+    }
 
     // Phase 7 (2026-04-26): AI 응답 apartments 에 backend 의 objectiveFacts 주입
     //   AI 가 생성하지 않는 객관 데이터 — backend 가 직접 매칭해서 보장

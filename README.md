@@ -69,36 +69,39 @@ python3 -m http.server 3000
 
 ---
 
-## Vercel 배포 (프론트엔드)
+## Vercel 배포 (frontend + backend 단일 함수)
+
+운영 구조: Vercel single project. `api/index.js` 가 `backend/server.js` (Express 앱) 을 그대로 export → `/api/*`, `/share/*` 처리. 정적 자산 (`frontend/*.html` 등) 은 `vercel.json` route 룰로 직접 서빙. 즉, 프론트엔드와 백엔드가 **같은 Vercel 함수** 에서 동작 — 별도 백엔드 호스트 불필요.
 
 ```bash
 npm i -g vercel
 cd myhomelog
-vercel
+vercel              # 첫 배포 (preview)
+vercel --prod       # 프로덕션 배포
 
-# 커스텀 도메인 연결
+# 커스텀 도메인 연결 (선택)
 vercel domains add myhomelog.com
 ```
 
-배포 후 `frontend/index.html`의 `API` 상수를 백엔드 URL로 변경:
-```js
-const API = 'https://your-backend.railway.app/api';
-```
+Vercel Dashboard → Settings → Environment Variables 등록 키:
+- 필수 — `ANTHROPIC_API_KEY`, `MOLIT_API_KEY`, `KAKAO_REST_API_KEY`
+- Supabase — `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
+- 선택 — `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (분산 rate-limit. 미설정 시 in-memory fallback)
+- 운영 — `CRON_SECRET` (cron 인증), `ADMIN_EMAILS` (admin endpoint 화이트리스트), `HEALTH_API_KEY`, `ALLOWED_ORIGINS`
+- 로컬 개발에서 `frontend/index.html` 의 `API` 상수는 `/api` 상대 경로 사용 — 별도 백엔드 URL 교체 불필요.
 
-## Railway 배포 (백엔드)
+cron 6개는 `vercel.json` 의 `crons` 배열로 자동 등록됩니다 (Hobby plan: daily 만 — hourly 미지원).
+
+## Railway 배포 (현재 미사용 — 옵션 메모)
+
+> ⚠ **현재 운영 구조는 위 Vercel 단일 함수.** 코드·설정에 Railway 흔적은 없으며 (`railway.json` 검사 시 fallback noop), 백엔드만 별도로 띄울 필요가 없습니다. 본 섹션은 향후 Vercel 함수 limit·cold start 등 사유로 백엔드를 분리하는 경우의 메모이며, 그대로 따라 하면 단일 배포가 깨집니다 — 이 sprint 시점엔 사용하지 마세요.
 
 ```bash
-# Railway CLI
+# (옵션) 백엔드 분리 시 — 현재 미사용
 npm i -g @railway/cli
 cd backend
-railway login
-railway init
-railway up
-
-# 환경변수 설정
-railway variables set ANTHROPIC_API_KEY=sk-ant-...
-railway variables set MOLIT_API_KEY=...
-railway variables set KAKAO_REST_API_KEY=...
+railway login && railway init && railway up
+railway variables set ANTHROPIC_API_KEY=sk-ant-... MOLIT_API_KEY=... KAKAO_REST_API_KEY=...
 railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 ```
 
@@ -106,17 +109,71 @@ railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 
 ## API 엔드포인트
 
-| Method | Path | 설명 |
-|--------|------|------|
-| POST | /api/chat | AI 채팅 |
-| POST | /api/properties/recommend | AI 단지 추천 |
-| GET | /api/transactions | 실거래가 조회 |
-| GET | /api/regulations | 현행 규제 정보 |
-| POST | /api/clause | 맞춤 특약 생성 |
-| POST | /api/clause/risk | 리스크 시나리오 |
-| POST | /api/geocode | 카카오 지오코딩 |
-| POST | /api/geocode/batch | 배치 지오코딩 |
-| GET | /api/health | 서버 상태 |
+> 모든 mount 의 출처는 `backend/server.js` (line 177~216).
+> `JWT` = `requireAuth` (Supabase access_token 필수) · `optional` = 비로그인 허용 (로그인 시 daily limit bonus)
+
+### 헬스
+| Method | Path | Auth | 설명 |
+|--------|------|------|------|
+| GET | /api/health | optional | 서버 상태 |
+| GET | /api/health/apis | x-health-key 헤더 | 외부 API 활성화 진단 (운영자 전용) |
+
+### AI 비용 경로 (chat scope rate-limit + daily limit)
+| Method | Path | Auth | 설명 |
+|--------|------|------|------|
+| POST | /api/chat | optional | AI 채팅 (PII 차단 + filterAdviceOutput) |
+| POST | /api/clause | optional | 맞춤 특약 + 리스크 통합 (Phase B-3) |
+| POST | /api/clause/risk | optional | 리스크 시나리오 (legacy) |
+| POST | /api/report/generate | optional (비로그인 0/일 차단) | 1Page 컨설팅 보고서. server.js mount = `optionalAuth + chatLimiter + dailyLimit{limit:0,scope:'report',loggedInBonus:1}` — 비로그인은 0/일 → 사실상 로그인 필수, 로그인 시 dailyLimit 모듈이 plan별 한도 적용 |
+| POST | /api/feedback/ai | optional | 답변 👍/👎 |
+
+### 부동산 데이터
+| Method | Path | Auth | 설명 |
+|--------|------|------|------|
+| GET | /api/properties/info | optional | 단지 메타 |
+| POST | /api/properties/recommend | optional | AI 단지 추천 |
+| GET | /api/properties/nearby | optional | 주변 단지 |
+| POST | /api/properties/transit | optional | 교통 분석 |
+| GET | /api/transactions(?...) | — | 실거래가 조회 |
+| GET | /api/transactions/analyze | — | 실거래 통계 |
+| GET | /api/transactions/codes | — | 시군구 코드 |
+| GET | /api/regulations | — | 현행 규제 (LTV·DSR snapshot) |
+| GET | /api/regulations/ltv | — | LTV 표 |
+| POST | /api/geocode, /api/geocode/batch | — | 카카오 지오코딩 |
+| GET | /api/analysis | — | 분석 결과 |
+| POST | /api/analysis/total-cost | — | 취득세·금리 등 총비용 |
+| GET | /api/news, /api/news/summary | optional | 부동산 뉴스 |
+| GET | /api/search/{apt,popular,in-bounds,facility} | — | 단지 검색 |
+| POST·GET·DELETE | /api/search/history | JWT | 본인 검색 이력 |
+
+### 결제·구독·즐겨찾기
+| Method | Path | Auth | 설명 |
+|--------|------|------|------|
+| GET | /api/billing/config, /api/billing/plans | — | Toss SDK 설정 / 플랜 |
+| GET·POST | /api/billing/{me,checkout,confirm,cancel} | JWT | 결제 흐름 |
+| POST | /api/billing/webhook | Toss 서명 | 결제 webhook |
+| GET | /api/subscription | — | 구독 정보 |
+| GET·POST·PATCH·DELETE | /api/bookmarks(/...) | JWT | 즐겨찾기 |
+| GET·PUT·DELETE | /api/field-notes(/...) | JWT | 임장노트 |
+| GET·POST·PATCH·DELETE | /api/chat/sessions(/...) | JWT | 채팅 세션·메시지 |
+
+### 계정·자동화 결정 (PIPA / GDPR)
+| Method | Path | Auth | 설명 |
+|--------|------|------|------|
+| POST | /api/account/consent | optional (비로그인 허용) | 4 flag (만 14세·약관·개인정보·국외이전) 동의 시각/버전 audit_log 기록 — OAuth 시작 *전* 호출. 4 flag 모두 `true` 검증 실패 시 400 |
+| GET | /api/account/export | JWT | PIPA 35조 데이터 다운로드 |
+| GET | /api/account/deletion-status | JWT | 삭제 예약 상태 |
+| POST | /api/account/delete | JWT | 30일 유예 소프트 삭제 |
+| POST | /api/account/restore | JWT | 유예기간 내 철회 |
+| GET | /api/account/automated-decision/explain | JWT | GDPR Art.22 / PIPA 37조의2 설명 |
+
+### 운영자 전용
+| Method | Path | Auth | 설명 |
+|--------|------|------|------|
+| GET·POST | /api/admin/run-geocache-backfill | JWT + ADMIN_EMAILS | 백필 즉시 trigger |
+| GET·POST | /api/cron/{retention, molit-ingest, apt-master-sync, regulations-check, audit-prune, geocache-backfill} | CRON_SECRET | `vercel.json` `crons` 자동 등록 6개 (Hobby plan: daily 만) |
+| GET·POST | /api/cron/regulations-auto-fetch | CRON_SECRET | route 만 정의 — `vercel.json` 미등록, 수동/별도 trigger 용 |
+| GET | /share?... | — | 공유 딥링크 (OG 메타 치환 HTML) |
 
 ---
 

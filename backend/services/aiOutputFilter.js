@@ -92,4 +92,110 @@ function filterAdviceOutput(reply) {
   return { text: reply, filtered: false, matched: [] };
 }
 
-module.exports = { filterAdviceOutput, FORBIDDEN_PATTERNS, FALLBACK_REPLY };
+// FILTER-UNIFY-2026-05-10 (M-3 β): clause/report 처럼 JSON 다단계 응답에 deep filter.
+//
+// 설계:
+//   - chat.js 는 plain text 1문장 → filterAdviceOutput 매칭 시 응답 통째 fallback 으로 교체.
+//   - clause/report 는 JSON (essential[].content / apartments[].pros 등) → 통째 fallback 으로 바꾸면
+//     구조 깨지고 사용자 경험도 망가짐.
+//   - β안: **사용자 가시 자유 텍스트 필드만 화이트리스트** 로 검사 → 매칭 시 해당 필드 string 만
+//     짧은 안내 텍스트 (FILTERED_FIELD_REPLACEMENT) 로 교체. 구조 보존.
+//   - enum/숫자/백엔드 주입 fact 등은 검사 X — false-positive 방지.
+//
+// path 표현 (배열 index 무시):
+//   - 'caution', 'summary'                    — root 직속 string
+//   - 'coreMessages', 'tips'                  — root 직속 array-of-string (path = 부모 key)
+//   - 'essential.content'                     — array-of-object 의 prop (index 무시)
+//   - 'apartments.pros' 등                    — 동일
+//
+// 반환:
+//   { filtered: boolean, matched: string[] } — 검사된 패턴 이름 누적 (logger 용)
+//   원본 obj 는 in-place 변형 (호출자가 검증된 응답을 그대로 res.json 으로 내보낼 수 있게).
+const FILTERED_FIELD_REPLACEMENT =
+  '※ 정책상 단언적 표현이 감지되어 본 항목은 표시하지 않습니다. 다른 항목/요약을 참고해주세요.';
+
+function filterAdviceOutputDeep(obj, fieldWhitelist) {
+  const matched = new Set();
+  let filtered = false;
+  if (!obj || typeof obj !== 'object' || !(fieldWhitelist instanceof Set)) {
+    return { filtered: false, matched: [] };
+  }
+
+  function _check(str) {
+    const result = filterAdviceOutput(str);
+    if (result.filtered) {
+      filtered = true;
+      for (const m of result.matched) matched.add(m);
+      return FILTERED_FIELD_REPLACEMENT; // 짧은 안내로 교체 — fallback 전체보다 가독성 ↑
+    }
+    return null;
+  }
+
+  function _visit(node, pathStr) {
+    if (Array.isArray(node)) {
+      for (let i = 0; i < node.length; i++) {
+        const item = node[i];
+        if (typeof item === 'string') {
+          // array-of-string — path 는 부모 key (e.g. 'coreMessages')
+          if (fieldWhitelist.has(pathStr)) {
+            const replaced = _check(item);
+            if (replaced !== null) node[i] = replaced;
+          }
+        } else if (item && typeof item === 'object') {
+          // array-of-object — path 변화 없음 (index 무시)
+          _visit(item, pathStr);
+        }
+      }
+    } else if (node && typeof node === 'object') {
+      for (const k of Object.keys(node)) {
+        const v = node[k];
+        const next = pathStr ? pathStr + '.' + k : k;
+        if (typeof v === 'string') {
+          if (fieldWhitelist.has(next)) {
+            const replaced = _check(v);
+            if (replaced !== null) node[k] = replaced;
+          }
+        } else if (v && typeof v === 'object') {
+          _visit(v, next);
+        }
+      }
+    }
+  }
+  _visit(obj, '');
+  return { filtered, matched: Array.from(matched) };
+}
+
+// clause/report 가 import 해서 그대로 사용 — 추측 금지, 실제 응답 구조 기반.
+//   clause 응답 schema (routes/clause.js prompt line 64~83 참고):
+//     essential[].title/content/reason · recommended[].title/content/reason · caution · summary
+//     · risks[].title/scenario/countermeasure (level=enum / probability=수치 / overallRisk=enum 제외)
+const CLAUSE_FILTER_FIELDS = new Set([
+  'essential.title', 'essential.content', 'essential.reason',
+  'recommended.title', 'recommended.content', 'recommended.reason',
+  'caution', 'summary',
+  'risks.title', 'risks.scenario', 'risks.countermeasure',
+]);
+//   report 응답 schema (routes/report.js prompt line 63~85 + line 182~187 backend 주입 참고):
+//     coreMessages[] · checklist[].text · apartments[].{ratio,location,pros,cons,priceFit,recommendation,matchReason}
+//     · longTermView · tips[]
+//   제외: apartments[].name (단지명), rank·areaSqm·areaPyeong·buildYear·households (숫자)
+//        checklist[].stars (숫자), apartments[].objectiveFacts/matchScore (backend 주입 fact)
+const REPORT_FILTER_FIELDS = new Set([
+  'coreMessages',
+  'checklist.text',
+  'apartments.ratio', 'apartments.location',
+  'apartments.pros', 'apartments.cons',
+  'apartments.priceFit', 'apartments.recommendation', 'apartments.matchReason',
+  'longTermView',
+  'tips',
+]);
+
+module.exports = {
+  filterAdviceOutput,
+  filterAdviceOutputDeep,
+  FORBIDDEN_PATTERNS,
+  FALLBACK_REPLY,
+  FILTERED_FIELD_REPLACEMENT,
+  CLAUSE_FILTER_FIELDS,
+  REPORT_FILTER_FIELDS,
+};
