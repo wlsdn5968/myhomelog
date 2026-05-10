@@ -1,8 +1,19 @@
 version: 2
 updates:
-  # 루트 (Vercel serverless 배포 진입점이 루트 package.json 사용)
+  # DEPENDABOT-EXP-2026-05-10: root + backend npm 통합 (실험 commit).
+  #   목적: `directories: ["/", "/backend"]` 복수형 키 + 기존 `groups.minor-and-patch` 가
+  #         root/backend 의 같은 dep 변경을 **단일 PR** 로 묶는지 다음 weekly tick
+  #         (월요일 09:00 KST) 에서 관찰. 공식 docs 는 본 조합의 PR 단위에 침묵.
+  #   배경: 기존 두 update block 분리 (`directory: /` + `directory: /backend`) 가
+  #         dependabot weekly tick 마다 root PR + backend PR 별개 생성 → 한쪽만 적용 시
+  #         scripts/check-deps-sync.js 의 versionMismatch 가 CI Syntax Check FAIL.
+  #         실제 사례: PR #43 (root) + PR #28 (backend) 둘 다 OPEN + Syntax Check FAIL.
+  #   revert 계획: 다음 weekly tick 에서 단일 통합 PR 이 안 나오면 본 commit 을
+  #         `git revert` 1 commit 으로 즉시 복원 (yml 1 파일 변경이라 안전).
   - package-ecosystem: "npm"
-    directory: "/"
+    directories:
+      - "/"
+      - "/backend"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -22,30 +33,6 @@ updates:
           - "patch"
     ignore:
       # 메이저 업그레이드는 따로 PR 받아 수동 검토
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-
-  # 백엔드 (동일 의존성 스택이지만 별도 lock 파일 존재)
-  - package-ecosystem: "npm"
-    directory: "/backend"
-    schedule:
-      interval: "weekly"
-      day: "monday"
-      time: "09:00"
-      timezone: "Asia/Seoul"
-    open-pull-requests-limit: 5
-    labels:
-      - "deps"
-      - "backend"
-    commit-message:
-      prefix: "chore(deps/backend)"
-      include: "scope"
-    groups:
-      minor-and-patch:
-        update-types:
-          - "minor"
-          - "patch"
-    ignore:
       - dependency-name: "*"
         update-types: ["version-update:semver-major"]
 
