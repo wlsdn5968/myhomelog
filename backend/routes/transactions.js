@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { getTransactions, getTransactionsByApt, analyzeTransactions, LAWD_CODES } = require('../services/transactionService');
 const { validateTransactionQuery } = require('../middleware/validation');
+const { normalizeAptName } = require('../utils/aptName');
 
 function handleMolitError(err, res) {
   if (err.code === 'MOLIT_KEY_MISSING') {
@@ -28,7 +29,10 @@ router.get('/', validateTransactionQuery, async (req, res) => {
     const list = aptName
       ? await getTransactionsByApt(lawdCd, aptName)
       : await getTransactions(lawdCd, dealYm);
-    res.json({ count: list.length, items: list, isMock: false });
+    // NAMEFIX-2026-05-11: 사용자 응답 시점에 aptName 정규화 — MOLIT raw "(고층)/(중층)/(저층)" suffix 제거.
+    //   DB raw 는 그대로 유지 (transactionService 내부 매칭 호환).
+    const items = list.map(t => ({ ...t, aptName: normalizeAptName(t.aptName) }));
+    res.json({ count: items.length, items, isMock: false });
   } catch (err) {
     handleMolitError(err, res);
   }

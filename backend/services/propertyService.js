@@ -16,6 +16,7 @@ const { getAptListBySgg, getAptBasisInfo } = require('./aptInfoService');
 const { resolveCoordBatch } = require('./geocodeCacheService');
 const { resolveSchoolsBatch } = require('./schoolService');
 const { isRegulatedRegion, getRegulatedKeywords, SEOUL_GU_KEYWORDS } = require('./regulationsService');
+const { normalizeAptName } = require('../utils/aptName');
 const cache = require('../cache');
 const logger = require('../logger');
 
@@ -398,6 +399,8 @@ async function getAIRecommendations(userCondition) {
   // 여기서 lat/lng 를 채워야 프론트가 fallback/jitter 없이 정확한 위치에 마커를 찍는다.
   // (기존 버그: 프론트 getLat/getLng 의 구명 키워드 매칭 실패 시 서울 중심 근처로 떨어져
   //  은평구 단지가 용산/한강 근처에 표시됨 → Bug #2 의 근본 원인)
+  // NAMEFIX-2026-05-11: coordInputs 의 aptName 은 **raw** 그대로 — apt_geocache cache key 호환성 보존.
+  //   (Kakao query 정확도 ↑ 는 geocodeCacheService.kakaoGeocode 함수 내부에서 normalize 적용.)
   const coordInputs = enrichedRecs.map((rec, i) => {
     const apt = ranked[i];
     return {
@@ -427,10 +430,13 @@ async function getAIRecommendations(userCondition) {
   });
   const schoolsArr = await resolveSchoolsBatch(schoolInputs, 3);
 
+  // NAMEFIX-2026-05-11: 사용자 응답에선 정규화된 단지명 노출 — "(고층)" 같은 MOLIT raw suffix 제거.
+  //   DB raw apt_name 은 그대로 유지 (다른 매칭 흐름 호환). 표시 layer 만 정규화.
   const withCoords = enrichedRecs.map((rec, i) => {
     const c = coords[i];
     return {
       ...rec,
+      aptName: normalizeAptName(rec.aptName),
       lat: c?.lat ?? null,
       lng: c?.lng ?? null,
       // 좌표 출처 — 프론트에서 "정확" 마커와 fallback 구분 가능

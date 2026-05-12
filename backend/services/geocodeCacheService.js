@@ -21,6 +21,7 @@ const { createClient } = require('@supabase/supabase-js');
 const cache = require('../cache');
 const logger = require('../logger');
 const { isValidKoreaCoord } = require('../utils/geo');
+const { normalizeAptName } = require('../utils/aptName');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
@@ -111,7 +112,9 @@ function getKakaoUsageStats() {
 async function kakaoGeocode({ aptName, sigungu, umdNm, address }) {
   if (!KAKAO_ENABLED) return null;
   const headers = { Authorization: `KakaoAK ${KAKAO_KEY}` };
-  const name = String(aptName || '').trim();
+  // NAMEFIX-2026-05-11: query 시점에 `(고층)/(중층)/(저층)` suffix 제거 — Kakao 검색 매칭률 ↑.
+  //   raw apt_name 은 caller (propertyService 등) 가 그대로 전달 → buildKey 의 DB cache 키는 raw 유지.
+  const name = normalizeAptName(aptName);
   const sgg = String(sigungu || '').trim();
   const umd = String(umdNm || '').trim();
   const addr = String(address || '').trim();
