@@ -7443,6 +7443,10 @@ async function goSearchResult(r) {
   // 정확 매칭 거래 (lawdCd + aptName) 6개월. 0건이면 빈 배열 → '실거래 데이터 없음' 표시.
   let txHistory = [], avgPrice = 0, minPrice = 0, maxPrice = 0;
   let _aliasUsed = null; // master 단지의 자동 alias 거래 표시용
+  // SCOPE-FIX-2026-05-12 (Sentry MYHOMELOG-FRONTEND-E 발견):
+  //   _facilityRes 가 try { } 안에서 `let` 으로 선언 → block-scoped → 아래 const p = {...} 객체 리터럴에서
+  //   _facilityRes 참조 시 ReferenceError. outer scope 에 끌어올림.
+  let _facilityRes = null;
   try {
     const now = new Date();
     const ym = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -7456,7 +7460,6 @@ async function goSearchResult(r) {
     //   기존: master 단지만 facility 호출 → molit 거래 단지는 facility null → 단지정보 탭 빈 메시지.
     //   변경: 모든 path 에서 1회 호출, facility / nearbySchools / altCandidates 통합 사용.
     //   APTSEQ-FALLBACK-2026-05-12: aptSeq 같이 보냄 → apt_master 미매칭 단지도 KAPT 직접 호출 가능.
-    let _facilityRes = null;
     try {
       // KAPT-LOOKUP-2026-05-12 + APTSEQ-FALLBACK-2026-05-12:
       //   aptSeq + lawdCd 같이 보냄 → apt_master 미매칭 단지의 KAPT SigunguAptList3 runtime fallback.
