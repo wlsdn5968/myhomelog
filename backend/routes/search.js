@@ -27,6 +27,9 @@ const { resolveSchools } = require('../services/schoolService');
 const { resolveSchoolNeisBatch } = require('../services/schoolNeisService');
 // STAB-AUDIT-2026-05-07 P2: 학구도 (배정 초·중) 매핑
 const { resolveSchoolDistrict } = require('../services/schoolDistrictService');
+// NAMEFIX-2026-05-11 + FACILITY-HELPER-2026-05-12: 검색 path 정규화 + facility schema 일관
+const { normalizeAptName } = require('../utils/aptName');
+const { buildFacility } = require('../utils/buildFacility');
 
 const router = express.Router();
 
@@ -107,12 +110,14 @@ router.get('/apt', async (req, res) => {
     const seen = new Set();
     const out = [];
     // molit 우선 (실거래 있는 단지) — 인기순
+    // NAMEFIX-2026-05-11: aptName 표시 시점에 `(고층)/(저층)/(중층)` suffix 제거.
+    //   DB raw apt_name 은 그대로 (key/seen 매칭은 raw 유지) — 응답만 정규화.
     for (const { count, firstRow: row } of sortedMolit) {
       const key = `${row.apt_name}|${row.sigungu}|${row.umd_nm}`;
       if (seen.has(key)) continue;
       seen.add(key);
       out.push({
-        aptName: row.apt_name,
+        aptName: normalizeAptName(row.apt_name),
         sigungu: row.sigungu,
         umdNm: row.umd_nm,
         lawdCd: row.lawd_cd,
@@ -130,7 +135,7 @@ router.get('/apt', async (req, res) => {
         if (seen.has(key)) continue;
         seen.add(key);
         out.push({
-          aptName: row.apt_name,
+          aptName: normalizeAptName(row.apt_name),
           sigungu: row.sigungu,
           umdNm: row.umd_nm,
           lawdCd: row.lawd_cd,
@@ -461,7 +466,15 @@ router.get('/facility', async (req, res) => {
       candidates.sort((a, b) => b._score - a._score || a.aptName.localeCompare(b.aptName));
       altCandidates = candidates.slice(0, 8).map(({ _score, ...c }) => c);
     }
-    res.json({ facility, altCandidates, nearbySchools, schoolDistrict });
+    // FACILITY-HELPER-2026-05-12: 검색 path 의 facility 도 propertyService 와 동일 schema 로 변환.
+    //   resolveFacility 반환: { kaptCode, official, raw } — raw 가 KAPT info.
+    //   buildFacility(info, kaptCode) 로 표준 facility 객체 빌드 → frontend 단지정보 탭이 정상 표시.
+    const builtFacility = facility
+      ? Object.assign(buildFacility(facility.raw, facility.kaptCode) || {}, {
+          official: facility.official || null,
+        })
+      : null;
+    res.json({ facility: builtFacility, altCandidates, nearbySchools, schoolDistrict });
   } catch (e) {
     logger.warn({ err: e.message, aptName }, 'facility 조회 실패');
     res.status(500).json({ error: 'facility 조회 실패' });

@@ -17,6 +17,7 @@ const { resolveCoordBatch } = require('./geocodeCacheService');
 const { resolveSchoolsBatch } = require('./schoolService');
 const { isRegulatedRegion, getRegulatedKeywords, SEOUL_GU_KEYWORDS } = require('./regulationsService');
 const { normalizeAptName } = require('../utils/aptName');
+const { buildFacility } = require('../utils/buildFacility');
 const cache = require('../cache');
 const logger = require('../logger');
 
@@ -344,62 +345,25 @@ async function getAIRecommendations(userCondition) {
       const kaptCode = kaptCodeMap.get(`${nmKey}|${apt.umdNm || ''}`) || kaptCodeMap.get(nmKey);
       if (!kaptCode) return rec;
       const info = await getAptBasisInfo(kaptCode);
-      // Fallback: info 없으면 allAptList 기본 데이터로 최소 facility 구성 (주소·kaptCode 노출)
+      // FACILITY-HELPER-2026-05-12: buildFacility 로 일관된 schema 빌드 (search path 와 공유)
+      const facility = buildFacility(info, kaptCode);
+      // Fallback: info 없으면 allAptList 기본 데이터로 address 보강
       if (!info) {
         const basic = allAptByCode.get(kaptCode);
-        if (!basic) return rec;
-        return {
-          ...rec,
-          facility: {
-            kaptCode,
-            totalHouseholds: 0,
-            dongCount: 0,
-            parkingTotal: 0,
-            parkingRatio: null,
-            builtDate: null,
-            heatType: null,
-            mgrType: null,
-            address: basic.doroJuso || basic.as1 || null,
-            floorAreaRatio: null,
-            _partial: true, // 프론트: 부분 데이터 표시 플래그
-          },
-        };
+        if (basic && facility) {
+          facility.address = basic.doroJuso || basic.as1 || null;
+        }
       }
-      const totalHouseholds = parseInt(info.kaptdaCnt) || 0;
-      const parkingTotal = parseInt(info.kaptdPcnt) || 0;
-      const parkingRatio = totalHouseholds > 0 && parkingTotal > 0
-        ? parseFloat((parkingTotal / totalHouseholds).toFixed(2)) : null;
-      // 추가 태그
+      // 추가 태그 — facility 값 기반
       const moreTags = [...(rec.tags || [])];
+      const totalHouseholds = facility?.totalHouseholds || 0;
+      const parkingRatio = facility?.parkingRatio;
       if (parkingRatio && parkingRatio >= 1.2) moreTags.push('주차여유');
       if (totalHouseholds >= 1000) moreTags.push('대단지');
       else if (totalHouseholds >= 500) moreTags.push('중대단지');
       return {
         ...rec,
-        facility: {
-          kaptCode,
-          totalHouseholds,
-          dongCount: parseInt(info.kaptDongCnt) || 0,
-          parkingTotal,
-          parkingRatio, // 세대당 주차대수
-          builtDate: info.kaptUsedate || null,
-          heatType: info.codeHeatNm || null,
-          mgrType: info.codeMgrNm || null,
-          address: info.doroJuso || info.codeAptNm || null,
-          floorAreaRatio: info.kaptTarea || null,
-          // DETAILTAB-2026-05-12 (운영자 발견 — 네이버 부동산 수준 정보 노출):
-          //   최고층 / 시공사 / 시행사 필드 추가. KAPT raw field 그대로 expose.
-          //   사용자 단지정보 탭에서 렌더링 — 데이터 부재 시 frontend 가 '미상' 표기.
-          topFloor: parseInt(info.kaptTopFloor) || null,
-          bottomFloor: parseInt(info.kaptBottomFloor) || null,
-          builder: (info.kaptBcompany || '').trim() || null,
-          developer: (info.kaptAcompany || '').trim() || null,
-          // KAPT-RAW-2026-05-12 (운영자 발견 — 평형 list 누락):
-          //   KAPT API V4 의 raw 응답에 평형 정보가 있는지 운영자가 단지정보 탭에서 직접
-          //   확인 가능하도록 raw 필드 전체를 sanitize 후 expose. user-PII 없음 (단지 공개정보).
-          //   향후 KAPT 응답에 areaList 류 필드 발견 시 facility 정식 필드로 격상.
-          rawKapt: info || null,
-        },
+        facility,
         tags: Array.from(new Set(moreTags)),
       };
     })

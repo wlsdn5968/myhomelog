@@ -7382,12 +7382,22 @@ async function goSearchResult(r) {
       txHistory = t.items.slice(0, 30);
     }
 
+    // FACILITY-HELPER-2026-05-12: 모든 검색 path 에서 facility fetch (단지정보 탭 정상 표시 보장).
+    //   기존: master 단지만 facility 호출 → molit 거래 단지는 facility null → 단지정보 탭 빈 메시지.
+    //   변경: 모든 path 에서 1회 호출, facility / nearbySchools / altCandidates 통합 사용.
+    let _facilityRes = null;
+    try {
+      const _fr = await fetch(`${CFG.api}/search/facility?aptName=${encodeURIComponent(r.aptName)}&sigungu=${encodeURIComponent(r.sigungu||'')}&umdNm=${encodeURIComponent(r.umdNm||'')}`,
+        { signal: AbortSignal.timeout(8000) }
+      ).then(rs => rs.ok ? rs.json() : null).catch(() => null);
+      if (_fr) _facilityRes = _fr;
+    } catch(_){}
+
     // Phase 4 (2026-04-26): master 단지 (거래 0건) → 모든 alias 거래 통합 (이전: 첫 1개만)
     // 사용자 케이스: 공릉풍림아이원 = 풍림아파트A + 풍림아파트B (면적군 분리 신고)
     // 모두 합쳐야 정확. 매칭은 같은 (lawd_cd, umd_nm) + facility altCandidates.
     if (!txHistory.length && r.source === 'master' && r.sigungu && r.umdNm) {
-      const fac = await fetch(`${CFG.api}/search/facility?aptName=${encodeURIComponent(r.aptName)}&sigungu=${encodeURIComponent(r.sigungu)}&umdNm=${encodeURIComponent(r.umdNm)}`)
-        .then(rs => rs.ok ? rs.json() : null).catch(() => null);
+      const fac = _facilityRes;
       const alts = fac?.altCandidates || [];
       const usedAliases = [];
       // 모든 alias 의 거래 병렬 fetch (top 5개 안전 한도)
@@ -7441,6 +7451,9 @@ async function goSearchResult(r) {
     buildYear: r.buildYear || 0,
     lawdCd: r.lawdCd,
     txHistory,
+    // FACILITY-HELPER-2026-05-12: search path 도 facility + nearbySchools 주입 → 단지정보 탭 정상.
+    facility: _facilityRes?.facility || null,
+    nearbySchools: _facilityRes?.nearbySchools || [],
     _fromSearch: true,
     _isMaster: r.source === 'master',
     _aliasUsed, // master → 첫 alias 자동 표시 시 단지명 (예: "풍림아파트A")
