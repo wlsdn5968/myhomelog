@@ -135,8 +135,19 @@ async function getAptListBySgg(sigunguCode) {
         headers: { Accept: 'application/json' },
       });
       const body = r.data?.response?.body;
-      const items = body?.item;
-      const list = Array.isArray(items) ? items : items ? [items] : [];
+      // BUG-FIX-2026-05-12 (Sprint Q — Chrome MCP audit 후 코드 비교 발견):
+      //   KAPT AptListService3/getSigunguAptList3 응답은 XML 의 <items><item>...</item></items> 구조.
+      //   JSON 변환 시 body.items (array) 또는 body.items.item (1 → 단일 객체) 로 옴.
+      //   기존: body.item (S 빠진 key) 로 읽어서 늘 undefined → list=[] → 모든 lawdCd 가 무한 [].
+      //   aptMasterSync.js 는 정확히 body.items 로 읽기 때문에 apt_master 는 일부 구만 채워짐.
+      //   propertyService 의 allAptList 도 본 bug 영향 → recommendation facility 미동작 (송파구 etc).
+      //   해결: aptMasterSync 와 동일 parse 로직.
+      const itemsRaw = body?.items;
+      const list = Array.isArray(itemsRaw)
+        ? itemsRaw
+        : (itemsRaw?.item
+            ? (Array.isArray(itemsRaw.item) ? itemsRaw.item : [itemsRaw.item])
+            : []);
       const resultCode = r.data?.response?.header?.resultCode;
       if (!list.length && resultCode && resultCode !== '00' && resultCode !== '000') {
         logger.warn({
