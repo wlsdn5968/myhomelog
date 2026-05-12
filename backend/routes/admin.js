@@ -19,6 +19,8 @@ const logger = require('../logger');
 const { requireAuth } = require('../middleware/auth');
 const { getActivePlan } = require('../services/planService');
 const { run: runGeocacheBackfill } = require('../jobs/geocacheBackfill');
+// DEBUG-2026-05-12 (Sprint P): KAPT SigunguAptList3 raw 진단 — 송파구 (11710) sync 누락 원인
+const { getAptListBySgg } = require('../services/aptInfoService');
 
 const router = express.Router();
 
@@ -90,6 +92,46 @@ router.get('/run-geocache-backfill', async (req, res) => {
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'admin/run-geocache-backfill 실패');
+    res.status(500).json({ error: e.message });
+  }
+});
+
+/**
+ * GET /api/admin/debug-kapt-list?lawdCd=11710[&q=헬리오시티]
+ *
+ * Sprint P (2026-05-12 디버그) — 송파구/양천구 apt_master sync 누락 원인 추적.
+ *   KAPT SigunguAptList3 raw 응답 + (q) 매칭 후보 확인.
+ *   요청 1회마다 cache (7일) busted 위해 별도 admin 진단 endpoint 분리.
+ */
+router.get('/debug-kapt-list', async (req, res) => {
+  const lawdCd = String(req.query.lawdCd || '').trim();
+  const q = String(req.query.q || '').trim();
+  if (!lawdCd) return res.status(400).json({ error: 'lawdCd required' });
+  try {
+    const t0 = Date.now();
+    const list = await getAptListBySgg(lawdCd);
+    const elapsed = Date.now() - t0;
+    const out = {
+      lawdCd,
+      elapsedMs: elapsed,
+      total: list.length,
+      sample: list.slice(0, 5).map(x => ({ kaptCode: x.kaptCode, kaptName: x.kaptName, as1: x.as1, as2: x.as2, as3: x.as3 })),
+    };
+    if (q) {
+      // 검색어가 있을 때만 매칭 후보 (string includes / 정규화 후 비교)
+      const stripped = q.replace(/\([^)]*\)/g, '').replace(/\s+/g, '').replace(/아파트$/, '');
+      const matches = list.filter(x => {
+        const n = String(x.kaptName || '').replace(/\([^)]*\)/g, '').replace(/\s+/g, '').replace(/아파트$/, '');
+        return n === stripped || n.includes(stripped) || stripped.includes(n);
+      });
+      out.q = q;
+      out.stripped = stripped;
+      out.matchedCount = matches.length;
+      out.matched = matches.slice(0, 10).map(x => ({ kaptCode: x.kaptCode, kaptName: x.kaptName, as3: x.as3 }));
+    }
+    res.json(out);
+  } catch (e) {
+    logger.error({ err: e.message, lawdCd }, 'admin/debug-kapt-list 실패');
     res.status(500).json({ error: e.message });
   }
 });
