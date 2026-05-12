@@ -209,47 +209,68 @@ async function fetchFromApi(kaptCode) {
 }
 
 /**
- * 단지 facility 해결 — { aptName, sigungu, umdNm } 로 호출
+ * 단지 facility 해결 — { aptName, sigungu, umdNm, aptSeq? } 로 호출
+ *
+ * APTSEQ-FALLBACK-2026-05-12 (Sprint M — 운영자 발견 + Chrome MCP audit 으로 [VERIFIED]):
+ *   apt_master 에 헬리오시티/리센츠/파크리오/한신잠실코아/서강예가 등 핵심 단지 누락 (송파구 1500+ 중 일부).
+ *   findMaster 가 정확/부분/토큰 매칭 모두 실패 → facility null → 단지정보 탭 빈 메시지.
+ *   해결: MOLIT 실거래의 apt_seq 가 KAPT kaptCode 와 동일 (data.go.kr 표준). aptSeq fallback 로 KAPT 직접 호출.
+ *
  * @returns {{ kaptCode, official, raw }|null}
  */
-async function resolveFacility({ aptName, sigungu, umdNm }) {
+async function resolveFacility({ aptName, sigungu, umdNm, aptSeq }) {
   if (!aptName) return null;
-  const memKey = `facility:${aptName}|${sigungu||''}|${umdNm||''}`;
+  const memKey = `facility:${aptName}|${sigungu||''}|${umdNm||''}|${aptSeq||''}`;
   const mem = cache.get(memKey);
   if (mem !== undefined) return mem;
 
   const m = await findMaster(aptName, sigungu, umdNm);
-  if (!m?.kapt_code) {
-    cache.set(memKey, null, 300);
-    return null;
+  if (m?.kapt_code) {
+    // 캐시 신선도
+    if (m.facility && m.facility_fetched_at) {
+      const ageDays = (Date.now() - new Date(m.facility_fetched_at).getTime()) / (1000*60*60*24);
+      if (ageDays < CACHE_TTL_DAYS) {
+        const out = { kaptCode: m.kapt_code, official: m.apt_name, raw: m.facility };
+        cache.set(memKey, out, 3600);
+        return out;
+      }
+    }
+
+    // API 호출 + DB 갱신 (fire-and-forget UPSERT)
+    const raw = await fetchFromApi(m.kapt_code);
+    if (raw) {
+      const a = admin();
+      if (a) {
+        a.from('apt_master').update({
+          facility: raw,
+          facility_fetched_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }).eq('kapt_code', m.kapt_code).then(() => {}, () => {});
+      }
+    }
+
+    const out = raw ? { kaptCode: m.kapt_code, official: m.apt_name, raw } : null;
+    cache.set(memKey, out, out ? 3600 : 300);
+    return out;
   }
 
-  // 캐시 신선도
-  if (m.facility && m.facility_fetched_at) {
-    const ageDays = (Date.now() - new Date(m.facility_fetched_at).getTime()) / (1000*60*60*24);
-    if (ageDays < CACHE_TTL_DAYS) {
-      const out = { kaptCode: m.kapt_code, official: m.apt_name, raw: m.facility };
+  // APTSEQ-FALLBACK-2026-05-12: apt_master 매칭 실패 → MOLIT aptSeq 로 KAPT 직접 호출.
+  //   apt_master 동기화 누락 단지 (예: 헬리오시티, 리센츠, 파크리오) 도 facility 보장.
+  //   aptSeq 가 KAPT kaptCode 와 동일 (data.go.kr V4 API 표준).
+  if (aptSeq && String(aptSeq).trim()) {
+    const code = String(aptSeq).trim();
+    const raw = await fetchFromApi(code);
+    if (raw) {
+      logger.info({ aptName, sigungu, umdNm, aptSeq: code },
+        'APTSEQ-FALLBACK: apt_master 미매칭 → MOLIT aptSeq 로 KAPT facility 직접 호출 성공');
+      const out = { kaptCode: code, official: aptName, raw };
       cache.set(memKey, out, 3600);
       return out;
     }
   }
 
-  // API 호출 + DB 갱신 (fire-and-forget UPSERT)
-  const raw = await fetchFromApi(m.kapt_code);
-  if (raw) {
-    const a = admin();
-    if (a) {
-      a.from('apt_master').update({
-        facility: raw,
-        facility_fetched_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-      }).eq('kapt_code', m.kapt_code).then(() => {}, () => {});
-    }
-  }
-
-  const out = raw ? { kaptCode: m.kapt_code, official: m.apt_name, raw } : null;
-  cache.set(memKey, out, out ? 3600 : 300);
-  return out;
+  cache.set(memKey, null, 300);
+  return null;
 }
 
 module.exports = { resolveFacility };

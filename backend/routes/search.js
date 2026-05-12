@@ -80,7 +80,8 @@ router.get('/apt', async (req, res) => {
     //         umd_nm (동명) 검색은 apt_master 에 위임 (이미 idx_apt_master_umd_trgm 있음)
     const [molitRes, masterRes] = await Promise.all([
       admin.from('molit_transactions')
-        .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date')
+        .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date, apt_seq')
+        // APTSEQ-FALLBACK-2026-05-12: apt_seq 추가 — apt_master 미매칭 단지의 KAPT facility 호출용
         .ilike('apt_name', `%${q}%`)  // OR 제거 — apt_name 만 (인덱스 활용)
         .order('deal_date', { ascending: false })
         .limit(limit * 10),
@@ -124,6 +125,7 @@ router.get('/apt', async (req, res) => {
         buildYear: row.build_year,
         recentDealDate: row.deal_date,
         dealCount: count, // Phase 10: 거래량 노출 — frontend 인기 배지 가능
+        aptSeq: row.apt_seq || null, // APTSEQ-FALLBACK-2026-05-12: KAPT 직접 호출용
         source: 'molit',
       });
       if (out.length >= limit) break;
@@ -142,6 +144,7 @@ router.get('/apt', async (req, res) => {
           buildYear: null,
           recentDealDate: null,
           kaptCode: row.kapt_code,
+          aptSeq: row.kapt_code || null, // master 는 kaptCode = aptSeq 동일 (KAPT 표준)
           source: 'master',
         });
         if (out.length >= limit) break;
@@ -383,13 +386,15 @@ router.get('/facility', async (req, res) => {
   const aptName = String(req.query.aptName || '').trim();
   const sigungu = String(req.query.sigungu || '').trim() || null;
   const umdNm = String(req.query.umdNm || '').trim() || null;
+  // APTSEQ-FALLBACK-2026-05-12: aptSeq query param 받기 (apt_master 미매칭 단지 fallback)
+  const aptSeq = String(req.query.aptSeq || '').trim() || null;
   if (!aptName) return res.status(400).json({ error: 'aptName 필수' });
 
   const admin = adminClient();
   if (!admin) return res.status(503).json({ error: '서비스 일시 불가' });
 
   try {
-    const facility = await resolveFacility({ aptName, sigungu, umdNm });
+    const facility = await resolveFacility({ aptName, sigungu, umdNm, aptSeq });
 
     // STAB-AUDIT-2026-05-07 P0+P1+P2: 학교 정보 통합 (검색 path 풍부화)
     //   - P0 카카오맵: 반경 1km 학교 list (이름·거리·종류)
