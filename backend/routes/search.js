@@ -28,7 +28,8 @@ const { resolveSchoolNeisBatch } = require('../services/schoolNeisService');
 // STAB-AUDIT-2026-05-07 P2: 학구도 (배정 초·중) 매핑
 const { resolveSchoolDistrict } = require('../services/schoolDistrictService');
 // NAMEFIX-2026-05-11 + FACILITY-HELPER-2026-05-12: 검색 path 정규화 + facility schema 일관
-const { normalizeAptName } = require('../utils/aptName');
+// NAME-MERGE-2026-05-12 (Sprint S): baseAptName helper 로 동/letter/층 suffix 분리 신고 통합
+const { normalizeAptName, baseAptName } = require('../utils/aptName');
 const { buildFacility } = require('../utils/buildFacility');
 
 const router = express.Router();
@@ -96,13 +97,47 @@ router.get('/apt', async (req, res) => {
       logger.warn({ err: masterRes.error.message }, 'apt_master 조회 실패 — molit only');
     }
 
-    // Phase 10: 거래량 카운트 (인기 정렬) + 첫 row (가장 최근) 보존
-    const aptMap = new Map(); // key → { count, firstRow }
+    // NAME-MERGE-2026-05-12 (Sprint S — 운영자 발견 + 3-source cross-check [VERIFIED]):
+    //   MOLIT 가 한 단지를 동/letter/층 suffix 로 분리 신고 → dropdown 에 같은 단지 2+ row.
+    //   해결: baseAptName + sigungu + umd_nm + build_year 로 group → 1 row.
+    //
+    //   group key 에 build_year 포함 이유: false-positive 방어
+    //     예) "상계주공1" 1988 (P3 (고층)/(저층) 같이 그룹) vs "상계주공1" 다른 연도 → 별개.
+    //   기존 raw_key 도 보관 (seen 매칭 변환 없도록) — dealCount 합산 + apt_seq 대표값 선택.
+    //
+    //   대표 row 선택:
+    //     - aptName: baseAptName 으로 정규화한 결과 (P3 상계주공 1 → "상계주공1", P1 풍림아파트A → "풍림아파트")
+    //     - dealCount: 그룹 전체 거래량 합산 (Phase 10 인기 배지 정확)
+    //     - recentDealDate: 그룹 내 가장 최근
+    //     - buildYear / lawdCd / sigungu / umd_nm: group key 동일
+    //     - aptSeq: 거래 가장 많은 row 의 apt_seq (KAPT 직접 호출 대표값)
+    //     - aliasNames: 합쳐진 원본 raw 이름들 (운영자 디버깅 + frontend 거래 fetch 시 base 매칭 보강용)
+    const aptMap = new Map(); // mergeKey → group state
     for (const row of (molitRes.data || [])) {
-      const key = `${row.apt_name}|${row.sigungu}|${row.umd_nm}`;
-      const cur = aptMap.get(key);
-      if (cur) { cur.count++; }
-      else { aptMap.set(key, { count: 1, firstRow: row }); }
+      const base = baseAptName(row.apt_name) || normalizeAptName(row.apt_name) || row.apt_name;
+      const mergeKey = `${base}|${row.sigungu}|${row.umd_nm}|${row.build_year || ''}`;
+      const cur = aptMap.get(mergeKey);
+      if (cur) {
+        cur.count++;
+        if (String(row.deal_date || '') > String(cur.firstRow.deal_date || '')) {
+          cur.firstRow = row; // 최신 거래 row 를 firstRow 로 갱신
+        }
+        // apt_seq 별 거래량 counter (대표 apt_seq 선택용)
+        const seqCnt = cur.seqCounts.get(row.apt_seq) || 0;
+        cur.seqCounts.set(row.apt_seq, seqCnt + 1);
+        // alias raw name 누적 (set 으로 중복 제거)
+        cur.rawNames.add(row.apt_name);
+      } else {
+        const seqCounts = new Map();
+        if (row.apt_seq) seqCounts.set(row.apt_seq, 1);
+        aptMap.set(mergeKey, {
+          count: 1,
+          firstRow: row,
+          baseName: base,
+          seqCounts,
+          rawNames: new Set([row.apt_name]),
+        });
+      }
     }
     // 정렬: (a) 거래량 desc, (b) 최근 거래 desc — 인기 + 최신성 균형
     const sortedMolit = Array.from(aptMap.values())
@@ -112,32 +147,53 @@ router.get('/apt', async (req, res) => {
     const out = [];
     // molit 우선 (실거래 있는 단지) — 인기순
     // NAMEFIX-2026-05-11: aptName 표시 시점에 `(고층)/(저층)/(중층)` suffix 제거.
-    //   DB raw apt_name 은 그대로 (key/seen 매칭은 raw 유지) — 응답만 정규화.
-    for (const { count, firstRow: row } of sortedMolit) {
-      const key = `${row.apt_name}|${row.sigungu}|${row.umd_nm}`;
+    // NAME-MERGE-2026-05-12 (Sprint S): baseAptName 으로 동/letter 까지 통합.
+    for (const grp of sortedMolit) {
+      const row = grp.firstRow;
+      const key = `${grp.baseName}|${row.sigungu}|${row.umd_nm}|${row.build_year||''}`;
       if (seen.has(key)) continue;
       seen.add(key);
+      // 대표 apt_seq: 거래 가장 많은 raw row 의 것
+      let repSeq = row.apt_seq || null;
+      let maxSeqCnt = 0;
+      for (const [seq, cnt] of grp.seqCounts) {
+        if (cnt > maxSeqCnt) { maxSeqCnt = cnt; repSeq = seq; }
+      }
       out.push({
-        aptName: normalizeAptName(row.apt_name),
+        aptName: grp.baseName, // base name 으로 표시 (예: "풍림아파트")
         sigungu: row.sigungu,
         umdNm: row.umd_nm,
         lawdCd: row.lawd_cd,
         buildYear: row.build_year,
         recentDealDate: row.deal_date,
-        dealCount: count, // Phase 10: 거래량 노출 — frontend 인기 배지 가능
-        aptSeq: row.apt_seq || null, // APTSEQ-FALLBACK-2026-05-12: KAPT 직접 호출용
+        dealCount: grp.count, // 그룹 전체 거래량 합산
+        aptSeq: repSeq, // 대표 apt_seq
         source: 'molit',
+        // NAME-MERGE 디버깅 + 거래 fetch 시 base 매칭 보강
+        aliasNames: grp.rawNames.size > 1 ? Array.from(grp.rawNames) : undefined,
       });
       if (out.length >= limit) break;
     }
     // apt_master 보충 (거래 0건 단지)
+    // NAME-MERGE-2026-05-12 (Sprint S): master 도 동일 baseAptName 기준 dedupe.
+    //   master 는 KAPT 정식명 (이미 base form) 이지만, molit 그룹과 collision (같은 base) 시
+    //   molit 가 이미 seen 추가했으므로 자동 차단됨.
     if (out.length < limit) {
       for (const row of (masterRes.data || [])) {
-        const key = `${row.apt_name}|${row.sigungu}|${row.umd_nm}`;
+        const base = baseAptName(row.apt_name) || normalizeAptName(row.apt_name) || row.apt_name;
+        const key = `${base}|${row.sigungu}|${row.umd_nm}|`;  // master 는 buildYear 부재 → 빈 ''
+        // molit out 의 seen key 와 collision 체크 (같은 base+sigungu+umd_nm 면 buildYear 무관 dedupe)
+        let alreadyInOut = false;
+        for (const exist of out) {
+          if (exist.aptName === base && exist.sigungu === row.sigungu && exist.umdNm === row.umd_nm) {
+            alreadyInOut = true; break;
+          }
+        }
+        if (alreadyInOut) continue;
         if (seen.has(key)) continue;
         seen.add(key);
         out.push({
-          aptName: normalizeAptName(row.apt_name),
+          aptName: base,
           sigungu: row.sigungu,
           umdNm: row.umd_nm,
           lawdCd: row.lawd_cd,
