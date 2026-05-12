@@ -47,7 +47,7 @@ const FLOOR_SUFFIX_RE = /\s*\(\s*(?:고|중|저)\s*층\s*\)\s*/g;
 //   4) 끝 단일 [A-E] — 예: "풍림아파트A" (단, base 길이 >= 3 보호)
 //   5) (고|중|저)층 — 기존
 const DONG_PAREN_RE   = /\s*[\(\[]\s*\d+(?:\s*[-~]\s*\d+)?\s*동\s*[\)\]]\s*$/;
-const DONG_PLAIN_RE   = /\s*\d{2,4}동\s*$/; // 100동 이상만 — false-positive 차단
+const DONG_PLAIN_RE   = /\s*\d{1,4}동\s*$/; // 1~4자리 동 (가드는 base 길이 + 한글 prev character 로 처리)
 const LETTER_PAREN_RE = /\s*[\(\[]\s*(?:[A-Z]|[가-하])\s*[\)\]]\s*$/;
 const SINGLE_AE_RE    = /([A-E])$/; // base 길이 검사 후 제거
 
@@ -94,8 +94,15 @@ function baseAptName(name) {
   // 2) (NNN동) / (NNN-NNN동) 괄호 동 표기
   s = s.replace(DONG_PAREN_RE, '');
 
-  // 3) 괄호 없이 trailing 동 (예: 한림101동) — 2~4자리 숫자+동
-  s = s.replace(DONG_PLAIN_RE, '');
+  // 3) 괄호 없이 trailing 동 (예: 한림101동, 리버펠리스1동) — 1~4자리 숫자+동
+  //    가드: 제거 후 길이 >= 4 (지나치게 짧은 base 차단), 직전 character 가 한글이어야
+  {
+    const candidate = s.replace(DONG_PLAIN_RE, '');
+    if (candidate.length >= 4 && candidate !== s) {
+      const prev = candidate.charAt(candidate.length - 1);
+      if (/[가-힣]/.test(prev)) s = candidate;
+    }
+  }
 
   // 4) (A)/(가) 등 단일 letter 괄호
   s = s.replace(LETTER_PAREN_RE, '');

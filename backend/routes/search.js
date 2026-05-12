@@ -83,9 +83,11 @@ router.get('/apt', async (req, res) => {
       admin.from('molit_transactions')
         .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date, apt_seq')
         // APTSEQ-FALLBACK-2026-05-12: apt_seq 추가 — apt_master 미매칭 단지의 KAPT facility 호출용
+        // NAME-MERGE-2026-05-12 (Sprint S+): limit *10 → *30 (한 단지가 동/면적 분리로 100+ row
+        //   생성 시 일부 raw row 누락되어 grouping 불완전. 상계주공1(고층) 119건 case 검증 발견.
         .ilike('apt_name', `%${q}%`)  // OR 제거 — apt_name 만 (인덱스 활용)
         .order('deal_date', { ascending: false })
-        .limit(limit * 10),
+        .limit(limit * 30),
       admin.from('apt_master')
         .select('apt_name, sigungu, umd_nm, lawd_cd, kapt_code')
         .or(`apt_name.ilike.%${q}%,umd_nm.ilike.%${q}%`)  // apt_master 는 작아서 OR OK (9.7k rows)
