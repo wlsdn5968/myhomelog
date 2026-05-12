@@ -69,6 +69,50 @@ function normalizedLen(s) {
     .length;
 }
 
+/** LCS-MATCH-2026-05-13 (Sprint T): MOLIT 와 KAPT 정식명이 builder/지역명 insertion 으로 다른 case 매칭.
+ *
+ *  MOLIT raw vs KAPT 정식 예시 [VERIFIED via AptInfo MCP]:
+ *    "한신잠실코아"   ↔ "한신코아"        (KAPT 송파구 A13824003) — "잠실" 중간 삽입
+ *    "서강예가"       ↔ "서강쌍용예가"     (KAPT 마포구 A12119006) — "쌍용" 중간 삽입
+ *
+ *  기존 토큰 매칭 (3자 공통 + ratio 0.6) 으론 score=2(2자만)라 임계 미달.
+ *
+ *  알고리즘:
+ *    1) shorter 가 longer 의 부분수열 (LCS 완전) — "한신코아" 의 모든 글자가 "한신잠실코아" 에 순서대로 존재
+ *    2) shorter 가 longer 의 prefix/suffix 가 아님 (다른 단지 확장 차단)
+ *         "공덕래미안" (5) ↔ "공덕래미안자이" (7) — prefix MATCH → 차단 (별개 단지)
+ *    3) shorter.length >= 4, length 차이 ≤ 4 (= 짧은 insertion 만 인정)
+ *
+ *  false-positive 가드 verification:
+ *    "공덕래미안" (5) prefix of "공덕래미안자이" (7) — startsWith MATCH → 차단 ✓
+ *    "한신코아" (4) prefix of "한신잠실코아" (6)? "한신잠실코아"[:4]="한신잠실" ≠ "한신코아" ✗ → 통과 ✓
+ */
+function _lcsLen(a, b) {
+  const m = a.length, n = b.length;
+  if (!m || !n) return 0;
+  const dp = new Array(n + 1).fill(0);
+  for (let i = 1; i <= m; i++) {
+    let prev = 0;
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j];
+      if (a[i - 1] === b[j - 1]) dp[j] = prev + 1;
+      else if (dp[j - 1] > dp[j]) dp[j] = dp[j - 1];
+      prev = tmp;
+    }
+  }
+  return dp[n];
+}
+
+function _isInsertionMatch(a, b) {
+  const [shorter, longer] = a.length <= b.length ? [a, b] : [b, a];
+  if (shorter.length < 4) return false; // 3자 단지명 보호
+  if (longer.length - shorter.length > 4) return false; // 너무 큰 차이 (별개 단지 위험)
+  if (longer.startsWith(shorter)) return false; // prefix → 확장 단지명 (예: 공덕래미안 → 공덕래미안자이)
+  if (longer.endsWith(shorter)) return false;   // suffix → 같은 이유
+  // 부분수열 완전 매칭 (shorter 의 모든 글자가 longer 에 순서대로)
+  return _lcsLen(shorter, longer) === shorter.length;
+}
+
 /** apt_name + sigungu + umd_nm 으로 apt_master 매칭 → kapt_code */
 async function findMaster(aptName, sigungu, umdNm) {
   const a = admin();
@@ -266,6 +310,14 @@ async function _lookupKaptByName(lawdCd, aptName, sigungu, umdNm) {
             'KAPT-LOOKUP: SigunguAptList3 포함 매칭 성공');
           return item;
         }
+      }
+      // 1.7) LCS-MATCH-2026-05-13 (Sprint T): builder/지역명 insertion 매칭
+      //       "한신잠실코아" ↔ KAPT "한신코아", "서강예가" ↔ KAPT "서강쌍용예가" 같은 case.
+      //       prefix/suffix 차단 가드로 "공덕래미안" ↔ "공덕래미안자이" 같은 별개 단지는 매칭 X.
+      if (_isInsertionMatch(stripped, itemStripped)) {
+        logger.info({ aptName, lawdCd, matched: item.kaptName, kaptCode: item.kaptCode, mode: 'lcs-insertion' },
+          'KAPT-LOOKUP: SigunguAptList3 LCS 부분수열 매칭 성공');
+        return item;
       }
       // 2) 토큰 매칭 (3자+) — false-positive 차단
       const score = nameMatchScore(aptName, item.kaptName);
