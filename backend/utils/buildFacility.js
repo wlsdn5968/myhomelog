@@ -14,6 +14,25 @@
  * 출력: 표준 facility 객체 (frontend t6 단지정보 탭이 사용).
  */
 
+// BUILDER-TYPO-2026-05-12 (Sprint I — 운영자 발견):
+//   KAPT raw 응답의 kaptBcompany / kaptAcompany 필드에 흔한 오타.
+//   Chrome MCP audit 으로 [VERIFIED]: 상계주공9 builder = "대힌주택공사" (정부 공시 raw 오타).
+//   사용자 UI 에 그대로 표시되어 혼란 → backend 정규화.
+//   추가 typo 발견 시 본 table 에 누적.
+const _BUILDER_TYPO_FIX = {
+  '대힌주택공사': '대한주택공사', // [VERIFIED 상계주공9] — LH 공사 전신
+  // 향후 audit 으로 발견 시 추가:
+  //   '대힌건설': '대한건설'
+  //   '주식회사대힌': '주식회사대한'
+};
+
+function normalizeBuilder(name) {
+  if (name == null) return null;
+  const s = String(name).trim();
+  if (!s) return null;
+  return _BUILDER_TYPO_FIX[s] || s;
+}
+
 /**
  * @param {object|null} info     — KAPT raw response (kaptdaCnt, kaptUsedate 등 포함)
  * @param {string|null} kaptCode — KAPT 단지 코드 (정확 매칭 ID)
@@ -82,8 +101,8 @@ function buildFacility(info, kaptCode) {
     floorAreaRatio: info.kaptTarea || null,
     topFloor: parseInt(info.kaptTopFloor) || null,
     bottomFloor: parseInt(info.kaptBottomFloor) || null,
-    builder: (info.kaptBcompany || '').trim() || null,
-    developer: (info.kaptAcompany || '').trim() || null,
+    builder: normalizeBuilder(info.kaptBcompany),     // BUILDER-TYPO-2026-05-12
+    developer: normalizeBuilder(info.kaptAcompany),   // BUILDER-TYPO-2026-05-12
     areaDistribution: areaDistribution.sum > 0 ? areaDistribution : null,
     rawKapt: info,
   };
