@@ -173,6 +173,16 @@ async function tryEndpoint(url, kaptCode) {
   if (!item || (typeof item === 'object' && Object.keys(item).length === 0)) {
     return { ok: false, reason: 'empty body', bodyPreview: JSON.stringify(r.data).slice(0,200) };
   }
+  // EMPTY-VALUES-2026-05-12 (Sprint O — 운영자 발견 디버깅):
+  //   KAPT 가 잘못된 kaptCode 호출 시 "schema 만 있고 값 모두 null" 응답 반환 (예: aptSeq "11710-8865" 직접 호출).
+  //   기존: Object.keys 만 검사 → ok:true → 빈 facility 노출 (totalHouseholds 0 / builtDate null).
+  //   해결: 핵심 식별 필드 (kaptName / kaptCode / kaptdaCnt) 모두 null 이면 empty 로 판정.
+  if (typeof item === 'object') {
+    const meaningful = item.kaptName || item.kaptCode || item.kaptdaCnt || item.kaptUsedate;
+    if (!meaningful) {
+      return { ok: false, reason: 'all-null body', bodyPreview: JSON.stringify(item).slice(0, 300) };
+    }
+  }
   return { ok: true, item };
 }
 
@@ -219,20 +229,47 @@ async function fetchFromApi(kaptCode) {
  *  본 Sprint N 이 진짜 fix.
  */
 async function _lookupKaptByName(lawdCd, aptName, sigungu, umdNm) {
-  if (!lawdCd || !aptName) return null;
+  if (!lawdCd || !aptName) {
+    logger.info({ lawdCd, aptName }, 'KAPT-LOOKUP: 입력 부족 → skip');
+    return null;
+  }
   try {
     const list = await getAptListBySgg(lawdCd);
-    if (!list?.length) return null;
+    if (!list?.length) {
+      logger.warn({ lawdCd, aptName, listLen: list?.length || 0 },
+        'KAPT-LOOKUP: SigunguAptList3 빈 리스트 → null');
+      return null;
+    }
+    // KAPT-LOOKUP-DIAG-2026-05-12 (Sprint O): list 정상 수신 시 sample 도 log (debugging)
+    //   매칭 실패 원인 추적 — list 에 정말 단지 있는지, kaptName 형식 어떤지
+    logger.info({ lawdCd, aptName, listLen: list.length, sample: list.slice(0, 3).map(x => x.kaptName) },
+      'KAPT-LOOKUP: SigunguAptList3 list 수신');
     // 정확 매칭 우선
     const stripped = String(aptName).replace(/\([^)]*\)/g, '').replace(/\s+/g, '').replace(/아파트$/, '');
     let best = null, bestScore = 0;
+    let topCandidates = []; // 디버깅 보조: 점수 ≥ 2 후보 모두 수집
     for (const item of list) {
       if (!item.kaptCode || !item.kaptName) continue;
       const itemStripped = String(item.kaptName).replace(/\([^)]*\)/g, '').replace(/\s+/g, '').replace(/아파트$/, '');
       // 1) 정확 매칭
-      if (itemStripped === stripped) return item;
+      if (itemStripped === stripped) {
+        logger.info({ aptName, lawdCd, matched: item.kaptName, kaptCode: item.kaptCode, mode: 'exact' },
+          'KAPT-LOOKUP: SigunguAptList3 정확 매칭 성공');
+        return item;
+      }
+      // 1.5) "포함" 매칭 — KAPT 가 행정구역 prefix 가진 경우 (가락 헬리오시티, 송파헬리오시티 등)
+      //      stripped 가 itemStripped 에 포함 (또는 역) + 길이 차이 충분히 작음 (방어적)
+      if (stripped.length >= 4 && itemStripped.includes(stripped)) {
+        const lenDiff = itemStripped.length - stripped.length;
+        if (lenDiff <= 6) { // 너무 큰 길이 차이는 wrong-match 위험
+          logger.info({ aptName, lawdCd, matched: item.kaptName, kaptCode: item.kaptCode, mode: 'contains' },
+            'KAPT-LOOKUP: SigunguAptList3 포함 매칭 성공');
+          return item;
+        }
+      }
       // 2) 토큰 매칭 (3자+) — false-positive 차단
       const score = nameMatchScore(aptName, item.kaptName);
+      if (score >= 2) topCandidates.push({ name: item.kaptName, score });
       if (score < 3) continue;
       const minLen = Math.min(normalizedLen(aptName), normalizedLen(item.kaptName));
       const ratio = minLen > 0 ? score / minLen : 0;
@@ -240,8 +277,12 @@ async function _lookupKaptByName(lawdCd, aptName, sigungu, umdNm) {
       if (score > bestScore) { bestScore = score; best = item; }
     }
     if (best) {
-      logger.info({ aptName, lawdCd, matched: best.kaptName, kaptCode: best.kaptCode, score: bestScore },
-        'KAPT-LOOKUP: SigunguAptList3 fallback 매칭 성공');
+      logger.info({ aptName, lawdCd, matched: best.kaptName, kaptCode: best.kaptCode, score: bestScore, mode: 'token' },
+        'KAPT-LOOKUP: SigunguAptList3 토큰 매칭 성공');
+    } else {
+      // KAPT-LOOKUP-DIAG-2026-05-12: 매칭 실패 시 후보 list (점수 2+) 도 log 출력
+      logger.warn({ aptName, lawdCd, stripped, topCandidates: topCandidates.slice(0, 5) },
+        'KAPT-LOOKUP: SigunguAptList3 매칭 실패 — 후보 없음');
     }
     return best;
   } catch (e) {
