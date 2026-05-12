@@ -5059,6 +5059,36 @@ function showDetail(p){
         <tr><td>대지면적</td><td>${f.floorAreaRatio ? _escHtml(String(f.floorAreaRatio)) + ' ㎡' : '<span style="color:var(--t3)">미상</span>'}</td></tr>
       </table>
       ${(() => {
+        // FLOOR-DIST-2026-05-12 (Sprint K — KAPT 의 kaptBottomFloor 부재 보완):
+        //   KAPT V4 응답은 kaptTopFloor 만 제공 (kaptBottomFloor 부재 → facility.bottomFloor null).
+        //   MOLIT 실거래의 floor 컬럼으로 실제 거래된 층 범위 보강 (sample 한계는 명시).
+        //   facility.topFloor 와 cross-check 가능 (환각 회피).
+        const tx = Array.isArray(p.txHistory) ? p.txHistory : [];
+        const floors = tx.map(t => parseInt(t.floor)).filter(f => Number.isFinite(f) && f > 0);
+        if (floors.length < 3) return ''; // sample 부족 시 section 숨김
+        const minF = Math.min(...floors);
+        const maxF = Math.max(...floors);
+        const distinctF = new Set(floors).size;
+        const totalTx = floors.length;
+        const facilityTop = p.facility?.topFloor;
+        const xCheck = facilityTop && maxF > facilityTop
+          ? `<span style="color:var(--red)">⚠ KAPT 최고층(${facilityTop}) 보다 거래 최고층(${maxF}) 이 큼 — 데이터 점검 필요</span>`
+          : facilityTop ? `<span style="color:var(--t3)">KAPT 등록 최고 ${facilityTop}층과 비교 ↑</span>` : '';
+        return `<div style="margin-top:14px">
+          <div style="font-weight:700;font-size:12px;color:var(--t1);margin-bottom:6px">🏗 실거래 층 분포 (최근 6개월 MOLIT)</div>
+          <table class="dtbl">
+            <tr><td>거래 최저층</td><td>${minF}층</td></tr>
+            <tr><td>거래 최고층</td><td>${maxF}층</td></tr>
+            <tr><td>거래 층 범위</td><td>${minF}~${maxF}층 (${distinctF}개 층)</td></tr>
+            <tr><td>표본</td><td>${totalTx}건 거래</td></tr>
+          </table>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px;line-height:1.6">
+            ※ MOLIT 실거래 sample 기반 — 거래 없는 층 (저층/탑층 등) 은 표시되지 않을 수 있음.<br>
+            ※ ${xCheck}
+          </div>
+        </div>`;
+      })()}
+      ${(() => {
         // AREA-DIST-2026-05-12 (운영자 발견 — KAPT raw 평형 구간 필드 [VERIFIED]):
         //   facility.areaDistribution 이 단지 schema 전체 세대 분포 — MOLIT 거래 sample 의 한계 보완.
         //   상계주공9 검증: under60=1990 + range60_85=840 = 2830 = totalHouseholds 정확 일치.
