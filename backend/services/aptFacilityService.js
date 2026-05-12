@@ -14,6 +14,7 @@
  */
 const axios = require('axios');
 const { getSupabaseAdmin } = require('../db/client');
+const { getAptListBySgg } = require('./aptInfoService');
 const cache = require('../cache');
 const logger = require('../logger');
 
@@ -208,23 +209,87 @@ async function fetchFromApi(kaptCode) {
   return null;
 }
 
-/**
- * 단지 facility 해결 — { aptName, sigungu, umdNm, aptSeq? } 로 호출
+/** KAPT-LOOKUP-2026-05-12 (Sprint N): apt_master 누락 단지의 KAPT lookup fallback.
  *
- * APTSEQ-FALLBACK-2026-05-12 (Sprint M — 운영자 발견 + Chrome MCP audit 으로 [VERIFIED]):
- *   apt_master 에 헬리오시티/리센츠/파크리오/한신잠실코아/서강예가 등 핵심 단지 누락 (송파구 1500+ 중 일부).
- *   findMaster 가 정확/부분/토큰 매칭 모두 실패 → facility null → 단지정보 탭 빈 메시지.
- *   해결: MOLIT 실거래의 apt_seq 가 KAPT kaptCode 와 동일 (data.go.kr 표준). aptSeq fallback 로 KAPT 직접 호출.
+ *  flow: lawdCd 의 KAPT SigunguAptList3 응답 (apt_master sync 와 동일 source) 에서
+ *        runtime 매칭. apt_master 가 아직 sync 안 된 단지도 즉시 매칭 가능.
+ *        매칭 시 자동 apt_master upsert (다음 호출부터 fast path).
+ *
+ *  Sprint M (aptSeq fallback) 효과 없음 [VERIFIED — MOLIT aptSeq != KAPT kaptCode].
+ *  본 Sprint N 이 진짜 fix.
+ */
+async function _lookupKaptByName(lawdCd, aptName, sigungu, umdNm) {
+  if (!lawdCd || !aptName) return null;
+  try {
+    const list = await getAptListBySgg(lawdCd);
+    if (!list?.length) return null;
+    // 정확 매칭 우선
+    const stripped = String(aptName).replace(/\([^)]*\)/g, '').replace(/\s+/g, '').replace(/아파트$/, '');
+    let best = null, bestScore = 0;
+    for (const item of list) {
+      if (!item.kaptCode || !item.kaptName) continue;
+      const itemStripped = String(item.kaptName).replace(/\([^)]*\)/g, '').replace(/\s+/g, '').replace(/아파트$/, '');
+      // 1) 정확 매칭
+      if (itemStripped === stripped) return item;
+      // 2) 토큰 매칭 (3자+) — false-positive 차단
+      const score = nameMatchScore(aptName, item.kaptName);
+      if (score < 3) continue;
+      const minLen = Math.min(normalizedLen(aptName), normalizedLen(item.kaptName));
+      const ratio = minLen > 0 ? score / minLen : 0;
+      if (ratio < 0.6) continue;
+      if (score > bestScore) { bestScore = score; best = item; }
+    }
+    if (best) {
+      logger.info({ aptName, lawdCd, matched: best.kaptName, kaptCode: best.kaptCode, score: bestScore },
+        'KAPT-LOOKUP: SigunguAptList3 fallback 매칭 성공');
+    }
+    return best;
+  } catch (e) {
+    logger.warn({ err: e.message, lawdCd, aptName }, 'KAPT-LOOKUP: SigunguAptList3 fallback 실패');
+    return null;
+  }
+}
+
+/**
+ * 단지 facility 해결 — { aptName, sigungu, umdNm, aptSeq?, lawdCd? } 로 호출
+ *
+ * fallback chain (Sprint M + N):
+ *   1) apt_master 매칭 (정확 → 부분 → 토큰)
+ *   2) KAPT SigunguAptList3 runtime lookup (lawdCd 필요)         ← Sprint N (진짜 fix)
+ *   3) aptSeq 로 KAPT BasisInfo 직접 호출 (effect 부분 — kaptCode 만) ← Sprint M (대부분 무효)
+ *   4) null
  *
  * @returns {{ kaptCode, official, raw }|null}
  */
-async function resolveFacility({ aptName, sigungu, umdNm, aptSeq }) {
+async function resolveFacility({ aptName, sigungu, umdNm, aptSeq, lawdCd }) {
   if (!aptName) return null;
-  const memKey = `facility:${aptName}|${sigungu||''}|${umdNm||''}|${aptSeq||''}`;
+  const memKey = `facility:${aptName}|${sigungu||''}|${umdNm||''}|${aptSeq||''}|${lawdCd||''}`;
   const mem = cache.get(memKey);
   if (mem !== undefined) return mem;
 
-  const m = await findMaster(aptName, sigungu, umdNm);
+  let m = await findMaster(aptName, sigungu, umdNm);
+
+  // KAPT-LOOKUP-2026-05-12 (Sprint N): master 매칭 실패 시 KAPT SigunguAptList3 runtime lookup.
+  //   apt_master sync 아직 누락된 단지도 즉시 catch + 자동 upsert.
+  if (!m?.kapt_code && lawdCd) {
+    const lookup = await _lookupKaptByName(lawdCd, aptName, sigungu, umdNm);
+    if (lookup?.kaptCode) {
+      m = { kapt_code: lookup.kaptCode, apt_name: lookup.kaptName };
+      // 자동 apt_master upsert (다음 호출부터 fast path)
+      const a = admin();
+      if (a) {
+        a.from('apt_master').upsert({
+          kapt_code: lookup.kaptCode,
+          apt_name: lookup.kaptName,
+          lawd_cd: lawdCd,
+          sigungu: sigungu || null,
+          umd_nm: umdNm || (lookup.as3 || null),
+          source: 'kapt-lookup-runtime',
+        }, { onConflict: 'kapt_code', ignoreDuplicates: true }).then(() => {}, () => {});
+      }
+    }
+  }
+
   if (m?.kapt_code) {
     // 캐시 신선도
     if (m.facility && m.facility_fetched_at) {

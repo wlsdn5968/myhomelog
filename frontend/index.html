@@ -7458,9 +7458,12 @@ async function goSearchResult(r) {
     //   APTSEQ-FALLBACK-2026-05-12: aptSeq 같이 보냄 → apt_master 미매칭 단지도 KAPT 직접 호출 가능.
     let _facilityRes = null;
     try {
+      // KAPT-LOOKUP-2026-05-12 + APTSEQ-FALLBACK-2026-05-12:
+      //   aptSeq + lawdCd 같이 보냄 → apt_master 미매칭 단지의 KAPT SigunguAptList3 runtime fallback.
       const _aptSeqQs = r.aptSeq ? `&aptSeq=${encodeURIComponent(r.aptSeq)}` : '';
-      const _fr = await fetch(`${CFG.api}/search/facility?aptName=${encodeURIComponent(r.aptName)}&sigungu=${encodeURIComponent(r.sigungu||'')}&umdNm=${encodeURIComponent(r.umdNm||'')}${_aptSeqQs}`,
-        { signal: AbortSignal.timeout(8000) }
+      const _lawdCdQs = r.lawdCd ? `&lawdCd=${encodeURIComponent(r.lawdCd)}` : '';
+      const _fr = await fetch(`${CFG.api}/search/facility?aptName=${encodeURIComponent(r.aptName)}&sigungu=${encodeURIComponent(r.sigungu||'')}&umdNm=${encodeURIComponent(r.umdNm||'')}${_aptSeqQs}${_lawdCdQs}`,
+        { signal: AbortSignal.timeout(10000) }
       ).then(rs => rs.ok ? rs.json() : null).catch(() => null);
       if (_fr) _facilityRes = _fr;
     } catch(_){}

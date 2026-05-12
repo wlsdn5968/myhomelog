@@ -388,13 +388,15 @@ router.get('/facility', async (req, res) => {
   const umdNm = String(req.query.umdNm || '').trim() || null;
   // APTSEQ-FALLBACK-2026-05-12: aptSeq query param 받기 (apt_master 미매칭 단지 fallback)
   const aptSeq = String(req.query.aptSeq || '').trim() || null;
+  // KAPT-LOOKUP-2026-05-12: lawdCd query param 받기 (SigunguAptList3 runtime lookup)
+  const lawdCd = String(req.query.lawdCd || '').trim() || null;
   if (!aptName) return res.status(400).json({ error: 'aptName 필수' });
 
   const admin = adminClient();
   if (!admin) return res.status(503).json({ error: '서비스 일시 불가' });
 
   try {
-    const facility = await resolveFacility({ aptName, sigungu, umdNm, aptSeq });
+    const facility = await resolveFacility({ aptName, sigungu, umdNm, aptSeq, lawdCd });
 
     // STAB-AUDIT-2026-05-07 P0+P1+P2: 학교 정보 통합 (검색 path 풍부화)
     //   - P0 카카오맵: 반경 1km 학교 list (이름·거리·종류)
