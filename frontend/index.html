@@ -5052,8 +5052,41 @@ function showDetail(p){
         <tr><td>대지면적</td><td>${f.floorAreaRatio ? _escHtml(String(f.floorAreaRatio)) + ' ㎡' : '<span style="color:var(--t3)">미상</span>'}</td></tr>
       </table>
       ${(() => {
+        // AREA-DIST-2026-05-12 (운영자 발견 — KAPT raw 평형 구간 필드 [VERIFIED]):
+        //   facility.areaDistribution 이 단지 schema 전체 세대 분포 — MOLIT 거래 sample 의 한계 보완.
+        //   상계주공9 검증: under60=1990 + range60_85=840 = 2830 = totalHouseholds 정확 일치.
+        const ad = p.facility && p.facility.areaDistribution;
+        if (!ad || !ad.sum) return '';
+        const total = ad.sum;
+        const _pct = n => total > 0 ? Math.round((n / total) * 1000) / 10 : 0;
+        const rows = [
+          ['under60', '전용 60㎡ 미만', '~18평', ad.under60],
+          ['range60_85', '전용 60~85㎡', '18~25평', ad.range60_85],
+          ['range85_135', '전용 85~135㎡', '25~40평', ad.range85_135],
+          ['over135', '전용 135㎡ 이상', '40평~', ad.over135],
+        ].filter(r => r[3] > 0)
+         .map(([k, name, py, cnt]) => `<tr>
+           <td>${_escHtml(name)}</td>
+           <td style="font-size:10px;color:var(--t3)">${_escHtml(py)}</td>
+           <td style="text-align:right">${cnt.toLocaleString()}세대</td>
+           <td style="text-align:right;color:var(--t2)">${_pct(cnt)}%</td>
+         </tr>`).join('');
+        return `<div style="margin-top:14px">
+          <div style="font-weight:700;font-size:12px;color:var(--t1);margin-bottom:6px">🏘 평형 구간별 세대 분포 (KAPT 기준)</div>
+          <table class="dtbl">
+            <tr style="font-size:10px;color:var(--t3)"><td>구간</td><td>평형</td><td style="text-align:right">세대수</td><td style="text-align:right">비율</td></tr>
+            ${rows}
+          </table>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px;line-height:1.6">
+            ※ 단지 schema 전체 세대 분포 — KAPT 공식 등록. 합계 ${total.toLocaleString()}세대.<br>
+            ※ 거래된 평형 세부 list 는 아래 '관측 평형' 표 참고 (최근 6개월 실거래 sample).
+          </div>
+        </div>`;
+      })()}
+      ${(() => {
         // AREA-OBS-2026-05-12: 단지 관측 평형 list — MOLIT 실거래 최근 6개월 거래된 모든 distinct 평형.
-        //   KAPT API 가 단지 schema 평형 list 를 미제공 (V4 BasisInfo 응답에 areaList 부재) → MOLIT 기반.
+        //   KAPT V4 의 areaDistribution 은 구간별 합계만 (under60/85/135/over135 4 구간).
+        //   세부 평형 (예: 49.94㎡, 58.01㎡) 은 MOLIT 거래 sample 에서만 도출 가능.
         //   거래 없는 평형은 표시 X — sample 한계 명시.
         const oa = Array.isArray(p.observedAreas) ? p.observedAreas : [];
         if (!oa.length) return '';
