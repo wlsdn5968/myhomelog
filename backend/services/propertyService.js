@@ -293,7 +293,7 @@ async function getAIRecommendations(userCondition) {
       tags: tags.length ? tags : ['실거래확인'],
       risk: '시세 변동·금리 인상 리스크는 본인 부담 / 미래 가격 예측 불가',
       recommend: false,
-      // 평형별 최근 시세 (사용자가 "지금 가격" 파악)
+      // 평형별 최근 시세 (사용자가 "지금 가격" 파악) — fit 평형만
       currentPriceByPyeong: apt.fitPyeongs.map(fp => ({
         pyeong: fp.pyeong,
         excluUseAr: fp.excluUseAr,
@@ -302,6 +302,16 @@ async function getAIRecommendations(userCondition) {
         dealCount: fp.dealCount,
         latestDeal: fp.recentTx[0] ? `${fp.recentTx[0].date.slice(2)} ${fp.recentTx[0].floor}층 ${(fp.recentTx[0].price / 10000).toFixed(2)}억` : '-',
       })),
+      // AREA-OBS-2026-05-12: 단지의 **모든 관측 평형** (최근 6개월 거래된 distinct 평형).
+      //   운영자 발견 (상계주공9 케이스): 단지 schema 의 12개 평형 중 5개만 표시되던 문제.
+      //   현재 source 는 MOLIT 실거래 (KAPT 의 평형 list endpoint 미발굴) — 거래 sample 기반.
+      //   단지정보 탭에서 "관측 평형" section 으로 노출.
+      observedAreas: (apt.pyeongStats || []).map(p => ({
+        pyeong: p.pyeong,
+        excluUseAr: p.excluUseAr,
+        dealCount: p.dealCount,
+        avgPrice: parseFloat((p.avgPrice / 10000).toFixed(2)),
+      })).sort((a, b) => a.excluUseAr - b.excluUseAr),
       txHistory: apt.rawList || [],
       dealCount6m: apt.dealCount,
       recentDeal: apt.recentDeal,
@@ -384,6 +394,11 @@ async function getAIRecommendations(userCondition) {
           bottomFloor: parseInt(info.kaptBottomFloor) || null,
           builder: (info.kaptBcompany || '').trim() || null,
           developer: (info.kaptAcompany || '').trim() || null,
+          // KAPT-RAW-2026-05-12 (운영자 발견 — 평형 list 누락):
+          //   KAPT API V4 의 raw 응답에 평형 정보가 있는지 운영자가 단지정보 탭에서 직접
+          //   확인 가능하도록 raw 필드 전체를 sanitize 후 expose. user-PII 없음 (단지 공개정보).
+          //   향후 KAPT 응답에 areaList 류 필드 발견 시 facility 정식 필드로 격상.
+          rawKapt: info || null,
         },
         tags: Array.from(new Set(moreTags)),
       };

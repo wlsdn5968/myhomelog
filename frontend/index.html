@@ -5051,6 +5051,51 @@ function showDetail(p){
         <tr><td>관리방식</td><td>${_v(f.mgrType)}</td></tr>
         <tr><td>대지면적</td><td>${f.floorAreaRatio ? _escHtml(String(f.floorAreaRatio)) + ' ㎡' : '<span style="color:var(--t3)">미상</span>'}</td></tr>
       </table>
+      ${(() => {
+        // AREA-OBS-2026-05-12: 단지 관측 평형 list — MOLIT 실거래 최근 6개월 거래된 모든 distinct 평형.
+        //   KAPT API 가 단지 schema 평형 list 를 미제공 (V4 BasisInfo 응답에 areaList 부재) → MOLIT 기반.
+        //   거래 없는 평형은 표시 X — sample 한계 명시.
+        const oa = Array.isArray(p.observedAreas) ? p.observedAreas : [];
+        if (!oa.length) return '';
+        const rows = oa.map(a => `<tr>
+          <td>${_escHtml(String(a.pyeong))}평</td>
+          <td>전용 ${_escHtml(String(a.excluUseAr))}㎡</td>
+          <td style="text-align:right">${a.dealCount}건</td>
+          <td style="text-align:right">${a.avgPrice}억</td>
+        </tr>`).join('');
+        return `<div style="margin-top:14px">
+          <div style="font-weight:700;font-size:12px;color:var(--t1);margin-bottom:6px">📐 관측 평형 (최근 6개월 실거래)</div>
+          <table class="dtbl">
+            <tr style="font-size:10px;color:var(--t3)"><td>평형</td><td>전용면적</td><td style="text-align:right">거래건수</td><td style="text-align:right">평균</td></tr>
+            ${rows}
+          </table>
+          <div style="font-size:10px;color:var(--t3);margin-top:4px;line-height:1.6">
+            ※ MOLIT 실거래 sample 기반 — 거래 없는 평형은 표시되지 않습니다.<br>
+            ※ 단지 schema 전체 평형은 향후 KAPT detail endpoint 발굴 시 보강 예정.
+          </div>
+        </div>`;
+      })()}
+      ${(() => {
+        // KAPT-RAW-2026-05-12 (진단 — 운영자 검증용): KAPT raw 응답에 평형 정보 있는지 확인.
+        //   접힌 상태로 노출. 사용자는 클릭 시 펼쳐서 raw key/value 확인 가능.
+        //   user-PII 없음 (단지 공개정보).
+        const raw = p.facility && p.facility.rawKapt;
+        if (!raw || typeof raw !== 'object') return '';
+        const keys = Object.keys(raw).sort();
+        if (!keys.length) return '';
+        // 평형 정보 가능성 있는 key 강조 (areaXX 등)
+        const _interesting = k => /area|pyeong|평형|kaptdaArea|kaptdaCntPa/i.test(k);
+        const rows = keys.map(k => {
+          const v = raw[k];
+          const vs = (v == null || v === '') ? '<span style="color:var(--t3)">∅</span>' : _escHtml(String(v).slice(0, 200));
+          const hl = _interesting(k) ? 'background:#FFF7E6;border:1px solid #F0D58C;border-radius:3px;padding:1px 4px' : '';
+          return `<tr><td style="font-size:10px;${hl}">${_escHtml(k)}</td><td style="font-size:10px;color:var(--t2)">${vs}</td></tr>`;
+        }).join('');
+        return `<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;font-size:12px;color:var(--t1);list-style:none">🔍 KAPT raw 응답 (진단용 ${keys.length}개 필드) — 클릭해서 펼치기</summary>
+          <div style="font-size:10px;color:var(--t3);margin:6px 0">평형 정보 추정 필드는 노란색 강조. 운영자 검증용.</div>
+          <table class="dtbl">${rows}</table>
+        </details>`;
+      })()}
       <div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.65">
         ※ 본 정보는 단지 기본정보입니다. 거래·시세는 다른 탭에서 확인하세요.<br>
         ※ KAPT 데이터는 단지 매칭 정확도에 따라 일부 누락 가능합니다.
