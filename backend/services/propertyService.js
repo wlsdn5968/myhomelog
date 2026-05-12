@@ -377,6 +377,13 @@ async function getAIRecommendations(userCondition) {
           mgrType: info.codeMgrNm || null,
           address: info.doroJuso || info.codeAptNm || null,
           floorAreaRatio: info.kaptTarea || null,
+          // DETAILTAB-2026-05-12 (운영자 발견 — 네이버 부동산 수준 정보 노출):
+          //   최고층 / 시공사 / 시행사 필드 추가. KAPT raw field 그대로 expose.
+          //   사용자 단지정보 탭에서 렌더링 — 데이터 부재 시 frontend 가 '미상' 표기.
+          topFloor: parseInt(info.kaptTopFloor) || null,
+          bottomFloor: parseInt(info.kaptBottomFloor) || null,
+          builder: (info.kaptBcompany || '').trim() || null,
+          developer: (info.kaptAcompany || '').trim() || null,
         },
         tags: Array.from(new Set(moreTags)),
       };

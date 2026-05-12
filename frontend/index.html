@@ -2189,6 +2189,7 @@ header{
       <button class="rtab" onclick="stb(this,'t2')">⚠ 리스크</button>
       <button class="rtab" onclick="stb(this,'t3')">📝 특약 초안</button>
       <button class="rtab" onclick="stb(this,'t4')">🎯 가격 시그널</button>
+      <button class="rtab" onclick="stb(this,'t6')">🏢 단지정보</button>
       <button class="rtab" onclick="stb(this,'t5')">🏃 임장노트</button>
     </div>
     <div class="rpanel">
@@ -2198,6 +2199,7 @@ header{
       <div class="tp" id="t3"></div>
       <div class="tp" id="t4"></div>
       <div class="tp" id="t5"></div>
+      <div class="tp" id="t6"></div>
     </div>
   </div>
 </div>
@@ -4999,6 +5001,61 @@ function showDetail(p){
   document.getElementById('t2').innerHTML=`<div class="tld"><div class="tsp"></div>AI 리스크 분석 중...</div>`;
   document.getElementById('t3').innerHTML=`<div class="tld"><div class="tsp"></div>AI 특약 초안 생성 중...</div>`;
   document.getElementById('t4').innerHTML=`<div class="tld"><div class="tsp"></div>가격 시그널 분석 중...</div>`;
+  // DETAILTAB-2026-05-12 (운영자 발견 — 네이버 부동산 수준 단지정보 노출):
+  //   facility (backend KAPT API 응답) 의 핵심 필드를 표로 표시. 데이터 부재 시 '미상' 표기.
+  document.getElementById('t6').innerHTML = (() => {
+    const f = p.facility || null;
+    const _v = v => (v == null || v === '' ? '<span style="color:var(--t3)">미상</span>' : _escHtml(String(v)));
+    const _ymd = ymd => {
+      if (!ymd) return '<span style="color:var(--t3)">미상</span>';
+      const s = String(ymd);
+      if (s.length === 8) return `${s.slice(0,4)}.${s.slice(4,6)}.${s.slice(6,8)}`;
+      if (s.length === 6) return `${s.slice(0,4)}.${s.slice(4,6)}`;
+      return _escHtml(s);
+    };
+    const _num = n => (n == null || !Number.isFinite(Number(n)) ? null : Number(n).toLocaleString());
+    if (!f) {
+      return `<div class="ibox y" style="line-height:1.6">🏢 KAPT 단지 기본정보를 조회할 수 없어요.<br>
+        <span style="font-size:10px;color:var(--t3)">단지 ID 미매칭(MOLIT 실거래 raw 와 KAPT 매칭 실패) 또는 KAPT API 일시 오류. 다른 탭(실거래가/가격 시그널)은 정상 표시될 수 있어요.</span></div>`;
+    }
+    const hh = _num(f.totalHouseholds);
+    const dong = _num(f.dongCount);
+    const parkTotal = _num(f.parkingTotal);
+    const floorRange = (f.bottomFloor && f.topFloor) ? `${f.bottomFloor}~${f.topFloor}층` : (f.topFloor ? `최고 ${f.topFloor}층` : null);
+    const tags = [];
+    if (f.totalHouseholds >= 1000) tags.push('🏗 대단지');
+    else if (f.totalHouseholds >= 500) tags.push('🏘 중대단지');
+    if (f.parkingRatio && f.parkingRatio >= 1.2) tags.push('🅿 주차여유');
+    if (f.builtDate) {
+      const yr = parseInt(String(f.builtDate).slice(0,4)) || 0;
+      const age = yr ? (new Date().getFullYear() - yr) : null;
+      if (age != null) {
+        if (age <= 5) tags.push('🆕 신축');
+        else if (age >= 25) tags.push('🏚 노후');
+      }
+    }
+    return `<div style="font-size:11px;color:var(--t3);margin-bottom:8px">출처: 한국부동산원 KAPT 공동주택 기본정보 (data.go.kr)</div>
+      ${f._partial ? '<div class="ibox y" style="margin-bottom:8px;font-size:11px">⚠ KAPT 전체 응답 중 일부만 조회되었습니다 (부분 정보)</div>' : ''}
+      ${tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">${tags.map(t=>`<span style="background:#EEF4FF;color:var(--a2);border:1px solid #C9DCF5;border-radius:4px;padding:3px 7px;font-size:10px;font-weight:600">${t}</span>`).join('')}</div>` : ''}
+      <table class="dtbl">
+        <tr><td>단지명</td><td>${_v(p.aptName)}</td></tr>
+        <tr><td>도로명 주소</td><td>${_v(f.address)}</td></tr>
+        <tr><td>사용승인일</td><td>${_ymd(f.builtDate)}</td></tr>
+        <tr><td>총 세대수</td><td>${hh ? hh + '세대' : '<span style="color:var(--t3)">미상</span>'}</td></tr>
+        <tr><td>총 동수</td><td>${dong ? dong + '개동' : '<span style="color:var(--t3)">미상</span>'}</td></tr>
+        <tr><td>층수</td><td>${floorRange ? _escHtml(floorRange) : '<span style="color:var(--t3)">미상</span>'}</td></tr>
+        <tr><td>총 주차대수</td><td>${parkTotal ? parkTotal + `대${f.parkingRatio ? ` (세대당 ${f.parkingRatio}대)` : ''}` : '<span style="color:var(--t3)">미상</span>'}</td></tr>
+        <tr><td>시공사</td><td>${_v(f.builder)}</td></tr>
+        <tr><td>시행사</td><td>${_v(f.developer)}</td></tr>
+        <tr><td>난방방식</td><td>${_v(f.heatType)}</td></tr>
+        <tr><td>관리방식</td><td>${_v(f.mgrType)}</td></tr>
+        <tr><td>대지면적</td><td>${f.floorAreaRatio ? _escHtml(String(f.floorAreaRatio)) + ' ㎡' : '<span style="color:var(--t3)">미상</span>'}</td></tr>
+      </table>
+      <div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.65">
+        ※ 본 정보는 단지 기본정보입니다. 거래·시세는 다른 탭에서 확인하세요.<br>
+        ※ KAPT 데이터는 단지 매칭 정확도에 따라 일부 누락 가능합니다.
+      </div>`;
+  })();
   document.querySelectorAll('.rtab').forEach((b,i)=>b.classList.toggle('on',i===0));
   document.querySelectorAll('.tp').forEach((t,i)=>t.classList.toggle('on',i===0));
   currentDetail=p;
