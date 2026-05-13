@@ -4883,7 +4883,16 @@ function showDetail(p){
     <div id="altAptBox" style="margin:4px 0 8px"></div>
     ${(()=>{
       // P1 (Phase 2 후속, 2026-04-25): 학군 표시 — 카카오 keyword 기반 사실 나열만 (학업성취도 X)
-      const sch = Array.isArray(p.nearbySchools) ? p.nearbySchools : [];
+      // SCHOOL-BASE-2026-05-13 (Sprint EE — 운영자 발견 "지성관/청원관/인산지해관" 부속명):
+      //   90일 cached raw 데이터 (DB apt_schools) 의 부속명 즉시 정리. backend fix 와 동일 로직.
+      const _schoolBase = n => { const m = String(n||'').match(/^(.*?(?:초등학교|중학교|고등학교|유치원|어린이집))(?:\s+.*)?$/); return m ? m[1] : ''; };
+      let sch = Array.isArray(p.nearbySchools) ? p.nearbySchools : [];
+      // baseName 추출 후 dedupe (같은 학교 부속 row 통합)
+      const _seen = new Set();
+      sch = sch.map(s => ({...s, name: _schoolBase(s.name)}))
+        .filter(s => s.name && /(초등학교|중학교|고등학교|유치원|어린이집)$/.test(s.name))
+        .sort((a,b) => (a.distance_m||0) - (b.distance_m||0))
+        .filter(s => { const k = s.type + ':' + s.name; if (_seen.has(k)) return false; _seen.add(k); return true; });
       if (!sch.length) return '';
       const byT = { '초': sch.filter(s=>s.type==='초'), '중': sch.filter(s=>s.type==='중'), '고': sch.filter(s=>s.type==='고') };
       const cells = ['초','중','고'].map(t => {
@@ -5290,13 +5299,14 @@ async function loadFacility(p){
     //   호갱노노/네이버 부동산 수준 학교 정보 — 호스트별 (초/중/고) + 거리 + 학생수 + 배정 가능성
     const sbox = document.getElementById('schoolBox');
     if (sbox && Array.isArray(r.nearbySchools) && r.nearbySchools.length) {
-      // STAB-AUDIT-2026-05-07 운영자 ASSERT: "행정실·체육관·교무실 표시 X. 학교 1개 = 거리 1줄만"
-      //   1) 부속 시설 row 자체 frontend 에서도 필터 (DB cache 90일 raw 데이터 대비)
-      //   2) 종류별 가장 가까운 학교 1개 만 표시 (추가 row noise 제거)
-      const _isAuxFacility = n => /\s+(행정실|교무실|체육관|강당|도서관|급식실|음악실|미술실|과학실|컴퓨터실|어학실|보건실|후문|정문|동문|서문|남문|북문|중앙문|입구|출구|시설관|운동장|본관)$/i.test(String(n||''));
+      // SCHOOL-BASE-2026-05-13 (Sprint EE — 운영자 발견 "지성관/청원관/인산지해관"):
+      //   학교 정식명 (초/중/고/유치원) 만 추출 — 부속명 (관/동/실 등 모든 suffix) 자동 제거.
+      //   이전 _isAuxFacility (specific keyword list) → 더 일반화한 base extractor 사용.
+      const _schoolBase = n => { const m = String(n||'').match(/^(.*?(?:초등학교|중학교|고등학교|유치원|어린이집))(?:\s+.*)?$/); return m ? m[1] : ''; };
       const byT = { '초': null, '중': null, '고': null };
       const sortedSchools = [...r.nearbySchools]
-        .filter(s => !_isAuxFacility(s.name)) // 부속 시설 응답 제거
+        .map(s => ({...s, name: _schoolBase(s.name)}))
+        .filter(s => s.name && /(초등학교|중학교|고등학교|유치원|어린이집)$/.test(s.name))
         .sort((a,b) => (a.distance_m||0) - (b.distance_m||0));
       for (const s of sortedSchools) {
         if (byT[s.type] === null) byT[s.type] = s; // 종류별 첫 row (가장 가까운) 만

@@ -126,14 +126,17 @@ async function kakaoSearchSchools(lat, lng) {
         // category_name 으로 필터: "교육,학교"
         const cat = d.category_name || '';
         if (!cat.includes('학교')) continue;
-        // STAB-AUDIT-2026-05-07 운영자 ASSERT: 부속 시설 (행정실·체육관·교무실·후문 등) 자체 표시 X
-        //   "서울가산초등학교 행정실/체육관/교무실" 같은 row 는 사용자 무가치 noise.
-        //   학교 본관 (이름이 부속 시설 키워드로 끝나지 않는) row 만 응답 포함.
+        // SCHOOL-BASE-2026-05-13 (Sprint EE — 운영자 발견: "지성관/청원관/인산지해관" 같은 학교 부속명):
+        //   기존 isAuxFacility 는 행정실/체육관/교무실/시설관 등 특정 keyword 만 cover (line 누락).
+        //   "~관" suffix (지성관/청원관/인산지해관/본관 외) + "~동" 등 더 광범위 패턴 처리 필요.
+        //   근본 해결: 학교 정식명 (초/중/고/유치원/어린이집) 뒤에 공백+추가 글자 있으면 부속.
+        //   base name 만 추출해서 정식명만 응답 포함 + dedupe key 도 base name.
         const placeName = String(d.place_name || '');
-        const isAuxFacility = /\s+(행정실|교무실|체육관|강당|도서관|급식실|음악실|미술실|과학실|컴퓨터실|어학실|보건실|후문|정문|동문|서문|남문|북문|중앙문|입구|출구|시설관|운동장|본관)$/i.test(placeName);
-        if (isAuxFacility) continue; // 부속 시설은 응답에서 완전 제외
+        const baseMatch = placeName.match(/^(.*?(?:초등학교|중학교|고등학교|유치원|어린이집))(?:\s+.*)?$/);
+        if (!baseMatch) continue; // 학교 정식명 아님 (학원/연구소 등 카테고리만 학교) → skip
+        const baseName = baseMatch[1];
         all.push({
-          name: placeName,
+          name: baseName,  // 부속 (지성관/청원관/교무실 등) 제거된 정식명
           type,
           distance_m: distanceM(lat, lng, sLat, sLng),
           lat: sLat,
