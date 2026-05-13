@@ -88,6 +88,22 @@ function buildFacility(info, kaptCode, detail) {
   // 승강기 / CCTV — detail 우선, BasisInfo fallback
   const elevatorCount = parseInt(detail?.kaptdEcnt) || parseInt(info.kaptdEcntp) || null;
   const cctvCount = parseInt(detail?.kaptdCccnt) || null;
+  // RICH-DETAIL-2026-05-13 (Sprint CC): KAPT V4 detail 풍부 필드 활용
+  //   [VERIFIED via Chrome MCP raw — 풍림아파트/헬리오시티]
+  //   지하철/버스 도보 / 편의시설 / 교육시설 / 전기차 충전기 / 관리회사
+  const subwayLine = detail?.subwayLine || null;
+  const subwayStation = detail?.subwayStation || null;
+  const walkBusMin = detail?.kaptdWtimebus || null;
+  const walkSubwayMin = detail?.kaptdWtimesub || null;
+  const convenientFacility = detail?.convenientFacility || null;
+  const welfareFacility = detail?.welfareFacility || null;
+  const educationFacility = detail?.educationFacility || null;
+  const evChargerGround = parseInt(detail?.groundElChargerCnt);
+  const evChargerUnder  = parseInt(detail?.undergroundElChargerCnt);
+  const evChargerTotal = (Number.isFinite(evChargerGround) || Number.isFinite(evChargerUnder))
+    ? ((Number.isFinite(evChargerGround) ? evChargerGround : 0) + (Number.isFinite(evChargerUnder) ? evChargerUnder : 0))
+    : null;
+  const mgrCompany = detail?.kaptCcompany || null;
   // AREA-DIST-2026-05-12 (운영자 발견 — KAPT raw 의 평형 구간 필드 [VERIFIED]):
   //   KAPT API V4 응답에 평형 구간별 세대수 4개 필드 존재.
   //   상계주공9 검증: kaptMparea60=1990 + kaptMparea85=840 + kaptMparea135=0 + kaptMparea136=0
@@ -130,6 +146,16 @@ function buildFacility(info, kaptCode, detail) {
     developer: normalizeBuilder(info.kaptAcompany),   // BUILDER-TYPO-2026-05-12
     elevatorCount,
     cctvCount,
+    // Sprint CC — detail 풍부 필드 (frontend t6 에 추가 노출)
+    subwayLine,
+    subwayStation,
+    walkBusMin,
+    walkSubwayMin,
+    convenientFacility,
+    welfareFacility,
+    educationFacility,
+    evChargerTotal,
+    mgrCompany,
     areaDistribution: areaDistribution.sum > 0 ? areaDistribution : null,
     rawKapt: info,
     rawDetail: detail || null,

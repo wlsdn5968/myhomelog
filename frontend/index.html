@@ -5064,12 +5064,31 @@ function showDetail(p){
         <tr><td>총 주차대수</td><td>${parkTotal ? parkTotal + `대${f.parkingRatio ? ` (세대당 ${f.parkingRatio}대)` : ''}` : '<span style="color:var(--t3)">미상</span>'}</td></tr>
         <tr><td>승강기</td><td>${_num(f.elevatorCount) ? _num(f.elevatorCount) + '대' : '<span style="color:var(--t3)">미상</span>'}</td></tr>
         <tr><td>CCTV</td><td>${_num(f.cctvCount) ? _num(f.cctvCount) + '대' : '<span style="color:var(--t3)">미상</span>'}</td></tr>
+        <tr><td>전기차 충전기</td><td>${_num(f.evChargerTotal) ? _num(f.evChargerTotal) + '대' : '<span style="color:var(--t3)">미상</span>'}</td></tr>
         <tr><td>시공사</td><td>${_v(f.builder)}</td></tr>
         <tr><td>시행사</td><td>${_v(f.developer)}</td></tr>
+        <tr><td>관리회사</td><td>${_v(f.mgrCompany)}</td></tr>
         <tr><td>난방방식</td><td>${_v(f.heatType)}</td></tr>
         <tr><td>관리방식</td><td>${_v(f.mgrType)}</td></tr>
         <tr><td>연면적</td><td>${f.floorAreaRatio ? _escHtml(String(f.floorAreaRatio)) + ' ㎡' : '<span style="color:var(--t3)">미상</span>'}</td></tr>
       </table>
+      ${(() => {
+        // RICH-DETAIL-2026-05-13 (Sprint CC): KAPT V4 detail 풍부 필드 — 교통/편의/교육
+        //   detail 없으면 section 자체 숨김.
+        const hasAny = f.subwayLine || f.walkBusMin || f.walkSubwayMin || f.convenientFacility || f.welfareFacility || f.educationFacility;
+        if (!hasAny) return '';
+        return `<div style="margin-top:14px">
+          <div style="font-weight:700;font-size:12px;color:var(--t1);margin-bottom:6px">🚇 교통·편의·교육 (KAPT 등록)</div>
+          <table class="dtbl">
+            ${f.subwayLine ? `<tr><td>가까운 지하철</td><td>${_escHtml(f.subwayLine)}${f.subwayStation ? ' · ' + _escHtml(f.subwayStation) : ''}</td></tr>` : ''}
+            ${f.walkSubwayMin ? `<tr><td>지하철 도보</td><td>${_escHtml(f.walkSubwayMin)}</td></tr>` : ''}
+            ${f.walkBusMin ? `<tr><td>버스 도보</td><td>${_escHtml(f.walkBusMin)}</td></tr>` : ''}
+            ${f.educationFacility ? `<tr><td>교육시설</td><td>${_escHtml(f.educationFacility)}</td></tr>` : ''}
+            ${f.convenientFacility ? `<tr><td>편의시설</td><td style="line-height:1.5">${_escHtml(f.convenientFacility)}</td></tr>` : ''}
+            ${f.welfareFacility ? `<tr><td>복지시설</td><td style="line-height:1.5">${_escHtml(f.welfareFacility)}</td></tr>` : ''}
+          </table>
+        </div>`;
+      })()}
       ${(() => {
         // FLOOR-DIST-2026-05-12 (Sprint K — KAPT 의 kaptBottomFloor 부재 보완):
         //   KAPT V4 응답은 kaptTopFloor 만 제공 (kaptBottomFloor 부재 → facility.bottomFloor null).

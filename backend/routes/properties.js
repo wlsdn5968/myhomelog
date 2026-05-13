@@ -7,6 +7,9 @@ const { validatePropertySearch } = require('../middleware/validation');
 
 // GET /api/properties/info?aptSeq=A13559101
 // 단지 기본정보 (총세대수·동수·준공일자·주차 등)
+// DEPRECATED-NOTE-2026-05-13 (Sprint CC): frontend 미사용 endpoint [VERIFIED via grep].
+//   외부 backward-compat 위해 유지. Sprint AA/BB 에서 V4 fix 적용해서 정확 데이터 반환.
+//   /api/search/facility 가 사실상 대체 endpoint (facility schema + altCandidates + nearbySchools 까지).
 // PARK-FIX-2026-05-13 (Sprint AA): KAPT V4 의 주차는 detail endpoint 필요 (BasisInfo 에 부재).
 // BasisInfo + DtlInfo 병렬 호출 + 진짜 필드명 (kaptdPcnt 지상 + kaptdPcntu 지하) 합산.
 router.get('/info', async (req, res) => {
