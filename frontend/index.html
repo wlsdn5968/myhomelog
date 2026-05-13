@@ -4886,13 +4886,14 @@ function showDetail(p){
       // SCHOOL-BASE-2026-05-13 (Sprint EE — 운영자 발견 "지성관/청원관/인산지해관" 부속명):
       //   90일 cached raw 데이터 (DB apt_schools) 의 부속명 즉시 정리. backend fix 와 동일 로직.
       const _schoolBase = n => { const m = String(n||'').match(/^(.*?(?:초등학교|중학교|고등학교|유치원|어린이집))(?:\s+.*)?$/); return m ? m[1] : ''; };
+      // EE++ : 시/도 prefix 제거된 key 로 dedupe ("용원초등학교" + "서울용원초등학교" = 같은 학교)
+      const _stripCity = s => String(s||'').replace(/^(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/, '');
       let sch = Array.isArray(p.nearbySchools) ? p.nearbySchools : [];
-      // baseName 추출 후 dedupe (같은 학교 부속 row 통합)
       const _seen = new Set();
       sch = sch.map(s => ({...s, name: _schoolBase(s.name)}))
         .filter(s => s.name && /(초등학교|중학교|고등학교|유치원|어린이집)$/.test(s.name))
         .sort((a,b) => (a.distance_m||0) - (b.distance_m||0))
-        .filter(s => { const k = s.type + ':' + s.name; if (_seen.has(k)) return false; _seen.add(k); return true; });
+        .filter(s => { const k = s.type + ':' + _stripCity(s.name); if (_seen.has(k)) return false; _seen.add(k); return true; });
       if (!sch.length) return '';
       const byT = { '초': sch.filter(s=>s.type==='초'), '중': sch.filter(s=>s.type==='중'), '고': sch.filter(s=>s.type==='고') };
       const cells = ['초','중','고'].map(t => {
@@ -5303,11 +5304,15 @@ async function loadFacility(p){
       //   학교 정식명 (초/중/고/유치원) 만 추출 — 부속명 (관/동/실 등 모든 suffix) 자동 제거.
       //   이전 _isAuxFacility (specific keyword list) → 더 일반화한 base extractor 사용.
       const _schoolBase = n => { const m = String(n||'').match(/^(.*?(?:초등학교|중학교|고등학교|유치원|어린이집))(?:\s+.*)?$/); return m ? m[1] : ''; };
+      // EE++ : 시/도 prefix 제거된 key 로 dedupe
+      const _stripCity = s => String(s||'').replace(/^(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/, '');
       const byT = { '초': null, '중': null, '고': null };
+      const _seenG = new Set();
       const sortedSchools = [...r.nearbySchools]
         .map(s => ({...s, name: _schoolBase(s.name)}))
         .filter(s => s.name && /(초등학교|중학교|고등학교|유치원|어린이집)$/.test(s.name))
-        .sort((a,b) => (a.distance_m||0) - (b.distance_m||0));
+        .sort((a,b) => (a.distance_m||0) - (b.distance_m||0))
+        .filter(s => { const k = (s.type||'') + ':' + _stripCity(s.name); if (_seenG.has(k)) return false; _seenG.add(k); return true; });
       for (const s of sortedSchools) {
         if (byT[s.type] === null) byT[s.type] = s; // 종류별 첫 row (가장 가까운) 만
       }
