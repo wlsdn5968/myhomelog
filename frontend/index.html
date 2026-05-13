@@ -4140,6 +4140,18 @@ function initLeaflet(){
   mapObj=L.map('mapEl',{center:[37.565,127.02],zoom:12});
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(mapObj);
   mapObj._isLeaflet=true;
+  // MAP-INVALIDATE-2026-05-13 (Sprint FF — 운영자 발견 "지도 깨짐"):
+  //   Leaflet 의 invalidateSize() 누락 → 모달/사이드바/리사이즈 후 tile 일부만 로드 + 회색 영역.
+  //   1) window resize 시 매번 호출 (디바운스 250ms)
+  //   2) 초기 로드 직후 layout 안정화 후 한번 (CSS animations / fonts 로드 완료 시점)
+  //   다른 모달 close 시점 (cDM/sv 등) 에도 별도 호출 — 함수 body 안.
+  let _resizeTm = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(_resizeTm);
+    _resizeTm = setTimeout(() => { try { mapObj.invalidateSize(); } catch(_){} }, 250);
+  });
+  setTimeout(() => { try { mapObj.invalidateSize(); } catch(_){} }, 300);
+  setTimeout(() => { try { mapObj.invalidateSize(); } catch(_){} }, 1500);
   // Phase 4 (2026-04-26): 영역 panning 시 "이 영역 단지 보기" 버튼 노출 — 호갱노노 패턴
   // Phase 35 #1 (2026-05-04): z-index 1000 → 350 (.dmbg 400 보다 아래) + DM open 시 hide
   let _pannBtn = null;
@@ -5383,6 +5395,8 @@ function cDM(){document.getElementById('DM').classList.remove('open');currentDet
   if(history.replaceState){const u=new URL(location.href);u.searchParams.delete('apt');u.searchParams.delete('area');history.replaceState(null,'',u);}
   // Phase 35 #1 (2026-05-04): DM 닫힘 시 _pannBtn 다시 노출 가능 (zoom>=13 + 모달 X 일 때만)
   try { window._pannBtnShow && window._pannBtnShow(); } catch(_){}
+  // MAP-INVALIDATE-2026-05-13 (Sprint FF): 모달 닫힌 후 지도 size 재계산 → tile rendering 정상화
+  setTimeout(() => { try { mapObj && mapObj.invalidateSize && mapObj.invalidateSize(); } catch(_){} }, 100);
 }
 
 // ── 공유 URL ───────────────────────────────────────────
@@ -6961,6 +6975,8 @@ function sv(v,btn){
     if(el)el.style.display=id===v?meta.display:'none';
   });
   _rpOverlay=false; // 탭 전환 시 오버레이 초기화
+  // MAP-INVALIDATE-2026-05-13 (Sprint FF): 탭 전환 시 지도 view 활성화 → size 재계산
+  if (v === 'map') setTimeout(() => { try { mapObj && mapObj.invalidateSize && mapObj.invalidateSize(); } catch(_){} }, 100);
   // Phase 5+ (2026-04-26): 보고서 탭에서는 #s3 (추천 단지 0건 — AI 단지 검색 기능 안내) hide — 보고서와 무관해서 노이즈
   const s3 = document.getElementById('s3');
   if (s3) {
