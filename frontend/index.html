@@ -3239,7 +3239,9 @@ async function _migrateBookmarksOnce(){
     localStorage.setItem('mhl_bookmarks_synced_at', String(Date.now()));
     if(typeof renderBookmarks === 'function') renderBookmarks();
   } catch(e){
+    const msg = String(e?.message || '');
     if (e?.name === 'AbortError') console.info('[bookmarks sync] aborted (timeout/navigation)');
+    else if (/HTTP 4[02]9|HTTP 5\d\d/.test(msg)) console.info('[bookmarks sync] transient (429/5xx) — 다음 로그인 때 재시도');
     else {
       console.warn('[bookmarks sync] 실패 — 다음 로그인 때 재시도', e);
       if(window.Sentry) window.Sentry.captureException(e);
@@ -5822,7 +5824,12 @@ async function _pushBookmarksToServer(){
     localStorage.setItem('mhl_bookmarks_synced_at', String(Date.now()));
     _setSyncBadge('ok');
   } catch(e){
+    // ABORT-RATE-FILTER-2026-05-13 (Sprint DD): AbortError + HTTP 429 (rate limit) Sentry 제외
+    //   둘 다 정상 transient 상황 — handled 코드 path 라 retry 다음 호출 시 자동 복구.
+    const msg = String(e?.message || '');
     if (e?.name === 'AbortError') { console.info('[bookmark sync] aborted (timeout/navigation)'); _setSyncBadge('err'); }
+    else if (/HTTP 4[02]9/.test(msg)) { console.info('[bookmark sync] rate-limited (429/...) — 다음 sync 재시도'); _setSyncBadge('err'); }
+    else if (/HTTP 5\d\d/.test(msg)) { console.warn('[bookmark sync] 서버 일시 오류 (5xx) — 자동 재시도'); _setSyncBadge('err'); }
     else {
       console.warn('[bookmark sync] 실패', e);
       _setSyncBadge('err');
@@ -5973,7 +5980,9 @@ async function _deleteBookmarkOnServer(id){
     });
     if(!r.ok && r.status !== 404) throw new Error('DELETE HTTP ' + r.status);
   } catch(e){
+    const msg = String(e?.message || '');
     if (e?.name === 'AbortError') console.info('[bookmark delete] aborted (timeout/navigation)');
+    else if (/HTTP 4[02]9|HTTP 5\d\d/.test(msg)) console.info('[bookmark delete] transient (429/5xx)');
     else {
       console.warn('[bookmark delete] 실패', e);
       if(window.Sentry) window.Sentry.captureException(e);
