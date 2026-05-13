@@ -63,19 +63,21 @@ function buildFacility(info, kaptCode, detail) {
     };
   }
   const totalHouseholds = parseInt(info.kaptdaCnt) || 0;
-  // PARK-FIELD-FIX-2026-05-13 (Sprint X — 운영자 발견):
-  //   KAPT BasisInfo V4 raw 응답에는 주차 필드 부재 [VERIFIED via 풍림아파트 rawKapt all keys].
-  //   주차/승강기/CCTV 는 KAPT V4 의 별도 endpoint (getAphusDtlInfoV4) 에서 fetch.
-  //   detail.kaptdPcnt (지상+지하 합) 또는 detail.kaptdPcntzs (지상) + .kaptdPcntha (지하).
-  //   detail 부재 시 0 — frontend 가 '미상' 표기.
+  // PARK-FIELD-FIX-2026-05-13 (Sprint X — 운영자 발견 + Chrome MCP 으로 진짜 필드명 [VERIFIED]):
+  //   KAPT V4 detail (getAphusDtlInfoV4) raw 필드:
+  //     - kaptdPcnt  = 지상 주차 (풍림 473, 헬리오 0)
+  //     - kaptdPcntu = 지하 주차 (풍림 1540, 헬리오 12096)   ← 핵심
+  //     - kaptdEcnt  = 승강기 (detail 이 BasisInfo 의 kaptdEcntp 보다 정확)
+  //     - kaptdCccnt = CCTV
+  //     - kaptdScnt  = 보안 인원
+  //     - kaptdDcnt  = 청소 인원
+  //   풍림아파트 검증: 473 + 1540 = 2013 대 (네이버 1992 와 거의 일치).
   let parkingTotal = 0;
   if (detail) {
-    const surfacE = parseInt(detail.kaptdPcntzs);
-    const underG = parseInt(detail.kaptdPcntha);
-    if (Number.isFinite(surfacE) || Number.isFinite(underG)) {
-      parkingTotal = (Number.isFinite(surfacE) ? surfacE : 0) + (Number.isFinite(underG) ? underG : 0);
-    } else if (Number.isFinite(parseInt(detail.kaptdPcnt))) {
-      parkingTotal = parseInt(detail.kaptdPcnt);
+    const surfaceP = parseInt(detail.kaptdPcnt);  // 지상
+    const underP   = parseInt(detail.kaptdPcntu); // 지하
+    if (Number.isFinite(surfaceP) || Number.isFinite(underP)) {
+      parkingTotal = (Number.isFinite(surfaceP) ? surfaceP : 0) + (Number.isFinite(underP) ? underP : 0);
     }
   }
   // BasisInfo 가 kaptdPcnt 가졌으면 fallback (구버전 호환)
@@ -83,8 +85,8 @@ function buildFacility(info, kaptCode, detail) {
   const parkingRatio = totalHouseholds > 0 && parkingTotal > 0
     ? parseFloat((parkingTotal / totalHouseholds).toFixed(2))
     : null;
-  // 승강기 / CCTV (detail 에 있으면, info.kaptdEcntp 도 BasisInfo 에 있음)
-  const elevatorCount = parseInt(info.kaptdEcntp) || parseInt(detail?.kaptdEcntp) || null;
+  // 승강기 / CCTV — detail 우선, BasisInfo fallback
+  const elevatorCount = parseInt(detail?.kaptdEcnt) || parseInt(info.kaptdEcntp) || null;
   const cctvCount = parseInt(detail?.kaptdCccnt) || null;
   // AREA-DIST-2026-05-12 (운영자 발견 — KAPT raw 의 평형 구간 필드 [VERIFIED]):
   //   KAPT API V4 응답에 평형 구간별 세대수 4개 필드 존재.
