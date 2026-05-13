@@ -190,13 +190,32 @@ async function saveToDb(key, apt, schools) {
  * @param {Object} apt - { kaptCode?, aptName, sigungu?, umdNm?, lat, lng }
  * @returns {Promise<Array<{name,type,distance_m,...}>>}
  */
+// SCHOOL-BASE-NORMALIZE-2026-05-13 (Sprint EE+): cache hit 의 raw 데이터에도 base name 적용.
+//   기존 90일 DB cache (옛 raw "용원초등학교 꿈나무관") 즉시 정리 — 운영자가 다음 새로고침 시 효과.
+function _normalizeSchoolsList(schools) {
+  if (!Array.isArray(schools)) return schools;
+  const out = [];
+  const seen = new Set();
+  for (const s of schools) {
+    if (!s) continue;
+    const m = String(s.name || '').match(/^(.*?(?:초등학교|중학교|고등학교|유치원|어린이집))(?:\s+.*)?$/);
+    if (!m) continue; // 학교 정식명 아님 (학원 등) — drop
+    const base = m[1];
+    const key = (s.type || '') + ':' + base;
+    if (seen.has(key)) continue; // 같은 학교 부속 dedupe
+    seen.add(key);
+    out.push({ ...s, name: base });
+  }
+  return out;
+}
+
 async function resolveSchools(apt) {
   if (!apt || !apt.aptName) return [];
   const key = buildKey(apt);
 
-  // 1) DB 캐시
+  // 1) DB 캐시 — cache hit 도 normalize (옛 raw → base + dedupe)
   const fromDb = await getFromDb(key);
-  if (fromDb !== null) return fromDb; // 빈 배열도 캐시 (해당 좌표 학교 없음)
+  if (fromDb !== null) return _normalizeSchoolsList(fromDb);
 
   // 2) 좌표 필수 — 단지 좌표 없으면 학군 검색 불가
   if (!isValidKoreaCoord(apt.lat, apt.lng)) {
@@ -204,12 +223,12 @@ async function resolveSchools(apt) {
     return [];
   }
 
-  // 3) 카카오 검색
+  // 3) 카카오 검색 (kakaoSearchSchools 가 이미 base name 으로 저장)
   const schools = await kakaoSearchSchools(apt.lat, apt.lng);
 
   // 4) 캐시 (빈 배열도 90일 — 시골 단지는 학교 없을 수 있음)
   saveToDb(key, apt, schools);
-  return schools;
+  return _normalizeSchoolsList(schools); // 안전 — kakao 새 fetch 도 normalize 한번 더 (이중 안전망)
 }
 
 /** 배치 — 동시성 제한 */
