@@ -229,10 +229,11 @@ router.get('/apt', async (req, res) => {
           .order('deal_date', { ascending: false })
           .limit(200);
         if (!txs?.length) return;
-        // distinct apt_name (가장 최근 거래의 build_year 사용)
+        // distinct apt_name + dealCount 누적 (Sprint BB: master 단지 dealCount 일관성)
         const aptInfo = {};
         for (const t of txs) {
-          if (!aptInfo[t.apt_name]) aptInfo[t.apt_name] = { build_year: t.build_year, deal_date: t.deal_date };
+          if (!aptInfo[t.apt_name]) aptInfo[t.apt_name] = { build_year: t.build_year, deal_date: t.deal_date, count: 0 };
+          aptInfo[t.apt_name].count++;
         }
         for (const m of g.items) {
           // 정식명에서 핵심 토큰 추출 (3글자 이상)
@@ -246,18 +247,23 @@ router.get('/apt', async (req, res) => {
               if (!tokens.includes(t)) tokens.push(t);
             }
           }
-          // 최고 점수 단지 찾기
-          let best = null, bestScore = 0;
+          // 최고 점수 단지 찾기 + 매칭된 모든 단지의 dealCount 합산 (Sprint BB)
+          let best = null, bestScore = 0, totalDeals = 0;
           for (const [aptName, info] of Object.entries(aptInfo)) {
             let score = 0;
             for (const tok of tokens) {
               if (aptName.includes(tok)) score = Math.max(score, tok.length);
             }
+            if (score >= 3) totalDeals += info.count;
             if (score > bestScore) { best = info; bestScore = score; }
           }
           if (best && bestScore >= 3) {
             m.buildYear = best.build_year;
             m.recentDealDate = best.deal_date;
+            // MASTER-DEAL-COUNT-2026-05-13 (Sprint BB — 운영자 발견 일관성):
+            //   master dropdown row 도 dealCount 표시 (🔥 배지 등 molit 와 일관)
+            //   매칭된 모든 raw apt_name 의 거래 합산
+            if (totalDeals > 0) m.dealCount = totalDeals;
           }
         }
       }));

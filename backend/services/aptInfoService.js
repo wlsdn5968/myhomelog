@@ -11,7 +11,13 @@ const axios = require('axios');
 const cache = require('../cache');
 const logger = require('../logger');
 
-const APT_BASIS_URL = 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3';
+// BASIS-V4-2026-05-13 (Sprint BB): aptFacilityService.fetchFromApi 는 이미 V4 사용 중.
+//   getAptBasisInfo (propertyService 추천 path + /api/properties/info) 만 V3 단일 사용 — V4 미사용.
+//   V4 가 더 완전한 데이터 (kaptMparea60~136 평형 구간 등) → V4 / V3 fallback chain.
+const APT_BASIS_URLS = [
+  'https://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusBassInfoV4',
+  'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3',
+];
 const APT_LIST_URL = 'https://apis.data.go.kr/1613000/AptListService3/getRoadnameAptList3';
 const APT_LIST_SGG_URL = 'https://apis.data.go.kr/1613000/AptListService3/getSigunguAptList3';
 // DTL-INFO-2026-05-13 (Sprint X): KAPT V4 detail endpoint (주차/승강기/CCTV/편의시설 정보)
@@ -37,51 +43,44 @@ async function getAptBasisInfo(aptSeq) {
   const cached = cache.get(cacheKey);
   if (cached !== undefined) return cached;
 
-  // 1회 재시도 — K-apt 서버가 간헐적으로 5xx 반환 (특히 피크시간)
-  const attempt = async () => axios.get(APT_BASIS_URL, {
-    params: {
-      serviceKey: process.env.MOLIT_API_KEY,
-      kaptCode: aptSeq,
-      _type: 'json',
-    },
-    timeout: 8000,
-  });
+  // BASIS-V4-2026-05-13 (Sprint BB): V4 → V3 fallback chain (V4 가 더 완전).
+  //   1회 재시도 per endpoint — K-apt 서버 간헐적 5xx (피크시간 등).
+  const tryEndpoint = async (url) => {
+    let lastErr;
+    for (let i = 0; i < 2; i++) {
+      try {
+        const r = await axios.get(url, {
+          params: { serviceKey: process.env.MOLIT_API_KEY, kaptCode: aptSeq, _type: 'json' },
+          timeout: 8000,
+        });
+        const item = r.data?.response?.body?.item || null;
+        const resultCode = r.data?.response?.header?.resultCode;
+        if (item && (!resultCode || ['00','000'].includes(resultCode))) {
+          // V4: 의미있는 값 1개 이상 (kaptName / kaptdaCnt) 검증 — empty schema 방지
+          const meaningful = item.kaptName || item.kaptdaCnt || item.kaptUsedate;
+          if (meaningful) return { ok: true, item };
+        }
+        return { ok: false, reason: `code ${resultCode || 'empty'}` };
+      } catch (e) {
+        lastErr = e;
+        const status = e.response?.status;
+        if (status && status >= 400 && status < 500) return { ok: false, reason: `HTTP ${status}` };
+        if (i === 0) await new Promise(res => setTimeout(res, 400));
+      }
+    }
+    return { ok: false, reason: lastErr?.message || 'unknown' };
+  };
 
-  let r, lastErr;
-  for (let i = 0; i < 2; i++) {
-    try {
-      r = await attempt();
-      break;
-    } catch (e) {
-      lastErr = e;
-      // 5xx/timeout만 재시도, 4xx는 즉시 포기
-      const status = e.response?.status;
-      if (status && status >= 400 && status < 500) break;
-      if (i === 0) await new Promise(res => setTimeout(res, 400));
+  for (const url of APT_BASIS_URLS) {
+    const r = await tryEndpoint(url);
+    if (r.ok) {
+      cache.set(cacheKey, r.item, 86400 * 30);
+      return r.item;
     }
   }
-
-  if (!r) {
-    logger.warn({
-      source: 'kapt-basis', aptSeq,
-      status: lastErr?.response?.status, errMsg: lastErr?.message,
-    }, 'K-apt 단지 기본정보 재시도 후 실패');
-    // 실패는 짧게 캐시해 다음 요청에서 재시도 기회 부여
-    cache.set(cacheKey, null, 600); // 10분
-    return null;
-  }
-
-  const item = r.data?.response?.body?.item || null;
-  const resultCode = r.data?.response?.header?.resultCode;
-  if (!item && resultCode && resultCode !== '00' && resultCode !== '000') {
-    logger.warn({
-      source: 'kapt-basis', aptSeq, resultCode,
-      resultMsg: r.data?.response?.header?.resultMsg,
-    }, 'K-apt 단지 기본정보 비정상 응답코드');
-  }
-  // 성공 결과만 30일 캐시. null 도 짧게 캐시(10분).
-  cache.set(cacheKey, item, item ? 86400 * 30 : 600);
-  return item;
+  logger.warn({ source: 'kapt-basis', aptSeq }, 'K-apt BasisInfo V4+V3 모두 실패');
+  cache.set(cacheKey, null, 600);
+  return null;
 }
 
 /**

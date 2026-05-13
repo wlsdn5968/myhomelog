@@ -2486,10 +2486,19 @@ window.addEventListener('DOMContentLoaded',()=>{
   setTimeout(() => { if (typeof loadPopularMarkers === 'function') loadPopularMarkers(); }, 100);
 
   // URL 쿼리로 검색 조건 복원 (공유 링크 · 뒤로가기)
+  // TOAST-DISMISS-2026-05-13 (Sprint BB): URL 별 1회만 토스트 — 같은 URL reload 시 noise 방지.
+  //   sessionStorage 으로 tab 별 (탭 닫으면 reset). URL key 별 hash.
   const restored=restoreSearchFromUrl();
   if(restored){
-    // 조건 복원됐으면 바로 검색 실행하지 않고 토스트만 — 사용자가 버튼 클릭해야 재검색
-    setTimeout(()=>{if(typeof toast==='function')toast('🔗 공유 링크 조건 복원 — AI 단지 검색 버튼을 눌러주세요');},500);
+    try {
+      const _urlKey = 'mhl_restore_toast:' + location.search;
+      if (!sessionStorage.getItem(_urlKey)) {
+        sessionStorage.setItem(_urlKey, '1');
+        setTimeout(()=>{if(typeof toast==='function')toast('🔗 공유 링크 조건 복원 — AI 단지 검색 버튼을 눌러주세요');},500);
+      }
+    } catch(_){ /* sessionStorage 비가용 시 fail-open: 토스트 표시 */
+      setTimeout(()=>{if(typeof toast==='function')toast('🔗 공유 링크 조건 복원 — AI 단지 검색 버튼을 눌러주세요');},500);
+    }
   }
 
   // 공유 URL 진입 처리
