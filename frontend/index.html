@@ -242,8 +242,12 @@ window.MHL.auth = window.MHL.auth || {
         A.signOut = async function(){ return sb.auth.signOut(); };
         A.getAccessToken = function(){ return A.session?.access_token || null; };
       } catch(e){
-        console.warn('[MHL.auth] init 실패', e);
-        if (window.Sentry) window.Sentry.captureException(e);
+        // ABORT-FILTER-2026-05-13 (Sprint CC++): AbortError = 정상 취소 (timeout / 사용자 navigate)
+        if (e?.name === 'AbortError') console.info('[MHL.auth] init aborted (timeout/navigation)');
+        else {
+          console.warn('[MHL.auth] init 실패', e);
+          if (window.Sentry) window.Sentry.captureException(e);
+        }
       }
     };
     s.onerror = function(){ console.warn('[MHL.auth] SDK CDN 로드 실패 — stub 모드 유지'); };
@@ -3235,8 +3239,11 @@ async function _migrateBookmarksOnce(){
     localStorage.setItem('mhl_bookmarks_synced_at', String(Date.now()));
     if(typeof renderBookmarks === 'function') renderBookmarks();
   } catch(e){
-    console.warn('[bookmarks sync] 실패 — 다음 로그인 때 재시도', e);
-    if(window.Sentry) window.Sentry.captureException(e);
+    if (e?.name === 'AbortError') console.info('[bookmarks sync] aborted (timeout/navigation)');
+    else {
+      console.warn('[bookmarks sync] 실패 — 다음 로그인 때 재시도', e);
+      if(window.Sentry) window.Sentry.captureException(e);
+    }
   }
 }
 
@@ -5815,9 +5822,12 @@ async function _pushBookmarksToServer(){
     localStorage.setItem('mhl_bookmarks_synced_at', String(Date.now()));
     _setSyncBadge('ok');
   } catch(e){
-    console.warn('[bookmark sync] 실패', e);
-    _setSyncBadge('err');
-    if(window.Sentry) window.Sentry.captureException(e);
+    if (e?.name === 'AbortError') { console.info('[bookmark sync] aborted (timeout/navigation)'); _setSyncBadge('err'); }
+    else {
+      console.warn('[bookmark sync] 실패', e);
+      _setSyncBadge('err');
+      if(window.Sentry) window.Sentry.captureException(e);
+    }
   } finally {
     _syncInflight = false;
   }
@@ -5963,8 +5973,11 @@ async function _deleteBookmarkOnServer(id){
     });
     if(!r.ok && r.status !== 404) throw new Error('DELETE HTTP ' + r.status);
   } catch(e){
-    console.warn('[bookmark delete] 실패', e);
-    if(window.Sentry) window.Sentry.captureException(e);
+    if (e?.name === 'AbortError') console.info('[bookmark delete] aborted (timeout/navigation)');
+    else {
+      console.warn('[bookmark delete] 실패', e);
+      if(window.Sentry) window.Sentry.captureException(e);
+    }
   }
 }
 
