@@ -7,6 +7,8 @@ const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
 const cache = require('../cache');
 const logger = require('../logger');
+// TXAPT-MATCH-2026-05-13 (Sprint Z): master 정식명 (잠실파크리오) ↔ MOLIT raw ("파크리오") 매칭
+const { baseAptName, normalizeAptName } = require('../utils/aptName');
 
 const MOLIT_DETAIL_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
 // MOLIT API 성공 코드: '00'(구버전) 또는 '000'(신버전) — 다른 서비스에서도 재사용
@@ -287,9 +289,30 @@ async function getTransactionsByApt(lawdCd, aptName) {
   );
 
   const flat = allResults.flat();
-  const filtered = aptName
-    ? flat.filter(t => t.aptName.includes(aptName.replace(/\s/g, '')))
-    : flat;
+  // TXAPT-MATCH-2026-05-13 (Sprint Z — 운영자 발견 "안 맞는 아파트 너무 많아" [VERIFIED]):
+  //   기존: 한방향 contains — `MOLIT_raw.includes(user_query)` 만.
+  //         "잠실파크리오" (KAPT 정식명 master 클릭) → MOLIT raw "파크리오" 매칭 실패 (substring 아님).
+  //   변경: 양방향 contains + baseAptName (Sprint S helper) 으로 동/letter/층 suffix 제거 후 비교.
+  //
+  //   false-positive 가드:
+  //     - lawdCd 가 같은 (구 안 데이터만) 이므로 sigungu 안에서 match — 동명이지 단지 위험 미미
+  //     - normalize 후 길이 >= 3 만 매칭 (너무 짧은 단지명 차단)
+  let filtered = flat;
+  if (aptName) {
+    const qStripped = String(aptName).replace(/\s/g, '');
+    const qBase = baseAptName(aptName).replace(/\s/g, '');
+    filtered = flat.filter(t => {
+      const rawName = String(t.aptName || '');
+      const rawStripped = rawName.replace(/\s/g, '');
+      const rawBase = baseAptName(rawName).replace(/\s/g, '');
+      // 양방향 contains (raw ↔ query, base 양쪽)
+      if (rawStripped.includes(qStripped)) return true;
+      if (qStripped.length >= 3 && qStripped.includes(rawStripped) && rawStripped.length >= 3) return true;
+      if (rawBase.includes(qBase) && qBase.length >= 3) return true;
+      if (qBase.includes(rawBase) && rawBase.length >= 3) return true;
+      return false;
+    });
+  }
 
   const sorted = filtered.sort((a, b) => {
     const da = a.dealYear * 10000 + a.dealMonth * 100 + a.dealDay;
