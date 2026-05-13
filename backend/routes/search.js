@@ -531,11 +531,11 @@ router.get('/facility', async (req, res) => {
       candidates.sort((a, b) => b._score - a._score || a.aptName.localeCompare(b.aptName));
       altCandidates = candidates.slice(0, 8).map(({ _score, ...c }) => c);
     }
-    // FACILITY-HELPER-2026-05-12: 검색 path 의 facility 도 propertyService 와 동일 schema 로 변환.
-    //   resolveFacility 반환: { kaptCode, official, raw } — raw 가 KAPT info.
-    //   buildFacility(info, kaptCode) 로 표준 facility 객체 빌드 → frontend 단지정보 탭이 정상 표시.
+    // FACILITY-HELPER-2026-05-12 + DTL-INFO-2026-05-13 (Sprint X):
+    //   resolveFacility 반환: { kaptCode, official, raw, detail } — Sprint X 부터 detail 동봉.
+    //   buildFacility(info, kaptCode, detail) 로 표준 facility 객체 빌드 (주차 등 detail 필드 포함).
     const builtFacility = facility
-      ? Object.assign(buildFacility(facility.raw, facility.kaptCode) || {}, {
+      ? Object.assign(buildFacility(facility.raw, facility.kaptCode, facility.detail) || {}, {
           official: facility.official || null,
         })
       : null;

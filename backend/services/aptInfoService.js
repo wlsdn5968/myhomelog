@@ -14,6 +14,12 @@ const logger = require('../logger');
 const APT_BASIS_URL = 'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3';
 const APT_LIST_URL = 'https://apis.data.go.kr/1613000/AptListService3/getRoadnameAptList3';
 const APT_LIST_SGG_URL = 'https://apis.data.go.kr/1613000/AptListService3/getSigunguAptList3';
+// DTL-INFO-2026-05-13 (Sprint X): KAPT V4 detail endpoint (주차/승강기/CCTV/편의시설 정보)
+//   BasisInfo 와 별개 endpoint. data.go.kr 표준 — V4 / V3 fallback.
+const APT_DTL_URLS = [
+  'https://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusDtlInfoV4',
+  'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusDtlInfoV3',
+];
 
 function isKeyMissing() {
   const key = process.env.MOLIT_API_KEY;
@@ -170,4 +176,43 @@ async function getAptListBySgg(sigunguCode) {
   }
 }
 
-module.exports = { getAptBasisInfo, findAptByRoadName, getAptListBySgg };
+/**
+ * DTL-INFO-2026-05-13 (Sprint X): KAPT V4 detail 정보 (주차/승강기/CCTV/편의시설/난방).
+ *   BasisInfo (이미 사용) 는 단지 기본정보만 — 주차 필드 없음.
+ *   Detail 은 별개 endpoint — V4 → V3 fallback.
+ *   동일 kaptCode 사용. 캐시 30일 (단지 시설은 거의 안 바뀜).
+ */
+async function getAptDtlInfo(kaptCode) {
+  if (!kaptCode || isKeyMissing()) return null;
+  const cacheKey = `aptdtl:${kaptCode}`;
+  const cached = cache.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  for (const url of APT_DTL_URLS) {
+    let r;
+    try {
+      r = await axios.get(url, {
+        params: { serviceKey: process.env.MOLIT_API_KEY, kaptCode, _type: 'json' },
+        timeout: 8000,
+        headers: { Accept: 'application/json' },
+      });
+    } catch (e) {
+      const status = e?.response?.status;
+      if (status && status >= 400 && status < 500) continue; // 404 등 → 다음 endpoint
+      continue;
+    }
+    const item = r.data?.response?.body?.item || null;
+    if (item && typeof item === 'object' && Object.keys(item).length > 0) {
+      // 의미 있는 값 1개 이상 있어야 (모두 null 인 경우 차단 — Sprint O 와 같은 보호)
+      const meaningful = item.kaptdPcnt || item.kaptdPcntha || item.kaptdPcntzs || item.kaptdEcntp || item.kaptdCccnt;
+      if (meaningful) {
+        cache.set(cacheKey, item, 86400 * 30);
+        return item;
+      }
+    }
+  }
+  cache.set(cacheKey, null, 600); // 10분 short cache (실패)
+  return null;
+}
+
+module.exports = { getAptBasisInfo, getAptDtlInfo, findAptByRoadName, getAptListBySgg };

@@ -14,7 +14,7 @@
  */
 const axios = require('axios');
 const { getSupabaseAdmin } = require('../db/client');
-const { getAptListBySgg } = require('./aptInfoService');
+const { getAptListBySgg, getAptDtlInfo } = require('./aptInfoService');
 const cache = require('../cache');
 const logger = require('../logger');
 
@@ -395,14 +395,21 @@ async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, 
     if (m.facility && m.facility_fetched_at) {
       const ageDays = (Date.now() - new Date(m.facility_fetched_at).getTime()) / (1000*60*60*24);
       if (ageDays < CACHE_TTL_DAYS) {
-        const out = { kaptCode: m.kapt_code, official: m.apt_name, raw: m.facility };
+        // DTL-INFO-2026-05-13 (Sprint X): 캐시된 BasisInfo 와 함께 detail 도 병렬 fetch.
+        //   detail 은 별도 cache (30일) — 단지 캐시 hit 라도 detail 은 따로 받아옴.
+        const detail = await getAptDtlInfo(m.kapt_code).catch(() => null);
+        const out = { kaptCode: m.kapt_code, official: m.apt_name, raw: m.facility, detail };
         cache.set(memKey, out, 3600);
         return out;
       }
     }
 
     // API 호출 + DB 갱신 (fire-and-forget UPSERT)
-    const raw = await fetchFromApi(m.kapt_code);
+    // Sprint X: BasisInfo + Detail 을 병렬로 fetch (KAPT API 단일 호출 비용 비슷)
+    const [raw, detail] = await Promise.all([
+      fetchFromApi(m.kapt_code),
+      getAptDtlInfo(m.kapt_code).catch(() => null),
+    ]);
     if (raw) {
       const a = admin();
       if (a) {
@@ -414,7 +421,7 @@ async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, 
       }
     }
 
-    const out = raw ? { kaptCode: m.kapt_code, official: m.apt_name, raw } : null;
+    const out = raw ? { kaptCode: m.kapt_code, official: m.apt_name, raw, detail } : null;
     cache.set(memKey, out, out ? 3600 : 300);
     return out;
   }

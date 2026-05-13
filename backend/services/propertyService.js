@@ -12,7 +12,7 @@
  * 대신 최신 실거래가가 가장 객관적인 시세 지표로 동등하게 기능함.
  */
 const { getTransactionsByApt, analyzeTransactions } = require('./transactionService');
-const { getAptListBySgg, getAptBasisInfo } = require('./aptInfoService');
+const { getAptListBySgg, getAptBasisInfo, getAptDtlInfo } = require('./aptInfoService');
 const { resolveCoordBatch } = require('./geocodeCacheService');
 const { resolveSchoolsBatch } = require('./schoolService');
 const { isRegulatedRegion, getRegulatedKeywords, SEOUL_GU_KEYWORDS } = require('./regulationsService');
@@ -138,6 +138,39 @@ function buildTags(apt) {
   const pyeongCount = (apt.pyeongStats || []).length;
   if (pyeongCount >= 4) tags.push('다양평형');
   return tags;
+}
+
+// ── 종합 점수 (Sprint Y 2026-05-13 — 운영자 발견 "왜 다 95점?") ──
+// 기존: `min(95, 50 + min(dealCount,30)*1.5)` 은 cap 으로 단지 차등 부족.
+// 다요인: 거래량/신축도/평형다양 (recommendations 단계, facility 없음)
+function _calcBaseScore(apt) {
+  let s = 30; // 기본
+  // 1) 거래량 (max 30점) — 50건+ cap
+  s += Math.min(apt.dealCount || 0, 50) * 0.6;
+  // 2) 신축도 (max 18점) — age 단계
+  const yr = parseInt(apt.buildYear) || 0;
+  const age = yr ? (new Date().getFullYear() - yr) : 30;
+  if (age <= 5) s += 18;
+  else if (age <= 10) s += 14;
+  else if (age <= 20) s += 10;
+  else if (age <= 30) s += 5;
+  // 3) 평형 다양 (max 8점)
+  const distinctP = Array.isArray(apt.pyeongStats) ? new Set(apt.pyeongStats.map(p => p.pyeong)).size : 0;
+  s += Math.min(distinctP, 4) * 2;
+  return Math.max(20, Math.min(86, Math.round(s))); // facility 보정 12점 여유
+}
+
+// enriched 단계에서 facility 받은 후 추가 보정 (단지 규모 + 주차 — max +12점)
+function _applyFacilityToScore(baseScore, facility) {
+  let s = baseScore || 30;
+  const th = facility?.totalHouseholds || 0;
+  if (th >= 3000) s += 8;
+  else if (th >= 1000) s += 6;
+  else if (th >= 500) s += 3;
+  const pr = facility?.parkingRatio || 0;
+  if (pr >= 1.2) s += 4;
+  else if (pr >= 0.8) s += 2;
+  return Math.max(20, Math.min(98, Math.round(s)));
 }
 
 /**
@@ -283,7 +316,10 @@ async function getAIRecommendations(userCondition) {
       maxPrice: maxAuk,
       buildYear: apt.buildYear,
       pyeong: `${p.pyeong}평 (전용 ${p.excluUseAr}㎡)`,
-      score: Math.min(95, 50 + Math.min(apt.dealCount, 30) * 1.5),
+      // SCORE-MULTIFACTOR-2026-05-13 (Sprint Y — 운영자 발견: "왜 다 95점?"):
+      //   기존: `min(95, 50 + min(dealCount,30)*1.5)` → dealCount ≥ 30 단지 모두 95점 (cap).
+      //   변경: 다요인 합산 (거래량/신축/평형다양). facility-derived 보정은 enriched 단계에서.
+      score: _calcBaseScore(apt),
       ltv: ltvInfo.ltv,
       maxLoan: ltvInfo.maxLoan,
       pros: `${p.pyeong}평형 6개월 ${p.dealCount}건 거래 · 평균 ${avgAuk}억 · ${apt.buildYear||'?'}년식`,
@@ -344,9 +380,13 @@ async function getAIRecommendations(userCondition) {
       const nmKey = normalizeName(apt.aptName);
       const kaptCode = kaptCodeMap.get(`${nmKey}|${apt.umdNm || ''}`) || kaptCodeMap.get(nmKey);
       if (!kaptCode) return rec;
-      const info = await getAptBasisInfo(kaptCode);
-      // FACILITY-HELPER-2026-05-12: buildFacility 로 일관된 schema 빌드 (search path 와 공유)
-      const facility = buildFacility(info, kaptCode);
+      // DTL-INFO-2026-05-13 (Sprint X): BasisInfo + Detail 병렬 fetch (주차 정보 포함)
+      const [info, detail] = await Promise.all([
+        getAptBasisInfo(kaptCode),
+        getAptDtlInfo(kaptCode).catch(() => null),
+      ]);
+      // FACILITY-HELPER-2026-05-12 + DTL-INFO-2026-05-13: detail 도 buildFacility 에 전달
+      const facility = buildFacility(info, kaptCode, detail);
       // Fallback: info 없으면 allAptList 기본 데이터로 address 보강
       if (!info) {
         const basic = allAptByCode.get(kaptCode);
@@ -361,9 +401,12 @@ async function getAIRecommendations(userCondition) {
       if (parkingRatio && parkingRatio >= 1.2) moreTags.push('주차여유');
       if (totalHouseholds >= 1000) moreTags.push('대단지');
       else if (totalHouseholds >= 500) moreTags.push('중대단지');
+      // SCORE-MULTIFACTOR-2026-05-13 (Sprint Y): facility 알게 된 후 score 보정.
+      const updatedScore = _applyFacilityToScore(rec.score, facility);
       return {
         ...rec,
         facility,
+        score: updatedScore,
         tags: Array.from(new Set(moreTags)),
       };
     })
