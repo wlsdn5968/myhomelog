@@ -160,7 +160,9 @@ function _calcBaseScore(apt) {
   return Math.max(20, Math.min(86, Math.round(s))); // facility 보정 12점 여유
 }
 
-// enriched 단계에서 facility 받은 후 추가 보정 (단지 규모 + 주차 — max +12점)
+// enriched 단계에서 facility 받은 후 추가 보정
+//   기본 (Sprint Y): 단지 규모 (max 8) + 주차 (max 4) = +12점
+//   확장 (Sprint CC+): 위치 가치 (지하철 도보 + 교육시설) = +6점
 function _applyFacilityToScore(baseScore, facility) {
   let s = baseScore || 30;
   const th = facility?.totalHouseholds || 0;
@@ -170,6 +172,15 @@ function _applyFacilityToScore(baseScore, facility) {
   const pr = facility?.parkingRatio || 0;
   if (pr >= 1.2) s += 4;
   else if (pr >= 0.8) s += 2;
+  // LOC-SCORE-2026-05-13 (Sprint CC+): 위치 가치 (지하철 도보 + 교육시설)
+  //   KAPT detail 의 정성 정보 활용 — 사용자 입지 가치 인식 반영.
+  const sub = String(facility?.walkSubwayMin || '');
+  if (sub.includes('5분이내')) s += 4;
+  else if (sub.includes('5~10분')) s += 2;
+  const edu = String(facility?.educationFacility || '');
+  // 빈 괄호 noise 제거 후 길이 검사
+  const eduMeaningful = edu.replace(/[가-힣A-Za-z]+\(\s*\)/g, '').replace(/[,\s]/g, '');
+  if (eduMeaningful.length >= 5) s += 2; // 학교 정보 있으면 가산
   return Math.max(20, Math.min(98, Math.round(s)));
 }
 
