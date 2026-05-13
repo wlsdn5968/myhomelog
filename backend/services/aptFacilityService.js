@@ -346,15 +346,22 @@ async function _lookupKaptByName(lawdCd, aptName, sigungu, umdNm) {
 /**
  * 단지 facility 해결 — { aptName, sigungu, umdNm, aptSeq?, lawdCd? } 로 호출
  *
- * fallback chain (Sprint M + N):
+ * fallback chain (Sprint N + T):
  *   1) apt_master 매칭 (정확 → 부분 → 토큰)
- *   2) KAPT SigunguAptList3 runtime lookup (lawdCd 필요)         ← Sprint N (진짜 fix)
- *   3) aptSeq 로 KAPT BasisInfo 직접 호출 (effect 부분 — kaptCode 만) ← Sprint M (대부분 무효)
- *   4) null
+ *   2) KAPT SigunguAptList3 runtime lookup (lawdCd 필요)         ← Sprint N (진짜 fix) + Sprint T (LCS insertion 매칭)
+ *   3) null
+ *
+ *   NOTE: Sprint M 의 aptSeq fallback 은 Sprint V (2026-05-13) 에서 제거됨.
+ *   MOLIT aptSeq (예: 11710-8865) 가 KAPT kaptCode (예: A10025850) 와 형식 다름 — 늘 실패 → 무효.
+ *   Sprint O 의 tryEndpoint all-null 검출이 빈 응답 차단해서 회귀 위험은 0 이었지만,
+ *   불필요한 KAPT API 호출 소비 + 코드 noise 제거.
+ *
+ *   호환성: 함수 signature 의 aptSeq param 은 유지 (frontend / search.js 호출자 호환).
+ *   파라미터 받지만 무시됨.
  *
  * @returns {{ kaptCode, official, raw }|null}
  */
-async function resolveFacility({ aptName, sigungu, umdNm, aptSeq, lawdCd }) {
+async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, ignored */, lawdCd }) {
   if (!aptName) return null;
   const memKey = `facility:${aptName}|${sigungu||''}|${umdNm||''}|${aptSeq||''}|${lawdCd||''}`;
   const mem = cache.get(memKey);
@@ -412,20 +419,10 @@ async function resolveFacility({ aptName, sigungu, umdNm, aptSeq, lawdCd }) {
     return out;
   }
 
-  // APTSEQ-FALLBACK-2026-05-12: apt_master 매칭 실패 → MOLIT aptSeq 로 KAPT 직접 호출.
-  //   apt_master 동기화 누락 단지 (예: 헬리오시티, 리센츠, 파크리오) 도 facility 보장.
-  //   aptSeq 가 KAPT kaptCode 와 동일 (data.go.kr V4 API 표준).
-  if (aptSeq && String(aptSeq).trim()) {
-    const code = String(aptSeq).trim();
-    const raw = await fetchFromApi(code);
-    if (raw) {
-      logger.info({ aptName, sigungu, umdNm, aptSeq: code },
-        'APTSEQ-FALLBACK: apt_master 미매칭 → MOLIT aptSeq 로 KAPT facility 직접 호출 성공');
-      const out = { kaptCode: code, official: aptName, raw };
-      cache.set(memKey, out, 3600);
-      return out;
-    }
-  }
+  // Sprint V (2026-05-13): aptSeq fallback 제거됨. MOLIT aptSeq != KAPT kaptCode 형식 — 늘 빈 응답.
+  // Sprint U (Supabase MCP 직접 backfill) + Sprint N (runtime KAPT-LOOKUP) + Sprint T (LCS 매칭) 으로
+  // 송파구/양천구 327 단지 + 다른 KAPT 매칭 가능 단지 모두 정상 해결됨.
+  // 본 path 까지 도달 = 진짜 KAPT 미등록 단지 (대부분 청년주택/임대 등) → null 반환 + 짧은 cache.
 
   cache.set(memKey, null, 300);
   return null;
