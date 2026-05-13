@@ -667,6 +667,7 @@ async function fetchCandidateApts(admin, input, limit) {
       const f = await resolveFacility({ aptName: c.apt_name, sigungu: c.sigungu, umdNm: c.umd_nm });
       if (f?.raw) {
         const raw = f.raw;
+        const detail = f.detail || {};
         c.households = raw.kaptdaCnt || raw.householdCount || raw.kaptCount || null;
         // build_year 우선순위 #1: KAPT 공식 사용승인일
         const useDate = raw.kaptUsedate || raw.kaptUseDate || raw.useApprovalDate;
@@ -676,11 +677,14 @@ async function fetchCandidateApts(admin, input, limit) {
         }
         c.master_matched = true;
         c.master_name = f.official; // 정식 단지명 (예: '답십리동서울한양')
-        // 추가 풍부화: 시공사·주차·승강기 (AI prompt 활용)
+        // PARK-FIX-2026-05-13 (Sprint AA): KAPT V4 주차는 detail (kaptdPcnt 지상 + kaptdPcntu 지하)
+        const surfP = parseInt(detail.kaptdPcnt) || 0;
+        const underP = parseInt(detail.kaptdPcntu) || 0;
+        const parking = (surfP + underP) || parseInt(raw.kaptdPcnt) || null;
         c.kaptInfo = {
           builder: raw.kaptBcompany || raw.bcompany || null,
-          parking: raw.kaptdPcnt || raw.parkingCount || null,
-          elevators: raw.kaptdEcapa || null,
+          parking,
+          elevators: parseInt(detail.kaptdEcnt) || parseInt(raw.kaptdEcntp) || null,
         };
       }
     } catch (e) {

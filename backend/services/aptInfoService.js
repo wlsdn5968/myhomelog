@@ -204,7 +204,8 @@ async function getAptDtlInfo(kaptCode) {
     const item = r.data?.response?.body?.item || null;
     if (item && typeof item === 'object' && Object.keys(item).length > 0) {
       // 의미 있는 값 1개 이상 있어야 (모두 null 인 경우 차단 — Sprint O 와 같은 보호)
-      const meaningful = item.kaptdPcnt || item.kaptdPcntha || item.kaptdPcntzs || item.kaptdEcntp || item.kaptdCccnt;
+      // FIELD-FIX-2026-05-13 (Sprint AA): V4 진짜 필드 — kaptdPcntu (지하) / kaptdEcnt (승강기, detail)
+      const meaningful = item.kaptdPcnt || item.kaptdPcntu || item.kaptdEcnt || item.kaptdCccnt;
       if (meaningful) {
         cache.set(cacheKey, item, 86400 * 30);
         return item;

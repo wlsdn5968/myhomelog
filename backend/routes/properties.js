@@ -1,17 +1,26 @@
 const express = require('express');
 const router = express.Router();
 const { getAIRecommendations } = require('../services/propertyService');
-const { getAptBasisInfo } = require('../services/aptInfoService');
+const { getAptBasisInfo, getAptDtlInfo } = require('../services/aptInfoService');
 const { getNearbyAmenities, getTransitMinutes, getCarMinutes, keywordToCoord } = require('../services/kakaoService');
 const { validatePropertySearch } = require('../middleware/validation');
 
 // GET /api/properties/info?aptSeq=A13559101
-// 단지 기본정보 (총세대수·동수·준공일자 등)
+// 단지 기본정보 (총세대수·동수·준공일자·주차 등)
+// PARK-FIX-2026-05-13 (Sprint AA): KAPT V4 의 주차는 detail endpoint 필요 (BasisInfo 에 부재).
+// BasisInfo + DtlInfo 병렬 호출 + 진짜 필드명 (kaptdPcnt 지상 + kaptdPcntu 지하) 합산.
 router.get('/info', async (req, res) => {
   const { aptSeq } = req.query;
   if (!aptSeq) return res.status(400).json({ error: 'aptSeq 필수' });
-  const info = await getAptBasisInfo(String(aptSeq).trim());
+  const code = String(aptSeq).trim();
+  const [info, detail] = await Promise.all([
+    getAptBasisInfo(code),
+    getAptDtlInfo(code).catch(() => null),
+  ]);
   if (!info) return res.json({ available: false, message: '단지 기본정보 조회 실패 또는 데이터 없음' });
+  const surfP = parseInt(detail?.kaptdPcnt) || 0;
+  const underP = parseInt(detail?.kaptdPcntu) || 0;
+  const parkingTotal = (surfP + underP) || parseInt(info.kaptdPcnt) || null;
   res.json({
     available: true,
     aptName: info.kaptName,
@@ -19,7 +28,9 @@ router.get('/info', async (req, res) => {
     dongCount: info.kaptDongCnt,
     householdCount: info.kaptdaCnt,
     builtDate: info.kaptUsedate,
-    parkingTotal: info.kaptdPcnt,
+    parkingTotal,
+    elevatorCount: parseInt(detail?.kaptdEcnt) || parseInt(info.kaptdEcntp) || null,
+    cctvCount: parseInt(detail?.kaptdCccnt) || null,
     heatType: info.codeHeatNm,
     floorArea: info.kaptMarea,
     raw: process.env.NODE_ENV === 'development' ? info : undefined,
