@@ -7,8 +7,10 @@ const axios = require('axios');
 const { createClient } = require('@supabase/supabase-js');
 const cache = require('../cache');
 const logger = require('../logger');
-// TXAPT-MATCH-2026-05-13 (Sprint Z): master 정식명 (잠실파크리오) ↔ MOLIT raw ("파크리오") 매칭
-const { baseAptName, normalizeAptName } = require('../utils/aptName');
+// TXAPT-MATCH-2026-05-13 (Sprint Z + Z+): master 정식명 ↔ MOLIT raw 매칭
+//   - Z: 양방향 contains + baseAptName (suffix 정규화)
+//   - Z+: LCS insertion (builder/지역명 중간 삽입 case — 서강쌍용예가↔서강예가, 한신코아↔한신잠실코아)
+const { baseAptName, normalizeAptName, isInsertionMatch } = require('../utils/aptName');
 
 const MOLIT_DETAIL_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
 // MOLIT API 성공 코드: '00'(구버전) 또는 '000'(신버전) — 다른 서비스에서도 재사용
@@ -305,11 +307,15 @@ async function getTransactionsByApt(lawdCd, aptName) {
       const rawName = String(t.aptName || '');
       const rawStripped = rawName.replace(/\s/g, '');
       const rawBase = baseAptName(rawName).replace(/\s/g, '');
-      // 양방향 contains (raw ↔ query, base 양쪽)
+      // 1) 양방향 contains (raw ↔ query, base 양쪽)
       if (rawStripped.includes(qStripped)) return true;
       if (qStripped.length >= 3 && qStripped.includes(rawStripped) && rawStripped.length >= 3) return true;
       if (rawBase.includes(qBase) && qBase.length >= 3) return true;
       if (qBase.includes(rawBase) && rawBase.length >= 3) return true;
+      // 2) LCS insertion (서강쌍용예가↔서강예가 같이 builder/지역명 중간 삽입 case)
+      //    Sprint Z+ (2026-05-13) — Sprint T 의 KAPT-LOOKUP 알고리즘과 동일.
+      //    sigungu 안에서만 적용되니 false-positive 위험 미미.
+      if (isInsertionMatch(aptName, rawName)) return true;
       return false;
     });
   }

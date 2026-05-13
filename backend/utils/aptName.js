@@ -122,4 +122,42 @@ function baseAptName(name) {
   return s.replace(/\s+/g, ' ').trim() || String(name).trim();
 }
 
-module.exports = { normalizeAptName, baseAptName };
+// LCS-MATCH-2026-05-13 (Sprint T → Sprint Z+ 으로 utils 추출):
+//   "한신잠실코아" ↔ "한신코아", "서강예가" ↔ "서강쌍용예가" 같이 KAPT 정식명에 builder/지역명 insertion case.
+//   shorter 가 longer 의 부분수열 (LCS 완전) + prefix/suffix 차단 가드.
+function _lcsLen(a, b) {
+  const m = a.length, n = b.length;
+  if (!m || !n) return 0;
+  const dp = new Array(n + 1).fill(0);
+  for (let i = 1; i <= m; i++) {
+    let prev = 0;
+    for (let j = 1; j <= n; j++) {
+      const tmp = dp[j];
+      if (a[i - 1] === b[j - 1]) dp[j] = prev + 1;
+      else if (dp[j - 1] > dp[j]) dp[j] = dp[j - 1];
+      prev = tmp;
+    }
+  }
+  return dp[n];
+}
+
+/**
+ * 두 단지명이 같은 단지인지 판정 (insertion 케이스 포함).
+ *  - shorter 가 longer 의 LCS 완전 부분수열
+ *  - longer.length - shorter.length ≤ 5
+ *  - shorter.length >= 4 (짧은 명칭 보호)
+ *  - longer 가 shorter 로 시작/끝 X (별개 단지 prefix/suffix 차단)
+ */
+function isInsertionMatch(a, b) {
+  if (!a || !b) return false;
+  const A = String(a).replace(/\([^)]*\)/g, '').replace(/\s+/g, '').replace(/아파트$/, '');
+  const B = String(b).replace(/\([^)]*\)/g, '').replace(/\s+/g, '').replace(/아파트$/, '');
+  const [shorter, longer] = A.length <= B.length ? [A, B] : [B, A];
+  if (shorter.length < 4) return false;
+  if (longer.length - shorter.length > 5) return false;
+  if (longer.startsWith(shorter)) return false;
+  if (longer.endsWith(shorter)) return false;
+  return _lcsLen(shorter, longer) === shorter.length;
+}
+
+module.exports = { normalizeAptName, baseAptName, isInsertionMatch };

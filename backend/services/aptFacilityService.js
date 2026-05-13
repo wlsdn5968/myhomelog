@@ -15,6 +15,7 @@
 const axios = require('axios');
 const { getSupabaseAdmin } = require('../db/client');
 const { getAptListBySgg, getAptDtlInfo } = require('./aptInfoService');
+const { isInsertionMatch } = require('../utils/aptName');
 const cache = require('../cache');
 const logger = require('../logger');
 
@@ -311,10 +312,10 @@ async function _lookupKaptByName(lawdCd, aptName, sigungu, umdNm) {
           return item;
         }
       }
-      // 1.7) LCS-MATCH-2026-05-13 (Sprint T): builder/지역명 insertion 매칭
+      // 1.7) LCS-MATCH-2026-05-13 (Sprint T → Sprint Z+ 으로 utils 추출):
       //       "한신잠실코아" ↔ KAPT "한신코아", "서강예가" ↔ KAPT "서강쌍용예가" 같은 case.
-      //       prefix/suffix 차단 가드로 "공덕래미안" ↔ "공덕래미안자이" 같은 별개 단지는 매칭 X.
-      if (_isInsertionMatch(stripped, itemStripped)) {
+      //       isInsertionMatch (backend/utils/aptName.js) — transactionService 와 동일 알고리즘.
+      if (isInsertionMatch(stripped, itemStripped)) {
         logger.info({ aptName, lawdCd, matched: item.kaptName, kaptCode: item.kaptCode, mode: 'lcs-insertion' },
           'KAPT-LOOKUP: SigunguAptList3 LCS 부분수열 매칭 성공');
         return item;
