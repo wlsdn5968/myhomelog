@@ -190,28 +190,40 @@ async function saveToDb(key, apt, schools) {
  * @param {Object} apt - { kaptCode?, aptName, sigungu?, umdNm?, lat, lng }
  * @returns {Promise<Array<{name,type,distance_m,...}>>}
  */
-// SCHOOL-BASE-NORMALIZE-2026-05-13 (Sprint EE+ + EE++): cache hit + 시/도 prefix dedupe
-//   - 부속명 제거 (Sprint EE+): "용원초등학교 꿈나무관" → "용원초등학교"
-//   - 시/도 prefix dedupe (Sprint EE++): 운영자 발견 "용원초등학교" + "서울용원초등학교" = 같은 학교
-//     카카오맵이 prefix 유무 차이로 같은 학교를 2 row 반환 → strip prefix 후 dedupe key 사용.
+// SCHOOL-BASE-NORMALIZE-2026-05-13 (Sprint EE+ + EE++ + EE+++): cache hit + prefix dedupe + type 재산정
+//   - 부속명 제거 (EE+): "용원초등학교 꿈나무관" → "용원초등학교"
+//   - 시/도 prefix dedupe (EE++): "용원초등학교" + "서울용원초등학교" = 같은 학교 (prefix 무시)
+//   - type 재산정 (EE+++): [VERIFIED 운영자 발견] kakao keyword='중학교' 검색이 "청원고등학교 청원관"
+//     같은 cross-type 결과 포함 → outer loop 의 type='중' 라벨 잘못. 학교명 끝 글자로 정확 라벨링.
 const _CITY_PREFIX_RE = /^(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/;
+function _typeFromName(baseName) {
+  if (!baseName) return null;
+  if (baseName.endsWith('초등학교')) return '초';
+  if (baseName.endsWith('중학교')) return '중';
+  if (baseName.endsWith('고등학교')) return '고';
+  if (baseName.endsWith('유치원')) return '유';
+  if (baseName.endsWith('어린이집')) return '어';
+  return null;
+}
 function _normalizeSchoolsList(schools) {
   if (!Array.isArray(schools)) return schools;
   const out = [];
   const seen = new Set();
-  // 거리 가까운 순으로 정렬 후 dedupe — 더 가까운 row (정확한 거리) 보존
+  // 거리 가까운 순 → dedupe — 더 가까운 row (정확한 거리) 보존
   const sorted = [...schools].sort((a, b) => (a?.distance_m || 0) - (b?.distance_m || 0));
   for (const s of sorted) {
     if (!s) continue;
     const m = String(s.name || '').match(/^(.*?(?:초등학교|중학교|고등학교|유치원|어린이집))(?:\s+.*)?$/);
     if (!m) continue; // 학교 정식명 아님 (학원 등) — drop
     const base = m[1];
-    // dedupe key: type + (시/도 prefix 제거된 base). 표시 name 은 그대로 (prefix 있는 정식명 가독성↑)
+    const correctType = _typeFromName(base);
+    if (!correctType) continue;
     const stripped = base.replace(_CITY_PREFIX_RE, '');
-    const key = (s.type || '') + ':' + stripped;
+    const key = correctType + ':' + stripped;
     if (seen.has(key)) continue;
     seen.add(key);
-    out.push({ ...s, name: base });
+    // type 재산정 → kakao keyword 검색 cross-type 결과도 정확 분류
+    out.push({ ...s, name: base, type: correctType });
   }
   return out;
 }
