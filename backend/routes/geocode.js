@@ -30,7 +30,18 @@ async function kakaoGeocode(key, aptName, area, sigungu, umdNm) {
       if (!docs.length) continue;
 
       // STAB-AUDIT-2026-05-06: 환각 차단 — sgg 명시 시 결과 address 가 sgg 포함하는지 검증
+      // Sprint LL (2026-05-16): umdNm + place_name + category 추가 검증.
+      //   Audit 결과 (apt_geocache 7195 rows 중 199건 의심):
+      //     - 73건 non-apt place_name (어린이집/사우나/마트 등)
+      //     - 110건 umdNm 불일치 (같은 sigungu 내 다른 동)
+      //     - 16건 sigungu 불일치
+      //   3-tier 점수 매칭:
+      //     - umdMatch: +2, aptCategory: +2, nonAptPenalty: -5
+      //     - bestScore < 0 차단
+      const NON_APT_PATTERNS = /빌라|사우나|어린이집|유치원|학원|마트|편의점|식당|카페|사옥|호텔|모텔|병원|약국|의원|학교|교회|성당|사찰|공원|체육관|주유소|미용실|세탁소|꽃집/;
+      const NON_APT_CATEGORY = /빌라|사우나|어린이집|유치원|학원|마트|편의점|음식점|카페|호텔|모텔|병원|약국|학교|종교|공원|체육|주유소|미용|세탁|꽃집/;
       let chosen = null;
+      let bestScore = -1;
       for (const d of docs) {
         const lat = parseFloat(d.y);
         const lng = parseFloat(d.x);
@@ -39,11 +50,22 @@ async function kakaoGeocode(key, aptName, area, sigungu, umdNm) {
           continue;
         }
         const addrText = d.address_name || d.address?.address_name || '';
+        const placeName = d.place_name || '';
+        const categoryName = d.category_name || '';
         if (sgg && !addrText.includes(sgg)) continue; // sigungu 불일치 → 환각 reject
-        chosen = { d, lat, lng, addrText };
-        break;
+        const isNonApt = (placeName && NON_APT_PATTERNS.test(placeName))
+                      || (categoryName && NON_APT_CATEGORY.test(categoryName));
+        const umdMatch = umd && addrText.includes(umd) ? 2 : 0;
+        const aptCategory = categoryName.includes('아파트') ? 2 : 0;
+        const nonAptPenalty = isNonApt ? -5 : 0;
+        const score = umdMatch + aptCategory + nonAptPenalty;
+        if (score > bestScore) {
+          bestScore = score;
+          chosen = { d, lat, lng, addrText, score };
+        }
       }
-      if (!chosen) continue;
+      // Sprint LL: bestScore < 0 차단 — 매칭 신뢰도 부족 (非아파트 카테고리 등)
+      if (!chosen || chosen.score < 0) continue;
 
       return {
         lat: chosen.lat, lng: chosen.lng,
