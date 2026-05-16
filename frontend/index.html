@@ -4128,8 +4128,17 @@ function loadMap() {
 }
 
 function loadNaverMap(clientId){
-  if (window.naver?.maps) { initNaverMap(); return; }
+  if (window.naver?.maps?.Map) { initNaverMap(); return; }
   if (!clientId) { loadLeaflet(); return; } // safety
+  // Sprint HH: NCP auth failure 시 호출되는 NCP 공식 콜백. SDK 로드 전에 등록.
+  window.navermap_authFailure = function(){
+    console.warn('[naver-maps] 인증 실패 (navermap_authFailure) — Leaflet fallback');
+    if (window.Sentry) window.Sentry.captureMessage('Naver Maps auth failed (navermap_authFailure) — Leaflet fallback');
+    // Naver SDK 가 그린 깨진 타일들 청소
+    const el = document.getElementById('mapEl');
+    if (el) el.innerHTML = '';
+    loadLeaflet();
+  };
   const sc = document.createElement('script');
   sc.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${encodeURIComponent(clientId)}`;
   sc.async = true;
@@ -4143,6 +4152,12 @@ function loadNaverMap(clientId){
 }
 
 function initNaverMap(){
+  // Sprint HH: 스크립트 로드는 됐지만 auth 실패로 naver.maps.Map 이 없을 수 있음 (navermap_authFailure 가 처리하지만 safety).
+  if (!window.naver?.maps?.Map) {
+    console.warn('[naver-maps] SDK 로드 후 naver.maps.Map 미정의 — Leaflet fallback');
+    loadLeaflet();
+    return;
+  }
   naverReady=true;
   mapObj=new naver.maps.Map('mapEl',{
     center:new naver.maps.LatLng(37.565,127.02),
