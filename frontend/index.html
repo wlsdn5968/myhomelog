@@ -4140,7 +4140,9 @@ function loadNaverMap(clientId){
     loadLeaflet();
   };
   const sc = document.createElement('script');
-  sc.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${encodeURIComponent(clientId)}`;
+  // Sprint II: NCP Maps API new format. legacy `ncpClientId` deprecated → `ncpKeyId`.
+  // 값은 동일 (Maps Application Client ID). docs: https://navermaps.github.io/maps.js.ncp/docs/tutorial-2-Getting-Started.html
+  sc.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${encodeURIComponent(clientId)}`;
   sc.async = true;
   sc.onload = initNaverMap;
   sc.onerror = () => {
