@@ -140,18 +140,43 @@ async function kakaoGeocode({ aptName, sigungu, umdNm, address }) {
       //   "대우" 검색 시 Kakao 첫 결과가 "구로구 고척동 대우" (요청 sigungu="성동구") → 잘못된 좌표.
       //   변경: 결과 후보 중 sigungu 일치 row 만 수락. 일치 없으면 다음 query 후보로.
       //   sgg 미지정 (검색 fallback `${name}` only) 인 경우는 검증 X — 좌표 정확성 보장 X.
+      // Sprint LL (2026-05-16, 운영자 발견 "좌표·주소 불일치 많음"):
+      //   ↳ Audit: 7195 rows 중 199건 의심 (73 non-apt place_name + 110 umdNm 불일치 + 16 sigungu 불일치)
+      //   #1 umdNm 검증 추가 — sgg 같지만 다른 동 응답 차단 (예: 모아1 중흥동 요청 → 두암동 응답)
+      //   #2 place_name 카테고리 필터 — 어린이집/사우나/학원/마트/오피스텔 등 非아파트 결과 차단
+      //   #3 category_name 도 검증 — "주거시설>아파트" 만 우선 (Kakao 의 카테고리 분류)
+      const NON_APT_PATTERNS = /빌라|사우나|어린이집|유치원|학원|마트|편의점|식당|카페|사옥|호텔|모텔|병원|약국|의원|학교|교회|성당|사찰|공원|체육관|주유소|미용실|세탁소|꽃집/;
+      const NON_APT_CATEGORY = /빌라|사우나|어린이집|유치원|학원|마트|편의점|음식점|카페|호텔|모텔|병원|약국|학교|종교|공원|체육|주유소|미용|세탁|꽃집/;
       let chosen = null;
+      let bestScore = -1;
       for (const d of docs) {
         const lat = parseFloat(d.y);
         const lng = parseFloat(d.x);
         if (!isValidKoreaCoord(lat, lng)) continue;
         const addrText = d.address_name || d.address?.address_name || '';
+        const placeName = d.place_name || '';
+        const categoryName = d.category_name || '';
         // sgg 명시 시 address 가 sgg 포함하는지 검증 (환각 차단)
         if (sgg && !addrText.includes(sgg)) continue;
-        chosen = { d, lat, lng, addrText };
-        break;
+        // Sprint LL #2/#3: 非아파트 place_name 또는 category 면 score 페널티 (다른 후보 우선)
+        const isNonApt = (placeName && NON_APT_PATTERNS.test(placeName))
+                      || (categoryName && NON_APT_CATEGORY.test(categoryName));
+        // Sprint LL #1: umdNm 일치 score
+        const umdMatch = umd && addrText.includes(umd) ? 2 : 0;
+        // 카테고리 "아파트" 일치 score
+        const aptCategory = categoryName.includes('아파트') ? 2 : 0;
+        // 페널티
+        const nonAptPenalty = isNonApt ? -5 : 0;
+        const score = umdMatch + aptCategory + nonAptPenalty;
+        if (score > bestScore) {
+          bestScore = score;
+          chosen = { d, lat, lng, addrText, placeName, score };
+        }
       }
-      if (!chosen) continue;
+      // Sprint LL: bestScore 가 0 미만이면 차단 — 매칭 신뢰도 부족 (非아파트 카테고리 등)
+      //   - 정상 아파트 매칭: aptCategory(2~3) + umdMatch(0~2) = 2~5
+      //   - 잘못된 매칭: nonAptPenalty(-5) + umdMatch(0~2) = -5 ~ -3
+      if (!chosen || chosen.score < 0) continue;
 
       return {
         lat: chosen.lat, lng: chosen.lng,
