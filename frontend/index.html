@@ -4331,22 +4331,28 @@ function mkNaverOverlay(p){
   const subTxt = p._areaSearch
     ? (p.dealCount > 0 ? `${p.dealCount}건` : '신규')
     : (p.score != null ? `${p.score}점` : (p.dealCount60d ? `${p.dealCount60d}건` : '단지'));
-  const ov=new naver.maps.CustomOverlay({
+  // Sprint KK (2026-05-16): CustomOverlay deprecated → Marker + icon.content (HTML)
+  // 공식 docs: https://navermaps.github.io/maps.js.ncp/docs/tutorial-5-marker-html-icon.example.html
+  const ov=new naver.maps.Marker({
     position:new naver.maps.LatLng(p.lat,p.lng),
-    content:`<div class="nmap-pin" ondblclick="showDetailById('${encodeURIComponent(p.aptName)}')">
-      <div class="nmap-bub ${cls}">
-        <div class="nmap-pr ${cls}">${pr}억</div>
-        <div class="nmap-sc">${subTxt}</div>
-      </div>
-    </div>`,
-    anchor:new naver.maps.Point(29,38),
     map:mapObj,
+    title:p.aptName,
+    icon:{
+      content:`<div class="nmap-pin" ondblclick="showDetailById('${encodeURIComponent(p.aptName)}')">
+        <div class="nmap-bub ${cls}">
+          <div class="nmap-pr ${cls}">${pr}억</div>
+          <div class="nmap-sc">${subTxt}</div>
+        </div>
+      </div>`,
+      size:new naver.maps.Size(58,38),
+      anchor:new naver.maps.Point(29,38),
+    },
   });
   // 클릭 인포윈도우
   const iw=new naver.maps.InfoWindow({content:mkNaverIW(p),maxWidth:230,borderWidth:0,disableAnchor:false,backgroundColor:'transparent',borderColor:'transparent'});
   naver.maps.Event.addListener(ov,'click',()=>{
     if(iw.getMap())iw.close();
-    else iw.open(mapObj,new naver.maps.LatLng(p.lat,p.lng));
+    else iw.open(mapObj,ov);
   });
   return ov;
 }
@@ -7512,13 +7518,18 @@ async function loadPopularMarkers() {
     popular.forEach(p => {
       try {
         if (isNaver) {
-          // Naver CustomOverlay — 🔥 라벨 + 클릭 InfoWindow
+          // Sprint KK (2026-05-16): CustomOverlay deprecated → Marker + icon.content (HTML)
+          // 공식 docs: https://navermaps.github.io/maps.js.ncp/docs/tutorial-5-marker-html-icon.example.html
           const _pj = JSON.stringify({aptName:p.aptName,sigungu:p.sigungu,umdNm:p.umdNm,lawdCd:p.lawdCd,buildYear:p.buildYear,recentDealDate:p.recentDealDate}).replace(/'/g,"&#39;");
-          const ov = new naver.maps.CustomOverlay({
+          const ov = new naver.maps.Marker({
             position: new naver.maps.LatLng(p.lat, p.lng),
-            content: `<div class="pop-marker" style="background:#FFE082;border:2px solid #C18A2C;border-radius:14px;padding:3px 7px;font-size:10.5px;font-weight:700;color:#7A4F0E;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.18);cursor:pointer">🔥 ${_escHtml(p.aptName).slice(0,12)}</div>`,
-            anchor: new naver.maps.Point(60, 14),
             map: mapObj,
+            title: p.aptName,
+            icon: {
+              content: `<div class="pop-marker" style="background:#FFE082;border:2px solid #C18A2C;border-radius:14px;padding:3px 7px;font-size:10.5px;font-weight:700;color:#7A4F0E;white-space:nowrap;box-shadow:0 2px 6px rgba(0,0,0,0.18);cursor:pointer">🔥 ${_escHtml(p.aptName).slice(0,12)}</div>`,
+              size: new naver.maps.Size(120, 28),
+              anchor: new naver.maps.Point(60, 14),
+            },
           });
           const iw = new naver.maps.InfoWindow({
             content: `<div style="font-size:12px;line-height:1.6;background:var(--bg-elev-1);padding:10px 12px;color:var(--text-primary);border-radius:var(--radius-md);border:1px solid var(--border-subtle);box-shadow:var(--shadow-lg)">
@@ -7531,7 +7542,7 @@ async function loadPopularMarkers() {
           });
           naver.maps.Event.addListener(ov, 'click', () => {
             if (iw.getMap()) iw.close();
-            else iw.open(mapObj, new naver.maps.LatLng(p.lat, p.lng));
+            else iw.open(mapObj, ov);
           });
           ov._iw = iw; ov._isNaver = true;
           window._popMarkers.push(ov);
