@@ -7726,11 +7726,20 @@ async function goSearchResult(r) {
           .then(at => ({ alt, items: at?.items || [] }))
       ));
       const merged = [];
+      // Sprint MM (2026-05-17): base name 매칭으로 cross-include 된 중복 거래 dedup.
+      //   풍림아파트A query + 풍림아파트B query 가 baseAptName 매칭으로 서로 다른 단지 거래도 포함.
+      //   같은 거래 (year+month+day+area+floor+amount) 는 1회만 push. _aliasFrom 은 실제 it.aptName 사용.
+      const _seenKey = new Set();
       for (const { alt, items } of altResults) {
         if (items.length) {
-          // 각 거래에 _aliasFrom 표기 (어느 신고명에서 왔는지)
-          for (const it of items) merged.push({ ...it, _aliasFrom: alt.aptName });
-          usedAliases.push(alt.aptName);
+          for (const it of items) {
+            const _dk = `${it.dealYear}|${it.dealMonth}|${it.dealDay}|${it.excluUseAr}|${it.floor}|${it.dealAmount}|${it.aptName}`;
+            if (_seenKey.has(_dk)) continue;
+            _seenKey.add(_dk);
+            // _aliasFrom 은 실제 거래의 aptName (base cross-include 시 alt 와 다를 수 있음)
+            merged.push({ ...it, _aliasFrom: it.aptName });
+          }
+          if (!usedAliases.includes(alt.aptName)) usedAliases.push(alt.aptName);
         }
       }
       // 거래일 내림차순 정렬
