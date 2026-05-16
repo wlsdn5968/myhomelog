@@ -20,15 +20,26 @@ function handleMolitError(err, res) {
   });
 }
 
-// GET /api/transactions?lawdCd=11350&dealYm=202503
+// GET /api/transactions?lawdCd=11350&dealYm=202503&sigungu=노원구&umdNm=공릉동
+// Sprint MM (2026-05-17, 운영자 발견 "공릉풍림아이원 실거래가 미반영"):
+//   sigungu + umdNm 옵션 필터 추가. 미지정 시 기존 동작 유지 (회귀 0).
+//   이유: aptName substring 매칭만으로는 동/단지 구분 불가 (예: "공릉풍림아이원" query 가 월계동 "풍림아이원" 7건 잘못 반환).
 router.get('/', validateTransactionQuery, async (req, res) => {
-  const { lawdCd, dealYm, aptName } = req.query;
+  const { lawdCd, dealYm, aptName, sigungu, umdNm } = req.query;
   if (!lawdCd || !dealYm) return res.status(400).json({ error: 'lawdCd, dealYm 필수' });
 
   try {
-    const list = aptName
+    let list = aptName
       ? await getTransactionsByApt(lawdCd, aptName)
       : await getTransactions(lawdCd, dealYm);
+    // Sprint MM: sigungu/umdNm 지정 시 결과 추가 필터 — 다른 동 단지 환각 매칭 차단.
+    if (sigungu || umdNm) {
+      list = list.filter(t => {
+        if (sigungu && t.sigungu && t.sigungu !== sigungu) return false;
+        if (umdNm && t.umdNm && t.umdNm !== umdNm) return false;
+        return true;
+      });
+    }
     // NAMEFIX-2026-05-11: 사용자 응답 시점에 aptName 정규화 — MOLIT raw "(고층)/(중층)/(저층)" suffix 제거.
     //   DB raw 는 그대로 유지 (transactionService 내부 매칭 호환).
     const items = list.map(t => ({ ...t, aptName: normalizeAptName(t.aptName) }));

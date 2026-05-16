@@ -7684,7 +7684,13 @@ async function goSearchResult(r) {
   try {
     const now = new Date();
     const ym = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}`;
-    const url = `${CFG.api}/transactions?lawdCd=${r.lawdCd}&aptName=${encodeURIComponent(r.aptName)}&dealYm=${ym}`;
+    // Sprint MM (2026-05-17, 운영자 발견 "공릉풍림아이원 실거래가 누락"):
+    //   transactions 엔드포인트에 sigungu/umdNm 전달 → 같은 동 단지만 매칭.
+    //   이전: aptName substring 매칭만 → "공릉풍림아이원" query 가 월계동 "풍림아이원" 7건 잘못 반환 → 진짜 master fallback 미작동.
+    //   변경: 정확한 sigungu/umdNm 으로 필터 → 다른 동 결과 차단 → txHistory.length===0 시 alias fallback 정상 작동.
+    const _sgQs = r.sigungu ? `&sigungu=${encodeURIComponent(r.sigungu)}` : '';
+    const _umdQs = r.umdNm ? `&umdNm=${encodeURIComponent(r.umdNm)}` : '';
+    const url = `${CFG.api}/transactions?lawdCd=${r.lawdCd}&aptName=${encodeURIComponent(r.aptName)}&dealYm=${ym}${_sgQs}${_umdQs}`;
     const t = await fetch(url, { signal: AbortSignal.timeout(10000) }).then(rs => rs.ok ? rs.json() : null);
     if (t?.items?.length) {
       txHistory = t.items.slice(0, 30);
@@ -7713,8 +7719,9 @@ async function goSearchResult(r) {
       const alts = fac?.altCandidates || [];
       const usedAliases = [];
       // 모든 alias 의 거래 병렬 fetch (top 5개 안전 한도)
+      // Sprint MM (2026-05-17): alias 거래 fetch 에도 sigungu/umdNm 전달 (다른 동 환각 차단)
       const altResults = await Promise.all(alts.slice(0, 5).map(alt =>
-        fetch(`${CFG.api}/transactions?lawdCd=${r.lawdCd}&aptName=${encodeURIComponent(alt.aptName)}&dealYm=${ym}`, { signal: AbortSignal.timeout(8000) })
+        fetch(`${CFG.api}/transactions?lawdCd=${r.lawdCd}&aptName=${encodeURIComponent(alt.aptName)}&dealYm=${ym}${_sgQs}${_umdQs}`, { signal: AbortSignal.timeout(8000) })
           .then(rs => rs.ok ? rs.json() : null).catch(() => null)
           .then(at => ({ alt, items: at?.items || [] }))
       ));
