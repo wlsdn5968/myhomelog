@@ -2480,11 +2480,17 @@ window.addEventListener('DOMContentLoaded',()=>{
   // /api/regulations 의 regulatedRegions 를 substring 매칭 set 으로 변환.
   loadRegulatedKeywords();
   cl();
-  chkAPI().then(ok=>{if(ok)checkMolit();});
+  // NAVER-MAPS-2026-05-13 (Sprint GG): chkAPI 완료 후 loadMap() 으로 분기
+  //   - NCP NAVER_MAPS_CLIENT_ID env 있으면 네이버 지도
+  //   - 없으면 Leaflet/OSM fallback (회귀 0)
+  chkAPI().then(ok => {
+    if(ok) checkMolit();
+    if (typeof loadMap === 'function') loadMap();
+    else loadLeaflet(); // safety
+  });
   renderBookmarks();
   renderSavedDeals();
   renderClauseHistory();
-  loadLeaflet(); // 카카오 정식 키 미연동 환경 대비, 기본은 OSM. 좌표는 백엔드 카카오 geocode로 보정.
   // P0 (Phase 2 3-2): 첫 진입 시 인기 단지 마커 prefill — 빈 지도 첫인상 차단
   // STAB-AUDIT #80 (2026-05-03): 1500 → 100ms — 첫 사용자 빈 지도 인상 1.5초 → 즉시
   setTimeout(() => { if (typeof loadPopularMarkers === 'function') loadPopularMarkers(); }, 100);
@@ -4109,10 +4115,31 @@ function openQuotaModal(reason, msg, resetAt){
 function closeQuotaModal(){ document.getElementById('QM')?.classList.remove('open'); }
 
 // ── MAP INIT ─────────────────────────────────────────────
-// (네이버 지도는 향후 P2에서 NCP Maps 전환 검토 — 현재는 OSM + 카카오 geocode 백엔드 보정 사용)
-function loadNaverMap(){
-  // 호환용 함수 (현재는 호출되지 않음)
-  loadLeaflet();
+// NAVER-MAPS-2026-05-13 (Sprint GG): NCP Web Dynamic Map 통합 — env NAVER_MAPS_CLIENT_ID 기반 분기.
+//   loadMap() = decision function (chkAPI 후 호출).
+//   NCP client ID 있으면 네이버, 없으면 Leaflet/OSM fallback (회귀 0).
+function loadMap() {
+  const clientId = window._healthData?.naverMapsClientId;
+  if (clientId) {
+    loadNaverMap(clientId);
+  } else {
+    loadLeaflet();
+  }
+}
+
+function loadNaverMap(clientId){
+  if (window.naver?.maps) { initNaverMap(); return; }
+  if (!clientId) { loadLeaflet(); return; } // safety
+  const sc = document.createElement('script');
+  sc.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${encodeURIComponent(clientId)}`;
+  sc.async = true;
+  sc.onload = initNaverMap;
+  sc.onerror = () => {
+    console.warn('[naver-maps] SDK 로드 실패 — Leaflet fallback');
+    if (window.Sentry) window.Sentry.captureMessage('Naver Maps SDK load failed — Leaflet fallback');
+    loadLeaflet();
+  };
+  document.head.appendChild(sc);
 }
 
 function initNaverMap(){
@@ -4127,7 +4154,10 @@ function initNaverMap(){
     zoomControl:true,
     zoomControlOptions:{position:naver.maps.Position.RIGHT_CENTER,style:naver.maps.ZoomControlStyle.SMALL},
   });
-  showHint('네이버 지도 로드 완료',2000);
+  mapObj._isNaver = true;
+  // Naver 지도는 container resize 자동 감지 (Leaflet 의 invalidateSize 불필요).
+  // 단, 모달 close 같은 명시적 layout 변경 후 강제 refresh 도 가능 — naver.maps.Event.trigger(map, 'resize')
+  if (typeof showHint === 'function') showHint('네이버 지도 로드 완료', 2000);
 }
 
 function loadLeaflet(){
@@ -5395,8 +5425,14 @@ function cDM(){document.getElementById('DM').classList.remove('open');currentDet
   if(history.replaceState){const u=new URL(location.href);u.searchParams.delete('apt');u.searchParams.delete('area');history.replaceState(null,'',u);}
   // Phase 35 #1 (2026-05-04): DM 닫힘 시 _pannBtn 다시 노출 가능 (zoom>=13 + 모달 X 일 때만)
   try { window._pannBtnShow && window._pannBtnShow(); } catch(_){}
-  // MAP-INVALIDATE-2026-05-13 (Sprint FF): 모달 닫힌 후 지도 size 재계산 → tile rendering 정상화
-  setTimeout(() => { try { mapObj && mapObj.invalidateSize && mapObj.invalidateSize(); } catch(_){} }, 100);
+  // MAP-INVALIDATE-2026-05-13 (Sprint FF + GG): 모달 닫힌 후 지도 size 재계산 → tile rendering 정상화
+  //   Leaflet: invalidateSize() / Naver: naver.maps.Event.trigger(map, 'resize')
+  setTimeout(() => {
+    try {
+      if (mapObj?._isLeaflet && mapObj.invalidateSize) mapObj.invalidateSize();
+      else if (mapObj?._isNaver && window.naver?.maps?.Event) naver.maps.Event.trigger(mapObj, 'resize');
+    } catch(_){}
+  }, 100);
 }
 
 // ── 공유 URL ───────────────────────────────────────────
@@ -6975,8 +7011,13 @@ function sv(v,btn){
     if(el)el.style.display=id===v?meta.display:'none';
   });
   _rpOverlay=false; // 탭 전환 시 오버레이 초기화
-  // MAP-INVALIDATE-2026-05-13 (Sprint FF): 탭 전환 시 지도 view 활성화 → size 재계산
-  if (v === 'map') setTimeout(() => { try { mapObj && mapObj.invalidateSize && mapObj.invalidateSize(); } catch(_){} }, 100);
+  // MAP-INVALIDATE-2026-05-13 (Sprint FF + GG): 탭 전환 시 지도 view 활성화 → size 재계산
+  if (v === 'map') setTimeout(() => {
+    try {
+      if (mapObj?._isLeaflet && mapObj.invalidateSize) mapObj.invalidateSize();
+      else if (mapObj?._isNaver && window.naver?.maps?.Event) naver.maps.Event.trigger(mapObj, 'resize');
+    } catch(_){}
+  }, 100);
   // Phase 5+ (2026-04-26): 보고서 탭에서는 #s3 (추천 단지 0건 — AI 단지 검색 기능 안내) hide — 보고서와 무관해서 노이즈
   const s3 = document.getElementById('s3');
   if (s3) {
@@ -7728,6 +7769,8 @@ async function chkAPI(){
     const r=await fetch(`${CFG.api}/health`,{signal:AbortSignal.timeout(5000)});
     if(r.ok){
       const d=await r.json().catch(()=>({}));
+      // NAVER-MAPS-2026-05-13 (Sprint GG): health 응답 전역 저장 — loadMap() 분기 시점 활용
+      window._healthData = d;
       // Phase 4: 정상 시 apiSt hide, 장애 시만 표시
       el.style.display='none';
       cs.textContent='● 온라인';cs.style.color='var(--grn)';

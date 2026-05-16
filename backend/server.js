@@ -393,12 +393,17 @@ app.get('/api/health', optionalAuth, async (req, res) => {
       acquisition_tax: { effectiveDate: tax?.effectiveDate, daysSince: tax?.daysSinceEffective, stale: (tax?.daysSinceEffective || 0) > 180, source: tax?.source },
     };
   } catch(_){}
+  // NAVER-MAPS-2026-05-13 (Sprint GG): NCP Web Dynamic Map client ID 노출 (public — frontend SDK 로드용)
+  //   env NAVER_MAPS_CLIENT_ID 설정 시 frontend 가 네이버 지도 사용, 미설정 시 Leaflet/OSM fallback.
+  //   NCP 정책: client ID 는 도메인 등록 기반 보호 (다른 도메인에서 사용 불가) — 공개해도 안전.
+  const _naverMapsClientId = process.env.NAVER_MAPS_CLIENT_ID || null;
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
     env: process.env.NODE_ENV,
     deploy: _deploy,
     ai_ready: _aiReady,
+    naverMapsClientId: _naverMapsClientId,
     regulations: _regulations,
     cache: { keys: cache.keys().length, stats: cache.getStats() },
     usage: {
