@@ -5496,6 +5496,44 @@ function showDetail(p){
           <table class="dtbl">${rows}</table>
         </details>`;
       })()}
+      <!-- 작업 C (2026-05-19, Sprint RR 확장): 단지 상황별 관련 법령 자동 인용 (정부 공식 출처) -->
+      ${(() => {
+        const laws = [];
+        // 모든 매매 공통
+        laws.push({ name: '부동산실권리자명의등기에관한법률', reason: '명의신탁 금지 (모든 매매 적용)', url: 'https://www.law.go.kr/법령/부동산실권리자명의등기에관한법률' });
+        laws.push({ name: '공인중개사법', reason: '복비 한도·중개의무', url: 'https://www.law.go.kr/법령/공인중개사법' });
+        // 재건축 단지
+        if (p.type === 'recon') {
+          laws.push({ name: '도시및주거환경정비법', reason: '재건축 단지 — 정비사업 절차·조합·관리처분', url: 'https://www.law.go.kr/법령/도시및주거환경정비법' });
+          laws.push({ name: '재건축초과이익환수에관한법률', reason: '재건축 — 초과이익 환수 (재초환)', url: 'https://www.law.go.kr/법령/재건축초과이익환수에관한법률' });
+        } else if (p.facility?.builtDate) {
+          // 노후 단지 (30년+) — 잠재 재건축
+          const yr = parseInt(String(p.facility.builtDate).slice(0,4)) || 0;
+          const age = yr ? (new Date().getFullYear() - yr) : 0;
+          if (age >= 30) {
+            laws.push({ name: '도시및주거환경정비법', reason: `준공 ${age}년 — 잠재 재건축 (정비사업 검토 가능)`, url: 'https://www.law.go.kr/법령/도시및주거환경정비법' });
+          }
+        }
+        // 세금 (모든 매매)
+        laws.push({ name: '지방세법', reason: '취득세 (제11조)', url: 'https://www.law.go.kr/법령/지방세법' });
+        laws.push({ name: '소득세법', reason: '양도세 (제94조 이하)', url: 'https://www.law.go.kr/법령/소득세법' });
+        if (p.avgPrice >= 9) {
+          laws.push({ name: '종합부동산세법', reason: '공시가격 9억 초과 가능 — 종부세 검토', url: 'https://www.law.go.kr/법령/종합부동산세법' });
+        }
+        // 임대 매물이면
+        laws.push({ name: '주택임대차보호법', reason: '임차인 보호 (전세·월세)', url: 'https://www.law.go.kr/법령/주택임대차보호법' });
+
+        return `<div style="margin-top:14px">
+          <div style="font-weight:700;font-size:12px;color:var(--t1);margin-bottom:6px">📜 이 단지에 적용되는 주요 법령</div>
+          <div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px">
+            ${laws.map(l => `<div style="font-size:10.5px;line-height:1.6;padding:3px 0">
+              <a href="${l.url}" target="_blank" rel="noopener" style="color:var(--a2);text-decoration:underline;font-weight:600">${_escHtml(l.name)}</a>
+              <span style="color:var(--t3)"> · ${_escHtml(l.reason)}</span>
+            </div>`).join('')}
+          </div>
+          <div style="font-size:9.5px;color:var(--t3);margin-top:5px">※ 정부 공식 법령 (law.go.kr). 본 서비스는 정보 정리 도구이며 법적 자문이 아닙니다. 최종 판단은 변호사·세무사·공인중개사와 상담 필수.</div>
+        </div>`;
+      })()}
       <div style="font-size:10px;color:var(--t3);margin-top:10px;line-height:1.65">
         ※ 본 정보는 단지 기본정보입니다. 거래·시세는 다른 탭에서 확인하세요.<br>
         ※ KAPT 데이터는 단지 매칭 정확도에 따라 일부 누락 가능합니다.
