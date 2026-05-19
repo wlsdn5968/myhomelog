@@ -31,26 +31,34 @@ const logger = require('../logger');
 // ── RSS 소스 (정부 보도자료) ───────────────────────────────
 // 금융위원회 / 국토교통부 / 국세청 RSS URL
 // 변경 시 본 객체만 수정 — endpoint/parser 영향 X
+// Sprint QQ (2026-05-19): 한국부동산원 + 정책브리핑 추가 — 2026.4.17 만기연장 금지 등 누락 방지
 const RSS_SOURCES = [
   {
     name: '금융위원회',
     url: 'https://www.fsc.go.kr/wsbiz/rss/in.do?menu=in090101', // 보도자료 RSS
-    keywords: ['LTV', 'DSR', '주담대', '대출', '주택담보', '규제지역', '스트레스', '디딤돌', '보금자리'],
+    keywords: ['LTV', 'DSR', '주담대', '대출', '주택담보', '규제지역', '스트레스', '디딤돌', '보금자리', '가계부채', '만기연장'],
   },
   {
     name: '국토교통부',
     url: 'https://www.molit.go.kr/USR/policyData/rss/rss.jsp?id=rss', // 정책자료 RSS (실제 URL 검증 필요)
-    keywords: ['주택', '부동산', '규제지역', '청약', '재건축', '재개발', '분양', 'LTV', 'DSR'],
+    keywords: ['주택', '부동산', '규제지역', '청약', '재건축', '재개발', '분양', 'LTV', 'DSR', '토지거래허가'],
   },
   {
     name: '국세청',
     url: 'https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=2353&cntntsId=7716', // 부동산 세제 (RSS 없을 시 HTML scraping)
-    keywords: ['취득세', '양도세', '종부세', '종합부동산세', '주택세', '부동산세'],
+    keywords: ['취득세', '양도세', '종부세', '종합부동산세', '주택세', '부동산세', '중과'],
+  },
+  // Sprint QQ: 정책브리핑 (korea.kr) — 부처 종합 정책 발표, 4.17 만기연장 같은 직접 발표 cover
+  {
+    name: '정책브리핑',
+    url: 'https://www.korea.kr/news/rssList.do?section=政府部처', // RSS 형식 확인 필요
+    keywords: ['부동산', '주택', '대출', '가계부채', 'LTV', 'DSR', '청약', '취득세', '양도세'],
   },
 ];
 
 const FETCH_TIMEOUT_MS = 15000;
-const LOOK_BACK_DAYS = 7; // 최근 7일 항목만
+// Sprint QQ: cron 매일 실행 변경 — 7일 lookback 으로 누락 방지
+const LOOK_BACK_DAYS = 7;
 
 /**
  * RSS XML 단순 파싱 (xml2js 의존성 회피 — 단순 regex).

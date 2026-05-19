@@ -3885,7 +3885,15 @@ function openRegSummary(){
         <b>토허구역</b>: 2년 실거주 의무 (강남·송파·용산 일부)<br>
         <b>전세대출</b>: 보유자 규제지역 3억 초과 매수 시 즉시 회수
       </div>
-      <div style="font-size:10px;color:var(--t3);text-align:center">출처: 금융위원회 2025.10.15 주택시장 안정화 대책 · 변경 가능 — 금융기관 최종 확인 필수</div>
+      <!-- Sprint QQ (2026-05-19): 10.15 이후 후속 정책 (4.17 만기연장 금지 / 5.9 양도세 중과 / 5.12 보완책) -->
+      <div style="background:#FFE8E8;border:1px solid #E8A0A0;border-radius:8px;padding:10px 12px;font-size:11px;color:#8B2914;line-height:1.6;margin-bottom:10px">
+        <b style="color:#A82525">⚡ 10.15 이후 후속 정책</b><br>
+        <b>2026.4.17~</b> 다주택자(2주택+) 주담대 만기연장 원칙 금지 (수도권·규제지역, 4조 1,000억 영향)<br>
+        <b>2026.5.9~</b> 다주택자 양도세 중과 부활 (2주택 +20%p / 3주택+ +30%p)<br>
+        <b>2026.5.12~</b> 보완책 — 매도 규제 일부 완화 (이사 등 실수요 일부 허용)<br>
+        <b>2026 전체</b> 가계대출 증가율 1.5% 이내 관리 목표
+      </div>
+      <div style="font-size:10px;color:var(--t3);text-align:center">출처: 금융위 2025.10.15 + 2026.4.1 가계부채 관리방안 (<a href="https://www.korea.kr" target="_blank" rel="noopener" style="color:var(--ac)">korea.kr 정책브리핑</a>) · 변경 가능 — 금융기관 최종 확인 필수</div>
     </div>`;
     m.addEventListener('click', e => { if (e.target === m) m.remove(); });
     document.body.appendChild(m);
@@ -3894,10 +3902,15 @@ function openRegSummary(){
 function closeTerms(){document.getElementById('TM').classList.remove('open');}
 
 // ── 정책 타임라인 ─────────────────────────────────────
+// Sprint QQ (2026-05-19): 4.17 만기연장 금지 + 5.9 양도세 중과 부활 + 5.12 보완책 추가
+//   - 공식 출처 검증: 4.17 = korea.kr 정책브리핑 / 5.9 = 정부 다주택자 양도세 중과 한시유예 종료
 const POLICY_TIMELINE = [
   { date:'2025-10-15', title:'규제지역 확대·DSR 강화 시행', desc:'서울 25개구 + 경기 12곳 토지거래허가구역', tag:'규제', color:'#C44' },
   { date:'2025-10-29', title:'1주택자 전세대출 이자 DSR 반영', desc:'전세대출 이자도 총부채상환비율에 포함', tag:'대출', color:'#B47' },
   { date:'2026-01-01', title:'은행권 주담대 위험가중치 15%→20%', desc:'은행 주담대 공급 위축·금리 상승 압력', tag:'금융', color:'#947' },
+  { date:'2026-04-17', title:'다주택자 주담대 만기연장 금지', desc:'2주택+ 임대사업자 수도권·규제지역 주담대 만기연장 원칙 금지 (4조 1,000억 / 1.7만 가구)', tag:'대출', color:'#C44' },
+  { date:'2026-05-09', title:'다주택자 양도세 중과 부활', desc:'2022.5~ 한시 유예 종료. 2주택 +20%p / 3주택+ +30%p', tag:'세제', color:'#B47' },
+  { date:'2026-05-12', title:'5.12 보완책 시행', desc:'매도 규제 일부 완화 (이사 등 실수요 일부 허용)', tag:'완화', color:'#476' },
   { date:'2026-07-01', title:'스트레스 DSR 4단계 시행 검토', desc:'금리 상승 시뮬레이션 가산폭 확대 예고(추정)', tag:'예고', color:'#777' },
 ];
 
