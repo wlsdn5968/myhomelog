@@ -1891,6 +1891,34 @@ header{
       </div>
     </details>
 
+    <!-- Sprint RR (2026-05-19): 정부 공식 법령 10건 직접 링크 (law.go.kr 국가법령정보센터) -->
+    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">📜 부동산 핵심 법령 10건 (정부 공식)</summary>
+      <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
+        본 서비스의 규제·세금·계약 정보는 아래 정부 공식 법령에 근거합니다. 정확한 조문은 직접 확인하세요:<br><br>
+        <table style="width:100%;border-collapse:collapse;font-size:11.5px">
+          <thead><tr style="background:var(--s1)"><th style="padding:6px;text-align:left">법령</th><th style="padding:6px;text-align:left">관련 내용</th><th style="padding:6px">원문</th></tr></thead>
+          <tbody>
+            <tr><td style="padding:6px;border-bottom:1px solid var(--bd)"><b>주택법</b></td><td style="padding:6px;border-bottom:1px solid var(--bd)">주택 공급·분양 기본법</td><td style="padding:6px;border-bottom:1px solid var(--bd);text-align:center"><a href="https://www.law.go.kr/법령/주택법" target="_blank" rel="noopener" style="color:var(--ac)">law.go.kr</a></td></tr>
+            <tr><td style="padding:6px;border-bottom:1px solid var(--bd)"><b>지방세법</b></td><td style="padding:6px;border-bottom:1px solid var(--bd)">취득세·재산세</td><td style="padding:6px;border-bottom:1px solid var(--bd);text-align:center"><a href="https://www.law.go.kr/법령/지방세법" target="_blank" rel="noopener" style="color:var(--ac)">law.go.kr</a></td></tr>
+            <tr><td style="padding:6px;border-bottom:1px solid var(--bd)"><b>종합부동산세법</b></td><td style="padding:6px;border-bottom:1px solid var(--bd)">종부세</td><td style="padding:6px;border-bottom:1px solid var(--bd);text-align:center"><a href="https://www.law.go.kr/법령/종합부동산세법" target="_blank" rel="noopener" style="color:var(--ac)">law.go.kr</a></td></tr>
+            <tr><td style="padding:6px;border-bottom:1px solid var(--bd)"><b>소득세법</b></td><td style="padding:6px;border-bottom:1px solid var(--bd)">양도세</td><td style="padding:6px;border-bottom:1px solid var(--bd);text-align:center"><a href="https://www.law.go.kr/법령/소득세법" target="_blank" rel="noopener" style="color:var(--ac)">law.go.kr</a></td></tr>
+            <tr><td style="padding:6px;border-bottom:1px solid var(--bd)"><b>주택임대차보호법</b></td><td style="padding:6px;border-bottom:1px solid var(--bd)">전세·월세 보호</td><td style="padding:6px;border-bottom:1px solid var(--bd);text-align:center"><a href="https://www.law.go.kr/법령/주택임대차보호법" target="_blank" rel="noopener" style="color:var(--ac)">law.go.kr</a></td></tr>
+            <tr><td style="padding:6px;border-bottom:1px solid var(--bd)"><b>공인중개사법</b></td><td style="padding:6px;border-bottom:1px solid var(--bd)">중개·복비</td><td style="padding:6px;border-bottom:1px solid var(--bd);text-align:center"><a href="https://www.law.go.kr/법령/공인중개사법" target="_blank" rel="noopener" style="color:var(--ac)">law.go.kr</a></td></tr>
+            <tr><td style="padding:6px;border-bottom:1px solid var(--bd)"><b>도시및주거환경정비법</b></td><td style="padding:6px;border-bottom:1px solid var(--bd)">재건축·재개발</td><td style="padding:6px;border-bottom:1px solid var(--bd);text-align:center"><a href="https://www.law.go.kr/법령/도시및주거환경정비법" target="_blank" rel="noopener" style="color:var(--ac)">law.go.kr</a></td></tr>
+            <tr><td style="padding:6px;border-bottom:1px solid var(--bd)"><b>부동산실권리자명의등기에관한법률</b></td><td style="padding:6px;border-bottom:1px solid var(--bd)">명의신탁 금지</td><td style="padding:6px;border-bottom:1px solid var(--bd);text-align:center"><a href="https://www.law.go.kr/법령/부동산실권리자명의등기에관한법률" target="_blank" rel="noopener" style="color:var(--ac)">law.go.kr</a></td></tr>
+            <tr><td style="padding:6px;border-bottom:1px solid var(--bd)"><b>재건축초과이익환수에관한법률</b></td><td style="padding:6px;border-bottom:1px solid var(--bd)">재초환</td><td style="padding:6px;border-bottom:1px solid var(--bd);text-align:center"><a href="https://www.law.go.kr/법령/재건축초과이익환수에관한법률" target="_blank" rel="noopener" style="color:var(--ac)">law.go.kr</a></td></tr>
+            <tr><td style="padding:6px"><b>민법</b></td><td style="padding:6px">부동산 §99 기본 정의</td><td style="padding:6px;text-align:center"><a href="https://www.law.go.kr/법령/민법" target="_blank" rel="noopener" style="color:var(--ac)">law.go.kr</a></td></tr>
+          </tbody>
+        </table>
+        <div style="margin-top:10px;font-size:10.5px;color:var(--t3);line-height:1.6">
+          ※ 본 서비스는 정부 공식 법령 corpus (<a href="https://github.com/9bow/legalize-kr" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">9bow/legalize-kr</a>) 를 통해 매일 자동 추적 (Sprint RR).<br>
+          ※ 법령 원문은 공공저작물 (자유 이용). 메타데이터 MIT 라이선스.<br>
+          ※ 본 서비스는 정보 정리 도구이며 <b>법적 자문이 아닙니다</b>. 정확한 판단은 변호사/세무사/공인중개사와 상담 필수.
+        </div>
+      </div>
+    </details>
+
     <!-- 8. FAQ + 면책 -->
     <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">❓ 자주 묻는 질문 + 면책 안내</summary>

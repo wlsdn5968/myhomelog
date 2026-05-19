@@ -152,6 +152,8 @@ const transactionRouter = require('./routes/transactions');
 const propertiesRouter = require('./routes/properties');
 const regulationsRouter = require('./routes/regulations');
 const clauseRouter = require('./routes/clause');
+// Sprint RR (2026-05-19): 9bow/legalize-kr 통합 — 정부 공식 법령 직접 인용 (환각 차단)
+const legalRouter = require('./routes/legal');
 const geocodeRouter = require('./routes/geocode');
 const analysisRouter = require('./routes/analysis');
 const newsRouter = require('./routes/news');
@@ -184,6 +186,8 @@ app.use('/api/chat', optionalAuth, chatLimiter, dailyLimit({ limit: DAILY_CHAT_L
 app.use('/api/transactions', dataLimiter, transactionRouter);
 app.use('/api/properties', optionalAuth, dataLimiter, dailyLimit({ limit: DAILY_SEARCH_LIMIT, scope: 'search', loggedInBonus: 5 }), propertiesRouter);
 app.use('/api/regulations', regulationsRouter);
+// Sprint RR: 정부 공식 법령 API (인증 불필요 — 공개 정보)
+app.use('/api/legal', dataLimiter, legalRouter);
 app.use('/api/clause', optionalAuth, chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat', loggedInBonus: 10 }), clauseRouter);
 app.use('/api/geocode', dataLimiter, geocodeRouter);
 app.use('/api/analysis', dataLimiter, analysisRouter);
