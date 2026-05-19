@@ -1864,6 +1864,33 @@ header{
       </div>
     </details>
 
+    <!-- Sprint PP-5 (2026-05-19): 부동산 기초 교육 — easylaw.go.kr (법제처 생활법령) 기반 정적 컨텐츠 -->
+    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">📚 부동산 기초 — 처음 거래하시나요?</summary>
+      <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
+        <b>📜 부동산 정의 (민법 §99)</b><br>
+        "토지와 그 정착물" = 부동산. 토지에 부착되어 계속 사용되는 모든 물건 포함 (건물·구조물 등).<br><br>
+        <b>🗺 토지 23가지 지목 (지적법)</b><br>
+        전·답·과수원·목장·임야·광천지·염전·대지·공장용지·학교용지·주차장·창고·도로·철도·하천·구거·유지·양어장·수도용지·공원·체육·종교·사적·종묘 등.<br><br>
+        <b>🏢 건축물 정의 (건축법 §2)</b><br>
+        "토지에 정착하는 공작물 중 지붕과 기둥 또는 벽이 있는 것". 용도: 주택·상업·의료·교육·문화 등 분류.<br><br>
+        <b>📋 매매 신고 의무 (부동산거래신고법)</b><br>
+        매매계약 체결일부터 <b>30일 이내</b> 신고. 신고 위반 시 과태료. 신고 후 해제도 30일 이내 보고.<br><br>
+        <b>💰 대출 한도 핵심 개념</b><br>
+        • <b>LTV</b> (주택가격 대비 대출비율): 무주택 비규제 70% / 무주택 규제 40% / 1주택 규제 0%<br>
+        • <b>DTI</b> (소득 대비 부채상환비율): 정책자금 디딤돌 60% 기준<br>
+        • <b>DSR</b> (총체적 상환능력): 일반 주담대 40% 기준 (소득 + 모든 대출 합산)<br><br>
+        <b>🏠 정책자금 4종 (무주택자)</b><br>
+        • <b>신생아 특례</b>: 2년 내 출산 + 부부 1.3억 이하 + 주택 9억 이하, 한도 4억<br>
+        • <b>신혼 디딤돌</b>: 혼인 7년 이내 + 부부 7천만 이하 + 주택 5억 이하, 한도 4억<br>
+        • <b>디딤돌</b>: 부부 6천만~7천만 이하 + 주택 5억 이하, 한도 2.5억<br>
+        • <b>보금자리론</b>: 부부 7천만 이하 + 주택 6억 이하, 한도 5억<br><br>
+        <b>📊 등기 vs 신고가</b><br>
+        "신고가" = 매매계약 체결 시점 신고 가격 (30일 이내). "등기" = 잔금 후 확정 (60일 이내). 등기는 신고보다 늦음. 우리 서비스는 신고가 기준.<br><br>
+        <span style="font-size:10.5px;color:var(--t3)">출처: <a href="https://www.easylaw.go.kr/CSP/CnpClsMain.laf?popMenu=ov&csmSeq=649" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">법제처 생활법령정보</a> · 한국부동산원 · 국토교통부</span>
+      </div>
+    </details>
+
     <!-- 8. FAQ + 면책 -->
     <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">❓ 자주 묻는 질문 + 면책 안내</summary>
@@ -4830,6 +4857,11 @@ function _selectTrendArea(sqm, btn) {
   chartBox.innerHTML = td.length >= 2
     ? renderPriceChart(td)
     : `<div style="font-size:11px;color:var(--t3);padding:10px 0">${sqm}㎡(${Math.round(sqm/3.3)}평) 시세 추이 데이터 부족 (거래 2개월 이상)</div>`;
+  // Sprint PP-1: 신고가 경신 추이도 평형 필터에 맞춰 재렌더
+  const peakBox = document.getElementById('peakTrendBox');
+  if (peakBox && typeof window._peakTrendHtml === 'function') {
+    peakBox.innerHTML = window._peakTrendHtml(sqm);
+  }
 }
 
 // Phase 4 (2026-04-26): areaSqm 인자 — 특정 평형만 필터 (없으면 전체 평균 — 의미 약함)
@@ -4978,6 +5010,29 @@ function showDetail(p){
       ${p.facility.totalHouseholds?`총 ${p.facility.totalHouseholds.toLocaleString()}세대`:''}${p.facility.dongCount?` · ${p.facility.dongCount}개동`:''}${p.facility.parkingRatio?` · 주차 세대당 ${p.facility.parkingRatio}대`:''}${p.facility.builtDate?` · 사용승인 ${p.facility.builtDate.slice(0,4)}.${p.facility.builtDate.slice(4,6)}`:''}${p.facility.heatType?` · ${p.facility.heatType}`:''}
       ${p.facility.address?`<br><span style="font-size:10px;color:var(--t3)">${p.facility.address}</span>`:''}
     </div>`:''}
+    <!-- Sprint PP-4 (2026-05-19): 1주택자 기준 예상 연간 보유세 (대략 추정) -->
+    ${p.avgPrice && p.avgPrice > 0 ? (() => {
+      const market = p.avgPrice;             // 시가 (억)
+      const official = market * 0.70;        // 공시가격 = 시가의 약 70%
+      // 재산세 1주택자 표준세율 (2026 기준 추정):
+      //   6천 이하: 0.05% / 6천~1.5억: 0.10%+3만 / 1.5억~3억: 0.20%+12만 / 3억 초과: 0.35%+42만
+      const officialW = official * 10000;    // 만원 단위
+      let propTaxW = 0;
+      if (officialW <= 6000)        propTaxW = officialW * 0.0005;
+      else if (officialW <= 15000)  propTaxW = 30000 + (officialW - 6000) * 0.001;
+      else if (officialW <= 30000)  propTaxW = 30000 + 90000 + (officialW - 15000) * 0.002;
+      else                          propTaxW = 30000 + 90000 + 300000 + (officialW - 30000) * 0.0035;
+      // 종합부동산세 1주택자 9억 초과 → 0.5~3% 누진 (간단화: 0.5%)
+      let compTaxW = 0;
+      if (official > 9) compTaxW = (official - 9) * 10000 * 0.005;
+      const totalW = Math.round(propTaxW + compTaxW);
+      const totalEok = (totalW / 10000).toFixed(2);
+      return `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
+        <div style="font-weight:700;color:var(--t1);margin-bottom:4px">💸 1주택자 기준 예상 연간 보유세</div>
+        매매가 ${market.toFixed(1)}억 → 공시가격 추정 ${official.toFixed(1)}억 → 재산세 + 종부세 <b style="color:var(--acc)">약 ${totalW.toLocaleString()}원 (${totalEok}억)</b>
+        <div style="font-size:9.5px;color:var(--t3);margin-top:4px">※ <b>대략 추정</b> (공시가격 = 시가 × 0.7 가정, 1주택자 기준, 2026 세율 추정). 실제 세금은 공시가격 발표·세대원·다주택 여부·세액공제에 따라 다름. 정확한 계산: <a href="https://hometax.go.kr" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">홈택스 모의계산</a> 별도 확인.</div>
+      </div>`;
+    })() : ''}
     <div id="amenityBox" style="font-size:11px;color:var(--t3);margin:4px 0 8px">🗺️ 주변 편의시설 조회 중...</div>
     <div id="facilityBox" style="margin:4px 0 8px"></div>
     <div id="schoolBox" style="display:none"></div>
@@ -5070,6 +5125,8 @@ function showDetail(p){
     }).join('') + (filtered.length > 30 ? `<div style="text-align:center;color:var(--t3);font-size:10px;padding:6px">+${filtered.length - 30}건 더 있음</div>` : '');
   }
   window._renderTxList = _renderTxList;
+  // Sprint PP-1: _peakTrendHtml 도 window 에 노출 — _selectTrendArea 가 호출할 수 있도록
+  // (선언은 아래에 있지만 closure 로 동일 scope 에서 같이 정의됨, 정의 후에 window 할당 필요 — 아래에서 처리)
 
   // areaSummaryHtml 만 (chip + 거래 리스트는 별도 위치)
   const summaryHtml = areaSummaryHtml
@@ -5095,6 +5152,66 @@ function showDetail(p){
     if (td.length >= 2) return renderPriceChart(td);
     return `<div style="font-size:11px;color:var(--t3);padding:10px 0">${area}㎡(${Math.round(area/3.3)}평) 시세 추이 데이터 부족 (거래 2개월 이상)</div>`;
   }
+
+  // Sprint PP-1 (2026-05-19, 한국도시연구소 100대 아파트 분석 방법론 차용):
+  //   단지의 "신고가 경신" 이벤트 추출. cumulative max 갱신 시점만 표시.
+  //   매수 추천 X / 가격 예측 X — 과거 신고가 갱신 history 정보 정리.
+  function _peakTrendHtml(area) {
+    const tx = (window._curTrendApt || []).filter(t => !area || Number(t.excluUseAr) === area);
+    if (tx.length < 2) {
+      return area
+        ? `<div style="font-size:11px;color:var(--t3);padding:10px 0">${area}㎡ 거래 부족 — 신고가 경신 추이 표시 어려움</div>`
+        : '<div style="font-size:11px;color:var(--t3);padding:10px 0">거래 데이터 부족</div>';
+    }
+    // 날짜 오름차순 정렬 (먼저 발생한 거래부터)
+    const sorted = [...tx].sort((a, b) => {
+      const da = a.dealYear * 10000 + a.dealMonth * 100 + a.dealDay;
+      const db = b.dealYear * 10000 + b.dealMonth * 100 + b.dealDay;
+      return da - db;
+    });
+    // cumulative max 갱신 시점만 추출
+    const peaks = [];
+    let runningMax = 0;
+    for (const t of sorted) {
+      const amt = Number(t.dealAmount) || 0;
+      if (amt > runningMax) {
+        runningMax = amt;
+        peaks.push(t);
+      }
+    }
+    if (peaks.length < 2) {
+      return `<div style="font-size:11px;color:var(--t3);padding:10px 0">신고가 경신 이력이 1건 이하 — 추이 표시 어려움</div>`;
+    }
+    // 최근부터 역순으로 표시 (최대 10건)
+    const reverseList = peaks.slice().reverse().slice(0, 10);
+    const first = peaks[0];
+    const last = peaks[peaks.length - 1];
+    const firstPrice = (Number(first.dealAmount) / 10000).toFixed(2);
+    const lastPrice = (Number(last.dealAmount) / 10000).toFixed(2);
+    const upPct = first.dealAmount > 0
+      ? (((Number(last.dealAmount) - Number(first.dealAmount)) / Number(first.dealAmount)) * 100).toFixed(1)
+      : '0.0';
+    return `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--t2);line-height:1.6">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+        <span style="font-weight:700;color:var(--t1)">📈 신고가 경신 ${peaks.length}회</span>
+        <span style="color:var(--acc);font-weight:600">최초 ${firstPrice}억 → 최근 ${lastPrice}억 (+${upPct}%)</span>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
+        ${reverseList.map((t, i) => {
+          const price = (Number(t.dealAmount) / 10000).toFixed(2);
+          const date = `${t.dealYear}-${String(t.dealMonth).padStart(2,'0')}-${String(t.dealDay).padStart(2,'0')}`;
+          const floor = t.floor ? `${t.floor}층` : '';
+          const isLatest = i === 0;
+          return `<div style="display:flex;justify-content:space-between;font-size:10.5px;${isLatest?'color:var(--acc);font-weight:600':'color:var(--t2)'}">
+            <span>${isLatest?'🔥 최근 신고가':''} ${date} ${floor}</span>
+            <span>${price}억</span>
+          </div>`;
+        }).join('')}
+      </div>
+      <div style="font-size:9.5px;color:var(--t3);margin-top:6px">※ 신고가 = 직전 모든 거래보다 높은 거래. 한국도시연구소 분석 방법론 차용. 매수 추천 X · 가격 예측 X · 정보 정리.</div>
+    </div>`;
+  }
+  window._peakTrendHtml = _peakTrendHtml;
   const _areaChipsHtml = _areaList.length
     ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 10px">
         <button class="trend-area-chip" data-sqm="0" onclick="_selectTrendArea(0, this)" style="padding:4px 10px;border-radius:14px;border:1px solid var(--acc);font-size:11px;cursor:pointer;font-family:inherit;background:var(--acc);color:#fff">전체 ${(p.txHistory||[]).length}건</button>
@@ -5129,6 +5246,15 @@ function showDetail(p){
     <div id="txListBox">${_renderTxList(0)}</div>
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 4px">📈 월별 시세 추이</div>
     <div id="trendChartBox">${_trendHtml(0)}</div>
+    <!-- Sprint PP-1 (2026-05-19): 신고가 경신 추이 (한국도시연구소 100대 아파트 방법론) -->
+    <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 4px">🏆 신고가 경신 추이</div>
+    <div id="peakTrendBox">${_peakTrendHtml(0)}</div>
+    <!-- Sprint PP-2 (2026-05-19): 거래 해제 안내 (한국도시연구소 서울 실거래 분석 — 2025 해제건수 대폭 증가 = 시장교란) -->
+    <div style="background:#FFF7E6;border:1px solid #FFD580;border-radius:8px;padding:10px 12px;margin-top:8px;font-size:10.5px;color:var(--t2);line-height:1.6">
+      <div style="font-weight:700;color:var(--t1);margin-bottom:4px">🛡 거래 해제 안내</div>
+      위 거래 데이터는 <b>정상 거래</b>만 포함합니다 (MOLIT 신고 후 해제된 거래 자동 제외 — 시세 정확도 우선).
+      <br><span style="font-size:10px;color:var(--t3)">※ 한국도시연구소 분석에 따르면 2025년 거래 해제건수가 대폭 증가 (시장교란 행위 가능성). 전체 해제 이력은 <a href="http://rtdown.molit.go.kr/" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">국토부 실거래가 공개시스템</a> 별도 확인.</span>
+    </div>
     <div class="ibox y" style="margin-top:12px">국토부 공공 API 기반. 거래 없는 월은 보간하지 않습니다.</div>`;
 
   document.getElementById('t2').innerHTML=`<div class="tld"><div class="tsp"></div>AI 리스크 분석 중...</div>`;
@@ -6761,6 +6887,7 @@ function calcC(){
       isNewlywed:   gct('ch-nw') === '예',
       hasNewborn:   gct('ch-nb') === '예',
       houseStatus:  gct('ch-h'),
+      region:       getRegionForSearch(), // Sprint PP-3: 신생아 특례 LTV 차등 (수도권 70% / 비수도권 80%)
     });
   }
   return r;
@@ -6770,19 +6897,28 @@ function calcC(){
 //   - 보금자리:    소득 7천↓, 주택 6억↓, LTV 70%, 한도 5억, 금리 ~4%
 //   - 디딤돌:      소득 6천↓ (생초 7천), 주택 5억↓, LTV 70%, 한도 2.5억, 금리 ~3%
 //   - 신혼 디딤돌: 소득 7천↓ (혼인 7년↓), 한도 4억, 금리 ~2.8%
-//   - 신생아 특례: 소득 1.3억↓ (2년 내 출산), 주택 9억↓, LTV 80%, 한도 5억, 금리 ~2.5%
+//   - 신생아 특례: 소득 1.3억↓ (2년 내 출산), 주택 9억↓, 한도 4억, 금리 ~1.6~3.3%
+// Sprint PP-3 (2026-05-19): 신생아 특례 정확화
+//   - 2026년 기준 정정: 대출 한도 5억 → 4억, LTV 수도권 70%/비수도권 80% 차등
+//   - DSR 아닌 DTI 60% 기준 심사 (디딤돌 특성)
+//   - 출처: 정부 공식 가이드 (younju 이미지 참조, 2026년 기준)
 // 모두 무주택 + 본인 거주 의무. 입력은 만원 단위 income.
-function computePolicyLoan({ buy, income, isFirstBuyer, isNewlywed, hasNewborn, houseStatus }) {
+function computePolicyLoan({ buy, income, isFirstBuyer, isNewlywed, hasNewborn, houseStatus, region }) {
   if (houseStatus !== '무주택') return { eligible: [], maxLoan: 0, bestName: null, note: '정책자금은 무주택자만 신청 가능' };
   const eligible = [];
+  // Sprint PP-3: 수도권 (서울/경기/인천) vs 비수도권 LTV 차등
+  const isMetro = region === '서울' || region === '경기' || region === '인천';
+  const newbornLtv = isMetro ? 0.70 : 0.80;
+  const NEWBORN_REGION_HINT = isMetro ? '수도권 LTV 70%' : '비수도권 LTV 80%';
 
   // 1) 신생아 특례 (가장 유리 — 1순위)
   if (hasNewborn && income > 0 && income <= 13000 && buy <= 9) {
     eligible.push({
       name: '신생아 특례',
-      maxLoan: Math.min(5, buy * 0.8),
-      ltv: 80, rate: '1.6~3.3%',
-      note: '2년 내 출산 부부, 부부합산 1.3억 이하. 1자녀 1년·2자녀 2년 추가 적용.',
+      maxLoan: Math.min(4, buy * newbornLtv), // 4억 한도 (이전 5억은 잘못된 값)
+      ltv: Math.round(newbornLtv * 100),
+      rate: '1.6~3.3%',
+      note: `2년 내 출산 부부, 부부합산 1.3억 이하 (맞벌이 2억). 주택가 9억 이하·전용 85㎡ 이하·자산 5.11억 이하. ${NEWBORN_REGION_HINT}. 한도 4억. DSR 아닌 DTI 60% 기준 심사.`,
     });
   }
   // 2) 신혼 디딤돌
