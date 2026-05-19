@@ -27,6 +27,9 @@ const { resolveSchools } = require('../services/schoolService');
 const { resolveSchoolNeisBatch } = require('../services/schoolNeisService');
 // STAB-AUDIT-2026-05-07 P2: 학구도 (배정 초·중) 매핑
 const { resolveSchoolDistrict } = require('../services/schoolDistrictService');
+// Sprint OO (2026-05-19): 강연 자료 적용 — 학군 권역 + 학원가
+const { resolveSchoolCluster } = require('../services/schoolClusterService');
+const { resolveAcademies } = require('../services/academyService');
 // NAMEFIX-2026-05-11 + FACILITY-HELPER-2026-05-12: 검색 path 정규화 + facility schema 일관
 // NAME-MERGE-2026-05-12 (Sprint S): baseAptName helper 로 동/letter/층 suffix 분리 신고 통합
 const { normalizeAptName, baseAptName } = require('../utils/aptName');
@@ -466,8 +469,12 @@ router.get('/facility', async (req, res) => {
     //   - P0 카카오맵: 반경 1km 학교 list (이름·거리·종류)
     //   - P1 학교알리미 NEIS: 학생수·학급수·교사수 (학교명 매칭)
     //   - P2 학구도: 단지 좌표 → 배정 초·중 (서울 우선)
+    // Sprint OO (2026-05-19): 강연 자료 적용 — 학군 권역 라벨 + 학원가 정보
+    //   - schoolCluster: 3대 학원가 + 4권역 정적 라벨 (sigungu/umdNm 매핑)
+    //   - nearbyAcademies: 반경 500m 학원 카운트 + 카테고리 분류
     let nearbySchools = [];
     let schoolDistrict = null;
+    let nearbyAcademies = null;
     try {
       const coord = await resolveCoord({
         kaptCode: facility?.kaptCode,
@@ -475,10 +482,11 @@ router.get('/facility', async (req, res) => {
         address: facility?.raw?.doroJuso || facility?.raw?.kaptAddr,
       });
       if (coord?.lat && coord?.lng) {
-        // P0: 반경 1km 학교 fetch (병렬 P1·P2 와 함께)
-        const [schools, district] = await Promise.all([
+        // P0: 반경 1km 학교 fetch + 학원 fetch (병렬 P1·P2 와 함께)
+        const [schools, district, academies] = await Promise.all([
           resolveSchools({ kaptCode: facility?.kaptCode, aptName, sigungu, umdNm, lat: coord.lat, lng: coord.lng }),
           resolveSchoolDistrict({ lat: coord.lat, lng: coord.lng, sigungu, umdNm }),
+          resolveAcademies({ kaptCode: facility?.kaptCode, aptName, sigungu, umdNm, lat: coord.lat, lng: coord.lng }),
         ]);
         // P1: 학교알리미 NEIS 풍부화 (학생수·학급수)
         const enriched = schools && schools.length
@@ -486,10 +494,14 @@ router.get('/facility', async (req, res) => {
           : [];
         nearbySchools = enriched;
         schoolDistrict = district;
+        nearbyAcademies = academies;
       }
     } catch (schoolErr) {
-      logger.debug({ err: schoolErr.message, aptName }, '학교 데이터 조회 실패 (무시)');
+      logger.debug({ err: schoolErr.message, aptName }, '학교/학원 데이터 조회 실패 (무시)');
     }
+
+    // Sprint OO: 학군 권역 라벨 (정적 강연 자료) — 좌표 없어도 sigungu/umdNm 만으로 매칭 가능
+    const schoolCluster = resolveSchoolCluster({ sigungu, umdNm });
 
     // 같은 동의 다른 MOLIT 단지명 — alias 후보 (사용자 표시용)
     // Phase 4 (2026-04-26): 토큰 매칭 우선순위 — 정식명 핵심 단어가 MOLIT 신고명에 포함되면
@@ -553,7 +565,7 @@ router.get('/facility', async (req, res) => {
           official: facility.official || null,
         })
       : null;
-    res.json({ facility: builtFacility, altCandidates, nearbySchools, schoolDistrict });
+    res.json({ facility: builtFacility, altCandidates, nearbySchools, schoolDistrict, schoolCluster, nearbyAcademies });
   } catch (e) {
     logger.warn({ err: e.message, aptName }, 'facility 조회 실패');
     res.status(500).json({ error: 'facility 조회 실패' });

@@ -4981,6 +4981,9 @@ function showDetail(p){
     <div id="amenityBox" style="font-size:11px;color:var(--t3);margin:4px 0 8px">🗺️ 주변 편의시설 조회 중...</div>
     <div id="facilityBox" style="margin:4px 0 8px"></div>
     <div id="schoolBox" style="display:none"></div>
+    <!-- Sprint OO (2026-05-19): 학군 권역 (강연 자료) + 학원가 정보 -->
+    <div id="clusterBox" style="display:none"></div>
+    <div id="academyBox" style="display:none"></div>
     <div id="altAptBox" style="margin:4px 0 8px"></div>
     ${(()=>{
       // P1 (Phase 2 후속, 2026-04-25): 학군 표시 — 카카오 keyword 기반 사실 나열만 (학업성취도 X)
@@ -5440,6 +5443,57 @@ async function loadFacility(p){
       sbox.style.display='block';
     } else if (sbox) {
       sbox.style.display='none';
+    }
+
+    // Sprint OO (2026-05-19): 학군 권역 라벨 (강연 자료 정적 매핑) — 매수 추천 X / 정보 정리
+    const cbox = document.getElementById('clusterBox');
+    if (cbox && r.schoolCluster && (r.schoolCluster.hubs?.length || r.schoolCluster.regions?.length)) {
+      const sc = r.schoolCluster;
+      const hubChips = (sc.hubs||[]).map(h =>
+        `<span style="display:inline-block;background:#FEF3C7;color:#7A4F0E;border:1px solid #FCD34D;border-radius:12px;padding:2px 8px;font-size:10.5px;font-weight:600;margin:2px 3px 2px 0">${_escHtml(h.label)}</span>`
+      ).join('');
+      const regionChips = (sc.regions||[]).map(rg => {
+        const colorMap = { '동북권': '#FEE2E2', '동남권': '#DBEAFE', '서북권': '#E9D5FF', '서남권': '#FED7AA' };
+        const textMap = { '동북권': '#991B1B', '동남권': '#1E40AF', '서북권': '#6B21A8', '서남권': '#9A3412' };
+        const bg = colorMap[rg.region] || '#F3F4F6';
+        const tc = textMap[rg.region] || '#374151';
+        return `<span style="display:inline-block;background:${bg};color:${tc};border-radius:12px;padding:2px 8px;font-size:10.5px;font-weight:600;margin:2px 3px 2px 0">${_escHtml(rg.label)}</span>`;
+      }).join('');
+      const notes = [...(sc.hubs||[]).map(h=>h.note), ...(sc.regions||[]).map(rg=>`${rg.name}: ${rg.note}`)].filter(Boolean).join(' · ');
+      cbox.innerHTML = `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6;margin-top:8px">
+        <div style="font-weight:700;color:var(--t1);margin-bottom:5px">🎓 학군 권역 (2026 부동산 강연 자료 기반)</div>
+        <div>${hubChips}${regionChips}</div>
+        ${notes ? `<div style="font-size:10px;color:var(--t3);margin-top:5px">${_escHtml(notes)}</div>` : ''}
+        <div style="font-size:9.5px;color:var(--t3);margin-top:4px">※ 강연 자료의 학군지 분류 (정보 정리). 매수·매도 추천 X · 가격 예측 X.</div>
+      </div>`;
+      cbox.style.display='block';
+    } else if (cbox) {
+      cbox.style.display='none';
+    }
+
+    // Sprint OO (2026-05-19): 인근 학원가 정보 (반경 500m, 카카오맵)
+    const acadBox = document.getElementById('academyBox');
+    if (acadBox && r.nearbyAcademies && r.nearbyAcademies.total > 0) {
+      const na = r.nearbyAcademies;
+      const byCat = na.byCategory || {};
+      // 카테고리별 카운트 표시 (입시/영어/수학 우선, 0개 카테고리 제외)
+      const PRIORITY = ['입시', '영어', '수학', '국어', '예체능', '코딩', '기타'];
+      const catChips = PRIORITY
+        .filter(k => byCat[k] > 0)
+        .map(k => `<span style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:2px 8px;font-size:10.5px;color:var(--t2);margin:2px 3px 2px 0;display:inline-block">${k} <b style="color:var(--ac)">${byCat[k]}</b></span>`)
+        .join('');
+      const topNames = (na.top||[]).slice(0,5).map(a =>
+        `<span style="font-size:10.5px;color:var(--t3)">${_escHtml(a.name)} <span style="color:var(--t3)">(${a.distance_m}m)</span></span>`
+      ).join(' · ');
+      acadBox.innerHTML = `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6;margin-top:8px">
+        <div style="font-weight:700;color:var(--t1);margin-bottom:5px">📚 인근 학원가 (반경 ${na.radius_m}m, ${na.total}개)</div>
+        <div style="margin-bottom:5px">${catChips}</div>
+        ${topNames ? `<div style="font-size:10px;color:var(--t3);line-height:1.5">${topNames}</div>` : ''}
+        <div style="font-size:9.5px;color:var(--t3);margin-top:4px">※ 카카오맵 기반. 학원 평판/난이도 정보 X · 객관 카운트만.</div>
+      </div>`;
+      acadBox.style.display='block';
+    } else if (acadBox) {
+      acadBox.style.display='none';
     }
 
     // Phase 4 (2026-04-26): alias 카드 제거 — 사용자 혼란 ("A/B 가 뭔지 모름")
