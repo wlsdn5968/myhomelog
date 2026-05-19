@@ -557,6 +557,23 @@ router.get('/facility', async (req, res) => {
       // 점수 ↓ → 단지명 ↑ 정렬, 상위 8개 (12 → 8 — false positive 차단)
       candidates.sort((a, b) => b._score - a._score || a.aptName.localeCompare(b.aptName));
       altCandidates = candidates.slice(0, 8).map(({ _score, ...c }) => c);
+
+      // 작업 D (2026-05-20): apt_master.molit_aliases 자동 backfill (운영자 발견 미진행 항목)
+      //   - facility 가 master 단지 (kaptCode 있음) 이면 alias name list 자동 저장
+      //   - jsonb 타입 — Supabase JS 가 자동 JSON 인코딩
+      //   - 매번 덮어쓰기 (altCandidates 알고리즘 변경 시 자동 반영, 부담 미미)
+      //   - fire-and-forget (응답 지연 차단)
+      if (facility?.kaptCode && altCandidates.length > 0) {
+        const aliasNames = altCandidates.map(c => c.aptName);
+        admin.from('apt_master')
+          .update({ molit_aliases: aliasNames, updated_at: new Date().toISOString() })
+          .eq('kapt_code', facility.kaptCode)
+          .then(({ error }) => {
+            if (error) {
+              logger.debug({ err: error.message, kapt: facility.kaptCode }, 'molit_aliases backfill 실패 (무시)');
+            }
+          });
+      }
     }
     // FACILITY-HELPER-2026-05-12 + DTL-INFO-2026-05-13 (Sprint X):
     //   resolveFacility 반환: { kaptCode, official, raw, detail } — Sprint X 부터 detail 동봉.
