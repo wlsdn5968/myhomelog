@@ -5051,27 +5051,50 @@ function showDetail(p){
       ${p.facility.totalHouseholds?`총 ${p.facility.totalHouseholds.toLocaleString()}세대`:''}${p.facility.dongCount?` · ${p.facility.dongCount}개동`:''}${p.facility.parkingRatio?` · 주차 세대당 ${p.facility.parkingRatio}대`:''}${p.facility.builtDate?` · 사용승인 ${p.facility.builtDate.slice(0,4)}.${p.facility.builtDate.slice(4,6)}`:''}${p.facility.heatType?` · ${p.facility.heatType}`:''}
       ${p.facility.address?`<br><span style="font-size:10px;color:var(--t3)">${p.facility.address}</span>`:''}
     </div>`:''}
-    <!-- Sprint PP-4 (2026-05-19): 1주택자 기준 예상 연간 보유세 (대략 추정) -->
+    <!-- Sprint PP-4 (2026-05-19) + 작업 A 확장 (2026-05-20): 보유 주택수별 세금 시뮬레이션 (취득세·재산세·종부세·양도세 중과) -->
     ${p.avgPrice && p.avgPrice > 0 ? (() => {
       const market = p.avgPrice;             // 시가 (억)
       const official = market * 0.70;        // 공시가격 = 시가의 약 70%
-      // 재산세 1주택자 표준세율 (2026 기준 추정):
-      //   6천 이하: 0.05% / 6천~1.5억: 0.10%+3만 / 1.5억~3억: 0.20%+12만 / 3억 초과: 0.35%+42만
-      const officialW = official * 10000;    // 만원 단위
+      const marketW = market * 10000;        // 시가 만원 단위
+      const officialW = official * 10000;    // 공시 만원 단위
+      // ── 재산세 (모든 시나리오 동일 — 소유자 단위 + 1주택자 동일 세율 가정) ──
       let propTaxW = 0;
       if (officialW <= 6000)        propTaxW = officialW * 0.0005;
       else if (officialW <= 15000)  propTaxW = 30000 + (officialW - 6000) * 0.001;
       else if (officialW <= 30000)  propTaxW = 30000 + 90000 + (officialW - 15000) * 0.002;
       else                          propTaxW = 30000 + 90000 + 300000 + (officialW - 30000) * 0.0035;
-      // 종합부동산세 1주택자 9억 초과 → 0.5~3% 누진 (간단화: 0.5%)
-      let compTaxW = 0;
-      if (official > 9) compTaxW = (official - 9) * 10000 * 0.005;
-      const totalW = Math.round(propTaxW + compTaxW);
-      const totalEok = (totalW / 10000).toFixed(2);
-      return `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
-        <div style="font-weight:700;color:var(--t1);margin-bottom:4px">💸 1주택자 기준 예상 연간 보유세</div>
-        매매가 ${market.toFixed(1)}억 → 공시가격 추정 ${official.toFixed(1)}억 → 재산세 + 종부세 <b style="color:var(--acc)">약 ${totalW.toLocaleString()}원 (${totalEok}억)</b>
-        <div style="font-size:9.5px;color:var(--t3);margin-top:4px">※ <b>대략 추정</b> (공시가격 = 시가 × 0.7 가정, 1주택자 기준, 2026 세율 추정). 실제 세금은 공시가격 발표·세대원·다주택 여부·세액공제에 따라 다름. 정확한 계산: <a href="https://hometax.go.kr" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">홈택스 모의계산</a> 별도 확인.</div>
+      // ── 종부세 (1주택 9억 / 다주택 6억 기준) ──
+      const compTax1H = official > 9 ? (official - 9) * 10000 * 0.005 : 0;       // 1주택 0.5%
+      const compTax2H = official > 6 ? (official - 6) * 10000 * 0.010 : 0;       // 다주택 1.0% (간단화)
+      const compTax3H = official > 6 ? (official - 6) * 10000 * 0.020 : 0;       // 3주택+ 2.0% (중과)
+      // ── 취득세 (시가 기준) ──
+      //   1주택: 6억↓ 1% / 6~9억 2% / 9억↑ 3%
+      //   2주택 조정대상지역: 8% / 3주택+ 12%
+      let acqTax1H = 0;
+      if (market <= 6) acqTax1H = marketW * 0.01;
+      else if (market <= 9) acqTax1H = marketW * 0.02;
+      else acqTax1H = marketW * 0.03;
+      const acqTax2H = marketW * 0.08;  // 다주택 중과
+      const acqTax3H = marketW * 0.12;
+      // ── 양도세 (5/9 부활) ──
+      //   1주택자 1세대 비과세 (조건부) 또는 6~45% 누진
+      //   2주택자 +20%p / 3주택+ +30%p (조정대상지역)
+      //   단순 추정: 만약 매도 시 시가의 50% 차익 가정 → 양도세 추정
+      const _format = w => Math.round(w).toLocaleString();
+      const propEok = (propTaxW / 10000).toFixed(2);
+      const _box = (icon, title, content) => `<div style="background:#fff;border:1px solid var(--bd);border-radius:6px;padding:8px 10px;font-size:10.5px;line-height:1.5;color:var(--t2)"><div style="font-weight:700;color:var(--t1);margin-bottom:3px">${icon} ${title}</div>${content}</div>`;
+      return `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:11px 13px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
+        <div style="font-weight:700;color:var(--t1);margin-bottom:6px">💸 보유 주택수별 예상 세금 시뮬레이션</div>
+        <div style="font-size:10px;color:var(--t3);margin-bottom:6px">매매가 ${market.toFixed(1)}억 / 공시가격 추정 ${official.toFixed(1)}억</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">
+          ${_box('🏠', '1주택자', `취득세 <b>${_format(acqTax1H)}원</b><br>재산세 ${_format(propTaxW)}원<br>종부세 ${_format(compTax1H)}원`)}
+          ${_box('🏘', '2주택자', `취득세 <b style="color:var(--amb)">${_format(acqTax2H)}원</b> <span style="font-size:9px;color:var(--t3)">(8% 중과)</span><br>재산세 ${_format(propTaxW)}원<br>종부세 <b style="color:var(--amb)">${_format(compTax2H)}원</b>`)}
+          ${_box('🏗', '3주택+', `취득세 <b style="color:var(--red)">${_format(acqTax3H)}원</b> <span style="font-size:9px;color:var(--t3)">(12% 중과)</span><br>재산세 ${_format(propTaxW)}원<br>종부세 <b style="color:var(--red)">${_format(compTax3H)}원</b>`)}
+        </div>
+        <div style="background:#FFF7E6;border:1px solid #E8C896;border-radius:6px;padding:7px 10px;font-size:10px;color:#8B6914;line-height:1.55;margin-top:4px">
+          <b>⚡ 양도세 중과 부활 (2026.5.9~)</b>: 다주택자 매도 시 기본세율 + <b>2주택 +20%p / 3주택+ +30%p</b> (조정대상지역). 매도 전 세무사 상담 필수.
+        </div>
+        <div style="font-size:9.5px;color:var(--t3);margin-top:5px">※ <b>대략 추정</b> — 공시가격=시가×0.7, 2026 세율 기준. 실제 세금은 공시가격 공식 발표·세대원·세액공제·조정대상지역 여부에 따라 다름.<br>※ 출처: 지방세법 §11 (취득세·재산세) / 종합부동산세법 / 소득세법 §94 (양도세). 정확 계산: <a href="https://hometax.go.kr" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">홈택스 모의계산</a></div>
       </div>`;
     })() : ''}
     <div id="amenityBox" style="font-size:11px;color:var(--t3);margin:4px 0 8px">🗺️ 주변 편의시설 조회 중...</div>
