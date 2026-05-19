@@ -562,17 +562,19 @@ router.get('/facility', async (req, res) => {
       //   - facility 가 master 단지 (kaptCode 있음) 이면 alias name list 자동 저장
       //   - jsonb 타입 — Supabase JS 가 자동 JSON 인코딩
       //   - 매번 덮어쓰기 (altCandidates 알고리즘 변경 시 자동 반영, 부담 미미)
-      //   - fire-and-forget (응답 지연 차단)
+      //   - await 필요 (Vercel serverless fire-and-forget 미작동 — request 응답 후 process 종료)
       if (facility?.kaptCode && altCandidates.length > 0) {
         const aliasNames = altCandidates.map(c => c.aptName);
-        admin.from('apt_master')
-          .update({ molit_aliases: aliasNames, updated_at: new Date().toISOString() })
-          .eq('kapt_code', facility.kaptCode)
-          .then(({ error }) => {
-            if (error) {
-              logger.debug({ err: error.message, kapt: facility.kaptCode }, 'molit_aliases backfill 실패 (무시)');
-            }
-          });
+        try {
+          const { error } = await admin.from('apt_master')
+            .update({ molit_aliases: aliasNames, updated_at: new Date().toISOString() })
+            .eq('kapt_code', facility.kaptCode);
+          if (error) {
+            logger.debug({ err: error.message, kapt: facility.kaptCode }, 'molit_aliases backfill 실패 (무시)');
+          }
+        } catch (e) {
+          logger.debug({ err: e.message, kapt: facility.kaptCode }, 'molit_aliases backfill 예외 (무시)');
+        }
       }
     }
     // FACILITY-HELPER-2026-05-12 + DTL-INFO-2026-05-13 (Sprint X):
