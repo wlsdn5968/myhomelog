@@ -517,6 +517,13 @@ router.get('/facility', async (req, res) => {
           if (!tokens.includes(t)) tokens.push(t);
         }
       }
+      // Sprint NN (2026-05-17, A 작업 sample 검증 중 발견):
+      //   "고덕현대아파트" (명일동) 검색 → 명일동 모든 단지가 alt candidate 로 잡힘.
+      //   원인: '아파트' (3글자) token 이 거의 모든 MOLIT 단지명에 substring 매칭 → false positive.
+      //   결과: master fallback 으로 무관한 "고덕삼환/명일지에스/명일다성이즈빌" 거래 표시 → 환각.
+      //   Fix: generic stop tokens 매칭 제외. 정체성 약한 일반 명사 단어 ('아파트', '오피스텔') 제거.
+      //   '풍림아파트A' 매칭은 '풍림아' (3글자) 로 score=3 유지 — 회귀 0.
+      const STOP_TOKENS = new Set(['아파트', '오피스텔']);
       const candidates = [];
       for (const r of (alts || [])) {
         if (seen.has(r.apt_name)) continue;
@@ -524,6 +531,7 @@ router.get('/facility', async (req, res) => {
         // 토큰 매칭 점수 — 더 긴 토큰 매칭 = 우선
         let score = 0;
         for (const tok of tokens) {
+          if (STOP_TOKENS.has(tok)) continue; // Sprint NN: generic stop token 제외
           if (tok.length >= 3 && r.apt_name.includes(tok)) score = Math.max(score, tok.length);
         }
         // Phase 4 (2026-04-26): score >= 3 (3글자 이상 매칭) 만 진짜 alias 후보.
