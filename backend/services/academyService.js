@@ -75,9 +75,11 @@ async function resolveAcademies({ kaptCode, aptName, sigungu, umdNm, lat, lng })
 
   try {
     const headers = { Authorization: `KakaoAK ${KAKAO_KEY}` };
-    // page 1~3 (최대 45개) — 1km 학원이 많은 학군지 (대치동 등) cover
+    // Sprint OO+ (2026-05-19 verify): page 1만 fetch (size 15) — facility endpoint 응답 시간 단축.
+    //   학원 많은 학군지도 15개면 카테고리 분포 + 상위 5개 표시 충분.
+    //   이전 3 page (timeout 15초) → frontend 8초 timeout 도달 가능 → nearbyAcademies null.
     const docs = [];
-    for (let page = 1; page <= 3; page++) {
+    try {
       const r = await axios.get(KAKAO_KEYWORD, {
         headers,
         params: {
@@ -85,15 +87,14 @@ async function resolveAcademies({ kaptCode, aptName, sigungu, umdNm, lat, lng })
           x: lng, y: lat,
           radius: SEARCH_RADIUS_M,
           size: 15,
-          page,
+          page: 1,
           sort: 'distance',
         },
-        timeout: 5000,
+        timeout: 3000, // 5초 → 3초
       });
-      const pageDocs = r.data?.documents || [];
-      docs.push(...pageDocs);
-      // is_end 면 stop
-      if (r.data?.meta?.is_end) break;
+      docs.push(...(r.data?.documents || []));
+    } catch (pageErr) {
+      logger.debug({ err: pageErr.message, lat, lng }, '학원 1페이지 fetch 실패');
     }
 
     const academies = [];

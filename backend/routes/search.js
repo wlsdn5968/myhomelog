@@ -483,10 +483,11 @@ router.get('/facility', async (req, res) => {
       });
       if (coord?.lat && coord?.lng) {
         // P0: 반경 1km 학교 fetch + 학원 fetch (병렬 P1·P2 와 함께)
+        // Sprint OO+ (2026-05-19 verify): 각 promise .catch 추가 — 학원 실패가 학교 실패 캐스케이드 차단
         const [schools, district, academies] = await Promise.all([
-          resolveSchools({ kaptCode: facility?.kaptCode, aptName, sigungu, umdNm, lat: coord.lat, lng: coord.lng }),
-          resolveSchoolDistrict({ lat: coord.lat, lng: coord.lng, sigungu, umdNm }),
-          resolveAcademies({ kaptCode: facility?.kaptCode, aptName, sigungu, umdNm, lat: coord.lat, lng: coord.lng }),
+          resolveSchools({ kaptCode: facility?.kaptCode, aptName, sigungu, umdNm, lat: coord.lat, lng: coord.lng }).catch(e => { logger.debug({err:e.message},'학교 실패'); return []; }),
+          resolveSchoolDistrict({ lat: coord.lat, lng: coord.lng, sigungu, umdNm }).catch(e => { logger.debug({err:e.message},'학구도 실패'); return null; }),
+          resolveAcademies({ kaptCode: facility?.kaptCode, aptName, sigungu, umdNm, lat: coord.lat, lng: coord.lng }).catch(e => { logger.debug({err:e.message},'학원 실패'); return null; }),
         ]);
         // P1: 학교알리미 NEIS 풍부화 (학생수·학급수)
         const enriched = schools && schools.length
