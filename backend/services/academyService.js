@@ -90,7 +90,7 @@ async function resolveAcademies({ kaptCode, aptName, sigungu, umdNm, lat, lng })
           page: 1,
           sort: 'distance',
         },
-        timeout: 3000, // 5초 → 3초
+        timeout: 5000, // cold start 시 cache miss → first kakao call latency 변동 큼
       });
       docs.push(...(r.data?.documents || []));
     } catch (pageErr) {
