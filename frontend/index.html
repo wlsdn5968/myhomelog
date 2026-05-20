@@ -241,6 +241,34 @@ window.MHL.auth = window.MHL.auth || {
         };
         A.signOut = async function(){ return sb.auth.signOut(); };
         A.getAccessToken = function(){ return A.session?.access_token || null; };
+        // TOKEN-FRESH-2026-05-21 (운영자 발견 "로그인했는데 보고서 안됨"):
+        //   근본원인 — autoRefreshToken 이 백그라운드 탭 타이머 throttle 등으로 누락되면
+        //   A.session.access_token 이 만료된 채 캐시됨. UI 는 로그인 상태로 보이나 인증 요청은
+        //   만료 토큰 전송 → 백엔드가 anonymous 처리 → admin/무제한 혜택 상실 + 보고서 0회 차단.
+        //   방어: 요청 시점에 만료(±60s) 검사 후 강제 refresh. 모든 인증 요청은 await A.getFreshToken() 권장.
+        A.getFreshToken = async function(){
+          try {
+            var now = Math.floor(Date.now()/1000);
+            var s = A.session;
+            if (s && s.access_token && s.expires_at && s.expires_at > now + 60) return s.access_token; // 아직 충분히 유효
+            // 1) getSession (v2 는 만료 시 refresh 시도) → 2) 여전히 만료면 refreshSession 강제
+            var g = await sb.auth.getSession();
+            var ns = g && g.data && g.data.session;
+            if (!ns || !ns.expires_at || ns.expires_at <= now + 60) {
+              var rr = await sb.auth.refreshSession();
+              if (rr && rr.data && rr.data.session) ns = rr.data.session;
+            }
+            if (ns) { A.session = ns; A.user = ns.user || A.user; A._emit(); }
+            return (A.session && A.session.access_token) || null;
+          } catch(_) { return (A.session && A.session.access_token) || null; }
+        };
+        // getSession 스텁 대체 — 캐시 대신 신선한 세션 반환 (기존 await A.getSession() 호출부 자동 수혜)
+        A.getSession = async function(){ await A.getFreshToken(); return A.session; };
+        // 캐시 워밍: 탭 포커스 복귀 + 4분 주기로 만료 임박 토큰 선제 refresh (autoRefresh 보강)
+        try {
+          document.addEventListener('visibilitychange', function(){ if (!document.hidden && A.session) A.getFreshToken(); });
+          setInterval(function(){ if (A.session) A.getFreshToken(); }, 4 * 60 * 1000);
+        } catch(_){}
       } catch(e){
         // ABORT-FILTER-2026-05-13 (Sprint CC++): AbortError = 정상 취소 (timeout / 사용자 navigate)
         if (e?.name === 'AbortError') console.info('[MHL.auth] init aborted (timeout/navigation)');
@@ -3536,7 +3564,8 @@ async function generateReport() {
     // Phase 5+ (2026-04-26): 로그인 사용자는 Authorization 헤더 추가 — 서버에서 user.id/email 인식 → admin/Pro plan 한도 적용
     const A = window.MHL?.auth;
     const headers = { 'Content-Type': 'application/json' };
-    const tok = A?.session?.access_token;
+    // TOKEN-FRESH-2026-05-21: 만료된 캐시 토큰 방지 — 요청 직전 신선한 토큰 확보 (admin 무제한 보장).
+    const tok = A?.getFreshToken ? await A.getFreshToken() : (A?.session?.access_token || null);
     if (tok) headers['Authorization'] = 'Bearer ' + tok;
     const r = await fetch(`${CFG.api}/report/generate`, {
       method: 'POST',
@@ -4125,7 +4154,8 @@ async function refreshQuota(){
   try{
     const A = window.MHL?.auth;
     const headers = {};
-    const tok = A?.session?.access_token;
+    // TOKEN-FRESH-2026-05-21: 신선한 토큰으로 health 의 admin/한도 표시 정확화.
+    const tok = A?.getFreshToken ? await A.getFreshToken() : (A?.session?.access_token || null);
     if(tok) headers['Authorization'] = 'Bearer ' + tok;
     const r=await fetch(`${CFG.api}/health`,{headers, signal:AbortSignal.timeout(5000)});
     if(r.ok){
@@ -4617,7 +4647,8 @@ async function doSearch(){
     setTimeout(()=>{if(btn.classList.contains('ld'))searchStep('AI 분석·점수 계산 중...', 3);}, 3500);
     // MOB-FIX-2026-05-03: 로그인 사용자 토큰 주입 → backend 가 user 한도(10/일) 적용 (이전: anonymous 5/일 잘못 적용)
     const _hdr={'Content-Type':'application/json'};
-    const _tok=window.MHL?.auth?.session?.access_token;
+    // TOKEN-FRESH-2026-05-21: 만료된 캐시 토큰 방지 — 신선한 토큰 확보.
+    const _tok=window.MHL?.auth?.getFreshToken ? await window.MHL.auth.getFreshToken() : (window.MHL?.auth?.session?.access_token||null);
     if(_tok)_hdr['Authorization']='Bearer '+_tok;
     // Phase 4-2 단계 1 미세 (2026-05-05): /api/properties/recommend cold start 자동 1회 재시도
     // 첫 호출이 500 (lambda 콜드) 시 1.5s 후 재호출 → 두 번째는 warm 으로 95% 성공
