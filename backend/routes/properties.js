@@ -46,12 +46,17 @@ router.post('/recommend', validatePropertySearch, async (req, res) => {
     maxBudget, myCash, availableLoan,
     region, houseStatus, isFirstBuyer,
     purpose, schoolNeeded, childPlan, workplaceArea,
+    minArea, maxArea,
   } = req.body;
 
   if (!maxBudget || maxBudget <= 0) {
     return res.status(400).json({ error: '매수 예산(maxBudget) 필수' });
   }
 
+  // PYEONG-FILTER-FIX-2026-05-21 (운영자 발견 "단지 정리 목록이 이상하게 나와"):
+  //   frontend pyRange() 가 {minArea,maxArea} (평) 전송하나 route 가 destructure 누락 →
+  //   getAIRecommendations 에 undefined 전달 → minPy=15/maxPy=60 기본값 → 평형 필터 무시.
+  //   (예: "중형 23~33평" 요청에 18·20·21평 단지 혼입). minArea/maxArea pass-through 로 수정.
   const result = await getAIRecommendations({
     maxBudget: parseFloat(maxBudget),
     myCash: parseFloat(myCash) || 0,
@@ -62,6 +67,7 @@ router.post('/recommend', validatePropertySearch, async (req, res) => {
     purpose: purpose || '실거주',
     schoolNeeded: schoolNeeded === true || schoolNeeded === 'true',
     childPlan, workplaceArea,
+    minArea, maxArea,
   }).catch(err => {
     throw Object.assign(new Error(err.message), { status: 502 });
   });

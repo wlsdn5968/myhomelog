@@ -420,24 +420,70 @@ router.get('/in-bounds', async (req, res) => {
       aptStats[t.apt_name].n++;
     }
 
+    // ALIAS-MERGE-2026-05-21 (운영자 발견 "검색 vs 지도 영역보기 매물 불일치"):
+    //   apt_geocache 는 MOLIT raw 단지명 (예: "풍림아파트A"/"풍림아파트B") 으로 좌표 보유 →
+    //   in-bounds 가 raw 명 그대로 노출 → 같은 단지(공릉풍림아이원)가 지도에 2~3개 별도 마커로 분리.
+    //   검색(/search/apt)은 apt_master + molit_aliases 로 1개 단지로 병합 → 두 path 가 별개 물건처럼 보임.
+    //   Fix: 영역 내 동(umd)의 apt_master.molit_aliases 로 raw→canonical 역매핑 → 같은 master 단지로 병합.
+    //   master 단지는 source:'master' + aptSeq(kaptCode) 부여 → frontend 가 검색과 동일한 상세 모달 fetch 가능.
+    const umds = [...new Set(coords.map(c => c.umd_nm).filter(Boolean))];
+    const aliasToMaster = {}; // key: `${alias}|${umd}` → master row
+    if (umds.length) {
+      const { data: masters } = await admin
+        .from('apt_master')
+        .select('apt_name, sigungu, umd_nm, kapt_code, molit_aliases')
+        .in('umd_nm', umds)
+        .not('molit_aliases', 'is', null);
+      for (const m of (masters || [])) {
+        const al = Array.isArray(m.molit_aliases) ? m.molit_aliases : [];
+        for (const a of al) aliasToMaster[`${a}|${m.umd_nm}`] = m;
+      }
+    }
+
     // MOB-AUDIT-2026-05-04: 거래 0건 단지 (apt_geocache 에 좌표만 있고 molit 매칭 X) 는
     //   avgPrice 0.00억 으로 노출되어 사용자 오인 → 결과에서 제외 (legal 보호)
-    //   필요 시 frontend 에 "거래 정보 없음" 별도 표시 추가 가능
-    const out = coords.map(c => {
+    // ALIAS-MERGE-2026-05-21: canonical 단지명 기준으로 그룹화 (alias 거래 합산).
+    const groups = {};
+    for (const c of coords) {
+      const master = aliasToMaster[`${c.apt_name}|${c.umd_nm}`] || null;
+      const canonName = master ? master.apt_name : c.apt_name;
+      const gkey = `${canonName}|${c.umd_nm}`;
+      if (!groups[gkey]) groups[gkey] = {
+        aptName: canonName,
+        sigungu: master ? master.sigungu : c.sigungu,
+        umdNm: c.umd_nm,
+        lat: Number(c.lat), lng: Number(c.lng),
+        sum: 0, n: 0, buildYear: null, lawdCd: null,
+        aptSeq: master ? (master.kapt_code || null) : null,
+        source: master ? 'master' : 'molit',
+        _bestN: -1,
+      };
+      const g = groups[gkey];
       const s = aptStats[c.apt_name];
-      if (!s || !s.n || !s.sum) return null; // 거래 0건 → 제외
-      const avg = +(s.sum / s.n / 10000).toFixed(2);
+      if (s && s.n && s.sum) {
+        g.sum += s.sum; g.n += s.n;
+        if (!g.buildYear) g.buildYear = s.buildYear;
+        if (!g.lawdCd) g.lawdCd = s.lawdCd;
+        // 대표 좌표 = 거래량 가장 많은 alias 행 (가장 활발한 동/위치)
+        if (s.n > g._bestN) { g._bestN = s.n; g.lat = Number(c.lat); g.lng = Number(c.lng); }
+      }
+    }
+    const out = Object.values(groups).map(g => {
+      if (!g.n || !g.sum) return null; // 거래 0건 → 제외
+      const avg = +(g.sum / g.n / 10000).toFixed(2);
       if (!avg || avg <= 0) return null;
       return {
-        aptName: c.apt_name,
-        sigungu: c.sigungu,
-        umdNm: c.umd_nm,
-        lat: Number(c.lat),
-        lng: Number(c.lng),
+        aptName: g.aptName,
+        sigungu: g.sigungu,
+        umdNm: g.umdNm,
+        lat: g.lat,
+        lng: g.lng,
         avgPrice: avg,
-        dealCount: s.n,
-        buildYear: s.buildYear || null,
-        lawdCd: s.lawdCd || null,
+        dealCount: g.n,
+        buildYear: g.buildYear || null,
+        lawdCd: g.lawdCd || null,
+        aptSeq: g.aptSeq || null,
+        source: g.source,
       };
     }).filter(Boolean);
     res.json({ results: out, count: out.length });

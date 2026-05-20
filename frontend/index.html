@@ -4864,7 +4864,14 @@ function selP(i){
   }
   showDetail(p);
 }
-function showDetailById(n){const p=props.find(x=>x.aptName===decodeURIComponent(n));if(p)showDetail(p);}
+function showDetailById(n){
+  const p=props.find(x=>x.aptName===decodeURIComponent(n));
+  if(!p)return;
+  // MARKER-DETAIL-2026-05-21: 지도/인기 마커도 검색과 동일하게 실거래·facility fetch (lawdCd 있을 때).
+  //   in-bounds ALIAS-MERGE 후 prop 에 lawdCd/sigungu/umdNm/aptSeq/source 존재 → 검색과 동일 모달.
+  if(p.lawdCd && typeof openAptDetail==='function') openAptDetail(p);
+  else showDetail(p);
+}
 
 // ── 시세 추이 차트 (SVG) ─────────────────────────────────
 // txHistory를 월별 평균으로 집계 (최근 24개월, 거래 있는 월만)
@@ -7963,6 +7970,16 @@ async function goSearchResult(r) {
   if (drop) drop.style.display='none';
   const input = document.getElementById('hSearchInput');
   if (input) input.value = r.aptName;
+  return openAptDetail(r);
+}
+
+// MARKER-DETAIL-2026-05-21 (운영자 발견 "지도 영역보기 단지가 검색과 다르고 실거래가 안 나온다"):
+//   기존: 지도/인기 마커 클릭 → showDetailById → showDetail(sparse prop) → 거래·facility fetch 안 함
+//     → 모달이 실거래 0건·가격범위 0·단지정보 빈칸 → "별개 물건"처럼 보임.
+//   변경: 검색 path 의 거래·facility·alias 병합 fetch 를 openAptDetail(r) 로 추출 →
+//     검색·지도·인기 마커 모두 동일한 상세 모달 (in-bounds ALIAS-MERGE 로 source/aptSeq 제공).
+//   r 필요 필드: aptName, sigungu, umdNm, lawdCd, aptSeq, source.
+async function openAptDetail(r) {
   toast('실거래 데이터 조회 중...');
 
   // Phase 4 (2026-04-26): 거래 fetch 후 모달 열기 — 'undefined.01' 빈 객체 버그 fix.
