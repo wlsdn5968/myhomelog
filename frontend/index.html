@@ -6741,7 +6741,7 @@ async function loadClauseAndRisk(p){
   if(_clauseRiskCache&&_clauseRiskCacheKey===key){renderClause(_clauseRiskCache);renderRisk(_clauseRiskCache);return _clauseRiskCache;}
   try{
     // STAB-A P0#3 (2026-05-03): AbortSignal.timeout(35000) — backend 30초+ 응답 시 무한 로딩 차단
-    const r=await fetch(`${CFG.api}/clause`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({aptName:p.aptName,area:p.area,price:p.avgPrice||p.price,ltv:p.ltv,houseStatus:gct('ch-h'),isFirstBuyer:gct('ch-f')==='예',buildYear:p.buildYear,score:p.score}),signal:AbortSignal.timeout(35000)});
+    const r=await fetch(`${CFG.api}/clause`,{method:'POST',headers:await _authHdr({'Content-Type':'application/json'}),body:JSON.stringify({aptName:p.aptName,area:p.area,price:p.avgPrice||p.price,ltv:p.ltv,houseStatus:gct('ch-h'),isFirstBuyer:gct('ch-f')==='예',buildYear:p.buildYear,score:p.score}),signal:AbortSignal.timeout(35000)});
     if(!r.ok)throw new Error('fail');
     const d=await r.json();
     _clauseRiskCache=d;_clauseRiskCacheKey=key;
@@ -7539,7 +7539,7 @@ async function genClause(){
     issues:document.getElementById('cl_issues').value.trim(),
   };
   try{
-    const r=await fetch(`${CFG.api}/clause`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(35000)});
+    const r=await fetch(`${CFG.api}/clause`,{method:'POST',headers:await _authHdr({'Content-Type':'application/json'}),body:JSON.stringify(body),signal:AbortSignal.timeout(35000)});
     if(!r.ok)throw new Error(`HTTP ${r.status}`);
     renderClauseResult(await r.json(),apt);
   }catch(e){
@@ -7996,6 +7996,18 @@ async function onHeaderSearchInput(q) {
 function onHeaderSearchKey(e) {
   if (e.key === 'Escape') { document.getElementById('hSearchDrop').style.display='none'; e.target.blur(); }
 }
+// AUTH-HDR-2026-05-21 (전수조사: SS-3 동일 클래스 — chat/clause 가 토큰 미전송 → 로그인/admin 도 anonymous 한도):
+//   인증요청 공통 헤더 빌더. getFreshToken 으로 만료 토큰 자동 갱신까지 일괄 처리.
+async function _authHdr(base) {
+  const h = Object.assign({}, base || {});
+  try {
+    const A = window.MHL && window.MHL.auth;
+    const t = A && A.getFreshToken ? await A.getFreshToken() : (A && A.session && A.session.access_token) || null;
+    if (t) h['Authorization'] = 'Bearer ' + t;
+  } catch (_) {}
+  return h;
+}
+
 async function goSearchResult(r) {
   // Day 1-② Vercel Analytics — SEARCH_APT funnel event (검색 결과 클릭 = 검색 성공)
   try { window.va && window.va('event', { name: 'search_apt_click', data: { aptName: String(r.aptName||'').slice(0,40), sigungu: r.sigungu||'' } }); } catch(_){}
@@ -8353,7 +8365,7 @@ async function sM(){
   // 백엔드 단일 경로 (BYOK 제거) — 단지·조건 컨텍스트 자동 첨부
   try{
     // MOB-AUDIT-2026-05-03: chat timeout 30s → 60s — Sonnet 4.5 가 1500 token 답변 시 25~30s 빈번
-    const r=await fetch(`${CFG.api}/chat`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:txt,context:{history:chatH.slice(-18), session:sessionContext}}),signal:AbortSignal.timeout(60000)});
+    const r=await fetch(`${CFG.api}/chat`,{method:'POST',headers:await _authHdr({'Content-Type':'application/json'}),body:JSON.stringify({message:txt,context:{history:chatH.slice(-18), session:sessionContext}}),signal:AbortSignal.timeout(60000)});
     if(r.status===429){
       const j=await r.json().catch(()=>({}));
       rmTyp();

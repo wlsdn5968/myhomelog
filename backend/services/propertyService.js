@@ -11,7 +11,7 @@
  * 네이버/KB 부동산 호가는 공식 API 부재 + 스크래핑 ToS 위반으로 미사용.
  * 대신 최신 실거래가가 가장 객관적인 시세 지표로 동등하게 기능함.
  */
-const { getTransactionsByApt, analyzeTransactions } = require('./transactionService');
+const { getTransactionsByApt, analyzeTransactions, getAliasCanonicalMap } = require('./transactionService');
 const { getAptListBySgg, getAptBasisInfo, getAptDtlInfo } = require('./aptInfoService');
 const { resolveCoordBatch } = require('./geocodeCacheService');
 const { resolveSchoolsBatch } = require('./schoolService');
@@ -229,7 +229,14 @@ async function getAIRecommendations(userCondition) {
   ]);
   const allAptList = aptListArrays.flat();
   const allTx = txArrays.flat();
-  const analyzed = analyzeTransactions(allTx);
+  // ALIAS-MERGE-2026-05-21 (전수조사: BUG2 동일 클래스): raw MOLIT명(풍림아파트A/B)을
+  //   canonical master명(공릉풍림아이원)으로 relabel → analyzeTransactions 그룹화 시 1개 단지로 병합
+  //   (검색/지도와 동일 식별). molit_aliases 보유 단지만 영향 (그 외 무변동).
+  const aliasMap = await getAliasCanonicalMap(targetRegions.map(r => r.name));
+  const relabeledTx = aliasMap.size
+    ? allTx.map(t => { const c = aliasMap.get(`${t.aptName}|${t.umdNm || ''}`); return c ? { ...t, aptName: c } : t; })
+    : allTx;
+  const analyzed = analyzeTransactions(relabeledTx);
   logger.info({
     aptListTotal: allAptList.length, analyzedCount: analyzed.length,
   }, 'PropertyService 지역 집계 완료');

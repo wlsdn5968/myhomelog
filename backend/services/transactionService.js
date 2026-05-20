@@ -333,6 +333,64 @@ async function getTransactionsByApt(lawdCd, aptName) {
   return sorted;
 }
 
+// ── ALIAS-MERGE-2026-05-21 (전수조사: BUG2/가격시그널 동일 클래스) ─────────────────
+//   master 단지(KAPT 정식명)의 MOLIT 신고명이 다를 때(예: 공릉풍림아이원 → 풍림아파트A/B),
+//   이름 유사도 매칭이 실패 → 거래 부분 집계 → 가격시그널/분석 "표본부족" 불일치(실거래가 탭과 어긋남).
+//   apt_master.molit_aliases (공식 매핑) 로 보강. 검색 path(openAptDetail) 와 동일 집합을 만들어 일관성 확보.
+
+// (a) 단일 단지: canonical + alias 거래 fetch + 병합 (analysisService 가격시그널용)
+async function getTransactionsByAptInclAliases(lawdCd, aptName) {
+  const base = await getTransactionsByApt(lawdCd, aptName);
+  if (!aptName) return base;
+  const admin = dbClient();
+  if (!admin) return base;
+  try {
+    const sigungu = LAWD_CODE_TO_NAME[lawdCd] || null;
+    let q = admin.from('apt_master').select('molit_aliases')
+      .eq('apt_name', aptName).not('molit_aliases', 'is', null).limit(1);
+    if (sigungu) q = q.eq('sigungu', sigungu);
+    const { data } = await q;
+    const aliases = (data && data[0] && Array.isArray(data[0].molit_aliases)) ? data[0].molit_aliases : [];
+    if (!aliases.length) return base;
+    const aliasArrays = await Promise.all(
+      aliases.slice(0, 5).map(a => getTransactionsByApt(lawdCd, a).catch(() => []))
+    );
+    const merged = [...base];
+    const seen = new Set(base.map(t => `${t.dealYear}|${t.dealMonth}|${t.dealDay}|${t.excluUseAr}|${t.floor}|${t.dealAmount}|${t.aptName}`));
+    for (const arr of aliasArrays) {
+      for (const t of arr) {
+        const k = `${t.dealYear}|${t.dealMonth}|${t.dealDay}|${t.excluUseAr}|${t.floor}|${t.dealAmount}|${t.aptName}`;
+        if (!seen.has(k)) { seen.add(k); merged.push(t); }
+      }
+    }
+    return merged;
+  } catch (e) {
+    logger.warn({ err: e.message, lawdCd, aptName }, 'getTransactionsByAptInclAliases alias 병합 실패 — base 반환');
+    return base;
+  }
+}
+
+// (b) 지역 단위: raw MOLIT명 → canonical master명 매핑 (propertyService 추천 relabel용)
+//   key: `${rawAliasName}|${umdNm}` (동까지 매칭해 동명이지 오병합 차단).
+async function getAliasCanonicalMap(sigungus) {
+  const admin = dbClient();
+  if (!admin || !Array.isArray(sigungus) || !sigungus.length) return new Map();
+  const map = new Map();
+  try {
+    const { data } = await admin.from('apt_master')
+      .select('apt_name, umd_nm, molit_aliases')
+      .in('sigungu', [...new Set(sigungus.filter(Boolean))])
+      .not('molit_aliases', 'is', null);
+    for (const r of (data || [])) {
+      const al = Array.isArray(r.molit_aliases) ? r.molit_aliases : [];
+      for (const a of al) map.set(`${a}|${r.umd_nm || ''}`, r.apt_name);
+    }
+  } catch (e) {
+    logger.warn({ err: e.message }, 'getAliasCanonicalMap 조회 실패 — 빈 맵');
+  }
+  return map;
+}
+
 // ── 통계 헬퍼 (P1 2026-04-25) ───────────────────────────────────
 // 감사 보고서 1-3 (🔴 치명):
 //   - 기존: 단순 산술평균. 30억 이상치 1건이 8억 단지 평균 +10% 왜곡.
@@ -466,4 +524,4 @@ const LAWD_CODE_TO_NAME = Object.fromEntries(
   Object.entries(LAWD_CODES).map(([name, code]) => [code, _stripCityPrefix(name)])
 );
 
-module.exports = { getTransactions, getTransactionsByApt, analyzeTransactions, LAWD_CODES, LAWD_CODE_TO_NAME };
+module.exports = { getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, LAWD_CODES, LAWD_CODE_TO_NAME };

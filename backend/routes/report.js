@@ -580,12 +580,22 @@ async function fetchCandidateApts(admin, input, limit) {
   const { data: txs, error } = await q.limit(2500);
   if (error) throw error;
 
+  // ALIAS-MERGE-2026-05-21 (전수조사: BUG2 동일 클래스): raw MOLIT명(풍림아파트A/B) →
+  //   canonical master명(공릉풍림아이원) relabel → 보고서 후보도 1개 단지로 병합 (검색/지도/단지정리와 동일 식별).
+  const txList = txs || [];
+  let _aliasMap = new Map();
+  try {
+    const { getAliasCanonicalMap } = require('../services/transactionService');
+    _aliasMap = await getAliasCanonicalMap([...new Set(txList.map(t => t.sigungu).filter(Boolean))]);
+  } catch (_) {}
+
   // 단지 그룹화 + build_year mode + 신고가 갱신 카운트
   const byApt = {};
-  for (const t of (txs || [])) {
-    const key = `${t.apt_name}|${t.sigungu}|${t.umd_nm}`;
+  for (const t of txList) {
+    const _canon = _aliasMap.get(`${t.apt_name}|${t.umd_nm}`) || t.apt_name;
+    const key = `${_canon}|${t.sigungu}|${t.umd_nm}`;
     if (!byApt[key]) byApt[key] = {
-      apt_name: t.apt_name, sigungu: t.sigungu, umd_nm: t.umd_nm,
+      apt_name: _canon, sigungu: t.sigungu, umd_nm: t.umd_nm,
       lawd_cd: t.lawd_cd,
       sum: 0, n: 0, areas: new Set(), latest: t.deal_date,
       buildYearCnt: {},

@@ -6,7 +6,7 @@
  * - 3개 지표 종합 매수 신호
  * - 실투자금 총비용 계산
  */
-const { getTransactionsByApt, LAWD_CODES } = require('./transactionService');
+const { getTransactionsByApt, getTransactionsByAptInclAliases, LAWD_CODES } = require('./transactionService');
 const { getJeonseByApt } = require('./rentService');
 const cache = require('../cache');
 
@@ -445,7 +445,8 @@ async function analyzeApt(lawdCd, aptName, currentPrice) {
   let saleTx = [], jeonseT = [], molitAvailable = true;
   try {
     [saleTx, jeonseT] = await Promise.all([
-      getTransactionsByApt(lawdCd, aptName),
+      // ALIAS-MERGE-2026-05-21: master 단지(공릉풍림아이원 등) alias 거래까지 포함 → 실거래가 탭과 표본 일치.
+      getTransactionsByAptInclAliases(lawdCd, aptName),
       getJeonseByApt(lawdCd, aptName).catch(() => []),
     ]);
   } catch (err) {
