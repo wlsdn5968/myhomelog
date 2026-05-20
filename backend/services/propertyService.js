@@ -252,7 +252,11 @@ async function getAIRecommendations(userCondition) {
   for (const apt of analyzed) {
     const fitPyeongs = (apt.pyeongStats || []).filter(p =>
       p.pyeong >= minPy && p.pyeong <= maxPy &&
-      p.minPrice <= budgetMaxMan && p.maxPrice >= budgetMinMan
+      // PRICE-FIT-FIX-2026-05-21 (운영자 "7억인데 최소금액 10억대"):
+      //   기존 minPrice 기준 → 이상치-저가 1건만 예산 내면 통과하나, 카드에 표시되는 avgPrice 는
+      //   예산을 크게 초과 (예: 한진한화그랑빌 26평 min 7.0억 / avg 10.43억 → 7억 검색 top 에 10.43억 노출).
+      //   표시값(avgPrice) 기준으로 필터 → 단지의 "평균 시세"가 예산 범위(0.5~1.05배)인 단지만 노출.
+      p.avgPrice <= budgetMaxMan && p.avgPrice >= budgetMinMan
     );
     if (fitPyeongs.length === 0) continue;
     // 사용자 예산 가장 잘 맞는 평형
