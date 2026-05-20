@@ -29,7 +29,13 @@ const { callAI } = require('../services/aiService');
 const logger = require('../logger');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
+// ENV-FIX-2026-05-21 (Sentry NODE-2 "Supabase 미설정" on cron regulations-auto-fetch):
+//   기존: process.env.SUPABASE_SECRET_KEY 단독 → 해당 env 미설정 → adminClient() 항상 throw →
+//   정책추적 AI 비교(regulationsAiCheck) 매 cron 실패. 코드베이스 표준은 SUPABASE_SERVICE_ROLE_KEY.
+//   fallback chain 으로 정정 (다른 모든 파일과 동일 패턴).
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY
+  || process.env.SUPABASE_SERVICE_ROLE_KEY
+  || process.env.service_role;
 
 function adminClient() {
   if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) throw new Error('Supabase 미설정');
