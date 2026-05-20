@@ -4359,6 +4359,9 @@ async function loadAptsInBounds(south, west, north, east) {
       _areaSearch: true, // 마커 렌더 시 "60점" 대신 거래량 표시
       ltv: '', maxLoan: '',
       buildYear: p.buildYear, lawdCd: p.lawdCd,
+      // MARKER-DETAIL-2026-05-21: source/aptSeq 전파 → 마커 클릭 시 openAptDetail 의 alias 병합
+      //   (source==='master') 정상 작동 → master 단지(공릉풍림아이원)도 검색과 동일 거래 표시.
+      aptSeq: p.aptSeq || null, source: p.source || null,
       lat: p.lat, lng: p.lng,
       type: 'non',
     }));
