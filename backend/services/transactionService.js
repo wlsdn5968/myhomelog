@@ -352,18 +352,20 @@ async function getTransactionsByAptInclAliases(lawdCd, aptName) {
     const { data } = await q;
     const aliases = (data && data[0] && Array.isArray(data[0].molit_aliases)) ? data[0].molit_aliases : [];
     if (!aliases.length) return base;
+    // master(공릉풍림아이원)는 canonical 명으로 MOLIT 실거래가 없음(전부 alias 로 신고) → base 의
+    //   느슨한 매칭(insertion 등)은 spurious 일 수 있어 제외. alias 거래만 병합(검색 path 와 동일 = 정확).
     const aliasArrays = await Promise.all(
       aliases.slice(0, 5).map(a => getTransactionsByApt(lawdCd, a).catch(() => []))
     );
-    const merged = [...base];
-    const seen = new Set(base.map(t => `${t.dealYear}|${t.dealMonth}|${t.dealDay}|${t.excluUseAr}|${t.floor}|${t.dealAmount}|${t.aptName}`));
+    const merged = [];
+    const seen = new Set();
     for (const arr of aliasArrays) {
       for (const t of arr) {
         const k = `${t.dealYear}|${t.dealMonth}|${t.dealDay}|${t.excluUseAr}|${t.floor}|${t.dealAmount}|${t.aptName}`;
         if (!seen.has(k)) { seen.add(k); merged.push(t); }
       }
     }
-    return merged;
+    return merged.length ? merged : base; // alias 거래 0건이면 base fallback
   } catch (e) {
     logger.warn({ err: e.message, lawdCd, aptName }, 'getTransactionsByAptInclAliases alias 병합 실패 — base 반환');
     return base;
