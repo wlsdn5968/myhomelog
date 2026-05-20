@@ -375,11 +375,17 @@ function analyzeTransactions(transactions) {
 
   const byApt = {};
   for (const t of transactions) {
-    if (!byApt[t.aptName]) byApt[t.aptName] = [];
-    byApt[t.aptName].push(t);
+    // GENERIC-NAME-SPLIT-2026-05-21 (운영자 발견 "단지 정리 목록이 이상"):
+    //   기존: aptName 단독 키 → "현대"·"벽산"·"청구" 등 동명 단지가 동/구를 넘어 1개로 합산 →
+    //     가격범위 왜곡 (예: 현대 5.65~12.1억 = 상계동·중계동 별개 현대 단지 합산).
+    //   변경: aptName|lawdCd|umdNm 복합키로 물리적 단지 분리 (report path fetchCandidateApts 와 동일 정책).
+    //   주: BUG2 의 alias 병합(서로 다른 이름 = 같은 단지)과는 반대 방향 — 같은 이름 = 다른 단지를 분리.
+    const gkey = `${t.aptName}|${t.lawdCd || ''}|${t.umdNm || ''}`;
+    if (!byApt[gkey]) byApt[gkey] = [];
+    byApt[gkey].push(t);
   }
 
-  return Object.entries(byApt).map(([name, list]) => {
+  return Object.entries(byApt).map(([, list]) => {
     const sorted = [...list].sort((a, b) => {
       const da = a.dealYear * 10000 + a.dealMonth * 100 + a.dealDay;
       const db = b.dealYear * 10000 + b.dealMonth * 100 + b.dealDay;
@@ -426,7 +432,7 @@ function analyzeTransactions(transactions) {
     }).sort((a, b) => a.pyeong - b.pyeong);
 
     return {
-      aptName: name,
+      aptName: sorted[0].aptName,
       sigungu: sorted[0].sigungu,
       umdNm: sorted[0].umdNm,
       buildYear: sorted[0].buildYear,
