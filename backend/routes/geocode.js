@@ -99,11 +99,19 @@ router.post('/', async (req, res) => {
 });
 
 // POST /api/geocode/batch - 배치
+// P2-1 (2026-05-22): 공개 endpoint 요청당 fan-out 방지 — item 상한(초과 시 400 명시 거절) +
+//   동시성 제한(청크 순차). 정상 프론트 호출(needGeo 수십 건 이하)엔 영향 없음.
+//   geocodeCacheService 통합 등 범위 확장 X.
+const MAX_BATCH_ITEMS = 50;
+const BATCH_CONCURRENCY = 5;
 router.post('/batch', async (req, res) => {
   const { items } = req.body;
   if (!Array.isArray(items)) return res.status(400).json({ error: 'items[] 필수' });
+  if (items.length > MAX_BATCH_ITEMS) {
+    return res.status(400).json({ error: 'too_many_items', max: MAX_BATCH_ITEMS });
+  }
   const key = process.env.KAKAO_REST_API_KEY;
-  const results = await Promise.all(items.map(async (item) => {
+  const geocodeOne = async (item) => {
     // STAB-AUDIT-2026-05-06: 캐시 키 + Kakao 검색에 sigungu·umdNm 추가 — 동명 환각 차단
     const sgg = String(item.sigungu || '').trim();
     const umd = String(item.umdNm || '').trim();
@@ -116,7 +124,13 @@ router.post('/batch', async (req, res) => {
     if (!out) return { id, lat: null, lng: null };
     cache.set(ck, out, 86400);
     return { id, ...out };
-  }));
+  };
+  // 동시성 제한 — BATCH_CONCURRENCY 개씩 청크 순차 처리 (전체 Promise.all fan-out 제거). 순서 보존.
+  const results = [];
+  for (let i = 0; i < items.length; i += BATCH_CONCURRENCY) {
+    const chunkResults = await Promise.all(items.slice(i, i + BATCH_CONCURRENCY).map(geocodeOne));
+    results.push(...chunkResults);
+  }
   res.json({ results });
 });
 

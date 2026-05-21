@@ -5785,9 +5785,8 @@ async function loadAmenities(p){
         const wp=document.getElementById('wp')?.value?.trim();
         if(!wp)return null;
         // MOB-FIX-2026-05-03: 로그인 토큰 주입 (한도 user 분기 적용)
-        const _h={'Content-Type':'application/json'};
-        const _t=window.MHL?.auth?.session?.access_token;
-        if(_t)_h['Authorization']='Bearer '+_t;
+        // TOKEN-FRESH-2026-05-22 (P2-2): cached-direct read 제거 → _authHdr(getFreshToken)로 통일
+        const _h=await _authHdr({'Content-Type':'application/json'});
         return fetch(`${CFG.api}/properties/transit`,{method:'POST',headers:_h,body:JSON.stringify({aptLat:g.lat,aptLng:g.lng,workplace:wp})}).then(r=>r.json()).catch(()=>null);
       })()
     ]);
