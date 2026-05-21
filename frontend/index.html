@@ -6782,17 +6782,19 @@ function renderClause(d){
     caution:'계약 전 등기부등본 최신본 확인 필수. 잔금일 월초~중순 권장. 복비 계약 전 협상.'
   };
   // P0-4 (2026-05-04): clause content/title/reason XSS escape — AI prompt injection 차단
+  // P1-A 확장 (2026-05-21): t3 단지 모달 특약 탭 누락분 — 복사버튼 raw onclick→data-clip,
+  //   citations(c.law/article/title/summary), d.caution 도 _escHtml. renderClauseResult 와 동일 경로.
   const mkC=(arr,badge)=>(arr||[]).map(c=>`<div class="ccard">
-    <div class="ccard-h"><span class="ccard-t">${_escHtml(c.title||'')}</span><div style="display:flex;gap:5px;align-items:center"><span class="rtag ${badge==='e'?'r':'y'}">${badge==='e'?'필수':'권장'}</span><button class="cpybtn" onclick="cpT(\`${(c.content||'').replace(/`/g,"'").replace(/\\/g,'\\\\').replace(/\n/g,' ')}\`)">복사</button></div></div>
+    <div class="ccard-h"><span class="ccard-t">${_escHtml(c.title||'')}</span><div style="display:flex;gap:5px;align-items:center"><span class="rtag ${badge==='e'?'r':'y'}">${badge==='e'?'필수':'권장'}</span><button class="cpybtn" data-clip="${_escHtml(c.content||'')}" onclick="cpT(this.dataset.clip)">복사</button></div></div>
     <div class="ccard-b"><div class="ccard-ct">${_escHtml(c.content||'')}</div><div class="ccard-r">💡 ${_escHtml(c.reason||'')}</div></div>
   </div>`).join('');
   const citeHtml = (d.citations&&d.citations.length)?`
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 6px">📚 관련 법령 근거</div>
     <div style="background:#FAFAFD;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:6px">
-      ${d.citations.map(c=>`<div style="font-size:11px;line-height:1.5"><b style="color:var(--a2)">${c.law} ${c.article}</b> <span style="color:var(--t3)">· ${c.title}</span><br><span style="color:var(--t2)">${c.summary}</span></div>`).join('')}
+      ${d.citations.map(c=>`<div style="font-size:11px;line-height:1.5"><b style="color:var(--a2)">${_escHtml(c.law||'')} ${_escHtml(c.article||'')}</b> <span style="color:var(--t3)">· ${_escHtml(c.title||'')}</span><br><span style="color:var(--t2)">${_escHtml(c.summary||'')}</span></div>`).join('')}
     </div>`:'';
   document.getElementById('t3').innerHTML=`
-    ${d.caution?`<div class="ibox y" style="margin-bottom:12px"><b>주의:</b> ${d.caution}</div>`:''}
+    ${d.caution?`<div class="ibox y" style="margin-bottom:12px"><b>주의:</b> ${_escHtml(d.caution)}</div>`:''}
     <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:8px">필수 특약</div>${mkC(d.essential,'e')}
     <div style="font-size:11px;font-weight:700;color:var(--amb);margin:12px 0 8px">권장 특약</div>${mkC(d.recommended,'r')}
     ${citeHtml}
