@@ -71,8 +71,16 @@ router.get('/plans', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// 이하 엔드포인트는 전부 인증 필요
-router.use(requireAuth);
+// 이하 엔드포인트는 전부 인증 필요 — 단 /webhook 은 예외.
+// AUTH-FIX-2026-05-21 (Codex 지적 + 라인 재검증 확인):
+//   기존: router.use(requireAuth) 가 /webhook(아래 L~)보다 앞 → Toss 서버 호출(JWT 없음)이 401 로 차단.
+//   webhook 은 JWT 가 아니라 Toss REST 재조회(/v1/payments/{key}) + 선택적 TOSS_WEBHOOK_SECRET 로 자체 검증하므로 공개가 맞음.
+//   변경: blanket requireAuth 에서 POST /webhook 만 예외 처리 (그 외 라우트는 그대로 requireAuth — secure-by-default 유지).
+//   (현재 TOSS_* 키 미설정 → 결제 비활성 latent. 결제 활성화 전 필수 수정.)
+router.use((req, res, next) => {
+  if (req.method === 'POST' && req.path.endsWith('/webhook')) return next();
+  return requireAuth(req, res, next);
+});
 
 // ── GET /billing/me — 내 현재 구독 상태 ────────────────────
 router.get('/me', async (req, res, next) => {

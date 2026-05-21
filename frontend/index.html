@@ -7564,19 +7564,19 @@ function renderClauseResult(d,aptName){
   document.getElementById('cl_result_title').textContent=`${aptName} 맞춤 특약 (필수 ${d.essential?.length||0}개 · 권장 ${d.recommended?.length||0}개)`;
   const mkCard=(arr,badge)=>(arr||[]).map(c=>`<div class="cv-card">
     <div class="cv-card-hdr${badge==='e'?' essential':''}">
-      <span class="cv-card-title">${c.title}</span>
+      <span class="cv-card-title">${_escHtml(c.title)}</span>
       <div style="display:flex;gap:5px;align-items:center">
         <span class="rtag ${badge==='e'?'r':'y'}">${badge==='e'?'필수':'권장'}</span>
-        <button class="cpybtn" onclick="cpT(\`${c.content.replace(/`/g,"'").replace(/\n/g,' ')}\`)">복사</button>
+        <button class="cpybtn" data-clip="${_escHtml(c.content)}" onclick="cpT(this.dataset.clip)">복사</button>
       </div>
     </div>
     <div class="cv-card-body">
-      <div class="cv-card-content">${c.content}</div>
-      <div class="cv-card-reason">💡 ${c.reason}</div>
+      <div class="cv-card-content">${_escHtml(c.content)}</div>
+      <div class="cv-card-reason">💡 ${_escHtml(c.reason)}</div>
     </div>
   </div>`).join('');
   document.getElementById('cl_output').innerHTML=`
-    ${d.caution?`<div class="cv-caution" style="margin-bottom:12px">⚠ ${d.caution}</div>`:''}
+    ${d.caution?`<div class="cv-caution" style="margin-bottom:12px">⚠ ${_escHtml(d.caution)}</div>`:''}
     <div style="font-size:11px;font-weight:700;color:var(--red);margin-bottom:7px">필수 특약</div>
     ${mkCard(d.essential,'e')}
     <div style="font-size:11px;font-weight:700;color:var(--amb);margin:12px 0 7px">권장 특약</div>
