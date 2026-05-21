@@ -2812,7 +2812,7 @@ async function loadMySearchHistory(){
   box.textContent = '로딩 중...';
   try {
     const r = await fetch('/api/search/history', {
-      headers: { 'Authorization':'Bearer ' + A.session.access_token },
+      headers: await _authHdr({}),
       signal: AbortSignal.timeout(10000),
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
@@ -2854,7 +2854,7 @@ async function clearMySearchHistory(){
   try {
     const r = await fetch('/api/search/history', {
       method:'DELETE',
-      headers: { 'Authorization':'Bearer ' + A.session.access_token },
+      headers: await _authHdr({}),
     });
     if(!r.ok && r.status !== 204) throw new Error('HTTP ' + r.status);
     toast('🗑 검색 이력 삭제 완료');
@@ -3287,7 +3287,7 @@ async function _migrateBookmarksOnce(){
       }));
       const r = await fetch('/api/bookmarks/migrate', {
         method:'POST',
-        headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
+        headers: await _authHdr({ 'Content-Type':'application/json' }),
         body: JSON.stringify({ items }),
         signal: AbortSignal.timeout(15000),
       });
@@ -3299,7 +3299,7 @@ async function _migrateBookmarksOnce(){
 
     // ── 2) PULL — 서버 전체 가져와서 localStorage 교체 ──
     const pr = await fetch('/api/bookmarks', {
-      headers:{ 'Authorization':'Bearer ' + A.session.access_token },
+      headers: await _authHdr({}),
       signal: AbortSignal.timeout(10000),
     });
     if(!pr.ok) throw new Error('pull HTTP ' + pr.status);
@@ -6243,7 +6243,7 @@ async function _pushBookmarksToServer(){
     }));
     const r = await fetch('/api/bookmarks/migrate', {
       method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
+      headers: await _authHdr({ 'Content-Type':'application/json' }),
       body: JSON.stringify({ items }),
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
@@ -6422,7 +6422,7 @@ async function _deleteBookmarkOnServer(id){
   try {
     const r = await fetch('/api/bookmarks/' + encodeURIComponent(id), {
       method:'DELETE',
-      headers:{ 'Authorization':'Bearer ' + A.session.access_token },
+      headers: await _authHdr({}),
       signal: AbortSignal.timeout(10000),
     });
     if(!r.ok && r.status !== 404) throw new Error('DELETE HTTP ' + r.status);
@@ -6446,7 +6446,7 @@ async function _patchBookmarkAvgPriceOnServer(serverId, avgPrice){
   try {
     const r = await fetch('/api/bookmarks/' + encodeURIComponent(serverId), {
       method:'PATCH',
-      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
+      headers: await _authHdr({ 'Content-Type':'application/json' }),
       body: JSON.stringify({ avg_price: avgPrice }),
     });
     if(!r.ok && r.status !== 404) throw new Error('PATCH HTTP ' + r.status);
@@ -6457,13 +6457,13 @@ async function _patchBookmarkAvgPriceOnServer(serverId, avgPrice){
 
 // 검색 이력 기록 — fire-and-forget. 비로그인/실패 시 조용히 무시.
 // 서버 RLS 가 자기 것만 INSERT 허용하므로 user_id 위조 불가.
-function _logSearch(queryType, query, resultCount){
+async function _logSearch(queryType, query, resultCount){
   const A = window.MHL?.auth;
   if(!A?.user || !A?.session?.access_token) return; // 비로그인 — 이력 기록 X
   if(!query) return; // 빈 쿼리 의미 없음
   fetch('/api/search/history', {
     method:'POST',
-    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
+    headers: await _authHdr({ 'Content-Type':'application/json' }),
     body: JSON.stringify({ query, queryType, resultCount }),
   }).catch(e => {
     // 조용히 실패 — 사용자 경험엔 영향 없음
@@ -6649,7 +6649,7 @@ async function _syncFieldNote(aptName, saved) {
     // STAB-A P1#14 (2026-05-03): timeout 8초 — fire-and-forget 이지만 hang 시 메모리 leak 차단
     await fetch(`${CFG.api}/field-notes/${encodeURIComponent(aptName)}`, {
       method: 'PUT',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + A.session.access_token },
+      headers: await _authHdr({ 'Content-Type': 'application/json' }),
       body: JSON.stringify({
         checks: saved.checks || [],
         rating: saved.rating || 0,
@@ -8449,7 +8449,7 @@ async function _ensureChatSession(firstMsg){
   try {
     const r = await fetch('/api/chat/sessions', {
       method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
+      headers: await _authHdr({ 'Content-Type':'application/json' }),
       body: JSON.stringify({ title }),
       signal: AbortSignal.timeout(10000),
     });
@@ -8475,13 +8475,13 @@ function _genUuid(){
 }
 
 // Phase 4.3 멱등성: 클라이언트가 메시지마다 UUID 발급 → 더블탭/재시도에도 1행만 INSERT
-function _persistChatMessage(sid, role, content){
+async function _persistChatMessage(sid, role, content){
   const A = window.MHL?.auth;
   if(!A?.user || !A?.session?.access_token || !sid) return;
   const clientMsgId = _genUuid();
   fetch(`/api/chat/sessions/${sid}/messages`, {
     method:'POST',
-    headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + A.session.access_token },
+    headers: await _authHdr({ 'Content-Type':'application/json' }),
     body: JSON.stringify({ role, content, clientMsgId }),
     signal: AbortSignal.timeout(10000),
   }).catch(e => console.warn('[chat message] 저장 실패', e));
@@ -8511,7 +8511,7 @@ async function openChatHistory(){
   box.textContent = '로딩 중...';
   try {
     const r = await fetch('/api/chat/sessions', {
-      headers:{ 'Authorization':'Bearer ' + A.session.access_token },
+      headers: await _authHdr({}),
       signal: AbortSignal.timeout(10000),
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
@@ -8554,7 +8554,7 @@ async function loadChatSession(sid){
   if(!A?.user || !A?.session?.access_token) return;
   try {
     const r = await fetch(`/api/chat/sessions/${sid}/messages`, {
-      headers:{ 'Authorization':'Bearer ' + A.session.access_token },
+      headers: await _authHdr({}),
       signal: AbortSignal.timeout(10000),
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
@@ -8585,7 +8585,7 @@ async function deleteChatSession(sid, ev){
   try {
     const r = await fetch(`/api/chat/sessions/${sid}`, {
       method:'DELETE',
-      headers:{ 'Authorization':'Bearer ' + A.session.access_token },
+      headers: await _authHdr({}),
       signal: AbortSignal.timeout(10000),
     });
     if(!r.ok && r.status !== 204) throw new Error('HTTP ' + r.status);
