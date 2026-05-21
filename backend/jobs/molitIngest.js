@@ -166,13 +166,19 @@ async function ingestOne(admin, lawdCd, dealYm) {
     //   같은 statement 안의 같은 conflict 키 두 번 처리 불가 (errCode 21000).
     //   해결: JS 에서 미리 dedup. 후행 row 우선 (정정 후 데이터로 추정).
     //   dedup 키는 SQL GENERATED dedup_key 와 동일 컴포넌트 사용 (해시 전 raw key).
+    // DEDUP-KEY-EXACT-2026-05-21 (cron 감사: 해운대구 26440 등 ingest 실패 "ON CONFLICT ... second time"):
+    //   DB dedup_key(GENERATED md5)는 numeric(7,2)/integer 컬럼을 ::text 캐스팅 →
+    //   "84.9700"/"84.9"/"84" 같은 raw 면적이 모두 "84.97"/"84.90"/"84.00" 로 정규화돼 동일 키.
+    //   기존 JS 키는 raw 값 사용 → JS 는 distinct 로 보지만 DB dedup_key 는 충돌 → 같은 chunk 안
+    //   2 row 가 같은 conflict 키 → DO UPDATE 실패 → 해당 region-month 전체 적재 누락.
+    //   해결: DB ::text 캐스팅과 동일하게 정규화(면적 toFixed(2), 정수 Number, apt_seq COALESCE 의미).
     const seen = new Map();
     for (const r of rawRows) {
-      const k = (r.apt_seq || `${r.apt_name}:${r.umd_nm || ''}`)
-        + '|' + r.exclu_use_ar
-        + '|' + r.deal_year + '-' + r.deal_month + '-' + r.deal_day
-        + '|' + (r.floor || 0);
-      seen.set(k, r); // 같은 키면 후행 덮어씀
+      const seq = (r.apt_seq == null) ? `${r.apt_name}:${r.umd_nm ?? ''}` : String(r.apt_seq); // COALESCE(apt_seq, ...)
+      const area = Number(r.exclu_use_ar).toFixed(2);       // numeric(7,2)::text
+      const fl = (r.floor == null) ? 0 : Number(r.floor);   // COALESCE(floor,0)::int
+      const k = `${seq}|${area}|${Number(r.deal_year)}-${Number(r.deal_month)}-${Number(r.deal_day)}|${fl}`;
+      seen.set(k, r); // 같은 키면 후행(정정 후) 덮어씀
     }
     const rows = Array.from(seen.values());
 
@@ -184,7 +190,21 @@ async function ingestOne(admin, lawdCd, dealYm) {
       const { error, count } = await admin
         .from('molit_transactions')
         .upsert(chunk, { onConflict: 'dedup_key', ignoreDuplicates: false, count: 'exact' });
-      if (error) throw error;
+      if (error) {
+        // DEDUP-KEY-EXACT-2026-05-21: 잔여 in-chunk dedup_key 충돌(21000) 시 chunk 전체 실패 방지 →
+        //   행 단위 재시도(각 upsert 독립 statement → in-statement 중복 불가). 향후 dedup_key 공식 변경에도 안전망.
+        if (error.code === '21000' || /affect row a second time/i.test(error.message || '')) {
+          logger.warn({ lawdCd, dealYm, chunkSize: chunk.length }, 'molit-ingest: in-chunk dedup_key 충돌 → 행 단위 재시도');
+          for (const row of chunk) {
+            const { error: e1 } = await admin
+              .from('molit_transactions')
+              .upsert([row], { onConflict: 'dedup_key', ignoreDuplicates: false });
+            if (!e1) inserted += 1;
+          }
+          continue;
+        }
+        throw error;
+      }
       inserted += (count ?? chunk.length);
     }
 
