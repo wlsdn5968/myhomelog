@@ -4472,7 +4472,7 @@ function mkNaverIW(p){
     : `<div style="font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);line-height:1.5">📊 데이터 분석 대기<br><span style="font-size:10px">사이드바 검색 후 분석</span></div>`;
   return`<div style="background:var(--bg-elev-1);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);border:1px solid var(--border-subtle);overflow:hidden">
     <div class="niw">
-      <div class="niw-n">${p.aptName}</div>
+      <div class="niw-n">${_escHtml(p.aptName || '')}</div>
       <div class="niw-pr">${(p.avgPrice||p.price||0).toFixed(2)}억</div>
       <div class="niw-m">${p.area||''} · ${p.buildYear||''}년 · LTV ${p.ltv||'?'}</div>
       <div class="niw-g">${scoreLabel}</div>

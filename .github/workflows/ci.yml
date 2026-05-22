@@ -79,6 +79,32 @@ jobs:
           grep -q '<html' frontend/index.html
           grep -q '</html>' frontend/index.html
 
+      - name: Frontend inline JS syntax check (classic <script> via vm.Script)
+        # HTML sanity 는 <html> 존재만 확인 — 인라인 <script>(~3900줄) 구문은 미검증이었음.
+        # classic inline script 만 vm.Script 로 검사. type="module"·application/ld+json·외부 src 는 skip.
+        # node 내장 vm 사용 (신규 npm 의존성 없음).
+        run: |
+          node <<'SCRIPT'
+          const fs = require('fs'), vm = require('vm');
+          const html = fs.readFileSync('frontend/index.html', 'utf8');
+          const re = /<script\b([^>]*)>([\s\S]*?)<\/script>/gi;
+          let m, i = 0, errs = 0, checked = 0, skipped = 0;
+          while ((m = re.exec(html))) {
+          i++;
+          const attrs = m[1] || '', code = m[2] || '';
+          const tm = attrs.match(/type\s*=\s*["']([^"']+)["']/i);
+          const type = tm ? tm[1].toLowerCase() : '';
+          if (/\bsrc\s*=/.test(attrs)) { skipped++; continue; }
+          if (type && !['text/javascript', 'application/javascript'].includes(type)) { skipped++; continue; }
+          const startLine = html.slice(0, m.index).split('\n').length;
+          try { new vm.Script(code, { filename: 'index.html#' + i + '@L' + startLine }); checked++; }
+          catch (e) { errs++; console.error('SYNTAX ERROR script#' + i + ' @L' + startLine + ': ' + e.message); }
+          }
+          console.log('frontend inline JS: blocks=' + i + ' checked=' + checked + ' skipped=' + skipped + ' errors=' + errs);
+          if (checked < 1) { console.error('No inline scripts checked — extractor regex likely broken'); process.exit(1); }
+          process.exit(errs ? 1 : 0);
+          SCRIPT
+
   gitleaks:
     name: Secret Scan (gitleaks)
     runs-on: ubuntu-latest
