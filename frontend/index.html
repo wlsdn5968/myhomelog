@@ -5791,7 +5791,7 @@ async function loadAmenities(p){
       })()
     ]);
     if(!near||!near.available){box.style.display='none';return;}
-    const tranHtml=tran&&tran.available?`<div style="margin-top:4px;font-weight:600;color:var(--a2)">🚇 ${tran.destinationName} 통근: 대중교통 ~${tran.transitMinutes}분 / 차량 ~${tran.carMinutes}분</div>`:'';
+    const tranHtml=tran&&tran.available?`<div style="margin-top:4px;font-weight:600;color:var(--a2)">🚇 ${tran.destinationName} 통근: 대중교통 추정 ~${tran.transitMinutes}분 / 차량 ~${tran.carMinutes}분</div>`:'';
     box.innerHTML=`<div style="background:#F0F7F0;border:1px solid #CFE5CF;border-radius:8px;padding:9px 11px;line-height:1.6">
       <div style="font-weight:700;color:var(--t1)">🗺️ 주변 (반경 800m~1km)</div>
       <div>🏫 학교 ${near.school}곳 · 🚇 지하철역 ${near.subway}곳 · 🛒 대형마트 ${near.mart}곳 · 🏥 병원 ${near.hospital}곳 · 🏪 편의점 ${near.cvs}곳</div>

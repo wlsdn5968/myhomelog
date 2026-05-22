@@ -195,6 +195,7 @@
 <script>
 // ── 상태 ────────────────────────────────────────────────
 let authSession = null;
+let sbClient = null;
 let tossClientKey = null;
 let confirmEnabled = false;
 let plansCache = [];
@@ -218,7 +219,7 @@ async function loadAuth(){
     const key = document.querySelector('meta[name="supabase-publishable-key"]')?.content?.trim();
     if(!url || !key) return null;
     // storageKey 'mhl-auth-session' 을 index.html 과 공유 → 홈에서 로그인한 세션 그대로 사용
-    const sb = supabase.createClient(url, key, {
+    sbClient = supabase.createClient(url, key, {
       auth:{
         persistSession:true,
         autoRefreshToken:true,
@@ -228,12 +229,24 @@ async function loadAuth(){
         flowType: 'pkce',
       },
     });
-    const { data:{ session } } = await sb.auth.getSession();
+    const { data:{ session } } = await sbClient.auth.getSession();
     return session;
   } catch(e){
     console.warn('[auth] 로드 실패', e);
     return null;
   }
+}
+
+// ── 결제 보호 요청용 fresh 토큰 (snapshot stale 방지) ────────
+// authSession 은 init 시점 1회 스냅샷 → 만료 시 stale. 호출 시점마다 getSession 으로 최신화.
+// 토큰 없으면 null 반환 → 호출부가 로그인/세션 만료 안내 후 중단.
+async function getBillingAccessToken(){
+  try {
+    if(!sbClient) return null;
+    const { data:{ session } } = await sbClient.auth.getSession();
+    authSession = session || null;
+    return authSession?.access_token || null;
+  } catch(_){ return null; }
 }
 
 // ── 초기화 ──────────────────────────────────────────────
@@ -302,8 +315,10 @@ function renderPlans(){
 async function loadMe(){
   if(!authSession){ document.getElementById('meCard').style.display = 'none'; return; }
   try {
+    const token = await getBillingAccessToken();
+    if(!token){ document.getElementById('meCard').style.display = 'none'; return; }
     const r = await fetch('/api/billing/me', {
-      headers:{ 'Authorization':'Bearer ' + authSession.access_token },
+      headers:{ 'Authorization':'Bearer ' + token },
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
     const me = await r.json();
@@ -339,9 +354,11 @@ async function startCheckout(planId){
   setStatus('info', '<span class="sp"></span> 주문 생성 중...');
   let order;
   try {
+    const token = await getBillingAccessToken();
+    if(!token){ setStatus('warn', '🔐 세션이 만료되었습니다. <a href="/">홈에서 다시 로그인</a> 후 시도해주세요.'); return; }
     const r = await fetch('/api/billing/checkout', {
       method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + authSession.access_token },
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + token },
       body: JSON.stringify({ plan: planId }),
     });
     if(!r.ok){
@@ -449,9 +466,11 @@ async function handleSuccess(sp){
   }
   setStatus('info', '<span class="sp"></span> 결제 승인 처리 중...');
   try {
+    const token = await getBillingAccessToken();
+    if(!token){ setStatus('err', '🔐 세션이 만료되었습니다. 다시 로그인 후 확인해주세요.'); return; }
     const r = await fetch('/api/billing/confirm', {
       method:'POST',
-      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + authSession.access_token },
+      headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + token },
       body: JSON.stringify({ paymentKey, orderId, amount }),
     });
     const data = await r.json();
@@ -481,9 +500,11 @@ async function cancelSubscription(){
   if(!authSession) return;
   if(!confirm('구독을 해지할까요? (현재 결제 주기 말까지는 계속 사용 가능)')) return;
   try {
+    const token = await getBillingAccessToken();
+    if(!token){ setStatus('err', '🔐 세션이 만료되었습니다. 다시 로그인해주세요.'); return; }
     const r = await fetch('/api/billing/cancel', {
       method:'POST',
-      headers:{ 'Authorization':'Bearer ' + authSession.access_token },
+      headers:{ 'Authorization':'Bearer ' + token },
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
     setStatus('ok', '✅ 해지 완료 — 현재 결제 주기 말까지는 계속 이용할 수 있어요.');

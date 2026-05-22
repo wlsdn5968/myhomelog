@@ -105,6 +105,22 @@ jobs:
           process.exit(errs ? 1 : 0);
           SCRIPT
 
+      - name: Clause XSS raw-pattern guard (P1 regression)
+        # P1-A/t3 에서 escape 한 clause 렌더 패턴이 raw 로 재유입됐는지 정적 검사 (fallback 포함).
+        # raw ${c.title}, ${c.title||''}, ${c.content || ''}, ${d.caution ?? ''} 등 → 실패.
+        # ${_escHtml(c.title...)} 통과. 삼항 가드 ${d.caution ? `...${_escHtml(d.caution)}...` : ''} 도 통과(오탐 방지).
+        # → field 직후 '}' 또는 '||'/'??' fallback 만 raw 로 판정. node 내장만 사용 (신규 의존성 없음).
+        run: |
+          node <<'SCRIPT'
+          const fs = require('fs');
+          const html = fs.readFileSync('frontend/index.html', 'utf8');
+          const re = /\$\{\s*(?:c\.(?:title|content|reason|law|article|summary)|d\.caution)\s*(?:\}|(?:\|\||\?\?)[^}]*\})/;
+          const hits = [];
+          html.split('\n').forEach((ln, i) => { if (re.test(ln)) hits.push((i + 1) + ': ' + ln.trim().slice(0, 120)); });
+          if (hits.length) { console.error('clause XSS raw-pattern 발견 (P1 회귀 — _escHtml 로 감싸야 함):'); hits.forEach(h => console.error('  ' + h)); process.exit(1); }
+          console.log('clause XSS raw-pattern guard: OK (0 raw matches)');
+          SCRIPT
+
   gitleaks:
     name: Secret Scan (gitleaks)
     runs-on: ubuntu-latest

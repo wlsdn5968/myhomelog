@@ -421,7 +421,8 @@ app.get('/api/health', optionalAuth, async (req, res) => {
       remaining: Math.max(0, DAILY_CHAT_LIMIT - chatUsed),
     },
     monthlyBudget,
-    // P1 (Phase 2 후속, 2026-04-25): 카카오맵 quota 노출 (geocode + 학교 검색)
+    // kakaoQuota: geocodeCacheService 좌표해결 경로의 부분 지표 (_trackKakaoCall 집계분).
+    //   directions/category/학교·학원 검색/geocode-batch 직접 호출은 미포함 — 전체 Kakao 사용량 아님.
     // 무료 한도 100K/일, 60K 도달 시 Sentry alert. 운영자 대시보드/모니터링 용도.
     kakaoQuota: (() => {
       try {

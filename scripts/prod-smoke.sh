@@ -86,6 +86,17 @@ else
   echo "[smoke] /api/cron auth gate FAIL — expected 401/403 got $cr_code (보안 회귀!)"; fail=1
 fi
 
+# /api/geocode/batch fan-out cap (P2-1) — 51개 items 는 key 확인/외부 geocode 전에 400 반환.
+# 빈 객체 51개 → items.length>50 분기에서 즉시 거절되므로 외부 위치 보조 API(geocode) 호출 없음.
+echo "[smoke] /api/geocode/batch cap 회귀 (51 items → 400 too_many_items, 외부 geocode 호출 없음)..."
+gb_items=$(printf '{},%.0s' $(seq 1 51)); gb_payload="{\"items\":[${gb_items%,}]}"
+gb_code=$(curl -sS -o /tmp/gb.json -w "%{http_code}" --max-time 8 -X POST -H "Content-Type: application/json" -d "$gb_payload" "$HOST/api/geocode/batch" || echo 000)
+if [ "$gb_code" = "400" ] && grep -q '"too_many_items"' /tmp/gb.json; then
+  echo "[smoke] /api/geocode/batch cap PASS ($gb_code too_many_items)"
+else
+  echo "[smoke] /api/geocode/batch cap FAIL — expected 400 too_many_items got $gb_code"; cat /tmp/gb.json; fail=1
+fi
+
 if [ "$fail" = "1" ]; then
   echo "[smoke] FAIL — 핵심 endpoint 회귀 실패"
   exit 1
