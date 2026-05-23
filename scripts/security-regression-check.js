@@ -12,8 +12,9 @@
  *       _jsonAttr() / _escHtml(JSON.stringify(..)) 이중 인코딩으로 통일했음)
  *   4. setAlert 의 _aptNameJs 가 _escHtml 없이 raw JSON.stringify  → _escHtml(JSON.stringify(..)) 사용해야 함
  *   [backend — AI 컨텍스트 무결성]
- *   5. chat.js 가 클라이언트 context.history 를 role messages 로 prepend (...(context?.history||[])) 재유입
+ *   5. chat.js 가 클라이언트 context.history 를 role messages 로 prepend (history spread) 재유입
  *   6. chatSessions.js ALLOWED_ROLES 에 system 재유입 (클라이언트가 system 권위 메시지 저장 가능)
+ *   7. chat.js 가 클라이언트 context.session 을 systemAppend(시스템 프롬프트)로 주입 재유입 (+ <session_context> 격리 블록 존재 필수)
  *
  * 정확히 raw 형태만 매칭하므로 안전 형태(_escHtml / _jsonAttr / safeTitle)는 통과(false positive 방지).
  * 통과: exit 0 / 위반: exit 1 + 위반 라인 출력.
@@ -64,6 +65,19 @@ const CHECKS = [
     file: 'backend/routes/chatSessions.js',
     re: /ALLOWED_ROLES\s*=\s*new Set\(\[[^\]]*['"]system['"]/,
   },
+  {
+    // 컨텍스트 무결성: 클라이언트 session 을 systemAppend(시스템 프롬프트)로 보내면 안 됨
+    name: 'chat.js systemAppend: sessionContext 재유입 — 클라이언트 session 은 system 프롬프트로 주입 금지',
+    file: 'backend/routes/chat.js',
+    re: /systemAppend\s*:\s*sessionContext/,
+  },
+  {
+    // 컨텍스트 무결성: session 은 단일 user 메시지의 <session_context> 신뢰불가 블록으로 격리되어야 함 (존재 확인)
+    name: 'chat.js <session_context data_source="client_supplied_untrusted"> 블록 부재 — session 격리가 되돌려짐',
+    file: 'backend/routes/chat.js',
+    re: /<session_context data_source="client_supplied_untrusted">/,
+    mustExist: true,
+  },
 ];
 
 function main() {
@@ -79,18 +93,26 @@ function main() {
       }
       cache[c.file] = fs.readFileSync(abs, 'utf8').split('\n');
     }
-    cache[c.file].forEach((ln, i) => {
-      // 순수 주석 라인은 건너뜀 — 문서/설명에서 패턴을 인용해도 오탐 안 나게 (실제 코드 라인만 검사)
-      const t = ln.trim();
-      if (t.startsWith('//') || t.startsWith('*') || t.startsWith('/*')) return;
-      if (c.re.test(ln)) {
-        violations.push({ file: c.file, line: i + 1, name: c.name, text: t.slice(0, 140) });
+    const isComment = (ln) => { const t = ln.trim(); return t.startsWith('//') || t.startsWith('*') || t.startsWith('/*'); };
+    if (c.mustExist) {
+      // 존재 필수 패턴: 코드(주석 제외) 어디에도 없으면 위반 — 격리 수정이 되돌려진 것
+      const found = cache[c.file].some((ln) => !isComment(ln) && c.re.test(ln));
+      if (!found) {
+        violations.push({ file: c.file, line: 0, name: '[필수 패턴 누락] ' + c.name, text: '(기대한 안전 패턴이 코드에 없음)' });
       }
-    });
+    } else {
+      cache[c.file].forEach((ln, i) => {
+        // 순수 주석 라인은 건너뜀 — 문서/설명에서 패턴을 인용해도 오탐 안 나게 (실제 코드 라인만 검사)
+        if (isComment(ln)) return;
+        if (c.re.test(ln)) {
+          violations.push({ file: c.file, line: i + 1, name: c.name, text: ln.trim().slice(0, 140) });
+        }
+      });
+    }
   }
 
   if (violations.length === 0) {
-    console.log(`✓ security-regression-check OK — ${CHECKS.length} XSS raw-pattern 검사, 재유입 0건`);
+    console.log(`✓ security-regression-check OK — ${CHECKS.length} 보안 회귀 패턴 검사, 위반 0건`);
     process.exit(0);
   }
 
