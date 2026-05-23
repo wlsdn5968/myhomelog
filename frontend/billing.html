@@ -299,7 +299,7 @@ function renderPlans(){
     const priceStr = isFree ? '무료' : fmtKrw(p.price_krw);
     const cta = isFree
       ? '<button class="btn btn-sec" disabled>현재 플랜</button>'
-      : `<button class="btn" onclick="startCheckout('${escapeHtml(p.id)}')">${escapeHtml(p.name)} 구독하기</button>`;
+      : `<button class="btn" data-plan="${escapeHtml(p.id)}" onclick="startCheckout(this.dataset.plan)">${escapeHtml(p.name)} 구독하기</button>`;
     return `<div class="plan" data-plan="${escapeHtml(p.id)}">
       <div class="plan-hd">
         <span class="plan-nm">${escapeHtml(p.name)}</span>

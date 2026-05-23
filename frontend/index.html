@@ -4439,7 +4439,7 @@ function mkNaverOverlay(p){
     map:mapObj,
     title:p.aptName,
     icon:{
-      content:`<div class="nmap-pin" ondblclick="showDetailById('${encodeURIComponent(p.aptName)}')">
+      content:`<div class="nmap-pin" ondblclick="showDetailById('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}')">
         <div class="nmap-bub ${cls}">
           <div class="nmap-pr ${cls}">${pr}억</div>
           <div class="nmap-sc">${subTxt}</div>
@@ -4477,8 +4477,8 @@ function mkNaverIW(p){
       <div class="niw-m">${p.area||''} · ${p.buildYear||''}년 · LTV ${p.ltv||'?'}</div>
       <div class="niw-g">${scoreLabel}</div>
       <div class="niw-tags">${tags}</div>
-      <button class="niw-btn a2" onclick="showDetailById('${encodeURIComponent(p.aptName)}')">📊 상세 리포트</button>
-      <button class="niw-btn acc" onclick="askP('${encodeURIComponent(p.aptName)}','${p.avgPrice||0}','${p.area||''}')">🤖 AI 전략 묻기</button>
+      <button class="niw-btn a2" onclick="showDetailById('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}')">📊 상세 리포트</button>
+      <button class="niw-btn acc" onclick="askP('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}','${p.avgPrice||0}','${encodeURIComponent(p.area||'').replace(/'/g,'%27')}')">🤖 AI 전략 묻기</button>
     </div>
   </div>`;
 }
@@ -5181,7 +5181,7 @@ function showDetail(p){
       <button class="abtn a2" style="margin:0;font-size:11px" onclick="goCalcFromDetail(${p.avgPrice||0})">🧮 대출 계산</button>
       <button class="abtn" style="margin:0;font-size:11px;background:#EEF4FF;color:var(--a2);border:1px solid #C9DCF5" onclick="goClauseFromCurrentDetail()">✍ 특약 만들기</button>
     </div>
-    <button class="abtn acc" style="margin-top:6px" onclick="askP('${encodeURIComponent(p.aptName)}','${p.avgPrice||0}','${p.area||''}');cDM()">🤖 AI에게 상세 전략 묻기</button>`;
+    <button class="abtn acc" style="margin-top:6px" onclick="askP('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}','${p.avgPrice||0}','${encodeURIComponent(p.area||'').replace(/'/g,'%27')}');cDM()">🤖 AI에게 상세 전략 묻기</button>`;
 
   // Phase 4 (2026-04-26): 평형 표시 + 단일 단지 통합 표시
   // 평형별 평균 카드 = 모든 평형 (개요)
@@ -6367,7 +6367,7 @@ function renderBookmarks(){
     const isHit=target&&priceNow>0&&priceNow<=target;
     const lc=b.lastChecked?` · 최근 ${new Date(b.lastChecked).toLocaleDateString('ko-KR',{month:'2-digit',day:'2-digit'})}`:'';
     // MOB-AUDIT-2026-05-03: 단지명에 ' 또는 < > 포함 시 onclick 깨짐 + XSS 잠재 → JSON.stringify + _escHtml 이중 안전
-    const _aptNameJs = JSON.stringify(b.aptName).replace(/</g,'\\u003c').replace(/>/g,'\\u003e');
+    const _aptNameJs = _escHtml(JSON.stringify(b.aptName || ''));
     const alertHtml=`<div class="bk-alert-row" onclick="event.stopPropagation()">
       <span style="font-size:10px;color:var(--t3);flex-shrink:0">목표가</span>
       <input class="bk-alert-inp" type="number" inputmode="decimal" step="0.1" placeholder="억" value="${target||''}" id="bk-alert-${i}" oninput="event.stopPropagation()">
@@ -6375,14 +6375,14 @@ function renderBookmarks(){
       ${target?`<span class="bk-alert-tag ${isHit?'hit':'set'}">${isHit?'🎯 목표가':'▼'+target+'억'}</span>`:''}
     </div>
     <div class="bk-memo-row" onclick="event.stopPropagation()" style="display:flex;gap:4px;margin-top:4px">
-      <input type="text" placeholder="메모 (왜 이 가격?)" maxlength="40" value="${(b.memo||'').replace(/"/g,'&quot;')}" id="bk-memo-${i}" oninput="event.stopPropagation()" style="flex:1;font-size:10.5px;padding:3px 6px;border:1px solid var(--bd);border-radius:5px;background:#fff;color:var(--t2)">
+      <input type="text" placeholder="메모 (왜 이 가격?)" maxlength="40" value="${_escHtml(b.memo || '')}" id="bk-memo-${i}" oninput="event.stopPropagation()" style="flex:1;font-size:10.5px;padding:3px 6px;border:1px solid var(--bd);border-radius:5px;background:#fff;color:var(--t2)">
       <button onclick="saveBookmarkMemo(${i},document.getElementById('bk-memo-${i}').value)" style="font-size:10px;padding:3px 8px;background:#F0F2F7;border:1px solid var(--bd);border-radius:5px;cursor:pointer;color:var(--t2)">저장</button>
     </div>
     ${lc?`<div style="font-size:9.5px;color:var(--t3);margin-top:3px;padding-left:2px">📊 ${b.lastCheckedCount||0}건${lc}</div>`:''}`;
     return`<div class="bk-item" onclick="openBookmark(${i})">
       <div class="bk-item-row">
         ${hasVisit?'<div class="bk-visit-dot" title="임장 기록 있음"></div>':''}
-        <div><div class="bk-name">${b.aptName}</div><div style="font-size:10px;color:var(--t3)">${b.area}</div></div>
+        <div><div class="bk-name">${_escHtml(b.aptName || '')}</div><div style="font-size:10px;color:var(--t3)">${_escHtml(b.area || '')}</div></div>
         <span class="bk-price">${priceNow?priceNow.toFixed(1)+'억':''}</span>
         <button class="bk-del" onclick="delBookmark(event,${i})">✕</button>
       </div>
@@ -6572,14 +6572,19 @@ function renderFieldNote(p){
   const vd=saved.visitDate||'';
   const hasNote=sc.length>0||memo.trim()||vd;
   const safeId=n.replace(/[^a-zA-Z0-9가-힣]/g,'_');
+  // XSS (P2): aptName 을 inline onclick JS 인자로 안전 삽입.
+  // _escHtml(JSON.stringify(..)) 이중 인코딩: JSON.stringify=JS 문자열 escape, _escHtml=HTML attr escape
+  // → 브라우저 attribute decode 후 JSON 원형 복원 → ' " < > & 및 &quot; 같은 entity 문자열도 안전.
+  const nJs=_escHtml(JSON.stringify(n || ''));
+  const sidJs=_escHtml(JSON.stringify(safeId || ''));
 
   const checksHtml=FN_CHECKS.map(c=>`
-    <div class="fn-check ${sc.includes(c.id)?'on':''}" id="fnc-${safeId}-${c.id}" onclick="toggleFnCheck('${n}','${c.id}','${safeId}')">
+    <div class="fn-check ${sc.includes(c.id)?'on':''}" id="fnc-${safeId}-${c.id}" onclick='toggleFnCheck(${nJs},${_escHtml(JSON.stringify(c.id))},${sidJs})'>
       <span>${c.icon}</span>${c.label}
     </div>`).join('');
 
   const starsHtml=[1,2,3,4,5].map(i=>`
-    <span class="fn-star ${i<=rating?'on':''}" id="fns-${safeId}-${i}" onclick="setFnRating('${n}',${i},'${safeId}')">★</span>`).join('');
+    <span class="fn-star ${i<=rating?'on':''}" id="fns-${safeId}-${i}" onclick='setFnRating(${nJs},${i},${sidJs})'>★</span>`).join('');
 
   document.getElementById('t5').innerHTML=`
     <div class="fn-section">
@@ -6595,15 +6600,15 @@ function renderFieldNote(p){
     </div>
     <div class="fn-section">
       <div class="fn-title">📅 방문일</div>
-      <input type="date" class="fn-date" id="fn-date-${safeId}" value="${vd}">
+      <input type="date" class="fn-date" id="fn-date-${safeId}" value="${_escHtml(vd)}">
     </div>
     <div class="fn-section">
       <div class="fn-title">📝 메모</div>
-      <textarea class="fn-memo" id="fn-memo-${safeId}" placeholder="채광, 소음, 주변 분위기, 기억할 것들...">${memo}</textarea>
+      <textarea class="fn-memo" id="fn-memo-${safeId}" placeholder="채광, 소음, 주변 분위기, 기억할 것들...">${_escHtml(memo)}</textarea>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between">
-      <button class="fn-save" onclick="saveFieldNote('${n}','${safeId}')">저장</button>
-      ${hasNote?`<button onclick="clearFieldNote('${n}')" style="background:none;border:none;font-size:11px;color:var(--t3);cursor:pointer;font-family:inherit;padding:6px">기록 삭제</button>`:''}
+      <button class="fn-save" onclick='saveFieldNote(${nJs},${sidJs})'>저장</button>
+      ${hasNote?`<button onclick='clearFieldNote(${nJs})' style="background:none;border:none;font-size:11px;color:var(--t3);cursor:pointer;font-family:inherit;padding:6px">기록 삭제</button>`:''}
     </div>
     <div class="ibox b" style="margin-top:12px;font-size:10px">💾 비로그인: 이 기기 브라우저에만 저장 · 로그인: 클라우드 자동 동기화 (모든 기기 공유)</div>`;
 }
@@ -7322,7 +7327,7 @@ function renderClauseHistory(){
   el.innerHTML=`<div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 8px">💾 최근 생성 (${arr.length}/5)</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px">${arr.map(it=>`
       <div style="background:#fff;border:1px solid var(--bd);border-radius:7px;padding:6px 10px;font-size:11px;display:flex;align-items:center;gap:6px">
-        <span style="cursor:pointer;font-weight:600" onclick="loadClauseHistory(${it.id})" title="다시 불러오기">${it.aptName}</span>
+        <span style="cursor:pointer;font-weight:600" onclick="loadClauseHistory(${it.id})" title="다시 불러오기">${_escHtml(it.aptName || '')}</span>
         <button onclick="delClauseHistory(${it.id})" style="background:transparent;border:none;cursor:pointer;color:var(--t3);font-size:12px;padding:0 2px">✕</button>
       </div>`).join('')}</div>`;
 }
@@ -7468,7 +7473,7 @@ function toggleBmPop(){
       body.innerHTML=bks.map((b,i)=>{
         const priceNow=b.avgPrice||0;
         return `<div style="padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px" onclick="openBookmark(${i});toggleBmPop();">
-          <div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${b.aptName}</div><div style="font-size:10px;color:var(--t3)">${b.area||''}</div></div>
+          <div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(b.aptName || '')}</div><div style="font-size:10px;color:var(--t3)">${_escHtml(b.area || '')}</div></div>
           ${priceNow?`<span style="font-size:11px;font-weight:700;color:var(--acc);flex-shrink:0">${priceNow.toFixed(1)}억</span>`:''}
         </div>`;
       }).join('');
@@ -8628,9 +8633,11 @@ document.addEventListener('DOMContentLoaded', () => {
 function sQ(t){document.getElementById('cIn').value=t;sM();}
 function askP(n,pr,a){
   const apt=decodeURIComponent(n);
+  // 호출부에서 area 도 encodeURIComponent 로 안전 삽입(inline onclick raw 제거) → 여기서 decode
+  let area=''; try{ area=decodeURIComponent(a||''); }catch(_){ area=String(a||''); }
   // AI 에 단지 분석 요청 = 강한 관심 신호 → kapt 검색으로 기록
   _logSearch('kapt', apt, 1);
-  sQ(`${apt}(${a}, ${pr}억) 매수 전략과 리스크 상세 분석해줘`);
+  sQ(`${apt}(${area}, ${pr}억) 매수 전략과 리스크 상세 분석해줘`);
 }
 function hk(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sM();}}
 function ah(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,90)+'px';}
