@@ -45,7 +45,8 @@ function validateChatInput(req, res, next) {
   // history는 배열이어야 하고 최대 20턴
   if (context?.history && Array.isArray(context.history)) {
     req.body.context.history = context.history.slice(-20).map(h => ({
-      role: h.role === 'user' ? 'user' : 'assistant',
+      // 컨텍스트 무결성: user/assistant 만 허용, 그 외(system 등)는 user 로 강등 — 절대 system/assistant 권위 부여 X
+      role: h.role === 'assistant' ? 'assistant' : 'user',
       content: sanitizeString(h.content, 2000),
     }));
   }

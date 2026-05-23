@@ -34,7 +34,8 @@ const MAX_TITLE_LEN = 60;
 const MAX_CONTENT_LEN = 8000; // LLM 응답 1회 상한 + 여유
 const SESSIONS_LIMIT = 30;
 const MESSAGES_LIMIT = 200;
-const ALLOWED_ROLES = new Set(['user', 'assistant', 'system']);
+// 컨텍스트 무결성 (2026-05): 클라이언트가 system role 메시지를 저장하지 못하도록 user|assistant 만 허용
+const ALLOWED_ROLES = new Set(['user', 'assistant']);
 
 function userScopedClient(accessToken) {
   if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) throw new Error('Supabase 미설정');
