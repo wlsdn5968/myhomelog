@@ -121,6 +121,11 @@ jobs:
           console.log('clause XSS raw-pattern guard: OK (0 raw matches)');
           SCRIPT
 
+      - name: Security regression guard (XSS raw-pattern 재유입 차단)
+        # 2026-05 XSS 보강(e177c1b/bc027ff)에서 닫은 raw 패턴 재유입 정적 검사
+        # (field-note memo textarea / exportClausePDF title / inline JSON .replace(&#39;) / setAlert raw JSON.stringify)
+        run: node scripts/security-regression-check.js
+
   gitleaks:
     name: Secret Scan (gitleaks)
     runs-on: ubuntu-latest

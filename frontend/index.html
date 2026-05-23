@@ -3651,10 +3651,10 @@ function _renderReport(data) {
   const aptsHtml = (r.apartments || []).map(a => `
     <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div style="font-size:13px;font-weight:700;color:var(--t1)">${a.rank}. ${_escHtml(a.name)} ${a.areaPyeong ? `<span style="font-weight:500;color:var(--t2);font-size:12px">${a.areaPyeong}평 (${a.areaSqm}㎡)</span>` : ''}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--t1)">${_numFmt(a.rank)}. ${_escHtml(a.name)} ${a.areaPyeong ? `<span style="font-weight:500;color:var(--t2);font-size:12px">${_numFmt(a.areaPyeong)}평 (${_numFmt(a.areaSqm)}㎡)</span>` : ''}</div>
       </div>
       <div style="font-size:11px;color:var(--t3);margin-bottom:6px">
-        ${(()=>{const hN=Number(a.households);const hStr=(a.households && Number.isFinite(hN)) ? `${hN.toLocaleString()}세대` : '세대수 미상';return `준공 ${a.buildYear || '?'} · ${hStr}`;})()}
+        ${(()=>{const hN=Number(a.households);const hStr=(a.households && Number.isFinite(hN)) ? `${hN.toLocaleString()}세대` : '세대수 미상';return `준공 ${_numFmt(a.buildYear, '?')} · ${hStr}`;})()}
       </div>
       <div style="font-size:11.5px;color:var(--t2);line-height:1.7">
         <div>📍 <b>입지</b>: ${_escHtml(a.location || '')}</div>
@@ -3662,10 +3662,10 @@ function _renderReport(data) {
         <div>✅ <b>장점</b>: ${_escHtml(a.pros || '')}</div>
         <div>⚠ <b>단점</b>: ${_escHtml(a.cons || '')}</div>
         <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--bg2)">💰 <b>예산 매칭</b>: ${_escHtml(a.priceFit || '')}</div>
-        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${_escHtml(f.district)}</b>`:null,f.builder?`시공사 <b>${_escHtml(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${f.parking_per_household}대</b>`:null,f.regulation?`규제 <b>${_escHtml(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>6개월 ${f.new_high_count}회 갱신</b>`:null].filter(Boolean);const am=f.amenities;
+        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${_escHtml(f.district)}</b>`:null,f.builder?`시공사 <b>${_escHtml(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>`:null,f.regulation?`규제 <b>${_escHtml(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>6개월 ${_numFmt(f.new_high_count)}회 갱신</b>`:null].filter(Boolean);const am=f.amenities;
         /* MOB-AUDIT-2026-05-03: amenities 0 vs undefined 구분 — 좌표 호출 실패 시 "지하철 0개" 오해 차단 */
         const _amOk = am && (am.subway != null || am.mart != null || am.hospital != null || am.school != null);
-        const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${am.subway??'?'}</b>·마트 <b>${am.mart??'?'}</b>·종합병원 <b>${am.hospital??'?'}</b>·학교 <b>${am.school??'?'}</b>·공원 <b>${am.park??'?'}</b>`:(am?'주변 편의시설 좌표 미해결':'');if(!items.length && !amStr)return '';return `<div style="font-size:10.5px;color:var(--t2);background:#F5F2EC;border:1px solid #E2DDD5;border-radius:5px;padding:6px 9px;margin-top:5px">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` <span style="color:var(--acc);font-weight:600">· 매칭 ${a.matchScore}점</span>`:''}</div>`;})()}
+        const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway,'?')}</b>·마트 <b>${_numFmt(am.mart,'?')}</b>·종합병원 <b>${_numFmt(am.hospital,'?')}</b>·학교 <b>${_numFmt(am.school,'?')}</b>·공원 <b>${_numFmt(am.park,'?')}</b>`:(am?'주변 편의시설 좌표 미해결':'');if(!items.length && !amStr)return '';return `<div style="font-size:10.5px;color:var(--t2);background:#F5F2EC;border:1px solid #E2DDD5;border-radius:5px;padding:6px 9px;margin-top:5px">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` <span style="color:var(--acc);font-weight:600">· 매칭 ${_numFmt(a.matchScore)}점</span>`:''}</div>`;})()}
         ${a.matchReason ? `<div style="font-size:10.5px;color:var(--t3);background:var(--s1);border-radius:4px;padding:4px 8px;margin-top:4px">🏆 <b>왜 이 순위?</b> ${_escHtml(a.matchReason)}</div>` : ''}
         <div style="color:var(--acc);font-weight:600">📌 ${_escHtml(a.recommendation || '')}</div>
       </div>
@@ -3689,7 +3689,7 @@ function _renderReport(data) {
       <div style="margin-top:8px;font-size:11.5px;color:var(--t2);line-height:1.8">
         <div>• <b>규제지역</b>: ${_escHtml(policy.regulatedAreas || '')}</div>
         <div>• <b>토지거래허가</b>: ${_escHtml(policy.landTrade || '')}</div>
-        <div>• <b>정책자금 종류</b>: ${(policy.policyLoans || []).join(' · ')}</div>
+        <div>• <b>정책자금 종류</b>: ${(policy.policyLoans || []).map(s=>_escHtml(s)).join(' · ')}</div>
         <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--bg2);font-size:10.5px;color:var(--t3)">
           ※ ${_escHtml(policy.note || '')}<br>
           ※ 자세한 자격·신청은 <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:var(--acc)">${_escHtml(policy.policyContact || '')}</a>
@@ -3783,15 +3783,15 @@ function _downloadReportPDF() {
     const hN = Number(a.households);
     const hStr = (a.households && Number.isFinite(hN)) ? `${hN.toLocaleString()}세대` : '세대수 미상';
     return `<div class="apt">
-      <div class="apt-name">${a.rank||''}. ${esc(a.name||'')} ${a.areaPyeong ? `<span class="apt-area">${a.areaPyeong}평 (${a.areaSqm}㎡)</span>` : ''}</div>
-      <div class="apt-meta">준공 ${a.buildYear||'?'} · ${hStr}</div>
+      <div class="apt-name">${_numFmt(a.rank)}. ${esc(a.name||'')} ${a.areaPyeong ? `<span class="apt-area">${_numFmt(a.areaPyeong)}평 (${_numFmt(a.areaSqm)}㎡)</span>` : ''}</div>
+      <div class="apt-meta">준공 ${_numFmt(a.buildYear, '?')} · ${hStr}</div>
       <div class="apt-body">
         <div>📍 <b>입지</b>: ${esc(a.location||'')}</div>
         <div>💡 <b>특징</b>: ${esc(a.ratio||'')}</div>
         <div>✅ <b>장점</b>: ${esc(a.pros||'')}</div>
         <div>⚠ <b>단점</b>: ${esc(a.cons||'')}</div>
         <div class="apt-fit">💰 <b>예산 매칭</b>: ${esc(a.priceFit||'')}</div>
-        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${esc(f.district)}</b>`:null,f.builder?`시공사 <b>${esc(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${f.parking_per_household}대</b>`:null,f.regulation?`규제 <b>${esc(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>6개월 ${f.new_high_count}회</b>`:null].filter(Boolean);const am=f.amenities;const amStr=am?`반경 1.2~2km: 지하철 <b>${am.subway}</b>·마트 <b>${am.mart}</b>·종합병원 <b>${am.hospital}</b>·학교 <b>${am.school}</b>·공원 <b>${am.park||0}</b>`:'';if(!items.length && !amStr)return '';return `<div class="apt-objfacts">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` · 매칭 <b>${a.matchScore}점</b>`:''}</div>`;})()}
+        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${esc(f.district)}</b>`:null,f.builder?`시공사 <b>${esc(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>`:null,f.regulation?`규제 <b>${esc(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>6개월 ${_numFmt(f.new_high_count)}회</b>`:null].filter(Boolean);const am=f.amenities;const amStr=am?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway)}</b>·마트 <b>${_numFmt(am.mart)}</b>·종합병원 <b>${_numFmt(am.hospital)}</b>·학교 <b>${_numFmt(am.school)}</b>·공원 <b>${_numFmt(am.park)}</b>`:'';if(!items.length && !amStr)return '';return `<div class="apt-objfacts">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` · 매칭 <b>${_numFmt(a.matchScore)}점</b>`:''}</div>`;})()}
         ${a.matchReason ? `<div class="apt-match">🏆 <b>왜 이 순위?</b> ${esc(a.matchReason)}</div>` : ''}
         <div class="apt-rec">📌 ${esc(a.recommendation||'')}</div>
       </div>
@@ -3804,8 +3804,8 @@ function _downloadReportPDF() {
   const SCR_CLOSE = '<\/scr' + 'ipt>';
 
   const inputLine = [
-    inp.maxBudget ? `매수가 ${inp.maxBudget}억` : null,
-    inp.myCash ? `자기자본 ${inp.myCash}억` : null,
+    inp.maxBudget ? `매수가 ${_numFmt(inp.maxBudget)}억` : null,
+    inp.myCash ? `자기자본 ${_numFmt(inp.myCash)}억` : null,
     inp.region ? `지역 ${esc(inp.region)}` : null,
     inp.pyeong ? `평형 ${esc(inp.pyeong)}` : null,
     inp.houseStatus ? `보유 ${esc(inp.houseStatus)}` : null,
@@ -3878,7 +3878,7 @@ function _downloadReportPDF() {
       <div class="policy">
         • <b>규제지역</b>: ${esc(policy.regulatedAreas||'')}<br>
         • <b>토지거래허가</b>: ${esc(policy.landTrade||'')}<br>
-        • <b>정책자금 종류</b>: ${(policy.policyLoans||[]).join(' · ')}
+        • <b>정책자금 종류</b>: ${(policy.policyLoans||[]).map(s=>esc(s)).join(' · ')}
         <div class="policy-note">※ ${esc(policy.note||'')} · 자세한 자격·신청은 ${esc(policy.policyContact||'')}</div>
       </div>
     </div>
@@ -8654,6 +8654,9 @@ function _escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/
 // inline onclick 의 JSON 인자 안전 삽입: JSON.stringify(JS escape) + _escHtml(HTML attr escape) 이중 인코딩.
 // 브라우저 attribute decode 후 JSON 원형 복원 → &quot; 등 entity 문자열 데이터에도 안전 (e177c1b setAlert 와 동일 패턴).
 function _jsonAttr(v){ return _escHtml(JSON.stringify(v)); }
+// 보고서 숫자 표시 안전화: AI 출력/외부 count/사용자 입력 숫자 필드가 문자열(HTML 포함)이어도 무력화.
+// 유효 숫자는 그대로(0 포함), null/undefined/비숫자는 fallback(fb). escape 대신 숫자 정규화(esc 의 0-falsy 문제 회피).
+function _numFmt(n, fb){ if (n == null) return fb !== undefined ? fb : ''; const v = Number(n); return Number.isFinite(v) ? String(v) : (fb !== undefined ? fb : ''); }
 // Phase 2.14: AI 응답에 항상 부착되는 공통 정보 배지 — 표시광고법·자본시장법 안전장치
 function _renderAIBadge(){
   return `<div style="background:#FFF6E3;border:1px solid #F0D998;border-radius:6px;padding:6px 8px;margin-top:6px;font-size:10px;color:#7a5500;line-height:1.5">
