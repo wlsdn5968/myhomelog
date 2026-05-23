@@ -361,10 +361,16 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
     if (Number(pay.amount) !== Number(tossData.totalAmount || tossData.balanceAmount || 0)) {
       logger.warn({ orderId, expected: pay.amount, got: tossData.totalAmount },
         'webhook: 금액 불일치');
-      await admin.from('payments').update({
+      // CAS: requested 상태만 failed 로 — captured/refunded/canceled 등 terminal 은 덮지 않음 (DONE/EXPIRED/ABORTED/refund 분기와 일관).
+      const { data: failRows } = await admin.from('payments').update({
         status: 'failed',
         failure_reason: `webhook_amount_mismatch: expected=${pay.amount} got=${tossData.totalAmount}`,
-      }).eq('order_id', orderId);
+      }).eq('order_id', orderId).eq('status', 'requested').select();
+      if (!failRows || failRows.length === 0) {
+        // 이미 terminal(captured/refunded/failed 등) — 덮어쓰기 보호 + Toss 재시도 중단(200)
+        logger.info({ orderId, prevStatus: pay.status }, 'webhook 금액불일치: terminal 상태 보호 (status 유지/이미 처리됨)');
+        return res.json({ ok: true, note: 'amount mismatch on terminal status — ignored' });
+      }
       return res.status(400).json({ error: 'amount mismatch' });
     }
 
