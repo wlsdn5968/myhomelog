@@ -110,13 +110,14 @@ router.get('/export', async (req, res, next) => {
     const sb = userScopedClient(req.accessToken);
     const userId = req.user.id;
 
-    const [bookmarks, searchHistory, chatSessions, chatMessages, billing, payments] = await Promise.all([
+    const [bookmarks, searchHistory, chatSessions, chatMessages, billing, payments, fieldNotes] = await Promise.all([
       sb.from('bookmarks').select('*').then((r) => r.data || []),
       sb.from('search_history').select('*').then((r) => r.data || []),
       sb.from('chat_sessions').select('*').then((r) => r.data || []),
       sb.from('chat_messages').select('id, session_id, role, content, meta, created_at').then((r) => r.data || []),
       sb.from('user_billing').select('*').then((r) => r.data || []),
       sb.from('payments').select('id, order_id, amount, currency, status, plan, method, created_at, approved_at').then((r) => r.data || []),
+      sb.from('field_notes').select('*').then((r) => r.data || []),
     ]);
 
     const payload = {
@@ -132,6 +133,7 @@ router.get('/export', async (req, res, next) => {
       chat_messages: chatMessages,
       user_billing: billing,
       payments,
+      field_notes: fieldNotes,
     };
 
     await writeAudit(req, 'account.export', 'user', userId, {
@@ -141,6 +143,7 @@ router.get('/export', async (req, res, next) => {
         chatSessions: chatSessions.length,
         chatMessages: chatMessages.length,
         payments: payments.length,
+        fieldNotes: fieldNotes.length,
       },
     });
 

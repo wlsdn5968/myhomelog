@@ -6755,7 +6755,7 @@ async function loadClauseAndRisk(p){
     _clauseRiskCache=d;_clauseRiskCacheKey=key;
     renderClause(d);renderRisk(d);
     return d;
-  }catch{renderClause(null);renderRisk(null);}
+  }catch{renderClause(null);renderRisk(null);toast('특약·리스크 AI 연결 실패 — 기본 예시 표시');}
 }
 
 // 기존 호출자 (loadClause/loadRisk) — 통합 함수에 위임 (backward compat)
@@ -7550,11 +7550,19 @@ async function genClause(){
   };
   try{
     const r=await fetch(`${CFG.api}/clause`,{method:'POST',headers:await _authHdr({'Content-Type':'application/json'}),body:JSON.stringify(body),signal:AbortSignal.timeout(35000)});
-    if(!r.ok)throw new Error(`HTTP ${r.status}`);
-    renderClauseResult(await r.json(),apt);
+    if(r.ok){
+      renderClauseResult(await r.json(),apt);
+    }else{
+      // STAB (2026-05): backend 의 status/code/message 를 읽어 한도·장애 안내 (기본 예시는 fallback 으로 유지)
+      const j=await r.json().catch(()=>({}));
+      if(r.status===429) toast(j.message||j.error||'⚠ AI 사용 한도에 도달했어요. 로그인하면 한도가 늘어나요. 잠시 후 다시 시도하세요.');
+      else if(r.status===503) toast(j.error||'⚠ AI 서비스가 일시 점검 중이에요. 잠시 후 다시 시도하세요.');
+      else toast('AI 연결 실패 — 기본 예시 표시');
+      renderClauseResult(null,apt);
+    }
   }catch(e){
+    toast(e&&e.name==='AbortError' ? '⏱ AI 응답이 지연됐어요. 잠시 후 다시 시도하세요 — 기본 예시 표시' : 'AI 연결 실패 — 기본 예시 표시');
     renderClauseResult(null,apt);
-    toast('AI 연결 실패 — 기본 특약 표시');
   }
   btn.classList.remove('ld');sp.style.display='none';tx.textContent='✍ 특약 초안 생성';
 }

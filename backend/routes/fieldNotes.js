@@ -40,7 +40,7 @@ function _client(req) {
 router.get('/', async (req, res) => {
   try {
     const sb = _client(req);
-    const { data, error } = await sb.from('field_notes').select('*').order('updated_at', { ascending: false });
+    const { data, error } = await sb.from('field_notes').select('*').eq('user_id', req.user.id).order('updated_at', { ascending: false });
     if (error) throw error;
     res.json({ notes: data || [] });
   } catch (e) {
@@ -56,6 +56,7 @@ router.get('/:aptName', async (req, res) => {
     const { data, error } = await sb
       .from('field_notes')
       .select('*')
+      .eq('user_id', req.user.id)
       .eq('apt_name', req.params.aptName)
       .maybeSingle();
     if (error) throw error;
