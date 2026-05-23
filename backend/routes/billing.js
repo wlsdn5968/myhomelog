@@ -444,4 +444,100 @@ router.post('/cancel', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── POST /billing/payments/:id/refund — 청약철회/환불 (전자상거래법 7일) ──
+//   billing.html 의 "결제 후 7일 이내·미사용 시 전액 환불" 안내와 backend 구현 정합성 확보용 endpoint.
+//   requireAuth(router.use) 뒤 — 본인 payment 만. Toss /v1/payments/{key}/cancel 호출 후 DB 반영.
+//   주의: DB 에 refunded_at 컬럼 없음 → status='refunded' + raw_response 로만 기록(스키마 변경 회피).
+const REFUND_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7일 (청약철회)
+router.post('/payments/:id/refund', async (req, res, next) => {
+  try {
+    if (!TOSS_SECRET_KEY) {
+      return res.status(501).json({ error: '환불 시스템 설정 미완료', hint: 'TOSS_SECRET_KEY 미설정', code: 'refund_unavailable' });
+    }
+    const admin = getSupabaseAdmin();
+    if (!admin) return res.status(503).json({ error: '결제 시스템 초기화 중' });
+
+    // 1) 본인 payment 조회 (service-role + user_id 명시 필터)
+    const { data: pay, error: selErr } = await admin
+      .from('payments')
+      .select('id, user_id, order_id, toss_payment_key, amount, status, plan, approved_at, created_at')
+      .eq('id', req.params.id)
+      .eq('user_id', req.user.id)
+      .maybeSingle();
+    if (selErr) throw selErr;
+    if (!pay) return res.status(404).json({ error: '결제 내역을 찾을 수 없습니다.' });
+
+    // 2) 멱등 — 이미 환불됨
+    if (pay.status === 'refunded') {
+      return res.status(200).json({ status: 'refunded', note: 'already refunded' });
+    }
+    // 3) 환불 가능 상태 — 승인 완료(captured) 만. requested/failed/canceled 등은 거절.
+    if (pay.status !== 'captured') {
+      return res.status(409).json({ error: `환불 불가 상태 (${pay.status})`, code: 'not_refundable' });
+    }
+    if (!pay.toss_payment_key) {
+      return res.status(409).json({ error: '결제 키 누락 — 환불 불가', code: 'no_payment_key' });
+    }
+    // 4) 7일 청약철회 기간 — approved_at 우선, 없으면 created_at
+    const paidAt = new Date(pay.approved_at || pay.created_at);
+    if (Date.now() - paidAt.getTime() > REFUND_WINDOW_MS) {
+      return res.status(400).json({ error: '청약철회 가능 기간(7일)이 지났습니다.', code: 'refund_window_expired' });
+    }
+
+    // 5) Toss 결제 취소 — confirm 과 동일한 Basic auth + Idempotency-Key
+    const basic = Buffer.from(TOSS_SECRET_KEY + ':').toString('base64');
+    let tossData;
+    try {
+      const r = await axios.post(
+        `${TOSS_API_BASE}/v1/payments/${encodeURIComponent(pay.toss_payment_key)}/cancel`,
+        { cancelReason: '고객 청약철회 (전자상거래법 7일 이내)' },
+        {
+          headers: {
+            Authorization: `Basic ${basic}`,
+            'Content-Type': 'application/json',
+            'Idempotency-Key': `refund-${pay.order_id}`,
+          },
+          timeout: 10000,
+        }
+      );
+      tossData = r.data;
+    } catch (err) {
+      const status = err.response?.status || 502;
+      const data = err.response?.data || {};
+      logger.error({ userId: req.user.id, paymentId: pay.id, status, data }, 'Toss 환불(cancel) 실패');
+      try { Sentry.captureException(new Error(data.message || 'Toss 환불 실패'), { tags: { route: 'billing.refund' }, extra: { paymentId: pay.id, status } }); } catch (_) {}
+      // DB 미변경 — payment 는 captured 그대로 유지(재시도 가능). 돈은 아직 환불 안 됨.
+      return res.status(status).json({ error: data.message || '환불 처리 실패', code: data.code });
+    }
+
+    // 6) DB 반영 — Toss 환불 성공 후. payments.status='refunded' (CAS: captured 인 경우만, race 차단)
+    const { data: updRows, error: updErr } = await admin.from('payments').update({
+      status: 'refunded',
+      raw_response: tossData,
+    }).eq('id', pay.id).eq('status', 'captured').select();
+    if (updErr || !updRows || updRows.length === 0) {
+      // Toss 환불은 성공했으나 DB 반영 실패/경합 → 수동 정합 필요 (Toss=취소, DB=captured 잔존).
+      //   복구: 관리자가 payments.status 를 'refunded' 로 수동 갱신 (Toss 는 멱등이라 재호출 무해).
+      logger.error({ userId: req.user.id, paymentId: pay.id, updErr: updErr?.message }, '환불 DB 반영 실패 — Toss 취소 성공/DB 미반영, 수동 정합 필요');
+      try { Sentry.captureException(new Error('refund DB update failed after Toss cancel'), { tags: { route: 'billing.refund' }, extra: { paymentId: pay.id } }); } catch (_) {}
+      return res.status(500).json({ error: '환불은 접수됐으나 기록 반영에 실패했어요. 고객센터로 문의해주세요.', code: 'refund_db_failed' });
+    }
+
+    // 7) user_billing 다운그레이드 — 환불=즉시 권한 회수 (canceled 의 "기간 말까지 유지" 와 달리 즉시).
+    //    현재 스키마는 user 당 단일 구독(user_billing 1 row) — 별도 동시 active 결제 개념 없음.
+    //    status='refunded' 는 planService entitlement(active|canceled) 에 미포함 → 즉시 free.
+    await admin.from('user_billing').update({
+      status: 'refunded',
+      canceled_at: new Date().toISOString(),
+    }).eq('user_id', req.user.id);
+    try {
+      const { invalidatePlanCache } = require('../services/planService');
+      invalidatePlanCache(req.user.id);
+    } catch (_) {}
+
+    logger.info({ userId: req.user.id, paymentId: pay.id, orderId: pay.order_id }, '환불 완료');
+    res.json({ status: 'refunded', paymentId: pay.id });
+  } catch (e) { next(e); }
+});
+
 module.exports = router;
