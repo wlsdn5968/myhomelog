@@ -92,7 +92,7 @@ router.put('/:aptName', async (req, res) => {
 router.delete('/:aptName', async (req, res) => {
   try {
     const sb = _client(req);
-    const { error } = await sb.from('field_notes').delete().eq('apt_name', req.params.aptName);
+    const { error } = await sb.from('field_notes').delete().eq('user_id', req.user.id).eq('apt_name', req.params.aptName);
     if (error) throw error;
     res.json({ ok: true });
   } catch (e) {
