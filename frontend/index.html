@@ -4466,7 +4466,11 @@ function mkNaverIW(p){
   const s = _hasS ? Number(p.score) : null;
   const lv = _hasS ? (s>=75?'safe':s>=50?'warn':'danger') : 'unknown';
   const lt = _hasS ? (s>=75?'거래활발':s>=50?'거래보통':'거래적음') : '분석 대기';
-  const tags=(p.tags||[]).slice(0,3).map(t=>`<span class="ptag ${typeof t==='object'?t.c||'gy':'gy'}">${typeof t==='object'?t.t||t:t}</span>`).join('');
+  const tags=(p.tags||[]).slice(0,3).map(t=>{
+    // tag class 는 CSS whitelist(bl/gr/or/gy/rd) 검증, 미일치 시 fallback 'gy' · tag text 는 _escHtml
+    const _tc=(typeof t==='object' && ['bl','gr','or','gy','rd'].includes(t.c))?t.c:'gy';
+    return `<span class="ptag ${_tc}">${_escHtml(typeof t==='object'?(t.t||t):t)}</span>`;
+  }).join('');
   const scoreLabel = _hasS
     ? `${gSVG(s,38)}<div><div style="font-family:var(--font-mono);font-size:11px;font-weight:700;color:var(--text-primary)">데이터 종합 점수 ${s}/100</div><span class="lvl ${lv}" style="font-family:var(--font-mono);font-size:10px;padding:2px 7px;font-weight:600">${lt}</span></div>`
     : `<div style="font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);line-height:1.5">📊 데이터 분석 대기<br><span style="font-size:10px">사이드바 검색 후 분석</span></div>`;
@@ -4474,7 +4478,7 @@ function mkNaverIW(p){
     <div class="niw">
       <div class="niw-n">${_escHtml(p.aptName || '')}</div>
       <div class="niw-pr">${(p.avgPrice||p.price||0).toFixed(2)}억</div>
-      <div class="niw-m">${p.area||''} · ${p.buildYear||''}년 · LTV ${p.ltv||'?'}</div>
+      <div class="niw-m">${_escHtml(p.area||'')} · ${_escHtml(p.buildYear||'')}년 · LTV ${_escHtml(p.ltv||'?')}</div>
       <div class="niw-g">${scoreLabel}</div>
       <div class="niw-tags">${tags}</div>
       <button class="niw-btn a2" onclick="showDetailById('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}')">📊 상세 리포트</button>
@@ -7598,13 +7602,16 @@ function renderClauseResult(d,aptName){
 
 function exportClausePDF(){
   const title=document.getElementById('cl_result_title').textContent;
+  // XSS (P2): title 은 cl_apt(사용자 입력) aptName 기반 → 새 창 document.write HTML 에 raw 삽입 차단
+  const safeTitle=_escHtml(title);
+  // content 는 clause 렌더링(08e3ef9 P1-A + CI clause guard)에서 이미 _escHtml 처리된 HTML → 재escape 시 이중인코딩되므로 그대로 사용
   const content=document.getElementById('cl_output').innerHTML;
   const w=window.open('','_blank');
   if(!w){toast('팝업 차단 해제 후 다시 시도하세요');return;}
   // P1 D5 (2026-04-25): 약관규제법 + 표시광고법 방어선 — PDF 워터마크 + 페이지 푸터 강제
   // 사용자가 PDF 를 그대로 계약서에 박는 사고 방어. footer 만으로는 일부 페이지에만 노출.
   // → 사선 워터마크 (page-break-inside 무시 + position:fixed) + @media print 강제 표시.
-  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${title}</title>
+  w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${safeTitle}</title>
   <style>
     @page { margin: 24mm 16mm; @bottom-center { content: "AI 생성 초안 · 법적 효력 없음 · 변호사·공인중개사 검토 필수 · " counter(page) "/" counter(pages); font-size: 9px; color: #C84B18; } }
     body{font-family:'Malgun Gothic',sans-serif;padding:28px;font-size:13px;line-height:1.7;color:#18160F;position:relative}
@@ -7634,7 +7641,7 @@ function exportClausePDF(){
     footer{margin-top:24px;font-size:10px;color:#98938A;border-top:1px solid #E2DDD5;padding-top:8px;line-height:1.7}
     footer b{color:#A82525}
   </style></head><body>
-  <h1>${title}</h1>
+  <h1>${safeTitle}</h1>
   <div class="sub">내집로그 AI 특약 초안 · ${new Date().toLocaleDateString('ko-KR')}</div>
   <div class="legal-banner">
     <b>⚠ 본 문서는 AI 가 생성한 초안이며 법적 효력이 없습니다.</b>
@@ -7859,7 +7866,7 @@ async function loadPopularMarkers() {
         if (isNaver) {
           // Sprint KK (2026-05-16): CustomOverlay deprecated → Marker + icon.content (HTML)
           // 공식 docs: https://navermaps.github.io/maps.js.ncp/docs/tutorial-5-marker-html-icon.example.html
-          const _pj = JSON.stringify({aptName:p.aptName,sigungu:p.sigungu,umdNm:p.umdNm,lawdCd:p.lawdCd,buildYear:p.buildYear,recentDealDate:p.recentDealDate}).replace(/'/g,"&#39;");
+          const _pj = _jsonAttr({aptName:p.aptName,sigungu:p.sigungu,umdNm:p.umdNm,lawdCd:p.lawdCd,buildYear:p.buildYear,recentDealDate:p.recentDealDate});
           const ov = new naver.maps.Marker({
             position: new naver.maps.LatLng(p.lat, p.lng),
             map: mapObj,
@@ -7902,7 +7909,7 @@ async function loadPopularMarkers() {
               <div style="font-weight:700">${_escHtml(p.aptName)}</div>
               <div style="font-size:10.5px;color:var(--text-tertiary)">${_escHtml(p.sigungu||'')} ${_escHtml(p.umdNm||'')} · ${p.buildYear||'?'}년</div>
               <div style="font-size:10.5px;color:var(--text-secondary);margin-top:4px">최근 60일 거래 <b>${p.dealCount60d}건</b></div>
-              <button onclick='goSearchResult(${JSON.stringify({aptName:p.aptName,sigungu:p.sigungu,umdNm:p.umdNm,lawdCd:p.lawdCd,buildYear:p.buildYear,recentDealDate:p.recentDealDate}).replace(/'/g,"&#39;")})' style="margin-top:6px;padding:5px 10px;background:var(--accent-700);color:#fff;border:none;border-radius:var(--radius-sm);font-size:11px;cursor:pointer">상세 보기 →</button>
+              <button onclick='goSearchResult(${_jsonAttr({aptName:p.aptName,sigungu:p.sigungu,umdNm:p.umdNm,lawdCd:p.lawdCd,buildYear:p.buildYear,recentDealDate:p.recentDealDate})})' style="margin-top:6px;padding:5px 10px;background:var(--accent-700);color:#fff;border:none;border-radius:var(--radius-sm);font-size:11px;cursor:pointer">상세 보기 →</button>
             </div>
           `);
           m.addTo(mapObj);
@@ -7964,7 +7971,7 @@ async function onHeaderSearchInput(q) {
             if (sims.length) {
               suggestionHtml = `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg2);text-align:left">
                 <div style="font-size:10.5px;color:var(--t2);font-weight:600;margin-bottom:6px">💡 비슷한 검색어 결과:</div>
-                ${sims.map(r => `<div onclick='goSearchResult(${JSON.stringify(r).replace(/'/g,"&#39;")})' style="padding:6px 8px;cursor:pointer;font-size:11px;border-radius:4px" onmouseover="this.style.background='#F4F8FF'" onmouseout="this.style.background='transparent'"><b>${_escHtml(r.aptName)}</b> <span style="color:var(--t3)">${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')}</span></div>`).join('')}
+                ${sims.map(r => `<div onclick='goSearchResult(${_jsonAttr(r)})' style="padding:6px 8px;cursor:pointer;font-size:11px;border-radius:4px" onmouseover="this.style.background='#F4F8FF'" onmouseout="this.style.background='transparent'"><b>${_escHtml(r.aptName)}</b> <span style="color:var(--t3)">${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')}</span></div>`).join('')}
               </div>`;
             }
           } catch(_) {}
@@ -7984,7 +7991,7 @@ async function onHeaderSearchInput(q) {
           // Phase 10 (2026-05-03): 거래량 인기 배지 — count 5건 이상 시 🔥, 10건 이상 시 🔥🔥
           const _hot = (r.dealCount >= 10) ? ' 🔥🔥' : (r.dealCount >= 5 ? ' 🔥' : '');
           const _cntStr = r.dealCount ? ` · ${r.dealCount}건` : '';
-          return `<div class="hsearch-item" data-idx="${i}" role="option" tabindex="0" aria-label="${_escHtml(r.aptName)} ${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')}" onclick='goSearchResult(${JSON.stringify(r).replace(/'/g,"&#39;")})' style="padding:7px 11px;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:12px;line-height:1.4" onmouseover="this.style.background='#F4F8FF'" onmouseout="this.style.background='#fff'">
+          return `<div class="hsearch-item" data-idx="${i}" role="option" tabindex="0" aria-label="${_escHtml(r.aptName)} ${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')}" onclick='goSearchResult(${_jsonAttr(r)})' style="padding:7px 11px;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:12px;line-height:1.4" onmouseover="this.style.background='#F4F8FF'" onmouseout="this.style.background='#fff'">
             <div style="font-weight:700;color:var(--t1)">${_escHtml(r.aptName)}${_hot}</div>
             <div style="font-size:10.5px;color:var(--t3);margin-top:2px">${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')} · ${r.buildYear||'?'}년 · ${(r.recentDealDate||'').slice(0,10)}${_cntStr}</div>
           </div>`;
@@ -8644,6 +8651,9 @@ function ah(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,
 function gt(){const n=new Date();return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');}
 // HTML escape — XSS 방어용 (AI/사용자/세션 복원 메시지 공통)
 function _escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+// inline onclick 의 JSON 인자 안전 삽입: JSON.stringify(JS escape) + _escHtml(HTML attr escape) 이중 인코딩.
+// 브라우저 attribute decode 후 JSON 원형 복원 → &quot; 등 entity 문자열 데이터에도 안전 (e177c1b setAlert 와 동일 패턴).
+function _jsonAttr(v){ return _escHtml(JSON.stringify(v)); }
 // Phase 2.14: AI 응답에 항상 부착되는 공통 정보 배지 — 표시광고법·자본시장법 안전장치
 function _renderAIBadge(){
   return `<div style="background:#FFF6E3;border:1px solid #F0D998;border-radius:6px;padding:6px 8px;margin-top:6px;font-size:10px;color:#7a5500;line-height:1.5">
