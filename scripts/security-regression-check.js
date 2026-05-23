@@ -78,6 +78,13 @@ const CHECKS = [
     re: /<session_context data_source="client_supplied_untrusted">/,
     mustExist: true,
   },
+  {
+    // PII 최소수집: AI 전송 텍스트 전수(message+history+session) PII 검사 유지 — message 단독 검사로 회귀 금지
+    name: 'chat.js PII 검사가 context 전수(collectClientPIIText) 없이 message 단독으로 회귀',
+    file: 'backend/routes/chat.js',
+    re: /detectPII\(\s*collectClientPIIText\(/,
+    mustExist: true,
+  },
 ];
 
 function main() {

@@ -28,16 +28,51 @@ function detectPII(text) {
   return found;
 }
 
+// PIPA 최소수집 — AI(Anthropic)로 전송되는 "모든 클라이언트 제공 텍스트"를 PII 검사 대상으로 수집.
+//   최신 message 뿐 아니라 context.history[*].content 와 context.session 의 사용자 자유입력 가능 문자열 필드까지
+//   포함해야 history/session 경유 PII 우회 전송을 차단할 수 있다.
+//   숫자 필드(예산/자기자본/가격/점수/LTV/면적 등)는 수집 제외 — 정상 숫자가 계좌/번호 패턴으로 오탐되는 것 방지.
+//   필드 구분자는 비-공백 ' | ' — \s* 패턴이 필드 경계를 넘어 숫자열을 잇는 오탐 차단.
+function collectClientPIIText(message, context) {
+  const parts = [String(message || '')];
+  const hist = context && context.history;
+  if (Array.isArray(hist)) {
+    for (const h of hist) { if (h && typeof h.content === 'string') parts.push(h.content); }
+  }
+  const s = context && context.session;
+  if (s) {
+    if (s.userProfile) {
+      for (const k of ['region', 'houseStatus', 'workplaceArea']) {
+        if (typeof s.userProfile[k] === 'string') parts.push(s.userProfile[k]);
+      }
+    }
+    if (s.focusProperty) {
+      for (const k of ['aptName', 'area']) {
+        if (typeof s.focusProperty[k] === 'string') parts.push(s.focusProperty[k]);
+      }
+    }
+    if (Array.isArray(s.recommendedProperties)) {
+      for (const p of s.recommendedProperties) {
+        if (!p) continue;
+        for (const k of ['aptName', 'area']) {
+          if (typeof p[k] === 'string') parts.push(p[k]);
+        }
+      }
+    }
+  }
+  return parts.join(' | ');
+}
+
 router.post('/', validateChatInput, async (req, res) => {
   const { message, context } = req.body;
 
-  // PII 차단 — Anthropic 으로 보내기 전 즉시 reject
-  const piiFound = detectPII(message);
+  // PII 차단 — Anthropic 으로 보내기 전 즉시 reject (message + context.history + context.session 문자열 전수 검사)
+  const piiFound = detectPII(collectClientPIIText(message, context));
   if (piiFound.length > 0) {
-    logger.warn({ source: 'chat-pii-block', userId: req.user?.id || null, types: piiFound },
-      '챗 메시지 PII 감지 — 처리 중단');
+    logger.warn({ source: 'chat-pii-block', scope: 'message+context', userId: req.user?.id || null, types: piiFound },
+      '챗 입력(메시지/이력/세션) PII 감지 — 처리 중단');
     return res.status(400).json({
-      error: `메시지에 개인정보(${piiFound.join(', ')})가 포함되어 있어 처리하지 않았어요. 해당 정보를 제거하고 다시 보내주세요.`,
+      error: `대화 입력에 개인정보(${piiFound.join(', ')})가 포함되어 있어 처리하지 않았어요. 해당 정보를 제거하고 다시 보내주세요.`,
       code: 'pii_blocked',
       types: piiFound,
     });
