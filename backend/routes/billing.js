@@ -406,13 +406,43 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
       } catch (_) {}
 
       logger.info({ orderId, userId: pay.user_id, source: 'webhook' }, '결제 승인 완료 (webhook)');
-    } else if (['CANCELED', 'EXPIRED', 'ABORTED'].includes(tossStatus)) {
+    } else if (tossStatus === 'CANCELED') {
+      // 환불/취소 완료 — refunded/captured 를 failed 로 덮지 않도록 EXPIRED/ABORTED 와 분리.
+      //   refund endpoint 가 Toss cancel → 이 CANCELED webhook 이 뒤따라 옴(상태 정합 필요).
+      if (pay.status === 'refunded') {
+        // refund endpoint 가 이미 처리 — 멱등 (raw_response 만 갱신, status 유지)
+        await admin.from('payments').update({ raw_response: tossData }).eq('order_id', orderId).eq('status', 'refunded');
+        logger.info({ orderId }, 'webhook CANCELED: 이미 refunded (멱등)');
+      } else if (pay.status === 'captured') {
+        // Toss 측 취소(콘솔 등) 또는 refund endpoint 의 DB 반영 누락 보정 → refunded 로 정합 (CAS: captured 만).
+        //   payments.status='refunded' 채택 이유: refund endpoint·planService(refunded→free) 와 동일 상태 체계.
+        await admin.from('payments').update({
+          status: 'refunded',
+          failure_reason: 'toss_canceled',
+          raw_response: tossData,
+        }).eq('order_id', orderId).eq('status', 'captured');
+        await admin.from('user_billing').update({
+          status: 'refunded',
+          canceled_at: new Date().toISOString(),
+        }).eq('user_id', pay.user_id);
+        try {
+          const { invalidatePlanCache } = require('../services/planService');
+          invalidatePlanCache(pay.user_id);
+        } catch (_) {}
+        logger.info({ orderId, userId: pay.user_id }, 'webhook CANCELED: captured → refunded 정합');
+      } else {
+        // requested/failed 등 비-captured 상태의 CANCELED — 상태 덮어쓰기 없이 raw_response 만 기록.
+        await admin.from('payments').update({ raw_response: tossData }).eq('order_id', orderId);
+        logger.info({ orderId, prevStatus: pay.status }, 'webhook CANCELED: 비-captured 상태 — status 유지');
+      }
+    } else if (['EXPIRED', 'ABORTED'].includes(tossStatus)) {
+      // 승인 전 만료/중단 — requested 만 failed 로 (captured/refunded 는 CAS 로 보호, 덮어쓰기 차단).
       await admin.from('payments').update({
         status: 'failed',
         failure_reason: `toss_${tossStatus.toLowerCase()}`,
         raw_response: tossData,
-      }).eq('order_id', orderId);
-      logger.info({ orderId, tossStatus }, '결제 실패/취소 (webhook)');
+      }).eq('order_id', orderId).eq('status', 'requested');
+      logger.info({ orderId, tossStatus }, '결제 만료/중단 (webhook)');
     }
     // WAITING_FOR_DEPOSIT 등 중간 상태는 별도 처리 없이 200 반환
 
