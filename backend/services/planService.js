@@ -56,11 +56,14 @@ async function getActivePlan(userId) {
       .eq('user_id', userId)
       .maybeSingle();
     let plan = 'free';
-    if (data && data.status === 'active' && (data.plan === 'pro' || data.plan === 'team')) {
-      // 만료일 체크
-      if (!data.current_period_end || new Date(data.current_period_end) > new Date()) {
-        plan = data.plan;
-      }
+    // 결제 활성화 전 readiness (2026-05): 해지(canceled) 후에도 current_period_end 까지는 유료 권한 유지.
+    //   billing.html "해지됨 (기간 말까지 유효)" UI 와 일치 — 즉시 free 강등 모순 제거 (B안: /cancel·schema 불변).
+    if (data && (data.plan === 'pro' || data.plan === 'team') && (data.status === 'active' || data.status === 'canceled')) {
+      // 기간 만료 체크. canceled 는 반드시 기간 미만료여야 유지. active 의 기간 미설정(레거시)만 허용(canceled+무기한 방지).
+      const periodOk = data.current_period_end
+        ? new Date(data.current_period_end) > new Date()
+        : (data.status === 'active');
+      if (periodOk) plan = data.plan;
     }
     cache.set(memKey, plan, 60);
     return plan;
