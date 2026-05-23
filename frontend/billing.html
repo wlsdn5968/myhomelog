@@ -126,10 +126,9 @@
         <input type="checkbox" id="cnRefund" style="margin-top:3px;flex-shrink:0">
         <span><b>(필수)</b> <a href="/refund.html" target="_blank" style="color:var(--acc);text-decoration:underline">환불 정책</a>을 확인했고 이에 동의합니다. 결제 후 7일 이내·미사용 시 전액 환불 가능하며, 사용 시작 시 일할 정산됨을 이해했습니다.</span>
       </label>
-      <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;margin-bottom:6px" id="cnAutoPayWrap">
-        <input type="checkbox" id="cnAutoPay" style="margin-top:3px;flex-shrink:0">
-        <span id="cnAutoPayText"><b>(필수)</b> 매월 자동 결제(구독 갱신)에 동의합니다. 언제든지 「내 계정 → 구독 해지」에서 해지할 수 있습니다.</span>
-      </label>
+      <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:6px;color:var(--t2)">
+        <span>ℹ <b>본 결제는 30일 단건 이용권이며 자동 갱신되지 않습니다.</b> 만료 후 계속 이용하려면 다시 결제해주세요.</span>
+      </div>
       <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer">
         <input type="checkbox" id="cnTerms" style="margin-top:3px;flex-shrink:0">
         <span><b>(필수)</b> <a href="/terms.html" target="_blank" style="color:var(--acc);text-decoration:underline">이용약관</a> 및 <a href="/privacy.html" target="_blank" style="color:var(--acc);text-decoration:underline">개인정보 처리방침</a>에 동의합니다.</span>
@@ -386,14 +385,9 @@ async function startCheckout(planId){
     await widget.renderPaymentMethods({ selector:'#widgetArea', variantKey:'DEFAULT' });
     await widget.renderAgreement({ selector:'#agreementArea', variantKey:'AGREEMENT' });
 
-    // 동의 박스 표시 + 자동결제 항목은 구독형(월/연/시즌)일 때만 표시
+    // 동의 박스 표시 (단건 30일 이용권 모델 — 자동 갱신/정기결제 없음)
     const consentBox = document.getElementById('myConsentBox');
-    const autoWrap = document.getElementById('cnAutoPayWrap');
     consentBox.style.display = '';
-    const isRecurring = currentPlan && (currentPlan.billing_cycle === 'month' || currentPlan.billing_cycle === 'year' || currentPlan.recurring === true);
-    autoWrap.style.display = isRecurring ? '' : 'none';
-    // 단건 결제이면 자동결제 체크 강제 통과
-    if(!isRecurring) document.getElementById('cnAutoPay').checked = true;
 
     const payBtn = document.getElementById('payBtn');
     payBtn.style.display = '';
@@ -401,8 +395,8 @@ async function startCheckout(planId){
     payBtn.textContent = `${fmtKrw(order.amount)} 결제하기`;
     payBtn.onclick = async () => {
       // 결제 직전 명시적 동의 검사 — 약관규제법 제5조 준수
-      const ids = ['cnRefund','cnAutoPay','cnTerms'];
-      const labels = ['환불 정책','자동 결제','이용약관·개인정보 처리방침'];
+      const ids = ['cnRefund','cnTerms'];
+      const labels = ['환불 정책','이용약관·개인정보 처리방침'];
       for(let i=0;i<ids.length;i++){
         const el = document.getElementById(ids[i]);
         if(!el || !el.checked){
@@ -440,7 +434,7 @@ function backToPlans(){
   document.getElementById('plansView').style.display = '';
   document.getElementById('checkoutView').style.display = 'none';
   // 동의 체크박스 초기화 — 다음 결제 시 명시적 재동의 받기
-  ['cnRefund','cnAutoPay','cnTerms'].forEach(id => {
+  ['cnRefund','cnTerms'].forEach(id => {
     const el = document.getElementById(id);
     if(el) el.checked = false;
   });
