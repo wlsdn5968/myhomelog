@@ -2950,7 +2950,7 @@ function _restoreConsentCheckboxes(){
 async function loginGoogle(){
   if(!_checkConsent()) return;
   const A = window.MHL?.auth;
-  if(!A?.ready){ document.getElementById('lmStatus').textContent='⚠ 인증 SDK 로드 중...'; return; }
+  if(!A?.ready){ document.getElementById('lmStatus').textContent='인증 준비 중...'; return; }
   document.getElementById('lmStatus').textContent='Google 인증창으로 이동 중...';
   // CONSENT-AUDIT-2026-05-10 (검토자 fix): redirect 전에 서버 audit 기록 await — fire-and-forget abort 회피.
   await _recordConsentAudit();
@@ -2966,7 +2966,7 @@ async function loginKakao(){
   // 아래는 사업자등록 후 활성화 시 위 5줄 제거하면 정상 동작
   if(!_checkConsent()) return;
   const A = window.MHL?.auth;
-  if(!A?.ready){ document.getElementById('lmStatus').textContent='⚠ 인증 SDK 로드 중...'; return; }
+  if(!A?.ready){ document.getElementById('lmStatus').textContent='인증 준비 중...'; return; }
   document.getElementById('lmStatus').textContent='카카오 인증창으로 이동 중...';
   try { await A.signInWithKakao(); } catch(e){ document.getElementById('lmStatus').textContent='❌ ' + (e.message||e); }
 }
@@ -2974,7 +2974,7 @@ async function loginEmail(){
   if(!_checkConsent()) return;
   const A = window.MHL?.auth;
   const st = document.getElementById('lmStatus');
-  if(!A?.ready){ st.textContent='⚠ 인증 SDK 로드 중... 잠시 후 다시 눌러주세요.'; return; }
+  if(!A?.ready){ st.textContent='인증 준비 중... 잠시 후 다시 눌러주세요.'; return; }
   const email = document.getElementById('lmEmail').value.trim();
   if(!email || !email.includes('@')){ st.textContent='✉ 올바른 이메일 주소를 입력해주세요.'; return; }
   st.textContent='메일 발송 중...';
@@ -4407,7 +4407,7 @@ async function loadAptsInBounds(south, west, north, east) {
     }));
     renderMarkers(props);
     if (typeof renderListGrid === 'function') renderListGrid();
-    toast(`✅ ${props.length}개 단지 표시`);
+    // UX 정리(2026-06-01): 성공 토스트 제거 — 마커가 이미 화면에 표시됨(중복 안내 제거)
   } catch (e) {
     toast('영역 검색 실패: ' + e.message);
   }
@@ -4727,9 +4727,8 @@ async function doSearch(){
     document.getElementById('pCnt').textContent=props.length+'건';
     sv('map',document.querySelector('.htab'));
     const missed = searchMeta.coordMissingCount||0;
-    toast(missed>0
-      ? `✅ ${props.length}개 단지 추천 · 좌표 미해결 ${missed}건 (마커 생략)`
-      : `✅ ${props.length}개 단지 추천 완료`);
+    // UX 정리(2026-06-01): 성공 토스트 제거(결과는 마커·목록·건수 pCnt 로 이미 표시) — 좌표 미해결 시에만 안내
+    if(missed>0) toast(`📍 ${props.length}개 단지 · 좌표 미해결 ${missed}건 (일부 마커 생략)`);
     // 백엔드 좌표 해결 실패분만 추가 지오코딩 보정 (네트워크 단건 폴백)
     const needGeo = props.filter(p => p.lat==null || p.lng==null);
     if (needGeo.length) {
@@ -7005,7 +7004,11 @@ function cp(el,id){
   if(id==='ch-r')populateRegionSub(el.textContent.trim());
   // KB 인사이트 3 (2026-05-06): 2주택+ 선택 시 양도세 중과 알림 (regulationsService 출처)
   if(id==='ch-h' && el.textContent.trim()==='2주택+'){
-    if(typeof toast==='function') toast('⚠ 2026.1.1 다주택자 양도세 중과 시행 — 매도 시 양도세 가산 (출처: 금융위 10·15 대책)');
+    // UX 정리(2026-06-01): 칩 클릭마다 매번 → 세션당 1회만 (반복 노출 noise 제거)
+    if(typeof toast==='function' && !sessionStorage.getItem('mhl_tax_warned')){
+      toast('⚠ 2026.1.1 다주택자 양도세 중과 시행 — 매도 시 양도세 가산 (출처: 금융위 10·15 대책)');
+      try{sessionStorage.setItem('mhl_tax_warned','1');}catch(_){}
+    }
   }
   cl();dc();_updateInputProgress();
 }
@@ -7263,7 +7266,7 @@ function searchWithBudget(buy,cash,loan,house,isFirst,regStr){
   // 탭 전환 후 검색 실행
   sv('map',document.querySelectorAll('.htab')[0]);
   setTimeout(()=>{if(typeof doSearch==='function')doSearch();},200);
-  toast('💨 예산 기준 단지 검색 시작');
+  // UX 정리(2026-06-01): "검색 시작" 토스트 제거 — 직후 "추천 완료" 토스트와 이중 노출이라 제거
 }
 // 상세 모달 → 특약 생성 (currentDetail 전역 사용, quote 이스케이프 회피)
 function goClauseFromCurrentDetail(){
