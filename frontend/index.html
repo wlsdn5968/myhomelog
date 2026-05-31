@@ -5655,12 +5655,14 @@ async function loadFacility(p){
       const totalDong = f.kaptDongCnt || f.dongCount || null;
       const parkingTotal = f.kaptdPcnt || f.parkingTotal || null;
       const heatType = f.codeHeatNm || f.heatType || null;
+      // 2026-05-31: KAPT raw 숫자 필드 robustness — 비숫자 garbage(L위 _sanitizeCompany 도입 근거와 동일 KAPT 깨짐) 시
+      //   "NaN세대" 표시 차단. 유효 양수만 노출(0/비숫자/NaN → 필드 생략). 사용승인일은 YYYYMMDD(6~8자리)만 포맷.
       const items = [];
-      if (householdCount) items.push(`총 ${Number(householdCount).toLocaleString()}세대`);
-      if (totalDong) items.push(`${totalDong}개동`);
-      if (parkingTotal) items.push(`주차 ${Number(parkingTotal).toLocaleString()}대`);
-      if (completionDate) items.push(`사용승인 ${String(completionDate).slice(0,4)}.${String(completionDate).slice(4,6)}`);
-      if (heatType) items.push(heatType);
+      const _hc = Number(householdCount); if (Number.isFinite(_hc) && _hc > 0) items.push(`총 ${_hc.toLocaleString()}세대`);
+      const _td = Number(totalDong); if (Number.isFinite(_td) && _td > 0) items.push(`${_td}개동`);
+      const _pk = Number(parkingTotal); if (Number.isFinite(_pk) && _pk > 0) items.push(`주차 ${_pk.toLocaleString()}대`);
+      const _cd = String(completionDate || ''); if (/^\d{6,8}$/.test(_cd)) items.push(`사용승인 ${_cd.slice(0,4)}.${_cd.slice(4,6)}`);
+      if (heatType) items.push(_escHtml(heatType)); // 형제 필드(official/시공사)와 동일하게 escape (KAPT 데이터 심층방어)
       const officialName = r.facility.official && r.facility.official !== p.aptName
         ? `<span style="color:var(--t3);font-size:10px"> (정식명: ${_escHtml(r.facility.official)})</span>` : '';
       fbox.innerHTML = `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6">
