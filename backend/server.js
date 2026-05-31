@@ -173,7 +173,7 @@ const { optionalAuth } = require('./middleware/auth');
 // MOB-AUDIT-2026-05-03: parseInt NaN 검증 — env 오타(DAILY_SEARCH_LIMITS 등) 시 NaN → 모든 사용자 차단 차단
 const _parseIntSafe = (v, def) => { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? n : def; };
 const DAILY_SEARCH_LIMIT = _parseIntSafe(process.env.DAILY_SEARCH_LIMIT, 5);
-const DAILY_CHAT_LIMIT = _parseIntSafe(process.env.DAILY_CHAT_LIMIT, 15);
+const DAILY_CHAT_LIMIT = _parseIntSafe(process.env.DAILY_CHAT_LIMIT, 3); // 2026-06-01: 비로그인 AI챗 한도 15→3. Anthropic=유일 변동비라 비로그인 과대(15) 축소 + 로그인 유도. 로그인 free=3+bonus10=13.
 
 // 채팅 세션/메시지 저장 (Supabase — JWT 필수, RLS 적용) — /api/chat 보다 먼저 마운트
 app.use('/api/chat/sessions', dataLimiter, chatSessionsRouter);
