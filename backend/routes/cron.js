@@ -70,7 +70,7 @@ router.get('/retention', async (req, res) => {
 });
 
 // ── MOLIT 실거래가 ETL ─────────────────────────────────────
-// 매일 17:00 KST — 최근 2개월 × 32 region 갱신
+// 매일 17:00 UTC (= 익일 02:00 KST) — schedule "0 17 * * *". 최근 2개월 × 32 region 갱신
 async function handleMolitIngest(req, res) {
   try {
     const started = Date.now();
@@ -86,6 +86,19 @@ async function handleMolitIngest(req, res) {
       ok: summary.ok, err: summary.err, skipped: summary.skipped,
       monthsRange: summary.monthsRange,
     }}, 'cron/molit-ingest OK');
+    // 부분 실패 가시화 (2026-05-31): summary.err>0(일부 region-month ingest 실패)는 200 유지 —
+    //   molit ingest 는 멱등(dedup_key UNIQUE)이라 다음 cron tick 이 이어받으며, 500 으로 Vercel Cron
+    //   재시도를 유발하면 MOLIT 무료 키 쿼터를 재소모하므로 회피. 기존엔 logger.info 만이라 운영자에게
+    //   안 보였음 → Sentry.captureMessage(warning) 알림만 추가 (status·재시도·ingest 로직 불변).
+    if (summary && summary.err > 0) {
+      try {
+        Sentry.captureMessage(
+          `cron/molit-ingest 부분 실패: ok=${summary.ok} err=${summary.err} skipped=${summary.skipped} range=${summary.monthsRange}`,
+          { level: 'warning', tags: { route: 'cron.molit-ingest', partial: 'true' },
+            extra: { ok: summary.ok, err: summary.err, skipped: summary.skipped, monthsRange: summary.monthsRange } }
+        );
+      } catch (_) {}
+    }
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/molit-ingest 실패');
@@ -97,7 +110,7 @@ router.post('/molit-ingest', handleMolitIngest);
 router.get('/molit-ingest', handleMolitIngest);
 
 // ── 단지 마스터 동기화 (Phase 4, 2026-04-26) ────────────────
-// 주 1회 (월 03:00 KST) — AptInfo 로 sgg 별 단지 목록 적재 (멱등).
+// 주 1회 월 20:00 UTC (= 화 05:00 KST) — schedule "0 20 * * 1". AptInfo 로 sgg 별 단지 목록 적재 (멱등).
 async function handleAptMasterSync(req, res) {
   try {
     const started = Date.now();
@@ -114,7 +127,7 @@ router.post('/apt-master-sync', handleAptMasterSync);
 router.get('/apt-master-sync', handleAptMasterSync);
 
 // ── Phase 18 (2026-05-04): regulations stale 자동 검증 ───────
-// 매주 월 04:00 KST — apt-master-sync 직후
+// 매일 21:00 UTC (= 익일 06:00 KST) — schedule "0 21 * * *" (월요일엔 apt-master-sync 1시간 후)
 async function handleRegulationsCheck(req, res) {
   try {
     const started = Date.now();
@@ -131,7 +144,7 @@ router.post('/regulations-check', handleRegulationsCheck);
 router.get('/regulations-check', handleRegulationsCheck);
 
 // ── Phase 20 + 37 (2026-05-04): regulations 자동 fetch + AI 분석 ──
-// 매주 화 06:00 UTC (KST 15:00) — 평일 정책 발표 후
+// 매일 21:30 UTC (= 익일 06:30 KST) — schedule "30 21 * * *" (정책 발표 후)
 // Phase 37: RSS fetch (Phase 20) + Claude AI 분석 + 제안 SQL 생성
 async function handleRegulationsAutoFetch(req, res) {
   try {

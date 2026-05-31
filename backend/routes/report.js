@@ -229,6 +229,14 @@ router.post('/generate', async (req, res) => {
         const c = candidates[i];
         if (c?.objectiveFacts) a.objectiveFacts = c.objectiveFacts;
         if (c?.score != null) a.matchScore = c.score;
+        // 동명 단지 식별 보장 (2026-05-31): name 을 backend 후보(canonical apt_name + 행정구역)로 강제 정합.
+        //   AI 가 prompt 의 "단지명 (시군구 동)" 형식을 어겨도(누락/오타) 보고서·PDF·북마크 식별 신뢰 유지.
+        //   render(_renderReport)·PDF(_downloadReportPDF)·북마크(_addAllReportAptsToBookmarks) 모두 a.name 사용 —
+        //   표시 escape(_escHtml)·scoring·prompt 로직 불변. 후보 부재 시(c 없음) AI name 그대로 둠.
+        if (c?.apt_name) {
+          const _loc = [c.sigungu, c.umd_nm].filter(Boolean).join(' ').trim();
+          a.name = _loc ? `${c.apt_name} (${_loc})` : c.apt_name;
+        }
       });
     }
 
