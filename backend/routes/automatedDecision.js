@@ -41,16 +41,46 @@ router.get('/explain', (req, res) => {
 
     decisions: [
       {
-        name: '단지 추천 스코어 (0~95)',
-        purpose: '사용자 조건(예산·지역·주택보유상태)에 맞는 단지를 거래 활발도 기준으로 정렬',
-        method: '결정론적 공식 — AI 예측 아님. 공공데이터(MOLIT 실거래) 기반.',
-        formula: 'score = min(95, 50 + min(dealCount, 30) × 1.5)',
+        name: '단지 추천 스코어 (20~98)',
+        purpose: '사용자 조건(예산·지역·주택보유상태)에 맞는 단지를 다요인 결정론적 점수로 정렬',
+        method: '결정론적 공식 — AI 예측 아님. 공공데이터(MOLIT 실거래 + KAPT 단지정보) 기반.',
+        formula: 'score = clamp(20~98, 기본 30 + 거래량 + 신축도 + 평형다양 + 단지규모 + 주차 + 입지). 단일 변수 아님 (2026-05 다요인 개편).',
         factors: [
           {
-            name: 'dealCount (최근 6개월 거래량)',
-            weight: '유일 변수 (30건에서 상한)',
+            name: '거래량 (최근 6개월)',
+            weight: 'min(거래수, 50) × 0.6 — 최대 30점',
             source: '국토교통부 실거래가 공개 API',
             rationale: '거래량은 환금성 지표 — 많을수록 매도 용이 (출구 전략).',
+          },
+          {
+            name: '신축도 (준공 연식)',
+            weight: '5년↓ +18 / 10년↓ +14 / 20년↓ +10 / 30년↓ +5 — 최대 18점',
+            source: 'KAPT(한국부동산원) 사용승인일',
+            rationale: '신축 선호 반영 (사용자 보편 선호).',
+          },
+          {
+            name: '평형 다양성',
+            weight: '관측된 distinct 평형 수 × 2 — 최대 8점',
+            source: 'MOLIT 실거래 평형',
+            rationale: '평형 구성이 다양할수록 수요층 폭넓음.',
+          },
+          {
+            name: '단지 규모 (세대수)',
+            weight: '3000세대↑ +8 / 1000↑ +6 / 500↑ +3',
+            source: 'KAPT 세대수',
+            rationale: '대단지일수록 관리·인프라·환금성 유리.',
+          },
+          {
+            name: '주차 비율',
+            weight: '세대당 1.2대↑ +4 / 0.8대↑ +2',
+            source: 'KAPT 주차대수 / 세대수',
+            rationale: '주거 편의 지표.',
+          },
+          {
+            name: '입지 (지하철 도보·교육시설)',
+            weight: '도보 5분↓ +4 / 5~10분 +2, 교육시설 정보 +2',
+            source: 'KAPT 단지 상세 정성정보',
+            rationale: '입지 가치 보정.',
           },
         ],
         notShown: [
@@ -77,7 +107,7 @@ router.get('/explain', (req, res) => {
       {
         name: 'AI 채팅·분석·특약 생성',
         purpose: '사용자 질문에 대한 부동산 정보 정리 (매수·매도 추천 절대 금지)',
-        method: 'Anthropic Claude Sonnet 4 + 시스템 프롬프트 (가드레일 10개)',
+        method: 'Anthropic Claude Sonnet 4.5 + 시스템 프롬프트 (가드레일 10개)',
         factors: [
           { name: '사용자 질문', source: '사용자 입력 (XML 태그로 격리 — prompt injection 방어)' },
           { name: '현재 조건·단지 컨텍스트', source: '세션 상태 (예산·지역·단지·점수)' },

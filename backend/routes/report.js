@@ -18,7 +18,7 @@
  *   - apt_schools: 주변 학교
  *
  * AI 호출:
- *   - Claude Sonnet 4 + cache_control (PDF 구조 prompt 매번 cache hit)
+ *   - Claude Sonnet 4.5 + cache_control (PDF 구조 prompt 매번 cache hit)
  *   - 출력: JSON 5섹션 (핵심방향·정책환경·체크리스트·단지·갈아타기·TIP)
  */
 const express = require('express');

@@ -6,11 +6,12 @@
  *   - 월 한도 초과 여부 판정 → 초과 시 callAI 전에 차단
  *   - 호출 후 토큰·비용 원자 증분 (increment_user_budget RPC)
  *
- * 비용 계산 (Claude Sonnet 4 기준 — 2025.05 가격표):
+ * 비용 계산 (Claude Sonnet 4.5 기준 — aiService 기본 모델 claude-sonnet-4-5):
  *   - input:  $3 per 1M tokens
  *   - output: $15 per 1M tokens
  *   - cache_creation: $3.75 per 1M (input × 1.25)
  *   - cache_read: $0.30 per 1M (input × 0.1)
+ *   ※ PRICE 는 Sonnet-tier 단가 가정. ANTHROPIC_MODEL 을 다른 tier(예: Opus)로 override 시 갱신 필요.
  *
  * 상한:
  *   - USER_MONTHLY_BUDGET_USD 환경변수 (기본 $3) — 마이크로달러로 저장
@@ -25,7 +26,7 @@ const { getSupabaseAdmin } = require('../db/client');
 const { getActivePlan, getLimitsForPlan } = require('./planService');
 const logger = require('../logger');
 
-// Claude Sonnet 4 가격 (마이크로달러 per 1M tokens)
+// Claude Sonnet 4.5 가격 (마이크로달러 per 1M tokens) — Sonnet-tier 단가 가정
 const PRICE = {
   input:          3_000_000,   // $3/M
   output:        15_000_000,   // $15/M
