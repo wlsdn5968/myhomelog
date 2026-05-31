@@ -69,7 +69,9 @@ function adminClient() {
 router.get('/apt', async (req, res) => {
   const q = String(req.query.q || '').trim();
   const limit = Math.min(parseInt(req.query.limit) || 10, 30);
-  if (q.length < 1) return res.json({ results: [] });
+  // 2026-05-31: 최소 2글자 — 1글자 ILIKE %x% 는 수천 row 매칭 → cold start 시 DB 부하.
+  //   프론트 자동완성(index.html L7958)은 빈 results 를 zero-result 제안 UI 로 정상 처리.
+  if (q.length < 2) return res.json({ results: [] });
   const admin = adminClient();
   if (!admin) return res.status(503).json({ error: '검색 서비스 일시 불가' });
   try {

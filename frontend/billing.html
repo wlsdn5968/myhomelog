@@ -207,7 +207,7 @@ function setStatus(type, html){
   if(!html){ box.innerHTML = ''; return; }
   box.innerHTML = `<div class="status ${type}">${html}</div>`;
 }
-function escapeHtml(s){ return String(s||'').replace(/[<>&"]/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;'}[c])); }
+function escapeHtml(s){ return String(s||'').replace(/[<>&"']/g, c => ({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])); }
 function fmtKrw(n){ return (n||0).toLocaleString('ko-KR') + '원'; }
 function fmtDate(iso){ if(!iso) return '—'; return new Date(iso).toLocaleDateString('ko-KR'); }
 

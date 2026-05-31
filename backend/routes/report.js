@@ -89,13 +89,42 @@ router.post('/generate', async (req, res) => {
   const userInput = req.body || {};
   const userId = req.user?.id || null;
 
-  // 입력 검증
-  if (!userInput.maxBudget || userInput.maxBudget <= 0) {
+  // 입력 검증 + 정규화 (2026-05-31): 자유입력 길이 제한·범위 clamp·enum 정규화.
+  //   목적: prompt 토큰 폭주 / injection 표면 / 비정상 숫자가 prompt·SQL 에 유입되는 것 차단.
+  //   범위 근거(추측 아님): frontend/index.html 매수가 bp(L1271 min=0.1 max=500 억) / 자기자본 mc(L1271 min=0 max=500 억).
+  //   문자열 40자: chat.js _sStr(region/workplaceArea, 40) (L94) 선례와 일치.
+  //   enum/기본값: UI chip 'on' 기본값(L1268/1322/1312/1294/1304) + 기존 fetchCandidateApts 기본값(환금성/없음/5~10년)과 동일.
+  //   ※ 정상 입력(프론트 UI 경유)은 모두 화이트리스트 내 → 동작 불변. 비정상 값만 정규화됨.
+  const _num = (v) => { const n = parseFloat(v); return Number.isFinite(n) ? n : NaN; };
+  const _clamp = (n, lo, hi) => Math.min(Math.max(n, lo), hi);
+  const _str = (v, max) => String(v == null ? '' : v).slice(0, max);
+  const _enum = (v, allowed, dflt) => { const t = String(v == null ? '' : v).trim(); return allowed.includes(t) ? t : dflt; };
+
+  const _budget = _num(userInput.maxBudget);
+  if (!Number.isFinite(_budget) || _budget <= 0) {
     return res.status(400).json({ error: '매수가 (maxBudget) 필수' });
   }
-  if (!userInput.region) {
+  if (!userInput.region || !String(userInput.region).trim()) {
     return res.status(400).json({ error: '희망 지역 (region) 필수' });
   }
+  // 숫자 — UI 범위 clamp (억 단위). 음수/NaN/과대값 차단.
+  userInput.maxBudget = _clamp(_budget, 0.1, 500);
+  const _cash = _num(userInput.myCash);
+  userInput.myCash = Number.isFinite(_cash) ? _clamp(_cash, 0, 500) : 0;
+  // 연소득(만원 단위) — UI 상·하한 미지정 → 보수적 sanity cap(0 ~ 1,000,000만원 = 100억) + 음수/NaN 차단.
+  const _inc = _num(userInput.annualIncome);
+  userInput.annualIncome = Number.isFinite(_inc) ? _clamp(_inc, 0, 1000000) : 0;
+  // 자유입력 문자열 — 40자 제한 (prompt 토큰 폭주·injection 표면 축소).
+  userInput.region = _str(userInput.region, 40);
+  userInput.workplaceArea = _str(userInput.workplaceArea, 40);
+  // enum 필드 — 화이트리스트 외 값(garbage·injection 문자열)은 안전 기본값으로 정규화.
+  userInput.houseStatus = _enum(userInput.houseStatus, ['무주택', '1주택', '1주택 (처분조건부)', '2주택+'], '무주택');
+  userInput.pyeong      = _enum(userInput.pyeong, ['소형 15~22평', '중형 23~33평', '대형 34평+', '전체'], '전체');
+  userInput.priority    = _enum(userInput.priority, ['학군', '역세권', '환금성', '조용함', '교통', '신축', '재건축', '갭투자'], '환금성');
+  userInput.kidPlan     = _enum(userInput.kidPlan, ['없음', '예정', '0~6세', '초등', '중등+'], '없음');
+  userInput.stayYears   = _enum(userInput.stayYears, ['3년 이하', '5~10년', '10년+'], '5~10년');
+  userInput.isFirstBuyer = !!userInput.isFirstBuyer;
+  userInput.schoolNeeded = !!userInput.schoolNeeded;
 
   // 캐시 키 — 동일 입력 30분 캐시
   // MOB-AUDIT-2026-05-03: JSON.stringify 의 key 순서 비결정성 → 동일 입력 두 번째 호출이 fresh 가 될 수 있음
