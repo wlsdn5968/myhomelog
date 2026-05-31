@@ -458,6 +458,9 @@ header{
   border:1px solid var(--border-subtle);font-weight:600;
   padding:5px 12px; /* border 보정 */
 }
+/* Design Phase 3 (2026-05-31): nav 탭 이모지 → inline SVG line icon (외부 의존성·CSP 변경 0).
+   currentColor 상속 → off=text-tertiary, hover/on=text-primary 자동 추종. aria-hidden, 텍스트 label 이 의미 전달. */
+.htab svg{width:14px;height:14px;vertical-align:-2.5px;margin-right:5px;flex-shrink:0}
 .hml{margin-left:auto;display:flex;gap:7px;align-items:center}
 .rpill{display:flex;align-items:center;gap:5px;background:var(--redL);color:var(--red);padding:4px 10px;border-radius:18px;font-size:11px;font-weight:600;border:1px solid #EEC8C8;flex-shrink:0}
 .hdot{width:6px;height:6px;border-radius:50%;background:var(--red);animation:blink 2s infinite}
@@ -1147,14 +1150,14 @@ header{
   <button class="hamb" onclick="toggleDrawer()" aria-label="메뉴 열기" title="내 상황 / 관심단지 / 계약타임라인">☰</button>
   <a class="logo" href="/"><div class="lmark">집</div><div class="ltxt">내집<em>로그</em></div></a>
   <div class="htabs">
-    <button class="htab on" onclick="sv('map',this)">🗺 지도</button>
-    <button class="htab" onclick="sv('list',this)">📋 목록</button>
-    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서">📊 보고서 <span style="background:#FF6B35;color:#fff;font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:top">NEW</span></button>
-    <button class="htab" onclick="sv('calc',this)">🧮 대출계산</button>
-    <button class="htab" onclick="sv('clause',this)">✍ 특약</button>
-    <button class="htab" onclick="sv('news',this)">📰 뉴스</button>
-    <button class="htab" onclick="sv('subs',this)">📅 청약</button>
-    <button class="htab" onclick="sv('guide',this)" style="opacity:0.85" title="처음이세요? 3분 가이드">📖 사용법</button>
+    <button class="htab on" onclick="sv('map',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>지도</button>
+    <button class="htab" onclick="sv('list',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>목록</button>
+    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서 <span style="background:#FF6B35;color:#fff;font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:top">NEW</span></button>
+    <button class="htab" onclick="sv('calc',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg>대출계산</button>
+    <button class="htab" onclick="sv('clause',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>특약</button>
+    <button class="htab" onclick="sv('news',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h12v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2"/><path d="M7.5 9h5"/><path d="M7.5 13h5"/><path d="M7.5 16.5h3"/></svg>뉴스</button>
+    <button class="htab" onclick="sv('subs',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18"/><path d="M8 2.5v4"/><path d="M16 2.5v4"/></svg>청약</button>
+    <button class="htab" onclick="sv('guide',this)" style="opacity:0.85" title="처음이세요? 3분 가이드"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>사용법</button>
   </div>
   <!-- P0 (2026-04-25 Phase 2 시나리오 A): 단지명·동명 직접 검색바 -->
   <div class="hsearch" style="position:relative;flex:1;max-width:480px;margin:0 8px">
