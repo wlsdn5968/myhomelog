@@ -182,8 +182,9 @@ router.post('/audit-prune', handleAuditPrune);
 router.get('/audit-prune', handleAuditPrune);
 
 // ── STAB-AUDIT-2026-05-06: apt_geocache 점진 백필 ─────────────
-// 매 30분 실행 — 50건/tick × 48 tick = 2400건/일 → 16K 단지 ~7일 완전 백필
-// Kakao 사용량: 50/30분 × 24h × 30 = 72K/월 (무료 30만건의 24%)
+// 매일 1회 04:00 UTC (= 13:00 KST) — vercel.json crons "0 4 * * *" (Hobby plan: daily 만 허용).
+// 1회 호출 = budgetMs(기본 240s, 핸들러는 chunk/daysBack 만 전달) 안에서 50건/chunk multi-chunk loop.
+// 월 외부 geocoding quota 사용량은 런타임 가변(chunk 수 × 외부 응답 latency) — 고정 산정 불가.
 // 운영자 발견 (2026-05-06): apt_geocache 172/16,044 = 1% coverage → 99% 마커 미표시
 async function handleGeocacheBackfill(req, res) {
   try {

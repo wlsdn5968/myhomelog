@@ -7,15 +7,15 @@
  *   - 운영자 ASSERT: "172 row 밖에 안되는거야"
  *
  * 전략:
- *   - 매 cron tick (매 30분) 50건 batch 백필
+ *   - 매일 1회 cron (vercel.json "0 4 * * *") + budgetMs 안 multi-chunk (50건/chunk default)
  *   - 거래 활발 단지 우선 (최근 60일 거래량 desc)
  *   - 정확 매칭 (sigungu+umd_nm+aptName) 만 INSERT — PR #44 환각 차단 검증 강제
- *   - Kakao 무료 한도 (월 30만) 안 — 50/30min × 24h × 30 = 72K/월 (24% 사용)
+ *   - 외부 geocoding quota 무료 한도 내 운용 목표 (월 사용량은 런타임 가변 — 고정 산정 불가)
  *
  * 안전:
  *   - NOT EXISTS apt_geocache 에만 처리 (덮어쓰기 X)
  *   - sigungu 검증 실패 시 INSERT 안 함 (환각 차단)
- *   - serverless 60s timeout 안 — 50건 × 200ms (Kakao avg) = ~10s
+ *   - serverless maxDuration 안 — budgetMs(기본 240s)-15s 마진에서 chunk loop 종료 (run 함수)
  *   - resolveCoord 자체가 saveToDb 진행 → INSERT 자동
  */
 const { createClient } = require('@supabase/supabase-js');
