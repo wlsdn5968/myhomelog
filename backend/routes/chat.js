@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { callAI, BudgetExceededError } = require('../services/aiService');
+const { callAI, BudgetExceededError, GlobalAiBudgetExceededError } = require('../services/aiService');
 const { filterAdviceOutput } = require('../services/aiOutputFilter');
 const { validateChatInput } = require('../middleware/validation');
 const logger = require('../logger');
@@ -145,6 +145,13 @@ router.post('/', validateChatInput, async (req, res) => {
         error: '이번 달 AI 사용 한도에 도달했어요. 다음 달 1일에 초기화됩니다.',
         code: 'budget_exceeded',
         budget: err.info,
+      });
+    }
+    if (err instanceof GlobalAiBudgetExceededError) {
+      return res.status(503).json({
+        code: 'ai_globally_paused',
+        error: 'AI 기능이 오늘 많이 사용되어 잠시 멈췄어요. 잠시 후 다시 시도해주세요. (단지 검색·LTV 계산·청약 정보는 정상 이용 가능)',
+        retryAfterSec: 1800,
       });
     }
     // Phase 3 (2026-04-25): Anthropic 장애 친절 안내 (단일 의존 — fallback 없음)

@@ -251,12 +251,19 @@ router.post('/generate', async (req, res) => {
   } catch (e) {
     // P0 (Agent 3차 audit, 2026-05-04): BudgetExceededError 처리 누락 → Pro 가입 funnel 차단
     //   chat.js / clause.js 는 처리됨. report.js 만 generic 500 → 사용자 "오류" 만 인지.
-    const { BudgetExceededError } = require('../services/aiService');
+    const { BudgetExceededError, GlobalAiBudgetExceededError } = require('../services/aiService');
     if (e instanceof BudgetExceededError) {
       return res.status(429).json({
         code: 'budget_exceeded',
         error: '이번 달 AI 사용 한도에 도달했어요. 다음 달 1일에 리셋됩니다.',
         budget: e.info,
+      });
+    }
+    if (e instanceof GlobalAiBudgetExceededError) {
+      return res.status(503).json({
+        code: 'ai_globally_paused',
+        error: 'AI 보고서 생성이 오늘 많이 사용되어 잠시 멈췄어요. 잠시 후 다시 시도해주세요. (단지 검색·LTV 계산은 정상)',
+        retryAfterSec: 1800,
       });
     }
     logger.error({ err: e.message, stack: e.stack }, '보고서 생성 실패');

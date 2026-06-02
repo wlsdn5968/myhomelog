@@ -16,6 +16,7 @@ const crypto = require('crypto');
 const logger = require('../logger');
 const cache = require('../cache');
 const budget = require('./budgetService');
+const globalAiBudget = require('./globalAiBudget'); // 전역 지출 상한 (kill-switch)
 
 // 예산 초과 전용 에러 — 상위(라우터)에서 status 429 로 변환
 class BudgetExceededError extends Error {
@@ -189,6 +190,16 @@ async function callAI(messages, useCache = true, opts = {}) {
     }
   }
 
+  // ── 1.5) 전역 AI 지출 상한 (kill-switch, 2026-06-01) ──────────
+  //   캐시 미스(=신규 과금 호출)에만 적용. 익명 포함 전체 합산이 일/월 상한 초과 시 차단.
+  //   라우터(chat/clause/report)가 GlobalAiBudgetExceededError → 친절 503 변환.
+  const _gb = await globalAiBudget.checkGlobalAiBudget();
+  if (!_gb.allowed) {
+    logger.warn({ scope: _gb.scope, dayUsedX1000: _gb.dayUsedX1000, monthUsedX1000: _gb.monthUsedX1000,
+      dayCapX1000: _gb.dayCapX1000, monthCapX1000: _gb.monthCapX1000 }, '전역 AI 지출 상한 도달 — 신규 호출 차단');
+    throw new globalAiBudget.GlobalAiBudgetExceededError(_gb);
+  }
+
   // Phase 3.1: Anthropic Prompt Caching (~86% input cost 절감)
   // Phase 5+ (2026-04-26): claude-sonnet-4-20250514 deprecated → claude-sonnet-4-5 (latest stable alias)
   // ENV override: ANTHROPIC_MODEL 로 특정 버전 고정 가능
@@ -255,6 +266,10 @@ async function callAI(messages, useCache = true, opts = {}) {
   if (userId && response.usage) {
     budget.recordUsage(userId, response.usage).catch(() => { /* already logged */ });
   }
+  // 전역 누적 기록 (익명 포함 전체 — kill-switch 카운터, fire-and-forget)
+  if (response.usage) {
+    globalAiBudget.recordGlobalAiUsage(response.usage).catch(() => { /* already logged */ });
+  }
 
   // 단답 질문만 캐시
   if (useCache && messages.length === 1) {
@@ -269,4 +284,4 @@ async function callAI(messages, useCache = true, opts = {}) {
 //   유지비용: 코드 부채 + 잠재 호출 시 입력 비용 risk. 제거가 안전.
 //   필요 시 git history 에서 복원 (commit 직전 ~30일 보존).
 
-module.exports = { callAI, SYSTEM_PROMPT, BudgetExceededError };
+module.exports = { callAI, SYSTEM_PROMPT, BudgetExceededError, GlobalAiBudgetExceededError: globalAiBudget.GlobalAiBudgetExceededError };
