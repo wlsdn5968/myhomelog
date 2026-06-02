@@ -1523,7 +1523,7 @@ header{
   </div>
   <!-- Phase 4 (2026-04-26): 무료 한도 사전 표시 + 검토 안내 prominent -->
   <div style="background:#FFF7E6;border:1px solid #E8C896;border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:11px;line-height:1.6;color:#8B6914">
-    💡 <b>무료 1일 1회</b> · <b>Pro 무제한</b> | <b>⚠ 생성 후 반드시 변호사·공인중개사 검토 필수</b><br>
+    💡 <b>무료 이용 가능</b> (유료 플랜 준비 중) | <b>⚠ 생성 후 반드시 변호사·공인중개사 검토 필수</b><br>
     <span style="font-size:10px">검토 의뢰: <a href="https://www.kabl.kr" target="_blank" rel="noopener" style="color:#8B6914;text-decoration:underline">대한변호사협회 (kabl.kr)</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:#8B6914;text-decoration:underline">한국공인중개사협회 (kar.or.kr)</a></span>
   </div>
   <div class="cv-form">
@@ -1852,7 +1852,7 @@ header{
         사용자 자금·자녀·거주기간·우선순위 → <b>AI가 컨설턴트 톤으로 1page 보고서 자동 생성</b><br>
         포함: 회원님 핵심 방향 3줄 · 정부 정책 환경 · 매수 체크리스트 · 조건 부합 단지 7개 (단지별 컨설팅 코멘트) · 갈아타기 시나리오 · 매수 TIP<br><br>
         <b>차별화</b>: 호갱노노/직방 = 시세 검색만, 우리 = AI 컨설턴트 보고서<br>
-        <b>가성비</b>: 부동산 컨설턴트 1회 30만원 → <b>무료 1일 1회 / Pro 9,900원/월 무제한</b><br>
+        <b>가성비</b>: 부동산 컨설턴트 1회 30만원 → <b>무료로 받아보세요</b> (유료 플랜 준비 중)<br>
         <b>다운로드</b>: PDF로 가족·중개사와 공유 가능<br><br>
         <span style="background:#FFF7E6;border:1px solid #E8C896;border-radius:6px;padding:6px 10px;display:inline-block;font-size:11px;color:#8B6914">⚠ 본 보고서는 정보 정리이며 투자자문업·중개업·대출모집인업 X. 매수·매도 추천 X.</span>
         <button class="abtn" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px;background:#FF6B35;color:#fff;border:none" onclick="sv('report')">📊 보고서 만들어보기 →</button>
@@ -2494,14 +2494,9 @@ header{
     <div class="smbody">
       <p id="qmMsg" style="margin:0 0 12px 0;font-size:13px;line-height:1.6;color:var(--t1)">무료 플랜 한도에 도달했어요.</p>
       <div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:12px">
-        <div style="font-size:12px;color:var(--t2);margin-bottom:6px">💎 Pro 플랜으로 업그레이드</div>
-        <ul style="margin:0;padding-left:18px;font-size:12px;line-height:1.8;color:var(--t1)">
-          <li>AI 채팅 <strong>무제한</strong></li>
-          <li>특약·리스크 분석 <strong>무제한</strong></li>
-          <li>고급 분석 우선 접근</li>
-        </ul>
+        <div style="font-size:12px;color:var(--t1);line-height:1.7">⏰ 매일 자정(KST)에 한도가 자동으로 리셋돼요.<br>로그인하면 한도가 더 늘어나요. 유료 플랜은 준비 중이에요.</div>
       </div>
-      <a href="/billing" class="sm-save" onclick="try{window.va&&window.va('event',{name:'billing_click',data:{from:'mobile_menu'}})}catch(_){}" style="display:block;text-align:center;background:var(--acc);color:#fff;text-decoration:none;padding:12px;font-size:14px;font-weight:600">💳 구독 플랜 보기</a>
+      <a href="mailto:wlsdn5968@gmail.com?subject=내집로그%20유료%20플랜%20출시%20알림%20신청" class="sm-save" onclick="try{window.va&&window.va('event',{name:'pro_mailto_click',data:{from:'quota_modal'}})}catch(_){}" style="display:block;text-align:center;background:var(--acc);color:#fff;text-decoration:none;padding:12px;font-size:14px;font-weight:600">📧 유료 플랜 출시 알림 신청</a>
       <button class="sm-save" onclick="closeQuotaModal()" style="background:var(--bg2);color:var(--t2);border:1px solid var(--bd);margin-top:6px">닫기</button>
       <div id="qmReset" style="font-size:11px;color:var(--t3);text-align:center;margin-top:8px"></div>
     </div>
@@ -8427,7 +8422,7 @@ async function sM(){
         if (lb) { lb.style.boxShadow='0 0 0 3px rgba(42,109,244,.35)'; setTimeout(()=>{lb.style.boxShadow='';},2500); }
       } else {
         // 로그인 사용자 또는 Pro 미설정: 기존 모달
-        addMsg('ai', aiMsg + '\n\n💎 Pro 플랜이면 무제한으로 이용할 수 있어요.');
+        addMsg('ai', aiMsg + '\n\n⏰ 내일 자정(KST)에 한도가 리셋돼요. (유료 플랜 준비 중)');
         openQuotaModal(reason, j.message || j.error, resetAt);
       }
       replied=true;
