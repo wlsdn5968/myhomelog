@@ -1186,7 +1186,7 @@ header{
     <!-- Phase 4: 클릭 → 규제 요약 모달 -->
     <div class="rpill" onclick="openRegSummary()" style="cursor:pointer" title="2025.10.15 규제 요약 보기"><div class="hdot"></div>10.15 규제</div>
     <span class="hst" id="quotaPill" style="background:var(--ambL);color:var(--amb);display:none" title="🤖 단지 검색·AI 분석 무료 한도 (오늘 자정 reset)" aria-label="AI 검색 무료 한도">🔎 검색 5/5</span>
-    <span class="hst" id="aiPill" style="background:var(--bg2);color:var(--t2);display:none" title="💬 AI 채팅 무료 한도 (오늘 자정 reset)" aria-label="AI 채팅 무료 한도">💬 채팅 —/15</span>
+    <span class="hst" id="aiPill" style="background:var(--bg2);color:var(--t2);display:none" title="💬 AI 채팅 무료 한도 (오늘 자정 reset)" aria-label="AI 채팅 무료 한도">💬 채팅 —</span>
     <!-- Phase 4 (2026-04-26): 서버 정상 시 hide, 장애 시만 빨간 표시 — "항상 초록"의 의미 없음 해소 -->
     <span class="hst off" id="apiSt" style="display:none">확인 중...</span>
     <!-- Phase 5 (2026-04-26): 핵심 USP = 1page 보고서. AI 특약 CTA 제거. -->
@@ -4176,13 +4176,13 @@ async function refreshQuota(){
   }catch{}
 }
 
-// AI 채팅 전용 pill — 무료 15회/일 기준. /api/health 응답의 chatUsage 필드 사용.
+// AI 채팅 전용 pill — 한도는 서버 /api/health 의 chat.{limit,used,remaining} 사용 (비로그인 3 / 로그인 13, 162bdbb). 클라 하드코딩 금지.
 function updateAiPill(usage){
   if(!usage) return;
   const pill = document.getElementById('aiPill');
   if(!pill) return;
   pill.style.display='inline-flex';
-  // P1 (Phase 2 8-1): 의미 명확 — "💬 채팅 N/15"
+  // P1 (Phase 2 8-1): 의미 명확 — "💬 채팅 N/limit" (limit 은 서버값 usage.limit, 하드코딩 금지)
   pill.textContent = `💬 채팅 ${usage.remaining}/${usage.limit}`;
   if(usage.remaining <= 1){ pill.style.background='var(--redL)'; pill.style.color='var(--red)'; }
   else if(usage.remaining <= 3){ pill.style.background='var(--ambL)'; pill.style.color='var(--amb)'; }
