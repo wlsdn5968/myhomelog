@@ -435,10 +435,11 @@ function buildMonthlyVolume(transactions, monthCount = 6) {
 }
 
 // ── 단지 종합 분석 (메인) ─────────────────────────────────
-async function analyzeApt(lawdCd, aptName, currentPrice) {
+async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
   if (!lawdCd) lawdCd = '11350'; // fallback
 
-  const cacheKey = `analysis:${lawdCd}:${aptName}`;
+  // CROSS-REGION-FIX-2026-06-03: sigungu/umdNm 도 캐시 키 포함 (동별 분리 — 동명 단지 캐시 오염 차단)
+  const cacheKey = `analysis:${lawdCd}:${aptName}:${sigungu||''}:${umdNm||''}`;
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
@@ -455,6 +456,21 @@ async function analyzeApt(lawdCd, aptName, currentPrice) {
     } else {
       throw err;
     }
+  }
+
+  // CROSS-REGION-FIX-2026-06-03 (운영자 발견 클래스 — 가격시그널이 실거래가 탭과 표본 불일치):
+  //   analyzeApt 가 lawdCd(구)+aptName 으로만 거래 fetch → "현대"/"벽산"/"청구" 등 generic 이름이
+  //   구 안에서 동(umd)을 넘어 과합산 (실측 2026-06-03: "현대" 노원구 139건 = 하계동·중계동·상계동 별개 단지 혼합).
+  //   실거래가 탭(/transactions)은 sigungu/umdNm 필터로 동 단위 → 같은 모달 두 탭이 표본 불일치(하계동 34 vs 139).
+  //   Fix: /transactions 라우트(transactions.js)와 동일 필터 정책으로 동 스코프 — L448 "실거래가 탭과 표본 일치" 의도 구현.
+  //   필드 존재 + 불일치 시에만 제외 → sigungu/umdNm 미전달 호출자는 무영향(회귀 0). master alias 거래는 같은 umd → 유지.
+  if (sigungu || umdNm) {
+    const _scope = t => !(
+      (sigungu && t.sigungu && t.sigungu !== sigungu) ||
+      (umdNm && t.umdNm && t.umdNm !== umdNm)
+    );
+    saleTx = saleTx.filter(_scope);
+    jeonseT = jeonseT.filter(_scope);
   }
 
   // 신뢰도 등급 (매매 + 전세 별도)

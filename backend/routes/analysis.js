@@ -8,7 +8,7 @@ const { analyzeApt, calcTotalCost, getLawdCdFromArea } = require('../services/an
 
 // GET /api/analysis
 router.get('/', async (req, res) => {
-  const { aptName, area, price } = req.query;
+  const { aptName, area, price, sigungu, umdNm } = req.query;
   let { lawdCd } = req.query;
 
   if (!aptName) return res.status(400).json({ error: 'aptName 필수' });
@@ -17,7 +17,8 @@ router.get('/', async (req, res) => {
   if (!lawdCd && area) lawdCd = getLawdCdFromArea(area);
 
   try {
-    const result = await analyzeApt(lawdCd, aptName, parseFloat(price) || 0);
+    // CROSS-REGION-FIX-2026-06-03: sigungu/umdNm 전달 → 가격시그널 표본을 실거래가 탭과 동일 동(umd) 스코프
+    const result = await analyzeApt(lawdCd, aptName, parseFloat(price) || 0, sigungu || null, umdNm || null);
     res.json(result);
   } catch (err) {
     // MOB-AUDIT-2026-05-03: production 에선 generic 메시지 — 내부 에러 노출 차단
