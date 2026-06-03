@@ -399,7 +399,7 @@ router.get('/in-bounds', async (req, res) => {
     // apt_geocache 좌표 범위 필터 + molit_transactions 평균가 join
     const { data: coords, error } = await admin
       .from('apt_geocache')
-      .select('apt_name, sigungu, umd_nm, lat, lng')
+      .select('apt_name, sigungu, umd_nm, lat, lng, apt_key')
       .gte('lat', south).lte('lat', north)
       .gte('lng', west).lte('lng', east)
       .limit(limit);
@@ -457,6 +457,18 @@ router.get('/in-bounds', async (req, res) => {
       }
     }
 
+    // CANON-COORD-FIX-2026-06-03 (운영자 발견 "공릉풍림아이원 마커가 단지 아닌 충전소 위치에 찍힘"):
+    //   geocache 의 alias 좌표(풍림아파트A/B)는 Kakao 가 '전기차충전소'·'B상가주차장' 같은 하위시설로 매칭한
+    //   오프셋 좌표(본체에서 158~392m). 같은 단지의 kapt 키(kapt:kaptCode) 좌표는 place_name=단지 본체("공릉풍림아파트")로
+    //   정확. master 그룹 대표좌표를 kapt 본체 좌표로 교체(아래 grouping 후).
+    const kaptCoord = {}; // kaptCode → {lat,lng} (본체 좌표)
+    for (const c of coords) {
+      if (typeof c.apt_key === 'string' && c.apt_key.startsWith('kapt:') && c.lat != null && c.lng != null) {
+        const _kc = c.apt_key.slice(5);
+        if (_kc) kaptCoord[_kc] = { lat: Number(c.lat), lng: Number(c.lng) };
+      }
+    }
+
     // MOB-AUDIT-2026-05-04: 거래 0건 단지 (apt_geocache 에 좌표만 있고 molit 매칭 X) 는
     //   avgPrice 0.00억 으로 노출되어 사용자 오인 → 결과에서 제외 (legal 보호)
     // ALIAS-MERGE-2026-05-21: canonical 단지명 기준으로 그룹화 (alias 거래 합산).
@@ -484,6 +496,13 @@ router.get('/in-bounds', async (req, res) => {
         if (!g.lawdCd) g.lawdCd = s.lawdCd;
         // 대표 좌표 = 거래량 가장 많은 alias 행 (가장 활발한 동/위치)
         if (s.n > g._bestN) { g._bestN = s.n; g.lat = Number(c.lat); g.lng = Number(c.lng); }
+      }
+    }
+    // CANON-COORD-FIX-2026-06-03: master 그룹 대표좌표를 kapt 본체 좌표로 교체 (alias 하위시설 오프셋 교정)
+    for (const g of Object.values(groups)) {
+      if (g.source === 'master' && g.aptSeq && kaptCoord[g.aptSeq]) {
+        g.lat = kaptCoord[g.aptSeq].lat;
+        g.lng = kaptCoord[g.aptSeq].lng;
       }
     }
     const out = Object.values(groups).map(g => {
