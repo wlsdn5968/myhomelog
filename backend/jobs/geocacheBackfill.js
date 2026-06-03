@@ -69,8 +69,9 @@ async function rehealSubfeatures(admin, { cap = 300, budgetMs = 90000 } = {}) {
             healed++; didHeal = true;
           }
         }
-        // 개선 불가/관련성 미달 → 좌표 불변, source 마킹해 다음 run 제외(무한 재시도 방지)
-        if (!didHeal) {
+        // 개선 불가/관련성 미달 → 좌표 불변, source 마킹해 다음 run 제외(무한 재시도 방지).
+        //   단, fresh=null(Kakao 일시실패/쿼터소진/페널티거부)은 마킹 안 함 → 다음 run 재시도(false-마킹 방지).
+        if (!didHeal && fresh) {
           await admin.from('apt_geocache').update({ source: 'kakao-sub' }).eq('apt_key', r.apt_key);
           marked++;
         }
