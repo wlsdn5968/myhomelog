@@ -32,7 +32,7 @@
 
 <!-- Phase 27 (2026-05-04): PWA + 모바일 retention -->
 <link rel="manifest" href="/manifest.json">
-<meta name="theme-color" content="#C84B18">
+<meta name="theme-color" content="#173A63">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
 <meta name="apple-mobile-web-app-title" content="내집로그">
@@ -285,6 +285,8 @@ window.MHL.auth = window.MHL.auth || {
 </script>
 
 <style>
+/* 리디자인 2026 Phase 1: Pretendard Variable 웹폰트 (한글 가독성·최신 톤) */
+@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css');
 :root{
   /* ════ Phase 4-2 단계 1 (2026-05-04): Concept C Light tokens ════ */
   /* Background scale (white-based) */
@@ -306,19 +308,19 @@ window.MHL.auth = window.MHL.auth || {
   --border-medium:  rgba(0,0,0,0.16);
   --border-strong:  rgba(0,0,0,0.24);
 
-  /* Accent · Electric Orange (myhomelog brand) */
-  --accent-50:      #FFF5EE;
-  --accent-100:     #FFE4D1;
-  --accent-300:     #FF9A6E;
-  --accent-500:     #FF6B35;   /* primary */
-  --accent-600:     #F25218;   /* hover */
-  --accent-700:     #C84B18;   /* legacy brand · print/PDF */
-  --accent-900:     #6B2A0E;
-  --accent-tint:    rgba(255,107,53,0.08);
-  --accent-tint-2:  rgba(255,107,53,0.14);
-  --accent-tint-3:  rgba(255,107,53,0.22);
-  --accent-shadow:        0 4px 12px rgba(255,107,53,0.18), 0 0 0 1px rgba(255,107,53,0.10);
-  --accent-shadow-strong: 0 8px 24px rgba(255,107,53,0.25), 0 0 0 1px rgba(255,107,53,0.18);
+  /* Accent · Deep Navy (myhomelog brand · 리디자인 2026 Phase 1 — 신뢰·전문 톤) */
+  --accent-50:      #EEF3F8;
+  --accent-100:     #D5E1EE;
+  --accent-300:     #5E7FA8;
+  --accent-500:     #173A63;   /* primary · deep navy */
+  --accent-600:     #112C4C;   /* hover */
+  --accent-700:     #0C2138;   /* dark · print/PDF */
+  --accent-900:     #06121F;
+  --accent-tint:    rgba(23,58,99,0.08);
+  --accent-tint-2:  rgba(23,58,99,0.14);
+  --accent-tint-3:  rgba(23,58,99,0.22);
+  --accent-shadow:        0 4px 12px rgba(23,58,99,0.18), 0 0 0 1px rgba(23,58,99,0.10);
+  --accent-shadow-strong: 0 8px 24px rgba(23,58,99,0.25), 0 0 0 1px rgba(23,58,99,0.18);
 
   /* Semantic */
   --positive:       #10B981;
@@ -395,9 +397,9 @@ window.MHL.auth = window.MHL.auth || {
   --t1:    var(--text-primary);        /* #18160F → #0A0A0F */
   --t2:    var(--text-secondary);      /* #56524A → #404048 */
   --t3:    var(--text-tertiary);       /* #7A7568 → #5C5749 (F-1 일치) */
-  --acc:   var(--accent-500);          /* #C84B18 → #FF6B35 */
-  --accL:  var(--accent-tint);         /* #FAE9E2 → rgba(255,107,53,.08) */
-  --accD:  var(--accent-600);          /* #8A3210 → #F25218 */
+  --acc:   var(--accent-500);          /* → #173A63 deep navy (리디자인 Phase 1) */
+  --accL:  var(--accent-tint);         /* → rgba(23,58,99,.08) (리디자인 Phase 1) */
+  --accD:  var(--accent-600);          /* → #112C4C (리디자인 Phase 1) */
   --a2:    #1E5499;                    /* (변경 없음 — 단계 5 에서 별도 검증) */
   --a2L:   #E6EFF9;                    /* (변경 없음) */
   --grn:   var(--positive);            /* #177038 → #10B981 */
@@ -423,7 +425,7 @@ html,body{height:100%;overflow:hidden}
 @supports (height: 100dvh){
   html,body{height:100dvh}
 }
-body{font-family:'Apple SD Gothic Neo','Malgun Gothic','Noto Sans KR',sans-serif;background:var(--bg);color:var(--t1);font-size:14px;line-height:1.6;display:flex;flex-direction:column}
+body{font-family:var(--font-body);background:var(--bg);color:var(--t1);font-size:14px;line-height:1.6;display:flex;flex-direction:column}
 
 /* HEADER · Phase 4-2 단계 1 (2026-05-04): glass + accent active 톤 */
 header{
@@ -469,8 +471,8 @@ header{
 .hbtn:hover{border-color:var(--border-strong);color:var(--text-primary)}
 /* Phase 3 (2026-04-25/26): "AI 특약 생성" 헤더 CTA 강조 — 호갱노노 무료 도구 대비 단일 가치.
    모바일 70% 사용자에게도 핵심 가치 노출 위해 텍스트 생략 + 아이콘만 유지. */
-.hbtn-cta{background:linear-gradient(135deg,#FF6B35 0%,#F7931E 100%);color:#fff!important;border-color:#FF6B35;font-weight:700}
-.hbtn-cta:hover{background:linear-gradient(135deg,#E55A2B 0%,#E08416 100%);color:#fff!important;border-color:#E55A2B;transform:translateY(-1px);box-shadow:0 2px 6px rgba(255,107,53,.3)}
+.hbtn-cta{background:linear-gradient(135deg,#1E4A7A 0%,#173A63 100%);color:#fff!important;border-color:#173A63;font-weight:700}
+.hbtn-cta:hover{background:linear-gradient(135deg,#173A63 0%,#112C4C 100%);color:#fff!important;border-color:#112C4C;transform:translateY(-1px);box-shadow:0 2px 6px rgba(23,58,99,.3)}
 .hbtn-cta .cta-icon{display:inline}
 .hbtn-cta .cta-text{display:inline}
 @media(max-width:560px){
@@ -862,7 +864,7 @@ header{
 /* Phase 3 (2026-04-25): "AI 특약 생성" 단일 가치 강조 — 무료 도구 대비 차별화 핵심 */
 .bnav-item.bnav-feature{color:#1F4F9C}
 .bnav-item.bnav-feature.on{color:var(--acc)}
-.bnav-tag{position:absolute;top:4px;right:8px;background:linear-gradient(135deg,#FF6B35,#F7931E);color:#fff;font-size:10px;font-weight:700;padding:1px 4px;border-radius:6px;line-height:1.2}
+.bnav-tag{position:absolute;top:4px;right:8px;background:linear-gradient(135deg,#1E4A7A,#173A63);color:#fff;font-size:10px;font-weight:700;padding:1px 4px;border-radius:6px;line-height:1.2}
 .bnav-icon{font-size:18px;line-height:1}
 /* Design Phase 4 (2026-05-31): 모바일 하단 탭 이모지 → inline SVG (데스크톱 nav 일관).
    currentColor 상속 → off=t3, on=acc(오렌지), bnav-feature=blue 자동 추종. */
@@ -1155,7 +1157,7 @@ header{
   <div class="htabs">
     <button class="htab on" onclick="sv('map',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>지도</button>
     <button class="htab" onclick="sv('list',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>목록</button>
-    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서 <span style="background:#FF6B35;color:#fff;font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:top">NEW</span></button>
+    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서 <span style="background:#173A63;color:#fff;font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:top">NEW</span></button>
     <button class="htab" onclick="sv('calc',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg>대출계산</button>
     <button class="htab" onclick="sv('clause',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>특약</button>
     <button class="htab" onclick="sv('news',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h12v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2"/><path d="M7.5 9h5"/><path d="M7.5 13h5"/><path d="M7.5 16.5h3"/></svg>뉴스</button>
@@ -1846,8 +1848,8 @@ header{
     </details>
 
     <!-- Phase 5: 핵심 가치 = 1page 보고서 (AI 특약 자리에 강조 디자인 이동) -->
-    <details style="background:linear-gradient(135deg,#FFF7F0,#fff);border:2px solid #FF6B35;border-radius:10px;padding:13px 16px;margin-bottom:10px" open>
-      <summary style="cursor:pointer;font-size:13px;font-weight:800;color:#FF6B35;list-style:none">📊 1Page 컨설팅 보고서 — 이 서비스의 핵심 (NEW)</summary>
+    <details style="background:linear-gradient(135deg,#EEF3F8,#fff);border:2px solid #173A63;border-radius:10px;padding:13px 16px;margin-bottom:10px" open>
+      <summary style="cursor:pointer;font-size:13px;font-weight:800;color:#173A63;list-style:none">📊 1Page 컨설팅 보고서 — 이 서비스의 핵심 (NEW)</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         사용자 자금·자녀·거주기간·우선순위 → <b>AI가 컨설턴트 톤으로 1page 보고서 자동 생성</b><br>
         포함: 회원님 핵심 방향 3줄 · 정부 정책 환경 · 매수 체크리스트 · 조건 부합 단지 7개 (단지별 컨설팅 코멘트) · 갈아타기 시나리오 · 매수 TIP<br><br>
@@ -1855,7 +1857,7 @@ header{
         <b>가성비</b>: 부동산 컨설턴트 1회 30만원 → <b>무료로 받아보세요</b> (유료 플랜 준비 중)<br>
         <b>다운로드</b>: PDF로 가족·중개사와 공유 가능<br><br>
         <span style="background:#FFF7E6;border:1px solid #E8C896;border-radius:6px;padding:6px 10px;display:inline-block;font-size:11px;color:#8B6914">⚠ 본 보고서는 정보 정리이며 투자자문업·중개업·대출모집인업 X. 매수·매도 추천 X.</span>
-        <button class="abtn" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px;background:#FF6B35;color:#fff;border:none" onclick="sv('report')">📊 보고서 만들어보기 →</button>
+        <button class="abtn" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px;background:#173A63;color:#fff;border:none" onclick="sv('report')">📊 보고서 만들어보기 →</button>
       </div>
     </details>
 
@@ -2109,8 +2111,8 @@ header{
       <div class="lv-card-head"><span class="lv-card-label">참고 · 5Y 가격 추세 시각화</span><span class="lv-card-meta">참고용</span></div>
       <svg viewBox="0 0 720 220" preserveAspectRatio="xMidYMid meet" class="lv-chart-svg" aria-label="5년 가격 추이 차트">
         <defs>
-          <linearGradient id="lvChartGrad" x1="0" x2="1"><stop offset="0%" stop-color="#FF6B35"/><stop offset="100%" stop-color="#C84B18"/></linearGradient>
-          <linearGradient id="lvChartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#FF6B35" stop-opacity="0.22"/><stop offset="100%" stop-color="#FF6B35" stop-opacity="0"/></linearGradient>
+          <linearGradient id="lvChartGrad" x1="0" x2="1"><stop offset="0%" stop-color="#2E5E94"/><stop offset="100%" stop-color="#173A63"/></linearGradient>
+          <linearGradient id="lvChartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#173A63" stop-opacity="0.22"/><stop offset="100%" stop-color="#173A63" stop-opacity="0"/></linearGradient>
         </defs>
         <g class="lv-chart-grid"><line x1="40" x2="700" y1="40" y2="40"/><line x1="40" x2="700" y1="100" y2="100"/><line x1="40" x2="700" y1="160" y2="160"/></g>
         <text class="lv-chart-axis" x="35" y="44" text-anchor="end">14억</text>
