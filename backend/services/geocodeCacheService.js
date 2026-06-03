@@ -33,6 +33,12 @@ const KAKAO_ENABLED = !!KAKAO_KEY && KAKAO_KEY !== 'your_kakao_rest_key';
 const KAKAO_KEYWORD = 'https://dapi.kakao.com/v2/local/search/keyword.json';
 const KAKAO_ADDRESS = 'https://dapi.kakao.com/v2/local/search/address.json';
 
+// CROSS-CITY-FIX-2026-06-03 (운영자 발견 "좌표와 실제 매물 불일치 검증"):
+//   중복 시군구명 — 여러 도시에 같은 이름 자치구가 존재(molit COUNT(DISTINCT lawd_cd)>=2 로 검증).
+//   예: "서구"=부산/대구/인천/광주/대전, "중구"=서울/부산/대구/인천/대전/울산.
+//   이들은 sigungu 이름만으론 도시 식별 불가 → 지오코딩 시 umd(법정동) 하드 검증 필수.
+const AMBIGUOUS_SGG = new Set(['강서구', '남구', '동구', '북구', '서구', '중구']);
+
 function dbClient() {
   if (!DB_ENABLED) return null;
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -158,6 +164,11 @@ async function kakaoGeocode({ aptName, sigungu, umdNm, address }) {
         const categoryName = d.category_name || '';
         // sgg 명시 시 address 가 sgg 포함하는지 검증 (환각 차단)
         if (sgg && !addrText.includes(sgg)) continue;
+        // CROSS-CITY-FIX-2026-06-03: 중복 시군구명(강서구/남구/동구/북구/서구/중구)은 구명만으론 도시 식별 불가.
+        //   umd(법정동)를 하드 필터로 요구 → 타도시 동명 구 오매칭 차단.
+        //   실측 4건: 동진3 인천 서구 석남동→대구 서구 좌표 / 교동 울산 중구→대구 중구 / 해원맨션 울산 남구→포항 / 대림e편한세상 부산 서구→서울권.
+        //   비중복 구(강남구·노원구 등)는 무영향(회귀 0). molit umd=법정동 ↔ Kakao 지번 address_name=법정동 기준이라 정상 단지는 매칭됨.
+        if (sgg && umd && AMBIGUOUS_SGG.has(sgg) && !addrText.includes(umd)) continue;
         // Sprint LL #2/#3: 非아파트 place_name 또는 category 면 score 페널티 (다른 후보 우선)
         const isNonApt = (placeName && NON_APT_PATTERNS.test(placeName))
                       || (categoryName && NON_APT_CATEGORY.test(categoryName));
