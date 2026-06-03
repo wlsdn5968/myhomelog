@@ -26,24 +26,32 @@ const logger = require('../logger');
 // 단지명 핵심 추출(접미사 아파트/단지/차/괄호/숫자/공백 제거) — reheal 관련성 판정용.
 function _aptCore(s) { return String(s || '').replace(/아파트|오피스텔|단지|[차()\s\d]/g, ''); }
 
-// CANON-COORD-FIX-2026-06-03 (운영자 승인 "재지오코딩 진행"): 하위시설(충전소/주차장 등) place_name 으로
-//   잘못 찍힌 기존 좌표를 본체로 in-place 재치유. 일일 backfill cron 시작 시 1회 호출.
-const REHEAL_SUBFEATURE_RE = /충전소|주차장|정류장|정문|후문|관리사무소|경비실|놀이터/;
+// CANON-COORD-FIX-2026-06-03 (운영자 승인 "재지오코딩 진행"): 비주거 place_name 으로 잘못 찍힌 기존 좌표를
+//   본체로 in-place 재치유. 일일 backfill cron 시작 시 1회 호출.
+//   2026-06-03 확장 (운영자 "태강아파트(아이파크) → 아이파크 공인중개사사무소 에 찍힘" 발견):
+//   시설(충전소/주차장)뿐 아니라 사무소(공인중개사/부동산)·상점·음식점 등 비주거 전체로 탐지 확장.
+const REHEAL_NONRES_KEYWORDS = [
+  '공인중개사','중개사','부동산','사무소','편의점','마트','슈퍼','충전소','주차장','정류장','정문','후문',
+  '관리사무소','경비실','놀이터','식당','음식점','카페','커피','병원','약국','의원','치과','한의원','학원',
+  '교습소','은행','주유소','미용','이용원','세탁','노래','호프','치킨','국밥','분식','족발','횟집','고깃집',
+  '당구','헬스','문구','마켓','상회','정비','공업사','교회','성당','어린이집','유치원',
+];
+const REHEAL_NONRES_RE = new RegExp(REHEAL_NONRES_KEYWORDS.join('|'));
 
 /**
- * 하위시설 place_name 좌표 재치유 — Kakao 재지오코딩(하드닝 필터) 후 "더 나은(비하위시설) 좌표"만 in-place UPDATE.
- * 안전: 비하위시설 + 한국 유효좌표 + 동일 시군구(kakaoGeocode 내부 검증) + 이동 20m~2km 일 때만 갱신.
- *      개선 불가(여전히 하위시설/실패)는 source='kakao-sub' 마킹 → 다음 run 제외(무한 재시도 방지).
+ * 비주거 place_name 좌표 재치유 — Kakao 재지오코딩(하드닝 필터) 후 "더 나은(주거 본체) 좌표"만 in-place UPDATE.
+ * 안전: 비주거-아님 + 한국 유효좌표 + 동일 시군구(kakaoGeocode 내부 검증) + 단지명 관련성 + 이동 20m~2km 일 때만 갱신.
+ *      개선 불가(여전히 비주거/실패)는 source='kakao-sub' 마킹 → 다음 run 제외(무한 재시도 방지).
  */
-async function rehealSubfeatures(admin, { cap = 300, budgetMs = 90000 } = {}) {
+async function rehealSubfeatures(admin, { cap = 300, budgetMs = 120000 } = {}) {
   const started = Date.now();
   const { data: rows } = await admin
     .from('apt_geocache')
     .select('apt_key, apt_name, sigungu, umd_nm, lat, lng, place_name, address')
     .eq('source', 'kakao')
-    .or('place_name.ilike.%충전소%,place_name.ilike.%주차장%,place_name.ilike.%정류장%,place_name.ilike.%정문%,place_name.ilike.%후문%,place_name.ilike.%관리사무소%,place_name.ilike.%경비실%,place_name.ilike.%놀이터%')
+    .or(REHEAL_NONRES_KEYWORDS.map(k => `place_name.ilike.%${k}%`).join(','))
     .limit(cap);
-  const subs = (rows || []).filter(r => REHEAL_SUBFEATURE_RE.test(r.place_name || ''));
+  const subs = (rows || []).filter(r => REHEAL_NONRES_RE.test(r.place_name || ''));
   if (!subs.length) return { tried: 0, healed: 0, marked: 0 };
 
   let tried = 0, healed = 0, marked = 0;
@@ -55,7 +63,7 @@ async function rehealSubfeatures(admin, { cap = 300, budgetMs = 90000 } = {}) {
       try {
         const fresh = await kakaoGeocode({ aptName: r.apt_name, sigungu: r.sigungu, umdNm: r.umd_nm, address: r.address });
         let didHeal = false;
-        if (fresh && isValidKoreaCoord(fresh.lat, fresh.lng) && !REHEAL_SUBFEATURE_RE.test(fresh.placeName || '')) {
+        if (fresh && isValidKoreaCoord(fresh.lat, fresh.lng) && !REHEAL_NONRES_RE.test(fresh.placeName || '')) {
           // 안전장치: 재지오코딩 결과 place_name 이 단지명과 관련될 때만(이웃 단지 오매칭 차단)
           const aCore = _aptCore(r.apt_name);
           const pCore = _aptCore(fresh.placeName || '');
@@ -116,7 +124,7 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 240000 } 
 
   // CANON-COORD-FIX-2026-06-03: 하위시설 좌표 재치유 (1회 본체 교정) — 백필 루프 전 최대 90s.
   let reheal = { tried: 0, healed: 0, marked: 0 };
-  try { reheal = await rehealSubfeatures(admin, { cap: 300, budgetMs: 90000 }); }
+  try { reheal = await rehealSubfeatures(admin, { cap: 300, budgetMs: 120000 }); }
   catch (e) { logger.warn({ err: e.message }, 'geocache reheal 실패(무시)'); }
 
   // budget 안 multi-chunk loop
