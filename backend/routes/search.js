@@ -408,18 +408,33 @@ router.get('/in-bounds', async (req, res) => {
 
     // 단지별 최근 거래 평균가 fetch
     const names = [...new Set(coords.map(c => c.apt_name))];
-    const { data: txs } = await admin
+    // CROSS-REGION-FIX-2026-06-03 (운영자 발견 "지도 영역보기 단지가 검색과 다르고 실거래 0건"):
+    //   [근본 원인] 아래 stats join 이 apt_name 만으로 매칭(.in('apt_name', names)) → 시군구/동 스코프 없음.
+    //     "풍림아파트"/"현대"/"벽산"/"청구" 등 전국 동명 단지 거래가 1개 stats 로 뭉쳐짐 → geocache 의 노원구
+    //     좌표가 용인(lawd 41465) 거래의 lawdCd·buildYear·평균가를 상속. 마커 클릭 → openAptDetail 이
+    //     타지역 lawdCd 로 /transactions 호출 → sigungu 필터가 전부 제거 → "거래 데이터 부족"(검색과 불일치).
+    //     실측(2026-06-03): 공릉동 in-bounds 41개 마커 중 16개(39%)가 타지역 lawd_cd. 749개 이름이 충돌 위험.
+    //   [Fix] (apt_name, sigungu, umd_nm) 정확 키로 stats 집계 + 쿼리도 동(umd) 스코프로 한정.
+    //     검색(/search/apt)이 molit row 자신의 sigungu/umd 로 스코프하는 것과 동일 기준 → 두 path 일관.
+    //   [회귀 위험] geocache triple 8878 중 8816(99.3%)이 동일 (name,sigungu,umd) molit row 보유 →
+    //     정상 단지 영향 0. 자기 지역 매칭 없는 유령 마커(예: 공릉동 "풍림아파트" — 실제는 공릉풍림아이원)만 사라짐.
+    const umds = [...new Set(coords.map(c => c.umd_nm).filter(Boolean))];
+    let _txQuery = admin
       .from('molit_transactions')
-      .select('apt_name, deal_amount, build_year, deal_date, lawd_cd')
-      .in('apt_name', names)
+      .select('apt_name, sigungu, umd_nm, deal_amount, build_year, deal_date, lawd_cd')
+      .in('apt_name', names);
+    if (umds.length) _txQuery = _txQuery.in('umd_nm', umds); // 동 스코프 — 전국 동명 충돌 차단 + row budget 보호
+    const { data: txs } = await _txQuery
       .gte('deal_date', new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0,10))
       .order('deal_date', { ascending: false })
-      .limit(500);
+      .limit(1000);
     const aptStats = {};
     for (const t of (txs || [])) {
-      if (!aptStats[t.apt_name]) aptStats[t.apt_name] = { sum: 0, n: 0, buildYear: t.build_year, lawdCd: t.lawd_cd };
-      aptStats[t.apt_name].sum += t.deal_amount || 0;
-      aptStats[t.apt_name].n++;
+      // (apt_name|sigungu|umd_nm) 정확 키 — 동명 타지역 단지 합산 차단
+      const _k = `${t.apt_name}|${t.sigungu}|${t.umd_nm}`;
+      if (!aptStats[_k]) aptStats[_k] = { sum: 0, n: 0, buildYear: t.build_year, lawdCd: t.lawd_cd };
+      aptStats[_k].sum += t.deal_amount || 0;
+      aptStats[_k].n++;
     }
 
     // ALIAS-MERGE-2026-05-21 (운영자 발견 "검색 vs 지도 영역보기 매물 불일치"):
@@ -428,7 +443,7 @@ router.get('/in-bounds', async (req, res) => {
     //   검색(/search/apt)은 apt_master + molit_aliases 로 1개 단지로 병합 → 두 path 가 별개 물건처럼 보임.
     //   Fix: 영역 내 동(umd)의 apt_master.molit_aliases 로 raw→canonical 역매핑 → 같은 master 단지로 병합.
     //   master 단지는 source:'master' + aptSeq(kaptCode) 부여 → frontend 가 검색과 동일한 상세 모달 fetch 가능.
-    const umds = [...new Set(coords.map(c => c.umd_nm).filter(Boolean))];
+    //   (umds 는 위 CROSS-REGION-FIX 에서 이미 계산 — 재사용)
     const aliasToMaster = {}; // key: `${alias}|${umd}` → master row
     if (umds.length) {
       const { data: masters } = await admin
@@ -461,7 +476,8 @@ router.get('/in-bounds', async (req, res) => {
         _bestN: -1,
       };
       const g = groups[gkey];
-      const s = aptStats[c.apt_name];
+      // CROSS-REGION-FIX-2026-06-03: 정확 키(name|sigungu|umd)로 조회 — 동명 타지역 stats 상속 차단
+      const s = aptStats[`${c.apt_name}|${c.sigungu}|${c.umd_nm}`];
       if (s && s.n && s.sum) {
         g.sum += s.sum; g.n += s.n;
         if (!g.buildYear) g.buildYear = s.buildYear;
