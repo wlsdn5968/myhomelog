@@ -399,7 +399,7 @@ router.get('/in-bounds', async (req, res) => {
     // apt_geocache 좌표 범위 필터 + molit_transactions 평균가 join
     const { data: coords, error } = await admin
       .from('apt_geocache')
-      .select('apt_name, sigungu, umd_nm, lat, lng, apt_key')
+      .select('apt_name, sigungu, umd_nm, lat, lng, apt_key, place_name')
       .gte('lat', south).lte('lat', north)
       .gte('lng', west).lte('lng', east)
       .limit(limit);
@@ -468,6 +468,9 @@ router.get('/in-bounds', async (req, res) => {
         if (_kc) kaptCoord[_kc] = { lat: Number(c.lat), lng: Number(c.lng) };
       }
     }
+    // CANON-COORD-FIX-2026-06-03: 하위시설 place_name (단지 본체서 오프셋된 좌표) 판별 — 대표좌표 선택 시 deprioritize.
+    //   ("상가"·"입구"는 주상복합/"서울대입구" false-positive 로 제외 — 정확성 우선.)
+    const SUBFEATURE_RE = /충전소|주차장|정류장|정문|후문|관리사무소|경비실|놀이터/;
 
     // MOB-AUDIT-2026-05-04: 거래 0건 단지 (apt_geocache 에 좌표만 있고 molit 매칭 X) 는
     //   avgPrice 0.00억 으로 노출되어 사용자 오인 → 결과에서 제외 (legal 보호)
@@ -485,7 +488,7 @@ router.get('/in-bounds', async (req, res) => {
         sum: 0, n: 0, buildYear: null, lawdCd: null,
         aptSeq: master ? (master.kapt_code || null) : null,
         source: master ? 'master' : 'molit',
-        _bestN: -1,
+        _bestN: -1, _bestRank: -1,
       };
       const g = groups[gkey];
       // CROSS-REGION-FIX-2026-06-03: 정확 키(name|sigungu|umd)로 조회 — 동명 타지역 stats 상속 차단
@@ -494,8 +497,12 @@ router.get('/in-bounds', async (req, res) => {
         g.sum += s.sum; g.n += s.n;
         if (!g.buildYear) g.buildYear = s.buildYear;
         if (!g.lawdCd) g.lawdCd = s.lawdCd;
-        // 대표 좌표 = 거래량 가장 많은 alias 행 (가장 활발한 동/위치)
-        if (s.n > g._bestN) { g._bestN = s.n; g.lat = Number(c.lat); g.lng = Number(c.lng); }
+        // CANON-COORD-FIX-2026-06-03: 대표 좌표 = 본체 우선(비하위시설 > 하위시설), 동순위는 거래량.
+        //   alias 좌표가 충전소/주차장 등 하위시설이면 오프셋 → 같은 그룹의 비하위시설(본체) 좌표를 우선 선택.
+        const _rank = SUBFEATURE_RE.test(c.place_name || '') ? 0 : 1;
+        if (_rank > g._bestRank || (_rank === g._bestRank && s.n > g._bestN)) {
+          g._bestRank = _rank; g._bestN = s.n; g.lat = Number(c.lat); g.lng = Number(c.lng);
+        }
       }
     }
     // CANON-COORD-FIX-2026-06-03: master 그룹 대표좌표를 kapt 본체 좌표로 교체 (alias 하위시설 오프셋 교정)
