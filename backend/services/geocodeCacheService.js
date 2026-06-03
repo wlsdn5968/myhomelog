@@ -271,4 +271,4 @@ async function resolveCoordBatch(apts, concurrency = 4) {
   return results;
 }
 
-module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats };
+module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats, kakaoGeocode };

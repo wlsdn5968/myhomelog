@@ -19,8 +19,69 @@
  *   - resolveCoord 자체가 saveToDb 진행 → INSERT 자동
  */
 const { createClient } = require('@supabase/supabase-js');
-const { resolveCoordBatch } = require('../services/geocodeCacheService');
+const { resolveCoordBatch, kakaoGeocode } = require('../services/geocodeCacheService');
+const { isValidKoreaCoord } = require('../utils/geo');
 const logger = require('../logger');
+
+// 단지명 핵심 추출(접미사 아파트/단지/차/괄호/숫자/공백 제거) — reheal 관련성 판정용.
+function _aptCore(s) { return String(s || '').replace(/아파트|오피스텔|단지|[차()\s\d]/g, ''); }
+
+// CANON-COORD-FIX-2026-06-03 (운영자 승인 "재지오코딩 진행"): 하위시설(충전소/주차장 등) place_name 으로
+//   잘못 찍힌 기존 좌표를 본체로 in-place 재치유. 일일 backfill cron 시작 시 1회 호출.
+const REHEAL_SUBFEATURE_RE = /충전소|주차장|정류장|정문|후문|관리사무소|경비실|놀이터/;
+
+/**
+ * 하위시설 place_name 좌표 재치유 — Kakao 재지오코딩(하드닝 필터) 후 "더 나은(비하위시설) 좌표"만 in-place UPDATE.
+ * 안전: 비하위시설 + 한국 유효좌표 + 동일 시군구(kakaoGeocode 내부 검증) + 이동 20m~2km 일 때만 갱신.
+ *      개선 불가(여전히 하위시설/실패)는 source='kakao-sub' 마킹 → 다음 run 제외(무한 재시도 방지).
+ */
+async function rehealSubfeatures(admin, { cap = 300, budgetMs = 90000 } = {}) {
+  const started = Date.now();
+  const { data: rows } = await admin
+    .from('apt_geocache')
+    .select('apt_key, apt_name, sigungu, umd_nm, lat, lng, place_name, address')
+    .eq('source', 'kakao')
+    .or('place_name.ilike.%충전소%,place_name.ilike.%주차장%,place_name.ilike.%정류장%,place_name.ilike.%정문%,place_name.ilike.%후문%,place_name.ilike.%관리사무소%,place_name.ilike.%경비실%,place_name.ilike.%놀이터%')
+    .limit(cap);
+  const subs = (rows || []).filter(r => REHEAL_SUBFEATURE_RE.test(r.place_name || ''));
+  if (!subs.length) return { tried: 0, healed: 0, marked: 0 };
+
+  let tried = 0, healed = 0, marked = 0;
+  const queue = [...subs];
+  async function worker() {
+    while (queue.length && (Date.now() - started) < budgetMs) {
+      const r = queue.shift();
+      tried++;
+      try {
+        const fresh = await kakaoGeocode({ aptName: r.apt_name, sigungu: r.sigungu, umdNm: r.umd_nm, address: r.address });
+        let didHeal = false;
+        if (fresh && isValidKoreaCoord(fresh.lat, fresh.lng) && !REHEAL_SUBFEATURE_RE.test(fresh.placeName || '')) {
+          // 안전장치: 재지오코딩 결과 place_name 이 단지명과 관련될 때만(이웃 단지 오매칭 차단)
+          const aCore = _aptCore(r.apt_name);
+          const pCore = _aptCore(fresh.placeName || '');
+          const related = aCore.length >= 2 && (pCore.includes(aCore) || aCore.includes(pCore));
+          const dx = (fresh.lng - Number(r.lng)) * Math.cos(fresh.lat * Math.PI / 180);
+          const moved = 111000 * Math.sqrt(Math.pow(fresh.lat - Number(r.lat), 2) + Math.pow(dx, 2));
+          if (related && moved >= 20 && moved <= 2000) {
+            await admin.from('apt_geocache').update({
+              lat: fresh.lat, lng: fresh.lng, place_name: fresh.placeName, address: fresh.address, source: 'kakao',
+            }).eq('apt_key', r.apt_key);
+            healed++; didHeal = true;
+          }
+        }
+        // 개선 불가/관련성 미달 → 좌표 불변, source 마킹해 다음 run 제외(무한 재시도 방지)
+        if (!didHeal) {
+          await admin.from('apt_geocache').update({ source: 'kakao-sub' }).eq('apt_key', r.apt_key);
+          marked++;
+        }
+      } catch (_) { /* 개별 실패(Kakao 일시오류 등) 무시 — source 유지 → 다음 run 재시도 */ }
+    }
+  }
+  await Promise.all(Array.from({ length: 4 }, () => worker()));
+  logger.info({ source: 'geocache-reheal', tried, healed, marked, elapsedMs: Date.now() - started },
+    `geocache reheal: ${healed} 본체교정 / ${marked} 개선불가마킹 / ${tried} 시도`);
+  return { tried, healed, marked };
+}
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
@@ -52,6 +113,11 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 240000 } 
   const limit = Math.min(Math.max(parseInt(chunk) || DEFAULT_CHUNK, 1), MAX_CHUNK);
   const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
+  // CANON-COORD-FIX-2026-06-03: 하위시설 좌표 재치유 (1회 본체 교정) — 백필 루프 전 최대 90s.
+  let reheal = { tried: 0, healed: 0, marked: 0 };
+  try { reheal = await rehealSubfeatures(admin, { cap: 300, budgetMs: 90000 }); }
+  catch (e) { logger.warn({ err: e.message }, 'geocache reheal 실패(무시)'); }
+
   // budget 안 multi-chunk loop
   let totalProcessed = 0, totalInserted = 0, totalFailed = 0, chunks = 0;
   while ((Date.now() - started) < budgetMs - 15000) {  // 15s 마진 (마지막 chunk 안전 종료)
@@ -67,7 +133,7 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 240000 } 
     source: 'geocache-backfill',
     chunks, totalProcessed, totalInserted, totalFailed, elapsedMs: elapsed,
   }, `geocache backfill: ${chunks} chunks, ${totalInserted}/${totalProcessed} 백필 (${elapsed}ms)`);
-  return { ok: true, chunks, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, elapsedMs: elapsed };
+  return { ok: true, reheal, chunks, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, elapsedMs: elapsed };
 }
 
 async function runOneChunk(admin, limit, since) {
