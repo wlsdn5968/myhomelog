@@ -4341,46 +4341,54 @@ function initNaverMap(){
   // 단, 모달 close 같은 명시적 layout 변경 후 강제 refresh 도 가능 — naver.maps.Event.trigger(map, 'resize')
   if (typeof showHint === 'function') showHint('네이버 지도 로드 완료', 2000);
 
-  // Sprint JJ #2: "이 영역 단지 보기" 버튼 — initLeaflet 에만 있던 기능을 Naver 에도 적용.
-  // Naver: 'idle' event (panning/zoom 완료 시 한번), Leaflet 의 'moveend' 와 등가.
-  let _pannBtn = null;
-  window._pannBtnHide = () => { if (_pannBtn) _pannBtn.style.display = 'none'; };
-  window._pannBtnShow = () => {
-    if (!_pannBtn || !mapObj) return;
-    const dmOpen = document.getElementById('DM')?.classList.contains('open');
-    const admOpen = document.getElementById('ADM')?.classList.contains('open');
-    if (dmOpen || admOpen) return;
-    if (mapObj.getZoom && mapObj.getZoom() >= _pannMinZoom()) _pannBtn.style.display = 'block';
-  };
-  naver.maps.Event.addListener(mapObj, 'idle', () => {
-    const z = mapObj.getZoom();
-    if (z < _pannMinZoom()) { if (_pannBtn) _pannBtn.style.display = 'none'; return; }
-    const dmOpen = document.getElementById('DM')?.classList.contains('open');
-    const admOpen = document.getElementById('ADM')?.classList.contains('open');
-    if (dmOpen || admOpen) { if (_pannBtn) _pannBtn.style.display = 'none'; return; }
-    if (!_pannBtn) {
-      _pannBtn = document.createElement('button');
-      _pannBtn.style.cssText = 'position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:350;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:24px;font-size:12px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,0.2);cursor:pointer;font-family:inherit';
-      _pannBtn.textContent = '🔄 이 영역 단지 보기';
-      _pannBtn.onclick = () => {
-        // Naver bounds API: getBounds() returns naver.maps.LatLngBounds — getMin()/getMax() for SW/NE
-        const b = mapObj.getBounds();
-        const sw = b.getMin ? b.getMin() : null;
-        const ne = b.getMax ? b.getMax() : null;
-        if (!sw || !ne) return;
-        loadAptsInBounds(sw.lat(), sw.lng(), ne.lat(), ne.lng());
-        _pannBtn.style.display = 'none';
-      };
-      const mapEl = document.getElementById('mapEl');
-      if (mapEl) mapEl.appendChild(_pannBtn);
-    }
-    _pannBtn.style.display = 'block';
-  });
+  // PANN-PERSIST-2026-06-14: "이 지역 단지 보기" 버튼 상시 노출 (init 1회 생성, 모달 시만 숨김).
+  _initPannBtn();
+  naver.maps.Event.addListener(mapObj, 'idle', () => { window._pannBtnShow(); });
 }
 
 // MOBILE-2026-06-13: "이 영역 단지 보기" 줌 임계값 — 모바일은 작은 화면+핀치줌 마찰로 기본 zoom 12 에 머물러
 //   임계 13 이면 버튼이 거의 안 뜸(운영자 발견 "PC엔 있는데 모바일엔 없다"). 버튼 자체는 정상 — 임계만 모바일 12/데스크톱 13.
 function _pannMinZoom(){ try{ return (window.innerWidth <= 700) ? 12 : 13; }catch(_){ return 13; } }
+
+// PANN-PERSIST-2026-06-14 (운영자 "근처 단지 보기 버튼이 또 없어졌다 — 항상 보여야 누르지"):
+//   [근본 원인] _pannBtn 을 idle/moveend 에서 지연 생성 + zoom>=임계에서만 노출 → 초기 로드/저줌에선
+//     버튼이 아예 없음(설계 결함, 회귀 아님). [Fix] 지도 init 시 1회 생성해 #mapEl 에 상시 노출
+//     (상세 모달 뜰 때만 숨김). 클릭 시 영역 크기로 가드(in-bounds 가 1도 초과 거절하므로 저줌은 확대 유도).
+let _pannBtn = null;
+function _initPannBtn(){
+  if (_pannBtn) { window._pannBtnShow(); return; }
+  const mapEl = document.getElementById('mapEl');
+  if (!mapEl) return;
+  _pannBtn = document.createElement('button');
+  _pannBtn.id = '_pannBtn';
+  _pannBtn.style.cssText = 'position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:350;padding:9px 18px;background:var(--acc);color:#fff;border:none;border-radius:24px;font-size:12.5px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,0.22);cursor:pointer;font-family:inherit;white-space:nowrap';
+  _pannBtn.textContent = '🔍 이 지역 단지 보기';
+  _pannBtn.onclick = _pannSearchNow;
+  mapEl.appendChild(_pannBtn);
+  window._pannBtnShow();
+}
+window._pannBtnHide = () => { if (_pannBtn) _pannBtn.style.display = 'none'; };
+window._pannBtnShow = () => {
+  if (!_pannBtn) return;
+  const dmOpen = document.getElementById('DM')?.classList.contains('open');
+  const admOpen = document.getElementById('ADM')?.classList.contains('open');
+  _pannBtn.style.display = (dmOpen || admOpen) ? 'none' : 'block';
+};
+function _pannSearchNow(){
+  if (!mapObj) return;
+  try {
+    let s, w, n, e;
+    if (mapObj._isNaver) {
+      const b = mapObj.getBounds(); const sw = b.getMin(), ne = b.getMax();
+      s = sw.lat(); w = sw.lng(); n = ne.lat(); e = ne.lng();
+    } else {
+      const b = mapObj.getBounds();
+      s = b.getSouth(); w = b.getWest(); n = b.getNorth(); e = b.getEast();
+    }
+    if (n - s > 1 || e - w > 1) { toast('지도를 더 확대한 뒤 눌러주세요'); return; }
+    loadAptsInBounds(s, w, n, e);
+  } catch(_) {}
+}
 function loadLeaflet(){
   if(window.L){initLeaflet();return;}
   const lk=document.createElement('link');lk.rel='stylesheet';lk.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(lk);
@@ -4403,38 +4411,9 @@ function initLeaflet(){
   });
   setTimeout(() => { try { mapObj.invalidateSize(); } catch(_){} }, 300);
   setTimeout(() => { try { mapObj.invalidateSize(); } catch(_){} }, 1500);
-  // Phase 4 (2026-04-26): 영역 panning 시 "이 영역 단지 보기" 버튼 노출 — 호갱노노 패턴
-  // Phase 35 #1 (2026-05-04): z-index 1000 → 350 (.dmbg 400 보다 아래) + DM open 시 hide
-  let _pannBtn = null;
-  window._pannBtnHide = () => { if (_pannBtn) _pannBtn.style.display = 'none'; };
-  window._pannBtnShow = () => {
-    if (!_pannBtn || !mapObj) return;
-    const dmOpen = document.getElementById('DM')?.classList.contains('open');
-    const admOpen = document.getElementById('ADM')?.classList.contains('open');
-    if (dmOpen || admOpen) return; // 다른 모달 떠 있으면 노출 안 함
-    if (mapObj.getZoom && mapObj.getZoom() >= _pannMinZoom()) _pannBtn.style.display = 'block';
-  };
-  mapObj.on('moveend', () => {
-    const z = mapObj.getZoom();
-    if (z < _pannMinZoom()) { if (_pannBtn) _pannBtn.style.display = 'none'; return; }
-    // 모달 열려 있으면 버튼 표시 X (회귀 fix)
-    const dmOpen = document.getElementById('DM')?.classList.contains('open');
-    const admOpen = document.getElementById('ADM')?.classList.contains('open');
-    if (dmOpen || admOpen) { if (_pannBtn) _pannBtn.style.display = 'none'; return; }
-    if (!_pannBtn) {
-      _pannBtn = document.createElement('button');
-      _pannBtn.style.cssText = 'position:absolute;top:16px;left:50%;transform:translateX(-50%);z-index:350;padding:8px 16px;background:var(--acc);color:#fff;border:none;border-radius:24px;font-size:12px;font-weight:700;box-shadow:0 4px 12px rgba(0,0,0,0.2);cursor:pointer;font-family:inherit';
-      _pannBtn.textContent = '🔄 이 영역 단지 보기';
-      _pannBtn.onclick = () => {
-        const b = mapObj.getBounds();
-        loadAptsInBounds(b.getSouth(), b.getWest(), b.getNorth(), b.getEast());
-        _pannBtn.style.display = 'none';
-      };
-      const mapEl = document.getElementById('mapEl');
-      if (mapEl) mapEl.appendChild(_pannBtn);
-    }
-    _pannBtn.style.display = 'block';
-  });
+  // PANN-PERSIST-2026-06-14: "이 지역 단지 보기" 버튼 상시 노출 (init 1회 생성, 모달 시만 숨김).
+  _initPannBtn();
+  mapObj.on('moveend', () => { window._pannBtnShow(); });
 }
 
 // Phase 4: 영역 단지 fetch — search/popular 비슷한 endpoint (지역 bounds 기반)
