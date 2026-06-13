@@ -51,12 +51,18 @@ async function getTransactionsFromDb(lawdCd, dealYm) {
 
     const dy = parseInt(dealYm.slice(0, 4), 10);
     const dm = parseInt(dealYm.slice(4, 6), 10);
+    // PERF-2026-06-13: deal_year+deal_month equality 는 idx_molit_lawd_date(lawd_cd, deal_date DESC) 의
+    //   deal_date 부분을 못 써 lawd_cd 의 전체 행을 bitmap heap 으로 긁고 month 필터+정렬 (실측 10.2ms).
+    //   deal_date 범위로 변경 → 동일 결과(검증: 276,473행 중 deal_date NULL 0 · year/month 불일치 0)이며
+    //   인덱스 (lawd_cd, deal_date) 완전 활용 + 정렬 제거 (실측 1.5ms, 7배 단축).
+    const _mFrom = `${dy}-${String(dm).padStart(2, '0')}-01`;
+    const _mNext = dm === 12 ? `${dy + 1}-01-01` : `${dy}-${String(dm + 1).padStart(2, '0')}-01`;
     const { data, error } = await admin
       .from('molit_transactions')
       .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq')
       .eq('lawd_cd', lawdCd)
-      .eq('deal_year', dy)
-      .eq('deal_month', dm)
+      .gte('deal_date', _mFrom)
+      .lt('deal_date', _mNext)
       .order('deal_date', { ascending: false })
       .limit(1000);
     if (error) throw error;
