@@ -302,8 +302,12 @@ router.get('/popular', async (req, res) => {
   if (!admin) return res.status(503).json({ error: '서비스 일시 불가' });
   try {
     // ① 전국 60일 실거래량 top — RPC 집계 (정직한 거래량순)
+    //   GEOCODE-ROBUST-2026-06-14: 라이브 지오코딩(lazy-fill)이 불안정해도 마커를 꽉 채우기 위해
+    //   limit 보다 넉넉히(×5, 최대 80) 받아 → 좌표 보유 단지를 거래량 순서대로 limit 개 선택.
+    //   (미좌표 최상위 단지는 좌표 backfill/geocode 정상화 후 자연히 진입. 별도 추적 중인 좌표 갭 사안.)
+    const fetchN = Math.min(limit * 5, 80);
     let top = null;
-    const { data: rpcRows, error: rpcErr } = await admin.rpc('search_popular_apts', { p_limit: limit });
+    const { data: rpcRows, error: rpcErr } = await admin.rpc('search_popular_apts', { p_limit: fetchN });
     if (!rpcErr && Array.isArray(rpcRows) && rpcRows.length) {
       // RPC 행(camelCase) → 아래 좌표-join 로직이 기대하는 shape 로 정규화
       top = rpcRows.map(r => ({
@@ -330,12 +334,12 @@ router.get('/popular', async (req, res) => {
         byApt[k].count++;
         if (r.deal_date > byApt[k].latest) byApt[k].latest = r.deal_date;
       }
-      top = Object.values(byApt).sort((a,b) => b.count - a.count).slice(0, limit);
+      top = Object.values(byApt).sort((a,b) => b.count - a.count).slice(0, fetchN);
     }
     if (!top || !top.length) return res.json({ results: [] });
 
-    // ③ apt_geocache 좌표 join (DB 우선) + 캐시 miss lazy-fill (resolveCoordBatch → apt_geocache 영속)
-    const names = top.map(t => t.apt_name);
+    // ③ apt_geocache 좌표 join (DB)
+    const names = [...new Set(top.map(t => t.apt_name))];
     const { data: coords } = await admin.from('apt_geocache')
       .select('apt_name, sigungu, umd_nm, lat, lng')
       .in('apt_name', names);
@@ -343,40 +347,38 @@ router.get('/popular', async (req, res) => {
     for (const c of (coords||[])) {
       coordMap.set(`${c.apt_name}|${c.sigungu||''}|${c.umd_nm||''}`, c);
     }
+    // 환각 차단(2026-05-06): (apt_name|sigungu|umd_nm) 정확 키만 — 동명 타지역 좌표 오매칭 차단.
+    const _row = (t, c) => ({
+      aptName: t.apt_name, sigungu: t.sigungu, umdNm: t.umd_nm,
+      lawdCd: t.lawd_cd, buildYear: t.build_year,
+      recentDealDate: t.latest, dealCount60d: t.count, avgDealAmount: t.deal_amount,
+      lat: Number(c.lat), lng: Number(c.lng),
+    });
 
-    // 좌표 lazy fill — 거래량 top 중 캐시 miss 만 즉시 geocode (첫 호출만 ~수초, 이후 영속 캐시 hit).
-    // 환각 차단(2026-05-06): missing 판정·매핑 모두 (apt_name|sigungu|umd_nm) 정확 키만 — 동명 타지역 좌표 오매칭 차단.
-    const missing = [];
+    // ④ 거래량 순서대로 좌표 보유 단지를 limit 개 선택 — 라이브 geocode 의존 없이 항상 꽉 채움.
+    const out = [];
     for (const t of top) {
-      const k = `${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`;
-      if (!coordMap.has(k)) missing.push(t);
-    }
-    if (missing.length) {
-      const filled = await resolveCoordBatch(missing.map(t => ({
-        aptName: t.apt_name, sigungu: t.sigungu, umdNm: t.umd_nm,
-      })), 5);
-      missing.forEach((t, i) => {
-        const f = filled[i];
-        if (f) coordMap.set(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`, f);
-      });
+      const c = coordMap.get(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`);
+      if (c && c.lat && c.lng) out.push(_row(t, c));
+      if (out.length >= limit) break;
     }
 
-    const out = top.map(t => {
-      // 매칭 X 시 lat/lng null → filter 에서 자동 제외 (잘못된 마커 표시 X).
-      const c = coordMap.get(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`);
-      return {
-        aptName: t.apt_name,
-        sigungu: t.sigungu,
-        umdNm: t.umd_nm,
-        lawdCd: t.lawd_cd,
-        buildYear: t.build_year,
-        recentDealDate: t.latest,
-        dealCount60d: t.count,
-        avgDealAmount: t.deal_amount,
-        lat: c?.lat ? Number(c.lat) : null,
-        lng: c?.lng ? Number(c.lng) : null,
-      };
-    }).filter(x => x.lat && x.lng);
+    // ⑤ 좌표 보유분이 limit 미만일 때만 best-effort lazy-fill (정상 상황에선 도달 안 함).
+    if (out.length < limit) {
+      const need = limit - out.length;
+      const missing = top
+        .filter(t => !coordMap.has(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`))
+        .slice(0, need);
+      if (missing.length) {
+        const filled = await resolveCoordBatch(missing.map(t => ({
+          aptName: t.apt_name, sigungu: t.sigungu, umdNm: t.umd_nm,
+        })), 5);
+        missing.forEach((t, i) => {
+          const f = filled[i];
+          if (f && f.lat && f.lng && out.length < limit) out.push(_row(t, f));
+        });
+      }
+    }
     return res.json({ results: out });
   } catch (e) {
     logger.warn({ err: e.message }, '인기 단지 조회 실패');
