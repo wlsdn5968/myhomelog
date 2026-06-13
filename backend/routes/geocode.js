@@ -108,7 +108,10 @@ router.post('/', async (req, res) => {
     return res.json({ debug: true, keyLen: key.length,
       received: { aptName, bytes: Buffer.byteLength(String(aptName), 'utf8') },
       fromBody: await kk(q),
-      selftest: await kk(SELF) });
+      selftest: await kk(SELF),
+      // 경기 "시+구" sigungu 검증 reject 가설: realFn(검증 포함)=null 이고 rawGyeonggi(검증 없음)=결과 있으면 확정
+      realFn_gyeonggi: await kakaoGeocode(key, '평촌어바인퍼스트', null, '안양시동안구', '호계동'),
+      rawGyeonggi: await kk('안양시동안구 호계동 평촌어바인퍼스트') });
   }
   const out = await kakaoGeocode(key, aptName, area, sgg, umd);
   if (!out) return res.json({ lat: null, lng: null, error: '결과없음' });
