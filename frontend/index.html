@@ -430,6 +430,10 @@ html[data-theme="dark"]{
   --shadow-lg:0 2px 6px rgba(0,0,0,0.38),0 16px 40px rgba(0,0,0,0.40);
   color-scheme:dark;
 }
+/* 다크: 네이비 하드코딩 클래스 버튼 → 밝은 블루 (라이트 100% 유지) */
+html[data-theme="dark"] .hbtn-cta{background:linear-gradient(135deg,#5E94D6 0%,#4E83C4 100%)!important;border-color:#4E83C4!important}
+html[data-theme="dark"] .hbtn-cta:hover{background:linear-gradient(135deg,#4E83C4 0%,#3D6CA8 100%)!important;border-color:#3D6CA8!important}
+html[data-theme="dark"] .bnav-tag{background:linear-gradient(135deg,#5E94D6,#4E83C4)}
 body{font-family:var(--font-body)}
 *{box-sizing:border-box;margin:0;padding:0}
 /* A11y: 키보드 탐색 시만 포커스 링 표시 (마우스 클릭 시 방해 없음) */
@@ -1189,7 +1193,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   <div class="htabs">
     <button class="htab on" onclick="sv('map',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>지도</button>
     <button class="htab" onclick="sv('list',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>목록</button>
-    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서 <span style="background:#173A63;color:#fff;font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:top">NEW</span></button>
+    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서 <span style="background:var(--accent-500);color:#fff;font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:top">NEW</span></button>
     <button class="htab" onclick="sv('calc',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg>대출계산</button>
     <button class="htab" onclick="sv('clause',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>특약</button>
     <button class="htab" onclick="sv('news',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h12v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2"/><path d="M7.5 9h5"/><path d="M7.5 13h5"/><path d="M7.5 16.5h3"/></svg>뉴스</button>
@@ -1435,7 +1439,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 <div class="cp calcv" id="view-calc" style="display:none">
   <h2>상세 대출 시뮬레이터</h2>
   <p>2025.10.15 규제 기준 · 참고용 — 실제 한도는 금융기관 필수 확인</p>
-  <div style="background:linear-gradient(135deg,var(--accent-50),#fff);border:1px solid var(--accent-100);border-radius:10px;padding:13px 15px;margin-bottom:14px;max-width:520px">
+  <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:10px;padding:13px 15px;margin-bottom:14px;max-width:520px">
     <div style="font-size:11px;font-weight:700;color:var(--accent-700);margin-bottom:9px;letter-spacing:.3px">📅 부동산 정책 타임라인 <span style="font-weight:500;color:var(--t3);font-size:10px">· 다가오는 일정 자동 카운트</span></div>
     <div id="policyTimeline" style="display:flex;flex-direction:column;gap:7px"></div>
     <div style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.5">출처: 금융위원회·국토교통부 발표 · 시행 일자는 변경될 수 있으니 공식 공고 확인 권고</div>
@@ -1846,7 +1850,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <p style="font-size:11.5px;color:var(--t3);margin:0 0 18px">3분 안에 핵심 가치 체험 + 자주 묻는 답</p>
 
     <!-- 1. 30초 가이드 — Phase 5: 보고서 중심 -->
-    <div style="background:linear-gradient(135deg,var(--accent-50),#fff);border:1px solid var(--accent-100);border-radius:12px;padding:16px 18px;margin-bottom:18px">
+    <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:12px;padding:16px 18px;margin-bottom:18px">
       <div style="font-size:13px;font-weight:800;color:var(--accent-700);margin-bottom:8px">🚀 30초 가이드 — 처음이세요?</div>
       <div style="font-size:12px;color:var(--t1);line-height:1.8">
         1. 좌측 사이드바에 <b>주택 보유 / 매수가 / 희망지역</b> 3개만 입력<br>
@@ -1881,8 +1885,8 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     </details>
 
     <!-- Phase 5: 핵심 가치 = 1page 보고서 (AI 특약 자리에 강조 디자인 이동) -->
-    <details style="background:linear-gradient(135deg,#EEF3F8,#fff);border:2px solid #173A63;border-radius:10px;padding:13px 16px;margin-bottom:10px" open>
-      <summary style="cursor:pointer;font-size:13px;font-weight:800;color:#173A63;list-style:none">📊 1Page 컨설팅 보고서 — 이 서비스의 핵심 (NEW)</summary>
+    <details style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:2px solid var(--accent-500);border-radius:10px;padding:13px 16px;margin-bottom:10px" open>
+      <summary style="cursor:pointer;font-size:13px;font-weight:800;color:var(--accent-700);list-style:none">📊 1Page 컨설팅 보고서 — 이 서비스의 핵심 (NEW)</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         사용자 자금·자녀·거주기간·우선순위 → <b>AI가 컨설턴트 톤으로 1page 보고서 자동 생성</b><br>
         포함: 회원님 핵심 방향 3줄 · 정부 정책 환경 · 매수 체크리스트 · 조건 부합 단지 7개 (단지별 컨설팅 코멘트) · 갈아타기 시나리오 · 매수 TIP<br><br>
@@ -1890,7 +1894,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <b>가성비</b>: 부동산 컨설턴트 1회 30만원 → <b>무료로 받아보세요</b> (유료 플랜 준비 중)<br>
         <b>다운로드</b>: PDF로 가족·중개사와 공유 가능<br><br>
         <span style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:6px;padding:6px 10px;display:inline-block;font-size:11px;color:var(--accent-700)">⚠ 본 보고서는 정보 정리이며 투자자문업·중개업·대출모집인업 X. 매수·매도 추천 X.</span>
-        <button class="abtn" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px;background:#173A63;color:#fff;border:none" onclick="sv('report')">📊 보고서 만들어보기 →</button>
+        <button class="abtn" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px;background:var(--accent-500);color:#fff;border:none" onclick="sv('report')">📊 보고서 만들어보기 →</button>
       </div>
     </details>
 
@@ -2144,8 +2148,8 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <div class="lv-card-head"><span class="lv-card-label">참고 · 5Y 가격 추세 시각화</span><span class="lv-card-meta">참고용</span></div>
       <svg viewBox="0 0 720 220" preserveAspectRatio="xMidYMid meet" class="lv-chart-svg" aria-label="5년 가격 추이 차트">
         <defs>
-          <linearGradient id="lvChartGrad" x1="0" x2="1"><stop offset="0%" stop-color="#2E5E94"/><stop offset="100%" stop-color="#173A63"/></linearGradient>
-          <linearGradient id="lvChartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#173A63" stop-opacity="0.22"/><stop offset="100%" stop-color="#173A63" stop-opacity="0"/></linearGradient>
+          <linearGradient id="lvChartGrad" x1="0" x2="1"><stop offset="0%" stop-color="#2E5E94"/><stop offset="100%" stop-color="var(--accent-500)"/></linearGradient>
+          <linearGradient id="lvChartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="var(--accent-500)" stop-opacity="0.22"/><stop offset="100%" stop-color="var(--accent-500)" stop-opacity="0"/></linearGradient>
         </defs>
         <g class="lv-chart-grid"><line x1="40" x2="700" y1="40" y2="40"/><line x1="40" x2="700" y1="100" y2="100"/><line x1="40" x2="700" y1="160" y2="160"/></g>
         <text class="lv-chart-axis" x="35" y="44" text-anchor="end">14억</text>
@@ -3718,7 +3722,7 @@ function _renderReport(data) {
 
   result.innerHTML = `
     <!-- 핵심 방향 3줄 -->
-    <div style="background:linear-gradient(135deg,#EEF3F8,#fff);border:1px solid var(--accent-100);border-radius:12px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(16,24,40,.04)">
+    <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:12px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(16,24,40,.04)">
       <div style="font-size:12px;font-weight:700;color:var(--accent-700);margin-bottom:8px">🎯 핵심 방향 (회원님 가구 상황 기반)</div>
       ${coreHtml}
     </div>
@@ -4134,7 +4138,7 @@ async function loadSubs(){
     const r = await fetch(url, {signal: AbortSignal.timeout(10000)});
     const d = await r.json();
     if(!r.ok){
-      box.innerHTML = `<div style="padding:30px 20px;text-align:center;color:var(--t3);line-height:1.7;background:linear-gradient(135deg,var(--accent-50),#fff);border:1px solid var(--accent-100);border-radius:12px">
+      box.innerHTML = `<div style="padding:30px 20px;text-align:center;color:var(--t3);line-height:1.7;background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:12px">
         <div style="font-size:34px;margin-bottom:8px">📅</div>
         <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px">청약 캘린더 연동 준비 중</div>
         <div style="font-size:11.5px;color:var(--t2);margin-bottom:14px;line-height:1.6">정부 청약 데이터 API 구독 절차 진행 중입니다.<br>지금은 청약Home에서 직접 확인해주세요.</div>
@@ -7681,7 +7685,7 @@ function exportClausePDF(){
     h1, .sub, .cv-card, .cv-caution, footer, .legal-banner { position: relative; z-index: 1; }
     h1{font-size:16px;font-weight:700;margin-bottom:4px;color:#173A63}
     .sub{font-size:11px;color:#98938A;margin-bottom:14px}
-    .legal-banner{background:#FAEBEB;border:2px solid #173A63;border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:#A82525;line-height:1.7}
+    .legal-banner{background:#FAEBEB;border:2px solid var(--accent-500);border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:#A82525;line-height:1.7}
     .legal-banner b{font-size:13px;display:block;margin-bottom:4px}
     .cv-card{border:1px solid #E2DDD5;border-radius:8px;margin-bottom:8px;overflow:hidden;page-break-inside:avoid;background:var(--bg-base)}
     .cv-card-hdr{padding:8px 12px;background:#F0EDE7;display:flex;justify-content:space-between}
