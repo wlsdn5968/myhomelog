@@ -166,17 +166,20 @@ async function kakaoGeocode({ aptName, sigungu, umdNm, address }) {
         const placeName = d.place_name || '';
         const categoryName = d.category_name || '';
         // sgg 명시 시 address 가 sgg 포함하는지 검증 (환각 차단)
-        if (sgg && !addrText.includes(sgg)) continue;
+        // SIGUNGU-SPACE-FIX-2026-06-14 (실측 확정): molit 은 "안양시동안구"(붙임)·Kakao 는 "안양시 동안구"(띄어쓰기) →
+        //   includes 가 경기 모든 시+구(안양/수원/성남/고양/용인/안산..) 단지를 전량 reject → 좌표 갭 4,987 핵심.
+        //   공백 제거 후 비교로 흡수. (단일어 sgg "송파구" 는 무영향, 타지역 오매칭은 공백만 제거라 영향 없음.)
+        if (sgg && !addrText.replace(/\s+/g, '').includes(sgg.replace(/\s+/g, ''))) continue;
         // CROSS-CITY-FIX-2026-06-03: 중복 시군구명(강서구/남구/동구/북구/서구/중구)은 구명만으론 도시 식별 불가.
         //   umd(법정동)를 하드 필터로 요구 → 타도시 동명 구 오매칭 차단.
         //   실측 4건: 동진3 인천 서구 석남동→대구 서구 좌표 / 교동 울산 중구→대구 중구 / 해원맨션 울산 남구→포항 / 대림e편한세상 부산 서구→서울권.
         //   비중복 구(강남구·노원구 등)는 무영향(회귀 0). molit umd=법정동 ↔ Kakao 지번 address_name=법정동 기준이라 정상 단지는 매칭됨.
-        if (sgg && umd && AMBIGUOUS_SGG.has(sgg) && !addrText.includes(umd)) continue;
+        if (sgg && umd && AMBIGUOUS_SGG.has(sgg) && !addrText.replace(/\s+/g, '').includes(umd.replace(/\s+/g, ''))) continue;
         // Sprint LL #2/#3: 非아파트 place_name 또는 category 면 score 페널티 (다른 후보 우선)
         const isNonApt = (placeName && NON_APT_PATTERNS.test(placeName))
                       || (categoryName && NON_APT_CATEGORY.test(categoryName));
-        // Sprint LL #1: umdNm 일치 score
-        const umdMatch = umd && addrText.includes(umd) ? 2 : 0;
+        // Sprint LL #1: umdNm 일치 score (SIGUNGU-SPACE-FIX-2026-06-14: 공백 무시 비교)
+        const umdMatch = umd && addrText.replace(/\s+/g, '').includes(umd.replace(/\s+/g, '')) ? 2 : 0;
         // 카테고리 "아파트" 일치 score
         const aptCategory = categoryName.includes('아파트') ? 2 : 0;
         // 페널티

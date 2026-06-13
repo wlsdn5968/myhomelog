@@ -52,10 +52,11 @@ async function kakaoGeocode(key, aptName, area, sigungu, umdNm) {
         const addrText = d.address_name || d.address?.address_name || '';
         const placeName = d.place_name || '';
         const categoryName = d.category_name || '';
-        if (sgg && !addrText.includes(sgg)) continue; // sigungu 불일치 → 환각 reject
+        // SIGUNGU-SPACE-FIX-2026-06-14: molit "안양시동안구"(붙임) vs Kakao "안양시 동안구"(띄어쓰기) → 공백 무시 비교 (경기 시+구 좌표 갭 해소)
+        if (sgg && !addrText.replace(/\s+/g, '').includes(sgg.replace(/\s+/g, ''))) continue; // sigungu 불일치 → 환각 reject
         const isNonApt = (placeName && NON_APT_PATTERNS.test(placeName))
                       || (categoryName && NON_APT_CATEGORY.test(categoryName));
-        const umdMatch = umd && addrText.includes(umd) ? 2 : 0;
+        const umdMatch = umd && addrText.replace(/\s+/g, '').includes(umd.replace(/\s+/g, '')) ? 2 : 0;
         const aptCategory = categoryName.includes('아파트') ? 2 : 0;
         const nonAptPenalty = isNonApt ? -5 : 0;
         const score = umdMatch + aptCategory + nonAptPenalty;
