@@ -92,18 +92,23 @@ router.post('/', async (req, res) => {
   if (hit) return res.json({ ...hit, fromCache: true });
   const key = process.env.KAKAO_REST_API_KEY;
   if (!key || key === 'your_kakao_rest_key') return res.json({ lat: null, lng: null, error: 'KAKAO_REST_API_KEY 미설정' });
-  // DIAG-2026-06-14 (임시): 단지명 geocode 전면 null 원인 규명 — raw Kakao keyword 응답 노출. 진단 후 즉시 제거. (키 미노출 — 길이만)
+  // DIAG-2026-06-14 (임시): 단지명 geocode 전면 null 원인 규명. 진단 후 즉시 제거. (키 미노출 — 길이만)
+  //   selftest = 서버 소스(UTF-8) 하드코딩 한글 → transport 인코딩 배제. fromBody = req.body 유래.
   if (req.query.debug === '1') {
+    const SELF = '서울 송파구 헬리오시티';
+    const kk = async (query) => {
+      try {
+        const r = await axios.get('https://dapi.kakao.com/v2/local/search/keyword.json',
+          { headers: { Authorization: `KakaoAK ${key}` }, params: { query, size: 5 }, timeout: 5000 });
+        return { query, qBytes: Buffer.byteLength(query, 'utf8'), status: r.status, total: r.data?.meta?.total_count,
+          docs: (r.data?.documents || []).slice(0, 2).map(d => ({ name: d.place_name, addr: d.address_name, y: d.y, x: d.x })) };
+      } catch (e) { return { query, errStatus: e.response?.status || null, errMsg: e.message }; }
+    };
     const q = (`${sgg} ${umd} ${aptName}`).trim() || aptName;
-    try {
-      const r = await axios.get('https://dapi.kakao.com/v2/local/search/keyword.json',
-        { headers: { Authorization: `KakaoAK ${key}` }, params: { query: q, size: 5 }, timeout: 5000 });
-      return res.json({ debug: true, q, status: r.status, total: r.data?.meta?.total_count, keyLen: key.length,
-        docs: (r.data?.documents || []).slice(0, 3).map(d => ({ name: d.place_name, addr: d.address_name, cat: d.category_name, y: d.y, x: d.x })) });
-    } catch (e) {
-      return res.json({ debug: true, q, errStatus: e.response?.status || null, errMsg: e.message,
-        body: e.response?.data ? JSON.stringify(e.response.data).slice(0, 300) : null, keyLen: key.length });
-    }
+    return res.json({ debug: true, keyLen: key.length,
+      received: { aptName, bytes: Buffer.byteLength(String(aptName), 'utf8') },
+      fromBody: await kk(q),
+      selftest: await kk(SELF) });
   }
   const out = await kakaoGeocode(key, aptName, area, sgg, umd);
   if (!out) return res.json({ lat: null, lng: null, error: '결과없음' });
