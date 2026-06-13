@@ -79,7 +79,10 @@
      LCP 영향 +50~100ms (모바일 4G 1.2s → 1.25-1.30s). preconnect + preload + display:swap 으로 FOUT 최소. -->
 <link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap">
+<!-- PERF-2026-06-13: 2차 폰트(Sora 헤드라인·JetBrains 숫자)는 비-렌더블로킹 비동기 로드 — FCP/LCP 단축.
+     로드 전엔 Pretendard/system 폴백(display=swap). 본문 Pretendard 는 위에서 동기 로드 유지(LCP 폰트). -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap"></noscript>
 
 <!-- ── Sentry (프론트) — DSN 주입 시 자동 활성화 ─────────────
      활성화 방법: 아래 content="" 에 Sentry Browser 프로젝트 DSN 입력.
@@ -402,6 +405,11 @@ window.MHL.auth = window.MHL.auth || {
   --accD:  var(--accent-600);          /* → #112C4C (리디자인 Phase 1) */
   --a2:    #1E5499;                    /* (변경 없음 — 단계 5 에서 별도 검증) */
   --a2L:   #E6EFF9;                    /* (변경 없음) */
+  /* DESIGN-UNIFY-2026-06-13: 반복되던 인라인 라이트 literal 토큰화 (info 블루박스·동반 보더/텍스트) → 다크 자동적응 + 통일 */
+  --info-bg: #F0F7FF;
+  --info-bd: #BFD7F7;
+  --info-tx: #1B4F8A;
+  --danger-bd: #EEC8C8;
   --grn:   var(--positive);            /* #177038 → #10B981 */
   --grnL:  var(--positive-tint);       /* #E5F3EB → rgba(16,185,129,.10) */
   --red:   var(--negative);            /* #A82525 → #DC2626 */
@@ -428,12 +436,18 @@ html[data-theme="dark"]{
   --shadow-sm:0 1px 2px rgba(0,0,0,0.30),0 2px 6px rgba(0,0,0,0.24);
   --shadow-md:0 1px 3px rgba(0,0,0,0.34),0 8px 24px rgba(0,0,0,0.30);
   --shadow-lg:0 2px 6px rgba(0,0,0,0.38),0 16px 40px rgba(0,0,0,0.40);
+  /* DESIGN-UNIFY-2026-06-13: 보조 블루(a2)·info 박스·레드보더 다크 적응 (라이트값 100% 유지) */
+  --a2:#4E83C4; --a2L:rgba(78,131,196,0.18);
+  --info-bg:rgba(78,131,196,0.13); --info-bd:rgba(78,131,196,0.34); --info-tx:#9FC2E8;
+  --danger-bd:rgba(220,38,38,0.34);
   color-scheme:dark;
 }
 /* 다크: 네이비 하드코딩 클래스 버튼 → 밝은 블루 (라이트 100% 유지) */
 html[data-theme="dark"] .hbtn-cta{background:linear-gradient(135deg,#5E94D6 0%,#4E83C4 100%)!important;border-color:#4E83C4!important}
 html[data-theme="dark"] .hbtn-cta:hover{background:linear-gradient(135deg,#4E83C4 0%,#3D6CA8 100%)!important;border-color:#3D6CA8!important}
 html[data-theme="dark"] .bnav-tag{background:linear-gradient(135deg,#5E94D6,#4E83C4)}
+/* DESIGN-UNIFY-2026-06-13: 다크에서 흰색(rgba(255,255,255,.78))으로 남던 헤더 표면 보정 */
+html[data-theme="dark"] header{background:rgba(26,31,41,0.82)}
 body{font-family:var(--font-body)}
 *{box-sizing:border-box;margin:0;padding:0}
 /* A11y: 키보드 탐색 시만 포커스 링 표시 (마우스 클릭 시 방해 없음) */
@@ -483,7 +497,7 @@ header{
    currentColor 상속 → off=text-tertiary, hover/on=text-primary 자동 추종. aria-hidden, 텍스트 label 이 의미 전달. */
 .htab svg{width:14px;height:14px;vertical-align:-2.5px;margin-right:5px;flex-shrink:0}
 .hml{margin-left:auto;display:flex;gap:7px;align-items:center}
-.rpill{display:flex;align-items:center;gap:5px;background:var(--redL);color:var(--red);padding:4px 10px;border-radius:18px;font-size:11px;font-weight:600;border:1px solid #EEC8C8;flex-shrink:0}
+.rpill{display:flex;align-items:center;gap:5px;background:var(--redL);color:var(--red);padding:4px 10px;border-radius:18px;font-size:11px;font-weight:600;border:1px solid var(--danger-bd);flex-shrink:0}
 .hdot{width:6px;height:6px;border-radius:50%;background:var(--red);animation:blink 2s infinite}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
 .hbtn{padding:5px 12px;border-radius:18px;font-size:11px;border:1px solid var(--bd);background:var(--s1);color:var(--t2);cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
@@ -753,7 +767,7 @@ header{
 .dtbl td{padding:6px 0;border-bottom:1px solid var(--bd)}.dtbl tr:last-child td{border-bottom:none}
 .dtbl td:first-child{color:var(--t3);width:38%}.dtbl td:last-child{font-weight:500}
 .ibox{border-radius:var(--rs);padding:10px 12px;font-size:12px;line-height:1.7;margin-bottom:9px}
-.ibox.g{background:var(--grnL);border:1px solid #B0D9BE;color:#0F5A2A}.ibox.r{background:var(--redL);border:1px solid #E8C4C4;color:var(--red)}.ibox.b{background:var(--a2L);border:1px solid #AECAEA;color:#144080}.ibox.o{background:var(--accL);border:1px solid #EAB8A0;color:#7A2E0C}.ibox.y{background:var(--ambL);border:1px solid #E4C080;color:var(--amb)}
+.ibox.g{background:var(--grnL);border:1px solid #B0D9BE;color:#0F5A2A}.ibox.r{background:var(--redL);border:1px solid #E8C4C4;color:var(--red)}.ibox.b{background:var(--a2L);border:1px solid var(--info-bd);color:var(--info-tx)}.ibox.o{background:var(--accL);border:1px solid #EAB8A0;color:#7A2E0C}.ibox.y{background:var(--ambL);border:1px solid #E4C080;color:var(--amb)}
 .gbw{display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:15px;background:var(--bg-base);border-radius:14px;border:1px solid var(--border-subtle);box-shadow:0 1px 3px rgba(16,24,40,.05)}
 .gi{flex:1}.gi-t{font-size:14px;font-weight:700;margin-bottom:5px}.gi-s{font-size:11px;color:var(--t2);line-height:1.6;margin-top:6px}
 .txi{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd);font-size:11px}.txi:last-child{border-bottom:none}
@@ -884,7 +898,7 @@ header{
 .comm-tier{display:flex;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--bd);font-size:12px}
 .comm-tier:last-child{border-bottom:none}
 .comm-label{color:var(--t2)}.comm-val{font-weight:700;color:var(--acc)}
-.comm-strat{margin-top:10px;background:var(--a2L);border:1px solid #AECAEA;border-radius:var(--rs);padding:10px 12px;font-size:11px;color:#144080;line-height:1.7}
+.comm-strat{margin-top:10px;background:var(--a2L);border:1px solid var(--info-bd);border-radius:var(--rs);padding:10px 12px;font-size:11px;color:var(--info-tx);line-height:1.7}
 
 /* 모바일 하단 탭 */
 .bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg-base);border-top:1px solid var(--bd);z-index:500;box-shadow:0 -2px 12px rgba(0,0,0,.08)}
@@ -944,7 +958,7 @@ header{
 .sig-hero{display:flex;align-items:center;gap:14px;padding:14px;border-radius:var(--r);margin-bottom:14px;border:1px solid var(--bd)}
 .sig-hero.green{background:var(--grnL);border-color:#B0D9BE}
 .sig-hero.yellow{background:var(--ambL);border-color:#E4C080}
-.sig-hero.red{background:var(--redL);border-color:#EEC8C8}
+.sig-hero.red{background:var(--redL);border-color:var(--danger-bd)}
 .sig-dot{width:44px;height:44px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:20px}
 .sig-dot.green{background:var(--grn)}.sig-dot.yellow{background:var(--amb)}.sig-dot.red{background:var(--red)}
 .sig-label{font-size:15px;font-weight:800}.sig-label.muted{color:var(--t2);font-weight:600}.sig-sub{font-size:11px;opacity:.75;margin-top:2px}
@@ -1007,7 +1021,7 @@ header{
 .bk-alert-inp:focus{border-color:var(--acc)}
 .bk-alert-set{padding:3px 8px;font-size:10px;font-weight:700;background:var(--accL);color:var(--acc);border:1px solid #EAB8A0;border-radius:var(--rs);cursor:pointer;font-family:inherit;white-space:nowrap;flex-shrink:0}
 .bk-alert-tag{font-size:9px;padding:1px 6px;border-radius:10px;font-weight:600;white-space:nowrap}
-.bk-alert-tag.set{background:var(--a2L);color:var(--a2);border:1px solid #AECAEA}
+.bk-alert-tag.set{background:var(--a2L);color:var(--a2);border:1px solid var(--info-bd)}
 .bk-alert-tag.hit{background:var(--grnL);color:var(--grn);border:1px solid #B0D9BE;animation:blink 1.5s infinite}
 .bk-visit-dot{width:6px;height:6px;border-radius:50%;background:var(--a2);flex-shrink:0;margin-top:3px}
 
@@ -1243,7 +1257,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 </div>
 <!-- P1 (Phase 2 5-1): 데이터 동기화 시각 표시 — 사용자 신뢰 시그널 -->
 <!-- Phase 33 #6 (2026-05-04): seoulsubway 영감 — 데이터량 + 갱신 주기 명시 (신뢰도 ↑) -->
-<div id="syncBanner" style="display:none;background:#F0F7FF;border-bottom:1px solid #BFD7F7;padding:6px 14px;font-size:11px;color:#1B4F8A;text-align:center">
+<div id="syncBanner" style="display:none;background:var(--info-bg);border-bottom:1px solid var(--info-bd);padding:6px 14px;font-size:11px;color:var(--info-tx);text-align:center">
   📅 마지막 데이터 동기화: <span id="syncTime">—</span> · 출처: 국토교통부 실거래가 (245k+) · KAPT 단지 (9.7k+) · 금융위 규제 · 매일 자동 갱신
 </div>
 
@@ -1309,7 +1323,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <div class="sh" onclick="ts('s1')"><span class="st">내 상황</span><span id="srcProg" title="입력 필수 3개 — 주택 보유 · 매수가 · 희망 지역" style="margin-left:auto;font-size:10.5px;color:var(--t3);font-weight:600">0/3 완료</span><span class="sa">▲</span></div>
     <div class="sb">
       <!-- Phase 4 (2026-04-26): 입력 wizard — 핵심 3개 (보유·예산·지역) 진행률 표시 -->
-      <div style="background:#F0F7FF;border:1px solid #BFD7F7;border-radius:6px;padding:7px 10px;margin-bottom:10px;font-size:10.5px;color:#1B4F8A;line-height:1.55">
+      <div style="background:var(--info-bg);border:1px solid var(--info-bd);border-radius:6px;padding:7px 10px;margin-bottom:10px;font-size:10.5px;color:var(--info-tx);line-height:1.55">
         💡 <b>핵심 3개</b>만 입력하면 단지 검색 가능: <b>주택 보유 · 매수가 · 희망지역</b>
       </div>
       <div class="mb9"><span class="lbl">주택 보유</span><div class="chips" id="ch-h"><span class="chip on" onclick="cp(this,'ch-h')">무주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택 (처분조건부)</span><span class="chip" onclick="cp(this,'ch-h')">2주택+</span></div></div>
@@ -1519,7 +1533,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:10px">📌 계약 직전 도구</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <button class="abtn" style="margin:0;background:var(--accent-50);color:var(--accent-700);border:1px solid var(--accent-100);font-size:12px" onclick="sv('biz')">💰 복비 계산기</button>
-      <button class="abtn" style="margin:0;background:#EEF4FF;color:var(--a2);border:1px solid #C9DCF5;font-size:12px" onclick="sv('biz');setTimeout(()=>document.getElementById('checkList')?.scrollIntoView({behavior:'smooth',block:'start'}),200)">📋 계약 체크리스트</button>
+      <button class="abtn" style="margin:0;background:var(--info-bg);color:var(--a2);border:1px solid var(--info-bd);font-size:12px" onclick="sv('biz');setTimeout(()=>document.getElementById('checkList')?.scrollIntoView({behavior:'smooth',block:'start'}),200)">📋 계약 체크리스트</button>
     </div>
   </div>
 </div>
@@ -1726,8 +1740,8 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 
     <!-- P1 D 추가 (2026-04-25 감사 4): 청약 가점 계산기 -->
     <!-- STAB-AUDIT #77 (2026-05-04): 청약 가점 default open — 사용자 발견 어려움 → 첫 노출 -->
-    <details open style="margin-top:18px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;padding:11px 13px">
-      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:#1B4F8A;list-style:none">🎯 청약 가점 계산기 (총 84점 만점)</summary>
+    <details open style="margin-top:18px;background:var(--info-bg);border:1px solid var(--info-bd);border-radius:8px;padding:11px 13px">
+      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--info-tx);list-style:none">🎯 청약 가점 계산기 (총 84점 만점)</summary>
       <div style="margin-top:10px;font-size:11px;color:var(--t2);line-height:1.7">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
           <div>
@@ -1787,9 +1801,9 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
             <option value="17">15년 이상 (17점)</option>
           </select>
         </div>
-        <div id="cs_result" style="margin-top:12px;padding:11px 13px;background:var(--bg-base);border-radius:8px;border:1px solid #BFD7F7">
+        <div id="cs_result" style="margin-top:12px;padding:11px 13px;background:var(--bg-base);border-radius:8px;border:1px solid var(--info-bd)">
           <!-- STAB-A P1#33 (2026-05-03): 초기값 "8" misleading → "—" 입력 전엔 빈 표시 -->
-          <div style="font-size:13px;font-weight:800;color:#1B4F8A">총 가점: <span id="cs_total">—</span>점 / 84점</div>
+          <div style="font-size:13px;font-weight:800;color:var(--info-tx)">총 가점: <span id="cs_total">—</span>점 / 84점</div>
           <div style="font-size:10.5px;color:var(--t2);margin-top:5px;line-height:1.7" id="cs_tier">예상 당첨 가능 분양: <b>참고치</b> — 실제 당첨 커트라인은 청약Home 공고 확인.</div>
         </div>
         <!-- Phase 4 (2026-04-26): 당첨 커트라인 통계 — 한국부동산원 2024-2025 평균 -->
@@ -1828,7 +1842,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <p style="font-size:11.5px;color:var(--t3);margin:0 0 14px">사용자 자금·가족·우선순위 자동 매칭 · 정부 정책 최신 반영 · 비공개</p>
 
     <!-- 입력 요약 + 생성 버튼 -->
-    <div id="reportInputSummary" style="background:#F0F7FF;border:1px solid #BFD7F7;border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:11.5px;color:var(--t1);line-height:1.7"></div>
+    <div id="reportInputSummary" style="background:var(--info-bg);border:1px solid var(--info-bd);border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:11.5px;color:var(--t1);line-height:1.7"></div>
 
     <button class="abtn acc" id="reportGenBtn" onclick="generateReport()" style="margin:0 0 14px;padding:11px 18px;font-size:13px;width:100%;max-width:380px">
       <span id="reportGenSp" class="spin" style="display:none"></span><span id="reportGenTx">📊 맞춤 보고서 생성하기</span>
@@ -1837,7 +1851,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <!-- 보고서 결과 영역 -->
     <div id="reportResult"></div>
 
-    <div style="margin-top:14px;padding:11px 13px;background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;font-size:10.5px;color:var(--red);line-height:1.6">
+    <div style="margin-top:14px;padding:11px 13px;background:var(--redL);border:1px solid var(--danger-bd);border-radius:8px;font-size:10.5px;color:var(--red);line-height:1.6">
       ⚠ 본 보고서는 정보 정리이며 <b>투자자문업·중개업·대출모집인업이 아닙니다.</b> 매수·매도 추천 X, 미래 가격 예측 X, 대출 알선 X. 모든 의사결정과 책임은 본인에게 있습니다.
     </div>
   </div>
@@ -1868,7 +1882,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <b>방법 1. 헤더 검색바</b> — "공덕래미안" 또는 "공덕동" 입력 → 자동완성에서 클릭<br>
         <b>방법 2. 지도 panning</b> — 지도 이동 후 "🔄 이 영역 단지 보기" 버튼<br>
         <b>방법 3. 사이드바 입력 → 추천</b> — 매수가·지역 기반 AI 추천 15개<br><br>
-        <span style="background:#F0F7FF;border:1px solid #BFD7F7;border-radius:6px;padding:6px 10px;display:inline-block;font-size:11px;color:#1B4F8A">💡 단지 클릭 → <b>실거래가 탭</b>에서 평형 chip 으로 자기 예산 평형만 필터 가능</span>
+        <span style="background:var(--info-bg);border:1px solid var(--info-bd);border-radius:6px;padding:6px 10px;display:inline-block;font-size:11px;color:var(--info-tx)">💡 단지 클릭 → <b>실거래가 탭</b>에서 평형 chip 으로 자기 예산 평형만 필터 가능</span>
       </div>
     </details>
 
@@ -2006,13 +2020,13 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         답변 옆 👍/👎 클릭 → 운영자 주간 리뷰 → 패턴 개선. AI 답변은 항상 <b>참고용</b>이며 의사결정 책임은 본인에게 있습니다.<br><br>
         <b>Q. Pro 결제는 어떻게?</b><br>
         billing 페이지 (사업자등록 완료 후 활성화 예정). 현재는 무료 사용 가능.<br><br>
-        <span style="background:var(--redL);border:1px solid #EEC8C8;border-radius:6px;padding:8px 10px;display:block;font-size:11px;color:var(--red);font-weight:600;line-height:1.6">⚠ <u>본 서비스는 매수·매도를 권유하지 않습니다.</u> 모든 분석·시그널은 과거 실거래 통계 정리이며 미래 가격을 보장하지 않습니다. 자본시장법상 투자자문업·공인중개사법상 중개업에 해당하지 않습니다.</span>
+        <span style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:6px;padding:8px 10px;display:block;font-size:11px;color:var(--red);font-weight:600;line-height:1.6">⚠ <u>본 서비스는 매수·매도를 권유하지 않습니다.</u> 모든 분석·시그널은 과거 실거래 통계 정리이며 미래 가격을 보장하지 않습니다. 자본시장법상 투자자문업·공인중개사법상 중개업에 해당하지 않습니다.</span>
       </div>
     </details>
 
     <!-- 9. 피드백 -->
-    <div style="background:#F0F7FF;border:1px solid #BFD7F7;border-radius:10px;padding:13px 16px;margin-top:18px;text-align:center">
-      <div style="font-size:12px;color:#1B4F8A;font-weight:700;margin-bottom:6px">💬 피드백 환영</div>
+    <div style="background:var(--info-bg);border:1px solid var(--info-bd);border-radius:10px;padding:13px 16px;margin-top:18px;text-align:center">
+      <div style="font-size:12px;color:var(--info-tx);font-weight:700;margin-bottom:6px">💬 피드백 환영</div>
       <div style="font-size:11.5px;color:var(--t2);line-height:1.7">
         버그 발견·개선 제안: AI 챗에 직접 알려주세요 (👍/👎 + 코멘트)<br>
         <span style="font-size:10.5px;color:var(--t3)">데이터 출처: 국토교통부 · 한국부동산원 · 카카오맵 · Anthropic Claude</span>
@@ -2254,7 +2268,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <div class="smbody" id="tmBody" style="overflow-y:auto;max-height:65vh">
       <div style="font-size:12px;line-height:1.8;color:var(--t1)">
         <h3 style="font-size:14px;margin:8px 0 6px;color:var(--red)">⚠ 가장 중요한 고지</h3>
-        <div style="background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;padding:12px;margin-bottom:14px;font-weight:600;color:var(--red)">
+        <div style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:8px;padding:12px;margin-bottom:14px;font-weight:600;color:var(--red)">
           내집로그는 <u>매수·매도를 권유하거나 가격을 예측하는 서비스가 아닙니다.</u><br>
           제공되는 모든 점수·신호등(🟢🟡🔴)·추천 단지·분석 코멘트는 <u>과거 실거래 데이터를 통계적으로 정리한 참고 정보</u>일 뿐이며, <u>미래 가격의 상승 또는 하락을 시사하지 않습니다.</u><br>
           부동산 가격은 거시경제·금리·정책·심리 등 다양한 요인에 의해 <u>언제든 큰 폭으로 하락할 수 있으며</u>, 본 서비스를 참고한 결과로 발생한 금전적 손실(매매 차손, 대출 이자, 세금, 기회비용 등)에 대해 <strong>운영자의 고의 또는 중대한 과실이 없는 한 운영자는 책임을 지지 않습니다.</strong> (「약관의 규제에 관한 법률」 제7조에 따른 책임 제한)
@@ -3460,7 +3474,7 @@ const OB_STEPS=[
   {
     title:'⚠ 시작 전 꼭 확인해주세요',
     body:`<div style="padding:4px 0;font-size:12px;line-height:1.7;color:var(--t1)">
-      <div style="background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;padding:12px;margin-bottom:12px;color:var(--red);font-weight:600">
+      <div style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:8px;padding:12px;margin-bottom:12px;color:var(--red);font-weight:600">
         내집로그는 <u>매수·매도를 추천하지 않습니다.</u><br>
         제공되는 점수·신호등은 <u>과거 실거래 통계 정리</u>이며, <u>미래 가격을 예측하거나 보장하지 않습니다.</u>
       </div>
@@ -3765,12 +3779,12 @@ function _renderReport(data) {
     </div>
 
     <!-- 액션 -->
-    <div style="background:#F0F7FF;border:1px solid #BFD7F7;border-radius:10px;padding:13px 15px;margin-bottom:10px">
-      <div style="font-size:12px;font-weight:700;color:#1B4F8A;margin-bottom:8px">📌 다음 액션</div>
+    <div style="background:var(--info-bg);border:1px solid var(--info-bd);border-radius:10px;padding:13px 15px;margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:var(--info-tx);margin-bottom:8px">📌 다음 액션</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">
-        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:var(--bg-base);border:1px solid #BFD7F7;color:#1B4F8A" onclick="_addAllReportAptsToBookmarks()">⭐ ${(r.apartments || []).length}단지 모두 관심 추가</button>
-        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:var(--bg-base);border:1px solid #BFD7F7;color:#1B4F8A" onclick="_downloadReportPDF()">🖨 PDF 다운로드</button>
-        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:var(--bg-base);border:1px solid #BFD7F7;color:#1B4F8A" onclick="sv('calc')">🧮 별도 대출 계산기</button>
+        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:var(--bg-base);border:1px solid var(--info-bd);color:var(--info-tx)" onclick="_addAllReportAptsToBookmarks()">⭐ ${(r.apartments || []).length}단지 모두 관심 추가</button>
+        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:var(--bg-base);border:1px solid var(--info-bd);color:var(--info-tx)" onclick="_downloadReportPDF()">🖨 PDF 다운로드</button>
+        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:var(--bg-base);border:1px solid var(--info-bd);color:var(--info-tx)" onclick="sv('calc')">🧮 별도 대출 계산기</button>
       </div>
     </div>
 
@@ -4825,9 +4839,9 @@ function renderListGrid(){
   }
   // Agent UX #8 (2026-05-04): 모바일 가로 스크롤 차단 — flex column 으로 줄 분리
   const metaLine = searchMeta && searchMeta.regions.length
-    ? `<div class="meta-line" style="margin:10px 14px 0;padding:8px 12px;background:#F0F7FF;border:1px solid #BFD7F7;border-radius:8px;color:#1B4F8A;font-size:11px;line-height:1.55"><div>📊 <b>분석 지역:</b> ${_escHtml(searchMeta.regions.map(String).join(', '))}</div><div>전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> · 예산 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b></div><div>최근 6개월 실거래 ${(Number(searchMeta.totalTx)||0).toLocaleString()}건 분석</div></div>`
+    ? `<div class="meta-line" style="margin:10px 14px 0;padding:8px 12px;background:var(--info-bg);border:1px solid var(--info-bd);border-radius:8px;color:var(--info-tx);font-size:11px;line-height:1.55"><div>📊 <b>분석 지역:</b> ${_escHtml(searchMeta.regions.map(String).join(', '))}</div><div>전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> · 예산 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b></div><div>최근 6개월 실거래 ${(Number(searchMeta.totalTx)||0).toLocaleString()}건 분석</div></div>`
     : '';
-  const banner=`${metaLine}<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;color:var(--red);font-size:11px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아닙니다.</u> 아래 점수·신호는 과거 실거래 통계 정리이며, 미래 가격(상승·하락)을 예측·보장하지 않습니다. 모든 의사결정 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>
+  const banner=`${metaLine}<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid var(--danger-bd);border-radius:8px;color:var(--red);font-size:11px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아닙니다.</u> 아래 점수·신호는 과거 실거래 통계 정리이며, 미래 가격(상승·하락)을 예측·보장하지 않습니다. 모든 의사결정 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>
   <!-- Phase 4 (2026-04-26): 정렬·필터 — 추천 결과 비교 핵심 -->
   <div style="margin:0 14px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
     <span style="font-size:11px;color:var(--t2);font-weight:600">정렬</span>
@@ -4846,6 +4860,8 @@ function renderListGrid(){
   </div>`;
   // Phase 4 (2026-04-26): 렌더 안전망 + 정렬·필터.
   let cardsHtml = '';
+  // PERF-2026-06-13: props.indexOf(p) 가 map 루프 안에서 O(n²) → 객체 식별자 Map 으로 O(1) 조회 (대량 결과 프레임저하 제거)
+  const _idxOf = new Map(props.map((p,i)=>[p,i]));
   try {
     // 필터 적용
     const flt = window._lstFlt || 'all';
@@ -4866,7 +4882,7 @@ function renderListGrid(){
     filtered.sort(sortFn);
     cardsHtml = filtered.map((p,_i)=>{
       if (!p || !p.aptName) return '';
-      const realIdx = props.indexOf(p);
+      const realIdx = _idxOf.get(p);
       return _renderListCard(p, realIdx);
     }).filter(Boolean).join('');
     if (!cardsHtml) {
@@ -5131,7 +5147,7 @@ function showDetail(p){
       </div>`;
   document.getElementById('t0').innerHTML=`
     ${_scoreSection}
-    <div style="background:var(--redL);border:1px solid #EEC8C8;border-radius:8px;padding:9px 11px;margin:8px 0 10px;font-size:11px;color:var(--red);font-weight:600;line-height:1.5">⚠ 점수·신호는 <u>과거 실거래 통계 정리</u>이며 매수 추천이 아닙니다. 가격 하락 위험은 본인이 부담합니다.</div>
+    <div style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:8px;padding:9px 11px;margin:8px 0 10px;font-size:11px;color:var(--red);font-weight:600;line-height:1.5">⚠ 점수·신호는 <u>과거 실거래 통계 정리</u>이며 매수 추천이 아닙니다. 가격 하락 위험은 본인이 부담합니다.</div>
     <div class="rg2">
       <div class="rc"><div class="rcl">현재 평균가</div><div class="rcv" style="color:var(--acc)">${(p.avgPrice||0).toFixed(2)}억</div></div>
       <div class="rc"><div class="rcl">가격 범위</div><div class="rcv">${(p.minPrice||0).toFixed(1)}~${(p.maxPrice||0).toFixed(1)}억</div></div>
@@ -5228,7 +5244,7 @@ function showDetail(p){
     ${p.strategy?`<div class="ibox b"><b>전략:</b> ${p.strategy}</div>`:''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
       <button class="abtn a2" style="margin:0;font-size:11px" onclick="goCalcFromDetail(${p.avgPrice||0})">🧮 대출 계산</button>
-      <button class="abtn" style="margin:0;font-size:11px;background:#EEF4FF;color:var(--a2);border:1px solid #C9DCF5" onclick="goClauseFromCurrentDetail()">✍ 특약 만들기</button>
+      <button class="abtn" style="margin:0;font-size:11px;background:var(--info-bg);color:var(--a2);border:1px solid var(--info-bd)" onclick="goClauseFromCurrentDetail()">✍ 특약 만들기</button>
     </div>
     <button class="abtn acc" style="margin-top:6px" onclick="askP('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}','${p.avgPrice||0}','${encodeURIComponent(p.area||'').replace(/'/g,'%27')}');cDM()">🤖 AI에게 상세 전략 묻기</button>`;
 
@@ -5456,7 +5472,7 @@ function showDetail(p){
     }
     return `<div style="font-size:11px;color:var(--t3);margin-bottom:8px">출처: 한국부동산원 KAPT 공동주택 기본정보 (data.go.kr)</div>
       ${f._partial ? '<div class="ibox y" style="margin-bottom:8px;font-size:11px">⚠ KAPT 전체 응답 중 일부만 조회되었습니다 (부분 정보)</div>' : ''}
-      ${tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">${tags.map(t=>`<span style="background:#EEF4FF;color:var(--a2);border:1px solid #C9DCF5;border-radius:4px;padding:3px 7px;font-size:10px;font-weight:600">${t}</span>`).join('')}</div>` : ''}
+      ${tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">${tags.map(t=>`<span style="background:var(--info-bg);color:var(--a2);border:1px solid var(--info-bd);border-radius:4px;padding:3px 7px;font-size:10px;font-weight:600">${t}</span>`).join('')}</div>` : ''}
       <table class="dtbl">
         <tr><td>단지명</td><td>${_v(p.aptName)}</td></tr>
         <tr><td>도로명 주소</td><td>${_v(f.address)}</td></tr>
@@ -7651,7 +7667,7 @@ function renderClauseResult(d,aptName){
     ${mkCard(d.essential,'e')}
     <div style="font-size:11px;font-weight:700;color:var(--amb);margin:12px 0 7px">권장 특약</div>
     ${mkCard(d.recommended,'r')}
-    <div class="cv-caution" style="margin-top:8px;background:var(--a2L);border-color:#AECAEA;color:#144080">특약은 공인중개사·법무사와 최종 검토 후 사용하세요.</div>
+    <div class="cv-caution" style="margin-top:8px;background:var(--a2L);border-color:var(--info-bd);color:var(--info-tx)">특약은 공인중개사·법무사와 최종 검토 후 사용하세요.</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
       <button class="abtn" style="margin:0;background:var(--accent-50);color:var(--accent-700);border:1px solid var(--accent-100)" onclick="saveClauseAptToBookmark()">⭐ 관심 단지로 저장</button>
       <button class="abtn a2" style="margin:0" onclick="saveClauseHistory();toast('💾 히스토리 저장 완료')">💾 이 특약 히스토리 저장</button>
