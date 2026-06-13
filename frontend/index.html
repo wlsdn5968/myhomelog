@@ -6817,6 +6817,7 @@ let _clauseRiskCacheKey = null;
 
 let _clauseRiskInflight=null, _clauseRiskInflightKey=null;
 async function loadClauseAndRisk(p){
+  if(!p)return null; // 방어(2026-06-13): null p 호출 시 'reading aptName of null' 크래시 차단 (stb 가드 외 안전망)
   const key=`${p.aptName}:${p.avgPrice||p.price}`;
   if(_clauseRiskCache&&_clauseRiskCacheKey===key){renderClause(_clauseRiskCache);renderRisk(_clauseRiskCache);return _clauseRiskCache;}
   // DEDUP-2026-06-13: 같은 단지 중복 호출(t2+t3 클릭 등) 은 1 fetch 로 합침 — AI 쿼터·비용 절반.
