@@ -288,29 +288,41 @@ router.get('/apt', async (req, res) => {
 
 // ── GET: 인기 단지 (마커 prefill) — 인증 불필요 ──────────
 // P0 (Phase 2 3-2): 첫 진입 시 빈 지도 첫인상 차단.
-// 최근 60일 거래량 top 단지 + apt_geocache 좌표 보유 단지.
+// POPULAR-HONEST-2026-06-14 (운영자 결정 "전국 거래량순으로 정직하게"):
+//   [근본 원인] 선정용 RPC search_popular_apts 가 DB 에 부재 → 코드가 항상 fallback 으로 떨어졌고,
+//     그 fallback 이 (a) 강남4구+마용성 7개 구 하드코딩 + (b) 최근 200건 샘플 내 카운트 였음.
+//     결과: 전국 60일 거래량 top25 중 84%(평촌어바인퍼스트 63건 1위 포함)가 화이트리스트 밖이라 제외,
+//           화면엔 샘플 2~7건짜리 강남권 단지만 노출 → "인기"라 부르기 어려운 지역 편향.
+//   [Fix] search_popular_apts RPC(전국 60일 GROUP BY count desc) 를 1차 소스로 사용. 지역 하드코딩·200샘플 제거.
+//         좌표 join + lazy-fill 은 기존 검증 로직 그대로 재사용(소스만 교체) → 회귀 최소.
+//   [회귀 위험] RPC 장애 시 fallback 도 지역 하드코딩 없이 전국 샘플 그룹핑으로 degrade (편향 재발 방지).
 router.get('/popular', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 12, 30);
   const admin = adminClient();
   if (!admin) return res.status(503).json({ error: '서비스 일시 불가' });
   try {
-    // 최근 60일 + 인기 구 (서울 핵심) + 좌표 있는 단지만
-    const { data, error } = await admin.rpc('search_popular_apts', { p_limit: limit }).single().then(
-      r => ({ data: r.data ? [r.data] : [], error: r.error }),
-      () => ({ data: null, error: { message: 'rpc fallback' } })
-    ).catch(() => ({ data: null, error: { message: 'rpc fallback' } }));
-    // RPC 실패 시 단순 query fallback
-    if (error || !data) {
+    // ① 전국 60일 실거래량 top — RPC 집계 (정직한 거래량순)
+    let top = null;
+    const { data: rpcRows, error: rpcErr } = await admin.rpc('search_popular_apts', { p_limit: limit });
+    if (!rpcErr && Array.isArray(rpcRows) && rpcRows.length) {
+      // RPC 행(camelCase) → 아래 좌표-join 로직이 기대하는 shape 로 정규화
+      top = rpcRows.map(r => ({
+        apt_name: r.aptName, sigungu: r.sigungu, umd_nm: r.umdNm,
+        lawd_cd: r.lawdCd, build_year: r.buildYear,
+        latest: r.recentDealDate, count: Number(r.dealCount60d) || 0,
+        deal_amount: r.avgDealAmount,
+      }));
+    } else {
+      // ② RPC 실패/빈 결과 시에만 degrade — 지역 하드코딩 없는 전국 최근거래 샘플 그룹핑
+      if (rpcErr) logger.warn({ err: rpcErr.message }, 'search_popular_apts RPC 실패 — 전국 샘플 fallback');
       const sinceIso = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const { data: rows, error: e2 } = await admin
         .from('molit_transactions')
         .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date, deal_amount')
         .gte('deal_date', sinceIso)
-        .in('sigungu', ['강남구','서초구','송파구','마포구','성동구','용산구','강동구'])
         .order('deal_date', { ascending: false })
-        .limit(200);
+        .limit(1000); // 200→1000: 전국 범위라 표본 확대 (그래도 RPC 가 정상 경로)
       if (e2) throw e2;
-      // apt_name 별 거래수 집계
       const byApt = {};
       for (const r of (rows||[])) {
         const k = `${r.apt_name}|${r.sigungu}|${r.umd_nm}`;
@@ -318,62 +330,54 @@ router.get('/popular', async (req, res) => {
         byApt[k].count++;
         if (r.deal_date > byApt[k].latest) byApt[k].latest = r.deal_date;
       }
-      const top = Object.values(byApt).sort((a,b) => b.count - a.count).slice(0, limit);
-      // apt_geocache 좌표 join (DB 우선)
-      const names = top.map(t => t.apt_name);
-      const { data: coords } = await admin.from('apt_geocache')
-        .select('apt_name, sigungu, umd_nm, lat, lng')
-        .in('apt_name', names);
-      const coordMap = new Map();
-      for (const c of (coords||[])) {
-        coordMap.set(`${c.apt_name}|${c.sigungu||''}|${c.umd_nm||''}`, c);
-      }
-
-      // P0 (2026-04-25 Phase 2 후속): 좌표 lazy fill — 인기 단지 중 캐시 miss 만 즉시 geocode.
-      //   apt_geocache 가 cold start 시 비어 있으면 popular 마커가 영원히 안 뜸 →
-      //   첫 호출만 ~3s 추가 (12건 × 카카오 200~500ms, concurrency=4) 후엔 캐시 hit.
-      // STAB-AUDIT-2026-05-06 (운영자 발견): 동명이지 단지 환각 차단
-      //   "대우" 17곳·"현대" 64곳·"벽산" 15곳 등 같은 단지명 다중 위치 → apt_name only fallback 시
-      //   다른 구 좌표 매칭 (예: 성동구 금호동4가 "대우" → 구로구 고척동 좌표).
-      //   변경: missing 판정과 결과 매핑 모두 (apt_name|sigungu|umd_nm) 정확 키만 허용.
-      //   대신 lazy fill 으로 정확한 (sigungu, umd_nm) 키워드로 Kakao 재검색 → apt_geocache 자동 백필.
-      const missing = [];
-      for (const t of top) {
-        const k = `${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`;
-        if (!coordMap.has(k)) {  // apt_name only fallback 제거 — 정확 키만 hit
-          missing.push(t);
-        }
-      }
-      if (missing.length) {
-        const filled = await resolveCoordBatch(missing.map(t => ({
-          aptName: t.apt_name, sigungu: t.sigungu, umdNm: t.umd_nm,
-        })), 4);
-        missing.forEach((t, i) => {
-          const f = filled[i];
-          if (f) coordMap.set(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`, f);
-        });
-      }
-
-      const out = top.map(t => {
-        // 환각 차단 (2026-05-06): apt_name only fallback 제거.
-        //   매칭 X 시 lat/lng null → filter 단계에서 자동 제외 (잘못된 마커 표시 X).
-        const c = coordMap.get(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`);
-        return {
-          aptName: t.apt_name,
-          sigungu: t.sigungu,
-          umdNm: t.umd_nm,
-          lawdCd: t.lawd_cd,
-          buildYear: t.build_year,
-          recentDealDate: t.latest,
-          dealCount60d: t.count,
-          avgDealAmount: t.deal_amount,
-          lat: c?.lat ? Number(c.lat) : null,
-          lng: c?.lng ? Number(c.lng) : null,
-        };
-      }).filter(x => x.lat && x.lng);
-      return res.json({ results: out });
+      top = Object.values(byApt).sort((a,b) => b.count - a.count).slice(0, limit);
     }
-    res.json({ results: data });
+    if (!top || !top.length) return res.json({ results: [] });
+
+    // ③ apt_geocache 좌표 join (DB 우선) + 캐시 miss lazy-fill (resolveCoordBatch → apt_geocache 영속)
+    const names = top.map(t => t.apt_name);
+    const { data: coords } = await admin.from('apt_geocache')
+      .select('apt_name, sigungu, umd_nm, lat, lng')
+      .in('apt_name', names);
+    const coordMap = new Map();
+    for (const c of (coords||[])) {
+      coordMap.set(`${c.apt_name}|${c.sigungu||''}|${c.umd_nm||''}`, c);
+    }
+
+    // 좌표 lazy fill — 거래량 top 중 캐시 miss 만 즉시 geocode (첫 호출만 ~수초, 이후 영속 캐시 hit).
+    // 환각 차단(2026-05-06): missing 판정·매핑 모두 (apt_name|sigungu|umd_nm) 정확 키만 — 동명 타지역 좌표 오매칭 차단.
+    const missing = [];
+    for (const t of top) {
+      const k = `${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`;
+      if (!coordMap.has(k)) missing.push(t);
+    }
+    if (missing.length) {
+      const filled = await resolveCoordBatch(missing.map(t => ({
+        aptName: t.apt_name, sigungu: t.sigungu, umdNm: t.umd_nm,
+      })), 5);
+      missing.forEach((t, i) => {
+        const f = filled[i];
+        if (f) coordMap.set(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`, f);
+      });
+    }
+
+    const out = top.map(t => {
+      // 매칭 X 시 lat/lng null → filter 에서 자동 제외 (잘못된 마커 표시 X).
+      const c = coordMap.get(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`);
+      return {
+        aptName: t.apt_name,
+        sigungu: t.sigungu,
+        umdNm: t.umd_nm,
+        lawdCd: t.lawd_cd,
+        buildYear: t.build_year,
+        recentDealDate: t.latest,
+        dealCount60d: t.count,
+        avgDealAmount: t.deal_amount,
+        lat: c?.lat ? Number(c.lat) : null,
+        lng: c?.lng ? Number(c.lng) : null,
+      };
+    }).filter(x => x.lat && x.lng);
+    return res.json({ results: out });
   } catch (e) {
     logger.warn({ err: e.message }, '인기 단지 조회 실패');
     res.status(500).json({ error: '조회 실패' });
