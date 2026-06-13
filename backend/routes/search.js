@@ -355,29 +355,26 @@ router.get('/popular', async (req, res) => {
       lat: Number(c.lat), lng: Number(c.lng),
     });
 
-    // ④ 거래량 순서대로 좌표 보유 단지를 limit 개 선택 — 라이브 geocode 의존 없이 항상 꽉 채움.
+    // ④ 거래량 top 후보의 좌표 확보 — DB 캐시 우선, 미보유 상위 단지는 즉시 lazy-fill (sigungu 공백 수정으로 경기 시+구도 해결됨).
+    //   진짜 거래량 1위(예: 평촌어바인퍼스트)가 좌표 없다고 빠지지 않게 채워서 노출 → "좌표 있는 것만"이 아닌 정직한 top.
+    //   비용 상한: 상위 limit 후보의 미좌표만 fill (첫 호출만 ~수초, 이후 apt_geocache 영속 캐시 hit).
+    const head = top.slice(0, limit);
+    const headMissing = head.filter(t => !coordMap.has(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`));
+    if (headMissing.length) {
+      const filled = await resolveCoordBatch(headMissing.map(t => ({
+        aptName: t.apt_name, sigungu: t.sigungu, umdNm: t.umd_nm,
+      })), 5);
+      headMissing.forEach((t, i) => {
+        const f = filled[i];
+        if (f && f.lat && f.lng) coordMap.set(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`, f);
+      });
+    }
+    // ⑤ 거래량 순서대로 좌표 보유 단지 limit 개 — 상위 lazy-fill 후에도 못 채운 자리는 다음 순위가 메움(항상 꽉).
     const out = [];
     for (const t of top) {
       const c = coordMap.get(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`);
       if (c && c.lat && c.lng) out.push(_row(t, c));
       if (out.length >= limit) break;
-    }
-
-    // ⑤ 좌표 보유분이 limit 미만일 때만 best-effort lazy-fill (정상 상황에선 도달 안 함).
-    if (out.length < limit) {
-      const need = limit - out.length;
-      const missing = top
-        .filter(t => !coordMap.has(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`))
-        .slice(0, need);
-      if (missing.length) {
-        const filled = await resolveCoordBatch(missing.map(t => ({
-          aptName: t.apt_name, sigungu: t.sigungu, umdNm: t.umd_nm,
-        })), 5);
-        missing.forEach((t, i) => {
-          const f = filled[i];
-          if (f && f.lat && f.lng && out.length < limit) out.push(_row(t, f));
-        });
-      }
     }
     return res.json({ results: out });
   } catch (e) {
