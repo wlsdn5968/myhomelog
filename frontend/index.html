@@ -5686,7 +5686,8 @@ function showDetail(p){
   // Phase 35 #1 (2026-05-04): 모달 열림 시 "이 영역 단지 보기" 버튼 hide (모달 가림 회귀 fix)
   try { window._pannBtnHide && window._pannBtnHide(); } catch(_){}
   renderFieldNote(p); // 임장 노트는 즉시 렌더 (로컬 데이터)
-  loadRisk(p);loadClause(p);loadAnalysis(p);loadAmenities(p);loadFacility(p);
+  // LAZY-2026-06-13: 특약·리스크는 탭(t2/t3) 클릭 시에만 로드 — 상세 열 때마다 AI 쿼터(3회/일) 소진하던 근본 문제 제거.
+  loadAnalysis(p);loadAmenities(p);loadFacility(p);
 }
 
 // ── 단지 facility 풍부화 (Phase 4, 2026-04-26) ────────────
@@ -5873,7 +5874,7 @@ async function loadAmenities(p){
   }catch{box.style.display='none';}
 }
 
-function stb(btn,id){document.querySelectorAll('.rtab').forEach(b=>b.classList.remove('on'));document.querySelectorAll('.tp').forEach(t=>t.classList.remove('on'));btn.classList.add('on');document.getElementById(id).classList.add('on');}
+function stb(btn,id){document.querySelectorAll('.rtab').forEach(b=>b.classList.remove('on'));document.querySelectorAll('.tp').forEach(t=>t.classList.remove('on'));btn.classList.add('on');document.getElementById(id).classList.add('on');/* LAZY-2026-06-13: 리스크(t2)·특약(t3) 탭을 처음 열 때만 AI 로드 */if((id==='t2'||id==='t3')&&currentDetail)loadClauseAndRisk(currentDetail);}
 function cDM(){document.getElementById('DM').classList.remove('open');currentDetail=null;
   // URL의 ?apt= 파라미터 정리
   if(history.replaceState){const u=new URL(location.href);u.searchParams.delete('apt');u.searchParams.delete('area');history.replaceState(null,'',u);}
@@ -6814,18 +6815,28 @@ function renderSavedDeals(){
 let _clauseRiskCache = null;
 let _clauseRiskCacheKey = null;
 
+let _clauseRiskInflight=null, _clauseRiskInflightKey=null;
 async function loadClauseAndRisk(p){
   const key=`${p.aptName}:${p.avgPrice||p.price}`;
   if(_clauseRiskCache&&_clauseRiskCacheKey===key){renderClause(_clauseRiskCache);renderRisk(_clauseRiskCache);return _clauseRiskCache;}
-  try{
-    // STAB-A P0#3 (2026-05-03): AbortSignal.timeout(35000) — backend 30초+ 응답 시 무한 로딩 차단
-    const r=await fetch(`${CFG.api}/clause`,{method:'POST',headers:await _authHdr({'Content-Type':'application/json'}),body:JSON.stringify({aptName:p.aptName,area:p.area,price:p.avgPrice||p.price,ltv:p.ltv,houseStatus:gct('ch-h'),isFirstBuyer:gct('ch-f')==='예',buildYear:p.buildYear,score:p.score}),signal:AbortSignal.timeout(35000)});
-    if(!r.ok)throw new Error('fail');
-    const d=await r.json();
-    _clauseRiskCache=d;_clauseRiskCacheKey=key;
-    renderClause(d);renderRisk(d);
-    return d;
-  }catch{renderClause(null);renderRisk(null);toast('특약·리스크 AI 연결 실패 — 기본 예시 표시');}
+  // DEDUP-2026-06-13: 같은 단지 중복 호출(t2+t3 클릭 등) 은 1 fetch 로 합침 — AI 쿼터·비용 절반.
+  if(_clauseRiskInflight&&_clauseRiskInflightKey===key)return _clauseRiskInflight;
+  // 즉시 예시 placeholder 렌더 (빈 탭/로딩 공백 방지). AI 성공 시 교체, 실패(한도/장애) 시 예시 그대로 유지 — 토스트 없음(백그라운드 로드라 부적절).
+  renderClause(null);renderRisk(null);
+  _clauseRiskInflightKey=key;
+  _clauseRiskInflight=(async()=>{
+    try{
+      const r=await fetch(`${CFG.api}/clause`,{method:'POST',headers:await _authHdr({'Content-Type':'application/json'}),body:JSON.stringify({aptName:p.aptName,area:p.area,price:p.avgPrice||p.price,ltv:p.ltv,houseStatus:gct('ch-h'),isFirstBuyer:gct('ch-f')==='예',buildYear:p.buildYear,score:p.score}),signal:AbortSignal.timeout(35000)});
+      if(!r.ok)return null; // 429(무료 한도 소진)·5xx 등 → 예시 유지(이미 렌더됨), 조용히 폴백.
+      const d=await r.json();
+      _clauseRiskCache=d;_clauseRiskCacheKey=key;
+      // stale 방지: 로드 중 다른 단지로 안 바뀐 경우만 렌더.
+      if(currentDetail&&`${currentDetail.aptName}:${currentDetail.avgPrice||currentDetail.price}`===key){renderClause(d);renderRisk(d);}
+      return d;
+    }catch{return null;} // 네트워크/타임아웃 → 예시 유지·조용히.
+    finally{_clauseRiskInflight=null;_clauseRiskInflightKey=null;}
+  })();
+  return _clauseRiskInflight;
 }
 
 // 기존 호출자 (loadClause/loadRisk) — 통합 함수에 위임 (backward compat)
