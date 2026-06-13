@@ -1546,8 +1546,9 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   </div>
 </div>
 
-<!-- RIGHT CHAT -->
-<div class="rp">
+<!-- RIGHT CHAT — PANEL-ONDEMAND-2026-06-14 (운영자 결정): 상시패널 폐지, 💬 FAB 오버레이로만 노출.
+     style=display:none 로 초기 flash 방지 (toggleRpOverlay / chat 뷰가 inline display 로 override). -->
+<div class="rp" style="display:none">
   <div class="chdr">
     <span class="ctit">AI 데이터 도우미</span>
     <span style="display:flex;gap:6px;align-items:center">
@@ -7524,17 +7525,19 @@ function sv(v,btn){
     if(meta.lp && window.innerWidth>700) lp.style.removeProperty('display');
     else lp.style.setProperty('display','none','important');
   }
-  // .rp 토글
+  // .rp 토글 — PANEL-ONDEMAND-2026-06-14 (운영자 결정 "상시패널 → 온디맨드"):
+  //   기존엔 map 뷰 데스크톱(>900px)에서 .rp 를 인라인 상시 노출(화면 ~25% 점유). 40일간 0건 사용 +
+  //   보고서가 동일 AI 엔진 공유 → 상시 점유 가치 낮음. map 포함 전 뷰에서 인라인 제거,
+  //   💬 FAB 오버레이로만 노출(아래). 지도/콘텐츠가 빈 자리를 가져감. (sv() 가 _rpOverlay=false 로 리셋)
   const rp=document.querySelector('.rp');
   if(rp){
-    if(v==='chat') rp.style.setProperty('display','flex','important');
-    else if(meta.rp && window.innerWidth>900) rp.style.removeProperty('display');
-    else rp.style.setProperty('display','none','important');
+    if(v==='chat') rp.style.setProperty('display','flex','important'); // 전용 chat 뷰만 인라인(레거시)
+    else rp.style.setProperty('display','none','important');           // map 포함 — 인라인 패널 제거(오버레이로)
   }
-  // 플로팅 AI 버튼: .rp 숨긴 탭에서만 노출 (chat, map 제외)
+  // 플로팅 AI 버튼: chat 전용 뷰를 제외한 전 뷰에서 노출 (map 포함 — 온디맨드 진입점)
   const fab=document.getElementById('fabAI');
   if(fab){
-    fab.style.display = (v!=='chat' && !meta.rp) ? 'flex' : 'none';
+    fab.style.display = (v!=='chat') ? 'flex' : 'none';
   }
   // 플로팅 관심단지 버튼: .lp 숨긴 탭에서만 노출
   const fabBm=document.getElementById('fabBM');
