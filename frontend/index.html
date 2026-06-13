@@ -96,7 +96,12 @@
   try{
     var dsn = document.querySelector('meta[name="sentry-dsn"]')?.content?.trim();
     if (!dsn) return; // stub 모드 — no-op
-    var env = document.querySelector('meta[name="sentry-environment"]')?.content || 'production';
+    // SENTRY-GATE-2026-06-13: localhost/프리뷰가 production Sentry 를 오염시키던 문제 차단(오늘 M 테스트 노이즈).
+    //   localhost 는 전송 안 함 / 운영 도메인 외(프리뷰 배포 등)는 environment='preview' 로 분리.
+    var _host = location.hostname || '';
+    if (_host==='localhost' || _host==='127.0.0.1' || _host==='[::1]' || _host==='') return;
+    var _isProd = (_host==='myhomelog.vercel.app');
+    var env = _isProd ? (document.querySelector('meta[name="sentry-environment"]')?.content || 'production') : 'preview';
     var tsr = parseFloat(document.querySelector('meta[name="sentry-traces-sample-rate"]')?.content || '0.1');
     var s = document.createElement('script');
     s.src = 'https://browser.sentry-cdn.com/8.40.0/bundle.tracing.min.js';
