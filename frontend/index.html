@@ -517,10 +517,10 @@ header{
 @keyframes sp{to{transform:rotate(360deg)}}
 
 /* loan */
-.lbox{background:var(--accL);border:1px solid #F0C0AC;border-radius:var(--rs);padding:12px;margin-top:8px}
+.lbox{background:var(--accL);border:1px solid var(--accent-100);border-radius:var(--rs);padding:12px;margin-top:8px}
 .lbig{font-size:20px;font-weight:700;color:var(--acc)}.lsm{font-size:10px;color:var(--t2);margin-top:1px}
 .lg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px}
-.li{background:#fff;border-radius:6px;padding:7px 9px;border:1px solid #F0C0AC}
+.li{background:#fff;border-radius:6px;padding:7px 9px;border:1px solid var(--accent-100)}
 .lil{font-size:10px;color:var(--t3);margin-bottom:2px}.liv{font-size:12px;font-weight:700}
 .wbox{background:var(--ambL);border:1px solid #E8C08A;border-radius:6px;padding:8px 10px;font-size:11px;color:var(--amb);margin-top:7px;line-height:1.65}
 
@@ -832,7 +832,7 @@ header{
 .cv-section-title{font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.6px;text-transform:uppercase;margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--bd)}
 .cv-card{border:1px solid var(--border-subtle);border-radius:var(--radius-md);margin-bottom:8px;overflow:hidden;box-shadow:var(--shadow-sm)}
 .cv-card-hdr{padding:8px 12px;display:flex;align-items:center;justify-content:space-between;background:var(--s1)}
-.cv-card-hdr.essential{background:var(--accL);border-bottom:1px solid #F0C0AC}
+.cv-card-hdr.essential{background:var(--accL);border-bottom:1px solid var(--accent-100)}
 .cv-card-title{font-size:12px;font-weight:700}
 .cv-card-body{padding:10px 12px}
 .cv-card-content{font-size:11px;line-height:1.75;background:var(--s2);border-radius:6px;padding:8px 10px;margin-bottom:6px;white-space:pre-wrap;word-break:break-all}
@@ -967,7 +967,7 @@ header{
 .cost-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px}
 .cost-row{display:flex;justify-content:space-between;padding:5px 9px;background:var(--s1);border-radius:6px;font-size:11px}
 .cost-lbl{color:var(--t2)}.cost-val{font-weight:700}
-.cost-total{background:var(--accL);border:1px solid #F0C0AC;border-radius:var(--rs);padding:10px 13px;display:flex;justify-content:space-between;align-items:center;margin-top:6px}
+.cost-total{background:var(--accL);border:1px solid var(--accent-100);border-radius:var(--rs);padding:10px 13px;display:flex;justify-content:space-between;align-items:center;margin-top:6px}
 .cost-total-lbl{font-size:11px;font-weight:700;color:var(--accD)}
 .cost-total-val{font-size:20px;font-weight:800;color:var(--acc)}
 
@@ -1308,7 +1308,7 @@ header{
       <!-- Phase 5-A (2026-04-26): 보고서 정확도 향상 입력 — 자녀·거주기간·우선순위 -->
       <!-- Phase 5+ (2026-04-26): default open + summary 강조 — 사용자가 입력 칸이 없는 줄 알았던 UX 이슈 fix -->
       <!-- STAB-AUDIT #78 (2026-05-04): 보고서 입력 default closed — 첫 진입 시 인지 부하 ↓ -->
-      <details style="margin-bottom:9px;background:var(--accL);border:1px solid #F0C0AC;border-radius:6px;padding:8px 10px"><summary style="cursor:pointer;font-size:11.5px;font-weight:700;color:var(--acc);user-select:none">📊 보고서 입력 (자녀·거주기간·우선순위) — 클릭</summary>
+      <details style="margin-bottom:9px;background:var(--accL);border:1px solid var(--accent-100);border-radius:6px;padding:8px 10px"><summary style="cursor:pointer;font-size:11.5px;font-weight:700;color:var(--acc);user-select:none">📊 보고서 입력 (자녀·거주기간·우선순위) — 클릭</summary>
         <div style="margin-top:6px;padding-left:4px;border-left:2px solid var(--bd)">
           <div class="mb9"><span class="lbl">자녀 계획</span>
             <div class="chips" id="ch-kid">
@@ -1413,8 +1413,8 @@ header{
 <div class="cp calcv" id="view-calc" style="display:none">
   <h2>상세 대출 시뮬레이터</h2>
   <p>2025.10.15 규제 기준 · 참고용 — 실제 한도는 금융기관 필수 확인</p>
-  <div style="background:linear-gradient(135deg,#FFF5E6,#FFF9F0);border:1px solid #E8C896;border-radius:10px;padding:13px 15px;margin-bottom:14px;max-width:520px">
-    <div style="font-size:11px;font-weight:700;color:#8B6914;margin-bottom:9px;letter-spacing:.3px">📅 부동산 정책 타임라인 <span style="font-weight:500;color:var(--t3);font-size:10px">· 다가오는 일정 자동 카운트</span></div>
+  <div style="background:linear-gradient(135deg,var(--accent-50),#fff);border:1px solid var(--accent-100);border-radius:10px;padding:13px 15px;margin-bottom:14px;max-width:520px">
+    <div style="font-size:11px;font-weight:700;color:var(--accent-700);margin-bottom:9px;letter-spacing:.3px">📅 부동산 정책 타임라인 <span style="font-weight:500;color:var(--t3);font-size:10px">· 다가오는 일정 자동 카운트</span></div>
     <div id="policyTimeline" style="display:flex;flex-direction:column;gap:7px"></div>
     <div style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.5">출처: 금융위원회·국토교통부 발표 · 시행 일자는 변경될 수 있으니 공식 공고 확인 권고</div>
   </div>
@@ -1477,8 +1477,8 @@ header{
   </div>
 
   <!-- Phase 4 (2026-04-26): 부족 자금 해결 시나리오 -->
-  <div style="max-width:520px;margin-top:14px;padding:14px 16px;background:#FFF7E6;border:1px solid #E8C896;border-radius:var(--r);box-shadow:var(--sh)">
-    <div style="font-size:12px;font-weight:700;color:#8B6914;margin-bottom:8px">💸 부족 자금 발생 시 — 합법 해결 시나리오</div>
+  <div style="max-width:520px;margin-top:14px;padding:14px 16px;background:var(--accent-50);border:1px solid var(--accent-100);border-radius:var(--r);box-shadow:var(--sh)">
+    <div style="font-size:12px;font-weight:700;color:var(--accent-700);margin-bottom:8px">💸 부족 자금 발생 시 — 합법 해결 시나리오</div>
     <div style="font-size:11px;color:var(--t2);line-height:1.7">
       <div style="margin-bottom:6px"><b>1. 신용대출 추가</b> — DSR 여유 시 가능. 1억 한도 + 1년간 규제지역 매수 제한 (10.15 규제). 평균 금리 6%·만기 5년.</div>
       <div style="margin-bottom:6px"><b>2. 마이너스 통장</b> — 일시 대응. 한도 5천만 ~ 1억. 변동 금리 7~8%, 사용 분만 이자.</div>
@@ -1492,7 +1492,7 @@ header{
   <div style="max-width:520px;margin-top:18px;padding:14px 16px;background:#fff;border:1px solid var(--bd);border-radius:var(--r);box-shadow:var(--sh)">
     <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:10px">📌 계약 직전 도구</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-      <button class="abtn" style="margin:0;background:#FFF7E6;color:#8B6914;border:1px solid #E8C896;font-size:12px" onclick="sv('biz')">💰 복비 계산기</button>
+      <button class="abtn" style="margin:0;background:var(--accent-50);color:var(--accent-700);border:1px solid var(--accent-100);font-size:12px" onclick="sv('biz')">💰 복비 계산기</button>
       <button class="abtn" style="margin:0;background:#EEF4FF;color:var(--a2);border:1px solid #C9DCF5;font-size:12px" onclick="sv('biz');setTimeout(()=>document.getElementById('checkList')?.scrollIntoView({behavior:'smooth',block:'start'}),200)">📋 계약 체크리스트</button>
     </div>
   </div>
@@ -1535,9 +1535,9 @@ header{
     <p>매매 정보 입력 → 법령 인용 + AI 작성 특약 초안</p>
   </div>
   <!-- Phase 4 (2026-04-26): 무료 한도 사전 표시 + 검토 안내 prominent -->
-  <div style="background:#FFF7E6;border:1px solid #E8C896;border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:11px;line-height:1.6;color:#8B6914">
+  <div style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:11px;line-height:1.6;color:var(--accent-700)">
     💡 <b>무료 이용 가능</b> (유료 플랜 준비 중) | <b>⚠ 생성 후 반드시 변호사·공인중개사 검토 필수</b><br>
-    <span style="font-size:10px">검토 의뢰: <a href="https://www.kabl.kr" target="_blank" rel="noopener" style="color:#8B6914;text-decoration:underline">대한변호사협회 (kabl.kr)</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:#8B6914;text-decoration:underline">한국공인중개사협회 (kar.or.kr)</a></span>
+    <span style="font-size:10px">검토 의뢰: <a href="https://www.kabl.kr" target="_blank" rel="noopener" style="color:var(--accent-700);text-decoration:underline">대한변호사협회 (kabl.kr)</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:var(--accent-700);text-decoration:underline">한국공인중개사협회 (kar.or.kr)</a></span>
   </div>
   <div class="cv-form">
     <h3>매매 기본 정보</h3>
@@ -1767,8 +1767,8 @@ header{
           <div style="font-size:10.5px;color:var(--t2);margin-top:5px;line-height:1.7" id="cs_tier">예상 당첨 가능 분양: <b>참고치</b> — 실제 당첨 커트라인은 청약Home 공고 확인.</div>
         </div>
         <!-- Phase 4 (2026-04-26): 당첨 커트라인 통계 — 한국부동산원 2024-2025 평균 -->
-        <div style="margin-top:10px;padding:9px 11px;background:#FFF7E6;border-radius:8px;border:1px solid #E8C896">
-          <div style="font-size:11px;font-weight:700;color:#8B6914;margin-bottom:6px">📊 최근 당첨 커트라인 통계 (한국부동산원 2024-2025 평균)</div>
+        <div style="margin-top:10px;padding:9px 11px;background:var(--accent-50);border-radius:8px;border:1px solid var(--accent-100)">
+          <div style="font-size:11px;font-weight:700;color:var(--accent-700);margin-bottom:6px">📊 최근 당첨 커트라인 통계 (한국부동산원 2024-2025 평균)</div>
           <table style="width:100%;font-size:10.5px;color:var(--t2);border-collapse:collapse">
             <tbody>
               <tr><td style="padding:3px 0">서울 강남·서초·송파 인기 단지</td><td style="text-align:right;font-weight:700;color:#A82525">68~75점</td></tr>
@@ -1824,8 +1824,8 @@ header{
     <p style="font-size:11.5px;color:var(--t3);margin:0 0 18px">3분 안에 핵심 가치 체험 + 자주 묻는 답</p>
 
     <!-- 1. 30초 가이드 — Phase 5: 보고서 중심 -->
-    <div style="background:linear-gradient(135deg,#FFF5E6,#FFFAF0);border:1px solid #E8C896;border-radius:12px;padding:16px 18px;margin-bottom:18px">
-      <div style="font-size:13px;font-weight:800;color:#8B6914;margin-bottom:8px">🚀 30초 가이드 — 처음이세요?</div>
+    <div style="background:linear-gradient(135deg,var(--accent-50),#FFFAF0);border:1px solid var(--accent-100);border-radius:12px;padding:16px 18px;margin-bottom:18px">
+      <div style="font-size:13px;font-weight:800;color:var(--accent-700);margin-bottom:8px">🚀 30초 가이드 — 처음이세요?</div>
       <div style="font-size:12px;color:var(--t1);line-height:1.8">
         1. 좌측 사이드바에 <b>주택 보유 / 매수가 / 희망지역</b> 3개만 입력<br>
         2. 헤더 <b>📊 보고서</b> 클릭 → "맞춤 보고서 생성" → AI가 회원님 가구 상황에 맞는 <b>1page 컨설팅 보고서</b> 자동 생성<br>
@@ -1867,7 +1867,7 @@ header{
         <b>차별화</b>: 호갱노노/직방 = 시세 검색만, 우리 = AI 컨설턴트 보고서<br>
         <b>가성비</b>: 부동산 컨설턴트 1회 30만원 → <b>무료로 받아보세요</b> (유료 플랜 준비 중)<br>
         <b>다운로드</b>: PDF로 가족·중개사와 공유 가능<br><br>
-        <span style="background:#FFF7E6;border:1px solid #E8C896;border-radius:6px;padding:6px 10px;display:inline-block;font-size:11px;color:#8B6914">⚠ 본 보고서는 정보 정리이며 투자자문업·중개업·대출모집인업 X. 매수·매도 추천 X.</span>
+        <span style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:6px;padding:6px 10px;display:inline-block;font-size:11px;color:var(--accent-700)">⚠ 본 보고서는 정보 정리이며 투자자문업·중개업·대출모집인업 X. 매수·매도 추천 X.</span>
         <button class="abtn" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px;background:#173A63;color:#fff;border:none" onclick="sv('report')">📊 보고서 만들어보기 →</button>
       </div>
     </details>
@@ -3954,7 +3954,7 @@ function openRegSummary(){
           <tr><td style="padding:8px">지방 생애최초</td><td style="padding:8px;color:var(--grn);font-weight:700;text-align:center">80%</td><td style="padding:8px;font-size:11px">LTV 완화</td></tr>
         </tbody>
       </table>
-      <div style="background:#FFF7E6;border:1px solid #E8C896;border-radius:8px;padding:10px 12px;font-size:11px;color:#8B6914;line-height:1.6;margin-bottom:10px">
+      <div style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--accent-700);line-height:1.6;margin-bottom:10px">
         <b>DSR</b>: 은행 40% / 2금융 50% · 스트레스 +1.5%p (수도권) · 만기 30년<br>
         <b>규제지역</b>: 서울 25구 + 경기 12곳 (과천·광명·성남 분당 등)<br>
         <b>토허구역</b>: 2년 실거주 의무 (강남·송파·용산 일부)<br>
@@ -4112,7 +4112,7 @@ async function loadSubs(){
     const r = await fetch(url, {signal: AbortSignal.timeout(10000)});
     const d = await r.json();
     if(!r.ok){
-      box.innerHTML = `<div style="padding:30px 20px;text-align:center;color:var(--t3);line-height:1.7;background:linear-gradient(135deg,#FFF5E6,#FFF9F0);border:1px solid #E8C896;border-radius:12px">
+      box.innerHTML = `<div style="padding:30px 20px;text-align:center;color:var(--t3);line-height:1.7;background:linear-gradient(135deg,var(--accent-50),#fff);border:1px solid var(--accent-100);border-radius:12px">
         <div style="font-size:34px;margin-bottom:8px">📅</div>
         <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px">청약 캘린더 연동 준비 중</div>
         <div style="font-size:11.5px;color:var(--t2);margin-bottom:14px;line-height:1.6">정부 청약 데이터 API 구독 절차 진행 중입니다.<br>지금은 청약Home에서 직접 확인해주세요.</div>
@@ -5155,7 +5155,7 @@ function showDetail(p){
           ${_box('🏘', '2주택자', `취득세 <b style="color:var(--amb)">${_format(acqTax2H)}원</b> <span style="font-size:9px;color:var(--t3)">(8% 중과)</span><br>재산세 ${_format(propTaxW)}원<br>종부세 <b style="color:var(--amb)">${_format(compTax2H)}원</b>`)}
           ${_box('🏗', '3주택+', `취득세 <b style="color:var(--red)">${_format(acqTax3H)}원</b> <span style="font-size:9px;color:var(--t3)">(12% 중과)</span><br>재산세 ${_format(propTaxW)}원<br>종부세 <b style="color:var(--red)">${_format(compTax3H)}원</b>`)}
         </div>
-        <div style="background:#FFF7E6;border:1px solid #E8C896;border-radius:6px;padding:7px 10px;font-size:10px;color:#8B6914;line-height:1.55;margin-top:4px">
+        <div style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:6px;padding:7px 10px;font-size:10px;color:var(--accent-700);line-height:1.55;margin-top:4px">
           <b>⚡ 양도세 중과 부활 (2026.5.9~)</b>: 다주택자 매도 시 기본세율 + <b>2주택 +20%p / 3주택+ +30%p</b> (조정대상지역). 매도 전 세무사 상담 필수.
         </div>
         <div style="font-size:9.5px;color:var(--t3);margin-top:5px">※ <b>대략 추정</b> — 공시가격=시가×0.7, 2026 세율 기준. 실제 세금은 공시가격 공식 발표·세대원·세액공제·조정대상지역 여부에 따라 다름.<br>※ 출처: 지방세법 §11 (취득세·재산세) / 종합부동산세법 / 소득세법 §94 (양도세). 정확 계산: <a href="https://hometax.go.kr" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">홈택스 모의계산</a></div>
@@ -5378,7 +5378,7 @@ function showDetail(p){
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 4px">🏆 신고가 경신 추이</div>
     <div id="peakTrendBox">${_peakTrendHtml(0)}</div>
     <!-- Sprint PP-2 (2026-05-19): 거래 해제 안내 (한국도시연구소 서울 실거래 분석 — 2025 해제건수 대폭 증가 = 시장교란) -->
-    <div style="background:#FFF7E6;border:1px solid #FFD580;border-radius:8px;padding:10px 12px;margin-top:8px;font-size:10.5px;color:var(--t2);line-height:1.6">
+    <div style="background:var(--accent-50);border:1px solid #FFD580;border-radius:8px;padding:10px 12px;margin-top:8px;font-size:10.5px;color:var(--t2);line-height:1.6">
       <div style="font-weight:700;color:var(--t1);margin-bottom:4px">🛡 거래 해제 안내</div>
       위 거래 데이터는 <b>정상 거래</b>만 포함합니다 (MOLIT 신고 후 해제된 거래 자동 제외 — 시세 정확도 우선).
       <br><span style="font-size:10px;color:var(--t3)">※ 한국도시연구소 분석에 따르면 2025년 거래 해제건수가 대폭 증가 (시장교란 행위 가능성). 전체 해제 이력은 <a href="http://rtdown.molit.go.kr/" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">국토부 실거래가 공개시스템</a> 별도 확인.</span>
@@ -5575,7 +5575,7 @@ function showDetail(p){
         const rows = keys.map(k => {
           const v = raw[k];
           const vs = (v == null || v === '') ? '<span style="color:var(--t3)">∅</span>' : _escHtml(String(v).slice(0, 200));
-          const hl = _interesting(k) ? 'background:#FFF7E6;border:1px solid #F0D58C;border-radius:3px;padding:1px 4px' : '';
+          const hl = _interesting(k) ? 'background:var(--accent-50);border:1px solid #F0D58C;border-radius:3px;padding:1px 4px' : '';
           return `<tr><td style="font-size:10px;${hl}">${_escHtml(k)}</td><td style="font-size:10px;color:var(--t2)">${vs}</td></tr>`;
         }).join('');
         return `<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;font-size:12px;color:var(--t1);list-style:none">🔍 KAPT raw 응답 (진단용 ${keys.length}개 필드) — 클릭해서 펼치기</summary>
@@ -6561,7 +6561,7 @@ function showAlertBanner(hits){
   const existing=document.getElementById('alertBanner');if(existing)existing.remove();
   const b=document.createElement('div');
   b.id='alertBanner';
-  b.style.cssText='position:fixed;top:14px;left:14px;right:14px;max-width:520px;margin:0 auto;z-index:9999;background:linear-gradient(135deg,#FFF5E6,#FFE4C4);border:1px solid #E8A868;border-radius:12px;padding:14px 18px;box-shadow:0 4px 16px rgba(0,0,0,.14);font-size:13px;font-family:inherit';
+  b.style.cssText='position:fixed;top:14px;left:14px;right:14px;max-width:520px;margin:0 auto;z-index:9999;background:linear-gradient(135deg,var(--accent-50),#FFE4C4);border:1px solid #E8A868;border-radius:12px;padding:14px 18px;box-shadow:0 4px 16px rgba(0,0,0,.14);font-size:13px;font-family:inherit';
   b.innerHTML=`<button onclick="document.getElementById('alertBanner').remove()" style="float:right;background:transparent;border:none;font-size:18px;cursor:pointer;color:#8B5A2B;padding:0 6px;line-height:1">✕</button>
     <div style="font-weight:700;color:#8B5A2B;margin-bottom:6px">🎯 목표가 달성 알림 (${hits.length}건)</div>
     ${hits.map(h=>`<div style="color:#5C3817;line-height:1.6;font-size:12px;margin-bottom:2px">・ <b>${h.name}</b> — 현재 평균 ${h.price}억 (이전 ${h.prev?h.prev.toFixed(2)+'억':'?'} / 목표 ${h.target}억 이하)</div>`).join('')}
@@ -7627,7 +7627,7 @@ function renderClauseResult(d,aptName){
     ${mkCard(d.recommended,'r')}
     <div class="cv-caution" style="margin-top:8px;background:var(--a2L);border-color:#AECAEA;color:#144080">특약은 공인중개사·법무사와 최종 검토 후 사용하세요.</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
-      <button class="abtn" style="margin:0;background:#FFF7E6;color:#8B6914;border:1px solid #E8C896" onclick="saveClauseAptToBookmark()">⭐ 관심 단지로 저장</button>
+      <button class="abtn" style="margin:0;background:var(--accent-50);color:var(--accent-700);border:1px solid var(--accent-100)" onclick="saveClauseAptToBookmark()">⭐ 관심 단지로 저장</button>
       <button class="abtn a2" style="margin:0" onclick="saveClauseHistory();toast('💾 히스토리 저장 완료')">💾 이 특약 히스토리 저장</button>
     </div>`;
   document.getElementById('cl_result').style.display='block';
@@ -7663,7 +7663,7 @@ function exportClausePDF(){
     .legal-banner b{font-size:13px;display:block;margin-bottom:4px}
     .cv-card{border:1px solid #E2DDD5;border-radius:8px;margin-bottom:8px;overflow:hidden;page-break-inside:avoid;background:#fff}
     .cv-card-hdr{padding:8px 12px;background:#F0EDE7;display:flex;justify-content:space-between}
-    .cv-card-hdr.essential{background:#FAE9E2;border-bottom:1px solid #F0C0AC}
+    .cv-card-hdr.essential{background:#FAE9E2;border-bottom:1px solid var(--accent-100)}
     .cv-card-title{font-size:12px;font-weight:700}
     .cv-card-body{padding:10px 12px}
     .cv-card-content{font-size:11px;line-height:1.75;background:#F4F2ED;border-radius:6px;padding:8px 10px;margin-bottom:6px;white-space:pre-wrap}
