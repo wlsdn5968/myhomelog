@@ -1824,7 +1824,7 @@ header{
     <p style="font-size:11.5px;color:var(--t3);margin:0 0 18px">3분 안에 핵심 가치 체험 + 자주 묻는 답</p>
 
     <!-- 1. 30초 가이드 — Phase 5: 보고서 중심 -->
-    <div style="background:linear-gradient(135deg,var(--accent-50),#FFFAF0);border:1px solid var(--accent-100);border-radius:12px;padding:16px 18px;margin-bottom:18px">
+    <div style="background:linear-gradient(135deg,var(--accent-50),#fff);border:1px solid var(--accent-100);border-radius:12px;padding:16px 18px;margin-bottom:18px">
       <div style="font-size:13px;font-weight:800;color:var(--accent-700);margin-bottom:8px">🚀 30초 가이드 — 처음이세요?</div>
       <div style="font-size:12px;color:var(--t1);line-height:1.8">
         1. 좌측 사이드바에 <b>주택 보유 / 매수가 / 희망지역</b> 3개만 입력<br>
@@ -3838,12 +3838,12 @@ function _downloadReportPDF() {
       @page { margin: 16mm 14mm; @bottom-center { content: "내집로그 1Page 컨설팅 · 매수·매도 추천 X · 미래 예측 X · " counter(page) "/" counter(pages); font-size: 8.5pt; color: #98938A; } }
       * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       body { font-family: 'Malgun Gothic','맑은 고딕',sans-serif; padding: 0; margin: 0; font-size: 10.5pt; line-height: 1.55; color: #18160F; }
-      h1 { font-size: 17pt; font-weight: 700; margin: 0 0 4px; color: #C84B18; letter-spacing: -0.3px; }
+      h1 { font-size: 17pt; font-weight: 700; margin: 0 0 4px; color: #173A63; letter-spacing: -0.3px; }
       .meta { font-size: 9pt; color: #98938A; margin-bottom: 12px; padding-bottom: 7px; border-bottom: 1px solid #E2DDD5; }
       .meta b { color: #18160F; }
       .sec { margin-bottom: 11px; page-break-inside: avoid; }
-      .sec-title { font-size: 11.5pt; font-weight: 700; color: #18160F; margin-bottom: 6px; padding-left: 5px; border-left: 3px solid #C84B18; }
-      .core { background: #FFFAF0; border: 1px solid #E8C896; border-radius: 5px; padding: 9px 13px; }
+      .sec-title { font-size: 11.5pt; font-weight: 700; color: #18160F; margin-bottom: 6px; padding-left: 5px; border-left: 3px solid #173A63; }
+      .core { background: #fff; border: 1px solid #D5E1EE; border-radius: 5px; padding: 9px 13px; }
       .core ol { margin: 0; padding-left: 20px; font-size: 10.5pt; line-height: 1.7; }
       .core li { margin-bottom: 3px; }
       .policy { background: #F8F8F6; border: 1px solid #E2DDD5; border-radius: 5px; padding: 9px 13px; font-size: 9.5pt; line-height: 1.7; }
@@ -3860,12 +3860,12 @@ function _downloadReportPDF() {
       .apt-fit { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #E8E5E0; }
       .apt-match { font-size: 8.5pt; color: #6B5F4D; background: #F8F6F0; border-radius: 3px; padding: 3px 6px; margin-top: 3px; }
       .apt-objfacts { font-size: 8.5pt; color: #3A3530; background: #F5F2EC; border: 1px solid #E2DDD5; border-radius: 3px; padding: 4px 7px; margin-top: 4px; line-height: 1.5; }
-      .apt-rec { color: #C84B18; font-weight: 600; margin-top: 2px; }
+      .apt-rec { color: #173A63; font-weight: 600; margin-top: 2px; }
       .longterm { background: #F0F7FF; border: 1px solid #BFD7F7; border-radius: 5px; padding: 9px 13px; font-size: 10pt; line-height: 1.7; color: #1B4F8A; }
       .longterm-warn { font-size: 8.5pt; color: #98938A; margin-top: 5px; }
       .tips ul { margin: 0; padding-left: 20px; font-size: 9.5pt; line-height: 1.7; }
       .tips li { margin-bottom: 2px; }
-      .disclaimer { margin-top: 14px; padding: 9px 13px; background: #FAEBEB; border: 1px solid #C84B18; border-radius: 5px; font-size: 8.5pt; color: #A82525; line-height: 1.6; page-break-inside: avoid; }
+      .disclaimer { margin-top: 14px; padding: 9px 13px; background: #FAEBEB; border: 1px solid #173A63; border-radius: 5px; font-size: 8.5pt; color: #A82525; line-height: 1.6; page-break-inside: avoid; }
       .disclaimer b { display: block; margin-bottom: 3px; font-size: 9pt; }
       @media print { body { padding: 0; margin: 0; } .noprint { display: none !important; } }
       /* MOB-AUDIT-2026-05-03: 모바일 print 가독성 — iOS Safari 폰 print 시 폰트·여백 보강 */
@@ -3879,7 +3879,7 @@ function _downloadReportPDF() {
         .apt-body, .core ol, .policy, .longterm, .tips ul { font-size: 10pt; line-height: 1.7; }
         .apt-objfacts, .apt-match, .longterm-warn, .disclaimer, .meta { font-size: 9pt; }
       }
-      .noprint { position: fixed; top: 16px; right: 16px; padding: 8px 14px; background: #C84B18; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 9999; }
+      .noprint { position: fixed; top: 16px; right: 16px; padding: 8px 14px; background: #173A63; color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px rgba(0,0,0,0.2); z-index: 9999; }
     </style>
   </head><body>
     <button class="noprint" onclick="window.print()">🖨 PDF 저장</button>
@@ -6112,7 +6112,7 @@ function renderAnalysis(d,p){
             }).join('')}
           </tbody>
         </table>
-        <div style="margin-top:8px;padding:7px 9px;background:#FAEBEB;border-left:3px solid #C84B18;border-radius:4px;font-size:10px;color:#A82525;line-height:1.6">
+        <div style="margin-top:8px;padding:7px 9px;background:#FAEBEB;border-left:3px solid #173A63;border-radius:4px;font-size:10px;color:#A82525;line-height:1.6">
           <b>⚠ 사용자가 부담하는 위험</b>: 만기 시 부족분만큼 신용대출 / 매각 강제. 신용대출 1억 초과 시 1년간 규제지역 추가 매수 제한.<br>
           <b>전세대출 보유자</b>: 규제지역 3억 초과 매수 시 전세대출 즉시 회수 (보증금 반환 자금 별도 마련 필수).<br>
           <b>토지거래허가구역</b>(강남 일부·송파·용산): 2년 실거주 의무 → <b>갭투자 사실상 금지</b>.
@@ -7647,7 +7647,7 @@ function exportClausePDF(){
   // → 사선 워터마크 (page-break-inside 무시 + position:fixed) + @media print 강제 표시.
   w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${safeTitle}</title>
   <style>
-    @page { margin: 24mm 16mm; @bottom-center { content: "AI 생성 초안 · 법적 효력 없음 · 변호사·공인중개사 검토 필수 · " counter(page) "/" counter(pages); font-size: 9px; color: #C84B18; } }
+    @page { margin: 24mm 16mm; @bottom-center { content: "AI 생성 초안 · 법적 효력 없음 · 변호사·공인중개사 검토 필수 · " counter(page) "/" counter(pages); font-size: 9px; color: #173A63; } }
     body{font-family:'Malgun Gothic',sans-serif;padding:28px;font-size:13px;line-height:1.7;color:#18160F;position:relative}
     /* ── 워터마크 (사선) ── */
     body::before{content:"AI 생성 초안";position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-32deg);font-size:120px;color:rgba(200,75,24,0.12);pointer-events:none;z-index:0;font-weight:900;white-space:nowrap;letter-spacing:8px}
@@ -7657,9 +7657,9 @@ function exportClausePDF(){
     }
     /* 컨텐츠는 워터마크 위에 */
     h1, .sub, .cv-card, .cv-caution, footer, .legal-banner { position: relative; z-index: 1; }
-    h1{font-size:16px;font-weight:700;margin-bottom:4px;color:#C84B18}
+    h1{font-size:16px;font-weight:700;margin-bottom:4px;color:#173A63}
     .sub{font-size:11px;color:#98938A;margin-bottom:14px}
-    .legal-banner{background:#FAEBEB;border:2px solid #C84B18;border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:#A82525;line-height:1.7}
+    .legal-banner{background:#FAEBEB;border:2px solid #173A63;border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:#A82525;line-height:1.7}
     .legal-banner b{font-size:13px;display:block;margin-bottom:4px}
     .cv-card{border:1px solid #E2DDD5;border-radius:8px;margin-bottom:8px;overflow:hidden;page-break-inside:avoid;background:#fff}
     .cv-card-hdr{padding:8px 12px;background:#F0EDE7;display:flex;justify-content:space-between}
