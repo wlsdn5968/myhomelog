@@ -684,14 +684,15 @@ header{
 /* DETAIL MODAL */
 .dmbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:400;align-items:center;justify-content:center;padding:16px}
 .dmbg.open{display:flex}
-.dm{background:#fff;border-radius:16px;width:100%;max-width:660px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 12px 48px rgba(0,0,0,.18)}
+.dm{background:#fff;border-radius:16px;width:100%;max-width:700px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(16,24,40,.20)}
 .dmhdr{padding:15px 18px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 .dmtit{font-size:14px;font-weight:700}
 .dmx{width:26px;height:26px;border-radius:50%;border:1px solid var(--bd);background:var(--s1);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--t2);transition:all .15s}
 .dmx:hover{background:var(--redL);color:var(--red)}
 /* TABS-OVERFLOW-2026-05-13 (Sprint W — 운영자 발견): desktop 에서도 7 tab overflow 시 가로 스크롤. */
-.rtabs{display:flex;border-bottom:1px solid var(--bd);padding:0 14px;gap:2px;flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
-.rtab{padding:9px 14px;font-size:12px;font-weight:500;color:var(--t3);border:none;background:transparent;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;font-family:inherit;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.rtabs{display:flex;border-bottom:1px solid var(--border-faint);padding:0 16px;gap:4px;flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
+.rtab{padding:11px 14px;font-size:12.5px;font-weight:600;color:var(--t3);border:none;background:transparent;cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px;font-family:inherit;transition:all .15s;white-space:nowrap;flex-shrink:0}
+.rtab:hover{color:var(--t1)}
 .rtab.on{color:var(--acc);border-bottom-color:var(--acc)}
 /* Phase 33 #2 (2026-05-04): 모바일 6 탭 가로 스크롤 → priority 3 + "더보기" overflow scroll */
 @media(max-width:600px){
@@ -714,10 +715,15 @@ header{
   /* Phase 35 #5: ctaReportBtn 모바일에서 헤더에 박혀 있되 z-index 낮춤 */
 }
 /* Phase 33 #3 (2026-05-04): 단지 sticky header "한줄 요약" — 12 element 스크롤 시 항상 노출 */
-.apt-sticky-summary{position:sticky;top:0;z-index:50;background:var(--s0);border-bottom:1px solid var(--bd);padding:8px 14px;font-size:12px;color:var(--t1);display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-weight:600;box-shadow:0 1px 4px rgba(0,0,0,0.04)}
-.apt-sticky-summary>span{white-space:nowrap}
-.apt-sticky-summary .ass-name{color:var(--acc);font-weight:700}
-.apt-sticky-summary .ass-sep{color:var(--t3);font-weight:400}
+/* 리디자인 import — 단지상세 리치 헤더 (Claude Design 충실 반영): 큰 단지명·배지 좌측 + 큰 평균 실거래가 우측 */
+.apt-sticky-summary{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid var(--border-faint);padding:13px 18px;color:var(--t1);display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(16,24,40,.05)}
+.apt-sticky-summary .ass-main{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1;min-width:0}
+.apt-sticky-summary .ass-name{color:var(--t1);font-weight:800;font-size:18px;letter-spacing:-.4px;white-space:nowrap}
+.apt-sticky-summary .ass-area{color:var(--t3);font-size:12px;font-weight:600;white-space:nowrap}
+.apt-sticky-summary .ass-sep{display:none}
+.apt-sticky-summary .ass-price{margin-left:auto;text-align:right;display:flex;flex-direction:column;line-height:1.15;white-space:nowrap}
+.apt-sticky-summary .ass-price-v{font-size:19px;font-weight:800;color:var(--acc);letter-spacing:-.3px}
+.apt-sticky-summary .ass-price-l{font-size:10px;color:var(--t3);font-weight:600}
 .rpanel{flex:1;overflow-y:auto;padding:16px}
 .rpanel::-webkit-scrollbar{width:4px}.rpanel::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:2px}
 .tp{display:none}.tp.on{display:block}
@@ -5070,13 +5076,17 @@ function showDetail(p){
       else if (_age >= 30) _ageLabel = `<span class="ass-sep">·</span><span class="ass-age recon" title="재건축 가능 시점 — 사업 추진은 단지별 결정 필요">🏗 재건축 검토</span>`;
       else if (_age >= 20) _ageLabel = `<span class="ass-sep">·</span><span class="ass-age remod" title="리모델링 가능 시점 — 사업 추진은 단지별 결정 필요">🛠 리모델링 검토</span>`;
     }
-    _ass.innerHTML = `<span class="ass-name">${_escHtml(p.aptName||'')}</span>` +
-      (p.area ? `<span class="ass-sep">·</span><span>${_escHtml(p.area)}</span>` : '') +
-      (p.avgPrice ? `<span class="ass-sep">·</span><span style="color:var(--acc)">${(p.avgPrice).toFixed(2)}억</span>` : '') +
-      (_hasScore
-        ? `<span class="ass-sep">·</span><span class="lvl ${lv}" style="font-size:10.5px;padding:1px 6px">${s}점 ${lt}</span>`
-        : `<span class="ass-sep">·</span><span class="lvl unknown" style="font-size:10.5px;padding:1px 6px">${lt}</span>`) +
-      _ageLabel;
+    const _badge = _ageLabel ? _ageLabel.replace('<span class="ass-sep">·</span>','') : '';
+    _ass.innerHTML =
+      `<div class="ass-main">`
+      + `<span class="ass-name">${_escHtml(p.aptName||'')}</span>`
+      + (p.area ? `<span class="ass-area">${_escHtml(p.area)}</span>` : '')
+      + _badge
+      + (_hasScore
+          ? `<span class="lvl ${lv}" style="font-size:10.5px;padding:1px 7px">${s}점 ${lt}</span>`
+          : `<span class="lvl unknown" style="font-size:10.5px;padding:1px 7px">${lt}</span>`)
+      + `</div>`
+      + (p.avgPrice ? `<div class="ass-price"><span class="ass-price-v">${(p.avgPrice).toFixed(1)}억</span><span class="ass-price-l">평균 실거래</span></div>` : '');
   } catch(_){}
 
   // 점수 환각 fix: score 없으면 "분석 대기" 카드 + 사이드바 진입 유도 CTA (60 fallback 제거)
