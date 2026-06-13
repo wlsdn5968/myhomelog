@@ -57,6 +57,9 @@ function adminClient() {
  */
 async function syncOneSgg(admin, lawdCd) {
   const all = [];
+  // ROBUSTNESS-2026-06-13: 페이지 재시도 상태 — 일시적 5xx 시 break(뒷페이지 전체 유실) 대신 동일 페이지 재시도.
+  let _pageRetry = 0;
+  const MAX_PAGE_RETRY = 2;
   for (let pageNo = 1; pageNo <= MAX_PAGES; pageNo++) {
     let r;
     try {
@@ -86,9 +89,17 @@ async function syncOneSgg(admin, lawdCd) {
           keyHasPercent: APT_INFO_KEY ? APT_INFO_KEY.includes('%') : null,
         }, 'AptInfo axios 진단 (1회)');
       }
-      logger.warn({ err: e.message, lawdCd, pageNo }, 'AptInfo 페이지 호출 실패');
+      // ROBUSTNESS-2026-06-13: molit 와 동일하게 동일 페이지 재시도(backoff) 후에만 포기 → 일시 오류로 인한 뒷페이지 유실 방지.
+      if (_pageRetry < MAX_PAGE_RETRY) {
+        _pageRetry++;
+        await new Promise(rs => setTimeout(rs, 400 * _pageRetry));
+        pageNo--; // 같은 페이지 재시도
+        continue;
+      }
+      logger.warn({ err: e.message, lawdCd, pageNo, retries: _pageRetry }, 'AptInfo 페이지 호출 실패 — 재시도 소진, 이 sgg 중단');
       break;
     }
+    _pageRetry = 0; // 페이지 성공 → 재시도 카운터 리셋(페이지별 예산)
     const header = r.data?.response?.header;
     // 진단 (1회만): 응답 raw 한번만 로깅 (구조 파악)
     if (!_diagLogged) {

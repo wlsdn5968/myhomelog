@@ -108,12 +108,20 @@ async function fetchRegionMonth(lawdCd, dealYm) {
 
   const all = [];
   let totalCount = null;
+  let _hitPageCap = false;
   for (let pageNo = 1; pageNo <= MAX_PAGES; pageNo++) {
     const { list, total } = await fetchPage(pageNo);
     if (total != null) totalCount = total;
     all.push(...list);
     if (list.length < NUM_ROWS) break;
     if (totalCount != null && all.length >= totalCount) break;
+    if (pageNo === MAX_PAGES) _hitPageCap = true; // 마지막 페이지까지 꽉 참 = 캡 도달(early break 아님)
+  }
+  // COVERAGE-2026-06-13: MAX_PAGES 캡에 걸렸는데 totalCount 가 더 크면 그 region-month 일부 거래가 조용히 누락됨.
+  //   실측 단일 region-month 최대 ~1,018건(< 10,000)이라 현재 미발생이나, 급증/대형통합 시 감지 위해 경고(손실 가시화).
+  if (_hitPageCap && totalCount != null && all.length < totalCount) {
+    logger.warn({ fetched: all.length, totalCount, maxPages: MAX_PAGES },
+      'molit-ingest: MAX_PAGES 캡 도달 — 일부 거래 미수집. MAX_PAGES 상향 검토 필요');
   }
 
   return all

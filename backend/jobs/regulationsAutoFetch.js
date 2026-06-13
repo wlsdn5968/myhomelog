@@ -33,25 +33,27 @@ const logger = require('../logger');
 // 변경 시 본 객체만 수정 — endpoint/parser 영향 X
 // Sprint QQ (2026-05-19): 한국부동산원 + 정책브리핑 추가 — 2026.4.17 만기연장 금지 등 누락 방지
 const RSS_SOURCES = [
+  // ── 2026-06-13 전수 재검증 (구 4개 URL 전부 사망 확인: 금융위 404 · 국토부 무한리다이렉트 · 국세청 HTML · korea.kr 삭제) ──
+  //   교체 URL 은 모두 실제 WebFetch 로 유효 RSS(<item>+최근 날짜) 확인 후 반영.
   {
     name: '금융위원회',
-    url: 'https://www.fsc.go.kr/wsbiz/rss/in.do?menu=in090101', // 보도자료 RSS
+    url: 'https://www.fsc.go.kr/about/fsc_bbs_rss/?fid=0111', // 보도자료 RSS (검증 2026-06-13: 구 wsbiz/rss/in.do 404 → 본 경로 ~10건 유효, dc:date)
     keywords: ['LTV', 'DSR', '주담대', '대출', '주택담보', '규제지역', '스트레스', '디딤돌', '보금자리', '가계부채', '만기연장'],
   },
   {
     name: '국토교통부',
-    url: 'https://www.molit.go.kr/USR/policyData/rss/rss.jsp?id=rss', // 정책자료 RSS (실제 URL 검증 필요)
+    url: 'https://www.korea.kr/rss/dept_molit.xml', // korea.kr 부처별 피드 (검증 2026-06-13: molit.go.kr 자체 RSS 무한리다이렉트 → korea.kr proxy 50건, 부동산 정책 확인)
     keywords: ['주택', '부동산', '규제지역', '청약', '재건축', '재개발', '분양', 'LTV', 'DSR', '토지거래허가'],
   },
   {
     name: '국세청',
-    url: 'https://www.nts.go.kr/nts/cm/cntnts/cntntsView.do?mi=2353&cntntsId=7716', // 부동산 세제 (RSS 없을 시 HTML scraping)
+    url: 'https://www.korea.kr/rss/dept_nts.xml', // korea.kr 부처별 피드 (검증 2026-06-13: nts.go.kr 자체 RSS 없음 → korea.kr proxy 50건)
     keywords: ['취득세', '양도세', '종부세', '종합부동산세', '주택세', '부동산세', '중과'],
   },
   // Sprint QQ: 정책브리핑 (korea.kr) — 부처 종합 정책 발표, 4.17 만기연장 같은 직접 발표 cover
   {
     name: '정책브리핑',
-    url: 'https://www.korea.kr/news/rssList.do?section=政府部처', // RSS 형식 확인 필요
+    url: 'https://www.korea.kr/rss/policy.xml', // 정책뉴스 RSS (검증 2026-06-13: 구 rssList.do?section= 삭제 → 정적 .xml 30건 유효)
     keywords: ['부동산', '주택', '대출', '가계부채', 'LTV', 'DSR', '청약', '취득세', '양도세'],
   },
 ];
@@ -76,7 +78,9 @@ function parseRss(xml) {
     const block = m[1];
     const titleM = block.match(/<title[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/title>/i);
     const linkM = block.match(/<link[^>]*>(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?<\/link>/i);
-    const pubM = block.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i);
+    // COVERAGE-2026-06-13: korea.kr 은 <pubDate>, 금융위(fsc) 는 <dc:date> 사용 → 둘 다 파싱(없으면 날짜필터 통과).
+    const pubM = block.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)
+      || block.match(/<dc:date[^>]*>([\s\S]*?)<\/dc:date>/i);
     const title = titleM ? titleM[1].trim().replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>') : '';
     const link = linkM ? linkM[1].trim() : '';
     const pubStr = pubM ? pubM[1].trim() : '';
@@ -139,6 +143,11 @@ async function run() {
     totalMatched += r.matched.length;
     if (r.error) {
       logger.warn({ source: r.name, err: r.error }, 'regulations-auto-fetch: 소스 fetch 실패');
+    } else if (r.total === 0) {
+      // COVERAGE-2026-06-13: fetch 는 성공했으나 <item> 0개 = RSS 가 깨짐(HTML/리다이렉트/오류 응답을 받아 파싱 0).
+      //   기존에는 error 가 아니므로 조용히 넘어가 4개 소스가 모두 0건이어도 무경보였음(실측: 2026-06-13 전 소스 무효).
+      //   운영자가 로그/Health 로 인지하도록 경고 — URL 점검 트리거.
+      logger.warn({ source: r.name, url: r.url || null }, 'regulations-auto-fetch: 소스가 0개 항목 반환 — RSS URL 점검 필요(HTML/오류 응답 가능성)');
     }
     if (r.matched.length) {
       // 매칭된 항목들 logger.warn — Sentry capture

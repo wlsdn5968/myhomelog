@@ -86,7 +86,7 @@ async function rehealSubfeatures(admin, { cap = 300, budgetMs = 120000 } = {}) {
       } catch (_) { /* 개별 실패(Kakao 일시오류 등) 무시 — source 유지 → 다음 run 재시도 */ }
     }
   }
-  await Promise.all(Array.from({ length: 4 }, () => worker()));
+  await Promise.all(Array.from({ length: 8 }, () => worker())); // PERF-2026-06-13: reheal 동시성 4→8 (Kakao 100K/일 한도 대비 안전, 개별 실패는 source 유지로 graceful)
   logger.info({ source: 'geocache-reheal', tried, healed, marked, elapsedMs: Date.now() - started },
     `geocache reheal: ${healed} 본체교정 / ${marked} 개선불가마킹 / ${tried} 시도`);
   return { tried, healed, marked };
@@ -210,7 +210,8 @@ async function runOneChunk(admin, limit, since) {
     umdNm: t.umd_nm,
   }));
 
-  const results = await resolveCoordBatch(items, 4);
+  // PERF-2026-06-13: 동시성 4→8 (Kakao 무료 100K/일·경고 60K 대비, 240s 예산 내 최대 ~6K 호출 = 한도 1/10 미만 안전). 백필 wall-time ~절반.
+  const results = await resolveCoordBatch(items, 8);
   const inserted = results.filter(r => r && r.lat && r.lng).length;
   const failed = results.length - inserted;
 
