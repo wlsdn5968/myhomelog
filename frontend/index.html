@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="description" content="내집로그 — 국토부 실거래가 기반 아파트 분석. 매수 비용·LTV·DSR·전세가율·갭·특약초안까지 한 화면에. 매수 추천 아님(참고용).">
 <meta name="keywords" content="아파트 실거래가, 부동산 분석, LTV 계산, DSR, 전세가율, 매수 비용, 부동산 특약, 임장 체크리스트">
 <meta name="robots" content="index, follow">
@@ -901,7 +901,7 @@ header{
 .comm-strat{margin-top:10px;background:var(--a2L);border:1px solid var(--info-bd);border-radius:var(--rs);padding:10px 12px;font-size:11px;color:var(--info-tx);line-height:1.7}
 
 /* 모바일 하단 탭 */
-.bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg-base);border-top:1px solid var(--bd);z-index:500;box-shadow:0 -2px 12px rgba(0,0,0,.08)}
+.bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg-base);border-top:1px solid var(--bd);z-index:500;box-shadow:0 -2px 12px rgba(0,0,0,.08);padding-bottom:env(safe-area-inset-bottom)}
 .bnav-inner{display:flex}
 .bnav-item{flex:1;padding:10px 4px 8px;text-align:center;cursor:pointer;font-size:9px;font-weight:600;color:var(--t3);border:none;background:transparent;font-family:inherit;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative}
 .bnav-item.on{color:var(--acc)}
@@ -944,6 +944,8 @@ header{
   /* 헤더 우측 hml: 모바일에선 핵심 버튼만 (10.15 / 로그인) */
   .hml .hst#quotaPill,.hml .hst#aiPill,.hml .hst#apiSt,.hml #settingsBtn{display:none!important}
   .hml .rpill{display:none}
+  /* MOBILE-2026-06-13: absolute 뷰(보고서·특약)는 bottom:0 이라 하단 ~54px 가 fixed bnav 뒤로 숨음 → bnav+safe-area 만큼 하단 패딩 확보 */
+  .biz-view, .clause-view{padding-bottom:calc(62px + env(safe-area-inset-bottom))!important}
   html,body{overflow:auto}
 }
 @media(max-width:480px){
@@ -1074,7 +1076,8 @@ header{
     padding-bottom: max(12px, env(safe-area-inset-bottom)) !important;
   }
   body {
-    padding-bottom: env(safe-area-inset-bottom);
+    /* MOBILE-2026-06-13: bnav(≈60px) 확보 + 노치 safe-area. 기존엔 safe-area 만 있어 max-width:700px 의 60px 를 덮어써 하단 콘텐츠가 bnav 뒤로 숨던 버그 수정. */
+    padding-bottom: calc(60px + env(safe-area-inset-bottom));
   }
 }
 /* tap-highlight 색상 토닝 다운 (회색 → 브랜드 톤) */
@@ -4341,11 +4344,11 @@ function initNaverMap(){
     const dmOpen = document.getElementById('DM')?.classList.contains('open');
     const admOpen = document.getElementById('ADM')?.classList.contains('open');
     if (dmOpen || admOpen) return;
-    if (mapObj.getZoom && mapObj.getZoom() >= 13) _pannBtn.style.display = 'block';
+    if (mapObj.getZoom && mapObj.getZoom() >= _pannMinZoom()) _pannBtn.style.display = 'block';
   };
   naver.maps.Event.addListener(mapObj, 'idle', () => {
     const z = mapObj.getZoom();
-    if (z < 13) { if (_pannBtn) _pannBtn.style.display = 'none'; return; }
+    if (z < _pannMinZoom()) { if (_pannBtn) _pannBtn.style.display = 'none'; return; }
     const dmOpen = document.getElementById('DM')?.classList.contains('open');
     const admOpen = document.getElementById('ADM')?.classList.contains('open');
     if (dmOpen || admOpen) { if (_pannBtn) _pannBtn.style.display = 'none'; return; }
@@ -4369,6 +4372,9 @@ function initNaverMap(){
   });
 }
 
+// MOBILE-2026-06-13: "이 영역 단지 보기" 줌 임계값 — 모바일은 작은 화면+핀치줌 마찰로 기본 zoom 12 에 머물러
+//   임계 13 이면 버튼이 거의 안 뜸(운영자 발견 "PC엔 있는데 모바일엔 없다"). 버튼 자체는 정상 — 임계만 모바일 12/데스크톱 13.
+function _pannMinZoom(){ try{ return (window.innerWidth <= 700) ? 12 : 13; }catch(_){ return 13; } }
 function loadLeaflet(){
   if(window.L){initLeaflet();return;}
   const lk=document.createElement('link');lk.rel='stylesheet';lk.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(lk);
@@ -4400,11 +4406,11 @@ function initLeaflet(){
     const dmOpen = document.getElementById('DM')?.classList.contains('open');
     const admOpen = document.getElementById('ADM')?.classList.contains('open');
     if (dmOpen || admOpen) return; // 다른 모달 떠 있으면 노출 안 함
-    if (mapObj.getZoom && mapObj.getZoom() >= 13) _pannBtn.style.display = 'block';
+    if (mapObj.getZoom && mapObj.getZoom() >= _pannMinZoom()) _pannBtn.style.display = 'block';
   };
   mapObj.on('moveend', () => {
     const z = mapObj.getZoom();
-    if (z < 13) { if (_pannBtn) _pannBtn.style.display = 'none'; return; }
+    if (z < _pannMinZoom()) { if (_pannBtn) _pannBtn.style.display = 'none'; return; }
     // 모달 열려 있으면 버튼 표시 X (회귀 fix)
     const dmOpen = document.getElementById('DM')?.classList.contains('open');
     const admOpen = document.getElementById('ADM')?.classList.contains('open');
