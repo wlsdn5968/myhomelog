@@ -92,6 +92,19 @@ router.post('/', async (req, res) => {
   if (hit) return res.json({ ...hit, fromCache: true });
   const key = process.env.KAKAO_REST_API_KEY;
   if (!key || key === 'your_kakao_rest_key') return res.json({ lat: null, lng: null, error: 'KAKAO_REST_API_KEY 미설정' });
+  // DIAG-2026-06-14 (임시): 단지명 geocode 전면 null 원인 규명 — raw Kakao keyword 응답 노출. 진단 후 즉시 제거. (키 미노출 — 길이만)
+  if (req.query.debug === '1') {
+    const q = (`${sgg} ${umd} ${aptName}`).trim() || aptName;
+    try {
+      const r = await axios.get('https://dapi.kakao.com/v2/local/search/keyword.json',
+        { headers: { Authorization: `KakaoAK ${key}` }, params: { query: q, size: 5 }, timeout: 5000 });
+      return res.json({ debug: true, q, status: r.status, total: r.data?.meta?.total_count, keyLen: key.length,
+        docs: (r.data?.documents || []).slice(0, 3).map(d => ({ name: d.place_name, addr: d.address_name, cat: d.category_name, y: d.y, x: d.x })) });
+    } catch (e) {
+      return res.json({ debug: true, q, errStatus: e.response?.status || null, errMsg: e.message,
+        body: e.response?.data ? JSON.stringify(e.response.data).slice(0, 300) : null, keyLen: key.length });
+    }
+  }
   const out = await kakaoGeocode(key, aptName, area, sgg, umd);
   if (!out) return res.json({ lat: null, lng: null, error: '결과없음' });
   cache.set(ck, out, 86400);
