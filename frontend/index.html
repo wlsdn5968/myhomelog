@@ -415,6 +415,21 @@ window.MHL.auth = window.MHL.auth || {
   --sh:    var(--shadow-sm);
   --sh2:   var(--shadow-lg);
 }
+/* ── 다크 모드 (리디자인 — 토글식, 라이트 기본) · 의미 토큰 오버라이드 ───── */
+html[data-theme="dark"]{
+  --bg-base:#1A1F29; --bg-elev-1:#222834; --bg-elev-2:#2A313F; --bg:#0F131A; --bg2:#2A313F;
+  --text-primary:#E7EAEF; --text-secondary:#AEB4BF; --text-tertiary:#7E8694;
+  --border-faint:rgba(255,255,255,0.06); --border-subtle:rgba(255,255,255,0.11);
+  --border-medium:rgba(255,255,255,0.17); --border-strong:rgba(255,255,255,0.26);
+  --accent-500:#4E83C4; --accent-600:#3D6CA8; --accent-700:#7CABDD;
+  --accent-50:rgba(78,131,196,0.15); --accent-100:rgba(78,131,196,0.30);
+  --accent-tint:rgba(78,131,196,0.16); --accent-tint-2:rgba(78,131,196,0.24); --accent-tint-3:rgba(78,131,196,0.32);
+  --positive-tint:rgba(16,185,129,0.18); --warning-tint:rgba(217,119,6,0.20); --negative-tint:rgba(220,38,38,0.20);
+  --shadow-sm:0 1px 2px rgba(0,0,0,0.30),0 2px 6px rgba(0,0,0,0.24);
+  --shadow-md:0 1px 3px rgba(0,0,0,0.34),0 8px 24px rgba(0,0,0,0.30);
+  --shadow-lg:0 2px 6px rgba(0,0,0,0.38),0 16px 40px rgba(0,0,0,0.40);
+  color-scheme:dark;
+}
 body{font-family:var(--font-body)}
 *{box-sizing:border-box;margin:0;padding:0}
 /* A11y: 키보드 탐색 시만 포커스 링 표시 (마우스 클릭 시 방해 없음) */
@@ -498,11 +513,11 @@ header{
 .lbl{display:block;font-size:11px;font-weight:600;color:var(--t3);margin-bottom:4px}
 .inp{width:100%;padding:9px 12px;border:1px solid var(--bd);border-radius:var(--rs);font-size:13px;font-family:inherit;color:var(--t1);background:var(--bg-base);outline:none;transition:border-color var(--duration-fast) var(--ease-out),box-shadow var(--duration-fast) var(--ease-out)}
 .inp::placeholder{color:var(--text-faint)}
-.inp:focus{border-color:var(--acc);background:#fff;box-shadow:0 0 0 3px var(--accent-tint-2)}
+.inp:focus{border-color:var(--acc);background:var(--bg-base);box-shadow:0 0 0 3px var(--accent-tint-2)}
 .r2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px}
 .mb9{margin-bottom:9px}
 .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
-.chip{padding:4px 11px;border-radius:999px;font-size:11px;border:1px solid var(--border-subtle);cursor:pointer;transition:all .15s;color:var(--t2);background:#fff;font-family:inherit}
+.chip{padding:4px 11px;border-radius:999px;font-size:11px;border:1px solid var(--border-subtle);cursor:pointer;transition:all .15s;color:var(--t2);background:var(--bg-base);font-family:inherit}
 .chip:hover{border-color:var(--border-strong);color:var(--text-primary)}.chip.on{background:var(--acc);color:#fff;border-color:var(--acc)}
 .abtn{width:100%;padding:9px;border:none;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:5px}
 /* Phase 4-3 후 sprint 단계 5 부분 (2026-05-05): MED risk 1 — .abtn.a2 #1E5499 → accent-tint variant
@@ -520,7 +535,7 @@ header{
 .lbox{background:var(--accL);border:1px solid var(--accent-100);border-radius:var(--rs);padding:12px;margin-top:8px}
 .lbig{font-size:20px;font-weight:700;color:var(--acc)}.lsm{font-size:10px;color:var(--t2);margin-top:1px}
 .lg{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:9px}
-.li{background:#fff;border-radius:6px;padding:7px 9px;border:1px solid var(--accent-100)}
+.li{background:var(--bg-base);border-radius:6px;padding:7px 9px;border:1px solid var(--accent-100)}
 .lil{font-size:10px;color:var(--t3);margin-bottom:2px}.liv{font-size:12px;font-weight:700}
 .wbox{background:var(--ambL);border:1px solid #E8C08A;border-radius:6px;padding:8px 10px;font-size:11px;color:var(--amb);margin-top:7px;line-height:1.65}
 
@@ -545,7 +560,7 @@ header{
 /* CENTER */
 .cp{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
 .mtbar{padding:7px 12px;background:var(--s0);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;box-shadow:var(--sh)}
-.mbtn{padding:5px 12px;border-radius:999px;font-size:11.5px;font-weight:600;border:1px solid var(--border-subtle);background:#fff;color:var(--t2);cursor:pointer;font-family:inherit;transition:all .15s;box-shadow:0 1px 2px rgba(16,24,40,.05)}
+.mbtn{padding:5px 12px;border-radius:999px;font-size:11.5px;font-weight:600;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--t2);cursor:pointer;font-family:inherit;transition:all .15s;box-shadow:0 1px 2px rgba(16,24,40,.05)}
 .mbtn:hover{border-color:var(--border-strong);color:var(--text-primary)}.mbtn.on{background:var(--acc);color:#fff;border-color:var(--acc);box-shadow:0 2px 7px rgba(23,58,99,.24)}
 .msep{width:1px;height:16px;background:var(--bd)}
 #mapEl{flex:1;min-height:0;background:var(--s2)}
@@ -627,11 +642,11 @@ header{
 .fab-ai{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border-radius:50%;background:var(--acc);color:#fff;border:none;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:24px;box-shadow:0 6px 18px rgba(0,0,0,.22);z-index:850;transition:transform .15s,box-shadow .15s}
 .fab-ai:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.28)}
 /* 플로팅 관심단지 버튼 */
-.fab-bm{position:fixed;right:24px;bottom:92px;width:48px;height:48px;border-radius:50%;background:#fff;color:#333;border:1px solid var(--bd);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.15);z-index:850;transition:transform .15s,box-shadow .15s;position:fixed}
+.fab-bm{position:fixed;right:24px;bottom:92px;width:48px;height:48px;border-radius:50%;background:var(--bg-base);color:#333;border:1px solid var(--bd);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.15);z-index:850;transition:transform .15s,box-shadow .15s;position:fixed}
 .fab-bm:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.20)}
 .fab-bm .fab-bm-cnt{position:absolute;top:-4px;right:-4px;background:var(--amb,#f5a623);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #fff}
 /* 관심단지 popover */
-.bm-pop{position:fixed;right:24px;bottom:150px;width:320px;max-width:calc(100vw - 40px);max-height:min(460px,calc(100vh - 200px));background:#fff;border:1px solid var(--bd);border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,.2);z-index:860;display:none;flex-direction:column;overflow:hidden}
+.bm-pop{position:fixed;right:24px;bottom:150px;width:320px;max-width:calc(100vw - 40px);max-height:min(460px,calc(100vh - 200px));background:var(--bg-base);border:1px solid var(--bd);border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,.2);z-index:860;display:none;flex-direction:column;overflow:hidden}
 .bm-pop.on{display:flex}
 .bm-pop-hdr{padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;background:var(--s0)}
 .bm-pop-close{background:transparent;border:none;cursor:pointer;font-size:16px;color:var(--t3);padding:2px 6px;border-radius:4px}
@@ -676,7 +691,7 @@ header{
 .qb:hover{background:var(--accent-tint-2);border-color:var(--accent-500);transform:translateY(-1px)}
 .cir{padding:8px 10px;border-top:1px solid var(--bd);display:flex;gap:7px;align-items:flex-end;flex-shrink:0}
 .ci{flex:1;padding:7px 11px;border:1px solid var(--bd);border-radius:18px;font-size:12px;font-family:inherit;color:var(--t1);background:var(--s1);outline:none;resize:none;min-height:36px;max-height:90px;transition:border-color .15s}
-.ci:focus{border-color:var(--acc);background:#fff}
+.ci:focus{border-color:var(--acc);background:var(--bg-base)}
 .cs{width:36px;height:36px;border-radius:50%;background:var(--acc);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .18s}
 .cs:hover{background:var(--accD);transform:scale(1.05)}.cs svg{width:14px;height:14px;fill:#fff}
 .cerr{font-size:11px;color:var(--red);padding:3px 13px;display:none}.cerr.show{display:block}
@@ -684,7 +699,7 @@ header{
 /* DETAIL MODAL */
 .dmbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:400;align-items:center;justify-content:center;padding:16px}
 .dmbg.open{display:flex}
-.dm{background:#fff;border-radius:16px;width:100%;max-width:700px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(16,24,40,.20)}
+.dm{background:var(--bg-base);border-radius:16px;width:100%;max-width:700px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(16,24,40,.20)}
 .dmhdr{padding:15px 18px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 .dmtit{font-size:14px;font-weight:700}
 .dmx{width:26px;height:26px;border-radius:50%;border:1px solid var(--bd);background:var(--s1);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--t2);transition:all .15s}
@@ -716,7 +731,7 @@ header{
 }
 /* Phase 33 #3 (2026-05-04): 단지 sticky header "한줄 요약" — 12 element 스크롤 시 항상 노출 */
 /* 리디자인 import — 단지상세 리치 헤더 (Claude Design 충실 반영): 큰 단지명·배지 좌측 + 큰 평균 실거래가 우측 */
-.apt-sticky-summary{position:sticky;top:0;z-index:50;background:#fff;border-bottom:1px solid var(--border-faint);padding:13px 18px;color:var(--t1);display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(16,24,40,.05)}
+.apt-sticky-summary{position:sticky;top:0;z-index:50;background:var(--bg-base);border-bottom:1px solid var(--border-faint);padding:13px 18px;color:var(--t1);display:flex;align-items:center;gap:10px;box-shadow:0 2px 8px rgba(16,24,40,.05)}
 .apt-sticky-summary .ass-main{display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:1;min-width:0}
 .apt-sticky-summary .ass-name{color:var(--t1);font-weight:800;font-size:18px;letter-spacing:-.4px;white-space:nowrap}
 .apt-sticky-summary .ass-area{color:var(--t3);font-size:12px;font-weight:600;white-space:nowrap}
@@ -728,14 +743,14 @@ header{
 .rpanel::-webkit-scrollbar{width:4px}.rpanel::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:2px}
 .tp{display:none}.tp.on{display:block}
 .rg2{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:13px}
-.rc{background:#fff;border-radius:12px;padding:12px 13px;border:1px solid var(--border-subtle);box-shadow:0 1px 3px rgba(16,24,40,.04)}
+.rc{background:var(--bg-base);border-radius:12px;padding:12px 13px;border:1px solid var(--border-subtle);box-shadow:0 1px 3px rgba(16,24,40,.04)}
 .rcl{font-size:10px;color:var(--t3);margin-bottom:2px}.rcv{font-size:18px;font-weight:700}
 .dtbl{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px}
 .dtbl td{padding:6px 0;border-bottom:1px solid var(--bd)}.dtbl tr:last-child td{border-bottom:none}
 .dtbl td:first-child{color:var(--t3);width:38%}.dtbl td:last-child{font-weight:500}
 .ibox{border-radius:var(--rs);padding:10px 12px;font-size:12px;line-height:1.7;margin-bottom:9px}
 .ibox.g{background:var(--grnL);border:1px solid #B0D9BE;color:#0F5A2A}.ibox.r{background:var(--redL);border:1px solid #E8C4C4;color:var(--red)}.ibox.b{background:var(--a2L);border:1px solid #AECAEA;color:#144080}.ibox.o{background:var(--accL);border:1px solid #EAB8A0;color:#7A2E0C}.ibox.y{background:var(--ambL);border:1px solid #E4C080;color:var(--amb)}
-.gbw{display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:15px;background:#fff;border-radius:14px;border:1px solid var(--border-subtle);box-shadow:0 1px 3px rgba(16,24,40,.05)}
+.gbw{display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:15px;background:var(--bg-base);border-radius:14px;border:1px solid var(--border-subtle);box-shadow:0 1px 3px rgba(16,24,40,.05)}
 .gi{flex:1}.gi-t{font-size:14px;font-weight:700;margin-bottom:5px}.gi-s{font-size:11px;color:var(--t2);line-height:1.6;margin-top:6px}
 .txi{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd);font-size:11px}.txi:last-child{border-bottom:none}
 .txd{color:var(--t3)}.txf{color:var(--t2)}.txp{font-weight:700;color:var(--acc)}
@@ -769,7 +784,7 @@ header{
 /* SETTINGS MODAL */
 .smbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;align-items:center;justify-content:center;padding:16px}
 .smbg.open{display:flex}
-.smbox{background:#fff;border-radius:16px;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.15);overflow:hidden}
+.smbox{background:var(--bg-base);border-radius:16px;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.15);overflow:hidden}
 .smhdr{padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center}
 .smtit{font-size:14px;font-weight:700}.smx{width:26px;height:26px;border-radius:50%;border:1px solid var(--bd);background:var(--s1);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--t2)}
 .smbody{padding:20px}
@@ -777,7 +792,7 @@ header{
 .sm-lbl{font-size:12px;font-weight:600;color:var(--t1);margin-bottom:4px;display:flex;align-items:center;gap:5px}
 .sm-hint{font-size:11px;color:var(--t3);margin-top:3px;line-height:1.5}
 .sm-inp{width:100%;padding:8px 12px;border:1px solid var(--bd);border-radius:var(--rs);font-size:12px;font-family:inherit;color:var(--t1);background:var(--s1);outline:none;transition:all .15s}
-.sm-inp:focus{border-color:var(--acc);background:#fff}
+.sm-inp:focus{border-color:var(--acc);background:var(--bg-base)}
 .sm-link{color:var(--a2);text-decoration:none;font-size:11px}
 .sm-link:hover{text-decoration:underline}
 .sm-save{width:100%;padding:10px;background:var(--acc);color:#fff;border:none;border-radius:var(--rs);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;margin-top:4px}
@@ -819,11 +834,11 @@ header{
 .cv-hero{background:linear-gradient(135deg,var(--acc),var(--accD));color:#fff;border-radius:10px;padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .cv-hero h2{font-size:14px;font-weight:700;margin:0}
 .cv-hero p{font-size:11px;opacity:.88;line-height:1.4;margin:0;flex:1;min-width:220px}
-.cv-form{background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--sh)}
+.cv-form{background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--sh)}
 .cv-form h3{font-size:13px;font-weight:700;margin-bottom:13px;color:var(--t1)}
 .cv-r3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin-bottom:9px}
 .cv-r2{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:9px}
-.cv-result{background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:16px;box-shadow:var(--sh)}
+.cv-result{background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--r);padding:16px;box-shadow:var(--sh)}
 .cv-result-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .cv-result-title{font-size:13px;font-weight:700}
 .pdf-btn{padding:6px 14px;background:var(--acc);color:#fff;border:none;border-radius:18px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:5px}
@@ -858,7 +873,7 @@ header{
   /* 모바일: .lp 가 fixed slide-in 이므로 fill 로 복귀 */
   #view-report{left:0!important}
 }
-.biz-section{background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--sh)}
+.biz-section{background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--sh)}
 .biz-section h3{font-size:13px;font-weight:700;margin-bottom:13px}
 .comm-result{margin-top:12px;display:none}
 .comm-result.show{display:block}
@@ -868,7 +883,7 @@ header{
 .comm-strat{margin-top:10px;background:var(--a2L);border:1px solid #AECAEA;border-radius:var(--rs);padding:10px 12px;font-size:11px;color:#144080;line-height:1.7}
 
 /* 모바일 하단 탭 */
-.bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--bd);z-index:500;box-shadow:0 -2px 12px rgba(0,0,0,.08)}
+.bnav{display:none;position:fixed;bottom:0;left:0;right:0;background:var(--bg-base);border-top:1px solid var(--bd);z-index:500;box-shadow:0 -2px 12px rgba(0,0,0,.08)}
 .bnav-inner{display:flex}
 .bnav-item{flex:1;padding:10px 4px 8px;text-align:center;cursor:pointer;font-size:9px;font-weight:600;color:var(--t3);border:none;background:transparent;font-family:inherit;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative}
 .bnav-item.on{color:var(--acc)}
@@ -893,7 +908,7 @@ header{
   .lp{
     display:block!important;
     position:fixed!important;top:0;left:0;bottom:0;width:85%;max-width:340px;
-    z-index:9999!important;background:#fff;box-shadow:2px 0 12px rgba(0,0,0,0.15);
+    z-index:9999!important;background:var(--bg-base);box-shadow:2px 0 12px rgba(0,0,0,0.15);
     transform:translateX(-100%);transition:transform .25s ease;
     overflow-y:auto;overflow-x:hidden;
     visibility:visible;
@@ -951,7 +966,7 @@ header{
 .pct-wrap{margin-bottom:14px}
 .pct-bar-bg{height:10px;background:var(--s2);border-radius:5px;position:relative;margin:7px 0 4px;overflow:visible}
 .pct-bar-fill{height:100%;border-radius:5px;transition:width .5s ease;background:linear-gradient(90deg,var(--grn),var(--amb),var(--red))}
-.pct-pin{position:absolute;top:-4px;width:18px;height:18px;border-radius:50%;background:#fff;border:2px solid var(--acc);transform:translateX(-50%);box-shadow:var(--sh)}
+.pct-pin{position:absolute;top:-4px;width:18px;height:18px;border-radius:50%;background:var(--bg-base);border:2px solid var(--acc);transform:translateX(-50%);box-shadow:var(--sh)}
 .pct-labels{display:flex;justify-content:space-between;font-size:9px;color:var(--t3)}
 .pct-result{font-size:12px;font-weight:700;margin-top:5px}
 
@@ -1002,7 +1017,7 @@ header{
 .fn-star{font-size:22px;cursor:pointer;transition:all .1s;color:var(--bd2);line-height:1}
 .fn-star.on{color:#F5A623}
 .fn-date,.fn-memo{width:100%;padding:7px 11px;border:1px solid var(--bd);border-radius:var(--rs);font-size:12px;background:var(--s1);color:var(--t1);outline:none;font-family:inherit;transition:border-color .15s}
-.fn-date:focus,.fn-memo:focus{border-color:var(--acc);background:#fff}
+.fn-date:focus,.fn-memo:focus{border-color:var(--acc);background:var(--bg-base)}
 .fn-memo{resize:vertical;min-height:80px;line-height:1.6}
 .fn-save{padding:8px 20px;background:var(--acc);color:#fff;border:none;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
 .fn-save:hover{background:var(--accD)}.fn-save:active{transform:scale(.97)}
@@ -1157,6 +1172,12 @@ header{
 <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
+<script>
+/* 리디자인 — 다크모드 토글(라이트 기본·localStorage). 저장값 즉시 적용(FOUC 방지) */
+(function(){try{if(localStorage.getItem('mhl_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(_){}})();
+function toggleTheme(){var dark=document.documentElement.getAttribute('data-theme')==='dark';if(dark){document.documentElement.removeAttribute('data-theme');}else{document.documentElement.setAttribute('data-theme','dark');}try{localStorage.setItem('mhl_theme',dark?'light':'dark');}catch(_){}var b=document.getElementById('themeToggle');if(b)b.textContent=dark?'🌙':'☀️';try{var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',dark?'#173A63':'#0F131A');}catch(_){}}
+document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('themeToggle');if(b)b.textContent=document.documentElement.getAttribute('data-theme')==='dark'?'☀️':'🌙';});
+</script>
 
 <!-- P0 Phase 2 R3-B (2026-04-25): 모바일 drawer 백그라운드 -->
 <div class="drawer-bg" id="drawerBg" onclick="closeDrawer()" aria-hidden="true"></div>
@@ -1193,7 +1214,7 @@ header{
       } catch(_){}
     })();
     </script>
-    <div id="hSearchDrop" style="display:none;position:absolute;top:100%;left:0;width:100%;max-width:calc(100vw - 40px);background:#fff;border:1px solid var(--bd);border-radius:8px;margin-top:3px;max-height:520px;overflow-y:auto;z-index:99999;box-shadow:0 6px 24px rgba(0,0,0,0.18)"></div>
+    <div id="hSearchDrop" style="display:none;position:absolute;top:100%;left:0;width:100%;max-width:calc(100vw - 40px);background:var(--bg-base);border:1px solid var(--bd);border-radius:8px;margin-top:3px;max-height:520px;overflow-y:auto;z-index:99999;box-shadow:0 6px 24px rgba(0,0,0,0.18)"></div>
   </div>
   <div class="hml">
     <!-- Phase 4: 클릭 → 규제 요약 모달 -->
@@ -1206,6 +1227,7 @@ header{
     <button class="hbtn hbtn-cta" id="ctaReportBtn" onclick="sv('report')" title="회원님 가구 맞춤 1page 컨설팅 보고서 자동 생성" aria-label="맞춤 보고서 생성으로 이동"><span class="cta-icon">📊</span><span class="cta-text"> 맞춤 보고서</span></button>
     <button class="hbtn" id="loginBtn" onclick="openLogin()" title="로그인하면 북마크가 기기 간 동기화돼요">로그인</button>
     <button class="hbtn" id="userBtn" onclick="openUserMenu()" style="display:none">👤 <span id="userBadge"></span></button>
+    <button class="hbtn" id="themeToggle" onclick="toggleTheme()" title="다크/라이트 모드 전환" aria-label="테마 전환" style="min-width:0;padding:6px 9px">🌙</button>
     <button class="hbtn" id="settingsBtn" onclick="openSettings()">ⓘ 정보</button>
   </div>
 </header>
@@ -1418,7 +1440,7 @@ header{
     <div id="policyTimeline" style="display:flex;flex-direction:column;gap:7px"></div>
     <div style="font-size:10px;color:var(--t3);margin-top:8px;line-height:1.5">출처: 금융위원회·국토교통부 발표 · 시행 일자는 변경될 수 있으니 공식 공고 확인 권고</div>
   </div>
-  <div style="background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:17px;margin-bottom:14px;max-width:520px;box-shadow:var(--sh)">
+  <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--r);padding:17px;margin-bottom:14px;max-width:520px;box-shadow:var(--sh)">
     <div class="r2"><div><label class="lbl" for="c_b">매수가(억)</label><input class="inp" id="c_b" type="number" inputmode="decimal" placeholder="7.0" oninput="dc()"></div><div><label class="lbl" for="c_i">연소득(만)</label><input class="inp" id="c_i" type="number" inputmode="decimal" placeholder="5000" oninput="dc()"></div></div>
     <div class="r2"><div><label class="lbl" for="c_r">금리(%)</label><input class="inp" id="c_r" type="number" inputmode="decimal" placeholder="4.0" step="0.1" oninput="dc()"></div><div><label class="lbl" for="c_y">기간(년)</label><input class="inp" id="c_y" type="number" inputmode="decimal" placeholder="30" oninput="dc()"></div></div>
     <div class="r2"><div><label class="lbl" for="c_e">기존 월원리금(만)</label><input class="inp" id="c_e" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div><div><label class="lbl" for="c_c">보유현금(억)</label><input class="inp" id="c_c" type="number" inputmode="decimal" placeholder="3.0" oninput="dc()"></div></div>
@@ -1448,7 +1470,7 @@ header{
       <div class="li" style="border-radius:var(--rs)"><div class="lil">DSR추정 <span style="font-size:9px;color:var(--t3);font-weight:500">(한도 40%)</span></div><div class="liv" id="co_t">—</div></div>
     </div>
     <div class="wbox" id="co_w" style="margin-bottom:12px"></div>
-    <div style="background:#fff;border:1px solid var(--bd);border-radius:var(--r);padding:14px;box-shadow:var(--sh)">
+    <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--r);padding:14px;box-shadow:var(--sh)">
       <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:9px">금리 시나리오별 월 원리금</div>
       <div id="scnC"></div>
     </div>
@@ -1459,7 +1481,7 @@ header{
   <div style="max-width:520px;margin-top:18px;padding:14px 16px;background:#EAF7EE;border:1px solid #B0D9BE;border-radius:var(--r);box-shadow:var(--sh)">
     <div style="font-size:12px;font-weight:700;color:#1F7A3A;margin-bottom:8px">💰 정책자금 4종 비교 (일반 주담대보다 한도·금리 유리)</div>
     <table style="width:100%;font-size:11px;border-collapse:collapse">
-      <thead><tr style="background:#fff;color:#1F7A3A">
+      <thead><tr style="background:var(--bg-base);color:#1F7A3A">
         <th style="padding:6px 4px;text-align:left;border-bottom:1px solid #B0D9BE">상품</th>
         <th style="padding:6px 4px;border-bottom:1px solid #B0D9BE">소득</th>
         <th style="padding:6px 4px;border-bottom:1px solid #B0D9BE">집값</th>
@@ -1489,7 +1511,7 @@ header{
     <div style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.5">※ 본 안내는 정보 정리이며 세무·법무 자문이 아닙니다. 가족 차용은 세무사 상담 필수 (<b>국세청 차용증 양식</b> 또는 변호사 작성 권장).</div>
   </div>
 
-  <div style="max-width:520px;margin-top:18px;padding:14px 16px;background:#fff;border:1px solid var(--bd);border-radius:var(--r);box-shadow:var(--sh)">
+  <div style="max-width:520px;margin-top:18px;padding:14px 16px;background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--r);box-shadow:var(--sh)">
     <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:10px">📌 계약 직전 도구</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <button class="abtn" style="margin:0;background:var(--accent-50);color:var(--accent-700);border:1px solid var(--accent-100);font-size:12px" onclick="sv('biz')">💰 복비 계산기</button>
@@ -1761,7 +1783,7 @@ header{
             <option value="17">15년 이상 (17점)</option>
           </select>
         </div>
-        <div id="cs_result" style="margin-top:12px;padding:11px 13px;background:#fff;border-radius:8px;border:1px solid #BFD7F7">
+        <div id="cs_result" style="margin-top:12px;padding:11px 13px;background:var(--bg-base);border-radius:8px;border:1px solid #BFD7F7">
           <!-- STAB-A P1#33 (2026-05-03): 초기값 "8" misleading → "—" 입력 전엔 빈 표시 -->
           <div style="font-size:13px;font-weight:800;color:#1B4F8A">총 가점: <span id="cs_total">—</span>점 / 84점</div>
           <div style="font-size:10.5px;color:var(--t2);margin-top:5px;line-height:1.7" id="cs_tier">예상 당첨 가능 분양: <b>참고치</b> — 실제 당첨 커트라인은 청약Home 공고 확인.</div>
@@ -1836,7 +1858,7 @@ header{
     </div>
 
     <!-- 2. 단지 검색 -->
-    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px" open>
+    <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px" open>
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">🔍 단지 검색 — 호갱노노처럼</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         <b>방법 1. 헤더 검색바</b> — "공덕래미안" 또는 "공덕동" 입력 → 자동완성에서 클릭<br>
@@ -1847,7 +1869,7 @@ header{
     </details>
 
     <!-- 3. 대출 한도 계산 -->
-    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+    <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">🧮 대출 한도 계산 — 2025.10.15 규제 반영</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         매수가·연소득·기존 대출(신용·전세) 입력 → <b>LTV·DSR·추천 한도·월 원리금</b> 즉시 계산<br>
@@ -1873,7 +1895,7 @@ header{
     </details>
 
     <!-- ✍ AI 특약 (보조 도구로 강등) -->
-    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+    <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">✍ AI 특약 초안 (보조 도구)</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         계약 직전 단지 결정 후 → 매수 정보 입력 → AI 특약 초안<br>
@@ -1882,7 +1904,7 @@ header{
     </details>
 
     <!-- 5. AI 챗 -->
-    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+    <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">🤖 AI 챗봇 활용</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         우측 또는 💬 버튼 → AI 도우미. <b>6개 빠른 질문 버튼</b> + 직접 입력 가능<br>
@@ -1893,7 +1915,7 @@ header{
     </details>
 
     <!-- 6. 관심 단지 + 임장노트 -->
-    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+    <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">⭐ 관심 단지 + 임장노트</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         <b>관심 단지</b>: 단지 상세에서 ⭐ 클릭 → 좌측 사이드바에 누적<br>
@@ -1904,7 +1926,7 @@ header{
     </details>
 
     <!-- 7. 청약·뉴스·계약 타임라인 -->
-    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+    <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">📅 청약 · 뉴스 · 계약 타임라인 (부가 도구)</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         <b>📅 청약</b>: 한국부동산원 청약Home 일정 + 가점 계산기 (84점) + 지역별 당첨 커트라인 통계<br>
@@ -1914,7 +1936,7 @@ header{
     </details>
 
     <!-- Sprint PP-5 (2026-05-19): 부동산 기초 교육 — easylaw.go.kr (법제처 생활법령) 기반 정적 컨텐츠 -->
-    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+    <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">📚 부동산 기초 — 처음 거래하시나요?</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         <b>📜 부동산 정의 (민법 §99)</b><br>
@@ -1941,7 +1963,7 @@ header{
     </details>
 
     <!-- Sprint RR (2026-05-19): 정부 공식 법령 10건 직접 링크 (law.go.kr 국가법령정보센터) -->
-    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+    <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">📜 부동산 핵심 법령 10건 (정부 공식)</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         본 서비스의 규제·세금·계약 정보는 아래 정부 공식 법령에 근거합니다. 정확한 조문은 직접 확인하세요:<br><br>
@@ -1969,7 +1991,7 @@ header{
     </details>
 
     <!-- 8. FAQ + 면책 -->
-    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
+    <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">❓ 자주 묻는 질문 + 면책 안내</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         <b>Q. 데이터는 어디서 오나요?</b><br>
@@ -3667,7 +3689,7 @@ function _renderReport(data) {
   }).join('');
 
   const aptsHtml = (r.apartments || []).map(a => `
-    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+    <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:10px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
         <div style="font-size:13px;font-weight:700;color:var(--t1)">${_numFmt(a.rank)}. ${_escHtml(a.name)} ${a.areaPyeong ? `<span style="font-weight:500;color:var(--t2);font-size:12px">${_numFmt(a.areaPyeong)}평 (${_numFmt(a.areaSqm)}㎡)</span>` : ''}</div>
       </div>
@@ -3702,7 +3724,7 @@ function _renderReport(data) {
     </div>
 
     <!-- 정부 정책 환경 -->
-    <details style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+    <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:10px">
       <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--t1);list-style:none">📜 현재 부동산 정책 환경 (${_escHtml(policy.snapshot || '')})</summary>
       <div style="margin-top:8px;font-size:11.5px;color:var(--t2);line-height:1.8">
         <div>• <b>규제지역</b>: ${_escHtml(policy.regulatedAreas || '')}</div>
@@ -3716,7 +3738,7 @@ function _renderReport(data) {
     </details>
 
     <!-- 매수 체크리스트 -->
-    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 15px;margin-bottom:12px">
+    <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 15px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px">✅ 매수·갈아타기 체크리스트</div>
       ${checklistHtml}
     </div>
@@ -3726,14 +3748,14 @@ function _renderReport(data) {
     ${aptsHtml}
 
     <!-- 갈아타기 시나리오 -->
-    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 15px;margin-bottom:12px">
+    <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 15px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:6px">🔁 갈아타기 관점 (장기)</div>
       <div style="font-size:11.5px;color:var(--t2);line-height:1.8">${_escHtml(r.longTermView || '')}</div>
       <div style="font-size:10px;color:var(--t3);margin-top:5px">⚠ 미래 가격 예측 X. 정성적 안내만.</div>
     </div>
 
     <!-- 매수 TIP -->
-    <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 15px;margin-bottom:12px">
+    <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 15px;margin-bottom:12px">
       <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:6px">💡 매수 실무 TIP</div>
       <ul style="margin:0;padding-left:18px;font-size:11.5px;color:var(--t2);line-height:1.8">${tipsHtml}</ul>
     </div>
@@ -3742,9 +3764,9 @@ function _renderReport(data) {
     <div style="background:#F0F7FF;border:1px solid #BFD7F7;border-radius:10px;padding:13px 15px;margin-bottom:10px">
       <div style="font-size:12px;font-weight:700;color:#1B4F8A;margin-bottom:8px">📌 다음 액션</div>
       <div style="display:flex;flex-wrap:wrap;gap:6px">
-        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:#fff;border:1px solid #BFD7F7;color:#1B4F8A" onclick="_addAllReportAptsToBookmarks()">⭐ ${(r.apartments || []).length}단지 모두 관심 추가</button>
-        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:#fff;border:1px solid #BFD7F7;color:#1B4F8A" onclick="_downloadReportPDF()">🖨 PDF 다운로드</button>
-        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:#fff;border:1px solid #BFD7F7;color:#1B4F8A" onclick="sv('calc')">🧮 별도 대출 계산기</button>
+        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:var(--bg-base);border:1px solid #BFD7F7;color:#1B4F8A" onclick="_addAllReportAptsToBookmarks()">⭐ ${(r.apartments || []).length}단지 모두 관심 추가</button>
+        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:var(--bg-base);border:1px solid #BFD7F7;color:#1B4F8A" onclick="_downloadReportPDF()">🖨 PDF 다운로드</button>
+        <button class="abtn" style="margin:0;padding:7px 12px;font-size:11px;background:var(--bg-base);border:1px solid #BFD7F7;color:#1B4F8A" onclick="sv('calc')">🧮 별도 대출 계산기</button>
       </div>
     </div>
 
@@ -3939,7 +3961,7 @@ function openRegSummary(){
     m.id = 'regSummaryModal';
     m.className = 'dmbg';
     m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
-    m.innerHTML = `<div style="background:#fff;border-radius:12px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto;padding:20px 22px;box-shadow:0 12px 40px rgba(0,0,0,0.3)">
+    m.innerHTML = `<div style="background:var(--bg-base);border-radius:12px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto;padding:20px 22px;box-shadow:0 12px 40px rgba(0,0,0,0.3)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <h3 style="margin:0;font-size:16px;color:var(--t1)">📋 2025.10.15 부동산 규제 요약</h3>
         <button onclick="document.getElementById('regSummaryModal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--t3)">✕</button>
@@ -4127,7 +4149,7 @@ async function loadSubs(){
       return;
     }
     const cards = d.items.map(it=>`
-      <div style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:13px 14px;margin-bottom:8px;box-shadow:var(--sh)">
+      <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 14px;margin-bottom:8px;box-shadow:var(--sh)">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
           <div style="font-size:13px;font-weight:700;color:var(--t1);flex:1;line-height:1.3">${it.name}</div>
           <div style="font-size:11px;white-space:nowrap">${dDayLabel(it.receiveStart)}</div>
@@ -4805,7 +4827,7 @@ function renderListGrid(){
   <!-- Phase 4 (2026-04-26): 정렬·필터 — 추천 결과 비교 핵심 -->
   <div style="margin:0 14px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
     <span style="font-size:11px;color:var(--t2);font-weight:600">정렬</span>
-    <select id="lstSort" onchange="renderListGrid()" style="padding:5px 9px;border:1px solid var(--bd);border-radius:6px;font-size:11.5px;background:#fff;cursor:pointer;font-family:inherit">
+    <select id="lstSort" onchange="renderListGrid()" style="padding:5px 9px;border:1px solid var(--bd);border-radius:6px;font-size:11.5px;background:var(--bg-base);cursor:pointer;font-family:inherit">
       <option value="score">점수 높은 순</option>
       <option value="priceAsc">가격 낮은 순</option>
       <option value="priceDesc">가격 높은 순</option>
@@ -4814,8 +4836,8 @@ function renderListGrid(){
     </select>
     <span style="font-size:11px;color:var(--t2);font-weight:600;margin-left:6px">필터</span>
     <button id="lstFltAll" onclick="setLstFilter('all', this)" style="padding:5px 11px;border:1px solid var(--acc);background:var(--acc);color:#fff;border-radius:18px;font-size:11px;cursor:pointer">전체</button>
-    <button id="lstFltReg" onclick="setLstFilter('regulated', this)" style="padding:5px 11px;border:1px solid var(--bd);background:#fff;color:var(--t2);border-radius:18px;font-size:11px;cursor:pointer">규제 LTV40</button>
-    <button id="lstFltNon" onclick="setLstFilter('non', this)" style="padding:5px 11px;border:1px solid var(--bd);background:#fff;color:var(--t2);border-radius:18px;font-size:11px;cursor:pointer">비규제 LTV70</button>
+    <button id="lstFltReg" onclick="setLstFilter('regulated', this)" style="padding:5px 11px;border:1px solid var(--bd);background:var(--bg-base);color:var(--t2);border-radius:18px;font-size:11px;cursor:pointer">규제 LTV40</button>
+    <button id="lstFltNon" onclick="setLstFilter('non', this)" style="padding:5px 11px;border:1px solid var(--bd);background:var(--bg-base);color:var(--t2);border-radius:18px;font-size:11px;cursor:pointer">비규제 LTV70</button>
     <span style="margin-left:auto;font-size:10.5px;color:var(--t3)">총 ${props.length}건</span>
   </div>`;
   // Phase 4 (2026-04-26): 렌더 안전망 + 정렬·필터.
@@ -5016,7 +5038,7 @@ function renderPriceChart(rows){
   const deltaColor=delta>0.05?'#D94545':delta<-0.05?'#2A8F3F':'#888';
   const arrow=delta>0.05?'▲':delta<-0.05?'▼':'→';
   return `
-  <div style="background:#fff;border:1px solid var(--bd);border-radius:8px;padding:10px 8px 6px">
+  <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:8px;padding:10px 8px 6px">
     <svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">
       <defs>
         <linearGradient id="pcGrad" x1="0" x2="0" y1="0" y2="1">
@@ -5146,7 +5168,7 @@ function showDetail(p){
       //   단순 추정: 만약 매도 시 시가의 50% 차익 가정 → 양도세 추정
       const _format = w => Math.round(w).toLocaleString();
       const propEok = (propTaxW / 10000).toFixed(2);
-      const _box = (icon, title, content) => `<div style="background:#fff;border:1px solid var(--bd);border-radius:6px;padding:8px 10px;font-size:10.5px;line-height:1.5;color:var(--t2)"><div style="font-weight:700;color:var(--t1);margin-bottom:3px">${icon} ${title}</div>${content}</div>`;
+      const _box = (icon, title, content) => `<div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;font-size:10.5px;line-height:1.5;color:var(--t2)"><div style="font-weight:700;color:var(--t1);margin-bottom:3px">${icon} ${title}</div>${content}</div>`;
       return `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:11px 13px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
         <div style="font-weight:700;color:var(--t1);margin-bottom:6px">💸 보유 주택수별 예상 세금 시뮬레이션</div>
         <div style="font-size:10px;color:var(--t3);margin-bottom:6px">매매가 ${market.toFixed(1)}억 / 공시가격 추정 ${official.toFixed(1)}억</div>
@@ -5345,7 +5367,7 @@ function showDetail(p){
         <button class="trend-area-chip" data-sqm="0" onclick="_selectTrendArea(0, this)" style="padding:4px 10px;border-radius:14px;border:1px solid var(--acc);font-size:11px;cursor:pointer;font-family:inherit;background:var(--acc);color:#fff">전체 ${(p.txHistory||[]).length}건</button>
         ${_areaList.map(a => {
           const py = Math.round(a.sqm / 3.3);
-          return `<button class="trend-area-chip" data-sqm="${a.sqm}" onclick="_selectTrendArea(${a.sqm}, this)" style="padding:4px 10px;border-radius:14px;border:1px solid var(--bd);font-size:11px;cursor:pointer;font-family:inherit;background:#fff;color:var(--t2)">${a.sqm}㎡(${py}평) <span style="opacity:0.7;font-size:9.5px">${a.n}건</span></button>`;
+          return `<button class="trend-area-chip" data-sqm="${a.sqm}" onclick="_selectTrendArea(${a.sqm}, this)" style="padding:4px 10px;border-radius:14px;border:1px solid var(--bd);font-size:11px;cursor:pointer;font-family:inherit;background:var(--bg-base);color:var(--t2)">${a.sqm}㎡(${py}평) <span style="opacity:0.7;font-size:9.5px">${a.n}건</span></button>`;
         }).join('')}
       </div>`
     : '';
@@ -5717,9 +5739,9 @@ async function loadFacility(p){
       // 종류별 1개 카드 — 학교명 + 거리만 (정직)
       const renderType = (t, label) => {
         const top = byT[t];
-        if (!top) return `<div style="background:#fff;border:1px solid var(--bd);border-radius:6px;padding:8px;font-size:11px"><div style="color:var(--t3);font-size:10px;margin-bottom:2px">${label}</div><div style="color:var(--t3);font-size:11px">반경 1km 내 없음</div></div>`;
+        if (!top) return `<div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:6px;padding:8px;font-size:11px"><div style="color:var(--t3);font-size:10px;margin-bottom:2px">${label}</div><div style="color:var(--t3);font-size:11px">반경 1km 내 없음</div></div>`;
         const neisInfo = top.neis?.foundationType ? ` <span style="color:var(--t3);font-size:9.5px">(${_escHtml(top.neis.foundationType)})</span>` : '';
-        return `<div style="background:#fff;border:1px solid var(--bd);border-radius:6px;padding:8px;font-size:11px">
+        return `<div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:6px;padding:8px;font-size:11px">
           <div style="color:var(--t3);font-size:10px;margin-bottom:3px">${label}</div>
           <div style="font-weight:600;color:var(--t1)">${_escHtml(top.name)}${neisInfo}</div>
           <div style="font-size:10px;color:var(--t3)">${top.distance_m}m</div>
@@ -5774,7 +5796,7 @@ async function loadFacility(p){
       const PRIORITY = ['입시', '영어', '수학', '국어', '예체능', '코딩', '기타'];
       const catChips = PRIORITY
         .filter(k => byCat[k] > 0)
-        .map(k => `<span style="background:#fff;border:1px solid var(--bd);border-radius:10px;padding:2px 8px;font-size:10.5px;color:var(--t2);margin:2px 3px 2px 0;display:inline-block">${k} <b style="color:var(--ac)">${byCat[k]}</b></span>`)
+        .map(k => `<span style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:2px 8px;font-size:10.5px;color:var(--t2);margin:2px 3px 2px 0;display:inline-block">${k} <b style="color:var(--ac)">${byCat[k]}</b></span>`)
         .join('');
       const topNames = (na.top||[]).slice(0,5).map(a =>
         `<span style="font-size:10.5px;color:var(--t3)">${_escHtml(a.name)} <span style="color:var(--t3)">(${a.distance_m}m)</span></span>`
@@ -6401,7 +6423,7 @@ function renderBookmarks(){
       ${target?`<span class="bk-alert-tag ${isHit?'hit':'set'}">${isHit?'🎯 목표가':'▼'+target+'억'}</span>`:''}
     </div>
     <div class="bk-memo-row" onclick="event.stopPropagation()" style="display:flex;gap:4px;margin-top:4px">
-      <input type="text" placeholder="메모 (왜 이 가격?)" maxlength="40" value="${_escHtml(b.memo || '')}" id="bk-memo-${i}" oninput="event.stopPropagation()" style="flex:1;font-size:10.5px;padding:3px 6px;border:1px solid var(--bd);border-radius:5px;background:#fff;color:var(--t2)">
+      <input type="text" placeholder="메모 (왜 이 가격?)" maxlength="40" value="${_escHtml(b.memo || '')}" id="bk-memo-${i}" oninput="event.stopPropagation()" style="flex:1;font-size:10.5px;padding:3px 6px;border:1px solid var(--bd);border-radius:5px;background:var(--bg-base);color:var(--t2)">
       <button onclick="saveBookmarkMemo(${i},document.getElementById('bk-memo-${i}').value)" style="font-size:10px;padding:3px 8px;background:#F0F2F7;border:1px solid var(--bd);border-radius:5px;cursor:pointer;color:var(--t2)">저장</button>
     </div>
     ${lc?`<div style="font-size:9.5px;color:var(--t3);margin-top:3px;padding-left:2px">📊 ${b.lastCheckedCount||0}건${lc}</div>`:''}`;
@@ -7356,7 +7378,7 @@ function renderClauseHistory(){
   if(!arr.length){el.innerHTML='';return;}
   el.innerHTML=`<div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 8px">💾 최근 생성 (${arr.length}/5)</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px">${arr.map(it=>`
-      <div style="background:#fff;border:1px solid var(--bd);border-radius:7px;padding:6px 10px;font-size:11px;display:flex;align-items:center;gap:6px">
+      <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:7px;padding:6px 10px;font-size:11px;display:flex;align-items:center;gap:6px">
         <span style="cursor:pointer;font-weight:600" onclick="loadClauseHistory(${it.id})" title="다시 불러오기">${_escHtml(it.aptName || '')}</span>
         <button onclick="delClauseHistory(${it.id})" style="background:transparent;border:none;cursor:pointer;color:var(--t3);font-size:12px;padding:0 2px">✕</button>
       </div>`).join('')}</div>`;
@@ -7661,7 +7683,7 @@ function exportClausePDF(){
     .sub{font-size:11px;color:#98938A;margin-bottom:14px}
     .legal-banner{background:#FAEBEB;border:2px solid #173A63;border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:#A82525;line-height:1.7}
     .legal-banner b{font-size:13px;display:block;margin-bottom:4px}
-    .cv-card{border:1px solid #E2DDD5;border-radius:8px;margin-bottom:8px;overflow:hidden;page-break-inside:avoid;background:#fff}
+    .cv-card{border:1px solid #E2DDD5;border-radius:8px;margin-bottom:8px;overflow:hidden;page-break-inside:avoid;background:var(--bg-base)}
     .cv-card-hdr{padding:8px 12px;background:#F0EDE7;display:flex;justify-content:space-between}
     .cv-card-hdr.essential{background:#FAE9E2;border-bottom:1px solid var(--accent-100)}
     .cv-card-title{font-size:12px;font-weight:700}
