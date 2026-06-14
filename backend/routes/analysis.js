@@ -16,6 +16,32 @@ router.get('/', async (req, res) => {
   // lawdCd 없으면 area 문자열에서 역조회
   if (!lawdCd && area) lawdCd = getLawdCdFromArea(area);
 
+  // DIAG-2026-06-14 (임시): 전세가율/갭 전면 null 원인 규명 — MOLIT 전월세 API raw 응답 노출. 진단 후 제거. (키 미노출 — 길이만)
+  if (req.query.rentDebug === '1') {
+    const axios = require('axios');
+    const dealYm = String(req.query.ym || '202604');
+    const key = process.env.MOLIT_API_KEY;
+    const lc = lawdCd || '11710';
+    try {
+      const r = await axios.get('https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent', {
+        params: { serviceKey: key, LAWD_CD: lc, DEAL_YMD: dealYm, pageNo: 1, numOfRows: 5, _type: 'json' },
+        timeout: 10000, headers: { Accept: 'application/json' },
+      });
+      const body = r.data?.response?.body; const header = r.data?.response?.header;
+      const itemsRaw = body?.items?.item;
+      const items = Array.isArray(itemsRaw) ? itemsRaw : (itemsRaw ? [itemsRaw] : []);
+      return res.json({ rentDebug: true, lawdCd: lc, dealYm, httpStatus: r.status,
+        resultCode: header?.resultCode, resultMsg: header?.resultMsg, totalCount: body?.totalCount,
+        keyLen: key ? key.length : 0, keySet: !!key,
+        sample: items.slice(0, 3).map(it => ({ apt: it.aptNm, deposit: it.deposit, ym: `${it.dealYear}-${it.dealMonth}` })),
+        rawHead: typeof r.data === 'string' ? r.data.slice(0, 400) : JSON.stringify(r.data).slice(0, 400) });
+    } catch (e) {
+      return res.json({ rentDebug: true, lawdCd: lc, dealYm, errStatus: e.response?.status || null, errMsg: e.message,
+        keyLen: key ? key.length : 0, keySet: !!key,
+        body: e.response?.data ? (typeof e.response.data === 'string' ? e.response.data.slice(0, 400) : JSON.stringify(e.response.data).slice(0, 400)) : null });
+    }
+  }
+
   try {
     // CROSS-REGION-FIX-2026-06-03: sigungu/umdNm 전달 → 가격시그널 표본을 실거래가 탭과 동일 동(umd) 스코프
     const result = await analyzeApt(lawdCd, aptName, parseFloat(price) || 0, sigungu || null, umdNm || null);
