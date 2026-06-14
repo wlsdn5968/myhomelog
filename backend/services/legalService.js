@@ -15,7 +15,17 @@ const LAW_TEXT = 'https://www.law.go.kr/DRF/lawService.do';
 /**
  * 이슈 → 대표 법령·조문 정적 매핑
  * (확장성: 필요시 실제 API 호출로 치환)
+ *
+ * CITATION-EXPAND-2026-06-14: 가장 흔한 매매 특약(근저당 말소·잔금 동시이행) 누락분 추가.
+ *   조문은 law.go.kr/casenote 로 검증한 실제 조문만 사용(환각 차단). 풀 코퍼스 RAG 대신 검증된 큐레이션 확장이 더 안전.
  */
+const C_576 = { law: '민법', article: '제576조', title: '저당권·전세권 행사와 매도인의 담보책임',
+  summary: '매매 부동산의 저당권·전세권 행사로 매수인이 소유권을 취득 못하거나 잃으면 계약해제·출재상환·손해배상 청구 가능. 잔금 시 근저당 말소 특약의 근거.' };
+const C_568 = { law: '민법', article: '제568조', title: '매매의 효력(완전한 권리이전·동시이행)',
+  summary: '매도인은 매매 목적 권리를 매수인에게 이전할 의무가 있고, 권리이전과 대금지급은 특약·관습이 없으면 동시이행 관계.' };
+const C_536 = { law: '민법', article: '제536조', title: '동시이행의 항변권',
+  summary: '쌍무계약 당사자는 상대방이 채무이행을 제공할 때까지 자기 채무이행을 거절 가능. 잔금 지급과 소유권이전등기의 동시이행 근거.' };
+
 const ISSUE_TO_CITATIONS = {
   '누수': [
     { law: '민법', article: '제580조', title: '매도인의 하자담보책임',
@@ -61,6 +71,11 @@ const ISSUE_TO_CITATIONS = {
     { law: '공동주택관리법', article: '제36조', title: '하자담보책임',
       summary: '공동주택 하자담보 기간 2~10년(부위별 상이).' },
   ],
+  // 검증된 조문(law.go.kr/casenote) — 근저당·말소·잔금·등기 특약 근거
+  '저당': [C_576, C_568],
+  '말소': [C_576, C_568],
+  '잔금': [C_536, C_568],
+  '등기': [C_536, C_568],
 };
 
 /**
@@ -69,15 +84,15 @@ const ISSUE_TO_CITATIONS = {
 function getCitationsForIssues(issues = '') {
   const text = String(issues).toLowerCase();
   const hits = new Map();
+  // CITATION-DEDUP-2026-06-14: 키를 (법령-조문)으로 → 여러 키워드가 같은 조문을 가리켜도 1회만(예: "근저당 말소" → 576 중복 제거).
   for (const [kw, cites] of Object.entries(ISSUE_TO_CITATIONS)) {
     if (text.includes(kw)) {
-      cites.forEach((c, i) => hits.set(`${kw}-${i}`, c));
+      cites.forEach((c) => hits.set(`${c.law}-${c.article}`, c));
     }
   }
   // 기본 보편 법령 (입력 없을 때)
   if (!hits.size) {
-    ISSUE_TO_CITATIONS['하자'].forEach((c, i) => hits.set(`기본-${i}`, c));
-    ISSUE_TO_CITATIONS['전세'].slice(0, 1).forEach((c, i) => hits.set(`기본전세-${i}`, c));
+    [...ISSUE_TO_CITATIONS['하자'], ISSUE_TO_CITATIONS['전세'][0]].forEach((c) => hits.set(`${c.law}-${c.article}`, c));
   }
   return Array.from(hits.values()).slice(0, 6);
 }
