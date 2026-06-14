@@ -31,7 +31,9 @@ router.get('/', async (req, res) => {
   const days = Math.min(180, Math.max(7, parseInt(req.query.days || '60')));
   const cacheKey = `subs:${sido}:${days}`;
   const hit = cache.get(cacheKey);
-  if (hit) return res.json({ ...hit, fromCache: true });
+  // CDN-CACHE-2026-06-14: 청약 일정 공개 데이터(6h 갱신) → Vercel 엣지 캐시로 콜드스타트 latency 제거.
+  const SUBS_CDN = 'public, max-age=0, s-maxage=3600, stale-while-revalidate=21600';
+  if (hit) { res.set('Cache-Control', SUBS_CDN); return res.json({ ...hit, fromCache: true }); }
 
   if (isKeyMissing()) {
     return res.status(503).json({
@@ -87,6 +89,7 @@ router.get('/', async (req, res) => {
       disclaimer: '청약 정보는 한국부동산원 공식 발표를 기준으로 갱신되나, 실제 신청 전 청약Home(applyhome.co.kr)에서 최종 확인 필수. 본 서비스는 정보 인덱싱만 제공합니다.',
     };
     cache.set(cacheKey, out, 21600); // 6시간
+    res.set('Cache-Control', SUBS_CDN);
     res.json({ ...out, fromCache: false });
   } catch (e) {
     const status = e.response?.status;

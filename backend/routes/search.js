@@ -391,6 +391,9 @@ router.get('/popular', async (req, res) => {
       if (c && c.lat && c.lng) out.push(_row(t, c));
       if (out.length >= limit) break;
     }
+    // CDN-CACHE-2026-06-14: 인기 마커 = 전국 60일 거래량 집계(일 단위 변동) + lazy-fill 지오코딩(첫 호출 수초)
+    //   → 엣지 캐시로 첫 진입 외 모든 사용자/세션 즉시 서빙. 빈/에러 응답은 무캐시(자연 재시도).
+    res.set('Cache-Control', 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400');
     return res.json({ results: out });
   } catch (e) {
     logger.warn({ err: e.message }, '인기 단지 조회 실패');

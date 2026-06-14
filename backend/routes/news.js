@@ -88,7 +88,9 @@ router.get('/', async (req, res) => {
   const keywords = KEYWORDS[cat] || KEYWORDS.hot;
   const cacheKey = `news:${cat}`;
   const hit = cache.get(cacheKey);
-  if (hit) return res.json({ ...hit, fromCache: true });
+  // CDN-CACHE-2026-06-14: 공개·비개인화 뉴스 → Vercel 엣지가 함수 호출 없이 서빙 → 콜드스타트/캐시미스 latency 제거.
+  const NEWS_CDN = 'public, max-age=0, s-maxage=600, stale-while-revalidate=1800';
+  if (hit) { res.set('Cache-Control', NEWS_CDN); return res.json({ ...hit, fromCache: true }); }
 
   // 키워드별 합쳐서 가져오기 (중복 제거)
   let items = [];
@@ -121,6 +123,7 @@ router.get('/', async (req, res) => {
     updatedAt: new Date().toISOString(),
   };
   cache.set(cacheKey, out, 1800); // 30분
+  if (items.length) res.set('Cache-Control', NEWS_CDN); // 빈 결과(전체 실패)는 캐시 안 함 — 다음 요청서 재시도
   res.json(out);
 });
 
@@ -133,7 +136,9 @@ router.get('/', async (req, res) => {
 router.get('/summary', async (req, res) => {
   const cacheKey = 'news:summary:v2';
   const hit = cache.get(cacheKey);
-  if (hit) return res.json({ ...hit, fromCache: true });
+  // CDN-CACHE-2026-06-14: AI 3줄 시황(전역·비개인화) — 성공 응답만 엣지 캐시(fallback 은 무캐시).
+  const SUM_CDN = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=7200';
+  if (hit) { res.set('Cache-Control', SUM_CDN); return res.json({ ...hit, fromCache: true }); }
 
   // Phase 4 (2026-04-26): Vercel serverless 인스턴스별 cache 분리 문제 fix.
   // `/news?cat=hot` 호출한 인스턴스와 `/news/summary` 호출한 인스턴스가 다르면 cache miss
@@ -203,6 +208,7 @@ ${titles.slice(0, 20).map((t, i) => `${i+1}. ${t}`).join('\n')}
       disclaimer: '본 시황 요약은 뉴스 헤드라인 기반 정보 정리이며, 매수·매도 추천이 아닙니다.',
     };
     cache.set(cacheKey, out, 10800); // 3시간
+    res.set('Cache-Control', SUM_CDN);
     res.json({ ...out, fromCache: false });
   } catch (e) {
     require('../logger').error({ err: e, source: 'news-summary' }, '뉴스 AI 요약 실패');

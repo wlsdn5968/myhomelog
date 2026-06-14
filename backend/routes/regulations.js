@@ -16,6 +16,8 @@ router.get('/', async (req, res) => {
     getSnapshot('housing_loan_2025'),
     getSnapshot('acquisition_tax_2025').catch(() => ({ data: null, source: 'missing' })),
   ]);
+  // CDN-CACHE-2026-06-14: 규제정보는 정책변경 시에만 갱신(드묾)인데 매 부팅 fetch(loadRegulatedKeywords) → 엣지 캐시 효과 큼.
+  res.set('Cache-Control', 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400');
   res.json({
     ...housing.data,
     tax: tax.data || null,
@@ -29,6 +31,7 @@ router.get('/', async (req, res) => {
 
 router.get('/ltv', async (req, res) => {
   const snap = await getSnapshot('housing_loan_2025');
+  res.set('Cache-Control', 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400');
   res.json({
     ltvTable: snap.data.ltvTable,
     lastUpdated: snap.data.lastUpdated,
