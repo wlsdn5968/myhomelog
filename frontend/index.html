@@ -2714,6 +2714,11 @@ window.addEventListener('DOMContentLoaded',()=>{
     const _hasParams = !!(location.search || location.hash);
     if(!_seenLanding && !_hasParams && !restored && !sp.get('apt')) {
       setTimeout(() => { if (typeof _showLanding === 'function') _showLanding(); }, 100);
+    } else {
+      // FAB-INIT-FIX-2026-06-14: 랜딩 미노출 진입(재방문·공유링크·apt링크)은 init 에서 sv() 가 안 불려
+      //   💬 AI 도우미 FAB(.fab-ai 기본 display:none)가 첫 탭 클릭 전까지 숨겨지는 회귀 → 초기 노출 보장.
+      //   (AI 챗 = 온디맨드 유지 결정 직결 — 입구가 초기화면에서 보여야 함)
+      try { const _fab=document.getElementById('fabAI'); if(_fab) _fab.style.display='flex'; } catch(_){}
     }
   } catch(_){}
 });
