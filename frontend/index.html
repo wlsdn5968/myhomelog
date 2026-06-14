@@ -293,8 +293,8 @@ window.MHL.auth = window.MHL.auth || {
 </script>
 
 <style>
-/* 리디자인 2026 Phase 1: Pretendard Variable 웹폰트 (한글 가독성·최신 톤) */
-@import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.min.css');
+/* PERF-2026-06-14: 중복 @import 제거 — Pretendard Variable 은 <head>(L80-81)서 preload+stylesheet 로 이미 로드됨.
+   @import 는 렌더블로킹+직렬 요청(preload 스캐너가 못 찾음)이라, 동일 폰트를 2번 받던 낭비를 제거. (폰트 표시 변화 없음) */
 :root{
   /* ════ Phase 4-2 단계 1 (2026-05-04): Concept C Light tokens ════ */
   /* Background scale (white-based) */
@@ -7103,7 +7103,10 @@ function calcC(){
   const buy=parseFloat(document.getElementById('bp')?.value)||0,cash=parseFloat(document.getElementById('mc')?.value)||0,inc=parseFloat(document.getElementById('inc')?.value)||0;
   if(!buy)return null;
   // P0 핫픽스: wide+sub 합친 region 전달 → 광명·하남·일산 같은 sub 단위 정확 매칭
-  const r = calcLTV(buy,cash,inc,200,gct('ch-h'),gct('ch-f')==='예',getRegionForSearch());
+  // DSR-CAP-FIX-2026-06-14: 4번째 인자(월상환 상한, 만원)를 200 하드코딩 → 0(상한 없음, DSR 만으로 산정).
+  //   기존 ef=min(200만, 소득×40%/12) → 연소득 6천↑이면 DSR 한도를 200만으로 깎아 고소득 한도 과소
+  //   (예: 소득1억·9억주택·비규제 무주택 → 3.83억으로 표시, 정상 LTV 한도 6.3억). 저소득(≤6천)은 DSR이 이미 200만↓라 무변화.
+  const r = calcLTV(buy,cash,inc,0,gct('ch-h'),gct('ch-f')==='예',getRegionForSearch());
   // P1 D4 (2026-04-25): 정책자금 비교 — 무주택 한도 과소 계산 차단
   if (r) {
     r.policyLoan = computePolicyLoan({
@@ -7202,7 +7205,7 @@ function calcLTV(buy,cash,inc,mo,house,isF,region){
   if(isR)cap=buy<=15?6:buy<=25?4:2;
   const lL=Math.min(buy*ltv,cap),rt=isR?.055:.0475;
   let dL=0;
-  if(inc>0){const ef=Math.min(mo*10000,inc*10000*.4/12);dL=Math.round(ef*(1-Math.pow(1+rt/12,-360))/(rt/12)/1e8*100)/100;}
+  if(inc>0){const dsrMonthly=inc*10000*.4/12;const ef=(mo>0?Math.min(mo*10000,dsrMonthly):dsrMonthly);dL=Math.round(ef*(1-Math.pow(1+rt/12,-360))/(rt/12)/1e8*100)/100;}
   const fin=dL>0?Math.min(lL,dL):lL,mo2=fin>0?Math.round(fin*1e8*rt/12/(1-Math.pow(1+rt/12,-360))/10000):0,need=Math.max(0,buy-cash-fin);
   return{ltv,lL,dL,fin,mo:mo2,need,warn,isR,cap};
 }
