@@ -1518,7 +1518,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <tr><td style="padding:5px 4px;border-bottom:1px solid #B0D9BE"><b>보금자리론</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;font-weight:700">5억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">3.6~4.2%</td></tr>
         <tr><td style="padding:5px 4px;border-bottom:1px solid #B0D9BE"><b>디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">6천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">5억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;font-weight:700">2.5억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;color:#1F7A3A;font-weight:700">2.0~3.3%</td></tr>
         <tr><td style="padding:5px 4px;border-bottom:1px solid #B0D9BE"><b>신혼 디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;font-weight:700">4억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;color:#1F7A3A;font-weight:700">1.8~3.1%</td></tr>
-        <tr><td style="padding:5px 4px"><b>신생아 특례</b></td><td style="text-align:center;padding:5px 4px">1.3억↓</td><td style="text-align:center;padding:5px 4px">9억↓</td><td style="text-align:center;padding:5px 4px;font-weight:700">5억</td><td style="text-align:center;padding:5px 4px;color:#1F7A3A;font-weight:700">1.6~3.3%</td></tr>
+        <tr><td style="padding:5px 4px"><b>신생아 특례</b></td><td style="text-align:center;padding:5px 4px">1.3억↓</td><td style="text-align:center;padding:5px 4px">9억↓</td><td style="text-align:center;padding:5px 4px;font-weight:700">4억</td><td style="text-align:center;padding:5px 4px;color:#1F7A3A;font-weight:700">1.6~3.3%</td></tr>
       </tbody>
     </table>
     <div style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.5">※ 정책자금은 자격·서류 요건 별도. <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:#1F7A3A;font-weight:700">주택도시기금 (nhuf.molit.go.kr) →</a> · 1599-0001<br>※ 신생아 특례 LTV 80% — 일반 주담대 40% 대비 압도적 유리. 2년 내 출산 가구 필수 확인.</div>
@@ -7063,7 +7063,7 @@ function cp(el,id){
   if(id==='ch-h' && el.textContent.trim()==='2주택+'){
     // UX 정리(2026-06-01): 칩 클릭마다 매번 → 세션당 1회만 (반복 노출 noise 제거)
     if(typeof toast==='function' && !sessionStorage.getItem('mhl_tax_warned')){
-      toast('⚠ 2026.1.1 다주택자 양도세 중과 시행 — 매도 시 양도세 가산 (출처: 금융위 10·15 대책)');
+      toast('⚠ 2026.5.10 다주택자 양도세 중과 부활 — 조정지역 매도 시 2주택 +20%p·3주택 +30%p (5.9까지 양도분 배제, 소득세법 시행령 일몰)');
       try{sessionStorage.setItem('mhl_tax_warned','1');}catch(_){}
     }
   }
