@@ -71,7 +71,9 @@ router.get('/', async (req, res) => {
       contractStart: it.CNTRCT_CNCLS_BGNDE || '',
       contractEnd: it.CNTRCT_CNCLS_ENDDE || '',
       moveInPlanned: it.MVN_PREARNGE_YM || '',
-      sales: it.HSSPLY_HSCNT || 0,
+      // SUBS-FIELD-FIX-2026-06-14 (라이브 실측: sales 항상 0): 청약홈 공고 총공급세대수 표준 필드는 TOT_SUPLY_HSHLDCO.
+      //   기존 HSSPLY_HSCNT 는 스키마에 없어 항상 0. fallback + 숫자/콤마문자열 안전 처리(전월세 monthlyRent 타입버그 교훈).
+      sales: parseInt(String(it.TOT_SUPLY_HSHLDCO ?? it.HSSPLY_HSCNT ?? '0').replace(/,/g, '')) || 0,
       builder: it.BSNS_MBY_NM || '',
       detailUrl: it.PBLANC_URL || '',
     })).sort((a, b) => (a.receiveStart || '').localeCompare(b.receiveStart || ''));
