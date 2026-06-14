@@ -30,11 +30,21 @@ router.get('/', async (req, res) => {
       const body = r.data?.response?.body; const header = r.data?.response?.header;
       const itemsRaw = body?.items?.item;
       const items = Array.isArray(itemsRaw) ? itemsRaw : (itemsRaw ? [itemsRaw] : []);
+      // 서비스 함수 직접 호출 — raw 는 되는데 서비스가 0 인지 확인 (로직 vs API 분리)
+      const { getRentTransactions, getJeonseByApt } = require('../services/rentService');
+      let svcCount = null, svcErr = null, jeonseCount = null, jeonseErr = null, jeonseMonths = null;
+      try { const svc = await getRentTransactions(lc, dealYm); svcCount = svc.length; } catch (e) { svcErr = e.message; }
+      try {
+        const ja = String(req.query.aptName || '은마');
+        const jb = await getJeonseByApt(lc, ja);
+        jeonseCount = jb.length;
+      } catch (e) { jeonseErr = e.message; }
       return res.json({ rentDebug: true, lawdCd: lc, dealYm, httpStatus: r.status,
-        resultCode: header?.resultCode, resultMsg: header?.resultMsg, totalCount: body?.totalCount,
-        keyLen: key ? key.length : 0, keySet: !!key,
-        sample: items.slice(0, 3).map(it => ({ apt: it.aptNm, deposit: it.deposit, ym: `${it.dealYear}-${it.dealMonth}` })),
-        rawHead: typeof r.data === 'string' ? r.data.slice(0, 400) : JSON.stringify(r.data).slice(0, 400) });
+        resultCode: header?.resultCode, totalCount: body?.totalCount, keyLen: key ? key.length : 0,
+        rawSample: items.slice(0, 3).map(it => it.aptNm),
+        svc_getRentTransactions_count: svcCount, svcErr,
+        jeonse_getJeonseByApt_count: jeonseCount, jeonseErr,
+        serverNow: new Date().toISOString() });
     } catch (e) {
       return res.json({ rentDebug: true, lawdCd: lc, dealYm, errStatus: e.response?.status || null, errMsg: e.message,
         keyLen: key ? key.length : 0, keySet: !!key,
