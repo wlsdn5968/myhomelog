@@ -1564,10 +1564,12 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     </div></div>
   </div>
   <div class="qa">
-    <!-- STAB-AUDIT #44 (2026-05-04): 챗 빠른 질문 6→3 핵심만 (인지 부하 ↓) -->
-    <button class="qb" onclick="sQ('서울 7억 무주택 대출 한도 알려줘')">대출계산</button>
-    <button class="qb" onclick="sQ('10.15 대책 핵심 3가지 요약')">규제요약</button>
-    <button class="qb" onclick="sQ('가계약 시 필수 특약 알려줘')">특약 초안</button>
+    <!-- QUICKACTION-FEATURE-2026-06-14 (운영자 "퀵액션을 맥락 있는 기능으로 이동"):
+         AI 캔드 프롬프트(부정확·유료 채팅) → 전용 기능 라우팅. 대출계산=정밀 계산기, 규제요약=공식 규제표,
+         특약초안=법령 인용 구조화 생성. AI 채팅 비용↓ + 정확도·출처↑. -->
+    <button class="qb" onclick="_closeAiPanel();sv('calc')">🧮 대출계산기</button>
+    <button class="qb" onclick="_closeAiPanel();openRegSummary()">📋 규제요약</button>
+    <button class="qb" onclick="_closeAiPanel();sv('clause')">✍ 특약초안</button>
   </div>
   <div id="cErr" class="cerr">⚠ 서버 오프라인 — 직접 AI 모드로 동작 중</div>
   <div class="cir">
@@ -7571,6 +7573,16 @@ function toggleRpOverlay(){
     rp.classList.remove('rp-overlay');
     rp.style.setProperty('display','none','important');
   }
+}
+// QUICKACTION-FEATURE-2026-06-14: 빠른시작 버튼이 전용 기능으로 이동 시 AI 오버레이를 닫는다(데스크톱 오버레이/모바일 chat 뷰 공통).
+function _closeAiPanel(){
+  try {
+    _rpOverlay = false;
+    const rp = document.querySelector('.rp');
+    if (rp) { rp.classList.remove('rp-overlay'); rp.style.setProperty('display','none','important'); }
+    const fab = document.getElementById('fabAI'); // map 등에서 다시 열 수 있게 FAB 노출 유지
+    if (fab && fab.style.display === 'none') { /* sv() 가 적절히 토글 */ }
+  } catch(_) {}
 }
 async function _renderChatQuotaHint(){
   try {
