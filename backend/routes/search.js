@@ -72,6 +72,12 @@ router.get('/apt', async (req, res) => {
   // 2026-05-31: 최소 2글자 — 1글자 ILIKE %x% 는 수천 row 매칭 → cold start 시 DB 부하.
   //   프론트 자동완성(index.html L7958)은 빈 results 를 zero-result 제안 UI 로 정상 처리.
   if (q.length < 2) return res.json({ results: [] });
+  // SEARCH-SUFFIX-2026-06-14: molit 은 "은마"/"헬리오시티"로 저장하나 사용자는 "은마아파트"로 검색 →
+  //   긴 쿼리가 짧은 저장명을 substring ILIKE 로 못 찾음(은마아파트 → 0건). 끝 "아파트(단지)" 접미사 제거한
+  //   검색어로 apt_name ILIKE (`%qApt%` 는 `%q%` 의 상위집합이라 결과 손실 0·일부 broaden). display·dedup 은 원본 보존.
+  //   가드: 제거 후 2자 미만이면 원본 유지("아파트"만 입력 시 전체매칭 방지).
+  const _qStrip = q.replace(/\s*아파트(?:단지)?\s*$/, '').trim();
+  const qApt = _qStrip.length >= 2 ? _qStrip : q;
   const admin = adminClient();
   if (!admin) return res.status(503).json({ error: '검색 서비스 일시 불가' });
   try {
@@ -90,12 +96,12 @@ router.get('/apt', async (req, res) => {
         // APTSEQ-FALLBACK-2026-05-12: apt_seq 추가 — apt_master 미매칭 단지의 KAPT facility 호출용
         // NAME-MERGE-2026-05-12 (Sprint S+): limit *10 → *30 (한 단지가 동/면적 분리로 100+ row
         //   생성 시 일부 raw row 누락되어 grouping 불완전. 상계주공1(고층) 119건 case 검증 발견.
-        .ilike('apt_name', `%${q}%`)  // OR 제거 — apt_name 만 (인덱스 활용)
+        .ilike('apt_name', `%${qApt}%`)  // OR 제거 — apt_name 만 (인덱스 활용) · qApt: 접미사 정규화
         .order('deal_date', { ascending: false })
         .limit(limit * 30),
       admin.from('apt_master')
         .select('apt_name, sigungu, umd_nm, lawd_cd, kapt_code')
-        .or(`apt_name.ilike.%${q}%,umd_nm.ilike.%${q}%`)  // apt_master 는 작아서 OR OK (9.7k rows)
+        .or(`apt_name.ilike.%${qApt}%,umd_nm.ilike.%${q}%`)  // apt_name 은 접미사 정규화 / umd_nm(동명) 은 원본
         .limit(limit * 5),  // umd_nm 검색 보강 위해 *3 → *5
     ]);
     if (molitRes.error) throw molitRes.error;
@@ -190,9 +196,12 @@ router.get('/apt', async (req, res) => {
         const base = baseAptName(row.apt_name) || normalizeAptName(row.apt_name) || row.apt_name;
         const key = `${base}|${row.sigungu}|${row.umd_nm}|`;  // master 는 buildYear 부재 → 빈 ''
         // molit out 의 seen key 와 collision 체크 (같은 base+sigungu+umd_nm 면 buildYear 무관 dedupe)
+        // SEARCH-SUFFIX-2026-06-14: dedup 비교 시 끝 "아파트" 흡수 — molit "헬리오시티" ↔ master "헬리오시티아파트"
+        //   (동일 단지, 이름 접미사만 차이) 1개로 병합. 표시명(aptName) 은 각자 원본 유지(비교에서만 정규화).
+        const _baseNoApt = String(base).replace(/아파트$/, '');
         let alreadyInOut = false;
         for (const exist of out) {
-          if (exist.aptName === base && exist.sigungu === row.sigungu && exist.umdNm === row.umd_nm) {
+          if (String(exist.aptName).replace(/아파트$/, '') === _baseNoApt && exist.sigungu === row.sigungu && exist.umdNm === row.umd_nm) {
             alreadyInOut = true; break;
           }
         }
