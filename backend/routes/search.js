@@ -283,6 +283,12 @@ router.get('/apt', async (req, res) => {
       }));
     }
 
+    // SEARCH-RANK-2026-06-14: 결과를 거래량(dealCount) 내림차순 정렬 — 동명/브랜드 검색 시 거래 활발한 단지 우선.
+    //   (기존: molit 이름매칭 → master 동매칭 순서라 "대치동" 검색에 1건짜리가 22건짜리보다 위로 뜸.)
+    //   거래 없는 master 단지(dealCount 미정)는 0 으로 후순위. exact 단지명 검색은 결과 1~2개라 영향 없음.
+    //   동률은 기존 순서 보존(JS sort stable) → molit 우선·이름매칭 순서 유지.
+    out.sort((a, b) => (b.dealCount || 0) - (a.dealCount || 0));
+
     res.json({ results: out, query: q });
   } catch (e) {
     logger.warn({ err: e.message, q }, '단지 검색 실패');
