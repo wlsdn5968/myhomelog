@@ -237,6 +237,10 @@ router.post('/generate', async (req, res) => {
           const _loc = [c.sigungu, c.umd_nm].filter(Boolean).join(' ').trim();
           a.name = _loc ? `${c.apt_name} (${_loc})` : c.apt_name;
         }
+        // PRICE-INTEGRITY-2026-06-14: priceFit(예산매칭) 을 backend 결정론 계산으로 주입 — AI 전사 환각 차단.
+        //   c.avgPrice(회원님 평형대 실거래 평균) + maxBudget → 정확 비교. name·objectiveFacts 와 같은 candidate[i] 출처라 일관.
+        const _pf = _buildPriceFit(c?.avgPrice, userInput.maxBudget);
+        if (_pf) a.priceFit = _pf;
       });
     }
 
@@ -297,6 +301,21 @@ function stripMarkdownDeep(obj) {
       else if (obj[k] && typeof obj[k] === 'object') stripMarkdownDeep(obj[k]);
     }
   }
+}
+
+/** PRICE-INTEGRITY-2026-06-14: 예산매칭(priceFit) 결정론 생성 — AI 전사 환각 차단.
+ *  @param avgPriceManwon 회원님 평형대 실거래 평균가 (만원, c.avgPrice)
+ *  @param maxBudgetEok 매수가 (억, userInput.maxBudget)
+ *  운영자 #1 룰(환각 차단·공식 출처): 가격 비교는 AI 가 아니라 DB 실거래 평균으로 보장. */
+function _buildPriceFit(avgPriceManwon, maxBudgetEok) {
+  const avg = Number(avgPriceManwon), bud = Number(maxBudgetEok);
+  if (!Number.isFinite(avg) || avg <= 0 || !Number.isFinite(bud) || bud <= 0) return null;
+  const avgEok = avg / 10000;
+  const diffPct = Math.round((avgEok - bud) / bud * 100);
+  const label = Math.abs(diffPct) <= 2 ? '예산 일치'
+              : diffPct > 0 ? `${diffPct}% 초과`
+              : `${Math.abs(diffPct)}% 여유`;
+  return `매수가 ${bud}억 vs 회원님 평형대 평균 ${avgEok.toFixed(2)}억 (${label})`;
 }
 
 /** 정부 정책 최신 스냅샷 — regulationsService 활용 */
