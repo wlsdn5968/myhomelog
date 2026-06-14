@@ -120,8 +120,12 @@ async function getRentTransactions(lawdCd, dealYm) {
         dealMonth: parseInt(item.dealMonth) || 0,
         dealDay: parseInt(item.dealDay) || 0,
         // 보증금·월세 모두 만원 단위
-        deposit: parseInt((item.deposit || '0').replace(/,/g, '')) || 0,
-        monthlyRent: parseInt((item.monthlyRent || '0').replace(/,/g, '')) || 0,
+        // RENT-TYPE-FIX-2026-06-14 (실측 근본수정): MOLIT 전월세 API 가 monthlyRent 를 숫자로 반환(예: 390)하는데
+        //   문자열 가정 .replace() 호출 → (390).replace TypeError → getRentTransactions 전체 throw →
+        //   getJeonseByApt 의 .catch(()=>[]) 로 조용히 0건 → 전세가율·갭 전 단지 null. (deposit 은 "10,000" 문자열이라 무사)
+        //   String() 래핑으로 숫자·문자열 모두 안전. 월세>0(반전세) row 가 한 건이라도 있으면 터지던 버그.
+        deposit: parseInt(String(item.deposit || '0').replace(/,/g, '')) || 0,
+        monthlyRent: parseInt(String(item.monthlyRent || '0').replace(/,/g, '')) || 0,
       }));
 
     if (cancelledCount > 0) {
