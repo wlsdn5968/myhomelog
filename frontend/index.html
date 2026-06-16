@@ -1278,7 +1278,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 <div id="heroBand" class="hero-band" style="display:none" role="region" aria-label="서비스 소개">
   <div class="hero-inner">
     <div class="hero-content">
-      <div class="hero-tag">DATA · 277K · 10K · DAILY</div>
+      <div class="hero-tag">DATA · <span class="jstxk">277K</span> · <span class="japtk">10K</span> · DAILY</div>
       <div class="hero-msg">
         <span class="hero-icon" aria-hidden="true">🏠</span>
         <strong>30초 입력으로 받는 <em>1page 부동산 보고서</em></strong>
@@ -1878,7 +1878,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:12px;padding:16px 18px;margin-bottom:18px">
       <div style="font-size:13px;font-weight:800;color:var(--accent-700);margin-bottom:8px">🚀 30초 가이드 — 처음이세요?</div>
       <div style="font-size:12px;color:var(--t1);line-height:1.8">
-        1. 좌측 사이드바에 <b>주택 보유 / 매수가 / 희망지역</b> 3개만 입력<br>
+        1. 좌측 사이드바(모바일은 ☰ 메뉴)에 <b>주택 보유 / 매수가 / 희망지역</b> 3개만 입력<br>
         2. 헤더 <b>📊 보고서</b> 클릭 → "맞춤 보고서 생성" → AI가 회원님 가구 상황에 맞는 <b>1page 컨설팅 보고서</b> 자동 생성<br>
         3. 보고서 안 추천 단지 클릭 → 실거래가·평형·시세 추이 상세 확인<br>
         4. 마음에 드는 단지 → ⭐ 관심 추가 → 임장노트 작성
@@ -2159,9 +2159,9 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   </header>
 
   <section class="lv-hero">
-    <div class="lv-tag">DATA · 277K · 10K · DAILY</div>
+    <div class="lv-tag">DATA · <span class="jstxk">277K</span> · <span class="japtk">10K</span> · DAILY</div>
     <h1 class="lv-h1">30초 입력으로 받는<br><em>1page 부동산 보고서</em></h1>
-    <p class="lv-hero-sub">국토부 실거래 27만건 + KAPT 1만 단지 + 금융위 규제. 객관적 점수로 정리한 매수 결정 도구.</p>
+    <p class="lv-hero-sub">국토부 실거래 <span class="jstxm">27만</span>건 + KAPT <span class="japtm">1만</span> 단지 + 금융위 규제. 객관적 점수로 정리한 매수 결정 도구.</p>
     <div class="lv-cta-row">
       <button class="lv-cta-primary" onclick="_landingCTA('primary')"><svg class="lv-cta-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>맞춤 보고서 시작 <span aria-hidden="true">→</span></button>
       <button class="lv-cta-secondary" onclick="_landingCTA('secondary')"><svg class="lv-cta-ic" style="margin-right:7px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>지도로 둘러보기 →</button>
@@ -8345,6 +8345,17 @@ function calcComm(){
 }
 
 // ── API STATUS ────────────────────────────────────────────
+// DATA-COUNTS-2026-06-14: /api/health.dataCounts 로 랜딩/배너 건수 동적 채움(하드코딩 stale 방지). 실패 시 정적 fallback 유지.
+function _applyStatTags(){
+  try{
+    const c=window._dataCounts; if(!c||!c.tx) return;
+    const K=n=>Math.round(n/1000)+'K', M=n=>Math.floor(n/10000)+'만';
+    document.querySelectorAll('.jstxk').forEach(e=>e.textContent=K(c.tx));
+    document.querySelectorAll('.japtk').forEach(e=>e.textContent=K(c.apt));
+    document.querySelectorAll('.jstxm').forEach(e=>e.textContent=M(c.tx));
+    document.querySelectorAll('.japtm').forEach(e=>e.textContent=M(c.apt));
+  }catch(_){}
+}
 async function chkAPI(){
   const el=document.getElementById('apiSt'),cs=document.getElementById('cSt'),ce=document.getElementById('cErr'),bs=document.getElementById('badgeSrv');
   try{
@@ -8354,6 +8365,7 @@ async function chkAPI(){
       const d=await r.json().catch(()=>({}));
       // NAVER-MAPS-2026-05-13 (Sprint GG): health 응답 전역 저장 — loadMap() 분기 시점 활용
       window._healthData = d;
+      if(d.dataCounts && d.dataCounts.tx){ window._dataCounts = d.dataCounts; _applyStatTags(); }
       // Phase 4: 정상 시 apiSt hide, 장애 시만 표시
       el.style.display='none';
       cs.textContent='● 온라인';cs.style.color='var(--grn)';
@@ -8391,9 +8403,11 @@ async function chkAPI(){
             const sb = document.getElementById('syncBanner');
             if (!sb || !window._syncData) return;
             const { kst:_k, staleNote:_n } = window._syncData;
+            const _dc = window._dataCounts;
+            const _cntTxt = (_dc && _dc.tx) ? ` (${Math.floor(_dc.tx/10000)}만+건) · KAPT ${Math.floor(_dc.apt/10000)}만+ 단지` : '';
             sb.innerHTML = mql.matches
               ? `📅 ${_k} 갱신 · 국토부·금융위·KAPT${_n}`
-              : `📅 마지막 데이터 동기화: <span id="syncTime">${_k} KST</span> · 출처: 국토교통부 실거래가 + 금융위원회 규제${_n}`;
+              : `📅 마지막 데이터 동기화: <span id="syncTime">${_k} KST</span> · 출처: 국토교통부 실거래가${_cntTxt} · 금융위 규제${_n}`;
           };
           const _mql = window.matchMedia('(max-width:700px)');
           _renderSync(_mql);

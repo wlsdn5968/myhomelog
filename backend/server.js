@@ -360,6 +360,26 @@ app.get('/api/health/apis', async (req, res) => {
 // getUsage 가 Redis 연동으로 async 가 되었으므로 핸들러도 async
 // Phase 3.3 + 4.9: 검색·AI 일일 잔량 + 월 예산 잔여 동시 반환 — 헤더 pill / 구독 CTA 용
 const budgetService = require('./services/budgetService');
+
+// DATA-COUNTS-2026-06-14: 랜딩/배너 표시 건수 동적화(하드코딩 stale 방지). 일 단위 변동(MOLIT ingest) → node-cache 6h, head:true(행 미전송이라 가벼움).
+async function getDataCounts() {
+  const CK = 'meta:dataCounts';
+  const hit = cache.get(CK);
+  if (hit) return hit;
+  try {
+    const { getSupabaseAdmin } = require('./db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return null;
+    const [tx, apt] = await Promise.all([
+      admin.from('molit_transactions').select('*', { count: 'exact', head: true }),
+      admin.from('apt_master').select('*', { count: 'exact', head: true }),
+    ]);
+    const out = { tx: tx.count || 0, apt: apt.count || 0 };
+    cache.set(CK, out, 21600); // 6h
+    return out;
+  } catch (e) { return null; }
+}
+
 app.get('/api/health', optionalAuth, async (req, res) => {
   const [searchUsed, chatUsed] = await Promise.all([
     getUsage(req, 'search'),
@@ -401,6 +421,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   //   env NAVER_MAPS_CLIENT_ID 설정 시 frontend 가 네이버 지도 사용, 미설정 시 Leaflet/OSM fallback.
   //   NCP 정책: client ID 는 도메인 등록 기반 보호 (다른 도메인에서 사용 불가) — 공개해도 안전.
   const _naverMapsClientId = process.env.NAVER_MAPS_CLIENT_ID || null;
+  const _dataCounts = await getDataCounts();
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -408,6 +429,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
     deploy: _deploy,
     ai_ready: _aiReady,
     naverMapsClientId: _naverMapsClientId,
+    dataCounts: _dataCounts,
     regulations: _regulations,
     cache: { keys: cache.keys().length, stats: cache.getStats() },
     usage: {
