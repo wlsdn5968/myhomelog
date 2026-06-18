@@ -25,6 +25,8 @@ const { runFullCheck: runRegulationsAiCheck } = require('../jobs/regulationsAiCh
 const { run: runAuditPrune } = require('../jobs/auditPrune');
 // STAB-AUDIT-2026-05-06: apt_geocache 점진 백필 (172 → 16K 점진 채우기)
 const { run: runGeocacheBackfill } = require('../jobs/geocacheBackfill');
+// FACILITY-BACKFILL-2026-06-18: apt_master.facility(세대수·주차 등) 점진 백필 — 단지 비교 토대
+const { run: runFacilityBackfill } = require('../jobs/facilityBackfill');
 // MOB-AUDIT-2026-05-03: cron 실패는 운영자 즉시 알림 — Sentry capture (logger.error 외 추가)
 const Sentry = require('@sentry/node');
 
@@ -204,5 +206,24 @@ async function handleGeocacheBackfill(req, res) {
 }
 router.post('/geocache-backfill', handleGeocacheBackfill);
 router.get('/geocache-backfill', handleGeocacheBackfill);
+
+// ── FACILITY-BACKFILL-2026-06-18: apt_master.facility 점진 백필 (단지 비교 토대) ──
+// 매일 1회 05:00 UTC (= 14:00 KST) — geocache(04:00) 1시간 후. KAPT BasisInfo + DTL(주차) 적재.
+// 운영자 발견 (2026-06-18): facility 140/10,107 = 1.39% + 주차 0% → 세대당주차·세대수 비교 불가였음.
+async function handleFacilityBackfill(req, res) {
+  try {
+    const started = Date.now();
+    const opts = { chunk: req.query.chunk ? parseInt(req.query.chunk) : undefined };
+    const summary = await runFacilityBackfill(opts);
+    logger.info({ durationMs: Date.now() - started, summary }, 'cron/facility-backfill OK');
+    res.json({ ok: true, summary });
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'cron/facility-backfill 실패');
+    try { Sentry.captureException(e, { tags: { route: 'cron.facility-backfill' } }); } catch(_){}
+    res.status(500).json({ error: e.message });
+  }
+}
+router.post('/facility-backfill', handleFacilityBackfill);
+router.get('/facility-backfill', handleFacilityBackfill);
 
 module.exports = router;

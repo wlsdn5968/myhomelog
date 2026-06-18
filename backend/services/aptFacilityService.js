@@ -392,8 +392,8 @@ async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, 
   }
 
   if (m?.kapt_code) {
-    // 캐시 신선도
-    if (m.facility && m.facility_fetched_at) {
+    // 캐시 신선도 (FACILITY-BACKFILL-2026-06-18: _empty sentinel 은 캐시로 안 봄 → 온디맨드 재시도 허용)
+    if (m.facility && m.facility_fetched_at && !m.facility._empty) {
       const ageDays = (Date.now() - new Date(m.facility_fetched_at).getTime()) / (1000*60*60*24);
       if (ageDays < CACHE_TTL_DAYS) {
         // DTL-INFO-2026-05-13 (Sprint X): 캐시된 BasisInfo 와 함께 detail 도 병렬 fetch.
@@ -414,8 +414,11 @@ async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, 
     if (raw) {
       const a = admin();
       if (a) {
+        // FACILITY-DTL-STORE-2026-06-18: DTL(주차/CCTV/승강기)을 facility._dtl 로 함께 저장.
+        //   기존엔 raw(BasisInfo)만 저장 → 주차가 DB에 안 남아 단지 비교(세대당주차)에 못 썼음.
+        const facilityToStore = detail ? { ...raw, _dtl: detail } : raw;
         a.from('apt_master').update({
-          facility: raw,
+          facility: facilityToStore,
           facility_fetched_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
         }).eq('kapt_code', m.kapt_code).then(() => {}, () => {});
@@ -436,4 +439,41 @@ async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, 
   return null;
 }
 
-module.exports = { resolveFacility };
+/**
+ * FACILITY-BACKFILL-2026-06-18 (운영자 "단지 비교 토대 = facility+주차 전수 적재"):
+ *   kaptCode 직접 백필 — BasisInfo + DTL(주차) 받아 apt_master.facility 에 AWAIT 저장(병합).
+ *   이름매칭 불필요(kaptCode 보유). 실패(KAPT 미등록/빈응답)는 {_empty:true} sentinel 로 표시 →
+ *   backfill 후보(facility IS NULL)에서 제외돼 매 run 무한 재시도 방지(geocode 교훈). 온디맨드 열람은 재시도됨.
+ * @returns {{ ok, kaptCode, hasParking, reason? }}
+ */
+async function backfillFacilityByKaptCode(kaptCode) {
+  if (!kaptCode) return { ok: false, reason: 'no-kaptCode' };
+  const a = admin();
+  if (!a) return { ok: false, reason: 'no-admin' };
+  const [raw, detail] = await Promise.all([
+    fetchFromApi(kaptCode),
+    getAptDtlInfo(kaptCode).catch(() => null),
+  ]);
+  if (!raw) {
+    // 실패 sentinel — facility 가 NULL 이 아니게 만들어 backfill 후보에서 빠지게(무한재시도 차단).
+    await a.from('apt_master').update({
+      facility: { _empty: true },
+      facility_fetched_at: new Date().toISOString(),
+    }).eq('kapt_code', kaptCode).then(() => {}, () => {});
+    return { ok: false, reason: 'no-basisinfo', kaptCode };
+  }
+  const facilityToStore = detail ? { ...raw, _dtl: detail } : raw;
+  const { error } = await a.from('apt_master').update({
+    facility: facilityToStore,
+    facility_fetched_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  }).eq('kapt_code', kaptCode);
+  return {
+    ok: !error,
+    kaptCode,
+    hasParking: !!(detail && (detail.kaptdPcnt || detail.kaptdPcntu)),
+    error: error?.message,
+  };
+}
+
+module.exports = { resolveFacility, backfillFacilityByKaptCode };
