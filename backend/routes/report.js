@@ -837,7 +837,7 @@ function buildReportPrompt(input, policy, candidates) {
     const factsList = [
       facts.district ? `행정구위계: ${facts.district}` : null,
       facts.builder ? `시공사: ${facts.builder}` : null,
-      facts.parking_per_household ? `주차: 세대당 ${facts.parking_per_household}대 (총 ${facts.parking_total})` : null,
+      facts.parking_per_household ? `주차: 세대당 ${facts.parking_per_household}대${facts.parking_total ? ` (총 ${facts.parking_total}대)` : ''}` : null,
       facts.age_years != null ? `노후도: ${facts.age_years}년차` : null,
       facts.regulation ? `규제: ${facts.regulation}` : null,
       facts.new_high_count > 0 ? `최근 6개월 신고가 ${facts.new_high_count}회 갱신` : null,

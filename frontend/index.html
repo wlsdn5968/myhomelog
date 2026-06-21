@@ -665,7 +665,7 @@ header{
 .fab-ai{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border-radius:50%;background:var(--acc);color:#fff;border:none;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:24px;box-shadow:0 6px 18px rgba(0,0,0,.22);z-index:850;transition:transform .15s,box-shadow .15s}
 .fab-ai:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.28)}
 /* 플로팅 관심단지 버튼 */
-.fab-bm{position:fixed;right:24px;bottom:92px;width:48px;height:48px;border-radius:50%;background:var(--bg-base);color:#333;border:1px solid var(--bd);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.15);z-index:850;transition:transform .15s,box-shadow .15s;position:fixed}
+.fab-bm{position:fixed;right:24px;bottom:92px;width:48px;height:48px;border-radius:50%;background:var(--bg-base);color:var(--t1);border:1px solid var(--bd);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.15);z-index:850;transition:transform .15s,box-shadow .15s}
 .fab-bm:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.20)}
 .fab-bm .fab-bm-cnt{position:absolute;top:-4px;right:-4px;background:var(--amb,#f5a623);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #fff}
 /* 관심단지 popover */
@@ -3822,7 +3822,7 @@ function _addAllReportAptsToBookmarks() {
     try {
       const bks = getBookmarks();
       if (!bks.some(b => b.aptName === a.name)) {
-        bks.push({ aptName: a.name, area: a.areaPyeong + '평', addedAt: Date.now() });
+        bks.push({ aptName: a.name, area: (a.areaPyeong != null ? a.areaPyeong + '평' : ''), addedAt: Date.now() });
         localStorage.setItem('mhl_bookmarks', JSON.stringify(bks));
         added++;
       }
@@ -3852,11 +3852,11 @@ function _downloadReportPDF() {
   const ts = new Date(data.generatedAt || Date.now()).toLocaleString('ko-KR');
 
   const coreHtml = (r.coreMessages || []).map(m => `<li>${esc(m)}</li>`).join('');
-  const checklistHtml = (r.checklist || []).map(c => {
+  const checklistHtml = (r.checklist && r.checklist.length) ? r.checklist.map(c => {
     const n = Math.max(1, Math.min(3, c.stars||1));
     const stars = '★'.repeat(n) + '☆'.repeat(3-n);
     return `<div class="ck"><span class="ckstars">${stars}</span> ${esc(c.text||'')}</div>`;
-  }).join('');
+  }).join('') : '<div style="padding:6px 0;color:var(--t3);font-size:11px">체크리스트 항목이 없습니다.</div>';
   const aptsHtml = (r.apartments || []).map(a => {
     const hN = Number(a.households);
     const hStr = (a.households && Number.isFinite(hN)) ? `${hN.toLocaleString()}세대` : '세대수 미상';
@@ -8271,7 +8271,7 @@ function toggleDrawer() {
       maxWidth: '340px',
       height: '100vh',
       zIndex: '99999',
-      background: '#ffffff',
+      background: 'var(--bg-base)',
       boxShadow: '2px 0 12px rgba(0,0,0,0.25)',
       transform: 'none',
       visibility: 'visible',
@@ -8303,7 +8303,7 @@ function closeDrawer() {
   const bg = document.getElementById('drawerBg');
   if (lp) {
     lp.classList.remove('open');
-    lp.style.transform = 'translateX(-100%)';
+    lp.style.left = '-100%';   // toggleDrawer 와 동일 left 기반 close (transform 충돌·플리커 방지)
     setTimeout(() => lp.removeAttribute('style'), 300);
   }
   if (bg) {
@@ -8920,7 +8920,7 @@ async function sM(){
       rmTyp();
       const isUpstream = j.code === 'ai_upstream_down';
       addMsg('ai', (j.error || 'AI 응답 생성 중 오류가 발생했어요.') +
-        (isUpstream ? '\n\n💡 그 동안 사이드바 "내 상황 입력 → 단지 검색" 또는 "역전세 시뮬레이터" 는 정상 사용 가능합니다.' : ''));
+        (isUpstream ? '\n\n💡 그 동안 사이드바 "내 상황 입력 → 단지 검색", 상단 "대출계산"·"뉴스" 는 정상 사용 가능합니다.' : ''));
       replied=true;
     } else if(!r.ok){
       throw new Error('http_' + r.status);
