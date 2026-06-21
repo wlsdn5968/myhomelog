@@ -5063,18 +5063,16 @@ function _cmpModalShell(){
   return bg;
 }
 
-async function openCompare(){
-  if(!cmpSel || cmpSel.size < 2){ toast('비교할 단지를 2개 이상 담아주세요'); return; }
-  const apts = [...cmpSel].map(i=>props[i]).filter(Boolean).map(p=>({
-    aptName: p.aptName, sigungu: p.sigungu||'', umdNm: p.umdNm||'', lawdCd: p.lawdCd||''
-  }));
+// 공유 비교 실행 — apts:[{aptName,sigungu,umdNm,lawdCd}] (목록·관심단지 양쪽 재사용)
+async function _runCompare(apts){
+  if(!apts || apts.length < 2){ toast('비교할 단지를 2개 이상 선택하세요'); return; }
   const modal = _cmpModalShell();
   const bodyEl = modal.querySelector('.cmp-body');
   bodyEl.innerHTML = `<div style="padding:48px 20px;text-align:center;color:var(--t3)"><div class="spin" style="margin:0 auto 12px"></div>실거래 평당가·단지정보를 불러오는 중…</div>`;
   try{
     const res = await fetch(`${CFG.api}/analysis/compare`,{
       method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ apts, dealMonths: 12 }),
+      body: JSON.stringify({ apts: apts.slice(0,CMP_MAX), dealMonths: 12 }),
       signal: AbortSignal.timeout(30000)
     });
     if(!res.ok){ const e=await res.json().catch(()=>({})); throw new Error(e.error||`HTTP ${res.status}`); }
@@ -5085,6 +5083,49 @@ async function openCompare(){
     const msg = (e&&e.name==='TimeoutError') ? '응답이 너무 길어요. 잠시 후 다시 시도해주세요.' : String((e&&e.message)||e).slice(0,160);
     bodyEl.innerHTML = `<div class="ibox y" style="margin:16px">비교 정보를 불러오지 못했어요: ${_escHtml(msg)}</div>`;
   }
+}
+
+async function openCompare(){
+  if(!cmpSel || cmpSel.size < 2){ toast('비교할 단지를 2개 이상 담아주세요'); return; }
+  const apts = [...cmpSel].map(i=>props[i]).filter(Boolean).map(p=>({
+    aptName: p.aptName, sigungu: p.sigungu||'', umdNm: p.umdNm||'', lawdCd: p.lawdCd||''
+  }));
+  return _runCompare(apts);
+}
+
+// ── 관심단지(북마크) 비교 (COMPARE-BK-2026-06-21) ──────────────────────────
+// 북마크는 sigungu/umdNm 미저장(레거시) → b.area("송파구 신천동" 형식, propertyService L335)에서 복원.
+// 신규 북마크는 toggleBookmark 가 sigungu/umdNm 명시 저장(robust). lawdCd 비면 백엔드가 sigungu로 보강.
+let cmpBkSel = new Set();
+function _bookmarkToApt(b){
+  let sigungu = b.sigungu || '', umdNm = b.umdNm || '';
+  if(!sigungu && b.area){
+    const parts = String(b.area).trim().split(/\s+/);
+    sigungu = parts[0] || '';
+    umdNm = parts.slice(1).join(' ') || '';
+  }
+  return { aptName: b.aptName, sigungu, umdNm, lawdCd: b.lawdCd || '' };
+}
+function toggleCmpBk(i, checked){
+  if(checked){
+    if(cmpBkSel.size >= CMP_MAX && !cmpBkSel.has(i)){
+      const cb = document.querySelector(`.cmp-bk-input[data-i="${i}"]`); if(cb) cb.checked = false;
+      toast(`비교는 최대 ${CMP_MAX}개까지 선택할 수 있어요`); return;
+    }
+    cmpBkSel.add(i);
+  } else cmpBkSel.delete(i);
+  _renderBkCmpBtn();
+}
+function _renderBkCmpBtn(){
+  const btn = document.getElementById('bkCmpBtn');
+  if(btn) btn.style.display = (cmpBkSel.size >= 2) ? 'block' : 'none';
+  const c = document.getElementById('bkCmpCnt'); if(c) c.textContent = cmpBkSel.size;
+}
+async function openCompareBookmarks(){
+  const bks = getBookmarks();
+  const apts = [...cmpBkSel].map(i=>bks[i]).filter(Boolean).map(_bookmarkToApt).filter(a=>a.aptName);
+  if(apts.length < 2){ toast('관심단지를 2개 이상 선택하세요'); return; }
+  return _runCompare(apts);
 }
 
 // 결과들의 밴드를 ±1㎡ 로 클러스터링 → 공통 전용면적대 후보
@@ -6645,8 +6686,11 @@ function toggleBookmark(){
       aptSeq: p.aptSeq || null,
       aptName: p.aptName,
       area: p.area||'',
+      // COMPARE-BK-2026-06-21: 관심단지 비교용 — sigungu/umdNm 명시 저장(레거시 북마크는 area 파싱 fallback)
+      sigungu: p.sigungu||'',
+      umdNm: p.umdNm||'',
       avgPrice: p.avgPrice||0,
-      lawdCd: p.txHistory?.[0]?.lawdCd||'',
+      lawdCd: p.lawdCd || p.txHistory?.[0]?.lawdCd || '',
       savedAt: Date.now(),
     });
     toast('⭐ 관심 단지 추가 완료');
@@ -6656,6 +6700,7 @@ function toggleBookmark(){
     try { window.va && window.va('event', { name: 'bookmark_add', data: { aptName: String(p.aptName||'').slice(0,40), sigungu: p.sigungu || p.area || '' } }); } catch(_){}
   }
   saveBookmarks(bks);
+  cmpBkSel.clear();   // COMPARE-BK: 추가/해제로 인덱스 시프트 → 비교 선택 초기화(stale 방지)
   renderBookmarks();
 }
 
@@ -6669,7 +6714,8 @@ function renderBookmarks(){
     el.innerHTML='<div class="bk-empty">관심 단지를 추가하면<br>여기서 빠르게 확인할 수 있어요.<br><br><span style="font-size:10.5px;color:var(--t3)">💡 단지 상세 → ⭐ 또는 지도 마커 → ⭐</span></div>';
     return;
   }
-  el.innerHTML=bks.map((b,i)=>{
+  const _bkCmpBtn = bks.length>=2 ? `<button id="bkCmpBtn" onclick="openCompareBookmarks()" style="display:none;width:100%;margin-bottom:8px;padding:8px 10px;background:var(--acc);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📊 선택 단지 비교 (<span id="bkCmpCnt">0</span>)</button>` : '';
+  el.innerHTML=_bkCmpBtn + bks.map((b,i)=>{
     const alerts=getAlerts();
     const target=alerts[b.aptName];
     const hasVisit=!!(getNoteForApt(b.aptName)?.visitDate);
@@ -6691,6 +6737,7 @@ function renderBookmarks(){
     ${lc?`<div style="font-size:9.5px;color:var(--t3);margin-top:3px;padding-left:2px">📊 ${b.lastCheckedCount||0}건${lc}</div>`:''}`;
     return`<div class="bk-item" onclick="openBookmark(${i})">
       <div class="bk-item-row">
+        <label onclick="event.stopPropagation()" title="비교 선택" style="display:flex;align-items:center;flex-shrink:0;cursor:pointer"><input type="checkbox" class="cmp-bk-input" data-i="${i}" ${cmpBkSel.has(i)?'checked':''} onclick="event.stopPropagation();toggleCmpBk(${i},this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--acc);margin:0"></label>
         ${hasVisit?'<div class="bk-visit-dot" title="임장 기록 있음"></div>':''}
         <div><div class="bk-name">${_escHtml(b.aptName || '')}</div><div style="font-size:10px;color:var(--t3)">${_escHtml(b.area || '')}</div></div>
         <span class="bk-price">${priceNow?priceNow.toFixed(1)+'억':''}</span>
@@ -6699,6 +6746,7 @@ function renderBookmarks(){
       ${alertHtml}
     </div>`;
   }).join('');
+  _renderBkCmpBtn();
 }
 
 function openBookmark(i){
@@ -6715,6 +6763,7 @@ function delBookmark(e,i){
   const removed = bks[i];
   bks.splice(i,1);
   saveBookmarks(bks);
+  cmpBkSel.clear();   // COMPARE-BK: 삭제로 인덱스 시프트 → 비교 선택 초기화(stale 방지)
   renderBookmarks();
   // 서버에 _serverId 가 있으면 명시적 DELETE (upsert 기반 push 는 삭제 불가)
   if(removed?._serverId){ _deleteBookmarkOnServer(removed._serverId).catch(()=>{}); }
