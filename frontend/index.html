@@ -5049,7 +5049,8 @@ function _cmpModalShell(){
   bg = document.createElement('div');
   bg.id = 'cmpModal';
   bg.className = 'smbg open';
-  bg.style.cssText = 'z-index:600;display:flex';
+  // z-index 9999: 지도 컨트롤(Leaflet 줌 1000 / Naver) 위로 — .smbg 기본 500/inline 600은 폴백 Leaflet 컨트롤에 가림(라이브 확인)
+  bg.style.cssText = 'z-index:9999;display:flex';
   bg.innerHTML = `<div class="smbox" style="max-width:880px;width:96%;max-height:92vh;display:flex;flex-direction:column;padding:0;overflow:hidden">
     <div class="smhdr" style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--bd)">
       <div class="smtit" style="font-size:15px;font-weight:800">📊 단지 비교 <span style="font-size:11px;font-weight:500;color:var(--t3)">· 평당가(전용) 중심</span></div>
