@@ -270,9 +270,13 @@ async function getTransactions(lawdCd, dealYm) {
 }
 
 /**
- * 단지명 기반 최근 6개월 실거래가 조회
+ * 단지명 기반 최근 N개월 실거래가 조회 (기본 6개월)
+ * COMPARE-12MO-2026-06-21 (단지 비교 Phase1): monthsBack 파라미터 추가.
+ *   배경: 단지 비교 평당가는 "동일 전용면적대·n>=8·최근 12개월" 룰. 기존 6개월 윈도우는
+ *         활성단지 n>=8 충족률 32% 에 그쳐(12개월=54%) 룰을 못 지킴 → 12개월 옵션 필요.
+ *   하위호환: 미전달 호출자는 6개월 유지(회귀 0). cacheKey 에 monthsBack 포함해 6/12 분리 캐시.
  */
-async function getTransactionsByApt(lawdCd, aptName) {
+async function getTransactionsByApt(lawdCd, aptName, monthsBack = 6) {
   if (isMolitKeyMissing()) {
     const err = new Error('국토부 실거래가 API 키 미설정');
     err.code = 'MOLIT_KEY_MISSING';
@@ -280,14 +284,14 @@ async function getTransactionsByApt(lawdCd, aptName) {
     throw err;
   }
 
-  const cacheKey = `txapt:${lawdCd}:${aptName}`;
+  const cacheKey = `txapt:${lawdCd}:${aptName}:${monthsBack}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
   const now = new Date();
   const months = [];
-  // 최근 6개월 조회 — 거래 희소 단지까지 커버
-  for (let i = 0; i < 6; i++) {
+  // 최근 N개월 조회 — 거래 희소 단지까지 커버
+  for (let i = 0; i < monthsBack; i++) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     months.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
@@ -345,8 +349,9 @@ async function getTransactionsByApt(lawdCd, aptName) {
 //   apt_master.molit_aliases (공식 매핑) 로 보강. 검색 path(openAptDetail) 와 동일 집합을 만들어 일관성 확보.
 
 // (a) 단일 단지: canonical + alias 거래 fetch + 병합 (analysisService 가격시그널용)
-async function getTransactionsByAptInclAliases(lawdCd, aptName) {
-  const base = await getTransactionsByApt(lawdCd, aptName);
+//   COMPARE-12MO-2026-06-21: monthsBack 패스스루 (단지 비교 12개월). 미전달 시 6개월(회귀 0).
+async function getTransactionsByAptInclAliases(lawdCd, aptName, monthsBack = 6) {
+  const base = await getTransactionsByApt(lawdCd, aptName, monthsBack);
   if (!aptName) return base;
   const admin = dbClient();
   if (!admin) return base;
@@ -361,7 +366,7 @@ async function getTransactionsByAptInclAliases(lawdCd, aptName) {
     // master(공릉풍림아이원)는 canonical 명으로 MOLIT 실거래가 없음(전부 alias 로 신고) → base 의
     //   느슨한 매칭(insertion 등)은 spurious 일 수 있어 제외. alias 거래만 병합(검색 path 와 동일 = 정확).
     const aliasArrays = await Promise.all(
-      aliases.slice(0, 5).map(a => getTransactionsByApt(lawdCd, a).catch(() => []))
+      aliases.slice(0, 5).map(a => getTransactionsByApt(lawdCd, a, monthsBack).catch(() => []))
     );
     const merged = [];
     const seen = new Set();

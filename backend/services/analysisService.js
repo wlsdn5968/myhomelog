@@ -8,6 +8,8 @@
  */
 const { getTransactionsByApt, getTransactionsByAptInclAliases, LAWD_CODES } = require('./transactionService');
 const { getJeonseByApt } = require('./rentService');
+const { resolveFacility } = require('./aptFacilityService');
+const { buildFacility } = require('../utils/buildFacility');
 const cache = require('../cache');
 
 // ── 지역명 → lawdCd 역조회 ────────────────────────────────
@@ -533,8 +535,135 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
   return { ...result, fromCache: false };
 }
 
+// ── 단지 비교 (Phase1, COMPARE-2026-06-21) ────────────────────────────────
+// 운영자 승인 설계(옵션1): 평당가(전용면적 기준)를 데이터-백드 축으로 비교.
+//   룰: 전용면적대(round ㎡)·최근 N개월(기본 12)·중앙값·표본 n>=8 만 신뢰값(미만 표본부족).
+//        시점/층/향/동 미보정 라벨 · 점수/등급색/레이더/승자표기 금지 · disclaimer 인라인.
+//   facility(세대수·주차/세대·준공·시공사·동수)는 있으면 표시/없으면 '수집 중'(점진 충실화).
+// 재사용(회귀 0): getTransactionsByAptInclAliases(검증된 alias·이름매칭) + filterAnomalies(평형별 MAD)
+//                + resolveFacility/buildFacility(검증된 KAPT 매칭). 신규 매칭/조인 코드 없음.
+const _PYEONG_M2 = 3.3058; // 1평 = 3.3058㎡ (전용면적 기준 평당가 환산)
+
+function _medianNum(nums) {
+  if (!nums || !nums.length) return 0;
+  const s = [...nums].sort((a, b) => a - b);
+  const m = Math.floor(s.length / 2);
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+}
+
+// 외부 facility 호출(드물게 KAPT live)에 상한 — 비교 응답이 느린 단지 1건에 묶이지 않도록.
+function _withTimeout(promise, ms) {
+  let to;
+  const timeout = new Promise((_, rej) => { to = setTimeout(() => rej(new Error('timeout')), ms); });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(to));
+}
+
+async function _compareOne(apt, dealMonths) {
+  const aptName = apt && apt.aptName;
+  const sigungu = (apt && apt.sigungu) || null;
+  const umdNm = (apt && apt.umdNm) || null;
+  const lawdCd = (apt && apt.lawdCd) || (sigungu ? getLawdCdFromArea(sigungu) : null);
+  const out = {
+    aptName: aptName || null, sigungu, umdNm, lawdCd: lawdCd || null,
+    molitAvailable: true, totalTx: 0, bands: [], facility: null,
+  };
+  if (!aptName) return out;
+
+  // 1) 거래 fetch — 검증된 alias 병합·이름매칭 재사용, 12개월 윈도우
+  let saleTx = [];
+  try {
+    saleTx = await getTransactionsByAptInclAliases(lawdCd, aptName, dealMonths);
+  } catch (err) {
+    if (err.code === 'MOLIT_KEY_MISSING') { out.molitAvailable = false; saleTx = []; }
+    else throw err;
+  }
+
+  // 2) 동 스코프 필터 — generic 이름(현대/벽산 등) 동 넘은 과합산 차단 (analyzeApt 와 동일 정책)
+  if (sigungu || umdNm) {
+    saleTx = saleTx.filter(t => !(
+      (sigungu && t.sigungu && t.sigungu !== sigungu) ||
+      (umdNm && t.umdNm && t.umdNm !== umdNm)
+    ));
+  }
+
+  // 3) 최근 dealMonths 윈도우 경계 정확화 (fetch 가 월 단위라 경계 보정)
+  const cutoff = new Date();
+  cutoff.setMonth(cutoff.getMonth() - dealMonths);
+  const cutoffMs = cutoff.getTime();
+  saleTx = saleTx.filter(t => {
+    const d = new Date(t.dealYear, (t.dealMonth || 1) - 1, t.dealDay || 1).getTime();
+    return d >= cutoffMs;
+  });
+  out.totalTx = saleTx.length;
+
+  // 4) 이상치 제거 — 평형별 MAD (검증된 filterAnomalies 재사용)
+  const { filtered } = filterAnomalies(saleTx);
+
+  // 5) 전용면적대(round ㎡) 그룹 → 평당가(전용) 중앙값. n>=8 만 신뢰.
+  const byBand = {};
+  for (const t of filtered) {
+    const ar = Number(t.excluUseAr) || 0;
+    if (ar <= 0) continue;
+    const band = Math.round(ar);
+    (byBand[band] = byBand[band] || []).push(t);
+  }
+  out.bands = Object.entries(byBand).map(([band, txs]) => {
+    const bandNum = parseInt(band, 10);
+    const pyeongPrices = txs.map(t => t.dealAmount / (Number(t.excluUseAr) / _PYEONG_M2)); // 만원/평
+    const deals = txs.map(t => t.dealAmount);
+    return {
+      band: bandNum,                              // 전용 ㎡ (반올림) — 비교 기준
+      pyeong: Math.round(bandNum / _PYEONG_M2),   // 전용 평 (참고 표시용)
+      n: txs.length,
+      reliable: txs.length >= 8,                  // 룰: n>=8 만 신뢰값
+      medianPyeongManwon: Math.round(_medianNum(pyeongPrices)),
+      medianDealManwon: Math.round(_medianNum(deals)),
+      minDealManwon: Math.min(...deals),
+      maxDealManwon: Math.max(...deals),
+    };
+  }).sort((a, b) => b.n - a.n);
+
+  // 6) facility — 검증된 resolveFacility 매칭 재사용. live 호출은 timeout 가드 → 실패 시 '수집 중'.
+  try {
+    const f = await _withTimeout(resolveFacility({ aptName, sigungu, umdNm, lawdCd }), 3500);
+    if (f && f.raw) {
+      const built = buildFacility(f.raw, f.kaptCode, f.detail || (f.raw && f.raw._dtl) || null);
+      if (built && !built._partial) {
+        const by = built.builtDate ? (parseInt(String(built.builtDate).slice(0, 4), 10) || null) : null;
+        out.facility = {
+          totalHouseholds: built.totalHouseholds || null,
+          dongCount: built.dongCount || null,
+          parkingTotal: built.parkingTotal || null,
+          parkingRatio: built.parkingRatio != null ? built.parkingRatio : null,
+          builtYear: by,
+          builder: built.builder || null,
+          topFloor: built.topFloor || null,
+        };
+      }
+    }
+  } catch (_) { /* facility 실패/timeout → null 유지 ('수집 중') */ }
+
+  return out;
+}
+
+/**
+ * 다중 단지 비교 배치. apts: [{ aptName, sigungu, umdNm, lawdCd }], 최대 6개.
+ * @returns {{ results, dealMonths, generatedAt, disclaimer }}
+ */
+async function compareBatch(apts, opts = {}) {
+  const dealMonths = Math.min(Math.max(parseInt(opts.dealMonths, 10) || 12, 6), 24);
+  const list = (Array.isArray(apts) ? apts : []).slice(0, 6);
+  const results = await Promise.all(list.map(a => _compareOne(a, dealMonths).catch(() => null)));
+  return {
+    results: results.filter(Boolean),
+    dealMonths,
+    generatedAt: new Date().toISOString(),
+    disclaimer: `평당가는 전용면적 기준·동일 전용면적대 최근 ${dealMonths}개월 실거래의 중앙값입니다. 시점·층·향·동은 보정되지 않았고, 표본 8건 미만은 통계적으로 신뢰하기 어려워 값 대신 '표본 부족'으로 표기합니다. 본 정보는 매수·매도 추천이 아니며 투자 판단의 근거가 될 수 없습니다. 출처: 국토교통부 실거래가·KAPT 공동주택 기본정보.`,
+  };
+}
+
 module.exports = {
-  analyzeApt, calcTotalCost, getLawdCdFromArea,
+  analyzeApt, calcTotalCost, getLawdCdFromArea, compareBatch,
   // 테스트·디버그 용 — 외부 호출 금지
-  _internals: { calcBuySignal, calcVolumeSignal, calcPricePercentile, filterAnomalies, detectSeasonalBias, getDataReliability, calcGap },
+  _internals: { calcBuySignal, calcVolumeSignal, calcPricePercentile, filterAnomalies, detectSeasonalBias, getDataReliability, calcGap, compareOne: _compareOne },
 };

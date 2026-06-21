@@ -4,7 +4,7 @@
  */
 const express = require('express');
 const router = express.Router();
-const { analyzeApt, calcTotalCost, getLawdCdFromArea } = require('../services/analysisService');
+const { analyzeApt, calcTotalCost, getLawdCdFromArea, compareBatch } = require('../services/analysisService');
 
 // GET /api/analysis
 router.get('/', async (req, res) => {
@@ -25,6 +25,29 @@ router.get('/', async (req, res) => {
     const isProd = process.env.NODE_ENV === 'production';
     res.status(err.status || 500).json({
       error: isProd ? '분석 중 오류가 발생했어요.' : err.message,
+      code: err.code,
+    });
+  }
+});
+
+// POST /api/analysis/compare — 단지 비교 (Phase1, COMPARE-2026-06-21)
+//   body: { apts: [{ aptName, sigungu, umdNm, lawdCd }], dealMonths? }
+//   평당가(전용)·facility 비교. 룰 준수(점수/등급/승자 금지·미보정 라벨·disclaimer 는 서비스가 부여).
+router.post('/compare', async (req, res) => {
+  const { apts, dealMonths } = req.body || {};
+  if (!Array.isArray(apts) || apts.length < 2) {
+    return res.status(400).json({ error: '비교할 단지를 2개 이상 선택하세요.' });
+  }
+  if (apts.length > 6) {
+    return res.status(400).json({ error: '한 번에 최대 6개 단지까지 비교할 수 있어요.' });
+  }
+  try {
+    const result = await compareBatch(apts, { dealMonths });
+    res.json(result);
+  } catch (err) {
+    const isProd = process.env.NODE_ENV === 'production';
+    res.status(err.status || 500).json({
+      error: isProd ? '비교 중 오류가 발생했어요.' : err.message,
       code: err.code,
     });
   }
