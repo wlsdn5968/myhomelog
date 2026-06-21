@@ -4020,11 +4020,11 @@ function openRegSummary(){
         <b>토허구역</b>: 2년 실거주 의무 (강남·송파·용산 일부)<br>
         <b>전세대출</b>: 보유자 규제지역 3억 초과 매수 시 즉시 회수
       </div>
-      <!-- Sprint QQ (2026-05-19): 10.15 이후 후속 정책 (4.17 만기연장 금지 / 5.9 양도세 중과 / 5.12 보완책) -->
+      <!-- Sprint QQ (2026-05-19): 10.15 이후 후속 정책 (4.17 만기연장 금지 / 5.10 양도세 중과 / 5.12 보완책) -->
       <div style="background:#FFE8E8;border:1px solid #E8A0A0;border-radius:8px;padding:10px 12px;font-size:11px;color:#8B2914;line-height:1.6;margin-bottom:10px">
         <b style="color:#A82525">⚡ 10.15 이후 후속 정책</b><br>
         <b>2026.4.17~</b> 다주택자(2주택+) 주담대 만기연장 원칙 금지 (수도권·규제지역, 4조 1,000억 영향)<br>
-        <b>2026.5.9~</b> 다주택자 양도세 중과 부활 (2주택 +20%p / 3주택+ +30%p)<br>
+        <b>2026.5.10~</b> 다주택자 양도세 중과 부활 (2주택 +20%p / 3주택+ +30%p, 5.9까지 양도분 배제)<br>
         <b>2026.5.12~</b> 보완책 — 매도 규제 일부 완화 (이사 등 실수요 일부 허용)<br>
         <b>2026 전체</b> 가계대출 증가율 1.5% 이내 관리 목표
       </div>
@@ -4037,14 +4037,14 @@ function openRegSummary(){
 function closeTerms(){document.getElementById('TM').classList.remove('open');}
 
 // ── 정책 타임라인 ─────────────────────────────────────
-// Sprint QQ (2026-05-19): 4.17 만기연장 금지 + 5.9 양도세 중과 부활 + 5.12 보완책 추가
-//   - 공식 출처 검증: 4.17 = korea.kr 정책브리핑 / 5.9 = 정부 다주택자 양도세 중과 한시유예 종료
+// Sprint QQ (2026-05-19): 4.17 만기연장 금지 + 5.10 양도세 중과 부활 + 5.12 보완책 추가
+//   - 공식 출처 검증: 4.17 = korea.kr 정책브리핑 / 5.10 = 다주택자 양도세 중과 부활(5.9까지 양도분 배제, 2026-06-22 재검증 socialfocus·KB·세무법인)
 const POLICY_TIMELINE = [
   { date:'2025-10-15', title:'규제지역 확대·DSR 강화 시행', desc:'서울 25개구 + 경기 12곳 토지거래허가구역', tag:'규제', color:'#C44' },
   { date:'2025-10-29', title:'1주택자 전세대출 이자 DSR 반영', desc:'전세대출 이자도 총부채상환비율에 포함', tag:'대출', color:'#B47' },
   { date:'2026-01-01', title:'은행권 주담대 위험가중치 15%→20%', desc:'은행 주담대 공급 위축·금리 상승 압력', tag:'금융', color:'#947' },
   { date:'2026-04-17', title:'다주택자 주담대 만기연장 금지', desc:'2주택+ 임대사업자 수도권·규제지역 주담대 만기연장 원칙 금지 (4조 1,000억 / 1.7만 가구)', tag:'대출', color:'#C44' },
-  { date:'2026-05-09', title:'다주택자 양도세 중과 부활', desc:'2022.5~ 한시 유예 종료. 2주택 +20%p / 3주택+ +30%p', tag:'세제', color:'#B47' },
+  { date:'2026-05-10', title:'다주택자 양도세 중과 부활', desc:'2022.5~ 한시 유예 종료(5.9까지 양도분 배제). 2주택 +20%p / 3주택+ +30%p·장특공 배제', tag:'세제', color:'#B47' },
   { date:'2026-05-12', title:'5.12 보완책 시행', desc:'매도 규제 일부 완화 (이사 등 실수요 일부 허용)', tag:'완화', color:'#476' },
   { date:'2026-07-01', title:'스트레스 DSR 4단계 시행 검토', desc:'금리 상승 시뮬레이션 가산폭 확대 예고(추정)', tag:'예고', color:'#777' },
 ];
@@ -5550,10 +5550,10 @@ function showDetail(p){
       const compTax1H = official > 12 ? (official - 12) * 10000 * FAIR * 0.005 : 0;
       const compTax2H = official > 9  ? (official - 9)  * 10000 * FAIR * 0.010 : 0;
       const compTax3H = official > 9  ? (official - 9)  * 10000 * FAIR * 0.020 : 0;
-      // 취득세 (시가 기준 만원): 1주택 6억↓1%/6~9억2%/9억↑3%, 2주택 8%·3주택+ 12% 중과
+      // 취득세 (시가 기준 만원): 1주택 6억↓1%/6~9억 누진(1~3%, 지방세법 §11①8호 (가액×2/3억-3)/100)/9억↑3%, 2주택 8%·3주택+ 12% 중과
       let acqTax1H = 0;
       if (market <= 6) acqTax1H = marketW * 0.01;
-      else if (market <= 9) acqTax1H = marketW * 0.02;
+      else if (market <= 9) acqTax1H = marketW * ((market * 2/3 - 3) / 100);
       else acqTax1H = marketW * 0.03;
       const acqTax2H = marketW * 0.08;
       const acqTax3H = marketW * 0.12;
@@ -5568,7 +5568,7 @@ function showDetail(p){
           ${_box('🏗', '3주택+', `취득세 <b style="color:var(--red)">${_format(acqTax3H)}만원</b> <span style="font-size:9px;color:var(--t3)">(12% 중과)</span><br>재산세 ${_format(propTaxW)}만원/년<br>종부세 <b style="color:var(--red)">${_format(compTax3H)}만원/년</b>`)}
         </div>
         <div style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:6px;padding:7px 10px;font-size:10px;color:var(--accent-700);line-height:1.55;margin-top:4px">
-          <b>⚡ 양도세 중과 부활 (2026.5.9~)</b>: 다주택자 매도 시 기본세율 + <b>2주택 +20%p / 3주택+ +30%p</b> (조정대상지역). 매도 전 세무사 상담 필수.
+          <b>⚡ 양도세 중과 부활 (2026.5.10~)</b>: 다주택자 매도 시 기본세율 + <b>2주택 +20%p / 3주택+ +30%p</b> (조정대상지역, 5.9까지 양도분 배제·장특공 배제). 매도 전 세무사 상담 필수.
         </div>
         <div style="font-size:9.5px;color:var(--t3);margin-top:5px">※ <b>대략 추정</b> — 공시가격=시가×0.7·공정시장가액 60%·종부세 단일률·표준세율 가정, 2025 세율 기준. 실제 세금은 공시가격 공식 발표·세대원·세액공제·1주택 특례·조정대상지역에 따라 다름.<br>※ 출처: 지방세법 §111(재산세)·§11(취득세) / 종합부동산세법 §8·§9. 정확 계산: <a href="https://hometax.go.kr" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">홈택스 모의계산</a></div>
       </div>`;
@@ -6599,6 +6599,8 @@ function calcTotalCostHTML(price,loan,houseStatus,isFirstBuyer){
     else if(houseStatus==='1주택')rate=price<=6?.01:price<=9?.02:.03;
     else rate=isFirstBuyer&&price<=1.5?.008:price<=6?.01:price<=9?.02:.03;
   }
+  // 지방세법 §11①8호: 1주택·무주택 6~9억 취득세는 누진(1~3%) — tier 평탄값 대신 정확식 (2026-06-22 law.go.kr 검증)
+  if (houseStatus !== '2주택+' && price > 6 && price <= 9) rate = (price * 2/3 - 3) / 100;
 
   const eduRate  = tc?.eduTaxRate       ?? 0.1;
   const spclRate = tc?.spclTaxRate      ?? 0.002;
