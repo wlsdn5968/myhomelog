@@ -1516,7 +1516,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       </tr></thead>
       <tbody style="color:var(--t2)">
         <tr><td style="padding:5px 4px;border-bottom:1px solid #B0D9BE"><b>보금자리론</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;font-weight:700">5억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">3.6~4.2%</td></tr>
-        <tr><td style="padding:5px 4px;border-bottom:1px solid #B0D9BE"><b>디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">6천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">5억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;font-weight:700">2.5억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;color:#1F7A3A;font-weight:700">2.0~3.3%</td></tr>
+        <tr><td style="padding:5px 4px;border-bottom:1px solid #B0D9BE"><b>디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">6~7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">5억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;font-weight:700">2~2.4억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;color:#1F7A3A;font-weight:700">2.0~3.3%</td></tr>
         <tr><td style="padding:5px 4px;border-bottom:1px solid #B0D9BE"><b>신혼 디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">8.5천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;font-weight:700">3.2억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;color:#1F7A3A;font-weight:700">1.8~3.1%</td></tr>
         <tr><td style="padding:5px 4px"><b>신생아 특례</b></td><td style="text-align:center;padding:5px 4px">1.3억↓</td><td style="text-align:center;padding:5px 4px">9억↓</td><td style="text-align:center;padding:5px 4px;font-weight:700">4억</td><td style="text-align:center;padding:5px 4px;color:#1F7A3A;font-weight:700">1.6~3.3%</td></tr>
       </tbody>
@@ -1983,7 +1983,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <b>🏠 정책자금 4종 (무주택자)</b><br>
         • <b>신생아 특례</b>: 2년 내 출산 + 부부 1.3억 이하 + 주택 9억 이하, 한도 4억<br>
         • <b>신혼 디딤돌</b>: 혼인 7년 이내 + 부부 8.5천만 이하 + 주택 6억 이하, 한도 3.2억<br>
-        • <b>디딤돌</b>: 부부 6천만~7천만 이하 + 주택 5억 이하, 한도 2.5억<br>
+        • <b>디딤돌</b>: 부부 6천만~7천만 이하 + 주택 5억 이하, 한도 일반 2억·생애최초 2.4억<br>
         • <b>보금자리론</b>: 부부 7천만 이하 + 주택 6억 이하, 한도 5억<br><br>
         <b>📊 등기 vs 신고가</b><br>
         "신고가" = 매매계약 체결 시점 신고 가격 (30일 이내). "등기" = 잔금 후 확정 (60일 이내). 등기는 신고보다 늦음. 우리 서비스는 신고가 기준.<br><br>
@@ -7518,7 +7518,7 @@ function calcC(){
 
 // P1 D4: 정책자금 4종 계산 — 일반 주담대보다 한도·금리 유리
 //   - 보금자리:    소득 7천↓, 주택 6억↓, LTV 70%, 한도 5억, 금리 ~4%
-//   - 디딤돌:      소득 6천↓ (생초 7천), 주택 5억↓, LTV 70%, 한도 2.5억, 금리 ~3%
+//   - 디딤돌:      소득 6천↓ (생초 7천), 주택 5억↓, LTV 일반70/생초80(수도권·규제70), 한도 일반 2억/생초 2.4억(2025.6.28~), 금리 ~3%
 //   - 신혼 디딤돌: 소득 8.5천↓ (혼인 7년↓), 주택 6억↓, 한도 3.2억(2025.6.27~ 계약), 금리 ~2.8%
 //   - 신생아 특례: 소득 1.3억↓ (2년 내 출산), 주택 9억↓, 한도 4억, 금리 ~1.6~3.3%
 // Sprint PP-3 (2026-05-19): 신생아 특례 정확화
@@ -7554,14 +7554,16 @@ function computePolicyLoan({ buy, income, isFirstBuyer, isNewlywed, hasNewborn, 
       note: '혼인 7년 이내, 부부합산 8,500만원 이하, 주택가격 6억 이하. 한도 3.2억(2025.6.27~ 계약).',
     });
   }
-  // 3) 일반 디딤돌 (생초 7천만, 그 외 6천만)
+  // 3) 디딤돌 — 일반 vs 생애최초 한도·LTV 차등 (공식 myhome·hf·금융위 2025.6.28~: 일반 2억/LTV70, 생애최초 2.4억/LTV80(수도권·규제 70))
   const dimdolIncomeCap = isFirstBuyer ? 7000 : 6000;
   if (income > 0 && income <= dimdolIncomeCap && buy <= 5) {
+    const dimdolCap = isFirstBuyer ? 2.4 : 2.0;
+    const dimdolLtv = isFirstBuyer ? (isMetro ? 0.70 : 0.80) : 0.70;
     eligible.push({
       name: '디딤돌',
-      maxLoan: Math.min(2.5, buy * 0.7),
-      ltv: 70, rate: '2.0~3.3%',
-      note: `부부합산 ${dimdolIncomeCap}만원 이하, 주택가격 5억 이하.`,
+      maxLoan: Math.min(dimdolCap, buy * dimdolLtv),
+      ltv: Math.round(dimdolLtv * 100), rate: '2.0~3.3%',
+      note: `부부합산 ${dimdolIncomeCap}만원 이하, 주택가격 5억 이하. 한도 ${dimdolCap}억${isFirstBuyer ? '(생애최초)' : ''}.`,
     });
   }
   // 4) 보금자리론
