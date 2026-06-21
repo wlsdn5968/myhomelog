@@ -106,116 +106,107 @@ function adminClient() {
 }
 
 /**
- * 백필 multi-chunk 실행 (budget time 안에 반복)
+ * 백필 실행 — 후보 풀 1회 조회 후 budget 안에서 batch 순회
  * @param {Object} opts
- * @param {number} [opts.chunk=50]   — 1 chunk 처리 단지 수
+ * @param {number} [opts.chunk=50]   — 1 batch 처리 단지 수 (resolveCoordBatch 단위)
  * @param {number} [opts.daysBack=180] — 거래 lookback 일수
  * @param {number} [opts.budgetMs=240000] — 총 실행 budget (Vercel maxDuration 300s 안전 마진)
+ * @param {number} [opts.pool=800]   — 1회 조회할 후보 풀 크기 (거래량 desc)
+ *
+ * GEOCODE-SWEEP-2026-06-21 (운영자 "이어서 진행해" — 좌표갭 5,042 활성단지 trickle 정체 근본수정):
+ *   [근본원인] 기존 run 은 매 chunk 마다 RPC top-50 을 재조회 → 고거래량 hard-fail 단지(Kakao 매칭 실패)는
+ *     apt_geocache 에 row 가 안 남아 NOT EXISTS 로 매번 top-50 을 영구 점유 → 그 아래 지오코딩 가능 단지에
+ *     영원히 미도달. 실측: cron 은 매일 정상(06-20 facility 680건)인데 geocode 는 일부 날 0건 삽입 = 순수 spin.
+ *   [Fix] 후보 풀(거래량순 top-N)을 1회 조회 후 budget 안에서 batch 순회 → top-50 이 막혀도 하위 랭크까지 sweep.
+ *     실패 단지는 다음 날 재시도(Kakao 호출 풀 800×최대4 ≈ 한도 100K/일 의 ~3% 안전). saveToDb 검증(sigungu/umd
+ *     하드체크)은 불변 → 환각 좌표 위험 0 (동일 검증, 처리 단지만 더 깊게).
  */
-async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 240000 } = {}) {
+async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 240000, pool = 800 } = {}) {
   const started = Date.now();
   const admin = adminClient();
   if (!admin) {
     return { ok: false, error: 'Supabase 미설정', processed: 0 };
   }
 
-  const limit = Math.min(Math.max(parseInt(chunk) || DEFAULT_CHUNK, 1), MAX_CHUNK);
+  const batchSize = Math.min(Math.max(parseInt(chunk) || DEFAULT_CHUNK, 1), MAX_CHUNK);
   const since = new Date(Date.now() - daysBack * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
-  // CANON-COORD-FIX-2026-06-03: 하위시설 좌표 재치유 (1회 본체 교정) — 백필 루프 전 최대 90s.
+  // CANON-COORD-FIX-2026-06-03: 하위시설 좌표 재치유 (1회 본체 교정) — sweep 루프 전.
+  //   GEOCODE-SWEEP-2026-06-21: reheal 실측 작업량 13행뿐 → 60s 예산이면 충분(기존 120s 과대, sweep 예산 확보).
   let reheal = { tried: 0, healed: 0, marked: 0 };
-  try { reheal = await rehealSubfeatures(admin, { cap: 300, budgetMs: 120000 }); }
+  try { reheal = await rehealSubfeatures(admin, { cap: 300, budgetMs: 60000 }); }
   catch (e) { logger.warn({ err: e.message }, 'geocache reheal 실패(무시)'); }
 
-  // budget 안 multi-chunk loop
-  let totalProcessed = 0, totalInserted = 0, totalFailed = 0, chunks = 0;
-  while ((Date.now() - started) < budgetMs - 15000) {  // 15s 마진 (마지막 chunk 안전 종료)
-    const tickResult = await runOneChunk(admin, limit, since);
-    if (tickResult.processed === 0) break; // 더 처리할 단지 X
-    totalProcessed += tickResult.processed;
-    totalInserted += tickResult.inserted;
-    totalFailed += tickResult.failed;
-    chunks++;
+  // 후보 풀 1회 조회 → budget 안에서 batch 순회 (재조회 spin 제거)
+  const candidates = await fetchCandidatePool(admin, pool, since);
+  let totalProcessed = 0, totalInserted = 0, totalFailed = 0, batches = 0, idx = 0;
+  while (idx < candidates.length && (Date.now() - started) < budgetMs - 15000) {  // 15s 마진
+    const slice = candidates.slice(idx, idx + batchSize);
+    idx += slice.length;
+    // resolveCoordBatch — sigungu 검증 강제 (PR #44 fix), saveToDb 자동 INSERT
+    const items = slice.map(t => ({ aptName: t.apt_name, sigungu: t.sigungu, umdNm: t.umd_nm }));
+    // PERF-2026-06-13: 동시성 8 (Kakao 무료 100K/일·경고 60K 대비 안전).
+    const results = await resolveCoordBatch(items, 8);
+    const inserted = results.filter(r => r && r.lat && r.lng).length;
+    totalProcessed += slice.length;
+    totalInserted += inserted;
+    totalFailed += (slice.length - inserted);
+    batches++;
   }
   const elapsed = Date.now() - started;
   logger.info({
     source: 'geocache-backfill',
-    chunks, totalProcessed, totalInserted, totalFailed, elapsedMs: elapsed,
-  }, `geocache backfill: ${chunks} chunks, ${totalInserted}/${totalProcessed} 백필 (${elapsed}ms)`);
-  return { ok: true, reheal, chunks, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, elapsedMs: elapsed };
+    batches, poolSize: candidates.length, totalProcessed, totalInserted, totalFailed, elapsedMs: elapsed,
+  }, `geocache backfill: ${batches} batches, ${totalInserted}/${totalProcessed} 백필 (풀 ${candidates.length}) (${elapsed}ms)`);
+  return { ok: true, reheal, batches, poolSize: candidates.length, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, elapsedMs: elapsed };
 }
 
-async function runOneChunk(admin, limit, since) {
-  const tickStart = Date.now();
-
-  // 거래 활발 단지 (apt_name, sigungu, umd_nm) distinct + 거래수 desc — RPC 또는 raw SQL
-  // RPC 미정의 시 fallback: 일반 query (DISTINCT + 거래량 그룹)
-  let candidates = [];
+/**
+ * 후보 풀 조회 — 거래 활발(최근 daysBack일) + apt_geocache 미보유 단지 limit 개를 거래량 desc 로.
+ *   RPC(geocache_backfill_candidates: NOT EXISTS apt_geocache 내장) 우선, 미정의 시 molit over-fetch fallback.
+ */
+async function fetchCandidatePool(admin, limit, since) {
+  // 1) RPC (NOT EXISTS apt_geocache 내장 — 별도 existing 필터 불필요)
   try {
     const { data, error } = await admin.rpc('geocache_backfill_candidates', {
       p_limit: limit,
       p_since: since,
     });
     if (error) throw error;
-    candidates = data || [];
+    if (data && data.length) return data;
   } catch (rpcErr) {
     logger.debug({ err: rpcErr.message }, 'geocache_backfill_candidates RPC 미정의 — fallback');
-    // Fallback: 단순 fetch (서울 25구 우선)
-    const { data, error } = await admin
-      .from('molit_transactions')
-      .select('apt_name, sigungu, umd_nm')
-      .gte('deal_date', since)
-      .limit(limit * 20); // 중복 많아 over-fetch
-    if (error) {
-      logger.error({ err: error.message }, 'geocache backfill 후보 조회 실패');
-      return { ok: false, error: error.message, processed: 0 };
-    }
-    // distinct + 거래수 집계
-    const groups = {};
-    for (const r of (data || [])) {
-      const k = `${r.apt_name}|${r.sigungu}|${r.umd_nm}`;
-      groups[k] = (groups[k] || 0) + 1;
-    }
-    candidates = Object.entries(groups)
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, limit * 5)
-      .map(([k]) => {
-        const [apt_name, sigungu, umd_nm] = k.split('|');
-        return { apt_name, sigungu, umd_nm };
-      });
   }
 
-  if (!candidates.length) {
-    return { processed: 0, inserted: 0, failed: 0, message: '후보 없음' };
+  // 2) Fallback: molit over-fetch → distinct 거래량 집계 → 기존 보유 제외
+  const { data, error } = await admin
+    .from('molit_transactions')
+    .select('apt_name, sigungu, umd_nm')
+    .gte('deal_date', since)
+    .limit(limit * 20); // 중복 많아 over-fetch
+  if (error) {
+    logger.error({ err: error.message }, 'geocache backfill 후보 조회 실패');
+    return [];
   }
-
-  // apt_geocache 미보유 단지만 필터
-  const keys = candidates.map(c => `${c.apt_name}|${c.sigungu}|${c.umd_nm}`);
+  const groups = {};
+  for (const r of (data || [])) {
+    const k = `${r.apt_name}|${r.sigungu}|${r.umd_nm}`;
+    groups[k] = (groups[k] || 0) + 1;
+  }
+  const ranked = Object.entries(groups)
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, limit)
+    .map(([k]) => {
+      const [apt_name, sigungu, umd_nm] = k.split('|');
+      return { apt_name, sigungu, umd_nm };
+    });
+  // fallback 은 NOT EXISTS 미내장 → apt_geocache 보유분 제외
   const { data: existing } = await admin
     .from('apt_geocache')
     .select('apt_name, sigungu, umd_nm')
-    .in('apt_name', candidates.map(c => c.apt_name).slice(0, 200));
-
-  const existingSet = new Set((existing || []).map(e => `${e.apt_name}|${e.sigungu||''}|${e.umd_nm||''}`));
-  const todo = candidates.filter(c => !existingSet.has(`${c.apt_name}|${c.sigungu}|${c.umd_nm}`)).slice(0, limit);
-
-  if (!todo.length) {
-    return { processed: 0, inserted: 0, failed: 0, message: '모두 이미 보유' };
-  }
-
-  // resolveCoordBatch — sigungu 검증 강제 (PR #44 fix), saveToDb 자동 INSERT
-  const items = todo.map(t => ({
-    aptName: t.apt_name,
-    sigungu: t.sigungu,
-    umdNm: t.umd_nm,
-  }));
-
-  // PERF-2026-06-13: 동시성 4→8 (Kakao 무료 100K/일·경고 60K 대비, 240s 예산 내 최대 ~6K 호출 = 한도 1/10 미만 안전). 백필 wall-time ~절반.
-  const results = await resolveCoordBatch(items, 8);
-  const inserted = results.filter(r => r && r.lat && r.lng).length;
-  const failed = results.length - inserted;
-
-  return { processed: todo.length, inserted, failed, elapsedMs: Date.now() - tickStart };
+    .in('apt_name', ranked.map(c => c.apt_name).slice(0, 200));
+  const existingSet = new Set((existing || []).map(e => `${e.apt_name}|${e.sigungu || ''}|${e.umd_nm || ''}`));
+  return ranked.filter(c => !existingSet.has(`${c.apt_name}|${c.sigungu}|${c.umd_nm}`));
 }
 
 module.exports = { run };
