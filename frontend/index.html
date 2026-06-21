@@ -4536,7 +4536,7 @@ function mkNaverIW(p){
     <div class="niw">
       <div class="niw-n">${_escHtml(p.aptName || '')}</div>
       <div class="niw-pr">${(p.avgPrice||p.price||0).toFixed(2)}억</div>
-      <div class="niw-m">${_escHtml(p.area||'')} · ${_escHtml(p.buildYear||'')}년 · LTV ${_escHtml(p.ltv||'?')}</div>
+      <div class="niw-m">${_escHtml(p.area||'')} · ${_escHtml(p.buildYear||'')}년 · LTV ${_escHtml(p.ltv||_regLtvLabel(p.area)||'—')}</div>
       <div class="niw-g">${scoreLabel}</div>
       <div class="niw-tags">${tags}</div>
       <button class="niw-btn a2" onclick="showDetailById('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}')">📊 상세 리포트</button>
@@ -4821,7 +4821,7 @@ function renderPList(){
     const rank = p.rank ? _escHtml(p.rank)+'. ' : '';
     return`<div class="pi" id="pi-${i}" onclick="selP(${i})">
       <div class="pi-top"><div class="pi-name">${rank}${_escHtml(p.aptName||'')}</div><div class="pi-price">${(Number(p.avgPrice)||0).toFixed(1)}억</div></div>
-      <div class="pi-sub">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||'?')}</div>
+      <div class="pi-sub">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area)||'—')}</div>
       <div class="pi-row">${tags}${gSVG(Number(p.score)||60,30)}</div>
     </div>`;
   }).join('');
@@ -4946,7 +4946,7 @@ function _renderListCard(p, i) {
       <div class="lc-g">${gSVG(s||0,50)}
         <div><div style="font-size:17px;font-weight:800;color:${_hasS?gc(s):'var(--text-tertiary)'}">${(Number(p.avgPrice)||0).toFixed(2)}억</div>
         <span class="lvl ${lv}">${lt}</span>
-        <div style="font-size:10px;color:var(--t2);margin-top:2px">LTV ${_escHtml(p.ltv||'?')} | 최대 ${_escHtml(p.maxLoan||'LTV기준')}</div></div>
+        <div style="font-size:10px;color:var(--t2);margin-top:2px">LTV ${_escHtml(p.ltv||_regLtvLabel(p.area)||'—')}${p.maxLoan?` | 최대 ${_escHtml(p.maxLoan)}`:''}</div></div>
       </div>
     </div>
     <div style="padding:12px 14px">
@@ -5506,7 +5506,7 @@ function showDetail(p){
   const _scoreSection = _hasScore
     ? `<div class="gbw">${gSVG(s,90)}
         <div class="gi"><div class="gi-t">데이터 종합 점수 ${s}/100</div><span class="lvl ${lv}">${lt}</span>
-          <div class="gi-s">${p.area||''} | ${p.buildYear||''}년 | LTV ${p.ltv||'?'} | 최대 ${p.maxLoan||'LTV기준'}</div>
+          <div class="gi-s">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area)||'—')}${p.maxLoan?` | 최대 ${_escHtml(p.maxLoan)}`:''}</div>
         </div>
       </div>`
     : `<div class="score-pending">
@@ -6564,7 +6564,7 @@ function renderAnalysis(d,p){
 function renderAnalysisFallback(p){
   const loanAmt=getLoanAmt();
   document.getElementById('t4').innerHTML=`
-    <div class="ibox y" style="margin-bottom:12px">백엔드 연결 시 실거래가 기반 신호 분석이 제공됩니다.</div>
+    <div class="ibox b" style="margin-bottom:12px">📊 시세 신호(추이·전세가율·갭)는 사이드바에서 <b>AI 단지 검색</b> 실행 시 표시됩니다. 아래 실투자금 계산은 지금도 이용할 수 있어요.</div>
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:7px">💰 실투자금 총비용 계산</div>
     ${calcTotalCostHTML(p.avgPrice||0,loanAmt,gct('ch-h'),gct('ch-f')==='예')}`;
 }
@@ -7219,7 +7219,7 @@ async function loadClause(p){return loadClauseAndRisk(p);}
 function renderRisk(d){
   if(!d||!d.risks){
     document.getElementById('t2').innerHTML=`
-      <div class="ibox y">백엔드 연결 시 AI 실시간 분석 제공</div>
+      <div class="ibox b" style="margin-bottom:12px">아래는 <b>일반적인 매수 리스크 예시</b>입니다. 사이드바에서 <b>AI 단지 검색</b>을 실행하면 이 단지 맞춤 리스크 분석이 제공돼요.</div>
       <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">시세 하락 리스크</div></div><div class="rcard-b">매수 후 금리 인상/규제 강화 시 단기 조정 가능성.</div><div class="rcard-c">💡 5년 이상 보유, 전세 전환 플랜B 수립</div></div>
       <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">대출 규제 추가 강화</div></div><div class="rcard-b">갈아타기 시점 LTV 추가 규제 가능성.</div><div class="rcard-c">💡 상호금융권(DSR 50%) 사전 상담</div></div>
       <div class="rcard"><div class="rcard-top"><span class="lvl safe">낮음</span><div class="rcard-t">환금성 리스크</div></div><div class="rcard-b">세대수 적을 경우 매도 시 거래 부재.</div><div class="rcard-c">💡 RR(로열동·로열호) 매수</div></div>`;
@@ -7313,6 +7313,15 @@ function isRegFront(regionStr){
   }
   for (const kw of reg.keywords) if (r.includes(kw)) return true;
   return false;
+}
+// 규제지역 LTV 라벨(무주택 기준: 규제 40% / 비규제 70%) — 위치만으로 산출. 마커·리스트 'LTV ?' 누수 제거.
+//   isRegFront 재사용 + SEOUL_GU_KW 직접 백스톱(__REG_KW 부팅 전에도 서울 구명 해석). 지역 미상이면 null → 라벨 생략.
+function _regLtvLabel(area){
+  const r = String(area||'').normalize('NFC').trim();
+  if(!r) return null;
+  let reg = isRegFront(r);
+  if(!reg){ for(const gu of SEOUL_GU_KW){ if(r.includes(gu)){ reg = true; break; } } }
+  return reg ? '40%' : '70%';
 }
 const REGION_SUB = {
   '서울': ['강남구','서초구','송파구','강동구','마포구','용산구','성동구','노원구','도봉구','강북구','은평구','구로구','금천구','강서구','양천구','영등포구','관악구','동작구','성북구','동대문구','광진구','중랑구','서대문구','종로구','중구'],
