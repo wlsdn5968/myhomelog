@@ -38,6 +38,35 @@ router.get('/', (req, res) => {
   if (!html) return res.redirect(302, '/');
   const apt = (req.query.apt || '').toString().slice(0, 60);
   const area = (req.query.area || '').toString().slice(0, 40);
+  const cmp = (req.query.cmp || '').toString().slice(0, 2000);
+  // 비교 공유 딥링크(?cmp=) — OG 메타에 단지명 나열 (COMPARE-SHARE-2026-06-21)
+  //   복원은 클라이언트 handleCompareUrl 이 수행. 여기선 크롤러 프리뷰 제목만 치환.
+  if (!apt && cmp) {
+    let names = [];
+    try {
+      let s = cmp.replace(/-/g, '+').replace(/_/g, '/');
+      while (s.length % 4) s += '=';
+      const arr = JSON.parse(Buffer.from(s, 'base64').toString('utf8'));
+      if (Array.isArray(arr)) names = arr.map(a => (a && a.aptName) ? String(a.aptName).slice(0, 40) : '').filter(Boolean).slice(0, 6);
+    } catch (_) { names = []; }
+    const label = names.length >= 2 ? names.join(' vs ') : '단지';
+    const title = `${label} — 내집로그 평당가 비교`;
+    const desc = `${label} 전용면적 기준 평당가·단지정보 비교 (국토부 실거래). 매수 추천 아님.`;
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const shareUrl = `${origin}/share?cmp=${encodeURIComponent(cmp)}`;
+    const t = escapeHtml(title), d = escapeHtml(desc), u = escapeHtml(shareUrl);
+    const rewritten = html
+      .replace(/<title>[^<]*<\/title>/, `<title>${t}</title>`)
+      .replace(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${d}">`)
+      .replace(/<meta property="og:title" content="[^"]*">/, `<meta property="og:title" content="${t}">`)
+      .replace(/<meta property="og:description" content="[^"]*">/, `<meta property="og:description" content="${d}">`)
+      .replace(/<meta property="og:url" content="[^"]*">/, `<meta property="og:url" content="${u}">`)
+      .replace(/<meta name="twitter:title" content="[^"]*">/, `<meta name="twitter:title" content="${t}">`)
+      .replace(/<meta name="twitter:description" content="[^"]*">/, `<meta name="twitter:description" content="${d}">`)
+      .replace(/<link rel="canonical" href="[^"]*">/, `<link rel="canonical" href="${u}">`);
+    res.set('Cache-Control', 'public, max-age=600, s-maxage=600');
+    return res.type('html').send(rewritten);
+  }
   // 쿼리 없으면 원본 그대로
   if (!apt) {
     res.set('Cache-Control', 'public, max-age=300'); // 5분

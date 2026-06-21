@@ -2667,6 +2667,8 @@ window.addEventListener('DOMContentLoaded',()=>{
 
   // 공유 URL 진입 처리
   setTimeout(handleShareUrl, 300);
+  // 비교 공유 딥링크 진입 처리 (?cmp=) (COMPARE-SHARE-2026-06-21)
+  setTimeout(handleCompareUrl, 350);
 
   // 북마크 가격 자동 새로고침 (6시간 이상된 것만, 목표가 달성 배너)
   setTimeout(()=>{if(typeof refreshBookmarkPrices==='function')refreshBookmarkPrices();}, 1800);
@@ -4962,6 +4964,18 @@ const CMP_MAX = 6;
 let _cmpBand = null;   // 현재 선택된 비교 전용㎡ 밴드
 let _cmpSort = null;   // 평당가 정렬 (null=선택순 | 'asc' 낮은순 | 'desc' 높은순)
 let _cmpData = null;   // 최근 compare 응답 캐시
+let _cmpApts = null;   // 최근 compare 입력 단지(공유 딥링크 직렬화용) (COMPARE-SHARE-2026-06-21)
+
+// base64url(유니코드 안전) — 공유 URL ?cmp= 직렬화. +/=/ 문자 회피로 URL 안전.
+function _b64urlEnc(str){
+  const b = btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+  return b.replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function _b64urlDec(s){
+  s = String(s).replace(/-/g,'+').replace(/_/g,'/');
+  while(s.length % 4) s += '=';
+  return new TextDecoder().decode(Uint8Array.from(atob(s), c=>c.charCodeAt(0)));
+}
 
 function _ensureCmpStyles(){
   if(document.getElementById('cmpStyles')) return;
@@ -5067,6 +5081,7 @@ function _cmpModalShell(){
 // 공유 비교 실행 — apts:[{aptName,sigungu,umdNm,lawdCd}] (목록·관심단지 양쪽 재사용)
 async function _runCompare(apts){
   if(!apts || apts.length < 2){ toast('비교할 단지를 2개 이상 선택하세요'); return; }
+  _cmpApts = apts.slice(0, CMP_MAX);   // 공유 딥링크 직렬화용 (목록·관심단지·딥링크 모든 경로 공통)
   const modal = _cmpModalShell();
   const bodyEl = modal.querySelector('.cmp-body');
   bodyEl.innerHTML = `<div style="padding:48px 20px;text-align:center;color:var(--t3)"><div class="spin" style="margin:0 auto 12px"></div>실거래 평당가·단지정보를 불러오는 중…</div>`;
@@ -5127,6 +5142,51 @@ async function openCompareBookmarks(){
   const apts = [...cmpBkSel].map(i=>bks[i]).filter(Boolean).map(_bookmarkToApt).filter(a=>a.aptName);
   if(apts.length < 2){ toast('관심단지를 2개 이상 선택하세요'); return; }
   return _runCompare(apts);
+}
+
+// ── 비교 공유 딥링크 (COMPARE-SHARE-2026-06-21) ────────────────────────────
+// 현재 비교(_cmpApts)를 /share?cmp=<base64url(JSON)> URL 로 공유. 백엔드는 OG 메타만 치환,
+// 실제 복원은 handleCompareUrl 이 ?cmp= 디코드 → 검색 없이 _runCompare 직행(식별자만으로 재현).
+async function shareCompare(){
+  const apts = (_cmpApts||[]).map(a=>({ aptName:a.aptName, sigungu:a.sigungu||'', umdNm:a.umdNm||'', lawdCd:a.lawdCd||'' })).filter(a=>a.aptName);
+  if(apts.length < 2){ toast('공유할 비교가 없어요'); return; }
+  let enc;
+  try{ enc = _b64urlEnc(JSON.stringify(apts)); }catch(_){ toast('공유 링크 생성 실패'); return; }
+  const u = new URL(location.origin + '/share');
+  u.searchParams.set('cmp', enc);
+  const url = u.toString();
+  const names = apts.map(a=>a.aptName).join(' vs ');
+  const title = `${names} — 내집로그 평당가 비교`;
+  const text = `${names}\n전용면적 기준 평당가·단지정보 비교 (국토부 실거래)\n※ 매수 추천이 아니며 참고용 정보입니다.`;
+  if(navigator.share){
+    try{ await navigator.share({ title, text, url }); return; }catch(e){ if(e.name==='AbortError') return; }
+  }
+  try{
+    await navigator.clipboard.writeText(`${text}\n${url}`);
+    toast('🔗 비교 링크 복사 완료 — 붙여넣기로 공유하세요');
+  }catch{
+    prompt('이 링크를 복사하세요:', url);
+  }
+}
+
+// 진입 시 ?cmp= 파라미터 → 비교 모달 자동 복원 (handleShareUrl 패턴 미러)
+async function handleCompareUrl(){
+  const sp = new URLSearchParams(location.search);
+  const enc = sp.get('cmp');
+  if(!enc) return;
+  let raw;
+  try{ raw = JSON.parse(_b64urlDec(enc)); }catch(_){ return; }
+  if(!Array.isArray(raw) || raw.length < 2) return;
+  // 신뢰 필드만·길이 제한 (URL 오염/XSS 1차 정제 — 백엔드도 apts 검증)
+  const apts = raw.slice(0, CMP_MAX).map(a=>({
+    aptName: String((a&&a.aptName)||'').slice(0,40),
+    sigungu: String((a&&a.sigungu)||'').slice(0,20),
+    umdNm:   String((a&&a.umdNm)||'').slice(0,20),
+    lawdCd:  String((a&&a.lawdCd)||'').slice(0,10)
+  })).filter(a=>a.aptName);
+  if(apts.length < 2) return;
+  document.title = `${apts.map(a=>a.aptName).join(' vs ')} — 내집로그 비교`;
+  _runCompare(apts);
 }
 
 // 결과들의 밴드를 ±1㎡ 로 클러스터링 → 공통 전용면적대 후보
@@ -5224,7 +5284,8 @@ function renderCompareModal(data, bodyEl){
   bodyEl.innerHTML = `
     <div class="cmp-disc-top">전용면적대를 골라 <b>같은 평형끼리</b> 비교하세요. 평당가는 <b>전용면적 기준</b>이라 공급면적 기준보다 높게 표시됩니다.</div>
     <div class="cmp-chips">${chips || '<span style="color:var(--t3);font-size:12px">공통 전용면적대가 없어 평당가 직접 비교가 어려워요 (단지정보만 비교)</span>'}</div>
-    <div style="display:flex;justify-content:flex-end;align-items:center;padding:0 16px 8px">
+    <div style="display:flex;justify-content:space-between;align-items:center;padding:0 16px 8px">
+      <button onclick="shareCompare()" title="이 비교를 링크로 공유" style="font-size:11px;padding:4px 10px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-base);color:var(--t2);cursor:pointer;font-family:inherit">🔗 비교 공유</button>
       <button onclick="_cmpToggleSort()" title="평당가 기준 단지 정렬" style="font-size:11px;padding:4px 10px;border:1px solid ${_cmpSort?'var(--acc)':'var(--bd)'};border-radius:8px;background:${_cmpSort?'var(--acc)':'var(--bg-base)'};color:${_cmpSort?'#fff':'var(--t2)'};cursor:pointer;font-family:inherit">평당가순 ${_cmpSort==='asc'?'↑ 낮은순':_cmpSort==='desc'?'↓ 높은순':'↕'}</button>
     </div>
     <div style="overflow:auto">
