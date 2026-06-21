@@ -1521,7 +1521,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <tr><td style="padding:5px 4px"><b>신생아 특례</b></td><td style="text-align:center;padding:5px 4px">1.3억↓</td><td style="text-align:center;padding:5px 4px">9억↓</td><td style="text-align:center;padding:5px 4px;font-weight:700">4억</td><td style="text-align:center;padding:5px 4px;color:#1F7A3A;font-weight:700">1.6~3.3%</td></tr>
       </tbody>
     </table>
-    <div style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.5">※ 정책자금은 자격·서류 요건 별도. <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:#1F7A3A;font-weight:700">주택도시기금 (nhuf.molit.go.kr) →</a> · 1599-0001<br>※ 신생아 특례 LTV 80% — 일반 주담대 40% 대비 압도적 유리. 2년 내 출산 가구 필수 확인.</div>
+    <div style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.5">※ 정책자금은 자격·서류 요건 별도. <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:#1F7A3A;font-weight:700">주택도시기금 (nhuf.molit.go.kr) →</a> · 1599-0001<br>※ 신생아 특례 LTV 수도권·규제 70% / 그 외 80% — 일반 주담대 40% 대비 유리. 2년 내 출산 가구 필수 확인.</div>
   </div>
 
   <!-- Phase 4 (2026-04-26): 부족 자금 해결 시나리오 -->
@@ -1959,7 +1959,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">📅 청약 · 뉴스 · 계약 타임라인 (부가 도구)</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         <b>📅 청약</b>: 한국부동산원 청약Home 일정 + 가점 계산기 (84점) + 지역별 당첨 커트라인 통계<br>
-        <b>📰 뉴스</b>: 부동산 뉴스 6개 카테고리 + 30분마다 갱신 + AI 3줄 시황<br>
+        <b>📰 뉴스</b>: 부동산 뉴스 6개 카테고리 + 최근 30분 이내 갱신 + AI 3줄 시황<br>
         <b>📅 계약 타임라인</b>: 좌측 사이드바(모바일은 ☰ 메뉴) — 계약일·잔금일 입력 → D-day 자동 계산
       </div>
     </details>
@@ -3443,7 +3443,7 @@ const OB_STEPS=[
         <li>LTV·DSR·세금까지 한눈에</li>
         <li>2025.10.15 규제 기준 반영</li>
       </ul>
-      <div style="margin-top:14px;padding:10px;background:var(--bg2);border-radius:8px;font-size:11px;color:var(--t3)">⏱ 1분만 알려주시면 맞춤 단지 5곳을 보여드려요 (4단계, 건너뛰기 가능)</div>
+      <div style="margin-top:14px;padding:10px;background:var(--bg2);border-radius:8px;font-size:11px;color:var(--t3)">⏱ 1~2분이면 맞춤 단지 5곳을 보여드려요 (4단계, 건너뛰기 가능)</div>
     </div>`,
     next:'시작하기 →'
   },
@@ -3869,7 +3869,7 @@ function _downloadReportPDF() {
         <div>✅ <b>장점</b>: ${esc(a.pros||'')}</div>
         <div>⚠ <b>단점</b>: ${esc(a.cons||'')}</div>
         <div class="apt-fit">💰 <b>예산 매칭</b>: ${esc(a.priceFit||'')}</div>
-        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${esc(f.district)}</b>`:null,f.builder?`시공사 <b>${esc(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>`:null,f.regulation?`규제 <b>${esc(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>6개월 ${_numFmt(f.new_high_count)}회</b>`:null].filter(Boolean);const am=f.amenities;const amStr=am?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway)}</b>·마트 <b>${_numFmt(am.mart)}</b>·종합병원 <b>${_numFmt(am.hospital)}</b>·학교 <b>${_numFmt(am.school)}</b>·공원 <b>${_numFmt(am.park)}</b>`:'';if(!items.length && !amStr)return '';return `<div class="apt-objfacts">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` · 매칭 <b>${_numFmt(a.matchScore)}점</b>`:''}</div>`;})()}
+        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${esc(f.district)}</b>`:null,f.builder?`시공사 <b>${esc(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>`:null,f.regulation?`규제 <b>${esc(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>6개월 ${_numFmt(f.new_high_count)}회</b>`:null].filter(Boolean);const am=f.amenities;const _amOk=am&&(am.subway!=null||am.mart!=null||am.hospital!=null||am.school!=null);const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway,'?')}</b>·마트 <b>${_numFmt(am.mart,'?')}</b>·종합병원 <b>${_numFmt(am.hospital,'?')}</b>·학교 <b>${_numFmt(am.school,'?')}</b>·공원 <b>${_numFmt(am.park,'?')}</b>`:(am?'주변 편의시설 좌표 미해결':'');if(!items.length && !amStr)return '';return `<div class="apt-objfacts">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` · 매칭 <b>${_numFmt(a.matchScore)}점</b>`:''}</div>`;})()}
         ${a.matchReason ? `<div class="apt-match">🏆 <b>왜 이 순위?</b> ${esc(a.matchReason)}</div>` : ''}
         <div class="apt-rec">📌 ${esc(a.recommendation||'')}</div>
       </div>
@@ -4098,7 +4098,7 @@ async function loadNews(btn){
         <div style="font-size:13px;font-weight:600;line-height:1.5;margin-bottom:6px">${_escHtml(n.title)}</div>
         <div style="font-size:10px;color:var(--t3)">📰 ${_escHtml(n.source||'언론사')} · ${_escHtml(fmtDate(n.pubDate))} · 원문 보기 ↗</div>
       </a>
-    `).join('') + `<div style="margin-top:10px;padding:8px;background:var(--s1);border-radius:6px;font-size:10px;color:var(--t3);text-align:center">출처: ${_escHtml(d.source||'')} · ${Number(d.count)||0}건 · 30분마다 갱신</div>`;
+    `).join('') + `<div style="margin-top:10px;padding:8px;background:var(--s1);border-radius:6px;font-size:10px;color:var(--t3);text-align:center">출처: ${_escHtml(d.source||'')} · ${Number(d.count)||0}건 · 최근 30분 이내</div>`;
     list.dataset.loaded='1';
     // 핫 카테고리일 때만 AI 3줄 시황 자동 로드 (첫 로드 시 1회)
     if(cat==='hot' && !document.getElementById('newsSummary').dataset.loaded){
@@ -4482,7 +4482,7 @@ function gSVG(score,sz){
 }
 
 // ── MARKERS ──────────────────────────────────────────────
-function getMarkerCls(p){return p.ltv?.includes('40')?'reg':p.type==='recon'?'recon':'non';}
+function getMarkerCls(p){const _l=p.ltv||_regLtvLabel(p.area);return _l?.includes('40')?'reg':p.type==='recon'?'recon':'non';}
 const clsColor={reg:'var(--acc)',non:'var(--a2)',recon:'var(--amb)'};
 
 function mkNaverOverlay(p){
@@ -4736,7 +4736,7 @@ async function doSearch(){
       props=(data.recommendations||[]).map((p,i)=>{
         const lat = (p.lat!=null) ? Number(p.lat) : getLat(p.area,i);
         const lng = (p.lng!=null) ? Number(p.lng) : getLng(p.area,i);
-        return {...p, lat, lng, type:p.ltv?.includes('40')?'regulated':'non'};
+        return {...p, lat, lng, type:(p.ltv||_regLtvLabel(p.area))?.includes('40')?'regulated':'non'};
       });
       searchMeta={
         regions:(data.targetRegions||[]).map(r=>r.name).filter(Boolean),
@@ -4870,8 +4870,8 @@ function renderListGrid(){
     // 필터 적용
     const flt = window._lstFlt || 'all';
     let filtered = props.slice();
-    if (flt === 'regulated') filtered = filtered.filter(p => p.ltv?.includes('40'));
-    else if (flt === 'non') filtered = filtered.filter(p => !p.ltv?.includes('40'));
+    if (flt === 'regulated') filtered = filtered.filter(p => (p.ltv||_regLtvLabel(p.area))?.includes('40'));
+    else if (flt === 'non') filtered = filtered.filter(p => !(p.ltv||_regLtvLabel(p.area))?.includes('40'));
     // 정렬 적용
     const sort = document.getElementById('lstSort')?.value || 'score';
     // MOB-AUDIT-2026-05-03: STAB #21 — `sortFn?.score` 가 자기 자신 참조 (선언 중) → 알 수 없는 sort 키 입력 시 undefined → 정렬 안 됨
@@ -4941,7 +4941,7 @@ function _renderListCard(p, i) {
       <input type="checkbox" class="cmp-chk-input" data-i="${i}" ${cmpSel.has(i)?'checked':''} onclick="event.stopPropagation();toggleCmp(${i},this.checked)">
       <span class="cmp-chk-lbl">비교</span>
     </label>
-    <div class="lc-top" style="background:${p.ltv?.includes('40')?'var(--accL)':'var(--a2L)'}">
+    <div class="lc-top" style="background:${(p.ltv||_regLtvLabel(p.area))?.includes('40')?'var(--accL)':'var(--a2L)'}">
       <div class="lc-name">${_escHtml(p.aptName||'')}</div><div class="lc-area">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년</div>
       <div class="lc-g">${gSVG(s||0,50)}
         <div><div style="font-size:17px;font-weight:800;color:${_hasS?gc(s):'var(--text-tertiary)'}">${(Number(p.avgPrice)||0).toFixed(2)}억</div>
@@ -7545,12 +7545,12 @@ function computePolicyLoan({ buy, income, isFirstBuyer, isNewlywed, hasNewborn, 
     });
   }
   // 2) 신혼 디딤돌
-  if (isNewlywed && income > 0 && income <= 7000 && buy <= 5) {
+  if (isNewlywed && income > 0 && income <= 7000 && buy <= 6) {
     eligible.push({
       name: '신혼 디딤돌',
       maxLoan: Math.min(4, buy * 0.7),
       ltv: 70, rate: '1.8~3.1%',
-      note: '혼인 7년 이내, 부부합산 7천만원 이하, 주택가격 5억 이하.',
+      note: '혼인 7년 이내, 부부합산 7천만원 이하, 주택가격 6억 이하.',
     });
   }
   // 3) 일반 디딤돌 (생초 7천만, 그 외 6천만)
