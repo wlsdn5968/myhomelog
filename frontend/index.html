@@ -4960,6 +4960,7 @@ function _renderListCard(p, i) {
 // 동일 전용면적대·n>=8·시점·층·향 미보정 라벨, disclaimer 인라인. backend POST /api/analysis/compare.
 const CMP_MAX = 6;
 let _cmpBand = null;   // 현재 선택된 비교 전용㎡ 밴드
+let _cmpSort = null;   // 평당가 정렬 (null=선택순 | 'asc' 낮은순 | 'desc' 높은순)
 let _cmpData = null;   // 최근 compare 응답 캐시
 
 function _ensureCmpStyles(){
@@ -5077,7 +5078,7 @@ async function _runCompare(apts){
     });
     if(!res.ok){ const e=await res.json().catch(()=>({})); throw new Error(e.error||`HTTP ${res.status}`); }
     const data = await res.json();
-    _cmpData = data; _cmpBand = null;
+    _cmpData = data; _cmpBand = null; _cmpSort = null;
     renderCompareModal(data, bodyEl);
   }catch(e){
     const msg = (e&&e.name==='TimeoutError') ? '응답이 너무 길어요. 잠시 후 다시 시도해주세요.' : String((e&&e.message)||e).slice(0,160);
@@ -5164,17 +5165,33 @@ function renderCompareModal(data, bodyEl){
   const sel = clusters.find(c=>c.center===_cmpBand) || clusters[0] || null;
   const perResult = sel ? sel.perResult : results.map(()=>null);
 
+  // 평당가순 정렬(colOrder) — 선택 밴드의 신뢰 평당가 기준. 무값(표본부족/해당평형없음)은 항상 뒤로.
+  //   중립 재정렬일 뿐(승자/등급 표기 아님 — 룰 준수). results/perResult 를 함께 재배열해 기존 루프 불변.
+  let _order = results.map((_,i)=>i);
+  if(_cmpSort){
+    const _v = i => { const b=perResult[i]; return (b && b.reliable) ? b.medianPyeongManwon : null; };
+    _order.sort((a,b)=>{
+      const va=_v(a), vb=_v(b);
+      if(va==null && vb==null) return 0;
+      if(va==null) return 1;
+      if(vb==null) return -1;
+      return _cmpSort==='asc' ? va-vb : vb-va;
+    });
+  }
+  const oResults = _order.map(i=>results[i]);
+  const oPerResult = _order.map(i=>perResult[i]);
+
   const chips = clusters.slice(0,8).map(c=>{
     const active = sel && c.center===sel.center;
     return `<button class="cmp-chip ${active?'on':''}" onclick="_cmpPickBand(${c.center})">전용 ${c.center}㎡<span class="cmp-chip-sub">신뢰 ${c.reliableCount}/${results.length}</span></button>`;
   }).join('');
 
-  const nameCols = results.map(r=> `<th class="cmp-th"><div class="cmp-apt">${_escHtml(r.aptName||'')}</div><div class="cmp-apt-sub">${_escHtml((r.sigungu||'')+(r.umdNm?(' '+r.umdNm):''))}</div></th>`).join('');
+  const nameCols = oResults.map(r=> `<th class="cmp-th"><div class="cmp-apt">${_escHtml(r.aptName||'')}</div><div class="cmp-apt-sub">${_escHtml((r.sigungu||'')+(r.umdNm?(' '+r.umdNm):''))}</div></th>`).join('');
 
-  const reliableVals = perResult.filter(b=>b&&b.reliable).map(b=>b.medianPyeongManwon);
+  const reliableVals = oPerResult.filter(b=>b&&b.reliable).map(b=>b.medianPyeongManwon);
   const maxVal = reliableVals.length ? Math.max(...reliableVals) : 0;
   let pyeongRow = '', sampleRow = '', dealRow = '';
-  perResult.forEach(b=>{
+  oPerResult.forEach(b=>{
     if(!b){
       pyeongRow += `<td class="cmp-na">해당 평형<br>거래 없음</td>`;
       sampleRow += `<td class="cmp-na">—</td>`;
@@ -5195,7 +5212,7 @@ function renderCompareModal(data, bodyEl){
 
   const facRow = (label, fn, unit) => {
     let cells='';
-    results.forEach(r=>{
+    oResults.forEach(r=>{
       const f = r.facility;
       let v = null;
       try { v = f ? fn(f) : null; } catch(_){ v = null; }
@@ -5207,6 +5224,9 @@ function renderCompareModal(data, bodyEl){
   bodyEl.innerHTML = `
     <div class="cmp-disc-top">전용면적대를 골라 <b>같은 평형끼리</b> 비교하세요. 평당가는 <b>전용면적 기준</b>이라 공급면적 기준보다 높게 표시됩니다.</div>
     <div class="cmp-chips">${chips || '<span style="color:var(--t3);font-size:12px">공통 전용면적대가 없어 평당가 직접 비교가 어려워요 (단지정보만 비교)</span>'}</div>
+    <div style="display:flex;justify-content:flex-end;align-items:center;padding:0 16px 8px">
+      <button onclick="_cmpToggleSort()" title="평당가 기준 단지 정렬" style="font-size:11px;padding:4px 10px;border:1px solid ${_cmpSort?'var(--acc)':'var(--bd)'};border-radius:8px;background:${_cmpSort?'var(--acc)':'var(--bg-base)'};color:${_cmpSort?'#fff':'var(--t2)'};cursor:pointer;font-family:inherit">평당가순 ${_cmpSort==='asc'?'↑ 낮은순':_cmpSort==='desc'?'↓ 높은순':'↕'}</button>
+    </div>
     <div style="overflow:auto">
     <table class="cmp-tbl">
       <thead><tr><th class="cmp-rl-h">전용 ${sel?sel.center:'-'}㎡ <span style="font-weight:500;color:var(--t3)">(약 ${sel?sel.pyeong:'-'}평)</span></th>${nameCols}</tr></thead>
@@ -5228,6 +5248,13 @@ function renderCompareModal(data, bodyEl){
 
 function _cmpPickBand(b){
   _cmpBand = b;
+  const modal = document.getElementById('cmpModal');
+  if(modal && _cmpData) renderCompareModal(_cmpData, modal.querySelector('.cmp-body'));
+}
+
+// 평당가 정렬 토글: 선택순 → 낮은순 → 높은순 → 선택순. 무값은 항상 뒤(렌더에서 처리).
+function _cmpToggleSort(){
+  _cmpSort = (_cmpSort==='asc') ? 'desc' : (_cmpSort==='desc') ? null : 'asc';
   const modal = document.getElementById('cmpModal');
   if(modal && _cmpData) renderCompareModal(_cmpData, modal.querySelector('.cmp-body'));
 }
