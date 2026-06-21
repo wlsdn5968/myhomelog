@@ -238,6 +238,60 @@ async function ingestOne(admin, lawdCd, dealYm) {
   }
 }
 
+/**
+ * GAP-BACKFILL-2026-06-21: 윈도우 밖으로 밀려 영구 갭이 된 region-month 재적재.
+ *
+ * 배경 (DB 실측 2026-06-21):
+ *   - cron 은 최근 3개월(recentYearMonths)만 적재. "과거 backfill 미구현" (본 파일 상단 주석).
+ *   - in-window 에 실패(error/timeout)한 region-month 가 재시도 전 3개월 윈도우 밖으로 밀리면
+ *     영구 누락 → 그 지역 DB 직접조회 빈결과(쿼리시 라이브 fallback 은 받치나 집계/geocode 경로 누락).
+ *   - 실측: error/timeout 만 있고 OK 없는 12 region-month (4월 dedup_key 버그 시절 실패분이
+ *     5/21 fix 후에도 미재시도). 11470:202505 ~ 36110:202602.
+ *
+ * 동작: 최근 lookback 내 (lawd,ym) 중 OK 한 번도 없는 것을 maxGaps 개 골라 ingestOne(검증된 적재) 재시도.
+ *   - 실패셋이 작아(누적 ~39쌍) supabase-js .in() 으로 안전. ingestOne 재사용 → 신규 write 로직 0.
+ *   - 빈 월(MOLIT 데이터 없음)은 ingestOne 이 rows=0 으로 status='ok' 처리 → 갭에서 자동 제외(무한재시도 차단).
+ *   - 연속 3 실패 시 중단(MOLIT 장애 보호). 시간가드는 호출부(runMolitIngest)에서.
+ */
+async function retryFailedGaps(admin, { maxGaps = 15, lookbackMonths = 18, deadline = Infinity } = {}) {
+  const minYm = recentYearMonths(lookbackMonths).slice(-1)[0]; // 가장 오래된 YYYYMM
+  const { data: fails, error: fe } = await admin.from('molit_ingest_runs')
+    .select('lawd_cd, deal_ym')
+    .in('status', ['error', 'timeout'])
+    .gte('deal_ym', minYm)
+    .limit(2000);
+  if (fe || !fails || !fails.length) return { gaps: 0, retried: 0, filled: 0 };
+
+  const failPairs = [...new Set(fails.map(r => `${r.lawd_cd}|${r.deal_ym}`))];
+  const failLawds = [...new Set(fails.map(r => r.lawd_cd))];
+  const failYms = [...new Set(fails.map(r => r.deal_ym))];
+
+  const { data: oks } = await admin.from('molit_ingest_runs')
+    .select('lawd_cd, deal_ym')
+    .eq('status', 'ok')
+    .in('lawd_cd', failLawds)
+    .in('deal_ym', failYms)
+    .limit(8000);
+  const okSet = new Set((oks || []).map(r => `${r.lawd_cd}|${r.deal_ym}`));
+
+  const gaps = failPairs.filter(p => !okSet.has(p)).slice(0, maxGaps);
+  let retried = 0, filled = 0, consec = 0;
+  for (const p of gaps) {
+    if (consec >= CIRCUIT_BREAK_CONSECUTIVE_FAILURES) break; // MOLIT 장애 시 중단
+    if (Date.now() > deadline) break;                        // maxDuration 보호 — 남은 갭은 다음 run
+    const idx = p.lastIndexOf('|');
+    const lawd = p.slice(0, idx), ym = p.slice(idx + 1);
+    const r = await ingestOne(admin, lawd, ym);
+    retried++;
+    if (r.ok) { filled++; consec = 0; } else { consec++; }
+  }
+  if (gaps.length) {
+    logger.info({ source: 'molit-ingest-gap', candidateGaps: failPairs.length, picked: gaps.length, retried, filled },
+      `molit-ingest gap-backfill: ${filled}/${retried} 적재`);
+  }
+  return { gaps: gaps.length, retried, filled };
+}
+
 /** 전체 실행 — Vercel Cron entrypoint 에서 호출 */
 /**
  * @param {Object} opts
@@ -313,7 +367,21 @@ async function runMolitIngest(opts = {}) {
     ok, err, skipped,
     elapsedMs,
   }, 'MOLIT ETL 완료');
-  return { ok, err, skipped, elapsedMs, monthsCount: months.length, monthsRange: months.length ? `${months[months.length-1]}~${months[0]}` : null, results };
+
+  // GAP-BACKFILL-2026-06-21: 윈도우 밖으로 밀린 영구 갭 재적재 (maxDuration 300s 여유 있을 때만).
+  //   정상 적재 이후 실행 → 실패해도 정상 적재엔 무영향. 시간 부족 시 skip(다음 run 재시도).
+  let gapBackfill = { gaps: 0, retried: 0, filled: 0 };
+  if (Date.now() - started < 200000) {
+    try {
+      gapBackfill = await retryFailedGaps(admin, { maxGaps: 15, lookbackMonths: 18, deadline: started + 270000 });
+    } catch (e) {
+      logger.warn({ err: e.message }, 'molit-ingest gap-backfill 실패 (정상 적재엔 무영향)');
+    }
+  } else {
+    logger.warn({ elapsedMs: Date.now() - started }, 'molit-ingest gap-backfill skip — 시간 부족');
+  }
+
+  return { ok, err, skipped, elapsedMs, monthsCount: months.length, monthsRange: months.length ? `${months[months.length-1]}~${months[0]}` : null, gapBackfill, results };
 }
 
 module.exports = { runMolitIngest };
