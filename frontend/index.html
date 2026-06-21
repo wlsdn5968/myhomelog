@@ -1515,7 +1515,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <th style="padding:6px 4px;border-bottom:1px solid #B0D9BE">금리</th>
       </tr></thead>
       <tbody style="color:var(--t2)">
-        <tr><td style="padding:5px 4px;border-bottom:1px solid #B0D9BE"><b>보금자리론</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;font-weight:700">5억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">3.6~4.2%</td></tr>
+        <tr><td style="padding:5px 4px;border-bottom:1px solid #B0D9BE"><b>보금자리론</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;font-weight:700">3.6~4.2억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">3.6~4.2%</td></tr>
         <tr><td style="padding:5px 4px;border-bottom:1px solid #B0D9BE"><b>디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">6~7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">5억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;font-weight:700">2~2.4억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;color:#1F7A3A;font-weight:700">2.0~3.3%</td></tr>
         <tr><td style="padding:5px 4px;border-bottom:1px solid #B0D9BE"><b>신혼 디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">8.5천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;font-weight:700">3.2억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid #B0D9BE;color:#1F7A3A;font-weight:700">1.8~3.1%</td></tr>
         <tr><td style="padding:5px 4px"><b>신생아 특례</b></td><td style="text-align:center;padding:5px 4px">1.3억↓</td><td style="text-align:center;padding:5px 4px">9억↓</td><td style="text-align:center;padding:5px 4px;font-weight:700">4억</td><td style="text-align:center;padding:5px 4px;color:#1F7A3A;font-weight:700">1.6~3.3%</td></tr>
@@ -1984,7 +1984,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         • <b>신생아 특례</b>: 2년 내 출산 + 부부 1.3억 이하 + 주택 9억 이하, 한도 4억<br>
         • <b>신혼 디딤돌</b>: 혼인 7년 이내 + 부부 8.5천만 이하 + 주택 6억 이하, 한도 3.2억<br>
         • <b>디딤돌</b>: 부부 6천만~7천만 이하 + 주택 5억 이하, 한도 일반 2억·생애최초 2.4억<br>
-        • <b>보금자리론</b>: 부부 7천만 이하 + 주택 6억 이하, 한도 5억<br><br>
+        • <b>보금자리론</b>: 부부 7천만 이하 + 주택 6억 이하, 한도 일반 3.6억·생애최초 4.2억<br><br>
         <b>📊 등기 vs 신고가</b><br>
         "신고가" = 매매계약 체결 시점 신고 가격 (30일 이내). "등기" = 잔금 후 확정 (60일 이내). 등기는 신고보다 늦음. 우리 서비스는 신고가 기준.<br><br>
         <span style="font-size:10.5px;color:var(--t3)">출처: <a href="https://www.easylaw.go.kr/CSP/CnpClsMain.laf?popMenu=ov&csmSeq=649" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">법제처 생활법령정보</a> · 한국부동산원 · 국토교통부</span>
@@ -7517,7 +7517,7 @@ function calcC(){
 }
 
 // P1 D4: 정책자금 4종 계산 — 일반 주담대보다 한도·금리 유리
-//   - 보금자리:    소득 7천↓, 주택 6억↓, LTV 70%, 한도 5억, 금리 ~4%
+//   - 보금자리:    소득 7천↓, 주택 6억↓, LTV 70%, 한도 일반 3.6억/생초 4.2억(특례보금자리 5억 종료), 금리 ~4%
 //   - 디딤돌:      소득 6천↓ (생초 7천), 주택 5억↓, LTV 일반70/생초80(수도권·규제70), 한도 일반 2억/생초 2.4억(2025.6.28~), 금리 ~3%
 //   - 신혼 디딤돌: 소득 8.5천↓ (혼인 7년↓), 주택 6억↓, 한도 3.2억(2025.6.27~ 계약), 금리 ~2.8%
 //   - 신생아 특례: 소득 1.3억↓ (2년 내 출산), 주택 9억↓, 한도 4억, 금리 ~1.6~3.3%
@@ -7566,13 +7566,14 @@ function computePolicyLoan({ buy, income, isFirstBuyer, isNewlywed, hasNewborn, 
       note: `부부합산 ${dimdolIncomeCap}만원 이하, 주택가격 5억 이하. 한도 ${dimdolCap}억${isFirstBuyer ? '(생애최초)' : ''}.`,
     });
   }
-  // 4) 보금자리론
+  // 4) 보금자리론 — 일반 3.6억 / 생애최초 4.2억 (공식 hf.go.kr 2026-06-21 재검증; 특례보금자리 5억은 2024.1 종료)
   if (income > 0 && income <= 7000 && buy <= 6) {
+    const bogeumCap = isFirstBuyer ? 4.2 : 3.6;
     eligible.push({
       name: '보금자리론',
-      maxLoan: Math.min(5, buy * 0.7),
+      maxLoan: Math.min(bogeumCap, buy * 0.7),
       ltv: 70, rate: '3.6~4.2%',
-      note: '부부합산 7천만원 이하, 주택가격 6억 이하.',
+      note: `부부합산 7천만원 이하, 주택가격 6억 이하. 한도 ${bogeumCap}억${isFirstBuyer ? '(생애최초)' : ''}.`,
     });
   }
 
