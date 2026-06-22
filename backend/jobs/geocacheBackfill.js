@@ -121,7 +121,12 @@ function adminClient() {
  *     실패 단지는 다음 날 재시도(Kakao 호출 풀 800×최대4 ≈ 한도 100K/일 의 ~3% 안전). saveToDb 검증(sigungu/umd
  *     하드체크)은 불변 → 환각 좌표 위험 0 (동일 검증, 처리 단지만 더 깊게).
  */
-async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 240000, pool = 800 } = {}) {
+// GEOCODE-ACCEL-2026-06-22: pool 800→2000·budget 240→270s (감속 대응 실측 근거).
+//   6/22 cron 커버리지 65.9%·+60/일 감속 — 잔여 미좌표 4,731 >> 풀 800 이라 풀 밖 geocodable 단지 미도달(pool-bound).
+//   reheal 실측 13행(~10s)이라 sweep ~215s 확보 → 2000 처리 여유. budget 270s = 루프 255s 중단 + 최종배치 ≈269s < maxDuration 300s
+//   (함수 300s 가능 검증: molit cron 정상패스>60s 후 retryFailedGaps 8건 처리 = 함수 >200s 실행 확인). Kakao 2000×최대4=8000=13%<60K 경고한도.
+//   주의: 풀 상단의 영구 하드페일(Kakao 무매칭·row 미생성)은 매 run 재시도로 budget·call 일부 낭비 — 향후 sentinel 제외 최적화 후보(미적용, 위험 회피).
+async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, pool = 2000 } = {}) {
   const started = Date.now();
   const admin = adminClient();
   if (!admin) {
