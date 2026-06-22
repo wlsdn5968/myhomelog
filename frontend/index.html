@@ -4174,8 +4174,8 @@ async function loadSubs(){
     if(!r.ok){
       box.innerHTML = `<div style="padding:30px 20px;text-align:center;color:var(--t3);line-height:1.7;background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:12px">
         <div style="font-size:34px;margin-bottom:8px">📅</div>
-        <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px">청약 캘린더 연동 준비 중</div>
-        <div style="font-size:11.5px;color:var(--t2);margin-bottom:14px;line-height:1.6">정부 청약 데이터 API 구독 절차 진행 중입니다.<br>지금은 청약Home에서 직접 확인해주세요.</div>
+        <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px">청약 일정을 불러오지 못했어요</div>
+        <div style="font-size:11.5px;color:var(--t2);margin-bottom:14px;line-height:1.6">일시적인 오류일 수 있어요. 잠시 후 다시 시도하거나<br>청약Home에서 직접 확인해주세요.</div>
         <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="display:inline-block;padding:9px 18px;background:var(--acc);color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;box-shadow:var(--sh)">🏠 청약Home 바로가기 ↗</a>
       </div>`;
       box.dataset.loaded = '1';
