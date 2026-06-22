@@ -5546,10 +5546,20 @@ function showDetail(p){
       else if (propBase <= 15000)  propTaxW = 6 + (propBase - 6000) * 0.0015;
       else if (propBase <= 30000)  propTaxW = 19.5 + (propBase - 15000) * 0.0025;
       else                         propTaxW = 57 + (propBase - 30000) * 0.004;
-      // 종부세 (만원): 공제 1주택 12억·다주택 9억, 과세표준×60%, 추정 단일률(실제는 누진 — 대략치)
-      const compTax1H = official > 12 ? (official - 12) * 10000 * FAIR * 0.005 : 0;
-      const compTax2H = official > 9  ? (official - 9)  * 10000 * FAIR * 0.010 : 0;
-      const compTax3H = official > 9  ? (official - 9)  * 10000 * FAIR * 0.020 : 0;
+      // 종부세 (만원): 공제 1주택 12억·다주택 9억, 과세표준×60%, 국세청 2023~ 주택분 누진세율 (2026-06-22 nts.go.kr 검증)
+      //   2주택 이하=일반(0.5~2.7%)·3주택 이상=중과(0.5~5.0%, 과표 12억 초과부터 일반과 갈림). 초과누진, 구간경계(만원): 3·6·12·25·50·94억.
+      const _jongbuTax = (baseW, heavy) => {
+        if (baseW <= 0) return 0;
+        const br = heavy
+          ? [[30000,.005],[60000,.007],[120000,.010],[250000,.020],[500000,.030],[940000,.040],[Infinity,.050]]
+          : [[30000,.005],[60000,.007],[120000,.010],[250000,.013],[500000,.015],[940000,.020],[Infinity,.027]];
+        let tax = 0, prev = 0;
+        for (const [cap, r] of br) { if (baseW <= prev) break; tax += (Math.min(baseW, cap) - prev) * r; prev = cap; }
+        return tax;
+      };
+      const compTax1H = official > 12 ? _jongbuTax((official - 12) * 10000 * FAIR, false) : 0;  // 1주택: 공제 12억·일반세율
+      const compTax2H = official > 9  ? _jongbuTax((official - 9)  * 10000 * FAIR, false) : 0;  // 2주택: 공제 9억·일반세율(조정 2주택 중과 폐지)
+      const compTax3H = official > 9  ? _jongbuTax((official - 9)  * 10000 * FAIR, true)  : 0;  // 3주택+: 공제 9억·중과세율
       // 취득세 (시가 기준 만원): 1주택 6억↓1%/6~9억 누진(1~3%, 지방세법 §11①8호 (가액×2/3억-3)/100)/9억↑3%, 2주택 8%·3주택+ 12% 중과
       let acqTax1H = 0;
       if (market <= 6) acqTax1H = marketW * 0.01;
@@ -5570,7 +5580,7 @@ function showDetail(p){
         <div style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:6px;padding:7px 10px;font-size:10px;color:var(--accent-700);line-height:1.55;margin-top:4px">
           <b>⚡ 양도세 중과 부활 (2026.5.10~)</b>: 다주택자 매도 시 기본세율 + <b>2주택 +20%p / 3주택+ +30%p</b> (조정대상지역, 5.9까지 양도분 배제·장특공 배제). 매도 전 세무사 상담 필수.
         </div>
-        <div style="font-size:9.5px;color:var(--t3);margin-top:5px">※ <b>대략 추정</b> — 공시가격=시가×0.7·공정시장가액 60%·종부세 단일률·표준세율 가정, 2025 세율 기준. 실제 세금은 공시가격 공식 발표·세대원·세액공제·1주택 특례·조정대상지역에 따라 다름.<br>※ 출처: 지방세법 §111(재산세)·§11(취득세) / 종합부동산세법 §8·§9. 정확 계산: <a href="https://hometax.go.kr" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">홈택스 모의계산</a></div>
+        <div style="font-size:9.5px;color:var(--t3);margin-top:5px">※ <b>대략 추정</b> — 공시가격=시가×0.7·공정시장가액 60%·종부세 누진세율(국세청 2023~)·표준세율 가정, 2025 세율 기준. 실제 세금은 공시가격 공식 발표·세대원·세액공제·1주택 특례·조정대상지역에 따라 다름.<br>※ 출처: 지방세법 §111(재산세)·§11(취득세) / 종합부동산세법 §8·§9. 정확 계산: <a href="https://hometax.go.kr" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">홈택스 모의계산</a></div>
       </div>`;
     })() : ''}
     <div id="amenityBox" style="font-size:11px;color:var(--t3);margin:4px 0 8px">🗺️ 주변 편의시설 조회 중...</div>
