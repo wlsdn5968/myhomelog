@@ -9,6 +9,7 @@ const router = express.Router();
 const axios = require('axios');
 const cache = require('../cache');
 const { callAI } = require('../services/aiService');
+const { filterAdviceOutput } = require('../services/aiOutputFilter');
 
 const NAVER_NEWS_URL = 'https://openapi.naver.com/v1/search/news.json';
 
@@ -202,8 +203,11 @@ ${titles.slice(0, 20).map((t, i) => `${i+1}. ${t}`).join('\n')}
     // Phase 4 (2026-04-26): AI 가 JSON 뒤에 추가 텍스트 붙이는 경우 대응 — 첫 { 부터 마지막 } 까지만 추출.
     const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
     const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
+    const _rawLines = Array.isArray(parsed.lines) ? parsed.lines : [];
+    // 정책 안전망(절대룰 — 매수·매도 추천 금지): SYS prompt 만으론 100% 차단 불가 → chat/report 와 동일 사후필터 적용
+    const _safeLines = _rawLines.map(l => { const f = filterAdviceOutput(l); return f.filtered ? f.text : l; });
     const out = {
-      summary: Array.isArray(parsed.lines) ? parsed.lines : [],
+      summary: _safeLines,
       updatedAt: new Date().toISOString(),
       disclaimer: '본 시황 요약은 뉴스 헤드라인 기반 정보 정리이며, 매수·매도 추천이 아닙니다.',
     };

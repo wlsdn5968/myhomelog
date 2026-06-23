@@ -4086,7 +4086,7 @@ async function loadNews(btn){
     const r=await fetch(`${CFG.api}/news?cat=${cat}`,{signal:AbortSignal.timeout(8000)});
     const d=await r.json();
     if(!d.items||!d.items.length){list.innerHTML='<div style="padding:30px 0;text-align:center;color:var(--t3)">표시할 뉴스가 없어요.</div>';return;}
-    const fmtDate=(s)=>{try{const dt=new Date(s);return `${dt.getMonth()+1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;}catch{return '';}};
+    const fmtDate=(s)=>{try{const dt=new Date(s);if(!s||isNaN(dt.getTime()))return '';return `${dt.getMonth()+1}/${dt.getDate()} ${String(dt.getHours()).padStart(2,'0')}:${String(dt.getMinutes()).padStart(2,'0')}`;}catch{return '';}};
     // XSS 방어: 백엔드 stripHtml 이 entity 를 디코드하므로 프론트에서 반드시 재-escape 필요
     // link 도 javascript:/data: 스킴 차단 (http/https 만 허용)
     const safeLink = (u) => {
@@ -4189,18 +4189,18 @@ async function loadSubs(){
     const cards = d.items.map(it=>`
       <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 14px;margin-bottom:8px;box-shadow:var(--sh)">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:6px">
-          <div style="font-size:13px;font-weight:700;color:var(--t1);flex:1;line-height:1.3">${it.name}</div>
+          <div style="font-size:13px;font-weight:700;color:var(--t1);flex:1;line-height:1.3">${_escHtml(it.name)}</div>
           <div style="font-size:11px;white-space:nowrap">${dDayLabel(it.receiveStart)}</div>
         </div>
-        <div style="font-size:11px;color:var(--t3);margin-bottom:6px">${it.area || ''} · ${it.address || ''}</div>
+        <div style="font-size:11px;color:var(--t3);margin-bottom:6px">${_escHtml(it.area || '')} · ${_escHtml(it.address || '')}</div>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;font-size:10.5px;color:var(--t2)">
           <div><span style="color:var(--t3)">접수</span> ${fmtSubsDate(it.receiveStart)}~${fmtSubsDate(it.receiveEnd)}</div>
           <div><span style="color:var(--t3)">당첨발표</span> ${fmtSubsDate(it.announceDate)}</div>
           <div><span style="color:var(--t3)">입주예정</span> ${fmtMoveIn(it.moveInPlanned)}</div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;padding-top:7px;border-top:1px solid var(--bdL,var(--bd))">
-          <span style="font-size:10.5px;color:var(--t3)">시공: ${it.builder || '미상'} · 공급 ${it.sales || '-'}세대</span>
-          ${it.detailUrl ? `<a href="${it.detailUrl}" target="_blank" rel="noopener" style="font-size:10.5px;color:var(--acc);text-decoration:none">공고 ↗</a>` : ''}
+          <span style="font-size:10.5px;color:var(--t3)">시공: ${_escHtml(it.builder || '미상')} · 공급 ${it.sales || '-'}세대</span>
+          ${it.detailUrl && /^https?:\/\//i.test(it.detailUrl) ? `<a href="${_escHtml(it.detailUrl)}" target="_blank" rel="noopener" style="font-size:10.5px;color:var(--acc);text-decoration:none">공고 ↗</a>` : ''}
         </div>
       </div>
     `).join('');
@@ -5523,10 +5523,10 @@ function showDetail(p){
       <div class="rc"><div class="rcl">현재 평균가</div><div class="rcv" style="color:var(--acc)">${(p.avgPrice||0).toFixed(2)}억</div></div>
       <div class="rc"><div class="rcl">가격 범위</div><div class="rcv">${(p.minPrice||0).toFixed(1)}~${(p.maxPrice||0).toFixed(1)}억</div></div>
     </div>
-    ${p.facility?`<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
+    ${p.facility?`<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:9px 11px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
       <div style="font-weight:700;color:var(--t1);margin-bottom:4px">🏢 단지 기본정보</div>
       ${p.facility.totalHouseholds?`총 ${p.facility.totalHouseholds.toLocaleString()}세대`:''}${p.facility.dongCount?` · ${p.facility.dongCount}개동`:''}${p.facility.parkingRatio?` · 주차 세대당 ${p.facility.parkingRatio}대`:''}${p.facility.builtDate?` · 사용승인 ${p.facility.builtDate.slice(0,4)}.${p.facility.builtDate.slice(4,6)}`:''}${p.facility.heatType?` · ${p.facility.heatType}`:''}
-      ${p.facility.address?`<br><span style="font-size:10px;color:var(--t3)">${p.facility.address}</span>`:''}
+      ${p.facility.address?`<br><span style="font-size:10px;color:var(--t3)">${_escHtml(p.facility.address)}</span>`:''}
     </div>`:''}
     <!-- Sprint PP-4 (2026-05-19) + 작업 A 확장 (2026-05-20): 보유 주택수별 세금 시뮬레이션 (취득세·재산세·종부세·양도세 중과) -->
     ${p.avgPrice && p.avgPrice > 0 ? (() => {
@@ -5569,7 +5569,7 @@ function showDetail(p){
       const acqTax3H = marketW * 0.12;
       const _format = w => Math.round(w).toLocaleString();   // 만원 단위 값
       const _box = (icon, title, content) => `<div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;font-size:10.5px;line-height:1.5;color:var(--t2)"><div style="font-weight:700;color:var(--t1);margin-bottom:3px">${icon} ${title}</div>${content}</div>`;
-      return `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:11px 13px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
+      return `<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:11px 13px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
         <div style="font-weight:700;color:var(--t1);margin-bottom:6px">💸 보유 주택수별 예상 세금 시뮬레이션</div>
         <div style="font-size:10px;color:var(--t3);margin-bottom:6px">매매가 ${market.toFixed(1)}억 / 공시가격 추정 ${official.toFixed(1)}억</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">
@@ -5619,9 +5619,9 @@ function showDetail(p){
         <div style="font-size:9.5px;color:var(--t3);margin-top:3px">※ 학교 위치만 — 학업성취도·진학률·통학구역은 본 데이터에 없음. 학교알리미(schoolinfo.go.kr) 별도 확인.</div>
       </div>`;
     })()}
-    ${p.pros?`<div class="ibox g"><b>장점:</b> ${p.pros}</div>`:''}
-    ${p.cons?`<div class="ibox r"><b>단점:</b> ${p.cons}</div>`:''}
-    ${p.strategy?`<div class="ibox b"><b>전략:</b> ${p.strategy}</div>`:''}
+    ${p.pros?`<div class="ibox g"><b>장점:</b> ${_escHtml(p.pros)}</div>`:''}
+    ${p.cons?`<div class="ibox r"><b>단점:</b> ${_escHtml(p.cons)}</div>`:''}
+    ${p.strategy?`<div class="ibox b"><b>전략:</b> ${_escHtml(p.strategy)}</div>`:''}
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
       <button class="abtn a2" style="margin:0;font-size:11px" onclick="goCalcFromDetail(${p.avgPrice||0})">🧮 대출 계산</button>
       <button class="abtn" style="margin:0;font-size:11px;background:var(--info-bg);color:var(--a2);border:1px solid var(--info-bd)" onclick="goClauseFromCurrentDetail()">✍ 특약 만들기</button>
@@ -5707,7 +5707,7 @@ function showDetail(p){
   //   단지의 "신고가 경신" 이벤트 추출. cumulative max 갱신 시점만 표시.
   //   매수 추천 X / 가격 예측 X — 과거 신고가 갱신 history 정보 정리.
   function _peakTrendHtml(area) {
-    const tx = (window._curTrendApt || []).filter(t => !area || Number(t.excluUseAr) === area);
+    const tx = (window._curTrendApt || []).filter(t => !area || Math.round(Number(t.excluUseAr) || 0) === area);
     if (tx.length < 2) {
       return area
         ? `<div style="font-size:11px;color:var(--t3);padding:10px 0">${area}㎡ 거래 부족 — 신고가 경신 추이 표시 어려움</div>`
@@ -5741,7 +5741,7 @@ function showDetail(p){
     const upPct = first.dealAmount > 0
       ? (((Number(last.dealAmount) - Number(first.dealAmount)) / Number(first.dealAmount)) * 100).toFixed(1)
       : '0.0';
-    return `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--t2);line-height:1.6">
+    return `<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--t2);line-height:1.6">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
         <span style="font-weight:700;color:var(--t1)">📈 신고가 경신 ${peaks.length}회</span>
         <span style="color:var(--acc);font-weight:600">최초 ${firstPrice}억 → 최근 ${lastPrice}억 (+${upPct}%)</span>
@@ -6034,7 +6034,7 @@ function showDetail(p){
 
         return `<div style="margin-top:14px">
           <div style="font-weight:700;font-size:12px;color:var(--t1);margin-bottom:6px">📜 이 단지에 적용되는 주요 법령</div>
-          <div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px">
+          <div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:9px 11px">
             ${laws.map(l => `<div style="font-size:10.5px;line-height:1.6;padding:3px 0">
               <a href="${l.url}" target="_blank" rel="noopener" style="color:var(--a2);text-decoration:underline;font-weight:600">${_escHtml(l.name)}</a>
               <span style="color:var(--t3)"> · ${_escHtml(l.reason)}</span>
@@ -6107,7 +6107,7 @@ async function loadFacility(p){
       if (heatType) items.push(_escHtml(heatType)); // 형제 필드(official/시공사)와 동일하게 escape (KAPT 데이터 심층방어)
       const officialName = r.facility.official && r.facility.official !== p.aptName
         ? `<span style="color:var(--t3);font-size:10px"> (정식명: ${_escHtml(r.facility.official)})</span>` : '';
-      fbox.innerHTML = `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6">
+      fbox.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6">
         <div style="font-weight:700;color:var(--t1);margin-bottom:4px">🏢 단지 기본정보 (공공데이터포털 AptInfo)${officialName}</div>
         ${items.join(' · ')}
         ${constructionCompany?`<br><span style="font-size:10px">시공: ${_escHtml(constructionCompany)}</span>`:''}
@@ -6148,7 +6148,7 @@ async function loadFacility(p){
           <div style="font-size:10px;color:var(--t3)">${top.distance_m}m</div>
         </div>`;
       };
-      sbox.innerHTML = `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6;margin-top:8px">
+      sbox.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6;margin-top:8px">
         <div style="font-weight:700;color:var(--t1);margin-bottom:6px">🏫 주변 학교 (반경 1km · 카카오맵 + 학교알리미)</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px">
           ${renderType('초', '초등학교')}
@@ -6177,7 +6177,7 @@ async function loadFacility(p){
         return `<span style="display:inline-block;background:${bg};color:${tc};border-radius:12px;padding:2px 8px;font-size:10.5px;font-weight:600;margin:2px 3px 2px 0">${_escHtml(rg.label)}</span>`;
       }).join('');
       const notes = [...(sc.hubs||[]).map(h=>h.note), ...(sc.regions||[]).map(rg=>`${rg.name}: ${rg.note}`)].filter(Boolean).join(' · ');
-      cbox.innerHTML = `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6;margin-top:8px">
+      cbox.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6;margin-top:8px">
         <div style="font-weight:700;color:var(--t1);margin-bottom:5px">🎓 학군 권역 (2026 부동산 강연 자료 기반)</div>
         <div>${hubChips}${regionChips}</div>
         ${notes ? `<div style="font-size:10px;color:var(--t3);margin-top:5px">${_escHtml(notes)}</div>` : ''}
@@ -6202,7 +6202,7 @@ async function loadFacility(p){
       const topNames = (na.top||[]).slice(0,5).map(a =>
         `<span style="font-size:10.5px;color:var(--t3)">${_escHtml(a.name)} <span style="color:var(--t3)">(${a.distance_m}m)</span></span>`
       ).join(' · ');
-      acadBox.innerHTML = `<div style="background:#F5F7FB;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6;margin-top:8px">
+      acadBox.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6;margin-top:8px">
         <div style="font-weight:700;color:var(--t1);margin-bottom:5px">📚 인근 학원가 (반경 ${na.radius_m}m, ${na.total}개)</div>
         <div style="margin-bottom:5px">${catChips}</div>
         ${topNames ? `<div style="font-size:10px;color:var(--t3);line-height:1.5">${topNames}</div>` : ''}
@@ -6997,7 +6997,7 @@ function showAlertBanner(hits){
   b.style.cssText='position:fixed;top:14px;left:14px;right:14px;max-width:520px;margin:0 auto;z-index:9999;background:linear-gradient(135deg,var(--accent-50),#FFE4C4);border:1px solid #E8A868;border-radius:12px;padding:14px 18px;box-shadow:0 4px 16px rgba(0,0,0,.14);font-size:13px;font-family:inherit';
   b.innerHTML=`<button onclick="document.getElementById('alertBanner').remove()" style="float:right;background:transparent;border:none;font-size:18px;cursor:pointer;color:#8B5A2B;padding:0 6px;line-height:1">✕</button>
     <div style="font-weight:700;color:#8B5A2B;margin-bottom:6px">🎯 목표가 달성 알림 (${hits.length}건)</div>
-    ${hits.map(h=>`<div style="color:#5C3817;line-height:1.6;font-size:12px;margin-bottom:2px">・ <b>${h.name}</b> — 현재 평균 ${h.price}억 (이전 ${h.prev?h.prev.toFixed(2)+'억':'?'} / 목표 ${h.target}억 이하)</div>`).join('')}
+    ${hits.map(h=>`<div style="color:#5C3817;line-height:1.6;font-size:12px;margin-bottom:2px">・ <b>${_escHtml(h.name)}</b> — 현재 평균 ${h.price}억 (이전 ${h.prev?h.prev.toFixed(2)+'억':'?'} / 목표 ${h.target}억 이하)</div>`).join('')}
     <div style="margin-top:8px;font-size:10px;color:#8B5A2B">※ 국토부 실거래 최근 평균가 기준. 매수 추천 아님.</div>`;
   document.body.appendChild(b);
   // 15초 후 자동 숨김
@@ -7542,7 +7542,7 @@ function computePolicyLoan({ buy, income, isFirstBuyer, isNewlywed, hasNewborn, 
   if (houseStatus !== '무주택') return { eligible: [], maxLoan: 0, bestName: null, note: '정책자금은 무주택자만 신청 가능' };
   const eligible = [];
   // Sprint PP-3: 수도권 (서울/경기/인천) vs 비수도권 LTV 차등
-  const isMetro = region === '서울' || region === '경기' || region === '인천';
+  const isMetro = ['서울', '경기', '인천'].some(k => String(region || '').includes(k));  // 부분일치(getRegionForSearch가 '서울 강남구' 형태로 넘김 — calcLTV의 isRegFront와 동일 정책)
   // 신생아 특례 LTV: 생애최초 80%(수도권·규제 70%) / 비생애최초 70% — 출처 myhome.go.kr (2026-06-21 재검증)
   const newbornLtv = isFirstBuyer ? (isMetro ? 0.70 : 0.80) : 0.70;
   const NEWBORN_REGION_HINT = !isFirstBuyer ? '비생애최초 LTV 70%' : (isMetro ? '수도권·규제 LTV 70%' : '비수도권 LTV 80%');
@@ -7684,6 +7684,7 @@ function dc(){
   let ltv=0,cap=Infinity,warn='';
   if(house==='2주택+'){ltv=0;warn='2주택+ 대출 불가';}
   else if(house==='1주택'&&isR){ltv=0;warn='1주택 규제지역 추가 대출 불가';}
+  else if(house==='1주택'){ltv=.7;warn='1주택 비규제 LTV 70%';}  // calcLTV와 일치 — 1주택은 생애최초 가산(0.8) 대상 아님
   else{ltv=isLoc?(isF?.8:.7):!isR?(isF?.8:.7):(isF?.7:.4);warn=isR&&isF?'생애최초 70%: 6개월 전입의무':isR?'무주택 규제지역 LTV 40%':'';}
   if(isR)cap=buy<=15?6:buy<=25?4:2;
   const lL=Math.min(buy*ltv,cap),n=yrs*12,mr=rate/12,smr=(rate+(isR?.015:.0075))/12;
@@ -8726,7 +8727,7 @@ function calcComm(){
       {label:'6억 이상',min:60000,max:Infinity,rate:0.008,cap:null},
     ];
   }
-  const tier=tiers.find(t=>priceW>t.min&&priceW<=t.max)||tiers[tiers.length-1];
+  const tier=tiers.find(t=>priceW>=t.min&&priceW<t.max)||tiers[tiers.length-1];  // 법령 '이상~미만'(하한포함·상한배제) — 2억·9억 등 경계가 정확화
   let comm=priceW*tier.rate;
   if(tier.cap)comm=Math.min(comm,tier.cap);
   const commMax=Math.round(comm),commNeg=Math.round(comm*0.7);
