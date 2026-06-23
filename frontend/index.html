@@ -4499,7 +4499,7 @@ function mkNaverOverlay(p){
     map:mapObj,
     title:p.aptName,
     icon:{
-      content:`<div class="nmap-pin ${cls}" ondblclick="showDetailById('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}')">
+      content:`<div class="nmap-pin ${cls}" ondblclick="showDetailById('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}',${p.lat},${p.lng})">
         <div class="nmap-bub ${cls}">
           <span class="nmap-pr">${pr}억</span><span class="nmap-sc">${subTxt}</span>
         </div>
@@ -4539,7 +4539,7 @@ function mkNaverIW(p){
       <div class="niw-m">${_escHtml(p.area||'')} · ${_escHtml(p.buildYear||'')}년 · LTV ${_escHtml(p.ltv||_regLtvLabel(p.area)||'—')}</div>
       <div class="niw-g">${scoreLabel}</div>
       <div class="niw-tags">${tags}</div>
-      <button class="niw-btn a2" onclick="showDetailById('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}')">📊 상세 리포트</button>
+      <button class="niw-btn a2" onclick="showDetailById('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}',${p.lat},${p.lng})">📊 상세 리포트</button>
       <button class="niw-btn acc" onclick="askP('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}','${p.avgPrice||0}','${encodeURIComponent(p.area||'').replace(/'/g,'%27')}')">🤖 AI 전략 묻기</button>
     </div>
   </div>`;
@@ -4565,6 +4565,9 @@ function mkLeafletMkr(p){
 }
 
 function renderMarkers(data){
+  // 인기(popular) 마커 제거 — 검색·영역검색 시 인기핀이 안 지워져 결과핀과 중복 누적되던 버그 fix
+  (window._popMarkers||[]).forEach(o=>{ if(o._isNaver)o.setMap&&o.setMap(null); else o.remove&&o.remove(); });
+  window._popMarkers=[];
   overlays.forEach(o=>{
     if(naverReady&&!mapObj?._isLeaflet)o.setMap&&o.setMap(null);
     else o.remove&&o.remove();
@@ -5330,8 +5333,10 @@ function selP(i){
   }
   showDetail(p);
 }
-function showDetailById(n){
-  const p=props.find(x=>x.aptName===decodeURIComponent(n));
+function showDetailById(n, lat, lng){
+  const _n=decodeURIComponent(n);
+  // 동명 단지 오매칭 방지: aptName+좌표로 정확 매칭(마커 좌표=클릭한 그 단지). 좌표 미전달/누락 시 aptName fallback(하위호환)
+  const p=(lat!=null ? props.find(x=>x.aptName===_n && Math.abs((x.lat||0)-Number(lat))<1e-6 && Math.abs((x.lng||0)-Number(lng))<1e-6) : null) || props.find(x=>x.aptName===_n);
   if(!p)return;
   // MARKER-DETAIL-2026-05-21: 지도/인기 마커도 검색과 동일하게 실거래·facility fetch (lawdCd 있을 때).
   //   in-bounds ALIAS-MERGE 후 prop 에 lawdCd/sigungu/umdNm/aptSeq/source 존재 → 검색과 동일 모달.
