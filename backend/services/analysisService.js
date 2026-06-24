@@ -346,30 +346,28 @@ function calcTotalCost(price, loanAmount, houseStatus, isFirstBuyer, taxConfig) 
       const tiers = at.oneHouse?.tiers || [];
       rate = pickTierRate(tiers, price, 0.03);
     } else { // 무주택
-      const fb = at.noHouse?.firstBuyerDiscount;
-      if (isFirstBuyer && fb && price <= fb.underAuk) {
-        rate = fb.rate;
-      } else {
-        rate = pickTierRate(at.noHouse?.tiers || [], price, 0.03);
-      }
+      rate = pickTierRate(at.noHouse?.tiers || [], price, 0.03);
     }
   } else {
     // ── 하드코딩 fallback ──
     if (houseStatus === '2주택+') rate = 0.08;
     else if (houseStatus === '1주택') rate = price <= 6 ? 0.01 : price <= 9 ? 0.02 : 0.03;
-    else {
-      if (isFirstBuyer && price <= 1.5) rate = 0.008;
-      else if (price <= 6) rate = 0.01;
-      else if (price <= 9) rate = 0.02;
-      else rate = 0.03;
-    }
+    else rate = price <= 6 ? 0.01 : price <= 9 ? 0.02 : 0.03;
   }
+  // 지방세법 §11①8호 나목: 1주택·무주택 6~9억 취득세 누진(1~3%) — frontend calcTotalCostHTML 와 정합 (2026-06-24 law.go.kr 검증)
+  if (houseStatus !== '2주택+' && price > 6 && price <= 9) rate = (price * 2 / 3 - 3) / 100;
 
   const eduRate  = taxConfig?.eduTaxRate       ?? 0.1;
   const spclRate = taxConfig?.spclTaxRate      ?? 0.002;
   const spclThr  = taxConfig?.spclTaxThreshold ?? 0.01;
 
-  const acqTax  = Math.round(priceW * rate);
+  const acqGross = Math.round(priceW * rate);
+  // 생애최초 취득세 감면 (지방세특례제한법 §36의3, 2026-06-02 시행~2028-12-31): 무주택·거주목적 12억↓ → 산출세액 200만원 공제(소형·인구감소지역 300만), 산출세액 200만↓ 면제.
+  //   전용면적·지역 데이터 부재로 일반 200만원만 보수적 적용. (구 1.5억↓ 0.8% 고정세율은 현행과 무관 — law.go.kr §36의3 검증)
+  const fbDeduct = (isFirstBuyer && houseStatus !== '1주택' && houseStatus !== '2주택+' && price <= 12)
+    ? Math.min(acqGross, (taxConfig?.acquisitionTax?.noHouse?.firstBuyerExempt?.deductManwon ?? 200))
+    : 0;
+  const acqTax  = acqGross - fbDeduct;
   const eduTax  = Math.round(acqTax * eduRate);
   const spclTax = rate <= spclThr ? 0 : Math.round(priceW * spclRate);
 
@@ -403,6 +401,7 @@ function calcTotalCost(price, loanAmount, houseStatus, isFirstBuyer, taxConfig) 
   return {
     gap:        parseFloat(gap.toFixed(2)),
     acqTax:     parseFloat((acqTax / 10000).toFixed(2)),
+    firstBuyerDeduct: parseFloat((fbDeduct / 10000).toFixed(2)),
     eduTax:     parseFloat((eduTax / 10000).toFixed(2)),
     spclTax:    parseFloat((spclTax / 10000).toFixed(2)),
     commission: parseFloat((commission / 10000).toFixed(2)),

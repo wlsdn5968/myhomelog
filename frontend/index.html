@@ -6604,15 +6604,11 @@ function calcTotalCostHTML(price,loan,houseStatus,isFirstBuyer){
     const at = tc.acquisitionTax;
     if (houseStatus==='2주택+') rate = at.twoHousePlus?.rate ?? 0.08;
     else if (houseStatus==='1주택') rate = _pickTierRate(at.oneHouse?.tiers, price, 0.03);
-    else {
-      const fb = at.noHouse?.firstBuyerDiscount;
-      if (isFirstBuyer && fb && price <= fb.underAuk) rate = fb.rate;
-      else rate = _pickTierRate(at.noHouse?.tiers, price, 0.03);
-    }
+    else rate = _pickTierRate(at.noHouse?.tiers, price, 0.03);
   } else {
     if(houseStatus==='2주택+')rate=0.08;
     else if(houseStatus==='1주택')rate=price<=6?.01:price<=9?.02:.03;
-    else rate=isFirstBuyer&&price<=1.5?.008:price<=6?.01:price<=9?.02:.03;
+    else rate=price<=6?.01:price<=9?.02:.03;
   }
   // 지방세법 §11①8호: 1주택·무주택 6~9억 취득세는 누진(1~3%) — tier 평탄값 대신 정확식 (2026-06-22 law.go.kr 검증)
   if (houseStatus !== '2주택+' && price > 6 && price <= 9) rate = (price * 2/3 - 3) / 100;
@@ -6621,7 +6617,13 @@ function calcTotalCostHTML(price,loan,houseStatus,isFirstBuyer){
   const spclRate = tc?.spclTaxRate      ?? 0.002;
   const spclThr  = tc?.spclTaxThreshold ?? 0.01;
   const pw=price*10000;
-  const acq=Math.round(pw*rate);
+  const acqGross=Math.round(pw*rate);
+  // 생애최초 취득세 감면 (지방세특례제한법 §36의3, 2026-06-02 시행~2028-12-31 한시):
+  //   무주택 본인·배우자 거주목적, 취득당시가액 12억 이하 → 산출세액에서 200만원 공제(소형·인구감소지역 300만), 산출세액 200만↓이면 면제.
+  //   전용면적·지역 데이터 부재로 일반 200만원만 보수적 적용. (구 1.5억↓ 0.8% 고정세율 방식은 현행과 무관 — 2026-06-24 law.go.kr §36의3 검증)
+  const _fbDed = (tc?.acquisitionTax?.noHouse?.firstBuyerExempt?.deductManwon) ?? 200;
+  const fbDeduct = (isFirstBuyer && houseStatus!=='1주택' && houseStatus!=='2주택+' && price<=12) ? Math.min(acqGross, _fbDed) : 0;
+  const acq=acqGross-fbDeduct;
   const edu=Math.round(acq*eduRate);
   const spcl=rate<=spclThr?0:Math.round(pw*spclRate);
 
@@ -6646,7 +6648,8 @@ function calcTotalCostHTML(price,loan,houseStatus,isFirstBuyer){
 
   return`<div class="cost-grid">
     <div class="cost-row"><span class="cost-lbl">매매가 - 대출</span><span class="cost-val">${gap.toFixed(2)}억</span></div>
-    <div class="cost-row"><span class="cost-lbl">취득세 (${Math.round(rate*1000)/10}%)</span><span class="cost-val">${fmt(acq)}</span></div>
+    <div class="cost-row"><span class="cost-lbl">취득세 (${Math.round(rate*1000)/10}%)</span><span class="cost-val">${fmt(acqGross)}</span></div>
+    ${fbDeduct>0?`<div class="cost-row"><span class="cost-lbl">생애최초 감면 <span style="font-size:9px;color:var(--t3)">(§36의3)</span></span><span class="cost-val" style="color:var(--acc)">-${fmt(fbDeduct)}</span></div>`:''}
     <div class="cost-row"><span class="cost-lbl">지방교육세</span><span class="cost-val">${fmt(edu)}</span></div>
     <div class="cost-row"><span class="cost-lbl">공인중개사 복비</span><span class="cost-val">${fmt(comm)}</span></div>
     <div class="cost-row"><span class="cost-lbl">등기비 (추정)</span><span class="cost-val">${fmt(reg)}</span></div>
@@ -6656,7 +6659,7 @@ function calcTotalCostHTML(price,loan,houseStatus,isFirstBuyer){
     <span class="cost-total-lbl">필요 현금 (추정 범위)${sourceTag}</span>
     <span class="cost-total-val">약 ${totalLowAuk}~${totalHighAuk}억</span>
   </div>
-  <div style="font-size:10px;color:var(--t3);margin-top:5px">※ ±1,500만원 추정 오차 — 법무사 수수료·지역·계약 조건에 따라 달라집니다. 최종 금액은 세무사·법무사 확인 필수.</div>`;
+  <div style="font-size:10px;color:var(--t3);margin-top:5px">※ ±1,500만원 추정 오차 — 법무사 수수료·지역·계약 조건에 따라 달라집니다. 최종 금액은 세무사·법무사 확인 필수.${fbDeduct>0?'<br>※ 생애최초 취득세 감면(지방세특례제한법 §36의3): 12억 이하 무주택·거주목적 산출세액 200만원 공제(소형주택·인구감소지역 300만). 3년 내 처분·임대 시 추징, 미성년 제외.':''}</div>`;
 }
 
 // ── 북마크 ────────────────────────────────────────────────
