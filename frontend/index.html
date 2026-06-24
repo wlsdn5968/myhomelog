@@ -7716,7 +7716,8 @@ function dc(){
   else if(house==='1주택'){ltv=.7;warn='1주택 비규제 LTV 70%';}  // calcLTV와 일치 — 1주택은 생애최초 가산(0.8) 대상 아님
   else{ltv=isLoc?(isF?.8:.7):!isR?(isF?.8:.7):(isF?.7:.4);warn=isR&&isF?'생애최초 70%: 6개월 전입의무':isR?'무주택 규제지역 LTV 40%':'';}
   if(isR)cap=buy<=15?6:buy<=25?4:2;
-  const lL=Math.min(buy*ltv,cap),n=yrs*12,mr=rate/12,smr=(rate+(isR?.015:.0075))/12;
+  // STRESS-DSR-2026-06-24: 규제지역 스트레스금리 하한 1.5%→3.0% (금융위 10.15 대책, 변동형 기준). 기존 1.5%는 규제지역 한도 과대표시.
+  const lL=Math.min(buy*ltv,cap),n=yrs*12,mr=rate/12,smr=(rate+(isR?.03:.0075))/12;
   let dL=0;
   if(inc>0){const mx=inc*10000*.4/12-exAdded*10000;if(mx>0)dL=Math.round(mx*(1-Math.pow(1+smr,-n))/smr/1e8*100)/100;}
   const fin=Math.min(lL,dL>0?dL:lL),mo=fin>0?Math.round(fin*1e8*mr/(1-Math.pow(1+mr,-n))/10000):0,need=Math.max(0,buy-cash-fin);
