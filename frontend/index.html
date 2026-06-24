@@ -7301,17 +7301,34 @@ async function loadRegulatedKeywords(){
     const reg = d.regulatedRegions || {};
     const seoulRegulated = !!reg.seoul;
     const gyeonggi = Array.isArray(reg.gyeonggi) ? reg.gyeonggi : [];
+    // REG-PRECISE-2026-06-24 (운영자 "지역별 차이를 매물에 정확 반영"): 규제는 '구' 단위 지정 —
+    //   부분규제 시(수원·안양·용인)의 시 core 를 keyword 에 넣으면 비규제 구(권선·만안·기흥·처인)까지
+    //   false-positive 규제 처리됨. 공식검증(2025.10.15 대책·korea.kr·molit, 2026-06-24): 수원 영통/장안/팔달,
+    //   안양 동안, 용인 수지만 규제. 성남(분당/수정/중원)·과천·광명·의왕·하남은 전역.
+    const PARTIAL_CITY = ['수원','안양','용인']; // 시 내 일부 구만 규제 → 시 core 매칭 금지
     const set = new Set();
     for (const fullName of gyeonggi) {
       const t = String(fullName||'').trim();
       if (!t) continue;
       set.add(t);
       set.add(t.replace(/\s+/g,''));
-      for (const tok of t.split(/\s+/)) {
-        const core = tok.replace(/(시|구|군)$/, '');
-        if (core && core.length >= 2) set.add(core);
+      const toks = t.split(/\s+/);
+      if (toks.length === 1) {
+        // 구 없는 시 (과천·광명·의왕·하남) → 시 단위 매칭 OK
+        const core = toks[0].replace(/(시|구|군)$/, '');
+        if (core.length >= 2) set.add(core);
+      } else {
+        // "성남시 분당구" 류 → 규제 '구' 토큰 + (부분규제 시가 아니면) 시 core
+        const siCore = toks[0].replace(/(시|군)$/, '');
+        if (siCore.length >= 2 && !PARTIAL_CITY.includes(siCore)) set.add(siCore);
+        const guTok = toks[toks.length - 1];
+        set.add(guTok);
+        const guCore = guTok.replace(/(구|군)$/, '');
+        if (guCore.length >= 2) set.add(guCore);
       }
     }
+    // 규제 구 동네 별칭(판교=분당구·평촌=동안구·미사=하남시 — 2026-06-24 공식검증): 칩/검색어 매칭 보완
+    ['판교','평촌','미사'].forEach(a => set.add(a));
     window.__REG_KW = { keywords: Array.from(set), seoulRegulated };
     // P1 (2026-04-25): 세제 스냅샷도 함께 캐시 — calcTotalCostHTML 에서 사용
     if (d.tax) window.__TAX_CONFIG = d.tax;
