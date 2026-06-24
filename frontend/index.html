@@ -5570,8 +5570,12 @@ function showDetail(p){
       if (market <= 6) acqTax1H = marketW * 0.01;
       else if (market <= 9) acqTax1H = marketW * ((market * 2/3 - 3) / 100);
       else acqTax1H = marketW * 0.03;
-      const acqTax2H = marketW * 0.08;
-      const acqTax3H = marketW * 0.12;
+      // ACQ-REG-2026-06-24 (운영자 "지역별 차이를 매물에 반영"): 다주택 취득세 중과(지방세법 §13의2)는
+      //   '조정대상지역'만 적용 — 비조정지역은 2주택 기본세율·3주택 8%(4주택+ 12%). 조정대상지역=규제지역(공식검증 동일범위).
+      //   단지 소재지(p.area)로 isRegFront 판정. area 미상이면 기존 동작(중과) 유지 — 회귀 최소화.
+      const _acqIsReg = (p.area && typeof isRegFront === 'function') ? isRegFront(p.area) : true;
+      const acqTax2H = _acqIsReg ? marketW * 0.08 : acqTax1H;        // 조정 2주택 8% / 비조정 2주택 기본세율
+      const acqTax3H = _acqIsReg ? marketW * 0.12 : marketW * 0.08;  // 조정 3주택+ 12% / 비조정 3주택 8% (4주택+ 12%는 주택수 구간 한계로 8% 보수 표기)
       const _format = w => Math.round(w).toLocaleString();   // 만원 단위 값
       const _box = (icon, title, content) => `<div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:6px;padding:8px 10px;font-size:10.5px;line-height:1.5;color:var(--t2)"><div style="font-weight:700;color:var(--t1);margin-bottom:3px">${icon} ${title}</div>${content}</div>`;
       return `<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:11px 13px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
@@ -5579,8 +5583,8 @@ function showDetail(p){
         <div style="font-size:10px;color:var(--t3);margin-bottom:6px">매매가 ${market.toFixed(1)}억 / 공시가격 추정 ${official.toFixed(1)}억</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">
           ${_box('🏠', '1주택자', `취득세 <b>${_format(acqTax1H)}만원</b><br>재산세 ${_format(propTaxW)}만원/년<br>종부세 ${_format(compTax1H)}만원/년`)}
-          ${_box('🏘', '2주택자', `취득세 <b style="color:var(--amb)">${_format(acqTax2H)}만원</b> <span style="font-size:9px;color:var(--t3)">(8% 중과)</span><br>재산세 ${_format(propTaxW)}만원/년<br>종부세 <b style="color:var(--amb)">${_format(compTax2H)}만원/년</b>`)}
-          ${_box('🏗', '3주택+', `취득세 <b style="color:var(--red)">${_format(acqTax3H)}만원</b> <span style="font-size:9px;color:var(--t3)">(12% 중과)</span><br>재산세 ${_format(propTaxW)}만원/년<br>종부세 <b style="color:var(--red)">${_format(compTax3H)}만원/년</b>`)}
+          ${_box('🏘', '2주택자', `취득세 <b style="color:var(--amb)">${_format(acqTax2H)}만원</b> <span style="font-size:9px;color:var(--t3)">(${_acqIsReg?'8% 중과':'비조정 기본세율'})</span><br>재산세 ${_format(propTaxW)}만원/년<br>종부세 <b style="color:var(--amb)">${_format(compTax2H)}만원/년</b>`)}
+          ${_box('🏗', '3주택+', `취득세 <b style="color:var(--red)">${_format(acqTax3H)}만원</b> <span style="font-size:9px;color:var(--t3)">(${_acqIsReg?'12% 중과':'비조정 8%'})</span><br>재산세 ${_format(propTaxW)}만원/년<br>종부세 <b style="color:var(--red)">${_format(compTax3H)}만원/년</b>`)}
         </div>
         <div style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:6px;padding:7px 10px;font-size:10px;color:var(--accent-700);line-height:1.55;margin-top:4px">
           <b>⚡ 양도세 중과 부활 (2026.5.10~)</b>: 다주택자 매도 시 기본세율 + <b>2주택 +20%p / 3주택+ +30%p</b> (조정대상지역, 5.9까지 양도분 배제·장특공 배제). 매도 전 세무사 상담 필수.
