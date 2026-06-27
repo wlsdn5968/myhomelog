@@ -5587,7 +5587,9 @@ function showDetail(p){
           ${_box('🏗', '3주택+', `취득세 <b style="color:var(--red)">${_format(acqTax3H)}만원</b> <span style="font-size:9px;color:var(--t3)">(${_acqIsReg?'12% 중과':'비조정 8%'})</span><br>재산세 ${_format(propTaxW)}만원/년<br>종부세 <b style="color:var(--red)">${_format(compTax3H)}만원/년</b>`)}
         </div>
         <div style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:6px;padding:7px 10px;font-size:10px;color:var(--accent-700);line-height:1.55;margin-top:4px">
-          <b>⚡ 양도세 중과 부활 (2026.5.10~)</b>: 다주택자 매도 시 기본세율 + <b>2주택 +20%p / 3주택+ +30%p</b> (조정대상지역, 5.9까지 양도분 배제·장특공 배제). 매도 전 세무사 상담 필수.
+          ${_acqIsReg
+            ? `<b>⚡ 양도세 중과 (2026.5.10~)</b>: 이 단지는 <b>조정대상지역</b> — 다주택자 매도 시 기본세율 + <b>2주택 +20%p / 3주택+ +30%p</b> (5.9까지 양도분 배제·장특공 배제). 매도 전 세무사 상담 필수.`
+            : `<b>ℹ 양도세</b>: 이 단지는 <b>비조정지역</b> — 다주택 양도세 중과(+20/+30%p) 미적용, 기본세율 적용. 보유·거주기간·주택수에 따라 달라지니 매도 전 세무사 상담 권장.`}
         </div>
         <div style="font-size:9.5px;color:var(--t3);margin-top:5px">※ <b>대략 추정</b> — 공시가격=시가×0.7·공정시장가액 60%·종부세 누진세율(국세청 2023~)·표준세율 가정, 2025 세율 기준. 실제 세금은 공시가격 공식 발표·세대원·세액공제·1주택 특례·조정대상지역에 따라 다름.<br>※ 출처: 지방세법 §111(재산세)·§11(취득세) / 종합부동산세법 §8·§9. 정확 계산: <a href="https://hometax.go.kr" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">홈택스 모의계산</a></div>
       </div>`;
