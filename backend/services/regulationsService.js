@@ -38,7 +38,7 @@ const FALLBACK_BY_KEY = {
     },
     ltvTable: [
       { condition: '무주택 — 규제지역', ltv: 40, cap: [{ under: 15, max: 6 }, { under: 25, max: 4 }, { over: 25, max: 2 }] },
-      { condition: '생애최초 — 규제지역', ltv: 70, cap: [{ under: 999, max: 6 }], note: '6개월 이내 전입 의무' },
+      { condition: '생애최초 — 규제지역', ltv: 70, cap: [{ under: 15, max: 6 }, { under: 25, max: 4 }, { over: 25, max: 2 }], note: '6개월 이내 전입 의무 · 한도는 주택가격 차등(정액 6억 아님, 금융위 10.15 FAQ 2026-06-24 검증)' },
       { condition: '무주택 — 비규제', ltv: 70, cap: null },
       { condition: '생애최초 — 비규제', ltv: 80, cap: null },
       { condition: '지방 생애최초', ltv: 80, cap: null },
@@ -66,7 +66,8 @@ const FALLBACK_BY_KEY = {
     sourceUrl: 'https://www.law.go.kr/법령/지방세법',
     acquisitionTax: {
       noHouse: {
-        firstBuyerDiscount: { underAuk: 1.5, rate: 0.008, note: '생애최초 1.5억 이하 50% 감면' },
+        // 지방세특례제한법 §36의3 (2026-06-02 시행~2028-12-31): 12억 이하 무주택 거주목적 → 산출세액 정액공제(면제). 구 1.5억↓0.8% 고정세율 방식 폐기.
+        firstBuyerExempt: { eligibleUnderAuk: 12, deductManwon: 200, deductManwonSmall: 300, validUntil: '2028-12-31', note: '생애최초 12억 이하 무주택 거주목적 — 산출세액 200만원 공제(소형·인구감소지역 300만), 한도 이하 면제 (지방세특례제한법 §36의3)' },
         tiers: [
           { underAuk: 6,   rate: 0.01 },
           { underAuk: 9,   rate: 0.02 },
