@@ -1398,7 +1398,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <div class="lg">
           <div class="li"><div class="lil" title="DSR (Debt Service Ratio): 연소득 대비 모든 대출 원리금 비율. 은행 40% / 2금융 50% 한도. 본 계산은 주담대만 반영 — 신용대출·전세대출 별도.">DSR 한도 <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lD">—</div></div>
           <div class="li"><div class="lil" title="매수가 - 현금 - 대출 = 부족 자금. 추가 자금 마련 (가족·신용대출) 또는 매수가 조정 필요.">부족 자금 <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lN">—</div></div>
-          <div class="li"><div class="lil" title="스트레스 DSR: 금리 상승 시나리오 가정 가산금리. 규제지역 +3.0%p(2025.10.15~ 상향) / 그 외 +0.75%p 가산해 심사.">스트레스 DSR <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lS">—</div></div>
+          <div class="li"><div class="lil" title="스트레스 DSR: 금리 상승 시나리오 가정 가산금리. 수도권(서울·경기·인천) +3.0%p(2025.10.15~ 상향) / 지방 +0.75%p 가산해 심사.">스트레스 DSR <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lS">—</div></div>
           <div class="li"><div class="lil" title="원리금균등 30년 만기 기준 월 상환액. 거치 없음 가정. 실제 금리·만기에 따라 변동.">월 원리금 <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lM">—</div></div>
         </div>
         <div class="wbox" id="lW"></div>
@@ -1428,7 +1428,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <tr><td>2주택+</td><td style="color:var(--red);font-weight:700">0%</td><td>불가</td><td><span class="rtag r">금지</span></td></tr>
         <tr><td>지방 생애최초</td><td style="color:var(--grn);font-weight:700">80%</td><td>LTV</td><td><span class="rtag g">완화</span></td></tr>
       </tbody></table>
-      <div class="rnote">DSR: 은행권 40% / 2금융권 50% | 스트레스 규제 +3.0%p<br>규제지역: 서울25구+경기12곳 | 토허구역 2년 실거주<br>⚠ 규제 수시변경 — 최종확인 금융기관 필수</div>
+      <div class="rnote">DSR: 은행권 40% / 2금융권 50% | 스트레스 수도권 +3.0%p<br>규제지역: 서울25구+경기12곳 | 토허구역 2년 실거주<br>⚠ 규제 수시변경 — 최종확인 금융기관 필수</div>
     </div>
   </div>
 
@@ -4015,7 +4015,7 @@ function openRegSummary(){
         </tbody>
       </table>
       <div style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--accent-700);line-height:1.6;margin-bottom:10px">
-        <b>DSR</b>: 은행 40% / 2금융 50% · 스트레스 +3.0%p (규제지역) · 만기 30년<br>
+        <b>DSR</b>: 은행 40% / 2금융 50% · 스트레스 +3.0%p (수도권) · 만기 30년<br>
         <b>규제지역</b>: 서울 25구 + 경기 12곳 (과천·광명·성남 분당 등)<br>
         <b>토허구역</b>: 2년 실거주 의무 (강남·송파·용산 일부)<br>
         <b>전세대출</b>: 보유자 규제지역 3억 초과 매수 시 즉시 회수
@@ -7649,11 +7649,13 @@ function calcLTV(buy,cash,inc,mo,house,isF,region){
   //   + 스트레스 가산(규제 3.0%p / 그 외 0.75%p, 금융위 10.15 대책·dc smr 정합).
   //   기존 rt=5.5/4.75(=4%+구 스트레스 1.5/0.75)는 규제 스트레스가 옛 1.5%p라 dc(3.0%p) 대비 한도 과대표시였음.
   //   DSR 한도(dL)는 스트레스금리(sRate), 월상환(mo2)은 실금리(baseRate)로 분리 — dc 와 동일(기존엔 월상환도 스트레스금리로 과대계산).
-  const lL=Math.min(buy*ltv,cap),baseRate=0.04,sRate=baseRate+(isR?0.03:0.0075);
+  // STRESS-METRO-2026-06-27: 스트레스금리는 '수도권 전역(서울·경기·인천)' +3.0%p / 지방 +0.75%p — 금융위 10.15 FAQ Q4-1 '지방만 제외'(비규제 수도권도 포함) 공식검증. LTV/cap 은 규제지역(isR) 기준 별개.
+  const isMetro=['서울','경기','인천'].some(k=>String(region||'').includes(k));
+  const lL=Math.min(buy*ltv,cap),baseRate=0.04,sRate=baseRate+(isMetro?0.03:0.0075);
   let dL=0;
   if(inc>0){const dsrMonthly=inc*10000*.4/12;const ef=(mo>0?Math.min(mo*10000,dsrMonthly):dsrMonthly);dL=Math.round(ef*(1-Math.pow(1+sRate/12,-360))/(sRate/12)/1e8*100)/100;}
   const fin=dL>0?Math.min(lL,dL):lL,mo2=fin>0?Math.round(fin*1e8*baseRate/12/(1-Math.pow(1+baseRate/12,-360))/10000):0,need=Math.max(0,buy-cash-fin);
-  return{ltv,lL,dL,fin,mo:mo2,need,warn,isR,cap};
+  return{ltv,lL,dL,fin,mo:mo2,need,warn,isR,isMetro,cap};
 }
 // Agent UX #7 (2026-05-04): cl() 매 글자 입력 시 호출 → "3" 만 쳐도 30억 잘못 표시
 //   debounce 250ms — 입력 멈춘 후 계산 (사용자 의도 완성)
@@ -7674,7 +7676,7 @@ function cl_inner(buy){
   document.getElementById('lV').textContent=`LTV ${Math.round(r.ltv*100)}% | 상한 ${r.cap===Infinity?'없음':r.cap+'억'}`;
   document.getElementById('lD').textContent=r.dL>0?r.dL.toFixed(2)+'억':'소득 입력 필요';
   document.getElementById('lN').textContent=r.need>0?'+'+r.need.toFixed(2)+'억 부족':'충분';
-  document.getElementById('lS').textContent=(r.isR?'+3.0%p':'+0.75%p')+(r.isR?' (규제 2025.10.15~)':' (3단계 2025.7~)');
+  document.getElementById('lS').textContent=(r.isMetro?'+3.0%p':'+0.75%p')+(r.isMetro?' (수도권 2025.10.15~)':' (지방 2단계)');
   // P1 (감사 2-4): 원리금균등 30년 명시
   document.getElementById('lM').textContent=r.mo>0?'~'+r.mo+'만원 (원리금균등 30년)':'—';
   document.getElementById('lW').textContent=r.warn;
@@ -7723,7 +7725,7 @@ function dc(){
   else{ltv=isLoc?(isF?.8:.7):!isR?(isF?.8:.7):(isF?.7:.4);warn=isR&&isF?'생애최초 70%: 6개월 전입의무':isR?'무주택 규제지역 LTV 40%':'';}
   if(isR)cap=buy<=15?6:buy<=25?4:2;
   // STRESS-DSR-2026-06-24: 규제지역 스트레스금리 하한 1.5%→3.0% (금융위 10.15 대책, 변동형 기준). 기존 1.5%는 규제지역 한도 과대표시.
-  const lL=Math.min(buy*ltv,cap),n=yrs*12,mr=rate/12,smr=(rate+(isR?.03:.0075))/12;
+  const lL=Math.min(buy*ltv,cap),n=yrs*12,mr=rate/12,smr=(rate+(isLoc?.0075:.03))/12;
   let dL=0;
   if(inc>0){const mx=inc*10000*.4/12-exAdded*10000;if(mx>0)dL=Math.round(mx*(1-Math.pow(1+smr,-n))/smr/1e8*100)/100;}
   const fin=Math.min(lL,dL>0?dL:lL),mo=fin>0?Math.round(fin*1e8*mr/(1-Math.pow(1+mr,-n))/10000):0,need=Math.max(0,buy-cash-fin);
@@ -8878,7 +8880,7 @@ async function chkAPI(){
 // ── CHAT ─────────────────────────────────────────────────
 const SYS=`당신은 내집로그 AI 부동산 정보 분석 도우미. 2025.10.15 규제 기준:
 서울25구+경기12곳 규제지역 | 무주택 LTV 40% | 생애최초 70%(전입의무) | 비규제 70%
-한도: 15억↓6억/15~25억4억/25억↑2억 | DSR 은행40%/2금융50% | 스트레스 규제+3.0%p | 토허구역 2년 실거주
+한도: 15억↓6억/15~25억4억/25억↑2억 | DSR 은행40%/2금융50% | 스트레스 수도권+3.0%p | 토허구역 2년 실거주
 
 [필수 응답 규칙 — 위반 금지]
 1. 절대 "사세요/사라/매수 추천/오를 것" 등 매수 권유 표현 금지. "현재 데이터로 보면 ~한 특징이 있어요" 식 중립 서술만.
