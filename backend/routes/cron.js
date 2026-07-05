@@ -14,6 +14,7 @@
  *   - retention.js 는 한 번에 100명까지만 처리하도록 제한되어 있어 반복 호출 안전
  */
 const express = require('express');
+const crypto = require('crypto');
 const logger = require('../logger');
 const { run: runRetention } = require('../jobs/retention');
 const { runMolitIngest } = require('../jobs/molitIngest');
@@ -40,7 +41,11 @@ function authorizeCron(req, res, next) {
     return res.status(403).json({ error: 'cron 엔드포인트가 비활성화되어 있습니다.' });
   }
   const h = req.headers.authorization || '';
-  if (!h.startsWith('Bearer ') || h.slice(7).trim() !== secret) {
+  // AUDIT-2026-07-05: 상수시간 비교(timingSafeEqual) — 단순 !== 는 조기종료로 타이밍 사이드채널 이론상 노출.
+  //   원격 타이밍 공격은 네트워크 지터로 실익 극미하나 정석 방어심층. 길이 다르면 timingSafeEqual 예외 → 사전 길이 체크.
+  const provided = h.startsWith('Bearer ') ? h.slice(7).trim() : '';
+  const pb = Buffer.from(provided), sb = Buffer.from(secret);
+  if (pb.length !== sb.length || !crypto.timingSafeEqual(pb, sb)) {
     return res.status(401).json({ error: 'cron 인증 실패' });
   }
   next();
