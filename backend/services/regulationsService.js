@@ -25,8 +25,8 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || proce
 //   tax.acquisitionTax 를 못 찾는 버그 수정.
 const FALLBACK_BY_KEY = {
   housing_loan_2025: {
-    lastUpdated: '2025-10-16',
-    source: '금융위원회 2025.10.15 주택시장 안정화 대책',
+    lastUpdated: '2026-06-30',
+    source: '금융위원회 2025.10.15 주택시장 안정화 대책 (규제지역 2026.6.30 동탄·기흥·구리 추가 지정 반영)',
     sourceUrl: 'https://fsc.go.kr',
     regulatedRegions: {
       seoul: '서울 전 지역 (25개 구)',
@@ -34,6 +34,9 @@ const FALLBACK_BY_KEY = {
         '과천시', '광명시', '성남시 분당구', '성남시 수정구', '성남시 중원구',
         '수원시 영통구', '수원시 장안구', '수원시 팔달구', '안양시 동안구',
         '용인시 수지구', '의왕시', '하남시',
+        // REG-UPDATE-2026-06-30: 국토부 6.29 주거정책심의위 의결 → 7.1 투기과열지구+조정대상지역, 7.5 토허구역(경기도, ~2027말) 신규 지정.
+        //   화성은 시 전체 아닌 '동탄구'만 (MoneyToday 2026-07-01 국토부 확인: 동탄구 전역, 내부 미분할).
+        '구리시', '용인시 기흥구', '화성시 동탄구',
       ],
     },
     ltvTable: [

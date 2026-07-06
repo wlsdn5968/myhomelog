@@ -1428,7 +1428,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <tr><td>2주택+</td><td style="color:var(--red);font-weight:700">0%</td><td>불가</td><td><span class="rtag r">금지</span></td></tr>
         <tr><td>지방 생애최초</td><td style="color:var(--grn);font-weight:700">80%</td><td>LTV</td><td><span class="rtag g">완화</span></td></tr>
       </tbody></table>
-      <div class="rnote">DSR: 은행권 40% / 2금융권 50% | 스트레스 수도권 +3.0%p<br>규제지역: 서울25구+경기12곳 | 토허구역 2년 실거주<br>⚠ 규제 수시변경 — 최종확인 금융기관 필수</div>
+      <div class="rnote">DSR: 은행권 40% / 2금융권 50% | 스트레스 수도권 +3.0%p<br>규제지역: 서울25구+경기15곳 | 토허구역 2년 실거주<br>⚠ 규제 수시변경 — 최종확인 금융기관 필수</div>
     </div>
   </div>
 
@@ -4018,8 +4018,8 @@ function openRegSummary(){
       </table>
       <div style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:8px;padding:10px 12px;font-size:11px;color:var(--accent-700);line-height:1.6;margin-bottom:10px">
         <b>DSR</b>: 은행 40% / 2금융 50% · 스트레스 +3.0%p (수도권) · 만기 30년<br>
-        <b>규제지역</b>: 서울 25구 + 경기 12곳 (과천·광명·성남 분당 등)<br>
-        <b>토허구역</b>: 2년 실거주 의무 (강남·송파·용산 일부)<br>
+        <b>규제지역</b>: 서울 25구 + 경기 15곳 (과천·광명·성남·수원·안양·용인·의왕·하남·구리·화성 동탄 등, 2026.6.30 동탄·기흥·구리 신규)<br>
+        <b>토허구역</b>: 규제지역 2년 실거주 의무 (2026.7.5 동탄·기흥·구리 추가)<br>
         <b>전세대출</b>: 보유자 규제지역 3억 초과 매수 시 즉시 회수
       </div>
       <!-- Sprint QQ (2026-05-19): 10.15 이후 후속 정책 (4.17 만기연장 금지 / 5.10 양도세 중과 / 5.12 보완책) -->
@@ -4048,7 +4048,7 @@ const POLICY_TIMELINE = [
   { date:'2026-04-17', title:'다주택자 주담대 만기연장 금지', desc:'2주택+ 임대사업자 수도권·규제지역 주담대 만기연장 원칙 금지 (4조 1,000억 / 1.7만 가구)', tag:'대출', color:'#C44' },
   { date:'2026-05-10', title:'다주택자 양도세 중과 부활', desc:'2022.5~ 한시 유예 종료(5.9까지 양도분 배제). 2주택 +20%p / 3주택+ +30%p·장특공 배제', tag:'세제', color:'#B47' },
   { date:'2026-05-12', title:'5.12 보완책 시행', desc:'매도 규제 일부 완화 (이사 등 실수요 일부 허용)', tag:'완화', color:'#476' },
-  { date:'2026-07-01', title:'스트레스 DSR 4단계 시행 검토', desc:'금리 상승 시뮬레이션 가산폭 확대 예고(추정)', tag:'예고', color:'#777' },
+  { date:'2026-06-30', title:'규제지역 추가 지정 (동탄·기흥·구리)', desc:'화성 동탄구·용인 기흥구·구리시 투기과열+조정대상(7.1 효력)·토허구역(7.5~2027말). 국토부 6.29 주거정책심의위 의결', tag:'규제', color:'#C44' },
 ];
 
 function renderPolicyTimeline(){
@@ -7310,10 +7310,12 @@ async function loadRegulatedKeywords(){
     const seoulRegulated = !!reg.seoul;
     const gyeonggi = Array.isArray(reg.gyeonggi) ? reg.gyeonggi : [];
     // REG-PRECISE-2026-06-24 (운영자 "지역별 차이를 매물에 정확 반영"): 규제는 '구' 단위 지정 —
-    //   부분규제 시(수원·안양·용인)의 시 core 를 keyword 에 넣으면 비규제 구(권선·만안·기흥·처인)까지
+    //   부분규제 시(수원·안양·용인·화성)의 시 core 를 keyword 에 넣으면 비규제 구(권선·만안·처인·서부화성)까지
     //   false-positive 규제 처리됨. 공식검증(2025.10.15 대책·korea.kr·molit, 2026-06-24): 수원 영통/장안/팔달,
-    //   안양 동안, 용인 수지만 규제. 성남(분당/수정/중원)·과천·광명·의왕·하남은 전역.
-    const PARTIAL_CITY = ['수원','안양','용인']; // 시 내 일부 구만 규제 → 시 core 매칭 금지
+    //   안양 동안, 용인 수지. 성남(분당/수정/중원)·과천·광명·의왕·하남은 전역.
+    //   REG-UPDATE-2026-06-30 (국토부 6.29 주정심 의결, 7.1 효력): 구리시(전역)·용인 기흥구·화성 동탄구 신규 규제.
+    //   → 용인은 수지+기흥(처인만 비규제), 화성은 동탄구만(서부화성 비규제) → 화성도 PARTIAL_CITY 편입.
+    const PARTIAL_CITY = ['수원','안양','용인','화성']; // 시 내 일부 구만 규제 → 시 core 매칭 금지
     const set = new Set();
     for (const fullName of gyeonggi) {
       const t = String(fullName||'').trim();
@@ -8881,7 +8883,7 @@ async function chkAPI(){
 
 // ── CHAT ─────────────────────────────────────────────────
 const SYS=`당신은 내집로그 AI 부동산 정보 분석 도우미. 2025.10.15 규제 기준:
-서울25구+경기12곳 규제지역 | 무주택 LTV 40% | 생애최초 70%(전입의무) | 비규제 70%
+서울25구+경기15곳 규제지역 | 무주택 LTV 40% | 생애최초 70%(전입의무) | 비규제 70%
 한도: 15억↓6억/15~25억4억/25억↑2억 | DSR 은행40%/2금융50% | 스트레스 수도권+3.0%p | 토허구역 2년 실거주
 
 [필수 응답 규칙 — 위반 금지]
