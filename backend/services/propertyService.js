@@ -18,6 +18,8 @@ const { resolveSchoolsBatch } = require('./schoolService');
 const { isRegulatedRegion, getRegulatedKeywords, SEOUL_GU_KEYWORDS } = require('./regulationsService');
 const { normalizeAptName } = require('../utils/aptName');
 const { buildFacility } = require('../utils/buildFacility');
+// REC-PERF-2026-07-10 (Sprint FFFF): apt_master.facility 배치 조회 — 콜드 KAPT 30콜 제거
+const { getFacilitiesByKaptCodes } = require('./aptFacilityService');
 const cache = require('../cache');
 const logger = require('../logger');
 
@@ -398,17 +400,28 @@ async function getAIRecommendations(userCondition) {
   for (const a of allAptList) {
     if (a.kaptCode) allAptByCode.set(a.kaptCode, a);
   }
+  // REC-PERF-2026-07-10 (Sprint FFFF): kaptCode 사전 수집 → apt_master.facility 일괄 1쿼리(DB-first).
+  //   콜드 KAPT 30콜(인메모리 캐시는 인스턴스 소실)이 완전콜드 잔여 ~10s 의 주 기여 — facility 컬럼이
+  //   동일 raw(+_dtl)를 이미 보유(실측 99.7%) → miss(신규 단지·_empty 29개)만 기존 KAPT API 폴백.
+  const preCodes = recommendations.map((rec, i) => {
+    const apt = ranked[i];
+    const nmKey = normalizeName(apt.aptName);
+    return kaptCodeMap.get(`${nmKey}|${apt.umdNm || ''}`) || kaptCodeMap.get(nmKey) || null;
+  });
+  const dbFacMap = await getFacilitiesByKaptCodes([...new Set(preCodes.filter(Boolean))]);
   const enriched = await Promise.allSettled(
     recommendations.map(async (rec, i) => {
-      const apt = ranked[i];
-      const nmKey = normalizeName(apt.aptName);
-      const kaptCode = kaptCodeMap.get(`${nmKey}|${apt.umdNm || ''}`) || kaptCodeMap.get(nmKey);
+      const kaptCode = preCodes[i];
       if (!kaptCode) return rec;
       // DTL-INFO-2026-05-13 (Sprint X): BasisInfo + Detail 병렬 fetch (주차 정보 포함)
-      const [info, detail] = await Promise.all([
-        getAptBasisInfo(kaptCode),
-        getAptDtlInfo(kaptCode).catch(() => null),
-      ]);
+      // Sprint FFFF: DB 보유분은 KAPT 콜 생략 (stored raw 의 _dtl 이 detail 역할)
+      const stored = dbFacMap.get(kaptCode);
+      const [info, detail] = stored
+        ? [stored, stored._dtl || null]
+        : await Promise.all([
+            getAptBasisInfo(kaptCode),
+            getAptDtlInfo(kaptCode).catch(() => null),
+          ]);
       // FACILITY-HELPER-2026-05-12 + DTL-INFO-2026-05-13: detail 도 buildFacility 에 전달
       const facility = buildFacility(info, kaptCode, detail);
       // Fallback: info 없으면 allAptList 기본 데이터로 address 보강

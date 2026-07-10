@@ -476,4 +476,31 @@ async function backfillFacilityByKaptCode(kaptCode) {
   };
 }
 
-module.exports = { resolveFacility, backfillFacilityByKaptCode };
+/**
+ * REC-PERF-2026-07-10 (Sprint FFFF): kapt_code 배치로 apt_master.facility 일괄 조회.
+ *   recommend enrichment 가 15단지×(BasisInfo+DtlInfo)=30 KAPT 콜을 콜드마다 반복(인메모리 30일 캐시는
+ *   인스턴스 재시작에 소실). facility 컬럼은 backfill cron 이 동일 raw(+_dtl)를 이미 저장 —
+ *   실측 10,638/10,638 보유(유효 99.7%, _empty 29). 1쿼리로 대체, miss 만 KAPT API 폴백.
+ * @returns {Promise<Map<string, object>>} kapt_code → facility raw(+_dtl). _empty/null 은 제외(폴백 유도).
+ */
+async function getFacilitiesByKaptCodes(kaptCodes) {
+  const a = admin();
+  if (!a || !Array.isArray(kaptCodes) || !kaptCodes.length) return new Map();
+  try {
+    const { data, error } = await a
+      .from('apt_master')
+      .select('kapt_code, facility')
+      .in('kapt_code', kaptCodes);
+    if (error) throw error;
+    const m = new Map();
+    for (const r of (data || [])) {
+      if (r.facility && !r.facility._empty) m.set(r.kapt_code, r.facility);
+    }
+    return m;
+  } catch (e) {
+    logger.warn({ err: e.message, n: kaptCodes.length }, 'facility 배치 조회 실패 — KAPT API 폴백');
+    return new Map();
+  }
+}
+
+module.exports = { resolveFacility, backfillFacilityByKaptCode, getFacilitiesByKaptCodes };

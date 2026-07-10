@@ -107,7 +107,7 @@ async function fetchSchoolNeis(schoolName, atptCode) {
       genderType: chosen.COEDU_SC_NM || null,      // 남녀공학/남고/여고
       schoolCode: chosen.SD_SCHUL_CODE || null,
     };
-    cache.set(ckey, out, 86400);
+    cache.set(ckey, out, 86400 * 7); // FACILITY-PERF-2026-07-10 (Sprint FFFF): 1d→7d — 공립/사립·주소는 정적
     return out;
   } catch (e) {
     logger.debug({ err: e.message, schoolName, atptCode }, 'NEIS schoolInfo 실패');
@@ -126,7 +126,7 @@ async function resolveSchoolNeisBatch(schools, sigungu) {
   const atptCode = inferAtptCode(sigungu);
   if (!atptCode) return schools; // 시도 추정 실패 — NEIS 호출 안 함
 
-  // 동시성 제한 (3개) — NEIS API 무리한 호출 방지
+  // 동시성 제한 (6개) — FACILITY-PERF-2026-07-10 (Sprint FFFF): 3→6, 콜드 9학교 3라운드→2라운드
   const enriched = new Array(schools.length);
   let i = 0;
   async function worker() {
@@ -137,7 +137,7 @@ async function resolveSchoolNeisBatch(schools, sigungu) {
       enriched[idx] = neis ? { ...s, neis } : s;
     }
   }
-  await Promise.all(Array.from({ length: Math.min(3, schools.length) }, () => worker()));
+  await Promise.all(Array.from({ length: Math.min(6, schools.length) }, () => worker()));
   return enriched;
 }
 
