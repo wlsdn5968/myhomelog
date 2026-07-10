@@ -298,6 +298,9 @@ async function retryFailedGaps(admin, { maxGaps = 15, lookbackMonths = 18, deadl
  * @param {number} [opts.months=3] - 적재할 개월 수 (이번 달부터 거꾸로)
  * @param {number} [opts.offsetMonths=0] - 시작 offset (예: offset=6, months=6 → 6~12개월 전)
  *   Backfill 분할 호출용 (한 번에 12개월 실행 시 maxDuration 부족 → 6개월씩 2번)
+ * @param {string[]} [opts.onlyLawds] - 지정 시 해당 LAWD_CD 만 targeted 적재 (Sprint AAAA, 2026-07-06).
+ *   신규 규제지역(동탄·기흥·구리) 편입 직후 다음 cron 을 기다리지 않고 admin 즉시 적재용.
+ *   미지정 시 기존 동작(전체 LAWD_CODES) 완전 불변.
  */
 async function runMolitIngest(opts = {}) {
   const monthsCount = Math.max(1, Math.min(parseInt(opts.months) || 3, 24));
@@ -321,7 +324,11 @@ async function runMolitIngest(opts = {}) {
   // offset 적용: recentYearMonths(N) 다음 N개 만 사용 (slice)
   const allMonths = recentYearMonths(monthsCount + offsetMonths);
   const months = allMonths.slice(offsetMonths);
-  const regions = Object.entries(LAWD_CODES);
+  // Sprint AAAA: onlyLawds 지정 시 해당 코드만 (admin targeted ingest). 검증은 admin route 에서 화이트리스트로 수행.
+  const onlySet = Array.isArray(opts.onlyLawds) && opts.onlyLawds.length
+    ? new Set(opts.onlyLawds.map(String)) : null;
+  const regions = Object.entries(LAWD_CODES)
+    .filter(([, code]) => !onlySet || onlySet.has(String(code)));
 
   const started = Date.now();
   const results = [];

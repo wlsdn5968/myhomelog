@@ -19,6 +19,10 @@ const logger = require('../logger');
 const { requireAuth } = require('../middleware/auth');
 const { getActivePlan } = require('../services/planService');
 const { run: runGeocacheBackfill } = require('../jobs/geocacheBackfill');
+// Sprint AAAA (2026-07-06): 신규 규제지역(동탄·기흥·구리) 즉시 적재 — cron(CRON_SECRET=Vercel env 전용) 수동 트리거 불가
+//   → geocache-backfill 전례와 동일하게 admin token 으로 targeted molit ingest 실행.
+const { runMolitIngest } = require('../jobs/molitIngest');
+const { LAWD_CODES } = require('../services/transactionService');
 // DEBUG-2026-05-12 (Sprint P): KAPT SigunguAptList3 raw 진단 — 송파구 (11710) sync 누락 원인
 const { getAptListBySgg } = require('../services/aptInfoService');
 
@@ -95,6 +99,52 @@ router.get('/run-geocache-backfill', async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+/**
+ * POST|GET /api/admin/run-molit-ingest
+ * (Sprint AAAA, 2026-07-06) — MOLIT 실거래 ETL 즉시 실행 (targeted 지원).
+ *
+ * 파라미터 (query 또는 body):
+ *   - months: number (기본 3, max 24) — 이번 달부터 거꾸로 적재할 개월 수
+ *   - offsetMonths: number (기본 0) — backfill 분할용
+ *   - lawd: string — 콤마 구분 LAWD_CD 목록 (예: "41310,41463,41597"). 미지정 시 전체.
+ *     LAWD_CODES 화이트리스트 검증 — 미등록 코드는 거부(전부 미등록이면 400).
+ *
+ * 응답: { ok, opts, unknownLawds?, summary: { regions, months, ok, err, skipped, elapsedMs, gapBackfill } }
+ */
+async function handleRunMolitIngest(req, res) {
+  const started = Date.now();
+  try {
+    const src = { ...req.query, ...(req.body || {}) };
+    const opts = {};
+    if (src.months) opts.months = parseInt(src.months);
+    if (src.offsetMonths) opts.offsetMonths = parseInt(src.offsetMonths);
+    let unknownLawds;
+    if (src.lawd) {
+      const known = new Set(Object.values(LAWD_CODES));
+      const asked = String(src.lawd).split(',').map(s => s.trim()).filter(Boolean);
+      const valid = asked.filter(c => known.has(c));
+      unknownLawds = asked.filter(c => !known.has(c));
+      if (!valid.length) {
+        return res.status(400).json({ error: 'lawd 에 LAWD_CODES 등록 코드가 없습니다.', unknownLawds });
+      }
+      opts.onlyLawds = valid;
+    }
+    const summary = await runMolitIngest(opts);
+    logger.info({
+      durationMs: Date.now() - started,
+      opts, unknownLawds,
+      summary: summary && { regions: summary.regions, months: summary.months, ok: summary.ok, err: summary.err, skipped: summary.skipped },
+      adminId: req.user.id,
+    }, 'admin/run-molit-ingest OK');
+    res.json({ ok: true, opts, ...(unknownLawds && unknownLawds.length ? { unknownLawds } : {}), summary });
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'admin/run-molit-ingest 실패');
+    res.status(500).json({ error: e.message });
+  }
+}
+router.post('/run-molit-ingest', handleRunMolitIngest);
+router.get('/run-molit-ingest', handleRunMolitIngest);
 
 /**
  * GET /api/admin/debug-kapt-list?lawdCd=11710[&q=헬리오시티]
