@@ -20,6 +20,11 @@ const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const { requireAuth } = require('../middleware/auth');
 const logger = require('../logger');
+// SEARCH-PERF-2026-07-10 (Sprint DDDD): 자동완성 결과 캐시 — 실측 웜 1.4~1.6s(은마 1,641ms).
+//   EXPLAIN 확정: 2글자 한글은 pg_trgm GIN 이 후보 30.9만행(전테이블화)이라 seq scan 591ms 가 최선 —
+//   인덱스로 해결 불가한 본질 비용 → 같은 검색어 재계산 제거(서버 10분 + CDN s-maxage).
+//   molit 데이터는 daily cron 갱신이라 10분 캐시 무해. cache.set 은 safeSet(Sprint BBBB)이라 실패 무해.
+const cache = require('../cache');
 const { resolveCoordBatch, resolveCoord } = require('../services/geocodeCacheService');
 const { resolveFacility } = require('../services/aptFacilityService');
 const { resolveSchools } = require('../services/schoolService');
@@ -78,6 +83,15 @@ router.get('/apt', async (req, res) => {
   //   가드: 제거 후 2자 미만이면 원본 유지("아파트"만 입력 시 전체매칭 방지).
   const _qStrip = q.replace(/\s*아파트(?:단지)?\s*$/, '').trim();
   const qApt = _qStrip.length >= 2 ? _qStrip : q;
+  // SEARCH-PERF-2026-07-10 (Sprint DDDD): q별 결과 캐시 + CDN 공유 캐시.
+  //   자동완성은 인증 무관 동일 응답(공개 데이터) → Vercel edge s-maxage 로 전 사용자 공유(인기 검색어 즉시).
+  const SEARCH_CDN = 'public, s-maxage=600, stale-while-revalidate=3600';
+  const sck = `searchapt:${q.toLowerCase()}:${limit}`;
+  const cached = cache.get(sck);
+  if (cached) {
+    res.set('Cache-Control', SEARCH_CDN);
+    return res.json(cached);
+  }
   const admin = adminClient();
   if (!admin) return res.status(503).json({ error: '검색 서비스 일시 불가' });
   try {
@@ -289,7 +303,10 @@ router.get('/apt', async (req, res) => {
     //   동률은 기존 순서 보존(JS sort stable) → molit 우선·이름매칭 순서 유지.
     out.sort((a, b) => (b.dealCount || 0) - (a.dealCount || 0));
 
-    res.json({ results: out, query: q });
+    const payload = { results: out, query: q };
+    cache.set(sck, payload, 600); // 10분 — molit 데이터는 daily cron 갱신
+    res.set('Cache-Control', SEARCH_CDN);
+    res.json(payload);
   } catch (e) {
     logger.warn({ err: e.message, q }, '단지 검색 실패');
     // MOB-AUDIT-2026-05-03: production 에선 detail 제거 — 내부 에러 누출 차단

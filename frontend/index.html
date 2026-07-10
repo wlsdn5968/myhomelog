@@ -4055,7 +4055,10 @@ function renderPolicyTimeline(){
   const box=document.getElementById('policyTimeline');
   if(!box) return;
   const today=new Date(); today.setHours(0,0,0,0);
-  const items=POLICY_TIMELINE.map(p=>{
+  // UX-FOLD-2026-07-10 (Sprint DDDD, 실측 근거): 지난 이벤트 7건(D+268~)이 항상 펼쳐져 화면 절반 점유 —
+  //   가장 최근 과거 1건(맥락)만 노출, 나머지 과거는 <details> 접기. 미래·D-DAY 는 전부 표시.
+  const pastHtml=[], futureHtml=[];
+  POLICY_TIMELINE.forEach(p=>{
     const d=new Date(p.date+'T00:00:00');
     const days=Math.floor((d-today)/86400000);
     const past=days<0;
@@ -4063,15 +4066,21 @@ function renderPolicyTimeline(){
     const dayBg=past?'#E8E8E8':days<=30?p.color:'#999';
     const dayColor=past?'#888':'#fff';
     const opacity=past?'.55':'1';
-    return `<div style="display:flex;align-items:center;gap:10px;opacity:${opacity}">
+    const html=`<div style="display:flex;align-items:center;gap:10px;opacity:${opacity}">
       <div style="min-width:54px;height:30px;background:${dayBg};color:${dayColor};border-radius:6px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:11px">${dayLabel}</div>
       <div style="flex:1;min-width:0">
         <div style="font-size:12px;font-weight:600;color:var(--t1);line-height:1.35"><span style="display:inline-block;padding:1px 6px;background:${p.color}22;color:${p.color};border-radius:3px;font-size:9.5px;font-weight:700;margin-right:5px;vertical-align:1px">${p.tag}</span>${p.title}</div>
         <div style="font-size:10.5px;color:var(--t3);line-height:1.4;margin-top:1px">${p.desc} · ${p.date}</div>
       </div>
     </div>`;
-  }).join('');
-  box.innerHTML=items;
+    (past?pastHtml:futureHtml).push(html);
+  });
+  const recentPast=pastHtml.length?pastHtml[pastHtml.length-1]:'';
+  const olderPast=pastHtml.slice(0,-1);
+  const folded=olderPast.length
+    ? `<details><summary style="cursor:pointer;font-size:11px;color:var(--t3);padding:2px 0;user-select:none">▸ 지난 정책 ${olderPast.length}건 더 보기</summary><div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">${olderPast.join('')}</div></details>`
+    : '';
+  box.innerHTML=folded+recentPast+futureHtml.join('');
 }
 
 // ── 부동산 뉴스 ───────────────────────────────────────
@@ -4107,7 +4116,9 @@ async function loadNews(btn){
       loadNewsSummary();
     }
   }catch(e){
-    list.innerHTML='<div style="padding:30px 0;text-align:center;color:var(--red);font-size:12px">뉴스를 불러오지 못했어요. 잠시 후 다시 시도해주세요.</div>';
+    // UX-RETRY-2026-07-10 (Sprint DDDD): 일시 오류 시 새로고침 없이 복구 — 재시도 버튼(현재 카테고리 유지)
+    list.innerHTML=`<div style="padding:30px 0;text-align:center;color:var(--red);font-size:12px">뉴스를 불러오지 못했어요. 잠시 후 다시 시도해주세요.<br>
+      <button class="abtn a2" style="margin:12px auto 0;padding:7px 18px;font-size:12px;width:auto" onclick="loadNews(document.querySelector('#news-cat .chip.on'))">🔄 다시 시도</button></div>`;
   }
 }
 
@@ -4179,6 +4190,7 @@ async function loadSubs(){
         <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px">청약 일정을 불러오지 못했어요</div>
         <div style="font-size:11.5px;color:var(--t2);margin-bottom:14px;line-height:1.6">일시적인 오류일 수 있어요. 잠시 후 다시 시도하거나<br>청약Home에서 직접 확인해주세요.</div>
         <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="display:inline-block;padding:9px 18px;background:var(--acc);color:#fff;border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;box-shadow:var(--sh)">🏠 청약Home 바로가기 ↗</a>
+        <button class="abtn a2" style="display:inline-block;margin-left:8px;padding:9px 18px;font-size:12px;width:auto;vertical-align:top" onclick="loadSubs()">🔄 다시 시도</button>
       </div>`;
       box.dataset.loaded = '1';
       return;
@@ -4692,6 +4704,15 @@ function searchStep(label,n){
 async function doSearch(){
   const btn=document.getElementById('srchBtn'),sp=document.getElementById('srchSp'),tx=document.getElementById('srchTx');
   btn.classList.add('ld');sp.style.display='block';
+  // UX-LOADING-2026-07-10 (Sprint DDDD, 실측 근거): 프리셋/검색 클릭 후 본문이 "아직 검색 결과가 없어요"
+  //   그대로 ~10초 유지 → "버튼 안 됨" 체감(운영자 신고 재현). 사이드바 버튼 스피너·hint 토스트(3s)는
+  //   시선 밖·짧음 → 본문(목록 영역)에 로딩 카드 즉시 표시. 결과 도착 시 renderListGrid 가 덮어씀.
+  const _lg=document.getElementById('view-list');
+  if(_lg) _lg.innerHTML=`<div style="grid-column:1/-1;padding:60px 20px;text-align:center;color:var(--t3)">
+    <div class="spin" style="margin:0 auto 14px"></div>
+    <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px">실거래 기반 단지 정리 중…</div>
+    <div style="font-size:12px;color:var(--t2);line-height:1.6">국토부 실거래 조회 → 단지 분석 → 좌표 매칭<br>보통 5~15초 걸려요</div>
+  </div>`;
   searchStep('조건 정리 중...', 1);
 
   const body={
