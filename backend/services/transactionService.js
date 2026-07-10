@@ -106,15 +106,26 @@ async function getRegionRecentTransactions(lawdCd, monthsBack = 6) {
     since.setMonth(since.getMonth() - (monthsBack - 1));
     since.setDate(1);
     const sinceStr = since.toISOString().slice(0, 10);
-    const { data, error } = await admin
-      .from('molit_transactions')
-      .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq')
-      .eq('lawd_cd', lawdCd)
-      .gte('deal_date', sinceStr)
-      .order('deal_date', { ascending: false })
-      .limit(12000); // 최대 지역(강남) 6개월 1,480행 실측 — 넉넉한 상한
-    if (error) throw error;
-    if (!data || !data.length) { cache.set(ck, null, 300); return null; } // 미ingest → 기존 경로 폴백
+    // REST-CAP-FIX-2026-07-10: Supabase REST 는 응답당 1000행 cap — .limit(12000) 요청도 서버가
+    //   1000으로 자름(라이브 실측: analyzedCount 581→490, "구당 최근 1000행 cap" SQL 재현으로 490 정확 일치).
+    //   → 1000행 range 페이징. 2차 정렬키 id 로 같은 deal_date 동점의 페이지 경계 중복/누락 차단.
+    //   최대 지역(구로 6mo 2,007행 실측) = 3왕복 — 기존 월별 12왕복 대비 여전히 1/4.
+    const PAGE = 1000;
+    let data = [];
+    for (let from = 0; from <= 11000; from += PAGE) {
+      const { data: page, error } = await admin
+        .from('molit_transactions')
+        .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq')
+        .eq('lawd_cd', lawdCd)
+        .gte('deal_date', sinceStr)
+        .order('deal_date', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      if (page && page.length) data = data.concat(page);
+      if (!page || page.length < PAGE) break;
+    }
+    if (!data.length) { cache.set(ck, null, 300); return null; } // 미ingest → 기존 경로 폴백
     const mapped = data.map(r => ({
       aptName: r.apt_name,
       sigungu: r.sigungu || '',
