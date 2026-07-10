@@ -8425,6 +8425,14 @@ async function loadPopularMarkers() {
     return;
   }
   _popularMarkersLoaded = true;
+  // GGGG-2: 사용자 지도 조작 감지 (DOM 레벨 — Naver/Leaflet 공통) → 자동 뷰 조정 차단 플래그
+  try {
+    const _me = document.getElementById('mapEl');
+    if (_me && !window._mapMoveHooked) {
+      window._mapMoveHooked = true;
+      ['pointerdown','wheel','touchstart'].forEach(ev => _me.addEventListener(ev, () => { window._mapUserMoved = true; }, { passive: true }));
+    }
+  } catch(_) {}
   try {
     const r = await fetch(`${CFG.api}/search/popular?limit=12`, { signal: AbortSignal.timeout(8000) });
     if (!r.ok) return;
@@ -8496,6 +8504,30 @@ async function loadPopularMarkers() {
     // 범례는 마커가 실제 그려졌을 때만 노출 (기준 공개 — 정직 정책)
     const _lg = document.getElementById('popLegend');
     if (_lg && window._popMarkers.length) _lg.style.display = '';
+    // GGGG-2: 초기 뷰포트(줌12 서울도심)에 인기 마커 0개면 — 실측: 1568px 화면에서 12/12 전부 밖 —
+    //   사용자 무조작 시에만 수도권 마커(대전·부산 제외)에 맞춰 1회 fitBounds ("빈 지도 첫인상 차단" 목적 복원).
+    //   API 실측: LatLngBounds ctor/extend/fitBounds/hasLatLng 존재 확인, fitBounds 후 줌10·10/10 가시 검증.
+    try {
+      if (!window._mapUserMoved) {
+        const metro = popular.filter(p => p.lat >= 36.9 && p.lat <= 37.85 && p.lng >= 126.35 && p.lng <= 127.45);
+        let vis = 0;
+        const b = mapObj.getBounds && mapObj.getBounds();
+        if (b) {
+          vis = popular.filter(p => isNaver
+            ? b.hasLatLng(new naver.maps.LatLng(p.lat, p.lng))
+            : (b.contains && b.contains([p.lat, p.lng]))).length;
+        }
+        if (!vis && metro.length >= 3) {
+          if (isNaver) {
+            const nb = new naver.maps.LatLngBounds();
+            metro.forEach(p => nb.extend(new naver.maps.LatLng(p.lat, p.lng)));
+            mapObj.fitBounds(nb);
+          } else if (window.L) {
+            mapObj.fitBounds(L.latLngBounds(metro.map(p => [p.lat, p.lng])), { padding: [40, 40] });
+          }
+        }
+      }
+    } catch(_) {}
   } catch(_) {
     _popularMarkersLoaded = false;
     _popularMarkersFailedAt = Date.now(); /* 5분 backoff */
