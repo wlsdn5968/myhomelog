@@ -11,7 +11,7 @@
  * 네이버/KB 부동산 호가는 공식 API 부재 + 스크래핑 ToS 위반으로 미사용.
  * 대신 최신 실거래가가 가장 객관적인 시세 지표로 동등하게 기능함.
  */
-const { getTransactionsByApt, analyzeTransactions, getAliasCanonicalMap } = require('./transactionService');
+const { getTransactionsByApt, analyzeTransactions, getAliasCanonicalMap, getRegionRecentTransactions } = require('./transactionService');
 const { getAptListBySgg, getAptBasisInfo, getAptDtlInfo } = require('./aptInfoService');
 const { resolveCoordBatch } = require('./geocodeCacheService');
 const { resolveSchoolsBatch } = require('./schoolService');
@@ -218,7 +218,9 @@ async function getAIRecommendations(userCondition) {
       targetRegions.map(r => getAptListBySgg(r.lawdCd))
     ).then(results => results.map(r => r.status === 'fulfilled' ? r.value : [])),
     Promise.allSettled(
-      targetRegions.map(r => getTransactionsByApt(r.lawdCd, ''))
+      // REC-PERF-2026-07-10 (Sprint EEEE): 지역 단일쿼리 우선(12왕복→1왕복/지역, 131ms 실측) —
+      //   null(미ingest·실패)이면 기존 월별 경로(MOLIT API 폴백 포함)로 안전 fallback.
+      targetRegions.map(async r => (await getRegionRecentTransactions(r.lawdCd)) ?? await getTransactionsByApt(r.lawdCd, ''))
     ).then(results => results.map((r, i) => {
       if (r.status === 'fulfilled') return r.value;
       logger.warn({
@@ -462,7 +464,7 @@ async function getAIRecommendations(userCondition) {
       address: rec.facility?.address || null,
     };
   });
-  const coords = await resolveCoordBatch(coordInputs, 4);
+  const coords = await resolveCoordBatch(coordInputs, 8); // REC-PERF-2026-07-10: 4→8 (Kakao 실측 여유 0.9K/60K, 콜드 라운드 절반)
 
   // P1 (Phase 2 후속, 2026-04-25): 학군 데이터 — 좌표 확보된 단지만 학교 검색.
   // 카카오 keyword "초/중/고등학교" 반경 1km, 종류별 3개 = 9개 이내. DB 캐시 90일.
@@ -479,7 +481,7 @@ async function getAIRecommendations(userCondition) {
       lng: c?.lng,
     };
   });
-  const schoolsArr = await resolveSchoolsBatch(schoolInputs, 3);
+  const schoolsArr = await resolveSchoolsBatch(schoolInputs, 6); // REC-PERF-2026-07-10: 3→6 — 콜드 학교 단계(15단지×Kakao 3콜) ~9s→~4.5s
 
   // NAMEFIX-2026-05-11: 사용자 응답에선 정규화된 단지명 노출 — "(고층)" 같은 MOLIT raw suffix 제거.
   //   DB raw apt_name 은 그대로 유지 (다른 매칭 흐름 호환). 표시 layer 만 정규화.
@@ -513,7 +515,7 @@ async function getAIRecommendations(userCondition) {
     coordMissingCount: missingCoords,
     disclaimer: '본 결과는 국토교통부 실거래가 데이터 기반 정보 정리이며, 매수·매도 추천이 아닙니다. 모든 의사결정의 책임은 본인에게 있습니다.',
   };
-  cache.set(cacheKey, result, 1800);
+  cache.set(cacheKey, result, 10800); // REC-PERF-2026-07-10 (Sprint EEEE): 30min→3h — 데이터는 daily cron만 갱신, 인기 조합 콜드 빈도 1/6
   return { ...result, fromCache: false };
 }
 

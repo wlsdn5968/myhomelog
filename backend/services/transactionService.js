@@ -86,6 +86,57 @@ async function getTransactionsFromDb(lawdCd, dealYm) {
   }
 }
 
+/**
+ * REC-PERF-2026-07-10 (Sprint EEEE): 지역 최근 N개월 거래를 단일 쿼리로 — recommend 전용.
+ *   [근본원인 실측] recommend 콜드 22.4s 중 ~10.8s가 "지역 집계" 단계. 기존 경로는
+ *   getTransactionsByApt(lawd,'') → 월별 getTransactions × 6 → 각 월마다 ingest-run 확인 1 + 데이터 1
+ *   = 지역당 12왕복, 3지역 36왕복. 동일 데이터를 단일 range 쿼리로 받으면 131ms(EXPLAIN 실측,
+ *   idx_molit_lawd_date 완전 활용) · pgrst.db_max_rows 미설정(무제한) 실측 확인.
+ *   [안전장치] 빈 결과(미ingest 지역)면 null 반환 → 호출부가 기존 월별 경로(MOLIT API 폴백 포함)로
+ *   fallback. 매핑은 getTransactionsFromDb 와 동일 포맷 → analyzeTransactions 그대로 호환.
+ */
+async function getRegionRecentTransactions(lawdCd, monthsBack = 6) {
+  const admin = dbClient();
+  if (!admin) return null;
+  const ck = `txregion:${lawdCd}:${monthsBack}`;
+  const hit = cache.get(ck);
+  if (hit !== undefined) return hit;
+  try {
+    const since = new Date();
+    since.setMonth(since.getMonth() - (monthsBack - 1));
+    since.setDate(1);
+    const sinceStr = since.toISOString().slice(0, 10);
+    const { data, error } = await admin
+      .from('molit_transactions')
+      .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq')
+      .eq('lawd_cd', lawdCd)
+      .gte('deal_date', sinceStr)
+      .order('deal_date', { ascending: false })
+      .limit(12000); // 최대 지역(강남) 6개월 1,480행 실측 — 넉넉한 상한
+    if (error) throw error;
+    if (!data || !data.length) { cache.set(ck, null, 300); return null; } // 미ingest → 기존 경로 폴백
+    const mapped = data.map(r => ({
+      aptName: r.apt_name,
+      sigungu: r.sigungu || '',
+      umdNm: r.umd_nm || '',
+      excluUseAr: Number(r.exclu_use_ar) || 0,
+      buildYear: r.build_year || 0,
+      floor: r.floor || 0,
+      dealYear: r.deal_year,
+      dealMonth: r.deal_month,
+      dealDay: r.deal_day,
+      dealAmount: Number(r.deal_amount) || 0,
+      lawdCd: r.lawd_cd || lawdCd,
+      aptSeq: r.apt_seq || '',
+    }));
+    cache.set(ck, mapped, 21600); // 6h — daily ingest 주기 기준
+    return mapped;
+  } catch (e) {
+    logger.warn({ err: e.message, lawdCd }, 'txregion 단일쿼리 실패 → 기존 월별 경로 폴백');
+    return null;
+  }
+}
+
 // 서울/경기 주요 구 법정동코드 (앞 5자리)
 // Phase 4 (2026-04-26): 전국 광역시 + 주요 시군구 확장 (32 → 82 region)
 // 핵심 신축 단지가 광역시 신도시에 많음. 사용자 검색 누락 해소.
@@ -155,7 +206,7 @@ async function getTransactions(lawdCd, dealYm) {
   if (DB_FIRST) {
     const fromDb = await getTransactionsFromDb(lawdCd, dealYm);
     if (fromDb && fromDb.length > 0) {
-      cache.set(cacheKey, fromDb, 3600); // 1h (다음 cron 갱신 전까지 유효)
+      cache.set(cacheKey, fromDb, 21600); // REC-PERF-2026-07-10 (Sprint EEEE): 1h→6h — 데이터는 daily cron(17:00 UTC)만 갱신, 콜드 빈도 축소
       return fromDb;
     }
     // fromDb === null (미ingest 또는 실패) 또는 빈 배열 → API fallback 으로 진행
@@ -543,4 +594,4 @@ const LAWD_CODE_TO_NAME = Object.fromEntries(
   Object.entries(LAWD_CODES).map(([name, code]) => [code, _stripCityPrefix(name)])
 );
 
-module.exports = { getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, LAWD_CODES, LAWD_CODE_TO_NAME };
+module.exports = { getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, LAWD_CODES, LAWD_CODE_TO_NAME };
