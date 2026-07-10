@@ -19,7 +19,7 @@
  *   - resolveCoord 자체가 saveToDb 진행 → INSERT 자동
  */
 const { createClient } = require('@supabase/supabase-js');
-const { resolveCoordBatch, kakaoGeocode } = require('../services/geocodeCacheService');
+const { resolveCoordBatch, kakaoGeocode, getKakaoUsageStats } = require('../services/geocodeCacheService');
 const { isValidKoreaCoord } = require('../utils/geo');
 const logger = require('../logger');
 
@@ -163,7 +163,8 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
     source: 'geocache-backfill',
     batches, poolSize: candidates.length, totalProcessed, totalInserted, totalFailed, elapsedMs: elapsed,
   }, `geocache backfill: ${batches} batches, ${totalInserted}/${totalProcessed} 백필 (풀 ${candidates.length}) (${elapsed}ms)`);
-  return { ok: true, reheal, batches, poolSize: candidates.length, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, elapsedMs: elapsed };
+  // KAKAO-DIAG-2026-07-10 (Sprint CCCC): 실패 사유 원격 확정용 — 이 run 인스턴스의 Kakao ok/무매칭/에러코드 분포 동봉.
+  return { ok: true, reheal, batches, poolSize: candidates.length, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, elapsedMs: elapsed, kakao: getKakaoUsageStats() };
 }
 
 /**

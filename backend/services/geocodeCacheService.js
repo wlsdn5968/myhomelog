@@ -110,8 +110,23 @@ function _trackKakaoCall() {
     }, '⚠ Kakao API 일일 호출 60K 도달 — 100K 무료 한도 임박');
   }
 }
+// KAKAO-DIAG-2026-07-10 (Sprint CCCC): backfill 600/600 "조용한 실패" 원격 진단 —
+//   kakaoGeocode 개별 실패가 debug 레벨이라 prod 로그에 안 남아 원인(429 rate-limit vs 200 무매칭) 구분 불가.
+//   에러코드·무매칭·성공 분포를 in-process 집계해 getKakaoUsageStats 로 노출(backfill run 응답에 포함).
+let _kakaoOkCount = 0;
+let _kakaoNoMatchCount = 0;
+const _kakaoErrStats = {};
+let _kakaoLastErr = null;
+function _trackKakaoResult(kind, detail) {
+  if (kind === 'ok') _kakaoOkCount += 1;
+  else if (kind === 'nomatch') _kakaoNoMatchCount += 1;
+  else { _kakaoErrStats[kind] = (_kakaoErrStats[kind] || 0) + 1; _kakaoLastErr = detail || kind; }
+}
 function getKakaoUsageStats() {
-  return { callsToday: _kakaoCallCount, threshold: KAKAO_DAILY_THRESHOLD, resetAt: new Date(_kakaoCountResetAt).toISOString() };
+  return {
+    callsToday: _kakaoCallCount, threshold: KAKAO_DAILY_THRESHOLD, resetAt: new Date(_kakaoCountResetAt).toISOString(),
+    ok: _kakaoOkCount, noMatch: _kakaoNoMatchCount, errors: _kakaoErrStats, lastErr: _kakaoLastErr,
+  };
 }
 
 /** Kakao 다중 쿼리 폴백 — 가장 정확한 매칭을 위해 여러 형태로 시도 */
@@ -195,16 +210,20 @@ async function kakaoGeocode({ aptName, sigungu, umdNm, address }) {
       //   - 잘못된 매칭: nonAptPenalty(-5) + umdMatch(0~2) = -5 ~ -3
       if (!chosen || chosen.score < 0) continue;
 
+      _trackKakaoResult('ok');
       return {
         lat: chosen.lat, lng: chosen.lng,
         address: chosen.addrText || addr,
         placeName: chosen.d.place_name || name,
       };
     } catch (e) {
-      // 일시 실패 — 다음 후보로 계속 진행
+      // 일시 실패 — 다음 후보로 계속 진행 (KAKAO-DIAG: 상태코드별 집계, prod 로그 스팸 없이 관측)
+      const code = e.response?.status ? `http_${e.response.status}` : (e.code || 'err');
+      _trackKakaoResult(code, `${code} ${t.q}: ${String(e.response?.data?.message || e.message).slice(0, 120)}`);
       logger.debug({ src: 'kakao', q: t.q, err: e.message }, 'Kakao geocode 개별 실패');
     }
   }
+  _trackKakaoResult('nomatch');
   return null;
 }
 
