@@ -607,7 +607,8 @@ header{
 /* 인기 단지 마커 (시안 톤 — 흰 pill + 네이비 텍스트 + 앰버 도트) */
 .pop-marker{display:inline-flex;align-items:center;gap:5px;background:#fff;border-radius:999px;padding:4px 11px;font-size:11px;font-weight:700;color:var(--acc);white-space:nowrap;border:1px solid rgba(16,24,40,.07);box-shadow:0 3px 10px rgba(16,24,40,.15),0 1px 3px rgba(16,24,40,.08);cursor:pointer;transform:translate(-50%,-100%);transition:transform .12s ease}
 .pop-marker:hover{transform:translate(-50%,-100%) scale(1.07);z-index:20}
-.pop-marker::before{content:'';width:6px;height:6px;border-radius:50%;background:#E8943A;flex:none}
+/* POPULAR-QUALITY-2026-07-11 (Sprint GGGG): 앰버 도트 → 순위 숫자 뱃지 (기준 가시화) */
+.pop-marker .pop-rank{display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;border-radius:50%;background:#E8943A;color:#fff;font-size:9px;font-weight:800;padding:0 2px;flex:none}
 
 /* 인포윈도우 */
 /* Phase 4-3 후 sprint C-2 P3 (2026-05-05): 마커 팝업 디자인 시스템 풀 적용 */
@@ -1450,6 +1451,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button class="mbtn" id="mtBtn" onclick="togMapType()">위성지도</button>
     <div class="msep"></div>
     <span style="font-size:10px;color:var(--t3)">마커클릭=팝업 | 더블클릭=상세리포트</span>
+    <span id="popLegend" style="font-size:10px;color:var(--t3);display:none">| 숫자 라벨 = 인기 단지 (최근 60일 실거래 많은 순 · 시군구당 최대 2곳)</span>
     <span id="geoSt" style="font-size:10px;color:var(--grn);display:none">📍 좌표 정확화 중...</span>
   </div>
   <div id="mapEl"></div>
@@ -4582,6 +4584,7 @@ function renderMarkers(data){
   // 인기(popular) 마커 제거 — 검색·영역검색 시 인기핀이 안 지워져 결과핀과 중복 누적되던 버그 fix
   (window._popMarkers||[]).forEach(o=>{ if(o._isNaver)o.setMap&&o.setMap(null); else o.remove&&o.remove(); });
   window._popMarkers=[];
+  const _plg=document.getElementById('popLegend'); if(_plg)_plg.style.display='none'; // GGGG: 인기 범례도 함께 숨김
   overlays.forEach(o=>{
     if(naverReady&&!mapObj?._isLeaflet)o.setMap&&o.setMap(null);
     else o.remove&&o.remove();
@@ -8431,8 +8434,13 @@ async function loadPopularMarkers() {
     if (!window._popMarkers) window._popMarkers = [];
     // Sprint JJ #1: Naver / Leaflet 분기 — 이전엔 L.marker 전용이라 Naver 활성 시 인기단지 마커 미표시.
     const isNaver = !!(mapObj._isNaver && window.naver?.maps);
-    popular.forEach(p => {
+    // POPULAR-QUALITY-2026-07-11 (Sprint GGGG): 순위 뱃지 + 짧은 일반명("주공1")은 시 접두("광명 주공1") + 범례 노출.
+    const _sggShort = s => { const m = String(s||'').match(/^([가-힣]{1,5}?)(시|군|구)/); return m ? m[1] : ''; };
+    popular.forEach((p, _pi) => {
       try {
+        const _rank = _pi + 1;
+        const _nm = String(p.aptName||'');
+        const _disp = (_nm.length <= 5 && _sggShort(p.sigungu)) ? `${_sggShort(p.sigungu)} ${_nm}` : _nm;
         if (isNaver) {
           // Sprint KK (2026-05-16): CustomOverlay deprecated → Marker + icon.content (HTML)
           // 공식 docs: https://navermaps.github.io/maps.js.ncp/docs/tutorial-5-marker-html-icon.example.html
@@ -8442,7 +8450,7 @@ async function loadPopularMarkers() {
             map: mapObj,
             title: p.aptName,
             icon: {
-              content: `<div class="pop-marker">${_escHtml(p.aptName).slice(0,12)}</div>`,
+              content: `<div class="pop-marker"><span class="pop-rank">${_rank}</span>${_escHtml(_disp).slice(0,12)}</div>`,
               anchor: new naver.maps.Point(0, 0),
             },
           });
@@ -8467,7 +8475,7 @@ async function loadPopularMarkers() {
             title: p.aptName,
             icon: L.divIcon({
               className: '',
-              html: `<div class="pop-marker">${_escHtml(p.aptName).slice(0,12)}</div>`,
+              html: `<div class="pop-marker"><span class="pop-rank">${_rank}</span>${_escHtml(_disp).slice(0,12)}</div>`,
               iconAnchor: [0, 0],
             }),
           });
@@ -8485,6 +8493,9 @@ async function loadPopularMarkers() {
         }
       } catch(_) {}
     });
+    // 범례는 마커가 실제 그려졌을 때만 노출 (기준 공개 — 정직 정책)
+    const _lg = document.getElementById('popLegend');
+    if (_lg && window._popMarkers.length) _lg.style.display = '';
   } catch(_) {
     _popularMarkersLoaded = false;
     _popularMarkersFailedAt = Date.now(); /* 5분 backoff */

@@ -370,6 +370,27 @@ router.get('/popular', async (req, res) => {
     }
     if (!top || !top.length) return res.json({ results: [] });
 
+    // ⑥ POPULAR-QUALITY-2026-07-11 (Sprint GGGG, 운영자 "기준이 이상해 보인다" 지적):
+    //   원칙(2026-06-14 "전국 거래량순으로 정직하게")은 유지하되, 실측으로 확인된 3가지 왜곡 제거.
+    //   (a) 지속 거래 필터: 마지막 거래 21일 초과 단지 제외 — 신축 일괄등기 버스트가 60일 창에
+    //       잔존하며 "인기" 행세하는 것 차단 (실측: 에드가개봉 5/21 멈춤 53건, 백상앨리츠 5/14 멈춤 37건).
+    //   (b) 시군구 다양성 캡(최대 2곳): 동탄구 신규 적재 후 전국 top13 중 8곳이 동탄 — 한 동네 도배 방지.
+    //       캡 초과분은 뒤로 밀어 limit 미달 시에만 순위순 재투입 (기존 "항상 꽉 채움" 보장 유지).
+    const activeCutoff = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const fresh = top.filter(t => String(t.latest || '') >= activeCutoff);
+    if (fresh.length >= limit) { // 필터 후에도 충분할 때만 적용 (데이터 희소 시 degrade 없이 원본 유지)
+      const bySgg = {};
+      const capped = [];
+      const overflow = [];
+      for (const t of fresh) {
+        // 그룹 키 = lawd_cd (시군구 고유코드) — sigungu 문자열은 "서구"(대전/부산/인천) 충돌 (실측 확인)
+        const g = String(t.lawd_cd || t.sigungu || '?');
+        bySgg[g] = (bySgg[g] || 0) + 1;
+        (bySgg[g] <= 2 ? capped : overflow).push(t);
+      }
+      top = capped.concat(overflow);
+    }
+
     // ③ apt_geocache 좌표 join (DB)
     const names = [...new Set(top.map(t => t.apt_name))];
     const { data: coords } = await admin.from('apt_geocache')
@@ -380,8 +401,11 @@ router.get('/popular', async (req, res) => {
       coordMap.set(`${c.apt_name}|${c.sigungu||''}|${c.umd_nm||''}`, c);
     }
     // 환각 차단(2026-05-06): (apt_name|sigungu|umd_nm) 정확 키만 — 동명 타지역 좌표 오매칭 차단.
+    // POPULAR-QUALITY-2026-07-11 (c): MOLIT raw 접두 "산척동," 제거 — 표시용만 (좌표 join 키는 raw 유지,
+    //   검색은 부분일치 ILIKE 라 정제명으로도 매칭됨. 실측: "산척동,동탄호수공원금강펜테리움센트럴파크Ⅱ").
+    const _cleanName = (n) => String(n || '').replace(/^[가-힣0-9]{1,8}(동|리|가),\s*/, '');
     const _row = (t, c) => ({
-      aptName: t.apt_name, sigungu: t.sigungu, umdNm: t.umd_nm,
+      aptName: _cleanName(t.apt_name), sigungu: t.sigungu, umdNm: t.umd_nm,
       lawdCd: t.lawd_cd, buildYear: t.build_year,
       recentDealDate: t.latest, dealCount60d: t.count, avgDealAmount: t.deal_amount,
       lat: Number(c.lat), lng: Number(c.lng),
