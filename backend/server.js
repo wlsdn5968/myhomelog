@@ -380,6 +380,27 @@ async function getDataCounts() {
   } catch (e) { return null; }
 }
 
+// DB-STABILITY-2026-07-11 (Sprint OOOO): 무료 500MB 한도 조기경보 — 초과 시 쓰기 실패=서비스 다운.
+//   pg_database_size 는 RPC(get_db_size_bytes) 필요 — 미생성 시 graceful null(운영자 SQL 실행 전엔 비활성, 무해).
+async function getDbUsage() {
+  const CK = 'meta:dbUsage';
+  const hit = cache.get(CK);
+  if (hit) return hit;
+  try {
+    const { getSupabaseAdmin } = require('./db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return null;
+    const { data, error } = await admin.rpc('get_db_size_bytes');
+    if (error || data == null) return null;
+    const usedMb = Math.round(Number(data) / (1024 * 1024));
+    const limitMb = parseInt(process.env.DB_LIMIT_MB || '500', 10); // Supabase free tier
+    const pct = limitMb > 0 ? Math.round((usedMb / limitMb) * 100) : null;
+    const out = { usedMb, limitMb, pct, warn: pct != null && pct >= 80 };
+    cache.set(CK, out, 21600); // 6h — DB 용량은 일 단위 완만 변동
+    return out;
+  } catch (e) { return null; }
+}
+
 app.get('/api/health', optionalAuth, async (req, res) => {
   const [searchUsed, chatUsed] = await Promise.all([
     getUsage(req, 'search'),
@@ -422,6 +443,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   //   NCP 정책: client ID 는 도메인 등록 기반 보호 (다른 도메인에서 사용 불가) — 공개해도 안전.
   const _naverMapsClientId = process.env.NAVER_MAPS_CLIENT_ID || null;
   const _dataCounts = await getDataCounts();
+  const _dbUsage = await getDbUsage();
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -430,6 +452,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
     ai_ready: _aiReady,
     naverMapsClientId: _naverMapsClientId,
     dataCounts: _dataCounts,
+    db: _dbUsage,
     regulations: _regulations,
     cache: { keys: cache.keys().length, stats: cache.getStats() },
     usage: {

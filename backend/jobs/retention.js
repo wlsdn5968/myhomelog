@@ -32,6 +32,10 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || proce
 
 const SEARCH_HISTORY_RETENTION_MONTHS = 12;
 const CHAT_RETENTION_MONTHS = 24;
+// DB-STABILITY-2026-07-11 (Sprint OOOO): molit_ingest_runs 는 매일 (lawd×월) 재적재로 무한 grow
+//   (실측 pair당 ~17배 중복). gap-retry(retryFailedGaps)는 error/timeout(18개월) 기반이라
+//   '성공(ok)' 로그만 90일 후 파기해도 재시도 로직에 무영향 — 테이블을 ~90일치로 bound.
+const INGEST_RUNS_OK_RETENTION_DAYS = parseInt(process.env.INGEST_RUNS_OK_RETENTION_DAYS || '90', 10);
 
 function adminClient() {
   if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
@@ -175,6 +179,38 @@ async function runChatRetention(admin) {
   }
 }
 
+/**
+ * molit_ingest_runs 운영 로그 정리 (DB-STABILITY-2026-07-11).
+ *   1) 고아 'running'(크래시 잔존, 2시간+) → 'timeout' (gap-retry 가 재시도하도록 · runMolitIngest 시작부 15분 정리의 이중 안전망)
+ *   2) 성공('ok') 90일 경과 로그 파기 — 무한 grow 차단. gap-retry 는 error/timeout(18개월) 기반이라 안전.
+ * 전부 PostgREST 단순 필터(자기조인/DDL 불요). 실패해도 다른 retention 작업엔 무영향.
+ */
+async function runIngestRunsRetention(admin) {
+  const out = { staleRunningFixed: 0, okPruned: 0, error: null };
+  try {
+    const staleCut = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const { count: sc, error: e1 } = await admin.from('molit_ingest_runs')
+      .update({ status: 'timeout', finished_at: new Date().toISOString(), error_message: 'stale running (retention cleanup)' }, { count: 'exact' })
+      .eq('status', 'running')
+      .lt('started_at', staleCut);
+    if (e1) throw e1;
+    out.staleRunningFixed = sc ?? 0;
+
+    const okCut = new Date(Date.now() - INGEST_RUNS_OK_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const { count: oc, error: e2 } = await admin.from('molit_ingest_runs')
+      .delete({ count: 'exact' })
+      .eq('status', 'ok')
+      .lt('started_at', okCut);
+    if (e2) throw e2;
+    out.okPruned = oc ?? 0;
+    logger.info({ ...out, okRetentionDays: INGEST_RUNS_OK_RETENTION_DAYS }, 'retention: molit_ingest_runs 정리');
+  } catch (e) {
+    out.error = e.message;
+    logger.warn({ err: e.message }, 'retention: molit_ingest_runs 정리 실패 (계속 진행)');
+  }
+  return out;
+}
+
 async function run() {
   const started = Date.now();
   const admin = adminClient();
@@ -183,18 +219,20 @@ async function run() {
   const softDeleteResult = await runSoftDeleteExpiry(admin);
   const searchHistResult = await runSearchHistoryRetention(admin);
   const chatResult = await runChatRetention(admin);
+  const ingestRunsResult = await runIngestRunsRetention(admin);
 
   const summary = {
     durationMs: Date.now() - started,
     softDelete: softDeleteResult,
     searchHistory: searchHistResult,
     chat: chatResult,
+    ingestRuns: ingestRunsResult,
   };
   logger.info(summary, 'retention job 완료');
   return summary;
 }
 
-module.exports = { run, hardDeleteUser, runSoftDeleteExpiry, runSearchHistoryRetention, runChatRetention };
+module.exports = { run, hardDeleteUser, runSoftDeleteExpiry, runSearchHistoryRetention, runChatRetention, runIngestRunsRetention };
 
 // CLI 실행 지원
 if (require.main === module) {
