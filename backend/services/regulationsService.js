@@ -212,6 +212,10 @@ async function getRegulatedKeywords() {
   const keywords = new Set();
   const seoulRegulated = !!reg.seoul; // "서울 전 지역" 명시 시 서울 전체 규제
 
+  // REG-PRECISE-2026-07-11 (Sprint NNNN): frontend isRegFront(index.html:7459~)와 동일 로직으로 통일.
+  //   기존 backend 는 '수원시 영통구'→시 core '수원'까지 무조건 추가 → isRegulatedRegion('수원 권선구')=true 로
+  //   비규제 구(권선·만안·처인·서부화성)를 규제(LTV 40%)로 오판정(report/aiService 경로). 부분규제 시의 시 core 배제.
+  const PARTIAL_CITY = ['수원', '안양', '용인', '화성']; // 시 내 일부 구만 규제 → 시 core 매칭 금지
   const gyeonggi = Array.isArray(reg.gyeonggi) ? reg.gyeonggi : [];
   for (const fullName of gyeonggi) {
     const trimmed = String(fullName || '').trim();
@@ -219,11 +223,22 @@ async function getRegulatedKeywords() {
     keywords.add(trimmed);
     keywords.add(trimmed.replace(/\s+/g, ''));
     const tokens = trimmed.split(/\s+/);
-    for (const tok of tokens) {
-      const core = tok.replace(/(시|구|군)$/, '');
-      if (core && core.length >= 2) keywords.add(core);
+    if (tokens.length === 1) {
+      // 구 없는 시 (과천·광명·의왕·하남) → 시 단위 매칭 OK
+      const core = tokens[0].replace(/(시|구|군)$/, '');
+      if (core.length >= 2) keywords.add(core);
+    } else {
+      // "성남시 분당구" 류 → 규제 '구' 토큰 + (부분규제 시가 아니면) 시 core
+      const siCore = tokens[0].replace(/(시|군)$/, '');
+      if (siCore.length >= 2 && !PARTIAL_CITY.includes(siCore)) keywords.add(siCore);
+      const guTok = tokens[tokens.length - 1];
+      keywords.add(guTok);
+      const guCore = guTok.replace(/(구|군)$/, '');
+      if (guCore.length >= 2) keywords.add(guCore);
     }
   }
+  // 규제 구 동네 별칭(판교=분당구·평촌=동안구·미사=하남시) — 프론트와 동일 보완
+  ['판교', '평촌', '미사'].forEach(a => keywords.add(a));
 
   const out = { keywords: Array.from(keywords), seoulRegulated };
   cache.set(cacheKey, out, 600); // 10분 — getSnapshot 과 동일 TTL
