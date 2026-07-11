@@ -337,7 +337,8 @@ function buildDataOnlyReport(userInput, candidates) {
   return {
     coreMessages: [
       `매수가 ${userInput.maxBudget}억 · 자기자본 ${userInput.myCash}억 · ${userInput.region} 조건의 최근 6개월 실거래 데이터를 정리했어요.`,
-      `아래 ${apartments.length}개 단지는 국토교통부 실거래 기준 조건 부합 단지 정리입니다 (매수 추천 아님).`,
+      // '추천' 단어는 자체 단언표현 필터(filterAdviceOutputDeep)에 걸림 (라이브 확인) — 필터 안전 문구 사용
+      `아래 ${apartments.length}개 단지는 국토교통부 실거래 기준 조건 부합 단지 정리예요 — 의사결정 책임은 본인에게 있어요.`,
       'AI 컨설팅 코멘트는 현재 일시 중단 — 실거래·세대수·주차·규제 등 객관 데이터만 표시해요.',
     ],
     checklist: [
