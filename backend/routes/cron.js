@@ -28,6 +28,8 @@ const { run: runAuditPrune } = require('../jobs/auditPrune');
 const { run: runGeocacheBackfill } = require('../jobs/geocacheBackfill');
 // FACILITY-BACKFILL-2026-06-18: apt_master.facility(세대수·주차 등) 점진 백필 — 단지 비교 토대
 const { run: runFacilityBackfill } = require('../jobs/facilityBackfill');
+// POPULAR-SNAPSHOT-2026-07-11 (Sprint LLLL): 인기 단지 일별 사전집계 (retention cron 에 편승)
+const { computeAndStoreSnapshot: computePopularSnapshot } = require('../services/popularService');
 // MOB-AUDIT-2026-05-03: cron 실패는 운영자 즉시 알림 — Sentry capture (logger.error 외 추가)
 const Sentry = require('@sentry/node');
 
@@ -58,7 +60,13 @@ router.post('/retention', async (req, res) => {
     const started = Date.now();
     const summary = await runRetention();
     logger.info({ durationMs: Date.now() - started }, 'cron/retention OK');
-    res.json({ ok: true, summary });
+    // POPULAR-SNAPSHOT-2026-07-11 (Sprint LLLL): 인기 단지 일별 사전집계 — retention(18:00 UTC)은
+    //   molit-ingest(17:00 UTC) 1시간 뒤라 신선한 데이터로 계산됨. 실패해도 retention 응답은 ok
+    //   (스냅샷은 부가 기능 — /popular 이 라이브 집계로 자체 fallback).
+    let popularSnapshot = null;
+    try { popularSnapshot = await computePopularSnapshot(); }
+    catch (e) { logger.warn({ err: e.message }, 'popular 스냅샷 계산 실패 (retention 은 정상)'); popularSnapshot = { stored: false, err: e.message }; }
+    res.json({ ok: true, summary, popularSnapshot });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/retention 실패');
     try { Sentry.captureException(e, { tags: { route: 'cron.retention' } }); } catch(_){}

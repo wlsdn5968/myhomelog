@@ -38,6 +38,8 @@ const { resolveAcademies } = require('../services/academyService');
 // NAMEFIX-2026-05-11 + FACILITY-HELPER-2026-05-12: 검색 path 정규화 + facility schema 일관
 // NAME-MERGE-2026-05-12 (Sprint S): baseAptName helper 로 동/letter/층 suffix 분리 신고 통합
 const { normalizeAptName, baseAptName } = require('../utils/aptName');
+// SNAPSHOT-2026-07-11 (Sprint LLLL): 인기 단지 집계 서비스 분리 + 일별 사전집계 스냅샷
+const { buildPopularResults, readPopularSnapshot, storePopularSnapshot } = require('../services/popularService');
 const { buildFacility } = require('../utils/buildFacility');
 
 const router = express.Router();
@@ -339,135 +341,40 @@ router.get('/apt', async (req, res) => {
 //   [Fix] search_popular_apts RPC(전국 60일 GROUP BY count desc) 를 1차 소스로 사용. 지역 하드코딩·200샘플 제거.
 //         좌표 join + lazy-fill 은 기존 검증 로직 그대로 재사용(소스만 교체) → 회귀 최소.
 //   [회귀 위험] RPC 장애 시 fallback 도 지역 하드코딩 없이 전국 샘플 그룹핑으로 degrade (편향 재발 방지).
+// SNAPSHOT-2026-07-11 (Sprint LLLL): 집계 로직은 services/popularService.js 로 이동 (로직 무변경).
+//   서빙 우선순위: ① 서버 인메모리 캐시 → ② 일별 사전집계 스냅샷(cron 이 저장, 36h 신선) →
+//   ③ 라이브 집계(RPC 7s + 품질 후처리 + 좌표 lazy-fill) + 성공본이면 스냅샷도 갱신.
+//   스냅샷 테이블 미생성(운영자 SQL 전)이어도 ②가 조용히 null → ③ 동작 — 완전 무해.
 router.get('/popular', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 12, 30);
-  const admin = adminClient();
-  if (!admin) return res.status(503).json({ error: '서비스 일시 불가' });
   try {
-    // POPULAR-COLD-2026-07-11 (Sprint HHHH, 실사고 00:44 UTC 재현): 새벽 ingest 후 콜드에서
-    //   RPC statement timeout(8s) 대기 → fallback → 총 10,035ms > 프론트 타임아웃 → 첫 화면 마커 0.
-    //   ① 서버 인메모리 캐시 30분 — 같은 인스턴스 내 CDN MISS 도 즉시 응답.
+    const CDN_OK = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400';
+    // ① 서버 인메모리 캐시 (Sprint HHHH)
     const pck = `popular:${limit}`;
     const pcached = cache.get(pck);
     if (pcached) {
-      res.set('Cache-Control', 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400');
+      res.set('Cache-Control', CDN_OK);
       return res.json(pcached);
     }
-    // ① 전국 60일 실거래량 top — RPC 집계 (정직한 거래량순)
-    //   GEOCODE-ROBUST-2026-06-14: 라이브 지오코딩(lazy-fill)이 불안정해도 마커를 꽉 채우기 위해
-    //   limit 보다 넉넉히(×5, 최대 80) 받아 → 좌표 보유 단지를 거래량 순서대로 limit 개 선택.
-    //   (미좌표 최상위 단지는 좌표 backfill/geocode 정상화 후 자연히 진입. 별도 추적 중인 좌표 갭 사안.)
-    const fetchN = Math.min(limit * 5, 80);
-    let top = null;
-    let _usedFallback = false;
-    //   ② RPC 7초 컷 (abortSignal) — POPULAR-QUALITY-FIX-2026-07-11 (라이브 회귀 발각):
-    //      4초 컷은 콜드 RPC 를 성급히 끊어 fallback(최근 1000행 샘플=며칠치, 3~4건짜리 저품질)을
-    //      30분 캐시에 박제했음. RPC 에 7초(프론트 12s 안에서 fallback 여유 확보) 주고,
-    //      fallback 결과는 아래에서 캐시 2분으로 제한 — 다음 요청이 RPC 성공본으로 교체.
-    const { data: rpcRows, error: rpcErr } = await admin
-      .rpc('search_popular_apts', { p_limit: fetchN })
-      .abortSignal(AbortSignal.timeout(7000));
-    if (!rpcErr && Array.isArray(rpcRows) && rpcRows.length) {
-      // RPC 행(camelCase) → 아래 좌표-join 로직이 기대하는 shape 로 정규화
-      top = rpcRows.map(r => ({
-        apt_name: r.aptName, sigungu: r.sigungu, umd_nm: r.umdNm,
-        lawd_cd: r.lawdCd, build_year: r.buildYear,
-        latest: r.recentDealDate, count: Number(r.dealCount60d) || 0,
-        deal_amount: r.avgDealAmount,
-      }));
-    } else {
-      // ② RPC 실패/빈 결과 시에만 degrade — 지역 하드코딩 없는 전국 최근거래 샘플 그룹핑
-      _usedFallback = true; // POPULAR-QUALITY-FIX: 저품질(며칠치 샘플) 응답임을 표시 — 캐시 단축용
-      if (rpcErr) logger.warn({ err: rpcErr.message }, 'search_popular_apts RPC 실패 — 전국 샘플 fallback');
-      const sinceIso = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-      const { data: rows, error: e2 } = await admin
-        .from('molit_transactions')
-        .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date, deal_amount')
-        .gte('deal_date', sinceIso)
-        .order('deal_date', { ascending: false })
-        .limit(1000); // 200→1000: 전국 범위라 표본 확대 (그래도 RPC 가 정상 경로)
-      if (e2) throw e2;
-      const byApt = {};
-      for (const r of (rows||[])) {
-        const k = `${r.apt_name}|${r.sigungu}|${r.umd_nm}`;
-        if (!byApt[k]) byApt[k] = { ...r, count: 0, latest: r.deal_date };
-        byApt[k].count++;
-        if (r.deal_date > byApt[k].latest) byApt[k].latest = r.deal_date;
-      }
-      top = Object.values(byApt).sort((a,b) => b.count - a.count).slice(0, fetchN);
+    // ② 일별 사전집계 스냅샷 — 콜드 RPC timeout 근본 회피 (밀리초 응답)
+    const snap = await readPopularSnapshot(limit);
+    if (snap) {
+      const payload = { results: snap };
+      cache.set(pck, payload, 1800);
+      res.set('Cache-Control', CDN_OK);
+      return res.json(payload);
     }
-    if (!top || !top.length) return res.json({ results: [] });
-
-    // ⑥ POPULAR-QUALITY-2026-07-11 (Sprint GGGG, 운영자 "기준이 이상해 보인다" 지적):
-    //   원칙(2026-06-14 "전국 거래량순으로 정직하게")은 유지하되, 실측으로 확인된 3가지 왜곡 제거.
-    //   (a) 지속 거래 필터: 마지막 거래 21일 초과 단지 제외 — 신축 일괄등기 버스트가 60일 창에
-    //       잔존하며 "인기" 행세하는 것 차단 (실측: 에드가개봉 5/21 멈춤 53건, 백상앨리츠 5/14 멈춤 37건).
-    //   (b) 시군구 다양성 캡(최대 2곳): 동탄구 신규 적재 후 전국 top13 중 8곳이 동탄 — 한 동네 도배 방지.
-    //       캡 초과분은 뒤로 밀어 limit 미달 시에만 순위순 재투입 (기존 "항상 꽉 채움" 보장 유지).
-    const activeCutoff = new Date(Date.now() - 21 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const fresh = top.filter(t => String(t.latest || '') >= activeCutoff);
-    if (fresh.length >= limit) { // 필터 후에도 충분할 때만 적용 (데이터 희소 시 degrade 없이 원본 유지)
-      const bySgg = {};
-      const capped = [];
-      const overflow = [];
-      for (const t of fresh) {
-        // 그룹 키 = lawd_cd (시군구 고유코드) — sigungu 문자열은 "서구"(대전/부산/인천) 충돌 (실측 확인)
-        const g = String(t.lawd_cd || t.sigungu || '?');
-        bySgg[g] = (bySgg[g] || 0) + 1;
-        (bySgg[g] <= 2 ? capped : overflow).push(t);
-      }
-      top = capped.concat(overflow);
-    }
-
-    // ③ apt_geocache 좌표 join (DB)
-    const names = [...new Set(top.map(t => t.apt_name))];
-    const { data: coords } = await admin.from('apt_geocache')
-      .select('apt_name, sigungu, umd_nm, lat, lng')
-      .in('apt_name', names);
-    const coordMap = new Map();
-    for (const c of (coords||[])) {
-      coordMap.set(`${c.apt_name}|${c.sigungu||''}|${c.umd_nm||''}`, c);
-    }
-    // 환각 차단(2026-05-06): (apt_name|sigungu|umd_nm) 정확 키만 — 동명 타지역 좌표 오매칭 차단.
-    // POPULAR-QUALITY-2026-07-11 (c): MOLIT raw 접두 "산척동," 제거 — 표시용만 (좌표 join 키는 raw 유지,
-    //   검색은 부분일치 ILIKE 라 정제명으로도 매칭됨. 실측: "산척동,동탄호수공원금강펜테리움센트럴파크Ⅱ").
-    const _cleanName = (n) => String(n || '').replace(/^[가-힣0-9]{1,8}(동|리|가),\s*/, '');
-    const _row = (t, c) => ({
-      aptName: _cleanName(t.apt_name), sigungu: t.sigungu, umdNm: t.umd_nm,
-      lawdCd: t.lawd_cd, buildYear: t.build_year,
-      recentDealDate: t.latest, dealCount60d: t.count, avgDealAmount: t.deal_amount,
-      lat: Number(c.lat), lng: Number(c.lng),
-    });
-
-    // ④ 거래량 top 후보의 좌표 확보 — DB 캐시 우선, 미보유 상위 단지는 즉시 lazy-fill (sigungu 공백 수정으로 경기 시+구도 해결됨).
-    //   진짜 거래량 1위(예: 평촌어바인퍼스트)가 좌표 없다고 빠지지 않게 채워서 노출 → "좌표 있는 것만"이 아닌 정직한 top.
-    //   비용 상한: 상위 limit 후보의 미좌표만 fill (첫 호출만 ~수초, 이후 apt_geocache 영속 캐시 hit).
-    const head = top.slice(0, limit);
-    const headMissing = head.filter(t => !coordMap.has(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`));
-    if (headMissing.length) {
-      const filled = await resolveCoordBatch(headMissing.map(t => ({
-        aptName: t.apt_name, sigungu: t.sigungu, umdNm: t.umd_nm,
-      })), 5);
-      headMissing.forEach((t, i) => {
-        const f = filled[i];
-        if (f && f.lat && f.lng) coordMap.set(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`, f);
-      });
-    }
-    // ⑤ 거래량 순서대로 좌표 보유 단지 limit 개 — 상위 lazy-fill 후에도 못 채운 자리는 다음 순위가 메움(항상 꽉).
-    const out = [];
-    for (const t of top) {
-      const c = coordMap.get(`${t.apt_name}|${t.sigungu||''}|${t.umd_nm||''}`);
-      if (c && c.lat && c.lng) out.push(_row(t, c));
-      if (out.length >= limit) break;
-    }
-    // CDN-CACHE-2026-06-14: 인기 마커 = 전국 60일 거래량 집계(일 단위 변동) + lazy-fill 지오코딩(첫 호출 수초)
-    //   → 엣지 캐시로 첫 진입 외 모든 사용자/세션 즉시 서빙. 빈/에러 응답은 무캐시(자연 재시도).
-    // POPULAR-QUALITY-FIX-2026-07-11: fallback(저품질) 결과는 서버 2분·CDN 2분만 — RPC 성공본만 30분.
-    res.set('Cache-Control', _usedFallback
+    // ③ 라이브 집계 — POPULAR-QUALITY-FIX-2026-07-11: fallback(저품질) 결과는 캐시 2분만
+    const { results: out, usedFallback } = await buildPopularResults(limit);
+    res.set('Cache-Control', usedFallback
       ? 'public, max-age=0, s-maxage=120, stale-while-revalidate=600'
-      : 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400');
+      : CDN_OK);
     const payload = { results: out };
-    if (out.length) cache.set(pck, payload, _usedFallback ? 120 : 1800); // HHHH ①: 빈 응답은 캐시 안 함
+    if (out.length) cache.set(pck, payload, usedFallback ? 120 : 1800); // 빈 응답은 캐시 안 함
+    // 정상 품질(RPC 성공본)이면 스냅샷도 갱신 — 다음 콜드 사용자를 위해 (fire-and-forget)
+    if (!usedFallback && out.length && limit === 12) {
+      storePopularSnapshot(out).catch(() => {});
+    }
     return res.json(payload);
   } catch (e) {
     logger.warn({ err: e.message }, '인기 단지 조회 실패');
