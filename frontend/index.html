@@ -1459,6 +1459,13 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <span id="popLegend" style="font-size:10px;color:var(--t3);display:none">| 숫자 라벨 = 인기 단지 (최근 60일 실거래 많은 순 · 시군구당 최대 2곳)</span>
     <span id="geoSt" style="font-size:10px;color:var(--grn);display:none">📍 좌표 정확화 중...</span>
   </div>
+  <!-- POP-TITLE-2026-07-11 (Sprint MMMM, 운영자 "이게 인기단지인지 바로 보이나? 매물로 오해"):
+       인기 마커의 정체를 지도 위에 명시 — 매물 광고 아님(정직 정책) + 선정 기준 공개.
+       loadPopularMarkers 성공 시 표시, 검색(renderMarkers) 시 인기 마커와 함께 숨김. -->
+  <div id="popTitleCard" style="display:none;position:absolute;top:46px;left:10px;z-index:30;background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:8px 12px;box-shadow:0 4px 14px rgba(16,24,40,.14);pointer-events:none;max-width:250px">
+    <div style="font-size:12.5px;font-weight:800;color:var(--t1)">🔥 지금 인기 단지 TOP 12</div>
+    <div style="font-size:10.5px;color:var(--t3);margin-top:2px;line-height:1.5">최근 60일 국토부 실거래 많은 순 (시군구당 최대 2곳)<br>실거래 통계 기반 정보 — 매물 광고가 아니에요</div>
+  </div>
   <div id="mapEl"></div>
   <div class="mhint h" id="mhint"></div>
 </div>
@@ -4497,7 +4504,9 @@ async function loadAptsInBounds(south, west, north, east) {
       //   (source==='master') 정상 작동 → master 단지(공릉풍림아이원)도 검색과 동일 거래 표시.
       aptSeq: p.aptSeq || null, source: p.source || null,
       lat: p.lat, lng: p.lng,
-      type: 'non',
+      // AREA-TYPE-FIX-2026-07-11 (Sprint MMMM): 기존 'non' 고정 → 영역 검색 결과도 규제/비규제
+      //   필터가 동작하도록 소재지(isRegFront) 판정 (검색 경로의 _regLtvLabel 과 동일 근거).
+      type: (typeof isRegFront === 'function' && isRegFront(`${p.sigungu||''} ${p.umdNm||''}`.trim())) ? 'regulated' : 'non',
     }));
     renderMarkers(props);
     if (typeof renderListGrid === 'function') renderListGrid();
@@ -4608,17 +4617,26 @@ function mkLeafletMkr(p){
   return m;
 }
 
+// RECON-FILTER-FIX (Sprint MMMM): 재건축 검토 연령 판정 — 상세 모달 배지(30년+ '재건축 검토')와 동일 기준
+function _isReconAge(buildYear){
+  const y = Number(buildYear);
+  return y > 1900 && (new Date().getFullYear() - y) >= 30;
+}
 function renderMarkers(data){
   // 인기(popular) 마커 제거 — 검색·영역검색 시 인기핀이 안 지워져 결과핀과 중복 누적되던 버그 fix
   (window._popMarkers||[]).forEach(o=>{ if(o._isNaver)o.setMap&&o.setMap(null); else o.remove&&o.remove(); });
   window._popMarkers=[];
   const _plg=document.getElementById('popLegend'); if(_plg)_plg.style.display='none'; // GGGG: 인기 범례도 함께 숨김
+  const _ptc2=document.getElementById('popTitleCard'); if(_ptc2)_ptc2.style.display='none'; // MMMM: 타이틀 카드도
   overlays.forEach(o=>{
     if(naverReady&&!mapObj?._isLeaflet)o.setMap&&o.setMap(null);
     else o.remove&&o.remove();
   });
   overlays=[];
-  const fl=flt==='all'?data:data.filter(p=>p.type===flt);
+  // RECON-FILTER-FIX-2026-07-11 (Sprint MMMM, 실측: 서울 15개 검색에서 재건축 0개 — 47년차 은마도 미포함):
+  //   props.type 은 'regulated'|'non' 만 할당돼 'recon' 필터가 항상 빈 결과였음 (죽은 기능).
+  //   재건축 검토 연령(30년+, 기존 상세 배지와 동일 기준) 기반 _recon 플래그로 필터.
+  const fl=flt==='all'?data:flt==='recon'?data.filter(p=>_isReconAge(p.buildYear)):data.filter(p=>p.type===flt);
   fl.forEach(p=>{
     if(!p.lat||!p.lng)return;
     const o=naverReady&&!mapObj?._isLeaflet?mkNaverOverlay(p):mkLeafletMkr(p);
@@ -8673,6 +8691,9 @@ async function loadPopularMarkers() {
     // 범례는 마커가 실제 그려졌을 때만 노출 (기준 공개 — 정직 정책)
     const _lg = document.getElementById('popLegend');
     if (_lg && window._popMarkers.length) _lg.style.display = '';
+    // POP-TITLE (Sprint MMMM): 지도 위 타이틀 카드 — 인기 단지 정체 명시 (매물 오해 방지)
+    const _ptc = document.getElementById('popTitleCard');
+    if (_ptc && window._popMarkers.length) _ptc.style.display = '';
     // GGGG-2: 초기 뷰포트(줌12 서울도심)에 인기 마커 0개면 — 실측: 1568px 화면에서 12/12 전부 밖 —
     //   사용자 무조작 시에만 수도권 마커(대전·부산 제외)에 맞춰 1회 fitBounds ("빈 지도 첫인상 차단" 목적 복원).
     //   API 실측: LatLngBounds ctor/extend/fitBounds/hasLatLng 존재 확인, fitBounds 후 줌10·10/10 가시 검증.
