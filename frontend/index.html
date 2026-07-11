@@ -1450,9 +1450,10 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button class="mbtn on" onclick="fm('all',this)">전체</button>
     <button class="mbtn" onclick="fm('regulated',this)">규제</button>
     <button class="mbtn" onclick="fm('non',this)">비규제</button>
-    <button class="mbtn" onclick="fm('recon',this)">재건축</button>
+    <button class="mbtn" onclick="fm('recon',this)" title="준공 30년 이상 단지 — 재건축 검토 가능 연령 기준 (실제 사업 추진은 단지별 결정 사항)">재건축</button>
     <div class="msep"></div>
-    <button class="mbtn" onclick="rv()">서울전체</button>
+    <button class="mbtn" onclick="rv()" title="지도를 서울 도심 초기 위치로 이동합니다">서울전체</button>
+    <button class="mbtn" onclick="showPop(this)" title="검색 후 사라진 인기 단지 마커를 다시 표시합니다">🔥 인기</button>
     <button class="mbtn" id="mtBtn" onclick="togMapType()">위성지도</button>
     <div class="msep"></div>
     <span style="font-size:10px;color:var(--t3)">마커클릭=팝업 | 더블클릭=상세리포트</span>
@@ -1529,20 +1530,20 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <th style="padding:6px 4px;border-bottom:1px solid var(--bd)">금리</th>
       </tr></thead>
       <tbody style="color:var(--t2)">
-        <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>보금자리론</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">3.6~4.2억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">3.6~4.2%</td></tr>
-        <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6~7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">5억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">2~2.4억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);color:var(--grn);font-weight:700">2.0~3.3%</td></tr>
-        <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>신혼 디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">8.5천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">3.2억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);color:var(--grn);font-weight:700">1.8~3.1%</td></tr>
-        <tr><td style="padding:5px 4px"><b>신생아 특례</b></td><td style="text-align:center;padding:5px 4px">1.3억↓</td><td style="text-align:center;padding:5px 4px">9억↓</td><td style="text-align:center;padding:5px 4px;font-weight:700">4억</td><td style="text-align:center;padding:5px 4px;color:var(--grn);font-weight:700">1.6~3.3%</td></tr>
+        <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>보금자리론</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">3.6~4.2억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">4.9~5.3%*</td></tr>
+        <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6~7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">5억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">2~2.4억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);color:var(--grn);font-weight:700">2.9~4.2%*</td></tr>
+        <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>신혼 디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">8.5천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">3.2억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);color:var(--grn);font-weight:700">2.6~3.9%*</td></tr>
+        <tr><td style="padding:5px 4px"><b>신생아 특례</b></td><td style="text-align:center;padding:5px 4px">1.3억↓</td><td style="text-align:center;padding:5px 4px">9억↓</td><td style="text-align:center;padding:5px 4px;font-weight:700">4억</td><td style="text-align:center;padding:5px 4px;color:var(--grn);font-weight:700">우대·확인*</td></tr>
       </tbody>
     </table>
-    <div style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.5">※ 정책자금은 자격·서류 요건 별도. <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:var(--grn);font-weight:700">주택도시기금 (nhuf.molit.go.kr) →</a> · 1599-0001<br>※ 신생아 특례 LTV 생애최초 80%(수도권·규제 70%)·일반 70% — 주담대 40% 대비 유리. 2년 내 출산 가구 필수 확인.</div>
+    <div style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.5">※ 정책자금은 자격·서류 요건 별도. <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:var(--grn);font-weight:700">주택도시기금 (nhuf.molit.go.kr) →</a> · 1599-0001<br>※ <b>금리(*)는 2026.7 공시 기준 대략치</b> — 소득·만기·우대에 따라 다르고 매월 변동. 신생아 특례 금리는 공시 확인. 최신 공시: <a href="https://www.hf.go.kr" target="_blank" rel="noopener" style="color:var(--grn);font-weight:700">주택금융공사(hf.go.kr)</a>·주택도시기금.<br>※ 신생아 특례 LTV 생애최초 80%(수도권·규제 70%)·일반 70% — 주담대 40% 대비 유리. 2년 내 출산 가구 필수 확인.</div>
   </div>
 
   <!-- Phase 4 (2026-04-26): 부족 자금 해결 시나리오 -->
   <div style="max-width:520px;margin-top:14px;padding:14px 16px;background:var(--accent-50);border:1px solid var(--accent-100);border-radius:var(--r);box-shadow:var(--sh)">
     <div style="font-size:12px;font-weight:700;color:var(--accent-700);margin-bottom:8px">💸 부족 자금 발생 시 — 합법 해결 시나리오</div>
     <div style="font-size:11px;color:var(--t2);line-height:1.7">
-      <div style="margin-bottom:6px"><b>1. 신용대출 추가</b> — DSR 여유 시 가능. 1억 한도 + 1년간 규제지역 매수 제한 (10.15 규제). 평균 금리 6%·만기 5년.</div>
+      <div style="margin-bottom:6px"><b>1. 신용대출 추가</b> — DSR 여유 시 가능. <b>한도는 차주별 연소득 이내로 제한</b>(2025.10.15 대책). 1억원 초과 신용대출 보유 시 대출 실행일부터 1년간 규제지역 주택 매수 제한(기존 규제 연장). 평균 금리 6%대·만기 5년.</div>
       <div style="margin-bottom:6px"><b>2. 마이너스 통장</b> — 일시 대응. 한도 5천만 ~ 1억. 변동 금리 7~8%, 사용 분만 이자.</div>
       <div style="margin-bottom:6px"><b>3. 가족 차용</b> — <b>차용증·이자 약정 필수</b> (증여세 회피 의심 차단). 연 1.6% 이상 이자, 매월 이체 기록 보존. 2.17억 초과 시 증여세 신고.</div>
       <div style="margin-bottom:6px"><b>4. 매수가 조정 / 평형 변경</b> — 부족분만큼 작은 평형/구축. 가장 안전.</div>
@@ -4057,7 +4058,7 @@ function openRegSummary(){
         <b>DSR</b>: 은행 40% / 2금융 50% · 스트레스 +3.0%p (수도권) · 만기 30년<br>
         <b>규제지역</b>: 서울 25구 + 경기 15곳 (과천·광명·성남·수원·안양·용인·의왕·하남·구리·화성 동탄 등, 2026.6.30 동탄·기흥·구리 신규)<br>
         <b>토허구역</b>: 규제지역 2년 실거주 의무 (2026.7.5 동탄·기흥·구리 추가)<br>
-        <b>전세대출</b>: 보유자 규제지역 3억 초과 매수 시 즉시 회수
+        <b>전세대출</b>: 보유자가 규제지역(투기과열지구 등) 내 3억 초과 <b>아파트</b>(분양권·입주권 포함) 매수 시 회수 — 세입자 잔여 임대차기간·불가피한 실수요 등 예외 있음
       </div>
       <!-- Sprint QQ (2026-05-19): 10.15 이후 후속 정책 (4.17 만기연장 금지 / 5.10 양도세 중과 / 5.12 보완책) -->
       <div style="background:#FFE8E8;border:1px solid #E8A0A0;border-radius:8px;padding:10px 12px;font-size:11px;color:#8B2914;line-height:1.6;margin-bottom:10px">
@@ -4079,7 +4080,7 @@ function closeTerms(){document.getElementById('TM').classList.remove('open');}
 // Sprint QQ (2026-05-19): 4.17 만기연장 금지 + 5.10 양도세 중과 부활 + 5.12 보완책 추가
 //   - 공식 출처 검증: 4.17 = korea.kr 정책브리핑 / 5.10 = 다주택자 양도세 중과 부활(5.9까지 양도분 배제, 2026-06-22 재검증 socialfocus·KB·세무법인)
 const POLICY_TIMELINE = [
-  { date:'2025-10-15', title:'규제지역 확대·DSR 강화 시행', desc:'서울 25개구 + 경기 12곳 토지거래허가구역', tag:'규제', color:'#C44' },
+  { date:'2025-10-15', title:'규제지역 확대·DSR 강화 시행', desc:'서울 25개구 + 경기 12곳(발표 당시) 토지거래허가구역 — 현재 경기 15곳', tag:'규제', color:'#C44' },
   { date:'2025-10-29', title:'1주택자 전세대출 이자 DSR 반영', desc:'전세대출 이자도 총부채상환비율에 포함', tag:'대출', color:'#B47' },
   { date:'2026-01-01', title:'은행권 주담대 위험가중치 15%→20%', desc:'은행 주담대 공급 위축·금리 상승 압력', tag:'금융', color:'#947' },
   { date:'2026-04-17', title:'다주택자 주담대 만기연장 금지', desc:'2주택+ 임대사업자 수도권·규제지역 주담대 만기연장 원칙 금지 (4조 1,000억 / 1.7만 가구)', tag:'대출', color:'#C44' },
@@ -4661,6 +4662,25 @@ function rv(){
   // Phase 4-3 UX-3 (2026-05-05): setView → flyTo (부드러운 zoom·이동 애니메이션, 사용자 작동 인지 ↑)
   if(mapObj._isLeaflet)mapObj.flyTo([37.565,127.02],12,{duration:0.8});
   else mapObj.setCenter(new naver.maps.LatLng(37.565,127.02));
+}
+
+// POP-RESTORE-2026-07-11 (Sprint NNNN, 운영자 후속 "검색 후 인기 칩 복귀"):
+//   검색하면 renderMarkers 가 인기 마커·타이틀 카드를 지움 → 다시 볼 방법이 새로고침뿐이었음.
+//   이 칩은 검색 결과 마커를 걷어내고 인기 단지 마커를 재로딩(스냅샷 캐시라 즉시).
+function showPop(btn){
+  if(!mapObj)return;
+  // 검색 결과 마커 제거
+  overlays.forEach(o=>{ if(naverReady&&!mapObj?._isLeaflet)o.setMap&&o.setMap(null); else o.remove&&o.remove(); });
+  overlays=[];
+  // 잔존 인기 마커도 제거 (재로딩이 append 라 중복 방지 — renderMarkers 정리와 동일)
+  (window._popMarkers||[]).forEach(o=>{ if(o._isNaver)o.setMap&&o.setMap(null); else o.remove&&o.remove(); });
+  window._popMarkers=[];
+  // 필터 버튼 활성 해제 (인기는 필터 아님)
+  document.querySelectorAll('.mbtn').forEach(b=>b.classList.remove('on'));
+  if(btn)btn.classList.add('on');
+  // 인기 마커 재로딩 (once 가드·backoff 해제)
+  _popularMarkersLoaded=false; _popularMarkersFailedAt=0; window._popMarkersRetry=0;
+  loadPopularMarkers();
 }
 
 function togMapType(){
