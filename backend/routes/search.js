@@ -166,9 +166,17 @@ router.get('/apt', async (req, res) => {
         });
       }
     }
-    // 정렬: (a) 거래량 desc, (b) 최근 거래 desc — 인기 + 최신성 균형
+    // 정렬: (0) 검색어 일치 우선, (a) 거래량 desc, (b) 최근 거래 desc — 인기 + 최신성 균형
+    // SEARCH-RANK-2026-07-11 (Sprint HHHH, 라이브 재현 "은마" → 1위 화성 '시범다은마을월드반도'):
+    //   부분매칭+거래량순뿐이라 정확일치 단지가 밀림 → 정확일치(0)·시작일치(1)·포함(2) 등급을 최우선.
+    //   동명(umd) 검색은 전부 2등급 동률이라 기존 순서 그대로 (회귀 없음).
+    const _qn = String(q).replace(/\s+/g, '').toLowerCase();
+    const _qRank = (n) => {
+      const s = String(n || '').replace(/\s+/g, '').toLowerCase();
+      return s === _qn ? 0 : (s.startsWith(_qn) ? 1 : 2);
+    };
     const sortedMolit = Array.from(aptMap.values())
-      .sort((a, b) => (b.count - a.count) || (String(b.firstRow.deal_date||'').localeCompare(String(a.firstRow.deal_date||''))));
+      .sort((a, b) => (_qRank(a.baseName) - _qRank(b.baseName)) || (b.count - a.count) || (String(b.firstRow.deal_date||'').localeCompare(String(a.firstRow.deal_date||''))));
 
     const seen = new Set();
     const out = [];
@@ -333,13 +341,26 @@ router.get('/popular', async (req, res) => {
   const admin = adminClient();
   if (!admin) return res.status(503).json({ error: '서비스 일시 불가' });
   try {
+    // POPULAR-COLD-2026-07-11 (Sprint HHHH, 실사고 00:44 UTC 재현): 새벽 ingest 후 콜드에서
+    //   RPC statement timeout(8s) 대기 → fallback → 총 10,035ms > 프론트 타임아웃 → 첫 화면 마커 0.
+    //   ① 서버 인메모리 캐시 30분 — 같은 인스턴스 내 CDN MISS 도 즉시 응답.
+    const pck = `popular:${limit}`;
+    const pcached = cache.get(pck);
+    if (pcached) {
+      res.set('Cache-Control', 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400');
+      return res.json(pcached);
+    }
     // ① 전국 60일 실거래량 top — RPC 집계 (정직한 거래량순)
     //   GEOCODE-ROBUST-2026-06-14: 라이브 지오코딩(lazy-fill)이 불안정해도 마커를 꽉 채우기 위해
     //   limit 보다 넉넉히(×5, 최대 80) 받아 → 좌표 보유 단지를 거래량 순서대로 limit 개 선택.
     //   (미좌표 최상위 단지는 좌표 backfill/geocode 정상화 후 자연히 진입. 별도 추적 중인 좌표 갭 사안.)
     const fetchN = Math.min(limit * 5, 80);
     let top = null;
-    const { data: rpcRows, error: rpcErr } = await admin.rpc('search_popular_apts', { p_limit: fetchN });
+    //   ② RPC 4초 컷 (abortSignal) — 콜드 DB 에서 statement timeout(8s) 을 기다리지 않고
+    //      빠르게 fallback 으로 전환 (fallback 은 인덱스 경로라 콜드에서도 ~2s).
+    const { data: rpcRows, error: rpcErr } = await admin
+      .rpc('search_popular_apts', { p_limit: fetchN })
+      .abortSignal(AbortSignal.timeout(4000));
     if (!rpcErr && Array.isArray(rpcRows) && rpcRows.length) {
       // RPC 행(camelCase) → 아래 좌표-join 로직이 기대하는 shape 로 정규화
       top = rpcRows.map(r => ({
@@ -435,7 +456,9 @@ router.get('/popular', async (req, res) => {
     // CDN-CACHE-2026-06-14: 인기 마커 = 전국 60일 거래량 집계(일 단위 변동) + lazy-fill 지오코딩(첫 호출 수초)
     //   → 엣지 캐시로 첫 진입 외 모든 사용자/세션 즉시 서빙. 빈/에러 응답은 무캐시(자연 재시도).
     res.set('Cache-Control', 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400');
-    return res.json({ results: out });
+    const payload = { results: out };
+    if (out.length) cache.set(pck, payload, 1800); // HHHH ①: 빈 응답은 캐시 안 함 (자연 재시도)
+    return res.json(payload);
   } catch (e) {
     logger.warn({ err: e.message }, '인기 단지 조회 실패');
     res.status(500).json({ error: '조회 실패' });

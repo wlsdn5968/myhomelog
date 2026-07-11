@@ -19,6 +19,11 @@
  *   DELETE /api/chat/sessions/:id          — 세션 + 메시지 일괄 삭제 (ON DELETE CASCADE)
  *   GET    /api/chat/sessions/:id/messages — 세션 메시지 시간순 (max 200)
  *   POST   /api/chat/sessions/:id/messages — 메시지 1건 append ({role, content, meta?})
+ *
+ * MOUNT-FIX-2026-07-11 (Sprint HHHH, 전수조사 라이브 404 재현으로 발견):
+ *   server.js 가 '/api/chat/sessions' 에 마운트하는데 라우터 내부 경로도 '/sessions...' 로 시작
+ *   → 실제 유효 경로가 /api/chat/sessions/sessions 가 되어 프론트 호출 전부 404 (이력 저장 전멸,
+ *   미스매치 요청이 /api/chat 마운트로 흘러 chat dailyLimit 까지 오소모). 내부 경로에서 prefix 제거.
  */
 const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
@@ -47,8 +52,8 @@ function userScopedClient(accessToken) {
 
 router.use(requireAuth);
 
-// ── GET /sessions ─────────────────────────────────────────
-router.get('/sessions', async (req, res, next) => {
+// ── GET / (마운트 /api/chat/sessions) ─────────────────────
+router.get('/', async (req, res, next) => {
   try {
     const sb = userScopedClient(req.accessToken);
     const { data, error } = await sb
@@ -61,8 +66,8 @@ router.get('/sessions', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// ── POST /sessions ────────────────────────────────────────
-router.post('/sessions', async (req, res, next) => {
+// ── POST / ────────────────────────────────────────────────
+router.post('/', async (req, res, next) => {
   try {
     const title = String(req.body?.title || '새 대화').trim().slice(0, MAX_TITLE_LEN);
     const sb = userScopedClient(req.accessToken);
@@ -76,8 +81,8 @@ router.post('/sessions', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// ── PATCH /sessions/:id — 제목 변경 ───────────────────────
-router.patch('/sessions/:id', async (req, res, next) => {
+// ── PATCH /:id — 제목 변경 ────────────────────────────────
+router.patch('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     const title = String(req.body?.title || '').trim().slice(0, MAX_TITLE_LEN);
@@ -97,7 +102,7 @@ router.patch('/sessions/:id', async (req, res, next) => {
 
 // ── DELETE /sessions/:id ──────────────────────────────────
 // chat_messages 는 FK ON DELETE CASCADE — 함께 삭제됨
-router.delete('/sessions/:id', async (req, res, next) => {
+router.delete('/:id', async (req, res, next) => {
   try {
     const { id } = req.params;
     const sb = userScopedClient(req.accessToken);
@@ -111,8 +116,8 @@ router.delete('/sessions/:id', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// ── GET /sessions/:id/messages ────────────────────────────
-router.get('/sessions/:id/messages', async (req, res, next) => {
+// ── GET /:id/messages ─────────────────────────────────────
+router.get('/:id/messages', async (req, res, next) => {
   try {
     const { id } = req.params;
     const sb = userScopedClient(req.accessToken);
@@ -136,7 +141,7 @@ router.get('/sessions/:id/messages', async (req, res, next) => {
 // body: { role, content, meta?, clientMsgId? }
 // Phase 4.3: clientMsgId(UUID) 전송 시 같은 (session, clientMsgId) 중복 INSERT → 기존 행 반환 (idempotent)
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-router.post('/sessions/:id/messages', async (req, res, next) => {
+router.post('/:id/messages', async (req, res, next) => {
   try {
     const { id } = req.params;
     const { role, content, meta, clientMsgId } = req.body || {};

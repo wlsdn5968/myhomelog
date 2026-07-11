@@ -723,7 +723,12 @@ header{
 /* DETAIL MODAL */
 .dmbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:400;align-items:center;justify-content:center;padding:16px}
 .dmbg.open{display:flex}
-.dm{background:var(--bg-base);border-radius:16px;width:100%;max-width:700px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(16,24,40,.20)}
+.dm{position:relative;background:var(--bg-base);border-radius:16px;width:100%;max-width:700px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(16,24,40,.20)}
+/* INSTANT-MODAL-2026-07-11 (Sprint HHHH): 단지 클릭 즉시 모달 + 불투명 로딩 커버 (이전 단지 잔상 차단) */
+.dm-loading{position:absolute;inset:0;background:var(--bg-base);border-radius:inherit;z-index:30;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px}
+.dm-loading .dml-spin{width:26px;height:26px;border:3px solid var(--bd);border-top-color:var(--acc);border-radius:50%;animation:sp .8s linear infinite}
+.dm-loading .dml-name{font-weight:800;font-size:15px;color:var(--t1)}
+.dm-loading .dml-msg{font-size:11.5px;color:var(--t3);line-height:1.5}
 .dmhdr{padding:15px 18px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 .dmtit{font-size:14px;font-weight:700}
 .dmx{width:26px;height:26px;border-radius:50%;border:1px solid var(--bd);background:var(--s1);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--t2);transition:all .15s}
@@ -8434,7 +8439,9 @@ async function loadPopularMarkers() {
     }
   } catch(_) {}
   try {
-    const r = await fetch(`${CFG.api}/search/popular?limit=12`, { signal: AbortSignal.timeout(8000) });
+    // POPULAR-COLD-2026-07-11 (Sprint HHHH): 콜드 origin 실측 10.0s(RPC timeout+fallback+lazy-fill) —
+    // 8s 타임아웃이 정상 콜드 응답을 버리고 빈 지도를 만들던 실사고. 12s 로 완화 (서버측 RPC 4s 컷과 세트).
+    const r = await fetch(`${CFG.api}/search/popular?limit=12`, { signal: AbortSignal.timeout(12000) });
     if (!r.ok) return;
     const j = await r.json();
     const popular = j.results || [];
@@ -8531,6 +8538,12 @@ async function loadPopularMarkers() {
   } catch(_) {
     _popularMarkersLoaded = false;
     _popularMarkersFailedAt = Date.now(); /* 5분 backoff */
+    // POPULAR-COLD-2026-07-11 (Sprint HHHH): 첫 실패만 30초 후 1회 자동 재시도 —
+    // 콜드 실패 시 두 번째 호출은 CDN/서버캐시 hit 라 빠름. 빈 첫 화면 5분 방치 방지.
+    if (!window._popRetryOnce) {
+      window._popRetryOnce = 1;
+      setTimeout(() => { _popularMarkersFailedAt = 0; loadPopularMarkers(); }, 30000);
+    }
   }
 }
 
@@ -8650,6 +8663,27 @@ async function goSearchResult(r) {
 //     검색·지도·인기 마커 모두 동일한 상세 모달 (in-bounds ALIAS-MERGE 로 source/aptSeq 제공).
 //   r 필요 필드: aptName, sigungu, umdNm, lawdCd, aptSeq, source.
 async function openAptDetail(r) {
+  // INSTANT-MODAL-2026-07-11 (Sprint HHHH, 운영자 신고 재현 "클릭 0초 무변화 → 3초 뒤 모달"):
+  //   클릭 즉시 모달 셸 + 불투명 로딩 커버를 띄우고, 데이터 도착 후 showDetail 재렌더 완료 시 커버 제거.
+  //   커버가 불투명(--bg-base)이라 직전 단지 잔상도 안 보임. 기존 toast 는 보조 신호로 유지.
+  try {
+    const _dm = document.getElementById('DM');
+    if (_dm) {
+      let _ld = document.getElementById('dmLoading');
+      if (!_ld) {
+        _ld = document.createElement('div');
+        _ld.id = 'dmLoading';
+        _ld.className = 'dm-loading';
+        (_dm.querySelector('.dm') || _dm).appendChild(_ld);
+      }
+      _ld.innerHTML = `<div class="dml-spin"></div>`
+        + `<div class="dml-name">${_escHtml(r.aptName||'')}</div>`
+        + `<div class="dml-msg">${_escHtml(`${r.sigungu||''} ${r.umdNm||''}`.trim())}</div>`
+        + `<div class="dml-msg">국토부 실거래 · 단지정보 불러오는 중… (보통 2~5초)</div>`;
+      _ld.style.display = 'flex';
+      _dm.classList.add('open');
+    }
+  } catch(_) {}
   toast('실거래 데이터 조회 중...');
 
   // Phase 4 (2026-04-26): 거래 fetch 후 모달 열기 — 'undefined.01' 빈 객체 버그 fix.
@@ -8767,7 +8801,9 @@ async function openAptDetail(r) {
   };
   // Phase 4 (2026-04-26): alias 토스트 제거 — 사용자 혼란 차단. 거래 자체만 표시.
   if (typeof showDetail === 'function') showDetail(p);
-  else toast('단지 상세 화면을 열 수 없어요');
+  else { toast('단지 상세 화면을 열 수 없어요'); try { cDM(); } catch(_) {} }
+  // INSTANT-MODAL (Sprint HHHH): showDetail 재렌더 완료 후 로딩 커버 제거
+  try { const _ld = document.getElementById('dmLoading'); if (_ld) _ld.style.display = 'none'; } catch(_) {}
 }
 
 // ── 청약 가점 계산기 (P1 D 감사 4) ────────────────────────
