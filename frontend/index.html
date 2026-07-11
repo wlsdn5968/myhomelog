@@ -3311,10 +3311,16 @@ function _updateAuthUi(session){
     userBtn.style.display='';
     badge.textContent = (session.user.email||'').split('@')[0].slice(0,12);
     closeLogin();
-    // 계정 삭제 예약 상태면 복구 안내 모달 — 북마크 이관 전 선행 체크
-    _checkPendingDeletionOnLogin(session).then((pending) => {
-      if(!pending) _migrateBookmarksOnce();
-    });
+    // SYNC-DEDUPE-2026-07-11 (Sprint IIII): getSession+SIGNED_IN+TOKEN_REFRESHED 다발 발화로
+    //   서버 동기화가 로드당 6~7회 반복되던 것 — 같은 access_token 이면 1회만 (UI 갱신은 매번 유지,
+    //   TOKEN_REFRESHED 로 새 토큰이 오면 다시 1회 — 정상).
+    if (window._lastAuthSyncTok !== session.access_token) {
+      window._lastAuthSyncTok = session.access_token;
+      // 계정 삭제 예약 상태면 복구 안내 모달 — 북마크 이관 전 선행 체크
+      _checkPendingDeletionOnLogin(session).then((pending) => {
+        if(!pending) _migrateBookmarksOnce();
+      });
+    }
   } else {
     loginBtn.style.display='';
     userBtn.style.display='none';
@@ -3425,8 +3431,13 @@ async function _migrateBookmarksOnce(){
 
 // SDK 준비되면 onChange 등록 — DOM 준비 후 안전하게
 window.addEventListener('DOMContentLoaded', ()=>{
+  // SYNC-DEDUPE-2026-07-11 (Sprint IIII): tryHook 3회 실행이 onChange 리스너를 3중 등록 —
+  //   auth 이벤트마다 _updateAuthUi 3배 발화 (서버 로그 실측: bookmarks 7회·deletion-status 6회/로드).
+  //   등록은 1회만, 재시도는 SDK 미로드 시에만 의미 유지.
+  let _authHooked = false;
   const tryHook = () => {
-    if(window.MHL?.auth){
+    if(window.MHL?.auth && !_authHooked){
+      _authHooked = true;
       window.MHL.auth.onChange(_updateAuthUi);
       // 이미 세션 있으면 즉시 반영
       if(window.MHL.auth.session) _updateAuthUi(window.MHL.auth.session);
@@ -5498,6 +5509,42 @@ function renderLegacyPriceBars(ph){
 }
 
 // ── DETAIL MODAL ─────────────────────────────────────────
+// FACILITY-SPLIT-2026-07-11 (Sprint IIII): t0 학교 섹션 렌더 — showDetail 인라인 IIFE 에서 추출.
+//   학교 데이터가 lazy(mode=schools) 도착 시 #schoolsBoxT0 만 부분 갱신 (모달 전체 재렌더 X).
+//   pending=true & 데이터 없음 → "확인 중" placeholder (조용한 공백 방지).
+function _schoolsSectionHtml(schools, pending){
+  // P1 (Phase 2 후속, 2026-04-25): 학군 표시 — 카카오 keyword 기반 사실 나열만 (학업성취도 X)
+  // SCHOOL-BASE-2026-05-13 (Sprint EE): 부속명 (관/동/실 등 suffix) 자동 제거.
+  const _schoolBase = n => { const m = String(n||'').match(/^(.*?(?:초등학교|중학교|고등학교|유치원|어린이집))(?:\s+.*)?$/); return m ? m[1] : ''; };
+  // EE++ : 시/도 prefix 제거된 key 로 dedupe ("용원초등학교" + "서울용원초등학교" = 같은 학교)
+  const _stripCity = s => String(s||'').replace(/^(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/, '');
+  let sch = Array.isArray(schools) ? schools : [];
+  const _seen = new Set();
+  sch = sch.map(s => ({...s, name: _schoolBase(s.name)}))
+    .filter(s => s.name && /(초등학교|중학교|고등학교|유치원|어린이집)$/.test(s.name))
+    .sort((a,b) => (a.distance_m||0) - (b.distance_m||0))
+    .filter(s => { const k = s.type + ':' + _stripCity(s.name); if (_seen.has(k)) return false; _seen.add(k); return true; });
+  if (!sch.length) {
+    return pending
+      ? `<div style="margin:8px 0;font-size:11px;color:var(--t3)">🏫 주변 학교 확인 중…</div>`
+      : '';
+  }
+  const byT = { '초': sch.filter(s=>s.type==='초'), '중': sch.filter(s=>s.type==='중'), '고': sch.filter(s=>s.type==='고') };
+  const cells = ['초','중','고'].map(t => {
+    if (!byT[t].length) return `<div class="gap-card"><div class="gap-lbl">${t}등학교</div><div class="gap-val" style="color:var(--t3);font-size:13px">없음</div><div class="gap-sub">반경 1km 내</div></div>`;
+    const top = byT[t][0];
+    const more = byT[t].length > 1 ? ` +${byT[t].length-1}` : '';
+    return `<div class="gap-card"><div class="gap-lbl">${t}등학교 (가장 가까운)</div><div class="gap-val" style="font-size:14px">${_escHtml(top.name)}${more}</div><div class="gap-sub">${top.distance_m}m</div></div>`;
+  }).join('');
+  const list = sch.map(s => `<span style="display:inline-block;background:var(--s1);border:1px solid var(--bd);border-radius:4px;padding:2px 6px;margin:1px;font-size:10px;color:var(--t2)">${_escHtml(s.name)} <span style="color:var(--t3)">${s.distance_m}m</span></span>`).join('');
+  return `<div style="margin:8px 0">
+    <div style="font-size:11px;font-weight:700;color:var(--t1);margin-bottom:4px">🏫 주변 학교 (반경 1km · 카카오맵 기준)</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px">${cells}</div>
+    <div style="font-size:10px;line-height:1.7">${list}</div>
+    <div style="font-size:9.5px;color:var(--t3);margin-top:3px">※ 학교 위치만 — 학업성취도·진학률·통학구역은 본 데이터에 없음. 학교알리미(schoolinfo.go.kr) 별도 확인.</div>
+  </div>`;
+}
+
 function showDetail(p){
   if(!p)return;
   // Day 1-② Vercel Analytics — APT_DETAIL funnel event (단지 상세 클릭)
@@ -5562,8 +5609,11 @@ function showDetail(p){
     ${_scoreSection}
     <div style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:8px;padding:9px 11px;margin:8px 0 10px;font-size:11px;color:var(--red);font-weight:600;line-height:1.5">⚠ 점수·신호는 <u>과거 실거래 통계 정리</u>이며 매수 추천이 아닙니다. 가격 하락 위험은 본인이 부담합니다.</div>
     <div class="rg2">
-      <div class="rc"><div class="rcl">현재 평균가</div><div class="rcv" style="color:var(--acc)">${(p.avgPrice||0).toFixed(2)}억</div></div>
-      <div class="rc"><div class="rcl">가격 범위</div><div class="rcv">${(p.minPrice||0).toFixed(1)}~${(p.maxPrice||0).toFixed(1)}억</div></div>
+      ${p._txFailed && !(p.txHistory||[]).length
+        ? `<div class="rc"><div class="rcl">현재 평균가</div><div class="rcv" style="color:var(--t3);font-size:12.5px">일시 조회 실패</div></div>
+      <div class="rc"><div class="rcl">가격 범위</div><div class="rcv" style="color:var(--t3);font-size:12.5px">단지를 다시 열어주세요</div></div>`
+        : `<div class="rc"><div class="rcl">현재 평균가</div><div class="rcv" style="color:var(--acc)">${(p.avgPrice||0).toFixed(2)}억</div></div>
+      <div class="rc"><div class="rcl">가격 범위</div><div class="rcv">${(p.minPrice||0).toFixed(1)}~${(p.maxPrice||0).toFixed(1)}억</div></div>`}
     </div>
     ${p.facility?`<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:9px 11px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
       <div style="font-weight:700;color:var(--t1);margin-bottom:4px">🏢 단지 기본정보</div>
@@ -5638,35 +5688,7 @@ function showDetail(p){
     <div id="clusterBox" style="display:none"></div>
     <div id="academyBox" style="display:none"></div>
     <div id="altAptBox" style="margin:4px 0 8px"></div>
-    ${(()=>{
-      // P1 (Phase 2 후속, 2026-04-25): 학군 표시 — 카카오 keyword 기반 사실 나열만 (학업성취도 X)
-      // SCHOOL-BASE-2026-05-13 (Sprint EE — 운영자 발견 "지성관/청원관/인산지해관" 부속명):
-      //   90일 cached raw 데이터 (DB apt_schools) 의 부속명 즉시 정리. backend fix 와 동일 로직.
-      const _schoolBase = n => { const m = String(n||'').match(/^(.*?(?:초등학교|중학교|고등학교|유치원|어린이집))(?:\s+.*)?$/); return m ? m[1] : ''; };
-      // EE++ : 시/도 prefix 제거된 key 로 dedupe ("용원초등학교" + "서울용원초등학교" = 같은 학교)
-      const _stripCity = s => String(s||'').replace(/^(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)/, '');
-      let sch = Array.isArray(p.nearbySchools) ? p.nearbySchools : [];
-      const _seen = new Set();
-      sch = sch.map(s => ({...s, name: _schoolBase(s.name)}))
-        .filter(s => s.name && /(초등학교|중학교|고등학교|유치원|어린이집)$/.test(s.name))
-        .sort((a,b) => (a.distance_m||0) - (b.distance_m||0))
-        .filter(s => { const k = s.type + ':' + _stripCity(s.name); if (_seen.has(k)) return false; _seen.add(k); return true; });
-      if (!sch.length) return '';
-      const byT = { '초': sch.filter(s=>s.type==='초'), '중': sch.filter(s=>s.type==='중'), '고': sch.filter(s=>s.type==='고') };
-      const cells = ['초','중','고'].map(t => {
-        if (!byT[t].length) return `<div class="gap-card"><div class="gap-lbl">${t}등학교</div><div class="gap-val" style="color:var(--t3);font-size:13px">없음</div><div class="gap-sub">반경 1km 내</div></div>`;
-        const top = byT[t][0];
-        const more = byT[t].length > 1 ? ` +${byT[t].length-1}` : '';
-        return `<div class="gap-card"><div class="gap-lbl">${t}등학교 (가장 가까운)</div><div class="gap-val" style="font-size:14px">${_escHtml(top.name)}${more}</div><div class="gap-sub">${top.distance_m}m</div></div>`;
-      }).join('');
-      const list = sch.map(s => `<span style="display:inline-block;background:var(--s1);border:1px solid var(--bd);border-radius:4px;padding:2px 6px;margin:1px;font-size:10px;color:var(--t2)">${_escHtml(s.name)} <span style="color:var(--t3)">${s.distance_m}m</span></span>`).join('');
-      return `<div style="margin:8px 0">
-        <div style="font-size:11px;font-weight:700;color:var(--t1);margin-bottom:4px">🏫 주변 학교 (반경 1km · 카카오맵 기준)</div>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:6px">${cells}</div>
-        <div style="font-size:10px;line-height:1.7">${list}</div>
-        <div style="font-size:9.5px;color:var(--t3);margin-top:3px">※ 학교 위치만 — 학업성취도·진학률·통학구역은 본 데이터에 없음. 학교알리미(schoolinfo.go.kr) 별도 확인.</div>
-      </div>`;
-    })()}
+    <div id="schoolsBoxT0">${_schoolsSectionHtml(p.nearbySchools, p._schoolsPending)}</div>
     ${p.pros?`<div class="ibox g"><b>장점:</b> ${_escHtml(p.pros)}</div>`:''}
     ${p.cons?`<div class="ibox r"><b>단점:</b> ${_escHtml(p.cons)}</div>`:''}
     ${p.strategy?`<div class="ibox b"><b>전략:</b> ${_escHtml(p.strategy)}</div>`:''}
@@ -6122,10 +6144,16 @@ async function loadFacility(p){
   try{
     const sigungu = p.sigungu || (p._raw?.sigungu) || '';
     const umdNm = p.umdNm || (p._raw?.umdNm) || '';
-    const params = new URLSearchParams({ aptName: p.aptName||'', sigungu, umdNm });
-    // STAB-A P1#11 (2026-05-03): timeout 8초 — facilityBox 무한 로딩 차단
-    const r = await fetch(`${CFG.api}/search/facility?${params}`, { signal: AbortSignal.timeout(8000) }).then(r=>r.json()).catch(()=>null);
-    if(!r) { fbox.style.display='none'; if(abox)abox.style.display='none'; return; }
+    // FACILITY-SPLIT-2026-07-11 (Sprint IIII): 검색 경로(openAptDetail)는 basic 응답을 이미 보유 —
+    //   같은 endpoint 풀 재호출(실측 모달당 2회 × 4.7~7.3s) 제거. 없을 때만(지도 마커 등) basic 호출.
+    //   학교·학군·학원은 아래 _loadFacilitySchools 가 mode=schools 로 lazy 로드.
+    let r = p._facilityRes || null;
+    if (!r) {
+      const params = new URLSearchParams({ aptName: p.aptName||'', sigungu, umdNm, mode: 'basic' });
+      // STAB-A P1#11 (2026-05-03): timeout 8초 — facilityBox 무한 로딩 차단
+      r = await fetch(`${CFG.api}/search/facility?${params}`, { signal: AbortSignal.timeout(8000) }).then(r=>r.json()).catch(()=>null);
+    }
+    if(!r) { fbox.style.display='none'; if(abox)abox.style.display='none'; _loadFacilitySchools(p); return; }
 
     // facility 표시 (raw jsonb — AptInfo 응답 구조 다양해 안전하게 처리)
     if (r.facility?.raw) {
@@ -6164,6 +6192,37 @@ async function loadFacility(p){
       fbox.style.display='none';
     }
 
+    // FACILITY-SPLIT-2026-07-11 (Sprint IIII): 학교·학군·학원 박스는 _loadFacilitySchools(mode=schools)
+    //   lazy 응답이 채움 — 아래 함수로 이동 (코드 동일, 호출 시점만 분리).
+    // Phase 4 (2026-04-26): alias 카드 제거 — 사용자 혼란 ("A/B 가 뭔지 모름")
+    // 통합 거래는 이미 실거래가 탭에 표시 (정식 단지명으로). 안내 카드 불필요.
+    if (abox) abox.style.display='none';
+  }catch{ fbox.style.display='none'; if(abox)abox.style.display='none'; }
+  _loadFacilitySchools(p); // FACILITY-SPLIT: 기본정보 표시와 무관하게 학교 lazy 시도
+}
+
+// FACILITY-SPLIT-2026-07-11 (Sprint IIII): 학교(카카오+NEIS)·학구도·학군권역·학원 lazy 로드.
+//   mode=schools 는 백엔드에서 altCandidates DB 조회를 스킵하고 Kakao/NEIS 만 수행.
+//   가드: 응답 도착 시 사용자가 다른 단지로 이동했으면 폐기 (currentDetail.aptName 비교).
+async function _loadFacilitySchools(p){
+  try{
+    const sigungu = p.sigungu || (p._raw?.sigungu) || '';
+    const umdNm = p.umdNm || (p._raw?.umdNm) || '';
+    const params = new URLSearchParams({ aptName: p.aptName||'', sigungu, umdNm, mode: 'schools' });
+    if (p.lawdCd) params.set('lawdCd', p.lawdCd);
+    const r = await fetch(`${CFG.api}/search/facility?${params}`, { signal: AbortSignal.timeout(12000) })
+      .then(x => x.ok ? x.json() : null).catch(() => null);
+    if (!r) return;
+    if (currentDetail && currentDetail.aptName !== p.aptName) return; // 다른 단지로 이동 — 폐기
+    _fillDetailSchoolBoxes(r);
+    const t0box = document.getElementById('schoolsBoxT0');
+    if (t0box) t0box.innerHTML = _schoolsSectionHtml(r.nearbySchools, false);
+  }catch(_){}
+}
+
+// 학교·학군·학원 박스 채움 — loadFacility 에서 그대로 이동 (Sprint IIII, 로직 무변경)
+function _fillDetailSchoolBoxes(r){
+  try{
     // STAB-AUDIT-2026-05-07 P0+P1+P2: 검색 path 학교 list + 학구도 + NEIS 풍부화 표시
     //   facility endpoint 응답에 nearbySchools (카카오맵 + NEIS) + schoolDistrict 포함
     //   호갱노노/네이버 부동산 수준 학교 정보 — 호스트별 (초/중/고) + 거리 + 학생수 + 배정 가능성
@@ -6260,11 +6319,7 @@ async function loadFacility(p){
     } else if (acadBox) {
       acadBox.style.display='none';
     }
-
-    // Phase 4 (2026-04-26): alias 카드 제거 — 사용자 혼란 ("A/B 가 뭔지 모름")
-    // 통합 거래는 이미 실거래가 탭에 표시 (정식 단지명으로). 안내 카드 불필요.
-    if (abox) abox.style.display='none';
-  }catch{ fbox.style.display='none'; if(abox)abox.style.display='none'; }
+  }catch(_){}
 }
 
 // ── 주변 편의시설 + 통근시간 비동기 로드 ────────────
@@ -8098,13 +8153,15 @@ async function _renderChatQuotaHint(){
 function ts(id){document.getElementById(id)?.classList.toggle('cl');}
 
 // ── MOLIT 상태 확인 ────────────────────────────────────────
+// MOLIT-CHECK-LIGHT-2026-07-11 (Sprint IIII): 기존엔 /transactions?lawdCd=11350&dealYm=202412 를
+//   로드마다 호출 — 서버가 215건 해제 필터링까지 수행 (실측 2.9~4.3s, "정체불명 고정 호출" 로그의 정체).
+//   /health 의 dataCounts.tx 로 대체 — 실거래 데이터가 아예 없을 때만 mock 배너 (기존 목적 동일, 서버비용 ~0).
 async function checkMolit(){
   try{
-    const r=await fetch(`${CFG.api}/transactions?lawdCd=11350&dealYm=202412`,{signal:AbortSignal.timeout(4000)});
-    if(r.status===503){
-      const d=await r.json();
-      if(d.code==='MOLIT_KEY_MISSING')document.getElementById('mockBanner').classList.add('show');
-    }
+    const r=await fetch(`${CFG.api}/health`,{signal:AbortSignal.timeout(4000)});
+    if(!r.ok) return;
+    const d=await r.json().catch(()=>null);
+    if(d && !(Number(d.dataCounts?.tx) > 0))document.getElementById('mockBanner').classList.add('show');
   }catch{/* 서버 오프라인이면 배너 표시 불필요 */}
 }
 
@@ -8696,6 +8753,7 @@ async function openAptDetail(r) {
   // 정확 매칭 거래 (lawdCd + aptName) 6개월. 0건이면 빈 배열 → '실거래 데이터 없음' 표시.
   let txHistory = [], avgPrice = 0, minPrice = 0, maxPrice = 0;
   let _aliasUsed = null; // master 단지의 자동 alias 거래 표시용
+  let _txFetchFailed = false; // TX-RETRY (Sprint IIII): 실패(재시도 후)와 "진짜 0건" 구분
   // SCOPE-FIX-2026-05-12 (Sentry MYHOMELOG-FRONTEND-E 발견):
   //   _facilityRes 가 try { } 안에서 `let` 으로 선언 → block-scoped → 아래 const p = {...} 객체 리터럴에서
   //   _facilityRes 참조 시 ReferenceError. outer scope 에 끌어올림.
@@ -8710,7 +8768,14 @@ async function openAptDetail(r) {
     const _sgQs = r.sigungu ? `&sigungu=${encodeURIComponent(r.sigungu)}` : '';
     const _umdQs = r.umdNm ? `&umdNm=${encodeURIComponent(r.umdNm)}` : '';
     const url = `${CFG.api}/transactions?lawdCd=${r.lawdCd}&aptName=${encodeURIComponent(r.aptName)}&dealYm=${ym}${_sgQs}${_umdQs}`;
-    const t = await fetch(url, { signal: AbortSignal.timeout(10000) }).then(rs => rs.ok ? rs.json() : null);
+    // TX-RETRY-2026-07-11 (Sprint IIII, 콜드 1회성 "0.00억" 실측): 기존엔 타임아웃이 throw 되어
+    //   facility fetch 까지 통째로 스킵 + "거래 없음"과 구분 불가. → catch 후 1회 즉시 재시도
+    //   (2번째는 웜 인스턴스라 빠름), 그래도 실패면 _txFailed 로 "일시 조회 실패" 정직 표시.
+    let t = await fetch(url, { signal: AbortSignal.timeout(10000) }).then(rs => rs.ok ? rs.json() : null).catch(() => null);
+    if (!t) {
+      t = await fetch(url, { signal: AbortSignal.timeout(10000) }).then(rs => rs.ok ? rs.json() : null).catch(() => null);
+      if (!t) _txFetchFailed = true;
+    }
     if (t?.items?.length) {
       txHistory = t.items.slice(0, 30);
     }
@@ -8724,7 +8789,9 @@ async function openAptDetail(r) {
       //   aptSeq + lawdCd 같이 보냄 → apt_master 미매칭 단지의 KAPT SigunguAptList3 runtime fallback.
       const _aptSeqQs = r.aptSeq ? `&aptSeq=${encodeURIComponent(r.aptSeq)}` : '';
       const _lawdCdQs = r.lawdCd ? `&lawdCd=${encodeURIComponent(r.lawdCd)}` : '';
-      const _fr = await fetch(`${CFG.api}/search/facility?aptName=${encodeURIComponent(r.aptName)}&sigungu=${encodeURIComponent(r.sigungu||'')}&umdNm=${encodeURIComponent(r.umdNm||'')}${_aptSeqQs}${_lawdCdQs}`,
+      // FACILITY-SPLIT-2026-07-11 (Sprint IIII): mode=basic — 학교·학원(Kakao/NEIS 다수 콜, 실측 4.7~7.3s)을
+      //   응답에서 분리해 모달 표시를 tx 속도(~2s)로. 학교는 showDetail 후 _loadFacilitySchools 가 lazy 로드.
+      const _fr = await fetch(`${CFG.api}/search/facility?aptName=${encodeURIComponent(r.aptName)}&sigungu=${encodeURIComponent(r.sigungu||'')}&umdNm=${encodeURIComponent(r.umdNm||'')}${_aptSeqQs}${_lawdCdQs}&mode=basic`,
         { signal: AbortSignal.timeout(10000) }
       ).then(rs => rs.ok ? rs.json() : null).catch(() => null);
       if (_fr) _facilityRes = _fr;
@@ -8789,6 +8856,7 @@ async function openAptDetail(r) {
     umdNm: r.umdNm,
     area: `${r.sigungu||''} ${r.umdNm||''}`.trim(),
     avgPrice, minPrice, maxPrice,
+    _txFailed: _txFetchFailed, // TX-RETRY (Sprint IIII)
     // STAB-AUDIT-2026-05-07: 검색 → click path score=60 환각 차단
     //   추천 path는 사용자 매칭 점수 (95 등), 검색 path는 default 60 → 환각.
     //   score=null 으로 변경 → showDetail 의 _hasScore 분기 → "분석 대기" 표시 (다른 path 와 일관).
@@ -8801,6 +8869,9 @@ async function openAptDetail(r) {
     // FACILITY-HELPER-2026-05-12: search path 도 facility + nearbySchools 주입 → 단지정보 탭 정상.
     facility: _facilityRes?.facility || null,
     nearbySchools: _facilityRes?.nearbySchools || [],
+    // FACILITY-SPLIT (Sprint IIII): basic 응답 전달(loadFacility 재호출 제거) + 학교 lazy 표시 플래그
+    _facilityRes: _facilityRes,
+    _schoolsPending: true,
     _fromSearch: true,
     _isMaster: r.source === 'master',
     _aliasUsed, // master → 첫 alias 자동 표시 시 단지명 (예: "풍림아파트A")

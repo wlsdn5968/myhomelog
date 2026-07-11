@@ -327,7 +327,8 @@ function buildDataOnlyReport(userInput, candidates) {
       buildYear: c.build_year || 0,
       households: c.households || '미상',
       ratio: `최근 6개월 실거래 ${c.n || 0}건`,
-      location: [f.district, f.regulation].filter(Boolean).join(' · ') || `${c.sigungu} ${c.umd_nm}`,
+      // IIII: 위계 라벨("서울 외곽구" 등)이 단독 노출되면 어색(라이브 확인) — 실제 행정구역을 주정보로, 라벨은 괄호
+      location: [`${c.sigungu} ${c.umd_nm}${f.district ? ` (${f.district})` : ''}`, f.regulation].filter(Boolean).join(' · '),
       pros: pros || '객관 정보는 아래 표 참조',
       cons: cons || '단점은 임장으로 직접 확인 권장',
       priceFit: '', // 아래 _buildPriceFit 주입이 덮어씀

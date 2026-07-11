@@ -635,6 +635,11 @@ router.get('/facility', async (req, res) => {
   const aptSeq = String(req.query.aptSeq || '').trim() || null;
   // KAPT-LOOKUP-2026-05-12: lawdCd query param 받기 (SigunguAptList3 runtime lookup)
   const lawdCd = String(req.query.lawdCd || '').trim() || null;
+  // FACILITY-SPLIT-2026-07-11 (Sprint IIII, 실측 4.7~7.3s + 모달당 이중호출 발견):
+  //   mode=basic  → 학교·학구도·학원·NEIS(Kakao 콜 다수) 스킵 — 모달 첫 표시용 (~1s, DB 위주)
+  //   mode=schools → altCandidates DB 조회 스킵 — 모달 표시 후 lazy 학교 로드용
+  //   기본(full)  → 기존 전체 (기존 호출자 회귀 0)
+  const mode = String(req.query.mode || 'full');
   if (!aptName) return res.status(400).json({ error: 'aptName 필수' });
 
   const admin = adminClient();
@@ -653,7 +658,7 @@ router.get('/facility', async (req, res) => {
     let nearbySchools = [];
     let schoolDistrict = null;
     let nearbyAcademies = null;
-    try {
+    if (mode !== 'basic') try { // FACILITY-SPLIT (Sprint IIII): basic 은 Kakao/NEIS 콜 전부 스킵
       const coord = await resolveCoord({
         kaptCode: facility?.kaptCode,
         aptName, sigungu, umdNm,
@@ -687,7 +692,7 @@ router.get('/facility', async (req, res) => {
     //   같은 단지일 가능성 높음 (예: '공릉풍림아이원' 의 '풍림' → '풍림아파트A/B' 우선).
     //   이전: 거래량 순 50건 안에 풍림아파트B(14건) 누락 → 사용자 거래 누락.
     let altCandidates = [];
-    if (sigungu && umdNm) {
+    if (mode !== 'schools' && sigungu && umdNm) { // FACILITY-SPLIT: schools 는 alias DB 조회 불필요
       const { data: alts } = await admin
         .from('molit_transactions')
         .select('apt_name, build_year')
