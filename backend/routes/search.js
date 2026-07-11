@@ -309,7 +309,10 @@ router.get('/apt', async (req, res) => {
     //   (기존: molit 이름매칭 → master 동매칭 순서라 "대치동" 검색에 1건짜리가 22건짜리보다 위로 뜸.)
     //   거래 없는 master 단지(dealCount 미정)는 0 으로 후순위. exact 단지명 검색은 결과 1~2개라 영향 없음.
     //   동률은 기존 순서 보존(JS sort stable) → molit 우선·이름매칭 순서 유지.
-    out.sort((a, b) => (b.dealCount || 0) - (a.dealCount || 0));
+    // SEARCH-RANK-2026-07-11 (Sprint HHHH 보강): 이 최종 정렬이 위 molit 그룹 rank 정렬을 덮어써
+    //   master 병합 항목("시범다은마을월드반도" 60건)이 정확일치 "은마"(44건)를 다시 이기던 것 —
+    //   라이브 재검증으로 발각. 일치 등급(정확0·시작1·포함2)을 최종 정렬에서도 최우선으로.
+    out.sort((a, b) => (_qRank(a.aptName) - _qRank(b.aptName)) || ((b.dealCount || 0) - (a.dealCount || 0)));
 
     const payload = { results: out, query: q };
     cache.set(sck, payload, 600); // 10분 — molit 데이터는 daily cron 갱신
