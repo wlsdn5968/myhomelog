@@ -134,9 +134,13 @@ function buildTags(apt) {
   const totalDeals = apt.dealCount || 0;
   if (totalDeals >= 50) tags.push('거래활발');
   else if (totalDeals >= 20) tags.push('거래보통');
-  if (apt.buildYear >= 2015) tags.push('신축급');
-  else if (apt.buildYear >= 2000) tags.push('준신축');
-  else if (apt.buildYear < 1995) tags.push('재건축연한');
+  // TAG-AGE-FIX-2026-07-11 (Sprint OOOO): 절대연도 하드코딩(≥2015/≥2000/<1995)은 시간이 지나며 오라벨 —
+  //   2026 기준 2000~2004년식(22~26년차)이 '준신축'으로 잡혀 cons '준구축(20년+)'과 모순됐음.
+  //   현재연도 기준 상대 나이로 교체(재건축연한도 상세 배지·_isReconAge 와 동일한 30년 기준으로 정렬).
+  const _age = apt.buildYear ? (new Date().getFullYear() - apt.buildYear) : null;
+  if (_age !== null && _age <= 10) tags.push('신축급');
+  else if (_age !== null && _age <= 15) tags.push('준신축');
+  else if (_age !== null && _age >= 30) tags.push('재건축연한');
   const pyeongCount = (apt.pyeongStats || []).length;
   if (pyeongCount >= 4) tags.push('다양평형');
   return tags;
