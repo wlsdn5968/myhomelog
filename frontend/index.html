@@ -3720,7 +3720,13 @@ function _renderReport(data) {
   const policy = data.policyContext || {};
   const result = document.getElementById('reportResult');
 
-  const coreHtml = (r.coreMessages || []).map((m, i) =>
+  // AI-DEGRADE-2026-07-11 (Sprint HHHH): AI 실패 시 서버가 데이터 전용 보고서 + aiUnavailable 로 응답 —
+  // 원인을 숨기지 않고 정직하게 안내 (기존: 전체 실패 + "잠시 후 재시도"만 노출).
+  const _aiBanner = data.aiUnavailable
+    ? `<div style="background:var(--ambL);border:1px solid var(--amb);border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:11.5px;line-height:1.6"><b>ℹ AI 컨설팅 코멘트 일시 중단</b> — 아래 보고서는 국토부 실거래·KAPT 세대수·주변시설 등 <b>객관 데이터만으로</b> 정리했어요.${data.aiUnavailableReason === 'budget' ? ' (이번 달 AI 한도 도달 — 다음 달 1일 리셋)' : ' AI 복구 후 다시 생성하면 컨설팅 코멘트가 포함돼요.'}</div>`
+    : '';
+
+  const coreHtml = _aiBanner + (r.coreMessages || []).map((m, i) =>
     `<div style="display:flex;gap:8px;margin-bottom:6px;font-size:12px;line-height:1.7">
       <span style="color:var(--acc);font-weight:700;flex-shrink:0">${i+1}.</span>
       <span>${_escHtml(m)}</span>
@@ -8126,7 +8132,7 @@ async function genClause(){
       // STAB (2026-05): backend 의 status/code/message 를 읽어 한도·장애 안내 (기본 예시는 fallback 으로 유지)
       const j=await r.json().catch(()=>({}));
       if(r.status===429) toast(j.message||j.error||'⚠ AI 사용 한도에 도달했어요. 로그인하면 한도가 늘어나요. 잠시 후 다시 시도하세요.');
-      else if(r.status===503) toast(j.error||'⚠ AI 서비스가 일시 점검 중이에요. 잠시 후 다시 시도하세요.');
+      else if(r.status===503) toast('⚠ AI 초안이 일시 중단 — 표준 특약 템플릿을 대신 표시했어요'); // HHHH: 크레딧 소진 시 "재시도" 유도 대신 아래 템플릿이 떴음을 명확히
       else toast('AI 연결 실패 — 기본 예시 표시');
       renderClauseResult(null,apt);
     }
@@ -9071,11 +9077,15 @@ async function sM(){
       replied=true;
     } else if(r.status===503){
       // Phase 3 (2026-04-25): Anthropic 단일 의존 — 장애 시 친절 안내 + 대체 경로
+      // AI-DEGRADE-2026-07-11 (Sprint HHHH): 크레딧 소진 등 실측 503 이 code!=='ai_upstream_down' 이라
+      //   대안 안내가 안 붙던 것 — 503 이면 원인 무관하게 무료 기능 안내 (정직 + 이탈 방지).
       const j=await r.json().catch(()=>({}));
       rmTyp();
-      const isUpstream = j.code === 'ai_upstream_down';
-      addMsg('ai', (j.error || 'AI 응답 생성 중 오류가 발생했어요.') +
-        (isUpstream ? '\n\n💡 그 동안 사이드바 "내 상황 입력 → 단지 검색", 상단 "대출계산"·"뉴스" 는 정상 사용 가능합니다.' : ''));
+      addMsg('ai', 'AI 도우미가 일시 중단 상태예요. 😥\n\n' +
+        '💡 AI 없이 바로 쓸 수 있는 기능:\n' +
+        '· 아래 퀵버튼 — 대출계산기 · 규제요약 · 특약초안(표준 템플릿)\n' +
+        '· 사이드바 "내 상황 입력 → 실거래 기반 단지 정리"\n' +
+        '· 상단 맞춤 보고서 (객관 데이터판으로 제공)');
       replied=true;
     } else if(!r.ok){
       throw new Error('http_' + r.status);

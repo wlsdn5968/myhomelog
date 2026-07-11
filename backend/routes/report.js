@@ -158,6 +158,15 @@ router.post('/generate', async (req, res) => {
     //      base 1500 (longTerm + tips + 헤더) + 단지당 600 → 7단지 = 5700
     const _candidatesCount = Array.isArray(candidates) ? candidates.length : 7;
     const _maxTokens = Math.min(7000, 1500 + _candidatesCount * 600);
+    // AI-DEGRADE-2026-07-11 (Sprint HHHH, 운영자 "유료 API 없이 살리는 방법 우선"):
+    //   기존엔 AI 실패(크레딧 소진·429·503·파싱 실패) 시 보고서 전체가 죽고, 이미 수집한
+    //   candidates(MOLIT+KAPT+Kakao 결정론 데이터)를 통째로 버렸음 (라이브 재현: Anthropic
+    //   credit balance too low → 500). AI 는 문장 생성만 담당하므로 실패 시
+    //   buildDataOnlyReport() 로 데이터 전용 보고서를 반환 — 핵심 가치(단지 정리·객관정보·
+    //   정책 컨텍스트·priceFit)는 AI 없이 유지. 응답에 aiUnavailable 플래그로 정직하게 표시.
+    let parsed;
+    let _aiDown = null;
+    try {
     const result = await callAI(
       [{ role: 'user', content: prompt }],
       false,
@@ -190,7 +199,6 @@ router.post('/generate', async (req, res) => {
       }
       if (end >= 0) jsonStr = cleaned.slice(_firstBrace, end + 1);
     }
-    let parsed;
     try {
       parsed = JSON.parse(jsonStr);
     } catch (e) {
@@ -201,7 +209,15 @@ router.post('/generate', async (req, res) => {
         sample_tail: cleaned.slice(-400),
         cleaned_len: cleaned.length,
       }, '보고서 AI JSON 파싱 실패');
-      return res.status(502).json({ error: '보고서 생성 실패 — AI 응답 형식 오류' });
+      throw e; // AI-DEGRADE: 기존 502 대신 데이터 전용 보고서로 degrade
+    }
+    } catch (aiErr) {
+      // AI 실패 전 분류: 사용자 월예산(budget) vs 그 외(upstream — 크레딧 소진·503·타임아웃·파싱)
+      const { BudgetExceededError: _BE } = require('../services/aiService');
+      _aiDown = aiErr instanceof _BE ? 'budget' : 'upstream';
+      logger.warn({ err: aiErr.message, mode: _aiDown, userId: userId || null },
+        '보고서 AI 실패 — 데이터 전용 보고서로 degrade');
+      parsed = buildDataOnlyReport(userInput, candidates);
     }
 
     // 안전망: markdown 강조 표기 (** __ ##) 자동 제거 — prompt 가 금지해도 가끔 새어나옴
@@ -249,8 +265,9 @@ router.post('/generate', async (req, res) => {
       policyContext: policyData,
       generatedAt: new Date().toISOString(),
       disclaimer: '본 보고서는 국토교통부·한국부동산원 공공 데이터 기반 정보 정리이며, 투자자문업·중개업·대출모집인업이 아닙니다. 매수·매도 추천 X, 미래 가격 예측 X. 모든 의사결정과 책임은 본인에게 있습니다.',
+      ...(_aiDown ? { aiUnavailable: true, aiUnavailableReason: _aiDown } : {}),
     };
-    cache.set(cacheKey, out, 1800); // 30분
+    cache.set(cacheKey, out, _aiDown ? 300 : 1800); // AI degrade 시 5분만 — AI 복구 시 정상판으로 빨리 교체
     res.json({ ...out, fromCache: false });
   } catch (e) {
     // P0 (Agent 3차 audit, 2026-05-04): BudgetExceededError 처리 누락 → Pro 가입 funnel 차단
@@ -278,6 +295,68 @@ router.post('/generate', async (req, res) => {
     });
   }
 });
+
+/**
+ * AI-DEGRADE-2026-07-11 (Sprint HHHH): AI 실패 시 데이터 전용 보고서.
+ * 전 필드가 이미 수집된 결정론 데이터(candidates: MOLIT 실거래·KAPT 세대수/주차·Kakao 편의시설,
+ * objectiveFacts)와 서비스가 상시 안내하는 사실 문구만 사용 — 생성·추정 없음 (환각 0).
+ * 프론트 _renderReport 필수 필드(coreMessages/checklist/apartments/longTermView/tips) 전부 충족.
+ * priceFit·objectiveFacts·matchScore·name 은 아래 기존 backend 주입 로직이 동일하게 채움.
+ */
+function buildDataOnlyReport(userInput, candidates) {
+  const curYear = new Date().getFullYear();
+  const apartments = (candidates || []).map((c, i) => {
+    const f = c.objectiveFacts || {};
+    const areaMain = Array.isArray(c.areas) && c.areas.length ? Number(c.areas[0]) : null;
+    const age = (c.build_year && c.build_year > 1900) ? curYear - c.build_year : null;
+    const pros = [
+      (c.households && c.households >= 1000) ? `대단지 ${Number(c.households).toLocaleString()}세대` : null,
+      (f.parking_per_household && f.parking_per_household >= 1) ? `주차 세대당 ${f.parking_per_household}대` : null,
+      (c.n >= 20) ? `최근 6개월 거래 ${c.n}건 (거래 활발)` : null,
+      f.builder ? `시공 ${f.builder}` : null,
+    ].filter(Boolean).join(' · ');
+    const cons = [
+      (age != null && age >= 25) ? `준공 ${age}년차 — 수리·관리 상태 임장 확인 필요` : null,
+      (c.n <= 5) ? `최근 6개월 거래 ${c.n}건 — 표본 적음(시세 판단 주의)` : null,
+    ].filter(Boolean).join(' · ');
+    return {
+      rank: i + 1,
+      name: `${c.apt_name} (${c.sigungu} ${c.umd_nm})`,
+      areaSqm: areaMain || undefined,
+      areaPyeong: areaMain ? Math.round(areaMain / 3.3058) : undefined,
+      buildYear: c.build_year || 0,
+      households: c.households || '미상',
+      ratio: `최근 6개월 실거래 ${c.n || 0}건`,
+      location: [f.district, f.regulation].filter(Boolean).join(' · ') || `${c.sigungu} ${c.umd_nm}`,
+      pros: pros || '객관 정보는 아래 표 참조',
+      cons: cons || '단점은 임장으로 직접 확인 권장',
+      priceFit: '', // 아래 _buildPriceFit 주입이 덮어씀
+      recommendation: '정보 참고',
+    };
+  });
+  return {
+    coreMessages: [
+      `매수가 ${userInput.maxBudget}억 · 자기자본 ${userInput.myCash}억 · ${userInput.region} 조건의 최근 6개월 실거래 데이터를 정리했어요.`,
+      `아래 ${apartments.length}개 단지는 국토교통부 실거래 기준 조건 부합 단지 정리입니다 (매수 추천 아님).`,
+      'AI 컨설팅 코멘트는 현재 일시 중단 — 실거래·세대수·주차·규제 등 객관 데이터만 표시해요.',
+    ],
+    checklist: [
+      { text: '등기부등본 최신본 확인 (계약 직전 재확인)', stars: 3 },
+      { text: '대출 사전심사 — 스트레스 DSR 반영 한도 확인 (상단 대출계산 탭)', stars: 3 },
+      { text: '규제지역 여부·전입 의무 확인 (10.15 규제 요약 참고)', stars: 2 },
+      { text: '관리비·주차 실태 임장 확인 (임장노트 탭 활용)', stars: 2 },
+      { text: '특약 초안 준비 (특약 탭 — 표준 템플릿 제공)', stars: 1 },
+    ],
+    apartments,
+    longTermView: 'AI 시나리오 분석이 일시 중단 상태예요. 단지별 실거래 추이·신고가 이력은 각 단지 상세의 실거래가·가격 시그널 탭에서 확인할 수 있어요.',
+    tips: [
+      '실거래는 신고 후 해제되는 경우가 있어요 — 단지 상세의 거래 해제 안내를 참고하세요.',
+      '같은 단지도 평형·층에 따라 가격 차가 커요 — 실거래가 탭의 평형 필터로 확인하세요.',
+      '정책자금(디딤돌·신생아 특례) 해당 여부는 사이드바 정책자금 자격에서 확인하세요.',
+    ],
+    _dataOnly: true,
+  };
+}
 
 /** markdown 강조 표기 자동 제거 — 응답 객체 내 모든 string 재귀 정제 */
 function stripMarkdown(s) {
