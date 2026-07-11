@@ -535,6 +535,9 @@ function computeAptScore(c, ctx) {
   const r = {};
   let total = 0;
   const p = ctx.priority;
+  // TAG-AGE-FIX-2026-07-11 (Sprint OOOO): 아래 신축/재건축/장기거주 점수의 절대연도 하드코딩(≥2018/≥2012/≤1995/≤2000/≥2010)을
+  //   현재연도 기준 상대 나이로 통일 — getAgeBonus 와 동일 패턴, 시간드리프트 방지(2026 동작 거의 동일).
+  const _age = c.build_year ? (new Date().getFullYear() - Number(c.build_year)) : null;
 
   // 1) priority 가중치 (Phase 9.1: 환금성 가중치 n*4 → n*1.5 — 외곽 거래활발이 핵심권 못 이기던 문제)
   if (p === '환금성') {
@@ -555,10 +558,10 @@ function computeAptScore(c, ctx) {
     const sub = c.n >= 12 ? 20 : (c.n >= 8 ? 12 : 5);
     r.priority_역세권 = sub; total += sub;
   } else if (p === '신축') {
-    const sub = c.build_year >= 2018 ? 35 : (c.build_year >= 2012 ? 18 : 0);
+    const sub = (_age !== null && _age <= 8) ? 35 : ((_age !== null && _age <= 14) ? 18 : 0);
     r.priority_신축 = sub; total += sub;
   } else if (p === '재건축') {
-    const sub = (c.build_year && c.build_year <= 1995) ? 30 : (c.build_year && c.build_year <= 2000 ? 12 : 0);
+    const sub = (_age !== null && _age >= 30) ? 30 : ((_age !== null && _age >= 25) ? 12 : 0);
     r.priority_재건축 = sub; total += sub;
   } else if (p === '교통') {
     const sub = c.n >= 10 ? 18 : 6;
@@ -579,7 +582,7 @@ function computeAptScore(c, ctx) {
       r.kids_school_bonus = 20; total += 20;
     }
   }
-  if (ctx.stayYears === '10년+' && c.build_year >= 2010) {
+  if (ctx.stayYears === '10년+' && _age !== null && _age <= 16) {
     r.long_stay_bonus = 10; total += 10;
   }
   if (ctx.isFirstBuyer && c.avgPrice <= 90000) {
