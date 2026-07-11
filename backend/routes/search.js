@@ -359,11 +359,14 @@ router.get('/popular', async (req, res) => {
     //   (미좌표 최상위 단지는 좌표 backfill/geocode 정상화 후 자연히 진입. 별도 추적 중인 좌표 갭 사안.)
     const fetchN = Math.min(limit * 5, 80);
     let top = null;
-    //   ② RPC 4초 컷 (abortSignal) — 콜드 DB 에서 statement timeout(8s) 을 기다리지 않고
-    //      빠르게 fallback 으로 전환 (fallback 은 인덱스 경로라 콜드에서도 ~2s).
+    let _usedFallback = false;
+    //   ② RPC 7초 컷 (abortSignal) — POPULAR-QUALITY-FIX-2026-07-11 (라이브 회귀 발각):
+    //      4초 컷은 콜드 RPC 를 성급히 끊어 fallback(최근 1000행 샘플=며칠치, 3~4건짜리 저품질)을
+    //      30분 캐시에 박제했음. RPC 에 7초(프론트 12s 안에서 fallback 여유 확보) 주고,
+    //      fallback 결과는 아래에서 캐시 2분으로 제한 — 다음 요청이 RPC 성공본으로 교체.
     const { data: rpcRows, error: rpcErr } = await admin
       .rpc('search_popular_apts', { p_limit: fetchN })
-      .abortSignal(AbortSignal.timeout(4000));
+      .abortSignal(AbortSignal.timeout(7000));
     if (!rpcErr && Array.isArray(rpcRows) && rpcRows.length) {
       // RPC 행(camelCase) → 아래 좌표-join 로직이 기대하는 shape 로 정규화
       top = rpcRows.map(r => ({
@@ -374,6 +377,7 @@ router.get('/popular', async (req, res) => {
       }));
     } else {
       // ② RPC 실패/빈 결과 시에만 degrade — 지역 하드코딩 없는 전국 최근거래 샘플 그룹핑
+      _usedFallback = true; // POPULAR-QUALITY-FIX: 저품질(며칠치 샘플) 응답임을 표시 — 캐시 단축용
       if (rpcErr) logger.warn({ err: rpcErr.message }, 'search_popular_apts RPC 실패 — 전국 샘플 fallback');
       const sinceIso = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
       const { data: rows, error: e2 } = await admin
@@ -458,9 +462,12 @@ router.get('/popular', async (req, res) => {
     }
     // CDN-CACHE-2026-06-14: 인기 마커 = 전국 60일 거래량 집계(일 단위 변동) + lazy-fill 지오코딩(첫 호출 수초)
     //   → 엣지 캐시로 첫 진입 외 모든 사용자/세션 즉시 서빙. 빈/에러 응답은 무캐시(자연 재시도).
-    res.set('Cache-Control', 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400');
+    // POPULAR-QUALITY-FIX-2026-07-11: fallback(저품질) 결과는 서버 2분·CDN 2분만 — RPC 성공본만 30분.
+    res.set('Cache-Control', _usedFallback
+      ? 'public, max-age=0, s-maxage=120, stale-while-revalidate=600'
+      : 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400');
     const payload = { results: out };
-    if (out.length) cache.set(pck, payload, 1800); // HHHH ①: 빈 응답은 캐시 안 함 (자연 재시도)
+    if (out.length) cache.set(pck, payload, _usedFallback ? 120 : 1800); // HHHH ①: 빈 응답은 캐시 안 함
     return res.json(payload);
   } catch (e) {
     logger.warn({ err: e.message }, '인기 단지 조회 실패');

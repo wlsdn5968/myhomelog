@@ -3796,7 +3796,11 @@ function _renderReport(data) {
         <div>• <b>정책자금 종류</b>: ${(policy.policyLoans || []).map(s=>_escHtml(s)).join(' · ')}</div>
         <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--bg2);font-size:10.5px;color:var(--t3)">
           ※ ${_escHtml(policy.note || '')}<br>
-          ※ 자세한 자격·신청은 <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:var(--acc)">${_escHtml(policy.policyContact || '')}</a>
+          ※ 자세한 자격·신청은 <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:var(--acc)">${_escHtml(policy.policyContact || '')}</a><br>
+          ${(()=>{ /* LEGAL-LINKS-2026-07-11 (Sprint KKKK): 법령 원문 링크 — 서비스 내장 law.go.kr 코퍼스(/api/legal) 목록과 동일 5종 */
+            const _lw=[['주택법','https://www.law.go.kr/법령/%EC%A3%BC%ED%83%9D%EB%B2%95'],['지방세법','https://www.law.go.kr/법령/%EC%A7%80%EB%B0%A9%EC%84%B8%EB%B2%95'],['종합부동산세법','https://www.law.go.kr/법령/%EC%A2%85%ED%95%A9%EB%B6%80%EB%8F%99%EC%82%B0%EC%84%B8%EB%B2%95'],['소득세법','https://www.law.go.kr/법령/%EC%86%8C%EB%93%9D%EC%84%B8%EB%B2%95'],['주택임대차보호법','https://www.law.go.kr/법령/%EC%A3%BC%ED%83%9D%EC%9E%84%EB%8C%80%EC%B0%A8%EB%B3%B4%ED%98%B8%EB%B2%95']];
+            return '※ 관련 법령 원문(국가법령정보센터): ' + _lw.map(([n,u])=>`<a href="${u}" target="_blank" rel="noopener" style="color:var(--acc)">${n}</a>`).join(' · ');
+          })()}
         </div>
       </div>
     </details>
@@ -4729,6 +4733,9 @@ function searchStep(label,n){
 async function doSearch(){
   const btn=document.getElementById('srchBtn'),sp=document.getElementById('srchSp'),tx=document.getElementById('srchTx');
   btn.classList.add('ld');sp.style.display='block';
+  // VIEW-GUARD-2026-07-11 (Sprint KKKK): 검색 시작 시점의 활성 탭 기록 — 완료 시 사용자가 다른
+  // 탭으로 이동해 있으면 sv('map') 강제 전환을 건너뛰기 위함 (5~15초 검색 중 탭 이동 덮어쓰기 방지).
+  window._searchStartView = document.querySelector('.htab.on')?.textContent?.trim() || null;
   // UX-LOADING-2026-07-10 (Sprint DDDD, 실측 근거): 프리셋/검색 클릭 후 본문이 "아직 검색 결과가 없어요"
   //   그대로 ~10초 유지 → "버튼 안 됨" 체감(운영자 신고 재현). 사이드바 버튼 스피너·hint 토스트(3s)는
   //   시선 밖·짧음 → 본문(목록 영역)에 로딩 카드 즉시 표시. 결과 도착 시 renderListGrid 가 덮어씀.
@@ -4826,7 +4833,10 @@ async function doSearch(){
     }
     renderPList();renderMarkers(props);renderListGrid();
     document.getElementById('pCnt').textContent=props.length+'건';
-    sv('map',document.querySelector('.htab'));
+    // VIEW-GUARD (Sprint KKKK): 검색 중 사용자가 탭을 옮겼으면 지도 강제 전환 스킵 —
+    // 결과는 지도·목록에 이미 렌더돼 있어 사용자가 돌아오면 그대로 보임.
+    const _nowTab = document.querySelector('.htab.on')?.textContent?.trim() || null;
+    if (_nowTab === window._searchStartView) sv('map',document.querySelector('.htab'));
     const missed = searchMeta.coordMissingCount||0;
     // UX 정리(2026-06-01): 성공 토스트 제거(결과는 마커·목록·건수 pCnt 로 이미 표시) — 좌표 미해결 시에만 안내
     if(missed>0) toast(`📍 ${props.length}개 단지 · 좌표 미해결 ${missed}건 (일부 마커 생략)`);
@@ -7312,8 +7322,14 @@ async function loadClauseAndRisk(p){
   if(_clauseRiskCache&&_clauseRiskCacheKey===key){renderClause(_clauseRiskCache);renderRisk(_clauseRiskCache);return _clauseRiskCache;}
   // DEDUP-2026-06-13: 같은 단지 중복 호출(t2+t3 클릭 등) 은 1 fetch 로 합침 — AI 쿼터·비용 절반.
   if(_clauseRiskInflight&&_clauseRiskInflightKey===key)return _clauseRiskInflight;
-  // 즉시 예시 placeholder 렌더 (빈 탭/로딩 공백 방지). AI 성공 시 교체, 실패(한도/장애) 시 예시 그대로 유지 — 토스트 없음(백그라운드 로드라 부적절).
-  renderClause(null);renderRisk(null);
+  // 즉시 placeholder 렌더 (빈 탭/로딩 공백 방지). AI 성공 시 교체, 실패(한도/장애) 시 그대로 유지 — 토스트 없음(백그라운드 로드라 부적절).
+  // CLAUSE-RULE-2026-07-11 (Sprint KKKK): 고정 예시 3종 → 단지 조건(소재지 규제판정·연식·보유상태) 반영
+  //   규칙 생성(buildRuleClause 재사용) — AI 없이도 단지별로 다른 특약 (문구는 표준 템플릿, 환각 0).
+  renderClause(typeof buildRuleClause === 'function'
+    ? buildRuleClause({ aptName: p.aptName, area: p.area || '', buildYear: p.buildYear || 0, issues: '',
+        houseStatus: (typeof gct === 'function' ? gct('ch-h') : ''), isFirstBuyer: (typeof gct === 'function' ? gct('ch-f') === '예' : false) })
+    : null);
+  renderRisk(null);
   _clauseRiskInflightKey=key;
   _clauseRiskInflight=(async()=>{
     try{
