@@ -401,6 +401,53 @@ async function getDbUsage() {
   } catch (e) { return null; }
 }
 
+// DATA-QUALITY-MONITOR-2026-07-12 (Sprint AAAAA, 운영자 "이런 에러 사전 자동검출 — 일일이 안 찾게"):
+//   apt_master.facility 데이터 품질 지표. 주차(_dtl) 누락·세대수 0·KAPT 조회실패(_empty)·facility 없음을
+//   카운트해 /api/health 로 노출 + warn 플래그(임계 초과). count head 쿼리 5개(6h 캐시)라 부하 무시.
+//   ⚠ 조건은 검증된 SQL 과 동일(주차누락 dtl null·세대수0 kaptdaCnt 0/null·_empty 키 존재). 배포 후 실측 대조.
+async function getFacilityQuality() {
+  const CK = 'meta:facilityQuality';
+  const hit = cache.get(CK);
+  if (hit) return hit;
+  try {
+    const { getSupabaseAdmin } = require('./db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return null;
+    const H = () => ['*', { count: 'exact', head: true }];
+    const [total, facNull, empty, dtlMissing, hhZero] = await Promise.all([
+      admin.from('apt_master').select(...H()),
+      admin.from('apt_master').select(...H()).is('facility', null),
+      admin.from('apt_master').select(...H()).not('facility->_empty', 'is', null),
+      admin.from('apt_master').select(...H()).not('facility', 'is', null).is('facility->_empty', null).is('facility->_dtl', null),
+      admin.from('apt_master').select(...H()).not('facility', 'is', null).is('facility->_empty', null).or('facility->>kaptdaCnt.eq.0,facility->>kaptdaCnt.is.null'),
+    ]);
+    const t = total.count || 0;
+    const dtl = dtlMissing.count || 0, hh = hhZero.count || 0, emp = empty.count || 0, fnull = facNull.count || 0;
+    const dtlPct = t > 0 ? Math.round((dtl / t) * 100) : null;
+    const out = {
+      total: t,
+      facilityNull: fnull,          // facility 미적재 (백필 대상)
+      emptyFetch: emp,              // KAPT 조회 실패 sentinel
+      parkingMissing: dtl,          // 주차(_dtl) 누락 → 주차필터 제외 원인
+      parkingMissingPct: dtlPct,
+      householdsZero: hh,           // 세대수 0/null → "미상" 표시
+      warn: (dtlPct != null && dtlPct >= 15) || hh >= 200 || emp >= 50 || fnull >= 10,
+    };
+    // 자동 사전검출: 품질 저하 시 Sentry 경보(6h 캐시라 최대 6h 1회 — 스팸 없음). 운영자가 직접 안 찾아도 통지.
+    if (out.warn) {
+      try {
+        const Sentry = require('@sentry/node');
+        Sentry.captureMessage(
+          `facility 데이터 품질 경보: 주차누락 ${dtl}(${dtlPct}%)·세대수0 ${hh}·조회실패 ${emp}·미적재 ${fnull}`,
+          { level: 'warning', tags: { monitor: 'facility-quality' }, extra: out }
+        );
+      } catch (_) {}
+    }
+    cache.set(CK, out, 21600); // 6h — 데이터 품질은 일 단위 완만 변동(백필 cron 이후 갱신)
+    return out;
+  } catch (e) { return null; }
+}
+
 app.get('/api/health', optionalAuth, async (req, res) => {
   const [searchUsed, chatUsed] = await Promise.all([
     getUsage(req, 'search'),
@@ -444,6 +491,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   const _naverMapsClientId = process.env.NAVER_MAPS_CLIENT_ID || null;
   const _dataCounts = await getDataCounts();
   const _dbUsage = await getDbUsage();
+  const _facQuality = await getFacilityQuality(); // 데이터 품질 모니터 (Sprint AAAAA)
   // QUOTA-PLAN-2026-07-12 (Sprint YYYY, 운영자 "admin 인데 검색 0/5 표시"): usage 한도를 사용자 plan 반영.
   //   기존엔 DAILY_SEARCH_LIMIT(=5) 고정 → admin·pro·로그인free 모두 5로 오표시(admin 은 초과 시 0/5).
   //   dailyLimit 과 동일 규칙: admin 무제한 · pro/team 플랜한도 · 로그인 free 는 base+bonus(검색5·챗10).
@@ -468,6 +516,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
     naverMapsClientId: _naverMapsClientId,
     dataCounts: _dataCounts,
     db: _dbUsage,
+    facilityQuality: _facQuality,
     regulations: _regulations,
     cache: { keys: cache.keys().length, stats: cache.getStats() },
     usage: _unlimited
