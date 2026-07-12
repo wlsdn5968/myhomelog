@@ -137,6 +137,7 @@ async function fetchRegionMonth(lawdCd, dealYm) {
         // MOLIT 응답이 sggNm 빈값인 경우 LAWD_CODE 역매핑으로 채움 (popular/검색 필터 동작 위해)
         sigungu: (item.sggNm || '').trim() || LAWD_CODE_TO_NAME[item.sggCd || lawdCd] || null,
         umd_nm: (item.umdNm || '').trim() || null,
+        jibun: (item.jibun != null ? String(item.jibun) : '').trim() || null, // BR-2026-07-12 (SSSS): 건축물대장 PNU 조회용. 월간 재적재 upsert 로 최근분 자동 backfill.
         exclu_use_ar: parseFloat(item.excluUseAr) || 0,
         build_year: parseInt(item.buildYear) || null,
         floor: parseInt(item.floor) || null,

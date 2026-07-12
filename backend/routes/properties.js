@@ -75,6 +75,25 @@ router.post('/recommend', validatePropertySearch, async (req, res) => {
   res.json(result);
 });
 
+// GET /api/properties/building-register — KAPT 없는 단지(성지 등) 건축물대장 표제부 fallback (SSSS)
+router.get('/building-register', async (req, res) => {
+  const { lawdCd, sigungu, umd, apt, aptKey } = req.query;
+  if (!lawdCd || !apt) return res.status(400).json({ error: 'lawdCd, apt 필수' });
+  try {
+    const { getBuildingTitle } = require('../services/buildingRegisterService');
+    const title = await getBuildingTitle({
+      lawdCd: String(lawdCd),
+      sigungu: sigungu ? String(sigungu) : '',
+      umdNm: umd ? String(umd) : '',
+      aptName: String(apt),
+      aptKey: aptKey ? String(aptKey) : undefined,
+    });
+    res.json({ title: title || null });
+  } catch (e) {
+    res.status(502).json({ error: e.message, title: null });
+  }
+});
+
 // GET /api/properties/nearby?lat=..&lng=..  주변 편의시설 카운트
 router.get('/nearby', async (req, res) => {
   const lat = parseFloat(req.query.lat);
