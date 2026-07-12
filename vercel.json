@@ -25,8 +25,16 @@
       "schedule": "0 18 * * *"
     },
     {
-      "path": "/api/cron/molit-ingest",
+      "path": "/api/cron/molit-ingest?slot=0&slotCount=3",
       "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/molit-ingest?slot=1&slotCount=3",
+      "schedule": "15 17 * * *"
+    },
+    {
+      "path": "/api/cron/molit-ingest?slot=2&slotCount=3",
+      "schedule": "30 17 * * *"
     },
     {
       "path": "/api/cron/apt-master-sync",

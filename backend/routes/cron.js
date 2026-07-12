@@ -95,6 +95,10 @@ async function handleMolitIngest(req, res) {
     const opts = {
       months: req.query.months ? parseInt(req.query.months) : undefined,
       offsetMonths: req.query.offsetMonths ? parseInt(req.query.offsetMonths) : undefined,
+      // REGION-CHUNK-2026-07-12 (Sprint VVVV): 지역 자동분할 — 커버리지 확장으로 지역수↑ 시 maxDuration 300s
+      //   초과 방지. vercel.json 이 slot=0..slotCount-1 을 스태거 스케줄로 호출 → 각 슬롯은 지역의 1/slotCount 만.
+      slot: req.query.slot != null ? parseInt(req.query.slot) : undefined,
+      slotCount: req.query.slotCount != null ? parseInt(req.query.slotCount) : undefined,
     };
     const summary = await runMolitIngest(opts);
     logger.info({ durationMs: Date.now() - started, opts, summary: {

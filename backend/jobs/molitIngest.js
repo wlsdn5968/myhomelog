@@ -328,11 +328,20 @@ async function runMolitIngest(opts = {}) {
   // Sprint AAAA: onlyLawds 지정 시 해당 코드만 (admin targeted ingest). 검증은 admin route 에서 화이트리스트로 수행.
   const onlySet = Array.isArray(opts.onlyLawds) && opts.onlyLawds.length
     ? new Set(opts.onlyLawds.map(String)) : null;
-  const regions = Object.entries(LAWD_CODES)
+  // REGION-CHUNK-2026-07-12 (Sprint VVVV): 지역 자동분할. slotCount>1 이면 인덱스 기준 disjoint partition
+  //   (idx % slotCount === slot) → 여러 cron 슬롯이 전체 지역을 정확히 분담(중복·누락 0). 커버리지 확장으로
+  //   지역수가 늘어도 각 슬롯이 1/slotCount 만 처리해 maxDuration 300s 내 유지. slotCount 미지정=1=기존 동작 불변.
+  const slotCount = Math.max(1, parseInt(opts.slotCount) || 1);
+  const slot = Math.max(0, Math.min(slotCount - 1, parseInt(opts.slot) || 0));
+  let regions = Object.entries(LAWD_CODES)
     .filter(([, code]) => !onlySet || onlySet.has(String(code)));
+  if (slotCount > 1) regions = regions.filter((_, idx) => idx % slotCount === slot);
 
   const started = Date.now();
   const results = [];
+  // MAXDUR-GUARD-2026-07-12 (Sprint VVVV): maxDuration 300s 하드 데드라인. 지역 확장/슬롯 미파싱 등 어떤
+  //   이유로 큐가 커도 250s 에 신규 착수 중단 → 절대 초과 안 함(남은 큐는 다음 run 이 멱등 dedup_key 로 이어받음).
+  const HARD_DEADLINE = started + 250000;
 
   // 동시 2 region-month 병렬 — MOLIT rate limit 존중
   const queue = [];
@@ -348,6 +357,7 @@ async function runMolitIngest(opts = {}) {
   async function worker() {
     let localFailures = 0;
     while (queue.length) {
+      if (Date.now() > HARD_DEADLINE) break; // maxDuration 보호 — 남은 큐는 다음 run 이 이어받음(멱등)
       const job = queue.shift();
       if (!job) break;
       if (localFailures >= CIRCUIT_BREAK_CONSECUTIVE_FAILURES) {
