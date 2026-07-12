@@ -227,6 +227,39 @@ app.use('/share', shareRouter);
 //        - 필요 시 git history 에서 복원 가능 (server.js commit 7개 이전)
 //   영향: 운영자 본인 외 사용자 0건 (admin only 였음).
 
+// TEMP-BR-VERIFY-2026-07-12 (건축물대장 서비스키 검증용 — 검증 후 즉시 제거 예정).
+//   운영자 data.go.kr 건축HUB(15134735) 활용신청 후 기존 MOLIT_API_KEY 로 표제부 호출되는지 실확인.
+//   추측 불가 경로 + 고정 입력(사용자 입력 없음) + 키 미노출. 두 후보 엔드포인트(1613000 HUB / 1611000 legacy) 시도.
+app.get('/api/_brchk_k29f4a', async (req, res) => {
+  const axios = require('axios');
+  const key = process.env.MOLIT_API_KEY;
+  const out = { hasKey: !!key, tries: [] };
+  if (!key) return res.json(out);
+  const cases = [
+    { name: 'hub_1613000_BldRgstHubService', url: 'https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo' },
+    { name: 'legacy_1611000_BldRgstService_v2', url: 'https://apis.data.go.kr/1611000/BldRgstService_v2/getBrTitleInfo' },
+  ];
+  // 종로구(11110) 무악동(10800) 인왕산아이파크 지번 60 — datadoctorblog 실응답 예시 기준
+  const params = { serviceKey: key, sigunguCd: '11110', bjdongCd: '10800', platGbCd: '0', bun: '0060', ji: '0000', numOfRows: '5', pageNo: '1', _type: 'json' };
+  for (const c of cases) {
+    try {
+      const r = await axios.get(c.url, { params, timeout: 8000, headers: { Accept: 'application/json' } });
+      const h = r.data?.response?.header;
+      const item = r.data?.response?.body?.items?.item;
+      const first = Array.isArray(item) ? item[0] : item;
+      out.tries.push({
+        name: c.name, code: h?.resultCode, msg: h?.resultMsg,
+        total: r.data?.response?.body?.totalCount,
+        sample: first ? { bldNm: first.bldNm, useAprDay: first.useAprDay, hhldCnt: first.hhldCnt, grndFlrCnt: first.grndFlrCnt, ugrndFlrCnt: first.ugrndFlrCnt, totArea: first.totArea, mainPurpsCdNm: first.mainPurpsCdNm, strctCdNm: first.strctCdNm } : null,
+        rawSnippet: typeof r.data === 'string' ? String(r.data).slice(0, 220) : undefined,
+      });
+    } catch (e) {
+      out.tries.push({ name: c.name, err: e.response?.status ? `HTTP ${e.response.status}` : e.message });
+    }
+  }
+  res.json(out);
+});
+
 // ── API 활성화 진단 (운영자 전용 — x-health-key 헤더 필수) ────
 // Phase 1.8: 과거 공개 엔드포인트는 외부 API 쿼터(MOLIT 1만/일, Kakao 30만/일) 소진 공격에 노출 →
 //   1) HEALTH_API_KEY 환경변수 미설정 시 404 (production 기본 차단)
