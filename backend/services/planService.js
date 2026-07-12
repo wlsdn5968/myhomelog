@@ -98,9 +98,19 @@ function getLimitsForPlan(plan) {
   return PLAN_LIMITS[plan] || PLAN_LIMITS.free;
 }
 
+// ADMIN-SYNC-2026-07-12 (운영자 ASSERT "검색은 운영자 계정 아예 리밋 걸지마"):
+//   동기 admin 판정 — optionalAuth 가 이미 req.user.email 을 넣으므로 DB(getUserById) 재조회 불필요.
+//   rateLimit(버스트) / dailyLimit(일일) 양쪽에서 재사용해 운영자 검색을 완전 무제한 처리.
+//   getActivePlan 의 admin 판정(auth.admin.getUserById)이 실패해도 이 경로로 견고하게 우회.
+//   ⚠ ADMIN_EMAILS env 미설정 시 whitelist 비활성 → 아무도 admin 아님 (기존 보안 설계 유지, 이메일 하드코딩 금지).
+function isAdminEmail(email) {
+  if (!email || ADMIN_EMAILS.length === 0) return false;
+  return ADMIN_EMAILS.includes(String(email).toLowerCase());
+}
+
 /** 캐시 invalidate — 결제 완료/해지 시 호출 (billing 라우트 hook) */
 function invalidatePlanCache(userId) {
   cache.del(`plan:${userId}`);
 }
 
-module.exports = { getActivePlan, getLimitsForPlan, invalidatePlanCache, PLAN_LIMITS };
+module.exports = { getActivePlan, getLimitsForPlan, invalidatePlanCache, PLAN_LIMITS, isAdminEmail };

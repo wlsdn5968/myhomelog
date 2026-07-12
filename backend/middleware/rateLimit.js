@@ -23,6 +23,10 @@ const { Ratelimit } = require('@upstash/ratelimit');
 const { getRedis } = require('../redis');
 const logger = require('../logger');
 const { maskIp } = require('../logger');
+// ADMIN-SYNC-2026-07-12 (운영자 ASSERT): 운영자(admin) 계정은 검색/버스트 리밋 완전 우회.
+//   optionalAuth 이후 마운트된 limiter(dataLimiter/chatLimiter)는 req.user.email 을 가지므로 동기 판정 가능.
+//   generalLimiter 는 optionalAuth 이전(app.use('/api/', ...))이라 req.user 미존재 → 우회 미적용(정상, 60/분은 무해).
+const { isAdminEmail } = require('../services/planService');
 
 /**
  * 식별자 — 로그인 사용자는 userId, 비로그인은 IP.
@@ -65,7 +69,7 @@ function makeRateLimiter({ limit, windowSec, scope, message, keySuffix = '', fai
     if (process.env.NODE_ENV === 'production' && effectiveFailClosed) {
       logger.error({ scope }, 'Redis 미설정 + fail-closed scope — production 에서 Upstash 설정 필수');
     }
-    return rateLimit({
+    const memLimiter = rateLimit({
       windowMs: windowSec * 1000,
       max: limit,
       message: { error: message },
@@ -73,6 +77,10 @@ function makeRateLimiter({ limit, windowSec, scope, message, keySuffix = '', fai
       legacyHeaders: false,
       keyGenerator: (req) => `${getRateLimitIdentity(req)}${keySuffix}`,
     });
+    return function adminAwareMemLimiter(req, res, next) {
+      if (isAdminEmail(req.user?.email)) return next(); // 운영자 무제한
+      return memLimiter(req, res, next);
+    };
   }
 
   // ── 정상: @upstash/ratelimit sliding window ────────────────
@@ -84,6 +92,7 @@ function makeRateLimiter({ limit, windowSec, scope, message, keySuffix = '', fai
   });
 
   return async function upstashRateLimiter(req, res, next) {
+    if (isAdminEmail(req.user?.email)) return next(); // ADMIN-SYNC-2026-07-12: 운영자 검색/버스트 무제한
     const baseId = getRateLimitIdentity(req);
     const identifier = `${baseId}${keySuffix}`;
 

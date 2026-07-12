@@ -99,11 +99,21 @@ function getLimitIdentity(req) {
 //   로그인 free: limit + loggedInBonus (예: 15)
 //   로그인 pro:  planLimits.dailyChat / dailySearch (예: 100/50)
 //   로그인 team: planLimits (예: 300/150)
-const { getActivePlan, getLimitsForPlan } = require('../services/planService');
+const { getActivePlan, getLimitsForPlan, isAdminEmail } = require('../services/planService');
 
 function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
   return async function (req, res, next) {
     if (req.method === 'GET' && scope !== 'chat') return next();
+
+    // ADMIN-SYNC-2026-07-12 (운영자 ASSERT "검색은 운영자 계정 아예 리밋 걸지마"):
+    //   req.user.email 로 동기 admin 판정 → getActivePlan(getUserById) 호출 전에 즉시 무제한 통과.
+    //   getActivePlan 의 admin 판정이 (auth.admin.getUserById 장애 등으로) 실패해도 견고하게 우회.
+    if (isAdminEmail(req.user?.email)) {
+      res.setHeader('X-Daily-Limit', 'unlimited');
+      res.setHeader('X-Daily-Remaining', 'unlimited');
+      res.setHeader('X-Plan', 'admin');
+      return next();
+    }
 
     const id = getLimitIdentity(req);
 
