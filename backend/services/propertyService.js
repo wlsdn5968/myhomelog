@@ -218,7 +218,7 @@ async function getAIRecommendations(userCondition) {
   // NFC 정규화 — Mac(NFD) ↔ Windows(NFC) 캐시 분리 방지
   const normReg = String(region || '').normalize('NFC').trim();
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
-  const cacheKey = `rec:v6:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
+  const cacheKey = `rec:v7:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
@@ -318,8 +318,13 @@ async function getAIRecommendations(userCondition) {
   let candidatePool = matched;
   if (fMinHh > 0 || fMinPark > 0 || fSaleOnly) {
     const _norm = (s) => (s || '').replace(/\s/g, '').toLowerCase();
-    // NAME-SUFFIX-2026-07-12 (Sprint TTTT): MOLIT "상계주공9" ↔ KAPT "상계주공9단지" — '단지' 접미 정규화 fallback.
-    const _strip = (n) => n.replace(/단지$/, '');
+    // NAME-CANON-2026-07-12 (Sprint UUUU, 전수조사 실측 정정): MOLIT 실거래명은 "상계주공9(고층)/(저층)"
+    //   처럼 층구분 괄호 접미를 씀(전국 25개·1,984거래) — KAPT "상계주공9단지"와 불일치.
+    //   ⚠ TTTT 의 '단지'-접미만 제거로는 상계주공류가 여전히 미매칭(전제 오류 판명, DB 실측).
+    //   → 층구분 괄호(고층/저층) + '단지' 접미를 함께 제거해 canon 매칭. 층 분할은 동일 단지의 물리 구분
+    //     이라 하나의 kaptCode 매핑이 정답(실측: 21개 전부 세대수 500+·분양). 차수/브랜드 괄호는
+    //     별개 단지 구분자라 제거하지 않음(오병합 방지).
+    const _canon = (n) => n.replace(/\((?:고층|저층)\)$/, '').replace(/단지$/, '');
     const _codeMap = new Map();
     for (const a of allAptList) {
       const nm = _norm(a.kaptName || a.aptName || '');
@@ -327,12 +332,12 @@ async function getAIRecommendations(userCondition) {
       const dong = a.as4 || a.as3 || '';
       _codeMap.set(`${nm}|${dong}`, a.kaptCode);
       if (!_codeMap.has(nm)) _codeMap.set(nm, a.kaptCode);
-      const st = _strip(nm);
+      const st = _canon(nm);
       if (st && st !== nm && !_codeMap.has(st)) _codeMap.set(st, a.kaptCode);
     }
     const _poolCodes = matched.map((apt) => {
       const nmKey = _norm(apt.aptName);
-      return _codeMap.get(`${nmKey}|${apt.umdNm || ''}`) || _codeMap.get(nmKey) || _codeMap.get(_strip(nmKey)) || null;
+      return _codeMap.get(`${nmKey}|${apt.umdNm || ''}`) || _codeMap.get(nmKey) || _codeMap.get(_canon(nmKey)) || null;
     });
     const _facMap = await getFacilitiesByKaptCodes([...new Set(_poolCodes.filter(Boolean))]);
     candidatePool = matched.filter((apt, i) => {
@@ -447,9 +452,10 @@ async function getAIRecommendations(userCondition) {
   // → allAptList(getSigunguAptList3)의 kaptName+dong 매칭으로 실제 kaptCode 해결
   const kaptCodeMap = new Map(); // normalizedName+dong → kaptCode
   const normalizeName = (s) => (s || '').replace(/\s/g, '').toLowerCase();
-  // NAME-SUFFIX-2026-07-12 (Sprint TTTT): MOLIT "상계주공9" ↔ KAPT "상계주공9단지" — '단지' 접미 정규화.
-  //   상계주공 등 대단지 facility 미매칭(라이브 발견) 해소. 정확 매칭 우선(!has 가드)이라 오매칭 위험 낮음.
-  const stripDanji = (n) => n.replace(/단지$/, '');
+  // NAME-CANON-2026-07-12 (Sprint UUUU, 전수조사 정정): 층구분 괄호(고층/저층) + '단지' 접미 정규화.
+  //   MOLIT "상계주공9(고층)" ↔ KAPT "상계주공9단지" 를 canon 으로 매칭(TTTT '단지'-only 는 미해결).
+  //   층 분할은 동일 단지 → 하나의 kaptCode 매핑이 정답. 차수/브랜드 괄호는 미제거(오병합 방지). 정확매칭 우선(!has).
+  const canonName = (n) => n.replace(/\((?:고층|저층)\)$/, '').replace(/단지$/, '');
   for (const a of allAptList) {
     const nm = normalizeName(a.kaptName || a.aptName || '');
     if (!nm || !a.kaptCode) continue;
@@ -457,7 +463,7 @@ async function getAIRecommendations(userCondition) {
     kaptCodeMap.set(`${nm}|${dong}`, a.kaptCode);
     // 동명 없이도 찾을 수 있도록 fallback 키 저장 (같은 이름 여러 개면 첫 매칭 유지)
     if (!kaptCodeMap.has(nm)) kaptCodeMap.set(nm, a.kaptCode);
-    const st = stripDanji(nm);
+    const st = canonName(nm);
     if (st && st !== nm && !kaptCodeMap.has(st)) kaptCodeMap.set(st, a.kaptCode);
   }
   // allAptList 인덱스 (kaptCode → 원본 엔트리) — K-apt basis 실패 시 fallback 용
@@ -471,7 +477,7 @@ async function getAIRecommendations(userCondition) {
   const preCodes = recommendations.map((rec, i) => {
     const apt = ranked[i];
     const nmKey = normalizeName(apt.aptName);
-    return kaptCodeMap.get(`${nmKey}|${apt.umdNm || ''}`) || kaptCodeMap.get(nmKey) || kaptCodeMap.get(stripDanji(nmKey)) || null;
+    return kaptCodeMap.get(`${nmKey}|${apt.umdNm || ''}`) || kaptCodeMap.get(nmKey) || kaptCodeMap.get(canonName(nmKey)) || null;
   });
   const dbFacMap = await getFacilitiesByKaptCodes([...new Set(preCodes.filter(Boolean))]);
   const enriched = await Promise.allSettled(
