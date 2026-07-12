@@ -59,11 +59,11 @@ async function resolveBjdong(sigungu, umdNm, jibun) {
 // 단지 지번 확보: 적재분(molit_transactions.jibun) 우선 → 없으면 MOLIT 라이브(최근 6개월 중 1건).
 async function resolveJibun(admin, lawdCd, umdNm, aptName) {
   try {
-    let q = admin.from('molit_transactions').select('jibun')
+    let q = admin.from('molit_transactions').select('jibun, sigungu, umd_nm')
       .eq('lawd_cd', lawdCd).eq('apt_name', aptName).not('jibun', 'is', null).limit(1);
     if (umdNm) q = q.eq('umd_nm', umdNm);
     const { data } = await q;
-    if (data && data[0] && data[0].jibun) return String(data[0].jibun).trim();
+    if (data && data[0] && data[0].jibun) return { jibun: String(data[0].jibun).trim(), sigungu: data[0].sigungu || '', umdNm: data[0].umd_nm || '' };
   } catch (_) { /* fall through to live */ }
 
   const key = process.env.MOLIT_API_KEY;
@@ -80,7 +80,7 @@ async function resolveJibun(admin, lawdCd, umdNm, aptName) {
       const items = r.data?.response?.body?.items?.item;
       const arr = Array.isArray(items) ? items : items ? [items] : [];
       const hit = arr.find((it) => (it.aptNm || '').trim() === aptName && (!umdNm || (it.umdNm || '').trim() === umdNm) && String(it.jibun || '').trim());
-      if (hit) return String(hit.jibun).trim();
+      if (hit) return { jibun: String(hit.jibun).trim(), sigungu: (hit.sggNm || '').trim(), umdNm: (hit.umdNm || '').trim() };
     } catch (_) { /* try previous month */ }
   }
   return null;
@@ -93,18 +93,23 @@ async function resolveJibun(admin, lawdCd, umdNm, aptName) {
 async function getBuildingTitle({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
   const admin = getSupabaseAdmin();
   if (!admin || !lawdCd || !aptName) return null;
-  const cacheKey = aptKey || `name:${aptName}|${sigungu || ''}|${umdNm || ''}`;
+  // BR-MARKER-FIX-2026-07-12: 캐시키를 lawdCd+aptName 기준으로 통일 (지도 마커 경로는 p.sigungu/umd 부재 →
+  //   기존 sigungu/umd 포함 키가 검색 경로와 달라져 캐시/조회가 어긋났음).
+  const cacheKey = aptKey || `name:${aptName}|${lawdCd}`;
 
   try {
     const { data } = await admin.from('building_register').select('title').eq('apt_key', cacheKey).limit(1);
     if (data && data[0] && data[0].title) return { ...data[0].title, cached: true };
   } catch (_) { /* no cache */ }
 
-  const jibun = await resolveJibun(admin, lawdCd, umdNm, aptName);
-  if (!jibun) return null;
-  const region = await resolveBjdong(sigungu, umdNm, jibun);
+  // MOLIT 원본에서 지번+시군구+동 자체 확보 → 호출자가 sigungu/umd 를 안 넘겨도 동작(마커 경로 버그 수정).
+  const ji = await resolveJibun(admin, lawdCd, umdNm, aptName);
+  if (!ji || !ji.jibun) return null;
+  const rSgg = ji.sigungu || sigungu || '';
+  const rUmd = ji.umdNm || umdNm || '';
+  const region = await resolveBjdong(rSgg, rUmd, ji.jibun);
   if (!region) return null;
-  const parsed = parseJibun(jibun);
+  const parsed = parseJibun(ji.jibun);
   if (!parsed) return null;
 
   let title = null;
@@ -140,7 +145,7 @@ async function getBuildingTitle({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
         mainPurpsCdNm: (best.mainPurpsCdNm || '').trim() || null,
         strctCdNm: (best.strctCdNm || '').trim() || null,
         dongCnt: arr.length,
-        jibun,
+        jibun: ji.jibun,
       };
     }
   } catch (e) {
