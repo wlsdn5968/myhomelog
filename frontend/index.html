@@ -1411,7 +1411,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <div class="mb9"><span class="lbl">단지 조건 <span style="font-weight:400;color:var(--t3);font-size:10px">(선택 · 좋은 아파트 필터)</span></span>
         <div class="chips" id="ch-flt">
           <span class="chip" id="flt-hh" onclick="this.classList.toggle('on')" title="세대수 500세대 이상 — 나홀로 아파트 제외 (호갱노노 기준)">500세대+</span>
-          <span class="chip" id="flt-park" onclick="this.classList.toggle('on')" title="세대당 주차 1.5대 이상 — 주차 여유 (법정 최소 1대)">주차 1.5+</span>
+          <span class="chip" id="flt-park" onclick="this.classList.toggle('on')" title="세대당 주차 1.2대 이상 — 주차 편리 (법정 최소 1대·호갱노노 '편리' 기준)">주차 1.2+</span>
           <span class="chip" id="flt-sale" onclick="this.classList.toggle('on')" title="분양 단지만 — 임대·혼합 제외">분양만</span>
         </div>
         <div style="font-size:10px;color:var(--t3);margin-top:3px">※ 조건 데이터는 KAPT 등록 단지에만 있어요 — 켜면 정보 있는 단지만 표시돼요</div>
@@ -4829,7 +4829,7 @@ async function doSearch(){
     ...pyRange(),
     // FILTER-2026-07-12 (Sprint TTTT): 좋은-아파트 조건 필터 (선택 토글)
     minHouseholds: document.getElementById('flt-hh')?.classList.contains('on') ? 500 : 0,
-    minParkingRatio: document.getElementById('flt-park')?.classList.contains('on') ? 1.5 : 0,
+    minParkingRatio: document.getElementById('flt-park')?.classList.contains('on') ? 1.2 : 0,
     saleOnly: !!document.getElementById('flt-sale')?.classList.contains('on'),
   };
   // 검색 조건을 URL 쿼리에 기록 (공유/뒤로가기용)
@@ -8868,6 +8868,7 @@ async function onHeaderSearchInput(q) {
       if (!r.ok) throw new Error('fail');
       const j = await r.json();
       const results = j.results || [];
+      window._hSearchResults = results; // SEARCH-FOCUS-2026-07-12: ENTER 시 첫 결과 선택용
       if (results.length === 0) {
         // MOB-AUDIT-2026-05-03: funnel — 0건 검색 추적 (사용자 이탈 원인 분석)
         try { window.va && window.va('event', { name: 'search_zero_result', data: { q: q.slice(0, 30) } }); } catch(_){}
@@ -8929,6 +8930,11 @@ async function onHeaderSearchInput(q) {
 }
 function onHeaderSearchKey(e) {
   if (e.key === 'Escape') { document.getElementById('hSearchDrop').style.display='none'; e.target.blur(); }
+  // SEARCH-FOCUS-2026-07-12 (운영자 요청): ENTER 시 첫 검색결과 선택 → 지도 이동+상세.
+  else if (e.key === 'Enter') {
+    const rs = window._hSearchResults;
+    if (rs && rs.length) { e.preventDefault(); goSearchResult(rs[0]); }
+  }
 }
 // AUTH-HDR-2026-05-21 (전수조사: SS-3 동일 클래스 — chat/clause 가 토큰 미전송 → 로그인/admin 도 anonymous 한도):
 //   인증요청 공통 헤더 빌더. getFreshToken 으로 만료 토큰 자동 갱신까지 일괄 처리.
@@ -8950,7 +8956,40 @@ async function goSearchResult(r) {
   if (drop) drop.style.display='none';
   const input = document.getElementById('hSearchInput');
   if (input) input.value = r.aptName;
+  focusMapOnApt(r); // SEARCH-FOCUS-2026-07-12 (운영자 요청): 검색 단지로 지도 이동+핀 (상세 모달과 병행)
   return openAptDetail(r);
+}
+
+// SEARCH-FOCUS-2026-07-12 (Sprint XXXX, 운영자 "검색하면 지도가 그 단지로 가고 표시돼야"):
+//   검색결과 선택 시 단지 좌표(있으면 그대로, 없으면 /api/geocode)로 지도 이동+확대 + 위치 핀.
+//   상세 모달(openAptDetail)과 병행 — 모달 닫으면 지도가 그 단지에 있음. 좌표 못 구하면 조용히 skip.
+async function focusMapOnApt(r) {
+  try {
+    if (typeof sv === 'function') { try { sv('map'); } catch(_){} } // 지도 뷰 전환(모달 닫으면 보이도록)
+    if (typeof mapObj === 'undefined' || !mapObj) return;
+    let lat = (r && r.lat != null) ? Number(r.lat) : null;
+    let lng = (r && r.lng != null) ? Number(r.lng) : null;
+    if (lat == null || lng == null || isNaN(lat) || isNaN(lng)) {
+      const area = `${r.sigungu||''} ${r.umdNm||''}`.trim() || r.area || '';
+      const g = await fetch(`${CFG.api}/geocode`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ aptName:r.aptName, area }), signal:AbortSignal.timeout(8000) }).then(x=>x.json()).catch(()=>null);
+      if (!g || g.lat == null || g.lng == null) { if (typeof toast === 'function') toast('이 단지는 지도 좌표를 못 찾았어요 (상세 정보는 정상)'); return; }
+      lat = Number(g.lat); lng = Number(g.lng);
+    }
+    // 이전 검색 핀 제거
+    try { const sm = window._searchMarker; if (sm) { if (sm._isNaverS) { sm.setMap && sm.setMap(null); } else { sm.remove && sm.remove(); } window._searchMarker = null; } } catch(_){}
+    const pinHtml = `<div style="transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;pointer-events:none;filter:drop-shadow(0 2px 5px rgba(0,0,0,.4))"><div style="background:#e03131;color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:13px;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis">📍 ${_escHtml(r.aptName||'')}</div><div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #e03131;margin-top:-1px"></div></div>`;
+    if (mapObj._isLeaflet) {
+      mapObj.flyTo([lat, lng], 16, { duration: 0.8 });
+      const icon = L.divIcon({ className:'', html: pinHtml, iconAnchor:[0,0] });
+      window._searchMarker = L.marker([lat, lng], { icon, zIndexOffset: 2000 }).addTo(mapObj);
+    } else if (window.naver && typeof naverReady !== 'undefined' && naverReady) {
+      mapObj.setCenter(new naver.maps.LatLng(lat, lng));
+      mapObj.setZoom(16);
+      const m = new naver.maps.Marker({ position: new naver.maps.LatLng(lat, lng), map: mapObj, title: r.aptName, zIndex: 2000, icon: { content: pinHtml, anchor: new naver.maps.Point(0, 0) } });
+      m._isNaverS = true;
+      window._searchMarker = m;
+    }
+  } catch(_) {}
 }
 
 // MARKER-DETAIL-2026-05-21 (운영자 발견 "지도 영역보기 단지가 검색과 다르고 실거래가 안 나온다"):
