@@ -233,7 +233,7 @@ async function getAIRecommendations(userCondition) {
   // NFC 정규화 — Mac(NFD) ↔ Windows(NFC) 캐시 분리 방지
   const normReg = String(region || '').normalize('NFC').trim();
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
-  const cacheKey = `rec:v9:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
+  const cacheKey = `rec:v10:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
@@ -361,17 +361,26 @@ async function getAIRecommendations(userCondition) {
     //   (라이브 실측: 고양 minHouseholds:1 도 0건, noFilter 는 5건 facility 부착). 필터에도 동일 fallback 추가.
     //   ⚠ 비용 통제: DB-hit 지역(노원·강남 등)은 miss 0 → KAPT 호출 0(성능·회귀 영향 없음). miss 는 dealCount
     //   상위 _KAPT_CAP 개만(최종 top-15 커버) KAPT 조회. 캐시(in-memory) + graceful(실패 시 제외 유지).
+    // FILTER-INCOMPLETE-FALLBACK-2026-07-12 (Sprint ZZZZ, 운영자 "공릉풍림아이원: 상세엔 주차 1.26 나오는데 필터가 제외"):
+    //   근본원인 = 상세는 resolveFacility(라이브 KAPT)로 _dtl(주차)까지 가져오나, 필터는 apt_master.facility(DB)만
+    //   보는데 그 레코드에 _dtl 이 없어(전국 2,588개·24%) parkingRatio=null → 주차필터가 부당 제외.
+    //   → DB facility 가 있어도 **주차필터인데 _dtl 없으면** KAPT 라이브 재조회(상세와 동일 데이터). backfill
+    //   self-heal(Sprint YYYY)이 DB를 영구 보정하기 전에도 즉시 정확. cap 20·in-memory 캐시.
     const _KAPT_CAP = 20;
     const _missIdx = [];
     for (let i = 0; i < matched.length; i++) {
       const c = _poolCodes[i];
-      if (c && !_facMap.has(c)) _missIdx.push(i);
+      if (!c) continue;
+      const _st = _facMap.get(c);
+      if (!_st || (fMinPark > 0 && !_st._dtl)) _missIdx.push(i); // DB miss OR 주차필터인데 _dtl 없음
     }
     if (_missIdx.length) {
       _missIdx.sort((a, b) => (matched[b].dealCount || 0) - (matched[a].dealCount || 0));
+      const _fetched = new Set();
       await Promise.allSettled(_missIdx.slice(0, _KAPT_CAP).map(async (i) => {
         const c = _poolCodes[i];
-        if (_facMap.has(c)) return; // 동일 code 중복 방지
+        if (_fetched.has(c)) return; // 동일 code 중복 조회 방지 (incomplete 는 _facMap.has 여도 재조회해야 함)
+        _fetched.add(c);
         try {
           const [info, detail] = await Promise.all([
             getAptBasisInfo(c), getAptDtlInfo(c).catch(() => null),
