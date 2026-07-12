@@ -35,16 +35,28 @@ function adminClient() {
   });
 }
 
-/** 한 chunk 처리 — facility 미적재 + kapt_code 보유 단지 limit 개를 동시성 내 backfill. */
-async function runOneChunk(admin, limit) {
-  const { data: rows, error } = await admin
-    .from('apt_master')
-    .select('kapt_code, apt_name')
-    .not('kapt_code', 'is', null)
-    .is('facility', null)
-    .limit(limit);
+/** 한 chunk 처리 — kapt_code 보유 단지 limit 개를 동시성 내 backfill.
+ *  mode='null'      : facility 미적재(최초 적재) — 기존 동작.
+ *  mode='incomplete': facility 있으나 _dtl(주차) 누락 레코드 self-heal (Sprint YYYY). */
+async function runOneChunk(admin, limit, mode = 'null') {
+  let q = admin.from('apt_master').select('kapt_code, apt_name').not('kapt_code', 'is', null);
+  if (mode === 'incomplete') {
+    // FACILITY-SELFHEAL-2026-07-12 (Sprint YYYY, 운영자 "공릉풍림아이원 주차 못잡음 + 세대수0 에러"):
+    //   근본원인 = 백필이 facility IS NULL 만 처리 → 이미 레코드 있는데 _dtl(주차) 없는 단지(전국 2,588개·
+    //   24%)를 영구 방치. backfillFacilityByKaptCode 가 BasisInfo+DTL 재조회 후 overwrite 하므로 재처리만
+    //   시키면 _dtl 채워짐 → 주차 필터가 잡게 됨. stale(14일↑)만 재시도(매일 재fetch·quota 낭비 방지),
+    //   _empty(실패 sentinel) 제외. 재fetch 후 fetched_at 갱신 → 다음 chunk 에서 자동 제외(진행 보장).
+    const cutoff = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
+    q = q.not('facility', 'is', null)
+         .is('facility->_empty', null)
+         .is('facility->_dtl', null)
+         .lt('facility_fetched_at', cutoff);
+  } else {
+    q = q.is('facility', null);
+  }
+  const { data: rows, error } = await q.limit(limit);
   if (error) {
-    logger.error({ err: error.message }, 'facility backfill 후보 조회 실패');
+    logger.error({ err: error.message, mode }, 'facility backfill 후보 조회 실패');
     return { processed: 0, inserted: 0, failed: 0, error: error.message };
   }
   if (!rows || !rows.length) return { processed: 0, inserted: 0, failed: 0, message: '후보 없음' };
@@ -78,14 +90,18 @@ async function run({ chunk = DEFAULT_CHUNK, budgetMs = 240000 } = {}) {
 
   const limit = Math.min(Math.max(parseInt(chunk) || DEFAULT_CHUNK, 1), MAX_CHUNK);
   let totalProcessed = 0, totalInserted = 0, totalFailed = 0, totalParking = 0, chunks = 0;
-  while ((Date.now() - started) < budgetMs - 15000) {
-    const t = await runOneChunk(admin, limit);
-    if (!t.processed) break; // 더 처리할 단지 X
-    totalProcessed += t.processed;
-    totalInserted += t.inserted;
-    totalFailed += t.failed;
-    totalParking += (t.withParking || 0);
-    chunks++;
+  // Phase A(null): 최초 적재 우선. Phase B(incomplete): _dtl(주차) 누락 self-heal (Sprint YYYY).
+  //   각 chunk 후 fetched_at 갱신되어 stale 조건에서 빠지므로 같은 후보 재조회 없이 진행.
+  for (const mode of ['null', 'incomplete']) {
+    while ((Date.now() - started) < budgetMs - 15000) {
+      const t = await runOneChunk(admin, limit, mode);
+      if (!t.processed) break; // 이 mode 후보 소진 → 다음 mode
+      totalProcessed += t.processed;
+      totalInserted += t.inserted;
+      totalFailed += t.failed;
+      totalParking += (t.withParking || 0);
+      chunks++;
+    }
   }
   const elapsed = Date.now() - started;
   logger.info({

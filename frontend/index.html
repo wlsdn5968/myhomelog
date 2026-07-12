@@ -4300,14 +4300,20 @@ function updateQuota(usage){
   const info=document.getElementById('usageInfo');
   if(pill){
     pill.style.display='inline-flex';
-    // P1 (Phase 2 8-1): "5/5" 의미 명확화 — "🔎 검색 5/5"
-    pill.textContent=`🔎 검색 ${usage.remaining}/${usage.limit}`;
-    if(usage.remaining<=1){pill.style.background='var(--redL)';pill.style.color='var(--red)';}
-    else if(usage.remaining<=2){pill.style.background='var(--ambL)';pill.style.color='var(--amb)';}
-    else{pill.style.background='var(--grnL)';pill.style.color='var(--grn)';}
-    pill.title=`오늘 무료 단지 검색 ${usage.used}/${usage.limit}회 사용 — 매일 자정 리셋`;
+    if(usage.unlimited){ // QUOTA-PLAN-2026-07-12: 운영자/admin 무제한 표시(0/5 오표시 fix)
+      pill.textContent='🔎 검색 무제한';
+      pill.style.background='var(--grnL)'; pill.style.color='var(--grn)';
+      pill.title='운영자·관리자 — 검색 무제한';
+    } else {
+      // P1 (Phase 2 8-1): "5/5" 의미 명확화 — "🔎 검색 5/5"
+      pill.textContent=`🔎 검색 ${usage.remaining}/${usage.limit}`;
+      if(usage.remaining<=1){pill.style.background='var(--redL)';pill.style.color='var(--red)';}
+      else if(usage.remaining<=2){pill.style.background='var(--ambL)';pill.style.color='var(--amb)';}
+      else{pill.style.background='var(--grnL)';pill.style.color='var(--grn)';}
+      pill.title=`오늘 무료 단지 검색 ${usage.used}/${usage.limit}회 사용 — 매일 자정 리셋`;
+    }
   }
-  if(info)info.textContent=`오늘 ${usage.used}/${usage.limit}회 사용 (남은 무료 검색 ${usage.remaining}회) · 매일 자정 리셋`;
+  if(info)info.textContent = usage.unlimited ? '검색 무제한 (운영자·관리자)' : `오늘 ${usage.used}/${usage.limit}회 사용 (남은 무료 검색 ${usage.remaining}회) · 매일 자정 리셋`;
 }
 async function refreshQuota(){
   try{
@@ -4336,6 +4342,9 @@ function updateAiPill(usage){
   const pill = document.getElementById('aiPill');
   if(!pill) return;
   pill.style.display='inline-flex';
+  if(usage.unlimited){ // QUOTA-PLAN-2026-07-12: 운영자/admin 무제한
+    pill.textContent='💬 채팅 무제한'; pill.style.background='var(--bg2)'; pill.style.color='var(--t2)'; return;
+  }
   // P1 (Phase 2 8-1): 의미 명확 — "💬 채팅 N/limit" (limit 은 서버값 usage.limit, 하드코딩 금지)
   pill.textContent = `💬 채팅 ${usage.remaining}/${usage.limit}`;
   if(usage.remaining <= 1){ pill.style.background='var(--redL)'; pill.style.color='var(--red)'; }
@@ -6011,7 +6020,10 @@ function showDetail(p){
       if (s.length === 6) return `${s.slice(0,4)}.${s.slice(4,6)}`;
       return _escHtml(s);
     };
-    const _num = n => (n == null || !Number.isFinite(Number(n)) ? null : Number(n).toLocaleString());
+    // DATA-QUALITY-2026-07-12 (Sprint YYYY, 운영자 "세대수 0 에러"): count 필드(세대수/동수/주차/승강기 등)에서
+    //   0/음수 = KAPT 미기재(데이터 없음) → null 반환해 "0세대/0대" 대신 "미상" 표기. (기존 _num 은 0→"0" 반환해
+    //   0 을 truthy 로 만들어 오표시). 신축이 KAPT 에 세대수 0 으로 등록된 케이스(전국 325개) 표시 정정.
+    const _num = n => { const v = Number(n); return (n == null || !Number.isFinite(v) || v <= 0) ? null : v.toLocaleString(); };
     if (!f) {
       const _lawd = p.lawdCd || '', _sgg = p.sigungu || '', _umd = p.umdNm || '', _apt = p.aptName || '';
       if (_lawd && _apt) setTimeout(() => { try { _loadBuildingRegister(_lawd, _sgg, _umd, _apt); } catch (_) {} }, 40);
@@ -8977,15 +8989,19 @@ async function focusMapOnApt(r) {
     }
     // 이전 검색 핀 제거
     try { const sm = window._searchMarker; if (sm) { if (sm._isNaverS) { sm.setMap && sm.setMap(null); } else { sm.remove && sm.remove(); } window._searchMarker = null; } } catch(_){}
-    const pinHtml = `<div style="transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;pointer-events:none;filter:drop-shadow(0 2px 5px rgba(0,0,0,.4))"><div style="background:#e03131;color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:13px;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis">📍 ${_escHtml(r.aptName||'')}</div><div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #e03131;margin-top:-1px"></div></div>`;
+    // 핀 클릭 → 상세 재열기 (운영자 follow-up #2). pointer-events auto + cursor.
+    const pinHtml = `<div style="transform:translate(-50%,-100%);display:flex;flex-direction:column;align-items:center;cursor:pointer;filter:drop-shadow(0 2px 5px rgba(0,0,0,.4))"><div style="background:#e03131;color:#fff;font-size:11px;font-weight:700;padding:3px 9px;border-radius:13px;white-space:nowrap;max-width:170px;overflow:hidden;text-overflow:ellipsis">📍 ${_escHtml(r.aptName||'')}</div><div style="width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:8px solid #e03131;margin-top:-1px"></div></div>`;
     if (mapObj._isLeaflet) {
       mapObj.flyTo([lat, lng], 16, { duration: 0.8 });
       const icon = L.divIcon({ className:'', html: pinHtml, iconAnchor:[0,0] });
-      window._searchMarker = L.marker([lat, lng], { icon, zIndexOffset: 2000 }).addTo(mapObj);
+      const m = L.marker([lat, lng], { icon, zIndexOffset: 2000 }).addTo(mapObj);
+      m.on('click', () => { try { openAptDetail(r); } catch(_){} });
+      window._searchMarker = m;
     } else if (window.naver && typeof naverReady !== 'undefined' && naverReady) {
       mapObj.setCenter(new naver.maps.LatLng(lat, lng));
       mapObj.setZoom(16);
       const m = new naver.maps.Marker({ position: new naver.maps.LatLng(lat, lng), map: mapObj, title: r.aptName, zIndex: 2000, icon: { content: pinHtml, anchor: new naver.maps.Point(0, 0) } });
+      naver.maps.Event.addListener(m, 'click', () => { try { openAptDetail(r); } catch(_){} });
       m._isNaverS = true;
       window._searchMarker = m;
     }

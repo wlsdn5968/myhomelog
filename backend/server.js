@@ -444,6 +444,21 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   const _naverMapsClientId = process.env.NAVER_MAPS_CLIENT_ID || null;
   const _dataCounts = await getDataCounts();
   const _dbUsage = await getDbUsage();
+  // QUOTA-PLAN-2026-07-12 (Sprint YYYY, 운영자 "admin 인데 검색 0/5 표시"): usage 한도를 사용자 plan 반영.
+  //   기존엔 DAILY_SEARCH_LIMIT(=5) 고정 → admin·pro·로그인free 모두 5로 오표시(admin 은 초과 시 0/5).
+  //   dailyLimit 과 동일 규칙: admin 무제한 · pro/team 플랜한도 · 로그인 free 는 base+bonus(검색5·챗10).
+  let _searchLimit = DAILY_SEARCH_LIMIT, _chatLimit = DAILY_CHAT_LIMIT, _unlimited = false;
+  try {
+    const { isAdminEmail, getActivePlan, getLimitsForPlan } = require('./services/planService');
+    if (isAdminEmail(req.user?.email)) {
+      _unlimited = true;
+    } else if (req.user?.id) {
+      const _plan = await getActivePlan(req.user.id);
+      if (_plan === 'admin') _unlimited = true;
+      else if (_plan !== 'free') { const _pl = getLimitsForPlan(_plan); _searchLimit = _pl.dailySearch || _searchLimit; _chatLimit = _pl.dailyChat || _chatLimit; }
+      else { _searchLimit += 5; _chatLimit += 10; } // 로그인 free 보너스 (loggedInBonus: search 5·chat 10)
+    }
+  } catch (_) {}
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),
@@ -455,16 +470,12 @@ app.get('/api/health', optionalAuth, async (req, res) => {
     db: _dbUsage,
     regulations: _regulations,
     cache: { keys: cache.keys().length, stats: cache.getStats() },
-    usage: {
-      used: searchUsed,
-      limit: DAILY_SEARCH_LIMIT,
-      remaining: Math.max(0, DAILY_SEARCH_LIMIT - searchUsed),
-    },
-    chat: {
-      used: chatUsed,
-      limit: DAILY_CHAT_LIMIT,
-      remaining: Math.max(0, DAILY_CHAT_LIMIT - chatUsed),
-    },
+    usage: _unlimited
+      ? { used: searchUsed, limit: '무제한', remaining: '무제한', unlimited: true }
+      : { used: searchUsed, limit: _searchLimit, remaining: Math.max(0, _searchLimit - searchUsed) },
+    chat: _unlimited
+      ? { used: chatUsed, limit: '무제한', remaining: '무제한', unlimited: true }
+      : { used: chatUsed, limit: _chatLimit, remaining: Math.max(0, _chatLimit - chatUsed) },
     monthlyBudget,
     // kakaoQuota: geocodeCacheService 좌표해결 경로의 부분 지표 (_trackKakaoCall 집계분).
     //   directions/category/학교·학원 검색/geocode-batch 직접 호출은 미포함 — 전체 Kakao 사용량 아님.
