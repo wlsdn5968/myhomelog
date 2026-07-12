@@ -47,6 +47,7 @@ router.post('/recommend', validatePropertySearch, async (req, res) => {
     region, houseStatus, isFirstBuyer,
     purpose, schoolNeeded, childPlan, workplaceArea,
     minArea, maxArea,
+    minHouseholds, minParkingRatio, saleOnly, // FILTER-2026-07-12: 좋은-아파트 조건 필터
   } = req.body;
 
   if (!maxBudget || maxBudget <= 0) {
@@ -68,6 +69,7 @@ router.post('/recommend', validatePropertySearch, async (req, res) => {
     schoolNeeded: schoolNeeded === true || schoolNeeded === 'true',
     childPlan, workplaceArea,
     minArea, maxArea,
+    minHouseholds, minParkingRatio, saleOnly, // FILTER-2026-07-12
   }).catch(err => {
     throw Object.assign(new Error(err.message), { status: 502 });
   });

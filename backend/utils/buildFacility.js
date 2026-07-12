@@ -132,6 +132,8 @@ function buildFacility(info, kaptCode, detail) {
     dongCount: parseInt(info.kaptDongCnt) || 0,
     parkingTotal,
     parkingRatio,
+    // SALE-TYPE-2026-07-12 (Sprint TTTT): 분양/임대/혼합 구분 (codeSaleNm). "임대세대 없는 단지" 필터용.
+    saleType: (info.codeSaleNm || '').trim() || null,
     builtDate: info.kaptUsedate || null,
     heatType: info.codeHeatNm || null,
     mgrType: info.codeMgrNm || null,

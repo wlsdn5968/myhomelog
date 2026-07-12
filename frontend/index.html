@@ -1407,6 +1407,15 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
           </div>
         </div>
       </div></div>
+      <!-- FILTER-2026-07-12 (Sprint TTTT): 좋은-아파트 조건 필터 (선택). KAPT facility 기준. -->
+      <div class="mb9"><span class="lbl">단지 조건 <span style="font-weight:400;color:var(--t3);font-size:10px">(선택 · 좋은 아파트 필터)</span></span>
+        <div class="chips" id="ch-flt">
+          <span class="chip" id="flt-hh" onclick="this.classList.toggle('on')" title="세대수 500세대 이상 — 나홀로 아파트 제외 (호갱노노 기준)">500세대+</span>
+          <span class="chip" id="flt-park" onclick="this.classList.toggle('on')" title="세대당 주차 1.5대 이상 — 주차 여유 (법정 최소 1대)">주차 1.5+</span>
+          <span class="chip" id="flt-sale" onclick="this.classList.toggle('on')" title="분양 단지만 — 임대·혼합 제외">분양만</span>
+        </div>
+        <div style="font-size:10px;color:var(--t3);margin-top:3px">※ 조건 데이터는 KAPT 등록 단지에만 있어요 — 켜면 정보 있는 단지만 표시돼요</div>
+      </div>
       <button class="abtn a2" id="srchBtn" onclick="doSearch()">
         <div class="spin" id="srchSp"></div><span id="srchTx">🤖 실거래 기반 단지 정리</span>
       </button>
@@ -4818,6 +4827,10 @@ async function doSearch(){
     workplaceArea:document.getElementById('wp').value.trim(),
     purpose:'실거주',
     ...pyRange(),
+    // FILTER-2026-07-12 (Sprint TTTT): 좋은-아파트 조건 필터 (선택 토글)
+    minHouseholds: document.getElementById('flt-hh')?.classList.contains('on') ? 500 : 0,
+    minParkingRatio: document.getElementById('flt-park')?.classList.contains('on') ? 1.5 : 0,
+    saleOnly: !!document.getElementById('flt-sale')?.classList.contains('on'),
   };
   // 검색 조건을 URL 쿼리에 기록 (공유/뒤로가기용)
   persistSearchToUrl(body);
@@ -4865,6 +4878,8 @@ async function doSearch(){
         coordMissingCount:data.coordMissingCount||0,
       };
       success=true;
+      // FILTER-2026-07-12: 조건 필터로 결과 0이면 완화 안내
+      if(data.filteredOut){ try{ toast('🔎 선택한 단지 조건에 맞는 결과가 없어요. 필터(세대수·주차·분양)를 완화해보세요.'); }catch(_){} }
       // 로그인 사용자면 검색 이력 기록 (fire-and-forget — 실패해도 UX 영향 X)
       _logSearch('recommend', body.region || '', (data.recommendations||[]).length);
     }

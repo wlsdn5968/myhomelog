@@ -202,16 +202,23 @@ async function getAIRecommendations(userCondition) {
     workplaceArea,
     minArea, // 평 단위 (예: 18)
     maxArea, // 평 단위 (예: 35)
+    minHouseholds,   // FILTER-2026-07-12: 세대수 하한 (예: 500)
+    minParkingRatio, // FILTER-2026-07-12: 세대당 주차 하한 (예: 1.5)
+    saleOnly,        // FILTER-2026-07-12: 분양만(임대·혼합 제외)
   } = userCondition;
 
   // 기본 최소 15평 (오피스텔·초소형 제외)
   const minPy = parseInt(minArea) || 15;
   const maxPy = parseInt(maxArea) || 60;
+  // FILTER-2026-07-12 (Sprint TTTT): 좋은-아파트 조건 필터 (KAPT facility 기준). 미설정 시 0/false = 무필터.
+  const fMinHh = parseInt(minHouseholds) || 0;
+  const fMinPark = parseFloat(minParkingRatio) || 0;
+  const fSaleOnly = saleOnly === true || saleOnly === 'true';
 
   // NFC 정규화 — Mac(NFD) ↔ Windows(NFC) 캐시 분리 방지
   const normReg = String(region || '').normalize('NFC').trim();
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
-  const cacheKey = `rec:v5:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}`;
+  const cacheKey = `rec:v6:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
@@ -305,8 +312,51 @@ async function getAIRecommendations(userCondition) {
     };
   }
 
+  // FILTER-2026-07-12 (Sprint TTTT): 좋은-아파트 조건 필터 (세대수/세대당주차/분양) — KAPT facility 기준.
+  //   정렬(Step 4) 전에 후보 pool 을 걸러 downstream(enrich→좌표→학군)의 ranked[i] 인덱스 정렬을 안 깨뜨림.
+  //   facility 없는(KAPT 미등록) 단지는 조건 확인 불가 → 필터 활성 시 제외. 미필터 시 전체 유지(무영향).
+  let candidatePool = matched;
+  if (fMinHh > 0 || fMinPark > 0 || fSaleOnly) {
+    const _norm = (s) => (s || '').replace(/\s/g, '').toLowerCase();
+    const _codeMap = new Map();
+    for (const a of allAptList) {
+      const nm = _norm(a.kaptName || a.aptName || '');
+      if (!nm || !a.kaptCode) continue;
+      const dong = a.as4 || a.as3 || '';
+      _codeMap.set(`${nm}|${dong}`, a.kaptCode);
+      if (!_codeMap.has(nm)) _codeMap.set(nm, a.kaptCode);
+    }
+    const _poolCodes = matched.map((apt) => {
+      const nmKey = _norm(apt.aptName);
+      return _codeMap.get(`${nmKey}|${apt.umdNm || ''}`) || _codeMap.get(nmKey) || null;
+    });
+    const _facMap = await getFacilitiesByKaptCodes([...new Set(_poolCodes.filter(Boolean))]);
+    candidatePool = matched.filter((apt, i) => {
+      const code = _poolCodes[i];
+      const stored = code ? _facMap.get(code) : null;
+      const fac = stored ? buildFacility(stored, code, stored._dtl || null) : null;
+      if (!fac) return false;
+      if (fMinHh > 0 && !(fac.totalHouseholds >= fMinHh)) return false;
+      if (fMinPark > 0 && !(fac.parkingRatio != null && fac.parkingRatio >= fMinPark)) return false;
+      if (fSaleOnly && fac.saleType !== '분양') return false;
+      return true;
+    });
+    logger.info({ before: matched.length, after: candidatePool.length, fMinHh, fMinPark, fSaleOnly }, 'PropertyService 조건 필터 적용');
+    if (!candidatePool.length) {
+      return {
+        recommendations: [],
+        targetRegions,
+        totalTxAnalyzed: analyzed.length,
+        inBudgetCount: matched.length,
+        filteredOut: true,
+        disclaimer: '본 결과는 국토교통부 실거래가 데이터 기반 정보 정리이며, 매수·매도 추천이 아닙니다.',
+        fromCache: false,
+      };
+    }
+  }
+
   // Step 4: 거래량 가중 정렬 → 실거래 단지 우선 상위 15건
-  const ranked = matched
+  const ranked = candidatePool
     .map(a => ({ ...a, _score: a.dealCount * 10 + (a.buildYear || 1990) * 0.01 }))
     .sort((x, y) => y._score - x._score)
     .slice(0, 15);
