@@ -233,7 +233,7 @@ async function getAIRecommendations(userCondition) {
   // NFC 정규화 — Mac(NFD) ↔ Windows(NFC) 캐시 분리 방지
   const normReg = String(region || '').normalize('NFC').trim();
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
-  const cacheKey = `rec:v8:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
+  const cacheKey = `rec:v9:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
@@ -339,7 +339,7 @@ async function getAIRecommendations(userCondition) {
     //   → 층구분 괄호(고층/저층) + '단지' 접미를 함께 제거해 canon 매칭. 층 분할은 동일 단지의 물리 구분
     //     이라 하나의 kaptCode 매핑이 정답(실측: 21개 전부 세대수 500+·분양). 차수/브랜드 괄호는
     //     별개 단지 구분자라 제거하지 않음(오병합 방지).
-    const _canon = (n) => n.replace(/\((?:고층|저층)\)$/, '').replace(/단지$/, '');
+    const _canon = (n) => n.replace(/\((?:고층|저층)\)$/, '').replace(/(?:아파트|단지)$/, '');
     const _codeMap = new Map();
     for (const a of allAptList) {
       const nm = _norm(a.kaptName || a.aptName || '');
@@ -495,7 +495,7 @@ async function getAIRecommendations(userCondition) {
   // NAME-CANON-2026-07-12 (Sprint UUUU, 전수조사 정정): 층구분 괄호(고층/저층) + '단지' 접미 정규화.
   //   MOLIT "상계주공9(고층)" ↔ KAPT "상계주공9단지" 를 canon 으로 매칭(TTTT '단지'-only 는 미해결).
   //   층 분할은 동일 단지 → 하나의 kaptCode 매핑이 정답. 차수/브랜드 괄호는 미제거(오병합 방지). 정확매칭 우선(!has).
-  const canonName = (n) => n.replace(/\((?:고층|저층)\)$/, '').replace(/단지$/, '');
+  const canonName = (n) => n.replace(/\((?:고층|저층)\)$/, '').replace(/(?:아파트|단지)$/, '');
   for (const a of allAptList) {
     const nm = normalizeName(a.kaptName || a.aptName || '');
     if (!nm || !a.kaptCode) continue;
