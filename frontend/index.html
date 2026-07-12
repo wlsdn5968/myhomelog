@@ -5952,6 +5952,39 @@ function showDetail(p){
   document.getElementById('t4').innerHTML=`<div class="tld"><div class="tsp"></div>가격 시그널 분석 중...</div>`;
   // DETAILTAB-2026-05-12 (운영자 발견 — 네이버 부동산 수준 단지정보 노출):
   //   facility (backend KAPT API 응답) 의 핵심 필드를 표로 표시. 데이터 부재 시 '미상' 표기.
+  // BR-2026-07-12 (Sprint SSSS): KAPT 없는 단지 → 건축물대장(건축HUB 표제부) 비동기 보강.
+  //   백엔드 /api/properties/building-register 가 지번→법정동코드→표제부 조회(라이브 검증: 성지빌딩 1984).
+  const _loadBuildingRegister = async (lawdCd, sigungu, umdNm, aptName) => {
+    if (!document.getElementById('t6brBox') || !lawdCd || !aptName) return;
+    try {
+      const qs = `lawdCd=${encodeURIComponent(lawdCd)}&sigungu=${encodeURIComponent(sigungu||'')}&umd=${encodeURIComponent(umdNm||'')}&apt=${encodeURIComponent(aptName)}`;
+      const r = await fetch(`/api/properties/building-register?${qs}`, { signal: AbortSignal.timeout(15000) });
+      const j = await r.json().catch(() => ({}));
+      const t = j && j.title;
+      const el = document.getElementById('t6brBox');
+      if (!el) return;
+      if (!t) {
+        el.innerHTML = `<div class="ibox y" style="line-height:1.6">🏢 이 단지는 상세 기본정보가 없어요.<br><span style="font-size:10px;color:var(--t3)">KAPT·건축물대장 모두에서 조회되지 않았어요. <b>실거래가·가격 시그널 탭은 정상</b>이에요.</span></div>`;
+        return;
+      }
+      const _d = s => { s = String(s || ''); return s.length === 8 ? `${s.slice(0,4)}.${s.slice(4,6)}.${s.slice(6,8)}` : (s || '미상'); };
+      const flr = (t.grndFlrCnt != null ? `지상 ${t.grndFlrCnt}층` : '') + (t.ugrndFlrCnt ? ` · 지하 ${t.ugrndFlrCnt}층` : '');
+      const rows = [
+        ['준공', _d(t.useAprDay)],
+        ['층수', flr || '미상'],
+        ['세대수', t.hhldCnt != null ? Number(t.hhldCnt).toLocaleString() + '세대' : '미상'],
+        ['연면적', t.totArea != null ? Math.round(t.totArea).toLocaleString() + '㎡' : '미상'],
+        ['주용도', t.mainPurpsCdNm || '미상'],
+        ['구조', t.strctCdNm || '미상'],
+      ];
+      el.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--t1);margin-bottom:6px">🏢 건축물대장 기본개요${t.bldNm ? ` · ${_escHtml(t.bldNm)}` : ''}</div>`
+        + `<table class="rtbl" style="width:100%"><tbody>${rows.map(([k, v]) => `<tr><td style="color:var(--t3);width:34%">${k}</td><td style="font-weight:600">${_escHtml(String(v))}</td></tr>`).join('')}</tbody></table>`
+        + `<div style="font-size:10px;color:var(--t3);margin-top:6px">출처: 국토교통부 건축HUB 건축물대장 (KAPT 미등록 단지 보강)</div>`;
+    } catch (e) {
+      const el = document.getElementById('t6brBox');
+      if (el) el.innerHTML = `<div class="ibox y" style="line-height:1.6">🏢 이 단지는 상세 기본정보(KAPT)가 없어요.<br><span style="font-size:10px;color:var(--t3)"><b>실거래가·가격 시그널 탭은 정상</b>이에요.</span></div>`;
+    }
+  };
   document.getElementById('t6').innerHTML = (() => {
     const f = p.facility || null;
     const _v = v => (v == null || v === '' ? '<span style="color:var(--t3)">미상</span>' : _escHtml(String(v)));
@@ -5964,8 +5997,10 @@ function showDetail(p){
     };
     const _num = n => (n == null || !Number.isFinite(Number(n)) ? null : Number(n).toLocaleString());
     if (!f) {
-      return `<div class="ibox y" style="line-height:1.6">🏢 이 단지는 상세 기본정보(KAPT)가 없어요.<br>
-        <span style="font-size:10px;color:var(--t3)">소형·노후 건물은 한국부동산원 <b>공동주택관리정보(KAPT)</b> 의무관리 대상이 아니라 세대수·주차·시공사 등 상세가 제공되지 않을 수 있어요 (일시적 조회 오류일 수도). <b>실거래가·가격 시그널 탭은 정상</b>이에요.</span></div>`;
+      const _lawd = p.lawdCd || '', _sgg = p.sigungu || '', _umd = p.umdNm || '', _apt = p.aptName || '';
+      if (_lawd && _apt) setTimeout(() => { try { _loadBuildingRegister(_lawd, _sgg, _umd, _apt); } catch (_) {} }, 40);
+      return `<div id="t6brBox"><div class="ibox y" style="line-height:1.6">🏢 KAPT 상세정보가 없어 <b>건축물대장</b>에서 확인 중…<br>
+        <span style="font-size:10px;color:var(--t3)">소형·노후·주상복합 건물은 한국부동산원 <b>KAPT(공동주택 의무관리)</b> 대상이 아닐 수 있어요. <b>실거래가·가격 시그널 탭은 정상</b>이에요.</span></div></div>`;
     }
     // KAPT-MISSING-2026-05-12 (Sprint J): facility 가 있지만 KAPT raw 빈 경우 (apt_master 미매칭 + aptSeq fallback 부분 효과).
     //   사용자가 "왜 정보가 다 미상으로 나오지?" 혼란하지 않도록 명확 안내.
