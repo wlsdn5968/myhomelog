@@ -218,7 +218,7 @@ async function getAIRecommendations(userCondition) {
   // NFC 정규화 — Mac(NFD) ↔ Windows(NFC) 캐시 분리 방지
   const normReg = String(region || '').normalize('NFC').trim();
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
-  const cacheKey = `rec:v7:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
+  const cacheKey = `rec:v8:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
@@ -340,6 +340,31 @@ async function getAIRecommendations(userCondition) {
       return _codeMap.get(`${nmKey}|${apt.umdNm || ''}`) || _codeMap.get(nmKey) || _codeMap.get(_canon(nmKey)) || null;
     });
     const _facMap = await getFacilitiesByKaptCodes([...new Set(_poolCodes.filter(Boolean))]);
+    // FILTER-KAPT-FALLBACK-2026-07-12 (Sprint UUUU, 전수조사 발견): 필터는 apt_master.facility(DB)만 봐서,
+    //   apt_master 미보유 단지(신축·KAPT 미동기·고양 등 lawd 미커버)를 전부 제외 → 필터 결과 0(filteredOut) 오류.
+    //   enrichment(preCodes)는 DB miss 시 KAPT API 로 facility 를 보강하나 필터엔 그 경로가 없던 게 근본원인
+    //   (라이브 실측: 고양 minHouseholds:1 도 0건, noFilter 는 5건 facility 부착). 필터에도 동일 fallback 추가.
+    //   ⚠ 비용 통제: DB-hit 지역(노원·강남 등)은 miss 0 → KAPT 호출 0(성능·회귀 영향 없음). miss 는 dealCount
+    //   상위 _KAPT_CAP 개만(최종 top-15 커버) KAPT 조회. 캐시(in-memory) + graceful(실패 시 제외 유지).
+    const _KAPT_CAP = 20;
+    const _missIdx = [];
+    for (let i = 0; i < matched.length; i++) {
+      const c = _poolCodes[i];
+      if (c && !_facMap.has(c)) _missIdx.push(i);
+    }
+    if (_missIdx.length) {
+      _missIdx.sort((a, b) => (matched[b].dealCount || 0) - (matched[a].dealCount || 0));
+      await Promise.allSettled(_missIdx.slice(0, _KAPT_CAP).map(async (i) => {
+        const c = _poolCodes[i];
+        if (_facMap.has(c)) return; // 동일 code 중복 방지
+        try {
+          const [info, detail] = await Promise.all([
+            getAptBasisInfo(c), getAptDtlInfo(c).catch(() => null),
+          ]);
+          if (info) _facMap.set(c, { ...info, _dtl: detail || undefined }); // buildFacility(stored, code, stored._dtl) 호환
+        } catch (_) { /* graceful: 실패 시 제외 유지 */ }
+      }));
+    }
     candidatePool = matched.filter((apt, i) => {
       const code = _poolCodes[i];
       const stored = code ? _facMap.get(code) : null;
