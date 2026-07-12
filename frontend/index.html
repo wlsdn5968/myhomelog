@@ -5964,8 +5964,8 @@ function showDetail(p){
     };
     const _num = n => (n == null || !Number.isFinite(Number(n)) ? null : Number(n).toLocaleString());
     if (!f) {
-      return `<div class="ibox y" style="line-height:1.6">🏢 KAPT 단지 기본정보를 조회할 수 없어요.<br>
-        <span style="font-size:10px;color:var(--t3)">단지 ID 미매칭(MOLIT 실거래 raw 와 KAPT 매칭 실패) 또는 KAPT API 일시 오류. 다른 탭(실거래가/가격 시그널)은 정상 표시될 수 있어요.</span></div>`;
+      return `<div class="ibox y" style="line-height:1.6">🏢 이 단지는 상세 기본정보(KAPT)가 없어요.<br>
+        <span style="font-size:10px;color:var(--t3)">소형·노후 건물은 한국부동산원 <b>공동주택관리정보(KAPT)</b> 의무관리 대상이 아니라 세대수·주차·시공사 등 상세가 제공되지 않을 수 있어요 (일시적 조회 오류일 수도). <b>실거래가·가격 시그널 탭은 정상</b>이에요.</span></div>`;
     }
     // KAPT-MISSING-2026-05-12 (Sprint J): facility 가 있지만 KAPT raw 빈 경우 (apt_master 미매칭 + aptSeq fallback 부분 효과).
     //   사용자가 "왜 정보가 다 미상으로 나오지?" 혼란하지 않도록 명확 안내.
