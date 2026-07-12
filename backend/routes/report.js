@@ -733,7 +733,7 @@ async function fetchCandidateApts(admin, input, limit) {
   let _aliasMap = new Map();
   try {
     const { getAliasCanonicalMap } = require('../services/transactionService');
-    _aliasMap = await getAliasCanonicalMap([...new Set(txList.map(t => t.sigungu).filter(Boolean))]);
+    _aliasMap = await getAliasCanonicalMap([...new Set(txList.map(t => t.lawd_cd).filter(Boolean))]); // ALIAS-REGION-FIX-2026-07-12: sigungu 명→lawd_cd (getAliasCanonicalMap 조회키 통일)
   } catch (_) {}
 
   // 단지 그룹화 + build_year mode + 신고가 갱신 카운트

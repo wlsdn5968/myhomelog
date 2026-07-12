@@ -453,14 +453,18 @@ async function getTransactionsByAptInclAliases(lawdCd, aptName, monthsBack = 6) 
 
 // (b) 지역 단위: raw MOLIT명 → canonical master명 매핑 (propertyService 추천 relabel용)
 //   key: `${rawAliasName}|${umdNm}` (동까지 매칭해 동명이지 오병합 차단).
-async function getAliasCanonicalMap(sigungus) {
+//   ALIAS-REGION-FIX-2026-07-12 (Sprint RRRR): sigungu 명이 아니라 lawd_cd 로 조회.
+//     [근본원인] propertyService 는 REGION_KEYWORDS 축약명('노원')을 넘기는데 apt_master.sigungu
+//     값은 '노원구' → `.in('sigungu',['노원'])` 0건 → 맵 비어서 풍림아파트A/B relabel 미발동(raw 표시).
+//     lawd_cd 는 숫자코드라 축약/전체명 모호성 없음. apt_master.lawd_cd 10,638/10,638 채움(검증).
+async function getAliasCanonicalMap(lawdCds) {
   const admin = dbClient();
-  if (!admin || !Array.isArray(sigungus) || !sigungus.length) return new Map();
+  if (!admin || !Array.isArray(lawdCds) || !lawdCds.length) return new Map();
   const map = new Map();
   try {
     const { data } = await admin.from('apt_master')
       .select('apt_name, umd_nm, molit_aliases')
-      .in('sigungu', [...new Set(sigungus.filter(Boolean))])
+      .in('lawd_cd', [...new Set(lawdCds.filter(Boolean))])
       .not('molit_aliases', 'is', null);
     for (const r of (data || [])) {
       const al = Array.isArray(r.molit_aliases) ? r.molit_aliases : [];
