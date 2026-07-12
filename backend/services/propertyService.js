@@ -233,7 +233,7 @@ async function getAIRecommendations(userCondition) {
   // NFC 정규화 — Mac(NFD) ↔ Windows(NFC) 캐시 분리 방지
   const normReg = String(region || '').normalize('NFC').trim();
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
-  const cacheKey = `rec:v10:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
+  const cacheKey = `rec:v11:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
@@ -536,12 +536,20 @@ async function getAIRecommendations(userCondition) {
       // DTL-INFO-2026-05-13 (Sprint X): BasisInfo + Detail 병렬 fetch (주차 정보 포함)
       // Sprint FFFF: DB 보유분은 KAPT 콜 생략 (stored raw 의 _dtl 이 detail 역할)
       const stored = dbFacMap.get(kaptCode);
-      const [info, detail] = stored
-        ? [stored, stored._dtl || null]
-        : await Promise.all([
-            getAptBasisInfo(kaptCode),
-            getAptDtlInfo(kaptCode).catch(() => null),
-          ]);
+      // FILTER-INCOMPLETE-FALLBACK-2026-07-12 (Sprint ZZZZ): 주차필터 시 stored 에 _dtl(주차) 없으면 KAPT DTL
+      //   재조회 → 카드 주차표시를 필터와 일치(공릉풍림처럼 필터엔 잡히나 카드 null 이던 불일치 해소). 필터가 방금
+      //   조회해 in-memory 캐시 hit 이라 저비용. 미필터 경로·_dtl 보유분은 기존대로(추가 KAPT 콜 0).
+      let info, detail;
+      if (stored && stored._dtl) { info = stored; detail = stored._dtl; }
+      else if (stored && fMinPark > 0) { info = stored; detail = await getAptDtlInfo(kaptCode).catch(() => null); }
+      else if (stored) { info = stored; detail = null; }
+      else {
+        const [_i, _d] = await Promise.all([
+          getAptBasisInfo(kaptCode),
+          getAptDtlInfo(kaptCode).catch(() => null),
+        ]);
+        info = _i; detail = _d;
+      }
       // FACILITY-HELPER-2026-05-12 + DTL-INFO-2026-05-13: detail 도 buildFacility 에 전달
       const facility = buildFacility(info, kaptCode, detail);
       // Fallback: info 없으면 allAptList 기본 데이터로 address 보강
