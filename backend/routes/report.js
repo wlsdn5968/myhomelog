@@ -263,6 +263,7 @@ router.post('/generate', async (req, res) => {
     const out = {
       report: parsed,
       policyContext: policyData,
+      dataBasis: await getDataBasis().catch(() => null), // Sprint CCCCC: 검증 기준 박스 (graceful null)
       generatedAt: new Date().toISOString(),
       disclaimer: '본 보고서는 국토교통부·한국부동산원 공공 데이터 기반 정보 정리이며, 투자자문업·중개업·대출모집인업이 아닙니다. 매수·매도 추천 X, 미래 가격 예측 X. 모든 의사결정과 책임은 본인에게 있습니다.',
       ...(_aiDown ? { aiUnavailable: true, aiUnavailableReason: _aiDown } : {}),
@@ -397,6 +398,34 @@ function _buildPriceFit(avgPriceManwon, maxBudgetEok) {
               : diffPct > 0 ? `${diffPct}% 초과`
               : `${Math.abs(diffPct)}% 여유`;
   return `매수가 ${bud}억 vs 회원님 평형대 평균 ${avgEok.toFixed(2)}억 (${label})`;
+}
+
+// DATA-BASIS-2026-07-13 (Sprint CCCCC, 집사닷컴 벤치마킹 "검증 기준 박스"):
+//   보고서에 데이터 기준(실거래 최신 반영월·규제 버전·출처)을 명시해 신뢰 시그널로 노출.
+//   실거래 최신월은 DB 실측(molit_transactions max(deal_date)) — 추측·하드코딩 아님. 6h 캐시.
+async function getDataBasis() {
+  const CK = 'report:dataBasis';
+  const hit = cache.get(CK);
+  if (hit) return hit;
+  try {
+    const { getSupabaseAdmin } = require('../db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return null;
+    const { data } = await admin
+      .from('molit_transactions')
+      .select('deal_date')
+      .order('deal_date', { ascending: false })
+      .limit(1);
+    const latest = data && data[0] && data[0].deal_date ? String(data[0].deal_date) : null;
+    const out = {
+      txLatest: latest,                                   // 예: '2026-07-07'
+      txLatestLabel: latest ? `${latest.slice(0, 7)} 실거래까지 반영` : null,
+      regulationBasis: '2025.10.15 주택시장 안정화 대책 (금융위) · 2026.6.30 규제지역 확대 반영',
+      sources: ['국토교통부 실거래가', 'K-apt 공동주택', '건축물대장(건축HUB)', '학교알리미·NEIS', '카카오맵', '국가법령정보', '금융위원회'],
+    };
+    cache.set(CK, out, 21600); // 6h — daily ingest 주기와 정합
+    return out;
+  } catch (_) { return null; }
 }
 
 /** 정부 정책 최신 스냅샷 — regulationsService 활용 */

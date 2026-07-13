@@ -3776,7 +3776,20 @@ function _renderReport(data) {
     ? `<div style="background:var(--ambL);border:1px solid var(--amb);border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:11.5px;line-height:1.6"><b>ℹ AI 컨설팅 코멘트 일시 중단</b> — 아래 보고서는 국토부 실거래·KAPT 세대수·주변시설 등 <b>객관 데이터만으로</b> 정리했어요.${data.aiUnavailableReason === 'budget' ? ' (이번 달 AI 한도 도달 — 다음 달 1일 리셋)' : ' AI 복구 후 다시 생성하면 컨설팅 코멘트가 포함돼요.'}</div>`
     : '';
 
-  const coreHtml = _aiBanner + (r.coreMessages || []).map((m, i) =>
+  // DATA-BASIS-2026-07-13 (Sprint CCCCC): 검증 기준 박스 — 데이터 기준·규제 버전·출처를 보고서 상단에 명시(신뢰 시그널).
+  //   값은 전부 백엔드 실측(dataBasis.txLatest=DB max(deal_date))·기존 정책 스냅샷 — 프론트 하드코딩 아님. 없으면 미표시.
+  const _basis = data.dataBasis;
+  const _basisHtml = _basis ? `<div style="background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:10px 13px;margin-bottom:12px;font-size:10.5px;line-height:1.7">
+      <div style="font-weight:700;font-size:11px;color:var(--t1);margin-bottom:4px">🔎 검증 기준 <span style="font-weight:400;color:var(--t3)">— 데이터 출처·기준 시점</span></div>
+      <div style="color:var(--t2)">
+        <span style="margin-right:10px">📅 생성 <b>${_escHtml(new Date(data.generatedAt || Date.now()).toLocaleDateString('ko-KR'))}</b></span>
+        ${_basis.txLatestLabel ? `<span style="margin-right:10px">📈 실거래 <b>${_escHtml(_basis.txLatestLabel)}</b></span>` : ''}
+        <span>⚖️ 규제 <b>${_escHtml(_basis.regulationBasis || '')}</b></span>
+      </div>
+      ${Array.isArray(_basis.sources) && _basis.sources.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${_basis.sources.map(s=>`<span style="background:var(--bg-base);border:1px solid var(--bd);border-radius:4px;padding:1px 7px;font-size:9.5px;color:var(--t3)">${_escHtml(s)}</span>`).join('')}</div>` : ''}
+    </div>` : '';
+
+  const coreHtml = _basisHtml + _aiBanner + (r.coreMessages || []).map((m, i) =>
     `<div style="display:flex;gap:8px;margin-bottom:6px;font-size:12px;line-height:1.7">
       <span style="color:var(--acc);font-weight:700;flex-shrink:0">${i+1}.</span>
       <span>${_escHtml(m)}</span>
