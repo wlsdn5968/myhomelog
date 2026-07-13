@@ -9300,11 +9300,11 @@ function _applyStatTags(){
     document.querySelectorAll('.japtm').forEach(e=>e.textContent=M(c.apt));
   }catch(_){}
 }
-async function chkAPI(){
+async function chkAPI(_isRetry){
   const el=document.getElementById('apiSt'),cs=document.getElementById('cSt'),ce=document.getElementById('cErr'),bs=document.getElementById('badgeSrv');
   try{
-    // Phase 4-2 단계 1 미세 (2026-05-05): Vercel Lambda cold start 대응 — 3s → 5s
-    const r=await fetch(`${CFG.api}/health`,{signal:AbortSignal.timeout(5000)});
+    // Phase 4-2 단계 1 미세 (2026-05-05): Vercel Lambda cold start 대응 — 3s → 5s. 재시도 시 9s(콜드 여유).
+    const r=await fetch(`${CFG.api}/health`,{signal:AbortSignal.timeout(_isRetry?9000:5000)});
     if(r.ok){
       const d=await r.json().catch(()=>({}));
       // NAVER-MAPS-2026-05-13 (Sprint GG): health 응답 전역 저장 — loadMap() 분기 시점 활용
@@ -9367,6 +9367,9 @@ async function chkAPI(){
     }
     throw new Error('not ok');
   }catch{
+    // COLD-START-RETRY-2026-07-12 (Sprint CCCCC, 운영자 발견 "서버 정상인데 오프라인 오표시"): 콜드 스타트로
+    //   첫 health 가 5s 초과하면 오프라인 오표시되던 것 → 1회 재시도(2번째는 웜 lambda) 후에만 오프라인 확정.
+    if(!_isRetry){ await new Promise(_r=>setTimeout(_r,1800)); return chkAPI(true); }
     // Phase 4: 장애 시 빨간 표시 + display block
     el.textContent='● 서버 오프라인';el.className='hst off';
     el.style.display='inline-flex';
