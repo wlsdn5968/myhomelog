@@ -417,11 +417,22 @@ async function getDataBasis() {
       .order('deal_date', { ascending: false })
       .limit(1);
     const latest = data && data[0] && data[0].deal_date ? String(data[0].deal_date) : null;
+    // ECOS-2026-07-13 (Sprint FFFFF): 시중 금리 기준 표기 — ECOS 실측값(키 없으면 생략, graceful)
+    let rateBasis = null, ecosSource = false;
+    try {
+      const ecos = await require('../services/ecosService').getEcosRates();
+      if (ecos && ecos.mortgageRate != null) {
+        const m = String(ecos.mortgageRateMonth || '').replace(/^(\d{4})(\d{2})$/, '$1.$2');
+        rateBasis = `시중 주담대 평균 ${ecos.mortgageRate}%${ecos.baseRate != null ? ` · 기준금리 ${ecos.baseRate}%` : ''} (한국은행 ECOS ${m})`;
+        ecosSource = true;
+      }
+    } catch (_) {}
     const out = {
       txLatest: latest,                                   // 예: '2026-07-07'
       txLatestLabel: latest ? `${latest.slice(0, 7)} 실거래까지 반영` : null,
       regulationBasis: '2025.10.15 주택시장 안정화 대책 (금융위) · 2026.6.30 규제지역 확대 반영',
-      sources: ['국토교통부 실거래가', 'K-apt 공동주택', '건축물대장(건축HUB)', '학교알리미·NEIS', '카카오맵', '국가법령정보', '금융위원회'],
+      rateBasis,
+      sources: ['국토교통부 실거래가', 'K-apt 공동주택', '건축물대장(건축HUB)', '학교알리미·NEIS', '카카오맵', '국가법령정보', '금융위원회', ...(ecosSource ? ['한국은행 ECOS'] : [])],
     };
     cache.set(CK, out, 21600); // 6h — daily ingest 주기와 정합
     return out;

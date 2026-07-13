@@ -1515,6 +1515,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--r);padding:17px;margin-bottom:14px;max-width:520px;box-shadow:var(--sh)">
     <div class="r2"><div><label class="lbl" for="c_b">매수가(억)</label><input class="inp" id="c_b" type="number" inputmode="decimal" placeholder="7.0" oninput="dc()"></div><div><label class="lbl" for="c_i">연소득(만)</label><input class="inp" id="c_i" type="number" inputmode="decimal" placeholder="5000" oninput="dc()"></div></div>
     <div class="r2"><div><label class="lbl" for="c_r">금리(%)</label><input class="inp" id="c_r" type="number" inputmode="decimal" placeholder="4.0" step="0.1" oninput="dc()"></div><div><label class="lbl" for="c_y">기간(년)</label><input class="inp" id="c_y" type="number" inputmode="decimal" placeholder="30" oninput="dc()"></div></div>
+    <div id="ecosHint" style="display:none;font-size:10px;color:var(--t2);margin:-4px 0 8px;line-height:1.5"></div>
     <div class="r2"><div><label class="lbl" for="c_e">기존 월원리금(만)</label><input class="inp" id="c_e" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div><div><label class="lbl" for="c_c">보유현금(억)</label><input class="inp" id="c_c" type="number" inputmode="decimal" placeholder="3.0" oninput="dc()"></div></div>
     <!-- Phase 4 (2026-04-26): 신용대출/전세대출 잔액 — DSR 정확 계산 위해 -->
     <div class="r2">
@@ -3785,6 +3786,7 @@ function _renderReport(data) {
         <span style="margin-right:10px">📅 생성 <b>${_escHtml(new Date(data.generatedAt || Date.now()).toLocaleDateString('ko-KR'))}</b></span>
         ${_basis.txLatestLabel ? `<span style="margin-right:10px">📈 실거래 <b>${_escHtml(_basis.txLatestLabel)}</b></span>` : ''}
         <span>⚖️ 규제 <b>${_escHtml(_basis.regulationBasis || '')}</b></span>
+        ${_basis.rateBasis ? `<span style="display:block;margin-top:2px">💰 금리 <b>${_escHtml(_basis.rateBasis)}</b></span>` : ''}
       </div>
       ${Array.isArray(_basis.sources) && _basis.sources.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${_basis.sources.map(s=>`<span style="background:var(--bg-base);border:1px solid var(--bd);border-radius:4px;padding:1px 7px;font-size:9.5px;color:var(--t3)">${_escHtml(s)}</span>`).join('')}</div>` : ''}
     </div>` : '';
@@ -4343,6 +4345,7 @@ async function refreshQuota(){
       updateQuota(d.usage);
       if(d.chat) updateAiPill(d.chat);
       updateDataQuality(d.facilityQuality, !!(d.usage && d.usage.unlimited)); // 관리자 데이터 품질 뱃지 (Sprint BBBBB)
+      updateEcosHint(d.ecosRates); // ECOS 시중금리 힌트 + dc() 기본금리 (Sprint FFFFF)
       // 월 예산 90% 초과 시 선제적 경고 (아직 차단 전)
       if(d.monthlyBudget && !d.monthlyBudget.exceeded && d.monthlyBudget.remainingPct <= 10){
         const pill = document.getElementById('aiPill');
@@ -4399,6 +4402,23 @@ function showDataQuality(){
   if(!fq){ if(typeof toast==='function') toast('데이터 품질 정보 없음'); return; }
   const msg = `🗂 facility 데이터 품질 (총 ${(fq.total||0).toLocaleString()}개) — 주차누락 ${fq.parkingMissing.toLocaleString()}(${fq.parkingMissingPct}%)·세대수0 ${fq.householdsZero}·KAPT조회실패 ${fq.emptyFetch}·미적재 ${fq.facilityNull} · ${fq.warn?'⚠ 백필 self-heal 진행중':'✓ 정상'}`;
   if(typeof toast==='function') toast(msg);
+}
+
+// ECOS-2026-07-13 (Sprint FFFFF): 시중 금리(한국은행 ECOS 실측) — 대출계산기 기본금리·힌트.
+//   window._ecosMortgageRate 를 dc() 기본값으로 사용(표시=계산 일치). ECOS 없으면 기존 4% 유지·힌트 숨김.
+function updateEcosHint(e){
+  try{
+    const el = document.getElementById('ecosHint');
+    if(!e || e.mortgageRate == null){ if(el) el.style.display='none'; return; }
+    window._ecosMortgageRate = Number(e.mortgageRate) || null;
+    const m = String(e.mortgageRateMonth||'').replace(/^(\d{4})(\d{2})$/,'$1.$2');
+    if(el){
+      el.innerHTML = `💡 미입력 시 시중 평균 주담대 <b>${_escHtml(String(e.mortgageRate))}%</b> 적용 <span style="color:var(--t3)">(신규취급 가중평균 · 한국은행 ECOS ${_escHtml(m)}${e.baseRate!=null?` · 기준금리 ${_escHtml(String(e.baseRate))}%`:''})</span>`;
+      el.style.display='block';
+    }
+    const cr = document.getElementById('c_r');
+    if(cr) cr.placeholder = String(e.mortgageRate);
+  }catch(_){}
 }
 
 // ── 한도 모달 (daily / monthly / info) ───────────────────
@@ -7989,7 +8009,8 @@ function cl_inner(buy){
 function dc(){
   const buy=parseFloat(document.getElementById('c_b')?.value)||0;
   if(!buy){document.getElementById('co').style.display='none';return;}
-  const inc=parseFloat(document.getElementById('c_i')?.value)||0,rate=(parseFloat(document.getElementById('c_r')?.value)||4)/100,yrs=parseInt(document.getElementById('c_y')?.value)||30,ex=parseFloat(document.getElementById('c_e')?.value)||0,cash=parseFloat(document.getElementById('c_c')?.value)||0;
+  // ECOS-2026-07-13 (Sprint FFFFF): 미입력 기본금리 4% 고정 → ECOS 시중 주담대 가중평균(있으면) — placeholder(updateEcosHint)와 표시=계산 일치.
+  const inc=parseFloat(document.getElementById('c_i')?.value)||0,rate=(parseFloat(document.getElementById('c_r')?.value)||window._ecosMortgageRate||4)/100,yrs=parseInt(document.getElementById('c_y')?.value)||30,ex=parseFloat(document.getElementById('c_e')?.value)||0,cash=parseFloat(document.getElementById('c_c')?.value)||0;
   // Phase 4 (2026-04-26): 신용대출/전세대출 잔액 → 추정 월원리금 환산해 ex 에 합산
   // 신용대출 평균 금리 6%·만기 5년, 전세대출 평균 4%·만기 2년 보수적 가정
   const cl=parseFloat(document.getElementById('c_cl')?.value)||0;

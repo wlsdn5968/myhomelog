@@ -146,45 +146,6 @@ const dataLimiter = makeRateLimiter({
 
 app.use('/api/', generalLimiter);
 
-// ECOS-CHK-2026-07-13 (Sprint FFFFF, 검증 후 즉시 제거 — SSSS _brchk 패턴):
-//   운영자가 Vercel 에 ECOS_API_KEY 등록 → 키 유효성 + 통계표 코드(기준금리 722Y001·가중평균 대출금리
-//   121Y006 후보)를 실응답으로 검증. 추측 배제 — KeyStatisticList(100대 지표)·StatisticItemList 로
-//   실제 지표명/아이템코드 확인. 키 값은 절대 응답에 미포함(길이만). 경로 추측불가.
-app.get('/api/_ecoschk_x91k4', async (req, res) => {
-  const key = process.env.ECOS_API_KEY || '';
-  const out = { keyLen: key.length };
-  if (!key) return res.json(out);
-  const axios = require('axios');
-  const base = 'https://ecos.bok.or.kr/api';
-  const get = async (url) => {
-    try { const r = await axios.get(url, { timeout: 8000 }); return r.data; }
-    catch (e) { return { _err: e.message }; }
-  };
-  const ks = await get(`${base}/KeyStatisticList/${key}/json/kr/1/100`);
-  out.keystatRates = ks && ks.KeyStatisticList && ks.KeyStatisticList.row
-    ? ks.KeyStatisticList.row.filter(r => /금리/.test(r.KEYSTAT_NAME || '')).map(r => ({ cls: r.CLASS_NAME, name: r.KEYSTAT_NAME, val: r.DATA_VALUE, unit: r.UNIT_NAME, cycle: r.CYCLE }))
-    : (ks && ks.RESULT) || (ks && ks._err) || 'no-row';
-  const t722 = await get(`${base}/StatisticSearch/${key}/json/kr/1/3/722Y001/D/20260601/20260731`);
-  out.t722 = t722 && t722.StatisticSearch && t722.StatisticSearch.row
-    ? t722.StatisticSearch.row.slice(-2).map(r => ({ name: r.STAT_NAME, item: r.ITEM_NAME1, time: r.TIME, val: r.DATA_VALUE }))
-    : (t722 && t722.RESULT) || (t722 && t722._err) || 'no-row';
-  const it = await get(`${base}/StatisticItemList/${key}/json/kr/1/100/121Y006`);
-  const _rows = (it && it.StatisticItemList && it.StatisticItemList.row) || [];
-  const _m = _rows.filter(r => r.CYCLE === 'M');
-  out.items121Y006M = _m.length ? _m.map(r => `${r.ITEM_CODE}:${r.ITEM_NAME}`) : ((it && it.RESULT) || (it && it._err) || 'no-row');
-  // 주택담보대출 아이템 동적 발견 → 최근 실데이터까지 조회 (코드 추측 배제)
-  const _mort = _m.find(r => /주택담보/.test(r.ITEM_NAME || ''));
-  if (_mort) {
-    const s = await get(`${base}/StatisticSearch/${key}/json/kr/1/5/121Y006/M/202601/202612/${_mort.ITEM_CODE}`);
-    out.mortgage = s && s.StatisticSearch && s.StatisticSearch.row
-      ? { itemCode: _mort.ITEM_CODE, rows: s.StatisticSearch.row.slice(-3).map(r => ({ time: r.TIME, val: r.DATA_VALUE, item: r.ITEM_NAME1 })) }
-      : ((s && s.RESULT) || (s && s._err) || 'no-row');
-  } else {
-    out.mortgage = 'no-주택담보-item';
-  }
-  res.json(out);
-});
-
 // ── 라우터 연결 ────────────────────────────────────────────
 const chatRouter = require('./routes/chat');
 const transactionRouter = require('./routes/transactions');
@@ -535,6 +496,9 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   //   계산 트리거 후 이번엔 null 반환(health 지연 0). 다음 호출부터 값 노출.
   let _facQuality = cache.get('meta:facilityQuality');
   if (_facQuality === undefined) { _facQuality = null; getFacilityQuality().catch(() => {}); }
+  // ECOS-2026-07-13 (Sprint FFFFF): 시중 금리(기준금리·주담대 가중평균) — facilityQuality 와 동일 비차단 패턴.
+  let _ecosRates = cache.get('ecos:rates:v1');
+  if (_ecosRates === undefined) { _ecosRates = null; try { require('./services/ecosService').getEcosRates().catch(() => {}); } catch (_) {} }
   // QUOTA-PLAN-2026-07-12 (Sprint YYYY, 운영자 "admin 인데 검색 0/5 표시"): usage 한도를 사용자 plan 반영.
   //   기존엔 DAILY_SEARCH_LIMIT(=5) 고정 → admin·pro·로그인free 모두 5로 오표시(admin 은 초과 시 0/5).
   //   dailyLimit 과 동일 규칙: admin 무제한 · pro/team 플랜한도 · 로그인 free 는 base+bonus(검색5·챗10).
@@ -560,6 +524,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
     dataCounts: _dataCounts,
     db: _dbUsage,
     facilityQuality: _facQuality,
+    ecosRates: _ecosRates,
     regulations: _regulations,
     cache: { keys: cache.keys().length, stats: cache.getStats() },
     usage: _unlimited
