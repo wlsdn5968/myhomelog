@@ -491,7 +491,11 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   const _naverMapsClientId = process.env.NAVER_MAPS_CLIENT_ID || null;
   const _dataCounts = await getDataCounts();
   const _dbUsage = await getDbUsage();
-  const _facQuality = await getFacilityQuality(); // 데이터 품질 모니터 (Sprint AAAAA)
+  // 데이터 품질 모니터 (Sprint AAAAA) — HOTPATH-NONBLOCK-2026-07-12 (Sprint DDDDD): count 5개가 콜드 health 를
+  //   ~2s 느리게 해 chkAPI 5s 타임아웃 오프라인 오표시 유발 → health 핫패스에선 캐시만 읽고, 미스 시 백그라운드
+  //   계산 트리거 후 이번엔 null 반환(health 지연 0). 다음 호출부터 값 노출.
+  let _facQuality = cache.get('meta:facilityQuality');
+  if (_facQuality === undefined) { _facQuality = null; getFacilityQuality().catch(() => {}); }
   // QUOTA-PLAN-2026-07-12 (Sprint YYYY, 운영자 "admin 인데 검색 0/5 표시"): usage 한도를 사용자 plan 반영.
   //   기존엔 DAILY_SEARCH_LIMIT(=5) 고정 → admin·pro·로그인free 모두 5로 오표시(admin 은 초과 시 0/5).
   //   dailyLimit 과 동일 규칙: admin 무제한 · pro/team 플랜한도 · 로그인 free 는 base+bonus(검색5·챗10).
