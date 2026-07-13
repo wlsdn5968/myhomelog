@@ -168,10 +168,20 @@ app.get('/api/_ecoschk_x91k4', async (req, res) => {
   out.t722 = t722 && t722.StatisticSearch && t722.StatisticSearch.row
     ? t722.StatisticSearch.row.slice(-2).map(r => ({ name: r.STAT_NAME, item: r.ITEM_NAME1, time: r.TIME, val: r.DATA_VALUE }))
     : (t722 && t722.RESULT) || (t722 && t722._err) || 'no-row';
-  const it = await get(`${base}/StatisticItemList/${key}/json/kr/1/30/121Y006`);
-  out.items121Y006 = it && it.StatisticItemList && it.StatisticItemList.row
-    ? it.StatisticItemList.row.map(r => ({ code: r.ITEM_CODE, name: r.ITEM_NAME, cycle: r.CYCLE }))
-    : (it && it.RESULT) || (it && it._err) || 'no-row';
+  const it = await get(`${base}/StatisticItemList/${key}/json/kr/1/100/121Y006`);
+  const _rows = (it && it.StatisticItemList && it.StatisticItemList.row) || [];
+  const _m = _rows.filter(r => r.CYCLE === 'M');
+  out.items121Y006M = _m.length ? _m.map(r => `${r.ITEM_CODE}:${r.ITEM_NAME}`) : ((it && it.RESULT) || (it && it._err) || 'no-row');
+  // 주택담보대출 아이템 동적 발견 → 최근 실데이터까지 조회 (코드 추측 배제)
+  const _mort = _m.find(r => /주택담보/.test(r.ITEM_NAME || ''));
+  if (_mort) {
+    const s = await get(`${base}/StatisticSearch/${key}/json/kr/1/5/121Y006/M/202601/202612/${_mort.ITEM_CODE}`);
+    out.mortgage = s && s.StatisticSearch && s.StatisticSearch.row
+      ? { itemCode: _mort.ITEM_CODE, rows: s.StatisticSearch.row.slice(-3).map(r => ({ time: r.TIME, val: r.DATA_VALUE, item: r.ITEM_NAME1 })) }
+      : ((s && s.RESULT) || (s && s._err) || 'no-row');
+  } else {
+    out.mortgage = 'no-주택담보-item';
+  }
   res.json(out);
 });
 
