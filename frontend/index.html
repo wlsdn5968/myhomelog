@@ -4363,7 +4363,13 @@ function updateAiPill(usage){
 function updateDataQuality(fq, isAdmin){
   const pill = document.getElementById('dqPill');
   if(!pill) return;
-  if(!isAdmin || !fq){ pill.style.display='none'; return; }
+  if(!isAdmin){ pill.style.display='none'; return; }
+  if(!fq){
+    // DDDDD 비차단: 첫 health 는 facilityQuality=null(백그라운드 계산 중)일 수 있음 → admin 이면 3초 후 1회
+    //   재조회로 뱃지 채움(무한루프 방지 _dqRetried).
+    if(!window._dqRetried){ window._dqRetried = true; setTimeout(()=>{ try{ typeof refreshQuota==='function' && refreshQuota(); }catch(_){} }, 3000); }
+    pill.style.display='none'; return;
+  }
   window._dqData = fq;
   pill.style.display='inline-flex';
   if(fq.warn){
