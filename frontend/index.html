@@ -1270,6 +1270,8 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <div class="rpill" onclick="openRegSummary()" style="cursor:pointer" title="2025.10.15 규제 요약 보기"><div class="hdot"></div>규제 요약</div>
     <span class="hst" id="quotaPill" style="background:var(--ambL);color:var(--amb);display:none" title="🤖 단지 검색·AI 분석 무료 한도 (오늘 자정 reset)" aria-label="AI 검색 무료 한도">🔎 검색 5/5</span>
     <span class="hst" id="aiPill" style="background:var(--bg2);color:var(--t2);display:none" title="💬 AI 채팅 무료 한도 (오늘 자정 reset)" aria-label="AI 채팅 무료 한도">💬 채팅 —</span>
+    <!-- DATA-QUALITY-2026-07-12 (Sprint BBBBB): 관리자 전용 facility 데이터 품질 뱃지 (운영자가 /api/health 안 봐도) -->
+    <span class="hst" id="dqPill" onclick="showDataQuality()" style="display:none;cursor:pointer" title="facility 데이터 품질 (관리자 전용)" aria-label="데이터 품질">🗂 데이터</span>
     <!-- Phase 4 (2026-04-26): 서버 정상 시 hide, 장애 시만 빨간 표시 — "항상 초록"의 의미 없음 해소 -->
     <span class="hst off" id="apiSt" style="display:none">확인 중...</span>
     <!-- Phase 5 (2026-04-26): 핵심 USP = 1page 보고서. AI 특약 CTA 제거. -->
@@ -4327,6 +4329,7 @@ async function refreshQuota(){
       const d=await r.json();
       updateQuota(d.usage);
       if(d.chat) updateAiPill(d.chat);
+      updateDataQuality(d.facilityQuality, !!(d.usage && d.usage.unlimited)); // 관리자 데이터 품질 뱃지 (Sprint BBBBB)
       // 월 예산 90% 초과 시 선제적 경고 (아직 차단 전)
       if(d.monthlyBudget && !d.monthlyBudget.exceeded && d.monthlyBudget.remainingPct <= 10){
         const pill = document.getElementById('aiPill');
@@ -4353,6 +4356,30 @@ function updateAiPill(usage){
   pill.title = `오늘 AI 채팅 ${usage.used}/${usage.limit}회 사용 — 매일 자정 리셋`;
   pill.onclick = () => openQuotaModal('info', `오늘 AI 채팅 ${usage.used}/${usage.limit}회 사용 중`);
   pill.style.cursor = 'pointer';
+}
+
+// DATA-QUALITY-2026-07-12 (Sprint BBBBB, 운영자 "일일이 안 찾게"): 관리자 전용 facility 데이터 품질 뱃지.
+//   /api/health.facilityQuality 를 헤더에 시각화 — warn(주차누락 등 임계초과) 시 앰버, 정상 시 초록. admin 만.
+function updateDataQuality(fq, isAdmin){
+  const pill = document.getElementById('dqPill');
+  if(!pill) return;
+  if(!isAdmin || !fq){ pill.style.display='none'; return; }
+  window._dqData = fq;
+  pill.style.display='inline-flex';
+  if(fq.warn){
+    pill.textContent = `🗂 데이터 ⚠${fq.parkingMissingPct!=null?fq.parkingMissingPct+'%':''}`;
+    pill.style.background='var(--ambL)'; pill.style.color='var(--amb)';
+  } else {
+    pill.textContent = '🗂 데이터 ✓';
+    pill.style.background='var(--grnL)'; pill.style.color='var(--grn)';
+  }
+  pill.title = `facility 데이터 품질 (관리자 · 총 ${(fq.total||0).toLocaleString()}개)\n주차누락 ${fq.parkingMissing}(${fq.parkingMissingPct}%) · 세대수0 ${fq.householdsZero} · KAPT조회실패 ${fq.emptyFetch} · 미적재 ${fq.facilityNull}\n${fq.warn?'⚠ 임계 초과 — 백필 self-heal 진행 중(매일 05:00 UTC)':'✓ 정상'}`;
+}
+function showDataQuality(){
+  const fq = window._dqData;
+  if(!fq){ if(typeof toast==='function') toast('데이터 품질 정보 없음'); return; }
+  const msg = `🗂 facility 데이터 품질 (총 ${(fq.total||0).toLocaleString()}개) — 주차누락 ${fq.parkingMissing.toLocaleString()}(${fq.parkingMissingPct}%)·세대수0 ${fq.householdsZero}·KAPT조회실패 ${fq.emptyFetch}·미적재 ${fq.facilityNull} · ${fq.warn?'⚠ 백필 self-heal 진행중':'✓ 정상'}`;
+  if(typeof toast==='function') toast(msg);
 }
 
 // ── 한도 모달 (daily / monthly / info) ───────────────────
