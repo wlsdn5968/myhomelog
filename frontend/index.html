@@ -1575,13 +1575,13 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <th style="padding:6px 4px;border-bottom:1px solid var(--bd)">금리</th>
       </tr></thead>
       <tbody style="color:var(--t2)">
-        <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>보금자리론</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">3.6~4.2억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">4.9~5.3%*</td></tr>
-        <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6~7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">5억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">2~2.4억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);color:var(--grn);font-weight:700">2.9~4.2%*</td></tr>
+        <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>보금자리론</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">3.6~4.2억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)"><span id="hfRateBogeum">4.9~5.3%*</span></td></tr>
+        <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6~7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">5억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">2~2.4억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);color:var(--grn);font-weight:700"><span id="hfRateDidimdol">2.9~4.2%*</span></td></tr>
         <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>신혼 디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">8.5천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">3.2억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);color:var(--grn);font-weight:700">2.6~3.9%*</td></tr>
         <tr><td style="padding:5px 4px"><b>신생아 특례</b></td><td style="text-align:center;padding:5px 4px">1.3억↓</td><td style="text-align:center;padding:5px 4px">9억↓</td><td style="text-align:center;padding:5px 4px;font-weight:700">4억</td><td style="text-align:center;padding:5px 4px;color:var(--grn);font-weight:700">1.8~3.5%*</td></tr>
       </tbody>
     </table>
-    <div style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.5">※ 정책자금은 자격·서류 요건 별도. <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:var(--grn);font-weight:700">주택도시기금 (nhuf.molit.go.kr) →</a> · 1599-0001<br>※ <b>금리(*)는 2026.7 공시 기준 대략치</b> — 소득·만기·우대에 따라 다르고 매월 변동(신생아 특례는 소득 1.3억↓ 기준). 최신 공시: <a href="https://www.hf.go.kr" target="_blank" rel="noopener" style="color:var(--grn);font-weight:700">주택금융공사(hf.go.kr)</a>·주택도시기금.<br>※ 신생아 특례 LTV 생애최초 80%(수도권·규제 70%)·일반 70% — 주담대 40% 대비 유리. 2년 내 출산 가구 필수 확인.</div>
+    <div style="font-size:10px;color:var(--t3);margin-top:6px;line-height:1.5">※ 정책자금은 자격·서류 요건 별도. <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:var(--grn);font-weight:700">주택도시기금 (nhuf.molit.go.kr) →</a> · 1599-0001<br>※ <b id="hfRateNote">금리(*)는 2026.7 공시 기준 대략치</b> — 소득·만기·우대에 따라 다르고 매월 변동(신생아 특례는 소득 1.3억↓ 기준). 최신 공시: <a href="https://www.hf.go.kr" target="_blank" rel="noopener" style="color:var(--grn);font-weight:700">주택금융공사(hf.go.kr)</a>·주택도시기금.<br>※ 신생아 특례 LTV 생애최초 80%(수도권·규제 70%)·일반 70% — 주담대 40% 대비 유리. 2년 내 출산 가구 필수 확인.</div>
   </div>
 
   <!-- Phase 4 (2026-04-26): 부족 자금 해결 시나리오 -->
@@ -4359,6 +4359,7 @@ async function refreshQuota(){
       if(d.chat) updateAiPill(d.chat);
       updateDataQuality(d.facilityQuality, !!(d.usage && d.usage.unlimited)); // 관리자 데이터 품질 뱃지 (Sprint BBBBB)
       updateEcosHint(d.ecosRates); // ECOS 시중금리 힌트 + dc() 기본금리 (Sprint FFFFF)
+      updateHfRates(d.hfRates); // HF 정책자금 공시 금리 — 표 자동 갱신 (Sprint HHHHH)
       // 월 예산 90% 초과 시 선제적 경고 (아직 차단 전)
       if(d.monthlyBudget && !d.monthlyBudget.exceeded && d.monthlyBudget.remainingPct <= 10){
         const pill = document.getElementById('aiPill');
@@ -4431,6 +4432,24 @@ function updateEcosHint(e){
     }
     const cr = document.getElementById('c_r');
     if(cr) cr.placeholder = String(e.mortgageRate);
+  }catch(_){}
+}
+
+// HF-2026-07-14 (Sprint HHHHH): 정책자금 표 금리 자동 갱신 — HF 공시(data.go.kr, 실측 검증 API).
+//   디딤돌·보금자리론(u-보금자리론 공시) 행만 자동(신혼·신생아는 API 없음 — 하드코딩 유지, 각주 명시).
+//   hfRates 없으면(키/API 실패) 기존 하드코딩 표 그대로(안전 fallback).
+function updateHfRates(hf){
+  try{
+    if(!hf) return;
+    const fmt = r => (r && r.min != null && r.max != null) ? (r.min === r.max ? `${r.min}%` : `${r.min}~${r.max}%`) : null;
+    const ymd = s => (s && /^\d{8}$/.test(s)) ? `${s.slice(0,4)}.${s.slice(4,6)}.${s.slice(6,8)}` : (s || '');
+    const b = document.getElementById('hfRateBogeum');
+    const d = document.getElementById('hfRateDidimdol');
+    let applied = null;
+    if(b && hf.bogeum && fmt(hf.bogeum)){ b.textContent = fmt(hf.bogeum); applied = hf.bogeum.applyDy || applied; }
+    if(d && hf.didimdol && fmt(hf.didimdol)){ d.textContent = fmt(hf.didimdol); applied = hf.didimdol.applyDy || applied; }
+    const note = document.getElementById('hfRateNote');
+    if(note && applied){ note.textContent = `보금자리론(u-보금자리론)·디딤돌 금리는 주택금융공사 공시 자동 반영 (적용일 ${ymd(String(applied))}) — 신혼·신생아 특례(*)는 2026.7 공시 대략치`; }
   }catch(_){}
 }
 

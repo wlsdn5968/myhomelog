@@ -146,35 +146,28 @@ const dataLimiter = makeRateLimiter({
 
 app.use('/api/', generalLimiter);
 
-// HF-CHK-2026-07-14 (Sprint HHHHH, 검증 후 즉시 제거 — _brchk/_ecoschk 패턴):
-//   운영자 data.go.kr 활용신청(디딤돌 15082028·u-보금자리론 15082039) 완료 → MOLIT_API_KEY 로
-//   실호출 검증. 파라미터/응답 구조 추측 배제 — 파라미터 변형 3종 시도해 raw 응답 확인. 키 미노출.
-app.get('/api/_hfchk_q72m8', async (req, res) => {
-  const key = process.env.MOLIT_API_KEY || '';
+// KOSIS-CHK-2026-07-14 (Sprint HHHHH, 검증 후 즉시 제거 — _brchk/_ecoschk/_hfchk 패턴):
+//   운영자 kosis.kr 인증키 발급 + Vercel KOSIS_API_KEY 등록 → 시군구 미분양 통계표(orgId/tblId)를
+//   실응답으로 확정. 추측 배제 — 검색 API + 후보 tblId 실호출 결과(성공/에러코드)로만 판단. 키 미노출.
+app.get('/api/_kosischk_p38v6', async (req, res) => {
+  const key = process.env.KOSIS_API_KEY || '';
   const out = { keyLen: key.length };
   if (!key) return res.json(out);
   const axios = require('axios');
-  const tryGet = async (url, params) => {
+  const tryGet = async (label, url) => {
     try {
-      const r = await axios.get(url, { params, timeout: 8000 });
+      const r = await axios.get(url, { timeout: 8000 });
       const d = r.data;
-      const s = typeof d === 'string' ? d.slice(0, 500) : JSON.stringify(d).slice(0, 900);
-      return { ok: true, preview: s };
+      return { label, ok: true, preview: (typeof d === 'string' ? d : JSON.stringify(d)).slice(0, 700) };
     } catch (e) {
-      return { ok: false, status: e.response && e.response.status, body: e.response && String(typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data)).slice(0, 300), msg: e.message };
+      return { label, ok: false, status: e.response && e.response.status, body: e.response ? String(typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data)).slice(0, 300) : e.message };
     }
   };
-  const variants = [
-    { serviceKey: key, pageNo: 1, numOfRows: 5, dataType: 'JSON' },
-    { serviceKey: key, pageNo: 1, numOfRows: 5, _type: 'json' },
-    { serviceKey: key, pageNo: 1, numOfRows: 5, resultType: 'json' },
-  ];
-  out.didimdol = [];
-  out.uloan = [];
-  for (const v of variants) {
-    out.didimdol.push(await tryGet('https://apis.data.go.kr/B551408/didimdol-loan-rate/didimdol-info', v));
-    out.uloan.push(await tryGet('https://apis.data.go.kr/B551408/u-loan-rate/uloan-info', v));
-  }
+  out.results = [];
+  // (a) 통계표 검색 — '미분양' (KOSIS 검색 서비스)
+  out.results.push(await tryGet('search', `https://kosis.kr/openapi/statisticsSearch.do?method=getList&apiKey=${encodeURIComponent(key)}&searchNm=${encodeURIComponent('미분양')}&format=json&jsonVD=Y&startCount=1&resultCount=10`));
+  // (b) 비공식 언급 후보 tblId 실호출 (성공하면 확정, 실패 시 에러코드가 근거)
+  out.results.push(await tryGet('cand-101-DT_1YL202001E', `https://kosis.kr/openapi/Param/statisticsParameterData.do?method=getList&apiKey=${encodeURIComponent(key)}&orgId=101&tblId=DT_1YL202001E&itmId=ALL&objL1=ALL&format=json&jsonVD=Y&prdSe=M&newEstPrdCnt=2`));
   res.json(out);
 });
 
@@ -531,6 +524,9 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   // ECOS-2026-07-13 (Sprint FFFFF): 시중 금리(기준금리·주담대 가중평균) — facilityQuality 와 동일 비차단 패턴.
   let _ecosRates = cache.get('ecos:rates:v1');
   if (_ecosRates === undefined) { _ecosRates = null; try { require('./services/ecosService').getEcosRates().catch(() => {}); } catch (_) {} }
+  // HF-2026-07-14 (Sprint HHHHH): 정책자금 공시 금리(디딤돌·u-보금자리론) — 동일 비차단 패턴.
+  let _hfRates = cache.get('hf:rates:v1');
+  if (_hfRates === undefined) { _hfRates = null; try { require('./services/hfService').getHfRates().catch(() => {}); } catch (_) {} }
   // QUOTA-PLAN-2026-07-12 (Sprint YYYY, 운영자 "admin 인데 검색 0/5 표시"): usage 한도를 사용자 plan 반영.
   //   기존엔 DAILY_SEARCH_LIMIT(=5) 고정 → admin·pro·로그인free 모두 5로 오표시(admin 은 초과 시 0/5).
   //   dailyLimit 과 동일 규칙: admin 무제한 · pro/team 플랜한도 · 로그인 free 는 base+bonus(검색5·챗10).
@@ -557,6 +553,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
     db: _dbUsage,
     facilityQuality: _facQuality,
     ecosRates: _ecosRates,
+    hfRates: _hfRates,
     regulations: _regulations,
     cache: { keys: cache.keys().length, stats: cache.getStats() },
     usage: _unlimited
