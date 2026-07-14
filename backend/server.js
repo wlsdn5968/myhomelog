@@ -479,6 +479,22 @@ app.get('/api/_synchk_q3', async (req, res) => {
   }
 });
 
+// TEMP-SYNCHK-2026-07-14 2단계: ?run=1 이면 정규 aptMasterSync.syncOneSgg 를 해당 lawd 1개에 그대로 실행
+//   (동일 코드 경로·동일 데이터 — 주간 cron 이 매주 하는 일의 targeted 실행). fetched/inserted/error 반환으로
+//   "API 정상인데 0행" 의 실패 단계를 실측. 검증 후 제거.
+app.get('/api/_synchk_q3_run', async (req, res) => {
+  const lawd = String(req.query.lawd || '').trim();
+  if (!/^\d{5}$/.test(lawd)) return res.status(400).json({ error: 'lawd 5자리 필요' });
+  try {
+    const { syncOneSgg, adminClient } = require('./jobs/aptMasterSync');
+    const admin = adminClient();
+    const r = await syncOneSgg(admin, lawd);
+    res.json({ ok: true, result: r });
+  } catch (e) {
+    res.json({ ok: false, error: e.message });
+  }
+});
+
 app.get('/api/health', optionalAuth, async (req, res) => {
   const [searchUsed, chatUsed] = await Promise.all([
     getUsage(req, 'search'),

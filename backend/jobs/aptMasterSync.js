@@ -154,6 +154,7 @@ async function syncOneSgg(admin, lawdCd) {
 
   // 500개씩 batch upsert
   let inserted = 0;
+  let upsertError = null; // TEMP-SYNCHK-2026-07-14: 진단용 — 실패 사유가 로그로만 남아 조용히 유실되던 것 반환에 포함
   for (let i = 0; i < rows.length; i += 500) {
     const chunk = rows.slice(i, i + 500);
     const { error, count } = await admin
@@ -161,11 +162,12 @@ async function syncOneSgg(admin, lawdCd) {
       .upsert(chunk, { onConflict: 'kapt_code', ignoreDuplicates: true, count: 'exact' });
     if (error) {
       logger.warn({ err: error.message, lawdCd }, 'apt_master upsert 실패 (chunk)');
+      if (!upsertError) upsertError = error.message;
       continue;
     }
     inserted += (count ?? 0);
   }
-  return { lawdCd, fetched: rows.length, inserted };
+  return { lawdCd, fetched: rows.length, inserted, ...(upsertError ? { upsertError } : {}) };
 }
 
 async function runAptMasterSync() {
@@ -212,7 +214,8 @@ async function runAptMasterSync() {
   return { sggs: codes.length, fetched: fetchedTotal, inserted: insertedTotal, errors: errCount, elapsedMs };
 }
 
-module.exports = { runAptMasterSync };
+// TEMP-SYNCHK-2026-07-14 (Sprint IIIII 진단): syncOneSgg 를 targeted 진단 endpoint 에서 재사용 — 검증 후 원복.
+module.exports = { runAptMasterSync, syncOneSgg, adminClient };
 
 if (require.main === module) {
   runAptMasterSync()
