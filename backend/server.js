@@ -163,11 +163,21 @@ app.get('/api/_kosischk_p38v6', async (req, res) => {
       return { label, ok: false, status: e.response && e.response.status, body: e.response ? String(typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data)).slice(0, 300) : e.message };
     }
   };
-  out.results = [];
-  // (a) 통계표 검색 — '미분양' (KOSIS 검색 서비스)
-  out.results.push(await tryGet('search', `https://kosis.kr/openapi/statisticsSearch.do?method=getList&apiKey=${encodeURIComponent(key)}&searchNm=${encodeURIComponent('미분양')}&format=json&jsonVD=Y&startCount=1&resultCount=10`));
-  // (b) 비공식 언급 후보 tblId 실호출 (성공하면 확정, 실패 시 에러코드가 근거)
-  out.results.push(await tryGet('cand-101-DT_1YL202001E', `https://kosis.kr/openapi/Param/statisticsParameterData.do?method=getList&apiKey=${encodeURIComponent(key)}&orgId=101&tblId=DT_1YL202001E&itmId=ALL&objL1=ALL&format=json&jsonVD=Y&prdSe=M&newEstPrdCnt=2`));
+  // (a) '시군구 미분양' 검색 → 후보 목록(orgId/tblId/이름)
+  let list = [];
+  try {
+    const r = await axios.get(`https://kosis.kr/openapi/statisticsSearch.do?method=getList&apiKey=${encodeURIComponent(key)}&searchNm=${encodeURIComponent('시군구 미분양')}&format=json&jsonVD=Y&startCount=1&resultCount=20`, { timeout: 8000 });
+    if (Array.isArray(r.data)) list = r.data;
+    out.searchRaw = Array.isArray(r.data) ? null : JSON.stringify(r.data).slice(0, 300);
+  } catch (e) { out.searchErr = e.message; }
+  out.candidates = list.map(r => ({ org: r.ORG_ID, tbl: r.TBL_ID, name: r.TBL_NM }));
+  // (b) 이름에 시군구 포함 첫 후보로 실데이터 조회 (itmId/objL1 ALL — 구조 확인)
+  const pick = list.find(r => /시.?군.?구/.test(r.TBL_NM || ''));
+  if (pick) {
+    out.results = [await tryGet(`data-${pick.ORG_ID}-${pick.TBL_ID}`, `https://kosis.kr/openapi/Param/statisticsParameterData.do?method=getList&apiKey=${encodeURIComponent(key)}&orgId=${pick.ORG_ID}&tblId=${pick.TBL_ID}&itmId=ALL&objL1=ALL&format=json&jsonVD=Y&prdSe=M&newEstPrdCnt=1`)];
+  } else {
+    out.results = ['no-시군구-candidate'];
+  }
   res.json(out);
 });
 
