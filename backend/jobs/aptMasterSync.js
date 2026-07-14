@@ -139,7 +139,7 @@ async function syncOneSgg(admin, lawdCd) {
 
   // ON CONFLICT (kapt_code) DO NOTHING — 신규만 INSERT
   const sigunguShort = LAWD_CODE_TO_NAME[lawdCd] || null;
-  const rows = all
+  const mapped = all
     .filter(it => it.kaptCode && it.kaptName)
     .map(it => ({
       kapt_code: String(it.kaptCode).trim(),
@@ -149,20 +149,44 @@ async function syncOneSgg(admin, lawdCd) {
       umd_nm: it.as3 ? String(it.as3).trim() : null,
       source: 'aptinfo',
     }));
+  // NAME-UNIQ-DEDUP-2026-07-14 (Sprint IIIII — 부산연제/대구동구/고양덕양 apt_master 0행 근본원인):
+  //   DB 에 uq_apt_master_name_lawd_umd(apt_name, lawd_cd, umd_nm) 유니크 제약 존재. KAPT 목록엔 동명 단지가
+  //   실재(26470 "연산현대아파트"×2 — A61176202/A61181202 [VERIFIED]) → chunk INSERT 가 duplicate key 로
+  //   전체 실패 → 그 지역 0행이 매주 조용히 반복(경고 로그만). onConflict 는 kapt_code 만 지정 가능하므로
+  //   ① 동일 (이름,법정동) 조합은 첫 항목만 유지(이름 매칭 관점에선 어차피 구분 불가) ② 아래 행별 fallback.
+  const _seenNameKey = new Set();
+  const rows = [];
+  for (const r of mapped) {
+    const k = `${r.apt_name}|${r.lawd_cd}|${r.umd_nm || ''}`;
+    if (_seenNameKey.has(k)) {
+      logger.warn({ lawdCd, dupName: r.apt_name, skippedKapt: r.kapt_code }, '동명 단지(이름 유니크 충돌) skip');
+      continue;
+    }
+    _seenNameKey.add(k);
+    rows.push(r);
+  }
 
   if (!rows.length) return { lawdCd, fetched: all.length, inserted: 0 };
 
   // 500개씩 batch upsert
   let inserted = 0;
-  let upsertError = null; // TEMP-SYNCHK-2026-07-14: 진단용 — 실패 사유가 로그로만 남아 조용히 유실되던 것 반환에 포함
+  let upsertError = null; // 실패 사유가 로그로만 남아 조용히 유실되던 것 — 반환에 포함(runAptMasterSync 가시성)
   for (let i = 0; i < rows.length; i += 500) {
     const chunk = rows.slice(i, i + 500);
     const { error, count } = await admin
       .from('apt_master')
       .upsert(chunk, { onConflict: 'kapt_code', ignoreDuplicates: true, count: 'exact' });
     if (error) {
-      logger.warn({ err: error.message, lawdCd }, 'apt_master upsert 실패 (chunk)');
+      // NAME-UNIQ-DEDUP-2026-07-14 fallback: chunk 실패(사전 dedup 못 잡는 기존 DB 행과의 이름 충돌 등) 시
+      //   행별 upsert 로 격리 — 충돌 행만 유실, 나머지 전부 구제. DB-only 라 추가 API 비용 0.
+      logger.warn({ err: error.message, lawdCd }, 'apt_master upsert 실패 (chunk) — 행별 fallback');
       if (!upsertError) upsertError = error.message;
+      for (const row of chunk) {
+        const { error: e1, count: c1 } = await admin
+          .from('apt_master')
+          .upsert(row, { onConflict: 'kapt_code', ignoreDuplicates: true, count: 'exact' });
+        if (!e1) inserted += (c1 ?? 0);
+      }
       continue;
     }
     inserted += (count ?? 0);
