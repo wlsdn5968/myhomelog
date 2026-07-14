@@ -146,6 +146,38 @@ const dataLimiter = makeRateLimiter({
 
 app.use('/api/', generalLimiter);
 
+// HF-CHK-2026-07-14 (Sprint HHHHH, 검증 후 즉시 제거 — _brchk/_ecoschk 패턴):
+//   운영자 data.go.kr 활용신청(디딤돌 15082028·u-보금자리론 15082039) 완료 → MOLIT_API_KEY 로
+//   실호출 검증. 파라미터/응답 구조 추측 배제 — 파라미터 변형 3종 시도해 raw 응답 확인. 키 미노출.
+app.get('/api/_hfchk_q72m8', async (req, res) => {
+  const key = process.env.MOLIT_API_KEY || '';
+  const out = { keyLen: key.length };
+  if (!key) return res.json(out);
+  const axios = require('axios');
+  const tryGet = async (url, params) => {
+    try {
+      const r = await axios.get(url, { params, timeout: 8000 });
+      const d = r.data;
+      const s = typeof d === 'string' ? d.slice(0, 500) : JSON.stringify(d).slice(0, 900);
+      return { ok: true, preview: s };
+    } catch (e) {
+      return { ok: false, status: e.response && e.response.status, body: e.response && String(typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data)).slice(0, 300), msg: e.message };
+    }
+  };
+  const variants = [
+    { serviceKey: key, pageNo: 1, numOfRows: 5, dataType: 'JSON' },
+    { serviceKey: key, pageNo: 1, numOfRows: 5, _type: 'json' },
+    { serviceKey: key, pageNo: 1, numOfRows: 5, resultType: 'json' },
+  ];
+  out.didimdol = [];
+  out.uloan = [];
+  for (const v of variants) {
+    out.didimdol.push(await tryGet('https://apis.data.go.kr/B551408/didimdol-loan-rate/didimdol-info', v));
+    out.uloan.push(await tryGet('https://apis.data.go.kr/B551408/u-loan-rate/uloan-info', v));
+  }
+  res.json(out);
+});
+
 // ── 라우터 연결 ────────────────────────────────────────────
 const chatRouter = require('./routes/chat');
 const transactionRouter = require('./routes/transactions');
