@@ -163,20 +163,13 @@ app.get('/api/_kosischk_p38v6', async (req, res) => {
       return { label, ok: false, status: e.response && e.response.status, body: e.response ? String(typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data)).slice(0, 300) : e.message };
     }
   };
-  // (a) '시군구 미분양' 검색 → 후보 목록(orgId/tblId/이름)
-  let list = [];
-  try {
-    const r = await axios.get(`https://kosis.kr/openapi/statisticsSearch.do?method=getList&apiKey=${encodeURIComponent(key)}&searchNm=${encodeURIComponent('시군구 미분양')}&format=json&jsonVD=Y&startCount=1&resultCount=20`, { timeout: 8000 });
-    if (Array.isArray(r.data)) list = r.data;
-    out.searchRaw = Array.isArray(r.data) ? null : JSON.stringify(r.data).slice(0, 300);
-  } catch (e) { out.searchErr = e.message; }
-  out.candidates = list.map(r => ({ org: r.ORG_ID, tbl: r.TBL_ID, name: r.TBL_NM }));
-  // (b) 이름에 시군구 포함 첫 후보로 실데이터 조회 (itmId/objL1 ALL — 구조 확인)
-  const pick = list.find(r => /시.?군.?구/.test(r.TBL_NM || ''));
-  if (pick) {
-    out.results = [await tryGet(`data-${pick.ORG_ID}-${pick.TBL_ID}`, `https://kosis.kr/openapi/Param/statisticsParameterData.do?method=getList&apiKey=${encodeURIComponent(key)}&orgId=${pick.ORG_ID}&tblId=${pick.TBL_ID}&itmId=ALL&objL1=ALL&format=json&jsonVD=Y&prdSe=M&newEstPrdCnt=1`)];
-  } else {
-    out.results = ['no-시군구-candidate'];
+  // 확정된 표(116/DT_MLTM_2082 시·군·구별 미분양현황)의 objL 요구 형태를 실측 — 변형 3종
+  const base = `https://kosis.kr/openapi/Param/statisticsParameterData.do?method=getList&apiKey=${encodeURIComponent(key)}&orgId=116&tblId=DT_MLTM_2082&itmId=ALL&format=json&jsonVD=Y&prdSe=M&newEstPrdCnt=1`;
+  out.results = [];
+  out.results.push(await tryGet('objL1+2', `${base}&objL1=ALL&objL2=ALL`));
+  if (!String((out.results[0] || {}).preview || '').includes('"TBL_NM"')) {
+    out.results.push(await tryGet('objL1only', `${base}&objL1=ALL`));
+    out.results.push(await tryGet('objL1+2+3', `${base}&objL1=ALL&objL2=ALL&objL3=ALL`));
   }
   res.json(out);
 });
