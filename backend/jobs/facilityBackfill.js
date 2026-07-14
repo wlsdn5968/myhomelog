@@ -51,6 +51,12 @@ async function runOneChunk(admin, limit, mode = 'null') {
          .is('facility->_empty', null)
          .is('facility->_dtl', null)
          .lt('facility_fetched_at', cutoff);
+  } else if (mode === 'empty') {
+    // EMPTY-RETRY-2026-07-14 (Sprint IIIII): KAPT 조회실패 sentinel(_empty, 실측 35건)이 일시 장애(트래픽 제한·
+    //   타임아웃)였을 수 있어 14일 경과 시 재시도. 재실패면 backfillFacilityByKaptCode 가 _empty 를 재기록하며
+    //   fetched_at 갱신 → stale 조건에서 빠져 무한재시도 차단(incomplete 모드와 동일 진행 보장 구조).
+    const cutoff = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
+    q = q.not('facility->_empty', 'is', null).lt('facility_fetched_at', cutoff);
   } else {
     q = q.is('facility', null);
   }
@@ -91,8 +97,9 @@ async function run({ chunk = DEFAULT_CHUNK, budgetMs = 240000 } = {}) {
   const limit = Math.min(Math.max(parseInt(chunk) || DEFAULT_CHUNK, 1), MAX_CHUNK);
   let totalProcessed = 0, totalInserted = 0, totalFailed = 0, totalParking = 0, chunks = 0;
   // Phase A(null): 최초 적재 우선. Phase B(incomplete): _dtl(주차) 누락 self-heal (Sprint YYYY).
+  // Phase C(empty): 조회실패 sentinel 재시도 (Sprint IIIII).
   //   각 chunk 후 fetched_at 갱신되어 stale 조건에서 빠지므로 같은 후보 재조회 없이 진행.
-  for (const mode of ['null', 'incomplete']) {
+  for (const mode of ['null', 'incomplete', 'empty']) {
     while ((Date.now() - started) < budgetMs - 15000) {
       const t = await runOneChunk(admin, limit, mode);
       if (!t.processed) break; // 이 mode 후보 소진 → 다음 mode

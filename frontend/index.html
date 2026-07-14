@@ -6432,7 +6432,8 @@ async function loadFacility(p){
     // facility 표시 (raw jsonb — AptInfo 응답 구조 다양해 안전하게 처리)
     if (r.facility?.raw) {
       const f = r.facility.raw;
-      const householdCount = f.kaptdaCnt || f.householdCount || f.kaptCount || null;
+      // HH-HOCNT-FALLBACK-2026-07-14 (Sprint IIIII): kaptdaCnt 0/"0" 이면 hoCnt(호수) fallback — backend buildFacility 와 동일 규칙
+      const householdCount = [f.kaptdaCnt, f.hoCnt, f.householdCount, f.kaptCount].map(Number).find(n => Number.isFinite(n) && n > 0) || null;
       const completionDate = f.useAprDay || f.completionDate || null;
       // STAB-AUDIT-2026-05-07: K-apt API kaptBcompany raw 데이터 깨짐 사례 발견
       //   "두산건설" 사이에 URL 끼어든 형태: "두산건https://www.k-apt.go.kr/...설"

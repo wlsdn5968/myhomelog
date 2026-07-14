@@ -29,7 +29,8 @@ router.get('/info', async (req, res) => {
     aptName: info.kaptName,
     address: info.doroJuso || info.codeAptNm,
     dongCount: info.kaptDongCnt,
-    householdCount: info.kaptdaCnt,
+    // HH-HOCNT-FALLBACK-2026-07-14 (Sprint IIIII): kaptdaCnt 0 이면 hoCnt(호수) fallback — buildFacility 와 동일 규칙
+    householdCount: (parseInt(info.kaptdaCnt) > 0 ? parseInt(info.kaptdaCnt) : null) ?? (parseInt(info.hoCnt) > 0 ? parseInt(info.hoCnt) : null),
     builtDate: info.kaptUsedate,
     parkingTotal,
     elevatorCount: parseInt(detail?.kaptdEcnt) || parseInt(info.kaptdEcntp) || null,

@@ -419,7 +419,11 @@ async function getFacilityQuality() {
       admin.from('apt_master').select(...H()).is('facility', null),
       admin.from('apt_master').select(...H()).not('facility->_empty', 'is', null),
       admin.from('apt_master').select(...H()).not('facility', 'is', null).is('facility->_empty', null).is('facility->_dtl', null),
-      admin.from('apt_master').select(...H()).not('facility', 'is', null).is('facility->_empty', null).or('facility->>kaptdaCnt.eq.0,facility->>kaptdaCnt.is.null'),
+      // HH-HOCNT-FALLBACK-2026-07-14 (Sprint IIIII): hoCnt fallback 도입 후 "세대수 미상"은 kaptdaCnt·hoCnt 둘 다
+      //   무효인 경우만(실측 346→16). 두 .or() 는 PostgREST 에서 AND 로 결합.
+      admin.from('apt_master').select(...H()).not('facility', 'is', null).is('facility->_empty', null)
+        .or('facility->>kaptdaCnt.eq.0,facility->>kaptdaCnt.is.null')
+        .or('facility->>hoCnt.eq.0,facility->>hoCnt.is.null'),
     ]);
     const t = total.count || 0;
     const dtl = dtlMissing.count || 0, hh = hhZero.count || 0, emp = empty.count || 0, fnull = facNull.count || 0;
@@ -441,6 +445,39 @@ async function getFacilityQuality() {
     return out;
   } catch (e) { return null; }
 }
+
+// TEMP-SYNCHK-2026-07-14 (Sprint IIIII 진단, 검증 후 즉시 제거): apt_master 0행 3지역(26470/27140/41281)의
+//   원인 규명 — aptMasterSync 의 syncOneSgg 와 동일 파라미터로 KAPT getSigunguAptList3 1페이지 실호출 결과 반환.
+//   키는 노출 안 함(응답에 미포함). AptInfo MCP(자체 키)로는 두 지역 모두 정상(106/179단지)이라 우리 키·파라미터 경로 검증 필요.
+app.get('/api/_synchk_q3', async (req, res) => {
+  const lawd = String(req.query.lawd || '').trim();
+  if (!/^\d{5}$/.test(lawd)) return res.status(400).json({ error: 'lawd 5자리 필요' });
+  const axios = require('axios');
+  const key = process.env.APT_INFO_API_KEY || process.env.MOLIT_API_KEY;
+  try {
+    const r = await axios.get('https://apis.data.go.kr/1613000/AptListService3/getSigunguAptList3', {
+      params: { serviceKey: key, sigunguCode: lawd, pageNo: 1, numOfRows: 100, _type: 'json' },
+      timeout: 8000, headers: { Accept: 'application/json' }, validateStatus: () => true,
+    });
+    const isStr = typeof r.data === 'string';
+    const header = r.data?.response?.header;
+    const body = r.data?.response?.body;
+    const itemsRaw = body?.items;
+    const list = Array.isArray(itemsRaw) ? itemsRaw
+      : (itemsRaw?.item ? (Array.isArray(itemsRaw.item) ? itemsRaw.item : [itemsRaw.item]) : []);
+    res.json({
+      lawd, httpStatus: r.status, contentType: r.headers?.['content-type'] || null,
+      resultCode: header?.resultCode ?? null, resultMsg: header?.resultMsg ?? null,
+      totalCount: body?.totalCount ?? null, pageLen: list.length,
+      sample: list.slice(0, 3).map(x => x && x.kaptName),
+      preview: isStr ? r.data.slice(0, 300) : (list.length ? null : JSON.stringify(r.data).slice(0, 300)),
+    });
+  } catch (e) {
+    const rd = e?.response?.data;
+    res.json({ lawd, error: e.message, httpStatus: e?.response?.status || null,
+      preview: typeof rd === 'string' ? rd.slice(0, 300) : JSON.stringify(rd || {}).slice(0, 300) });
+  }
+});
 
 app.get('/api/health', optionalAuth, async (req, res) => {
   const [searchUsed, chatUsed] = await Promise.all([

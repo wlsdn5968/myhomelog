@@ -62,7 +62,12 @@ function buildFacility(info, kaptCode, detail) {
       _partial: true,
     };
   }
-  const totalHouseholds = parseInt(info.kaptdaCnt) || 0;
+  // HH-HOCNT-FALLBACK-2026-07-14 (Sprint IIIII): kaptdaCnt(관리세대수)=0 인 단지 346곳 실측 —
+  //   KAPT 원천이 0 을 반환(당일 재조회도 0)하지만 hoCnt(호수)에는 실값 존재. 위례래미안이편한세상
+  //   kaptdaCnt=0·hoCnt=1540 = AptInfo MCP 실호출 세대수 1540 과 정확 일치 [VERIFIED].
+  //   330/346 이 hoCnt 로 해소(SQL 실측), 잔여 16 만 진짜 미상. 재조회 self-heal 로는 못 고침 → fallback 이 정답.
+  const _posInt = v => { const n = parseInt(v); return Number.isFinite(n) && n > 0 ? n : 0; };
+  const totalHouseholds = _posInt(info.kaptdaCnt) || _posInt(info.hoCnt);
   // PARK-FIELD-FIX-2026-05-13 (Sprint X — 운영자 발견 + Chrome MCP 으로 진짜 필드명 [VERIFIED]):
   //   KAPT V4 detail (getAphusDtlInfoV4) raw 필드:
   //     - kaptdPcnt  = 지상 주차 (풍림 473, 헬리오 0)

@@ -874,7 +874,9 @@ async function fetchCandidateApts(admin, input, limit) {
       if (f?.raw) {
         const raw = f.raw;
         const detail = f.detail || {};
-        c.households = raw.kaptdaCnt || raw.householdCount || raw.kaptCount || null;
+        // HH-HOCNT-FALLBACK-2026-07-14 (Sprint IIIII): kaptdaCnt 가 0("0" 문자열 포함)인 단지는 hoCnt(호수) fallback.
+        c.households = [raw.kaptdaCnt, raw.hoCnt, raw.householdCount, raw.kaptCount]
+          .map(v => parseInt(v)).find(n => Number.isFinite(n) && n > 0) || null;
         // build_year 우선순위 #1: KAPT 공식 사용승인일
         const useDate = raw.kaptUsedate || raw.kaptUseDate || raw.useApprovalDate;
         if (useDate) {
