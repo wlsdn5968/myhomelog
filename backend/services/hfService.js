@@ -39,20 +39,20 @@ async function getHfRates() {
   try {
     const params = { serviceKey: key, pageNo: 1, numOfRows: 5, dataType: 'JSON' };
     const [dR, uR] = await Promise.all([
-      axios.get(DIDIMDOL_URL, { params, timeout: 8000 }),
-      axios.get(ULOAN_URL, { params, timeout: 8000 }),
+      axios.get(DIDIMDOL_URL, { params, timeout: 15000 }),
+      axios.get(ULOAN_URL, { params, timeout: 15000 }),
     ]);
     const dItem = dR.data && dR.data.body && dR.data.body.item;
     const uItem = uR.data && uR.data.body && uR.data.body.item;
     const didimdol = dItem ? { ..._minMax(dItem, 'interest_'), applyDy: String(dItem.applyDy || '') } : null;
     const bogeum = uItem ? { ..._minMax(uItem, 'interest_'), applyDy: String(uItem.applyDy || '') } : null;
-    if (!didimdol && !bogeum) { cache.set(CACHE_KEY, null, 3600); return null; }
+    if (!didimdol && !bogeum) { cache.set(CACHE_KEY, null, 600); return null; }
     const out = { didimdol, bogeum, source: '한국주택금융공사 (data.go.kr)' };
     cache.set(CACHE_KEY, out, 43200); // 12h — 공시 금리는 월 단위 변동
     return out;
   } catch (e) {
-    logger.warn({ err: e.message }, 'HF 금리 조회 실패 — null (하드코딩 표 유지, 1h 후 재시도)');
-    cache.set(CACHE_KEY, null, 3600);
+    logger.warn({ err: e.message }, 'HF 금리 조회 실패 — null (하드코딩 표 유지, 10분 후 재시도)');
+    cache.set(CACHE_KEY, null, 600);
     return null;
   }
 }

@@ -11,7 +11,7 @@
  *
  * 정책:
  *   - ECOS_API_KEY 미설정/호출 실패 시 null (하드코딩 fallback 없음 — 낡은 값 오표시 방지).
- *   - 12h 캐시(월 단위 통계·기준금리는 변동 드묾). 실패 시 1h 후 재시도.
+ *   - 12h 캐시(월 단위 통계·기준금리는 변동 드묾). 실패 시 10분 후 재시도.
  */
 const axios = require('axios');
 const cache = require('../cache');
@@ -30,8 +30,8 @@ async function getEcosRates() {
     const ym = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
     const from = new Date(now); from.setMonth(from.getMonth() - 6); // M 통계 공표지연 감안 6개월 창
     const [ksR, mgR] = await Promise.all([
-      axios.get(`${BASE}/KeyStatisticList/${key}/json/kr/1/100`, { timeout: 8000 }),
-      axios.get(`${BASE}/StatisticSearch/${key}/json/kr/1/12/121Y006/M/${ym(from)}/${ym(now)}/BECBLA0302`, { timeout: 8000 }),
+      axios.get(`${BASE}/KeyStatisticList/${key}/json/kr/1/100`, { timeout: 15000 }),
+      axios.get(`${BASE}/StatisticSearch/${key}/json/kr/1/12/121Y006/M/${ym(from)}/${ym(now)}/BECBLA0302`, { timeout: 15000 }),
     ]);
     const ksRow = (ksR.data && ksR.data.KeyStatisticList && ksR.data.KeyStatisticList.row) || [];
     const baseRow = ksRow.find(r => r.KEYSTAT_NAME === '한국은행 기준금리');
@@ -44,12 +44,12 @@ async function getEcosRates() {
       mortgageRateMonth: mgLast ? String(mgLast.TIME || '') : null,      // 예: '202605'
       source: '한국은행 ECOS',
     };
-    if (out.baseRate == null && out.mortgageRate == null) { cache.set(CACHE_KEY, null, 3600); return null; }
+    if (out.baseRate == null && out.mortgageRate == null) { cache.set(CACHE_KEY, null, 600); return null; }
     cache.set(CACHE_KEY, out, 43200); // 12h
     return out;
   } catch (e) {
-    logger.warn({ err: e.message }, 'ECOS 금리 조회 실패 — null (표시 생략, 1h 후 재시도)');
-    cache.set(CACHE_KEY, null, 3600);
+    logger.warn({ err: e.message }, 'ECOS 금리 조회 실패 — null (표시 생략, 10분 후 재시도)');
+    cache.set(CACHE_KEY, null, 600);
     return null;
   }
 }

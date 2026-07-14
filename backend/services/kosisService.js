@@ -22,11 +22,11 @@ async function _fetchAll() {
   if (!key) { cache.set(CACHE_KEY, null, 21600); return null; }
   try {
     const url = `https://kosis.kr/openapi/Param/statisticsParameterData.do?method=getList&apiKey=${encodeURIComponent(key)}&orgId=116&tblId=DT_MLTM_2082&itmId=ALL&objL1=ALL&objL2=ALL&format=json&jsonVD=Y&prdSe=M&newEstPrdCnt=${MONTHS}`;
-    const r = await axios.get(url, { timeout: 12000 });
+    const r = await axios.get(url, { timeout: 15000 });
     const rows = Array.isArray(r.data) ? r.data : null;
     if (!rows || !rows.length) {
       logger.warn({ preview: JSON.stringify(r.data).slice(0, 200) }, 'KOSIS 미분양 응답 비정상 — null');
-      cache.set(CACHE_KEY, null, 3600);
+      cache.set(CACHE_KEY, null, 600);
       return null;
     }
     // (시도|시군구) → [{ym, cnt}] 맵으로 압축
@@ -46,8 +46,8 @@ async function _fetchAll() {
     cache.set(CACHE_KEY, out, 86400); // 24h — 월간 통계
     return out;
   } catch (e) {
-    logger.warn({ err: e.message }, 'KOSIS 미분양 조회 실패 — null (1h 후 재시도)');
-    cache.set(CACHE_KEY, null, 3600);
+    logger.warn({ err: e.message }, 'KOSIS 미분양 조회 실패 — null (10분 후 재시도)');
+    cache.set(CACHE_KEY, null, 600);
     return null;
   }
 }
