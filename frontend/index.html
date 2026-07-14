@@ -3804,7 +3804,15 @@ function _renderReport(data) {
       ${Array.isArray(_basis.sources) && _basis.sources.length ? `<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:6px">${_basis.sources.map(s=>`<span style="background:var(--bg-base);border:1px solid var(--bd);border-radius:4px;padding:1px 7px;font-size:9.5px;color:var(--t3)">${_escHtml(s)}</span>`).join('')}</div>` : ''}
     </div>` : '';
 
-  const coreHtml = _basisHtml + _aiBanner + (r.coreMessages || []).map((m, i) =>
+  // KOSIS-2026-07-14 (Sprint HHHHH): 지역 미분양 추이 — 국토부/KOSIS 실측 통계, 객관 수치만(판단어·예측 없음).
+  const _us = data.unsoldTrend;
+  const _usHtml = (_us && Array.isArray(_us.months) && _us.months.length) ? `<div style="background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:9px 13px;margin-bottom:12px;font-size:10.5px;line-height:1.7">
+      <b style="font-size:11px;color:var(--t1)">🏗️ ${_escHtml(_us.sido)} ${_escHtml(_us.sigungu)} 미분양 추이</b>
+      <span style="color:var(--t2);margin-left:8px">${_us.months.map(m=>`${_escHtml(String(m.ym).slice(4))}월 <b>${Number(m.cnt).toLocaleString()}호</b>`).join(' → ')}</span>
+      <div style="font-size:9.5px;color:var(--t3)">출처: ${_escHtml(_us.source||'KOSIS')} · 수치 나열이며 시장 예측이 아닙니다</div>
+    </div>` : '';
+
+  const coreHtml = _basisHtml + _usHtml + _aiBanner + (r.coreMessages || []).map((m, i) =>
     `<div style="display:flex;gap:8px;margin-bottom:6px;font-size:12px;line-height:1.7">
       <span style="color:var(--acc);font-weight:700;flex-shrink:0">${i+1}.</span>
       <span>${_escHtml(m)}</span>

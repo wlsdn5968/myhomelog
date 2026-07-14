@@ -260,10 +260,19 @@ router.post('/generate', async (req, res) => {
       });
     }
 
+    // KOSIS-2026-07-14 (Sprint HHHHH): 대상 지역 미분양 추이(국토부/KOSIS 실측 통계) — 객관 수치만, 판단어 없음.
+    //   첫 후보 단지의 시군구 기준. 키 없음/매칭 실패 시 null → 프론트 미표시(graceful).
+    let _unsold = null;
+    try {
+      const _sgg = candidates && candidates[0] && candidates[0].sigungu;
+      if (_sgg) _unsold = await require('../services/kosisService').getUnsoldTrend(userInput.region, _sgg);
+    } catch (_) {}
+
     const out = {
       report: parsed,
       policyContext: policyData,
       dataBasis: await getDataBasis().catch(() => null), // Sprint CCCCC: 검증 기준 박스 (graceful null)
+      unsoldTrend: _unsold,
       generatedAt: new Date().toISOString(),
       disclaimer: '본 보고서는 국토교통부·한국부동산원 공공 데이터 기반 정보 정리이며, 투자자문업·중개업·대출모집인업이 아닙니다. 매수·매도 추천 X, 미래 가격 예측 X. 모든 의사결정과 책임은 본인에게 있습니다.',
       ...(_aiDown ? { aiUnavailable: true, aiUnavailableReason: _aiDown } : {}),

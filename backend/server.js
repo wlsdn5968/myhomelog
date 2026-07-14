@@ -146,34 +146,6 @@ const dataLimiter = makeRateLimiter({
 
 app.use('/api/', generalLimiter);
 
-// KOSIS-CHK-2026-07-14 (Sprint HHHHH, 검증 후 즉시 제거 — _brchk/_ecoschk/_hfchk 패턴):
-//   운영자 kosis.kr 인증키 발급 + Vercel KOSIS_API_KEY 등록 → 시군구 미분양 통계표(orgId/tblId)를
-//   실응답으로 확정. 추측 배제 — 검색 API + 후보 tblId 실호출 결과(성공/에러코드)로만 판단. 키 미노출.
-app.get('/api/_kosischk_p38v6', async (req, res) => {
-  const key = process.env.KOSIS_API_KEY || '';
-  const out = { keyLen: key.length };
-  if (!key) return res.json(out);
-  const axios = require('axios');
-  const tryGet = async (label, url) => {
-    try {
-      const r = await axios.get(url, { timeout: 8000 });
-      const d = r.data;
-      return { label, ok: true, preview: (typeof d === 'string' ? d : JSON.stringify(d)).slice(0, 700) };
-    } catch (e) {
-      return { label, ok: false, status: e.response && e.response.status, body: e.response ? String(typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data)).slice(0, 300) : e.message };
-    }
-  };
-  // 확정된 표(116/DT_MLTM_2082 시·군·구별 미분양현황)의 objL 요구 형태를 실측 — 변형 3종
-  const base = `https://kosis.kr/openapi/Param/statisticsParameterData.do?method=getList&apiKey=${encodeURIComponent(key)}&orgId=116&tblId=DT_MLTM_2082&itmId=ALL&format=json&jsonVD=Y&prdSe=M&newEstPrdCnt=1`;
-  out.results = [];
-  out.results.push(await tryGet('objL1+2', `${base}&objL1=ALL&objL2=ALL`));
-  if (!String((out.results[0] || {}).preview || '').includes('"TBL_NM"')) {
-    out.results.push(await tryGet('objL1only', `${base}&objL1=ALL`));
-    out.results.push(await tryGet('objL1+2+3', `${base}&objL1=ALL&objL2=ALL&objL3=ALL`));
-  }
-  res.json(out);
-});
-
 // ── 라우터 연결 ────────────────────────────────────────────
 const chatRouter = require('./routes/chat');
 const transactionRouter = require('./routes/transactions');
