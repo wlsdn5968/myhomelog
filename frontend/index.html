@@ -1332,6 +1332,19 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <div style="background:var(--info-bg);border:1px solid var(--info-bd);border-radius:6px;padding:7px 10px;margin-bottom:10px;font-size:10.5px;color:var(--info-tx);line-height:1.55">
         💡 <b>핵심 3개</b>만 입력하면 단지 검색 가능: <b>주택 보유 · 매수가 · 희망지역</b>
       </div>
+      <!-- PERSONA-PRESET-2026-07-13 (Sprint GGGGG, 집사닷컴 벤치마킹): 상황 예시 클릭 채우기 -->
+      <details class="mb9">
+        <summary style="cursor:pointer;font-size:11px;font-weight:600;color:var(--t2);list-style:none">👥 내 상황과 비슷한 예시로 시작 <span style="font-weight:400;color:var(--t3)">(클릭하면 아래 폼이 채워져요) ▾</span></summary>
+        <div class="chips" style="margin-top:6px">
+          <span class="chip" onclick="applyPersona('first')">🐣 생애최초 첫집</span>
+          <span class="chip" onclick="applyPersona('newlywed')">💒 신혼부부</span>
+          <span class="chip" onclick="applyPersona('newborn')">👶 신생아 특례</span>
+          <span class="chip" onclick="applyPersona('upgrade')">🔄 갈아타기</span>
+          <span class="chip" onclick="applyPersona('school')">🏫 학군 최우선</span>
+          <span class="chip" onclick="applyPersona('senior')">🧓 다운사이징</span>
+        </div>
+        <div style="font-size:10px;color:var(--t3);margin-top:4px">※ 입력 예시일 뿐이에요 — 매수가·자본·소득은 본인 상황으로 고쳐주세요. 희망 지역은 그대로 둡니다.</div>
+      </details>
       <div class="mb9"><span class="lbl">주택 보유</span><div class="chips" id="ch-h"><span class="chip on" onclick="cp(this,'ch-h')">무주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택 (처분조건부)</span><span class="chip" onclick="cp(this,'ch-h')">2주택+</span></div></div>
       <!-- Phase 33 #1 (2026-05-04): 매수가/자본 — 핵심 wizard 3 (보유·매수가·지역) 순서 정합 -->
       <!-- 기존: 보고서 details 안 (사용자가 chip 누르다 못 찾음) → 이 위치로 이동 -->
@@ -4419,6 +4432,41 @@ function updateEcosHint(e){
     const cr = document.getElementById('c_r');
     if(cr) cr.placeholder = String(e.mortgageRate);
   }catch(_){}
+}
+
+// PERSONA-PRESET-2026-07-13 (Sprint GGGGG, 집사닷컴 벤치마킹): 상황 예시 클릭 채우기.
+//   값은 "입력 예시"일 뿐(데이터 주장 아님) — 사용자가 본인 상황으로 수정 전제(토스트 안내).
+//   지역(ch-r/서브)·직장(wp)·단지조건(flt-*)은 안 건드림(사용자 선택 존중) · 자동 검색 안 함.
+const PERSONAS = {
+  // 칩 값은 실제 칩 텍스트와 정확 일치(1372~1402행 실측): kid 없음/예정/0~6세/초등/중등+ · stay 3년 이하/5~10년/10년+ ·
+  // pri 학군/역세권/환금성/조용함/교통/신축/재건축/갭투자 · py 는 '소형/중형/대형' 접두 includes 매칭.
+  first:    { label:'생애최초 첫집',   h:'무주택', f:'예',    nw:'아니오', nb:'아니오', bp:5,  mc:1.5, inc:5000,  py:'소형', pri:'역세권', kid:'없음',  stay:'5~10년', sc:'보통' },
+  newlywed: { label:'신혼부부',        h:'무주택', f:'예',    nw:'예',    nb:'아니오', bp:8,  mc:2.5, inc:9000,  py:'중형', pri:'교통',   kid:'예정',  stay:'5~10년', sc:'보통' },
+  newborn:  { label:'신생아 특례',     h:'무주택', f:'예',    nw:'아니오', nb:'예',    bp:9,  mc:3,   inc:11000, py:'중형', pri:'학군',   kid:'0~6세', stay:'10년+',  sc:'학군 중요' },
+  upgrade:  { label:'갈아타기(1주택)', h:'1주택 (처분조건부)', f:'아니오', nw:'아니오', nb:'아니오', bp:12, mc:6, inc:12000, py:'중형', pri:'학군', kid:'초등', stay:'10년+', sc:'학군 중요' },
+  school:   { label:'학군 최우선',     h:'무주택', f:'아니오', nw:'아니오', nb:'아니오', bp:10, mc:4,  inc:10000, py:'중형', pri:'학군',   kid:'초등',  stay:'10년+',  sc:'학군 중요' },
+  senior:   { label:'다운사이징',      h:'1주택 (처분조건부)', f:'아니오', nw:'아니오', nb:'아니오', bp:6, mc:5, inc:4000, py:'소형', pri:'조용함', kid:'없음', stay:'10년+', sc:'보통' },
+};
+function applyPersona(key){
+  const p = PERSONAS[key]; if(!p) return;
+  // 그룹 칩 설정: 정확 일치 우선 → 부분 일치(칩 라벨에 부가 텍스트 있어도 매칭: '중형 23~33평' 등)
+  const setChip = (gid, val) => {
+    try{
+      const chips = Array.from(document.querySelectorAll('#'+gid+' .chip'));
+      if(!chips.length) return;
+      const target = chips.find(c => c.textContent.trim() === val) || chips.find(c => c.textContent.trim().includes(val));
+      if(!target) return;
+      chips.forEach(c => c.classList.remove('on'));
+      target.classList.add('on');
+    }catch(_){}
+  };
+  setChip('ch-h', p.h); setChip('ch-f', p.f); setChip('ch-nw', p.nw); setChip('ch-nb', p.nb);
+  setChip('ch-py', p.py); setChip('ch-pri', p.pri); setChip('ch-kid', p.kid); setChip('ch-stay', p.stay); setChip('ch-sc', p.sc);
+  const _set = (id, v) => { const el = document.getElementById(id); if(el) el.value = String(v); };
+  _set('bp', p.bp); _set('mc', p.mc); _set('inc', p.inc);
+  try{ cl(); }catch(_){} try{ dc(); }catch(_){} try{ _updateInputProgress(); }catch(_){}
+  if(typeof toast === 'function') toast(`👥 '${p.label}' 예시 적용 — 매수가·자본·소득을 본인 상황으로 고친 뒤 검색하세요`);
+  try{ window.va && window.va('event', { name: 'persona_preset', data: { key } }); }catch(_){}
 }
 
 // ── 한도 모달 (daily / monthly / info) ───────────────────
