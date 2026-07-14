@@ -147,8 +147,23 @@ router.post('/generate', async (req, res) => {
       return res.status(404).json({ error: '입력 조건에 맞는 단지가 없어요. 매수가나 지역을 조정해보세요.' });
     }
 
+    // FREE-CONTEXT-2026-07-14 (Sprint JJJJJ, 운영자 "돈 안 들이고 보고서 질 높이기"):
+    //   기존엔 dataBasis(ECOS 금리·실거래 반영월)·unsoldTrend(KOSIS 미분양)를 AI 호출 "이후" 에 조회해
+    //   응답에만 붙였음 → AI 는 이 무료 실측 수치를 못 보고 글을 씀. 조회를 프롬프트 생성 전으로 옮겨
+    //   프롬프트에 주입(추가 API 비용 0 — 같은 호출, 순서만 변경. 인풋 토큰만 수십 토큰 증가).
+    const [_dataBasis, _unsold] = await Promise.all([
+      getDataBasis().catch(() => null),
+      (async () => {
+        const _sgg = candidates[0] && candidates[0].sigungu;
+        if (!_sgg) return null;
+        try { return await require('../services/kosisService').getUnsoldTrend(userInput.region, _sgg); }
+        catch (_) { return null; }
+      })(),
+    ]);
+    const _freeCtx = { dataBasis: _dataBasis, unsoldTrend: _unsold };
+
     // 3) AI prompt 작성
-    const prompt = buildReportPrompt(userInput, policyData, candidates);
+    const prompt = buildReportPrompt(userInput, policyData, candidates, _freeCtx);
 
     // 4) AI 호출 — REPORT_SPECIFIC 을 systemSpecific 으로 명시 전달
     //    Phase 6 (2026-04-26): 4500 → 6500 (단지 확장 후 6087자 잘림 실측 대응)
@@ -217,7 +232,7 @@ router.post('/generate', async (req, res) => {
       _aiDown = aiErr instanceof _BE ? 'budget' : 'upstream';
       logger.warn({ err: aiErr.message, mode: _aiDown, userId: userId || null },
         '보고서 AI 실패 — 데이터 전용 보고서로 degrade');
-      parsed = buildDataOnlyReport(userInput, candidates);
+      parsed = buildDataOnlyReport(userInput, candidates, policyData, _freeCtx);
     }
 
     // 안전망: markdown 강조 표기 (** __ ##) 자동 제거 — prompt 가 금지해도 가끔 새어나옴
@@ -260,24 +275,20 @@ router.post('/generate', async (req, res) => {
       });
     }
 
-    // KOSIS-2026-07-14 (Sprint HHHHH): 대상 지역 미분양 추이(국토부/KOSIS 실측 통계) — 객관 수치만, 판단어 없음.
-    //   첫 후보 단지의 시군구 기준. 키 없음/매칭 실패 시 null → 프론트 미표시(graceful).
-    let _unsold = null;
-    try {
-      const _sgg = candidates && candidates[0] && candidates[0].sigungu;
-      if (_sgg) _unsold = await require('../services/kosisService').getUnsoldTrend(userInput.region, _sgg);
-    } catch (_) {}
-
     const out = {
       report: parsed,
       policyContext: policyData,
-      dataBasis: await getDataBasis().catch(() => null), // Sprint CCCCC: 검증 기준 박스 (graceful null)
+      // Sprint CCCCC(검증 기준 박스)·HHHHH(KOSIS 미분양) — Sprint JJJJJ 에서 AI 호출 전으로 이동(위 _freeCtx).
+      dataBasis: _dataBasis,
       unsoldTrend: _unsold,
       generatedAt: new Date().toISOString(),
       disclaimer: '본 보고서는 국토교통부·한국부동산원 공공 데이터 기반 정보 정리이며, 투자자문업·중개업·대출모집인업이 아닙니다. 매수·매도 추천 X, 미래 가격 예측 X. 모든 의사결정과 책임은 본인에게 있습니다.',
       ...(_aiDown ? { aiUnavailable: true, aiUnavailableReason: _aiDown } : {}),
     };
-    cache.set(cacheKey, out, _aiDown ? 300 : 1800); // AI degrade 시 5분만 — AI 복구 시 정상판으로 빨리 교체
+    // CACHE-TTL-2026-07-14 (Sprint JJJJJ): 정상판 30분 → 6h. 기반 데이터가 전부 일/시간 단위 갱신
+    //   (실거래 daily ingest · dataBasis 6h 캐시 · 정책 스냅샷 · KOSIS 월간)이라 최신성 손실 없이
+    //   동일 입력 재요청의 AI 호출을 스킵 → 비용 절감. degrade(5분)는 AI 복구 시 빠른 교체 위해 유지.
+    cache.set(cacheKey, out, _aiDown ? 300 : 21600);
     res.json({ ...out, fromCache: false });
   } catch (e) {
     // P0 (Agent 3차 audit, 2026-05-04): BudgetExceededError 처리 누락 → Pro 가입 funnel 차단
@@ -313,8 +324,40 @@ router.post('/generate', async (req, res) => {
  * 프론트 _renderReport 필수 필드(coreMessages/checklist/apartments/longTermView/tips) 전부 충족.
  * priceFit·objectiveFacts·matchScore·name 은 아래 기존 backend 주입 로직이 동일하게 채움.
  */
-function buildDataOnlyReport(userInput, candidates) {
+/** FREE-CONTEXT-2026-07-14 (Sprint JJJJJ): 이미 무료로 확보한 실측 수치를 문장으로 정리.
+ *  전부 DB/공공 API 실측값(정책 스냅샷 LTV·DSR, ECOS 금리, KOSIS 미분양, 실거래 최신월) —
+ *  하드코딩·추정 없음. 스냅샷이 갱신되면 문구도 자동 갱신. 절대룰: 수치 나열만, 예측·추천 표현 금지. */
+function _freeContextLines(policy, freeCtx) {
+  const db = (freeCtx && freeCtx.dataBasis) || null;
+  const us = (freeCtx && freeCtx.unsoldTrend) || null;
+  const out = {};
+  if (Array.isArray(policy?.ltv) && policy.ltv.length) {
+    out.ltv = policy.ltv
+      .filter(r => r && r.condition && r.ltv != null)
+      .map(r => `${r.condition} LTV ${r.ltv}%`)
+      .join(' · ');
+  }
+  const d = policy?.dsr;
+  if (d && d.bankDSR != null) {
+    out.dsr = `은행권 DSR ${d.bankDSR}%`
+      + (d.secondFinanceDSR != null ? ` · 2금융권 ${d.secondFinanceDSR}%` : '')
+      + (d.stressDSRMetro != null ? ` · 스트레스 가산금리 수도권 ${d.stressDSRMetro}%p` : '')
+      + (d.stressFloorMetroRegulated != null ? `(수도권 규제지역 하한 ${d.stressFloorMetroRegulated}%)` : '');
+  }
+  if (db?.rateBasis) out.rate = db.rateBasis;
+  if (db?.txLatestLabel) out.tx = db.txLatestLabel;
+  if (us && Array.isArray(us.months) && us.months.length) {
+    const seq = us.months
+      .map(m => `${String(m.ym).slice(4, 6).replace(/^0/, '')}월 ${Number(m.cnt).toLocaleString()}호`)
+      .join(' → ');
+    out.unsold = `${us.sigungu} 미분양 ${seq} — ${us.source}`;
+  }
+  return out;
+}
+
+function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
   const curYear = new Date().getFullYear();
+  const fc = _freeContextLines(policy || {}, freeCtx || {});
   const apartments = (candidates || []).map((c, i) => {
     const f = c.objectiveFacts || {};
     const areaMain = Array.isArray(c.areas) && c.areas.length ? Number(c.areas[0]) : null;
@@ -345,27 +388,50 @@ function buildDataOnlyReport(userInput, candidates) {
       recommendation: '정보 참고',
     };
   });
+  // FREE-CONTEXT-2026-07-14 (Sprint JJJJJ): 데이터판(=AI 미사용 경로)도 이미 확보한 실측 수치를 반영.
+  //   운영자 방침(AI 비용 지출 최소화)상 이 경로가 상시 노출될 수 있어, 고정 문구 대신 실데이터를 넣어
+  //   AI 없이도 정보 밀도를 높인다. 전부 실측값 — 없으면 해당 줄만 생략(graceful).
+  const coreMessages = [
+    `매수가 ${userInput.maxBudget}억 · 자기자본 ${userInput.myCash}억 · ${userInput.region} 조건의 최근 6개월 실거래 데이터를 정리했어요.`
+      + (fc.tx ? ` (${fc.tx})` : ''),
+    // '추천' 단어는 자체 단언표현 필터(filterAdviceOutputDeep)에 걸림 (라이브 확인) — 필터 안전 문구 사용
+    `아래 ${apartments.length}개 단지는 국토교통부 실거래 기준 조건 부합 단지 정리예요 — 의사결정 책임은 본인에게 있어요.`,
+    fc.rate
+      ? `현재 금리 기준: ${fc.rate} — 대출 한도·월 상환액은 상단 대출계산 탭에서 이 금리로 계산돼요.`
+      : 'AI 컨설팅 코멘트는 현재 일시 중단 — 실거래·세대수·주차·규제 등 객관 데이터만 표시해요.',
+  ];
+  if (fc.unsold) coreMessages.push(`${fc.unsold} — 수치 나열이며 시장 예측이 아니에요.`);
+
+  const checklist = [
+    { text: '등기부등본 최신본 확인 (계약 직전 재확인)', stars: 3 },
+    {
+      text: fc.dsr ? `대출 사전심사 — ${fc.dsr}` : '대출 사전심사 — 스트레스 DSR 반영 한도 확인 (상단 대출계산 탭)',
+      stars: 3,
+    },
+    {
+      text: fc.ltv
+        ? `LTV 한도 확인 — ${userInput.isFirstBuyer ? '생애최초' : (userInput.houseStatus || '무주택')} 기준 (${fc.ltv})`
+        : '규제지역 여부·전입 의무 확인 (10.15 규제 요약 참고)',
+      stars: 3,
+    },
+    { text: '규제지역 여부·전입 의무 확인 (10.15 규제 요약 참고)', stars: 2 },
+    { text: '관리비·주차 실태 임장 확인 (임장노트 탭 활용)', stars: 2 },
+    { text: '특약 초안 준비 (특약 탭 — 표준 템플릿 제공)', stars: 1 },
+  ];
+
+  const tips = [
+    '실거래는 신고 후 해제되는 경우가 있어요 — 단지 상세의 거래 해제 안내를 참고하세요.',
+    '같은 단지도 평형·층에 따라 가격 차가 커요 — 실거래가 탭의 평형 필터로 확인하세요.',
+    '정책자금(디딤돌·신생아 특례) 해당 여부는 사이드바 정책자금 자격에서 확인하세요.',
+  ];
+  if (fc.tx) tips.push(`본 정리의 실거래 기준: ${fc.tx} (국토교통부 신고 자료 · 신고 지연분은 이후 반영돼요).`);
+
   return {
-    coreMessages: [
-      `매수가 ${userInput.maxBudget}억 · 자기자본 ${userInput.myCash}억 · ${userInput.region} 조건의 최근 6개월 실거래 데이터를 정리했어요.`,
-      // '추천' 단어는 자체 단언표현 필터(filterAdviceOutputDeep)에 걸림 (라이브 확인) — 필터 안전 문구 사용
-      `아래 ${apartments.length}개 단지는 국토교통부 실거래 기준 조건 부합 단지 정리예요 — 의사결정 책임은 본인에게 있어요.`,
-      'AI 컨설팅 코멘트는 현재 일시 중단 — 실거래·세대수·주차·규제 등 객관 데이터만 표시해요.',
-    ],
-    checklist: [
-      { text: '등기부등본 최신본 확인 (계약 직전 재확인)', stars: 3 },
-      { text: '대출 사전심사 — 스트레스 DSR 반영 한도 확인 (상단 대출계산 탭)', stars: 3 },
-      { text: '규제지역 여부·전입 의무 확인 (10.15 규제 요약 참고)', stars: 2 },
-      { text: '관리비·주차 실태 임장 확인 (임장노트 탭 활용)', stars: 2 },
-      { text: '특약 초안 준비 (특약 탭 — 표준 템플릿 제공)', stars: 1 },
-    ],
+    coreMessages,
+    checklist,
     apartments,
     longTermView: 'AI 시나리오 분석이 일시 중단 상태예요. 단지별 실거래 추이·신고가 이력은 각 단지 상세의 실거래가·가격 시그널 탭에서 확인할 수 있어요.',
-    tips: [
-      '실거래는 신고 후 해제되는 경우가 있어요 — 단지 상세의 거래 해제 안내를 참고하세요.',
-      '같은 단지도 평형·층에 따라 가격 차가 커요 — 실거래가 탭의 평형 필터로 확인하세요.',
-      '정책자금(디딤돌·신생아 특례) 해당 여부는 사이드바 정책자금 자격에서 확인하세요.',
-    ],
+    tips,
     _dataOnly: true,
   };
 }
@@ -955,8 +1021,17 @@ async function fetchCandidateApts(admin, input, limit) {
   return finalOut;
 }
 
-/** AI prompt 빌드 — 사용자 입력 + 정책 + 단지 정보 + 점수 breakdown + 객관 fact (Phase 7) */
-function buildReportPrompt(input, policy, candidates) {
+/** AI prompt 빌드 — 사용자 입력 + 정책 + 단지 정보 + 점수 breakdown + 객관 fact (Phase 7)
+ *  Sprint JJJJJ: freeCtx(이미 무료로 확보한 ECOS 금리·KOSIS 미분양·실거래 최신월) + 정책 LTV/DSR 실수치 주입. */
+function buildReportPrompt(input, policy, candidates, freeCtx) {
+  const fc = _freeContextLines(policy || {}, freeCtx || {});
+  const _freeBlock = [
+    fc.ltv ? `- LTV 한도(정부 공시 스냅샷): ${fc.ltv}` : null,
+    fc.dsr ? `- DSR 규제: ${fc.dsr}` : null,
+    fc.rate ? `- 시중 금리(실측): ${fc.rate}` : null,
+    fc.unsold ? `- 대상 지역 미분양 추이(실측): ${fc.unsold}` : null,
+    fc.tx ? `- 실거래 데이터 기준: ${fc.tx}` : null,
+  ].filter(Boolean).join('\n');
   const aptList = candidates.map((c, i) => {
     const householdsStr = (c.households && Number.isFinite(Number(c.households))) ? `${c.households}세대` : '미상';
     // RISK-6 fix (2026-05-02): displayName 단순화 — c.master_name (KAPT facility 매칭 결과) 무시
@@ -1006,6 +1081,7 @@ function buildReportPrompt(input, policy, candidates) {
 - 토지거래허가: ${policy.landTrade}
 - 정책자금 종류: ${(policy.policyLoans || []).join(', ')} (자세한 자격·신청은 ${policy.policyContact})
 - ※ ${policy.note}
+${_freeBlock ? `\n## 실측 수치 (전부 공식 출처 — 아래 수치만 인용 가능, 임의 변형·추정 금지)\n${_freeBlock}` : ''}
 
 ## 단지 정보 (${candidates.length}개 후보, 최근 6개월 실거래 기반)
 ${aptList}
@@ -1031,6 +1107,12 @@ ${aptList}
    ★ 응답 길이 절약: location/pros/cons/recommendation/matchReason 각각 60자 이내, ratio 30자 이내 (응답 토큰 부족시 잘림 방지)
 4. longTermView — 자녀 시점 기반 갈아타기 시나리오 (가격 수치 X, 권역만)
 5. tips — 실무 TIP 5~6개 (회전율·RR·복비·잔금·임장)
+
+[실측 수치 활용 — Sprint JJJJJ]
+- 위 '실측 수치' 블록(LTV·DSR·금리·미분양·실거래 기준월)이 있으면 checklist/coreMessages 의 근거로 인용할 것
+  (예: checklist {"text":"대출한도 — 생애최초 규제지역 LTV 70%","stars":3} / {"text":"금리 — 시중 주담대 4.32% 기준 상환액 확인","stars":3})
+- 그 블록에 없는 수치(LTV·DSR·금리·미분양 값)는 절대 임의로 쓰지 말 것. 블록이 없으면 해당 수치 언급 자체를 생략.
+- 미분양 수치는 나열만. "미분양이 늘어 가격이 …" 같은 인과·전망 서술 절대 금지.
 
 [환각 차단 절대 규칙]
 - 입력 데이터에 없는 거리(km, 도보 분), 지형(평지·경사), 정확한 역명·노선 번호, 재개발 일정 임의 추정 X

@@ -27,10 +27,14 @@ const { getActivePlan, getLimitsForPlan } = require('./planService');
 const logger = require('../logger');
 
 // Claude Sonnet 4.5 가격 (마이크로달러 per 1M tokens) — Sonnet-tier 단가 가정
+// CACHE-PRICE-FIX-2026-07-14 (Sprint JJJJJ): cache_creation 단가가 5분 TTL 요율(input×1.25 = $3.75/M)로
+//   하드코딩돼 있었으나, aiService.js 는 모든 system 블록에 ttl:'1h' 를 쓴다(aiService.js:213·224-225).
+//   Anthropic 요율은 1시간 TTL 캐시 쓰기 = input×2.0 (= $6/M) → 기존 계산은 캐시 미스마다 지출을 과소집계.
+//   지출 상한(user_budget · globalAiBudget kill-switch)이 실제 청구보다 느슨하게 작동하던 문제 → 정정.
 const PRICE = {
   input:          3_000_000,   // $3/M
   output:        15_000_000,   // $15/M
-  cache_creation: 3_750_000,   // $3.75/M
+  cache_creation: 6_000_000,   // $6/M (1h TTL 캐시 쓰기 = input×2.0)
   cache_read:       300_000,   // $0.30/M
 };
 
