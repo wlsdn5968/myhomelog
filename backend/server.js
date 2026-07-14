@@ -446,55 +446,6 @@ async function getFacilityQuality() {
   } catch (e) { return null; }
 }
 
-// TEMP-SYNCHK-2026-07-14 (Sprint IIIII 진단, 검증 후 즉시 제거): apt_master 0행 3지역(26470/27140/41281)의
-//   원인 규명 — aptMasterSync 의 syncOneSgg 와 동일 파라미터로 KAPT getSigunguAptList3 1페이지 실호출 결과 반환.
-//   키는 노출 안 함(응답에 미포함). AptInfo MCP(자체 키)로는 두 지역 모두 정상(106/179단지)이라 우리 키·파라미터 경로 검증 필요.
-app.get('/api/_synchk_q3', async (req, res) => {
-  const lawd = String(req.query.lawd || '').trim();
-  if (!/^\d{5}$/.test(lawd)) return res.status(400).json({ error: 'lawd 5자리 필요' });
-  const axios = require('axios');
-  const key = process.env.APT_INFO_API_KEY || process.env.MOLIT_API_KEY;
-  try {
-    const r = await axios.get('https://apis.data.go.kr/1613000/AptListService3/getSigunguAptList3', {
-      params: { serviceKey: key, sigunguCode: lawd, pageNo: 1, numOfRows: 100, _type: 'json' },
-      timeout: 8000, headers: { Accept: 'application/json' }, validateStatus: () => true,
-    });
-    const isStr = typeof r.data === 'string';
-    const header = r.data?.response?.header;
-    const body = r.data?.response?.body;
-    const itemsRaw = body?.items;
-    const list = Array.isArray(itemsRaw) ? itemsRaw
-      : (itemsRaw?.item ? (Array.isArray(itemsRaw.item) ? itemsRaw.item : [itemsRaw.item]) : []);
-    res.json({
-      lawd, httpStatus: r.status, contentType: r.headers?.['content-type'] || null,
-      resultCode: header?.resultCode ?? null, resultMsg: header?.resultMsg ?? null,
-      totalCount: body?.totalCount ?? null, pageLen: list.length,
-      sample: list.slice(0, 3).map(x => x && x.kaptName),
-      preview: isStr ? r.data.slice(0, 300) : (list.length ? null : JSON.stringify(r.data).slice(0, 300)),
-    });
-  } catch (e) {
-    const rd = e?.response?.data;
-    res.json({ lawd, error: e.message, httpStatus: e?.response?.status || null,
-      preview: typeof rd === 'string' ? rd.slice(0, 300) : JSON.stringify(rd || {}).slice(0, 300) });
-  }
-});
-
-// TEMP-SYNCHK-2026-07-14 2단계: ?run=1 이면 정규 aptMasterSync.syncOneSgg 를 해당 lawd 1개에 그대로 실행
-//   (동일 코드 경로·동일 데이터 — 주간 cron 이 매주 하는 일의 targeted 실행). fetched/inserted/error 반환으로
-//   "API 정상인데 0행" 의 실패 단계를 실측. 검증 후 제거.
-app.get('/api/_synchk_q3_run', async (req, res) => {
-  const lawd = String(req.query.lawd || '').trim();
-  if (!/^\d{5}$/.test(lawd)) return res.status(400).json({ error: 'lawd 5자리 필요' });
-  try {
-    const { syncOneSgg, adminClient } = require('./jobs/aptMasterSync');
-    const admin = adminClient();
-    const r = await syncOneSgg(admin, lawd);
-    res.json({ ok: true, result: r });
-  } catch (e) {
-    res.json({ ok: false, error: e.message });
-  }
-});
-
 app.get('/api/health', optionalAuth, async (req, res) => {
   const [searchUsed, chatUsed] = await Promise.all([
     getUsage(req, 'search'),

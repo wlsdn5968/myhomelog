@@ -238,8 +238,7 @@ async function runAptMasterSync() {
   return { sggs: codes.length, fetched: fetchedTotal, inserted: insertedTotal, errors: errCount, elapsedMs };
 }
 
-// TEMP-SYNCHK-2026-07-14 (Sprint IIIII 진단): syncOneSgg 를 targeted 진단 endpoint 에서 재사용 — 검증 후 원복.
-module.exports = { runAptMasterSync, syncOneSgg, adminClient };
+module.exports = { runAptMasterSync };
 
 if (require.main === module) {
   runAptMasterSync()
