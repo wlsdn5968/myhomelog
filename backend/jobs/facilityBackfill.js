@@ -108,6 +108,32 @@ async function run({ chunk = DEFAULT_CHUNK, budgetMs = 240000 } = {}) {
     source: 'facility-backfill',
     chunks, totalProcessed, totalInserted, totalFailed, totalParking, elapsedMs: elapsed,
   }, `facility backfill: ${chunks} chunks, ${totalInserted}/${totalProcessed} 적재 (주차 ${totalParking}건) (${elapsed}ms)`);
+  // ALERT-DEDUP-FIX-2026-07-14 (Sprint HHHHH-3): 품질 경보를 health 핫패스(인스턴스별 스팸, Sentry NODE-4
+  //   107 events)에서 본 cron 종료 시 1일 1회로 이동. cron 은 단일 실행이라 dedup 보장.
+  try {
+    const { getSupabaseAdmin } = require('../db/client');
+    const a2 = getSupabaseAdmin();
+    if (a2) {
+      const H = () => ['*', { count: 'exact', head: true }];
+      const [total, facNull, dtlMissing] = await Promise.all([
+        a2.from('apt_master').select(...H()),
+        a2.from('apt_master').select(...H()).is('facility', null),
+        a2.from('apt_master').select(...H()).not('facility', 'is', null).is('facility->_empty', null).is('facility->_dtl', null),
+      ]);
+      const t = total.count || 0, fn = facNull.count || 0, dm = dtlMissing.count || 0;
+      const dtlPct = t > 0 ? Math.round((dm / t) * 100) : 0;
+      const fnPct = t > 0 ? Math.round((fn / t) * 100) : 0;
+      // 임계: 비율 기반(신규 단지 대량 유입 시에도 절대수 아닌 비율로 판단) — 주차누락 ≥15% OR 미적재 ≥10%
+      if (dtlPct >= 15 || fnPct >= 10) {
+        const Sentry = require('@sentry/node');
+        Sentry.captureMessage(
+          `facility 품질 (daily): 주차누락 ${dm}(${dtlPct}%)·미적재 ${fn}(${fnPct}%) — 백필 진행 중`,
+          { level: 'warning', tags: { monitor: 'facility-quality-daily' } }
+        );
+      }
+      logger.info({ source: 'facility-quality-daily', total: t, facilityNull: fn, dtlMissing: dm, dtlPct, fnPct }, 'facility 품질 일일 요약');
+    }
+  } catch (_) { /* 품질 요약 실패는 backfill 결과에 무영향 */ }
   return { ok: true, chunks, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, withParking: totalParking, elapsedMs: elapsed };
 }
 

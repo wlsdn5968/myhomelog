@@ -433,16 +433,10 @@ async function getFacilityQuality() {
       householdsZero: hh,           // 세대수 0/null → "미상" 표시
       warn: (dtlPct != null && dtlPct >= 15) || hh >= 200 || emp >= 50 || fnull >= 10,
     };
-    // 자동 사전검출: 품질 저하 시 Sentry 경보(6h 캐시라 최대 6h 1회 — 스팸 없음). 운영자가 직접 안 찾아도 통지.
-    if (out.warn) {
-      try {
-        const Sentry = require('@sentry/node');
-        Sentry.captureMessage(
-          `facility 데이터 품질 경보: 주차누락 ${dtl}(${dtlPct}%)·세대수0 ${hh}·조회실패 ${emp}·미적재 ${fnull}`,
-          { level: 'warning', tags: { monitor: 'facility-quality' }, extra: out }
-        );
-      } catch (_) {}
-    }
+    // ALERT-DEDUP-FIX-2026-07-14 (Sprint HHHHH-3, Sentry NODE-4 107 events 실측): health 경로 captureMessage 는
+    //   서버리스 인스턴스별 캐시라 dedup 불가(인스턴스 수만큼 발생) + 주간 apt-master-sync 의 신규 단지 유입
+    //   (facilityNull 0→3,452)이 임계를 상시 초과 → 경보 스팸. 경보는 facility-backfill cron(일 1회) 종료 시로
+    //   이동(facilityBackfill.js) — health 는 지표 노출만.
     cache.set(CK, out, 21600); // 6h — 데이터 품질은 일 단위 완만 변동(백필 cron 이후 갱신)
     return out;
   } catch (e) { return null; }
