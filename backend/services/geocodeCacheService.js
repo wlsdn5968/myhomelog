@@ -227,6 +227,22 @@ async function kakaoGeocode({ aptName, sigungu, umdNm, address }) {
   return null;
 }
 
+/** GEO-KEY-MERGE-2026-07-14 (Sprint IIIII-2): 키 네임스페이스 2종(kapt:/name:) 공존으로 같은 단지가
+ *  다른 키로 이미 지오코딩된 경우(실측 137그룹·잉여 142행) — (apt_name, sigungu, umd_nm) 정확 일치
+ *  2차 조회로 기존 좌표 재사용. Kakao 재호출·이중 등록을 원천 차단(uq_apt_geocache_name_combo 와 정합). */
+async function getFromDbByNameCombo({ aptName, sigungu, umdNm }) {
+  const admin = dbClient();
+  if (!admin || !aptName) return null;
+  try {
+    let q = admin.from('apt_geocache').select('lat,lng,address,place_name').eq('apt_name', aptName);
+    q = sigungu ? q.eq('sigungu', sigungu) : q.is('sigungu', null);
+    q = umdNm ? q.eq('umd_nm', umdNm) : q.is('umd_nm', null);
+    const { data } = await q.limit(1).maybeSingle();
+    if (!data || !isValidKoreaCoord(Number(data.lat), Number(data.lng))) return null;
+    return { lat: Number(data.lat), lng: Number(data.lng), address: data.address, placeName: data.place_name };
+  } catch (_) { return null; }
+}
+
 /** DB UPSERT — 쓰기 실패해도 좌표는 반환 (UX 우선) */
 async function saveToDb(key, entry) {
   const admin = dbClient();
@@ -261,6 +277,13 @@ async function resolveCoord(apt) {
   // 1) DB 캐시
   const fromDb = await getFromDb(key);
   if (fromDb) return fromDb;
+
+  // 1.5) 다른 키 네임스페이스(kapt:/name:)로 이미 저장된 동일 단지 재사용 (Sprint IIIII-2)
+  const fromCombo = await getFromDbByNameCombo(apt);
+  if (fromCombo) {
+    cache.set(`geo-db:${key}`, fromCombo, 3600);
+    return fromCombo;
+  }
 
   // 2) Kakao 폴백
   const fromKakao = await kakaoGeocode(apt);
