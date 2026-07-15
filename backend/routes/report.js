@@ -474,11 +474,19 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
       text: fc.dsr ? `대출 사전심사 — ${fc.dsr}` : '대출 사전심사 — 스트레스 DSR 반영 한도 확인 (상단 대출계산 탭)',
       stars: 3,
     },
-    // KKKKK-3: fc.ltv 없으면 항목 생략 — fallback 문구가 아래 '규제지역 확인'과 중복되던 것(라이브 발각) 제거
-    ...(fc.ltv ? [{
-      text: `LTV 한도 확인 — ${userInput.isFirstBuyer ? '생애최초' : (userInput.houseStatus || '무주택')} 기준 (${fc.ltv})`,
-      stars: 3,
-    }] : []),
+    // KKKKK-3: fc.ltv 없으면 항목 생략 — fallback 문구가 아래 '규제지역 확인'과 중복되던 것(라이브 발각) 제거.
+    // KKKKK-4: 표시용은 사용자 상황 행만(라이브: 7개 조건 전부 나열돼 항목 과대) — 프롬프트는 전체 표 유지.
+    ...((() => {
+      if (!Array.isArray(policy?.ltv)) return [];
+      const _st = userInput.isFirstBuyer ? '생애최초' : String(userInput.houseStatus || '무주택');
+      const _kw = /생애최초/.test(_st) ? '생애최초' : (/2주택|다주택/.test(_st) ? '2주택' : (/1주택/.test(_st) ? '1주택' : '무주택'));
+      const rows = policy.ltv.filter(r => r && r.condition && r.ltv != null && r.condition.includes(_kw));
+      if (!rows.length) return [];
+      return [{
+        text: `LTV 한도 확인 — ${rows.map(r => `${r.condition} ${r.ltv}%`).join(' · ')}`,
+        stars: 3,
+      }];
+    })()),
     { text: '규제지역 여부·전입 의무 확인 (10.15 규제 요약 참고)', stars: 2 },
     { text: '관리비·주차 실태 임장 확인 (임장노트 탭 활용)', stars: 2 },
     { text: '특약 초안 준비 (특약 탭 — 표준 템플릿 제공)', stars: 1 },
