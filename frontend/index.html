@@ -203,6 +203,9 @@ window.MHL.auth = window.MHL.auth || {
           A.user = session?.user || null;
           if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'SIGNED_OUT') {
             A._emit();
+            // PILL-STALE-2026-07-15 (Sprint MMMMM, 라이브 발각): 첫 health 콜이 세션 복원보다 빨라
+            //   로그인(admin)인데 "검색 4/5"(익명 기준)로 stale 표시 — 세션 확정 시 한도 pill 재갱신.
+            try { if (typeof refreshQuota === 'function') setTimeout(refreshQuota, 300); } catch(_){}
             // MOB-AUDIT-2026-05-03: funnel — 로그인 성공/로그아웃 추적 (운영자 전환율 측정)
             try {
               if (event === 'SIGNED_IN' && window.va) {
@@ -486,6 +489,13 @@ header{
 .ltxt{font-family:var(--font-display);font-size:17px;font-weight:800;color:var(--text-primary);letter-spacing:-.5px}
 .ltxt em{font-style:normal;background:linear-gradient(120deg,var(--accent-700),var(--accent-500));-webkit-background-clip:text;background-clip:text;color:transparent}
 .htabs{display:flex;gap:2px;margin-left:4px}
+/* HEADER-SQUEEZE-2026-07-15 (Sprint MMMMM, 실측): '도구 ▾' 2줄 꺾임(1280·1512 공통) + 701~1000px 헤더 탭
+   세로 붕괴(756px 실캡처) — 탭 줄바꿈 금지 + 태블릿 구간 비핵심 pill 축소로 공간 확보 */
+.htab,.htabs button{white-space:nowrap}
+@media(min-width:701px) and (max-width:1120px){
+  .hml .rpill,.hml .hst#dqPill,.hml .hst#aiPill{display:none!important}
+  .hsearch{min-width:130px!important}
+}
 .htab{
   padding:6px 13px;border-radius:var(--radius-sm);
   font-family:var(--font-display);font-size:12.5px;font-weight:500;
@@ -1248,7 +1258,8 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     </div>
   </div>
   <!-- P0 (2026-04-25 Phase 2 시나리오 A): 단지명·동명 직접 검색바 -->
-  <div class="hsearch" style="position:relative;flex:1;max-width:480px;margin:0 8px">
+  <!-- HEADER-SQUEEZE-2026-07-15 (Sprint MMMMM, 실측): pill 8개(admin) 시 검색창 173px·1050px 창 44px 붕괴 → min-width 확보 -->
+  <div class="hsearch" style="position:relative;flex:1;min-width:170px;max-width:480px;margin:0 8px">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-faint);pointer-events:none;z-index:1"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
     <input id="hSearchInput" class="inp" type="text" placeholder="단지명·동명 검색 (예: 마포래미안푸르지오, 공덕동)" style="margin:0;font-size:12px;padding:7px 10px 7px 32px" oninput="onHeaderSearchInput(this.value)" onkeydown="onHeaderSearchKey(event)" onfocus="if(this.value)onHeaderSearchInput(this.value)" onblur="setTimeout(()=>document.getElementById('hSearchDrop').style.display='none',200)" autocomplete="off">
     <script>
@@ -3815,7 +3826,7 @@ function _renderReport(data) {
   const _usHtml = (_us && Array.isArray(_us.months) && _us.months.length) ? `<div style="background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:9px 13px;margin-bottom:12px;font-size:10.5px;line-height:1.7">
       <b style="font-size:11px;color:var(--t1)">🏗️ ${_escHtml(_us.sido)} ${_escHtml(_us.sigungu)} 미분양 추이</b>
       <span style="color:var(--t2);margin-left:8px">${_us.months.map(m=>`${_escHtml(String(m.ym).slice(4))}월 <b>${Number(m.cnt).toLocaleString()}호</b>`).join(' → ')}</span>
-      <div style="font-size:9.5px;color:var(--t3)">출처: ${_escHtml(_us.source||'KOSIS')} · 수치 나열이며 시장 예측이 아닙니다</div>
+      <div style="font-size:9.5px;color:var(--t3)">출처: ${_escHtml(_us.source||'KOSIS')} · 추천 1위 단지 지역 기준 · 수치 나열이며 시장 예측이 아닙니다</div>
     </div>` : '';
 
   // REGION-TREND-2026-07-14 (Sprint KKKKK): 지역 월별 거래량 — 자체 DB 집계, 수치 나열만(예측 없음).
@@ -3824,7 +3835,7 @@ function _renderReport(data) {
       <b style="font-size:11px;color:var(--t1)">📊 ${_escHtml(_tt.sigungu)} 월별 매매 거래량</b>
       <span style="color:var(--t2);margin-left:8px">${_tt.months.map(m=>`${_escHtml(String(m.ym).slice(4))}월 <b>${Number(m.n).toLocaleString()}건</b>`).join(' → ')}</span>
       ${Array.isArray(_tt.ageBands) && _tt.ageBands.length >= 2 ? `<div style="color:var(--t2);margin-top:2px">🏗 준공연차별 평당가 <span style="font-size:9.5px;color:var(--t3)">(전용면적 환산·중위)</span> · ${_tt.ageBands.map(b=>`${_escHtml(b.band)} <b>${Number(b.medianPyeong).toLocaleString()}만</b><span style="font-size:9.5px;color:var(--t3)">(${Number(b.n).toLocaleString()}건)</span>`).join(' · ')}</div>` : ''}
-      <div style="font-size:9.5px;color:var(--t3)">국토교통부 실거래 신고 기준 · ${_escHtml(_tt.note||'최근 월은 신고 지연으로 집계 중일 수 있어요')} · 수치 나열이며 시장 예측이 아닙니다</div>
+      <div style="font-size:9.5px;color:var(--t3)">국토교통부 실거래 신고 기준 · 추천 1위 단지 지역 기준 · ${_escHtml(_tt.note||'최근 월은 신고 지연으로 집계 중일 수 있어요')} · 수치 나열이며 시장 예측이 아닙니다</div>
     </div>` : '';
 
   const coreHtml = _basisHtml + _usHtml + _ttHtml + _aiBanner + (r.coreMessages || []).map((m, i) =>
@@ -4381,6 +4392,7 @@ async function refreshQuota(){
       updateQuota(d.usage);
       if(d.chat) updateAiPill(d.chat);
       updateDataQuality(d.facilityQuality, !!(d.usage && d.usage.unlimited)); // 관리자 데이터 품질 뱃지 (Sprint BBBBB)
+      window._isAdmin = !!(d.usage && d.usage.unlimited); // Sprint MMMMM — admin 전용 UI(진단 raw 등) 게이트
       updateEcosHint(d.ecosRates); // ECOS 시중금리 힌트 + dc() 기본금리 (Sprint FFFFF)
       updateHfRates(d.hfRates); // HF 정책자금 공시 금리 — 표 자동 갱신 (Sprint HHHHH)
       // 월 예산 90% 초과 시 선제적 경고 (아직 차단 전)
@@ -4446,7 +4458,10 @@ function showDataQuality(){
 function updateEcosHint(e){
   try{
     const el = document.getElementById('ecosHint');
-    if(!e || e.mortgageRate == null){ if(el) el.style.display='none'; return; }
+    // ECOS-HINT-STICKY-2026-07-15 (Sprint MMMMM, 라이브 발각): 서버리스 인스턴스별로 ecosRates 가
+    //   null 일 수 있어(비차단 캐시 미스), 후속 health 의 null 이 이미 표시된 힌트를 다시 숨기던 버그 —
+    //   한 번 값 받은 뒤(_ecosMortgageRate 보유)엔 유지, 최초부터 null 일 때만 숨김.
+    if(!e || e.mortgageRate == null){ if(el && !window._ecosMortgageRate) el.style.display='none'; return; }
     window._ecosMortgageRate = Number(e.mortgageRate) || null;
     const m = String(e.mortgageRateMonth||'').replace(/^(\d{4})(\d{2})$/,'$1.$2');
     if(el){
@@ -5079,6 +5094,25 @@ async function doSearch(){
       _chatSessionId = null;
     }
     renderPList();renderMarkers(props);renderListGrid();
+    // SEARCH-FITBOUNDS-2026-07-15 (Sprint MMMMM, 전수 실측): 검색 후에도 광역 줌 유지 → 결과 마커 pill
+    //   겹침(9.0억↔5.2억 실캡처). 좌표 보유 결과에 맞춰 1회 fitBounds — GGGG 함정 회피(좌표 있는 것만·
+    //   1건이면 setCenter+줌14). 이후 사용자가 지도를 움직이면 그대로 존중(재검색 시에만 재적용).
+    try {
+      const _pts = props.filter(p => p.lat != null && p.lng != null && isFinite(p.lat) && isFinite(p.lng));
+      if (typeof mapObj !== 'undefined' && mapObj && _pts.length) {
+        const _isNv = !!(mapObj._isNaver && window.naver?.maps);
+        if (_pts.length === 1) {
+          if (_isNv) { mapObj.setCenter(new naver.maps.LatLng(_pts[0].lat, _pts[0].lng)); mapObj.setZoom(14); }
+          else if (mapObj.setView) mapObj.setView([_pts[0].lat, _pts[0].lng], 14);
+        } else if (_isNv) {
+          const nb = new naver.maps.LatLngBounds();
+          _pts.forEach(p => nb.extend(new naver.maps.LatLng(p.lat, p.lng)));
+          mapObj.fitBounds(nb);
+        } else if (window.L && mapObj.fitBounds) {
+          mapObj.fitBounds(L.latLngBounds(_pts.map(p => [p.lat, p.lng])), { padding: [40, 40] });
+        }
+      }
+    } catch(_){}
     document.getElementById('pCnt').textContent=props.length+'건';
     // VIEW-GUARD (Sprint KKKK): 검색 중 사용자가 탭을 옮겼으면 지도 강제 전환 스킵 —
     // 결과는 지도·목록에 이미 렌더돼 있어 사용자가 돌아오면 그대로 보임.
@@ -6359,6 +6393,9 @@ function showDetail(p){
         // KAPT-RAW-2026-05-12 (진단 — 운영자 검증용): KAPT raw 응답에 평형 정보 있는지 확인.
         //   접힌 상태로 노출. 사용자는 클릭 시 펼쳐서 raw key/value 확인 가능.
         //   user-PII 없음 (단지 공개정보).
+        // ADMIN-GATE-2026-07-15 (Sprint MMMMM, 전수 실측): 진단 raw 덤프가 일반 사용자에게도 노출 —
+        //   정보 가치 없고 신뢰 저하 → admin(무제한 계정)에게만 표시.
+        if (!window._isAdmin) return '';
         const raw = p.facility && p.facility.rawKapt;
         if (!raw || typeof raw !== 'object') return '';
         const keys = Object.keys(raw).sort();
@@ -6863,6 +6900,9 @@ function renderAnalysis(d,p){
     const basedOn=d.filteredTxCount||d.txCount||0;
     const pctColor=pct<=30?'var(--grn)':pct<=65?'var(--amb)':'var(--red)';
     const pctDesc=pct<=30?'시세 하단 구간':pct<=65?'시세 중간 구간':'시세 상단 구간';
+    // PCT-LABEL-2026-07-15 (Sprint MMMMM, 실측 발각): "하위 97% — 시세 상단"은 '하위'가 정반대 인상 —
+    //   50% 초과면 "상위 X%"로 자동 전환(같은 수치, 읽기만 직관화).
+    const pctLabel = pct > 50 ? `상위 ${100-pct}%` : `하위 ${pct}%`;
     // 백엔드가 제공하는 신뢰 구간 사용 (없으면 fallback ±15%)
     const lo = (d.percentileLow !== null && d.percentileLow !== undefined) ? d.percentileLow : Math.max(0, pct - 15);
     const hi = (d.percentileHigh !== null && d.percentileHigh !== undefined) ? d.percentileHigh : Math.min(100, pct + 15);
@@ -6877,7 +6917,7 @@ function renderAnalysis(d,p){
         <div class="pct-pin" style="left:${pct}%"></div>
       </div>
       <div class="pct-labels"><span>최저가</span><span>중간</span><span>최고가</span></div>
-      <div class="pct-result" style="color:${pctColor}">하위 ${pct}% — ${pctDesc}<br><span style="font-size:10px;color:var(--t3)">${rangeText}${d.anomalyCount>0?' · 이상거래 '+d.anomalyCount+'건 제외':''}</span></div>
+      <div class="pct-result" style="color:${pctColor}">${pctLabel} — ${pctDesc}<br><span style="font-size:10px;color:var(--t3)">${rangeText}${d.anomalyCount>0?' · 이상거래 '+d.anomalyCount+'건 제외':''}</span></div>
     </div>`;
   }
 
@@ -7478,7 +7518,7 @@ function renderFieldNote(p){
       <button class="fn-save" onclick='saveFieldNote(${nJs},${sidJs})'>저장</button>
       ${hasNote?`<button onclick='clearFieldNote(${nJs})' style="background:none;border:none;font-size:11px;color:var(--t3);cursor:pointer;font-family:inherit;padding:6px">기록 삭제</button>`:''}
     </div>
-    <div class="ibox b" style="margin-top:12px;font-size:10px">💾 비로그인: 이 기기 브라우저에만 저장 · 로그인: 클라우드 자동 동기화 (모든 기기 공유)</div>`;
+    <div class="ibox b" style="margin-top:12px;font-size:10px">💾 ${(window.MHL?.auth?.user)?'☁ 클라우드 자동 동기화 중 (모든 기기 공유)':'비로그인: 이 기기 브라우저에만 저장 · 로그인 시 클라우드 자동 동기화'}</div>`;
 }
 
 function toggleFnCheck(aptName,checkId,safeId){
@@ -7650,7 +7690,7 @@ function renderRisk(d){
       <div class="ibox b" style="margin-bottom:12px">아래는 <b>일반적인 매수 리스크 예시</b>입니다. 사이드바에서 <b>AI 단지 검색</b>을 실행하면 이 단지 맞춤 리스크 분석이 제공돼요.</div>
       <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">시세 하락 리스크</div></div><div class="rcard-b">매수 후 금리 인상/규제 강화 시 단기 조정 가능성.</div><div class="rcard-c">💡 5년 이상 보유, 전세 전환 플랜B 수립</div></div>
       <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">대출 규제 추가 강화</div></div><div class="rcard-b">갈아타기 시점 LTV 추가 규제 가능성.</div><div class="rcard-c">💡 상호금융권(DSR 50%) 사전 상담</div></div>
-      <div class="rcard"><div class="rcard-top"><span class="lvl safe">낮음</span><div class="rcard-t">환금성 리스크</div></div><div class="rcard-b">세대수 적을 경우 매도 시 거래 부재.</div><div class="rcard-c">💡 RR(로열동·로열호) 매수</div></div>`;
+      <div class="rcard"><div class="rcard-top"><span class="lvl safe">낮음</span><div class="rcard-t">환금성 리스크</div></div><div class="rcard-b">세대수 적을 경우 매도 시 거래 부재.</div><div class="rcard-c">💡 RR(로열동·로열호) 여부 임장 확인</div></div>`;
     return;
   }
   const lm={높음:'danger',중간:'warn',낮음:'safe'};
@@ -8569,7 +8609,7 @@ function buildRuleRisk(p){
   if (hh != null && hh < 300) {
     risks.push({level:'낮음',title:'환금성 리스크',probability:'',scenario:`세대수 ${hh.toLocaleString()}세대(소단지) — 매도 시 거래 부재 가능성.`,countermeasure:'같은 생활권 대단지 시세와 비교 확인'});
   } else {
-    risks.push({level:'낮음',title:'환금성 리스크',probability:'',scenario:'세대수 적을 경우 매도 시 거래 부재.',countermeasure:'RR(로열동·로열호) 매수'});
+    risks.push({level:'낮음',title:'환금성 리스크',probability:'',scenario:'세대수 적을 경우 매도 시 거래 부재.',countermeasure:'RR(로열동·로열호) 여부 임장 확인'});
   }
   return {
     overallRisk:'보통',

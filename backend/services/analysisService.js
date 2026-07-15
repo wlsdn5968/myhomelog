@@ -474,9 +474,15 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
     jeonseT = jeonseT.filter(_scope);
   }
 
+  // JEONSE-PURE-2026-07-15 (Sprint MMMMM): 전세가율 기준을 보고서(report.js)와 통일 — 순수 전세만.
+  //   getJeonseByApt 는 반전세를 환산보증금으로 포함하지만, 소액 보증금 월세가 평균/중위를 끌어내려
+  //   왜곡(라이브 실측: 보고서 '동신 9%' — 같은 원인). 전세가율·표본수·신뢰도·최근 전세 목록 전부
+  //   순수 전세(monthlyRent=0) 기준으로 계산해 두 화면 수치 정합.
+  const jeonsePure = jeonseT.filter(t => (t.monthlyRent || 0) === 0);
+
   // 신뢰도 등급 (매매 + 전세 별도)
-  const reliability = getDataReliability(saleTx.length, jeonseT.length);
-  const jeonseReliability = getJeonseReliability(jeonseT.length);
+  const reliability = getDataReliability(saleTx.length, jeonsePure.length);
+  const jeonseReliability = getJeonseReliability(jeonsePure.length);
 
   // 가격 단위: currentPrice=억 → 만원 변환
   const priceW = (currentPrice || 0) * 10000;
@@ -490,7 +496,7 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
   const volumeSignalObj = calcVolumeSignal(saleTx);
   // P0-3 (2026-05-04): saleTx (filter X) → filteredTx (이상거래 제외)
   //   기존: outlier 1건 30억 → 평균 +18% 왜곡 → 잘못된 전세가율 → 매수 신호 RED 오판
-  const gapData = calcGap(filteredTx, jeonseT);
+  const gapData = calcGap(filteredTx, jeonsePure); // Sprint MMMMM — 순수 전세 기준(보고서와 통일)
 
   // LOW 이상일 때만 시세 위치 요약 계산 (NONE은 null)
   // P1 (2026-04-25 D2): buySignal → marketSummary alias 동시 노출 (호환성)
@@ -526,8 +532,8 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
     monthlyVolume,
     txCount: saleTx.length,
     filteredTxCount: filteredTx.length,
-    jeonseCount: jeonseT.length,
-    recentJeonseTx: jeonseT.slice(0, 5),
+    jeonseCount: jeonsePure.length,        // Sprint MMMMM — '전세 N건' 라벨과 정합(월세 미포함)
+    recentJeonseTx: jeonsePure.slice(0, 5), // '최근 전세 거래' 목록에 월세 보증금 혼입 차단
   };
 
   if (molitAvailable) cache.set(cacheKey, result, 3600);
