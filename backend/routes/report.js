@@ -180,9 +180,29 @@ router.post('/generate', async (req, res) => {
             byYm[ym] = (byYm[ym] || 0) + 1;
           }
           const months = Object.keys(byYm).sort().map(ym => ({ ym, n: byYm[ym] }));
+          // AGE-BANDS-2026-07-15 (Sprint KKKKK-2): 준공연차 구간별 평당가(전용면적 환산 기준) 중위 —
+          //   같은 txs 재사용(추가 쿼리 0). 표본 8건 미만 구간 비노출(기존 단지 비교기능 n≥8 관례),
+          //   유효 구간 2개 미만이면 전체 비노출(비교 의미 없음). ⚠ '전용 기준' 명시 필수 —
+          //   시장 관례 평당가는 공급면적 기준이라 수치가 달라 보임(우리 비교기능과 동일 기준으로 일관).
+          const _curYear = new Date().getFullYear();
+          const _bandDefs = [[0, 9, '10년 미만'], [10, 19, '10~19년'], [20, 29, '20~29년'], [30, 999, '30년 이상']];
+          const _byBand = _bandDefs.map(() => []);
+          for (const t of txs) {
+            if (!t.buildYear || t.buildYear < 1900 || !(t.excluUseAr > 10) || !(t.dealAmount > 0)) continue;
+            const age = _curYear - t.buildYear;
+            const bi = _bandDefs.findIndex(([lo, hi]) => age >= lo && age <= hi);
+            if (bi >= 0) _byBand[bi].push(t.dealAmount / (t.excluUseAr / 3.3058));
+          }
+          const ageBands = _bandDefs.map(([, , label], i) => {
+            const arr = _byBand[i];
+            if (arr.length < 8) return null;
+            arr.sort((a, b) => a - b);
+            return { band: label, n: arr.length, medianPyeong: Math.round(arr[Math.floor(arr.length / 2)]) };
+          }).filter(Boolean);
           return {
             sigungu: LAWD_CODE_TO_NAME[lawd] || candidates[0].sigungu,
             months,
+            ...(ageBands.length >= 2 ? { ageBands } : {}),
             note: '최근 월은 신고 지연(계약 후 30일 내 신고)으로 집계 중일 수 있어요',
           };
         } catch (_) { return null; }
@@ -391,6 +411,11 @@ function _freeContextLines(policy, freeCtx) {
       .join(' → ');
     out.txTrend = `${rt.sigungu} 매매 거래량 ${seq} (국토교통부 실거래 신고 기준 · 최근 월은 신고 지연으로 집계 중)`;
   }
+  // Sprint KKKKK-2: 준공연차 구간별 평당가 (전용면적 환산 기준 — 시장 관례 공급면적 평당가와 다름 명시)
+  if (rt && Array.isArray(rt.ageBands) && rt.ageBands.length >= 2) {
+    out.agePrice = `${rt.sigungu} 준공연차별 평당가(전용면적 환산·최근 6개월 중위): `
+      + rt.ageBands.map(b => `${b.band} ${b.medianPyeong.toLocaleString()}만원(${b.n}건)`).join(' · ');
+  }
   return out;
 }
 
@@ -466,6 +491,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
     '정책자금(디딤돌·신생아 특례) 해당 여부는 사이드바 정책자금 자격에서 확인하세요.',
   ];
   if (fc.tx) tips.push(`본 정리의 실거래 기준: ${fc.tx} (국토교통부 신고 자료 · 신고 지연분은 이후 반영돼요).`);
+  if (fc.agePrice) tips.push(`${fc.agePrice} — 과거 실거래 분포이며 특정 연차 단지 권유가 아니에요.`);
 
   return {
     coreMessages,
@@ -1111,6 +1137,7 @@ function buildReportPrompt(input, policy, candidates, freeCtx) {
     fc.rate ? `- 시중 금리(실측): ${fc.rate}` : null,
     fc.unsold ? `- 대상 지역 미분양 추이(실측): ${fc.unsold}` : null,
     fc.txTrend ? `- 대상 지역 매매 거래량 추이(실측): ${fc.txTrend}` : null,
+    fc.agePrice ? `- 대상 지역 준공연차별 평당가(실측): ${fc.agePrice}` : null,
     fc.tx ? `- 실거래 데이터 기준: ${fc.tx}` : null,
   ].filter(Boolean).join('\n');
   const aptList = candidates.map((c, i) => {

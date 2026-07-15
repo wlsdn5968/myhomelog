@@ -3817,6 +3817,7 @@ function _renderReport(data) {
   const _ttHtml = (_tt && Array.isArray(_tt.months) && _tt.months.length) ? `<div style="background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:9px 13px;margin-bottom:12px;font-size:10.5px;line-height:1.7">
       <b style="font-size:11px;color:var(--t1)">📊 ${_escHtml(_tt.sigungu)} 월별 매매 거래량</b>
       <span style="color:var(--t2);margin-left:8px">${_tt.months.map(m=>`${_escHtml(String(m.ym).slice(4))}월 <b>${Number(m.n).toLocaleString()}건</b>`).join(' → ')}</span>
+      ${Array.isArray(_tt.ageBands) && _tt.ageBands.length >= 2 ? `<div style="color:var(--t2);margin-top:2px">🏗 준공연차별 평당가 <span style="font-size:9.5px;color:var(--t3)">(전용면적 환산·중위)</span> · ${_tt.ageBands.map(b=>`${_escHtml(b.band)} <b>${Number(b.medianPyeong).toLocaleString()}만</b><span style="font-size:9.5px;color:var(--t3)">(${Number(b.n).toLocaleString()}건)</span>`).join(' · ')}</div>` : ''}
       <div style="font-size:9.5px;color:var(--t3)">국토교통부 실거래 신고 기준 · ${_escHtml(_tt.note||'최근 월은 신고 지연으로 집계 중일 수 있어요')} · 수치 나열이며 시장 예측이 아닙니다</div>
     </div>` : '';
 
