@@ -474,12 +474,11 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
       text: fc.dsr ? `대출 사전심사 — ${fc.dsr}` : '대출 사전심사 — 스트레스 DSR 반영 한도 확인 (상단 대출계산 탭)',
       stars: 3,
     },
-    {
-      text: fc.ltv
-        ? `LTV 한도 확인 — ${userInput.isFirstBuyer ? '생애최초' : (userInput.houseStatus || '무주택')} 기준 (${fc.ltv})`
-        : '규제지역 여부·전입 의무 확인 (10.15 규제 요약 참고)',
+    // KKKKK-3: fc.ltv 없으면 항목 생략 — fallback 문구가 아래 '규제지역 확인'과 중복되던 것(라이브 발각) 제거
+    ...(fc.ltv ? [{
+      text: `LTV 한도 확인 — ${userInput.isFirstBuyer ? '생애최초' : (userInput.houseStatus || '무주택')} 기준 (${fc.ltv})`,
       stars: 3,
-    },
+    }] : []),
     { text: '규제지역 여부·전입 의무 확인 (10.15 규제 요약 참고)', stars: 2 },
     { text: '관리비·주차 실태 임장 확인 (임장노트 탭 활용)', stars: 2 },
     { text: '특약 초안 준비 (특약 탭 — 표준 템플릿 제공)', stars: 1 },
@@ -583,14 +582,16 @@ async function getDataBasis() {
 
 /** 정부 정책 최신 스냅샷 — regulationsService 활용 */
 async function getPolicyContext() {
-  const [ltv, dsr] = await Promise.all([
-    getSnapshot('ltv').catch(() => null),
-    getSnapshot('dsr').catch(() => null),
-  ]);
+  // LTV-DSR-KEY-FIX-2026-07-15 (Sprint KKKKK-3, 운영자 세션 라이브 검증 중 발각):
+  //   기존 getSnapshot('ltv')/('dsr')는 DB(실측: housing_loan_2025·acquisition_tax_2025 2행뿐)에도
+  //   FALLBACK_BY_KEY 에도 없는 키 + 반환이 {data,...} wrapper 인데 .ltvTable 직접 접근 — 이중으로 틀려
+  //   항상 null(소비처가 없어 잠복, JJJJJ 에서 첫 소비 시작하며 발각). 실제 위치 = housing_loan_2025.data.
+  const housing = await getSnapshot('housing_loan_2025').catch(() => null);
+  const hd = housing?.data || null;
   return {
     snapshot: '2025.10.15 주택시장 안정화 대책',
-    ltv: ltv?.ltvTable || null,
-    dsr: dsr?.dsrRules || null,
+    ltv: hd?.ltvTable || null,
+    dsr: hd?.dsrRules || null,
     regulatedAreas: '서울 25구 + 경기 15곳 (과천·광명·성남·수원·안양·용인·의왕·하남·구리·화성 동탄 등, 2026.6.30 동탄·기흥·구리 신규 지정)',
     landTrade: '규제지역 토지거래허가구역 — 2년 실거주 의무·갭투자 금지 (2026.7.5 동탄·기흥·구리 추가 지정)',
     policyLoans: ['보금자리론', '디딤돌', '신혼 디딤돌', '신생아 특례'],
@@ -1091,8 +1092,13 @@ async function fetchCandidateApts(admin, input, limit) {
       const q = String(c.apt_name || '').replace(/\s/g, '');
       if (!q) continue;
       const areas = Array.isArray(c.areas) ? c.areas : [...(c.areas || [])];
+      // JEONSE-SCOPE-FIX-2026-07-15 (Sprint KKKKK-3, 라이브 '동신 9%' 실측 발각):
+      //   ① 순수 전세(monthlyRent=0)만 — 소액보증금 월세가 환산돼도 중위를 심하게 끌어내림(9% 왜곡).
+      //     라벨 '전세 N건'과도 정합. ② 2글자 이하 단지명은 정확 일치만 — '동신' includes 가
+      //     '당현천동신' 등 다른 단지 전세를 흡수하는 오병합 차단(KAPT-LOOKUP 短이름 가드와 동일 원칙).
       const scoped = all.filter(t =>
-        t.aptName.replace(/\s/g, '').includes(q) &&
+        t.monthlyRent === 0 &&
+        (q.length >= 3 ? t.aptName.replace(/\s/g, '').includes(q) : t.aptName.replace(/\s/g, '') === q) &&
         areas.some(a => Math.abs((t.excluUseAr || 0) - a) <= 5));
       if (scoped.length < 4) continue; // 표본 부족 — 분석탭 jeonseReliability NONE 관례와 동일
       const deps = scoped.map(t => t._convertedDeposit || t.deposit || 0).filter(d => d > 0).sort((a, b) => a - b);
