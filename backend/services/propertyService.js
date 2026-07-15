@@ -476,6 +476,7 @@ async function getAIRecommendations(userCondition) {
         excluUseAr: fp.excluUseAr,
         recentAvg: parseFloat((fp.avgPrice / 10000).toFixed(2)),
         range: `${(fp.minPrice / 10000).toFixed(1)}~${(fp.maxPrice / 10000).toFixed(1)}억`,
+        floorBands: fp.floorBands || null, // Sprint KKKKK — 저/중/고층 중위가 (표본 12건+ 시)
         dealCount: fp.dealCount,
         latestDeal: fp.recentTx[0] ? `${fp.recentTx[0].date.slice(2)} ${fp.recentTx[0].floor}층 ${(fp.recentTx[0].price / 10000).toFixed(2)}억` : '-',
       })),

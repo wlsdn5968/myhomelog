@@ -136,9 +136,15 @@ router.get('/', async (req, res) => {
  */
 router.get('/summary', async (req, res) => {
   const cacheKey = 'news:summary:v2';
-  const hit = cache.get(cacheKey);
+  let hit = cache.get(cacheKey);
   // CDN-CACHE-2026-06-14: AI 3줄 시황(전역·비개인화) — 성공 응답만 엣지 캐시(fallback 은 무캐시).
   const SUM_CDN = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=7200';
+  // REDIS-CACHE-2026-07-14 (Sprint KKKKK): 전역·비개인화 AI 응답인데 인스턴스 로컬 캐시뿐이라
+  //   인스턴스 미스마다 AI 재호출(3h 캐시 무력화) — Redis 2차 조회로 인스턴스 간 공유.
+  if (!hit) {
+    hit = await require('../services/redisCache').rget(cacheKey);
+    if (hit) cache.set(cacheKey, hit, 10800);
+  }
   if (hit) { res.set('Cache-Control', SUM_CDN); return res.json({ ...hit, fromCache: true }); }
 
   // Phase 4 (2026-04-26): Vercel serverless 인스턴스별 cache 분리 문제 fix.
@@ -212,6 +218,7 @@ ${titles.slice(0, 20).map((t, i) => `${i+1}. ${t}`).join('\n')}
       disclaimer: '본 시황 요약은 뉴스 헤드라인 기반 정보 정리이며, 매수·매도 추천이 아닙니다.',
     };
     cache.set(cacheKey, out, 10800); // 3시간
+    require('../services/redisCache').rset(cacheKey, out, 10800); // Sprint KKKKK — 인스턴스 간 공유
     res.set('Cache-Control', SUM_CDN);
     res.json({ ...out, fromCache: false });
   } catch (e) {

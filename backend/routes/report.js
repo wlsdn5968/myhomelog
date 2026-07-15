@@ -131,7 +131,13 @@ router.post('/generate', async (req, res) => {
   //   → keys sort 후 stringify (결정성 보장) — 비용 절감
   const _sortedInput = Object.keys(userInput).sort().reduce((o, k) => { o[k] = userInput[k]; return o; }, {});
   const cacheKey = `report:${crypto.createHash('sha256').update(JSON.stringify(_sortedInput)).digest('hex').slice(0, 16)}`;
-  const hit = cache.get(cacheKey);
+  let hit = cache.get(cacheKey);
+  // REDIS-CACHE-2026-07-14 (Sprint KKKKK): 로컬 미스 시 Redis 2차 조회 — 다른 인스턴스가 만든 보고서
+  //   재사용(동일 입력의 AI 재호출 차단). 미설정/오류 시 undefined → 기존 흐름 그대로.
+  if (!hit) {
+    hit = await require('../services/redisCache').rget(cacheKey);
+    if (hit) cache.set(cacheKey, hit, 1800); // 로컬에도 복사(같은 인스턴스 후속 요청 fast path)
+  }
   if (hit) return res.json({ ...hit, fromCache: true });
 
   try {
@@ -151,7 +157,7 @@ router.post('/generate', async (req, res) => {
     //   기존엔 dataBasis(ECOS 금리·실거래 반영월)·unsoldTrend(KOSIS 미분양)를 AI 호출 "이후" 에 조회해
     //   응답에만 붙였음 → AI 는 이 무료 실측 수치를 못 보고 글을 씀. 조회를 프롬프트 생성 전으로 옮겨
     //   프롬프트에 주입(추가 API 비용 0 — 같은 호출, 순서만 변경. 인풋 토큰만 수십 토큰 증가).
-    const [_dataBasis, _unsold] = await Promise.all([
+    const [_dataBasis, _unsold, _regionTrend] = await Promise.all([
       getDataBasis().catch(() => null),
       (async () => {
         const _sgg = candidates[0] && candidates[0].sigungu;
@@ -159,8 +165,30 @@ router.post('/generate', async (req, res) => {
         try { return await require('../services/kosisService').getUnsoldTrend(userInput.region, _sgg); }
         catch (_) { return null; }
       })(),
+      // REGION-TREND-2026-07-14 (Sprint KKKKK): 대상 지역(구) 월별 거래량 추이 — 자체 DB 월별 집계.
+      //   getRegionRecentTransactions 는 분석탭과 동일 함수·6h 캐시 공유라 추가 부하 미미. 실패 시 null(graceful).
+      (async () => {
+        try {
+          const lawd = candidates[0] && candidates[0].lawd_cd;
+          if (!lawd) return null;
+          const { getRegionRecentTransactions, LAWD_CODE_TO_NAME } = require('../services/transactionService');
+          const txs = await getRegionRecentTransactions(lawd, 6);
+          if (!txs || !txs.length) return null;
+          const byYm = {};
+          for (const t of txs) {
+            const ym = `${t.dealYear}${String(t.dealMonth).padStart(2, '0')}`;
+            byYm[ym] = (byYm[ym] || 0) + 1;
+          }
+          const months = Object.keys(byYm).sort().map(ym => ({ ym, n: byYm[ym] }));
+          return {
+            sigungu: LAWD_CODE_TO_NAME[lawd] || candidates[0].sigungu,
+            months,
+            note: '최근 월은 신고 지연(계약 후 30일 내 신고)으로 집계 중일 수 있어요',
+          };
+        } catch (_) { return null; }
+      })(),
     ]);
-    const _freeCtx = { dataBasis: _dataBasis, unsoldTrend: _unsold };
+    const _freeCtx = { dataBasis: _dataBasis, unsoldTrend: _unsold, regionTxTrend: _regionTrend };
 
     // 3) AI prompt 작성
     const prompt = buildReportPrompt(userInput, policyData, candidates, _freeCtx);
@@ -281,6 +309,7 @@ router.post('/generate', async (req, res) => {
       // Sprint CCCCC(검증 기준 박스)·HHHHH(KOSIS 미분양) — Sprint JJJJJ 에서 AI 호출 전으로 이동(위 _freeCtx).
       dataBasis: _dataBasis,
       unsoldTrend: _unsold,
+      regionTxTrend: _regionTrend, // Sprint KKKKK — 지역 월별 거래량(자체 DB 집계, 수치 나열)
       generatedAt: new Date().toISOString(),
       disclaimer: '본 보고서는 국토교통부·한국부동산원 공공 데이터 기반 정보 정리이며, 투자자문업·중개업·대출모집인업이 아닙니다. 매수·매도 추천 X, 미래 가격 예측 X. 모든 의사결정과 책임은 본인에게 있습니다.',
       ...(_aiDown ? { aiUnavailable: true, aiUnavailableReason: _aiDown } : {}),
@@ -289,6 +318,8 @@ router.post('/generate', async (req, res) => {
     //   (실거래 daily ingest · dataBasis 6h 캐시 · 정책 스냅샷 · KOSIS 월간)이라 최신성 손실 없이
     //   동일 입력 재요청의 AI 호출을 스킵 → 비용 절감. degrade(5분)는 AI 복구 시 빠른 교체 위해 유지.
     cache.set(cacheKey, out, _aiDown ? 300 : 21600);
+    // Sprint KKKKK: Redis 에도 저장(인스턴스 간 공유) — 정상판만(degrade 는 AI 복구 시 빨리 갱신돼야 함)
+    if (!_aiDown) require('../services/redisCache').rset(cacheKey, out, 21600);
     res.json({ ...out, fromCache: false });
   } catch (e) {
     // P0 (Agent 3차 audit, 2026-05-04): BudgetExceededError 처리 누락 → Pro 가입 funnel 차단
@@ -352,6 +383,14 @@ function _freeContextLines(policy, freeCtx) {
       .join(' → ');
     out.unsold = `${us.sigungu} 미분양 ${seq} — ${us.source}`;
   }
+  // Sprint KKKKK: 지역 월별 거래량 추이 (자체 DB 집계 — 최근 월은 신고 지연분 존재)
+  const rt = (freeCtx && freeCtx.regionTxTrend) || null;
+  if (rt && Array.isArray(rt.months) && rt.months.length) {
+    const seq = rt.months
+      .map(m => `${String(m.ym).slice(4, 6).replace(/^0/, '')}월 ${Number(m.n).toLocaleString()}건`)
+      .join(' → ');
+    out.txTrend = `${rt.sigungu} 매매 거래량 ${seq} (국토교통부 실거래 신고 기준 · 최근 월은 신고 지연으로 집계 중)`;
+  }
   return out;
 }
 
@@ -367,6 +406,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
       (f.parking_per_household && f.parking_per_household >= 1) ? `주차 세대당 ${f.parking_per_household}대` : null,
       (c.n >= 20) ? `최근 6개월 거래 ${c.n}건 (거래 활발)` : null,
       f.builder ? `시공 ${f.builder}` : null,
+      f.jeonse_ratio ? `전세가율 ${f.jeonse_ratio} (회원님 평형대 전세 ${f.jeonse_sample}건)` : null, // Sprint KKKKK
     ].filter(Boolean).join(' · ');
     const cons = [
       (age != null && age >= 25) ? `준공 ${age}년차 — 수리·관리 상태 임장 확인 필요` : null,
@@ -401,6 +441,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
       : 'AI 컨설팅 코멘트는 현재 일시 중단 — 실거래·세대수·주차·규제 등 객관 데이터만 표시해요.',
   ];
   if (fc.unsold) coreMessages.push(`${fc.unsold} — 수치 나열이며 시장 예측이 아니에요.`);
+  if (fc.txTrend) coreMessages.push(`${fc.txTrend} — 수치 나열이며 시장 예측이 아니에요.`);
 
   const checklist = [
     { text: '등기부등본 최신본 확인 (계약 직전 재확인)', stars: 3 },
@@ -791,6 +832,9 @@ function applyObjectiveScore(c) {
     transactions_6mo: c.n,
     new_high_count: c.new_high_count || 0, // Phase 8
     amenities: c.amenities || null,        // Phase 8: { school, mart, hospital, subway, cvs }
+    // Sprint KKKKK: 전세가율 — 회원님 평형대 전세 실거래 중위 환산보증금 / 같은 평형대 매매 평균 (수치만)
+    jeonse_ratio: c.jeonse ? `${c.jeonse.ratio}%` : null,
+    jeonse_sample: c.jeonse ? c.jeonse.n : null,
   };
 
   c.score = Math.round(c.score);
@@ -1000,6 +1044,42 @@ async function fetchCandidateApts(admin, input, limit) {
     logger.warn({ err: e.message }, 'Phase 8 좌표/amenities 일괄 처리 실패 — 객관 점수만으로 진행');
   }
 
+  // JEONSE-2026-07-14 (Sprint KKKKK): 후보별 전세가율 — 무료 MOLIT 전월세 실거래(getJeonseByApt).
+  //   ⚠ 후보별 개별 호출은 같은 구 후보 7개가 월별 캐시(rent:{lawd}:{ym}) 미스를 "동시에" 때려
+  //   MOLIT 콜이 7배 증폭(in-flight dedup 없음) → lawd 당 1회(getJeonseByApt(lawd, '') = 전체 목록)만
+  //   조회하고 단지명 필터는 여기서 수행. 콜드 시 구당 정확히 6콜(월별), 이후 24h 캐시.
+  //   분석탭(analysisService)과 동일 소스·동일 표본 임계(getJeonseReliability NONE: <4건 → 비노출).
+  //   회원님 평형대(±5㎡) 전세만 스코프 — 매매 avgPrice(같은 평형대)와 비교 정합.
+  //   절대룰: 수치 나열만(전세가율 %·표본수). 판단·전망·갭투자 서술 없음.
+  try {
+    const { getJeonseByApt } = require('../services/rentService');
+    const _lawds = [...new Set(out.map(c => c.lawd_cd).filter(Boolean))];
+    const _rentByLawd = new Map();
+    await Promise.all(_lawds.map(async (l) => {
+      try { _rentByLawd.set(l, await getJeonseByApt(l, '')); } // query '' → 전체 목록 (includes('') 항상 true)
+      catch (_) { _rentByLawd.set(l, []); }
+    }));
+    for (const c of out) {
+      if (!c.lawd_cd || !(c.avgPrice > 0)) continue;
+      const all = _rentByLawd.get(c.lawd_cd) || [];
+      const q = String(c.apt_name || '').replace(/\s/g, '');
+      if (!q) continue;
+      const areas = Array.isArray(c.areas) ? c.areas : [...(c.areas || [])];
+      const scoped = all.filter(t =>
+        t.aptName.replace(/\s/g, '').includes(q) &&
+        areas.some(a => Math.abs((t.excluUseAr || 0) - a) <= 5));
+      if (scoped.length < 4) continue; // 표본 부족 — 분석탭 jeonseReliability NONE 관례와 동일
+      const deps = scoped.map(t => t._convertedDeposit || t.deposit || 0).filter(d => d > 0).sort((a, b) => a - b);
+      if (deps.length < 4) continue;
+      const med = deps[Math.floor(deps.length / 2)];
+      const ratio = Math.round((med / c.avgPrice) * 100);
+      if (ratio <= 0 || ratio > 130) continue; // 명백한 데이터 오류(면적 오매칭 등) 방어
+      c.jeonse = { medianDeposit: med, n: deps.length, ratio };
+    }
+  } catch (e) {
+    logger.warn({ err: e.message }, '전세가율 일괄 계산 실패 — 비노출로 진행');
+  }
+
   // Phase 7 + 8 + 9: KAPT + amenities 호출 후 객관 점수 + objectiveFacts 적용
   for (const c of out) {
     applyObjectiveScore(c);
@@ -1030,6 +1110,7 @@ function buildReportPrompt(input, policy, candidates, freeCtx) {
     fc.dsr ? `- DSR 규제: ${fc.dsr}` : null,
     fc.rate ? `- 시중 금리(실측): ${fc.rate}` : null,
     fc.unsold ? `- 대상 지역 미분양 추이(실측): ${fc.unsold}` : null,
+    fc.txTrend ? `- 대상 지역 매매 거래량 추이(실측): ${fc.txTrend}` : null,
     fc.tx ? `- 실거래 데이터 기준: ${fc.tx}` : null,
   ].filter(Boolean).join('\n');
   const aptList = candidates.map((c, i) => {
@@ -1051,6 +1132,7 @@ function buildReportPrompt(input, policy, candidates, freeCtx) {
       facts.age_years != null ? `노후도: ${facts.age_years}년차` : null,
       facts.regulation ? `규제: ${facts.regulation}` : null,
       facts.new_high_count > 0 ? `최근 6개월 신고가 ${facts.new_high_count}회 갱신` : null,
+      facts.jeonse_ratio ? `전세가율: ${facts.jeonse_ratio} (회원님 평형대 전세 ${facts.jeonse_sample}건 기준)` : null, // Sprint KKKKK
       amStr,
     ].filter(Boolean).join(' | ');
     return `${i + 1}. ${displayName} (${c.sigungu} ${c.umd_nm})
@@ -1112,7 +1194,8 @@ ${aptList}
 - 위 '실측 수치' 블록(LTV·DSR·금리·미분양·실거래 기준월)이 있으면 checklist/coreMessages 의 근거로 인용할 것
   (예: checklist {"text":"대출한도 — 생애최초 규제지역 LTV 70%","stars":3} / {"text":"금리 — 시중 주담대 4.32% 기준 상환액 확인","stars":3})
 - 그 블록에 없는 수치(LTV·DSR·금리·미분양 값)는 절대 임의로 쓰지 말 것. 블록이 없으면 해당 수치 언급 자체를 생략.
-- 미분양 수치는 나열만. "미분양이 늘어 가격이 …" 같은 인과·전망 서술 절대 금지.
+- 미분양·거래량 수치는 나열만. "미분양이 늘어 가격이 …" "거래가 줄어 …" 같은 인과·전망 서술 절대 금지.
+- 전세가율은 객관 fact 에 있을 때만 그 값 그대로 인용 (예: "전세가율 62%, 전세 8건 기준"). 갭투자·역전세 예측 서술 금지 — 전세 표본이 적으면 그 사실만 언급.
 
 [환각 차단 절대 규칙]
 - 입력 데이터에 없는 거리(km, 도보 분), 지형(평지·경사), 정확한 역명·노선 번호, 재개발 일정 임의 추정 X

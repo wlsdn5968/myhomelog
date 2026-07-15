@@ -569,6 +569,23 @@ function analyzeTransactions(transactions) {
       const floors = txs.map(t => t.floor || 0).filter(f => f > 0);
       const minFloor = floors.length ? Math.min(...floors) : null;
       const maxFloor = floors.length ? Math.max(...floors) : null;
+      // FLOOR-BANDS-2026-07-14 (Sprint KKKKK): 같은 평형 내 저/중/고층(그룹 내 3분위) 중위가.
+      //   기존 floorAdjustmentNote 는 "층별 보정 불가·임장 필수" 회피 안내뿐이었으나, floor 컬럼은
+      //   이미 전 거래에 보유 — 실측치로 보강. 밴드당 표본 4건 미만이면 중위가 노이즈 → 전체 null(비노출).
+      //   절대룰: 과거 실거래 수치 나열만(층 프리미엄 % 산정·예측 표현 없음 — 그건 사용자 해석 영역).
+      let floorBands = null;
+      const fTxs = txs.filter(t => (t.floor || 0) > 0);
+      if (fTxs.length >= 12) {
+        const fSorted = [...fTxs].sort((a, b) => a.floor - b.floor);
+        const third = Math.floor(fSorted.length / 3);
+        const bandTx = [fSorted.slice(0, third), fSorted.slice(third, fSorted.length - third), fSorted.slice(fSorted.length - third)];
+        const built = bandTx.map(b => (b.length >= 4 ? {
+          range: `${b[0].floor}~${b[b.length - 1].floor}층`,
+          n: b.length,
+          median: _median(b.map(t => t.dealAmount).sort((x, y) => x - y)),
+        } : null));
+        if (built.every(Boolean)) floorBands = { low: built[0], mid: built[1], high: built[2] };
+      }
       return {
         pyeong: parseInt(py),
         excluUseAr: parseFloat((txs[0].excluUseAr).toFixed(2)),
@@ -579,6 +596,7 @@ function analyzeTransactions(transactions) {
         minPrice: Math.min(...ps),
         maxPrice: Math.max(...ps),
         floorRange: minFloor !== null ? { min: minFloor, max: maxFloor } : null,
+        floorBands, // Sprint KKKKK — 저/중/고층 3분위 중위가 (표본 부족 시 null)
         recentTx: txs.slice(0, 5).map(t => ({
           date: `${t.dealYear}.${String(t.dealMonth).padStart(2, '0')}.${String(t.dealDay).padStart(2, '0')}`,
           floor: t.floor,

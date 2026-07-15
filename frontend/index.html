@@ -3812,7 +3812,15 @@ function _renderReport(data) {
       <div style="font-size:9.5px;color:var(--t3)">출처: ${_escHtml(_us.source||'KOSIS')} · 수치 나열이며 시장 예측이 아닙니다</div>
     </div>` : '';
 
-  const coreHtml = _basisHtml + _usHtml + _aiBanner + (r.coreMessages || []).map((m, i) =>
+  // REGION-TREND-2026-07-14 (Sprint KKKKK): 지역 월별 거래량 — 자체 DB 집계, 수치 나열만(예측 없음).
+  const _tt = data.regionTxTrend;
+  const _ttHtml = (_tt && Array.isArray(_tt.months) && _tt.months.length) ? `<div style="background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:9px 13px;margin-bottom:12px;font-size:10.5px;line-height:1.7">
+      <b style="font-size:11px;color:var(--t1)">📊 ${_escHtml(_tt.sigungu)} 월별 매매 거래량</b>
+      <span style="color:var(--t2);margin-left:8px">${_tt.months.map(m=>`${_escHtml(String(m.ym).slice(4))}월 <b>${Number(m.n).toLocaleString()}건</b>`).join(' → ')}</span>
+      <div style="font-size:9.5px;color:var(--t3)">국토교통부 실거래 신고 기준 · ${_escHtml(_tt.note||'최근 월은 신고 지연으로 집계 중일 수 있어요')} · 수치 나열이며 시장 예측이 아닙니다</div>
+    </div>` : '';
+
+  const coreHtml = _basisHtml + _usHtml + _ttHtml + _aiBanner + (r.coreMessages || []).map((m, i) =>
     `<div style="display:flex;gap:8px;margin-bottom:6px;font-size:12px;line-height:1.7">
       <span style="color:var(--acc);font-weight:700;flex-shrink:0">${i+1}.</span>
       <span>${_escHtml(m)}</span>
@@ -6090,6 +6098,12 @@ function showDetail(p){
              <div style="font-size:10.5px;color:var(--t3);line-height:1.5">
                범위 ${cp.range} · 최근 ${cp.dealCount}건 · 직전: ${cp.latestDeal}
              </div>
+             ${cp.floorBands ? `<div style="font-size:10px;color:var(--t3);line-height:1.6;margin-top:4px;padding-top:4px;border-top:1px dashed var(--bd)">
+               층별 중위가(실거래) · 저 ${_escHtml(cp.floorBands.low.range)} <b style="color:var(--t2)">${(cp.floorBands.low.median/10000).toFixed(2)}억</b>
+               · 중 ${_escHtml(cp.floorBands.mid.range)} <b style="color:var(--t2)">${(cp.floorBands.mid.median/10000).toFixed(2)}억</b>
+               · 고 ${_escHtml(cp.floorBands.high.range)} <b style="color:var(--t2)">${(cp.floorBands.high.median/10000).toFixed(2)}억</b>
+               <span style="color:var(--t3)">— 과거 거래 분포이며 층 프리미엄 보장 아님</span>
+             </div>` : ''}
            </div>`).join('')}
        </div>`
     : '';
