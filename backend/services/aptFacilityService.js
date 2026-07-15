@@ -155,6 +155,16 @@ async function findMaster(aptName, sigungu, umdNm) {
     .select('kapt_code, apt_name, sigungu, umd_nm, facility, facility_fetched_at')
     .eq('sigungu', sigungu).eq('umd_nm', umdNm)
     .limit(80);
+  // SPACE-NORM-2026-07-15 (Sprint LLLLL): 공백만 다른 이름 매칭 — master 'e편한세상 강변' vs molit
+  //   'e편한세상강변' 같은 쌍(활성 509건 실측)은 위 ILIKE 가 구조적으로 실패(molit 쪽만 공백 제거,
+  //   master 원본엔 공백 잔존 — DB 재현 확인). 토큰 매칭 전에 "공백 제거 후 정확 일치"를 우선 시도.
+  //   정확 일치만 허용(포함 매칭 확장 X — 오병합 방지).
+  if (stripped) {
+    for (const m of (candidates || [])) {
+      const mStripped = String(m.apt_name).replace(/\([^)]*\)/g, '').replace(/\s+/g, '').replace(/아파트$/, '');
+      if (mStripped === stripped) return m;
+    }
+  }
   let best = null, bestScore = 0;
   // STAB-2 (2026-05-03 / RISK-6 fix C): score >= 3 만으로는 4글자 공통 토큰 false-positive 잔존.
   //   사례: '마포한강제이스카이' (9) ↔ master '마포한강 아이파크' (정규화 8) score=4 통과 → wrong match.
@@ -397,8 +407,10 @@ async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, 
       const ageDays = (Date.now() - new Date(m.facility_fetched_at).getTime()) / (1000*60*60*24);
       if (ageDays < CACHE_TTL_DAYS) {
         // DTL-INFO-2026-05-13 (Sprint X): 캐시된 BasisInfo 와 함께 detail 도 병렬 fetch.
-        //   detail 은 별도 cache (30일) — 단지 캐시 hit 라도 detail 은 따로 받아옴.
-        const detail = await getAptDtlInfo(m.kapt_code).catch(() => null);
+        // PERF-DTL-SKIP-2026-07-15 (Sprint LLLLL): 저장 facility 에 _dtl 이 이미 병합돼 있으면(백필·이전 조회)
+        //   KAPT detail 재조회 생략 — recommend 경로(propertyService 의 stored._dtl 체크)와 대칭.
+        //   report 후보 최대 20개 기준 콜드 KAPT 콜 최대 20개 절감. _dtl 없을 때만 기존대로 라이브 조회.
+        const detail = m.facility._dtl || await getAptDtlInfo(m.kapt_code).catch(() => null);
         const out = { kaptCode: m.kapt_code, official: m.apt_name, raw: m.facility, detail };
         cache.set(memKey, out, 3600);
         return out;

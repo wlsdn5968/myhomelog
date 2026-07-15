@@ -964,8 +964,10 @@ header{
   .hsearch input{font-size:13px!important}
   /* 모바일: dropdown 검색창 너비 따라가기 (가로 확장 X) */
   #hSearchDrop{width:auto!important;left:0!important;right:0!important;max-width:none!important}
-  /* 헤더 우측 hml: 모바일에선 핵심 버튼만 (10.15 / 로그인) */
-  .hml .hst#quotaPill,.hml .hst#aiPill,.hml .hst#apiSt,.hml #settingsBtn{display:none!important}
+  /* 헤더 우측 hml: 모바일에선 핵심 버튼만 (10.15 / 로그인)
+     QUOTA-ACCESS-2026-07-15 (Sprint LLLLL): #settingsBtn 은 모바일에서도 유지 — 이걸 숨기면 무료 검색
+     한도(5/일)를 확인할 창구가 429 를 맞기 전까지 전무했음(quotaPill·설정 모달 진입점 전부 소멸). */
+  .hml .hst#quotaPill,.hml .hst#aiPill,.hml .hst#apiSt{display:none!important}
   .hml .rpill{display:none}
   /* MOBILE-2026-06-13: absolute 뷰(보고서·특약)는 bottom:0 이라 하단 ~54px 가 fixed bnav 뒤로 숨음 → bnav+safe-area 만큼 하단 패딩 확보 */
   .biz-view, .clause-view{padding-bottom:calc(62px + env(safe-area-inset-bottom))!important}
@@ -1407,10 +1409,11 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <div style="font-size:10px;color:var(--t2);margin-bottom:2px">최대 대출 한도 (일반 주담대)</div>
         <div class="lbig" id="lA">—</div><div class="lsm" id="lV"></div>
         <div class="lg">
-          <div class="li"><div class="lil" title="DSR (Debt Service Ratio): 연소득 대비 모든 대출 원리금 비율. 은행 40% / 2금융 50% 한도. 본 계산은 주담대만 반영 — 신용대출·전세대출 별도.">DSR 한도 <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lD">—</div></div>
-          <div class="li"><div class="lil" title="매수가 - 현금 - 대출 = 부족 자금. 추가 자금 마련 (가족·신용대출) 또는 매수가 조정 필요.">부족 자금 <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lN">—</div></div>
-          <div class="li"><div class="lil" title="스트레스 DSR: 금리 상승 시나리오 가정 가산금리. 수도권(서울·경기·인천) +3.0%p(2025.10.15~ 상향) / 지방 +0.75%p 가산해 심사.">스트레스 DSR <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lS">—</div></div>
-          <div class="li"><div class="lil" title="원리금균등 30년 만기 기준 월 상환액. 거치 없음 가정. 실제 금리·만기에 따라 변동.">월 원리금 <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lM">—</div></div>
+          <!-- TIP-TAP-2026-07-15 (Sprint LLLLL): title 툴팁은 터치 기기에서 열 방법이 없음 — 탭 시 toast 로 동일 내용 노출 -->
+          <div class="li"><div class="lil" onclick="toast(this.title)" title="DSR (Debt Service Ratio): 연소득 대비 모든 대출 원리금 비율. 은행 40% / 2금융 50% 한도. 본 계산은 주담대만 반영 — 신용대출·전세대출 별도.">DSR 한도 <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lD">—</div></div>
+          <div class="li"><div class="lil" onclick="toast(this.title)" title="매수가 - 현금 - 대출 = 부족 자금. 추가 자금 마련 (가족·신용대출) 또는 매수가 조정 필요.">부족 자금 <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lN">—</div></div>
+          <div class="li"><div class="lil" onclick="toast(this.title)" title="스트레스 DSR: 금리 상승 시나리오 가정 가산금리. 수도권(서울·경기·인천) +3.0%p(2025.10.15~ 상향) / 지방 +0.75%p 가산해 심사.">스트레스 DSR <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lS">—</div></div>
+          <div class="li"><div class="lil" onclick="toast(this.title)" title="원리금균등 30년 만기 기준 월 상환액. 거치 없음 가정. 실제 금리·만기에 따라 변동.">월 원리금 <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></div><div class="liv" id="lM">—</div></div>
         </div>
         <div class="wbox" id="lW"></div>
         <!-- P1 D4 (2026-04-25): 정책자금 비교 — 무주택자 한도 과소 계산 차단 -->
@@ -1532,8 +1535,8 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <div class="r2"><div><label class="lbl" for="c_e">기존 월원리금(만)</label><input class="inp" id="c_e" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div><div><label class="lbl" for="c_c">보유현금(억)</label><input class="inp" id="c_c" type="number" inputmode="decimal" placeholder="3.0" oninput="dc()"></div></div>
     <!-- Phase 4 (2026-04-26): 신용대출/전세대출 잔액 — DSR 정확 계산 위해 -->
     <div class="r2">
-      <div><label class="lbl" for="c_cl" title="신용대출 원금 잔액 — 만원 단위. DSR 한도 차감.">신용대출 잔액(만) <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></label><input class="inp" id="c_cl" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div>
-      <div><label class="lbl" for="c_jl" title="전세대출 잔액 — 만원 단위. 규제지역 3억 초과 매수 시 즉시 회수 대상.">전세대출 잔액(만) <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></label><input class="inp" id="c_jl" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div>
+      <div><label class="lbl" for="c_cl" onclick="toast(this.title)" title="신용대출 원금 잔액 — 만원 단위. DSR 한도 차감.">신용대출 잔액(만) <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></label><input class="inp" id="c_cl" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div>
+      <div><label class="lbl" for="c_jl" onclick="toast(this.title)" title="전세대출 잔액 — 만원 단위. 규제지역 3억 초과 매수 시 즉시 회수 대상.">전세대출 잔액(만) <span style="cursor:help;color:var(--t3);font-size:10px">ⓘ</span></label><input class="inp" id="c_jl" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div>
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:11px">
       <div><span class="lbl">주택보유</span><div class="chips" id="cc-h"><span class="chip on" onclick="cp(this,'cc-h')">무주택</span><span class="chip" onclick="cp(this,'cc-h')">1주택</span><span class="chip" onclick="cp(this,'cc-h')">2주택+</span></div></div>
@@ -3680,12 +3683,15 @@ async function generateReport() {
   const priority = gct('ch-pri') || '환금성';
   const workplaceArea = (document.getElementById('wp')?.value || '').trim();
 
+  // CTA-MSG-2026-07-15 (Sprint LLLLL): 모바일 드로어는 좌측 "고정"이 아니라 ☰ 로 여는 슬라이드 —
+  //   랜딩 대표 CTA 실패 안내가 실제 UI 와 불일치했음. matchMedia 분기 + alert → toast(이탈 완화).
+  const _mob = window.matchMedia && window.matchMedia('(max-width:700px)').matches;
   if (!buy || buy <= 0) {
-    alert('매수가를 입력해주세요 (좌측 사이드바)');
+    toast(_mob ? '☰ 메뉴(좌측 상단)를 열고 매수가를 입력해주세요' : '매수가를 입력해주세요 (좌측 사이드바)');
     return;
   }
   if (!region) {
-    alert('희망 지역을 선택해주세요');
+    toast(_mob ? '☰ 메뉴(좌측 상단)에서 희망 지역을 선택해주세요' : '희망 지역을 선택해주세요');
     return;
   }
   // P1-14: 미지원 광역도 사전 차단 — backend 0건 후 generic error 차단
@@ -5012,7 +5018,13 @@ async function doSearch(){
     }
     if(res.status===429){
       const j=await res.json().catch(()=>({}));
-      toast(j.message || '오늘의 무료 검색을 모두 사용했어요. 내일 다시 이용해주세요.');
+      // LOGIN-CTA-2026-07-15 (Sprint LLLLL): 보고서·채팅 429 에는 로그인 CTA 가 있는데 검색만 toast 한 줄
+      //   (2.6초 소멸)이라 로그인 전환 기회 유실 — dailyLimit 응답의 canBoostByLogin 활용해 동의형 CTA.
+      if(j.canBoostByLogin && typeof openLogin==='function'){
+        if(confirm((j.message||'오늘의 무료 검색을 모두 사용했어요.')+'\n\n지금 로그인하고 추가 횟수를 받으시겠어요?')) openLogin();
+      } else {
+        toast(j.message || '오늘의 무료 검색을 모두 사용했어요. 내일 다시 이용해주세요.');
+      }
     } else if(res.status===502 || res.status===504){
       toast('⏱ 국토부 실거래가 서버 응답 지연. 30초 후 다시 시도해주세요.');
     } else if(res.status===500){
@@ -6330,7 +6342,7 @@ function showDetail(p){
           <td>전용 ${_escHtml(String(a.excluUseAr))}㎡</td>
           <td style="text-align:right">${a.dealCount}건</td>
           <td style="text-align:right">${a.avgPrice}억</td>
-        </tr>`).join('');
+        </tr>${a.floorBands?`<tr><td colspan="4" style="font-size:9.5px;color:var(--t3);padding:2px 4px 6px">↳ 층별 중위(실거래): 저 ${_escHtml(a.floorBands.low.range)} ${(a.floorBands.low.median/10000).toFixed(2)}억 · 중 ${_escHtml(a.floorBands.mid.range)} ${(a.floorBands.mid.median/10000).toFixed(2)}억 · 고 ${_escHtml(a.floorBands.high.range)} ${(a.floorBands.high.median/10000).toFixed(2)}억</td></tr>`:''}`).join('');
         return `<div style="margin-top:14px">
           <div style="font-weight:700;font-size:12px;color:var(--t1);margin-bottom:6px">📐 관측 평형 (최근 6개월 실거래)</div>
           <table class="dtbl">
@@ -6822,8 +6834,9 @@ function renderAnalysis(d,p){
     heroHtml=`<div class="sig-hero ${sc}" role="status" aria-label="${ariaTone} — ${sigRatioText}">
       <div class="sig-dot ${sc}" style="font-size:13px;font-weight:800;padding:0 8px;min-width:60px;text-align:center" aria-hidden="true">${shape}</div>
       <div style="flex:1">
-        <div class="sig-label">${sigRatioText} <span style="cursor:help;color:var(--t3);font-size:10px;margin-left:4px" title="${_escHtml(tipText)}">ⓘ</span></div>
+        <div class="sig-label">${sigRatioText} <span style="cursor:help;color:var(--t3);font-size:10px;margin-left:4px" onclick="toast(this.title)" title="${_escHtml(tipText)}">ⓘ</span></div>
         <div class="sig-sub">${d.filteredTxCount||d.txCount||0}건 분석 · <span style="color:${relColor}">${relLabel}</span> · <span style="color:var(--t3)">매수 추천 아님 (정보 정리)</span></div>
+        ${sig.signalDesc?`<div class="sig-sub" style="color:var(--amb)">${_escHtml(sig.signalDesc)}</div>`:''}
       </div>
     </div>`;
   }
@@ -6938,7 +6951,7 @@ function renderAnalysis(d,p){
     </details>`;
 
     gapHtml=`<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:7px">🏠 전세가율 · 갭 분석</div>
-    <div class="ibox b" style="margin-bottom:7px;font-size:10px">전세 ${d.jeonseCount||0}건 기준. 갱신계약 포함 시 실제 시세와 다를 수 있습니다.</div>
+    <div class="ibox b" style="margin-bottom:7px;font-size:10px">전세 ${d.jeonseCount||0}건 기준${d.jeonseReliability&&d.jeonseReliability!=='NONE'?` · 전세 표본 신뢰도 <b>${({LOW:'낮음',MED:'보통',HIGH:'높음'})[d.jeonseReliability]||_escHtml(String(d.jeonseReliability))}</b>`:''}. 갱신계약 포함 시 실제 시세와 다를 수 있습니다.</div>
     <div class="gap-grid">
       <div class="gap-card"><div class="gap-lbl">전세가율</div><div class="gap-val" style="color:${g.jeonseRate>=60?'var(--grn)':g.jeonseRate>=45?'var(--amb)':'var(--red)'}">${g.jeonseRate}%</div><div class="gap-sub">${g.jeonseRate>=60?'역전세 위험 낮음':g.jeonseRate>=45?'보통':'역전세 위험 확인 필요'}</div></div>
       <div class="gap-card"><div class="gap-lbl">갭 (매매-전세)</div><div class="gap-val">${g.gap}억</div><div class="gap-sub">매매 ${g.avgSale}억 / 전세 ${g.avgJeonse}억</div></div>

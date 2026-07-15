@@ -49,18 +49,8 @@ router.get('/', validateTransactionQuery, async (req, res) => {
   }
 });
 
-// GET /api/transactions/analyze?lawdCd=11350&dealYm=202503
-router.get('/analyze', validateTransactionQuery, async (req, res) => {
-  const { lawdCd, dealYm } = req.query;
-  if (!lawdCd || !dealYm) return res.status(400).json({ error: 'lawdCd, dealYm 필수' });
-
-  try {
-    const list = await getTransactions(lawdCd, dealYm);
-    res.json({ count: list.length, summary: analyzeTransactions(list), isMock: false });
-  } catch (err) {
-    handleMolitError(err, res);
-  }
-});
+// DEAD-ROUTE-2026-07-15 (Sprint LLLLL): GET /analyze 삭제 — 프론트 호출 0 실측(grep 전수).
+//   analyzeTransactions 는 propertyService(추천)가 내부 사용 — 함수 자체는 유지, 라우트만 제거.
 
 // GET /api/transactions/codes
 router.get('/codes', (req, res) => {

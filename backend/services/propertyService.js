@@ -489,6 +489,7 @@ async function getAIRecommendations(userCondition) {
         excluUseAr: p.excluUseAr,
         dealCount: p.dealCount,
         avgPrice: parseFloat((p.avgPrice / 10000).toFixed(2)),
+        floorBands: p.floorBands || null, // Sprint LLLLL — fit 평형 밖(대형 등)도 층별 중위가 열람 가능하게
       })).sort((a, b) => a.excluUseAr - b.excluUseAr),
       txHistory: apt.rawList || [],
       dealCount6m: apt.dealCount,
