@@ -519,7 +519,8 @@ html[data-theme="dark"] .ltxt em{color:#7FA1E8}
 .htabs > .htab > svg,.htab-tool > svg{display:none}
 .htab svg{width:14px;height:14px;vertical-align:-2.5px;margin-right:5px;flex-shrink:0}
 .newb{font-size:10px;font-weight:800;letter-spacing:.04em;color:#fff;background:#E5484D;padding:2px 5px;border-radius:5px;line-height:1;margin-left:4px;display:inline-block;vertical-align:2px}
-/* IA-2026-07-12 (Sprint QQQQ): 상단 탭 과밀 완화 — 부차 도구(특약·청약·뉴스·사용법)를 "도구 ▾" 드롭다운으로.
+/* IA-2026-07-12 (Sprint QQQQ) → OOOOO-3 (2026-07-16 운영자 지시): "도구 ▾" 구성 = 특약·청약·대출계산·규제요약.
+   사용법(첫 탭)·뉴스(보고서 옆)는 상단 승격.
    드롭다운 항목은 .htab 유지·DOM 순서 보존 → sv() 인덱스 활성 로직 무변경. 데스크톱 전용(.htabs 는 ≤700px 숨김). */
 .htab-dd{position:relative;display:flex}
 .htab-tool{padding:8px 11px;border-radius:9px;font-family:var(--font-display);font-size:14.5px;font-weight:600;cursor:pointer;border:none;color:var(--hd-tab);background:transparent;transition:all var(--duration-fast) var(--ease-out);display:flex;align-items:center;gap:5px}
@@ -969,6 +970,10 @@ html[data-theme="dark"] .acct-sw .knob{transform:translateX(16px)}
    변경: top:0 → top:84px (header + syncBanner 합).
    syncBanner dismiss 시 30px 빈 공간 발생하나, 환각·잘림 보다 안전. */
 .biz-view{position:absolute;top:84px;left:0;right:0;bottom:0;overflow-y:auto;padding:10px 22px 22px;display:none;flex-direction:column;gap:0;background:var(--bg);z-index:1}
+/* Sprint OOOOO-3 (운영자 발견 "동기화 글자 짤림", 실측): 헤더가 66px(≥701px)로 커진 뒤에도 절대배치 뷰
+   top:84px(구 header 54 + syncBanner 30) 고정 → 뷰 흰 배경이 syncBanner 하단 ~12.6px 를 덮어 글자 하단 절단.
+   데스크톱 = header 66 + syncBanner ~31 = 97px 보정(모바일은 헤더 54 유지라 84 그대로). */
+@media(min-width:701px){ .clause-view,.biz-view{top:97px} }
 .biz-view.active{display:flex}
 /* Phase 5 (2026-04-26): view-report 는 .biz-view 클래스를 쓰지만 사이드바(.lp)와 함께 표시되어야 함
    주의: .biz-view 들은 모두 BODY 직계 자식이고, .lp 는 .app(BODY 자식) 안에 있음 → flex item 으로 만들면 .lp 아래로 떨어짐
@@ -1299,20 +1304,22 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   <!-- 모바일 햄버거 — 사이드바 (내 상황 입력) drawer 토글 -->
   <button class="hamb" onclick="toggleDrawer()" aria-label="메뉴 열기" title="내 상황 / 관심단지 / 계약타임라인">☰</button>
   <a class="logo" href="/"><div class="lmark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M3 11.2 12 4l9 7.2" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 9.8V20h13V9.8" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 20v-5h4v5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="ltxt">내집<em>로그</em></div></a>
+  <!-- Sprint OOOOO-3 (운영자 지시): 탭 재배열 — 사용법을 첫 탭으로(헷갈린다는 사용자 다수), 뉴스를 보고서 옆으로,
+       대출계산은 도구▾ 안으로. ⚠ sv() 탭 활성은 .htab DOM 순서 = htabOrder 배열 인덱스 매칭 — 여기 순서를 바꾸면
+       반드시 htabOrder(sv 함수)도 함께 갱신할 것. 규제 요약(비뷰)은 항상 마지막(인덱스 밖 → 항상 off). -->
   <div class="htabs">
+    <button class="htab" onclick="sv('guide',this)" title="처음이세요? 3분 가이드"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>사용법</button>
     <button class="htab on" onclick="sv('map',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>지도</button>
     <button class="htab" onclick="sv('list',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>목록</button>
     <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서 <span class="newb">NEW</span></button>
-    <button class="htab" onclick="sv('calc',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg>대출계산</button>
+    <button class="htab" onclick="sv('news',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h12v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2"/><path d="M7.5 9h5"/><path d="M7.5 13h5"/><path d="M7.5 16.5h3"/></svg>뉴스</button>
     <div class="htab-dd" id="htabToolDd">
-      <button class="htab-tool" id="htabToolBtn" onclick="toggleToolMenu(event)" aria-haspopup="true" aria-expanded="false" title="특약 · 뉴스 · 청약 · 사용법 · 규제 요약"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>도구 <span class="ddcaret">▾</span></button>
+      <button class="htab-tool" id="htabToolBtn" onclick="toggleToolMenu(event)" aria-haspopup="true" aria-expanded="false" title="특약 · 청약 · 대출계산 · 규제 요약"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>도구 <span class="ddcaret">▾</span></button>
       <div class="htab-menu" id="htabToolMenu">
     <button class="htab" onclick="sv('clause',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>특약</button>
-    <button class="htab" onclick="sv('news',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h12v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2"/><path d="M7.5 9h5"/><path d="M7.5 13h5"/><path d="M7.5 16.5h3"/></svg>뉴스</button>
     <button class="htab" onclick="sv('subs',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18"/><path d="M8 2.5v4"/><path d="M16 2.5v4"/></svg>청약</button>
-    <button class="htab" onclick="sv('guide',this)" style="opacity:0.85" title="처음이세요? 3분 가이드"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>사용법</button>
-    <!-- Sprint OOOOO: 규제 요약 pill → 도구▾ 항목으로 이동(시안). sv() 탭 활성은 인덱스 기반(htabOrder 8개)이라
-         반드시 마지막 항목(인덱스 8, htabOrder[8]=undefined → 항상 off)이어야 안전. -->
+    <button class="htab" onclick="sv('calc',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg>대출계산</button>
+    <!-- Sprint OOOOO: 규제 요약(비뷰 버튼) — 반드시 마지막 유지(인덱스 밖 → 항상 off) -->
     <button class="htab" onclick="closeToolMenu();openRegSummary()" title="2025.10.15 규제 요약 보기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3.5v5c0 4.4-3 7.6-7 9.5-4-1.9-7-5.1-7-9.5v-5Z"/></svg>규제 요약</button>
       </div>
     </div>
@@ -8494,13 +8501,14 @@ function sv(v,btn){
   // popover 닫기 (탭 전환 시)
   const bmPop=document.getElementById('bmPop');
   if(bmPop) bmPop.classList.remove('on');
-  // 헤더 탭 활성화 — STAB-A P1#22 (2026-05-03): report·guide 누락 fix (실제 8개 탭 순서 일치)
-  const htabOrder=['map','list','report','calc','clause','news','subs','guide'];
+  // 헤더 탭 활성화 — 인덱스 기반: htabOrder 는 .htab DOM 순서와 1:1 (Sprint OOOOO-3 재배열 반영.
+  //   마크업 순서 바꾸면 여기도 함께! 규제 요약(비뷰)은 마지막이라 인덱스 밖 → 항상 off)
+  const htabOrder=['guide','map','list','report','news','clause','subs','calc'];
   document.querySelectorAll('.htab').forEach((b,i)=>b.classList.toggle('on',htabOrder[i]===v));
-  // IA-2026-07-12 (Sprint QQQQ): "도구 ▾" 드롭다운 버튼 — 도구 뷰(특약·청약·뉴스·사용법) 활성 시 하이라이트 + 탭 전환 시 메뉴 닫기
+  // "도구 ▾" 드롭다운 버튼 — 도구 뷰(특약·청약·대출계산) 활성 시 하이라이트 + 탭 전환 시 메뉴 닫기 (OOOOO-3: 뉴스·사용법 승격, calc 편입)
   try{
     const _toolBtn=document.getElementById('htabToolBtn');
-    if(_toolBtn)_toolBtn.classList.toggle('on',['clause','news','subs','guide'].includes(v));
+    if(_toolBtn)_toolBtn.classList.toggle('on',['clause','subs','calc'].includes(v));
     closeToolMenu();
   }catch(_){}
   // 모바일 하단 탭 활성화
