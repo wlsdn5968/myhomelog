@@ -811,7 +811,6 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .ci:focus{border-color:var(--acc);background:var(--bg-base)}
 .cs{width:36px;height:36px;border-radius:50%;background:var(--acc);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .18s}
 .cs:hover{background:var(--accD);transform:scale(1.05)}.cs svg{width:14px;height:14px;fill:#fff}
-.cerr{font-size:11px;color:var(--red);padding:3px 13px;display:none}.cerr.show{display:block}
 
 /* DETAIL MODAL */
 .dmbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:400;align-items:center;justify-content:center;padding:16px}
@@ -1337,7 +1336,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button class="htab" onclick="sv('subs',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18"/><path d="M8 2.5v4"/><path d="M16 2.5v4"/></svg>청약</button>
     <button class="htab" onclick="sv('calc',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg>대출계산</button>
     <!-- Sprint OOOOO: 규제 요약(비뷰 버튼) — 반드시 마지막 유지(인덱스 밖 → 항상 off) -->
-    <button class="htab" onclick="closeToolMenu();openRegSummary()" title="2025.10.15 규제 요약 보기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3.5v5c0 4.4-3 7.6-7 9.5-4-1.9-7-5.1-7-9.5v-5Z"/></svg>규제 요약</button>
+    <button class="htab" onclick="closeToolMenu();openRegSummary()" title="부동산 규제 요약 (2025.10.15 대책 + 2026 후속 반영)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3.5v5c0 4.4-3 7.6-7 9.5-4-1.9-7-5.1-7-9.5v-5Z"/></svg>규제 요약</button>
       </div>
     </div>
   </div>
@@ -1570,7 +1569,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <!-- P1 (Phase 2 3-1): Empty state 행동 유도 -->
       <div class="bk-empty">
         관심 단지를 추가하면 여기서 빠르게 확인할 수 있어요.<br><br>
-        <span style="font-size:10.5px;color:var(--t3)">💡 단지 상세 화면에서 ⭐ 버튼 또는 지도 마커 클릭</span>
+        <span style="font-size:10.5px;color:var(--t3)">💡 단지 상세 화면(지도 마커 더블클릭 또는 팝업 → 상세 리포트)에서 ⭐ 버튼</span>
       </div>
     </div>
   </div>
@@ -1705,7 +1704,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       </tr></thead>
       <tbody style="color:var(--t2)">
         <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>보금자리론</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">3.6~4.2억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)"><span id="hfRateBogeum">4.9~5.3%*</span></td></tr>
-        <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6~7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">5억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">2~2.4억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);color:var(--grn);font-weight:700"><span id="hfRateDidimdol">2.9~4.2%*</span></td></tr>
+        <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6~7천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">5억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">2~2.4억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);color:var(--grn);font-weight:700"><span id="hfRateDidimdol">2.85~4.15%*</span></td></tr>
         <tr><td style="padding:5px 4px;border-bottom:1px solid var(--bd)"><b>신혼 디딤돌</b></td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">8.5천만↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd)">6억↓</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);font-weight:700">3.2억</td><td style="text-align:center;padding:5px 4px;border-bottom:1px solid var(--bd);color:var(--grn);font-weight:700">2.6~3.9%*</td></tr>
         <tr><td style="padding:5px 4px"><b>신생아 특례</b></td><td style="text-align:center;padding:5px 4px">1.3억↓</td><td style="text-align:center;padding:5px 4px">9억↓</td><td style="text-align:center;padding:5px 4px;font-weight:700">4억</td><td style="text-align:center;padding:5px 4px;color:var(--grn);font-weight:700">1.8~3.5%*</td></tr>
       </tbody>
@@ -1719,7 +1718,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <div style="font-size:11px;color:var(--t2);line-height:1.7">
       <div style="margin-bottom:6px"><b>1. 신용대출 추가</b> — DSR 여유 시 가능. <b>한도는 차주별 연소득 이내로 제한</b>(2025.10.15 대책). 1억원 초과 신용대출 보유 시 대출 실행일부터 1년간 규제지역 주택 매수 제한(기존 규제 연장). 평균 금리 6%대·만기 5년.</div>
       <div style="margin-bottom:6px"><b>2. 마이너스 통장</b> — 일시 대응. 한도 5천만 ~ 1억. 변동 금리 7~8%, 사용 분만 이자.</div>
-      <div style="margin-bottom:6px"><b>3. 가족 차용</b> — <b>차용증·이자 약정 필수</b> (증여세 회피 의심 차단). 연 1.6% 이상 이자, 매월 이체 기록 보존. 2.17억 초과 시 증여세 신고.</div>
+      <div style="margin-bottom:6px"><b>3. 가족 차용</b> — <b>차용증·이자 약정 필수</b> (증여세 회피 의심 차단). 무이자·저리 시 적정이자율(연 4.6%) 기준 이자 차액이 연 1,000만원 이상이면 증여세 과세 — 무이자 기준 원금 약 2.17억까지 비과세. 매월 이체 기록 보존.</div>
       <div style="margin-bottom:6px"><b>4. 매수가 조정 / 평형 변경</b> — 부족분만큼 작은 평형/구축. 가장 안전.</div>
       <div><b>5. 지역 변경</b> — 비규제 지역 = LTV 70% (규제 40% 대비 1.75배). 한도 자체가 다름.</div>
     </div>
@@ -1760,7 +1759,6 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button class="qb" onclick="_closeAiPanel();openRegSummary()">📋 규제요약</button>
     <button class="qb" onclick="_closeAiPanel();sv('clause')">✍ 특약초안</button>
   </div>
-  <div id="cErr" class="cerr">⚠ 서버 오프라인 — 직접 AI 모드로 동작 중</div>
   <div class="cir">
     <textarea class="ci" id="cIn" placeholder="질문 입력 (Shift+Enter 줄바꿈)" rows="1" onkeydown="hk(event)" oninput="ah(this)" aria-label="AI 도우미에게 질문 입력"></textarea>
     <button class="cs" onclick="sM()" aria-label="질문 전송" title="전송"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 21L23 12 2 3v7l15 2-15 2z"/></svg></button>
@@ -1777,7 +1775,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   <!-- Phase 4 (2026-04-26): 무료 한도 사전 표시 + 검토 안내 prominent -->
   <div style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:11px;line-height:1.6;color:var(--accent-700)">
     💡 <b>무료 이용 가능</b> | <b>⚠ 생성 후 반드시 변호사·공인중개사 검토 필수</b><br>
-    <span style="font-size:10px">검토 의뢰: <a href="https://www.kabl.kr" target="_blank" rel="noopener" style="color:var(--accent-700);text-decoration:underline">대한변호사협회 (kabl.kr)</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:var(--accent-700);text-decoration:underline">한국공인중개사협회 (kar.or.kr)</a></span>
+    <span style="font-size:10px">검토 의뢰: <a href="https://www.koreanbar.or.kr" target="_blank" rel="noopener" style="color:var(--accent-700);text-decoration:underline">대한변호사협회 (koreanbar.or.kr)</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:var(--accent-700);text-decoration:underline">한국공인중개사협회 (kar.or.kr)</a></span>
   </div>
   <div class="cv-form">
     <h3>매매 기본 정보</h3>
@@ -1945,7 +1943,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <div style="margin-top:10px;font-size:11px;color:var(--t2);line-height:1.7">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
           <div>
-            <label class="lbl">무주택 기간 (1점·1년당 2점·최대 32점)</label>
+            <label class="lbl">무주택 기간 (1년 미만 2점 · 1년당 +2점 · 최대 32점)</label>
             <select class="inp" id="cs_noHome" onchange="calcSubsScore()">
               <option value="0">0년 (유주택)</option>
               <option value="2">1년 미만 (2점)</option>
@@ -1980,7 +1978,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
           </div>
         </div>
         <div style="margin-bottom:10px">
-          <label class="lbl">청약통장 가입기간 (1점·1년당 1점·최대 17점)</label>
+          <label class="lbl">청약통장 가입기간 (6개월 미만 1점 · 1년당 +1점 · 최대 17점)</label>
           <select class="inp" id="cs_bank" onchange="calcSubsScore()">
             <option value="1">6개월 미만 (1점)</option>
             <option value="2">6개월~1년 (2점)</option>
@@ -2024,7 +2022,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         </div>
         <div style="font-size:9.5px;color:var(--t3);margin-top:8px;line-height:1.6">
           ※ 본 계산기는 일반공급 가점제 기준 (특별공급은 별도 자격). 실제 가점은 <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="color:var(--acc)">청약Home</a> 마이페이지에서 확인 가능.<br>
-          ※ 무주택 기간은 만 30세 이후·혼인 후 기간 중 늦은 시점부터 계산.
+          ※ 무주택 기간은 만 30세가 되는 날부터 계산 — 단, 30세 이전에 혼인했다면 혼인신고일부터(둘 중 빠른 날 기준, 주택공급에 관한 규칙).
         </div>
       </div>
     </details>
@@ -2068,7 +2066,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 <div class="biz-view" id="view-guide" style="display:none">
   <div class="biz-section" style="max-width:780px;margin:0 auto">
     <h3 style="margin:0 0 4px">📖 내집로그 사용법</h3>
-    <p style="font-size:11.5px;color:var(--t3);margin:0 0 18px">3분 안에 핵심 가치 체험 + 자주 묻는 답</p>
+    <p style="font-size:11.5px;color:var(--t3);margin:0 0 18px">3분 안에 핵심 가치 체험 + 자주 묻는 질문(FAQ)</p>
 
     <!-- 1. 30초 가이드 — Phase 5: 보고서 중심 -->
     <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:12px;padding:16px 18px;margin-bottom:18px">
@@ -2076,7 +2074,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <div style="font-size:12px;color:var(--t1);line-height:1.8">
         1. 헤더 <b>보고서</b> 탭 클릭 → 화면의 <b>3단계(주택 보유 · 자금 · 희망 지역)</b> 입력<br>
         2. <b>📊 맞춤 보고서 생성하기</b> 클릭 → AI가 회원님 가구 상황에 맞는 <b>1page 컨설팅 보고서</b> 자동 생성<br>
-        3. 보고서 안 추천 단지 클릭 → 실거래가·평형·시세 추이 상세 확인<br>
+        3. 보고서 안 단지명을 헤더 검색창에 입력 → 실거래가·평형·시세 추이 상세 확인<br>
         4. 마음에 드는 단지 → ⭐ 관심 추가 → 임장노트 작성
       </div>
       <button class="abtn acc" style="margin-top:12px;padding:8px 16px;width:auto;font-size:12px" onclick="sv('report')">📊 지금 보고서 받기 →</button>
@@ -2088,7 +2086,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         <b>방법 1. 헤더 검색바</b> — "공덕래미안" 또는 "공덕동" 입력 → 자동완성에서 클릭<br>
         <b>방법 2. 지도 panning</b> — 지도 이동 후 "🔍 이 지역 단지 보기" 버튼<br>
-        <b>방법 3. 사이드바 입력 → 추천</b> — 매수가·지역 기반 AI 추천 15개<br><br>
+        <b>방법 3. 사이드바 입력 → 🔍 조건에 맞는 단지 찾기</b> — 매수가·지역 기반 실거래 조건 매칭 15개<br><br>
         <span style="background:var(--info-bg);border:1px solid var(--info-bd);border-radius:6px;padding:6px 10px;display:inline-block;font-size:11px;color:var(--info-tx)">💡 단지 클릭 → <b>실거래가 탭</b>에서 평형 chip 으로 자기 예산 평형만 필터 가능</span>
       </div>
     </details>
@@ -2107,7 +2105,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 
     <!-- Phase 5: 핵심 가치 = 1page 보고서 (AI 특약 자리에 강조 디자인 이동) -->
     <details style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:2px solid var(--accent-500);border-radius:10px;padding:13px 16px;margin-bottom:10px" open>
-      <summary style="cursor:pointer;font-size:13px;font-weight:800;color:var(--accent-700);list-style:none">📊 1Page 컨설팅 보고서 — 이 서비스의 핵심</summary>
+      <summary style="cursor:pointer;font-size:13px;font-weight:800;color:var(--accent-700);list-style:none">📊 1page 컨설팅 보고서 — 이 서비스의 핵심</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         사용자 자금·자녀·거주기간·우선순위 → <b>AI가 컨설턴트 톤으로 1page 보고서 자동 생성</b><br>
         포함: 회원님 핵심 방향 3줄 · 정부 정책 환경 · 매수 체크리스트 · 조건 부합 단지 7개 (단지별 컨설팅 코멘트) · 갈아타기 시나리오 · 매수 TIP<br><br>
@@ -2124,7 +2122,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">✍ AI 특약 초안 (보조 도구)</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         계약 직전 단지 결정 후 → 매수 정보 입력 → AI 특약 초안<br>
-        ⚠ <b>변호사·공인중개사 최종 검토 필수</b> — <a href="https://www.kabl.kr" target="_blank" rel="noopener" style="color:var(--acc)">대한변호사협회</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:var(--acc)">한국공인중개사협회</a>
+        ⚠ <b>변호사·공인중개사 최종 검토 필수</b> — <a href="https://www.koreanbar.or.kr" target="_blank" rel="noopener" style="color:var(--acc)">대한변호사협회</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:var(--acc)">한국공인중개사협회</a>
       </div>
     </details>
 
@@ -2155,7 +2153,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">📅 청약 · 뉴스 · 계약 타임라인 (부가 도구)</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         <b>📅 청약</b>: 한국부동산원 청약Home 일정 + 가점 계산기 (84점) + 지역별 당첨 커트라인 통계<br>
-        <b>📰 뉴스</b>: 부동산 뉴스 6개 카테고리 + 최근 30분 이내 갱신 + AI 3줄 시황<br>
+        <b>📰 뉴스</b>: 부동산 뉴스 6개 카테고리 + 30분 주기 갱신 + 3줄 시황(AI 요약 또는 공식 통계 자동 전환)<br>
         <b>📅 계약 타임라인</b>: 좌측 사이드바(모바일은 ☰ 메뉴) — 계약일·잔금일 입력 → D-day 자동 계산
       </div>
     </details>
@@ -2221,11 +2219,11 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         <b>Q. 데이터는 어디서 오나요?</b><br>
         국토교통부 실거래가 (data.go.kr) + 한국부동산원 청약Home + 네이버 지도(지도 표시) + 카카오(좌표·학교·편의시설).<br><br>
-        <b>Q. 단지 정식명과 거래 신고명이 달라요</b><br>
+        <b>Q. 단지 정식명과 거래 신고명이 다른 이유는?</b><br>
         MOLIT가 면적군별로 분리 신고하는 경우 (예: '풍림아파트A·B') 가 있어요. 우리는 정식명 (예: '공릉풍림아이원') 클릭 시 모든 신고명 거래 자동 통합해서 보여드립니다.<br><br>
         <b>Q. AI 답변이 틀린 것 같아요</b><br>
         답변 옆 👍/👎 클릭 → 운영자 주간 리뷰 → 패턴 개선. AI 답변은 항상 <b>참고용</b>이며 의사결정 책임은 본인에게 있습니다.<br><br>
-        <b>Q. Pro 결제는 어떻게?</b><br>
+        <b>Q. Pro 결제는 어떻게 하나요?</b><br>
         billing 페이지 (사업자등록 완료 후 활성화 예정). 현재는 무료 사용 가능.<br><br>
         <span style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:6px;padding:8px 10px;display:block;font-size:11px;color:var(--red);font-weight:600;line-height:1.6">⚠ <u>본 서비스는 매수·매도를 권유하지 않습니다.</u> 모든 분석·시그널은 과거 실거래 통계 정리이며 미래 가격을 보장하지 않습니다. 자본시장법상 투자자문업·공인중개사법상 중개업에 해당하지 않습니다.</span>
       </div>
@@ -2384,9 +2382,9 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     </div>
 
     <div class="lv-card lv-stat">
-      <div class="lv-card-head"><span class="lv-card-label">데이터 종합 점수</span><span class="lv-card-meta">도구</span></div>
+      <div class="lv-card-head"><span class="lv-card-label">데이터 종합 점수</span><span class="lv-card-meta">예시</span></div>
       <div style="font-family:var(--font-display);font-size:22px;font-weight:800;color:var(--text-primary);letter-spacing:-.5px;line-height:1.2;margin-top:8px">60/100 거래보통</div>
-      <div class="lv-card-sub" style="margin-top:10px">평균가 · 범위 · LTV · 학군 종합</div>
+      <div class="lv-card-sub" style="margin-top:10px">평균가 · 범위 · LTV · 학군 종합 — 단지 선택 시 실제 점수로 계산</div>
     </div>
 
     <div class="lv-card lv-apt">
@@ -2566,7 +2564,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 <div class="smbg" id="SM">
   <div class="smbox">
     <div class="smhdr">
-      <span class="smtit">⚙ 서비스 정보</span>
+      <span class="smtit">ⓘ 서비스 정보</span>
       <button class="smx" onclick="closeSM()" aria-label="서비스 정보 닫기" title="닫기">✕</button>
     </div>
     <div class="smbody">
@@ -2859,10 +2857,10 @@ window.addEventListener('DOMContentLoaded',()=>{
       const _urlKey = 'mhl_restore_toast:' + location.search;
       if (!sessionStorage.getItem(_urlKey)) {
         sessionStorage.setItem(_urlKey, '1');
-        setTimeout(()=>{if(typeof toast==='function')toast('🔗 공유 링크 조건 복원 — AI 단지 검색 버튼을 눌러주세요');},500);
+        setTimeout(()=>{if(typeof toast==='function')toast('🔗 공유 링크 조건 복원 — 🔍 조건에 맞는 단지 찾기 버튼을 눌러주세요');},500);
       }
     } catch(_){ /* sessionStorage 비가용 시 fail-open: 토스트 표시 */
-      setTimeout(()=>{if(typeof toast==='function')toast('🔗 공유 링크 조건 복원 — AI 단지 검색 버튼을 눌러주세요');},500);
+      setTimeout(()=>{if(typeof toast==='function')toast('🔗 공유 링크 조건 복원 — 🔍 조건에 맞는 단지 찾기 버튼을 눌러주세요');},500);
     }
   }
 
@@ -4000,7 +3998,7 @@ function _renderReport(data) {
         <div>✅ <b>장점</b>: ${_escHtml(a.pros || '')}</div>
         <div>⚠ <b>단점</b>: ${_escHtml(a.cons || '')}</div>
         <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--bg2)">💰 <b>예산 매칭</b>: ${_escHtml(a.priceFit || '')}</div>
-        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${_escHtml(f.district)}</b>`:null,f.builder?`시공사 <b>${_escHtml(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>`:null,f.regulation?`규제 <b>${_escHtml(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>6개월 ${_numFmt(f.new_high_count)}회 갱신</b>`:null].filter(Boolean);const am=f.amenities;
+        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구 등급 <b>${_escHtml(f.district)}</b>`:null,f.builder?`시공사 <b>${_escHtml(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>`:null,f.regulation?`규제 <b>${_escHtml(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>6개월 ${_numFmt(f.new_high_count)}회 갱신</b>`:null].filter(Boolean);const am=f.amenities;
         /* MOB-AUDIT-2026-05-03: amenities 0 vs undefined 구분 — 좌표 호출 실패 시 "지하철 0개" 오해 차단 */
         const _amOk = am && (am.subway != null || am.mart != null || am.hospital != null || am.school != null);
         const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway,'?')}</b>·마트 <b>${_numFmt(am.mart,'?')}</b>·종합병원 <b>${_numFmt(am.hospital,'?')}</b>·학교 <b>${_numFmt(am.school,'?')}</b>·공원 <b>${_numFmt(am.park,'?')}</b>`:(am?'주변 편의시설 좌표 미해결':'');if(!items.length && !amStr)return '';return `<div style="font-size:10.5px;color:var(--t2);background:var(--accent-50);border:1px solid var(--accent-100);border-radius:7px;padding:7px 10px;margin-top:5px">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` <span style="color:var(--acc);font-weight:600">· 매칭 ${_numFmt(a.matchScore)}점</span>`:''}</div>`;})()}
@@ -4267,7 +4265,7 @@ function openRegSummary(){
     m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
     m.innerHTML = `<div style="background:var(--bg-base);border-radius:12px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto;padding:20px 22px;box-shadow:0 12px 40px rgba(0,0,0,0.3)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <h3 style="margin:0;font-size:16px;color:var(--t1)">📋 2025.10.15 부동산 규제 요약</h3>
+        <h3 style="margin:0;font-size:16px;color:var(--t1)">📋 부동산 규제 요약 <span style="font-size:11px;font-weight:500;color:var(--t3)">2025.10.15 대책 + 2026.6.30 확대 반영</span></h3>
         <button onclick="document.getElementById('regSummaryModal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--t3)" aria-label="닫기">✕</button>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px">
@@ -4373,7 +4371,7 @@ async function loadNews(btn){
         <div style="font-size:13px;font-weight:600;line-height:1.5;margin-bottom:6px">${_escHtml(n.title)}</div>
         <div style="font-size:10px;color:var(--t3)">📰 ${_escHtml(n.source||'언론사')} · ${_escHtml(fmtDate(n.pubDate))} · 원문 보기 ↗</div>
       </a>
-    `).join('') + `<div style="margin-top:10px;padding:8px;background:var(--s1);border-radius:6px;font-size:10px;color:var(--t3);text-align:center">출처: ${_escHtml(d.source||'')} · ${Number(d.count)||0}건 · 최근 30분 이내</div>`;
+    `).join('') + `<div style="margin-top:10px;padding:8px;background:var(--s1);border-radius:6px;font-size:10px;color:var(--t3);text-align:center">출처: ${_escHtml(d.source||'')} · ${Number(d.count)||0}건 · 30분 주기 갱신</div>`;
     list.dataset.loaded='1';
     // 핫 카테고리일 때만 AI 3줄 시황 자동 로드 (첫 로드 시 1회)
     if(cat==='hot' && !document.getElementById('newsSummary').dataset.loaded){
@@ -4510,7 +4508,8 @@ function updateQuota(usage){
     pill.style.color = usage.remaining<=1 ? 'var(--red)' : (usage.remaining<=2 ? 'var(--amb)' : '');
     if(wrap) wrap.title=`오늘 무료 단지 검색 ${usage.used}/${usage.limit}회 사용 — 매일 자정 리셋 (클릭: 상세 정보)`;
   }
-  if(info)info.textContent = usage.unlimited ? '검색 무제한 (운영자·관리자)' : `오늘 ${usage.used}/${usage.limit}회 사용 (남은 무료 검색 ${usage.remaining}회) · 매일 자정 리셋`;
+  // USAGE-INFO-2026-07-16 (Sprint SSSSS): 정적 안내("로그인 시 10회/일 · 특약·채팅 별도 한도")가 이 덮어쓰기로 소실되던 것 — 항상 뒤에 유지
+  if(info)info.textContent = usage.unlimited ? '검색 무제한 (운영자·관리자)' : `오늘 ${usage.used}/${usage.limit}회 사용 (남은 무료 검색 ${usage.remaining}회) · 매일 자정 리셋 · 로그인 시 10회/일 · 매수특약·AI 채팅은 별도 한도`;
 }
 async function refreshQuota(){
   try{
@@ -6027,8 +6026,8 @@ function showDetail(p){
     : `<div class="score-pending">
         <div class="sp-icon">📊</div>
         <div class="sp-title">데이터 분석 대기</div>
-        <div class="sp-msg">사이드바에서 매수가·자기자본·희망지역 입력 후<br>"맞춤 보고서"를 받으면 정확한 점수가 분석됩니다.</div>
-        <button class="sp-cta" onclick="cDM();sv('report');setTimeout(()=>{const lp=document.querySelector('.lp');if(lp)lp.scrollTo({top:0,behavior:'smooth'});},100)">📊 맞춤 보고서 만들기 →</button>
+        <div class="sp-msg">보고서 탭에서 주택 보유·자금·희망 지역 입력 후<br>"맞춤 보고서"를 받으면 정확한 점수가 분석됩니다.</div>
+        <button class="sp-cta" onclick="cDM();sv('report')">📊 맞춤 보고서 만들기 →</button>
         <div class="sp-meta">${p.area||''}${p.buildYear?' · '+p.buildYear+'년':''}${p.ltv?' · LTV '+p.ltv:''}</div>
       </div>`;
   document.getElementById('t0').innerHTML=`
@@ -6850,7 +6849,8 @@ async function shareCurrent(){
   if(currentDetail.area)u.searchParams.set('area', currentDetail.area);
   const url=u.toString();
   const title=`${currentDetail.aptName} — 내집로그 데이터 분석`;
-  const text=`${currentDetail.aptName} (${currentDetail.area||''}) — 평균 ${(currentDetail.avgPrice||0).toFixed(2)}억 / 점수 ${currentDetail.score||60}점\n※ 매수 추천이 아니며 참고용 정보입니다.`;
+  // SCORE-HALLUC-FIX-2026-07-16 (Sprint SSSSS): 폐기된 60점 fallback 잔재 — 점수 없으면 표기 생략(외부 공유 텍스트라 특히 중요)
+  const text=`${currentDetail.aptName} (${currentDetail.area||''}) — 평균 ${(currentDetail.avgPrice||0).toFixed(2)}억${currentDetail.score?` / 점수 ${currentDetail.score}점`:''}\n※ 매수 추천이 아니며 참고용 정보입니다.`;
   // Web Share API (모바일)
   if(navigator.share){
     try{await navigator.share({title,text,url});return;}catch(e){if(e.name==='AbortError')return;}
@@ -6900,7 +6900,7 @@ async function handleShareUrl(){
       // STAB-AUDIT-2026-05-07: 공유 링크 score=60 환각 차단 → null
       score:null, ltv:null, maxLoan:null,
       pros:`최근 6개월 실거래 ${items.length}건 · 평균 ${avg.toFixed(2)}억`,
-      cons:'', strategy:'공유 링크 조회 — 정밀 분석은 내 조건을 입력 후 AI 단지 검색을 실행해주세요.',
+      cons:'', strategy:'공유 링크 조회 — 정밀 분석은 내 조건을 입력 후 🔍 조건에 맞는 단지 찾기를 실행해주세요.',
       tags:[], txHistory:items.slice(0,30), lawdCd,
     };
     // 현재 열린 상세가 동일 단지면 재렌더
@@ -7155,7 +7155,7 @@ function renderAnalysis(d,p){
 function renderAnalysisFallback(p){
   const loanAmt=getLoanAmt();
   document.getElementById('t4').innerHTML=`
-    <div class="ibox b" style="margin-bottom:12px">📊 시세 신호(추이·전세가율·갭)는 사이드바에서 <b>AI 단지 검색</b> 실행 시 표시됩니다. 아래 실투자금 계산은 지금도 이용할 수 있어요.</div>
+    <div class="ibox b" style="margin-bottom:12px">📊 시세 신호(추이·전세가율·갭)는 사이드바 <b>🔍 조건에 맞는 단지 찾기</b> 실행 시 표시됩니다. 아래 실투자금 계산은 지금도 이용할 수 있어요.</div>
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:7px">💰 실투자금 총비용 계산</div>
     ${calcTotalCostHTML(p.avgPrice||0,loanAmt,gct('ch-h'),gct('ch-f')==='예')}`;
 }
@@ -7438,7 +7438,7 @@ function openBookmark(i){
   const b=bks[i];if(!b)return;
   const found=props.find(p=>p.aptName===b.aptName);
   if(found){showDetail(found);}
-  else{showDetail({aptName:b.aptName,area:b.area,avgPrice:b.avgPrice,score:60,tags:[],txHistory:[]});}
+  else{showDetail({aptName:b.aptName,area:b.area,avgPrice:b.avgPrice,score:null,tags:[],txHistory:[]});} // score null → "분석 대기" 분기 (60점 환각 fallback 제거)
 }
 
 function delBookmark(e,i){
@@ -7822,7 +7822,7 @@ async function loadClause(p){return loadClauseAndRisk(p);}
 function renderRisk(d){
   if(!d||!d.risks){
     document.getElementById('t2').innerHTML=`
-      <div class="ibox b" style="margin-bottom:12px">아래는 <b>일반적인 매수 리스크 예시</b>입니다. 사이드바에서 <b>AI 단지 검색</b>을 실행하면 이 단지 맞춤 리스크 분석이 제공돼요.</div>
+      <div class="ibox b" style="margin-bottom:12px">아래는 <b>일반적인 매수 리스크 예시</b>입니다. 사이드바에서 <b>🔍 조건에 맞는 단지 찾기</b>를 실행하면 이 단지 맞춤 리스크 분석이 제공돼요.</div>
       <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">시세 하락 리스크</div></div><div class="rcard-b">매수 후 금리 인상/규제 강화 시 단기 조정 가능성.</div><div class="rcard-c">💡 5년 이상 보유, 전세 전환 플랜B 수립</div></div>
       <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">대출 규제 추가 강화</div></div><div class="rcard-b">갈아타기 시점 LTV 추가 규제 가능성.</div><div class="rcard-c">💡 상호금융권(DSR 50%) 사전 상담</div></div>
       <div class="rcard"><div class="rcard-top"><span class="lvl safe">낮음</span><div class="rcard-t">환금성 리스크</div></div><div class="rcard-b">세대수 적을 경우 매도 시 거래 부재.</div><div class="rcard-c">💡 RR(로열동·로열호) 여부 임장 확인</div></div>`;
@@ -8080,7 +8080,7 @@ function cp(el,id){
   if(id==='ch-h' && el.textContent.trim()==='2주택+'){
     // UX 정리(2026-06-01): 칩 클릭마다 매번 → 세션당 1회만 (반복 노출 noise 제거)
     if(typeof toast==='function' && !sessionStorage.getItem('mhl_tax_warned')){
-      toast('⚠ 2026.5.10 다주택자 양도세 중과 부활 — 조정지역 매도 시 2주택 +20%p·3주택 +30%p (5.9까지 양도분 배제, 소득세법 시행령 일몰)');
+      toast('⚠ 2026.5.10~ 다주택 양도세 중과 부활 (2주택 +20%p·3주택 +30%p) — 상세는 도구▾ 규제 요약 참고'); // 2.6초 토스트에 맞게 축약 (Sprint SSSSS)
       try{sessionStorage.setItem('mhl_tax_warned','1');}catch(_){}
     }
   }
@@ -8345,10 +8345,10 @@ function dc(){
     dsrEl.textContent=dsr?dsr+'%':'—';
     dsrEl.style.color=dsrExceed?'var(--red)':dsr>=35?'var(--amb)':'';
   }
-  // P1 (2026-04-25): DSR disclaimer 명시 — 본 계산은 주담대 원리금만 반영
-  // 신용대출·전세대출·기타 부채 미반영 → 금융기관 실제 DSR 은 더 높을 수 있음
+  // DSR-NOTE-FIX-2026-07-16 (Sprint SSSSS): 신용·전세대출 잔액은 Phase 4(2026-04-26)부터 추정 월상환액으로
+  //   exAdded 에 이미 합산됨(8316-8319) — 구 disclaimer "미반영"이 계산 로직과 정반대로 안내되던 것 정정.
   const dsrNote=dsr>0?(dsrExceed?` · ⛔ DSR ${dsr}% 초과 (한도 40%) — 대출 거절 가능`:dsr>=35?` · ⚠ DSR ${dsr}% — 한도 근접`:` · ✅ DSR ${dsr}% 여유`):'';
-  const dsrDisclaimer = dsr>0 ? ' · ℹ 신용대출·전세대출 미반영 — 금융기관 실제값 다를 수 있음' : '';
+  const dsrDisclaimer = dsr>0 ? ' · ℹ 신용·전세대출 잔액은 추정 월상환액(신용 6%/5년·전세 4%/2년 가정)으로 반영 — 금융기관 실제 심사값과 다를 수 있음' : '';
   document.getElementById('co_w').textContent=(warn||'')+dsrNote+dsrDisclaimer;
   const mos=[0,.01,.02].map(d2=>fin>0?Math.round(fin*1e8*(rate+d2)/12/(1-Math.pow(1+(rate+d2)/12,-n))/10000):0);
   const mx=Math.max(...mos,1);
@@ -8870,7 +8870,7 @@ function renderClauseResult(d,aptName){
     ${mkCard(d.essential,'e')}
     <div style="font-size:11px;font-weight:700;color:var(--amb);margin:12px 0 7px">권장 특약</div>
     ${mkCard(d.recommended,'r')}
-    <div class="cv-caution" style="margin-top:8px;background:var(--a2L);border-color:var(--info-bd);color:var(--info-tx)">특약은 공인중개사·법무사와 최종 검토 후 사용하세요.</div>
+    <div class="cv-caution" style="margin-top:8px;background:var(--a2L);border-color:var(--info-bd);color:var(--info-tx)">특약은 변호사·법무사·공인중개사와 최종 검토 후 사용하세요.</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px">
       <button class="abtn" style="margin:0;background:var(--accent-50);color:var(--accent-700);border:1px solid var(--accent-100)" onclick="saveClauseAptToBookmark()">⭐ 관심 단지로 저장</button>
       <button class="abtn a2" style="margin:0" onclick="saveClauseHistory();toast('💾 히스토리 저장 완료')">💾 이 특약 히스토리 저장</button>
@@ -9672,7 +9672,7 @@ function _applyStatTags(){
   }catch(_){}
 }
 async function chkAPI(_isRetry){
-  const el=document.getElementById('apiSt'),cs=document.getElementById('cSt'),ce=document.getElementById('cErr'),bs=document.getElementById('badgeSrv');
+  const el=document.getElementById('apiSt'),cs=document.getElementById('cSt'),bs=document.getElementById('badgeSrv'); // cErr(BYOK 잔재 죽은 마크업) 제거 — Sprint SSSSS
   try{
     // Phase 4-2 단계 1 미세 (2026-05-05): Vercel Lambda cold start 대응 — 3s → 5s. 재시도 시 9s(콜드 여유).
     const r=await fetch(`${CFG.api}/health`,{signal:AbortSignal.timeout(_isRetry?9000:5000)});
@@ -9684,7 +9684,6 @@ async function chkAPI(_isRetry){
       // Phase 4: 정상 시 apiSt hide, 장애 시만 표시
       el.style.display='none';
       cs.textContent='● 온라인';cs.style.color='var(--grn)';
-      ce && ce.classList.remove('show');
       if(bs){bs.textContent='연결됨';bs.className='sm-badge';}
       // 사용 한도 표시 (모달 + 헤더 사용량 텍스트)
       if(d.usage){
@@ -9755,16 +9754,8 @@ async function chkAPI(_isRetry){
 }
 
 // ── CHAT ─────────────────────────────────────────────────
-const SYS=`당신은 내집로그 AI 부동산 정보 분석 도우미. 2025.10.15 규제 기준:
-서울25구+경기15곳 규제지역 | 무주택 LTV 40% | 생애최초 70%(전입의무) | 비규제 70%
-한도: 15억↓6억/15~25억4억/25억↑2억 | DSR 은행40%/2금융50% | 스트레스 수도권+3.0%p | 토허구역 2년 실거주
-
-[필수 응답 규칙 — 위반 금지]
-1. 절대 "사세요/사라/매수 추천/오를 것" 등 매수 권유 표현 금지. "현재 데이터로 보면 ~한 특징이 있어요" 식 중립 서술만.
-2. 절대 미래 가격을 예측·보장하지 않음. "오를 것" "떨어질 것" 등 단정 금지. "과거 N개월 추이는 ~" 식 사실 진술만.
-3. 모든 답변 끝에 "본 답변은 참고 정보이며 매수·매도 추천이 아닙니다. 가격 하락 위험은 본인이 부담하세요." 한 줄 추가.
-4. 대출/세금/계약은 반드시 "금융기관/세무사/공인중개사·법무사 확인 필수" 명시.
-5. 결론→근거→확인필요사항 순서. 수치 기반. 불확실 시 "확인 필요" 솔직히 표시.`;
+// SYS-DEAD-2026-07-16 (Sprint SSSSS): BYOK 제거 후 참조 0이던 프론트 SYS 프롬프트 삭제 —
+//   내용도 2025.10 기준으로 stale(백엔드 aiService 프롬프트가 단일 소스·2026 개정 반영 완료).
 
 // 사용자 조건 + 추천 단지 컨텍스트 자동 주입 (P0-5)
 function buildChatContext(){
@@ -9802,7 +9793,6 @@ async function sM(){
   // MOB-AUDIT-2026-05-03: funnel — 첫 채팅 송신 추적 (사용자 첫 5분 funnel)
   if (chatH.length === 0) { try { window.va && window.va('event', { name: 'chat_first_send', data: { msgLen: txt.length } }); } catch(_){} }
   el.value='';el.style.height='auto';addMsg('user',txt);chatH.push({role:'user',content:txt});chatLd=true;showTyp();
-  document.getElementById('cErr').classList.remove('show');
   let replied=false;
   const sessionContext=buildChatContext();
 
