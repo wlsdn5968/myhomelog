@@ -1042,8 +1042,11 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
   .legal-footer{margin-bottom:60px}
   .htabs{display:none}
   .hamb{display:inline-flex;align-items:center;justify-content:center}
-  .hsearch{flex:1!important;max-width:none!important;margin:0 6px!important}
+  /* Sprint PPPPP-3 (실측): 375px 헤더 가로 오버플로 68px — 검색창 min 170→130 + ⓘ 텍스트 축약으로 해소
+     (합계 439px→372px ≤ 375. 터치 최소는 기존 44px min-height MQ 가 보장) */
+  .hsearch{flex:1!important;max-width:none!important;margin:0!important;min-width:130px!important}
   .hsearch input{font-size:13px!important}
+  .sbtn-tx{display:none}
   /* 모바일: dropdown 검색창 너비 따라가기 (가로 확장 X) */
   #hSearchDrop{width:auto!important;left:0!important;right:0!important;max-width:none!important}
   /* 헤더 우측 hml: 모바일에선 핵심 버튼만 (10.15 / 로그인)
@@ -1056,10 +1059,15 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 }
 @media(max-width:480px){
   .cv-r3{grid-template-columns:1fr 1fr}
-  header{padding:0 8px;gap:5px}
+  header{padding:0 7px;gap:4px} /* PPPPP-3: 375px 잔여 2px 오버플로 해소 */
   .logo .ltxt{display:none}
   /* 검색 placeholder 짧게 */
   .hsearch input::placeholder{content:"🔎 단지 검색"}
+}
+/* PPPPP-3: 초소형(≤360px, 실측 320 에서 53px 초과) — 테마 토글은 ⓘ정보 모달 「화면 모드」로 대체 가능해 숨김 */
+@media(max-width:360px){
+  #themeToggle{display:none!important}
+  .hsearch{min-width:110px!important}
 }
 
 /* ── 가격 위치 시그널 (Price Location Signal) ────────────── */
@@ -1381,7 +1389,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       </div>
     </div>
     <button class="hbtn" id="themeToggle" onclick="toggleTheme()" title="다크/라이트 모드 전환" aria-label="테마 전환" style="min-width:0;padding:6px 9px">🌙</button>
-    <button class="hbtn" id="settingsBtn" onclick="openSettings()">ⓘ 정보</button>
+    <button class="hbtn" id="settingsBtn" onclick="openSettings()" aria-label="서비스 정보">ⓘ<span class="sbtn-tx"> 정보</span></button>
   </div>
 </header>
 
@@ -1466,7 +1474,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
           <summary>＋ 더 정확한 보고서 (선택) <span style="font-weight:400;color:var(--t3);font-size:11px">생애최초 · 연소득 · 자녀 · 거주기간 · 우선순위 · 평형 · 직장</span></summary>
           <div style="margin-top:10px">
           <div class="mb9"><span class="lbl">생애 최초 <span class="wi" onclick="toast(this.title)" title="생애최초: 세대원 전원이 지금까지 한 번도 주택을 소유한 적 없는 경우. LTV 우대·취득세 감면 등 혜택 판단에 쓰여요.">ⓘ</span></span><div class="chips" id="ch-f"><span class="chip on" onclick="cp(this,'ch-f')">예</span><span class="chip" onclick="cp(this,'ch-f')">아니오</span></div></div>
-          <details style="margin-bottom:9px"><summary style="cursor:pointer;font-size:11px;color:var(--t2);user-select:none;list-style:none">▸ 정책자금 자격 (신혼·신생아 해당 시)</summary>
+          <details id="polQualBox" style="margin-bottom:9px"><summary style="cursor:pointer;font-size:11px;color:var(--t2);user-select:none;list-style:none">▸ 정책자금 자격 (신혼·신생아 해당 시)</summary>
             <div style="margin-top:6px;padding-left:4px;border-left:2px solid var(--bd)">
               <div class="mb9"><span class="lbl">신혼부부 (혼인 7년 이내)</span><div class="chips" id="ch-nw"><span class="chip" onclick="cp(this,'ch-nw')">예</span><span class="chip on" onclick="cp(this,'ch-nw')">아니오</span></div></div>
               <div class="mb9"><span class="lbl">신생아 출산 (2년 이내)</span><div class="chips" id="ch-nb"><span class="chip" onclick="cp(this,'ch-nb')">예</span><span class="chip on" onclick="cp(this,'ch-nb')">아니오</span></div></div>
@@ -4622,6 +4630,12 @@ function applyPersona(key){
   const _set = (id, v) => { const el = document.getElementById(id); if(el) el.value = String(v); };
   _set('bp', p.bp); _set('mc', p.mc); _set('inc', p.inc);
   try{ cl(); }catch(_){} try{ dc(); }catch(_){} try{ _updateInputProgress(); }catch(_){}
+  // Sprint PPPPP-3: 프리셋이 채운 선택 입력(자녀·거주·우선순위 등)이 접힌 채라 "뭐가 채워졌는지" 안 보이던 것 —
+  //   선택 접기를 열어 시각 피드백. 신혼/신생아 프리셋이면 정책자금 박스도 함께.
+  try{
+    const o=document.getElementById('wizOpt'); if(o) o.open=true;
+    const pol=document.getElementById('polQualBox'); if(pol && (p.nw==='예'||p.nb==='예')) pol.open=true;
+  }catch(_){}
   if(typeof toast === 'function') toast(`👥 '${p.label}' 예시 적용 — 매수가·자본·소득을 본인 상황으로 고친 뒤 검색하세요`);
   try{ window.va && window.va('event', { name: 'persona_preset', data: { key } }); }catch(_){}
 }
