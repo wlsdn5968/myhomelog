@@ -450,10 +450,7 @@ html[data-theme="dark"]{
   --danger-bd:rgba(220,38,38,0.34);
   color-scheme:dark;
 }
-/* 다크: 헤더 CTA — Claude Design 시안(Sprint OOOOO) 밝은 네이비 #3B62C9 로 명도 확보 */
-html[data-theme="dark"] .hbtn-cta{background:#3B62C9!important;border-color:#3B62C9!important}
-html[data-theme="dark"] .hbtn-cta:hover{background:#2F55B8!important;border-color:#2F55B8!important}
-html[data-theme="dark"] .bnav-tag{background:linear-gradient(135deg,#5E94D6,#4E83C4)}
+/* Sprint OOOOO-4: 헤더 CTA·NEW 배지 제거(운영자 지시 — 보고서 진입점 중복 해소)로 관련 다크 오버라이드 삭제 */
 /* 다크 헤더 표면 — Claude Design 시안 #0E1526 (Sprint OOOOO) */
 html[data-theme="dark"] header{background:#0E1526}
 body{font-family:var(--font-body)}
@@ -518,7 +515,6 @@ html[data-theme="dark"] .ltxt em{color:#7FA1E8}
 /* 시안: 상단 1열 탭은 텍스트 중심(아이콘 제거) — 도구▾ 메뉴 항목의 아이콘은 유지 */
 .htabs > .htab > svg,.htab-tool > svg{display:none}
 .htab svg{width:14px;height:14px;vertical-align:-2.5px;margin-right:5px;flex-shrink:0}
-.newb{font-size:10px;font-weight:800;letter-spacing:.04em;color:#fff;background:#E5484D;padding:2px 5px;border-radius:5px;line-height:1;margin-left:4px;display:inline-block;vertical-align:2px}
 /* IA-2026-07-12 (Sprint QQQQ) → OOOOO-3 (2026-07-16 운영자 지시): "도구 ▾" 구성 = 특약·청약·대출계산·규제요약.
    사용법(첫 탭)·뉴스(보고서 옆)는 상단 승격.
    드롭다운 항목은 .htab 유지·DOM 순서 보존 → sv() 인덱스 활성 로직 무변경. 데스크톱 전용(.htabs 는 ≤700px 숨김). */
@@ -543,23 +539,12 @@ html[data-theme="dark"] .ltxt em{color:#7FA1E8}
 #hUsage b{font-weight:700;color:inherit}
 .hbtn{padding:5px 12px;border-radius:18px;font-size:11px;border:1px solid var(--bd);background:var(--s1);color:var(--t2);cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
 .hbtn:hover{border-color:var(--border-strong);color:var(--text-primary)}
-/* 주 CTA (시안: 딥네이비 solid — 헤더 유일 강조 버튼) */
-.hbtn-cta{background:var(--hd-navy,#13234B);color:#fff!important;border:1px solid transparent;font-weight:700}
-.hbtn-cta:hover{filter:brightness(1.12);color:#fff!important;transform:translateY(-1px);box-shadow:0 6px 16px -8px rgba(19,35,75,.7)}
-.hbtn-cta .cta-icon{display:inline-flex}
-.hbtn-cta .cta-icon svg{width:15px;height:15px}
-.hbtn-cta .cta-text{display:inline}
 @media(min-width:701px){
-  .hbtn-cta{height:40px;padding:0 18px;border-radius:11px;font-size:14px;display:inline-flex;align-items:center;gap:7px;box-shadow:0 6px 16px -8px rgba(19,35,75,.5)}
   #loginBtn{height:40px;padding:0 16px;border-radius:11px;font-size:13.5px}
   .hsearch input{height:40px;background:var(--hd-search-bg);border:1px solid var(--hd-search-bd);border-radius:11px}
   .hsearch input::placeholder{color:var(--hd-ph)}
 }
 @media(min-width:1120px){ .hsearch{min-width:260px!important} }
-@media(max-width:560px){
-  .hbtn-cta{padding:5px 8px;font-size:13px}
-  .hbtn-cta .cta-text{display:none}
-}
 /* 계정 아바타 + 드롭다운 (시안 컷2) */
 .acct-dd{position:relative;display:none}
 .hbtn-avatar{display:flex;align-items:center;gap:4px;padding:3px 5px 3px 3px;border:1px solid var(--hd-bd);border-radius:22px;background:var(--hd-menu-bg);cursor:pointer;font-family:inherit;transition:border-color .15s}
@@ -588,12 +573,9 @@ html[data-theme="dark"] .acct-sw .knob{transform:translateX(16px)}
 @media(min-width:701px) and (max-width:1119px){
   #hUsage{display:none!important}
   .ltxt{display:none}
-  .cta-full{display:none}
   .htab{font-size:13.5px;padding:7px 10px}
   .htab-tool{font-size:13.5px;padding:7px 9px}
-  .newb{font-size:0;width:6px;height:6px;padding:0;border-radius:50%;vertical-align:1px}
   .hsearch{min-width:200px!important}
-  .hbtn-cta{height:38px;padding:0 14px;border-radius:10px;font-size:14px}
   #loginBtn{height:38px;padding:0 14px;border-radius:10px}
   .hbtn-avatar .avtr{width:30px;height:30px;font-size:12px}
   .hsearch input{height:38px}
@@ -836,8 +818,6 @@ html[data-theme="dark"] .acct-sw .knob{transform:translateX(16px)}
   .apt-sticky-summary{padding:8px 12px!important}
   /* 챗 답변 우측 공백 fix — bbl 90% → 95% */
   .bbl{max-width:95%!important}
-  /* CTA 보고서 버튼 모바일 — 상세모달 위 z-index 충돌 방지 + DM 열려도 클릭 가능 */
-  /* Phase 35 #5: ctaReportBtn 모바일에서 헤더에 박혀 있되 z-index 낮춤 */
 }
 /* Phase 33 #3 (2026-05-04): 단지 sticky header "한줄 요약" — 12 element 스크롤 시 항상 노출 */
 /* 리디자인 import — 단지상세 리치 헤더 (Claude Design 충실 반영): 큰 단지명·배지 좌측 + 큰 평균 실거래가 우측 */
@@ -1004,7 +984,6 @@ html[data-theme="dark"] .acct-sw .knob{transform:translateX(16px)}
 /* Phase 3 (2026-04-25): "AI 특약 생성" 단일 가치 강조 — 무료 도구 대비 차별화 핵심 */
 .bnav-item.bnav-feature{color:#1F4F9C}
 .bnav-item.bnav-feature.on{color:var(--acc)}
-.bnav-tag{position:absolute;top:4px;right:8px;background:linear-gradient(135deg,#1E4A7A,#173A63);color:#fff;font-size:10px;font-weight:700;padding:1px 4px;border-radius:6px;line-height:1.2}
 .bnav-icon{font-size:18px;line-height:1}
 /* Design Phase 4 (2026-05-31): 모바일 하단 탭 이모지 → inline SVG (데스크톱 nav 일관).
    currentColor 상속 → off=t3, on=acc(오렌지), bnav-feature=blue 자동 추종. */
@@ -1311,7 +1290,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button class="htab" onclick="sv('guide',this)" title="처음이세요? 3분 가이드"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>사용법</button>
     <button class="htab on" onclick="sv('map',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>지도</button>
     <button class="htab" onclick="sv('list',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>목록</button>
-    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서 <span class="newb">NEW</span></button>
+    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서</button>
     <button class="htab" onclick="sv('news',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h12v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2"/><path d="M7.5 9h5"/><path d="M7.5 13h5"/><path d="M7.5 16.5h3"/></svg>뉴스</button>
     <div class="htab-dd" id="htabToolDd">
       <button class="htab-tool" id="htabToolBtn" onclick="toggleToolMenu(event)" aria-haspopup="true" aria-expanded="false" title="특약 · 청약 · 대출계산 · 규제 요약"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>도구 <span class="ddcaret">▾</span></button>
@@ -1356,8 +1335,8 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     </div>
     <!-- Phase 4 (2026-04-26): 서버 정상 시 hide, 장애 시만 빨간 표시 — "항상 초록"의 의미 없음 해소 -->
     <span class="hst off" id="apiSt" style="display:none">확인 중...</span>
-    <!-- Phase 5 (2026-04-26): 핵심 USP = 1page 보고서 (시안: 헤더 유일 강조 CTA) -->
-    <button class="hbtn hbtn-cta" id="ctaReportBtn" onclick="sv('report')" title="회원님 가구 맞춤 1page 컨설팅 보고서 자동 생성" aria-label="맞춤 보고서 생성으로 이동"><span class="cta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14H6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 3v5h5M9 13h6M9 17h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span><span class="cta-text"> <span class="cta-full">맞춤 </span>보고서</span></button>
+    <!-- Sprint OOOOO-4 (운영자 지시): 헤더 "맞춤 보고서" CTA 제거 — 보고서 진입점이 랜딩·보고서 탭·
+         사이드바·모바일 bnav 에 이미 존재(첫 화면 실측 4중 중복). 탭이 유일한 헤더 진입점. -->
     <button class="hbtn" id="loginBtn" onclick="openLogin()" title="로그인하면 북마크가 기기 간 동기화돼요">로그인</button>
     <div class="acct-dd" id="acctDd">
       <button class="hbtn-avatar" id="userBtn" onclick="toggleAcctMenu(event)" aria-haspopup="true" aria-expanded="false" title="계정 메뉴"><span class="avtr" id="userAvatar">·</span><span class="ddcaret">▾</span><span id="userBadge" style="display:none"></span></button>
@@ -2065,7 +2044,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 
     <!-- Phase 5: 핵심 가치 = 1page 보고서 (AI 특약 자리에 강조 디자인 이동) -->
     <details style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:2px solid var(--accent-500);border-radius:10px;padding:13px 16px;margin-bottom:10px" open>
-      <summary style="cursor:pointer;font-size:13px;font-weight:800;color:var(--accent-700);list-style:none">📊 1Page 컨설팅 보고서 — 이 서비스의 핵심 (NEW)</summary>
+      <summary style="cursor:pointer;font-size:13px;font-weight:800;color:var(--accent-700);list-style:none">📊 1Page 컨설팅 보고서 — 이 서비스의 핵심</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         사용자 자금·자녀·거주기간·우선순위 → <b>AI가 컨설턴트 톤으로 1page 보고서 자동 생성</b><br>
         포함: 회원님 핵심 방향 3줄 · 정부 정책 환경 · 매수 체크리스트 · 조건 부합 단지 7개 (단지별 컨설팅 코멘트) · 갈아타기 시나리오 · 매수 TIP<br><br>
@@ -2405,7 +2384,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   <div class="bnav-inner">
     <button class="bnav-item on" onclick="sv('map',this)" data-view="map" aria-label="지도 보기"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg></div>지도</button>
     <button class="bnav-item" onclick="sv('list',this)" data-view="list" aria-label="단지 목록"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg></div>목록</button>
-    <button class="bnav-item bnav-feature" onclick="sv('report',this)" data-view="report" title="회원님 가구 맞춤 1page 컨설팅 보고서" aria-label="맞춤 보고서"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg></div>보고서 <span class="bnav-tag">NEW</span></button>
+    <button class="bnav-item bnav-feature" onclick="sv('report',this)" data-view="report" title="회원님 가구 맞춤 1page 컨설팅 보고서" aria-label="맞춤 보고서"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg></div>보고서</button>
     <button class="bnav-item" onclick="sv('calc',this)" data-view="calc" aria-label="대출 한도 계산"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg></div>대출</button>
     <button class="bnav-item" onclick="sv('chat',this)" data-view="chat" aria-label="AI 상담"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 4H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3v3l4-3h7a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/></svg></div>AI상담</button>
   </div>
@@ -9757,7 +9736,7 @@ async function sM(){
         '💡 AI 없이 바로 쓸 수 있는 기능:\n' +
         '· 아래 퀵버튼 — 대출계산기 · 규제요약 · 특약초안(표준 템플릿)\n' +
         '· 사이드바 "내 상황 입력 → 실거래 기반 단지 정리"\n' +
-        '· 상단 맞춤 보고서 (객관 데이터판으로 제공)');
+        '· 상단 보고서 탭 (객관 데이터판으로 제공)');
       // LEGAL-FALLBACK-2026-07-11 (Sprint JJJJ): 질문 키워드로 법령 원문 검색(law.go.kr 코퍼스,
       //   무료·환각 0) — 관련 조문이 있으면 참고로 안내. addMsg 는 _escHtml 처리라 XSS 안전.
       try {
