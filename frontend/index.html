@@ -583,6 +583,36 @@ html[data-theme="dark"] .acct-sw .knob{transform:translateX(16px)}
 .hst{font-size:11px;font-weight:600;padding:4px 10px;border-radius:18px;white-space:nowrap}
 .hst.on{background:var(--grnL);color:var(--grn)}.hst.off{background:var(--redL);color:var(--red)}
 
+/* Sprint PPPPP: 보고서 입력 위저드 (Claude Design 시안 「첫사용 동선 재설계」).
+   #wizCore 는 사이드바(#wizHome)↔보고서(#wizSlot) 를 오가는 단일 노드 — 컨테이너별 밀도만 분기. */
+.wcard{background:var(--bg-base);border:1px solid var(--bd);border-radius:14px;padding:13px 14px;margin-bottom:10px}
+.wchead{display:flex;align-items:center;gap:8px;margin-bottom:9px}
+.wnum{width:21px;height:21px;border-radius:50%;background:var(--acc);color:#fff;font-size:11.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.wtitle{font-size:12.5px;font-weight:700;color:var(--t1)}
+.wreq{font-size:9.5px;color:#C2410C;background:#FDEEE4;padding:2px 7px;border-radius:6px;font-weight:800}
+html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
+.wchead .wi{margin-left:auto;cursor:help;color:var(--t3);font-size:10px;white-space:nowrap}
+.lbl .wi{cursor:help;color:var(--t3);font-size:10px}
+.wopt{border:1px dashed var(--bd2);border-radius:14px;padding:11px 13px;margin-bottom:10px;background:var(--bg-base)}
+.wopt>summary{cursor:pointer;font-size:12px;font-weight:700;color:var(--t1);list-style:none;user-select:none}
+/* 보고서 본문(#wizSlot) 컨텍스트 — 시안 밀도 */
+#wizSlot .wcard{padding:20px 22px;margin-bottom:14px}
+#wizSlot .wchead{gap:10px;margin-bottom:14px}
+#wizSlot .wnum{width:25px;height:25px;font-size:13px}
+#wizSlot .wtitle{font-size:15px}
+#wizSlot .wopt{padding:14px 18px;margin-bottom:14px}
+#wizSlot .chips .chip{padding:8px 15px;font-size:13px;border-radius:999px}
+#wizSlot .inp{padding:11px 13px;font-size:14px}
+/* 진행바 + 게이트 */
+#wizProgWrap{display:flex;align-items:center;gap:10px;margin:4px 0 10px}
+#wizProgTx{font-size:12.5px;font-weight:800;white-space:nowrap;color:var(--acc)}
+#wizProgTrack{flex:1;height:8px;border-radius:999px;background:var(--bg2);overflow:hidden}
+#wizProgBar{height:100%;width:0;background:var(--acc);transition:width .25s ease}
+#reportGenBtn:disabled{background:var(--bd2)!important;border-color:transparent!important;color:#fff!important;cursor:not-allowed;transform:none!important;box-shadow:none!important}
+/* 지도 우측 컨트롤 스택 (Sprint PPPPP 시안 컷3 — 위성/서울전체 이동) */
+#mapCtrlStack{position:absolute;top:46px;right:10px;z-index:30;display:flex;flex-direction:column;gap:6px}
+#mapCtrlStack .mbtn{box-shadow:0 4px 12px -4px rgba(16,24,40,.25)}
+
 /* LAYOUT */
 .app{flex:1;display:flex;overflow:hidden;position:relative}
 
@@ -1381,7 +1411,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <strong>30초 입력으로 받는 <em>1page 부동산 보고서</em></strong>
       </div>
       <div class="hero-sub">
-        국토부 실거래 · LTV/DSR · 전세가율 · 10.15 규제
+        실거래가 · 대출 한도 · 최신 규제를 한 곳에서 정리해드려요
       </div>
     </div>
     <button class="hero-cta" onclick="_heroFunnel('cta_click'); sv('report');" aria-label="맞춤 보고서 만들기">
@@ -1400,10 +1430,6 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   <div class="sec" id="s1">
     <div class="sh" onclick="ts('s1')"><span class="st">내 상황</span><span id="srcProg" title="입력 필수 3개 — 주택 보유 · 매수가 · 희망 지역" style="margin-left:auto;font-size:10.5px;color:var(--t3);font-weight:600">0/3 완료</span><span class="sa">▲</span></div>
     <div class="sb">
-      <!-- Phase 4 (2026-04-26): 입력 wizard — 핵심 3개 (보유·예산·지역) 진행률 표시 -->
-      <div style="background:var(--info-bg);border:1px solid var(--info-bd);border-radius:6px;padding:7px 10px;margin-bottom:10px;font-size:10.5px;color:var(--info-tx);line-height:1.55">
-        💡 <b>핵심 3개</b>만 입력하면 단지 검색 가능: <b>주택 보유 · 매수가 · 희망지역</b>
-      </div>
       <!-- PERSONA-PRESET-2026-07-13 (Sprint GGGGG, 집사닷컴 벤치마킹): 상황 예시 클릭 채우기 -->
       <details class="mb9">
         <summary style="cursor:pointer;font-size:11px;font-weight:600;color:var(--t2);list-style:none">👥 내 상황과 비슷한 예시로 시작 <span style="font-weight:400;color:var(--t3)">(클릭하면 아래 폼이 채워져요) ▾</span></summary>
@@ -1417,30 +1443,36 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         </div>
         <div style="font-size:10px;color:var(--t3);margin-top:4px">※ 입력 예시일 뿐이에요 — 매수가·자본·소득은 본인 상황으로 고쳐주세요. 희망 지역은 그대로 둡니다.</div>
       </details>
-      <div class="mb9"><span class="lbl">주택 보유</span><div class="chips" id="ch-h"><span class="chip on" onclick="cp(this,'ch-h')">무주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택 (처분조건부)</span><span class="chip" onclick="cp(this,'ch-h')">2주택+</span></div></div>
-      <!-- Phase 33 #1 (2026-05-04): 매수가/자본 — 핵심 wizard 3 (보유·매수가·지역) 순서 정합 -->
-      <!-- 기존: 보고서 details 안 (사용자가 chip 누르다 못 찾음) → 이 위치로 이동 -->
-      <div class="r2"><div><label class="lbl" for="bp">매수가 <span style="color:var(--acc);font-weight:600">(억)</span></label><input class="inp" id="bp" type="number" inputmode="decimal" placeholder="6.8 → 6억 8천만원" step="0.1" min="0.1" max="500" oninput="cl()" title="단위: 억. 예) 6억 8천만원은 6.8 입력"></div><div><label class="lbl" for="mc">자기 자본 <span style="color:var(--acc);font-weight:600">(억)</span></label><input class="inp" id="mc" type="number" inputmode="decimal" placeholder="3.5 → 3억 5천만원" step="0.1" min="0" max="500" oninput="cl()" title="단위: 억"></div></div>
-      <div class="mb9"><span class="lbl">생애 최초</span><div class="chips" id="ch-f"><span class="chip on" onclick="cp(this,'ch-f')">예</span><span class="chip" onclick="cp(this,'ch-f')">아니오</span></div></div>
-      <!-- P1 (Phase 2 후속, 2026-04-25): 정책자금 자격 chip — 인지 부하 절감 위해 접기.
-           해당자(신혼/신생아)만 펼쳐서 응답. 디폴트 '아니오' 라 미펼침이어도 계산 정상. -->
-      <details style="margin-bottom:9px"><summary style="cursor:pointer;font-size:11px;color:var(--t2);user-select:none;list-style:none">▸ 정책자금 자격 (신혼·신생아 해당 시)</summary>
-        <div style="margin-top:6px;padding-left:4px;border-left:2px solid var(--bd)">
-          <div class="mb9"><span class="lbl">신혼부부 (혼인 7년 이내)</span><div class="chips" id="ch-nw"><span class="chip" onclick="cp(this,'ch-nw')">예</span><span class="chip on" onclick="cp(this,'ch-nw')">아니오</span></div></div>
-          <div class="mb9"><span class="lbl">신생아 출산 (2년 이내)</span><div class="chips" id="ch-nb"><span class="chip" onclick="cp(this,'ch-nb')">예</span><span class="chip on" onclick="cp(this,'ch-nb')">아니오</span></div></div>
+      <!-- Sprint PPPPP (Claude Design 시안 「첫사용 동선 재설계」): 위저드 코어.
+           report 뷰 진입 시 _wizPlace 가 이 노드를 통째로 #wizSlot(보고서 본문)으로 이동, 이탈 시 여기로 복귀.
+           ⚠ DOM 노드가 단 하나 — 사이드바/보고서 이중 폼·상태 동기화 문제 원천 차단(id 불변 → generateReport/doSearch/cl 무변경).
+           ⚠ ⓘ 아이콘은 칩 "옆" 별도 span — gct() 가 칩 textContent 를 상태값으로 쓰므로 칩 안에 넣으면 오염됨. -->
+      <div id="wizHome"><div id="wizCore">
+        <div class="wcard">
+          <div class="wchead"><span class="wnum">1</span><span class="wtitle">주택 보유 현황</span><span class="wreq">필수</span><span class="wi" onclick="toast(this.title)" title="처분조건부: 기존에 보유한 집을 판다는 조건으로 대출을 받는 것이에요. 규제지역 1주택자의 신규 주담대에 흔히 적용됩니다.">처분조건부란? ⓘ</span></div>
+          <div class="chips" id="ch-h"><span class="chip on" onclick="cp(this,'ch-h')">무주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택</span><span class="chip" onclick="cp(this,'ch-h')">1주택 (처분조건부)</span><span class="chip" onclick="cp(this,'ch-h')">2주택+</span></div>
         </div>
-      </details>
-      <div class="mb9"><span class="lbl">희망 지역</span>
-        <div class="chips" id="ch-r"><span class="chip on" onclick="cp(this,'ch-r')">서울</span><span class="chip" onclick="cp(this,'ch-r')">경기</span><span class="chip" onclick="cp(this,'ch-r')">인천</span><span class="chip" onclick="cp(this,'ch-r')">지방</span></div>
-        <div style="font-size:10px;color:var(--t3);margin:4px 0 3px">세부 구 선택 (선택 시 그 지역만 분석 — 미선택 시 광역의 인기 구 분석)</div>
-        <div class="chips" id="ch-r-sub" style="margin-top:2px"></div>
-      </div>
-      <div class="mb9"><span class="lbl">학군 중요도</span><div class="chips" id="ch-sc"><span class="chip" onclick="cp(this,'ch-sc')">학군 중요</span><span class="chip on" onclick="cp(this,'ch-sc')">보통</span></div></div>
-      <!-- Phase 5-A (2026-04-26): 보고서 정확도 향상 입력 — 자녀·거주기간·우선순위 -->
-      <!-- Phase 5+ (2026-04-26): default open + summary 강조 — 사용자가 입력 칸이 없는 줄 알았던 UX 이슈 fix -->
-      <!-- STAB-AUDIT #78 (2026-05-04): 보고서 입력 default closed — 첫 진입 시 인지 부하 ↓ -->
-      <details style="margin-bottom:9px;background:var(--accL);border:1px solid var(--accent-100);border-radius:6px;padding:8px 10px"><summary style="cursor:pointer;font-size:11.5px;font-weight:700;color:var(--acc);user-select:none">📊 보고서 입력 (자녀·거주기간·우선순위) — 클릭</summary>
-        <div style="margin-top:6px;padding-left:4px;border-left:2px solid var(--bd)">
+        <div class="wcard">
+          <div class="wchead"><span class="wnum">2</span><span class="wtitle">자금 계획</span><span class="wreq">필수</span></div>
+          <div class="r2"><div><label class="lbl" for="bp">매수 예정가 <span style="color:var(--acc);font-weight:600">(억)</span></label><input class="inp" id="bp" type="number" inputmode="decimal" placeholder="6.8 → 6억 8천만원" step="0.1" min="0.1" max="500" oninput="cl()" title="단위: 억. 예) 6억 8천만원은 6.8 입력"></div><div><label class="lbl" for="mc">자기 자본 <span style="color:var(--acc);font-weight:600">(억)</span></label><input class="inp" id="mc" type="number" inputmode="decimal" placeholder="3.5 → 3억 5천만원" step="0.1" min="0" max="500" oninput="cl()" title="단위: 억"></div></div>
+        </div>
+        <div class="wcard">
+          <div class="wchead"><span class="wnum">3</span><span class="wtitle">희망 지역</span><span class="wreq">필수</span></div>
+          <div class="chips" id="ch-r"><span class="chip on" onclick="cp(this,'ch-r')">서울</span><span class="chip" onclick="cp(this,'ch-r')">경기</span><span class="chip" onclick="cp(this,'ch-r')">인천</span><span class="chip" onclick="cp(this,'ch-r')">지방</span></div>
+          <div style="font-size:10px;color:var(--t3);margin:4px 0 3px">세부 구 선택 (선택 시 그 지역만 분석 — 미선택 시 광역의 인기 구 분석)</div>
+          <div class="chips" id="ch-r-sub" style="margin-top:2px"></div>
+        </div>
+        <details class="wopt" id="wizOpt">
+          <summary>＋ 더 정확한 보고서 (선택) <span style="font-weight:400;color:var(--t3);font-size:11px">생애최초 · 연소득 · 자녀 · 거주기간 · 우선순위 · 평형 · 직장</span></summary>
+          <div style="margin-top:10px">
+          <div class="mb9"><span class="lbl">생애 최초 <span class="wi" onclick="toast(this.title)" title="생애최초: 세대원 전원이 지금까지 한 번도 주택을 소유한 적 없는 경우. LTV 우대·취득세 감면 등 혜택 판단에 쓰여요.">ⓘ</span></span><div class="chips" id="ch-f"><span class="chip on" onclick="cp(this,'ch-f')">예</span><span class="chip" onclick="cp(this,'ch-f')">아니오</span></div></div>
+          <details style="margin-bottom:9px"><summary style="cursor:pointer;font-size:11px;color:var(--t2);user-select:none;list-style:none">▸ 정책자금 자격 (신혼·신생아 해당 시)</summary>
+            <div style="margin-top:6px;padding-left:4px;border-left:2px solid var(--bd)">
+              <div class="mb9"><span class="lbl">신혼부부 (혼인 7년 이내)</span><div class="chips" id="ch-nw"><span class="chip" onclick="cp(this,'ch-nw')">예</span><span class="chip on" onclick="cp(this,'ch-nw')">아니오</span></div></div>
+              <div class="mb9"><span class="lbl">신생아 출산 (2년 이내)</span><div class="chips" id="ch-nb"><span class="chip" onclick="cp(this,'ch-nb')">예</span><span class="chip on" onclick="cp(this,'ch-nb')">아니오</span></div></div>
+            </div>
+          </details>
+          <div class="mb9"><span class="lbl">학군 중요도</span><div class="chips" id="ch-sc"><span class="chip" onclick="cp(this,'ch-sc')">학군 중요</span><span class="chip on" onclick="cp(this,'ch-sc')">보통</span></div></div>
           <div class="mb9"><span class="lbl">자녀 계획</span>
             <div class="chips" id="ch-kid">
               <span class="chip on" onclick="cp(this,'ch-kid')">없음</span>
@@ -1469,11 +1501,11 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
               <span class="chip" onclick="cp(this,'ch-pri')">갭투자</span>
             </div>
           </div>
-        </div>
-      </details>
-      <div class="mb9"><span class="lbl">희망 평형</span><div class="chips" id="ch-py"><span class="chip" onclick="cp(this,'ch-py')">소형 15~22평</span><span class="chip on" onclick="cp(this,'ch-py')">중형 23~33평</span><span class="chip" onclick="cp(this,'ch-py')">대형 34평+</span><span class="chip" onclick="cp(this,'ch-py')">전체</span></div></div>
-      <!-- Phase 33 #1: 매수가/자본 위로 이동됨 (line ~901). 여기엔 연소득/직장만 유지 -->
-      <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원 단위 — 1.2억은 12000)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000 (만원)" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 / 관심 구 <span style="color:var(--t3);font-weight:400">(보고서 통근시간 분석)</span></label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
+          <div class="mb9"><span class="lbl">희망 평형</span><div class="chips" id="ch-py"><span class="chip" onclick="cp(this,'ch-py')">소형 15~22평</span><span class="chip on" onclick="cp(this,'ch-py')">중형 23~33평</span><span class="chip" onclick="cp(this,'ch-py')">대형 34평+</span><span class="chip" onclick="cp(this,'ch-py')">전체</span></div></div>
+          <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원 단위 — 1.2억은 12000)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000 (만원)" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 / 관심 구 <span style="color:var(--t3);font-weight:400">(보고서 통근시간 분석)</span></label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
+          </div>
+        </details>
+      </div></div>
       <button class="abtn acc" onclick="cl()">대출 한도 계산</button>
       <div id="lr" style="display:none"><div class="lbox">
         <div style="font-size:10px;color:var(--t2);margin-bottom:2px">최대 대출 한도 (일반 주담대)</div>
@@ -1563,15 +1595,17 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 <!-- CENTER -->
 <div class="cp" id="view-map" style="position:relative">
   <div class="mtbar">
-    <button class="mbtn on" onclick="fm('all',this)">전체</button>
-    <button class="mbtn" onclick="fm('regulated',this)">규제</button>
-    <button class="mbtn" onclick="fm('non',this)">비규제</button>
-    <button class="mbtn" onclick="fm('recon',this)" title="준공 30년 이상 단지 — 재건축 검토 가능 연령 기준 (실제 사업 추진은 단지별 결정 사항)">재건축</button>
-    <div class="msep"></div>
-    <button class="mbtn" onclick="rv()" title="지도를 서울 도심 초기 위치로 이동합니다">서울전체</button>
-    <button class="mbtn" onclick="showPop(this)" title="검색 후 사라진 인기 단지 마커를 다시 표시합니다">🔥 인기</button>
-    <button class="mbtn" id="mtBtn" onclick="togMapType()">위성지도</button>
-    <div class="msep"></div>
+    <!-- Sprint PPPPP (시안 컷3): 필터·인기 칩은 검색 결과가 있을 때만 표시(renderMarkers 가 노출) —
+         첫 화면에선 규제/비규제/재건축이 눌러도 토스트만 뜨는 죽은 버튼이었음(fm() props 가드 실측).
+         서울전체·위성지도는 지도 우측 컨트롤 스택(#mapCtrlStack)으로 이동. -->
+    <span id="fltGroup" style="display:none">
+      <button class="mbtn on" onclick="fm('all',this)">전체</button>
+      <button class="mbtn" onclick="fm('regulated',this)">규제</button>
+      <button class="mbtn" onclick="fm('non',this)">비규제</button>
+      <button class="mbtn" onclick="fm('recon',this)" title="준공 30년 이상 단지 — 재건축 검토 가능 연령 기준 (실제 사업 추진은 단지별 결정 사항)">재건축</button>
+      <button class="mbtn" onclick="showPop(this)" title="검색 결과 마커를 걷어내고 인기 단지 마커를 다시 표시합니다">🔥 인기</button>
+      <div class="msep"></div>
+    </span>
     <span style="font-size:10px;color:var(--t3)">마커클릭=팝업 | 더블클릭=상세리포트</span>
     <span id="popLegend" style="font-size:10px;color:var(--t3);display:none">| 숫자 라벨 = 인기 단지 (최근 60일 실거래 많은 순 · 시군구당 최대 2곳)</span>
     <span id="geoSt" style="font-size:10px;color:var(--grn);display:none">📍 좌표 정확화 중...</span>
@@ -1580,9 +1614,14 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
        인기 마커의 정체를 지도 위에 명시 — 매물 광고 아님(정직 정책) + 선정 기준 공개.
        loadPopularMarkers 성공 시 표시, 검색(renderMarkers) 시 인기 마커와 함께 숨김. -->
   <div id="popTitleCard" style="display:none;position:absolute;top:46px;left:10px;z-index:30;background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:8px 26px 8px 12px;box-shadow:0 4px 14px rgba(16,24,40,.14);pointer-events:none;max-width:250px">
-    <button onclick="var c=document.getElementById('popTitleCard');if(c)c.style.display='none'" aria-label="인기 단지 안내 닫기" title="닫기" style="position:absolute;top:3px;right:4px;width:19px;height:19px;line-height:1;border:none;background:transparent;color:var(--t3);font-size:14px;cursor:pointer;pointer-events:auto;padding:0">✕</button>
+    <button onclick="var c=document.getElementById('popTitleCard');if(c)c.style.display='none';try{sessionStorage.setItem('mhl_popcard_hide','1')}catch(_){}" aria-label="인기 단지 안내 닫기" title="닫기 (이번 접속 동안 다시 표시 안 함)" style="position:absolute;top:3px;right:4px;width:19px;height:19px;line-height:1;border:none;background:transparent;color:var(--t3);font-size:14px;cursor:pointer;pointer-events:auto;padding:0">✕</button>
     <div style="font-size:12.5px;font-weight:800;color:var(--t1)">🔥 지금 인기 단지 TOP 12</div>
     <div style="font-size:10.5px;color:var(--t3);margin-top:2px;line-height:1.5">최근 60일 국토부 실거래 많은 순 (시군구당 최대 2곳)<br>실거래 통계 기반 정보 — 매물 광고가 아니에요</div>
+  </div>
+  <!-- Sprint PPPPP (시안 컷3): 지도 우측 컨트롤 스택 — 뷰 이동·타일 토글은 필터가 아니라서 툴바에서 분리 -->
+  <div id="mapCtrlStack">
+    <button class="mbtn" id="mtBtn" onclick="togMapType()" title="위성/일반 지도 전환">위성지도</button>
+    <button class="mbtn" onclick="rv()" title="지도를 서울 도심 초기 위치로 이동합니다">서울전체</button>
   </div>
   <div id="mapEl"></div>
   <div class="mhint h" id="mhint"></div>
@@ -1981,16 +2020,23 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 
 <!-- Phase 5 (2026-04-26): 1Page 컨설팅 보고서 — 핵심 USP -->
 <div class="biz-view" id="view-report" style="display:none">
-  <div class="biz-section" style="max-width:820px;margin:0 auto">
-    <h3 style="margin:0 0 4px">📊 회원님 가구 맞춤 단지 분석 보고서</h3>
-    <p style="font-size:11.5px;color:var(--t3);margin:0 0 14px">사용자 자금·가족·우선순위 자동 매칭 · 정부 정책 최신 반영 · 비공개</p>
+  <div class="biz-section" style="max-width:840px;margin:0 auto">
+    <div style="font-size:12px;font-weight:800;color:var(--acc);letter-spacing:.04em">맞춤 보고서</div>
+    <h3 style="margin:4px 0 4px">회원님 가구 맞춤 단지 분석 보고서</h3>
+    <p style="font-size:11.5px;color:var(--t3);margin:0 0 14px">필수 3가지만 입력하면 바로 생성돼요 — 이 화면에서 끝납니다. (비공개 · 정부 정책 최신 반영)</p>
 
-    <!-- 입력 요약 + 생성 버튼 -->
+    <!-- Sprint PPPPP (시안 컷1·2): 위저드 슬롯 — _wizPlace 가 사이드바의 #wizCore 를 여기로 이동 -->
+    <div id="wizSlot"></div>
+
+    <!-- 입력 요약 -->
     <div id="reportInputSummary" style="background:var(--info-bg);border:1px solid var(--info-bd);border-radius:10px;padding:12px 14px;margin-bottom:12px;font-size:11.5px;color:var(--t1);line-height:1.7"></div>
 
-    <button class="abtn acc" id="reportGenBtn" onclick="generateReport()" style="margin:0 0 14px;padding:11px 18px;font-size:13px;width:100%;max-width:380px">
+    <!-- Sprint PPPPP: 진행바 + 사전 안내 게이트 (에러 토스트 → 사전 안내 전환, _updateInputProgress 가 갱신) -->
+    <div id="wizProgWrap"><span id="wizProgTx">0/3</span><div id="wizProgTrack"><div id="wizProgBar"></div></div></div>
+    <button class="abtn acc" id="reportGenBtn" onclick="generateReport()" style="margin:0 0 6px;padding:13px 18px;font-size:14px;width:100%;max-width:none">
       <span id="reportGenSp" class="spin" style="display:none"></span><span id="reportGenTx">📊 맞춤 보고서 생성하기</span>
     </button>
+    <p id="wizGateHint" style="display:none;font-size:11.5px;color:var(--t3);text-align:center;margin:0 0 12px"></p>
 
     <!-- 보고서 결과 영역 -->
     <div id="reportResult"></div>
@@ -2011,8 +2057,8 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:12px;padding:16px 18px;margin-bottom:18px">
       <div style="font-size:13px;font-weight:800;color:var(--accent-700);margin-bottom:8px">🚀 30초 가이드 — 처음이세요?</div>
       <div style="font-size:12px;color:var(--t1);line-height:1.8">
-        1. 좌측 사이드바(모바일은 ☰ 메뉴)에 <b>주택 보유 / 매수가 / 희망지역</b> 3개만 입력<br>
-        2. 헤더 <b>📊 보고서</b> 클릭 → "맞춤 보고서 생성" → AI가 회원님 가구 상황에 맞는 <b>1page 컨설팅 보고서</b> 자동 생성<br>
+        1. 헤더 <b>보고서</b> 탭 클릭 → 화면의 <b>3단계(주택 보유 · 자금 · 희망 지역)</b> 입력<br>
+        2. <b>📊 맞춤 보고서 생성하기</b> 클릭 → AI가 회원님 가구 상황에 맞는 <b>1page 컨설팅 보고서</b> 자동 생성<br>
         3. 보고서 안 추천 단지 클릭 → 실거래가·평형·시세 추이 상세 확인<br>
         4. 마음에 드는 단지 → ⭐ 관심 추가 → 임장노트 작성
       </div>
@@ -2038,7 +2084,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <b>정책자금 4종 비교</b>: 보금자리·디딤돌·신혼 디딤돌·신생아 특례 (한도·금리)<br>
         <b>부족 자금 시나리오</b>: 신용대출·마이너스·가족 차용 등 합법 해결 5가지<br><br>
         <span style="font-size:11px;color:var(--t3)">⚠ 본 계산은 참고용. 실제 한도는 금융기관 심사로 결정됩니다.</span>
-        <button class="abtn a2" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px" onclick="sv('calc')">🧮 대출 계산 열기 →</button>
+        <button class="abtn a2" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px" onclick="sv('calc')">🧮 대출 계산 열기 → <span style="font-weight:400;opacity:.75">(헤더 도구 ▾ 안에 있어요)</span></button>
       </div>
     </details>
 
@@ -3766,13 +3812,13 @@ async function generateReport() {
 
   // CTA-MSG-2026-07-15 (Sprint LLLLL): 모바일 드로어는 좌측 "고정"이 아니라 ☰ 로 여는 슬라이드 —
   //   랜딩 대표 CTA 실패 안내가 실제 UI 와 불일치했음. matchMedia 분기 + alert → toast(이탈 완화).
-  const _mob = window.matchMedia && window.matchMedia('(max-width:700px)').matches;
+  // Sprint PPPPP: 입력 폼이 이 화면(위저드) 안으로 이동 — 버튼도 미완료 시 disabled 라 이 토스트는 안전망.
   if (!buy || buy <= 0) {
-    toast(_mob ? '☰ 메뉴(좌측 상단)를 열고 매수가를 입력해주세요' : '매수가를 입력해주세요 (좌측 사이드바)');
+    toast('위 2단계 「자금 계획」에 매수 예정가를 입력해주세요');
     return;
   }
   if (!region) {
-    toast(_mob ? '☰ 메뉴(좌측 상단)에서 희망 지역을 선택해주세요' : '희망 지역을 선택해주세요');
+    toast('위 3단계 「희망 지역」을 선택해주세요');
     return;
   }
   // P1-14: 미지원 광역도 사전 차단 — backend 0건 후 generic error 차단
@@ -4893,6 +4939,7 @@ function renderMarkers(data){
   window._popMarkers=[];
   const _plg=document.getElementById('popLegend'); if(_plg)_plg.style.display='none'; // GGGG: 인기 범례도 함께 숨김
   const _ptc2=document.getElementById('popTitleCard'); if(_ptc2)_ptc2.style.display='none'; // MMMM: 타이틀 카드도
+  const _fg=document.getElementById('fltGroup'); if(_fg)_fg.style.display=''; // Sprint PPPPP: 검색 결과가 생겼으니 필터 칩 노출
   overlays.forEach(o=>{
     if(naverReady&&!mapObj?._isLeaflet)o.setMap&&o.setMap(null);
     else o.remove&&o.remove();
@@ -4944,6 +4991,7 @@ function showPop(btn){
   if(btn)btn.classList.add('on');
   // 인기 마커 재로딩 (once 가드·backoff 해제)
   _popularMarkersLoaded=false; _popularMarkersFailedAt=0; window._popMarkersRetry=0;
+  try{sessionStorage.removeItem('mhl_popcard_hide')}catch(_){} // Sprint PPPPP: 명시적 재표시 요청이므로 카드 숨김 해제
   loadPopularMarkers();
 }
 
@@ -8023,17 +8071,37 @@ function _updateInputProgress() {
     // Agent UX #13 (2026-05-04): 모바일 hover tooltip 작동 X → 텍스트 항상 표기
     //   미입력 항목 명시 (사용자가 무엇 입력해야 하는지 즉시 인지)
     const missing = [];
-    if (!checks.house) missing.push('보유');
+    if (!checks.house) missing.push('주택 보유');
     if (!checks.budget) missing.push('매수가');
-    if (!checks.region) missing.push('지역');
+    if (!checks.region) missing.push('희망 지역');
     el.textContent = n === 3 ? '✅ 입력 완료' : `${n}/3 (${missing.join('·')} 입력)`;
     el.style.color = n === 3 ? 'var(--grn)' : (n >= 1 ? 'var(--amb)' : 'var(--t3)');
+    // Sprint PPPPP (시안 컷2): 보고서 위저드 진행바 + 생성 버튼 사전 게이트 — "에러 토스트"를 "사전 안내"로.
+    //   기존엔 빈 입력으로 버튼을 눌러야 "매수가를 입력해주세요(좌측 사이드바)" 토스트 = 시작 즉시 실패 경험.
+    const done = n === 3;
+    const tx = document.getElementById('wizProgTx');
+    if (tx) {
+      tx.textContent = done ? '3/3 입력 완료 ✅'
+        : (n === 2 ? `2/3 — ${missing[0]}만 입력하면 끝!` : `${n}/3 — 남은 입력: ${missing.join(' · ')}`);
+      tx.style.color = done ? 'var(--grn)' : 'var(--acc)';
+    }
+    const bar = document.getElementById('wizProgBar');
+    if (bar) { bar.style.width = Math.round(n / 3 * 100) + '%'; bar.style.background = done ? 'var(--grn)' : 'var(--acc)'; }
+    const btn = document.getElementById('reportGenBtn');
+    if (btn) btn.disabled = !done;
+    const hint = document.getElementById('wizGateHint');
+    if (hint) {
+      if (done) hint.style.display = 'none';
+      else { hint.textContent = `${missing.join(' · ')} 입력 시 버튼이 활성화돼요`; hint.style.display = ''; }
+    }
   } catch (_) {}
 }
 // 입력값 변경 시도 자동 갱신
 document.addEventListener('input', e => {
   if (e.target?.id === 'bp' || e.target?.id === 'mc' || e.target?.id === 'inc') _updateInputProgress();
 });
+// Sprint PPPPP: 초기 로드 시 게이트/진행바 1회 세팅 (기존엔 첫 상호작용 전까지 미갱신)
+document.addEventListener('DOMContentLoaded', () => { try { _updateInputProgress(); } catch (_) {} });
 function getLoanAmt(){const r=calcC();return r?r.fin:0;}
 function calcC(){
   const buy=parseFloat(document.getElementById('bp')?.value)||0,cash=parseFloat(document.getElementById('mc')?.value)||0,inc=parseFloat(document.getElementById('inc')?.value)||0;
@@ -8418,10 +8486,21 @@ const VIEW_DISPLAY={
   news:  {display:'flex', lp:false, rp:false},
   subs:  {display:'flex', lp:false, rp:false},
   guide: {display:'flex', lp:false, rp:false},
-  report:{display:'flex', lp:true,  rp:false}, // Phase 5 — 핵심 USP. lp 유지 (사이드바 입력)
+  report:{display:'flex', lp:false, rp:false}, // Sprint PPPPP — 입력 위저드가 본문으로 이동(시안), 사이드바 숨김
   landing:{display:'block', lp:false, rp:false}, // Phase 4-3 (2026-05-05) — 랜딩 대시보드 첫 방문 (옵션 A2)
 };
 let _rpOverlay=false; // 플로팅 챗 버튼으로 .rp 강제 표시 상태
+// Sprint PPPPP (시안 컷1): 위저드 코어 이동 — report 뷰에선 보고서 본문(#wizSlot), 그 외엔 사이드바(#wizHome).
+//   노드가 하나뿐이라 이중 폼/동기화 문제가 없음. 실패해도 뷰 전환은 진행(try).
+function _wizPlace(v){
+  try{
+    const core=document.getElementById('wizCore');
+    if(!core)return;
+    const target=document.getElementById(v==='report'?'wizSlot':'wizHome');
+    if(target && core.parentElement!==target) target.appendChild(core);
+    if(v==='report' && typeof _updateInputProgress==='function') _updateInputProgress();
+  }catch(_){}
+}
 function sv(v,btn){
   // Phase 35 #5 (2026-05-04): DM 모달 열린 상태에서 헤더 탭 (특히 주황 보고서) 클릭 시 모달 close
   //   기존 회귀: 모바일에서 헤더 보고서 버튼 클릭해도 DM 가린 채로 view 전환 → "동작 X" 보임
@@ -8492,6 +8571,7 @@ function sv(v,btn){
   }catch(_){}
   // 모바일 하단 탭 활성화
   document.querySelectorAll('.bnav-item').forEach(b=>b.classList.toggle('on',b.dataset.view===v));
+  _wizPlace(v); // Sprint PPPPP: 위저드 코어를 뷰에 맞는 슬롯으로
   if(v==='list')renderListGrid();
   if(v==='news' && !document.getElementById('newsList').dataset.loaded){loadNews();}
   if(v==='subs' && !document.getElementById('subsList').dataset.loaded){loadSubs();}
@@ -9100,8 +9180,10 @@ async function loadPopularMarkers() {
     const _lg = document.getElementById('popLegend');
     if (_lg && window._popMarkers.length) _lg.style.display = '';
     // POP-TITLE (Sprint MMMM): 지도 위 타이틀 카드 — 인기 단지 정체 명시 (매물 오해 방지)
+    // Sprint PPPPP: ✕ 로 닫으면 세션 동안 재표시 안 함(sessionStorage) — 반복 노출 피로 제거(시안 컷3)
     const _ptc = document.getElementById('popTitleCard');
-    if (_ptc && window._popMarkers.length) _ptc.style.display = '';
+    let _ptcHide=false; try{_ptcHide=sessionStorage.getItem('mhl_popcard_hide')==='1'}catch(_){}
+    if (_ptc && window._popMarkers.length && !_ptcHide) _ptc.style.display = '';
     // GGGG-2: 초기 뷰포트(줌12 서울도심)에 인기 마커 0개면 — 실측: 1568px 화면에서 12/12 전부 밖 —
     //   사용자 무조작 시에만 수도권 마커(대전·부산 제외)에 맞춰 1회 fitBounds ("빈 지도 첫인상 차단" 목적 복원).
     //   API 실측: LatLngBounds ctor/extend/fitBounds/hasLatLng 존재 확인, fitBounds 후 줌10·10/10 가시 검증.
