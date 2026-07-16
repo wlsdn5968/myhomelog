@@ -1436,7 +1436,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 
   <!-- IA-2026-07-12 (Sprint QQQQ): 핵심 입력(내 상황)을 최상단으로 — 빈 관심단지가 진입 동선 위에 오던 우선순위 역전 해소. s0/s-deal 은 s1 아래로 이동(ts 는 id 토글이라 순서 무관). -->
   <div class="sec" id="s1">
-    <div class="sh" onclick="ts('s1')"><span class="st">내 상황</span><span id="srcProg" title="입력 필수 3개 — 주택 보유 · 매수가 · 희망 지역" style="margin-left:auto;font-size:10.5px;color:var(--t3);font-weight:600">0/3 완료</span><span class="sa">▲</span></div>
+    <div class="sh" onclick="ts('s1')"><span class="st">내 상황</span><span id="srcProg" title="주택 보유·매수가·희망 지역을 채울수록 검색·보고서가 정확해져요 (미입력 시 기본 조건으로 검색)" style="margin-left:auto;font-size:10.5px;color:var(--t3);font-weight:600">맞춤 정확도 0/3</span><span class="sa">▲</span></div>
     <div class="sb">
       <!-- PERSONA-PRESET-2026-07-13 (Sprint GGGGG, 집사닷컴 벤치마킹): 상황 예시 클릭 채우기 -->
       <details class="mb9">
@@ -1514,6 +1514,22 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
           </div>
         </details>
       </div></div>
+      <!-- Sprint QQQQQ (시안): 검색 흐름 직결 — 필터·검색 버튼을 위저드 직후로, 대출 계산은 접이식 미리보기로 강등 -->
+      <div class="mb9"><span class="lbl">단지 조건 <span style="font-weight:400;color:var(--t3);font-size:10px">(선택 · 좋은 아파트 필터)</span></span>
+        <div class="chips" id="ch-flt">
+          <span class="chip" id="flt-hh" onclick="this.classList.toggle('on')" title="세대수 500세대 이상 — 나홀로 아파트 제외 (호갱노노 기준)">500세대+</span>
+          <span class="chip" id="flt-park" onclick="this.classList.toggle('on')" title="세대당 주차 1.2대 이상 — 주차 편리 (법정 최소 1대·호갱노노 '편리' 기준)">주차 1.2+</span>
+          <span class="chip" id="flt-sale" onclick="this.classList.toggle('on')" title="분양 단지만 — 임대·혼합 제외">분양만</span>
+        </div>
+        <div style="font-size:10px;color:var(--t3);margin-top:3px">※ 조건 데이터는 KAPT 등록 단지에만 있어요 — 켜면 정보 있는 단지만 표시돼요</div>
+      </div>
+      <button class="abtn a2" id="srchBtn" onclick="doSearch()">
+        <div class="spin" id="srchSp"></div><span id="srchTx">🔍 조건에 맞는 단지 찾기</span>
+      </button>
+      <button class="abtn" style="margin-top:6px;background:none;border:1px dashed var(--bd2);color:var(--t2);font-size:11.5px" onclick="sv('report')">📊 보고서로 더 자세히 →</button>
+      <details style="margin-top:10px;border:1px dashed var(--bd2);border-radius:10px;padding:9px 12px">
+        <summary style="cursor:pointer;font-size:11.5px;font-weight:700;color:var(--t2);list-style:none;user-select:none">💰 대출 한도 미리보기 (선택) ▾</summary>
+        <div style="margin-top:8px">
       <button class="abtn acc" onclick="cl()">대출 한도 계산</button>
       <div id="lr" style="display:none"><div class="lbox">
         <div style="font-size:10px;color:var(--t2);margin-bottom:2px">최대 대출 한도 (일반 주담대)</div>
@@ -1535,19 +1551,16 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
           </div>
         </div>
       </div></div>
-      <!-- FILTER-2026-07-12 (Sprint TTTT): 좋은-아파트 조건 필터 (선택). KAPT facility 기준. -->
-      <div class="mb9"><span class="lbl">단지 조건 <span style="font-weight:400;color:var(--t3);font-size:10px">(선택 · 좋은 아파트 필터)</span></span>
-        <div class="chips" id="ch-flt">
-          <span class="chip" id="flt-hh" onclick="this.classList.toggle('on')" title="세대수 500세대 이상 — 나홀로 아파트 제외 (호갱노노 기준)">500세대+</span>
-          <span class="chip" id="flt-park" onclick="this.classList.toggle('on')" title="세대당 주차 1.2대 이상 — 주차 편리 (법정 최소 1대·호갱노노 '편리' 기준)">주차 1.2+</span>
-          <span class="chip" id="flt-sale" onclick="this.classList.toggle('on')" title="분양 단지만 — 임대·혼합 제외">분양만</span>
+        <div style="margin-top:8px;font-size:11px;text-align:right"><a href="javascript:void(0)" onclick="sv('calc')" style="color:var(--acc);font-weight:700;text-decoration:none">🧮 상세 대출 시뮬레이터 →</a></div>
         </div>
-        <div style="font-size:10px;color:var(--t3);margin-top:3px">※ 조건 데이터는 KAPT 등록 단지에만 있어요 — 켜면 정보 있는 단지만 표시돼요</div>
-      </div>
-      <button class="abtn a2" id="srchBtn" onclick="doSearch()">
-        <div class="spin" id="srchSp"></div><span id="srchTx">🤖 실거래 기반 단지 정리</span>
-      </button>
+      </details>
     </div>
+  </div>
+
+  <!-- Sprint QQQQQ (시안): 추천 단지(검색 결과)를 s1 바로 아래로 — "검색 바로 아래 결과" -->
+  <div class="sec" id="s3">
+    <div class="sh" onclick="ts('s3')"><span class="st">추천 단지</span><span id="pCnt" style="color:var(--acc);font-size:11px;font-weight:700">0건</span><span class="sa">▲</span></div>
+    <div id="pList"><div style="padding:20px;text-align:center;color:var(--t3);font-size:12px;line-height:2.1">위에서 단지 찾기를 실행하면<br>국토부 실거래가 기반으로<br>여기에 결과가 표시됩니다</div></div>
   </div>
 
   <!-- 북마크 섹션 (IA-2026-07-12: 내 상황 아래로 이동) -->
@@ -1579,7 +1592,8 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     </div>
   </div>
 
-  <div class="sec" id="s2">
+  <!-- Sprint QQQQQ (시안): 규제 표 기본 접힘 — 도구▾ 규제 요약 모달과 중복 상존이던 385px 회수 -->
+  <div class="sec cl" id="s2" style="border-bottom:none">
     <div class="sh" onclick="ts('s2')"><span class="st">2025 규제</span><span style="color:var(--red);font-size:10px;font-weight:600">10.15</span><span class="sa">▲</span></div>
     <div class="sb" style="padding:0">
       <table class="rtbl"><thead><tr><th>구분</th><th>LTV</th><th>한도</th><th></th></tr></thead><tbody>
@@ -1590,13 +1604,8 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <tr><td>2주택+</td><td style="color:var(--red);font-weight:700">0%</td><td>불가</td><td><span class="rtag r">금지</span></td></tr>
         <tr><td>지방 생애최초</td><td style="color:var(--grn);font-weight:700">80%</td><td>LTV</td><td><span class="rtag g">완화</span></td></tr>
       </tbody></table>
-      <div class="rnote">DSR: 은행권 40% / 2금융권 50% | 스트레스 수도권 +3.0%p<br>규제지역: 서울25구+경기15곳 | 토허구역 2년 실거주<br>⚠ 규제 수시변경 — 최종확인 금융기관 필수</div>
+      <div class="rnote">DSR: 은행권 40% / 2금융권 50% | 스트레스 수도권 +3.0%p<br>규제지역: 서울25구+경기15곳 | 토허구역 2년 실거주<br>⚠ 규제 수시변경 — 최종확인 금융기관 필수<br><a href="javascript:void(0)" onclick="openRegSummary()" style="color:var(--acc);font-weight:700;text-decoration:none">전체 규제 요약 보기 →</a></div>
     </div>
-  </div>
-
-  <div class="sec" id="s3" style="border-bottom:none">
-    <div class="sh" onclick="ts('s3')"><span class="st">추천 단지</span><span id="pCnt" style="color:var(--acc);font-size:11px;font-weight:700">0건</span><span class="sa">▲</span></div>
-    <div id="pList"><div style="padding:20px;text-align:center;color:var(--t3);font-size:12px;line-height:2.1">AI 단지 검색을 실행하면<br>국토부 실거래가 기반으로<br>실시간 추천됩니다</div></div>
   </div>
 </div></div>
 
@@ -5112,6 +5121,9 @@ async function doSearch(){
     <div style="font-size:12px;color:var(--t2);line-height:1.6">국토부 실거래 조회 → 단지 분석 → 좌표 매칭<br>보통 5~15초 걸려요</div>
   </div>`;
   searchStep('조건 정리 중...', 1);
+  // Sprint QQQQQ (정직 정책): doSearch 는 미입력이어도 기본값으로 진행(5117행 ||7 등) — 그 사실을 숨기지 않고 안내
+  if(!(parseFloat(document.getElementById('bp')?.value)>0) && typeof toast==='function')
+    toast('기본 매수가 7억 기준으로 검색해요 — 매수가를 입력하면 맞춤 결과가 나와요');
 
   const body={
     maxBudget:parseFloat(document.getElementById('bp').value)||7,
@@ -5230,6 +5242,8 @@ async function doSearch(){
       }
     } catch(_){}
     document.getElementById('pCnt').textContent=props.length+'건';
+    // Sprint QQQQQ: 추천 단지 섹션이 검색 버튼 바로 아래로 이동 — 결과 도착 시 사이드바를 결과로 스크롤
+    try{ document.getElementById('s3')?.scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(_){}
     // VIEW-GUARD (Sprint KKKK): 검색 중 사용자가 탭을 옮겼으면 지도 강제 전환 스킵 —
     // 결과는 지도·목록에 이미 렌더돼 있어 사용자가 돌아오면 그대로 보임.
     const _nowTab = document.querySelector('.htab.on')?.textContent?.trim() || null;
@@ -5255,7 +5269,7 @@ async function doSearch(){
       });
     }
   }
-  btn.classList.remove('ld');sp.style.display='none';tx.textContent='🤖 실거래 기반 단지 정리';
+  btn.classList.remove('ld');sp.style.display='none';tx.textContent='🔍 조건에 맞는 단지 찾기';
   refreshQuota();
 }
 
@@ -5291,7 +5305,7 @@ function renderListGrid(){
     g.innerHTML=`<div style="grid-column:1/-1;padding:50px 20px;text-align:center;color:var(--t3)">
       <div style="font-size:48px;margin-bottom:14px">🏠</div>
       <div style="font-size:15px;font-weight:700;color:var(--t1);margin-bottom:6px">아직 검색 결과가 없어요</div>
-      <div style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:18px">왼쪽 <b>"내 상황"</b> 입력 후 <b>🤖 실거래 기반 단지 정리</b>을 누르면<br>국토부 실거래가 기반으로 단지 정보가 정리됩니다 (매수 추천 아님 — 정보 정리 도구).</div>
+      <div style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:18px">왼쪽 <b>"내 상황"</b> 입력 후 <b>🔍 조건에 맞는 단지 찾기</b>를 누르면<br>국토부 실거래가 기반으로 단지 정보가 정리됩니다 (매수 추천 아님 — 정보 정리 도구).</div>
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="abtn acc" style="margin:0;padding:8px 16px;font-size:12px;width:auto" onclick="quickSearchPreset('서울 7억 무주택')">⚡ 빠른 검색: 서울 7억 무주택</button>
         <button class="abtn a2" style="margin:0;padding:8px 16px;font-size:12px;width:auto" onclick="quickSearchPreset('경기 5억 생애최초')">⚡ 경기 5억 생애최초</button>
@@ -8088,7 +8102,8 @@ function _updateInputProgress() {
     if (!checks.house) missing.push('주택 보유');
     if (!checks.budget) missing.push('매수가');
     if (!checks.region) missing.push('희망 지역');
-    el.textContent = n === 3 ? '✅ 입력 완료' : `${n}/3 (${missing.join('·')} 입력)`;
+    // Sprint QQQQQ (정직화): doSearch 는 미입력도 기본값으로 진행 — "필수/완료"가 아니라 "맞춤 정확도" 지표로 표기
+    el.textContent = n === 3 ? '맞춤 정확도 3/3 ✅' : `맞춤 정확도 ${n}/3 (${missing.join('·')})`;
     el.style.color = n === 3 ? 'var(--grn)' : (n >= 1 ? 'var(--amb)' : 'var(--t3)');
     // Sprint PPPPP (시안 컷2): 보고서 위저드 진행바 + 생성 버튼 사전 게이트 — "에러 토스트"를 "사전 안내"로.
     //   기존엔 빈 입력으로 버튼을 눌러야 "매수가를 입력해주세요(좌측 사이드바)" 토스트 = 시작 즉시 실패 경험.
@@ -9831,7 +9846,7 @@ async function sM(){
       addMsg('ai', 'AI 도우미가 일시 중단 상태예요. 😥\n\n' +
         '💡 AI 없이 바로 쓸 수 있는 기능:\n' +
         '· 아래 퀵버튼 — 대출계산기 · 규제요약 · 특약초안(표준 템플릿)\n' +
-        '· 사이드바 "내 상황 입력 → 실거래 기반 단지 정리"\n' +
+        '· 사이드바 "내 상황 입력 → 조건에 맞는 단지 찾기"\n' +
         '· 상단 보고서 탭 (객관 데이터판으로 제공)');
       // LEGAL-FALLBACK-2026-07-11 (Sprint JJJJ): 질문 키워드로 법령 원문 검색(law.go.kr 코퍼스,
       //   무료·환각 0) — 관련 조문이 있으면 참고로 안내. addMsg 는 _escHtml 처리라 XSS 안전.
