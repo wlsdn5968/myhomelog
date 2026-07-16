@@ -25,6 +25,9 @@ const logger = require('../logger');
 //   인덱스로 해결 불가한 본질 비용 → 같은 검색어 재계산 제거(서버 10분 + CDN s-maxage).
 //   molit 데이터는 daily cron 갱신이라 10분 캐시 무해. cache.set 은 safeSet(Sprint BBBB)이라 실패 무해.
 const cache = require('../cache');
+// SEC-REDOS-2026-07-17 (Sprint TTTTT): 사용자 입력이 new RegExp 소스로 들어가는 곳(620행 /facility 공개
+//   엔드포인트 등)의 정규식 메타문자 이스케이프 — evil regex 주입으로 인한 catastrophic backtracking 차단.
+const _reEsc = (s) => String(s == null ? '' : s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const { resolveCoordBatch, resolveCoord } = require('../services/geocodeCacheService');
 const { resolveFacility } = require('../services/aptFacilityService');
 const { resolveSchools } = require('../services/schoolService');
@@ -106,7 +109,11 @@ router.get('/apt', async (req, res) => {
     //   원인: idx_molit_aptname_trgm GIN 있으나 umd_nm GIN 없음 → OR 시 둘 다 인덱스 X
     //   변경: molit_transactions 는 apt_name 만 (인덱스 활용 → ~50ms),
     //         umd_nm (동명) 검색은 apt_master 에 위임 (이미 idx_apt_master_umd_trgm 있음)
-    const [molitRes, masterRes] = await Promise.all([
+    // SEC-ORFILTER-2026-07-17 (Sprint TTTTT): 기존 .or(`apt_name.ilike.%${qApt}%,umd_nm.ilike.%${q}%`) 는
+    //   사용자 입력이 PostgREST or= 미니 문법에 원시 삽입돼 콤마 등으로 임의 필터 절 주입 가능(유일한 원시 경로).
+    //   → 파라미터 인코딩되는 .ilike() 2회 병렬 + 병합으로 교체 — "상계주공9(고층)" 같은 괄호 검색어도 무손실.
+    const _masterSel = 'apt_name, sigungu, umd_nm, lawd_cd, kapt_code';
+    const [molitRes, masterNameRes, masterUmdRes] = await Promise.all([
       admin.from('molit_transactions')
         .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date, apt_seq')
         // APTSEQ-FALLBACK-2026-05-12: apt_seq 추가 — apt_master 미매칭 단지의 KAPT facility 호출용
@@ -115,12 +122,25 @@ router.get('/apt', async (req, res) => {
         .ilike('apt_name', `%${qApt}%`)  // OR 제거 — apt_name 만 (인덱스 활용) · qApt: 접미사 정규화
         .order('deal_date', { ascending: false })
         .limit(limit * 30),
-      admin.from('apt_master')
-        .select('apt_name, sigungu, umd_nm, lawd_cd, kapt_code')
-        .or(`apt_name.ilike.%${qApt}%,umd_nm.ilike.%${q}%`)  // apt_name 은 접미사 정규화 / umd_nm(동명) 은 원본
-        .limit(limit * 5),  // umd_nm 검색 보강 위해 *3 → *5
+      admin.from('apt_master').select(_masterSel).ilike('apt_name', `%${qApt}%`).limit(limit * 5), // 접미사 정규화명
+      admin.from('apt_master').select(_masterSel).ilike('umd_nm', `%${q}%`).limit(limit * 5),      // 동명은 원본
     ]);
     if (molitRes.error) throw molitRes.error;
+    // 두 쿼리 결과 병합 (기존 .or() 와 동일 집합·동일 상한) + 중복 제거
+    let masterRes;
+    if (masterNameRes.error && masterUmdRes.error) {
+      masterRes = { error: masterNameRes.error };
+    } else {
+      const _seenMk = new Set();
+      const _rows = [];
+      for (const r of [...(masterNameRes.data || []), ...(masterUmdRes.data || [])]) {
+        const k = `${r.apt_name}|${r.lawd_cd}|${r.umd_nm}`;
+        if (_seenMk.has(k)) continue;
+        _seenMk.add(k);
+        _rows.push(r);
+      }
+      masterRes = { data: _rows };
+    }
     if (masterRes.error) {
       // apt_master 미존재/접근 실패는 fallback (molit 만 사용)
       logger.warn({ err: masterRes.error.message }, 'apt_master 조회 실패 — molit only');
@@ -276,7 +296,7 @@ router.get('/apt', async (req, res) => {
         for (const m of g.items) {
           // 정식명에서 핵심 토큰 추출 (3글자 이상)
           const baseName = m.aptName
-            .replace(new RegExp(`^(${m.sigungu||''}|${m.umdNm||''})\\s*`, 'g'), '')
+            .replace(new RegExp(`^(${_reEsc(m.sigungu)}|${_reEsc(m.umdNm)})\\s*`, 'g'), '') // DB 파생값이지만 방어적 이스케이프
             .replace(/\s+/g, '');
           const tokens = [];
           for (let len = 4; len >= 3; len--) {
@@ -617,7 +637,7 @@ router.get('/facility', async (req, res) => {
       const seen = new Set();
       // 정식명에서 핵심 토큰 추출 (행정구역 prefix 제거 후 길이 2+ 단어들)
       const baseName = aptName
-        .replace(new RegExp(`^(${sigungu}|${umdNm})\\s*`, 'g'), '')
+        .replace(new RegExp(`^(${_reEsc(sigungu)}|${_reEsc(umdNm)})\\s*`, 'g'), '')
         .replace(/\s+/g, '');
       // 부분 문자열 (3+ 글자) 추출 — '공릉풍림아이원' → ['풍림', '아이원', '풍림아이원']
       const tokens = [];
