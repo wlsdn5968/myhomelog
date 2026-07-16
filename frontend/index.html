@@ -3836,6 +3836,11 @@ async function generateReport() {
     toast('위 3단계 「희망 지역」을 선택해주세요');
     return;
   }
+  // METRO-SUB-2026-07-17 (Sprint UUUUU): '지방'만 선택·세부 미선택 시 특정 광역시로 좁힐 수 없음 → 세부 선택 안내
+  if (region === '지방') {
+    toast('지방은 세부 지역(해운대·수영·수성·유성·광주서구)을 선택해주세요');
+    return;
+  }
   // P1-14: 미지원 광역도 사전 차단 — backend 0건 후 generic error 차단
   if (typeof _isUnsupportedRegion === 'function' && _isUnsupportedRegion(region)) {
     alert('현재 서울·경기·인천 + 광역시 (부산·대구·광주·대전·울산) 만 지원합니다.\n\n지방 광역도는 향후 데이터 확장 시 지원 예정입니다.');
@@ -5124,6 +5129,13 @@ async function doSearch(){
     <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px">실거래 기반 단지 정리 중…</div>
     <div style="font-size:12px;color:var(--t2);line-height:1.6">국토부 실거래 조회 → 단지 분석 → 좌표 매칭<br>보통 5~15초 걸려요</div>
   </div>`;
+  // METRO-SUB-2026-07-17 (Sprint UUUUU): '지방'만 고르고 세부 미선택 시 backend 가 특정 광역시로 좁힐 수 없어
+  //   경기로 오귀속됨 → 조용한 오결과 대신 세부 선택 안내(honest). 세부 선택 시엔 정상 도달.
+  if(getRegionForSearch()==='지방'){
+    btn.classList.remove('ld');sp.style.display='none';
+    if(typeof toast==='function') toast('지방은 세부 지역(해운대·수영·수성·유성·광주서구)을 선택해주세요');
+    return;
+  }
   searchStep('조건 정리 중...', 1);
   // Sprint QQQQQ (정직 정책): doSearch 는 미입력이어도 기본값으로 진행(5117행 ||7 등) — 그 사실을 숨기지 않고 안내
   if(!(parseFloat(document.getElementById('bp')?.value)>0) && typeof toast==='function')

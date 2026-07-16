@@ -904,8 +904,15 @@ async function fetchCandidateApts(admin, input, limit) {
     .gte('deal_amount', minAmt).lte('deal_amount', maxAmt)
     .gte('deal_date', new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
 
-  const guMatch = region.match(/([가-힣]+구)/);
-  if (guMatch) q = q.like('sigungu', `%${guMatch[1]}%`);
+  // METRO-SUB-2026-07-17 (Sprint UUUUU): 지방 광역시 세부(해운대·수영·수성·유성·광주서구)는 guMatch 보다 먼저 처리.
+  //   '해운대/수영/수성/유성'은 '구' 접미사가 없어 guMatch 미스 → 전국 조회로 빠지고, '광주서구'는 sigungu 문자열에
+  //   없어 like 실패. 5개 구는 이미 적재된 lawd_cd 라 IN 필터로 정확 도달(propertyService.REGION_KEYWORDS 와 동반 수정).
+  const METRO_SUB = { '해운대': '26350', '수영': '26500', '수성': '27260', '유성': '30200', '광주서': '29140' };
+  let _metroCode = null;
+  for (const [kw, code] of Object.entries(METRO_SUB)) { if (region.includes(kw)) { _metroCode = code; break; } }
+  const guMatch = _metroCode ? null : region.match(/([가-힣]+구)/);
+  if (_metroCode) q = q.in('lawd_cd', [_metroCode]);
+  else if (guMatch) q = q.like('sigungu', `%${guMatch[1]}%`);
   else {
     // P1-1 (2026-05-04): lawd_cd LIKE '11%' → IN (...) 명시
     //   진단 (EXPLAIN): LIKE prefix 시 인덱스 미활용 → Parallel Seq Scan 960ms
