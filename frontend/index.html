@@ -1890,7 +1890,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <div id="newsSummary" style="margin-bottom:14px;padding:13px 14px;background:linear-gradient(135deg,#F9F4EC,#F1EADE);border:1px solid #E1D5BE;border-radius:10px;display:none">
       <div style="font-size:10.5px;color:var(--amb);font-weight:700;margin-bottom:6px;letter-spacing:0.3px">📅 오늘의 부동산 3줄 시황 <span style="color:var(--t3);font-weight:500" id="newsSummaryTime"></span></div>
       <div id="newsSummaryLines" style="font-size:12px;line-height:1.85;color:var(--t1)"></div>
-      <div style="font-size:9.5px;color:var(--t3);margin-top:6px;line-height:1.5">AI가 뉴스 헤드라인을 중립적으로 정리 · 매수·매도 추천이 아닙니다</div>
+      <div id="newsSummarySrc" style="font-size:9.5px;color:var(--t3);margin-top:6px;line-height:1.5">AI가 뉴스 헤드라인을 중립적으로 정리 · 매수·매도 추천이 아닙니다</div>
     </div>
     <div class="chips" id="news-cat" style="margin-bottom:14px">
       <span class="chip on" data-cat="hot" onclick="loadNews(this)">🔥 인기</span>
@@ -4397,6 +4397,11 @@ async function loadNewsSummary(){
     const lines = Array.isArray(d.summary) ? d.summary : [d.summary];
     // XSS 방어: AI 생성 요약 — 반드시 escape
     document.getElementById('newsSummaryLines').innerHTML = lines.map(l=>`<div>${_escHtml(l)}</div>`).join('');
+    // 데이터 시황 모드(mode:'data') — 출처를 사실대로 표기 (AI 요약 아님)
+    const srcEl=document.getElementById('newsSummarySrc');
+    if(srcEl) srcEl.textContent = d.mode==='data'
+      ? '공식 통계 기반 자동 정리 (한국은행 ECOS · 국토부 KOSIS · 국토부 실거래) · 매수·매도 추천이 아닙니다'
+      : 'AI가 뉴스 헤드라인을 중립적으로 정리 · 매수·매도 추천이 아닙니다';
     const t=d.updatedAt?new Date(d.updatedAt):new Date();
     document.getElementById('newsSummaryTime').textContent = `· ${t.getMonth()+1}/${t.getDate()} ${String(t.getHours()).padStart(2,'0')}:${String(t.getMinutes()).padStart(2,'0')} 기준`;
     box.style.display='block';

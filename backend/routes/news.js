@@ -53,10 +53,15 @@ async function fetchNaverNews(query, display = 10) {
   });
 }
 
-// RSS Fallback — 네이버 부동산 메인 RSS (간단한 XML 파싱)
-async function fetchRssFallback() {
+// RSS Fallback — Google News RSS 검색 (Naver 키 부재/전체 실패 시)
+// NEWS-CAT-2026-07-16 (Sprint RRRRR, 운영자 발견): 기존 고정 쿼리 '한국 부동산'이 카테고리를 무시해
+//   Naver 키 없는 프로덕션에서 6개 카테고리 전부 동일 뉴스가 나오던 근본 원인.
+//   KEYWORDS 를 단일 소스로 재사용해 카테고리별 검색 쿼리 구성 (재건축 쿼리 실측: 5/5 관련 기사).
+async function fetchRssFallback(cat) {
   try {
-    const r = await axios.get('https://news.google.com/rss/search?q=%ED%95%9C%EA%B5%AD+%EB%B6%80%EB%8F%99%EC%82%B0&hl=ko&gl=KR&ceid=KR:ko', {
+    const kws = KEYWORDS[cat] || KEYWORDS.hot;
+    const q = encodeURIComponent(kws.join(' OR '));
+    const r = await axios.get(`https://news.google.com/rss/search?q=${q}&hl=ko&gl=KR&ceid=KR:ko`, {
       timeout: 5000,
       headers: { 'User-Agent': 'MyHomeLogBot/1.0' },
     });
@@ -98,8 +103,8 @@ router.get('/', async (req, res) => {
   try {
     const results = await Promise.all(keywords.map(k => fetchNaverNews(k, 6).catch(() => null)));
     if (results.every(r => r === null)) {
-      // 네이버 키 없음 → RSS fallback
-      items = await fetchRssFallback();
+      // 네이버 키 없음 → RSS fallback (카테고리별 쿼리)
+      items = await fetchRssFallback(cat);
     } else {
       const seen = new Set();
       results.flat().filter(Boolean).forEach(it => {
@@ -112,7 +117,7 @@ router.get('/', async (req, res) => {
       items = items.slice(0, 20);
     }
   } catch {
-    items = await fetchRssFallback();
+    items = await fetchRssFallback(cat);
   }
 
   const out = {
@@ -129,10 +134,56 @@ router.get('/', async (req, res) => {
 });
 
 /**
+ * 데이터 시황 폴백 — NEWS-SUM-2026-07-16 (Sprint RRRRR, 운영자 발견 "3줄 시황 공백")
+ * 근본 원인(Vercel 런타임 로그 실측): Anthropic 크레딧 소진 400 → catch 의 무의미한 한 줄 폴백만 표시.
+ * AI 실패 시 이미 자동화된 공식 통계(ECOS 금리·KOSIS 미분양·실거래 기준월 — 전부 무료·기존 서비스 재사용)로
+ * 사실 서술 3줄 구성. 예측·권유 없음(절대룰). 값 없는 줄은 생략(graceful).
+ */
+async function _dataMarketLines() {
+  const lines = [];
+  try {
+    const ecos = await require('../services/ecosService').getEcosRates();
+    if (ecos && (ecos.baseRate != null || ecos.mortgageRate != null)) {
+      const m = String(ecos.mortgageRateMonth || '').replace(/^(\d{4})(\d{2})$/, '$1.$2');
+      const parts = [];
+      if (ecos.baseRate != null) parts.push(`한국은행 기준금리 ${ecos.baseRate}%`);
+      if (ecos.mortgageRate != null) parts.push(`시중 주담대 평균 ${ecos.mortgageRate}%${m ? ` (${m} 신규취급)` : ''}`);
+      lines.push(`💰 ${parts.join(' · ')} — 한국은행 ECOS`);
+    }
+  } catch (_) {}
+  try {
+    // KOSIS 시도 합계 행(C2_NM='계') — kosisService 실측 주석 근거. 미존재 시 null → 줄 생략.
+    const unsold = await require('../services/kosisService').getUnsoldTrend('서울', '계');
+    if (unsold && unsold.latest && Number.isFinite(unsold.latest.cnt)) {
+      const ym = String(unsold.latest.ym || '').replace(/^(\d{4})(\d{2})$/, '$1.$2');
+      const prev = unsold.months && unsold.months.length >= 2 ? unsold.months[unsold.months.length - 2] : null;
+      const diff = prev && Number.isFinite(prev.cnt) ? unsold.latest.cnt - prev.cnt : null;
+      lines.push(`🏘 서울 미분양 ${unsold.latest.cnt.toLocaleString()}호${ym ? ` (${ym})` : ''}${diff != null ? ` · 전월 대비 ${diff >= 0 ? '+' : ''}${diff.toLocaleString()}호` : ''} — 국토부 KOSIS`);
+    }
+  } catch (_) {}
+  try {
+    const { getSupabaseAdmin } = require('../db/client');
+    const admin = getSupabaseAdmin();
+    if (admin) {
+      const CK = 'news:txlatest';
+      let latest = cache.get(CK);
+      if (latest === undefined) {
+        const { data } = await admin.from('molit_transactions').select('deal_date').order('deal_date', { ascending: false }).limit(1);
+        latest = data && data[0] && data[0].deal_date ? String(data[0].deal_date) : null;
+        cache.set(CK, latest, 21600);
+      }
+      lines.push(`🏛 2025.10.15 안정화 대책 · 2026.6.30 규제지역 확대 적용 중${latest ? ` · 실거래 ${latest.slice(0, 7).replace('-', '.')}월분까지 반영` : ''}`);
+    }
+  } catch (_) {}
+  return lines;
+}
+
+/**
  * GET /api/news/summary
  * 오늘의 부동산 3줄 시황 (AI 자동 요약)
  * - 핫이슈 뉴스 타이틀 15건 → Claude로 중립적 3줄 요약
  * - 3시간 캐시 (AI 호출 절약)
+ * - AI 실패 시 데이터 시황 폴백(mode:'data', 30분 캐시 — 크레딧 복구 시 자동 재개)
  */
 router.get('/summary', async (req, res) => {
   const cacheKey = 'news:summary:v2';
@@ -159,7 +210,7 @@ router.get('/summary', async (req, res) => {
     try {
       const results = await Promise.all(kws.map(k => fetchNaverNews(k, perKwLimit).catch(() => null)));
       if (results.every(r => r === null)) {
-        return { items: await fetchRssFallback() };
+        return { items: await fetchRssFallback(catKey) };
       }
       const seen = new Set();
       const items = [];
@@ -184,8 +235,11 @@ router.get('/summary', async (req, res) => {
   });
 
   if (titles.length === 0) {
+    // 뉴스 전체 실패 시에도 공식 통계 시황은 독립적으로 성립
+    const dataLines = await _dataMarketLines();
     return res.json({
-      summary: ['📌 뉴스 데이터를 가져오지 못했어요. 잠시 후 다시 시도해주세요.'],
+      summary: dataLines.length ? dataLines : ['📌 뉴스 데이터를 가져오지 못했어요. 잠시 후 다시 시도해주세요.'],
+      mode: dataLines.length ? 'data' : undefined,
       updatedAt: new Date().toISOString(),
       fromCache: false,
     });
@@ -223,6 +277,19 @@ ${titles.slice(0, 20).map((t, i) => `${i+1}. ${t}`).join('\n')}
     res.json({ ...out, fromCache: false });
   } catch (e) {
     require('../logger').error({ err: e, source: 'news-summary' }, '뉴스 AI 요약 실패');
+    const dataLines = await _dataMarketLines();
+    if (dataLines.length) {
+      const out = {
+        summary: dataLines,
+        mode: 'data',
+        updatedAt: new Date().toISOString(),
+        disclaimer: '본 시황은 공식 통계 수치 정리이며, 매수·매도 추천이 아닙니다.',
+      };
+      // 30분 캐시 — 실패마다 AI 재시도(비용 0이지만 지연 1s+)하지 않되, 크레딧 복구 시 30분 내 AI 재개
+      cache.set(cacheKey, out, 1800);
+      require('../services/redisCache').rset(cacheKey, out, 1800);
+      return res.json({ ...out, fromCache: false });
+    }
     res.json({
       summary: ['📌 오늘 뉴스를 불러왔어요. 상세는 아래 목록을 확인하세요.'],
       updatedAt: new Date().toISOString(),
