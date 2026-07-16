@@ -82,8 +82,12 @@ function validatePropertySearch(req, res, next) {
   if (maxPrice !== undefined) src.maxPrice = sanitizeNumber(maxPrice, 0, 999);
 
   // 광역 키워드 화이트리스트 — "서울 강북구" 같은 복합 입력도 허용
+  // METRO-SUB-2026-07-17 (Sprint UUUUU): 프론트 REGION_SUB['지방'] 은 "지방 해운대" 형태로 보내 시/도명이
+  //   없어 통과 실패(해운대·수영·수성·유성). 이미 적재된 광역시 구라 세부 라벨을 화이트리스트에 추가
+  //   (광주서구는 '광주' 로 통과). 특정 리터럴만 추가 — 인젝션 위험 없음.
   const allowedWide = ['서울','경기','인천','부산','대구','광주','대전','울산','세종',
-    '강원','충북','충남','전북','전남','경북','경남','제주'];
+    '강원','충북','충남','전북','전남','경북','경남','제주',
+    '해운대','수영','수성','유성'];
   if (region) {
     const normalized = String(region).normalize('NFC').trim();
     src.region = normalized;

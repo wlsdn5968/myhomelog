@@ -90,7 +90,7 @@ Vercel Dashboard → Settings → Environment Variables 등록 키:
 - 운영 — `CRON_SECRET` (cron 인증), `ADMIN_EMAILS` (admin endpoint 화이트리스트), `HEALTH_API_KEY`, `ALLOWED_ORIGINS`
 - 로컬 개발에서 `frontend/index.html` 의 `API` 상수는 `/api` 상대 경로 사용 — 별도 백엔드 URL 교체 불필요.
 
-cron 6개는 `vercel.json` 의 `crons` 배열로 자동 등록됩니다 (Hobby plan: daily 만 — hourly 미지원).
+cron 8개(라우트 기준)는 `vercel.json` 의 `crons` 배열로 자동 등록됩니다 — retention · molit-ingest(3슬롯 분할) · apt-master-sync(월요일) · regulations-check · regulations-auto-fetch · audit-prune · geocache-backfill · facility-backfill. (Hobby plan: daily 만 — hourly 미지원)
 
 ## Railway 배포 (현재 미사용 — 옵션 메모)
 
@@ -171,8 +171,7 @@ railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 | Method | Path | Auth | 설명 |
 |--------|------|------|------|
 | GET·POST | /api/admin/run-geocache-backfill | JWT + ADMIN_EMAILS | 백필 즉시 trigger |
-| GET·POST | /api/cron/{retention, molit-ingest, apt-master-sync, regulations-check, audit-prune, geocache-backfill} | CRON_SECRET | `vercel.json` `crons` 자동 등록 6개 (Hobby plan: daily 만) |
-| GET·POST | /api/cron/regulations-auto-fetch | CRON_SECRET | route 만 정의 — `vercel.json` 미등록, 수동/별도 trigger 용 |
+| GET·POST | /api/cron/{retention, molit-ingest, apt-master-sync, regulations-check, regulations-auto-fetch, audit-prune, geocache-backfill, facility-backfill} | CRON_SECRET | `vercel.json` `crons` 자동 등록 8개 라우트 (molit-ingest 는 3슬롯 분할, Hobby plan: daily 만) |
 | GET | /share?... | — | 공유 딥링크 (OG 메타 치환 HTML) |
 
 ---
