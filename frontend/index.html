@@ -9583,10 +9583,13 @@ async function chkAPI(_isRetry){
       cs.textContent='● 온라인';cs.style.color='var(--grn)';
       ce && ce.classList.remove('show');
       if(bs){bs.textContent='연결됨';bs.className='sm-badge';}
-      // 사용 한도 표시 (모달 + 헤더 pill)
+      // 사용 한도 표시 (모달 + 헤더 사용량 텍스트)
       if(d.usage){
         updateQuota(d.usage);
       }
+      // Sprint OOOOO-2: 익명 세션은 auth 이벤트 기반 refreshQuota 가 안 돌아 채팅 잔여가 "—"로 남음
+      //   (구 pill 은 숨겨져 무증상이었으나 새 사용량 행에선 노출) → 부팅 health 에서 함께 채움.
+      if(d.chat && typeof updateAiPill==='function') updateAiPill(d.chat);
       // P1 (Phase 2 5-1): 데이터 동기화 시각 표시 — 사용자 신뢰 시그널
       const syncBanner=document.getElementById('syncBanner'), syncTime=document.getElementById('syncTime');
       if(syncBanner && syncTime){
