@@ -9560,8 +9560,12 @@ async function openAptDetail(r) {
     //   추천 path는 사용자 매칭 점수 (95 등), 검색 path는 default 60 → 환각.
     //   score=null 으로 변경 → showDetail 의 _hasScore 분기 → "분석 대기" 표시 (다른 path 와 일관).
     //   ltv/maxLoan 도 '' → null (계산 안 된 상태 명시).
-    score: null,
-    ltv: null, maxLoan: null,
+    // DETAIL-SCORE-2026-07-17 (Sprint VVVVV, 운영자 발견 "지도 마커로 열면 목록과 다른 집/분석대기"):
+    //   추천 마커 클릭 시 r 에 실제 매칭 점수(예 79)·LTV 가 있는데도 무조건 null 로 버려 목록 클릭
+    //   (showDetail(props[i]) — 점수 표시)과 갈라졌음. 가짜 60 환각 차단 의도는 유지하되 진짜 값은 보존
+    //   (검색·인기 path 는 r.score 부재 → 여전히 null → "분석 대기").
+    score: Number.isFinite(r.score) ? r.score : null,
+    ltv: r.ltv || null, maxLoan: r.maxLoan || null,
     buildYear: r.buildYear || 0,
     lawdCd: r.lawdCd,
     txHistory,
