@@ -450,12 +450,12 @@ html[data-theme="dark"]{
   --danger-bd:rgba(220,38,38,0.34);
   color-scheme:dark;
 }
-/* 다크: 네이비 하드코딩 클래스 버튼 → 밝은 블루 (라이트 100% 유지) */
-html[data-theme="dark"] .hbtn-cta{background:linear-gradient(135deg,#5E94D6 0%,#4E83C4 100%)!important;border-color:#4E83C4!important}
-html[data-theme="dark"] .hbtn-cta:hover{background:linear-gradient(135deg,#4E83C4 0%,#3D6CA8 100%)!important;border-color:#3D6CA8!important}
+/* 다크: 헤더 CTA — Claude Design 시안(Sprint OOOOO) 밝은 네이비 #3B62C9 로 명도 확보 */
+html[data-theme="dark"] .hbtn-cta{background:#3B62C9!important;border-color:#3B62C9!important}
+html[data-theme="dark"] .hbtn-cta:hover{background:#2F55B8!important;border-color:#2F55B8!important}
 html[data-theme="dark"] .bnav-tag{background:linear-gradient(135deg,#5E94D6,#4E83C4)}
-/* DESIGN-UNIFY-2026-06-13: 다크에서 흰색(rgba(255,255,255,.78))으로 남던 헤더 표면 보정 */
-html[data-theme="dark"] header{background:rgba(26,31,41,0.82)}
+/* 다크 헤더 표면 — Claude Design 시안 #0E1526 (Sprint OOOOO) */
+html[data-theme="dark"] header{background:#0E1526}
 body{font-family:var(--font-body)}
 *{box-sizing:border-box;margin:0;padding:0}
 /* A11y: 키보드 탐색 시만 포커스 링 표시 (마우스 클릭 시 방해 없음) */
@@ -468,76 +468,134 @@ html,body{height:100%;overflow:hidden}
 }
 body{font-family:var(--font-body);background:var(--bg);color:var(--t1);font-size:14px;line-height:1.6;display:flex;flex-direction:column}
 
-/* HEADER · Phase 4-2 단계 1 (2026-05-04): glass + accent active 톤 */
+/* HEADER · Sprint OOOOO (2026-07-16): Claude Design 시안 「내집로그 헤더 재설계」 반영 — pill 8→3.
+   색·간격·크기는 시안 dc.html 원문값(추출: DesignSync get_file). 데스크톱(≥701px)만 개편,
+   ≤700px 모바일은 현행 유지(themeToggle·settingsBtn 은 모바일 전용 잔존 — Sprint LLLLL 한도 접근성). */
 header{
-  background:rgba(255,255,255,0.78);
-  backdrop-filter:var(--blur-md);-webkit-backdrop-filter:var(--blur-md);
-  border-bottom:1px solid var(--border-faint);
+  --hd-navy:#13234B; --hd-tab:#5C6577; --hd-tab-act:#13234B; --hd-tab-act-bg:#EEF1F8;
+  --hd-bd:#E6E9EF; --hd-search-bg:#F4F6FA; --hd-search-bd:#E6E9EF; --hd-ph:#9AA3B2;
+  --hd-usage:#6B7686; --hd-usage-dim:#9AA3B2; --hd-usage-dot:#CDD3DD;
+  --hd-menu-bg:#fff; --hd-menu-tx:#2B3546; --hd-menu-sub:#8A93A3; --hd-menu-div:#EEF0F4;
+  background:#fff;
+  border-bottom:1px solid var(--hd-bd);
   flex-shrink:0;height:54px;display:flex;align-items:center;
   padding:0 18px;gap:10px;z-index:1000;position:relative;
-  box-shadow:0 1px 0 rgba(0,0,0,0.02);
 }
-.logo{display:flex;align-items:center;gap:7px;text-decoration:none;flex-shrink:0}
+html[data-theme="dark"] header{
+  --hd-navy:#3B62C9; --hd-tab:#9AA6BD; --hd-tab-act:#EEF1F7; --hd-tab-act-bg:#1C2A47;
+  --hd-bd:#232F49; --hd-search-bg:#16203A; --hd-search-bd:#2A3855; --hd-ph:#6E7B95;
+  --hd-usage:#9AA6BD; --hd-usage-dim:#6E7B95; --hd-usage-dot:#3E4B66;
+  --hd-menu-bg:#141C30; --hd-menu-tx:#D7DEEA; --hd-menu-sub:#6E7B95; --hd-menu-div:#232F49;
+}
+@media(min-width:701px){
+  header{height:66px;gap:16px;padding:0 20px}
+  /* 데스크톱: 테마 토글·ⓘ정보는 계정 드롭다운/정보 모달로 이동(시안) — 모바일에선 유지 */
+  #settingsBtn,#themeToggle{display:none!important}
+  .hml{gap:14px}
+}
+.logo{display:flex;align-items:center;gap:9px;text-decoration:none;flex-shrink:0}
 .lmark{
-  width:30px;height:30px;
-  background:linear-gradient(135deg,var(--accent-500),var(--accent-700));
-  border-radius:var(--radius-md);
+  width:32px;height:32px;
+  background:var(--hd-navy);
+  border-radius:9px;
   display:flex;align-items:center;justify-content:center;
-  color:#fff;font-weight:800;font-size:15px;font-family:var(--font-display);
-  box-shadow:var(--accent-shadow);
+  color:#fff;
 }
-.ltxt{font-family:var(--font-display);font-size:17px;font-weight:800;color:var(--text-primary);letter-spacing:-.5px}
-.ltxt em{font-style:normal;background:linear-gradient(120deg,var(--accent-700),var(--accent-500));-webkit-background-clip:text;background-clip:text;color:transparent}
-.htabs{display:flex;gap:2px;margin-left:4px}
-/* HEADER-SQUEEZE-2026-07-15 (Sprint MMMMM, 실측): '도구 ▾' 2줄 꺾임(1280·1512 공통) + 701~1000px 헤더 탭
-   세로 붕괴(756px 실캡처) — 탭 줄바꿈 금지 + 태블릿 구간 비핵심 pill 축소로 공간 확보 */
+.lmark svg{width:17px;height:17px}
+.ltxt{font-family:var(--font-display);font-size:18px;font-weight:800;color:var(--hd-tab-act);letter-spacing:-.02em}
+.ltxt em{font-style:normal;color:var(--hd-navy)}
+html[data-theme="dark"] .ltxt em{color:#7FA1E8}
+.htabs{display:flex;gap:2px;margin-left:2px}
 .htab,.htabs button{white-space:nowrap}
-@media(min-width:701px) and (max-width:1120px){
-  .hml .rpill,.hml .hst#dqPill,.hml .hst#aiPill{display:none!important}
-  .hsearch{min-width:130px!important}
-}
 .htab{
-  padding:6px 13px;border-radius:var(--radius-sm);
-  font-family:var(--font-display);font-size:12.5px;font-weight:500;
-  cursor:pointer;border:none;color:var(--text-tertiary);
+  padding:8px 13px;border-radius:9px;
+  font-family:var(--font-display);font-size:14.5px;font-weight:600;
+  cursor:pointer;border:none;color:var(--hd-tab);
   background:transparent;transition:all var(--duration-fast) var(--ease-out);
 }
-.htab:hover{background:var(--glass-1);color:var(--text-primary)}
-.htab.on{
-  background:var(--glass-2);color:var(--text-primary);
-  border:1px solid var(--border-subtle);font-weight:600;
-  padding:5px 12px; /* border 보정 */
-}
-/* Design Phase 3 (2026-05-31): nav 탭 이모지 → inline SVG line icon (외부 의존성·CSP 변경 0).
-   currentColor 상속 → off=text-tertiary, hover/on=text-primary 자동 추종. aria-hidden, 텍스트 label 이 의미 전달. */
+.htab:hover{background:var(--glass-1);color:var(--hd-tab-act)}
+.htab.on{background:var(--hd-tab-act-bg);color:var(--hd-tab-act);font-weight:700}
+/* 시안: 상단 1열 탭은 텍스트 중심(아이콘 제거) — 도구▾ 메뉴 항목의 아이콘은 유지 */
+.htabs > .htab > svg,.htab-tool > svg{display:none}
 .htab svg{width:14px;height:14px;vertical-align:-2.5px;margin-right:5px;flex-shrink:0}
+.newb{font-size:10px;font-weight:800;letter-spacing:.04em;color:#fff;background:#E5484D;padding:2px 5px;border-radius:5px;line-height:1;margin-left:4px;display:inline-block;vertical-align:2px}
 /* IA-2026-07-12 (Sprint QQQQ): 상단 탭 과밀 완화 — 부차 도구(특약·청약·뉴스·사용법)를 "도구 ▾" 드롭다운으로.
    드롭다운 항목은 .htab 유지·DOM 순서 보존 → sv() 인덱스 활성 로직 무변경. 데스크톱 전용(.htabs 는 ≤700px 숨김). */
 .htab-dd{position:relative;display:flex}
-.htab-tool{padding:6px 11px;border-radius:var(--radius-sm);font-family:var(--font-display);font-size:12.5px;font-weight:500;cursor:pointer;border:none;color:var(--text-tertiary);background:transparent;transition:all var(--duration-fast) var(--ease-out);display:flex;align-items:center;gap:4px}
-.htab-tool:hover{background:var(--glass-1);color:var(--text-primary)}
-.htab-tool.on{background:var(--glass-2);color:var(--text-primary);border:1px solid var(--border-subtle);font-weight:600;padding:5px 10px}
+.htab-tool{padding:8px 11px;border-radius:9px;font-family:var(--font-display);font-size:14.5px;font-weight:600;cursor:pointer;border:none;color:var(--hd-tab);background:transparent;transition:all var(--duration-fast) var(--ease-out);display:flex;align-items:center;gap:5px}
+.htab-tool:hover{background:var(--glass-1);color:var(--hd-tab-act)}
+.htab-tool.on{background:var(--hd-tab-act-bg);color:var(--hd-tab-act);font-weight:700}
 .htab-tool .ddcaret{font-size:9px;transition:transform var(--duration-fast) var(--ease-out)}
 .htab-dd.open .htab-tool .ddcaret{transform:rotate(180deg)}
-.htab-menu{display:none;position:absolute;top:calc(100% + 6px);left:0;min-width:148px;background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;box-shadow:0 8px 22px rgba(16,24,40,.16);padding:5px;z-index:120}
+.htab-menu{display:none;position:absolute;top:calc(100% + 6px);left:0;min-width:158px;background:var(--hd-menu-bg);border:1px solid var(--hd-bd);border-radius:12px;box-shadow:0 12px 32px -10px rgba(19,35,75,.28);padding:5px;z-index:120}
 .htab-dd.open .htab-menu{display:block}
-.htab-menu .htab{display:flex;align-items:center;width:100%;padding:8px 10px;border-radius:6px}
-.htab-menu .htab.on{padding:8px 10px;border:none;background:var(--glass-2)}
+.htab-menu .htab{display:flex;align-items:center;width:100%;padding:8px 10px;border-radius:8px;font-size:13.5px}
+.htab-menu .htab.on{padding:8px 10px;border:none;background:var(--hd-tab-act-bg)}
 .hml{margin-left:auto;display:flex;gap:7px;align-items:center}
-.rpill{display:flex;align-items:center;gap:5px;background:var(--redL);color:var(--red);padding:4px 10px;border-radius:18px;font-size:11px;font-weight:600;border:1px solid var(--danger-bd);flex-shrink:0}
-.hdot{width:6px;height:6px;border-radius:50%;background:var(--red)}
 @keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+/* 사용량 텍스트 (시안: 테두리 없는 텍스트 — 비로그인/무료만, admin 무제한은 JS 가 숨김) */
+#hUsage{display:none;align-items:center;gap:8px;font-size:13px;color:var(--hd-usage);font-weight:600;cursor:pointer;flex-shrink:0}
+#hUsage .hu-dim{color:var(--hd-usage-dim)}
+#hUsage .hu-dot{color:var(--hd-usage-dot)}
+#hUsage .hu-item{display:inline-flex;align-items:center;gap:4px}
+#hUsage .hu-item svg{width:14px;height:14px;flex-shrink:0}
+#hUsage b{font-weight:700;color:inherit}
 .hbtn{padding:5px 12px;border-radius:18px;font-size:11px;border:1px solid var(--bd);background:var(--s1);color:var(--t2);cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
 .hbtn:hover{border-color:var(--border-strong);color:var(--text-primary)}
-/* Phase 3 (2026-04-25/26): "AI 특약 생성" 헤더 CTA 강조 — 호갱노노 무료 도구 대비 단일 가치.
-   모바일 70% 사용자에게도 핵심 가치 노출 위해 텍스트 생략 + 아이콘만 유지. */
-.hbtn-cta{background:linear-gradient(135deg,#1E4A7A 0%,#173A63 100%);color:#fff!important;border-color:#173A63;font-weight:700}
-.hbtn-cta:hover{background:linear-gradient(135deg,#173A63 0%,#112C4C 100%);color:#fff!important;border-color:#112C4C;transform:translateY(-1px);box-shadow:0 2px 6px rgba(23,58,99,.3)}
-.hbtn-cta .cta-icon{display:inline}
+/* 주 CTA (시안: 딥네이비 solid — 헤더 유일 강조 버튼) */
+.hbtn-cta{background:var(--hd-navy,#13234B);color:#fff!important;border:1px solid transparent;font-weight:700}
+.hbtn-cta:hover{filter:brightness(1.12);color:#fff!important;transform:translateY(-1px);box-shadow:0 6px 16px -8px rgba(19,35,75,.7)}
+.hbtn-cta .cta-icon{display:inline-flex}
+.hbtn-cta .cta-icon svg{width:15px;height:15px}
 .hbtn-cta .cta-text{display:inline}
+@media(min-width:701px){
+  .hbtn-cta{height:40px;padding:0 18px;border-radius:11px;font-size:14px;display:inline-flex;align-items:center;gap:7px;box-shadow:0 6px 16px -8px rgba(19,35,75,.5)}
+  #loginBtn{height:40px;padding:0 16px;border-radius:11px;font-size:13.5px}
+  .hsearch input{height:40px;background:var(--hd-search-bg);border:1px solid var(--hd-search-bd);border-radius:11px}
+  .hsearch input::placeholder{color:var(--hd-ph)}
+}
+@media(min-width:1120px){ .hsearch{min-width:260px!important} }
 @media(max-width:560px){
   .hbtn-cta{padding:5px 8px;font-size:13px}
   .hbtn-cta .cta-text{display:none}
+}
+/* 계정 아바타 + 드롭다운 (시안 컷2) */
+.acct-dd{position:relative;display:none}
+.hbtn-avatar{display:flex;align-items:center;gap:4px;padding:3px 5px 3px 3px;border:1px solid var(--hd-bd);border-radius:22px;background:var(--hd-menu-bg);cursor:pointer;font-family:inherit;transition:border-color .15s}
+.acct-dd.open .hbtn-avatar{border-color:var(--hd-navy)}
+.avtr{width:32px;height:32px;border-radius:50%;background:var(--hd-navy);color:#fff;display:grid;place-items:center;font-size:13px;font-weight:700}
+.hbtn-avatar .ddcaret{font-size:9px;color:var(--hd-usage-dim);transition:transform var(--duration-fast) var(--ease-out)}
+.acct-dd.open .hbtn-avatar .ddcaret{transform:rotate(180deg);color:var(--hd-navy)}
+.acct-menu{display:none;position:absolute;top:calc(100% + 10px);right:0;width:272px;background:var(--hd-menu-bg);border:1px solid var(--hd-bd);border-radius:14px;box-shadow:0 18px 48px -14px rgba(19,35,75,.4);padding:8px;z-index:1200;text-align:left}
+.acct-dd.open .acct-menu{display:block}
+.acct-head{display:flex;align-items:center;gap:11px;padding:10px 10px 11px}
+.acct-head .avtr{width:38px;height:38px;font-size:15px}
+.acct-name{font-size:14px;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acct-plan{font-size:12px;color:var(--hd-menu-sub)}
+.acct-div{height:1px;background:var(--hd-menu-div);margin:2px 4px 6px}
+.acct-it{display:flex;align-items:flex-start;gap:11px;width:100%;padding:9px 10px;border-radius:9px;border:none;background:none;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--hd-menu-tx);text-align:left;transition:background .12s}
+.acct-it:hover{background:var(--hd-tab-act-bg)}
+.acct-it svg{width:17px;height:17px;flex-shrink:0;margin-top:1px}
+.acct-it .acct-sub{display:block;font-size:11.5px;font-weight:500;color:var(--hd-menu-sub);margin-top:2px}
+.acct-it.danger{color:#C0392B}
+html[data-theme="dark"] .acct-it.danger{color:#E5766B}
+.acct-sw{width:38px;height:22px;border-radius:11px;background:#D6DBE4;position:relative;flex-shrink:0;margin-left:auto;align-self:center;transition:background .15s}
+.acct-sw .knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .15s}
+html[data-theme="dark"] .acct-sw{background:var(--hd-navy)}
+html[data-theme="dark"] .acct-sw .knob{transform:translateX(16px)}
+/* 태블릿 701~1119px (시안 컷3 @900px): 사용량 숨김 · 로고 아이콘만 · CTA 「보고서」 축약 · 검색 유지 */
+@media(min-width:701px) and (max-width:1119px){
+  #hUsage{display:none!important}
+  .ltxt{display:none}
+  .cta-full{display:none}
+  .htab{font-size:13.5px;padding:7px 10px}
+  .htab-tool{font-size:13.5px;padding:7px 9px}
+  .newb{font-size:0;width:6px;height:6px;padding:0;border-radius:50%;vertical-align:1px}
+  .hsearch{min-width:200px!important}
+  .hbtn-cta{height:38px;padding:0 14px;border-radius:10px;font-size:14px}
+  #loginBtn{height:38px;padding:0 14px;border-radius:10px}
+  .hbtn-avatar .avtr{width:30px;height:30px;font-size:12px}
+  .hsearch input{height:38px}
 }
 .hst{font-size:11px;font-weight:600;padding:4px 10px;border-radius:18px;white-space:nowrap}
 .hst.on{background:var(--grnL);color:var(--grn)}.hst.off{background:var(--redL);color:var(--red)}
@@ -977,8 +1035,7 @@ header{
   /* 헤더 우측 hml: 모바일에선 핵심 버튼만 (10.15 / 로그인)
      QUOTA-ACCESS-2026-07-15 (Sprint LLLLL): #settingsBtn 은 모바일에서도 유지 — 이걸 숨기면 무료 검색
      한도(5/일)를 확인할 창구가 429 를 맞기 전까지 전무했음(quotaPill·설정 모달 진입점 전부 소멸). */
-  .hml .hst#quotaPill,.hml .hst#aiPill,.hml .hst#apiSt{display:none!important}
-  .hml .rpill{display:none}
+  .hml #hUsage,.hml .hst#apiSt{display:none!important}
   /* MOBILE-2026-06-13: absolute 뷰(보고서·특약)는 bottom:0 이라 하단 ~54px 가 fixed bnav 뒤로 숨음 → bnav+safe-area 만큼 하단 패딩 확보 */
   .biz-view, .clause-view{padding-bottom:calc(62px + env(safe-area-inset-bottom))!important}
   html,body{overflow:auto}
@@ -1241,27 +1298,30 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 <header>
   <!-- 모바일 햄버거 — 사이드바 (내 상황 입력) drawer 토글 -->
   <button class="hamb" onclick="toggleDrawer()" aria-label="메뉴 열기" title="내 상황 / 관심단지 / 계약타임라인">☰</button>
-  <a class="logo" href="/"><div class="lmark">집</div><div class="ltxt">내집<em>로그</em></div></a>
+  <a class="logo" href="/"><div class="lmark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M3 11.2 12 4l9 7.2" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 9.8V20h13V9.8" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 20v-5h4v5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="ltxt">내집<em>로그</em></div></a>
   <div class="htabs">
     <button class="htab on" onclick="sv('map',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>지도</button>
     <button class="htab" onclick="sv('list',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>목록</button>
-    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서 <span style="background:var(--accent-500);color:#fff;font-size:10px;font-weight:700;padding:1px 4px;border-radius:4px;margin-left:2px;vertical-align:top">NEW</span></button>
+    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서 <span class="newb">NEW</span></button>
     <button class="htab" onclick="sv('calc',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg>대출계산</button>
     <div class="htab-dd" id="htabToolDd">
-      <button class="htab-tool" id="htabToolBtn" onclick="toggleToolMenu(event)" aria-haspopup="true" aria-expanded="false" title="특약 · 청약 · 뉴스 · 사용법"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>도구 <span class="ddcaret">▾</span></button>
+      <button class="htab-tool" id="htabToolBtn" onclick="toggleToolMenu(event)" aria-haspopup="true" aria-expanded="false" title="특약 · 뉴스 · 청약 · 사용법 · 규제 요약"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>도구 <span class="ddcaret">▾</span></button>
       <div class="htab-menu" id="htabToolMenu">
     <button class="htab" onclick="sv('clause',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>특약</button>
     <button class="htab" onclick="sv('news',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h12v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2"/><path d="M7.5 9h5"/><path d="M7.5 13h5"/><path d="M7.5 16.5h3"/></svg>뉴스</button>
     <button class="htab" onclick="sv('subs',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18"/><path d="M8 2.5v4"/><path d="M16 2.5v4"/></svg>청약</button>
     <button class="htab" onclick="sv('guide',this)" style="opacity:0.85" title="처음이세요? 3분 가이드"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>사용법</button>
+    <!-- Sprint OOOOO: 규제 요약 pill → 도구▾ 항목으로 이동(시안). sv() 탭 활성은 인덱스 기반(htabOrder 8개)이라
+         반드시 마지막 항목(인덱스 8, htabOrder[8]=undefined → 항상 off)이어야 안전. -->
+    <button class="htab" onclick="closeToolMenu();openRegSummary()" title="2025.10.15 규제 요약 보기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3.5v5c0 4.4-3 7.6-7 9.5-4-1.9-7-5.1-7-9.5v-5Z"/></svg>규제 요약</button>
       </div>
     </div>
   </div>
   <!-- P0 (2026-04-25 Phase 2 시나리오 A): 단지명·동명 직접 검색바 -->
   <!-- HEADER-SQUEEZE-2026-07-15 (Sprint MMMMM, 실측): pill 8개(admin) 시 검색창 173px·1050px 창 44px 붕괴 → min-width 확보 -->
-  <div class="hsearch" style="position:relative;flex:1;min-width:170px;max-width:480px;margin:0 8px">
+  <div class="hsearch" style="position:relative;flex:1;min-width:170px;max-width:480px;margin:0 4px">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-faint);pointer-events:none;z-index:1"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
-    <input id="hSearchInput" class="inp" type="text" placeholder="단지명·동명 검색 (예: 마포래미안푸르지오, 공덕동)" style="margin:0;font-size:12px;padding:7px 10px 7px 32px" oninput="onHeaderSearchInput(this.value)" onkeydown="onHeaderSearchKey(event)" onfocus="if(this.value)onHeaderSearchInput(this.value)" onblur="setTimeout(()=>document.getElementById('hSearchDrop').style.display='none',200)" autocomplete="off">
+    <input id="hSearchInput" class="inp" type="text" placeholder="단지명·동명 검색 (예: 마포래미안푸르지오, 공덕동)" style="margin:0;font-size:13.5px;padding:7px 10px 7px 34px" oninput="onHeaderSearchInput(this.value)" onkeydown="onHeaderSearchKey(event)" onfocus="if(this.value)onHeaderSearchInput(this.value)" onblur="setTimeout(()=>document.getElementById('hSearchDrop').style.display='none',200)" autocomplete="off">
     <script>
     // Agent UX #11 (2026-05-04): 모바일 ≤480px placeholder 잘림 → JS 로 단순화
     (function _adjustHSearchPlaceholder(){
@@ -1279,18 +1339,31 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <div id="hSearchDrop" style="display:none;position:absolute;top:100%;left:0;width:100%;max-width:calc(100vw - 40px);background:var(--bg-base);border:1px solid var(--bd);border-radius:8px;margin-top:3px;max-height:520px;overflow-y:auto;z-index:99999;box-shadow:0 6px 24px rgba(0,0,0,0.18)"></div>
   </div>
   <div class="hml">
-    <!-- Phase 4: 클릭 → 규제 요약 모달 -->
-    <div class="rpill" onclick="openRegSummary()" style="cursor:pointer" title="2025.10.15 규제 요약 보기"><div class="hdot"></div>규제 요약</div>
-    <span class="hst" id="quotaPill" style="background:var(--ambL);color:var(--amb);display:none" title="🤖 단지 검색·AI 분석 무료 한도 (오늘 자정 reset)" aria-label="AI 검색 무료 한도">🔎 검색 5/5</span>
-    <span class="hst" id="aiPill" style="background:var(--bg2);color:var(--t2);display:none" title="💬 AI 채팅 무료 한도 (오늘 자정 reset)" aria-label="AI 채팅 무료 한도">💬 채팅 —</span>
-    <!-- DATA-QUALITY-2026-07-12 (Sprint BBBBB): 관리자 전용 facility 데이터 품질 뱃지 (운영자가 /api/health 안 봐도) -->
-    <span class="hst" id="dqPill" onclick="showDataQuality()" style="display:none;cursor:pointer" title="facility 데이터 품질 (관리자 전용)" aria-label="데이터 품질">🗂 데이터</span>
+    <!-- Sprint OOOOO (Claude Design 시안): pill 8→3 — 규제 요약은 도구▾, 데이터 품질·다크·ⓘ는 계정 드롭다운으로.
+         quotaPill/aiPill id 는 숫자 표시용 <b> 로 유지(updateQuota/updateAiPill 연속성). -->
+    <div id="hUsage" onclick="openSettings()" title="오늘 무료 사용량 — 매일 자정 리셋 (클릭: 상세 정보)" role="status">
+      <span class="hu-dim">오늘</span>
+      <span class="hu-item" aria-label="단지 검색 잔여"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/><path d="m19.5 19.5-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><b id="quotaPill">—</b></span>
+      <span class="hu-dot">·</span>
+      <span class="hu-item" aria-label="AI 채팅 잔여"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5.5h16v10H9l-4 3.5v-3.5H4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><b id="aiPill">—</b></span>
+    </div>
     <!-- Phase 4 (2026-04-26): 서버 정상 시 hide, 장애 시만 빨간 표시 — "항상 초록"의 의미 없음 해소 -->
     <span class="hst off" id="apiSt" style="display:none">확인 중...</span>
-    <!-- Phase 5 (2026-04-26): 핵심 USP = 1page 보고서. AI 특약 CTA 제거. -->
-    <button class="hbtn hbtn-cta" id="ctaReportBtn" onclick="sv('report')" title="회원님 가구 맞춤 1page 컨설팅 보고서 자동 생성" aria-label="맞춤 보고서 생성으로 이동"><span class="cta-icon">📊</span><span class="cta-text"> 맞춤 보고서</span></button>
+    <!-- Phase 5 (2026-04-26): 핵심 USP = 1page 보고서 (시안: 헤더 유일 강조 CTA) -->
+    <button class="hbtn hbtn-cta" id="ctaReportBtn" onclick="sv('report')" title="회원님 가구 맞춤 1page 컨설팅 보고서 자동 생성" aria-label="맞춤 보고서 생성으로 이동"><span class="cta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M6 3h9l4 4v14H6z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 3v5h5M9 13h6M9 17h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></span><span class="cta-text"> <span class="cta-full">맞춤 </span>보고서</span></button>
     <button class="hbtn" id="loginBtn" onclick="openLogin()" title="로그인하면 북마크가 기기 간 동기화돼요">로그인</button>
-    <button class="hbtn" id="userBtn" onclick="openUserMenu()" style="display:none">👤 <span id="userBadge"></span></button>
+    <div class="acct-dd" id="acctDd">
+      <button class="hbtn-avatar" id="userBtn" onclick="toggleAcctMenu(event)" aria-haspopup="true" aria-expanded="false" title="계정 메뉴"><span class="avtr" id="userAvatar">·</span><span class="ddcaret">▾</span><span id="userBadge" style="display:none"></span></button>
+      <div class="acct-menu" id="acctMenu">
+        <div class="acct-head"><span class="avtr" id="userAvatar2">·</span><div style="min-width:0"><div class="acct-name" id="acctName"></div><div class="acct-plan" id="acctPlan">로그인됨</div></div></div>
+        <div class="acct-div"></div>
+        <button class="acct-it" onclick="closeAcctMenu();openUserMenu()"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-3.9 3.1-6 7-6s7 2.1 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>내 정보</button>
+        <button class="acct-it" onclick="toggleTheme()" aria-label="다크 모드 전환"><svg viewBox="0 0 24 24" fill="none"><path d="M20 13.5A8 8 0 1 1 10.5 4a6.5 6.5 0 0 0 9.5 9.5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>다크 모드<span class="acct-sw" aria-hidden="true"><span class="knob"></span></span></button>
+        <button class="acct-it" onclick="closeAcctMenu();openSettings();if(window._isAdmin&&typeof showDataQuality==='function')showDataQuality()"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 11v5M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>사용량 · 데이터 품질 정보<span class="acct-sub" id="acctDqSub">검색·채팅 잔여 및 데이터 출처 확인</span></span></button>
+        <div class="acct-div"></div>
+        <button class="acct-it danger" onclick="closeAcctMenu();logout()"><svg viewBox="0 0 24 24" fill="none"><path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 8 6 12l4 4M6 12h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>로그아웃</button>
+      </div>
+    </div>
     <button class="hbtn" id="themeToggle" onclick="toggleTheme()" title="다크/라이트 모드 전환" aria-label="테마 전환" style="min-width:0;padding:6px 9px">🌙</button>
     <button class="hbtn" id="settingsBtn" onclick="openSettings()">ⓘ 정보</button>
   </div>
@@ -2460,6 +2533,11 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <!-- STAB-A P1#25 (2026-05-03): 한도 가독성 강화 — 비로그인·로그인 차이 명시 -->
         <div class="sm-hint" id="usageInfo">로그인 X: 5회/일 · 로그인: 10회/일 (단지 검색). 매일 자정 리셋. 매수특약·AI 채팅은 별도 한도.</div>
       </div>
+      <!-- Sprint OOOOO: 데스크톱 헤더에서 테마 토글 제거(계정 드롭다운으로) — 비로그인 사용자용 전환 창구 -->
+      <div class="sm-row">
+        <div class="sm-lbl">화면 모드</div>
+        <button class="hbtn" onclick="toggleTheme()" style="min-width:0;padding:6px 14px;margin-top:4px">🌙 다크 / ☀️ 라이트 전환</button>
+      </div>
       <div class="sm-row">
         <div class="sm-lbl">데이터 출처</div>
         <div class="sm-hint">
@@ -3371,12 +3449,17 @@ async function checkDeletionStatus(){
 // 세션 변경 시 헤더 UI + 자동 마이그레이션
 function _updateAuthUi(session){
   const loginBtn = document.getElementById('loginBtn');
-  const userBtn = document.getElementById('userBtn');
+  const acctDd = document.getElementById('acctDd');
   const badge = document.getElementById('userBadge');
   if(session?.user){
+    const _name = (session.user.email||'').split('@')[0];
     loginBtn.style.display='none';
-    userBtn.style.display='';
-    badge.textContent = (session.user.email||'').split('@')[0].slice(0,12);
+    if(acctDd) acctDd.style.display='flex'; // Sprint OOOOO: userBtn → 계정 아바타 드롭다운(시안)
+    const _init = (_name[0]||'?').toUpperCase();
+    const av=document.getElementById('userAvatar'); if(av) av.textContent=_init;
+    const av2=document.getElementById('userAvatar2'); if(av2) av2.textContent=_init;
+    const nm=document.getElementById('acctName'); if(nm) nm.textContent=_name.slice(0,20);
+    if(badge) badge.textContent = _name.slice(0,12);
     closeLogin();
     // SYNC-DEDUPE-2026-07-11 (Sprint IIII): getSession+SIGNED_IN+TOKEN_REFRESHED 다발 발화로
     //   서버 동기화가 로드당 6~7회 반복되던 것 — 같은 access_token 이면 1회만 (UI 갱신은 매번 유지,
@@ -3390,7 +3473,8 @@ function _updateAuthUi(session){
     }
   } else {
     loginBtn.style.display='';
-    userBtn.style.display='none';
+    if(acctDd){ acctDd.style.display='none'; }
+    if(typeof closeAcctMenu==='function') closeAcctMenu();
   }
 }
 
@@ -4357,25 +4441,20 @@ async function loadSubs(){
   }
 }
 
-// 사용량 표시 갱신 (헤더 pill + 정보 모달)
+// 사용량 표시 갱신 (헤더 사용량 텍스트 + 정보 모달)
+// Sprint OOOOO (시안): pill → 테두리 없는 텍스트 "오늘 🔎4/5 · 💬2/3". 무제한(admin)은 행 자체를 숨김.
 function updateQuota(usage){
   if(!usage)return;
+  const wrap=document.getElementById('hUsage');
   const pill=document.getElementById('quotaPill');
   const info=document.getElementById('usageInfo');
-  if(pill){
-    pill.style.display='inline-flex';
-    if(usage.unlimited){ // QUOTA-PLAN-2026-07-12: 운영자/admin 무제한 표시(0/5 오표시 fix)
-      pill.textContent='🔎 검색 무제한';
-      pill.style.background='var(--grnL)'; pill.style.color='var(--grn)';
-      pill.title='운영자·관리자 — 검색 무제한';
-    } else {
-      // P1 (Phase 2 8-1): "5/5" 의미 명확화 — "🔎 검색 5/5"
-      pill.textContent=`🔎 검색 ${usage.remaining}/${usage.limit}`;
-      if(usage.remaining<=1){pill.style.background='var(--redL)';pill.style.color='var(--red)';}
-      else if(usage.remaining<=2){pill.style.background='var(--ambL)';pill.style.color='var(--amb)';}
-      else{pill.style.background='var(--grnL)';pill.style.color='var(--grn)';}
-      pill.title=`오늘 무료 단지 검색 ${usage.used}/${usage.limit}회 사용 — 매일 자정 리셋`;
-    }
+  window._quotaUnlimited = !!usage.unlimited;
+  if(wrap) wrap.style.display = usage.unlimited ? 'none' : 'flex';
+  if(pill && !usage.unlimited){
+    pill.textContent=`${usage.remaining}/${usage.limit}`;
+    // 한도 임박 시 숫자만 색으로 신호 (시안: 배경 pill 없음)
+    pill.style.color = usage.remaining<=1 ? 'var(--red)' : (usage.remaining<=2 ? 'var(--amb)' : '');
+    if(wrap) wrap.title=`오늘 무료 단지 검색 ${usage.used}/${usage.limit}회 사용 — 매일 자정 리셋 (클릭: 상세 정보)`;
   }
   if(info)info.textContent = usage.unlimited ? '검색 무제한 (운영자·관리자)' : `오늘 ${usage.used}/${usage.limit}회 사용 (남은 무료 검색 ${usage.remaining}회) · 매일 자정 리셋`;
 }
@@ -4393,6 +4472,8 @@ async function refreshQuota(){
       if(d.chat) updateAiPill(d.chat);
       updateDataQuality(d.facilityQuality, !!(d.usage && d.usage.unlimited)); // 관리자 데이터 품질 뱃지 (Sprint BBBBB)
       window._isAdmin = !!(d.usage && d.usage.unlimited); // Sprint MMMMM — admin 전용 UI(진단 raw 등) 게이트
+      // Sprint OOOOO: 계정 드롭다운 플랜 라벨 (시안 "무료 플랜 · 로그인됨")
+      const _plan=document.getElementById('acctPlan'); if(_plan) _plan.textContent = window._isAdmin ? '관리자 · 무제한' : '무료 플랜 · 로그인됨';
       updateEcosHint(d.ecosRates); // ECOS 시중금리 힌트 + dc() 기본금리 (Sprint FFFFF)
       updateHfRates(d.hfRates); // HF 정책자금 공시 금리 — 표 자동 갱신 (Sprint HHHHH)
       // 월 예산 90% 초과 시 선제적 경고 (아직 차단 전)
@@ -4404,47 +4485,34 @@ async function refreshQuota(){
   }catch{}
 }
 
-// AI 채팅 전용 pill — 한도는 서버 /api/health 의 chat.{limit,used,remaining} 사용 (비로그인 3 / 로그인 13, 162bdbb). 클라 하드코딩 금지.
+// AI 채팅 잔여 — 한도는 서버 /api/health 의 chat.{limit,used,remaining} 사용 (비로그인 3 / 로그인 13, 162bdbb). 클라 하드코딩 금지.
+// Sprint OOOOO (시안): #hUsage 내부 숫자(<b id="aiPill">)만 갱신 — 행 표시/숨김은 updateQuota 가 담당(admin 은 둘 다 무제한).
 function updateAiPill(usage){
   if(!usage) return;
   const pill = document.getElementById('aiPill');
   if(!pill) return;
-  pill.style.display='inline-flex';
-  if(usage.unlimited){ // QUOTA-PLAN-2026-07-12: 운영자/admin 무제한
-    pill.textContent='💬 채팅 무제한'; pill.style.background='var(--bg2)'; pill.style.color='var(--t2)'; return;
-  }
-  // P1 (Phase 2 8-1): 의미 명확 — "💬 채팅 N/limit" (limit 은 서버값 usage.limit, 하드코딩 금지)
-  pill.textContent = `💬 채팅 ${usage.remaining}/${usage.limit}`;
-  if(usage.remaining <= 1){ pill.style.background='var(--redL)'; pill.style.color='var(--red)'; }
-  else if(usage.remaining <= 3){ pill.style.background='var(--ambL)'; pill.style.color='var(--amb)'; }
-  else { pill.style.background='var(--bg2)'; pill.style.color='var(--t2)'; }
+  if(usage.unlimited){ pill.textContent='∞'; pill.style.color=''; return; }
+  pill.textContent = `${usage.remaining}/${usage.limit}`;
+  pill.style.color = usage.remaining<=1 ? 'var(--red)' : (usage.remaining<=3 ? 'var(--amb)' : '');
   pill.title = `오늘 AI 채팅 ${usage.used}/${usage.limit}회 사용 — 매일 자정 리셋`;
-  pill.onclick = () => openQuotaModal('info', `오늘 AI 채팅 ${usage.used}/${usage.limit}회 사용 중`);
-  pill.style.cursor = 'pointer';
 }
 
-// DATA-QUALITY-2026-07-12 (Sprint BBBBB, 운영자 "일일이 안 찾게"): 관리자 전용 facility 데이터 품질 뱃지.
-//   /api/health.facilityQuality 를 헤더에 시각화 — warn(주차누락 등 임계초과) 시 앰버, 정상 시 초록. admin 만.
+// DATA-QUALITY-2026-07-12 (Sprint BBBBB) → Sprint OOOOO: 헤더 dqPill 제거(시안), 계정 드롭다운
+//   「사용량·데이터 품질 정보」 서브라인(#acctDqSub)으로 이동. admin 만 실제 수치, 클릭 시 상세 toast 병행.
 function updateDataQuality(fq, isAdmin){
-  const pill = document.getElementById('dqPill');
-  if(!pill) return;
-  if(!isAdmin){ pill.style.display='none'; return; }
+  const sub = document.getElementById('acctDqSub');
+  if(!sub) return;
+  if(!isAdmin){ sub.textContent='검색·채팅 잔여 및 데이터 출처 확인'; return; }
   if(!fq){
     // DDDDD 비차단: 첫 health 는 facilityQuality=null(백그라운드 계산 중)일 수 있음 → admin 이면 3초 후 1회
-    //   재조회로 뱃지 채움(무한루프 방지 _dqRetried).
+    //   재조회로 채움(무한루프 방지 _dqRetried).
     if(!window._dqRetried){ window._dqRetried = true; setTimeout(()=>{ try{ typeof refreshQuota==='function' && refreshQuota(); }catch(_){} }, 3000); }
-    pill.style.display='none'; return;
+    return;
   }
   window._dqData = fq;
-  pill.style.display='inline-flex';
-  if(fq.warn){
-    pill.textContent = `🗂 데이터 ⚠${fq.parkingMissingPct!=null?fq.parkingMissingPct+'%':''}`;
-    pill.style.background='var(--ambL)'; pill.style.color='var(--amb)';
-  } else {
-    pill.textContent = '🗂 데이터 ✓';
-    pill.style.background='var(--grnL)'; pill.style.color='var(--grn)';
-  }
-  pill.title = `facility 데이터 품질 (관리자 · 총 ${(fq.total||0).toLocaleString()}개)\n주차누락 ${fq.parkingMissing}(${fq.parkingMissingPct}%) · 세대수0 ${fq.householdsZero} · KAPT조회실패 ${fq.emptyFetch} · 미적재 ${fq.facilityNull}\n${fq.warn?'⚠ 임계 초과 — 백필 self-heal 진행 중(매일 05:00 UTC)':'✓ 정상'}`;
+  sub.textContent = fq.warn
+    ? `⚠ 주차 데이터 누락 ${fq.parkingMissingPct!=null?fq.parkingMissingPct+'%':''} — self-heal 진행 중`
+    : `✓ facility 데이터 정상 (총 ${(fq.total||0).toLocaleString()}개)`;
 }
 function showDataQuality(){
   const fq = window._dqData;
@@ -8456,6 +8524,22 @@ function closeToolMenu(){
 document.addEventListener('click',function(e){
   const dd=document.getElementById('htabToolDd');
   if(dd&&dd.classList.contains('open')&&!dd.contains(e.target))closeToolMenu();
+});
+// Sprint OOOOO (시안 컷2): 계정 아바타 드롭다운 열기/닫기 — 도구▾ 와 동일 패턴
+function toggleAcctMenu(e){
+  if(e)e.stopPropagation();
+  const dd=document.getElementById('acctDd'), btn=document.getElementById('userBtn');
+  if(!dd)return;
+  const open=dd.classList.toggle('open');
+  if(btn)btn.setAttribute('aria-expanded',open?'true':'false');
+}
+function closeAcctMenu(){
+  const dd=document.getElementById('acctDd'), btn=document.getElementById('userBtn');
+  if(dd&&dd.classList.contains('open')){dd.classList.remove('open');if(btn)btn.setAttribute('aria-expanded','false');}
+}
+document.addEventListener('click',function(e){
+  const dd=document.getElementById('acctDd');
+  if(dd&&dd.classList.contains('open')&&!dd.contains(e.target))closeAcctMenu();
 });
 // 플로팅 관심단지 popover 토글
 function toggleBmPop(){
