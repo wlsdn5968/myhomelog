@@ -19,7 +19,7 @@
  *   - resolveCoord 자체가 saveToDb 진행 → INSERT 자동
  */
 const { createClient } = require('@supabase/supabase-js');
-const { resolveCoordBatch, kakaoGeocode, getKakaoUsageStats } = require('../services/geocodeCacheService');
+const { resolveCoordBatch, kakaoGeocode, getKakaoUsageStats, kakaoAddressGeocode } = require('../services/geocodeCacheService');
 const { isValidKoreaCoord } = require('../utils/geo');
 const logger = require('../logger');
 
@@ -98,6 +98,95 @@ async function rehealSubfeatures(admin, { cap = 300, budgetMs = 120000 } = {}) {
   return { tried, healed, marked };
 }
 
+/**
+ * 공식 주소 기반 좌표 검증·교정 스윕 — ADDR-VERIFY-2026-07-17 (Sprint ZZZZZ, 운영자 "지도 매칭" 1번 승인)
+ *
+ * 배경(전수 실측): 이름 키워드 지오코딩의 구조적 한계로 place_name↔단지명 무관 행 존재(표본: 문구점·
+ *   교차로·자동차 대리점·타단지 차수혼동). 반면 이름 유사도는 판정 기준으로 부적합 —
+ *   실사례: geocache apt_name '두산'(옛 스냅샷) vs KAPT 공식 '가산두산위브' → place '두산위브아파트'가
+ *   오히려 정답. 유일하게 신뢰 가능한 기준 = 공식 주소와의 거리.
+ *
+ * 진실 소스(이름 무관·공식 데이터만):
+ *   - kapt: 키 → apt_master.facility.kaptAddr (KAPT 공식 주소, 11,480단지 보유)
+ *   - name: 키 → molit_transactions 해당 단지 최빈 지번 → "시군구 법정동 지번"
+ *
+ * 판정: 주소 지오코딩(모호성 0) 좌표와 기존 좌표 거리 d
+ *   - d ≤ 300m → 좌표 유지 + source='kakao-v' (검증 통과 — 대단지 반경 감안, place 가 상가여도 실용 정확)
+ *   - d > 300m → 공식 주소 좌표로 교정 + source='kakao-addr' + place_name 은 비움(이름 place 아님이 사실)
+ *   - 주소 미확보/지오코딩 실패 → 아무것도 안 바꿈(마킹 없음 — 다음 run 재시도)
+ * 처리된 행은 source 가 'kakao'에서 벗어나 반복 재검증·reheal 재시도에서 자연 제외(진행 보장).
+ */
+async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = {}) {
+  const started = Date.now();
+  const { data: rows } = await admin
+    .from('apt_geocache')
+    .select('apt_key, apt_name, sigungu, umd_nm, lat, lng')
+    .eq('source', 'kakao')
+    .limit(cap);
+  if (!rows || !rows.length) return { tried: 0, verified: 0, corrected: 0, skippedNoAddr: 0 };
+
+  // kapt: 키의 공식 주소 배치 조회 (N+1 회피)
+  const kaptCodes = rows.filter(r => r.apt_key.startsWith('kapt:')).map(r => r.apt_key.slice(5));
+  const addrByKapt = new Map();
+  if (kaptCodes.length) {
+    const { data: masters } = await admin.from('apt_master')
+      .select('kapt_code, facility').in('kapt_code', kaptCodes);
+    for (const m of (masters || [])) {
+      const a = m.facility && m.facility.kaptAddr;
+      if (a && String(a).trim().length >= 5) addrByKapt.set(m.kapt_code, String(a).trim());
+    }
+  }
+
+  let tried = 0, verified = 0, corrected = 0, skippedNoAddr = 0;
+  const queue = [...rows];
+  async function worker() {
+    while (queue.length && (Date.now() - started) < budgetMs) {
+      const r = queue.shift();
+      try {
+        // 1) 공식 주소 결정
+        let addr = null;
+        if (r.apt_key.startsWith('kapt:')) {
+          addr = addrByKapt.get(r.apt_key.slice(5)) || null;
+        } else if (r.sigungu && r.umd_nm) {
+          // molit 최빈 지번 — 동일 (단지명, 시군구, 법정동) 신고 거래의 mode(jibun)
+          const { data: tx } = await admin.from('molit_transactions')
+            .select('jibun').eq('apt_name', r.apt_name).eq('sigungu', r.sigungu).eq('umd_nm', r.umd_nm)
+            .not('jibun', 'is', null).neq('jibun', '').limit(60);
+          if (tx && tx.length) {
+            const freq = {};
+            for (const t of tx) freq[t.jibun] = (freq[t.jibun] || 0) + 1;
+            const top = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
+            if (top) addr = `${r.sigungu} ${r.umd_nm} ${top[0]}`.trim();
+          }
+        }
+        if (!addr) { skippedNoAddr++; continue; }
+        // 2) 주소 지오코딩(모호성 0) — 실패 시 아무것도 안 바꿈
+        const fresh = await kakaoAddressGeocode(addr);
+        if (!fresh) continue;
+        tried++;
+        // 3) 거리 판정
+        const dx = (fresh.lng - Number(r.lng)) * Math.cos(fresh.lat * Math.PI / 180);
+        const moved = 111000 * Math.sqrt(Math.pow(fresh.lat - Number(r.lat), 2) + Math.pow(dx, 2));
+        if (moved <= 300) {
+          await admin.from('apt_geocache').update({ source: 'kakao-v' }).eq('apt_key', r.apt_key);
+          verified++;
+        } else {
+          await admin.from('apt_geocache').update({
+            lat: fresh.lat, lng: fresh.lng, address: fresh.address, place_name: null, source: 'kakao-addr',
+          }).eq('apt_key', r.apt_key);
+          corrected++;
+          logger.info({ source: 'geocache-addr-verify', aptKey: r.apt_key, movedM: Math.round(moved), addr },
+            `좌표 교정: ${r.apt_name} ${Math.round(moved)}m 이동 (공식주소 기반)`);
+        }
+      } catch (_) { /* 개별 실패 무시 — source 유지 → 다음 run 재시도 */ }
+    }
+  }
+  await Promise.all(Array.from({ length: 6 }, () => worker()));
+  logger.info({ source: 'geocache-addr-verify', tried, verified, corrected, skippedNoAddr, elapsedMs: Date.now() - started },
+    `주소 검증 스윕: ${verified} 통과 / ${corrected} 교정 / ${skippedNoAddr} 주소없음 / ${tried} 판정`);
+  return { tried, verified, corrected, skippedNoAddr };
+}
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
 
@@ -148,6 +237,13 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
   try { reheal = await rehealSubfeatures(admin, { cap: 300, budgetMs: 60000 }); }
   catch (e) { logger.warn({ err: e.message }, 'geocache reheal 실패(무시)'); }
 
+  // ADDR-VERIFY-2026-07-17 (Sprint ZZZZZ): 공식 주소 기반 좌표 검증·교정 — 일 300행씩 전 행 점진 커버
+  //   (미검증 10.4K → ~35일, admin 수동 트리거로 가속 가능). 예산 60s 는 sweep 몫에서 차감되지만
+  //   신규 백필보다 기존 오좌표 교정이 사용자 체감 우선(운영자 "지도 매칭" 지적).
+  let addrVerify = { tried: 0, verified: 0, corrected: 0, skippedNoAddr: 0 };
+  try { addrVerify = await verifyByOfficialAddress(admin, { cap: 300, budgetMs: 60000 }); }
+  catch (e) { logger.warn({ err: e.message }, 'geocache 주소검증 실패(무시)'); }
+
   // 후보 풀 1회 조회 → budget 안에서 batch 순회 (재조회 spin 제거)
   const candidates = await fetchCandidatePool(admin, pool, since);
   let totalProcessed = 0, totalInserted = 0, totalFailed = 0, batches = 0, idx = 0;
@@ -170,7 +266,7 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
     batches, poolSize: candidates.length, totalProcessed, totalInserted, totalFailed, elapsedMs: elapsed,
   }, `geocache backfill: ${batches} batches, ${totalInserted}/${totalProcessed} 백필 (풀 ${candidates.length}) (${elapsed}ms)`);
   // KAKAO-DIAG-2026-07-10 (Sprint CCCC): 실패 사유 원격 확정용 — 이 run 인스턴스의 Kakao ok/무매칭/에러코드 분포 동봉.
-  return { ok: true, reheal, batches, poolSize: candidates.length, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, elapsedMs: elapsed, kakao: getKakaoUsageStats() };
+  return { ok: true, reheal, addrVerify, batches, poolSize: candidates.length, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, elapsedMs: elapsed, kakao: getKakaoUsageStats() };
 }
 
 /**

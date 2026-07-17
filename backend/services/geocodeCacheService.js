@@ -129,6 +129,31 @@ function getKakaoUsageStats() {
   };
 }
 
+/** 주소 전용 지오코딩 — ADDR-VERIFY-2026-07-17 (Sprint ZZZZZ): 이름 키워드 검색과 달리 모호성이 없어
+ *  좌표 검증·교정의 진실 소스로 사용(KAPT 공식 주소 / MOLIT 신고 지번). 실패 시 null(호출측 skip). */
+async function kakaoAddressGeocode(address) {
+  if (!KAKAO_ENABLED) return null;
+  const addr = String(address || '').trim();
+  if (addr.length < 5) return null;
+  try {
+    _trackKakaoCall();
+    const r = await axios.get(KAKAO_ADDRESS, {
+      headers: { Authorization: `KakaoAK ${KAKAO_KEY}` },
+      params: { query: addr, size: 1 }, timeout: 5000,
+    });
+    const d = (r.data?.documents || [])[0];
+    if (!d) { _trackKakaoResult('nomatch'); return null; }
+    const lat = parseFloat(d.y), lng = parseFloat(d.x);
+    if (!isValidKoreaCoord(lat, lng)) return null;
+    _trackKakaoResult('ok');
+    return { lat, lng, address: d.address_name || addr };
+  } catch (e) {
+    const code = e.response?.status ? `http_${e.response.status}` : (e.code || 'err');
+    _trackKakaoResult(code, `${code} addr: ${String(e.message).slice(0, 100)}`);
+    return null;
+  }
+}
+
 /** Kakao 다중 쿼리 폴백 — 가장 정확한 매칭을 위해 여러 형태로 시도 */
 async function kakaoGeocode({ aptName, sigungu, umdNm, address }) {
   if (!KAKAO_ENABLED) return null;
@@ -320,4 +345,4 @@ async function resolveCoordBatch(apts, concurrency = 4) {
   return results;
 }
 
-module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats, kakaoGeocode };
+module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode };
