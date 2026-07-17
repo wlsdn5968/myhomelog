@@ -1516,8 +1516,8 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <!-- Sprint QQQQQ (시안): 검색 흐름 직결 — 필터·검색 버튼을 위저드 직후로, 대출 계산은 접이식 미리보기로 강등 -->
       <div class="mb9"><span class="lbl">단지 조건 <span style="font-weight:400;color:var(--t3);font-size:10px">(선택 · 좋은 아파트 필터)</span></span>
         <div class="chips" id="ch-flt">
-          <span class="chip" id="flt-hh" onclick="this.classList.toggle('on')" title="세대수 500세대 이상 — 나홀로 아파트 제외 (호갱노노 기준)">500세대+</span>
-          <span class="chip" id="flt-park" onclick="this.classList.toggle('on')" title="세대당 주차 1.2대 이상 — 주차 편리 (법정 최소 1대·호갱노노 '편리' 기준)">주차 1.2+</span>
+          <span class="chip" id="flt-hh" onclick="this.classList.toggle('on')" title="세대수 500세대 이상 — 나홀로 단지 제외">500세대+</span>
+          <span class="chip" id="flt-park" onclick="this.classList.toggle('on')" title="세대당 주차 1.2대 이상 — 주차 여유 (법정 최소 1대 대비)">주차 1.2+</span>
           <span class="chip" id="flt-sale" onclick="this.classList.toggle('on')" title="분양 단지만 — 임대·혼합 제외">분양만</span>
         </div>
         <div style="font-size:10px;color:var(--t3);margin-top:3px">※ 조건 데이터는 KAPT 등록 단지에만 있어요 — 켜면 정보 있는 단지만 표시돼요</div>
@@ -2082,7 +2082,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 
     <!-- 2. 단지 검색 -->
     <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px" open>
-      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">🔍 단지 검색 — 호갱노노처럼</summary>
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">🔍 단지 검색 — 이름·동·지도 3가지 방법</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         <b>방법 1. 헤더 검색바</b> — "공덕래미안" 또는 "공덕동" 입력 → 자동완성에서 클릭<br>
         <b>방법 2. 지도 panning</b> — 지도 이동 후 "🔍 이 지역 단지 보기" 버튼<br>
@@ -2109,8 +2109,8 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         사용자 자금·자녀·거주기간·우선순위 → <b>AI가 컨설턴트 톤으로 1page 보고서 자동 생성</b><br>
         포함: 회원님 핵심 방향 3줄 · 정부 정책 환경 · 매수 체크리스트 · 조건 부합 단지 7개 (단지별 컨설팅 코멘트) · 갈아타기 시나리오 · 매수 TIP<br><br>
-        <b>차별화</b>: 호갱노노/직방 = 시세 검색만, 우리 = AI 컨설턴트 보고서<br>
-        <b>가성비</b>: 부동산 컨설턴트 1회 30만원 → <b>무료로 받아보세요</b><br>
+        <b>차별화</b>: 시세 검색에서 끝나지 않고, 내 자금·가구 상황 기반 1page 보고서까지<br>
+        <b>비용</b>: 지금은 <b>무료</b>로 받아볼 수 있어요<br>
         <b>다운로드</b>: PDF로 가족·중개사와 공유 가능<br><br>
         <span style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:6px;padding:6px 10px;display:inline-block;font-size:11px;color:var(--accent-700)">⚠ 본 보고서는 정보 정리이며 투자자문업·중개업·대출모집인업 X. 매수·매도 추천 X.</span>
         <button class="abtn" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px;background:var(--accent-500);color:#fff;border:none" onclick="sv('report')">📊 보고서 만들어보기 →</button>
@@ -2717,19 +2717,6 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   </div>
 </div>
 
-<!-- ONBOARDING MODAL -->
-<div class="smbg" id="OB" style="z-index:9999">
-  <div class="smbox" style="max-width:440px">
-    <div class="smhdr">
-      <span class="smtit" id="obTit">🏠 내집로그에 오신 걸 환영해요</span>
-      <button class="smx" onclick="skipOnboarding()">건너뛰기</button>
-    </div>
-    <div class="smbody" id="obBody">
-      <!-- step content rendered by JS -->
-    </div>
-  </div>
-</div>
-
 <!-- AUTOMATED DECISION EXPLANATION MODAL (GDPR Art.22 / PIPA) -->
 <div class="smbg" id="ADM" style="z-index:9997">
   <div class="smbox" style="max-width:540px">
@@ -2901,11 +2888,10 @@ window.addEventListener('DOMContentLoaded',()=>{
     });
   } catch(_){}
 
-  // 첫 방문자 온보딩 (공유 링크로 들어온 경우는 스킵)
+  // OB-REMOVE-2026-07-17 (Sprint YYYYY): 4단계 온보딩 모달 제거 — 랜딩+보고서 위저드가 대체(정상 첫방문
+  //   경로에선 mhl_landing_seen 로직이 mhl_onboarded 를 즉시 세팅해 영구 미노출이던 사실상 죽은 코드).
+  //   유일한 표시 경로(구 방문자)는 구식 4단계 모달이 현 위저드 동선과 충돌 — 제거가 정합.
   const sp=new URLSearchParams(location.search);
-  if(!localStorage.getItem('mhl_onboarded') && !sp.get('apt') && !restored){
-    setTimeout(()=>startOnboarding(),400);
-  }
 
   // Phase 4-3 (2026-05-05): 랜딩 대시보드 — 첫 방문 + URL clean 시만 노출 (옵션 A2)
   //   - localStorage 'mhl_landing_seen' 체크
@@ -3647,158 +3633,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
   setTimeout(tryHook, 2500);
 });
 
-// ── ONBOARDING ───────────────────────────────────────────
-let _obStep=0;
-const OB_STEPS=[
-  {
-    title:'🏠 내집로그에 오신 걸 환영해요',
-    body:`<div style="padding:8px 0;line-height:1.6;font-size:13px;color:var(--t1)">
-      <div style="margin-bottom:10px"><b>실거래가 + AI 분석</b>으로 내 조건에 맞는 아파트를 추천해드려요.</div>
-      <ul style="padding-left:18px;color:var(--t2);font-size:12px">
-        <li>국토교통부 실거래가 데이터 (매일 갱신)</li>
-        <li>LTV·DSR·세금까지 한눈에</li>
-        <li>2025.10.15 규제 기준 반영</li>
-      </ul>
-      <div style="margin-top:14px;padding:10px;background:var(--bg2);border-radius:8px;font-size:11px;color:var(--t3)">⏱ 1~2분이면 맞춤 단지 5곳을 보여드려요 (4단계, 건너뛰기 가능)</div>
-    </div>`,
-    next:'시작하기 →'
-  },
-  {
-    title:'1️⃣ 예산을 알려주세요',
-    body:`<div style="padding:6px 0">
-      <div style="font-size:12px;color:var(--t2);margin-bottom:8px">총 매수 예산 (자기자본 + 대출)</div>
-      <select id="ob_budget" class="sm-inp" style="margin-bottom:14px">
-        <option value="5">~5억</option>
-        <option value="7" selected>5~7억</option>
-        <option value="10">7~10억</option>
-        <option value="15">10~15억</option>
-        <option value="20">15억 이상</option>
-      </select>
-      <div style="font-size:12px;color:var(--t2);margin-bottom:8px">자기자본 (현금)</div>
-      <select id="ob_cash" class="sm-inp">
-        <option value="2">~2억</option>
-        <option value="3" selected>2~3억</option>
-        <option value="5">3~5억</option>
-        <option value="8">5~8억</option>
-        <option value="12">8억 이상</option>
-      </select>
-    </div>`,
-    next:'다음 →'
-  },
-  {
-    title:'2️⃣ 관심 지역을 선택하세요',
-    body:`<div style="padding:6px 0">
-      <div style="font-size:12px;color:var(--t2);margin-bottom:8px">희망 지역</div>
-      <select id="ob_region" class="sm-inp" style="margin-bottom:14px">
-        <option value="강남4구">강남·서초·송파·강동</option>
-        <option value="마용성">마포·용산·성동</option>
-        <option value="노도강">노원·도봉·강북</option>
-        <option value="금관구">금천·관악·구로</option>
-        <option value="분당과천">성남분당·과천·하남</option>
-        <option value="서울전체" selected>서울 전체</option>
-        <option value="경기">경기 (수도권)</option>
-      </select>
-      <div style="font-size:12px;color:var(--t2);margin-bottom:8px">주택 보유 현황</div>
-      <select id="ob_house" class="sm-inp">
-        <option value="무주택" selected>무주택 (생애최초 가능)</option>
-        <option value="1주택">1주택자 (갈아타기)</option>
-        <option value="다주택">다주택자</option>
-      </select>
-    </div>`,
-    next:'다음 →'
-  },
-  {
-    title:'⚠ 시작 전 꼭 확인해주세요',
-    body:`<div style="padding:4px 0;font-size:12px;line-height:1.7;color:var(--t1)">
-      <div style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:8px;padding:12px;margin-bottom:12px;color:var(--red);font-weight:600">
-        내집로그는 <u>매수·매도를 추천하지 않습니다.</u><br>
-        제공되는 점수·신호등은 <u>과거 실거래 통계 정리</u>이며, <u>미래 가격을 예측하거나 보장하지 않습니다.</u>
-      </div>
-      <ul style="padding-left:18px;color:var(--t2);font-size:11px;line-height:1.8">
-        <li>부동산 가격은 <strong>하락할 수 있으며</strong>, 손실 책임은 이용자 본인에게 있습니다.</li>
-        <li>대출은 금융기관, 세금은 세무사, 계약은 공인중개사·법무사의 확인을 반드시 거치세요.</li>
-        <li>AI 응답은 오류가 있을 수 있어 <strong>사실 확인 없이</strong> 의사결정에 사용 금지.</li>
-      </ul>
-      <label style="display:flex;align-items:flex-start;gap:8px;margin-top:14px;padding:10px;background:var(--s1);border-radius:8px;cursor:pointer;font-size:12px">
-        <input type="checkbox" id="ob_agree" style="margin-top:2px;flex-shrink:0">
-        <span>위 내용을 모두 읽고 이해했으며, <strong>본 서비스를 참고용으로만 사용</strong>하고 모든 의사결정의 책임이 저에게 있음에 동의합니다.</span>
-      </label>
-      <div style="text-align:center;margin-top:8px"><a href="javascript:openTerms()" style="font-size:10px;color:var(--t3);text-decoration:underline">전체 이용약관·면책조항 보기</a></div>
-    </div>`,
-    next:'동의하고 시작 →'
-  },
-];
-
-function startOnboarding(){
-  // Phase 4-3 회귀 fix R1 (2026-05-05): _showLanding 의 mhl_onboarded='1' set 후에도
-  // setTimeout 이 이미 등록된 상태라 startOnboarding 호출됨 → 내부 check 로 모달 차단
-  if (localStorage.getItem('mhl_onboarded') === '1') return;
-  _obStep=0;
-  document.getElementById('OB').classList.add('open');
-  renderOnboarding();
-  // Phase 11 (2026-05-03): funnel — onboarding 시작 추적
-  try { window.va && window.va('event', { name: 'onboarding_start' }); } catch(_){}
-}
-function skipOnboarding(){
-  localStorage.setItem('mhl_onboarded','1');
-  document.getElementById('OB').classList.remove('open');
-  // Phase 11: skip funnel — 어느 단계에서 이탈했는지 측정
-  try { window.va && window.va('event', { name: 'onboarding_skip', data: { step: _obStep } }); } catch(_){}
-}
-function renderOnboarding(){
-  const s=OB_STEPS[_obStep];
-  document.getElementById('obTit').textContent=s.title;
-  document.getElementById('obBody').innerHTML=
-    s.body+
-    `<button class="sm-save" onclick="nextOnboarding()">${s.next}</button>`+
-    (_obStep>0?`<div style="text-align:center;margin-top:8px"><a style="font-size:11px;color:var(--t3);cursor:pointer" onclick="_obStep--;renderOnboarding()">← 이전</a></div>`:'');
-}
-function nextOnboarding(){
-  // 입력값 저장
-  if(_obStep===1){
-    const b=document.getElementById('ob_budget')?.value;
-    const c=document.getElementById('ob_cash')?.value;
-    if(b)document.getElementById('bp').value=b;
-    if(c)document.getElementById('mc').value=c;
-  }
-  if(_obStep===2){
-    const r=document.getElementById('ob_region')?.value;
-    const h=document.getElementById('ob_house')?.value;
-    if(r){
-      document.querySelectorAll('#ch-r .ch').forEach(el=>{
-        if(r.includes(el.textContent.trim()) || el.textContent.trim().includes(r))el.classList.add('on');
-        else el.classList.remove('on');
-      });
-    }
-    if(h){
-      document.querySelectorAll('#ch-h .ch').forEach(el=>{
-        el.classList.toggle('on', el.textContent.trim()===h);
-      });
-    }
-  }
-  // 마지막 동의 단계 검증
-  if(_obStep===3){
-    const agreed=document.getElementById('ob_agree')?.checked;
-    if(!agreed){toast('서비스 이용 동의가 필요해요');return;}
-    localStorage.setItem('mhl_legal_agreed', new Date().toISOString());
-  }
-  _obStep++;
-  if(_obStep>=OB_STEPS.length){
-    localStorage.setItem('mhl_onboarded','1');
-    document.getElementById('OB').classList.remove('open');
-    // Phase 11 (2026-05-03): funnel — onboarding 완주 (가장 critical conversion)
-    try { window.va && window.va('event', { name: 'onboarding_complete' }); } catch(_){}
-    setTimeout(()=>{
-      const btn=document.getElementById('srchBtn');
-      if(typeof doSearch==='function')doSearch();
-      else if(btn)btn.click();
-    },300);
-    return;
-  }
-  // Phase 11: 단계 진행 funnel (어느 단계가 마찰 가장 큰지)
-  try { window.va && window.va('event', { name: 'onboarding_step', data: { step: _obStep } }); } catch(_){}
-  renderOnboarding();
-}
+// OB-REMOVE-2026-07-17 (Sprint YYYYY): OB_STEPS/start/skip/render/nextOnboarding 제거 — 랜딩+위저드가 대체.
 
 // 약관 모달
 function openTerms(){document.getElementById('TM').classList.add('open');}

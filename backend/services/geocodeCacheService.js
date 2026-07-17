@@ -199,7 +199,11 @@ async function kakaoGeocode({ aptName, sigungu, umdNm, address }) {
         const aptCategory = categoryName.includes('아파트') ? 2 : 0;
         // 페널티
         const nonAptPenalty = isNonApt ? -5 : 0;
-        const score = umdMatch + aptCategory + nonAptPenalty;
+        // SANGGA-SOFT-2026-07-17 (Sprint YYYYY): '상가' place 는 차단(-5) 대신 소프트 강등(-1) —
+        //   아파트 본체 후보가 있으면 항상 그쪽이 이기고, 상가 후보뿐이면 여전히 채택(주상복합 명칭
+        //   충돌 우려로 하드 차단하지 않던 기존 의도 유지). 기존 1,091건 잔존의 신규 유입 축소.
+        const sanggaPenalty = (!isNonApt && /상가/.test(placeName)) ? -1 : 0;
+        const score = umdMatch + aptCategory + nonAptPenalty + sanggaPenalty;
         if (score > bestScore) {
           bestScore = score;
           chosen = { d, lat, lng, addrText, placeName, score };
