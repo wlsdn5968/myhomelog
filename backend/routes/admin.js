@@ -40,6 +40,7 @@ async function requireAdmin(req, res, next) {
     next();
   } catch (e) {
     logger.warn({ err: e.message, userId: req.user?.id }, 'admin 인증 실패');
+    require('../utils/captureError').captureRouteError(e, 'admin'); // SENTRY-GAP (Sprint XXXXX)
     res.status(500).json({ error: '인증 처리 실패' });
   }
 }
@@ -74,6 +75,7 @@ router.post('/run-geocache-backfill', async (req, res) => {
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'admin/run-geocache-backfill 실패');
+    require('../utils/captureError').captureRouteError(e, 'admin'); // SENTRY-GAP (Sprint XXXXX)
     res.status(500).json({ error: e.message });
   }
 });
@@ -96,6 +98,7 @@ router.get('/run-geocache-backfill', async (req, res) => {
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'admin/run-geocache-backfill 실패');
+    require('../utils/captureError').captureRouteError(e, 'admin'); // SENTRY-GAP (Sprint XXXXX)
     res.status(500).json({ error: e.message });
   }
 });
@@ -140,6 +143,7 @@ async function handleRunMolitIngest(req, res) {
     res.json({ ok: true, opts, ...(unknownLawds && unknownLawds.length ? { unknownLawds } : {}), summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'admin/run-molit-ingest 실패');
+    require('../utils/captureError').captureRouteError(e, 'admin'); // SENTRY-GAP (Sprint XXXXX)
     res.status(500).json({ error: e.message });
   }
 }
@@ -182,6 +186,7 @@ router.get('/debug-kapt-list', async (req, res) => {
     res.json(out);
   } catch (e) {
     logger.error({ err: e.message, lawdCd }, 'admin/debug-kapt-list 실패');
+    require('../utils/captureError').captureRouteError(e, 'admin'); // SENTRY-GAP (Sprint XXXXX)
     res.status(500).json({ error: e.message });
   }
 });
