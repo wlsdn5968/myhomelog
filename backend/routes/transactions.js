@@ -15,6 +15,9 @@ function handleMolitError(err, res) {
   }
   // MOB-AUDIT-2026-05-03: production 에선 generic — 내부 에러 누출 차단
   const isProd = process.env.NODE_ENV === 'production';
+  // SENTRY-GAP-2026-07-17 (Sprint XXXXX): 5xx 만 캡처(KEY_MISSING 503 은 의도된 안내 상태라 위에서 return 됨,
+  //   err.status 4xx 는 클라이언트성이라 제외). MOLIT 타임아웃류는 헬퍼가 upstream fingerprint 로 그룹핑.
+  if (!err.status || err.status >= 500) require('../utils/captureError').captureRouteError(err, 'transactions');
   return res.status(err.status || 500).json({
     error: isProd ? '실거래 데이터 조회 실패. 잠시 후 다시 시도해주세요.' : err.message,
   });

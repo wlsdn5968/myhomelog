@@ -686,4 +686,5 @@ function getStaticFallback(budget, region) {
   }];
 }
 
-module.exports = { getAIRecommendations, pickRegions };
+// TEST-EXPORT-2026-07-17 (Sprint XXXXX): computeLTV 는 순수 함수 — 특성화 테스트용 export 추가(동작 불변).
+module.exports = { getAIRecommendations, pickRegions, computeLTV };

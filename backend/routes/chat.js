@@ -164,6 +164,7 @@ router.post('/', validateChatInput, async (req, res) => {
       err: err.message, status: err.status,
       userId: req.user?.id || null,
     }, 'AI 호출 실패');
+    require('../utils/captureError').captureRouteError(err, 'chat'); // SENTRY-GAP (Sprint XXXXX) — upstream 장애는 헬퍼가 fingerprint 그룹핑
     return res.status(503).json({
       code: isUpstream ? 'ai_upstream_down' : 'ai_error',
       error: isUpstream

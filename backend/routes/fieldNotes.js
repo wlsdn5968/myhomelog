@@ -16,6 +16,7 @@ const express = require('express');
 const { createClient } = require('@supabase/supabase-js');
 const { requireAuth } = require('../middleware/auth');
 const logger = require('../logger');
+const { captureRouteError: _cap } = require('../utils/captureError'); // SENTRY-GAP (Sprint XXXXX)
 
 const router = express.Router();
 router.use(requireAuth);
@@ -45,6 +46,7 @@ router.get('/', async (req, res) => {
     res.json({ notes: data || [] });
   } catch (e) {
     logger.warn({ err: e.message }, 'field-notes GET 실패');
+    _cap(e, 'field-notes/list'); // SENTRY-GAP (Sprint XXXXX)
     res.status(500).json({ error: '조회 실패' });
   }
 });
@@ -62,6 +64,8 @@ router.get('/:aptName', async (req, res) => {
     if (error) throw error;
     res.json({ note: data });
   } catch (e) {
+    logger.warn({ err: e.message }, 'field-notes GET(:aptName) 실패'); // SENTRY-GAP: 무로그였던 catch — 로깅+캡처 추가
+    _cap(e, 'field-notes/get');
     res.status(500).json({ error: '조회 실패' });
   }
 });
@@ -84,6 +88,7 @@ router.put('/:aptName', async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     logger.warn({ err: e.message }, 'field-notes PUT 실패');
+    _cap(e, 'field-notes/put'); // SENTRY-GAP (Sprint XXXXX)
     res.status(500).json({ error: '저장 실패' });
   }
 });
@@ -96,6 +101,8 @@ router.delete('/:aptName', async (req, res) => {
     if (error) throw error;
     res.json({ ok: true });
   } catch (e) {
+    logger.warn({ err: e.message }, 'field-notes DELETE 실패'); // SENTRY-GAP: 무로그였던 catch — 로깅+캡처 추가
+    _cap(e, 'field-notes/delete');
     res.status(500).json({ error: '삭제 실패' });
   }
 });

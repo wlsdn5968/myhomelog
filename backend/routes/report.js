@@ -360,6 +360,7 @@ router.post('/generate', async (req, res) => {
       });
     }
     logger.error({ err: e.message, stack: e.stack }, '보고서 생성 실패');
+    require('../utils/captureError').captureRouteError(e, 'report/generate'); // SENTRY-GAP (Sprint XXXXX) — GlobalAiBudget 503 은 예상 이벤트라 위에서 제외
     // MOB-AUDIT-2026-05-03: production 에선 generic 메시지 — stack 내부 정보 누출 차단
     const isProd = process.env.NODE_ENV === 'production';
     res.status(500).json({

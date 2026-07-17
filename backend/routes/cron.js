@@ -80,6 +80,9 @@ router.get('/retention', async (req, res) => {
     const summary = await runRetention();
     res.json({ ok: true, summary });
   } catch (e) {
+    // SENTRY-GAP-2026-07-17 (Sprint XXXXX): POST 쌍둥이(72행)만 캡처하고 GET 은 무로그·무캡처였음 — 동일 처리
+    logger.error({ err: e.message, stack: e.stack }, 'cron/retention(GET) 실패');
+    try { Sentry.captureException(e, { tags: { route: 'cron.retention' } }); } catch(_){}
     res.status(500).json({ error: e.message });
   }
 });

@@ -34,6 +34,7 @@ router.get('/laws/:slug', async (req, res) => {
     res.json(law);
   } catch (e) {
     logger.warn({ err: e.message, slug, fileType }, 'legal getLaw 실패');
+    require('../utils/captureError').captureRouteError(e, 'legal/laws'); // SENTRY-GAP (Sprint XXXXX)
     res.status(500).json({ error: '법령 조회 실패' });
   }
 });
@@ -53,6 +54,7 @@ router.get('/search', async (req, res) => {
     });
   } catch (e) {
     logger.warn({ err: e.message, q }, 'legal search 실패');
+    require('../utils/captureError').captureRouteError(e, 'legal/search'); // SENTRY-GAP (Sprint XXXXX)
     res.status(500).json({ error: '법령 검색 실패' });
   }
 });

@@ -29,6 +29,9 @@ const cache = require('../cache');
 //   엔드포인트 등)의 정규식 메타문자 이스케이프 — evil regex 주입으로 인한 catastrophic backtracking 차단.
 const _reEsc = (s) => String(s == null ? '' : s).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const { resolveCoordBatch, resolveCoord } = require('../services/geocodeCacheService');
+// SENTRY-GAP-2026-07-17 (Sprint XXXXX): 자체 res.status(5xx) 응답 catch 가 전역 핸들러를 우회해
+//   Sentry 에 안 잡히던 사각 해소 — 응답 shape 불변, 캡처만 추가(일시 오류는 헬퍼가 그룹핑).
+const { captureRouteError } = require('../utils/captureError');
 const { resolveFacility } = require('../services/aptFacilityService');
 const { resolveSchools } = require('../services/schoolService');
 // STAB-AUDIT-2026-05-07 P1: 학교알리미 NEIS API 통합 — 학생수·학급수
@@ -342,6 +345,7 @@ router.get('/apt', async (req, res) => {
     res.json(payload);
   } catch (e) {
     logger.warn({ err: e.message, q }, '단지 검색 실패');
+    captureRouteError(e, 'search/apt');
     // MOB-AUDIT-2026-05-03: production 에선 detail 제거 — 내부 에러 누출 차단
     const isProd = process.env.NODE_ENV === 'production';
     res.status(500).json({
@@ -398,6 +402,7 @@ router.get('/popular', async (req, res) => {
     return res.json(payload);
   } catch (e) {
     logger.warn({ err: e.message }, '인기 단지 조회 실패');
+    captureRouteError(e, 'search/popular');
     res.status(500).json({ error: '조회 실패' });
   }
 });
@@ -555,6 +560,7 @@ router.get('/in-bounds', async (req, res) => {
     res.json({ results: out, count: out.length });
   } catch (e) {
     logger.warn({ err: e.message }, '영역 검색 실패');
+    captureRouteError(e, 'search/in-bounds');
     res.status(500).json({ error: '영역 검색 실패' });
   }
 });
@@ -690,6 +696,7 @@ router.get('/facility', async (req, res) => {
     res.json({ facility: builtFacility, altCandidates, nearbySchools, schoolDistrict, schoolCluster, nearbyAcademies });
   } catch (e) {
     logger.warn({ err: e.message, aptName }, 'facility 조회 실패');
+    captureRouteError(e, 'search/facility');
     res.status(500).json({ error: 'facility 조회 실패' });
   }
 });

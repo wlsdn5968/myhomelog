@@ -5198,7 +5198,9 @@ async function doSearch(){
       props=(data.recommendations||[]).map((p,i)=>{
         const lat = (p.lat!=null) ? Number(p.lat) : getLat(p.area,i);
         const lng = (p.lng!=null) ? Number(p.lng) : getLng(p.area,i);
-        return {...p, lat, lng, type:(p.ltv||_regLtvLabel(p.area))?.includes('40')?'regulated':'non'};
+        // PRICE-BASIS-2026-07-17 (Sprint XXXXX): 추천 avgPrice = 대표 평형(primaryPyeong) 6개월 평균 —
+        //   상세(openAptDetail)의 "최근 N건 평균"과 정의가 달라 같은 단지가 다른 값으로 보이던 혼란을 라벨로 명시.
+        return {...p, lat, lng, _priceBasis:'회원님 평형대 · 6개월 평균', type:(p.ltv||_regLtvLabel(p.area))?.includes('40')?'regulated':'non'};
       });
       searchMeta={
         regions:(data.targetRegions||[]).map(r=>r.name).filter(Boolean),
@@ -5308,9 +5310,9 @@ function renderPList(){
     const tags=_renderPTags(p.tags, 2);
     const rank = p.rank ? _escHtml(p.rank)+'. ' : '';
     return`<div class="pi" id="pi-${i}" onclick="selP(${i})">
-      <div class="pi-top"><div class="pi-name">${rank}${_escHtml(p.aptName||'')}</div><div class="pi-price">${(Number(p.avgPrice)||0).toFixed(1)}억</div></div>
+      <div class="pi-top"><div class="pi-name">${rank}${_escHtml(p.aptName||'')}</div><div class="pi-price" title="${_escHtml(p._priceBasis||'평균 실거래')}">${(Number(p.avgPrice)||0).toFixed(1)}억</div></div>
       <div class="pi-sub">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area)||'—')}</div>
-      <div class="pi-row">${tags}${gSVG(Number(p.score)||60,30)}</div>
+      <div class="pi-row">${tags}${p.score!=null?gSVG(Number(p.score),30):''}</div>
     </div>`;
   }).join('');
 }
@@ -6025,7 +6027,7 @@ function showDetail(p){
           ? `<span class="lvl ${lv}" style="font-size:10.5px;padding:1px 7px">${s}점 ${lt}</span>`
           : `<span class="lvl unknown" style="font-size:10.5px;padding:1px 7px">${lt}</span>`)
       + `</div>`
-      + (p.avgPrice ? `<div class="ass-price"><span class="ass-price-v">${(p.avgPrice).toFixed(1)}억</span><span class="ass-price-l">평균 실거래</span></div>` : '');
+      + (p.avgPrice ? `<div class="ass-price"><span class="ass-price-v">${(p.avgPrice).toFixed(1)}억</span><span class="ass-price-l">${_escHtml(p._priceBasis||'평균 실거래')}</span></div>` : '');
   } catch(_){}
 
   // 점수 환각 fix: score 없으면 "분석 대기" 카드 + 사이드바 진입 유도 CTA (60 fallback 제거)
@@ -9555,6 +9557,9 @@ async function openAptDetail(r) {
     umdNm: r.umdNm,
     area: `${r.sigungu||''} ${r.umdNm||''}`.trim(),
     avgPrice, minPrice, maxPrice,
+    // PRICE-BASIS-2026-07-17 (Sprint XXXXX): 이 avgPrice 는 방금 조회한 전 평형 최근 거래 평균 —
+    //   추천 카드(대표 평형 6개월 평균)와 정의가 달라 값이 다를 수 있음을 라벨로 정직하게 표기.
+    _priceBasis: txHistory.length ? `전 평형 최근 ${txHistory.length}건 평균` : null,
     _txFailed: _txFetchFailed, // TX-RETRY (Sprint IIII)
     // STAB-AUDIT-2026-05-07: 검색 → click path score=60 환각 차단
     //   추천 path는 사용자 매칭 점수 (95 등), 검색 path는 default 60 → 환각.

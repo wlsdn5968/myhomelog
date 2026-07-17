@@ -93,6 +93,9 @@ router.get('/building-register', async (req, res) => {
     });
     res.json({ title: title || null });
   } catch (e) {
+    // SENTRY-GAP-2026-07-17 (Sprint XXXXX): 무로그·무캡처였던 502 — 건축물대장 upstream 실패는 헬퍼가 그룹핑
+    require('../logger').warn({ err: e.message }, 'building-register 조회 실패');
+    require('../utils/captureError').captureRouteError(e, 'properties/building-register');
     res.status(502).json({ error: e.message, title: null });
   }
 });

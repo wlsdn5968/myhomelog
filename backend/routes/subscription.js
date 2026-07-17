@@ -105,6 +105,8 @@ router.get('/', async (req, res) => {
         externalLink: 'https://www.applyhome.co.kr',
       });
     }
+    // SENTRY-GAP (Sprint XXXXX): -4 인증키 503 은 안내형 설정 상태라 제외, 일반 502 upstream 만 캡처(헬퍼 그룹핑)
+    require('../utils/captureError').captureRouteError(e, 'subscription');
     res.status(502).json({
       error: '청약 정보 조회 일시 실패',
       hint: '잠시 후 다시 시도하거나 청약Home(applyhome.co.kr)에서 직접 확인',
