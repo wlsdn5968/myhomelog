@@ -241,6 +241,12 @@ async function getAIRecommendations(userCondition) {
   const cacheKey = `rec:v11:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
+  // REC-REDIS-2026-07-17 (Sprint AAAAAA, 운영자 "검색 더 빨리" — 실측: cold 12.6s vs warm 1.4s):
+  //   recommend 결과가 node-cache(인스턴스 로컬)뿐이라 Vercel 스케일아웃 시 같은 인기 검색도 인스턴스마다
+  //   cold 12초 반복(뉴스 summary KKKKK 와 동일 구조). Redis 2차 조회로 인스턴스 간 공유 → 전역 첫 1회만
+  //   콜드, 이후 모든 인스턴스가 Redis hit. 로직·결과 shape 불변, fail-open(Redis 없으면 로컬만).
+  const _rHit = await require('./redisCache').rget(cacheKey);
+  if (_rHit) { cache.set(cacheKey, _rHit, 10800); return { ..._rHit, fromCache: true }; }
 
   // Step 1: 키워드 기반 빠른 지역 결정
   const targetRegions = pickRegions(region, maxBudget, workplaceArea).slice(0, 3);
@@ -664,6 +670,7 @@ async function getAIRecommendations(userCondition) {
     disclaimer: '본 결과는 국토교통부 실거래가 데이터 기반 정보 정리이며, 매수·매도 추천이 아닙니다. 모든 의사결정의 책임은 본인에게 있습니다.',
   };
   cache.set(cacheKey, result, 10800); // REC-PERF-2026-07-10 (Sprint EEEE): 30min→3h — 데이터는 daily cron만 갱신, 인기 조합 콜드 빈도 1/6
+  require('./redisCache').rset(cacheKey, result, 10800).catch(() => {}); // Sprint AAAAAA — 인스턴스 간 공유(fire-and-forget)
   return { ...result, fromCache: false };
 }
 
