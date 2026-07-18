@@ -43,7 +43,16 @@ async function loadRows(admin, table) {
 }
 
 /** 구독 1건의 items 를 신규 거래 rows 와 매칭 → [{name, count, maxMan}] (count desc) */
-function matchItems(items, rows, aliasMap, since) {
+function matchItems(rawItems, rows, aliasMap, since) {
+  // DEDUP-2026-07-18 (실측: 카카오 연결 items 에 동일 단지 2건 — 북마크 로컬·서버 병합 중복) —
+  //   같은 (aptName, lawdCd) 중복 항목이 거래를 이중 카운트해 '새 실거래 N건'을 부풀리는 것 차단.
+  const seen = new Set();
+  const items = (rawItems || []).filter(it => {
+    const k = `${nn(it.aptName)}|${it.lawdCd}`;
+    if (seen.has(k)) return false;
+    seen.add(k);
+    return true;
+  });
   const perItem = new Map();
   for (const r of rows) {
     if (new Date(r.ingested_at) <= since) continue;
