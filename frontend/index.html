@@ -813,9 +813,10 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .cs:hover{background:var(--accD);transform:scale(1.05)}.cs svg{width:14px;height:14px;fill:#fff}
 
 /* DETAIL MODAL */
-.dmbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:400;align-items:center;justify-content:center;padding:16px}
+/* CCCCCC: 세로 중앙정렬이던 것 — 헤더(66px, z1000)가 오버레이(z400) 위에 그려져 키 큰 모달 상단(제목·공유·닫기)이 잘림. 상단 정렬 + 헤더 아래 오프셋 */
+.dmbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:400;align-items:flex-start;justify-content:center;padding:78px 16px 16px}
 .dmbg.open{display:flex}
-.dm{position:relative;background:var(--bg-base);border-radius:16px;width:100%;max-width:700px;max-height:90vh;display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(16,24,40,.20)}
+.dm{position:relative;background:var(--bg-base);border-radius:16px;width:100%;max-width:700px;max-height:calc(100vh - 94px);display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(16,24,40,.20)}
 /* INSTANT-MODAL-2026-07-11 (Sprint HHHH): 단지 클릭 즉시 모달 + 불투명 로딩 커버 (이전 단지 잔상 차단) */
 .dm-loading{position:absolute;inset:0;background:var(--bg-base);border-radius:inherit;z-index:60;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px} /* JJJJ: 60 — sticky summary(z50) 위로, 직전 단지 잔상 차단 (마커 경로 라이브 검증에서 발견) */
 .dm-loading .dml-spin{width:26px;height:26px;border:3px solid var(--bd);border-top-color:var(--acc);border-radius:50%;animation:sp .8s linear infinite}
@@ -827,7 +828,11 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .dmx:hover{background:var(--redL);color:var(--red)}
 /* TABS-OVERFLOW-2026-05-13 (Sprint W — 운영자 발견): desktop 에서도 7 tab overflow 시 가로 스크롤. */
 .rtabs{display:flex;border-bottom:1px solid var(--border-faint);padding:0 16px;gap:4px;flex-shrink:0;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
-.rtab{padding:11px 14px;font-size:12.5px;font-weight:600;color:var(--t3);border:none;background:transparent;cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px;font-family:inherit;transition:all .15s;white-space:nowrap;flex-shrink:0}
+/* CCCCCC: Windows Chrome 기본 가로 스크롤바(굵은 트랙+화살표)가 탭 밑에 노출 — 얇은 바로 교체 */
+.rtabs::-webkit-scrollbar{height:4px}
+.rtabs::-webkit-scrollbar-track{background:transparent}
+.rtabs::-webkit-scrollbar-thumb{background:var(--bd);border-radius:2px}
+.rtab{padding:11px 12px;font-size:12.5px;font-weight:600;color:var(--t3);border:none;background:transparent;cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px;font-family:inherit;transition:all .15s;white-space:nowrap;flex-shrink:0}
 .rtab:hover{color:var(--t1)}
 .rtab.on{color:var(--acc);border-bottom-color:var(--acc)}
 /* Phase 33 #2 (2026-05-04): 모바일 6 탭 가로 스크롤 → priority 3 + "더보기" overflow scroll */
@@ -4346,7 +4351,8 @@ function updateQuota(usage){
     pill.textContent=`${usage.remaining}/${usage.limit}`;
     // 한도 임박 시 숫자만 색으로 신호 (시안: 배경 pill 없음)
     pill.style.color = usage.remaining<=1 ? 'var(--red)' : (usage.remaining<=2 ? 'var(--amb)' : '');
-    if(wrap) wrap.title=`오늘 무료 단지 검색 ${usage.used}/${usage.limit}회 사용 — 매일 자정 리셋 (클릭: 상세 정보)`;
+    /* CCCCCC: pill 은 "남은/전체"인데 툴팁은 "사용/전체"라 숫자가 어긋나 보이던 것 — 남은 횟수 기준으로 통일 */
+    if(wrap) wrap.title=`오늘 남은 무료 단지 검색 ${usage.remaining}/${usage.limit}회 — 매일 자정 리셋 (클릭: 상세 정보)`;
   }
   // USAGE-INFO-2026-07-16 (Sprint SSSSS): 정적 안내("로그인 시 10회/일 · 특약·채팅 별도 한도")가 이 덮어쓰기로 소실되던 것 — 항상 뒤에 유지
   if(info)info.textContent = usage.unlimited ? '검색 무제한 (운영자·관리자)' : `오늘 ${usage.used}/${usage.limit}회 사용 (남은 무료 검색 ${usage.remaining}회) · 매일 자정 리셋 · 로그인 시 10회/일 · 매수특약·AI 채팅은 별도 한도`;
@@ -6139,7 +6145,7 @@ function showDetail(p){
     : '';
   document.getElementById('t1').innerHTML=`
     ${pyeongHtml}
-    <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:8px">📐 평형별 평균</div>${summaryHtml}
+    ${summaryHtml}
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 4px">🔍 평형 필터 <span style="font-weight:500;color:var(--t3)">· 클릭 시 아래 거래·차트 둘 다 필터</span></div>
     ${_areaChipsHtml}
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 8px">📋 개별 거래 <span style="font-weight:500;color:var(--t3)">(최대 30건)</span></div>
@@ -6842,7 +6848,7 @@ function renderAnalysis(d,p){
     heroHtml=`<div class="sig-hero" role="status" aria-label="시세 요약 보류 — 표본 부족" style="background:var(--s1);border-color:var(--bd)">
       <div class="sig-dot" style="background:var(--bd2);color:var(--t2)" aria-hidden="true">○</div>
       <div><div class="sig-label" style="color:var(--t2)">표본 부족 — 시세 요약 보류</div>
-      <div class="sig-sub">${d.txCount||0}건 거래 — 통계적 의미 부족 (8건 이상 필요)</div></div>
+      <div class="sig-sub">${d.txCount||0}건 거래 — 통계적 의미 부족 (${reliability==='NONE'?'최소 8건':'25건 이상'} 필요)</div></div>
     </div>`;
   } else {
     const sc=sig.signal||'yellow';
