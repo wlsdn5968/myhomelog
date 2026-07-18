@@ -248,6 +248,11 @@ async function getAIRecommendations(userCondition) {
   const _rHit = await require('./redisCache').rget(cacheKey);
   if (_rHit) { cache.set(cacheKey, _rHit, 10800); return { ..._rHit, fromCache: true }; }
 
+  // STAGE-TIMING-2026-07-17 (Sprint BBBBBB, 운영자 "enrichment 6.15s 단축" — 추측 금지·단계별 실측):
+  //   cold 경로의 스테이지별 소요를 1줄 로그로 노출 → 병목을 숫자로 확정 후 타깃 최적화.
+  const _tt = { start: Date.now() };
+  const _mark = (k) => { _tt[k] = Date.now(); };
+
   // Step 1: 키워드 기반 빠른 지역 결정
   const targetRegions = pickRegions(region, maxBudget, workplaceArea).slice(0, 3);
 
@@ -280,6 +285,7 @@ async function getAIRecommendations(userCondition) {
     ? allTx.map(t => { const c = aliasMap.get(`${t.aptName}|${t.umdNm || ''}`); return c ? { ...t, aptName: c } : t; })
     : allTx;
   const analyzed = analyzeTransactions(relabeledTx);
+  _mark('collect');
   logger.info({
     aptListTotal: allAptList.length, analyzedCount: analyzed.length,
   }, 'PropertyService 지역 집계 완료');
@@ -541,6 +547,7 @@ async function getAIRecommendations(userCondition) {
     const nmKey = normalizeName(apt.aptName);
     return kaptCodeMap.get(`${nmKey}|${apt.umdNm || ''}`) || kaptCodeMap.get(nmKey) || kaptCodeMap.get(canonName(nmKey)) || null;
   });
+  _mark('rank');
   const dbFacMap = await getFacilitiesByKaptCodes([...new Set(preCodes.filter(Boolean))]);
   const enriched = await Promise.allSettled(
     recommendations.map(async (rec, i) => {
@@ -618,7 +625,9 @@ async function getAIRecommendations(userCondition) {
       address: rec.facility?.address || null,
     };
   });
+  _mark('facility');
   const coords = await resolveCoordBatch(coordInputs, 8); // REC-PERF-2026-07-10: 4→8 (Kakao 실측 여유 0.9K/60K, 콜드 라운드 절반)
+  _mark('coords');
 
   // P1 (Phase 2 후속, 2026-04-25): 학군 데이터 — 좌표 확보된 단지만 학교 검색.
   // 카카오 keyword "초/중/고등학교" 반경 1km, 종류별 3개 = 9개 이내. DB 캐시 90일.
@@ -636,6 +645,17 @@ async function getAIRecommendations(userCondition) {
     };
   });
   const schoolsArr = await resolveSchoolsBatch(schoolInputs, 6); // REC-PERF-2026-07-10: 3→6 — 콜드 학교 단계(15단지×Kakao 3콜) ~9s→~4.5s
+  _mark('schools');
+  // Sprint BBBBBB — 스테이지 분해 로그 (병목 실측 확정용, cold 에만 의미)
+  logger.info({
+    stageMs: {
+      collect: _tt.collect - _tt.start,
+      rankFilter: _tt.rank - _tt.collect,
+      facility: _tt.facility - _tt.rank,
+      coords: _tt.coords - _tt.facility,
+      schools: _tt.schools - _tt.coords,
+    }, totalMs: _tt.schools - _tt.start,
+  }, 'PropertyService 스테이지 타이밍');
 
   // NAMEFIX-2026-05-11: 사용자 응답에선 정규화된 단지명 노출 — "(고층)" 같은 MOLIT raw suffix 제거.
   //   DB raw apt_name 은 그대로 유지 (다른 매칭 흐름 호환). 표시 layer 만 정규화.
