@@ -15,6 +15,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const logger = require('../logger');
 const { getAliasCanonicalMap } = require('../services/transactionService');
+const { normalizeAptName } = require('../utils/aptName');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
@@ -27,6 +28,9 @@ function dbClient() {
 }
 
 const norm = s => String(s || '').normalize('NFC').replace(/\s+/g, '').toLowerCase();
+// NAMEFIX 유틸 재사용 — MOLIT 분리표기("상계주공9(고층)")를 표시명("상계주공9")과 동일 취급.
+//   검색/추천/지오코딩과 같은 매칭 semantics (실측: 상계주공9 alias 빈 배열이라 norm 만으론 미매칭).
+const nn = s => norm(normalizeAptName(String(s || '')));
 const fmtEok = man => (man / 10000).toFixed(man >= 100000 ? 0 : 1); // 만원 → 억
 
 async function run() {
@@ -98,7 +102,7 @@ async function run() {
       const canon = aliasMap.get(`${r.apt_name}|${r.umd_nm || ''}`) || r.apt_name;
       for (const it of items) {
         if (it.lawdCd !== r.lawd_cd) continue;
-        if (norm(canon) !== norm(it.aptName) && norm(r.apt_name) !== norm(it.aptName)) continue;
+        if (nn(canon) !== nn(it.aptName) && nn(r.apt_name) !== nn(it.aptName)) continue;
         if (it.umdNm && r.umd_nm && norm(it.umdNm) !== norm(r.umd_nm)) continue;
         const g = perItem.get(it.aptName) || { count: 0, maxMan: 0 };
         g.count += 1;
