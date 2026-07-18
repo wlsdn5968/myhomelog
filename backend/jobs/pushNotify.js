@@ -36,7 +36,7 @@ const fmtEok = man => (man / 10000).toFixed(man >= 100000 ? 0 : 1); // 만원 �
 async function loadRows(admin, table) {
   const { data, error } = await admin.from(table).select('*').limit(500);
   if (error) {
-    if (String(error.code) === '42P01') return { rows: [], missing: true };
+    if (['42P01','PGRST205'].includes(String(error.code))) return { rows: [], missing: true };
     throw new Error(`${table}: ${error.message}`);
   }
   return { rows: data || [], missing: false };

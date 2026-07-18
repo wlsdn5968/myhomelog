@@ -86,7 +86,7 @@ router.get('/status', requireAuth, async (req, res) => {
     if (!admin) return res.json({ configured: false, linked: false });
     const { data, error } = await admin.from('kakao_notify_tokens').select('user_id, linked_at').eq('user_id', req.user.id).maybeSingle();
     if (error) {
-      if (String(error.code) === '42P01') return res.json({ configured: false, linked: false, gate: 'table' });
+      if (['42P01','PGRST205'].includes(String(error.code))) return res.json({ configured: false, linked: false, gate: 'table' });
       throw new Error(error.message);
     }
     return res.json({ configured: true, linked: !!data, linkedAt: data?.linked_at || null });
@@ -138,7 +138,7 @@ router.get('/callback', async (req, res) => {
       fail_count: 0,
     }, { onConflict: 'user_id' });
     if (error) {
-      if (String(error.code) === '42P01') { logger.warn('kakao_notify_tokens 미생성 — 운영자 SQL 대기'); return back('gate'); }
+      if (['42P01','PGRST205'].includes(String(error.code))) { logger.warn('kakao_notify_tokens 미생성 — 운영자 SQL 대기'); return back('gate'); }
       throw new Error(error.message);
     }
     return back('linked');
@@ -156,7 +156,7 @@ router.post('/items', requireAuth, async (req, res) => {
     if (!admin) return res.json({ ok: true });
     const items = sanitizeItems(req.body?.items);
     const { error } = await admin.from('kakao_notify_tokens').update({ items, updated_at: new Date().toISOString() }).eq('user_id', req.user.id);
-    if (error && String(error.code) !== '42P01') throw new Error(error.message);
+    if (error && !['42P01','PGRST205'].includes(String(error.code))) throw new Error(error.message);
     return res.json({ ok: true, items: items.length });
   } catch (e) {
     logger.warn({ err: e.message }, 'kakao items 갱신 실패');

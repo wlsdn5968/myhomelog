@@ -70,7 +70,7 @@ router.post('/subscribe', async (req, res) => {
     }, { onConflict: 'endpoint' });
     if (error) {
       // 테이블 미생성(42P01) — 게이트 미승인 상태를 명확히 구분
-      if (String(error.code) === '42P01') {
+      if (['42P01','PGRST205'].includes(String(error.code))) {
         logger.warn('push_subscriptions 테이블 미생성 — 운영자 SQL 승인 대기');
         return res.status(503).json({ error: '푸시 알림이 아직 활성화되지 않았어요.' });
       }
