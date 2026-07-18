@@ -7260,7 +7260,7 @@ function renderBookmarks(){
     return;
   }
   const _bkCmpBtn = bks.length>=2 ? `<button id="bkCmpBtn" onclick="openCompareBookmarks()" style="display:none;width:100%;margin-bottom:8px;padding:8px 10px;background:var(--acc);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📊 선택 단지 비교 (<span id="bkCmpCnt">0</span>)</button>` : '';
-  el.innerHTML=_pushBtnHtml() + _bkCmpBtn + bks.map((b,i)=>{
+  el.innerHTML=_pushBtnHtml() + _kkoBtnHtml() + _bkCmpBtn + bks.map((b,i)=>{
     const alerts=getAlerts();
     const target=alerts[b.aptName];
     const hasVisit=!!(getNoteForApt(b.aptName)?.visitDate);
@@ -7345,18 +7345,80 @@ async function togglePush(){
 }
 let _pushSyncT=null;
 function _schedulePushItemsSync(){
-  if(!_pushOn)return;
   if(_pushSyncT)clearTimeout(_pushSyncT);
   _pushSyncT=setTimeout(async()=>{
     try{
-      const reg=await navigator.serviceWorker.getRegistration('/sw.js');
-      const sub=reg&&await reg.pushManager.getSubscription();
       const items=_pushItems();
-      if(sub&&items.length)fetch(`${CFG.api}/push/subscribe`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:sub.toJSON(),items})}).catch(()=>{});
+      if(_pushOn){
+        const reg=await navigator.serviceWorker.getRegistration('/sw.js');
+        const sub=reg&&await reg.pushManager.getSubscription();
+        if(sub&&items.length)fetch(`${CFG.api}/push/subscribe`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:sub.toJSON(),items})}).catch(()=>{});
+      }
+      // KAKAO-NOTIFY (Sprint FFFFFF): 카카오 연결 유저는 관심단지 스냅샷도 동기화
+      if(_kkoLinked&&items.length){
+        fetch(`${CFG.api}/kakao/items`,{method:'POST',headers:await _authHdr({'Content-Type':'application/json'}),body:JSON.stringify({items})}).catch(()=>{});
+      }
     }catch(_){}
   },2000);
 }
-document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{try{initPush();}catch(_){}} ,1500);});
+// ── KAKAO-NOTIFY (Sprint FFFFFF): 카카오톡 '나에게 보내기' 알림 연결 (portai 패턴) ──
+// 게이트: 서버 /api/kakao/status configured=false (콘솔/env/테이블 미충족) → 버튼 자체 미렌더.
+let _kkoConfigured=false,_kkoLinked=false;
+async function initKakao(){
+  try{
+    const A=window.MHL?.auth;
+    if(!A?.user||!A?.session?.access_token)return; // 카카오 알림은 로그인 유저 전용 (토큰-유저 바인딩)
+    const r=await fetch(`${CFG.api}/kakao/status`,{headers:await _authHdr({}),signal:AbortSignal.timeout(5000)});
+    if(!r.ok)return;
+    const j=await r.json();
+    _kkoConfigured=!!j.configured;_kkoLinked=!!j.linked;
+    if(_kkoConfigured)renderBookmarks();
+  }catch(_){}
+}
+function _kkoBtnHtml(){
+  if(!_kkoConfigured)return'';
+  return `<div style="padding:8px 12px;border-bottom:1px solid var(--bd)"><button id="kkoToggleBtn" onclick="event.stopPropagation();toggleKakao()" style="width:100%;padding:7px 10px;border-radius:8px;border:1px solid ${_kkoLinked?'#E8CB4A':'var(--bd)'};background:${_kkoLinked?'#FEF7DE':'var(--bg-base)'};color:${_kkoLinked?'#8A6D00':'var(--t2)'};font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit">${_kkoLinked?'💬 카카오톡 알림 연결됨 · 누르면 해제':'💬 카카오톡으로 새 거래 알림 받기'}</button><div style="font-size:9.5px;color:var(--t3);margin-top:4px;text-align:center">본인 카카오톡 "나와의 채팅"으로 발송 (일 1회 · 무료)</div></div>`;
+}
+async function toggleKakao(){
+  try{
+    if(_kkoLinked){
+      await fetch(`${CFG.api}/kakao/disconnect`,{method:'POST',headers:await _authHdr({})});
+      _kkoLinked=false;toast('카카오톡 알림 연결을 해제했어요');renderBookmarks();return;
+    }
+    if(!_pushItems().length){toast('먼저 관심 단지를 추가해주세요 (단지 상세 → ⭐)');return;}
+    const r=await fetch(`${CFG.api}/kakao/authorize-url`,{method:'POST',headers:await _authHdr({'Content-Type':'application/json'})});
+    if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.error||('HTTP '+r.status));}
+    const j=await r.json();
+    location.href=j.url; // 카카오 동의 화면으로 이동 → /api/kakao/callback → '/?kakao=linked'
+  }catch(e){toast('카카오 연결 실패: '+(e&&e.message||'잠시 후 다시 시도해주세요'));}
+}
+// 카카오 콜백 복귀 처리 — '/?kakao=linked|no_scope|denied|error|gate'
+function _handleKakaoReturn(){
+  try{
+    const q=new URLSearchParams(location.search);
+    const st=q.get('kakao');
+    if(!st)return;
+    q.delete('kakao');
+    history.replaceState(null,'',location.pathname+(q.toString()?'?'+q.toString():'')+location.hash);
+    if(st==='linked'){
+      toast('💬 카카오톡 알림 연결 완료 — 새 실거래가 반영되면 나와의 채팅으로 알려드려요');
+      _kkoLinked=true;_kkoConfigured=true;
+      // 연결 직후 관심단지 스냅샷 저장
+      setTimeout(async()=>{try{const items=_pushItems();if(items.length)fetch(`${CFG.api}/kakao/items`,{method:'POST',headers:await _authHdr({'Content-Type':'application/json'}),body:JSON.stringify({items})}).catch(()=>{});}catch(_){}} ,2500);
+      renderBookmarks();
+    }
+    else if(st==='no_scope')toast('카카오 메시지 권한에 동의해야 알림을 보낼 수 있어요 — 다시 연결하며 체크해주세요');
+    else if(st==='denied')toast('카카오 연결을 취소했어요');
+    else if(st==='gate')toast('카카오 알림이 아직 준비 중이에요 (운영자 설정 대기)');
+    else toast('카카오 연결에 실패했어요 — 잠시 후 다시 시도해주세요');
+  }catch(_){}
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  setTimeout(()=>{try{initPush();}catch(_){}} ,1500);
+  setTimeout(()=>{try{initKakao();}catch(_){}} ,2000);
+  setTimeout(()=>{try{if(!_kkoConfigured)initKakao();}catch(_){}} ,6000); // 세션 늦은 복원 대비 1회 재시도
+  setTimeout(()=>{try{_handleKakaoReturn();}catch(_){}} ,2200);
+});
 
 function openBookmark(i){
   const bks=getBookmarks();
