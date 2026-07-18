@@ -328,20 +328,72 @@ async function resolveCoord(apt) {
 }
 
 /**
- * 배치 단지 좌표 해결 — 동시성 제한
+ * 배치 단지 좌표 해결 — DB 배치 선조회 + 잔여만 단건 경로
+ * GEO-BATCH-2026-07-18 (Sprint DDDDDD): 기존엔 단지당 getFromDb .eq 단건 왕복(15개=15왕복,
+ *   iad1→Supabase RTT 누적)이 coords 스테이지 지배 — .in 1왕복으로 캐시 히트를 한 번에 해소하고,
+ *   진짜 miss(콤보 재사용·Kakao 폴백·upsert)만 기존 resolveCoord 경로 유지(검증·점수 로직 무변경).
  * @param {Array} apts
  * @returns {Promise<Array<{lat, lng}|null>>}
  */
 async function resolveCoordBatch(apts, concurrency = 4) {
+  const t0 = Date.now();
   const results = new Array(apts.length).fill(null);
-  let i = 0;
+  const keys = apts.map(a => (a && a.aptName) ? buildKey(a) : null);
+  // 1) 프로세스 메모 — 양성만 확정 (음성 null 은 기존 semantics 대로 combo/Kakao 재시도 대상)
+  const missIdx = [];
+  keys.forEach((k, i) => {
+    if (!k) return;
+    const mem = cache.get(`geo-db:${k}`);
+    if (mem) results[i] = mem; else missIdx.push(i);
+  });
+  const memHits = apts.filter((a, i) => keys[i] && results[i]).length;
+  // 2) DB 배치 조회 — 단건 .eq N왕복 → .in 1왕복
+  let remain = missIdx;
+  let dbMs = 0, dbHits = 0;
+  const admin = dbClient();
+  if (admin && missIdx.length) {
+    const td = Date.now();
+    try {
+      const { data } = await admin
+        .from('apt_geocache')
+        .select('apt_key,lat,lng,address,place_name')
+        .in('apt_key', [...new Set(missIdx.map(i => keys[i]))]);
+      const byKey = new Map((data || []).map(r => [r.apt_key, r]));
+      remain = [];
+      for (const i of missIdx) {
+        const r = byKey.get(keys[i]);
+        if (r && isValidKoreaCoord(Number(r.lat), Number(r.lng))) {
+          results[i] = { lat: Number(r.lat), lng: Number(r.lng), address: r.address, placeName: r.place_name };
+          cache.set(`geo-db:${keys[i]}`, results[i], 3600);
+          dbHits += 1;
+        } else {
+          // 음성 메모 → resolveCoord 내부 getFromDb 단건 재조회만 생략 (combo/Kakao 는 그대로 진행)
+          cache.set(`geo-db:${keys[i]}`, null, 300);
+          remain.push(i);
+        }
+      }
+    } catch (e) {
+      logger.warn({ err: e.message, n: missIdx.length }, 'apt_geocache 배치 조회 실패 — 단건 경로 fallback');
+      remain = missIdx;
+    }
+    dbMs = Date.now() - td;
+  }
+  // 3) 잔여(진짜 miss)만 기존 단건 경로
+  const tk = Date.now();
+  let p = 0;
   async function worker() {
-    while (i < apts.length) {
-      const idx = i++;
+    while (p < remain.length) {
+      const idx = remain[p++];
       results[idx] = await resolveCoord(apts[idx]).catch(() => null);
     }
   }
-  await Promise.all(Array.from({ length: Math.min(concurrency, apts.length) }, () => worker()));
+  await Promise.all(Array.from({ length: Math.min(concurrency, remain.length) }, () => worker()));
+  if (apts.length) {
+    logger.info({
+      src: 'geo-batch', n: apts.length, memHits, dbHits, tail: remain.length,
+      dbMs, tailMs: Date.now() - tk, totalMs: Date.now() - t0,
+    }, 'resolveCoordBatch 타이밍');
+  }
   return results;
 }
 

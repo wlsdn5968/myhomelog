@@ -254,21 +254,44 @@ async function resolveSchools(apt) {
  *  coords 2,938ms → schools 3,276ms 가 완전 순차였음). DB 캐시 키(buildKey)는 단지 기반이라 좌표가
  *  필요 없음 → 이 함수는 좌표 확보(resolveCoordBatch)와 병렬 실행 가능. miss 는 undefined 로 구분
  *  (캐시된 빈 배열 []=학교 없음 과 다름) — 호출측이 좌표 확보 후 miss 만 resolveSchools 2차 처리. */
-async function getCachedSchoolsBatch(apts, concurrency = 8) {
+async function getCachedSchoolsBatch(apts, concurrency = 8) { // concurrency: 시그니처 호환용 (배치화로 미사용)
+  // SCHOOL-BATCH-2026-07-18 (Sprint DDDDDD): 단지당 getFromDb .eq 단건 왕복 → .in 1왕복.
+  //   miss=undefined(2차 resolveSchools 대상) / 히트=정규화 배열 — 기존 semantics 동일 유지.
   const results = new Array(apts.length).fill(undefined);
-  let i = 0;
-  async function worker() {
-    while (i < apts.length) {
-      const idx = i++;
-      try {
-        const a = apts[idx];
-        if (!a || !a.aptName) { results[idx] = []; continue; }
-        const fromDb = await getFromDb(buildKey(a));
-        results[idx] = fromDb !== null ? _normalizeSchoolsList(fromDb) : undefined;
-      } catch (_) { results[idx] = undefined; }
+  const keys = apts.map(a => (a && a.aptName) ? buildKey(a) : null);
+  const missIdx = [];
+  keys.forEach((k, i) => {
+    if (!k) { results[i] = []; return; }
+    const mem = cache.get(`schools:${k}`);
+    if (mem !== undefined) results[i] = mem !== null ? _normalizeSchoolsList(mem) : undefined;
+    else missIdx.push(i);
+  });
+  if (!missIdx.length) return results;
+  const admin = dbClient();
+  if (!admin) return results;
+  try {
+    const t0 = Date.now();
+    const { data } = await admin
+      .from('apt_schools')
+      .select('apt_key,schools,fetched_at')
+      .in('apt_key', [...new Set(missIdx.map(i => keys[i]))]);
+    const byKey = new Map((data || []).map(r => [r.apt_key, r]));
+    let hits = 0;
+    for (const i of missIdx) {
+      const memKey = `schools:${keys[i]}`;
+      const row = byKey.get(keys[i]);
+      if (!row) { cache.set(memKey, null, 300); continue; }
+      const ageDays = (Date.now() - new Date(row.fetched_at).getTime()) / (1000 * 60 * 60 * 24);
+      if (ageDays > CACHE_TTL_DAYS) { cache.set(memKey, null, 300); continue; }
+      const out = Array.isArray(row.schools) ? row.schools : [];
+      cache.set(memKey, out, 3600);
+      results[i] = _normalizeSchoolsList(out);
+      hits += 1;
     }
+    logger.info({ src: 'school-batch', n: apts.length, queried: missIdx.length, hits, dbMs: Date.now() - t0 }, 'getCachedSchoolsBatch 타이밍');
+  } catch (e) {
+    logger.warn({ err: e.message, n: missIdx.length }, 'apt_schools 배치 조회 실패 — miss 처리');
   }
-  await Promise.all(Array.from({ length: Math.min(concurrency, apts.length) }, () => worker()));
   return results;
 }
 

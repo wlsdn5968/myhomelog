@@ -257,6 +257,8 @@ async function getAIRecommendations(userCondition) {
   const targetRegions = pickRegions(region, maxBudget, workplaceArea).slice(0, 3);
 
   // Step 2: 병렬 조회 — (a) 시군구 전체 단지 목록 + (b) 실거래 내역
+  // COLLECT-PAR-2026-07-18 (Sprint DDDDDD): aliasMap 이 대형 병렬 조회 뒤 직렬 1왕복이던 것 — 동시 시작
+  const aliasMapPromise = getAliasCanonicalMap(targetRegions.map(r => r.lawdCd));
   const [aptListArrays, txArrays] = await Promise.all([
     Promise.allSettled(
       targetRegions.map(r => getAptListBySgg(r.lawdCd))
@@ -273,6 +275,7 @@ async function getAIRecommendations(userCondition) {
       return [];
     })),
   ]);
+  _mark('collectQ');
   const allAptList = aptListArrays.flat();
   const allTx = txArrays.flat();
   // ALIAS-MERGE-2026-05-21 (전수조사: BUG2 동일 클래스): raw MOLIT명(풍림아파트A/B)을
@@ -280,7 +283,8 @@ async function getAIRecommendations(userCondition) {
   //   (검색/지도와 동일 식별). molit_aliases 보유 단지만 영향 (그 외 무변동).
   // ALIAS-REGION-FIX-2026-07-12 (Sprint RRRR): r.name(REGION_KEYWORDS 축약명 '노원')이 아니라
   //   r.lawdCd 를 넘김 — apt_master.sigungu('노원구') 불일치로 맵이 비어 풍림A/B relabel 이 안 되던 버그.
-  const aliasMap = await getAliasCanonicalMap(targetRegions.map(r => r.lawdCd));
+  const aliasMap = await aliasMapPromise;
+  _mark('alias');
   const relabeledTx = aliasMap.size
     ? allTx.map(t => { const c = aliasMap.get(`${t.aptName}|${t.umdNm || ''}`); return c ? { ...t, aptName: c } : t; })
     : allTx;
@@ -659,6 +663,11 @@ async function getAIRecommendations(userCondition) {
   logger.info({
     stageMs: {
       collect: _tt.collect - _tt.start,
+      collectDetail: {
+        queries: _tt.collectQ - _tt.start,
+        alias: _tt.alias - _tt.collectQ,
+        analyze: _tt.collect - _tt.alias,
+      },
       rankFilter: _tt.rank - _tt.collect,
       facility: _tt.facility - _tt.rank,
       coords: _tt.coords - _tt.facility,
