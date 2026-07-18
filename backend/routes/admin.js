@@ -58,6 +58,20 @@ router.use(requireAdmin);
  * 응답:
  *   - { ok: true, summary: { chunks, processed, inserted, failed, elapsedMs } }
  */
+// PUSH-TEST (Sprint EEEEEE): 웹푸시 발송 수동 트리거 — cron(18:20 UTC) 대기 없이 운영자 검증용
+router.post('/run-push-notify', async (req, res) => {
+  const started = Date.now();
+  try {
+    const summary = await require('../jobs/pushNotify').run();
+    logger.info({ durationMs: Date.now() - started, summary, adminId: req.user.id }, 'admin/run-push-notify OK');
+    res.json({ ok: true, summary });
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'admin/run-push-notify 실패');
+    require('../utils/captureError').captureRouteError(e, 'admin');
+    res.status(500).json({ error: e.message });
+  }
+});
+
 router.post('/run-geocache-backfill', async (req, res) => {
   const started = Date.now();
   try {
