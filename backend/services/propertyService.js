@@ -14,7 +14,7 @@
 const { getTransactionsByApt, analyzeTransactions, getAliasCanonicalMap, getRegionRecentTransactions } = require('./transactionService');
 const { getAptListBySgg, getAptBasisInfo, getAptDtlInfo } = require('./aptInfoService');
 const { resolveCoordBatch } = require('./geocodeCacheService');
-const { resolveSchoolsBatch } = require('./schoolService');
+const { resolveSchoolsBatch, getCachedSchoolsBatch } = require('./schoolService');
 const { isRegulatedRegion, getRegulatedKeywords, SEOUL_GU_KEYWORDS } = require('./regulationsService');
 const { normalizeAptName } = require('../utils/aptName');
 const { buildFacility } = require('../utils/buildFacility');
@@ -626,25 +626,34 @@ async function getAIRecommendations(userCondition) {
     };
   });
   _mark('facility');
-  const coords = await resolveCoordBatch(coordInputs, 8); // REC-PERF-2026-07-10: 4→8 (Kakao 실측 여유 0.9K/60K, 콜드 라운드 절반)
+  // SCHOOL-PIPELINE-2026-07-18 (Sprint BBBBBB, 스테이지 실측: coords 2,938ms → schools 3,276ms 완전 순차):
+  //   학군 DB 캐시(90일, 단지 키)는 좌표가 필요 없음 → 좌표 확보와 병렬 실행. 캐시 miss 단지만
+  //   좌표 확보 후 2차(resolveSchools — Kakao 반경 검색·DB 저장은 기존 그대로). 결과 동일, 겹친 시간만 절약.
+  const schoolCacheInputs = enrichedRecs.map((rec, i) => ({
+    kaptCode: rec.facility?.kaptCode || null,
+    aptName: rec.aptName,
+    sigungu: ranked[i].sigungu || '',
+    umdNm: ranked[i].umdNm || '',
+  }));
+  const [coords, schoolsCached] = await Promise.all([
+    resolveCoordBatch(coordInputs, 8), // REC-PERF-2026-07-10: 4→8 (Kakao 실측 여유, 콜드 라운드 절반)
+    getCachedSchoolsBatch(schoolCacheInputs, 8),
+  ]);
   _mark('coords');
 
   // P1 (Phase 2 후속, 2026-04-25): 학군 데이터 — 좌표 확보된 단지만 학교 검색.
   // 카카오 keyword "초/중/고등학교" 반경 1km, 종류별 3개 = 9개 이내. DB 캐시 90일.
   // 학업성취도는 차후 학교알리미 API (사용자 키 발급 필요) 통합.
-  const schoolInputs = enrichedRecs.map((rec, i) => {
-    const c = coords[i];
-    const apt = ranked[i];
-    return {
-      kaptCode: rec.facility?.kaptCode || null,
-      aptName: rec.aptName,
-      sigungu: apt.sigungu || '',
-      umdNm: apt.umdNm || '',
-      lat: c?.lat,
-      lng: c?.lng,
-    };
-  });
-  const schoolsArr = await resolveSchoolsBatch(schoolInputs, 6); // REC-PERF-2026-07-10: 3→6 — 콜드 학교 단계(15단지×Kakao 3콜) ~9s→~4.5s
+  // 캐시 miss 단지만 좌표 포함 2차 조회 (Kakao 검색 + DB 저장 — 기존 resolveSchools 경로 그대로)
+  const schoolsArr = schoolsCached.map(s => s || []);
+  const _schoolMissIdx = schoolsCached.map((s, i) => (s === undefined ? i : -1)).filter(i => i >= 0);
+  if (_schoolMissIdx.length) {
+    const missInputs = _schoolMissIdx.map(i => ({
+      ...schoolCacheInputs[i], lat: coords[i]?.lat, lng: coords[i]?.lng,
+    }));
+    const fetched = await resolveSchoolsBatch(missInputs, 6); // REC-PERF-2026-07-10: 3→6
+    _schoolMissIdx.forEach((origI, k) => { schoolsArr[origI] = fetched[k] || []; });
+  }
   _mark('schools');
   // Sprint BBBBBB — 스테이지 분해 로그 (병목 실측 확정용, cold 에만 의미)
   logger.info({

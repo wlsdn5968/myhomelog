@@ -250,6 +250,28 @@ async function resolveSchools(apt) {
   return _normalizeSchoolsList(schools); // 안전 — kakao 새 fetch 도 normalize 한번 더 (이중 안전망)
 }
 
+/** 캐시 전용 배치 조회 — SCHOOL-PIPELINE-2026-07-18 (Sprint BBBBBB, 실측: recommend cold 에서
+ *  coords 2,938ms → schools 3,276ms 가 완전 순차였음). DB 캐시 키(buildKey)는 단지 기반이라 좌표가
+ *  필요 없음 → 이 함수는 좌표 확보(resolveCoordBatch)와 병렬 실행 가능. miss 는 undefined 로 구분
+ *  (캐시된 빈 배열 []=학교 없음 과 다름) — 호출측이 좌표 확보 후 miss 만 resolveSchools 2차 처리. */
+async function getCachedSchoolsBatch(apts, concurrency = 8) {
+  const results = new Array(apts.length).fill(undefined);
+  let i = 0;
+  async function worker() {
+    while (i < apts.length) {
+      const idx = i++;
+      try {
+        const a = apts[idx];
+        if (!a || !a.aptName) { results[idx] = []; continue; }
+        const fromDb = await getFromDb(buildKey(a));
+        results[idx] = fromDb !== null ? _normalizeSchoolsList(fromDb) : undefined;
+      } catch (_) { results[idx] = undefined; }
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(concurrency, apts.length) }, () => worker()));
+  return results;
+}
+
 /** 배치 — 동시성 제한 */
 async function resolveSchoolsBatch(apts, concurrency = 3) {
   const results = new Array(apts.length).fill([]);
@@ -264,4 +286,4 @@ async function resolveSchoolsBatch(apts, concurrency = 3) {
   return results;
 }
 
-module.exports = { resolveSchools, resolveSchoolsBatch };
+module.exports = { resolveSchools, resolveSchoolsBatch, getCachedSchoolsBatch };
