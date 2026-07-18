@@ -769,6 +769,8 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .bm-pop-close{background:transparent;border:none;cursor:pointer;font-size:16px;color:var(--t3);padding:2px 6px;border-radius:4px}
 .bm-pop-close:hover{background:var(--s1)}
 .bm-pop-body{flex:1;overflow-y:auto}
+/* WATCH-FEED (Sprint EEEEEE): 관심단지 '새 거래' 배지 */
+.bk-new-badge{display:inline-block;margin-left:6px;padding:1px 7px;background:var(--red,#D64545);color:#fff;font-size:9.5px;font-weight:700;border-radius:9px;vertical-align:1px;white-space:nowrap}
 @media(max-width:700px){.fab-ai{bottom:72px;right:16px;width:52px;height:52px;font-size:22px}.fab-bm{bottom:132px;right:16px}.bm-pop{bottom:186px;right:16px}}
 /* Agent UX #8 (2026-05-04): metaLine 모바일 줄 분리 (가로 스크롤 차단) */
 @media(max-width:600px){.meta-line{font-size:10.5px!important;padding:7px 10px!important}.meta-line>div{margin-bottom:2px}}
@@ -7105,6 +7107,7 @@ let _syncInflight=false;
 function saveBookmarks(bks){
   localStorage.setItem(BK_KEY,JSON.stringify(bks));
   _scheduleBookmarkSync();
+  _schedulePushItemsSync(); // WATCH-PUSH: 푸시 켜져 있으면 구독 단지 목록도 서버 동기화
 }
 
 function _scheduleBookmarkSync(){
@@ -7248,6 +7251,8 @@ function renderBookmarks(){
   const bks=getBookmarks();
   document.getElementById('bkCnt').textContent=bks.length||'0';
   const fbc=document.getElementById('fabBmCnt');if(fbc)fbc.textContent=bks.length||'0';
+  // WATCH-FEED: 새 거래 있는 관심단지가 있으면 FAB 배지를 적색으로 (시각 신호)
+  if(fbc){const _anyNew=bks.some(b=>b.newDealCount>0);fbc.style.background=_anyNew?'var(--red,#D64545)':'';fbc.title=_anyNew?'관심단지에 새 실거래가 있어요':'';}
   const el=document.getElementById('bkList');
   if(!bks.length){
     // Agent UX #25 (2026-05-04): empty state 두 곳 (HTML 직접 + JS) 일관성 — JS 도 hint 추가
@@ -7255,7 +7260,7 @@ function renderBookmarks(){
     return;
   }
   const _bkCmpBtn = bks.length>=2 ? `<button id="bkCmpBtn" onclick="openCompareBookmarks()" style="display:none;width:100%;margin-bottom:8px;padding:8px 10px;background:var(--acc);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📊 선택 단지 비교 (<span id="bkCmpCnt">0</span>)</button>` : '';
-  el.innerHTML=_bkCmpBtn + bks.map((b,i)=>{
+  el.innerHTML=_pushBtnHtml() + _bkCmpBtn + bks.map((b,i)=>{
     const alerts=getAlerts();
     const target=alerts[b.aptName];
     const hasVisit=!!(getNoteForApt(b.aptName)?.visitDate);
@@ -7279,7 +7284,7 @@ function renderBookmarks(){
       <div class="bk-item-row">
         <label onclick="event.stopPropagation()" title="비교 선택" style="display:flex;align-items:center;flex-shrink:0;cursor:pointer"><input type="checkbox" class="cmp-bk-input" data-i="${i}" ${cmpBkSel.has(i)?'checked':''} onclick="event.stopPropagation();toggleCmpBk(${i},this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--acc);margin:0"></label>
         ${hasVisit?'<div class="bk-visit-dot" title="임장 기록 있음"></div>':''}
-        <div><div class="bk-name">${_escHtml(b.aptName || '')}</div><div style="font-size:10px;color:var(--t3)">${_escHtml(b.area || '')}</div></div>
+        <div><div class="bk-name">${_escHtml(b.aptName || '')}${b.newDealCount>0?`<span class="bk-new-badge" title="마지막 확인 이후 신규 실거래">🔔 새 거래 ${b.newDealCount}건</span>`:''}</div><div style="font-size:10px;color:var(--t3)">${_escHtml(b.area || '')}</div></div>
         <span class="bk-price">${priceNow?priceNow.toFixed(1)+'억':''}</span>
         <button class="bk-del" onclick="delBookmark(event,${i})" aria-label="북마크 삭제">✕</button>
       </div>
@@ -7289,9 +7294,75 @@ function renderBookmarks(){
   _renderBkCmpBtn();
 }
 
+// ── WATCH-PUSH (Sprint EEEEEE): 관심단지 신규 실거래 웹푸시 구독 ──
+// 게이트: 서버 /api/push/key 가 null 이면 (VAPID 미설정) 버튼 자체를 렌더하지 않음 — 완전 no-op.
+let _pushKey=null,_pushReady=false,_pushOn=false;
+async function initPush(){
+  try{
+    if(!('serviceWorker' in navigator)||!('PushManager' in window)||!('Notification' in window))return;
+    const r=await fetch(`${CFG.api}/push/key`,{signal:AbortSignal.timeout(5000)});
+    if(!r.ok)return;
+    const j=await r.json();
+    if(!j.key)return;
+    _pushKey=j.key;_pushReady=true;
+    const reg=await navigator.serviceWorker.getRegistration('/sw.js');
+    const sub=reg?await reg.pushManager.getSubscription():null;
+    _pushOn=!!sub&&Notification.permission==='granted';
+    renderBookmarks();
+  }catch(_){}
+}
+function _pushBtnHtml(){
+  if(!_pushReady)return'';
+  return `<div style="padding:8px 12px;border-bottom:1px solid var(--bd)"><button id="pushToggleBtn" onclick="event.stopPropagation();togglePush()" style="width:100%;padding:7px 10px;border-radius:8px;border:1px solid ${_pushOn?'#7FB89A':'var(--bd)'};background:${_pushOn?'var(--grnL,#EAF6EF)':'var(--bg-base)'};color:${_pushOn?'var(--grn,#2E8B57)':'var(--t2)'};font-size:11.5px;font-weight:700;cursor:pointer;font-family:inherit">${_pushOn?'🔔 새 거래 푸시 알림 켜짐 · 누르면 끄기':'🔕 새 거래 푸시 알림 켜기'}</button><div style="font-size:9.5px;color:var(--t3);margin-top:4px;text-align:center">관심단지 새 실거래 반영 시 브라우저 알림 (일 1회 · 무료)</div></div>`;
+}
+function _pushItems(){
+  return getBookmarks().map(b=>({aptName:b.aptName,lawdCd:String(b.lawdCd||''),sigungu:b.sigungu||'',umdNm:b.umdNm||''})).filter(x=>/^\d{5}$/.test(x.lawdCd)).slice(0,30);
+}
+function _b64ToU8(base64){
+  const pad='='.repeat((4-base64.length%4)%4);
+  const b=(base64+pad).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(b);return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+}
+async function togglePush(){
+  try{
+    if(!_pushReady)return;
+    if(_pushOn){
+      const reg=await navigator.serviceWorker.getRegistration('/sw.js');
+      const sub=reg&&await reg.pushManager.getSubscription();
+      if(sub){fetch(`${CFG.api}/push/unsubscribe`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint})}).catch(()=>{});await sub.unsubscribe().catch(()=>{});}
+      _pushOn=false;toast('푸시 알림을 껐어요');renderBookmarks();return;
+    }
+    const items=_pushItems();
+    if(!items.length){toast('먼저 관심 단지를 추가해주세요 (단지 상세 → ⭐)');return;}
+    const perm=await Notification.requestPermission();
+    if(perm!=='granted'){toast('알림 권한이 거부됐어요 — 주소창 자물쇠 아이콘에서 허용으로 변경 가능');return;}
+    const reg=await navigator.serviceWorker.register('/sw.js');
+    const sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:_b64ToU8(_pushKey)});
+    const r=await fetch(`${CFG.api}/push/subscribe`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:sub.toJSON(),items})});
+    if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.error||('HTTP '+r.status));}
+    _pushOn=true;toast('🔔 알림 켜짐 — 새 실거래가 반영되면 알려드려요');renderBookmarks();
+  }catch(e){toast('알림 설정 실패: '+(e&&e.message||'잠시 후 다시 시도해주세요'));}
+}
+let _pushSyncT=null;
+function _schedulePushItemsSync(){
+  if(!_pushOn)return;
+  if(_pushSyncT)clearTimeout(_pushSyncT);
+  _pushSyncT=setTimeout(async()=>{
+    try{
+      const reg=await navigator.serviceWorker.getRegistration('/sw.js');
+      const sub=reg&&await reg.pushManager.getSubscription();
+      const items=_pushItems();
+      if(sub&&items.length)fetch(`${CFG.api}/push/subscribe`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:sub.toJSON(),items})}).catch(()=>{});
+    }catch(_){}
+  },2000);
+}
+document.addEventListener('DOMContentLoaded',()=>{setTimeout(()=>{try{initPush();}catch(_){}} ,1500);});
+
 function openBookmark(i){
   const bks=getBookmarks();
   const b=bks[i];if(!b)return;
+  // WATCH-FEED: 상세를 열면 '새 거래' 배지 소거 (확인 처리)
+  if(b.newDealCount){b.newDealCount=0;saveBookmarks(bks);renderBookmarks();}
   const found=props.find(p=>p.aptName===b.aptName);
   if(found){showDetail(found);}
   else{showDetail({aptName:b.aptName,area:b.area,avgPrice:b.avgPrice,score:null,tags:[],txHistory:[]});} // score null → "분석 대기" 분기 (60점 환각 fallback 제거)
@@ -7409,6 +7480,16 @@ async function refreshBookmarkPrices(){
         b.lastChecked=Date.now();b.lastCheckedCount=0;updated=true;
         continue;
       }
+      // WATCH-FEED (Sprint EEEEEE): 직전 확인 이후 '새 거래' 검출 — 최신 거래일 워터마크 비교.
+      //   첫 확인(워터마크 없음)은 배지 미발생. 배지는 해당 단지 상세를 열면 소거(openBookmark).
+      try{
+        const _dk=t=>`${t.dealYear}-${String(t.dealMonth).padStart(2,'0')}-${String(t.dealDay).padStart(2,'0')}`;
+        const _latest=items.map(_dk).sort().pop()||'';
+        if(b.lastLatestDeal && _latest>b.lastLatestDeal){
+          b.newDealCount=(b.newDealCount||0)+items.filter(t=>_dk(t)>b.lastLatestDeal).length;
+        }
+        if(_latest) b.lastLatestDeal=_latest;
+      }catch(_){}
       const prices=items.map(t=>t.dealAmount/10000);
       const newAvg=+(prices.reduce((s,x)=>s+x,0)/prices.length).toFixed(2);
       const prev=b.avgPrice||0;
@@ -8532,7 +8613,7 @@ function toggleBmPop(){
       body.innerHTML=bks.map((b,i)=>{
         const priceNow=b.avgPrice||0;
         return `<div style="padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px" onclick="openBookmark(${i});toggleBmPop();">
-          <div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(b.aptName || '')}</div><div style="font-size:10px;color:var(--t3)">${_escHtml(b.area || '')}</div></div>
+          <div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(b.aptName || '')}${b.newDealCount>0?`<span class="bk-new-badge">🔔 ${b.newDealCount}</span>`:''}</div><div style="font-size:10px;color:var(--t3)">${_escHtml(b.area || '')}</div></div>
           ${priceNow?`<span style="font-size:11px;font-weight:700;color:var(--acc);flex-shrink:0">${priceNow.toFixed(1)}억</span>`:''}
         </div>`;
       }).join('');

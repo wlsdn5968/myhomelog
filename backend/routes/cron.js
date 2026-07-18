@@ -246,4 +246,22 @@ async function handleFacilityBackfill(req, res) {
 router.post('/facility-backfill', handleFacilityBackfill);
 router.get('/facility-backfill', handleFacilityBackfill);
 
+// ── PUSH-NOTIFY (Sprint EEEEEE): 관심단지 신규 실거래 웹푸시 발송 ──
+// 매일 1회 18:20 UTC — molit-ingest 3슬롯(17:00~17:30) 완료 후. 게이트(VAPID env·테이블) 미충족 시 { skipped }.
+const { run: runPushNotify } = require('../jobs/pushNotify');
+async function handlePushNotify(req, res) {
+  try {
+    const started = Date.now();
+    const summary = await runPushNotify();
+    logger.info({ durationMs: Date.now() - started, summary }, 'cron/push-notify OK');
+    res.json({ ok: true, summary });
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'cron/push-notify 실패');
+    try { Sentry.captureException(e, { tags: { route: 'cron.push-notify' } }); } catch(_){}
+    res.status(500).json({ error: e.message });
+  }
+}
+router.post('/push-notify', handlePushNotify);
+router.get('/push-notify', handlePushNotify);
+
 module.exports = router;

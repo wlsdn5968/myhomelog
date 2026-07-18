@@ -193,6 +193,8 @@ app.use('/api/geocode', dataLimiter, geocodeRouter);
 app.use('/api/analysis', dataLimiter, analysisRouter);
 app.use('/api/news', optionalAuth, dataLimiter, newsRouter);
 app.use('/api/subscription', dataLimiter, subscriptionRouter);
+// 웹푸시 구독 (Sprint EEEEEE — 익명 동작, VAPID/테이블 게이트 미충족 시 no-op)
+app.use('/api/push', dataLimiter, require('./routes/push'));
 // 북마크 (Supabase 백엔드 — JWT 필수, RLS 적용)
 app.use('/api/bookmarks', dataLimiter, bookmarksRouter);
 // 검색 이력 (Supabase 백엔드 — JWT 필수, RLS 적용)
