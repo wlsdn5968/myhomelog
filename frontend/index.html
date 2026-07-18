@@ -486,8 +486,10 @@ html[data-theme="dark"] header{
 }
 @media(min-width:701px){
   header{height:66px;gap:16px;padding:0 20px}
-  /* 데스크톱: 테마 토글·ⓘ정보는 계정 드롭다운/정보 모달로 이동(시안) — 모바일에선 유지 */
-  #settingsBtn,#themeToggle{display:none!important}
+  /* 데스크톱: ⓘ정보는 계정 드롭다운/정보 모달로 이동(시안) — 모바일에선 유지.
+     GGGGGG (운영자 지시 "화면 모드 버튼 밖으로"): 테마 토글은 데스크톱에도 상시 노출 —
+     비로그인은 계정 드롭다운이 없어 다크모드 접근 경로가 아예 없던 것도 실측 확인. */
+  #settingsBtn{display:none!important}
   .hml{gap:14px}
 }
 .logo{display:flex;align-items:center;gap:9px;text-decoration:none;flex-shrink:0}
@@ -536,6 +538,9 @@ html[data-theme="dark"] .ltxt em{color:#7FA1E8}
 #hUsage .hu-dot{color:var(--hd-usage-dot)}
 #hUsage .hu-item{display:inline-flex;align-items:center;gap:4px}
 #hUsage .hu-item svg{width:14px;height:14px;flex-shrink:0}
+/* GGGGGG: '남은 검색/채팅' 텍스트 라벨 — 좁은 폭에선 숨겨 헤더 오버플로 방지 */
+#hUsage .hu-lbl{font-weight:600}
+@media(max-width:1119px){#hUsage .hu-lbl{display:none}#hUsage .hu-dim{display:none}}
 #hUsage b{font-weight:700;color:inherit}
 .hbtn{padding:5px 12px;border-radius:18px;font-size:11px;border:1px solid var(--bd);background:var(--s1);color:var(--t2);cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
 .hbtn:hover{border-color:var(--border-strong);color:var(--text-primary)}
@@ -994,15 +999,10 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 /* Phase 5 (2026-04-26): view-report 는 .biz-view 클래스를 쓰지만 사이드바(.lp)와 함께 표시되어야 함
    주의: .biz-view 들은 모두 BODY 직계 자식이고, .lp 는 .app(BODY 자식) 안에 있음 → flex item 으로 만들면 .lp 아래로 떨어짐
    → absolute 유지하되 left 만 사이드바 폭만큼 비워서 화면 우측을 차지하도록 */
-#view-report{left:310px!important}
-@media(max-width:900px){
-  /* .lp width 260px (701~900) */
-  #view-report{left:260px!important}
-}
-@media(max-width:700px){
-  /* 모바일: .lp 가 fixed slide-in 이므로 fill 로 복귀 */
-  #view-report{left:0!important}
-}
+/* GGGGGG (2026-07-18, 운영자 시크릿 실측): Sprint PPPPP 에서 보고서 사이드바를 숨겼는데(lp:false)
+   '사이드바와 함께 표시' 시절 left:310px 오프셋이 잔재로 남아 좌측 빈 백색 열 + 폼 우측 치우침 —
+   내부 카드가 max-width:840px+margin:auto 라 left:0 이면 화면 정중앙. */
+#view-report{left:0!important}
 .biz-section{background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--sh)}
 .biz-section h3{font-size:13px;font-weight:700;margin-bottom:13px}
 .comm-result{margin-top:12px;display:none}
@@ -1372,10 +1372,12 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <!-- Sprint OOOOO (Claude Design 시안): pill 8→3 — 규제 요약은 도구▾, 데이터 품질·다크·ⓘ는 계정 드롭다운으로.
          quotaPill/aiPill id 는 숫자 표시용 <b> 로 유지(updateQuota/updateAiPill 연속성). -->
     <div id="hUsage" onclick="openSettings()" title="오늘 무료 사용량 — 매일 자정 리셋 (클릭: 상세 정보)" role="status">
-      <span class="hu-dim">오늘</span>
-      <span class="hu-item" aria-label="단지 검색 잔여"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/><path d="m19.5 19.5-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><b id="quotaPill">—</b></span>
+      <!-- GGGGGG (운영자 실측 "2/5·2/3 의미 모르겠다"): 숫자만으론 사용/잔여 구분 불가 — '남은' 텍스트 라벨 명시.
+           좁은 폭(≤1119px)은 .hu-lbl 숨김(아이콘+숫자 유지) — 헤더 오버플로 방지. -->
+      <span class="hu-dim">오늘 남은</span>
+      <span class="hu-item" aria-label="오늘 남은 무료 단지 검색"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/><path d="m19.5 19.5-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="hu-lbl">검색</span><b id="quotaPill">—</b></span>
       <span class="hu-dot">·</span>
-      <span class="hu-item" aria-label="AI 채팅 잔여"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5.5h16v10H9l-4 3.5v-3.5H4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><b id="aiPill">—</b></span>
+      <span class="hu-item" aria-label="오늘 남은 AI 채팅"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5.5h16v10H9l-4 3.5v-3.5H4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="hu-lbl">채팅</span><b id="aiPill">—</b></span>
     </div>
     <!-- Phase 4 (2026-04-26): 서버 정상 시 hide, 장애 시만 빨간 표시 — "항상 초록"의 의미 없음 해소 -->
     <span class="hst off" id="apiSt" style="display:none">확인 중...</span>
@@ -4396,7 +4398,7 @@ function updateAiPill(usage){
   if(usage.unlimited){ pill.textContent='∞'; pill.style.color=''; return; }
   pill.textContent = `${usage.remaining}/${usage.limit}`;
   pill.style.color = usage.remaining<=1 ? 'var(--red)' : (usage.remaining<=3 ? 'var(--amb)' : '');
-  pill.title = `오늘 AI 채팅 ${usage.used}/${usage.limit}회 사용 — 매일 자정 리셋`;
+  pill.title = `오늘 남은 AI 채팅 ${usage.remaining}/${usage.limit}회 — 매일 자정 리셋`; // GGGGGG: pill(남은)과 기준 통일
 }
 
 // DATA-QUALITY-2026-07-12 (Sprint BBBBB) → Sprint OOOOO: 헤더 dqPill 제거(시안), 계정 드롭다운
