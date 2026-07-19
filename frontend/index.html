@@ -941,6 +941,23 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 #ntcNudge.open{display:block}
 @media(min-width:701px){#ntcNudge{right:18px;bottom:18px;width:330px;border-radius:14px;padding:14px}}
 @media(max-width:700px){#ntcNudge{left:0;right:0;bottom:0;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))}}
+/* ── KKKKKK: 모바일 전용 요소 기본 정의 (표시 여부는 ≤700px MQ + JS .on 이 결정, 데스크톱은 아래 701px 규칙이 차단) ── */
+#mHeroChip{display:none;position:absolute;top:8px;left:8px;right:8px;z-index:26;align-items:center;gap:9px;background:var(--bg-base);border:1px solid var(--bd);border-radius:12px;padding:9px 10px;box-shadow:0 4px 14px rgba(16,24,40,.16)}
+.mhc-ico{width:32px;height:32px;border-radius:8px;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.mhc-txt{flex:1;text-align:left;background:none;border:none;font-family:inherit;font-size:13px;font-weight:700;color:var(--t1);cursor:pointer;padding:6px 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.mhc-x{width:34px;height:34px;border:none;background:none;color:var(--t3);font-size:14px;cursor:pointer;flex-shrink:0}
+#mHeroCard{display:none;position:absolute;top:8px;left:8px;right:8px;z-index:27;background:var(--bg-base);border:1px solid var(--bd);border-radius:14px;padding:14px;box-shadow:0 10px 30px rgba(16,24,40,.22)}
+#mHeroCard.open{display:block}
+.mhc-chk{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--t2);margin-top:5px}
+.mhc-cta{width:100%;margin-top:11px;padding:12px;border:none;border-radius:10px;background:var(--acc);color:#fff;font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
+#mMapCap{display:none;position:absolute;left:8px;bottom:8px;z-index:25;background:rgba(255,255,255,.88);border:1px solid var(--bd);border-radius:99px;padding:4px 10px;font-size:10px;color:var(--t2);pointer-events:none}
+[data-theme="dark"] #mMapCap{background:rgba(26,31,41,.88)}
+#drawerUtil{display:none}
+.du-it{display:flex;align-items:center;gap:8px;width:100%;min-height:44px;padding:10px 12px;margin-bottom:6px;border:1px solid var(--bd);border-radius:10px;background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:12.5px;font-weight:600;cursor:pointer;text-align:left}
+.du-it.danger{color:var(--red,#A82525)}
+.du-legal{display:flex;gap:14px;justify-content:center;padding:10px 0 2px}
+.du-legal a{color:var(--t3);font-size:11px;text-decoration:underline;padding:10px 2px;min-height:44px;display:flex;align-items:center}
+@media(min-width:701px){#mHeroChip,#mHeroCard,#mMapCap,#drawerUtil{display:none!important}}
 .smbg.open{display:flex}
 .smbox{background:var(--bg-base);border-radius:16px;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.15);overflow:hidden}
 .smhdr{padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center}
@@ -1089,6 +1106,21 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
   #ntcBell,#themeToggle{padding:6px 6px!important}
   #settingsBtn{min-width:36px} /* 터치 44px MQ 예외 — 배포 실측 380px(5px 초과)의 잔여 원인. 시안 M-B(ⓘ 드로어 이동)까지 한시 */
   .hsearch{min-width:124px!important}
+  /* ── Sprint KKKKKK: 모바일 리디자인 (Claude Design '내집로그 모바일 리디자인' 시안) — 전부 ≤700px 격리, 데스크톱 불변 ── */
+  /* M-B 헤더 4요소(햄버거·로고·검색·벨): 로그인·테마·ⓘ·계정 아바타는 드로어 유틸(#drawerUtil)로 이동 */
+  #loginBtn,#themeToggle,#settingsBtn,.acct-dd{display:none!important}
+  /* M-A 지도 풀블리드: 날짜줄·히어로 배너·법적 링크줄 회수 — #mapEl flex:1 이 문서 흐름에서 자동 확장 */
+  #syncBanner{display:none!important}
+  #heroBand{display:none!important}
+  footer.legal-footer{display:none!important} /* 법적 링크는 드로어 유틸 하단(44px) + 비지도 뷰 자체 줄(DDDDDD) 로 도달성 유지 */
+  /* 지도 툴바 31px → 지도 위 오버레이 (필터 칩 .mbtn 은 자체 배경·보더로 가독 유지) */
+  #view-map .mtbar{position:absolute;top:0;left:0;right:0;z-index:25;background:transparent;border-bottom:none;box-shadow:none;pointer-events:none}
+  #view-map .mtbar>*{pointer-events:auto}
+  #mapHintTxt{display:none} /* '마커클릭=팝업 | 더블클릭' — 터치 환경에서 무의미 */
+  #popTitleCard{top:56px!important} /* 히어로 칩(상단 풀폭)과 겹침 회피 */
+  #mHeroChip.on{display:flex}
+  #drawerUtil{display:block}
+  #mMapCap.on{display:block}
   /* 헤더 우측 hml: 모바일에선 핵심 버튼만 (10.15 / 로그인)
      QUOTA-ACCESS-2026-07-15 (Sprint LLLLL): #settingsBtn 은 모바일에서도 유지 — 이걸 숨기면 무료 검색
      한도(5/일)를 확인할 창구가 429 를 맞기 전까지 전무했음(quotaPill·설정 모달 진입점 전부 소멸). */
@@ -1650,6 +1682,12 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <div class="rnote">DSR: 은행권 40% / 2금융권 50% | 스트레스 수도권 +3.0%p<br>규제지역: 서울25구+경기15곳 | 토허구역 2년 실거주<br>⚠ 규제 수시변경 — 최종확인 금융기관 필수<br><a href="javascript:void(0)" onclick="openRegSummary()" style="color:var(--acc);font-weight:700;text-decoration:none">전체 규제 요약 보기 →</a></div>
     </div>
   </div>
+
+  <!-- KKKKKK: 드로어 유틸 (≤700px 전용 — 헤더에서 이동한 로그인·테마·정보 + 법적 링크 44px. 데스크톱은 701px MQ 차단) -->
+  <div id="drawerUtil" class="sec">
+    <div class="sh"><span class="st">계정 · 설정</span></div>
+    <div class="sb" id="drawerUtilBody" style="padding:10px 12px"></div>
+  </div>
 </div></div>
 
 <!-- CENTER -->
@@ -1666,10 +1704,31 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <button class="mbtn" onclick="showPop(this)" title="검색 결과 마커를 걷어내고 인기 단지 마커를 다시 표시합니다">🔥 인기</button>
       <div class="msep"></div>
     </span>
-    <span style="font-size:10px;color:var(--t3)">마커클릭=팝업 | 더블클릭=상세리포트</span>
+    <span id="mapHintTxt" style="font-size:10px;color:var(--t3)">마커클릭=팝업 | 더블클릭=상세리포트</span>
     <span id="popLegend" style="font-size:10px;color:var(--t3);display:none">| 숫자 라벨 = 인기 단지 (최근 60일 실거래 많은 순 · 시군구당 최대 2곳)</span>
     <span id="geoSt" style="font-size:10px;color:var(--grn);display:none">📍 좌표 정확화 중...</span>
   </div>
+  <!-- KKKKKK: 모바일 히어로 칩 + 확장 카드 + 데이터 캡션 (≤700px 전용 — 데스크톱은 701px MQ 가 차단).
+       표시 로직은 기존 heroBand 와 공유: _showHeroNow/dismissHero 가 .on 토글, mhl_hero_dismissed 존중. -->
+  <div id="mHeroChip" role="region" aria-label="서비스 소개">
+    <span class="mhc-ico" aria-hidden="true">📊</span>
+    <button class="mhc-txt" onclick="mHeroExpand()">30초 만에 1page 보고서 <span aria-hidden="true">→</span></button>
+    <button class="mhc-x" onclick="dismissHero()" aria-label="안내 닫기" title="닫기">✕</button>
+  </div>
+  <div id="mHeroCard" role="dialog" aria-label="1page 보고서 소개">
+    <div style="display:flex;align-items:flex-start;gap:9px">
+      <span class="mhc-ico" aria-hidden="true">📊</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:14px;font-weight:800;color:var(--t1)">30초 만에 1page 보고서</div>
+        <div style="font-size:11.5px;color:var(--t3);margin-top:3px;line-height:1.5">실거래가 · 대출 한도 · 최신 규제를<br>한 곳에서 정리해드려요</div>
+      </div>
+      <button class="mhc-x" onclick="mHeroCollapse()" aria-label="접기" title="접기">✕</button>
+    </div>
+    <div class="mhc-chk"><span style="color:var(--grn,#177038)">✓</span> 단지별 실거래가 흐름 한눈에</div>
+    <div class="mhc-chk"><span style="color:var(--grn,#177038)">✓</span> 내 조건 기준 대출 한도 계산</div>
+    <button class="mhc-cta" onclick="_heroFunnel('cta_click'); mHeroCollapse(); sv('report');">무료로 보고서 만들기 →</button>
+  </div>
+  <div id="mMapCap" aria-hidden="true"></div>
   <!-- POP-TITLE-2026-07-11 (Sprint MMMM, 운영자 "이게 인기단지인지 바로 보이나? 매물로 오해"):
        인기 마커의 정체를 지도 위에 명시 — 매물 광고 아님(정직 정책) + 선정 기준 공개.
        loadPopularMarkers 성공 시 표시, 검색(renderMarkers) 시 인기 마커와 함께 숨김. -->
@@ -3058,14 +3117,43 @@ function dismissHero(){
   try { localStorage.setItem('mhl_hero_dismissed', '1'); } catch(_){}
   const el = document.getElementById('heroBand');
   if (el) el.style.display = 'none';
+  // KKKKKK: 모바일 칩·확장 카드도 함께 종료 (표시 로직 공유)
+  try { document.getElementById('mHeroChip').classList.remove('on'); mHeroCollapse(); } catch(_){}
   _heroFunnel('dismiss');
 }
 function _showHeroNow(){
   const el = document.getElementById('heroBand');
   if (el && el.style.display !== 'flex') {
     el.style.display = 'flex';
+    // KKKKKK: ≤700px 에선 CSS 가 heroBand 를 숨기고 이 칩이 대신 보임 (>700px 는 701px MQ 가 칩 차단)
+    try { document.getElementById('mHeroChip').classList.add('on'); } catch(_){}
     _heroFunnel('view');
   }
+}
+// ── KKKKKK: 모바일 히어로 칩 확장/접기 (시안 화면3) ──
+function mHeroExpand(){
+  _heroFunnel('chip_expand');
+  const c = document.getElementById('mHeroCard');
+  if (c) c.classList.add('open');
+}
+function mHeroCollapse(){
+  const c = document.getElementById('mHeroCard');
+  if (c) c.classList.remove('open');
+}
+// ── KKKKKK: 모바일 드로어 유틸 (헤더에서 이동한 로그인·테마·정보 + 법적 링크, 시안 화면2) ──
+function renderDrawerUtil(){
+  const el = document.getElementById('drawerUtilBody');
+  if (!el) return;
+  const u = window.MHL?.auth?.user;
+  const acct = u
+    ? `<div style="display:flex;align-items:center;gap:9px;padding:4px 2px 10px"><span class="avtr" style="width:32px;height:32px;border-radius:50%;background:var(--acc);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700">${_escHtml(((u.email||'?')[0]||'?').toUpperCase())}</span><div style="min-width:0"><div style="font-size:12.5px;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml((u.email||'').split('@')[0])}</div><div style="font-size:10px;color:var(--t3)">로그인됨</div></div></div>
+       <button class="du-it" onclick="toggleDrawer();openUserMenu()">👤 내 정보</button>
+       <button class="du-it danger" onclick="toggleDrawer();logout()">↩ 로그아웃</button>`
+    : `<button class="du-it" onclick="toggleDrawer();openLogin()">🔐 로그인<span style="font-weight:400;color:var(--t3);font-size:10.5px">관심단지 기기 간 동기화</span></button>`;
+  el.innerHTML = acct
+    + `<button class="du-it" onclick="toggleTheme()">🌙 다크/라이트 모드 전환</button>
+       <button class="du-it" onclick="toggleDrawer();openSettings()">ⓘ 서비스 정보 · 사용량</button>
+       <div class="du-legal"><a href="/terms.html" target="_blank">이용약관</a><a href="/privacy.html" target="_blank">개인정보처리방침</a><a href="/refund.html" target="_blank">환불정책</a></div>`;
 }
 function _maybeShowHero(){
   try {
@@ -3572,6 +3660,7 @@ function _updateAuthUi(session){
     if(acctDd){ acctDd.style.display='none'; }
     if(typeof closeAcctMenu==='function') closeAcctMenu();
   }
+  try { renderDrawerUtil(); } catch(_){} // KKKKKK: 드로어 유틸도 세션 변화 동기화
 }
 
 // 로그인 직후 /deletion-status 조회 → pending 이면 즉시 복구 안내
@@ -7513,6 +7602,7 @@ document.addEventListener('DOMContentLoaded',()=>{
   setTimeout(()=>{try{if(!_kkoConfigured)initKakao();}catch(_){}} ,6000); // 세션 늦은 복원 대비 1회 재시도
   setTimeout(()=>{try{_handleKakaoReturn();}catch(_){}} ,2200);
   setTimeout(()=>{try{_updateNtcDot();}catch(_){}} ,2500); // NTC: 채널 상태 확정 후 벨 배지 1회 갱신
+  setTimeout(()=>{try{renderDrawerUtil();}catch(_){}} ,300); // KKKKKK: 드로어 유틸 초기 렌더 (세션 확정 시 _updateAuthUi 가 재렌더)
 });
 
 // ── NTC (Sprint JJJJJJ): 알림 센터 + 구독 넛지 + 헤더 벨 — Claude Design 시안 반영 ──
@@ -9236,6 +9326,7 @@ function toggleDrawer() {
   bg.classList.toggle('open', opening);
 
   if (opening) {
+    try { renderDrawerUtil(); } catch(_){} // KKKKKK: 열 때마다 로그인 상태 최신 반영
     // ALL 속성 inline 강제 — left 기반 (transform 의존 X)
     Object.assign(lp.style, {
       display: 'block',
@@ -9924,6 +10015,8 @@ async function chkAPI(_isRetry){
             sb.innerHTML = mql.matches
               ? `📅 ${_k} 갱신 · 국토부·금융위·KAPT${_n}`
               : `📅 마지막 데이터 동기화: <span id="syncTime">${_k} KST</span> · 출처: 국토교통부 실거래가${_cntTxt} · 금융위 규제${_n}`;
+            // KKKKKK: 모바일은 syncBanner 를 CSS 로 숨기고 지도 좌하단 캡션 칩이 대신 표시 (>700px 는 MQ 차단)
+            try { const cap=document.getElementById('mMapCap'); if(cap){ cap.textContent=`${_k} 갱신 · 국토부·KAPT${_n?' · ⚠':''}`; cap.classList.add('on'); } } catch(_){}
           };
           const _mql = window.matchMedia('(max-width:700px)');
           _renderSync(_mql);
