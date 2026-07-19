@@ -1008,11 +1008,10 @@ async function fetchCandidateApts(admin, input, limit) {
 
   // TRUST-GATE (Sprint LLLLLL, 운영자 제보 '서울숲한성' DB 실측): 6개월 거래 1건 단지는 평균가 자체가
   //   무의미(표본 1)하고, MOLIT 신고 오타 이형(행당동 '서울숲한성' 1건 — 정식 표기 '서울숲 한신 더 휴' 85건)이
-  //   별도 단지처럼 보고서에 오르는 유일한 채널. 게이트 후에도 limit 이상 남을 때만 적용(거래 희소 지역 보호).
-  {
-    const _multi = pool.filter(a => a.n >= 2);
-    if (_multi.length >= limit) pool = _multi;
-  }
+  //   별도 단지처럼 보고서에 오르는 유일한 채널.
+  //   LLLLLL-2: **무조건 배제** — 배포 검증에서 '후보 부족 시 완화'가 게이트를 무력화(성동 후보 4개 → 1건짜리
+  //   복귀) 실측. 표본 1은 어떤 경우에도 부적격 — 0건이면 기존 인접 구 확장/빈 결과 안내가 정직한 처리.
+  pool = pool.filter(a => a.n >= 2);
 
   // Phase 9: 다양성 강제 제거 — 한 구에 몰려도 OK. 사용자 의도: "최적 매물 우선"
   //   상위 limit*2 개 후보를 KAPT 호출 대상으로 (API 호출 비용 절감)

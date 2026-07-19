@@ -238,7 +238,7 @@ async function getAIRecommendations(userCondition) {
   // NFC 정규화 — Mac(NFD) ↔ Windows(NFC) 캐시 분리 방지
   const normReg = String(region || '').normalize('NFC').trim();
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
-  const cacheKey = `rec:v11:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
+  const cacheKey = `rec:v12:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v12: LLLLLL 게이트 — 구버전 캐시 결과 서빙 차단
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
   // REC-REDIS-2026-07-17 (Sprint AAAAAA, 운영자 "검색 더 빨리" — 실측: cold 12.6s vs warm 1.4s):
@@ -465,14 +465,17 @@ async function getAIRecommendations(userCondition) {
       const v = [st.kaptdaCnt, st.hoCnt].map(x => parseInt(x)).find(nn => Number.isFinite(nn) && nn > 0);
       return v || null;
     });
-    const _pass = (apt, i, minDeals) => ((apt.dealCount || 0) >= minDeals) && !(_hh[i] != null && _hh[i] < 100);
-    let gated = candidatePool.filter((a, i) => _pass(a, i, 2));
-    if (gated.length < 5) gated = candidatePool.filter((a, i) => _pass(a, i, 1)); // 표본 게이트만 완화
-    if (gated.length < 3) gated = candidatePool;                                   // 전부 완화 (희소 지역)
-    if (gated.length !== candidatePool.length) {
-      logger.info({ before: candidatePool.length, after: gated.length }, 'PropertyService TRUST+HH 게이트');
+    // LLLLLL-2 (배포 검증에서 완화 로직이 게이트 무력화 실측 — 성동구 후보 4개<5 → 1건짜리 복귀):
+    //   TRUST(거래 1건 배제)는 **무조건** — 표본 1은 어떤 경우에도 부적격(정직한 빈 결과 > 무의미 추천).
+    //   HH(<100 확인분)만 후보 부족 시 완화('가능하면'). 인덱스 안전 위해 hh 를 객체에 동반.
+    const _withHh = candidatePool.map((a, i) => ({ a, hh: _hh[i] }));
+    const _base = _withHh.filter(x => (x.a.dealCount || 0) >= 2);            // TRUST: 무조건
+    let _gated = _base.filter(x => !(x.hh != null && x.hh < 100));           // HH: 확인된 소형 제외
+    if (_gated.length < 3) _gated = _base;                                    // HH 만 완화 (희소 지역)
+    if (_gated.length !== candidatePool.length) {
+      logger.info({ before: candidatePool.length, after: _gated.length }, 'PropertyService TRUST+HH 게이트');
     }
-    candidatePool = gated;
+    candidatePool = _gated.map(x => x.a);
   }
 
   // Step 4: 거래량 가중 정렬 → 실거래 단지 우선 상위 15건
