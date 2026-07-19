@@ -119,7 +119,7 @@ async function getBuildingTitle({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
         serviceKey: process.env.MOLIT_API_KEY,
         sigunguCd: region.sigunguCd, bjdongCd: region.bjdongCd,
         platGbCd: '0', bun: parsed.bun, ji: parsed.ji,
-        numOfRows: 30, pageNo: 1, _type: 'json',
+        numOfRows: 100, pageNo: 1, _type: 'json', // BR-SUM-2026-07-19: 대단지(>30동) 전체 동 커버 위해 30→100
       },
       timeout: 8000, headers: { Accept: 'application/json' },
     });
@@ -130,15 +130,20 @@ async function getBuildingTitle({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
     }
     const items = r.data?.response?.body?.items?.item;
     const arr = Array.isArray(items) ? items : items ? [items] : [];
-    // 대표 동 = 세대수 최대(주건물). 세대수 동률/부재 시 연면적 최대.
+    // 대표 동(주건물) = 세대수 최대 — bldNm·연식·구조 등 표시 필드용.
     const best = arr.slice().sort((a, b) =>
       ((parseInt(b.hhldCnt, 10) || 0) - (parseInt(a.hhldCnt, 10) || 0)) ||
       ((parseFloat(b.totArea) || 0) - (parseFloat(a.totArea) || 0)))[0];
+    // BR-SUM-2026-07-19 (운영자 전수감사 발견: 황골마을주공1=영통포레파크원 실제 3,129세대인데 건축물대장이
+    //   118세대(한 동)만 반환): 표제부는 동별 레코드라 대표동 1개의 hhldCnt 는 다동 단지의 "한 동" 세대수일
+    //   뿐 — 단지 전체는 전 동 hhldCnt 합. 소형 단독건물(성지 84=1동)은 합=단일값이라 무영향. 비주거 동은
+    //   hhldCnt 0 이라 합에 안 섞임. 총 세대수(hhldCnt)만 합산, 표시 필드는 대표동 유지.
+    const totalHh = arr.reduce((s, b) => s + (parseInt(b.hhldCnt, 10) || 0), 0);
     if (best) {
       title = {
         bldNm: (best.bldNm || '').trim() || null,
         useAprDay: (best.useAprDay || '').trim() || null,
-        hhldCnt: parseInt(best.hhldCnt, 10) || null,
+        hhldCnt: totalHh > 0 ? totalHh : (parseInt(best.hhldCnt, 10) || null),
         grndFlrCnt: parseInt(best.grndFlrCnt, 10) || null,
         ugrndFlrCnt: parseInt(best.ugrndFlrCnt, 10) || null,
         totArea: parseFloat(best.totArea) || null,
