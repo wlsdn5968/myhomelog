@@ -180,14 +180,21 @@ router.post('/migrate', async (req, res, next) => {
       }))
       .filter(r => r.kapt_code);  // normalize 실패 항목 제외
 
-    if (rows.length === 0) return res.json({ migrated: 0, skipped: items.length, items: [] });
+    // BATCH-DEDUP (Sprint HHHHHH, Sentry NODE-8 실측): 클라 로컬에 같은 단지가 중복이면 normalize 후
+    //   같은 kapt_code 가 한 배치에 2행 → Postgres 21000 "ON CONFLICT cannot affect row a second time".
+    //   배치 내 마지막 항목(최신) 승리로 사전 dedup.
+    const _byKey = new Map();
+    for (const r of rows) _byKey.set(r.kapt_code, r);
+    const dedupedRows = [..._byKey.values()];
+
+    if (dedupedRows.length === 0) return res.json({ migrated: 0, skipped: items.length, items: [] });
 
     const sb = userScopedClient(req.accessToken);
     // upsert on (user_id, kapt_code) — 중복은 갱신 (PIPA 관점에서 user_id 일치만 보장)
     // 반환 컬럼: 클라가 _serverId 매핑할 수 있도록 전체 필드 반환
     const { data, error } = await sb
       .from('bookmarks')
-      .upsert(rows, { onConflict: 'user_id,kapt_code', ignoreDuplicates: false })
+      .upsert(dedupedRows, { onConflict: 'user_id,kapt_code', ignoreDuplicates: false })
       .select('id, kapt_code, display_name, address, memo, tags, avg_price, created_at, updated_at');
     if (error) throw error;
 
