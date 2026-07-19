@@ -1006,6 +1006,14 @@ async function fetchCandidateApts(admin, input, limit) {
   }
   pool.sort((a, b) => b.score - a.score);
 
+  // TRUST-GATE (Sprint LLLLLL, 운영자 제보 '서울숲한성' DB 실측): 6개월 거래 1건 단지는 평균가 자체가
+  //   무의미(표본 1)하고, MOLIT 신고 오타 이형(행당동 '서울숲한성' 1건 — 정식 표기 '서울숲 한신 더 휴' 85건)이
+  //   별도 단지처럼 보고서에 오르는 유일한 채널. 게이트 후에도 limit 이상 남을 때만 적용(거래 희소 지역 보호).
+  {
+    const _multi = pool.filter(a => a.n >= 2);
+    if (_multi.length >= limit) pool = _multi;
+  }
+
   // Phase 9: 다양성 강제 제거 — 한 구에 몰려도 OK. 사용자 의도: "최적 매물 우선"
   //   상위 limit*2 개 후보를 KAPT 호출 대상으로 (API 호출 비용 절감)
   // MOB-AUDIT-2026-05-03: priority 매칭 점수 ≥ 임계 단지가 7개 미만일 risk → 후보 풀 14 → 20 확장
@@ -1016,7 +1024,7 @@ async function fetchCandidateApts(admin, input, limit) {
     logger.warn({ region, pool_size: pool.length },
       '후보 풀 부족 — 인접 구 확장 권장 (사용자에 안내)');
   }
-  const out = pool.slice(0, Math.min(limit * 3, 20));
+  let out = pool.slice(0, Math.min(limit * 3, 20)); // LLLLLL: HH-GATE 재할당 위해 let
 
   // Phase 6+ (2026-04-26): KAPT API 통합 — 선정된 N개 단지만 facility 병렬 fetch
   //   resolveFacility() 가 ILIKE 토큰 매칭 + KAPT API + DB 캐시 (90일) 다 처리.
@@ -1024,6 +1032,20 @@ async function fetchCandidateApts(admin, input, limit) {
   await Promise.all(out.map(async (c) => {
     try {
       const f = await resolveFacility({ aptName: c.apt_name, sigungu: c.sigungu, umdNm: c.umd_nm });
+      // MERGE-GUARD (Sprint LLLLLL, '서울숲한성' 오병합 실측): resolveFacility 의 관대 매칭(ILIKE·토큰)이
+      //   오타 이형 이름에 유사 단지('서울숲한신더휴' 1,410세대)를 붙여 "그럴듯한 틀린 정보"가 되던 것 차단.
+      //   정규화+접미(아파트/단지/고·저층) 제거 후 포함관계일 때만 채택 — 정당 케이스('왕십리삼성'⊂
+      //   '왕십리삼성아파트', '답십리 서울한양'⊂'답십리동서울한양')는 유지, 판정 불가면 미채택(정보 없음 > 틀린 정보).
+      if (f?.raw) {
+        const _nrm = (s) => String(s || '').normalize('NFC').replace(/\s/g, '').toLowerCase()
+          .replace(/\((?:고층|저층)\)$/, '').replace(/(?:아파트|단지)$/, '');
+        const _a = _nrm(c.apt_name);
+        const _b = _nrm(f.official || f.raw.kaptName || '');
+        if (_a && _b && !(_a.includes(_b) || _b.includes(_a))) {
+          logger.info({ apt: c.apt_name, official: f.official || f.raw.kaptName }, 'MERGE-GUARD: 이름 불일치 — facility 미채택');
+          return;
+        }
+      }
       if (f?.raw) {
         const raw = f.raw;
         const detail = f.detail || {};
@@ -1131,6 +1153,16 @@ async function fetchCandidateApts(admin, input, limit) {
   // Phase 7 + 8 + 9: KAPT + amenities 호출 후 객관 점수 + objectiveFacts 적용
   for (const c of out) {
     applyObjectiveScore(c);
+  }
+  // HH-GATE (Sprint LLLLLL, 운영자 지시 "100세대 미만은 가능하면 추천하지 말 것"):
+  //   세대수 확인된 소형(<100)만 제외 — 미확인(null)은 유지(이름 매칭 실패한 실제 대단지 오배제 방지).
+  //   '가능하면' = 게이트 후에도 limit 이상 남을 때만(희소 지역 보고서 공백 방지).
+  {
+    const _big = out.filter(c => !(Number.isFinite(c.households) && c.households < 100));
+    if (_big.length >= limit) {
+      if (_big.length !== out.length) logger.info({ before: out.length, after: _big.length }, 'HH-GATE: 100세대 미만 제외');
+      out = _big;
+    }
   }
   // Phase 9: 객관 점수 (universal preference) 적용 후 최종 정렬
   out.sort((a, b) => b.score - a.score);

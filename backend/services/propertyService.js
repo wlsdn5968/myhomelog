@@ -434,6 +434,47 @@ async function getAIRecommendations(userCondition) {
     }
   }
 
+  // TRUST+HH GATE (Sprint LLLLLL, 운영자 제보 '서울숲한성' 실측 — report fetchCandidateApts 와 동일 원칙):
+  //   ① 6개월 거래 1건 단지 배제 — 표본 1은 평균가 무의미 + MOLIT 신고 오타 이형(행당동 '서울숲한성' 1건,
+  //      정식 '서울숲 한신 더 휴' 85건)이 별도 단지로 노출되는 채널.
+  //   ② apt_master(DB) 정확·canon 매칭으로 세대수 확인된 100세대 미만 배제 (운영자 지시 "가능하면 추천 제외").
+  //      미확인은 유지 — 이름 매칭 실패한 실제 대단지(예: 도원동 삼성래미안) 오배제 방지. KAPT API 추가 호출 0(DB 1쿼리).
+  //   '가능하면' = 게이트 후 후보가 충분할 때만 적용(희소 지역 결과 공백 방지). Step 4 이전이라 downstream 인덱스 안전.
+  {
+    const _n = (s) => (s || '').replace(/\s/g, '').toLowerCase();
+    const _c = (n) => n.replace(/\((?:고층|저층)\)$/, '').replace(/(?:아파트|단지)$/, '');
+    const _m = new Map();
+    for (const a of allAptList) {
+      const nm = _n(a.kaptName || a.aptName || '');
+      if (!nm || !a.kaptCode) continue;
+      const dong = a.as4 || a.as3 || '';
+      _m.set(`${nm}|${dong}`, a.kaptCode);
+      if (!_m.has(nm)) _m.set(nm, a.kaptCode);
+      const st = _c(nm);
+      if (st && st !== nm && !_m.has(st)) _m.set(st, a.kaptCode);
+    }
+    const _codes = candidatePool.map((apt) => {
+      const k = _n(apt.aptName);
+      return _m.get(`${k}|${apt.umdNm || ''}`) || _m.get(k) || _m.get(_c(k)) || null;
+    });
+    let _hhMap = new Map();
+    try { _hhMap = await getFacilitiesByKaptCodes([...new Set(_codes.filter(Boolean))]); } catch (_) { /* graceful — 게이트 ② 비활성 */ }
+    const _hh = candidatePool.map((_, i) => {
+      const st = _codes[i] && _hhMap.get(_codes[i]);
+      if (!st) return null;
+      const v = [st.kaptdaCnt, st.hoCnt].map(x => parseInt(x)).find(nn => Number.isFinite(nn) && nn > 0);
+      return v || null;
+    });
+    const _pass = (apt, i, minDeals) => ((apt.dealCount || 0) >= minDeals) && !(_hh[i] != null && _hh[i] < 100);
+    let gated = candidatePool.filter((a, i) => _pass(a, i, 2));
+    if (gated.length < 5) gated = candidatePool.filter((a, i) => _pass(a, i, 1)); // 표본 게이트만 완화
+    if (gated.length < 3) gated = candidatePool;                                   // 전부 완화 (희소 지역)
+    if (gated.length !== candidatePool.length) {
+      logger.info({ before: candidatePool.length, after: gated.length }, 'PropertyService TRUST+HH 게이트');
+    }
+    candidatePool = gated;
+  }
+
   // Step 4: 거래량 가중 정렬 → 실거래 단지 우선 상위 15건
   const ranked = candidatePool
     .map(a => ({ ...a, _score: a.dealCount * 10 + (a.buildYear || 1990) * 0.01 }))
