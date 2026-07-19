@@ -20,6 +20,7 @@ const { normalizeAptName } = require('../utils/aptName');
 const { buildFacility } = require('../utils/buildFacility');
 // REC-PERF-2026-07-10 (Sprint FFFF): apt_master.facility 배치 조회 — 콜드 KAPT 30콜 제거
 const { getFacilitiesByKaptCodes } = require('./aptFacilityService');
+const { getBuildingTitle } = require('./buildingRegisterService'); // LLLLLL-3: KAPT 미매칭 단지 세대수 = 건축물대장(SSSS 연동)으로 보강
 const cache = require('../cache');
 const logger = require('../logger');
 
@@ -238,7 +239,7 @@ async function getAIRecommendations(userCondition) {
   // NFC 정규화 — Mac(NFD) ↔ Windows(NFC) 캐시 분리 방지
   const normReg = String(region || '').normalize('NFC').trim();
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
-  const cacheKey = `rec:v12:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v12: LLLLLL 게이트 — 구버전 캐시 결과 서빙 차단
+  const cacheKey = `rec:v13:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v13: LLLLLL-3 건축물대장 세대수 보강+HH게이트 — 구버전 캐시 차단
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
   // REC-REDIS-2026-07-17 (Sprint AAAAAA, 운영자 "검색 더 빨리" — 실측: cold 12.6s vs warm 1.4s):
@@ -597,10 +598,25 @@ async function getAIRecommendations(userCondition) {
   });
   _mark('rank');
   const dbFacMap = await getFacilitiesByKaptCodes([...new Set(preCodes.filter(Boolean))]);
+  // LLLLLL-3 (운영자 제보 'YM프라젠 83세대 소형이 세대수 null 로 게이트 우회'): KAPT 미매칭·세대수 null 단지는
+  //   건축물대장(getBuildingTitle, SSSS 연동)으로 세대수 보강. building_register 캐시 우선 → miss 만
+  //   지번(적재분)+Kakao 법정동+건축HUB(graceful 8s). 실패 시 null(기존 동작). top-15 로 bounded, Redis 캐시로 콜드 1회만.
+  const _brHh = async (apt) => {
+    try {
+      const t = await getBuildingTitle({ lawdCd: apt.lawdCd, sigungu: apt.sigungu || '', umdNm: apt.umdNm || '', aptName: apt.aptName });
+      return (t && Number.isFinite(t.hhldCnt) && t.hhldCnt > 0) ? t.hhldCnt : null;
+    } catch (_) { return null; }
+  };
   const enriched = await Promise.allSettled(
     recommendations.map(async (rec, i) => {
       const kaptCode = preCodes[i];
-      if (!kaptCode) return rec;
+      if (!kaptCode) {
+        // 이름 매칭 실패(KAPT 미등록/미매칭) — 건축물대장 세대수만이라도 보강해 카드 표시 + HH 게이트가 판정 가능하게.
+        const brHh = await _brHh(ranked[i]);
+        if (!brHh) return rec;
+        const t2 = [...(rec.tags || []), ...(brHh >= 1000 ? ['대단지'] : brHh >= 500 ? ['중대단지'] : [])];
+        return { ...rec, facility: { totalHouseholds: brHh, source: 'buildingRegister' }, tags: Array.from(new Set(t2)) };
+      }
       // DTL-INFO-2026-05-13 (Sprint X): BasisInfo + Detail 병렬 fetch (주차 정보 포함)
       // Sprint FFFF: DB 보유분은 KAPT 콜 생략 (stored raw 의 _dtl 이 detail 역할)
       const stored = dbFacMap.get(kaptCode);
@@ -626,6 +642,11 @@ async function getAIRecommendations(userCondition) {
         if (basic && facility) {
           facility.address = basic.doroJuso || basic.as1 || null;
         }
+      }
+      // LLLLLL-3: KAPT 매칭됐어도 세대수(kaptdaCnt/hoCnt) 0/null 이면 건축물대장으로 보강.
+      if (facility && !(facility.totalHouseholds > 0)) {
+        const brHh = await _brHh(ranked[i]);
+        if (brHh) facility.totalHouseholds = brHh;
       }
       // 추가 태그 — facility 값 기반
       const moreTags = [...(rec.tags || [])];
@@ -740,8 +761,19 @@ async function getAIRecommendations(userCondition) {
       'propertyService: 일부 단지 좌표 해결 실패 — 프론트에서 마커 생략');
   }
 
+  // LLLLLL-3 HH-GATE (건축물대장 보강 후): 세대수 확인된 100세대 미만 제외 (운영자 지시). 미확인(null) 유지.
+  //   이 시점은 index 정렬 불요(withCoords 최종). 후보 3개 이상 남을 때만 — 희소 지역 결과 공백 방지.
+  let finalRecs = withCoords;
+  {
+    const _big = withCoords.filter(r => !(Number.isFinite(r.facility?.totalHouseholds) && r.facility.totalHouseholds < 100));
+    if (_big.length >= 3 && _big.length !== withCoords.length) {
+      logger.info({ before: withCoords.length, after: _big.length }, 'PropertyService HH-GATE(건축물대장 보강): 100세대 미만 제외');
+      finalRecs = _big;
+    }
+  }
+
   const result = {
-    recommendations: withCoords,
+    recommendations: finalRecs,
     targetRegions,
     totalTxAnalyzed: analyzed.length,
     totalAptsInRegion: allAptList.length,

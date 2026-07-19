@@ -1074,6 +1074,24 @@ async function fetchCandidateApts(admin, input, limit) {
     }
   }));
 
+  // LLLLLL-3 (운영자 제보 'YM프라젠 83세대 소형이 세대수 null 로 노출'): KAPT 세대수 못 찾은 후보를
+  //   건축물대장(getBuildingTitle, SSSS 연동·building_register 캐시)으로 보강 → 카드 세대수 표시 +
+  //   아래 HH-GATE 가 100세대 미만을 정확히 제외. top out(~20) bounded, graceful(실패 시 기존 null 유지).
+  try {
+    const { getBuildingTitle } = require('../services/buildingRegisterService');
+    await Promise.all(out.map(async (c) => {
+      if (Number.isFinite(c.households) && c.households > 0) return;
+      try {
+        const t = await getBuildingTitle({ lawdCd: c.lawd_cd, sigungu: c.sigungu, umdNm: c.umd_nm, aptName: c.apt_name });
+        if (t && Number.isFinite(t.hhldCnt) && t.hhldCnt > 0) {
+          c.households = t.hhldCnt;
+          if (!c.build_year && t.useAprDay && /^\d{4}/.test(t.useAprDay)) c.build_year = Number(t.useAprDay.slice(0, 4));
+          c.br_source = true;
+        }
+      } catch (_) { /* graceful */ }
+    }));
+  } catch (_) { /* 서비스 로드 실패 시 기존 동작 */ }
+
   // Phase 8 (2026-04-26): 좌표 해결 → 카카오 amenities 병렬 fetch
   // 7단지 좌표 일괄 + 주변 시설 카운트 (학교/마트/병원/지하철/공원)
   try {
