@@ -64,7 +64,7 @@
     },
     {
       "path": "/api/cron/push-notify",
-      "schedule": "20 18 * * *"
+      "schedule": "30 22 * * *"
     }
   ]
 }
