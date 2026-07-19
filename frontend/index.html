@@ -3563,7 +3563,9 @@ async function _migrateBookmarksOnce(){
     // ── 1) PUSH (1회만 — 새 유저라면 빈 배열이라도 OK) ──
     if(!localStorage.getItem(flagKey)){
       const items = local.map(b => ({
-        kapt_code: b.aptName,
+        // BK-KEY-UNIFY (Sprint HHHHHH): 레거시로 aptName 을 키로 보내던 것 — 상시 sync(7127)와 동일한
+        //   정확 식별자 우선 규칙으로 통일. (실측: 같은 단지가 A13921005 + composite: 2행으로 갈라진 근본 원인)
+        kapt_code: b.aptKey || b.kaptCode || b.aptSeq || b.aptName,
         display_name: b.aptName,
         address: b.area || null,
         memo: b.memo || null,
@@ -3597,18 +3599,52 @@ async function _migrateBookmarksOnce(){
       savedAt: new Date(b.created_at).getTime(),
       memo: b.memo || '',
       _serverId: b.id,
+      _kapt: b.kapt_code || '',
     }));
+
+    // BK-DEDUP (Sprint HHHHHH, 실측): 레거시 migrate(aptName 키)와 상시 sync(aptKey 키)가 같은 단지를
+    //   서로 다른 kapt_code 로 2행 생성(상계주공9 = A13921005 + composite:) → 알림 items 중복의 근본 원인.
+    //   정식 키(KAPT/aptSeq) 행 우선 보존, 잉여 행은 본인 소유 정규 DELETE API 로 자기치유.
+    const _isCanonKey = k => /^[A-Z]\d{6,}$/.test(k) || /^\d{5}-\d+$/.test(k);
+    const _byApt = new Map();
+    const _extras = [];
+    for (const s of serverList) {
+      const gk = `${s.aptName}|${s.area}`;
+      const cur = _byApt.get(gk);
+      if (!cur) { _byApt.set(gk, s); continue; }
+      let keep = cur;
+      if (_isCanonKey(s._kapt) && !_isCanonKey(cur._kapt)) keep = s;
+      else if (_isCanonKey(cur._kapt) && !_isCanonKey(s._kapt)) keep = cur;
+      else if (s.savedAt > cur.savedAt) keep = s;
+      _extras.push(keep === s ? cur : s);
+      _byApt.set(gk, keep);
+    }
+    if (_extras.length) {
+      _extras.forEach(x => { if (x._serverId && typeof _deleteBookmarkOnServer === 'function') _deleteBookmarkOnServer(x._serverId).catch(()=>{}); });
+    }
+    const dedupedList = [..._byApt.values()];
 
     // 서버가 source of truth — localStorage 의 가격/lawdCd 가 더 최신일 수 있으므로 머지
     // 로컬 avgPrice 가 0 이 아니면 우선 사용 (가장 최근 조회값), 아니면 서버값 fallback
+    // BK-AREA-RESTORE (Sprint HHHHHH): 서버 스키마엔 sigungu/umdNm 이 없어 복원 시 소실 →
+    //   알림 items 가 빈 값이 되던 것. area("노원구 상계동") 파싱으로 복원 (로컬값 있으면 우선).
+    const _parseArea = a => { const p = String(a || '').trim().split(/\s+/).filter(Boolean); return p.length >= 2 ? { sigungu: p.slice(0, -1).join(' '), umdNm: p[p.length - 1] } : { sigungu: p[0] || '', umdNm: '' }; };
     const localByName = Object.fromEntries(local.map(b => [b.aptName, b]));
-    const merged = serverList.map(s => ({
-      ...s,
-      avgPrice: (localByName[s.aptName]?.avgPrice > 0) ? localByName[s.aptName].avgPrice : (s.avgPrice || 0),
-      lawdCd: localByName[s.aptName]?.lawdCd || '',
-      lastChecked: localByName[s.aptName]?.lastChecked,
-      lastCheckedCount: localByName[s.aptName]?.lastCheckedCount,
-    }));
+    const merged = dedupedList.map(s => {
+      const pa = _parseArea(s.area);
+      const lb = localByName[s.aptName];
+      return {
+        ...s,
+        sigungu: lb?.sigungu || pa.sigungu,
+        umdNm: lb?.umdNm || pa.umdNm,
+        aptKey: lb?.aptKey || (_isCanonKey(s._kapt) ? s._kapt : undefined),
+        kaptCode: lb?.kaptCode || (/^[A-Z]\d{6,}$/.test(s._kapt) ? s._kapt : null),
+        avgPrice: (lb?.avgPrice > 0) ? lb.avgPrice : (s.avgPrice || 0),
+        lawdCd: lb?.lawdCd || '',
+        lastChecked: lb?.lastChecked,
+        lastCheckedCount: lb?.lastCheckedCount,
+      };
+    });
     localStorage.setItem(BK_KEY, JSON.stringify(merged));
     localStorage.setItem('mhl_bookmarks_synced_at', String(Date.now()));
     if(typeof renderBookmarks === 'function') renderBookmarks();

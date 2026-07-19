@@ -68,7 +68,8 @@ async function hardDeleteUser(admin, userId) {
   }
 
   // 2) 데이터 cascade 삭제 (chat_sessions → chat_messages ON DELETE CASCADE)
-  const tables = ['bookmarks', 'search_history', 'chat_sessions', 'user_billing'];
+  // Sprint HHHHHH: kakao_notify_tokens 추가 — 카카오 OAuth 토큰은 탈퇴 즉시 파기 (FK CASCADE 도 있으나 명시 삭제 이중 안전망)
+  const tables = ['bookmarks', 'search_history', 'chat_sessions', 'user_billing', 'kakao_notify_tokens'];
   for (const tbl of tables) {
     try {
       const { error, count } = await admin

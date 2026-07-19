@@ -21,3 +21,9 @@ CREATE TABLE IF NOT EXISTS public.kakao_notify_tokens (
 
 ALTER TABLE public.kakao_notify_tokens ENABLE ROW LEVEL SECURITY;
 -- 정책 의도적 부재 (audit_log·push_subscriptions 패턴)
+
+-- Sprint HHHHHH 추가 (운영자 위임 하에 2026-07-18 apply_migration 으로 실행 완료):
+-- 탈퇴 파기 갭 보완 — 기존 사용자 테이블과 동일한 auth.users FK ON DELETE CASCADE
+ALTER TABLE public.kakao_notify_tokens
+  ADD CONSTRAINT kakao_notify_tokens_user_fk
+  FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
