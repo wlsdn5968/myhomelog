@@ -239,7 +239,7 @@ async function getAIRecommendations(userCondition) {
   // NFC 정규화 — Mac(NFD) ↔ Windows(NFC) 캐시 분리 방지
   const normReg = String(region || '').normalize('NFC').trim();
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
-  const cacheKey = `rec:v14:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v14: LLLLLL-3.1 HH게이트 임계 강화(>=1) — 구버전 캐시 차단
+  const cacheKey = `rec:v15:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v15: LLLLLL-6 가격하한 0.5→0.7 (보고서와 통일) — 구버전 캐시 차단
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
   // REC-REDIS-2026-07-17 (Sprint AAAAAA, 운영자 "검색 더 빨리" — 실측: cold 12.6s vs warm 1.4s):
@@ -308,7 +308,10 @@ async function getAIRecommendations(userCondition) {
 
   // Step 3: 평형별 예산 매칭 — 단지 안에서 사용자 예산에 맞는 평형 1개 이상 있어야 통과
   const budgetMaxMan = maxBudget * 10000 * 1.05; // 5% 여유
-  const budgetMinMan = maxBudget * 10000 * 0.5;  // 50% 미만은 너무 작은 평형
+  // PRICE-FLOOR-2026-07-19 (Sprint LLLLLL-6, 운영자 "25억 검색에 14.5억이 뜨는 게 어색"):
+  //   하한 0.5→0.7 배 — 보고서(fetchCandidateApts minAmt=buy*0.7)와 동일 기준으로 통일(기존 추천만 0.5로 느슨했음).
+  //   보고서가 0.7 로 이미 전 지역 정상 동작(공백 없음) = 0.7 viable 실증. 예산의 70~105% 평균시세 단지만 노출.
+  const budgetMinMan = maxBudget * 10000 * 0.7;  // 70% 미만은 예산대와 괴리 (보고서와 통일)
   const matched = [];
   for (const apt of analyzed) {
     const fitPyeongs = (apt.pyeongStats || []).filter(p =>
