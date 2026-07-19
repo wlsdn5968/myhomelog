@@ -1082,6 +1082,12 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
   .sbtn-tx{display:none}
   /* 모바일: dropdown 검색창 너비 따라가기 (가로 확장 X) */
   #hSearchDrop{width:auto!important;left:0!important;right:0!important;max-width:none!important}
+  /* NTC (Sprint JJJJJJ 실측): 벨 버튼 추가로 헤더 합계 415px — PPPPP-3 예산(372px≤375) 복원.
+     gap 7→4(-9) + hbtn 12→8px 패딩(로그인·ⓘ -16) + 벨·테마 인라인 9→6px(-12) + 검색 min 130→124(-6) = -43px */
+  .hml{gap:4px}
+  .hbtn{padding:5px 8px}
+  #ntcBell,#themeToggle{padding:6px 6px!important}
+  .hsearch{min-width:124px!important}
   /* 헤더 우측 hml: 모바일에선 핵심 버튼만 (10.15 / 로그인)
      QUOTA-ACCESS-2026-07-15 (Sprint LLLLL): #settingsBtn 은 모바일에서도 유지 — 이걸 숨기면 무료 검색
      한도(5/일)를 확인할 창구가 429 를 맞기 전까지 전무했음(quotaPill·설정 모달 진입점 전부 소멸). */
