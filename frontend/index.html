@@ -1121,9 +1121,10 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
   #mHeroChip.on{display:flex}
   #drawerUtil{display:block}
   #mMapCap.on{display:block}
-  /* 헤더 우측 hml: 모바일에선 핵심 버튼만 (10.15 / 로그인)
-     QUOTA-ACCESS-2026-07-15 (Sprint LLLLL): #settingsBtn 은 모바일에서도 유지 — 이걸 숨기면 무료 검색
-     한도(5/일)를 확인할 창구가 429 를 맞기 전까지 전무했음(quotaPill·설정 모달 진입점 전부 소멸). */
+  /* 헤더 우측 hml: 모바일 4요소(햄버거·로고·검색·벨)
+     QUOTA-ACCESS-2026-07-15 (Sprint LLLLL): 무료 검색 한도(5/일) 확인 창구는 소멸 금지.
+     KKKKKK 갱신: #settingsBtn 은 모바일 헤더에서 드로어 유틸(#drawerUtil 'ⓘ 서비스 정보 · 사용량'
+     → 동일 openSettings)로 이동 — 한도 접근성 유지 실클릭 검증 완료(☰ 1탭 경유). */
   .hml #hUsage,.hml .hst#apiSt{display:none!important}
   /* MOBILE-2026-06-13: absolute 뷰(보고서·특약)는 bottom:0 이라 하단 ~54px 가 fixed bnav 뒤로 숨음 → bnav+safe-area 만큼 하단 패딩 확보 */
   .biz-view, .clause-view{padding-bottom:calc(62px + env(safe-area-inset-bottom))!important}
