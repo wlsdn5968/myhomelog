@@ -1173,11 +1173,12 @@ async function fetchCandidateApts(admin, input, limit) {
   }
   // HH-GATE (Sprint LLLLLL, 운영자 지시 "100세대 미만은 가능하면 추천하지 말 것"):
   //   세대수 확인된 소형(<100)만 제외 — 미확인(null)은 유지(이름 매칭 실패한 실제 대단지 오배제 방지).
-  //   '가능하면' = 게이트 후에도 limit 이상 남을 때만(희소 지역 보고서 공백 방지).
+  //   LLLLLL-3.1: 세대수는 이제 건축물대장으로 대부분 채워짐 → **1개라도 남으면 소형 전부 제외**
+  //   (전부 소형일 때만 유지 = 빈 결과 방지). 기존 '>=limit' 은 너무 느슨해 소형 잔존(실측)했음.
   {
     const _big = out.filter(c => !(Number.isFinite(c.households) && c.households < 100));
-    if (_big.length >= limit) {
-      if (_big.length !== out.length) logger.info({ before: out.length, after: _big.length }, 'HH-GATE: 100세대 미만 제외');
+    if (_big.length >= 1 && _big.length !== out.length) {
+      logger.info({ before: out.length, after: _big.length }, 'HH-GATE: 100세대 미만 제외');
       out = _big;
     }
   }

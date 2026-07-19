@@ -239,7 +239,7 @@ async function getAIRecommendations(userCondition) {
   // NFC 정규화 — Mac(NFD) ↔ Windows(NFC) 캐시 분리 방지
   const normReg = String(region || '').normalize('NFC').trim();
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
-  const cacheKey = `rec:v13:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v13: LLLLLL-3 건축물대장 세대수 보강+HH게이트 — 구버전 캐시 차단
+  const cacheKey = `rec:v14:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v14: LLLLLL-3.1 HH게이트 임계 강화(>=1) — 구버전 캐시 차단
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
   // REC-REDIS-2026-07-17 (Sprint AAAAAA, 운영자 "검색 더 빨리" — 실측: cold 12.6s vs warm 1.4s):
@@ -761,12 +761,14 @@ async function getAIRecommendations(userCondition) {
       'propertyService: 일부 단지 좌표 해결 실패 — 프론트에서 마커 생략');
   }
 
-  // LLLLLL-3 HH-GATE (건축물대장 보강 후): 세대수 확인된 100세대 미만 제외 (운영자 지시). 미확인(null) 유지.
-  //   이 시점은 index 정렬 불요(withCoords 최종). 후보 3개 이상 남을 때만 — 희소 지역 결과 공백 방지.
+  // LLLLLL-3 HH-GATE (건축물대장 보강 후): 세대수 확인된 100세대 미만 제외 (운영자 지시 "이딴것들 추천하지 말라").
+  //   미확인(null) 유지. index 정렬 불요(withCoords 최종). **1개라도 남으면 소형 전부 제외** — 오직 후보 전부가
+  //   소형일 때만(빈 결과 방지) 유지 = '가능하면 제외'의 강한 해석. LLLLLL-3.1(배포 실측: YM프라젠 83세대가
+  //   후보 2개 상황에서 >=3 임계로 살아남던 것 → 임계 1로 강화).
   let finalRecs = withCoords;
   {
     const _big = withCoords.filter(r => !(Number.isFinite(r.facility?.totalHouseholds) && r.facility.totalHouseholds < 100));
-    if (_big.length >= 3 && _big.length !== withCoords.length) {
+    if (_big.length >= 1 && _big.length !== withCoords.length) {
       logger.info({ before: withCoords.length, after: _big.length }, 'PropertyService HH-GATE(건축물대장 보강): 100세대 미만 제외');
       finalRecs = _big;
     }
