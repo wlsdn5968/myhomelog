@@ -63,6 +63,10 @@
       "schedule": "0 5 * * *"
     },
     {
+      "path": "/api/cron/building-register-backfill",
+      "schedule": "0 6 * * *"
+    },
+    {
       "path": "/api/cron/push-notify",
       "schedule": "30 22 * * *"
     }

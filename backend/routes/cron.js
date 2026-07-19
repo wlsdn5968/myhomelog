@@ -246,6 +246,27 @@ async function handleFacilityBackfill(req, res) {
 router.post('/facility-backfill', handleFacilityBackfill);
 router.get('/facility-backfill', handleFacilityBackfill);
 
+// ── BR-BACKFILL-2026-07-19 (Sprint LLLLLL-4): building_register 세대수 점진 백필 ──
+// 매일 1회 06:00 UTC (= 15:00 KST) — facility-backfill(05:00) 1시간 후. 거래 활발 단지의 KAPT 미매칭
+// 세대수를 건축물대장으로 미리 채워 추천 콜드 지연 감소. Kakao 쿼터 보호 위해 total cap 보수적(기본 100).
+// 게이트: get_br_backfill_candidates 함수 미생성 시 graceful no-op(운영자 SQL 대기).
+const { run: runBrBackfill } = require('../jobs/buildingRegisterBackfill');
+async function handleBrBackfill(req, res) {
+  try {
+    const started = Date.now();
+    const opts = { cap: req.query.cap ? parseInt(req.query.cap) : undefined };
+    const summary = await runBrBackfill(opts);
+    logger.info({ durationMs: Date.now() - started, summary }, 'cron/building-register-backfill OK');
+    res.json({ ok: true, summary });
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'cron/building-register-backfill 실패');
+    try { Sentry.captureException(e, { tags: { route: 'cron.building-register-backfill' } }); } catch(_){}
+    res.status(500).json({ error: e.message });
+  }
+}
+router.post('/building-register-backfill', handleBrBackfill);
+router.get('/building-register-backfill', handleBrBackfill);
+
 // ── PUSH-NOTIFY (Sprint EEEEEE): 관심단지 신규 실거래 웹푸시 발송 ──
 // 매일 1회 18:20 UTC — molit-ingest 3슬롯(17:00~17:30) 완료 후. 게이트(VAPID env·테이블) 미충족 시 { skipped }.
 const { run: runPushNotify } = require('../jobs/pushNotify');
