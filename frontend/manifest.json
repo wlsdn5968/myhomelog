@@ -11,10 +11,22 @@
   "scope": "/",
   "icons": [
     {
-      "src": "/og.png",
-      "sizes": "1200x630",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512-maskable.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
     }
   ],
   "categories": ["finance", "productivity", "lifestyle"],
@@ -24,14 +36,14 @@
       "short_name": "보고서",
       "description": "AI 맞춤 컨설팅 보고서",
       "url": "/?view=report",
-      "icons": [{ "src": "/og.png", "sizes": "1200x630" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "AI 챗",
       "short_name": "AI 상담",
       "description": "부동산 정보 AI 챗",
       "url": "/?view=chat",
-      "icons": [{ "src": "/og.png", "sizes": "1200x630" }]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

@@ -8,10 +8,9 @@ self.addEventListener('push', e => {
   try { data = e.data ? e.data.json() : {}; } catch (_) {}
   const title = data.title || '내집로그 알림';
   const body = data.body || '관심단지에 새 소식이 있어요.';
-  // icon 미지정 — 저장소에 정사각 아이콘 파일이 없음(manifest 의 /og.png 도 실존 X, 캐치올이 HTML 반환).
-  //   깨진 URL 참조 대신 브라우저 기본 아이콘 사용. 전용 아이콘 추가 시 여기와 manifest 동시 갱신.
   e.waitUntil(self.registration.showNotification(title, {
     body,
+    icon: '/icon-192.png', // Sprint IIIIII: 브랜드 정사각 아이콘 신설 (manifest 와 동일)
     data: { url: data.url || '/' },
     tag: 'mhl-watch-feed', // 같은 태그 = 최신 1개만 유지 (알림 스팸 방지)
   }));
