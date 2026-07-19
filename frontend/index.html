@@ -3828,7 +3828,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
 function openTerms(){document.getElementById('TM').classList.add('open');}
 
 // Phase 5 (2026-04-26): 1Page 컨설팅 보고서 — 핵심 USP
-async function generateReport() {
+async function generateReport(_isRetry) {
   const btn = document.getElementById('reportGenBtn');
   const sp = document.getElementById('reportGenSp');
   const tx = document.getElementById('reportGenTx');
@@ -3936,7 +3936,20 @@ async function generateReport() {
       titleMsg = '응답 시간이 너무 길어 중단했어요 (3분).';
       extraHtml = `<div style="font-size:11px;color:var(--t2);margin-top:8px">단지 데이터·AI 처리 둘 다 부하가 큰 시간일 수 있어요. 잠시 후 다시 시도해주세요.</div>`;
     } else if (e.code === 'DAILY_LIMIT_EXCEEDED') {
-      if (e.canBoostByLogin) {
+      const _A = window.MHL?.auth;
+      // TOKEN-STALE-RETRY-2026-07-20 (운영자 "admin인데 보고서 1회만 됨"): 프론트는 로그인 상태(_A.user)인데
+      //   429 가 canBoostByLogin(=백엔드가 anonymous 로 처리, dailyLimit isAnonymous&&loggedInBonus) 이면 토큰
+      //   만료로 admin/로그인 보너스 상실한 것. 토큰 강제 갱신 후 1회 자동 재시도(admin 은 재시도로 무제한 복구).
+      //   정상 무료 로그인 유저의 한도 초과는 canBoostByLogin=false 라 이 분기 안 탐(오작동 없음).
+      if (_A?.user && e.canBoostByLogin && !_isRetry) {
+        try { if (_A.getFreshToken) await _A.getFreshToken(); } catch(_){}
+        return generateReport(true);
+      }
+      if (_A?.user && e.canBoostByLogin) {
+        // 재시도도 anonymous = 리프레시 토큰 만료(장기 미접속) → 재로그인 유도(admin 은 재로그인 시 무제한 복구).
+        titleMsg = '로그인 세션이 만료된 것 같아요.';
+        extraHtml = `<div style="font-size:11px;color:var(--t2);margin-top:8px">로그아웃 후 다시 로그인하면 정상 이용할 수 있어요.</div><button onclick="logout&&logout()" style="margin-top:10px;padding:9px 18px;background:var(--acc);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">↩ 다시 로그인</button>`;
+      } else if (e.canBoostByLogin) {
         extraHtml = `<button onclick="openLogin&&openLogin()" style="margin-top:14px;padding:9px 18px;background:var(--acc);color:#fff;border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🔓 로그인하고 +${e.bonusOnLogin || 1}회 추가로 받기</button>`;
       } else {
         // MOB-AUDIT-2026-05-03: 로그인 사용자 한도 도달 시 Pro 출시 알림 mailto 노출 — 가입 funnel 활성
