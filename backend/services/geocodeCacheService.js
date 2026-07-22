@@ -69,7 +69,11 @@ async function getFromDb(key) {
       .select('lat,lng,address,place_name')
       .eq('apt_key', key)
       .maybeSingle();
-    const out = data ? {
+    // GEO-FAIL-SENTINEL-2026-07-22 (Sprint MMMMMM-3): 백필 하드페일 sentinel 행은 (0,0)+source='kakao-fail'
+    //   규약(lat/lng NOT NULL 제약 때문) — 유효 한국좌표가 아니면 캐시 미보유로 취급해 온디맨드 경로는
+    //   계속 Kakao 재시도(사용자 검색으로 언젠가 찾히면 saveToDb 가 실좌표로 대체). 백필 후보 RPC 는
+    //   행 존재만 보고 제외하므로 매일 재시도 낭비만 사라짐.
+    const out = (data && isValidKoreaCoord(Number(data.lat), Number(data.lng))) ? {
       lat: Number(data.lat),
       lng: Number(data.lng),
       address: data.address,
@@ -154,9 +158,12 @@ async function kakaoAddressGeocode(address) {
   }
 }
 
-/** Kakao 다중 쿼리 폴백 — 가장 정확한 매칭을 위해 여러 형태로 시도 */
-async function kakaoGeocode({ aptName, sigungu, umdNm, address }) {
-  if (!KAKAO_ENABLED) return null;
+/** Kakao 다중 쿼리 폴백 — 가장 정확한 매칭을 위해 여러 형태로 시도
+ *  GEO-FAIL-SENTINEL-2026-07-22: 선택 인자 _diag({}) 전달 시 실패 사유를 _diag.outcome 에 기록 —
+ *  'ok' | 'nomatch'(정상 응답이나 매칭 없음/검증 탈락 — 재시도 무의미) | 'error'(HTTP 오류 포함 — 일시적일 수 있음).
+ *  백필이 'nomatch' 만 sentinel 기록하기 위한 구분. 기존 호출처(인자 1개)는 무영향. */
+async function kakaoGeocode({ aptName, sigungu, umdNm, address }, _diag) {
+  if (!KAKAO_ENABLED) { if (_diag) _diag.outcome = 'error'; return null; }
   const headers = { Authorization: `KakaoAK ${KAKAO_KEY}` };
   // NAMEFIX-2026-05-11: query 시점에 `(고층)/(중층)/(저층)` suffix 제거 — Kakao 검색 매칭률 ↑.
   //   raw apt_name 은 caller (propertyService 등) 가 그대로 전달 → buildKey 의 DB cache 키는 raw 유지.
@@ -240,6 +247,7 @@ async function kakaoGeocode({ aptName, sigungu, umdNm, address }) {
       if (!chosen || chosen.score < 0) continue;
 
       _trackKakaoResult('ok');
+      if (_diag) _diag.outcome = 'ok';
       return {
         lat: chosen.lat, lng: chosen.lng,
         address: chosen.addrText || addr,
@@ -248,11 +256,13 @@ async function kakaoGeocode({ aptName, sigungu, umdNm, address }) {
     } catch (e) {
       // 일시 실패 — 다음 후보로 계속 진행 (KAKAO-DIAG: 상태코드별 집계, prod 로그 스팸 없이 관측)
       const code = e.response?.status ? `http_${e.response.status}` : (e.code || 'err');
+      if (_diag) _diag.hadError = true; // GEO-FAIL-SENTINEL: HTTP 오류는 'nomatch' 로 오인 금지
       _trackKakaoResult(code, `${code} ${t.q}: ${String(e.response?.data?.message || e.message).slice(0, 120)}`);
       logger.debug({ src: 'kakao', q: t.q, err: e.message }, 'Kakao geocode 개별 실패');
     }
   }
   _trackKakaoResult('nomatch');
+  if (_diag) _diag.outcome = _diag.hadError ? 'error' : 'nomatch';
   return null;
 }
 
@@ -294,12 +304,39 @@ async function saveToDb(key, entry) {
   }
 }
 
+/** GEO-FAIL-SENTINEL-2026-07-22 (Sprint MMMMMM-3): Kakao "무매칭 확정"(nomatch) 단지를 (0,0)+
+ *  source='kakao-fail' sentinel 행으로 기록 — 백필 후보 RPC(NOT EXISTS 콤보)에서 제외돼 매일 재시도
+ *  낭비 제거. 규약 안전망: (0,0)은 isValidKoreaCoord 미달이라 getFromDb/combo/배치 전 조회 경로가
+ *  "캐시 없음"으로 취급(온디맨드 Kakao 재시도 유지) + in-bounds 는 좌표 범위 쿼리라 자연 배제 +
+ *  popular 는 좌표 검증 필터(동시 배포). **plain INSERT(upsert 아님)** — 실좌표 기존 행을 (0,0)으로
+ *  덮는 사고 원천 차단(충돌 23505 는 무시=기존 행 보존). 리셋: source='kakao-fail' 행 DELETE.
+ *  호출은 백필 잡의 nomatch 확정 항목만 — 일시 오류('error')·온디맨드 실패에는 기록하지 않는다. */
+async function markGeoFail(apt) {
+  const admin = dbClient();
+  if (!admin || !apt || !apt.aptName) return false;
+  try {
+    const { error } = await admin.from('apt_geocache').insert({
+      apt_key: buildKey(apt),
+      apt_name: apt.aptName,
+      sigungu: apt.sigungu || null,
+      umd_nm: apt.umdNm || null,
+      address: null,
+      place_name: null,
+      lat: 0,
+      lng: 0,
+      source: 'kakao-fail',
+    });
+    if (error) { logger.debug({ err: error.message, apt: apt.aptName }, 'geo-fail sentinel INSERT 충돌(기존 행 보존)'); return false; }
+    return true;
+  } catch (e) { logger.debug({ err: e.message }, 'geo-fail sentinel 기록 실패(무시)'); return false; }
+}
+
 /**
  * 단건 단지 좌표 해결
  * @param {Object} apt - { kaptCode?, aptName, sigungu?, umdNm?, address? }
  * @returns {Promise<{lat, lng}|null>}
  */
-async function resolveCoord(apt) {
+async function resolveCoord(apt, _diag) {
   if (!apt || !apt.aptName) return null;
   const key = buildKey(apt);
 
@@ -314,8 +351,8 @@ async function resolveCoord(apt) {
     return fromCombo;
   }
 
-  // 2) Kakao 폴백
-  const fromKakao = await kakaoGeocode(apt);
+  // 2) Kakao 폴백 (_diag: GEO-FAIL-SENTINEL — 백필이 무매칭/오류 구분용, 선택 인자)
+  const fromKakao = await kakaoGeocode(apt, _diag);
   if (fromKakao) {
     // fire-and-forget UPSERT (응답 지연 최소화)
     saveToDb(key, { ...apt, ...fromKakao });
@@ -335,7 +372,7 @@ async function resolveCoord(apt) {
  * @param {Array} apts
  * @returns {Promise<Array<{lat, lng}|null>>}
  */
-async function resolveCoordBatch(apts, concurrency = 4) {
+async function resolveCoordBatch(apts, concurrency = 4, diags) {
   const t0 = Date.now();
   const results = new Array(apts.length).fill(null);
   const keys = apts.map(a => (a && a.aptName) ? buildKey(a) : null);
@@ -378,13 +415,14 @@ async function resolveCoordBatch(apts, concurrency = 4) {
     }
     dbMs = Date.now() - td;
   }
-  // 3) 잔여(진짜 miss)만 기존 단건 경로
+  // 3) 잔여(진짜 miss)만 기존 단건 경로 (diags: GEO-FAIL-SENTINEL — 백필 전용 선택 인자, 인덱스 정렬)
   const tk = Date.now();
   let p = 0;
   async function worker() {
     while (p < remain.length) {
       const idx = remain[p++];
-      results[idx] = await resolveCoord(apts[idx]).catch(() => null);
+      const d = Array.isArray(diags) ? (diags[idx] = diags[idx] || {}) : undefined;
+      results[idx] = await resolveCoord(apts[idx], d).catch(() => null);
     }
   }
   await Promise.all(Array.from({ length: Math.min(concurrency, remain.length) }, () => worker()));
@@ -397,4 +435,4 @@ async function resolveCoordBatch(apts, concurrency = 4) {
   return results;
 }
 
-module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode };
+module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail };

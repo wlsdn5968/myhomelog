@@ -25,6 +25,7 @@
 const { createClient } = require('@supabase/supabase-js');
 const logger = require('../logger');
 const { resolveCoordBatch } = require('./geocodeCacheService');
+const { isValidKoreaCoord } = require('../utils/geo');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SNAPSHOT_MAX_AGE_MS = 36 * 60 * 60 * 1000; // 36시간 — daily cron 1회 실패까지 허용
@@ -126,6 +127,9 @@ async function buildPopularResults(limit = 12) {
     .in('apt_name', names);
   const coordMap = new Map();
   for (const c of (coords || [])) {
+    // GEO-FAIL-SENTINEL-2026-07-22 (Sprint MMMMMM-3): (0,0) sentinel 행이 인기 마커로 오염되지 않게
+    //   유효 한국좌표만 채택 — 미달이면 miss 취급되어 아래 lazy-fill 이 온디맨드 재시도(기존 동작).
+    if (!isValidKoreaCoord(Number(c.lat), Number(c.lng))) continue;
     coordMap.set(`${c.apt_name}|${c.sigungu || ''}|${c.umd_nm || ''}`, c);
   }
   // POPULAR-QUALITY (c): MOLIT raw 접두("산척동,") 제거 — 표시용만 (좌표 join 키는 raw 유지)

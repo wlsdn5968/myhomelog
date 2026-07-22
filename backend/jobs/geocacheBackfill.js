@@ -19,7 +19,7 @@
  *   - resolveCoord 자체가 saveToDb 진행 → INSERT 자동
  */
 const { createClient } = require('@supabase/supabase-js');
-const { resolveCoordBatch, kakaoGeocode, getKakaoUsageStats, kakaoAddressGeocode } = require('../services/geocodeCacheService');
+const { resolveCoordBatch, kakaoGeocode, getKakaoUsageStats, kakaoAddressGeocode, markGeoFail } = require('../services/geocodeCacheService');
 const { isValidKoreaCoord } = require('../utils/geo');
 const logger = require('../logger');
 
@@ -252,15 +252,26 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
 
   // 후보 풀 1회 조회 → budget 안에서 batch 순회 (재조회 spin 제거)
   const candidates = await fetchCandidatePool(admin, pool, since);
-  let totalProcessed = 0, totalInserted = 0, totalFailed = 0, batches = 0, idx = 0;
+  let totalProcessed = 0, totalInserted = 0, totalFailed = 0, totalSentinel = 0, batches = 0, idx = 0;
   while (idx < candidates.length && (Date.now() - started) < budgetMs - 15000) {  // 15s 마진
     const slice = candidates.slice(idx, idx + batchSize);
     idx += slice.length;
     // resolveCoordBatch — sigungu 검증 강제 (PR #44 fix), saveToDb 자동 INSERT
     const items = slice.map(t => ({ aptName: t.apt_name, sigungu: t.sigungu, umdNm: t.umd_nm }));
     // PERF-2026-06-13: 동시성 8 (Kakao 무료 100K/일·경고 60K 대비 안전).
-    const results = await resolveCoordBatch(items, 8);
-    const inserted = results.filter(r => r && r.lat && r.lng).length;
+    // GEO-FAIL-SENTINEL-2026-07-22 (Sprint MMMMMM-3): diags 로 실패 사유 수집 —
+    //   'nomatch'(Kakao 정상응답·매칭없음 확정)만 sentinel 기록해 내일부터 후보 제외.
+    //   'error'(HTTP 오류·타임아웃 등 일시 가능성)는 기록 안 함 → 다음 run 재시도.
+    const diags = new Array(items.length);
+    const results = await resolveCoordBatch(items, 8, diags);
+    let inserted = 0;
+    for (let i = 0; i < items.length; i++) {
+      if (results[i] && results[i].lat && results[i].lng) { inserted++; continue; }
+      if (diags[i] && diags[i].outcome === 'nomatch') {
+        const ok = await markGeoFail(items[i]).catch(() => false);
+        if (ok) totalSentinel++;
+      }
+    }
     totalProcessed += slice.length;
     totalInserted += inserted;
     totalFailed += (slice.length - inserted);
@@ -269,10 +280,10 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
   const elapsed = Date.now() - started;
   logger.info({
     source: 'geocache-backfill',
-    batches, poolSize: candidates.length, totalProcessed, totalInserted, totalFailed, elapsedMs: elapsed,
-  }, `geocache backfill: ${batches} batches, ${totalInserted}/${totalProcessed} 백필 (풀 ${candidates.length}) (${elapsed}ms)`);
+    batches, poolSize: candidates.length, totalProcessed, totalInserted, totalFailed, totalSentinel, elapsedMs: elapsed,
+  }, `geocache backfill: ${batches} batches, ${totalInserted}/${totalProcessed} 백필 (풀 ${candidates.length}, sentinel ${totalSentinel}) (${elapsed}ms)`);
   // KAKAO-DIAG-2026-07-10 (Sprint CCCC): 실패 사유 원격 확정용 — 이 run 인스턴스의 Kakao ok/무매칭/에러코드 분포 동봉.
-  return { ok: true, reheal, addrVerify, batches, poolSize: candidates.length, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, elapsedMs: elapsed, kakao: getKakaoUsageStats() };
+  return { ok: true, reheal, addrVerify, batches, poolSize: candidates.length, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, sentinelMarked: totalSentinel, elapsedMs: elapsed, kakao: getKakaoUsageStats() };
 }
 
 /**
