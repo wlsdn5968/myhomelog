@@ -4026,10 +4026,22 @@ function _renderReport(data) {
     </div>`;
   }).join('');
 
-  const aptsHtml = (r.apartments || []).map(a => `
-    <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:10px">
+  // RPT-CARD-LINK-2026-07-22 (Sprint MMMMMM-4): 카드 클릭 → 단지 상세 모달(openAptDetail).
+  //   식별 필드는 백엔드 candidates 소스(aptName·sigungu·umdNm·lawdCd) — 인라인엔 인덱스만 넣고
+  //   데이터는 window._rptApts 에서 꺼내 escape 이슈 원천 차단. 구버전 응답(필드 없음)은 기존 정적 카드.
+  window._rptApts = (r.apartments || []);
+  window._rptOpenApt = function(i){
+    const a = (window._rptApts || [])[i];
+    if (!a || !a.aptName || !a.lawdCd) return;
+    if (typeof openAptDetail === 'function') openAptDetail({ aptName: a.aptName, sigungu: a.sigungu, umdNm: a.umdNm, lawdCd: a.lawdCd });
+  };
+  const aptsHtml = (r.apartments || []).map((a, _ai) => {
+    const _clickable = !!(a.aptName && a.lawdCd);
+    return `
+    <div ${_clickable ? `onclick="_rptOpenApt(${_ai})" role="button" tabindex="0" onkeydown="if(event.key==='Enter')_rptOpenApt(${_ai})"` : ''} style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:12px 14px;margin-bottom:10px${_clickable ? ';cursor:pointer' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
         <div style="font-size:13px;font-weight:700;color:var(--t1)">${_numFmt(a.rank)}. ${_escHtml(a.name)} ${a.areaPyeong ? `<span style="font-weight:500;color:var(--t2);font-size:12px">${_numFmt(a.areaPyeong)}평 (${_numFmt(a.areaSqm)}㎡)</span>` : ''}</div>
+        ${_clickable ? '<span style="flex-shrink:0;font-size:10.5px;color:var(--acc);font-weight:600;white-space:nowrap;margin-left:8px">실거래 상세 →</span>' : ''}
       </div>
       <div style="font-size:11px;color:var(--t3);margin-bottom:6px">
         ${(()=>{const hN=Number(a.households);const hStr=(a.households && Number.isFinite(hN)) ? `${hN.toLocaleString()}세대` : '세대수 미상';return `준공 ${_numFmt(a.buildYear, '?')} · ${hStr}`;})()}
@@ -4048,7 +4060,7 @@ function _renderReport(data) {
         <div style="color:var(--acc);font-weight:600">📌 ${_escHtml(a.recommendation || '')}</div>
       </div>
     </div>
-  `).join('');
+  `;}).join('');
 
   const tipsHtml = (r.tips || []).map(t =>
     `<li style="margin-bottom:5px">${_escHtml(t)}</li>`

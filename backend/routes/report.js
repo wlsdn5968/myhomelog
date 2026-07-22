@@ -315,6 +315,12 @@ router.post('/generate', async (req, res) => {
         if (c?.apt_name) {
           const _loc = [c.sigungu, c.umd_nm].filter(Boolean).join(' ').trim();
           a.name = _loc ? `${c.apt_name} (${_loc})` : c.apt_name;
+          // RPT-CARD-LINK-2026-07-22 (Sprint MMMMMM-4): AI판 카드도 상세 모달 연결 식별 필드 주입 —
+          //   objectiveFacts·name 강제와 동일한 candidates[i] 인덱스 매칭(기존 패턴·동일 신뢰 수준).
+          a.aptName = c.apt_name;
+          a.sigungu = c.sigungu;
+          a.umdNm = c.umd_nm;
+          a.lawdCd = c.lawd_cd;
         }
         // PRICE-INTEGRITY-2026-06-14: priceFit(예산매칭) 을 backend 결정론 계산으로 주입 — AI 전사 환각 차단.
         //   c.avgPrice(회원님 평형대 실거래 평균) + maxBudget → 정확 비교. name·objectiveFacts 와 같은 candidate[i] 출처라 일관.
@@ -441,6 +447,12 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
     return {
       rank: i + 1,
       name: `${c.apt_name} (${c.sigungu} ${c.umd_nm})`,
+      // RPT-CARD-LINK-2026-07-22 (Sprint MMMMMM-4): 카드 → 단지 상세 모달 연결용 식별 필드.
+      //   프론트 openAptDetail 필수 인자(aptName·sigungu·umdNm·lawdCd)와 동일 소스(c) — 표시용 name 과 별개.
+      aptName: c.apt_name,
+      sigungu: c.sigungu,
+      umdNm: c.umd_nm,
+      lawdCd: c.lawd_cd,
       areaSqm: areaMain || undefined,
       areaPyeong: areaMain ? Math.round(areaMain / 3.3058) : undefined,
       buildYear: c.build_year || 0,
