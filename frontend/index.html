@@ -9834,15 +9834,23 @@ async function openAptDetail(r) {
     }
   } catch (_) {}
 
+  // PRICE-CANON-2026-07-22 (Sprint MMMMMM, VVVVV 보류분 종결):
+  //   추천 마커로 열면 목록 카드(대표평형 6개월 평균, r.avgPrice)와 상세 헤더(전 평형 최근 평균 재계산)가
+  //   같은 단지를 다른 가격으로 표시해 "다른 집" 오인 유발. score 보존(VVVVV)과 동일 원칙 —
+  //   추천 컨텍스트(r._priceBasis 세팅됨)면 목록과 동일한 가격·기준을 보존, 전 평형 재계산은
+  //   추천값 없는 검색·인기 경로에만. txHistory(거래 리스트·차트·평형별 평균)는 양쪽 모두 그대로.
+  const _fromRec = !!(r._priceBasis && Number(r.avgPrice) > 0);
   const p = {
     aptName: r.aptName,
     sigungu: r.sigungu,
     umdNm: r.umdNm,
     area: `${r.sigungu||''} ${r.umdNm||''}`.trim(),
-    avgPrice, minPrice, maxPrice,
-    // PRICE-BASIS-2026-07-17 (Sprint XXXXX): 이 avgPrice 는 방금 조회한 전 평형 최근 거래 평균 —
-    //   추천 카드(대표 평형 6개월 평균)와 정의가 달라 값이 다를 수 있음을 라벨로 정직하게 표기.
-    _priceBasis: txHistory.length ? `전 평형 최근 ${txHistory.length}건 평균` : null,
+    avgPrice: _fromRec ? Number(r.avgPrice) : avgPrice,
+    minPrice: (_fromRec && Number(r.minPrice) > 0) ? Number(r.minPrice) : minPrice,
+    maxPrice: (_fromRec && Number(r.maxPrice) > 0) ? Number(r.maxPrice) : maxPrice,
+    // PRICE-BASIS-2026-07-17 (Sprint XXXXX): 재계산 avgPrice 는 전 평형 최근 거래 평균 — 기준 라벨로 정직 표기.
+    _priceBasis: _fromRec ? r._priceBasis
+               : (txHistory.length ? `전 평형 최근 ${txHistory.length}건 평균` : null),
     _txFailed: _txFetchFailed, // TX-RETRY (Sprint IIII)
     // STAB-AUDIT-2026-05-07: 검색 → click path score=60 환각 차단
     //   추천 path는 사용자 매칭 점수 (95 등), 검색 path는 default 60 → 환각.
