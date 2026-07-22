@@ -27,8 +27,11 @@ const logger = require('../logger');
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
 
-const DEFAULT_TOTAL_CAP = 100; // Kakao 쿼터 보호 — 하루 total 상한(보수적)
-const MAX_TOTAL_CAP = 300;
+// BR-ACCEL-2026-07-22 (Sprint MMMMMM, 백로그 감사 A3): 100→300. 실측 3일 정상 가동(일 ~100 적재,
+//   351행)·실패 0 확인 후 상향. Kakao +300/일(한도 100K)·건축HUB ~300-600/일(한도 10K) — 둘 다 안전.
+//   잔여 ~9.2K → 92일에서 ~31일로 단축. 수동 트리거 상한(MAX)은 500.
+const DEFAULT_TOTAL_CAP = 300;
+const MAX_TOTAL_CAP = 500;
 const CONCURRENCY = 3;
 
 function adminClient() {

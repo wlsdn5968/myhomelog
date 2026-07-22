@@ -221,7 +221,13 @@ function adminClient() {
 //   reheal 실측 13행(~10s)이라 sweep ~215s 확보 → 2000 처리 여유. budget 270s = 루프 255s 중단 + 최종배치 ≈269s < maxDuration 300s
 //   (함수 300s 가능 검증: molit cron 정상패스>60s 후 retryFailedGaps 8건 처리 = 함수 >200s 실행 확인). Kakao 2000×최대4=8000=13%<60K 경고한도.
 //   주의: 풀 상단의 영구 하드페일(Kakao 무매칭·row 미생성)은 매 run 재시도로 budget·call 일부 낭비 — 향후 sentinel 제외 최적화 후보(미적용, 위험 회피).
-async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, pool = 2000 } = {}) {
+// GEOCODE-ACCEL-2-2026-07-22 (Sprint MMMMMM, 백로그 감사 A2): pool 2000→4000.
+//   실측: 10일 신규 +738(일 ~74)·미좌표 잔여 ~4,542그룹(이름+동 근사) > 풀 2000 — 6/22와 동일한
+//   pool-bound 재발(하드페일이 풀 상단 점유 + 잔여가 풀보다 큼). 풀 4000 = 잔여 전체 포괄.
+//   Kakao 4000×최대4=16K(일한도 100K의 16%, 경고 60K의 27%) — 사용자검색·BR백필 합산해도 안전.
+//   budget 270s 불변(시간이 먼저 끊어 초과 위험 0) — 하루에 다 못 돌면 다음날 이어서.
+//   잔여 병목(Kakao 무매칭 영구 하드페일의 매일 재시도)은 sentinel 도입이 근본책 — DB 영향이라 별도 결정.
+async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, pool = 4000 } = {}) {
   const started = Date.now();
   const admin = adminClient();
   if (!admin) {
