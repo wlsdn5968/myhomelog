@@ -492,10 +492,20 @@ async function getAIRecommendations(userCondition) {
   // 규제지역 키워드 1회 조회 → 단지별 sigungu 기준으로 정확하게 LTV 계산.
   // (snapshot in-process 캐시 hit 시 비용 무시 가능)
   const { keywords: regKeywords, seoulRegulated } = await getRegulatedKeywords();
-  const matchRegulated = (sigunguStr) => {
+  // SEOUL-JUNGGU-FIX-2026-07-25 (Sprint PPPPPP, improve 감사 CONFIRMED — P0 금전 영향):
+  //   SEOUL_GU_KEYWORDS 는 주석과 달리 24개('중구' 누락)여서 서울 중구 단지(DB 실측 1,355건)가
+  //   **비규제로 오판정** → 카드에 LTV 70%(생애최초 80%)·한도 무제한으로 표기됐다. 실제 규제지역
+  //   무주택은 40%+cap. 이 파일 120~127행 주석이 경고한 "계약금 걸고 은행 가서 40%만 나오는" 그 시나리오.
+  //   ⚠ 문자열 '중구' 추가는 오답 — 부산·대구·인천·대전·울산에도 bare '중구' 가 저장돼 있어(DB 실측)
+  //     지방 5곳을 규제로 오판정한다. **lawdCd 우선 판정**(서울=11 prefix)이 유일하게 안전.
+  const matchRegulated = (sigunguStr, lawdCd) => {
+    const code = String(lawdCd || '').trim();
+    // 1) 지역코드가 있으면 최우선 — 서울 전역 규제 시 11 prefix 로 25개 구 전부 정확 판정(동명 구 오판 0)
+    if (seoulRegulated && code.startsWith('11')) return true;
     const r = String(sigunguStr || '').normalize('NFC').trim();
     if (!r) return false;
-    if (seoulRegulated) {
+    // 2) 코드가 없을 때만 문자열 키워드 폴백(사용자 자유입력 경로와 동일 한계)
+    if (seoulRegulated && !code) {
       if (r.includes('서울')) return true;
       for (const gu of SEOUL_GU_KEYWORDS) if (r.includes(gu)) return true;
     }
@@ -508,8 +518,8 @@ async function getAIRecommendations(userCondition) {
     const avgAuk = parseFloat((p.avgPrice / 10000).toFixed(2));
     const minAuk = parseFloat((p.minPrice / 10000).toFixed(2));
     const maxAuk = parseFloat((p.maxPrice / 10000).toFixed(2));
-    // 단지 실제 위치(MOLIT sggNm)로 규제 판정 — 사용자 입력 region 보다 정확
-    const aptIsRegulated = matchRegulated(apt.sigungu || region || '');
+    // 단지 실제 위치(MOLIT sggNm + lawdCd)로 규제 판정 — 사용자 입력 region 보다 정확
+    const aptIsRegulated = matchRegulated(apt.sigungu || region || '', apt.lawdCd);
     const ltvInfo = computeLTV(avgAuk, aptIsRegulated, isFirstBuyer, houseStatus);
     const tags = buildTags(apt);
     const ageYears = new Date().getFullYear() - (apt.buildYear || 0);

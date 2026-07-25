@@ -4927,7 +4927,7 @@ function gSVG(score,sz){
 }
 
 // ── MARKERS ──────────────────────────────────────────────
-function getMarkerCls(p){const _l=p.ltv||_regLtvLabel(p.area);return _l?.includes('40')?'reg':p.type==='recon'?'recon':'non';}
+function getMarkerCls(p){const _l=p.ltv||_regLtvLabel(p.area, p.lawdCd);return _l?.includes('40')?'reg':p.type==='recon'?'recon':'non';}
 const clsColor={reg:'var(--acc)',non:'var(--a2)',recon:'var(--amb)'};
 
 function mkNaverOverlay(p){
@@ -4982,7 +4982,7 @@ function mkNaverIW(p){
       <button onclick="try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_){}" aria-label="닫기" title="닫기" style="position:absolute;top:-3px;right:-3px;width:22px;height:22px;border:none;background:transparent;color:var(--text-tertiary);font-size:15px;line-height:1;cursor:pointer;padding:0;z-index:3">✕</button>
       <div class="niw-n">${_escHtml(p.aptName || '')}</div>
       <div class="niw-pr">${(p.avgPrice||p.price||0).toFixed(2)}억</div>
-      <div class="niw-m">${_escHtml(p.area||'')} · ${_escHtml(p.buildYear||'')}년 · LTV ${_escHtml(p.ltv||_regLtvLabel(p.area)||'—')}</div>
+      <div class="niw-m">${_escHtml(p.area||'')} · ${_escHtml(p.buildYear||'')}년 · LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}</div>
       <div class="niw-g">${scoreLabel}</div>
       <div class="niw-tags">${tags}</div>
       <button class="niw-btn a2" onclick="showDetailById('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}',${p.lat},${p.lng})">📊 상세 리포트</button>
@@ -5250,7 +5250,7 @@ async function doSearch(){
         const lng = (p.lng!=null) ? Number(p.lng) : getLng(p.area,i);
         // PRICE-BASIS-2026-07-17 (Sprint XXXXX): 추천 avgPrice = 대표 평형(primaryPyeong) 6개월 평균 —
         //   상세(openAptDetail)의 "최근 N건 평균"과 정의가 달라 같은 단지가 다른 값으로 보이던 혼란을 라벨로 명시.
-        return {...p, lat, lng, _priceBasis:'회원님 평형대 · 6개월 평균', type:(p.ltv||_regLtvLabel(p.area))?.includes('40')?'regulated':'non'};
+        return {...p, lat, lng, _priceBasis:'회원님 평형대 · 6개월 평균', type:(p.ltv||_regLtvLabel(p.area, p.lawdCd))?.includes('40')?'regulated':'non'};
       });
       searchMeta={
         regions:(data.targetRegions||[]).map(r=>r.name).filter(Boolean),
@@ -5361,7 +5361,7 @@ function renderPList(){
     const rank = p.rank ? _escHtml(p.rank)+'. ' : '';
     return`<div class="pi" id="pi-${i}" onclick="selP(${i})">
       <div class="pi-top"><div class="pi-name">${rank}${_escHtml(p.aptName||'')}</div><div class="pi-price" title="${_escHtml(p._priceBasis||'평균 실거래')}">${(Number(p.avgPrice)||0).toFixed(1)}억</div></div>
-      <div class="pi-sub">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area)||'—')}</div>
+      <div class="pi-sub">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}</div>
       <div class="pi-row">${tags}${p.score!=null?gSVG(Number(p.score),30):''}</div>
     </div>`;
   }).join('');
@@ -5410,8 +5410,8 @@ function renderListGrid(){
     // 필터 적용
     const flt = window._lstFlt || 'all';
     let filtered = props.slice();
-    if (flt === 'regulated') filtered = filtered.filter(p => (p.ltv||_regLtvLabel(p.area))?.includes('40'));
-    else if (flt === 'non') filtered = filtered.filter(p => !(p.ltv||_regLtvLabel(p.area))?.includes('40'));
+    if (flt === 'regulated') filtered = filtered.filter(p => (p.ltv||_regLtvLabel(p.area, p.lawdCd))?.includes('40'));
+    else if (flt === 'non') filtered = filtered.filter(p => !(p.ltv||_regLtvLabel(p.area, p.lawdCd))?.includes('40'));
     // 정렬 적용
     const sort = document.getElementById('lstSort')?.value || 'score';
     // MOB-AUDIT-2026-05-03: STAB #21 — `sortFn?.score` 가 자기 자신 참조 (선언 중) → 알 수 없는 sort 키 입력 시 undefined → 정렬 안 됨
@@ -5481,12 +5481,12 @@ function _renderListCard(p, i) {
       <input type="checkbox" class="cmp-chk-input" data-i="${i}" ${cmpSel.has(i)?'checked':''} onclick="event.stopPropagation();toggleCmp(${i},this.checked)">
       <span class="cmp-chk-lbl">비교</span>
     </label>
-    <div class="lc-top" style="background:${(p.ltv||_regLtvLabel(p.area))?.includes('40')?'var(--accL)':'var(--a2L)'}">
+    <div class="lc-top" style="background:${(p.ltv||_regLtvLabel(p.area, p.lawdCd))?.includes('40')?'var(--accL)':'var(--a2L)'}">
       <div class="lc-name">${_escHtml(p.aptName||'')}</div><div class="lc-area">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년</div>
       <div class="lc-g">${gSVG(s||0,50)}
         <div><div style="font-size:17px;font-weight:800;color:${_hasS?gc(s):'var(--text-tertiary)'}">${(Number(p.avgPrice)||0).toFixed(2)}억</div>
         <span class="lvl ${lv}">${lt}</span>
-        <div style="font-size:10px;color:var(--t2);margin-top:2px">LTV ${_escHtml(p.ltv||_regLtvLabel(p.area)||'—')}${p.maxLoan?` | 최대 ${_escHtml(p.maxLoan)}`:''}</div></div>
+        <div style="font-size:10px;color:var(--t2);margin-top:2px">LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}${p.maxLoan?` | 최대 ${_escHtml(p.maxLoan)}`:''}</div></div>
       </div>
     </div>
     <div style="padding:12px 14px">
@@ -6084,7 +6084,7 @@ function showDetail(p){
   const _scoreSection = _hasScore
     ? `<div class="gbw">${gSVG(s,90)}
         <div class="gi"><div class="gi-t">데이터 종합 점수 ${s}/100</div><span class="lvl ${lv}">${lt}</span>
-          <div class="gi-s">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area)||'—')}${p.maxLoan?` | 최대 ${_escHtml(p.maxLoan)}`:''}</div>
+          <div class="gi-s">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}${p.maxLoan?` | 최대 ${_escHtml(p.maxLoan)}`:''}</div>
         </div>
       </div>`
     : `<div class="score-pending">
@@ -6092,7 +6092,7 @@ function showDetail(p){
         <div class="sp-title">데이터 분석 대기</div>
         <div class="sp-msg">보고서 탭에서 주택 보유·자금·희망 지역 입력 후<br>"맞춤 보고서"를 받으면 정확한 점수가 분석됩니다.</div>
         <button class="sp-cta" onclick="cDM();sv('report')">📊 맞춤 보고서 만들기 →</button>
-        <div class="sp-meta">${p.area||''}${p.buildYear?' · '+p.buildYear+'년':''}${p.ltv?' · LTV '+p.ltv:''}</div>
+        <div class="sp-meta">${_escHtml(p.area||'')}${p.buildYear?' · '+_escHtml(p.buildYear)+'년':''}${p.ltv?' · LTV '+_escHtml(p.ltv):''}</div>
       </div>`;
   document.getElementById('t0').innerHTML=`
     ${_scoreSection}
@@ -8161,6 +8161,10 @@ function gct(id){return document.querySelector(`#${id} .chip.on`)?.textContent.t
 // ── 규제지역 매칭 (백엔드 regulationsService 와 동일 로직) ─────────
 // 부팅 시 /api/regulations 1회 호출 → window.__REG_KW 캐시 → calcLTV 매칭에 사용.
 // fetch 실패 시 보수적 fallback ("서울"/"경기" 포함 여부) — 기존 동작 유지.
+// SEOUL-JUNGGU-FIX-2026-07-25 (Sprint PPPPPP): 기존 배열은 24개로 '중구'가 빠져 있어 서울 중구
+//   단지가 '비규제'로 오판정, 마커 색·필터·LTV 라벨·취득세 시뮬레이션(비조정 표기)까지 연쇄 오류였다.
+//   ⚠ 문자열 '중구'를 그냥 넣으면 부산·대구·인천·대전·울산 중구까지 규제로 오판정 →
+//     아래 _regLtvLabel 은 **lawdCd(11 prefix) 우선 판정**을 쓰고, 문자열은 코드 없을 때만 쓴다.
 const SEOUL_GU_KW = ['강남','강동','강북','강서','관악','광진','구로','금천','노원',
   '도봉','동대문','동작','마포','서대문','서초','성동','성북','송파','양천',
   '영등포','용산','은평','종로','중랑'];
@@ -8226,11 +8230,15 @@ function isRegFront(regionStr){
 }
 // 규제지역 LTV 라벨(무주택 기준: 규제 40% / 비규제 70%) — 위치만으로 산출. 마커·리스트 'LTV ?' 누수 제거.
 //   isRegFront 재사용 + SEOUL_GU_KW 직접 백스톱(__REG_KW 부팅 전에도 서울 구명 해석). 지역 미상이면 null → 라벨 생략.
-function _regLtvLabel(area){
+function _regLtvLabel(area, lawdCd){
+  // SEOUL-JUNGGU-FIX-2026-07-25: lawdCd 있으면 최우선(서울=11 prefix → 25개 구 전부 정확, 동명 구 오판 0).
+  //   문자열 백스톱은 코드가 없을 때만 — '중구'를 문자열로 넣으면 지방 중구까지 규제가 되기 때문.
+  const code = String(lawdCd||'').trim();
+  if(code.startsWith('11')) return '40%';
   const r = String(area||'').normalize('NFC').trim();
   if(!r) return null;
   let reg = isRegFront(r);
-  if(!reg){ for(const gu of SEOUL_GU_KW){ if(r.includes(gu)){ reg = true; break; } } }
+  if(!reg && !code){ for(const gu of SEOUL_GU_KW){ if(r.includes(gu)){ reg = true; break; } } }
   return reg ? '40%' : '70%';
 }
 const REGION_SUB = {

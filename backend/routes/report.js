@@ -651,13 +651,22 @@ function aptNameMatchScore(a, b) {
 // 절대 Tier(S+/A) 매기지 X — 사용자 priority 가중치의 보조 역할.
 
 /** 행정구 위계 (Phase 9.1: SQL 진단 후 추가 강화 — 9억 예산에 핵심권 단지 다수 존재 확인 */
-function getDistrictTier(sigungu) {
+// REGION-LABEL-FIX-2026-07-25 (Sprint PPPPPP, improve 감사 CONFIRMED — 절대룰 ②③ 위반):
+//   기존엔 "이름이 4자 이하 '구'" 라는 문자열 규칙만 봐서, 지방 광역시 구가 전부 걸렸다.
+//   MOLIT sigungu 는 광역 prefix 가 없어(transactionService _stripCityPrefix) 인천 '연수구',
+//   부산 '해운대구', 대구 '수성구' 등이 그대로 저장된다 → 보고서 카드·PDF·데이터판·AI 프롬프트에
+//   "해운대구 우동 (서울 외곽구)" 같은 **사실 아닌 문장**이 노출됐다(보고서 지역은 UUUUU 이후 지방 포함).
+//   ⇒ 서울 판정은 lawd_cd 11 prefix 로만. 지방은 '기타'(라벨 생략)로 떨어뜨린다.
+function getDistrictTier(sigungu, lawdCd) {
   if (!sigungu) return { tier: '기타', bonus: 0 };
-  if (['강남구', '서초구', '송파구'].includes(sigungu)) return { tier: '강남3구', bonus: 60 };
-  if (['마포구', '용산구', '성동구', '광진구'].includes(sigungu)) return { tier: '마용성광', bonus: 50 };
-  if (['양천구', '영등포구', '강동구'].includes(sigungu)) return { tier: '서울 핵심구', bonus: 30 };
+  const code = String(lawdCd || '').trim();
+  const isSeoul = code ? code.startsWith('11') : false;
+  if (isSeoul && ['강남구', '서초구', '송파구'].includes(sigungu)) return { tier: '강남3구', bonus: 60 };
+  if (isSeoul && ['마포구', '용산구', '성동구', '광진구'].includes(sigungu)) return { tier: '마용성광', bonus: 50 };
+  if (isSeoul && ['양천구', '영등포구', '강동구'].includes(sigungu)) return { tier: '서울 핵심구', bonus: 30 };
+  // 경기 과천·분당·판교는 시/구 이름이 고유해 문자열 매칭이 안전(동명 지역 없음)
   if (['과천시', '분당구', '판교'].some(k => sigungu.includes(k))) return { tier: '분당·과천·판교', bonus: 35 };
-  if (sigungu.endsWith('구') && sigungu.length <= 4) return { tier: '서울 외곽구', bonus: 5 };
+  if (isSeoul && sigungu.endsWith('구')) return { tier: '서울 외곽구', bonus: 5 };
   return { tier: '기타', bonus: 0 };
 }
 
@@ -721,17 +730,23 @@ function getAgeBonus(buildYear) {
 }
 
 /** 규제지역 페널티 (가산이 아닌 감산) */
-function getRegulationPenalty(sigungu) {
+// REGION-LABEL-FIX-2026-07-25 (Sprint PPPPPP): 위와 동일 근본원인. 지방 구를 '조정대상지역'으로
+//   단정하면 사용자가 LTV 40%·취득세 중과·실거주 의무를 잘못 전제한다(금전 오판). 규제 여부를
+//   **틀리게 단정하는 것보다 '미확인'(라벨 생략)이 절대룰에 부합** — 서울만 lawd_cd 로 확정 판정.
+function getRegulationPenalty(sigungu, lawdCd) {
   if (!sigungu) return { status: '미확인', bonus: 0 };
-  // 2025.10.15 기준 강화 규제지역
-  if (['강남구', '서초구', '송파구', '용산구'].includes(sigungu)) {
+  const code = String(lawdCd || '').trim();
+  const isSeoul = code ? code.startsWith('11') : false;
+  // 2025.10.15 기준 강화 규제지역 (서울 확정분)
+  if (isSeoul && ['강남구', '서초구', '송파구', '용산구'].includes(sigungu)) {
     return { status: '투기과열·토허구역 일부', bonus: -8 };
   }
-  // 서울 25구는 모두 조정대상
-  if (sigungu.endsWith('구') && sigungu.length <= 4) {
+  // 서울 25개 구는 전부 조정대상 (lawd_cd 11 prefix 로만 판정 — 지방 동명 구 오판 차단)
+  if (isSeoul && sigungu.endsWith('구')) {
     return { status: '조정대상지역', bonus: -3 };
   }
-  return { status: '비규제', bonus: 0 };
+  // 서울 외 지역은 코드만으로 규제 여부를 단정할 수 없음 → 미확인(하위 표시에서 생략)
+  return { status: code ? '미확인' : '비규제', bonus: 0 };
 }
 
 /** 점수 계산 — priority + 가구상황 + 예산 fit + 데이터 품질 + 객관 항목 (Phase 7) */
@@ -820,7 +835,7 @@ function applyObjectiveScore(c) {
   if (c.build_year && !r.data_build_year) { r.data_build_year = 5; c.score += 5; }
 
   // 객관 데이터 항목 — KAPT facility + sigungu 활용
-  const district = getDistrictTier(c.sigungu);
+  const district = getDistrictTier(c.sigungu, c.lawd_cd);
   if (district.bonus && !r['객관_행정구위계']) { r['객관_행정구위계'] = district.bonus; c.score += district.bonus; }
 
   const builder = getBuilderTier(c.kaptInfo?.builder);
@@ -835,7 +850,7 @@ function applyObjectiveScore(c) {
   const age = getAgeBonus(c.build_year);
   if (age.bonus && !r['객관_노후도']) { r['객관_노후도'] = age.bonus; c.score += age.bonus; }
 
-  const reg = getRegulationPenalty(c.sigungu);
+  const reg = getRegulationPenalty(c.sigungu, c.lawd_cd);
   if (reg.bonus && !r['객관_규제']) { r['객관_규제'] = reg.bonus; c.score += reg.bonus; }
 
   // Phase 8: 신고가 갱신 횟수 (6개월 내)
@@ -870,13 +885,15 @@ function applyObjectiveScore(c) {
 
   // 객관 fact 객체 — UI/PDF 노출용 (점수와 별개로 사용자에게 보여줌)
   c.objectiveFacts = {
-    district: district.tier,
+    // REGION-LABEL-FIX-2026-07-25: 확정되지 않은 위계·규제는 **표시하지 않는다**(null → 프론트·PDF·
+    //   AI 프롬프트에서 자동 생략). 틀린 단정보다 미표기가 절대룰(환각 차단·정확도)에 부합.
+    district: district.tier === '기타' ? null : district.tier,
     builder: c.kaptInfo?.builder ? `${c.kaptInfo.builder} (${builder.tier})` : null,
     households: c.households || null,
     age_years: age.years,
     parking_per_household: parking.ratio,
     parking_total: c.kaptInfo?.parking || null,
-    regulation: reg.status,
+    regulation: reg.status === '미확인' ? null : reg.status,
     transactions_6mo: c.n,
     new_high_count: c.new_high_count || 0, // Phase 8
     amenities: c.amenities || null,        // Phase 8: { school, mart, hospital, subway, cvs }
@@ -1031,7 +1048,7 @@ async function fetchCandidateApts(admin, input, limit) {
     c.score = s.total;
     c.scoreBreakdown = s.breakdown;
     // 1차 행정구위계 점수도 미리 부여 — 강남/마용성광이 외곽보다 1차에서 우선
-    const district = getDistrictTier(c.sigungu);
+    const district = getDistrictTier(c.sigungu, c.lawd_cd);
     if (district.bonus) {
       c.scoreBreakdown['객관_행정구위계'] = district.bonus;
       c.score += district.bonus;
