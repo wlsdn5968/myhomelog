@@ -305,11 +305,13 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
 async function fetchCandidatePool(admin, limit, since) {
   // 1) RPC (NOT EXISTS apt_geocache 내장 — 별도 existing 필터 불필요)
   try {
-    // POSTGREST-1000-FIX-2026-07-25 (Sprint NNNNNN, admin 트리거 실측): PostgREST 는 응답을 기본
-    //   1000행에서 자른다 — RPC 에 p_limit=4000 을 줘도 실제 수신은 1000(실측 poolSize:1000).
-    //   즉 6/22 의 pool 800→2000, 7/22 의 2000→4000 은 **둘 다 실효 0** 이었고, 매일 동일한 상위
-    //   1000개(대부분 Kakao 무매칭 하드페일)만 재시도하다 끝나 신규 좌표 0건이 되는 구조였다.
-    //   .range(0, limit-1) 로 Range 헤더를 명시해 1000행 상한을 넘긴다(서버 max-rows 정책 내).
+    // POSTGREST-1000-2026-07-25 (Sprint NNNNNN, admin 트리거 2회 실측): PostgREST 는 응답을 서버
+    //   max-rows(=1000)에서 자른다 — RPC p_limit=4000 을 줘도 실제 수신 1000.
+    //   ⚠ .range(0, limit-1) 로 Range 헤더를 명시해도 **여전히 1000**(배포 후 rawPoolSize:1000 실측)
+    //     → 서버 설정 상한이라 클라이언트로 못 넘음. Range 호출은 무해해서 남겨두되 효과는 없다.
+    //   ⇒ 결론: pool 인자를 키우는 접근(6/22 800→2000, 7/22 2000→4000)은 **전부 실효 0**이었고,
+    //     실질 해법은 아래 filterOutGeoFailed(sentinel) — 매 실행마다 확정 실패분을 풀에서 걷어내
+    //     상위 1000 창을 아래로 밀어내는 것이다.
     const { data, error } = await admin
       .rpc('geocache_backfill_candidates', { p_limit: limit, p_since: since })
       .range(0, Math.max(0, limit - 1));
