@@ -109,6 +109,23 @@ router.get('/rone-probe', async (req, res) => {
   try {
     const r = await axios.get(`https://www.reb.or.kr/r-one/openapi/${EP[epKey]}`, { params, timeout: 15000 });
     const body = r.data;
+
+    // 목록 탐색 모드: 응답이 커서 preview 로는 일부만 보이므로 서버에서 (id·명칭·주기)만 요약.
+    //   q 로 명칭 부분일치 필터(대소문자 무시). 통계표 ID 확정 작업 전용.
+    if (req.query.summary === '1') {
+      const rootKey = Object.keys(body || {})[0];
+      const arr = (body && body[rootKey]) || [];
+      const rowsNode = Array.isArray(arr) ? arr.find(x => x && x.row) : null;
+      const rows = rowsNode ? rowsNode.row : [];
+      const headNode = Array.isArray(arr) ? arr.find(x => x && x.head) : null;
+      const total = headNode ? (headNode.head.find(x => x.list_total_count) || {}).list_total_count : null;
+      const q = String(req.query.q || '').toLowerCase();
+      const items = rows
+        .map(x => ({ id: x.STATBL_ID, nm: x.STATBL_NM, cyc: x.DTACYCLE_CD, start: x.DATA_START_YY, end: x.DATA_END_YY }))
+        .filter(x => !q || String(x.nm || '').toLowerCase().includes(q));
+      return res.json({ ok: true, httpStatus: r.status, totalCount: total, returned: rows.length, matched: items.length, items: items.slice(0, 60) });
+    }
+
     const asStr = typeof body === 'string' ? body : JSON.stringify(body);
     res.json({
       ok: true,
