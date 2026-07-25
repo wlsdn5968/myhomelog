@@ -915,6 +915,44 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 
 /* SETTINGS MODAL */
 .smbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;align-items:center;justify-content:center;padding:16px}
+/* ── RGM (Sprint WWWWWW): 지역 시장 요약 모달 — claude.ai/design 시안 '지역 시장 요약 모달' 반영 ──
+     시안 구성 그대로: 헤더(지역명+기준일) · 2×2 카드(가격지수·거래량·미분양·규제) · 하단 고지.
+     모바일은 1열 스택. 색은 전부 의미 토큰이라 다크모드가 자동 적응한다(시안의 라이트/다크 4프레임 대응).
+     z-index 600 — 단지 상세(.dmbg 400)·공유(.smbg 500) 위에 뜬다(상세에서 열리는 진입점이라 필수). */
+.rgbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:600;align-items:center;justify-content:center;padding:16px}
+.rgbg.open{display:flex}
+.rgm{background:var(--s0);border:1px solid var(--bd);border-radius:16px;max-width:720px;width:100%;max-height:88vh;overflow:auto;padding:18px;box-shadow:0 18px 48px rgba(0,0,0,.22)}
+.rgm-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
+.rgm-t{font-size:17px;font-weight:800;color:var(--t1);letter-spacing:-.2px}
+.rgm-s{font-size:11.5px;color:var(--t3);margin-top:3px}
+.rgm-x{background:none;border:1px solid var(--bd);border-radius:8px;width:28px;height:28px;cursor:pointer;color:var(--t2);font-size:14px;line-height:1;flex:none}
+.rg-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:700px){.rg-grid{grid-template-columns:1fr}.rgm{padding:15px}}
+.rg-c{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:12px 13px}
+.rg-ch{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
+.rg-cn{font-size:12px;font-weight:700;color:var(--t1)}
+.rg-bg{font-size:10px;color:var(--t3);background:var(--s2);border-radius:5px;padding:2px 6px;white-space:nowrap}
+.rg-v{font-size:20px;font-weight:800;color:var(--t1);letter-spacing:-.3px}
+.rg-vu{font-size:11px;font-weight:600;color:var(--t3);margin-left:2px}
+.rg-vl{font-size:10.5px;color:var(--t3);margin-right:6px;font-weight:600}
+.rg-note{font-size:10.5px;color:var(--t3);line-height:1.55;margin-top:7px}
+.rg-src{font-size:10px;color:var(--t3);border-top:1px solid var(--bd);margin-top:8px;padding-top:6px}
+.rg-badge{display:inline-block;font-size:11px;font-weight:700;padding:3px 9px;border-radius:6px;background:var(--accL);color:var(--acc);border:1px solid var(--acc)}
+/* 시안의 '확인 필요'·'데이터 없음' 변형 — 값이 없을 때 단정하지 않는다는 표시를 점선으로 시각화 */
+.rg-badge.muted{background:transparent;color:var(--t3);border:1px dashed var(--bd2);font-weight:600}
+.rg-spark{display:flex;align-items:flex-end;gap:5px;height:34px;margin:7px 0 2px}
+.rg-slot{flex:1;position:relative;height:100%}
+.rg-dot{position:absolute;left:50%;transform:translateX(-50%);width:7px;height:7px;border-radius:50%;background:var(--acc)}
+/* '미수신' 슬롯 = 점선 — 값을 만들어 넣지 않는다(시안 원칙) */
+.rg-dot.empty{width:64%;height:0;border-top:1px dashed var(--bd2);border-radius:0;background:none;bottom:46%;opacity:.65}
+.rg-bar{position:absolute;left:16%;right:16%;bottom:0;background:var(--acc);border-radius:3px 3px 0 0;min-height:3px}
+.rg-bar.empty{background:transparent;border:1px dashed var(--bd2);border-bottom:none;top:12%;opacity:.5}
+.rg-ax{display:flex;gap:5px;margin-top:3px}
+.rg-ax span{flex:1;text-align:center;font-size:9px;color:var(--t3)}
+.rg-disc{border-left:3px solid var(--acc);background:var(--accL);padding:9px 12px;border-radius:0 8px 8px 0;font-size:11px;color:var(--t2);line-height:1.55;margin-top:13px}
+.rg-load{text-align:center;padding:34px 0;color:var(--t3);font-size:12px;line-height:1.6}
+/* 진입점 — 단지 상세 sticky 요약 안의 링크 버튼 */
+.rg-open{background:var(--accL);color:var(--acc);border:1px solid var(--acc);border-radius:7px;font-size:11px;font-weight:700;padding:3px 9px;cursor:pointer;white-space:nowrap}
 /* ── NTC (Sprint JJJJJJ): 알림 센터 + 구독 넛지 + 헤더 벨 — Claude Design 시안 '내집로그 알림 구독 UX' 반영 ── */
 .ntc-bell{position:relative}
 .ntc-dot{position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;background:var(--red,#DC2626);display:none}
@@ -2665,6 +2703,20 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 </div>
 
 <!-- SETTINGS MODAL -->
+<!-- RGM (Sprint WWWWWW): 지역 시장 요약 모달 — claude.ai/design 시안 반영. 내용은 JS 가 채운다. -->
+<div class="rgbg" id="RGM" onclick="if(event.target===this)closeRegionSummary()">
+  <div class="rgm" role="dialog" aria-modal="true" aria-labelledby="rgmT">
+    <div class="rgm-hd">
+      <div>
+        <div class="rgm-t" id="rgmT">지역 시장 요약</div>
+        <div class="rgm-s" id="rgmS"></div>
+      </div>
+      <button class="rgm-x" onclick="closeRegionSummary()" aria-label="지역 요약 닫기" title="닫기">✕</button>
+    </div>
+    <div id="rgmBody"><div class="rg-load">불러오는 중…</div></div>
+  </div>
+</div>
+
 <div class="smbg" id="SM">
   <div class="smbox">
     <div class="smhdr">
@@ -6082,6 +6134,25 @@ function showDetail(p){
           : `<span class="lvl unknown" style="font-size:10.5px;padding:1px 7px">${lt}</span>`)
       + `</div>`
       + (p.avgPrice ? `<div class="ass-price"><span class="ass-price-v">${(p.avgPrice).toFixed(1)}억</span><span class="ass-price-l">${_escHtml(p._priceBasis||'평균 실거래')}</span></div>` : '');
+
+    // REGION-ENTRY-2026-07-25 (Sprint WWWWWW, 기획안 §3 A안): "단지를 보다 동네가 궁금해지는 순간"에 노출.
+    //   탭 신설(B안) 대신 상세 상단 링크 — 탭 과밀 정리(Sprint OOOOO) 역사와 충돌하지 않는다.
+    //   lawdCd 가 있어야만 노출한다(이름으로 지역을 특정하면 동명 구 오매칭 — Sprint PPPPPP P0 재발).
+    try {
+      const _lc = String(p.lawdCd||'').trim();
+      let _rb = _ass.querySelector('.rg-open');
+      if (_lc) {
+        const _nm = String(p.sigungu || '').trim();
+        if (!_rb) {
+          _rb = document.createElement('button');
+          _rb.className = 'rg-open';
+          _ass.querySelector('.ass-main')?.appendChild(_rb);
+        }
+        _rb.textContent = (_nm ? _nm+' ' : '') + '시장 요약';
+        _rb.title = '이 지역의 가격지수·거래량·미분양·규제 상태를 공식 통계로 봅니다';
+        _rb.onclick = (ev) => { ev.stopPropagation(); openRegionSummary(_lc, _nm); };
+      } else if (_rb) { _rb.remove(); }
+    } catch(_){}
   } catch(_){}
 
   // 점수 환각 fix: score 없으면 "분석 대기" 카드 + 사이드바 진입 유도 CTA (60 fallback 제거)
@@ -9328,6 +9399,7 @@ document.addEventListener('keydown', (e) => {
   // 열린 모달 우선순위 (위쪽이 나중에 열림 → 먼저 닫음)
   const closers = [
     { id: 'QM', fn: 'closeQuotaModal' },  // quota 모달 (z-index 9998)
+    { id: 'RGM', fn: 'closeRegionSummary' }, // 지역 시장 요약 (z600 — 상세 위에 뜨므로 먼저 닫는다)
     { id: 'DM', fn: 'cDM' },              // 단지 상세
     { id: 'SM', fn: 'closeSM' },          // 설정
     { id: 'UM', fn: 'closeUserMenu' },    // 계정 메뉴
@@ -10469,6 +10541,140 @@ function ah(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,
 function gt(){const n=new Date();return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');}
 // HTML escape — XSS 방어용 (AI/사용자/세션 복원 메시지 공통)
 function _escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+
+/* ── 지역 시장 요약 모달 (Sprint WWWWWW) ───────────────────────────────────────────
+   claude.ai/design 시안 '지역 시장 요약 모달' 을 우리 토큰으로 재구현.
+   데이터는 전부 `/api/region/dashboard?lawdCd=` (공식 통계 실측치) — AI 호출 0.
+
+   ★ 시안이 지킨 원칙을 코드에서도 그대로 지킨다: **없는 달은 값을 만들지 않는다.**
+     응답에 없는 월은 점선 슬롯으로 비워 두고, 왜 비었는지 문구로 밝힌다.
+     (미분양이 없으면 "추정해 채우지 않아요", 규제를 모르면 "확인 필요" — 단정 금지)
+   ⚠ 모든 동적 값은 _escHtml, 수치는 Number 로 강제 — 문자열이 그대로 스타일/마크업에 들어가지 않게. */
+let _rgmAbort = null;
+function _rgYm(ym){ const s=String(ym||''); return /^\d{6}$/.test(s) ? `${s.slice(2,4)}.${s.slice(4,6)}` : ''; }
+function _rgNum(v){ const n=Number(v); return Number.isFinite(n) ? n : null; }
+
+async function openRegionSummary(lawdCd, name){
+  const bg = document.getElementById('RGM'); if(!bg) return;
+  const code = String(lawdCd||'').trim();
+  if(!code){ if(typeof toast==='function') toast('지역 코드를 확인할 수 없어요.'); return; }
+  document.getElementById('rgmT').textContent = (name ? name+' ' : '') + '시장 요약';
+  document.getElementById('rgmS').textContent = '';
+  document.getElementById('rgmBody').innerHTML = '<div class="rg-load">공식 통계를 불러오는 중…</div>';
+  bg.classList.add('open');
+  try { window.va && window.va('event', { name:'region_summary_open', data:{ lawdCd: code } }); } catch(_){}
+  try{
+    if(_rgmAbort) _rgmAbort.abort();
+    _rgmAbort = new AbortController();
+    const r = await fetch(`${CFG.api}/region/dashboard?lawdCd=${encodeURIComponent(code)}`, { signal:_rgmAbort.signal });
+    if(!r.ok) throw new Error('http '+r.status);
+    _renderRegionSummary(await r.json());
+  }catch(e){
+    if(e && e.name === 'AbortError') return;
+    document.getElementById('rgmBody').innerHTML =
+      '<div class="rg-load">지금은 통계를 불러오지 못했어요.<br>잠시 후 다시 시도해 주세요.</div>';
+  }
+}
+function closeRegionSummary(){
+  document.getElementById('RGM')?.classList.remove('open');
+  if(_rgmAbort){ _rgmAbort.abort(); _rgmAbort = null; }
+}
+
+function _renderRegionSummary(d){
+  const body = document.getElementById('rgmBody'); if(!body) return;
+  if(d?.region?.name) document.getElementById('rgmT').textContent = d.region.name + ' 시장 요약';
+  const asOf = d?.generatedAt ? String(d.generatedAt).slice(0,10) : '';
+  document.getElementById('rgmS').textContent = asOf ? `공식 통계 기준 · ${asOf}` : '공식 통계 기준';
+
+  const cards = [];
+
+  // ① 가격지수 — 매매·전세 각각 스파크라인. 값 없는 달은 점선(미수신).
+  const pi = d?.priceIndex;
+  if (pi?.months?.length) {
+    const ms = pi.months;
+    const last = ms[ms.length-1];
+    const line = (key) => {
+      const vals = ms.map(m => _rgNum(m[key])).filter(v => v !== null);
+      const lo = vals.length ? Math.min(...vals) : 0;
+      const hi = vals.length ? Math.max(...vals) : 1;
+      const rng = (hi - lo) || 1;
+      return ms.map(m => {
+        const v = _rgNum(m[key]);
+        if (v === null) return '<div class="rg-slot"><i class="rg-dot empty"></i></div>';
+        const pct = 12 + ((v - lo) / rng) * 66;           // 12~78% — 위아래 여백 확보
+        return `<div class="rg-slot"><i class="rg-dot" style="bottom:${pct.toFixed(1)}%"></i></div>`;
+      }).join('');
+    };
+    const axis = ms.map(m => `<span>${_escHtml(_rgYm(m.ym))}</span>`).join('');
+    const missing = ms.filter(m => _rgNum(m.sale) === null && _rgNum(m.jeonse) === null).map(m => _rgYm(m.ym));
+    const sale = _rgNum(last?.sale), jeon = _rgNum(last?.jeonse);
+    cards.push(`<div class="rg-c">
+      <div class="rg-ch"><span class="rg-cn">가격지수</span><span class="rg-bg">${_escHtml(_rgYm(last?.ym))}</span></div>
+      ${sale !== null ? `<div><span class="rg-vl">매매</span><span class="rg-v">${sale.toFixed(2)}</span></div>
+        <div class="rg-spark">${line('sale')}</div><div class="rg-ax">${axis}</div>` : ''}
+      ${jeon !== null ? `<div style="margin-top:9px"><span class="rg-vl">전세</span><span class="rg-v">${jeon.toFixed(2)}</span></div>
+        <div class="rg-spark">${line('jeonse')}</div><div class="rg-ax">${axis}</div>` : ''}
+      ${missing.length ? `<div class="rg-note">${_escHtml(missing[0])} ~ ${_escHtml(missing[missing.length-1])} 는 응답에 포함되지 않아 표시하지 않았어요.</div>` : ''}
+      <div class="rg-src">출처 · ${_escHtml(pi.source || '한국부동산원')}</div>
+    </div>`);
+  }
+
+  // ② 월별 거래량 — 최신 월 큰 숫자 + 막대.
+  const tx = d?.txTrend;
+  if (tx?.months?.length) {
+    const ms = tx.months;
+    const last = ms[ms.length-1];
+    const hi = Math.max(...ms.map(m => _rgNum(m.n) || 0), 1);
+    const bars = ms.map(m => {
+      const n = _rgNum(m.n);
+      if (n === null) return '<div class="rg-slot"><i class="rg-bar empty"></i></div>';
+      return `<div class="rg-slot"><i class="rg-bar" style="height:${((n/hi)*100).toFixed(1)}%"></i></div>`;
+    }).join('');
+    const axis = ms.map(m => `<span>${_escHtml(_rgYm(m.ym))}</span>`).join('');
+    cards.push(`<div class="rg-c">
+      <div class="rg-ch"><span class="rg-cn">월별 거래량</span><span class="rg-bg">${_escHtml(_rgYm(last?.ym))}</span></div>
+      <div><span class="rg-v">${(_rgNum(last?.n) ?? 0).toLocaleString('ko-KR')}</span><span class="rg-vu">건</span></div>
+      <div class="rg-spark">${bars}</div><div class="rg-ax">${axis}</div>
+      ${tx.note ? `<div class="rg-note">${_escHtml(tx.note)}</div>` : ''}
+      <div class="rg-src">출처 · ${_escHtml(tx.source || '국토교통부 실거래 신고')}</div>
+    </div>`);
+  }
+
+  // ③ 미분양 — 없으면 '데이터 없음'. 추정해서 채우지 않는다.
+  const un = d?.unsold;
+  const unRows = Array.isArray(un?.months) ? un.months : (Array.isArray(un) ? un : null);
+  if (unRows && unRows.length) {
+    const lastU = unRows[unRows.length-1];
+    const cnt = _rgNum(lastU?.cnt ?? lastU?.n);
+    cards.push(`<div class="rg-c">
+      <div class="rg-ch"><span class="rg-cn">미분양</span><span class="rg-bg">${_escHtml(_rgYm(lastU?.ym))}</span></div>
+      <div><span class="rg-v">${cnt !== null ? cnt.toLocaleString('ko-KR') : '—'}</span><span class="rg-vu">호</span></div>
+      <div class="rg-src">출처 · KOSIS 미분양주택현황보고</div>
+    </div>`);
+  } else {
+    cards.push(`<div class="rg-c">
+      <div class="rg-ch"><span class="rg-cn">미분양</span><span class="rg-badge muted">데이터 없음</span></div>
+      <div class="rg-note" style="margin-top:2px;color:var(--t2)">이 지역은 미분양 통계가 제공되지 않아요.</div>
+      <div class="rg-note">값을 추정해서 채우지 않아요.</div>
+      <div class="rg-src">출처 · KOSIS 미분양주택현황보고</div>
+    </div>`);
+  }
+
+  // ④ 규제 상태 — 확정된 것만 단정. 모르면 '확인 필요'.
+  const rg = d?.regulation;
+  const known = rg && rg.status === '규제지역';
+  cards.push(`<div class="rg-c">
+    <div class="rg-ch"><span class="rg-cn">규제 상태</span></div>
+    <div><span class="rg-badge${known ? '' : ' muted'}">${_escHtml(rg?.status || '확인 필요')}</span></div>
+    ${known && rg.basis
+      ? `<div class="rg-note" style="color:var(--t2)">근거 · ${_escHtml(rg.basis)}</div>`
+      : `<div class="rg-note" style="color:var(--t2)">이 지역의 규제 지정 여부는 응답에 포함되지 않았어요. 국토교통부 공고로 확인해 주세요.</div>`}
+    ${asOf ? `<div class="rg-src">기준일 · ${_escHtml(asOf)}</div>` : ''}
+  </div>`);
+
+  body.innerHTML = `<div class="rg-grid">${cards.join('')}</div>
+    <div class="rg-disc">${_escHtml(d?.disclaimer || '공식 통계 수치를 정리한 정보이며, 매수·매도 추천이나 가격 예측이 아닙니다.')}</div>`;
+}
 // inline onclick 의 JSON 인자 안전 삽입: JSON.stringify(JS escape) + _escHtml(HTML attr escape) 이중 인코딩.
 // 브라우저 attribute decode 후 JSON 원형 복원 → &quot; 등 entity 문자열 데이터에도 안전 (e177c1b setAlert 와 동일 패턴).
 function _jsonAttr(v){ return _escHtml(JSON.stringify(v)); }
