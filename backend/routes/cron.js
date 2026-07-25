@@ -217,6 +217,11 @@ async function handleGeocacheBackfill(req, res) {
     };
     const summary = await runGeocacheBackfill(opts);
     logger.info({ durationMs: Date.now() - started, summary }, 'cron/geocache-backfill OK');
+    // CRON-OBSERV-2026-07-25 (Sprint XXXXXX): 위 로그는 **1시간 뒤 사라진다**(Vercel Hobby 보존 1h,
+    //   cron 은 하루 1회) → 사후 원인 추적이 원천 불가였다. 실제로 07-13~24 백필 정체를 조사할 때
+    //   로그가 없어 DB 행 카운트로 우회해야 했고, 그마저 사용자 온디맨드 지오코딩과 섞여 분리가 어려웠다.
+    //   같은 값을 Redis 에 남겨 다음부터는 언제든 확인 가능하게 한다(DB 변경 0·fail-open).
+    require('../services/cronStats').recordCronRun('geocache-backfill', summary).catch(() => {});
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/geocache-backfill 실패');

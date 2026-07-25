@@ -130,3 +130,28 @@ test('_regLtvLabel(프론트) — lawd_cd 스코프 가드로 지방 동명 구 
   assert.equal(_regLtvLabel('수원시팔달구', '41115'), '40%'); // 경기는 이름 매칭 대상
   assert.equal(_regLtvLabel('', ''), null);                   // 지역 미상 → 라벨 생략
 });
+
+// ── Sprint XXXXXX: cron 관측 기록이 /api/health 로 새면 안 되는 값을 거르는지 ──────────
+//   cronStats 는 job summary 를 Redis 에 담고 그 최근 1회가 **공개 health 응답**에 실린다.
+//   job 이 나중에 새 필드(키·경로·사용자 식별자 등)를 요약에 추가해도 자동으로 노출되지 않도록
+//   숫자 화이트리스트만 통과시키는데, 그 성질을 여기서 고정한다.
+test('cronStats._pick — 숫자 화이트리스트만 통과, 그 외 필드는 유출되지 않는다', () => {
+  const { _pick } = require('../services/cronStats');
+  const out = _pick({
+    inserted: 142, processed: 400, failed: 258, elapsedMs: 251000, poolSize: 3800,
+    // 아래는 전부 빠져야 한다
+    apiKey: 'secret-value', token: 'abc', userEmail: 'a@b.c', rows: [{ aptName: '홍길동아파트' }],
+    kakao: { key: 'k' }, nested: { deep: { x: 1 } },
+  });
+  assert.deepEqual(out, { processed: 400, inserted: 142, failed: 258, poolSize: 3800, elapsedMs: 251000 });
+  for (const k of ['apiKey','token','userEmail','rows','kakao','nested']) {
+    assert.equal(k in out, false, `${k} 가 화이트리스트를 통과했다 — health 로 유출된다`);
+  }
+  // 실패 표기는 남긴다(진단 목적) — 단 문자열은 길이 제한
+  const err = _pick({ ok: false, error: 'x'.repeat(500) });
+  assert.equal(err.ok, false);
+  assert.equal(err.error.length, 120);
+  // 숫자가 아닌 값이 숫자 필드에 와도 통과시키지 않는다
+  assert.deepEqual(_pick({ inserted: 'NaN아님', processed: null }), {});
+  assert.deepEqual(_pick(null), {});
+});

@@ -520,6 +520,8 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   //   NCP 정책: client ID 는 도메인 등록 기반 보호 (다른 도메인에서 사용 불가) — 공개해도 안전.
   const _naverMapsClientId = process.env.NAVER_MAPS_CLIENT_ID || null;
   const _dataCounts = await getDataCounts();
+  // Redis 조회 1회(수 ms). 실패해도 null 로 흘려보낸다 — health 가 이것 때문에 죽으면 안 된다.
+  const _cronLatest = await require('./services/cronStats').getCronLatest().catch(() => null);
   const _dbUsage = await getDbUsage();
   // 데이터 품질 모니터 (Sprint AAAAA) — HOTPATH-NONBLOCK-2026-07-12 (Sprint DDDDD): count 5개가 콜드 health 를
   //   ~2s 느리게 해 chkAPI 5s 타임아웃 오프라인 오표시 유발 → health 핫패스에선 캐시만 읽고, 미스 시 백그라운드
@@ -559,6 +561,11 @@ app.get('/api/health', optionalAuth, async (req, res) => {
     //   배너가 항상 '방금 갱신'을 보여주던 것이 원래 결함. 모르면 null(프론트가 표기 생략).
     dataSyncedAt: _dataCounts?.lastIngestedAt || null,
     dataCounts: _dataCounts,
+    // CRON-OBSERV-2026-07-25 (Sprint XXXXXX): cron 최근 1회 결과(숫자 화이트리스트만).
+    //   Vercel Hobby 로그가 1시간만 남아 하루 1회 cron 은 사실상 사후 확인이 불가능했다 —
+    //   admin 전용으로 두면 진단 때마다 운영자를 거쳐야 해서 health 에 **건수만** 싣는다.
+    //   민감값 없음(cronStats._pick 이 숫자 필드만 통과시킨다). Redis 미설정·실패 시 null.
+    crons: _cronLatest,
     db: _dbUsage,
     facilityQuality: _facQuality,
     ecosRates: _ecosRates,
