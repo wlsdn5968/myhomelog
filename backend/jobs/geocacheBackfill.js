@@ -305,18 +305,27 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
 async function fetchCandidatePool(admin, limit, since) {
   // 1) RPC (NOT EXISTS apt_geocache 내장 — 별도 existing 필터 불필요)
   try {
-    // POSTGREST-1000-2026-07-25 (Sprint NNNNNN, admin 트리거 2회 실측): PostgREST 는 응답을 서버
-    //   max-rows(=1000)에서 자른다 — RPC p_limit=4000 을 줘도 실제 수신 1000.
-    //   ⚠ .range(0, limit-1) 로 Range 헤더를 명시해도 **여전히 1000**(배포 후 rawPoolSize:1000 실측)
-    //     → 서버 설정 상한이라 클라이언트로 못 넘음. Range 호출은 무해해서 남겨두되 효과는 없다.
-    //   ⇒ 결론: pool 인자를 키우는 접근(6/22 800→2000, 7/22 2000→4000)은 **전부 실효 0**이었고,
-    //     실질 해법은 아래 filterOutGeoFailed(sentinel) — 매 실행마다 확정 실패분을 풀에서 걷어내
-    //     상위 1000 창을 아래로 밀어내는 것이다.
-    const { data, error } = await admin
-      .rpc('geocache_backfill_candidates', { p_limit: limit, p_since: since })
-      .range(0, Math.max(0, limit - 1));
-    if (error) throw error;
-    if (data && data.length) return data;
+    // POSTGREST-PAGING-2026-07-25 (Sprint NNNNNN-3, admin 트리거 5회 실측으로 확정):
+    //   PostgREST 는 응답을 서버 max-rows(=1000)에서 자른다. p_limit=4000 도, .range(0,3999) 한 번도
+    //   실제 수신은 1000(rawPoolSize:1000 실측) — 6/22 pool 800→2000, 7/22 2000→4000 은 전부 실효 0이었다.
+    //   ⇒ **페이지 루프**(range(0,999) → (1000,1999) → …)로만 1000을 넘을 수 있다. 각 페이지가 RPC
+    //     재실행(실측 ~2s)이라 4페이지 ≈ 8s — budget 270s 대비 무해.
+    //   왜 필요한가(실측): sentinel 이 확정 실패분을 걷어내자 상위 1000 창이 3회 실행 만에 69개까지
+    //     소진됐다(skippedKnownFail 931). RPC 는 항상 같은 상위 1000 을 주므로 페이징 없이는 그 아래
+    //     3,500여 단지에 영원히 도달하지 못한다. 페이징 + sentinel 둘 다 있어야 실제로 전진한다.
+    const PAGE = 1000;
+    const out = [];
+    for (let from = 0; from < limit; from += PAGE) {
+      const to = Math.min(from + PAGE, limit) - 1;
+      const { data, error } = await admin
+        .rpc('geocache_backfill_candidates', { p_limit: limit, p_since: since })
+        .range(from, to);
+      if (error) throw error;
+      if (!data || !data.length) break;
+      out.push(...data);
+      if (data.length < (to - from + 1)) break; // 마지막 페이지 도달
+    }
+    if (out.length) return out;
   } catch (rpcErr) {
     logger.debug({ err: rpcErr.message }, 'geocache_backfill_candidates RPC 미정의 — fallback');
   }
