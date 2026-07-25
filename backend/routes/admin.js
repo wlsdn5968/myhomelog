@@ -120,6 +120,14 @@ router.get('/rone-probe', async (req, res) => {
       const headNode = Array.isArray(arr) ? arr.find(x => x && x.head) : null;
       const total = headNode ? (headNode.head.find(x => x.list_total_count) || {}).list_total_count : null;
       const q = String(req.query.q || '').toLowerCase();
+      // ep=item 요약: 지역 분류 **계층** — PAR_ITM_ID(부모)·ITM_FULLNM(전체명)이 동명 지역
+      //   ('중구' 4개 등) 구별의 유일한 근거. lawd_cd↔CLS_ID 매핑표의 원천 데이터.
+      if (epKey === 'item') {
+        const items = rows.map(x => ({ id: x.ITM_ID, par: x.PAR_ITM_ID, nm: x.ITM_NM, full: x.ITM_FULLNM, tag: x.ITM_TAG, ord: x.V_ORDER }))
+          .filter(x => !q || String(x.full || x.nm || '').toLowerCase().includes(q));
+        return res.json({ ok: true, httpStatus: r.status, totalCount: total, returned: rows.length, matched: items.length,
+          items: items.slice(0, parseInt(req.query.take, 10) || 300) });
+      }
       // ep=data 요약: 지역 분류(CLS) 체계 파악용 — lawd_cd↔CLS_ID 매핑표 구축 1단계.
       if (epKey === 'data') {
         const cls = rows.map(x => ({ clsId: x.CLS_ID, clsNm: x.CLS_NM, grpId: x.GRP_ID, grpNm: x.GRP_NM, itm: x.ITM_NM, val: x.DTA_VAL }))
