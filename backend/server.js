@@ -186,6 +186,9 @@ app.use('/api/chat', optionalAuth, chatLimiter, dailyLimit({ limit: DAILY_CHAT_L
 app.use('/api/transactions', dataLimiter, transactionRouter);
 app.use('/api/properties', optionalAuth, dataLimiter, dailyLimit({ limit: DAILY_SEARCH_LIMIT, scope: 'search', loggedInBonus: 5 }), propertiesRouter);
 app.use('/api/regulations', regulationsRouter);
+// REGION-DASH-2026-07-25 (Sprint TTTTTT): 지역 대시보드 — 공식 통계 조립(AI 0·DB 변경 0).
+//   공개 정보라 인증 불필요, dataLimiter 만 적용(검색과 동일 등급).
+app.use('/api/region', dataLimiter, require('./routes/region'));
 // Sprint RR: 정부 공식 법령 API (인증 불필요 — 공개 정보)
 app.use('/api/legal', dataLimiter, legalRouter);
 app.use('/api/clause', optionalAuth, chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat', loggedInBonus: 10 }), clauseRouter);
