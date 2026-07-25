@@ -76,6 +76,44 @@ router.get('/env-probe', (req, res) => {
   });
 });
 
+/**
+ * GET /api/admin/rone-probe — R-ONE(부동산원 통계) API 실호출 검증 (Sprint RRRRRR, 임시 진단)
+ *
+ * 명세(공식 개발가이드 실측): https://www.reb.or.kr/r-one/openapi/SttsApiTblData.do
+ *   필수 STATBL_ID·DTACYCLE_CD·WRTTIME_IDTFR_ID·Type, 인증 파라미터명 = KEY (미지정 시 sample 10건).
+ * ⚠ 키 값은 응답·로그 어디에도 싣지 않는다 — 성공 여부와 응답 구조만 반환.
+ * 통계표 ID 확정 후 정식 서비스로 옮기고 이 라우트는 제거.
+ */
+router.get('/rone-probe', async (req, res) => {
+  const key = process.env.REB_RONE_API_KEY;
+  if (!key) return res.json({ ok: false, reason: 'REB_RONE_API_KEY 미설정' });
+  const axios = require('axios');
+  const params = {
+    KEY: key,
+    Type: 'json',
+    STATBL_ID: String(req.query.statblId || 'A_2024_00900'),
+    DTACYCLE_CD: String(req.query.cycle || 'YY'),
+    WRTTIME_IDTFR_ID: String(req.query.time || '2022'),
+    pSize: 5,
+  };
+  try {
+    const r = await axios.get('https://www.reb.or.kr/r-one/openapi/SttsApiTblData.do', { params, timeout: 12000 });
+    const body = r.data;
+    const asStr = typeof body === 'string' ? body : JSON.stringify(body);
+    res.json({
+      ok: true,
+      httpStatus: r.status,
+      contentType: r.headers['content-type'] || null,
+      // 키가 포함될 여지가 없는 구조 정보만
+      topLevelKeys: (body && typeof body === 'object') ? Object.keys(body).slice(0, 10) : null,
+      bodyPreview: asStr.slice(0, 600),
+    });
+  } catch (e) {
+    res.json({ ok: false, httpStatus: e.response?.status || null, error: String(e.message).slice(0, 200),
+      bodyPreview: e.response?.data ? String(typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data)).slice(0, 400) : null });
+  }
+});
+
 // PUSH-TEST (Sprint EEEEEE): 웹푸시 발송 수동 트리거 — cron(18:20 UTC) 대기 없이 운영자 검증용
 router.post('/run-push-notify', async (req, res) => {
   const started = Date.now();
