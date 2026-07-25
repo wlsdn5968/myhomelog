@@ -369,20 +369,45 @@ app.get('/api/health/apis', async (req, res) => {
 const budgetService = require('./services/budgetService');
 
 // DATA-COUNTS-2026-06-14: 랜딩/배너 표시 건수 동적화(하드코딩 stale 방지). 일 단위 변동(MOLIT ingest) → node-cache 6h, head:true(행 미전송이라 가벼움).
+// HEALTH-PERF+SYNCTIME-2026-07-25 (Sprint VVVVVV):
+//   [문제 1 — 성능] 위 6h node-cache 는 **서버리스에서 공유되지 않는다**(Sprint TTTTTT-3 과 동일 클래스).
+//     `/api/health` 는 모든 페이지 로드에서 호출되는데, 프로덕션 5회 연속 실측이 632~793ms 로
+//     캐시가 사실상 안 먹고 있었다. 원인은 exact count 2건 — EXPLAIN ANALYZE 로 molit COUNT(*) 가
+//     **781ms**(168,964행 × 2 워커 Index Only Scan, Heap Fetches 169,698). 즉 초기 로딩에 직격.
+//     → Redis 2차 캐시로 인스턴스 간 공유. 미설정 시 rget/rset 이 no-op → 기존 동작 폴백.
+//   [문제 2 — 정확성] 프론트 배너 "마지막 데이터 동기화"가 `health.timestamp`(= 응답 생성 시각 = 지금)를
+//     쓰고 있어 **언제 접속하든 항상 '방금 갱신됨'** 으로 보였다. 데이터가 며칠 안 들어와도 알 수 없는
+//     허위 신뢰 시그널(절대 룰 ② 위반). → 실제 최신 적재 시각(molit ingested_at 최대값)을 함께 반환.
+//     MAX(ingested_at) 은 인덱스가 없어 975ms(seq scan)지만 위 count 들과 **병렬**이라 캐시 미스 시
+//     벽시계 증가는 ~200ms 뿐이고, Redis 캐시로 미스 자체가 하루 몇 번으로 줄어든다.
+//     ⚠ ingested_at 인덱스 추가는 DDL — 운영자 승인 사항이라 하지 않았다(현 비용으로 충분히 수용 가능).
 async function getDataCounts() {
-  const CK = 'meta:dataCounts';
+  const CK = 'meta:dataCounts:v2';
   const hit = cache.get(CK);
   if (hit) return hit;
+  const redisCache = require('./services/redisCache');
+  try {
+    const rHit = await redisCache.rget(CK);
+    if (rHit) { cache.set(CK, rHit, 21600); return rHit; }
+  } catch (_) { /* Redis 실패는 무시하고 DB 조회 */ }
   try {
     const { getSupabaseAdmin } = require('./db/client');
     const admin = getSupabaseAdmin();
     if (!admin) return null;
-    const [tx, apt] = await Promise.all([
+    const [tx, apt, lastIngest] = await Promise.all([
       admin.from('molit_transactions').select('*', { count: 'exact', head: true }),
       admin.from('apt_master').select('*', { count: 'exact', head: true }),
+      // 최신 1건의 ingested_at — 실패해도 아래에서 null 로 흘려보낸다(배너는 시각 표기만 생략).
+      admin.from('molit_transactions').select('ingested_at').order('ingested_at', { ascending: false }).limit(1).maybeSingle(),
     ]);
-    const out = { tx: tx.count || 0, apt: apt.count || 0 };
+    const out = {
+      tx: tx.count || 0,
+      apt: apt.count || 0,
+      // ISO 문자열 또는 null. 프론트는 null 이면 "언제 갱신됐는지" 표기를 아예 하지 않는다.
+      lastIngestedAt: lastIngest?.data?.ingested_at || null,
+    };
     cache.set(CK, out, 21600); // 6h
+    redisCache.rset(CK, out, 21600).catch(() => {}); // 인스턴스 간 공유(fire-and-forget)
     return out;
   } catch (e) { return null; }
 }
@@ -529,6 +554,10 @@ app.get('/api/health', optionalAuth, async (req, res) => {
     deploy: _deploy,
     ai_ready: _aiReady,
     naverMapsClientId: _naverMapsClientId,
+    // SYNCTIME-2026-07-25 (Sprint VVVVVV): 프론트 배너용 **실제** 데이터 동기화 시각.
+    //   `timestamp` 는 이 응답을 만든 시각일 뿐 데이터 갱신 시각이 아니다 — 둘을 혼동해
+    //   배너가 항상 '방금 갱신'을 보여주던 것이 원래 결함. 모르면 null(프론트가 표기 생략).
+    dataSyncedAt: _dataCounts?.lastIngestedAt || null,
     dataCounts: _dataCounts,
     db: _dbUsage,
     facilityQuality: _facQuality,

@@ -3090,16 +3090,20 @@ async function _landingAsyncRefresh(){
       }
     }
   } catch(_){}
-  // LAST SYNC 시각 갱신 (async fetch 정확값)
+  // LAST SYNC 시각 갱신
+  // SYNCTIME-FIX-2026-07-25 (Sprint VVVVVV): 여기도 `d.timestamp`(응답 생성 시각 = 지금)를 쓰면서
+  //   주석엔 "정확값"이라고 적혀 있었다 — 라이브뷰 카드도 배너와 똑같이 항상 현재 시각을 보여줬다.
+  //   실제 적재 시각 `dataSyncedAt` 으로 교체. 모르면 '—' 유지(지어내지 않는다).
   try {
     const h = await fetch(`${CFG.api}/health`, {signal:AbortSignal.timeout(5000)});
     if(h.ok){
       const d = await h.json();
-      if(d.timestamp){
-        const ts = new Date(d.timestamp);
-        const kst = ts.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
-        const e = document.getElementById('lv-syncTime');
-        if(e) e.textContent = kst;
+      const e = document.getElementById('lv-syncTime');
+      if(e){
+        const ts = d.dataSyncedAt ? new Date(d.dataSyncedAt) : null;
+        e.textContent = (ts && !isNaN(ts))
+          ? ts.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})
+          : '—';
       }
     }
   } catch(_){}
@@ -10055,11 +10059,17 @@ async function chkAPI(_isRetry){
       // P1 (Phase 2 5-1): 데이터 동기화 시각 표시 — 사용자 신뢰 시그널
       const syncBanner=document.getElementById('syncBanner'), syncTime=document.getElementById('syncTime');
       if(syncBanner && syncTime){
-        // health 의 timestamp 활용 (서버 KST 변환)
+        // SYNCTIME-FIX-2026-07-25 (Sprint VVVVVV):
+        //   [근본 원인] 기존 코드는 `d.timestamp`(= health 응답을 만든 시각 = **지금**)를
+        //     "마지막 데이터 동기화"로 표시했다. 그래서 사용자가 언제 접속하든 **항상 '방금 갱신됨'**.
+        //     실거래 적재가 며칠 밀려도 화면상으로는 알 수 없는 **허위 신뢰 시그널**이었다(절대 룰 ②).
+        //     (fallback 인 `: new Date()` 도 같은 문제 — 서버가 시각을 안 줘도 현재 시각을 지어냈다.)
+        //   [Fix] 서버가 실제 최신 적재 시각(molit ingested_at 최대값)을 `dataSyncedAt` 으로 준다.
+        //     **모르면 지어내지 않는다** — null 이면 시각 문구 자체를 빼고 출처만 보여준다.
         try{
-          const ts=d.timestamp ? new Date(d.timestamp) : new Date();
-          const kst=ts.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'});
-          syncTime.textContent=kst+' KST';
+          const _sync = d.dataSyncedAt ? new Date(d.dataSyncedAt) : null;
+          const kst = (_sync && !isNaN(_sync)) ? _sync.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : null;
+          syncTime.textContent = kst ? kst+' KST' : '—';
           // Phase 15 (2026-05-03): 정책 stale 시 사용자에게 안내 (legal 보호 + 운영자 알림 보완)
           //   regulations.X.stale === true 면 syncBanner 색상 → 노란색 + 안내 텍스트 추가
           let _staleNote = '';
@@ -10082,11 +10092,14 @@ async function chkAPI(_isRetry){
             const { kst:_k, staleNote:_n } = window._syncData;
             const _dc = window._dataCounts;
             const _cntTxt = (_dc && _dc.tx) ? ` (${Math.floor(_dc.tx/10000)}만+건) · KAPT ${Math.floor(_dc.apt/10000)}만+ 단지` : '';
+            // SYNCTIME-FIX-2026-07-25: 갱신 시각을 모르면(_k == null) 그 문구를 통째로 뺀다.
+            //   여기서 `${_k}` 를 그대로 쓰면 화면에 "null 갱신" 이 찍힌다 — 출처 표기는 그대로 유지.
             sb.innerHTML = mql.matches
-              ? `📅 ${_k} 갱신 · 국토부·금융위·KAPT${_n}`
-              : `📅 마지막 데이터 동기화: <span id="syncTime">${_k} KST</span> · 출처: 국토교통부 실거래가${_cntTxt} · 금융위 규제${_n}`;
+              ? (_k ? `📅 ${_k} 갱신 · 국토부·금융위·KAPT${_n}` : `📅 국토부·금융위·KAPT${_n}`)
+              : (_k ? `📅 마지막 데이터 동기화: <span id="syncTime">${_k} KST</span> · 출처: 국토교통부 실거래가${_cntTxt} · 금융위 규제${_n}`
+                    : `📅 출처: 국토교통부 실거래가${_cntTxt} · 금융위 규제${_n}`);
             // KKKKKK: 모바일은 syncBanner 를 CSS 로 숨기고 지도 좌하단 캡션 칩이 대신 표시 (>700px 는 MQ 차단)
-            try { const cap=document.getElementById('mMapCap'); if(cap){ cap.textContent=`${_k} 갱신 · 국토부·KAPT${_n?' · ⚠':''}`; cap.classList.add('on'); } } catch(_){}
+            try { const cap=document.getElementById('mMapCap'); if(cap){ cap.textContent = _k ? `${_k} 갱신 · 국토부·KAPT${_n?' · ⚠':''}` : `국토부·KAPT${_n?' · ⚠':''}`; cap.classList.add('on'); } } catch(_){}
           };
           const _mql = window.matchMedia('(max-width:700px)');
           _renderSync(_mql);
