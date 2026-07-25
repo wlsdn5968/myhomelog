@@ -5441,7 +5441,28 @@ function renderListGrid(){
   const metaLine = searchMeta && searchMeta.regions.length
     ? `<div class="meta-line" style="margin:10px 14px 0;padding:8px 12px;background:var(--info-bg);border:1px solid var(--info-bd);border-radius:8px;color:var(--info-tx);font-size:11px;line-height:1.55"><div>📊 <b>분석 지역:</b> ${_escHtml(searchMeta.regions.map(String).join(', '))}</div><div>전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> · 예산 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b></div><div>최근 6개월 실거래 ${(Number(searchMeta.totalTx)||0).toLocaleString()}건 분석</div></div>`
     : '';
-  const banner=`${metaLine}<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid var(--danger-bd);border-radius:8px;color:var(--red);font-size:11px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아닙니다.</u> 아래 점수·신호는 과거 실거래 통계 정리이며, 미래 가격(상승·하락)을 예측·보장하지 않습니다. 모든 의사결정 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>
+  // REGION-ENTRY-2-2026-07-25 (Sprint ZZZZZZ, 기획안 §3 A안의 '추천 결과 상단'분):
+  //   결과에 실제로 등장하는 지역만 노출한다. ⚠ searchMeta.regions(이름 배열)를 쓰지 않고
+  //   **props 의 lawdCd 로 묶는다** — 이름으로 지역을 특정하면 동명 구 오매칭(Sprint PPPPPP P0).
+  //   많이 나온 지역 상위 3개까지만(결과가 여러 구에 걸쳐도 줄이 넘치지 않게).
+  const _regionEntry = (() => {
+    const cnt = new Map();
+    for (const p of props) {
+      const c = String(p.lawdCd || '').trim();
+      if (!/^\d{5}$/.test(c)) continue;
+      const cur = cnt.get(c) || { n: 0, nm: '' };
+      cur.n++;
+      if (!cur.nm && p.sigungu) cur.nm = String(p.sigungu);
+      cnt.set(c, cur);
+    }
+    const top = Array.from(cnt.entries()).sort((a, b) => b[1].n - a[1].n).slice(0, 3);
+    if (!top.length) return '';
+    return `<div style="margin:0 14px 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
+      <span style="font-size:11px;color:var(--t2);font-weight:600">동네 시장</span>
+      ${top.map(([code, v]) => `<button class="rg-open" title="이 지역의 가격지수·거래량·미분양·인구 순이동·규제 상태를 공식 통계로 봅니다" onclick="openRegionSummary('${_escHtml(code)}','${_escHtml(v.nm)}')">${_escHtml(v.nm || code)} 시장 요약</button>`).join('')}
+    </div>`;
+  })();
+  const banner=`${metaLine}${_regionEntry}<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid var(--danger-bd);border-radius:8px;color:var(--red);font-size:11px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아닙니다.</u> 아래 점수·신호는 과거 실거래 통계 정리이며, 미래 가격(상승·하락)을 예측·보장하지 않습니다. 모든 의사결정 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>
   <!-- Phase 4 (2026-04-26): 정렬·필터 — 추천 결과 비교 핵심 -->
   <div style="margin:0 14px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
     <span style="font-size:11px;color:var(--t2);font-weight:600">정렬</span>
@@ -5454,8 +5475,8 @@ function renderListGrid(){
     </select>
     <span style="font-size:11px;color:var(--t2);font-weight:600;margin-left:6px">필터</span>
     <button id="lstFltAll" onclick="setLstFilter('all', this)" style="padding:5px 11px;border:1px solid var(--acc);background:var(--acc);color:#fff;border-radius:18px;font-size:11px;cursor:pointer">전체</button>
-    <button id="lstFltReg" onclick="setLstFilter('regulated', this)" style="padding:5px 11px;border:1px solid var(--bd);background:var(--bg-base);color:var(--t2);border-radius:18px;font-size:11px;cursor:pointer">규제 LTV40</button>
-    <button id="lstFltNon" onclick="setLstFilter('non', this)" style="padding:5px 11px;border:1px solid var(--bd);background:var(--bg-base);color:var(--t2);border-radius:18px;font-size:11px;cursor:pointer">비규제 LTV70</button>
+    <button id="lstFltReg" onclick="setLstFilter('regulated', this)" style="padding:5px 11px;border:1px solid var(--bd);background:var(--bg-base);color:var(--t2);border-radius:18px;font-size:11px;cursor:pointer">규제지역</button>
+    <button id="lstFltNon" onclick="setLstFilter('non', this)" style="padding:5px 11px;border:1px solid var(--bd);background:var(--bg-base);color:var(--t2);border-radius:18px;font-size:11px;cursor:pointer">비규제</button>
     <span style="margin-left:auto;font-size:10.5px;color:var(--t3)">총 ${props.length}건</span>
   </div>`;
   // Phase 4 (2026-04-26): 렌더 안전망 + 정렬·필터.
