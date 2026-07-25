@@ -46,7 +46,13 @@ jobs:
     name: Syntax Check
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    needs: install-audit
+    # CI-GATE-DECOUPLE-2026-07-25 (Sprint QQQQQQ, improve 감사 CONFIRMED — 실측으로 발동 확인):
+    #   기존 `needs: install-audit` 때문에 **npm audit 실패 하나가 모든 품질 검증을 꺼버렸다**.
+    #   실측: `npm audit --omit=dev --audit-level=high` exit=1 (high 2건 — axios formDataToJSON
+    #   재귀 DoS, form-data CRLF). 그 결과 문법 검사·deps-sync·인라인 JS 검증·XSS 정적검사·
+    #   (이번에 추가한) 돈 계산 테스트가 전부 skip 되어 **CI 가 사실상 무방비**였다.
+    #   보안 취약점 가시성은 install-audit job 이 계속 빨간불로 유지하고(별도 판단 대상),
+    #   코드 품질 게이트는 그와 독립적으로 항상 돌아야 한다.
     steps:
       - uses: actions/checkout@v6
 
@@ -65,6 +71,16 @@ jobs:
       - name: Deps-sync check (root vs backend package.json)
         # 루트 package.json 에 누락된 외부 require → 프로덕션 함수 MODULE_NOT_FOUND 예방
         run: node scripts/check-deps-sync.js
+
+      # CI-TEST-GATE-2026-07-25 (Sprint QQQQQQ, improve 감사 CONFIRMED):
+      #   backend/package.json 에 "test": "node --test" 가 정의돼 있고 로컬에서 통과하는데,
+      #   CI 어디에서도 실행하지 않아 **돈 계산 회귀 안전망이 실제로는 꺼져 있었다**
+      #   (.husky 없음·pre-commit 훅 없음 — 전수 확인). 특성화 테스트는 규제 LTV·취득세 경계처럼
+      #   틀리면 사용자 금전 손실로 이어지는 계산을 고정하는 용도라 CI 게이트가 필수.
+      #   의존성 0(node:test 내장)이라 install 없이 즉시 실행 가능.
+      - name: Run backend tests (money-calculation characterization)
+        working-directory: backend
+        run: npm test
 
       - name: JSON config validate
         run: |

@@ -256,24 +256,54 @@ async function ingestOne(admin, lawdCd, dealYm) {
  */
 async function retryFailedGaps(admin, { maxGaps = 15, lookbackMonths = 18, deadline = Infinity } = {}) {
   const minYm = recentYearMonths(lookbackMonths).slice(-1)[0]; // 가장 오래된 YYYYMM
-  const { data: fails, error: fe } = await admin.from('molit_ingest_runs')
-    .select('lawd_cd, deal_ym')
-    .in('status', ['error', 'timeout'])
-    .gte('deal_ym', minYm)
-    .limit(2000);
-  if (fe || !fails || !fails.length) return { gaps: 0, retried: 0, filled: 0 };
+
+  // REST-CAP-FIX-2026-07-25 (Sprint QQQQQQ, improve 감사 CONFIRMED — DB 실측으로 발동 확인):
+  //   Supabase REST 는 응답당 1000행에서 자른다(레포 내 3회 실증: transactionService·geocacheBackfill·report).
+  //   여기 `.limit(8000)` 의 ok 조회는 **실측 대상 7,338행** → 1,000행만 수신되어 okSet 이 불완전해진다.
+  //   결과: 이미 정상 적재된 (lawd,ym) 이 '갭' 으로 오판되어 maxGaps(15) 슬롯을 잠식 →
+  //   **진짜 영구 갭이 매 run 뒤로 밀린다**(6월부터 잔여 갭이 오래 안 풀리던 현상과 정합).
+  //   ⇒ 두 조회 모두 1000행 페이지 루프. 정렬 명시로 페이지 경계 중복/누락 차단.
+  const pageAll = async (build) => {
+    const PAGE = 1000, out = [];
+    for (let from = 0; from < 20000; from += PAGE) {
+      const { data, error } = await build().order('id', { ascending: true }).range(from, from + PAGE - 1);
+      if (error) throw error;
+      if (!data || !data.length) break;
+      out.push(...data);
+      if (data.length < PAGE) break;
+    }
+    return out;
+  };
+
+  let fails;
+  try {
+    fails = await pageAll(() => admin.from('molit_ingest_runs')
+      .select('id, lawd_cd, deal_ym')
+      .in('status', ['error', 'timeout'])
+      .gte('deal_ym', minYm));
+  } catch (e) {
+    logger.warn({ err: e.message }, 'molit gap-backfill 실패목록 조회 실패');
+    return { gaps: 0, retried: 0, filled: 0 };
+  }
+  if (!fails.length) return { gaps: 0, retried: 0, filled: 0 };
 
   const failPairs = [...new Set(fails.map(r => `${r.lawd_cd}|${r.deal_ym}`))];
   const failLawds = [...new Set(fails.map(r => r.lawd_cd))];
   const failYms = [...new Set(fails.map(r => r.deal_ym))];
 
-  const { data: oks } = await admin.from('molit_ingest_runs')
-    .select('lawd_cd, deal_ym')
-    .eq('status', 'ok')
-    .in('lawd_cd', failLawds)
-    .in('deal_ym', failYms)
-    .limit(8000);
-  const okSet = new Set((oks || []).map(r => `${r.lawd_cd}|${r.deal_ym}`));
+  let oks = [];
+  try {
+    oks = await pageAll(() => admin.from('molit_ingest_runs')
+      .select('id, lawd_cd, deal_ym')
+      .eq('status', 'ok')
+      .in('lawd_cd', failLawds)
+      .in('deal_ym', failYms));
+  } catch (e) {
+    // ok 목록을 온전히 못 받으면 재적재 오판이 생기므로 이번 run 은 갭 처리를 건너뛴다(안전 우선).
+    logger.warn({ err: e.message }, 'molit gap-backfill 성공목록 조회 실패 — 이번 run 갭 처리 skip');
+    return { gaps: 0, retried: 0, filled: 0 };
+  }
+  const okSet = new Set(oks.map(r => `${r.lawd_cd}|${r.deal_ym}`));
 
   const gaps = failPairs.filter(p => !okSet.has(p)).slice(0, maxGaps);
   let retried = 0, filled = 0, consec = 0;

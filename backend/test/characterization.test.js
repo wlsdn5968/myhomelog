@@ -55,3 +55,26 @@ test('calcTotalCost — 생애최초 200만 공제(12억↓)와 12억 초과 배
 test('calcTotalCost — 2주택+ 취득세 8% 중과', () => {
   assert.deepEqual(calcTotalCost(7, 3, '2주택+', false), { gap: 4, acqTax: 0.56, firstBuyerDeduct: 0, eduTax: 0.06, spclTax: 0.01, commission: 0.03, regFee: 0.01, total: 4.67, totalLow: 4.52, totalHigh: 4.82, taxRate: 8, source: 'fallback' });
 });
+
+// ── Sprint QQQQQQ (2026-07-25): snapshot(운영 기본) 경로 취득세 경계 ──────────
+//   왜 추가하나: 위 테스트들은 전부 source:'fallback'(taxConfig 미주입) 경로만 고정하고 있어,
+//   운영에서 실제로 쓰이는 snapshot 경로(pickTierRate)의 경계 버그를 잡지 못했다.
+//   실제 결함: pickTierRate 가 엄격 미만(`<`)이라 **정확히 6억**에서 1% 가 아닌 2% 적용
+//   (지방세법 §11①8호 "6억원 이하 1%" 위반, 6억 기준 600만→1,200만 과다).
+//   프론트(index.html:7250 `price<=6?.01`)·fallback(analysisService:354)과도 어긋나 있었다.
+test('pickTierRate — snapshot 경로 취득세 경계 (6억 이하 1% / 6 초과 누진 / 9 초과 3%)', () => {
+  const { calcTotalCost } = require('../services/analysisService');
+  // 실제 운영 스냅샷과 동일한 tier 구조 (regulationsService FALLBACK_SNAPSHOT 과 일치)
+  const cfg = { acquisitionTax: {
+    noHouse: { tiers: [ { underAuk: 6, rate: 0.01 }, { underAuk: 9, rate: 0.02 }, { underAuk: 999, rate: 0.03 } ] },
+    oneHouse: { tiers: [ { underAuk: 6, rate: 0.01 }, { underAuk: 9, rate: 0.02 }, { underAuk: 999, rate: 0.03 } ] },
+    twoHousePlus: { rate: 0.08 },
+  } };
+  const rateOf = (price) => calcTotalCost(price, 1, '무주택', false, cfg).taxRate;
+  assert.equal(rateOf(5), 1);   // 6억 미만 → 1%
+  assert.equal(rateOf(6), 1);   // ★ 정확히 6억 → 1% (이 경계가 2% 였던 것이 결함)
+  assert.equal(rateOf(9), 3);   // 누진 상단 = 3%
+  assert.equal(rateOf(10), 3);  // 9억 초과 → 3%
+  // snapshot 경로임을 확인 (fallback 으로 새지 않았는지)
+  assert.equal(calcTotalCost(6, 1, '무주택', false, cfg).source, 'snapshot');
+});

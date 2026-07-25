@@ -415,9 +415,16 @@ function calcTotalCost(price, loanAmount, houseStatus, isFirstBuyer, taxConfig) 
 }
 
 // 가격(억)이 들어맞는 첫 tier 의 rate 반환
+// ACQ-BOUNDARY-FIX-2026-07-25 (Sprint QQQQQQ, improve 감사 CONFIRMED — 돈 계산 오류):
+//   지방세법 §11①8호는 "6억원 **이하** 1%" 인데 여기가 엄격 미만(`<`)이라 **정확히 6억**일 때
+//   6<6=false → 다음 tier(9억)로 넘어가 2% 가 적용됐다. 6억 기준 600만원 → 1,200만원 과다 표기.
+//   같은 계산의 다른 두 경로는 이미 '이하'로 맞다 — 프론트 index.html:7250 `price<=6?.01`,
+//   백엔드 fallback analysisService:354 `price <= 6 ? 0.01`. 즉 운영 기본(snapshot) 경로만 어긋나
+//   프론트와 백엔드가 같은 입력에 다른 세액을 보여주고 있었다.
+//   경계 재확인: 6→1% / 6.5→2%후 누진보정 / 9→누진 끝(3%) / 9.5→3% 전부 법령 일치.
 function pickTierRate(tiers, priceAuk, fallbackRate) {
   for (const t of tiers || []) {
-    if (priceAuk < (t.underAuk ?? 0)) return t.rate ?? fallbackRate;
+    if (priceAuk <= (t.underAuk ?? 0)) return t.rate ?? fallbackRate;
   }
   return fallbackRate;
 }
