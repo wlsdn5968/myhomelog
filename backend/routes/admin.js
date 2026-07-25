@@ -88,16 +88,26 @@ router.get('/rone-probe', async (req, res) => {
   const key = process.env.REB_RONE_API_KEY;
   if (!key) return res.json({ ok: false, reason: 'REB_RONE_API_KEY 미설정' });
   const axios = require('axios');
-  const params = {
-    KEY: key,
-    Type: 'json',
-    STATBL_ID: String(req.query.statblId || 'A_2024_00900'),
-    DTACYCLE_CD: String(req.query.cycle || 'YY'),
-    WRTTIME_IDTFR_ID: String(req.query.time || '2022'),
-    pSize: 5,
+  // SSRF 차단: 엔드포인트는 화이트리스트 고정(임의 URL 호출 불가). 도메인·경로 모두 코드 상수.
+  const EP = {
+    data: 'SttsApiTblData.do',   // 통계 데이터 조회
+    list: 'SttsApiTbl.do',       // 서비스 통계목록 (통계표 ID 탐색용)
+    item: 'SttsApiTblItm.do',    // 통계 세부항목 목록
   };
+  const epKey = String(req.query.ep || 'data');
+  if (!EP[epKey]) return res.json({ ok: false, reason: `ep 는 ${Object.keys(EP).join('|')} 중 하나` });
+  const params = { KEY: key, Type: 'json', pSize: String(req.query.pSize || 20) };
+  if (epKey === 'data') {
+    params.STATBL_ID = String(req.query.statblId || 'A_2024_00900');
+    params.DTACYCLE_CD = String(req.query.cycle || 'YY');
+    params.WRTTIME_IDTFR_ID = String(req.query.time || '2022');
+  } else {
+    if (req.query.statblId) params.STATBL_ID = String(req.query.statblId);
+    if (req.query.q) params.STATBL_NM = String(req.query.q); // 명칭 검색(지원 시)
+    if (req.query.pIndex) params.pIndex = String(req.query.pIndex);
+  }
   try {
-    const r = await axios.get('https://www.reb.or.kr/r-one/openapi/SttsApiTblData.do', { params, timeout: 12000 });
+    const r = await axios.get(`https://www.reb.or.kr/r-one/openapi/${EP[epKey]}`, { params, timeout: 15000 });
     const body = r.data;
     const asStr = typeof body === 'string' ? body : JSON.stringify(body);
     res.json({
@@ -106,7 +116,7 @@ router.get('/rone-probe', async (req, res) => {
       contentType: r.headers['content-type'] || null,
       // 키가 포함될 여지가 없는 구조 정보만
       topLevelKeys: (body && typeof body === 'object') ? Object.keys(body).slice(0, 10) : null,
-      bodyPreview: asStr.slice(0, 600),
+      bodyPreview: asStr.slice(0, Math.min(parseInt(req.query.n, 10) || 600, 6000)),
     });
   } catch (e) {
     res.json({ ok: false, httpStatus: e.response?.status || null, error: String(e.message).slice(0, 200),
