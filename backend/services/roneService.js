@@ -147,23 +147,29 @@ async function getRegionIndex(lawdCd, { months = 6 } = {}) {
   const clsId = Object.keys(cls2lawd).find(k => cls2lawd[k] === String(lawdCd));
   if (!clsId) { cache.set(ck, null, TTL_INDEX); return null; } // R-ONE 미제공 지역 — 조용히 생략
 
+  // PERF-2026-07-25 (Sprint TTTTTT-2): 월별 순차 루프였을 때 콜드 8.8s 실측(6개월 × 2통계표 =
+  //   6라운드 직렬). 각 호출이 서로 독립이므로 **12개를 한 번에 병렬**로 — 라운드 6 → 1.
+  //   외부 부담은 6h 캐시(+계층 24h)로 호출 빈도 자체가 낮아 수용 가능하고, 개별 실패는
+  //   call() 이 null 을 돌려 해당 월만 빠진다(graceful 유지).
   const yms = recentMonths(months);
-  const series = [];
+  const tasks = [];
   for (const ym of yms) {
-    const [saleRows, jeonseRows] = await Promise.all([
-      call('SttsApiTblData.do', { STATBL_ID: STATBL.saleIndex,   DTACYCLE_CD: 'MM', WRTTIME_IDTFR_ID: ym, pSize: 300 }),
-      call('SttsApiTblData.do', { STATBL_ID: STATBL.jeonseIndex, DTACYCLE_CD: 'MM', WRTTIME_IDTFR_ID: ym, pSize: 300 }),
-    ]);
-    const pick = (rows) => {
-      if (!rows) return null;
-      const row = rows.find(x => String(x.CLS_ID) === String(clsId));
-      const v = row ? Number(row.DTA_VAL) : NaN;
-      return Number.isFinite(v) ? Math.round(v * 100) / 100 : null;
-    };
-    const sale = pick(saleRows);
-    const jeonse = pick(jeonseRows);
-    if (sale != null || jeonse != null) series.push({ ym, sale, jeonse });
+    tasks.push(call('SttsApiTblData.do', { STATBL_ID: STATBL.saleIndex,   DTACYCLE_CD: 'MM', WRTTIME_IDTFR_ID: ym, pSize: 300 }));
+    tasks.push(call('SttsApiTblData.do', { STATBL_ID: STATBL.jeonseIndex, DTACYCLE_CD: 'MM', WRTTIME_IDTFR_ID: ym, pSize: 300 }));
   }
+  const settled = await Promise.all(tasks);
+  const pick = (rows) => {
+    if (!rows) return null;
+    const row = rows.find(x => String(x.CLS_ID) === String(clsId));
+    const v = row ? Number(row.DTA_VAL) : NaN;
+    return Number.isFinite(v) ? Math.round(v * 100) / 100 : null;
+  };
+  const series = [];
+  yms.forEach((ym, i) => {
+    const sale = pick(settled[i * 2]);
+    const jeonse = pick(settled[i * 2 + 1]);
+    if (sale != null || jeonse != null) series.push({ ym, sale, jeonse });
+  });
   if (!series.length) { cache.set(ck, null, TTL_INDEX); return null; }
 
   const out = {
