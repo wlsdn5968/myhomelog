@@ -60,6 +60,8 @@ jobs:
         uses: actions/setup-node@v6
         with:
           node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
 
       - name: Node syntax check (backend + api)
         # node --check 는 파싱 오류만 잡음 — ESLint 대체가 아니라 최소 안전망
@@ -77,7 +79,16 @@ jobs:
       #   CI 어디에서도 실행하지 않아 **돈 계산 회귀 안전망이 실제로는 꺼져 있었다**
       #   (.husky 없음·pre-commit 훅 없음 — 전수 확인). 특성화 테스트는 규제 LTV·취득세 경계처럼
       #   틀리면 사용자 금전 손실로 이어지는 계산을 고정하는 용도라 CI 게이트가 필수.
-      #   의존성 0(node:test 내장)이라 install 없이 즉시 실행 가능.
+      # CI-TEST-DEPS-2026-07-25 (Sprint UUUUUU-4): 원래 주석은 "의존성 0(node:test 내장)이라 install 없이
+      #   즉시 실행 가능"이라고 적었는데 **틀렸다**. 테스트 파일 자체는 의존성이 없지만
+      #   propertyService → transactionService → @supabase/supabase-js 로 이어져 MODULE_NOT_FOUND 였다.
+      #   글롭 문제(UUUUUU-3)에 가려 안 보이던 2차 원인 — 이 job 은 npm ci 를 하지 않는다.
+      #   → 테스트 직전에 backend 의존성 설치. install-audit job 과는 파일시스템이 분리돼 있어 중복 설치가
+      #     필요하며, 그게 Sprint QQQQQQ 의 job 분리(감사 실패가 품질 게이트를 끄지 않게) 취지에 맞는다.
+      - name: Install backend deps (테스트 실행용)
+        working-directory: backend
+        run: npm ci --no-audit --no-fund
+
       - name: Run backend tests (money-calculation characterization)
         working-directory: backend
         run: npm test
