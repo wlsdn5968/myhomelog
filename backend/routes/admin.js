@@ -67,14 +67,12 @@ router.use(requireAdmin);
  * R-ONE(부동산원 통계) 연동 착수 시 키 이름 확정 후 제거 예정.
  */
 router.get('/env-probe', (req, res) => {
-  const PATTERN = /^(REB|RONE|R_ONE|REALESTATE|REAL_ESTATE|BUDONGSAN|KREB|RONE_?API|REB_?RONE)/i;
+  // SCOPE-NARROWED-2026-07-25: 등록명이 REB_RONE_API_KEY 로 확인돼(값은 빈 상태) 전체 env 이름
+  //   나열은 제거 — admin 계정이 탈취될 경우의 정보 노출 면적을 줄인다. 대상 키만 존재/길이 확인.
+  const PATTERN = /^(REB|RONE|R_ONE)/i;
   const names = Object.keys(process.env).filter(k => PATTERN.test(k));
   res.json({
     matched: names.map(n => ({ name: n, set: !!process.env[n], length: String(process.env[n] || '').length })),
-    // 후보 이름을 못 찾을 때 운영자가 실제 등록명을 알려줄 수 있도록, 최근 추가됐을 법한 비표준 키 목록도 이름만 제공
-    allNonSystemNames: Object.keys(process.env)
-      .filter(k => /^[A-Z][A-Z0-9_]*$/.test(k) && !/^(npm_|VERCEL_|AWS_|LAMBDA_|PATH|HOME|LANG|TZ|NODE|PWD|SHLVL|_)/i.test(k))
-      .sort(),
   });
 });
 

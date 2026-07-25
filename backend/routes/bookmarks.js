@@ -136,12 +136,16 @@ router.patch('/:id', async (req, res, next) => {
       return res.status(400).json({ error: '업데이트할 필드 없음' });
     }
     const sb = userScopedClient(req.accessToken);
+    // BOOKMARK-404-FIX-2026-07-25 (Sprint OOOOOO, Sentry NODE-8): .single() 은 0행이면 PGRST116
+    //   ("Cannot coerce the result to a single JSON object")을 **에러로 던져** 바로 아래 404 분기가
+    //   죽은 코드였고, 이미 삭제된(또는 남의) 북마크를 PATCH 하면 500 이 났다(운영자 계정 실발생 3회).
+    //   RLS 로 타인 행은 애초에 안 잡히므로 0행 = 없음/권한없음 → maybeSingle 로 받아 404 로 정직하게 응답.
     const { data, error } = await sb
       .from('bookmarks')
       .update(patch)
       .eq('id', id)
       .select()
-      .single();
+      .maybeSingle();
     if (error) throw error;
     if (!data) return res.status(404).json({ error: '북마크를 찾을 수 없음' });
     res.json({ bookmark: data });
