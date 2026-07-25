@@ -58,103 +58,12 @@ router.use(requireAdmin);
  * 응답:
  *   - { ok: true, summary: { chunks, processed, inserted, failed, elapsedMs } }
  */
-/**
- * GET /api/admin/env-probe — 특정 env 의 "설정 여부"만 확인 (Sprint OOOOOO, 임시 진단)
- *
- * 운영자가 Vercel 에 등록한 키의 **이름을 확정**하기 위한 admin 전용 프로브.
- * ⚠ 값은 절대 반환하지 않는다 — 존재 여부(boolean)와 길이만. 시크릿 노출 경로가 되지 않도록
- *   ①admin 인증 필수(위 requireAdmin) ②이름 화이트리스트(정규식 매칭)만 조회 ③값·앞뒤 일부도 미반환.
- * R-ONE(부동산원 통계) 연동 착수 시 키 이름 확정 후 제거 예정.
- */
-router.get('/env-probe', (req, res) => {
-  // SCOPE-NARROWED-2026-07-25: 등록명이 REB_RONE_API_KEY 로 확인돼(값은 빈 상태) 전체 env 이름
-  //   나열은 제거 — admin 계정이 탈취될 경우의 정보 노출 면적을 줄인다. 대상 키만 존재/길이 확인.
-  const PATTERN = /^(REB|RONE|R_ONE)/i;
-  const names = Object.keys(process.env).filter(k => PATTERN.test(k));
-  res.json({
-    matched: names.map(n => ({ name: n, set: !!process.env[n], length: String(process.env[n] || '').length })),
-  });
-});
-
-/**
- * GET /api/admin/rone-probe — R-ONE(부동산원 통계) API 실호출 검증 (Sprint RRRRRR, 임시 진단)
- *
- * 명세(공식 개발가이드 실측): https://www.reb.or.kr/r-one/openapi/SttsApiTblData.do
- *   필수 STATBL_ID·DTACYCLE_CD·WRTTIME_IDTFR_ID·Type, 인증 파라미터명 = KEY (미지정 시 sample 10건).
- * ⚠ 키 값은 응답·로그 어디에도 싣지 않는다 — 성공 여부와 응답 구조만 반환.
- * 통계표 ID 확정 후 정식 서비스로 옮기고 이 라우트는 제거.
- */
-router.get('/rone-probe', async (req, res) => {
-  const key = process.env.REB_RONE_API_KEY;
-  if (!key) return res.json({ ok: false, reason: 'REB_RONE_API_KEY 미설정' });
-  const axios = require('axios');
-  // SSRF 차단: 엔드포인트는 화이트리스트 고정(임의 URL 호출 불가). 도메인·경로 모두 코드 상수.
-  const EP = {
-    data: 'SttsApiTblData.do',   // 통계 데이터 조회
-    list: 'SttsApiTbl.do',       // 서비스 통계목록 (통계표 ID 탐색용)
-    item: 'SttsApiTblItm.do',    // 통계 세부항목 목록
-  };
-  const epKey = String(req.query.ep || 'data');
-  if (!EP[epKey]) return res.json({ ok: false, reason: `ep 는 ${Object.keys(EP).join('|')} 중 하나` });
-  const params = { KEY: key, Type: 'json', pSize: String(req.query.pSize || 20) };
-  if (epKey === 'data') {
-    params.STATBL_ID = String(req.query.statblId || 'A_2024_00900');
-    params.DTACYCLE_CD = String(req.query.cycle || 'YY');
-    params.WRTTIME_IDTFR_ID = String(req.query.time || '2022');
-  } else {
-    if (req.query.statblId) params.STATBL_ID = String(req.query.statblId);
-    if (req.query.q) params.STATBL_NM = String(req.query.q); // 명칭 검색(지원 시)
-    if (req.query.pIndex) params.pIndex = String(req.query.pIndex);
-  }
-  try {
-    const r = await axios.get(`https://www.reb.or.kr/r-one/openapi/${EP[epKey]}`, { params, timeout: 15000 });
-    const body = r.data;
-
-    // 목록 탐색 모드: 응답이 커서 preview 로는 일부만 보이므로 서버에서 (id·명칭·주기)만 요약.
-    //   q 로 명칭 부분일치 필터(대소문자 무시). 통계표 ID 확정 작업 전용.
-    if (req.query.summary === '1') {
-      const rootKey = Object.keys(body || {})[0];
-      const arr = (body && body[rootKey]) || [];
-      const rowsNode = Array.isArray(arr) ? arr.find(x => x && x.row) : null;
-      const rows = rowsNode ? rowsNode.row : [];
-      const headNode = Array.isArray(arr) ? arr.find(x => x && x.head) : null;
-      const total = headNode ? (headNode.head.find(x => x.list_total_count) || {}).list_total_count : null;
-      const q = String(req.query.q || '').toLowerCase();
-      // ep=item 요약: 지역 분류 **계층** — PAR_ITM_ID(부모)·ITM_FULLNM(전체명)이 동명 지역
-      //   ('중구' 4개 등) 구별의 유일한 근거. lawd_cd↔CLS_ID 매핑표의 원천 데이터.
-      if (epKey === 'item') {
-        const items = rows.map(x => ({ id: x.ITM_ID, par: x.PAR_ITM_ID, nm: x.ITM_NM, full: x.ITM_FULLNM, tag: x.ITM_TAG, ord: x.V_ORDER }))
-          .filter(x => !q || String(x.full || x.nm || '').toLowerCase().includes(q));
-        return res.json({ ok: true, httpStatus: r.status, totalCount: total, returned: rows.length, matched: items.length,
-          items: items.slice(0, parseInt(req.query.take, 10) || 300) });
-      }
-      // ep=data 요약: 지역 분류(CLS) 체계 파악용 — lawd_cd↔CLS_ID 매핑표 구축 1단계.
-      if (epKey === 'data') {
-        const cls = rows.map(x => ({ clsId: x.CLS_ID, clsNm: x.CLS_NM, grpId: x.GRP_ID, grpNm: x.GRP_NM, itm: x.ITM_NM, val: x.DTA_VAL }))
-          .filter(x => !q || String(x.clsNm || '').toLowerCase().includes(q));
-        return res.json({ ok: true, httpStatus: r.status, totalCount: total, returned: rows.length, matched: cls.length,
-          items: cls.slice(0, parseInt(req.query.take, 10) || 300) });
-      }
-      const items = rows
-        .map(x => ({ id: x.STATBL_ID, nm: x.STATBL_NM, cyc: x.DTACYCLE_CD, start: x.DATA_START_YY, end: x.DATA_END_YY }))
-        .filter(x => !q || String(x.nm || '').toLowerCase().includes(q));
-      return res.json({ ok: true, httpStatus: r.status, totalCount: total, returned: rows.length, matched: items.length, items: items.slice(0, 60) });
-    }
-
-    const asStr = typeof body === 'string' ? body : JSON.stringify(body);
-    res.json({
-      ok: true,
-      httpStatus: r.status,
-      contentType: r.headers['content-type'] || null,
-      // 키가 포함될 여지가 없는 구조 정보만
-      topLevelKeys: (body && typeof body === 'object') ? Object.keys(body).slice(0, 10) : null,
-      bodyPreview: asStr.slice(0, Math.min(parseInt(req.query.n, 10) || 600, 6000)),
-    });
-  } catch (e) {
-    res.json({ ok: false, httpStatus: e.response?.status || null, error: String(e.message).slice(0, 200),
-      bodyPreview: e.response?.data ? String(typeof e.response.data === 'string' ? e.response.data : JSON.stringify(e.response.data)).slice(0, 400) : null });
-  }
-});
+// PROBE-REMOVED-2026-07-25 (Sprint UUUUUU): `/env-probe`·`/rone-probe` 삭제.
+//   둘 다 R-ONE 연동 착수 시 **키 이름 확정 + 통계표 ID 탐색**을 위해 만든 임시 진단 라우트였고,
+//   Sprint TTTTTT 로 roneService 가 정식 연동되면서 목적을 다했다(명세는 memory/rone-api-verified 에 확정 기록).
+//   남겨두면 admin 계정이 탈취됐을 때 env 이름 나열·임의 통계 조회라는 불필요한 정보 노출 면적이 된다
+//   — "쓸 일 없는 진단 경로는 지운다"가 원래 계획(SPRINT_NOTES 잔여 ③).
+//   재진단이 필요하면 git history 에서 되살리면 된다.
 
 // PUSH-TEST (Sprint EEEEEE): 웹푸시 발송 수동 트리거 — cron(18:20 UTC) 대기 없이 운영자 검증용
 router.post('/run-push-notify', async (req, res) => {
