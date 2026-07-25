@@ -114,4 +114,63 @@ router.get('/dashboard', async (req, res) => {
   res.json(payload);
 });
 
+/**
+ * GET /api/region/_kosischk — KOSIS 통계표 실호출 검증 (**임시**, Sprint YYYYYY)
+ *
+ * 왜 임시로 공개인가: admin 라우트는 Bearer 토큰이 필요한데, 브라우저 자동화에서 인증 헤더를
+ *   다루는 것이 보안 필터에 차단된다(우회하지 않는다). Sprint HHHHH 가 KOSIS 미분양 통계표를
+ *   확정할 때 쓴 임시 endpoint `_kosischk` 전례를 그대로 따른다 — **명세 확정 즉시 제거**.
+ *
+ * 왜 필요한가: 공식 카탈로그에 통계표 ID 가 있어도 OpenAPI 가 반려하는 전례가 있다
+ *   (Sprint HHHHH: 101/DT_1YL202001E → "해당 통계표가 존재하지 않습니다").
+ *   itmId·objL 구조·주기(prdSe)는 실호출 없이 확정할 수 없고, 우리 절차는 "미검증 코드 선배선 금지".
+ *
+ * 노출 위험 평가: ①도메인·경로는 코드 상수 → 임의 URL 호출 불가(SSRF 차단) ②KOSIS 키는 응답·로그
+ *   어디에도 실리지 않는다 ③반환값은 KOSIS **공개 통계**뿐(누구나 자기 키로 무료 조회 가능)
+ *   ④orgId/tblId 는 [A-Za-z0-9_] 형식 검증 ⑤상위 라우터에 dataLimiter 적용.
+ *   → 실질 위험은 우리 KOSIS 쿼터 소모뿐이며, 그마저 rate limit + 짧은 수명으로 억제된다.
+ */
+router.get('/_kosischk', async (req, res) => {
+  const key = process.env.KOSIS_API_KEY;
+  if (!key) return res.json({ ok: false, reason: 'KOSIS_API_KEY 미설정' });
+  const axios = require('axios');
+  const EP = {
+    data: 'https://kosis.kr/openapi/Param/statisticsParameterData.do',
+    meta: 'https://kosis.kr/openapi/statisticsData.do',
+  };
+  const mode = String(req.query.mode || 'data');
+  if (!EP[mode]) return res.json({ ok: false, reason: `mode 는 ${Object.keys(EP).join('|')}` });
+  const safe = (v, d) => { const s = String(v == null ? d : v); return /^[A-Za-z0-9_]+$/.test(s) ? s : d; };
+
+  const params = { apiKey: key, format: 'json', jsonVD: 'Y',
+    orgId: safe(req.query.orgId, '101'), tblId: safe(req.query.tblId, 'DT_1B26001_A01') };
+  if (mode === 'data') {
+    params.method = 'getList';
+    params.itmId = safe(req.query.itmId, 'ALL');
+    params.objL1 = safe(req.query.objL1, 'ALL');
+    if (req.query.objL2 !== 'skip') params.objL2 = safe(req.query.objL2, 'ALL');
+    params.prdSe = safe(req.query.prdSe, 'M');
+    params.newEstPrdCnt = safe(req.query.n, '2');
+  } else {
+    params.method = 'getMeta';
+    params.type = safe(req.query.type, 'ITM'); // ITM(항목) | OBJ(분류)
+  }
+  try {
+    const r = await axios.get(EP[mode], { params, timeout: 20000 });
+    const b = r.data;
+    if (!Array.isArray(b)) {
+      // KOSIS 는 오류를 객체로 준다 — 메시지 원문이 있어야 원인이 확정된다(키는 포함되지 않음)
+      return res.json({ ok: false, httpStatus: r.status, notArray: true, body: JSON.stringify(b).slice(0, 600) });
+    }
+    const take = Math.min(parseInt(req.query.take, 10) || 4, 20);
+    return res.json({
+      ok: true, rows: b.length, fields: b[0] ? Object.keys(b[0]) : [], sample: b.slice(0, take),
+      distinct: b[0] ? Object.fromEntries(['C1_NM', 'C2_NM', 'ITM_NM', 'PRD_DE', 'PRD_SE', 'UNIT_NM']
+        .filter(k => k in b[0]).map(k => [k, Array.from(new Set(b.map(x => x[k]))).slice(0, 14)])) : {},
+    });
+  } catch (e) {
+    return res.json({ ok: false, httpStatus: e.response?.status || null, error: String(e.message).slice(0, 200) });
+  }
+});
+
 module.exports = router;
