@@ -120,6 +120,13 @@ router.get('/rone-probe', async (req, res) => {
       const headNode = Array.isArray(arr) ? arr.find(x => x && x.head) : null;
       const total = headNode ? (headNode.head.find(x => x.list_total_count) || {}).list_total_count : null;
       const q = String(req.query.q || '').toLowerCase();
+      // ep=data 요약: 지역 분류(CLS) 체계 파악용 — lawd_cd↔CLS_ID 매핑표 구축 1단계.
+      if (epKey === 'data') {
+        const cls = rows.map(x => ({ clsId: x.CLS_ID, clsNm: x.CLS_NM, grpId: x.GRP_ID, grpNm: x.GRP_NM, itm: x.ITM_NM, val: x.DTA_VAL }))
+          .filter(x => !q || String(x.clsNm || '').toLowerCase().includes(q));
+        return res.json({ ok: true, httpStatus: r.status, totalCount: total, returned: rows.length, matched: cls.length,
+          items: cls.slice(0, parseInt(req.query.take, 10) || 300) });
+      }
       const items = rows
         .map(x => ({ id: x.STATBL_ID, nm: x.STATBL_NM, cyc: x.DTACYCLE_CD, start: x.DATA_START_YY, end: x.DATA_END_YY }))
         .filter(x => !q || String(x.nm || '').toLowerCase().includes(q));
