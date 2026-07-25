@@ -4927,7 +4927,7 @@ function gSVG(score,sz){
 }
 
 // ── MARKERS ──────────────────────────────────────────────
-function getMarkerCls(p){const _l=p.ltv||_regLtvLabel(p.area, p.lawdCd);return _l?.includes('40')?'reg':p.type==='recon'?'recon':'non';}
+function getMarkerCls(p){return _isRegProp(p)?'reg':p.type==='recon'?'recon':'non';}
 const clsColor={reg:'var(--acc)',non:'var(--a2)',recon:'var(--amb)'};
 
 function mkNaverOverlay(p){
@@ -5250,7 +5250,7 @@ async function doSearch(){
         const lng = (p.lng!=null) ? Number(p.lng) : getLng(p.area,i);
         // PRICE-BASIS-2026-07-17 (Sprint XXXXX): 추천 avgPrice = 대표 평형(primaryPyeong) 6개월 평균 —
         //   상세(openAptDetail)의 "최근 N건 평균"과 정의가 달라 같은 단지가 다른 값으로 보이던 혼란을 라벨로 명시.
-        return {...p, lat, lng, _priceBasis:'회원님 평형대 · 6개월 평균', type:(p.ltv||_regLtvLabel(p.area, p.lawdCd))?.includes('40')?'regulated':'non'};
+        return {...p, lat, lng, _priceBasis:'회원님 평형대 · 6개월 평균', type:_isRegProp(p)?'regulated':'non'};
       });
       searchMeta={
         regions:(data.targetRegions||[]).map(r=>r.name).filter(Boolean),
@@ -5410,8 +5410,8 @@ function renderListGrid(){
     // 필터 적용
     const flt = window._lstFlt || 'all';
     let filtered = props.slice();
-    if (flt === 'regulated') filtered = filtered.filter(p => (p.ltv||_regLtvLabel(p.area, p.lawdCd))?.includes('40'));
-    else if (flt === 'non') filtered = filtered.filter(p => !(p.ltv||_regLtvLabel(p.area, p.lawdCd))?.includes('40'));
+    if (flt === 'regulated') filtered = filtered.filter(p => _isRegProp(p));
+    else if (flt === 'non') filtered = filtered.filter(p => !_isRegProp(p));
     // 정렬 적용
     const sort = document.getElementById('lstSort')?.value || 'score';
     // MOB-AUDIT-2026-05-03: STAB #21 — `sortFn?.score` 가 자기 자신 참조 (선언 중) → 알 수 없는 sort 키 입력 시 undefined → 정렬 안 됨
@@ -5481,7 +5481,7 @@ function _renderListCard(p, i) {
       <input type="checkbox" class="cmp-chk-input" data-i="${i}" ${cmpSel.has(i)?'checked':''} onclick="event.stopPropagation();toggleCmp(${i},this.checked)">
       <span class="cmp-chk-lbl">비교</span>
     </label>
-    <div class="lc-top" style="background:${(p.ltv||_regLtvLabel(p.area, p.lawdCd))?.includes('40')?'var(--accL)':'var(--a2L)'}">
+    <div class="lc-top" style="background:${_isRegProp(p)?'var(--accL)':'var(--a2L)'}">
       <div class="lc-name">${_escHtml(p.aptName||'')}</div><div class="lc-area">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년</div>
       <div class="lc-g">${gSVG(s||0,50)}
         <div><div style="font-size:17px;font-weight:800;color:${_hasS?gc(s):'var(--text-tertiary)'}">${(Number(p.avgPrice)||0).toFixed(2)}억</div>
@@ -8240,6 +8240,22 @@ function _regLtvLabel(area, lawdCd){
   let reg = isRegFront(r);
   if(!reg && !code){ for(const gu of SEOUL_GU_KW){ if(r.includes(gu)){ reg = true; break; } } }
   return reg ? '40%' : '70%';
+}
+// REG-CLASS-FIX-2026-07-25 (Sprint UUUUUU): **규제지역 여부 단일 판정**.
+//   [근본 원인] 마커 색·리스트 카드 색·규제/비규제 필터 5곳이 모두 `ltv.includes('40')` 로
+//     "규제지역이냐"를 판정했다. 그런데 40% 는 **무주택 + 생애최초 아니오** 조합에서만 나오는 값이다.
+//     백엔드 computeLTV 는 상황별로 '70% (규제)'(생애최초·처분조건부) · '0% (1주택 규제지역)' ·
+//     '0% (규제)'(2주택+) 를 돌려주는데 전부 '40' 이 없어 **비규제로 오분류**됐다.
+//     기본 칩이 무주택+생애최초'예' 라서 **아무 설정도 안 한 기본 사용자에게 상시 발생**했다
+//     (2026-07-25 프로덕션 실측: getMarkerCls({ltv:'70% (규제)'}) === 'non').
+//   [Fix] 퍼센트 숫자가 아니라 백엔드가 이미 내린 규제 판정('(규제)'/'(비규제)' 표기)을 그대로 승계.
+//     ⚠ '비규제' 안에 '규제' 가 부분문자열로 들어있으므로 **비규제 배제를 먼저** 봐야 한다.
+//     백엔드 값이 없는 경로(지도 in-bounds·공유 링크·인기단지)는 기존 위치 기반 폴백 유지.
+//   [회귀 위험] 지역 미상(_regLtvLabel null)은 종전과 동일하게 비규제 취급 — 동작 불변.
+function _isRegProp(p){
+  const l = String(p?.ltv || '');
+  if (l) return !l.includes('비규제') && l.includes('규제');
+  return _regLtvLabel(p?.area, p?.lawdCd) === '40%';
 }
 const REGION_SUB = {
   '서울': ['강남구','서초구','송파구','강동구','마포구','용산구','성동구','노원구','도봉구','강북구','은평구','구로구','금천구','강서구','양천구','영등포구','관악구','동작구','성북구','동대문구','광진구','중랑구','서대문구','종로구','중구'],

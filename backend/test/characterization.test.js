@@ -78,3 +78,32 @@ test('pickTierRate — snapshot 경로 취득세 경계 (6억 이하 1% / 6 초�
   // snapshot 경로임을 확인 (fallback 으로 새지 않았는지)
   assert.equal(calcTotalCost(6, 1, '무주택', false, cfg).source, 'snapshot');
 });
+
+// ── Sprint UUUUUU (2026-07-25): 프론트 규제지역 분류 ↔ 백엔드 computeLTV 계약 ──────────
+//   왜 추가하나: 프론트가 마커 색·카드 색·규제/비규제 필터를 `ltv.includes('40')` 로 판정했는데,
+//   40% 는 **무주택 + 생애최초 아니오** 조합에서만 나오는 값이다. 기본 칩이 무주택+생애최초'예'라
+//   아무 설정도 안 한 사용자에게 규제지역 단지가 상시 '비규제'로 표시됐다(프로덕션 실측 확인).
+//   이 테스트는 두 파일을 **계약으로 묶는다** — computeLTV 가 새 라벨을 만들면 여기서 먼저 깨진다.
+test('_isRegProp(프론트) — computeLTV 전 조합에서 규제/비규제 분류가 어긋나지 않는다', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const m = html.match(/function _isRegProp\(p\)\{[\s\S]*?\n\}/);
+  assert.ok(m, 'frontend/index.html 에서 _isRegProp 를 찾지 못했다 (함수명 변경 시 이 테스트도 갱신할 것)');
+  // 폴백 분기용 스텁 — 이 테스트는 "라벨 → 규제 여부" 승계만 검증한다(위치 판정은 별도 관심사).
+  const _isRegProp = new Function('_regLtvLabel', `${m[0]}; return _isRegProp;`)(() => null);
+
+  const HOUSE = ['무주택', '1주택', '1주택 (처분조건부)', '2주택+'];
+  for (const house of HOUSE) {
+    for (const first of [true, false]) {
+      const reg = computeLTV(7, true, first, house);
+      const non = computeLTV(7, false, first, house);
+      assert.equal(_isRegProp({ ltv: reg.ltv }), true,
+        `규제지역인데 비규제로 분류됨: house=${house} 생애최초=${first} ltv="${reg.ltv}"`);
+      assert.equal(_isRegProp({ ltv: non.ltv }), false,
+        `비규제인데 규제로 분류됨: house=${house} 생애최초=${first} ltv="${non.ltv}"`);
+    }
+  }
+  // ltv 미제공(지도 in-bounds·공유 링크 경로) → 위치 폴백으로 위임. 스텁이 null 이므로 비규제.
+  assert.equal(_isRegProp({ area: '서울 강남구', lawdCd: '11680' }), false);
+});

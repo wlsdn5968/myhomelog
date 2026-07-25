@@ -126,7 +126,12 @@ function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '') {
 //   - 개선: 호출자가 미리 isRegulatedRegion() 으로 boolean 만 계산해서
 //     주입 → per-row 비용은 0 (closure 변수 read 만), 정확도는 snapshot 기준.
 function computeLTV(buyAuk, isRegulated, isFirstBuyer, houseStatus) {
-  if (houseStatus === '2주택+') return { ltv: '0% (규제)', maxLoan: '0억' };
+  // REG-LABEL-FIX-2026-07-25 (Sprint UUUUUU): 2주택+ 는 isRegulated 와 무관하게 '(규제)' 를 붙이고
+  //   있었다 → **비규제 지역 단지에 "규제" 라고 표기**되는 사실 오류(다른 모든 분기는 지역 상태를
+  //   정확히 반영한다). LTV 0% 자체는 유지 — 2주택 이상은 규제지역·수도권 구입 불가(스냅샷 note).
+  //   접미사는 '지역이 규제인가'만 나타내므로 isRegulated 를 그대로 쓴다.
+  //   ※ 프론트가 이 접미사로 마커·필터의 규제 여부를 판정(_isRegProp)하므로 정확성이 표시에 직결된다.
+  if (houseStatus === '2주택+') return { ltv: `0% ${isRegulated ? '(규제)' : '(비규제)'}`, maxLoan: '0억' };
   // P1 (감사 2-5): 처분조건부 = 무주택 LTV 적용. 1주택 일반은 규제지역 0%.
   const isDispose = houseStatus === '1주택 (처분조건부)';
   if (houseStatus === '1주택' && isRegulated) return { ltv: '0% (1주택 규제지역)', maxLoan: '처분조건부 chip 선택 시 무주택 한도' };
