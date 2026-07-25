@@ -43,7 +43,7 @@ router.get('/dashboard', async (req, res) => {
   if (!region) {
     return res.status(400).json({ error: '지역을 찾을 수 없어요. lawdCd(권장) 또는 정확한 지역명을 지정해주세요.' });
   }
-  const ck = `region:dash:v1:${region.lawdCd}`;
+  const ck = `region:dash:v2:${region.lawdCd}`; // v2 — netMigration 추가로 구 캐시 재사용 방지
   // CACHE-2026-07-25 (Sprint TTTTTT-3, 실측): Vercel 서버리스는 요청마다 다른 인스턴스일 수 있어
   //   node-cache(인메모리)만으로는 재요청도 콜드였다 — 병렬화 후 재측정에서 캐시 히트가 4.1s 로
   //   콜드와 동일. Sprint AAAAAA 가 추천 경로에 쓴 것과 같은 **Redis 2차 캐시**를 적용해
@@ -56,7 +56,7 @@ router.get('/dashboard', async (req, res) => {
   } catch (_) { /* Redis 실패는 무시하고 계산 경로로 */ }
 
   const started = Date.now();
-  const [priceIndex, txTrend, unsold, regulation] = await Promise.all([
+  const [priceIndex, txTrend, unsold, netMigration, regulation] = await Promise.all([
     // ① R-ONE 가격지수 (신규)
     (async () => {
       try { return await require('../services/roneService').getRegionIndex(region.lawdCd, { months: 6 }); }
@@ -82,6 +82,12 @@ router.get('/dashboard', async (req, res) => {
       try { return await require('../services/kosisService').getUnsoldTrend('', region.name); }
       catch (_) { return null; }
     })(),
+    // ⑥ 인구 순이동 — KOSIS 국내인구이동통계(Sprint YYYYYY, 실호출로 명세 확정 후 배선)
+    //    ★ lawd_cd 를 그대로 키로 쓴다(KOSIS C1 = 우리 lawd_cd 5자리 동일) — 이름 매칭 없음.
+    (async () => {
+      try { return await require('../services/kosisService').getNetMigration(region.lawdCd); }
+      catch (_) { return null; }
+    })(),
     // ⑤ 규제 상태 — 스냅샷 기준(서울은 lawd_cd 11 prefix 로 확정, 그 외는 스냅샷 키워드)
     (async () => {
       try {
@@ -99,13 +105,14 @@ router.get('/dashboard', async (req, res) => {
     priceIndex,   // null 이면 프론트에서 해당 칸 생략
     txTrend,
     unsold,
+    netMigration,
     regulation,
     generatedAt: new Date().toISOString(),
     disclaimer: '공식 통계 수치를 정리한 정보이며, 매수·매도 추천이나 가격 예측이 아닙니다.',
   };
   logger.info({
     src: 'region-dash', lawdCd: region.lawdCd,
-    has: { priceIndex: !!priceIndex, txTrend: !!txTrend, unsold: !!unsold, regulation: !!regulation },
+    has: { priceIndex: !!priceIndex, txTrend: !!txTrend, unsold: !!unsold, netMigration: !!netMigration, regulation: !!regulation },
     ms: Date.now() - started,
   }, '지역 대시보드 조립');
 
@@ -114,63 +121,10 @@ router.get('/dashboard', async (req, res) => {
   res.json(payload);
 });
 
-/**
- * GET /api/region/_kosischk — KOSIS 통계표 실호출 검증 (**임시**, Sprint YYYYYY)
- *
- * 왜 임시로 공개인가: admin 라우트는 Bearer 토큰이 필요한데, 브라우저 자동화에서 인증 헤더를
- *   다루는 것이 보안 필터에 차단된다(우회하지 않는다). Sprint HHHHH 가 KOSIS 미분양 통계표를
- *   확정할 때 쓴 임시 endpoint `_kosischk` 전례를 그대로 따른다 — **명세 확정 즉시 제거**.
- *
- * 왜 필요한가: 공식 카탈로그에 통계표 ID 가 있어도 OpenAPI 가 반려하는 전례가 있다
- *   (Sprint HHHHH: 101/DT_1YL202001E → "해당 통계표가 존재하지 않습니다").
- *   itmId·objL 구조·주기(prdSe)는 실호출 없이 확정할 수 없고, 우리 절차는 "미검증 코드 선배선 금지".
- *
- * 노출 위험 평가: ①도메인·경로는 코드 상수 → 임의 URL 호출 불가(SSRF 차단) ②KOSIS 키는 응답·로그
- *   어디에도 실리지 않는다 ③반환값은 KOSIS **공개 통계**뿐(누구나 자기 키로 무료 조회 가능)
- *   ④orgId/tblId 는 [A-Za-z0-9_] 형식 검증 ⑤상위 라우터에 dataLimiter 적용.
- *   → 실질 위험은 우리 KOSIS 쿼터 소모뿐이며, 그마저 rate limit + 짧은 수명으로 억제된다.
- */
-router.get('/_kosischk', async (req, res) => {
-  const key = process.env.KOSIS_API_KEY;
-  if (!key) return res.json({ ok: false, reason: 'KOSIS_API_KEY 미설정' });
-  const axios = require('axios');
-  const EP = {
-    data: 'https://kosis.kr/openapi/Param/statisticsParameterData.do',
-    meta: 'https://kosis.kr/openapi/statisticsData.do',
-  };
-  const mode = String(req.query.mode || 'data');
-  if (!EP[mode]) return res.json({ ok: false, reason: `mode 는 ${Object.keys(EP).join('|')}` });
-  const safe = (v, d) => { const s = String(v == null ? d : v); return /^[A-Za-z0-9_]+$/.test(s) ? s : d; };
-
-  const params = { apiKey: key, format: 'json', jsonVD: 'Y',
-    orgId: safe(req.query.orgId, '101'), tblId: safe(req.query.tblId, 'DT_1B26001_A01') };
-  if (mode === 'data') {
-    params.method = 'getList';
-    params.itmId = safe(req.query.itmId, 'ALL');
-    params.objL1 = safe(req.query.objL1, 'ALL');
-    if (req.query.objL2 !== 'skip') params.objL2 = safe(req.query.objL2, 'ALL');
-    params.prdSe = safe(req.query.prdSe, 'M');
-    params.newEstPrdCnt = safe(req.query.n, '2');
-  } else {
-    params.method = 'getMeta';
-    params.type = safe(req.query.type, 'ITM'); // ITM(항목) | OBJ(분류)
-  }
-  try {
-    const r = await axios.get(EP[mode], { params, timeout: 20000 });
-    const b = r.data;
-    if (!Array.isArray(b)) {
-      // KOSIS 는 오류를 객체로 준다 — 메시지 원문이 있어야 원인이 확정된다(키는 포함되지 않음)
-      return res.json({ ok: false, httpStatus: r.status, notArray: true, body: JSON.stringify(b).slice(0, 600) });
-    }
-    const take = Math.min(parseInt(req.query.take, 10) || 4, 20);
-    return res.json({
-      ok: true, rows: b.length, fields: b[0] ? Object.keys(b[0]) : [], sample: b.slice(0, take),
-      distinct: b[0] ? Object.fromEntries(['C1_NM', 'C2_NM', 'ITM_NM', 'PRD_DE', 'PRD_SE', 'UNIT_NM']
-        .filter(k => k in b[0]).map(k => [k, Array.from(new Set(b.map(x => x[k]))).slice(0, 14)])) : {},
-    });
-  } catch (e) {
-    return res.json({ ok: false, httpStatus: e.response?.status || null, error: String(e.message).slice(0, 200) });
-  }
-});
+// KOSISCHK-REMOVED-2026-07-25 (Sprint YYYYYY): 임시 검증 endpoint `_kosischk` 삭제.
+//   목적(인구이동 통계표의 itmId·objL·prdSe 확정)을 달성했고, 확정 명세는 kosisService 주석과
+//   memory/popmove-api-pairwise-blocked 에 기록했다. 재검증이 필요하면 git history 에서 되살린다.
+//   ⚠ 이 표에서 배운 것: **objL2 를 넣으면 err21** (미분양표는 반대로 objL2 누락 시 err20) —
+//     표마다 분류 단계가 달라 파라미터 조합은 표별 실호출로만 확정된다.
 
 module.exports = router;
