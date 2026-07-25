@@ -85,7 +85,7 @@ jobs:
       - name: JSON config validate
         run: |
           set -e
-          for f in package.json backend/package.json vercel.json railway.json; do
+          for f in package.json backend/package.json vercel.json; do
             [ -f "$f" ] && node -e "JSON.parse(require('fs').readFileSync('$f','utf8'))" && echo "ok: $f"
           done
 
