@@ -54,3 +54,7 @@ supabase/.temp/
 secrets.json
 credentials.json
 .local-notes/
+
+# Agent Skills (npx skills add) — 개발 보조 도구, 배포 산출물 아님 (2026-07-25)
+.agents/
+skills-lock.json
