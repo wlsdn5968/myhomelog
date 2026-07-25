@@ -65,6 +65,68 @@ router.use(requireAdmin);
 //   — "쓸 일 없는 진단 경로는 지운다"가 원래 계획(SPRINT_NOTES 잔여 ③).
 //   재진단이 필요하면 git history 에서 되살리면 된다.
 
+/**
+ * GET /api/admin/kosis-probe — KOSIS 통계표 실호출 검증 (Sprint YYYYYY, **임시 진단**)
+ *
+ * 왜: 인구이동 6번째 칸을 붙이려면 통계표의 itmId·objL 구조·주기(prdSe)를 확정해야 하는데,
+ *   공식 카탈로그에 ID 가 있어도 OpenAPI 가 반려하는 전례가 있다(Sprint HHHHH: 101/DT_1YL202001E
+ *   → "해당 통계표가 존재하지 않습니다"). **실호출 전에는 코드를 쓰지 않는다**는 절차를 지키기 위한 경로.
+ *
+ * 보안:
+ *   - admin 전용(위 requireAdmin) · **키 값은 응답·로그 어디에도 싣지 않는다**.
+ *   - 도메인·경로는 코드 상수 화이트리스트 → 임의 URL 호출 불가(SSRF 차단).
+ *   - orgId/tblId 는 탐색이 목적이라 자유롭되 형식 검증([A-Za-z0-9_] 만).
+ * 명세 확정 후 이 라우트는 제거한다(rone-probe 와 동일 수명).
+ */
+router.get('/kosis-probe', async (req, res) => {
+  const key = process.env.KOSIS_API_KEY;
+  if (!key) return res.json({ ok: false, reason: 'KOSIS_API_KEY 미설정' });
+  const axios = require('axios');
+  const EP = {
+    data: 'https://kosis.kr/openapi/Param/statisticsParameterData.do', // 통계 데이터
+    meta: 'https://kosis.kr/openapi/statisticsData.do',                // 항목/분류 메타
+  };
+  const mode = String(req.query.mode || 'data');
+  if (!EP[mode]) return res.json({ ok: false, reason: `mode 는 ${Object.keys(EP).join('|')}` });
+  const safe = (v, d) => { const s = String(v == null ? d : v); return /^[A-Za-z0-9_]+$/.test(s) ? s : d; };
+
+  const params = { apiKey: key, format: 'json', jsonVD: 'Y',
+    orgId: safe(req.query.orgId, '101'), tblId: safe(req.query.tblId, 'DT_1B26001_A01') };
+  if (mode === 'data') {
+    params.method = 'getList';
+    params.itmId = safe(req.query.itmId, 'ALL');
+    params.objL1 = safe(req.query.objL1, 'ALL');
+    if (req.query.objL2 !== 'skip') params.objL2 = safe(req.query.objL2, 'ALL');
+    params.prdSe = safe(req.query.prdSe, 'M');
+    params.newEstPrdCnt = safe(req.query.n, '3');
+  } else {
+    params.method = 'getMeta';
+    params.type = safe(req.query.type, 'ITM'); // ITM(항목) | OBJ(분류)
+  }
+  try {
+    const r = await axios.get(EP[mode], { params, timeout: 20000 });
+    const b = r.data;
+    if (!Array.isArray(b)) {
+      // KOSIS 는 오류를 객체로 준다 — 메시지 그대로 보여야 원인 확정이 된다(키는 안 들어감)
+      return res.json({ ok: false, httpStatus: r.status, notArray: true,
+        body: JSON.stringify(b).slice(0, 600) });
+    }
+    const take = Math.min(parseInt(req.query.take, 10) || 5, 30);
+    return res.json({ ok: true, httpStatus: r.status, rows: b.length,
+      fields: b[0] ? Object.keys(b[0]) : [],
+      sample: b.slice(0, take),
+      // 지역/항목 구별에 쓸 후보값 분포 — 어떤 컬럼이 시군구인지 한눈에
+      distinct: b[0] ? Object.fromEntries(['C1_NM','C2_NM','ITM_NM','PRD_DE','PRD_SE']
+        .filter(k => k in b[0])
+        .map(k => [k, Array.from(new Set(b.map(x => x[k]))).slice(0, 12)])) : {},
+    });
+  } catch (e) {
+    return res.json({ ok: false, httpStatus: e.response?.status || null,
+      error: String(e.message).slice(0, 200),
+      body: e.response?.data ? JSON.stringify(e.response.data).slice(0, 400) : null });
+  }
+});
+
 // PUSH-TEST (Sprint EEEEEE): 웹푸시 발송 수동 트리거 — cron(18:20 UTC) 대기 없이 운영자 검증용
 router.post('/run-push-notify', async (req, res) => {
   const started = Date.now();
