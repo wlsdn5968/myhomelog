@@ -127,8 +127,8 @@ async function buildPopularResults(limit = 12) {
     .in('apt_name', names);
   const coordMap = new Map();
   for (const c of (coords || [])) {
-    // GEO-FAIL-SENTINEL-2026-07-22 (Sprint MMMMMM-3): (0,0) sentinel 행이 인기 마커로 오염되지 않게
-    //   유효 한국좌표만 채택 — 미달이면 miss 취급되어 아래 lazy-fill 이 온디맨드 재시도(기존 동작).
+    // COORD-GUARD-2026-07-25 (Sprint NNNNNN): 한국 범위 밖 좌표가 인기 마커로 새어나가지 않게 방어.
+    //   미달이면 miss 취급되어 아래 lazy-fill 이 온디맨드 재시도(기존 동작). DB CHECK 와 이중 안전망.
     if (!isValidKoreaCoord(Number(c.lat), Number(c.lng))) continue;
     coordMap.set(`${c.apt_name}|${c.sigungu || ''}|${c.umd_nm || ''}`, c);
   }

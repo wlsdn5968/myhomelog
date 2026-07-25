@@ -19,7 +19,7 @@
  *   - resolveCoord 자체가 saveToDb 진행 → INSERT 자동
  */
 const { createClient } = require('@supabase/supabase-js');
-const { resolveCoordBatch, kakaoGeocode, getKakaoUsageStats, kakaoAddressGeocode, markGeoFail } = require('../services/geocodeCacheService');
+const { resolveCoordBatch, kakaoGeocode, getKakaoUsageStats, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed } = require('../services/geocodeCacheService');
 const { isValidKoreaCoord } = require('../utils/geo');
 const logger = require('../logger');
 
@@ -251,7 +251,15 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
   catch (e) { logger.warn({ err: e.message }, 'geocache 주소검증 실패(무시)'); }
 
   // 후보 풀 1회 조회 → budget 안에서 batch 순회 (재조회 spin 제거)
-  const candidates = await fetchCandidatePool(admin, pool, since);
+  const rawPool = await fetchCandidatePool(admin, pool, since);
+  // GEO-FAIL-SENTINEL-2026-07-25 (Sprint NNNNNN): 최근 30일 내 "Kakao 무매칭 확정" 단지를 풀에서 제외 —
+  //   상단을 영구 점유하던 하드페일을 걷어내야 그 아래 지오코딩 가능한 단지에 도달한다(본 cron 의 핵심 병목).
+  //   Redis 미설정이면 skipped=0 으로 기존 동작 유지.
+  const _filtered = await filterOutGeoFailed(
+    rawPool.map(t => ({ aptName: t.apt_name, sigungu: t.sigungu, umdNm: t.umd_nm }))
+  );
+  const candidates = _filtered.kept.map(i => ({ apt_name: i.aptName, sigungu: i.sigungu, umd_nm: i.umdNm }));
+  const skippedKnownFail = _filtered.skipped;
   let totalProcessed = 0, totalInserted = 0, totalFailed = 0, totalSentinel = 0, batches = 0, idx = 0;
   while (idx < candidates.length && (Date.now() - started) < budgetMs - 15000) {  // 15s 마진
     const slice = candidates.slice(idx, idx + batchSize);
@@ -265,12 +273,15 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
     const diags = new Array(items.length);
     const results = await resolveCoordBatch(items, 8, diags);
     let inserted = 0;
+    const toMark = [];
     for (let i = 0; i < items.length; i++) {
       if (results[i] && results[i].lat && results[i].lng) { inserted++; continue; }
-      if (diags[i] && diags[i].outcome === 'nomatch') {
-        const ok = await markGeoFail(items[i]).catch(() => false);
-        if (ok) totalSentinel++;
-      }
+      if (diags[i] && diags[i].outcome === 'nomatch') toMark.push(items[i]);
+    }
+    if (toMark.length) {
+      // Redis 기록은 병렬 — 순차 await 로 batch 시간을 잡아먹지 않게(이전 DB INSERT 판의 교훈)
+      const marks = await Promise.all(toMark.map(it => markGeoFail(it).catch(() => false)));
+      totalSentinel += marks.filter(Boolean).length;
     }
     totalProcessed += slice.length;
     totalInserted += inserted;
@@ -280,10 +291,11 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
   const elapsed = Date.now() - started;
   logger.info({
     source: 'geocache-backfill',
-    batches, poolSize: candidates.length, totalProcessed, totalInserted, totalFailed, totalSentinel, elapsedMs: elapsed,
-  }, `geocache backfill: ${batches} batches, ${totalInserted}/${totalProcessed} 백필 (풀 ${candidates.length}, sentinel ${totalSentinel}) (${elapsed}ms)`);
+    batches, rawPoolSize: rawPool.length, poolSize: candidates.length, skippedKnownFail,
+    totalProcessed, totalInserted, totalFailed, totalSentinel, elapsedMs: elapsed,
+  }, `geocache backfill: ${batches} batches, ${totalInserted}/${totalProcessed} 백필 (풀 ${rawPool.length}→${candidates.length}, 기지실패제외 ${skippedKnownFail}, sentinel ${totalSentinel}) (${elapsed}ms)`);
   // KAKAO-DIAG-2026-07-10 (Sprint CCCC): 실패 사유 원격 확정용 — 이 run 인스턴스의 Kakao ok/무매칭/에러코드 분포 동봉.
-  return { ok: true, reheal, addrVerify, batches, poolSize: candidates.length, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, sentinelMarked: totalSentinel, elapsedMs: elapsed, kakao: getKakaoUsageStats() };
+  return { ok: true, reheal, addrVerify, batches, rawPoolSize: rawPool.length, poolSize: candidates.length, skippedKnownFail, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, sentinelMarked: totalSentinel, elapsedMs: elapsed, kakao: getKakaoUsageStats() };
 }
 
 /**
@@ -293,10 +305,14 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
 async function fetchCandidatePool(admin, limit, since) {
   // 1) RPC (NOT EXISTS apt_geocache 내장 — 별도 existing 필터 불필요)
   try {
-    const { data, error } = await admin.rpc('geocache_backfill_candidates', {
-      p_limit: limit,
-      p_since: since,
-    });
+    // POSTGREST-1000-FIX-2026-07-25 (Sprint NNNNNN, admin 트리거 실측): PostgREST 는 응답을 기본
+    //   1000행에서 자른다 — RPC 에 p_limit=4000 을 줘도 실제 수신은 1000(실측 poolSize:1000).
+    //   즉 6/22 의 pool 800→2000, 7/22 의 2000→4000 은 **둘 다 실효 0** 이었고, 매일 동일한 상위
+    //   1000개(대부분 Kakao 무매칭 하드페일)만 재시도하다 끝나 신규 좌표 0건이 되는 구조였다.
+    //   .range(0, limit-1) 로 Range 헤더를 명시해 1000행 상한을 넘긴다(서버 max-rows 정책 내).
+    const { data, error } = await admin
+      .rpc('geocache_backfill_candidates', { p_limit: limit, p_since: since })
+      .range(0, Math.max(0, limit - 1));
     if (error) throw error;
     if (data && data.length) return data;
   } catch (rpcErr) {

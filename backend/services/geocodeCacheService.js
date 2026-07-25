@@ -69,10 +69,9 @@ async function getFromDb(key) {
       .select('lat,lng,address,place_name')
       .eq('apt_key', key)
       .maybeSingle();
-    // GEO-FAIL-SENTINEL-2026-07-22 (Sprint MMMMMM-3): 백필 하드페일 sentinel 행은 (0,0)+source='kakao-fail'
-    //   규약(lat/lng NOT NULL 제약 때문) — 유효 한국좌표가 아니면 캐시 미보유로 취급해 온디맨드 경로는
-    //   계속 Kakao 재시도(사용자 검색으로 언젠가 찾히면 saveToDb 가 실좌표로 대체). 백필 후보 RPC 는
-    //   행 존재만 보고 제외하므로 매일 재시도 낭비만 사라짐.
+    // COORD-GUARD-2026-07-25 (Sprint NNNNNN): 저장된 좌표가 한국 범위 밖이면 "캐시 없음"으로 취급.
+    //   현재 DB CHECK(lat 33~39·lng 124~132)가 범위를 강제하므로 실질 no-op 이지만, 과거 데이터·
+    //   제약 변경·수동 INSERT 등으로 이상 좌표가 들어와도 지도에 찍히지 않게 하는 방어(비용 0).
     const out = (data && isValidKoreaCoord(Number(data.lat), Number(data.lng))) ? {
       lat: Number(data.lat),
       lng: Number(data.lng),
@@ -304,31 +303,53 @@ async function saveToDb(key, entry) {
   }
 }
 
-/** GEO-FAIL-SENTINEL-2026-07-22 (Sprint MMMMMM-3): Kakao "무매칭 확정"(nomatch) 단지를 (0,0)+
- *  source='kakao-fail' sentinel 행으로 기록 — 백필 후보 RPC(NOT EXISTS 콤보)에서 제외돼 매일 재시도
- *  낭비 제거. 규약 안전망: (0,0)은 isValidKoreaCoord 미달이라 getFromDb/combo/배치 전 조회 경로가
- *  "캐시 없음"으로 취급(온디맨드 Kakao 재시도 유지) + in-bounds 는 좌표 범위 쿼리라 자연 배제 +
- *  popular 는 좌표 검증 필터(동시 배포). **plain INSERT(upsert 아님)** — 실좌표 기존 행을 (0,0)으로
- *  덮는 사고 원천 차단(충돌 23505 는 무시=기존 행 보존). 리셋: source='kakao-fail' 행 DELETE.
- *  호출은 백필 잡의 nomatch 확정 항목만 — 일시 오류('error')·온디맨드 실패에는 기록하지 않는다. */
+/** GEO-FAIL-SENTINEL-2026-07-25 (Sprint NNNNNN, MMMMMM-3 결함 교체):
+ *  Kakao "무매칭 확정"(nomatch) 단지를 **Redis 키**로 기록 → 백필 후보에서 TTL 기간 제외.
+ *
+ *  [MMMMMM-3(07-22) 실패 원인 — 실측 확정] 당시 (0,0)+source='kakao-fail' 행으로 기록하려 했으나
+ *    apt_geocache 에 CHECK 제약(lat 33~39 / lng 124~132)이 있어 INSERT 가 100% 거부됨(무동작 no-op).
+ *    NOT NULL 만 확인하고 CHECK 를 확인하지 않은 설계 오류. admin 트리거 실측: sentinelMarked=0.
+ *  [교체 설계] apt_geocache 는 "좌표 저장소"라는 스키마 의도(CHECK 가 그 의도를 강제)를 존중하고,
+ *    실패 이력은 Redis(이미 rate-limit 에서 사용 중)에 둔다. **DB 스키마·행 변경 0.**
+ *  [안전] Redis 미설정이면 항상 false → 기존 동작(매일 재시도)으로 자연 폴백.
+ *    TTL 30일이라 매칭 로직이 개선되면 자동 재시도. 즉시 리셋은 Redis 키 삭제(geofail:*).
+ *  [호출] 백필 잡의 nomatch 확정 항목만. HTTP 오류('error')·온디맨드 실패는 기록하지 않는다. */
+const GEOFAIL_PREFIX = 'geofail:';
+const GEOFAIL_TTL_SEC = 30 * 24 * 3600;
+
 async function markGeoFail(apt) {
-  const admin = dbClient();
-  if (!admin || !apt || !apt.aptName) return false;
+  if (!apt || !apt.aptName) return false;
   try {
-    const { error } = await admin.from('apt_geocache').insert({
-      apt_key: buildKey(apt),
-      apt_name: apt.aptName,
-      sigungu: apt.sigungu || null,
-      umd_nm: apt.umdNm || null,
-      address: null,
-      place_name: null,
-      lat: 0,
-      lng: 0,
-      source: 'kakao-fail',
-    });
-    if (error) { logger.debug({ err: error.message, apt: apt.aptName }, 'geo-fail sentinel INSERT 충돌(기존 행 보존)'); return false; }
+    const { getRedis } = require('../redis');
+    const redis = getRedis();
+    if (!redis) return false;
+    await redis.set(`${GEOFAIL_PREFIX}${buildKey(apt)}`, 1, { ex: GEOFAIL_TTL_SEC });
     return true;
-  } catch (e) { logger.debug({ err: e.message }, 'geo-fail sentinel 기록 실패(무시)'); return false; }
+  } catch (e) { logger.debug({ err: e.message }, 'geo-fail 기록 실패(무시)'); return false; }
+}
+
+/** 후보 목록에서 최근 무매칭 확정(sentinel) 단지를 제외 — 백필 sweep 전용.
+ *  Redis 미설정/오류 시 원본 그대로 반환(기존 동작). mget 은 500개씩 청크. */
+async function filterOutGeoFailed(items) {
+  if (!Array.isArray(items) || !items.length) return { kept: items || [], skipped: 0 };
+  try {
+    const { getRedis } = require('../redis');
+    const redis = getRedis();
+    if (!redis) return { kept: items, skipped: 0 };
+    const keys = items.map(i => `${GEOFAIL_PREFIX}${buildKey(i)}`);
+    const flags = [];
+    for (let i = 0; i < keys.length; i += 500) {
+      const chunk = keys.slice(i, i + 500);
+      const vals = await redis.mget(...chunk);
+      for (const v of (Array.isArray(vals) ? vals : [])) flags.push(v);
+      while (flags.length < i + chunk.length) flags.push(null); // 응답 길이 방어
+    }
+    const kept = items.filter((_, i) => !flags[i]);
+    return { kept, skipped: items.length - kept.length };
+  } catch (e) {
+    logger.debug({ err: e.message }, 'geo-fail 필터 실패 — 전체 후보 진행');
+    return { kept: items, skipped: 0 };
+  }
 }
 
 /**
@@ -435,4 +456,4 @@ async function resolveCoordBatch(apts, concurrency = 4, diags) {
   return results;
 }
 
-module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail };
+module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed };
