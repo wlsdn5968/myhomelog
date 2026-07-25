@@ -44,8 +44,16 @@ router.get('/dashboard', async (req, res) => {
     return res.status(400).json({ error: '지역을 찾을 수 없어요. lawdCd(권장) 또는 정확한 지역명을 지정해주세요.' });
   }
   const ck = `region:dash:v1:${region.lawdCd}`;
-  const hit = cache.get(ck);
-  if (hit !== undefined && hit) return res.json(hit);
+  // CACHE-2026-07-25 (Sprint TTTTTT-3, 실측): Vercel 서버리스는 요청마다 다른 인스턴스일 수 있어
+  //   node-cache(인메모리)만으로는 재요청도 콜드였다 — 병렬화 후 재측정에서 캐시 히트가 4.1s 로
+  //   콜드와 동일. Sprint AAAAAA 가 추천 경로에 쓴 것과 같은 **Redis 2차 캐시**를 적용해
+  //   인스턴스 간 공유. Redis 미설정 시 rget/rset 이 no-op → 기존 동작으로 자연 폴백.
+  const memHit = cache.get(ck);
+  if (memHit !== undefined && memHit) return res.json(memHit);
+  try {
+    const rHit = await require('../services/redisCache').rget(ck);
+    if (rHit) { cache.set(ck, rHit, TTL); return res.json(rHit); }
+  } catch (_) { /* Redis 실패는 무시하고 계산 경로로 */ }
 
   const started = Date.now();
   const [priceIndex, txTrend, unsold, regulation] = await Promise.all([
@@ -102,6 +110,7 @@ router.get('/dashboard', async (req, res) => {
   }, '지역 대시보드 조립');
 
   cache.set(ck, payload, TTL);
+  require('../services/redisCache').rset(ck, payload, TTL).catch(() => {}); // 인스턴스 간 공유(fire-and-forget)
   res.json(payload);
 });
 
