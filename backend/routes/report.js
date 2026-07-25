@@ -938,8 +938,29 @@ async function fetchCandidateApts(admin, input, limit) {
   }
 
   // Phase 9: 광역 검색 시 후보 풀 2500 (선호도 가산점 위해 더 넓게 후보 풀)
-  const { data: txs, error } = await q.limit(2500);
-  if (error) throw error;
+  // REPORT-CAP-FIX-2026-07-25 (Sprint NNNNNN-4, 워크플로 적대검증 CONFIRMED — 성능이 아니라 정확도 결함):
+  //   [실측] Supabase REST 는 응답당 1000행 cap(레포 내 2회 독립 실증: transactionService.js:109-112,
+  //     geocacheBackfill 페이징). 여기 .limit(2500) 은 서버가 1000으로 자르고, **정렬 지정이 없어**
+  //     인덱스(idx_molit_lawd_date) 출력 순서 = lawd_cd 오름차순으로 잘렸다.
+  //   [영향] 서울 광역("서울" 칩이 기본값·세부 구 미선택) 6개월 밴드 실측 4,624~6,208행 → 1000 절단이
+  //     상시 발동. 앞쪽 8개 구(종로 11110~성북 11290)만 덮여 **강남(11680)·서초(11650)·송파(11710)·
+  //     마포(11440)·강동(11740)이 후보 풀에 구조적으로 전혀 진입 못함**(후보 단지 1,446→261=17%).
+  //     "광역 서울" 보고서인데 강남권이 통째로 빠지던 것 — 사용자에겐 보이지 않는 조용한 누락.
+  //   [Fix] transactionService.getRegionRecentTransactions(113-127)와 동일 패턴: 최신순 정렬 명시 +
+  //     1000행 range 페이징으로 의도한 2500 을 실제로 확보. deal_date 동점의 페이지 경계 중복/누락은
+  //     2차 정렬키 id 로 차단. 왕복 1→3(광역 기준) — 정확도 대비 수용.
+  //   ⚠ 구현 주의: supabase-js 빌더에서 .order() 는 쿼리스트링에 **누적**되므로 루프 밖에서 1회만 적용하고,
+  //     루프 안에서는 Range 헤더를 덮어쓰는 .range() 만 반복한다(반복 호출 시 order 중복 방지).
+  const PAGE = 1000, POOL_MAX = 2500;
+  const qOrdered = q.order('deal_date', { ascending: false }).order('id', { ascending: false });
+  let txs = [];
+  for (let from = 0; from < POOL_MAX; from += PAGE) {
+    const _take = Math.min(PAGE, POOL_MAX - from);
+    const { data: page, error } = await qOrdered.range(from, from + _take - 1);
+    if (error) throw error;
+    if (page && page.length) txs = txs.concat(page);
+    if (!page || page.length < _take) break;
+  }
 
   // ALIAS-MERGE-2026-05-21 (전수조사: BUG2 동일 클래스): raw MOLIT명(풍림아파트A/B) →
   //   canonical master명(공릉풍림아이원) relabel → 보고서 후보도 1개 단지로 병합 (검색/지도/단지정리와 동일 식별).
