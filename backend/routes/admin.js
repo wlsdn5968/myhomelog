@@ -58,6 +58,26 @@ router.use(requireAdmin);
  * 응답:
  *   - { ok: true, summary: { chunks, processed, inserted, failed, elapsedMs } }
  */
+/**
+ * GET /api/admin/env-probe — 특정 env 의 "설정 여부"만 확인 (Sprint OOOOOO, 임시 진단)
+ *
+ * 운영자가 Vercel 에 등록한 키의 **이름을 확정**하기 위한 admin 전용 프로브.
+ * ⚠ 값은 절대 반환하지 않는다 — 존재 여부(boolean)와 길이만. 시크릿 노출 경로가 되지 않도록
+ *   ①admin 인증 필수(위 requireAdmin) ②이름 화이트리스트(정규식 매칭)만 조회 ③값·앞뒤 일부도 미반환.
+ * R-ONE(부동산원 통계) 연동 착수 시 키 이름 확정 후 제거 예정.
+ */
+router.get('/env-probe', (req, res) => {
+  const PATTERN = /^(REB|RONE|R_ONE|REALESTATE|REAL_ESTATE|BUDONGSAN|KREB|RONE_?API|REB_?RONE)/i;
+  const names = Object.keys(process.env).filter(k => PATTERN.test(k));
+  res.json({
+    matched: names.map(n => ({ name: n, set: !!process.env[n], length: String(process.env[n] || '').length })),
+    // 후보 이름을 못 찾을 때 운영자가 실제 등록명을 알려줄 수 있도록, 최근 추가됐을 법한 비표준 키 목록도 이름만 제공
+    allNonSystemNames: Object.keys(process.env)
+      .filter(k => /^[A-Z][A-Z0-9_]*$/.test(k) && !/^(npm_|VERCEL_|AWS_|LAMBDA_|PATH|HOME|LANG|TZ|NODE|PWD|SHLVL|_)/i.test(k))
+      .sort(),
+  });
+});
+
 // PUSH-TEST (Sprint EEEEEE): 웹푸시 발송 수동 트리거 — cron(18:20 UTC) 대기 없이 운영자 검증용
 router.post('/run-push-notify', async (req, res) => {
   const started = Date.now();
