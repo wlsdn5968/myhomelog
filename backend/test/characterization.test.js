@@ -107,3 +107,26 @@ test('_isRegProp(프론트) — computeLTV 전 조합에서 규제/비규제 분
   // ltv 미제공(지도 in-bounds·공유 링크 경로) → 위치 폴백으로 위임. 스텁이 null 이므로 비규제.
   assert.equal(_isRegProp({ area: '서울 강남구', lawdCd: '11680' }), false);
 });
+
+// ── Sprint UUUUUU: 위치 기반 폴백(_regLtvLabel)의 시도 스코프 가드 ──────────
+//   왜 추가하나: 폴백은 이름 부분일치(isRegFront)에 의존하는데, 서울 키워드 '강서' 가
+//   '부산 강서구' 에 부분일치해 지방을 규제로 오판정할 수 있었다. 스냅샷이 표현 가능한 축이
+//   서울(11)·경기(41) 뿐이라는 사실을 코드가 강제하는지 고정한다.
+test('_regLtvLabel(프론트) — lawd_cd 스코프 가드로 지방 동명 구 오판정 차단', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const m = html.match(/function _regLtvLabel\(area, lawdCd\)\{[\s\S]*?\n\}/);
+  assert.ok(m, 'frontend/index.html 에서 _regLtvLabel 를 찾지 못했다');
+  // isRegFront 는 "이름이 규제 키워드에 걸리면 true" — 최악 조건으로 **항상 true** 스텁을 주고,
+  // 그래도 지방이 규제로 새지 않는지(= 가드가 이름보다 먼저 동작하는지) 검증한다.
+  const _regLtvLabel = new Function('isRegFront', 'SEOUL_GU_KW',
+    `${m[0]}; return _regLtvLabel;`)(() => true, ['강서', '중구']);
+
+  assert.equal(_regLtvLabel('서울 강남구', '11680'), '40%');  // 서울 = 규제
+  assert.equal(_regLtvLabel('서울 중구', '11140'), '40%');    // 서울 중구(동명) = 규제
+  assert.equal(_regLtvLabel('강서구', '26440'), '70%');       // ★ 부산 강서구 — 이름은 걸려도 비규제
+  assert.equal(_regLtvLabel('중구', '26110'), '70%');         // ★ 부산 중구 — 비규제
+  assert.equal(_regLtvLabel('수원시팔달구', '41115'), '40%'); // 경기는 이름 매칭 대상
+  assert.equal(_regLtvLabel('', ''), null);                   // 지역 미상 → 라벨 생략
+});

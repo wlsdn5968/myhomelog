@@ -8235,6 +8235,12 @@ function _regLtvLabel(area, lawdCd){
   //   문자열 백스톱은 코드가 없을 때만 — '중구'를 문자열로 넣으면 지방 중구까지 규제가 되기 때문.
   const code = String(lawdCd||'').trim();
   if(code.startsWith('11')) return '40%';
+  // REG-SCOPE-2026-07-25 (Sprint UUUUUU): 스냅샷 regulatedRegions 는 **seoul·gyeonggi 두 축만** 표현한다
+  //   (구조상 광역시·지방을 담을 필드 자체가 없다). 따라서 코드가 있는데 11(서울)·41(경기)이 아니면
+  //   규제 대상일 수 없으므로 이름 매칭을 시도조차 하지 않는다.
+  //   ⚠ 이게 없으면 '부산 강서구'가 서울 키워드 '강서' 에 부분일치해 규제로 오판정된다
+  //     (아래 isRegFront 는 부분일치 기반 — 이름만으로는 동명·부분일치를 막을 수 없다).
+  if(code && !code.startsWith('41')) return '70%';
   const r = String(area||'').normalize('NFC').trim();
   if(!r) return null;
   let reg = isRegFront(r);
@@ -8255,7 +8261,13 @@ function _regLtvLabel(area, lawdCd){
 function _isRegProp(p){
   const l = String(p?.ltv || '');
   if (l) return !l.includes('비규제') && l.includes('규제');
-  return _regLtvLabel(p?.area, p?.lawdCd) === '40%';
+  // POPULAR-REG-FIX-2026-07-25 (Sprint UUUUUU): 인기 단지(/api/search/popular)는 `area` 가 없고
+  //   `sigungu`('수원시팔달구')만 준다 → area 만 보던 폴백이 항상 null 이라 **첫 화면 마커 12개가
+  //   전부 비규제로 분류**됐다(실측: 12개 중 4개가 실제 규제 — 수원 팔달×2·안양 동안·성남 수정).
+  //   sigungu 를 보조 소스로 승격. 위 REG-SCOPE 가드 덕분에 지방 동명 구 오판정은 생기지 않는다.
+  //   ※ 표시되는 'LTV n%' 문구는 일부러 건드리지 않는다 — 위치만으로 만든 숫자를 사용자의 한도인 양
+  //     보여주는 것보다 '—'(모름)이 정직하다. 여기서 고치는 것은 색·필터 분류뿐이다.
+  return _regLtvLabel(p?.area || p?.sigungu, p?.lawdCd) === '40%';
 }
 const REGION_SUB = {
   '서울': ['강남구','서초구','송파구','강동구','마포구','용산구','성동구','노원구','도봉구','강북구','은평구','구로구','금천구','강서구','양천구','영등포구','관악구','동작구','성북구','동대문구','광진구','중랑구','서대문구','종로구','중구'],
