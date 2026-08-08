@@ -199,7 +199,12 @@ async function storePopularSnapshot(results) {
 
 /** cron 용 — RPC 성공본(정상 품질)만 저장. fallback/빈 결과는 저장하지 않음. */
 async function computeAndStoreSnapshot() {
-  const { results, usedFallback } = await buildPopularResults(SNAPSHOT_SIZE);
+  let { results, usedFallback } = await buildPopularResults(SNAPSHOT_SIZE);
+  // SNAPRETRY-2026-08-08 (Sprint BBBBBBB-4, NODE-9 근본원인): RPC 실측 3.5s(웜) — 콜드 DB 에선
+  //   statement timeout(8s)을 넘겨 usedFallback → 저장 스킵 → 스냅샷 36h 노화 → 사용자가 라이브
+  //   집계를 직접 타다 간헐 timeout(NODE-9, 15일 7회)이 나던 순환. 첫 시도가 DB 캐시를 데우므로
+  //   1회 재시도로 대부분 성공한다(cron 은 요청 경로 300s 예산 — 재시도 여유 충분).
+  if (usedFallback) ({ results, usedFallback } = await buildPopularResults(SNAPSHOT_SIZE));
   if (usedFallback || !results.length) {
     logger.warn({ usedFallback, count: results.length }, 'popular 스냅샷 스킵 — fallback/빈 결과는 저장 안 함');
     return { stored: false, usedFallback, count: results.length };

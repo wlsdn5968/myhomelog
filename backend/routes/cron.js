@@ -90,6 +90,14 @@ router.post('/retention', async (req, res) => {
     let popularSnapshot = null;
     try { popularSnapshot = await computePopularSnapshot(); }
     catch (e) { logger.warn({ err: e.message }, 'popular 스냅샷 계산 실패 (retention 은 정상)'); popularSnapshot = { stored: false, err: e.message }; }
+    // SNAP-OBSERV-2026-08-08 (Sprint BBBBBBB-4): 스냅샷 갱신 성패를 health.crons 로 — cron 이
+    //   조용히 스킵(usedFallback)을 반복해 스냅샷이 노화되던 것을 아무도 못 봤다(NODE-9 순환의 축).
+    require('../services/cronStats').recordCronRun('popular-snapshot', {
+      ok: popularSnapshot && popularSnapshot.stored ? 1 : false,
+      processed: popularSnapshot && popularSnapshot.count,
+      error: (popularSnapshot && (popularSnapshot.reason || popularSnapshot.err
+        || (popularSnapshot.usedFallback ? 'usedFallback(RPC 실패)' : undefined))) || undefined,
+    }).catch(() => {});
     await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시(실패는 내부에서 삼킴)
     // RATE-WARM-2026-08-08 (Sprint BBBBBBB-3): HF·ECOS 금리 캐시 워밍 — health 의 비차단 백그라운드
     //   갱신은 응답 반환 후 서버리스 동결로 완주가 안 될 수 있다(HF 실측: 12:01 까지 반복 ECONNABORTED,
