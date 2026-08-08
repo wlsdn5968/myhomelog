@@ -55,6 +55,30 @@ function authorizeCron(req, res, next) {
 
 router.use(authorizeCron);
 
+// FRESHNESS-2026-08-08 (Sprint AAAAAAA): 실거래 적재 신선도 감시 — retention cron(18:00 UTC, molit 1h 후)에 편승.
+//   실사고: 08-02 부터 molit ingest 가 전면 실패(적재 0)했는데 6일간 아무도 몰랐다. cron 자체가 안 도는
+//   경우(스케줄 소실)는 molit 핸들러 안의 어떤 경보도 발동할 수 없다 — **다른 cron 이 데이터로 감시**해야 한다.
+//   MAX(ingested_at) 48h 초과 시 Sentry error(고정 메시지 = 이슈 그룹 유지, 가변값은 extra). 실패는 삼킨다.
+async function checkIngestFreshness() {
+  try {
+    const { getSupabaseAdmin } = require('../db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return;
+    const { data } = await admin.from('molit_transactions')
+      .select('ingested_at').order('ingested_at', { ascending: false }).limit(1).maybeSingle();
+    const last = data && data.ingested_at ? new Date(data.ingested_at).getTime() : null;
+    if (!last) return; // 판단 불가 시 침묵(오탐 방지)
+    const hours = Math.round((Date.now() - last) / 3600000);
+    if (hours >= 48) {
+      Sentry.captureMessage('cron 감시: 실거래 적재가 48시간 이상 정체 — molit cron·API 키 확인 필요', {
+        level: 'error', tags: { route: 'cron.retention', monitor: 'data-freshness' },
+        extra: { lastIngestedAt: data.ingested_at, staleHours: hours },
+      });
+      logger.error({ lastIngestedAt: data.ingested_at, staleHours: hours }, '실거래 적재 정체 감지');
+    }
+  } catch (e) { logger.warn({ err: e.message }, '적재 신선도 점검 실패(무시)'); }
+}
+
 router.post('/retention', async (req, res) => {
   try {
     const started = Date.now();
@@ -66,6 +90,7 @@ router.post('/retention', async (req, res) => {
     let popularSnapshot = null;
     try { popularSnapshot = await computePopularSnapshot(); }
     catch (e) { logger.warn({ err: e.message }, 'popular 스냅샷 계산 실패 (retention 은 정상)'); popularSnapshot = { stored: false, err: e.message }; }
+    await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시(실패는 내부에서 삼킴)
     res.json({ ok: true, summary, popularSnapshot });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/retention 실패');
@@ -78,6 +103,7 @@ router.post('/retention', async (req, res) => {
 router.get('/retention', async (req, res) => {
   try {
     const summary = await runRetention();
+    await checkIngestFreshness(); // Sprint AAAAAAA — POST 쌍둥이와 동일(Vercel 이 GET 으로 호출하는 경우 대비)
     res.json({ ok: true, summary });
   } catch (e) {
     // SENTRY-GAP-2026-07-17 (Sprint XXXXX): POST 쌍둥이(72행)만 캡처하고 GET 은 무로그·무캡처였음 — 동일 처리
@@ -114,13 +140,27 @@ async function handleMolitIngest(req, res) {
     //   안 보였음 → Sentry.captureMessage(warning) 알림만 추가 (status·재시도·ingest 로직 불변).
     if (summary && summary.err > 0) {
       try {
+        // FULLFAIL-2026-08-08 (Sprint AAAAAAA): ok=0(적재 0건 = 전면 실패)은 '부분 실패' warning 과
+        //   분리해 **error 레벨 별도 이슈**로 — 08-02~08-08 전면 중단이 기존 warning 이슈에 묻혀
+        //   6일간 인지되지 못한 실사고 후속. 메시지는 고정 문자열(가변값은 extra)로 그룹핑 유지.
+        const fullFail = summary.ok === 0;
         Sentry.captureMessage(
-          `cron/molit-ingest 부분 실패: ok=${summary.ok} err=${summary.err} skipped=${summary.skipped} range=${summary.monthsRange}`,
-          { level: 'warning', tags: { route: 'cron.molit-ingest', partial: 'true' },
-            extra: { ok: summary.ok, err: summary.err, skipped: summary.skipped, monthsRange: summary.monthsRange } }
+          fullFail
+            ? 'cron/molit-ingest 전면 실패: 적재 0건 — 즉시 확인 필요'
+            : `cron/molit-ingest 부분 실패: ok=${summary.ok} err=${summary.err} skipped=${summary.skipped} range=${summary.monthsRange}`,
+          { level: fullFail ? 'error' : 'warning', tags: { route: 'cron.molit-ingest', partial: String(!fullFail) },
+            extra: { ok: summary.ok, err: summary.err, skipped: summary.skipped, monthsRange: summary.monthsRange,
+              firstError: summary.firstError } }
         );
       } catch (_) {}
     }
+    // CRON-OBSERV-2026-08-08 (Sprint AAAAAAA): geocache-backfill 과 동일하게 health.crons 로 노출 —
+    //   실거래 적재가 며칠 멈춰도 로그(1h 보존)·Sentry 를 안 보면 몰랐다. 숫자+대표 사유만(_pick 화이트리스트).
+    require('../services/cronStats').recordCronRun('molit-ingest', {
+      ok: summary.ok, err: summary.err, skipped: summary.skipped, elapsedMs: summary.elapsedMs,
+      retried: summary.gapBackfill && summary.gapBackfill.retried, filled: summary.gapBackfill && summary.gapBackfill.filled,
+      error: summary.firstError || summary.reason || undefined, // reason = 키 미설정 skip 케이스
+    }).catch(() => {});
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/molit-ingest 실패');
@@ -241,6 +281,9 @@ async function handleFacilityBackfill(req, res) {
     const opts = { chunk: req.query.chunk ? parseInt(req.query.chunk) : undefined };
     const summary = await runFacilityBackfill(opts);
     logger.info({ durationMs: Date.now() - started, summary }, 'cron/facility-backfill OK');
+    // CRON-OBSERV-2026-08-08 (Sprint AAAAAAA): data.go.kr 3형제(molit·facility·건축물대장) 전부
+    //   health.crons 노출 — 08-02 키 장애 때 세 cron 이 동시에 조용히 죽은 것을 아무도 못 봤다.
+    require('../services/cronStats').recordCronRun('facility-backfill', summary).catch(() => {});
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/facility-backfill 실패');
@@ -262,6 +305,7 @@ async function handleBrBackfill(req, res) {
     const opts = { cap: req.query.cap ? parseInt(req.query.cap) : undefined };
     const summary = await runBrBackfill(opts);
     logger.info({ durationMs: Date.now() - started, summary }, 'cron/building-register-backfill OK');
+    require('../services/cronStats').recordCronRun('building-register-backfill', summary).catch(() => {}); // Sprint AAAAAAA
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/building-register-backfill 실패');

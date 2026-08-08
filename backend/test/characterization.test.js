@@ -154,4 +154,31 @@ test('cronStats._pick — 숫자 화이트리스트만 통과, 그 외 필드는
   // 숫자가 아닌 값이 숫자 필드에 와도 통과시키지 않는다
   assert.deepEqual(_pick({ inserted: 'NaN아님', processed: null }), {});
   assert.deepEqual(_pick(null), {});
+  // Sprint AAAAAAA: molit-ingest 카운터(ok·err·skipped)는 숫자일 때 통과, boolean 실패 표기와 공존
+  assert.deepEqual(_pick({ ok: 0, err: 9, skipped: 108 }), { ok: 0, err: 9, skipped: 108 });
+});
+
+// ── Sprint AAAAAAA: MOLIT HTTP 에러 사유 추출 — 본문 통짜 저장 금지(키 에코 차단) ──────
+//   실사고(2026-08-02~08): 전 지역 실패가 "Request failed with status code 400" 로만 남아
+//   키 만료인지 게이트웨이 변경인지 6일간 확정 불가였다. 사유 필드는 남기되, 모르는 필드
+//   (serviceKey 에코 등)는 절대 통과시키지 않는 성질을 고정한다.
+test('molitErrReason — 알려진 사유 필드만 추출, 임의 본문은 유출되지 않는다', () => {
+  const { molitErrReason } = require('../jobs/molitIngest');
+  // data.go.kr 게이트웨이 JSON (실측 형태: 2026-08-08 브라우저 실호출)
+  const gw = molitErrReason({ response: { status: 403, data: {
+    OpenAPI_ServiceResponse: { cmmMsgHeader: { errMsg: 'SERVICE_KEY_IS_NOT_REGISTERED_ERROR', returnAuthMsg: '등록되지 않은 서비스키', returnReasonCode: '30' } },
+  } } });
+  assert.match(gw, /HTTP 403/);
+  assert.match(gw, /SERVICE_KEY_IS_NOT_REGISTERED_ERROR/);
+  assert.match(gw, /code=30/);
+  // XML 문자열 응답에서도 errMsg 만 뽑는다
+  const xml = molitErrReason({ response: { status: 400, data: '<OpenAPI_ServiceResponse><cmmMsgHeader><errMsg>DEADLINE_HAS_EXPIRED_ERROR</errMsg></cmmMsgHeader></OpenAPI_ServiceResponse>' } });
+  assert.match(xml, /HTTP 400/);
+  assert.match(xml, /DEADLINE_HAS_EXPIRED_ERROR/);
+  // 모르는 필드에 키가 에코돼도 결과에 실리지 않는다 — HTTP 상태까지만
+  const echo = molitErrReason({ response: { status: 400, data: { requestedKey: 'SECRET-KEY-VALUE', anything: 'x' } } });
+  assert.equal(echo, 'HTTP 400');
+  assert.equal(echo.includes('SECRET'), false);
+  // 응답 자체가 없으면(네트워크 단계) code/message 로
+  assert.equal(molitErrReason({ code: 'ECONNABORTED', message: 'timeout' }), 'ECONNABORTED');
 });

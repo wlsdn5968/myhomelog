@@ -27,8 +27,11 @@ const KEEP = 14;
 /** summary 에서 관측에 필요한 수치만 뽑는다(문자열은 길이 제한). */
 function _pick(summary) {
   if (!summary || typeof summary !== 'object') return {};
+  // MOLIT-OBSERV-2026-08-08 (Sprint AAAAAAA): molit-ingest 계열 카운터(ok·err·skipped·gap 채움) 추가.
+  //   ok 가 숫자면 여기서 통과, boolean false 면 아래 실패 표기 분기 — 두 의미가 충돌하지 않는다.
   const NUM = ['processed', 'inserted', 'failed', 'batches', 'rawPoolSize', 'poolSize',
-    'skippedKnownFail', 'sentinelMarked', 'elapsedMs', 'updated', 'scanned', 'gapsFixed'];
+    'skippedKnownFail', 'sentinelMarked', 'elapsedMs', 'updated', 'scanned', 'gapsFixed',
+    'ok', 'err', 'skipped', 'retried', 'filled', 'missed'];
   const out = {};
   for (const k of NUM) {
     const v = summary[k];

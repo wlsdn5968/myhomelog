@@ -49,6 +49,12 @@ async function getEcosRates() {
     return out;
   } catch (e) {
     logger.warn({ err: e.message }, 'ECOS 금리 조회 실패 — null (표시 생략, 10분 후 재시도)');
+    // EXT-OBSERV-2026-08-08 (Sprint AAAAAAA): 실패 사유를 health.crons 에 남긴다 — 이 warn 로그는
+    //   1시간 뒤 증발해 "왜 null 인지"를 사후 확인할 수 없었다(08-08 ecosRates null 실사고).
+    //   ⚠ e.message 는 쓰지 않는다 — ECOS 는 키가 URL 경로에 들어가 메시지에 섞일 수 있다.
+    //   상태코드/에러코드만(키 유출 원천 차단).
+    const brief = e.response ? `HTTP ${e.response.status}` : String(e.code || 'ERR');
+    require('./cronStats').recordCronRun('ecos-rates', { ok: false, error: brief }).catch(() => {});
     cache.set(CACHE_KEY, null, 600);
     return null;
   }

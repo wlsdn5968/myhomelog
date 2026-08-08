@@ -52,6 +52,10 @@ async function getHfRates() {
     return out;
   } catch (e) {
     logger.warn({ err: e.message }, 'HF 금리 조회 실패 — null (하드코딩 표 유지, 10분 후 재시도)');
+    // EXT-OBSERV-2026-08-08 (Sprint AAAAAAA): ecosService 와 동일 — 사유를 health.crons 에.
+    //   상태코드/에러코드만 기록(키 유출 차단).
+    const brief = e.response ? `HTTP ${e.response.status}` : String(e.code || 'ERR');
+    require('./cronStats').recordCronRun('hf-rates', { ok: false, error: brief }).catch(() => {});
     cache.set(CACHE_KEY, null, 600);
     return null;
   }

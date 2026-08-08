@@ -65,6 +65,36 @@ function recentYearMonths(months = 3) {
  *     → 강남·송파 등 월 1000+건 구의 최근 거래 누락 문제 해결 (Bug #3)
  *   - 해제 거래 필터 (cdealType NOT NULL 행 제외) — Naver 와 시세 불일치 원인 제거
  */
+/**
+ * ERR-REASON-2026-08-08 (Sprint AAAAAAA): HTTP 에러의 **실제 사유**를 남긴다.
+ *
+ * 배경(실사고): 2026-08-02 17:15 부터 전 region-month 가 실패했는데 기록은 axios 기본 메시지
+ *   "Request failed with status code 400" 뿐 — 응답 본문의 data.go.kr 사유(errMsg·returnReasonCode)가
+ *   버려져서 키 만료인지 게이트웨이 변경인지 6일간 확정할 수 없었다.
+ * 정책: 본문을 통째로 저장하지 않는다(모르는 필드에 키가 에코될 위험 차단) — 알려진 사유 필드만
+ *   화이트리스트로 뽑는다. 없으면 "HTTP <status>" 까지만. (cronStats._pick 과 같은 원칙)
+ */
+function molitErrReason(e) {
+  const res = e && e.response;
+  if (!res) return e && (e.code || e.message) || 'unknown';
+  const d = res.data;
+  // data.go.kr 게이트웨이 (OpenAPI_ServiceResponse) — JSON 또는 XML 문자열 두 형태 실측
+  const hdr = d && d.OpenAPI_ServiceResponse && d.OpenAPI_ServiceResponse.cmmMsgHeader;
+  if (hdr && (hdr.errMsg || hdr.returnReasonCode)) {
+    return `HTTP ${res.status} ${hdr.errMsg || ''} code=${hdr.returnReasonCode || ''}`.trim();
+  }
+  if (typeof d === 'string') {
+    const m = d.match(/<errMsg>([^<]{0,80})<\/errMsg>|<returnAuthMsg>([^<]{0,80})<\/returnAuthMsg>/);
+    if (m) return `HTTP ${res.status} ${m[1] || m[2]}`;
+  }
+  // 서비스 본체 header (resultCode/resultMsg)
+  const svc = d && d.response && d.response.header;
+  if (svc && (svc.resultMsg || svc.resultCode)) {
+    return `HTTP ${res.status} ${svc.resultMsg || ''} code=${svc.resultCode || ''}`.trim();
+  }
+  return `HTTP ${res.status}`;
+}
+
 async function fetchRegionMonth(lawdCd, dealYm) {
   const MAX_RETRY = 3;
   const MAX_PAGES = 10;
@@ -103,6 +133,9 @@ async function fetchRegionMonth(lawdCd, dealYm) {
         }
       }
     }
+    // ERR-REASON-2026-08-08: HTTP 에러면 사유 포함 메시지로 승격 — molit_ingest_runs.error_message 와
+    //   Sentry 에 "400" 대신 "400 + 게이트웨이 사유" 가 남는다.
+    if (lastErr && lastErr.response) throw new Error(molitErrReason(lastErr));
     throw lastErr;
   }
 
@@ -406,6 +439,9 @@ async function runMolitIngest(opts = {}) {
   const ok = results.filter(r => r.ok).length;
   const err = results.filter(r => !r.ok && !r.skipped).length;
   const skipped = results.filter(r => r.skipped).length;
+  // ERR-REASON-2026-08-08 (Sprint AAAAAAA): 대표 실패 사유 1건 — 전 지역이 같은 원인으로 죽는
+  //   유형(키 만료·게이트웨이 변경)에서 "err=9" 숫자만으론 진단 불가했던 실사고 후속.
+  const firstError = (results.find(r => !r.ok && !r.skipped && r.error) || {}).error || null;
   const elapsedMs = Date.now() - started;
   logger.info({
     source: 'molit-ingest',
@@ -429,10 +465,11 @@ async function runMolitIngest(opts = {}) {
     logger.warn({ elapsedMs: Date.now() - started }, 'molit-ingest gap-backfill skip — 시간 부족');
   }
 
-  return { ok, err, skipped, elapsedMs, monthsCount: months.length, monthsRange: months.length ? `${months[months.length-1]}~${months[0]}` : null, gapBackfill, results };
+  return { ok, err, skipped, firstError, elapsedMs, monthsCount: months.length, monthsRange: months.length ? `${months[months.length-1]}~${months[0]}` : null, gapBackfill, results };
 }
 
-module.exports = { runMolitIngest };
+// molitErrReason 은 "응답 본문을 통째로 저장하지 않는다(키 에코 차단)" 보안 성질을 테스트로 고정하기 위해 export.
+module.exports = { runMolitIngest, molitErrReason };
 
 // CLI: node backend/jobs/molitIngest.js
 if (require.main === module) {
