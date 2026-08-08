@@ -39,8 +39,12 @@ async function getHfRates() {
   try {
     const params = { serviceKey: key, pageNo: 1, numOfRows: 5, dataType: 'JSON' };
     const [dR, uR] = await Promise.all([
-      dgk.get(DIDIMDOL_URL, { params, timeout: 15000 }),
-      dgk.get(ULOAN_URL, { params, timeout: 15000 }),
+      // HF-TIMEOUT-2026-08-08 (Sprint BBBBBBB-3, 실측): icn1발 HF direct 는 drop(무응답) 계열이라
+      //   15s 타임아웃을 다 기다리는데, health 의 HF 갱신은 **백그라운드**라 응답 반환 후 서버리스
+      //   인스턴스가 동결 → 타이머 만료(ECONNABORTED)로 릴레이까지 못 갔다(12:01 까지 반복 실측).
+      //   HF 정상 응답은 18~70ms 실측 — 5s 면 70배 마진이고, direct 실패→릴레이 완료가 동결 전에 끝난다.
+      dgk.get(DIDIMDOL_URL, { params, timeout: 5000 }),
+      dgk.get(ULOAN_URL, { params, timeout: 5000 }),
     ]);
     const dItem = dR.data && dR.data.body && dR.data.body.item;
     const uItem = uR.data && uR.data.body && uR.data.body.item;
