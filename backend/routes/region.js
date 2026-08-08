@@ -43,7 +43,7 @@ router.get('/dashboard', async (req, res) => {
   if (!region) {
     return res.status(400).json({ error: '지역을 찾을 수 없어요. lawdCd(권장) 또는 정확한 지역명을 지정해주세요.' });
   }
-  const ck = `region:dash:v2:${region.lawdCd}`; // v2 — netMigration 추가로 구 캐시 재사용 방지
+  const ck = `region:dash:v3:${region.lawdCd}`; // v3 — 미분양 sido 수정 반영(구 캐시의 unsold:null 재사용 방지)
   // CACHE-2026-07-25 (Sprint TTTTTT-3, 실측): Vercel 서버리스는 요청마다 다른 인스턴스일 수 있어
   //   node-cache(인메모리)만으로는 재요청도 콜드였다 — 병렬화 후 재측정에서 캐시 히트가 4.1s 로
   //   콜드와 동일. Sprint AAAAAA 가 추천 경로에 쓴 것과 같은 **Redis 2차 캐시**를 적용해
@@ -78,9 +78,17 @@ router.get('/dashboard', async (req, res) => {
       } catch (_) { return null; }
     })(),
     // ③ KOSIS 미분양
+    // UNSOLD-FIX-2026-08-08 (Sprint BBBBBBB-2, 라이브 실측): 첫 인자를 '' 로 넘겨 sido 매칭이 항상
+    //   실패 → 이 칸이 **무조건 null** 이었다(강남 실측 unsold:false). 시도는 lawd_cd 앞 2자리로
+    //   유도한다(이름 판정 금지 원칙 유지 — 코드가 근거, 이름은 KOSIS 응답 키 조합용일 뿐).
     (async () => {
-      try { return await require('../services/kosisService').getUnsoldTrend('', region.name); }
-      catch (_) { return null; }
+      try {
+        const SIDO_BY_PREFIX = { 11: '서울', 26: '부산', 27: '대구', 28: '인천', 29: '광주', 30: '대전',
+          31: '울산', 36: '세종', 41: '경기', 42: '강원', 51: '강원', 43: '충북', 44: '충남',
+          45: '전북', 46: '전남', 47: '경북', 48: '경남', 50: '제주' };
+        const sido = SIDO_BY_PREFIX[region.lawdCd.slice(0, 2)] || '';
+        return await require('../services/kosisService').getUnsoldTrend(sido, region.name);
+      } catch (_) { return null; }
     })(),
     // ⑥ 인구 순이동 — KOSIS 국내인구이동통계(Sprint YYYYYY, 실호출로 명세 확정 후 배선)
     //    ★ lawd_cd 를 그대로 키로 쓴다(KOSIS C1 = 우리 lawd_cd 5자리 동일) — 이름 매칭 없음.
