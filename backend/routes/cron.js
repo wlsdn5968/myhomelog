@@ -91,6 +91,12 @@ router.post('/retention', async (req, res) => {
     try { popularSnapshot = await computePopularSnapshot(); }
     catch (e) { logger.warn({ err: e.message }, 'popular 스냅샷 계산 실패 (retention 은 정상)'); popularSnapshot = { stored: false, err: e.message }; }
     await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시(실패는 내부에서 삼킴)
+    // RATE-WARM-2026-08-08 (Sprint BBBBBBB-3): HF·ECOS 금리 캐시 워밍 — health 의 비차단 백그라운드
+    //   갱신은 응답 반환 후 서버리스 동결로 완주가 안 될 수 있다(HF 실측: 12:01 까지 반복 ECONNABORTED,
+    //   신규 실패 기록조차 없는 "잘림" 상태). 요청 경로인 여기서 하루 1회 완주시켜 Redis 에 남기면
+    //   전 인스턴스가 12h 공유한다. 실패해도 retention 은 정상(삼킴).
+    try { await require('../services/hfService').getHfRates(); } catch (_) {}
+    try { await require('../services/ecosService').getEcosRates(); } catch (_) {}
     res.json({ ok: true, summary, popularSnapshot });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/retention 실패');
@@ -104,6 +110,8 @@ router.get('/retention', async (req, res) => {
   try {
     const summary = await runRetention();
     await checkIngestFreshness(); // Sprint AAAAAAA — POST 쌍둥이와 동일(Vercel 이 GET 으로 호출하는 경우 대비)
+    try { await require('../services/hfService').getHfRates(); } catch (_) {}   // Sprint BBBBBBB-3 워밍
+    try { await require('../services/ecosService').getEcosRates(); } catch (_) {}
     res.json({ ok: true, summary });
   } catch (e) {
     // SENTRY-GAP-2026-07-17 (Sprint XXXXX): POST 쌍둥이(72행)만 캡처하고 GET 은 무로그·무캡처였음 — 동일 처리

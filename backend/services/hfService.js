@@ -34,6 +34,12 @@ function _minMax(obj, prefix) {
 async function getHfRates() {
   const hit = cache.get(CACHE_KEY);
   if (hit !== undefined) return hit;
+  // REDIS-2026-08-08 (Sprint BBBBBBB-3): 성공 값 인스턴스 간 공유. health 의 비차단 갱신은 응답 후
+  //   서버리스 동결로 완주가 안 될 수 있어(HF 실측), cron 요청 경로에서 데운 값을 여기서 읽는다.
+  try {
+    const rHit = await require('./redisCache').rget(CACHE_KEY);
+    if (rHit) { cache.set(CACHE_KEY, rHit, 43200); return rHit; }
+  } catch (_) { /* Redis 실패는 무시하고 외부 조회 */ }
   const key = process.env.MOLIT_API_KEY;
   if (!key || key === 'your_molit_api_key') { cache.set(CACHE_KEY, null, 21600); return null; }
   try {
@@ -53,6 +59,7 @@ async function getHfRates() {
     if (!didimdol && !bogeum) { cache.set(CACHE_KEY, null, 600); return null; }
     const out = { didimdol, bogeum, source: '한국주택금융공사 (data.go.kr)' };
     cache.set(CACHE_KEY, out, 43200); // 12h — 공시 금리는 월 단위 변동
+    require('./redisCache').rset(CACHE_KEY, out, 43200).catch(() => {}); // 인스턴스 간 공유
     return out;
   } catch (e) {
     logger.warn({ err: e.message }, 'HF 금리 조회 실패 — null (하드코딩 표 유지, 10분 후 재시도)');
