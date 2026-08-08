@@ -139,6 +139,13 @@ async function getRentTransactions(lawdCd, dealYm) {
     return result;
   } catch (err) {
     if (err.code === 'MOLIT_KEY_MISSING') throw err;
+    // EXT-OBSERV-2026-08-08 (Sprint AAAAAAA-4): 실패 사유(게이트웨이 errMsg·code)를 health.crons 에 기록 —
+    //   08-02 부터 전월세 라이브가 조용히 0건이 되는 동안 사유를 어디서도 볼 수 없었다.
+    //   molitErrReason 은 화이트리스트 추출이라 키 에코 없음(테스트 고정). 실패 기록은 관측이 본 기능을 막지 않게 삼킨다.
+    try {
+      const brief = require('../jobs/molitIngest').molitErrReason(err);
+      require('./cronStats').recordCronRun('rent-live', { ok: false, error: brief }).catch(() => {});
+    } catch (_) {}
     // 에러 캐시 5분 — 일시적 5xx/timeout 시 매 요청마다 외부 API 두드리는 부하 방지
     cache.set(cacheKey, [], 300);
     const apiErr = new Error(`국토부 전월세 API 호출 실패: ${err.message}`);
