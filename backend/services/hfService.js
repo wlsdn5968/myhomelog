@@ -53,8 +53,12 @@ async function getHfRates() {
   } catch (e) {
     logger.warn({ err: e.message }, 'HF 금리 조회 실패 — null (하드코딩 표 유지, 10분 후 재시도)');
     // EXT-OBSERV-2026-08-08 (Sprint AAAAAAA): ecosService 와 동일 — 사유를 health.crons 에.
-    //   상태코드/에러코드만 기록(키 유출 차단).
-    const brief = e.response ? `HTTP ${e.response.status}` : String(e.code || 'ERR');
+    // EXT-OBSERV-2026-08-08-2 (Sprint AAAAAAA-2): HF 도 data.go.kr 게이트웨이라 molitErrReason 재사용 —
+    //   08-02 부터의 HTTP 400 이 **무슨 사유인지**(게이트웨이 errMsg·returnReasonCode) cron 을 기다리지
+    //   않고 health 재조회만으로 즉시 실측하기 위해. 화이트리스트 추출이라 키 에코 없음(테스트 고정).
+    let brief;
+    try { brief = require('../jobs/molitIngest').molitErrReason(e); }
+    catch (_) { brief = e.response ? `HTTP ${e.response.status}` : String(e.code || 'ERR'); }
     require('./cronStats').recordCronRun('hf-rates', { ok: false, error: brief }).catch(() => {});
     cache.set(CACHE_KEY, null, 600);
     return null;
