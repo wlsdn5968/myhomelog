@@ -15,7 +15,7 @@
  *
  * 정책: MOLIT_API_KEY(data.go.kr 공용) 사용. 실패/키없음 → null(하드코딩 표가 fallback — 기존 표시 유지).
  */
-const axios = require('axios');
+const dgk = require('./dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): 직접+Edge 릴레이
 const cache = require('../cache');
 const logger = require('../logger');
 
@@ -39,8 +39,8 @@ async function getHfRates() {
   try {
     const params = { serviceKey: key, pageNo: 1, numOfRows: 5, dataType: 'JSON' };
     const [dR, uR] = await Promise.all([
-      axios.get(DIDIMDOL_URL, { params, timeout: 15000 }),
-      axios.get(ULOAN_URL, { params, timeout: 15000 }),
+      dgk.get(DIDIMDOL_URL, { params, timeout: 15000 }),
+      dgk.get(ULOAN_URL, { params, timeout: 15000 }),
     ]);
     const dItem = dR.data && dR.data.body && dR.data.body.item;
     const uItem = uR.data && uR.data.body && uR.data.body.item;

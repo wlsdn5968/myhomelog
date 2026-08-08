@@ -16,7 +16,7 @@
  *   apt_master.kapt_code PRIMARY KEY → ON CONFLICT DO NOTHING (이름 변경 무시).
  *   재실행해도 안전.
  */
-const axios = require('axios');
+const dgk = require('../services/dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): 직접+Edge 릴레이
 const { createClient } = require('@supabase/supabase-js');
 const logger = require('../logger');
 const { LAWD_CODES, LAWD_CODE_TO_NAME } = require('../services/transactionService');
@@ -63,7 +63,7 @@ async function syncOneSgg(admin, lawdCd) {
   for (let pageNo = 1; pageNo <= MAX_PAGES; pageNo++) {
     let r;
     try {
-      r = await axios.get(APT_LIST_URL, {
+      r = await dgk.get(APT_LIST_URL, {
         params: {
           serviceKey: APT_INFO_KEY,
           sigunguCode: lawdCd,

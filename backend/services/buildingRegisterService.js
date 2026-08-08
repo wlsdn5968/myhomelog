@@ -12,7 +12,8 @@
  *
  * 키: process.env.MOLIT_API_KEY(data.go.kr 건축HUB 활용신청 완료) + KAKAO_REST_API_KEY.
  */
-const axios = require('axios');
+const axios = require('axios'); // Kakao 주소검색 전용(릴레이 불필요 — 카카오는 정상)
+const dgk = require('./dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): data.go.kr 호출만 릴레이 대상
 const logger = require('../logger');
 const { getSupabaseAdmin } = require('../db/client');
 
@@ -73,7 +74,7 @@ async function resolveJibun(admin, lawdCd, umdNm, aptName) {
     const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
     const ym = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
     try {
-      const r = await axios.get(MOLIT_DETAIL_URL, {
+      const r = await dgk.get(MOLIT_DETAIL_URL, {
         params: { serviceKey: key, LAWD_CD: lawdCd, DEAL_YMD: ym, numOfRows: 1000, pageNo: 1, _type: 'json' },
         timeout: 7000, headers: { Accept: 'application/json' },
       });
@@ -114,7 +115,7 @@ async function getBuildingTitle({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
 
   let title = null;
   try {
-    const r = await axios.get(BR_TITLE_URL, {
+    const r = await dgk.get(BR_TITLE_URL, {
       params: {
         serviceKey: process.env.MOLIT_API_KEY,
         sigunguCd: region.sigunguCd, bjdongCd: region.bjdongCd,

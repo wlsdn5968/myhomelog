@@ -3,7 +3,7 @@
  * 공공데이터포털 (data.go.kr) 무료 API
  * API 신청: data.go.kr → '아파트매매 실거래가 상세자료' 검색 → 활용신청
  */
-const axios = require('axios');
+const dgk = require('./dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): 직접+Edge 릴레이
 const { createClient } = require('@supabase/supabase-js');
 const cache = require('../cache');
 const logger = require('../logger');
@@ -258,7 +258,7 @@ async function getTransactions(lawdCd, dealYm) {
     let cancelledCount = 0;
 
     for (let pageNo = 1; pageNo <= MAX_PAGES; pageNo++) {
-      const response = await axios.get(MOLIT_DETAIL_URL, {
+      const response = await dgk.get(MOLIT_DETAIL_URL, {
         params: {
           serviceKey: process.env.MOLIT_API_KEY,
           LAWD_CD: lawdCd,

@@ -7,7 +7,7 @@
  * 주의: 같은 MOLIT_API_KEY 사용 가능. data.go.kr 활용신청 시
  * 'AptBasisInfoService' 함께 신청 권장.
  */
-const axios = require('axios');
+const dgk = require('./dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): 직접+Edge 릴레이
 const cache = require('../cache');
 const logger = require('../logger');
 
@@ -49,7 +49,7 @@ async function getAptBasisInfo(aptSeq) {
     let lastErr;
     for (let i = 0; i < 2; i++) {
       try {
-        const r = await axios.get(url, {
+        const r = await dgk.get(url, {
           params: { serviceKey: process.env.MOLIT_API_KEY, kaptCode: aptSeq, _type: 'json' },
           timeout: 8000,
         });
@@ -93,7 +93,7 @@ async function findAptByRoadName(bjdCode) {
   if (cached) return cached;
 
   try {
-    const r = await axios.get(APT_LIST_URL, {
+    const r = await dgk.get(APT_LIST_URL, {
       params: {
         serviceKey: process.env.MOLIT_API_KEY,
         bjdCode,
@@ -128,7 +128,7 @@ async function getAptListBySgg(sigunguCode) {
     const all = [];
     // 페이지당 최대 200건, 강남·송파 등 대단지 구는 1500개 이상이므로 10페이지까지
     for (let pageNo = 1; pageNo <= 10; pageNo++) {
-      const r = await axios.get(APT_LIST_SGG_URL, {
+      const r = await dgk.get(APT_LIST_SGG_URL, {
         params: {
           serviceKey: process.env.MOLIT_API_KEY,
           sigunguCode,
@@ -190,7 +190,7 @@ async function getAptDtlInfo(kaptCode) {
   for (const url of APT_DTL_URLS) {
     let r;
     try {
-      r = await axios.get(url, {
+      r = await dgk.get(url, {
         params: { serviceKey: process.env.MOLIT_API_KEY, kaptCode, _type: 'json' },
         timeout: 8000,
         headers: { Accept: 'application/json' },

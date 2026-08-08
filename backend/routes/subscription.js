@@ -10,7 +10,7 @@
  */
 const express = require('express');
 const router = express.Router();
-const axios = require('axios');
+const dgk = require('../services/dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): odcloud 도 data.go.kr 계열
 const cache = require('../cache');
 
 const APT_LTTOT_URL = 'https://api.odcloud.kr/api/ApplyhomeInfoDetailSvc/v1/getAPTLttotPblancDetail';
@@ -47,7 +47,7 @@ router.get('/', async (req, res) => {
   const fmt = (d) => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
 
   try {
-    const r = await axios.get(APT_LTTOT_URL, {
+    const r = await dgk.get(APT_LTTOT_URL, {
       params: {
         serviceKey: process.env.MOLIT_API_KEY,
         page: 1,

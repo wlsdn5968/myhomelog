@@ -14,7 +14,9 @@
  *   - 단일 UPSERT 대신 batch INSERT … ON CONFLICT DO NOTHING — dedup_key 충돌 무시.
  *   - 최근 2개월만 → 과거 데이터는 따로 backfill 스크립트 (미구현, 향후).
  */
-const axios = require('axios');
+// RELAY-2026-08-08 (Sprint BBBBBBB): axios 직접 호출 → dataGoKrClient(직접+Edge 릴레이 폴백).
+//   08-02 부터 게이트웨이가 Vercel IP 를 거부(400/code=10, 키 무관 실측) — 시그니처·응답 형태는 axios 동일.
+const dgk = require('../services/dataGoKrClient');
 const { createClient } = require('@supabase/supabase-js');
 const logger = require('../logger');
 const { LAWD_CODES, LAWD_CODE_TO_NAME } = require('../services/transactionService');
@@ -104,7 +106,7 @@ async function fetchRegionMonth(lawdCd, dealYm) {
     let lastErr;
     for (let attempt = 1; attempt <= MAX_RETRY; attempt++) {
       try {
-        const r = await axios.get(MOLIT_URL, {
+        const r = await dgk.get(MOLIT_URL, {
           params: {
             serviceKey: MOLIT_API_KEY,
             LAWD_CD: lawdCd,

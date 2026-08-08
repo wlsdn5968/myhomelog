@@ -13,7 +13,7 @@
  *   - ECOS_API_KEY 미설정/호출 실패 시 null (하드코딩 fallback 없음 — 낡은 값 오표시 방지).
  *   - 12h 캐시(월 단위 통계·기준금리는 변동 드묾). 실패 시 10분 후 재시도.
  */
-const axios = require('axios');
+const dgk = require('./dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): ECOS 도 iad1/icn1 발 타임아웃 실측 — 릴레이 폴백
 const cache = require('../cache');
 const logger = require('../logger');
 
@@ -30,8 +30,8 @@ async function getEcosRates() {
     const ym = (d) => `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
     const from = new Date(now); from.setMonth(from.getMonth() - 6); // M 통계 공표지연 감안 6개월 창
     const [ksR, mgR] = await Promise.all([
-      axios.get(`${BASE}/KeyStatisticList/${key}/json/kr/1/100`, { timeout: 15000 }),
-      axios.get(`${BASE}/StatisticSearch/${key}/json/kr/1/12/121Y006/M/${ym(from)}/${ym(now)}/BECBLA0302`, { timeout: 15000 }),
+      dgk.get(`${BASE}/KeyStatisticList/${key}/json/kr/1/100`, { timeout: 15000 }),
+      dgk.get(`${BASE}/StatisticSearch/${key}/json/kr/1/12/121Y006/M/${ym(from)}/${ym(now)}/BECBLA0302`, { timeout: 15000 }),
     ]);
     const ksRow = (ksR.data && ksR.data.KeyStatisticList && ksR.data.KeyStatisticList.row) || [];
     const baseRow = ksRow.find(r => r.KEYSTAT_NAME === '한국은행 기준금리');

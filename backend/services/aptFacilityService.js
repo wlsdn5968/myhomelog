@@ -12,7 +12,7 @@
  *   사용자가 단지 클릭 시 (showDetail) 호출 → 첫 호출 ~1초, 이후 캐시 hit.
  *   apt_master.facility 컬럼에 영구 저장 (90일 만료).
  */
-const axios = require('axios');
+const dgk = require('./dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): 직접+Edge 릴레이
 const { getSupabaseAdmin } = require('../db/client');
 const { getAptListBySgg, getAptDtlInfo } = require('./aptInfoService');
 const { isInsertionMatch } = require('../utils/aptName');
@@ -161,7 +161,7 @@ async function findMaster(aptName, sigungu, umdNm) {
 async function tryEndpoint(url, kaptCode) {
   let r;
   try {
-    r = await axios.get(url, {
+    r = await dgk.get(url, {
       params: { serviceKey: APT_INFO_KEY, kaptCode, _type: 'json' },
       timeout: 8000,
       headers: { Accept: 'application/json' },

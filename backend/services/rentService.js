@@ -10,7 +10,7 @@
  *          (MAX_PAGES=10, NUM_ROWS=1000, totalCount 조기 종료, cdealType 해제 거래 제외).
  *   - 왜 이렇게: 매매 API 와 응답 스키마/페이징 동작이 동일 — 검증된 패턴 재사용.
  */
-const axios = require('axios');
+const dgk = require('./dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): 직접+Edge 릴레이
 const cache = require('../cache');
 const logger = require('../logger');
 
@@ -53,7 +53,7 @@ async function getRentTransactions(lawdCd, dealYm) {
     let cancelledCount = 0;
 
     for (let pageNo = 1; pageNo <= MAX_PAGES; pageNo++) {
-      const response = await axios.get(MOLIT_RENT_URL, {
+      const response = await dgk.get(MOLIT_RENT_URL, { // RELAY (Sprint BBBBBBB)
         params: {
           serviceKey: process.env.MOLIT_API_KEY,
           LAWD_CD: lawdCd,

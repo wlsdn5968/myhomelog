@@ -253,7 +253,8 @@ app.get('/api/health/apis', async (req, res) => {
     return res.json({ ...cached, fromCache: true });
   }
 
-  const axios = require('axios');
+  const axios = require('axios'); // Kakao 진단용
+  const dgk = require('./services/dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): data.go.kr 진단도 실경로와 동일하게
   const molit = process.env.MOLIT_API_KEY;
   const kakao = process.env.KAKAO_REST_API_KEY;
   const checks = { molit_key: !!molit, kakao_key: !!kakao };
@@ -264,7 +265,7 @@ app.get('/api/health/apis', async (req, res) => {
       const d = new Date();
       const prev = new Date(d.getFullYear(), d.getMonth() - 1, 1);
       const ym = `${prev.getFullYear()}${String(prev.getMonth() + 1).padStart(2, '0')}`;
-      const r = await axios.get('https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev', {
+      const r = await dgk.get('https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev', {
         params: { serviceKey: molit, LAWD_CD: '11350', DEAL_YMD: ym, pageNo: 1, numOfRows: 1, _type: 'json' },
         timeout: 6000,
         headers: { Accept: 'application/json' },
@@ -290,7 +291,7 @@ app.get('/api/health/apis', async (req, res) => {
   // 2) K-apt 단지 리스트 (AptListService3)
   if (molit) {
     try {
-      const r = await axios.get('https://apis.data.go.kr/1613000/AptListService3/getSigunguAptList3', {
+      const r = await dgk.get('https://apis.data.go.kr/1613000/AptListService3/getSigunguAptList3', {
         params: { serviceKey: molit, sigunguCode: '11350', numOfRows: 1, pageNo: 1, _type: 'json' },
         timeout: 6000,
       });
@@ -304,7 +305,7 @@ app.get('/api/health/apis', async (req, res) => {
   // 3) K-apt 단지 기본정보 (AptBasisInfoServiceV3)
   if (molit) {
     try {
-      const r = await axios.get('https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3', {
+      const r = await dgk.get('https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3', {
         params: { serviceKey: molit, kaptCode: 'A10020255', _type: 'json' },
         timeout: 6000,
         headers: { Accept: 'application/json' },

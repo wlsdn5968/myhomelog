@@ -182,3 +182,26 @@ test('molitErrReason — 알려진 사유 필드만 추출, 임의 본문은 유
   // 응답 자체가 없으면(네트워크 단계) code/message 로
   assert.equal(molitErrReason({ code: 'ECONNABORTED', message: 'timeout' }), 'ECONNABORTED');
 });
+
+// ── Sprint BBBBBBB: 릴레이 클라이언트 — 폴백 판정·URL 조립·화이트리스트 계약 ─────────
+//   08-02 실사고 시그니처(민짜400·code=10·RST)에만 릴레이하고, 정상 4xx(키오류 403/30 등)는
+//   그대로 throw 해야 한다(릴레이 낭비·오진 방지). 화이트리스트는 Edge Function 쪽과 일치.
+test('dataGoKrClient — IP-거부 패턴 판정과 정상 4xx 구분, URL 조립 인코딩', () => {
+  const { _isBlockedPattern, _buildFullUrl, ALLOWED_HOSTS } = require('../services/dataGoKrClient');
+  // 실측 시그니처들 → 릴레이 대상
+  assert.equal(_isBlockedPattern({ code: 'ECONNRESET' }), true);
+  assert.equal(_isBlockedPattern({ code: 'ECONNABORTED' }), true);
+  assert.equal(_isBlockedPattern({ response: { status: 400, data: {} } }), true); // 민짜 400
+  assert.equal(_isBlockedPattern({ response: { status: 400, data: { OpenAPI_ServiceResponse: { cmmMsgHeader: { returnReasonCode: '10' } } } } }), true);
+  // 정상 게이트웨이 동작 → 릴레이 금지(그대로 throw)
+  assert.equal(_isBlockedPattern({ response: { status: 403, data: { OpenAPI_ServiceResponse: { cmmMsgHeader: { returnReasonCode: '30' } } } } }), false);
+  assert.equal(_isBlockedPattern({ response: { status: 500, data: {} } }), false);
+  assert.equal(_isBlockedPattern(null), false);
+  // URL 조립 — serviceKey 의 +,/,= 가 인코딩되고 기존 쿼리(ECOS 경로형)는 보존
+  const u = _buildFullUrl('https://apis.data.go.kr/1613000/x/y', { serviceKey: 'a+b/c==', LAWD_CD: '11680' });
+  assert.match(u, /serviceKey=a%2Bb%2Fc%3D%3D/);
+  assert.match(u, /LAWD_CD=11680/);
+  assert.equal(_buildFullUrl('https://ecos.bok.or.kr/api/K/key123/json/kr/1/100'), 'https://ecos.bok.or.kr/api/K/key123/json/kr/1/100');
+  // 화이트리스트 — Edge Function(supabase/functions/datagokr-proxy)과 동일해야 한다
+  assert.deepEqual([...ALLOWED_HOSTS].sort(), ['api.odcloud.kr', 'apis.data.go.kr', 'ecos.bok.or.kr']);
+});

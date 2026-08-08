@@ -121,25 +121,10 @@ router.get('/dashboard', async (req, res) => {
   res.json(payload);
 });
 
-// GWCHECK-TEMP-2026-08-08 (Sprint AAAAAAA-5): data.go.kr 게이트웨이 진단 — **임시, 진단 후 즉시 삭제**.
-//   08-02 부터 프로덕션발 요청만 400 INVALID_REQUEST_PARAMETER(code=10). 원인 후보가 "발신 IP(AWS) 거부"와
-//   "실키 값 형태" 둘로 좁혀졌고, 이 라우트는 **더미 키 리터럴('test')만** 보내 그 둘을 가른다:
-//   403/30(등록되지 않은 서비스키) = 서버 IP 는 정상 취급 → 키 값 문제. 400/10 = IP 자체 거부.
-//   env 접근 0 · 비밀 0 · 응답은 상태코드·게이트웨이 사유 필드만( _kosischk 전례와 동일 수명).
-router.get('/_gwcheck', async (req, res) => {
-  try {
-    const axios = require('axios');
-    const r = await axios.get('https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev', {
-      params: { serviceKey: 'test', LAWD_CD: '11680', DEAL_YMD: '202606', pageNo: 1, numOfRows: 1, _type: 'json' },
-      timeout: 12000, headers: { Accept: 'application/json' },
-      validateStatus: () => true, // 4xx 도 응답으로 받는다
-    });
-    const hdr = r.data && r.data.OpenAPI_ServiceResponse && r.data.OpenAPI_ServiceResponse.cmmMsgHeader;
-    res.json({ status: r.status, errMsg: hdr && hdr.errMsg || null, code: hdr && hdr.returnReasonCode || null });
-  } catch (e) {
-    res.json({ status: null, netErr: String(e.code || e.message).slice(0, 60) });
-  }
-});
+// GWCHECK-REMOVED-2026-08-08 (Sprint AAAAAAA-5→6): 임시 진단 라우트 `_gwcheck` 삭제(1c7890a 에서 추가).
+//   실측 결론: 프로덕션(icn1)발 **더미 키 'test' 요청조차 400 INVALID_REQUEST_PARAMETER code=10** —
+//   비 AWS IP(브라우저·curl·로컬 Node 동일 형태)는 전부 정상 403/30. ⇒ 08-02 장애는 키·코드가 아니라
+//   **data.go.kr 게이트웨이의 발신 IP(AWS/Vercel 대역) 거부**. 재진단 필요 시 git history 에서 되살린다.
 
 // KOSISCHK-REMOVED-2026-07-25 (Sprint YYYYYY): 임시 검증 endpoint `_kosischk` 삭제.
 //   목적(인구이동 통계표의 itmId·objL·prdSe 확정)을 달성했고, 확정 명세는 kosisService 주석과
