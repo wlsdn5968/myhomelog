@@ -262,13 +262,16 @@ async function callAI(messages, useCache = true, opts = {}) {
     }, 'AI usage');
   } catch(_){}
 
-  // ── 2) post-call 사용량 기록 (fire-and-forget, 실패해도 응답은 정상) ──
+  // ── 2) post-call 사용량 기록 — await (실패는 삼킴, 응답은 정상) ──
+  // FREEZE-FIX-2026-08-09 (Plan 003): 기존 fire-and-forget 은 응답 반환 후 서버리스 동결로 완주
+  //   보장이 없었다(RATE-WARM-2026-08-08 의 HF 실측 선례와 동일 클래스). 비용 카운터가 유실되면
+  //   사용자 월예산·전역 kill-switch 상한이 "구조적 보장"이 아니게 되므로 응답 전에 완주시킨다.
   if (userId && response.usage) {
-    budget.recordUsage(userId, response.usage).catch(() => { /* already logged */ });
+    await budget.recordUsage(userId, response.usage).catch(() => { /* already logged */ });
   }
-  // 전역 누적 기록 (익명 포함 전체 — kill-switch 카운터, fire-and-forget)
+  // 전역 누적 기록 (익명 포함 전체 — kill-switch 카운터)
   if (response.usage) {
-    globalAiBudget.recordGlobalAiUsage(response.usage).catch(() => { /* already logged */ });
+    await globalAiBudget.recordGlobalAiUsage(response.usage).catch(() => { /* already logged */ });
   }
 
   // 단답 질문만 캐시

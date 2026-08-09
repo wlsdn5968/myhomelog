@@ -381,8 +381,10 @@ async function resolveCoord(apt, _diag) {
   // 2) Kakao 폴백 (_diag: GEO-FAIL-SENTINEL — 백필이 무매칭/오류 구분용, 선택 인자)
   const fromKakao = await kakaoGeocode(apt, _diag);
   if (fromKakao) {
-    // fire-and-forget UPSERT (응답 지연 최소화)
-    saveToDb(key, { ...apt, ...fromKakao });
+    // FREEZE-FIX-2026-08-09 (Plan 003): fire-and-forget UPSERT 는 서버리스 동결로 유실될 수 있어
+    //   (RATE-WARM-2026-08-08 실측 선례) 저장이 안 되면 같은 단지 재요청마다 Kakao 를 다시 호출한다
+    //   — 응답 전에 완주(수십 ms). 실패는 기존대로 삼킨다.
+    await saveToDb(key, { ...apt, ...fromKakao }).catch(() => {});
     return fromKakao;
   }
 
