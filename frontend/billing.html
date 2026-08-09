@@ -145,18 +145,24 @@
     <strong>전자상거래법 제17조</strong>에 따라 결제 후 7일 이내·미사용 시 청약철회(전액 환불) 가능합니다.
   </div>
 
-  <!-- 전자상거래법 제13조 표시의무사항 + 사업자등록 미완 시 결제 차단 -->
+  <!-- 전자상거래법 제10조·제13조 표시의무사항 — BIZ-INFO-2026-08-09: 사업자등록 완료 실값 반영
+       (주소는 운영자 결정에 따라 도로명까지 공개 · 연락처는 이메일 우선. 통신판매업 신고번호는 발급 시 갱신) -->
   <div class="card" style="margin-top:14px;background:#FFF6E6;border:2px solid #F0D6A2;font-size:11px;color:var(--t2);line-height:1.7">
-    <div style="font-weight:700;color:#7A4F0E;margin-bottom:6px">⚠ 결제 시스템 준비 중 (사업자 등록 절차 진행 중)</div>
-    <div>아래 정보는 사업자 등록 완료 후 입력됩니다. <strong>현재 결제는 비활성화 상태</strong>이며, 출시 알림을 받으시려면 <a href="mailto:wlsdn5968@gmail.com?subject=출시 알림 신청" style="color:var(--acc)">wlsdn5968@gmail.com</a> 으로 메일 주세요.</div>
-    <div style="margin-top:8px">· 상호: <span id="bizName">내집로그</span></div>
-    <div>· 대표자 / 사업자등록번호 / 통신판매신고번호 / 사업장 주소: <strong>등록 후 공시</strong></div>
-    <div>· 고객센터: <a href="mailto:wlsdn5968@gmail.com" style="color:var(--acc)">wlsdn5968@gmail.com</a></div>
-    <div style="margin-top:8px;color:var(--t3);font-size:10px">전자상거래법 제13조 표시의무사항이 완료되기 전까지 결제 처리를 받지 않습니다.</div>
+    <div style="font-weight:700;color:#7A4F0E;margin-bottom:6px">⚠ 결제 시스템 준비 중 (전자결제 PG 가맹 심사 진행 중)</div>
+    <div>사업자 등록은 완료되었으며, PG 가맹 심사 완료 후 결제가 활성화됩니다. 출시 알림을 받으시려면 <a href="mailto:wlsdn5968@gmail.com?subject=출시 알림 신청" style="color:var(--acc)">wlsdn5968@gmail.com</a> 으로 메일 주세요.</div>
+    <div style="margin-top:8px">· 상호: <span id="bizName">공명랩</span> (서비스명: 내집로그)</div>
+    <div>· 대표자: 우진우</div>
+    <div>· 사업자등록번호: 381-08-03668</div>
+    <div>· 사업장 소재지: 서울특별시 노원구 섬밭로 139</div>
+    <div>· 통신판매업 신고: 절차 진행 중 (부가가치세법상 간이과세자 — 신고면제 기준 해당)</div>
+    <div>· 고객센터: <a href="mailto:wlsdn5968@gmail.com" style="color:var(--acc)">wlsdn5968@gmail.com</a> (이메일 우선 응대)</div>
+    <div style="margin-top:8px;color:var(--t3);font-size:10px">PG 가맹 심사가 완료되기 전까지 결제 처리를 받지 않습니다.</div>
   </div>
 </div>
 
-<!-- P0 (2026-04-25): 사업자 등록 완료 전까지 결제 버튼 강제 비활성화 -->
+<!-- P0 (2026-04-25→2026-08-09 갱신): PG 가맹 심사 완료(live 키 수령) 전까지 결제 버튼 강제 비활성화 -->
+<!-- BIZ-INFO-2026-08-09: 사업자등록은 완료 — 이 블록은 토스페이먼츠 live_ck/live_sk 발급 후 제거 -->
+
 <style>
   #plansList .btn:not([disabled]) { opacity: 0.55; cursor: not-allowed !important; }
   #plansList .btn[onclick*="startCheckout"]::after {
@@ -166,11 +172,11 @@
   }
 </style>
 <script>
-  // 결제 시작 차단 — 사업자 등록 완료 전 임시
+  // 결제 시작 차단 — PG 가맹 심사(live 키 발급) 완료 전 임시
   (function(){
     const _origStart = window.startCheckout;
     window.startCheckout = function(planId){
-      alert('결제 시스템은 사업자 등록 완료 후 활성화됩니다.\n\n출시 알림을 받으시려면 wlsdn5968@gmail.com 으로 메일 주세요.\n\n무료 플랜 (5회/일)은 홈에서 로그인 없이도 사용 가능합니다.');
+      alert('결제 시스템은 전자결제(PG) 가맹 심사 완료 후 활성화됩니다.\n\n출시 알림을 받으시려면 wlsdn5968@gmail.com 으로 메일 주세요.\n\n무료 플랜 (5회/일)은 홈에서 로그인 없이도 사용 가능합니다.');
       return false;
     };
     document.addEventListener('DOMContentLoaded', function(){
@@ -179,7 +185,7 @@
         document.querySelectorAll('#plansList button.btn').forEach(function(b){
           if (/구독하기/.test(b.textContent)) {
             b.disabled = true;
-            b.title = '사업자 등록 완료 후 활성화';
+            b.title = 'PG 가맹 심사 완료 후 활성화';
           }
         });
       }, 1500);
