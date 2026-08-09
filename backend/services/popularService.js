@@ -67,13 +67,23 @@ async function buildPopularResults(limit = 12) {
     usedFallback = true;
     if (rpcErr) logger.warn({ err: rpcErr.message }, 'search_popular_apts RPC 실패 — 전국 샘플 fallback');
     const sinceIso = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const { data: rows, error: e2 } = await admin
-      .from('molit_transactions')
-      .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date, deal_amount')
-      .gte('deal_date', sinceIso)
-      .order('deal_date', { ascending: false })
-      .limit(1000);
-    if (e2) throw e2;
+    // REST-CAP-FIX-2026-08-09 (Sprint GGGGGGG): 기존 limit(1000) 은 전국 60일 실측 47,444건의
+    //   2.1%(최근 며칠 버스트)만 보게 해 거래량 랭킹이 왜곡됐다. range 페이징 상한 10,000
+    //   (~최근 2주 커버, 최대 10왕복)으로 표본 10배 확대 — fallback 은 여전히 근사치이며
+    //   주경로(RPC search_popular_apts·일일 스냅샷)가 정상이면 이 코드는 돌지 않는다.
+    const rows = [];
+    for (let _from = 0; _from <= 9000; _from += 1000) {
+      const { data: _page, error: e2 } = await admin
+        .from('molit_transactions')
+        .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date, deal_amount')
+        .gte('deal_date', sinceIso)
+        .order('deal_date', { ascending: false })
+        .order('id', { ascending: false })
+        .range(_from, _from + 999);
+      if (e2) throw e2;
+      if (_page && _page.length) rows.push(..._page);
+      if (!_page || _page.length < 1000) break;
+    }
     const byApt = {};
     for (const r of (rows || [])) {
       const k = `${r.apt_name}|${r.sigungu}|${r.umd_nm}`;

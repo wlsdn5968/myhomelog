@@ -428,15 +428,26 @@ router.get('/in-bounds', async (req, res) => {
     //   [회귀 위험] geocache triple 8878 중 8816(99.3%)이 동일 (name,sigungu,umd) molit row 보유 →
     //     정상 단지 영향 0. 자기 지역 매칭 없는 유령 마커(예: 공릉동 "풍림아파트" — 실제는 공릉풍림아이원)만 사라짐.
     const umds = [...new Set(coords.map(c => c.umd_nm).filter(Boolean))];
-    let _txQuery = admin
-      .from('molit_transactions')
-      .select('apt_name, sigungu, umd_nm, deal_amount, build_year, deal_date, lawd_cd')
-      .in('apt_name', names);
-    if (umds.length) _txQuery = _txQuery.in('umd_nm', umds); // 동 스코프 — 전국 동명 충돌 차단 + row budget 보호
-    const { data: txs } = await _txQuery
-      .gte('deal_date', new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0,10))
-      .order('deal_date', { ascending: false })
-      .limit(1000);
+    // REST-CAP-FIX-2026-08-09 (Sprint GGGGGGG): 기존 .limit(1000) 단일 쿼리는 PostgREST 1000행
+    //   캡 — 실측(상위 100단지 180일 거래 8,881건)상 밀집/광역 viewport 에서 최신 일부만 집계돼
+    //   마커 평균가·건수가 왜곡됐다. range 페이징(상한 10,000)으로 전량 수집 — 통상 viewport 는
+    //   1페이지(<1000)로 끝나 왕복 증가 없음. 2차 정렬키 id 로 페이지 경계 안정화.
+    const _cut180 = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const txs = [];
+    for (let _from = 0; _from <= 9000; _from += 1000) {
+      let _q = admin
+        .from('molit_transactions')
+        .select('apt_name, sigungu, umd_nm, deal_amount, build_year, deal_date, lawd_cd')
+        .in('apt_name', names);
+      if (umds.length) _q = _q.in('umd_nm', umds); // 동 스코프 — 전국 동명 충돌 차단 + row budget 보호
+      const { data: _page } = await _q
+        .gte('deal_date', _cut180)
+        .order('deal_date', { ascending: false })
+        .order('id', { ascending: false })
+        .range(_from, _from + 999);
+      if (_page && _page.length) txs.push(..._page);
+      if (!_page || _page.length < 1000) break;
+    }
     const aptStats = {};
     for (const t of (txs || [])) {
       // (apt_name|sigungu|umd_nm) 정확 키 — 동명 타지역 단지 합산 차단
@@ -455,11 +466,22 @@ router.get('/in-bounds', async (req, res) => {
     //   (umds 는 위 CROSS-REGION-FIX 에서 이미 계산 — 재사용)
     const aliasToMaster = {}; // key: `${alias}|${umd}` → master row
     if (umds.length) {
-      const { data: masters } = await admin
-        .from('apt_master')
-        .select('apt_name, sigungu, umd_nm, kapt_code, molit_aliases')
-        .in('umd_nm', umds)
-        .not('molit_aliases', 'is', null);
+      // REST-CAP-FIX-2026-08-09: limit 없는 SELECT 는 PostgREST 서버 캡(1000)에 조용히 잘림 —
+      //   molit_aliases 보유 행이 14,901(사실상 전체)라 광역 viewport(상위 100동 = 실측 4,574행)에서
+      //   alias 병합 누락 → 같은 단지 마커 분리(ALIAS-MERGE 이전 버그) 재발 위험. kapt_code 안정
+      //   정렬 + range 페이징(상한 5,000).
+      const masters = [];
+      for (let _mf = 0; _mf <= 4000; _mf += 1000) {
+        const { data: _mp } = await admin
+          .from('apt_master')
+          .select('apt_name, sigungu, umd_nm, kapt_code, molit_aliases')
+          .in('umd_nm', umds)
+          .not('molit_aliases', 'is', null)
+          .order('kapt_code', { ascending: true })
+          .range(_mf, _mf + 999);
+        if (_mp && _mp.length) masters.push(..._mp);
+        if (!_mp || _mp.length < 1000) break;
+      }
       for (const m of (masters || [])) {
         const al = Array.isArray(m.molit_aliases) ? m.molit_aliases : [];
         for (const a of al) aliasToMaster[`${a}|${m.umd_nm}`] = m;

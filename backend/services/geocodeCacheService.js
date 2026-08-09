@@ -38,6 +38,14 @@ const KAKAO_ADDRESS = 'https://dapi.kakao.com/v2/local/search/address.json';
 //   이들은 sigungu 이름만으론 도시 식별 불가 → 지오코딩 시 umd(법정동) 하드 검증 필수.
 const AMBIGUOUS_SGG = new Set(['강서구', '남구', '동구', '북구', '서구', '중구']);
 
+// Sprint LL #2/#3 + CANON-COORD-FIX-2026-06-03: 非아파트/하위시설(충전소/주차장/정류장/정문/
+//   관리사무소/놀이터 등) 좌표 환각 차단 패턴. "상가"는 주상복합 명칭 충돌로 제외(소프트 강등만).
+// GEO-VALIDATE-SSOT-2026-08-09 (Sprint GGGGGGG): routes/geocode.js 가 동일 검증을 복붙했다가
+//   ca9fcf7(Sprint LL) 1회 동기화 후 방치돼 드리프트(충전소·중개사 등 미차단)된 실이력 —
+//   상수를 모듈 레벨로 승격·export 해 두 경로가 같은 패턴을 쓰게 한다. 갱신은 여기 한 곳만.
+const NON_APT_PATTERNS = /빌라|사우나|어린이집|유치원|학원|마트|편의점|식당|카페|커피|사옥|호텔|모텔|병원|약국|의원|학교|교회|성당|사찰|공원|체육관|주유소|미용실|세탁소|꽃집|충전소|주차장|정류장|정문|후문|관리사무소|경비실|놀이터|공인중개사|중개사|부동산|사무소|은행|노래방/;
+const NON_APT_CATEGORY = /빌라|사우나|어린이집|유치원|학원|마트|편의점|음식점|카페|커피|호텔|모텔|병원|약국|학교|종교|공원|체육|주유소|미용|세탁|꽃집|충전|주차|정류|중개|부동산|은행/;
+
 function dbClient() {
   if (!DB_ENABLED) return null;
   return getSupabaseAdmin();
@@ -194,11 +202,6 @@ async function kakaoGeocode({ aptName, sigungu, umdNm, address }, _diag) {
       //   #1 umdNm 검증 추가 — sgg 같지만 다른 동 응답 차단 (예: 모아1 중흥동 요청 → 두암동 응답)
       //   #2 place_name 카테고리 필터 — 어린이집/사우나/학원/마트/오피스텔 등 非아파트 결과 차단
       //   #3 category_name 도 검증 — "주거시설>아파트" 만 우선 (Kakao 의 카테고리 분류)
-      // CANON-COORD-FIX-2026-06-03: 하위시설(충전소/주차장/정류장/정문/관리사무소/놀이터) 추가 —
-      //   단지 본체에서 오프셋된 좌표 매칭 차단(실측: 풍림아파트A→전기차충전소 158m, B→상가주차장 392m).
-      //   "상가"는 주상복합 명칭과 충돌 위험으로 제외(애매), "주차장/충전소" 등 단지명에 없는 명백한 시설만 추가.
-      const NON_APT_PATTERNS = /빌라|사우나|어린이집|유치원|학원|마트|편의점|식당|카페|커피|사옥|호텔|모텔|병원|약국|의원|학교|교회|성당|사찰|공원|체육관|주유소|미용실|세탁소|꽃집|충전소|주차장|정류장|정문|후문|관리사무소|경비실|놀이터|공인중개사|중개사|부동산|사무소|은행|노래방/;
-      const NON_APT_CATEGORY = /빌라|사우나|어린이집|유치원|학원|마트|편의점|음식점|카페|커피|호텔|모텔|병원|약국|학교|종교|공원|체육|주유소|미용|세탁|꽃집|충전|주차|정류|중개|부동산|은행/;
       let chosen = null;
       let bestScore = -1;
       for (const d of docs) {
@@ -462,4 +465,4 @@ async function resolveCoordBatch(apts, concurrency = 4, diags) {
 }
 
 // buildKey·saveToDb 는 백필의 지번 주소 폴백(Sprint CCCCCCC)이 키 규약·저장 경로를 재사용하기 위해 노출.
-module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb };
+module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb, NON_APT_PATTERNS, NON_APT_CATEGORY, AMBIGUOUS_SGG };

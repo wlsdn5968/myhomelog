@@ -5,6 +5,11 @@ const cache = require('../cache');
 const logger = require('../logger');
 const { isValidKoreaCoord } = require('../utils/geo');
 const { getRedis } = require('../redis');
+// GEO-VALIDATE-SSOT-2026-08-09 (Sprint GGGGGGG): 이 라우트의 kakaoGeocode 는 서비스 경로
+//   (geocodeCacheService)의 복붙본으로 ca9fcf7(Sprint LL) 1회 동기화 후 방치 — 충전소·주차장·
+//   중개사 차단, AMBIGUOUS_SGG(동명 구) umd 하드필터, 상가 소프트 강등이 빠진 채 드리프트됨.
+//   검증 상수·정책을 서비스 모듈에서 import 해 동일화(재드리프트 원천 차단).
+const { NON_APT_PATTERNS, NON_APT_CATEGORY, AMBIGUOUS_SGG } = require('../services/geocodeCacheService');
 
 // ── GEOCAP-2026-08-09 (Plan 002): 서비스 전역 일일 Kakao 호출 상한 ─────────────────────
 // 이 라우트는 인증 없이 열려 있고 캐시 키가 요청 텍스트라 캐시 미스를 강제할 수 있어,
@@ -65,8 +70,8 @@ async function kakaoGeocode(key, aptName, area, sigungu, umdNm) {
       //   3-tier 점수 매칭:
       //     - umdMatch: +2, aptCategory: +2, nonAptPenalty: -5
       //     - bestScore < 0 차단
-      const NON_APT_PATTERNS = /빌라|사우나|어린이집|유치원|학원|마트|편의점|식당|카페|사옥|호텔|모텔|병원|약국|의원|학교|교회|성당|사찰|공원|체육관|주유소|미용실|세탁소|꽃집/;
-      const NON_APT_CATEGORY = /빌라|사우나|어린이집|유치원|학원|마트|편의점|음식점|카페|호텔|모텔|병원|약국|학교|종교|공원|체육|주유소|미용|세탁|꽃집/;
+      // GEO-VALIDATE-SSOT-2026-08-09: 검증 상수·판정식을 geocodeCacheService 와 동일화
+      //   (AMBIGUOUS_SGG umd 하드필터 + sanggaPenalty 추가 — 서비스 경로와 같은 정책).
       let chosen = null;
       let bestScore = -1;
       for (const d of docs) {
@@ -81,12 +86,16 @@ async function kakaoGeocode(key, aptName, area, sigungu, umdNm) {
         const categoryName = d.category_name || '';
         // SIGUNGU-SPACE-FIX-2026-06-14: molit "안양시동안구"(붙임) vs Kakao "안양시 동안구"(띄어쓰기) → 공백 무시 비교 (경기 시+구 좌표 갭 해소)
         if (sgg && !addrText.replace(/\s+/g, '').includes(sgg.replace(/\s+/g, ''))) continue; // sigungu 불일치 → 환각 reject
+        // CROSS-CITY-FIX-2026-06-03 동일화: 중복 시군구명(서구/중구 등)은 umd(법정동) 하드 필터 필수
+        if (sgg && umd && AMBIGUOUS_SGG.has(sgg) && !addrText.replace(/\s+/g, '').includes(umd.replace(/\s+/g, ''))) continue;
         const isNonApt = (placeName && NON_APT_PATTERNS.test(placeName))
                       || (categoryName && NON_APT_CATEGORY.test(categoryName));
         const umdMatch = umd && addrText.replace(/\s+/g, '').includes(umd.replace(/\s+/g, '')) ? 2 : 0;
         const aptCategory = categoryName.includes('아파트') ? 2 : 0;
         const nonAptPenalty = isNonApt ? -5 : 0;
-        const score = umdMatch + aptCategory + nonAptPenalty;
+        // SANGGA-SOFT-2026-07-17 동일화: '상가' place 는 소프트 강등(-1) — 본체 후보가 있으면 그쪽 우선
+        const sanggaPenalty = (!isNonApt && /상가/.test(placeName)) ? -1 : 0;
+        const score = umdMatch + aptCategory + nonAptPenalty + sanggaPenalty;
         if (score > bestScore) {
           bestScore = score;
           chosen = { d, lat, lng, addrText, score };
