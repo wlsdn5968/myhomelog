@@ -113,4 +113,12 @@ function invalidatePlanCache(userId) {
   cache.del(`plan:${userId}`);
 }
 
-module.exports = { getActivePlan, getLimitsForPlan, invalidatePlanCache, PLAN_LIMITS, isAdminEmail };
+/** 구독 만료일 계산 — 기존 만료가 미래면 그 시점+30일(잔여 이월), 아니면 now+30일.
+ *  P0(2026-05-04) "만료 전 재결제 시 잔여일 손실" 재발 방지의 단일 소스 — billing confirm/webhook
+ *  두 곳에 독립 중복이던 인라인 계산을 여기로 단일화(동작 불변). (Plan 004) */
+function computePeriodEnd(existingEndIso, now) {
+  const base = (existingEndIso && new Date(existingEndIso) > now) ? new Date(existingEndIso) : now;
+  return new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000);
+}
+
+module.exports = { getActivePlan, getLimitsForPlan, invalidatePlanCache, PLAN_LIMITS, isAdminEmail, computePeriodEnd };

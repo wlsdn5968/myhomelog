@@ -205,3 +205,33 @@ test('dataGoKrClient — IP-거부 패턴 판정과 정상 4xx 구분, URL 조�
   // 화이트리스트 — Edge Function(supabase/functions/datagokr-proxy)과 동일해야 한다
   assert.deepEqual([...ALLOWED_HOSTS].sort(), ['api.odcloud.kr', 'apis.data.go.kr', 'ecos.bok.or.kr']);
 });
+
+// ── Plan 004: 결제 기간 이월 — P0(2026-05-04) "만료 전 재결제 시 잔여일 손실" 재발 방지 고정 ──
+//   confirm/webhook 이 공유하는 단일 소스 computePeriodEnd 의 경계 4케이스를 고정한다.
+test('computePeriodEnd — 잔여기간 이월 경계(미보유/과거/미래/정확히 현재)', () => {
+  const { computePeriodEnd } = require('../services/planService');
+  const now = new Date('2026-08-09T00:00:00Z');
+  const D30 = 30 * 24 * 60 * 60 * 1000;
+  // 미보유 → now+30일
+  assert.equal(computePeriodEnd(null, now).getTime(), now.getTime() + D30);
+  assert.equal(computePeriodEnd(undefined, now).getTime(), now.getTime() + D30);
+  // 과거 만료 → now+30일 (이월 없음)
+  assert.equal(computePeriodEnd('2026-08-08T00:00:00Z', now).getTime(), now.getTime() + D30);
+  // 미래 만료(+5일) → 그 시점+30일 (잔여 5일 보존 — P0 의 핵심)
+  assert.equal(computePeriodEnd('2026-08-14T00:00:00Z', now).getTime(),
+    new Date('2026-08-14T00:00:00Z').getTime() + D30);
+  // 정확히 현재 → now+30일 (`>` 비교 — 현재 동작 고정)
+  assert.equal(computePeriodEnd('2026-08-09T00:00:00Z', now).getTime(), now.getTime() + D30);
+});
+
+// ── Plan 004: 규제지역 판정 — LTV 40↔70% 를 가르는 백엔드 판정의 경계 고정 ─────────────
+//   로컬 테스트 환경(SUPABASE env 없음)에서는 getSnapshot 이 FALLBACK 경로로 결정적으로 동작한다.
+test('isRegulatedRegion — 서울/규제 키워드/비규제/빈 문자열 경계', async () => {
+  const { isRegulatedRegion } = require('../services/regulationsService');
+  assert.equal(await isRegulatedRegion('서울'), true);
+  assert.equal(await isRegulatedRegion('강남'), true);
+  assert.equal(await isRegulatedRegion('송파구'), true);
+  assert.equal(await isRegulatedRegion('분당'), true);
+  assert.equal(await isRegulatedRegion(''), false);
+  assert.equal(await isRegulatedRegion('일산'), false);
+});
