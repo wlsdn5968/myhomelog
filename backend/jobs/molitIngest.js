@@ -20,6 +20,7 @@ const dgk = require('../services/dataGoKrClient');
 const { createClient } = require('@supabase/supabase-js');
 const logger = require('../logger');
 const { LAWD_CODES, LAWD_CODE_TO_NAME } = require('../services/transactionService');
+const { itemArray, parseAmountManwon, isCanceled } = require('../utils/molitParse');
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 // Vercel env 가 'service_role' 짧은 이름으로 추가될 수 있어 fallback (D1 ETL 운영 호환)
@@ -123,8 +124,7 @@ async function fetchRegionMonth(lawdCd, dealYm) {
         if (header?.resultCode && !MOLIT_OK_CODES.has(header.resultCode)) {
           throw new Error(`MOLIT resultCode=${header.resultCode} msg=${header.resultMsg}`);
         }
-        const items = body?.items?.item;
-        const list = Array.isArray(items) ? items : items ? [items] : [];
+        const list = itemArray(body?.items?.item);
         const total = body?.totalCount != null ? parseInt(body.totalCount, 10) : null;
         return { list, total };
       } catch (e) {
@@ -160,7 +160,7 @@ async function fetchRegionMonth(lawdCd, dealYm) {
   }
 
   return all
-    .filter(item => !String(item.cdealType || '').trim()) // 해제 거래 제외
+    .filter(item => !isCanceled(item)) // 해제 거래 제외
     .map(item => {
       const dy = parseInt(item.dealYear) || 0;
       const dm = parseInt(item.dealMonth) || 0;
@@ -182,7 +182,7 @@ async function fetchRegionMonth(lawdCd, dealYm) {
         deal_date: (dy && dm && dd)
           ? `${dy}-${String(dm).padStart(2,'0')}-${String(dd).padStart(2,'0')}`
           : null,
-        deal_amount: parseInt((item.dealAmount || '0').replace(/,/g, '')) || 0,
+        deal_amount: parseAmountManwon(item.dealAmount),
       };
     })
     .filter(t => t.apt_name && t.deal_date && t.deal_amount > 0);

@@ -13,6 +13,7 @@
 const dgk = require('./dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): 직접+Edge 릴레이
 const cache = require('../cache');
 const logger = require('../logger');
+const { itemArray, parseAmountManwon, isCanceled } = require('../utils/molitParse');
 
 const MOLIT_RENT_URL =
   'https://apis.data.go.kr/1613000/RTMSDataSvcAptRent/getRTMSDataSvcAptRent';
@@ -69,8 +70,7 @@ async function getRentTransactions(lawdCd, dealYm) {
       const body = response.data?.response?.body;
       header = response.data?.response?.header || header;
       totalCount = body?.totalCount != null ? parseInt(body.totalCount, 10) : totalCount;
-      const items = body?.items?.item;
-      const pageItems = Array.isArray(items) ? items : items ? [items] : [];
+      const pageItems = itemArray(body?.items?.item);
 
       if (header && header.resultCode && !MOLIT_OK_CODES.has(header.resultCode)) {
         logger.warn({
@@ -104,8 +104,7 @@ async function getRentTransactions(lawdCd, dealYm) {
     // 매매와 동일하게 cdealType 비어있지 않으면 해제 거래로 간주, 제외.
     const result = allItems
       .filter(item => {
-        const cancelled = String(item.cdealType || '').trim();
-        if (cancelled) {
+        if (isCanceled(item)) {
           cancelledCount++;
           return false;
         }
@@ -119,13 +118,10 @@ async function getRentTransactions(lawdCd, dealYm) {
         dealYear: parseInt(item.dealYear) || 0,
         dealMonth: parseInt(item.dealMonth) || 0,
         dealDay: parseInt(item.dealDay) || 0,
-        // 보증금·월세 모두 만원 단위
-        // RENT-TYPE-FIX-2026-06-14 (실측 근본수정): MOLIT 전월세 API 가 monthlyRent 를 숫자로 반환(예: 390)하는데
-        //   문자열 가정 .replace() 호출 → (390).replace TypeError → getRentTransactions 전체 throw →
-        //   getJeonseByApt 의 .catch(()=>[]) 로 조용히 0건 → 전세가율·갭 전 단지 null. (deposit 은 "10,000" 문자열이라 무사)
-        //   String() 래핑으로 숫자·문자열 모두 안전. 월세>0(반전세) row 가 한 건이라도 있으면 터지던 버그.
-        deposit: parseInt(String(item.deposit || '0').replace(/,/g, '')) || 0,
-        monthlyRent: parseInt(String(item.monthlyRent || '0').replace(/,/g, '')) || 0,
+        // 보증금·월세 모두 만원 단위. 숫자·문자열 양쪽 안전 파싱은 utils/molitParse 로 통합
+        // (RENT-TYPE-FIX-2026-06-14 실장애 근거는 parseAmountManwon 주석 참조 — Plan 006)
+        deposit: parseAmountManwon(item.deposit),
+        monthlyRent: parseAmountManwon(item.monthlyRent),
       }));
 
     if (cancelledCount > 0) {

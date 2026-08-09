@@ -245,3 +245,37 @@ test('isRegulatedRegion — 서울/규제 키워드/비규제/빈 문자열 경�
   assert.equal(await isRegulatedRegion(''), false);
   assert.equal(await isRegulatedRegion('일산'), false);
 });
+
+// ── Plan 006 (2026-08-09): MOLIT 공통 파싱 헬퍼 — 5곳 복붙 통합의 동작 고정 ────────
+//   parseAmountManwon 의 숫자 입력 케이스는 88e9303 실장애(monthlyRent=390 숫자 → TypeError)의
+//   회귀 고정 — 깨지면 "문자열 전제 파싱" 이 되돌아온 것.
+test('molitParse.parseAmountManwon — 콤마 문자열/숫자/빈값 전 케이스', () => {
+  const { parseAmountManwon } = require('../utils/molitParse');
+  assert.equal(parseAmountManwon('82,500'), 82500);
+  assert.equal(parseAmountManwon('1,234'), 1234);
+  assert.equal(parseAmountManwon(390), 390);       // 숫자 타입 (88e9303 회귀)
+  assert.equal(parseAmountManwon('0'), 0);
+  assert.equal(parseAmountManwon(0), 0);
+  assert.equal(parseAmountManwon(null), 0);
+  assert.equal(parseAmountManwon(undefined), 0);
+  assert.equal(parseAmountManwon(''), 0);
+});
+
+test('molitParse.itemArray — 배열/단일 객체/undefined 정규화', () => {
+  const { itemArray } = require('../utils/molitParse');
+  const a = [{ x: 1 }, { x: 2 }];
+  assert.equal(itemArray(a), a);                    // 배열은 그대로 (복사 없음 — 기존 동작)
+  assert.deepEqual(itemArray({ x: 1 }), [{ x: 1 }]); // 단일 item 이 객체로 오는 MOLIT 특성
+  assert.deepEqual(itemArray(undefined), []);
+  assert.deepEqual(itemArray(null), []);
+});
+
+test('molitParse.isCanceled — cdealType 유/무/공백 판정', () => {
+  const { isCanceled } = require('../utils/molitParse');
+  assert.equal(isCanceled({ cdealType: 'O' }), true);
+  assert.equal(isCanceled({ cdealType: 1 }), true);   // 숫자로 와도 해제로 판정
+  assert.equal(isCanceled({ cdealType: '' }), false);
+  assert.equal(isCanceled({ cdealType: '  ' }), false);
+  assert.equal(isCanceled({}), false);
+  assert.equal(isCanceled(null), false);
+});

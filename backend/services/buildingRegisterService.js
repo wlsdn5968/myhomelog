@@ -16,6 +16,7 @@ const axios = require('axios'); // Kakao 주소검색 전용(릴레이 불필요
 const dgk = require('./dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): data.go.kr 호출만 릴레이 대상
 const logger = require('../logger');
 const { getSupabaseAdmin } = require('../db/client');
+const { itemArray } = require('../utils/molitParse');
 
 const BR_TITLE_URL = 'https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo';
 const KAKAO_ADDRESS = 'https://dapi.kakao.com/v2/local/search/address.json';
@@ -78,8 +79,7 @@ async function resolveJibun(admin, lawdCd, umdNm, aptName) {
         params: { serviceKey: key, LAWD_CD: lawdCd, DEAL_YMD: ym, numOfRows: 1000, pageNo: 1, _type: 'json' },
         timeout: 7000, headers: { Accept: 'application/json' },
       });
-      const items = r.data?.response?.body?.items?.item;
-      const arr = Array.isArray(items) ? items : items ? [items] : [];
+      const arr = itemArray(r.data?.response?.body?.items?.item);
       const hit = arr.find((it) => (it.aptNm || '').trim() === aptName && (!umdNm || (it.umdNm || '').trim() === umdNm) && String(it.jibun || '').trim());
       if (hit) return { jibun: String(hit.jibun).trim(), sigungu: (hit.sggNm || '').trim(), umdNm: (hit.umdNm || '').trim() };
     } catch (_) { /* try previous month */ }
@@ -129,8 +129,7 @@ async function getBuildingTitle({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
       logger.warn({ code, msg: r.data?.response?.header?.resultMsg, aptName }, 'buildingRegister: 표제부 비정상 코드');
       return null;
     }
-    const items = r.data?.response?.body?.items?.item;
-    const arr = Array.isArray(items) ? items : items ? [items] : [];
+    const arr = itemArray(r.data?.response?.body?.items?.item);
     // 대표 동(주건물) = 세대수 최대 — bldNm·연식·구조 등 표시 필드용.
     const best = arr.slice().sort((a, b) =>
       ((parseInt(b.hhldCnt, 10) || 0) - (parseInt(a.hhldCnt, 10) || 0)) ||

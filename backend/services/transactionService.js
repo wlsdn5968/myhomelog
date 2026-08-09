@@ -11,6 +11,7 @@ const logger = require('../logger');
 //   - Z: 양방향 contains + baseAptName (suffix 정규화)
 //   - Z+: LCS insertion (builder/지역명 중간 삽입 case — 서강쌍용예가↔서강예가, 한신코아↔한신잠실코아)
 const { baseAptName, normalizeAptName, isInsertionMatch } = require('../utils/aptName');
+const { itemArray, parseAmountManwon, isCanceled } = require('../utils/molitParse');
 
 const MOLIT_DETAIL_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
 // MOLIT API 성공 코드: '00'(구버전) 또는 '000'(신버전) — 다른 서비스에서도 재사용
@@ -285,8 +286,7 @@ async function getTransactions(lawdCd, dealYm) {
       const body = response.data?.response?.body;
       header = response.data?.response?.header || header;
       totalCount = body?.totalCount != null ? parseInt(body.totalCount, 10) : totalCount;
-      const items = body?.items?.item;
-      const pageItems = Array.isArray(items) ? items : items ? [items] : [];
+      const pageItems = itemArray(body?.items?.item);
 
       if (header && header.resultCode && !MOLIT_OK_CODES.has(header.resultCode)) {
         logger.warn({
@@ -322,8 +322,7 @@ async function getTransactions(lawdCd, dealYm) {
     //          필터 안 하면 "네이버엔 없는 거래가 여기엔 있다" 는 불일치 원인 (Bug #3)
     const result = allItems
       .filter(item => {
-        const cancelled = String(item.cdealType || '').trim();
-        if (cancelled) {
+        if (isCanceled(item)) {
           cancelledCount++;
           return false;
         }
@@ -339,7 +338,7 @@ async function getTransactions(lawdCd, dealYm) {
         dealYear: parseInt(item.dealYear) || 0,
         dealMonth: parseInt(item.dealMonth) || 0,
         dealDay: parseInt(item.dealDay) || 0,
-        dealAmount: parseInt((item.dealAmount || '0').replace(/,/g, '')) || 0,
+        dealAmount: parseAmountManwon(item.dealAmount),
         lawdCd: item.regionCode || lawdCd,
         aptSeq: item.aptSeq || '',
       }));
