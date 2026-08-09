@@ -295,7 +295,9 @@ async function saveToDb(key, entry) {
       place_name: entry.placeName || null,
       lat: entry.lat,
       lng: entry.lng,
-      source: 'kakao',
+      // ADDR-FALLBACK-2026-08-09 (Sprint CCCCCCC): 지번 주소 폴백 저장분은 'kakao-addr' 로 구분 —
+      //   사후 품질 분석(이름 매칭 vs 주소 매칭)을 위해. 기존 호출처는 source 미지정 → 'kakao' 불변.
+      source: entry.source || 'kakao',
     }, { onConflict: 'apt_key' });
     cache.set(`geo-db:${key}`, { lat: entry.lat, lng: entry.lng, address: entry.address, placeName: entry.placeName }, 3600);
   } catch (e) {
@@ -314,7 +316,11 @@ async function saveToDb(key, entry) {
  *  [안전] Redis 미설정이면 항상 false → 기존 동작(매일 재시도)으로 자연 폴백.
  *    TTL 30일이라 매칭 로직이 개선되면 자동 재시도. 즉시 리셋은 Redis 키 삭제(geofail:*).
  *  [호출] 백필 잡의 nomatch 확정 항목만. HTTP 오류('error')·온디맨드 실패는 기록하지 않는다. */
-const GEOFAIL_PREFIX = 'geofail:';
+// ADDR-FALLBACK-2026-08-09 (Sprint CCCCCCC): prefix 세대교체 'geofail:' → 'geofail2:' —
+//   기존 무매칭 확정 ~4천 건은 **이름 검색만** 실패한 것이고, 새로 추가된 지번 주소 폴백으로는
+//   해석될 수 있다(실측: '황골마을주공1' 이름 무매칭 ↔ '영통동 955-1' 주소 매칭). prefix 를 바꾸면
+//   구 마킹이 자연 무효화되어 전 후보가 새 로직으로 재시도되고, 구 키는 TTL 30일로 스스로 사라진다.
+const GEOFAIL_PREFIX = 'geofail2:';
 const GEOFAIL_TTL_SEC = 30 * 24 * 3600;
 
 async function markGeoFail(apt) {
@@ -456,4 +462,5 @@ async function resolveCoordBatch(apts, concurrency = 4, diags) {
   return results;
 }
 
-module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed };
+// buildKey·saveToDb 는 백필의 지번 주소 폴백(Sprint CCCCCCC)이 키 규약·저장 경로를 재사용하기 위해 노출.
+module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb };

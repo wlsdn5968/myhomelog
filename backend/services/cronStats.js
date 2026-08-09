@@ -31,7 +31,7 @@ function _pick(summary) {
   //   ok 가 숫자면 여기서 통과, boolean false 면 아래 실패 표기 분기 — 두 의미가 충돌하지 않는다.
   const NUM = ['processed', 'inserted', 'failed', 'batches', 'rawPoolSize', 'poolSize',
     'skippedKnownFail', 'sentinelMarked', 'elapsedMs', 'updated', 'scanned', 'gapsFixed',
-    'ok', 'err', 'skipped', 'retried', 'filled', 'missed'];
+    'ok', 'err', 'skipped', 'retried', 'filled', 'missed', 'addrTried', 'addrInserted'];
   const out = {};
   for (const k of NUM) {
     const v = summary[k];

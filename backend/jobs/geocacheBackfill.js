@@ -19,7 +19,7 @@
  *   - resolveCoord 자체가 saveToDb 진행 → INSERT 자동
  */
 const { createClient } = require('@supabase/supabase-js');
-const { resolveCoordBatch, kakaoGeocode, getKakaoUsageStats, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed } = require('../services/geocodeCacheService');
+const { resolveCoordBatch, kakaoGeocode, getKakaoUsageStats, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb } = require('../services/geocodeCacheService');
 const { isValidKoreaCoord } = require('../utils/geo');
 const logger = require('../logger');
 
@@ -258,9 +258,53 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
   const _filtered = await filterOutGeoFailed(
     rawPool.map(t => ({ aptName: t.apt_name, sigungu: t.sigungu, umdNm: t.umd_nm }))
   );
+
+  // ── ADDR-FALLBACK-2026-08-09 (Sprint CCCCCCC): 이름 무매칭 확정 단지의 지번 주소 폴백 ──
+  // [근거 실측] 미좌표 활성 6,389그룹 중 5,040(78.9%)이 molit 지번 보유. 거래량 상위 무매칭이
+  //   전부 이름 이형('황골마을주공1'·'충무주공(872)' 등 — Kakao 이름 검색에 없음)인데,
+  //   같은 단지가 '영통동 955-1' 지번 주소로는 정확히 매칭됨(카카오맵 실검증).
+  // [원칙] 이름 매칭 "완화"(환각 위험)가 아니라 **신고 지번이라는 더 정확한 근거**로의 폴백.
+  //   결과 주소에 시군구(공백 무시)+법정동 포함을 재검증해 동명 오배치를 차단한다.
+  /** molit 'sigungu' 붙임 표기("안양시동안구")를 Kakao 주소 파서용("안양시 동안구")으로 — 단일어 구는 불변 */
+  const _sggWithSpace = (sgg) => String(sgg || '').replace(/^(.{2,}?시)(.{2,}구)$/, '$1 $2');
+  /** 단지의 최근 1년 최빈 지번 — 없으면 null */
+  const _modeJibun = async (it) => {
+    try {
+      let q = admin.from('molit_transactions').select('jibun')
+        .eq('apt_name', it.aptName).eq('sigungu', it.sigungu)
+        .not('jibun', 'is', null)
+        .gte('deal_date', new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10))
+        .limit(40);
+      if (it.umdNm) q = q.eq('umd_nm', it.umdNm);
+      const { data } = await q;
+      const cnt = new Map();
+      for (const r of (data || [])) {
+        const j = String(r.jibun || '').trim();
+        if (j) cnt.set(j, (cnt.get(j) || 0) + 1);
+      }
+      let best = null, bestN = 0;
+      for (const [j, n] of cnt.entries()) if (n > bestN) { best = j; bestN = n; }
+      return best;
+    } catch (_) { return null; }
+  };
+  /** nomatch 항목 1개의 주소 폴백 시도 — 성공 시 저장까지. true=좌표 확보 */
+  const _tryAddrFallback = async (it) => {
+    const jibun = await _modeJibun(it);
+    if (!jibun) return false;
+    const address = `${_sggWithSpace(it.sigungu)} ${it.umdNm || ''} ${jibun}`.replace(/\s+/g, ' ').trim();
+    const g = await kakaoAddressGeocode(address);
+    if (!g || !isValidKoreaCoord(g.lat, g.lng)) return false;
+    // 동명 오배치 방어 — 응답 주소가 우리 시군구(공백 무시)·법정동을 실제로 포함하는지(kakaoGeocode 검증과 동일 원칙)
+    const flat = String(g.address || '').replace(/\s+/g, '');
+    if (it.sigungu && !flat.includes(String(it.sigungu).replace(/\s+/g, ''))) return false;
+    if (it.umdNm && !flat.includes(String(it.umdNm).replace(/\s+/g, ''))) return false;
+    await saveToDb(buildKey(it), { ...it, lat: g.lat, lng: g.lng, address: g.address, source: 'kakao-addr' });
+    return true;
+  };
   const candidates = _filtered.kept.map(i => ({ apt_name: i.aptName, sigungu: i.sigungu, umd_nm: i.umdNm }));
   const skippedKnownFail = _filtered.skipped;
   let totalProcessed = 0, totalInserted = 0, totalFailed = 0, totalSentinel = 0, batches = 0, idx = 0;
+  let addrTried = 0, addrInserted = 0; // Sprint CCCCCCC — 주소 폴백 관측(health.crons 노출)
   while (idx < candidates.length && (Date.now() - started) < budgetMs - 15000) {  // 15s 마진
     const slice = candidates.slice(idx, idx + batchSize);
     idx += slice.length;
@@ -273,10 +317,22 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
     const diags = new Array(items.length);
     const results = await resolveCoordBatch(items, 8, diags);
     let inserted = 0;
-    const toMark = [];
+    const noMatches = [];
     for (let i = 0; i < items.length; i++) {
       if (results[i] && results[i].lat && results[i].lng) { inserted++; continue; }
-      if (diags[i] && diags[i].outcome === 'nomatch') toMark.push(items[i]);
+      if (diags[i] && diags[i].outcome === 'nomatch') noMatches.push(items[i]);
+    }
+    // ADDR-FALLBACK-2026-08-09 (Sprint CCCCCCC): 이름 무매칭은 곧장 sentinel 이 아니라 지번 주소로 2차 시도.
+    //   8개씩 병렬(위 resolveCoordBatch 동시성과 동일한 Kakao 보호 수준). 주소까지 실패한 것만 확정 실패.
+    const toMark = [];
+    for (let i = 0; i < noMatches.length; i += 8) {
+      const chunk = noMatches.slice(i, i + 8);
+      const hits = await Promise.all(chunk.map(it => _tryAddrFallback(it).catch(() => false)));
+      for (let k = 0; k < chunk.length; k++) {
+        addrTried++;
+        if (hits[k]) { inserted++; addrInserted++; }
+        else toMark.push(chunk[k]);
+      }
     }
     if (toMark.length) {
       // Redis 기록은 병렬 — 순차 await 로 batch 시간을 잡아먹지 않게(이전 DB INSERT 판의 교훈)
@@ -295,7 +351,7 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
     totalProcessed, totalInserted, totalFailed, totalSentinel, elapsedMs: elapsed,
   }, `geocache backfill: ${batches} batches, ${totalInserted}/${totalProcessed} 백필 (풀 ${rawPool.length}→${candidates.length}, 기지실패제외 ${skippedKnownFail}, sentinel ${totalSentinel}) (${elapsed}ms)`);
   // KAKAO-DIAG-2026-07-10 (Sprint CCCC): 실패 사유 원격 확정용 — 이 run 인스턴스의 Kakao ok/무매칭/에러코드 분포 동봉.
-  return { ok: true, reheal, addrVerify, batches, rawPoolSize: rawPool.length, poolSize: candidates.length, skippedKnownFail, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, sentinelMarked: totalSentinel, elapsedMs: elapsed, kakao: getKakaoUsageStats() };
+  return { ok: true, reheal, addrVerify, batches, rawPoolSize: rawPool.length, poolSize: candidates.length, skippedKnownFail, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, sentinelMarked: totalSentinel, addrTried, addrInserted, elapsedMs: elapsed, kakao: getKakaoUsageStats() };
 }
 
 /**
