@@ -40,7 +40,7 @@ ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
 | 국토부 실거래가 | [data.go.kr](https://www.data.go.kr) 검색: "아파트매매 실거래가 상세자료" | ✅ 무료 |
 | 카카오 지오코딩 | [developers.kakao.com](https://developers.kakao.com) → REST API 키 | ✅ 무료 (월 30만건) |
 | Anthropic Claude | [console.anthropic.com](https://console.anthropic.com) | 유료 (사용량 기반) |
-| 네이버 지도 | [console.ncloud.com](https://console.ncloud.com) → Maps | 월 100만건 무료 (선택, 현재 미사용 — Leaflet/OSM 기본) |
+| 네이버 지도 | [console.ncloud.com](https://console.ncloud.com) → Maps | 월 100만건 무료 (기본 지도 엔진 — `NAVER_MAPS_CLIENT_ID` 설정 시. 미설정·인증 실패 시 Leaflet/OSM 자동 폴백) |
 
 ### 3. 백엔드 실행
 
@@ -61,11 +61,14 @@ python3 -m http.server 3000
 
 또는 VS Code Live Server / npx serve 사용
 
-### 5. 네이버 지도 연동 (선택, 현재 미사용)
+### 5. 네이버 지도 (기본 지도 엔진)
 
-현재 기본 구현은 Leaflet + OpenStreetMap (위성지도는 Esri World Imagery tile). 네이버 지도는 향후 옵션으로 검토 중이며 필수 아님.
+프로덕션 기본 지도는 **네이버 지도(NCP Web Dynamic Map)** 다 — `/api/health` 가 내려주는
+`NAVER_MAPS_CLIENT_ID` 로 SDK 를 로드한다(frontend `NAVER-MAPS-2026-05-13` 주석 참고).
+키 미설정·SDK 인증 실패 시 **Leaflet + OpenStreetMap 으로 자동 폴백**하므로 키 없이도
+로컬 개발이 가능하다(위성지도는 Esri World Imagery tile).
 
-기본 동작은 카카오 좌표 검색/캐시(`backend/services/geocodeCacheService.js`) + Leaflet 마커로 처리됨.
+좌표는 엔진과 무관하게 카카오 좌표 검색/캐시(`backend/services/geocodeCacheService.js`)로 해석한다.
 
 ---
 
@@ -90,7 +93,7 @@ Vercel Dashboard → Settings → Environment Variables 등록 키:
 - 운영 — `CRON_SECRET` (cron 인증), `ADMIN_EMAILS` (admin endpoint 화이트리스트), `HEALTH_API_KEY`, `ALLOWED_ORIGINS`
 - 로컬 개발에서 `frontend/index.html` 의 `API` 상수는 `/api` 상대 경로 사용 — 별도 백엔드 URL 교체 불필요.
 
-cron 8개(라우트 기준)는 `vercel.json` 의 `crons` 배열로 자동 등록됩니다 — retention · molit-ingest(3슬롯 분할) · apt-master-sync(월요일) · regulations-check · regulations-auto-fetch · audit-prune · geocache-backfill · facility-backfill. (Hobby plan: daily 만 — hourly 미지원)
+cron 10개(라우트 기준)는 `vercel.json` 의 `crons` 배열로 자동 등록됩니다 — retention · molit-ingest(3슬롯 분할) · apt-master-sync(월요일) · regulations-check · regulations-auto-fetch · audit-prune · geocache-backfill · facility-backfill · building-register-backfill · push-notify(관심단지 웹푸시·카톡 발송). (Hobby plan: daily 만 — hourly 미지원)
 
 ## Railway 배포 (현재 미사용 — 옵션 메모)
 
@@ -171,7 +174,7 @@ railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 | Method | Path | Auth | 설명 |
 |--------|------|------|------|
 | GET·POST | /api/admin/run-geocache-backfill | JWT + ADMIN_EMAILS | 백필 즉시 trigger |
-| GET·POST | /api/cron/{retention, molit-ingest, apt-master-sync, regulations-check, regulations-auto-fetch, audit-prune, geocache-backfill, facility-backfill} | CRON_SECRET | `vercel.json` `crons` 자동 등록 8개 라우트 (molit-ingest 는 3슬롯 분할, Hobby plan: daily 만) |
+| GET·POST | /api/cron/{retention, molit-ingest, apt-master-sync, regulations-check, regulations-auto-fetch, audit-prune, geocache-backfill, facility-backfill, building-register-backfill, push-notify} | CRON_SECRET | `vercel.json` `crons` 자동 등록 10개 라우트 (molit-ingest 는 3슬롯 분할, Hobby plan: daily 만) |
 | GET | /share?... | — | 공유 딥링크 (OG 메타 치환 HTML) |
 
 ---
