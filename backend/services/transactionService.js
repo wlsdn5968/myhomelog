@@ -57,15 +57,26 @@ async function getTransactionsFromDb(lawdCd, dealYm) {
     //   인덱스 (lawd_cd, deal_date) 완전 활용 + 정렬 제거 (실측 1.5ms, 7배 단축).
     const _mFrom = `${dy}-${String(dm).padStart(2, '0')}-01`;
     const _mNext = dm === 12 ? `${dy + 1}-01-01` : `${dy}-${String(dm + 1).padStart(2, '0')}-01`;
-    const { data, error } = await admin
-      .from('molit_transactions')
-      .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq')
-      .eq('lawd_cd', lawdCd)
-      .gte('deal_date', _mFrom)
-      .lt('deal_date', _mNext)
-      .order('deal_date', { ascending: false })
-      .limit(1000);
-    if (error) throw error;
+    // REST-CAP-FIX-2026-08-09 (Plan 001): 단일 .limit(1000) 은 PostgREST 서버 캡에 걸려 고거래 월
+    //   데이터가 조용히 잘렸다 — DB 실측: 1000건 초과 (lawd,월) 7개 실존, 최대 화성동탄 202606
+    //   1,905건(905건 47% 누락). getRegionRecentTransactions(REST-CAP-FIX-2026-07-10)와 동일한
+    //   range 페이징 + 2차 정렬키 id(동점 페이지 경계 중복/누락 차단)로 교체.
+    const PAGE = 1000;
+    let data = [];
+    for (let from = 0; from <= 11000; from += PAGE) {
+      const { data: page, error } = await admin
+        .from('molit_transactions')
+        .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq')
+        .eq('lawd_cd', lawdCd)
+        .gte('deal_date', _mFrom)
+        .lt('deal_date', _mNext)
+        .order('deal_date', { ascending: false })
+        .order('id', { ascending: false })
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      if (page && page.length) data = data.concat(page);
+      if (!page || page.length < PAGE) break;
+    }
     return (data || []).map(r => ({
       aptName: r.apt_name,
       sigungu: r.sigungu || '',
