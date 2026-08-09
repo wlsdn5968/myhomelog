@@ -8,11 +8,11 @@ improve 스킬이 2026-08-09 생성 (기준 커밋 `b63da64`). 아래 순서로 
 
 | Plan | Title | Priority | Effort | Depends on | Status |
 |------|-------|----------|--------|------------|--------|
-| 001 | 실거래 DB 조회 1000행 페이징 (고거래 월 최대 47% 누락 실측) | P1 | S | — | TODO |
-| 002 | 공개 geocode 라우트 일일 총량 캡 (Kakao 쿼터 고갈 증폭 차단) | P1 | M | — | TODO |
-| 003 | AI 비용 카운터·좌표 저장 await (서버리스 동결 유실 차단) | P1 | S | — | TODO |
-| 004 | 결제 이월·규제 판정 계약 테스트 (실사고 이력 경로 고정) | P1 | S~M | — | TODO |
-| 005 | README·.env.example·engines 실동작 정합 | P2 | S | — | TODO |
+| 001 | 실거래 DB 조회 1000행 페이징 (고거래 월 최대 47% 누락 실측) | P1 | S | — | DONE (4983974, 2026-08-09) |
+| 002 | 공개 geocode 라우트 일일 총량 캡 (Kakao 쿼터 고갈 증폭 차단) | P1 | M | — | DONE (0e0f982, 2026-08-09) |
+| 003 | AI 비용 카운터·좌표 저장 await (서버리스 동결 유실 차단) | P1 | S | — | DONE (5e6190a, 2026-08-09) |
+| 004 | 결제 이월·규제 판정 계약 테스트 (실사고 이력 경로 고정) | P1 | S~M | — | DONE (d50ed75, 2026-08-09) |
+| 005 | README·.env.example·engines 실동작 정합 | P2 | S | — | DONE (b91fda1, 2026-08-09) |
 
 Status values: TODO | IN PROGRESS | DONE | BLOCKED (한 줄 사유) | REJECTED (한 줄 근거)
 
