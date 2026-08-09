@@ -4,6 +4,33 @@ const axios = require('axios');
 const cache = require('../cache');
 const logger = require('../logger');
 const { isValidKoreaCoord } = require('../utils/geo');
+const { getRedis } = require('../redis');
+
+// ── GEOCAP-2026-08-09 (Plan 002): 서비스 전역 일일 Kakao 호출 상한 ─────────────────────
+// 이 라우트는 인증 없이 열려 있고 캐시 키가 요청 텍스트라 캐시 미스를 강제할 수 있어,
+// 배치 50 × 다단계 폴백으로 요청당 수백 회 Kakao 호출 증폭이 가능했다(쿼터 고갈 → 지도 전면 다운).
+// IP 일일 캡(server.js 의 dailyLimit scope 'geocode')과 별개로, 전역 카운터로 총량 천장을 둔다.
+// 상한 근거: Kakao 경고선 60,000/일의 13% — 백필 cron 등 다른 소비자 여유 확보. 도달 시 Kakao 를
+// 부르지 않고 null 좌표 반환(프론트는 마커 생략으로 graceful). Redis 미설정 시 no-op(fail-open).
+const GEOCODE_GLOBAL_DAILY_CAP = 8000;
+
+/** 카운트 → 차단 여부 (순수 판정 — 테스트 고정). null/undefined = Redis 미설정 → 허용 */
+function _geocodeCapExceeded(count, cap) {
+  if (count === null || count === undefined) return false;
+  return Number(count) > cap;
+}
+
+/** Kakao 실호출 직전에만 호출 — 전역 카운터 증가 후 현재값 반환(실패/미설정 시 null) */
+async function _bumpGeoCap() {
+  const redis = getRedis();
+  if (!redis) return null;
+  try {
+    const key = `geocap:${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
+    const n = await redis.incr(key);
+    if (Number(n) === 1) await redis.expire(key, 2 * 24 * 3600); // 첫 증분 시에만 TTL(2일)
+    return Number(n);
+  } catch (_) { return null; }
+}
 
 // Kakao 좌표 조회: keyword → address fallback
 // STAB-AUDIT-2026-05-06: sigungu·umdNm 명시 시 결과 검증 강제 (동명이지 환각 차단)
@@ -93,6 +120,10 @@ router.post('/', async (req, res) => {
   if (hit) return res.json({ ...hit, fromCache: true });
   const key = process.env.KAKAO_REST_API_KEY;
   if (!key || key === 'your_kakao_rest_key') return res.json({ lat: null, lng: null, error: 'KAKAO_REST_API_KEY 미설정' });
+  // GEOCAP-2026-08-09 (Plan 002): 캐시 미스로 Kakao 실호출 직전에만 전역 카운터 — 히트는 무과금
+  if (_geocodeCapExceeded(await _bumpGeoCap(), GEOCODE_GLOBAL_DAILY_CAP)) {
+    return res.json({ lat: null, lng: null, error: 'quota' });
+  }
   const out = await kakaoGeocode(key, aptName, area, sgg, umd);
   if (!out) return res.json({ lat: null, lng: null, error: '결과없음' });
   cache.set(ck, out, 86400);
@@ -121,6 +152,10 @@ router.post('/batch', async (req, res) => {
     const hit = cache.get(ck);
     if (hit) return { id, ...hit };
     if (!key || key === 'your_kakao_rest_key') return { id, lat: null, lng: null };
+    // GEOCAP-2026-08-09 (Plan 002): 아이템별 — Kakao 실호출 직전에만 카운트(캐시 히트 무과금)
+    if (_geocodeCapExceeded(await _bumpGeoCap(), GEOCODE_GLOBAL_DAILY_CAP)) {
+      return { id, lat: null, lng: null };
+    }
     const out = await kakaoGeocode(key, item.aptName, item.area, sgg, umd);
     if (!out) return { id, lat: null, lng: null };
     cache.set(ck, out, 86400);
@@ -136,3 +171,5 @@ router.post('/batch', async (req, res) => {
 });
 
 module.exports = router;
+// 순수 판정 함수 노출 — 계약 테스트 고정용 (Plan 002)
+module.exports._geocodeCapExceeded = _geocodeCapExceeded;

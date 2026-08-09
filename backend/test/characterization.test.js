@@ -206,6 +206,16 @@ test('dataGoKrClient — IP-거부 패턴 판정과 정상 4xx 구분, URL 조�
   assert.deepEqual([...ALLOWED_HOSTS].sort(), ['api.odcloud.kr', 'apis.data.go.kr', 'ecos.bok.or.kr']);
 });
 
+// ── Plan 002: geocode 전역 캡 판정 — Redis 미설정(null) 은 허용(fail-open), 초과만 차단 ──────
+test('geocode _geocodeCapExceeded — 경계·fail-open', () => {
+  const { _geocodeCapExceeded } = require('../routes/geocode');
+  assert.equal(_geocodeCapExceeded(7999, 8000), false); // 상한 미만 — 허용
+  assert.equal(_geocodeCapExceeded(8000, 8000), false); // 정확히 상한(이번 호출이 8000번째) — 허용
+  assert.equal(_geocodeCapExceeded(8001, 8000), true);  // 초과 — 차단
+  assert.equal(_geocodeCapExceeded(null, 8000), false); // Redis 미설정 — fail-open
+  assert.equal(_geocodeCapExceeded(undefined, 8000), false);
+});
+
 // ── Plan 004: 결제 기간 이월 — P0(2026-05-04) "만료 전 재결제 시 잔여일 손실" 재발 방지 고정 ──
 //   confirm/webhook 이 공유하는 단일 소스 computePeriodEnd 의 경계 4케이스를 고정한다.
 test('computePeriodEnd — 잔여기간 이월 경계(미보유/과거/미래/정확히 현재)', () => {

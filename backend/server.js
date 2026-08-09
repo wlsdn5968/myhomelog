@@ -192,7 +192,9 @@ app.use('/api/region', dataLimiter, require('./routes/region'));
 // Sprint RR: 정부 공식 법령 API (인증 불필요 — 공개 정보)
 app.use('/api/legal', dataLimiter, legalRouter);
 app.use('/api/clause', optionalAuth, chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat', loggedInBonus: 10 }), clauseRouter);
-app.use('/api/geocode', dataLimiter, geocodeRouter);
+// GEOCAP-2026-08-09 (Plan 002): 공개 라우트 + 자유 텍스트 캐시 키 = Kakao 호출 증폭 벡터 —
+//   IP 일일 캡(요청 단위 60/일, 정상 지도 사용 여유) + 라우트 내부 전역 일일 캡(geocode.js) 이중 상한.
+app.use('/api/geocode', dataLimiter, dailyLimit({ limit: 60, scope: 'geocode' }), geocodeRouter);
 app.use('/api/analysis', dataLimiter, analysisRouter);
 app.use('/api/news', optionalAuth, dataLimiter, newsRouter);
 app.use('/api/subscription', dataLimiter, subscriptionRouter);
