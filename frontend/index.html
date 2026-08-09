@@ -7938,9 +7938,13 @@ async function refreshBookmarkPrices(){
           // WATCH-FEED-MIN-2026-08-09 (Sprint HHHHHHH): 배지가 "몇 건"만 말하고 클릭 시 소거돼
           //   무엇이 새 거래였는지 볼 수 없던 갭 — 최신순 최대 3건 요약(월-일·금액·전용)을 함께
           //   보관해 리스트에서 열람 전 미리보기. DB 변경 0 (localStorage 북마크 구조 확장).
-          const _sum=_newOnes.sort((x,y)=>_dk(y).localeCompare(_dk(x))).slice(0,3)
-            .map(t=>({d:_dk(t).slice(5),p:+(t.dealAmount/10000).toFixed(1),ar:Math.round(t.excluUseAr||0)}));
-          b.newDeals=_sum.concat(Array.isArray(b.newDeals)?b.newDeals:[]).slice(0,3);
+          // 같은 날·같은 평형·같은 가격 다건은 1줄로(라이브 실측: 07-21 63.5억 165㎡ ×3 → 정보가치 0)
+          const _seen=new Set();
+          b.newDeals=_newOnes.sort((x,y)=>_dk(y).localeCompare(_dk(x)))
+            .map(t=>({d:_dk(t).slice(5),p:+(t.dealAmount/10000).toFixed(1),ar:Math.round(t.excluUseAr||0)}))
+            .concat(Array.isArray(b.newDeals)?b.newDeals:[])
+            .filter(x=>{const k=`${x.d}|${x.p}|${x.ar}`;if(_seen.has(k))return false;_seen.add(k);return true;})
+            .slice(0,3);
         }
         if(_latest) b.lastLatestDeal=_latest;
       }catch(_){}
