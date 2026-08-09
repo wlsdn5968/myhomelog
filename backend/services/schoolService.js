@@ -17,16 +17,15 @@
  *   - frontend 에는 사실 나열만 ("○○초 0.4km, ○○중 0.7km")
  */
 const axios = require('axios');
-const { createClient } = require('@supabase/supabase-js');
 const cache = require('../cache');
 const logger = require('../logger');
 const { isValidKoreaCoord } = require('../utils/geo');
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 (DB_ENABLED 게이트 의미 유지)
+const { getSupabaseAdmin, hasAdminEnv } = require('../db/client');
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
 const KAKAO_KEY = process.env.KAKAO_REST_API_KEY;
 
-const DB_ENABLED = !!SUPABASE_URL && !!SUPABASE_SERVICE_ROLE_KEY;
+const DB_ENABLED = hasAdminEnv();
 const KAKAO_ENABLED = !!KAKAO_KEY && KAKAO_KEY !== 'your_kakao_rest_key';
 
 const KAKAO_KEYWORD = 'https://dapi.kakao.com/v2/local/search/keyword.json';
@@ -44,9 +43,7 @@ const CACHE_TTL_DAYS = 90;
 
 function dbClient() {
   if (!DB_ENABLED) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return getSupabaseAdmin();
 }
 
 function buildKey({ kaptCode, aptName, sigungu, umdNm }) {

@@ -18,20 +18,13 @@
  *   - audit_log INSERT 실패가 원래 요청을 막으면 안 됨 → try/catch 후 warn 만.
  *   - 실패 로그는 pino 가 Sentry 로 올려줌 → 운영자가 사후 확인 가능.
  */
-const { createClient } = require('@supabase/supabase-js');
 const logger = require('../logger');
 const { maskIp } = require('../logger');
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 (env명 드리프트 재발 차단)
+const { requireSupabaseAdmin } = require('../db/client');
 
 function adminClient() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Supabase service_role 미설정 — audit_log 기록 불가');
-  }
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return requireSupabaseAdmin('audit_log 기록 불가');
 }
 
 /**

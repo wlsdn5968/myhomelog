@@ -20,22 +20,14 @@
  *   POST /api/cron/regulations-check (Vercel Cron 또는 외부 스케줄러)
  *   GET  도 동일 (수동 trigger 용)
  */
-const { createClient } = require('@supabase/supabase-js');
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
+const { getSupabaseReadonly } = require('../db/client');
 const logger = require('../logger');
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY
-                  || process.env.SUPABASE_ANON_KEY
-                  || process.env.SUPABASE_SERVICE_ROLE_KEY
-                  || process.env.service_role;
 
 const STALE_THRESHOLD_DAYS = parseInt(process.env.REGULATIONS_STALE_DAYS || '180', 10);
 
 function client() {
-  if (!SUPABASE_URL || !SUPABASE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return getSupabaseReadonly();
 }
 
 /**

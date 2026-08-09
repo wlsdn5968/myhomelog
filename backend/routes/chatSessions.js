@@ -26,14 +26,12 @@
  *   미스매치 요청이 /api/chat 마운트로 흘러 chat dailyLimit 까지 오소모). 내부 경로에서 prefix 제거.
  */
 const express = require('express');
-const { createClient } = require('@supabase/supabase-js');
 const { requireAuth } = require('../middleware/auth');
 const logger = require('../logger');
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
+const { getUserScopedClient: userScopedClient } = require('../db/client');
 
 const router = express.Router();
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
 
 const MAX_TITLE_LEN = 60;
 const MAX_CONTENT_LEN = 8000; // LLM 응답 1회 상한 + 여유
@@ -42,13 +40,6 @@ const MESSAGES_LIMIT = 200;
 // 컨텍스트 무결성 (2026-05): 클라이언트가 system role 메시지를 저장하지 못하도록 user|assistant 만 허용
 const ALLOWED_ROLES = new Set(['user', 'assistant']);
 
-function userScopedClient(accessToken) {
-  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) throw new Error('Supabase 미설정');
-  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${accessToken}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 router.use(requireAuth);
 

@@ -18,7 +18,7 @@
  *   - serverless maxDuration 안 — budgetMs(기본 240s)-15s 마진에서 chunk loop 종료 (run 함수)
  *   - resolveCoord 자체가 saveToDb 진행 → INSERT 자동
  */
-const { createClient } = require('@supabase/supabase-js');
+const { getSupabaseAdmin } = require('../db/client');
 const { resolveCoordBatch, kakaoGeocode, getKakaoUsageStats, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb } = require('../services/geocodeCacheService');
 const { isValidKoreaCoord } = require('../utils/geo');
 const logger = require('../logger');
@@ -187,17 +187,12 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
   return { tried, verified, corrected, skippedNoAddr };
 }
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
-
 const DEFAULT_CHUNK = 50;
 const MAX_CHUNK = 100;
 
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 (null-게이트 의미 유지)
 function adminClient() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return getSupabaseAdmin();
 }
 
 /**

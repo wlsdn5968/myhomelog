@@ -25,7 +25,8 @@
  *   - audit_log 에 모든 행위 기록 (PIPA 제29조)
  */
 const express = require('express');
-const { createClient } = require('@supabase/supabase-js');
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
+const { getUserScopedClient: userScopedClient, requireSupabaseAdmin } = require('../db/client');
 const { requireAuth } = require('../middleware/auth');
 const { writeAudit } = require('../middleware/auditLog');
 const logger = require('../logger');
@@ -34,27 +35,10 @@ const { maskIp } = require('../logger');
 
 const router = express.Router();
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
-
 const GRACE_DAYS = 30;
 
-function userScopedClient(accessToken) {
-  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) throw new Error('Supabase 미설정');
-  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${accessToken}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
 function adminClient() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Supabase service_role 미설정 — 계정 관리 비활성');
-  }
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return requireSupabaseAdmin('계정 관리 비활성');
 }
 
 // writeAudit: 공용 미들웨어 (backend/middleware/auditLog.js) 사용

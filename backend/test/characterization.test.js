@@ -270,6 +270,18 @@ test('molitParse.itemArray — 배열/단일 객체/undefined 정규화', () => 
   assert.deepEqual(itemArray(null), []);
 });
 
+// ── Plan 007 (2026-08-09): Supabase 클라이언트 SSOT — 공개 읽기 키 체인 순서 고정 ──────
+//   publishable 우선(defense in depth)·service_role 은 최후 폴백. 순서가 바뀌면 "공개 읽기"
+//   경로가 의도보다 넓은 권한(RLS 우회)으로 먼저 붙는 회귀 — 반드시 이 순서 유지.
+test('db/client._pickReadonlyKey — publishable > anon > service_role > service_role(소문자)', () => {
+  const { _pickReadonlyKey } = require('../db/client');
+  assert.equal(_pickReadonlyKey({ SUPABASE_PUBLISHABLE_KEY: 'p', SUPABASE_ANON_KEY: 'a', SUPABASE_SERVICE_ROLE_KEY: 's' }), 'p');
+  assert.equal(_pickReadonlyKey({ SUPABASE_ANON_KEY: 'a', SUPABASE_SERVICE_ROLE_KEY: 's' }), 'a');
+  assert.equal(_pickReadonlyKey({ SUPABASE_SERVICE_ROLE_KEY: 's' }), 's');
+  assert.equal(_pickReadonlyKey({ service_role: 'sr' }), 'sr');
+  assert.equal(_pickReadonlyKey({}), null);
+});
+
 test('molitParse.isCanceled — cdealType 유/무/공백 판정', () => {
   const { isCanceled } = require('../utils/molitParse');
   assert.equal(isCanceled({ cdealType: 'O' }), true);

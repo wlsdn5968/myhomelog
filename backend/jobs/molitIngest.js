@@ -17,14 +17,12 @@
 // RELAY-2026-08-08 (Sprint BBBBBBB): axios 직접 호출 → dataGoKrClient(직접+Edge 릴레이 폴백).
 //   08-02 부터 게이트웨이가 Vercel IP 를 거부(400/code=10, 키 무관 실측) — 시그니처·응답 형태는 axios 동일.
 const dgk = require('../services/dataGoKrClient');
-const { createClient } = require('@supabase/supabase-js');
 const logger = require('../logger');
 const { LAWD_CODES, LAWD_CODE_TO_NAME } = require('../services/transactionService');
 const { itemArray, parseAmountManwon, isCanceled } = require('../utils/molitParse');
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 ('service_role' 짧은 env 폴백 포함)
+const { requireSupabaseAdmin } = require('../db/client');
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-// Vercel env 가 'service_role' 짧은 이름으로 추가될 수 있어 fallback (D1 ETL 운영 호환)
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
 const MOLIT_API_KEY = process.env.MOLIT_API_KEY;
 
 const MOLIT_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
@@ -37,12 +35,7 @@ const CIRCUIT_BREAK_CONSECUTIVE_FAILURES = 3;
 const BATCH_INSERT_SIZE = 500;
 
 function adminClient() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Supabase service_role 미설정 — ETL 불가');
-  }
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return requireSupabaseAdmin('ETL 불가');
 }
 
 /**

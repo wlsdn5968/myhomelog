@@ -19,22 +19,20 @@
  */
 const express = require('express');
 const crypto = require('crypto');
-const { createClient } = require('@supabase/supabase-js');
 const { requireAuth } = require('../middleware/auth');
 const logger = require('../logger');
 const { isKakaoConfigured, exchangeKakaoCode } = require('../services/kakaoMemoService');
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 (null-게이트 의미 유지)
+const { getSupabaseAdmin } = require('../db/client');
 
 const router = express.Router();
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
 const CANONICAL_HOST = 'https://myhomelog.vercel.app';
 const STATE_COOKIE = 'mhl_kko_st';
 const STATE_TTL_MS = 10 * 60 * 1000;
 
 function dbClient() {
-  if (!SUPABASE_URL || !SERVICE_KEY) return null;
-  return createClient(SUPABASE_URL, SERVICE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  return getSupabaseAdmin();
 }
 
 // HMAC 키 — 별도 env 없이 service key 에서 파생 (용도 문자열로 분리)

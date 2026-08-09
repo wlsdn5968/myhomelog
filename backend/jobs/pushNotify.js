@@ -11,20 +11,15 @@
  *   '새로 반영된 거래(ingested_at 기준)'를 1회 조회 → 채널별 매칭·발송 → 워터마크 갱신.
  *   이름 매칭은 NAMEFIX 공용 유틸(normalizeAptName) + molit_aliases canonical — 검색/추천과 동일 semantics.
  */
-const { createClient } = require('@supabase/supabase-js');
 const logger = require('../logger');
 const { getAliasCanonicalMap } = require('../services/transactionService');
 const { normalizeAptName } = require('../utils/aptName');
 const { isKakaoConfigured, sendKakaoMemo, refreshKakaoToken } = require('../services/kakaoMemoService');
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 (null-게이트 의미 유지)
+const { getSupabaseAdmin } = require('../db/client');
 
 function dbClient() {
-  if (!SUPABASE_URL || !SERVICE_KEY) return null;
-  return createClient(SUPABASE_URL, SERVICE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return getSupabaseAdmin();
 }
 
 const norm = s => String(s || '').normalize('NFC').replace(/\s+/g, '').toLowerCase();

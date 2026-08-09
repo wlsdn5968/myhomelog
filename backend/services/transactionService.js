@@ -4,7 +4,8 @@
  * API 신청: data.go.kr → '아파트매매 실거래가 상세자료' 검색 → 활용신청
  */
 const dgk = require('./dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): 직접+Edge 릴레이
-const { createClient } = require('@supabase/supabase-js');
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 (DB_FIRST 게이트 의미 유지)
+const { getSupabaseAdmin, hasAdminEnv } = require('../db/client');
 const cache = require('../cache');
 const logger = require('../logger');
 // TXAPT-MATCH-2026-05-13 (Sprint Z + Z+): master 정식명 ↔ MOLIT raw 매칭
@@ -18,16 +19,10 @@ const MOLIT_DETAIL_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev
 const MOLIT_OK_CODES = new Set(['00', '000']);
 
 // DB 사용 여부 — Supabase 설정되어 있고, MOLIT_DB_FIRST 가 'false' 가 아니면 DB 우선
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
-const DB_FIRST = (process.env.MOLIT_DB_FIRST !== 'false')
-  && !!SUPABASE_URL && !!SUPABASE_SERVICE_ROLE_KEY;
+const DB_FIRST = (process.env.MOLIT_DB_FIRST !== 'false') && hasAdminEnv();
 
 function dbClient() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return getSupabaseAdmin();
 }
 
 /**

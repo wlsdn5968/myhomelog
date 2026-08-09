@@ -21,7 +21,8 @@
 const express = require('express');
 const crypto = require('crypto');
 const axios = require('axios');
-const { createClient } = require('@supabase/supabase-js');
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
+const { getUserScopedClient: userScopedClient, getSupabasePublic } = require('../db/client');
 const { requireAuth } = require('../middleware/auth');
 // MOB-AUDIT-2026-05-03: 결제 실패는 사용자 직격 → Sentry 즉시 알림 (logger.error 외 추가)
 const Sentry = require('@sentry/node');
@@ -30,18 +31,8 @@ const logger = require('../logger');
 
 const router = express.Router();
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
 const TOSS_SECRET_KEY = process.env.TOSS_SECRET_KEY;       // 서버 전용 (test_sk_* / live_sk_*)
 const TOSS_API_BASE = 'https://api.tosspayments.com';
-
-function userScopedClient(accessToken) {
-  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) throw new Error('Supabase 미설정');
-  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${accessToken}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 // ── GET /billing/config — 공개 (클라이언트 설정) ──────────
 // 프론트가 Toss Widget 초기화에 필요한 clientKey 를 꺼내는 엔드포인트
@@ -58,9 +49,9 @@ router.get('/config', (req, res) => {
 // 요금제 메타는 RLS 로 공개 SELECT 허용되어 있으므로 publishable 키로 충분
 router.get('/plans', async (req, res, next) => {
   try {
-    const sb = createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-      auth: { persistSession: false, autoRefreshToken: false },
-    });
+    // SSOT-2026-08-09 (Plan 007): 과거 유일하게 env 가드 없는 인라인 createClient 였음 — 표준 에러로 개선
+    const sb = getSupabasePublic();
+    if (!sb) throw new Error('Supabase 미설정');
     const { data, error } = await sb
       .from('billing_plans')
       .select('id, name, price_krw, features')

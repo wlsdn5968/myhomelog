@@ -17,12 +17,9 @@
  *   재실행해도 안전.
  */
 const dgk = require('../services/dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): 직접+Edge 릴레이
-const { createClient } = require('@supabase/supabase-js');
+const { requireSupabaseAdmin } = require('../db/client');
 const logger = require('../logger');
 const { LAWD_CODES, LAWD_CODE_TO_NAME } = require('../services/transactionService');
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
 
 // 공공데이터포털 API (data.go.kr) — AptInfo 전용 키 (별도 발급)
 const APT_INFO_KEY = process.env.APT_INFO_API_KEY || process.env.MOLIT_API_KEY;
@@ -33,13 +30,9 @@ const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
 let _diagLogged = false; // 한 번만 진단 로그 (전체 backfill 동안)
 
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
 function adminClient() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Supabase service_role 미설정 — apt-master-sync 불가');
-  }
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return requireSupabaseAdmin('apt-master-sync 불가');
 }
 
 /**

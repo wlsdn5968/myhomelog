@@ -22,36 +22,18 @@
  *   create policy "popular_snapshot_read" on public.popular_apts_snapshot for select using (true);
  *   -- 쓰기 정책 없음: anon 쓰기 차단, service_role 은 RLS bypass 로 cron 만 upsert.
  */
-const { createClient } = require('@supabase/supabase-js');
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
+const { getSupabaseReadonly, getSupabaseAdmin } = require('../db/client');
 const logger = require('../logger');
 const { resolveCoordBatch } = require('./geocodeCacheService');
 const { isValidKoreaCoord } = require('../utils/geo');
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
 const SNAPSHOT_MAX_AGE_MS = 36 * 60 * 60 * 1000; // 36시간 — daily cron 1회 실패까지 허용
 const SNAPSHOT_SIZE = 12; // 프론트 고정 limit 와 동일 기준으로 저장
 
-// 읽기용 (공개 데이터) — search.js adminClient 와 동일한 키 우선순위
-function anonClient() {
-  if (!SUPABASE_URL) return null;
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY
-           || process.env.SUPABASE_ANON_KEY
-           || process.env.SUPABASE_SERVICE_ROLE_KEY
-           || process.env.service_role;
-  if (!key) return null;
-  return createClient(SUPABASE_URL, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
-// 쓰기용 — jobs/molitIngest.js 와 동일 (service_role 만, RLS bypass)
-function serviceClient() {
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
-  if (!SUPABASE_URL || !key) return null;
-  return createClient(SUPABASE_URL, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
+// 읽기용(공개 데이터) = getSupabaseReadonly, 쓰기용(RLS bypass) = getSupabaseAdmin — 키 체인 동일
+const anonClient = () => getSupabaseReadonly();
+const serviceClient = () => getSupabaseAdmin();
 
 /**
  * 인기 단지 라이브 집계 — search.js /popular 에서 이동 (Sprint LLLL, 로직 무변경).

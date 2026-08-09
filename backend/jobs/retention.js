@@ -24,11 +24,8 @@
  * 보안:
  *   - service_role 키 필수 — 환경변수 미설정 시 즉시 에러 throw
  */
-const { createClient } = require('@supabase/supabase-js');
 const logger = require('../logger');
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
+const { requireSupabaseAdmin } = require('../db/client');
 
 const SEARCH_HISTORY_RETENTION_MONTHS = 12;
 const CHAT_RETENTION_MONTHS = 24;
@@ -37,13 +34,9 @@ const CHAT_RETENTION_MONTHS = 24;
 //   '성공(ok)' 로그만 90일 후 파기해도 재시도 로직에 무영향 — 테이블을 ~90일치로 bound.
 const INGEST_RUNS_OK_RETENTION_DAYS = parseInt(process.env.INGEST_RUNS_OK_RETENTION_DAYS || '90', 10);
 
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
 function adminClient() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    throw new Error('Retention job: SUPABASE_URL / SERVICE_ROLE_KEY 미설정');
-  }
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return requireSupabaseAdmin('Retention job');
 }
 
 const { writeSystemAudit } = require('../middleware/auditLog');

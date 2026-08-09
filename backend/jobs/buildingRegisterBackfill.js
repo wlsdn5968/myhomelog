@@ -20,12 +20,10 @@
  *     total cap 이 방어). 성공분은 building_register 에 남아 후보에서 제외(anti-join).
  *   - budgetMs 마진에서 종료(Vercel maxDuration 안전).
  */
-const { createClient } = require('@supabase/supabase-js');
 const { getBuildingTitle } = require('../services/buildingRegisterService');
 const logger = require('../logger');
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 (null-게이트 의미 유지)
+const { getSupabaseAdmin } = require('../db/client');
 
 // BR-ACCEL-2026-07-22 (Sprint MMMMMM, 백로그 감사 A3): 100→300. 실측 3일 정상 가동(일 ~100 적재,
 //   351행)·실패 0 확인 후 상향. Kakao +300/일(한도 100K)·건축HUB ~300-600/일(한도 10K) — 둘 다 안전.
@@ -35,10 +33,7 @@ const MAX_TOTAL_CAP = 500;
 const CONCURRENCY = 3;
 
 function adminClient() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return getSupabaseAdmin();
 }
 
 /**

@@ -17,22 +17,18 @@
  *   - 실패 단지는 backfillFacilityByKaptCode 가 {_empty} sentinel 처리 → 다음 chunk 후보에서 제외(무한재시도 차단).
  *   - budgetMs(기본 240s)-15s 마진에서 chunk loop 종료(Vercel maxDuration 300s 안전).
  */
-const { createClient } = require('@supabase/supabase-js');
 const { backfillFacilityByKaptCode } = require('../services/aptFacilityService');
 const logger = require('../logger');
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 (null-게이트 의미 유지).
+//   품질경보 블록의 지연 require 이중 인스턴스도 이 싱글톤으로 자연 해소.
+const { getSupabaseAdmin } = require('../db/client');
 
 const DEFAULT_CHUNK = 40;
 const MAX_CHUNK = 80;
 const CONCURRENCY = 6;
 
 function adminClient() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return getSupabaseAdmin();
 }
 
 /** 한 chunk 처리 — kapt_code 보유 단지 limit 개를 동시성 내 backfill.
@@ -118,8 +114,7 @@ async function run({ chunk = DEFAULT_CHUNK, budgetMs = 240000 } = {}) {
   // ALERT-DEDUP-FIX-2026-07-14 (Sprint HHHHH-3): 품질 경보를 health 핫패스(인스턴스별 스팸, Sentry NODE-4
   //   107 events)에서 본 cron 종료 시 1일 1회로 이동. cron 은 단일 실행이라 dedup 보장.
   try {
-    const { getSupabaseAdmin } = require('../db/client');
-    const a2 = getSupabaseAdmin();
+    const a2 = getSupabaseAdmin(); // SSOT (Plan 007): 상단 require 재사용 — 과거 지연 require 이중 인스턴스 제거
     if (a2) {
       const H = () => ['*', { count: 'exact', head: true }];
       const [total, facNull, dtlMissing] = await Promise.all([

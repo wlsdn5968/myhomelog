@@ -17,7 +17,8 @@
  *   - resultCount 는 선택. 0 은 "결과 없음" 을 명시적으로 기록하는 의미.
  */
 const express = require('express');
-const { createClient } = require('@supabase/supabase-js');
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
+const { getUserScopedClient: userScopedClient, getSupabaseReadonly } = require('../db/client');
 const { requireAuth } = require('../middleware/auth');
 const logger = require('../logger');
 // SEARCH-PERF-2026-07-10 (Sprint DDDD): 자동완성 결과 캐시 — 실측 웜 1.4~1.6s(은마 1,641ms).
@@ -50,35 +51,16 @@ const { buildFacility } = require('../utils/buildFacility');
 
 const router = express.Router();
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
-
 const ALLOWED_TYPES = new Set(['recommend', 'address', 'kapt', 'keyword']);
 const MAX_QUERY_LEN = 200;
 const HISTORY_LIMIT = 50;
 
-function userScopedClient(accessToken) {
-  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) throw new Error('Supabase 미설정');
-  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${accessToken}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
-
 // ── GET: 단지명·동명 검색 (자동완성) — 인증 불필요 (공개 데이터) ──
 // P0 (2026-04-25 Phase 2 시나리오 A): 호갱노노 핵심 사용 패턴 — 단지명 직접 검색.
 // molit_transactions 의 pg_trgm 인덱스 (idx_molit_aptname_trgm) 활용 — ILIKE 고속.
-function adminClient() {
-  if (!SUPABASE_URL) return null;
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY
-           || process.env.SUPABASE_ANON_KEY
-           || process.env.SUPABASE_SERVICE_ROLE_KEY
-           || process.env.service_role;
-  if (!key) return null;
-  return createClient(SUPABASE_URL, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
+// SSOT-2026-08-09 (Plan 007): 구명 adminClient 는 실권한과 불일치(공개키 우선 readonly) —
+//   db/client.getSupabaseReadonly 로 통합(키 체인 동일, 콜사이트 이름만 정리).
+const adminClient = () => getSupabaseReadonly();
 router.get('/apt', async (req, res) => {
   const q = String(req.query.q || '').trim();
   const limit = Math.min(parseInt(req.query.limit) || 10, 30);

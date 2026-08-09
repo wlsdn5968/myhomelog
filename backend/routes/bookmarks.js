@@ -14,26 +14,13 @@
  *   POST   /api/bookmarks/migrate — localStorage 일괄 이관 (upsert, 멱등)
  */
 const express = require('express');
-const { createClient } = require('@supabase/supabase-js');
 const { requireAuth } = require('../middleware/auth');
 const logger = require('../logger');
+// 사용자 JWT 가 주입된 Supabase 클라이언트 (요청별) → RLS 정책 자동 적용
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
+const { getUserScopedClient: userScopedClient } = require('../db/client');
 
 const router = express.Router();
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
-
-// 사용자 JWT 가 주입된 Supabase 클라이언트 (요청별)
-// → PostgREST 가 JWT 의 sub 를 auth.uid() 로 사용 → RLS 정책 자동 적용
-function userScopedClient(accessToken) {
-  if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-    throw new Error('Supabase 미설정');
-  }
-  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
-    global: { headers: { Authorization: `Bearer ${accessToken}` } },
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
-}
 
 // 모든 라우트 인증 필수
 router.use(requireAuth);

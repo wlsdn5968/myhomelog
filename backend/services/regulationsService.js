@@ -14,10 +14,8 @@
  */
 const cache = require('../cache');
 const logger = require('../logger');
-const { createClient } = require('@supabase/supabase-js');
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
+const { getSupabaseReadonly } = require('../db/client');
 
 // 하드코딩 fallback — DB 없이도 최소 작동 (dev / DB 장애 / Vercel env 누락 대비)
 // P1 (2026-04-25): key 별 fallback 분리 — 기존 단일 FALLBACK 은 housing 만 반환해서
@@ -105,20 +103,11 @@ const FALLBACK_BY_KEY = {
 // 하위 호환 — 기존 import { FALLBACK } 코드 (housing 만 반환)
 const FALLBACK = FALLBACK_BY_KEY.housing_loan_2025;
 
-// P1 (2026-04-25): regulations_snapshot 은 RLS "public_read" 정책으로 anon 접근 가능.
-// → service_role 불필요. publishable key 우선 사용 (defense in depth: 권한 최소화).
-// → service_role 은 fallback (dev 환경에서 publishable key 미설정 시).
-// 이전: service_role 만 시도 → Vercel production env 에 service_role 없으면 fallback 으로 떨어져
-//       매번 코드 변경 + 재배포 필요. publishable key 만으로 snapshot 읽기 가능 — 운영 효율 ↑.
+// P1 (2026-04-25): regulations_snapshot 은 RLS "public_read" 정책으로 anon 접근 가능 —
+//   publishable key 우선(defense in depth), service_role 은 fallback.
+// SSOT-2026-08-09 (Plan 007): 위 키 체인 정책은 db/client.getSupabaseReadonly 로 이관(동일 순서).
 function snapshotClient() {
-  if (!SUPABASE_URL) return null;
-  const key = process.env.SUPABASE_PUBLISHABLE_KEY
-           || process.env.SUPABASE_ANON_KEY
-           || SUPABASE_SERVICE_ROLE_KEY;
-  if (!key) return null;
-  return createClient(SUPABASE_URL, key, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return getSupabaseReadonly();
 }
 
 /**

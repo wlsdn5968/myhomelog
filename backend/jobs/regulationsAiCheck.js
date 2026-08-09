@@ -24,24 +24,16 @@
  *   - cron `/api/cron/regulations-auto-fetch` 에서 매주 자동
  *   - admin endpoint `/api/admin/regulations-status` 에서 on-demand
  */
-const { createClient } = require('@supabase/supabase-js');
 const { callAI } = require('../services/aiService');
 const logger = require('../logger');
-
-const SUPABASE_URL = process.env.SUPABASE_URL;
-// ENV-FIX-2026-05-21 (Sentry NODE-2 "Supabase 미설정" on cron regulations-auto-fetch):
-//   기존: process.env.SUPABASE_SECRET_KEY 단독 → 해당 env 미설정 → adminClient() 항상 throw →
-//   정책추적 AI 비교(regulationsAiCheck) 매 cron 실패. 코드베이스 표준은 SUPABASE_SERVICE_ROLE_KEY.
-//   fallback chain 으로 정정 (다른 모든 파일과 동일 패턴).
-const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY
-  || process.env.SUPABASE_SERVICE_ROLE_KEY
-  || process.env.service_role;
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리.
+//   이 파일이 SSOT 의 존재 이유다 — ENV-FIX-2026-05-21(Sentry NODE-2): 과거 이 파일만
+//   SUPABASE_SECRET_KEY 라는 자기만의 env 를 읽어 cron 매 실행 실패. 비표준 SECRET_KEY
+//   우선순위는 여기서 폐기(표준은 SERVICE_ROLE_KEY — db/client 가 단일 관리).
+const { requireSupabaseAdmin } = require('../db/client');
 
 function adminClient() {
-  if (!SUPABASE_URL || !SUPABASE_SECRET_KEY) throw new Error('Supabase 미설정');
-  return createClient(SUPABASE_URL, SUPABASE_SECRET_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return requireSupabaseAdmin();
 }
 
 /**

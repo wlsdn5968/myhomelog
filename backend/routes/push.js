@@ -14,20 +14,16 @@
  *   POST /api/push/unsubscribe  — { endpoint } 삭제
  */
 const express = require('express');
-const { createClient } = require('@supabase/supabase-js');
 const logger = require('../logger');
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 (null-게이트 의미 유지)
+const { getSupabaseAdmin } = require('../db/client');
 
 const router = express.Router();
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || null;
 
 function dbClient() {
-  if (!SUPABASE_URL || !SERVICE_KEY) return null;
-  return createClient(SUPABASE_URL, SERVICE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return getSupabaseAdmin();
 }
 
 const MAX_ITEMS = 30;

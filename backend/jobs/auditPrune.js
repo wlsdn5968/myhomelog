@@ -14,11 +14,10 @@
  * 멱등:
  *   같은 cutoff 재실행해도 0 row 삭제 (이미 삭제됨).
  */
-const { createClient } = require('@supabase/supabase-js');
 const logger = require('../logger');
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 (null-게이트 의미 유지)
+const { getSupabaseAdmin } = require('../db/client');
 
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
 const RETENTION_DAYS = parseInt(process.env.AUDIT_LOG_RETENTION_DAYS || '90', 10);
 
 // CONSENT-AUDIT-2026-05-10: 영구 보존 화이트리스트
@@ -40,10 +39,7 @@ const RETAIN_ACTIONS = [
 ];
 
 function client() {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
-    auth: { persistSession: false, autoRefreshToken: false },
-  });
+  return getSupabaseAdmin();
 }
 
 /**

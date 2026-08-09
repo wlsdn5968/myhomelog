@@ -8,7 +8,8 @@
  * 대중교통 시간은 자동차 시간 × 1.6 으로 근사 (실서비스 검증 필요).
  */
 const axios = require('axios');
-const { createClient } = require('@supabase/supabase-js');
+// SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 (DB_ENABLED 게이트 의미 유지)
+const { getSupabaseAdmin, hasAdminEnv } = require('../db/client');
 const cache = require('../cache');
 const logger = require('../logger');
 const { isValidKoreaCoord } = require('../utils/geo');
@@ -20,13 +21,11 @@ const KAKAO_KEY_SEARCH = 'https://dapi.kakao.com/v2/local/search/keyword.json';
 // Phase B-6 (2026-05-01): apt_amenities DB 캐시 — Vercel scale-out 시 fresh 호출 -90%.
 //   좌표 4자리(~11m) 정규화 → 인접 단지가 같은 cache 공유.
 //   migration 미적용 시 silent fail → in-memory cache 만 동작 (graceful fallback).
-const SUPABASE_URL = process.env.SUPABASE_URL;
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
-const DB_ENABLED = !!SUPABASE_URL && !!SUPABASE_SERVICE_ROLE_KEY;
+const DB_ENABLED = hasAdminEnv();
 
 function _dbClient() {
   if (!DB_ENABLED) return null;
-  return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  return getSupabaseAdmin();
 }
 
 async function _dbGetAmenityCount(cacheKey) {
