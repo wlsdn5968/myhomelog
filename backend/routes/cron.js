@@ -117,10 +117,23 @@ router.post('/retention', async (req, res) => {
 router.get('/retention', async (req, res) => {
   try {
     const summary = await runRetention();
-    await checkIngestFreshness(); // Sprint AAAAAAA — POST 쌍둥이와 동일(Vercel 이 GET 으로 호출하는 경우 대비)
+    // GET-PARITY-2026-08-09 (Sprint BBBBBBB-5, 실측): popular 스냅샷 계산이 **POST 쌍둥이에만** 있었는데
+    //   스냅샷 도입(7/11) 이래 computed_at 이 cron 시각(18:00 UTC)이었던 적이 없다 — Vercel cron 이
+    //   이 GET 을 호출하고 있어 **cron 스냅샷 갱신이 한 번도 실행되지 않았다**는 실측 정합(NODE-9 노화
+    //   순환의 진짜 뿌리). 메서드 논쟁과 무관하게 두 쌍둥이를 동일하게 맞춘다.
+    let popularSnapshot = null;
+    try { popularSnapshot = await computePopularSnapshot(); }
+    catch (e) { logger.warn({ err: e.message }, 'popular 스냅샷 계산 실패 (retention 은 정상)'); popularSnapshot = { stored: false, err: e.message }; }
+    require('../services/cronStats').recordCronRun('popular-snapshot', {
+      ok: popularSnapshot && popularSnapshot.stored ? 1 : false,
+      processed: popularSnapshot && popularSnapshot.count,
+      error: (popularSnapshot && (popularSnapshot.reason || popularSnapshot.err
+        || (popularSnapshot.usedFallback ? 'usedFallback(RPC 실패)' : undefined))) || undefined,
+    }).catch(() => {});
+    await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시
     try { await require('../services/hfService').getHfRates(); } catch (_) {}   // Sprint BBBBBBB-3 워밍
     try { await require('../services/ecosService').getEcosRates(); } catch (_) {}
-    res.json({ ok: true, summary });
+    res.json({ ok: true, summary, popularSnapshot });
   } catch (e) {
     // SENTRY-GAP-2026-07-17 (Sprint XXXXX): POST 쌍둥이(72행)만 캡처하고 GET 은 무로그·무캡처였음 — 동일 처리
     logger.error({ err: e.message, stack: e.stack }, 'cron/retention(GET) 실패');
