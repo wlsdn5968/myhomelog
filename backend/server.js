@@ -5,7 +5,7 @@
  */
 // ⚠️ Sentry 는 다른 어떤 import 보다 먼저 (v8 auto-instrumentation)
 // api/index.js 에서 먼저 로드되지만, 로컬 `npm run dev` 진입점도 방어적으로 중복 로드
-require('./sentry');
+const Sentry = require('./sentry');
 
 const express = require('express');
 const cors = require('cors');
@@ -22,6 +22,42 @@ const app = express();
 
 // Vercel/프록시 환경에서 X-Forwarded-For 신뢰 (express-rate-limit 호환)
 app.set('trust proxy', 1);
+
+// ── TRACE-FALLBACK-2026-08-09 (Sprint JJJJJJJ): Vercel 프로덕션 HTTP 스팬 수동 폴백 ──
+//   v10 업그레이드 후 프로덕션에서만 트랜잭션 스팬 0건(FFFFFFF 판별: 로컬은 정상 생성 →
+//   SDK·설정 정상, Vercel 환경에서 OTel 자동 계측 미부착). 활성 span 이 이미 있으면
+//   (=자동 계측이 동작하는 환경) no-op 이라 중복 생성이 구조적으로 불가능하고, 없을 때만
+//   공식 API(startSpan+forceTransaction)로 수동 트랜잭션을 연다. 샘플링은 SDK 가
+//   tracesSampleRate 로 동일 적용. 실패는 전부 삼켜 응답 경로를 보호한다.
+app.use((req, res, next) => {
+  let nextCalled = false;
+  const safeNext = () => { if (!nextCalled) { nextCalled = true; next(); } };
+  try {
+    if (!Sentry.isEnabled || typeof Sentry.startSpan !== 'function' || Sentry.getActiveSpan()) {
+      return safeNext();
+    }
+    Sentry.startSpan(
+      {
+        name: `${req.method} ${req.path}`,
+        op: 'http.server',
+        forceTransaction: true,
+        attributes: { 'http.request.method': req.method, 'url.path': req.path, 'sentry.source': 'url' },
+      },
+      (span) => new Promise((resolve) => {
+        const done = () => {
+          try {
+            span.setAttribute('http.response.status_code', res.statusCode);
+            span.setStatus({ code: res.statusCode >= 500 ? 2 : 1 }); // 2=error, 1=ok
+          } catch (_) { /* span 상태 실패 무시 */ }
+          resolve();
+        };
+        res.once('finish', done);
+        res.once('close', done); // 클라이언트 중단도 종료 처리 (중복 resolve 무해)
+        safeNext();
+      })
+    );
+  } catch (_) { safeNext(); }
+});
 
 const cache = require('./cache');
 
@@ -595,8 +631,8 @@ app.get('/api/health', optionalAuth, async (req, res) => {
 });
 
 // ── Sentry 에러 핸들러 (우리 에러 핸들러보다 먼저) ─────────
-// v8 는 setupExpressErrorHandler 로 모든 라우트 에러를 자동 캡쳐
-const Sentry = require('@sentry/node');
+// setupExpressErrorHandler 로 모든 라우트 에러를 자동 캡쳐
+// (Sentry 는 파일 상단에서 ./sentry 로 이미 로드됨 — JJJJJJJ 에서 재선언 제거)
 Sentry.setupExpressErrorHandler(app);
 
 // ── 전역 에러 핸들러 ───────────────────────────────────────
