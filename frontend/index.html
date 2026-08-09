@@ -105,7 +105,7 @@
     var env = _isProd ? (document.querySelector('meta[name="sentry-environment"]')?.content || 'production') : 'preview';
     var tsr = parseFloat(document.querySelector('meta[name="sentry-traces-sample-rate"]')?.content || '0.1');
     var s = document.createElement('script');
-    s.src = 'https://browser.sentry-cdn.com/8.40.0/bundle.tracing.min.js';
+    s.src = 'https://browser.sentry-cdn.com/10.69.0/bundle.tracing.min.js'; // SENTRY-V10-2026-08-09: backend @sentry/node 10.69.0 과 버전 정합
     s.crossOrigin = 'anonymous';
     s.integrity = ''; // SRI 는 버전 픽스 시 추가 권장
     s.onload = function(){

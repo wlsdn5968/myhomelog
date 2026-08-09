@@ -13,7 +13,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
-    "@sentry/node": "^8.55.2",
+    "@sentry/node": "^10.69.0",
     "@supabase/supabase-js": "^2.105.4",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.0",
