@@ -937,7 +937,10 @@ async function fetchCandidateApts(admin, input, limit) {
   // METRO-SUB-2026-07-17 (Sprint UUUUU): 지방 광역시 세부(해운대·수영·수성·유성·광주서구)는 guMatch 보다 먼저 처리.
   //   '해운대/수영/수성/유성'은 '구' 접미사가 없어 guMatch 미스 → 전국 조회로 빠지고, '광주서구'는 sigungu 문자열에
   //   없어 like 실패. 5개 구는 이미 적재된 lawd_cd 라 IN 필터로 정확 도달(propertyService.REGION_KEYWORDS 와 동반 수정).
-  const METRO_SUB = { '해운대': '26350', '수영': '26500', '수성': '27260', '유성': '30200', '광주서': '29140' };
+  //   REGION-SWAP-2026-08-10: '광주서'(29140) 제거 — 광주광역시 → 전남광주통합특별시 편입으로
+  //   구 코드 폐지 + 운영자 방침(전라권 미지원). 청주 4개 구는 '상당구/서원구/흥덕구/청원구'로
+  //   끝나 아래 guMatch(구 접미사) 경로가 정상 처리하므로 여기 추가하지 않는다.
+  const METRO_SUB = { '해운대': '26350', '수영': '26500', '수성': '27260', '유성': '30200' };
   let _metroCode = null;
   for (const [kw, code] of Object.entries(METRO_SUB)) { if (region.includes(kw)) { _metroCode = code; break; } }
   const guMatch = _metroCode ? null : region.match(/([가-힣]+구)/);

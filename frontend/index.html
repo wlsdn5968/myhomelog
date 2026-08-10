@@ -3919,12 +3919,12 @@ async function generateReport(_isRetry) {
   }
   // METRO-SUB-2026-07-17 (Sprint UUUUU): '지방'만 선택·세부 미선택 시 특정 광역시로 좁힐 수 없음 → 세부 선택 안내
   if (region === '지방') {
-    toast('지방은 세부 지역(해운대·수영·수성·유성·광주서구)을 선택해주세요');
+    toast('지방은 세부 지역(해운대·수영·수성·유성·청주)을 선택해주세요');
     return;
   }
   // P1-14: 미지원 광역도 사전 차단 — backend 0건 후 generic error 차단
   if (typeof _isUnsupportedRegion === 'function' && _isUnsupportedRegion(region)) {
-    alert('현재 서울·경기·인천 + 광역시 (부산·대구·광주·대전·울산) 만 지원합니다.\n\n지방 광역도는 향후 데이터 확장 시 지원 예정입니다.');
+    alert('현재 서울·경기·인천 + 광역시 (부산·대구·대전·울산) + 청주 만 지원합니다.\n\n그 외 지방 광역도는 향후 데이터 확장 시 지원 예정입니다.');
     return;
   }
 
@@ -5240,7 +5240,7 @@ async function doSearch(){
   //   경기로 오귀속됨 → 조용한 오결과 대신 세부 선택 안내(honest). 세부 선택 시엔 정상 도달.
   if(getRegionForSearch()==='지방'){
     btn.classList.remove('ld');sp.style.display='none';
-    if(typeof toast==='function') toast('지방은 세부 지역(해운대·수영·수성·유성·광주서구)을 선택해주세요');
+    if(typeof toast==='function') toast('지방은 세부 지역(해운대·수영·수성·유성·청주)을 선택해주세요');
     return;
   }
   searchStep('조건 정리 중...', 1);
@@ -8381,7 +8381,7 @@ const REGION_SUB = {
   '서울': ['강남구','서초구','송파구','강동구','마포구','용산구','성동구','노원구','도봉구','강북구','은평구','구로구','금천구','강서구','양천구','영등포구','관악구','동작구','성북구','동대문구','광진구','중랑구','서대문구','종로구','중구'],
   '경기': ['과천','광명','분당','판교','평촌','안양','수지','용인','하남','미사','영통','수원','일산','고양','의왕','시흥'],
   '인천': ['연수(송도)','남동','부평','계양','서구','미추홀'],
-  '지방': ['해운대','수영','수성','유성','광주서구'],
+  '지방': ['해운대','수영','수성','유성','청주'],
 };
 function populateRegionSub(wide){
   const sub=document.getElementById('ch-r-sub');
@@ -8402,10 +8402,13 @@ function getRegionForSearch(){
 //   사용자가 미지원 지역 입력 시 사전 차단 — backend 데이터 0건 후 "조회 실패" 차단
 function _isUnsupportedRegion(region) {
   if (!region) return false;
-  const unsupported = ['강원','충북','충남','전북','전남','경북','경남','제주','세종','광주','대전','대구','울산','부산'];
-  // 단, 부산·대구·광주·대전·울산은 LAWD_CODES 에 일부 있음 — 정밀 매칭은 backend
-  // 광역도 (강원·충북·충남·전북·전남·경북·경남·제주) 만 frontend 사전 차단
-  return /강원|충북|충남|전북|전남|경북|경남|제주/.test(region);
+  // REGION-SWAP-2026-08-10: 충북에 **청주 4개 구**가 편입돼 더는 전면 차단 대상이 아니다.
+  //   부산·대구·대전·울산과 같은 논리로 "일부만 적재된 시도"이므로 정밀 매칭은 backend 에 맡긴다
+  //   (차단을 유지하면 "충북 청주" 입력이 프론트에서 막힌다). 광주는 전남광주통합특별시 편입으로
+  //   커버리지에서 빠졌지만 **경기 광주시**가 남아 있어 키워드 차단은 하지 않는다.
+  const unsupported = ['강원','충남','전북','전남','경북','경남','제주','세종','대전','대구','울산','부산'];
+  // 광역도 (강원·충남·전북·전남·경북·경남·제주) 만 frontend 사전 차단
+  return /강원|충남|전북|전남|경북|경남|제주/.test(region);
 }
 function pyRange(){
   const sel=gct('ch-py');
