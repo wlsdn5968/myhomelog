@@ -47,21 +47,47 @@ const ATPT_CODE = {
   '제주': 'T10', '제주특별자치도': 'T10',
 };
 
-// 시·구 → 시도 추정 (서울 25구 = B10)
-function inferAtptCode(sigungu) {
+/** lawd_cd 앞 2자리 → 시도. 이름 추정과 달리 **원리적으로 정확**하다. */
+const LAWD_PREFIX_TO_SIDO = {
+  '11': '서울', '26': '부산', '27': '대구', '28': '인천', '30': '대전', '31': '울산',
+  '36': '세종', '41': '경기', '42': '강원', '51': '강원', '43': '충북', '44': '충남',
+  '45': '전북', '52': '전북', '46': '전남', '47': '경북', '48': '경남', '50': '제주',
+};
+
+/** 서울 **고유** 자치구만 — '중구·동구·서구·남구·북구' 처럼 여러 시도에 함께 있는 이름은 뺐다. */
+const SEOUL_ONLY_GU = new Set([
+  '종로구', '용산구', '성동구', '광진구', '동대문구', '중랑구', '성북구', '강북구', '도봉구',
+  '노원구', '은평구', '서대문구', '마포구', '양천구', '강서구', '구로구', '금천구', '영등포구',
+  '동작구', '관악구', '서초구', '강남구', '송파구', '강동구',
+]);
+
+/**
+ * 시군구 → 시도교육청 코드.
+ *
+ * LAWD-FIRST-2026-08-10 (Sprint KKKKKKK-7): 기존 구현은 **"…구로 끝나면 서울"** 로 단정해
+ *   `해운대구`·`수성구`·`유성구`·`부산진구`·`청주시상당구` 를 전부 서울(B10)로 판정했다.
+ *   NEIS 는 (시도교육청 + 학교명)으로 조회하므로, 동명 학교가 서울에 있으면 **서울 학교의
+ *   학생수·주소가 그 단지 정보로 붙는다** — 조용한 환각이다(절대 룰 위반).
+ *   → lawd_cd 가 있으면 **그것으로만** 판정하고(행정구역 판정은 코드로 — 메모리 교훈),
+ *     없으면 서울 고유 자치구만 인정하고 나머지는 null 을 반환해 **조회 자체를 포기**한다.
+ *     "정보 없음"이 "남의 지역 정보"보다 낫다.
+ * @param {string} sigungu
+ * @param {string} [lawdCd] 있으면 최우선 — 이름 추정의 모호성이 원천 제거된다
+ */
+function inferAtptCode(sigungu, lawdCd) {
+  const pfx = String(lawdCd || '').slice(0, 2);
+  if (pfx && LAWD_PREFIX_TO_SIDO[pfx]) return ATPT_CODE[LAWD_PREFIX_TO_SIDO[pfx]] || null;
+
   if (!sigungu) return null;
   const s = String(sigungu);
-  // 서울 25구 — 자치구 이름으로 직접 매핑 (구 이름 끝)
-  if (/구$/.test(s) && !/^(수원시|성남시|용인시|고양시|부천시|안양시|안산시|남양주시|화성시|평택시|의정부시|시흥시|파주시|김포시|광명시|광주시|군포시|오산시|이천시|양주시|구리시|안성시|포천시|의왕시|하남시|여주시|동두천시|과천시)/.test(s)) {
-    // "강남구", "성동구" 등 — 서울 추정 (다른 광역시도 "구" 있지만 대부분 서울)
-    return 'B10';
-  }
-  // "수원시영통구" 같은 합성어 — 경기
+  // "수원시영통구" 같은 시+구 합성어 — 경기 (도시명이 붙어 있어 모호하지 않다)
   if (/(시[가-힣]+구)/.test(s)) return 'J10';
-  // 직접 매칭
+  if (SEOUL_ONLY_GU.has(s)) return 'B10';
+  // 시도명으로 시작하면 그대로 매칭 ('부산…','대구…' 등)
   for (const [k, v] of Object.entries(ATPT_CODE)) {
     if (s.startsWith(k)) return v;
   }
+  // 여기까지 왔다 = '중구'·'서구'처럼 여러 시도에 있는 이름이거나 미지원 표기 → 판정 포기
   return null;
 }
 
@@ -119,12 +145,15 @@ async function fetchSchoolNeis(schoolName, atptCode) {
 /**
  * 학교 list 풍부화 — 각 학교에 NEIS 정보 추가
  * @param {Array} schools - schoolService.resolveSchools 결과
- * @param {string} sigungu - 단지 시·구 (NEIS atptCode 추정용)
+ * @param {string} sigungu - 단지 시·구 (lawdCd 가 없을 때의 폴백 추정용)
+ * @param {string} [lawdCd] - 있으면 시도교육청 판정에 **최우선** 사용(이름 추정의 오판 제거)
  */
-async function resolveSchoolNeisBatch(schools, sigungu) {
+async function resolveSchoolNeisBatch(schools, sigungu, lawdCd) {
   if (!Array.isArray(schools) || !schools.length) return schools || [];
-  const atptCode = inferAtptCode(sigungu);
-  if (!atptCode) return schools; // 시도 추정 실패 — NEIS 호출 안 함
+  const atptCode = inferAtptCode(sigungu, lawdCd);
+  // 시도 판정 실패 → NEIS 호출 안 함. 남의 시도로 조회해 **동명 학교 정보를 붙이는 것**보다
+  //   보강 데이터가 비는 편이 낫다(카카오 기반 학교 목록·거리는 그대로 표시된다).
+  if (!atptCode) return schools;
 
   // 동시성 제한 (6개) — FACILITY-PERF-2026-07-10 (Sprint FFFF): 3→6, 콜드 9학교 3라운드→2라운드
   const enriched = new Array(schools.length);

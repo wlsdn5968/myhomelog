@@ -618,7 +618,9 @@ router.get('/facility', async (req, res) => {
         ]);
         // P1: 학교알리미 NEIS 풍부화 (학생수·학급수)
         const enriched = schools && schools.length
-          ? await resolveSchoolNeisBatch(schools, sigungu)
+          // LAWD-FIRST-2026-08-10: lawdCd 를 넘겨 시도교육청을 코드로 확정한다
+          //   (이름 추정은 '해운대구'·'수성구'·'청주시상당구' 를 전부 서울로 오판했다).
+          ? await resolveSchoolNeisBatch(schools, sigungu, lawdCd)
           : [];
         nearbySchools = enriched;
         schoolDistrict = district;

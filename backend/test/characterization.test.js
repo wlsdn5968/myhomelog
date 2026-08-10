@@ -296,6 +296,31 @@ test('molitParse.isCanceled — cdealType 유/무/공백 판정', () => {
 //   운영자 발견 사고: 도봉구 방학동 "신동아아파트1"(1986년·3,169세대 방학신동아1단지)에
 //   "신동아 타워 아파트"(1997년·104세대)가 붙어 단지정보 탭이 통째로 남의 단지였다.
 //   원인은 ratio 게이트가 **이름이 짧은 후보를 편애**한 것(정답 0.429 차단 / 오답 0.600 통과).
+// LAWD-FIRST (2026-08-10): 시도교육청을 **구 이름으로 추정**하면 남의 지역 학교 정보가 붙는다.
+//   기존 구현은 "…구로 끝나면 서울"이라 해운대구·수성구·유성구·청주시상당구가 전부 B10(서울)이었고,
+//   NEIS 는 (시도교육청 + 학교명)으로 조회하므로 동명 학교가 서울에 있으면 **서울 학교의 학생수**가
+//   그 단지 정보로 붙었다. 행정구역 판정은 lawd_cd 로 한다(반복 확인된 원칙).
+test('schoolNeis.inferAtptCode — lawd_cd 우선, 모호한 구 이름은 판정 포기', () => {
+  const { inferAtptCode } = require('../services/schoolNeisService');
+  // lawd_cd 가 있으면 그것으로 확정 — 이름이 무엇이든 정확하다
+  assert.equal(inferAtptCode('청주시상당구', '43111'), 'M10'); // 충북
+  assert.equal(inferAtptCode('해운대구', '26350'), 'C10');     // 부산 (예전엔 서울로 오판)
+  assert.equal(inferAtptCode('수성구', '27260'), 'D10');       // 대구
+  assert.equal(inferAtptCode('유성구', '30200'), 'G10');       // 대전
+  assert.equal(inferAtptCode('강남구', '11680'), 'B10');       // 서울
+  assert.equal(inferAtptCode('수원시영통구', '41117'), 'J10'); // 경기
+
+  // lawd_cd 가 없을 때: 서울 고유 자치구만 인정
+  assert.equal(inferAtptCode('강남구'), 'B10');
+  assert.equal(inferAtptCode('수원시영통구'), 'J10'); // 시+구 합성어는 모호하지 않다
+  // 여러 시도에 함께 있는 이름은 **null** — 서울로 단정하면 환각이 된다
+  assert.equal(inferAtptCode('중구'), null);
+  assert.equal(inferAtptCode('서구'), null);
+  assert.equal(inferAtptCode('해운대구'), null); // 예전엔 B10 을 반환했다
+  assert.equal(inferAtptCode(''), null);
+  assert.equal(inferAtptCode(null), null);
+});
+
 // JIBUN-MISMATCH (2026-08-10): 좌표가 **남의 단지**에 찍혔는지는 지번 본번으로 판정한다.
 //   운영자 발견 실사고: '신동아아파트3'(신고 지번 방학동 530)의 저장 좌표가 272("신동아1단지 3동")로,
 //   같은 동이라 거리(300m) 기준만으로는 '검증 통과'로 박제될 수 있었다. 본번 비교가 그걸 잡는다.

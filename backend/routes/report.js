@@ -938,13 +938,21 @@ async function fetchCandidateApts(admin, input, limit) {
   //   '해운대/수영/수성/유성'은 '구' 접미사가 없어 guMatch 미스 → 전국 조회로 빠지고, '광주서구'는 sigungu 문자열에
   //   없어 like 실패. 5개 구는 이미 적재된 lawd_cd 라 IN 필터로 정확 도달(propertyService.REGION_KEYWORDS 와 동반 수정).
   //   REGION-SWAP-2026-08-10: '광주서'(29140) 제거 — 광주광역시 → 전남광주통합특별시 편입으로
-  //   구 코드 폐지 + 운영자 방침(전라권 미지원). 청주 4개 구는 '상당구/서원구/흥덕구/청원구'로
-  //   끝나 아래 guMatch(구 접미사) 경로가 정상 처리하므로 여기 추가하지 않는다.
-  const METRO_SUB = { '해운대': '26350', '수영': '26500', '수성': '27260', '유성': '30200' };
-  let _metroCode = null;
-  for (const [kw, code] of Object.entries(METRO_SUB)) { if (region.includes(kw)) { _metroCode = code; break; } }
-  const guMatch = _metroCode ? null : region.match(/([가-힣]+구)/);
-  if (_metroCode) q = q.in('lawd_cd', [_metroCode]);
+  //   구 코드 폐지 + 운영자 방침(전라권 미지원).
+  //   CHEONGJU-FIX-2026-08-10: 청주를 여기 **반드시** 넣어야 한다. 직전 커밋의 "청주는 '○○구'로
+  //   끝나 guMatch 가 처리한다"는 주석은 **틀렸다** — guMatch 가 보는 것은 DB 의 sigungu 값이 아니라
+  //   프론트가 보내는 **사용자 선택값**이고, 그 값은 `getRegionForSearch()`(index.html)가 만드는
+  //   "지방 청주"다('구'가 없다). 그러면 METRO_SUB·guMatch·서울/경기/인천 세 분기에 모두 걸리지 않아
+  //   **lawd_cd 필터가 아예 안 붙고 전국 molit_transactions 가 후보 풀이 된다** — 에러도 빈 결과도
+  //   아닌 "조용히 틀린 보고서"라 가장 위험하다. 청주는 구가 4개라 값을 배열로 통일한다.
+  const METRO_SUB = {
+    '해운대': ['26350'], '수영': ['26500'], '수성': ['27260'], '유성': ['30200'],
+    '청주': ['43111', '43112', '43113', '43114'],
+  };
+  let _metroCodes = null;
+  for (const [kw, codes] of Object.entries(METRO_SUB)) { if (region.includes(kw)) { _metroCodes = codes; break; } }
+  const guMatch = _metroCodes ? null : region.match(/([가-힣]+구)/);
+  if (_metroCodes) q = q.in('lawd_cd', _metroCodes);
   else if (guMatch) q = q.like('sigungu', `%${guMatch[1]}%`);
   else {
     // P1-1 (2026-05-04): lawd_cd LIKE '11%' → IN (...) 명시
