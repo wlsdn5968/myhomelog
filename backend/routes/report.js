@@ -953,8 +953,25 @@ async function fetchCandidateApts(admin, input, limit) {
   for (const [kw, codes] of Object.entries(METRO_SUB)) { if (region.includes(kw)) { _metroCodes = codes; break; } }
   const guMatch = _metroCodes ? null : region.match(/([가-힣]+구)/);
   if (_metroCodes) q = q.in('lawd_cd', _metroCodes);
-  else if (guMatch) q = q.like('sigungu', `%${guMatch[1]}%`);
-  else {
+  else if (guMatch) {
+    // SIDO-SCOPE-2026-08-10 (Sprint KKKKKKK-9): 구 이름만으로 `.like('sigungu', …)` 하면
+    //   **다른 도시 아파트가 섞인다**. molit_transactions.sigungu 에는 광역 접두가 없어
+    //   (transactionService._stripCityPrefix) 실측상 '중구'는 6개 시도, '서구'는 4개 시도에
+    //   17,350건이 같은 문자열로 저장돼 있다 — "인천 서구" 보고서에 부산·대구·대전 서구 단지가
+    //   후보로 들어왔다. 광역 접두가 있으면 그 시도의 lawd_cd 로 정확히 좁힌다.
+    const { LAWD_CODES } = require('../services/transactionService');
+    const SIDO_PFX = [['서울', '11'], ['인천', '28'], ['부산', '26'], ['대구', '27'],
+      ['대전', '30'], ['울산', '31'], ['경기', '41']];
+    const hit = SIDO_PFX.find(([nm]) => region.includes(nm));
+    const scoped = hit
+      ? Object.entries(LAWD_CODES)
+        .filter(([, c]) => String(c).startsWith(hit[1]))
+        .filter(([n]) => String(n).replace(/^(인천|부산|대구|대전|울산)/, '') === guMatch[1])
+        .map(([, c]) => c)
+      : [];
+    if (scoped.length) q = q.in('lawd_cd', scoped);
+    else q = q.like('sigungu', `%${guMatch[1]}%`); // 광역 접두 없음 → 기존 동작(모호성 잔존)
+  } else {
     // P1-1 (2026-05-04): lawd_cd LIKE '11%' → IN (...) 명시
     //   진단 (EXPLAIN): LIKE prefix 시 인덱스 미활용 → Parallel Seq Scan 960ms
     //   변경: IN (서울 25개 코드) 명시 → idx_molit_lawd_date 인덱스 활용 → ~10x 향상 예상

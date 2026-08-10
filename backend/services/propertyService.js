@@ -75,6 +75,40 @@ const REGION_KEYWORDS = {
   '경기': ['41210','41290','41135','41281'],
 };
 
+/**
+ * SIDO-SCOPE-2026-08-10 (Sprint KKKKKKK-9): 광역 접두가 있으면 **그 시도 안에서만** 구를 찾는다.
+ *
+ * [환각 실측] REGION_KEYWORDS 는 `'중구': ['11140']`·`'강서': ['11500']` 처럼 **서울 코드 하나로
+ *   고정**돼 있는데, DB 에는 동명 시군구가 실재한다(molit_transactions 실측):
+ *     '중구' 6곳(서울11140·부산26110·대구27110·인천28110·대전30140·울산31110, 11,243건)
+ *     '서구' 4곳(17,350건) · '동구' 5곳 · '남구'/'북구' 3곳 · '강서구' 2곳(서울11500·부산26440)
+ *   그래서 "부산 중구"를 입력해도 아래 1)단계가 '중구'를 매칭해 **서울 중구 아파트**를 추천했다.
+ *   프론트는 항상 "광역 세부"(예 "인천 서구") 형태로 보내므로(index.html getRegionForSearch),
+ *   광역을 먼저 확정하면 이 모호성이 원천 제거된다.
+ *
+ * ⚠ 가장 **긴** 구 이름을 택한다 — "인천 남동구"에서 '동구'가 부분문자열로 걸리기 때문.
+ * ⚠ 경기는 제외 — LAWD_CODES 키가 '성남시분당구' 형태라 사용자 입력('분당')과 형태가 달라
+ *   기존 REGION_KEYWORDS(분당·판교 등 고유 별칭)가 이미 정확히 처리한다.
+ */
+const _SIDO_PFX = [['서울', '11'], ['인천', '28'], ['부산', '26'], ['대구', '27'],
+  ['대전', '30'], ['울산', '31'], ['세종', '36'], ['청주', '43']];
+function _scopedBySido(text) {
+  const hit = _SIDO_PFX.find(([nm]) => text.includes(nm));
+  if (!hit) return null;
+  const pfx = hit[1];
+  const { LAWD_CODES } = require('./transactionService');
+  let best = null;
+  for (const [name, code] of Object.entries(LAWD_CODES)) {
+    if (!String(code).startsWith(pfx)) continue;
+    // LAWD_CODES 키는 광역 접두를 갖는다('인천중구'·'부산중구'). 서울·세종은 접두가 없다.
+    const gu = String(name).replace(/^(인천|부산|대구|대전|울산)/, '');
+    if (gu.length >= 2 && text.includes(gu) && (!best || gu.length > best.name.length)) {
+      best = { lawdCd: code, name: gu };
+    }
+  }
+  return best ? [best] : null;
+}
+
 function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '') {
   // Unicode NFC 정규화 — 일부 OS(Mac)/브라우저에서 한글이 NFD(분해형)로 전달돼
   // "강북" 같은 NFC 키워드와 문자열 비교 실패하는 버그 방지
@@ -82,6 +116,10 @@ function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '') {
   const wp = String(workplaceArea || '').normalize('NFC').replace(/\s+/g,'');
   const combined = r + ' ' + wp;
   logger.debug({ userRegion, r, wp, maxBudget }, 'pickRegions 진입');
+  // 0) 광역 접두가 있으면 그 시도 범위로 먼저 확정 — 동명 구('중구'·'서구'…) 환각 차단.
+  //    userRegion 만 본다(workplaceArea 는 자유 입력이라 광역 판정 근거로 쓰기엔 신뢰도가 낮다).
+  const scoped = _scopedBySido(r);
+  if (scoped) return scoped;
   // 1) 사용자 입력에서 구 단위 키워드 매칭 (광역 키워드는 후순위)
   const SKIP_GLOBAL = new Set(['서울','경기','인천']);
   for (const [kw, codes] of Object.entries(REGION_KEYWORDS)) {

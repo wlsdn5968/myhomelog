@@ -296,6 +296,42 @@ test('molitParse.isCanceled — cdealType 유/무/공백 판정', () => {
 //   운영자 발견 사고: 도봉구 방학동 "신동아아파트1"(1986년·3,169세대 방학신동아1단지)에
 //   "신동아 타워 아파트"(1997년·104세대)가 붙어 단지정보 탭이 통째로 남의 단지였다.
 //   원인은 ratio 게이트가 **이름이 짧은 후보를 편애**한 것(정답 0.429 차단 / 오답 0.600 통과).
+// SIDO-SCOPE (2026-08-10): 동명 시군구 환각 — DB 실측으로 '중구'는 6개 시도(서울·부산·대구·인천·
+//   대전·울산, 11,243건), '서구'는 4개 시도(17,350건)에 **같은 문자열**로 저장돼 있다
+//   (molit_transactions.sigungu 에는 광역 접두가 없다). REGION_KEYWORDS 가 '중구'→서울(11140)로
+//   고정돼 있어 "부산 중구"를 넣어도 **서울 중구 아파트**가 추천됐다. 광역 접두로 먼저 좁혀야 한다.
+test('pickRegions — 광역 접두로 동명 구를 정확히 구분한다', () => {
+  const { pickRegions } = require('../services/propertyService');
+  const first = (r) => { const x = pickRegions(r, 10); return x && x[0] ? x[0].lawdCd : null; };
+
+  // 같은 '중구'라도 광역에 따라 다른 코드여야 한다 (예전엔 전부 11140 서울이었다)
+  assert.equal(first('서울 중구'), '11140');
+  assert.equal(first('인천 중구'), '28110');
+  assert.equal(first('부산 중구'), '26110');
+  assert.equal(first('대구 중구'), '27110');
+  assert.equal(first('대전 중구'), '30140');
+  assert.equal(first('울산 중구'), '31110');
+
+  // '서구'도 마찬가지
+  assert.equal(first('인천 서구'), '28260');
+  assert.equal(first('부산 서구'), '26140');
+  assert.equal(first('대전 서구'), '30170');
+
+  // '강서구' — 서울(11500) vs 부산(26440)
+  assert.equal(first('서울 강서구'), '11500');
+  assert.equal(first('부산 강서구'), '26440');
+
+  // 부분문자열 함정: '남동구' 안에 '동구'가 들어 있다 → 더 긴 이름을 택해야 한다
+  assert.equal(first('인천 남동구'), '28200');
+  assert.equal(first('인천 동구'), '28140');
+
+  // 기존 동작 회귀 확인: 서울 고유 구·경기 별칭·지방 세부는 그대로여야 한다
+  assert.equal(first('서울 강남구'), '11680');
+  assert.equal(first('경기 분당'), '41135');
+  assert.equal(first('지방 해운대'), '26350');
+  assert.equal(first('지방 청주'), '43111');
+});
+
 // LAWD-FIRST (2026-08-10): 시도교육청을 **구 이름으로 추정**하면 남의 지역 학교 정보가 붙는다.
 //   기존 구현은 "…구로 끝나면 서울"이라 해운대구·수성구·유성구·청주시상당구가 전부 B10(서울)이었고,
 //   NEIS 는 (시도교육청 + 학교명)으로 조회하므로 동명 학교가 서울에 있으면 **서울 학교의 학생수**가
