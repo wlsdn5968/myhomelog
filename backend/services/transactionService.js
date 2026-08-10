@@ -501,13 +501,32 @@ async function getAliasCanonicalMap(lawdCds) {
   if (!admin || !Array.isArray(lawdCds) || !lawdCds.length) return new Map();
   const map = new Map();
   try {
-    const { data } = await admin.from('apt_master')
-      .select('apt_name, umd_nm, molit_aliases')
-      .in('lawd_cd', [...new Set(lawdCds.filter(Boolean))])
-      .not('molit_aliases', 'is', null);
-    for (const r of (data || [])) {
-      const al = Array.isArray(r.molit_aliases) ? r.molit_aliases : [];
-      for (const a of al) map.set(`${a}|${r.umd_nm || ''}`, r.apt_name);
+    // REST-CAP-FIX-2026-08-10 (Sprint KKKKKKK-11, 감사 발견 — DB 실측으로 발동 확인):
+    //   이 조회에는 `.limit()`/`.range()` 가 없어 PostgREST max-rows(1000)에서 **조용히 잘렸다**.
+    //   [왜 필터가 못 막나] `.not('molit_aliases','is',null)` 은 사실상 아무것도 안 거른다 —
+    //     실측 apt_master 13,951행 **전부**가 molit_aliases 를 갖고 있다(자동 backfill 완료 상태).
+    //   [실측 규모] lawd_cd 당 평균 122.4행(최대 328) → **9개 지역만 넘어도 1000행 초과**.
+    //     보고서에서 "서울" 광역을 고르면 25개 구 = 3,384행이라 **70%가 소실**된다.
+    //   [증상] 잘린 alias 는 맵에 없으니 relabel 이 안 걸려 raw MOLIT 명이 그대로 노출된다 —
+    //     보고서는 같은 단지가 이름 이형으로 쪼개져 중복 표기되고(BUG2/ALIAS-MERGE 와 같은 실패),
+    //     pushNotify 는 canonical 명으로 담은 관심단지의 새 거래를 **알림에서 놓친다**(조용한 미발송).
+    //   ⇒ 페이지 루프. 2차 정렬키는 kapt_code(pg_index 실측 PRIMARY KEY)라 경계 드리프트가 없다.
+    const uniq = [...new Set(lawdCds.filter(Boolean))];
+    const PAGE = 1000;
+    for (let from = 0; from < 20000; from += PAGE) {   // apt_master 13,951행 → 최대 14페이지
+      const { data, error } = await admin.from('apt_master')
+        .select('kapt_code, apt_name, umd_nm, molit_aliases')
+        .in('lawd_cd', uniq)
+        .not('molit_aliases', 'is', null)
+        .order('kapt_code', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw new Error(error.message);
+      if (!data || !data.length) break;
+      for (const r of data) {
+        const al = Array.isArray(r.molit_aliases) ? r.molit_aliases : [];
+        for (const a of al) map.set(`${a}|${r.umd_nm || ''}`, r.apt_name);
+      }
+      if (data.length < PAGE) break;   // 마지막 페이지 — 통상 추천 경로(1~3지역)는 여기서 1회 종료
     }
   } catch (e) {
     logger.warn({ err: e.message }, 'getAliasCanonicalMap 조회 실패 — 빈 맵');
