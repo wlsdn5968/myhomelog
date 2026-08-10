@@ -176,12 +176,15 @@ async function kakaoGeocode({ aptName, sigungu, umdNm, address }, _diag) {
   const umd = String(umdNm || '').trim();
   const addr = String(address || '').trim();
 
-  // 우선순위: 구+동+단지명(가장 정확) → 구+단지명 → 단지명 → 도로명주소
+  // JIBUN-FIRST-2026-08-10 (Sprint KKKKKKK-6): **주소를 맨 앞으로**.
+  //   기존 순서(이름 검색 3회 → 주소)는 이름이 그럴듯하게 맞는 **다른 단지**를 먼저 채택해버렸다.
+  //   실사고: '신동아아파트3'(방학동 530) → "신동아1단지아파트 3동"(272) 로 잡혀 마커가 남의 단지 안에.
+  //   주소(지번)는 모호성이 0이므로 있으면 항상 먼저 쓴다. 이름 검색은 주소가 없거나 실패할 때의 폴백.
   const tries = [
+    addr ? { url: KAKAO_ADDRESS, q: addr } : null,
     { url: KAKAO_KEYWORD, q: `${sgg} ${umd} ${name}`.trim() },
     { url: KAKAO_KEYWORD, q: `${sgg} ${name}`.trim() },
     { url: KAKAO_KEYWORD, q: name },
-    addr ? { url: KAKAO_ADDRESS, q: addr } : null,
   ].filter(t => t && t.q && t.q.length > 1);
 
   for (const t of tries) {
@@ -358,6 +361,44 @@ async function filterOutGeoFailed(items) {
   }
 }
 
+/** molit "안양시동안구"(붙임 표기) → Kakao 주소 파서용 "안양시 동안구". 단일어 구("송파구")는 불변 */
+function sggWithSpace(sgg) {
+  return String(sgg || '').replace(/^(.{2,}?시)(.{2,}구)$/, '$1 $2');
+}
+
+/**
+ * 실거래 신고 지번으로 만든 주소 — 이름 키워드 검색보다 정확한 지오코딩 근거.
+ *
+ * JIBUN-FIRST-2026-08-10 (Sprint KKKKKKK-6, 운영자 재지적 "신동아아파트3 위치가 이상한 곳"):
+ *   Kakao **장소검색**은 단지명이 짧거나 이형일 때 무관한 업소·다른 단지를 1순위로 잡는다.
+ *   실측: 좌표-지번 불일치 1,340건 중 39%가 2글자 단지명(세종→세종통신, 현대→현대자동차블루핸즈).
+ *   더 나쁜 건 **같은 이름 계열의 다른 단지**를 잡는 경우다 —
+ *   '신동아아파트3'(방학동 530) → "신동아1단지아파트 3동"(방학동 272)으로 잡혀 마커가 남의 단지 안에 찍혔다.
+ *   신고 지번은 이름이 전혀 개입하지 않으므로 이 실패 모드에 면역이다.
+ * @returns {Promise<string|null>} "서울 도봉구 방학동 530" 형태
+ */
+async function molitJibunAddress({ aptName, sigungu, umdNm }) {
+  const admin = dbClient();
+  if (!admin || !aptName || !sigungu || !umdNm) return null;
+  try {
+    const { data } = await admin.from('molit_transactions')
+      .select('jibun')
+      .eq('apt_name', aptName).eq('sigungu', sigungu).eq('umd_nm', umdNm)
+      .not('jibun', 'is', null).neq('jibun', '')
+      .order('deal_date', { ascending: false })
+      .limit(40);
+    if (!data || !data.length) return null;
+    const freq = new Map();
+    for (const r of data) {
+      const j = String(r.jibun || '').trim();
+      if (j) freq.set(j, (freq.get(j) || 0) + 1);
+    }
+    let best = null, bestN = 0;
+    for (const [j, n] of freq) if (n > bestN) { best = j; bestN = n; }
+    return best ? `${sggWithSpace(sigungu)} ${umdNm} ${best}`.trim() : null;
+  } catch (_) { return null; }
+}
+
 /**
  * 단건 단지 좌표 해결
  * @param {Object} apt - { kaptCode?, aptName, sigungu?, umdNm?, address? }
@@ -379,7 +420,14 @@ async function resolveCoord(apt, _diag) {
   }
 
   // 2) Kakao 폴백 (_diag: GEO-FAIL-SENTINEL — 백필이 무매칭/오류 구분용, 선택 인자)
-  const fromKakao = await kakaoGeocode(apt, _diag);
+  //    JIBUN-FIRST-2026-08-10: 호출처가 주소를 안 줬으면 **실거래 신고 지번으로 만들어** 넘긴다.
+  //    kakaoGeocode 는 주소를 최우선으로 시도하므로, 이름 검색이 남의 단지를 잡는 사고를 원천 차단한다.
+  let target = apt;
+  if (!apt.address) {
+    const jibunAddr = await molitJibunAddress(apt);
+    if (jibunAddr) target = { ...apt, address: jibunAddr };
+  }
+  const fromKakao = await kakaoGeocode(target, _diag);
   if (fromKakao) {
     // FREEZE-FIX-2026-08-09 (Plan 003): fire-and-forget UPSERT 는 서버리스 동결로 유실될 수 있어
     //   (RATE-WARM-2026-08-08 실측 선례) 저장이 안 되면 같은 단지 재요청마다 Kakao 를 다시 호출한다
@@ -465,4 +513,6 @@ async function resolveCoordBatch(apts, concurrency = 4, diags) {
 }
 
 // buildKey·saveToDb 는 백필의 지번 주소 폴백(Sprint CCCCCCC)이 키 규약·저장 경로를 재사용하기 위해 노출.
-module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb, NON_APT_PATTERNS, NON_APT_CATEGORY, AMBIGUOUS_SGG };
+module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb, NON_APT_PATTERNS, NON_APT_CATEGORY, AMBIGUOUS_SGG,
+  // JIBUN-FIRST-2026-08-10: 백필 잡도 같은 헬퍼를 쓰도록 export(복붙 드리프트 방지)
+  molitJibunAddress, sggWithSpace };

@@ -134,7 +134,7 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
   //   의심도가 높은 kakao-sub 를 먼저 소진하도록 정렬('kakao-sub' > 'kakao' 문자열 역순).
   const { data: rows } = await admin
     .from('apt_geocache')
-    .select('apt_key, apt_name, sigungu, umd_nm, lat, lng, place_name')
+    .select('apt_key, apt_name, sigungu, umd_nm, lat, lng, place_name, address')
     .in('source', ['kakao', 'kakao-sub'])
     .order('source', { ascending: false })
     .limit(cap);
@@ -196,7 +196,15 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
         //   C계(무관 상호) 668건·49.9%로 최대 덩어리였다. 공식 주소 좌표가 어차피 더 정확하므로 손해가 없고,
         //   place_name 은 비워진다(프론트 미사용 필드 — 렌더 영향 0, grep 실측).
         const nonRes = r.place_name && REHEAL_NONRES_RE.test(r.place_name);
-        if (moved <= 300 && !nonRes) {
+        // JIBUN-MISMATCH-FORCE-2026-08-10 (Sprint KKKKKKK-6): **지번 본번이 다르면 거리 무관 교정**.
+        //   거리만 보면 같은 동 안의 **다른 단지**가 300m 이내라 'kakao-v'(검증 통과)로 박제된다 —
+        //   실사고: '신동아아파트3'(신고 지번 방학동 530)의 저장 좌표가 272("신동아1단지아파트 3동")로,
+        //   남의 단지 안에 마커가 찍혀 있는데도 거리 기준만으로는 통과할 수 있었다.
+        //   addr 는 이 행의 신고 지번으로 만든 주소이므로, 저장 주소의 본번과 다르면 저장분이 틀린 것이다.
+        const _bon = (s) => { const m = String(s || '').match(/(\d+)(?:-\d+)?\s*$/); return m ? m[1] : null; };
+        const oldBon = _bon(r.address), newBon = _bon(addr);
+        const jibunMismatch = !!(oldBon && newBon && oldBon !== newBon);
+        if (moved <= 300 && !nonRes && !jibunMismatch) {
           await admin.from('apt_geocache').update({ source: 'kakao-v' }).eq('apt_key', r.apt_key);
           verified++;
         } else {
