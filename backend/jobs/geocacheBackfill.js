@@ -125,18 +125,19 @@ async function rehealSubfeatures(admin, { cap = 300, budgetMs = 120000 } = {}) {
  */
 async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = {}) {
   const started = Date.now();
-  // SUB-INCLUDE-2026-08-10 (Sprint KKKKKKK): 'kakao-sub' 도 대상에 포함(실측 1,980행).
-  //   reheal 이 이 행들을 마킹한 이유는 **이름 재지오코딩**이 개선에 실패했기 때문인데, 주소 기반
-  //   지오코딩(모호성 0)은 애초에 시도조차 안 됐다. 즉 가장 의심스러운 행들이 유일하게 정확한
-  //   검증 경로에서 영구 제외돼 있었다 — 인기 단지 6위 '평촌어바인퍼스트'(실거래 지번 호계동 1296,
-  //   저장 좌표 946-13 '1단지 상가')가 이 상태였다. 처리 후 source 가 kakao-v/kakao-addr 로 바뀌어
-  //   재시도 루프는 생기지 않는다(진행 보장 유지).
-  //   의심도가 높은 kakao-sub 를 먼저 소진하도록 정렬('kakao-sub' > 'kakao' 문자열 역순).
+  // FULL-ROTATION-2026-08-10 (Sprint KKKKKKK-6, 운영자 "모든 좌표 전수조사"):
+  //   대상을 **전 source 로 확대**하고 `cached_at` 오래된 순으로 순환한다.
+  //   [왜] source 로 대상을 고르면 한 번 처리된 행이 영구 제외돼, 그때의 판정이 틀렸어도 교정 기회가
+  //   없다 — 실측으로 kakao-v 661행 중 24행, kakao-addr 3,479행 중 7행이 **지번 불일치인데도
+  //   스윕에서 빠져 있었다**. 오래된 순 순환은 (a) 한 바퀴 돌면 전량이 재검증되고 (b) 처리 시
+  //   cached_at 을 갱신하므로 같은 행이 연속으로 다시 잡히지 않는다(무한 재시도 없음).
+  //   [비용] 대상 13,185행 / 일 cap 1,000 → 약 13일에 한 바퀴. Kakao 호출은 일 한도의 1% 수준.
+  //   급할 때는 admin 트리거(/api/admin/run-geocache-backfill)를 반복 호출해 가속할 수 있다.
   const { data: rows } = await admin
     .from('apt_geocache')
     .select('apt_key, apt_name, sigungu, umd_nm, lat, lng, place_name, address')
-    .in('source', ['kakao', 'kakao-sub'])
-    .order('source', { ascending: false })
+    .in('source', ['kakao', 'kakao-sub', 'kakao-v', 'kakao-addr'])
+    .order('cached_at', { ascending: true, nullsFirst: true })
     .limit(cap);
   if (!rows || !rows.length) return { tried: 0, verified: 0, corrected: 0, skippedNoAddr: 0 };
 
@@ -154,6 +155,15 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
 
   let tried = 0, verified = 0, corrected = 0, skippedNoAddr = 0;
   const queue = [...rows];
+  // FULL-ROTATION 진행 보장: 순회 기준이 cached_at 이므로 **결과와 무관하게** 손댄 행은 시각을
+  //   갱신해야 한다. 안 그러면 주소를 못 구한 행·지오코딩 실패 행이 영원히 큐 맨 앞을 점유해
+  //   그 뒤 행에 도달하지 못한다(geocode 백필이 겪었던 spin 과 같은 함정).
+  //   갱신해도 한 바퀴 뒤에 다시 시도되므로 "다음 run 재시도" 의도는 유지된다.
+  const _now = () => new Date().toISOString();
+  const _touch = async (aptKey) => {
+    try { await admin.from('apt_geocache').update({ cached_at: _now() }).eq('apt_key', aptKey); }
+    catch (_) { /* 진행 보장용 — 실패해도 본 작업엔 영향 없음 */ }
+  };
   async function worker() {
     while (queue.length && (Date.now() - started) < budgetMs) {
       const r = queue.shift();
@@ -182,10 +192,10 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
         if (!addr && r.apt_key.startsWith('kapt:')) {
           addr = addrByKapt.get(r.apt_key.slice(5)) || null;
         }
-        if (!addr) { skippedNoAddr++; continue; }
-        // 2) 주소 지오코딩(모호성 0) — 실패 시 아무것도 안 바꿈
+        if (!addr) { skippedNoAddr++; await _touch(r.apt_key); continue; }
+        // 2) 주소 지오코딩(모호성 0) — 실패 시 좌표는 그대로 두고 순번만 넘긴다
         const fresh = await kakaoAddressGeocode(addr);
-        if (!fresh) continue;
+        if (!fresh) { await _touch(r.apt_key); continue; }
         tried++;
         // 3) 거리 판정
         const dx = (fresh.lng - Number(r.lng)) * Math.cos(fresh.lat * Math.PI / 180);
@@ -205,11 +215,12 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
         const oldBon = _bon(r.address), newBon = _bon(addr);
         const jibunMismatch = !!(oldBon && newBon && oldBon !== newBon);
         if (moved <= 300 && !nonRes && !jibunMismatch) {
-          await admin.from('apt_geocache').update({ source: 'kakao-v' }).eq('apt_key', r.apt_key);
+          await admin.from('apt_geocache').update({ source: 'kakao-v', cached_at: _now() }).eq('apt_key', r.apt_key);
           verified++;
         } else {
           await admin.from('apt_geocache').update({
             lat: fresh.lat, lng: fresh.lng, address: fresh.address, place_name: null, source: 'kakao-addr',
+            cached_at: _now(),
           }).eq('apt_key', r.apt_key);
           corrected++;
           logger.info({ source: 'geocache-addr-verify', aptKey: r.apt_key, movedM: Math.round(moved), addr },
