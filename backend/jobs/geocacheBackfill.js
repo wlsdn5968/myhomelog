@@ -210,10 +210,11 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
       } catch (_) { /* 개별 실패 무시 — source 유지 → 다음 run 재시도 */ }
     }
   }
-  await Promise.all(Array.from({ length: 6 }, () => worker()));
-  logger.info({ source: 'geocache-addr-verify', tried, verified, corrected, skippedNoAddr, elapsedMs: Date.now() - started },
+  await Promise.all(Array.from({ length: 8 }, () => worker())); // reheal 과 동일 동시성(Kakao 한도 대비 충분히 안전)
+  const elapsedMs = Date.now() - started;
+  logger.info({ source: 'geocache-addr-verify', tried, verified, corrected, skippedNoAddr, rows: rows.length, elapsedMs },
     `주소 검증 스윕: ${verified} 통과 / ${corrected} 교정 / ${skippedNoAddr} 주소없음 / ${tried} 판정`);
-  return { tried, verified, corrected, skippedNoAddr };
+  return { tried, verified, corrected, skippedNoAddr, elapsedMs, rows: rows.length };
 }
 
 const DEFAULT_CHUNK = 50;
@@ -263,15 +264,23 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
 
   // CANON-COORD-FIX-2026-06-03: 하위시설 좌표 재치유 (1회 본체 교정) — sweep 루프 전.
   //   GEOCODE-SWEEP-2026-06-21: reheal 실측 작업량 13행뿐 → 60s 예산이면 충분(기존 120s 과대, sweep 예산 확보).
+  //   GEO-BUDGET-2026-08-10 (Sprint KKKKKKK-3): reheal 60s → 30s. 실측 작업량이 13행뿐이라 60s 는
+  //   여전히 과대했고, 그 여유를 아래 주소 검증(오염 좌표 948건 교정)에 넘긴다.
   let reheal = { tried: 0, healed: 0, marked: 0 };
-  try { reheal = await rehealSubfeatures(admin, { cap: 300, budgetMs: 60000 }); }
+  try { reheal = await rehealSubfeatures(admin, { cap: 300, budgetMs: 30000 }); }
   catch (e) { logger.warn({ err: e.message }, 'geocache reheal 실패(무시)'); }
 
   // ADDR-VERIFY-2026-07-17 (Sprint ZZZZZ): 공식 주소 기반 좌표 검증·교정 — 일 300행씩 전 행 점진 커버
   //   (미검증 10.4K → ~35일, admin 수동 트리거로 가속 가능). 예산 60s 는 sweep 몫에서 차감되지만
   //   신규 백필보다 기존 오좌표 교정이 사용자 체감 우선(운영자 "지도 매칭" 지적).
+  //   GEO-BUDGET-2026-08-10 (Sprint KKKKKKK-3): cap 300→1000 · 60s→120s.
+  //   [근거] 전수 대조로 오염 좌표 948건이 확정됐는데 일 300행 페이스로는 대상 12,076행
+  //   (kakao 10,096 + kakao-sub 1,980)을 훑는 데 ~40일이 걸린다. 예산 실측: run 전체 270s 중
+  //   최근 실행이 194.7s 사용(processed 4,000 = 풀 완주) → 여유 ~75s + reheal 감축분 30s.
+  //   Kakao 호출은 verify 1,000 + sweep 최대 16K = 17K 로 일 한도 100K 의 17%(경고 60K 미만).
+  //   시간이 먼저 끊으면 남은 행은 다음 날 이어서 처리된다(진행 보장 구조 불변).
   let addrVerify = { tried: 0, verified: 0, corrected: 0, skippedNoAddr: 0 };
-  try { addrVerify = await verifyByOfficialAddress(admin, { cap: 300, budgetMs: 60000 }); }
+  try { addrVerify = await verifyByOfficialAddress(admin, { cap: 1000, budgetMs: 120000 }); }
   catch (e) { logger.warn({ err: e.message }, 'geocache 주소검증 실패(무시)'); }
 
   // 후보 풀 1회 조회 → budget 안에서 batch 순회 (재조회 spin 제거)
@@ -375,7 +384,17 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
     totalProcessed, totalInserted, totalFailed, totalSentinel, elapsedMs: elapsed,
   }, `geocache backfill: ${batches} batches, ${totalInserted}/${totalProcessed} 백필 (풀 ${rawPool.length}→${candidates.length}, 기지실패제외 ${skippedKnownFail}, sentinel ${totalSentinel}) (${elapsed}ms)`);
   // KAKAO-DIAG-2026-07-10 (Sprint CCCC): 실패 사유 원격 확정용 — 이 run 인스턴스의 Kakao ok/무매칭/에러코드 분포 동봉.
-  return { ok: true, reheal, addrVerify, batches, rawPoolSize: rawPool.length, poolSize: candidates.length, skippedKnownFail, processed: totalProcessed, inserted: totalInserted, failed: totalFailed, sentinelMarked: totalSentinel, addrTried, addrInserted, elapsedMs: elapsed, kakao: getKakaoUsageStats() };
+  return {
+    ok: true, reheal, addrVerify, batches,
+    rawPoolSize: rawPool.length, poolSize: candidates.length, skippedKnownFail,
+    processed: totalProcessed, inserted: totalInserted, failed: totalFailed, sentinelMarked: totalSentinel,
+    addrTried, addrInserted, elapsedMs: elapsed, kakao: getKakaoUsageStats(),
+    // GEO-VERIFY-OBSERV-2026-08-10 (Sprint KKKKKKK-3): cronStats._pick 이 숫자만 통과시켜
+    //   위 reheal/addrVerify 객체는 health 에 안 잡힌다 → 평탄화해서 관측 가능하게.
+    verifyTried: addrVerify.tried, verifyOk: addrVerify.verified, verifyFixed: addrVerify.corrected,
+    verifyNoAddr: addrVerify.skippedNoAddr, verifyMs: addrVerify.elapsedMs,
+    rehealTried: reheal.tried, rehealHealed: reheal.healed, rehealMarked: reheal.marked,
+  };
 }
 
 /**

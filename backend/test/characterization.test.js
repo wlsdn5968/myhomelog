@@ -296,6 +296,28 @@ test('molitParse.isCanceled — cdealType 유/무/공백 판정', () => {
 //   운영자 발견 사고: 도봉구 방학동 "신동아아파트1"(1986년·3,169세대 방학신동아1단지)에
 //   "신동아 타워 아파트"(1997년·104세대)가 붙어 단지정보 탭이 통째로 남의 단지였다.
 //   원인은 ratio 게이트가 **이름이 짧은 후보를 편애**한 것(정답 0.429 차단 / 오답 0.600 통과).
+// ZERO-FETCH-WATCH (2026-08-10): 광주 5개 구가 44일간 rows_fetched=0 인데 status='ok' 라
+//   기존 지표(ok/err)로 전혀 안 보였다. 관측 필드를 열되 화이트리스트의 보안 성질은 유지해야 한다.
+test('cronStats._pick — 지역 정체 감시 필드는 통과, 임의 필드는 여전히 차단', () => {
+  const { _pick } = require('../services/cronStats');
+  const out = _pick({
+    zeroFetchRegions: 5, zeroFetchLawds: '29110,29140,29155', slot: 2, regionsCount: 39,
+    verifyFixed: 12, rehealHealed: 3,
+    serviceKey: 'SECRET', apiKey: 'SECRET', results: [{ lawdCd: '29110' }],
+  });
+  assert.equal(out.zeroFetchRegions, 5);
+  assert.equal(out.zeroFetchLawds, '29110,29140,29155'); // 법정동 코드 = 공개 정보
+  assert.equal(out.slot, 2);
+  assert.equal(out.verifyFixed, 12);
+  assert.equal(out.rehealHealed, 3);
+  // 화이트리스트 밖은 무조건 배제 (민감값 유출 방지 — 이 성질이 깨지면 안 된다)
+  assert.equal(out.serviceKey, undefined);
+  assert.equal(out.apiKey, undefined);
+  assert.equal(out.results, undefined);
+  // 빈 문자열은 "보고되지 않음"이므로 키 자체가 없어야 한다
+  assert.equal(_pick({ zeroFetchLawds: '' }).zeroFetchLawds, undefined);
+});
+
 test('aptFacility.jibunFromKaptAddr — KAPT 지번주소에서 지번만 추출', () => {
   const { jibunFromKaptAddr } = require('../services/aptFacilityService');
   assert.equal(jibunFromKaptAddr('서울특별시 도봉구 방학동 271-1 방학신동아1단지'), '271-1');

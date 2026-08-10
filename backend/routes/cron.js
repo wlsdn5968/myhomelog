@@ -189,6 +189,10 @@ async function handleMolitIngest(req, res) {
       ok: summary.ok, err: summary.err, skipped: summary.skipped, elapsedMs: summary.elapsedMs,
       retried: summary.gapBackfill && summary.gapBackfill.retried, filled: summary.gapBackfill && summary.gapBackfill.filled,
       error: summary.firstError || summary.reason || undefined, // reason = 키 미설정 skip 케이스
+      // ZERO-FETCH-WATCH-2026-08-10 (Sprint KKKKKKK-4): 광주 5개 구 44일 무적재가 status='ok' 라
+      //   기존 지표(ok/err)로는 전혀 안 보였다 — 지역 단위 0건을 health 로 올린다.
+      slot: summary.slot, regionsCount: summary.regionsCount,
+      zeroFetchRegions: summary.zeroFetchRegions, zeroFetchLawds: summary.zeroFetchLawds,
     }).catch(() => {});
     res.json({ ok: true, summary });
   } catch (e) {

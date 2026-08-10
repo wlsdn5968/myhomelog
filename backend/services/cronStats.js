@@ -29,9 +29,17 @@ function _pick(summary) {
   if (!summary || typeof summary !== 'object') return {};
   // MOLIT-OBSERV-2026-08-08 (Sprint AAAAAAA): molit-ingest 계열 카운터(ok·err·skipped·gap 채움) 추가.
   //   ok 가 숫자면 여기서 통과, boolean false 면 아래 실패 표기 분기 — 두 의미가 충돌하지 않는다.
+  // GEO-VERIFY-OBSERV-2026-08-10 (Sprint KKKKKKK-3): 좌표 검증·교정 스윕(verifyByOfficialAddress)과
+  //   reheal 의 성과가 여기 화이트리스트에 없어 health 로 전혀 보이지 않았다 — run 이 객체
+  //   ({reheal},{addrVerify})로 돌려주는데 _pick 은 숫자만 통과시키기 때문. 오염 좌표 948건이
+  //   며칠에 걸쳐 실제로 줄고 있는지 측정할 수단이 없어 튜닝이 추측이 된다. 평탄화 키를 추가한다.
   const NUM = ['processed', 'inserted', 'failed', 'batches', 'rawPoolSize', 'poolSize',
     'skippedKnownFail', 'sentinelMarked', 'elapsedMs', 'updated', 'scanned', 'gapsFixed',
-    'ok', 'err', 'skipped', 'retried', 'filled', 'missed', 'addrTried', 'addrInserted'];
+    'ok', 'err', 'skipped', 'retried', 'filled', 'missed', 'addrTried', 'addrInserted',
+    'verifyTried', 'verifyOk', 'verifyFixed', 'verifyNoAddr', 'verifyMs',
+    'rehealTried', 'rehealHealed', 'rehealMarked',
+    // ZERO-FETCH-WATCH-2026-08-10 (Sprint KKKKKKK-4): 지역 단위 적재 중단 감시.
+    'slot', 'regionsCount', 'zeroFetchRegions'];
   const out = {};
   for (const k of NUM) {
     const v = summary[k];
@@ -45,6 +53,11 @@ function _pick(summary) {
   }
   if (summary.ok === false) out.ok = false;
   if (typeof summary.error === 'string') out.error = summary.error.slice(0, 120);
+  // 적재 0건 지역의 lawd_cd 목록 — 숫자가 아니라 콤마 문자열이라 위 NUM 루프를 못 탄다.
+  //   법정동 시군구 코드는 공개 정보라 민감하지 않다(error 와 동일하게 길이만 제한).
+  if (typeof summary.zeroFetchLawds === 'string' && summary.zeroFetchLawds.trim()) {
+    out.zeroFetchLawds = summary.zeroFetchLawds.slice(0, 120);
+  }
   return out;
 }
 

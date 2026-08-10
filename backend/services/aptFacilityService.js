@@ -197,15 +197,31 @@ async function findMaster(aptName, sigungu, umdNm, identity) {
   }
 
   // 같은 sigungu+umd_nm 후보 전량 — 기존 limit(80) 은 실측 최대 81개 동에서 잘렸다(range 페이징).
-  const candidates = [];
-  for (let from = 0; from <= 900; from += 300) {
-    const { data: page, error } = await a.from('apt_master').select(COLS)
-      .eq('sigungu', sigungu).eq('umd_nm', umdNm)
-      .order('kapt_code', { ascending: true })
-      .range(from, from + 299);
-    if (error) break;
-    if (page && page.length) candidates.push(...page);
-    if (!page || page.length < 300) break;
+  const loadCandidates = async (umd) => {
+    const out = [];
+    for (let from = 0; from <= 900; from += 300) {
+      const { data: page, error } = await a.from('apt_master').select(COLS)
+        .eq('sigungu', sigungu).eq('umd_nm', umd)
+        .order('kapt_code', { ascending: true })
+        .range(from, from + 299);
+      if (error) break;
+      if (page && page.length) out.push(...page);
+      if (!page || page.length < 300) break;
+    }
+    return out;
+  };
+  let candidates = await loadCandidates(umdNm);
+
+  // EUPMYEON-FALLBACK-2026-08-10 (Sprint KKKKKKK-4): 군(郡) 지역 읍/면+리 표기 차이 흡수.
+  //   KAPT 는 '범서읍'(읍/면 단독)인데 MOLIT 은 '범서읍 구영리'(읍/면+리)로 신고해 동등 조인이
+  //   **전건 실패**한다 — 울주군은 apt_master 104행을 갖고도 매칭 0이었다(달성군도 동일, 실측).
+  //   전국 실측: 공백 포함 umd_nm 조합 1,146개 중 apt_master 에 같은 단지명이 있는 240개가
+  //   현재 0건 매칭이고, 읍/면 토큰으로 조인하면 231개(96.3%)가 붙는다. 그 231개의 준공연도는
+  //   78/78 표본 전수 일치, 같은 읍/면 안의 동명 단지(里만 다른 경우)는 전국 0건 — 오매칭 위험 없음.
+  //   폴백으로 얻은 후보도 아래 IDENTITY-GATE 검증을 똑같이 통과해야 채택된다(이중 안전).
+  if (!candidates.length && /\s/.test(String(umdNm || ''))) {
+    const eupMyeon = String(umdNm).trim().split(/\s+/)[0];
+    if (eupMyeon && eupMyeon !== umdNm) candidates = await loadCandidates(eupMyeon);
   }
   if (!candidates.length) return null;
 

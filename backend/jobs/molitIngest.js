@@ -438,6 +438,28 @@ async function runMolitIngest(opts = {}) {
   //   유형(키 만료·게이트웨이 변경)에서 "err=9" 숫자만으론 진단 불가했던 실사고 후속.
   const firstError = (results.find(r => !r.ok && !r.skipped && r.error) || {}).error || null;
   const elapsedMs = Date.now() - started;
+
+  // ZERO-FETCH-WATCH-2026-08-10 (Sprint KKKKKKK-4): 지역별 적재 정체 감시.
+  //   [실사고] 광주 5개 구가 2026-06-27 이후 **44일간** rows_fetched=0 이었는데 status='ok'
+  //   (= HTTP 성공, 데이터만 빈 응답)라 err 카운터에도 Sentry 에도 안 잡혔다. 전국 단일 지표
+  //   (dataCounts.lastIngestedAt)는 다른 지역이 매일 갱신하므로 **한 지역만 죽으면 구조적으로
+  //   감지 불가**했다. 이 run 이 담당한 지역 중 "맡은 모든 월에서 0건"인 lawd_cd 를 올린다.
+  //   ⚠ 거래가 드문 소규모 지역은 정상적으로 0일 수 있다 — 경보가 아니라 관측값(운영자 판단용).
+  const _byLawd = new Map();
+  for (const r of results) {
+    if (!r.lawdCd || r.skipped) continue;
+    const c = _byLawd.get(r.lawdCd) || { fetched: 0, runs: 0 };
+    c.fetched += Number(r.fetched) || 0;
+    c.runs += 1;
+    _byLawd.set(r.lawdCd, c);
+  }
+  const zeroFetchLawds = [...(_byLawd.entries())]
+    .filter(([, v]) => v.runs > 0 && v.fetched === 0)
+    .map(([k]) => k);
+  if (zeroFetchLawds.length) {
+    logger.warn({ source: 'molit-ingest', slot, slotCount, zeroFetchLawds, months: months.length },
+      `적재 0건 지역 ${zeroFetchLawds.length}곳 — 상류 응답이 비었는지 확인 필요`);
+  }
   logger.info({
     source: 'molit-ingest',
     regions: regions.length,
@@ -460,7 +482,16 @@ async function runMolitIngest(opts = {}) {
     logger.warn({ elapsedMs: Date.now() - started }, 'molit-ingest gap-backfill skip — 시간 부족');
   }
 
-  return { ok, err, skipped, firstError, elapsedMs, monthsCount: months.length, monthsRange: months.length ? `${months[months.length-1]}~${months[0]}` : null, gapBackfill, results };
+  return {
+    ok, err, skipped, firstError, elapsedMs,
+    monthsCount: months.length,
+    monthsRange: months.length ? `${months[months.length - 1]}~${months[0]}` : null,
+    gapBackfill, results,
+    // ZERO-FETCH-WATCH-2026-08-10: health.crons 로 올려 지역 단위 중단을 즉시 보이게 한다.
+    slot, regionsCount: regions.length,
+    zeroFetchRegions: zeroFetchLawds.length,
+    zeroFetchLawds: zeroFetchLawds.slice(0, 12).join(','),
+  };
 }
 
 // molitErrReason 은 "응답 본문을 통째로 저장하지 않는다(키 에코 차단)" 보안 성질을 테스트로 고정하기 위해 export.
