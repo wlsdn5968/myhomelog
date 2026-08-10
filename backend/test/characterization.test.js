@@ -296,6 +296,28 @@ test('molitParse.isCanceled — cdealType 유/무/공백 판정', () => {
 //   운영자 발견 사고: 도봉구 방학동 "신동아아파트1"(1986년·3,169세대 방학신동아1단지)에
 //   "신동아 타워 아파트"(1997년·104세대)가 붙어 단지정보 탭이 통째로 남의 단지였다.
 //   원인은 ratio 게이트가 **이름이 짧은 후보를 편애**한 것(정답 0.429 차단 / 오답 0.600 통과).
+// JIBUN-MISMATCH (2026-08-10): 좌표가 **남의 단지**에 찍혔는지는 지번 본번으로 판정한다.
+//   운영자 발견 실사고: '신동아아파트3'(신고 지번 방학동 530)의 저장 좌표가 272("신동아1단지 3동")로,
+//   같은 동이라 거리(300m) 기준만으로는 '검증 통과'로 박제될 수 있었다. 본번 비교가 그걸 잡는다.
+test('geocacheBackfill.addrBonbun — 주소 끝 지번의 본번만 추출(부번 무시)', () => {
+  const { addrBonbun } = require('../jobs/geocacheBackfill');
+  assert.equal(addrBonbun('서울 도봉구 방학동 271-4'), '271'); // 대단지 다필지 → 본번만
+  assert.equal(addrBonbun('서울 도봉구 방학동 272'), '272');
+  assert.equal(addrBonbun('서울 도봉구 방학동 530'), '530');
+  assert.equal(addrBonbun('경기 안양시 동안구 호계동 946-13'), '946');
+  assert.equal(addrBonbun('경기 평택시 동삭동'), null);        // 번지 없는 주소 → 판정 불가
+  assert.equal(addrBonbun(''), null);
+  assert.equal(addrBonbun(null), null);
+
+  // 실사고 재현: 신고 지번(530)과 저장 좌표 주소(272)의 본번이 다르면 '다른 단지'로 판정돼야 한다
+  const 저장 = addrBonbun('서울 도봉구 방학동 272');
+  const 신고 = addrBonbun('서울 도봉구 방학동 530');
+  assert.ok(저장 && 신고 && 저장 !== 신고, '신동아아파트3 은 지번 불일치로 강제 교정 대상이어야 한다');
+
+  // 정상 케이스: 신고 271-1 vs 저장 271-4 → 본번 271 로 같으므로 교정하지 않는다(오탐 방지)
+  assert.equal(addrBonbun('서울 도봉구 방학동 271-1'), addrBonbun('서울 도봉구 방학동 271-4'));
+});
+
 // ZERO-FETCH-WATCH (2026-08-10): 광주 5개 구가 44일간 rows_fetched=0 인데 status='ok' 라
 //   기존 지표(ok/err)로 전혀 안 보였다. 관측 필드를 열되 화이트리스트의 보안 성질은 유지해야 한다.
 test('cronStats._pick — 지역 정체 감시 필드는 통과, 임의 필드는 여전히 차단', () => {

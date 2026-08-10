@@ -51,6 +51,13 @@ const REHEAL_NONRES_KEYWORDS = [
 ];
 const REHEAL_NONRES_RE = new RegExp(REHEAL_NONRES_KEYWORDS.join('|'));
 
+/** 주소 문자열 끝의 지번에서 **본번**만 추출 — "서울 도봉구 방학동 271-4" → "271".
+ *  대단지는 여러 필지에 걸치므로 부번까지 비교하면 정상 케이스를 오판한다(본번만 비교). */
+function addrBonbun(addr) {
+  const m = String(addr || '').match(/(\d+)(?:-\d+)?\s*$/);
+  return m ? m[1] : null;
+}
+
 /**
  * 비주거 place_name 좌표 재치유 — Kakao 재지오코딩(하드닝 필터) 후 "더 나은(주거 본체) 좌표"만 in-place UPDATE.
  * 안전: 비주거-아님 + 한국 유효좌표 + 동일 시군구(kakaoGeocode 내부 검증) + 단지명 관련성 + 이동 20m~2km 일 때만 갱신.
@@ -211,8 +218,7 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
         //   실사고: '신동아아파트3'(신고 지번 방학동 530)의 저장 좌표가 272("신동아1단지아파트 3동")로,
         //   남의 단지 안에 마커가 찍혀 있는데도 거리 기준만으로는 통과할 수 있었다.
         //   addr 는 이 행의 신고 지번으로 만든 주소이므로, 저장 주소의 본번과 다르면 저장분이 틀린 것이다.
-        const _bon = (s) => { const m = String(s || '').match(/(\d+)(?:-\d+)?\s*$/); return m ? m[1] : null; };
-        const oldBon = _bon(r.address), newBon = _bon(addr);
+        const oldBon = addrBonbun(r.address), newBon = addrBonbun(addr);
         const jibunMismatch = !!(oldBon && newBon && oldBon !== newBon);
         if (moved <= 300 && !nonRes && !jibunMismatch) {
           await admin.from('apt_geocache').update({ source: 'kakao-v', cached_at: _now() }).eq('apt_key', r.apt_key);
@@ -479,4 +485,5 @@ async function fetchCandidatePool(admin, limit, since) {
   return ranked.filter(c => !existingSet.has(`${c.apt_name}|${c.sigungu}|${c.umd_nm}`));
 }
 
-module.exports = { run };
+// addrBonbun 은 "좌표가 남의 단지에 찍혔는지" 판정의 핵심이라 테스트로 고정한다.
+module.exports = { run, addrBonbun };
