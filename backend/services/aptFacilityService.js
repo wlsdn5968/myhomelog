@@ -161,7 +161,10 @@ function verifyCandidate(kaptUsedate, kaptAddr, identity, mode) {
   //   거부는 연도로만 한다 (정답의 99.05%가 연도차 0 — 훨씬 깨끗한 신호).
   const ky = String(kaptUsedate || '').slice(0, 4);
   if (identity.buildYear && /^\d{4}$/.test(ky)) {
-    const tol = mode === 'exact' ? YEAR_TOL_EXACT : YEAR_TOL_WEAK;
+    // 공백 차이만 있는 이름(space-norm)은 사실상 완전일치로 본다 — 전수 진단 실측에서
+    //   MOLIT "영도센트럴에일린의뜰"(2023) ↔ KAPT "영도 센트럴 에일린의뜰"(2021) 같은 정답 쌍이
+    //   ±1년 게이트에 걸려 거부되는 것이 확인됐다. 포함매칭(ilike)·토큰은 오매칭 위험이 커 ±1 유지.
+    const tol = (mode === 'exact' || mode === 'space-norm') ? YEAR_TOL_EXACT : YEAR_TOL_WEAK;
     const diff = Math.abs(Number(ky) - identity.buildYear);
     if (diff > tol) {
       return { ok: false, reason: `준공연도 ${diff}년 차이(실거래 ${identity.buildYear} vs KAPT ${ky})` };

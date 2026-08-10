@@ -35,6 +35,13 @@ const REHEAL_NONRES_KEYWORDS = [
   '관리사무소','경비실','놀이터','식당','음식점','카페','커피','병원','약국','의원','치과','한의원','학원',
   '교습소','은행','주유소','미용','이용원','세탁','노래','호프','치킨','국밥','분식','족발','횟집','고깃집',
   '당구','헬스','문구','마켓','상회','정비','공업사','교회','성당','어린이집','유치원',
+  // NONRES-EXPAND-2026-08-10 (Sprint KKKKKKK, 좌표 1,340건 전수 분류에서 실측된 상호 토큰):
+  //   단지명이 2글자인 경우(`현대`·`삼성`·`세종`·`동신`·`미성`·`성원`·`SK` 등, 불일치의 39%)
+  //   카카오 장소검색이 그 두 글자가 든 무관 업소를 1순위로 잡는 것이 지배적 실패 모드였다.
+  //   실제 사례: 세종→세종통신 / 현대→현대자동차블루핸즈 / 동신→동신손세차 / 미성→미성인테리어 /
+  //   성원→성원비철금속 / 갈마·누리→○○네거리(교차로 지점) / 신창→신창시장.
+  '통신','인테리어','세차','자동차','렌터카','타이어','전자','설비','공사','건축','금속','엘리베이터',
+  '요양','건강원','도서관','네거리','오거리','삼거리','시장','조합','필라테스','서비스센터','접수센터',
   // SANGGA-REHEAL-2026-07-17 (Sprint YYYYY, 운영자 "지도 매칭 안 되는 것 많다" — DB 실측 확정):
   //   place_name '%상가%' 1,091건(source=kakao, 전체 10.3%)이 단지 본체 아닌 상가동 좌표로 잔존 —
   //   비단지 place 최대 단일 원인(운영자 15건 표본에서 4건). 과거 "주상복합 명칭 충돌 애매"로 제외했으나,
@@ -118,10 +125,18 @@ async function rehealSubfeatures(admin, { cap = 300, budgetMs = 120000 } = {}) {
  */
 async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = {}) {
   const started = Date.now();
+  // SUB-INCLUDE-2026-08-10 (Sprint KKKKKKK): 'kakao-sub' 도 대상에 포함(실측 1,980행).
+  //   reheal 이 이 행들을 마킹한 이유는 **이름 재지오코딩**이 개선에 실패했기 때문인데, 주소 기반
+  //   지오코딩(모호성 0)은 애초에 시도조차 안 됐다. 즉 가장 의심스러운 행들이 유일하게 정확한
+  //   검증 경로에서 영구 제외돼 있었다 — 인기 단지 6위 '평촌어바인퍼스트'(실거래 지번 호계동 1296,
+  //   저장 좌표 946-13 '1단지 상가')가 이 상태였다. 처리 후 source 가 kakao-v/kakao-addr 로 바뀌어
+  //   재시도 루프는 생기지 않는다(진행 보장 유지).
+  //   의심도가 높은 kakao-sub 를 먼저 소진하도록 정렬('kakao-sub' > 'kakao' 문자열 역순).
   const { data: rows } = await admin
     .from('apt_geocache')
-    .select('apt_key, apt_name, sigungu, umd_nm, lat, lng')
-    .eq('source', 'kakao')
+    .select('apt_key, apt_name, sigungu, umd_nm, lat, lng, place_name')
+    .in('source', ['kakao', 'kakao-sub'])
+    .order('source', { ascending: false })
     .limit(cap);
   if (!rows || !rows.length) return { tried: 0, verified: 0, corrected: 0, skippedNoAddr: 0 };
 
@@ -143,11 +158,15 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
     while (queue.length && (Date.now() - started) < budgetMs) {
       const r = queue.shift();
       try {
-        // 1) 공식 주소 결정
+        // 1) 공식 주소 결정 — **실거래 신고 지번을 먼저** 본다.
+        //    IDENTITY-GATE-2026-08-10 (Sprint KKKKKKK): kapt: 키의 kaptAddr 를 1순위로 쓰면 안 된다.
+        //    그 kaptCode 는 이름 유사도 매칭의 산물이라 키 자체가 오염돼 있을 수 있다 — 실측으로
+        //    3,169세대 "신동아아파트1"(방학동 271-1)의 apt_key 가 104세대 타워 코드(kapt:A10026856,
+        //    방학동 736)로 저장돼 있었다. 이 상태로 kaptAddr 를 정답 삼으면 이 스윕이 대단지 마커를
+        //    남의 단지 자리로 "교정"해 오매칭을 좌표까지 전파시킨다.
+        //    MOLIT 신고 지번은 이름 매칭이 개입하지 않는 원본이라 이 오염에 면역이다.
         let addr = null;
-        if (r.apt_key.startsWith('kapt:')) {
-          addr = addrByKapt.get(r.apt_key.slice(5)) || null;
-        } else if (r.sigungu && r.umd_nm) {
+        if (r.sigungu && r.umd_nm) {
           // molit 최빈 지번 — 동일 (단지명, 시군구, 법정동) 신고 거래의 mode(jibun)
           const { data: tx } = await admin.from('molit_transactions')
             .select('jibun').eq('apt_name', r.apt_name).eq('sigungu', r.sigungu).eq('umd_nm', r.umd_nm)
@@ -159,6 +178,10 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
             if (top) addr = `${r.sigungu} ${r.umd_nm} ${top[0]}`.trim();
           }
         }
+        // 신고 지번이 없을 때만 KAPT 공식 주소 (거래가 드문 단지 — 오염 위험보다 커버리지 이득이 크다)
+        if (!addr && r.apt_key.startsWith('kapt:')) {
+          addr = addrByKapt.get(r.apt_key.slice(5)) || null;
+        }
         if (!addr) { skippedNoAddr++; continue; }
         // 2) 주소 지오코딩(모호성 0) — 실패 시 아무것도 안 바꿈
         const fresh = await kakaoAddressGeocode(addr);
@@ -167,7 +190,13 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
         // 3) 거리 판정
         const dx = (fresh.lng - Number(r.lng)) * Math.cos(fresh.lat * Math.PI / 180);
         const moved = 111000 * Math.sqrt(Math.pow(fresh.lat - Number(r.lat), 2) + Math.pow(dx, 2));
-        if (moved <= 300) {
+        // NONRES-FORCE-2026-08-10 (Sprint KKKKKKK): 비주거 상호에 찍힌 좌표는 **300m 이내여도 교정**한다.
+        //   기존엔 거리만 봐서, 같은 동 안의 무관 업소(예: 산본동 '세종'→'세종통신', 월계동 '동신'→'동신손세차')가
+        //   300m 안에 있으면 'kakao-v'(검증 통과)로 마킹돼 오염이 영구 박제됐다. 좌표 1,340건 분류에서
+        //   C계(무관 상호) 668건·49.9%로 최대 덩어리였다. 공식 주소 좌표가 어차피 더 정확하므로 손해가 없고,
+        //   place_name 은 비워진다(프론트 미사용 필드 — 렌더 영향 0, grep 실측).
+        const nonRes = r.place_name && REHEAL_NONRES_RE.test(r.place_name);
+        if (moved <= 300 && !nonRes) {
           await admin.from('apt_geocache').update({ source: 'kakao-v' }).eq('apt_key', r.apt_key);
           verified++;
         } else {

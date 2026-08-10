@@ -19,7 +19,10 @@ const { isRegulatedRegion, getRegulatedKeywords, SEOUL_GU_KEYWORDS } = require('
 const { normalizeAptName } = require('../utils/aptName');
 const { buildFacility } = require('../utils/buildFacility');
 // REC-PERF-2026-07-10 (Sprint FFFF): apt_master.facility 배치 조회 — 콜드 KAPT 30콜 제거
-const { getFacilitiesByKaptCodes } = require('./aptFacilityService');
+// IDENTITY-GATE-2026-08-10 (Sprint KKKKKKK): 이 경로는 resolveFacility 를 거치지 않고 자체 이름
+//   매칭(_norm/_canon)으로 kaptCode 를 얻으므로, 그 검증 게이트가 닿지 않는다. 붙은 facility 가
+//   실거래 건축년도와 어긋나면 필터·게이트 판정이 통째로 틀어지므로 여기서도 같은 검증을 적용한다.
+const { getFacilitiesByKaptCodes, verifyCandidate } = require('./aptFacilityService');
 const { getBuildingTitle } = require('./buildingRegisterService'); // LLLLLL-3: KAPT 미매칭 단지 세대수 = 건축물대장(SSSS 연동)으로 보강
 const cache = require('../cache');
 const logger = require('../logger');
@@ -422,6 +425,12 @@ async function getAIRecommendations(userCondition) {
     candidatePool = matched.filter((apt, i) => {
       const code = _poolCodes[i];
       const stored = code ? _facMap.get(code) : null;
+      // 실거래 건축년도와 어긋나는 facility 는 신뢰할 수 없다 → 조건 충족 판정 불가로 제외.
+      //   (이름 정확일치 기반이라 mode='exact' 의 ±3년 허용치를 쓴다. 동명 단지 혼동은 보통 연도가 크게 다르다.)
+      if (stored && apt.buildYear
+          && !verifyCandidate(stored.kaptUsedate, stored.kaptAddr, { buildYear: apt.buildYear }, 'exact').ok) {
+        return false;
+      }
       const fac = stored ? buildFacility(stored, code, stored._dtl || null) : null;
       if (!fac) return false;
       if (fMinHh > 0 && !(fac.totalHouseholds >= fMinHh)) return false;
@@ -468,9 +477,15 @@ async function getAIRecommendations(userCondition) {
     });
     let _hhMap = new Map();
     try { _hhMap = await getFacilitiesByKaptCodes([...new Set(_codes.filter(Boolean))]); } catch (_) { /* graceful — 게이트 ② 비활성 */ }
-    const _hh = candidatePool.map((_, i) => {
+    const _hh = candidatePool.map((_a, i) => {
       const st = _codes[i] && _hhMap.get(_codes[i]);
       if (!st) return null;
+      // 건축년도가 어긋나면 남의 단지 세대수다 → '미확인'(null)으로 되돌려 게이트를 적용하지 않는다.
+      //   잘못된 104세대로 3,169세대 대단지를 추천에서 탈락시키는 것이 이 게이트의 최악 실패 모드다.
+      if (_a.buildYear
+          && !verifyCandidate(st.kaptUsedate, st.kaptAddr, { buildYear: _a.buildYear }, 'exact').ok) {
+        return null;
+      }
       const v = [st.kaptdaCnt, st.hoCnt].map(x => parseInt(x)).find(nn => Number.isFinite(nn) && nn > 0);
       return v || null;
     });
