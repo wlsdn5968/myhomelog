@@ -445,3 +445,40 @@ test('aptFacility.verifyCandidate — 준공연도 불일치는 거부, 지번 �
   // 신원 정보가 없으면 기존 동작 유지(통과) — 검증 불가를 거부로 바꾸면 회귀
   assert.equal(verifyCandidate('19970825', '아무주소', null, 'token').ok, true);
 });
+
+test('geocacheBackfill.canFastVerify — Kakao 호출 없이 통과시켜도 되는 조건 (Sprint KKKKKKK-10)', () => {
+  const { canFastVerify } = require('../jobs/geocacheBackfill');
+
+  // 통과: 신고 지번(271-1)과 저장 주소(271-4)의 **본번이 같다** = 같은 필지.
+  //   부번 차이는 대단지 다필지라 정상이고, 여기서 끝내면 Kakao 왕복 1회가 통째로 사라진다.
+  assert.equal(canFastVerify({
+    addrFromMolit: true, storedAddress: '서울 도봉구 방학동 271-4',
+    officialAddress: '도봉구 방학동 271-1', placeName: '신동아1단지아파트 노인정',
+  }), true);
+
+  // 거부: 본번이 다르다(신고 530 vs 저장 272) — 실사고 재현. 남의 단지에 찍힌 좌표이므로
+  //   반드시 지오코딩 경로로 내려가 교정돼야 한다.
+  assert.equal(canFastVerify({
+    addrFromMolit: true, storedAddress: '서울 도봉구 방학동 272',
+    officialAddress: '도봉구 방학동 530', placeName: '신동아1단지아파트 3동',
+  }), false);
+
+  // 거부: 주소가 MOLIT 신고 지번이 아니라 KAPT 폴백 — kaptCode 자체가 이름 매칭 산물이라
+  //   오염 가능(IDENTITY-GATE). 본번이 같아 보여도 무호출 통과시키지 않는다.
+  assert.equal(canFastVerify({
+    addrFromMolit: false, storedAddress: '서울 도봉구 방학동 736',
+    officialAddress: '서울특별시 도봉구 방학동 736', placeName: null,
+  }), false);
+
+  // 거부: 비주거 상호 — 본번이 같아도 NONRES 강제 교정 대상이라 종전 판정을 유지해야 한다.
+  assert.equal(canFastVerify({
+    addrFromMolit: true, storedAddress: '서울 노원구 월계동 100-1',
+    officialAddress: '노원구 월계동 100', placeName: '동신손세차',
+  }), false);
+
+  // 거부: 본번을 뽑을 수 없으면 판정 불가 → 종전 경로(거리 검증)로.
+  assert.equal(canFastVerify({
+    addrFromMolit: true, storedAddress: '경기 평택시 동삭동',
+    officialAddress: '평택시 동삭동 500', placeName: null,
+  }), false);
+});

@@ -37,6 +37,8 @@ function _pick(summary) {
     'skippedKnownFail', 'sentinelMarked', 'elapsedMs', 'updated', 'scanned', 'gapsFixed',
     'ok', 'err', 'skipped', 'retried', 'filled', 'missed', 'addrTried', 'addrInserted',
     'verifyTried', 'verifyOk', 'verifyFixed', 'verifyNoAddr', 'verifyMs',
+    // FAST-VERIFY-2026-08-10 (Sprint KKKKKKK-10): Kakao 무호출 통과분 / 이번 run 이 집은 행 수.
+    'verifyFast', 'verifyRows',
     'rehealTried', 'rehealHealed', 'rehealMarked',
     // ZERO-FETCH-WATCH-2026-08-10 (Sprint KKKKKKK-4): 지역 단위 적재 중단 감시.
     'slot', 'regionsCount', 'zeroFetchRegions'];

@@ -59,6 +59,30 @@ function addrBonbun(addr) {
 }
 
 /**
+ * FAST-VERIFY-2026-08-10 (Sprint KKKKKKK-10): **Kakao 호출 없이** "이 좌표는 옳다"를 확정할 수 있는가.
+ *
+ * [왜] 검증 스윕이 대상 전 행에서 주소 지오코딩을 1회씩 호출하는데, 판정의 핵심인 **지번 본번 비교는
+ *   외부 호출이 전혀 필요 없다** — 저장된 주소(그 좌표와 함께 카카오가 준 값)와 실거래 신고 지번,
+ *   둘 다 이미 DB 에 있다. 전수 실측상 대조 가능한 13,185행 중 불일치는 1,327행(10.1%)뿐이라
+ *   나머지 90%가 확인만 하고 버리는 호출을 유발하고 있었다(일 1,000행 = 13일에 한 바퀴의 주범).
+ *
+ * [안전] 통과 조건을 기존 판정보다 **좁게** 잡는다:
+ *   - `addrFromMolit` 일 때만 — KAPT 폴백 주소는 kaptCode 매칭(이름 유사도)의 산물이라 오염 가능성이
+ *     있고(IDENTITY-GATE), 그 경우는 종전대로 지오코딩해 거리로 검증한다.
+ *   - 비주거 place_name 이면 통과시키지 않는다(NONRES 강제 교정 대상 — 판정 불변).
+ *   - 본번을 양쪽 다 뽑을 수 있고 서로 같을 때만. 하나라도 null 이면 판정 불가 → 종전 경로.
+ *   즉 여기서 통과하는 행은 종전 로직에서도 `jibunMismatch=false && nonRes=false` 였고, 남는 차이는
+ *   거리 검사뿐이다. 본번이 같다는 건 **같은 필지**라는 뜻이므로 거리 초과분은 대단지 내부 편차이고,
+ *   그건 교정할 대상이 아니다(오히려 종전 로직의 과교정 여지를 없앤다).
+ */
+function canFastVerify({ addrFromMolit, storedAddress, officialAddress, placeName }) {
+  if (!addrFromMolit) return false;
+  if (placeName && REHEAL_NONRES_RE.test(placeName)) return false;
+  const oldBon = addrBonbun(storedAddress), newBon = addrBonbun(officialAddress);
+  return !!(oldBon && newBon && oldBon === newBon);
+}
+
+/**
  * 비주거 place_name 좌표 재치유 — Kakao 재지오코딩(하드닝 필터) 후 "더 나은(주거 본체) 좌표"만 in-place UPDATE.
  * 안전: 비주거-아님 + 한국 유효좌표 + 동일 시군구(kakaoGeocode 내부 검증) + 단지명 관련성 + 이동 20m~2km 일 때만 갱신.
  *      개선 불가(여전히 비주거/실패)는 source='kakao-sub' 마킹 → 다음 run 제외(무한 재시도 방지).
@@ -140,27 +164,44 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
   //   cached_at 을 갱신하므로 같은 행이 연속으로 다시 잡히지 않는다(무한 재시도 없음).
   //   [비용] 대상 13,185행 / 일 cap 1,000 → 약 13일에 한 바퀴. Kakao 호출은 일 한도의 1% 수준.
   //   급할 때는 admin 트리거(/api/admin/run-geocache-backfill)를 반복 호출해 가속할 수 있다.
-  const { data: rows } = await admin
-    .from('apt_geocache')
-    .select('apt_key, apt_name, sigungu, umd_nm, lat, lng, place_name, address')
-    .in('source', ['kakao', 'kakao-sub', 'kakao-v', 'kakao-addr'])
-    .order('cached_at', { ascending: true, nullsFirst: true })
-    .limit(cap);
-  if (!rows || !rows.length) return { tried: 0, verified: 0, corrected: 0, skippedNoAddr: 0 };
+  // POSTGREST-PAGING-2026-08-10 (Sprint KKKKKKK-10): `.limit(cap)` 은 cap>1000 에서 **거짓말이 된다** —
+  //   PostgREST 가 응답을 서버 max-rows(=1000)에서 자르기 때문(이 레포에서만 5회 실증, 위 fetchCandidatePool
+  //   주석 참조). cap 을 올려도 1,000행만 와서 상향이 통째로 무효가 되므로 페이지 루프로 받는다.
+  //   ⚠ 2차 정렬키(apt_key)가 필수 — cached_at 이 같은 행이 몰려 있으면 페이지 경계에서 순서가
+  //     흔들려 중복 수신·누락이 생긴다.
+  const PAGE = 1000;
+  const rows = [];
+  for (let from = 0; from < cap; from += PAGE) {
+    const to = Math.min(from + PAGE, cap) - 1;
+    const { data, error } = await admin
+      .from('apt_geocache')
+      .select('apt_key, apt_name, sigungu, umd_nm, lat, lng, place_name, address')
+      .in('source', ['kakao', 'kakao-sub', 'kakao-v', 'kakao-addr'])
+      .order('cached_at', { ascending: true, nullsFirst: true })
+      .order('apt_key', { ascending: true })
+      .range(from, to);
+    if (error || !data || !data.length) break;
+    rows.push(...data);
+    if (data.length < (to - from + 1)) break;   // 마지막 페이지
+  }
+  if (!rows.length) return { tried: 0, verified: 0, fastVerified: 0, corrected: 0, skippedNoAddr: 0, rows: 0 };
 
   // kapt: 키의 공식 주소 배치 조회 (N+1 회피)
   const kaptCodes = rows.filter(r => r.apt_key.startsWith('kapt:')).map(r => r.apt_key.slice(5));
   const addrByKapt = new Map();
-  if (kaptCodes.length) {
+  // cap 상향(1,000→4,000)으로 kaptCodes 가 1,000 을 넘을 수 있다. `.in()` 의 응답도 같은 max-rows
+  //   캡에 걸려 조용히 잘리므로(폴백 주소가 일부만 채워짐) 500개씩 나눠 조회한다.
+  for (let i = 0; i < kaptCodes.length; i += 500) {
+    const chunk = kaptCodes.slice(i, i + 500);
     const { data: masters } = await admin.from('apt_master')
-      .select('kapt_code, facility').in('kapt_code', kaptCodes);
+      .select('kapt_code, facility').in('kapt_code', chunk);
     for (const m of (masters || [])) {
       const a = m.facility && m.facility.kaptAddr;
       if (a && String(a).trim().length >= 5) addrByKapt.set(m.kapt_code, String(a).trim());
     }
   }
 
-  let tried = 0, verified = 0, corrected = 0, skippedNoAddr = 0;
+  let tried = 0, verified = 0, corrected = 0, skippedNoAddr = 0, fastVerified = 0;
   const queue = [...rows];
   // FULL-ROTATION 진행 보장: 순회 기준이 cached_at 이므로 **결과와 무관하게** 손댄 행은 시각을
   //   갱신해야 한다. 안 그러면 주소를 못 구한 행·지오코딩 실패 행이 영원히 큐 맨 앞을 점유해
@@ -182,7 +223,7 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
         //    방학동 736)로 저장돼 있었다. 이 상태로 kaptAddr 를 정답 삼으면 이 스윕이 대단지 마커를
         //    남의 단지 자리로 "교정"해 오매칭을 좌표까지 전파시킨다.
         //    MOLIT 신고 지번은 이름 매칭이 개입하지 않는 원본이라 이 오염에 면역이다.
-        let addr = null;
+        let addr = null, addrFromMolit = false;
         if (r.sigungu && r.umd_nm) {
           // molit 최빈 지번 — 동일 (단지명, 시군구, 법정동) 신고 거래의 mode(jibun)
           const { data: tx } = await admin.from('molit_transactions')
@@ -192,7 +233,7 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
             const freq = {};
             for (const t of tx) freq[t.jibun] = (freq[t.jibun] || 0) + 1;
             const top = Object.entries(freq).sort((a, b) => b[1] - a[1])[0];
-            if (top) addr = `${r.sigungu} ${r.umd_nm} ${top[0]}`.trim();
+            if (top) { addr = `${r.sigungu} ${r.umd_nm} ${top[0]}`.trim(); addrFromMolit = true; }
           }
         }
         // 신고 지번이 없을 때만 KAPT 공식 주소 (거래가 드문 단지 — 오염 위험보다 커버리지 이득이 크다)
@@ -200,6 +241,18 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
           addr = addrByKapt.get(r.apt_key.slice(5)) || null;
         }
         if (!addr) { skippedNoAddr++; await _touch(r.apt_key); continue; }
+        // 1.5) FAST-VERIFY-2026-08-10 (Sprint KKKKKKK-10): 신고 지번과 저장 주소의 **본번이 같으면**
+        //   외부 호출 없이 통과를 확정한다. 실측상 대조 가능한 13,185행의 89.9%가 여기서 끝나므로
+        //   Kakao 왕복이 사라져 같은 시간 예산에 훨씬 많은 행을 훑는다(= 오염 교정이 그만큼 빨라진다).
+        //   판정 자체는 종전보다 좁다 — 근거는 canFastVerify 주석.
+        if (canFastVerify({
+          addrFromMolit, storedAddress: r.address, officialAddress: addr, placeName: r.place_name,
+        })) {
+          await admin.from('apt_geocache')
+            .update({ source: 'kakao-v', cached_at: _now() }).eq('apt_key', r.apt_key);
+          verified++; fastVerified++;
+          continue;
+        }
         // 2) 주소 지오코딩(모호성 0) — 실패 시 좌표는 그대로 두고 순번만 넘긴다
         const fresh = await kakaoAddressGeocode(addr);
         if (!fresh) { await _touch(r.apt_key); continue; }
@@ -237,9 +290,9 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
   }
   await Promise.all(Array.from({ length: 8 }, () => worker())); // reheal 과 동일 동시성(Kakao 한도 대비 충분히 안전)
   const elapsedMs = Date.now() - started;
-  logger.info({ source: 'geocache-addr-verify', tried, verified, corrected, skippedNoAddr, rows: rows.length, elapsedMs },
-    `주소 검증 스윕: ${verified} 통과 / ${corrected} 교정 / ${skippedNoAddr} 주소없음 / ${tried} 판정`);
-  return { tried, verified, corrected, skippedNoAddr, elapsedMs, rows: rows.length };
+  logger.info({ source: 'geocache-addr-verify', tried, verified, fastVerified, corrected, skippedNoAddr, rows: rows.length, elapsedMs },
+    `주소 검증 스윕: ${verified} 통과(무호출 ${fastVerified}) / ${corrected} 교정 / ${skippedNoAddr} 주소없음 / ${tried} 판정`);
+  return { tried, verified, fastVerified, corrected, skippedNoAddr, elapsedMs, rows: rows.length };
 }
 
 const DEFAULT_CHUNK = 50;
@@ -304,8 +357,12 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
   //   최근 실행이 194.7s 사용(processed 4,000 = 풀 완주) → 여유 ~75s + reheal 감축분 30s.
   //   Kakao 호출은 verify 1,000 + sweep 최대 16K = 17K 로 일 한도 100K 의 17%(경고 60K 미만).
   //   시간이 먼저 끊으면 남은 행은 다음 날 이어서 처리된다(진행 보장 구조 불변).
-  let addrVerify = { tried: 0, verified: 0, corrected: 0, skippedNoAddr: 0 };
-  try { addrVerify = await verifyByOfficialAddress(admin, { cap: 1000, budgetMs: 120000 }); }
+  //   GEO-BUDGET-2026-08-10 (Sprint KKKKKKK-10): cap 1,000 → 4,000. **시간 예산은 120s 그대로**다 —
+  //   cap 은 상한일 뿐이고 실제 종료는 budgetMs 가 결정하므로, 올려도 초과 실행 위험은 없다.
+  //   위 FAST-VERIFY 로 행당 Kakao 왕복이 대상의 ~90% 에서 사라져 같은 120s 에 훨씬 더 많이 훑는다.
+  //   Kakao 호출량은 오히려 **감소**한다(종전 1,000회 → 불일치 의심분만).
+  let addrVerify = { tried: 0, verified: 0, fastVerified: 0, corrected: 0, skippedNoAddr: 0 };
+  try { addrVerify = await verifyByOfficialAddress(admin, { cap: 4000, budgetMs: 120000 }); }
   catch (e) { logger.warn({ err: e.message }, 'geocache 주소검증 실패(무시)'); }
 
   // 후보 풀 1회 조회 → budget 안에서 batch 순회 (재조회 spin 제거)
@@ -418,6 +475,9 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
     //   위 reheal/addrVerify 객체는 health 에 안 잡힌다 → 평탄화해서 관측 가능하게.
     verifyTried: addrVerify.tried, verifyOk: addrVerify.verified, verifyFixed: addrVerify.corrected,
     verifyNoAddr: addrVerify.skippedNoAddr, verifyMs: addrVerify.elapsedMs,
+    // verifyFast: Kakao 호출 없이 본번 대조만으로 통과시킨 수 — 스윕 가속이 실제로 먹었는지의 지표.
+    //   verifyRows 대비 비중이 낮으면 지번 커버리지가 모자란 것이므로 원인이 갈린다.
+    verifyFast: addrVerify.fastVerified, verifyRows: addrVerify.rows,
     rehealTried: reheal.tried, rehealHealed: reheal.healed, rehealMarked: reheal.marked,
   };
 }
@@ -486,4 +546,4 @@ async function fetchCandidatePool(admin, limit, since) {
 }
 
 // addrBonbun 은 "좌표가 남의 단지에 찍혔는지" 판정의 핵심이라 테스트로 고정한다.
-module.exports = { run, addrBonbun };
+module.exports = { run, addrBonbun, canFastVerify };
