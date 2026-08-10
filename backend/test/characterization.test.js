@@ -291,3 +291,52 @@ test('molitParse.isCanceled — cdealType 유/무/공백 판정', () => {
   assert.equal(isCanceled({}), false);
   assert.equal(isCanceled(null), false);
 });
+
+// ── IDENTITY-GATE (2026-08-10, Sprint KKKKKKK): KAPT 단지정보 오매칭 차단 ─────────────
+//   운영자 발견 사고: 도봉구 방학동 "신동아아파트1"(1986년·3,169세대 방학신동아1단지)에
+//   "신동아 타워 아파트"(1997년·104세대)가 붙어 단지정보 탭이 통째로 남의 단지였다.
+//   원인은 ratio 게이트가 **이름이 짧은 후보를 편애**한 것(정답 0.429 차단 / 오답 0.600 통과).
+test('aptFacility.jibunFromKaptAddr — KAPT 지번주소에서 지번만 추출', () => {
+  const { jibunFromKaptAddr } = require('../services/aptFacilityService');
+  assert.equal(jibunFromKaptAddr('서울특별시 도봉구 방학동 271-1 방학신동아1단지'), '271-1');
+  assert.equal(jibunFromKaptAddr('서울특별시 도봉구 방학동 736 신동아 타워 아파트'), '736');
+  // 단지명에 숫자가 있어도 동 뒤 첫 지번만 — 단지명 숫자를 지번으로 오인하면 안 된다
+  assert.equal(jibunFromKaptAddr('서울특별시 도봉구 방학동 738 방학신동아5단지'), '738');
+  assert.equal(jibunFromKaptAddr(''), null);
+  assert.equal(jibunFromKaptAddr(null), null);
+});
+
+test('aptFacility.bonbun — 부번 제거(대단지 다필지 흡수)', () => {
+  const { bonbun } = require('../services/aptFacilityService');
+  assert.equal(bonbun('271-1'), '271');
+  assert.equal(bonbun('271'), '271');
+  assert.equal(bonbun(' 530 '), '530');
+  assert.equal(bonbun(''), null);
+  assert.equal(bonbun(null), null);
+});
+
+test('aptFacility.verifyCandidate — 준공연도 불일치는 거부, 지번 일치는 채택', () => {
+  const { verifyCandidate } = require('../services/aptFacilityService');
+  const 신동아1 = { buildYear: 1986, jibunBon: '271' };
+
+  // 실제 사고: 1986년 단지에 1997년 KAPT(11년 차이) → 반드시 거부
+  const 타워 = verifyCandidate('19970825', '서울특별시 도봉구 방학동 736 신동아 타워 아파트', 신동아1, 'token');
+  assert.equal(타워.ok, false);
+
+  // 정답: 지번(271-1 → 271) 일치 → 이름이 달라도 채택
+  const 정답 = verifyCandidate('19861231', '서울특별시 도봉구 방학동 271-1 방학신동아1단지', 신동아1, 'token');
+  assert.equal(정답.ok, true);
+  assert.equal(정답.reason, 'jibun-match');
+
+  // 지번 **불일치는 거부 근거가 아니다** — 이름 완전일치(확실한 정답) 2,426쌍 중 10.47%가
+  //   본번 불일치(대단지 다필지)라, 거부하면 정상 매칭 10%를 날린다. 연도가 맞으면 통과해야 한다.
+  const 다른필지 = verifyCandidate('19861231', '서울특별시 도봉구 방학동 999 다른필지등록', 신동아1, 'token');
+  assert.equal(다른필지.ok, true);
+
+  // 약한 매칭(토큰)은 ±1년, 이름 완전일치는 ±3년까지 허용
+  assert.equal(verifyCandidate('19880101', '주소없음', { buildYear: 1986 }, 'token').ok, false);
+  assert.equal(verifyCandidate('19880101', '주소없음', { buildYear: 1986 }, 'exact').ok, true);
+
+  // 신원 정보가 없으면 기존 동작 유지(통과) — 검증 불가를 거부로 바꾸면 회귀
+  assert.equal(verifyCandidate('19970825', '아무주소', null, 'token').ok, true);
+});

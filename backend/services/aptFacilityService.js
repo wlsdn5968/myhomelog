@@ -75,86 +75,223 @@ function normalizedLen(s) {
 //   임계값(4 vs 5)까지 드리프트된 상태였음. grep 실측 호출처 0(죽은 코드) — 동작 영향 없이 삭제.
 //   알고리즘 문서·검증 사례(한신잠실코아↔한신코아 등)는 utils/aptName.js 주석 참조.
 
-/** apt_name + sigungu + umd_nm 으로 apt_master 매칭 → kapt_code */
-async function findMaster(aptName, sigungu, umdNm) {
+/* ────────────────────────────────────────────────────────────────────────────
+ * IDENTITY-GATE-2026-08-10 (Sprint KKKKKKK — 운영자 발견 P0)
+ *
+ * 사고: 도봉구 방학동 MOLIT "신동아아파트1"(1986년 준공·지번 271-1·3,169세대 방학신동아1단지)에
+ *   KAPT "신동아 타워 아파트"(1997년·104세대 주상복합)가 붙어, 인기 단지로 노출된 대단지의
+ *   단지정보 탭이 통째로 남의 단지 값이었다. 같은 동의 신동아 1~5단지 5개 전부 동일 오답으로 매칭.
+ *
+ * 근본원인 [원본 함수 vm 재현으로 실증]: STAB-2 의 ratio(=score/min(정규화길이)) 게이트가
+ *   **이름이 짧은 후보를 구조적으로 편애**한다. 공통 토큰은 "신동아"(score 3) 하나로 모두 같은데
+ *     · 정답 "방학신동아1단지" → minLen 7 → ratio 0.429 → 차단
+ *     · 오답 "신동아타워"      → minLen 5 → ratio 0.600 → 통과(임계와 정확히 동일)
+ *   즉 정답만 골라 떨어뜨리고 오답만 통과시켰다. 임계값 조정으로는 못 고친다 — 신호가 부족한 것.
+ *
+ * 해법: 이름 유사도를 **유일한 근거로 쓰지 않는다**. 실거래가 들고 있는 물리적 신원
+ *   (지번 jibun · 건축년도 build_year)을 KAPT 값(kaptAddr · kaptUsedate)과 대조한다.
+ *     1순위 지번 일치 → 이름과 무관하게 확정 (전국 실측: MOLIT 지번 보유 68.7%, KAPT 지번 추출 95.3%)
+ *     2순위 이름 매칭 → 지번/연도 교차검증 통과분만 채택, 실패하면 **거부(null)**
+ *   "그럴듯한 틀린 정보"보다 "정보 없음"이 낫다 — 절대 룰(환각 차단).
+ *
+ * 연도 허용오차 근거 [실측]: 이름 완전일치(= 확실한 정답) 2,841쌍의 |build_year - kaptUsedate| 분포는
+ *   0년 2,814(99.05%) / 1년 15 / 2년 3 / 3년 이상 9. 따라서 ±1년이면 정답의 99.6%를 보존한다.
+ *   이름 완전일치는 동명 단지 구분 실패만 걸러내면 되므로 ±3년으로 완화(재건축·증축 신고 편차 흡수).
+ * ──────────────────────────────────────────────────────────────────────────── */
+const YEAR_TOL_WEAK = 1;   // ILIKE·공백정규화·토큰 등 약한 이름매칭
+const YEAR_TOL_EXACT = 3;  // 이름 완전일치
+
+/** KAPT 지번주소("서울특별시 도봉구 방학동 271-1 방학신동아1단지")에서 지번만 추출 */
+function jibunFromKaptAddr(addr) {
+  const m = String(addr || '').match(/[가-힣0-9]+(?:동|리|가)\s+(\d+(?:-\d+)?)/);
+  return m ? m[1] : null;
+}
+
+/** 지번 본번(부번 제거) — 대단지는 필지가 여러 개라 본번까지만 비교한다 ('271-1'/'271-4' → '271') */
+function bonbun(jibun) {
+  const m = String(jibun || '').trim().match(/^(\d+)/);
+  return m ? m[1] : null;
+}
+
+/**
+ * MOLIT 실거래가 말해주는 단지 신원 — 오매칭 차단의 기준값.
+ * 최근 거래 60건의 최빈 build_year / 최빈 지번 본번. (호출처 수정 없이 모든 경로를 방어하려고
+ *  resolveFacility 안에서 직접 조회한다 — 결과는 memKey 캐시에 함께 실려 반복 조회 없음.)
+ */
+async function molitIdentity(aptName, sigungu, umdNm) {
+  const a = admin();
+  if (!a || !aptName || !sigungu || !umdNm) return null;
+  try {
+    const { data, error } = await a.from('molit_transactions')
+      .select('build_year, jibun')
+      .eq('apt_name', aptName).eq('sigungu', sigungu).eq('umd_nm', umdNm)
+      .order('deal_date', { ascending: false })
+      .limit(60);
+    if (error || !data || !data.length) return null;
+    const years = new Map(), jibuns = new Map();
+    for (const r of data) {
+      if (r.build_year > 1900) years.set(r.build_year, (years.get(r.build_year) || 0) + 1);
+      const b = bonbun(r.jibun);
+      if (b) jibuns.set(b, (jibuns.get(b) || 0) + 1);
+    }
+    const top = (m) => { let k = null, v = 0; for (const [kk, vv] of m) if (vv > v) { k = kk; v = vv; } return k; };
+    const buildYear = top(years), jibunBon = top(jibuns);
+    if (!buildYear && !jibunBon) return null;
+    return { buildYear, jibunBon };
+  } catch (_) { return null; }
+}
+
+/**
+ * 후보 검증 — MOLIT 신원과 대조해 채택 가능한지 판정.
+ * facility(KAPT 값)가 아직 없는 후보는 판정 불가라 통과시키고, resolveFacility 가 API 응답을
+ * 받은 뒤 verifyResolved() 로 한 번 더 검증한다(2단 방어).
+ * @returns {{ ok:boolean, reason:string }}
+ */
+function verifyCandidate(kaptUsedate, kaptAddr, identity, mode) {
+  if (!identity) return { ok: true, reason: 'no-identity' };
+
+  // 지번 일치 = 강한 긍정 신호 → 즉시 채택.
+  const kBon = bonbun(jibunFromKaptAddr(kaptAddr));
+  if (identity.jibunBon && kBon && identity.jibunBon === kBon) {
+    return { ok: true, reason: 'jibun-match' };
+  }
+  // 단, 지번 **불일치는 거부 근거로 쓰지 않는다** [실측]: 이름 완전일치(= 확실한 정답) 2,426쌍 중
+  //   10.47%(254건)가 본번 불일치다 — 대단지가 여러 필지에 걸쳐 MOLIT 신고 지번과 KAPT 대표 지번이
+  //   서로 다른 필지를 가리키는 경우가 흔하다. 거부 신호로 쓰면 정상 매칭 10%를 날린다.
+  //   거부는 연도로만 한다 (정답의 99.05%가 연도차 0 — 훨씬 깨끗한 신호).
+  const ky = String(kaptUsedate || '').slice(0, 4);
+  if (identity.buildYear && /^\d{4}$/.test(ky)) {
+    const tol = mode === 'exact' ? YEAR_TOL_EXACT : YEAR_TOL_WEAK;
+    const diff = Math.abs(Number(ky) - identity.buildYear);
+    if (diff > tol) {
+      return { ok: false, reason: `준공연도 ${diff}년 차이(실거래 ${identity.buildYear} vs KAPT ${ky})` };
+    }
+  }
+  return { ok: true, reason: 'verified' };
+}
+
+/** apt_name + sigungu + umd_nm 으로 apt_master 매칭 → kapt_code (identity 로 교차검증) */
+async function findMaster(aptName, sigungu, umdNm, identity) {
   const a = admin();
   if (!a || !aptName) return null;
-  // 1) 정확 매칭
-  let q = a.from('apt_master')
-    .select('kapt_code, apt_name, sigungu, umd_nm, facility, facility_fetched_at')
-    .eq('apt_name', aptName);
-  if (sigungu) q = q.eq('sigungu', sigungu);
-  if (umdNm) q = q.eq('umd_nm', umdNm);
-  const { data } = await q.maybeSingle();
-  if (data) return data;
+  const COLS = 'kapt_code, apt_name, sigungu, umd_nm, facility, facility_fetched_at';
+  const check = (cand, mode) => verifyCandidate(
+    cand?.facility?.kaptUsedate, cand?.facility?.kaptAddr, identity, mode);
 
-  if (!sigungu || !umdNm) return null;
+  // 동/리 정보가 없으면 후보를 좁힐 수 없다 — 기존대로 이름 완전일치만 (검증은 동일 적용)
+  if (!sigungu || !umdNm) {
+    let q = a.from('apt_master').select(COLS).eq('apt_name', aptName);
+    if (sigungu) q = q.eq('sigungu', sigungu);
+    const { data } = await q.maybeSingle();
+    if (!data) return null;
+    const v = check(data, 'exact');
+    if (!v.ok) {
+      logger.warn({ aptName, sigungu, master: data.apt_name, reason: v.reason },
+        'KAPT 매칭 거부 (IDENTITY-GATE)');
+      return null;
+    }
+    return data;
+  }
 
-  // 2) 부분 매칭 ILIKE — molit 가 더 길 때 ('래미안엘파인아파트' 안에 master '래미안엘파인')
-  //    선두/말미 키워드 추출 (괄호·아파트·숫자 제거 후)
+  // 같은 sigungu+umd_nm 후보 전량 — 기존 limit(80) 은 실측 최대 81개 동에서 잘렸다(range 페이징).
+  const candidates = [];
+  for (let from = 0; from <= 900; from += 300) {
+    const { data: page, error } = await a.from('apt_master').select(COLS)
+      .eq('sigungu', sigungu).eq('umd_nm', umdNm)
+      .order('kapt_code', { ascending: true })
+      .range(from, from + 299);
+    if (error) break;
+    if (page && page.length) candidates.push(...page);
+    if (!page || page.length < 300) break;
+  }
+  if (!candidates.length) return null;
+
+  // ── 1순위: 지번 매칭 — 이름이 아무리 달라도 같은 땅이면 같은 단지 ──
+  //    MOLIT "신동아아파트1"(271-1) → KAPT "방학신동아1단지"(방학동 271-1) 정답 복원 경로.
+  if (identity && identity.jibunBon) {
+    const hits = candidates.filter(
+      (c) => bonbun(jibunFromKaptAddr(c?.facility?.kaptAddr)) === identity.jibunBon);
+    if (hits.length === 1) return hits[0];
+    if (hits.length > 1) {
+      // 한 필지에 여러 KAPT 단지(단지 분할 등록) — 준공연도 일치를 먼저 보고, 그 다음 이름 유사도
+      let best = null, bestYear = -1, bestScore = -1;
+      for (const c of hits) {
+        const ky = String(c?.facility?.kaptUsedate || '').slice(0, 4);
+        const yearOk = (identity.buildYear && /^\d{4}$/.test(ky)
+          && Math.abs(Number(ky) - identity.buildYear) <= YEAR_TOL_WEAK) ? 1 : 0;
+        const s = nameMatchScore(aptName, c.apt_name);
+        if (yearOk > bestYear || (yearOk === bestYear && s > bestScore)) {
+          bestYear = yearOk; bestScore = s; best = c;
+        }
+      }
+      return best;
+    }
+  }
+
   const stripped = String(aptName).replace(/\([^)]*\)/g, '').replace(/\s+/g, '').replace(/아파트$/, '');
+
+  // ── 2순위: 이름 매칭 단계별 후보 → 각각 검증, 실패하면 다음 단계로 ──
+  //    (기존 순서 보존: 정확일치 → 이름포함 → 공백정규화 일치 → 토큰. 달라진 건 "검증 통과분만 채택".)
+  const rejected = [];
+  const tryPick = (cand, mode) => {
+    if (!cand) return null;
+    const v = check(cand, mode);
+    if (v.ok) return cand;
+    rejected.push({ master: cand.apt_name, mode, reason: v.reason });
+    return null;
+  };
+
+  const exact = candidates.find((c) => c.apt_name === aptName);
+  const picked1 = tryPick(exact, 'exact');
+  if (picked1) return picked1;
+
+  // ILIKE 상당 — molit 가 더 길 때 ('래미안엘파인아파트' 안에 master '래미안엘파인')
   if (stripped) {
-    // 양방향 시도
-    const directions = [
-      a.from('apt_master').select('kapt_code, apt_name, sigungu, umd_nm, facility, facility_fetched_at')
-        .eq('sigungu', sigungu).eq('umd_nm', umdNm).ilike('apt_name', `%${stripped}%`).limit(1),
-    ];
-    for (const dir of directions) {
-      const { data: partial } = await dir.maybeSingle();
-      if (partial) return partial;
-    }
+    const partial = candidates.find((c) => String(c.apt_name).includes(stripped));
+    const picked2 = tryPick(partial, 'ilike');
+    if (picked2) return picked2;
+
+    // SPACE-NORM-2026-07-15 (Sprint LLLLL): 공백만 다른 이름 — master 'e편한세상 강변' vs molit
+    //   'e편한세상강변'(활성 509건 실측). 정확 일치만 허용(포함 확장 X — 오병합 방지).
+    const spaceNorm = candidates.find(
+      (c) => String(c.apt_name).replace(/\([^)]*\)/g, '').replace(/\s+/g, '').replace(/아파트$/, '') === stripped);
+    const picked3 = tryPick(spaceNorm, 'space-norm');
+    if (picked3) return picked3;
   }
 
-  // 3) 토큰 매칭 — 같은 sigungu+umd_nm 의 모든 master 가져와서 sliding 토큰 비교
-  //    ("한진(609-1)" vs "돈암한신한진아파트" → 토큰 "한진" score 2 매칭) ← 너무 느슨
-  //
-  // RISK-6 fix (2026-05-02): score 임계 2 → 3 으로 상향
-  //   사례: "휴먼빌"(평균 8.92억) 같은 단지가 master "마포한강아이파크"(평균 15.81억) 와
-  //   "마포" 2글자 공통만으로 score=2 통과 → wrong match → 보고서에 잘못된 단지명·평균가 노출.
-  //   3글자 이상 공통 (예: "래미안", "푸르지", "아이파") 있어야 매칭 — false-positive 차단.
-  const { data: candidates } = await a.from('apt_master')
-    .select('kapt_code, apt_name, sigungu, umd_nm, facility, facility_fetched_at')
-    .eq('sigungu', sigungu).eq('umd_nm', umdNm)
-    .limit(80);
-  // SPACE-NORM-2026-07-15 (Sprint LLLLL): 공백만 다른 이름 매칭 — master 'e편한세상 강변' vs molit
-  //   'e편한세상강변' 같은 쌍(활성 509건 실측)은 위 ILIKE 가 구조적으로 실패(molit 쪽만 공백 제거,
-  //   master 원본엔 공백 잔존 — DB 재현 확인). 토큰 매칭 전에 "공백 제거 후 정확 일치"를 우선 시도.
-  //   정확 일치만 허용(포함 매칭 확장 X — 오병합 방지).
-  if (stripped) {
-    for (const m of (candidates || [])) {
-      const mStripped = String(m.apt_name).replace(/\([^)]*\)/g, '').replace(/\s+/g, '').replace(/아파트$/, '');
-      if (mStripped === stripped) return m;
-    }
-  }
-  let best = null, bestScore = 0;
-  // STAB-2 (2026-05-03 / RISK-6 fix C): score >= 3 만으로는 4글자 공통 토큰 false-positive 잔존.
-  //   사례: '마포한강제이스카이' (9) ↔ master '마포한강 아이파크' (정규화 8) score=4 통과 → wrong match.
-  //   해결: score / min(len) >= 0.6 비율 검증 추가. 짧은 단지명일수록 비율 자연 높아 OK.
-  //   - '공덕래미안자이' (8) ↔ '공덕래미안자이아파트' (정규화 8): score=8, ratio=1.0 → 통과 ✅
-  //   - '마포한강제이스카이' (9) ↔ '마포한강아이파크' (정규화 8): score=4, ratio=0.5 → 차단 ✅
-  //   - '휴먼빌' (3) ↔ '망원휴먼빌아파트' (정규화 6): score=3, ratio=1.0 → 통과 ✅ (정상 매칭)
-  for (const m of (candidates || [])) {
-    const score = nameMatchScore(aptName, m.apt_name);
-    if (score < 3) continue; // 기존 RISK-6 fix B
-    const minLen = Math.min(normalizedLen(aptName), normalizedLen(m.apt_name));
+  // 토큰 매칭 — RISK-6/STAB-2 게이트 유지(score>=3, ratio>=0.6). 단 이제 통과해도 검증을 거친다.
+  //   ratio 게이트가 짧은 이름을 편애하는 구조적 편향이 있으므로(위 사고 원인) 점수 상위부터
+  //   차례로 검증하고, 전부 탈락하면 매칭 없음으로 끝낸다.
+  const scored = [];
+  for (const c of candidates) {
+    const score = nameMatchScore(aptName, c.apt_name);
+    if (score < 3) continue;
+    const minLen = Math.min(normalizedLen(aptName), normalizedLen(c.apt_name));
     const ratio = minLen > 0 ? score / minLen : 0;
-    if (ratio < 0.6) continue; // STAB-2 fix C — 비율 검증
-    if (score > bestScore) {
-      bestScore = score;
-      best = m;
-    }
+    const ky = String(c?.facility?.kaptUsedate || '').slice(0, 4);
+    const diff = (identity && identity.buildYear && /^\d{4}$/.test(ky))
+      ? Math.abs(Number(ky) - identity.buildYear) : null;
+    const yearRank = diff === 0 ? 2 : (diff === 1 ? 1 : 0);
+    // ratio 게이트 면제 — 준공연도가 실거래와 **정확히** 같을 때만.
+    //   이 게이트가 짧은 이름을 편애해 정답을 떨어뜨린 것이 이번 사고의 원인이었다.
+    //   예) MOLIT "신동아아파트5"(1998) 는 지번이 없어 이름으로만 찾아야 하는데
+    //       정답 "방학신동아5단지"(1998) 는 ratio 0.429 로 탈락하고
+    //       오답 "신동아 타워"(1997) 만 ratio 0.600 으로 통과했다.
+    if (ratio < 0.6 && yearRank < 2) continue;
+    scored.push({ c, score, ratio, yearRank });
   }
-  // 매칭 신뢰도 낮으면 운영자 모니터링용 warn (호출량 적은 경로라 부담 낮음)
-  if (best) {
-    const aLen = normalizedLen(aptName);
-    const bLen = normalizedLen(best.apt_name);
-    const r = bestScore / Math.min(aLen, bLen);
-    if (r < 0.75) {
-      logger.warn({ aptName, master: best.apt_name, score: bestScore, ratio: r.toFixed(2) },
-                  'KAPT 매칭 신뢰도 낮음 (RISK-6 모니터)');
-    }
+  // 준공연도 일치도 → 이름 점수 → 비율 순. 연도가 맞는 후보를 이름만 비슷한 후보보다 앞세운다.
+  scored.sort((x, y) => (y.yearRank - x.yearRank) || (y.score - x.score) || (y.ratio - x.ratio));
+  for (const { c } of scored) {
+    const picked = tryPick(c, 'token');
+    if (picked) return picked;
   }
-  return best;
+
+  if (rejected.length) {
+    logger.warn({ aptName, sigungu, umdNm, identity, rejected: rejected.slice(0, 5) },
+      'KAPT 매칭 거부 (IDENTITY-GATE) — 실거래 신원과 불일치');
+  }
+  return null;
 }
 
 /** 한 endpoint 시도 — 성공 시 raw item, 실패 시 null + 진단 로그 */
@@ -339,7 +476,11 @@ async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, 
   const mem = cache.get(memKey);
   if (mem !== undefined) return mem;
 
-  let m = await findMaster(aptName, sigungu, umdNm);
+  // IDENTITY-GATE-2026-08-10 (Sprint KKKKKKK): 실거래가 말해주는 단지 신원(지번·건축년도)을 먼저 확보해
+  //   이름 매칭의 근거로 쓰고 결과를 교차검증한다. 호출처(search/report/analysis) 수정 없이 전 경로 방어.
+  const identity = await molitIdentity(aptName, sigungu, umdNm);
+
+  let m = await findMaster(aptName, sigungu, umdNm, identity);
 
   // KAPT-LOOKUP-2026-05-12 (Sprint N): master 매칭 실패 시 KAPT SigunguAptList3 runtime lookup.
   //   apt_master sync 아직 누락된 단지도 즉시 catch + 자동 upsert.
@@ -363,10 +504,22 @@ async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, 
   }
 
   if (m?.kapt_code) {
+    // IDENTITY-GATE 2단 방어: KAPT-LOOKUP fallback 은 이름만 보고 매칭하므로(SigunguAptList3 응답에
+    //   지번·준공일 없음) findMaster 의 검증을 우회한다. 실제 KAPT 값을 손에 쥔 이 시점에 한 번 더 본다.
+    const gate = (raw, where) => {
+      const v = verifyCandidate(raw?.kaptUsedate, raw?.kaptAddr, identity, 'weak');
+      if (!v.ok) {
+        logger.warn({ aptName, sigungu, umdNm, kaptCode: m.kapt_code, master: m.apt_name, where, reason: v.reason },
+          'KAPT 매칭 거부 (IDENTITY-GATE 2단)');
+      }
+      return v.ok;
+    };
+
     // 캐시 신선도 (FACILITY-BACKFILL-2026-06-18: _empty sentinel 은 캐시로 안 봄 → 온디맨드 재시도 허용)
     if (m.facility && m.facility_fetched_at && !m.facility._empty) {
       const ageDays = (Date.now() - new Date(m.facility_fetched_at).getTime()) / (1000*60*60*24);
       if (ageDays < CACHE_TTL_DAYS) {
+        if (!gate(m.facility, 'cached')) { cache.set(memKey, null, 300); return null; }
         // DTL-INFO-2026-05-13 (Sprint X): 캐시된 BasisInfo 와 함께 detail 도 병렬 fetch.
         // PERF-DTL-SKIP-2026-07-15 (Sprint LLLLL): 저장 facility 에 _dtl 이 이미 병합돼 있으면(백필·이전 조회)
         //   KAPT detail 재조회 생략 — recommend 경로(propertyService 의 stored._dtl 체크)와 대칭.
@@ -398,7 +551,9 @@ async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, 
       }
     }
 
-    const out = raw ? { kaptCode: m.kapt_code, official: m.apt_name, raw, detail } : null;
+    // 저장(upsert)은 kapt_code 기준이라 그대로 둔다 — 잘못된 건 데이터가 아니라 이 단지와의 연결이다.
+    // 다른 단지가 같은 kapt_code 를 정당하게 쓸 수 있으므로 반환만 차단한다.
+    const out = (raw && gate(raw, 'api')) ? { kaptCode: m.kapt_code, official: m.apt_name, raw, detail } : null;
     cache.set(memKey, out, out ? 3600 : 300);
     return out;
   }
@@ -476,4 +631,8 @@ async function getFacilitiesByKaptCodes(kaptCodes) {
   }
 }
 
-module.exports = { resolveFacility, backfillFacilityByKaptCode, getFacilitiesByKaptCodes };
+module.exports = {
+  resolveFacility, backfillFacilityByKaptCode, getFacilitiesByKaptCodes,
+  // IDENTITY-GATE 검증용 (테스트에서 직접 호출)
+  findMaster, molitIdentity, verifyCandidate, jibunFromKaptAddr, bonbun,
+};
