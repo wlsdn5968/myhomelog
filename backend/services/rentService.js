@@ -146,6 +146,10 @@ async function getRentTransactions(lawdCd, dealYm) {
     }
 
     cache.set(cacheKey, result, 86400);
+    // OBSERV-SUCCESS-2026-08-12 (Sprint KKKKKKK-13b): ecos/hf 와 동일 — 성공도 기록. 실패만 남기면
+    //   429 가 해소돼도 health 에 옛 실패가 영구 잔류해 "아직도 429" 로 오판하게 만든다.
+    //   실제 외부 fetch 성공 지점(캐시 히트 아님)에만 찍는다.
+    require('./cronStats').recordCronRun('rent-live', { ok: 1 }).catch(() => {});
     return result;
   } catch (err) {
     if (err.code === 'MOLIT_KEY_MISSING') throw err;
