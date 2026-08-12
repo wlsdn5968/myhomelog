@@ -562,3 +562,17 @@ test('chatDataRouter — 지역 시세 요약 확장, env 무관 성립 (KKKKKKK
     assert.ok(reply.length > 20, `빈 응답: ${msg}`);
   }
 });
+
+test('chatDataRouter — 모든 인텐트가 후속 질문(suggestions)을 동봉 (KKKKKKK-19)', async () => {
+  const { route, classifyIntent } = require('../services/chatDataRouter');
+  // 정적 인텐트 전수: suggestions 는 항상 1개 이상, 전부 실제로 라우팅되는 질문(죽은 예시 금지)
+  for (const msg of ['안녕하세요', '특약 알려줘', '5억 대출 한도', '사용법', '추천해줘', '전세가율이 뭐야', '모르는말xyz?']) {
+    const { reply, suggestions } = await route(msg, null);
+    assert.equal(typeof reply, 'string');
+    assert.ok(Array.isArray(suggestions) && suggestions.length >= 1, `suggestions 비어있음: ${msg}`);
+    assert.ok(suggestions.length <= 3);
+    for (const s of suggestions) {
+      assert.ok(classifyIntent(s).intent !== 'fallback', `죽은 예시(라우팅 불가): "${s}" ← ${msg}`);
+    }
+  }
+});

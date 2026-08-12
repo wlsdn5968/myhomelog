@@ -1905,7 +1905,17 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   </div>
   <div class="cmsgs" id="cMsgs">
     <div class="msg ai"><div class="ava ai">AI</div><div>
-      <div class="bbl">안녕하세요 👋 국토부 실거래·한국은행 금리 등 <b>공식 데이터로 바로</b> 답해드려요.<br><br>이렇게 물어보세요: <b>"은마 시세"</b> · <b>"오늘 금리"</b> · <b>"동탄 규제"</b> · <b>"5억 대출 한도"</b><br><span style="font-size:10px;color:var(--t3)">※ 매수·매도 추천 X · 공식 데이터 기반(환각 없음)</span></div>
+      <div class="bbl">안녕하세요 👋 국토부 실거래·한국은행 금리 등 <b>공식 데이터로 바로</b> 답해드려요.<br><br>아래 예시를 <b>눌러보세요</b> — 단지명·동네·구 단위 전부 돼요 👇<br><span style="font-size:10px;color:var(--t3)">※ 매수·매도 추천 X · 공식 데이터 기반(환각 없음)</span>
+      <!-- KKKKKKK-19 (운영자 "예시로 어디까지 되는지 알게"): 커버 범위가 다른 예시 6종을 탭 즉시 전송 칩으로.
+           의도적으로 유형을 섞음 — 단지(은마)·동(공덕)·구+인기(노원구)·규제(동탄)·한도(숫자)·정책자금 -->
+      <div style="margin-top:9px;display:flex;flex-wrap:wrap;gap:6px">
+        <button class="qb" style="font-size:11px;padding:5px 10px" onclick="qSend('은마 시세')">📊 은마 시세</button>
+        <button class="qb" style="font-size:11px;padding:5px 10px" onclick="qSend('공덕 시세')">🏘 공덕 시세</button>
+        <button class="qb" style="font-size:11px;padding:5px 10px" onclick="qSend('노원구 인기단지')">🔥 노원구 인기단지</button>
+        <button class="qb" style="font-size:11px;padding:5px 10px" onclick="qSend('동탄 규제 맞아?')">📋 동탄 규제</button>
+        <button class="qb" style="font-size:11px;padding:5px 10px" onclick="qSend('5억이면 대출 얼마까지 돼?')">🧮 5억 대출 한도</button>
+        <button class="qb" style="font-size:11px;padding:5px 10px" onclick="qSend('디딤돌 조건 알려줘')">🏦 디딤돌 조건</button>
+      </div></div>
       <div class="mt" id="it"></div>
     </div></div>
   </div>
@@ -1923,7 +1933,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   <div class="cir">
     <!-- KKKKKKK-15: placeholder 의 "(Shift+Enter 줄바꿈)" 은 데스크톱 전용 지식인데 모바일에서
          두 줄로 감겨 "끔)" 만 잘려 보였다(운영자 실기기 스크린샷) — 힌트는 title(데스크톱 툴팁)로 이동 -->
-    <textarea class="ci" id="cIn" placeholder="질문 입력" title="Shift+Enter 로 줄바꿈" rows="1" onkeydown="hk(event)" oninput="ah(this)" aria-label="AI 도우미에게 질문 입력"></textarea>
+    <textarea class="ci" id="cIn" placeholder="질문 입력 — 예: 공덕 시세" title="Shift+Enter 로 줄바꿈" rows="1" onkeydown="hk(event)" oninput="ah(this)" aria-label="데이터 도우미에게 질문 입력"></textarea>
     <button class="cs" onclick="sM()" aria-label="질문 전송" title="전송"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 21L23 12 2 3v7l15 2-15 2z"/></svg></button>
   </div>
 </div>
@@ -10370,6 +10380,28 @@ async function sM(){
       throw new Error('http_' + r.status);
     } else {
       const d=await r.json();rmTyp();chatH.push({role:'assistant',content:d.reply});addMsg('ai',d.reply);
+      // KKKKKKK-19: 서버가 문맥 맞는 후속 질문(suggestions)을 주면 응답 밑에 탭 칩으로 렌더 —
+      //   "다음에 뭘 물어볼 수 있는지"를 답변마다 보여준다. DOM API(textContent)로만 붙여 XSS 안전
+      //   (단지명에 따옴표·괄호가 있어 inline onclick 문자열 조립은 위험).
+      try {
+        if (Array.isArray(d.suggestions) && d.suggestions.length) {
+          const last = document.getElementById('cMsgs')?.lastChild?.querySelector('.bbl');
+          if (last) {
+            const wrap = document.createElement('div');
+            wrap.style.cssText = 'margin-top:8px;display:flex;flex-wrap:wrap;gap:6px';
+            for (const s of d.suggestions.slice(0, 3)) {
+              if (typeof s !== 'string' || s.trim().length < 2) continue;
+              const b = document.createElement('button');
+              b.className = 'qb';
+              b.style.cssText = 'font-size:11px;padding:5px 10px';
+              b.textContent = s.slice(0, 34);
+              b.addEventListener('click', () => qSend(s.slice(0, 100)));
+              wrap.appendChild(b);
+            }
+            if (wrap.childNodes.length) last.appendChild(wrap);
+          }
+        }
+      } catch(_) {}
       document.getElementById('cSt').textContent='● 온라인';document.getElementById('cSt').style.color='var(--grn)';
       replied=true;
       // 어시스턴트 응답도 persist

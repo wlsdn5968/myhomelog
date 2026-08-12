@@ -96,7 +96,7 @@ async function _market(query, context) {
       && typeof context.session.focusProperty.aptName === 'string') {
     q = context.session.focusProperty.aptName.slice(0, 40);
   }
-  if (!q) return `어느 단지가 궁금하세요? 단지명을 함께 적어주세요 (예: "은마 시세", "헬리오시티 실거래").`;
+  if (!q) return { text: `어느 단지가 궁금하세요? 단지명이나 동네 이름을 함께 적어주세요.`, suggestions: ['은마 시세', '공덕 시세', '노원구 시세'] };
   // REGION-MARKET-2026-08-12 (KKKKKKK-18): 지역(구·동) 토큰이면 지역 요약 우선 — "공덕 시세"는
   //   단지가 아니라 동네 질문이다. 단지명("은마" 등)은 sigungu/umd 에 없어 여기서 자연히 걸러지고
   //   기존 단지 경로로 폴백한다(회귀 없음 — 라이브 재검증으로 확인).
@@ -144,7 +144,11 @@ async function _market(query, context) {
     out += `\n\n같은 이름의 다른 단지도 있어요: ${others}\n지역명을 함께 적어주시면 좁혀드려요.`;
   }
   out += `\n\n🔍 전세가율·연식·학군 등 상세는 상단 검색창에서 "${aptName}" 을 검색해 보세요.`;
-  return out + DISCLAIMER;
+  // 후속 질문 칩 — 그 단지의 동네로 시야 확장 + 동명 단지 바로가기 (KKKKKKK-19)
+  const sug = [];
+  if (sigungu) sug.push(`${sigungu} 인기단지`);
+  if (sorted.length > 1) sug.push(`${sorted[1][0].split('|')[0]} 시세`);
+  return { text: out + DISCLAIMER, suggestions: sug };
 }
 
 async function _rates() {
@@ -340,10 +344,18 @@ async function _regionPopular(regionQuery) {
   const res = await _resolveRegionRows(regionQuery);
   if (!res) return null;
   if (res.ambiguousSidos) {
-    return `"${res.token}" 는 여러 지역에 있어요 (${res.ambiguousSidos.join('·')}) — 어느 곳인지 광역시·도를 함께 적어주세요.\n예: "${res.ambiguousSidos[0]} ${res.token} 인기단지"`;
+    // 되묻기도 칩으로 — 시도별 선택지를 눌러서 바로 확정 (KKKKKKK-19)
+    return {
+      text: `"${res.token}" 는 여러 지역에 있어요 (${res.ambiguousSidos.join('·')}) — 아래에서 눌러 고르시거나 광역시·도를 함께 적어주세요.`,
+      suggestions: res.ambiguousSidos.slice(0, 3).map(s => `${s} ${res.token} 인기단지`),
+    };
   }
   const top = _topGroups(res.rows, 5);
-  return `🔥 ${res.scopeLabel} 최근 60일 거래 많은 단지 TOP ${top.length} (국토부 실거래 ${res.rows.length}건 기준)\n${_groupLines(top)}\n\n단지명으로 물어보시면 최근 거래 내역을 보여드려요 (예: "${top[0][0].split('|')[0]} 시세").` + DISCLAIMER;
+  const top1 = top[0][0].split('|')[0];
+  return {
+    text: `🔥 ${res.scopeLabel} 최근 60일 거래 많은 단지 TOP ${top.length} (국토부 실거래 ${res.rows.length}건 기준)\n${_groupLines(top)}` + DISCLAIMER,
+    suggestions: [`${top1} 시세`, `${regionQuery} 시세`],
+  };
 }
 
 /**
@@ -354,17 +366,23 @@ async function _regionMarket(regionQuery) {
   const res = await _resolveRegionRows(regionQuery);
   if (!res) return null;
   if (res.ambiguousSidos) {
-    return `"${res.token}" 는 여러 지역에 있어요 (${res.ambiguousSidos.join('·')}) — 어느 곳인지 광역시·도를 함께 적어주세요.\n예: "${res.ambiguousSidos[0]} ${res.token} 시세"`;
+    return {
+      text: `"${res.token}" 는 여러 지역에 있어요 (${res.ambiguousSidos.join('·')}) — 아래에서 눌러 고르시거나 광역시·도를 함께 적어주세요.`,
+      suggestions: res.ambiguousSidos.slice(0, 3).map(s => `${s} ${res.token} 시세`),
+    };
   }
   const amounts = res.rows.map(t => Number(t.deal_amount || 0)).filter(v => v > 0);
   if (!amounts.length) return null;
   const avg = amounts.reduce((s, v) => s + v, 0) / amounts.length;
   const min = Math.min(...amounts), max = Math.max(...amounts);
   const top = _topGroups(res.rows, 3);
-  return `📊 ${res.scopeLabel} 최근 60일 실거래 요약 (국토부 ${res.rows.length}건)\n` +
-    `· 단순평균 ${eok(avg)} · 거래 범위 ${eok(min)} ~ ${eok(max)} (평형·연식 섞인 전체 범위예요)\n\n` +
-    `거래 많은 단지:\n${_groupLines(top)}\n\n` +
-    `특정 단지가 궁금하면 "단지명 시세"로 물어보세요 (예: "${top[0][0].split('|')[0]} 시세").` + DISCLAIMER;
+  const top1 = top[0][0].split('|')[0];
+  return {
+    text: `📊 ${res.scopeLabel} 최근 60일 실거래 요약 (국토부 ${res.rows.length}건)\n` +
+      `· 단순평균 ${eok(avg)} · 거래 범위 ${eok(min)} ~ ${eok(max)} (평형·연식 섞인 전체 범위예요)\n\n` +
+      `거래 많은 단지:\n${_groupLines(top)}` + DISCLAIMER,
+    suggestions: [`${top1} 시세`, `${regionQuery} 인기단지`],
+  };
 }
 
 function _jeonseGuide(query) {
@@ -406,22 +424,48 @@ function _fallback() {
 }
 
 // ── 진입점 ───────────────────────────────────────────────────────────────────
+// SUGGEST-2026-08-12 (Sprint KKKKKKK-19, 운영자 "예시로 어디까지 되는지 알게"): 모든 응답에
+//   문맥 맞는 후속 질문(탭 칩)을 동봉한다. 핸들러가 {text, suggestions} 를 주면 그것을,
+//   문자열만 주면 인텐트별 기본값을 쓴다. 칩 문구는 전부 실제로 라우팅되는 질문이어야 한다
+//   (누르면 즉시 전송되므로 — 죽은 예시 금지).
+const DEFAULT_SUG = {
+  greeting:   ['은마 시세', '노원구 인기단지', '오늘 금리'],
+  clause:     ['동탄 규제 맞아?', '5억이면 대출 얼마까지 돼?'],
+  policyLoan: ['오늘 금리 알려줘', '5억이면 대출 얼마까지 돼?'],
+  rates:      ['디딤돌 조건 알려줘', '5억이면 대출 얼마까지 돼?'],
+  regulation: ['5억이면 대출 얼마까지 돼?', '노원구 인기단지'],
+  loanLimit:  ['디딤돌 조건 알려줘', '동탄 규제 맞아?'],
+  jeonse:     ['은마 시세', '공덕 시세'],
+  popular:    ['은마 시세', '공덕 시세'],
+  market:     ['노원구 인기단지', '오늘 금리'],
+  howto:      ['은마 시세', '노원구 인기단지', '오늘 금리'],
+  recommendAsk: ['노원구 인기단지', '은마 시세'],
+  fallback:   ['은마 시세', '노원구 인기단지', '오늘 금리'],
+};
+function _norm(v, intent) {
+  const isObj = v && typeof v === 'object';
+  const reply = isObj ? v.text : v;
+  const suggestions = (isObj && Array.isArray(v.suggestions) && v.suggestions.length
+    ? v.suggestions : DEFAULT_SUG[intent] || []).slice(0, 3);
+  return { reply, intent, suggestions };
+}
+
 async function route(message, context) {
   const { intent, query } = classifyIntent(message);
   logger.info({ source: 'chat-data-router', intent, hasQuery: !!query }, '데이터 도우미 의도 분류');
   switch (intent) {
-    case 'greeting':   return { reply: _greeting(), intent };
-    case 'clause':     return { reply: _clauseGuide(), intent };
-    case 'policyLoan': return { reply: await _policyLoan(), intent };
-    case 'rates':      return { reply: await _rates(), intent };
-    case 'regulation': return { reply: await _regulation(String(message || '')), intent };
-    case 'loanLimit':  return { reply: _loanLimit(message), intent };
-    case 'popular':    return { reply: await _popular(query), intent };
-    case 'jeonse':     return { reply: _jeonseGuide(query), intent };
-    case 'market':     return { reply: await _market(query, context), intent };
-    case 'howto':      return { reply: _howto(), intent };
-    case 'recommendAsk': return { reply: _recommendAsk(), intent };
-    default:           return { reply: _fallback(), intent: 'fallback' };
+    case 'greeting':   return _norm(_greeting(), intent);
+    case 'clause':     return _norm(_clauseGuide(), intent);
+    case 'policyLoan': return _norm(await _policyLoan(), intent);
+    case 'rates':      return _norm(await _rates(), intent);
+    case 'regulation': return _norm(await _regulation(String(message || '')), intent);
+    case 'loanLimit':  return _norm(_loanLimit(message), intent);
+    case 'popular':    return _norm(await _popular(query), intent);
+    case 'jeonse':     return _norm(_jeonseGuide(query), intent);
+    case 'market':     return _norm(await _market(query, context), intent);
+    case 'howto':      return _norm(_howto(), intent);
+    case 'recommendAsk': return _norm(_recommendAsk(), intent);
+    default:           return _norm(_fallback(), 'fallback');
   }
 }
 

@@ -86,8 +86,12 @@ router.post('/', validateChatInput, async (req, res) => {
   const _unescape = (s) => String(s || '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
 
   try {
-    const { reply, intent } = await routeDataChat(_unescape(message), context);
-    return res.json({ reply, intent, source: 'data-router' });
+    const { reply, intent, suggestions } = await routeDataChat(_unescape(message), context);
+    // KKKKKKK-19: 후속 질문 칩 — 문자열·길이 제한만 통과시켜 전달(프론트는 textContent 로 렌더)
+    const sug = Array.isArray(suggestions)
+      ? suggestions.filter(s => typeof s === 'string' && s.trim().length >= 2).map(s => s.slice(0, 40)).slice(0, 3)
+      : [];
+    return res.json({ reply, intent, suggestions: sug, source: 'data-router' });
   } catch (err) {
     // 라우터 내부는 데이터 실패를 개별 삼킴 — 여기 도달은 예외적. 정직한 실패 안내(위장 금지).
     logger.error({ err: err.message, userId: req.user?.id || null }, '데이터 도우미 라우터 실패');
