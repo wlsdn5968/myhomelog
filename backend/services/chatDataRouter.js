@@ -30,6 +30,9 @@ const INTENT_RULES = [
   { intent: 'jeonse',     re: /전세가율|갭\s*투자|갭이|전세/ },
   { intent: 'market',     re: /시세|실거래|매매가|평당가|가격|얼마/ },
   { intent: 'howto',      re: /사용법|사용방법|도움말|어떻게\s*(써|사용|해)|무슨\s*기능|뭘\s*할\s*수/ },
+  // 추천 요청은 전용 정책 응답 — 절대 룰 ①(매수·매도 추천 금지)을 정중히 안내 + 대안 제시.
+  //   구체 의도(인기 단지 추천해줘 → popular)가 전부 위에서 먼저 잡히므로 순수 추천 요청만 남는다.
+  { intent: 'recommendAsk', re: /추천/ },
 ];
 
 // 시세 질의에서 단지명 후보 추출 시 걷어낼 조사·상투어.
@@ -55,8 +58,13 @@ function classifyIntent(message) {
       return { intent: r.intent };
     }
   }
-  // 의도어가 전혀 없어도 2~20자 단문이면 단지명 단독 입력으로 간주("은마", "헬리오시티")
-  if (/^[가-힣A-Za-z0-9\s()]{2,20}$/.test(m) && !/[?]/.test(m)) return { intent: 'market', query: _stripAptSuffix(m) };
+  // 의도어가 전혀 없어도 2~20자 단문이면 단지명 단독 입력으로 간주("은마", "헬리오시티").
+  //   ⚠ 동사 어미로 끝나는 문장은 제외 — 라이브 실채팅에서 "오늘 저녁 메뉴 추천해줘"가 단지명으로
+  //   오인돼 어색한 응답이 나왔다. 어미는 **끝 위치만** 본다("해모로"류 단지명 훼손 방지).
+  if (/^[가-힣A-Za-z0-9\s()]{2,20}$/.test(m) && !/[?]/.test(m)
+      && !/(줘|줄래|주세요|해요|할까요|하세요|인가요|일까요|나요|세요|습니다|어요|게요|네요|죠|해봐|해봐요)$/.test(m)) {
+    return { intent: 'market', query: _stripAptSuffix(m) };
+  }
   return { intent: 'fallback' };
 }
 
@@ -246,6 +254,13 @@ function _greeting() {
   return `안녕하세요 👋 국토부 실거래·한국은행 금리 같은 공식 데이터로 바로 답해드리는 데이터 도우미예요.\n\n${EXAMPLES}`;
 }
 
+function _recommendAsk() {
+  return '매수·매도 추천은 정책상 하지 않아요 🙏 (정보 정리 도구예요)\n\n대신 이렇게 도와드릴 수 있어요:\n' +
+    '· 조건에 맞는 단지 정리: 목록 탭 → "내 상황" 입력 → 조건 검색\n' +
+    '· 특정 단지 데이터: "○○ 시세" 라고 물어보세요\n' +
+    '· 요즘 거래 많은 곳: "인기 단지" 라고 물어보세요\n\n판단에 필요한 공식 데이터를 정리해드리는 게 제 역할이에요.';
+}
+
 function _fallback() {
   return `그 질문은 제가 가진 공식 데이터로는 정확히 답하기 어려워요 😅\n\n${EXAMPLES}\n\n매물 추천·가격 전망은 정책상 다루지 않아요 (정보 정리 도구).`;
 }
@@ -265,6 +280,7 @@ async function route(message, context) {
     case 'jeonse':     return { reply: _jeonseGuide(query), intent };
     case 'market':     return { reply: await _market(query, context), intent };
     case 'howto':      return { reply: _howto(), intent };
+    case 'recommendAsk': return { reply: _recommendAsk(), intent };
     default:           return { reply: _fallback(), intent: 'fallback' };
   }
 }

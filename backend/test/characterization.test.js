@@ -524,3 +524,18 @@ test('chatDataRouter.route — DB 무관 인텐트는 항상 성립 + 추천 표
   const { reply: ask } = await route('시세 알려줘', null);
   assert.ok(/단지명/.test(ask));
 });
+
+test('chatDataRouter — 추천 요청 전용 응답 + 동사어미 문장 단지명 오인 방지 (KKKKKKK-16d)', async () => {
+  const { classifyIntent, route } = require('../services/chatDataRouter');
+  // 라이브 실채팅에서 발각: "오늘 저녁 메뉴 추천해줘"가 단지명으로 오인됐다
+  assert.equal(classifyIntent('오늘 저녁 메뉴 추천해줘').intent, 'recommendAsk');
+  assert.equal(classifyIntent('단지 추천해줘').intent, 'recommendAsk');
+  assert.equal(classifyIntent('그냥 아무말이나 해볼게요').intent, 'fallback');
+  // 어미 검사(끝 위치만)가 실제 단지명을 훼손하지 않아야 함
+  assert.equal(classifyIntent('해모로').intent, 'market');
+  // 구체 의도(인기)는 '추천'보다 우선
+  assert.equal(classifyIntent('인기 단지 추천해줘').intent, 'popular');
+  // 추천 응답은 절대 룰 ① 준수 + 대안 제시
+  const { reply } = await route('추천해줘', null);
+  assert.ok(/추천은 정책상 하지 않아요/.test(reply) && /내 상황/.test(reply));
+});
