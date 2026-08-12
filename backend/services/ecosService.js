@@ -52,6 +52,11 @@ async function getEcosRates() {
     if (out.baseRate == null && out.mortgageRate == null) { cache.set(CACHE_KEY, null, 600); return null; }
     cache.set(CACHE_KEY, out, 43200); // 12h
     require('./redisCache').rset(CACHE_KEY, out, 43200).catch(() => {}); // 인스턴스 간 공유 (Sprint BBBBBBB-3)
+    // OBSERV-SUCCESS-2026-08-12 (Sprint KKKKKKK-12): **성공도 기록한다.** 실패만 기록하니 health 에
+    //   마지막 실패가 영구 잔류해, 값이 정상 유입 중인데도 "며칠째 실패"로 읽혔다(08-10 실제 오판 사례 —
+    //   ecos-rates 기록은 08-08 실패인데 그 뒤로 매일 성공하고 있었다). 캐시 히트가 아닌 실제 외부
+    //   fetch 성공 지점에만 넣는다 — 캐시 히트에 찍으면 신선도 감시가 다시 거짓말이 된다.
+    require('./cronStats').recordCronRun('ecos-rates', { ok: 1 }).catch(() => {});
     return out;
   } catch (e) {
     logger.warn({ err: e.message }, 'ECOS 금리 조회 실패 — null (표시 생략, 10분 후 재시도)');

@@ -93,8 +93,25 @@ router.get('/dashboard', async (req, res) => {
     // ⑥ 인구 순이동 — KOSIS 국내인구이동통계(Sprint YYYYYY, 실호출로 명세 확정 후 배선)
     //    ★ lawd_cd 를 그대로 키로 쓴다(KOSIS C1 = 우리 lawd_cd 5자리 동일) — 이름 매칭 없음.
     (async () => {
-      try { return await require('../services/kosisService').getNetMigration(region.lawdCd); }
-      catch (_) { return null; }
+      try {
+        const { getNetMigration } = require('../services/kosisService');
+        let mig = await getNetMigration(region.lawdCd);
+        // CITY-FALLBACK-2026-08-12 (Sprint KKKKKKK-12, 라이브 실측): **시 산하 일반구는 이 칸이
+        //   전부 비어 있었다** — KOSIS 인구이동에 구 단위 행이 없기 때문(안양시만안구·청주시상당구
+        //   null, 단일 구인 해운대구는 정상). 상위 시 코드(행안부 체계상 앞 4자리+'0' — 안양시
+        //   41170·청주시 43110)로 폴백하되, **시 단위 수치임을 basis 에 명시**한다(단정 없는 표기).
+        //   상위 코드마저 KOSIS 에 없으면 종전대로 null → 칸 생략. 폴백은 이름이 '○○시…구' 형태일
+        //   때만 — 군(끝자리 0)·광역 구는 parentCd 가 자기 자신이라 애초에 발동하지 않는다.
+        if (!mig) {
+          const parentCd = region.lawdCd.slice(0, 4) + '0';
+          const cityName = (String(region.name || '').match(/^(.+?시)/) || [])[1];
+          if (parentCd !== region.lawdCd && cityName) {
+            mig = await getNetMigration(parentCd);
+            if (mig) mig.basis = `${cityName} 전체 기준(구 단위 미공표) · ${mig.basis}`;
+          }
+        }
+        return mig;
+      } catch (_) { return null; }
     })(),
     // ⑤ 규제 상태 — 스냅샷 기준(서울은 lawd_cd 11 prefix 로 확정, 그 외는 스냅샷 키워드)
     (async () => {

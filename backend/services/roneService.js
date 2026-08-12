@@ -90,6 +90,7 @@ async function getClsToLawd(statblId = STATBL.saleIndex) {
   //   경기(41)는 시명 그대로('과천시') 또는 시+구('성남시분당구'). 아래 후보를 순서대로 시도한다.
   const map = {};
   let matched = 0;
+  const unmatched = []; // 커버 시도(prefix 有)인데 LAWD_CODES 에 못 붙인 행 — 표기 차이 진단용
   for (const r of rows) {
     const full = String(r.ITM_FULLNM || '').trim();
     const leaf = String(r.ITM_NM || '').trim();
@@ -109,16 +110,30 @@ async function getClsToLawd(statblId = STATBL.saleIndex) {
     const cands = [];
     if (prefix === '11') cands.push(leaf);
     else { cands.push(`${sido}${leaf}`); cands.push(leaf); }
-    if (prefix === '41') {
+    // CHUNGBUK-MATCH-2026-08-12 (Sprint KKKKKKK-12, 라이브 실측): 충북(43)도 경기처럼 '상위시+구'
+    //   결합이 필요하다 — 우리 키는 '청주시상당구'인데 종전 후보는 '충북상당구'·'상당구'뿐이라
+    //   **절대 닿지 못해** 청주 대시보드 priceIndex 가 무조건 null 이었다(43111 실호출로 확인,
+    //   대조군 도봉·해운대·안양만안은 정상). R-ONE 이 상위를 '청주'로 주는지 '청주시'로 주는지는
+    //   응답을 봐야 알므로 두 형태를 모두 시도한다 — 오채택 위험은 없다(모든 후보는 lawd prefix
+    //   게이트를 통과해야만 채택되고, 틀린 형태는 LAWD_CODES 에 키가 없어 그냥 무시된다).
+    if (prefix === '41' || prefix === '43') {
       const parent = parts[parts.length - 2];                 // '성남시' > '분당구'
-      if (parent && parent !== sido) cands.push(`${parent}${leaf}`);
+      if (parent && parent !== sido) {
+        cands.push(`${parent}${leaf}`);
+        if (!/시$/.test(parent)) cands.push(`${parent}시${leaf}`); // '청주'>'상당구' 형태 대비
+      }
     }
+    let hit = false;
     for (const c of cands) {
       const code = LAWD_CODES[c];
-      if (code && String(code).startsWith(prefix)) { map[r.ITM_ID] = code; matched++; break; }
+      if (code && String(code).startsWith(prefix)) { map[r.ITM_ID] = code; matched++; hit = true; break; }
     }
+    // 커버 시도인데 못 붙인 행의 실제 표기를 남긴다(지역명뿐 — 민감정보 없음). 표기 차이로
+    // 조용히 칸이 비는 유형(이번 청주)은 이 로그 없이는 원인 확정에 배포가 한 번 더 필요하다.
+    if (!hit && unmatched.length < 12) unmatched.push(full);
   }
-  logger.info({ src: 'rone', statblId, rows: rows.length, matched }, 'R-ONE 지역 계층 매핑 생성');
+  logger.info({ src: 'rone', statblId, rows: rows.length, matched, unmatched },
+    'R-ONE 지역 계층 매핑 생성');
   cache.set(ck, map, TTL_HIER);
   return map;
 }

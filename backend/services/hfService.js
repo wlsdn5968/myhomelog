@@ -60,6 +60,9 @@ async function getHfRates() {
     const out = { didimdol, bogeum, source: '한국주택금융공사 (data.go.kr)' };
     cache.set(CACHE_KEY, out, 43200); // 12h — 공시 금리는 월 단위 변동
     require('./redisCache').rset(CACHE_KEY, out, 43200).catch(() => {}); // 인스턴스 간 공유
+    // OBSERV-SUCCESS-2026-08-12 (Sprint KKKKKKK-12): 성공도 기록 — ecosService 와 동일 근거.
+    //   (hf-rates 기록이 08-11 16:12 실패로 멈춰 있었는데 실제로는 08-12 applyDy 값이 정상 유입 중이었다.)
+    require('./cronStats').recordCronRun('hf-rates', { ok: 1 }).catch(() => {});
     return out;
   } catch (e) {
     logger.warn({ err: e.message }, 'HF 금리 조회 실패 — null (하드코딩 표 유지, 10분 후 재시도)');
