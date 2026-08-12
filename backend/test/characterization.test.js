@@ -572,7 +572,25 @@ test('chatDataRouter — 모든 인텐트가 후속 질문(suggestions)을 동�
     assert.ok(Array.isArray(suggestions) && suggestions.length >= 1, `suggestions 비어있음: ${msg}`);
     assert.ok(suggestions.length <= 3);
     for (const s of suggestions) {
-      assert.ok(classifyIntent(s).intent !== 'fallback', `죽은 예시(라우팅 불가): "${s}" ← ${msg}`);
+      if (typeof s === 'string') {
+        assert.ok(classifyIntent(s).intent !== 'fallback', `죽은 예시(라우팅 불가): "${s}" ← ${msg}`);
+      } else {
+        // KKKKKKK-20: 이동형 칩 — label + 화이트리스트 view 만 허용
+        assert.ok(typeof s.label === 'string' && s.label.length >= 2, `이동 칩 label 불량 ← ${msg}`);
+        assert.ok(['report', 'calc', 'clause', 'map', 'list'].includes(s.view), `이동 칩 view 불량: ${s.view} ← ${msg}`);
+      }
     }
   }
+});
+
+test('chatDataRouter — 관심단지(watch) 인텐트 + 보고서 퍼널 이동 칩 (KKKKKKK-20)', async () => {
+  const { classifyIntent, route } = require('../services/chatDataRouter');
+  assert.equal(classifyIntent('관심단지 소식 알려줘').intent, 'watch');
+  assert.equal(classifyIntent('찜한 단지 어때?').intent, 'watch');
+  // 북마크가 없으면 담는 방법 안내(정직) — env/DB 무관 성립
+  const { reply: empty } = await route('관심단지 소식', { session: { bookmarks: [] } });
+  assert.ok(/담아둔 관심단지가 없어요/.test(empty));
+  // 한도 질문 응답에는 보고서 이동 칩이 동봉된다 (퍼널 연결 고정)
+  const { suggestions } = await route('5억 대출 한도', null);
+  assert.ok(suggestions.some(s => s && typeof s === 'object' && s.view === 'report'), '보고서 이동 칩 부재');
 });

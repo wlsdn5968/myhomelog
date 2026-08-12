@@ -579,6 +579,20 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   // HF-2026-07-14 (Sprint HHHHH): 정책자금 공시 금리(디딤돌·u-보금자리론) — 동일 비차단 패턴.
   let _hfRates = cache.get('hf:rates:v1');
   if (_hfRates === undefined) { _hfRates = null; try { require('./services/hfService').getHfRates().catch(() => {}); } catch (_) {} }
+  // INTENT-OBSERVE-2026-08-12 (Sprint KKKKKKK-20): 데이터 도우미 의도 분포(오늘·어제) + 최근
+  //   미매칭 원문 10개 — "다음 인텐트"를 실사용이 결정하게 하는 관측 창. 실패는 null(fail-open).
+  let _chatIntents = null;
+  try {
+    const r = require('./redis').getRedis();
+    if (r) {
+      const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+      const yday = new Date(Date.now() - 864e5).toISOString().slice(0, 10).replace(/-/g, '');
+      const [today, yesterday, recentMisses] = await Promise.all([
+        r.hgetall(`chatint:${day}`), r.hgetall(`chatint:${yday}`), r.lrange('chatint:misses', 0, 9),
+      ]);
+      _chatIntents = { today: today || {}, yesterday: yesterday || {}, recentMisses: recentMisses || [] };
+    }
+  } catch (_) { /* 관측 실패 무시 */ }
   // QUOTA-PLAN-2026-07-12 (Sprint YYYY, 운영자 "admin 인데 검색 0/5 표시"): usage 한도를 사용자 plan 반영.
   //   기존엔 DAILY_SEARCH_LIMIT(=5) 고정 → admin·pro·로그인free 모두 5로 오표시(admin 은 초과 시 0/5).
   //   dailyLimit 과 동일 규칙: admin 무제한 · pro/team 플랜한도 · 로그인 free 는 base+bonus(검색5·챗10).
@@ -624,6 +638,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
       ? { used: chatUsed, limit: '무제한', remaining: '무제한', unlimited: true }
       : { used: chatUsed, limit: _chatLimit, remaining: Math.max(0, _chatLimit - chatUsed) },
     monthlyBudget,
+    chatIntents: _chatIntents, // KKKKKKK-20: 도우미 의도 분포 + 미매칭 원문(다음 인텐트 결정 재료)
     // kakaoQuota: geocodeCacheService 좌표해결 경로의 부분 지표 (_trackKakaoCall 집계분).
     //   directions/category/학교·학원 검색/geocode-batch 직접 호출은 미포함 — 전체 Kakao 사용량 아님.
     // 무료 한도 100K/일, 60K 도달 시 Sentry alert. 운영자 대시보드/모니터링 용도.

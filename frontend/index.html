@@ -1926,6 +1926,8 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <!-- KKKKKKK-16: 데이터 라우터 전환 — 챗으로 즉답 가능한 주제 2종(금리·인기)을 send 칩으로 추가 -->
     <button class="qb" onclick="qSend('오늘 금리 알려줘')">💰 오늘 금리</button>
     <button class="qb" onclick="qSend('요즘 인기 단지 알려줘')">🔥 인기 단지</button>
+    <button class="qb" onclick="qSend('관심단지 소식 알려줘')">⭐ 관심단지</button><!-- KKKKKKK-20 B -->
+
     <button class="qb" onclick="_closeAiPanel();sv('calc')">🧮 대출계산기</button>
     <button class="qb" onclick="_closeAiPanel();openRegSummary()">📋 규제요약</button>
     <button class="qb" onclick="_closeAiPanel();sv('clause')">✍ 특약초안</button>
@@ -10299,6 +10301,13 @@ function buildChatContext(){
       aptName:p.aptName, area:p.area, avgPrice:p.avgPrice, score:p.score, ltv:p.ltv,
     }));
   }
+  // KKKKKKK-20 제안 B: 관심단지 이름 동봉 — 도우미 "관심단지 소식" 인텐트가 60일 거래로 대조
+  try{
+    const bks=getBookmarks();
+    if(Array.isArray(bks)&&bks.length){
+      ctx.bookmarks=bks.slice(0,5).map(b=>String(b&&b.aptName||'').trim().slice(0,40)).filter(s=>s.length>=2);
+    }
+  }catch(_){}
   return ctx;
 }
 
@@ -10389,13 +10398,19 @@ async function sM(){
           if (last) {
             const wrap = document.createElement('div');
             wrap.style.cssText = 'margin-top:8px;display:flex;flex-wrap:wrap;gap:6px';
+            // KKKKKKK-20: 문자열=질문 전송 칩 · {label,view}=탭 이동 칩(고정 핸들러 맵 — 임의 코드 불가)
+            const VIEW_ACTS = { report:()=>sv('report'), calc:()=>sv('calc'), clause:()=>sv('clause'), map:()=>sv('map'), list:()=>sv('list') };
             for (const s of d.suggestions.slice(0, 3)) {
-              if (typeof s !== 'string' || s.trim().length < 2) continue;
+              const isNav = s && typeof s === 'object' && typeof s.label === 'string' && VIEW_ACTS[s.view];
+              const label = isNav ? s.label : s;
+              if (typeof label !== 'string' || label.trim().length < 2) continue;
               const b = document.createElement('button');
               b.className = 'qb';
-              b.style.cssText = 'font-size:11px;padding:5px 10px';
-              b.textContent = s.slice(0, 34);
-              b.addEventListener('click', () => qSend(s.slice(0, 100)));
+              b.style.cssText = 'font-size:11px;padding:5px 10px' + (isNav ? ';font-weight:700' : '');
+              b.textContent = label.slice(0, 34);
+              b.addEventListener('click', isNav
+                ? () => { try{_closeAiPanel();}catch(_){ } VIEW_ACTS[s.view](); }
+                : () => qSend(label.slice(0, 100)));
               wrap.appendChild(b);
             }
             if (wrap.childNodes.length) last.appendChild(wrap);

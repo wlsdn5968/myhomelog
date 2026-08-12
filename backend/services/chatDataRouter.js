@@ -21,6 +21,8 @@ const logger = require('../logger');
 // 순서 중요: 구체적 의도(특약·금리·정책자금·규제·한도·인기·전세)를 먼저, 시세(광범위)는 뒤에.
 const INTENT_RULES = [
   { intent: 'greeting',   re: /^(안녕하세요|안녕|하이|헬로|반가워요?|반갑습니다|고마워요?|고맙습니다|감사합니다|감사해요|감사|ㅎㅇ|hi|hello)[!~\s.^^]*$/i },
+  // WATCH-2026-08-12 (KKKKKKK-20 제안 B): 관심단지 — popular 보다 앞(같이 등장 시 관심단지 우선)
+  { intent: 'watch',      re: /관심\s*단지|북마크|즐겨찾기|찜(한|해\s*둔|해둔)?\s*(단지|아파트|곳)/ },
   { intent: 'clause',     re: /특약|계약서|가계약|등기부|전세\s*사기|임대차.*(조항|문구)/ },
   { intent: 'policyLoan', re: /디딤돌|보금자리|신생아\s*특례|신혼.*대출|정책\s*자금|특례\s*대출/ },
   { intent: 'rates',      re: /금리|이자율|기준\s*금리/ },
@@ -181,12 +183,14 @@ async function _policyLoan() {
       rateLine = `\n오늘 공시 금리: ${p.join(' · ')} (HF)`;
     }
   } catch (_) { /* 생략 */ }
-  return '🏦 정책자금 4종 핵심 요건 (주택도시기금·HF 공시)\n' +
+  return { text: '🏦 정책자금 4종 핵심 요건 (주택도시기금·HF 공시)\n' +
     '· 디딤돌: 부부합산 소득 6~7천만↓ · 집값 5억↓ · 한도 2~2.4억\n' +
     '· 신혼 디딤돌: 소득 8.5천만↓ · 집값 6억↓ · 한도 3.2억\n' +
     '· 신생아 특례: 소득 1.3억↓ · 집값 9억↓ · 한도 4억\n' +
     '· 보금자리론: 소득 7천만↓ · 집값 6억↓ · 한도 3.6~4.2억' + rateLine +
-    '\n\n자격·서류 요건은 별도예요 — 주택도시기금(nhuf.molit.go.kr) · 1599-0001 에서 확정 확인.\n🧮 대출 탭에 4종 비교표와 내 조건 계산기가 있어요.';
+    '\n\n자격·서류 요건은 별도예요 — 주택도시기금(nhuf.molit.go.kr) · 1599-0001 에서 확정 확인.\n🧮 대출 탭에 4종 비교표와 내 조건 계산기가 있어요.',
+    // KKKKKKK-20 제안 C: 정책자금 관심자도 보고서 퍼널 진입점
+    suggestions: [{ label: '📊 내 조건 맞춤 보고서 만들기', view: 'report' }, '오늘 금리 알려줘'] };
 }
 
 async function _regulation(message) {
@@ -230,7 +234,11 @@ function _loanLimit(message) {
   }
   out += '\n연소득까지 넣은 정밀 계산은 🧮 대출 탭 계산기에서 바로 돼요 (생애최초·정책자금 분기 포함).\n' +
     '⚠ 참고용 계산이며 실제 한도는 금융기관 심사로 확정돼요.';
-  return out;
+  // KKKKKKK-20 제안 C: 한도 질문자는 보고서 퍼널의 최적 진입점 — 이동형 칩(view) 동봉
+  return { text: out, suggestions: [
+    { label: '📊 내 조건 맞춤 보고서 만들기', view: 'report' },
+    '디딤돌 조건 알려줘',
+  ] };
 }
 
 async function _popular(regionQuery) {
@@ -412,6 +420,48 @@ function _greeting() {
   return `안녕하세요 👋 국토부 실거래·한국은행 금리 같은 공식 데이터로 바로 답해드리는 데이터 도우미예요.\n\n${EXAMPLES}`;
 }
 
+/**
+ * 관심단지 최근 거래 요약 — KKKKKKK-20 제안 B. 프론트가 context.session.bookmarks 로 보낸
+ * 단지명(클라이언트 제공 — 문자열·개수·길이만 신뢰)을 하나씩 60일 실거래로 대조.
+ * 이름은 자체 데이터 출신이라 eq(정확일치) 우선, 없으면 접두 ilike 폴백. 없으면 없다고 말한다.
+ */
+async function _watch(context) {
+  const raw = context && context.session && context.session.bookmarks;
+  const names = Array.isArray(raw)
+    ? raw.filter(s => typeof s === 'string' && s.trim().length >= 2).slice(0, 4).map(s => s.trim().slice(0, 40))
+    : [];
+  if (!names.length) {
+    return { text: '아직 담아둔 관심단지가 없어요 ⭐\n단지 상세에서 별(⭐) 버튼으로 담아두면, 여기서 "관심단지 소식"이라고 물었을 때 최근 거래를 한 번에 모아 보여드려요.',
+      suggestions: ['노원구 인기단지', '은마 시세'] };
+  }
+  const admin = getSupabaseAdmin();
+  if (!admin) return '지금 조회가 잠시 어려워요. 잠시 후 다시 시도해주세요.';
+  const since = new Date(); since.setDate(since.getDate() - 60);
+  const sinceStr = since.toISOString().slice(0, 10);
+  const lines = [];
+  for (const n of names) {
+    const safe = n.replace(/[%_]/g, '');
+    let { data } = await admin.from('molit_transactions').select('deal_amount, deal_date')
+      .eq('apt_name', safe).gte('deal_date', sinceStr)
+      .order('deal_date', { ascending: false }).limit(100);
+    if (!data || !data.length) {
+      ({ data } = await admin.from('molit_transactions').select('deal_amount, deal_date')
+        .ilike('apt_name', `${safe}%`).gte('deal_date', sinceStr)
+        .order('deal_date', { ascending: false }).limit(100));
+    }
+    if (data && data.length) {
+      const avg = data.reduce((s, t) => s + Number(t.deal_amount || 0), 0) / data.length;
+      lines.push(`· ${n} — ${data.length}건 · 평균 ${eok(avg)} · 최근 ${mmdd(data[0].deal_date)}`);
+    } else {
+      lines.push(`· ${n} — 최근 60일 신고 거래 없음`);
+    }
+  }
+  return {
+    text: `⭐ 관심단지 최근 60일 거래 요약 (국토부 신고 기준)\n${lines.join('\n')}\n\n새 거래 배지는 관심단지 목록(⭐ 버튼)에서도 확인할 수 있어요.` + DISCLAIMER,
+    suggestions: [`${names[0]} 시세`],
+  };
+}
+
 function _recommendAsk() {
   return '매수·매도 추천은 정책상 하지 않아요 🙏 (정보 정리 도구예요)\n\n대신 이렇게 도와드릴 수 있어요:\n' +
     '· 조건에 맞는 단지 정리: 목록 탭 → "내 상황" 입력 → 조건 검색\n' +
@@ -440,6 +490,7 @@ const DEFAULT_SUG = {
   market:     ['노원구 인기단지', '오늘 금리'],
   howto:      ['은마 시세', '노원구 인기단지', '오늘 금리'],
   recommendAsk: ['노원구 인기단지', '은마 시세'],
+  watch:      ['노원구 인기단지', '은마 시세'],
   fallback:   ['은마 시세', '노원구 인기단지', '오늘 금리'],
 };
 function _norm(v, intent) {
@@ -450,11 +501,31 @@ function _norm(v, intent) {
   return { reply, intent, suggestions };
 }
 
+// INTENT-OBSERVE-2026-08-12 (KKKKKKK-20 제안 A): 의도 분포를 Redis 일별 해시로 누적 —
+//   로그는 1시간이면 증발(Hobby)하지만 이건 3주 남아 "다음에 무슨 인텐트를 만들지"를 실사용이
+//   결정하게 한다. fallback 원문(80자·PII 차단 통과분만 — 라우터 앞의 PII 게이트가 이미 거름)은
+//   최근 50개 링버퍼로. 전부 fail-open — 관측 실패가 응답을 막지 않는다.
+async function _observe(intent, message) {
+  try {
+    const r = require('../redis').getRedis();
+    if (!r) return;
+    const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    await r.hincrby(`chatint:${day}`, intent, 1);
+    await r.expire(`chatint:${day}`, 60 * 60 * 24 * 21);
+    if (intent === 'fallback') {
+      await r.lpush('chatint:misses', String(message || '').slice(0, 80));
+      await r.ltrim('chatint:misses', 0, 49);
+    }
+  } catch (_) { /* 관측은 본 기능을 막지 않는다 */ }
+}
+
 async function route(message, context) {
   const { intent, query } = classifyIntent(message);
   logger.info({ source: 'chat-data-router', intent, hasQuery: !!query }, '데이터 도우미 의도 분류');
+  await _observe(intent, message);
   switch (intent) {
     case 'greeting':   return _norm(_greeting(), intent);
+    case 'watch':      return _norm(await _watch(context), intent);
     case 'clause':     return _norm(_clauseGuide(), intent);
     case 'policyLoan': return _norm(await _policyLoan(), intent);
     case 'rates':      return _norm(await _rates(), intent);

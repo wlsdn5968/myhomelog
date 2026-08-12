@@ -87,9 +87,16 @@ router.post('/', validateChatInput, async (req, res) => {
 
   try {
     const { reply, intent, suggestions } = await routeDataChat(_unescape(message), context);
-    // KKKKKKK-19: 후속 질문 칩 — 문자열·길이 제한만 통과시켜 전달(프론트는 textContent 로 렌더)
+    // KKKKKKK-19/20: 후속 칩 — 문자열(질문 전송) 또는 {label, view}(탭 이동, 화이트리스트만).
+    //   프론트는 textContent + 고정 핸들러 맵으로만 렌더(임의 코드·URL 전달 불가).
+    const ALLOWED_VIEWS = new Set(['report', 'calc', 'clause', 'map', 'list']);
     const sug = Array.isArray(suggestions)
-      ? suggestions.filter(s => typeof s === 'string' && s.trim().length >= 2).map(s => s.slice(0, 40)).slice(0, 3)
+      ? suggestions.map(s => {
+          if (typeof s === 'string' && s.trim().length >= 2) return s.slice(0, 40);
+          if (s && typeof s === 'object' && typeof s.label === 'string' && s.label.trim().length >= 2
+              && ALLOWED_VIEWS.has(s.view)) return { label: s.label.slice(0, 40), view: s.view };
+          return null;
+        }).filter(Boolean).slice(0, 3)
       : [];
     return res.json({ reply, intent, suggestions: sug, source: 'data-router' });
   } catch (err) {
