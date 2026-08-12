@@ -1167,6 +1167,10 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
   #mHeroCard{top:30px}
   #mapCtrlStack{top:108px}
   #_pannBtn{top:auto!important;bottom:72px!important} /* inline top:14 를 !important 로 이김 — 캡션(bottom8)·FAB(우측)와 비겹침 실측 */
+  /* KKKKKKK-15 (운영자 실기기 스크린샷): AI상담 탭의 .rp 가 데스크톱 우측 패널 폭(290px)을 그대로
+     들고 와 화면 우측 ~30% 가 빈 공백이었다(412px 실측 rp.width=290). 인라인 표시일 때만 풀폭 —
+     💬 FAB 오버레이(.rp-overlay)는 자체 폭 규칙이 있으므로 제외. */
+  .rp:not(.rp-overlay){width:100%;border-left:none}
   #drawerUtil{display:block}
   #mMapCap.on{display:block}
   /* 헤더 우측 hml: 모바일 4요소(햄버거·로고·검색·벨)
@@ -1914,7 +1918,9 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button class="qb" onclick="_closeAiPanel();sv('clause')">✍ 특약초안</button>
   </div>
   <div class="cir">
-    <textarea class="ci" id="cIn" placeholder="질문 입력 (Shift+Enter 줄바꿈)" rows="1" onkeydown="hk(event)" oninput="ah(this)" aria-label="AI 도우미에게 질문 입력"></textarea>
+    <!-- KKKKKKK-15: placeholder 의 "(Shift+Enter 줄바꿈)" 은 데스크톱 전용 지식인데 모바일에서
+         두 줄로 감겨 "끔)" 만 잘려 보였다(운영자 실기기 스크린샷) — 힌트는 title(데스크톱 툴팁)로 이동 -->
+    <textarea class="ci" id="cIn" placeholder="질문 입력" title="Shift+Enter 로 줄바꿈" rows="1" onkeydown="hk(event)" oninput="ah(this)" aria-label="AI 도우미에게 질문 입력"></textarea>
     <button class="cs" onclick="sM()" aria-label="질문 전송" title="전송"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M2 21L23 12 2 3v7l15 2-15 2z"/></svg></button>
   </div>
 </div>
