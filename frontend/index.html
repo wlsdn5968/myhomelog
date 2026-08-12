@@ -1152,11 +1152,21 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
   #heroBand{display:none!important}
   footer.legal-footer{display:none!important} /* 법적 링크는 드로어 유틸 하단(44px) + 비지도 뷰 자체 줄(DDDDDD) 로 도달성 유지 */
   /* 지도 툴바 31px → 지도 위 오버레이 (필터 칩 .mbtn 은 자체 배경·보더로 가독 유지) */
-  #view-map .mtbar{position:absolute;top:0;left:0;right:0;z-index:25;background:transparent;border-bottom:none;box-shadow:none;pointer-events:none}
+  /* KKKKKKK-14 모바일 상단 오버레이 수직 스택 (운영자 실기기 스크린샷 + 375px 좌표 실측):
+     종전엔 mtbar(top0)·히어로칩(top8)·이지역보기(top14)·인기카드(top56)·위성버튼(top46)이
+     각자 top 을 갖고 같은 54~200px 띠에 5중으로 겹쳤다(칩↔버튼 140×44px 겹침 실측).
+     → 띠를 셋으로 나눈다: 범례(0~28, 1줄 말줄임) → 칩(30~) → 우측 버튼(108~).
+     '이 지역 단지 보기'는 지도앱 관례대로 **하단 중앙**으로 — 상단 경합에서 완전히 뺀다. */
+  #view-map .mtbar{position:absolute;top:0;left:0;right:0;z-index:25;background:transparent;border-bottom:none;box-shadow:none;pointer-events:none;flex-wrap:nowrap;overflow:hidden}
   #view-map .mtbar>*{pointer-events:auto}
+  #view-map .mtbar #popLegend{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
   #mapHintTxt{display:none} /* '마커클릭=팝업 | 더블클릭' — 터치 환경에서 무의미 */
-  #popTitleCard{top:56px!important} /* 히어로 칩(상단 풀폭)과 겹침 회피 */
+  #popTitleCard{display:none!important} /* mtbar 범례(#popLegend)와 동일 정보 — 모바일은 중복 제거 */
   #mHeroChip.on{display:flex}
+  #mHeroChip{top:30px}
+  #mHeroCard{top:30px}
+  #mapCtrlStack{top:108px}
+  #_pannBtn{top:auto!important;bottom:72px!important} /* inline top:14 를 !important 로 이김 — 캡션(bottom8)·FAB(우측)와 비겹침 실측 */
   #drawerUtil{display:block}
   #mMapCap.on{display:block}
   /* 헤더 우측 hml: 모바일 4요소(햄버거·로고·검색·벨)
@@ -1789,7 +1799,9 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 
 <div class="cp calcv" id="view-calc" style="display:none">
   <h2>상세 대출 시뮬레이터</h2>
-  <p>2025.10.15 규제 기준 · 참고용 — 실제 한도는 금융기관 필수 확인</p>
+  <!-- KKKKKKK-14: "2025.10.15 규제 기준" 단독 표기는 낡아 보임 — 실제로는 2026.6.30 확대(동탄·기흥·구리)까지
+       반영돼 있으므로(규제요약 헤더 표현과 통일) 사실 그대로 표기 -->
+  <p>2025.10.15 대책 + 2026.6.30 확대 반영 · 참고용 — 실제 한도는 금융기관 필수 확인</p>
   <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:10px;padding:13px 15px;margin-bottom:14px;max-width:520px">
     <div style="font-size:11px;font-weight:700;color:var(--accent-700);margin-bottom:9px;letter-spacing:.3px">📅 부동산 정책 타임라인 <span style="font-weight:500;color:var(--t3);font-size:10px">· D-day 자동 카운트 (D+는 지난 일정)</span></div>
     <div id="policyTimeline" style="display:flex;flex-direction:column;gap:7px"></div>
@@ -2235,7 +2247,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 
     <!-- 3. 대출 한도 계산 -->
     <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
-      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">🧮 대출 한도 계산 — 2025.10.15 규제 반영</summary>
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">🧮 대출 한도 계산 — 2025.10.15 대책 + 2026.6.30 확대 반영</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         매수가·연소득·기존 대출(신용·전세) 입력 → <b>LTV·DSR·추천 한도·월 원리금</b> 즉시 계산<br>
         <b>정책자금 4종 비교</b>: 보금자리·디딤돌·신혼 디딤돌·신생아 특례 (한도·금리)<br>
@@ -5430,7 +5442,8 @@ function renderListGrid(){
     g.innerHTML=`<div style="grid-column:1/-1;padding:50px 20px;text-align:center;color:var(--t3)">
       <div style="font-size:48px;margin-bottom:14px">🏠</div>
       <div style="font-size:15px;font-weight:700;color:var(--t1);margin-bottom:6px">아직 검색 결과가 없어요</div>
-      <div style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:18px">왼쪽 <b>"내 상황"</b> 입력 후 <b>🔍 조건에 맞는 단지 찾기</b>를 누르면<br>국토부 실거래가 기반으로 단지 정보가 정리됩니다 (매수 추천 아님 — 정보 정리 도구).</div>
+      <!-- KKKKKKK-14: "왼쪽" 은 데스크톱 전제 — 모바일은 좌측 패널이 없어(☰ 드로어) 길 안내가 틀렸다 -->
+      <div style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:18px"><b>"내 상황"</b>(PC 왼쪽 패널 · 모바일 ☰ 메뉴) 입력 후 <b>🔍 조건에 맞는 단지 찾기</b>를 누르면<br>국토부 실거래가 기반으로 단지 정보가 정리됩니다 (매수 추천 아님 — 정보 정리 도구).</div>
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="abtn acc" style="margin:0;padding:8px 16px;font-size:12px;width:auto" onclick="quickSearchPreset('서울 7억 무주택')">⚡ 빠른 검색: 서울 7억 무주택</button>
         <button class="abtn a2" style="margin:0;padding:8px 16px;font-size:12px;width:auto" onclick="quickSearchPreset('경기 5억 생애최초')">⚡ 경기 5억 생애최초</button>
