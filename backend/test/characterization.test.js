@@ -539,3 +539,16 @@ test('chatDataRouter — 추천 요청 전용 응답 + 동사어미 문장 단�
   const { reply } = await route('추천해줘', null);
   assert.ok(/추천은 정책상 하지 않아요/.test(reply) && /내 상황/.test(reply));
 });
+
+test('chatDataRouter — 지역 스코프 인기 단지 추출 (KKKKKKK-17, 운영자 "공덕 인기단지 되게")', async () => {
+  const { classifyIntent, route } = require('../services/chatDataRouter');
+  // 지역 토큰 추출 — 판정은 데이터(sigungu/umd 매칭)가 하고, 여기선 추출만 고정
+  assert.deepEqual(classifyIntent('공덕 인기단지'), { intent: 'popular', query: '공덕' });
+  assert.deepEqual(classifyIntent('노원구 인기단지'), { intent: 'popular', query: '노원구' });
+  assert.deepEqual(classifyIntent('서울 중구 인기단지 알려줘'), { intent: 'popular', query: '서울 중구' });
+  assert.deepEqual(classifyIntent('요즘 인기 단지 알려줘'), { intent: 'popular', query: null });
+  // env/DB 없이도 안전: 지역 해석 실패 → 정직 폴백 문구 + 전국 안내로 성립
+  const { reply } = await route('공덕 인기단지', null);
+  assert.equal(typeof reply, 'string');
+  assert.ok(reply.length > 20);
+});

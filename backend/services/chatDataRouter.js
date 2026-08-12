@@ -45,11 +45,20 @@ function _stripAptSuffix(q) {
   return s.length >= 2 ? s : String(q || '').trim();
 }
 
+// 인기 질의에서 지역 토큰 추출용 상투어 ("공덕 인기단지" → "공덕")
+const POPULAR_STOPWORDS = /(인기|단지|아파트|거래|많은|많이|요즘|핫한|뜨는|알려\s*줘요?|알려주세요|어디(예요|야)?|보여\s*줘요?|좀|추천해?\s*줘요?|top\s*\d*)\s*/gi;
+
 function classifyIntent(message) {
   const m = String(message || '').trim();
   if (!m) return { intent: 'fallback' };
   for (const r of INTENT_RULES) {
     if (r.re.test(m)) {
+      if (r.intent === 'popular') {
+        // REGION-POPULAR-2026-08-12 (운영자 요청 "공덕 인기단지·노원구 인기단지 되게"):
+        //   상투어를 걷어낸 잔여 토큰을 지역 후보로 — 실제 판정은 데이터(sigungu/umd_nm 매칭)가 한다.
+        const q = m.replace(POPULAR_STOPWORDS, ' ').replace(/[?!.~,]/g, ' ').replace(/\s+/g, ' ').trim();
+        return { intent: 'popular', query: q.length >= 2 ? q : null };
+      }
       if (r.intent === 'market' || r.intent === 'jeonse') {
         let q = m.replace(MARKET_STOPWORDS, ' ').replace(/[?!.~,]/g, ' ').replace(/\s+/g, ' ').trim();
         q = _stripAptSuffix(q);
@@ -215,7 +224,19 @@ function _loanLimit(message) {
   return out;
 }
 
-async function _popular() {
+async function _popular(regionQuery) {
+  // 지역 토큰이 있으면 지역 스코프 집계 (REGION-POPULAR-2026-08-12, 운영자 요청)
+  if (regionQuery) {
+    const scoped = await _regionPopular(regionQuery);
+    if (scoped) return scoped;
+    // 지역 해석 실패 → 전국 TOP 으로 자연 폴백하되 그 사실을 정직하게 앞에 밝힘
+    const nation = await _popularNationwide();
+    return `"${regionQuery}" 지역의 최근 60일 실거래를 찾지 못했어요 — 구·동 이름(예: "노원구 인기단지", "공덕 인기단지")으로 물어봐 주세요.\n\n대신 전국 기준으로 보여드려요:\n\n${nation}`;
+  }
+  return _popularNationwide();
+}
+
+async function _popularNationwide() {
   try {
     const snap = await require('./popularService').readPopularSnapshot(5);
     if (snap && snap.length) {
@@ -225,6 +246,90 @@ async function _popular() {
     }
   } catch (_) { /* 아래 안내 */ }
   return '인기 단지 집계를 지금 불러오지 못했어요 — 지도 탭에서 숫자 라벨(인기 단지)로 확인할 수 있어요.';
+}
+
+// lawd_cd 앞 2자리 → 시도명 (routes/region.js SIDO_BY_PREFIX 와 동일 값 — 코드 기반 판정, 이름 판정 아님)
+const SIDO_BY_PREFIX = { 11: '서울', 26: '부산', 27: '대구', 28: '인천', 29: '광주', 30: '대전',
+  31: '울산', 36: '세종', 41: '경기', 42: '강원', 51: '강원', 43: '충북', 44: '충남',
+  45: '전북', 46: '전남', 47: '경북', 48: '경남', 50: '제주' };
+const SIDO_NAME_TO_PREFIX = { '서울': '11', '부산': '26', '대구': '27', '인천': '28', '대전': '30',
+  '울산': '31', '세종': '36', '경기': '41', '충북': '43' };
+
+/**
+ * 지역 스코프 인기 단지 — 최근 60일 실거래를 (구 이름 우선 → 동 이름 폴백)으로 스캔해 상위 5개.
+ * [실측 근거 2026-08-12] "노원"→sigungu 노원구 948건 / "공덕"→umd 공덕동(마포) 10건 /
+ *   "중구"→6개 시도 산재(대전283·울산240·대구218·서울95·부산16·인천1) — 동명 시군구는 반드시
+ *   되묻는다([[region-judgment-by-lawdcd]] 원칙: 판정은 lawd_cd 로, 이름은 표시용).
+ * 해석 실패 시 null 반환(호출부가 정직 폴백).
+ */
+async function _regionPopular(regionQuery) {
+  const admin = getSupabaseAdmin();
+  if (!admin) return null;
+  // "서울 중구" 처럼 광역 접두가 오면 분리 — 접두는 lawd_cd prefix 필터로만 쓴다
+  let r = regionQuery.trim(), sidoPfx = null;
+  const mSido = r.match(/^(서울|부산|대구|인천|대전|울산|세종|경기|충북)\s+(.+)$/);
+  if (mSido) { sidoPfx = SIDO_NAME_TO_PREFIX[mSido[1]]; r = mSido[2].trim(); }
+  const safe = r.replace(/[%_]/g, '');
+  if (safe.length < 2) return null;
+  const since = new Date(); since.setDate(since.getDate() - 60);
+  const sinceStr = since.toISOString().slice(0, 10);
+
+  // 페이지 루프 (PostgREST 1000행 캡 — 실측 최대 구가 60일 ~1천 건대라 3페이지면 충분, 도달 시 로그)
+  const fetchBy = async (col) => {
+    const out = []; const PAGE = 1000;
+    for (let from = 0; from < 3000; from += PAGE) {
+      let q = admin.from('molit_transactions')
+        .select('apt_name, sigungu, umd_nm, lawd_cd, deal_amount')
+        .ilike(col, `${safe}%`).gte('deal_date', sinceStr)
+        .order('deal_date', { ascending: false }).order('id', { ascending: true })
+        .range(from, from + PAGE - 1);
+      const { data, error } = await q;
+      if (error || !data || !data.length) break;
+      out.push(...data);
+      if (data.length < PAGE) break;
+    }
+    if (out.length >= 3000) logger.warn({ source: 'chat-region-popular', col, region: safe }, '지역 인기 3천행 캡 도달 — 집계가 최신 구간으로 절단됨');
+    return out;
+  };
+
+  // ① 구 이름 우선 → ② 동 이름 폴백 (실측: "공덕"은 sigungu 에 없고 umd 공덕동에만 있다)
+  let rows = await fetchBy('sigungu');
+  let scopeLabel = null;
+  if (rows.length) {
+    // 동명 시군구 검사 — 시도 prefix 가 2개 이상이면 단정하지 않고 되묻는다
+    const sidos = [...new Set(rows.map(t => String(t.lawd_cd || '').slice(0, 2)))];
+    const filtered = sidoPfx ? rows.filter(t => String(t.lawd_cd || '').startsWith(sidoPfx)) : rows;
+    if (!sidoPfx && sidos.length > 1) {
+      const names = sidos.map(p => SIDO_BY_PREFIX[p]).filter(Boolean).join('·');
+      return `"${r}" 는 여러 지역에 있어요 (${names}) — 어느 곳인지 광역시·도를 함께 적어주세요.\n예: "서울 ${r} 인기단지" / "대전 ${r} 인기단지"`;
+    }
+    if (!filtered.length) return null;
+    rows = filtered;
+    scopeLabel = `${SIDO_BY_PREFIX[String(rows[0].lawd_cd || '').slice(0, 2)] || ''} ${rows[0].sigungu}`.trim();
+  } else {
+    rows = await fetchBy('umd_nm');
+    if (!rows.length) return null;
+    if (sidoPfx) rows = rows.filter(t => String(t.lawd_cd || '').startsWith(sidoPfx));
+    if (!rows.length) return null;
+    const umds = [...new Set(rows.map(t => `${t.sigungu} ${t.umd_nm}`))];
+    scopeLabel = umds.length === 1 ? umds[0]
+      : `'${safe}…' 동 일대 (${umds.slice(0, 3).join(' · ')}${umds.length > 3 ? ' 외' : ''})`;
+  }
+
+  // (단지, 시군구, 동) 그룹핑 → 거래 건수 상위 5
+  const groups = new Map();
+  for (const t of rows) {
+    const k = `${t.apt_name}|${t.sigungu || ''}|${t.umd_nm || ''}`;
+    if (!groups.has(k)) groups.set(k, []);
+    groups.get(k).push(t);
+  }
+  const top = [...groups.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 5);
+  const lines = top.map(([k, v], i) => {
+    const [name, , umd] = k.split('|');
+    const avg = v.reduce((s, t) => s + Number(t.deal_amount || 0), 0) / v.length;
+    return `${i + 1}. ${name}${umd ? ` (${umd})` : ''} — ${v.length}건 · 평균 ${eok(avg)}`;
+  }).join('\n');
+  return `🔥 ${scopeLabel} 최근 60일 거래 많은 단지 TOP ${top.length} (국토부 실거래 ${rows.length}건 기준)\n${lines}\n\n단지명으로 물어보시면 최근 거래 내역을 보여드려요 (예: "${top[0][0].split('|')[0]} 시세").` + DISCLAIMER;
 }
 
 function _jeonseGuide(query) {
@@ -276,7 +381,7 @@ async function route(message, context) {
     case 'rates':      return { reply: await _rates(), intent };
     case 'regulation': return { reply: await _regulation(String(message || '')), intent };
     case 'loanLimit':  return { reply: _loanLimit(message), intent };
-    case 'popular':    return { reply: await _popular(), intent };
+    case 'popular':    return { reply: await _popular(query), intent };
     case 'jeonse':     return { reply: _jeonseGuide(query), intent };
     case 'market':     return { reply: await _market(query, context), intent };
     case 'howto':      return { reply: _howto(), intent };
