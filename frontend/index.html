@@ -1896,7 +1896,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
      style=display:none 로 초기 flash 방지 (toggleRpOverlay / chat 뷰가 inline display 로 override). -->
 <div class="rp" style="display:none">
   <div class="chdr">
-    <span class="ctit">AI 데이터 도우미</span>
+    <span class="ctit">데이터 도우미</span><!-- KKKKKKK-16: 룰베이스 전환 — 'AI' 표기 제거(정직성) -->
     <span style="display:flex;gap:6px;align-items:center">
       <button id="chatHistBtn" onclick="openChatHistory()" title="대화 이력" aria-label="저장된 대화 이력 열기" style="background:none;border:none;color:var(--t2);cursor:pointer;font-size:13px;padding:2px 6px;display:none">🕘</button>
       <button id="chatNewBtn" onclick="newChatSession()" title="새 대화" aria-label="새 대화 시작" style="background:none;border:none;color:var(--t2);cursor:pointer;font-size:13px;padding:2px 6px;display:none">✚</button>
@@ -1905,7 +1905,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   </div>
   <div class="cmsgs" id="cMsgs">
     <div class="msg ai"><div class="ava ai">AI</div><div>
-      <div class="bbl">안녕하세요 👋 부동산 정보를 정리해드려요.<br><br>↓ <b>빠른 시작</b> 또는 직접 질문<br><span style="font-size:10px;color:var(--t3)">※ 매수·매도 추천 X · 정보 정리 도구</span></div>
+      <div class="bbl">안녕하세요 👋 국토부 실거래·한국은행 금리 등 <b>공식 데이터로 바로</b> 답해드려요.<br><br>이렇게 물어보세요: <b>"은마 시세"</b> · <b>"오늘 금리"</b> · <b>"동탄 규제"</b> · <b>"5억 대출 한도"</b><br><span style="font-size:10px;color:var(--t3)">※ 매수·매도 추천 X · 공식 데이터 기반(환각 없음)</span></div>
       <div class="mt" id="it"></div>
     </div></div>
   </div>
@@ -1913,6 +1913,9 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <!-- QUICKACTION-FEATURE-2026-06-14 (운영자 "퀵액션을 맥락 있는 기능으로 이동"):
          AI 캔드 프롬프트(부정확·유료 채팅) → 전용 기능 라우팅. 대출계산=정밀 계산기, 규제요약=공식 규제표,
          특약초안=법령 인용 구조화 생성. AI 채팅 비용↓ + 정확도·출처↑. -->
+    <!-- KKKKKKK-16: 데이터 라우터 전환 — 챗으로 즉답 가능한 주제 2종(금리·인기)을 send 칩으로 추가 -->
+    <button class="qb" onclick="qSend('오늘 금리 알려줘')">💰 오늘 금리</button>
+    <button class="qb" onclick="qSend('요즘 인기 단지 알려줘')">🔥 인기 단지</button>
     <button class="qb" onclick="_closeAiPanel();sv('calc')">🧮 대출계산기</button>
     <button class="qb" onclick="_closeAiPanel();openRegSummary()">📋 규제요약</button>
     <button class="qb" onclick="_closeAiPanel();sv('clause')">✍ 특약초안</button>
@@ -2607,7 +2610,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button class="bnav-item" onclick="sv('list',this)" data-view="list" aria-label="단지 목록"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg></div>목록</button>
     <button class="bnav-item bnav-feature" onclick="sv('report',this)" data-view="report" title="회원님 가구 맞춤 1page 컨설팅 보고서" aria-label="맞춤 보고서"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg></div>보고서</button>
     <button class="bnav-item" onclick="sv('calc',this)" data-view="calc" aria-label="대출 한도 계산"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg></div>대출</button>
-    <button class="bnav-item" onclick="sv('chat',this)" data-view="chat" aria-label="AI 상담"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 4H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3v3l4-3h7a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/></svg></div>AI상담</button>
+    <button class="bnav-item" onclick="sv('chat',this)" data-view="chat" aria-label="데이터 도우미"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 4H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h3v3l4-3h7a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z"/><path d="M8 10h.01"/><path d="M12 10h.01"/><path d="M16 10h.01"/></svg></div>도우미</button>
   </div>
 </nav>
 
@@ -10289,6 +10292,8 @@ function buildChatContext(){
   return ctx;
 }
 
+// KKKKKKK-16: 퀵칩 → 챗 전송 헬퍼 (데이터 라우터가 즉답하는 주제용)
+function qSend(t){const el=document.getElementById('cIn');if(!el)return;el.value=t;sM();}
 async function sM(){
   if(chatLd)return;
   const el=document.getElementById('cIn'),txt=el.value.trim();if(!txt)return;
@@ -10840,7 +10845,7 @@ document.getElementById('DM').addEventListener('click',e=>{if(e.target.id==='DM'
 document.getElementById('SM').addEventListener('click',e=>{if(e.target.id==='SM')closeSM();});
 </script>
 <!-- 플로팅 AI 버튼: .rp 숨김 탭에서만 노출 -->
-<button id="fabAI" class="fab-ai" title="AI 데이터 도우미" aria-label="AI 데이터 도우미 열기" onclick="toggleRpOverlay()">💬</button>
+<button id="fabAI" class="fab-ai" title="데이터 도우미" aria-label="데이터 도우미 열기" onclick="toggleRpOverlay()">💬</button>
 <!-- 플로팅 관심단지 버튼: .lp 숨김 탭에서만 노출 -->
 <button id="fabBM" class="fab-bm" title="관심 단지" onclick="toggleBmPop()">⭐<span class="fab-bm-cnt" id="fabBmCnt">0</span></button>
 <!-- 관심단지 popover -->

@@ -482,3 +482,45 @@ test('geocacheBackfill.canFastVerify — Kakao 호출 없이 통과시켜도 되
     officialAddress: '평택시 동삭동 500', placeName: null,
   }), false);
 });
+
+test('chatDataRouter.classifyIntent — 의도 분류 고정 (Sprint KKKKKKK-16, 비용 0 라우터)', () => {
+  const { classifyIntent } = require('../services/chatDataRouter');
+  const c = (m) => classifyIntent(m);
+
+  // 시세: 단지명 추출 + 끝의 '아파트' 접미사만 제거 (search.js SEARCH-SUFFIX 와 동일 비대칭 해소)
+  assert.deepEqual(c('은마 시세'), { intent: 'market', query: '은마' });
+  assert.deepEqual(c('은마아파트 시세 알려줘'), { intent: 'market', query: '은마' });
+  assert.equal(c('헬리오시티').intent, 'market');            // 단지명 단독 입력
+  assert.equal(c('신동아아파트1 실거래').query, '신동아아파트1'); // 이름 중간 '아파트' 훼손 금지
+  assert.equal(c('시세 알려줘').query, null);                 // 단지명 없음 → 되묻기 대상
+
+  // 구체 의도가 광범위 의도(시세)보다 우선
+  assert.equal(c('오늘 금리 알려줘').intent, 'rates');
+  assert.equal(c('동탄 규제 맞아?').intent, 'regulation');
+  assert.equal(c('5억이면 대출 얼마까지 돼?').intent, 'loanLimit');
+  assert.equal(c('디딤돌 대출 조건').intent, 'policyLoan');   // '대출' 있어도 정책자금 우선
+  assert.equal(c('요즘 인기 단지 알려줘').intent, 'popular');
+  assert.equal(c('전세가율이 뭐야').intent, 'jeonse');
+  assert.equal(c('특약 어떻게 써?').intent, 'clause');
+  assert.equal(c('안녕하세요').intent, 'greeting');
+  assert.equal(c('사용법 알려줘').intent, 'howto');
+
+  // 분류 불가는 fallback (아는 척 금지 — 환각 차단)
+  assert.equal(c('오늘 저녁 뭐 먹지?').intent, 'fallback');
+  assert.equal(c('').intent, 'fallback');
+});
+
+test('chatDataRouter.route — DB 무관 인텐트는 항상 성립 + 추천 표현 부재 (절대 룰 ①)', async () => {
+  const { route } = require('../services/chatDataRouter');
+  // env/DB 없이도 성립해야 하는 경로들 (라우터는 데이터 실패를 개별 삼킴)
+  for (const msg of ['안녕하세요', '특약 알려줘', '5억 대출 한도', '사용법', '이해 안 가는 질문 xyz?']) {
+    const { reply } = await route(msg, null);
+    assert.equal(typeof reply, 'string');
+    assert.ok(reply.length > 20, `응답이 비었음: ${msg}`);
+    // 절대 룰 ①: 매수·매도 추천 단언 표현 금지
+    assert.ok(!/사세요|파세요|매수하세요|추천드려요|오를 겁니다|떨어질 겁니다/.test(reply), `금지 표현 감지: ${msg}`);
+  }
+  // 시세 인텐트 + 단지명 없음 + 컨텍스트 없음 → 되묻기(친절)
+  const { reply: ask } = await route('시세 알려줘', null);
+  assert.ok(/단지명/.test(ask));
+});

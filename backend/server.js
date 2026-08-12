@@ -209,7 +209,13 @@ const { optionalAuth } = require('./middleware/auth');
 // MOB-AUDIT-2026-05-03: parseInt NaN 검증 — env 오타(DAILY_SEARCH_LIMITS 등) 시 NaN → 모든 사용자 차단 차단
 const _parseIntSafe = (v, def) => { const n = parseInt(v, 10); return Number.isFinite(n) && n > 0 ? n : def; };
 const DAILY_SEARCH_LIMIT = _parseIntSafe(process.env.DAILY_SEARCH_LIMIT, 5);
-const DAILY_CHAT_LIMIT = _parseIntSafe(process.env.DAILY_CHAT_LIMIT, 3); // 2026-06-01: 비로그인 AI챗 한도 15→3. Anthropic=유일 변동비라 비로그인 과대(15) 축소 + 로그인 유도. 로그인 free=3+bonus10=13.
+// CHAT-ZERO-COST-2026-08-12 (Sprint KKKKKKK-16): 챗이 룰베이스 데이터 라우터로 전환되며 한도의
+//   근거였던 "Anthropic=유일 변동비"가 소멸 → 3 → 30 상향(운영자 "최대한 활용"). 비용은 DB 조회뿐이고
+//   분당 chatLimiter 가 버스트를 방어한다. 특약(clause)은 여전히 Anthropic 유료 경로라 **별도 상수·별도
+//   scope** 로 분리 — 종전엔 scope 'chat' 공유라 챗 사용이 특약 한도를 잠식했는데, 챗 30 상향 시
+//   공유 유지하면 특약이 사실상 무제한이 되는 구멍이 생긴다.
+const DAILY_CHAT_LIMIT = _parseIntSafe(process.env.DAILY_CHAT_LIMIT, 30);
+const DAILY_CLAUSE_LIMIT = _parseIntSafe(process.env.DAILY_CLAUSE_LIMIT, 3); // 기존 유료 한도 그대로
 
 // 채팅 세션/메시지 저장 (Supabase — JWT 필수, RLS 적용) — /api/chat 보다 먼저 마운트
 app.use('/api/chat/sessions', dataLimiter, chatSessionsRouter);
@@ -227,7 +233,7 @@ app.use('/api/regulations', regulationsRouter);
 app.use('/api/region', dataLimiter, require('./routes/region'));
 // Sprint RR: 정부 공식 법령 API (인증 불필요 — 공개 정보)
 app.use('/api/legal', dataLimiter, legalRouter);
-app.use('/api/clause', optionalAuth, chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat', loggedInBonus: 10 }), clauseRouter);
+app.use('/api/clause', optionalAuth, chatLimiter, dailyLimit({ limit: DAILY_CLAUSE_LIMIT, scope: 'clause', loggedInBonus: 10 }), clauseRouter);
 // GEOCAP-2026-08-09 (Plan 002): 공개 라우트 + 자유 텍스트 캐시 키 = Kakao 호출 증폭 벡터 —
 //   IP 일일 캡(요청 단위 60/일, 정상 지도 사용 여유) + 라우트 내부 전역 일일 캡(geocode.js) 이중 상한.
 app.use('/api/geocode', dataLimiter, dailyLimit({ limit: 60, scope: 'geocode' }), geocodeRouter);
