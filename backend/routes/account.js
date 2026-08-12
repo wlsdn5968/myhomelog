@@ -94,14 +94,35 @@ router.get('/export', async (req, res, next) => {
     const sb = userScopedClient(req.accessToken);
     const userId = req.user.id;
 
+    // REST-CAP-FIX-2026-08-12 (Sprint KKKKKKK-13, 감사 발견): limit 없는 select 는 PostgREST
+    //   max-rows(1000)에서 **조용히 잘린다**(레포 6회 실증). 이 엔드포인트는 "본인 데이터 전부"를
+    //   약속하는 법정 열람권(PIPA §35)이라 절단은 단순 버그가 아니라 이행 결함이다 — search_history
+    //   (12개월 보존)·chat_messages(24개월 보존)는 활성 사용자가 1,000행을 넘을 수 있다.
+    //   ⇒ 테이블별 페이지 루프. 정렬키는 information_schema 실측으로 확정한 실재 컬럼만 사용
+    //   (⚠ field_notes·user_billing 엔 id 가 없다 — 없는 컬럼으로 order 하면 조회가 통째로
+    //   실패해 해당 테이블이 빈 배열로 나가는 더 나쁜 결함이 된다).
+    const PAGE = 1000;
+    const pageAll = async (table, select, orderCol) => {
+      const out = [];
+      for (let from = 0; from < 50000; from += PAGE) {   // 상한 5만 — 보존기간 정책상 도달 불가한 안전마진
+        const { data, error } = await sb.from(table).select(select)
+          .order(orderCol, { ascending: true })
+          .range(from, from + PAGE - 1);
+        if (error) throw new Error(`${table} 조회 실패: ${error.message}`); // 부분 export 위장 방지 — 실패는 실패로
+        if (!data || !data.length) break;
+        out.push(...data);
+        if (data.length < PAGE) break;
+      }
+      return out;
+    };
     const [bookmarks, searchHistory, chatSessions, chatMessages, billing, payments, fieldNotes] = await Promise.all([
-      sb.from('bookmarks').select('*').then((r) => r.data || []),
-      sb.from('search_history').select('*').then((r) => r.data || []),
-      sb.from('chat_sessions').select('*').then((r) => r.data || []),
-      sb.from('chat_messages').select('id, session_id, role, content, meta, created_at').then((r) => r.data || []),
-      sb.from('user_billing').select('*').then((r) => r.data || []),
-      sb.from('payments').select('id, order_id, amount, currency, status, plan, method, created_at, approved_at').then((r) => r.data || []),
-      sb.from('field_notes').select('*').then((r) => r.data || []),
+      pageAll('bookmarks', '*', 'id'),
+      pageAll('search_history', '*', 'id'),
+      pageAll('chat_sessions', '*', 'id'),
+      pageAll('chat_messages', 'id, session_id, role, content, meta, created_at', 'id'),
+      pageAll('user_billing', '*', 'user_id'),   // PK user_id · 사용자당 1행
+      pageAll('payments', 'id, order_id, amount, currency, status, plan, method, created_at, approved_at', 'id'),
+      pageAll('field_notes', '*', 'created_at'), // id 없음 — (user_id,apt_name) 유니크·RLS 로 본인 행만
     ]);
 
     const payload = {

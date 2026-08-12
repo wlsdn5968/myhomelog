@@ -54,7 +54,7 @@ async function getRentTransactions(lawdCd, dealYm) {
     let cancelledCount = 0;
 
     for (let pageNo = 1; pageNo <= MAX_PAGES; pageNo++) {
-      const response = await dgk.get(MOLIT_RENT_URL, { // RELAY (Sprint BBBBBBB)
+      const _fetch = () => dgk.get(MOLIT_RENT_URL, { // RELAY (Sprint BBBBBBB)
         params: {
           serviceKey: process.env.MOLIT_API_KEY,
           LAWD_CD: lawdCd,
@@ -66,6 +66,20 @@ async function getRentTransactions(lawdCd, dealYm) {
         timeout: 10000,
         headers: { Accept: 'application/json' },
       });
+      // RENT-429-RETRY-2026-08-12 (Sprint KKKKKKK-13): 국토부 게이트웨이 **초당** 요청 한도
+      //   (HTTP 429 code=23, health 실측)는 다음 초에 자연 해제되는 순간 한도다. 그런데 종전엔
+      //   429 도 일반 실패로 떨어져 이 (lawd,월)이 빈 배열로 5분 캐시됐다 — **일시 한도가
+      //   5분짜리 표본 구멍으로 확대**되는 구조. 1.2s 대기 후 1회만 재시도한다(그래도 429 면
+      //   기존 실패 경로 그대로 — 무한 재시도 없음).
+      let response;
+      try {
+        response = await _fetch();
+      } catch (e) {
+        if (e.response && e.response.status === 429) {
+          await new Promise(r => setTimeout(r, 1200));
+          response = await _fetch();
+        } else { throw e; }
+      }
 
       const body = response.data?.response?.body;
       header = response.data?.response?.header || header;
@@ -167,9 +181,18 @@ async function getJeonseByApt(lawdCd, aptName) {
     months.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
 
-  const allResults = await Promise.all(
-    months.map(m => getRentTransactions(lawdCd, m).catch(() => []))
-  );
+  // RENT-429-2026-08-12 (Sprint KKKKKKK-13): 6개월 일괄 병렬(Promise.all)이 캐시 콜드 지역에서
+  //   국토부 초당 한도(429 code=23)를 정면으로 때렸다 — health.crons.rent-live 실측. 걸린 달은
+  //   catch(()=>[]) 로 **조용히 빈 배열**이 되어 전세가율 표본이 소리 없이 얇아진다(정확도 USP 훼손).
+  //   동시 2개 청크로 초당 요청을 한도 아래로 낮춘다. 웜 경로(24h 캐시 히트)는 체감 차이 없음.
+  const CONC = 2;
+  const allResults = [];
+  for (let i = 0; i < months.length; i += CONC) {
+    const chunk = await Promise.all(
+      months.slice(i, i + CONC).map(m => getRentTransactions(lawdCd, m).catch(() => []))
+    );
+    allResults.push(...chunk);
+  }
 
   const flat = allResults.flat();
   const query = aptName.replace(/\s/g, '');
