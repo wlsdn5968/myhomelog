@@ -72,10 +72,21 @@ const CHECKS = [
     re: /systemAppend\s*:\s*sessionContext/,
   },
   {
-    // 컨텍스트 무결성: session 은 단일 user 메시지의 <session_context> 신뢰불가 블록으로 격리되어야 함 (존재 확인)
-    name: 'chat.js <session_context data_source="client_supplied_untrusted"> 블록 부재 — session 격리가 되돌려짐',
+    // CHAT-ZERO-COST-2026-08-12 (Sprint KKKKKKK-16): 챗은 룰베이스 데이터 라우터로 전환 — LLM 호출이
+    //   구조적으로 제거됐다. 종전 가드(<session_context> 격리 블록 존재 필수)는 "LLM 프롬프트에
+    //   클라이언트 세션을 격리해 넣어라"는 규칙이라 **보호 대상 코드 자체가 사라져** 전제가 소멸.
+    //   대신 새 불변식을 CI 로 강제한다: **chat.js 에 LLM 호출(callAI) 재유입 금지** — 운영자
+    //   "챗 비용 0원 영구" 방침의 회귀 가드이자, 프롬프트 인젝션 표면의 원천 제거 상태 유지.
+    //   (LLM 을 다시 붙이는 결정은 운영자 승인 + 이 가드의 의도적 갱신을 함께 요구하게 된다.)
+    name: 'chat.js 에 callAI(LLM 유료 호출) 재유입 — 챗은 룰베이스 데이터 라우터(비용 0)여야 함',
     file: 'backend/routes/chat.js',
-    re: /<session_context data_source="client_supplied_untrusted">/,
+    re: /callAI/,
+  },
+  {
+    // 챗 응답은 반드시 데이터 라우터를 거쳐야 함 (존재 확인) — 라우터 우회 직접 응답 생성 회귀 차단
+    name: 'chat.js 데이터 라우터(chatDataRouter) 연결 부재 — 룰베이스 경로가 제거됨',
+    file: 'backend/routes/chat.js',
+    re: /require\(['"]\.\.\/services\/chatDataRouter['"]\)/,
     mustExist: true,
   },
   {
