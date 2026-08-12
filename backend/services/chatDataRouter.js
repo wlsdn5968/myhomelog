@@ -97,6 +97,11 @@ async function _market(query, context) {
     q = context.session.focusProperty.aptName.slice(0, 40);
   }
   if (!q) return `어느 단지가 궁금하세요? 단지명을 함께 적어주세요 (예: "은마 시세", "헬리오시티 실거래").`;
+  // REGION-MARKET-2026-08-12 (KKKKKKK-18): 지역(구·동) 토큰이면 지역 요약 우선 — "공덕 시세"는
+  //   단지가 아니라 동네 질문이다. 단지명("은마" 등)은 sigungu/umd 에 없어 여기서 자연히 걸러지고
+  //   기존 단지 경로로 폴백한다(회귀 없음 — 라이브 재검증으로 확인).
+  const regionAns = await _regionMarket(q);
+  if (regionAns) return regionAns;
   const admin = getSupabaseAdmin();
   if (!admin) return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
   const since = new Date(); since.setMonth(since.getMonth() - 6);
@@ -256,13 +261,14 @@ const SIDO_NAME_TO_PREFIX = { '서울': '11', '부산': '26', '대구': '27', '�
   '울산': '31', '세종': '36', '경기': '41', '충북': '43' };
 
 /**
- * 지역 스코프 인기 단지 — 최근 60일 실거래를 (구 이름 우선 → 동 이름 폴백)으로 스캔해 상위 5개.
+ * 공용 지역 해석기 — 최근 60일 실거래를 (구 이름 우선 → 동 이름 폴백)으로 스캔.
+ * REGION-SHARED-2026-08-12 (Sprint KKKKKKK-18): 인기·시세 두 인텐트가 같은 검증된 경로를 쓴다.
  * [실측 근거 2026-08-12] "노원"→sigungu 노원구 948건 / "공덕"→umd 공덕동(마포) 10건 /
  *   "중구"→6개 시도 산재(대전283·울산240·대구218·서울95·부산16·인천1) — 동명 시군구는 반드시
- *   되묻는다([[region-judgment-by-lawdcd]] 원칙: 판정은 lawd_cd 로, 이름은 표시용).
- * 해석 실패 시 null 반환(호출부가 정직 폴백).
+ *   되묻는다(region-judgment-by-lawdcd 원칙: 판정은 lawd_cd 로, 이름은 표시용).
+ * @returns {Promise<null | {ambiguousSidos: string[], token: string} | {rows, scopeLabel}>}
  */
-async function _regionPopular(regionQuery) {
+async function _resolveRegionRows(regionQuery) {
   const admin = getSupabaseAdmin();
   if (!admin) return null;
   // "서울 중구" 처럼 광역 접두가 오면 분리 — 접두는 lawd_cd prefix 필터로만 쓴다
@@ -278,58 +284,87 @@ async function _regionPopular(regionQuery) {
   const fetchBy = async (col) => {
     const out = []; const PAGE = 1000;
     for (let from = 0; from < 3000; from += PAGE) {
-      let q = admin.from('molit_transactions')
+      const { data, error } = await admin.from('molit_transactions')
         .select('apt_name, sigungu, umd_nm, lawd_cd, deal_amount')
         .ilike(col, `${safe}%`).gte('deal_date', sinceStr)
         .order('deal_date', { ascending: false }).order('id', { ascending: true })
         .range(from, from + PAGE - 1);
-      const { data, error } = await q;
       if (error || !data || !data.length) break;
       out.push(...data);
       if (data.length < PAGE) break;
     }
-    if (out.length >= 3000) logger.warn({ source: 'chat-region-popular', col, region: safe }, '지역 인기 3천행 캡 도달 — 집계가 최신 구간으로 절단됨');
+    if (out.length >= 3000) logger.warn({ source: 'chat-region-resolve', col, region: safe }, '지역 스캔 3천행 캡 도달 — 집계가 최신 구간으로 절단됨');
     return out;
   };
 
   // ① 구 이름 우선 → ② 동 이름 폴백 (실측: "공덕"은 sigungu 에 없고 umd 공덕동에만 있다)
   let rows = await fetchBy('sigungu');
-  let scopeLabel = null;
   if (rows.length) {
     // 동명 시군구 검사 — 시도 prefix 가 2개 이상이면 단정하지 않고 되묻는다
     const sidos = [...new Set(rows.map(t => String(t.lawd_cd || '').slice(0, 2)))];
-    const filtered = sidoPfx ? rows.filter(t => String(t.lawd_cd || '').startsWith(sidoPfx)) : rows;
     if (!sidoPfx && sidos.length > 1) {
-      const names = sidos.map(p => SIDO_BY_PREFIX[p]).filter(Boolean).join('·');
-      return `"${r}" 는 여러 지역에 있어요 (${names}) — 어느 곳인지 광역시·도를 함께 적어주세요.\n예: "서울 ${r} 인기단지" / "대전 ${r} 인기단지"`;
+      return { ambiguousSidos: sidos.map(p => SIDO_BY_PREFIX[p]).filter(Boolean), token: r };
     }
+    const filtered = sidoPfx ? rows.filter(t => String(t.lawd_cd || '').startsWith(sidoPfx)) : rows;
     if (!filtered.length) return null;
-    rows = filtered;
-    scopeLabel = `${SIDO_BY_PREFIX[String(rows[0].lawd_cd || '').slice(0, 2)] || ''} ${rows[0].sigungu}`.trim();
-  } else {
-    rows = await fetchBy('umd_nm');
-    if (!rows.length) return null;
-    if (sidoPfx) rows = rows.filter(t => String(t.lawd_cd || '').startsWith(sidoPfx));
-    if (!rows.length) return null;
-    const umds = [...new Set(rows.map(t => `${t.sigungu} ${t.umd_nm}`))];
-    scopeLabel = umds.length === 1 ? umds[0]
-      : `'${safe}…' 동 일대 (${umds.slice(0, 3).join(' · ')}${umds.length > 3 ? ' 외' : ''})`;
+    const scopeLabel = `${SIDO_BY_PREFIX[String(filtered[0].lawd_cd || '').slice(0, 2)] || ''} ${filtered[0].sigungu}`.trim();
+    return { rows: filtered, scopeLabel };
   }
+  rows = await fetchBy('umd_nm');
+  if (!rows.length) return null;
+  if (sidoPfx) rows = rows.filter(t => String(t.lawd_cd || '').startsWith(sidoPfx));
+  if (!rows.length) return null;
+  const umds = [...new Set(rows.map(t => `${t.sigungu} ${t.umd_nm}`))];
+  const scopeLabel = umds.length === 1 ? umds[0]
+    : `'${safe}…' 동 일대 (${umds.slice(0, 3).join(' · ')}${umds.length > 3 ? ' 외' : ''})`;
+  return { rows, scopeLabel };
+}
 
-  // (단지, 시군구, 동) 그룹핑 → 거래 건수 상위 5
+/** (단지,구,동) 그룹 상위 N — 지역 응답 공용 */
+function _topGroups(rows, n) {
   const groups = new Map();
   for (const t of rows) {
     const k = `${t.apt_name}|${t.sigungu || ''}|${t.umd_nm || ''}`;
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(t);
   }
-  const top = [...groups.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 5);
-  const lines = top.map(([k, v], i) => {
-    const [name, , umd] = k.split('|');
-    const avg = v.reduce((s, t) => s + Number(t.deal_amount || 0), 0) / v.length;
-    return `${i + 1}. ${name}${umd ? ` (${umd})` : ''} — ${v.length}건 · 평균 ${eok(avg)}`;
-  }).join('\n');
-  return `🔥 ${scopeLabel} 최근 60일 거래 많은 단지 TOP ${top.length} (국토부 실거래 ${rows.length}건 기준)\n${lines}\n\n단지명으로 물어보시면 최근 거래 내역을 보여드려요 (예: "${top[0][0].split('|')[0]} 시세").` + DISCLAIMER;
+  return [...groups.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, n);
+}
+const _groupLines = (top) => top.map(([k, v], i) => {
+  const [name, , umd] = k.split('|');
+  const avg = v.reduce((s, t) => s + Number(t.deal_amount || 0), 0) / v.length;
+  return `${i + 1}. ${name}${umd ? ` (${umd})` : ''} — ${v.length}건 · 평균 ${eok(avg)}`;
+}).join('\n');
+
+async function _regionPopular(regionQuery) {
+  const res = await _resolveRegionRows(regionQuery);
+  if (!res) return null;
+  if (res.ambiguousSidos) {
+    return `"${res.token}" 는 여러 지역에 있어요 (${res.ambiguousSidos.join('·')}) — 어느 곳인지 광역시·도를 함께 적어주세요.\n예: "${res.ambiguousSidos[0]} ${res.token} 인기단지"`;
+  }
+  const top = _topGroups(res.rows, 5);
+  return `🔥 ${res.scopeLabel} 최근 60일 거래 많은 단지 TOP ${top.length} (국토부 실거래 ${res.rows.length}건 기준)\n${_groupLines(top)}\n\n단지명으로 물어보시면 최근 거래 내역을 보여드려요 (예: "${top[0][0].split('|')[0]} 시세").` + DISCLAIMER;
+}
+
+/**
+ * 지역 시세 요약 — REGION-MARKET-2026-08-12 (Sprint KKKKKKK-18, 운영자 "검색 자체가 더 많이"):
+ * "공덕 시세"·"노원구 시세"처럼 지역 단위 시세 질문에 60일 요약(건수·평균·범위·상위 단지)으로 답한다.
+ */
+async function _regionMarket(regionQuery) {
+  const res = await _resolveRegionRows(regionQuery);
+  if (!res) return null;
+  if (res.ambiguousSidos) {
+    return `"${res.token}" 는 여러 지역에 있어요 (${res.ambiguousSidos.join('·')}) — 어느 곳인지 광역시·도를 함께 적어주세요.\n예: "${res.ambiguousSidos[0]} ${res.token} 시세"`;
+  }
+  const amounts = res.rows.map(t => Number(t.deal_amount || 0)).filter(v => v > 0);
+  if (!amounts.length) return null;
+  const avg = amounts.reduce((s, v) => s + v, 0) / amounts.length;
+  const min = Math.min(...amounts), max = Math.max(...amounts);
+  const top = _topGroups(res.rows, 3);
+  return `📊 ${res.scopeLabel} 최근 60일 실거래 요약 (국토부 ${res.rows.length}건)\n` +
+    `· 단순평균 ${eok(avg)} · 거래 범위 ${eok(min)} ~ ${eok(max)} (평형·연식 섞인 전체 범위예요)\n\n` +
+    `거래 많은 단지:\n${_groupLines(top)}\n\n` +
+    `특정 단지가 궁금하면 "단지명 시세"로 물어보세요 (예: "${top[0][0].split('|')[0]} 시세").` + DISCLAIMER;
 }
 
 function _jeonseGuide(query) {

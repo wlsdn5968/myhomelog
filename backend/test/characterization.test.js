@@ -552,3 +552,13 @@ test('chatDataRouter — 지역 스코프 인기 단지 추출 (KKKKKKK-17, 운�
   assert.equal(typeof reply, 'string');
   assert.ok(reply.length > 20);
 });
+
+test('chatDataRouter — 지역 시세 요약 확장, env 무관 성립 (KKKKKKK-18)', async () => {
+  const { route } = require('../services/chatDataRouter');
+  // env/DB 없이: 지역 해석기 null → 기존 단지 경로 안내로 자연 폴백 (throw 없이 성립)
+  for (const msg of ['공덕 시세', '노원구 시세', '시세 알려줘']) {
+    const { reply } = await route(msg, null);
+    assert.equal(typeof reply, 'string');
+    assert.ok(reply.length > 20, `빈 응답: ${msg}`);
+  }
+});
