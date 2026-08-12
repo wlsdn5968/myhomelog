@@ -101,7 +101,14 @@ async function _market(query, context) {
     if (!groups.has(k)) groups.set(k, []);
     groups.get(k).push(t);
   }
-  const sorted = [...groups.entries()].sort((a, b) => b[1].length - a[1].length);
+  // NAME-RANK-2026-08-12 (라이브 실채팅에서 발각): 거래 건수만으로 정렬하면 부분문자열 오매칭이
+  //   1위를 먹는다 — 실사고: "은마"(강남, 20건)가 "동탄시범**다은마**을…"(35건)에 밀렸다.
+  //   **이름 정확일치 > 접두 일치 > 부분 포함** 순으로 먼저 가르고, 같은 등급 안에서만 건수순.
+  const _rank = (name) => name === q ? 3 : name.startsWith(q) ? 2 : 1;
+  const sorted = [...groups.entries()].sort((a, b) => {
+    const ra = _rank(a[0].split('|')[0]), rb = _rank(b[0].split('|')[0]);
+    return rb !== ra ? rb - ra : b[1].length - a[1].length;
+  });
   const [topKey, txs] = sorted[0];
   const [aptName, sigungu] = topKey.split('|');
   const avg = txs.reduce((s, t) => s + Number(t.deal_amount || 0), 0) / txs.length;
@@ -167,7 +174,7 @@ async function _regulation(message) {
   } catch (_) { /* snapshot 실패 → 일반 안내 */ }
   const basis = '(2025.10.15 대책 + 2026.6.30 확대 기준)';
   if (kw) {
-    return `📍 "${kw}" 는 현행 규제지역 목록에 있어요 ${basis}\n` +
+    return `📍 "${kw}" — 현행 규제지역 목록에 있는 지역이에요 ${basis}\n` +
       '· 투기과열지구·조정대상지역 — LTV 40%(무주택 기준)·대출한도 제한·전입 의무 등 적용\n' +
       '· 상세 항목별 내용은 📋 규제요약 버튼(아래)에서 표로 볼 수 있어요.' + DISCLAIMER;
   }
