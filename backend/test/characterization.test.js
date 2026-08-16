@@ -2469,3 +2469,21 @@ test('인기 단지 범례·학군 칩이 실제 동작을 숨기지 않는다 (
     'propertyService 가 schoolNeeded 를 쓰기 시작했다면 칩 안내를 다시 판단할 것');
   assert.ok(html.includes('(보고서 반영)'), '학군 칩이 반영 범위를 밝히지 않는다 — 죽은 입력으로 보인다');
 });
+
+test('시세 "평균"·노후 배지가 실제 계산 기준을 밝힌다 (Sprint MMMMMMM-9)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const tx = fs.readFileSync(path.join(__dirname, '../services/transactionService.js'), 'utf8');
+
+  // ① 시세는 단순평균이 아니라 반감기 90일 가중평균이다 — 화면의 거래 목록으로 재현되지 않는다.
+  //    설계 전제를 함께 고정: 이 계산이 단순평균으로 바뀌면 라벨도 되돌려야 한다.
+  assert.ok(tx.includes('function _weightedMean'), '_weightedMean 이 사라졌다 — 라벨 근거를 다시 볼 것');
+  assert.ok(tx.includes('Math.exp(-daysAgo / 90)'), '가중치 반감기가 바뀌었다');
+  assert.ok(html.includes('최근 6개월 실거래 가중평균'), '평형별 시세 라벨이 가중평균임을 밝히지 않는다');
+  assert.ok(html.includes('6개월 가중평균(최근 거래 가중)'), '추천 카드 가격 기준 라벨이 부정확하다');
+
+  // ② 노후 기준이 화면마다 다르다 — 배지 25년 / 리스크 30년. 배지에 기준을 밝혀 혼선을 없앤다.
+  assert.ok(html.includes("tags.push('🏚 노후 25년+')"), '노후 배지가 기준 연수를 밝히지 않는다');
+  assert.ok(html.includes('age != null && age >= 30'), '리스크 탭의 30년 기준이 바뀌었다 — 배지 표기도 함께 볼 것');
+});

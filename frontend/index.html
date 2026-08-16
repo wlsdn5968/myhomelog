@@ -5487,7 +5487,7 @@ async function doSearch(){
         const lng = (p.lng!=null) ? Number(p.lng) : getLng(p.area,i);
         // PRICE-BASIS-2026-07-17 (Sprint XXXXX): 추천 avgPrice = 대표 평형(primaryPyeong) 6개월 평균 —
         //   상세(openAptDetail)의 "최근 N건 평균"과 정의가 달라 같은 단지가 다른 값으로 보이던 혼란을 라벨로 명시.
-        return {...p, lat, lng, _priceBasis:'회원님 평형대 · 6개월 평균', type:_isRegProp(p)?'regulated':'non'};
+        return {...p, lat, lng, _priceBasis:'회원님 평형대 · 6개월 가중평균(최근 거래 가중)', type:_isRegProp(p)?'regulated':'non'};
       });
       searchMeta={
         regions:(data.targetRegions||[]).map(r=>r.name).filter(Boolean),
@@ -6615,7 +6615,7 @@ function showDetail(p){
     : '';
   // 평형별 현재 시세 (최근 거래 기반)
   const pyeongHtml = (p.currentPriceByPyeong||[]).length
-    ? `<div style="font-size:11px;font-weight:700;color:var(--t2);margin:0 0 8px">📐 평형별 현재 시세 <span style="font-weight:500;color:var(--t3)">· 최근 6개월 실거래 평균</span></div>
+    ? `<div style="font-size:11px;font-weight:700;color:var(--t2);margin:0 0 8px">📐 평형별 현재 시세 <span style="font-weight:500;color:var(--t3)" title="최근 거래에 더 큰 가중치를 주는 가중평균입니다(반감기 90일). 아래 거래 목록을 단순 평균한 값과는 다를 수 있어요.">· 최근 6개월 실거래 가중평균</span></div>
        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
          ${p.currentPriceByPyeong.map(cp=>`
            <div style="background:#F7F9FC;border:1px solid var(--bd);border-radius:8px;padding:9px 11px">
@@ -6736,7 +6736,7 @@ function showDetail(p){
       const age = yr ? (new Date().getFullYear() - yr) : null;
       if (age != null) {
         if (age <= 5) tags.push('🆕 신축');
-        else if (age >= 25) tags.push('🏚 노후');
+        else if (age >= 25) tags.push('🏚 노후 25년+');  // AGE-LABEL-2026-08-17: 리스크 탭의 '노후 단지 유지·수선' 은 30년 기준이라 서로 다르다 — 배지에 기준을 밝힌다
       }
     }
     return `<div style="font-size:11px;color:var(--t3);margin-bottom:8px">출처: 한국부동산원 KAPT 공동주택 기본정보 (data.go.kr)</div>
