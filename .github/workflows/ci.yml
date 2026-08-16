@@ -42,6 +42,20 @@ jobs:
         working-directory: backend
         run: npm audit --omit=dev --audit-level=high
 
+      # ── dev 트리 가시성 (비차단) — 감사 #15·#34 ────────────────────────────
+      # [왜] 위 두 게이트는 `--omit=dev` 라 개발 의존성(eslint 계열 68패키지 등)이
+      #   **아무 신호도 남기지 않는다**. 그 판단 자체는 맞다 — dev 취약점으로 배포를 막으면
+      #   실익 없이 릴리스만 멈춘다. 문제는 "막지 않는다"가 "보이지도 않는다"가 된 것이다.
+      # [그래서] 차단하지 않되(`|| true`) 로그에는 남긴다. critical 만 본다 — 노이즈를 만들면
+      #   아무도 안 읽고, 그럼 없는 것과 같다.
+      # ⚠ 이 스텝은 **절대 실패하면 안 된다**. 게이트로 승격하려면 별도 결정이 필요하다.
+      - name: npm audit (dev 트리 포함 — 가시성 전용, 비차단)
+        run: |
+          echo "── root (dev 포함) ──"
+          npm audit --audit-level=critical || true
+          echo "── backend (dev 포함) ──"
+          (cd backend && npm audit --audit-level=critical || true)
+
   syntax-check:
     name: Syntax Check
     runs-on: ubuntu-latest

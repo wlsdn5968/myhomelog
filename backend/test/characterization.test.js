@@ -124,8 +124,22 @@ test('_regLtvLabel(프론트) — lawd_cd 스코프 가드로 지방 동명 구 
   //   이 하네스도 window 를 넘겨야 한다. 여기서는 **미로드 상태**(undefined)를 준다 —
   //   그때도 서울은 보수적으로 40% 여야 한다는 것이 아래 두 단언의 뜻이다.
   //   (해제 시나리오는 별도 테스트 '서울 규제 해제 시나리오' 에서 실제 isRegFront 와 함께 본다.)
+  //
+  // ★★ 감사 #29 (2026-08-16): 예전엔 SEOUL_GU_KW 를 `['강서','중구']` 로 **손으로 축약**해 넘겼다.
+  //   그런데 실제 목록은 '중구' 를 **의도적으로 뺐다**(지방 중구 오판 방지, index.html 주석).
+  //   즉 없는 값을 넣은 탓에 "서울 중구가 40%" 인 이유가 lawd_cd 가드 때문인지 그 가짜 키워드
+  //   때문인지 **구별되지 않았다** — 스텁이 정답을 만들어 준 셈이다.
+  //   → 실제 배열을 소스에서 추출해 쓴다. 그래야 아래 중구 단언이 lawd_cd 경로를 증명한다.
+  const kwM = html.match(/const SEOUL_GU_KW\s*=\s*\[[\s\S]*?\];/);
+  assert.ok(kwM, 'frontend/index.html 에서 SEOUL_GU_KW 를 찾지 못했다');
+  const SEOUL_GU_KW = new Function(`${kwM[0]}; return SEOUL_GU_KW;`)();
+  assert.ok(SEOUL_GU_KW.includes('강서'),
+    "SEOUL_GU_KW 에 '강서' 가 없다 — 부산 강서구 오판 케이스의 전제가 사라졌다(테스트도 갱신할 것)");
+  assert.equal(SEOUL_GU_KW.includes('중구'), false,
+    "SEOUL_GU_KW 에 '중구' 가 들어갔다 — 지방 중구를 서울로 오판한다(의도적으로 빼둔 값이다)");
+
   const _regLtvLabel = new Function('isRegFront', 'SEOUL_GU_KW', 'window',
-    `${m[0]}; return _regLtvLabel;`)(() => true, ['강서', '중구'], { __REG_KW: undefined });
+    `${m[0]}; return _regLtvLabel;`)(() => true, SEOUL_GU_KW, { __REG_KW: undefined });
 
   assert.equal(_regLtvLabel('서울 강남구', '11680'), '40%');  // 서울 = 규제
   assert.equal(_regLtvLabel('서울 중구', '11140'), '40%');    // 서울 중구(동명) = 규제
@@ -797,6 +811,26 @@ test('_softQuery — reject 를 error 로 정규화해 Promise.all 이 통째로
   ]);
   assert.ok(a.error, 'reject 가 error 로 오지 않음');
   assert.equal(b.data.length, 1, '다른 쿼리 결과가 유실됨 → 강등 대신 500 이 된다');
+
+  // ★★ 감사 #7: 위 케이스들은 전부 **reject** 경로인데, postgrest-js 는 실제로 reject 하지 않는다
+  //   (구현 주석 참조 — 이 헬퍼의 reject 분기는 라이브러리 변경에 대비한 방어층이다).
+  //   운영에서 진짜 일어나는 건 **error 를 담은 resolve** 이고, 그 경로에서 _softQuery 가 해야 할 일은
+  //   "아무것도 하지 않는 것"이다. 변형하면 뒤이은 _isAbortErr 판정이 깨져 우리가 의도적으로 끊은
+  //   요청이 'molit-error' 로 분류되고 **Sentry 이슈가 매일 쌓인다.**
+  //   → 실제 shape 를 넣어 (a) 원형 보존 (b) 그 error 가 abort 로 판정됨 을 함께 못 박는다.
+  const realShape = {
+    data: null,
+    error: {
+      message: 'TimeoutError: The operation was aborted due to timeout',
+      details: '', hint: '', code: '',
+    },
+  };
+  const passed = await _softQuery(Promise.resolve(realShape));
+  assert.deepEqual(passed, realShape,
+    '_softQuery 가 postgrest 의 실패 resolve 를 변형했다 — 원형 그대로 통과해야 한다');
+  const { _isAbortErr } = require('../routes/search');
+  assert.equal(_isAbortErr(passed.error), true,
+    '통과된 error 를 abort 로 판정하지 못한다 — 의도한 중단이 오류로 집계되고 Sentry 이슈가 매일 생긴다');
 });
 
 test('_isAbortErr — 우리가 끊은 요청만 abort 로 보고, 진짜 오류는 Sentry 로 보낸다', () => {
