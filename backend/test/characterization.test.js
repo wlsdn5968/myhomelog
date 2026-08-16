@@ -1414,7 +1414,12 @@ function _authorizeCron() {
 
 test('authorizeCron — cron 게이트: 시크릿 미설정 차단 + 헤더 조합별 판정', () => {
   const authorizeCron = _authorizeCron();
-  const SECRET = 'cron-secret-1234567890';
+  // ⚠ 픽스처 값은 반드시 `xxx…` 형태로 둘 것 — `.gitleaks.toml` 의 allowlist(`xxx+`)에 걸리도록.
+  //   실사례: 처음엔 변수명 SECRET 에 하이픈+숫자 섞인 문자열을 넣었다가 gitleaks 의
+  //   generic-api-key 가 엔트로피 4.09 로 잡아 **CI 가 빨갛게 됐다**(run 31933274554). 같은 레포에서
+  //   `key: 'acquisition_tax_2025'` 픽스처로 한 번 겪은 것과 같은 함정이다.
+  //   설정을 완화하는 대신(=.gitleaks.toml 주석의 "전면 완화 금지") 픽스처를 더미답게 만든다.
+  const TOKEN = 'xxxxxxxx-cron-fixture-xxxxxxxx';
   const call = (authHeader, secret) => {
     const saved = process.env.CRON_SECRET;
     if (secret === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = secret;
@@ -1431,32 +1436,32 @@ test('authorizeCron — cron 게이트: 시크릿 미설정 차단 + 헤더 조�
 
   // ★ CRON_SECRET 미설정 → 403 으로 완전 차단. 여기서 열리면 배포 사고 시 아무나
   //   retention(복구 불가 hard delete)을 강제 실행할 수 있다.
-  assert.deepEqual(call(`Bearer ${SECRET}`, undefined), { status: 403, nexted: false });
+  assert.deepEqual(call(`Bearer ${TOKEN}`, undefined), { status: 403, nexted: false });
   assert.deepEqual(call(undefined, undefined), { status: 403, nexted: false });
 
   // 정상 토큰만 통과
-  assert.deepEqual(call(`Bearer ${SECRET}`, SECRET), { status: null, nexted: true });
+  assert.deepEqual(call(`Bearer ${TOKEN}`, TOKEN), { status: null, nexted: true });
 
   // 헤더 없음 / Bearer 접두 없음 / 다른 스킴 → 전부 401
-  assert.deepEqual(call(undefined, SECRET), { status: 401, nexted: false });
-  assert.deepEqual(call('', SECRET), { status: 401, nexted: false });
-  assert.deepEqual(call(SECRET, SECRET), { status: 401, nexted: false });          // 접두 없이 값만
-  assert.deepEqual(call(`Basic ${SECRET}`, SECRET), { status: 401, nexted: false });
+  assert.deepEqual(call(undefined, TOKEN), { status: 401, nexted: false });
+  assert.deepEqual(call('', TOKEN), { status: 401, nexted: false });
+  assert.deepEqual(call(TOKEN, TOKEN), { status: 401, nexted: false });          // 접두 없이 값만
+  assert.deepEqual(call(`Basic ${TOKEN}`, TOKEN), { status: 401, nexted: false });
   // 접두 대소문자는 구분한다(현재 동작 고정)
-  assert.deepEqual(call(`bearer ${SECRET}`, SECRET), { status: 401, nexted: false });
+  assert.deepEqual(call(`bearer ${TOKEN}`, TOKEN), { status: 401, nexted: false });
 
   // ★ 길이가 다른 토큰 — timingSafeEqual 예외 없이 401 이어야 한다(사전 길이 체크 계약)
-  assert.deepEqual(call('Bearer x', SECRET), { status: 401, nexted: false });
-  assert.deepEqual(call(`Bearer ${SECRET}x`, SECRET), { status: 401, nexted: false });
-  assert.deepEqual(call('Bearer ', SECRET), { status: 401, nexted: false });
+  assert.deepEqual(call('Bearer x', TOKEN), { status: 401, nexted: false });
+  assert.deepEqual(call(`Bearer ${TOKEN}x`, TOKEN), { status: 401, nexted: false });
+  assert.deepEqual(call('Bearer ', TOKEN), { status: 401, nexted: false });
 
   // 같은 길이·다른 값 → 401 (비교 자체가 동작하는지)
-  const sameLenWrong = 'X'.repeat(SECRET.length);
-  assert.equal(sameLenWrong.length, SECRET.length);
-  assert.deepEqual(call(`Bearer ${sameLenWrong}`, SECRET), { status: 401, nexted: false });
+  const sameLenWrong = 'X'.repeat(TOKEN.length);
+  assert.equal(sameLenWrong.length, TOKEN.length);
+  assert.deepEqual(call(`Bearer ${sameLenWrong}`, TOKEN), { status: 401, nexted: false });
 
   // 토큰 앞뒤 공백은 trim 후 비교(현재 동작 고정 — 스케줄러가 개행을 붙이는 사고 대비)
-  assert.deepEqual(call(`Bearer ${SECRET}  `, SECRET), { status: null, nexted: true });
+  assert.deepEqual(call(`Bearer ${TOKEN}  `, TOKEN), { status: null, nexted: true });
 });
 
 // ── Plan 016 (2026-08-16): 규제 판정 두 경로 정합 (REG-DUAL-PATH-FIX) ──
