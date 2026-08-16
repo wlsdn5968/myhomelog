@@ -126,6 +126,17 @@ const CHECKS = [
     re: /detectPII\(\s*collectClientPIIText\(/,
     mustExist: true,
   },
+  {
+    // HEALTH-PII-2026-08-16 (Plan 024): 무인증 `/api/health` 가 **사용자 챗 원문**을 반환하던 결함.
+    //   `chatint:misses` 에는 chatDataRouter.js 가 `String(message).slice(0, 80)` 로 사용자 입력을
+    //   그대로 넣고, /api/health 는 optionalAuth 라 익명도 호출한다 → 익명 방문자가 남의 챗 10건을
+    //   읽을 수 있었다(2026-08-16 라이브 확인). 관리자일 때만 **조회 자체를** 하도록 고쳤다.
+    //   이 가드는 관리자 게이트가 사라지는 회귀를 막는다.
+    name: 'server.js 가 chatint:misses 를 관리자 게이트(_isAdmin) 없이 조회 — 무인증 health 로 챗 원문 유출',
+    file: 'backend/server.js',
+    re: /_isAdmin\s*\?\s*r\.lrange\(\s*['"]chatint:misses['"]/,
+    mustExist: true,
+  },
 ];
 
 function main() {
