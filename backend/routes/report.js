@@ -1355,7 +1355,7 @@ function buildReportPrompt(input, policy, candidates, freeCtx) {
     ].filter(Boolean).join(' | ');
     return `${i + 1}. ${displayName} (${c.sigungu} ${c.umd_nm})
    - 준공: ${c.build_year || '미상'}년 / 세대수: ${householdsStr}
-   - 회원님 평형대 (${c.areas.map(a => `${a}㎡(${Math.round(a / 3.3)}평)`).join(', ')}) 만 노출됨
+   - 회원님 평형대 (${c.areas.map(a => `${a}㎡(${Math.round(a / 3.3058)}평)`).join(', ')}) 만 노출됨
    - 회원님 평형대 평균가: ${(c.avgPrice / 10000).toFixed(2)}억원 (해당 평형 ${c.n}건 거래, 최근 ${c.latest})
    - 객관 fact: ${factsList || '데이터 부족'}
    - 매칭 점수: ${c.score}점 (${breakdownStr})`;

@@ -59,7 +59,13 @@ function filterAnomalies(transactions) {
   // 평형별 그룹화 (3.3㎡ = 1평 기준 반올림)
   const groups = {};
   for (const t of transactions) {
-    const py = Math.round((t.excluUseAr || 0) / 3.3);
+    // PYEONG-M2-2026-08-17 (Sprint MMMMMMM-10): 평↔㎡ 계수가 저장소 안에서 3.3 과 3.3058 로 갈려 있었다.
+    //   정확값은 1평 = 3.305785㎡ 이고, 이미 analysisService 에 _PYEONG_M2 = 3.3058 이 있었는데
+    //   다른 자리들이 어림값 3.3 을 쓰고 있었다. 3.3058 로 통일한다.
+    //   [영향 실측] 20~250㎡ 전 구간에서 반올림 결과가 갈리는 비율 7.2%. 다만 실제 대표 평형
+    //   (59.82·84.92·114.97·134.9·164.9㎡)은 **전부 동일**하고, 불일치는 21~25㎡ 같은 소형 구간에 몰린다.
+    //   ⚠ 회귀 위험: 평형 필터(15~60평) 경계에 걸린 극소수 매물이 들고날 수 있다.
+    const py = Math.round((t.excluUseAr || 0) / 3.3058);
     if (!groups[py]) groups[py] = [];
     groups[py].push(t);
   }

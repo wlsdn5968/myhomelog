@@ -2487,3 +2487,23 @@ test('시세 "평균"·노후 배지가 실제 계산 기준을 밝힌다 (Sprin
   assert.ok(html.includes("tags.push('🏚 노후 25년+')"), '노후 배지가 기준 연수를 밝히지 않는다');
   assert.ok(html.includes('age != null && age >= 30'), '리스크 탭의 30년 기준이 바뀌었다 — 배지 표기도 함께 볼 것');
 });
+
+test('평↔㎡ 환산 계수가 저장소 전체에서 하나다 (Sprint MMMMMMM-10)', () => {
+  // 정확값 1평 = 3.305785㎡. 예전엔 3.3(어림)과 3.3058 이 섞여 있었다.
+  // 실측: 20~250㎡ 전 구간 반올림 불일치 7.2%, 다만 대표 평형(59.82·84.92·114.97·134.9·164.9)은 전부 동일.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const files = ['../routes/report.js', '../services/analysisService.js', '../services/transactionService.js',
+                 '../../frontend/index.html'];
+  for (const f of files) {
+    const src = fs.readFileSync(path.join(__dirname, f), 'utf8');
+    // 어림값이 나눗셈에 다시 쓰이면 실패 — 주석·문서의 '3.3' 은 잡지 않도록 나눗셈 형태만 본다
+    assert.equal(src.includes('/ 3.3)'), false, `${f} 에 어림 계수 나눗셈이 되돌아왔다`);
+    assert.equal(src.includes('/ 3.3;'), false, `${f} 에 어림 계수 나눗셈이 되돌아왔다`);
+    assert.equal(src.includes('/3.3)'), false, `${f} 에 어림 계수 나눗셈이 되돌아왔다`);
+  }
+  // 정확 계수가 실제로 쓰이고 있는지(전부 지워지는 사고 방지)
+  const ana = fs.readFileSync(path.join(__dirname, '../services/analysisService.js'), 'utf8');
+  assert.ok(ana.includes('_PYEONG_M2 = 3.3058'), '기준 상수가 사라졌다');
+  assert.ok(ana.includes('/ 3.3058'), 'analysisService 가 정확 계수를 쓰지 않는다');
+});
