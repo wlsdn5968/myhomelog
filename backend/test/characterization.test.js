@@ -1470,6 +1470,58 @@ test('중개보수 tier — 스냅샷 경로와 법정 폴백이 모든 경계�
   const ACQ_TIERS = [{ rate: 0.01, underAuk: 6 }, { rate: 0.02, underAuk: 9 }, { rate: 0.03, underAuk: 999 }];
   assert.equal(frontIncl(ACQ_TIERS, 6, 0.03), 0.01, '취득세 6억 정확히는 1%(지방세법 §11①8호 6억 이하)여야 한다');
   assert.equal(frontIncl(ACQ_TIERS, 9, 0.03), 0.02, '취득세 9억 정확히는 누진구간(2% tier)이어야 한다');
+
+  // ★★ 배선(wiring) 계약 — 헬퍼가 옳아도 **호출부가 틀린 헬퍼를 부르면** 사고가 그대로 재현된다.
+  //   [실측 근거] 위 단언들만 있을 때 회귀 주입(호출부를 `_pickTierRateUnder` → `_pickTierRate` 로
+  //   되돌림)을 했더니 **65개 전부 통과했다** — 원래 사고를 그대로 되돌려도 못 잡았다.
+  //   함수 단위 테스트는 "함수가 옳은가"만 보고 "누가 그 함수를 쓰는가"는 안 본다.
+  const feSrc = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const feCall = feSrc.split('\n').find((l) => /cr\s*=\s*_pickTierRate\w*\(tc\.commission/.test(l));
+  assert.ok(feCall, '프론트에서 중개보수 요율 선택 호출부를 찾지 못했다 (형태 변경 시 이 테스트도 갱신할 것)');
+  assert.match(feCall, /_pickTierRateUnder\(tc\.commission/,
+    `프론트 중개보수가 '이하' 헬퍼를 쓰고 있다 — 별표1 은 '미만' 경계다: ${feCall.trim()}`);
+
+  const beCall = beSrc.split('\n').find((l) => /commRate\s*=\s*pickTierRate\w*\(taxConfig\.commission/.test(l));
+  assert.ok(beCall, '백엔드에서 중개보수 요율 선택 호출부를 찾지 못했다');
+  assert.match(beCall, /pickTierRateUnder\(taxConfig\.commission/,
+    `백엔드 중개보수가 '이하' 헬퍼를 쓰고 있다: ${beCall.trim()}`);
+
+  // 취득세 호출부는 반대로 '이하' 헬퍼여야 한다(Under 를 잘못 쓰면 6억에서 다시 1,200만원 과다).
+  //   ⚠ `rate = _pickTierRate…(at.` 형태만 잡는다. 처음엔 `\((at|tiers)\b` 로 느슨하게 썼다가
+  //   **함수 정의 줄까지 매칭**해 테스트가 자기 자신 때문에 실패했다(2026-08-16 실측) —
+  //   소스 텍스트 기반 단언은 정의/호출을 반드시 구분할 것.
+  const acqCalls = feSrc.split('\n').filter((l) => /rate\s*=\s*_pickTierRate\w*\(at\./.test(l));
+  assert.ok(acqCalls.length >= 2,
+    `취득세 호출부를 ${acqCalls.length}개만 찾았다 — 형태 변경 시 이 테스트도 갱신할 것`);
+  for (const l of acqCalls) {
+    assert.ok(!/_pickTierRateUnder/.test(l),
+      `취득세 호출부가 '미만' 헬퍼를 쓰고 있다 — §11①8호는 '6억 이하'다: ${l.trim()}`);
+  }
+});
+
+// ── Plan 023-2: cron 인증 **배선** 계약 (감사 워크플로 지적 — 함수만 보고 router.use 는 안 봤다) ──
+//   `authorizeCron` 함수 자체는 아래 테스트가 12개 조합으로 고정하지만, 그 함수가 **라우터에
+//   실제로 물려 있는지**는 아무도 안 봤다. `router.use(authorizeCron)` 한 줄이 사라지면
+//   실거래 재적재·apt_master 동기화·retention hard delete(복구 불가)가 인증 없이 열리는데
+//   테스트는 초록이다. 위 중개보수 배선 누락과 **같은 클래스**라 함께 막는다.
+test('cron 라우터 배선 — authorizeCron 이 모든 엔드포인트 앞에 물려 있다', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../routes/cron.js'), 'utf8');
+  const lines = src.split('\n');
+
+  const useIdx = lines.findIndex((l) => /^\s*router\.use\(\s*authorizeCron\s*\)/.test(l));
+  assert.ok(useIdx >= 0, 'cron.js 에 `router.use(authorizeCron)` 이 없다 — 모든 cron 엔드포인트가 무인증으로 열린다');
+
+  // ★ 라우트 정의보다 **먼저** 와야 한다. 뒤에 오면 앞선 라우트는 게이트를 통과하지 않는다.
+  const firstRouteIdx = lines.findIndex((l) => /^\s*router\.(get|post|put|patch|delete)\s*\(/.test(l));
+  assert.ok(firstRouteIdx >= 0, 'cron.js 에서 라우트 정의를 찾지 못했다');
+  assert.ok(useIdx < firstRouteIdx,
+    `router.use(authorizeCron) 이 첫 라우트(${firstRouteIdx + 1}행)보다 뒤(${useIdx + 1}행)에 있다 — 앞선 라우트가 무인증이다`);
+
+  // 이 파일이 실제로 여러 cron 엔드포인트를 들고 있는지도 확인(빈 파일이면 위 단언이 무의미해진다)
+  const routeCount = lines.filter((l) => /^\s*router\.(get|post|put|patch|delete)\s*\(/.test(l)).length;
+  assert.ok(routeCount >= 5, `cron 라우트가 ${routeCount}개뿐 — 파일 구조가 바뀌었는지 확인할 것`);
 });
 
 // ── Plan 015 (2026-08-16): cron 인증 게이트 (`backend/routes/cron.js` authorizeCron) ──
