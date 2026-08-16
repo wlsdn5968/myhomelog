@@ -2189,13 +2189,14 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
           <div style="font-size:13px;font-weight:800;color:var(--info-tx)">총 가점: <span id="cs_total">—</span>점 / 84점</div>
           <div style="font-size:10.5px;color:var(--t2);margin-top:5px;line-height:1.7" id="cs_tier">예상 당첨 가능 분양: <b>참고치</b> — 실제 당첨 커트라인은 청약Home 공고 확인.</div>
         </div>
-        <!-- Phase 4 (2026-04-26): 당첨 커트라인 통계 — 한국부동산원 2024-2025 평균 -->
+        <!-- Phase 4 (2026-04-26): 당첨 가점 개략 범위 — 청약Home 단지별 공고 참고(2024~2025).
+             ⚠ '한국부동산원 공표 평균 통계'가 아니다 — 귀속 근거 미확인(Sprint OOOOOOO-4 주석 참조). -->
         <div style="margin-top:10px;padding:9px 11px;background:var(--accent-50);border-radius:8px;border:1px solid var(--accent-100)">
           <!-- SUBS-LABEL-2026-08-16 (Sprint OOOOOOO): '최근' 제거 — 2026-08 기준 2024~2025 는 최근이 아니다.
                출처·기간은 이미 병기돼 있고 바로 위(2190행)에 "참고치 · 실제는 청약Home 공고 확인" 면책이
                있어 절대 룰 ②(출처 명시)는 충족 상태 → 수식어만 정정하고 수치는 건드리지 않는다.
                ⚠ 수치 자체의 최신화는 공식 통계 재확인이 필요한 별도 사안(운영자 판단) — 추측 갱신 금지. -->
-          <div style="font-size:11px;font-weight:700;color:var(--accent-700);margin-bottom:6px">📊 당첨 커트라인 참고 통계 (한국부동산원 2024~2025 평균)</div>
+          <div style="font-size:11px;font-weight:700;color:var(--accent-700);margin-bottom:6px">📊 당첨 가점 개략 범위 (청약Home 공고 참고 · 2024~2025)</div>
           <table style="width:100%;font-size:10.5px;color:var(--t2);border-collapse:collapse">
             <tbody>
               <tr><td style="padding:3px 0">서울 강남·서초·송파 인기 단지</td><td style="text-align:right;font-weight:700;color:#A82525">68~75점</td></tr>
@@ -2207,7 +2208,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
               <tr><td style="padding:3px 0">지방 일반</td><td style="text-align:right;font-weight:700;color:#1F7A3A">25~45점</td></tr>
             </tbody>
           </table>
-          <div style="font-size:9.5px;color:var(--t3);margin-top:5px;line-height:1.4">※ 단지·평형·시점별 편차 큼. 특별공급(생초·신혼·다자녀·신생아)은 별도 자격. 출처: 한국부동산원 청약Home 통계</div>
+          <div style="font-size:9.5px;color:var(--t3);margin-top:5px;line-height:1.4">※ 단지·평형·시점별 편차 큼. 특별공급(생초·신혼·다자녀·신생아)은 별도 자격.<br>※ 위 범위는 <b>청약Home 단지별 당첨 가점 공고를 참고한 개략 값</b>이며, 기관이 공표한 지역별 평균 통계가 아닙니다. 실제 커트라인은 <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="color:var(--acc)">청약Home</a> 공고에서 확인하세요.</div>
         </div>
         <div style="font-size:9.5px;color:var(--t3);margin-top:8px;line-height:1.6">
           ※ 본 계산기는 일반공급 가점제 기준 (특별공급은 별도 자격). 실제 가점은 <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="color:var(--acc)">청약Home</a> 마이페이지에서 확인 가능.<br>
@@ -2346,7 +2347,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
       <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">📅 청약 · 뉴스 · 계약 타임라인 (부가 도구)</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
-        <b>📅 청약</b>: 한국부동산원 청약Home 일정 + 가점 계산기 (84점) + 지역별 당첨 커트라인 통계<br>
+        <b>📅 청약</b>: 한국부동산원 청약Home 일정 + 가점 계산기 (84점) + 지역별 당첨 가점 개략 범위<br>
         <b>📰 뉴스</b>: 부동산 뉴스 6개 카테고리 + 30분 주기 갱신 + 3줄 시황(AI 요약 또는 공식 통계 자동 전환)<br>
         <b>📅 계약 타임라인</b>: 좌측 사이드바(모바일은 ☰ 메뉴) — 계약일·잔금일 입력 → D-day 자동 계산
       </div>
@@ -10206,7 +10207,15 @@ async function openAptDetail(r) {
 
 // ── 청약 가점 계산기 (P1 D 감사 4) ────────────────────────
 // 일반공급 가점제 84점 만점 = 무주택 32 + 부양가족 35 + 청약통장 17
-// 실제 청약 커트라인 통계 (한국부동산원 2024-2025 평균):
+// SUBS-SOURCE-2026-08-16 (Sprint OOOOOOO-4): 종전 주석·UI 는 이 수치를 "한국부동산원 2024-2025 평균"
+//   이라고 **기관 공표 통계처럼** 귀속했으나, 공식 확인 결과 그렇게 단정할 근거를 찾지 못했다.
+//   · 한국부동산원 청약업무 페이지는 "지역·면적·유형별 청약경쟁률·계약률·청약가점 **모니터링**"만 기술하고
+//     지역별 평균 커트라인의 **정기 공표 여부는 명시하지 않는다**(2026-08-16 확인).
+//   · 게다가 아래 지역 구분("경기 인기(분당·판교·과천)"·"인천 송도·청라" 등)은 **공식 통계의 분류 체계가
+//     아니다** — 어떤 공표 통계를 가져와도 이 표를 그대로 채울 수 없다. 즉 편집된 개략 안내다.
+//   → 수치는 **바꾸지 않고**(추측 갱신 금지) 귀속 표현만 "청약Home 공고 참고 개략 범위"로 낮췄다.
+//   ⚠ 수치 자체를 갱신하려면 청약Home 단지별 공고를 실제로 집계해야 한다(외부 작업).
+// 청약 커트라인 개략 범위 (청약Home 단지별 공고 참고, 2024~2025):
 //   - 서울 인기 분양: 65점+ (평균)
 //   - 수도권 일반: 50~60점
 //   - 지방 일반: 30~50점
