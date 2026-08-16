@@ -2191,7 +2191,11 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         </div>
         <!-- Phase 4 (2026-04-26): 당첨 커트라인 통계 — 한국부동산원 2024-2025 평균 -->
         <div style="margin-top:10px;padding:9px 11px;background:var(--accent-50);border-radius:8px;border:1px solid var(--accent-100)">
-          <div style="font-size:11px;font-weight:700;color:var(--accent-700);margin-bottom:6px">📊 최근 당첨 커트라인 통계 (한국부동산원 2024-2025 평균)</div>
+          <!-- SUBS-LABEL-2026-08-16 (Sprint OOOOOOO): '최근' 제거 — 2026-08 기준 2024~2025 는 최근이 아니다.
+               출처·기간은 이미 병기돼 있고 바로 위(2190행)에 "참고치 · 실제는 청약Home 공고 확인" 면책이
+               있어 절대 룰 ②(출처 명시)는 충족 상태 → 수식어만 정정하고 수치는 건드리지 않는다.
+               ⚠ 수치 자체의 최신화는 공식 통계 재확인이 필요한 별도 사안(운영자 판단) — 추측 갱신 금지. -->
+          <div style="font-size:11px;font-weight:700;color:var(--accent-700);margin-bottom:6px">📊 당첨 커트라인 참고 통계 (한국부동산원 2024~2025 평균)</div>
           <table style="width:100%;font-size:10.5px;color:var(--t2);border-collapse:collapse">
             <tbody>
               <tr><td style="padding:3px 0">서울 강남·서초·송파 인기 단지</td><td style="text-align:right;font-weight:700;color:#A82525">68~75점</td></tr>
@@ -4463,7 +4467,15 @@ function closeTerms(){document.getElementById('TM').classList.remove('open');}
 // Sprint QQ (2026-05-19): 4.17 만기연장 금지 + 5.10 양도세 중과 부활 + 5.12 보완책 추가
 //   - 공식 출처 검증: 4.17 = korea.kr 정책브리핑 / 5.10 = 다주택자 양도세 중과 부활(5.9까지 양도분 배제, 2026-06-22 재검증 socialfocus·KB·세무법인)
 const POLICY_TIMELINE = [
-  { date:'2025-10-15', title:'규제지역 확대·DSR 강화 시행', desc:'서울 25개구 + 경기 12곳(발표 당시) 토지거래허가구역 — 현재 경기 15곳', tag:'규제', color:'#C44' },
+  // REG-LABEL-2026-08-16 (Sprint OOOOOOO): desc 가 '토지거래허가구역'이라 **제도를 잘못 붙이고** 있었다.
+  //   같은 항목 title 은 '규제지역 확대'이고, 숫자(서울 25구 + 경기 15곳)도 regulations_snapshot 의
+  //   `regulatedRegions`(=규제지역) 와 정확히 일치한다(DB 실측: 경기 배열 15개 — 과천·광명·성남3·수원3·
+  //   안양동안·용인수지·의왕·하남 + 2026.6.30 추가 구리·기흥·동탄). 즉 라벨만 틀렸다.
+  //   두 제도는 효과가 다르다 — 규제지역=LTV/DSR 제한 / 토지거래허가구역=취득 후 2년 실거주·갭투자 금지.
+  //   혼동하면 사용자의 계약 판단(전세 끼고 매수 가능 여부)이 틀어진다. 같은 파일 내 토허구역 설명은
+  //   '강남 일부·송파·용산'(서울 일부)이라 자기모순이기도 했다.
+  //   ⚠ 토지거래허가구역의 **실제 지정 범위**는 이 스냅샷이 보유하지 않는다 — 별도 공식 확인 대상.
+  { date:'2025-10-15', title:'규제지역 확대·DSR 강화 시행', desc:'서울 25개구 + 경기 12곳(발표 당시) 규제지역 지정 — 현재 경기 15곳', tag:'규제', color:'#C44' },
   { date:'2025-10-29', title:'1주택자 전세대출 이자 DSR 반영', desc:'전세대출 이자도 총부채상환비율에 포함', tag:'대출', color:'#B47' },
   { date:'2026-01-01', title:'은행권 주담대 위험가중치 15%→20%', desc:'은행 주담대 공급 위축·금리 상승 압력', tag:'금융', color:'#947' },
   { date:'2026-04-17', title:'다주택자 주담대 만기연장 금지', desc:'2주택+ 임대사업자 수도권·규제지역 주담대 만기연장 원칙 금지 (4조 1,000억 / 1.7만 가구)', tag:'대출', color:'#C44' },
