@@ -222,8 +222,11 @@ app.use('/api/chat/sessions', dataLimiter, chatSessionsRouter);
 // AI 엔드포인트: optionalAuth 를 앞단에 — 로그인 유저는 userId 기반 dailyLimit + 월 예산 가드,
 // 비로그인은 IP 기반 dailyLimit 만 (월 예산은 로그인 유저 한정).
 // P1 (2026-04-25 Phase 2 8-2): 로그인 사용자 보너스 — 비로그인은 base, 로그인 +N
-//   chat: base 3 + 로그인 +10 = 13 (162bdbb 2026-06-01: 비로그인 base 15→3)
-//   search: base 5 + 로그인 +5 = 10
+//   chat: base = DAILY_CHAT_LIMIT(기본 30) + 로그인 +10 = 40
+//     QUOTA-TRUTH-2026-08-16 (Sprint NNNNNNN): 이 줄이 "base 3 → 13" 으로 stale 이었고, 프론트
+//     사용법 탭도 그 옛 숫자("무료 일 3회")를 하드코딩해 사용자에게 **실제의 1/10** 로 안내했다.
+//     한도 숫자는 이 상수(그리고 /api/health 응답)가 유일한 진실 — 주석·HTML 에 복제하지 말 것.
+//   search: base = DAILY_SEARCH_LIMIT(기본 5) + 로그인 +5 = 10
 app.use('/api/chat', optionalAuth, chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat', loggedInBonus: 10 }), chatRouter);
 app.use('/api/transactions', dataLimiter, transactionRouter);
 app.use('/api/properties', optionalAuth, dataLimiter, dailyLimit({ limit: DAILY_SEARCH_LIMIT, scope: 'search', loggedInBonus: 5 }), propertiesRouter);

@@ -1506,7 +1506,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <span class="hu-dim">오늘 남은</span>
       <span class="hu-item" aria-label="오늘 남은 무료 단지 검색"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/><path d="m19.5 19.5-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="hu-lbl">검색</span><b id="quotaPill">—</b></span>
       <span class="hu-dot">·</span>
-      <span class="hu-item" aria-label="오늘 남은 AI 채팅"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5.5h16v10H9l-4 3.5v-3.5H4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="hu-lbl">채팅</span><b id="aiPill">—</b></span>
+      <span class="hu-item" aria-label="오늘 남은 도우미 채팅"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5.5h16v10H9l-4 3.5v-3.5H4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="hu-lbl">채팅</span><b id="aiPill">—</b></span>
     </div>
     <!-- Phase 4 (2026-04-26): 서버 정상 시 hide, 장애 시만 빨간 표시 — "항상 초록"의 의미 없음 해소 -->
     <span class="hst off" id="apiSt" style="display:none">확인 중...</span>
@@ -1914,7 +1914,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     </span>
   </div>
   <div class="cmsgs" id="cMsgs">
-    <div class="msg ai"><div class="ava ai">AI</div><div>
+    <div class="msg ai"><div class="ava ai">📊</div><div><!-- BADGE-TRUTH-2026-08-16: 정적 환영 메시지 아바타도 addMsg 와 동일하게 -->
       <div class="bbl">안녕하세요 👋 국토부 실거래·한국은행 금리 등 <b>공식 데이터로 바로</b> 답해드려요.<br><br>아래 예시를 <b>눌러보세요</b> — 단지명·동네·구 단위 전부 돼요 👇<br><span style="font-size:10px;color:var(--t3)">※ 매수·매도 추천 X · 공식 데이터 기반(환각 없음)</span>
       <!-- KKKKKKK-19 (운영자 "예시로 어디까지 되는지 알게"): 커버 범위가 다른 예시 6종을 탭 즉시 전송 칩으로.
            의도적으로 유형을 섞음 — 단지(은마)·동(공덕)·구+인기(노원구)·규제(동탄)·한도(숫자)·정책자금 -->
@@ -2313,12 +2313,17 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 
     <!-- 5. AI 챗 -->
     <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:13px 16px;margin-bottom:10px">
-      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">🤖 AI 챗봇 활용</summary>
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">💬 데이터 도우미 활용</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
-        💬 버튼(우측 하단) → AI 도우미. <b>3개 빠른 시작 버튼</b>(대출계산·규제요약·특약초안) + 직접 입력 가능<br>
+        <!-- GUIDE-TRUTH-2026-08-16 (Sprint NNNNNNN): 이 블록은 세 군데가 실제와 달랐다 —
+             ① "AI 챗봇/AI 도우미" (LLM 은 CHAT-ZERO-COST 로 제거됨) ② "3개 빠른 시작 버튼"
+             (실제 예시 칩 6종 + 퀵버튼 6종 = 12개) ③ **"무료 일 3회"** (라이브 실측 한도는 30회 —
+             10배 적게 안내해 사용자가 안 쓰고 이탈할 문구였다). 숫자는 다시 하드코딩하지 않고
+             updateAiPill 이 /api/health 값으로 채운다(#guideChatQuota) → 한도를 또 바꿔도 드리프트 0. -->
+        💬 버튼(우측 하단) → 데이터 도우미. <b>예시 칩을 누르기만</b> 해도 돼요 — 단지 시세·동네 시세·구 인기단지·규제·대출 한도·정책자금 + 퀵버튼(대출계산기·규제요약·특약초안) + 직접 입력<br>
         단지 클릭 후 챗에 질문하면 <b>그 단지 정보가 자동 컨텍스트</b> (예: "이 단지 LTV 얼마?")<br>
-        무료 일 3회 / 로그인 일 13회 · 매일 자정 리셋<br><br>
-        <span style="font-size:11px;color:var(--t3)">⚠ 주민번호·계좌·카드번호 입력 자동 차단 (PIPA 준수). AI 답변은 참고용 — 매수·매도 추천 X.</span>
+        <span id="guideChatQuota">매일 자정 리셋</span><br><br>
+        <span style="font-size:11px;color:var(--t3)">⚠ 주민번호·계좌·카드번호 입력 자동 차단 (PIPA 준수). 답변은 공식 데이터 조회 결과이며 참고용 — 매수·매도 추천 X.</span>
       </div>
     </details>
 
@@ -2778,7 +2783,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <div class="sm-row">
         <div class="sm-lbl">사용 한도</div>
         <!-- STAB-A P1#25 (2026-05-03): 한도 가독성 강화 — 비로그인·로그인 차이 명시 -->
-        <div class="sm-hint" id="usageInfo">로그인 X: 5회/일 · 로그인: 10회/일 (단지 검색). 매일 자정 리셋. 매수특약·AI 채팅은 별도 한도.</div>
+        <div class="sm-hint" id="usageInfo">로그인 X: 5회/일 · 로그인: 10회/일 (단지 검색). 매일 자정 리셋. 매수특약·도우미 채팅은 별도 한도.</div>
       </div>
       <!-- Sprint OOOOO: 데스크톱 헤더에서 테마 토글 제거(계정 드롭다운으로) — 비로그인 사용자용 전환 창구 -->
       <div class="sm-row">
@@ -4664,7 +4669,7 @@ function updateQuota(usage){
     if(wrap) wrap.title=`오늘 남은 무료 단지 검색 ${usage.remaining}/${usage.limit}회 — 매일 자정 리셋 (클릭: 상세 정보)`;
   }
   // USAGE-INFO-2026-07-16 (Sprint SSSSS): 정적 안내("로그인 시 10회/일 · 특약·채팅 별도 한도")가 이 덮어쓰기로 소실되던 것 — 항상 뒤에 유지
-  if(info)info.textContent = usage.unlimited ? '검색 무제한 (운영자·관리자)' : `오늘 ${usage.used}/${usage.limit}회 사용 (남은 무료 검색 ${usage.remaining}회) · 매일 자정 리셋 · 로그인 시 10회/일 · 매수특약·AI 채팅은 별도 한도`;
+  if(info)info.textContent = usage.unlimited ? '검색 무제한 (운영자·관리자)' : `오늘 ${usage.used}/${usage.limit}회 사용 (남은 무료 검색 ${usage.remaining}회) · 매일 자정 리셋 · 로그인 시 10회/일 · 매수특약·도우미 채팅은 별도 한도`;
 }
 async function refreshQuota(){
   try{
@@ -4693,16 +4698,26 @@ async function refreshQuota(){
   }catch{}
 }
 
-// AI 채팅 잔여 — 한도는 서버 /api/health 의 chat.{limit,used,remaining} 사용 (비로그인 3 / 로그인 13, 162bdbb). 클라 하드코딩 금지.
+// 도우미 채팅 잔여 — 한도는 서버 /api/health 의 chat.{limit,used,remaining} 사용. 클라 하드코딩 금지.
+// QUOTA-TRUTH-2026-08-16 (Sprint NNNNNNN): 이 주석의 "비로그인 3 / 로그인 13" 자체가 stale 이었다 —
+//   server.js 의 DAILY_CHAT_LIMIT 이 30 으로 올라가 라이브 실측이 30(로그인 40)인데, 사용법 탭은
+//   여전히 "무료 일 3회"라고 안내하고 있었다(**실제의 1/10**). 문구가 숫자를 직접 들고 있으면
+//   한도를 바꿀 때마다 조용히 거짓말이 된다 → 사용법 탭 문구도 여기서 서버 값으로 렌더한다.
+//   ⚠ 앞으로 한도 숫자를 HTML·주석에 적지 말 것(여기가 유일한 렌더 지점).
 // Sprint OOOOO (시안): #hUsage 내부 숫자(<b id="aiPill">)만 갱신 — 행 표시/숨김은 updateQuota 가 담당(admin 은 둘 다 무제한).
 function updateAiPill(usage){
   if(!usage) return;
+  // 사용법 탭 안내도 동일 출처로 — pill 유무와 무관하게 먼저 처리(무제한 early-return 앞).
+  const g = document.getElementById('guideChatQuota');
+  if(g) g.textContent = usage.unlimited
+    ? '도우미 채팅 무제한 (운영자·관리자) · 매일 자정 리셋'
+    : `무료 하루 ${usage.limit}회 · 매일 자정 리셋`;
   const pill = document.getElementById('aiPill');
   if(!pill) return;
   if(usage.unlimited){ pill.textContent='∞'; pill.style.color=''; return; }
   pill.textContent = `${usage.remaining}/${usage.limit}`;
   pill.style.color = usage.remaining<=1 ? 'var(--red)' : (usage.remaining<=3 ? 'var(--amb)' : '');
-  pill.title = `오늘 남은 AI 채팅 ${usage.remaining}/${usage.limit}회 — 매일 자정 리셋`; // GGGGGG: pill(남은)과 기준 통일
+  pill.title = `오늘 남은 도우미 채팅 ${usage.remaining}/${usage.limit}회 — 매일 자정 리셋`; // GGGGGG: pill(남은)과 기준 통일
 }
 
 // DATA-QUALITY-2026-07-12 (Sprint BBBBB) → Sprint OOOOO: 헤더 dqPill 제거(시안), 계정 드롭다운
@@ -9170,7 +9185,7 @@ function toggleRpOverlay(){
   if(_rpOverlay){
     rp.classList.add('rp-overlay');
     rp.style.setProperty('display','flex','important');
-    // Phase 3.3: AI 채팅 잔량 안내
+    // Phase 3.3: 도우미 채팅 잔량 안내 (룰베이스 전환 후 'AI' 표기 정정 — Sprint NNNNNNN)
     _renderChatQuotaHint();
   } else {
     rp.classList.remove('rp-overlay');
@@ -9203,7 +9218,7 @@ async function _renderChatQuotaHint(){
     const bg = lvl === 'red' ? '#FDEEEE' : lvl === 'amb' ? '#FFF6E3' : '#EAF7EE';
     const fg = lvl === 'red' ? '#C4402A' : lvl === 'amb' ? '#7a5500' : '#0f5d2f';
     div.style.cssText = `background:${bg};color:${fg};border-radius:6px;padding:6px 9px;margin:6px 0;font-size:11px;line-height:1.5`;
-    div.textContent = `💡 오늘 AI 채팅 ${d.chat.remaining}/${d.chat.limit}회 남음 — 매일 자정 리셋`;
+    div.textContent = `💡 오늘 도우미 채팅 ${d.chat.remaining}/${d.chat.limit}회 남음 — 매일 자정 리셋`;
     c.insertBefore(div, c.firstChild);
   } catch(_){}
 }
@@ -10448,8 +10463,8 @@ async function sM(){
       //   대안 안내가 안 붙던 것 — 503 이면 원인 무관하게 무료 기능 안내 (정직 + 이탈 방지).
       const j=await r.json().catch(()=>({}));
       rmTyp();
-      addMsg('ai', 'AI 도우미가 일시 중단 상태예요. 😥\n\n' +
-        '💡 AI 없이 바로 쓸 수 있는 기능:\n' +
+      addMsg('ai', '데이터 도우미가 일시 중단 상태예요. 😥\n\n' +
+        '💡 지금 바로 쓸 수 있는 기능:\n' +
         '· 아래 퀵버튼 — 대출계산기 · 규제요약 · 특약초안(표준 템플릿)\n' +
         '· 사이드바 "내 상황 입력 → 조건에 맞는 단지 찾기"\n' +
         '· 상단 보고서 탭 (객관 데이터판으로 제공)');
@@ -10527,7 +10542,7 @@ async function sM(){
   // MOB-3 (2026-05-03): generic catch fallback — 더 구체적 안내 + 대체 경로 제시
   if(!replied){
     rmTyp();
-    addMsg('ai','💬 AI 응답을 받지 못했어요.\n\n네트워크 또는 서버 일시 오류일 수 있어요. 잠시 후 다시 시도해주세요.\n\n그동안 좌측 사이드바의 "내 상황 입력 → 단지 검색" 또는 상단 "🧮 대출계산"·"📊 보고서" 는 정상 이용 가능합니다.');
+    addMsg('ai','💬 응답을 받지 못했어요.\n\n네트워크 또는 서버 일시 오류일 수 있어요. 잠시 후 다시 시도해주세요.\n\n그동안 좌측 사이드바의 "내 상황 입력 → 단지 검색" 또는 상단 "🧮 대출계산"·"📊 보고서" 는 정상 이용 가능합니다.');
   }
   chatLd=false;
 }
@@ -10903,10 +10918,20 @@ function _jsonAttr(v){ return _escHtml(JSON.stringify(v)); }
 // 보고서 숫자 표시 안전화: AI 출력/외부 count/사용자 입력 숫자 필드가 문자열(HTML 포함)이어도 무력화.
 // 유효 숫자는 그대로(0 포함), null/undefined/비숫자는 fallback(fb). escape 대신 숫자 정규화(esc 의 0-falsy 문제 회피).
 function _numFmt(n, fb){ if (n == null) return fb !== undefined ? fb : ''; const v = Number(n); return Number.isFinite(v) ? String(v) : (fb !== undefined ? fb : ''); }
-// Phase 2.14: AI 응답에 항상 부착되는 공통 정보 배지 — 표시광고법·자본시장법 안전장치
+// Phase 2.14: 도우미 응답에 항상 부착되는 공통 정보 배지 — 표시광고법·자본시장법 안전장치
+// BADGE-TRUTH-2026-08-16 (Sprint NNNNNNN): 문구가 **사실과 반대**였다 —
+//   "AI는 환각(hallucination)이 발생할 수 있어 사실 확인이 필요합니다".
+//   챗은 CHAT-ZERO-COST-2026-08-12 로 LLM 호출이 구조적으로 제거돼(CI 가드로 강제) 지금은
+//   룰베이스 라우터가 DB·공식 API 조회 결과만 반환한다. 환각이 원리적으로 발생하지 않는데
+//   발생한다고 고지하면 (a) 사실이 아니고 (b) 우리 신뢰도를 근거 없이 깎는다.
+//   같은 화면 환영 메시지는 이미 "공식 데이터 기반(환각 없음)" 이라 **자기모순**이기도 했다
+//   (KKKKKKK-16 이 패널 제목만 'AI 채팅'→'데이터 도우미'로 고치고 이 배지를 놓쳤다).
+//   대신 실제로 남아 있는 리스크(출처 데이터의 정정·지연)를 명시한다 — 면책 강도는 낮추지 않는다.
+//   ⚠ 호출처는 addMsg 한 곳(챗 전용)뿐이다 — 보고서·특약·뉴스와 공유하지 않음(grep 확인).
+//   AI 를 다시 붙이면 이 문구를 원복해야 한다.
 function _renderAIBadge(){
   return `<div style="background:#FFF6E3;border:1px solid #F0D998;border-radius:6px;padding:6px 8px;margin-top:6px;font-size:10px;color:#7a5500;line-height:1.5">
-    ⚠ 본 응답은 <b>참고 정보</b>이며 매수·매도 추천이 아닙니다. AI는 환각(hallucination)이 발생할 수 있어 사실 확인이 필요합니다. 대출·세무·계약 사항은 반드시 금융기관·세무사·공인중개사 확인 필수.
+    ⚠ 본 응답은 <b>참고 정보</b>이며 매수·매도 추천이 아닙니다. 국토부 실거래·한국은행 등 <b>공식 데이터를 그대로 조회</b>해 보여드립니다(AI 생성 아님). 다만 출처 데이터의 정정·지연이 있을 수 있고, 대출·세무·계약 사항은 반드시 금융기관·세무사·공인중개사 확인 필수.
   </div>`;
 }
 function addMsg(role,text){
@@ -10939,7 +10964,10 @@ function addMsg(role,text){
       }, 0);
     }
   }
-  d.innerHTML=`<div class="ava ${role}">${role==='ai'?'AI':'나'}</div><div><div class="bbl">${safe}</div>${badge}${fb}<div class="mt">${gt()}</div></div>`;
+  // BADGE-TRUTH-2026-08-16: 아바타도 'AI' → '📊' (룰베이스 전환 후 남아 있던 표기).
+  //   패널 제목은 KKKKKKK-16 에서 이미 '데이터 도우미'로 바뀌었는데 아바타만 'AI' 라 어긋나 있었다.
+  //   .ava 는 28px 원형·font-size 10px 라 짧은 라벨만 들어간다(한글 3자는 넘침) → 이모지 1자.
+  d.innerHTML=`<div class="ava ${role}">${role==='ai'?'📊':'나'}</div><div><div class="bbl">${safe}</div>${badge}${fb}<div class="mt">${gt()}</div></div>`;
   c.appendChild(d);c.scrollTop=c.scrollHeight;
 }
 
