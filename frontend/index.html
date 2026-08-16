@@ -1649,7 +1649,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
               <span class="chip" onclick="cp(this,'ch-pri')">갭투자</span>
             </div>
           </div>
-          <div class="mb9"><span class="lbl">희망 평형</span><div class="chips" id="ch-py"><span class="chip" onclick="cp(this,'ch-py')">소형 15~22평</span><span class="chip on" onclick="cp(this,'ch-py')">중형 23~33평</span><span class="chip" onclick="cp(this,'ch-py')">대형 34평+</span><span class="chip" onclick="cp(this,'ch-py')">전체</span></div></div>
+          <div class="mb9"><span class="lbl">희망 평형</span><div class="chips" id="ch-py"><span class="chip" onclick="cp(this,'ch-py')">소형 15~22평</span><span class="chip on" onclick="cp(this,'ch-py')">중형 23~33평</span><span class="chip" onclick="cp(this,'ch-py')" title="34~60평 조회 — '+'는 상한 없음이 아니라 60평까지입니다">대형 34~60평</span><span class="chip" onclick="cp(this,'ch-py')" title="15~60평 조회 — 오피스텔·초소형(15평 미만)과 60평 초과는 제외됩니다">전체(15~60평)</span></div></div>
           <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원 단위 — 1.2억은 12000)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000 (만원)" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 / 관심 구 <span style="color:var(--t3);font-weight:400">(보고서 통근시간 분석)</span></label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
           </div>
         </details>
@@ -4265,18 +4265,40 @@ function _renderReport(data) {
 function _addAllReportAptsToBookmarks() {
   const r = window._lastReport?.report;
   if (!r?.apartments?.length) return toast('보고서가 없어요');
+  // BULK-WATCH-2026-08-17 (Sprint MMMMMMM-6, 서울 전수조사 7회차):
+  //   예전 이 루프가 만든 북마크는 정식 형태(toggleBookmark)와 **5가지가 어긋났다**:
+  //     ① aptName 에 표시용 문자열("단지명 (구 동)")을 넣었다 — 상세·비교가 단지명으로 못 찾는다.
+  //     ② area 에 지역 대신 '32평' 을 넣었다 — 규제지역 판정이 `isRegFront(b.area, b.lawdCd)` 로
+  //        area 를 지역 문자열로 읽는다(관심단지 목록의 규제 배지가 엉뚱해진다).
+  //     ③ sigungu·umdNm·lawdCd 를 아예 안 넣었다 → **알림 대상 필터가 `lawdCd` 5자리 숫자만
+  //        통과시키므로(_watchTargets) 일괄 추가한 단지는 전부 조용히 알림에서 빠진다.**
+  //        화면에는 "N단지 관심 추가 완료" 라고 떠서 사용자는 알림이 오는 줄 안다.
+  //     ④ 타임스탬프 키가 addedAt 인데 정식은 savedAt 이다.
+  //     ⑤ localStorage 를 직접 써서 saveBookmarks() 의 후처리(서버 동기화 등)를 건너뛰었다.
+  //   보고서 응답에는 aptName·sigungu·umdNm·lawdCd 가 **이미 전부 들어있다**(report.js:457-460).
+  //   쓰지 않고 있었을 뿐이다.
   let added = 0;
+  const bks = getBookmarks();
   for (const a of r.apartments) {
     try {
-      const bks = getBookmarks();
-      if (!bks.some(b => b.aptName === a.name)) {
-        bks.push({ aptName: a.name, area: (a.areaPyeong != null ? a.areaPyeong + '평' : ''), addedAt: Date.now() });
-        localStorage.setItem('mhl_bookmarks', JSON.stringify(bks));
-        added++;
-      }
+      const nm = a.aptName || a.name;
+      if (!nm) continue;
+      if (bks.some(b => b.aptName === nm)) continue;
+      bks.push({
+        aptName: nm,
+        area: `${a.sigungu || ''} ${a.umdNm || ''}`.trim(),
+        sigungu: a.sigungu || '',
+        umdNm: a.umdNm || '',
+        lawdCd: a.lawdCd || '',
+        savedAt: Date.now(),
+      });
+      added++;
     } catch (_) {}
   }
-  toast(`✅ ${added}단지 관심 추가 완료`);
+  if (added) { try { saveBookmarks(bks); } catch(_) {} }
+  // 알림 대상은 lawdCd 가 있어야 한다 — 없으면 그 사실을 숨기지 않는다.
+  const noCode = r.apartments.filter(a => !/^\d{5}$/.test(String(a.lawdCd || ''))).length;
+  toast(`✅ ${added}단지 관심 추가 완료${noCode ? ` (${noCode}곳은 지역코드가 없어 알림 대상 제외)` : ''}`);
   if (typeof renderBookmarks === 'function') renderBookmarks();
 }
 
@@ -8680,6 +8702,10 @@ function _isUnsupportedRegion(region) {
   // 광역도 (강원·충남·전북·전남·경북·경남·제주) 만 frontend 사전 차단
   return /강원|충남|전북|전남|경북|경남|제주/.test(region);
 }
+// PY-RANGE-LABEL-2026-08-17 (Sprint MMMMMMM-6): 칩 라벨이 '전체'·'34평+' 였지만 실제 조회 범위는
+//   15~60평(전체)·34~60평(대형)이다. 15평 하한은 오피스텔·초소형 제외라는 **의도된 설계**이고
+//   (propertyService.js 의 minPy 기본값 주석), 60평 상한도 백엔드 maxPy 로 실제 걸린다.
+//   설계를 바꾸는 대신 **라벨이 사실을 말하게** 했다 — '전체'라는 말에 초소형·초대형이 빠져 있었다.
 function pyRange(){
   const sel=gct('ch-py');
   if(sel.startsWith('소형')) return {minArea:15,maxArea:22};

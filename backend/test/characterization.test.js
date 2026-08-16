@@ -2380,3 +2380,40 @@ test('기간·금리 표기가 실제와 일치한다 (Sprint MMMMMMM-5)', () =>
   assert.match(html, /name: '신혼 디딤돌'[\s\S]{0,250}rate: '1\.8~3\.1%'/);
   assert.match(html, /name: '신생아 특례'[\s\S]{0,250}rate: '1\.6~3\.3%'/);
 });
+
+test('보고서 일괄 관심추가가 정식 북마크 형태를 만든다 (Sprint MMMMMMM-6)', () => {
+  // 알림 대상 필터는 lawdCd 가 5자리 숫자인 북마크만 통과시킨다. 일괄 추가가 그 필드를 안 넣으면
+  // "N단지 관심 추가 완료" 토스트만 뜨고 **알림에서는 조용히 빠진다**.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const rep = fs.readFileSync(path.join(__dirname, '../routes/report.js'), 'utf8');
+
+  // 전제 ①: 보고서 응답이 식별 필드를 실제로 내려준다
+  for (const f of ['aptName: c.apt_name', 'sigungu: c.sigungu', 'umdNm: c.umd_nm', 'lawdCd: c.lawd_cd']) {
+    assert.ok(rep.includes(f), `보고서 apartments 에 ${f} 가 없다 — 일괄 추가가 쓸 소스가 사라졌다`);
+  }
+  // 전제 ②: 알림 대상 필터가 lawdCd 5자리를 요구한다
+  assert.ok(html.includes('.test(x.lawdCd)') && html.includes('slice(0,30)'),
+    '알림 대상 필터 형태가 바뀌었다 — 아래 판단 근거를 다시 확인할 것');
+
+  const m = html.match(/function _addAllReportAptsToBookmarks\(\)[\s\S]*?\n\}/);
+  assert.ok(m, '_addAllReportAptsToBookmarks 를 찾지 못했다');
+  const fn = m[0];
+  for (const need of ['lawdCd: a.lawdCd', 'sigungu: a.sigungu', 'umdNm: a.umdNm', 'savedAt: Date.now()']) {
+    assert.ok(fn.includes(need), `일괄 추가가 ${need} 를 넣지 않는다`);
+  }
+  assert.equal(/aptName: a\.name\b/.test(fn), false, 'aptName 에 표시용 문자열이 되돌아왔다');
+  assert.equal(/areaPyeong \+ '평'/.test(fn), false, "area 에 평형이 되돌아왔다 — 규제 판정이 area 를 지역으로 읽는다");
+  assert.equal(/addedAt:/.test(fn), false, '타임스탬프 키가 정식(savedAt)과 다르다');
+  assert.equal(/localStorage\.setItem\('mhl_bookmarks'/.test(fn), false,
+    'saveBookmarks() 를 건너뛰고 localStorage 를 직접 쓴다');
+  assert.ok(fn.includes('saveBookmarks(bks)'), '정식 저장 헬퍼를 쓰지 않는다');
+
+  // 평형 칩 라벨 — '전체'/'34평+' 가 실제 조회 범위를 숨기고 있었다
+  assert.match(html, /전체\(15~60평\)/, "'전체' 칩이 실제 범위를 밝히지 않는다");
+  assert.match(html, /대형 34~60평/, "'대형 34평+' 가 상한을 숨긴다");
+  const py = html.match(/function pyRange\(\)\{[\s\S]*?\n\}/);
+  assert.ok(py && py[0].includes('{minArea:15,maxArea:60}'), 'pyRange 전체 분기가 바뀌었다 — 라벨도 함께 볼 것');
+  assert.ok(py[0].includes('{minArea:34,maxArea:60}'), 'pyRange 대형 분기가 바뀌었다');
+});
