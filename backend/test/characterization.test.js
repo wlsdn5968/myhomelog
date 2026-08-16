@@ -474,8 +474,23 @@ test('geocacheBackfill.canFastVerify — Kakao 호출 없이 통과시켜도 되
   //   부번 차이는 대단지 다필지라 정상이고, 여기서 끝내면 Kakao 왕복 1회가 통째로 사라진다.
   assert.equal(canFastVerify({
     addrFromMolit: true, storedAddress: '서울 도봉구 방학동 271-4',
-    officialAddress: '도봉구 방학동 271-1', placeName: '신동아1단지아파트 노인정',
+    officialAddress: '도봉구 방학동 271-1', placeName: '신동아1단지아파트',
   }), true);
+
+  // ★ 기대값 변경 2026-08-17 (Sprint MMMMMMM) — 예전엔 이 케이스의 placeName 이
+  //   '신동아1단지아파트 **노인정**' 인 채로 `true` 로 고정돼 있었다. 본번만 보고 무호출 통과시킨 것이다.
+  //   그런데 **노인정 좌표는 단지 본체가 아니다** — 본번이 같아도 핀은 수십~수백m 어긋난다.
+  //   서울 전수조사 4회차에서 이 단지가 실제 오배치 목록(도봉구 방학동 신동아아파트1 → "…노인정")에
+  //   올라왔고, 전국 경로당/노인정 place 는 **298건**이다. '노인정'을 REHEAL_NONRES 에 넣어
+  //   이제 fast-verify 가 거부하고 지오코딩 교정 경로로 내려간다 — 이것이 **의도한 동작 변경**이다.
+  assert.equal(canFastVerify({
+    addrFromMolit: true, storedAddress: '서울 도봉구 방학동 271-4',
+    officialAddress: '도봉구 방학동 271-1', placeName: '신동아1단지아파트 노인정',
+  }), false);
+  assert.equal(canFastVerify({
+    addrFromMolit: true, storedAddress: '서울 노원구 상계동 700',
+    officialAddress: '노원구 상계동 700-1', placeName: '상계주공10단지아파트 경로당',
+  }), false, '경로당도 같은 이유로 무호출 통과 대상이 아니다');
 
   // 거부: 본번이 다르다(신고 530 vs 저장 272) — 실사고 재현. 남의 단지에 찍힌 좌표이므로
   //   반드시 지오코딩 경로로 내려가 교정돼야 한다.
@@ -2059,4 +2074,159 @@ test('KOSIS 미분양 캐시 — Map 은 JSON 왕복을 못 견딘다: pack/unpa
   assert.equal(_packUnsold(null), null);
   assert.equal(_packUnsold({ map: {} }), null);
   assert.equal(_packUnsold({ map: naive.map }), null);
+});
+
+// ────────────────────────────────────────────────────────────────────────────
+// Sprint MMMMMMM (2026-08-17) — 서울 전수조사 4회차에서 **실측으로 확정된** 두 결함의 계약.
+//   두 결함 모두 "코드가 던지지도, 로그를 남기지도 않는" 조용한 종류라 테스트로만 지킬 수 있다.
+// ────────────────────────────────────────────────────────────────────────────
+
+const { buildFacility } = require('../utils/buildFacility');
+
+test('buildFacility — 세대수 원천 2개가 20% 이상 어긋나면 householdsConflict 로 드러난다', () => {
+  // [실측 근거] 서울 apt_master 중 kaptdaCnt·hoCnt 가 둘 다 0이 아니면서 서로 다른 단지 207곳.
+  //   상대차 분포: 5%미만 157 / 5~20% 26 / 20~50% 16 / 50%이상 8.
+  //   20% 임계는 이 분포에서 뽑았다 — 20% 미만은 관리세대수와 호수의 정상적 차이다.
+  const mk = (da, ho) => buildFacility({ kaptdaCnt: String(da), hoCnt: String(ho) }, 'A1', null);
+
+  // ① 아스테리움용산 실값 — 128 vs 338 (62.1%). 이 단지가 '주차여유' 태그를 받고 있었다.
+  const conflict = mk(128, 338);
+  assert.deepEqual(conflict.householdsConflict, { kaptdaCnt: 128, hoCnt: 338, used: 'kaptdaCnt' });
+  assert.equal(conflict.totalHouseholds, 128, '표시값 규칙(kaptdaCnt 우선)은 바뀌지 않아야 한다');
+
+  // ② 대치풍림아이원 1.2단지 실값 — 19 vs 90 (78.9%). 5개동에 19세대는 성립하지 않는다.
+  assert.ok(mk(19, 90).householdsConflict, '78.9% 차이가 감지되지 않는다');
+
+  // ③ 반대 방향도 같은 규칙 — 방원예뜨랑 실값(121 vs 3). hoCnt 가 틀린 케이스다.
+  assert.ok(mk(121, 3).householdsConflict, 'hoCnt 쪽이 틀린 경우도 불일치로 잡아야 한다');
+
+  // ④ 임계 미만은 **평소 경로** — null 이어야 하고, 여기가 깨지면 정상 단지 대부분이 오탐된다.
+  //    롯데캐슬클라시아 실값(2033 vs 2029, 0.2%) — 건축물대장은 hoCnt 손을 들었지만 차이는 무시 가능.
+  assert.equal(mk(2033, 2029).householdsConflict, null);
+  assert.equal(mk(100, 81).householdsConflict, null, '19% 는 임계 미만이다');
+  assert.ok(mk(100, 80).householdsConflict, '정확히 20% 는 임계 이상이다');
+
+  // ⑤ 한쪽만 존재하면 비교 자체가 성립하지 않는다 → null (기존 hoCnt fallback 은 그대로 동작)
+  assert.equal(mk(0, 1540).householdsConflict, null);
+  assert.equal(mk(1540, 0).householdsConflict, null);
+  assert.equal(buildFacility({ kaptdaCnt: '0', hoCnt: '1540' }, 'A1', null).totalHouseholds, 1540,
+    'HH-HOCNT-FALLBACK(위례래미안이편한세상 [VERIFIED]) 이 깨졌다');
+});
+
+test('주차 필터 — 세대수 불일치 단지는 minParkingRatio 조건에서 빠진다 (소스 계약)', () => {
+  // 단위 테스트로는 못 잡는 종류다(필터가 DB·KAPT 응답에 얽혀 있다) → 배선의 **형태**를 고정한다.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../services/propertyService.js'), 'utf8');
+  const guard = src.indexOf('if (fMinPark > 0 && fac.householdsConflict) return false;');
+  const ratio = src.indexOf('if (fMinPark > 0 && !(fac.parkingRatio != null && fac.parkingRatio >= fMinPark)) return false;');
+  assert.ok(guard > 0, '세대수 불일치 가드가 사라졌다 — 분모를 못 믿는 단지가 "주차 여유"로 추천된다');
+  assert.ok(ratio > 0, '주차 비율 필터 자체가 사라졌다');
+  assert.ok(guard < ratio, '가드가 비율 검사보다 뒤에 있다 — 순서가 바뀌어도 결과는 같지만 의도가 흐려진다');
+});
+
+test('지도 마커 — 좌표가 같은 단지는 세로로 쌓여 서로를 가리지 않는다', () => {
+  // [실측 근거] 라이브 DOM: 올림픽선수기자촌 1·2·3단지가 x=546.8/548.3/546.8, y=172.8(폭 83~86px)
+  //   → 98% 포개져 하나만 클릭 가능했다. 전국 209그룹·450단지 중 241단지가 가려져 있었다.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const grab = (re, what) => {
+    const m = html.match(re);
+    assert.ok(m, `frontend/index.html 에서 ${what} 을 찾지 못했다`);
+    return m[0];
+  };
+  const stepSrc = grab(/const _MK_STACK_STEP = \d+;/, '_MK_STACK_STEP');
+  const fnSrc = grab(/function _assignMarkerStack\(list\)[\s\S]*?\n\}/, '_assignMarkerStack');
+  const styleSrc = grab(/function _mkStackStyle\(p\)[\s\S]*?\n\}/, '_mkStackStyle');
+  const { _assignMarkerStack, _mkStackStyle, _MK_STACK_STEP } = new Function(
+    `${stepSrc}\n${fnSrc}\n${styleSrc}\nreturn { _assignMarkerStack, _mkStackStyle, _MK_STACK_STEP };`)();
+
+  // ① 겹친 3단지 — 서로 다른 dy 를 받고, 간격은 라벨 높이(26px)보다 커야 겹치지 않는다
+  const same = [
+    { aptName: '올림픽선수기자촌3단지', lat: 37.5145538, lng: 127.1352531 },
+    { aptName: '올림픽선수기자촌1단지', lat: 37.5145538, lng: 127.1352531 },
+    { aptName: '올림픽선수기자촌2단지', lat: 37.5145538, lng: 127.1352531 },
+  ];
+  _assignMarkerStack(same);
+  const dys = same.map(p => p._stackDy);
+  assert.equal(new Set(dys).size, 3, '같은 좌표 3개가 서로 다른 오프셋을 받지 못했다 — 여전히 포개진다');
+  assert.ok(_MK_STACK_STEP > 26, '간격이 라벨 높이(실측 26.3px)보다 작으면 쌓아도 겹친다');
+  // 정렬은 단지명 오름차순 — 렌더마다 순서가 흔들리면 같은 마커를 다시 찾을 수 없다
+  const byName = [...same].sort((a, b) => a._stackDy - b._stackDy).map(p => p.aptName);
+  assert.deepEqual(byName, ['올림픽선수기자촌3단지', '올림픽선수기자촌2단지', '올림픽선수기자촌1단지'],
+    'dy 가 단지명 오름차순으로 부여되지 않았다(1단지가 맨 아래여야 한다)');
+
+  // ② 겹치지 않는 마커는 오프셋 0 · style 없음 → 기존 마크업과 픽셀 단위로 동일(회귀 0)
+  const solo = [{ aptName: '반포자이', lat: 37.5075936, lng: 127.0131932 },
+                { aptName: '은마', lat: 37.4974184, lng: 127.0653274 }];
+  _assignMarkerStack(solo);
+  assert.deepEqual(solo.map(p => p._stackDy), [0, 0]);
+  assert.equal(_mkStackStyle(solo[0]), '', '겹치지 않는 마커에 style 이 붙으면 안 된다');
+  assert.match(_mkStackStyle(same.find(p => p._stackDy !== 0)), /^ style="--mkdy:-\d+px"$/);
+
+  // ③ 재렌더(필터 변경) 시 초기화 — 안 하면 오프셋이 누적돼 마커가 화면 밖으로 날아간다
+  _assignMarkerStack([same[0]]);
+  assert.equal(same[0]._stackDy, 0, '그룹이 1개로 줄었는데 이전 오프셋이 남았다');
+
+  // ④ 좌표 없는 항목이 섞여도 죽지 않는다 (검색 결과엔 좌표 미해결 단지가 실제로 섞인다)
+  assert.doesNotThrow(() => _assignMarkerStack([null, { aptName: 'x' }, { aptName: 'y', lat: 1, lng: null }]));
+
+  // ⑤ 마커 HTML 두 경로(Naver·Leaflet fallback)가 모두 이 style 을 실제로 쓰는지 — 배선 계약
+  const pinTags = html.match(/<div class="nmap-pin \$\{cls\}\}?"?[^>]*/g) || [];
+  const wired = (html.match(/class="nmap-pin \$\{cls\}"\$\{_mkStackStyle\(p\)\}/g) || []).length;
+  assert.equal(wired, 2, `_mkStackStyle 배선이 ${wired}곳이다 — Naver·Leaflet 두 경로 모두여야 한다`);
+  assert.ok(pinTags.length >= 2);
+
+  // ⑥ CSS 가 --mkdy 를 실제로 반영하는지 (변수만 넣고 transform 을 안 고치면 아무 일도 안 일어난다)
+  assert.match(html, /\.nmap-pin\{[^}]*translate\(-50%,calc\(-100% \+ var\(--mkdy,0px\)\)\)/);
+  assert.match(html, /\.nmap-pin:hover\{[^}]*translate\(-50%,calc\(-100% \+ var\(--mkdy,0px\)\)\) scale/);
+});
+
+test('geocode 단건 호출 3경로가 모두 sigungu·umdNm 을 넘긴다 (배선 계약)', () => {
+  // [근본 원인] 백엔드 kakaoGeocode 의 검증 3종(sigungu 주소 하드필터 · 동명 구 umd 하드필터 ·
+  //   umdMatch +2)은 전부 `if (sgg && ...)` 조건부다. 프론트가 area 문자열만 넘기면 **전부 꺼지고**
+  //   점수 0 동점 → `score > bestScore` 라 Kakao 관련도 1순위(상가·교차로)가 그대로 채택된다.
+  //   실호출 실측: '반포자이'→"반포자이플라자", '은마'→"은마아파트입구교차로", '헬리오시티'→"…상가".
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  // /geocode 와 /geocode/batch 호출의 body 를 전부 뽑아 하나도 빠짐없이 검사한다
+  //   (한 곳만 고치고 나머지를 놓치는 것이 이 저장소의 반복 실패 모드였다).
+  const calls = [...html.matchAll(/\$\{CFG\.api\}\/geocode(?:\/batch)?`[\s\S]{0,420}?JSON\.stringify\(\{[\s\S]{0,300}?\}\)/g)]
+    .map(m => m[0]);
+  assert.ok(calls.length >= 3, `geocode 호출을 ${calls.length}곳만 찾았다 — 형태가 바뀌었다면 이 테스트도 갱신할 것`);
+  for (const c of calls) {
+    assert.match(c, /sigungu\s*:/, `sigungu 를 안 넘기는 geocode 호출이 있다:\n${c.slice(0, 160)}`);
+    assert.match(c, /umdNm\s*:/, `umdNm 을 안 넘기는 geocode 호출이 있다:\n${c.slice(0, 160)}`);
+  }
+});
+
+test('부속시설 키워드가 세 판정 경로에 모두 반영돼 있다 (드리프트 방지)', () => {
+  // 같은 개념이 3곳에 흩어져 있고 과거에 실제로 갈렸다(GEO-VALIDATE-SSOT 주석의 ca9fcf7 이력).
+  //   ① geocodeCacheService.NON_APT_PATTERNS — 지오코딩 후보 점수(-5)
+  //   ② geocacheBackfill.REHEAL_NONRES_KEYWORDS — 기존 캐시 재지오코딩 대상 판정
+  //   ③ routes/search.js SUBFEATURE_RE — in-bounds 대표좌표 선택 시 강등
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const { NON_APT_PATTERNS } = require('../services/geocodeCacheService');
+  const backfillSrc = fs.readFileSync(path.join(__dirname, '../jobs/geocacheBackfill.js'), 'utf8');
+  const searchSrc = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
+  const subM = searchSrc.match(/const SUBFEATURE_RE = \/[^/]+\//);
+  assert.ok(subM, 'search.js 에서 SUBFEATURE_RE 를 찾지 못했다');
+
+  // 전국 실측 규모: 경로당/노인정 298건 · 교차로 9건. 단지명 사용례는 apt_master·molit 모두 0건.
+  for (const kw of ['경로당', '노인정', '교차로']) {
+    assert.ok(NON_APT_PATTERNS.test(kw), `NON_APT_PATTERNS 에 '${kw}' 가 없다 — 지오코딩이 그 지점을 고른다`);
+    assert.ok(backfillSrc.includes(`'${kw}'`), `REHEAL_NONRES_KEYWORDS 에 '${kw}' 가 없다 — 기존 298건이 안 고쳐진다`);
+    assert.ok(subM[0].includes(kw), `SUBFEATURE_RE 에 '${kw}' 가 없다 — 지도 대표좌표로 뽑힌다`);
+  }
+  // 기존 항목이 사라지지 않았는지도 함께 고정 (넓히다 지우는 사고 방지)
+  for (const kw of ['충전소', '주차장', '관리사무소', '경비실', '놀이터']) {
+    assert.ok(NON_APT_PATTERNS.test(kw), `NON_APT_PATTERNS 에서 기존 '${kw}' 가 사라졌다`);
+    assert.ok(subM[0].includes(kw), `SUBFEATURE_RE 에서 기존 '${kw}' 가 사라졌다`);
+  }
+  // '플라자'는 의도적으로 넣지 않았다 — 주상복합 실명에 쓰여 오탐 위험이 있다.
+  assert.equal(NON_APT_PATTERNS.test('플라자'), false,
+    "'플라자'가 NON_APT_PATTERNS 에 들어갔다 — 주상복합 단지명 오탐 위험. 넣으려면 단지명 실측부터 할 것");
 });

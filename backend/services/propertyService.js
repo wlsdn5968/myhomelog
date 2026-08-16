@@ -476,6 +476,12 @@ async function getAIRecommendations(userCondition) {
       const fac = stored ? buildFacility(stored, code, stored._dtl || null) : null;
       if (!fac) return false;
       if (fMinHh > 0 && !(fac.totalHouseholds >= fMinHh)) return false;
+      // HH-CONFLICT-2026-08-17 (Sprint MMMMMMM): 세대당 주차의 분모는 세대수다. KAPT 두 원천
+      //   (kaptdaCnt·hoCnt)이 20% 이상 어긋난 단지는 그 분모를 믿을 수 없어 비율이 부풀거나 꺼진다
+      //   (실측: 아스테리움용산 6.07대/세대 — 서울 평균 1.086의 5.6배). '주차 여유' 를 **조건으로 건**
+      //   사용자에게 그런 단지를 여유 단지로 넣어주면 안 된다 → 필터 사용 시에만 제외한다.
+      //   (필터를 안 걸면 종전대로 후보에 남는다 — 정보를 지우는 게 아니라 판단에서만 뺀다.)
+      if (fMinPark > 0 && fac.householdsConflict) return false;
       if (fMinPark > 0 && !(fac.parkingRatio != null && fac.parkingRatio >= fMinPark)) return false;
       if (fSaleOnly && fac.saleType !== '분양') return false;
       return true;

@@ -48,6 +48,13 @@ const REHEAL_NONRES_KEYWORDS = [
   //   reheal 은 재지오코딩 결과가 '더 나은 주거 본체'일 때만 UPDATE(아니면 kakao-sub 마킹)라 안전 —
   //   진짜 이름에 상가가 든 단지도 전국 2건뿐(SQL 실측). cap 300/일 → 약 4일 내 자동 스윕.
   '상가',
+  // NONRES-GERONTO-2026-08-17 (Sprint MMMMMMM, 서울 전수조사 4회차 실측):
+  //   전국 place_name 중 '경로당|노인정' **298건** — '상가' 다음가는 비단지 place 대량 항목인데
+  //   여태 재지오코딩 대상에서 빠져 있었다. 단지 안이긴 하나 본체가 아니라 수십~수백m 어긋난다.
+  //   '교차로'는 '네거리/오거리/삼거리'와 같은 부류인데 이 표기만 빠져 있었다(은마 실측).
+  //   [안전] 이 세 단어가 든 단지명은 apt_master·molit_transactions 모두 **0건**(SQL 실측) →
+  //   reheal 이 진짜 단지를 건드릴 여지가 없다. cap 300/일이라 약 하루면 스윕된다.
+  '경로당', '노인정', '교차로',
 ];
 const REHEAL_NONRES_RE = new RegExp(REHEAL_NONRES_KEYWORDS.join('|'));
 

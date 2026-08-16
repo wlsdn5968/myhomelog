@@ -68,6 +68,21 @@ function buildFacility(info, kaptCode, detail) {
   //   330/346 이 hoCnt 로 해소(SQL 실측), 잔여 16 만 진짜 미상. 재조회 self-heal 로는 못 고침 → fallback 이 정답.
   const _posInt = v => { const n = parseInt(v); return Number.isFinite(n) && n > 0 ? n : 0; };
   const totalHouseholds = _posInt(info.kaptdaCnt) || _posInt(info.hoCnt);
+  // HH-CONFLICT-2026-08-17 (Sprint MMMMMMM — 서울 전수조사 4회차 실측):
+  //   kaptdaCnt(관리세대수)와 hoCnt(호수)가 **둘 다 0이 아니면서 서로 다른** 단지가 서울에만 207곳이다.
+  //   위 fallback 은 kaptdaCnt 를 무조건 우선하는데, 그 값이 틀린 케이스가 실재한다:
+  //     · 대치풍림아이원 1.2단지 kaptdaCnt=19 / hoCnt=90 / **5개동** → 5개동 19세대는 성립 불가
+  //     · 아스테리움용산    kaptdaCnt=128 / hoCnt=338 / 주차 777 → 세대당 6.07대(서울 평균 1.086의 5.6배)
+  //   반대로 hoCnt 가 틀린 케이스도 있다(방원예뜨랑 hoCnt=3, 삼전현대 hoCnt=4) → **어느 쪽도 일괄 신뢰 불가**.
+  //   건축물대장(건축HUB) 교차검증 12건은 kaptdaCnt 9 : hoCnt 2 로 kaptdaCnt 우세 → **기본 규칙은 유지**한다.
+  //   [처리] 값을 바꾸지 않는다. 두 원천이 어긋났다는 **사실만** 내보내고, 그 위에 쌓는 판단
+  //     ('주차여유' 태그·주차 1.2+ 필터)을 프론트에서 막는다. 우리가 임의로 고르면 그게 환각이다.
+  //   [임계 20%] 서울 207건 분포 실측 — 5%미만 157 / 5~20% 26 / 20~50% 16 / 50%이상 8.
+  //     20% 미만은 관리세대수와 호수의 정상적 차이(동수·부속호실)로 설명되고 비율도 뒤틀리지 않는다.
+  const _hhA = _posInt(info.kaptdaCnt), _hhB = _posInt(info.hoCnt);
+  const householdsConflict = (_hhA > 0 && _hhB > 0 && Math.abs(_hhA - _hhB) / Math.max(_hhA, _hhB) >= 0.2)
+    ? { kaptdaCnt: _hhA, hoCnt: _hhB, used: 'kaptdaCnt' }
+    : null;
   // PARK-FIELD-FIX-2026-05-13 (Sprint X — 운영자 발견 + Chrome MCP 으로 진짜 필드명 [VERIFIED]):
   //   KAPT V4 detail (getAphusDtlInfoV4) raw 필드:
   //     - kaptdPcnt  = 지상 주차 (풍림 473, 헬리오 0)
@@ -137,6 +152,8 @@ function buildFacility(info, kaptCode, detail) {
     dongCount: parseInt(info.kaptDongCnt) || 0,
     parkingTotal,
     parkingRatio,
+    // HH-CONFLICT-2026-08-17: null 이면 두 원천이 일치(또는 한쪽만 존재) — 평소 경로엔 아무 영향 없다.
+    householdsConflict,
     // SALE-TYPE-2026-07-12 (Sprint TTTT): 분양/임대/혼합 구분 (codeSaleNm). "임대세대 없는 단지" 필터용.
     saleType: (info.codeSaleNm || '').trim() || null,
     builtDate: info.kaptUsedate || null,
