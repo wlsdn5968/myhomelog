@@ -120,8 +120,12 @@ test('_regLtvLabel(프론트) — lawd_cd 스코프 가드로 지방 동명 구 
   assert.ok(m, 'frontend/index.html 에서 _regLtvLabel 를 찾지 못했다');
   // isRegFront 는 "이름이 규제 키워드에 걸리면 true" — 최악 조건으로 **항상 true** 스텁을 주고,
   // 그래도 지방이 규제로 새지 않는지(= 가드가 이름보다 먼저 동작하는지) 검증한다.
-  const _regLtvLabel = new Function('isRegFront', 'SEOUL_GU_KW',
-    `${m[0]}; return _regLtvLabel;`)(() => true, ['강서', '중구']);
+  // Plan 018(2026-08-16): _regLtvLabel 이 서울 판정에 스냅샷(window.__REG_KW)을 보게 되면서
+  //   이 하네스도 window 를 넘겨야 한다. 여기서는 **미로드 상태**(undefined)를 준다 —
+  //   그때도 서울은 보수적으로 40% 여야 한다는 것이 아래 두 단언의 뜻이다.
+  //   (해제 시나리오는 별도 테스트 '서울 규제 해제 시나리오' 에서 실제 isRegFront 와 함께 본다.)
+  const _regLtvLabel = new Function('isRegFront', 'SEOUL_GU_KW', 'window',
+    `${m[0]}; return _regLtvLabel;`)(() => true, ['강서', '중구'], { __REG_KW: undefined });
 
   assert.equal(_regLtvLabel('서울 강남구', '11680'), '40%');  // 서울 = 규제
   assert.equal(_regLtvLabel('서울 중구', '11140'), '40%');    // 서울 중구(동명) = 규제
@@ -1531,6 +1535,38 @@ test('isRegFront ↔ _regLtvLabel — 같은 단지에서 규제 판정이 갈�
   assert.equal(isRegFront('서울 강남구'), true);
   assert.equal(isRegFront('강서구 명지동'), true);  // 코드가 없으면 여전히 구별 불가(알려진 한계)
   assert.equal(isRegFront('일산동구 마두동'), false);
+});
+
+// ── Plan 018 (2026-08-16): 서울 규제 **해제** 시나리오에서도 두 경로가 붙어 있는가 ──
+//   계획 016 에서 남겨둔 잔여 항목. `_regLtvLabel` 은 lawd_cd 11 이면 스냅샷을 보지 않고
+//   무조건 '40%' 였다 — 서울이 해제되면 `isRegFront` 만 비규제로 바뀌어 다시 갈린다.
+//   실측 근거: regulations_snapshot.housing_loan_2025 의 regulatedRegions =
+//     { seoul: "서울 전 지역 (25개 구)"(문자열), gyeonggi: [15개] }  (2026-08-16 DB 조회)
+//     → regulationsService.js:202 `const seoulRegulated = !!reg.seoul` 로 boolean 이 된다.
+test('서울 규제 해제 시나리오 — 스냅샷을 따라 두 경로가 함께 움직인다 (부팅 전엔 보수적 40%)', () => {
+  // (1) 현행: 서울 전 지역 규제 → 양쪽 다 규제
+  {
+    const { isRegFront, _regLtvLabel } = _regPairFns({ keywords: ['과천시'], seoulRegulated: true });
+    assert.equal(_regLtvLabel('강남구 대치동', '11680'), '40%');
+    assert.equal(isRegFront('강남구 대치동', '11680'), true);
+  }
+  // (2) ★ 해제: 스냅샷이 seoulRegulated=false → **양쪽 다** 비규제로 움직여야 한다.
+  //     여기서 _regLtvLabel 만 40% 로 남으면 해제된 서울 매물에 사실 아닌 한도를 표기한다.
+  {
+    const { isRegFront, _regLtvLabel } = _regPairFns({ keywords: ['과천시'], seoulRegulated: false });
+    assert.equal(isRegFront('강남구 대치동', '11680'), false);
+    assert.equal(_regLtvLabel('강남구 대치동', '11680'), '70%',
+      '스냅샷이 서울 해제인데 _regLtvLabel 이 40% 로 남았다 — 두 경로가 갈렸다');
+    // 경기 규제는 그대로여야 한다(서울 해제가 경기까지 풀면 안 된다)
+    assert.equal(_regLtvLabel('과천시 별양동', '41290'), '40%');
+  }
+  // (3) ★ 스냅샷 **미로드**(부팅 직후) → 보수적으로 40% 유지.
+  //     이때 70% 를 찍으면 서울 매물 한도를 부풀리는 반대 방향 오표기가 된다.
+  {
+    const { _regLtvLabel } = _regPairFns(undefined);
+    assert.equal(_regLtvLabel('강남구 대치동', '11680'), '40%',
+      '스냅샷 미로드인데 서울이 비규제(70%)로 표기됐다 — 한도 부풀림');
+  }
 });
 
 // ── Plan 017 (2026-08-16): KOSIS 미분양 Redis 2차 캐시의 Map 직렬화 계약 ──

@@ -8460,7 +8460,23 @@ function _regLtvLabel(area, lawdCd){
   // SEOUL-JUNGGU-FIX-2026-07-25: lawdCd 있으면 최우선(서울=11 prefix → 25개 구 전부 정확, 동명 구 오판 0).
   //   문자열 백스톱은 코드가 없을 때만 — '중구'를 문자열로 넣으면 지방 중구까지 규제가 되기 때문.
   const code = String(lawdCd||'').trim();
-  if(code.startsWith('11')) return '40%';
+  // REG-SEOUL-SNAPSHOT-2026-08-16 (Plan 018): 원래 이 줄은 **무조건 '40%'** 였다.
+  //   [문제] 서울이 규제 해제되어 스냅샷(regulations_snapshot.housing_loan_2025 →
+  //     regulatedRegions.seoul)이 비면 isRegFront 는 비규제로 바뀌는데 여기만 40% 로 남아
+  //     **두 경로가 다시 갈린다**(계획 016 에서 남겨둔 잔여 항목). 그러면 해제된 서울 매물에
+  //     "LTV 40%" 라는 **사실 아닌 한도**를 계속 보여준다.
+  //   [보수적 폴백 유지] 스냅샷 **미로드**(부팅 직후 window.__REG_KW undefined)면 기존대로 40%.
+  //     그 순간 70% 로 찍으면 서울 매물 한도를 부풀리는 반대 방향 오표기가 된다 — 해제가
+  //     **명시적으로 확인될 때만** 완화한다.
+  //   ⚠ 알려진 한계: 스냅샷의 seoul 은 문자열("서울 전 지역 (25개 구)")이고
+  //     seoulRegulated = !!seoul 이라 **부분 해제(예: 강남3구만 유지)는 구조상 표현 불가**다.
+  //     그 경우 isRegFront 도 똑같이 '전체 규제'로 보므로 두 함수는 일치하지만 둘 다 부정확하다.
+  //     이건 스냅샷 스키마 문제라 프론트에서 고칠 수 없다 — 부분 해제가 실제로 생기면
+  //     regulationsService 의 regulatedRegions 스키마부터 손봐야 한다.
+  if(code.startsWith('11')){
+    const _snap = window.__REG_KW;
+    return (_snap && _snap.seoulRegulated === false) ? '70%' : '40%';
+  }
   // REG-SCOPE-2026-07-25 (Sprint UUUUUU): 스냅샷 regulatedRegions 는 **seoul·gyeonggi 두 축만** 표현한다
   //   (구조상 광역시·지방을 담을 필드 자체가 없다). 따라서 코드가 있는데 11(서울)·41(경기)이 아니면
   //   규제 대상일 수 없으므로 이름 매칭을 시도조차 하지 않는다.
