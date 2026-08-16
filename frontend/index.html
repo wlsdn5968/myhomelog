@@ -5040,7 +5040,8 @@ async function loadAptsInBounds(south, west, north, east) {
       lat: p.lat, lng: p.lng,
       // AREA-TYPE-FIX-2026-07-11 (Sprint MMMM): 기존 'non' 고정 → 영역 검색 결과도 규제/비규제
       //   필터가 동작하도록 소재지(isRegFront) 판정 (검색 경로의 _regLtvLabel 과 동일 근거).
-      type: (typeof isRegFront === 'function' && isRegFront(`${p.sigungu||''} ${p.umdNm||''}`.trim())) ? 'regulated' : 'non',
+      //   REG-DUAL-PATH-FIX-2026-08-16: lawdCd 를 함께 넘긴다(바로 위에서 이미 받아 둔 값).
+      type: (typeof isRegFront === 'function' && isRegFront(`${p.sigungu||''} ${p.umdNm||''}`.trim(), p.lawdCd)) ? 'regulated' : 'non',
     }));
     renderMarkers(props);
     if (typeof renderListGrid === 'function') renderListGrid();
@@ -6332,7 +6333,9 @@ function showDetail(p){
       // ACQ-REG-2026-06-24 (운영자 "지역별 차이를 매물에 반영"): 다주택 취득세 중과(지방세법 §13의2)는
       //   '조정대상지역'만 적용 — 비조정지역은 2주택 기본세율·3주택 8%(4주택+ 12%). 조정대상지역=규제지역(공식검증 동일범위).
       //   단지 소재지(p.area)로 isRegFront 판정. area 미상이면 기존 동작(중과) 유지 — 회귀 최소화.
-      const _acqIsReg = (p.area && typeof isRegFront === 'function') ? isRegFront(p.area) : true;
+      //   REG-DUAL-PATH-FIX-2026-08-16: lawdCd 동반 — 바로 위 LTV 라벨(_regLtvLabel(p.area, p.lawdCd))과
+      //   같은 근거로 판정해야 한 화면에서 "비규제 LTV 70%" + "조정지역 취득세 8%" 모순이 안 생긴다.
+      const _acqIsReg = (p.area && typeof isRegFront === 'function') ? isRegFront(p.area, p.lawdCd) : true;
       const acqTax2H = _acqIsReg ? marketW * 0.08 : acqTax1H;        // 조정 2주택 8% / 비조정 2주택 기본세율
       const acqTax3H = _acqIsReg ? marketW * 0.12 : marketW * 0.08;  // 조정 3주택+ 12% / 비조정 3주택 8% (4주택+ 12%는 주택수 구간 한계로 8% 보수 표기)
       const _format = w => Math.round(w).toLocaleString();   // 만원 단위 값
@@ -8288,7 +8291,8 @@ async function loadClauseAndRisk(p){
   // CLAUSE-RULE-2026-07-11 (Sprint KKKK): 고정 예시 3종 → 단지 조건(소재지 규제판정·연식·보유상태) 반영
   //   규칙 생성(buildRuleClause 재사용) — AI 없이도 단지별로 다른 특약 (문구는 표준 템플릿, 환각 0).
   renderClause(typeof buildRuleClause === 'function'
-    ? buildRuleClause({ aptName: p.aptName, area: p.area || '', buildYear: p.buildYear || 0, issues: '',
+    // REG-DUAL-PATH-FIX-2026-08-16: lawdCd 전파 — 특약의 "전입 의무" 문구도 LTV 라벨과 같은 근거로.
+    ? buildRuleClause({ aptName: p.aptName, area: p.area || '', lawdCd: p.lawdCd || '', buildYear: p.buildYear || 0, issues: '',
         houseStatus: (typeof gct === 'function' ? gct('ch-h') : ''), isFirstBuyer: (typeof gct === 'function' ? gct('ch-f') === '예' : false) })
     : null);
   // RISK-RULE (Sprint LLLL): 리스크도 단지 조건 반영 규칙 생성 — AI 성공 시 아래에서 교체
@@ -8419,9 +8423,25 @@ async function loadRegulatedKeywords(){
     if (typeof cl === 'function') cl();
   }catch(_){ /* 부팅 fetch 실패 시 fallback 사용 */ }
 }
-function isRegFront(regionStr){
+function isRegFront(regionStr, lawdCd){
   const r = String(regionStr||'').normalize('NFC').trim();
   if (!r) return false;
+  // REG-DUAL-PATH-FIX-2026-08-16 (improve 교차검증 CONFIRMED — 절대룰 ② 위반):
+  //   [근본 원인] 규제 판정이 두 갈래로 독립 구현돼 있었다. _regLtvLabel 은 lawdCd 를 최우선으로
+  //     보는데(REG-SCOPE-2026-07-25), isRegFront 는 lawdCd 매개변수 자체가 없어 **문자열 부분일치만**
+  //     했다. 그래서 같은 단지·같은 화면에서 두 값이 갈렸다.
+  //   [실측 범위] transactionService.LAWD_CODES 전수 대조 결과 어긋나는 곳은 **정확히 1곳**:
+  //     부산 강서구(26440). SEOUL_GU_KW 의 '강서' 에 부분일치한다.
+  //     증상: 상세 모달에서 LTV 는 "70%(비규제)" 인데 바로 아래 세금 시뮬레이션은 2주택 8%·3주택 12%
+  //     (조정지역 중과)로, 특약·리스크 카드는 "규제지역 — 잔금 후 6개월 전입 의무" 로 표기됐다.
+  //     영역검색 마커도 '규제' 로 분류돼 규제/비규제 필터에 잘못 잡혔다.
+  //   [Fix] _regLtvLabel 과 **같은 근거**를 쓴다: /api/regulations 스냅샷은 구조상 seoul·gyeonggi
+  //     두 축만 표현하므로(regulationsService.js:200-232 실측 — reg.seoul·reg.gyeonggi 외 필드 없음),
+  //     코드가 있는데 11(서울)·41(경기) 가 아니면 규제 대상일 수 없다 → 이름 매칭을 시도조차 않는다.
+  //   ⚠ 코드가 없으면(사용자 직접 입력 region 등) 기존 문자열 동작 그대로 — 회귀 0.
+  //     서울·경기 판정 경로는 건드리지 않는다(seoulRegulated 스냅샷 존중 유지).
+  const _code = String(lawdCd||'').trim();
+  if (_code && !_code.startsWith('11') && !_code.startsWith('41')) return false;
   const reg = window.__REG_KW;
   if (!reg) {
     // fallback: snapshot 미로드 — 보수적으로 서울/경기 라벨 모두 규제 처리
@@ -9285,7 +9305,9 @@ function buildRuleClause(b){
   const recommended = [];
   const yr = new Date().getFullYear();
   const age = (b.buildYear && b.buildYear > 1900) ? (yr - b.buildYear) : null;
-  const isReg = (typeof isRegFront === 'function' && b.area) ? isRegFront(b.area) : null;
+  // REG-DUAL-PATH-FIX-2026-08-16: b.lawdCd 는 단지 상세 경로에서만 채워진다. 사용자가 직접
+  //   단지명·지역을 타이핑하는 특약 탭(genClause)은 lawd_cd 를 알 수 없어 undefined → 기존 문자열 판정 유지.
+  const isReg = (typeof isRegFront === 'function' && b.area) ? isRegFront(b.area, b.lawdCd) : null;
   const issues = String(b.issues || '');
   // 1) 대출 특약 — 항상 (기존 표준)
   essential.push({title:'대출 미승인 시 계약금 반환',content:'본 계약은 매수인의 주택담보대출 승인을 조건으로 하며, 대출이 미승인될 경우 매수인은 계약을 해제할 수 있고 매도인은 계약금 전액을 즉시 반환한다.',reason:'대출 규제 강화 — 사전심사 필수'});
@@ -9334,7 +9356,7 @@ function buildRuleRisk(p){
   const yr = new Date().getFullYear();
   const age = (p.buildYear && p.buildYear > 1900) ? (yr - p.buildYear) : null;
   const hh = Number(p.facility?.totalHouseholds) || null;
-  const isReg = (typeof isRegFront === 'function' && p.area) ? isRegFront(p.area) : null;
+  const isReg = (typeof isRegFront === 'function' && p.area) ? isRegFront(p.area, p.lawdCd) : null; // REG-DUAL-PATH-FIX-2026-08-16
   risks.push({level:'중간',title:'시세 하락 리스크',probability:'',scenario:'매수 후 금리 인상/규제 강화 시 단기 조정 가능성.',countermeasure:'5년 이상 보유, 전세 전환 플랜B 수립'});
   if (isReg === true) {
     risks.push({level:'중간',title:'규제지역 의무·대출 제약',probability:'',scenario:`${p.area}는 규제지역 — LTV 40%·잔금 후 6개월 전입 의무 등 제약이 있어요.`,countermeasure:'대출계산 탭에서 규제 기준 한도 확인 + 전입 계획 수립'});

@@ -1458,3 +1458,72 @@ test('authorizeCron — cron 게이트: 시크릿 미설정 차단 + 헤더 조�
   // 토큰 앞뒤 공백은 trim 후 비교(현재 동작 고정 — 스케줄러가 개행을 붙이는 사고 대비)
   assert.deepEqual(call(`Bearer ${SECRET}  `, SECRET), { status: null, nexted: true });
 });
+
+// ── Plan 016 (2026-08-16): 규제 판정 두 경로 정합 (REG-DUAL-PATH-FIX) ──
+//   [왜 이 테스트가 필요한가] 오늘 하루에만 **"같은 규칙이 두 경로에 복제돼 한쪽만 고쳐졌다"** 가
+//   세 번 나왔다: ① 취득세 6억 경계(프론트/백엔드) ② 결제 실패기록 금액 제외(confirm/webhook)
+//   ③ 그리고 이것 — 규제지역 판정이 `_regLtvLabel`(lawdCd 우선)과 `isRegFront`(문자열 전용)로
+//   갈려 있었다. 매번 "고친 뒤 다른 경로를 grep 한다"에 의존했으니 이번엔 **테스트로 묶는다.**
+//
+//   [실측 영향 범위] transactionService.LAWD_CODES 전수 대조 결과 두 함수가 갈리는 곳은
+//   **정확히 1곳**: 부산 강서구(26440) — SEOUL_GU_KW 의 '강서' 에 부분일치한다.
+//   같은 상세 모달에서 LTV 는 "70%(비규제)", 세금 시뮬레이션은 조정지역 중과(2주택 8%),
+//   특약·리스크는 "규제지역 6개월 전입 의무" 로 **서로 모순되는 사실**이 동시에 표시됐다.
+//
+//   ⚠ 이 테스트가 **덮지 않는** 것(정직한 한계): `_regLtvLabel` 은 lawd_cd 가 11 이면
+//   스냅샷의 `seoulRegulated` 를 보지 않고 무조건 '40%' 를 돌려준다(SEOUL-JUNGGU-FIX-2026-07-25).
+//   그래서 서울이 규제 해제되어 스냅샷이 갱신되는 날에는 두 함수가 다시 갈린다.
+//   아래는 **현재 상태(서울 전 지역 규제)** 만 고정한다 — 해제 시 대응은 운영자 판단 사항으로 보고했다.
+function _regPairFns(regKw) {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const grab = (re, what) => {
+    const m = html.match(re);
+    assert.ok(m, `frontend/index.html 에서 ${what} 을 찾지 못했다 (형태 변경 시 이 테스트도 갱신할 것)`);
+    return m[0];
+  };
+  // SEOUL_GU_KW 도 소스에서 그대로 가져온다 — 테스트에 복사해두면 목록이 바뀔 때 조용히 어긋난다.
+  const kwSrc = grab(/const SEOUL_GU_KW = \[[\s\S]*?\];/, 'SEOUL_GU_KW');
+  const isSrc = grab(/function isRegFront\(regionStr[\s\S]*?\n\}/, 'isRegFront');
+  const lblSrc = grab(/function _regLtvLabel\(area[\s\S]*?\n\}/, '_regLtvLabel');
+  return new Function('__REG',
+    `${kwSrc}\nconst window = { __REG_KW: __REG };\n${isSrc}\n${lblSrc}\n`
+    + 'return { isRegFront, _regLtvLabel };')(regKw);
+}
+
+test('isRegFront ↔ _regLtvLabel — 같은 단지에서 규제 판정이 갈리지 않는다 (한 화면 모순 차단)', () => {
+  // 현재 프로덕션 스냅샷 형태: { keywords, seoulRegulated } — regulationsService.js:232 실측.
+  //   keywords 는 경기 규제 지역에서 파생된다(같은 파일 209-230). 구조상 지방 축이 없다.
+  const REG = { keywords: ['과천시', '과천', '성남시 분당구', '분당', '광명시', '광명', '하남시', '하남'], seoulRegulated: true };
+  const { isRegFront, _regLtvLabel } = _regPairFns(REG);
+
+  // lawd_cd 는 전부 transactionService.LAWD_CODES 실값
+  const cases = [
+    ['강남구 대치동', '11680', true],   // 서울
+    ['강서구 화곡동', '11500', true],   // 서울 강서구 — 여기는 규제가 맞다
+    ['강서구 명지동', '26440', false],  // ★ 부산 강서구 — 실제로 갈렸던 유일한 조합
+    ['해운대구 우동', '26350', false],
+    ['수성구 범어동', '27260', false],
+    ['연수구 송도동', '28185', false],
+    ['분당구 정자동', '41135', true],   // 경기 규제
+    ['과천시 별양동', '41290', true],
+  ];
+
+  for (const [area, code, wantReg] of cases) {
+    const a = isRegFront(area, code);
+    const b = _regLtvLabel(area, code);
+    assert.equal(a, wantReg, `isRegFront('${area}', '${code}') 가 ${wantReg} 가 아니다`);
+    assert.equal(b, wantReg ? '40%' : '70%', `_regLtvLabel('${area}', '${code}') 가 어긋났다`);
+    // ★ 핵심 계약: 두 경로가 **서로** 같아야 한다. 한쪽만 고치면 여기서 걸린다.
+    assert.equal(a, b === '40%',
+      `규제 판정 두 경로가 갈렸다 — '${area}'(${code}): isRegFront=${a} vs _regLtvLabel=${b}. ` +
+      '한쪽만 고치지 말고 두 함수를 함께 볼 것.');
+  }
+
+  // lawd_cd 를 모르는 경로(사용자가 지역을 직접 타이핑하는 특약 탭·대출계산 탭)는
+  // 기존 문자열 판정 그대로 — 회귀가 없어야 한다.
+  assert.equal(isRegFront('서울 강남구'), true);
+  assert.equal(isRegFront('강서구 명지동'), true);  // 코드가 없으면 여전히 구별 불가(알려진 한계)
+  assert.equal(isRegFront('일산동구 마두동'), false);
+});
