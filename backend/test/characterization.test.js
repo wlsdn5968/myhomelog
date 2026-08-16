@@ -1170,3 +1170,223 @@ test('isDeletionAllowed — 삭제 유예 중 허용 경로는 화이트리스�
   assert.equal(isDeletionAllowed({ url: '/api/account/restore' }), true);
   assert.equal(isDeletionAllowed({}), false);
 });
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Plan 014 (2026-08-16): 추천 점수 엔진(report.js) — 실사고 2건의 재발 차단
+//
+// 왜 추가하나: `backend/routes/report.js` 의 점수 엔진은 **테스트가 0** 이었다.
+//   이 엔진의 출력(`objectiveFacts`)은 그대로 사용자 화면에 문장으로 찍힌다
+//   (frontend/index.html:4171 · :4304 — "행정구 등급 <b>…</b> · 규제 <b>…</b>").
+//   즉 여기서 틀린 값이 나오면 **서비스가 사실이 아닌 문장을 사용자에게 단정**하게 된다(절대룰 ②).
+//
+// 이 파일이 고정하는 실사고 2건 (둘 다 코드 주석에 근본원인이 남아 있다):
+//   ① REGION-LABEL-FIX-2026-07-25 (report.js:654-659, :733-735)
+//      "이름이 4자 이하 '구'" 라는 **문자열 규칙**으로 서울을 판정해, MOLIT sigungu 에 광역 접두가
+//      없다는 성질(transactionService._stripCityPrefix) 과 겹치면서 부산 해운대구·대구 수성구·
+//      인천 연수구가 전부 "서울 외곽구"·"조정대상지역" 으로 표기됐다.
+//      → 사용자는 LTV 40%·취득세 중과·실거주 의무를 잘못 전제하게 된다(금전 오판).
+//   ② TAG-AGE-FIX-2026-07-11 (report.js:757-759)
+//      신축/재건축 판정이 **절대 연도 하드코딩**(≥2018/≤1995 …)이라 시간이 지나면 조용히 어긋났다.
+//      → 상대 나이로 통일됐고, 이 테스트는 **현재 연도를 기준으로 계산**해 절대연도 복귀를 잡는다.
+//
+// 프로덕션 코드는 바꾸지 않는다 — 파일에서 함수를 정규식으로 추출해 되살린다
+// (`_isRegProp`·`_pickTierRate`·`_authFn` 와 같은, 이 저장소에 이미 확립된 패턴).
+//
+// ⚠ 기대값의 성격: 이것은 **characterization(현재 동작 고정) 테스트**다. 규제 수치·등급 배점의
+//   정책 정합성을 판정하지 않는다(그건 Sprint NNNN 법령 전수 재검증의 영역). 정책이 실제로
+//   바뀌어서 값을 고치는 경우라면 기대값도 같이 고치는 게 맞다 — 이 테스트가 잡으려는 것은
+//   **의도하지 않은 드리프트**, 특히 위 ①②로 되돌아가는 변경이다.
+// ══════════════════════════════════════════════════════════════════════════════
+function _reportFn(name, injectArgNames = [], injectValues = []) {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../routes/report.js'), 'utf8');
+  // ⚠ 템플릿 리터럴 안에서는 `\s`·`\n` 이 이스케이프 시퀀스로 먼저 소비돼 정규식이 깨진다.
+  //   문자열 연결 + 명시적 이중 이스케이프로 쓴다(_authFn 과 동일).
+  const re = new RegExp('function ' + name + '\\([\\s\\S]*?\\n\\}');
+  const m = src.match(re);
+  assert.ok(m, `report.js 에서 ${name} 을 찾지 못했다 (함수명·형태 변경 시 이 테스트도 갱신할 것)`);
+  return new Function(...injectArgNames, `${m[0]}; return ${name};`)(...injectValues);
+}
+
+// lawd_cd 는 전부 이 저장소의 `transactionService.LAWD_CODES` 실값이다(임의 생성 금지).
+//   서울 11 · 부산 26 · 대구 27 · 인천 28 · 경기 41 접두는 report.js:963-964 SIDO_PFX 와 동일.
+const LAWD = {
+  강남구: '11680', 마포구: '11440', 양천구: '11470', 노원구: '11350', 서울중구: '11140',
+  부산중구: '26110', 부산서구: '26140', 해운대구: '26350', 수성구: '27260',
+  연수구: '28185', 인천서구: '28260', 과천시: '41290',
+};
+
+test('getDistrictTier — 행정구 위계는 lawd_cd 로만 판정한다 (동명 구 오표기 실사고)', () => {
+  const getDistrictTier = _reportFn('getDistrictTier');
+
+  // 서울(lawd_cd 11 접두) — 등급이 실제로 붙는다
+  assert.deepEqual(getDistrictTier('강남구', LAWD.강남구), { tier: '강남3구', bonus: 60 });
+  assert.deepEqual(getDistrictTier('마포구', LAWD.마포구), { tier: '마용성광', bonus: 50 });
+  assert.deepEqual(getDistrictTier('양천구', LAWD.양천구), { tier: '서울 핵심구', bonus: 30 });
+  assert.deepEqual(getDistrictTier('노원구', LAWD.노원구), { tier: '서울 외곽구', bonus: 5 });
+
+  // ★ 실사고 재발 차단: 지방 광역시 구에 '서울 …' 라벨이 붙으면 안 된다.
+  //   MOLIT sigungu 에는 광역 접두가 없어 이름만 보면 서울 구와 구별할 수 없다.
+  assert.deepEqual(getDistrictTier('해운대구', LAWD.해운대구), { tier: '기타', bonus: 0 });
+  assert.deepEqual(getDistrictTier('수성구', LAWD.수성구), { tier: '기타', bonus: 0 });
+  assert.deepEqual(getDistrictTier('연수구', LAWD.연수구), { tier: '기타', bonus: 0 });
+
+  // ★ 완전 동명 구 — 문자열로는 원리적으로 구별 불가능한 조합
+  assert.deepEqual(getDistrictTier('중구', LAWD.서울중구), { tier: '서울 외곽구', bonus: 5 });
+  assert.deepEqual(getDistrictTier('중구', LAWD.부산중구), { tier: '기타', bonus: 0 });
+  assert.deepEqual(getDistrictTier('서구', LAWD.부산서구), { tier: '기타', bonus: 0 });
+  assert.deepEqual(getDistrictTier('서구', LAWD.인천서구), { tier: '기타', bonus: 0 });
+
+  // lawd_cd 가 없으면 서울로 단정하지 않는다 — 틀린 단정보다 미표기(절대룰 ②)
+  assert.deepEqual(getDistrictTier('강남구', ''), { tier: '기타', bonus: 0 });
+  assert.deepEqual(getDistrictTier('강남구', null), { tier: '기타', bonus: 0 });
+  assert.deepEqual(getDistrictTier('강남구', undefined), { tier: '기타', bonus: 0 });
+  // sigungu 자체가 없을 때도 예외 없이 '기타'(molit_transactions.sigungu 는 nullable — 실측)
+  assert.deepEqual(getDistrictTier(null, LAWD.강남구), { tier: '기타', bonus: 0 });
+
+  // 경기 과천·분당·판교는 **의도적으로** 문자열 매칭이다(report.js:667 — 동명 지역이 없어 안전).
+  //   lawd_cd 에 의존하지 않는다는 것 자체가 계약이므로 코드 유무 양쪽을 고정한다.
+  assert.deepEqual(getDistrictTier('과천시', LAWD.과천시), { tier: '분당·과천·판교', bonus: 35 });
+  assert.deepEqual(getDistrictTier('분당구', ''), { tier: '분당·과천·판교', bonus: 35 });
+});
+
+test('getRegulationPenalty — 서울 외 지역을 규제지역으로 단정하지 않는다 (금전 오판 차단)', () => {
+  const getRegulationPenalty = _reportFn('getRegulationPenalty');
+
+  assert.deepEqual(getRegulationPenalty('강남구', LAWD.강남구), { status: '투기과열·토허구역 일부', bonus: -8 });
+  assert.deepEqual(getRegulationPenalty('노원구', LAWD.노원구), { status: '조정대상지역', bonus: -3 });
+  assert.deepEqual(getRegulationPenalty('중구', LAWD.서울중구), { status: '조정대상지역', bonus: -3 });
+
+  // ★ 지방은 코드만으로 규제 여부를 단정할 수 없다 → '미확인'(화면에서 라벨 생략)
+  assert.deepEqual(getRegulationPenalty('해운대구', LAWD.해운대구), { status: '미확인', bonus: 0 });
+  assert.deepEqual(getRegulationPenalty('수성구', LAWD.수성구), { status: '미확인', bonus: 0 });
+  assert.deepEqual(getRegulationPenalty('중구', LAWD.부산중구), { status: '미확인', bonus: 0 });
+  assert.deepEqual(getRegulationPenalty('서구', LAWD.인천서구), { status: '미확인', bonus: 0 });
+  assert.deepEqual(getRegulationPenalty(null, LAWD.강남구), { status: '미확인', bonus: 0 });
+
+  // lawd_cd 가 비면 '비규제' 로 떨어진다.
+  //   ⚠ 이 분기는 **보고서 경로에서는 도달 불가**다: 후보의 lawd_cd 는 molit_transactions 에서
+  //   그대로 오고 그 컬럼은 NOT NULL 이다(2026-08-16 information_schema 실측).
+  //   그래도 동작을 고정해 둔다 — 훗날 다른 호출부가 생겨 코드 없이 부르면 '강남구'에 "비규제"라는
+  //   **사실 아닌 라벨**이 화면에 뜬다. 그때 이 줄이 근거가 된다.
+  assert.deepEqual(getRegulationPenalty('강남구', ''), { status: '비규제', bonus: 0 });
+});
+
+test('applyObjectiveScore — 지방 단지 카드에 서울 위계·규제 문구가 찍히지 않는다 (실사고 재현)', () => {
+  const deps = ['getDistrictTier', 'getBuilderTier', 'getHouseholdBonus',
+    'getParkingBonus', 'getAgeBonus', 'getRegulationPenalty'];
+  const applyObjectiveScore = _reportFn('applyObjectiveScore', deps, deps.map((n) => _reportFn(n)));
+
+  const mk = (sigungu, lawd_cd) => ({
+    sigungu, lawd_cd, umd_nm: '테스트동',
+    households: 1200, build_year: new Date().getFullYear() - 3, n: 10,
+    kaptInfo: { builder: '삼성물산', parking: 1500 },
+    score: 100, scoreBreakdown: {},
+  });
+
+  // 서울 강남구 — 라벨이 붙어야 정상
+  const seoul = mk('강남구', LAWD.강남구);
+  applyObjectiveScore(seoul);
+  assert.equal(seoul.objectiveFacts.district, '강남3구');
+  assert.equal(seoul.objectiveFacts.regulation, '투기과열·토허구역 일부');
+
+  // ★ 부산 해운대구 — 프론트가 `f.district ? … : null` 로 렌더하므로 null 이어야 문구가 사라진다.
+  //   여기서 문자열이 새어 나가면 "해운대구 우동 (서울 외곽구)" 실사고가 그대로 재현된다.
+  for (const [gu, code] of [['해운대구', LAWD.해운대구], ['수성구', LAWD.수성구], ['연수구', LAWD.연수구]]) {
+    const local = mk(gu, code);
+    applyObjectiveScore(local);
+    assert.equal(local.objectiveFacts.district, null, `${gu} 에 행정구 등급 라벨이 붙었다`);
+    assert.equal(local.objectiveFacts.regulation, null, `${gu} 에 규제 라벨이 붙었다`);
+    // 라벨뿐 아니라 **점수 가산/감산도** 서울 기준으로 들어가면 안 된다
+    assert.equal(local.scoreBreakdown['객관_행정구위계'], undefined, `${gu} 에 서울 위계 가산점이 붙었다`);
+    assert.equal(local.scoreBreakdown['객관_규제'], undefined, `${gu} 에 규제 감산이 붙었다`);
+  }
+});
+
+test('getAgeBonus — 노후도는 절대 연도가 아니라 현재 연도 기준 상대 나이다 (시간 드리프트 차단)', () => {
+  const getAgeBonus = _reportFn('getAgeBonus');
+  const Y = new Date().getFullYear();
+
+  // 경계 양쪽을 모두 고정한다 — 한쪽만 보면 부등호 방향 실수를 놓친다(계획 008 의 취득세 경계와 동일 교훈)
+  assert.deepEqual(getAgeBonus(Y - 5), { years: 5, bonus: 25 });
+  assert.deepEqual(getAgeBonus(Y - 6), { years: 6, bonus: 18 });
+  assert.deepEqual(getAgeBonus(Y - 10), { years: 10, bonus: 18 });
+  assert.deepEqual(getAgeBonus(Y - 11), { years: 11, bonus: 12 });
+  assert.deepEqual(getAgeBonus(Y - 15), { years: 15, bonus: 12 });
+  assert.deepEqual(getAgeBonus(Y - 16), { years: 16, bonus: 6 });
+  assert.deepEqual(getAgeBonus(Y - 20), { years: 20, bonus: 6 });
+  assert.deepEqual(getAgeBonus(Y - 21), { years: 21, bonus: 2 });
+  assert.deepEqual(getAgeBonus(Y - 30), { years: 30, bonus: 2 });
+  assert.deepEqual(getAgeBonus(Y - 31), { years: 31, bonus: 0 });
+  // 준공년도 미상 → 추정하지 않는다(0)
+  assert.deepEqual(getAgeBonus(null), { years: null, bonus: 0 });
+  assert.deepEqual(getAgeBonus(0), { years: null, bonus: 0 });
+});
+
+test('computeAptScore — 신축/재건축 우선순위도 상대 나이 기준이다 (절대연도 하드코딩 복귀 차단)', () => {
+  const computeAptScore = _reportFn('computeAptScore');
+  const Y = new Date().getFullYear();
+  // 다른 항목을 전부 0 으로 만들어 priority 만 남긴다:
+  //   n=0 → 거래량 가산 없음 / avgPrice·buy 비 = 0.79999 → 예산 fit 두 구간 모두 밖 / 가구상황 전부 무해
+  const ctxOf = (priority) => ({ buy: 10, priority, kidPlan: '없음', stayYears: '5~10년', isFirstBuyer: false });
+  const cOf = (buildYear) => ({ n: 0, households: 0, avgPrice: 79999, build_year: buildYear, sigungu: '강남구', umd_nm: '대치동' });
+
+  const score = (priority, buildYear) => computeAptScore(cOf(buildYear), ctxOf(priority)).total;
+
+  // 신축: 8년 이하 35 / 14년 이하 18 / 그 밖 0
+  assert.equal(score('신축', Y - 8), 35);
+  assert.equal(score('신축', Y - 9), 18);
+  assert.equal(score('신축', Y - 14), 18);
+  assert.equal(score('신축', Y - 15), 0);
+  // 재건축: 30년 이상 30 / 25년 이상 12 / 그 밖 0
+  assert.equal(score('재건축', Y - 30), 30);
+  assert.equal(score('재건축', Y - 25), 12);
+  assert.equal(score('재건축', Y - 24), 0);
+  // 준공년도 미상이면 신축·재건축 어느 쪽으로도 추정하지 않는다
+  assert.equal(score('신축', null), 0);
+  assert.equal(score('재건축', null), 0);
+});
+
+test('computeAptScore — 예산 fit 구간 경계 (예산 ±10%/±20% 양쪽 끝)', () => {
+  const computeAptScore = _reportFn('computeAptScore');
+  const Y = new Date().getFullYear();
+  // priority '신축' + 15년 구축 → priority 기여 0. n=0 → 거래량 0. 남는 것은 budget_fit 뿐.
+  const ctx = { buy: 10, priority: '신축', kidPlan: '없음', stayYears: '5~10년', isFirstBuyer: false };
+  const fit = (avgPriceManwon) => computeAptScore(
+    { n: 0, households: 0, avgPrice: avgPriceManwon, build_year: Y - 15, sigungu: '강남구', umd_nm: '테스트동' }, ctx).total;
+
+  // buy=10억 → 기준 100,000 만원
+  assert.equal(fit(100000), 30);  // 정확 일치
+  assert.equal(fit(90000), 30);   // 0.9 — 경계 포함
+  assert.equal(fit(110000), 30);  // 1.1 — 경계 포함
+  assert.equal(fit(89999), 12);   // 0.9 바로 아래 → 넓은 구간
+  assert.equal(fit(80000), 12);   // 0.8 — 경계 포함
+  assert.equal(fit(120000), 12);  // 1.2 — 경계 포함
+  assert.equal(fit(79999), 0);    // 구간 밖
+  assert.equal(fit(120001), 0);   // 구간 밖
+});
+
+test('getHouseholdBonus·getParkingBonus — 등급 경계 + 0 나눗셈 방어', () => {
+  const getHouseholdBonus = _reportFn('getHouseholdBonus');
+  const getParkingBonus = _reportFn('getParkingBonus');
+
+  for (const [n, want] of [[3000, 30], [2999, 25], [2000, 25], [1999, 20], [1000, 20],
+    [999, 12], [500, 12], [499, 5], [300, 5], [299, 0]]) {
+    assert.equal(getHouseholdBonus(n), want, `세대수 ${n} 의 보너스가 ${want} 가 아니다`);
+  }
+  // 세대수 미상은 0 — KAPT 미매칭 단지를 대단지로 오인하지 않는다
+  assert.equal(getHouseholdBonus(null), 0);
+  assert.equal(getHouseholdBonus(0), 0);
+  assert.equal(getHouseholdBonus('많음'), 0);
+
+  // 주차 비율 — ratio 는 **문자열**(toFixed(2))이다. 프론트가 그대로 표시하므로 타입이 계약의 일부다.
+  assert.deepEqual(getParkingBonus(1300, 1000), { ratio: '1.30', bonus: 12 });
+  assert.deepEqual(getParkingBonus(1000, 1000), { ratio: '1.00', bonus: 8 });
+  assert.deepEqual(getParkingBonus(700, 1000), { ratio: '0.70', bonus: 3 });
+  assert.deepEqual(getParkingBonus(699, 1000), { ratio: '0.70', bonus: 0 }); // 표시는 반올림, 판정은 원값
+  // ★ 0 나눗셈·미상 방어 — Infinity/NaN 이 점수에 섞이면 그 단지가 상위권을 통째로 차지한다
+  assert.deepEqual(getParkingBonus(1000, 0), { ratio: null, bonus: 0 });
+  assert.deepEqual(getParkingBonus(0, 1000), { ratio: null, bonus: 0 });
+  assert.deepEqual(getParkingBonus(null, null), { ratio: null, bonus: 0 });
+});
