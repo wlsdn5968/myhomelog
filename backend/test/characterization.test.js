@@ -1395,6 +1395,83 @@ test('getHouseholdBonus·getParkingBonus — 등급 경계 + 0 나눗셈 방어'
   assert.deepEqual(getParkingBonus(null, null), { ratio: null, bonus: 0 });
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Plan 023 (2026-08-16): 중개보수 tier 경계 — **주 경로(스냅샷) == 폴백 경로(법정 하드코딩)**
+//
+// [실사고] 계획 008(02f4a26)이 취득세 경계를 `<` → `<=` 로 고쳤는데, 그 한 줄이 **같은 헬퍼를
+//   쓰던 중개보수까지** 바꿨다. 두 tier 표는 `underAuk` 라는 같은 필드를 쓰지만 법정 경계가 반대다:
+//     · 취득세   지방세법 §11①8호          — "6억원 **이하** 1%"    → `<=`
+//     · 중개보수 공인중개사법 시행규칙 별표1 — "2억~9억원 **미만** 0.4%" → `<`
+//   그 결과 0.5·2·9·12·15억 정확히 5개 지점에서 법정 요율과 어긋났다
+//   (라이브 실측 2026-08-16: 9억 −90만 · 12억 −120만 · 15억 −150만 **과소**, 0.5억 +5만 · 2억 +20만 과대).
+//   커밋 메시지는 "경계값 하나만 바뀌고 회귀 위험 낮음" 이었다 — **공유 헬퍼의 두 번째 소비처를
+//   확인하지 않은 것**이 근본 원인이고, 기존 테스트는 폴백 경로(`source:'fallback'`)만 봐서 못 잡았다.
+//
+// [이 테스트가 고정하는 것] 스냅샷 tier 로 계산한 값과, 법령을 그대로 옮긴 하드코딩 폴백이
+//   **모든 경계에서 같아야 한다**. 손으로 고른 지점이 아니라 tier 의 `underAuk` 에서 경계를
+//   **파생**시켜 그 앞·정확히·뒤 3점을 전부 본다(계획 022 의 교훈 — 손으로 고른 목록은 빠뜨린다).
+// ══════════════════════════════════════════════════════════════════════════════
+test('중개보수 tier — 스냅샷 경로와 법정 폴백이 모든 경계에서 일치한다 (공인중개사법 별표1 = 미만)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+
+  // 프로덕션에 실제로 실린 tier (regulations_snapshot.acquisition_tax_2025.commission, 2026-08-16 DB 실측)
+  const COMMISSION_TIERS = [
+    { rate: 0.006, underAuk: 0.5 }, { rate: 0.005, underAuk: 2 },
+    { rate: 0.004, underAuk: 9 }, { rate: 0.005, underAuk: 12 },
+    { rate: 0.006, underAuk: 15 }, { rate: 0.007, underAuk: 999 },
+  ];
+  // 법령 그대로 (별표1 매매·교환) — 프론트 7477행·백엔드 analysisService 폴백과 동일한 식
+  const legalRate = (p) => (p < 0.5 ? 0.006 : p < 2 ? 0.005 : p < 9 ? 0.004
+    : p < 12 ? 0.005 : p < 15 ? 0.006 : 0.007);
+
+  const grabFront = (name) => {
+    const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+    const m = html.match(new RegExp('function ' + name + '\\([\\s\\S]*?\\n\\}'));
+    assert.ok(m, `frontend/index.html 에서 ${name} 을 찾지 못했다`);
+    return new Function(`${m[0]}; return ${name};`)();
+  };
+  const frontUnder = grabFront('_pickTierRateUnder');
+  const frontIncl = grabFront('_pickTierRate');
+
+  // 경계를 **데이터에서 파생** — tier 목록이 바뀌어도 자동으로 따라간다
+  const bounds = COMMISSION_TIERS.map((t) => t.underAuk).filter((v) => v < 999);
+  assert.ok(bounds.length >= 5, `경계가 ${bounds.length}개뿐 — tier 표가 바뀌었는지 확인할 것`);
+
+  for (const b of bounds) {
+    for (const p of [Number((b - 0.01).toFixed(2)), b, Number((b + 0.01).toFixed(2))]) {
+      const law = legalRate(p);
+      assert.equal(frontUnder(COMMISSION_TIERS, p, 0.007), law,
+        `프론트 중개보수 ${p}억: 스냅샷 경로가 법정 요율(${(law * 100).toFixed(1)}%)과 다르다`);
+    }
+    // ★ 경계 **정확히** 그 값일 때가 사고 지점이었다 — '이하' 헬퍼를 쓰면 여기서 갈린다.
+    assert.notEqual(frontIncl(COMMISSION_TIERS, b, 0.007), undefined);
+    if (frontIncl(COMMISSION_TIERS, b, 0.007) !== legalRate(b)) {
+      // 이 분기가 도는 것이 정상이다: '이하' 헬퍼는 중개보수에 쓰면 안 된다는 사실 자체를 고정한다.
+      assert.notEqual(frontIncl(COMMISSION_TIERS, b, 0.007), frontUnder(COMMISSION_TIERS, b, 0.007),
+        `${b}억에서 두 헬퍼가 같은 값을 낸다 — 경계 분리가 무의미해졌으니 이 테스트를 재검토할 것`);
+    }
+  }
+
+  // 백엔드 쌍둥이도 같은 계약 (지금은 라우트가 taxConfig 를 안 넘겨 도달 불가지만,
+  //   넘기는 순간 되살아나는 결함이라 함께 고정한다 — 오늘만 "한쪽만 고침"이 4번 나왔다)
+  const beSrc = fs.readFileSync(path.join(__dirname, '../services/analysisService.js'), 'utf8');
+  const mBe = beSrc.match(/function pickTierRateUnder\([\s\S]*?\n\}/);
+  assert.ok(mBe, 'analysisService.js 에서 pickTierRateUnder 를 찾지 못했다');
+  const beUnder = new Function(`${mBe[0]}; return pickTierRateUnder;`)();
+  for (const b of bounds) {
+    assert.equal(beUnder(COMMISSION_TIERS, b, 0.007), legalRate(b),
+      `백엔드 중개보수 ${b}억이 법정 요율과 다르다`);
+    assert.equal(beUnder(COMMISSION_TIERS, b, 0.007), frontUnder(COMMISSION_TIERS, b, 0.007),
+      `${b}억에서 프론트↔백엔드 중개보수가 갈렸다`);
+  }
+
+  // 취득세는 반대로 '이하' 가 맞다 — 두 표의 경계 의미가 다르다는 것 자체를 고정한다
+  const ACQ_TIERS = [{ rate: 0.01, underAuk: 6 }, { rate: 0.02, underAuk: 9 }, { rate: 0.03, underAuk: 999 }];
+  assert.equal(frontIncl(ACQ_TIERS, 6, 0.03), 0.01, '취득세 6억 정확히는 1%(지방세법 §11①8호 6억 이하)여야 한다');
+  assert.equal(frontIncl(ACQ_TIERS, 9, 0.03), 0.02, '취득세 9억 정확히는 누진구간(2% tier)이어야 한다');
+});
+
 // ── Plan 015 (2026-08-16): cron 인증 게이트 (`backend/routes/cron.js` authorizeCron) ──
 //   왜 추가하나: `router.use(authorizeCron)` 하나가 **모든 cron 엔드포인트의 유일한 방어선**이다.
 //   그 뒤에는 실거래 재적재·apt_master 동기화·retention hard delete(복구 불가 삭제)가 있다.

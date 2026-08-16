@@ -7432,9 +7432,28 @@ function renderAnalysisFallback(p){
 //   그때 "프론트는 이미 맞다"고 본 근거가 아래 하드코딩 폴백(`price<=6?.01`)이라 **이 주 경로는 누락**됐다.
 //   window.__TAX_CONFIG 가 로드된 정상 상태에서 상시 타는 쪽이 여기다. 두 사본은 같은 값을 내야 하며
 //   그 계약은 characterization.test.js 의 '_pickTierRate(프론트) ↔ 백엔드' 테스트가 고정한다.
+// ⚠⚠ TIER-BOUNDARY-SPLIT-2026-08-16 (Plan 023) — **경계 의미가 표마다 반대다. 헬퍼를 공유하지 마라.**
+//   같은 `underAuk` 필드를 쓰는 두 tier 표가 법령상 서로 다른 경계를 갖는다:
+//     · 취득세      지방세법 §11①8호        — "6억원 **이하** 1%"   → `<=` (아래 _pickTierRate)
+//     · 중개보수    공인중개사법 시행규칙 별표1 — "2억~9억원 **미만** 0.4%" → `<`  (아래 _pickTierRateUnder)
+//   [실사고] 계획 008(02f4a26)이 취득세 경계를 `<`→`<=` 로 고쳤는데, 그 한 줄이 **같은 헬퍼를 쓰던
+//     중개보수까지 바꿔** 0.5·2·9·12·15억 정확히 5개 지점에서 법정 요율과 어긋났다
+//     (라이브 실측: 9억 −90만 · 12억 −120만 · 15억 −150만 **과소**, 0.5억 +5만 · 2억 +20만 과대).
+//     커밋 메시지엔 "경계값 하나만 바뀌고 회귀 위험 낮음"이라 적혀 있었다 — **공유 헬퍼의 두 번째
+//     소비처를 확인하지 않은 것**이 근본 원인이다.
+//   [설계 원칙] 경계 의미가 다르면 **함수를 나눈다**. 기본값 인자로 구분하면 새 호출부가 조용히
+//     틀린 쪽을 고른다. 이름에 경계를 박아 호출부에서 법령이 보이게 한다.
+/** "N억 **이하**" 경계 (취득세 — 지방세법 §11①8호) */
 function _pickTierRate(tiers, priceAuk, fallbackRate){
   for (const t of (tiers||[])) {
     if (priceAuk <= (t.underAuk||0)) return t.rate ?? fallbackRate;
+  }
+  return fallbackRate;
+}
+/** "N억 **미만**" 경계 (중개보수 — 공인중개사법 시행규칙 별표1). 필드명 `underAuk` 의 문자 그대로. */
+function _pickTierRateUnder(tiers, priceAuk, fallbackRate){
+  for (const t of (tiers||[])) {
+    if (priceAuk < (t.underAuk||0)) return t.rate ?? fallbackRate;
   }
   return fallbackRate;
 }
@@ -7473,7 +7492,8 @@ function calcTotalCostHTML(price,loan,houseStatus,isFirstBuyer){
 
   // ── 중개 수수료 ──
   let cr;
-  if (tc?.commission) cr = _pickTierRate(tc.commission, price, 0.007);
+  // TIER-BOUNDARY-SPLIT-2026-08-16: 중개보수는 **미만** 경계다(별표1). 아래 폴백의 `<` 와 같은 값을 내야 한다.
+  if (tc?.commission) cr = _pickTierRateUnder(tc.commission, price, 0.007);
   else cr = price<.5?.006:price<2?.005:price<9?.004:price<12?.005:price<15?.006:.007;
   const comm=Math.round(pw*cr);
 
