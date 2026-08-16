@@ -1769,6 +1769,9 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     </span>
     <span id="mapHintTxt" style="font-size:10px;color:var(--t3)">마커클릭=팝업 | 더블클릭=상세리포트</span>
     <span id="popLegend" style="font-size:10px;color:var(--t3);display:none">| 숫자 라벨 = 인기 단지 (최근 60일 실거래 많은 순 · 시군구당 최대 2곳)</span>
+    <!-- POPULAR-STALE-SURFACE-2026-08-16 (Plan 028): 서버가 stale:true 를 줄 때만 노출.
+         라이브 집계 실패 시 최대 7일 묵은 스냅샷을 쓰는데, 그걸 "최근 60일" 로만 적으면 위장이 된다. -->
+    <span id="popStaleNote" style="font-size:10px;color:var(--warn,#b26a00);display:none">| ⚠️ 집계 일시 지연 — 최대 며칠 전 기준</span>
     <span id="geoSt" style="font-size:10px;color:var(--grn);display:none">📍 좌표 정확화 중...</span>
   </div>
   <!-- KKKKKK: 모바일 히어로 칩 + 확장 카드 + 데이터 캡션 (≤700px 전용 — 데스크톱은 701px MQ 가 차단).
@@ -7432,9 +7435,28 @@ function renderAnalysisFallback(p){
 //   그때 "프론트는 이미 맞다"고 본 근거가 아래 하드코딩 폴백(`price<=6?.01`)이라 **이 주 경로는 누락**됐다.
 //   window.__TAX_CONFIG 가 로드된 정상 상태에서 상시 타는 쪽이 여기다. 두 사본은 같은 값을 내야 하며
 //   그 계약은 characterization.test.js 의 '_pickTierRate(프론트) ↔ 백엔드' 테스트가 고정한다.
+// ⚠⚠ TIER-BOUNDARY-SPLIT-2026-08-16 (Plan 023) — **경계 의미가 표마다 반대다. 헬퍼를 공유하지 마라.**
+//   같은 `underAuk` 필드를 쓰는 두 tier 표가 법령상 서로 다른 경계를 갖는다:
+//     · 취득세      지방세법 §11①8호        — "6억원 **이하** 1%"   → `<=` (아래 _pickTierRate)
+//     · 중개보수    공인중개사법 시행규칙 별표1 — "2억~9억원 **미만** 0.4%" → `<`  (아래 _pickTierRateUnder)
+//   [실사고] 계획 008(02f4a26)이 취득세 경계를 `<`→`<=` 로 고쳤는데, 그 한 줄이 **같은 헬퍼를 쓰던
+//     중개보수까지 바꿔** 0.5·2·9·12·15억 정확히 5개 지점에서 법정 요율과 어긋났다
+//     (라이브 실측: 9억 −90만 · 12억 −120만 · 15억 −150만 **과소**, 0.5억 +5만 · 2억 +20만 과대).
+//     커밋 메시지엔 "경계값 하나만 바뀌고 회귀 위험 낮음"이라 적혀 있었다 — **공유 헬퍼의 두 번째
+//     소비처를 확인하지 않은 것**이 근본 원인이다.
+//   [설계 원칙] 경계 의미가 다르면 **함수를 나눈다**. 기본값 인자로 구분하면 새 호출부가 조용히
+//     틀린 쪽을 고른다. 이름에 경계를 박아 호출부에서 법령이 보이게 한다.
+/** "N억 **이하**" 경계 (취득세 — 지방세법 §11①8호) */
 function _pickTierRate(tiers, priceAuk, fallbackRate){
   for (const t of (tiers||[])) {
     if (priceAuk <= (t.underAuk||0)) return t.rate ?? fallbackRate;
+  }
+  return fallbackRate;
+}
+/** "N억 **미만**" 경계 (중개보수 — 공인중개사법 시행규칙 별표1). 필드명 `underAuk` 의 문자 그대로. */
+function _pickTierRateUnder(tiers, priceAuk, fallbackRate){
+  for (const t of (tiers||[])) {
+    if (priceAuk < (t.underAuk||0)) return t.rate ?? fallbackRate;
   }
   return fallbackRate;
 }
@@ -7473,7 +7495,8 @@ function calcTotalCostHTML(price,loan,houseStatus,isFirstBuyer){
 
   // ── 중개 수수료 ──
   let cr;
-  if (tc?.commission) cr = _pickTierRate(tc.commission, price, 0.007);
+  // TIER-BOUNDARY-SPLIT-2026-08-16: 중개보수는 **미만** 경계다(별표1). 아래 폴백의 `<` 와 같은 값을 내야 한다.
+  if (tc?.commission) cr = _pickTierRateUnder(tc.commission, price, 0.007);
   else cr = price<.5?.006:price<2?.005:price<9?.004:price<12?.005:price<15?.006:.007;
   const comm=Math.round(pw*cr);
 
@@ -8448,6 +8471,22 @@ function isRegFront(regionStr, lawdCd){
   //     서울·경기 판정 경로는 건드리지 않는다(seoulRegulated 스냅샷 존중 유지).
   const _code = String(lawdCd||'').trim();
   if (_code && !_code.startsWith('11') && !_code.startsWith('41')) return false;
+  // SEOUL-JUNGGU-SYMMETRY-2026-08-16 (Plan 022, **라이브 실측으로 발각**):
+  //   위 음성 게이트만으로는 부족했다. 서울(11) 은 여기서 **확정**해야 한다.
+  //   [근본 원인] SEOUL_GU_KW 는 24개이고 '중구' 를 **의도적으로 뺐다**(지방 중구 오판 방지 —
+  //     SEOUL-JUNGGU-FIX-2026-07-25). 그래서 서울 중구(11140)는 이름 매칭에 걸리지 않고
+  //     `reg.keywords`(경기 파생)에도 없어 **false** 가 됐다. 반면 _regLtvLabel 은 코드 11 을
+  //     보고 '40%'(규제)를 준다 → 서울 25개 구 중 **중구 1곳에서만** 두 경로가 갈렸다(라이브 전수 확인).
+  //   [증상] LTV 라벨은 "40% 규제"인데 영역검색 마커는 '비규제', 세금 시뮬레이션은 2주택 취득세를
+  //     **기본세율**로(조정지역 8% 중과 누락 = 금전 과소 표기), 특약·리스크는 "전입 의무" 미표시.
+  //     오늘 아침 고친 부산 강서구와 **정확히 반대 방향의 같은 클래스** 결함이다.
+  //   [Fix] _regLtvLabel 의 서울 분기와 **대칭**으로 맞춘다:
+  //     스냅샷이 명시적으로 해제(seoulRegulated === false)일 때만 false, 그 외(미로드 포함)는 true.
+  //     미로드 시 true 인 것이 보수적 선택이다(_regLtvLabel 도 미로드면 '40%').
+  if (_code.startsWith('11')) {
+    const _snap = window.__REG_KW;
+    return !_snap || _snap.seoulRegulated !== false;
+  }
   const reg = window.__REG_KW;
   if (!reg) {
     // fallback: snapshot 미로드 — 보수적으로 서울/경기 라벨 모두 규제 처리
@@ -9814,7 +9853,17 @@ async function loadPopularMarkers() {
     });
     // 범례는 마커가 실제 그려졌을 때만 노출 (기준 공개 — 정직 정책)
     const _lg = document.getElementById('popLegend');
-    if (_lg && window._popMarkers.length) _lg.style.display = '';
+    if (_lg && window._popMarkers.length) {
+      _lg.style.display = '';
+      // POPULAR-STALE-SURFACE-2026-08-16 (Plan 028, 감사 지적):
+      //   백엔드는 라이브 집계가 죽으면 **최대 7일 묵은 스냅샷**을 주면서 `stale: true` 를 붙이고
+      //   주석에 "stale 표기를 payload 에 남겨 위장하지 않는다"(search.js:598)고 적었다.
+      //   그런데 **프론트가 그 필드를 읽지 않아** 며칠 전 랭킹이 "최근 60일 …" 문구 그대로 떴다 —
+      //   서버는 정직하게 표기했는데 화면에서 사라져 결국 위장이 된 셈이다(절대룰 ②).
+      //   기준을 공개하는 이 범례가 표시 위치로 맞다. 정상 응답이면 아무 변화 없음.
+      const _staleEl = document.getElementById('popStaleNote');
+      if (_staleEl) _staleEl.style.display = j.stale ? '' : 'none';
+    }
     // POP-TITLE (Sprint MMMM): 지도 위 타이틀 카드 — 인기 단지 정체 명시 (매물 오해 방지)
     // Sprint PPPPP: ✕ 로 닫으면 세션 동안 재표시 안 함(sessionStorage) — 반복 노출 피로 제거(시안 컷3)
     const _ptc = document.getElementById('popTitleCard');

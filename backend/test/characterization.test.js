@@ -880,11 +880,17 @@ function _mockRes() {
 // supabase 체인 목 — payments 조회 1건 + update 결과를 주입한다.
 //   update 는 두 형태로 쓰인다: `update().eq()` 를 await(금액불일치 경로) / `update().eq().eq().select()`(CAS 경로).
 //   둘 다 지원하려면 체인이 thenable 이면서 eq/select 를 가져야 한다.
+// ⚠ MOCK-EQ-RECORD-2026-08-16 (Plan 025) — **`.eq()` 인자를 기록한다. 무시하면 안 된다.**
+//   [실사고] 이 목은 원래 `eq: () => c` 로 **인자를 통째로 버렸다**. 그 결과 프로덕션에서
+//   CAS 가드(`.eq('status','requested')` — P0-5 동시처리 race 차단)나 소유자 필터
+//   (`.eq('user_id', req.user.id)`)를 **지워도 결제 테스트 9건이 전부 초록**이었다.
+//   돈 경로에 대해 잘못된 안심을 주는 구조라, 목이 필터를 기록하고 테스트가 그걸 단언한다.
+//   `seen.updateFilters` / `seen.selectFilters` 는 [[col, val], …] 형태로 호출 순서대로 쌓인다.
 function _mockAdmin({ payRow, casRows }) {
-  const seen = { updates: [] };
+  const seen = { updates: [], updateFilters: [], selectFilters: [] };
   const upChain = (patch) => {
     const c = {
-      eq: () => c,
+      eq: (col, val) => { seen.updateFilters.push([col, val]); return c; },
       select: async () => ({ data: casRows, error: null }),
       then: (res, rej) => Promise.resolve({ data: null, error: null }).then(res, rej),
     };
@@ -893,11 +899,15 @@ function _mockAdmin({ payRow, casRows }) {
   };
   const sel = {
     select: () => sel,
-    eq: () => sel,
+    eq: (col, val) => { seen.selectFilters.push([col, val]); return sel; },
     maybeSingle: async () => ({ data: payRow, error: null }),
     update: upChain,
   };
   return { client: { from: () => sel }, seen };
+}
+/** 기록된 필터에 [col, val] 조합이 있는지 (순서·중복 무관) */
+function _hasFilter(list, col, val) {
+  return (list || []).some(([c, v]) => c === col && (val === undefined || v === val));
 }
 async function _withBillingStub({ payRow, casRows, tossKey }, fn) {
   const clientPath = require.resolve('../db/client');
@@ -957,6 +967,33 @@ test('billing/confirm — 이미 captured 면 Toss 재호출 없이 멱등 응�
     assert.equal(res.body.status, 'captured');
     // ★ 이미 처리된 주문에 update 를 또 날리면 안 된다(승인 상태를 덮어쓸 위험)
     assert.equal(seen.updates.length, 0, '이미 captured 인데 추가 update 가 발생했다');
+    // ★★ MOCK-EQ-RECORD-2026-08-16: 조회가 **소유자 필터**를 걸었는지. 이게 빠지면 남의 주문을
+    //   orderId 만 알면 조회·확정할 수 있다. 목이 인자를 버리던 시절엔 지워도 통과했다.
+    assert.ok(_hasFilter(seen.selectFilters, 'order_id', 'o1'),
+      `confirm 조회에 order_id 필터가 없다: ${JSON.stringify(seen.selectFilters)}`);
+    assert.ok(_hasFilter(seen.selectFilters, 'user_id', 'u1'),
+      `confirm 조회에 소유자(user_id) 필터가 없다 — 남의 주문을 조회할 수 있다: ${JSON.stringify(seen.selectFilters)}`);
+  });
+});
+
+// ── Plan 025 (2026-08-16): 결제 CAS 가드가 **실제로 걸리는지** 단언 ──
+//   [왜] 감사에서 나온 지적 — 목의 `.eq()` 가 인자를 버려서, 프로덕션에서 CAS 조건
+//   (`.eq('status','requested')`, P0-5 동시처리 race 차단)을 지워도 결제 테스트가 전부 초록이었다.
+//   목이 필터를 기록하도록 고쳤으니(위 _mockAdmin), 그 조건이 실제로 걸리는지 여기서 못 박는다.
+test('billing/confirm — captured 전환은 status=requested CAS 로만 (webhook 과의 race 차단)', async () => {
+  const payRow = { order_id: 'o1', user_id: 'u1', amount: 9900, status: 'requested', plan: 'pro' };
+  const axiosImpl = { post: async () => ({ data: { orderId: 'o1', status: 'DONE', totalAmount: 9900, method: '카드', approvedAt: '2026-08-16T00:00:00Z' } }) };
+  await _withBillingStub2({ payRow, casRows: [{ order_id: 'o1' }], tossKey: 'test', axiosImpl }, async (seen) => {
+    const res = _mockRes();
+    await _billingHandler('/confirm')({ body: { paymentKey: 'pk', orderId: 'o1', amount: 9900 }, user: { id: 'u1' } }, res, () => {});
+    const cap = seen.updates.find((u) => u && u.status === 'captured');
+    assert.ok(cap, `captured 전환 update 가 없다: ${JSON.stringify(seen.updates)}`);
+    // ★ 핵심: 이 두 필터가 함께 걸려야 "requested 인 것만 captured 로" 가 성립한다.
+    assert.ok(_hasFilter(seen.updateFilters, 'order_id', 'o1'),
+      `CAS update 에 order_id 필터가 없다: ${JSON.stringify(seen.updateFilters)}`);
+    assert.ok(_hasFilter(seen.updateFilters, 'status', 'requested'),
+      'CAS 가드(.eq("status","requested")) 가 없다 — webhook 이 먼저 captured 시켜도 confirm 이 덮어쓴다: '
+      + JSON.stringify(seen.updateFilters));
   });
 });
 
@@ -1275,6 +1312,21 @@ test('getRegulationPenalty — 서울 외 지역을 규제지역으로 단정하
   //   그래도 동작을 고정해 둔다 — 훗날 다른 호출부가 생겨 코드 없이 부르면 '강남구'에 "비규제"라는
   //   **사실 아닌 라벨**이 화면에 뜬다. 그때 이 줄이 근거가 된다.
   assert.deepEqual(getRegulationPenalty('강남구', ''), { status: '비규제', bonus: 0 });
+
+  // ★★ Plan 027 (2026-08-16): 이 함수는 규제 판정의 **네 번째 사본**이었고, 프론트 두 함수가
+  //   스냅샷을 따라가게 된 뒤에도 여기만 "서울=조정대상" 을 하드코딩하고 있었다.
+  //   ⚠ 그리고 **이 테스트가 그 하드코딩을 정답으로 고정**하고 있었다(감사 지적).
+  //   이제 3번째 인자로 스냅샷 상태를 받으므로 **두 상태 모두** 고정한다.
+  //   기본값은 true(규제) — 스냅샷 조회 실패 시 보수적. 프론트 _regLtvLabel 미로드 동작과 같은 방향.
+  assert.deepEqual(getRegulationPenalty('노원구', LAWD.노원구, true), { status: '조정대상지역', bonus: -3 });
+  assert.deepEqual(getRegulationPenalty('강남구', LAWD.강남구, true), { status: '투기과열·토허구역 일부', bonus: -8 });
+  // 해제 시: 서울 분기를 타지 않고 '미확인'(= 라벨 생략·감산 0) 으로 떨어져야 한다
+  assert.deepEqual(getRegulationPenalty('노원구', LAWD.노원구, false), { status: '미확인', bonus: 0 });
+  assert.deepEqual(getRegulationPenalty('강남구', LAWD.강남구, false), { status: '미확인', bonus: 0 },
+    '서울 해제인데 강남구에 투기과열 라벨이 남았다 — 프론트는 비규제로 바뀌므로 서비스가 서로 다른 말을 한다');
+  // 지방은 스냅샷 상태와 무관하게 '미확인'
+  assert.deepEqual(getRegulationPenalty('해운대구', LAWD.해운대구, false), { status: '미확인', bonus: 0 });
+  assert.deepEqual(getRegulationPenalty('해운대구', LAWD.해운대구, true), { status: '미확인', bonus: 0 });
 });
 
 test('applyObjectiveScore — 지방 단지 카드에 서울 위계·규제 문구가 찍히지 않는다 (실사고 재현)', () => {
@@ -1393,6 +1445,135 @@ test('getHouseholdBonus·getParkingBonus — 등급 경계 + 0 나눗셈 방어'
   assert.deepEqual(getParkingBonus(1000, 0), { ratio: null, bonus: 0 });
   assert.deepEqual(getParkingBonus(0, 1000), { ratio: null, bonus: 0 });
   assert.deepEqual(getParkingBonus(null, null), { ratio: null, bonus: 0 });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Plan 023 (2026-08-16): 중개보수 tier 경계 — **주 경로(스냅샷) == 폴백 경로(법정 하드코딩)**
+//
+// [실사고] 계획 008(02f4a26)이 취득세 경계를 `<` → `<=` 로 고쳤는데, 그 한 줄이 **같은 헬퍼를
+//   쓰던 중개보수까지** 바꿨다. 두 tier 표는 `underAuk` 라는 같은 필드를 쓰지만 법정 경계가 반대다:
+//     · 취득세   지방세법 §11①8호          — "6억원 **이하** 1%"    → `<=`
+//     · 중개보수 공인중개사법 시행규칙 별표1 — "2억~9억원 **미만** 0.4%" → `<`
+//   그 결과 0.5·2·9·12·15억 정확히 5개 지점에서 법정 요율과 어긋났다
+//   (라이브 실측 2026-08-16: 9억 −90만 · 12억 −120만 · 15억 −150만 **과소**, 0.5억 +5만 · 2억 +20만 과대).
+//   커밋 메시지는 "경계값 하나만 바뀌고 회귀 위험 낮음" 이었다 — **공유 헬퍼의 두 번째 소비처를
+//   확인하지 않은 것**이 근본 원인이고, 기존 테스트는 폴백 경로(`source:'fallback'`)만 봐서 못 잡았다.
+//
+// [이 테스트가 고정하는 것] 스냅샷 tier 로 계산한 값과, 법령을 그대로 옮긴 하드코딩 폴백이
+//   **모든 경계에서 같아야 한다**. 손으로 고른 지점이 아니라 tier 의 `underAuk` 에서 경계를
+//   **파생**시켜 그 앞·정확히·뒤 3점을 전부 본다(계획 022 의 교훈 — 손으로 고른 목록은 빠뜨린다).
+// ══════════════════════════════════════════════════════════════════════════════
+test('중개보수 tier — 스냅샷 경로와 법정 폴백이 모든 경계에서 일치한다 (공인중개사법 별표1 = 미만)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+
+  // 프로덕션에 실제로 실린 tier (regulations_snapshot.acquisition_tax_2025.commission, 2026-08-16 DB 실측)
+  const COMMISSION_TIERS = [
+    { rate: 0.006, underAuk: 0.5 }, { rate: 0.005, underAuk: 2 },
+    { rate: 0.004, underAuk: 9 }, { rate: 0.005, underAuk: 12 },
+    { rate: 0.006, underAuk: 15 }, { rate: 0.007, underAuk: 999 },
+  ];
+  // 법령 그대로 (별표1 매매·교환) — 프론트 7477행·백엔드 analysisService 폴백과 동일한 식
+  const legalRate = (p) => (p < 0.5 ? 0.006 : p < 2 ? 0.005 : p < 9 ? 0.004
+    : p < 12 ? 0.005 : p < 15 ? 0.006 : 0.007);
+
+  const grabFront = (name) => {
+    const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+    const m = html.match(new RegExp('function ' + name + '\\([\\s\\S]*?\\n\\}'));
+    assert.ok(m, `frontend/index.html 에서 ${name} 을 찾지 못했다`);
+    return new Function(`${m[0]}; return ${name};`)();
+  };
+  const frontUnder = grabFront('_pickTierRateUnder');
+  const frontIncl = grabFront('_pickTierRate');
+
+  // 경계를 **데이터에서 파생** — tier 목록이 바뀌어도 자동으로 따라간다
+  const bounds = COMMISSION_TIERS.map((t) => t.underAuk).filter((v) => v < 999);
+  assert.ok(bounds.length >= 5, `경계가 ${bounds.length}개뿐 — tier 표가 바뀌었는지 확인할 것`);
+
+  for (const b of bounds) {
+    for (const p of [Number((b - 0.01).toFixed(2)), b, Number((b + 0.01).toFixed(2))]) {
+      const law = legalRate(p);
+      assert.equal(frontUnder(COMMISSION_TIERS, p, 0.007), law,
+        `프론트 중개보수 ${p}억: 스냅샷 경로가 법정 요율(${(law * 100).toFixed(1)}%)과 다르다`);
+    }
+    // ★ 경계 **정확히** 그 값일 때가 사고 지점이었다 — '이하' 헬퍼를 쓰면 여기서 갈린다.
+    assert.notEqual(frontIncl(COMMISSION_TIERS, b, 0.007), undefined);
+    if (frontIncl(COMMISSION_TIERS, b, 0.007) !== legalRate(b)) {
+      // 이 분기가 도는 것이 정상이다: '이하' 헬퍼는 중개보수에 쓰면 안 된다는 사실 자체를 고정한다.
+      assert.notEqual(frontIncl(COMMISSION_TIERS, b, 0.007), frontUnder(COMMISSION_TIERS, b, 0.007),
+        `${b}억에서 두 헬퍼가 같은 값을 낸다 — 경계 분리가 무의미해졌으니 이 테스트를 재검토할 것`);
+    }
+  }
+
+  // 백엔드 쌍둥이도 같은 계약 (지금은 라우트가 taxConfig 를 안 넘겨 도달 불가지만,
+  //   넘기는 순간 되살아나는 결함이라 함께 고정한다 — 오늘만 "한쪽만 고침"이 4번 나왔다)
+  const beSrc = fs.readFileSync(path.join(__dirname, '../services/analysisService.js'), 'utf8');
+  const mBe = beSrc.match(/function pickTierRateUnder\([\s\S]*?\n\}/);
+  assert.ok(mBe, 'analysisService.js 에서 pickTierRateUnder 를 찾지 못했다');
+  const beUnder = new Function(`${mBe[0]}; return pickTierRateUnder;`)();
+  for (const b of bounds) {
+    assert.equal(beUnder(COMMISSION_TIERS, b, 0.007), legalRate(b),
+      `백엔드 중개보수 ${b}억이 법정 요율과 다르다`);
+    assert.equal(beUnder(COMMISSION_TIERS, b, 0.007), frontUnder(COMMISSION_TIERS, b, 0.007),
+      `${b}억에서 프론트↔백엔드 중개보수가 갈렸다`);
+  }
+
+  // 취득세는 반대로 '이하' 가 맞다 — 두 표의 경계 의미가 다르다는 것 자체를 고정한다
+  const ACQ_TIERS = [{ rate: 0.01, underAuk: 6 }, { rate: 0.02, underAuk: 9 }, { rate: 0.03, underAuk: 999 }];
+  assert.equal(frontIncl(ACQ_TIERS, 6, 0.03), 0.01, '취득세 6억 정확히는 1%(지방세법 §11①8호 6억 이하)여야 한다');
+  assert.equal(frontIncl(ACQ_TIERS, 9, 0.03), 0.02, '취득세 9억 정확히는 누진구간(2% tier)이어야 한다');
+
+  // ★★ 배선(wiring) 계약 — 헬퍼가 옳아도 **호출부가 틀린 헬퍼를 부르면** 사고가 그대로 재현된다.
+  //   [실측 근거] 위 단언들만 있을 때 회귀 주입(호출부를 `_pickTierRateUnder` → `_pickTierRate` 로
+  //   되돌림)을 했더니 **65개 전부 통과했다** — 원래 사고를 그대로 되돌려도 못 잡았다.
+  //   함수 단위 테스트는 "함수가 옳은가"만 보고 "누가 그 함수를 쓰는가"는 안 본다.
+  const feSrc = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const feCall = feSrc.split('\n').find((l) => /cr\s*=\s*_pickTierRate\w*\(tc\.commission/.test(l));
+  assert.ok(feCall, '프론트에서 중개보수 요율 선택 호출부를 찾지 못했다 (형태 변경 시 이 테스트도 갱신할 것)');
+  assert.match(feCall, /_pickTierRateUnder\(tc\.commission/,
+    `프론트 중개보수가 '이하' 헬퍼를 쓰고 있다 — 별표1 은 '미만' 경계다: ${feCall.trim()}`);
+
+  const beCall = beSrc.split('\n').find((l) => /commRate\s*=\s*pickTierRate\w*\(taxConfig\.commission/.test(l));
+  assert.ok(beCall, '백엔드에서 중개보수 요율 선택 호출부를 찾지 못했다');
+  assert.match(beCall, /pickTierRateUnder\(taxConfig\.commission/,
+    `백엔드 중개보수가 '이하' 헬퍼를 쓰고 있다: ${beCall.trim()}`);
+
+  // 취득세 호출부는 반대로 '이하' 헬퍼여야 한다(Under 를 잘못 쓰면 6억에서 다시 1,200만원 과다).
+  //   ⚠ `rate = _pickTierRate…(at.` 형태만 잡는다. 처음엔 `\((at|tiers)\b` 로 느슨하게 썼다가
+  //   **함수 정의 줄까지 매칭**해 테스트가 자기 자신 때문에 실패했다(2026-08-16 실측) —
+  //   소스 텍스트 기반 단언은 정의/호출을 반드시 구분할 것.
+  const acqCalls = feSrc.split('\n').filter((l) => /rate\s*=\s*_pickTierRate\w*\(at\./.test(l));
+  assert.ok(acqCalls.length >= 2,
+    `취득세 호출부를 ${acqCalls.length}개만 찾았다 — 형태 변경 시 이 테스트도 갱신할 것`);
+  for (const l of acqCalls) {
+    assert.ok(!/_pickTierRateUnder/.test(l),
+      `취득세 호출부가 '미만' 헬퍼를 쓰고 있다 — §11①8호는 '6억 이하'다: ${l.trim()}`);
+  }
+});
+
+// ── Plan 023-2: cron 인증 **배선** 계약 (감사 워크플로 지적 — 함수만 보고 router.use 는 안 봤다) ──
+//   `authorizeCron` 함수 자체는 아래 테스트가 12개 조합으로 고정하지만, 그 함수가 **라우터에
+//   실제로 물려 있는지**는 아무도 안 봤다. `router.use(authorizeCron)` 한 줄이 사라지면
+//   실거래 재적재·apt_master 동기화·retention hard delete(복구 불가)가 인증 없이 열리는데
+//   테스트는 초록이다. 위 중개보수 배선 누락과 **같은 클래스**라 함께 막는다.
+test('cron 라우터 배선 — authorizeCron 이 모든 엔드포인트 앞에 물려 있다', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../routes/cron.js'), 'utf8');
+  const lines = src.split('\n');
+
+  const useIdx = lines.findIndex((l) => /^\s*router\.use\(\s*authorizeCron\s*\)/.test(l));
+  assert.ok(useIdx >= 0, 'cron.js 에 `router.use(authorizeCron)` 이 없다 — 모든 cron 엔드포인트가 무인증으로 열린다');
+
+  // ★ 라우트 정의보다 **먼저** 와야 한다. 뒤에 오면 앞선 라우트는 게이트를 통과하지 않는다.
+  const firstRouteIdx = lines.findIndex((l) => /^\s*router\.(get|post|put|patch|delete)\s*\(/.test(l));
+  assert.ok(firstRouteIdx >= 0, 'cron.js 에서 라우트 정의를 찾지 못했다');
+  assert.ok(useIdx < firstRouteIdx,
+    `router.use(authorizeCron) 이 첫 라우트(${firstRouteIdx + 1}행)보다 뒤(${useIdx + 1}행)에 있다 — 앞선 라우트가 무인증이다`);
+
+  // 이 파일이 실제로 여러 cron 엔드포인트를 들고 있는지도 확인(빈 파일이면 위 단언이 무의미해진다)
+  const routeCount = lines.filter((l) => /^\s*router\.(get|post|put|patch|delete)\s*\(/.test(l)).length;
+  assert.ok(routeCount >= 5, `cron 라우트가 ${routeCount}개뿐 — 파일 구조가 바뀌었는지 확인할 것`);
 });
 
 // ── Plan 015 (2026-08-16): cron 인증 게이트 (`backend/routes/cron.js` authorizeCron) ──
@@ -1528,6 +1709,24 @@ test('isRegFront ↔ _regLtvLabel — 같은 단지에서 규제 판정이 갈�
     assert.equal(a, b === '40%',
       `규제 판정 두 경로가 갈렸다 — '${area}'(${code}): isRegFront=${a} vs _regLtvLabel=${b}. ` +
       '한쪽만 고치지 말고 두 함수를 함께 볼 것.');
+  }
+
+  // ★★ 서울 **25개 구 전수** — 손으로 고른 목록은 빠뜨린다(실제로 빠뜨렸다).
+  //   [실사고 2026-08-16] 위 cases 는 사람이 고른 8개였고 거기에 **서울 중구가 없었다**.
+  //   그래서 계약 테스트가 초록인 채로 프로덕션에서 중구 1곳만 갈려 있었다
+  //   (SEOUL_GU_KW 가 24개이고 '중구' 를 의도적으로 제외하기 때문 — 라이브 전수 조회로 발각).
+  //   → 목록을 손으로 쓰지 말고 **LAWD_CODES 에서 11 접두를 전부 뽑아** 돌린다.
+  //     구가 추가/개편돼도 자동으로 포함된다.
+  const { LAWD_CODES } = require('../services/transactionService');
+  const seoulGus = Object.entries(LAWD_CODES).filter(([, c]) => String(c).startsWith('11'));
+  assert.equal(seoulGus.length, 25, `서울 구 수가 25가 아니다(${seoulGus.length}) — LAWD_CODES 변경 시 이 테스트도 확인할 것`);
+  for (const [gu, code] of seoulGus) {
+    const area = `${gu} 테스트동`;
+    const a = isRegFront(area, code);
+    const b = _regLtvLabel(area, code);
+    assert.equal(a, true, `서울 ${gu}(${code}) 를 isRegFront 가 비규제로 판정했다`);
+    assert.equal(b, '40%', `서울 ${gu}(${code}) 의 _regLtvLabel 이 40% 가 아니다`);
+    assert.equal(a, b === '40%', `서울 ${gu}(${code}) 에서 두 경로가 갈렸다: isRegFront=${a} vs ${b}`);
   }
 
   // lawd_cd 를 모르는 경로(사용자가 지역을 직접 타이핑하는 특약 탭·대출계산 탭)는

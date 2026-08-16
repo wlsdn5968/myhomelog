@@ -31,6 +31,14 @@
 | **018** | **서울 규제 해제 시 LTV 라벨이 스냅샷을 따라가게 (016 잔여)** | P2 | S | 016 | DONE (c755b38, 2026-08-16) |
 | **019** | **마이그레이션 실적용 전수 대조 + advisor 경고 3건 해소** | **P1** | M | — | DONE (514352c, 2026-08-16) |
 | **020** | **정확성 전용 최소 ESLint 도입 + 프론트 인라인 JS 커버 + CI Node 24 정합** | P2 | M | — | DONE (d6511c8·6399333, 2026-08-16) |
+| **021** | **gitleaks v3 SHA 재고정(v2 EOL) + 의존성 상향/engines>=22 + RLS role 복원** | **P1** | M | — | DONE (2e6e38c·f3227f8·4f3f17b, 2026-08-16) |
+| **022** | **서울 중구 규제판정 불일치 수정 + 계약 테스트를 25개 구 전수로** | **P1** | S | 016 | DONE (2097305, 2026-08-16) |
+| **023** | **중개보수 경계 회귀 복구 — tier 헬퍼 경계 의미별 분리 (내가 만든 회귀)** | **P1** | S | 008 | DONE (eefcb8f·0fea3f6, 2026-08-16) |
+| **024** | **무인증 /api/health 의 사용자 챗 원문 노출 차단 (개인정보)** | **P1** | S | — | DONE (2f6c0be, 2026-08-16) |
+| **025** | **결제 목이 .eq() 인자 기록 → CAS·소유자 필터 단언** | **P1** | S | 012 | DONE (f83a9f4, 2026-08-16) |
+| **026** | **오늘 적용한 DDL 3종 마이그레이션 사후 기록** | P2 | S | 019 | DONE (95c64c8, 2026-08-16) |
+| **027** | **규제 판정 네 번째 사본(report.js) 스냅샷 정합** | **P1** | S | 018 | DONE (a81b261, 2026-08-16) |
+| **028** | **/popular stale 폴백 화면 표기** | P2 | XS | — | DONE (2a20ec2, 2026-08-16) |
 
 ### 018~019 실행 결과 (2026-08-16)
 
@@ -156,11 +164,32 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (한 줄 사유) | REJECTED (
 - ⚠ **Supabase `auth_leaked_password_protection` 비활성** (XS, **운영자 Dashboard 조치**):
   advisor WARN. HaveIBeenPwned 대조로 유출된 비밀번호 사용을 막는 기능인데 꺼져 있다.
   SQL 이 아니라 Dashboard → Authentication 설정이라 코드/MCP 로 켤 수 없다.
-- **RLS 정책 role 드리프트** (S, 심층방어): `field_notes_*` 4개 + `ai_feedback_select_own` 의
+- ~~**RLS 정책 role 드리프트**~~ → **021 로 완료(4f3f17b)**. `ALTER POLICY … TO authenticated` 5건.
+  안전성 근거: `fieldNotes.js` 가 사용자 JWT 클라이언트(`getUserScopedClient`)를 쓰므로 role 이
+  `authenticated` 로 해석되고, 나머지 경로는 service_role(RLS 우회), 프론트 직접 접근은 0건(실측).
+  (원문 ↓)
+- ~~**RLS 정책 role 드리프트** (S, 심층방어): `field_notes_*` 4개 + `ai_feedback_select_own` 의~~
   role 이 `authenticated` 가 아니라 **PUBLIC** 이다(20260504000003 이 DROP+CREATE 하며 `TO` 절
   누락, 20260531000001 이 `insert_own` 만 복원). **기능 영향은 0** — USING/WITH CHECK 가
   `(SELECT auth.uid()) = user_id` 라 anon 은 `auth.uid()` 가 NULL 이어서 통과 못 한다(실측).
   뚫린 구멍이 아니라 **의도와 실제의 불일치**라 019 에서 건드리지 않았다.
+### dependabot PR 처리 결과 (2026-08-16) — ⚠ **#58 은 머지하지 말 것**
+
+- **#65** minor-and-patch 4종 → **직접 적용 완료(f3227f8)**. PR 을 머지하지 않은 이유: PR 생성 이후
+  루트 package.json 이 갈라졌고(eslint devDep·scripts), 무엇보다 **`engines` 상향이 PR 에 빠져 있어**
+  그대로 머지하면 supabase-js 요구(>=22)와 선언(">=20")이 어긋난 채 남는다. dependabot 이 곧 자동 종료한다.
+- ~~⚠ **#58** `gitleaks-action 2→3`~~ → **닫음(2026-08-16)**. `gh pr diff 58` 로 실제 내용을 확인한 결과
+  `uses` 를 **가변 태그 `@v3`** 으로 바꾸는 것이 맞았다 — 머지하면 `@e0c47f4… # v3.0.0` SHA 고정이 풀린다.
+  v3 전환 자체는 `2e6e38c` 로 이미 달성했으므로 사유를 PR 코멘트로 남기고 닫았다.
+- **#62** `setup-node 6→7` · **#61** `checkout 6→7` — GitHub 1st-party 액션 메이저. 머지는 운영자 결정.
+
+#### v2 를 SHA 로 고정한 것이 왜 위험했나 (재발 방지)
+`gitleaks-action@v2` 는 node20 런타임이고 업스트림이 명시한 일정이 있다:
+**2026-06-02** 러너 기본이 Node 24 로 전환(우회 env 필요) → **2026-09-16 Node 20 제거로 v2 완전 중단**.
+즉 v2 에 SHA 를 고정하는 것은 한 달 뒤 Secret Scan job 을 죽이는 선택이었다.
+→ **버전 고정 대상은 "지금 도는 것"이 아니라 "앞으로도 도는 것"이다. 고정 전에 그 버전의 수명을 확인할 것.**
+
+<!-- 아래는 처리 전 시점의 기록 -->
 - **dependabot PR 4건 대기 — 머지는 운영자 결정** (2026-08-16 실측):
   · **#65** minor-and-patch 4종(`supabase-js` 2.105→2.112 · `anthropic-sdk` · `upstash/redis` · `axios`).
     ⚠ 신규 `supabase-js` 가 `engines.node ">=22"` 를 요구한다. CI 는 이번에 24 로 올렸으니 정합이지만
@@ -173,10 +202,12 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (한 줄 사유) | REJECTED (
   라고 적혀 있다. **사업자등록은 2026-08-09 완료**됐다. 그런데도 해제하지 않은 이유는 KOE205 가
   카카오 개발자 콘솔의 앱/비즈앱 설정 문제라 사업자등록만으로 풀리지 않고, 콘솔 상태를 코드에서
   확인할 방법이 없기 때문이다. 콘솔 확인 후 해제 여부를 결정할 것.
-- **`kosisService.KOSIS_CACHE_KEY` 는 죽은 export** (XS): 저장소 전체에 소비처가 0건.
-  017 작업 중 확인했으나 범위 밖이라 그대로 뒀다.
-- **`/search/history` 헤더 주석이 부정확** (XS): `search.js:9` 가 "fire-and-forget"이라고
-  적었지만 실제로는 `await` insert 후 응답한다. 계획 011 에서 발견, 범위 밖이라 미수정.
+- ~~**`kosisService.KOSIS_CACHE_KEY` 는 죽은 export**~~ → **제거 완료(680df79)**. 소비처 0건 실측 후
+  제거. 캐시가 node-cache + Redis 2계층이라 키 하나 노출은 "밖에서 무효화 가능"이라는 잘못된
+  기대만 만든다 — 필요해지면 두 계층을 함께 지우는 함수를 노출할 것(근거를 주석에 남김).
+- ~~**`/search/history` 헤더 주석이 부정확**~~ → **정정 완료(680df79)**. 실제로는 insert 를 await 하고
+  `.select('id, created_at').single()` 결과를 **201 로 응답**한다(실패는 `next(e)`).
+  주석을 믿고 "응답 안 기다려도 된다"고 판단하면 기록 유실을 오판하는 지점이었다.
 
 ## Findings considered and rejected (재감사 방지)
 

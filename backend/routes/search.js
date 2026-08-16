@@ -6,7 +6,11 @@
  *   - userScopedClient 로 생성 → RLS 자동 적용 ((select auth.uid()) = user_id)
  *
  * 엔드포인트:
- *   POST /api/search/history  — 검색 1건 기록 (fire-and-forget)
+ *   POST /api/search/history  — 검색 1건 기록 → 201 { id, createdAt }
+ *     (COMMENT-FIX-2026-08-16: 이전 설명 "fire-and-forget" 은 **사실이 아니었다**.
+ *      아래 구현은 insert 를 await 하고 `.select().single()` 로 받은 id·created_at 을 응답한다.
+ *      실패하면 next(e) 로 에러 핸들러에 넘어간다 — 호출측이 결과를 신뢰해도 되는 계약이다.
+ *      계획 011 에서 발견했으나 범위 밖이라 미뤄뒀던 항목.)
  *   GET  /api/search/history  — 최근 50건 (최신순)
  *   DELETE /api/search/history — 내 이력 전체 삭제
  *

@@ -733,10 +733,22 @@ function getAgeBonus(buildYear) {
 // REGION-LABEL-FIX-2026-07-25 (Sprint PPPPPP): 위와 동일 근본원인. 지방 구를 '조정대상지역'으로
 //   단정하면 사용자가 LTV 40%·취득세 중과·실거주 의무를 잘못 전제한다(금전 오판). 규제 여부를
 //   **틀리게 단정하는 것보다 '미확인'(라벨 생략)이 절대룰에 부합** — 서울만 lawd_cd 로 확정 판정.
-function getRegulationPenalty(sigungu, lawdCd) {
+// REG-4TH-COPY-2026-08-16 (Plan 027, 감사 워크플로 지적): 이것이 규제 판정의 **네 번째 사본**이었다.
+//   프론트 `_regLtvLabel`·`isRegFront` 는 계획 016·018·022 로 스냅샷을 따라가게 만들었는데,
+//   여기만 "서울 25개 구 = 조정대상"을 **하드코딩**해 스냅샷을 보지 않았다.
+//   같은 파일이 `getSnapshot` 을 이미 import 해 쓰고 있었는데도(:28, :610) 이 함수만 눈이 멀어 있었다.
+//   [증상 시나리오] 서울이 규제 해제되면 프론트는 "비규제 70%" 로 바뀌는데 보고서만 계속
+//     "조정대상지역" 이라 적고 점수까지 -3 감산한다 → 같은 서비스가 서로 다른 사실을 말한다(절대룰 ②).
+//   [Fix] 호출측이 스냅샷에서 읽은 `seoulRegulated` 를 넘긴다.
+//     **기본값 true(규제)** 는 의도적이다 — 스냅샷 조회 실패 시 보수적으로 규제로 보는 것이
+//     프론트 `_regLtvLabel`(미로드면 '40%')과 같은 방향이고, 한도·의무를 과소 안내하지 않는다.
+//   ⚠ 한계(프론트와 동일): 스냅샷의 `seoul` 이 문자열 + `!!` 라 **부분 해제는 표현 불가**다.
+function getRegulationPenalty(sigungu, lawdCd, seoulRegulated = true) {
   if (!sigungu) return { status: '미확인', bonus: 0 };
   const code = String(lawdCd || '').trim();
   const isSeoul = code ? code.startsWith('11') : false;
+  // 서울이 스냅샷상 해제됐으면 서울 분기를 타지 않는다(= 아래 '미확인'으로 떨어져 라벨 생략).
+  if (isSeoul && seoulRegulated === false) return { status: '미확인', bonus: 0 };
   // 2025.10.15 기준 강화 규제지역 (서울 확정분)
   if (isSeoul && ['강남구', '서초구', '송파구', '용산구'].includes(sigungu)) {
     return { status: '투기과열·토허구역 일부', bonus: -8 };
@@ -826,7 +838,7 @@ function computeAptScore(c, ctx) {
 }
 
 /** Phase 7: 객관 데이터 점수 추가 — KAPT API 호출 후 별도 적용 */
-function applyObjectiveScore(c) {
+function applyObjectiveScore(c, seoulRegulated = true) {
   // c.score, c.scoreBreakdown 이 이미 1차 계산되어 있다고 가정
   const r = c.scoreBreakdown;
 
@@ -850,7 +862,7 @@ function applyObjectiveScore(c) {
   const age = getAgeBonus(c.build_year);
   if (age.bonus && !r['객관_노후도']) { r['객관_노후도'] = age.bonus; c.score += age.bonus; }
 
-  const reg = getRegulationPenalty(c.sigungu, c.lawd_cd);
+  const reg = getRegulationPenalty(c.sigungu, c.lawd_cd, seoulRegulated);
   if (reg.bonus && !r['객관_규제']) { r['객관_규제'] = reg.bonus; c.score += reg.bonus; }
 
   // Phase 8: 신고가 갱신 횟수 (6개월 내)
@@ -1246,8 +1258,17 @@ async function fetchCandidateApts(admin, input, limit) {
   }
 
   // Phase 7 + 8 + 9: KAPT + amenities 호출 후 객관 점수 + objectiveFacts 적용
+  // REG-4TH-COPY-2026-08-16 (Plan 027): 규제 판정을 프론트와 **같은 근거**(스냅샷)로 맞춘다.
+  //   여기서 1회만 읽어 루프에 넘긴다(후보마다 조회하면 N번 왕복).
+  //   조회 실패 시 true(규제) — 보수적 폴백. 프론트 `_regLtvLabel` 의 미로드 동작과 같은 방향이다.
+  let _seoulRegulated = true;
+  try {
+    const _snap = await getSnapshot('housing_loan_2025').catch(() => null);
+    const _seoul = _snap?.data?.regulatedRegions?.seoul;
+    if (_snap && _snap.data) _seoulRegulated = !!_seoul; // 스냅샷을 읽은 경우에만 반영
+  } catch (_) { /* 보수적 기본값 유지 */ }
   for (const c of out) {
-    applyObjectiveScore(c);
+    applyObjectiveScore(c, _seoulRegulated);
   }
   // HH-GATE (Sprint LLLLLL, 운영자 지시 "100세대 미만은 가능하면 추천하지 말 것"):
   //   세대수 확인된 소형(<100)만 제외 — 미확인(null)은 유지(이름 매칭 실패한 실제 대단지 오배제 방지).
