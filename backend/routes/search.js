@@ -188,7 +188,13 @@ router.get('/apt', async (req, res) => {
     }
     if (masterRes.error) {
       // apt_master 미존재/접근 실패는 fallback (molit 만 사용)
-      logger.warn({ err: masterRes.error.message }, 'apt_master 조회 실패 — molit only');
+      // LOG-TRUTH-2026-08-16 (Sprint QQQQQQQ, 크로스체크 지적): molit 도 함께 죽은 fatal 케이스에서
+      //   'molit only'(= molit 만으로 응답 가능) 는 **거짓**이다 — 아래 205행에서 500 으로 throw 된다.
+      //   종전엔 molit 오류를 최상단에서 즉시 throw 했기에 이 줄에 도달할 수 없었는데, Sprint NNNNNNN
+      //   에서 강등 판정을 뒤로 미루면서 fatal 도 이 줄을 지나게 됐다. 장애 조사 때 "molit 은 살아
+      //   있었다"는 정반대 판단을 유도하므로 두 상황을 구분해 남긴다.
+      logger.warn({ err: masterRes.error.message, molitAlsoFailed: !!_molitErr, q },
+        _molitErr ? 'apt_master + molit 동시 실패 — 돌려줄 데이터 없음(500)' : 'apt_master 조회 실패 — molit only');
     }
     // DEGRADE-PARTIAL-2026-08-16 (Sprint NNNNNNN — 코드리뷰 지적, 재현 확인):
     //   apt_master 는 **이름·동명 2개** 쿼리인데 위 판정은 *둘 다* 실패해야 error 를 세운다.

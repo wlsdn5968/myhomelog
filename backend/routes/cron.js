@@ -240,7 +240,9 @@ router.get('/regulations-check', handleRegulationsCheck);
 
 // ── Phase 20 + 37 (2026-05-04): regulations 자동 fetch + AI 분석 ──
 // 매일 21:30 UTC (= 익일 06:30 KST) — schedule "30 21 * * *" (정책 발표 후)
-// Phase 37: RSS fetch (Phase 20) + Claude AI 분석 + 제안 SQL 생성
+// Phase 37 → REG-ZERO-COST-2026-08-16 (Sprint LLLLLLL): RSS fetch(Phase 20) + **룰베이스** 대조.
+//   종전의 Claude 유료 호출·제안 SQL 자동 생성은 제거됐다(법령 SQL 을 추론으로 만들지 않는다).
+//   지금은 키워드 맵으로 스냅샷 key 별 RSS 를 대조해 '검토 필요' 건수만 센다 — proposedSQL 은 항상 null.
 async function handleRegulationsAutoFetch(req, res) {
   try {
     const started = Date.now();

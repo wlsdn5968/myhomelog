@@ -10760,7 +10760,7 @@ function newChatSession(skipConfirm){
   _chatSessionId = null;
   chatH = [];
   const container = document.getElementById('cMsgs');
-  container.innerHTML = `<div class="msg ai"><div class="ava ai">AI</div><div>
+  container.innerHTML = `<div class="msg ai"><div class="ava ai">📊</div><div><!-- BADGE-TRUTH-2026-08-16 (Sprint QQQQQQQ): 정적 환영(1917행)·addMsg 와 동일 아바타 -->
     <div class="bbl">💬 새 대화를 시작합니다. 무엇이든 물어보세요!</div>
     <div class="mt">${gt()}</div>
   </div></div>`;
@@ -11037,7 +11037,9 @@ async function sendAIFeedback(btn, rating, fid) {
     if (thx) thx.textContent = '⚠ 피드백 전송 실패 — 잠시 후 다시 시도';
   }
 }
-function showTyp(){const c=document.getElementById('cMsgs'),d=document.createElement('div');d.className='msg ai';d.id='ty';d.innerHTML=`<div class="ava ai">AI</div><div><div class="typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div></div>`;c.appendChild(d);c.scrollTop=c.scrollHeight;}
+// BADGE-TRUTH-2026-08-16 (Sprint QQQQQQQ): 타이핑 인디케이터 아바타도 '📊' — 종전엔 여기만 'AI' 라
+//   메시지 전송 직후엔 'AI', 응답이 오면 '📊' 로 **같은 대화창 안에서 표기가 뒤바뀌었다.**
+function showTyp(){const c=document.getElementById('cMsgs'),d=document.createElement('div');d.className='msg ai';d.id='ty';d.innerHTML=`<div class="ava ai">📊</div><div><div class="typing"><div class="tdot"></div><div class="tdot"></div><div class="tdot"></div></div></div>`;c.appendChild(d);c.scrollTop=c.scrollHeight;}
 function rmTyp(){document.getElementById('ty')?.remove();}
 function toast(m){const t=document.getElementById('tst');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2600);}
 
