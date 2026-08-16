@@ -2283,3 +2283,68 @@ test('세대당 주차 판정 5곳이 모두 세대수 불일치 가드를 거�
   assert.match(html, /f\.parkingRatio >= 1\.2 && !f\.householdsConflict/,
     '프론트 단지정보 주차여유 태그에 가드가 없다');
 });
+
+test('절대 규칙 — 화면·프롬프트가 추천/예측/대출알선을 하지 않는다 (Sprint MMMMMMM-4)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const ai = fs.readFileSync(path.join(__dirname, '../services/aiService.js'), 'utf8');
+  const clause = fs.readFileSync(path.join(__dirname, '../routes/clause.js'), 'utf8');
+
+  // ① 미래 사건 확률 — AI 가 지어낸 "발생 가능성 35%" 가 필터를 우회해 화면에 뜨고 있었다.
+  //    (aiOutputFilter 의 CLAUSE_FILTER_FIELDS 는 risks.probability 를 의도적으로 제외한다.)
+  //   ★ 주석은 검사 대상이 아니다 — clause.js:161 은 2026-07-15 에 POST /risk 를 지우며
+  //     "'발생 가능성 %' 등 예측성 서술 요구(절대룰 저촉 소지)" 라고 **문제를 이미 기록해 둔** 줄이다.
+  //     그때 죽은 라우트만 지우고 **살아있는 /clause 프롬프트의 같은 문제는 남겨뒀다** — 그 잔여분이
+  //     이번에 제거됐다. 기록은 보존하고, 실제 스키마 키만 본다.
+  assert.equal(/"probability"/.test(clause), false,
+    'clause 프롬프트가 다시 AI 에게 확률을 요구한다 — 근거 없는 수치가 화면에 뜬다');
+  assert.equal(/class="rcard-p">\$\{_escHtml\(r\.probability/.test(html), false,
+    '리스크 카드가 다시 probability 를 렌더한다');
+
+  // ② 대출 알선 — aiService 규칙 5 가 "대출 알선·소개 금지"인데 같은 프롬프트가 이를 어기고 있었다.
+  assert.ok(/대출 알선·소개 금지/.test(ai), '대출 알선 금지 규칙 자체가 사라졌다');
+  assert.equal(/신협·수협 특판/.test(ai), false,
+    '프롬프트가 특정 금융기관 특판 금리를 다시 싣는다 — 화면 disclaimer "대출 알선 X" 와 충돌');
+  assert.equal(/대출상담사 활용 권장/.test(ai), false, '프롬프트가 대출상담사를 다시 권한다');
+  assert.equal(/상호금융권\(DSR 50%\) 사전 상담/.test(html), false,
+    '규칙기반 특약 폴백이 특정 금융업권 상담을 다시 유도한다');
+
+  // ③ 단지 등급 판정 — 규칙 10(특정 단지 평가 금지)과 절대 룰 ①에 어긋나던 지시문
+  assert.equal(/3% 이상: 양호, 5% 이상: 우수/.test(ai), false,
+    '프롬프트가 다시 단지에 등급을 매긴다');
+  assert.equal(/하방 지지력/.test(ai), false,
+    '프롬프트가 다시 미래 가격 방어력을 단정한다');
+
+  // ④ 랜딩 첫 화면의 가짜 실측값 — API 실패 시 하드코딩 단지가 '실시간' 딱지를 달고 남았다
+  assert.equal(/id="lv-aptName">헬리오시티/.test(html), false,
+    '랜딩 카드에 하드코딩 단지명이 되돌아왔다 — 실패 시 가짜 시세가 실시간으로 보인다');
+  assert.equal(/id="lv-aptPrice">\d/.test(html), false, '랜딩 카드에 하드코딩 가격이 되돌아왔다');
+  assert.match(html, /id="lv-aptMeta">불러오는 중</, '초기 라벨이 플레이스홀더가 아니다');
+  assert.match(html, /_set\('lv-aptMeta', '실시간'\)/, "'실시간' 라벨을 응답 수신 후에 달지 않는다");
+});
+
+test('공유링크 거래 건수 — 같은 6개월 응답을 3번 합산하지 않는다 (Sprint MMMMMMM-4)', () => {
+  // 백엔드는 aptName 이 있으면 dealYm 을 무시하고 6개월치 전량을 준다
+  //   (routes/transactions.js:35-37 → transactionService.getTransactionsByApt(…, monthsBack = 6)).
+  //   프론트가 3개월을 각각 호출해 합치면 **정확히 3배**가 된다 — 공유링크 "최근 6개월 실거래 N건",
+  //   관심단지 "새 거래 N건" 이 전부 부풀어 있었다.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const svc = fs.readFileSync(path.join(__dirname, '../services/transactionService.js'), 'utf8');
+
+  // 전제 고정 — 이 시그니처가 바뀌면 위 판단의 근거가 사라진다
+  assert.match(svc, /async function getTransactionsByApt\(lawdCd, aptName, monthsBack = 6\)/,
+    'getTransactionsByApt 시그니처가 바뀌었다 — 6개월 전량 반환 전제를 다시 확인할 것');
+
+  const m = html.match(/async function fetchRecentTx\(lawdCd, aptName\)\{[\s\S]*?\n\}/);
+  assert.ok(m, 'fetchRecentTx 를 찾지 못했다');
+  const fn = m[0];
+  assert.match(fn, /if\(aptName\)\{/, 'aptName 단축 경로가 없다 — 3배 합산이 되돌아왔다');
+  // 단축 경로 안에서는 prevYm 을 한 번만 쓴다(월 3회 루프로 되돌아가지 않았는지)
+  const short = fn.slice(fn.indexOf('if(aptName){'), fn.indexOf('const months='));
+  assert.equal((short.match(/prevYm\(/g) || []).length, 1,
+    'aptName 경로가 다시 여러 달을 호출한다');
+  assert.equal(/aptName\]/.test(short) || /aptName,\s*$/.test(short), false);
+});

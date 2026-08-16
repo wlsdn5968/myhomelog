@@ -80,7 +80,6 @@ ${citationText}
       "level": "높음|중간|낮음",
       "title": "리스크 제목",
       "scenario": "구체적 시나리오 설명",
-      "probability": "발생 가능성 %",
       "countermeasure": "대응 방법"
     }
   ],

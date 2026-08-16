@@ -2588,12 +2588,18 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     </div>
 
     <div class="lv-card lv-apt">
-      <div class="lv-card-head"><span class="lv-card-label">TOP · 60일 거래량</span><span class="lv-card-meta" id="lv-aptMeta">실시간</span></div>
-      <div class="lv-apt-name" id="lv-aptName">헬리오시티</div>
-      <div class="lv-apt-loc" id="lv-aptLoc">송파구 가락동 · 2018년</div>
+      <!-- LANDING-FAKE-2026-08-17 (Sprint MMMMMMM-4, 서울 전수조사 6회차):
+           예전엔 이 자리에 "헬리오시티 / 송파구 가락동 · 2018년 / 29.8억 / 5건" 이 **하드코딩**돼 있었고
+           라벨은 '실시간' 이었다. _landingAsyncRefresh 의 fetch 는 5초 타임아웃 + catch(_){} 라
+           실패하면 그 가짜 숫자가 '실시간' 딱지를 단 채 첫 화면에 남는다 — 존재하지 않는 시세를
+           사용자가 실측값으로 읽는다(운영자 절대 룰 ② 환각 차단 위반).
+           → 초기값을 중립 플레이스홀더로 두고, **실제 응답이 온 뒤에만** 값과 '실시간' 라벨을 채운다. -->
+      <div class="lv-card-head"><span class="lv-card-label">TOP · 60일 거래량</span><span class="lv-card-meta" id="lv-aptMeta">불러오는 중</span></div>
+      <div class="lv-apt-name" id="lv-aptName">—</div>
+      <div class="lv-apt-loc" id="lv-aptLoc">&nbsp;</div>
       <div class="lv-apt-stats">
-        <div><div class="lv-apt-stat-v" id="lv-aptPrice">29.8억</div><div class="lv-apt-stat-l">평균</div></div>
-        <div><div class="lv-apt-stat-v" id="lv-aptDeals">5건</div><div class="lv-apt-stat-l">60일 거래</div></div>
+        <div><div class="lv-apt-stat-v" id="lv-aptPrice">—</div><div class="lv-apt-stat-l">평균</div></div>
+        <div><div class="lv-apt-stat-v" id="lv-aptDeals">—</div><div class="lv-apt-stat-l">60일 거래</div></div>
       </div>
     </div>
 
@@ -3195,8 +3201,16 @@ async function _landingAsyncRefresh(){
         _set('lv-aptLoc', `${top.sigungu||''} ${top.umdNm||''} · ${top.buildYear || '?'}년`);
         if(top.avgDealAmount) _set('lv-aptPrice', (top.avgDealAmount/10000).toFixed(1) + '억');
         if(top.dealCount60d != null) _set('lv-aptDeals', top.dealCount60d + '건');
+        // LANDING-FAKE-2026-08-17: '실시간' 은 **실제 응답이 온 뒤에만** 단다.
+        _set('lv-aptMeta', '실시간');
       }
     }
+  } catch(_){}
+  // LANDING-FAKE-2026-08-17: 실패·타임아웃이면 값이 플레이스홀더로 남는다 — 그 상태를 사용자에게 밝힌다.
+  //   (예전엔 하드코딩된 가짜 단지가 '실시간' 딱지를 단 채 그대로 보였다.)
+  try {
+    const _m = document.getElementById('lv-aptMeta');
+    if (_m && _m.textContent === '불러오는 중') _m.textContent = '불러오지 못함';
   } catch(_){}
   // LAST SYNC 시각 갱신
   // SYNCTIME-FIX-2026-07-25 (Sprint VVVVVV): 여기도 `d.timestamp`(응답 생성 시각 = 지금)를 쓰면서
@@ -7213,11 +7227,25 @@ function prevYm(monthsBack){
   d.setMonth(d.getMonth()-monthsBack);
   return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}`;
 }
-// 최근 3개월 거래 합산 fetch — 평균가 산출 시 표본 수 확보
+// TX-TRIPLE-2026-08-17 (Sprint MMMMMMM-4, 서울 전수조사 6회차 — 거래 건수가 실제의 3배로 표시되던 버그):
+//   예전엔 prevYm(1)·(2)·(3) 세 달을 각각 호출해 `items.push(...)` 로 합쳤다. 그런데 백엔드는
+//   `aptName` 이 있으면 `getTransactionsByApt(lawdCd, aptName, monthsBack = 6)` 로 분기해
+//   **dealYm 을 아예 무시하고 6개월치 전량**을 돌려준다(backend/routes/transactions.js:35-37,
+//   backend/services/transactionService.js:386). 즉 같은 목록이 3번 합쳐져 정확히 3배가 됐다.
+//   영향: 공유 링크 "최근 6개월 실거래 N건"(index.html), 관심단지 "새 거래 N건"·"직전 N건".
+//   (평균가는 같은 값이 3번 들어가 변하지 않았기에 눈에 안 띄었다 — 건수만 틀렸다.)
+//   [처리] aptName 이 있으면 **1회만** 호출한다. 응답 자체가 이미 6개월치다.
+//   ⚠ aptName 없이 부르는 경로가 생기면 그때는 dealYm 이 실제로 쓰이므로 월별 호출이 맞다.
 async function fetchRecentTx(lawdCd, aptName){
+  if(aptName){
+    const qs=new URLSearchParams({lawdCd,dealYm:prevYm(1),aptName});
+    const r=await fetch(`${CFG.api}/transactions?${qs}`,{signal:AbortSignal.timeout(10000)})
+      .then(x=>x.ok?x.json():null).catch(()=>null);
+    return (r && Array.isArray(r.items)) ? r.items : [];
+  }
   const months=[prevYm(1), prevYm(2), prevYm(3)];
   const results=await Promise.allSettled(months.map(ym=>{
-    const qs=new URLSearchParams({lawdCd,dealYm:ym,aptName});
+    const qs=new URLSearchParams({lawdCd,dealYm:ym});
     return fetch(`${CFG.api}/transactions?${qs}`,{signal:AbortSignal.timeout(10000)}).then(r=>r.ok?r.json():null);
   }));
   const items=[];
@@ -8384,7 +8412,7 @@ function renderRisk(d){
     document.getElementById('t2').innerHTML=`
       <div class="ibox b" style="margin-bottom:12px">아래는 <b>일반적인 매수 리스크 예시</b>입니다. 사이드바에서 <b>🔍 조건에 맞는 단지 찾기</b>를 실행하면 이 단지 맞춤 리스크 분석이 제공돼요.</div>
       <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">시세 하락 리스크</div></div><div class="rcard-b">매수 후 금리 인상/규제 강화 시 단기 조정 가능성.</div><div class="rcard-c">💡 5년 이상 보유, 전세 전환 플랜B 수립</div></div>
-      <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">대출 규제 추가 강화</div></div><div class="rcard-b">갈아타기 시점 LTV 추가 규제 가능성.</div><div class="rcard-c">💡 상호금융권(DSR 50%) 사전 상담</div></div>
+      <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">대출 규제 추가 강화</div></div><div class="rcard-b">갈아타기 시점 LTV 추가 규제 가능성.</div><div class="rcard-c">💡 금융기관에서 DSR 한도 사전 확인 (기관 종류에 따라 한도가 다름)</div></div>
       <div class="rcard"><div class="rcard-top"><span class="lvl safe">낮음</span><div class="rcard-t">환금성 리스크</div></div><div class="rcard-b">세대수 적을 경우 매도 시 거래 부재.</div><div class="rcard-c">💡 RR(로열동·로열호) 여부 임장 확인</div></div>`;
     return;
   }
@@ -8393,7 +8421,14 @@ function renderRisk(d){
   //   기존: ${r.scenario} 등 raw innerHTML → AI 가 <img onerror=...> 출력 시 모든 사용자 세션 탈취 risk
   document.getElementById('t2').innerHTML=`
     <div class="ibox ${d.overallRisk==='높음'?'r':d.overallRisk==='보통'?'y':'g'}" style="margin-bottom:12px"><b>종합 리스크:</b> ${_escHtml(d.summary||'')}</div>
-    ${(d.risks||[]).map(r=>`<div class="rcard"><div class="rcard-top"><span class="lvl ${lm[r.level]||'warn'}">${_escHtml(r.level||'')}</span><div class="rcard-t">${_escHtml(r.title||'')}</div><div class="rcard-p">${_escHtml(r.probability||'')}</div></div><div class="rcard-b">${_escHtml(r.scenario||'')}</div><div class="rcard-c">💡 ${_escHtml(r.countermeasure||'')}</div></div>`).join('')}`;
+    ${/* RISK-PROB-2026-08-17 (Sprint MMMMMMM-4): 여기에 있던 <div class="rcard-p">{probability}</div> 를
+          제거했다. clause 프롬프트가 AI 에게 "발생 가능성 %" 를 만들어 내라고 요구했고(clause.js:83),
+          aiOutputFilter 의 CLAUSE_FILTER_FIELDS 는 risks.probability 를 **의도적으로 제외**해
+          (aiOutputFilter.js:171-177) 그 숫자가 필터를 통째로 우회해 화면에 그대로 떴다.
+          "전세 보증금 미반환 35%" 같은 값에는 **아무 근거가 없다** — 운영자 절대 룰 ②(환각 차단)이자
+          미래 사건 확률 단정이다. 프롬프트에서도 함께 뺐으므로 신규 응답엔 필드 자체가 없고,
+          여기 렌더도 지웠으므로 예전에 캐시된 응답이 와도 표시되지 않는다. */ ''}
+    ${(d.risks||[]).map(r=>`<div class="rcard"><div class="rcard-top"><span class="lvl ${lm[r.level]||'warn'}">${_escHtml(r.level||'')}</span><div class="rcard-t">${_escHtml(r.title||'')}</div></div><div class="rcard-b">${_escHtml(r.scenario||'')}</div><div class="rcard-c">💡 ${_escHtml(r.countermeasure||'')}</div></div>`).join('')}`;
 }
 
 function renderClause(d){
@@ -9459,7 +9494,7 @@ function buildRuleRisk(p){
   if (isReg === true) {
     risks.push({level:'중간',title:'규제지역 의무·대출 제약',probability:'',scenario:`${p.area}는 규제지역 — LTV 40%·잔금 후 6개월 전입 의무 등 제약이 있어요.`,countermeasure:'대출계산 탭에서 규제 기준 한도 확인 + 전입 계획 수립'});
   } else {
-    risks.push({level:'중간',title:'대출 규제 추가 강화',probability:'',scenario:'갈아타기 시점 LTV 추가 규제 가능성.',countermeasure:'상호금융권(DSR 50%) 사전 상담'});
+    risks.push({level:'중간',title:'대출 규제 추가 강화',probability:'',scenario:'갈아타기 시점 LTV 추가 규제 가능성.',countermeasure:'금융기관에서 DSR 한도 사전 확인 (기관 종류에 따라 한도가 다름)'});
   }
   if (age != null && age >= 30) {
     risks.push({level:'중간',title:'노후 단지 유지·수선',probability:'',scenario:`준공 ${age}년차 — 배관·누수 등 수선 이슈와 관리비 상승 가능성. 재건축 검토 가능 시점이나 사업 추진은 단지별 결정 사항.`,countermeasure:'임장 시 하자·수선 이력 확인 + 하자 수리 특약(특약 초안 탭)'});
