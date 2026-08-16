@@ -1084,3 +1084,89 @@ test('billing/webhook — 금액 불일치 기록에 정확한 결제 금액을 
       `실패 기록에 결제 금액이 남았다(PIPA 최소수집 위반, confirm 경로와 불일치): ${JSON.stringify(failed)}`);
   });
 });
+
+// ── Plan 013 (2026-08-16): auth 미들웨어 순수 로직 — JWT 만료 우회 차단 + 삭제 유예 화이트리스트 ──
+//   왜 추가하나: `backend/middleware/auth.js` 는 테스트가 **0** 이었다. 그중 `_jwtExpMs` 는
+//   주석 자체가 "cache TTL 이 JWT 만료 후로 연장되는 우회 차단"(P0-1, 2026-05-04)이라고 밝힌
+//   **보안 수정**이다. verifyToken 은 `expiresAt = jwtExp ? min(jwtExp, now+5s) : now+5s` 로 쓰므로,
+//   `_jwtExpMs` 가 실패해 null 을 돌려주면 **만료된 JWT 가 최대 5초 더 통과**한다.
+//   ⚠ 실제 JWT payload 는 **base64url**(`-`·`_`)이고 **패딩이 제거**돼 있다 — 그 처리가 깨지면
+//   정상 토큰에서도 null 이 나와 방어가 통째로 죽는데, 그때 겉으로는 아무 에러도 안 난다.
+//   프로덕션 코드는 바꾸지 않는다 — 파일에서 함수를 정규식으로 추출해 되살린다
+//   (이 저장소의 `_isRegProp`·`_pickTierRate` 테스트와 같은 패턴).
+function _authFn(name, injectArgNames = [], injectValues = []) {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../middleware/auth.js'), 'utf8');
+  // ⚠ 템플릿 리터럴 안에서는 `\s`·`\n` 이 이스케이프 시퀀스로 먼저 소비돼 정규식이 깨진다.
+  //   문자열 연결 + 명시적 이중 이스케이프로 쓴다.
+  const re = new RegExp('function ' + name + '\\([\\s\\S]*?\\n\\}');
+  const m = src.match(re);
+  assert.ok(m, `auth.js 에서 ${name} 을 찾지 못했다 (함수명·형태 변경 시 이 테스트도 갱신할 것)`);
+  return new Function(...injectArgNames, `${m[0]}; return ${name};`)(...injectValues);
+}
+// 실제 JWT 와 동일한 인코딩: base64url + 패딩 제거
+function _mkJwtPayload(obj) {
+  const b64 = Buffer.from(JSON.stringify(obj)).toString('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `hdr.${b64}.sig`;
+}
+
+test('_jwtExpMs — 실제 JWT 인코딩(base64url·무패딩)에서 exp 를 읽어야 만료 우회가 막힌다', () => {
+  const _jwtExpMs = _authFn('_jwtExpMs');
+  const expSec = 1893456000; // 고정값 (2030-01-01 근처) — 현재 시각에 의존하지 않는다
+
+  // 길이(패딩) 변주 — 기본 동작 확인
+  for (const pad of ['a', 'ab', 'abc', 'abcd']) {
+    const t = _mkJwtPayload({ exp: expSec, sub: pad, iss: 'https://example.supabase.co/auth/v1' });
+    assert.equal(_jwtExpMs(t), expSec * 1000, `디코드 실패(길이 케이스 '${pad}')`);
+  }
+
+  // base64url 특수문자(-, _)가 실제로 들어간 토큰에서도 exp 를 읽는지 확인한다.
+  let urlSafeToken = null;
+  for (let i = 0; i < 500 && !urlSafeToken; i++) {
+    const t = _mkJwtPayload({ exp: expSec, sub: 'u' + i, n: 'ÿþ~?' + i });
+    if (/[-_]/.test(t.split('.')[1])) urlSafeToken = t;
+  }
+  assert.ok(urlSafeToken, 'base64url 특수문자(-,_)가 포함된 payload 를 만들지 못했다');
+  assert.equal(_jwtExpMs(urlSafeToken), expSec * 1000, 'base64url 토큰에서 exp 를 읽지 못했다');
+
+  // ⚠ 정직한 한계 (2026-08-16 실측): `_jwtExpMs` 안의 base64url 복원 두 줄
+  //   — `.replace(/-/g,'+').replace(/_/g,'/')` 와 `.padEnd(..., '=')` — 은
+  //   **Node 에서 no-op** 이다. `Buffer.from(s,'base64')` 가 base64url 도, 무패딩도 그대로 디코드한다.
+  //   실제로 두 줄을 각각 제거해도 이 테스트는 전부 통과했다(회귀 주입 확인).
+  //   즉 **어떤 테스트로도 그 두 줄은 고정할 수 없다** — 다른 런타임(예: 브라우저 atob) 대비
+  //   방어 코드로 보고 남겨 두되, "테스트가 지켜준다"고 오해하지 말 것.
+  //   이 테스트가 실제로 고정하는 것은 아래 셋이다:
+  //     (a) 정상 JWT 에서 exp*1000 을 돌려준다   (b) exp 없음/숫자 아님 → null (NaN 오염 차단)
+  //     (c) 손상 입력에 예외를 던지지 않는다(던지면 인증 요청이 500 으로 죽는다)
+
+  // exp 없음 → null (verifyToken 이 micro-cache TTL 로 폴백하는 기존 동작)
+  assert.equal(_jwtExpMs(_mkJwtPayload({ sub: 'u1' })), null);
+  // exp 가 숫자가 아니면 null — 문자열 exp 를 곱해 NaN/이상값이 되는 것을 막는다
+  assert.equal(_jwtExpMs(_mkJwtPayload({ exp: '1893456000' })), null);
+  // 손상 입력 — 전부 null 이어야 하고 예외를 던지면 안 된다(요청이 500 으로 죽는다)
+  assert.equal(_jwtExpMs('not-a-jwt'), null);
+  assert.equal(_jwtExpMs('hdr..sig'), null);
+  assert.equal(_jwtExpMs('hdr.###.sig'), null);
+  assert.equal(_jwtExpMs(''), null);
+});
+
+test('isDeletionAllowed — 삭제 유예 중 허용 경로는 화이트리스트로만 열린다', () => {
+  // DELETION_ALLOWED_PATHS 는 모듈 스코프 상수라 주입한다(값은 auth.js 정의와 동일).
+  const PATHS = new Set(['/api/account/restore', '/api/account/deletion-status']);
+  const isDeletionAllowed = _authFn('isDeletionAllowed', ['DELETION_ALLOWED_PATHS'], [PATHS]);
+
+  assert.equal(isDeletionAllowed({ originalUrl: '/api/account/restore' }), true);
+  assert.equal(isDeletionAllowed({ originalUrl: '/api/account/deletion-status' }), true);
+  // 쿼리스트링이 붙어도 판정은 경로 기준
+  assert.equal(isDeletionAllowed({ originalUrl: '/api/account/restore?from=email' }), true);
+  // ★ 화이트리스트 밖은 전부 차단 — 삭제 유예 중 일반 API 가 열리면 안 된다
+  assert.equal(isDeletionAllowed({ originalUrl: '/api/report/generate' }), false);
+  assert.equal(isDeletionAllowed({ originalUrl: '/api/billing/checkout' }), false);
+  // 접두만 같은 경로도 차단(Set 정확일치)
+  assert.equal(isDeletionAllowed({ originalUrl: '/api/account/restore/all' }), false);
+  // originalUrl 이 없으면 url 로 폴백, 둘 다 없으면 차단
+  assert.equal(isDeletionAllowed({ url: '/api/account/restore' }), true);
+  assert.equal(isDeletionAllowed({}), false);
+});
