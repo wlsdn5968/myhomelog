@@ -506,8 +506,11 @@ router.get('/apt', async (req, res) => {
     //   라이브 재검증으로 발각. 일치 등급(정확0·시작1·포함2)을 최종 정렬에서도 최우선으로.
     out.sort((a, b) => (_qRank(a.aptName) - _qRank(b.aptName)) || ((b.dealCount || 0) - (a.dealCount || 0)));
 
-    // degraded 를 응답에 명시 — 프론트는 아직 쓰지 않지만, 이 경로는 로그가 1시간이면 사라져
-    //   "이 응답이 반쪽이었나"를 사후에 확인할 방법이 없다. 위장하지 않기 위한 표식.
+    // degraded 를 응답에 명시 — 위장하지 않기 위한 표식이자, 로그가 1시간이면 사라지는 이 경로에서
+    //   "이 응답이 반쪽이었나"를 사후에 확인할 유일한 수단이다.
+    //   ⚠ **프론트가 이 필드를 실제로 소비한다**(frontend/index.html 의 `j.degraded` → "⚠ 일부 데이터를
+    //   불러오지 못해 결과가 불완전해요" 배너, Sprint NNNNNNN-3). 이 필드를 지우면 사용자 고지가
+    //   조용히 사라진다 — 관측용이라고만 보고 정리하지 말 것.
     const payload = _degraded ? { results: out, query: q, degraded: true } : { results: out, query: q };
     if (_degraded) {
       // 강등 응답은 서버 캐시·CDN 어디에도 굳히지 않는다 — 3초 타임아웃 한 번이 10분(+SWR 1시간)
@@ -570,9 +573,15 @@ router.get('/popular', async (req, res) => {
       : CDN_OK);
     const payload = { results: out };
     if (out.length) cache.set(pck, payload, usedFallback ? 120 : 1800); // 빈 응답은 캐시 안 함
-    // 정상 품질(RPC 성공본)이면 스냅샷도 갱신 — 다음 콜드 사용자를 위해 (fire-and-forget)
+    // 정상 품질(RPC 성공본)이면 스냅샷도 갱신 — 다음 콜드 사용자를 위해.
+    // FREEZE-FIX-2026-08-16 (Plan 011): 종전엔 await 없이 던져만 뒀다. Vercel 서버리스는
+    //   res.json() 직후 인스턴스를 동결하므로 남은 upsert 가 유실될 수 있다 — 유실되면 스냅샷
+    //   computed_at 이 갱신되지 않아 노화하고, 그러면 사용자 요청이 무거운 라이브 집계를 다시 타는
+    //   원래 순환으로 돌아간다(POPULAR-STALE·SNAPROLE 이 손보려던 바로 그 문제).
+    //   2026-08-09 Plan 003 이 같은 이유로 geocodeCacheService 의 좌표 저장을 await 로 고쳤는데
+    //   이 경로만 남아 있었다. 응답 전에 완주시키되(단일 upsert, 수십 ms) 실패는 기존대로 삼킨다.
     if (!usedFallback && out.length && limit === 12) {
-      storePopularSnapshot(out).catch(() => {});
+      await storePopularSnapshot(out).catch(() => {});
     }
     return res.json(payload);
   } catch (e) {

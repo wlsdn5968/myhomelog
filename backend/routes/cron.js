@@ -33,6 +33,16 @@ const { computeAndStoreSnapshot: computePopularSnapshot } = require('../services
 // MOB-AUDIT-2026-05-03: cron 실패는 운영자 즉시 알림 — Sentry capture (logger.error 외 추가)
 const Sentry = require('@sentry/node');
 
+// MV-ABORT-2026-08-16 (Plan 011): 검색용 MV 갱신 RPC 의 상한.
+//   [측정] `REFRESH MATERIALIZED VIEW CONCURRENTLY molit_apt_index` 실소요 = **11,451ms**
+//   (2026-08-16 프로덕션 실측, clock_timestamp 차이). 여기에 여유를 크게 둬 60s 로 잡는다.
+//   [왜 필요한가] 상한이 없으면 갱신 지연 시 이 await 가 함수 maxDuration(300s)까지 붙잡아,
+//   뒤따르는 recordCronRun·res.json 이 아예 실행되지 않는다 — **적재가 성공했어도 그날 cron
+//   실행 기록 자체가 health 에 안 남는다**(필드 누락이 아니라 레코드 부재).
+//   [겹침 위험] molit-ingest 는 slot 3개가 15분 간격으로 돌고 같은 MV 를 갱신한다.
+//   CONCURRENTLY 는 선행 갱신이 끝날 때까지 대기하므로 겹치면 대기 시간이 실제로 늘어난다.
+const MV_REFRESH_ABORT_MS = 60000;
+
 const router = express.Router();
 
 function authorizeCron(req, res, next) {
@@ -197,7 +207,8 @@ async function handleMolitIngest(req, res) {
         logger.warn('검색 MV 갱신 skip — service_role 미설정(적재는 정상)');
       } else {
         const _t = Date.now();
-        const { error: _mvErr } = await sc.rpc('refresh_molit_apt_index');
+        const { error: _mvErr } = await sc.rpc('refresh_molit_apt_index')
+          .abortSignal(AbortSignal.timeout(MV_REFRESH_ABORT_MS));
         if (_mvErr) logger.warn({ err: _mvErr.message }, '검색 MV 갱신 실패 — 적재는 정상(다음 cron 재시도)');
         else _mvRefreshMs = Date.now() - _t;
       }
