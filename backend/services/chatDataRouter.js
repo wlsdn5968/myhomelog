@@ -259,7 +259,7 @@ async function _popularNationwide() {
     if (snap && snap.length) {
       const rows = snap.map((p, i) =>
         `${i + 1}. ${p.aptName} (${p.sigungu}) — 최근 60일 ${p.dealCount60d}건 · 평균 ${eok(p.avgDealAmount)}`).join('\n');
-      return `🔥 지금 인기 단지 TOP 5 (최근 60일 국토부 실거래 많은 순 · 시군구당 최대 2곳)\n${rows}\n\n지도 탭에서 위치와 함께 전체 12곳을 볼 수 있어요.` + DISCLAIMER;
+      return `🔥 지금 인기 단지 TOP 5 (최근 60일 국토부 실거래 많은 순 · 최근 21일 거래 단지 우선 · 지역 쏠림 완화)\n${rows}\n\n지도 탭에서 위치와 함께 전체 12곳을 볼 수 있어요.` + DISCLAIMER;
     }
   } catch (_) { /* 아래 안내 */ }
   return '인기 단지 집계를 지금 불러오지 못했어요 — 지도 탭에서 숫자 라벨(인기 단지)로 확인할 수 있어요.';

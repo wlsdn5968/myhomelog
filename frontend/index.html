@@ -1620,7 +1620,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
               <div class="mb9"><span class="lbl">신생아 출산 (2년 이내)</span><div class="chips" id="ch-nb"><span class="chip" onclick="cp(this,'ch-nb')">예</span><span class="chip on" onclick="cp(this,'ch-nb')">아니오</span></div></div>
             </div>
           </details>
-          <div class="mb9"><span class="lbl">학군 중요도</span><div class="chips" id="ch-sc"><span class="chip" onclick="cp(this,'ch-sc')">학군 중요</span><span class="chip on" onclick="cp(this,'ch-sc')">보통</span></div></div>
+          <div class="mb9"><span class="lbl" title="이 선택은 보고서 생성에 반영됩니다. 아래 &#39;조건에 맞는 단지 찾기&#39; 결과 순위는 바꾸지 않아요(학교 정보는 어느 쪽을 골라도 항상 함께 표시됩니다).">학군 중요도 <span style="font-weight:400;color:var(--t3);font-size:10px">(보고서 반영)</span></span><div class="chips" id="ch-sc"><span class="chip" onclick="cp(this,'ch-sc')">학군 중요</span><span class="chip on" onclick="cp(this,'ch-sc')">보통</span></div></div>
           <div class="mb9"><span class="lbl">자녀 계획</span>
             <div class="chips" id="ch-kid">
               <span class="chip on" onclick="cp(this,'ch-kid')">없음</span>
@@ -1770,7 +1770,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <div class="msep"></div>
     </span>
     <span id="mapHintTxt" style="font-size:10px;color:var(--t3)">마커클릭=팝업 | 더블클릭=상세리포트</span>
-    <span id="popLegend" style="font-size:10px;color:var(--t3);display:none">| 숫자 라벨 = 인기 단지 (최근 60일 실거래 많은 순 · 시군구당 최대 2곳)</span>
+    <span id="popLegend" title="최근 21일 내 거래가 있는 단지를 우선합니다(신축 일괄등기 버스트 차단). 한 시군구가 2곳을 넘지 않도록 조정하되, 자리가 남으면 초과분도 채웁니다. 지도에 표시하려면 좌표가 확인된 단지여야 하며, 확인 안 된 단지는 다음 순위가 대신합니다." style="font-size:10px;color:var(--t3);display:none">| 숫자 라벨 = 인기 단지 (최근 60일 실거래 많은 순 · 지역 쏠림 완화)</span>
     <!-- POPULAR-STALE-SURFACE-2026-08-16 (Plan 028): 서버가 stale:true 를 줄 때만 노출.
          라이브 집계 실패 시 최대 7일 묵은 스냅샷을 쓰는데, 그걸 "최근 60일" 로만 적으면 위장이 된다. -->
     <span id="popStaleNote" style="font-size:10px;color:var(--warn,#b26a00);display:none">| ⚠️ 집계 일시 지연 — 최대 며칠 전 기준</span>
@@ -1803,7 +1803,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   <div id="popTitleCard" style="display:none;position:absolute;top:46px;left:10px;z-index:30;background:var(--bg-base);border:1px solid var(--bd);border-radius:10px;padding:8px 26px 8px 12px;box-shadow:0 4px 14px rgba(16,24,40,.14);pointer-events:none;max-width:250px">
     <button onclick="var c=document.getElementById('popTitleCard');if(c)c.style.display='none';try{sessionStorage.setItem('mhl_popcard_hide','1')}catch(_){}" aria-label="인기 단지 안내 닫기" title="닫기 (이번 접속 동안 다시 표시 안 함)" style="position:absolute;top:3px;right:4px;width:19px;height:19px;line-height:1;border:none;background:transparent;color:var(--t3);font-size:14px;cursor:pointer;pointer-events:auto;padding:0">✕</button>
     <div style="font-size:12.5px;font-weight:800;color:var(--t1)">🔥 지금 인기 단지 TOP 12</div>
-    <div style="font-size:10.5px;color:var(--t3);margin-top:2px;line-height:1.5">최근 60일 국토부 실거래 많은 순 (시군구당 최대 2곳)<br>실거래 통계 기반 정보 — 매물 광고가 아니에요</div>
+    <div style="font-size:10.5px;color:var(--t3);margin-top:2px;line-height:1.5">최근 60일 국토부 실거래 많은 순 (최근 21일 거래 단지 우선 · 지역 쏠림 완화 · 좌표 확인된 단지)<br>실거래 통계 기반 정보 — 매물 광고가 아니에요</div>
   </div>
   <!-- Sprint PPPPP (시안 컷3): 지도 우측 컨트롤 스택 — 뷰 이동·타일 토글은 필터가 아니라서 툴바에서 분리 -->
   <div id="mapCtrlStack">

@@ -2441,3 +2441,31 @@ test('매칭 0건 안내가 단지 건수로 세어지지 않는다 + 진행 문
   assert.equal(html.includes("searchStep('AI 분석·점수 계산 중...', 3)"), false,
     '추천 진행 문구에 AI 표현이 되돌아왔다');
 });
+
+test('인기 단지 범례·학군 칩이 실제 동작을 숨기지 않는다 (Sprint MMMMMMM-8)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const pop = fs.readFileSync(path.join(__dirname, '../services/popularService.js'), 'utf8');
+  const chat = fs.readFileSync(path.join(__dirname, '../services/chatDataRouter.js'), 'utf8');
+  const svc = fs.readFileSync(path.join(__dirname, '../services/propertyService.js'), 'utf8');
+
+  // ① 인기 단지 — 세 가지가 범례에 없었다: 21일 게이트 / 캡이 하드캡 아님 / 좌표 없으면 탈락.
+  //    전제(설계)가 그대로인지 먼저 고정한다 — 바뀌면 문구도 다시 판단해야 한다.
+  assert.ok(pop.includes('21 * 24 * 60 * 60 * 1000'), '21일 게이트가 사라졌다');
+  assert.ok(pop.includes('top = capped.concat(overflow)'), '캡 초과분 재투입 구조가 바뀌었다');
+  assert.ok(pop.includes('if (c && c.lat && c.lng) out.push'), '좌표 없는 단지 탈락 구조가 바뀌었다');
+  // 문구 3곳이 '최대 2곳' 을 단정하지 않는다
+  for (const [label, src] of [['프론트', html], ['챗봇', chat]]) {
+    assert.equal(src.includes('시군구당 최대 2곳'), false,
+      `${label} 문구가 하드캡을 단정한다 — 실제로는 자리가 남으면 초과분도 채운다`);
+  }
+  assert.ok(html.includes('최근 21일 거래 단지 우선'), '21일 게이트가 안내되지 않는다');
+  assert.ok(chat.includes('최근 21일 거래 단지 우선'), '챗봇 안내에 21일 게이트가 없다');
+  assert.ok(html.includes('좌표 확인된 단지'), '좌표 없는 단지 탈락이 안내되지 않는다');
+
+  // ② 학군 중요도 칩 — 검색 결과에는 무영향이고 보고서에만 반영된다
+  assert.equal(svc.includes('schoolNeeded'), false,
+    'propertyService 가 schoolNeeded 를 쓰기 시작했다면 칩 안내를 다시 판단할 것');
+  assert.ok(html.includes('(보고서 반영)'), '학군 칩이 반영 범위를 밝히지 않는다 — 죽은 입력으로 보인다');
+});
