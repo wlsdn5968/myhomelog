@@ -1390,3 +1390,71 @@ test('getHouseholdBonus·getParkingBonus — 등급 경계 + 0 나눗셈 방어'
   assert.deepEqual(getParkingBonus(0, 1000), { ratio: null, bonus: 0 });
   assert.deepEqual(getParkingBonus(null, null), { ratio: null, bonus: 0 });
 });
+
+// ── Plan 015 (2026-08-16): cron 인증 게이트 (`backend/routes/cron.js` authorizeCron) ──
+//   왜 추가하나: `router.use(authorizeCron)` 하나가 **모든 cron 엔드포인트의 유일한 방어선**이다.
+//   그 뒤에는 실거래 재적재·apt_master 동기화·retention hard delete(복구 불가 삭제)가 있다.
+//   그런데 테스트가 **0** 이었다.
+//   특히 `timingSafeEqual` 은 **두 버퍼 길이가 다르면 예외를 던진다** — 사전 길이 체크가 빠지면
+//   틀린 길이의 토큰이 401 이 아니라 **500(예외)** 으로 나가고, 그건 방어 실패는 아니지만
+//   "인증 실패"와 "서버 오류"를 구분 못 하게 만들어 실제 공격 시도를 로그에서 놓치게 한다.
+//   프로덕션 코드는 바꾸지 않는다 — report.js/auth.js 와 같은 정규식 추출 패턴.
+function _authorizeCron() {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../routes/cron.js'), 'utf8');
+  const re = new RegExp('function authorizeCron\\([\\s\\S]*?\\n\\}');
+  const m = src.match(re);
+  assert.ok(m, 'cron.js 에서 authorizeCron 을 찾지 못했다 (함수명·형태 변경 시 이 테스트도 갱신할 것)');
+  // crypto·logger 는 모듈 스코프 require 라 주입한다. logger 는 호출만 삼킨다.
+  return new Function('crypto', 'logger',
+    'return (' + m[0].replace(/^function authorizeCron/, 'function') + ');')(
+    require('node:crypto'), { error() {}, warn() {}, info() {} });
+}
+
+test('authorizeCron — cron 게이트: 시크릿 미설정 차단 + 헤더 조합별 판정', () => {
+  const authorizeCron = _authorizeCron();
+  const SECRET = 'cron-secret-1234567890';
+  const call = (authHeader, secret) => {
+    const saved = process.env.CRON_SECRET;
+    if (secret === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = secret;
+    const res = _mockRes();
+    let nexted = false;
+    try {
+      authorizeCron({ headers: authHeader === undefined ? {} : { authorization: authHeader } },
+        res, () => { nexted = true; });
+    } finally {
+      if (saved === undefined) delete process.env.CRON_SECRET; else process.env.CRON_SECRET = saved;
+    }
+    return { status: nexted ? null : res.statusCode, nexted };
+  };
+
+  // ★ CRON_SECRET 미설정 → 403 으로 완전 차단. 여기서 열리면 배포 사고 시 아무나
+  //   retention(복구 불가 hard delete)을 강제 실행할 수 있다.
+  assert.deepEqual(call(`Bearer ${SECRET}`, undefined), { status: 403, nexted: false });
+  assert.deepEqual(call(undefined, undefined), { status: 403, nexted: false });
+
+  // 정상 토큰만 통과
+  assert.deepEqual(call(`Bearer ${SECRET}`, SECRET), { status: null, nexted: true });
+
+  // 헤더 없음 / Bearer 접두 없음 / 다른 스킴 → 전부 401
+  assert.deepEqual(call(undefined, SECRET), { status: 401, nexted: false });
+  assert.deepEqual(call('', SECRET), { status: 401, nexted: false });
+  assert.deepEqual(call(SECRET, SECRET), { status: 401, nexted: false });          // 접두 없이 값만
+  assert.deepEqual(call(`Basic ${SECRET}`, SECRET), { status: 401, nexted: false });
+  // 접두 대소문자는 구분한다(현재 동작 고정)
+  assert.deepEqual(call(`bearer ${SECRET}`, SECRET), { status: 401, nexted: false });
+
+  // ★ 길이가 다른 토큰 — timingSafeEqual 예외 없이 401 이어야 한다(사전 길이 체크 계약)
+  assert.deepEqual(call('Bearer x', SECRET), { status: 401, nexted: false });
+  assert.deepEqual(call(`Bearer ${SECRET}x`, SECRET), { status: 401, nexted: false });
+  assert.deepEqual(call('Bearer ', SECRET), { status: 401, nexted: false });
+
+  // 같은 길이·다른 값 → 401 (비교 자체가 동작하는지)
+  const sameLenWrong = 'X'.repeat(SECRET.length);
+  assert.equal(sameLenWrong.length, SECRET.length);
+  assert.deepEqual(call(`Bearer ${sameLenWrong}`, SECRET), { status: 401, nexted: false });
+
+  // 토큰 앞뒤 공백은 trim 후 비교(현재 동작 고정 — 스케줄러가 개행을 붙이는 사고 대비)
+  assert.deepEqual(call(`Bearer ${SECRET}  `, SECRET), { status: null, nexted: true });
+});
