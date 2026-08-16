@@ -880,11 +880,17 @@ function _mockRes() {
 // supabase 체인 목 — payments 조회 1건 + update 결과를 주입한다.
 //   update 는 두 형태로 쓰인다: `update().eq()` 를 await(금액불일치 경로) / `update().eq().eq().select()`(CAS 경로).
 //   둘 다 지원하려면 체인이 thenable 이면서 eq/select 를 가져야 한다.
+// ⚠ MOCK-EQ-RECORD-2026-08-16 (Plan 025) — **`.eq()` 인자를 기록한다. 무시하면 안 된다.**
+//   [실사고] 이 목은 원래 `eq: () => c` 로 **인자를 통째로 버렸다**. 그 결과 프로덕션에서
+//   CAS 가드(`.eq('status','requested')` — P0-5 동시처리 race 차단)나 소유자 필터
+//   (`.eq('user_id', req.user.id)`)를 **지워도 결제 테스트 9건이 전부 초록**이었다.
+//   돈 경로에 대해 잘못된 안심을 주는 구조라, 목이 필터를 기록하고 테스트가 그걸 단언한다.
+//   `seen.updateFilters` / `seen.selectFilters` 는 [[col, val], …] 형태로 호출 순서대로 쌓인다.
 function _mockAdmin({ payRow, casRows }) {
-  const seen = { updates: [] };
+  const seen = { updates: [], updateFilters: [], selectFilters: [] };
   const upChain = (patch) => {
     const c = {
-      eq: () => c,
+      eq: (col, val) => { seen.updateFilters.push([col, val]); return c; },
       select: async () => ({ data: casRows, error: null }),
       then: (res, rej) => Promise.resolve({ data: null, error: null }).then(res, rej),
     };
@@ -893,11 +899,15 @@ function _mockAdmin({ payRow, casRows }) {
   };
   const sel = {
     select: () => sel,
-    eq: () => sel,
+    eq: (col, val) => { seen.selectFilters.push([col, val]); return sel; },
     maybeSingle: async () => ({ data: payRow, error: null }),
     update: upChain,
   };
   return { client: { from: () => sel }, seen };
+}
+/** 기록된 필터에 [col, val] 조합이 있는지 (순서·중복 무관) */
+function _hasFilter(list, col, val) {
+  return (list || []).some(([c, v]) => c === col && (val === undefined || v === val));
 }
 async function _withBillingStub({ payRow, casRows, tossKey }, fn) {
   const clientPath = require.resolve('../db/client');
@@ -957,6 +967,33 @@ test('billing/confirm — 이미 captured 면 Toss 재호출 없이 멱등 응�
     assert.equal(res.body.status, 'captured');
     // ★ 이미 처리된 주문에 update 를 또 날리면 안 된다(승인 상태를 덮어쓸 위험)
     assert.equal(seen.updates.length, 0, '이미 captured 인데 추가 update 가 발생했다');
+    // ★★ MOCK-EQ-RECORD-2026-08-16: 조회가 **소유자 필터**를 걸었는지. 이게 빠지면 남의 주문을
+    //   orderId 만 알면 조회·확정할 수 있다. 목이 인자를 버리던 시절엔 지워도 통과했다.
+    assert.ok(_hasFilter(seen.selectFilters, 'order_id', 'o1'),
+      `confirm 조회에 order_id 필터가 없다: ${JSON.stringify(seen.selectFilters)}`);
+    assert.ok(_hasFilter(seen.selectFilters, 'user_id', 'u1'),
+      `confirm 조회에 소유자(user_id) 필터가 없다 — 남의 주문을 조회할 수 있다: ${JSON.stringify(seen.selectFilters)}`);
+  });
+});
+
+// ── Plan 025 (2026-08-16): 결제 CAS 가드가 **실제로 걸리는지** 단언 ──
+//   [왜] 감사에서 나온 지적 — 목의 `.eq()` 가 인자를 버려서, 프로덕션에서 CAS 조건
+//   (`.eq('status','requested')`, P0-5 동시처리 race 차단)을 지워도 결제 테스트가 전부 초록이었다.
+//   목이 필터를 기록하도록 고쳤으니(위 _mockAdmin), 그 조건이 실제로 걸리는지 여기서 못 박는다.
+test('billing/confirm — captured 전환은 status=requested CAS 로만 (webhook 과의 race 차단)', async () => {
+  const payRow = { order_id: 'o1', user_id: 'u1', amount: 9900, status: 'requested', plan: 'pro' };
+  const axiosImpl = { post: async () => ({ data: { orderId: 'o1', status: 'DONE', totalAmount: 9900, method: '카드', approvedAt: '2026-08-16T00:00:00Z' } }) };
+  await _withBillingStub2({ payRow, casRows: [{ order_id: 'o1' }], tossKey: 'test', axiosImpl }, async (seen) => {
+    const res = _mockRes();
+    await _billingHandler('/confirm')({ body: { paymentKey: 'pk', orderId: 'o1', amount: 9900 }, user: { id: 'u1' } }, res, () => {});
+    const cap = seen.updates.find((u) => u && u.status === 'captured');
+    assert.ok(cap, `captured 전환 update 가 없다: ${JSON.stringify(seen.updates)}`);
+    // ★ 핵심: 이 두 필터가 함께 걸려야 "requested 인 것만 captured 로" 가 성립한다.
+    assert.ok(_hasFilter(seen.updateFilters, 'order_id', 'o1'),
+      `CAS update 에 order_id 필터가 없다: ${JSON.stringify(seen.updateFilters)}`);
+    assert.ok(_hasFilter(seen.updateFilters, 'status', 'requested'),
+      'CAS 가드(.eq("status","requested")) 가 없다 — webhook 이 먼저 captured 시켜도 confirm 이 덮어쓴다: '
+      + JSON.stringify(seen.updateFilters));
   });
 });
 
