@@ -1699,6 +1699,34 @@ test('billing 라우터 배선 — requireAuth 게이트가 보호 대상 라우
   }
 });
 
+// ── 감사 #45 (2026-08-16): 응답 직전 관측이 **await 되는지** 소스 계약 ────────────────
+//   [왜] 이건 단위 테스트로 잡을 수 없는 종류다 — 유실은 "서버리스가 응답 후 함수를 동결할 때"
+//   일어나고, 로컬에서는 Redis 도 동결도 재현되지 않는다(실제로 await 를 지우는 회귀 주입을 해도
+//   테스트 71개가 전부 초록이었다). 그래서 **동작이 아니라 소스의 형태**를 고정한다.
+//   cron·billing 배선 계약과 같은 부류: 지워지면 조용히 관측만 사라지고 아무도 모른다.
+test('강등 관측 배선 — popular-stale 은 응답 전에 await 된다 (서버리스 동결 유실 차단)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
+
+  // 1) 함수가 Promise 를 돌려줘야 호출부가 기다릴 수 있다 (return 이 없으면 await 가 무의미)
+  const fnStart = src.indexOf('function _observeDegrade(');
+  assert.ok(fnStart >= 0, 'search.js 에서 _observeDegrade 를 찾지 못했다');
+  const fnBody = src.slice(fnStart, src.indexOf('\n}', fnStart));
+  assert.match(fnBody, /return\s+Promise/,
+    '_observeDegrade 가 Promise 를 반환하지 않는다 — 호출부가 await 해도 즉시 통과한다');
+
+  // 2) 응답 직전 경로(popular-stale)는 반드시 await
+  assert.match(src, /await\s+_observeDegrade\('popular-stale'\)/,
+    "popular-stale 강등이 await 되지 않는다 — res.json 직후 동결되면 관측이 유실된다");
+
+  // 3) await 가 res.json 보다 **앞**이어야 의미가 있다
+  const awaitIdx = src.indexOf("await _observeDegrade('popular-stale')");
+  const jsonIdx = src.indexOf('res.json({ results: stale, stale: true })');
+  assert.ok(awaitIdx >= 0 && jsonIdx >= 0 && awaitIdx < jsonIdx,
+    `await 가 응답(res.json)보다 뒤에 있다 — await ${awaitIdx} vs json ${jsonIdx}`);
+});
+
 // ── 감사 #26 (2026-08-16): 취득세 **6억 초과 ~ 9억 이하 누진 구간**의 사본 3개 계약 ──────
 //   [왜] 기존 프론트↔백엔드 대조는 5·6·10억만 본다. 그 사이 누진 구간은 대조에서 빠져 있었고,
 //   그 구간의 계산식은 **세 곳에 복제**돼 있다:
