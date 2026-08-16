@@ -2348,3 +2348,35 @@ test('공유링크 거래 건수 — 같은 6개월 응답을 3번 합산하지 
     'aptName 경로가 다시 여러 달을 호출한다');
   assert.equal(/aptName\]/.test(short) || /aptName,\s*$/.test(short), false);
 });
+
+test('기간·금리 표기가 실제와 일치한다 (Sprint MMMMMMM-5)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const ana = fs.readFileSync(path.join(__dirname, '../services/analysisService.js'), 'utf8');
+  const tx = fs.readFileSync(path.join(__dirname, '../services/transactionService.js'), 'utf8');
+
+  // ① 가격 위치 백분위 — 표본은 6개월인데 표기는 1년이었다.
+  //    전제: percentile 은 calcPricePercentile(filteredTx)로 계산되고 그 원천이 monthsBack=6 이다.
+  assert.match(tx, /async function getTransactionsByAptInclAliases\(lawdCd, aptName, monthsBack = 6\)/,
+    '표본 기간 전제가 바뀌었다 — 표기도 함께 다시 판단할 것');
+  assert.match(ana, /calcPricePercentile\(filteredTx/, '백분위 입력이 filteredTx 가 아니다');
+  for (const bad of ['최근 1년 하위', '최근 1년 상위', '가격 위치 (최근 1년']) {
+    assert.equal(ana.includes(bad) || html.includes(bad), false,
+      `"${bad}" 표기가 되돌아왔다 — 실제 표본은 6개월이다`);
+  }
+  assert.match(ana, /최근 6개월 하위 \$\{percentile\}%/);
+  assert.match(html, /가격 위치 \(최근 6개월 거래 대비\)/);
+
+  // ② 정책자금 금리 — 계산 패널이 비교표와 다른 값을 쓰고 있었다(계산 패널은 갱신 대상 밖).
+  assert.match(html, /window\._hfRates = hf;/, 'HF 공시값을 공유하지 않는다');
+  assert.match(html, /function _polRate\(key, fallback\)/, '_polRate 헬퍼가 없다');
+  assert.match(html, /rate: _polRate\('didimdol', '2\.85~4\.15%'\)/, '디딤돌 금리가 공시값과 연결되지 않았다');
+  assert.match(html, /rate: _polRate\('bogeum', '4\.9~5\.3%'\)/, '보금자리론 금리가 공시값과 연결되지 않았다');
+  // stale 값이 되살아나지 않았는지 (한도 '3.6~4.2억' 은 금리가 아니므로 % 로 한정해 검사)
+  assert.equal(/rate: '3\.6~4\.2%'/.test(html), false, '보금자리론에 stale 금리가 되돌아왔다');
+  assert.equal(/rate: '2\.0~3\.3%'/.test(html), false, '디딤돌에 stale 금리가 되돌아왔다');
+  // HF API 가 없는 두 상품은 하드코딩이 정상 — 실수로 _polRate 에 묶이지 않았는지
+  assert.match(html, /name: '신혼 디딤돌'[\s\S]{0,250}rate: '1\.8~3\.1%'/);
+  assert.match(html, /name: '신생아 특례'[\s\S]{0,250}rate: '1\.6~3\.3%'/);
+});

@@ -4810,9 +4810,16 @@ function updateEcosHint(e){
 // HF-2026-07-14 (Sprint HHHHH): 정책자금 표 금리 자동 갱신 — HF 공시(data.go.kr, 실측 검증 API).
 //   디딤돌·보금자리론(u-보금자리론 공시) 행만 자동(신혼·신생아는 API 없음 — 하드코딩 유지, 각주 명시).
 //   hfRates 없으면(키/API 실패) 기존 하드코딩 표 그대로(안전 fallback).
+// HF-RATE-SHARE-2026-08-17 (Sprint MMMMMMM-5, 서울 전수조사 6회차):
+//   예전엔 이 함수가 비교표의 DOM 두 곳(#hfRateBogeum·#hfRateDidimdol)만 갱신했고,
+//   정책자금 **계산 패널**의 금리는 JS 객체 리터럴(rate:'…')이라 갱신 대상 밖이었다.
+//   그 결과 같은 서비스 안에서 보금자리론 금리가 두 값으로 갈렸다 — 계산 패널은 stale 하드코딩,
+//   비교표는 HF 공시 자동값. 어느 쪽을 본 사용자냐에 따라 다른 금리를 안내받는다.
+//   → 받은 공시값을 전역에 보관해 계산 패널도 같은 값을 쓰게 한다(아래 _polRate).
 function updateHfRates(hf){
   try{
     if(!hf) return;
+    window._hfRates = hf;
     const fmt = r => (r && r.min != null && r.max != null) ? (r.min === r.max ? `${r.min}%` : `${r.min}~${r.max}%`) : null;
     const ymd = s => (s && /^\d{8}$/.test(s)) ? `${s.slice(0,4)}.${s.slice(4,6)}.${s.slice(6,8)}` : (s || '');
     const b = document.getElementById('hfRateBogeum');
@@ -4823,6 +4830,18 @@ function updateHfRates(hf){
     const note = document.getElementById('hfRateNote');
     if(note && applied){ note.textContent = `보금자리론(u-보금자리론)·디딤돌 금리는 주택금융공사 공시 자동 반영 (적용일 ${ymd(String(applied))}) — 신혼·신생아 특례(*)는 2026.7 공시 대략치`; }
   }catch(_){}
+}
+
+// HF-RATE-SHARE-2026-08-17 (Sprint MMMMMMM-5): 정책자금 계산 패널이 비교표와 **같은 금리**를 쓰게 하는 헬퍼.
+//   HF 공시(updateHfRates 가 window._hfRates 에 저장)가 있으면 그 값을, 없으면 fallback(2026.7 공시)을 쓴다.
+//   ⚠ fallback 숫자는 Sprint NNNN 에서 공식 재검증한 값이다 — 근거 없이 바꾸지 말 것.
+//   ⚠ 신혼 디딤돌·신생아 특례는 HF 공시 API 자체가 없어 대상이 아니다(비교표 각주와 동일 전제).
+function _polRate(key, fallback){
+  try{
+    const r = (window._hfRates || {})[key];
+    if(r && r.min != null && r.max != null) return (r.min === r.max) ? `${r.min}%` : `${r.min}~${r.max}%`;
+  }catch(_){}
+  return fallback;
 }
 
 // PERSONA-PRESET-2026-07-13 (Sprint GGGGG, 집사닷컴 벤치마킹): 상황 예시 클릭 채우기.
@@ -7363,7 +7382,7 @@ function renderAnalysis(d,p){
     const hi = (d.percentileHigh !== null && d.percentileHigh !== undefined) ? d.percentileHigh : Math.min(100, pct + 15);
     const rangeText = `(95% 신뢰 구간 ${lo}~${hi}%, 표본 ${d.percentileN || basedOn}건)`;
     pctHtml=`<div class="pct-wrap">
-      <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:4px">📍 가격 위치 (최근 1년 거래 대비)</div>
+      <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:4px">📍 가격 위치 (최근 6개월 거래 대비)</div>
       <div style="font-size:10px;color:var(--amb);margin-bottom:4px">⚠ MOLIT 데이터는 층·향(RR/저층) 자동 보정 불가 — 임장 시 동·층·향 확인 필수</div>
       <div class="pct-bar-bg">
         <div class="pct-bar-fill" style="width:100%"></div>
@@ -8911,7 +8930,7 @@ function computePolicyLoan({ buy, income, isFirstBuyer, isNewlywed, hasNewborn, 
     eligible.push({
       name: '디딤돌',
       maxLoan: Math.min(dimdolCap, buy * dimdolLtv),
-      ltv: Math.round(dimdolLtv * 100), rate: '2.0~3.3%',
+      ltv: Math.round(dimdolLtv * 100), rate: _polRate('didimdol', '2.85~4.15%'), // 2026.7 공시
       note: `부부합산 ${dimdolIncomeCap}만원 이하, 주택가격 5억 이하. 한도 ${dimdolCap}억${isFirstBuyer ? '(생애최초)' : ''}.`,
     });
   }
@@ -8921,7 +8940,7 @@ function computePolicyLoan({ buy, income, isFirstBuyer, isNewlywed, hasNewborn, 
     eligible.push({
       name: '보금자리론',
       maxLoan: Math.min(bogeumCap, buy * 0.7),
-      ltv: 70, rate: '3.6~4.2%',
+      ltv: 70, rate: _polRate('bogeum', '4.9~5.3%'), // 2026.7 공시 (예전 3.6~4.2% 는 stale — 한도 3.6/4.2억 과 숫자가 겹쳐 혼동을 키웠다)
       note: `부부합산 7천만원 이하, 주택가격 6억 이하. 한도 ${bogeumCap}억${isFirstBuyer ? '(생애최초)' : ''}.`,
     });
   }

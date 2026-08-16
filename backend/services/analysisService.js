@@ -1,6 +1,6 @@
 /**
  * 매수 의사결정 분석 엔진
- * - 가격 위치 백분위 (최근 1년 거래 대비)
+ * - 가격 위치 백분위 (최근 6개월 거래 대비 — 표본은 getTransactionsByApt monthsBack=6)
  * - 전세가율 + 갭 계산
  * - 거래량 추이 신호
  * - 3개 지표 종합 매수 신호
@@ -228,6 +228,12 @@ function calcGap(saleTx, jeonseT) {
 //   - signal 키워드 (green/yellow/red) → tone (active/neutral/cautious)
 //   - 단, 광범위 frontend 변경 회피 위해 buySignal 필드도 alias 로 동시 반환 (호환성)
 // volumeSignalObj: { signal, seasonalBias }
+// PCTL-PERIOD-2026-08-17 (Sprint MMMMMMM-5): 이 문구는 예전에 "최근 1년" 이었다.
+//   그런데 percentile 은 calcPricePercentile(filteredTx, …)(:518)로 계산되고, filteredTx 의 원천은
+//   getTransactionsByAptInclAliases(lawdCd, aptName)(:474) → getTransactionsByApt(…, monthsBack = 6)
+//   즉 **표본은 6개월**이다. 표기만 두 배로 부풀어 있었다 — 사용자는 더 긴 기간의 위치로 읽는다.
+//   표본을 1년으로 늘리는 선택도 있으나 그건 MOLIT 호출량·캐시 키가 바뀌는 별개 결정이라,
+//   여기서는 **표기를 실제에 맞춘다**(같은 화면의 다른 지표도 전부 6개월 기준이다).
 function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate) {
   let score = 0;
   const conditions = [];
@@ -238,12 +244,12 @@ function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate) {
   if (percentile !== null) {
     if (percentile <= 30) {
       score += 2;
-      conditions.push({ label: '가격 위치', status: 'green', desc: `최근 1년 하위 ${percentile}% — 시세 하단 구간` });
+      conditions.push({ label: '가격 위치', status: 'green', desc: `최근 6개월 하위 ${percentile}% — 시세 하단 구간` });
     } else if (percentile <= 65) {
       score += 1;
-      conditions.push({ label: '가격 위치', status: 'yellow', desc: `최근 1년 ${percentile}% 구간 — 시세 수준` });
+      conditions.push({ label: '가격 위치', status: 'yellow', desc: `최근 6개월 ${percentile}% 구간 — 시세 수준` });
     } else {
-      conditions.push({ label: '가격 위치', status: 'red', desc: `최근 1년 상위 ${100 - percentile}% — 시세 상단 구간` });
+      conditions.push({ label: '가격 위치', status: 'red', desc: `최근 6개월 상위 ${100 - percentile}% — 시세 상단 구간` });
     }
   }
 
