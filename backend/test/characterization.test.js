@@ -1312,6 +1312,21 @@ test('getRegulationPenalty — 서울 외 지역을 규제지역으로 단정하
   //   그래도 동작을 고정해 둔다 — 훗날 다른 호출부가 생겨 코드 없이 부르면 '강남구'에 "비규제"라는
   //   **사실 아닌 라벨**이 화면에 뜬다. 그때 이 줄이 근거가 된다.
   assert.deepEqual(getRegulationPenalty('강남구', ''), { status: '비규제', bonus: 0 });
+
+  // ★★ Plan 027 (2026-08-16): 이 함수는 규제 판정의 **네 번째 사본**이었고, 프론트 두 함수가
+  //   스냅샷을 따라가게 된 뒤에도 여기만 "서울=조정대상" 을 하드코딩하고 있었다.
+  //   ⚠ 그리고 **이 테스트가 그 하드코딩을 정답으로 고정**하고 있었다(감사 지적).
+  //   이제 3번째 인자로 스냅샷 상태를 받으므로 **두 상태 모두** 고정한다.
+  //   기본값은 true(규제) — 스냅샷 조회 실패 시 보수적. 프론트 _regLtvLabel 미로드 동작과 같은 방향.
+  assert.deepEqual(getRegulationPenalty('노원구', LAWD.노원구, true), { status: '조정대상지역', bonus: -3 });
+  assert.deepEqual(getRegulationPenalty('강남구', LAWD.강남구, true), { status: '투기과열·토허구역 일부', bonus: -8 });
+  // 해제 시: 서울 분기를 타지 않고 '미확인'(= 라벨 생략·감산 0) 으로 떨어져야 한다
+  assert.deepEqual(getRegulationPenalty('노원구', LAWD.노원구, false), { status: '미확인', bonus: 0 });
+  assert.deepEqual(getRegulationPenalty('강남구', LAWD.강남구, false), { status: '미확인', bonus: 0 },
+    '서울 해제인데 강남구에 투기과열 라벨이 남았다 — 프론트는 비규제로 바뀌므로 서비스가 서로 다른 말을 한다');
+  // 지방은 스냅샷 상태와 무관하게 '미확인'
+  assert.deepEqual(getRegulationPenalty('해운대구', LAWD.해운대구, false), { status: '미확인', bonus: 0 });
+  assert.deepEqual(getRegulationPenalty('해운대구', LAWD.해운대구, true), { status: '미확인', bonus: 0 });
 });
 
 test('applyObjectiveScore — 지방 단지 카드에 서울 위계·규제 문구가 찍히지 않는다 (실사고 재현)', () => {
