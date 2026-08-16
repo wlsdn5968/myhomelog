@@ -37,10 +37,14 @@ const serviceClient = () => getSupabaseAdmin();
 
 /**
  * 인기 단지 라이브 집계 — search.js /popular 에서 이동 (Sprint LLLL, 로직 무변경).
+ * @param {number} limit
+ * @param {{client?: object, rpcTimeoutMs?: number}} opts  SNAPROLE-2026-08-16: 조회 클라이언트 주입점.
+ *   미지정이면 종전과 동일하게 공개키(anon) — 사용자 요청 경로 동작 불변.
+ *   cron 만 service_role 을 넘긴다(아래 computeAndStoreSnapshot 주석에 실측 근거).
  * @returns {{ results: Array, usedFallback: boolean }}
  */
-async function buildPopularResults(limit = 12) {
-  const admin = anonClient();
+async function buildPopularResults(limit = 12, opts = {}) {
+  const admin = opts.client || anonClient();
   if (!admin) throw new Error('Supabase 미설정');
 
   // ① 전국 60일 실거래량 top — RPC 집계 (정직한 거래량순)

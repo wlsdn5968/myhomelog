@@ -61,6 +61,21 @@ const HISTORY_LIMIT = 50;
 // SSOT-2026-08-09 (Plan 007): 구명 adminClient 는 실권한과 불일치(공개키 우선 readonly) —
 //   db/client.getSupabaseReadonly 로 통합(키 체인 동일, 콜사이트 이름만 정리).
 const adminClient = () => getSupabaseReadonly();
+
+// SEARCH-DEGRADE-OBSERVE-2026-08-16 (Sprint LLLLLLL): 강등 빈도를 Redis 일별 카운터로 남긴다.
+//   Hobby 로그는 1시간이면 증발해 "얼마나 자주 강등되는가"를 사후에 알 수 없다. 실제로
+//   배포 직후 라이브 콜드 요청 1건이 곧바로 강등을 탔으므로(은마 검색 4.3s, molit 미반영)
+//   빈도 파악이 다음 판단(인덱스·캐시 워밍·상한 조정)의 근거가 된다. health.searchDegrade 로 노출.
+//   전부 fail-open + await 하지 않음 — 이미 느린 강등 응답을 더 늦추지 않는다.
+function _observeDegrade(kind) {
+  try {
+    const r = require('../redis').getRedis();
+    if (!r) return;
+    const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    Promise.resolve(r.hincrby(`searchdeg:${day}`, kind, 1)).catch(() => {});
+    Promise.resolve(r.expire(`searchdeg:${day}`, 60 * 60 * 24 * 21)).catch(() => {});
+  } catch (_) { /* 관측은 응답을 막지 않는다 */ }
+}
 router.get('/apt', async (req, res) => {
   const q = String(req.query.q || '').trim();
   const limit = Math.min(parseInt(req.query.limit) || 10, 30);
@@ -125,9 +140,9 @@ router.get('/apt', async (req, res) => {
       logger.warn({ err: _molitErr.message, code: _molitErr.code, q }, 'molit 검색 실패 — apt_master only 로 강등');
       // 57014(statement timeout)는 위 EXPLAIN 으로 원인이 확정된 기지 사항 → Sentry 노이즈만 만든다.
       //   그 외 오류(권한·스키마 드리프트 등)는 조용히 강등되면 안 되므로 그대로 캡처.
-      if (!/statement timeout|57014/i.test(`${_molitErr.code || ''} ${_molitErr.message || ''}`)) {
-        captureRouteError(_molitErr, 'search/apt-molit');
-      }
+      const _isTimeout = /statement timeout|57014/i.test(`${_molitErr.code || ''} ${_molitErr.message || ''}`);
+      _observeDegrade(_isTimeout ? 'molit-timeout' : 'molit-error');
+      if (!_isTimeout) captureRouteError(_molitErr, 'search/apt-molit');
     }
     // 두 쿼리 결과 병합 (기존 .or() 와 동일 집합·동일 상한) + 중복 제거
     let masterRes;
@@ -343,7 +358,9 @@ router.get('/apt', async (req, res) => {
     //   라이브 재검증으로 발각. 일치 등급(정확0·시작1·포함2)을 최종 정렬에서도 최우선으로.
     out.sort((a, b) => (_qRank(a.aptName) - _qRank(b.aptName)) || ((b.dealCount || 0) - (a.dealCount || 0)));
 
-    const payload = { results: out, query: q };
+    // degraded 를 응답에 명시 — 프론트는 아직 쓰지 않지만, 이 경로는 로그가 1시간이면 사라져
+    //   "이 응답이 반쪽이었나"를 사후에 확인할 방법이 없다. 위장하지 않기 위한 표식.
+    const payload = _degraded ? { results: out, query: q, degraded: true } : { results: out, query: q };
     if (_degraded) {
       // 강등 응답은 서버 캐시·CDN 어디에도 굳히지 않는다 — 3초 타임아웃 한 번이 10분(+SWR 1시간)
       //   동안 전 사용자에게 반쪽 결과를 고정시키는 것을 막는다. 다음 요청이 정상 경로를 다시 탄다.
@@ -419,6 +436,7 @@ router.get('/popular', async (req, res) => {
     const stale = await readPopularSnapshot(limit, 7 * 24 * 60 * 60 * 1000).catch(() => null);
     if (stale && stale.length) {
       logger.warn({ count: stale.length }, '인기 단지 — 만료 스냅샷 폴백');
+      _observeDegrade('popular-stale');
       res.set('Cache-Control', 'public, max-age=0, s-maxage=120');
       return res.json({ results: stale, stale: true });
     }

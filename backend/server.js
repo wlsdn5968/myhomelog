@@ -582,15 +582,21 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   // INTENT-OBSERVE-2026-08-12 (Sprint KKKKKKK-20): 데이터 도우미 의도 분포(오늘·어제) + 최근
   //   미매칭 원문 10개 — "다음 인텐트"를 실사용이 결정하게 하는 관측 창. 실패는 null(fail-open).
   let _chatIntents = null;
+  // SEARCH-DEGRADE-OBSERVE-2026-08-16 (Sprint LLLLLLL): 검색/인기단지 강등 빈도(오늘·어제).
+  //   molit-timeout 은 pg 57014(2글자 ILIKE 340K행 seq scan vs anon 3s 한도)로 원인이 확정된
+  //   기지 사항이라 Sentry 캡처를 뺐다 — 대신 여기서 빈도를 본다. 0 이 아니면 정상(강등이 동작 중).
+  let _searchDegrade = null;
   try {
     const r = require('./redis').getRedis();
     if (r) {
       const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       const yday = new Date(Date.now() - 864e5).toISOString().slice(0, 10).replace(/-/g, '');
-      const [today, yesterday, recentMisses] = await Promise.all([
+      const [today, yesterday, recentMisses, degToday, degYday] = await Promise.all([
         r.hgetall(`chatint:${day}`), r.hgetall(`chatint:${yday}`), r.lrange('chatint:misses', 0, 9),
+        r.hgetall(`searchdeg:${day}`), r.hgetall(`searchdeg:${yday}`),
       ]);
       _chatIntents = { today: today || {}, yesterday: yesterday || {}, recentMisses: recentMisses || [] };
+      _searchDegrade = { today: degToday || {}, yesterday: degYday || {} };
     }
   } catch (_) { /* 관측 실패 무시 */ }
   // QUOTA-PLAN-2026-07-12 (Sprint YYYY, 운영자 "admin 인데 검색 0/5 표시"): usage 한도를 사용자 plan 반영.
@@ -639,6 +645,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
       : { used: chatUsed, limit: _chatLimit, remaining: Math.max(0, _chatLimit - chatUsed) },
     monthlyBudget,
     chatIntents: _chatIntents, // KKKKKKK-20: 도우미 의도 분포 + 미매칭 원문(다음 인텐트 결정 재료)
+    searchDegrade: _searchDegrade, // LLLLLLL: 검색 molit 타임아웃 강등 · 인기단지 stale 폴백 빈도
     // kakaoQuota: geocodeCacheService 좌표해결 경로의 부분 지표 (_trackKakaoCall 집계분).
     //   directions/category/학교·학원 검색/geocode-batch 직접 호출은 미포함 — 전체 Kakao 사용량 아님.
     // 무료 한도 100K/일, 60K 도달 시 Sentry alert. 운영자 대시보드/모니터링 용도.
