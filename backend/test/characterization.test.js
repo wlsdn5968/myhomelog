@@ -729,3 +729,35 @@ test('computeDegrade — apt_master "한쪽만" 실패도 강등으로 잡는다
   assert.equal(mixed.fatal, false, 'master 한쪽 생존인데 500');
   assert.equal(mixed.degraded, true, '강등 응답인데 캐시 대상으로 분류');
 });
+
+// ── Sprint OOOOOOO (2026-08-16) — 한도 리셋 경계는 KST 자정 ──────────
+//   왜 추가하나: 종전 todayKey/secondsUntilMidnight 는 `new Date()` 의 **로컬** 시각을 썼는데
+//   Vercel 서버리스 런타임은 UTC 라(레포 전역 TZ 설정 0건), 한도 리셋이 실제로는 KST 09:00 에
+//   일어났다. 프로덕션 실증: POST /api/report(비로그인 한도 0 → 즉시 429) 의 resetIn = 77,582초로
+//   같은 순간 UTC 자정까지(77,640s)와 일치, KST 자정까지(45,240s)와는 3만초 어긋남.
+//   그런데 프론트는 10곳 넘게 "매일 자정(KST) 리셋"이라 안내한다 → 밤에 소진한 사용자가 자정 넘어
+//   재시도하면 여전히 막히고 9시간을 더 기다린다. 코드를 의도(KST)에 맞췄고, 이 테스트로 고정한다.
+//   ⚠ 핵심: 서버 타임존이 UTC 든 KST 든 **같은 결과**가 나와야 한다(getUTC* 만 사용).
+test('dailyLimit — 하루 경계가 KST 자정이다 (서버 타임존 무관)', () => {
+  const { todayKey, secondsUntilMidnight } = require('../middleware/dailyLimit');
+  const origNow = Date.now;
+  try {
+    // UTC 08-16 14:30 = KST 08-16 23:30 → 아직 16일, 자정까지 30분
+    Date.now = () => Date.UTC(2026, 7, 16, 14, 30, 0);
+    assert.equal(todayKey(), '20260816', 'KST 23:30 인데 날짜 키가 어긋남');
+    assert.equal(secondsUntilMidnight(), 1800, 'KST 자정까지 30분이어야 함');
+
+    // UTC 08-16 15:30 = KST 08-17 00:30 → 날짜가 17일로 넘어가야 한다(= 여기서 한도 리셋)
+    Date.now = () => Date.UTC(2026, 7, 16, 15, 30, 0);
+    assert.equal(todayKey(), '20260817', 'KST 자정을 넘겼는데 날짜 키가 안 바뀜 = 리셋 안 됨');
+    assert.equal(secondsUntilMidnight(), 23.5 * 3600, 'KST 00:30 → 다음 자정까지 23.5시간');
+
+    // UTC 자정 직후(= KST 09:00). 종전 버그면 여기서 리셋됐다 — 이제는 날짜가 안 바뀌어야 한다.
+    Date.now = () => Date.UTC(2026, 7, 17, 0, 1, 0);
+    assert.equal(todayKey(), '20260817', 'UTC 자정에 리셋되는 종전 동작으로 회귀');
+
+    // 하한 가드: KST 자정 1초 전이어도 최소 60초 TTL
+    Date.now = () => Date.UTC(2026, 7, 16, 14, 59, 59);
+    assert.equal(secondsUntilMidnight(), 60, 'TTL 하한 60초 가드가 사라짐');
+  } finally { Date.now = origNow; }
+});

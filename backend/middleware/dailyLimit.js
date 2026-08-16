@@ -26,18 +26,31 @@ function getClientIp(req) {
   );
 }
 
+// QUOTA-TZ-2026-08-16 (Sprint OOOOOOO): "하루"의 경계를 **KST 자정**으로 확정한다.
+//   [문제] 종전 두 함수는 `new Date()` 의 로컬 시각(getDate/setHours)을 그대로 썼는데,
+//   Vercel 서버리스 런타임 타임존이 **UTC** 다(레포 전역에 TZ·Asia/Seoul 설정 0건 — grep 확인).
+//   그래서 한도 리셋이 UTC 자정 = **KST 오전 9시**에 일어나고 있었다.
+//   [실증] 프로덕션 `POST /api/report`(비로그인 한도 0 → 즉시 429) 응답의 resetIn = **77,582초**.
+//   같은 순간 UTC 자정까지가 77,640초, KST 자정까지가 45,240초 — UTC 쪽과 58초(왕복 지연) 차이.
+//   [영향] 프론트는 10곳 넘게 "매일 자정(KST)에 리셋"이라 안내한다. 밤 11시에 한도를 쓴 사용자가
+//   자정 넘어 재시도하면 여전히 막히고 9시간을 더 기다린다 — 안내를 믿을수록 손해를 본다.
+//   [선택] 문구를 코드에 맞추지 않고 **코드를 의도에 맞춘다**(한국 사용자 전용 서비스).
+//   TZ 환경변수로 런타임 전역을 바꾸는 방식은 로그 타임스탬프·cron 기록 등 다른 Date 사용처까지
+//   함께 흔들므로 채택하지 않고, 이 두 함수만 KST 오프셋으로 계산한다.
+//   ⚠ 계산에 getUTC* 만 쓴다 — 서버 타임존이 UTC 든 KST 든 **같은 결과**가 나와야 하기 때문이다.
+const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+
 function todayKey() {
-  const d = new Date();
-  return `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(
-    d.getDate()
+  const d = new Date(Date.now() + KST_OFFSET_MS); // UTC 시각 +9h = KST 벽시계
+  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(
+    d.getUTCDate()
   ).padStart(2, '0')}`;
 }
 
 function secondsUntilMidnight() {
-  const now = new Date();
-  const next = new Date(now);
-  next.setHours(24, 0, 0, 0);
-  return Math.max(60, Math.floor((next - now) / 1000));
+  const kstNow = Date.now() + KST_OFFSET_MS;
+  const kstNextMidnight = Math.floor(kstNow / 86400000) * 86400000 + 86400000;
+  return Math.max(60, Math.floor((kstNextMidnight - kstNow) / 1000));
 }
 
 /**
@@ -156,7 +169,8 @@ function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
       const isAnonymous = !req.user?.id;
       const isPaid = plan === 'pro' || plan === 'team';
       // Phase B-5: scope 'report' 추가
-      const scopeName = scope === 'chat' ? 'AI 채팅'
+      // Sprint NNNNNNN: 챗은 룰베이스 전환(CHAT-ZERO-COST)으로 AI 가 아니다 → '도우미 채팅'.
+      const scopeName = scope === 'chat' ? '도우미 채팅'
                        : scope === 'report' ? '컨설팅 보고서'
                        : '단지 검색';
       return res.status(429).json({
@@ -188,4 +202,5 @@ async function getUsage(req, scope = 'search') {
   return readUsage(key);
 }
 
-module.exports = { dailyLimit, getUsage, getClientIp, getLimitIdentity };
+// todayKey/secondsUntilMidnight 도 export — KST 경계 계약을 테스트로 고정하기 위함(Sprint OOOOOOO).
+module.exports = { dailyLimit, getUsage, getClientIp, getLimitIdentity, todayKey, secondsUntilMidnight };
