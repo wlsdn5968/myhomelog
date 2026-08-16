@@ -15,9 +15,33 @@ const logger = require('../logger');
 const CACHE_KEY = 'kosis:unsold:v1';
 const MONTHS = 4; // 최근 4개월 추이
 
+// KOSIS-REDIS-2026-08-16 (Plan 017): 아래 순이동 로더(_fetchNetMigrationAll)에는 이미 있는
+//   Redis 2차 캐시를 미분양 로더에도 역이식한다. Vercel 서버리스가 콜드스타트/스케일아웃으로
+//   인스턴스를 갈아끼울 때마다 node-cache 는 비어 있어 KOSIS 를 다시 부르고 있었다(월간 통계인데).
+//
+//   ⚠ **그대로 복붙하면 안 된다** — 순이동 로더의 반환값은 평범한 객체(`byCode`)지만
+//     이쪽 반환값의 `map` 은 **Map 인스턴스**다. Upstash 는 set(객체)→JSON 직렬화이므로
+//     Map 을 그대로 실으면 `{"map":{}}` 로 납작해지고, 복원 시 getUnsoldTrend 의
+//     `all.map.get(...)` 이 **TypeError: all.map.get is not a function** 으로 죽는다
+//     (2026-08-16 Node 실측 확인). 저장은 엔트리 배열로 pack, 복원은 unpack 한다.
+//   형태를 못 알아보면 null → **캐시 미스로 떨어뜨린다**(fail-safe: 최악이라도 기존 동작인 외부 조회).
+function _packUnsold(out) {
+  if (!out || !(out.map instanceof Map)) return null;
+  return { entries: Array.from(out.map.entries()), fetchedAt: out.fetchedAt };
+}
+function _unpackUnsold(packed) {
+  if (!packed || !Array.isArray(packed.entries)) return null;
+  return { map: new Map(packed.entries), fetchedAt: packed.fetchedAt };
+}
+
 async function _fetchAll() {
   const hit = cache.get(CACHE_KEY);
   if (hit !== undefined) return hit;
+  const redisCache = require('./redisCache');
+  try {
+    const restored = _unpackUnsold(await redisCache.rget(CACHE_KEY));
+    if (restored) { cache.set(CACHE_KEY, restored, 86400); return restored; }
+  } catch (_) { /* Redis 실패는 무시하고 외부 조회 */ }
   const key = process.env.KOSIS_API_KEY;
   if (!key) { cache.set(CACHE_KEY, null, 21600); return null; }
   try {
@@ -44,6 +68,8 @@ async function _fetchAll() {
     for (const arr of map.values()) arr.sort((a, b) => a.ym.localeCompare(b.ym));
     const out = { map, fetchedAt: new Date().toISOString() };
     cache.set(CACHE_KEY, out, 86400); // 24h — 월간 통계
+    const packed = _packUnsold(out);  // Map → 엔트리 배열 (위 주석 참조)
+    if (packed) redisCache.rset(CACHE_KEY, packed, 86400).catch(() => {});
     return out;
   } catch (e) {
     logger.warn({ err: e.message }, 'KOSIS 미분양 조회 실패 — null (10분 후 재시도)');

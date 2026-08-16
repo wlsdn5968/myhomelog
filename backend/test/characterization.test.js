@@ -1527,3 +1527,53 @@ test('isRegFront ↔ _regLtvLabel — 같은 단지에서 규제 판정이 갈�
   assert.equal(isRegFront('강서구 명지동'), true);  // 코드가 없으면 여전히 구별 불가(알려진 한계)
   assert.equal(isRegFront('일산동구 마두동'), false);
 });
+
+// ── Plan 017 (2026-08-16): KOSIS 미분양 Redis 2차 캐시의 Map 직렬화 계약 ──
+//   순이동 로더에 이미 있던 Redis 캐시를 미분양 로더에 역이식했는데, **그대로 복붙하면 죽는다.**
+//   미분양 로더의 반환값은 `map` 이 Map 인스턴스이고 Upstash 는 set(객체)→JSON 직렬화라
+//   Map 이 `{}` 로 납작해진다. 그러면 복원 후 getUnsoldTrend 의 `all.map.get(...)` 이
+//   TypeError 로 죽어 **보고서의 미분양 패널이 통째로 500** 이 된다.
+//   이 테스트는 pack/unpack 이 그 함정을 실제로 막는지, 그리고 이상한 값이 오면
+//   조용히 null(캐시 미스)로 떨어지는지를 고정한다.
+test('KOSIS 미분양 캐시 — Map 은 JSON 왕복을 못 견딘다: pack/unpack 계약', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../services/kosisService.js'), 'utf8');
+  const grab = (name) => {
+    const m = src.match(new RegExp('function ' + name + '\\([\\s\\S]*?\\n\\}'));
+    assert.ok(m, `kosisService.js 에서 ${name} 을 찾지 못했다`);
+    return m[0];
+  };
+  const { _packUnsold, _unpackUnsold } = new Function(
+    `${grab('_packUnsold')}\n${grab('_unpackUnsold')}\nreturn { _packUnsold, _unpackUnsold };`)();
+
+  const out = {
+    map: new Map([['서울|종로구', [{ ym: '202605', cnt: 12 }, { ym: '202606', cnt: 9 }]],
+      ['부산|해운대구', [{ ym: '202606', cnt: 401 }]]]),
+    fetchedAt: '2026-08-16T00:00:00.000Z',
+  };
+
+  // ★ 함정 자체를 고정한다 — Map 을 그냥 실으면 복원 후 .get 이 사라진다(2026-08-16 Node 실측).
+  const naive = JSON.parse(JSON.stringify(out));
+  assert.equal(typeof naive.map.get, 'undefined',
+    'Map 이 JSON 왕복을 견디게 됐다면 이 테스트와 pack/unpack 의 전제를 다시 확인할 것');
+
+  // pack → (Upstash JSON 직렬화 모사) → unpack 이면 Map 이 살아 돌아온다
+  const restored = _unpackUnsold(JSON.parse(JSON.stringify(_packUnsold(out))));
+  assert.ok(restored.map instanceof Map, '복원 결과가 Map 이 아니다 — getUnsoldTrend 가 TypeError 로 죽는다');
+  assert.deepEqual(restored.map.get('서울|종로구'), [{ ym: '202605', cnt: 12 }, { ym: '202606', cnt: 9 }]);
+  assert.equal(restored.map.size, 2);
+  assert.equal(restored.fetchedAt, out.fetchedAt);
+  // getUnsoldTrend 가 실제로 쓰는 두 연산이 복원본에서 동작하는지
+  assert.equal(typeof restored.map.get, 'function');
+  assert.equal(typeof restored.map.entries, 'function');
+
+  // ★ fail-safe — 형태가 이상하면 예외가 아니라 null(캐시 미스 → 외부 재조회)
+  for (const bad of [null, undefined, {}, { entries: null }, { entries: '해킹' }, 'string', 0]) {
+    assert.equal(_unpackUnsold(bad), null, `이상 입력 ${JSON.stringify(bad)} 에 null 이 아니다`);
+  }
+  // pack 도 Map 이 아니면 null → 호출측이 rset 자체를 건너뛴다(깨진 값을 24h 캐싱하지 않는다)
+  assert.equal(_packUnsold(null), null);
+  assert.equal(_packUnsold({ map: {} }), null);
+  assert.equal(_packUnsold({ map: naive.map }), null);
+});
