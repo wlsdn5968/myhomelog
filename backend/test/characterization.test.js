@@ -955,3 +955,132 @@ test('billing/confirm — 이미 captured 면 Toss 재호출 없이 멱등 응�
     assert.equal(seen.updates.length, 0, '이미 captured 인데 추가 update 가 발생했다');
   });
 });
+
+// ── Plan 012-2 (2026-08-16): webhook 상태 분기 + 환불 7일 창 ──────────
+//   Plan 012 는 confirm 경로만 덮었다. 결제를 켜기 전 나머지 두 축을 고정한다.
+//   webhook 은 Toss 재조회(axios)가 **사실상 서명 검증 역할**이라 axios 스텁이 필요하고,
+//   환불 7일 경계는 payRow 의 approved_at 을 조작하면 **타이머 제어 없이** 검증된다.
+//   여기서도 프로덕션 코드는 바꾸지 않는다 — 라우터 스택에서 핸들러만 꺼내 쓴다.
+async function _withBillingStub2({ payRow, casRows, tossKey, webhookSecret, axiosImpl }, fn) {
+  const clientPath = require.resolve('../db/client');
+  const billPath = require.resolve('../routes/billing');
+  const axiosPath = require.resolve('axios');
+  const saved = { c: require.cache[clientPath], b: require.cache[billPath], a: require.cache[axiosPath] };
+  const savedEnv = { k: process.env.TOSS_SECRET_KEY, w: process.env.TOSS_WEBHOOK_SECRET };
+  const { client, seen } = _mockAdmin({ payRow, casRows });
+  if (tossKey === undefined) delete process.env.TOSS_SECRET_KEY; else process.env.TOSS_SECRET_KEY = tossKey;
+  if (webhookSecret === undefined) delete process.env.TOSS_WEBHOOK_SECRET; else process.env.TOSS_WEBHOOK_SECRET = webhookSecret;
+  require.cache[clientPath] = { id: clientPath, filename: clientPath, loaded: true, exports: {
+    getSupabaseAdmin: () => client, getSupabaseReadonly: () => client, getUserScopedClient: () => client } };
+  if (axiosImpl) {
+    require.cache[axiosPath] = { id: axiosPath, filename: axiosPath, loaded: true, exports: axiosImpl };
+  }
+  delete require.cache[billPath];   // env·axios 는 모듈 로드 시 바인딩되므로 반드시 재로드
+  try { return await fn(seen); } finally {
+    if (saved.c) require.cache[clientPath] = saved.c; else delete require.cache[clientPath];
+    if (saved.b) require.cache[billPath] = saved.b; else delete require.cache[billPath];
+    if (saved.a) require.cache[axiosPath] = saved.a; else delete require.cache[axiosPath];
+    if (savedEnv.k === undefined) delete process.env.TOSS_SECRET_KEY; else process.env.TOSS_SECRET_KEY = savedEnv.k;
+    if (savedEnv.w === undefined) delete process.env.TOSS_WEBHOOK_SECRET; else process.env.TOSS_WEBHOOK_SECRET = savedEnv.w;
+  }
+}
+const _req = (o) => ({ body: {}, user: { id: 'u1' }, params: {}, get: () => undefined, ip: '127.0.0.1', ...o });
+
+test('billing/webhook — Toss 재조회 orderId 가 body 와 다르면 400 (위조 차단)', async () => {
+  const axiosImpl = { get: async () => ({ data: { orderId: 'ATTACKER-ORDER', status: 'DONE', totalAmount: 9900 } }) };
+  await _withBillingStub2({ payRow: null, casRows: [], tossKey: 'test', axiosImpl }, async () => {
+    const h = _billingHandler('/webhook');
+    const res = _mockRes();
+    await h(_req({ body: { paymentKey: 'pk', orderId: 'o1' } }), res, () => {});
+    assert.equal(res.statusCode, 400, 'orderId 불일치인데 통과했다 — 재조회 검증이 무력화됐다');
+    assert.match(String(res.body && res.body.error), /mismatch/i);
+  });
+});
+
+test('billing/webhook — 정적 시크릿이 설정돼 있는데 헤더가 틀리면 401', async () => {
+  await _withBillingStub2({ payRow: null, casRows: [], tossKey: 'test', webhookSecret: 'expected-value' }, async () => {
+    const h = _billingHandler('/webhook');
+    const res = _mockRes();
+    await h(_req({ body: { paymentKey: 'pk', orderId: 'o1' }, get: () => 'wrong-value' }), res, () => {});
+    assert.equal(res.statusCode, 401, '시크릿 불일치인데 처리로 넘어갔다');
+  });
+});
+
+test('billing/webhook — 금액 불일치라도 terminal 상태(captured)는 failed 로 덮지 않는다', async () => {
+  // Toss 는 100원이라 하고 DB 는 9,900원 → 불일치. 단 이 주문은 이미 captured(terminal).
+  const payRow = { order_id: 'o1', user_id: 'u1', amount: 9900, status: 'captured', plan: 'pro' };
+  const axiosImpl = { get: async () => ({ data: { orderId: 'o1', status: 'CANCELED', totalAmount: 100 } }) };
+  // CAS(.eq('status','requested'))가 0행을 돌려주는 상황 = terminal 보호가 작동한 경우
+  await _withBillingStub2({ payRow, casRows: [], tossKey: 'test', axiosImpl }, async () => {
+    const h = _billingHandler('/webhook');
+    const res = _mockRes();
+    await h(_req({ body: { paymentKey: 'pk', orderId: 'o1' } }), res, () => {});
+    // 200 으로 응답해 Toss 재시도를 멈추되, 상태는 덮지 않는다
+    assert.equal(res.statusCode, 200, 'terminal 보호 경로는 200 이어야 Toss 가 재시도를 멈춘다');
+    assert.ok(/ignored|terminal/i.test(JSON.stringify(res.body)), `terminal 보호 응답이 아니다: ${JSON.stringify(res.body)}`);
+  });
+});
+
+test('billing/refund — 7일 청약철회 창을 넘으면 400 으로 막는다 (경계 양쪽 확인)', async () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  const mk = (daysAgo) => ({ id: 'p1', user_id: 'u1', order_id: 'o1', toss_payment_key: 'tk',
+    amount: 9900, status: 'captured', plan: 'pro',
+    approved_at: new Date(Date.now() - daysAgo * DAY).toISOString() });
+
+  // (a) 8일 전 결제 → 창 만료. axios 가 호출되면 안 된다(그 전에 차단되어야 함).
+  let tossCalled = false;
+  const axiosImpl = { post: async () => { tossCalled = true; return { data: {} }; }, get: async () => ({ data: {} }) };
+  await _withBillingStub2({ payRow: mk(8), casRows: [], tossKey: 'test', axiosImpl }, async () => {
+    const h = _billingHandler('/payments/:id/refund');
+    const res = _mockRes();
+    await h(_req({ params: { id: 'p1' } }), res, () => {});
+    assert.equal(res.statusCode, 400, '7일 초과인데 환불이 진행됐다');
+    assert.equal(res.body.code, 'refund_window_expired');
+    assert.equal(tossCalled, false, '창이 만료됐는데 Toss 취소 API 를 호출했다');
+  });
+
+  // (b) 6일 전 결제 → 창 안. 여기서는 Toss 호출까지 도달해야 한다(경계가 과하게 좁지 않은지).
+  tossCalled = false;
+  const axiosOk = { post: async () => { tossCalled = true; return { data: { status: 'CANCELED' } }; }, get: async () => ({ data: {} }) };
+  await _withBillingStub2({ payRow: mk(6), casRows: [{}], tossKey: 'test', axiosImpl: axiosOk }, async () => {
+    const h = _billingHandler('/payments/:id/refund');
+    const res = _mockRes();
+    await h(_req({ params: { id: 'p1' } }), res, () => {});
+    assert.equal(tossCalled, true, '6일차(창 안)인데 환불이 차단됐다 — 경계가 잘못 좁혀졌다');
+  });
+});
+
+test('billing/refund — captured 가 아니면 409, 이미 refunded 면 멱등 200', async () => {
+  const base = { id: 'p1', user_id: 'u1', order_id: 'o1', toss_payment_key: 'tk', amount: 9900,
+    plan: 'pro', approved_at: new Date().toISOString() };
+  await _withBillingStub2({ payRow: { ...base, status: 'requested' }, casRows: [], tossKey: 'test' }, async () => {
+    const res = _mockRes();
+    await _billingHandler('/payments/:id/refund')(_req({ params: { id: 'p1' } }), res, () => {});
+    assert.equal(res.statusCode, 409, '미승인(requested) 결제를 환불 가능으로 취급했다');
+    assert.equal(res.body.code, 'not_refundable');
+  });
+  await _withBillingStub2({ payRow: { ...base, status: 'refunded' }, casRows: [], tossKey: 'test' }, async () => {
+    const res = _mockRes();
+    await _billingHandler('/payments/:id/refund')(_req({ params: { id: 'p1' } }), res, () => {});
+    assert.equal(res.statusCode, 200, '이미 환불된 건은 멱등 200 이어야 한다');
+    assert.equal(res.body.status, 'refunded');
+  });
+});
+
+// PIPA-PARITY (Plan 012-2): confirm 과 webhook 이 **같은 개인정보 정책**을 갖는지 고정한다.
+//   confirm 은 P2-5(2026-05-04)로 실패 기록에서 정확한 결제 금액을 뺐는데 webhook 만 그대로였다
+//   — 같은 방어선의 "한쪽만 고침". 이 테스트가 두 경로를 묶는다.
+test('billing/webhook — 금액 불일치 기록에 정확한 결제 금액을 남기지 않는다 (PIPA 최소수집)', async () => {
+  // requested 상태여야 failed 전이 경로(CAS 성공)를 탄다
+  const payRow = { order_id: 'o1', user_id: 'u1', amount: 9900, status: 'requested', plan: 'pro' };
+  const axiosImpl = { get: async () => ({ data: { orderId: 'o1', status: 'DONE', totalAmount: 100 } }) };
+  await _withBillingStub2({ payRow, casRows: [{ order_id: 'o1' }], tossKey: 'test', axiosImpl }, async (seen) => {
+    const res = _mockRes();
+    await _billingHandler('/webhook')(_req({ body: { paymentKey: 'pk', orderId: 'o1' } }), res, () => {});
+    assert.equal(res.statusCode, 400, '금액 불일치인데 400 이 아니다');
+    const failed = seen.updates.find((u) => u && u.status === 'failed');
+    assert.ok(failed, '금액 불일치인데 requested 주문을 failed 로 막지 않았다');
+    assert.ok(!/9900|100/.test(JSON.stringify(failed)),
+      `실패 기록에 결제 금액이 남았다(PIPA 최소수집 위반, confirm 경로와 불일치): ${JSON.stringify(failed)}`);
+  });
+});

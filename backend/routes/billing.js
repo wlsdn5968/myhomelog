@@ -348,12 +348,16 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
 
     // 금액 검증 (confirm 과 동일 방어선)
     if (Number(pay.amount) !== Number(tossData.totalAmount || tossData.balanceAmount || 0)) {
-      logger.warn({ orderId, expected: pay.amount, got: tossData.totalAmount },
+      // PIPA-PARITY-2026-08-16 (Plan 012-2): confirm 경로는 P2-5(2026-05-04)로 실패 기록·로그에서
+      //   **정확한 결제 금액을 제외**했는데(PIPA 제3조 최소수집), 같은 방어선인 여기만 그대로였다.
+      //   두 경로가 서로 다른 개인정보 정책을 갖고 있던 셈이라 confirm 과 동일하게 맞춘다.
+      //   정확한 금액은 admin DB 조회로만 확인한다(로그·failure_reason 에 누적 노출 금지).
+      logger.warn({ userId: pay.user_id, orderId, mismatch: true },
         'webhook: 금액 불일치');
       // CAS: requested 상태만 failed 로 — captured/refunded/canceled 등 terminal 은 덮지 않음 (DONE/EXPIRED/ABORTED/refund 분기와 일관).
       const { data: failRows } = await admin.from('payments').update({
         status: 'failed',
-        failure_reason: `webhook_amount_mismatch: expected=${pay.amount} got=${tossData.totalAmount}`,
+        failure_reason: 'webhook_amount_mismatch', // P2-5 정합: 정확 값 제외
       }).eq('order_id', orderId).eq('status', 'requested').select();
       if (!failRows || failRows.length === 0) {
         // 이미 terminal(captured/refunded/failed 등) — 덮어쓰기 보호 + Toss 재시도 중단(200)

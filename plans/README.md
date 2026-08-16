@@ -67,9 +67,17 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (한 줄 사유) | REJECTED (
   **프로덕션 코드 변경 0** — express 라우터 스택에서 핸들러만 꺼내 req/res 목으로 호출했다
   (결제 로직을 테스트 편의로 리팩터링하는 것이 더 위험하다는 판단).
   **회귀 주입 2건 검증**: 금액 비교 무력화 → fail 1, captured 멱등 분기 제거 → fail 1.
-  ⚠ **남은 것**: `webhook` 상태별 분기(DONE/CANCELED/EXPIRED/ABORTED)와 **환불 7일 창 경계**는
-  미착수다. webhook 은 axios 스텁이 추가로 필요하고, 환불은 시간 경계라 타이머 제어가 필요하다.
-  **결제를 켜기 전에 이 둘도 덮는 것을 권장한다.**
+  **→ 012-2(2026-08-16)로 webhook·환불까지 완료.** 총 **9건**(41→51 테스트):
+  · webhook: Toss 재조회 orderId 불일치 → 400(위조 차단) · 정적 시크릿 불일치 → 401 ·
+    금액 불일치라도 **terminal(captured)은 failed 로 덮지 않고 200**(Toss 재시도 중단)
+  · 환불: **7일 창 경계 양쪽**(8일 → 400 + Toss 미호출 / 6일 → Toss 호출 도달) ·
+    captured 아니면 409 · 이미 refunded 면 멱등 200
+  · axios 는 `require.cache` 스텁, 7일 경계는 `approved_at` 조작으로 **타이머 제어 없이** 검증.
+  **회귀 주입 4건 전부 확인**(금액비교·멱등분기·7일창·orderId검증 각각 무력화 시 fail 1).
+  ⚠ **이 과정에서 실제 결함 1건 발견·수정**: confirm 은 P2-5(2026-05-04)로 실패 기록에서 정확한
+  결제 금액을 뺐는데 **webhook 만 그대로**였다(로그·failure_reason 양쪽). 같은 방어선인데 서로 다른
+  개인정보 정책을 갖고 있던 셈 — 오늘 취득세와 같은 "한쪽만 고침" 패턴이라 confirm 과 맞추고
+  계약 테스트로 묶었다.
 - **`middleware/auth.js` 테스트 0** (S): `_jwtExpMs`(JWT 만료 후 캐시 재사용 차단)·
   `isDeletionAllowed` 가 순수 함수인데 미노출·미검증. export 추가만으로 착수 가능.
 - **`report.js` 점수 엔진 export·테스트 0** (M): `computeAptScore`·`getDistrictTier` 등이
