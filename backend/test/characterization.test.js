@@ -2230,3 +2230,49 @@ test('부속시설 키워드가 세 판정 경로에 모두 반영돼 있다 (�
   assert.equal(NON_APT_PATTERNS.test('플라자'), false,
     "'플라자'가 NON_APT_PATTERNS 에 들어갔다 — 주상복합 단지명 오탐 위험. 넣으려면 단지명 실측부터 할 것");
 });
+
+test('세대당 주차 판정 5곳이 모두 세대수 불일치 가드를 거친다 (사본 드리프트 방지)', () => {
+  // [배경] 같은 지표가 이미 5곳에서 판단에 쓰이고 있었다 — 태그 2곳(프론트 단지정보·백엔드 추천카드),
+  //   점수 가산 1곳, 보고서 등급 보너스 1곳, 보고서 '장점' 문장 1곳. 여기에 필터가 하나 더 있다.
+  //   이 저장소는 "사본 하나만 고치고 나머지가 갈리는" 사고를 여러 번 겪었으므로 전부 묶는다.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const p = f => fs.readFileSync(path.join(__dirname, f), 'utf8');
+  const svc = p('../services/propertyService.js');
+  const rep = p('../routes/report.js');
+  const html = p('../../frontend/index.html');
+
+  // 판정은 한 곳(householdsConflictOf)에서만 나온다 — 임계값을 복사한 자리가 있으면 안 된다
+  const { householdsConflictOf, HH_CONFLICT_THRESHOLD } = require('../utils/buildFacility');
+  assert.equal(HH_CONFLICT_THRESHOLD, 0.2);
+  assert.ok(householdsConflictOf(128, 338), '아스테리움용산 실값(62%)이 불일치로 안 잡힌다');
+  assert.equal(householdsConflictOf(2033, 2029), null, '0.2% 차이가 불일치로 잡히면 정상 단지가 오탐된다');
+  assert.equal(householdsConflictOf(0, 1540), null, '한쪽만 있으면 비교 불가 → null');
+  assert.equal(householdsConflictOf('abc', 100), null, '숫자가 아니면 null (KAPT 원천은 문자열이다)');
+  assert.ok(rep.includes("require('../utils/buildFacility')"),
+    '보고서가 판정을 따로 구현했다 — 임계값이 갈리면 같은 단지가 화면마다 다르게 나온다');
+
+  // ① 점수 가산 ② 추천카드 태그 ③ 주차 필터 — propertyService
+  assert.match(svc, /const pr = facility\?\.householdsConflict \? 0 : \(facility\?\.parkingRatio \|\| 0\)/,
+    '점수 가산(+4)이 불일치 단지에도 붙는다');
+  assert.match(svc, /parkingRatio >= 1\.2 && !facility\?\.householdsConflict/,
+    '추천카드 주차여유 태그에 가드가 없다');
+  assert.ok(svc.includes('if (fMinPark > 0 && fac.householdsConflict) return false;'),
+    '주차 필터에 가드가 없다');
+
+  // ④ 보고서 등급 보너스 ⑤ 보고서 장점 문장
+  assert.match(rep, /function getParkingBonus\(parkingTotal, households, householdsConflict\)/,
+    'getParkingBonus 가 불일치 여부를 받지 않는다');
+  assert.match(rep, /if \(householdsConflict\) return \{ ratio: \(p \/ h\)\.toFixed\(2\), bonus: 0, uncertain: true \}/,
+    '불일치인데 보너스(최대 12점)가 그대로 붙는다');
+  assert.match(rep, /getParkingBonus\(c\.kaptInfo\?\.parking, c\.households, c\.householdsConflict\)/,
+    '호출부가 불일치 값을 안 넘긴다 — 함수만 고치고 배선을 놓친 상태다');
+  assert.match(rep, /parking_per_household >= 1 && !f\.parking_uncertain/,
+    "보고서 '장점' 문장에 가드가 없다");
+  assert.match(rep, /parking_uncertain: parking\.uncertain \|\| false/,
+    'objectiveFacts 에 parking_uncertain 이 실리지 않는다 — 위 pros 가드가 항상 통과한다');
+
+  // ⑥ 프론트 단지정보 태그
+  assert.match(html, /f\.parkingRatio >= 1\.2 && !f\.householdsConflict/,
+    '프론트 단지정보 주차여유 태그에 가드가 없다');
+});

@@ -27,6 +27,9 @@ const { filterAdviceOutputDeep, REPORT_FILTER_FIELDS } = require('../services/ai
 const { getSupabaseAdmin } = require('../db/client');
 const { getSnapshot } = require('../services/regulationsService');
 const { resolveFacility } = require('../services/aptFacilityService');
+// HH-CONFLICT-2026-08-17 (Sprint MMMMMMM): 세대수 원천 불일치 판정은 buildFacility 의 것 하나만 쓴다.
+//   (보고서는 buildFacility 자체는 호출하지 않지만, **판정 기준까지 따로 두면 두 화면이 갈린다.**)
+const { householdsConflictOf } = require('../utils/buildFacility');
 const { resolveCoordBatch } = require('../services/geocodeCacheService');
 const { getNearbyAmenities, countNearby, keywordToCoord, getTransitMinutes } = require('../services/kakaoService');
 const cache = require('../cache');
@@ -435,7 +438,9 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
     const age = (c.build_year && c.build_year > 1900) ? curYear - c.build_year : null;
     const pros = [
       (c.households && c.households >= 1000) ? `대단지 ${Number(c.households).toLocaleString()}세대` : null,
-      (f.parking_per_household && f.parking_per_household >= 1) ? `주차 세대당 ${f.parking_per_household}대` : null,
+      // HH-CONFLICT-2026-08-17 (Sprint MMMMMMM): '장점' 은 판단이다 — 분모를 못 믿으면 쓰지 않는다.
+      (f.parking_per_household && f.parking_per_household >= 1 && !f.parking_uncertain)
+        ? `주차 세대당 ${f.parking_per_household}대` : null,
       (c.n >= 20) ? `최근 6개월 거래 ${c.n}건 (거래 활발)` : null,
       f.builder ? `시공 ${f.builder}` : null,
       f.jeonse_ratio ? `전세가율 ${f.jeonse_ratio} (회원님 평형대 전세 ${f.jeonse_sample}건)` : null, // Sprint KKKKK
@@ -707,9 +712,14 @@ function getHouseholdBonus(n) {
 }
 
 /** 주차 대수/세대 (Phase 9 강화) */
-function getParkingBonus(parkingTotal, households) {
+// HH-CONFLICT-2026-08-17 (Sprint MMMMMMM): 보고서는 buildFacility 를 안 거치는 **독립 2번째 경로**라
+//   같은 가드를 따로 걸어야 한다(그래서 판정은 householdsConflictOf 하나만 쓴다 — 조건 복사 금지).
+//   불일치면 비율은 그대로 보여주되(사실) 등급 보너스(최대 12점)만 0으로 만든다 —
+//   실측상 세대당 6.07대까지 부푸는데 그걸로 점수를 주면 순위가 뒤틀린다.
+function getParkingBonus(parkingTotal, households, householdsConflict) {
   const p = Number(parkingTotal), h = Number(households);
   if (!p || !h) return { ratio: null, bonus: 0 };
+  if (householdsConflict) return { ratio: (p / h).toFixed(2), bonus: 0, uncertain: true };
   const ratio = p / h;
   if (ratio >= 1.3) return { ratio: ratio.toFixed(2), bonus: 12 };
   if (ratio >= 1.0) return { ratio: ratio.toFixed(2), bonus: 8 };
@@ -861,7 +871,7 @@ function applyObjectiveScore(c, seoulRegulated = true) {
   const hhBonus = getHouseholdBonus(c.households);
   if (hhBonus && !r['객관_세대수']) { r['객관_세대수'] = hhBonus; c.score += hhBonus; }
 
-  const parking = getParkingBonus(c.kaptInfo?.parking, c.households);
+  const parking = getParkingBonus(c.kaptInfo?.parking, c.households, c.householdsConflict);
   if (parking.bonus && !r['객관_주차']) { r['객관_주차'] = parking.bonus; c.score += parking.bonus; }
 
   const age = getAgeBonus(c.build_year);
@@ -909,6 +919,8 @@ function applyObjectiveScore(c, seoulRegulated = true) {
     households: c.households || null,
     age_years: age.years,
     parking_per_household: parking.ratio,
+    // HH-CONFLICT-2026-08-17: 비율은 그대로 보여주되 '장점' 문장은 이 플래그로 막는다(위 pros 참조).
+    parking_uncertain: parking.uncertain || false,
     parking_total: c.kaptInfo?.parking || null,
     regulation: reg.status === '미확인' ? null : reg.status,
     transactions_6mo: c.n,
@@ -1146,6 +1158,9 @@ async function fetchCandidateApts(admin, input, limit) {
         // HH-HOCNT-FALLBACK-2026-07-14 (Sprint IIIII): kaptdaCnt 가 0("0" 문자열 포함)인 단지는 hoCnt(호수) fallback.
         c.households = [raw.kaptdaCnt, raw.hoCnt, raw.householdCount, raw.kaptCount]
           .map(v => parseInt(v)).find(n => Number.isFinite(n) && n > 0) || null;
+        // HH-CONFLICT-2026-08-17 (Sprint MMMMMMM): 위 fallback 이 고른 값이 신뢰 가능한지 함께 기록.
+        //   세대수 자체는 그대로 쓰되(표시는 사실), 세대당 주차로 **점수를 주는 것**만 막는다.
+        c.householdsConflict = householdsConflictOf(raw.kaptdaCnt, raw.hoCnt);
         // build_year 우선순위 #1: KAPT 공식 사용승인일
         const useDate = raw.kaptUsedate || raw.kaptUseDate || raw.useApprovalDate;
         if (useDate) {

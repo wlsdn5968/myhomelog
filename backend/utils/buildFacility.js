@@ -33,6 +33,31 @@ function normalizeBuilder(name) {
   return _BUILDER_TYPO_FIX[s] || s;
 }
 
+// HH-CONFLICT-2026-08-17 (Sprint MMMMMMM — 서울 전수조사 4회차 실측):
+//   KAPT 의 세대수 원천은 두 개다 — kaptdaCnt(관리세대수)·hoCnt(호수). 둘 다 0이 아니면서
+//   서로 다른 단지가 서울에만 207곳이고, 어느 쪽도 일괄 신뢰할 수 없다:
+//     · kaptdaCnt 가 틀린 예 — 대치풍림아이원 1.2단지 19(5개동) vs hoCnt 90
+//                              아스테리움용산 128 vs 338 → 세대당 주차 6.07대(서울 평균 1.086의 5.6배)
+//     · hoCnt 가 틀린 예     — 방원예뜨랑 121 vs 3, 삼전현대 120 vs 4
+//   건축물대장(건축HUB) 교차검증 12건은 kaptdaCnt 9 : hoCnt 2 → **표시값 규칙(kaptdaCnt 우선)은 유지**한다.
+//   값을 우리가 고르는 대신 "두 원천이 어긋났다"는 사실만 내보내고, 그 위에 쌓는 판단
+//   (주차여유 태그·점수 가산·보고서 보너스·주차 필터)만 막는다. 임의로 고르면 그게 환각이다.
+//
+//   ★ 이 함수를 SSOT 로 둔 이유: 세대당 주차 판정이 이미 **5곳**에 흩어져 있다
+//     (propertyService 점수·태그·필터, report 보너스·장점문). 조건을 각 자리에 복사하면
+//     이 저장소가 여러 번 겪은 "사본이 조용히 갈리는" 사고를 그대로 반복한다.
+//     report 경로는 buildFacility 를 아예 호출하지 않으므로 이 함수를 직접 부른다.
+//
+//   [임계 20% 근거] 서울 207건 분포 실측 — 5%미만 157 / 5~20% 26 / 20~50% 16 / 50%이상 8.
+//     20% 미만은 관리세대수와 호수의 정상적 차이(부속호실 등)로 설명되고 비율도 뒤틀리지 않는다.
+const HH_CONFLICT_THRESHOLD = 0.2;
+function householdsConflictOf(kaptdaCnt, hoCnt) {
+  const a = parseInt(kaptdaCnt), b = parseInt(hoCnt);
+  if (!Number.isFinite(a) || !Number.isFinite(b) || a <= 0 || b <= 0) return null; // 한쪽만 있으면 비교 불가
+  if (Math.abs(a - b) / Math.max(a, b) < HH_CONFLICT_THRESHOLD) return null;
+  return { kaptdaCnt: a, hoCnt: b, used: 'kaptdaCnt' };
+}
+
 /**
  * @param {object|null} info     — KAPT raw response (kaptdaCnt, kaptUsedate 등 포함)
  * @param {string|null} kaptCode — KAPT 단지 코드 (정확 매칭 ID)
@@ -79,10 +104,7 @@ function buildFacility(info, kaptCode, detail) {
   //     ('주차여유' 태그·주차 1.2+ 필터)을 프론트에서 막는다. 우리가 임의로 고르면 그게 환각이다.
   //   [임계 20%] 서울 207건 분포 실측 — 5%미만 157 / 5~20% 26 / 20~50% 16 / 50%이상 8.
   //     20% 미만은 관리세대수와 호수의 정상적 차이(동수·부속호실)로 설명되고 비율도 뒤틀리지 않는다.
-  const _hhA = _posInt(info.kaptdaCnt), _hhB = _posInt(info.hoCnt);
-  const householdsConflict = (_hhA > 0 && _hhB > 0 && Math.abs(_hhA - _hhB) / Math.max(_hhA, _hhB) >= 0.2)
-    ? { kaptdaCnt: _hhA, hoCnt: _hhB, used: 'kaptdaCnt' }
-    : null;
+  const householdsConflict = householdsConflictOf(info.kaptdaCnt, info.hoCnt);
   // PARK-FIELD-FIX-2026-05-13 (Sprint X — 운영자 발견 + Chrome MCP 으로 진짜 필드명 [VERIFIED]):
   //   KAPT V4 detail (getAphusDtlInfoV4) raw 필드:
   //     - kaptdPcnt  = 지상 주차 (풍림 473, 헬리오 0)
@@ -186,4 +208,4 @@ function buildFacility(info, kaptCode, detail) {
   };
 }
 
-module.exports = { buildFacility };
+module.exports = { buildFacility, householdsConflictOf, HH_CONFLICT_THRESHOLD };

@@ -246,7 +246,9 @@ function _applyFacilityToScore(baseScore, facility) {
   if (th >= 3000) s += 8;
   else if (th >= 1000) s += 6;
   else if (th >= 500) s += 3;
-  const pr = facility?.parkingRatio || 0;
+  // HH-CONFLICT-2026-08-17 (Sprint MMMMMMM): 분모(세대수) 원천이 갈린 단지는 이 비율로 점수를
+  //   올리면 안 된다 — 실측상 세대당 6.07대까지 부푼다. 점수를 깎지도 않는다(모르는 것은 0이다).
+  const pr = facility?.householdsConflict ? 0 : (facility?.parkingRatio || 0);
   if (pr >= 1.2) s += 4;
   else if (pr >= 0.8) s += 2;
   // LOC-SCORE-2026-05-13 (Sprint CC+): 위치 가치 (지하철 도보 + 교육시설)
@@ -733,7 +735,9 @@ async function getAIRecommendations(userCondition) {
       const moreTags = [...(rec.tags || [])];
       const totalHouseholds = facility?.totalHouseholds || 0;
       const parkingRatio = facility?.parkingRatio;
-      if (parkingRatio && parkingRatio >= 1.2) moreTags.push('주차여유');
+      // HH-CONFLICT-2026-08-17 (Sprint MMMMMMM): 프론트 단지정보 태그(index.html)와 같은 가드.
+      //   두 자리가 갈리면 같은 단지가 카드엔 '주차여유', 상세엔 미표기로 나와 사용자가 모순을 본다.
+      if (parkingRatio && parkingRatio >= 1.2 && !facility?.householdsConflict) moreTags.push('주차여유');
       if (totalHouseholds >= 1000) moreTags.push('대단지');
       else if (totalHouseholds >= 500) moreTags.push('중대단지');
       // SCORE-MULTIFACTOR-2026-05-13 (Sprint Y): facility 알게 된 후 score 보정.
