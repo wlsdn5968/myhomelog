@@ -761,3 +761,54 @@ test('dailyLimit — 하루 경계가 KST 자정이다 (서버 타임존 무관)
     assert.equal(secondsUntilMidnight(), 60, 'TTL 하한 60초 가드가 사라짐');
   } finally { Date.now = origNow; }
 });
+
+// ── Sprint RRRRRRR (2026-08-16) — 검색 molit 조회 상한(abort) 계약 ──────────
+//   왜 추가하나: 라이브 실측에서 자동완성이 최대 7.4s 를 쓰고(래미 7,401ms·주공 7,304ms) 그중
+//   일부는 500(은마 4,485ms)까지 났다. 원인은 435,613행 CPU 바운드 ILIKE Seq Scan 으로 확정됐고
+//   (EXPLAIN: 스캔 2,467ms·buffers 전부 shared hit / Sort 는 0.015ms / GIN 강제는 더 느림),
+//   인덱스로는 줄일 수 없어 **2.5s 에 먼저 끊는** 상한을 넣었다.
+//   이 테스트가 지키는 것은 두 가지 퇴행이다:
+//     (a) abort 가 error 로 정규화되지 않으면 Promise.all 이 reject → 강등(200)이 **500 으로 퇴행**
+//     (b) abort 판정이 새면 우리가 의도적으로 끊은 요청이 'molit-error' 로 분류돼 **Sentry 이슈 양산**
+test('_softQuery — reject 를 error 로 정규화해 Promise.all 이 통째로 터지지 않는다', async () => {
+  const { _softQuery } = require('../routes/search');
+
+  // 정상 결과는 그대로 통과해야 한다(래핑이 응답을 바꾸면 안 됨)
+  const ok = await _softQuery(Promise.resolve({ data: [{ apt_name: '은마' }], error: null }));
+  assert.deepEqual(ok, { data: [{ apt_name: '은마' }], error: null });
+
+  // AbortSignal.timeout() 이 던지는 것은 TimeoutError 다 — AbortError 만 보면 놓친다
+  const te = new Error('The operation was aborted due to timeout'); te.name = 'TimeoutError';
+  const r1 = await _softQuery(Promise.reject(te));
+  assert.equal(r1.data, null);
+  assert.equal(r1.error.aborted, true, 'TimeoutError 를 abort 로 인식하지 못함');
+
+  // ★ 핵심 회귀: 한 쿼리가 reject 해도 나머지 결과는 살아야 한다(강등의 전제)
+  const [a, b] = await Promise.all([
+    _softQuery(Promise.reject(te)),
+    _softQuery(Promise.resolve({ data: [{ apt_name: '헬리오시티' }], error: null })),
+  ]);
+  assert.ok(a.error, 'reject 가 error 로 오지 않음');
+  assert.equal(b.data.length, 1, '다른 쿼리 결과가 유실됨 → 강등 대신 500 이 된다');
+});
+
+test('_isAbortErr — 우리가 끊은 요청만 abort 로 보고, 진짜 오류는 Sentry 로 보낸다', () => {
+  const { _isAbortErr } = require('../routes/search');
+
+  // postgrest-js 가 실제로 만드는 형태: message = `${name}: ${msg}`, code = '' (dist/index.cjs 확인)
+  assert.equal(_isAbortErr({ message: 'TimeoutError: The operation was aborted due to timeout', code: '', hint: '' }),
+    true, 'TimeoutError 형태를 못 잡으면 Sentry 이슈가 매번 생긴다');
+  assert.equal(_isAbortErr({ message: 'AbortError: This operation was aborted', code: '',
+    hint: 'Request was aborted (timeout or manual cancellation)' }), true);
+  assert.equal(_isAbortErr({ aborted: true }), true, 'reject 경로(_softQuery)가 붙인 표식');
+
+  // ★ DB 측 statement timeout 은 abort 가 아니다 — 둘을 구분해야 대응이 갈린다
+  //   (abort 증가 = 상한이 동작 / timeout 증가 = 2.5s 안에도 못 끝냄)
+  assert.equal(_isAbortErr({ code: '57014', message: 'canceling statement due to statement timeout' }),
+    false, 'DB timeout 을 abort 로 오분류하면 상한 효과를 측정할 수 없다');
+
+  // ★ 진짜 오류는 반드시 false — 조용히 삼켜지면 권한·스키마 드리프트를 못 본다
+  assert.equal(_isAbortErr({ code: '42501', message: 'permission denied for table molit_transactions' }), false);
+  assert.equal(_isAbortErr({ code: 'PGRST204', message: 'column does not exist' }), false);
+  assert.equal(_isAbortErr(null), false);
+});

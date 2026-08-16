@@ -89,6 +89,56 @@ function computeDegrade(molitErr, masterNameErr, masterUmdErr) {
   };
 }
 
+// SEARCH-ABORT-2026-08-16 (Sprint RRRRRRR) — 자동완성이 최대 7.4s 를 쓰던 것을 상한으로 끊는다.
+//   [실측 2026-08-16 04:2x, 라이브 /api/search/apt · 캐시 우회]
+//     래미 7,401ms(강등) · 주공 7,304ms(강등) · 자이 5,270ms(강등) · 푸르지오 3,808ms(강등)
+//     은마 4,485ms(**500** — molit+master 동시 실패) · 헬리오시티 1,440ms(정상)
+//     health.searchDegrade: 03:26 molit-timeout 5 → 03:46 **11** (전부 실사용자) — 시간당 약 3건.
+//   [원인 — EXPLAIN(ANALYZE, BUFFERS)]
+//     `apt_name ILIKE '%q%'` 는 435,613행 **병렬 Seq Scan**. buffers 가 전부 shared hit(디스크 IO 0)
+//     인데도 스캔에 2,467ms — 즉 **CPU 바운드 ILIKE** 다. Sort 는 top-N heapsort 0.015ms 로 무시 가능
+//     (ORDER BY 제거는 무의미). GIN trgm 강제는 오히려 느리다(후보 362,429행 → 323,914행 Recheck 폐기).
+//     ⚠ EXPLAIN 의 TIMING ON 은 행마다 타이머를 호출해 값을 부풀린다 — 같은 쿼리가
+//     TIMING ON 2,625ms / **TIMING OFF 917ms**. 실제 비용은 후자 쪽이다.
+//   [선택] 근본 해법은 스캔 대상 축소(단지 단위 집계 = 21,977행, 20배)뿐인데 **DDL 이라 운영자 SQL**
+//     이 필요하다. 코드로 지금 할 수 있는 건 "3s statement_timeout 을 다 쓰고 실패하는 것"을 막는 것:
+//     2.5s 에 먼저 끊으면 (a) 사용자 대기가 짧아지고 (b) DB 가 죽은 쿼리에 CPU 를 덜 쓴다.
+//     2.5s 근거 = 웜 실비용 917ms + PostgREST/네트워크 오버헤드의 약 2배 여유, statement_timeout 3s 보다 앞.
+const MOLIT_ABORT_MS = 2500;
+
+// postgrest-js 의 abort 처리 — dist/index.cjs 실물 확인 결과(추측 아님):
+//   · 재시도 루프 안(270행)에서는 AbortError/ABORT_ERR 를 rethrow 하지만,
+//   · **상위 catch(312행)가 이를 받아** `{ success:false, error:{message,details,hint,code:''}, data:null }`
+//     을 **반환**한다(마지막 `return res.then(onfulfilled, onrejected)`).
+//   → 즉 Promise.all 은 reject 되지 않는다. 그래도 이 헬퍼를 두는 이유는 **방어층**이다:
+//     라이브러리 버전이 바뀌어 rethrow 로 돌아서면 강등(200)이 조용히 500 으로 퇴행하기 때문이다.
+//     네트워크 예외(fetch failed 등) 같은 진짜 reject 도 여기서 강등으로 흡수된다.
+//   ⚠ 반환되는 error 에는 `aborted` 필드가 **없다**. abort 판정은 아래 _isAbortErr 가 문자열로 한다
+//     (여기서 붙이는 aborted:true 는 reject 경로 전용).
+function _softQuery(p) {
+  return Promise.resolve(p).then(
+    (r) => r,
+    (e) => ({
+      data: null,
+      error: {
+        message: (e && e.message) || 'aborted',
+        code: (e && (e.code || e.name)) || 'ABORT_ERR',
+        aborted: !!(e && (e.name === 'AbortError' || e.name === 'TimeoutError' || e.code === 'ABORT_ERR')),
+      },
+    })
+  );
+}
+// abort 판정 — postgrest-js 는 message 를 `${name}: ${msg}` 로 만들고(AbortError/TimeoutError),
+//   AbortError/ABORT_ERR 인 경우 hint 에 "Request was aborted (timeout or manual cancellation)" 를 넣는다.
+//   ⚠ `AbortSignal.timeout()` 이 던지는 것은 **TimeoutError** 라 name 만 보면 놓친다 — 문자열 전체를 본다.
+//   이 판정이 실패하면 우리가 의도적으로 끊은 요청이 'molit-error' 로 분류돼 **Sentry 이슈가 매번 생긴다.**
+function _isAbortErr(err) {
+  if (!err) return false;
+  if (err.aborted === true) return true;
+  return /abort|timeouterror/i.test(
+    `${err.name || ''} ${err.code || ''} ${err.message || ''} ${err.hint || ''}`
+  );
+}
 function _observeDegrade(kind) {
   try {
     const r = require('../redis').getRedis();
@@ -135,18 +185,21 @@ router.get('/apt', async (req, res) => {
     //   사용자 입력이 PostgREST or= 미니 문법에 원시 삽입돼 콤마 등으로 임의 필터 절 주입 가능(유일한 원시 경로).
     //   → 파라미터 인코딩되는 .ilike() 2회 병렬 + 병합으로 교체 — "상계주공9(고층)" 같은 괄호 검색어도 무손실.
     const _masterSel = 'apt_name, sigungu, umd_nm, lawd_cd, kapt_code';
+    const _tQuery = Date.now();
     const [molitRes, masterNameRes, masterUmdRes] = await Promise.all([
-      admin.from('molit_transactions')
+      _softQuery(admin.from('molit_transactions')
         .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date, apt_seq')
         // APTSEQ-FALLBACK-2026-05-12: apt_seq 추가 — apt_master 미매칭 단지의 KAPT facility 호출용
         // NAME-MERGE-2026-05-12 (Sprint S+): limit *10 → *30 (한 단지가 동/면적 분리로 100+ row
         //   생성 시 일부 raw row 누락되어 grouping 불완전. 상계주공1(고층) 119건 case 검증 발견.
         .ilike('apt_name', `%${qApt}%`)  // OR 제거 — apt_name 만 (인덱스 활용) · qApt: 접미사 정규화
         .order('deal_date', { ascending: false })
-        .limit(limit * 30),
-      admin.from('apt_master').select(_masterSel).ilike('apt_name', `%${qApt}%`).limit(limit * 5), // 접미사 정규화명
-      admin.from('apt_master').select(_masterSel).ilike('umd_nm', `%${q}%`).limit(limit * 5),      // 동명은 원본
+        .limit(limit * 30)
+        .abortSignal(AbortSignal.timeout(MOLIT_ABORT_MS))),
+      _softQuery(admin.from('apt_master').select(_masterSel).ilike('apt_name', `%${qApt}%`).limit(limit * 5)), // 접미사 정규화명
+      _softQuery(admin.from('apt_master').select(_masterSel).ilike('umd_nm', `%${q}%`).limit(limit * 5)),      // 동명은 원본
     ]);
+    const _msQuery = Date.now() - _tQuery;
     // SEARCH-DEGRADE-2026-08-16 (Sprint LLLLLLL — Sentry NODE-5): molit 조회 실패를 500 으로 올리던 것을
     //   apt_master-only 강등으로 교체 — 바로 아래 "apt_master 실패 → molit only" 폴백과 대칭.
     //   실측 근거(EXPLAIN ANALYZE, 2026-08-16 · 339,958행):
@@ -160,14 +213,23 @@ router.get('/apt', async (req, res) => {
     // 57014(statement timeout)는 위 EXPLAIN 으로 원인이 확정된 기지 사항 → Sentry 노이즈만 만든다.
     //   그 외 오류(권한·스키마 드리프트 등)는 조용히 강등되면 안 되므로 캡처 — 단 캡처 시점은
     //   아래 throw 판정 **뒤**다(같은 오류가 'search/apt-molit'+'search/apt' 2건으로 잡히는 것 방지).
+    // SEARCH-ABORT-2026-08-16: 우리 2.5s abort 도 DB 3s 타임아웃과 동일한 "기지(旣知) 지연" 이다
+    //   → Sentry 캡처 제외 대상에 함께 넣는다(원인이 위 주석으로 확정돼 있어 노이즈만 만든다).
+    //   관측(searchDegrade)에서는 둘을 **구분**한다 — abort 가 늘면 상한이 실제로 동작하는 것이고,
+    //   timeout 이 늘면 DB 가 2.5s 안에도 못 끝낸다는 뜻이라 대응이 다르다.
+    const _isMolitAbort = _isAbortErr(_molitErr);
     const _isMolitTimeout = _molitErr
-      ? /statement timeout|57014/i.test(`${_molitErr.code || ''} ${_molitErr.message || ''}`)
+      ? (_isMolitAbort || /statement timeout|57014/i.test(`${_molitErr.code || ''} ${_molitErr.message || ''}`))
       : false;
     if (_molitErr) {
       molitRows = [];
-      logger.warn({ err: _molitErr.message, code: _molitErr.code, q }, 'molit 검색 실패 — apt_master only 로 강등');
-      _observeDegrade(_isMolitTimeout ? 'molit-timeout' : 'molit-error');
+      logger.warn({ err: _molitErr.message, code: _molitErr.code, q, msQuery: _msQuery },
+        'molit 검색 실패 — apt_master only 로 강등');
+      _observeDegrade(_isMolitAbort ? 'molit-abort' : (_isMolitTimeout ? 'molit-timeout' : 'molit-error'));
     }
+    // 병목 위치 계측 — 라이브에서 7.4s 가 나왔는데 그중 DB 조회가 얼마인지 몰라 조치 범위를 못 좁혔다.
+    //   (Hobby 로그 1시간이라 사후 추적이 안 되므로 임계 초과 시에만 남긴다.)
+    if (_msQuery >= 2000) logger.warn({ q, msQuery: _msQuery }, '검색 DB 조회 지연(2s+)');
     // 두 쿼리 결과 병합 (기존 .or() 와 동일 집합·동일 상한) + 중복 제거
     let masterRes;
     const _mNameErr = masterNameRes.error || null;
@@ -873,3 +935,8 @@ router.delete('/history', async (req, res, next) => {
 module.exports = router;
 // 순수 판정 함수 노출 — 테스트 전용(라우터 동작에는 영향 없음). Express Router 는 함수 객체라 프로퍼티 부착 가능.
 module.exports.computeDegrade = computeDegrade;
+// SEARCH-ABORT-2026-08-16: abort 정규화가 틀리면 Promise.all 이 reject 되어 **강등이 500 으로 퇴행**한다.
+//   순수 함수라 DB 없이 계약을 고정할 수 있다 → 테스트에서 직접 호출한다.
+module.exports._softQuery = _softQuery;
+module.exports._isAbortErr = _isAbortErr;
+module.exports.MOLIT_ABORT_MS = MOLIT_ABORT_MS;
