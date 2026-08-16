@@ -28,6 +28,23 @@
 | **015** | **cron.js `authorizeCron` 계약 테스트** | P2 | S | — | DONE (bbb1a61, 2026-08-16) |
 | **016** | **규제 판정 두 경로 정합 — `isRegFront` lawdCd 게이트 (실결함 수정)** | **P1** | S | — | DONE (80d341b, 2026-08-16) |
 | **017** | **KOSIS 미분양 Redis 2차 캐시 역이식 (+Map 직렬화 함정 차단)** | P2 | S | — | DONE (abbf772, 2026-08-16) |
+| **018** | **서울 규제 해제 시 LTV 라벨이 스냅샷을 따라가게 (016 잔여)** | P2 | S | 016 | DONE (c755b38, 2026-08-16) |
+| **019** | **마이그레이션 실적용 전수 대조 + advisor 경고 3건 해소** | **P1** | M | — | DONE (514352c, 2026-08-16) |
+
+### 018~019 실행 결과 (2026-08-16)
+
+- **018**: `_regLtvLabel` 의 서울 하드코딩을 스냅샷 조건부로. **오늘 동작 변화 0**
+  (`seoulRegulated=true`), 해제되는 날에만 발동. **미로드 시엔 보수적 40% 유지** — 부팅 직후
+  70% 로 찍으면 한도를 부풀리는 반대 방향 오표기가 되기 때문.
+  기존 테스트가 즉시 깨졌다(하네스가 새 `window` 의존성을 안 넘겨줌) → 하네스 갱신.
+- **019**: ⚠ **미감사로 남아 있던 "마이그레이션 실적용 여부"를 종결.** 27개 파일 선언 vs
+  `pg_catalog` 전수 대조.
+  · ✅ 함수 3종 하드닝·pg_trgm 스키마·dedup_key v2·인덱스 5종·pg_cron job 전부 **적용 확인**
+  · ✅ **오탐 정정** — `billing_plans` 는 정책 0개가 아니라 `billing_plans_public_read` 존재
+  · ❌ **`20260504000002`(regulations overlap GIST) 미적용 발견** → overlap 0건 선검증 후 적용,
+    의도적 위반 INSERT 가 `exclusion_violation` 으로 막히는 것까지 실증(롤백, 데이터 변화 0)
+  · advisor security 경고 **6 → 3**: btree_gist public→extensions, SECURITY DEFINER RPC 2종의
+    anon/authenticated EXECUTE 회수(호출부가 service_role 전용임을 실측 후)
 
 ### 014~017 실행 결과 (2026-08-16)
 
@@ -106,19 +123,39 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (한 줄 사유) | REJECTED (
 - ~~**KOSIS 미분양 로더 Redis 2차 캐시 누락**~~ → **017 로 완료(abbf772)**.
   단순 역이식이 아니었다: 반환값의 `map` 이 Map 인스턴스라 그대로 실으면 복원 시 TypeError.
 - ~~**`cron.js` `authorizeCron` 테스트 0**~~ → **015 로 완료(bbb1a61)**.
-- **린트 도입** (S~M): 설정이 전무해 `no-dupe-keys` 같은 표준 규칙으로 잡히는 결함(계획 010 의
-  결함 B)이 CI 를 통과했다. 도입 시 11,070행 프론트에서 기존 위반이 대량으로 나올 수 있으니
-  **신규 파일부터 점진 적용** 전략이 필요하다.
-- **`gitleaks-action@v2` 가변 태그 → 커밋 SHA 고정** (S): 공급망. 다만 워크플로가
-  `permissions: contents: read` 로 최소화돼 있어 블라스트 반경은 제한적.
+- **린트 도입** (S~M) — **2026-08-16 판단: 지금은 하지 않는다. 운영자 결정 대기.**
+  전제(=`no-dupe-keys` 같은 표준 규칙이면 계획 010 의 결함 B 를 잡았다)는 **사실**이다.
+  그러나 지금 착수하면 다음이 전부 딸려온다:
+  · `eslint`/`acorn`/`espree`/`typescript` 중 **로컬에 설치된 파서가 하나도 없다**(실측).
+    즉 네트워크 설치 없이는 시범 측정조차 불가능하다.
+  · devDependency 추가는 `scripts/check-deps-sync.js` 게이트 때문에 **루트+backend 양쪽
+    package.json 동기 수정**이 필요하다(이 게이트는 실제로 CI 를 막은 이력이 있다).
+  · 11,070행 단일 파일 프론트에서 기존 위반이 대량으로 나올 것이라 **baseline 전략**
+    (신규/변경 파일만 검사 or 규칙 최소 집합부터)이 선행돼야 한다.
+  ⚠ **파서 없이 정규식으로 흉내 내는 가드는 만들지 말 것** — 중복 키는 문법적으로 합법이라
+    `node -c`·`new Function()` 로는 절대 안 잡히고, 정규식 스캐너는 오탐/누락을 검증할 방법이
+    없어 "가드가 지켜준다"는 잘못된 확신만 만든다.
+  권고: 규칙을 `no-dupe-keys`·`no-unreachable`·`no-dupe-args` 정도로 좁힌 최소 설정 +
+  **변경된 파일만** 검사하는 CI 스텝으로 시작.
+- ~~**`gitleaks-action@v2` 가변 태그 → 커밋 SHA 고정**~~ → **완료(b94d995, 2026-08-16)**.
+  `ff98106`(= v2 annotated tag 가 가리키는 commit)로 고정. dependabot 이 SHA 핀도 갱신한다.
+  `actions/checkout`·`setup-node` 는 1st-party 라 미고정 — 필요 시 같은 방식으로.
 
 ### 2026-08-16 라운드에서 새로 올라온 항목 (운영자 판단 필요)
 
-- ⚠ **`_regLtvLabel` 의 서울 하드코딩** (M, 운영자 결정 사항): lawd_cd 가 11 이면
-  스냅샷 `seoulRegulated` 를 **보지 않고** 무조건 '40%'(규제)를 돌려준다
-  (SEOUL-JUNGGU-FIX-2026-07-25 의 의도적 선택). **서울이 규제 해제되어 스냅샷이 갱신되는 날
-  `isRegFront` 와 다시 갈린다.** 고치면 서울 전역 LTV 표기가 스냅샷을 따라 움직이게 되므로
-  영향 범위가 커서 계획 016 에서는 손대지 않았다. 규제 해제 논의가 실제로 생길 때 착수 권고.
+- ~~⚠ **`_regLtvLabel` 의 서울 하드코딩**~~ → **018 로 완료(c755b38)**. 다만 **부분 해제**
+  (예: 강남3구만 규제 유지)는 스냅샷의 `seoul` 이 문자열 + `!!` 로 boolean 화되는 구조라
+  **표현 자체가 불가능**하다. 그 경우 두 판정 함수는 서로 일치하되 **둘 다 부정확**하다.
+  프론트에서 못 고친다 — `regulationsService` 의 `regulatedRegions` 스키마부터 손봐야 한다.
+- ⚠ **Supabase `auth_leaked_password_protection` 비활성** (XS, **운영자 Dashboard 조치**):
+  advisor WARN. HaveIBeenPwned 대조로 유출된 비밀번호 사용을 막는 기능인데 꺼져 있다.
+  SQL 이 아니라 Dashboard → Authentication 설정이라 코드/MCP 로 켤 수 없다.
+- **RLS 정책 role 드리프트** (S, 심층방어): `field_notes_*` 4개 + `ai_feedback_select_own` 의
+  role 이 `authenticated` 가 아니라 **PUBLIC** 이다(20260504000003 이 DROP+CREATE 하며 `TO` 절
+  누락, 20260531000001 이 `insert_own` 만 복원). **기능 영향은 0** — USING/WITH CHECK 가
+  `(SELECT auth.uid()) = user_id` 라 anon 은 `auth.uid()` 가 NULL 이어서 통과 못 한다(실측).
+  뚫린 구멍이 아니라 **의도와 실제의 불일치**라 019 에서 건드리지 않았다.
+- **dependabot PR 대기**: `actions/setup-node 6 → 7` (CI green). 머지는 운영자 결정.
 - **`kosisService.KOSIS_CACHE_KEY` 는 죽은 export** (XS): 저장소 전체에 소비처가 0건.
   017 작업 중 확인했으나 범위 밖이라 그대로 뒀다.
 - **`/search/history` 헤더 주석이 부정확** (XS): `search.js:9` 가 "fire-and-forget"이라고
