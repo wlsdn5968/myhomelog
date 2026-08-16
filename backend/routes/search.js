@@ -67,6 +67,28 @@ const adminClient = () => getSupabaseReadonly();
 //   배포 직후 라이브 콜드 요청 1건이 곧바로 강등을 탔으므로(은마 검색 4.3s, molit 미반영)
 //   빈도 파악이 다음 판단(인덱스·캐시 워밍·상한 조정)의 근거가 된다. health.searchDegrade 로 노출.
 //   전부 fail-open + await 하지 않음 — 이미 느린 강등 응답을 더 늦추지 않는다.
+/**
+ * 강등 판정 — 라우트 밖에서 검증할 수 있도록 순수 함수로 분리 (Sprint NNNNNNN 회귀 가드).
+ *   apt_master 는 이름·동명 **2개** 쿼리라 "한쪽만 실패"라는 상태가 존재한다. 이걸 놓치면
+ *   결과 일부가 빠진 응답이 '정상'으로 캐시·CDN 에 굳는다 — 실제로 코드리뷰에서 발각된 결함이라
+ *   판정을 이 한 곳에 모으고 테스트로 고정한다(characterization.test.js).
+ * @param {object|null} molitErr        molit_transactions 조회 오류
+ * @param {object|null} masterNameErr   apt_master.apt_name ILIKE 오류
+ * @param {object|null} masterUmdErr    apt_master.umd_nm ILIKE 오류
+ * @returns {{masterAllFailed:boolean, masterPartial:boolean, degraded:boolean, fatal:boolean}}
+ *   fatal = molit 과 apt_master 가 동시에 전멸 → 돌려줄 데이터가 없어 500 이 정직하다.
+ */
+function computeDegrade(molitErr, masterNameErr, masterUmdErr) {
+  const masterAllFailed = !!(masterNameErr && masterUmdErr);
+  const masterPartial = !masterAllFailed && !!(masterNameErr || masterUmdErr);
+  return {
+    masterAllFailed,
+    masterPartial,
+    degraded: !!(molitErr || masterAllFailed || masterPartial),
+    fatal: !!(molitErr && masterAllFailed),
+  };
+}
+
 function _observeDegrade(kind) {
   try {
     const r = require('../redis').getRedis();
@@ -135,19 +157,24 @@ router.get('/apt', async (req, res) => {
     //   같은 검색어의 apt_master 경로는 313ms 라, molit 이 죽어도 결과를 돌려줄 수 있다.
     let molitRows = molitRes.data || [];
     const _molitErr = molitRes.error || null;
+    // 57014(statement timeout)는 위 EXPLAIN 으로 원인이 확정된 기지 사항 → Sentry 노이즈만 만든다.
+    //   그 외 오류(권한·스키마 드리프트 등)는 조용히 강등되면 안 되므로 캡처 — 단 캡처 시점은
+    //   아래 throw 판정 **뒤**다(같은 오류가 'search/apt-molit'+'search/apt' 2건으로 잡히는 것 방지).
+    const _isMolitTimeout = _molitErr
+      ? /statement timeout|57014/i.test(`${_molitErr.code || ''} ${_molitErr.message || ''}`)
+      : false;
     if (_molitErr) {
       molitRows = [];
       logger.warn({ err: _molitErr.message, code: _molitErr.code, q }, 'molit 검색 실패 — apt_master only 로 강등');
-      // 57014(statement timeout)는 위 EXPLAIN 으로 원인이 확정된 기지 사항 → Sentry 노이즈만 만든다.
-      //   그 외 오류(권한·스키마 드리프트 등)는 조용히 강등되면 안 되므로 그대로 캡처.
-      const _isTimeout = /statement timeout|57014/i.test(`${_molitErr.code || ''} ${_molitErr.message || ''}`);
-      _observeDegrade(_isTimeout ? 'molit-timeout' : 'molit-error');
-      if (!_isTimeout) captureRouteError(_molitErr, 'search/apt-molit');
+      _observeDegrade(_isMolitTimeout ? 'molit-timeout' : 'molit-error');
     }
     // 두 쿼리 결과 병합 (기존 .or() 와 동일 집합·동일 상한) + 중복 제거
     let masterRes;
-    if (masterNameRes.error && masterUmdRes.error) {
-      masterRes = { error: masterNameRes.error };
+    const _mNameErr = masterNameRes.error || null;
+    const _mUmdErr = masterUmdRes.error || null;
+    const _dg = computeDegrade(_molitErr, _mNameErr, _mUmdErr);
+    if (_dg.masterAllFailed) {
+      masterRes = { error: _mNameErr };
     } else {
       const _seenMk = new Set();
       const _rows = [];
@@ -163,10 +190,24 @@ router.get('/apt', async (req, res) => {
       // apt_master 미존재/접근 실패는 fallback (molit 만 사용)
       logger.warn({ err: masterRes.error.message }, 'apt_master 조회 실패 — molit only');
     }
+    // DEGRADE-PARTIAL-2026-08-16 (Sprint NNNNNNN — 코드리뷰 지적, 재현 확인):
+    //   apt_master 는 **이름·동명 2개** 쿼리인데 위 판정은 *둘 다* 실패해야 error 를 세운다.
+    //   → 한쪽만 실패하면 masterRes 는 `{data}` 라 `.error` 가 undefined → _degraded=false 가 되어
+    //   **결과 일부가 빠진 응답이 "정상"으로 서버 10분 + CDN s-maxage 600(+SWR 1h) 에 굳었다.**
+    //   경고 로그조차 없어 사후 추적도 불가(Hobby 로그 1시간). 게다가 umd_nm 쿼리는 접미 정규화 전
+    //   원본 q 로 더 넓게 스캔해 timeout 확률이 apt_name 쪽보다 높다 — 실제로 걸리는 쪽이다.
+    if (_dg.masterPartial) {
+      logger.warn({ nameErr: _mNameErr && _mNameErr.message, umdErr: _mUmdErr && _mUmdErr.message, q },
+        'apt_master 부분 실패 — 결과 일부 누락(캐시 제외)');
+      _observeDegrade(_mNameErr ? 'master-name-partial' : 'master-umd-partial');
+    }
     // 두 출처가 **동시에** 죽으면 돌려줄 데이터가 없다 → 빈 배열로 위장하지 말고 정직하게 500.
-    if (_molitErr && masterRes.error) throw _molitErr;
+    if (_dg.fatal) throw _molitErr;   // catch 가 'search/apt' 로 1회 캡처
+    // 강등으로 살아남은 경우에만 molit 오류를 따로 캡처 — throw 경로에서 함께 하면 동일 오류가
+    //   'search/apt-molit' + 'search/apt' 2건으로 잡힌다(코드리뷰 LOW 지적).
+    if (_molitErr && !_isMolitTimeout) captureRouteError(_molitErr, 'search/apt-molit');
     // 한쪽만 죽은 응답은 불완전 → 캐시에 굳히면 안 된다(서버 10분 + CDN s-maxage 600 은 전 사용자 공유).
-    const _degraded = !!(_molitErr || masterRes.error);
+    const _degraded = _dg.degraded;
 
     // NAME-MERGE-2026-05-12 (Sprint S — 운영자 발견 + 3-source cross-check [VERIFIED]):
     //   MOLIT 가 한 단지를 동/letter/층 suffix 로 분리 신고 → dropdown 에 같은 단지 2+ row.
@@ -824,3 +865,5 @@ router.delete('/history', async (req, res, next) => {
 });
 
 module.exports = router;
+// 순수 판정 함수 노출 — 테스트 전용(라우터 동작에는 영향 없음). Express Router 는 함수 객체라 프로퍼티 부착 가능.
+module.exports.computeDegrade = computeDegrade;

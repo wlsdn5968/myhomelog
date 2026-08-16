@@ -693,3 +693,39 @@ test('popularService — cron 스냅샷 집계는 service_role 로 조회한다 
     if (saved.s) require.cache[svcPath] = saved.s; else delete require.cache[svcPath];
   }
 });
+
+// ── Sprint NNNNNNN (2026-08-16, 코드리뷰 HIGH 지적) — 검색 강등 판정 ──────────
+//   왜 추가하나: apt_master 조회는 **이름·동명 2개** 쿼리인데, 종전 판정은 *둘 다* 실패할 때만
+//   error 를 세웠다. 한쪽만 실패하면 masterRes 가 `{data}` 라 `.error` 가 undefined → degraded=false
+//   → **결과 일부가 빠진 응답이 '정상'으로 서버 10분 + CDN s-maxage 600(+SWR 1h) 에 굳었다.**
+//   경고 로그도 관측 카운터도 없어 사후 추적조차 불가했다. 게다가 umd_nm 쿼리는 접미 정규화 전
+//   원본 q 로 더 넓게 스캔해 timeout 확률이 apt_name 쪽보다 높다 — 실제로 걸리는 쪽이다.
+//   이 테스트는 "반쪽 응답은 캐시하지 않는다"는 계약을 판정 함수 수준에서 고정한다.
+test('computeDegrade — apt_master "한쪽만" 실패도 강등으로 잡는다 (반쪽 응답 캐시 금지 계약)', () => {
+  const { computeDegrade } = require('../routes/search');
+  const E = { code: '57014', message: 'canceling statement due to statement timeout' };
+
+  // 전부 정상 → 캐시해도 되는 완전한 응답
+  assert.deepEqual(computeDegrade(null, null, null),
+    { masterAllFailed: false, masterPartial: false, degraded: false, fatal: false });
+
+  // ★ 핵심 회귀: 이름 쿼리만 실패 / 동명 쿼리만 실패 — 둘 다 부분실패이자 강등이어야 한다
+  for (const [nameErr, umdErr, label] of [[E, null, 'apt_name 만 실패'], [null, E, 'umd_nm 만 실패']]) {
+    const r = computeDegrade(null, nameErr, umdErr);
+    assert.equal(r.masterPartial, true, `${label}: 부분실패로 인식 못함`);
+    assert.equal(r.degraded, true, `${label}: degraded=false → 반쪽 응답이 캐시/CDN 에 굳는다`);
+    assert.equal(r.fatal, false, `${label}: 한쪽은 살아있는데 500 을 낸다`);
+  }
+
+  // apt_master 양쪽 실패 + molit 정상 → molit-only 로 살아남음(500 아님)
+  assert.deepEqual(computeDegrade(null, E, E),
+    { masterAllFailed: true, masterPartial: false, degraded: true, fatal: false });
+
+  // 두 출처가 **동시에** 전멸할 때만 500 — 빈 배열로 위장 금지
+  assert.equal(computeDegrade(E, E, E).fatal, true, '전멸인데 빈 결과를 정상으로 반환');
+
+  // molit 이 죽어도 apt_master 한쪽이 살아있으면 강등 서비스(500 아님)
+  const mixed = computeDegrade(E, null, E);
+  assert.equal(mixed.fatal, false, 'master 한쪽 생존인데 500');
+  assert.equal(mixed.degraded, true, '강등 응답인데 캐시 대상으로 분류');
+});
