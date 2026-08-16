@@ -1769,6 +1769,9 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     </span>
     <span id="mapHintTxt" style="font-size:10px;color:var(--t3)">마커클릭=팝업 | 더블클릭=상세리포트</span>
     <span id="popLegend" style="font-size:10px;color:var(--t3);display:none">| 숫자 라벨 = 인기 단지 (최근 60일 실거래 많은 순 · 시군구당 최대 2곳)</span>
+    <!-- POPULAR-STALE-SURFACE-2026-08-16 (Plan 028): 서버가 stale:true 를 줄 때만 노출.
+         라이브 집계 실패 시 최대 7일 묵은 스냅샷을 쓰는데, 그걸 "최근 60일" 로만 적으면 위장이 된다. -->
+    <span id="popStaleNote" style="font-size:10px;color:var(--warn,#b26a00);display:none">| ⚠️ 집계 일시 지연 — 최대 며칠 전 기준</span>
     <span id="geoSt" style="font-size:10px;color:var(--grn);display:none">📍 좌표 정확화 중...</span>
   </div>
   <!-- KKKKKK: 모바일 히어로 칩 + 확장 카드 + 데이터 캡션 (≤700px 전용 — 데스크톱은 701px MQ 가 차단).
@@ -9850,7 +9853,17 @@ async function loadPopularMarkers() {
     });
     // 범례는 마커가 실제 그려졌을 때만 노출 (기준 공개 — 정직 정책)
     const _lg = document.getElementById('popLegend');
-    if (_lg && window._popMarkers.length) _lg.style.display = '';
+    if (_lg && window._popMarkers.length) {
+      _lg.style.display = '';
+      // POPULAR-STALE-SURFACE-2026-08-16 (Plan 028, 감사 지적):
+      //   백엔드는 라이브 집계가 죽으면 **최대 7일 묵은 스냅샷**을 주면서 `stale: true` 를 붙이고
+      //   주석에 "stale 표기를 payload 에 남겨 위장하지 않는다"(search.js:598)고 적었다.
+      //   그런데 **프론트가 그 필드를 읽지 않아** 며칠 전 랭킹이 "최근 60일 …" 문구 그대로 떴다 —
+      //   서버는 정직하게 표기했는데 화면에서 사라져 결국 위장이 된 셈이다(절대룰 ②).
+      //   기준을 공개하는 이 범례가 표시 위치로 맞다. 정상 응답이면 아무 변화 없음.
+      const _staleEl = document.getElementById('popStaleNote');
+      if (_staleEl) _staleEl.style.display = j.stale ? '' : 'none';
+    }
     // POP-TITLE (Sprint MMMM): 지도 위 타이틀 카드 — 인기 단지 정체 명시 (매물 오해 방지)
     // Sprint PPPPP: ✕ 로 닫으면 세션 동안 재표시 안 함(sessionStorage) — 반복 노출 피로 제거(시안 컷3)
     const _ptc = document.getElementById('popTitleCard');
