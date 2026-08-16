@@ -172,9 +172,9 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (한 줄 사유) | REJECTED (
 - **#65** minor-and-patch 4종 → **직접 적용 완료(f3227f8)**. PR 을 머지하지 않은 이유: PR 생성 이후
   루트 package.json 이 갈라졌고(eslint devDep·scripts), 무엇보다 **`engines` 상향이 PR 에 빠져 있어**
   그대로 머지하면 supabase-js 요구(>=22)와 선언(">=20")이 어긋난 채 남는다. dependabot 이 곧 자동 종료한다.
-- ⚠ **#58** `gitleaks-action 2→3` → **머지 금지.** v3 로 가는 것 자체는 맞고 **이미 갔다(2e6e38c)**.
-  다만 그 PR 은 `uses` 를 **가변 태그 `@v3`** 으로 되돌리므로 머지하면 오늘 한 SHA 고정이 풀린다.
-  우리는 `@e0c47f4…  # v3.0.0` 으로 고정돼 있다. PR 은 닫으면 된다.
+- ~~⚠ **#58** `gitleaks-action 2→3`~~ → **닫음(2026-08-16)**. `gh pr diff 58` 로 실제 내용을 확인한 결과
+  `uses` 를 **가변 태그 `@v3`** 으로 바꾸는 것이 맞았다 — 머지하면 `@e0c47f4… # v3.0.0` SHA 고정이 풀린다.
+  v3 전환 자체는 `2e6e38c` 로 이미 달성했으므로 사유를 PR 코멘트로 남기고 닫았다.
 - **#62** `setup-node 6→7` · **#61** `checkout 6→7` — GitHub 1st-party 액션 메이저. 머지는 운영자 결정.
 
 #### v2 를 SHA 로 고정한 것이 왜 위험했나 (재발 방지)
@@ -196,10 +196,12 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (한 줄 사유) | REJECTED (
   라고 적혀 있다. **사업자등록은 2026-08-09 완료**됐다. 그런데도 해제하지 않은 이유는 KOE205 가
   카카오 개발자 콘솔의 앱/비즈앱 설정 문제라 사업자등록만으로 풀리지 않고, 콘솔 상태를 코드에서
   확인할 방법이 없기 때문이다. 콘솔 확인 후 해제 여부를 결정할 것.
-- **`kosisService.KOSIS_CACHE_KEY` 는 죽은 export** (XS): 저장소 전체에 소비처가 0건.
-  017 작업 중 확인했으나 범위 밖이라 그대로 뒀다.
-- **`/search/history` 헤더 주석이 부정확** (XS): `search.js:9` 가 "fire-and-forget"이라고
-  적었지만 실제로는 `await` insert 후 응답한다. 계획 011 에서 발견, 범위 밖이라 미수정.
+- ~~**`kosisService.KOSIS_CACHE_KEY` 는 죽은 export**~~ → **제거 완료(680df79)**. 소비처 0건 실측 후
+  제거. 캐시가 node-cache + Redis 2계층이라 키 하나 노출은 "밖에서 무효화 가능"이라는 잘못된
+  기대만 만든다 — 필요해지면 두 계층을 함께 지우는 함수를 노출할 것(근거를 주석에 남김).
+- ~~**`/search/history` 헤더 주석이 부정확**~~ → **정정 완료(680df79)**. 실제로는 insert 를 await 하고
+  `.select('id, created_at').single()` 결과를 **201 로 응답**한다(실패는 `next(e)`).
+  주석을 믿고 "응답 안 기다려도 된다"고 판단하면 기록 유실을 오판하는 지점이었다.
 
 ## Findings considered and rejected (재감사 방지)
 
