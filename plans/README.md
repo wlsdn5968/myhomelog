@@ -22,6 +22,7 @@
 | **009** | **`molit_transactions.deal_date` 인덱스 (2.2초 조회 제거)** | **P1** | S | — | DONE (DDL only, 2026-08-16) |
 | **010** | **프론트 정적 결함 2건 (XSS 싱크 escape, 중복 키로 죽은 타임아웃)** | **P1** | S | — | DONE (fcad495, 2026-08-16) |
 | **011** | **백엔드 일관성 3건 (미대기 저장·상한 없는 RPC·사실과 다른 주석)** | P2 | S | — | DONE (5b1b5bc, 2026-08-16) |
+| **012** | **billing/confirm 금전 상태 전이 계약 테스트 (백로그 1번 착수)** | **P1** | M | — | DONE (2026-08-16) |
 
 ### 008~011 실행 결과 (2026-08-16, 운영자 승인 후 실행)
 
@@ -60,9 +61,15 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (한 줄 사유) | REJECTED (
 운영자가 이번 라운드에서 008~011 만 선택했다. 아래는 **유효한 발견이지만 미착수** —
 재감사할 필요 없이 여기서 바로 계획으로 승격할 수 있다.
 
-- **`billing.js` 결제 로직 테스트 0** (M): confirm 금액 위조 탐지·webhook CAS 상태 전이·환불 7일
-  경계가 전부 미검증. 지금은 `TOSS_SECRET_KEY` 미설정이라 잠들어 있지만, **결제를 켜는 시점에
-  반드시 선행**되어야 한다. 순서를 뒤집으면 미검증 코드가 실결제를 처리한다.
+- ~~**`billing.js` 결제 로직 테스트 0**~~ → **012 로 부분 착수 완료(2026-08-16)**.
+  confirm 경로 3건 고정: 키 미설정 시 501 차단 · 금액 불일치 → 400 + `failed` 전이(동일 orderId
+  재사용 차단) + 실패 기록에 금액 미포함(PIPA) · 이미 captured 면 Toss 재호출 없이 멱등.
+  **프로덕션 코드 변경 0** — express 라우터 스택에서 핸들러만 꺼내 req/res 목으로 호출했다
+  (결제 로직을 테스트 편의로 리팩터링하는 것이 더 위험하다는 판단).
+  **회귀 주입 2건 검증**: 금액 비교 무력화 → fail 1, captured 멱등 분기 제거 → fail 1.
+  ⚠ **남은 것**: `webhook` 상태별 분기(DONE/CANCELED/EXPIRED/ABORTED)와 **환불 7일 창 경계**는
+  미착수다. webhook 은 axios 스텁이 추가로 필요하고, 환불은 시간 경계라 타이머 제어가 필요하다.
+  **결제를 켜기 전에 이 둘도 덮는 것을 권장한다.**
 - **`middleware/auth.js` 테스트 0** (S): `_jwtExpMs`(JWT 만료 후 캐시 재사용 차단)·
   `isDeletionAllowed` 가 순수 함수인데 미노출·미검증. export 추가만으로 착수 가능.
 - **`report.js` 점수 엔진 export·테스트 0** (M): `computeAptScore`·`getDistrictTier` 등이

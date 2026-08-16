@@ -851,3 +851,107 @@ test('_pickTierRate(프론트) — 취득세 경계가 백엔드와 같은 값�
       `프론트·백엔드 취득세율 불일치: ${p}억 프론트=${frontRate(p) * 100}% 백엔드=${backRate(p)}%`);
   }
 });
+
+// ── Plan 012 (2026-08-16): 결제 confirm 계약 — 금전 상태 전이 고정 ──────────
+//   왜 추가하나: billing.js 566줄 전체가 라우트 핸들러이고 테스트가 **0** 이었다. 지금은
+//   TOSS_SECRET_KEY 미설정이라 잠들어 있지만, **결제를 켜는 순간 전량 미검증 코드가 실결제를
+//   처리**한다. 여기서 나는 회귀는 이중 승인·금액 위조 통과 같은 직접적 금전 사고다.
+//   ⚠ 프로덕션 코드는 **한 줄도 바꾸지 않는다** — express 라우터 스택에서 핸들러만 꺼내
+//   req/res 목으로 호출한다(결제 로직을 테스트 편의로 리팩터링하는 것이 더 위험하다).
+//   의존성(db/client)은 이 파일에 이미 있는 require.cache 스텁 패턴을 그대로 쓴다.
+function _billingHandler(path) {
+  const router = require('../routes/billing');
+  const layer = router.stack.find((l) => l.route && l.route.path === path);
+  assert.ok(layer, `billing 라우터에서 ${path} 를 찾지 못했다 (경로 변경 시 이 테스트도 갱신할 것)`);
+  return layer.route.stack[layer.route.stack.length - 1].handle;
+}
+function _mockRes() {
+  return {
+    statusCode: 200, body: null,
+    status(c) { this.statusCode = c; return this; },
+    json(b) { this.body = b; return this; },
+    set() { return this; },
+  };
+}
+// supabase 체인 목 — payments 조회 1건 + update 결과를 주입한다.
+//   update 는 두 형태로 쓰인다: `update().eq()` 를 await(금액불일치 경로) / `update().eq().eq().select()`(CAS 경로).
+//   둘 다 지원하려면 체인이 thenable 이면서 eq/select 를 가져야 한다.
+function _mockAdmin({ payRow, casRows }) {
+  const seen = { updates: [] };
+  const upChain = (patch) => {
+    const c = {
+      eq: () => c,
+      select: async () => ({ data: casRows, error: null }),
+      then: (res, rej) => Promise.resolve({ data: null, error: null }).then(res, rej),
+    };
+    seen.updates.push(patch);
+    return c;
+  };
+  const sel = {
+    select: () => sel,
+    eq: () => sel,
+    maybeSingle: async () => ({ data: payRow, error: null }),
+    update: upChain,
+  };
+  return { client: { from: () => sel }, seen };
+}
+async function _withBillingStub({ payRow, casRows, tossKey }, fn) {
+  const clientPath = require.resolve('../db/client');
+  const billPath = require.resolve('../routes/billing');
+  const saved = { c: require.cache[clientPath], b: require.cache[billPath] };
+  const savedKey = process.env.TOSS_SECRET_KEY;
+  const { client, seen } = _mockAdmin({ payRow, casRows });
+  if (tossKey === undefined) delete process.env.TOSS_SECRET_KEY;
+  else process.env.TOSS_SECRET_KEY = tossKey;
+  require.cache[clientPath] = { id: clientPath, filename: clientPath, loaded: true, exports: {
+    getSupabaseAdmin: () => client, getSupabaseReadonly: () => client,
+    getUserScopedClient: () => client } };
+  delete require.cache[billPath];   // TOSS_SECRET_KEY 는 모듈 로드 시 상수라 반드시 재로드
+  try {
+    return await fn(seen);
+  } finally {
+    if (saved.c) require.cache[clientPath] = saved.c; else delete require.cache[clientPath];
+    if (saved.b) require.cache[billPath] = saved.b; else delete require.cache[billPath];
+    if (savedKey === undefined) delete process.env.TOSS_SECRET_KEY;
+    else process.env.TOSS_SECRET_KEY = savedKey;
+  }
+}
+
+test('billing/confirm — 결제 키 미설정이면 501 로 막고 결제를 진행하지 않는다', async () => {
+  await _withBillingStub({ payRow: null, casRows: [], tossKey: undefined }, async () => {
+    const h = _billingHandler('/confirm');
+    const res = _mockRes();
+    await h({ body: { paymentKey: 'pk', orderId: 'o1', amount: 9900 }, user: { id: 'u1' } }, res, () => {});
+    assert.equal(res.statusCode, 501, '키가 없는데 결제 흐름이 진행됐다');
+  });
+});
+
+test('billing/confirm — DB 금액과 다르면 400 + 해당 주문을 failed 로 막는다 (위조 차단)', async () => {
+  // 저장된 주문은 9,900원인데 클라이언트가 100원을 주장하는 상황
+  const payRow = { order_id: 'o1', user_id: 'u1', amount: 9900, status: 'requested', plan: 'pro' };
+  await _withBillingStub({ payRow, casRows: [], tossKey: 'test' }, async (seen) => {
+    const h = _billingHandler('/confirm');
+    const res = _mockRes();
+    await h({ body: { paymentKey: 'pk', orderId: 'o1', amount: 100 }, user: { id: 'u1' } }, res, () => {});
+    assert.equal(res.statusCode, 400, '금액 불일치인데 400 이 아니다');
+    // ★ 같은 orderId 재사용을 막기 위해 failed 로 전이해야 한다
+    const failed = seen.updates.find((u) => u && u.status === 'failed');
+    assert.ok(failed, '금액 불일치인데 주문을 failed 로 막지 않았다 — 동일 orderId 재시도가 가능해진다');
+    assert.equal(failed.failure_reason, 'amount_mismatch');
+    // PIPA 최소수집: 실패 사유에 정확한 금액을 남기지 않는다
+    assert.ok(!/9900|100/.test(JSON.stringify(failed)), '실패 기록에 결제 금액이 남았다(PIPA 최소수집 위반)');
+  });
+});
+
+test('billing/confirm — 이미 captured 면 Toss 재호출 없이 멱등 응답', async () => {
+  const payRow = { order_id: 'o1', user_id: 'u1', amount: 9900, status: 'captured', plan: 'pro' };
+  await _withBillingStub({ payRow, casRows: [], tossKey: 'test' }, async (seen) => {
+    const h = _billingHandler('/confirm');
+    const res = _mockRes();
+    await h({ body: { paymentKey: 'pk', orderId: 'o1', amount: 9900 }, user: { id: 'u1' } }, res, () => {});
+    assert.equal(res.statusCode, 200);
+    assert.equal(res.body.status, 'captured');
+    // ★ 이미 처리된 주문에 update 를 또 날리면 안 된다(승인 상태를 덮어쓸 위험)
+    assert.equal(seen.updates.length, 0, '이미 captured 인데 추가 update 가 발생했다');
+  });
+});
