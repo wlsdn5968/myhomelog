@@ -9816,10 +9816,17 @@ function declutterPopMarkers() {
   } catch (_) { /* 라벨 정리는 부가 기능 — 실패해도 지도는 그대로 */ }
 }
 // 팬·줌·리사이즈마다 재계산 (rAF 병합 — idle 이 연속 발화해도 프레임당 1회)
-let _declutterRaf = 0;
+let _declutterRaf = 0, _declutterTail = 0;
 function scheduleDeclutter() {
-  if (_declutterRaf) return;
-  _declutterRaf = requestAnimationFrame(() => { _declutterRaf = 0; declutterPopMarkers(); });
+  if (!_declutterRaf) {
+    _declutterRaf = requestAnimationFrame(() => { _declutterRaf = 0; declutterPopMarkers(); });
+  }
+  // DECLUTTER-TAIL-2026-08-16: rAF 1회로는 부족하다 — 라이브 실측(451683e)에서 축약/숨김이
+  //   0건이었다. 지도 컨테이너가 0→실측폭이 되는 순간(탭 전환) RO 가 먼저 발화하는데
+  //   그 시점엔 마커 위치가 아직 확정 전이라 "겹침 없음"으로 오판하고, 이후 재계산을
+  //   촉발할 이벤트가 없어 그대로 굳었다. 레이아웃 정착 후 1회 더 돌린다(연속 호출은 디바운스).
+  clearTimeout(_declutterTail);
+  _declutterTail = setTimeout(declutterPopMarkers, 400);
 }
 
 // ── 헤더 단지·동명 검색 (P0 Phase 2 시나리오 A) ───────────
