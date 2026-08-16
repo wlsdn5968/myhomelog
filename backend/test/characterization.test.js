@@ -812,3 +812,42 @@ test('_isAbortErr — 우리가 끊은 요청만 abort 로 보고, 진짜 오류
   assert.equal(_isAbortErr({ code: 'PGRST204', message: 'column does not exist' }), false);
   assert.equal(_isAbortErr(null), false);
 });
+
+// ── Plan 008 (2026-08-16): 프론트 _pickTierRate ↔ 백엔드 취득세 경계 계약 ──────────
+//   왜 추가하나: 같은 취득세 tier 판정이 프론트(index.html)·백엔드(analysisService) **두 사본**으로
+//   존재하는데, 2026-07-25 경계 수정(엄격 미만 → 이하) 때 백엔드만 고쳐졌다. 당시 "프론트는 이미
+//   맞다"고 본 근거가 프론트의 하드코딩 폴백이었고, 정상 운영(window.__TAX_CONFIG 로드)에서 상시
+//   타는 _pickTierRate 경로는 검토에서 빠졌다 — 정확히 6억에서 1% 대신 2% 가 적용돼 사용자에게
+//   600만원이 과다 표기됐다(지방세법 §11①8호 "6억원 이하 1%").
+//   이 테스트는 두 파일을 **계약으로 묶는다**: 한쪽만 고치면 여기서 먼저 깨진다.
+test('_pickTierRate(프론트) — 취득세 경계가 백엔드와 같은 값을 낸다 (6억 이하 1%)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const m = html.match(/function _pickTierRate\([\s\S]*?\n\}/);
+  assert.ok(m, 'frontend/index.html 에서 _pickTierRate 를 찾지 못했다 (함수명 변경 시 이 테스트도 갱신할 것)');
+  const _pickTierRate = new Function(`${m[0]}; return _pickTierRate;`)();
+
+  // 실제 운영 스냅샷과 동일한 tier 구조 (위 pickTierRate 테스트와 같은 값)
+  const cfg = { acquisitionTax: {
+    noHouse: { tiers: [ { underAuk: 6, rate: 0.01 }, { underAuk: 9, rate: 0.02 }, { underAuk: 999, rate: 0.03 } ] },
+    oneHouse: { tiers: [ { underAuk: 6, rate: 0.01 }, { underAuk: 9, rate: 0.02 }, { underAuk: 999, rate: 0.03 } ] },
+    twoHousePlus: { rate: 0.08 },
+  } };
+  const tiers = cfg.acquisitionTax.noHouse.tiers;
+  const frontRate = (price) => _pickTierRate(tiers, price, 0.03);
+
+  assert.equal(frontRate(5), 0.01, '6억 미만 → 1%');
+  assert.equal(frontRate(6), 0.01, '★ 정확히 6억 → 1% (이 경계가 2% 였던 것이 결함)');
+  assert.equal(frontRate(9), 0.02, '9억 → 2% tier (백엔드는 여기에 누진 보정을 더해 3% 가 되므로 아래 대조에서 제외)');
+  assert.equal(frontRate(10), 0.03, '9억 초과 → fallback 3%');
+
+  // ★ 백엔드와 값 일치 — "한쪽만 고쳐지는" 재발을 여기서 잡는다.
+  //   9억은 백엔드가 6~9억 누진 보정을 적용해 tier 평탄값(2%)과 달라지므로 대조 대상에서 뺀다.
+  const { calcTotalCost } = require('../services/analysisService');
+  const backRate = (price) => calcTotalCost(price, 1, '무주택', false, cfg).taxRate;
+  for (const p of [5, 6, 10]) {
+    assert.equal(Math.round(frontRate(p) * 100), backRate(p),
+      `프론트·백엔드 취득세율 불일치: ${p}억 프론트=${frontRate(p) * 100}% 백엔드=${backRate(p)}%`);
+  }
+});

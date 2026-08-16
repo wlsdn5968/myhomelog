@@ -7410,9 +7410,16 @@ function renderAnalysisFallback(p){
 //   - window.__TAX_CONFIG (loadRegulatedKeywords 에서 함께 로드) 가 있으면 사용
 //   - 없으면 하드코딩 fallback (offline · 캐시 미로드 시 backwards-compat)
 //   - total → totalLow ~ totalHigh 범위 표기 (감사 보고서 트리거 7 — 단일 숫자 정밀도 착시 차단)
+// ACQ-BOUNDARY-FIX-2026-08-16 (Plan 008): 경계는 '이하'(`<=`) 다 — 엄격 미만이면 **정확히 6억**에서
+//   6<6=false 로 1% tier 를 건너뛰고 2% 가 적용된다(지방세법 §11①8호 "6억원 이하 1%" 위반,
+//   6억 기준 600만 → 1,200만 과다 표기).
+//   ⚠ 백엔드 사본(analysisService.js:425-430 `pickTierRate`)은 2026-07-25 에 이미 '이하' 로 고쳤는데,
+//   그때 "프론트는 이미 맞다"고 본 근거가 아래 하드코딩 폴백(`price<=6?.01`)이라 **이 주 경로는 누락**됐다.
+//   window.__TAX_CONFIG 가 로드된 정상 상태에서 상시 타는 쪽이 여기다. 두 사본은 같은 값을 내야 하며
+//   그 계약은 characterization.test.js 의 '_pickTierRate(프론트) ↔ 백엔드' 테스트가 고정한다.
 function _pickTierRate(tiers, priceAuk, fallbackRate){
   for (const t of (tiers||[])) {
-    if (priceAuk < (t.underAuk||0)) return t.rate ?? fallbackRate;
+    if (priceAuk <= (t.underAuk||0)) return t.rate ?? fallbackRate;
   }
   return fallbackRate;
 }
