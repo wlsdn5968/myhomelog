@@ -193,4 +193,9 @@ async function getNetMigration(lawdCd) {
   };
 }
 
-module.exports = { getUnsoldTrend, getNetMigration, KOSIS_CACHE_KEY: CACHE_KEY };
+// DEAD-EXPORT-2026-08-16: `KOSIS_CACHE_KEY: CACHE_KEY` 를 제거했다 — 저장소 전체에 소비처가
+//   **0건**이었다(2026-08-16 전수 grep, 테스트 포함). 캐시 키를 밖으로 노출하면 "외부에서 무효화할
+//   수 있다"는 잘못된 기대를 만든다. 실제로는 node-cache(인스턴스 로컬)와 Redis 2차 캐시가 함께
+//   걸려 있어 키 하나만 지워도 일관되게 무효화되지 않는다. 무효화가 필요해지면 그때
+//   **두 계층을 함께 지우는 함수**를 노출하는 것이 맞다.
+module.exports = { getUnsoldTrend, getNetMigration };

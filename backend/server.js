@@ -589,16 +589,28 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   //   molit-timeout 은 pg 57014(2글자 ILIKE 340K행 seq scan vs anon 3s 한도)로 원인이 확정된
   //   기지 사항이라 Sentry 캡처를 뺐다 — 대신 여기서 빈도를 본다. 0 이 아니면 정상(강등이 동작 중).
   let _searchDegrade = null;
+  // ⚠ HEALTH-PII-2026-08-16 (Plan 024): `recentMisses` 는 **사용자가 입력한 챗 원문 80자**다
+  //   (chatDataRouter.js:516 `r.lpush('chatint:misses', String(message).slice(0, 80))`).
+  //   그런데 이 라우트는 `optionalAuth` 라 **로그인 없이 누구나 호출**한다 — 즉 익명 방문자가
+  //   다른 사용자의 마지막 챗 10건을 그대로 읽을 수 있었다(라이브 확인: 응답에 배열로 포함).
+  //   부동산 챗 특성상 "신혼부부 3억", 특정 단지명 등 개인 사정이 그대로 담긴다.
+  //   [설계] 유출을 "응답에서 지우는" 방식이 아니라 **관리자가 아니면 조회조차 하지 않는다** —
+  //   나중에 누가 응답 조립부를 고쳐도 값이 애초에 존재하지 않아 구조적으로 샐 수 없다.
+  //   집계 카운터(today/yesterday = 인텐트별 건수)는 개인정보가 아니므로 그대로 공개한다.
+  let _isAdmin = false;
+  try { _isAdmin = require('./services/planService').isAdminEmail(req.user?.email); } catch (_) {}
   try {
     const r = require('./redis').getRedis();
     if (r) {
       const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
       const yday = new Date(Date.now() - 864e5).toISOString().slice(0, 10).replace(/-/g, '');
       const [today, yesterday, recentMisses, degToday, degYday] = await Promise.all([
-        r.hgetall(`chatint:${day}`), r.hgetall(`chatint:${yday}`), r.lrange('chatint:misses', 0, 9),
+        r.hgetall(`chatint:${day}`), r.hgetall(`chatint:${yday}`),
+        _isAdmin ? r.lrange('chatint:misses', 0, 9) : Promise.resolve(null),
         r.hgetall(`searchdeg:${day}`), r.hgetall(`searchdeg:${yday}`),
       ]);
-      _chatIntents = { today: today || {}, yesterday: yesterday || {}, recentMisses: recentMisses || [] };
+      _chatIntents = { today: today || {}, yesterday: yesterday || {} };
+      if (_isAdmin) _chatIntents.recentMisses = recentMisses || [];
       _searchDegrade = { today: degToday || {}, yesterday: degYday || {} };
     }
   } catch (_) { /* 관측 실패 무시 */ }
@@ -607,8 +619,8 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   //   dailyLimit 과 동일 규칙: admin 무제한 · pro/team 플랜한도 · 로그인 free 는 base+bonus(검색5·챗10).
   let _searchLimit = DAILY_SEARCH_LIMIT, _chatLimit = DAILY_CHAT_LIMIT, _unlimited = false;
   try {
-    const { isAdminEmail, getActivePlan, getLimitsForPlan } = require('./services/planService');
-    if (isAdminEmail(req.user?.email)) {
+    const { getActivePlan, getLimitsForPlan } = require('./services/planService');
+    if (_isAdmin) { // HEALTH-PII-2026-08-16: 위에서 이미 판정 — 같은 요청에서 두 번 계산하지 않는다
       _unlimited = true;
     } else if (req.user?.id) {
       const _plan = await getActivePlan(req.user.id);

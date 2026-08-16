@@ -374,7 +374,8 @@ function calcTotalCost(price, loanAmount, houseStatus, isFirstBuyer, taxConfig) 
   // ── 중개 수수료 ──
   let commRate;
   if (taxConfig?.commission) {
-    commRate = pickTierRate(taxConfig.commission, price, 0.007);
+    // TIER-BOUNDARY-SPLIT-2026-08-16: 중개보수는 **미만** 경계(별표1) → 아래 폴백의 `<` 와 같은 값을 내야 한다.
+    commRate = pickTierRateUnder(taxConfig.commission, price, 0.007);
   } else {
     if (price < 0.5) commRate = 0.006;
     else if (price < 2)  commRate = 0.005;
@@ -422,9 +423,25 @@ function calcTotalCost(price, loanAmount, houseStatus, isFirstBuyer, taxConfig) 
 //   백엔드 fallback analysisService:354 `price <= 6 ? 0.01`. 즉 운영 기본(snapshot) 경로만 어긋나
 //   프론트와 백엔드가 같은 입력에 다른 세액을 보여주고 있었다.
 //   경계 재확인: 6→1% / 6.5→2%후 누진보정 / 9→누진 끝(3%) / 9.5→3% 전부 법령 일치.
+// ⚠⚠ TIER-BOUNDARY-SPLIT-2026-08-16 (Plan 023) — 프론트 `_pickTierRate` 주석과 동일한 사유.
+//   같은 `underAuk` 필드를 쓰는 두 tier 표의 법정 경계가 **반대**다:
+//     · 취득세   지방세법 §11①8호          — "6억원 **이하**"   → pickTierRate      (`<=`)
+//     · 중개보수 공인중개사법 시행규칙 별표1 — "9억원 **미만**"   → pickTierRateUnder (`<`)
+//   프론트에서 실사고가 났다(계획 008 의 `<`→`<=` 한 줄이 중개보수까지 바꿈). 백엔드는 라우트가
+//   taxConfig 를 넘기지 않아(routes/analysis.js:61-66) snapshot 경로가 도달 불가라 라이브 영향은
+//   없었지만, **쌍둥이를 한쪽만 고치면 다음에 라우트가 taxConfig 를 넘기는 순간 되살아난다** —
+//   그래서 지금 같이 고친다(오늘만 "한쪽만 고침" 패턴이 4번 나왔다).
+/** "N억 **이하**" 경계 (취득세) */
 function pickTierRate(tiers, priceAuk, fallbackRate) {
   for (const t of tiers || []) {
     if (priceAuk <= (t.underAuk ?? 0)) return t.rate ?? fallbackRate;
+  }
+  return fallbackRate;
+}
+/** "N억 **미만**" 경계 (중개보수). 필드명 `underAuk` 의 문자 그대로. */
+function pickTierRateUnder(tiers, priceAuk, fallbackRate) {
+  for (const t of tiers || []) {
+    if (priceAuk < (t.underAuk ?? 0)) return t.rate ?? fallbackRate;
   }
   return fallbackRate;
 }
