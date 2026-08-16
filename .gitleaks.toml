@@ -45,4 +45,9 @@ regexes = [
   '''example[-_]?key''',
   '''REPLACE[-_]ME''',
   '''xxx+''',
+  # regulations_snapshot.key 값 — 정책 스냅샷의 **공개 식별자**이지 자격증명이 아니다.
+  #   실사례(2026-08-16, run 31917863984): 테스트 픽스처의 `key: 'acquisition_tax_2025'` 를
+  #   generic-api-key 가 엔트로피 3.68 로 잡아 CI 를 막았다. 알려진 key 명에 한해서만 예외로 둔다
+  #   (전면 완화 금지 — 새 스냅샷 key 가 걸리면 그때 이 목록에 명시적으로 추가할 것).
+  '''(acquisition_tax|housing_loan|future_policy)_20\d{2}''',
 ]
