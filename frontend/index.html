@@ -4012,8 +4012,14 @@ async function generateReport(_isRetry) {
         kidPlan, stayYears, priority, workplaceArea,
       }),
       // AUDIT-2026-07-05: 유일하게 타임아웃 없던 사용자 대기 fetch — 서버 지연 시 최대 300s(Vercel) 대기하던 것을 90s로 제한(AI 보고서 정상 소요 감안). TimeoutError는 기존 catch else("잠시 후 다시 시도")로 처리됨.
+      // DUPKEY-FIX-2026-08-16 (Plan 010): 여기 `signal` 키가 **두 번** 있었다(90s 와 180s).
+      //   객체 리터럴은 뒤가 이기므로 위 90s 제한이 죽고 실제로는 180s 가 적용되고 있었다 —
+      //   "90s 로 제한한다"는 의도가 실현된 적이 없다. 나중 결정인 90s 를 남기고 중복을 제거한다.
+      //   (제거한 줄의 근거였던 "Phase 8: 150s → 180s (KAPT + 카카오 amenities + Claude)" 는
+      //    이 fetch 가 무거운 구간이라는 뜻이다. 90s 로 잘리는 사례가 관측되면 이 값을 재검토할 것 —
+      //    실패는 기존 catch 의 else 분기가 "잠시 후 다시 시도" 로 흡수한다.)
+      //   ⚠ 이 종류(중복 키)는 린터(no-dupe-keys)로 잡히는 결함인데 이 저장소엔 린트 설정이 없다.
       signal: AbortSignal.timeout(90000),
-      signal: AbortSignal.timeout(180000),  // Phase 8: 150s → 180s (KAPT + 카카오 amenities + Claude)
     });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
@@ -8258,7 +8264,7 @@ function renderSavedDeals(){
     const balanceD=d.balance?getDday(d.balance):null;
     const fmtD=(n)=>n===null?'-':n===0?'오늘':n>0?`D-${n}`:`완료`;
     return`<div class="deal-card">
-      <div class="deal-apt">${d.apt}</div>
+      <div class="deal-apt">${_escHtml(d.apt||'')}</div>
       ${d.contract?`<div class="deal-row"><span class="deal-lbl">계약일</span><span class="deal-day ${contractD!==null&&contractD<=7&&contractD>0?'soon':'ok'}">${fmtD(contractD)}</span></div>`:''}
       ${d.balance?`<div class="deal-row"><span class="deal-lbl">잔금일</span><span class="deal-day ${balanceD!==null&&balanceD<=30&&balanceD>0?'soon':'ok'}">${fmtD(balanceD)}</span></div>`:''}
     </div>`;

@@ -102,6 +102,17 @@ const CHECKS = [
     re: /callAI/,
   },
   {
+    // XSS-DEALCARD-2026-08-16 (Plan 010): 계약 타임라인 단지명은 **자유 입력**(드롭다운 아님)이고
+    //   localStorage 에 저장됐다가 renderSavedDeals() 가 innerHTML 로 다시 그린다. 이 저장소는
+    //   사용자 입력 렌더링을 예외 없이 _escHtml() 로 감싸는데 **여기 한 곳만 누락**돼 있었다.
+    //   CSP 가 script-src 'unsafe-inline' 을 허용하므로(인라인 스크립트 구조상 기존 트레이드오프)
+    //   CSP 백스톱이 작동하지 않는다 — 코드 레벨 escape 가 유일한 방어라 가드로 고정한다.
+    //   ⚠ 안전 형태(`${_escHtml(d.apt||'')}`)는 이 패턴에 걸리지 않는다(raw `${d.apt}` 만 매칭).
+    name: 'deal-apt 단지명 raw 삽입 — ${_escHtml(d.apt||\'\')} 로 감싸야 함 (저장형 XSS)',
+    file: 'frontend/index.html',
+    re: /class="deal-apt">\$\{d\.apt\}/,
+  },
+  {
     // 챗 응답은 반드시 데이터 라우터를 거쳐야 함 (존재 확인) — 라우터 우회 직접 응답 생성 회귀 차단
     name: 'chat.js 데이터 라우터(chatDataRouter) 연결 부재 — 룰베이스 경로가 제거됨',
     file: 'backend/routes/chat.js',
