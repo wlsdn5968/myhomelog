@@ -758,7 +758,12 @@ function getRegulationPenalty(sigungu, lawdCd, seoulRegulated = true) {
     return { status: '조정대상지역', bonus: -3 };
   }
   // 서울 외 지역은 코드만으로 규제 여부를 단정할 수 없음 → 미확인(하위 표시에서 생략)
-  return { status: code ? '미확인' : '비규제', bonus: 0 };
+  //   REG-UNKNOWN-2026-08-16 (감사 #9): 예전엔 코드가 **없을 때** '비규제' 로 떨어졌다.
+  //   그런데 `regulation` 필드는 '미확인' 이면 null 로 생략되지만 '비규제' 는 **화면에 그대로 뜬다**(:908).
+  //   즉 lawd_cd 없이 부르면 강남구에도 "비규제" 라는 **사실 아닌 라벨**이 붙는다.
+  //   코드가 없다는 건 "규제가 아니다" 가 아니라 "판정할 근거가 없다" 는 뜻이므로 '미확인' 이 정직하다.
+  //   (현재 도달 불가 — apt_master 14,405행 중 lawd_cd 결측 0건 실측. 방어적 기본값으로만 둔다.)
+  return { status: '미확인', bonus: 0 };
 }
 
 /** 점수 계산 — priority + 가구상황 + 예산 fit + 데이터 품질 + 객관 항목 (Phase 7) */

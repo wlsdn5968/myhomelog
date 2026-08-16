@@ -110,8 +110,14 @@ uq_molit_dedup           btree (dedup_key)
 | 백엔드 테스트 | `cd backend && npm test` | exit 0, 41 pass (이 계획은 코드 무변경이라 그대로여야 함) |
 | 프로덕션 health | `GET https://myhomelog.vercel.app/api/health` | `status: "ok"` |
 
-DB 접근은 Supabase MCP(`execute_sql`) 또는 Supabase 콘솔 SQL Editor 를 쓴다.
+DB 접근은 Supabase 콘솔 SQL Editor 또는 Supabase MCP 를 쓴다.
 프로젝트 id: `brxorvxdfrbxcavufspe` (이 값은 `CLAUDE.md` 에 공개 기재된 프로젝트 식별자다).
+
+> ⚠ **`execute_sql` 을 `apply_migration` 우회로로 쓰지 말 것** (감사 #13).
+> auto-mode classifier 가 `apply_migration` 을 막는 것은 **의도된 안전장치**이고,
+> "그럼 `execute_sql` 로 하면 된다" 는 그 장치를 무력화한다.
+> 이 계획의 DDL 은 **위 24~29행의 실행 게이트(운영자 명시 승인)를 통과한 뒤에만** 적용한다.
+> 승인 없이 에이전트가 단독으로 프로덕션 DDL 을 실행하는 것은 이 레포의 절대 룰 ③ 위반이다.
 
 ## Scope
 

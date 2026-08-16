@@ -380,7 +380,10 @@ test('geocacheBackfill.addrBonbun — 주소 끝 지번의 본번만 추출(부�
   assert.ok(저장 && 신고 && 저장 !== 신고, '신동아아파트3 은 지번 불일치로 강제 교정 대상이어야 한다');
 
   // 정상 케이스: 신고 271-1 vs 저장 271-4 → 본번 271 로 같으므로 교정하지 않는다(오탐 방지)
-  assert.equal(addrBonbun('서울 도봉구 방학동 271-1'), addrBonbun('서울 도봉구 방학동 271-4'));
+  //   ⚠ 감사 #30: 예전엔 `addrBonbun(a) === addrBonbun(b)` 로 **함수끼리** 비교했다.
+  //     그러면 함수가 항상 null 을 돌려줘도 통과한다 → 리터럴 기대값으로 고정한다.
+  assert.equal(addrBonbun('서울 도봉구 방학동 271-1'), '271');
+  assert.equal(addrBonbun('서울 도봉구 방학동 271-4'), '271');
 });
 
 // ZERO-FETCH-WATCH (2026-08-10): 광주 5개 구가 44일간 rows_fetched=0 인데 status='ok' 라
@@ -1372,12 +1375,15 @@ test('getRegulationPenalty — 서울 외 지역을 규제지역으로 단정하
   assert.deepEqual(getRegulationPenalty('서구', LAWD.인천서구), { status: '미확인', bonus: 0 });
   assert.deepEqual(getRegulationPenalty(null, LAWD.강남구), { status: '미확인', bonus: 0 });
 
-  // lawd_cd 가 비면 '비규제' 로 떨어진다.
-  //   ⚠ 이 분기는 **보고서 경로에서는 도달 불가**다: 후보의 lawd_cd 는 molit_transactions 에서
-  //   그대로 오고 그 컬럼은 NOT NULL 이다(2026-08-16 information_schema 실측).
-  //   그래도 동작을 고정해 둔다 — 훗날 다른 호출부가 생겨 코드 없이 부르면 '강남구'에 "비규제"라는
-  //   **사실 아닌 라벨**이 화면에 뜬다. 그때 이 줄이 근거가 된다.
-  assert.deepEqual(getRegulationPenalty('강남구', ''), { status: '비규제', bonus: 0 });
+  // ★ lawd_cd 가 없으면 '미확인' 이다 — REG-UNKNOWN-2026-08-16 (감사 #9).
+  //   예전엔 여기서 '비규제' 가 나왔고 이 테스트가 그 값을 **정답으로 고정**하고 있었다.
+  //   그런데 `regulation` 필드는 '미확인' 이면 null 로 생략되지만 '비규제' 는 화면에 그대로 뜬다
+  //   (report.js:908). 즉 코드 없이 부르면 강남구에 "비규제" 라는 **사실 아닌 라벨**이 붙는다.
+  //   코드가 없다는 건 "규제가 아니다" 가 아니라 "판정할 근거가 없다" 는 뜻이다(절대룰 ②).
+  //   ⚠ 현재 이 분기는 **도달 불가**다(apt_master 14,405행 중 lawd_cd 결측 0건 실측).
+  //     그래서 이 수정의 회귀 위험은 0이고, 훗날 코드 없는 호출부가 생겼을 때의 방어로만 존재한다.
+  assert.deepEqual(getRegulationPenalty('강남구', ''), { status: '미확인', bonus: 0 });
+  assert.deepEqual(getRegulationPenalty('강남구', null), { status: '미확인', bonus: 0 });
 
   // ★★ Plan 027 (2026-08-16): 이 함수는 규제 판정의 **네 번째 사본**이었고, 프론트 두 함수가
   //   스냅샷을 따라가게 된 뒤에도 여기만 "서울=조정대상" 을 하드코딩하고 있었다.
@@ -1880,10 +1886,10 @@ test('isRegFront ↔ _regLtvLabel — 같은 단지에서 규제 판정이 갈�
     const b = _regLtvLabel(area, code);
     assert.equal(a, wantReg, `isRegFront('${area}', '${code}') 가 ${wantReg} 가 아니다`);
     assert.equal(b, wantReg ? '40%' : '70%', `_regLtvLabel('${area}', '${code}') 가 어긋났다`);
-    // ★ 핵심 계약: 두 경로가 **서로** 같아야 한다. 한쪽만 고치면 여기서 걸린다.
-    assert.equal(a, b === '40%',
-      `규제 판정 두 경로가 갈렸다 — '${area}'(${code}): isRegFront=${a} vs _regLtvLabel=${b}. ` +
-      '한쪽만 고치지 말고 두 함수를 함께 볼 것.');
+    // TAUTOLOGY-REMOVED-2026-08-16 (감사 #8): 여기 있던 `assert.equal(a, b === '40%')` 는
+    //   위 두 단언이 통과하면 **반드시 참**이라 아무것도 검증하지 못했다("두 경로 교차검증"이라는
+    //   이름이 실제보다 강한 보장을 주장하고 있었다). 두 함수가 서로 같은지는 기대값을 쓰지 않는
+    //   **아래 '서울 25개 구 전수' 대조**가 담당한다 — 거기서만 a↔b 를 직접 비교한다.
   }
 
   // ★★ 서울 **25개 구 전수** — 손으로 고른 목록은 빠뜨린다(실제로 빠뜨렸다).

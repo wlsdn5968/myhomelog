@@ -146,14 +146,21 @@ function _isAbortErr(err) {
     `${err.name || ''} ${err.code || ''} ${err.message || ''} ${err.hint || ''}`
   );
 }
+// DEGRADE-AWAIT-2026-08-16 (감사 #45): 이전엔 반환값이 없어 호출부가 기다릴 수 없었다.
+//   서버리스는 응답 직후 함수를 동결할 수 있어, 응답 **직전**에 쏜 Redis 쓰기는 유실될 수 있다.
+//   → Promise 를 돌려주도록 바꿔서 그런 경로만 await 할 수 있게 했다.
+//   여전히 **실패는 삼킨다** — 관측이 응답을 막으면 안 된다(그게 원래 설계 의도).
 function _observeDegrade(kind) {
   try {
     const r = require('../redis').getRedis();
-    if (!r) return;
+    if (!r) return Promise.resolve();
     const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    Promise.resolve(r.hincrby(`searchdeg:${day}`, kind, 1)).catch(() => {});
-    Promise.resolve(r.expire(`searchdeg:${day}`, 60 * 60 * 24 * 21)).catch(() => {});
+    return Promise.all([
+      Promise.resolve(r.hincrby(`searchdeg:${day}`, kind, 1)).catch(() => {}),
+      Promise.resolve(r.expire(`searchdeg:${day}`, 60 * 60 * 24 * 21)).catch(() => {}),
+    ]).then(() => {});
   } catch (_) { /* 관측은 응답을 막지 않는다 */ }
+  return Promise.resolve();
 }
 router.get('/apt', async (req, res) => {
   const q = String(req.query.q || '').trim();
@@ -597,7 +604,9 @@ router.get('/popular', async (req, res) => {
     const stale = await readPopularSnapshot(limit, 7 * 24 * 60 * 60 * 1000).catch(() => null);
     if (stale && stale.length) {
       logger.warn({ count: stale.length }, '인기 단지 — 만료 스냅샷 폴백');
-      _observeDegrade('popular-stale');
+      // ★ 여기만 await 한다 — 바로 다음 줄이 응답이라 fire-and-forget 이면 동결에 걸려 유실될 수 있다.
+      //   (위 molit/master 강등 경로는 이후 처리가 더 이어지므로 그대로 둔다 — 지연을 안 만드는 쪽이 낫다.)
+      await _observeDegrade('popular-stale');
       res.set('Cache-Control', 'public, max-age=0, s-maxage=120');
       return res.json({ results: stale, stale: true });
     }
