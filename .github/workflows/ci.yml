@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Node 24 (프로덕션 런타임과 일치)
         uses: actions/setup-node@v7
@@ -54,7 +54,7 @@ jobs:
     #   보안 취약점 가시성은 install-audit job 이 계속 빨간불로 유지하고(별도 판단 대상),
     #   코드 품질 게이트는 그와 독립적으로 항상 돌아야 한다.
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Node 24 (프로덕션 런타임과 일치)
         uses: actions/setup-node@v7
@@ -167,7 +167,7 @@ jobs:
     #   [범위] 정확성 규칙만. 스타일 규칙 0개(들여쓰기·따옴표 논쟁으로 배포가 멈추면 안 된다).
     #   도입 시점 실측: backend/scripts/api 에러 0, 프론트 인라인 에러 1(의도된 카카오 게이트, disable 주석 처리).
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Setup Node 24 (프로덕션 런타임과 일치)
         uses: actions/setup-node@v7
@@ -188,7 +188,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0  # gitleaks 가 과거 커밋까지 스캔
 
@@ -227,7 +227,7 @@ jobs:
     timeout-minutes: 8
     needs: [syntax-check]
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Wait for Vercel prod redeploy (up to 5min) + probe /api/health
         run: bash scripts/prod-smoke.sh
