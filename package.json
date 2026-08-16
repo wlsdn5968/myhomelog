@@ -2,12 +2,12 @@
   "name": "myhomelog",
   "version": "1.0.0",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.96.0",
+    "@anthropic-ai/sdk": "^0.115.0",
     "@sentry/node": "^10.69.0",
-    "@supabase/supabase-js": "^2.105.4",
+    "@supabase/supabase-js": "^2.112.2",
     "@upstash/ratelimit": "^2.0.8",
-    "@upstash/redis": "^1.38.0",
-    "axios": "^1.18.1",
+    "@upstash/redis": "^1.38.2",
+    "axios": "^1.19.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
     "drizzle-orm": "^0.45.2",
@@ -20,7 +20,7 @@
     "web-push": "^3.6.7"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=22"
   },
   "scripts": {
     "lint": "node scripts/extract-inline-js.js && eslint backend scripts api .lint-tmp",
