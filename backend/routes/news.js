@@ -8,8 +8,9 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const cache = require('../cache');
-const { callAI } = require('../services/aiService');
-const { filterAdviceOutput } = require('../services/aiOutputFilter');
+// NEWS-ZERO-COST-2026-08-16 (Sprint PPPPPPP): 3줄 시황의 Anthropic 유료 호출을 **구조적으로 제거**했다.
+//   callAI / filterAdviceOutput import 도 함께 삭제 — 재유입은 scripts/security-regression-check.js 가 차단.
+//   (필터는 AI 생성문 전용 사후 안전망이었다. 이제 시황 문구는 우리가 조립한 사실 서술뿐이라 대상이 없다.)
 
 const NAVER_NEWS_URL = 'https://openapi.naver.com/v1/search/news.json';
 
@@ -180,122 +181,56 @@ async function _dataMarketLines() {
 
 /**
  * GET /api/news/summary
- * 오늘의 부동산 3줄 시황 (AI 자동 요약)
- * - 핫이슈 뉴스 타이틀 15건 → Claude로 중립적 3줄 요약
- * - 3시간 캐시 (AI 호출 절약)
- * - AI 실패 시 데이터 시황 폴백(mode:'data', 30분 캐시 — 크레딧 복구 시 자동 재개)
+ * 오늘의 부동산 3줄 시황 — **공식 통계 기반 자동 정리** (AI 생성 아님)
+ *
+ * NEWS-ZERO-COST-2026-08-16 (Sprint PPPPPPP) — NODE-7(유료 크레딧 소진 400) 의 마지막 활성 유입구.
+ *   [실측] Sentry NODE-7 (28일·21건) 을 transaction 별로 분해하니, 오늘 배포(00:42Z) **이후에도
+ *   발생한 경로는 이 엔드포인트 하나**였다(08-16 01:26Z). 나머지 유입구는 이미 닫혔거나(chat 08-12
+ *   룰베이스 전환·regulations cron 오늘 제거) 사용자가 직접 누르는 경로(clause·report)다.
+ *   [원인] 크레딧 0 → callAI 가 400 으로 **100% 실패** → catch 의 데이터 폴백이 사실상 주 경로였다.
+ *   즉 이 AI 호출은 28일 동안 지연(+1s 대기)과 Sentry 노이즈만 만들었고 사용자 화면에 닿은 적이 없다.
+ *   [조치] 폴백을 **주 경로로 승격**하고 유료 호출을 삭제한다. 사용자 화면은 종전과 동일하다 —
+ *   프론트는 Sprint RRRRR 이후 이미 mode:'data' 문구("공식 통계 기반 자동 정리")를 그리고 있었다.
+ *   [부수 이득] 헤드라인 수집(_fetchCat 2회 = 외부 최대 7콜)은 요약에 더는 기여하지 않아 함께 제거.
+ *   뉴스 탭 첫 진입이 그만큼 빨라진다. 목록 API(GET /news)는 불변이라 헤드라인 자체는 종전대로 보인다.
+ *   ⚠ 절대룰② 정합: 헤드라인 기반 생성 요약은 원문에 없는 서술이 섞일 여지가 있었다.
+ *   ECOS·KOSIS·실거래는 공식 수치를 그대로 인용하므로 그 위험이 구조적으로 없다.
+ *   ⚠ 캐시 키를 v3 로 올린다 — v2 에 남은 구 스키마(mode 없음)가 서빙되면 프론트가 'AI 요약' 문구를
+ *   그린다(TTL 만료까지 최대 3h). 키를 바꾸는 것이 확실하다.
  */
 router.get('/summary', async (req, res) => {
-  const cacheKey = 'news:summary:v2';
-  let hit = cache.get(cacheKey);
-  // CDN-CACHE-2026-06-14: AI 3줄 시황(전역·비개인화) — 성공 응답만 엣지 캐시(fallback 은 무캐시).
+  const cacheKey = 'news:summary:v3';
+  // CDN-CACHE-2026-06-14 → NEWS-ZERO-COST: 데이터 시황이 이제 정상 응답이므로 엣지 캐시 대상이다
+  //   (종전엔 "AI 성공본만" 캐시하고 폴백은 무캐시였다 — 폴백이 주 경로가 된 지금은 반대가 맞다).
   const SUM_CDN = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=7200';
-  // REDIS-CACHE-2026-07-14 (Sprint KKKKK): 전역·비개인화 AI 응답인데 인스턴스 로컬 캐시뿐이라
-  //   인스턴스 미스마다 AI 재호출(3h 캐시 무력화) — Redis 2차 조회로 인스턴스 간 공유.
+  let hit = cache.get(cacheKey);
+  // REDIS-CACHE-2026-07-14 (Sprint KKKKK): 전역·비개인화 응답인데 인스턴스 로컬 캐시뿐이면
+  //   인스턴스 미스마다 외부 API(ECOS·KOSIS) 재조회 → Redis 2차 조회로 인스턴스 간 공유.
   if (!hit) {
     hit = await require('../services/redisCache').rget(cacheKey);
-    if (hit) cache.set(cacheKey, hit, 10800);
+    if (hit) cache.set(cacheKey, hit, 1800);
   }
   if (hit) { res.set('Cache-Control', SUM_CDN); return res.json({ ...hit, fromCache: true }); }
 
-  // Phase 4 (2026-04-26): Vercel serverless 인스턴스별 cache 분리 문제 fix.
-  // `/news?cat=hot` 호출한 인스턴스와 `/news/summary` 호출한 인스턴스가 다르면 cache miss
-  // → 사용자가 뉴스 탭 정상 진입 후에도 fallback "준비되지 않았어요" 표시되던 root cause.
-  // 해결: cache 우선, 없으면 직접 fetch (lazy chain).
-  let hot = cache.get('news:hot');
-  let policy = cache.get('news:policy');
-
-  async function _fetchCat(catKey, perKwLimit) {
-    const kws = KEYWORDS[catKey] || [];
-    try {
-      const results = await Promise.all(kws.map(k => fetchNaverNews(k, perKwLimit).catch(() => null)));
-      if (results.every(r => r === null)) {
-        return { items: await fetchRssFallback(catKey) };
-      }
-      const seen = new Set();
-      const items = [];
-      for (const it of results.flat().filter(Boolean)) {
-        if (seen.has(it.link)) continue;
-        seen.add(it.link);
-        items.push(it);
-      }
-      items.sort((a, b) => new Date(b.pubDate) - new Date(a.pubDate));
-      return { items: items.slice(0, 15) };
-    } catch {
-      return { items: [] };
-    }
-  }
-
-  if (!hot?.items?.length) hot = await _fetchCat('hot', 6);
-  if (!policy?.items?.length) policy = await _fetchCat('policy', 4);
-
-  let titles = [];
-  [hot, policy].forEach(h => {
-    if (h?.items) titles.push(...h.items.slice(0, 8).map(i => i.title));
-  });
-
-  if (titles.length === 0) {
-    // 뉴스 전체 실패 시에도 공식 통계 시황은 독립적으로 성립
-    const dataLines = await _dataMarketLines();
-    return res.json({
-      summary: dataLines.length ? dataLines : ['📌 뉴스 데이터를 가져오지 못했어요. 잠시 후 다시 시도해주세요.'],
-      mode: dataLines.length ? 'data' : undefined,
-      updatedAt: new Date().toISOString(),
-      fromCache: false,
-    });
-  }
-
-  const prompt = `다음은 오늘 한국 부동산 뉴스 헤드라인 모음이야. 이걸 사실 기반으로 중립적으로 '3줄 시황 요약'해줘.
-
-헤드라인:
-${titles.slice(0, 20).map((t, i) => `${i+1}. ${t}`).join('\n')}
-
-규칙:
-- 정확히 3줄. 각 줄은 60자 이내.
-- 매수·매도 권유 금지. "~오를 것" "~사야" 등 예측 표현 금지.
-- 사실·흐름만 요약 ("~가 이슈" "~ 발표" "~ 추세" 식).
-- 각 줄 앞에 이모지 1개 (📌 💰 🏛 🔨 📈 📉 중 택).
-- JSON만 반환 (\`\`\` 없이): {"lines":["...","...","..."]}`;
-
-  try {
-    const result = await callAI([{ role: 'user', content: prompt }], false, { userId: req.user?.id });
-    const cleaned = result.content.replace(/```json|```/g, '').trim();
-    // Phase 4 (2026-04-26): AI 가 JSON 뒤에 추가 텍스트 붙이는 경우 대응 — 첫 { 부터 마지막 } 까지만 추출.
-    const jsonMatch = cleaned.match(/\{[\s\S]*\}/);
-    const parsed = JSON.parse(jsonMatch ? jsonMatch[0] : cleaned);
-    const _rawLines = Array.isArray(parsed.lines) ? parsed.lines : [];
-    // 정책 안전망(절대룰 — 매수·매도 추천 금지): SYS prompt 만으론 100% 차단 불가 → chat/report 와 동일 사후필터 적용
-    const _safeLines = _rawLines.map(l => { const f = filterAdviceOutput(l); return f.filtered ? f.text : l; });
+  const dataLines = await _dataMarketLines();
+  if (dataLines.length) {
     const out = {
-      summary: _safeLines,
+      summary: dataLines,
+      mode: 'data',
       updatedAt: new Date().toISOString(),
-      disclaimer: '본 시황 요약은 뉴스 헤드라인 기반 정보 정리이며, 매수·매도 추천이 아닙니다.',
+      disclaimer: '본 시황은 공식 통계 수치 정리이며, 매수·매도 추천이 아닙니다.',
     };
-    cache.set(cacheKey, out, 10800); // 3시간
-    require('../services/redisCache').rset(cacheKey, out, 10800); // Sprint KKKKK — 인스턴스 간 공유
+    cache.set(cacheKey, out, 1800);
+    require('../services/redisCache').rset(cacheKey, out, 1800);
     res.set('Cache-Control', SUM_CDN);
-    res.json({ ...out, fromCache: false });
-  } catch (e) {
-    require('../logger').error({ err: e, source: 'news-summary' }, '뉴스 AI 요약 실패');
-    const dataLines = await _dataMarketLines();
-    if (dataLines.length) {
-      const out = {
-        summary: dataLines,
-        mode: 'data',
-        updatedAt: new Date().toISOString(),
-        disclaimer: '본 시황은 공식 통계 수치 정리이며, 매수·매도 추천이 아닙니다.',
-      };
-      // 30분 캐시 — 실패마다 AI 재시도(비용 0이지만 지연 1s+)하지 않되, 크레딧 복구 시 30분 내 AI 재개
-      cache.set(cacheKey, out, 1800);
-      require('../services/redisCache').rset(cacheKey, out, 1800);
-      return res.json({ ...out, fromCache: false });
-    }
-    res.json({
-      summary: ['📌 오늘 뉴스를 불러왔어요. 상세는 아래 목록을 확인하세요.'],
-      updatedAt: new Date().toISOString(),
-      fromCache: false,
-    });
+    return res.json({ ...out, fromCache: false });
   }
+  // 외부 통계 3종이 모두 실패한 경우 — 캐시하지 않는다(다음 요청서 재시도).
+  res.json({
+    summary: ['📌 오늘 뉴스를 불러왔어요. 상세는 아래 목록을 확인하세요.'],
+    updatedAt: new Date().toISOString(),
+    fromCache: false,
+  });
 });
 
 module.exports = router;
