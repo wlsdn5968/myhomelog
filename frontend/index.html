@@ -8448,6 +8448,22 @@ function isRegFront(regionStr, lawdCd){
   //     서울·경기 판정 경로는 건드리지 않는다(seoulRegulated 스냅샷 존중 유지).
   const _code = String(lawdCd||'').trim();
   if (_code && !_code.startsWith('11') && !_code.startsWith('41')) return false;
+  // SEOUL-JUNGGU-SYMMETRY-2026-08-16 (Plan 022, **라이브 실측으로 발각**):
+  //   위 음성 게이트만으로는 부족했다. 서울(11) 은 여기서 **확정**해야 한다.
+  //   [근본 원인] SEOUL_GU_KW 는 24개이고 '중구' 를 **의도적으로 뺐다**(지방 중구 오판 방지 —
+  //     SEOUL-JUNGGU-FIX-2026-07-25). 그래서 서울 중구(11140)는 이름 매칭에 걸리지 않고
+  //     `reg.keywords`(경기 파생)에도 없어 **false** 가 됐다. 반면 _regLtvLabel 은 코드 11 을
+  //     보고 '40%'(규제)를 준다 → 서울 25개 구 중 **중구 1곳에서만** 두 경로가 갈렸다(라이브 전수 확인).
+  //   [증상] LTV 라벨은 "40% 규제"인데 영역검색 마커는 '비규제', 세금 시뮬레이션은 2주택 취득세를
+  //     **기본세율**로(조정지역 8% 중과 누락 = 금전 과소 표기), 특약·리스크는 "전입 의무" 미표시.
+  //     오늘 아침 고친 부산 강서구와 **정확히 반대 방향의 같은 클래스** 결함이다.
+  //   [Fix] _regLtvLabel 의 서울 분기와 **대칭**으로 맞춘다:
+  //     스냅샷이 명시적으로 해제(seoulRegulated === false)일 때만 false, 그 외(미로드 포함)는 true.
+  //     미로드 시 true 인 것이 보수적 선택이다(_regLtvLabel 도 미로드면 '40%').
+  if (_code.startsWith('11')) {
+    const _snap = window.__REG_KW;
+    return !_snap || _snap.seoulRegulated !== false;
+  }
   const reg = window.__REG_KW;
   if (!reg) {
     // fallback: snapshot 미로드 — 보수적으로 서울/경기 라벨 모두 규제 처리

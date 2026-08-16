@@ -1530,6 +1530,24 @@ test('isRegFront ↔ _regLtvLabel — 같은 단지에서 규제 판정이 갈�
       '한쪽만 고치지 말고 두 함수를 함께 볼 것.');
   }
 
+  // ★★ 서울 **25개 구 전수** — 손으로 고른 목록은 빠뜨린다(실제로 빠뜨렸다).
+  //   [실사고 2026-08-16] 위 cases 는 사람이 고른 8개였고 거기에 **서울 중구가 없었다**.
+  //   그래서 계약 테스트가 초록인 채로 프로덕션에서 중구 1곳만 갈려 있었다
+  //   (SEOUL_GU_KW 가 24개이고 '중구' 를 의도적으로 제외하기 때문 — 라이브 전수 조회로 발각).
+  //   → 목록을 손으로 쓰지 말고 **LAWD_CODES 에서 11 접두를 전부 뽑아** 돌린다.
+  //     구가 추가/개편돼도 자동으로 포함된다.
+  const { LAWD_CODES } = require('../services/transactionService');
+  const seoulGus = Object.entries(LAWD_CODES).filter(([, c]) => String(c).startsWith('11'));
+  assert.equal(seoulGus.length, 25, `서울 구 수가 25가 아니다(${seoulGus.length}) — LAWD_CODES 변경 시 이 테스트도 확인할 것`);
+  for (const [gu, code] of seoulGus) {
+    const area = `${gu} 테스트동`;
+    const a = isRegFront(area, code);
+    const b = _regLtvLabel(area, code);
+    assert.equal(a, true, `서울 ${gu}(${code}) 를 isRegFront 가 비규제로 판정했다`);
+    assert.equal(b, '40%', `서울 ${gu}(${code}) 의 _regLtvLabel 이 40% 가 아니다`);
+    assert.equal(a, b === '40%', `서울 ${gu}(${code}) 에서 두 경로가 갈렸다: isRegFront=${a} vs ${b}`);
+  }
+
   // lawd_cd 를 모르는 경로(사용자가 지역을 직접 타이핑하는 특약 탭·대출계산 탭)는
   // 기존 문자열 판정 그대로 — 회귀가 없어야 한다.
   assert.equal(isRegFront('서울 강남구'), true);
