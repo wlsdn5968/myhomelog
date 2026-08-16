@@ -732,7 +732,7 @@ router.get('/in-bounds', async (req, res) => {
     //   단지명에 이 세 단어가 든 경우는 apt_master·molit 모두 0건(SQL 실측) → 오탐 위험 없음.
     //   ⚠ 이 정규식은 **한 그룹에 후보가 2개 이상일 때 순위를 매기는 용도**다. 후보가 하나뿐이면
     //     하위시설이어도 그대로 쓰인다 — 근본 해소는 geocacheBackfill 의 reheal(같은 단어 추가함)이 한다.
-    const SUBFEATURE_RE = /충전소|주차장|정류장|정문|후문|관리사무소|경비실|놀이터|경로당|노인정|교차로/;
+    const SUBFEATURE_RE = /충전소|주차장|정류장|정문|후문|관리사무소|경비실|놀이터|경로당|노인정|교차로|주민센터|복지관|다이소|출구|치과|기공소/;
 
     // MOB-AUDIT-2026-05-04: 거래 0건 단지 (apt_geocache 에 좌표만 있고 molit 매칭 X) 는
     //   avgPrice 0.00억 으로 노출되어 사용자 오인 → 결과에서 제외 (legal 보호)

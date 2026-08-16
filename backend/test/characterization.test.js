@@ -2216,7 +2216,8 @@ test('부속시설 키워드가 세 판정 경로에 모두 반영돼 있다 (�
   assert.ok(subM, 'search.js 에서 SUBFEATURE_RE 를 찾지 못했다');
 
   // 전국 실측 규모: 경로당/노인정 298건 · 교차로 9건. 단지명 사용례는 apt_master·molit 모두 0건.
-  for (const kw of ['경로당', '노인정', '교차로']) {
+  // 5회차 추가분 — 단지명 사용례 apt_master·molit 모두 0건 실측(출구7·다이소5·복지관3·주민센터1·치과1·기공소1)
+  for (const kw of ['경로당', '노인정', '교차로', '주민센터', '복지관', '다이소', '출구', '치과', '기공소']) {
     assert.ok(NON_APT_PATTERNS.test(kw), `NON_APT_PATTERNS 에 '${kw}' 가 없다 — 지오코딩이 그 지점을 고른다`);
     assert.ok(backfillSrc.includes(`'${kw}'`), `REHEAL_NONRES_KEYWORDS 에 '${kw}' 가 없다 — 기존 298건이 안 고쳐진다`);
     assert.ok(subM[0].includes(kw), `SUBFEATURE_RE 에 '${kw}' 가 없다 — 지도 대표좌표로 뽑힌다`);
@@ -2229,6 +2230,12 @@ test('부속시설 키워드가 세 판정 경로에 모두 반영돼 있다 (�
   // '플라자'는 의도적으로 넣지 않았다 — 주상복합 실명에 쓰여 오탐 위험이 있다.
   assert.equal(NON_APT_PATTERNS.test('플라자'), false,
     "'플라자'가 NON_APT_PATTERNS 에 들어갔다 — 주상복합 단지명 오탐 위험. 넣으려면 단지명 실측부터 할 것");
+  // '프라자' 도 같은 이유로 금지 — 단지명 실측 master 13건·molit 261건.
+  assert.equal(NON_APT_PATTERNS.test('프라자'), false,
+    "'프라자'는 단지명으로 261건 쓰인다 — 넣으면 진짜 단지를 비주거로 오판한다");
+  // '입구' 도 금지 — "서울대입구" 오탐. ('출구'는 지하철 출구 전용이라 위 목록에 들어가 있다.)
+  assert.equal(NON_APT_PATTERNS.test('서울대입구'), false,
+    "'입구'가 들어가면 '서울대입구'가 비주거로 걸린다");
 });
 
 test('세대당 주차 판정 5곳이 모두 세대수 불일치 가드를 거친다 (사본 드리프트 방지)', () => {
