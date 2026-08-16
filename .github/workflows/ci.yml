@@ -21,10 +21,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node 20
+      - name: Setup Node 24 (프로덕션 런타임과 일치)
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install root deps (npm ci)
@@ -56,10 +56,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node 20
+      - name: Setup Node 24 (프로덕션 런타임과 일치)
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
           cache-dependency-path: backend/package-lock.json
 
@@ -169,10 +169,10 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - name: Setup Node 20
+      - name: Setup Node 24 (프로덕션 런타임과 일치)
         uses: actions/setup-node@v6
         with:
-          node-version: '20'
+          node-version: '24'
           cache: 'npm'
 
       - name: Install root deps (eslint)
