@@ -641,3 +641,55 @@ test('규제 감시 — 주제 키워드 미정의 key 는 누락이 아니라 �
   assert.equal(r.analysis[0].evidenceCount, 1, '미정의 key 가 조용히 0건으로 떨어짐');
   assert.ok(/미정의 key/.test(r.analysis[0].reasoning));
 });
+
+// SNAPROLE-2026-08-16 (Sprint MMMMMMM) — NODE-9 순환의 마지막 고리를 고정한다.
+//   실측: pg_db_role_setting 의 anon.statement_timeout = 3s, service_role 은 항목 없음.
+//   집계 RPC 를 2회 연속 EXPLAIN ANALYZE 한 결과 **콜드 5,672ms → 웜 198ms**(정렬이 work_mem 을
+//   넘겨 temp 481/483 디스크로 흐름). cron 은 하루 1회라 항상 콜드에 가까워 3s 를 확실히 초과 →
+//   08-14·08-15 cron 연속 실패, 스냅샷 54h 노화(신선도 36h 미달) → 사용자가 라이브 집계 직격.
+//   service_role 로 바꾸면 최소한 3s 컷은 벗어난다(정확한 실효 상한은 미검증 — popularService
+//   주석의 [미검증] 항목 참조. 8s 라면 여유 2.3s 뿐이라 거래량 증가 시 재점검 필요).
+//   이 테스트가 깨지면 "cron 이 다시 공개키로 집계한다"는 뜻 — 스냅샷 생산이 또 멈춘다.
+test('popularService — cron 스냅샷 집계는 service_role 로 조회한다 (anon 3s 컷 회피)', async () => {
+  const clientPath = require.resolve('../db/client');
+  const geoPath = require.resolve('../services/geocodeCacheService');
+  const svcPath = require.resolve('../services/popularService');
+  const saved = { c: require.cache[clientPath], g: require.cache[geoPath], s: require.cache[svcPath] };
+
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = Array.from({ length: 12 }, (_, i) => ({
+    aptName: `단지${i}`, sigungu: `시군구${i}`, umdNm: `동${i}`, lawdCd: `1111${i}`,
+    buildYear: 2000, recentDealDate: today, dealCount60d: 50 - i, avgDealAmount: 100000,
+  }));
+  const used = [];   // 어떤 키로 무엇을 호출했는지 기록 — 주입이 실제로 먹었는지의 유일한 증거
+  const makeClient = (tag) => ({
+    rpc(name) {
+      used.push(`${tag}:rpc:${name}`);
+      return { abortSignal: () => Promise.resolve({ data: rows, error: null }) };
+    },
+    from(table) {
+      used.push(`${tag}:from:${table}`);
+      if (table === 'apt_geocache') {
+        const coords = rows.map(r => ({ apt_name: r.aptName, sigungu: r.sigungu, umd_nm: r.umdNm, lat: 37.5, lng: 127.0 }));
+        return { select: () => ({ in: () => Promise.resolve({ data: coords, error: null }) }) };
+      }
+      return { upsert: () => Promise.resolve({ error: null }) };
+    },
+  });
+  require.cache[clientPath] = { id: clientPath, filename: clientPath, loaded: true, exports: {
+    getSupabaseReadonly: () => makeClient('anon'), getSupabaseAdmin: () => makeClient('service_role') } };
+  require.cache[geoPath] = { id: geoPath, filename: geoPath, loaded: true, exports: {
+    resolveCoordBatch: async () => { used.push('resolveCoordBatch'); return []; } } };
+  delete require.cache[svcPath];
+  try {
+    const r = await require('../services/popularService').computeAndStoreSnapshot();
+    assert.equal(r.stored, true, `스냅샷 저장 실패: ${JSON.stringify(r)}`);
+    assert.equal(r.usedFallback, false, 'RPC 성공인데 fallback 으로 빠짐');
+    assert.ok(used.includes('service_role:rpc:search_popular_apts'), `집계 RPC 가 service_role 로 가지 않았다: ${used.join(' ')}`);
+    assert.ok(!used.some(u => u.startsWith('anon:')), `cron 경로가 공개키(anon)를 썼다 — 3s 컷 재유입: ${used.join(' ')}`);
+  } finally {
+    if (saved.c) require.cache[clientPath] = saved.c; else delete require.cache[clientPath];
+    if (saved.g) require.cache[geoPath] = saved.g; else delete require.cache[geoPath];
+    if (saved.s) require.cache[svcPath] = saved.s; else delete require.cache[svcPath];
+  }
+});

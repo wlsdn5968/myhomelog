@@ -55,9 +55,13 @@ async function buildPopularResults(limit = 12, opts = {}) {
   let usedFallback = false;
   // ② RPC 7초 컷 — POPULAR-QUALITY-FIX-2026-07-11: 4초 컷이 콜드 RPC 를 성급히 끊어
   //   저품질 fallback 을 장기 캐시에 박제한 회귀의 재발 방지 균형점.
+  //   ⚠ SNAPROLE-2026-08-16 (Sprint MMMMMMM): 공개키(anon)로 붙는 한 이 숫자는 한 번도
+  //   작동한 적이 없다 — DB 가 role 단위로 statement_timeout=3s 를 먼저 끊는다(pg_roles 실측).
+  //   즉 클라이언트 컷은 DB 컷보다 뒤에 있어 무의미했다. service_role 을 주입한 cron 경로에서만
+  //   이 값이 실제 상한으로 작동한다.
   const { data: rpcRows, error: rpcErr } = await admin
     .rpc('search_popular_apts', { p_limit: fetchN })
-    .abortSignal(AbortSignal.timeout(7000));
+    .abortSignal(AbortSignal.timeout(opts.rpcTimeoutMs || 7000));
   if (!rpcErr && Array.isArray(rpcRows) && rpcRows.length) {
     // RPC 행(camelCase) → 좌표-join 로직이 기대하는 shape 로 정규화
     top = rpcRows.map(r => ({
@@ -198,18 +202,46 @@ async function storePopularSnapshot(results) {
 
 /** cron 용 — RPC 성공본(정상 품질)만 저장. fallback/빈 결과는 저장하지 않음. */
 async function computeAndStoreSnapshot() {
-  let { results, usedFallback } = await buildPopularResults(SNAPSHOT_SIZE);
-  // SNAPRETRY-2026-08-08 (Sprint BBBBBBB-4, NODE-9 근본원인): RPC 실측 3.5s(웜) — 콜드 DB 에선
-  //   statement timeout(8s)을 넘겨 usedFallback → 저장 스킵 → 스냅샷 36h 노화 → 사용자가 라이브
-  //   집계를 직접 타다 간헐 timeout(NODE-9, 15일 7회)이 나던 순환. 첫 시도가 DB 캐시를 데우므로
-  //   1회 재시도로 대부분 성공한다(cron 은 요청 경로 300s 예산 — 재시도 여유 충분).
-  if (usedFallback) ({ results, usedFallback } = await buildPopularResults(SNAPSHOT_SIZE));
+  // SNAPROLE-2026-08-16 (Sprint MMMMMMM) — NODE-9 순환의 마지막 고리.
+  //   [실측 확인됨]
+  //   · pg_db_role_setting: anon = statement_timeout **3s** / authenticated = 8s /
+  //     authenticator(유일한 login 역할, rolcanlogin=true) = 8s / **service_role = 항목 없음**.
+  //     코드는 이 한계를 8s 로 알고 있었다(BBBBBBB-4 주석) — 공개키 경로에선 실제보다 관대한 오인.
+  //   · 집계 RPC `search_popular_apts(60)` EXPLAIN ANALYZE 2회 연속(LLLLLLL 크로스체크):
+  //     **콜드 5,672ms → 웜 198ms**. temp read 481 / written 483 = 정렬이 work_mem 을 넘겨
+  //     디스크로 흘렀다(GROUP BY apt_name,sigungu,umd_nm + ORDER BY count DESC).
+  //     cron 은 하루 1회라 **항상 콜드에 가깝다** → 5.67s 는 anon 3s 를 확실히 초과. 실패가 설명된다.
+  //   [미검증 — 추측하지 말 것]
+  //   · service_role 의 **실효** statement_timeout 값은 측정하지 못했다. PostgREST 는 authenticator
+  //     로 로그인(8s 세션값) 후 SET ROLE 하는데, service_role 에 per-role 항목이 없으므로 세션값
+  //     8s 가 남는지 DB 기본(2min)으로 가는지는 service_role 키 없이 확인 불가(DDL 도 운영자 전용).
+  //     확실한 것은 **anon 3s 보다는 크다**는 것뿐. 만약 8s 라면 콜드 5.67s 는 통과하되 여유가
+  //     2.3s 뿐이라 거래량 증가 시 재실패할 수 있다 → 그때는 RPC 자체(디스크 정렬) 최적화가 답.
+  //     같은 이유로 아래 rpcTimeoutMs 25s 도 DB 컷보다 뒤일 수 있다(무해하나 상한 역할은 못 한다).
+  //   [증상 — health.crons 로 독립 확인]
+  //   · 스냅샷 computed_at 이 08-13 18:22 에서 정지, 08-14·08-15 cron 연속 실패
+  //     (health.crons['popular-snapshot'].error = "canceling statement due to statement timeout"),
+  //     54h 노화 → 36h 신선도 미달 → 사용자가 라이브 집계를 직접 타는 원래 순환으로 복귀.
+  //   Sprint LLLLLLL 의 stale 폴백(최대 7일)은 이 상태에서 **빈 지도만** 막는 증상 처치다.
+  //   생산 자체를 살리려면 cron 이 3s 제약을 벗어나야 한다.
+  //   [안전성] cron 은 서버 내부 작업이고 조회 대상도 동일한 공개 데이터라 RLS 우회 키로 노출면이
+  //   늘지 않는다(스냅샷 저장은 이미 service_role — 읽기만 anon 이던 비대칭을 맞추는 것).
+  //   ⚠ 사용자 요청 경로(/popular 라이브 집계)는 종전대로 공개키 — 방어층 불변.
+  //   [확인 지점] 다음 18:00 UTC 실행 후 health.crons['popular-snapshot'].ok 로 판정.
+  const sc = serviceClient();
+  const opts = sc ? { client: sc, rpcTimeoutMs: 25000 } : {};  // 25s: 300s 예산 안에서 재시도 포함 2회
+  let { results, usedFallback } = await buildPopularResults(SNAPSHOT_SIZE, opts);
+  // SNAPRETRY-2026-08-08 (Sprint BBBBBBB-4): 첫 시도가 DB 캐시를 데우므로 1회 재시도로 대부분
+  //   성공한다(cron 은 요청 경로 300s 예산 — 재시도 여유 충분). service_role 전환 후에도 유지:
+  //   RPC 가 아닌 다른 이유(일시 네트워크)로 실패했을 때의 값이 남는다.
+  if (usedFallback) ({ results, usedFallback } = await buildPopularResults(SNAPSHOT_SIZE, opts));
+  const via = sc ? 'service_role' : 'anon';
   if (usedFallback || !results.length) {
-    logger.warn({ usedFallback, count: results.length }, 'popular 스냅샷 스킵 — fallback/빈 결과는 저장 안 함');
+    logger.warn({ usedFallback, count: results.length, via }, 'popular 스냅샷 스킵 — fallback/빈 결과는 저장 안 함');
     return { stored: false, usedFallback, count: results.length };
   }
   const r = await storePopularSnapshot(results);
-  logger.info({ ...r, usedFallback }, 'popular 스냅샷 계산 완료');
+  logger.info({ ...r, usedFallback, via }, 'popular 스냅샷 계산 완료');
   return { ...r, usedFallback };
 }
 
