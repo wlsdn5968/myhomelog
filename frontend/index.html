@@ -5444,7 +5444,12 @@ async function doSearch(){
   let success=false;
   try{
     setTimeout(()=>{if(btn.classList.contains('ld'))searchStep('국토부 실거래가 조회 중...', 2);}, 600);
-    setTimeout(()=>{if(btn.classList.contains('ld'))searchStep('AI 분석·점수 계산 중...', 3);}, 3500);
+    // STEP-LABEL-2026-08-17 (Sprint MMMMMMM-7): 예전 문구는 'AI 분석·점수 계산 중' 이었다.
+    //   그런데 추천 경로(propertyService)에는 LLM 호출이 **한 건도 없다**(grep 0). 정렬은
+    //   dealCount·buildYear 산식이고, 소스 주석도 'AI 호출 없음, 즉시 응답' 이라고 적혀 있다.
+    //   '점수 계산' 은 사실이지만 'AI 분석' 은 아니다 — 사용자가 모델이 판단한 결과로 오해한다.
+    //   ⚠ 함수명 getAIRecommendations 는 과거 LLM 경로의 잔재다(이름 변경은 파급이 커 보류).
+    setTimeout(()=>{if(btn.classList.contains('ld'))searchStep('조건 매칭·점수 계산 중...', 3);}, 3500);
     // MOB-FIX-2026-05-03: 로그인 사용자 토큰 주입 → backend 가 user 한도(10/일) 적용 (이전: anonymous 5/일 잘못 적용)
     const _hdr={'Content-Type':'application/json'};
     // TOKEN-FRESH-2026-05-21: 만료된 캐시 토큰 방지 — 신선한 토큰 확보.
@@ -5541,7 +5546,10 @@ async function doSearch(){
         }
       }
     } catch(_){}
-    document.getElementById('pCnt').textContent=props.length+'건';
+    // NOTICE-FLAG-2026-08-17 (Sprint MMMMMMM-7): 백엔드 안내 항목(_notice)은 단지가 아니다 —
+    //   건수에서 빼고, 실제 단지가 0이면 '0건' 으로 정직하게 표시한다.
+    const _real = props.filter(p=>!p._notice).length;
+    document.getElementById('pCnt').textContent=_real+'건';
     // Sprint QQQQQ: 추천 단지 섹션이 검색 버튼 바로 아래로 이동 — 결과 도착 시 사이드바를 결과로 스크롤
     try{ document.getElementById('s3')?.scrollIntoView({behavior:'smooth',block:'nearest'}); }catch(_){}
     // VIEW-GUARD (Sprint KKKK): 검색 중 사용자가 탭을 옮겼으면 지도 강제 전환 스킵 —

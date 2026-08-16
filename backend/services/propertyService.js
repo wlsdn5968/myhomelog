@@ -877,8 +877,14 @@ async function getAIRecommendations(userCondition) {
 
 // ── 정적 폴백 (API 완전 실패 시) ─────────────────────────
 function getStaticFallback(budget, region) {
+  // NOTICE-FLAG-2026-08-17 (Sprint MMMMMMM-7): 이 항목은 **단지가 아니라 안내**다.
+  //   예전엔 표식이 없어 프론트가 props.length 를 그대로 건수로 찍었고, 매칭 0건인데
+  //   헤더에 '추천 단지 1건' 이 뜨고 단지 카드 자리에 실패 안내가 들어앉았다.
+  //   (props.length 가 1이라 '검색 결과 없음' 분기도 타지 않았다.)
+  //   응답 형태를 바꾸면 기존 소비자가 깨질 수 있으므로 **식별 플래그만** 추가한다.
   return [{
     rank: 1,
+    _notice: true,
     aptName: '데이터 일시 조회 실패',
     area: `${region || '서울'} 지역에서 예산 ${budget}억 범위 거래 미발견`,
     avgPrice: budget,

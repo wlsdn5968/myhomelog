@@ -2417,3 +2417,27 @@ test('보고서 일괄 관심추가가 정식 북마크 형태를 만든다 (Spr
   assert.ok(py && py[0].includes('{minArea:15,maxArea:60}'), 'pyRange 전체 분기가 바뀌었다 — 라벨도 함께 볼 것');
   assert.ok(py[0].includes('{minArea:34,maxArea:60}'), 'pyRange 대형 분기가 바뀌었다');
 });
+
+test('매칭 0건 안내가 단지 건수로 세어지지 않는다 + 진행 문구가 실제와 맞다 (Sprint MMMMMMM-7)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const svc = fs.readFileSync(path.join(__dirname, '../services/propertyService.js'), 'utf8');
+
+  // ① 안내 항목은 단지가 아니다 — 예전엔 표식이 없어 '추천 단지 1건' 으로 세어졌다
+  const fb = svc.match(/function getStaticFallback\(budget, region\)[\s\S]*?\n\}/);
+  assert.ok(fb, 'getStaticFallback 을 찾지 못했다');
+  assert.ok(fb[0].includes('_notice: true'), '안내 항목에 식별 플래그가 없다 — 단지 건수로 세어진다');
+  assert.ok(html.includes("props.filter(p=>!p._notice).length"), '프론트가 안내 항목을 건수에서 빼지 않는다');
+  assert.equal(html.includes("textContent=props.length+'건'"), false,
+    '건수에 안내 항목이 다시 포함된다');
+
+  // ② 추천 경로에 LLM 호출이 없다 — 문구가 'AI 분석' 이면 거짓 서술이 된다
+  for (const k of ['callAI', 'anthropic', 'openai']) {
+    assert.equal(svc.includes(k), false,
+      `propertyService 에 ${k} 가 생겼다 — LLM 을 쓴다면 진행 문구도 다시 판단할 것`);
+  }
+  assert.ok(html.includes("searchStep('조건 매칭·점수 계산 중...', 3)"), '진행 문구가 사실과 다르다');
+  assert.equal(html.includes("searchStep('AI 분석·점수 계산 중...', 3)"), false,
+    '추천 진행 문구에 AI 표현이 되돌아왔다');
+});
