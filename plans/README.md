@@ -100,8 +100,11 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (한 줄 사유) | REJECTED (
   을 수정하므로 **동시에 돌리지 마라**(같은 파일 충돌). 순차로 하되 순서는 무관하다.
 - 009 는 코드 변경이 0 이고 DB 만 바꾸므로 다른 계획과 완전히 독립이다. 단 **운영자 승인 없이는
   Step 2 를 실행할 수 없다**(계획 안의 "실행 게이트" 참조).
-- 검증 공통 게이트: `cd backend && npm test`(현재 41 pass 가 baseline) +
-  `node scripts/security-regression-check.js`(현재 13패턴). 008 은 42 pass, 010 은 14패턴이 된다.
+- 검증 공통 게이트: `cd backend && npm test` + `node scripts/security-regression-check.js`.
+  ⚠ **아래 숫자는 계획 008~011 당시의 값이다(41 pass·13패턴). 지금 baseline 이 아니다** —
+  2026-08-16 감사 후속으로 **71 pass · 15패턴**까지 올라갔다(계획 012~028 + 감사 확정 4건).
+  당시 기준: 008 은 42 pass, 010 은 14패턴이 됐다. 새 계획을 쓸 때는 baseline 을 **그 시점에 실측**할 것
+  — 여기 적힌 숫자를 그대로 베끼면 낡은 값을 재생산한다.
 
 ## 2026-08-16 감사에서 발견했으나 이번에 계획화하지 않음 (백로그)
 
@@ -114,7 +117,7 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (한 줄 사유) | REJECTED (
   **프로덕션 코드 변경 0** — express 라우터 스택에서 핸들러만 꺼내 req/res 목으로 호출했다
   (결제 로직을 테스트 편의로 리팩터링하는 것이 더 위험하다는 판단).
   **회귀 주입 2건 검증**: 금액 비교 무력화 → fail 1, captured 멱등 분기 제거 → fail 1.
-  **→ 012-2(2026-08-16)로 webhook·환불까지 완료.** 총 **9건**(41→51 테스트):
+  **→ 012-2(2026-08-16)로 webhook·환불까지 완료.** 총 **9건**(42→51 테스트 — 착수 직전 baseline 은 41 이 아니라 42 였다):
   · webhook: Toss 재조회 orderId 불일치 → 400(위조 차단) · 정적 시크릿 불일치 → 401 ·
     금액 불일치라도 **terminal(captured)은 failed 로 덮지 않고 200**(Toss 재시도 중단)
   · 환불: **7일 창 경계 양쪽**(8일 → 400 + Toss 미호출 / 6일 → Toss 호출 도달) ·
@@ -242,9 +245,11 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (한 줄 사유) | REJECTED (
 2026-08-16 라운드는 이전에 미감사로 남았던 영역을 우선 다뤘다(프론트 전체 XSS 싱크·Supabase
 RLS 정책 전문·워크플로). 그럼에도 아래는 여전히 미검증이다:
 
-- **Supabase 마이그레이션의 실적용 여부**: `supabase/migrations/` 의 SECURITY DEFINER 권한 회수·
-  `search_path` 하드닝이 **파일로는 확인**됐으나 프로덕션 DB 에 실제 적용됐는지는 대조하지 않았다.
-  (`molit_transactions`·`apt_master`·`molit_apt_index` 3개만 실측 확인함.)
+- ~~**Supabase 마이그레이션의 실적용 여부**~~ → **계획 019 에서 종결(2026-08-16).**
+  27개 파일 선언 vs `pg_catalog` 실측을 전수 대조했고, **양방향으로 어긋난 것**을 찾았다
+  (overlap GIST 제약은 3개월+ 미적용 / `tg_set_updated_at` 은 파일 없이 존재). 미적용분은 적용 완료.
+  ⚠ 이 항목이 "미검증"으로 남아 있던 것은 **문서 정합 오류**였다(감사 #51 지적) — 같은 문서 안에서
+  019 는 종결을 적고 여기는 미검증을 적고 있었다.
 - **결제 실거래 경로**: `TOSS_*` 키 미설정 상태라 런타임 검증 불가 — 코드 리딩만 수행.
 - **모바일 실기기 동작**, **프론트 런타임 성능 프로파일링**.
 - 정확성 감사에서 제기된 두 건의 **실발생 이력**(Sentry/로그): 코드상 위험 메커니즘만 확인했고

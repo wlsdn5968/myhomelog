@@ -886,8 +886,8 @@ function _mockRes() {
 //   (`.eq('user_id', req.user.id)`)를 **지워도 결제 테스트 9건이 전부 초록**이었다.
 //   돈 경로에 대해 잘못된 안심을 주는 구조라, 목이 필터를 기록하고 테스트가 그걸 단언한다.
 //   `seen.updateFilters` / `seen.selectFilters` 는 [[col, val], …] 형태로 호출 순서대로 쌓인다.
-function _mockAdmin({ payRow, casRows }) {
-  const seen = { updates: [], updateFilters: [], selectFilters: [] };
+function _mockAdmin({ payRow, casRows, billingRow }) {
+  const seen = { updates: [], updateFilters: [], selectFilters: [], upserts: [], tables: [] };
   const upChain = (patch) => {
     const c = {
       eq: (col, val) => { seen.updateFilters.push([col, val]); return c; },
@@ -897,13 +897,25 @@ function _mockAdmin({ payRow, casRows }) {
     seen.updates.push(patch);
     return c;
   };
-  const sel = {
-    select: () => sel,
-    eq: (col, val) => { seen.selectFilters.push([col, val]); return sel; },
-    maybeSingle: async () => ({ data: payRow, error: null }),
-    update: upChain,
+  // UPSERT-MOCK-2026-08-16 (감사 #28): 목에 upsert 가 없어서 confirm **성공** 경로가
+  //   `admin.from(...).upsert is not a function` 으로 죽고 next(err) 로 빠졌다.
+  //   그런데 테스트가 next 를 `() => {}` 로 삼키고 res 도 안 봐서 **아무도 몰랐다** —
+  //   즉 "결제 확정이 구독 기간을 실제로 기록하는가"는 테스트 0건이었다.
+  //   테이블별로 다른 행을 돌려줘야 한다: payments 는 payRow, user_billing 은 billingRow.
+  const makeSel = (table) => {
+    const sel = {
+      select: () => sel,
+      eq: (col, val) => { seen.selectFilters.push([col, val]); return sel; },
+      maybeSingle: async () => ({ data: table === 'user_billing' ? (billingRow || null) : payRow, error: null }),
+      update: upChain,
+      upsert: async (row) => { seen.upserts.push({ table, row }); return { data: null, error: null }; },
+    };
+    return sel;
   };
-  return { client: { from: () => sel }, seen };
+  return {
+    client: { from: (table) => { seen.tables.push(table); return makeSel(table); } },
+    seen,
+  };
 }
 /** 기록된 필터에 [col, val] 조합이 있는지 (순서·중복 무관) */
 function _hasFilter(list, col, val) {
@@ -997,18 +1009,72 @@ test('billing/confirm — captured 전환은 status=requested CAS 로만 (webhoo
   });
 });
 
+// ── 감사 #28 (2026-08-16): confirm 성공의 **마지막 배선** — 구독 기간이 실제로 기록되는가 ──
+//   [왜] 결제가 승인되고 payments 가 captured 로 바뀌어도, `user_billing` 에 기간이 안 들어가면
+//   **돈은 받았는데 이용권이 안 생긴다**. 그런데 목에 upsert 가 없어 이 경로는 항상 예외로 끝났고,
+//   테스트가 next 를 삼켜서 통과했다 — 즉 이 배선은 지금까지 검증된 적이 없다.
+//   기간 **계산**(computePeriodEnd)은 Plan 004 가 경계 4케이스로 이미 고정했다. 여기서 막는 건
+//   "계산 결과가 plan·status 와 함께 user_billing 에 실제로 쓰이는가" 라는 **호출 배선**이다.
+const _confirmOk = (extra = {}) => ({
+  payRow: { order_id: 'o1', user_id: 'u1', amount: 9900, status: 'requested', plan: 'pro' },
+  casRows: [{ order_id: 'o1' }],
+  tossKey: 'test',
+  axiosImpl: { post: async () => ({ data: { orderId: 'o1', status: 'DONE', totalAmount: 9900, method: '카드', approvedAt: '2026-08-16T00:00:00Z' } }) },
+  ...extra,
+});
+
+test('billing/confirm 성공 — user_billing 에 plan·active·기간이 실제로 기록된다', async () => {
+  await _withBillingStub2(_confirmOk({ billingRow: null }), async (seen) => {
+    const res = _mockRes();
+    let nextErr = null;
+    await _billingHandler('/confirm')(
+      { body: { paymentKey: 'pk', orderId: 'o1', amount: 9900 }, user: { id: 'u1' } }, res, (e) => { nextErr = e; });
+
+    // ★ next(err) 를 삼키지 않는다 — 이걸 안 봐서 upsert 부재가 3개월 숨어 있었다
+    assert.equal(nextErr, null, `confirm 성공 경로가 에러로 빠졌다: ${nextErr && nextErr.message}`);
+    assert.equal(res.statusCode, 200);
+
+    const up = seen.upserts.find((u) => u.table === 'user_billing');
+    assert.ok(up, `user_billing upsert 가 없다 — 결제는 됐는데 이용권이 안 생긴다: ${JSON.stringify(seen.upserts)}`);
+    assert.equal(up.row.user_id, 'u1');
+    assert.equal(up.row.plan, 'pro', '결제한 플랜과 다른 플랜이 기록된다');
+    assert.equal(up.row.status, 'active');
+    assert.equal(up.row.canceled_at, null, '재결제인데 이전 해지 표시가 남는다');
+    assert.ok(up.row.current_period_end, 'current_period_end 가 비어 있다');
+  });
+});
+
+test('billing/confirm 성공 — 기존 구독이 남아 있으면 그 만료일 기준으로 이월된다', async () => {
+  // 미래 만료(2026-09-01)가 남은 상태에서 재결제 → now+30 이 아니라 기존 만료+30 이어야 한다.
+  const existingEnd = '2026-09-01T00:00:00.000Z';
+  await _withBillingStub2(_confirmOk({ billingRow: { current_period_end: existingEnd } }), async (seen) => {
+    const res = _mockRes();
+    await _billingHandler('/confirm')(
+      { body: { paymentKey: 'pk', orderId: 'o1', amount: 9900 }, user: { id: 'u1' } }, res, () => {});
+    const up = seen.upserts.find((u) => u.table === 'user_billing');
+    assert.ok(up, 'user_billing upsert 가 없다');
+    // 라우트가 쓴 값이 planService 의 단일 소스와 같은지 — 인라인 재구현으로 갈라지는 것을 막는다
+    const expected = require('../services/planService').computePeriodEnd(existingEnd, new Date()).toISOString();
+    assert.equal(up.row.current_period_end, expected,
+      `이월 계산이 planService.computePeriodEnd 와 다르다 (기존 만료 ${existingEnd} 무시 의심)`);
+    // 기존 만료보다 뒤여야 한다는 것도 못 박는다(계산식이 통째로 now 기준으로 바뀌면 여기서 걸린다)
+    assert.ok(new Date(up.row.current_period_end) > new Date(existingEnd),
+      '재결제인데 만료일이 기존보다 앞이다 — 사용자가 기간을 손해본다');
+  });
+});
+
 // ── Plan 012-2 (2026-08-16): webhook 상태 분기 + 환불 7일 창 ──────────
 //   Plan 012 는 confirm 경로만 덮었다. 결제를 켜기 전 나머지 두 축을 고정한다.
 //   webhook 은 Toss 재조회(axios)가 **사실상 서명 검증 역할**이라 axios 스텁이 필요하고,
 //   환불 7일 경계는 payRow 의 approved_at 을 조작하면 **타이머 제어 없이** 검증된다.
 //   여기서도 프로덕션 코드는 바꾸지 않는다 — 라우터 스택에서 핸들러만 꺼내 쓴다.
-async function _withBillingStub2({ payRow, casRows, tossKey, webhookSecret, axiosImpl }, fn) {
+async function _withBillingStub2({ payRow, casRows, tossKey, webhookSecret, axiosImpl, billingRow }, fn) {
   const clientPath = require.resolve('../db/client');
   const billPath = require.resolve('../routes/billing');
   const axiosPath = require.resolve('axios');
   const saved = { c: require.cache[clientPath], b: require.cache[billPath], a: require.cache[axiosPath] };
   const savedEnv = { k: process.env.TOSS_SECRET_KEY, w: process.env.TOSS_WEBHOOK_SECRET };
-  const { client, seen } = _mockAdmin({ payRow, casRows });
+  const { client, seen } = _mockAdmin({ payRow, casRows, billingRow });
   if (tossKey === undefined) delete process.env.TOSS_SECRET_KEY; else process.env.TOSS_SECRET_KEY = tossKey;
   if (webhookSecret === undefined) delete process.env.TOSS_WEBHOOK_SECRET; else process.env.TOSS_WEBHOOK_SECRET = webhookSecret;
   require.cache[clientPath] = { id: clientPath, filename: clientPath, loaded: true, exports: {
@@ -1576,6 +1642,112 @@ test('cron 라우터 배선 — authorizeCron 이 모든 엔드포인트 앞에 
   assert.ok(routeCount >= 5, `cron 라우트가 ${routeCount}개뿐 — 파일 구조가 바뀌었는지 확인할 것`);
 });
 
+// ── 감사 #2 (2026-08-16): billing 인증 **배선** 계약 ──────────────────────────
+//   [왜] 위 cron 배선 계약은 Plan 023-2 에서 만들었는데 **billing 에는 같은 방어가 없었다**.
+//   결제 테스트는 `router.stack` 에서 route 레이어의 핸들러만 꺼내 직접 호출하므로
+//   (`l.route` 가 있는 레이어만 찾는다 — `router.use` 미들웨어는 `l.route` 가 undefined)
+//   인증 게이트를 통째로 지워도 결제 테스트가 전부 초록이다. 실제로 테스트 req 에
+//   `user: { id: 'u1' }` 을 손으로 주입하는 것 자체가 게이트를 안 거친다는 증거다.
+//   ★ 특히 이 파일은 게이트(router.use)가 파일 **중간**에 있고 그 앞에 공개 라우트 2개가 있다.
+//     새 라우트를 무심코 그 위에 추가하면 무인증으로 열린다 — 그걸 여기서 막는다.
+test('billing 라우터 배선 — requireAuth 게이트가 보호 대상 라우트 앞에 있고, 그 앞은 공개 허용 라우트뿐', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../routes/billing.js'), 'utf8');
+  const lines = src.split('\n');
+
+  // 1) 게이트 존재 — router.use(...) 블록 안에서 requireAuth 를 호출한다
+  const useIdx = lines.findIndex((l) => /^\s*router\.use\(/.test(l));
+  assert.ok(useIdx >= 0, 'billing.js 에 router.use 게이트가 없다 — 결제 라우트가 무인증으로 열린다');
+  const gateBlock = lines.slice(useIdx, useIdx + 6).join('\n');
+  assert.match(gateBlock, /requireAuth\s*\(/,
+    `router.use 블록이 requireAuth 를 호출하지 않는다:\n${gateBlock}`);
+
+  // 2) webhook 예외는 **POST + 경로 끝이 /webhook** 일 때만. 조건이 느슨해지면 인증이 뚫린다.
+  //    (Toss 서버가 JWT 없이 호출하므로 이 예외 자체는 의도된 설계 — AUTH-FIX-2026-05-21)
+  assert.match(gateBlock, /req\.method\s*===\s*'POST'/,
+    'webhook 예외에 method 조건이 없다 — GET 으로도 인증을 우회할 수 있다');
+  assert.match(gateBlock, /req\.path\.endsWith\('\/webhook'\)/,
+    "webhook 예외가 endsWith('/webhook') 가 아니다 — 경로 조건이 느슨하면 다른 라우트도 열린다");
+
+  // 3) 게이트보다 **앞에** 정의된 라우트는 공개가 의도된 것만이어야 한다.
+  //    새 라우트를 위쪽에 추가하면 조용히 무인증이 되므로 허용 목록으로 못 박는다.
+  const PUBLIC_OK = ['/config', '/plans'];
+  const routeRe = /^\s*router\.(get|post|put|patch|delete)\s*\(\s*'([^']+)'/;
+  const before = [];
+  const after = [];
+  lines.forEach((l, i) => {
+    const m = l.match(routeRe);
+    if (!m) return;
+    (i < useIdx ? before : after).push(m[2]);
+  });
+  assert.ok(after.length >= 4, `게이트 뒤 라우트가 ${after.length}개뿐 — 파일 구조가 바뀌었는지 확인할 것`);
+  const unexpected = before.filter((p) => !PUBLIC_OK.includes(p));
+  assert.deepEqual(unexpected, [],
+    `인증 게이트보다 앞에 있는 비공개 라우트: ${JSON.stringify(unexpected)} — 무인증으로 열려 있다. `
+    + `공개가 맞다면 PUBLIC_OK 에 근거와 함께 추가할 것 (현재 허용: ${JSON.stringify(PUBLIC_OK)})`);
+
+  // 4) 돈이 움직이는 라우트는 반드시 게이트 뒤에 있어야 한다
+  for (const p of ['/confirm', '/cancel', '/checkout']) {
+    assert.ok(after.includes(p), `${p} 가 인증 게이트 뒤에 없다 — 결제 경로가 무인증이다`);
+  }
+});
+
+// ── 감사 #26 (2026-08-16): 취득세 **6억 초과 ~ 9억 이하 누진 구간**의 사본 3개 계약 ──────
+//   [왜] 기존 프론트↔백엔드 대조는 5·6·10억만 본다. 그 사이 누진 구간은 대조에서 빠져 있었고,
+//   그 구간의 계산식은 **세 곳에 복제**돼 있다:
+//     ① frontend/index.html  calcTotalCostHTML  (비용 계산기)
+//     ② frontend/index.html  매물 카드 acqTax1H (단지 카드)
+//     ③ backend/services/analysisService.js     (보고서)
+//   백엔드(③)는 이미 세율 단언 3건으로 고정돼 있지만 **프론트 2개는 단언이 하나도 없어**,
+//   계수를 바꿔도(예: 2/3 → 1/2) 전 테스트가 초록이었다. 6억 초과 구간은 세액이 수백만원 단위로
+//   갈리는 구간이라 사본이 갈리면 곧바로 화면의 돈이 틀린다.
+//   근거: 지방세법 §11①8호 — 6억 초과 9억 이하 주택 취득세율 = (취득가액[억] × 2/3 − 3) %
+test('취득세 누진 구간(6억 초과~9억 이하) — 프론트 2사본·백엔드가 모두 같은 법정식', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const feSrc = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const beSrc = fs.readFileSync(path.join(__dirname, '../services/analysisService.js'), 'utf8');
+
+  // 공백만 제거해 정규화 — `2/3` 과 `2 / 3` 을 같은 식으로 본다
+  const norm = (s) => s.replace(/\s+/g, '');
+  // 세 사본에서 "(<변수>*2/3-3)/100" 형태를 뽑는다. 변수명은 사본마다 다르다(price/market).
+  const RE = /\(\s*(\w+)\s*\*\s*2\s*\/\s*3\s*-\s*3\s*\)\s*\/\s*100/g;
+
+  const feHits = [...feSrc.matchAll(RE)];
+  const beHits = [...beSrc.matchAll(RE)];
+  assert.equal(feHits.length, 2,
+    `프론트의 누진식 사본이 2개가 아니다(${feHits.length}개) — 사본이 늘거나 식이 바뀌었다. `
+    + '늘었다면 이 테스트도 함께 갱신할 것');
+  assert.equal(beHits.length, 1, `백엔드 누진식이 1개가 아니다(${beHits.length}개)`);
+
+  // 변수명을 통일해 비교 → 계수(2/3, -3, /100) 중 하나라도 다르면 여기서 걸린다
+  const shape = (m) => norm(m[0]).replace(m[1], 'X');
+  const shapes = [...feHits, ...beHits].map(shape);
+  assert.deepEqual([...new Set(shapes)], ['(X*2/3-3)/100'],
+    `누진식 사본이 서로 다르다: ${JSON.stringify(shapes)}`);
+
+  // 구간 경계도 사본마다 같아야 한다 — 프론트 계산기·백엔드는 `price > 6 && price <= 9`
+  const boundRe = /(\w+)\s*>\s*6\s*&&\s*\1\s*<=\s*9/g;
+  assert.equal([...feSrc.matchAll(boundRe)].length + [...beSrc.matchAll(boundRe)].length, 2,
+    '누진 구간 경계(> 6 && <= 9)가 프론트 계산기·백엔드 양쪽에 있지 않다');
+
+  // 실제 값 대조 — 백엔드가 법정식과 같은 세율을 내는지 (프론트는 위에서 식 동일성으로 묶었다)
+  //   ⚠ `taxRate` 는 원시 비율이 아니라 **표시용으로 소수 1자리 반올림**된 값이다
+  //     (analysisService.js: `Math.round(rate * 1000) / 10`). 기대값도 같은 반올림을 거쳐야 한다.
+  //     이걸 모르고 원시값과 비교했다가 6.5억에서 1.3 vs 1.3333 으로 어긋났다.
+  const { calcTotalCost } = require('../services/analysisService');
+  for (const p of [6.5, 7, 8, 9]) {
+    const expected = Math.round((p * 2 / 3 - 3) * 10) / 10;   // % 단위, 표시 반올림 반영
+    const got = calcTotalCost(p, 3, '무주택', false).taxRate;
+    assert.equal(got, expected,
+      `${p}억 취득세율이 법정식과 다르다: got=${got} expected=${expected} (지방세법 §11①8호)`);
+  }
+  // 경계 바로 밖은 누진이 아니라 평탄값이어야 한다 (구간이 새어나가지 않는지)
+  assert.equal(calcTotalCost(6, 3, '무주택', false).taxRate, 1, '6억 이하는 1% 평탄이어야 한다');
+  assert.equal(calcTotalCost(10, 3, '무주택', false).taxRate, 3, '9억 초과는 3% 평탄이어야 한다');
+});
+
 // ── Plan 015 (2026-08-16): cron 인증 게이트 (`backend/routes/cron.js` authorizeCron) ──
 //   왜 추가하나: `router.use(authorizeCron)` 하나가 **모든 cron 엔드포인트의 유일한 방어선**이다.
 //   그 뒤에는 실거래 재적재·apt_master 동기화·retention hard delete(복구 불가 삭제)가 있다.
@@ -1655,15 +1827,18 @@ test('authorizeCron — cron 게이트: 시크릿 미설정 차단 + 헤더 조�
 //   ③ 그리고 이것 — 규제지역 판정이 `_regLtvLabel`(lawdCd 우선)과 `isRegFront`(문자열 전용)로
 //   갈려 있었다. 매번 "고친 뒤 다른 경로를 grep 한다"에 의존했으니 이번엔 **테스트로 묶는다.**
 //
-//   [실측 영향 범위] transactionService.LAWD_CODES 전수 대조 결과 두 함수가 갈리는 곳은
-//   **정확히 1곳**: 부산 강서구(26440) — SEOUL_GU_KW 의 '강서' 에 부분일치한다.
-//   같은 상세 모달에서 LTV 는 "70%(비규제)", 세금 시뮬레이션은 조정지역 중과(2주택 8%),
-//   특약·리스크는 "규제지역 6개월 전입 의무" 로 **서로 모순되는 사실**이 동시에 표시됐다.
+//   [실측 영향 범위] ⚠ 최초에 "전수 대조 결과 **정확히 1곳**(부산 강서구)" 이라고 적었는데
+//   **그 주장이 거짓이었다.** 실제로는 2곳이다 — 부산 강서구(26440, SEOUL_GU_KW 의 '강서' 부분일치)와
+//   **서울 중구(11140)**. 중구는 강서구를 고친 뒤 반대 방향으로 갈려(취득세 중과 누락) 남아 있었다.
+//   증상은 같은 상세 모달에서 LTV "70%(비규제)" · 세금 조정지역 중과 · 특약 "규제지역 6개월 전입"이
+//   **동시에** 표시되는 모순이었다.
+//   ★ 교훈: 그때 계약 테스트는 **초록이었는데 프로덕션이 갈렸다** — 케이스를 손으로 골라 중구를
+//   빠뜨렸기 때문이다. 그래서 아래 서울 전수 테스트는 케이스를 `LAWD_CODES` 에서 **파생**시킨다.
+//   "손으로 고른 목록"으로 영향 범위를 단정하지 말 것.
 //
-//   ⚠ 이 테스트가 **덮지 않는** 것(정직한 한계): `_regLtvLabel` 은 lawd_cd 가 11 이면
-//   스냅샷의 `seoulRegulated` 를 보지 않고 무조건 '40%' 를 돌려준다(SEOUL-JUNGGU-FIX-2026-07-25).
-//   그래서 서울이 규제 해제되어 스냅샷이 갱신되는 날에는 두 함수가 다시 갈린다.
-//   아래는 **현재 상태(서울 전 지역 규제)** 만 고정한다 — 해제 시 대응은 운영자 판단 사항으로 보고했다.
+//   [해소됨 2026-08-16] 이전 주석은 "서울이 규제 해제되면 두 함수가 다시 갈린다 — 운영자 판단으로
+//   보고했다" 로 끝났는데, 그건 계획 018·022 에서 **이미 해결됐다**: 두 함수 모두 스냅샷의
+//   `seoulRegulated` 를 따르고, 아래 '서울 규제 해제 시나리오' 테스트가 그 축을 고정한다.
 function _regPairFns(regKw) {
   const fs = require('node:fs');
   const path = require('node:path');
