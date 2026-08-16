@@ -193,15 +193,26 @@ jobs:
           fetch-depth: 0  # gitleaks 가 과거 커밋까지 스캔
 
       - name: Run gitleaks
-        # SUPPLY-CHAIN-2026-08-16: 가변 태그(@v2) → **커밋 SHA 고정**.
+        # SUPPLY-CHAIN-2026-08-16: 가변 태그 → **커밋 SHA 고정**.
         #   태그는 언제든 다른 커밋을 가리키도록 옮길 수 있어, 서드파티 저장소가 탈취되면
         #   우리 워크플로가 조용히 새 코드를 실행한다. 이 액션은 GITHUB_TOKEN 을 받고
         #   fetch-depth:0 로 받은 **전체 커밋 히스토리**를 읽으므로 우선 고정 대상이다.
-        #   ff98106 = v2 (annotated tag → commit, 2025-04-17) 를 `gh api` 로 해석해 확인함.
+        #
+        # GITLEAKS-V3-2026-08-16: v2 SHA 고정 직후 **v2 에 시한이 있다는 사실을 확인**해 v3 으로 올렸다.
+        #   [근거 — 업스트림 v3.0.0 릴리스 노트 원문 확인]
+        #     · 2026-06-02: GitHub 러너 기본이 Node 24 로 전환 → v2(node20)는
+        #       `ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION=true` 가 있어야만 동작
+        #     · **2026-09-16: Node 20 이 러너에서 제거 → v2 는 어떤 우회 플래그로도 동작 중단**
+        #   즉 v2 에 SHA 를 고정해두면 한 달 뒤 Secret Scan 이 죽는다 — 공급망 조치가
+        #   오히려 시한폭탄을 굳히는 셈이었다.
+        #   [변경 범위] 업스트림 명시: "No changes to inputs, outputs, or behavior."
+        #     action.yml 의 `using: node20` → `node24` 와 @actions/core 갱신이 전부다(실측 확인).
+        #   e0c47f4 = v3·v3.0.0 두 태그가 같이 가리키는 커밋("chore: migrate to Node 24 runtime (v3)",
+        #     2026-05-30). `gh api` 로 태그→커밋 해석 + action.yml 의 `using: "node24"` 직접 확인.
         #   ⚠ dependabot(github-actions, weekly)이 SHA 핀도 갱신하므로 수동 추적 불필요.
-        #   ⚠ actions/checkout·setup-node 는 GitHub 1st-party 라 이번에 고정하지 않았다
+        #   ⚠ actions/checkout·setup-node 는 GitHub 1st-party 라 아직 고정하지 않았다
         #     (plans/README 백로그에 기록). 필요해지면 같은 방식으로 고정할 것.
-        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # 개인/팀 무료 사용 — 라이선스 키 불필요
