@@ -195,4 +195,6 @@ async function run() {
   };
 }
 
-module.exports = { run, parseRss, RSS_SOURCES };
+// LOOK_BACK_DAYS 도 export — regulationsAiCheck 가 사용자 노출 문구("최근 N일")에 쓴다.
+//   상수를 복제하면 한쪽만 바뀌어 문구가 거짓이 되므로 여기가 단일 출처.
+module.exports = { run, parseRss, RSS_SOURCES, LOOK_BACK_DAYS };

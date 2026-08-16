@@ -83,6 +83,15 @@ const CHECKS = [
     re: /callAI/,
   },
   {
+    // REG-ZERO-COST-2026-08-16 (Sprint LLLLLLL — Sentry NODE-7): 규제 감시 cron 이 매일 Anthropic
+    //   유료 호출을 시도해 29일간 100% 실패(크레딧 0)하며 매일 error 이슈를 만들었다. 룰베이스로
+    //   전환했고, 되돌아오면 **운영자 모르게 다시 과금이 시작되는 경로**라 CI 로 차단한다.
+    //   (cron 은 사용자 트리거가 아니라 자동 실행이므로 재유입을 알아채기가 특히 어렵다.)
+    name: 'regulationsAiCheck.js 에 callAI(LLM 유료 호출) 재유입 — 규제 감시 cron 은 룰베이스(비용 0)여야 함',
+    file: 'backend/jobs/regulationsAiCheck.js',
+    re: /callAI/,
+  },
+  {
     // 챗 응답은 반드시 데이터 라우터를 거쳐야 함 (존재 확인) — 라우터 우회 직접 응답 생성 회귀 차단
     name: 'chat.js 데이터 라우터(chatDataRouter) 연결 부재 — 룰베이스 경로가 제거됨',
     file: 'backend/routes/chat.js',

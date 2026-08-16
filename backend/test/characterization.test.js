@@ -594,3 +594,44 @@ test('chatDataRouter — 관심단지(watch) 인텐트 + 보고서 퍼널 이동
   const { suggestions } = await route('5억 대출 한도', null);
   assert.ok(suggestions.some(s => s && typeof s === 'object' && s.view === 'report'), '보고서 이동 칩 부재');
 });
+
+test('규제 감시 — 룰베이스 대조는 SQL·confidence 를 만들지 않는다 (REG-ZERO-COST, Sentry NODE-7)', async () => {
+  const { analyzeRegulations } = require('../jobs/regulationsAiCheck');
+  const snap = [
+    { key: 'acquisition_tax_2025', note: '취득세 스냅샷' },
+    { key: 'housing_loan_2025', note: '주담대 스냅샷' },
+  ];
+  const src = (name, matched) => ({ name, matched });
+
+  // ① 매칭 항목 0건 → 확인 필요 0, topAlert 없음
+  const none = await analyzeRegulations([src('국세청', [])], snap);
+  assert.equal(none.reviewNeededCount, 0);
+  assert.equal(none.topAlert, null);
+
+  // ② 취득세 보도자료는 취득세 key 에만 붙는다 (주제 키워드 분리 — 전 key 무차별 매칭 회귀 차단)
+  const tax = await analyzeRegulations([src('국세청', [
+    { title: '2026년 취득세 중과 개편 방안', link: 'https://korea.kr/x', pubDate: new Date('2026-08-14'), hits: ['취득세', '중과'] },
+  ])], snap);
+  const byKey = Object.fromEntries(tax.analysis.map(a => [a.key, a]));
+  assert.equal(byKey.acquisition_tax_2025.evidenceCount, 1);
+  assert.equal(byKey.housing_loan_2025.evidenceCount, 0);
+  assert.equal(byKey.acquisition_tax_2025.reviewNeeded, true);
+
+  // ③ 환각 차단 계약: 어떤 경우에도 proposedSQL·confidence 를 지어내지 않고, '변경'을 단정하지 않는다.
+  //    (종전 AI 판정은 confidence≥90 이면 UPDATE 문까지 생성했다 — 되살리면 이 테스트가 깨진다.)
+  for (const a of tax.analysis) {
+    assert.equal(a.proposedSQL, null, `proposedSQL 자동 생성 부활: ${a.key}`);
+    assert.equal(a.confidence, null, `confidence 점수 조작 부활: ${a.key}`);
+    assert.equal(a.changeDetected, false, `룰베이스가 변경을 단정: ${a.key}`);
+  }
+  assert.ok(/변경 확정 아님/.test(tax.topAlert), 'topAlert 가 변경을 단정하는 문구로 회귀');
+});
+
+test('규제 감시 — 주제 키워드 미정의 key 는 누락이 아니라 과보고로 실패한다 (REG-ZERO-COST)', async () => {
+  const { analyzeRegulations } = require('../jobs/regulationsAiCheck');
+  const r = await analyzeRegulations([{ name: '금융위원회', matched: [
+    { title: '주택담보대출 LTV 규제 조정', link: 'https://fsc.go.kr/y', pubDate: new Date('2026-08-15'), hits: ['LTV'] },
+  ] }], [{ key: 'brand_new_key_2027', note: '미정의 키' }]);
+  assert.equal(r.analysis[0].evidenceCount, 1, '미정의 key 가 조용히 0건으로 떨어짐');
+  assert.ok(/미정의 key/.test(r.analysis[0].reasoning));
+});

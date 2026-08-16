@@ -110,7 +110,25 @@ router.get('/apt', async (req, res) => {
       admin.from('apt_master').select(_masterSel).ilike('apt_name', `%${qApt}%`).limit(limit * 5), // 접미사 정규화명
       admin.from('apt_master').select(_masterSel).ilike('umd_nm', `%${q}%`).limit(limit * 5),      // 동명은 원본
     ]);
-    if (molitRes.error) throw molitRes.error;
+    // SEARCH-DEGRADE-2026-08-16 (Sprint LLLLLLL — Sentry NODE-5): molit 조회 실패를 500 으로 올리던 것을
+    //   apt_master-only 강등으로 교체 — 바로 아래 "apt_master 실패 → molit only" 폴백과 대칭.
+    //   실측 근거(EXPLAIN ANALYZE, 2026-08-16 · 339,958행):
+    //     · `apt_name ILIKE '%2글자%' ORDER BY deal_date DESC LIMIT 300` = 병렬 Seq Scan, 웜 1,272ms
+    //     · enable_seqscan=off 로 GIN trgm 강제 시 1,808ms (Bitmap Index Scan 이 362,429행 후보를 뱉고
+    //       Recheck 에서 323,914행을 버림) → **인덱스로는 줄일 수 없는 본질 비용**. 새 인덱스 제안 금지.
+    //     · anon 역할 statement_timeout = 3s → 콜드 버퍼/동시부하에서 초과 시 pg 57014.
+    //   같은 검색어의 apt_master 경로는 313ms 라, molit 이 죽어도 결과를 돌려줄 수 있다.
+    let molitRows = molitRes.data || [];
+    const _molitErr = molitRes.error || null;
+    if (_molitErr) {
+      molitRows = [];
+      logger.warn({ err: _molitErr.message, code: _molitErr.code, q }, 'molit 검색 실패 — apt_master only 로 강등');
+      // 57014(statement timeout)는 위 EXPLAIN 으로 원인이 확정된 기지 사항 → Sentry 노이즈만 만든다.
+      //   그 외 오류(권한·스키마 드리프트 등)는 조용히 강등되면 안 되므로 그대로 캡처.
+      if (!/statement timeout|57014/i.test(`${_molitErr.code || ''} ${_molitErr.message || ''}`)) {
+        captureRouteError(_molitErr, 'search/apt-molit');
+      }
+    }
     // 두 쿼리 결과 병합 (기존 .or() 와 동일 집합·동일 상한) + 중복 제거
     let masterRes;
     if (masterNameRes.error && masterUmdRes.error) {
@@ -130,6 +148,10 @@ router.get('/apt', async (req, res) => {
       // apt_master 미존재/접근 실패는 fallback (molit 만 사용)
       logger.warn({ err: masterRes.error.message }, 'apt_master 조회 실패 — molit only');
     }
+    // 두 출처가 **동시에** 죽으면 돌려줄 데이터가 없다 → 빈 배열로 위장하지 말고 정직하게 500.
+    if (_molitErr && masterRes.error) throw _molitErr;
+    // 한쪽만 죽은 응답은 불완전 → 캐시에 굳히면 안 된다(서버 10분 + CDN s-maxage 600 은 전 사용자 공유).
+    const _degraded = !!(_molitErr || masterRes.error);
 
     // NAME-MERGE-2026-05-12 (Sprint S — 운영자 발견 + 3-source cross-check [VERIFIED]):
     //   MOLIT 가 한 단지를 동/letter/층 suffix 로 분리 신고 → dropdown 에 같은 단지 2+ row.
@@ -147,7 +169,7 @@ router.get('/apt', async (req, res) => {
     //     - aptSeq: 거래 가장 많은 row 의 apt_seq (KAPT 직접 호출 대표값)
     //     - aliasNames: 합쳐진 원본 raw 이름들 (운영자 디버깅 + frontend 거래 fetch 시 base 매칭 보강용)
     const aptMap = new Map(); // mergeKey → group state
-    for (const row of (molitRes.data || [])) {
+    for (const row of molitRows) {
       const base = baseAptName(row.apt_name) || normalizeAptName(row.apt_name) || row.apt_name;
       const mergeKey = `${base}|${row.sigungu}|${row.umd_nm}|${row.build_year || ''}`;
       const cur = aptMap.get(mergeKey);
@@ -322,8 +344,14 @@ router.get('/apt', async (req, res) => {
     out.sort((a, b) => (_qRank(a.aptName) - _qRank(b.aptName)) || ((b.dealCount || 0) - (a.dealCount || 0)));
 
     const payload = { results: out, query: q };
-    cache.set(sck, payload, 600); // 10분 — molit 데이터는 daily cron 갱신
-    res.set('Cache-Control', SEARCH_CDN);
+    if (_degraded) {
+      // 강등 응답은 서버 캐시·CDN 어디에도 굳히지 않는다 — 3초 타임아웃 한 번이 10분(+SWR 1시간)
+      //   동안 전 사용자에게 반쪽 결과를 고정시키는 것을 막는다. 다음 요청이 정상 경로를 다시 탄다.
+      res.set('Cache-Control', 'no-store');
+    } else {
+      cache.set(sck, payload, 600); // 10분 — molit 데이터는 daily cron 갱신
+      res.set('Cache-Control', SEARCH_CDN);
+    }
     res.json(payload);
   } catch (e) {
     logger.warn({ err: e.message, q }, '단지 검색 실패');
@@ -384,6 +412,16 @@ router.get('/popular', async (req, res) => {
     return res.json(payload);
   } catch (e) {
     logger.warn({ err: e.message }, '인기 단지 조회 실패');
+    // POPULAR-STALE-2026-08-16 (Sprint LLLLLLL — Sentry NODE-9 statement timeout 8건):
+    //   라이브 집계가 죽어도 만료 스냅샷(최대 7일)이 있으면 그걸 준다 — 프론트는 !r.ok 를
+    //   조용히 return 해서 **빈 지도**가 되는데, 60일 거래량 랭킹은 며칠 묵어도 유효하다.
+    //   stale 표기를 payload 에 남겨 위장하지 않는다. 캐시는 2분만(다음 요청이 정상 경로 재시도).
+    const stale = await readPopularSnapshot(limit, 7 * 24 * 60 * 60 * 1000).catch(() => null);
+    if (stale && stale.length) {
+      logger.warn({ count: stale.length }, '인기 단지 — 만료 스냅샷 폴백');
+      res.set('Cache-Control', 'public, max-age=0, s-maxage=120');
+      return res.json({ results: stale, stale: true });
+    }
     captureRouteError(e, 'search/popular');
     res.status(500).json({ error: '조회 실패' });
   }

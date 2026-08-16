@@ -159,7 +159,10 @@ async function buildPopularResults(limit = 12) {
  * 스냅샷 읽기 — 신선(36h 이내)하고 limit 충족 시 results 반환, 아니면 null.
  * 테이블 미생성/조회 실패는 조용히 null (라이브 경로 fallback).
  */
-async function readPopularSnapshot(limit = 12) {
+// POPULAR-STALE-2026-08-16 (Sprint LLLLLLL — Sentry NODE-9): maxAgeMs 파라미터 추가.
+//   기본값은 종전과 동일(36h)이라 정상 경로 동작 불변. 라이브 집계가 statement timeout 으로
+//   죽었을 때만 호출부가 더 긴 age 를 넘겨 "만료된 스냅샷"을 최후 폴백으로 쓴다(빈 지도 방지).
+async function readPopularSnapshot(limit = 12, maxAgeMs = SNAPSHOT_MAX_AGE_MS) {
   try {
     const admin = anonClient();
     if (!admin) return null;
@@ -170,7 +173,7 @@ async function readPopularSnapshot(limit = 12) {
       .maybeSingle();
     if (error || !data || !Array.isArray(data.payload)) return null;
     const age = Date.now() - new Date(data.computed_at).getTime();
-    if (!(age >= 0 && age < SNAPSHOT_MAX_AGE_MS)) return null;
+    if (!(age >= 0 && age < maxAgeMs)) return null;
     if (data.payload.length < Math.min(limit, SNAPSHOT_SIZE)) return null;
     return data.payload.slice(0, limit);
   } catch (_) { return null; }

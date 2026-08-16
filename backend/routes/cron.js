@@ -248,7 +248,7 @@ async function handleRegulationsAutoFetch(req, res) {
     logger.info({
       durationMs: Date.now() - started,
       totalMatched: result.rssResults.totalMatched,
-      aiHighConfidence: result.aiResults.highConfidenceCount,
+      reviewNeeded: result.aiResults.reviewNeededCount,
     }, 'cron/regulations-auto-fetch OK');
     res.json({ ok: true, ...result });
   } catch (e) {
