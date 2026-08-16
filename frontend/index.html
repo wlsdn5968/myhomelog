@@ -708,6 +708,16 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .pop-marker:hover{transform:translate(-50%,-100%) scale(1.07);z-index:20}
 /* POPULAR-QUALITY-2026-07-11 (Sprint GGGG): 앰버 도트 → 순위 숫자 뱃지 (기준 가시화) */
 .pop-marker .pop-rank{display:inline-flex;align-items:center;justify-content:center;min-width:14px;height:14px;border-radius:50%;background:#E8943A;color:#fff;font-size:9px;font-weight:800;padding:0 2px;flex:none}
+/* MARKER-DECLUTTER-2026-08-16 (Sprint LLLLLLL): 모바일 실측 — 375px 화면에서 라벨 폭 110~158px
+   (최대 화면의 42%), 겹침 6쌍 / 최악 96% → 아래 마커가 완전히 가려져 클릭조차 불가했다.
+   3단계로 푼다: ① 이름 폭 상한(생략부호) ② 겹치면 순위 뱃지만 남기는 축약(pm-mini)
+   ③ 축약해도 겹치면 숨기고 승자에 "+N" 표기(pm-hidden). 줌인하면 좌표가 벌어져 자동 복귀. */
+.pop-marker .pop-nm{display:inline-block;max-width:160px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
+.pop-marker.pm-mini{padding:4px 6px;gap:0}
+.pop-marker.pm-mini .pop-nm{display:none}
+.pop-marker.pm-hidden{display:none!important}
+.pop-marker[data-more]::after{content:"+" attr(data-more);margin-left:4px;font-size:9px;font-weight:800;color:#fff;background:#98A2B3;border-radius:999px;padding:1px 5px}
+@media (max-width:520px){ .pop-marker .pop-nm{max-width:96px} }
 
 /* 인포윈도우 */
 /* Phase 4-3 후 sprint C-2 P3 (2026-05-05): 마커 팝업 디자인 시스템 풀 적용 */
@@ -9657,7 +9667,10 @@ async function loadPopularMarkers() {
             map: mapObj,
             title: p.aptName,
             icon: {
-              content: `<div class="pop-marker"><span class="pop-rank">${_rank}</span>${_escHtml(_disp).slice(0,12)}</div>`,
+              // 이름은 .pop-nm 로 감싼다 — declutter 축약(pm-mini)이 이름만 숨길 수 있어야 한다.
+              //   slice 를 escape **앞**으로: 종전 `_escHtml(x).slice(0,12)` 는 이름에 & < > 가 있으면
+              //   `&amp;` 같은 엔티티 중간을 잘라 깨진 문자를 만들 수 있었다(순서만 교정, 표시 동일).
+              content: `<div class="pop-marker"><span class="pop-rank">${_rank}</span><span class="pop-nm">${_escHtml(_disp.slice(0,12))}</span></div>`,
               anchor: new naver.maps.Point(0, 0),
             },
           });
@@ -9683,7 +9696,7 @@ async function loadPopularMarkers() {
             title: p.aptName,
             icon: L.divIcon({
               className: '',
-              html: `<div class="pop-marker"><span class="pop-rank">${_rank}</span>${_escHtml(_disp).slice(0,12)}</div>`,
+              html: `<div class="pop-marker"><span class="pop-rank">${_rank}</span><span class="pop-nm">${_escHtml(_disp.slice(0,12))}</span></div>`,
               iconAnchor: [0, 0],
             }),
           });
@@ -9733,6 +9746,28 @@ async function loadPopularMarkers() {
         }
       }
     } catch(_) {}
+    // MARKER-DECLUTTER-2026-08-16: 최초 1회 + 지도 이동/줌/리사이즈마다 라벨 겹침 재정리.
+    //   Naver 는 'idle'(팬·줌 종료), Leaflet 은 moveend/zoomend. 리스너는 1회만 건다.
+    try {
+      scheduleDeclutter();
+      if (!window._declutterHooked) {
+        window._declutterHooked = true;
+        if (isNaver) {
+          naver.maps.Event.addListener(mapObj, 'idle', scheduleDeclutter);
+        } else if (mapObj.on) {
+          mapObj.on('moveend', scheduleDeclutter);
+          mapObj.on('zoomend', scheduleDeclutter);
+        }
+        window.addEventListener('resize', scheduleDeclutter, { passive: true });
+        // 모바일 실측: 마커는 **지도 탭이 숨겨진 동안**(랜딩 화면) 이미 생성된다 → 폭 0 이라
+        //   최초 declutter 가 아무것도 못 한다. 탭 전환으로 #mapEl 이 0→실측폭이 되는 순간을
+        //   ResizeObserver 로 잡는다(뷰 전환 함수 sv() 에 손대지 않아 결합도 0).
+        const _mapEl = document.getElementById('mapEl');
+        if (_mapEl && window.ResizeObserver) {
+          new ResizeObserver(scheduleDeclutter).observe(_mapEl);
+        }
+      }
+    } catch(_) {}
   } catch(_) {
     _popularMarkersLoaded = false;
     _popularMarkersFailedAt = Date.now(); /* 5분 backoff */
@@ -9743,6 +9778,48 @@ async function loadPopularMarkers() {
       setTimeout(() => { _popularMarkersFailedAt = 0; loadPopularMarkers(); }, 30000);
     }
   }
+}
+
+// ── MARKER-DECLUTTER-2026-08-16 (Sprint LLLLLLL): 인기 마커 라벨 겹침 해소 ──
+// 모바일 실측(375×698, 프로덕션 c71983a): 라벨 폭 110~158px, 겹친 쌍 6 / 최악 96% —
+//   96% 가려진 마커는 보이지도 클릭되지도 않았다(정보가 있는데 도달 불가).
+// 알고리즘: 순위 오름차순(1위 우선)으로 배치하며 이미 놓인 라벨과 겹치면
+//   ① 축약(pm-mini — 순위 뱃지만) → ② 그래도 겹치면 숨김(pm-hidden)하고 가린 쪽에 "+N".
+//   숨김은 은폐가 아니다 — "+N" 으로 존재를 알리고, 줌인하면 좌표가 벌어져 자동 복귀한다.
+// 같은 실측 스크립트 재측정 결과: 겹친 쌍 6 → **0**, 표시 10/12(전체라벨 7·축약 3), "+2" 1개.
+function declutterPopMarkers() {
+  try {
+    const els = Array.prototype.slice.call(document.querySelectorAll('.pop-marker'));
+    if (!els.length) return;
+    els.forEach(e => { e.classList.remove('pm-mini', 'pm-hidden'); e.removeAttribute('data-more'); });
+    const items = els
+      .map(e => ({ e, rank: parseInt((e.querySelector('.pop-rank') || {}).textContent || '99', 10) || 99 }))
+      // 폭 0 = 지도 탭이 아직 숨김이거나 아직 레이아웃 전 → 이번 회차 대상 아님
+      .filter(o => o.e.getBoundingClientRect().width > 0)
+      .sort((a, b) => a.rank - b.rank);
+    const placed = [];
+    const findHit = (r) => placed.find(p =>
+      Math.min(p.r.right, r.right) - Math.max(p.r.left, r.left) > 0 &&
+      Math.min(p.r.bottom, r.bottom) - Math.max(p.r.top, r.top) > 0);
+    for (const o of items) {
+      let r = o.e.getBoundingClientRect();
+      if (findHit(r)) { o.e.classList.add('pm-mini'); r = o.e.getBoundingClientRect(); }
+      const still = findHit(r);
+      if (still) {
+        o.e.classList.add('pm-hidden');
+        still.more = (still.more || 0) + 1;
+        still.el.setAttribute('data-more', String(still.more));
+        continue;
+      }
+      placed.push({ r, el: o.e, more: 0 });
+    }
+  } catch (_) { /* 라벨 정리는 부가 기능 — 실패해도 지도는 그대로 */ }
+}
+// 팬·줌·리사이즈마다 재계산 (rAF 병합 — idle 이 연속 발화해도 프레임당 1회)
+let _declutterRaf = 0;
+function scheduleDeclutter() {
+  if (_declutterRaf) return;
+  _declutterRaf = requestAnimationFrame(() => { _declutterRaf = 0; declutterPopMarkers(); });
 }
 
 // ── 헤더 단지·동명 검색 (P0 Phase 2 시나리오 A) ───────────
