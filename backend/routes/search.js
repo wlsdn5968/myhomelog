@@ -105,6 +105,9 @@ function computeDegrade(molitErr, masterNameErr, masterUmdErr) {
 //     2.5s 에 먼저 끊으면 (a) 사용자 대기가 짧아지고 (b) DB 가 죽은 쿼리에 CPU 를 덜 쓴다.
 //     2.5s 근거 = 웜 실비용 917ms + PostgREST/네트워크 오버헤드의 약 2배 여유, statement_timeout 3s 보다 앞.
 const MOLIT_ABORT_MS = 2500;
+// ENRICH-ABORT-2026-08-16 (Sprint SSSSSSS): master 결과의 buildYear 보충 조회 상한.
+//   본 쿼리(2.5s)보다 **짧아야** 전체 응답을 늘리지 않는다. 실측 428ms 의 약 2배 여유.
+const ENRICH_ABORT_MS = 1000;
 
 // postgrest-js 의 abort 처리 — dist/index.cjs 실물 확인 결과(추측 아님):
 //   · 재시도 루프 안(270행)에서는 AbortError/ABORT_ERR 를 rethrow 하지만,
@@ -410,13 +413,24 @@ router.get('/apt', async (req, res) => {
         if (!groups[gk]) groups[gk] = { lawdCd: r.lawdCd, umdNm: r.umdNm, items: [] };
         groups[gk].items.push(r);
       }
+      const _tEnrich = Date.now();
       await Promise.all(Object.values(groups).map(async g => {
-        const { data: txs } = await admin
+        // ENRICH-ABORT-2026-08-16 (Sprint SSSSSSS): 이 보충 조회에 1s 상한.
+        //   [실측] `lawd_cd=41171 AND umd_nm='안양동'` → **428ms**(TIMING OFF). 인덱스는 있으나
+        //   BitmapAnd(umd_nm trgm + lawd_date) 후 1,783행 heap 접근 + top-N 정렬이라 싸지 않다.
+        //   그리고 이건 **그룹마다** 돈다.
+        //   [악순환] molit 본 쿼리가 느려 강등되면 → 결과가 master 위주가 되고 → buildYear 가 빈 행이
+        //   늘어 → 이 보충 조회가 **더 많이** 돈다. 느릴수록 더 느려지는 구조였다.
+        //   [근거] 이건 표시용 **부가 정보**다(없으면 종전처럼 '?년'). 검색 결과 자체는 이미 확정돼
+        //   있으므로 빨리 포기하는 편이 낫다 — 실패는 아래 `if (!txs?.length) return;` 이 이미 흡수한다.
+        //   1s = 실측 428ms 의 약 2배 여유. 본 쿼리(2.5s)보다 짧아야 전체 응답을 늘리지 않는다.
+        const { data: txs } = await _softQuery(admin
           .from('molit_transactions')
           .select('apt_name, build_year, deal_date')
           .eq('lawd_cd', g.lawdCd).eq('umd_nm', g.umdNm)
           .order('deal_date', { ascending: false })
-          .limit(200);
+          .limit(200)
+          .abortSignal(AbortSignal.timeout(ENRICH_ABORT_MS)));
         if (!txs?.length) return;
         // distinct apt_name + dealCount 누적 (Sprint BB: master 단지 dealCount 일관성)
         const aptInfo = {};
@@ -456,6 +470,13 @@ router.get('/apt', async (req, res) => {
           }
         }
       }));
+      // 후처리 몫을 따로 남긴다 — 라이브 7.4s 중 DB 본조회가 아닌 부분이 어디인지 몰라
+      //   조치 범위를 못 좁혔던 구간이다(_msQuery 와 짝).
+      const _msEnrich = Date.now() - _tEnrich;
+      if (_msEnrich >= 1000) {
+        logger.warn({ q, msEnrich: _msEnrich, groupCount: Object.keys(groups).length },
+          '검색 buildYear 보충 지연(1s+)');
+      }
     }
 
     // SEARCH-RANK-2026-06-14: 결과를 거래량(dealCount) 내림차순 정렬 — 동명/브랜드 검색 시 거래 활발한 단지 우선.
