@@ -185,7 +185,25 @@ async function handleMolitIngest(req, res) {
     }
     // CRON-OBSERV-2026-08-08 (Sprint AAAAAAA): geocache-backfill 과 동일하게 health.crons 로 노출 —
     //   실거래 적재가 며칠 멈춰도 로그(1h 보존)·Sentry 를 안 보면 몰랐다. 숫자+대표 사유만(_pick 화이트리스트).
+    // SEARCH-MV-2026-08-16 (Sprint TTTTTTT): 적재 직후 **검색용 MV 갱신**.
+    //   자동완성은 이제 molit_apt_index(단지 단위 집계, 22,473행)를 읽는다 — 적재만 하고 갱신을
+    //   안 하면 새 거래가 검색에 영영 안 잡힌다. `CONCURRENTLY` 라 갱신 중에도 읽기는 안 막힌다(실측).
+    //   ⚠ RPC 는 SECURITY DEFINER 라 service_role 전용이다(anon·authenticated 실행 권한 회수 완료).
+    //   실패해도 ingest 응답은 ok — 검색은 직전 스냅샷으로 계속 동작하고 다음 cron 이 재시도한다.
+    let _mvRefreshMs;
+    try {
+      const sc = require('../db/client').getSupabaseAdmin();
+      if (!sc) {
+        logger.warn('검색 MV 갱신 skip — service_role 미설정(적재는 정상)');
+      } else {
+        const _t = Date.now();
+        const { error: _mvErr } = await sc.rpc('refresh_molit_apt_index');
+        if (_mvErr) logger.warn({ err: _mvErr.message }, '검색 MV 갱신 실패 — 적재는 정상(다음 cron 재시도)');
+        else _mvRefreshMs = Date.now() - _t;
+      }
+    } catch (e) { logger.warn({ err: e.message }, '검색 MV 갱신 예외 — 적재는 정상'); }
     require('../services/cronStats').recordCronRun('molit-ingest', {
+      mvRefreshMs: _mvRefreshMs,
       ok: summary.ok, err: summary.err, skipped: summary.skipped, elapsedMs: summary.elapsedMs,
       retried: summary.gapBackfill && summary.gapBackfill.retried, filled: summary.gapBackfill && summary.gapBackfill.filled,
       error: summary.firstError || summary.reason || undefined, // reason = 키 미설정 skip 케이스

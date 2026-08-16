@@ -41,7 +41,10 @@ function _pick(summary) {
     'verifyFast', 'verifyRows',
     'rehealTried', 'rehealHealed', 'rehealMarked',
     // ZERO-FETCH-WATCH-2026-08-10 (Sprint KKKKKKK-4): 지역 단위 적재 중단 감시.
-    'slot', 'regionsCount', 'zeroFetchRegions'];
+    'slot', 'regionsCount', 'zeroFetchRegions',
+    // SEARCH-MV-2026-08-16 (Sprint TTTTTTT): 검색용 MV 갱신 소요. 이 값이 사라지면(=필드 부재)
+    //   적재는 되는데 검색 인덱스가 안 도는 상태다 — 새 거래가 자동완성에 안 잡히므로 관측이 필요하다.
+    'mvRefreshMs'];
   const out = {};
   for (const k of NUM) {
     const v = summary[k];

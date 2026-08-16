@@ -190,13 +190,17 @@ router.get('/apt', async (req, res) => {
     const _masterSel = 'apt_name, sigungu, umd_nm, lawd_cd, kapt_code';
     const _tQuery = Date.now();
     const [molitRes, masterNameRes, masterUmdRes] = await Promise.all([
-      _softQuery(admin.from('molit_transactions')
-        .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, deal_date, apt_seq')
-        // APTSEQ-FALLBACK-2026-05-12: apt_seq 추가 — apt_master 미매칭 단지의 KAPT facility 호출용
-        // NAME-MERGE-2026-05-12 (Sprint S+): limit *10 → *30 (한 단지가 동/면적 분리로 100+ row
-        //   생성 시 일부 raw row 누락되어 grouping 불완전. 상계주공1(고층) 119건 case 검증 발견.
-        .ilike('apt_name', `%${qApt}%`)  // OR 제거 — apt_name 만 (인덱스 활용) · qApt: 접미사 정규화
-        .order('deal_date', { ascending: false })
+      // SEARCH-MV-2026-08-16 (Sprint TTTTTTT): 조회 대상을 거래 테이블 → **단지 단위 집계 MV** 로 교체.
+      //   [실측] 동일 ILIKE 가 molit_transactions(435,613행) **917ms** → molit_apt_index(22,473행) **32ms**
+      //   = 약 29배. 원인은 CPU 바운드 Seq Scan 이었고 행수를 19.4배 줄인 것이 그대로 반영됐다.
+      //   [부수 개선] limit*30(300) 의 단위가 '거래' → '단지' 로 바뀐다. 종전엔 거래가 많은 단지 하나가
+      //   300행을 다 먹어 다른 단지가 잘렸다(주석에 남아 있던 '상계주공1 119건' 문제) — 이제 안 잘린다.
+      //   [주의] MV 는 cron 이 REFRESH 한다(molit-ingest 직후). 갱신 전엔 최신 거래가 최대 1일 늦다 —
+      //   자동완성 목록의 recentDealDate 표시에만 영향이고, 단지 상세·거래 목록은 원본을 그대로 읽는다.
+      _softQuery(admin.from('molit_apt_index')
+        .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, recent_deal_date, deal_count, apt_seq')
+        .ilike('apt_name', `%${qApt}%`)  // qApt: 접미사 정규화
+        .order('recent_deal_date', { ascending: false })
         .limit(limit * 30)
         .abortSignal(AbortSignal.timeout(MOLIT_ABORT_MS))),
       _softQuery(admin.from('apt_master').select(_masterSel).ilike('apt_name', `%${qApt}%`).limit(limit * 5)), // 접미사 정규화명
@@ -211,7 +215,16 @@ router.get('/apt', async (req, res) => {
     //       Recheck 에서 323,914행을 버림) → **인덱스로는 줄일 수 없는 본질 비용**. 새 인덱스 제안 금지.
     //     · anon 역할 statement_timeout = 3s → 콜드 버퍼/동시부하에서 초과 시 pg 57014.
     //   같은 검색어의 apt_master 경로는 313ms 라, molit 이 죽어도 결과를 돌려줄 수 있다.
-    let molitRows = molitRes.data || [];
+    // SEARCH-MV-2026-08-16 (Sprint TTTTTTT): MV 행 → 기존 그룹핑이 기대하는 모양으로 정규화.
+    //   아래 그룹핑은 **"행 1개 = 거래 1건"** 전제로 쓰여 있다(`cur.count++`, `seqCounts.set(seq, cnt+1)`).
+    //   MV 행은 이미 단지 단위 집계라 그 전제가 깨진다 → 컬럼명(recent_deal_date→deal_date)과
+    //   가중치(_w = 그 행이 대표하는 거래 건수)를 **여기서 한 번에** 맞춰 그룹핑 본체는 그대로 둔다.
+    //   ⚠ `_w` 기본값 1 — 혹시 원본 테이블로 되돌려도 그룹핑이 종전과 동일하게 작동한다(하위 호환).
+    let molitRows = (molitRes.data || []).map((r) => ({
+      ...r,
+      deal_date: r.recent_deal_date != null ? r.recent_deal_date : r.deal_date,
+      _w: Number(r.deal_count) > 0 ? Number(r.deal_count) : 1,
+    }));
     const _molitErr = molitRes.error || null;
     // 57014(statement timeout)는 위 EXPLAIN 으로 원인이 확정된 기지 사항 → Sentry 노이즈만 만든다.
     //   그 외 오류(권한·스키마 드리프트 등)는 조용히 강등되면 안 되므로 캡처 — 단 캡처 시점은
@@ -299,22 +312,27 @@ router.get('/apt', async (req, res) => {
     for (const row of molitRows) {
       const base = baseAptName(row.apt_name) || normalizeAptName(row.apt_name) || row.apt_name;
       const mergeKey = `${base}|${row.sigungu}|${row.umd_nm}|${row.build_year || ''}`;
+      // SEARCH-MV-2026-08-16: 종전의 상수 1 을 `row._w`(그 행이 대표하는 거래 건수)로 대체.
+      //   MV 이전엔 행 1개가 거래 1건이라 1 이 맞았다. 지금은 행 1개가 단지 1개(= _w 건)다.
+      //   이 치환이 빠지면 dealCount 와 대표 apt_seq 선택이 **거래량이 아니라 행수 기준**이 되어
+      //   인기 정렬(SEARCH-RANK)이 통째로 뒤틀린다.
+      const _w = row._w || 1;
       const cur = aptMap.get(mergeKey);
       if (cur) {
-        cur.count++;
+        cur.count += _w;
         if (String(row.deal_date || '') > String(cur.firstRow.deal_date || '')) {
           cur.firstRow = row; // 최신 거래 row 를 firstRow 로 갱신
         }
         // apt_seq 별 거래량 counter (대표 apt_seq 선택용)
         const seqCnt = cur.seqCounts.get(row.apt_seq) || 0;
-        cur.seqCounts.set(row.apt_seq, seqCnt + 1);
+        cur.seqCounts.set(row.apt_seq, seqCnt + _w);
         // alias raw name 누적 (set 으로 중복 제거)
         cur.rawNames.add(row.apt_name);
       } else {
         const seqCounts = new Map();
-        if (row.apt_seq) seqCounts.set(row.apt_seq, 1);
+        if (row.apt_seq) seqCounts.set(row.apt_seq, _w);
         aptMap.set(mergeKey, {
-          count: 1,
+          count: _w,
           firstRow: row,
           baseName: base,
           seqCounts,
