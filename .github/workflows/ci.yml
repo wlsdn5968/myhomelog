@@ -153,6 +153,36 @@ jobs:
         # (field-note memo textarea / exportClausePDF title / inline JSON .replace(&#39;) / setAlert raw JSON.stringify)
         run: node scripts/security-regression-check.js
 
+  lint:
+    name: Lint (correctness only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # LINT-MINIMAL-2026-08-16 (Plan 020):
+    #   [왜 별도 job 인가] 이 레포는 Sprint QQQQQQ 에서 "감사 실패 하나가 모든 품질 게이트를 꺼버린"
+    #   사고를 겪고 job 을 분리하는 방침을 세웠다(위 syntax-check 주석 참조). 린트도 같은 원칙으로
+    #   독립 job 이다 — 다른 게이트가 죽어도 이건 돌고, 이게 죽어도 다른 건 돈다.
+    #   [왜 필요한가] 계획 010 의 결함 B(`fetch` 옵션에 `signal` 키 중복 → 90s 타임아웃이 죽고 180s 적용)는
+    #   `no-dupe-keys` 하나면 잡혔다. 중복 키는 **합법 문법**이라 위의 `node --check`·`vm.Script`
+    #   구문 검사로는 원리적으로 못 잡는다 — 그래서 별도 도구가 필요하다.
+    #   [범위] 정확성 규칙만. 스타일 규칙 0개(들여쓰기·따옴표 논쟁으로 배포가 멈추면 안 된다).
+    #   도입 시점 실측: backend/scripts/api 에러 0, 프론트 인라인 에러 1(의도된 카카오 게이트, disable 주석 처리).
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install root deps (eslint)
+        run: npm ci --no-audit --no-fund
+
+      - name: Lint (backend + scripts + api + 프론트 인라인 JS)
+        # npm run lint = scripts/extract-inline-js.js 로 index.html 인라인 <script> 를 .lint-tmp/ 에
+        # 뽑은 뒤(줄번호 보존) eslint 실행. 에러만 CI 를 막고 경고는 막지 않는다.
+        run: npm run lint
+
   gitleaks:
     name: Secret Scan (gitleaks)
     runs-on: ubuntu-latest

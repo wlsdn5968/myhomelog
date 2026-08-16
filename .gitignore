@@ -58,3 +58,6 @@ credentials.json
 # Agent Skills (npx skills add) — 개발 보조 도구, 배포 산출물 아님 (2026-07-25)
 .agents/
 skills-lock.json
+
+# Lint (인라인 JS 추출 산출물 — scripts/extract-inline-js.js)
+.lint-tmp/

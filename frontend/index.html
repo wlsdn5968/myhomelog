@@ -3479,6 +3479,12 @@ async function loginKakao(){
   alert('카카오 로그인은 현재 점검 중이에요.\n\nGoogle 로그인 또는 이메일(매직링크)을 사용해주세요.\n\n(사업자등록 완료 후 재활성화 예정)');
   return;
   // 아래는 사업자등록 후 활성화 시 위 5줄 제거하면 정상 동작
+  // LINT-MINIMAL-2026-08-16: 여기 죽은 코드는 **의도된 기능 게이트**라 규칙을 이 한 줄만 끈다.
+  //   ⚠ 게이트의 전제였던 사업자등록은 **2026-08-09 에 완료**됐다. 그런데도 재활성화가 보류인 이유는
+  //     카카오 로그인 복구가 사업자등록만으로 끝나지 않기 때문이다(KOE205 = 카카오 개발자 콘솔의
+  //     앱/비즈앱 설정 문제). 콘솔 상태를 코드에서 확인할 방법이 없어 **운영자 확인 후 해제**한다.
+  //   해제 시: 위 3줄(_st/alert/return)과 이 주석 블록을 함께 지우면 원래 흐름이 살아난다.
+  // eslint-disable-next-line no-unreachable
   if(!_checkConsent()) return;
   const A = window.MHL?.auth;
   if(!A?.ready){ document.getElementById('lmStatus').textContent='인증 준비 중...'; return; }

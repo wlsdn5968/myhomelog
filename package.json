@@ -21,5 +21,12 @@
   },
   "engines": {
     "node": ">=20"
+  },
+  "scripts": {
+    "lint": "node scripts/extract-inline-js.js && eslint backend scripts api .lint-tmp",
+    "lint:be": "eslint backend scripts api"
+  },
+  "devDependencies": {
+    "eslint": "^10.8.1"
   }
 }
