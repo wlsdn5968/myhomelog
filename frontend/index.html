@@ -228,19 +228,19 @@ window.MHL.auth = window.MHL.auth || {
           });
         };
         // 카카오 OAuth — 한국 부동산 사용자 90%+ 카카오 사용. retention 핵심.
-        // Supabase Dashboard → Authentication → Providers → Kakao 활성화 + REST API 키 등록 필요.
-        // MOB-1 fix (2026-05-03): scope 명시 — Supabase default 의 account_email 제거.
-        //   배경: 카카오 정책 (2024~) 일반 앱 (사업자등록 X) 은 이메일 동의 항목 활성화 불가.
-        //         Supabase default 가 account_email 요청 → 카카오 콘솔에 미등록 → KOE205 발생.
-        //   해결: scope 명시 'profile_nickname profile_image' 만 — 콘솔에 등록된 항목만 요청.
-        //   영향: auth.users.email NULL — 베타 단계 영향 0. 비즈 앱 전환 후 account_email 추가 가능.
+        // 2026-08-16: 비즈 앱 전환 완료 → 콘솔 동의항목에 `account_email` 이 열렸으므로 scope 에 복원.
+        //   (2026-05-03 에는 일반 앱이라 이메일 동의항목 자체를 못 켜서 KOE205 가 났고,
+        //    그때는 scope 에서 account_email 을 빼는 우회를 썼다. 그 전제는 이제 사라졌다.)
+        //   ⚠ 이메일은 **선택 동의**다 — 사용자가 거부하면 auth.users.email 이 NULL 로 들어온다.
+        //     Supabase 의 "Allow users without an email" 이 ON 이어야 그 경우에도 가입이 된다(2026-08-16 ON 확인).
+        //     이메일 없는 계정을 허용하지 않으려면 콘솔에서 필수 동의로 올린 뒤 그 토글을 끄는 순서로 바꿀 것.
         A.signInWithKakao = async function(){
           var redirectTo = window.location.origin + window.location.pathname;
           return sb.auth.signInWithOAuth({
             provider: 'kakao',
             options: {
               redirectTo,
-              scopes: 'profile_nickname profile_image',
+              scopes: 'profile_nickname profile_image account_email',
             },
           });
         };
@@ -2863,13 +2863,9 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         </label>
       </div>
 
-      <!-- MOB-1 카카오 임시 비활성 (2026-05-03, 조건 갱신 2026-08-16):
-           비즈 앱 아님 → account_email 동의 항목 미등록 →
-           Supabase 가 default scope 에 account_email 강제 포함 → KOE205 영구 발생.
-           해결: Supabase Dashboard 에서 Kakao Provider Disabled + 버튼 hide (사용자 이탈 차단).
-           ⚠ 해제 조건은 사업자등록이 아니다(2026-08-09 완료됨). 관문은 loginKakao() 주석 참조.
-           ④ 동의항목까지 끝난 뒤: Dashboard 토글 ON + 아래 display:none 제거. -->
-      <button class="sm-save" id="lmKakao" onclick="loginKakao()" style="display:none;background:#FEE500;color:#191919;margin-bottom:8px;font-weight:700">
+      <!-- 카카오 로그인: 2026-05-03 비활성 → 2026-08-16 재활성화 (비즈 앱 전환 + 동의항목 + 콜백 등록 완료).
+           되돌려야 하면 style 에 display:none 을 다시 넣고 loginKakao() 앞단을 막으면 된다. -->
+      <button class="sm-save" id="lmKakao" onclick="loginKakao()" style="background:#FEE500;color:#191919;margin-bottom:8px;font-weight:700">
         💬 카카오로 계속하기
       </button>
       <button class="sm-save" id="lmGoogle" onclick="loginGoogle()" style="background:#4285F4;margin-bottom:8px;display:flex;align-items:center;justify-content:center;gap:8px">
@@ -3476,22 +3472,13 @@ async function loginGoogle(){
   try { await A.signInWithGoogle(); } catch(e){ document.getElementById('lmStatus').textContent='❌ ' + (e.message||e); }
 }
 async function loginKakao(){
-  // MOB-FIX-2026-05-03: 카카오 OAuth 임시 비활성 (.local-notes/MOB_KAKAO_DECISION_20260503.md)
-  // 브라우저 캐시된 옛 버전이 #lmKakao 클릭해도 KOE205 안 보이도록 친화 alert 후 return
-  const _st=document.getElementById('lmStatus');
-  if(_st)_st.textContent='⏰ 카카오 로그인은 현재 점검 중이에요. Google 또는 이메일을 사용해주세요.';
-  alert('카카오 로그인은 현재 점검 중이에요.\n\nGoogle 로그인 또는 이메일(매직링크)을 사용해주세요.');
-  return;
-  // LINT-MINIMAL-2026-08-16: 여기 죽은 코드는 **의도된 기능 게이트**라 규칙을 이 한 줄만 끈다.
-  //   ⚠ 해제 조건은 "사업자등록"이 아니다 — 그건 2026-08-09 에 이미 끝났다.
-  //     KOE205 의 실제 원인은 카카오 콘솔의 `account_email` 동의항목이고, 그 항목은 비즈 앱에만 열린다.
-  //     실측한 관문 순서 (2026-08-16, 콘솔에서 직접 확인):
-  //       ① 앱 아이콘 등록  → **완료** (frontend/kakao-app-icon-128.png, 앱 ID 1434932)
-  //       ② 사업자 정보 등록(사업자등록번호 3-2-5) → 운영자 승인 대기
-  //       ③ 비즈 앱 전환 → ④ 카카오 로그인 > 동의항목에서 `카카오계정(이메일)` 활성화
-  //     ④ 까지 끝나야 이 게이트를 열 수 있다. 콘솔 상태는 코드에서 확인할 방법이 없다.
-  //   해제 시: 위 4줄(_st 선언 ~ return)과 이 주석 블록을 지우고, #lmKakao 의 display:none 도 함께 제거.
-  // eslint-disable-next-line no-unreachable
+  // 2026-08-16 재활성화. 2026-05-03 부터 막혀 있던 KOE205/KOE006 체인이 전부 해소됐다:
+  //   ① 앱 아이콘 등록 → ② 사업자 정보 등록 → ③ 비즈 앱 전환
+  //   → ④ 동의항목 `account_email` 선택 동의  → ⑤ Supabase Kakao provider ON
+  //   → ⑥ REST API 키의 "카카오 로그인 리다이렉트 URI" 에 Supabase 콜백 등록(KOE006 의 원인)
+  // 라이브 실증: /auth/v1/authorize?provider=kakao → 동의화면에 닉네임·프로필사진·이메일 3항목 노출.
+  // ⚠ 이메일은 **선택 동의**라 사용자가 거부할 수 있다 → Supabase 의
+  //   "Allow users without an email" 이 ON 이어야 한다(2026-08-16 ON 확인). 끄면 가입이 깨진다.
   if(!_checkConsent()) return;
   const A = window.MHL?.auth;
   if(!A?.ready){ document.getElementById('lmStatus').textContent='인증 준비 중...'; return; }
