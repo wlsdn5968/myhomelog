@@ -30,6 +30,7 @@
 | **017** | **KOSIS 미분양 Redis 2차 캐시 역이식 (+Map 직렬화 함정 차단)** | P2 | S | — | DONE (abbf772, 2026-08-16) |
 | **018** | **서울 규제 해제 시 LTV 라벨이 스냅샷을 따라가게 (016 잔여)** | P2 | S | 016 | DONE (c755b38, 2026-08-16) |
 | **019** | **마이그레이션 실적용 전수 대조 + advisor 경고 3건 해소** | **P1** | M | — | DONE (514352c, 2026-08-16) |
+| **021** | **gitleaks v3 SHA 재고정(v2 EOL) + 의존성 상향/engines>=22 + RLS role 복원** | **P1** | M | — | DONE (2e6e38c·f3227f8·4f3f17b, 2026-08-16) |
 | **020** | **정확성 전용 최소 ESLint 도입 + 프론트 인라인 JS 커버 + CI Node 24 정합** | P2 | M | — | DONE (d6511c8·6399333, 2026-08-16) |
 
 ### 018~019 실행 결과 (2026-08-16)
@@ -156,11 +157,32 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (한 줄 사유) | REJECTED (
 - ⚠ **Supabase `auth_leaked_password_protection` 비활성** (XS, **운영자 Dashboard 조치**):
   advisor WARN. HaveIBeenPwned 대조로 유출된 비밀번호 사용을 막는 기능인데 꺼져 있다.
   SQL 이 아니라 Dashboard → Authentication 설정이라 코드/MCP 로 켤 수 없다.
-- **RLS 정책 role 드리프트** (S, 심층방어): `field_notes_*` 4개 + `ai_feedback_select_own` 의
+- ~~**RLS 정책 role 드리프트**~~ → **021 로 완료(4f3f17b)**. `ALTER POLICY … TO authenticated` 5건.
+  안전성 근거: `fieldNotes.js` 가 사용자 JWT 클라이언트(`getUserScopedClient`)를 쓰므로 role 이
+  `authenticated` 로 해석되고, 나머지 경로는 service_role(RLS 우회), 프론트 직접 접근은 0건(실측).
+  (원문 ↓)
+- ~~**RLS 정책 role 드리프트** (S, 심층방어): `field_notes_*` 4개 + `ai_feedback_select_own` 의~~
   role 이 `authenticated` 가 아니라 **PUBLIC** 이다(20260504000003 이 DROP+CREATE 하며 `TO` 절
   누락, 20260531000001 이 `insert_own` 만 복원). **기능 영향은 0** — USING/WITH CHECK 가
   `(SELECT auth.uid()) = user_id` 라 anon 은 `auth.uid()` 가 NULL 이어서 통과 못 한다(실측).
   뚫린 구멍이 아니라 **의도와 실제의 불일치**라 019 에서 건드리지 않았다.
+### dependabot PR 처리 결과 (2026-08-16) — ⚠ **#58 은 머지하지 말 것**
+
+- **#65** minor-and-patch 4종 → **직접 적용 완료(f3227f8)**. PR 을 머지하지 않은 이유: PR 생성 이후
+  루트 package.json 이 갈라졌고(eslint devDep·scripts), 무엇보다 **`engines` 상향이 PR 에 빠져 있어**
+  그대로 머지하면 supabase-js 요구(>=22)와 선언(">=20")이 어긋난 채 남는다. dependabot 이 곧 자동 종료한다.
+- ⚠ **#58** `gitleaks-action 2→3` → **머지 금지.** v3 로 가는 것 자체는 맞고 **이미 갔다(2e6e38c)**.
+  다만 그 PR 은 `uses` 를 **가변 태그 `@v3`** 으로 되돌리므로 머지하면 오늘 한 SHA 고정이 풀린다.
+  우리는 `@e0c47f4…  # v3.0.0` 으로 고정돼 있다. PR 은 닫으면 된다.
+- **#62** `setup-node 6→7` · **#61** `checkout 6→7` — GitHub 1st-party 액션 메이저. 머지는 운영자 결정.
+
+#### v2 를 SHA 로 고정한 것이 왜 위험했나 (재발 방지)
+`gitleaks-action@v2` 는 node20 런타임이고 업스트림이 명시한 일정이 있다:
+**2026-06-02** 러너 기본이 Node 24 로 전환(우회 env 필요) → **2026-09-16 Node 20 제거로 v2 완전 중단**.
+즉 v2 에 SHA 를 고정하는 것은 한 달 뒤 Secret Scan job 을 죽이는 선택이었다.
+→ **버전 고정 대상은 "지금 도는 것"이 아니라 "앞으로도 도는 것"이다. 고정 전에 그 버전의 수명을 확인할 것.**
+
+<!-- 아래는 처리 전 시점의 기록 -->
 - **dependabot PR 4건 대기 — 머지는 운영자 결정** (2026-08-16 실측):
   · **#65** minor-and-patch 4종(`supabase-js` 2.105→2.112 · `anthropic-sdk` · `upstash/redis` · `axios`).
     ⚠ 신규 `supabase-js` 가 `engines.node ">=22"` 를 요구한다. CI 는 이번에 24 로 올렸으니 정합이지만
