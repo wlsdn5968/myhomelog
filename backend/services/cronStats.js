@@ -119,10 +119,20 @@ async function getCronLatest() {
  *   좌표 백필이 조용히 멈추면 지도 핀이 그대로 늙는다 — 같은 부류의 사고를 이 저장소는
  *   이미 여러 번 겪었다(광주 44일 무적재).
  *
- * [기준값을 왜 50h 로 잡았나]
- *   Vercel Hobby cron 은 정시가 아니다 — 같은 날 실측에서 05:00 예정이 05:08, 17:30 예정이 17:34 에
- *   기록됐다. 26h(=1회 누락)로 잡으면 이 지터와 배포 타이밍만으로도 경보가 뜬다.
- *   **2회 연속 누락**을 기준으로 삼아 오탐을 줄인다. 주 1회 잡은 2회면 15일이라 너무 늦어 10일로 둔다.
+ * [기준값을 왜 50h 로 잡았나 — 2026-08-17 Vercel 공식 문서로 근거 확정]
+ *   종전 주석은 "실측에서 05:00 예정이 05:08" 이라 적었는데, 그건 관측일 뿐 사양이 아니었다.
+ *   공식 사양(vercel.com/docs/cron-jobs/usage-and-pricing · manage-cron-jobs, 2026-07-15):
+ *     · Hobby 스케줄링 정밀도 = **시간 단위(±59분)** — "Vercel may invoke these cron jobs at any point
+ *       within the specified hour". `0 6 * * *` 은 06:00~06:59 어디서든 정상이다.
+ *     · 전달은 **best effort** — "occasional transient network errors can prevent a request from reaching
+ *       your function. In those cases, your function does not execute, and **no runtime log is created**."
+ *       즉 **회차 통째 누락은 예상된 동작**이고, 로그 부재는 장애의 증거가 못 된다.
+ *     · 실패해도 **재시도 없음** — "Vercel will not retry an invocation if a cron job fails."
+ *     · 반대로 **중복 호출도 가능** — "can also occasionally invoke the same scheduled run more than once."
+ *   → 26h(=1회 누락)로 잡으면 사양상 정상인 누락에도 경보가 뜬다. **2회 연속 누락**(50h)이 기준이다.
+ *     주 1회 잡은 2회면 15일이라 너무 늦어 10일(240h)로 둔다.
+ *   ⚠ 여기서 나온 결론 하나 더: 각 job 은 **멱등 + 재조정**이어야 한다(공식 권고). 한 회차를 건너뛰어도
+ *     다음 회차가 밀린 몫을 따라잡아야 하고, 두 번 불려도 부작용이 두 배가 되면 안 된다.
  */
 const CRON_MAX_AGE_H = {
   'retention': 50,

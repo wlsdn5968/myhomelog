@@ -43,7 +43,13 @@ function adminClient() {
 //   [실측 2026-08-17] 미확인 407곳(= 조회실패 sentinel 395 + 세대수 0 인 12) 중 이미 BR 캐시가 있는 곳 17.
 //     그 17곳 세대수는 250~2,700(평균 878) — 전부 100세대 이상이다. 2,700세대 단지가 미확인이었다.
 //   API 호출 0 — 캐시만 읽어 붙인다.
-const WRITE_BACK_SCAN = 300;
+// ⚠ 기아(starvation) 방지 — 첫 실행 실측(2026-08-17)에서 드러난 결함을 고친 값이다.
+//   종전 300 은 대상(_empty 395)보다 작았다. 채운 행은 `_br` 필터로 후보에서 빠지지만
+//   **건축물대장 캐시가 없는 389곳은 영원히 후보에 남는다** → 매 회차 앞 300개만 훑게 되고
+//   뒤쪽은 영구히 스캔 밖이다. 실제로 캐시가 있는데도 못 붙은 단지가 4곳 있었다.
+//   대상 전체(현재 407)를 한 회차에 덮는 값으로 올린다. PostgREST 는 1000행에서 잘리므로
+//   그 이상은 의미가 없고, 상한에 닿으면 경고로 알린다(그때는 페이징이 필요하다는 신호).
+const WRITE_BACK_SCAN = 1000;
 
 async function writeBackToMaster(admin) {
   const base = () => admin.from('apt_master')
@@ -63,6 +69,12 @@ async function writeBackToMaster(admin) {
   }
   const rows = [...(emptyRes.data || []), ...(zeroRes.data || [])];
   if (!rows.length) return { scanned: 0, written: 0, ambiguous: 0 };
+  // 상한에 닿았다 = 이번 회차에 못 본 후보가 있다는 뜻. 조용히 넘기면 그 뒤쪽이 영구 기아가 된다.
+  for (const [label, res] of [['_empty', emptyRes], ['세대수0', zeroRes]]) {
+    if ((res.data || []).length >= WRITE_BACK_SCAN) {
+      logger.warn({ label, scan: WRITE_BACK_SCAN }, 'BR 되쓰기: 후보가 스캔 상한에 닿음 — 페이징 필요');
+    }
+  }
 
   // ⚠ 동명 가드: BR 캐시 키는 `name:단지명|lawd_cd` 라 같은 구에 같은 이름 단지가 둘이면 어느 쪽 값인지
   //   구별할 수 없다. 그런 키는 **쓰지 않는다**(현재 대상 407곳엔 0건이나 마스터 전체엔 5쌍 존재).
