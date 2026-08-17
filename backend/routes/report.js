@@ -1033,13 +1033,20 @@ async function fetchCandidateApts(admin, input, limit) {
       const picked = pickRegions(region, buy, '') || [];
       const codes = [...new Set(picked.map(p => p && p.lawdCd).filter(Boolean))];
       const wantPfx = _WIDE_PFX[_wideKey] || null;
-      // 서울·경기·인천은 접두로 검증한다. '지방'은 여러 시도가 섞이므로 접두 대신
-      //   "서울·경기·인천 코드가 아닐 것" 으로 검증한다(해운대 26·수성 27·유성 30·청주 43).
-      const ok = codes.length && (wantPfx
+      // ⚠ 접두 검증만으로는 부족하다(실측으로 확인). 매핑에 없는 세부 토큰이 오면 pickRegions 는
+      //   **그 광역의 대표 몇 개 구**를 돌려주는데(예: '인천 테스트동' → 28185·28200·28237·28245),
+      //   접두는 28 로 맞아 그대로 채택돼 버린다. 사용자가 고른 곳과 무관한 4개 구를 뒤지게 된다.
+      //   판별자는 `name` 이다 — 매핑에 걸리면 매칭된 키워드('연수'·'과천'·'판교')가 오고,
+      //   못 걸리면 **광역 이름**('인천'·'경기')이 온다. 후자면 해석 실패로 보고 광역 분기로 내려간다
+      //   (광역 전체가 대표 4구보다 정직하다 — 임의로 좁히면 빠진 지역을 사용자가 알 길이 없다).
+      const names = picked.map(p => p && p.name).filter(Boolean);
+      const resolved = names.length && !names.some(n => ['서울', '경기', '인천', '지방'].includes(n));
+      const ok = codes.length && resolved && (wantPfx
         ? codes.every(c => String(c).startsWith(wantPfx))
+        // '지방'은 여러 시도가 섞이므로 접두 대신 "수도권 코드가 아닐 것"으로 본다(해운대26·수성27·유성30·청주43).
         : codes.every(c => !['11', '41', '28'].includes(String(c).slice(0, 2))));
       if (ok) _scopedCodes = codes;
-      else logger.warn({ region, codes }, '지역 세부 해석이 선택한 광역과 어긋남 — 광역 분기로 폴백');
+      else logger.warn({ region, codes, names }, '지역 세부 해석 실패 — 광역 분기로 폴백');
     } catch (e) { logger.warn({ region, err: e.message }, 'pickRegions 재사용 실패 — 광역 분기로 폴백'); }
   }
 

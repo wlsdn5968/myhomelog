@@ -2821,8 +2821,16 @@ test('지역 세부 칩 전부가 광역보다 좁게 해석된다 (프론트 �
     for (const [wide, subs] of Object.entries(REGION_SUB)) {
       for (const sub of subs) {
         const region = `${wide} ${sub}`;
-        const codes = [...new Set((pickRegions(region, budget, '') || []).map(p => p.lawdCd))];
+        const picked = pickRegions(region, budget, '') || [];
+        const codes = [...new Set(picked.map(p => p.lawdCd))];
         assert.ok(codes.length, `'${region}'(예산 ${budget}) 이 아무 지역으로도 해석되지 않는다`);
+        // ⚠ 코드 개수만 보면 부족하다 — 매핑에 없는 칩은 **광역 대표 몇 개 구**로 폴백되어
+        //   개수·접두 검사를 그대로 통과한다(실측: '인천 테스트동' → 28185·28200·28237·28245).
+        //   판별자는 name 이다. 매핑에 걸리면 매칭 키워드가, 못 걸리면 **광역 이름**이 온다.
+        const names = picked.map(p => p.name);
+        assert.ok(!names.some(n => ['서울', '경기', '인천', '지방'].includes(n)),
+          `'${region}'(예산 ${budget}) 이 매핑에 없어 광역 대표 구로 폴백된다 — ` +
+          `REGION_KEYWORDS 에 이 칩의 매핑을 추가할 것 (현재 name=${names.join('/')})`);
         const pfx = WIDE_PFX[wide];
         if (pfx) {
           assert.ok(codes.every(c => String(c).startsWith(pfx)),
@@ -2853,6 +2861,10 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
   //    그게 그대로 새면 "경기 보고서에 서울 단지" 가 된다 → 시도 접두 검증이 반드시 있어야 한다.
   assert.match(src, /codes\.every\(c => String\(c\)\.startsWith\(wantPfx\)\)/,
     '세부 해석 결과의 시도 접두를 검증하지 않는다 — 다른 광역 단지가 섞인다');
+  // ②-b 접두만으로는 부족하다. 매핑에 없는 세부는 **광역 대표 구 몇 개**로 폴백되는데 접두는 맞는다.
+  //     name 이 광역 이름이면 해석 실패로 보고 광역 분기로 내려가야 한다.
+  assert.match(src, /names\.some\(n => \['서울', '경기', '인천', '지방'\]\.includes\(n\)\)/,
+    '해석 실패(광역 대표 구 폴백)를 걸러내지 않는다 — 고른 곳과 무관한 구를 조용히 뒤진다');
 
   // ③ '지방' 광역이 lawd_cd 필터 없이 **전국**으로 새던 분기가 막혀 있다.
   assert.match(src, /region\.includes\('지방'\)/,
