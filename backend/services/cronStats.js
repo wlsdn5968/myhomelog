@@ -44,7 +44,10 @@ function _pick(summary) {
     'slot', 'regionsCount', 'zeroFetchRegions',
     // SEARCH-MV-2026-08-16 (Sprint TTTTTTT): 검색용 MV 갱신 소요. 이 값이 사라지면(=필드 부재)
     //   적재는 되는데 검색 인덱스가 안 도는 상태다 — 새 거래가 자동완성에 안 잡히므로 관측이 필요하다.
-    'mvRefreshMs'];
+    'mvRefreshMs',
+    // HH-BR-WRITEBACK-2026-08-17 (Sprint MMMMMMM-23): 건축물대장 세대수가 apt_master 로 실제 합류했는지.
+    //   이 값이 0에 머물면 "수집은 되는데 화면엔 여전히 미상" 상태가 재현된 것이다.
+    'brScanned', 'brWritten', 'brAmbiguous'];
   const out = {};
   for (const k of NUM) {
     const v = summary[k];

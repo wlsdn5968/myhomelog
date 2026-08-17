@@ -71,6 +71,7 @@ function buildFacility(info, kaptCode, detail) {
     return {
       kaptCode,
       totalHouseholds: 0,
+      householdsSource: null,   // HH-BR-FALLBACK-2026-08-17: 위 0 은 "모름"이다(형태 일치용으로 명시)
       dongCount: 0,
       parkingTotal: 0,
       parkingRatio: null,
@@ -92,7 +93,18 @@ function buildFacility(info, kaptCode, detail) {
   //   kaptdaCnt=0·hoCnt=1540 = AptInfo MCP 실호출 세대수 1540 과 정확 일치 [VERIFIED].
   //   330/346 이 hoCnt 로 해소(SQL 실측), 잔여 16 만 진짜 미상. 재조회 self-heal 로는 못 고침 → fallback 이 정답.
   const _posInt = v => { const n = parseInt(v); return Number.isFinite(n) && n > 0 ? n : 0; };
-  const totalHouseholds = _posInt(info.kaptdaCnt) || _posInt(info.hoCnt);
+  // HH-BR-FALLBACK-2026-08-17 (Sprint MMMMMMM-23): KAPT 두 원천이 **둘 다 0** 이면 종전엔 세대수가 0이었다.
+  //   즉 '모름'이 값처럼 흘러 판정을 바꿨다 — 추천 게이트는 983fbc1 에서 막았지만 원인은 여기(생산 함수)다.
+  //   [원천] 건축물대장(건축HUB 표제부)은 애초에 "KAPT 없는 소형·노후 단지" 보강용으로 붙인 연동이다
+  //     (buildingRegisterService 헤더). 이 모집단에서 실제로 작동함을 라이브로 확인했다:
+  //     지산타운 **630세대**(4개동·1991) · 일산두산위브더제니스 **2,700세대** · 위례센트럴자이 1,413세대.
+  //   ⚠ KAPT 값이 있으면 **절대 덮지 않는다** — 교차검증 12건이 kaptdaCnt 9:2 로 우세했다(아래 HH-CONFLICT).
+  //     건축물대장은 '모를 때만' 쓰는 3순위다.
+  //   출처를 함께 내보낸다 — 어느 원천의 값인지 화면이 밝힐 수 있어야 한다(절대 룰 ②).
+  const _kaptHh = _posInt(info.kaptdaCnt) || _posInt(info.hoCnt);
+  const _brHh = _posInt(info._br && info._br.hhldCnt);
+  const totalHouseholds = _kaptHh || _brHh;
+  const householdsSource = _kaptHh ? 'kapt' : (_brHh ? 'buildingRegister' : null);
   // HH-CONFLICT-2026-08-17 (Sprint MMMMMMM — 서울 전수조사 4회차 실측):
   //   kaptdaCnt(관리세대수)와 hoCnt(호수)가 **둘 다 0이 아니면서 서로 다른** 단지가 서울에만 207곳이다.
   //   위 fallback 은 kaptdaCnt 를 무조건 우선하는데, 그 값이 틀린 케이스가 실재한다:
@@ -171,6 +183,9 @@ function buildFacility(info, kaptCode, detail) {
   return {
     kaptCode: kaptCode || null,
     totalHouseholds,
+    // HH-BR-FALLBACK-2026-08-17: 'kapt' | 'buildingRegister' | null(미확인). null 이면 세대수는 0이고,
+    //   그 0 은 "확인된 0세대"가 아니라 **모름**이다 — 배제·경고의 근거로 쓰면 안 된다.
+    householdsSource,
     dongCount: parseInt(info.kaptDongCnt) || 0,
     parkingTotal,
     parkingRatio,

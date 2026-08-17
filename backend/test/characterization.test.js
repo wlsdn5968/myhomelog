@@ -3046,3 +3046,138 @@ test('카카오 OAuth state — 서명·검증 왕복과 위조·만료 거부�
   assert.equal(other.verifyState(signed), null,
     '다른 키로 서명한 state 가 통과한다 — 파생 키가 서명에 반영되지 않는다');
 });
+
+// ── HH-BR-FALLBACK-2026-08-17 (Sprint MMMMMMM-23) ─────────────────────────────
+// 운영자 지시: "미확인은 다시 조사해서 채워넣어야지 뭘 그냥 통과시켜."
+// 세대수의 3순위 원천으로 건축물대장을 붙인다. 경계는 셋 — KAPT 우선 / 모를 때만 BR / 그래도 없으면 모름.
+test('buildFacility — 세대수는 KAPT 우선, 둘 다 0일 때만 건축물대장, 출처를 함께 낸다', () => {
+  const { buildFacility } = require('../utils/buildFacility');
+  const br = { hhldCnt: 630, dongCnt: 4, useAprDay: '19911115', source: 'buildingRegister' };
+
+  // (1) KAPT 값이 있으면 BR 이 있어도 절대 덮지 않는다 (교차검증 12건 kaptdaCnt 9:2 우세 — 기본 규칙 유지)
+  const kapt = buildFacility({ kaptdaCnt: '1540', hoCnt: '1540', _br: br }, 'A1', null);
+  assert.equal(kapt.totalHouseholds, 1540, 'KAPT 값이 건축물대장에 밀렸다');
+  assert.equal(kapt.householdsSource, 'kapt');
+
+  // (2-1) kaptdaCnt=0 이어도 hoCnt 가 살아 있으면 그쪽이 먼저다 (HH-HOCNT-FALLBACK 유지)
+  const ho = buildFacility({ kaptdaCnt: '0', hoCnt: '1540', _br: br }, 'A2', null);
+  assert.equal(ho.totalHouseholds, 1540);
+  assert.equal(ho.householdsSource, 'kapt');
+
+  // (2-2) 둘 다 0 → 건축물대장. 실측 대상 12곳이 정확히 이 형태다 (kaptdaCnt "0" · hoCnt "0")
+  const brOnly = buildFacility({ kaptdaCnt: '0', hoCnt: '0', _br: br }, 'A3', null);
+  assert.equal(brOnly.totalHouseholds, 630, '둘 다 0인데 건축물대장 값이 안 붙었다');
+  assert.equal(brOnly.householdsSource, 'buildingRegister');
+
+  // (2-3) KAPT 조회 실패 sentinel 위에도 붙는다 — 실측 모집단 395곳이 이 형태다
+  const onEmpty = buildFacility({ _empty: true, _br: br }, 'A4', null);
+  assert.equal(onEmpty.totalHouseholds, 630);
+  assert.equal(onEmpty.householdsSource, 'buildingRegister');
+
+  // (3) 아무 원천도 없으면 **모름**이다. 0 이 나오되 출처는 null — 이 null 이 "0을 값으로 읽지 말라"는 표시다.
+  const none = buildFacility({ kaptdaCnt: '0', hoCnt: '0' }, 'A5', null);
+  assert.equal(none.totalHouseholds, 0);
+  assert.equal(none.householdsSource, null, '미확인인데 출처가 붙으면 0이 값으로 읽힌다');
+
+  // BR 값이 0/음수/쓰레기면 채택하지 않는다(모름 유지) — 상류가 0을 줄 수 있다
+  for (const bad of [0, -1, null, undefined, 'N/A']) {
+    const r = buildFacility({ kaptdaCnt: '0', hoCnt: '0', _br: { hhldCnt: bad } }, 'A6', null);
+    assert.equal(r.totalHouseholds, 0, '쓸 수 없는 BR 값이 채택됐다: ' + String(bad));
+    assert.equal(r.householdsSource, null);
+  }
+
+  // 세대당 주차는 세대수를 분모로 쓴다 — BR 로 세대수가 생기면 비율도 함께 성립해야 한다
+  const withPark = buildFacility({ kaptdaCnt: '0', hoCnt: '0', _br: br }, 'A7', { kaptdPcnt: '300', kaptdPcntu: '330' });
+  assert.equal(withPark.parkingTotal, 630);
+  assert.equal(withPark.parkingRatio, 1, '분모(세대수)가 BR 로 채워졌는데 비율이 안 나왔다');
+});
+
+test('BR 되쓰기 — 캐시된 세대수만 붙이고 동명·값없음은 건드리지 않는다', async () => {
+  const { writeBackToMaster } = require('../jobs/buildingRegisterBackfill');
+  const brRows = [
+    { apt_key: 'name:지산타운|27260', title: { hhldCnt: 630, dongCnt: 4, useAprDay: '19911115' } },
+    { apt_key: 'name:값없음|11110', title: { hhldCnt: 0 } },       // 상류가 0 → 적지 않는다
+    { apt_key: 'name:쌍둥이|11140', title: { hhldCnt: 999 } },     // 동명 2행 → 어느 쪽인지 모른다
+    { apt_key: 'name:세대수0|11680', title: { hhldCnt: 250, dongCnt: 2 } },
+  ];
+  const emptyRows = [
+    { kapt_code: 'A1', apt_name: '지산타운', lawd_cd: '27260', facility: { _empty: true } },
+    { kapt_code: 'A2', apt_name: '값없음', lawd_cd: '11110', facility: { _empty: true } },
+    { kapt_code: 'A3', apt_name: '쌍둥이', lawd_cd: '11140', facility: { _empty: true } },
+    { kapt_code: 'A4', apt_name: '쌍둥이', lawd_cd: '11140', facility: { _empty: true } },
+    { kapt_code: 'A5', apt_name: '캐시없음', lawd_cd: '41290', facility: { _empty: true } },
+  ];
+  const zeroRows = [
+    { kapt_code: 'B1', apt_name: '세대수0', lawd_cd: '11680', facility: { kaptdaCnt: '0', hoCnt: '0', kaptName: '세대수0' } },
+  ];
+
+  const updates = [];
+  const admin = {
+    from(table) {
+      const calls = [];
+      const o = {
+        select() { return o; },
+        not(...a) { calls.push(['not'].concat(a)); return o; },
+        is(...a) { calls.push(['is'].concat(a)); return o; },
+        eq(...a) { calls.push(['eq'].concat(a)); return o; },
+        in(...a) { calls.push(['in'].concat(a)); return o; },
+        limit() { return o; },
+        update(p) { calls.push(['update', p]); return o; },
+        then(res, rej) {
+          let data = [];
+          if (table === 'building_register') {
+            const inCall = calls.find(c => c[0] === 'in');
+            const keys = new Set(inCall ? inCall[2] : []);
+            data = brRows.filter(b => keys.has(b.apt_key));
+          } else if (calls.some(c => c[0] === 'update')) {
+            const patch = calls.find(c => c[0] === 'update')[1];
+            const key = calls.find(c => c[0] === 'eq' && c[1] === 'kapt_code');
+            updates.push({ kaptCode: key && key[2], facility: patch.facility });
+            data = null;
+          } else {
+            // 두 후보 질의를 구분 — 세대수 0 질의만 kaptdaCnt 필터를 건다
+            data = calls.some(c => c[0] === 'eq' && c[1] === 'facility->>kaptdaCnt') ? zeroRows : emptyRows;
+          }
+          return Promise.resolve({ data, error: null }).then(res, rej);
+        },
+      };
+      return o;
+    },
+  };
+
+  const r = await writeBackToMaster(admin);
+  const byCode = new Map(updates.map(u => [u.kaptCode, u.facility]));
+
+  assert.equal(r.written, 2, '되쓴 행 수가 다르다: ' + JSON.stringify(updates.map(u => u.kaptCode)));
+  assert.deepEqual([...byCode.keys()].sort(), ['A1', 'B1']);
+
+  assert.equal(byCode.get('A1')._br.hhldCnt, 630);
+  assert.equal(byCode.get('A1')._br.dongCnt, 4);
+  assert.equal(byCode.get('A1')._br.useAprDay, '19911115');
+  assert.equal(byCode.get('A1')._br.source, 'buildingRegister');
+  // 기존 facility 를 통째로 갈아끼우면 안 된다 — 덧붙이는 것이다
+  assert.equal(byCode.get('A1')._empty, true, '기존 facility 키가 사라졌다');
+  assert.equal(byCode.get('B1').kaptName, '세대수0', '기존 KAPT raw 가 사라졌다');
+  assert.equal(byCode.get('B1')._br.hhldCnt, 250);
+
+  // 건드리면 안 되는 것들
+  assert.equal(byCode.has('A2'), false, '상류 세대수가 0인데 적었다 — 모름을 0으로 굳히면 안 된다');
+  assert.equal(byCode.has('A3') || byCode.has('A4'), false, '동명 단지에 값을 붙였다 — 어느 쪽인지 알 수 없다');
+  assert.equal(byCode.has('A5'), false, '캐시에 없는 단지를 적었다');
+  assert.equal(r.ambiguous, 2, '동명으로 건너뛴 수가 안 맞는다');
+});
+
+test('_br 보존 — facility 통째 교체 경로가 건축물대장 값을 지우지 않는다', () => {
+  const fs = require('fs'); const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '../services/aptFacilityService.js'), 'utf8');
+  const i = src.indexOf('async function backfillFacilityByKaptCode');
+  assert.ok(i >= 0, 'backfillFacilityByKaptCode 를 못 찾았다');
+  const body = src.slice(i, i + 3000);
+  // 이 함수는 facility 를 **통째로 교체**한다. 보존이 빠지면 empty 재시도(14일 주기)마다 건축물대장
+  //   세대수가 지워져 "채웠는데 며칠 뒤 다시 미상" 이 된다 — 사후 원인 추적이 매우 어렵다.
+  assert.match(body, /select\('facility'\)/, '기존 facility 를 읽지 않으면 보존할 수 없다');
+  assert.match(body, /_empty: true, _br: prevBr/, '실패 sentinel 경로가 _br 을 버린다');
+  assert.match(body, /facilityToStore\._br = prevBr/, '성공 경로가 _br 을 버린다');
+  // raw 를 그대로 넘기면 _br 을 붙일 때 상류 객체를 오염시킨다 → 복사본이어야 한다
+  assert.match(body, /detail \? \{ \.\.\.raw, _dtl: detail \} : \{ \.\.\.raw \}/, 'facilityToStore 가 raw 참조를 그대로 쓴다');
+});

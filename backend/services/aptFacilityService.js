@@ -597,6 +597,17 @@ async function backfillFacilityByKaptCode(kaptCode) {
   if (!kaptCode) return { ok: false, reason: 'no-kaptCode' };
   const a = admin();
   if (!a) return { ok: false, reason: 'no-admin' };
+  // HH-BR-PRESERVE-2026-08-17 (Sprint MMMMMMM-23): 아래 두 update 는 facility 를 **통째로 교체**한다.
+  //   건축물대장 보강값(`_br`)을 여기서 살려두지 않으면 'empty' 재시도(14일 주기, facilityBackfill Phase C)가
+  //   돌 때마다 지워져 세대수가 영원히 미확인으로 되돌아간다 — 넣는 경로만 만들고 이걸 놓치면
+  //   "채웠는데 며칠 뒤 다시 비어 있다"가 되고, 그 원인은 사후에 찾기 대단히 어렵다.
+  //   실패 sentinel 경로도 동일하게 보존한다(오히려 그쪽이 _br 이 필요한 단지다).
+  let prevBr = null;
+  try {
+    const { data: prev } = await a.from('apt_master').select('facility').eq('kapt_code', kaptCode).maybeSingle();
+    if (prev && prev.facility && prev.facility._br) prevBr = prev.facility._br;
+  } catch (_) { /* 보존 실패가 백필 자체를 막아선 안 된다 */ }
+
   const [raw, detail] = await Promise.all([
     fetchFromApi(kaptCode),
     getAptDtlInfo(kaptCode).catch(() => null),
@@ -604,12 +615,13 @@ async function backfillFacilityByKaptCode(kaptCode) {
   if (!raw) {
     // 실패 sentinel — facility 가 NULL 이 아니게 만들어 backfill 후보에서 빠지게(무한재시도 차단).
     await a.from('apt_master').update({
-      facility: { _empty: true },
+      facility: prevBr ? { _empty: true, _br: prevBr } : { _empty: true },
       facility_fetched_at: new Date().toISOString(),
     }).eq('kapt_code', kaptCode).then(() => {}, () => {});
     return { ok: false, reason: 'no-basisinfo', kaptCode };
   }
-  const facilityToStore = detail ? { ...raw, _dtl: detail } : raw;
+  const facilityToStore = detail ? { ...raw, _dtl: detail } : { ...raw };
+  if (prevBr) facilityToStore._br = prevBr;   // KAPT 가 성공해도 남긴다 — buildFacility 가 3순위로만 쓴다
   const { error } = await a.from('apt_master').update({
     facility: facilityToStore,
     facility_fetched_at: new Date().toISOString(),
