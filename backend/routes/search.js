@@ -836,6 +836,16 @@ router.get('/facility', async (req, res) => {
   if (!admin) return res.status(503).json({ error: '서비스 일시 불가' });
 
   try {
+    // AC-PARALLEL-2026-08-17 (실측 후 정정): 학교 블록과만 겹치면 **프론트 경로에서는 이득이 0** 이다.
+    //   프론트는 mode 를 `basic`(모달 첫 표시) 과 `schools`(lazy) 로만 쓴다(grep 실측, `full` 호출 없음):
+    //     - basic  → 학교 블록이 통째로 스킵 → 겹칠 상대가 없다
+    //     - schools → alias 가 [] 로 즉시 반환 → 겹칠 상대가 없다
+    //   실제로 남는 유일한 병렬화 기회는 **resolveFacility(KAPT/DB) ∥ alias(DB)** 다. 둘 다
+    //   req.query 와 admin 만 쓰고 서로를 참조하지 않는다 → 여기서 미리 띄우고 아래에서 기다린다.
+    //   ⚠ `.catch(()=>{})` 는 **unhandled rejection 경고만** 막는다. 원본 promise 는 여전히 rejected
+    //     상태로 남아 아래 Promise.all 이 그대로 받는다 → 실패 의미·전파 경로는 종전과 동일하다.
+    const _altP = _fetchAltCandidates();
+    _altP.catch(() => {});
     const facility = await resolveFacility({ aptName, sigungu, umdNm, aptSeq, lawdCd });
 
     // STAB-AUDIT-2026-05-07 P0+P1+P2: 학교 정보 통합 (검색 path 풍부화)
@@ -891,7 +901,9 @@ router.get('/facility', async (req, res) => {
     // Phase 4 (2026-04-26): 토큰 매칭 우선순위 — 정식명 핵심 단어가 MOLIT 신고명에 포함되면
     //   같은 단지일 가능성 높음 (예: '공릉풍림아이원' 의 '풍림' → '풍림아파트A/B' 우선).
     //   이전: 거래량 순 50건 안에 풍림아파트B(14건) 누락 → 사용자 거래 누락.
-    const _fetchAltCandidates = async () => {
+    // ⚠ 화살표 const 가 아니라 **함수 선언**이다 — 위쪽(resolveFacility 앞)에서 먼저 호출해야 해서
+    //   호이스팅이 필요하다. 정의를 통째로 위로 옮기면 diff 가 커지고 검증이 어려워진다.
+    async function _fetchAltCandidates() {
       // FACILITY-SPLIT: schools 는 alias DB 조회 불필요 (원래 `if` 게이트를 조기 return 으로 뒤집었을 뿐)
       if (!(mode !== 'schools' && sigungu && umdNm)) return [];
       const { data: alts } = await admin
@@ -945,10 +957,11 @@ router.get('/facility', async (req, res) => {
       //   backend update 가 RLS/jsonb 이슈로 미작동 → 매 호출 실패 DB 호출 = 응답 지연만 유발.
       //   RLS 디버깅은 사용자 가치 낮음 + 보안 위험 → 중단. 동적 계산으로 충분.
       return candidates.slice(0, 8).map(({ _score, ...c }) => c);
-    };
-    // PARALLEL-BLOCKS-2026-08-17 (Plan 030): 학교 블록(느림)과 alias 조회(DB 한 방)를 겹친다.
+    }
+    // PARALLEL-BLOCKS-2026-08-17 (Plan 030): 학교 블록(느림)과 alias 조회를 겹친다.
     //   학교 블록은 값을 상위 스코프 변수에 대입하므로 반환값을 쓰지 않는다(구멍 뚫린 구조분해).
-    const [, altCandidates] = await Promise.all([_schoolsBlock(), _fetchAltCandidates()]);
+    //   `_altP` 는 위에서 이미 시작됐다 — 여기서는 기다리기만 한다.
+    const [, altCandidates] = await Promise.all([_schoolsBlock(), _altP]);
     // FACILITY-HELPER-2026-05-12 + DTL-INFO-2026-05-13 (Sprint X):
     //   resolveFacility 반환: { kaptCode, official, raw, detail } — Sprint X 부터 detail 동봉.
     //   buildFacility(info, kaptCode, detail) 로 표준 facility 객체 빌드 (주차 등 detail 필드 포함).
