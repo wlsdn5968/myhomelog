@@ -656,21 +656,54 @@ router.get('/in-bounds', async (req, res) => {
     //   마커 평균가·건수가 왜곡됐다. range 페이징(상한 10,000)으로 전량 수집 — 통상 viewport 는
     //   1페이지(<1000)로 끝나 왕복 증가 없음. 2차 정렬키 id 로 페이지 경계 안정화.
     const _cut180 = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-    const txs = [];
-    for (let _from = 0; _from <= 9000; _from += 1000) {
-      let _q = admin
-        .from('molit_transactions')
-        .select('apt_name, sigungu, umd_nm, deal_amount, build_year, deal_date, lawd_cd')
-        .in('apt_name', names);
-      if (umds.length) _q = _q.in('umd_nm', umds); // 동 스코프 — 전국 동명 충돌 차단 + row budget 보호
-      const { data: _page } = await _q
-        .gte('deal_date', _cut180)
-        .order('deal_date', { ascending: false })
-        .order('id', { ascending: false })
-        .range(_from, _from + 999);
-      if (_page && _page.length) txs.push(..._page);
-      if (!_page || _page.length < 1000) break;
-    }
+    // PARALLEL-BLOCKS-2026-08-17 (Plan 030): 아래 거래 페이징과 alias 페이징은 **서로의 결과를
+    //   전혀 참조하지 않는다**(둘 다 위에서 이미 계산된 names/umds 만 읽고, 합치는 코드는 양쪽이
+    //   다 끝난 뒤에 온다). 순차로 돌 이유가 없어 Promise.all 로 겹친다. 지도를 움직일 때마다
+    //   호출되는 핫패스다.
+    //   ⚠ 각 promise 에 `.catch` 를 **일부러 달지 않았다** — 현재 동작은 조회가 throw 하면
+    //     라우트 상위 try/catch 로 가는 것이고, 여기서 빈 배열로 삼키면 마커 개수·평균가가
+    //     조용히 왜곡된다(이 저장소가 겪은 사고 유형). 병렬화는 대기만 겹칠 뿐 실패 의미는 그대로다.
+    //   ⚠ 페이지 크기·상한(9000/4000)·정렬 키·필터는 한 글자도 바꾸지 않았다 — 각각 근거 주석이 있다.
+    const _fetchTxs = async () => {
+      const txs = [];
+      for (let _from = 0; _from <= 9000; _from += 1000) {
+        let _q = admin
+          .from('molit_transactions')
+          .select('apt_name, sigungu, umd_nm, deal_amount, build_year, deal_date, lawd_cd')
+          .in('apt_name', names);
+        if (umds.length) _q = _q.in('umd_nm', umds); // 동 스코프 — 전국 동명 충돌 차단 + row budget 보호
+        const { data: _page } = await _q
+          .gte('deal_date', _cut180)
+          .order('deal_date', { ascending: false })
+          .order('id', { ascending: false })
+          .range(_from, _from + 999);
+        if (_page && _page.length) txs.push(..._page);
+        if (!_page || _page.length < 1000) break;
+      }
+      return txs;
+    };
+    // (원래 `if (umds.length)` 블록 안에 있던 루프 — 조건을 그대로 유지하고 거짓이면 빈 배열)
+    const _fetchMasters = async () => {
+      if (!umds.length) return [];
+      // REST-CAP-FIX-2026-08-09: limit 없는 SELECT 는 PostgREST 서버 캡(1000)에 조용히 잘림 —
+      //   molit_aliases 보유 행이 14,901(사실상 전체)라 광역 viewport(상위 100동 = 실측 4,574행)에서
+      //   alias 병합 누락 → 같은 단지 마커 분리(ALIAS-MERGE 이전 버그) 재발 위험. kapt_code 안정
+      //   정렬 + range 페이징(상한 5,000).
+      const masters = [];
+      for (let _mf = 0; _mf <= 4000; _mf += 1000) {
+        const { data: _mp } = await admin
+          .from('apt_master')
+          .select('apt_name, sigungu, umd_nm, kapt_code, molit_aliases')
+          .in('umd_nm', umds)
+          .not('molit_aliases', 'is', null)
+          .order('kapt_code', { ascending: true })
+          .range(_mf, _mf + 999);
+        if (_mp && _mp.length) masters.push(..._mp);
+        if (!_mp || _mp.length < 1000) break;
+      }
+      return masters;
+    };
+    const [txs, _masters] = await Promise.all([_fetchTxs(), _fetchMasters()]);
     const aptStats = {};
     for (const t of (txs || [])) {
       // (apt_name|sigungu|umd_nm) 정확 키 — 동명 타지역 단지 합산 차단
@@ -688,27 +721,12 @@ router.get('/in-bounds', async (req, res) => {
     //   master 단지는 source:'master' + aptSeq(kaptCode) 부여 → frontend 가 검색과 동일한 상세 모달 fetch 가능.
     //   (umds 는 위 CROSS-REGION-FIX 에서 이미 계산 — 재사용)
     const aliasToMaster = {}; // key: `${alias}|${umd}` → master row
-    if (umds.length) {
-      // REST-CAP-FIX-2026-08-09: limit 없는 SELECT 는 PostgREST 서버 캡(1000)에 조용히 잘림 —
-      //   molit_aliases 보유 행이 14,901(사실상 전체)라 광역 viewport(상위 100동 = 실측 4,574행)에서
-      //   alias 병합 누락 → 같은 단지 마커 분리(ALIAS-MERGE 이전 버그) 재발 위험. kapt_code 안정
-      //   정렬 + range 페이징(상한 5,000).
-      const masters = [];
-      for (let _mf = 0; _mf <= 4000; _mf += 1000) {
-        const { data: _mp } = await admin
-          .from('apt_master')
-          .select('apt_name, sigungu, umd_nm, kapt_code, molit_aliases')
-          .in('umd_nm', umds)
-          .not('molit_aliases', 'is', null)
-          .order('kapt_code', { ascending: true })
-          .range(_mf, _mf + 999);
-        if (_mp && _mp.length) masters.push(..._mp);
-        if (!_mp || _mp.length < 1000) break;
-      }
-      for (const m of (masters || [])) {
-        const al = Array.isArray(m.molit_aliases) ? m.molit_aliases : [];
-        for (const a of al) aliasToMaster[`${a}|${m.umd_nm}`] = m;
-      }
+    // PARALLEL-BLOCKS-2026-08-17 (Plan 030): 조회 자체는 위 `_fetchMasters` 가 거래 조회와 병렬로
+    //   이미 끝냈다. 여기 남은 것은 순수 계산(역매핑 조립)뿐이다. `umds.length` 게이트는
+    //   `_fetchMasters` 안으로 옮겼고, 비면 빈 배열이라 이 루프가 안 돈다 — 동작 동일.
+    for (const m of (_masters || [])) {
+      const al = Array.isArray(m.molit_aliases) ? m.molit_aliases : [];
+      for (const a of al) aliasToMaster[`${a}|${m.umd_nm}`] = m;
     }
 
     // CANON-COORD-FIX-2026-06-03 (운영자 발견 "공릉풍림아이원 마커가 단지 아닌 충전소 위치에 찍힘"):
@@ -830,6 +848,13 @@ router.get('/facility', async (req, res) => {
     let nearbySchools = [];
     let schoolDistrict = null;
     let nearbyAcademies = null;
+    // PARALLEL-BLOCKS-2026-08-17 (Plan 030): 이 학교/학원 블록과 아래 alias 후보 블록은 서로를
+    //   전혀 참조하지 않는다(alias 는 req.query 의 aptName/sigungu/umdNm 만 읽는다). 순차로 두면
+    //   Kakao/NEIS 다수 콜(실측 4.7~7.3s)이 끝날 때까지 DB 한 방 조회가 그냥 기다린다.
+    //   ⚠ 기존 try/catch 를 **함수 안에 그대로** 둔다 — 학교 실패가 alias 를 죽이면 회귀다.
+    //   ⚠ nearbySchools/schoolDistrict/nearbyAcademies 는 상위 스코프 let 에 그대로 대입한다
+    //     (응답 조립부를 건드리지 않는 것이 우선).
+    const _schoolsBlock = async () => {
     if (mode !== 'basic') try { // FACILITY-SPLIT (Sprint IIII): basic 은 Kakao/NEIS 콜 전부 스킵
       const coord = await resolveCoord({
         kaptCode: facility?.kaptCode,
@@ -857,6 +882,7 @@ router.get('/facility', async (req, res) => {
     } catch (schoolErr) {
       logger.debug({ err: schoolErr.message, aptName }, '학교/학원 데이터 조회 실패 (무시)');
     }
+    };
 
     // Sprint OO: 학군 권역 라벨 (정적 강연 자료) — 좌표 없어도 sigungu/umdNm 만으로 매칭 가능
     const schoolCluster = resolveSchoolCluster({ sigungu, umdNm });
@@ -865,8 +891,9 @@ router.get('/facility', async (req, res) => {
     // Phase 4 (2026-04-26): 토큰 매칭 우선순위 — 정식명 핵심 단어가 MOLIT 신고명에 포함되면
     //   같은 단지일 가능성 높음 (예: '공릉풍림아이원' 의 '풍림' → '풍림아파트A/B' 우선).
     //   이전: 거래량 순 50건 안에 풍림아파트B(14건) 누락 → 사용자 거래 누락.
-    let altCandidates = [];
-    if (mode !== 'schools' && sigungu && umdNm) { // FACILITY-SPLIT: schools 는 alias DB 조회 불필요
+    const _fetchAltCandidates = async () => {
+      // FACILITY-SPLIT: schools 는 alias DB 조회 불필요 (원래 `if` 게이트를 조기 return 으로 뒤집었을 뿐)
+      if (!(mode !== 'schools' && sigungu && umdNm)) return [];
       const { data: alts } = await admin
         .from('molit_transactions')
         .select('apt_name, build_year')
@@ -913,12 +940,15 @@ router.get('/facility', async (req, res) => {
       }
       // 점수 ↓ → 단지명 ↑ 정렬, 상위 8개 (12 → 8 — false positive 차단)
       candidates.sort((a, b) => b._score - a._score || a.aptName.localeCompare(b.aptName));
-      altCandidates = candidates.slice(0, 8).map(({ _score, ...c }) => c);
       // 작업 D 철회 (2026-05-20, 총괄책임자 판단): molit_aliases DB backfill 제거.
       //   사유: altCandidates 가 이미 동적 계산 (작동 중) + read 로직 없어 저장해도 무의미.
       //   backend update 가 RLS/jsonb 이슈로 미작동 → 매 호출 실패 DB 호출 = 응답 지연만 유발.
       //   RLS 디버깅은 사용자 가치 낮음 + 보안 위험 → 중단. 동적 계산으로 충분.
-    }
+      return candidates.slice(0, 8).map(({ _score, ...c }) => c);
+    };
+    // PARALLEL-BLOCKS-2026-08-17 (Plan 030): 학교 블록(느림)과 alias 조회(DB 한 방)를 겹친다.
+    //   학교 블록은 값을 상위 스코프 변수에 대입하므로 반환값을 쓰지 않는다(구멍 뚫린 구조분해).
+    const [, altCandidates] = await Promise.all([_schoolsBlock(), _fetchAltCandidates()]);
     // FACILITY-HELPER-2026-05-12 + DTL-INFO-2026-05-13 (Sprint X):
     //   resolveFacility 반환: { kaptCode, official, raw, detail } — Sprint X 부터 detail 동봉.
     //   buildFacility(info, kaptCode, detail) 로 표준 facility 객체 빌드 (주차 등 detail 필드 포함).
