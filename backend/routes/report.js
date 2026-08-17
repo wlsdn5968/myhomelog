@@ -646,7 +646,14 @@ async function getPolicyContext() {
     landTrade: '규제지역 토지거래허가구역 — 2년 실거주 의무·갭투자 금지 (2026.7.5 동탄·기흥·구리 추가 지정)',
     policyLoans: ['보금자리론', '디딤돌', '신혼 디딤돌', '신생아 특례'],
     policyContact: '주택도시기금 nhuf.molit.go.kr · 1599-0001',
-    note: '대출 알선·소개 X. 본 정보는 정부 공시 자동 인용. 신청·자격은 별도 확인 필수.',
+    // SOURCE-HONEST-2026-08-17 (Sprint MMMMMMM-21): 종전 문구는 "본 정보는 정부 공시 **자동** 인용"
+    //   이었는데, 위 항목 중 자동으로 갱신되는 것은 **ltv·dsr(regulations_snapshot DB)** 뿐이고
+    //   regulatedAreas·landTrade·snapshot 은 **코드에 고정된 문자열**이다. 절대 룰 ②는
+    //   "출처 + 검증 일자 명시" 를 요구하는데, 하드코딩을 자동 인용이라 부르면 출처 표기를 오도한다.
+    //   ⚠ 값 자체는 그대로 둔다 — 규제 지정일이 바뀌면 주간 규제감시 cron 이 능동 탐지한다.
+    //     여기서 고치는 것은 **무엇이 자동이고 무엇이 고정인지** 를 정직하게 말하는 것뿐이다.
+    note: '대출 알선·소개 X. LTV·DSR 은 정부 공시 스냅샷에서 자동 인용하고, 규제지역·토지거래허가 범위는 '
+      + '표기된 지정일 기준으로 고정된 값이에요. 신청·자격과 최신 지정 현황은 별도 확인 필수.',
   };
 }
 
@@ -1148,11 +1155,26 @@ async function fetchCandidateApts(admin, input, limit) {
   //     약 11~12초였다. 배치 병렬로 3라운드면 **약 3초**다. 동시 요청 수는 4로 제한한다 —
   //     한 번에 12개를 던지는 이득(3초→1초)은 크지 않은데 커넥션 부담은 3배가 되고,
   //     그 부담이 안전한지는 **재보지 않았다**(재보지 않은 값을 고르지 않는다).
+  //   ⚠ **첫 페이지는 반드시 단독으로** 받는다(POOL-COLD-2026-08-17, 프로덕션 DB 실측으로 발견).
+  //     처음엔 0번 페이지부터 4개를 동시에 던졌는데, **콜드 상태에서 4개가 서로 경합해 전부
+  //     statement timeout** 이 났다(실측: 4개 동시 → 4,177ms 만에 4개 모두 실패).
+  //     같은 쿼리를 한 번 워밍한 뒤에는 4개 병렬이 **167ms** 에 끝난다 — 즉 병렬 자체가 아니라
+  //     **콜드 경합**이 문제였다. 첫 페이지를 혼자 보내 워밍하면 그 창이 사라진다.
+  //     ⚠ statement_timeout 은 service_role 도 무제한이 아니다 — `authenticator` 의 **8s** 를 물려받는다
+  //       (`pg_roles.rolconfig` 실측: anon 3s · authenticated 8s · authenticator 8s · service_role null).
   const PAGE = 1000, POOL_MAX = 12000, POOL_BUDGET_MS = 25000, POOL_CONCURRENCY = 4;
   const _poolStart = Date.now();
   let txs = [], poolComplete = false;
-  for (let from = 0; from < POOL_MAX && !poolComplete; from += PAGE * POOL_CONCURRENCY) {
-    if (from > 0 && Date.now() - _poolStart > POOL_BUDGET_MS) break;   // 예산 초과 → 잘린 상태로 진행
+  {
+    // ① 첫 페이지 단독 — 콜드 경합 방지. 여기서 덜 차면(구 단위 선택 등) 더 볼 것도 없다.
+    const { data: first, error: firstErr } = await _newPageQuery().range(0, PAGE - 1);
+    if (firstErr) throw firstErr;
+    txs = first || [];
+    if (txs.length < PAGE) poolComplete = true;
+  }
+  // ② 이후는 배치 병렬. 결과는 offsets 순서로 돌아오므로 concat 만으로 정렬이 보존된다.
+  for (let from = PAGE; from < POOL_MAX && !poolComplete; from += PAGE * POOL_CONCURRENCY) {
+    if (Date.now() - _poolStart > POOL_BUDGET_MS) break;   // 예산 초과 → 잘린 상태로 진행
     const offsets = [];
     for (let i = 0; i < POOL_CONCURRENCY; i++) {
       const off = from + i * PAGE;
@@ -1161,7 +1183,6 @@ async function fetchCandidateApts(admin, input, limit) {
     const pages = await Promise.all(offsets.map(off =>
       _newPageQuery().range(off, off + PAGE - 1)
         .then(r => (r.error ? { err: r.error } : { rows: r.data || [] }))));
-    // 결과는 offsets 순서로 돌아오므로 concat 만으로 정렬(deal_date DESC, id DESC)이 보존된다.
     for (const p of pages) {
       if (p.err) throw p.err;                       // 조회 실패는 종전처럼 그대로 던진다
       txs = txs.concat(p.rows);

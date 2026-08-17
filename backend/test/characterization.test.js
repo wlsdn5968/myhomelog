@@ -2681,6 +2681,13 @@ test('보고서 후보 풀 — 상한·시간예산·잘림 표기가 실제 커
   const cm = src.match(/POOL_CONCURRENCY\s*=\s*(\d+)/);
   assert.ok(cm && Number(cm[1]) >= 2 && Number(cm[1]) <= 8,
     `POOL_CONCURRENCY 가 ${cm && cm[1]} 이다 — 2~8 범위를 벗어나면 왕복 부담을 다시 실측할 것`);
+  // ④-c ⚠ **첫 페이지는 단독**이어야 한다. 프로덕션 DB 실측에서 0번부터 4개를 동시에 던지면
+  //     콜드 경합으로 **4개 전부 statement timeout**(4,177ms)이 났다. 한 번 워밍하면 4개 병렬이 167ms.
+  //     statement_timeout 은 service_role 도 무제한이 아니다(authenticator 의 8s 를 물려받는다).
+  assert.match(src, /첫 페이지 단독 — 콜드 경합 방지/, '첫 페이지 단독 워밍 단계가 사라졌다');
+  const loopStart = src.match(/for \(let from = (\w+); from < POOL_MAX && !poolComplete;/);
+  assert.ok(loopStart && loopStart[1] === 'PAGE',
+    `병렬 루프가 ${loopStart && loopStart[1]} 부터 시작한다 — 0 부터면 첫 배치가 콜드 경합에 노출된다`);
   // 2차 정렬키 — 병렬이라 페이지 경계의 동점 처리가 더 중요해졌다.
   assert.match(src, /\.order\('id', \{ ascending: false \}\)/, '2차 정렬키(id)가 없다 — 페이지 경계에서 중복·누락이 생긴다');
 
@@ -2772,6 +2779,13 @@ test('출처 없는 단정·수치가 화면에 없다 (청약 커트라인·신
   // ④ 보고서 프롬프트 쪽 금지 지시가 살아 있는지도 함께 고정 — 한쪽만 남으면 다시 갈린다.
   const rep = fs.readFileSync(path.join(__dirname, '../routes/report.js'), 'utf8');
   assert.ok(rep.includes('조건 부합 단지'), 'report.js 프롬프트의 대체 표현 지시가 사라졌다');
+
+  // ⑤ 정책 블록의 출처 표기가 정직하다 — 자동 갱신되는 것(LTV·DSR)과 코드에 고정된 것
+  //    (규제지역·토허 범위)을 구분해 말해야 한다. 전부를 "자동 인용" 이라 부르면 출처를 오도한다.
+  assert.equal(/본 정보는 정부 공시 자동 인용/.test(rep), false,
+    '하드코딩된 규제 범위까지 "자동 인용" 이라고 말한다 — 절대 룰 ②(출처 명시) 위반');
+  assert.match(rep, /LTV·DSR 은 정부 공시 스냅샷에서 자동 인용/,
+    '무엇이 자동이고 무엇이 고정인지 구분하는 문구가 사라졌다');
 });
 
 test('단지 카드 — 기간 라벨은 서버 값을 쓰고, 세대당 주차에는 총량이 함께 붙는다', () => {
