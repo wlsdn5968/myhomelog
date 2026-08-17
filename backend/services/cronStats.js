@@ -175,8 +175,53 @@ function findStaleCrons(latest, nowMs) {
   return { stale, never };
 }
 
+/**
+ * REGION-FRESHNESS-2026-08-17 (Sprint MMMMMMM-22): **지역 단위** 적재 중단 판정. 순수 함수.
+ *
+ * [왜 필요한가 — 이 저장소가 두 번 겪은 사고]
+ *   · 광주 5개 구 44일 무적재(2026-06-27~) — 행정구역 통합으로 옛 코드에 빈 응답
+ *   · 인천 중구·동구·서구 45일 무적재(2026-06-26~) — 완전히 같은 메커니즘
+ *   둘 다 HTTP 200 · rows_fetched=0 이라 status='ok' 였고 오류 카운터에 잡히지 않았다.
+ *
+ * [기존 감시 두 개로는 원리적으로 못 잡는다]
+ *   · checkIngestFreshness 는 **전역 MAX(ingested_at)** 하나만 본다 — 121곳 중 1곳만 살아 있어도 신선.
+ *   · ZERO-FETCH-WATCH 는 health.crons 에 숫자만 올리고 경보가 없다. 게다가 molit-ingest 는
+ *     slot 3개로 나뉘어 한 회차 기록엔 지역의 1/3 만 담긴다.
+ *
+ * [임계 30일의 근거 — 2026-08-17 전국 전수 실측]
+ *   거래 이력이 있는 121개 지역의 "마지막 거래일로부터 경과일" 분포:
+ *     ≤7일 **113곳** · 8~14일 4곳 · 15~30일 1곳(과천 20일) · 30일 초과 3곳
+ *   30일 초과 3곳은 전부 폐지된 인천 옛 구(28110·28140·28260)로 **정상값**이다.
+ *   → 30일이면 현재 오탐 0 이고, 위 두 사고(44일·45일)는 둘 다 잡힌다.
+ *   여유가 가장 적은 정상 지역은 과천(20일)이라 10일치 완충이 남는다.
+ *
+ * @param {object} latestByCode  { [lawdCd]: 'YYYY-MM-DD' | null }  null = 거래 이력이 한 번도 없음
+ * @param {Set<string>} retired  폐지 코드(신규 적재가 없는 것이 정상) — transactionService 가 소유
+ * @returns {{ stale: Array<{lawdCd,lastDealDate,days}>, never: string[] }}
+ *   never 는 **경보로 올리지 않는다** — 옹진군(28720)처럼 원래 아파트 거래가 없는 지역이 여기 들어온다
+ *   (실측: LAWD_CODES 122개 중 거래 이력이 있는 곳은 121개). findStaleCrons 의 never 와 같은 원칙이다.
+ */
+const REGION_STALE_DAYS = 30;
+
+function pickStaleRegions(latestByCode, retired, nowMs, staleDays) {
+  const limitDays = Number.isFinite(staleDays) ? staleDays : REGION_STALE_DAYS;
+  const stale = [], never = [];
+  for (const [code, d] of Object.entries(latestByCode || {})) {
+    if (retired && typeof retired.has === 'function' && retired.has(code)) continue;
+    if (!d) { never.push(code); continue; }
+    // deal_date 는 날짜형(YYYY-MM-DD) — UTC 자정으로 고정해 서버 TZ 에 좌우되지 않게 한다.
+    const t = Date.parse(`${String(d).slice(0, 10)}T00:00:00Z`);
+    if (!Number.isFinite(t)) continue;      // 판독 불가 → 침묵(오탐 방지)
+    const days = Math.floor((nowMs - t) / 86400000);
+    if (days > limitDays) stale.push({ lawdCd: code, lastDealDate: String(d).slice(0, 10), days });
+  }
+  stale.sort((a, b) => b.days - a.days);
+  return { stale, never };
+}
+
 // _pick 은 "민감 필드가 health 로 새지 않는다"는 보안 성질을 담당하므로 테스트에서 직접 고정한다.
 module.exports = {
   recordCronRun, getCronRuns, getCronLatest, _pick,
   CRON_MAX_AGE_H, CRON_PATH_TO_JOBS, findStaleCrons,
+  REGION_STALE_DAYS, pickStaleRegions,
 };

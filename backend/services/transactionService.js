@@ -241,6 +241,14 @@ const LAWD_CODES = {
   '양평군': '41830', '가평군': '41820', '연천군': '41800',
 };
 
+// REGION-FRESHNESS-2026-08-17 (Sprint MMMMMMM-22): 위 인천 주석이 말한 "앞으로 신규 적재가 없고,
+//   그것이 정확한 상태" 인 코드를 **기계가 읽을 수 있는 형태**로 고정한다.
+//   주석으로만 있으면 지역 적재 중단 감시가 이 3곳을 매일 경보로 올려 **진짜 중단을 가린다**(경보 피로).
+//   ⚠ LAWD_CODES 에서 지우는 것과는 다르다 — 지우면 적재된 10,074건의 지역명 매핑과
+//     지역 대시보드(routes/region.js 의 LAWD_CODE_TO_NAME 조회)가 깨진다. 목록엔 남기고 감시만 뺀다.
+//   폐지 근거는 위 INCHEON-REORG-2026-08-10 주석(행정안전부 행정표준코드관리시스템 실조회)과 동일.
+const RETIRED_LAWD_CODES = new Set(['28110', '28140', '28260']);
+
 function isMolitKeyMissing() {
   const key = process.env.MOLIT_API_KEY;
   return !key || key === 'your_molit_api_key';
@@ -693,4 +701,4 @@ const LAWD_CODE_TO_NAME = Object.fromEntries(
   Object.entries(LAWD_CODES).map(([name, code]) => [code, _stripCityPrefix(name)])
 );
 
-module.exports = { getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, LAWD_CODES, LAWD_CODE_TO_NAME };
+module.exports = { getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES };

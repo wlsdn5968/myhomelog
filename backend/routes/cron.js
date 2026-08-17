@@ -110,6 +110,59 @@ async function checkCronStaleness() {
   } catch (e) { logger.warn({ err: e.message }, 'cron 미실행 점검 실패(무시)'); }
 }
 
+// REGION-FRESHNESS-2026-08-17 (Sprint MMMMMMM-22): 위 두 감시의 사각지대 — **지역 단위** 적재 중단.
+//   checkIngestFreshness 는 전역 MAX 하나만 보므로 121곳 중 1곳만 살아 있어도 침묵하고,
+//   checkCronStaleness 는 cron 이 "돌았는가"만 보므로 돌면서 특정 지역만 빈 응답인 경우를 못 본다.
+//   광주 44일·인천 45일 무적재가 정확히 그 틈에서 났다. 판정 기준은 cronStats.pickStaleRegions 주석 참조.
+//   [비용 실측] idx_molit_lawd_date(lawd_cd, deal_date DESC) Index Only Scan — 지역당 buffer 5 · 4.5ms.
+//   ⚠ 한계: 이 점검도 retention 에 얹혀 있어 retention 이 안 돌면 그날은 건너뛴다. 다만 임계가 30일이라
+//     하루이틀 누락으로는 판정이 흔들리지 않는다(checkCronStaleness 가 그 누락 자체를 따로 잡는다).
+const REGION_FRESH_CONCURRENCY = 6;
+
+async function checkRegionIngestFreshness() {
+  try {
+    const { getSupabaseAdmin } = require('../db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return;
+    const tx = require('../services/transactionService');
+    const { pickStaleRegions } = require('../services/cronStats');
+    const codes = [...new Set(Object.values(tx.LAWD_CODES))];
+    if (!codes.length) return;
+
+    const latestOf = (code) => admin.from('molit_transactions')
+      .select('deal_date').eq('lawd_cd', code)
+      .order('deal_date', { ascending: false }).limit(1).maybeSingle()
+      .then(r => ({ code, dealDate: (r.data && r.data.deal_date) || null, err: r.error || null }));
+
+    // ⚠ 8fa8181 의 교훈: 콜드 상태에서 여러 개를 동시에 던지면 서로 경합해 **전부** statement timeout 난다
+    //   (보고서 페이징 실측: 동시 4개 → 4,177ms 전멸 / 워밍 후 동시 4개 → 167ms). 첫 건은 단독으로 돈다.
+    const results = [await latestOf(codes[0])];
+    for (let i = 1; i < codes.length; i += REGION_FRESH_CONCURRENCY) {
+      const batch = await Promise.all(codes.slice(i, i + REGION_FRESH_CONCURRENCY).map(latestOf));
+      results.push(...batch);
+    }
+
+    // 조회가 한 건이라도 실패하면 "그 지역이 죽었다"와 구별할 수 없다 → 판정 보류(침묵).
+    //   checkIngestFreshness 의 "판단 불가 시 침묵" 과 같은 원칙 — 오탐이 감시를 죽인다.
+    const failed = results.filter(r => r.err);
+    if (failed.length) {
+      logger.warn({ failed: failed.length, sample: failed[0].err.message }, '지역 신선도 조회 실패 — 판정 보류');
+      return;
+    }
+
+    const latestByCode = Object.fromEntries(results.map(r => [r.code, r.dealDate]));
+    const { stale, never } = pickStaleRegions(latestByCode, tx.RETIRED_LAWD_CODES, Date.now());
+    if (!stale.length) return;
+    const named = stale.slice(0, 20).map(s => ({ ...s, name: tx.LAWD_CODE_TO_NAME[s.lawdCd] || s.lawdCd }));
+    // 고정 메시지 = Sentry 이슈 그룹 유지. 가변값은 extra (checkIngestFreshness 와 동일 규약).
+    Sentry.captureMessage('cron 감시: 일부 지역의 실거래 적재가 30일 이상 멈춤 — 행정구역 코드 변경 여부 확인 필요', {
+      level: 'error', tags: { route: 'cron.retention', monitor: 'region-freshness' },
+      extra: { staleCount: stale.length, stale: named, neverIngested: never },
+    });
+    logger.error({ staleCount: stale.length, stale: named }, '지역 단위 적재 중단 감지');
+  } catch (e) { logger.warn({ err: e.message }, '지역 신선도 점검 실패(무시)'); }
+}
+
 router.post('/retention', async (req, res) => {
   try {
     const started = Date.now();
@@ -134,6 +187,7 @@ router.post('/retention', async (req, res) => {
     }).catch(() => {});
     await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시(실패는 내부에서 삼킴)
     await checkCronStaleness();   // Sprint MMMMMMM-12 — 안 돈 cron 감시
+    await checkRegionIngestFreshness(); // Sprint MMMMMMM-22 — 지역 단위 적재 중단 감시
     // RATE-WARM-2026-08-08 (Sprint BBBBBBB-3): HF·ECOS 금리 캐시 워밍 — health 의 비차단 백그라운드
     //   갱신은 응답 반환 후 서버리스 동결로 완주가 안 될 수 있다(HF 실측: 12:01 까지 반복 ECONNABORTED,
     //   신규 실패 기록조차 없는 "잘림" 상태). 요청 경로인 여기서 하루 1회 완주시켜 Redis 에 남기면
@@ -169,6 +223,7 @@ router.get('/retention', async (req, res) => {
     }).catch(() => {});
     await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시
     await checkCronStaleness();   // Sprint MMMMMMM-12 — 안 돈 cron 감시(POST 쌍둥이와 동일)
+    await checkRegionIngestFreshness(); // Sprint MMMMMMM-22 — 지역 단위 적재 중단 감시(POST 쌍둥이와 동일)
     try { await require('../services/hfService').getHfRates(); } catch (_) {}   // Sprint BBBBBBB-3 워밍
     try { await require('../services/ecosService').getEcosRates(); } catch (_) {}
     res.json({ ok: true, summary, popularSnapshot });

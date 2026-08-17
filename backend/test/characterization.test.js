@@ -2592,6 +2592,9 @@ test('cron 실행 기록이 성공·실패 양쪽에 남는다 + await 로 유�
   for (const [name, part] of [['POST', src.slice(iPost, iGet)], ['GET', src.slice(iGet, iMolit)]]) {
     assert.match(part, /await checkCronStaleness\(\)/, `retention ${name} 에 cron 미실행 감시가 없다`);
     assert.ok(part.includes("recordCronRun('retention'"), `retention ${name} 이 자기 실행을 기록하지 않는다`);
+    // Sprint MMMMMMM-22: 지역 단위 적재 중단 감시도 쌍둥이 양쪽에 있어야 한다.
+    //   실제로 Vercel cron 이 호출하는 쪽이 GET 이었던 전례가 있다(GET-PARITY 주석) — 한쪽만 넣으면 감시가 안 돈다.
+    assert.match(part, /await checkRegionIngestFreshness\(\)/, `retention ${name} 에 지역 적재 중단 감시가 없다`);
   }
 
   // ④ 감시 대상 목록이 vercel.json 과 1:1 이다 — 새 cron 이 감시에서 조용히 빠지는 것을 막는다.
@@ -2631,6 +2634,57 @@ test('findStaleCrons — 기대 주기 초과만 경보, 기록 없음은 침묵
 
   // Redis 미설정(null) 이어도 던지지 않는다 — 감시가 cron 본체를 막아선 안 된다.
   assert.deepEqual(findStaleCrons(null, now).stale, []);
+});
+
+// ── REGION-FRESHNESS-2026-08-17 (Sprint MMMMMMM-22) ───────────────────────────
+// 이 저장소는 **지역 단위** 적재 중단으로 두 번 사고를 냈다(광주 44일 · 인천 45일).
+// 둘 다 HTTP 200 · 0건이라 status='ok' 였고, 전역 신선도 감시(MAX(ingested_at) 하나)로는
+// 원리적으로 보이지 않는다. 판정을 실행해서 고정한다 — 형태 검사로는 경계값(> vs >=)을 못 잡는다.
+test('pickStaleRegions — 30일 초과만 경보 · 폐지 코드 제외 · 이력 없음은 침묵', () => {
+  const { pickStaleRegions, REGION_STALE_DAYS } = require('../services/cronStats');
+  const now = Date.parse('2026-08-17T05:00:00Z');
+  const retired = new Set(['28110', '28140', '28260']);
+
+  const { stale, never } = pickStaleRegions({
+    '11680': '2026-08-14',   // 3일 — 정상
+    '41290': '2026-07-28',   // 20일 — 실측상 가장 오래된 **정상** 지역(과천). 경보가 나면 안 된다
+    '29110': '2026-07-04',   // 44일 — 광주 사고 재현. 반드시 잡혀야 한다
+    '28260': '2026-06-24',   // 54일이지만 **폐지 코드** → 제외
+    '28720': null,           // 거래 이력 자체가 없음(옹진군) → never, 경보 아님
+  }, retired, now);
+
+  const codes = stale.map(s => s.lawdCd);
+  assert.deepEqual(codes, ['29110'], `경보 대상이 정확히 광주 1곳이어야 한다: ${JSON.stringify(stale)}`);
+  assert.equal(stale[0].days, 44, '경과일 계산이 어긋난다');
+  assert.equal(stale[0].lastDealDate, '2026-07-04');
+  assert.deepEqual(never, ['28720'], '이력 없는 지역은 never 로만 분류돼야 한다');
+
+  // 경계값 — 임계와 정확히 같은 날은 경보가 아니고, 하루 더 지나면 경보다(> 인지 >= 인지 고정).
+  const at = (days) => new Date(now - days * 86400000).toISOString().slice(0, 10);
+  assert.equal(pickStaleRegions({ '11680': at(REGION_STALE_DAYS) }, retired, now).stale.length, 0,
+    `${REGION_STALE_DAYS}일 정확히는 경보 대상이 아니어야 한다`);
+  assert.equal(pickStaleRegions({ '11680': at(REGION_STALE_DAYS + 1) }, retired, now).stale.length, 1,
+    `${REGION_STALE_DAYS + 1}일은 경보 대상이어야 한다`);
+
+  // 서버 런타임 TZ 는 UTC 다 — 로컬(한국)에서만 통과하는 계산이 되면 안 된다(TZ 사고 이력).
+  assert.equal(pickStaleRegions({ '11680': '2026-07-04' }, retired, now).stale[0].days, 44);
+
+  // 빈 입력·retired 미전달에도 던지지 않는다 — 감시가 cron 본체를 막아선 안 된다.
+  assert.deepEqual(pickStaleRegions(null, null, now).stale, []);
+  assert.deepEqual(pickStaleRegions({}, undefined, now).never, []);
+});
+
+test('RETIRED_LAWD_CODES — 감시에서만 빼고 LAWD_CODES 에는 남아 있어야 한다', () => {
+  const { LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES } = require('../services/transactionService');
+  const all = new Set(Object.values(LAWD_CODES));
+  for (const code of RETIRED_LAWD_CODES) {
+    // ⚠ 지우면 적재된 인천 옛 구 거래의 지역명 매핑과 지역 대시보드가 깨진다(transactionService 주석).
+    assert.ok(all.has(code), `폐지 코드 ${code} 를 LAWD_CODES 에서 지우면 안 된다 — 감시 제외만 하는 것이다`);
+    assert.ok(LAWD_CODE_TO_NAME[code], `폐지 코드 ${code} 의 지역명 매핑이 사라졌다`);
+  }
+  // 폐지 목록이 전체를 삼키면 감시가 통째로 꺼진다 — 그런 실수를 막는다.
+  assert.ok(RETIRED_LAWD_CODES.size > 0 && RETIRED_LAWD_CODES.size < all.size / 4,
+    `폐지 목록이 비정상적으로 크다: ${RETIRED_LAWD_CODES.size}/${all.size}`);
 });
 
 // ── POOL-COVERAGE-2026-08-17 (Sprint MMMMMMM-13) ──────────────────────────────
