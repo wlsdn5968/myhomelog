@@ -3208,3 +3208,36 @@ test('pushNotify — 누락 내성 창 72h + 캡에서 최신을 버리지 않�
   assert.match(src, /rows\.length >= ROW_CAP/, '거래 조회 캡 도달 경고가 없다');
   assert.match(src, /상한\(500\)에 닿음/, '구독자 조회 상한 경고가 없다');
 });
+
+// ── HH-BR-OBSERV-2026-08-17 (Sprint MMMMMMM-26) ───────────────────────────────
+// emptyFetch·householdsZero 는 **KAPT 커버리지** 지표라 건축물대장으로 세대수를 채워도 안 줄어든다.
+// 그래서 지표만 보면 "407곳 미확인" 이 영원히 유지된다 — 실제로 해소된 몫이 안 보인다.
+// 여기서 고정하는 것은 "해소분을 어떻게 세는가" 다. 세는 방법을 틀리면 수치가 조용히 거짓이 된다.
+test('facilityQuality — 건축물대장 해소분은 모집단 안에서만 센다', () => {
+  const fs = require('fs'); const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  const i = src.indexOf('async function getFacilityQuality');
+  assert.ok(i >= 0, 'getFacilityQuality 를 못 찾았다');
+  const body = src.slice(i, i + 4000);
+
+  // (1) `_br` 을 **단독으로** 세면 안 된다. KAPT 가 나중에 성공한 행도 `_br` 을 보존하므로
+  //     (aptFacilityService 가 재조회 시 유실을 막으려고 남긴다) 모집단 밖까지 빼게 되어
+  //     실질 미확인이 과소 집계된다 → 반드시 각 모집단 조건과 AND 로 묶어야 한다.
+  assert.match(body, /not\('facility->_empty', 'is', null\)\.not\('facility->_br', 'is', null\)/,
+    '_empty 모집단 안의 해소분을 AND 로 세지 않는다');
+  const zeroBr = body.slice(body.indexOf("_dtl"));
+  assert.match(zeroBr, /kaptdaCnt[\s\S]{0,200}hoCnt[\s\S]{0,200}not\('facility->_br', 'is', null\)/,
+    '세대수0 모집단 안의 해소분을 AND 로 세지 않는다');
+
+  // (2) 실질 미확인은 뺄셈이되 음수 방어가 있어야 한다(모집단 정의가 바뀌어도 안전).
+  assert.match(body, /Math\.max\(0,\s*\(emp - brE\)\)\s*\+\s*Math\.max\(0,\s*\(hh - brZ\)\)/,
+    '실질 미확인 계산이 없거나 음수 방어가 없다');
+
+  // (3) 두 신규 필드가 실제로 응답에 실린다 — 안 실으면 관측이 여전히 불가능하다.
+  assert.match(body, /householdsFilledByBr:/, '해소 누계 필드가 응답에 없다');
+  assert.match(body, /householdsUnknown:/, '실질 미확인 필드가 응답에 없다');
+
+  // (4) warn 은 **실질 미확인**을 봐야 한다. emp 를 그대로 보면 건축물대장으로 다 채워도 계속 켜진다.
+  assert.match(body, /warn:[^;]*hhUnknown >= 50/, 'warn 이 실질 미확인이 아니라 옛 지표를 본다');
+  assert.equal(/warn:[^;]*emp >= 50/.test(body), false, 'warn 에 옛 emp 임계가 남아 있다');
+});

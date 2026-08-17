@@ -494,7 +494,14 @@ async function getFacilityQuality() {
     const admin = getSupabaseAdmin();
     if (!admin) return null;
     const H = () => ['*', { count: 'exact', head: true }];
-    const [total, facNull, empty, dtlMissing, hhZero] = await Promise.all([
+    // HH-BR-OBSERV-2026-08-17 (Sprint MMMMMMM-26): 아래 emptyFetch·householdsZero 는 **KAPT 커버리지**를
+    //   재는 지표다. 건축물대장으로 세대수를 채워도(Sprint MMMMMMM-23) 그 두 수치는 그대로 남는다 —
+    //   KAPT 가 여전히 못 준 것은 사실이기 때문이다. 그래서 지표만 보면 "407곳 미확인" 이 영원히 유지되고
+    //   실제로 해소된 몫이 보이지 않는다. crons.brWritten 은 **그 회차 처리량**이라 누계를 알 수 없다.
+    //   → 두 모집단 **안에서** 건축물대장으로 해소된 수를 따로 세어 '실질 미확인' 을 함께 낸다.
+    //   ⚠ `_br` 전체를 세면 안 된다 — KAPT 가 나중에 성공한 행도 `_br` 을 보존하므로(재조회 시 유실 방지)
+    //     모집단 밖 행까지 빼게 되어 실질 미확인이 과소 집계된다. 반드시 각 조건과 AND 로 묶어 센다.
+    const [total, facNull, empty, dtlMissing, hhZero, brInEmpty, brInZero] = await Promise.all([
       admin.from('apt_master').select(...H()),
       admin.from('apt_master').select(...H()).is('facility', null),
       admin.from('apt_master').select(...H()).not('facility->_empty', 'is', null),
@@ -504,18 +511,31 @@ async function getFacilityQuality() {
       admin.from('apt_master').select(...H()).not('facility', 'is', null).is('facility->_empty', null)
         .or('facility->>kaptdaCnt.eq.0,facility->>kaptdaCnt.is.null')
         .or('facility->>hoCnt.eq.0,facility->>hoCnt.is.null'),
+      // 위 두 모집단 **안에서** 건축물대장으로 세대수가 채워진 수 (각 조건과 AND).
+      admin.from('apt_master').select(...H()).not('facility->_empty', 'is', null).not('facility->_br', 'is', null),
+      admin.from('apt_master').select(...H()).not('facility', 'is', null).is('facility->_empty', null)
+        .or('facility->>kaptdaCnt.eq.0,facility->>kaptdaCnt.is.null')
+        .or('facility->>hoCnt.eq.0,facility->>hoCnt.is.null')
+        .not('facility->_br', 'is', null),
     ]);
     const t = total.count || 0;
     const dtl = dtlMissing.count || 0, hh = hhZero.count || 0, emp = empty.count || 0, fnull = facNull.count || 0;
+    const brE = brInEmpty.count || 0, brZ = brInZero.count || 0;
+    // 실질 미확인 = KAPT 도 건축물대장도 세대수를 못 준 수. 음수 방어(모집단 정의가 바뀌어도 안전).
+    const hhUnknown = Math.max(0, (emp - brE)) + Math.max(0, (hh - brZ));
     const dtlPct = t > 0 ? Math.round((dtl / t) * 100) : null;
     const out = {
       total: t,
       facilityNull: fnull,          // facility 미적재 (백필 대상)
-      emptyFetch: emp,              // KAPT 조회 실패 sentinel
+      emptyFetch: emp,              // KAPT 조회 실패 sentinel (건축물대장으로 채워져도 이 값은 유지된다)
       parkingMissing: dtl,          // 주차(_dtl) 누락 → 주차필터 제외 원인
       parkingMissingPct: dtlPct,
-      householdsZero: hh,           // 세대수 0/null → "미상" 표시
-      warn: (dtlPct != null && dtlPct >= 15) || hh >= 200 || emp >= 50 || fnull >= 10,
+      householdsZero: hh,           // KAPT 세대수 0/null
+      // HH-BR-OBSERV-2026-08-17: 위 두 수치는 **KAPT 커버리지**라 건축물대장 보강 뒤에도 안 줄어든다.
+      //   실제로 화면에 세대수가 뜨는지는 아래 두 값이 말해준다.
+      householdsFilledByBr: brE + brZ,   // 건축물대장으로 해소된 누계
+      householdsUnknown: hhUnknown,      // 어느 원천으로도 못 채운 실질 미확인
+      warn: (dtlPct != null && dtlPct >= 15) || hhUnknown >= 50 || fnull >= 10,
     };
     // ALERT-DEDUP-FIX-2026-07-14 (Sprint HHHHH-3, Sentry NODE-4 107 events 실측): health 경로 captureMessage 는
     //   서버리스 인스턴스별 캐시라 dedup 불가(인스턴스 수만큼 발생) + 주간 apt-master-sync 의 신규 단지 유입
