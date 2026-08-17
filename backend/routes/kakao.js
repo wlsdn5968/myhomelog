@@ -36,6 +36,13 @@ function dbClient() {
 }
 
 // HMAC 키 — 별도 env 없이 service key 에서 파생 (용도 문자열로 분리)
+// ⚠ DANGLING-REF-2026-08-17 (Sprint MMMMMMM-14): 이 상수는 acfd032(Plan 007 SSOT 리팩터링)에서
+//   **선언만 지워지고 아래 사용처가 남아** ReferenceError 를 던지고 있었다. 그 결과
+//   signState 는 throw, verifyState 는 catch 로 항상 null → **카카오 알림 OAuth 가 통째로 죽어 있었다.**
+//   자체 createClient 를 없앤 리팩터링이었는데 이 값은 클라이언트 생성이 아니라 HMAC 파생에도
+//   쓰이고 있었던 것이 원인이다. 여기서는 클라이언트를 만들지 않으므로 env 만 다시 읽는다.
+//   (발견 경로: eslint `no-undef` 도입 — 문법 검사로는 원리적으로 못 잡는 종류다.)
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.service_role;
 function stateHmacKey() {
   return crypto.createHash('sha256').update(`mhl-kakao-state|${SERVICE_KEY || 'no-key'}`).digest();
 }

@@ -202,7 +202,7 @@ async function _market(query, context) {
   // 후속 질문 칩 — 그 단지의 동네로 시야 확장 + 동명 단지 바로가기 (KKKKKKK-19)
   const sug = [];
   if (sigungu) sug.push(`${sigungu} 인기단지`);
-  if (sorted.length > 1) sug.push(`${sorted[1][0].split('|')[0]} 시세`);
+  if (ranked.length > 1) sug.push(`${ranked[1].aptName} 시세`);
   return { text: out + DISCLAIMER, suggestions: sug };
 }
 

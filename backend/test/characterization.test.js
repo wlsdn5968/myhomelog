@@ -2749,3 +2749,26 @@ test('단지 카드 — 기간 라벨은 서버 값을 쓰고, 세대당 주차�
   // ③ 세대수 불일치로 분모를 못 믿는 경우 카드에서도 그 사실을 밝힌다(상세 표와 동일 처리).
   assert.match(html, /f\.parking_uncertain\?/, '카드가 세대수 불일치를 표시하지 않는다');
 });
+
+// ── NO-UNDEF-2026-08-17 (Sprint MMMMMMM-14) ───────────────────────────────────
+// 같은 날 **매달린 참조**를 두 건 잡았다. 둘 다 문법은 합법이라 `node --check` 와 `vm.Script` 로는
+// 원리적으로 못 잡고, 실행해 봐야만 드러난다:
+//   ① chatDataRouter._market 이 교체 후 옛 변수를 계속 참조 → 시세 답변이 라이브에서 죽었다.
+//   ② backend/routes/kakao.js 가 SSOT 리팩터링(acfd032)에서 선언만 지워진 상수를 계속 참조
+//      → 카카오 알림 OAuth 의 state 서명이 무증상으로 죽어 있었다.
+// 이 테스트는 규칙이 조용히 꺼지는 것을 막는다(끄면 같은 사고가 다시 통과한다).
+test('eslint 에 no-undef 가 켜져 있다 (매달린 참조 차단)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const cfg = fs.readFileSync(path.join(__dirname, '../../eslint.config.mjs'), 'utf8');
+  const blocks = cfg.split('rules:').slice(1);
+  assert.ok(blocks.length >= 2, 'eslint 설정의 rules 블록을 2개(백엔드·인라인) 찾지 못했다');
+  for (const [i, b] of blocks.entries()) {
+    assert.match(b, /'no-undef':\s*'error'/,
+      `rules 블록 #${i + 1} 에 no-undef 가 없다 — 한쪽만 켜면 다른 쪽 매달린 참조가 그대로 통과한다`);
+  }
+  // 리팩터링이 지운 그 상수가 실제로 복구돼 있는지도 함께 못 박는다(재발 시 여기서 먼저 걸린다).
+  const kakao = fs.readFileSync(path.join(__dirname, '../routes/kakao.js'), 'utf8');
+  assert.match(kakao, /const SERVICE_KEY = process\.env\.SUPABASE_SERVICE_ROLE_KEY/,
+    'kakao.js 의 state HMAC 파생 키 선언이 다시 사라졌다 — OAuth state 서명이 죽는다');
+});

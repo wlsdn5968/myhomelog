@@ -31,6 +31,9 @@ export default [
         setTimeout: 'readonly', clearTimeout: 'readonly',
         setInterval: 'readonly', clearInterval: 'readonly',
         AbortSignal: 'readonly', fetch: 'readonly', URL: 'readonly',
+        // NO-UNDEF-2026-08-17 (Sprint MMMMMMM-14): no-undef 를 켜면서 실측으로 확인된 Node 내장.
+        URLSearchParams: 'readonly', TextEncoder: 'readonly', TextDecoder: 'readonly',
+        atob: 'readonly', btoa: 'readonly',
       },
     },
     linterOptions: {
@@ -40,6 +43,14 @@ export default [
       reportUnusedDisableDirectives: 'off',
     },
     rules: {
+      // ★ 실사고 클래스 — 리팩터링이 남긴 **매달린 참조**
+      //   2026-08-17 에 같은 날 두 건을 잡았다:
+      //   ① chatDataRouter._market 이 교체 후 옛 변수(`sorted`)를 계속 참조 → 시세 답변이
+      //      router_error 로 죽었다. `node --check` 도 `new vm.Script()` 도 못 잡는다(문법은 합법).
+      //   ② backend/routes/kakao.js 가 acfd032(SSOT 리팩터링)에서 **선언만 지워진** 상수를
+      //      계속 참조 → 카카오 알림 OAuth 의 state 서명이 통째로 죽어 있었다(무증상 3개월).
+      //   globals 는 위에서 실측으로 채웠고 이 규칙 도입 시점 위반은 **0** 이다.
+      'no-undef': 'error',
       // ★ 실사고 클래스 — 중복 키/인자/분기
       'no-dupe-keys': 'error',
       'no-dupe-args': 'error',
@@ -77,9 +88,21 @@ export default [
         requestAnimationFrame: 'readonly', AbortSignal: 'readonly', AbortController: 'readonly',
         URL: 'readonly', URLSearchParams: 'readonly', FormData: 'readonly', Blob: 'readonly',
         naver: 'readonly', kakao: 'readonly', Sentry: 'readonly',
+        // NO-UNDEF-2026-08-17 (Sprint MMMMMMM-14): 실측으로 확인된 브라우저 내장.
+        history: 'readonly', MutationObserver: 'readonly', ResizeObserver: 'readonly',
+        Notification: 'readonly', prompt: 'readonly',
+        atob: 'readonly', btoa: 'readonly', TextEncoder: 'readonly', TextDecoder: 'readonly',
+        L: 'readonly',              // Leaflet (지도 라이브러리, 외부 <script src>)
+        // ⚠ refreshQuota 는 **다른 인라인 블록에 선언된 우리 함수**다. classic script 는 전역을
+        //   공유하므로 런타임엔 정상이지만(호출부도 typeof 가드가 있다), 블록별로 뽑아 린트하는
+        //   이 설정에서는 알 수 없다. 진짜 오타를 놓치지 않으려면 이런 크로스블록 참조만 명시한다.
+        refreshQuota: 'readonly',
       },
     },
     rules: {
+      // 백엔드 블록과 동일 — 매달린 참조 차단(위 블록의 도입 근거 주석 참조).
+      //   ⚠ 한쪽만 켜면 반대쪽 오타가 그대로 통과한다(계약 테스트가 두 블록을 함께 본다).
+      'no-undef': 'error',
       'no-dupe-keys': 'error',
       'no-dupe-args': 'error',
       'no-dupe-else-if': 'error',
