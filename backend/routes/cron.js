@@ -89,11 +89,35 @@ async function checkIngestFreshness() {
   } catch (e) { logger.warn({ err: e.message }, '적재 신선도 점검 실패(무시)'); }
 }
 
+// CRON-STALE-2026-08-17 (Sprint MMMMMMM-12): "안 돈 cron" 감시 — checkIngestFreshness 의 형제.
+//   저건 **데이터**(적재 신선도)를 보고, 이건 **실행 기록**을 본다. 2026-08-16 실측에서 cron 3종이
+//   기록 없이 사라졌는데 Sentry 오류도 0건이라 실패인지 미실행인지 구별조차 못 했다.
+//   ⚠ 한계: 이 점검 자체가 retention cron 에 얹혀 있으므로 retention 이 안 돌면 그날은 점검도 안 된다.
+//     그래도 매일 돌기 때문에 누락은 하루 늦어질 뿐 영구 은폐되지는 않는다. 실패는 삼킨다.
+async function checkCronStaleness() {
+  try {
+    const { getCronLatest, findStaleCrons } = require('../services/cronStats');
+    const latest = await getCronLatest();
+    if (!latest) return;                       // Redis 미설정·조회 실패 → 침묵(오탐 방지)
+    const { stale, never } = findStaleCrons(latest, Date.now());
+    if (!stale.length) return;
+    // 고정 메시지 = Sentry 이슈 그룹 유지. 가변값은 extra 로 (checkIngestFreshness 와 동일 규약).
+    Sentry.captureMessage('cron 감시: 예정된 cron 이 기대 주기를 넘도록 실행되지 않음 — 스케줄·배포 확인 필요', {
+      level: 'error', tags: { route: 'cron.retention', monitor: 'cron-staleness' },
+      extra: { stale, neverRecorded: never },
+    });
+    logger.error({ stale, never }, 'cron 미실행 감지');
+  } catch (e) { logger.warn({ err: e.message }, 'cron 미실행 점검 실패(무시)'); }
+}
+
 router.post('/retention', async (req, res) => {
   try {
     const started = Date.now();
     const summary = await runRetention();
     logger.info({ durationMs: Date.now() - started }, 'cron/retention OK');
+    // Sprint MMMMMMM-12: retention 자신의 실행 기록 — 종전엔 popular-snapshot 만 남아
+    //   "retention 이 돌았는가" 를 스냅샷 성패로 유추해야 했다.
+    await require('../services/cronStats').recordCronRun('retention', summary).catch(() => {});
     // POPULAR-SNAPSHOT-2026-07-11 (Sprint LLLL): 인기 단지 일별 사전집계 — retention(18:00 UTC)은
     //   molit-ingest(17:00 UTC) 1시간 뒤라 신선한 데이터로 계산됨. 실패해도 retention 응답은 ok
     //   (스냅샷은 부가 기능 — /popular 이 라이브 집계로 자체 fallback).
@@ -102,13 +126,14 @@ router.post('/retention', async (req, res) => {
     catch (e) { logger.warn({ err: e.message }, 'popular 스냅샷 계산 실패 (retention 은 정상)'); popularSnapshot = { stored: false, err: e.message }; }
     // SNAP-OBSERV-2026-08-08 (Sprint BBBBBBB-4): 스냅샷 갱신 성패를 health.crons 로 — cron 이
     //   조용히 스킵(usedFallback)을 반복해 스냅샷이 노화되던 것을 아무도 못 봤다(NODE-9 순환의 축).
-    require('../services/cronStats').recordCronRun('popular-snapshot', {
+    await require('../services/cronStats').recordCronRun('popular-snapshot', {
       ok: popularSnapshot && popularSnapshot.stored ? 1 : false,
       processed: popularSnapshot && popularSnapshot.count,
       error: (popularSnapshot && (popularSnapshot.reason || popularSnapshot.err
         || (popularSnapshot.usedFallback ? 'usedFallback(RPC 실패)' : undefined))) || undefined,
     }).catch(() => {});
     await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시(실패는 내부에서 삼킴)
+    await checkCronStaleness();   // Sprint MMMMMMM-12 — 안 돈 cron 감시
     // RATE-WARM-2026-08-08 (Sprint BBBBBBB-3): HF·ECOS 금리 캐시 워밍 — health 의 비차단 백그라운드
     //   갱신은 응답 반환 후 서버리스 동결로 완주가 안 될 수 있다(HF 실측: 12:01 까지 반복 ECONNABORTED,
     //   신규 실패 기록조차 없는 "잘림" 상태). 요청 경로인 여기서 하루 1회 완주시켜 Redis 에 남기면
@@ -119,6 +144,7 @@ router.post('/retention', async (req, res) => {
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/retention 실패');
     try { Sentry.captureException(e, { tags: { route: 'cron.retention' } }); } catch(_){}
+    await require('../services/cronStats').recordCronRun('retention', { ok: false, error: e.message }).catch(() => {}); // Sprint MMMMMMM-12
     res.status(500).json({ error: e.message });
   }
 });
@@ -127,6 +153,7 @@ router.post('/retention', async (req, res) => {
 router.get('/retention', async (req, res) => {
   try {
     const summary = await runRetention();
+    await require('../services/cronStats').recordCronRun('retention', summary).catch(() => {}); // Sprint MMMMMMM-12
     // GET-PARITY-2026-08-09 (Sprint BBBBBBB-5, 실측): popular 스냅샷 계산이 **POST 쌍둥이에만** 있었는데
     //   스냅샷 도입(7/11) 이래 computed_at 이 cron 시각(18:00 UTC)이었던 적이 없다 — Vercel cron 이
     //   이 GET 을 호출하고 있어 **cron 스냅샷 갱신이 한 번도 실행되지 않았다**는 실측 정합(NODE-9 노화
@@ -134,13 +161,14 @@ router.get('/retention', async (req, res) => {
     let popularSnapshot = null;
     try { popularSnapshot = await computePopularSnapshot(); }
     catch (e) { logger.warn({ err: e.message }, 'popular 스냅샷 계산 실패 (retention 은 정상)'); popularSnapshot = { stored: false, err: e.message }; }
-    require('../services/cronStats').recordCronRun('popular-snapshot', {
+    await require('../services/cronStats').recordCronRun('popular-snapshot', {
       ok: popularSnapshot && popularSnapshot.stored ? 1 : false,
       processed: popularSnapshot && popularSnapshot.count,
       error: (popularSnapshot && (popularSnapshot.reason || popularSnapshot.err
         || (popularSnapshot.usedFallback ? 'usedFallback(RPC 실패)' : undefined))) || undefined,
     }).catch(() => {});
     await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시
+    await checkCronStaleness();   // Sprint MMMMMMM-12 — 안 돈 cron 감시(POST 쌍둥이와 동일)
     try { await require('../services/hfService').getHfRates(); } catch (_) {}   // Sprint BBBBBBB-3 워밍
     try { await require('../services/ecosService').getEcosRates(); } catch (_) {}
     res.json({ ok: true, summary, popularSnapshot });
@@ -148,6 +176,7 @@ router.get('/retention', async (req, res) => {
     // SENTRY-GAP-2026-07-17 (Sprint XXXXX): POST 쌍둥이(72행)만 캡처하고 GET 은 무로그·무캡처였음 — 동일 처리
     logger.error({ err: e.message, stack: e.stack }, 'cron/retention(GET) 실패');
     try { Sentry.captureException(e, { tags: { route: 'cron.retention' } }); } catch(_){}
+    await require('../services/cronStats').recordCronRun('retention', { ok: false, error: e.message }).catch(() => {}); // Sprint MMMMMMM-12 (POST 쌍둥이와 동일)
     res.status(500).json({ error: e.message });
   }
 });
@@ -213,7 +242,7 @@ async function handleMolitIngest(req, res) {
         else _mvRefreshMs = Date.now() - _t;
       }
     } catch (e) { logger.warn({ err: e.message }, '검색 MV 갱신 예외 — 적재는 정상'); }
-    require('../services/cronStats').recordCronRun('molit-ingest', {
+    await require('../services/cronStats').recordCronRun('molit-ingest', {
       mvRefreshMs: _mvRefreshMs,
       ok: summary.ok, err: summary.err, skipped: summary.skipped, elapsedMs: summary.elapsedMs,
       retried: summary.gapBackfill && summary.gapBackfill.retried, filled: summary.gapBackfill && summary.gapBackfill.filled,
@@ -227,6 +256,7 @@ async function handleMolitIngest(req, res) {
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/molit-ingest 실패');
     try { Sentry.captureException(e, { tags: { route: 'cron.molit-ingest' } }); } catch(_){}
+    await require('../services/cronStats').recordCronRun('molit-ingest', { ok: false, error: e.message }).catch(() => {}); // Sprint MMMMMMM-12
     res.status(500).json({ error: e.message });
   }
 }
@@ -240,10 +270,12 @@ async function handleAptMasterSync(req, res) {
     const started = Date.now();
     const summary = await runAptMasterSync();
     logger.info({ durationMs: Date.now() - started, summary }, 'cron/apt-master-sync OK');
+    await require('../services/cronStats').recordCronRun('apt-master-sync', summary).catch(() => {}); // Sprint MMMMMMM-12
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/apt-master-sync 실패');
     try { Sentry.captureException(e, { tags: { route: 'cron.apt-master-sync' } }); } catch(_){}
+    await require('../services/cronStats').recordCronRun('apt-master-sync', { ok: false, error: e.message }).catch(() => {});
     res.status(500).json({ error: e.message });
   }
 }
@@ -257,10 +289,12 @@ async function handleRegulationsCheck(req, res) {
     const started = Date.now();
     const summary = await runRegulationsCheck();
     logger.info({ durationMs: Date.now() - started, summary }, 'cron/regulations-check OK');
+    await require('../services/cronStats').recordCronRun('regulations-check', summary).catch(() => {}); // Sprint MMMMMMM-12
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/regulations-check 실패');
     try { Sentry.captureException(e, { tags: { route: 'cron.regulations-check' } }); } catch(_){}
+    await require('../services/cronStats').recordCronRun('regulations-check', { ok: false, error: e.message }).catch(() => {});
     res.status(500).json({ error: e.message });
   }
 }
@@ -281,10 +315,14 @@ async function handleRegulationsAutoFetch(req, res) {
       totalMatched: result.rssResults.totalMatched,
       reviewNeeded: result.aiResults.reviewNeededCount,
     }, 'cron/regulations-auto-fetch OK');
+    await require('../services/cronStats').recordCronRun('regulations-auto-fetch', {   // Sprint MMMMMMM-12
+      ok: 1, processed: result.rssResults && result.rssResults.totalMatched,
+    }).catch(() => {});
     res.json({ ok: true, ...result });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/regulations-auto-fetch 실패');
     try { Sentry.captureException(e, { tags: { route: 'cron.regulations-auto-fetch' } }); } catch(_){}
+    await require('../services/cronStats').recordCronRun('regulations-auto-fetch', { ok: false, error: e.message }).catch(() => {});
     res.status(500).json({ error: e.message });
   }
 }
@@ -297,10 +335,12 @@ async function handleAuditPrune(req, res) {
     const started = Date.now();
     const summary = await runAuditPrune();
     logger.info({ durationMs: Date.now() - started, summary }, 'cron/audit-prune OK');
+    await require('../services/cronStats').recordCronRun('audit-prune', summary).catch(() => {}); // Sprint MMMMMMM-12
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/audit-prune 실패');
     try { Sentry.captureException(e, { tags: { route: 'cron.audit-prune' } }); } catch(_){}
+    await require('../services/cronStats').recordCronRun('audit-prune', { ok: false, error: e.message }).catch(() => {});
     res.status(500).json({ error: e.message });
   }
 }
@@ -325,11 +365,15 @@ async function handleGeocacheBackfill(req, res) {
     //   cron 은 하루 1회) → 사후 원인 추적이 원천 불가였다. 실제로 07-13~24 백필 정체를 조사할 때
     //   로그가 없어 DB 행 카운트로 우회해야 했고, 그마저 사용자 온디맨드 지오코딩과 섞여 분리가 어려웠다.
     //   같은 값을 Redis 에 남겨 다음부터는 언제든 확인 가능하게 한다(DB 변경 0·fail-open).
-    require('../services/cronStats').recordCronRun('geocache-backfill', summary).catch(() => {});
+    await require('../services/cronStats').recordCronRun('geocache-backfill', summary).catch(() => {});
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/geocache-backfill 실패');
     try { Sentry.captureException(e, { tags: { route: 'cron.geocache-backfill' } }); } catch(_){}
+    // Sprint MMMMMMM-12: **실패도 기록한다**. 종전엔 이 저장소의 cron 핸들러 중 실패 경로에
+    //   기록을 남기는 것이 **하나도 없었다**(popular-snapshot 만 try 안에서 ok:false 를 남겼다).
+    //   그래서 2026-08-16 에 기록이 빈 cron 을 두고 "안 돈 건지 실패한 건지" 를 구별할 수 없었다.
+    await require('../services/cronStats').recordCronRun('geocache-backfill', { ok: false, error: e.message }).catch(() => {});
     res.status(500).json({ error: e.message });
   }
 }
@@ -347,11 +391,12 @@ async function handleFacilityBackfill(req, res) {
     logger.info({ durationMs: Date.now() - started, summary }, 'cron/facility-backfill OK');
     // CRON-OBSERV-2026-08-08 (Sprint AAAAAAA): data.go.kr 3형제(molit·facility·건축물대장) 전부
     //   health.crons 노출 — 08-02 키 장애 때 세 cron 이 동시에 조용히 죽은 것을 아무도 못 봤다.
-    require('../services/cronStats').recordCronRun('facility-backfill', summary).catch(() => {});
+    await require('../services/cronStats').recordCronRun('facility-backfill', summary).catch(() => {});
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/facility-backfill 실패');
     try { Sentry.captureException(e, { tags: { route: 'cron.facility-backfill' } }); } catch(_){}
+    await require('../services/cronStats').recordCronRun('facility-backfill', { ok: false, error: e.message }).catch(() => {}); // Sprint MMMMMMM-12
     res.status(500).json({ error: e.message });
   }
 }
@@ -369,11 +414,12 @@ async function handleBrBackfill(req, res) {
     const opts = { cap: req.query.cap ? parseInt(req.query.cap) : undefined };
     const summary = await runBrBackfill(opts);
     logger.info({ durationMs: Date.now() - started, summary }, 'cron/building-register-backfill OK');
-    require('../services/cronStats').recordCronRun('building-register-backfill', summary).catch(() => {}); // Sprint AAAAAAA
+    await require('../services/cronStats').recordCronRun('building-register-backfill', summary).catch(() => {}); // Sprint AAAAAAA
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/building-register-backfill 실패');
     try { Sentry.captureException(e, { tags: { route: 'cron.building-register-backfill' } }); } catch(_){}
+    await require('../services/cronStats').recordCronRun('building-register-backfill', { ok: false, error: e.message }).catch(() => {}); // Sprint MMMMMMM-12
     res.status(500).json({ error: e.message });
   }
 }
@@ -381,17 +427,21 @@ router.post('/building-register-backfill', handleBrBackfill);
 router.get('/building-register-backfill', handleBrBackfill);
 
 // ── PUSH-NOTIFY (Sprint EEEEEE): 관심단지 신규 실거래 웹푸시 발송 ──
-// 매일 1회 18:20 UTC — molit-ingest 3슬롯(17:00~17:30) 완료 후. 게이트(VAPID env·테이블) 미충족 시 { skipped }.
+// 매일 1회 22:30 UTC — molit-ingest 3슬롯(17:00~17:30) 완료 후. 게이트(VAPID env·테이블) 미충족 시 { skipped }.
+//   ⚠ 2026-08-17 정정 — 이 주석의 시각이 vercel.json 의 실제 스케줄("30 22 * * *")과 4시간 어긋나 있었다.
+//     계약 테스트가 vercel.json 을 읽어 두 값을 묶는다. (옛 값은 테스트의 금지 문자열이라 여기 적지 않는다.)
 const { run: runPushNotify } = require('../jobs/pushNotify');
 async function handlePushNotify(req, res) {
   try {
     const started = Date.now();
     const summary = await runPushNotify();
     logger.info({ durationMs: Date.now() - started, summary }, 'cron/push-notify OK');
+    await require('../services/cronStats').recordCronRun('push-notify', summary).catch(() => {}); // Sprint MMMMMMM-12
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/push-notify 실패');
     try { Sentry.captureException(e, { tags: { route: 'cron.push-notify' } }); } catch(_){}
+    await require('../services/cronStats').recordCronRun('push-notify', { ok: false, error: e.message }).catch(() => {});
     res.status(500).json({ error: e.message });
   }
 }

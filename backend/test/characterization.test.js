@@ -2535,3 +2535,84 @@ test('표본·범위 표기가 실제 집계와 맞다 (Sprint MMMMMMM-11)', () 
   // ③ 층 분포는 전량이 아니라 화면에 불러온 표본 기준이다
   assert.ok(html.includes('최근 6개월 MOLIT · 표본 기준'), '층 분포가 전량 집계처럼 표기된다');
 });
+
+// ── CRON-STALE-2026-08-17 (Sprint MMMMMMM-12) ─────────────────────────────────
+// [실측 배경] 2026-08-16 에 geocache-backfill(04:00) · building-register-backfill(06:00) ·
+//   retention(18:00) 의 실행 기록이 통째로 비었는데 **Sentry 의 cron 오류도 0건**이었다.
+//   즉 실패한 게 아니라 안 돈 것인데, 그걸 알아차릴 수단이 하나도 없었다.
+//   원인 두 갈래를 모두 코드에서 확인했고 여기서 형태로 고정한다.
+test('cron 실행 기록이 성공·실패 양쪽에 남는다 + await 로 유실을 막는다', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../routes/cron.js'), 'utf8');
+  const { CRON_PATH_TO_JOBS, CRON_MAX_AGE_H } = require('../services/cronStats');
+
+  // ① 모든 cron 잡이 **실패 경로에서도** 기록을 남긴다.
+  //   종전엔 실패 기록이 단 한 곳도 없었다(popular-snapshot 만 try 안에서 ok:false 를 남겼다).
+  //   그래서 기록이 빈 cron 을 두고 "미실행 vs 실패" 를 구별할 수 없었다.
+  const jobsWithOwnThrowPath = Object.values(CRON_PATH_TO_JOBS).flat()
+    .filter(j => j !== 'popular-snapshot'); // popular-snapshot 은 자기 라우트가 없다(retention 안에서 계산)
+  for (const job of jobsWithOwnThrowPath) {
+    assert.ok(src.includes(`recordCronRun('${job}', { ok: false`),
+      `'${job}' 의 catch 에 실패 기록이 없다 — 실패하면 health.crons 에 흔적이 사라진다`);
+  }
+
+  // ② 모든 recordCronRun 이 await 된다.
+  //   ⚠ 이 저장소는 같은 실수를 이미 겪었다 — `_observeDegrade` 를 await 안 하면 서버리스가
+  //     응답 후 함수를 동결하면서 Redis 쓰기가 잘린다(커밋 ba1db07). cron 기록도 같은 경로다.
+  //     await 없이 두면 cron 은 정상인데 기록만 사라지는, 가장 헷갈리는 상태가 만들어진다.
+  const total = (src.match(/\.recordCronRun\(/g) || []).length;
+  const awaited = (src.match(/await require\('\.\.\/services\/cronStats'\)\.recordCronRun\(/g) || []).length;
+  assert.ok(total > 0, 'recordCronRun 호출을 하나도 못 찾았다 — 이 테스트의 전제가 깨졌다');
+  assert.equal(awaited, total,
+    `recordCronRun ${total}개 중 ${awaited}개만 await 된다 — 안 된 것은 서버리스 동결로 유실된다`);
+
+  // ③ 미실행 감시가 retention **쌍둥이 양쪽**에 걸려 있다.
+  //   이 저장소는 쌍둥이 한쪽만 고쳐 사고가 난 이력이 여러 번 있다(GET-PARITY·SENTRY-GAP 주석).
+  const iPost = src.indexOf("router.post('/retention'");
+  const iGet = src.indexOf("router.get('/retention'");
+  const iMolit = src.indexOf('async function handleMolitIngest');
+  assert.ok(iPost >= 0 && iGet > iPost && iMolit > iGet, 'retention 쌍둥이 구조를 못 찾았다');
+  for (const [name, part] of [['POST', src.slice(iPost, iGet)], ['GET', src.slice(iGet, iMolit)]]) {
+    assert.match(part, /await checkCronStaleness\(\)/, `retention ${name} 에 cron 미실행 감시가 없다`);
+    assert.ok(part.includes("recordCronRun('retention'"), `retention ${name} 이 자기 실행을 기록하지 않는다`);
+  }
+
+  // ④ 감시 대상 목록이 vercel.json 과 1:1 이다 — 새 cron 이 감시에서 조용히 빠지는 것을 막는다.
+  const vercel = JSON.parse(fs.readFileSync(path.join(__dirname, '../../vercel.json'), 'utf8'));
+  const declared = [...new Set(vercel.crons.map(c => c.path.split('?')[0]))].sort();
+  assert.deepEqual(declared, Object.keys(CRON_PATH_TO_JOBS).sort(),
+    'vercel.json 의 cron 경로와 CRON_PATH_TO_JOBS 가 어긋났다 — 새 cron 을 감시 대상에 넣을 것');
+  assert.deepEqual(
+    [...new Set(Object.values(CRON_PATH_TO_JOBS).flat())].sort(),
+    Object.keys(CRON_MAX_AGE_H).sort(),
+    'CRON_MAX_AGE_H 에 기대 주기가 없는 잡이 있다(또는 없는 잡이 남아 있다)');
+
+  // ⑤ push-notify 주석의 시각이 실제 스케줄과 맞는다 (2026-08-17 까지 '18:20 UTC' 로 어긋나 있었다)
+  const pn = vercel.crons.find(c => c.path === '/api/cron/push-notify');
+  assert.equal(pn.schedule, '30 22 * * *', 'push-notify 스케줄이 바뀌었다 — 주석도 함께 고칠 것');
+  assert.equal(src.includes('18:20 UTC'), false, 'push-notify 주석이 실제 스케줄(22:30 UTC)과 다르다');
+});
+
+test('findStaleCrons — 기대 주기 초과만 경보, 기록 없음은 침묵', () => {
+  const { findStaleCrons } = require('../services/cronStats');
+  const now = Date.parse('2026-08-17T00:00:00Z');
+  const { stale, never } = findStaleCrons({
+    'geocache-backfill': { at: '2026-08-16T04:00:00Z' },  // 20h — 정상
+    'facility-backfill': { at: '2026-08-14T05:00:00Z' },  // 67h — 일간 기준(50h) 초과
+    'apt-master-sync': { at: '2026-08-11T20:00:00Z' },    // 124h — 주간 기준(240h) 안이라 정상
+    'audit-prune': { at: null },                          // 값이 깨진 기록 → 판단 불가
+  }, now);
+
+  assert.deepEqual(stale.map(s => s.job), ['facility-backfill'],
+    '주기 초과 판정이 바뀌었다 — 일간 50h / 주간 240h 전제를 확인할 것');
+  assert.equal(stale[0].ageH, 67);
+  // ⚠ "기록 없음" 은 경보로 올리지 않는다 — 이 기능 배포 직후엔 아직 한 번도 안 돈 잡이 정상적으로
+  //   여기 들어오기 때문이다(오탐). 진단용으로만 함께 싣는다.
+  assert.ok(never.includes('audit-prune'), 'at 이 깨진 기록은 never 로 분류돼야 한다');
+  assert.ok(never.includes('push-notify'), '기록이 아예 없는 잡은 never 로 분류돼야 한다');
+  assert.equal(stale.some(s => s.job === 'audit-prune'), false, '판단 불가를 경보로 올리면 안 된다');
+
+  // Redis 미설정(null) 이어도 던지지 않는다 — 감시가 cron 본체를 막아선 안 된다.
+  assert.deepEqual(findStaleCrons(null, now).stale, []);
+});

@@ -105,5 +105,78 @@ async function getCronLatest() {
   return Object.keys(out).length ? out : null;
 }
 
+/**
+ * CRON-STALE-2026-08-17 (Sprint MMMMMMM-12): "안 돈 cron" 을 감지한다.
+ *
+ * [왜 필요한가 — 2026-08-16 실측]
+ *   그날 geocache-backfill(04:00) · building-register-backfill(06:00) · retention(18:00) 세 cron 의
+ *   실행 기록이 **통째로 없었다**. 그런데 Sentry 의 cron 오류도 0건이었다.
+ *   즉 "실패한 것"이 아니라 "아예 안 돈 것"인데, 우리에겐 그걸 알아차릴 수단이 하나도 없었다.
+ *   health.crons 는 **마지막 성공 시각만** 보여주므로 사람이 날짜를 직접 빼서 비교해야만 보인다.
+ *   좌표 백필이 조용히 멈추면 지도 핀이 그대로 늙는다 — 같은 부류의 사고를 이 저장소는
+ *   이미 여러 번 겪었다(광주 44일 무적재).
+ *
+ * [기준값을 왜 50h 로 잡았나]
+ *   Vercel Hobby cron 은 정시가 아니다 — 같은 날 실측에서 05:00 예정이 05:08, 17:30 예정이 17:34 에
+ *   기록됐다. 26h(=1회 누락)로 잡으면 이 지터와 배포 타이밍만으로도 경보가 뜬다.
+ *   **2회 연속 누락**을 기준으로 삼아 오탐을 줄인다. 주 1회 잡은 2회면 15일이라 너무 늦어 10일로 둔다.
+ */
+const CRON_MAX_AGE_H = {
+  'retention': 50,
+  'popular-snapshot': 50,          // 별도 cron 경로 없음 — retention 안에서 계산·기록된다
+  'molit-ingest': 50,
+  'apt-master-sync': 240,          // 주 1회(월 20:00 UTC) — 10일
+  'regulations-check': 50,
+  'regulations-auto-fetch': 50,
+  'audit-prune': 50,
+  'geocache-backfill': 50,
+  'facility-backfill': 50,
+  'building-register-backfill': 50,
+  'push-notify': 50,
+};
+
+/**
+ * vercel.json 의 cron path → 그 요청이 남기는 잡 이름(들).
+ * ⚠ 이 맵과 vercel.json 은 **계약 테스트로 묶여 있다**. cron 을 추가·삭제하면 여기도 고쳐야 하고,
+ *   안 고치면 테스트가 막는다 — 새 cron 이 감시 대상에서 조용히 빠지는 것을 원천 차단한다.
+ *   (molit-ingest 는 슬롯 3개가 같은 이름 하나로 기록된다 — 최신 1회만 남는 구조.)
+ */
+const CRON_PATH_TO_JOBS = {
+  '/api/cron/retention': ['retention', 'popular-snapshot'],
+  '/api/cron/molit-ingest': ['molit-ingest'],
+  '/api/cron/apt-master-sync': ['apt-master-sync'],
+  '/api/cron/regulations-check': ['regulations-check'],
+  '/api/cron/regulations-auto-fetch': ['regulations-auto-fetch'],
+  '/api/cron/audit-prune': ['audit-prune'],
+  '/api/cron/geocache-backfill': ['geocache-backfill'],
+  '/api/cron/facility-backfill': ['facility-backfill'],
+  '/api/cron/building-register-backfill': ['building-register-backfill'],
+  '/api/cron/push-notify': ['push-notify'],
+};
+
+/**
+ * 기대 주기를 넘긴 잡을 찾는다. 순수 함수(테스트에서 직접 고정).
+ * @param {object|null} latest  getCronLatest() 결과 — { [job]: { at, ... } }
+ * @param {number} nowMs
+ * @returns {{ stale: Array<{job,ageH,lastAt}>, never: string[] }}
+ *   never = 기록이 한 번도 없는 잡. ⚠ **경보로 올리지 않는다** — 이 기능을 막 배포한 직후엔
+ *   아직 한 번도 안 돈 잡이 정상적으로 여기 들어오기 때문이다(오탐). 진단용으로만 함께 싣는다.
+ *   기존 checkIngestFreshness 의 "판단 불가 시 침묵" 원칙과 같은 결정이다.
+ */
+function findStaleCrons(latest, nowMs) {
+  const stale = [], never = [];
+  for (const [job, maxH] of Object.entries(CRON_MAX_AGE_H)) {
+    const rec = latest && latest[job];
+    const at = rec && rec.at ? Date.parse(rec.at) : NaN;
+    if (!Number.isFinite(at)) { never.push(job); continue; }
+    const ageH = (nowMs - at) / 3600000;
+    if (ageH > maxH) stale.push({ job, ageH: Math.round(ageH), lastAt: rec.at });
+  }
+  return { stale, never };
+}
+
 // _pick 은 "민감 필드가 health 로 새지 않는다"는 보안 성질을 담당하므로 테스트에서 직접 고정한다.
-module.exports = { recordCronRun, getCronRuns, getCronLatest, _pick };
+module.exports = {
+  recordCronRun, getCronRuns, getCronLatest, _pick,
+  CRON_MAX_AGE_H, CRON_PATH_TO_JOBS, findStaleCrons,
+};
