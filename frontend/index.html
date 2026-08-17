@@ -5624,7 +5624,7 @@ function renderListGrid(){
   }
   // Agent UX #8 (2026-05-04): 모바일 가로 스크롤 차단 — flex column 으로 줄 분리
   const metaLine = searchMeta && searchMeta.regions.length
-    ? `<div class="meta-line" style="margin:10px 14px 0;padding:8px 12px;background:var(--info-bg);border:1px solid var(--info-bd);border-radius:8px;color:var(--info-tx);font-size:11px;line-height:1.55"><div>📊 <b>분석 지역:</b> ${_escHtml(searchMeta.regions.map(String).join(', '))}</div><div>전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> · 예산 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b></div><div>최근 6개월 실거래 ${(Number(searchMeta.totalTx)||0).toLocaleString()}건 분석</div></div>`
+    ? `<div class="meta-line" style="margin:10px 14px 0;padding:8px 12px;background:var(--info-bg);border:1px solid var(--info-bd);border-radius:8px;color:var(--info-tx);font-size:11px;line-height:1.55"><div>📊 <b>분석 지역:</b> ${_escHtml(searchMeta.regions.map(String).join(', '))}</div><div>전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> · 예산 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b></div><div title="analyzeTransactions 가 (단지명·법정동) 기준으로 묶은 결과 수입니다. 거래 건수가 아니라 단지 수예요.">최근 6개월 거래가 있는 단지 ${(Number(searchMeta.totalTx)||0).toLocaleString()}곳 분석</div></div>`
     : '';
   // REGION-ENTRY-2-2026-07-25 (Sprint ZZZZZZ, 기획안 §3 A안의 '추천 결과 상단'분):
   //   결과에 실제로 등장하는 지역만 노출한다. ⚠ searchMeta.regions(이름 배열)를 쓰지 않고
@@ -6803,7 +6803,7 @@ function showDetail(p){
           ? `<span style="color:var(--red)">⚠ KAPT 최고층(${facilityTop}) 보다 거래 최고층(${maxF}) 이 큼 — 데이터 점검 필요</span>`
           : facilityTop ? `<span style="color:var(--t3)">KAPT 등록 최고 ${facilityTop}층과 비교 ↑</span>` : '';
         return `<div style="margin-top:14px">
-          <div style="font-weight:700;font-size:12px;color:var(--t1);margin-bottom:6px">🏗 실거래 층 분포 (최근 6개월 MOLIT)</div>
+          <div style="font-weight:700;font-size:12px;color:var(--t1);margin-bottom:6px">🏗 실거래 층 분포 <span style="font-weight:400;color:var(--t3);font-size:10px" title="최근 6개월 거래 중 화면에 불러온 표본만 집계합니다(전량이 아닙니다). 표본 수는 아래 표에 표시됩니다.">(최근 6개월 MOLIT · 표본 기준)</span></div>
           <table class="dtbl">
             <tr><td>거래 최저층</td><td>${minF}층</td></tr>
             <tr><td>거래 최고층</td><td>${maxF}층</td></tr>
@@ -7172,7 +7172,7 @@ async function loadAmenities(p){
     if(!near||!near.available){box.style.display='none';return;}
     const tranHtml=tran&&tran.available?`<div style="margin-top:4px;font-weight:600;color:var(--a2)">🚇 ${tran.destinationName} 통근: 대중교통 추정 ~${tran.transitMinutes}분 / 차량 ~${tran.carMinutes}분</div>`:'';
     box.innerHTML=`<div style="background:#F0F7F0;border:1px solid #CFE5CF;border-radius:8px;padding:9px 11px;line-height:1.6">
-      <div style="font-weight:700;color:var(--t1)">🗺️ 주변 (반경 800m~1km)</div>
+      <div style="font-weight:700;color:var(--t1)">🗺️ 주변 <span style="font-weight:400;color:var(--t3);font-size:10px" title="항목마다 반경이 다릅니다 — 편의점 500m · 학교/지하철/공원 1.2km · 대형마트 1.5km · 종합병원 2km">(항목별 500m~2km)</span></div>
       <div>🏫 학교 ${near.school}곳 · 🚇 지하철역 ${near.subway}곳 · 🛒 대형마트 ${near.mart}곳 · 🏥 병원 ${near.hospital}곳 · 🏪 편의점 ${near.cvs}곳</div>
       ${tranHtml}
     </div>`;

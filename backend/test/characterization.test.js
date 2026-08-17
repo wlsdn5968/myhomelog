@@ -2507,3 +2507,31 @@ test('평↔㎡ 환산 계수가 저장소 전체에서 하나다 (Sprint MMMMMM
   assert.ok(ana.includes('_PYEONG_M2 = 3.3058'), '기준 상수가 사라졌다');
   assert.ok(ana.includes('/ 3.3058'), 'analysisService 가 정확 계수를 쓰지 않는다');
 });
+
+test('표본·범위 표기가 실제 집계와 맞다 (Sprint MMMMMMM-11)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const svc = fs.readFileSync(path.join(__dirname, '../services/propertyService.js'), 'utf8');
+  const txs = fs.readFileSync(path.join(__dirname, '../services/transactionService.js'), 'utf8');
+  const kakao = fs.readFileSync(path.join(__dirname, '../services/kakaoService.js'), 'utf8');
+
+  // ① totalTxAnalyzed 는 거래 건수가 아니라 **단지 개수**다.
+  //    전제: analyzeTransactions 가 단지별로 묶어서 배열을 돌려준다.
+  assert.ok(txs.includes('function analyzeTransactions'), 'analyzeTransactions 가 사라졌다');
+  assert.ok(txs.includes('const byApt = {}'), '단지별 그룹화 구조가 바뀌었다 — 표기 근거를 다시 볼 것');
+  assert.ok(svc.includes('totalTxAnalyzed: analyzed.length'), '집계 소스가 바뀌었다');
+  assert.ok(html.includes('거래가 있는 단지'), '건수/단지수 표기가 되돌아왔다');
+  assert.equal(html.includes('실거래 ${(Number(searchMeta.totalTx)||0).toLocaleString()}건 분석'), false,
+    "'N건 분석' 표기가 되돌아왔다 — N 은 단지 수다");
+
+  // ② 주변시설 반경은 항목마다 다르다 (편의점 500 ~ 종합병원 2000)
+  for (const r of ['500', '1200', '1500', '2000']) {
+    assert.ok(kakao.includes(r), `kakaoService 의 반경 ${r} 이 사라졌다 — 표기를 다시 판단할 것`);
+  }
+  assert.ok(html.includes('항목별 500m~2km'), '주변시설 반경 표기가 실제와 다르다');
+  assert.equal(html.includes('주변 (반경 800m~1km)'), false, '단일 반경 표기가 되돌아왔다');
+
+  // ③ 층 분포는 전량이 아니라 화면에 불러온 표본 기준이다
+  assert.ok(html.includes('최근 6개월 MOLIT · 표본 기준'), '층 분포가 전량 집계처럼 표기된다');
+});
