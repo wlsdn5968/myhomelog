@@ -850,9 +850,22 @@ async function getAIRecommendations(userCondition) {
   //   미확인(null) 유지. index 정렬 불요(withCoords 최종). **1개라도 남으면 소형 전부 제외** — 오직 후보 전부가
   //   소형일 때만(빈 결과 방지) 유지 = '가능하면 제외'의 강한 해석. LLLLLL-3.1(배포 실측: YM프라젠 83세대가
   //   후보 2개 상황에서 >=3 임계로 살아남던 것 → 임계 1로 강화).
+  //   ⚠ HH-UNKNOWN-2026-08-17 (Sprint MMMMMMM-19): 위 "미확인(null) 유지" 는 **도달 불가능한 의도**였다.
+  //     `buildFacility` 는 세대수를 모를 때 null 이 아니라 **0** 을 넣는다(KAPT info 자체가 없으면
+  //     `totalHouseholds: 0`, 있어도 `_posInt(kaptdaCnt) || _posInt(hoCnt)` 가 둘 다 0이면 0).
+  //     그런데 `Number.isFinite(0)` 은 true 이고 `0 < 100` 도 true 라 **미확인이 전부 소형으로 배제**됐다.
+  //     [실측] 세대수 미확인 단지 **407곳**(서울 56). 그중 건축물대장(building_register.hhldCnt)으로
+  //     교차확인되는 17곳은 **전부 100세대 이상**(평균 878 · 최대 2,700세대), 소형은 **0곳**.
+  //     즉 "미확인 = 소형" 이라는 전제가 데이터로 반증된다 — 2,700세대 단지가 추천에서 빠지고 있었다.
+  //     운영자 지시는 "확인된 100세대 미만 제외" 이므로 **0(미확인)은 배제 대상이 아니다.**
+  //     ⚠ 진짜 소형(1~99세대, 실측 239곳)은 종전대로 배제된다 — 지시의 대상은 그쪽이다.
   let finalRecs = withCoords;
   {
-    const _big = withCoords.filter(r => !(Number.isFinite(r.facility?.totalHouseholds) && r.facility.totalHouseholds < 100));
+    const _isKnownSmall = (r) => {
+      const hh = r.facility?.totalHouseholds;
+      return Number.isFinite(hh) && hh > 0 && hh < 100;   // 0 = 미확인 → 소형으로 치지 않는다
+    };
+    const _big = withCoords.filter(r => !_isKnownSmall(r));
     if (_big.length >= 1 && _big.length !== withCoords.length) {
       logger.info({ before: withCoords.length, after: _big.length }, 'PropertyService HH-GATE(건축물대장 보강): 100세대 미만 제외');
       finalRecs = _big;

@@ -2901,6 +2901,41 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
 });
 
+// ── HH-UNKNOWN-2026-08-17 (Sprint MMMMMMM-19) ─────────────────────────────────
+// [실측 배경] 추천의 소형 단지 게이트가 **세대수 미확인(0)을 소형으로 취급**해 407곳(서울 56)을
+//   조용히 배제하고 있었다. 코드 주석은 "세대수 **확인된** 100세대 미만 제외 · 미확인(null) 유지"
+//   라고 적혀 있었지만, `buildFacility` 는 모를 때 null 이 아니라 **0** 을 넣으므로 그 의도는
+//   도달할 수 없었다(`Number.isFinite(0)` = true).
+//   그 407곳 중 건축물대장으로 교차확인되는 17곳은 **전부 100세대 이상**(평균 878·최대 2,700),
+//   소형은 0곳 — "미확인 = 소형" 전제가 데이터로 반증된다.
+test('추천 소형 게이트 — 미확인(0)은 배제하지 않고, 확인된 1~99만 배제한다', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../services/propertyService.js'), 'utf8');
+
+  // 판정을 소스에서 뽑아 **직접 실행**한다 — 형태만 보면 경계 실수를 못 잡는다.
+  const m = src.match(/const _isKnownSmall = \(r\) => \{[\s\S]*?\n {4}\};/);
+  assert.ok(m, 'propertyService 에서 _isKnownSmall 을 찾지 못했다 (형태가 바뀌면 이 테스트도 갱신할 것)');
+  const _isKnownSmall = new Function(`${m[0]} return _isKnownSmall;`)();
+
+  const mk = (hh) => ({ facility: hh === undefined ? undefined : { totalHouseholds: hh } });
+  // 미확인 계열 — 전부 유지(배제 대상 아님)
+  assert.equal(_isKnownSmall(mk(0)), false, '세대수 0(미확인)이 소형으로 배제된다 — 407곳이 사라진 원인');
+  assert.equal(_isKnownSmall(mk(null)), false, 'null(미확인)이 배제된다');
+  assert.equal(_isKnownSmall(mk(undefined)), false, 'undefined(미확인)가 배제된다');
+  assert.equal(_isKnownSmall({}), false, 'facility 자체가 없을 때 배제된다');
+  // 확인된 소형 — 배제 (운영자 지시의 실제 대상, 실측 239곳)
+  assert.equal(_isKnownSmall(mk(1)), true, '1세대가 소형으로 안 걸린다');
+  assert.equal(_isKnownSmall(mk(83)), true, '83세대(YM프라젠 실사례)가 소형으로 안 걸린다');
+  assert.equal(_isKnownSmall(mk(99)), true, '99세대가 소형으로 안 걸린다');
+  // 경계 — 100 이상은 유지
+  assert.equal(_isKnownSmall(mk(100)), false, '100세대가 소형으로 배제된다(경계 오류)');
+  assert.equal(_isKnownSmall(mk(2700)), false, '2,700세대가 배제된다');
+
+  // 주석이 실제 동작과 다시 어긋나지 않도록 근거 수치를 함께 고정한다.
+  assert.match(src, /미확인이 전부 소형으로 배제/, 'HH-UNKNOWN 근거 주석이 사라졌다');
+});
+
 // OAUTH-STATE-2026-08-17 (Sprint MMMMMMM-15): 이 세 함수는 **3개월간 테스트가 0** 이었고,
 //   그 사이 매달린 참조로 통째로 죽어 있었는데 아무도 몰랐다. 형태(선언 존재)만 고정하면
 //   같은 사고의 다른 형태(예: 키가 undefined 로 계산되어 서명이 항상 같아짐)를 못 잡는다.
