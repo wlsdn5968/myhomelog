@@ -1002,10 +1002,52 @@ async function fetchCandidateApts(admin, input, limit) {
     '해운대': ['26350'], '수영': ['26500'], '수성': ['27260'], '유성': ['30200'],
     '청주': ['43111', '43112', '43113', '43114'],
   };
+  // ══ REGION-SCOPE-2026-08-17 (Sprint MMMMMMM-16) ══════════════════════════════
+  //   [실측] 프론트가 보내는 지역 문자열은 **닫힌 집합**이다 — `getRegionForSearch()` 가
+  //     `${wide} ${sub}` 를 만들고 wide∈{서울,경기,인천,지방}, sub 는 REGION_SUB 의 52개뿐.
+  //     그 56개를 전부 아래 분기에 넣어 돌린 결과:
+  //       · 서울 25개 · 지방 5개 · 인천 '서구'  → 정확히 1개 구로 좁혀짐 ✅
+  //       · **경기 16개 전부 → 경기 44개 코드 전체** ❌
+  //       · **인천 5개(연수(송도)·남동·부평·계양·미추홀) → 인천 14개 전체** ❌
+  //       · **'지방' 세부 미선택 → 필터 자체가 안 붙어 전국** ❌
+  //     원인은 단순하다. 이 분기는 `[가-힣]+구` 로 '구'가 붙은 이름만 좁힐 수 있는데
+  //     경기·인천 칩 라벨은 '과천'·'분당'·'남동'처럼 **'구'가 없다**.
+  //     화면 안내는 "선택 시 **그 지역만** 분석" 이라고 말한다 — 52개 중 21개가 그 말과 달랐다.
+  //
+  //   [고치는 방법 — 새 매핑을 만들지 않는다] `propertyService.REGION_KEYWORDS` 가
+  //     판교→41135 · 평촌→41173 · 미사→41450 · 수지→41465 처럼 **이미 정확한 매핑을 갖고 있고**
+  //     추천 경로는 그걸로 잘 좁히고 있었다(52개 전부 정확 해석 실측). 즉 같은 입력에 두 기능이
+  //     다르게 동작하던 것 — 이 저장소가 반복해 겪은 "사본이 갈린다" 그 자체다.
+  //     여기서 별도 표를 만들면 **세 번째 사본**이 된다 → 검증된 쪽을 재사용한다.
+  //
+  //   ⚠ 안전장치: pickRegions 는 매칭 실패 시 **예산 기반 서울 인기 구**를 돌려준다(추천용 폴백).
+  //     그게 보고서로 새면 "경기 보고서에 서울 단지" 가 된다 → 결과 코드의 시도 접두가
+  //     사용자가 고른 광역과 맞을 때만 채택하고, 아니면 아래 기존 광역 분기로 내려간다.
+  const _WIDE_PFX = { '서울': '11', '경기': '41', '인천': '28' };
+  const _wideKey = Object.keys(_WIDE_PFX).find(w => region.includes(w)) || (region.includes('지방') ? '지방' : null);
+  const _subToken = ['서울', '경기', '인천', '지방'].reduce((s, w) => s.split(w).join(''), String(region || '')).trim();
+  let _scopedCodes = null;
+  if (_subToken) {
+    try {
+      const { pickRegions } = require('../services/propertyService');
+      const picked = pickRegions(region, buy, '') || [];
+      const codes = [...new Set(picked.map(p => p && p.lawdCd).filter(Boolean))];
+      const wantPfx = _WIDE_PFX[_wideKey] || null;
+      // 서울·경기·인천은 접두로 검증한다. '지방'은 여러 시도가 섞이므로 접두 대신
+      //   "서울·경기·인천 코드가 아닐 것" 으로 검증한다(해운대 26·수성 27·유성 30·청주 43).
+      const ok = codes.length && (wantPfx
+        ? codes.every(c => String(c).startsWith(wantPfx))
+        : codes.every(c => !['11', '41', '28'].includes(String(c).slice(0, 2))));
+      if (ok) _scopedCodes = codes;
+      else logger.warn({ region, codes }, '지역 세부 해석이 선택한 광역과 어긋남 — 광역 분기로 폴백');
+    } catch (e) { logger.warn({ region, err: e.message }, 'pickRegions 재사용 실패 — 광역 분기로 폴백'); }
+  }
+
   let _metroCodes = null;
   for (const [kw, codes] of Object.entries(METRO_SUB)) { if (region.includes(kw)) { _metroCodes = codes; break; } }
-  const guMatch = _metroCodes ? null : region.match(/([가-힣]+구)/);
-  if (_metroCodes) q = q.in('lawd_cd', _metroCodes);
+  const guMatch = (_scopedCodes || _metroCodes) ? null : region.match(/([가-힣]+구)/);
+  if (_scopedCodes) q = q.in('lawd_cd', _scopedCodes);
+  else if (_metroCodes) q = q.in('lawd_cd', _metroCodes);
   else if (guMatch) {
     // SIDO-SCOPE-2026-08-10 (Sprint KKKKKKK-9): 구 이름만으로 `.like('sigungu', …)` 하면
     //   **다른 도시 아파트가 섞인다**. molit_transactions.sigungu 에는 광역 접두가 없어
@@ -1033,6 +1075,13 @@ async function fetchCandidateApts(admin, input, limit) {
     if (region.includes('서울')) q = q.in('lawd_cd', codeList.filter(c => c.startsWith('11')));
     else if (region.includes('경기')) q = q.in('lawd_cd', codeList.filter(c => c.startsWith('41')));
     else if (region.includes('인천')) q = q.in('lawd_cd', codeList.filter(c => c.startsWith('28')));
+    // REGION-SCOPE-2026-08-17: '지방' 광역을 세부 미선택으로 보내면 **위 셋 어디에도 안 걸려
+    //   lawd_cd 필터가 통째로 빠지고 전국이 후보 풀이 됐다**(실측). 화면은 "광역의 인기 구 분석"
+    //   이라고 안내하는데 실제로는 서울·경기까지 포함한 전국을 뒤진 것 — 에러도 빈 결과도 아니라
+    //   가장 발견하기 어려운 종류다(청주 사고 때 주석이 경고한 바로 그 형태).
+    //   우리가 '지방'으로 커버하는 범위는 정의상 위 METRO_SUB 그 자체이므로 그 합집합으로 좁힌다.
+    else if (region.includes('지방')) q = q.in('lawd_cd', Object.values(METRO_SUB).flat());
+    else logger.warn({ region }, '지역 필터 미적용 — 전국이 후보 풀이 된다(예상치 못한 지역 문자열)');
   }
 
   // Phase 9: 광역 검색 시 후보 풀 2500 (선호도 가산점 위해 더 넓게 후보 풀)

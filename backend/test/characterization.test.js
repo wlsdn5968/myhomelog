@@ -2791,6 +2791,77 @@ test('eslint 에 no-undef 가 켜져 있다 (매달린 참조 차단)', () => {
     'kakao.js 의 state HMAC 파생 키 선언이 다시 사라졌다 — OAuth state 서명이 죽는다');
 });
 
+// ── REGION-SCOPE-2026-08-17 (Sprint MMMMMMM-16) ───────────────────────────────
+// [실측 배경] 프론트가 보내는 지역 문자열은 닫힌 집합이다(`${wide} ${sub}`, wide 4종 · sub 52종).
+//   그 56개를 보고서의 지역 분기에 전부 넣어 돌린 결과 **21개가 광역 전체로 샜다**:
+//     · 경기 16개 전부 → 경기 44코드   · 인천 5개 → 인천 14코드   · '지방' 미선택 → **전국(필터 없음)**
+//   원인은 분기가 `[가-힣]+구` 로 '구'가 붙은 이름만 좁힐 수 있다는 것 —
+//   경기·인천 칩은 '과천'·'분당'·'남동'처럼 '구'가 없다.
+//   화면 안내는 "선택 시 **그 지역만** 분석" 이라 52개 중 21개가 그 말과 달랐다.
+// ⚠ 이 테스트는 **프론트의 칩 목록을 직접 읽어** 검사한다. 칩을 새로 추가했는데 백엔드가
+//   해석 못 하면 여기서 잡힌다 — 사람이 케이스를 손으로 고르면 반드시 빠뜨린다(중구 사고).
+test('지역 세부 칩 전부가 광역보다 좁게 해석된다 (프론트 칩 목록 기준 전수)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const m = html.match(/const REGION_SUB = (\{[\s\S]*?\});/);
+  assert.ok(m, 'index.html 에서 REGION_SUB 를 찾지 못했다 (칩 목록 형태가 바뀌었다면 이 테스트도 갱신할 것)');
+  const REGION_SUB = new Function(`return ${m[1]}`)();
+  assert.deepEqual(Object.keys(REGION_SUB).sort(), ['경기', '서울', '인천', '지방'],
+    '광역 칩 구성이 바뀌었다 — report.js 의 광역 분기도 함께 확인할 것');
+
+  const { pickRegions } = require('../services/propertyService');
+  const WIDE_PFX = { '서울': '11', '경기': '41', '인천': '28' };
+  // 광역 전체 코드 수 — 이 수에 도달하면 "좁히지 못하고 광역으로 샌 것" 이다.
+  const { LAWD_CODES } = require('../services/transactionService');
+  const wideCount = (pfx) => Object.values(LAWD_CODES).filter(c => String(c).startsWith(pfx)).length;
+
+  // 예산에 따라 pickRegions 의 폴백 분기가 달라지므로 여러 예산으로 함께 본다.
+  for (const budget of [4, 6, 8, 10, 15, 25]) {
+    for (const [wide, subs] of Object.entries(REGION_SUB)) {
+      for (const sub of subs) {
+        const region = `${wide} ${sub}`;
+        const codes = [...new Set((pickRegions(region, budget, '') || []).map(p => p.lawdCd))];
+        assert.ok(codes.length, `'${region}'(예산 ${budget}) 이 아무 지역으로도 해석되지 않는다`);
+        const pfx = WIDE_PFX[wide];
+        if (pfx) {
+          assert.ok(codes.every(c => String(c).startsWith(pfx)),
+            `'${region}'(예산 ${budget}) 이 다른 광역 코드로 해석된다: ${codes.join(',')}`);
+          assert.ok(codes.length < wideCount(pfx),
+            `'${region}'(예산 ${budget}) 이 광역 전체(${wideCount(pfx)}개)로 샌다 — "그 지역만 분석" 안내와 다르다`);
+        } else {
+          // '지방' 은 여러 시도가 섞이므로 "수도권 코드가 아닐 것" 으로 본다.
+          assert.ok(codes.every(c => !['11', '41', '28'].includes(String(c).slice(0, 2))),
+            `'${region}'(예산 ${budget}) 이 수도권 코드로 해석된다: ${codes.join(',')}`);
+        }
+      }
+    }
+  }
+});
+
+test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴백에 지방이 있다', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../routes/report.js'), 'utf8');
+
+  // ① 별도 표를 새로 만들지 않고 propertyService 의 매핑을 재사용한다(세 번째 사본 방지).
+  assert.match(src, /require\('\.\.\/services\/propertyService'\)/,
+    '보고서가 검증된 지역 매핑을 재사용하지 않는다 — 사본을 새로 만들면 또 갈린다');
+  assert.match(src, /pickRegions\(region, buy, ''\)/, 'pickRegions 재사용 호출이 없다');
+
+  // ② ⚠ pickRegions 는 매칭 실패 시 **예산 기반 서울 인기 구**를 돌려준다(추천용 폴백).
+  //    그게 그대로 새면 "경기 보고서에 서울 단지" 가 된다 → 시도 접두 검증이 반드시 있어야 한다.
+  assert.match(src, /codes\.every\(c => String\(c\)\.startsWith\(wantPfx\)\)/,
+    '세부 해석 결과의 시도 접두를 검증하지 않는다 — 다른 광역 단지가 섞인다');
+
+  // ③ '지방' 광역이 lawd_cd 필터 없이 **전국**으로 새던 분기가 막혀 있다.
+  assert.match(src, /region\.includes\('지방'\)/,
+    "'지방' 광역 분기가 없다 — 세부 미선택 시 전국이 후보 풀이 된다");
+  // 어느 분기에도 안 걸리는 입력은 조용히 넘어가지 말고 흔적을 남긴다.
+  assert.match(src, /지역 필터 미적용 — 전국이 후보 풀이 된다/,
+    '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
+});
+
 // OAUTH-STATE-2026-08-17 (Sprint MMMMMMM-15): 이 세 함수는 **3개월간 테스트가 0** 이었고,
 //   그 사이 매달린 참조로 통째로 죽어 있었는데 아무도 몰랐다. 형태(선언 존재)만 고정하면
 //   같은 사고의 다른 형태(예: 키가 undefined 로 계산되어 서명이 항상 같아짐)를 못 잡는다.
