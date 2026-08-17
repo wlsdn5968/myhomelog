@@ -2653,8 +2653,20 @@ test('보고서 후보 풀 — 상한·시간예산·잘림 표기가 실제 커
   assert.match(src, /_poolTruncated:\s*poolTruncated/, '후보에 잘림 여부가 실리지 않는다');
   assert.match(src, /_poolFrom:\s*poolFromDate/, '후보에 실제 커버 시작일이 실리지 않는다');
 
-  // ④ 병렬화 금지가 주석으로 남아 있다 — supabase-js 빌더는 mutable 이라 range 가 서로 덮인다.
-  assert.match(src, /병렬화하면 안 된다/, '페이징 병렬화 금지 근거 주석이 사라졌다');
+  // ④ 페이지마다 **새 빌더**를 만든다 — supabase-js 빌더는 mutable 이라 한 인스턴스를 병렬로 쓰면
+  //    .range() 가 서로를 덮어 같은 구간을 여러 번 읽거나 빠뜨린다(조용한 데이터 손상).
+  assert.match(src, /const _newPageQuery = \(\) =>/, '페이지 쿼리 팩토리가 없다 — 병렬 요청이 서로를 덮는다');
+  assert.equal(/_newPageQuery\(\)\.range\(/.test(src), true, '페이징이 팩토리로 만든 새 빌더를 쓰지 않는다');
+  // 지역 판정은 **적용 함수**로만 담긴다(빌더를 직접 mutate 하면 팩토리가 무의미해진다).
+  assert.match(src, /let _regionOp = null;/, '지역 필터가 적용 함수로 분리돼 있지 않다');
+  assert.equal(/\bq = q\.(in|like)\(/.test(src), false,
+    '지역 분기가 아직 빌더를 직접 mutate 한다 — 페이지 병렬 요청과 양립하지 않는다');
+  // 동시성 상한이 있다 — 재보지 않은 부담을 떠안지 않는다.
+  const cm = src.match(/POOL_CONCURRENCY\s*=\s*(\d+)/);
+  assert.ok(cm && Number(cm[1]) >= 2 && Number(cm[1]) <= 8,
+    `POOL_CONCURRENCY 가 ${cm && cm[1]} 이다 — 2~8 범위를 벗어나면 왕복 부담을 다시 실측할 것`);
+  // 2차 정렬키 — 병렬이라 페이지 경계의 동점 처리가 더 중요해졌다.
+  assert.match(src, /\.order\('id', \{ ascending: false \}\)/, '2차 정렬키(id)가 없다 — 페이지 경계에서 중복·누락이 생긴다');
 
   // ④-b 강등 카운터가 search.js 와 **같은 Redis 키**에 쓴다 — 안 그러면 health 에 안 보인다.
   //     (두 구현이 아직 따로 있으므로 키가 갈리는 순간 보고서 강등이 조용히 사라진다.)

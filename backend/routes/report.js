@@ -981,11 +981,24 @@ async function fetchCandidateApts(admin, input, limit) {
   const maxAmt = Math.round(buy * 1.2 * 10000);
 
   // 지역
-  let q = admin.from('molit_transactions')
-    .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, exclu_use_ar, deal_amount, deal_date, apt_seq')
-    .gte('exclu_use_ar', minSqm).lte('exclu_use_ar', maxSqm)
-    .gte('deal_amount', minAmt).lte('deal_amount', maxAmt)
-    .gte('deal_date', new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10));
+  // POOL-PARALLEL-2026-08-17 (Sprint MMMMMMM-17): 아래 지역 분기는 종전에 빌더 `q` 를 직접 mutate 했다.
+  //   supabase-js 빌더는 mutable 이라 **같은 인스턴스로는 페이지를 병렬 요청할 수 없다**(range 가 서로 덮인다).
+  //   그래서 지역 판정 결과를 **적용 함수 하나**(_regionOp)로만 담고, 페이지마다 새 빌더를 만든다.
+  //   ⚠ 판정 **조건은 한 글자도 바꾸지 않았다** — `q = q.X(…)` 를 `_regionOp = qq => qq.X(…)` 로
+  //     기계적으로 치환했을 뿐이다. 이 구간은 지역 판정 사고가 8회 재발한 자리라 의미 변경을 섞지 않는다.
+  //   날짜 기준은 **밖에서 한 번** 계산한다 — 팩토리 안에서 계산하면 자정 경계에서 페이지마다 달라진다.
+  const _sinceDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  let _regionOp = null;   // (qq) => qq · null 이면 지역 필터 없음
+  const _newPageQuery = () => {
+    let qq = admin.from('molit_transactions')
+      .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, exclu_use_ar, deal_amount, deal_date, apt_seq')
+      .gte('exclu_use_ar', minSqm).lte('exclu_use_ar', maxSqm)
+      .gte('deal_amount', minAmt).lte('deal_amount', maxAmt)
+      .gte('deal_date', _sinceDate);
+    if (_regionOp) qq = _regionOp(qq);
+    // 2차 정렬키 id — deal_date 동점의 페이지 경계 중복/누락을 막는다(병렬이라 더 중요해졌다).
+    return qq.order('deal_date', { ascending: false }).order('id', { ascending: false });
+  };
 
   // METRO-SUB-2026-07-17 (Sprint UUUUU): 지방 광역시 세부(해운대·수영·수성·유성·광주서구)는 guMatch 보다 먼저 처리.
   //   '해운대/수영/수성/유성'은 '구' 접미사가 없어 guMatch 미스 → 전국 조회로 빠지고, '광주서구'는 sigungu 문자열에
@@ -1053,8 +1066,8 @@ async function fetchCandidateApts(admin, input, limit) {
   let _metroCodes = null;
   for (const [kw, codes] of Object.entries(METRO_SUB)) { if (region.includes(kw)) { _metroCodes = codes; break; } }
   const guMatch = (_scopedCodes || _metroCodes) ? null : region.match(/([가-힣]+구)/);
-  if (_scopedCodes) q = q.in('lawd_cd', _scopedCodes);
-  else if (_metroCodes) q = q.in('lawd_cd', _metroCodes);
+  if (_scopedCodes) _regionOp = qq => qq.in('lawd_cd', _scopedCodes);
+  else if (_metroCodes) _regionOp = qq => qq.in('lawd_cd', _metroCodes);
   else if (guMatch) {
     // SIDO-SCOPE-2026-08-10 (Sprint KKKKKKK-9): 구 이름만으로 `.like('sigungu', …)` 하면
     //   **다른 도시 아파트가 섞인다**. molit_transactions.sigungu 에는 광역 접두가 없어
@@ -1071,23 +1084,23 @@ async function fetchCandidateApts(admin, input, limit) {
         .filter(([n]) => String(n).replace(/^(인천|부산|대구|대전|울산)/, '') === guMatch[1])
         .map(([, c]) => c)
       : [];
-    if (scoped.length) q = q.in('lawd_cd', scoped);
-    else q = q.like('sigungu', `%${guMatch[1]}%`); // 광역 접두 없음 → 기존 동작(모호성 잔존)
+    if (scoped.length) _regionOp = qq => qq.in('lawd_cd', scoped);
+    else _regionOp = qq => qq.like('sigungu', `%${guMatch[1]}%`); // 광역 접두 없음 → 기존 동작(모호성 잔존)
   } else {
     // P1-1 (2026-05-04): lawd_cd LIKE '11%' → IN (...) 명시
     //   진단 (EXPLAIN): LIKE prefix 시 인덱스 미활용 → Parallel Seq Scan 960ms
     //   변경: IN (서울 25개 코드) 명시 → idx_molit_lawd_date 인덱스 활용 → ~10x 향상 예상
     const { LAWD_CODES } = require('../services/transactionService');
     const codeList = Object.values(LAWD_CODES);
-    if (region.includes('서울')) q = q.in('lawd_cd', codeList.filter(c => c.startsWith('11')));
-    else if (region.includes('경기')) q = q.in('lawd_cd', codeList.filter(c => c.startsWith('41')));
-    else if (region.includes('인천')) q = q.in('lawd_cd', codeList.filter(c => c.startsWith('28')));
+    if (region.includes('서울')) _regionOp = qq => qq.in('lawd_cd', codeList.filter(c => c.startsWith('11')));
+    else if (region.includes('경기')) _regionOp = qq => qq.in('lawd_cd', codeList.filter(c => c.startsWith('41')));
+    else if (region.includes('인천')) _regionOp = qq => qq.in('lawd_cd', codeList.filter(c => c.startsWith('28')));
     // REGION-SCOPE-2026-08-17: '지방' 광역을 세부 미선택으로 보내면 **위 셋 어디에도 안 걸려
     //   lawd_cd 필터가 통째로 빠지고 전국이 후보 풀이 됐다**(실측). 화면은 "광역의 인기 구 분석"
     //   이라고 안내하는데 실제로는 서울·경기까지 포함한 전국을 뒤진 것 — 에러도 빈 결과도 아니라
     //   가장 발견하기 어려운 종류다(청주 사고 때 주석이 경고한 바로 그 형태).
     //   우리가 '지방'으로 커버하는 범위는 정의상 위 METRO_SUB 그 자체이므로 그 합집합으로 좁힌다.
-    else if (region.includes('지방')) q = q.in('lawd_cd', Object.values(METRO_SUB).flat());
+    else if (region.includes('지방')) _regionOp = qq => qq.in('lawd_cd', Object.values(METRO_SUB).flat());
     else logger.warn({ region }, '지역 필터 미적용 — 전국이 후보 풀이 된다(예상치 못한 지역 문자열)');
   }
 
@@ -1128,19 +1141,33 @@ async function fetchCandidateApts(admin, input, limit) {
   //   [남은 개선 — 운영자 결정 대기] 병렬화하면 12초가 1~4초가 된다. 다만 supabase-js 빌더는 mutable
   //     이라 페이지마다 **새 빌더**가 필요하고, 그러려면 위 지역 판정 분기(956~1012행)를 팩토리로
   //     빼야 한다. 이 저장소는 지역 판정 수정에서 사고가 반복된 이력이 있어 오늘은 건드리지 않는다.
-  //   ⚠ 구현 주의(기존과 동일): supabase-js 빌더에서 .order() 는 쿼리스트링에 **누적**되므로
-  //     루프 밖에서 1회만 적용하고, 루프 안에서는 Range 헤더를 덮어쓰는 .range() 만 반복한다.
-  //     같은 이유로 이 루프는 **병렬화하면 안 된다** — 빌더 인스턴스를 공유하면 range 가 서로 덮인다.
-  const PAGE = 1000, POOL_MAX = 12000, POOL_BUDGET_MS = 25000;
+  //   ⚠ 구현 주의: supabase-js 빌더에서 .order() 는 쿼리스트링에 **누적**되고 .range() 는 헤더를
+  //     덮어쓴다. 그래서 **한 인스턴스를 재사용하면 병렬 요청이 서로를 덮는다** —
+  //     `_newPageQuery()` 로 페이지마다 새 빌더를 만드는 이유가 이것이다(위 팩토리 주석 참조).
+  //   [병렬화 근거 — 실측] 1,000행 페이지 왕복이 평균 935ms(최대 3,967ms)라 12페이지 순차는
+  //     약 11~12초였다. 배치 병렬로 3라운드면 **약 3초**다. 동시 요청 수는 4로 제한한다 —
+  //     한 번에 12개를 던지는 이득(3초→1초)은 크지 않은데 커넥션 부담은 3배가 되고,
+  //     그 부담이 안전한지는 **재보지 않았다**(재보지 않은 값을 고르지 않는다).
+  const PAGE = 1000, POOL_MAX = 12000, POOL_BUDGET_MS = 25000, POOL_CONCURRENCY = 4;
   const _poolStart = Date.now();
-  const qOrdered = q.order('deal_date', { ascending: false }).order('id', { ascending: false });
   let txs = [], poolComplete = false;
-  for (let from = 0; from < POOL_MAX; from += PAGE) {
-    const { data: page, error } = await qOrdered.range(from, from + PAGE - 1);
-    if (error) throw error;
-    if (page && page.length) txs = txs.concat(page);
-    if (!page || page.length < PAGE) { poolComplete = true; break; }  // 더 없음 = 조건 내 전량 확보
-    if (Date.now() - _poolStart > POOL_BUDGET_MS) break;              // 예산 초과 → 잘린 상태로 진행
+  for (let from = 0; from < POOL_MAX && !poolComplete; from += PAGE * POOL_CONCURRENCY) {
+    if (from > 0 && Date.now() - _poolStart > POOL_BUDGET_MS) break;   // 예산 초과 → 잘린 상태로 진행
+    const offsets = [];
+    for (let i = 0; i < POOL_CONCURRENCY; i++) {
+      const off = from + i * PAGE;
+      if (off < POOL_MAX) offsets.push(off);
+    }
+    const pages = await Promise.all(offsets.map(off =>
+      _newPageQuery().range(off, off + PAGE - 1)
+        .then(r => (r.error ? { err: r.error } : { rows: r.data || [] }))));
+    // 결과는 offsets 순서로 돌아오므로 concat 만으로 정렬(deal_date DESC, id DESC)이 보존된다.
+    for (const p of pages) {
+      if (p.err) throw p.err;                       // 조회 실패는 종전처럼 그대로 던진다
+      txs = txs.concat(p.rows);
+      // 한 페이지라도 덜 찼으면 그 뒤는 존재하지 않는다 = 조건 내 전량 확보.
+      if (p.rows.length < PAGE) poolComplete = true;
+    }
   }
   // 잘렸다면 "최근 6개월" 이라고 말하면 안 된다 — 실제로 덮은 시작일을 함께 들고 다닌다.
   //   (txs 는 deal_date 내림차순이므로 마지막 원소가 가장 오래된 거래다.)
