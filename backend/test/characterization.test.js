@@ -2633,8 +2633,19 @@ test('보고서 후보 풀 — 상한·시간예산·잘림 표기가 실제 커
   assert.ok(Number(m[1]) >= 12000,
     `POOL_MAX 가 ${m[1]} 이다 — 서울 광역 밴드 실측 최대 11,983행을 못 덮으면 후보가 조용히 탈락한다`);
 
-  // ② 무한정 늘어나 함수 maxDuration 을 잡아먹지 않도록 시간 예산이 있다.
-  assert.match(src, /POOL_BUDGET_MS\s*=\s*\d+/, '후보 풀 페이징에 시간 예산이 없다');
+  // ② 시간 예산이 있고, **왕복 실측을 덮을 만큼** 크다.
+  //    [실측 — Supabase edge_logs `response.origin_time`, molit_transactions]
+  //      1,000행 페이지 평균 935ms(최대 3,967) · 2페이지째 평균 1,076ms → 12페이지 순차 ≈ 11~12초.
+  //    ⚠ 처음엔 8s 로 잡았다가 이 실측에서 뒤집혔다 — 8s 면 7~8페이지에서 끊겨
+  //      "12,000 이면 전량 커버" 가 성립하지 않는다. 예산을 낮추려면 왕복부터 다시 재라.
+  const bm = src.match(/POOL_BUDGET_MS\s*=\s*(\d+)/);
+  assert.ok(bm, '후보 풀 페이징에 시간 예산이 없다');
+  assert.ok(Number(bm[1]) >= 20000,
+    `POOL_BUDGET_MS 가 ${bm[1]}ms 다 — 12페이지 순차 실측(≈11~12초)을 못 덮으면 상한 12,000 이 무의미하다`);
+
+  // ②-b 잘림이 **얼마나 자주** 일어나는지 관측된다(Hobby 로그는 1시간이면 사라진다).
+  assert.match(src, /await require\('\.\.\/services\/degradeStats'\)\.observeDegrade\('report-pool-cut'\)/,
+    '풀 절단이 카운터로 남지 않는다 — 예산·병렬화를 데이터가 아니라 추측으로 정하게 된다');
 
   // ③ "다 가져왔는가" 를 별도 플래그로 판정하고, 그 결과가 후보에 실려 나간다.
   //    (행수만 보고 판단하면 "정확히 상한만큼 있는 경우"와 "잘린 경우"를 구별 못 한다.)
@@ -2644,6 +2655,13 @@ test('보고서 후보 풀 — 상한·시간예산·잘림 표기가 실제 커
 
   // ④ 병렬화 금지가 주석으로 남아 있다 — supabase-js 빌더는 mutable 이라 range 가 서로 덮인다.
   assert.match(src, /병렬화하면 안 된다/, '페이징 병렬화 금지 근거 주석이 사라졌다');
+
+  // ④-b 강등 카운터가 search.js 와 **같은 Redis 키**에 쓴다 — 안 그러면 health 에 안 보인다.
+  //     (두 구현이 아직 따로 있으므로 키가 갈리는 순간 보고서 강등이 조용히 사라진다.)
+  const searchSrc = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
+  const { KEY_PREFIX } = require('../services/degradeStats');
+  assert.ok(searchSrc.includes(`\`${KEY_PREFIX}\${day}\``),
+    `search.js 의 강등 키가 degradeStats.KEY_PREFIX('${KEY_PREFIX}') 와 다르다 — health 에서 갈린다`);
 
   // ⑤ '표본 적음(시세 판단 주의)' 는 잘린 풀에서 **거짓 경고**가 되므로 가드를 거친다.
   //    반대로 '거래 활발'(n>=20)은 잘려도 하한 보장이라 가드가 없어야 정상이다.

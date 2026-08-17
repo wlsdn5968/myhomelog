@@ -1060,14 +1060,22 @@ async function fetchCandidateApts(admin, input, limit) {
   //     구별 없이 배제된다. 게이트를 완화하는 건 답이 아니다(유령 단지가 다시 들어온다) —
   //     **풀이 잘리지 않게 하는 것**이 유일한 해법이다.
   //   [상한을 12,000 으로 잡은 근거] 구 단위 선택은 원래 안 잘린다(서울 최대 노원구 1,430행).
-  //     광역만 문제이고 서울 광역은 밴드별 최대 11,983행 → **12,000 이면 전량 커버**(실측).
+  //     광역만 문제이고 서울 광역은 밴드별 최대 11,983행 → 12,000 이면 **행수 기준으로는** 전부 담긴다.
   //     경기 광역 최악 밴드는 29,260행이라 여전히 부분 표본이다 — 그 경우는 아래에서 사실대로 밝힌다.
-  //   [시간 예산] 왕복이 3 → 최대 12 로 늘어난다. 무한정 늘어나 함수 maxDuration(300s)을 잡아먹지
-  //     않도록 상한을 둔다(MV_REFRESH_ABORT_MS 와 같은 방어). 예산 초과 = 잘림으로 취급한다.
+  //   [시간 예산 — ⚠ 2026-08-17 정정] 처음엔 8s 로 잡았는데, **왕복 실측을 안 하고 정한 값이었다.**
+  //     Supabase edge_logs 실측(`response.origin_time`, molit_transactions 대상):
+  //       · 1,000행 페이지(`content_range: 0-999/*`)  평균 **935ms** · 최대 3,967ms (n=19)
+  //       · 2페이지째(`1000-1999/*`)                   평균 **1,076ms** · 최대 2,683ms (n=7)
+  //     즉 12페이지 순차면 평균 **약 11~12초**다. 8s 예산은 7~8페이지에서 끊겨
+  //     "12,000 이면 전량 커버" 가 실제로는 성립하지 않았다. 평균 소요에 여유를 둬 **25s** 로 올린다.
+  //     (함수 maxDuration 은 300s 이고 이 경로는 뒤이어 AI 호출까지 하므로 25s 는 안전 범위.)
+  //   [남은 개선 — 운영자 결정 대기] 병렬화하면 12초가 1~4초가 된다. 다만 supabase-js 빌더는 mutable
+  //     이라 페이지마다 **새 빌더**가 필요하고, 그러려면 위 지역 판정 분기(956~1012행)를 팩토리로
+  //     빼야 한다. 이 저장소는 지역 판정 수정에서 사고가 반복된 이력이 있어 오늘은 건드리지 않는다.
   //   ⚠ 구현 주의(기존과 동일): supabase-js 빌더에서 .order() 는 쿼리스트링에 **누적**되므로
   //     루프 밖에서 1회만 적용하고, 루프 안에서는 Range 헤더를 덮어쓰는 .range() 만 반복한다.
   //     같은 이유로 이 루프는 **병렬화하면 안 된다** — 빌더 인스턴스를 공유하면 range 가 서로 덮인다.
-  const PAGE = 1000, POOL_MAX = 12000, POOL_BUDGET_MS = 8000;
+  const PAGE = 1000, POOL_MAX = 12000, POOL_BUDGET_MS = 25000;
   const _poolStart = Date.now();
   const qOrdered = q.order('deal_date', { ascending: false }).order('id', { ascending: false });
   let txs = [], poolComplete = false;
@@ -1085,6 +1093,11 @@ async function fetchCandidateApts(admin, input, limit) {
   if (poolTruncated) {
     logger.warn({ region, rows: txs.length, poolFromDate, elapsedMs: Date.now() - _poolStart },
       '보고서 후보 풀 절단 — 표기를 실제 커버 기간으로 낮춘다');
+    // 로그는 Hobby 에서 1시간이면 사라진다. **얼마나 자주 잘리는지**를 알아야 예산·병렬화를
+    //   추측이 아니라 데이터로 정할 수 있다 → health.searchDegrade 에 카운터로 남긴다.
+    //   ⚠ await 하지 않으면 서버리스 동결로 유실된다(커밋 ba1db07 에서 실제로 겪었다).
+    //   여기는 응답까지 아직 멀지만, 유실 가능한 관측을 남기지 않는다는 규약을 일관되게 지킨다.
+    await require('../services/degradeStats').observeDegrade('report-pool-cut');
   }
 
   // ALIAS-MERGE-2026-05-21 (전수조사: BUG2 동일 클래스): raw MOLIT명(풍림아파트A/B) →
