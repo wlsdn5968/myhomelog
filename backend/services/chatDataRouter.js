@@ -107,42 +107,95 @@ async function _market(query, context) {
   const admin = getSupabaseAdmin();
   if (!admin) return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
   const since = new Date(); since.setMonth(since.getMonth() - 6);
-  const { data, error } = await admin.from('molit_transactions')
-    .select('apt_name, sigungu, umd_nm, deal_amount, deal_date, exclu_use_ar')
-    .ilike('apt_name', `%${q.replace(/[%_]/g, '')}%`)
-    .gte('deal_date', since.toISOString().slice(0, 10))
-    .order('deal_date', { ascending: false })
-    .limit(400);
-  if (error || !data) return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
-  if (!data.length) {
-    return `"${q}" 이름이 들어간 단지의 최근 6개월 국토부 실거래를 찾지 못했어요.\n` +
+  const _safeQ = q.replace(/[%_]/g, '');
+
+  // MARKET-SAMPLE-2026-08-17 (Sprint MMMMMMM-13): **단지 선택**과 **통계 계산**을 분리한다.
+  //
+  //   [종전 결함 — 실측] 이름 부분일치 전체를 `.limit(400)` 최신순으로 한 번에 긁어 그 안에서
+  //     그룹핑했다. 6개월 매칭 행수는 "자이" 6,117건(289그룹) · "푸르지오" 7,057건(351그룹) —
+  //     400행은 **6.5%** 다. 그래서 ① 어느 단지를 고를지가 "최근 며칠" 표본으로 결정되고
+  //     ② 고른 단지의 "거래 N건 · 단순평균"이 그 잘린 조각에서 계산됐다.
+  //     화면은 "최근 6개월"이라고 적는데 실제로는 아니었다.
+  //     ⚠ "은마"는 233건이라 상한에 닿은 적이 없다 — 라이브 점검에서 이 결함이 안 보인 이유다.
+  //
+  //   [Fix] ① 후보 단지는 검색용 MV(`molit_apt_index`, 단지 단위 집계 22,473행)에서 고른다.
+  //           search.js 와 같은 소스다. 등급(정확>접두>부분)별로 따로 조회해 **낮은 등급의
+  //           대량 매칭이 높은 등급을 밀어내지 못하게** 한다(실측 상한: 접두 최대 134행·부분 359행,
+  //           '아파트' 같은 무의미 질의만 1,282행).
+  //         ② 통계는 **고른 단지 하나**의 6개월 거래만 조회해 계산한다. 단지 하나의 6개월 거래는
+  //           실측 최대 **209건**이고 400건 초과 단지는 **0곳**이라 상한에 닿지 않는다.
+  //
+  //   ⚠ MV 의 deal_count 는 **전 기간** 누적이다(정의에 날짜 필터 없음). 그래서 후보 **순위**에만
+  //     쓰고, 사용자에게 보여주는 건수·평균은 아래 6개월 조회 결과로만 만든다. 두 기준을 섞지 않는다.
+  const _mvSel = 'apt_name, lawd_cd, sigungu, umd_nm, build_year, deal_count';
+  const _mv = () => admin.from('molit_apt_index').select(_mvSel);
+  const [exactRes, prefixRes, substrRes] = await Promise.all([
+    _mv().eq('apt_name', _safeQ).limit(50),
+    _mv().ilike('apt_name', `${_safeQ}%`).order('deal_count', { ascending: false }).limit(200),
+    _mv().ilike('apt_name', `%${_safeQ}%`).order('deal_count', { ascending: false }).limit(500),
+  ]);
+  if (exactRes.error && prefixRes.error && substrRes.error) {
+    return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
+  }
+
+  // NAME-RANK-2026-08-12 (라이브 실채팅에서 발각): 건수만으로 정렬하면 부분문자열 오매칭이
+  //   1위를 먹는다 — 실사고: "은마"(강남)가 "동탄시범**다은마**을…"에 밀렸다.
+  //   **이름 정확일치 > 접두 일치 > 부분 포함** 순으로 먼저 가르고, 같은 등급 안에서만 건수순.
+  const _tier = (name) => name === _safeQ ? 3 : String(name || '').startsWith(_safeQ) ? 2 : 1;
+  // ⚠ 세 결과는 서로 포함관계(정확 ⊂ 접두 ⊂ 부분)라 같은 MV 행이 여러 번 온다.
+  //   MV 행 고유키로 먼저 걸러내지 않으면 deal_count 가 2~3배로 부풀어 순위가 뒤집힌다.
+  const seenRow = new Set();
+  const cand = new Map();   // "이름|시군구" → { aptName, sigungu, dealCount, tier }
+  for (const r of [...(exactRes.data || []), ...(prefixRes.data || []), ...(substrRes.data || [])]) {
+    if (!r || !r.apt_name) continue;
+    const rowKey = `${r.apt_name}|${r.lawd_cd}|${r.sigungu}|${r.umd_nm}|${r.build_year}`;
+    if (seenRow.has(rowKey)) continue;
+    seenRow.add(rowKey);
+    // (단지, 시군구) 그룹핑 — 동명 단지 분리 (문자열 지역 판정 아님: 표시 그룹핑 용도만).
+    //   종전과 같은 그룹 키를 유지한다 — 여기서 바꾸면 화면에 보이는 묶음이 달라진다(별개 결정).
+    const k = `${r.apt_name}|${r.sigungu || ''}`;
+    const cur = cand.get(k);
+    if (cur) cur.dealCount += (r.deal_count || 0);
+    else cand.set(k, { aptName: r.apt_name, sigungu: r.sigungu || '', dealCount: r.deal_count || 0, tier: _tier(r.apt_name) });
+  }
+  const ranked = [...cand.values()].sort((a, b) => b.tier !== a.tier ? b.tier - a.tier : b.dealCount - a.dealCount);
+  if (!ranked.length) {
+    return `"${q}" 이름이 들어간 단지를 국토부 실거래 데이터에서 찾지 못했어요.\n` +
       `· 단지명을 조금 다르게(공백·차수 없이) 적어보시거나\n· 상단 검색창 자동완성으로 정확한 이름을 확인해 보세요.`;
   }
-  // (단지, 시군구) 그룹핑 — 동명 단지 분리 (문자열 지역 판정 아님: 표시 그룹핑 용도만)
-  const groups = new Map();
-  for (const t of data) {
-    const k = `${t.apt_name}|${t.sigungu || ''}`;
-    if (!groups.has(k)) groups.set(k, []);
-    groups.get(k).push(t);
+
+  // 상위 후보부터 6개월 거래를 조회 — 전 기간 순위 1위가 최근 6개월엔 거래가 없을 수 있다.
+  const TX_CAP = 400;   // 단지 하나 기준 실측 최대 209건(400 초과 0곳). 닿으면 아래에서 사실대로 밝힌다.
+  let picked = null, txs = null;
+  for (const c of ranked.slice(0, 3)) {
+    let tq = admin.from('molit_transactions')
+      .select('apt_name, sigungu, umd_nm, deal_amount, deal_date, exclu_use_ar')
+      .eq('apt_name', c.aptName)
+      .gte('deal_date', since.toISOString().slice(0, 10));
+    tq = c.sigungu ? tq.eq('sigungu', c.sigungu) : tq.is('sigungu', null);
+    const { data, error } = await tq.order('deal_date', { ascending: false }).limit(TX_CAP);
+    if (error) return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
+    if (data && data.length) { picked = c; txs = data; break; }
   }
-  // NAME-RANK-2026-08-12 (라이브 실채팅에서 발각): 거래 건수만으로 정렬하면 부분문자열 오매칭이
-  //   1위를 먹는다 — 실사고: "은마"(강남, 20건)가 "동탄시범**다은마**을…"(35건)에 밀렸다.
-  //   **이름 정확일치 > 접두 일치 > 부분 포함** 순으로 먼저 가르고, 같은 등급 안에서만 건수순.
-  const _rank = (name) => name === q ? 3 : name.startsWith(q) ? 2 : 1;
-  const sorted = [...groups.entries()].sort((a, b) => {
-    const ra = _rank(a[0].split('|')[0]), rb = _rank(b[0].split('|')[0]);
-    return rb !== ra ? rb - ra : b[1].length - a[1].length;
-  });
-  const [topKey, txs] = sorted[0];
-  const [aptName, sigungu] = topKey.split('|');
+  if (!picked) {
+    const names = ranked.slice(0, 3).map(c => `${c.aptName}${c.sigungu ? `(${c.sigungu})` : ''}`).join(' · ');
+    return `"${q}" 로 찾은 단지(${names})는 최근 6개월 국토부 실거래가 없어요.\n` +
+      `· 상단 검색창에서 단지명을 검색하면 더 이전 거래까지 볼 수 있어요.`;
+  }
+
+  const aptName = picked.aptName, sigungu = picked.sigungu;
   const avg = txs.reduce((s, t) => s + Number(t.deal_amount || 0), 0) / txs.length;
   const recent = txs.slice(0, 3)
     .map(t => `· ${mmdd(t.deal_date)} · 전용 ${Number(t.exclu_use_ar || 0).toFixed(0)}㎡ · ${eok(t.deal_amount)}`)
     .join('\n');
   let out = `📊 ${aptName} (${sigungu}${txs[0].umd_nm ? ' ' + txs[0].umd_nm : ''}) — 최근 6개월 국토부 실거래\n` +
     `${recent}\n거래 ${txs.length}건 · 단순평균 ${eok(avg)}`;
-  if (sorted.length > 1) {
-    const others = sorted.slice(1, 3).map(([k, v]) => { const [n, s] = k.split('|'); return `${n}(${s}, ${v.length}건)`; }).join(' · ');
+  // 실측상 닿지 않는 상한이지만, 닿았다면 그 사실을 숨기지 않는다(조용한 절단 재발 방지).
+  if (txs.length >= TX_CAP) out += `\n(최신 ${TX_CAP}건까지만 집계한 값이에요)`;
+  if (ranked.length > 1) {
+    // ⚠ 여기 건수를 붙이지 않는다 — MV 의 deal_count 는 전 기간이라 위의 6개월 건수와 기준이 다르다.
+    //   같은 줄에 두 기준의 숫자가 나란히 놓이면 사용자가 비교 가능한 값으로 읽는다.
+    const others = ranked.slice(1, 3).map(c => `${c.aptName}(${c.sigungu || '지역미상'})`).join(' · ');
     out += `\n\n같은 이름의 다른 단지도 있어요: ${others}\n지역명을 함께 적어주시면 좁혀드려요.`;
   }
   out += `\n\n🔍 전세가율·연식·학군 등 상세는 상단 검색창에서 "${aptName}" 을 검색해 보세요.`;

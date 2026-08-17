@@ -429,6 +429,17 @@ function _freeContextLines(policy, freeCtx) {
   return out;
 }
 
+// POOL-COVERAGE-2026-08-17 (Sprint MMMMMMM-13): 후보의 거래 수치가 **어느 기간 표본**에서 나왔는지.
+//   풀이 잘리지 않았으면 '최근 6개월', 잘렸으면 실제로 덮은 일수를 돌려준다.
+//   두 소비처(보고서 카드 · AI 프롬프트)가 같은 함수를 쓰게 해 사본이 갈리는 사고를 막는다 —
+//   이 저장소는 같은 지표의 사본이 조용히 갈리는 사고를 여러 번 겪었다(취득세 tier·규제 판정).
+//   ⚠ 서버 런타임 TZ 는 UTC 다 — 날짜 차이는 UTC 로 계산한다.
+function poolSpanLabel(c) {
+  if (!c || !c._poolTruncated || !c._poolFrom) return '최근 6개월';
+  const days = Math.max(1, Math.round((Date.now() - Date.parse(`${c._poolFrom}T00:00:00Z`)) / 86400000));
+  return Number.isFinite(days) ? `최근 ${days}일` : '최근 6개월';
+}
+
 function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
   const curYear = new Date().getFullYear();
   const fc = _freeContextLines(policy || {}, freeCtx || {});
@@ -436,18 +447,26 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
     const f = c.objectiveFacts || {};
     const areaMain = Array.isArray(c.areas) && c.areas.length ? Number(c.areas[0]) : null;
     const age = (c.build_year && c.build_year > 1900) ? curYear - c.build_year : null;
+    // POOL-COVERAGE-2026-08-17 (Sprint MMMMMMM-13): c.n 은 **후보 풀 안에서의** 거래 수다.
+    //   풀이 잘렸으면 그 수는 6개월치가 아니다 — 실제로 덮은 기간으로 적는다.
+    //   ⚠ 서버 런타임 TZ 는 UTC 이므로 날짜 차이는 UTC 기준으로 계산한다([[server-runtime-timezone-utc]]).
+    const _span = poolSpanLabel(c);
     const pros = [
       (c.households && c.households >= 1000) ? `대단지 ${Number(c.households).toLocaleString()}세대` : null,
       // HH-CONFLICT-2026-08-17 (Sprint MMMMMMM): '장점' 은 판단이다 — 분모를 못 믿으면 쓰지 않는다.
       (f.parking_per_household && f.parking_per_household >= 1 && !f.parking_uncertain)
         ? `주차 세대당 ${f.parking_per_household}대` : null,
-      (c.n >= 20) ? `최근 6개월 거래 ${c.n}건 (거래 활발)` : null,
+      // 잘린 풀에서도 n 은 **하한**이라 '거래 활발'은 여전히 참이다(실제는 더 많다) → 유지.
+      (c.n >= 20) ? `${_span} 거래 ${c.n}건 (거래 활발)` : null,
       f.builder ? `시공 ${f.builder}` : null,
       f.jeonse_ratio ? `전세가율 ${f.jeonse_ratio} (회원님 평형대 전세 ${f.jeonse_sample}건)` : null, // Sprint KKKKK
     ].filter(Boolean).join(' · ');
     const cons = [
       (age != null && age >= 25) ? `준공 ${age}년차 — 수리·관리 상태 임장 확인 필요` : null,
-      (c.n <= 5) ? `최근 6개월 거래 ${c.n}건 — 표본 적음(시세 판단 주의)` : null,
+      // ⚠ 반대로 '표본 적음'은 잘린 풀에서 **거짓 경고**가 된다 — 실제로 30건인 단지가 풀에선 3건일 수
+      //   있고, 그때 "시세 판단 주의"를 붙이면 없는 위험을 만든다. 잘렸으면 이 판정을 하지 않는다.
+      //   (모르는 것은 말하지 않는다 — 억지로 반대쪽 단정을 넣지도 않는다.)
+      (!c._poolTruncated && c.n <= 5) ? `최근 6개월 거래 ${c.n}건 — 표본 적음(시세 판단 주의)` : null,
     ].filter(Boolean).join(' · ');
     return {
       rank: i + 1,
@@ -462,7 +481,12 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
       areaPyeong: areaMain ? Math.round(areaMain / 3.3058) : undefined,
       buildYear: c.build_year || 0,
       households: c.households || '미상',
-      ratio: `최근 6개월 실거래 ${c.n || 0}건`,
+      ratio: c._poolTruncated
+        ? `${_span} 실거래 ${c.n || 0}건 (후보 표본 기준)`
+        : `최근 6개월 실거래 ${c.n || 0}건`,
+      // 프론트가 같은 판정을 **자기 문자열로 다시 만들지 않도록** 기간 라벨을 함께 내려보낸다.
+      //   (index.html 의 카드가 '6개월' 을 하드코딩하고 있어 여기 값이 바뀌면 조용히 갈렸다.)
+      sampleSpan: _span,
       // IIII: 위계 라벨("서울 외곽구" 등)이 단독 노출되면 어색(라이브 확인) — 실제 행정구역을 주정보로, 라벨은 괄호
       location: [`${c.sigungu} ${c.umd_nm}${f.district ? ` (${f.district})` : ''}`, f.regulation].filter(Boolean).join(' · '),
       pros: pros || '객관 정보는 아래 표 참조',
@@ -1025,15 +1049,42 @@ async function fetchCandidateApts(admin, input, limit) {
   //     2차 정렬키 id 로 차단. 왕복 1→3(광역 기준) — 정확도 대비 수용.
   //   ⚠ 구현 주의: supabase-js 빌더에서 .order() 는 쿼리스트링에 **누적**되므로 루프 밖에서 1회만 적용하고,
   //     루프 안에서는 Range 헤더를 덮어쓰는 .range() 만 반복한다(반복 호출 시 order 중복 방지).
-  const PAGE = 1000, POOL_MAX = 2500;
+  // POOL-COVERAGE-2026-08-17 (Sprint MMMMMMM-13): 위 페이징은 1000행 cap 은 풀었지만
+  //   **2,500 이라는 상한 자체가 광역 보고서를 조용히 최근 2개월짜리로 만들고 있었다.**
+  //   [실측 — 서울 광역·평형 전체·매수가 10억(밴드 0.7~1.2배)]
+  //     · 밴드 내 180일 행수 **11,983** → 2,500 은 20.9%
+  //     · 풀이 실제로 덮는 기간 = **2026-06-19 이후(59일)**. 의도한 시작일은 2026-02-18.
+  //     · 적격 단지(n>=2) **1,329곳 → 508곳**. **821곳(62%)이 후보에 아예 진입하지 못했다.**
+  //   [왜 라벨 수정으로 못 덮나] n 은 표시용이 아니다 — 아래 TRUST-GATE `n >= 2` 의 판정 기준이고
+  //     computeAptScore 의 거래량 점수 입력이다. 잘린 풀에서 n=1 이 된 정상 단지가 유령 단지와
+  //     구별 없이 배제된다. 게이트를 완화하는 건 답이 아니다(유령 단지가 다시 들어온다) —
+  //     **풀이 잘리지 않게 하는 것**이 유일한 해법이다.
+  //   [상한을 12,000 으로 잡은 근거] 구 단위 선택은 원래 안 잘린다(서울 최대 노원구 1,430행).
+  //     광역만 문제이고 서울 광역은 밴드별 최대 11,983행 → **12,000 이면 전량 커버**(실측).
+  //     경기 광역 최악 밴드는 29,260행이라 여전히 부분 표본이다 — 그 경우는 아래에서 사실대로 밝힌다.
+  //   [시간 예산] 왕복이 3 → 최대 12 로 늘어난다. 무한정 늘어나 함수 maxDuration(300s)을 잡아먹지
+  //     않도록 상한을 둔다(MV_REFRESH_ABORT_MS 와 같은 방어). 예산 초과 = 잘림으로 취급한다.
+  //   ⚠ 구현 주의(기존과 동일): supabase-js 빌더에서 .order() 는 쿼리스트링에 **누적**되므로
+  //     루프 밖에서 1회만 적용하고, 루프 안에서는 Range 헤더를 덮어쓰는 .range() 만 반복한다.
+  //     같은 이유로 이 루프는 **병렬화하면 안 된다** — 빌더 인스턴스를 공유하면 range 가 서로 덮인다.
+  const PAGE = 1000, POOL_MAX = 12000, POOL_BUDGET_MS = 8000;
+  const _poolStart = Date.now();
   const qOrdered = q.order('deal_date', { ascending: false }).order('id', { ascending: false });
-  let txs = [];
+  let txs = [], poolComplete = false;
   for (let from = 0; from < POOL_MAX; from += PAGE) {
-    const _take = Math.min(PAGE, POOL_MAX - from);
-    const { data: page, error } = await qOrdered.range(from, from + _take - 1);
+    const { data: page, error } = await qOrdered.range(from, from + PAGE - 1);
     if (error) throw error;
     if (page && page.length) txs = txs.concat(page);
-    if (!page || page.length < _take) break;
+    if (!page || page.length < PAGE) { poolComplete = true; break; }  // 더 없음 = 조건 내 전량 확보
+    if (Date.now() - _poolStart > POOL_BUDGET_MS) break;              // 예산 초과 → 잘린 상태로 진행
+  }
+  // 잘렸다면 "최근 6개월" 이라고 말하면 안 된다 — 실제로 덮은 시작일을 함께 들고 다닌다.
+  //   (txs 는 deal_date 내림차순이므로 마지막 원소가 가장 오래된 거래다.)
+  const poolTruncated = !poolComplete;
+  const poolFromDate = txs.length ? txs[txs.length - 1].deal_date : null;
+  if (poolTruncated) {
+    logger.warn({ region, rows: txs.length, poolFromDate, elapsedMs: Date.now() - _poolStart },
+      '보고서 후보 풀 절단 — 표기를 실제 커버 기간으로 낮춘다');
   }
 
   // ALIAS-MERGE-2026-05-21 (전수조사: BUG2 동일 클래스): raw MOLIT명(풍림아파트A/B) →
@@ -1096,6 +1147,10 @@ async function fetchCandidateApts(admin, input, limit) {
         households: null,
         master_matched: false,
         new_high_count: countNewHigh(a.deals), // Phase 8
+        // POOL-COVERAGE-2026-08-17: n·new_high_count 가 **어떤 표본에서 나온 값인지**를 값과 함께
+        //   들고 다닌다. 잘린 풀에서 나온 수치를 "최근 6개월" 이라고 적으면 그게 곧 거짓 서술이다.
+        _poolTruncated: poolTruncated,
+        _poolFrom: poolFromDate,
       };
     });
 
@@ -1349,7 +1404,8 @@ function buildReportPrompt(input, policy, candidates, freeCtx) {
       facts.parking_per_household ? `주차: 세대당 ${facts.parking_per_household}대${facts.parking_total ? ` (총 ${facts.parking_total}대)` : ''}` : null,
       facts.age_years != null ? `노후도: ${facts.age_years}년차` : null,
       facts.regulation ? `규제: ${facts.regulation}` : null,
-      facts.new_high_count > 0 ? `최근 6개월 신고가 ${facts.new_high_count}회 갱신` : null,
+      // POOL-COVERAGE-2026-08-17: 신고가 갱신 횟수도 후보 풀 안에서 센 값이다 — 기간을 정확히 적는다.
+      facts.new_high_count > 0 ? `${poolSpanLabel(c)} 신고가 ${facts.new_high_count}회 갱신` : null,
       facts.jeonse_ratio ? `전세가율: ${facts.jeonse_ratio} (회원님 평형대 전세 ${facts.jeonse_sample}건 기준)` : null, // Sprint KKKKK
       amStr,
     ].filter(Boolean).join(' | ');
@@ -1383,7 +1439,7 @@ function buildReportPrompt(input, policy, candidates, freeCtx) {
 - ※ ${policy.note}
 ${_freeBlock ? `\n## 실측 수치 (전부 공식 출처 — 아래 수치만 인용 가능, 임의 변형·추정 금지)\n${_freeBlock}` : ''}
 
-## 단지 정보 (${candidates.length}개 후보, 최근 6개월 실거래 기반)
+## 단지 정보 (${candidates.length}개 후보, ${poolSpanLabel(candidates[0])} 실거래 기반)
 ${aptList}
 
 ## 작성 지침

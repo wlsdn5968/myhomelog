@@ -1699,7 +1699,11 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 
   <!-- Sprint QQQQQ (시안): 추천 단지(검색 결과)를 s1 바로 아래로 — "검색 바로 아래 결과" -->
   <div class="sec" id="s3">
-    <div class="sh" onclick="ts('s3')"><span class="st">추천 단지</span><span id="pCnt" style="color:var(--acc);font-size:11px;font-weight:700">0건</span><span class="sa">▲</span></div>
+    <!-- RECO-WORD-2026-08-17 (Sprint MMMMMMM-13): 이 섹션 제목이 권유형 단어를 쓰고 있었다.
+         보고서 AI 프롬프트는 report.js:46 에서 그 단어를 **금지**하고 '조건 부합 단지'·'탐색 후보' 를
+         쓰라고 지시하는데, 정작 화면 제목이 반대라 서비스 안에서 말이 갈렸다(절대 룰 ① 매수 추천 금지).
+         동작은 그대로 두고 이름만 실제 하는 일(조건 매칭)에 맞춘다. -->
+    <div class="sh" onclick="ts('s3')"><span class="st">조건 맞는 단지</span><span id="pCnt" style="color:var(--acc);font-size:11px;font-weight:700">0건</span><span class="sa">▲</span></div>
     <div id="pList"><div style="padding:20px;text-align:center;color:var(--t3);font-size:12px;line-height:2.1">위에서 단지 찾기를 실행하면<br>국토부 실거래가 기반으로<br>여기에 결과가 표시됩니다</div></div>
   </div>
 
@@ -1889,8 +1893,14 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   <div style="max-width:520px;margin-top:14px;padding:14px 16px;background:var(--accent-50);border:1px solid var(--accent-100);border-radius:var(--r);box-shadow:var(--sh)">
     <div style="font-size:12px;font-weight:700;color:var(--accent-700);margin-bottom:8px">💸 부족 자금 발생 시 — 합법 해결 시나리오</div>
     <div style="font-size:11px;color:var(--t2);line-height:1.7">
-      <div style="margin-bottom:6px"><b>1. 신용대출 추가</b> — DSR 여유 시 가능. <b>한도는 차주별 연소득 이내로 제한</b>(2025.10.15 대책). 1억원 초과 신용대출 보유 시 대출 실행일부터 1년간 규제지역 주택 매수 제한(기존 규제 연장). 평균 금리 6%대·만기 5년.</div>
-      <div style="margin-bottom:6px"><b>2. 마이너스 통장</b> — 일시 대응. 한도 5천만 ~ 1억. 변동 금리 7~8%, 사용 분만 이자.</div>
+      <!-- RATE-SOURCE-2026-08-17 (Sprint MMMMMMM-13): 아래 두 줄에 신용대출·마이너스통장 금리가
+           **출처도 기준시점도 없이** 숫자로 박혀 있었다. 이 금리들은 은행·신용등급·한도별 편차가 커
+           단일 값으로 말할 수 없고, 우리가 자동 갱신하는 공시(ECOS 기준금리·주담대 가중평균)에도
+           해당 항목이 없다. 절대 룰 ②(공식 출처만 인용)에 따라 수치를 빼고 확인 경로를 남긴다.
+           한도·규제 문구는 2025.10.15 대책이라는 출처가 명시돼 있으므로 그대로 둔다.
+           (옛 수치는 계약 테스트의 금지 문자열이라 여기 적지 않는다.) -->
+      <div style="margin-bottom:6px"><b>1. 신용대출 추가</b> — DSR 여유 시 가능. <b>한도는 차주별 연소득 이내로 제한</b>(2025.10.15 대책). 1억원 초과 신용대출 보유 시 대출 실행일부터 1년간 규제지역 주택 매수 제한(기존 규제 연장). 만기 5년 내외이며, 금리는 은행·신용도별 편차가 커 거래 은행에서 직접 확인이 필요해요.</div>
+      <div style="margin-bottom:6px"><b>2. 마이너스 통장</b> — 일시 대응. 한도 5천만 ~ 1억. 변동 금리이고 사용한 금액에만 이자가 붙어요(금리는 은행별 상이).</div>
       <div style="margin-bottom:6px"><b>3. 가족 차용</b> — <b>차용증·이자 약정 필수</b> (증여세 회피 의심 차단). 무이자·저리 시 적정이자율(연 4.6%) 기준 이자 차액이 연 1,000만원 이상이면 증여세 과세 — 무이자 기준 원금 약 2.17억까지 비과세. 매월 이체 기록 보존.</div>
       <div style="margin-bottom:6px"><b>4. 매수가 조정 / 평형 변경</b> — 부족분만큼 작은 평형/구축. 가장 안전.</div>
       <div><b>5. 지역 변경</b> — 비규제 지역 = LTV 70% (규제 40% 대비 1.75배). 한도 자체가 다름.</div>
@@ -2682,7 +2692,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <h3 style="font-size:14px;margin:8px 0 6px;color:var(--red)">⚠ 가장 중요한 고지</h3>
         <div style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:8px;padding:12px;margin-bottom:14px;font-weight:600;color:var(--red)">
           내집로그는 <u>매수·매도를 권유하거나 가격을 예측하는 서비스가 아닙니다.</u><br>
-          제공되는 모든 점수·신호등(🟢🟡🔴)·추천 단지·분석 코멘트는 <u>과거 실거래 데이터를 통계적으로 정리한 참고 정보</u>일 뿐이며, <u>미래 가격의 상승 또는 하락을 시사하지 않습니다.</u><br>
+          제공되는 모든 점수·신호등(🟢🟡🔴)·조건 맞는 단지 목록·분석 코멘트는 <u>과거 실거래 데이터를 통계적으로 정리한 참고 정보</u>일 뿐이며, <u>미래 가격의 상승 또는 하락을 시사하지 않습니다.</u><br>
           부동산 가격은 거시경제·금리·정책·심리 등 다양한 요인에 의해 <u>언제든 큰 폭으로 하락할 수 있으며</u>, 본 서비스를 참고한 결과로 발생한 금전적 손실(매매 차손, 대출 이자, 세금, 기회비용 등)에 대해 <strong>운영자의 고의 또는 중대한 과실이 없는 한 운영자는 책임을 지지 않습니다.</strong> (「약관의 규제에 관한 법률」 제7조에 따른 책임 제한)
         </div>
 
@@ -4184,7 +4194,7 @@ function _renderReport(data) {
         <div>✅ <b>장점</b>: ${_escHtml(a.pros || '')}</div>
         <div>⚠ <b>단점</b>: ${_escHtml(a.cons || '')}</div>
         <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--bg2)">💰 <b>예산 매칭</b>: ${_escHtml(a.priceFit || '')}</div>
-        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구 등급 <b>${_escHtml(f.district)}</b>`:null,f.builder?`시공사 <b>${_escHtml(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>`:null,f.regulation?`규제 <b>${_escHtml(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>6개월 ${_numFmt(f.new_high_count)}회 갱신</b>`:null].filter(Boolean);const am=f.amenities;
+        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구 등급 <b>${_escHtml(f.district)}</b>`:null,f.builder?`시공사 <b>${_escHtml(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>${f.parking_total?` (총 ${_numFmt(f.parking_total)}대)`:''}${f.parking_uncertain?' <span style="color:var(--t3)">— 세대수 불일치로 참고용</span>':''}`:null,f.regulation?`규제 <b>${_escHtml(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>${_escHtml(a.sampleSpan||'최근 6개월')} ${_numFmt(f.new_high_count)}회 갱신</b>`:null].filter(Boolean);const am=f.amenities;
         /* MOB-AUDIT-2026-05-03: amenities 0 vs undefined 구분 — 좌표 호출 실패 시 "지하철 0개" 오해 차단 */
         const _amOk = am && (am.subway != null || am.mart != null || am.hospital != null || am.school != null);
         const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway,'?')}</b>·마트 <b>${_numFmt(am.mart,'?')}</b>·종합병원 <b>${_numFmt(am.hospital,'?')}</b>·학교 <b>${_numFmt(am.school,'?')}</b>·공원 <b>${_numFmt(am.park,'?')}</b>`:(am?'주변 편의시설 좌표 미해결':'');if(!items.length && !amStr)return '';return `<div style="font-size:10.5px;color:var(--t2);background:var(--accent-50);border:1px solid var(--accent-100);border-radius:7px;padding:7px 10px;margin-top:5px">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` <span style="color:var(--acc);font-weight:600">· 매칭 ${_numFmt(a.matchScore)}점</span>`:''}</div>`;})()}
@@ -4339,7 +4349,7 @@ function _downloadReportPDF() {
         <div>✅ <b>장점</b>: ${esc(a.pros||'')}</div>
         <div>⚠ <b>단점</b>: ${esc(a.cons||'')}</div>
         <div class="apt-fit">💰 <b>예산 매칭</b>: ${esc(a.priceFit||'')}</div>
-        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${esc(f.district)}</b>`:null,f.builder?`시공사 <b>${esc(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>`:null,f.regulation?`규제 <b>${esc(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>6개월 ${_numFmt(f.new_high_count)}회</b>`:null].filter(Boolean);const am=f.amenities;const _amOk=am&&(am.subway!=null||am.mart!=null||am.hospital!=null||am.school!=null);const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway,'?')}</b>·마트 <b>${_numFmt(am.mart,'?')}</b>·종합병원 <b>${_numFmt(am.hospital,'?')}</b>·학교 <b>${_numFmt(am.school,'?')}</b>·공원 <b>${_numFmt(am.park,'?')}</b>`:(am?'주변 편의시설 좌표 미해결':'');if(!items.length && !amStr)return '';return `<div class="apt-objfacts">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` · 매칭 <b>${_numFmt(a.matchScore)}점</b>`:''}</div>`;})()}
+        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${esc(f.district)}</b>`:null,f.builder?`시공사 <b>${esc(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>${f.parking_total?` (총 ${_numFmt(f.parking_total)}대)`:''}${f.parking_uncertain?' <span style="color:var(--t3)">— 세대수 불일치로 참고용</span>':''}`:null,f.regulation?`규제 <b>${esc(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>${esc(a.sampleSpan||'최근 6개월')} ${_numFmt(f.new_high_count)}회</b>`:null].filter(Boolean);const am=f.amenities;const _amOk=am&&(am.subway!=null||am.mart!=null||am.hospital!=null||am.school!=null);const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway,'?')}</b>·마트 <b>${_numFmt(am.mart,'?')}</b>·종합병원 <b>${_numFmt(am.hospital,'?')}</b>·학교 <b>${_numFmt(am.school,'?')}</b>·공원 <b>${_numFmt(am.park,'?')}</b>`:(am?'주변 편의시설 좌표 미해결':'');if(!items.length && !amStr)return '';return `<div class="apt-objfacts">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` · 매칭 <b>${_numFmt(a.matchScore)}점</b>`:''}</div>`;})()}
         ${a.matchReason ? `<div class="apt-match">🏆 <b>왜 이 순위?</b> ${esc(a.matchReason)}</div>` : ''}
         <div class="apt-rec">📌 ${esc(a.recommendation||'')}</div>
       </div>
@@ -10467,7 +10477,12 @@ function calcSubsScore(){
   const tierEl = document.getElementById('cs_tier');
   if (!tierEl) return;
   let tier;
-  if (total >= 70) tier = '<b style="color:#1F7A3A">상위권</b> — 서울 인기 단지 일반공급 안정권 (커트라인 평균 65~70점)';
+  // CUTLINE-2026-08-17 (Sprint MMMMMMM-13): 여기 상위권 문구에 당락을 단정하는 표현과
+  //   커트라인 점수 범위가 **출처 없이** 박혀 있었다. 당첨 커트라인은 단지·공급유형·평형마다 다르고
+  //   공고 후에야 확정된다 — 우리가 인용할 수 있는 공시값이 존재하지 않는다.
+  //   절대 룰 ②(공식 출처만 인용)에 따라 근거 없는 수치와 단정을 걷어내고 아래 청약Home 안내만 남긴다.
+  //   (옛 문구는 계약 테스트의 금지 문자열이라 여기 적지 않는다.)
+  if (total >= 70) tier = '<b style="color:#1F7A3A">상위권</b> — 서울 인기 단지 일반공급 지원 가능 구간';
   else if (total >= 60) tier = '<b style="color:#1F7A3A">중상위권</b> — 서울 일반 단지·수도권 인기 분양 도전 가능';
   else if (total >= 50) tier = '<b style="color:#9A5510">중위권</b> — 수도권 일반·지방 인기 분양 도전 가능. 서울은 어려움';
   else if (total >= 35) tier = '<b style="color:#9A5510">중하위권</b> — 지방 일반 분양 도전 권장. 특별공급(생초/신혼/신생아) 활용 필수';

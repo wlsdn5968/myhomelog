@@ -2616,3 +2616,136 @@ test('findStaleCrons — 기대 주기 초과만 경보, 기록 없음은 침묵
   // Redis 미설정(null) 이어도 던지지 않는다 — 감시가 cron 본체를 막아선 안 된다.
   assert.deepEqual(findStaleCrons(null, now).stale, []);
 });
+
+// ── POOL-COVERAGE-2026-08-17 (Sprint MMMMMMM-13) ──────────────────────────────
+// [실측 배경] 보고서 후보 풀 상한 2,500 이 광역 보고서를 조용히 "최근 2개월"짜리로 만들고 있었다.
+//   서울 광역·평형 전체·매수가 10억 기준: 밴드 내 180일 행수 11,983 → 풀이 실제로 덮는 시작일이
+//   2026-06-19(59일). 적격 단지(n>=2) **1,329곳 → 508곳**, 즉 **821곳(62%)이 후보에 못 들어왔다.**
+//   n 은 표시용이 아니라 TRUST-GATE(n>=2)와 점수의 입력이라 라벨 수정으로는 못 덮는다.
+test('보고서 후보 풀 — 상한·시간예산·잘림 표기가 실제 커버리지를 따른다', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../routes/report.js'), 'utf8');
+
+  // ① 상한이 서울 광역 최대 밴드(11,983행)를 덮는다. 낮추면 62% 탈락이 되살아난다.
+  const m = src.match(/POOL_MAX\s*=\s*(\d+)/);
+  assert.ok(m, 'report.js 에서 POOL_MAX 를 찾지 못했다');
+  assert.ok(Number(m[1]) >= 12000,
+    `POOL_MAX 가 ${m[1]} 이다 — 서울 광역 밴드 실측 최대 11,983행을 못 덮으면 후보가 조용히 탈락한다`);
+
+  // ② 무한정 늘어나 함수 maxDuration 을 잡아먹지 않도록 시간 예산이 있다.
+  assert.match(src, /POOL_BUDGET_MS\s*=\s*\d+/, '후보 풀 페이징에 시간 예산이 없다');
+
+  // ③ "다 가져왔는가" 를 별도 플래그로 판정하고, 그 결과가 후보에 실려 나간다.
+  //    (행수만 보고 판단하면 "정확히 상한만큼 있는 경우"와 "잘린 경우"를 구별 못 한다.)
+  assert.match(src, /poolComplete\s*=\s*true/, '전량 확보 판정 플래그가 없다');
+  assert.match(src, /_poolTruncated:\s*poolTruncated/, '후보에 잘림 여부가 실리지 않는다');
+  assert.match(src, /_poolFrom:\s*poolFromDate/, '후보에 실제 커버 시작일이 실리지 않는다');
+
+  // ④ 병렬화 금지가 주석으로 남아 있다 — supabase-js 빌더는 mutable 이라 range 가 서로 덮인다.
+  assert.match(src, /병렬화하면 안 된다/, '페이징 병렬화 금지 근거 주석이 사라졌다');
+
+  // ⑤ '표본 적음(시세 판단 주의)' 는 잘린 풀에서 **거짓 경고**가 되므로 가드를 거친다.
+  //    반대로 '거래 활발'(n>=20)은 잘려도 하한 보장이라 가드가 없어야 정상이다.
+  assert.match(src, /!c\._poolTruncated && c\.n <= 5/,
+    "'표본 적음' 판정이 잘림 가드를 안 거친다 — 실제로 거래 많은 단지에 없는 위험을 붙인다");
+});
+
+test('poolSpanLabel — 잘리지 않으면 6개월, 잘리면 실제 커버 일수', () => {
+  const poolSpanLabel = _reportFn('poolSpanLabel');
+  assert.equal(poolSpanLabel({ _poolTruncated: false, _poolFrom: '2026-06-19' }), '최근 6개월');
+  assert.equal(poolSpanLabel({}), '최근 6개월');
+  assert.equal(poolSpanLabel(null), '최근 6개월');
+  // 잘린 경우 — 오늘로부터의 일수. 값 자체가 아니라 **형태**를 고정한다(테스트가 날짜에 안 묶이게).
+  const out = poolSpanLabel({ _poolTruncated: true, _poolFrom: '2026-06-19' });
+  assert.match(out, /^최근 \d+일$/, `잘린 풀인데 '${out}' 로 나온다 — 6개월이라고 말하면 거짓 서술이다`);
+  // _poolFrom 이 없으면 판단 불가 → 억지로 추정하지 않고 기본 문구로 돌아간다.
+  assert.equal(poolSpanLabel({ _poolTruncated: true }), '최근 6개월');
+});
+
+// ── MARKET-SAMPLE-2026-08-17 (Sprint MMMMMMM-13) ──────────────────────────────
+// [실측 배경] AI 도우미 시세 답변이 이름 부분일치 전체를 `.limit(400)` 최신순으로 긁어 그 안에서
+//   그룹핑했다. 6개월 매칭 행수는 "자이" 6,117건(289그룹)·"푸르지오" 7,057건(351그룹) — 400행은 6.5%.
+//   그래서 단지 선택도, 그 단지의 "거래 N건 · 단순평균"도 잘린 조각에서 나왔다.
+//   ("은마"는 233건이라 상한에 닿은 적이 없다 — 라이브 점검에서 안 보인 이유.)
+test('AI 도우미 시세 — 단지 선택과 통계 계산이 분리돼 있다', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../services/chatDataRouter.js'), 'utf8');
+
+  // ① 후보 단지는 단지 단위 집계 MV 에서 고른다(거래 테이블 전체 긁기 아님).
+  assert.match(src, /molit_apt_index/, '단지 후보를 MV 에서 고르지 않는다 — 절단이 되살아난다');
+
+  // ② 통계는 **고른 단지 하나**로 좁혀 조회한다. eq(apt_name) 이 없으면 다시 전체를 긁는 것이다.
+  assert.match(src, /\.eq\('apt_name',\s*c\.aptName\)/,
+    '거래 조회가 단지 하나로 좁혀지지 않는다');
+
+  // ③ 세 등급 조회는 서로 포함관계라 같은 MV 행이 중복으로 온다 — 행 고유키로 걸러야 한다.
+  //    안 걸러내면 deal_count 가 2~3배로 부풀어 순위가 뒤집힌다.
+  assert.match(src, /seenRow/, 'MV 행 중복 제거가 없다 — deal_count 가 부풀어 순위가 뒤집힌다');
+  assert.match(src, /rowKey\s*=\s*`\$\{r\.apt_name\}\|\$\{r\.lawd_cd\}/,
+    '중복 제거 키가 MV 행 고유키(이름|법정동코드|시군구|읍면동|준공년)가 아니다');
+
+  // ④ MV 의 deal_count 는 **전 기간** 누적이다 — 6개월 건수와 같은 줄에 놓으면 사용자가 비교한다.
+  //    "다른 단지도 있어요" 목록에 건수를 붙이지 않는 것이 이 커밋의 결정이다.
+  const others = src.match(/같은 이름의 다른 단지도 있어요[\s\S]{0,200}/);
+  assert.ok(others, '동명 단지 안내 문구를 찾지 못했다');
+  assert.equal(/\$\{[^}]*dealCount[^}]*\}건/.test(others[0]), false,
+    '동명 단지 목록에 전 기간 deal_count 를 "건" 으로 붙였다 — 위의 6개월 건수와 기준이 다르다');
+
+  // ⑤ 상한에 닿으면 그 사실을 숨기지 않는다(조용한 절단 재발 방지).
+  assert.match(src, /txs\.length >= TX_CAP/, '단지 단위 조회의 상한 도달을 표기하지 않는다');
+});
+
+// ── 출처 없는 단정·수치 제거 (Sprint MMMMMMM-13) ──────────────────────────────
+// 절대 룰 ②는 "공식 출처만 인용 + 출처·검증일자 명시"다. 아래 세 자리는 그 룰을 어기고 있었다.
+// ⚠ 이 테스트는 **금지 문자열**을 검사하므로, 소스 주석에 옛 문구를 그대로 인용하면 안 된다
+//   (이 저장소에서 실제로 두 번 재발한 함정이다 — 설명은 하되 원문은 적지 말 것).
+test('출처 없는 단정·수치가 화면에 없다 (청약 커트라인·신용대출 금리·권유 단어)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+
+  // ① 청약 가점 — 당락 단정 + 근거 없는 커트라인 점수.
+  //    커트라인은 단지·공급유형·평형마다 다르고 공고 후 확정된다. 인용할 공시값이 없다.
+  assert.equal(html.includes('안정권'), false, '청약 가점에 당락 단정 표현이 남아 있다');
+  assert.equal(/커트라인\s*평균/.test(html), false, '근거 없는 커트라인 평균 점수가 남아 있다');
+  assert.equal(html.includes('65~70점'), false, '하드코딩된 커트라인 점수 범위가 남아 있다');
+  //    대신 공식 확인처 안내는 반드시 남아 있어야 한다(정보를 지우기만 하면 안 된다).
+  assert.ok(html.includes('applyhome.co.kr'), '청약Home 안내가 사라졌다 — 확인 경로는 남겨야 한다');
+
+  // ② 신용대출·마이너스통장 금리 — 출처도 기준시점도 없던 수치.
+  assert.equal(/평균 금리 6%대/.test(html), false, '출처 없는 신용대출 금리 수치가 남아 있다');
+  assert.equal(/변동 금리 7~8%/.test(html), false, '출처 없는 마이너스통장 금리 수치가 남아 있다');
+  assert.ok(html.includes('거래 은행에서 직접 확인'), '금리 확인 경로 안내가 없다');
+
+  // ③ 검색 결과 섹션 제목이 권유 단어를 쓰지 않는다 — 보고서 프롬프트의 금지와 말을 맞춘다.
+  assert.equal(html.includes('<span class="st">추천 단지</span>'), false,
+    '검색 결과 섹션 제목이 여전히 권유 단어다 (절대 룰 ① · report.js 프롬프트 금지와 모순)');
+  assert.ok(html.includes('<span class="st">조건 맞는 단지</span>'), '섹션 제목이 바뀌지 않았다');
+
+  // ④ 보고서 프롬프트 쪽 금지 지시가 살아 있는지도 함께 고정 — 한쪽만 남으면 다시 갈린다.
+  const rep = fs.readFileSync(path.join(__dirname, '../routes/report.js'), 'utf8');
+  assert.ok(rep.includes('조건 부합 단지'), 'report.js 프롬프트의 대체 표현 지시가 사라졌다');
+});
+
+test('단지 카드 — 기간 라벨은 서버 값을 쓰고, 세대당 주차에는 총량이 함께 붙는다', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const rep = fs.readFileSync(path.join(__dirname, '../routes/report.js'), 'utf8');
+
+  // ① 서버가 기간 라벨을 내려보낸다. 프론트가 자기 문자열로 다시 만들면 잘림 표기가 조용히 갈린다
+  //    (백엔드는 잘렸을 때 '최근 N일' 로 낮추는데 카드만 6개월이라고 우기는 상태가 실제로 있었다).
+  assert.match(rep, /sampleSpan:\s*_span/, 'report 응답에 기간 라벨(sampleSpan)이 없다');
+  assert.match(html, /a\.sampleSpan\s*\|\|/, '카드가 서버의 기간 라벨을 쓰지 않는다 — 사본이 갈린다');
+  assert.equal(/신고가 <b>6개월 /.test(html), false, '카드가 아직 기간을 하드코딩한다');
+
+  // ② 세대당 주차는 **비율**이다 — 분모(총 주차대수)가 데이터에 있는데 카드에만 빠져 있었다.
+  //    report.js:948 이 parking_total 을 이미 싣고 있으므로 새 조회 없이 붙일 수 있다.
+  assert.match(rep, /parking_total:/, 'objectiveFacts 에 총 주차대수가 없다');
+  assert.match(html, /f\.parking_total\?`\s*\(총 /, '카드의 세대당 주차에 총량이 안 붙는다');
+
+  // ③ 세대수 불일치로 분모를 못 믿는 경우 카드에서도 그 사실을 밝힌다(상세 표와 동일 처리).
+  assert.match(html, /f\.parking_uncertain\?/, '카드가 세대수 불일치를 표시하지 않는다');
+});
