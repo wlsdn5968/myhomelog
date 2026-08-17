@@ -2790,3 +2790,46 @@ test('eslint 에 no-undef 가 켜져 있다 (매달린 참조 차단)', () => {
   assert.match(kakao, /const SERVICE_KEY = process\.env\.SUPABASE_SERVICE_ROLE_KEY/,
     'kakao.js 의 state HMAC 파생 키 선언이 다시 사라졌다 — OAuth state 서명이 죽는다');
 });
+
+// OAUTH-STATE-2026-08-17 (Sprint MMMMMMM-15): 이 세 함수는 **3개월간 테스트가 0** 이었고,
+//   그 사이 매달린 참조로 통째로 죽어 있었는데 아무도 몰랐다. 형태(선언 존재)만 고정하면
+//   같은 사고의 다른 형태(예: 키가 undefined 로 계산되어 서명이 항상 같아짐)를 못 잡는다.
+//   → 실제로 **실행해서** 서명·검증 왕복과 위조 거부를 확인한다.
+test('카카오 OAuth state — 서명·검증 왕복과 위조·만료 거부가 실제로 동작한다', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../routes/kakao.js'), 'utf8');
+  const pick = (name) => {
+    const m = src.match(new RegExp('function ' + name + '\\([\\s\\S]*?\\n\\}'));
+    assert.ok(m, `kakao.js 에서 ${name} 을 찾지 못했다 (형태가 바뀌면 이 테스트도 갱신할 것)`);
+    return m[0];
+  };
+  const build = (serviceKey) => new Function('crypto', 'SERVICE_KEY',
+    `${pick('stateHmacKey')}\n${pick('signState')}\n${pick('verifyState')}\n` +
+    'return { stateHmacKey, signState, verifyState };'
+  )(require('node:crypto'), serviceKey);
+
+  const k = build('test-service-key-xxxxxxxx');
+
+  // ① 정상 왕복 — 서명한 payload 가 그대로 돌아온다.
+  const payload = { n: 'nonce-1', exp: Date.now() + 60000 };
+  const signed = k.signState(payload);
+  assert.match(signed, /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/, 'state 형식이 data.sig 가 아니다');
+  const back = k.verifyState(signed);
+  assert.equal(back && back.n, 'nonce-1', '서명한 state 가 검증을 통과하지 못한다 — OAuth 가 죽는다');
+
+  // ② 위조 거부 — 서명부를 바꾸면 통과하면 안 된다(CSRF 방어의 본체).
+  const [d, s] = signed.split('.');
+  assert.equal(k.verifyState(`${d}.${s.slice(0, -1)}X`), null, '변조된 서명이 통과한다');
+  assert.equal(k.verifyState('garbage'), null, '형식이 깨진 값이 통과한다');
+  assert.equal(k.verifyState(''), null, '빈 값이 통과한다');
+
+  // ③ 만료 거부.
+  assert.equal(k.verifyState(k.signState({ n: 'x', exp: Date.now() - 1 })), null, '만료된 state 가 통과한다');
+
+  // ④ **키가 다르면 검증이 실패해야 한다** — 이게 깨지면 파생 키가 실제로 안 쓰이는 것이다.
+  //    (SERVICE_KEY 가 undefined 로 조용히 'no-key' 폴백만 타는 회귀를 여기서 잡는다.)
+  const other = build('another-service-key-yyyyyyyy');
+  assert.equal(other.verifyState(signed), null,
+    '다른 키로 서명한 state 가 통과한다 — 파생 키가 서명에 반영되지 않는다');
+});
