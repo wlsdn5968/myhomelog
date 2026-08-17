@@ -84,6 +84,10 @@ async function writeBackToMaster(admin) {
   const ambiguous = rows.length - keys.length;
   for (const r of rows) {
     const k = keyOf(r);
+    // ⚠ 이 가드는 위 keys 필터와 **이중**이다 — 회귀 주입 실측(2026-08-17): 이 줄만 지워도 동작은
+    //   그대로다(중복 키는 애초에 조회되지 않아 titleByKey 에 없다). 반대로 keys 필터를 지우면
+    //   ambiguous 카운트가 틀려져 테스트가 잡는다. 둘 다 남긴다 — 어느 한쪽을 나중에 손대도
+    //   "동명 단지에 남의 세대수를 붙이는" 사고가 나지 않게 하기 위해서다.
     if (seen.get(k) !== 1) continue;
     const t = titleByKey.get(k);
     const hh = t ? parseInt(t.hhldCnt, 10) : NaN;
