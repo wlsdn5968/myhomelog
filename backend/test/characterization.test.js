@@ -1753,17 +1753,23 @@ test('billing 라우터 배선 — requireAuth 게이트가 보호 대상 라우
 //   일어나고, 로컬에서는 Redis 도 동결도 재현되지 않는다(실제로 await 를 지우는 회귀 주입을 해도
 //   테스트 71개가 전부 초록이었다). 그래서 **동작이 아니라 소스의 형태**를 고정한다.
 //   cron·billing 배선 계약과 같은 부류: 지워지면 조용히 관측만 사라지고 아무도 모른다.
-test('강등 관측 배선 — popular-stale 은 응답 전에 await 된다 (서버리스 동결 유실 차단)', () => {
+test('강등 관측 배선 — popular-stale 은 응답 전에 await 된다 (서버리스 동결 유실 차단)', async () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const src = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
 
   // 1) 함수가 Promise 를 돌려줘야 호출부가 기다릴 수 있다 (return 이 없으면 await 가 무의미)
+  //    DEGRADE-SHARED-2026-08-17: 구현이 services/degradeStats 로 옮겨졌으므로 **소스 정규식이 아니라
+  //    실제로 실행해서** Promise 인지 확인한다(형태 검사보다 강하다 — 위임이 끊기면 여기서 잡힌다).
   const fnStart = src.indexOf('function _observeDegrade(');
   assert.ok(fnStart >= 0, 'search.js 에서 _observeDegrade 를 찾지 못했다');
   const fnBody = src.slice(fnStart, src.indexOf('\n}', fnStart));
-  assert.match(fnBody, /return\s+Promise/,
-    '_observeDegrade 가 Promise 를 반환하지 않는다 — 호출부가 await 해도 즉시 통과한다');
+  assert.match(fnBody, /return\s+/,
+    '_observeDegrade 가 아무것도 반환하지 않는다 — 호출부가 await 해도 즉시 통과한다');
+  const { observeDegrade } = require('../services/degradeStats');
+  const ret = observeDegrade('test-kind');
+  assert.ok(ret && typeof ret.then === 'function',
+    'degradeStats.observeDegrade 가 Promise 를 반환하지 않는다 — await 가 무의미해진다');
 
   // 2) 응답 직전 경로(popular-stale)는 반드시 await
   assert.match(src, /await\s+_observeDegrade\('popular-stale'\)/,
@@ -1774,6 +1780,16 @@ test('강등 관측 배선 — popular-stale 은 응답 전에 await 된다 (서
   const jsonIdx = src.indexOf('res.json({ results: stale, stale: true })');
   assert.ok(awaitIdx >= 0 && jsonIdx >= 0 && awaitIdx < jsonIdx,
     `await 가 응답(res.json)보다 뒤에 있다 — await ${awaitIdx} vs json ${jsonIdx}`);
+
+  // 4) Redis 미설정(로컬)에서도 절대 reject 하지 않는다 — 관측이 응답을 막으면 안 된다.
+  await ret;
+
+  // 5) 두 소비처가 **같은 Redis 키**를 쓴다(검색·보고서). 갈리면 health 에서 한쪽이 사라진다.
+  const { KEY_PREFIX } = require('../services/degradeStats');
+  assert.equal(KEY_PREFIX, 'searchdeg:',
+    '강등 키 접두어가 바뀌었다 — /api/health 의 searchDegrade 배선과 함께 확인할 것');
+  assert.match(src, /require\('\.\.\/services\/degradeStats'\)/,
+    'search.js 가 공유 모듈을 쓰지 않는다 — 사본이 다시 갈린다');
 });
 
 // ── 감사 #26 (2026-08-16): 취득세 **6억 초과 ~ 9억 이하 누진 구간**의 사본 3개 계약 ──────
@@ -2668,12 +2684,11 @@ test('보고서 후보 풀 — 상한·시간예산·잘림 표기가 실제 커
   // 2차 정렬키 — 병렬이라 페이지 경계의 동점 처리가 더 중요해졌다.
   assert.match(src, /\.order\('id', \{ ascending: false \}\)/, '2차 정렬키(id)가 없다 — 페이지 경계에서 중복·누락이 생긴다');
 
-  // ④-b 강등 카운터가 search.js 와 **같은 Redis 키**에 쓴다 — 안 그러면 health 에 안 보인다.
-  //     (두 구현이 아직 따로 있으므로 키가 갈리는 순간 보고서 강등이 조용히 사라진다.)
+  // ④-b 검색·보고서가 **같은 강등 모듈**을 쓴다(2026-08-17 통합 완료 — 종전엔 같은 코드가 두 벌이었다).
+  //     키가 갈리면 /api/health 의 searchDegrade 에서 한쪽이 조용히 사라진다.
   const searchSrc = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
-  const { KEY_PREFIX } = require('../services/degradeStats');
-  assert.ok(searchSrc.includes(`\`${KEY_PREFIX}\${day}\``),
-    `search.js 의 강등 키가 degradeStats.KEY_PREFIX('${KEY_PREFIX}') 와 다르다 — health 에서 갈린다`);
+  assert.match(searchSrc, /require\('\.\.\/services\/degradeStats'\)/,
+    'search.js 가 공유 강등 모듈을 쓰지 않는다 — 사본이 갈리면 관측이 반쪽이 된다');
 
   // ⑤ '표본 적음(시세 판단 주의)' 는 잘린 풀에서 **거짓 경고**가 되므로 가드를 거친다.
   //    반대로 '거래 활발'(n>=20)은 잘려도 하한 보장이라 가드가 없어야 정상이다.

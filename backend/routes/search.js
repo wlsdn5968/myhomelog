@@ -150,17 +150,14 @@ function _isAbortErr(err) {
 //   서버리스는 응답 직후 함수를 동결할 수 있어, 응답 **직전**에 쏜 Redis 쓰기는 유실될 수 있다.
 //   → Promise 를 돌려주도록 바꿔서 그런 경로만 await 할 수 있게 했다.
 //   여전히 **실패는 삼킨다** — 관측이 응답을 막으면 안 된다(그게 원래 설계 의도).
+// DEGRADE-SHARED-2026-08-17 (Sprint MMMMMMM-18): 구현을 `services/degradeStats` 로 옮겼다.
+//   보고서 경로(report-pool-cut)가 같은 Redis 키에 써야 해서 같은 코드가 두 벌 있었는데,
+//   이 저장소는 사본이 조용히 갈리는 사고를 반복해서 겪었다 — 키가 갈리면 health 에서 한쪽이 사라진다.
+//   ⚠ 함수 이름·시그니처·호출부는 **그대로 둔다**. 계약 테스트가 "Promise 를 반환하고,
+//     응답 직전 경로에서 await 되며, 그 await 가 res.json 보다 앞" 이라는 형태를 고정하고 있고
+//     그건 서버리스 동결로 관측이 유실되던 실사고(ba1db07)의 방어다. 위임만 한다.
 function _observeDegrade(kind) {
-  try {
-    const r = require('../redis').getRedis();
-    if (!r) return Promise.resolve();
-    const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    return Promise.all([
-      Promise.resolve(r.hincrby(`searchdeg:${day}`, kind, 1)).catch(() => {}),
-      Promise.resolve(r.expire(`searchdeg:${day}`, 60 * 60 * 24 * 21)).catch(() => {}),
-    ]).then(() => {});
-  } catch (_) { /* 관측은 응답을 막지 않는다 */ }
-  return Promise.resolve();
+  return require('../services/degradeStats').observeDegrade(kind);
 }
 router.get('/apt', async (req, res) => {
   const q = String(req.query.q || '').trim();
