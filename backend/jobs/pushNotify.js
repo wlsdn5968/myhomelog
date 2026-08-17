@@ -34,6 +34,12 @@ async function loadRows(admin, table) {
     if (['42P01','PGRST205'].includes(String(error.code))) return { rows: [], missing: true };
     throw new Error(`${table}: ${error.message}`);
   }
+  // SUBS-CAP-2026-08-17: limit(500) 은 조용한 상한이다 — 구독자가 500 을 넘으면 초과분은
+  //   **알림을 영영 못 받는데 아무 신호도 안 난다**(이 저장소가 반복해서 겪은 PostgREST 행 캡 부류).
+  //   현재 3명이라 여유가 크지만, 늘어난 순간을 알아야 페이징으로 바꿀 수 있다.
+  if ((data || []).length >= 500) {
+    logger.warn({ table, rows: data.length }, '알림 구독자 조회가 상한(500)에 닿음 — 페이징 필요');
+  }
   return { rows: data || [], missing: false };
 }
 
@@ -85,10 +91,20 @@ async function run() {
   }
 
   const now = Date.now();
-  const floor48h = new Date(now - 48 * 3600 * 1000);
+  // CRON-MISS-2026-08-17 (Sprint MMMMMMM-24): 바닥을 48h → 72h.
+  //   [근거] Vercel 공식 문서: cron 전달은 **best effort** 라 회차가 통째로 누락될 수 있고
+  //     (그때 런타임 로그도 안 남는다) 실패해도 재시도하지 않는다. 즉 누락은 예외가 아니라 정상 범위다.
+  //     바닥이 48h 면 **하루만 걸러도 경계**이고 이틀 연속이면 그 사이 신고된 거래가 영구히 안 나간다
+  //     — 사용자는 관심단지 거래를 놓치고, 놓쳤다는 사실조차 모른다.
+  //   72h = 2회 연속 누락 내성. cronStats 의 미실행 임계 50h(=2회 누락)와 같은 기준으로 맞춘다.
+  //   ⚠ 알림 폭주 걱정은 없다 — buildBody 는 구독자당 **요약 1건**을 만든다("N건 · 최고 X억 외 M개 단지").
+  //     창을 넓혀도 메시지 수가 아니라 N 만 커진다. 조회량도 실측상 무시할 수준이다
+  //     (2026-08-17: 구독 지역 전체의 48h 내 신규 적재 = **11행**).
+  const NOTIFY_FLOOR_MS = 72 * 3600 * 1000;
+  const floorTs = new Date(now - NOTIFY_FLOOR_MS);
   const sinceOf = s => {
     const w = s.last_notified_at ? new Date(s.last_notified_at) : null;
-    return (w && w > floor48h) ? w : floor48h; // 48h 바닥 — 과다조회·중복 융단폭격 방지
+    return (w && w > floorTs) ? w : floorTs;
   };
   const allSubs = [...push.rows, ...kakao.rows];
   const lawds = [...new Set(allSubs.flatMap(s => (s.items || []).map(it => it.lawdCd)).filter(c => /^\d{5}$/.test(String(c))))];
@@ -96,19 +112,32 @@ async function run() {
   const minSince = new Date(Math.min(...allSubs.map(s => sinceOf(s).getTime()))).toISOString();
 
   // ── 신규 ingest 거래 1회 조회 (1000행 페이징, 5천행 안전캡) ──
+  // ⚠ CAP-ORDER-2026-08-17 (Sprint MMMMMMM-24): 정렬을 오름차순 → **내림차순**으로 바꿨다.
+  //   안전캡(5,000행)에 걸리면 잘리는 쪽이 생기는데, 오름차순이면 **가장 최근 거래가 잘린다** —
+  //   "새 실거래 알림" 에서 최신을 버리고 오래된 것만 남기는 것은 정확히 반대다.
+  //   내림차순이면 최신은 반드시 포함되고, 캡에 걸릴 때 건수가 과소 보고될 뿐이다(거짓 신호가 아니다).
+  //   [언제 발현되나 — 실측] 평소엔 무해하다(2026-08-17 구독 지역 48h 신규 = 11행).
+  //     그러나 지역 backfill 같은 대량 적재일엔 하루 +47,319행이 들어온 적이 있다(2026-08-16).
+  //     그런 날 구독 지역이 겹치면 캡을 넘긴다. 정렬만 바꿔도 그때 최신을 잃지 않는다.
+  const ROW_CAP = 5000;
   let rows = [];
-  for (let from = 0; from <= 4000; from += 1000) {
+  for (let from = 0; from <= ROW_CAP - 1000; from += 1000) {
     const { data: page, error } = await admin
       .from('molit_transactions')
       .select('apt_name, sigungu, umd_nm, lawd_cd, deal_date, deal_amount, exclu_use_ar, ingested_at')
       .in('lawd_cd', lawds)
       .gte('ingested_at', minSince)
-      .order('ingested_at', { ascending: true })
-      .order('id', { ascending: true })
+      .order('ingested_at', { ascending: false })
+      .order('id', { ascending: false })
       .range(from, from + 999);
     if (error) throw new Error(error.message);
     if (page && page.length) rows = rows.concat(page);
     if (!page || page.length < 1000) break;
+  }
+  // 캡에 닿았다 = 이번 회차에 못 본 거래가 있다는 뜻. 조용히 넘기면 건수가 틀린 채로 발송된다.
+  if (rows.length >= ROW_CAP) {
+    logger.warn({ rows: rows.length, cap: ROW_CAP, lawds: lawds.length },
+      '알림 조회가 안전캡에 닿음 — 건수가 과소 보고될 수 있다(최신은 포함)');
   }
 
   let aliasMap = new Map();

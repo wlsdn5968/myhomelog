@@ -3181,3 +3181,30 @@ test('_br 보존 — facility 통째 교체 경로가 건축물대장 값을 지
   // raw 를 그대로 넘기면 _br 을 붙일 때 상류 객체를 오염시킨다 → 복사본이어야 한다
   assert.match(body, /detail \? \{ \.\.\.raw, _dtl: detail \} : \{ \.\.\.raw \}/, 'facilityToStore 가 raw 참조를 그대로 쓴다');
 });
+
+// ── CRON-MISS-2026-08-17 (Sprint MMMMMMM-24) ──────────────────────────────────
+// Vercel 공식 문서로 확정한 사실: cron 전달은 best effort 라 회차가 통째로 누락될 수 있고,
+// 그때 런타임 로그조차 안 남으며, 실패해도 재시도하지 않는다. 따라서 알림 job 은
+// "한 회차 걸러도 다음 회차가 따라잡는" 창을 가져야 한다. 그 창을 여기서 고정한다.
+test('pushNotify — 누락 내성 창 72h + 캡에서 최신을 버리지 않는다', () => {
+  const fs = require('fs'); const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '../jobs/pushNotify.js'), 'utf8');
+
+  // (1) 바닥 창 = 72h. 48h 면 하루만 걸러도 경계이고 이틀 연속이면 그 사이 신고 거래가 영구 유실된다.
+  //     cronStats 의 미실행 임계 50h(=2회 연속 누락)와 같은 기준으로 맞춘 값이다.
+  assert.match(src, /NOTIFY_FLOOR_MS\s*=\s*72\s*\*\s*3600\s*\*\s*1000/,
+    '알림 바닥 창이 72h 가 아니다 — cron 누락 2회 내성이 깨진다');
+  assert.equal(/48\s*\*\s*3600\s*\*\s*1000/.test(src), false, '옛 48h 창이 남아 있다');
+
+  // (2) 거래 조회 정렬은 **내림차순**이어야 한다. 안전캡에 걸릴 때 오름차순이면 최신이 잘린다 —
+  //     "새 실거래 알림" 에서 최신을 버리는 것은 정확히 반대 동작이다.
+  const q = src.slice(src.indexOf("from('molit_transactions')"));
+  assert.match(q.slice(0, 600), /order\('ingested_at',\s*\{\s*ascending:\s*false\s*\}\)/,
+    '거래 조회가 오름차순이라 캡에 걸리면 최신 거래가 잘린다');
+  assert.match(q.slice(0, 600), /order\('id',\s*\{\s*ascending:\s*false\s*\}\)/,
+    '2차 정렬키 방향이 어긋나면 페이지 경계가 흔들린다');
+
+  // (3) 캡·상한에 닿으면 침묵하지 않는다 — 조용히 잘리면 건수가 틀린 채로 발송된다.
+  assert.match(src, /rows\.length >= ROW_CAP/, '거래 조회 캡 도달 경고가 없다');
+  assert.match(src, /상한\(500\)에 닿음/, '구독자 조회 상한 경고가 없다');
+});
