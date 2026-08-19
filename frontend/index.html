@@ -841,6 +841,13 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .dmbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:400;align-items:flex-start;justify-content:center;padding:78px 16px 16px}
 .dmbg.open{display:flex}
 .dm{position:relative;background:var(--bg-base);border-radius:16px;width:100%;max-width:700px;max-height:calc(100vh - 94px);display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(16,24,40,.20)}
+/* DM-SKIN-2026-08-19 (Sprint NNNNNNN-10): 상세 모달 시안 정합 — 차트 액센트 토큰(라이트/다크) + 실거래 표 그리드.
+   구조 클래스(.dm/.rtab 등)는 이미 앱 토큰 기반이라 무변경 — 하드코딩 색만 승격(다크 갭 해소).
+   ⚠ SVG presentation attribute 는 var() 미지원 — style 속성으로 덮는다(renderPriceChart 참조). */
+.dmbg{--dm-ac:#C98A00}
+html[data-theme="dark"] .dmbg{--dm-ac:#FFC93C}
+.dm-txgrid{display:grid;grid-template-columns:1.05fr .95fr .5fr .9fr;gap:8px;align-items:center;padding:8px 4px;border-bottom:1px solid var(--bd);font-size:12px;font-variant-numeric:tabular-nums}
+.dm-txgrid.hd{padding:0 4px 6px;font-size:10.5px;font-weight:700;color:var(--t3)}
 /* INSTANT-MODAL-2026-07-11 (Sprint HHHH): 단지 클릭 즉시 모달 + 불투명 로딩 커버 (이전 단지 잔상 차단) */
 .dm-loading{position:absolute;inset:0;background:var(--bg-base);border-radius:inherit;z-index:60;display:none;flex-direction:column;align-items:center;justify-content:center;gap:10px;text-align:center;padding:24px} /* JJJJ: 60 — sticky summary(z50) 위로, 직전 단지 잔상 차단 (마커 경로 라이브 검증에서 발견) */
 .dm-loading .dml-spin{width:26px;height:26px;border:3px solid var(--bd);border-top-color:var(--acc);border-radius:50%;animation:sp .8s linear infinite}
@@ -6015,7 +6022,7 @@ function _renderListCard(p, i) {
     <div style="padding:12px 14px">
       <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:7px">${tags}</div>
       <div style="font-size:11px;color:var(--t2);line-height:1.65;margin-bottom:6px">${_escHtml(prosClamped)}</div>
-      ${(p.currentPriceByPyeong||[]).length?`<div style="font-size:10.5px;color:var(--t3);background:#F7F9FC;border-radius:6px;padding:5px 8px;line-height:1.5">📐 ${p.currentPriceByPyeong.slice(0,3).map(cp=>`<b style="color:var(--t2)">${_escHtml(cp.pyeong)}평</b> ${_escHtml(cp.recentAvg)}억`).join(' · ')}</div>`:''}
+      ${(p.currentPriceByPyeong||[]).length?`<div style="font-size:10.5px;color:var(--t3);background:var(--bg2);border-radius:6px;padding:5px 8px;line-height:1.5">📐 ${p.currentPriceByPyeong.slice(0,3).map(cp=>`<b style="color:var(--t2)">${_escHtml(cp.pyeong)}평</b> ${_escHtml(cp.recentAvg)}억`).join(' · ')}</div>`:''}
     </div>
   </div>`;
 }
@@ -6411,7 +6418,7 @@ function _selectTrendArea(sqm, btn) {
   window._curTrendArea = sqm;
   // chip 토글
   document.querySelectorAll('.trend-area-chip').forEach(c => {
-    c.style.background = '#fff';
+    c.style.background = 'var(--bg-base)'; // DM-SKIN-2026-08-19: 다크모드 흰 칩 갭
     c.style.color = 'var(--t2)';
     c.style.borderColor = 'var(--bd)';
   });
@@ -6429,7 +6436,7 @@ function _selectTrendArea(sqm, btn) {
   const chartBox = document.getElementById('trendChartBox');
   if (!chartBox) return;
   if (!sqm) {
-    chartBox.innerHTML = '<div style="font-size:11px;color:var(--t3);padding:14px 8px;text-align:center;background:#FAFCFF;border:1px dashed var(--bd);border-radius:8px">📊 위 평형 chip 을 클릭하면 그 평형의 월별 시세 추이가 표시돼요</div>';
+    chartBox.innerHTML = '<div style="font-size:11px;color:var(--t3);padding:14px 8px;text-align:center;background:var(--bg2);border:1px dashed var(--bd);border-radius:8px">📊 위 평형 chip 을 클릭하면 그 평형의 월별 시세 추이가 표시돼요</div>';
     return;
   }
   const td = buildPriceTrend(window._curTrendApt || [], sqm);
@@ -6483,12 +6490,12 @@ function renderPriceChart(rows){
   // X축 레이블: 데이터 포인트가 많으면 일부만
   const xLabelEvery=rows.length<=8?1:rows.length<=14?2:Math.ceil(rows.length/8);
   const xLabels=rows.map((r,i)=>(i%xLabelEvery===0||i===rows.length-1)?
-    `<text x="${x(i).toFixed(1)}" y="${(H-8).toFixed(1)}" text-anchor="middle" fill="#888" font-size="9">${r.label}</text>`:'').join('');
+    `<text x="${x(i).toFixed(1)}" y="${(H-8).toFixed(1)}" text-anchor="middle" fill="#888" style="fill:var(--t3)" font-size="9">${r.label}</text>`:'').join('');
   // Y축: min/max만 표시
   const yLabels=`
-    <text x="${pad.l-4}" y="${(pad.t+4).toFixed(1)}" text-anchor="end" fill="#888" font-size="9">${vMax.toFixed(1)}</text>
-    <text x="${pad.l-4}" y="${(pad.t+innerH).toFixed(1)}" text-anchor="end" fill="#888" font-size="9">${vMin.toFixed(1)}</text>`;
-  const dots=pts.map((p,i)=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.5" fill="#2E7DF0"><title>${rows[i].label}: ${rows[i].avgAuk.toFixed(2)}억 (${rows[i].count}건)</title></circle>`).join('');
+    <text x="${pad.l-4}" y="${(pad.t+4).toFixed(1)}" text-anchor="end" fill="#888" style="fill:var(--t3)" font-size="9">${vMax.toFixed(1)}</text>
+    <text x="${pad.l-4}" y="${(pad.t+innerH).toFixed(1)}" text-anchor="end" fill="#888" style="fill:var(--t3)" font-size="9">${vMin.toFixed(1)}</text>`;
+  const dots=pts.map((p,i)=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.5" fill="#2E7DF0" style="fill:var(--dm-ac,#2E7DF0)"><title>${rows[i].label}: ${rows[i].avgAuk.toFixed(2)}억 (${rows[i].count}건)</title></circle>`).join('');
   const first=rows[0].avgAuk, last=rows[rows.length-1].avgAuk;
   const delta=last-first, deltaPct=first>0?(delta/first*100):0;
   const deltaColor=delta>0.05?'#D94545':delta<-0.05?'#2A8F3F':'#888';
@@ -6498,12 +6505,12 @@ function renderPriceChart(rows){
     <svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">
       <defs>
         <linearGradient id="pcGrad" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stop-color="#2E7DF0" stop-opacity="0.25"/>
-          <stop offset="100%" stop-color="#2E7DF0" stop-opacity="0"/>
+          <stop offset="0%" stop-color="#2E7DF0" style="stop-color:var(--dm-ac,#2E7DF0)" stop-opacity="0.25"/>
+          <stop offset="100%" stop-color="#2E7DF0" style="stop-color:var(--dm-ac,#2E7DF0)" stop-opacity="0"/>
         </linearGradient>
       </defs>
       <path d="${areaD}" fill="url(#pcGrad)" stroke="none"/>
-      <path d="${pathD}" fill="none" stroke="#2E7DF0" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/>
+      <path d="${pathD}" fill="none" stroke="#2E7DF0" style="stroke:var(--dm-ac,#2E7DF0)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
       ${dots}
       ${yLabels}
       ${xLabels}
@@ -6751,7 +6758,7 @@ function showDetail(p){
       const avg = v.prices.reduce((a,b)=>a+b,0) / v.prices.length / 10000;
       const min = Math.min(...v.prices) / 10000;
       const max = Math.max(...v.prices) / 10000;
-      return `<div style="display:flex;justify-content:space-between;padding:5px 8px;background:#F7F9FC;border-radius:6px;margin-bottom:3px;font-size:11px">
+      return `<div style="display:flex;justify-content:space-between;padding:5px 8px;background:var(--bg2);border-radius:6px;margin-bottom:3px;font-size:11px">
         <span><b>${k}</b> · <span style="color:var(--t3)">${v.prices.length}건</span></span>
         <span><b style="color:var(--acc)">${avg.toFixed(2)}억</b> <span style="color:var(--t3);font-size:10px">(${min.toFixed(1)}~${max.toFixed(1)})</span></span>
       </div>`;
@@ -6765,15 +6772,16 @@ function showDetail(p){
       ? txAll.filter(t => Math.abs((Math.round(Number(t.excluUseAr)||0)) - area) <= 2)
       : txAll;
     if (!filtered.length) return '<div style="padding:10px 0;color:var(--t3);font-size:11px">해당 평형 거래 없음</div>';
-    return filtered.slice(0,30).map(t => {
+    // DM-SKIN-2026-08-19 (Sprint NNNNNNN-10): 시안 실거래 표 — 그리드 4열(계약일/전용/층/거래금액)+헤더, tabular-nums.
+    const _hd='<div class="dm-txgrid hd"><span>계약일</span><span>전용</span><span style="text-align:right">층</span><span style="text-align:right">거래금액</span></div>';
+    return _hd + filtered.slice(0,30).map(t => {
       const sqm = Math.round(Number(t.excluUseAr) || 0);
       const py = sqm ? Math.round(sqm / 3.3058) : 0;  // PYEONG-M2-2026-08-17
-      const areaTag = sqm ? `<span style="color:var(--a2);font-weight:600">${sqm}㎡(${py}평)</span>` : '';
-      return `<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-bottom:1px dashed var(--bg2)">
-        <span style="color:var(--t3);font-size:10.5px;min-width:55px">${t.dealYear}.${String(t.dealMonth||1).padStart(2,'0')}.${String(t.dealDay||1).padStart(2,'0')}</span>
-        ${areaTag}
-        <span style="color:var(--t2);font-size:10.5px">${t.floor||'?'}층</span>
-        <span style="margin-left:auto;font-weight:700;color:var(--acc)">${((t.dealAmount||0)/10000).toFixed(2)}억</span>
+      return `<div class="dm-txgrid">
+        <span style="color:var(--t2);font-weight:600">${t.dealYear}.${String(t.dealMonth||1).padStart(2,'0')}.${String(t.dealDay||1).padStart(2,'0')}</span>
+        <span style="color:var(--a2);font-weight:600">${sqm?sqm+'㎡('+py+'평)':'—'}</span>
+        <span style="text-align:right;color:var(--t2)">${t.floor||'?'}층</span>
+        <span style="text-align:right;font-weight:800;color:var(--acc)">${((t.dealAmount||0)/10000).toFixed(2)}억</span>
       </div>`;
     }).join('') + (filtered.length > 30 ? `<div style="text-align:center;color:var(--t3);font-size:10px;padding:6px">+${filtered.length - 30}건 더 있음</div>` : '');
   }
@@ -6800,7 +6808,7 @@ function showDetail(p){
   window._curTrendArea = 0;
 
   function _trendHtml(area) {
-    if (!area) return '<div style="font-size:11px;color:var(--t3);padding:14px 8px;text-align:center;background:#FAFCFF;border:1px dashed var(--bd);border-radius:8px">📊 위 평형 chip 을 클릭하면 그 평형의 월별 시세 추이가 표시돼요</div>';
+    if (!area) return '<div style="font-size:11px;color:var(--t3);padding:14px 8px;text-align:center;background:var(--bg2);border:1px dashed var(--bd);border-radius:8px">📊 위 평형 chip 을 클릭하면 그 평형의 월별 시세 추이가 표시돼요</div>';
     const td = buildPriceTrend(window._curTrendApt, area);
     if (td.length >= 2) return renderPriceChart(td);
     return `<div style="font-size:11px;color:var(--t3);padding:10px 0">${area}㎡(${Math.round(area/3.3058)}평) 시세 추이 데이터 부족 (거래 2개월 이상)</div>`;
@@ -6879,7 +6887,7 @@ function showDetail(p){
     ? `<div style="font-size:11px;font-weight:700;color:var(--t2);margin:0 0 8px">📐 평형별 현재 시세 <span style="font-weight:500;color:var(--t3)" title="최근 거래에 더 큰 가중치를 주는 가중평균입니다(반감기 90일). 아래 거래 목록을 단순 평균한 값과는 다를 수 있어요.">· 최근 6개월 실거래 가중평균</span></div>
        <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:14px">
          ${p.currentPriceByPyeong.map(cp=>`
-           <div style="background:#F7F9FC;border:1px solid var(--bd);border-radius:8px;padding:9px 11px">
+           <div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:9px 11px">
              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:3px">
                <span style="font-size:12px;font-weight:700;color:var(--t1)">${cp.pyeong}평 (전용 ${cp.excluUseAr}㎡)</span>
                <span style="font-size:13px;font-weight:800;color:var(--acc)">${cp.recentAvg}억</span>
@@ -7289,7 +7297,7 @@ async function loadFacility(p){
         ${items.join(' · ')}
         ${constructionCompany?`<br><span style="font-size:10px">시공: ${_escHtml(constructionCompany)}</span>`:''}
       </div>
-      <div style="background:var(--bg2);border:1px dashed var(--bd2);border-radius:8px;padding:8px 11px;font-size:10.5px;color:var(--t2);line-height:1.75;margin-top:6px">
+      <div style="background:var(--bg2);border:1px solid var(--grn,#2A8F3F);border-radius:8px;padding:8px 11px;font-size:10.5px;color:var(--t2);line-height:1.75;margin-top:6px">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
           <span style="font-weight:700;color:var(--t1)">🔍 데이터 검증</span>
           <a href="mailto:wlsdn5968@gmail.com?subject=${_mailSub}&body=${_mailBody}" style="color:var(--acc);text-decoration:underline;font-size:10px">오류 신고</a>
