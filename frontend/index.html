@@ -4840,6 +4840,7 @@ async function renderBriefing(){
     const er=h&&h.ecosRates; const dc=h&&h.dataCounts;
     const items=(subs&&subs.items)||[];
     const ps=(pop&&pop.results)||[];
+    window._lastPopular=ps; // RANKCARD: 랭킹 카드 재료(재조회 없이 재사용)
     const tk=[];
     if(er&&er.baseRate!=null) tk.push({l:'기준금리',v:_escHtml(String(er.baseRate))+'%',s:'한국은행'});
     if(er&&er.mortgageRate!=null) tk.push({l:'주담대 평균',v:_escHtml(String(er.mortgageRate))+'%',s:'ECOS '+_escHtml(String(er.mortgageRateMonth||'').replace(/^(\d{4})(\d{2})$/,'$1.$2'))});
@@ -4883,7 +4884,7 @@ async function renderBriefing(){
         <div style="font-size:9px;color:var(--brf-tx3);margin-top:6px">청약홈 · 신청 전 applyhome.co.kr 최종 확인</div>
       </div>
       <div class="brf-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b class="brf-h2">인기 단지 TOP 5</b><a href="javascript:void(0)" onclick="sv('map')" style="font-size:10.5px;color:var(--brf-tx3);text-decoration:none">지도 ›</a></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b class="brf-h2">인기 단지 TOP 5</b><span style="display:flex;gap:10px"><a href="javascript:void(0)" onclick="openRankCard()" style="font-size:10.5px;color:var(--brf-ac);text-decoration:none;font-weight:700">🖼 카드</a><a href="javascript:void(0)" onclick="sv('map')" style="font-size:10.5px;color:var(--brf-tx3);text-decoration:none">지도 ›</a></span></div>
         ${popHtml}
         <div style="font-size:9px;color:var(--brf-tx3);margin-top:8px">최근 60일 국토부 실거래 많은 순 · 60일 평균가 · 매물 광고 아님</div>
       </div>`;
@@ -7686,6 +7687,7 @@ async function openShareCard(){
   const s=_buildCardStats(items);
   if(!s){toast('실거래 기록이 없어 카드를 만들 수 없어요');return;}
   _drawShareCard(s,cd);
+  try{const _u=new URL(location.origin+'/share');_u.searchParams.set('apt',cd.aptName);if(cd.area)_u.searchParams.set('area',cd.area);window._cardShareUrl=_u.toString();}catch(_e){window._cardShareUrl='';}
   const ov=document.getElementById('CARDOV');
   document.getElementById('cardImg').src=_cardCanvas.toDataURL('image/png');
   ov.style.display='flex';ov.classList.add('open');
@@ -7702,14 +7704,80 @@ function dlShareCard(){
   },'image/png');
 }
 async function copyShareCardLink(){
-  if(!currentDetail){toast('복사할 링크가 없어요');return;}
-  const u=new URL(location.origin+'/share');
-  u.searchParams.set('apt',currentDetail.aptName);
-  if(currentDetail.area)u.searchParams.set('area',currentDetail.area);
-  try{await navigator.clipboard.writeText(u.toString());toast('🔗 링크 복사 완료');}
-  catch(_e){prompt('이 링크를 복사하세요:',u.toString());}
+  // RANKCARD-2026-08-19: 카드 종류별 링크 — 단지 카드=/share, 랭킹 카드=/briefing(각 open* 이 설정)
+  let url=window._cardShareUrl||'';
+  if(!url&&currentDetail){const u=new URL(location.origin+'/share');u.searchParams.set('apt',currentDetail.aptName);if(currentDetail.area)u.searchParams.set('area',currentDetail.area);url=u.toString();}
+  if(!url){toast('복사할 링크가 없어요');return;}
+  try{await navigator.clipboard.writeText(url);toast('🔗 링크 복사 완료');}
+  catch(_e){prompt('이 링크를 복사하세요:',url);}
 }
 // ============ /SHARECARD ============
+// ============ RANKCARD-2026-08-19 (Sprint NNNNNNN-13, 기획 킥 콘텐츠 2호) ============
+// 실거래 랭킹 카드 — 브리핑 TOP5(최근 60일, TRUST 게이트 통과분)를 인스타 규격 이미지로.
+// [정직] "주간"이라 부르지 않는다 — 7일 창은 국토부 신고 지연(최대 30일)으로 과소집계 왜곡.
+//   실제 창(최근 60일)과 기준일을 카드에 인쇄. 오버레이·PNG 저장은 팩트 카드 엔진 재사용(_cardCanvas).
+function _drawRankCard(list){
+  const W=1080,H=1350;
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  const x=cv.getContext('2d');
+  x.fillStyle='#0E1A2B';x.fillRect(0,0,W,H);
+  x.fillStyle='#F5B842';x.fillRect(0,0,W,10);
+  x.textBaseline='top';
+  x.fillStyle='#F5B842';x.font='800 30px Pretendard, sans-serif';
+  x.fillText('MYHOMELOG · 실거래 랭킹',80,84);
+  x.fillStyle='#DFE7EE';x.font='800 66px Pretendard, sans-serif';
+  x.fillText('실거래 많은 단지 TOP 5',80,140);
+  const d=new Date();
+  const today=d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0');
+  x.fillStyle='#8FA1B5';x.font='500 30px Pretendard, sans-serif';
+  x.fillText('최근 60일 국토부 실거래 많은 순 · '+today+' 기준',80,232);
+  x.fillStyle='#22344E';x.fillRect(80,300,W-160,2);
+  let y=336;
+  list.forEach((p,i)=>{
+    x.fillStyle='#F5B842';x.font='800 46px Pretendard, sans-serif';
+    x.fillText(String(i+1),80,y+18);
+    let fs=40;x.fillStyle='#DFE7EE';
+    do{x.font='700 '+fs+'px Pretendard, sans-serif';fs-=2;}while(x.measureText(p.aptName||'').width>560&&fs>24);
+    x.fillText(p.aptName||'',150,y);
+    x.fillStyle='#8FA1B5';x.font='500 26px Pretendard, sans-serif';
+    x.fillText(p.sigungu||'',150,y+58);
+    x.textAlign='right';
+    if(Number.isFinite(Number(p.avgDealAmount))&&Number(p.avgDealAmount)>0){
+      x.fillStyle='#DFE7EE';x.font='800 40px Pretendard, sans-serif';
+      x.fillText((Number(p.avgDealAmount)/10000).toFixed(2)+'억',W-80,y+2);
+    }
+    x.fillStyle='#93A4BD';x.font='700 26px Pretendard, sans-serif';
+    x.fillText((p.dealCount60d?p.dealCount60d+'건':''),W-80,y+54);
+    x.textAlign='left';
+    if(i<list.length-1){x.fillStyle='#22344E';x.fillRect(80,y+112,W-160,1);}
+    y+=138;
+  });
+  x.fillStyle='#22344E';x.fillRect(80,1096,W-160,2);
+  x.fillStyle='#8FA1B5';x.font='500 27px Pretendard, sans-serif';
+  x.fillText('출처 국토교통부 실거래가 · 60일 평균가 · 기준 '+today,80,1126);
+  x.fillText('매물 광고가 아닙니다 · 과거 실거래 기록이며 매수·매도 추천이 아닙니다',80,1170);
+  x.fillStyle='#F5B842';x.font='800 34px Pretendard, sans-serif';
+  x.fillText('myhomelog.vercel.app',80,1240);
+  _cardCanvas=cv;
+}
+async function openRankCard(){
+  let ps=window._lastPopular;
+  if(!ps||!ps.length){
+    try{const r=await fetch(CFG.api+'/search/popular');if(r.ok){const t=await r.json();ps=(t&&t.results)||[];}}catch(_e){}
+  }
+  if(!ps||!ps.length){toast('랭킹 데이터를 불러오지 못했어요');return;}
+  toast('🖼 랭킹 카드 만드는 중…');
+  _drawRankCard(ps.slice(0,5));
+  const d=new Date();
+  const day=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  // 카드의 공유 링크 = 오늘 브리핑 영구 URL(복사 직전 fetch 로 스냅샷 생성 보장 — 멱등)
+  window._cardShareUrl=location.origin+'/briefing/'+day;
+  try{ fetch(window._cardShareUrl).catch(()=>{}); }catch(_){ }
+  const ov=document.getElementById('CARDOV');
+  document.getElementById('cardImg').src=_cardCanvas.toDataURL('image/png');
+  ov.style.display='flex';ov.classList.add('open');
+}
+// ============ /RANKCARD ============
 async function shareCurrent(){
   if(!currentDetail){toast('공유할 단지가 없어요');return;}
   // 공유 URL은 /share 경로 — 서버에서 OG 메타 동적 치환 (카카오톡·슬랙 링크 프리뷰용)
