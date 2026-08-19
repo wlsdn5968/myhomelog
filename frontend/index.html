@@ -1848,6 +1848,11 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
 #mapTrustChip{display:none;align-items:baseline;gap:4px;font-size:10px;color:var(--map-tx3);background:var(--map-panel);border:1px solid var(--map-line);border-radius:6px;padding:3px 8px}
 #mapTrustChip b{color:var(--map-tx2);font-weight:700}
 #fltTrust{margin:6px 10px 2px;padding:11px 13px;background:var(--map-raise);border:1px solid var(--map-line);border-radius:11px}
+/* MSHEET (①C): 모바일 하단 시트 — 데스크톱(>700px)은 표시 자체를 차단 */
+#MSHEET{display:none;position:absolute;left:0;right:0;bottom:0;z-index:60;background:var(--map-panel);border-top:1px solid var(--map-line);box-shadow:0 -12px 32px rgba(0,0,0,.28);padding:10px 16px 16px}
+#MSHEET.on{display:block}
+.ms-grab{width:40px;height:4px;border-radius:99px;background:var(--map-line);margin:0 auto 10px}
+@media(min-width:701px){#MSHEET{display:none!important}}
 @media(max-width:700px){ #mapTrustChip{display:none!important} }
 </style>
   <div class="mtbar">
@@ -1905,6 +1910,24 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
     <button class="mbtn" onclick="rv()" title="지도를 서울 도심 초기 위치로 이동합니다">서울전체</button>
   </div>
   <div id="mapEl"></div>
+<!-- MSHEET-2026-08-19 (Sprint NNNNNNN-17, ①C): 모바일 지도 하단 시트 — 데스크톱은 CSS 로 차단 -->
+<div id="MSHEET">
+  <div class="ms-grab"></div>
+  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+    <b id="msName" style="font-size:16px;font-weight:800;letter-spacing:-.02em;color:var(--map-tx)"></b>
+    <span id="msSub" style="font-size:10px;font-weight:700;padding:3px 7px;border-radius:5px;background:var(--map-raise);border:1px solid var(--map-line);color:var(--map-tx2)"></span>
+  </div>
+  <div style="display:flex;gap:18px;align-items:flex-end;margin-top:8px;flex-wrap:wrap">
+    <div><div id="msPriceL" style="font-size:10px;color:var(--map-tx3)"></div><div id="msPriceV" style="font-size:19px;font-weight:800;color:var(--map-tx);font-variant-numeric:tabular-nums;letter-spacing:-.02em"></div></div>
+    <div id="msMeta" style="font-size:11.5px;color:var(--map-tx2);padding-bottom:3px;font-variant-numeric:tabular-nums"></div>
+  </div>
+  <div id="msSrc" style="margin-top:7px;font-size:9.5px;color:var(--map-tx3)"></div>
+  <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
+    <button onclick="_msDetail()" style="flex:1;padding:11px;border-radius:10px;background:var(--map-ac);border:none;color:#0B1524;font-weight:800;font-size:13px;font-family:inherit;cursor:pointer">단지 상세 보기</button>
+    <a href="javascript:void(0)" onclick="_msReport()" style="font-size:10.5px;color:var(--map-tx3);flex-shrink:0">오류 신고</a>
+    <button onclick="closeMapSheet()" aria-label="시트 닫기" style="width:34px;height:38px;border-radius:10px;background:var(--map-raise);border:1px solid var(--map-line);color:var(--map-tx2);cursor:pointer;flex-shrink:0">✕</button>
+  </div>
+</div>
   <div class="mhint h" id="mhint"></div>
 </div>
 
@@ -5026,6 +5049,57 @@ async function submitErrReport(){
   finally{if(btn)btn.disabled=false;}
 }
 // ============ /DATA-ERR ============
+// WRAPPED-B-2026-08-19 (Sprint NNNNNNN-17, 운영자 결정 ②B): 활동 카운터 — 로그인 사용자만, 집계 숫자만.
+//   익명은 전송 자체를 하지 않는다(수집 최소화). 실패·스로틀은 조용히(사용자 흐름 무관).
+let _actLast={};
+async function _bumpActivity(kind){
+  try{
+    const now=Date.now();
+    if(_actLast[kind]&&now-_actLast[kind]<3000)return;
+    _actLast[kind]=now;
+    const A2=window.A; // 다른 스크립트 블록의 auth 전역 — window 경유(no-undef 린트 정합)
+    if(!A2||!A2.getSession)return;
+    const session=await A2.getSession(); const token=session&&session.access_token;
+    if(!token)return;
+    fetch(`${CFG.api}/account/activity`,{method:'POST',headers:{Authorization:'Bearer '+token,'Content-Type':'application/json'},body:JSON.stringify({kind})}).catch(()=>{});
+  }catch(_e){}
+}
+// ============ MSHEET-2026-08-19 (Sprint NNNNNNN-17, 운영자 결정 ①C): 모바일 지도 하단 시트 ============
+// 하이브리드 — 모바일(≤700px)만 마커 클릭 시 시안 하단 시트, 데스크톱은 검증된 인포윈도우 유지.
+// 값은 마커가 이미 가진 실데이터만 표시(없으면 '—(미확인)'), 출처·동기화일 병기.
+function _mapSheetTry(kind,p){
+  try{
+    if(!window.matchMedia||!window.matchMedia('(max-width:700px)').matches)return false;
+    const sh=document.getElementById('MSHEET'); if(!sh||!p)return false;
+    const sub=[(p.sigungu||''),(p.umdNm||'')].filter(Boolean).join(' ')||String(p.area||'');
+    let priceV='',priceL='';
+    if(kind==='pop'){
+      if(Number.isFinite(Number(p.avgDealAmount))&&Number(p.avgDealAmount)>0){priceV=(Number(p.avgDealAmount)/10000).toFixed(2)+'억';priceL='최근 60일 실거래 평균';}
+      else if(p.dealCount60d){priceV=p.dealCount60d+'건';priceL='최근 60일 실거래';}
+    }else{
+      const v=Number(p.avgPrice||p.price||0);
+      if(v>0){priceV=v.toFixed(2)+'억';priceL='평균 실거래';}
+    }
+    const meta=[(p.buildYear?`${p.buildYear}년 준공`:''),(kind==='pop'?(p.dealCount60d?`60일 ${p.dealCount60d}건`:''):(p.dealCount?`거래 ${p.dealCount}건`:''))].filter(Boolean).join(' · ');
+    document.getElementById('msName').textContent=p.aptName||'';
+    document.getElementById('msSub').textContent=sub||'—';
+    document.getElementById('msPriceV').textContent=priceV||'—(미확인)';
+    document.getElementById('msPriceL').textContent=priceL||'실거래';
+    document.getElementById('msMeta').textContent=meta;
+    const k=window._syncData&&window._syncData.kst;
+    document.getElementById('msSrc').textContent=`국토부 실거래가${k?` · ${k} 동기화`:''} · 추정가·호가 아님`;
+    window._msGo=(kind==='pop')
+      ?()=>goSearchResult({aptName:p.aptName,sigungu:p.sigungu,umdNm:p.umdNm,lawdCd:p.lawdCd,buildYear:p.buildYear,recentDealDate:p.recentDealDate})
+      :()=>showDetailById(encodeURIComponent(p.aptName||''),p.lat,p.lng);
+    window._msErr=()=>openErrReport({aptName:p.aptName||null,lawdCd:p.lawdCd||null,page:'map-sheet'});
+    sh.classList.add('on');
+    return true;
+  }catch(_e){return false;}
+}
+function closeMapSheet(){const sh=document.getElementById('MSHEET');if(sh)sh.classList.remove('on');}
+function _msDetail(){try{closeMapSheet();window._msGo&&window._msGo();}catch(_e){}}
+function _msReport(){try{window._msErr&&window._msErr();}catch(_e){}}
+// ============ /MSHEET ============
 function openYesterdayBrief(){
   try{
     const n=new Date(Date.now()-86400000);
@@ -5567,6 +5641,7 @@ function mkNaverOverlay(p){
   // 클릭 인포윈도우
   const iw=new naver.maps.InfoWindow({content:mkNaverIW(p),maxWidth:230,borderWidth:0,disableAnchor:false,backgroundColor:'transparent',borderColor:'transparent'});
   naver.maps.Event.addListener(ov,'click',()=>{
+    if(_mapSheetTry('search',p))return; // MSHEET (①C): 모바일은 하단 시트
     if(iw.getMap())iw.close();
     else { try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_){} window._activeMarkerIW=iw; iw.open(mapObj,ov); }
   });
@@ -5617,7 +5692,11 @@ function mkLeafletMkr(p){
     iconAnchor:[0,0],
   });
   const m=L.marker([p.lat,p.lng],{icon}).addTo(mapObj);
-  m.bindPopup(`<div style="border-radius:10px;overflow:hidden">${mkNaverIW(p)}</div>`,{maxWidth:230});
+  if(window.matchMedia&&window.matchMedia('(max-width:700px)').matches){
+    m.on('click',()=>_mapSheetTry('search',p)); // MSHEET (①C)
+  } else {
+    m.bindPopup(`<div style="border-radius:10px;overflow:hidden">${mkNaverIW(p)}</div>`,{maxWidth:230});
+  }
   m.on('dblclick',()=>showDetail(p));
   return m;
 }
@@ -5963,6 +6042,7 @@ async function doSearch(){
     //   건수에서 빼고, 실제 단지가 0이면 '0건' 으로 정직하게 표시한다.
     const _real = props.filter(p=>!p._notice).length;
     document.getElementById('pCnt').textContent=_real+'건';
+    _bumpActivity('search'); // WRAPPED-B: 검색 실행 카운트(로그인 시만)
     // MAP-SKIN-2026-08-19 (Sprint NNNNNNN-9): 시안 "현재 필터 적용 결과" 신뢰 박스 — 전부 실측값(추정 금지).
     try{
       const _ft=document.getElementById('fltTrust');
@@ -7377,6 +7457,7 @@ function showDetail(p){
     else if(!p.recentDealDate&&p.recentDeal)p.recentDealDate=String(p.recentDeal).replace(/\./g,'-');
   }catch(_e){}
   currentDetail=p;
+  _bumpActivity('detail_view'); // WRAPPED-B: 상세 열람 카운트(로그인 시만)
   const bks=getBookmarks();
   const isBk=bks.some(b=>b.aptName===p.aptName);
   const bkBtn=document.getElementById('bkToggle');
@@ -10572,6 +10653,7 @@ async function loadPopularMarkers() {
             maxWidth: 240, borderWidth: 0, disableAnchor: false, backgroundColor: 'transparent', borderColor: 'transparent'
           });
           naver.maps.Event.addListener(ov, 'click', () => {
+            if(_mapSheetTry('pop',p))return; // MSHEET (①C)
             if (iw.getMap()) iw.close();
             else { try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_){} window._activeMarkerIW=iw; iw.open(mapObj, ov); }
           });
@@ -10594,7 +10676,8 @@ async function loadPopularMarkers() {
             lawdCd: p.lawdCd, buildYear: p.buildYear, recentDealDate: p.recentDealDate,
           }));
           // Phase 4-2 단계 1 미세 P1 (2026-05-05): 마커 팝업 디자인 통일성 — Concept C 토큰 적용
-          m.bindPopup(`
+          if(window.matchMedia&&window.matchMedia('(max-width:700px)').matches){ m.on('click',()=>_mapSheetTry('pop',p)); } // MSHEET (①C)
+          else m.bindPopup(`
             <div style="font-size:12px;line-height:1.6;background:var(--bg-elev-1);padding:10px 12px;color:var(--text-primary)">
               <div style="font-weight:700">${_escHtml(p.aptName)}</div>
               <div style="font-size:10.5px;color:var(--text-tertiary)">${_escHtml(p.sigungu||'')} ${_escHtml(p.umdNm||'')} · ${p.buildYear||'?'}년</div>

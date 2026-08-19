@@ -26,7 +26,7 @@
  */
 const express = require('express');
 // SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
-const { getUserScopedClient: userScopedClient, requireSupabaseAdmin } = require('../db/client');
+const { getUserScopedClient: userScopedClient, requireSupabaseAdmin, getSupabaseAdmin } = require('../db/client');
 const { requireAuth } = require('../middleware/auth');
 const { writeAudit } = require('../middleware/auditLog');
 const logger = require('../logger');
@@ -324,6 +324,44 @@ router.post('/restore', async (req, res, next) => {
     });
   } catch (e) {
     next(e);
+  }
+});
+
+// WRAPPED-B-2026-08-19 (Sprint NNNNNNN-17, 운영자 결정 ②B): 연말결산용 활동 카운터.
+// 집계 숫자만 저장(무엇을 봤는지는 저장하지 않는다 — "추천을 팔지 않습니다" 포지셔닝 정합).
+// requireAuth 뒤 정의라 로그인 사용자 한정. 남용 방지: user+kind 당 2초 스로틀(인스턴스 로컬).
+const _actRate = require('../cache');
+const ACT_KINDS = ['detail_view', 'search'];
+router.post('/activity', async (req, res) => {
+  const kind = String((req.body || {}).kind || '');
+  if (!ACT_KINDS.includes(kind)) return res.status(400).json({ error: 'kind' });
+  const rk = `act:${req.user.id}:${kind}`;
+  if (_actRate.get(rk)) return res.json({ ok: true, throttled: true });
+  _actRate.set(rk, 1, 2);
+  try {
+    const admin = getSupabaseAdmin();
+    if (!admin) return res.json({ ok: true, persisted: false });
+    // 연도는 KST 기준(서버 TZ=UTC 함정 — 자정 전후 연도 갈림 방지)
+    const kstYear = new Date(Date.now() + 9 * 3600 * 1000).getUTCFullYear();
+    const { error } = await admin.rpc('bump_activity_counter', { p_user: req.user.id, p_year: kstYear, p_kind: kind });
+    if (error) throw error;
+    return res.json({ ok: true, persisted: true });
+  } catch (e) {
+    logger.warn({ err: e.message }, 'activity bump 실패');
+    return res.json({ ok: true, persisted: false }); // 카운터 실패가 사용자 흐름을 막지 않는다
+  }
+});
+router.get('/activity', async (req, res) => {
+  try {
+    const admin = getSupabaseAdmin();
+    if (!admin) return res.json({ items: [] });
+    const { data, error } = await admin.from('activity_counters')
+      .select('year, kind, cnt').eq('user_id', req.user.id).order('year', { ascending: false }).limit(20);
+    if (error) throw error;
+    return res.json({ items: data || [] });
+  } catch (e) {
+    logger.warn({ err: e.message }, 'activity get 실패');
+    return res.json({ items: [] });
   }
 });
 
