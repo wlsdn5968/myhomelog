@@ -1344,6 +1344,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
    그 예산은 1151~1162 주석이 정밀하게 맞춰둔 것이라 넘기면 안 된다. */
 @media (max-width:700px) {
   #hSearchInput { min-height: 44px; }
+  #briefWidgets { grid-template-columns: 1fr !important; } /* BRIEFING-HOME: 모바일 1열 */
 }
 /* CTA-STICKY-2026-08-17 (라이브 실측): 창 높이 675px(노트북 흔한 값)에서 핵심 CTA
    "🔍 조건에 맞는 단지 찾기" 가 **y=996** — 접힘 한참 아래라 스크롤하지 않으면 존재를 모른다.
@@ -1499,10 +1500,13 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <!-- GUIDE-TAB-RETIRE-2026-08-19 (Sprint NNNNNNN-3, 사업기획 v2): 사용법 탭 제거 — 헤더 탭
          하나를 설명서에 쓰지 않는다. 뷰(view-guide)는 유지, 진입은 계정 드롭다운·모바일 드로어의
          '사용법' 항목으로. ⚠ 아래 htabOrder 에서도 'guide' 를 함께 뫐다(인덱스 1:1 규칙). -->
+    <!-- BRIEFING-HOME-2026-08-19 (Sprint NNNNNNN-5, 사업기획 Phase 1): 뉴스 탭을 '브리핑'으로
+         개편해 첫 탭으로 이동 — 3줄 시황 승격 + 티커 + 청약 D-day + 인기 TOP5. RSS 뉴스는 같은 뷰
+         하단 '그 밖의 소식'으로 흥수. ⚠ htabOrder 동시 재배열(인덱스 1:1). -->
+    <button class="htab" onclick="sv('news',this)" title="오늘의 데이터 브리핑"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h12v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2"/><path d="M7.5 9h5"/><path d="M7.5 13h5"/><path d="M7.5 16.5h3"/></svg>브리핑</button>
     <button class="htab on" onclick="sv('map',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>지도</button>
     <button class="htab" onclick="sv('list',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>목록</button>
     <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서</button>
-    <button class="htab" onclick="sv('news',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h12v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2"/><path d="M7.5 9h5"/><path d="M7.5 13h5"/><path d="M7.5 16.5h3"/></svg>뉴스</button>
     <div class="htab-dd" id="htabToolDd">
       <button class="htab-tool" id="htabToolBtn" onclick="toggleToolMenu(event)" aria-haspopup="true" aria-expanded="false" title="특약 · 청약 · 대출계산 · 규제 요약"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>도구 <span class="ddcaret">▾</span></button>
       <div class="htab-menu" id="htabToolMenu">
@@ -2120,13 +2124,25 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 <!-- 부동산 뉴스 뷰 -->
 <div class="biz-view" id="view-news" style="display:none">
   <div class="biz-section">
-    <h3>📰 부동산 뉴스</h3>
-    <p style="font-size:11px;color:var(--t3);margin-bottom:13px">언론사 원문 링크 · 본 서비스는 단순 인덱싱 (저작권은 각 언론사)</p>
+    <!-- BRIEFING-HOME-2026-08-19 (Sprint NNNNNNN-5): 오늘의 브리핑 헤더 — 전부 기존 공식
+         데이터 재사용(health.ecosRates·dataCounts / subscription / popular). 값 없는 항목은
+         항목자체를 생략(미확인 원칙) — 0이나 추정치로 채우지 않는다. -->
+    <div id="briefTicker" style="display:none;white-space:nowrap;overflow-x:auto;font-size:10.5px;color:var(--t2);padding:5px 2px 8px;border-bottom:1px dashed var(--bd);margin-bottom:10px"></div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:6px;margin-bottom:4px">
+      <div>
+        <div style="font-size:10px;color:var(--amb);font-weight:800;letter-spacing:1.5px">오늘의 브리핑</div>
+        <h3 id="briefDate" style="margin:2px 0 0">—</h3>
+        <div style="font-size:10.5px;color:var(--t3)">추천을 팔지 않습니다. 데이터를 팝니다.</div>
+      </div>
+      <button class="abtn" style="margin:0;width:auto;padding:6px 11px;font-size:10.5px;background:var(--accent-50);color:var(--accent-700);border:1px solid var(--accent-100)" onclick="copyBriefLink()">🔗 오늘 브리핑 링크 복사</button>
+    </div>
+    <div id="briefWidgets" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 14px"></div>
     <div id="newsSummary" style="margin-bottom:14px;padding:13px 14px;background:linear-gradient(135deg,#F9F4EC,#F1EADE);border:1px solid #E1D5BE;border-radius:10px;display:none">
       <div style="font-size:10.5px;color:var(--amb);font-weight:700;margin-bottom:6px;letter-spacing:0.3px">📅 오늘의 부동산 3줄 시황 <span style="color:var(--t3);font-weight:500" id="newsSummaryTime"></span></div>
       <div id="newsSummaryLines" style="font-size:12px;line-height:1.85;color:var(--t1)"></div>
       <div id="newsSummarySrc" style="font-size:9.5px;color:var(--t3);margin-top:6px;line-height:1.5">공식 통계 기반 자동 정리 (한국은행 ECOS · 국토부 KOSIS · 국토부 실거래) · 매수·매도 추천이 아닙니다</div>
     </div>
+    <div style="font-size:12px;font-weight:700;color:var(--t1);margin:2px 0 8px">📰 그 밖의 소식 <span style="font-weight:500;font-size:10px;color:var(--t3)">언론사 원문 링크 · 단순 인덱싱 (저작권은 각 언론사)</span></div>
     <div class="chips" id="news-cat" style="margin-bottom:14px">
       <span class="chip on" data-cat="hot" onclick="loadNews(this)">🔥 인기</span>
       <span class="chip" data-cat="policy" onclick="loadNews(this)">📋 정책·규제</span>
@@ -4679,6 +4695,69 @@ async function loadNewsSummary(){
   }catch(e){
     // 요약 실패는 조용히 숨김 (뉴스 본체는 정상)
   }
+}
+
+// ── BRIEFING-HOME-2026-08-19 (Sprint NNNNNNN-5): 오늘의 브리핑 ──
+//   전부 기존 공식 데이터 재조합 — 새 수집·AI 호출 0. 값 없는 항목은 항목채 생략(미확인 원칙).
+//   3줄 시황은 기존 loadNewsSummary(#newsSummary)가 그린다 — 이 함수는 티커·날짜·위젯만.
+async function renderBriefing(){
+  try{
+    const dEl=document.getElementById('briefDate');
+    const now=new Date();
+    if(dEl){ const yo='일월화수목금토'[now.getDay()];
+      dEl.textContent=`${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}(${yo})`; }
+    const [h,subs,pop]=await Promise.all([
+      fetch(`${CFG.api}/health`,{signal:AbortSignal.timeout(6000)}).then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(`${CFG.api}/subscription?sido=&days=30`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(`${CFG.api}/search/popular`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
+    ]);
+    // 티커 — 전부 출처·기준 표기, 값 있는 항목만
+    const tk=[]; const er=h&&h.ecosRates; const dc=h&&h.dataCounts;
+    const src=(t)=>`<span style="color:var(--t3);font-size:9.5px"> ${t}</span>`;
+    if(er&&er.baseRate!=null) tk.push(`기준금리 <b>${_escHtml(String(er.baseRate))}%</b>${src('한국은행')}`);
+    if(er&&er.mortgageRate!=null) tk.push(`주담대 평균 <b>${_escHtml(String(er.mortgageRate))}%</b>${src('ECOS '+_escHtml(String(er.mortgageRateMonth||'').replace(/^(\d{4})(\d{2})$/,'$1.$2')))}`);
+    if(dc&&dc.tx) tk.push(`실거래 누적 <b>${Number(dc.tx).toLocaleString()}건</b>${src('국토부'+(dc.lastIngestedAt?' · '+String(dc.lastIngestedAt).slice(5,10).replace('-','.')+' 동기화':''))}`);
+    const tEl=document.getElementById('briefTicker');
+    if(tEl&&tk.length){tEl.innerHTML=tk.join('<span style="color:var(--bd2);margin:0 9px">|</span>');tEl.style.display='block';}
+    const w=document.getElementById('briefWidgets'); if(!w) return;
+    // 청약 D-day 3건 (접수 임박순 — 기존 dDayLabel/fmtSubsDate 재사용)
+    let subsHtml='';
+    const items=(subs&&subs.items)||[];
+    if(items.length){
+      subsHtml=items.slice(0,3).map(it=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px dashed var(--bd);font-size:11px">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t1);font-weight:600">${_escHtml(it.name||'')}</span>
+        <span style="flex-shrink:0">${dDayLabel(it.receiveStart)}</span>
+      </div>`).join('');
+    } else { subsHtml=`<div style="font-size:10.5px;color:var(--t3);padding:6px 0">30일 내 일정 없음 또는 조회 실패</div>`; }
+    // 인기 단지 TOP5 (클릭 = 기존 goSearchResult 경로)
+    let popHtml='';
+    const ps=(pop&&pop.results)||[];
+    if(ps.length){
+      popHtml=ps.slice(0,5).map((p2,i)=>`<div onclick='goSearchResult(${_jsonAttr({aptName:p2.aptName,sigungu:p2.sigungu,umdNm:p2.umdNm,lawdCd:p2.lawdCd,buildYear:p2.buildYear,recentDealDate:p2.recentDealDate})})' style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px dashed var(--bd);font-size:11px;cursor:pointer">
+        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b style="color:var(--amb)">${i+1}</b> <span style="color:var(--t1);font-weight:600">${_escHtml(p2.aptName||'')}</span></span>
+        <span style="flex-shrink:0;color:var(--t2)">${p2.dealCount60d?p2.dealCount60d+'건':''}</span>
+      </div>`).join('');
+    } else { popHtml=`<div style="font-size:10.5px;color:var(--t3);padding:6px 0">조회 실패</div>`; }
+    w.innerHTML=`
+      <div style="background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px"><b style="font-size:11.5px;color:var(--t1)">📅 청약 D-day</b><a href="javascript:void(0)" onclick="sv('subs')" style="font-size:10px;color:var(--acc);text-decoration:none">전체 ›</a></div>
+        ${subsHtml}
+        <div style="font-size:9px;color:var(--t3);margin-top:4px">청약Home · 신청 전 applyhome.co.kr 최종 확인</div>
+      </div>
+      <div style="background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px">
+        <div style="display:flex;justify-content:space-between;margin-bottom:4px"><b style="font-size:11.5px;color:var(--t1)">🔥 인기 단지 TOP5</b><a href="javascript:void(0)" onclick="sv('map')" style="font-size:10px;color:var(--acc);text-decoration:none">지도 ›</a></div>
+        ${popHtml}
+        <div style="font-size:9px;color:var(--t3);margin-top:4px">최근 60일 국토부 실거래 많은 순 · 매물 광고 아님</div>
+      </div>`;
+  }catch(_e){ /* 브리핑 실패는 조용히 — 뉴스 본체는 정상 */ }
+}
+function copyBriefLink(){
+  try{
+    const n=new Date();
+    const day=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+    const url=`${location.origin}/?briefing=${day}`;
+    navigator.clipboard.writeText(url).then(()=>toast('🔗 오늘 브리핑 링크 복사 완료'),()=>toast('복사 실패'));
+  }catch(_e){ toast('복사 실패'); }
 }
 
 // ── 청약 캘린더 ────────────────────────────────────────────
@@ -8011,7 +8090,10 @@ document.addEventListener('DOMContentLoaded',()=>{
   setTimeout(()=>{try{if(!_kkoConfigured)initKakao();}catch(_){}} ,6000); // 세션 늦은 복원 대비 1회 재시도
   setTimeout(()=>{try{_handleKakaoReturn();}catch(_){}} ,2200);
   setTimeout(()=>{try{_updateNtcDot();}catch(_){}} ,2500); // NTC: 채널 상태 확정 후 벨 배지 1회 갱신
-  setTimeout(()=>{try{renderDrawerUtil();}catch(_){}} ,300); // KKKKKK: 드로어 유틸 초기 렌더 (세션 확정 시 _updateAuthUi 가 재렌더)
+  setTimeout(()=>{try{renderDrawerUtil();}catch(_){}} ,300);
+  // BRIEFING-HOME-2026-08-19: 공유 륌크(?briefing=YYYY-MM-DD) 진입 시 브리핑 뷰로.
+  //   v1은 항상 최신 브리핑을 보여준다(날짜별 서버렌더 아카이브는 별도 설계 — 보고됨).
+  setTimeout(()=>{try{ if(new URLSearchParams(location.search).has('briefing')) sv('news'); }catch(_){}} ,500); // KKKKKK: 드로어 유틸 초기 렌더 (세션 확정 시 _updateAuthUi 가 재렌더)
 });
 
 // ── NTC (Sprint JJJJJJ): 알림 센터 + 구독 넛지 + 헤더 벨 — Claude Design 시안 반영 ──
@@ -9389,7 +9471,8 @@ function sv(v,btn){
   // 헤더 탭 활성화 — 인덱스 기반: htabOrder 는 .htab DOM 순서와 1:1 (Sprint OOOOO-3 재배열 반영.
   //   마크업 순서 바꾸면 여기도 함께! 규제 요약(비뷰)은 마지막이라 인덱스 밖 → 항상 off)
   // GUIDE-TAB-RETIRE-2026-08-19: 'guide' 제거 — DOM .htab 순서와 1:1 유지(마크업도 같은 커밋에서 제거)
-  const htabOrder=['map','list','report','news','clause','subs','calc'];
+  // BRIEFING-HOME-2026-08-19: 브리핑(news 뷰 재사용)이 첫 탭 — DOM 순서와 1:1
+  const htabOrder=['news','map','list','report','clause','subs','calc'];
   document.querySelectorAll('.htab').forEach((b,i)=>b.classList.toggle('on',htabOrder[i]===v));
   // "도구 ▾" 드롭다운 버튼 — 도구 뷰(특약·청약·대출계산) 활성 시 하이라이트 + 탭 전환 시 메뉴 닫기 (OOOOO-3: 뉴스·사용법 승격, calc 편입)
   try{
@@ -9402,6 +9485,8 @@ function sv(v,btn){
   _wizPlace(v); // Sprint PPPPP: 위저드 코어를 뷰에 맞는 슬롯으로
   if(v==='list')renderListGrid();
   if(v==='news' && !document.getElementById('newsList').dataset.loaded){loadNews();}
+  // BRIEFING-HOME-2026-08-19: 브리핑 헤더는 진입마다 갱신(날짜·D-day 신선도) — 실패는 조용히
+  if(v==='news'){ try{ renderBriefing(); }catch(_e){} }
   if(v==='subs' && !document.getElementById('subsList').dataset.loaded){loadSubs();}
 }
 // IA-2026-07-12 (Sprint QQQQ): 상단 "도구 ▾" 드롭다운 열기/닫기 (데스크톱 전용 — .htabs 는 ≤700px 숨김)
