@@ -178,7 +178,11 @@ function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
         message: isPaid
           ? `오늘 ${plan === 'pro' ? '프로' : '팀'} 플랜 ${scopeName} 한도(${effectiveLimit}회)를 모두 사용했어요. 내일 다시 이용해주세요.`
           : isAnonymous && loggedInBonus > 0
-          ? `오늘 무료 ${scopeName} ${effectiveLimit}회를 모두 사용했어요. 로그인하면 ${loggedInBonus}회를 추가로 받을 수 있어요.`
+          // LIMIT0-MSG-FIX-2026-08-20 (루프 회차 5 실측): 익명 한도 0 인 scope(보고서)에서
+          //   "무료 0회를 모두 사용했어요"라는 모순 문구가 나갔다 — 한도 0 은 '소진'이 아니라 '로그인 필요'다.
+          ? (effectiveLimit === 0
+            ? `${scopeName} 무료 이용은 로그인이 필요해요 — 로그인하면 하루 ${loggedInBonus}회 제공돼요.`
+            : `오늘 무료 ${scopeName} ${effectiveLimit}회를 모두 사용했어요. 로그인하면 ${loggedInBonus}회를 추가로 받을 수 있어요.`)
           : `오늘의 무료 ${scopeName} 한도(${effectiveLimit}회)를 모두 사용했어요. 내일 다시 이용해주세요.`,
         used,
         limit: effectiveLimit,
