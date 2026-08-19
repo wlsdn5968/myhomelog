@@ -115,7 +115,7 @@ router.get('/export', async (req, res, next) => {
       }
       return out;
     };
-    const [bookmarks, searchHistory, chatSessions, chatMessages, billing, payments, fieldNotes] = await Promise.all([
+    const [bookmarks, searchHistory, chatSessions, chatMessages, billing, payments, fieldNotes, activityCounters] = await Promise.all([
       pageAll('bookmarks', '*', 'id'),
       pageAll('search_history', '*', 'id'),
       pageAll('chat_sessions', '*', 'id'),
@@ -123,6 +123,7 @@ router.get('/export', async (req, res, next) => {
       pageAll('user_billing', '*', 'user_id'),   // PK user_id · 사용자당 1행
       pageAll('payments', 'id, order_id, amount, currency, status, plan, method, created_at, approved_at', 'id'),
       pageAll('field_notes', '*', 'created_at'), // id 없음 — (user_id,apt_name) 유니크·RLS 로 본인 행만
+      pageAll('activity_counters', 'year, kind, cnt, updated_at', 'year'), // VERIFY-FIX-2: 열람권 '전부' 고지 정합
     ]);
 
     const payload = {
@@ -139,6 +140,7 @@ router.get('/export', async (req, res, next) => {
       user_billing: billing,
       payments,
       field_notes: fieldNotes,
+      activity_counters: activityCounters, // VERIFY-FIX-2
     };
 
     await writeAudit(req, 'account.export', 'user', userId, {
@@ -149,6 +151,7 @@ router.get('/export', async (req, res, next) => {
         chatMessages: chatMessages.length,
         payments: payments.length,
         fieldNotes: fieldNotes.length,
+        activityCounters: activityCounters.length,
       },
     });
 

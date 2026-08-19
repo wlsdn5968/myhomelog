@@ -1849,7 +1849,7 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
 #mapTrustChip b{color:var(--map-tx2);font-weight:700}
 #fltTrust{margin:6px 10px 2px;padding:11px 13px;background:var(--map-raise);border:1px solid var(--map-line);border-radius:11px}
 /* MSHEET (①C): 모바일 하단 시트 — 데스크톱(>700px)은 표시 자체를 차단 */
-#MSHEET{display:none;position:absolute;left:0;right:0;bottom:0;z-index:60;background:var(--map-panel);border-top:1px solid var(--map-line);box-shadow:0 -12px 32px rgba(0,0,0,.28);padding:10px 16px 16px}
+#MSHEET{display:none;position:absolute;left:0;right:0;bottom:0;z-index:380;background:var(--map-panel);border-top:1px solid var(--map-line);box-shadow:0 -12px 32px rgba(0,0,0,.28);padding:10px 16px 16px}
 #MSHEET.on{display:block}
 .ms-grab{width:40px;height:4px;border-radius:99px;background:var(--map-line);margin:0 auto 10px}
 @media(min-width:701px){#MSHEET{display:none!important}}
@@ -5057,7 +5057,7 @@ async function _bumpActivity(kind){
     const now=Date.now();
     if(_actLast[kind]&&now-_actLast[kind]<3000)return;
     _actLast[kind]=now;
-    const A2=window.A; // 다른 스크립트 블록의 auth 전역 — window 경유(no-undef 린트 정합)
+    const A2=window.MHL&&window.MHL.auth; // VERIFY-FIX-2: 실제 auth 전역은 window.MHL.auth — window.A 는 존재한 적 없어 전원 무전송이었다(적대 검증 적발)
     if(!A2||!A2.getSession)return;
     const session=await A2.getSession(); const token=session&&session.access_token;
     if(!token)return;
@@ -5071,6 +5071,7 @@ function _mapSheetTry(kind,p){
   try{
     if(!window.matchMedia||!window.matchMedia('(max-width:700px)').matches)return false;
     const sh=document.getElementById('MSHEET'); if(!sh||!p)return false;
+    try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_e2){} // VERIFY-FIX-2: 조기 return 이 IW 닫기를 건너뛰던 갭
     const sub=[(p.sigungu||''),(p.umdNm||'')].filter(Boolean).join(' ')||String(p.area||'');
     let priceV='',priceL='';
     if(kind==='pop'){
@@ -5078,7 +5079,7 @@ function _mapSheetTry(kind,p){
       else if(p.dealCount60d){priceV=p.dealCount60d+'건';priceL='최근 60일 실거래';}
     }else{
       const v=Number(p.avgPrice||p.price||0);
-      if(v>0){priceV=v.toFixed(2)+'억';priceL='평균 실거래';}
+      if(v>0){priceV=v.toFixed(2)+'억';priceL=p._priceBasis||'평균 실거래';} // VERIFY-FIX-2: 개인화 가중평균에 '평균 실거래' 라벨 금지(기존 두 지점과 동일 원칙)
     }
     const meta=[(p.buildYear?`${p.buildYear}년 준공`:''),(kind==='pop'?(p.dealCount60d?`60일 ${p.dealCount60d}건`:''):(p.dealCount?`거래 ${p.dealCount}건`:''))].filter(Boolean).join(' · ');
     document.getElementById('msName').textContent=p.aptName||'';
@@ -5692,11 +5693,12 @@ function mkLeafletMkr(p){
     iconAnchor:[0,0],
   });
   const m=L.marker([p.lat,p.lng],{icon}).addTo(mapObj);
-  if(window.matchMedia&&window.matchMedia('(max-width:700px)').matches){
-    m.on('click',()=>_mapSheetTry('search',p)); // MSHEET (①C)
-  } else {
-    m.bindPopup(`<div style="border-radius:10px;overflow:hidden">${mkNaverIW(p)}</div>`,{maxWidth:230});
-  }
+  // MSHEET (①C, VERIFY-FIX-2): 판정은 '클릭 시점' — 생성 시점 스냅샷은 리사이즈 후 클릭 무반응(적대 검증 적발)
+  m.on('click',()=>{
+    if(_mapSheetTry('search',p))return;
+    if(!m.getPopup())m.bindPopup(`<div style="border-radius:10px;overflow:hidden">${mkNaverIW(p)}</div>`,{maxWidth:230});
+    m.openPopup();
+  });
   m.on('dblclick',()=>showDetail(p));
   return m;
 }
@@ -10009,6 +10011,7 @@ function sv(v,btn){
     if (dm && dm.classList.contains('open')) { try { cDM(); } catch(_){ dm.classList.remove('open'); } }
     const adm = document.getElementById('ADM');
     if (adm && adm.classList.contains('open')) adm.classList.remove('open');
+    try { closeMapSheet(); } catch(_){} // MSHEET (①C): 탭 전환 = 새 컨텍스트 — 시트 stale 재노출 방지
   } catch(_){}
   Object.entries(VIEW_DISPLAY).forEach(([id,meta])=>{
     const el=document.getElementById('view-'+id);
@@ -10676,8 +10679,8 @@ async function loadPopularMarkers() {
             lawdCd: p.lawdCd, buildYear: p.buildYear, recentDealDate: p.recentDealDate,
           }));
           // Phase 4-2 단계 1 미세 P1 (2026-05-05): 마커 팝업 디자인 통일성 — Concept C 토큰 적용
-          if(window.matchMedia&&window.matchMedia('(max-width:700px)').matches){ m.on('click',()=>_mapSheetTry('pop',p)); } // MSHEET (①C)
-          else m.bindPopup(`
+          m.on('click',()=>{ if(_mapSheetTry('pop',p)){ setTimeout(()=>{try{m.closePopup();}catch(_){}},0); } }); // MSHEET (①C, VERIFY-FIX-2): 클릭 시점 판정
+          m.bindPopup(`
             <div style="font-size:12px;line-height:1.6;background:var(--bg-elev-1);padding:10px 12px;color:var(--text-primary)">
               <div style="font-weight:700">${_escHtml(p.aptName)}</div>
               <div style="font-size:10.5px;color:var(--text-tertiary)">${_escHtml(p.sigungu||'')} ${_escHtml(p.umdNm||'')} · ${p.buildYear||'?'}년</div>

@@ -62,7 +62,8 @@ async function hardDeleteUser(admin, userId) {
 
   // 2) 데이터 cascade 삭제 (chat_sessions → chat_messages ON DELETE CASCADE)
   // Sprint HHHHHH: kakao_notify_tokens 추가 — 카카오 OAuth 토큰은 탈퇴 즉시 파기 (FK CASCADE 도 있으나 명시 삭제 이중 안전망)
-  const tables = ['bookmarks', 'search_history', 'chat_sessions', 'user_billing', 'kakao_notify_tokens'];
+  // VERIFY-FIX-2 (Sprint NNNNNNN-17): activity_counters 누락 — 탈퇴 후 잔존은 PIPA 파기 의무 위반 소지(적대 검증 적발)
+  const tables = ['bookmarks', 'search_history', 'chat_sessions', 'user_billing', 'kakao_notify_tokens', 'activity_counters'];
   for (const tbl of tables) {
     try {
       const { error, count } = await admin
