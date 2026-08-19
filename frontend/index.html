@@ -1854,6 +1854,8 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
 .ms-grab{width:40px;height:4px;border-radius:99px;background:var(--map-line);margin:0 auto 10px}
 @media(min-width:701px){#MSHEET{display:none!important}}
 @media(max-width:700px){ #mapTrustChip{display:none!important} }
+/* AUDIT-FN-2026-08-19 (운영자 제안 검토): 모바일 헤더 공간 — 데이터 상태는 점 아이콘만(기능·신호 유지, 문구는 데스크톱 전용) */
+@media(max-width:700px){ #dataStatusBtn{font-size:0;padding:6px 9px} #dataStatusBtn span{margin-right:0!important} }
 </style>
   <div class="mtbar">
     <!-- Sprint PPPPP (시안 컷3): 필터·인기 칩은 검색 결과가 있을 때만 표시(renderMarkers 가 노출) —
@@ -6136,7 +6138,7 @@ function renderListGrid(){
   }
   // Agent UX #8 (2026-05-04): 모바일 가로 스크롤 차단 — flex column 으로 줄 분리
   const metaLine = searchMeta && searchMeta.regions.length
-    ? `<div class="meta-line" style="margin:10px 14px 0;padding:8px 12px;background:var(--info-bg);border:1px solid var(--info-bd);border-radius:8px;color:var(--info-tx);font-size:11px;line-height:1.55"><div>📊 <b>분석 지역:</b> ${_escHtml(searchMeta.regions.map(String).join(', '))}</div><div>전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> · 예산 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b></div><div title="analyzeTransactions 가 (단지명·법정동) 기준으로 묶은 결과 수입니다. 거래 건수가 아니라 단지 수예요.">최근 6개월 거래가 있는 단지 ${(Number(searchMeta.totalTx)||0).toLocaleString()}곳 분석</div></div>`
+    ? `<div class="meta-line" style="margin:10px 14px 0;padding:8px 12px;background:var(--info-bg);border:1px solid var(--info-bd);border-radius:8px;color:var(--info-tx);font-size:11px;line-height:1.55"><div>📊 <b>분석 지역:</b> ${_escHtml(searchMeta.regions.map(String).join(', '))}</div>${(()=>{try{const _wideOn=document.querySelector('#ch-r .chip.on');const _subOn=document.querySelectorAll('#ch-r-sub .chip.on').length;return (_wideOn&&!_subOn)?`<div style="font-size:10px;opacity:.85">${_escHtml(_wideOn.textContent.trim())} 전체 중 예산에 맞는 구를 골라 분석했어요 — 세부 구를 직접 선택하면 그 지역만 분석합니다</div>`:'';}catch(_e){return '';}})()}<div>전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> · 예산 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b></div><div title="analyzeTransactions 가 (단지명·법정동) 기준으로 묶은 결과 수입니다. 거래 건수가 아니라 단지 수예요.">최근 6개월 거래가 있는 단지 ${(Number(searchMeta.totalTx)||0).toLocaleString()}곳 분석</div></div>`
     : '';
   // REGION-ENTRY-2-2026-07-25 (Sprint ZZZZZZ, 기획안 §3 A안의 '추천 결과 상단'분):
   //   결과에 실제로 등장하는 지역만 노출한다. ⚠ searchMeta.regions(이름 배열)를 쓰지 않고
@@ -6149,7 +6151,9 @@ function renderListGrid(){
       if (!/^\d{5}$/.test(c)) continue;
       const cur = cnt.get(c) || { n: 0, nm: '' };
       cur.n++;
-      if (!cur.nm && p.sigungu) cur.nm = String(p.sigungu);
+      if (!cur.nm) cur.nm = String(p.sigungu || (p.area ? String(p.area).split(' ')[0] : '') || '');
+      // AUDIT-FN-2026-08-19 (운영자 폰 재현 '11530 시장 요약'): recommend 응답엔 sigungu 필드가 없고
+      //   area('금천구 시흥동')뿐 — 라벨은 area 첫 토큰 폴백(판정은 위에서 lawd_cd 로 이미 안전).
       cnt.set(c, cur);
     }
     const top = Array.from(cnt.entries()).sort((a, b) => b[1].n - a[1].n).slice(0, 3);
