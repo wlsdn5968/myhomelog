@@ -44,7 +44,6 @@ const { resolveSchoolNeisBatch } = require('../services/schoolNeisService');
 // STAB-AUDIT-2026-05-07 P2: 학구도 (배정 초·중) 매핑
 const { resolveSchoolDistrict } = require('../services/schoolDistrictService');
 // Sprint OO (2026-05-19): 강연 자료 적용 — 학군 권역 + 학원가
-const { resolveSchoolCluster } = require('../services/schoolClusterService');
 const { resolveAcademies } = require('../services/academyService');
 // NAMEFIX-2026-05-11 + FACILITY-HELPER-2026-05-12: 검색 path 정규화 + facility schema 일관
 // NAME-MERGE-2026-05-12 (Sprint S): baseAptName helper 로 동/letter/층 suffix 분리 신고 통합
@@ -894,8 +893,11 @@ router.get('/facility', async (req, res) => {
     }
     };
 
-    // Sprint OO: 학군 권역 라벨 (정적 강연 자료) — 좌표 없어도 sigungu/umdNm 만으로 매칭 가능
-    const schoolCluster = resolveSchoolCluster({ sigungu, umdNm });
+    // CLUSTER-RETIRE-2026-08-19 (Sprint NNNNNNN-3, 사업기획 v2 판정): 학군 권역 정적 라벨 제거.
+    //   출처가 '강연 자료 + KB 보고서'로, 우리 절대 룰(정부 공식 출처만 인용)과 충돌하는 유일한
+    //   데이터였다. NEIS 실데이터(nearbySchools 의 학생수·학급수)만 남긴다.
+    //   응답 키는 유지하고 null 고정 — 프론트 렌더 블록은 같은 스프린트에서 제거(계약 파손 방지).
+    const schoolCluster = null;
 
     // 같은 동의 다른 MOLIT 단지명 — alias 후보 (사용자 표시용)
     // Phase 4 (2026-04-26): 토큰 매칭 우선순위 — 정식명 핵심 단어가 MOLIT 신고명에 포함되면

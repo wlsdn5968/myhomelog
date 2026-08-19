@@ -1496,7 +1496,9 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
        대출계산은 도구▾ 안으로. ⚠ sv() 탭 활성은 .htab DOM 순서 = htabOrder 배열 인덱스 매칭 — 여기 순서를 바꾸면
        반드시 htabOrder(sv 함수)도 함께 갱신할 것. 규제 요약(비뷰)은 항상 마지막(인덱스 밖 → 항상 off). -->
   <div class="htabs">
-    <button class="htab" onclick="sv('guide',this)" title="처음이세요? 3분 가이드"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>사용법</button>
+    <!-- GUIDE-TAB-RETIRE-2026-08-19 (Sprint NNNNNNN-3, 사업기획 v2): 사용법 탭 제거 — 헤더 탭
+         하나를 설명서에 쓰지 않는다. 뷰(view-guide)는 유지, 진입은 계정 드롭다운·모바일 드로어의
+         '사용법' 항목으로. ⚠ 아래 htabOrder 에서도 'guide' 를 함께 뫐다(인덱스 1:1 규칙). -->
     <button class="htab on" onclick="sv('map',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>지도</button>
     <button class="htab" onclick="sv('list',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>목록</button>
     <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서</button>
@@ -1558,6 +1560,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <button class="acct-it" onclick="toggleTheme()" aria-label="다크 모드 전환"><svg viewBox="0 0 24 24" fill="none"><path d="M20 13.5A8 8 0 1 1 10.5 4a6.5 6.5 0 0 0 9.5 9.5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>다크 모드<span class="acct-sw" aria-hidden="true"><span class="knob"></span></span></button>
         <button class="acct-it" onclick="closeAcctMenu();openSettings();if(window._isAdmin&&typeof showDataQuality==='function')showDataQuality()"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 11v5M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>사용량 · 데이터 품질 정보<span class="acct-sub" id="acctDqSub">검색·채팅 잔여 및 데이터 출처 확인</span></span></button>
         <div class="acct-div"></div>
+        <button class="acct-it" onclick="closeAcctMenu();sv('guide')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5" stroke="currentColor" stroke-width="2"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" stroke-width="2"/></svg>사용법 · 3분 가이드</button>
         <button class="acct-it danger" onclick="closeAcctMenu();logout()"><svg viewBox="0 0 24 24" fill="none"><path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 8 6 12l4 4M6 12h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>로그아웃</button>
       </div>
     </div>
@@ -2003,12 +2006,12 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 <!-- 특약 생성 전용 뷰 -->
 <div class="clause-view" id="view-clause">
   <div class="cv-hero">
-    <h2>✍ AI 특약 초안 생성</h2>
-    <p>매매 정보 입력 → 법령 인용 + AI 작성 특약 초안</p>
+    <h2>✍ 특약 초안 만들기</h2>
+    <p>매매 정보 입력 → 조건 반영 표준 특약 초안 (규제·연식·특이사항 자동 반영)</p>
   </div>
   <!-- Phase 4 (2026-04-26): 무료 한도 사전 표시 + 검토 안내 prominent -->
   <div style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:8px;padding:9px 12px;margin-bottom:10px;font-size:11px;line-height:1.6;color:var(--accent-700)">
-    💡 <b>무료 이용 가능</b> | <b>⚠ 생성 후 반드시 변호사·공인중개사 검토 필수</b><br>
+    💡 <b>무료</b> · 검증된 표준 문구 기반 | 🤖 AI 맞춤 초안은 프로 플랜(준비 중) | <b>⚠ 생성 후 반드시 변호사·공인중개사 검토 필수</b><br>
     <span style="font-size:10px">검토 의뢰: <a href="https://www.koreanbar.or.kr" target="_blank" rel="noopener" style="color:var(--accent-700);text-decoration:underline">대한변호사협회 (koreanbar.or.kr)</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:var(--accent-700);text-decoration:underline">한국공인중개사협회 (kar.or.kr)</a></span>
   </div>
   <div class="cv-form">
@@ -3323,6 +3326,7 @@ function renderDrawerUtil(){
     : `<button class="du-it" onclick="toggleDrawer();openLogin()">🔐 로그인<span style="font-weight:400;color:var(--t3);font-size:10.5px">관심단지 기기 간 동기화</span></button>`;
   el.innerHTML = acct
     + `<button class="du-it" onclick="toggleTheme()">🌙 다크/라이트 모드 전환</button>
+       <button class="du-it" onclick="toggleDrawer();sv('guide')">📖 사용법 · 3분 가이드</button>
        <button class="du-it" onclick="toggleDrawer();openSettings()">ⓘ 서비스 정보 · 사용량</button>
        <div class="du-legal"><a href="/terms.html" target="_blank">이용약관</a><a href="/privacy.html" target="_blank">개인정보처리방침</a><a href="/refund.html" target="_blank">환불정책</a></div>`;
 }
@@ -7136,31 +7140,11 @@ function _fillDetailSchoolBoxes(r){
       sbox.style.display='none';
     }
 
-    // Sprint OO (2026-05-19): 학군 권역 라벨 (강연 자료 정적 매핑) — 매수 추천 X / 정보 정리
+    // CLUSTER-RETIRE-2026-08-19 (Sprint NNNNNNN-3): 학군 권역 정적 라벨 렌더 제거 — 출처가
+    //   '강연 자료'라 절대 룰(정부 공식 출처만)과 충돌하던 유일한 표시였다. 백엔드도 같은 커밋에서
+    //   schoolCluster:null 고정. NEIS 실데이터(위 schoolsBox)만 남긴다. #clusterBox 마크업은 유지, 항상 숨김.
     const cbox = document.getElementById('clusterBox');
-    if (cbox && r.schoolCluster && (r.schoolCluster.hubs?.length || r.schoolCluster.regions?.length)) {
-      const sc = r.schoolCluster;
-      const hubChips = (sc.hubs||[]).map(h =>
-        `<span style="display:inline-block;background:#FEF3C7;color:#7A4F0E;border:1px solid #FCD34D;border-radius:12px;padding:2px 8px;font-size:10.5px;font-weight:600;margin:2px 3px 2px 0">${_escHtml(h.label)}</span>`
-      ).join('');
-      const regionChips = (sc.regions||[]).map(rg => {
-        const colorMap = { '동북권': '#FEE2E2', '동남권': '#DBEAFE', '서북권': '#E9D5FF', '서남권': '#FED7AA' };
-        const textMap = { '동북권': '#991B1B', '동남권': '#1E40AF', '서북권': '#6B21A8', '서남권': '#9A3412' };
-        const bg = colorMap[rg.region] || '#F3F4F6';
-        const tc = textMap[rg.region] || '#374151';
-        return `<span style="display:inline-block;background:${bg};color:${tc};border-radius:12px;padding:2px 8px;font-size:10.5px;font-weight:600;margin:2px 3px 2px 0">${_escHtml(rg.label)}</span>`;
-      }).join('');
-      const notes = [...(sc.hubs||[]).map(h=>h.note), ...(sc.regions||[]).map(rg=>`${rg.name}: ${rg.note}`)].filter(Boolean).join(' · ');
-      cbox.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6;margin-top:8px">
-        <div style="font-weight:700;color:var(--t1);margin-bottom:5px">🎓 학군 권역 (2026 부동산 강연 자료 기반)</div>
-        <div>${hubChips}${regionChips}</div>
-        ${notes ? `<div style="font-size:10px;color:var(--t3);margin-top:5px">${_escHtml(notes)}</div>` : ''}
-        <div style="font-size:9.5px;color:var(--t3);margin-top:4px">※ 강연 자료의 학군지 분류 (정보 정리). 매수·매도 추천 X · 가격 예측 X.</div>
-      </div>`;
-      cbox.style.display='block';
-    } else if (cbox) {
-      cbox.style.display='none';
-    }
+    if (cbox) cbox.style.display='none';
 
     // Sprint OO (2026-05-19): 인근 학원가 정보 (반경 500m, 카카오맵)
     const acadBox = document.getElementById('academyBox');
@@ -8463,13 +8447,11 @@ function renderSavedDeals(){
 let _clauseRiskCache = null;
 let _clauseRiskCacheKey = null;
 
-let _clauseRiskInflight=null, _clauseRiskInflightKey=null;
 async function loadClauseAndRisk(p){
   if(!p)return null; // 방어(2026-06-13): null p 호출 시 'reading aptName of null' 크래시 차단 (stb 가드 외 안전망)
   const key=`${p.aptName}:${p.avgPrice||p.price}`;
   if(_clauseRiskCache&&_clauseRiskCacheKey===key){renderClause(_clauseRiskCache);renderRisk(_clauseRiskCache);return _clauseRiskCache;}
   // DEDUP-2026-06-13: 같은 단지 중복 호출(t2+t3 클릭 등) 은 1 fetch 로 합침 — AI 쿼터·비용 절반.
-  if(_clauseRiskInflight&&_clauseRiskInflightKey===key)return _clauseRiskInflight;
   // 즉시 placeholder 렌더 (빈 탭/로딩 공백 방지). AI 성공 시 교체, 실패(한도/장애) 시 그대로 유지 — 토스트 없음(백그라운드 로드라 부적절).
   // CLAUSE-RULE-2026-07-11 (Sprint KKKK): 고정 예시 3종 → 단지 조건(소재지 규제판정·연식·보유상태) 반영
   //   규칙 생성(buildRuleClause 재사용) — AI 없이도 단지별로 다른 특약 (문구는 표준 템플릿, 환각 0).
@@ -8480,20 +8462,10 @@ async function loadClauseAndRisk(p){
     : null);
   // RISK-RULE (Sprint LLLL): 리스크도 단지 조건 반영 규칙 생성 — AI 성공 시 아래에서 교체
   renderRisk(typeof buildRuleRisk === 'function' ? buildRuleRisk(p) : null);
-  _clauseRiskInflightKey=key;
-  _clauseRiskInflight=(async()=>{
-    try{
-      const r=await fetch(`${CFG.api}/clause`,{method:'POST',headers:await _authHdr({'Content-Type':'application/json'}),body:JSON.stringify({aptName:p.aptName,area:p.area,price:p.avgPrice||p.price,ltv:p.ltv,houseStatus:gct('ch-h'),isFirstBuyer:gct('ch-f')==='예',buildYear:p.buildYear,score:p.score}),signal:AbortSignal.timeout(35000)});
-      if(!r.ok)return null; // 429(무료 한도 소진)·5xx 등 → 예시 유지(이미 렌더됨), 조용히 폴백.
-      const d=await r.json();
-      _clauseRiskCache=d;_clauseRiskCacheKey=key;
-      // stale 방지: 로드 중 다른 단지로 안 바뀐 경우만 렌더.
-      if(currentDetail&&`${currentDetail.aptName}:${currentDetail.avgPrice||currentDetail.price}`===key){renderClause(d);renderRisk(d);}
-      return d;
-    }catch{return null;} // 네트워크/타임아웃 → 예시 유지·조용히.
-    finally{_clauseRiskInflight=null;_clauseRiskInflightKey=null;}
-  })();
-  return _clauseRiskInflight;
+  // CLAUSE-TEMPLATE-DEFAULT-2026-08-19 (Sprint NNNNNNN-3): AI 업그레이드 fetch 제거 — 위에서 이미
+  //   렌더된 규칙 생성분(buildRuleClause/buildRuleRisk)이 최종 표시다. AI 는 프로 개통 시 재배선.
+  _clauseRiskCacheKey=key;
+  return null;
 }
 
 // 기존 호출자 (loadClause/loadRisk) — 통합 함수에 위임 (backward compat)
@@ -9398,7 +9370,8 @@ function sv(v,btn){
   if(bmPop) bmPop.classList.remove('on');
   // 헤더 탭 활성화 — 인덱스 기반: htabOrder 는 .htab DOM 순서와 1:1 (Sprint OOOOO-3 재배열 반영.
   //   마크업 순서 바꾸면 여기도 함께! 규제 요약(비뷰)은 마지막이라 인덱스 밖 → 항상 off)
-  const htabOrder=['guide','map','list','report','news','clause','subs','calc'];
+  // GUIDE-TAB-RETIRE-2026-08-19: 'guide' 제거 — DOM .htab 순서와 1:1 유지(마크업도 같은 커밋에서 제거)
+  const htabOrder=['map','list','report','news','clause','subs','calc'];
   document.querySelectorAll('.htab').forEach((b,i)=>b.classList.toggle('on',htabOrder[i]===v));
   // "도구 ▾" 드롭다운 버튼 — 도구 뷰(특약·청약·대출계산) 활성 시 하이라이트 + 탭 전환 시 메뉴 닫기 (OOOOO-3: 뉴스·사용법 승격, calc 편입)
   try{
@@ -9613,7 +9586,6 @@ async function genClause(){
   const apt=document.getElementById('cl_apt').value.trim();
   if(!apt){toast('단지명을 입력하세요');return;}
   const btn=document.getElementById('clBtn'),sp=document.getElementById('clSp'),tx=document.getElementById('clTx');
-  btn.classList.add('ld');sp.style.display='block';tx.textContent='AI 생성 중...';
   const body={
     aptName:apt,
     area:document.getElementById('cl_area').value.trim(),
@@ -9624,22 +9596,11 @@ async function genClause(){
     isFirstBuyer:gct('cl-f')==='예',
     issues:document.getElementById('cl_issues').value.trim(),
   };
-  try{
-    const r=await fetch(`${CFG.api}/clause`,{method:'POST',headers:await _authHdr({'Content-Type':'application/json'}),body:JSON.stringify(body),signal:AbortSignal.timeout(35000)});
-    if(r.ok){
-      renderClauseResult(await r.json(),apt);
-    }else{
-      // STAB (2026-05): backend 의 status/code/message 를 읽어 한도·장애 안내 (기본 예시는 fallback 으로 유지)
-      const j=await r.json().catch(()=>({}));
-      if(r.status===429) toast(j.message||j.error||'⚠ AI 사용 한도에 도달했어요. 로그인하면 한도가 늘어나요. 잠시 후 다시 시도하세요.');
-      else if(r.status===503) toast('⚠ AI 초안이 일시 중단 — 입력 조건을 반영한 표준 특약을 표시했어요'); // HHHH: 크레딧 소진 시 "재시도" 유도 대신 아래 템플릿이 떴음을 명확히
-      else toast('AI 연결 실패 — 표준 특약 표시');
-      renderClauseResult(buildRuleClause(body),apt); // JJJJ: 고정 3종 → 입력 조건 반영 규칙 생성
-    }
-  }catch(e){
-    toast(e&&e.name==='AbortError' ? '⏱ AI 응답이 지연됐어요 — 입력 조건 반영 표준 특약을 표시했어요' : 'AI 연결 실패 — 표준 특약 표시');
-    renderClauseResult(buildRuleClause(body),apt); // JJJJ
-  }
+  // CLAUSE-TEMPLATE-DEFAULT-2026-08-19 (Sprint NNNNNNN-3, 사업기획 v2): 무료 경로에서 AI 호출 제거.
+  //   기본은 검증된 규칙 엔진(buildRuleClause — 규제 판정·연식·특이사항 반영, 문구는 기존 검증분만).
+  //   AI 맞춤 초안은 프로 개통 시 재배선(backend /api/clause 는 pro/admin 게이트로 막아둠).
+  //   규칙 생성은 즉시라 스피너·로딩 상태 불필요.
+  renderClauseResult(buildRuleClause(body),apt);
   btn.classList.remove('ld');sp.style.display='none';tx.textContent='✍ 특약 초안 생성';
 }
 

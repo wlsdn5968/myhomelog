@@ -127,6 +127,18 @@ router.post('/', async (req, res) => {
   const ck = `geo:${aptName}|${sgg}|${umd}|${area||''}`.trim();
   const hit = cache.get(ck);
   if (hit) return res.json({ ...hit, fromCache: true });
+  // CACHE-FIRST-2026-08-19 (Sprint NNNNNNN-3, 라이브 실측 확정 결함): 반포자이 요청이 캐시의
+  //   정답(반포자이아파트 127.0132)을 두고 Kakao 이름검색으로 '반포자이플라자'(127.0099, ~290m
+  //   오프셋 상가)를 반환하고 있었다 — 이 라우트가 apt_geocache 를 전혀 조회하지 않았기 때문.
+  //   검증된 DB 캐시를 먼저 본다(Kakao 비용 0 → GEOCAP 미소모). 미스일 때만 기존 경로 그대로.
+  try {
+    const fromDb = await require('../services/geocodeCacheService').resolveCoordFromCacheOnly({ aptName, sigungu: sgg, umdNm: umd });
+    if (fromDb && fromDb.lat != null) {
+      const out = { lat: fromDb.lat, lng: fromDb.lng, address: fromDb.address || null, placeName: fromDb.place_name || fromDb.placeName || null, fromGeocache: true };
+      cache.set(ck, out, 86400);
+      return res.json(out);
+    }
+  } catch (_) { /* 캐시 조회 실패는 기존 Kakao 경로로 계속 — 응답을 막지 않는다 */ }
   const key = process.env.KAKAO_REST_API_KEY;
   if (!key || key === 'your_kakao_rest_key') return res.json({ lat: null, lng: null, error: 'KAKAO_REST_API_KEY 미설정' });
   // GEOCAP-2026-08-09 (Plan 002): 캐시 미스로 Kakao 실호출 직전에만 전역 카운터 — 히트는 무과금
@@ -160,6 +172,15 @@ router.post('/batch', async (req, res) => {
     const ck = `geo:${item.aptName}|${sgg}|${umd}|${item.area||''}`.trim();
     const hit = cache.get(ck);
     if (hit) return { id, ...hit };
+    // CACHE-FIRST-2026-08-19: 단건 라우트와 동일 — 검증된 DB 캐시 선조회(비용 0). 주석은 위 참조.
+    try {
+      const fromDb = await require('../services/geocodeCacheService').resolveCoordFromCacheOnly({ aptName: item.aptName, sigungu: sgg, umdNm: umd });
+      if (fromDb && fromDb.lat != null) {
+        const out = { lat: fromDb.lat, lng: fromDb.lng, address: fromDb.address || null, placeName: fromDb.place_name || fromDb.placeName || null, fromGeocache: true };
+        cache.set(ck, out, 86400);
+        return { id, ...out };
+      }
+    } catch (_) { /* 미스/실패 → 기존 경로 */ }
     if (!key || key === 'your_kakao_rest_key') return { id, lat: null, lng: null };
     // GEOCAP-2026-08-09 (Plan 002): 아이템별 — Kakao 실호출 직전에만 카운트(캐시 히트 무과금)
     if (_geocodeCapExceeded(await _bumpGeoCap(), GEOCODE_GLOBAL_DAILY_CAP)) {

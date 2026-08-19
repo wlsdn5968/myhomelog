@@ -520,6 +520,18 @@ async function resolveCoordBatch(apts, concurrency = 4, diags) {
 }
 
 // buildKey·saveToDb 는 백필의 지번 주소 폴백(Sprint CCCCCCC)이 키 규약·저장 경로를 재사용하기 위해 노출.
-module.exports = { resolveCoord, resolveCoordBatch, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb, NON_APT_PATTERNS, NON_APT_CATEGORY, AMBIGUOUS_SGG,
+// CACHE-ONLY-RESOLVE-2026-08-19 (Sprint NNNNNNN-3): 공개 /api/geocode 라우트용 — **검증된 DB 캐시만**
+//   조회하고 Kakao 는 절대 부르지 않는다. 라이브 실측: 반포자이가 캐시엔 정답(반포자이아파트)인데
+//   온디맨드 라우트가 캐시를 안 보고 Kakao 이름검색을 먼저 해 '반포자이플라자'(상가, ~290m 오프셋)를
+//   반환하고 있었다. 캐시(전수 검증 이력 있음)가 항상 이름검색보다 정확하므로 선조회가 맞다.
+async function resolveCoordFromCacheOnly(apt) {
+  if (!apt || !apt.aptName) return null;
+  const fromDb = await getFromDb(buildKey(apt));
+  if (fromDb) return fromDb;
+  const fromCombo = await getFromDbByNameCombo(apt);
+  return fromCombo || null;
+}
+
+module.exports = { resolveCoord, resolveCoordBatch, resolveCoordFromCacheOnly, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb, NON_APT_PATTERNS, NON_APT_CATEGORY, AMBIGUOUS_SGG,
   // JIBUN-FIRST-2026-08-10: 백필 잡도 같은 헬퍼를 쓰도록 export(복붙 드리프트 방지)
   molitJibunAddress, sggWithSpace };

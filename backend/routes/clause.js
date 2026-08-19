@@ -32,6 +32,25 @@ router.post('/', async (req, res) => {
   let { aptName, area, price, ltv, houseStatus, isFirstBuyer, buildYear, issues, score } = req.body;
   if (!aptName) return res.status(400).json({ error: 'aptName 필수' });
 
+  // PRO-GATE-2026-08-19 (Sprint NNNNNNN-3, 사업기획 v2): 무료 경로의 AI 특약 제거.
+  //   프론트는 이번 스프린트부터 규칙 엔진(buildRuleClause)을 기본으로 렌더하고 이 라우트를 부르지
+  //   않는다 — 여기 게이트는 **API 직접 호출로 남는 마지막 LLM 비용 경로**를 막는 방어선이다.
+  //   pro 플랜(결제 개통 시) 또는 admin(운영자 검증용)만 통과. 익명·free 는 403.
+  try {
+    const { getActivePlan, isAdminEmail } = require('../services/planService');
+    const _admin = isAdminEmail(req.user?.email);
+    const _plan = _admin ? 'admin' : (req.user?.id ? await getActivePlan(req.user.id) : 'free');
+    if (!_admin && _plan !== 'pro') {
+      return res.status(403).json({
+        code: 'pro_only',
+        error: 'AI 맞춤 특약은 프로 플랜에서 제공 예정이에요. 지금은 입력 조건을 반영한 표준 특약 템플릿을 이용해주세요.',
+      });
+    }
+  } catch (_e) {
+    // 플랜 조회 실패 시에도 열지 않는다(fail-closed) — 비용 경로이기 때문. admin 판별은 이메일 로컬 연산이라 여기 안 옴.
+    return res.status(403).json({ code: 'pro_only', error: 'AI 맞춤 특약은 프로 플랜에서 제공 예정이에요.' });
+  }
+
   // 모든 사용자 입력 sanitize — 인젝션 방어
   aptName     = _safeStr(aptName, 80);
   area        = _safeStr(area, 80);
