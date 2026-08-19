@@ -4919,7 +4919,7 @@ async function openDataStatus(){
   const er=h.ecosRates;
   if(er&&er.baseRate!=null) row('한국은행 ECOS 금리',`기준금리 ${er.baseRate}%${er.mortgageRate!=null?` · 주담대 ${er.mortgageRate}%`:''}`,er.mortgageRateMonth?('공표월 '+String(er.mortgageRateMonth).replace(/^(\d{4})(\d{2})$/,'$1.$2')):'—','정상',false);
   const rg=h.regulations||{};
-  const regRow=(label,r0)=>{ if(r0&&r0.effectiveDate) row(label,`시행 ${_escHtml(String(r0.effectiveDate))}${r0.source?` · ${_escHtml(String(r0.source))}`:''}`,r0.daysSince!=null?`${r0.daysSince}일 경과`:'—',r0.stale?'⚠ 개정 확인 필요':'정상',!!r0.stale); };
+  const regRow=(label,r0)=>{ if(r0&&r0.effectiveDate) row(label,`시행 ${_escHtml(String(r0.effectiveDate))}${(r0.source&&!/^[a-z]{1,8}$/.test(String(r0.source)))?` · ${_escHtml(String(r0.source))}`:''}`,r0.daysSince!=null?`${r0.daysSince}일 경과`:'—',r0.stale?'⚠ 개정 확인 필요':'정상',!!r0.stale); };
   regRow('규제지역·대출 규정',rg.housing_loan);
   regRow('취득세 규정',rg.acquisition_tax);
   if(h.crons&&typeof h.crons==='object'){
