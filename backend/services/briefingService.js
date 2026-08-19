@@ -31,7 +31,13 @@ function kstDayString(d) {
 async function buildBriefingPayload() {
   // 3줄 시황: news 라우트의 공식통계 라인 생성기 재사용(라우터 속성 export — 사본 금지)
   let lines = [];
-  try { lines = await require('../routes/news')._dataMarketLines(); } catch (_) { lines = []; }
+  // REG-STRUCT-2026-08-19 (Sprint NNNNNNN-15): 구조화 items 를 원본으로, 문자열은 파생(사본 금지)
+  let lines2 = [];
+  try {
+    const _news = require('../routes/news');
+    lines2 = await _news._dataMarketItems();
+    lines = _news._deriveMarketLines(lines2);
+  } catch (_) { lines = []; lines2 = []; }
   if (!Array.isArray(lines)) lines = [];
 
   // 금리: health 와 동일 소스(공유 node-cache) — 콜드 미스면 ecosService 직접(실패 시 null 유지)
@@ -67,6 +73,7 @@ async function buildBriefingPayload() {
     day: kstDayString(),
     generatedAt: new Date().toISOString(),
     lines,
+    lines2,
     ecos: ecos ? {
       baseRate: ecos.baseRate != null ? ecos.baseRate : null,
       mortgageRate: ecos.mortgageRate != null ? ecos.mortgageRate : null,

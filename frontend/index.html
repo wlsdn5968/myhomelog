@@ -4801,7 +4801,11 @@ async function loadNewsSummary(){
     if(!d.summary || !d.summary.length) return;
     const lines = Array.isArray(d.summary) ? d.summary : [d.summary];
     // XSS 방어: 외부 API(ECOS·KOSIS) 유래 문자열이 섞이므로 출처와 무관하게 반드시 escape
-    document.getElementById('newsSummaryLines').innerHTML = lines.map((l,i)=>`<div class="brf-row"><div style="font-size:12px;font-weight:800;color:var(--brf-ac);font-variant-numeric:tabular-nums;padding-top:2px">${String(i+1).padStart(2,'0')}</div><div style="min-width:0;font-size:13px;line-height:1.55;font-weight:600;color:var(--brf-tx)">${_escHtml(l)}</div></div>`).join('');
+    // REG-STRUCT-2026-08-19 (Sprint NNNNNNN-15): 구조화 응답(items)이면 시안처럼 출처·기준일 캡션 분리(전부 escape)
+    const its = Array.isArray(d.items) && d.items.length ? d.items : null;
+    document.getElementById('newsSummaryLines').innerHTML = its
+      ? its.map((it,i)=>`<div class="brf-row"><div style="font-size:12px;font-weight:800;color:var(--brf-ac);font-variant-numeric:tabular-nums;padding-top:2px">${String(i+1).padStart(2,'0')}</div><div style="min-width:0"><div style="font-size:13px;line-height:1.55;font-weight:600;color:var(--brf-tx)">${_escHtml(it.text||'')}</div><div style="margin-top:5px;font-size:10px;color:var(--brf-tx3)">출처 ${_escHtml(it.src||'')}${it.date?` · 기준 ${_escHtml(String(it.date))}`:''}</div></div></div>`).join('')
+      : lines.map((l,i)=>`<div class="brf-row"><div style="font-size:12px;font-weight:800;color:var(--brf-ac);font-variant-numeric:tabular-nums;padding-top:2px">${String(i+1).padStart(2,'0')}</div><div style="min-width:0;font-size:13px;line-height:1.55;font-weight:600;color:var(--brf-tx)">${_escHtml(l)}</div></div>`).join('');
     // NEWS-ZERO-COST-2026-08-16 (Sprint PPPPPPP): 시황은 이제 공식 통계 전용이다(AI 생성 아님).
     //   mode 가 없으면 통계 3종이 모두 실패한 안내 문구이므로 출처 줄 자체를 감춘다 —
     //   종전엔 이 자리에 'AI가 헤드라인을 정리' 가 들어갔는데, AI 경로가 사라진 지금은 거짓 문구가 된다.

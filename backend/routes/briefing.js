@@ -101,8 +101,13 @@ router.get('/:date', async (req, res) => {
   const _rl = (snap.regLog || []).find(x => x.key === 'housing_loan_2025' && !x.supersededAt);
   if (_rl && _rl.effectiveFrom) tk.push(`대출·규제 기준 <b>${esc(String(_rl.effectiveFrom).replace(/-/g, '.'))} 시행</b> <span class="src">금융위</span>`);
 
-  const lines = (snap.lines || []).map((l, i) =>
-    `<div class="ln"><b class="no">${String(i + 1).padStart(2, '0')}</b><span>${esc(l)}</span></div>`).join('');
+  // REG-STRUCT-2026-08-19 (Sprint NNNNNNN-15): 구조화 스냅샷(lines2)이면 출처·기준일 캡션 분리 — 구 스냅샷은 기존 렌더.
+  const _l2 = Array.isArray(snap.lines2) && snap.lines2.length ? snap.lines2 : null;
+  const lines = _l2
+    ? _l2.map((it, i) =>
+      `<div class="ln"><b class="no">${String(i + 1).padStart(2, '0')}</b><span>${esc(it.text || '')}<span style="display:block;margin-top:4px;font-size:10px;color:var(--sub)">출처 ${esc(it.src || '')}${it.date ? ` · 기준 ${esc(String(it.date))}` : ''}</span></span></div>`).join('')
+    : (snap.lines || []).map((l, i) =>
+      `<div class="ln"><b class="no">${String(i + 1).padStart(2, '0')}</b><span>${esc(l)}</span></div>`).join('');
   const pops = (snap.popular || []).filter(p => p && p.aptName).map((p, i) =>
     `<div class="pop"><span><b style="color:var(--amb)">${i + 1}</b> ${esc(p.aptName)}${p.sigungu ? ` <span style="color:var(--sub);font-size:10.5px">${esc(p.sigungu)}</span>` : ''}</span><span style="color:var(--sub)">${p.dealCount60d != null ? p.dealCount60d + '건' : ''}</span></div>`).join('');
 
