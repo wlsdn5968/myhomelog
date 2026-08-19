@@ -274,6 +274,8 @@ app.use('/api/admin', dataLimiter, require('./routes/admin'));
 app.use('/share', shareRouter);
 // BRIEFING-ARCHIVE-2026-08-19 (Sprint NNNNNNN-6): 날짜별 서버렌더 브리핑(SEO·공유 실체) — /share 와 같은 계열.
 app.use('/briefing', require('./routes/briefing'));
+// SITEMAP-DYNAMIC-2026-08-19 (Sprint NNNNNNN-7B): /sitemap.xml 동적 생성 — briefing 아카이브 반영(정적 파일 대체).
+app.use('/sitemap.xml', require('./routes/sitemap'));
 
 // STAB-3 (2026-05-03): /api/admin/kapt-diag endpoint 제거
 //   사유: KAPT API 키 진단용 임시 endpoint. 활용신청 확인 후 역할 종료.
