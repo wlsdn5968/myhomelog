@@ -10270,7 +10270,7 @@ function buildRuleRisk(p){
   const isReg = (typeof isRegFront === 'function' && p.area) ? isRegFront(p.area, p.lawdCd) : null; // REG-DUAL-PATH-FIX-2026-08-16
   risks.push({level:'중간',title:'시세 하락 리스크',probability:'',scenario:'매수 후 금리 인상/규제 강화 시 단기 조정 가능성.',countermeasure:'5년 이상 보유, 전세 전환 플랜B 수립'});
   if (isReg === true) {
-    risks.push({level:'중간',title:'규제지역 의무·대출 제약',probability:'',scenario:`${p.area}는 규제지역 — LTV 40%·잔금 후 6개월 전입 의무 등 제약이 있어요.`,countermeasure:'대출계산 탭에서 규제 기준 한도 확인 + 전입 계획 수립'});
+    risks.push({level:'중간',title:'규제지역 의무·대출 제약',probability:'',scenario:`${p.area} — 규제지역이라 LTV 40%·잔금 후 6개월 전입 의무 등 제약이 있어요.`,countermeasure:'대출계산 탭에서 규제 기준 한도 확인 + 전입 계획 수립'});
   } else {
     risks.push({level:'중간',title:'대출 규제 추가 강화',probability:'',scenario:'갈아타기 시점 LTV 추가 규제 가능성.',countermeasure:'금융기관에서 DSR 한도 사전 확인 (기관 종류에 따라 한도가 다름)'});
   }
