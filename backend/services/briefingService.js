@@ -41,7 +41,10 @@ async function buildBriefingPayload() {
   }
 
   // 실거래 누적·동기화: health 가 캐시한 메타 재사용. 콜드 미스면 null → 렌더에서 생략(미확인 원칙)
-  const dc = cache.get('meta:dataCounts:v2') || null;
+  // COUNTS-FALLBACK-2026-08-19 (Sprint NNNNNNN-14): 콜드 인스턴스에서 로컬 캐시 미스 시
+  //   Redis 공유 캐시(getDataCounts 가 기록)로 폴백 — 오늘 아카이브에서 실거래 누적이 빠진 실사례.
+  let dc = cache.get('meta:dataCounts:v2') || null;
+  if (!dc) { try { dc = await require('./redisCache').rget('meta:dataCounts:v2'); } catch (_) { dc = null; } }
 
   // 인기 TOP5: 일별 사전집계 스냅샷 재사용(없으면 빈 배열 — 실시간 재집계로 cron 경로를 무겁게 하지 않는다)
   let popular = [];
