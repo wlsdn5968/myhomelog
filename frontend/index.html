@@ -2123,24 +2123,69 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 
 <!-- 부동산 뉴스 뷰 -->
 <div class="biz-view" id="view-news" style="display:none">
+<style id="brfStyles">
+/* BRF-DESIGN-2026-08-19 (Sprint NNNNNNN-8): claude design 시안 "브리핑 화면" 코드화 — 브리핑 뷰 스코프 토큰.
+   시안 원본 팔레트 그대로: 앱 라이트 = 시안 light, 앱 다크(html[data-theme=dark]) = 시안 dark.
+   전역 토큰(--t1/--acc 등) 오염 금지 — 이 뷰 밖 화면은 무변경. */
+#view-news{
+  --brf-panel:#FFFFFF; --brf-raise:#F7F9FC; --brf-line:#DEE5EF;
+  --brf-tx:#0B1524; --brf-tx2:#5A6A82; --brf-tx3:#8A98AC;
+  --brf-ac:#C98A00;
+  --brf-shadow:0 1px 2px rgba(11,21,36,.06),0 10px 28px rgba(11,21,36,.07);
+}
+html[data-theme="dark"] #view-news{
+  --brf-panel:#101B2B; --brf-raise:#162336; --brf-line:#22334A;
+  --brf-tx:#E8EFFA; --brf-tx2:#93A4BD; --brf-tx3:#63758F;
+  --brf-ac:#FFC93C;
+  --brf-shadow:0 1px 0 rgba(255,255,255,.03),0 12px 32px rgba(0,0,0,.35);
+}
+@keyframes brfTape{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.brf-ticker{overflow:hidden;border-top:1px solid var(--brf-line);border-bottom:1px solid var(--brf-line);background:var(--brf-panel);margin-bottom:14px}
+.brf-tape{display:flex;width:max-content;animation:brfTape 46s linear infinite}
+.brf-tk{display:flex;align-items:baseline;gap:8px;padding:9px 22px;border-right:1px solid var(--brf-line);white-space:nowrap}
+.brf-card{background:var(--brf-panel);border:1px solid var(--brf-line);border-radius:14px;box-shadow:var(--brf-shadow);padding:16px 18px;min-width:0}
+.brf-h2{margin:0;font-size:15px;font-weight:800;letter-spacing:-.02em;color:var(--brf-tx)}
+.brf-row{display:flex;gap:14px;padding:12px 14px;background:var(--brf-raise);border:1px solid var(--brf-line);border-radius:11px}
+.brf-btn{font-size:12px;font-weight:600;padding:8px 13px;border:1px solid var(--brf-line);border-radius:9px;color:var(--brf-tx2);text-decoration:none;background:var(--brf-panel)}
+.brf-btn:hover{border-color:var(--brf-ac);color:var(--brf-tx);text-decoration:none}
+.brf-top{display:flex;align-items:center;gap:12px;width:100%;padding:10px 4px;background:none;border:none;border-bottom:1px solid var(--brf-line);cursor:pointer;font-family:inherit;text-align:left;color:var(--brf-tx)}
+.brf-top:hover{background:var(--brf-raise)}
+.brf-top:last-of-type{border-bottom:none}
+@media(prefers-reduced-motion:reduce){.brf-tape{animation:none}.brf-ticker{overflow-x:auto}}
+</style>
   <div class="biz-section">
     <!-- BRIEFING-HOME-2026-08-19 (Sprint NNNNNNN-5): 오늘의 브리핑 헤더 — 전부 기존 공식
          데이터 재사용(health.ecosRates·dataCounts / subscription / popular). 값 없는 항목은
          항목자체를 생략(미확인 원칙) — 0이나 추정치로 채우지 않는다. -->
-    <div id="briefTicker" style="display:none;white-space:nowrap;overflow-x:auto;font-size:10.5px;color:var(--t2);padding:5px 2px 8px;border-bottom:1px dashed var(--bd);margin-bottom:10px"></div>
-    <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:6px;margin-bottom:4px">
+    <!-- BRF-DESIGN-2026-08-19 (Sprint NNNNNNN-8): 시안 코드화 — 티커=무한 테이프(라벨/값/출처), 날짜 대형 타이포.
+         id(briefTicker/briefDate/briefWidgets)는 유지 — renderBriefing 배선 호환. -->
+    <div id="briefTicker" class="brf-ticker" style="display:none"><div class="brf-tape" id="briefTape"></div></div>
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;padding-bottom:14px;border-bottom:1px solid var(--brf-line);margin-bottom:4px">
       <div>
-        <div style="font-size:10px;color:var(--amb);font-weight:800;letter-spacing:1.5px">오늘의 브리핑</div>
-        <h3 id="briefDate" style="margin:2px 0 0">—</h3>
-        <div style="font-size:10.5px;color:var(--t3)">추천을 팔지 않습니다. 데이터를 팝니다. <a href="javascript:void(0)" onclick="openYesterdayBrief()" style="color:var(--acc);text-decoration:underline">어제 브리핑 →</a></div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.18em;color:var(--brf-ac)">오늘의 브리핑</div>
+        <h3 id="briefDate" style="margin:6px 0 4px;font-size:28px;font-weight:800;letter-spacing:-.03em;color:var(--brf-tx);font-variant-numeric:tabular-nums">—</h3>
+        <div style="font-size:12px;color:var(--brf-tx3)">추천을 팔지 않습니다. 데이터를 팝니다.</div>
       </div>
-      <button class="abtn" style="margin:0;width:auto;padding:6px 11px;font-size:10.5px;background:var(--accent-50);color:var(--accent-700);border:1px solid var(--accent-100)" onclick="copyBriefLink()">🔗 오늘 브리핑 링크 복사</button>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <a href="javascript:void(0)" onclick="openYesterdayBrief()" class="brf-btn">← 어제 브리핑</a>
+        <a href="javascript:void(0)" onclick="copyBriefLink()" class="brf-btn">🔗 오늘 링크 복사</a>
+      </div>
     </div>
-    <div id="briefWidgets" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:12px 0 14px"></div>
-    <div id="newsSummary" style="margin-bottom:14px;padding:13px 14px;background:linear-gradient(135deg,#F9F4EC,#F1EADE);border:1px solid #E1D5BE;border-radius:10px;display:none">
-      <div style="font-size:10.5px;color:var(--amb);font-weight:700;margin-bottom:6px;letter-spacing:0.3px">📅 오늘의 부동산 3줄 시황 <span style="color:var(--t3);font-weight:500" id="newsSummaryTime"></span></div>
-      <div id="newsSummaryLines" style="font-size:12px;line-height:1.85;color:var(--t1)"></div>
-      <div id="newsSummarySrc" style="font-size:9.5px;color:var(--t3);margin-top:6px;line-height:1.5">공식 통계 기반 자동 정리 (한국은행 ECOS · 국토부 KOSIS · 국토부 실거래) · 매수·매도 추천이 아닙니다</div>
+    <div id="briefWidgets" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 14px"></div>
+    <div id="newsSummary" class="brf-card" style="margin-bottom:14px;display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+        <b style="font-size:15px;font-weight:800;letter-spacing:-.02em;color:var(--brf-tx)">오늘의 시장 3줄 <span style="color:var(--brf-tx3);font-weight:500;font-size:10.5px" id="newsSummaryTime"></span></b>
+      </div>
+      <div id="newsSummaryLines" style="display:flex;flex-direction:column;gap:10px"></div>
+      <div id="newsSummarySrc" style="font-size:9.5px;color:var(--brf-tx3);margin-top:10px;line-height:1.5">공식 통계 기반 자동 정리 (한국은행 ECOS · 국토부 KOSIS · 국토부 실거래) · 매수·매도 추천이 아닙니다</div>
+      <!-- BRF-DESIGN-2026-08-19: 집킴이 코너 — 시안 플레이스홀더(⌂). 캐릭터 원화는 운영자 제공 대기, 외형 추측 금지. -->
+      <div style="margin-top:12px;display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px dashed var(--brf-line);border-radius:11px">
+        <div style="flex:0 0 38px;height:38px;border-radius:11px;background:var(--brf-ac);display:grid;place-items:center;color:#0B1524;font-size:18px;font-weight:800">⌂</div>
+        <div>
+          <div style="font-size:12px;font-weight:700;color:var(--brf-tx)">집킴이 코너 <span style="color:var(--brf-tx3);font-weight:600">(캐릭터 준비 중)</span></div>
+          <div id="brfMascotMsg" style="margin-top:4px;font-size:12px;color:var(--brf-tx2);line-height:1.5">값이 없는 항목은 추정하지 않고 비워둡니다.</div>
+        </div>
+      </div>
     </div>
     <div style="font-size:12px;font-weight:700;color:var(--t1);margin:2px 0 8px">📰 그 밖의 소식 <span style="font-weight:500;font-size:10px;color:var(--t3)">언론사 원문 링크 · 단순 인덱싱 (저작권은 각 언론사)</span></div>
     <div class="chips" id="news-cat" style="margin-bottom:14px">
@@ -4690,7 +4735,7 @@ async function loadNewsSummary(){
     if(!d.summary || !d.summary.length) return;
     const lines = Array.isArray(d.summary) ? d.summary : [d.summary];
     // XSS 방어: 외부 API(ECOS·KOSIS) 유래 문자열이 섞이므로 출처와 무관하게 반드시 escape
-    document.getElementById('newsSummaryLines').innerHTML = lines.map(l=>`<div>${_escHtml(l)}</div>`).join('');
+    document.getElementById('newsSummaryLines').innerHTML = lines.map((l,i)=>`<div class="brf-row"><div style="font-size:12px;font-weight:800;color:var(--brf-ac);font-variant-numeric:tabular-nums;padding-top:2px">${String(i+1).padStart(2,'0')}</div><div style="min-width:0;font-size:13px;line-height:1.55;font-weight:600;color:var(--brf-tx)">${_escHtml(l)}</div></div>`).join('');
     // NEWS-ZERO-COST-2026-08-16 (Sprint PPPPPPP): 시황은 이제 공식 통계 전용이다(AI 생성 아님).
     //   mode 가 없으면 통계 3종이 모두 실패한 안내 문구이므로 출처 줄 자체를 감춘다 —
     //   종전엔 이 자리에 'AI가 헤드라인을 정리' 가 들어갔는데, AI 경로가 사라진 지금은 거짓 문구가 된다.
@@ -4723,44 +4768,58 @@ async function renderBriefing(){
       fetch(`${CFG.api}/subscription?sido=&days=30`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(`${CFG.api}/search/popular`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
     ]);
-    // 티커 — 전부 출처·기준 표기, 값 있는 항목만
-    const tk=[]; const er=h&&h.ecosRates; const dc=h&&h.dataCounts;
-    const src=(t)=>`<span style="color:var(--t3);font-size:9.5px"> ${t}</span>`;
-    if(er&&er.baseRate!=null) tk.push(`기준금리 <b>${_escHtml(String(er.baseRate))}%</b>${src('한국은행')}`);
-    if(er&&er.mortgageRate!=null) tk.push(`주담대 평균 <b>${_escHtml(String(er.mortgageRate))}%</b>${src('ECOS '+_escHtml(String(er.mortgageRateMonth||'').replace(/^(\d{4})(\d{2})$/,'$1.$2')))}`);
-    if(dc&&dc.tx) tk.push(`실거래 누적 <b>${Number(dc.tx).toLocaleString()}건</b>${src('국토부'+(dc.lastIngestedAt?' · '+String(dc.lastIngestedAt).slice(5,10).replace('-','.')+' 동기화':''))}`);
-    const tEl=document.getElementById('briefTicker');
-    if(tEl&&tk.length){tEl.innerHTML=tk.join('<span style="color:var(--bd2);margin:0 9px">|</span>');tEl.style.display='block';}
-    const w=document.getElementById('briefWidgets'); if(!w) return;
-    // 청약 D-day 3건 (접수 임박순 — 기존 dDayLabel/fmtSubsDate 재사용)
-    let subsHtml='';
+    // BRF-DESIGN-2026-08-19 (Sprint NNNNNNN-8): 시안 코드화 — 티커=무한 테이프(라벨/값/출처 구조).
+    //   전 항목 실데이터, 값 없으면 항목째 생략. 델타(전월 대비)는 원자료에 이전 값이 없어 표시하지 않는다(추정 금지).
+    const er=h&&h.ecosRates; const dc=h&&h.dataCounts;
     const items=(subs&&subs.items)||[];
-    if(items.length){
-      subsHtml=items.slice(0,3).map(it=>`<div style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px dashed var(--bd);font-size:11px">
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--t1);font-weight:600">${_escHtml(it.name||'')}</span>
-        <span style="flex-shrink:0">${dDayLabel(it.receiveStart)}</span>
-      </div>`).join('');
-    } else { subsHtml=`<div style="font-size:10.5px;color:var(--t3);padding:6px 0">30일 내 일정 없음 또는 조회 실패</div>`; }
-    // 인기 단지 TOP5 (클릭 = 기존 goSearchResult 경로)
-    let popHtml='';
     const ps=(pop&&pop.results)||[];
-    if(ps.length){
-      popHtml=ps.slice(0,5).map((p2,i)=>`<div onclick='goSearchResult(${_jsonAttr({aptName:p2.aptName,sigungu:p2.sigungu,umdNm:p2.umdNm,lawdCd:p2.lawdCd,buildYear:p2.buildYear,recentDealDate:p2.recentDealDate})})' style="display:flex;justify-content:space-between;gap:8px;padding:5px 0;border-bottom:1px dashed var(--bd);font-size:11px;cursor:pointer">
-        <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"><b style="color:var(--amb)">${i+1}</b> <span style="color:var(--t1);font-weight:600">${_escHtml(p2.aptName||'')}</span></span>
-        <span style="flex-shrink:0;color:var(--t2)">${p2.dealCount60d?p2.dealCount60d+'건':''}</span>
+    const tk=[];
+    if(er&&er.baseRate!=null) tk.push({l:'기준금리',v:_escHtml(String(er.baseRate))+'%',s:'한국은행'});
+    if(er&&er.mortgageRate!=null) tk.push({l:'주담대 평균',v:_escHtml(String(er.mortgageRate))+'%',s:'ECOS '+_escHtml(String(er.mortgageRateMonth||'').replace(/^(\d{4})(\d{2})$/,'$1.$2'))});
+    if(dc&&dc.tx) tk.push({l:'실거래 누적',v:Number(dc.tx).toLocaleString()+'건',s:'국토부'+(dc.lastIngestedAt?' · '+String(dc.lastIngestedAt).slice(5,10).replace('-','.')+' 동기화':'')});
+    if(ps.length&&ps[0].dealCount60d) tk.push({l:'실거래 최다·60일',v:_escHtml(ps[0].aptName||'')+' '+ps[0].dealCount60d+'건',s:'국토부'});
+    if(items.length&&items[0].name) tk.push({l:'청약 임박',v:_escHtml(items[0].name||''),s:'청약홈'});
+    const tEl=document.getElementById('briefTicker');
+    const tape=document.getElementById('briefTape');
+    if(tEl&&tape&&tk.length){
+      const base=tk.map(t=>`<div class="brf-tk"><span style="font-size:11px;color:var(--brf-tx3);font-weight:600">${t.l}</span><span style="font-size:13px;font-weight:800;font-variant-numeric:tabular-nums;letter-spacing:-.01em;color:var(--brf-tx)">${t.v}</span><span style="font-size:10px;color:var(--brf-tx3)">${t.s}</span></div>`).join('');
+      // translateX(-50%) 무한 루프가 이음새 없이 돌려면 내용이 짝수 반복이어야 한다 — 항목이 적으면 반복 수를 늘린다.
+      const rep=Math.max(2,Math.ceil(6/tk.length)*2);
+      tape.innerHTML=Array(rep).fill(base).join('');
+      tEl.style.display='block';
+    }
+    const w=document.getElementById('briefWidgets'); if(!w) return;
+    // 청약 D-day — 시안 카드(대형 D-n + 접수 기간). dDayLabel 의 긴급도 색상(red/amb)은 정보라 유지.
+    let subsHtml='';
+    if(items.length){
+      subsHtml=items.slice(0,3).map(it=>`<div class="brf-row" style="align-items:center;gap:12px;padding:11px 13px;margin-bottom:8px">
+        <div style="flex:0 0 56px;text-align:center"><div style="font-size:16px;font-weight:800;font-variant-numeric:tabular-nums">${dDayLabel(it.receiveStart)}</div><div style="font-size:9.5px;color:var(--brf-tx3)">접수</div></div>
+        <div style="min-width:0;flex:1"><div style="font-size:12.5px;font-weight:700;color:var(--brf-tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(it.name||'')}</div><div style="margin-top:2px;font-size:10.5px;color:var(--brf-tx2);font-variant-numeric:tabular-nums">접수 ${fmtSubsDate(it.receiveStart)}${it.receiveEnd?'~'+fmtSubsDate(it.receiveEnd):''}</div></div>
       </div>`).join('');
-    } else { popHtml=`<div style="font-size:10.5px;color:var(--t3);padding:6px 0">조회 실패</div>`; }
+    } else { subsHtml=`<div style="font-size:10.5px;color:var(--brf-tx3);padding:6px 0">30일 내 일정 없음 또는 조회 실패</div>`; }
+    // 인기 단지 TOP5 — 시안 카드(rank·단지·구 + 60일 평균가·건수). 평균가는 popular avgDealAmount(만원) 실데이터.
+    let popHtml='';
+    if(ps.length){
+      popHtml=ps.slice(0,5).map((p2,i)=>`<button class="brf-top" onclick='goSearchResult(${_jsonAttr({aptName:p2.aptName,sigungu:p2.sigungu,umdNm:p2.umdNm,lawdCd:p2.lawdCd,buildYear:p2.buildYear,recentDealDate:p2.recentDealDate})})'>
+        <span style="flex:0 0 18px;font-size:12px;font-weight:800;color:var(--brf-tx3);font-variant-numeric:tabular-nums">${i+1}</span>
+        <span style="flex:1;min-width:0"><span style="display:block;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(p2.aptName||'')}</span><span style="display:block;margin-top:2px;font-size:10.5px;color:var(--brf-tx3)">${_escHtml(p2.sigungu||'')}</span></span>
+        <span style="text-align:right;flex-shrink:0">${Number.isFinite(Number(p2.avgDealAmount))&&Number(p2.avgDealAmount)>0?`<span style="display:block;font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums">${(Number(p2.avgDealAmount)/10000).toFixed(2)}억</span>`:''}<span style="display:block;margin-top:2px;font-size:10.5px;font-weight:700;color:var(--brf-tx2);font-variant-numeric:tabular-nums">${p2.dealCount60d?p2.dealCount60d+'건':''}</span></span>
+      </button>`).join('');
+    } else { popHtml=`<div style="font-size:10.5px;color:var(--brf-tx3);padding:6px 0">조회 실패</div>`; }
     w.innerHTML=`
-      <div style="background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px"><b style="font-size:11.5px;color:var(--t1)">📅 청약 D-day</b><a href="javascript:void(0)" onclick="sv('subs')" style="font-size:10px;color:var(--acc);text-decoration:none">전체 ›</a></div>
+      <div class="brf-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px"><b class="brf-h2">청약 D-day</b><a href="javascript:void(0)" onclick="sv('subs')" style="font-size:10.5px;color:var(--brf-tx3);text-decoration:none">전체 ›</a></div>
         ${subsHtml}
-        <div style="font-size:9px;color:var(--t3);margin-top:4px">청약Home · 신청 전 applyhome.co.kr 최종 확인</div>
+        <div style="font-size:9px;color:var(--brf-tx3);margin-top:6px">청약홈 · 신청 전 applyhome.co.kr 최종 확인</div>
       </div>
-      <div style="background:var(--bg2);border:1px solid var(--bd);border-radius:10px;padding:10px 12px">
-        <div style="display:flex;justify-content:space-between;margin-bottom:4px"><b style="font-size:11.5px;color:var(--t1)">🔥 인기 단지 TOP5</b><a href="javascript:void(0)" onclick="sv('map')" style="font-size:10px;color:var(--acc);text-decoration:none">지도 ›</a></div>
+      <div class="brf-card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b class="brf-h2">인기 단지 TOP 5</b><a href="javascript:void(0)" onclick="sv('map')" style="font-size:10.5px;color:var(--brf-tx3);text-decoration:none">지도 ›</a></div>
         ${popHtml}
-        <div style="font-size:9px;color:var(--t3);margin-top:4px">최근 60일 국토부 실거래 많은 순 · 매물 광고 아님</div>
+        <div style="font-size:9px;color:var(--brf-tx3);margin-top:8px">최근 60일 국토부 실거래 많은 순 · 60일 평균가 · 매물 광고 아님</div>
       </div>`;
+    // 집킴이 코너 — 실제 동기화 기준일만 문장에 사용(추정 금지)
+    const mm=document.getElementById('brfMascotMsg');
+    if(mm) mm.textContent=`오늘 브리핑은 한국은행 ECOS·국토부 실거래·청약홈 원자료 기준입니다.${dc&&dc.lastIngestedAt?' 실거래 동기화 '+String(dc.lastIngestedAt).slice(5,10).replace('-','.')+'.':''} 값이 없는 항목은 추정하지 않고 비워둡니다.`;
   }catch(_e){ /* 브리핑 실패는 조용히 — 뉴스 본체는 정상 */ }
 }
 function openYesterdayBrief(){
