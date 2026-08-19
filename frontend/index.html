@@ -7054,10 +7054,33 @@ async function loadFacility(p){
       if (heatType) items.push(_escHtml(heatType)); // 형제 필드(official/시공사)와 동일하게 escape (KAPT 데이터 심층방어)
       const officialName = r.facility.official && r.facility.official !== p.aptName
         ? `<span style="color:var(--t3);font-size:10px"> (정식명: ${_escHtml(r.facility.official)})</span>` : '';
+      // TRUST-BOX-2026-08-19 (Sprint NNNNNNN-4, 사업기획 v2 Phase 0): 데이터 검증 줄 —
+      //   각 값의 출처를 화면이 직접 밝힌다(절대 룰 ②). 값은 backend SSOT(buildFacility 반환)를 쓴다 —
+      //   프론트 자체 계산(_hc)과 출처 라벨이 어긋나면 그게 또 환각이다.
+      //   오류 신고 v1 = mailto 프리필(운영자 1인 구조에서 가장 확실한 루프, DB 변경 0).
+      const _bfHh = Number(r.facility.totalHouseholds) || 0;
+      const _hhSrcLabel = r.facility.householdsSource === 'kapt' ? 'KAPT 공동주택정보'
+        : r.facility.householdsSource === 'buildingRegister' ? '건축물대장(건축HUB)' : null;
+      const _hhConflictTag = r.facility.householdsConflict
+        ? ` <span title="KAPT 관리세대수와 호수가 20% 이상 어긋남 — 관리사무소 확인 권장" style="color:var(--amb);font-weight:700">⚠ 원천 불일치</span>` : '';
+      const _lastDeal = p.recentDealDate ? String(p.recentDealDate).slice(0,10) : null;
+      const _syncDay = (window._dataCounts && window._dataCounts.lastIngestedAt) ? String(window._dataCounts.lastIngestedAt).slice(0,10) : null;
+      const _mailSub = encodeURIComponent('[데이터 오류 신고] ' + (p.aptName||''));
+      const _mailBody = encodeURIComponent('단지: ' + (p.aptName||'') + ' (' + sigungu + ' ' + umdNm + ')\n잘못된 항목: \n올바른 값(아는 경우): \n');
       fbox.innerHTML = `<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:9px 11px;font-size:11px;color:var(--t2);line-height:1.6">
         <div style="font-weight:700;color:var(--t1);margin-bottom:4px">🏢 단지 기본정보 (공공데이터포털 AptInfo)${officialName}</div>
         ${items.join(' · ')}
         ${constructionCompany?`<br><span style="font-size:10px">시공: ${_escHtml(constructionCompany)}</span>`:''}
+      </div>
+      <div style="background:var(--bg2);border:1px dashed var(--bd2);border-radius:8px;padding:8px 11px;font-size:10.5px;color:var(--t2);line-height:1.75;margin-top:6px">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:2px">
+          <span style="font-weight:700;color:var(--t1)">🔍 데이터 검증</span>
+          <a href="mailto:wlsdn5968@gmail.com?subject=${_mailSub}&body=${_mailBody}" style="color:var(--acc);text-decoration:underline;font-size:10px">오류 신고</a>
+        </div>
+        세대수 <b style="color:var(--t1)">${_bfHh>0?_bfHh.toLocaleString()+'세대':'—(미확인)'}</b>${_hhSrcLabel?` · 출처 ${_hhSrcLabel}`:''}${_hhConflictTag}<br>
+        주차 <b style="color:var(--t1)">${(Number(parkingTotal)>0)?Number(parkingTotal).toLocaleString()+'대':'—(미확인)'}</b>${(Number(parkingTotal)>0)?' · 출처 KAPT 상세':''}
+        &nbsp;|&nbsp; 실거래 최신 <b style="color:var(--t1)">${_lastDeal||'—'}</b> · 국토부${_syncDay?` · 동기화 ${_syncDay}`:''}
+        <div style="font-size:9.5px;color:var(--t3);margin-top:3px">※ 값이 없으면 추정하지 않고 '미확인'으로 표시합니다.</div>
       </div>`;
     } else {
       fbox.style.display='none';
