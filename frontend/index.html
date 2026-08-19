@@ -424,6 +424,7 @@ window.MHL.auth = window.MHL.auth || {
   --red:   var(--negative);            /* #A82525 → #DC2626 */
   --redL:  var(--negative-tint);       /* #FAEBEB → rgba(220,38,38,.08) */
   --amb:   var(--warning);             /* #9A5510 → #D97706 */
+  --warn-bd:#E4C080;                  /* DARK-GAP-2026-08-19: 앰버 안내 박스 보더(다크 재정의 아래에 있음) */
   --ambL:  var(--warning-tint);        /* #FAF0E2 → rgba(217,119,6,.10) */
   --bg2:   var(--bg-elev-2);           /* #EEF1F6 → #F5F5F5 */
   --danger:var(--negative);            /* alias */
@@ -449,6 +450,7 @@ html[data-theme="dark"]{
   --a2:#4E83C4; --a2L:rgba(78,131,196,0.18);
   --info-bg:rgba(78,131,196,0.13); --info-bd:rgba(78,131,196,0.34); --info-tx:#9FC2E8;
   --danger-bd:rgba(220,38,38,0.34);
+  --warn-bd:rgba(217,119,6,0.40);
   color-scheme:dark;
 }
 /* Sprint OOOOO-4: 헤더 CTA·NEW 배지 제거(운영자 지시 — 보고서 진입점 중복 해소)로 관련 다크 오버라이드 삭제 */
@@ -826,7 +828,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .tdot{width:5px;height:5px;border-radius:50%;background:var(--t3);animation:td 1.2s infinite}
 .tdot:nth-child(2){animation-delay:.2s}.tdot:nth-child(3){animation-delay:.4s}
 @keyframes td{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
-.qa{padding:7px 10px;border-top:1px solid var(--bd);display:flex;flex-wrap:wrap;gap:5px;flex-shrink:0;background:#FAFCFF}
+.qa{padding:7px 10px;border-top:1px solid var(--bd);display:flex;flex-wrap:wrap;gap:5px;flex-shrink:0;background:var(--bg2)}
 /* Phase 4-3 후 sprint 단계 5 부분 (2026-05-05): MED risk 2 — .qb blue tint → accent-tint variant (chat quick) */
 .qb{padding:5px 11px;border-radius:var(--radius-full);font-size:11.5px;font-weight:600;border:1px solid var(--accent-tint-2);background:var(--accent-tint);color:var(--accent-700);cursor:pointer;font-family:inherit;transition:all .15s}
 .qb:hover{background:var(--accent-tint-2);border-color:var(--accent-500);transform:translateY(-1px)}
@@ -904,7 +906,12 @@ html[data-theme="dark"] .dmbg{--dm-ac:#FFC93C}
 .dtbl td{padding:6px 0;border-bottom:1px solid var(--bd)}.dtbl tr:last-child td{border-bottom:none}
 .dtbl td:first-child{color:var(--t3);width:38%}.dtbl td:last-child{font-weight:500}
 .ibox{border-radius:var(--rs);padding:10px 12px;font-size:12px;line-height:1.7;margin-bottom:9px}
-.ibox.g{background:var(--grnL);border:1px solid #B0D9BE;color:#0F5A2A}.ibox.r{background:var(--redL);border:1px solid #E8C4C4;color:var(--red)}.ibox.b{background:var(--a2L);border:1px solid var(--info-bd);color:var(--info-tx)}.ibox.o{background:var(--accL);border:1px solid #EAB8A0;color:#7A2E0C}.ibox.y{background:var(--ambL);border:1px solid #E4C080;color:var(--amb)}
+.ibox.g{background:var(--grnL);border:1px solid #B0D9BE;color:#0F5A2A}.ibox.r{background:var(--redL);border:1px solid #E8C4C4;color:var(--red)}.ibox.b{background:var(--a2L);border:1px solid var(--info-bd);color:var(--info-tx)}.ibox.o{background:var(--accL);border:1px solid #EAB8A0;color:#7A2E0C}.ibox.y{background:var(--ambL);border:1px solid var(--warn-bd);color:var(--amb)}
+/* DARK-GAP-2026-08-19 (Sprint NNNNNNN-11): .ibox 하드코딩 보더·텍스트 다크 대응(배경 tint 는 이미 적응) */
+html[data-theme="dark"] .ibox.g{border-color:rgba(16,185,129,.35);color:#7FD6A0}
+html[data-theme="dark"] .ibox.r{border-color:rgba(220,38,38,.35);color:#F08A8A}
+html[data-theme="dark"] .ibox.o{border-color:rgba(234,110,40,.35);color:#F0A882}
+html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .gbw{display:flex;align-items:center;gap:16px;margin-bottom:14px;padding:15px;background:var(--bg-base);border-radius:14px;border:1px solid var(--border-subtle);box-shadow:0 1px 3px rgba(16,24,40,.05)}
 .gi{flex:1}.gi-t{font-size:14px;font-weight:700;margin-bottom:5px}.gi-s{font-size:11px;color:var(--t2);line-height:1.6;margin-top:6px}
 .txi{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bd);font-size:11px}.txi:last-child{border-bottom:none}
@@ -1576,6 +1583,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       </div>
     </div>
     <button class="hbtn ntc-bell" id="ntcBell" onclick="openNtc()" title="알림 설정 — 관심단지 새 실거래 알림" aria-label="알림 설정" style="min-width:0;padding:6px 9px">🔔<span class="ntc-dot"></span></button>
+    <button class="hbtn" id="dataStatusBtn" onclick="openDataStatus()" title="데이터 신선도 전체 공개" style="min-width:0;padding:6px 10px;font-size:11px"><span style="display:inline-block;width:7px;height:7px;border-radius:99px;background:var(--grn);margin-right:5px;vertical-align:1px"></span>데이터 상태</button>
     <button class="hbtn" id="themeToggle" onclick="toggleTheme()" title="다크/라이트 모드 전환" aria-label="테마 전환" style="min-width:0;padding:6px 9px">🌙</button>
     <button class="hbtn" id="settingsBtn" onclick="openSettings()" aria-label="서비스 정보">ⓘ<span class="sbtn-tx"> 정보</span></button>
   </div>
@@ -1588,7 +1596,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 </div>
 <!-- P1 (Phase 2 5-1): 데이터 동기화 시각 표시 — 사용자 신뢰 시그널 -->
 <!-- Phase 33 #6 (2026-05-04): seoulsubway 영감 — 데이터량 + 갱신 주기 명시 (신뢰도 ↑) -->
-<div id="syncBanner" style="display:none;background:var(--info-bg);border-bottom:1px solid var(--info-bd);padding:6px 14px;font-size:11px;color:var(--info-tx);text-align:center">
+<div id="syncBanner" onclick="openDataStatus()" title="클릭하면 데이터 상태 전체 보기" style="display:none;cursor:pointer;background:var(--info-bg);border-bottom:1px solid var(--info-bd);padding:6px 14px;font-size:11px;color:var(--info-tx);text-align:center">
   📅 마지막 데이터 동기화: <span id="syncTime">—</span> · 출처: 국토교통부 실거래가 (27만+) · KAPT 단지 (1만+) · 금융위 규제 · 매일 자동 갱신
 </div>
 
@@ -2895,6 +2903,21 @@ html[data-theme="dark"] #view-news{
       <button class="bk-btn" onclick="copyShareCardLink()">🔗 링크 복사</button>
       <button class="bk-btn" onclick="closeShareCard()">✕ 닫기</button>
     </div>
+  </div>
+</div>
+<!-- DATA-STATUS-2026-08-19 (Sprint NNNNNNN-11): 데이터 상태 모달 — 시안 신선도 패널, 전부 /api/health 실측값.
+     값 없는 행은 생략, 판정 기준(48h/30h)은 하단에 명시 — 추정·과장 금지. -->
+<div id="DSM" style="display:none;position:fixed;inset:0;background:rgba(8,14,24,.62);z-index:770;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeDataStatus()">
+  <div style="width:100%;max-width:520px;background:var(--bg-base);border:1px solid var(--bd);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.4);padding:20px 22px;max-height:82vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
+      <div>
+        <h2 style="margin:0;font-size:17px;font-weight:800;letter-spacing:-.02em;color:var(--t1)">데이터 상태</h2>
+        <div style="margin-top:4px;font-size:11px;color:var(--t3)" id="dsmAt">—</div>
+      </div>
+      <button onclick="closeDataStatus()" aria-label="데이터 상태 닫기" style="width:30px;height:30px;border-radius:8px;background:var(--bg2);border:1px solid var(--bd);color:var(--t2);cursor:pointer;font-size:13px">✕</button>
+    </div>
+    <div id="dsmBody" style="margin-top:10px"></div>
+    <div style="margin-top:14px;font-size:10.5px;color:var(--t3);line-height:1.7">정상 기준: 실거래 48시간 · 자동 작업 30시간 이내 실행. 동기화가 지연된 항목의 값은 화면에서 '— (미확인)'으로 표기하며, 추정치로 대체하지 않습니다.</div>
   </div>
 </div>
 <div class="dmbg" id="DM">
@@ -4870,6 +4893,49 @@ async function renderBriefing(){
     if(mm) mm.textContent=(_srcs.length?`오늘 브리핑은 ${_srcs.join('·')} 원자료 기준입니다.`:'오늘 브리핑 원자료 조회가 일시 실패했습니다 — 확인된 값만 표시합니다.')+(dc&&dc.lastIngestedAt?' 실거래 동기화 '+String(dc.lastIngestedAt).slice(5,10).replace('-','.')+'.':'')+' 값이 없는 항목은 추정하지 않고 비워둡니다.';
   }catch(_e){ /* 브리핑 실패는 조용히 — 뉴스 본체는 정상 */ }
 }
+// ============ DATA-STATUS-2026-08-19 (Sprint NNNNNNN-11): 데이터 상태 모달 ============
+// 시안 "전체 신선도 공개" 패널 — 전부 /api/health 실측값. 값 없는 행은 생략(추정 금지),
+// '정상/지연' 판정 기준은 모달 하단에 명시(실거래 48h · 자동작업 30h — daily cron+Hobby ±59분 감안).
+async function openDataStatus(){
+  const ov=document.getElementById('DSM'); if(!ov) return;
+  ov.style.display='flex'; ov.classList.add('open');
+  const body=document.getElementById('dsmBody');
+  body.innerHTML='<div style="padding:18px 0;color:var(--t3);font-size:12px">조회 중…</div>';
+  let h=null;
+  try{ h=await fetch(`${CFG.api}/health`,{signal:AbortSignal.timeout(8000)}).then(r=>r.ok?r.json():null); }catch(_e){}
+  if(!h){ body.innerHTML='<div style="padding:18px 0;color:var(--t3);font-size:12px">상태 조회에 실패했어요. 잠시 후 다시 열어주세요.</div>'; return; }
+  const rows=[];
+  const row=(name,detail,synced,state,warn)=>rows.push(`<div style="display:flex;justify-content:space-between;gap:12px;padding:11px 0;border-bottom:1px solid var(--bd)">
+    <div style="min-width:0"><div style="font-size:12.5px;font-weight:700;color:var(--t1)">${name}</div><div style="margin-top:3px;font-size:10.5px;color:var(--t3)">${detail}</div></div>
+    <div style="text-align:right;white-space:nowrap"><div style="font-size:12px;font-weight:800;color:var(--t1);font-variant-numeric:tabular-nums">${synced}</div><div style="margin-top:3px;font-size:10.5px;font-weight:700;color:${warn?'var(--amb)':'var(--t2)'}">${state}</div></div>
+  </div>`);
+  const dc=h.dataCounts||{};
+  if(dc.tx){
+    const ts=h.dataSyncedAt?new Date(h.dataSyncedAt):null;
+    const hrs=(ts&&!isNaN(ts))?Math.round((Date.now()-ts.getTime())/3600000):null;
+    row('국토부 실거래가',`누적 ${Number(dc.tx).toLocaleString()}건 · 일간 동기화`,(window._syncData&&window._syncData.kst)?window._syncData.kst+' KST':'—',hrs==null?'—':(hrs<=48?`정상 · ${hrs}시간 전`:`지연 · ${hrs}시간 전`),hrs!=null&&hrs>48);
+  }
+  if(dc.apt) row('KAPT 단지정보',`${Number(dc.apt).toLocaleString()}개 단지`,'—','건수만 공개',false);
+  const er=h.ecosRates;
+  if(er&&er.baseRate!=null) row('한국은행 ECOS 금리',`기준금리 ${er.baseRate}%${er.mortgageRate!=null?` · 주담대 ${er.mortgageRate}%`:''}`,er.mortgageRateMonth?('공표월 '+String(er.mortgageRateMonth).replace(/^(\d{4})(\d{2})$/,'$1.$2')):'—','정상',false);
+  const rg=h.regulations||{};
+  const regRow=(label,r0)=>{ if(r0&&r0.effectiveDate) row(label,`시행 ${_escHtml(String(r0.effectiveDate))}${r0.source?` · ${_escHtml(String(r0.source))}`:''}`,r0.daysSince!=null?`${r0.daysSince}일 경과`:'—',r0.stale?'⚠ 개정 확인 필요':'정상',!!r0.stale); };
+  regRow('규제지역·대출 규정',rg.housing_loan);
+  regRow('취득세 규정',rg.acquisition_tax);
+  if(h.crons&&typeof h.crons==='object'){
+    const jobs=Object.values(h.crons).filter(j=>j&&j.at&&!isNaN(new Date(j.at))).sort((a,b)=>String(b.at).localeCompare(String(a.at))).slice(0,6);
+    for(const j of jobs){
+      const hrs=Math.round((Date.now()-new Date(j.at).getTime())/3600000);
+      row(`자동 작업 · ${_escHtml(String(j.name||''))}`,'정기 작업 최근 실행 기록',`${hrs}시간 전`,hrs<=30?'정상':'확인 필요',hrs>30);
+    }
+  }
+  body.innerHTML=rows.length?rows.join(''):'<div style="padding:14px 0;color:var(--t3);font-size:12px">표시할 상태 항목이 없어요.</div>';
+  const now=new Date();
+  const el=document.getElementById('dsmAt');
+  if(el) el.textContent=`전체 신선도 공개 · ${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')} 조회`;
+}
+function closeDataStatus(){const ov=document.getElementById('DSM');if(ov){ov.style.display='none';ov.classList.remove('open');}}
+// ============ /DATA-STATUS ============
 function openYesterdayBrief(){
   try{
     const n=new Date(Date.now()-86400000);
@@ -6917,7 +6983,7 @@ function showDetail(p){
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 4px">🏆 신고가 경신 추이</div>
     <div id="peakTrendBox">${_peakTrendHtml(0)}</div>
     <!-- Sprint PP-2 (2026-05-19): 거래 해제 안내 (한국도시연구소 서울 실거래 분석 — 2025 해제건수 대폭 증가 = 시장교란) -->
-    <div style="background:var(--accent-50);border:1px solid #FFD580;border-radius:8px;padding:10px 12px;margin-top:8px;font-size:10.5px;color:var(--t2);line-height:1.6">
+    <div style="background:var(--accent-50);border:1px solid var(--warn-bd);border-radius:8px;padding:10px 12px;margin-top:8px;font-size:10.5px;color:var(--t2);line-height:1.6">
       <div style="font-weight:700;color:var(--t1);margin-bottom:4px">🛡 거래 해제 안내</div>
       위 거래 데이터는 <b>정상 거래</b>만 포함합니다 (MOLIT 신고 후 해제된 거래 자동 제외 — 시세 정확도 우선).
       <br><span style="font-size:10px;color:var(--t3)">※ 한국도시연구소 분석에 따르면 2025년 거래 해제건수가 대폭 증가 (시장교란 행위 가능성). 전체 해제 이력은 <a href="http://rtdown.molit.go.kr/" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">국토부 실거래가 공개시스템</a> 별도 확인.</span>
@@ -7158,7 +7224,7 @@ function showDetail(p){
         const rows = keys.map(k => {
           const v = raw[k];
           const vs = (v == null || v === '') ? '<span style="color:var(--t3)">∅</span>' : _escHtml(String(v).slice(0, 200));
-          const hl = _interesting(k) ? 'background:var(--accent-50);border:1px solid #F0D58C;border-radius:3px;padding:1px 4px' : '';
+          const hl = _interesting(k) ? 'background:var(--accent-50);border:1px solid var(--warn-bd);border-radius:3px;padding:1px 4px' : '';
           return `<tr><td style="font-size:10px;${hl}">${_escHtml(k)}</td><td style="font-size:10px;color:var(--t2)">${vs}</td></tr>`;
         }).join('');
         return `<details style="margin-top:14px"><summary style="cursor:pointer;font-weight:700;font-size:12px;color:var(--t1);list-style:none">🔍 KAPT raw 응답 (진단용 ${keys.length}개 필드) — 클릭해서 펼치기</summary>
@@ -8903,7 +8969,7 @@ function renderClause(d){
   </div>`).join('');
   const citeHtml = (d.citations&&d.citations.length)?`
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 6px">📚 관련 법령 근거</div>
-    <div style="background:#FAFAFD;border:1px solid var(--bd);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:6px">
+    <div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:9px 11px;display:flex;flex-direction:column;gap:6px">
       ${d.citations.map(c=>`<div style="font-size:11px;line-height:1.5"><b style="color:var(--a2)">${_escHtml(c.law||'')} ${_escHtml(c.article||'')}</b> <span style="color:var(--t3)">· ${_escHtml(c.title||'')}</span><br><span style="color:var(--t2)">${_escHtml(c.summary||'')}</span></div>`).join('')}
     </div>`:'';
   document.getElementById('t3').innerHTML=`
@@ -10137,6 +10203,7 @@ document.addEventListener('keydown', (e) => {
   // 열린 모달 우선순위 (위쪽이 나중에 열림 → 먼저 닫음)
   const closers = [
     { id: 'QM', fn: 'closeQuotaModal' },  // quota 모달 (z-index 9998)
+    { id: 'DSM', fn: 'closeDataStatus' }, // 데이터 상태 (z770)
     { id: 'CARDOV', fn: 'closeShareCard' }, // 실거래 팩트 카드 (상세 위 z760 — 먼저 닫음)
     { id: 'RGM', fn: 'closeRegionSummary' }, // 지역 시장 요약 (z600 — 상세 위에 뜨므로 먼저 닫는다)
     { id: 'DM', fn: 'cDM' },              // 단지 상세
