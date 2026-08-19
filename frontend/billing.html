@@ -267,7 +267,7 @@ async function init(){
   } catch(e){ console.warn('[billing config] 실패', e); }
 
   if(!tossClientKey){
-    setStatus('warn', '⚙ 결제 시스템 설정 중 (관리자 환경변수 미설정) — 플랜만 조회 가능해요.');
+    setStatus('warn', '⚙ 프로 플랜 정식 출시 준비 중 — 지금은 플랜 안내만 볼 수 있어요.');
   } else if(!confirmEnabled){
     setStatus('warn', '⚙ 결제 승인 서버 설정 미완료 — 결제는 곧 활성화됩니다.');
   }
