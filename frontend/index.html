@@ -2222,6 +2222,7 @@ html[data-theme="dark"] #view-news{
       </div>
     </div>
     <div id="briefWidgets" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 14px"></div>
+    <div id="brfRegLog" class="brf-card" style="margin:0 0 14px;display:none"></div>
     <div id="newsSummary" class="brf-card" style="margin-bottom:14px;display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
         <b style="font-size:15px;font-weight:800;letter-spacing:-.02em;color:var(--brf-tx)">오늘의 시장 3줄 <span style="color:var(--brf-tx3);font-weight:500;font-size:10.5px" id="newsSummaryTime"></span></b>
@@ -4828,10 +4829,11 @@ async function renderBriefing(){
     const now=new Date();
     if(dEl){ const yo='일월화수목금토'[now.getDay()];
       dEl.textContent=`${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}(${yo})`; }
-    const [h,subs,pop]=await Promise.all([
+    const [h,subs,pop,reglog]=await Promise.all([
       fetch(`${CFG.api}/health`,{signal:AbortSignal.timeout(6000)}).then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(`${CFG.api}/subscription?sido=&days=30`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(`${CFG.api}/search/popular`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
+      fetch(`${CFG.api}/regulations/log`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
     ]);
     // BRF-DESIGN-2026-08-19 (Sprint NNNNNNN-8): 시안 코드화 — 티커=무한 테이프(라벨/값/출처 구조).
     //   전 항목 실데이터, 값 없으면 항목째 생략. 델타(전월 대비)는 원자료에 이전 값이 없어 표시하지 않는다(추정 금지).
@@ -4844,6 +4846,9 @@ async function renderBriefing(){
     if(dc&&dc.tx) tk.push({l:'실거래 누적',v:Number(dc.tx).toLocaleString()+'건',s:'국토부'+(dc.lastIngestedAt?' · '+String(dc.lastIngestedAt).slice(5,10).replace('-','.')+' 동기화':'')});
     if(ps.length&&ps[0].dealCount60d) tk.push({l:'실거래 최다·60일',v:_escHtml(ps[0].aptName||'')+' '+ps[0].dealCount60d+'건',s:'국토부'});
     if(items.length&&items[0].name) tk.push({l:'청약 임박',v:_escHtml(items[0].name||''),s:'청약홈'});
+    // REG-LOG: 현행 대출·규제 기준의 시행일(valid_from)·확인일 — 전부 스냅샷 사실값
+    const _rh=(reglog&&Array.isArray(reglog.items))?reglog.items.find(x=>x.key==='housing_loan_2025'&&!x.supersededAt):null;
+    if(_rh&&_rh.effectiveFrom) tk.push({l:'대출·규제 기준',v:String(_rh.effectiveFrom).replace(/-/g,'.')+' 시행',s:'금융위'+(_rh.verifiedAt?' · 확인 '+String(_rh.verifiedAt).slice(5,10).replace('-','.'):'')});
     const tEl=document.getElementById('briefTicker');
     const tape=document.getElementById('briefTape');
     if(tEl&&tape&&tk.length){
@@ -4883,6 +4888,30 @@ async function renderBriefing(){
         <div style="font-size:9px;color:var(--brf-tx3);margin-top:8px">최근 60일 국토부 실거래 많은 순 · 60일 평균가 · 매물 광고 아님</div>
       </div>`;
     // 집킴이 코너 — 실제 동기화 기준일만 문장에 사용(추정 금지)
+    // REG-LOG-2026-08-19 (Sprint NNNNNNN-12): 규제·금융 변동 로그 카드 — regulations_snapshot 버전 체인
+    //   (운영자 검증 후에만 행이 추가되는 구조 = 전 행이 검증된 이벤트). valid_from=시행일. 감시 cron 실행
+    //   시각(RSS 대조·스냅샷 점검)을 함께 표기 — "변동 없음"을 단정하지 않고 감시 사실만 적는다.
+    try{
+      const lg=document.getElementById('brfRegLog');
+      if(lg&&reglog&&Array.isArray(reglog.items)&&reglog.items.length){
+        const fm=d=>d?String(d).slice(0,10).replace(/-/g,'.'):'';
+        const rows=reglog.items.slice(0,4).map(it=>`<div class="brf-row" style="align-items:baseline;gap:12px;flex-wrap:wrap;padding:10px 13px;margin-bottom:8px">
+          <span style="font-size:11px;font-weight:700;color:var(--brf-tx3);font-variant-numeric:tabular-nums;flex:0 0 88px">${fm(it.effectiveFrom)} 시행</span>
+          <span style="font-size:10px;font-weight:800;padding:3px 7px;border-radius:5px;background:var(--brf-panel);border:1px solid var(--brf-line);color:var(--brf-ac)">${_escHtml(it.tag||'')}</span>
+          <span style="flex:1;min-width:150px;font-size:12px;font-weight:600;color:var(--brf-tx);line-height:1.5">${_escHtml(it.note||'')}${it.supersededAt?` <span style="color:var(--brf-tx3);font-weight:500">(→ ${fm(it.supersededAt)} 대체)</span>`:''}</span>
+          ${it.verifiedAt?`<span style="font-size:10px;color:var(--brf-tx3)">확인 ${fm(it.verifiedAt)}</span>`:''}
+        </div>`).join('');
+        const cr=(h&&h.crons)||{};
+        const _ago=at=>{const t=new Date(at);return isNaN(t)?null:Math.round((Date.now()-t.getTime())/3600000);};
+        const watch=[];
+        if(cr['regulations-auto-fetch']&&cr['regulations-auto-fetch'].at){const g=_ago(cr['regulations-auto-fetch'].at);if(g!=null)watch.push(`정부 RSS 대조 ${g}시간 전`);}
+        if(cr['regulations-check']&&cr['regulations-check'].at){const g=_ago(cr['regulations-check'].at);if(g!=null)watch.push(`스냅샷 점검 ${g}시간 전`);}
+        lg.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><b class="brf-h2">규제·금융 변동 로그</b><span style="font-size:10px;color:var(--brf-tx3)">금융위·국토부 고시 기준 · 검증된 이벤트만 기록</span></div>
+          ${rows}
+          ${watch.length?`<div style="font-size:9.5px;color:var(--brf-tx3);margin-top:2px">감시: ${watch.join(' · ')} — 새 고시는 검증을 거쳐 이 로그에 추가됩니다.</div>`:''}`;
+        lg.style.display='block';
+      }
+    }catch(_e){}
     const mm=document.getElementById('brfMascotMsg');
     // VERIFY-FIX-2026-08-19: 성공한 원자료만 '기준'으로 명시 — 조회 실패 시에도 3개 기관을 단정하던
     //   모순(적대 검증 적발, 절대룰 '값 없으면 생략'). subs/er/dc 가 null 이면 그 기관은 문장에서 뺀다.
@@ -4915,11 +4944,17 @@ async function openDataStatus(){
     const hrs=(ts&&!isNaN(ts))?Math.round((Date.now()-ts.getTime())/3600000):null;
     row('국토부 실거래가',`누적 ${Number(dc.tx).toLocaleString()}건 · 일간 동기화`,(window._syncData&&window._syncData.kst)?window._syncData.kst+' KST':'—',hrs==null?'—':(hrs<=48?`정상 · ${hrs}시간 전`:`지연 · ${hrs}시간 전`),hrs!=null&&hrs>48);
   }
-  if(dc.apt) row('KAPT 단지정보',`${Number(dc.apt).toLocaleString()}개 단지`,'—','건수만 공개',false);
+  if(dc.apt){
+    // REG-LOG-2026-08-19 정정: apt_master.updated_at 은 시설정보 갱신이 찍는 값이라 목록 동기화 시각이 아니다 —
+    //   정확한 소스는 crons['apt-master-sync'](주간 월 20:00 UTC) 실행 기록. 8일(192h) 초과 시 지연.
+    const aj=h.crons&&h.crons['apt-master-sync'];
+    const ah=(aj&&aj.at&&!isNaN(new Date(aj.at)))?Math.round((Date.now()-new Date(aj.at).getTime())/3600000):null;
+    row('KAPT 단지정보',`${Number(dc.apt).toLocaleString()}개 단지 · 주간 목록 동기화`,ah!=null?`${ah}시간 전 실행`:'—',ah==null?'실행 기록 없음':(ah<=192?'정상':'지연'),ah!=null&&ah>192);
+  }
   const er=h.ecosRates;
   if(er&&er.baseRate!=null) row('한국은행 ECOS 금리',`기준금리 ${er.baseRate}%${er.mortgageRate!=null?` · 주담대 ${er.mortgageRate}%`:''}`,er.mortgageRateMonth?('공표월 '+String(er.mortgageRateMonth).replace(/^(\d{4})(\d{2})$/,'$1.$2')):'—','정상',false);
   const rg=h.regulations||{};
-  const regRow=(label,r0)=>{ if(r0&&r0.effectiveDate) row(label,`시행 ${_escHtml(String(r0.effectiveDate))}${(r0.source&&!/^[a-z]{1,8}$/.test(String(r0.source)))?` · ${_escHtml(String(r0.source))}`:''}`,r0.daysSince!=null?`${r0.daysSince}일 경과`:'—',r0.stale?'⚠ 개정 확인 필요':'정상',!!r0.stale); };
+  const regRow=(label,r0)=>{ if(r0&&r0.effectiveDate) row(label,`출처 확인 ${_escHtml(String(r0.effectiveDate))}${(r0.source&&!/^[a-z]{1,8}$/.test(String(r0.source)))?` · ${_escHtml(String(r0.source))}`:''}`,r0.daysSince!=null?`${r0.daysSince}일 경과`:'—',r0.stale?'⚠ 개정 확인 필요':'정상',!!r0.stale); };
   regRow('규제지역·대출 규정',rg.housing_loan);
   regRow('취득세 규정',rg.acquisition_tax);
   if(h.crons&&typeof h.crons==='object'){
