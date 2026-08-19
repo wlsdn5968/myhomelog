@@ -70,4 +70,39 @@ router.post('/ai', optionalAuth, async (req, res) => {
   }
 });
 
+// DATA-ERR-2026-08-19 (Sprint NNNNNNN-16): 데이터 오류 신고 — mailto 대체 인앱 폼.
+// 저장소는 전용 테이블 data_error_reports(RLS on·정책 0 = service role 전용).
+// 스팸 방지: IP 당 30초 1회(인스턴스 로컬 — 완화 목적이지 보안 경계 아님) + 길이 제한.
+const _errRateCache = require('../cache');
+const ERR_FIELDS = ['세대수', '주차', '실거래', '좌표', '학군', '기타'];
+router.post('/data-error', optionalAuth, async (req, res) => {
+  const { aptName, lawdCd, field, detail, page } = req.body || {};
+  if (!detail || typeof detail !== 'string' || detail.trim().length < 5) {
+    return res.status(400).json({ error: '내용을 5자 이상 적어주세요.' });
+  }
+  const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+  const rk = 'errRate:' + ip;
+  if (_errRateCache.get(rk)) return res.status(429).json({ error: '잠시 후 다시 신고해주세요.' });
+  _errRateCache.set(rk, 1, 30);
+  const row = {
+    apt_name: (typeof aptName === 'string' ? aptName.trim().slice(0, 50) : null) || null,
+    lawd_cd: (typeof lawdCd === 'string' && /^\d{5}$/.test(lawdCd)) ? lawdCd : null,
+    field: ERR_FIELDS.includes(field) ? field : '기타',
+    detail: detail.trim().slice(0, 500),
+    user_id: req.user?.id || null,
+    page: (typeof page === 'string' ? page.slice(0, 30) : null) || null,
+  };
+  const admin = getSupabaseAdmin();
+  if (!admin) return res.json({ ok: true, persisted: false });
+  try {
+    const { error } = await admin.from('data_error_reports').insert(row);
+    if (error) throw error;
+    return res.json({ ok: true, persisted: true });
+  } catch (e) {
+    logger.warn({ err: e.message }, 'data-error 신고 저장 실패');
+    Sentry.captureException(e);
+    return res.json({ ok: true, persisted: false }); // 신고 실패가 사용자 흐름을 막지 않는다
+  }
+});
+
 module.exports = router;
