@@ -28,12 +28,15 @@ function handleMolitError(err, res) {
 //   sigungu + umdNm 옵션 필터 추가. 미지정 시 기존 동작 유지 (회귀 0).
 //   이유: aptName substring 매칭만으로는 동/단지 구분 불가 (예: "공릉풍림아이원" query 가 월계동 "풍림아이원" 7건 잘못 반환).
 router.get('/', validateTransactionQuery, async (req, res) => {
-  const { lawdCd, dealYm, aptName, sigungu, umdNm } = req.query;
+  const { lawdCd, dealYm, aptName, sigungu, umdNm, monthsBack } = req.query;
   if (!lawdCd || !dealYm) return res.status(400).json({ error: 'lawdCd, dealYm 필수' });
 
   try {
+    // SHARECARD-2026-08-19 (Sprint NNNNNNN-7A): 공유 카드 장기 창 — 화이트리스트만(캐시 키 폭발·과도 조회 방지).
+    //   그 외 값·미전달은 기존 6개월(회귀 0). 서비스 cacheKey 에 monthsBack 포함돼 분리 캐시(COMPARE-12MO 검증 완료).
+    const _mb = aptName && ['12', '15'].includes(String(monthsBack || '')) ? Number(monthsBack) : undefined;
     let list = aptName
-      ? await getTransactionsByApt(lawdCd, aptName)
+      ? await getTransactionsByApt(lawdCd, aptName, _mb)
       : await getTransactions(lawdCd, dealYm);
     // Sprint MM: sigungu/umdNm 지정 시 결과 추가 필터 — 다른 동 단지 환각 매칭 차단.
     if (sigungu || umdNm) {
