@@ -1825,6 +1825,8 @@ html[data-theme="dark"] #view-map,html[data-theme="dark"] .lp{
 #view-map .nmap-bub{background:var(--map-panel);border:1px solid var(--map-line);box-shadow:var(--map-shadow)}
 #view-map .nmap-pr{color:var(--map-tx);font-variant-numeric:tabular-nums}
 #view-map .nmap-sc{color:var(--map-tx3)}
+/* VERIFY-FIX-2026-08-19: ID 스코프(1-1-0)가 .nmap-bub.reg 의 빨간 후광(0-2-0)을 명시성으로 덮던 회귀 — 동일 값 복원 */
+#view-map .nmap-bub.reg{box-shadow:0 3px 11px rgba(229,72,77,.24),0 1px 3px rgba(16,24,40,.10)}
 #view-map .pop-marker{background:var(--map-panel);border:1px solid var(--map-line);color:var(--map-tx);box-shadow:var(--map-shadow)}
 #view-map .pop-marker .pop-rank{background:var(--map-ac)}
 html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
@@ -2174,6 +2176,7 @@ html[data-theme="dark"] #view-news{
 @keyframes brfTape{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 .brf-ticker{overflow:hidden;border-top:1px solid var(--brf-line);border-bottom:1px solid var(--brf-line);background:var(--brf-panel);margin-bottom:14px}
 .brf-tape{display:flex;width:max-content;animation:brfTape 46s linear infinite}
+.brf-ticker:hover .brf-tape{animation-play-state:paused} /* VERIFY-FIX-2026-08-19: 마퀴 정지 수단 */
 .brf-tk{display:flex;align-items:baseline;gap:8px;padding:9px 22px;border-right:1px solid var(--brf-line);white-space:nowrap}
 .brf-card{background:var(--brf-panel);border:1px solid var(--brf-line);border-radius:14px;box-shadow:var(--brf-shadow);padding:16px 18px;min-width:0}
 .brf-h2{margin:0;font-size:15px;font-weight:800;letter-spacing:-.02em;color:var(--brf-tx)}
@@ -4851,7 +4854,13 @@ async function renderBriefing(){
       </div>`;
     // 집킴이 코너 — 실제 동기화 기준일만 문장에 사용(추정 금지)
     const mm=document.getElementById('brfMascotMsg');
-    if(mm) mm.textContent=`오늘 브리핑은 한국은행 ECOS·국토부 실거래·청약홈 원자료 기준입니다.${dc&&dc.lastIngestedAt?' 실거래 동기화 '+String(dc.lastIngestedAt).slice(5,10).replace('-','.')+'.':''} 값이 없는 항목은 추정하지 않고 비워둡니다.`;
+    // VERIFY-FIX-2026-08-19: 성공한 원자료만 '기준'으로 명시 — 조회 실패 시에도 3개 기관을 단정하던
+    //   모순(적대 검증 적발, 절대룰 '값 없으면 생략'). subs/er/dc 가 null 이면 그 기관은 문장에서 뺀다.
+    const _srcs=[];
+    if(er) _srcs.push('한국은행 ECOS');
+    if(dc) _srcs.push('국토부 실거래');
+    if(subs) _srcs.push('청약홈');
+    if(mm) mm.textContent=(_srcs.length?`오늘 브리핑은 ${_srcs.join('·')} 원자료 기준입니다.`:'오늘 브리핑 원자료 조회가 일시 실패했습니다 — 확인된 값만 표시합니다.')+(dc&&dc.lastIngestedAt?' 실거래 동기화 '+String(dc.lastIngestedAt).slice(5,10).replace('-','.')+'.':'')+' 값이 없는 항목은 추정하지 않고 비워둡니다.';
   }catch(_e){ /* 브리핑 실패는 조용히 — 뉴스 본체는 정상 */ }
 }
 function openYesterdayBrief(){
@@ -5637,6 +5646,7 @@ function searchStep(label,n){
 }
 
 async function doSearch(){
+  try{ const _ftr=document.getElementById('fltTrust'); if(_ftr) _ftr.style.display='none'; }catch(_e){} // VERIFY-FIX-2026-08-19: 실패 재검색 시 이전 신뢰 박스 잔존 방지
   const btn=document.getElementById('srchBtn'),sp=document.getElementById('srchSp'),tx=document.getElementById('srchTx');
   btn.classList.add('ld');sp.style.display='block';
   // VIEW-GUARD-2026-07-11 (Sprint KKKK): 검색 시작 시점의 활성 탭 기록 — 완료 시 사용자가 다른
