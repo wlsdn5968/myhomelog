@@ -188,6 +188,9 @@ router.post('/retention', async (req, res) => {
     await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시(실패는 내부에서 삼킴)
     await checkCronStaleness();   // Sprint MMMMMMM-12 — 안 돈 cron 감시
     await checkRegionIngestFreshness(); // Sprint MMMMMMM-22 — 지역 단위 적재 중단 감시
+    // BRIEFING-ARCHIVE-2026-08-19 (Sprint NNNNNNN-6): 오늘자 브리핑 스냅샷 보장 생성.
+    //   멱등 upsert — lazy 생성(페이지 첫 조회)과 중복돼도 무해(Hobby cron 중복호출 대응 원칙).
+    try { const _bs = require('../services/briefingService'); await _bs.getOrCreateSnapshot(_bs.kstDayString()); } catch (_e) { logger.warn({ err: _e.message }, '브리핑 스냅샷 생성 실패(무시)'); }
     // RATE-WARM-2026-08-08 (Sprint BBBBBBB-3): HF·ECOS 금리 캐시 워밍 — health 의 비차단 백그라운드
     //   갱신은 응답 반환 후 서버리스 동결로 완주가 안 될 수 있다(HF 실측: 12:01 까지 반복 ECONNABORTED,
     //   신규 실패 기록조차 없는 "잘림" 상태). 요청 경로인 여기서 하루 1회 완주시켜 Redis 에 남기면
@@ -224,6 +227,9 @@ router.get('/retention', async (req, res) => {
     await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시
     await checkCronStaleness();   // Sprint MMMMMMM-12 — 안 돈 cron 감시(POST 쌍둥이와 동일)
     await checkRegionIngestFreshness(); // Sprint MMMMMMM-22 — 지역 단위 적재 중단 감시(POST 쌍둥이와 동일)
+    // BRIEFING-ARCHIVE-2026-08-19 (Sprint NNNNNNN-6): 오늘자 브리핑 스냅샷 보장 생성.
+    //   멱등 upsert — lazy 생성(페이지 첫 조회)과 중복돼도 무해(Hobby cron 중복호출 대응 원칙).
+    try { const _bs = require('../services/briefingService'); await _bs.getOrCreateSnapshot(_bs.kstDayString()); } catch (_e) { logger.warn({ err: _e.message }, '브리핑 스냅샷 생성 실패(무시)'); }
     try { await require('../services/hfService').getHfRates(); } catch (_) {}   // Sprint BBBBBBB-3 워밍
     try { await require('../services/ecosService').getEcosRates(); } catch (_) {}
     res.json({ ok: true, summary, popularSnapshot });

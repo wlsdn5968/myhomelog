@@ -234,3 +234,6 @@ router.get('/summary', async (req, res) => {
 });
 
 module.exports = router;
+// BRIEFING-ARCHIVE-2026-08-19 (Sprint NNNNNNN-6): briefingService 가 3줄 시황 생성기를
+// 재사용한다(사본 금지 — 사본이 조용히 갈라지는 사고를 반복 겪은 레포다). 라우터 속성으로 노출.
+module.exports._dataMarketLines = _dataMarketLines;

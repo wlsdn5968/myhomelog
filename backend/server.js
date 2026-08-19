@@ -272,6 +272,8 @@ app.use('/api/cron', cronRouter);
 app.use('/api/admin', dataLimiter, require('./routes/admin'));
 // 공유 딥링크 — 크롤러용 OG 메타 치환 (HTML 서빙)
 app.use('/share', shareRouter);
+// BRIEFING-ARCHIVE-2026-08-19 (Sprint NNNNNNN-6): 날짜별 서버렌더 브리핑(SEO·공유 실체) — /share 와 같은 계열.
+app.use('/briefing', require('./routes/briefing'));
 
 // STAB-3 (2026-05-03): /api/admin/kapt-diag endpoint 제거
 //   사유: KAPT API 키 진단용 임시 endpoint. 활용신청 확인 후 역할 종료.

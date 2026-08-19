@@ -2132,7 +2132,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <div>
         <div style="font-size:10px;color:var(--amb);font-weight:800;letter-spacing:1.5px">오늘의 브리핑</div>
         <h3 id="briefDate" style="margin:2px 0 0">—</h3>
-        <div style="font-size:10.5px;color:var(--t3)">추천을 팔지 않습니다. 데이터를 팝니다.</div>
+        <div style="font-size:10.5px;color:var(--t3)">추천을 팔지 않습니다. 데이터를 팝니다. <a href="javascript:void(0)" onclick="openYesterdayBrief()" style="color:var(--acc);text-decoration:underline">어제 브리핑 →</a></div>
       </div>
       <button class="abtn" style="margin:0;width:auto;padding:6px 11px;font-size:10.5px;background:var(--accent-50);color:var(--accent-700);border:1px solid var(--accent-100)" onclick="copyBriefLink()">🔗 오늘 브리핑 링크 복사</button>
     </div>
@@ -4751,11 +4751,21 @@ async function renderBriefing(){
       </div>`;
   }catch(_e){ /* 브리핑 실패는 조용히 — 뉴스 본체는 정상 */ }
 }
+function openYesterdayBrief(){
+  try{
+    const n=new Date(Date.now()-86400000);
+    const day=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
+    window.open(`/briefing/${day}`,'_blank','noopener');
+  }catch(_e){}
+}
 function copyBriefLink(){
   try{
     const n=new Date();
     const day=`${n.getFullYear()}-${String(n.getMonth()+1).padStart(2,'0')}-${String(n.getDate()).padStart(2,'0')}`;
-    const url=`${location.origin}/?briefing=${day}`;
+    // BRIEFING-ARCHIVE-2026-08-19: 공유 링크 = 서버렌더 영구 URL(/briefing/날짜) — 카톡·X 미리보기·SEO 실체.
+    //   복사 직전 fetch 로 오늘자 스냅샷 생성 보장(멱등 — 실패해도 복사는 진행, retention cron 이 보증).
+    const url=`${location.origin}/briefing/${day}`;
+    try{ fetch(url,{method:'GET'}).catch(()=>{}); }catch(_){ }
     navigator.clipboard.writeText(url).then(()=>toast('🔗 오늘 브리핑 링크 복사 완료'),()=>toast('복사 실패'));
   }catch(_e){ toast('복사 실패'); }
 }
