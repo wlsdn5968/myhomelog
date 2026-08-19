@@ -39,43 +39,10 @@ router.get('/ltv', async (req, res) => {
   });
 });
 
-// REG-LOG-2026-08-19 (Sprint NNNNNNN-12): 규정 변동 로그 — regulations_snapshot 버전 체인을 그대로 노출.
-// [사실 관계] valid_from = 시행일, source_effective_date = 출처 확인일(검증일) — 둘을 혼동하지 않는다.
-// 스냅샷 신규 행은 운영자 수동 검증 후에만 삽입되는 구조(자동 반영 금지 설계)라, 이 로그의 모든
-// 행은 검증된 규정 이벤트다. note 의 '/' 뒤는 내부 검증 메모라 사용자 응답에서 제거.
-const _regLogCache = require('../cache');
+// REG-LOG-2026-08-19 (Sprint NNNNNNN-12→14): 로직은 regulationsService.getChangeLog 로 승격 — 서버렌더 브리핑 페이지와 공유(사본 금지).
 router.get('/log', async (req, res) => {
-  const CK = 'reg:log:v1';
-  const hit = _regLogCache.get(CK);
   res.set('Cache-Control', 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
-  if (hit) return res.json(hit);
-  try {
-    const { getSupabaseAdmin } = require('../db/client');
-    const admin = getSupabaseAdmin();
-    if (!admin) return res.json({ items: [] });
-    const { data, error } = await admin
-      .from('regulations_snapshot')
-      .select('key, valid_from, valid_to, source_effective_date, note, source_url')
-      .order('valid_from', { ascending: false })
-      .limit(50);
-    if (error) throw error;
-    const KEY_LABEL = { housing_loan_2025: '대출·규제지역', acquisition_tax_2025: '취득세·거래비용' };
-    const items = (data || []).map(r => ({
-      key: r.key,
-      tag: KEY_LABEL[r.key] || r.key,
-      effectiveFrom: r.valid_from ? String(r.valid_from).slice(0, 10) : null,
-      supersededAt: r.valid_to ? String(r.valid_to).slice(0, 10) : null,
-      verifiedAt: r.source_effective_date || null,
-      note: r.note ? String(r.note).split('/')[0].trim() : null,
-      sourceUrl: r.source_url || null,
-    }));
-    const out = { items };
-    _regLogCache.set(CK, out, 21600);
-    return res.json(out);
-  } catch (e) {
-    require('../logger').warn({ err: e.message }, 'regulations/log 조회 실패');
-    return res.json({ items: [] });
-  }
+  res.json(await require('../services/regulationsService').getChangeLog());
 });
 
 module.exports = router;

@@ -262,8 +262,45 @@ async function isRegulatedRegion(regionStr) {
   return false;
 }
 
+// REG-LOG-2026-08-19 (Sprint NNNNNNN-14): 변동 로그 — snapshot 버전 체인 노출을 서비스로 승격.
+// (routes/regulations.js /log 인라인 로직 이동 — 서버렌더 브리핑 페이지와 공유, 사본 금지)
+// valid_from=시행일 / source_effective_date=출처 확인일. note 의 '/' 뒤 내부 검증 메모는 제거.
+const REG_LOG_CK = 'reg:log:v1';
+const REG_KEY_LABEL = { housing_loan_2025: '대출·규제지역', acquisition_tax_2025: '취득세·거래비용' };
+async function getChangeLog() {
+  const hit = cache.get(REG_LOG_CK);
+  if (hit) return hit;
+  try {
+    const { getSupabaseAdmin } = require('../db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return { items: [] };
+    const { data, error } = await admin
+      .from('regulations_snapshot')
+      .select('key, valid_from, valid_to, source_effective_date, note, source_url')
+      .order('valid_from', { ascending: false })
+      .limit(50);
+    if (error) throw error;
+    const items = (data || []).map(r => ({
+      key: r.key,
+      tag: REG_KEY_LABEL[r.key] || r.key,
+      effectiveFrom: r.valid_from ? String(r.valid_from).slice(0, 10) : null,
+      supersededAt: r.valid_to ? String(r.valid_to).slice(0, 10) : null,
+      verifiedAt: r.source_effective_date || null,
+      note: r.note ? String(r.note).split('/')[0].trim() : null,
+      sourceUrl: r.source_url || null,
+    }));
+    const out = { items };
+    cache.set(REG_LOG_CK, out, 21600);
+    return out;
+  } catch (e) {
+    logger.warn({ err: e.message }, 'regulations getChangeLog 실패');
+    return { items: [] };
+  }
+}
+
 module.exports = {
   getSnapshot,
+  getChangeLog,
   FALLBACK,
   getRegulatedKeywords,
   isRegulatedRegion,

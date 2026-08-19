@@ -56,6 +56,10 @@ async function buildBriefingPayload() {
     }
   } catch (_) { /* 생략 */ }
 
+  // REG-LOG-2026-08-19 (Sprint NNNNNNN-14): 검증된 규정 이벤트 체인 — 아카이브 카드용(실패 시 빈 배열)
+  let regLog = [];
+  try { regLog = (await require('./regulationsService').getChangeLog()).items || []; } catch (_) { regLog = []; }
+
   return {
     day: kstDayString(),
     generatedAt: new Date().toISOString(),
@@ -68,6 +72,7 @@ async function buildBriefingPayload() {
     txTotal: dc && dc.tx ? Number(dc.tx) : null,
     syncedAt: dc && dc.lastIngestedAt ? String(dc.lastIngestedAt) : null,
     popular,
+    regLog,
   };
 }
 

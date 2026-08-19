@@ -38,7 +38,8 @@ function pageShell(title, desc, day, body) {
 <meta property="og:url" content="${canonical}">
 <meta property="og:type" content="article">
 <style>
-  :root{--bg:#0E1A2B;--card:#14243A;--bd:#22344E;--tx:#DFE7EE;--sub:#8FA1B5;--amb:#F5B842;--acc:#6EA8FE}
+  /* ARCH-SKIN-2026-08-19 (Sprint NNNNNNN-14): 앱 시안 dark 팔레트와 1:1 정합(단일 테마 페이지 — 의도된 커미트먼트) */
+  :root{--bg:#080E18;--card:#101B2B;--bd:#22334A;--tx:#E8EFFA;--sub:#93A4BD;--amb:#FFC93C;--acc:#4C8DFF}
   *{box-sizing:border-box;margin:0}
   body{background:var(--bg);color:var(--tx);font-family:Pretendard,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;line-height:1.7;padding:28px 16px}
   main{max-width:640px;margin:0 auto}
@@ -96,11 +97,18 @@ router.get('/:date', async (req, res) => {
   if (snap.ecos && snap.ecos.baseRate != null) tk.push(`기준금리 <b>${esc(String(snap.ecos.baseRate))}%</b> <span class="src">한국은행</span>`);
   if (snap.ecos && snap.ecos.mortgageRate != null) tk.push(`주담대 평균 <b>${esc(String(snap.ecos.mortgageRate))}%</b> <span class="src">ECOS ${esc(String(snap.ecos.mortgageRateMonth || '').replace(/^(\d{4})(\d{2})$/, '$1.$2'))}</span>`);
   if (snap.txTotal) tk.push(`실거래 누적 <b>${Number(snap.txTotal).toLocaleString()}건</b> <span class="src">국토부${snap.syncedAt ? ' · ' + String(snap.syncedAt).slice(5, 10).replace('-', '.') + ' 동기화' : ''}</span>`);
+  // REG-LOG (Sprint NNNNNNN-14): 현행 대출·규제 기준 시행일 — 스냅샷 사실값
+  const _rl = (snap.regLog || []).find(x => x.key === 'housing_loan_2025' && !x.supersededAt);
+  if (_rl && _rl.effectiveFrom) tk.push(`대출·규제 기준 <b>${esc(String(_rl.effectiveFrom).replace(/-/g, '.'))} 시행</b> <span class="src">금융위</span>`);
 
   const lines = (snap.lines || []).map((l, i) =>
     `<div class="ln"><b class="no">${String(i + 1).padStart(2, '0')}</b><span>${esc(l)}</span></div>`).join('');
   const pops = (snap.popular || []).filter(p => p && p.aptName).map((p, i) =>
     `<div class="pop"><span><b style="color:var(--amb)">${i + 1}</b> ${esc(p.aptName)}${p.sigungu ? ` <span style="color:var(--sub);font-size:10.5px">${esc(p.sigungu)}</span>` : ''}</span><span style="color:var(--sub)">${p.dealCount60d != null ? p.dealCount60d + '건' : ''}</span></div>`).join('');
+
+  // REG-LOG (Sprint NNNNNNN-14): 규제·금융 변동 로그 카드(있을 때만 — 과거 스냅샷은 필드 없음)
+  const regs = (snap.regLog || []).slice(0, 4).map(it =>
+    `<div class="ln" style="align-items:baseline"><b class="no" style="font-size:11px;min-width:86px">${esc(String(it.effectiveFrom || '').replace(/-/g, '.'))} 시행</b><span><span style="color:var(--amb);font-size:10.5px;font-weight:700">${esc(it.tag || '')}</span> ${esc(it.note || '')}${it.verifiedAt ? ` <span style="color:var(--sub);font-size:10px">· 확인 ${esc(String(it.verifiedAt).replace(/-/g, '.'))}</span>` : ''}</span></div>`).join('');
 
   const yo = '일월화수목금토'[new Date(day + 'T00:00:00Z').getUTCDay()];
   const title = `내집로그 브리핑 ${day.replace(/-/g, '.')}(${yo}) — 실거래·금리·시장 데이터`;
@@ -116,6 +124,7 @@ router.get('/:date', async (req, res) => {
     ${tk.length ? `<div class="ticker">${tk.join('<span style="color:var(--bd);margin:0 9px">|</span>')}</div>` : ''}
     <div class="card"><h2>오늘의 시장</h2>${lines || '<div style="font-size:12px;color:var(--sub)">기록된 시황이 없습니다.</div>'}</div>
     ${pops ? `<div class="card"><h2>인기 단지 TOP5 <span style="font-weight:500;color:var(--sub);font-size:10px">최근 60일 실거래 많은 순 · 매물 광고 아님</span></h2>${pops}</div>` : ''}
+    ${regs ? `<div class="card"><h2>규제·금융 변동 로그 <span style="font-weight:500;color:var(--sub);font-size:10px">금융위·국토부 고시 · 검증된 이벤트만</span></h2>${regs}</div>` : ''}
     <div class="nav"><a href="/briefing/${dayNav(day, -1)}">← 전날 브리핑</a>${isToday ? '' : `<a href="/briefing/${dayNav(day, 1)}">다음날 →</a>`}</div>
     <a class="cta" href="/?briefing=${esc(day)}">앱에서 지도·계산기와 함께 보기 →</a>`));
 });
