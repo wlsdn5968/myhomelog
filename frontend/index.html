@@ -6163,16 +6163,20 @@ function renderListGrid(){
       ${top.map(([code, v]) => `<button class="rg-open" title="이 지역의 가격지수·거래량·미분양·인구 순이동·규제 상태를 공식 통계로 봅니다" onclick="openRegionSummary('${_escHtml(code)}','${_escHtml(v.nm)}')">${_escHtml(v.nm || code)} 시장 요약</button>`).join('')}
     </div>`;
   })();
+  // SORT-RESET-FIX-2026-08-20 (Sprint NNNNNNN-19, 루프 회차 3 실측): innerHTML 재렌더가 셀렉트를
+  //   첫 옵션(score)으로 초기화 — 정렬 변경 직후 표시가 리셋되고, 이어 필터를 누르면 리셋된 값을
+  //   읽어 실제 정렬까지 풀렸다. 재렌더 전에 현재 선택을 읽어 selected 로 되살린다.
+  const _curSortSel = document.getElementById('lstSort')?.value || 'score';
   const banner=`${metaLine}${_regionEntry}<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid var(--danger-bd);border-radius:8px;color:var(--red);font-size:11px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아닙니다.</u> 아래 점수·신호는 과거 실거래 통계 정리이며, 미래 가격(상승·하락)을 예측·보장하지 않습니다. 모든 의사결정 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>
   <!-- Phase 4 (2026-04-26): 정렬·필터 — 추천 결과 비교 핵심 -->
   <div style="margin:0 14px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
     <span style="font-size:11px;color:var(--t2);font-weight:600">정렬</span>
     <select id="lstSort" onchange="renderListGrid()" style="padding:5px 9px;border:1px solid var(--bd);border-radius:6px;font-size:11.5px;background:var(--bg-base);cursor:pointer;font-family:inherit">
-      <option value="score">점수 높은 순</option>
-      <option value="priceAsc">가격 낮은 순</option>
-      <option value="priceDesc">가격 높은 순</option>
-      <option value="newBuild">신축 우선</option>
-      <option value="oldBuild">구축 우선</option>
+      <option value="score"${_curSortSel==='score'?' selected':''}>점수 높은 순</option>
+      <option value="priceAsc"${_curSortSel==='priceAsc'?' selected':''}>가격 낮은 순</option>
+      <option value="priceDesc"${_curSortSel==='priceDesc'?' selected':''}>가격 높은 순</option>
+      <option value="newBuild"${_curSortSel==='newBuild'?' selected':''}>신축 우선</option>
+      <option value="oldBuild"${_curSortSel==='oldBuild'?' selected':''}>구축 우선</option>
     </select>
     <span style="font-size:11px;color:var(--t2);font-weight:600;margin-left:6px">필터</span>
     <button id="lstFltAll" onclick="setLstFilter('all', this)" style="padding:5px 11px;border:1px solid var(--acc);background:var(--acc);color:#fff;border-radius:18px;font-size:11px;cursor:pointer">전체</button>
@@ -6191,7 +6195,7 @@ function renderListGrid(){
     if (flt === 'regulated') filtered = filtered.filter(p => _isRegProp(p));
     else if (flt === 'non') filtered = filtered.filter(p => !_isRegProp(p));
     // 정렬 적용
-    const sort = document.getElementById('lstSort')?.value || 'score';
+    const sort = _curSortSel; // SORT-RESET-FIX-2026-08-20: 위에서 읽은 같은 값 — 재렌더 전 DOM 재조회와 동일하나 의도가 명확
     // MOB-AUDIT-2026-05-03: STAB #21 — `sortFn?.score` 가 자기 자신 참조 (선언 중) → 알 수 없는 sort 키 입력 시 undefined → 정렬 안 됨
     const _sortMap = {
       score: (a,b) => (Number(b.score)||0) - (Number(a.score)||0),
