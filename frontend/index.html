@@ -5682,7 +5682,7 @@ function mkNaverIW(p){
       <div class="niw-g">${scoreLabel}</div>
       <div class="niw-tags">${tags}</div>
       <button class="niw-btn a2" onclick="showDetailById('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}',${p.lat},${p.lng})">📊 상세 리포트</button>
-      <button class="niw-btn acc" onclick="askP('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}','${p.avgPrice||0}','${encodeURIComponent(p.area||'').replace(/'/g,'%27')}')">🤖 AI 전략 묻기</button>
+      <button class="niw-btn acc" onclick="askP('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}','${p.avgPrice||0}','${encodeURIComponent(p.area||'').replace(/'/g,'%27')}')">💬 시세 묻기</button>
     </div>
   </div>`;
 }
@@ -6988,7 +6988,7 @@ function showDetail(p){
       <button class="abtn a2" style="margin:0;font-size:11px" onclick="goCalcFromDetail(${p.avgPrice||0})">🧮 대출 계산</button>
       <button class="abtn" style="margin:0;font-size:11px;background:var(--info-bg);color:var(--a2);border:1px solid var(--info-bd)" onclick="goClauseFromCurrentDetail()">✍ 특약 만들기</button>
     </div>
-    <button class="abtn acc" style="margin-top:6px" onclick="askP('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}','${p.avgPrice||0}','${encodeURIComponent(p.area||'').replace(/'/g,'%27')}');cDM()">🤖 AI에게 상세 전략 묻기</button>`;
+    <button class="abtn acc" style="margin-top:6px" onclick="askP('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}','${p.avgPrice||0}','${encodeURIComponent(p.area||'').replace(/'/g,'%27')}');cDM()">💬 도우미에게 시세 묻기</button>`;
 
   // Phase 4 (2026-04-26): 평형 표시 + 단일 단지 통합 표시
   // 평형별 평균 카드 = 모든 평형 (개요)
@@ -11758,7 +11758,11 @@ function askP(n,pr,a){
   let area=''; try{ area=decodeURIComponent(a||''); }catch(_){ area=String(a||''); }
   // AI 에 단지 분석 요청 = 강한 관심 신호 → kapt 검색으로 기록
   _logSearch('kapt', apt, 1);
-  sQ(`${apt}(${area}, ${pr}억) 매수 전략과 리스크 상세 분석해줘`);
+  // ASKP-FIX-2026-08-20 (루프 회차 5 실측): ① 패널을 열지 않아 전송·응답이 닫힌 패널에 쌓였다(사용자에겐 무반응).
+  //   ② 질문이 LLM 시절 문구("매수 전략과 리스크 상세 분석")라 룰베이스 라우터가 100% 폴백("답하기 어려워요") —
+  //   라우터가 실제로 답하는 검증된 형태("{단지} 시세", 빠른 질문 칩과 동일 패턴)로 교체. area·pr 은 하위호환 유지.
+  try{ if(!_rpOverlay) toggleRpOverlay(); }catch(_){}
+  sQ(`${apt} 시세`);
 }
 function hk(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sM();}}
 function ah(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,90)+'px';}
