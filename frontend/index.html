@@ -9093,7 +9093,9 @@ function saveDeals(d){localStorage.setItem(DEAL_KEY,JSON.stringify(d))}
 
 function getDday(dateStr){
   if(!dateStr)return null;
-  const diff=new Date(dateStr)-new Date();
+  // DDAY-TZ-FIX-2026-08-20 (루프 회차 3 실측): 'YYYY-MM-DD' 단독은 UTC 자정 파싱 → KST 09:00 이 되어
+  //   KST 00~09시에 D-day 가 하루 크게 표시됐다(실측 D-13, 실제 12일). 'T00:00:00' 을 붙이면 로컬 자정.
+  const diff=new Date(dateStr+'T00:00:00')-new Date();
   return Math.ceil(diff/(1000*60*60*24));
 }
 
