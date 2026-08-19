@@ -3306,7 +3306,10 @@ window.addEventListener('DOMContentLoaded',()=>{
   // TOAST-DISMISS-2026-05-13 (Sprint BB): URL 별 1회만 토스트 — 같은 URL reload 시 noise 방지.
   //   sessionStorage 으로 tab 별 (탭 닫으면 reset). URL key 별 hash.
   const restored=restoreSearchFromUrl();
-  if(restored){
+  // RESTORE-TOAST-2026-08-19 (Sprint NNNNNNN-18, 운영자 지적 "매번 뜬다·의미 있나"):
+  //   본인 이전 입력(localStorage) 복원까지 '공유 링크' 문구로 매 세션 토스트하던 오작동 —
+  //   문구도 거짓이고 실효도 없다. 진짜 공유 URL(파라미터 진입)일 때만 1회 안내, 그 외엔 조용히.
+  if(restored==='url'){
     try {
       const _urlKey = 'mhl_restore_toast:' + location.search;
       if (!sessionStorage.getItem(_urlKey)) {
@@ -9466,6 +9469,8 @@ function restoreSearchFromUrl(){
     const _hasUrl=[...s.keys()].some(k=>['budget','cash','region','house','first','school','py','wp'].includes(k));
     const _hasStored=!!(_stB||_stC||_stW);
     if(!_hasUrl && !_hasStored)return false;
+    // RESTORE-TOAST-2026-08-19 (Sprint NNNNNNN-18, 운영자 지적): 반환을 'url'|'stored' 로 구분 —
+    //   localStorage(본인 이전 입력) 복원까지 '공유 링크' 토스트를 매 세션 띄우던 오작동의 근거값.
     const setChip=(gid,val)=>{
       if(!val)return;
       let matched=false;
@@ -9516,7 +9521,7 @@ function restoreSearchFromUrl(){
       },800);
     }
     cl();
-    return true;
+    return _hasUrl?'url':'stored';
   }catch(e){return false;}
 }
 function cp(el,id){
