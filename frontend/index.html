@@ -7025,25 +7025,20 @@ async function loadFacility(p){
     }
     if(!r) { fbox.style.display='none'; if(abox)abox.style.display='none'; _loadFacilitySchools(p); return; }
 
-    // facility 표시 (raw jsonb — AptInfo 응답 구조 다양해 안전하게 처리)
-    if (r.facility?.raw) {
-      const f = r.facility.raw;
-      // HH-HOCNT-FALLBACK-2026-07-14 (Sprint IIIII): kaptdaCnt 0/"0" 이면 hoCnt(호수) fallback — backend buildFacility 와 동일 규칙
-      const householdCount = [f.kaptdaCnt, f.hoCnt, f.householdCount, f.kaptCount].map(Number).find(n => Number.isFinite(n) && n > 0) || null;
-      const completionDate = f.useAprDay || f.completionDate || null;
-      // STAB-AUDIT-2026-05-07: K-apt API kaptBcompany raw 데이터 깨짐 사례 발견
-      //   "두산건설" 사이에 URL 끼어든 형태: "두산건https://www.k-apt.go.kr/...설"
-      //   kaptAcompany (시공사) 가 정상 데이터 — 우선 사용 + URL pattern sanitize
-      const _sanitizeCompany = v => {
-        if (!v) return null;
-        // URL 패턴 (http://... 또는 www....) 제거 + 공백 정리
-        const cleaned = String(v).replace(/https?:\/\/[^\s]+/g, '').replace(/www\.[^\s]+/g, '').replace(/\s+/g, ' ').trim();
-        return cleaned || null;
-      };
-      const constructionCompany = _sanitizeCompany(f.kaptAcompany) || _sanitizeCompany(f.kaptBcompany) || _sanitizeCompany(f.constructionCompany) || _sanitizeCompany(f.bcompany) || null;
-      const totalDong = f.kaptDongCnt || f.dongCount || null;
-      const parkingTotal = f.kaptdPcnt || f.parkingTotal || null;
-      const heatType = f.codeHeatNm || f.heatType || null;
+    // FACILITY-SCHEMA-FIX-2026-08-19 (Sprint NNNNNNN-4, 라이브 실측으로 발각된 기존 결함):
+    //   이 분기는 `r.facility.raw` 를 조건으로 삼았지만 **응답에 raw 필드가 없다**
+    //   (buildFacility 반환 키 실측 — raw 부재). 즉 단지 기본정보 박스가 이 경로에서
+    //   **항상 숨겨져 있었다**(조건이 스키마와 어긋난 매달린 참조 — 이 레포 실사고 유형).
+    //   buildFacility 가 이미 정규화한 필드를 직접 쓴다 — 프론트 사본 계산(필드명 추정·sanitize)을
+    //   제거해 값과 출처 라벨의 정합을 보장한다.
+    if (r.facility) {
+      const bf = r.facility;
+      const householdCount = Number(bf.totalHouseholds) > 0 ? Number(bf.totalHouseholds) : null;
+      const completionDate = bf.builtDate || null;
+      const constructionCompany = bf.builder || bf.developer || null; // 백엔드 normalizeBuilder 적용분
+      const totalDong = bf.dongCount || null;
+      const parkingTotal = bf.parkingTotal || null;
+      const heatType = bf.heatType || null;
       // 2026-05-31: KAPT raw 숫자 필드 robustness — 비숫자 garbage(L위 _sanitizeCompany 도입 근거와 동일 KAPT 깨짐) 시
       //   "NaN세대" 표시 차단. 유효 양수만 노출(0/비숫자/NaN → 필드 생략). 사용승인일은 YYYYMMDD(6~8자리)만 포맷.
       const items = [];
