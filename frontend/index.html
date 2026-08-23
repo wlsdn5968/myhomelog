@@ -588,14 +588,15 @@ html[data-theme="dark"] header{
    (design.html:187-216)의 토큰만 .lp 스코프로 입힌다: panel 배경·line 보더·칩=raise+line+tx2·hover ac·CTA=ac 배경+잉크 글자(design.html:524 패턴).
    칩 선택 상태는 시안 미정의 → 골드 배경+잉크(#0B1524, 대비 6.4:1) — 골드 위 흰 글자(3.3:1)는 AA 미달이라 쓰지 않는다.
    구조(번호 배지·필수 태그·입력창)는 유지. 전역 --acc(네이비)는 건드리지 않는다(다른 뷰 무영향). */
-.lp{
+body .lp{ /* (0,1,1) — 659행대 .lp{background:var(--s0)} 보다 앞에 있어도 이기도록 */
   --sb-panel:#FFFFFF; --sb-raise:#F7F9FC; --sb-line:#DEE5EF; --sb-tx:#0B1524; --sb-tx2:#5A6A82; --sb-tx3:#8A98AC;
   --sb-ac:#C98A00; --sb-ac2:#A87200; --sb-ink:#0B1524; --sb-ac-tint:rgba(201,138,0,.14);
   background:var(--sb-panel);border-right-color:var(--sb-line);
 }
-html[data-theme="dark"] .lp{
+html[data-theme="dark"] body .lp{ /* (0,1,2) — 596행대 기존 다크 .lp 규칙(0,1,1)보다 앞에 있어도 이기도록 */
   --sb-panel:#101B2B; --sb-raise:#162336; --sb-line:#22334A; --sb-tx:#E8EFFA; --sb-tx2:#93A4BD; --sb-tx3:#63758F;
   --sb-ac:#FFC93C; --sb-ac2:#F5A524; --sb-ink:#0B1524; --sb-ac-tint:rgba(255,201,60,.16);
+  background:var(--sb-panel);border-right-color:var(--sb-line); /* 기존 다크 .lp 규칙(--s0)이 이기던 갭 — 같은 specificity 뒤 선언 */
 }
 .lp .sec{border-bottom-color:var(--sb-line)}
 .lp .wnum{background:var(--sb-ac);color:var(--sb-ink)}
