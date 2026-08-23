@@ -91,6 +91,7 @@ export default [
         // NO-UNDEF-2026-08-17 (Sprint MMMMMMM-14): 실측으로 확인된 브라우저 내장.
         history: 'readonly', MutationObserver: 'readonly', ResizeObserver: 'readonly',
         Notification: 'readonly', prompt: 'readonly',
+        getComputedStyle: 'readonly', // FOCUS-TRAP-2026-08-20: 브라우저 내장(window.getComputedStyle) — 실존 전역
         atob: 'readonly', btoa: 'readonly', TextEncoder: 'readonly', TextDecoder: 'readonly',
         L: 'readonly',              // Leaflet (지도 라이브러리, 외부 <script src>)
         // ⚠ refreshQuota 는 **다른 인라인 블록에 선언된 우리 함수**다. classic script 는 전역을
