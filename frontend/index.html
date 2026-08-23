@@ -580,8 +580,8 @@ html[data-theme="dark"] header{
 .htab:hover,.htab-tool:hover{background:var(--hd-raise);color:var(--hd-tab-act)}
 .htab.on,.htab-tool.on{background:transparent;font-weight:600;color:var(--hd-tab-act)}
 .htabs > .htab.on::before,.htab-tool.on::before{content:'';display:inline-block;width:5px;height:5px;border-radius:99px;background:var(--hd-ac);margin-right:7px;vertical-align:2px}
-.hbtn{background:var(--hd-panel);border-color:var(--hd-bd);color:var(--hd-tab);border-radius:999px;font-weight:600;font-size:12px}
-.hbtn:hover{border-color:var(--hd-ac);color:var(--hd-tab-act)}
+header .hbtn{background:var(--hd-panel);border-color:var(--hd-bd);color:var(--hd-tab);border-radius:999px;font-weight:600;font-size:12px} /* header 한정 — SM 모달의 .hbtn(테마 전환)은 --hd-* 토큰 밖 */
+header .hbtn:hover{border-color:var(--hd-ac);color:var(--hd-tab-act)}
 #dataStatusBtn > span{background:var(--hd-ok)!important;box-shadow:0 0 0 3px var(--hd-ok-glow)}
 #themeToggle{border-radius:9px}
 /* SB-DESIGN-2026-08-20 (Sprint NNNNNNN-21): 사이드바 스킨 — 시안엔 '내 상황 위저드'가 없어(판단 불가) 시안 "조건 설정" 패널
