@@ -10523,10 +10523,14 @@ document.addEventListener('click', (e) => {
 //   ③ 닫힘 시 이전 포커스 복원. 개폐 방식이 제각각(.open 클래스·style.display·동적 생성)이라 "보이는
 //   풀스크린 오버레이 중 z-index 최상단"을 활성 모달로 판정한다. 동적 생성 모달(비교·규제요약)은 ①만 적용.
 (function(){
-  const MODAL_SEL='.smbg,.dmbg,.rgbg,#ERM,#DSM,#CARDOV,#cmpModal,#regSummaryModal,#ntcNudge';
+  // ntcNudge 는 비차단 토스트성(20초 자동 닫힘, z520)이라 트랩 대상에서 제외 — 상세 모달(z400) 위에 떠도 Tab 을 가로채면 안 된다(적대 검증 적발)
+  const MODAL_SEL='.smbg,.dmbg,.rgbg,#ERM,#DSM,#CARDOV,#cmpModal,#regSummaryModal';
   const FOCUSABLE='a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   const _vis=el=>{ if(!el||!el.isConnected||el.offsetHeight<=0)return false; const cs=getComputedStyle(el); return cs.display!=='none'&&cs.visibility!=='hidden'; };
   function _activeModal(){
+    // 포커스가 이미 어떤 모달 안에 있으면 그 모달이 활성(중첩·z-index 역전 대응) — 없으면 보이는 것 중 z-index 최상단
+    const cur=document.activeElement; const own=cur&&cur.closest?cur.closest(MODAL_SEL):null;
+    if(own&&_vis(own)) return own;
     let best=null,bz=-1;
     document.querySelectorAll(MODAL_SEL).forEach(el=>{ if(!_vis(el))return; const z=parseInt(getComputedStyle(el).zIndex)||0; if(z>=bz){bz=z;best=el;} });
     return best;
@@ -10542,7 +10546,6 @@ document.addEventListener('click', (e) => {
     else { if(!inside||cur===last){ e.preventDefault(); first.focus(); } }
   }, true);
   function _initFocusRestore(){
-    let _prev=null;
     // 접근성 이름: 포커스 대상이 dialog 이름을 갖도록 — 자기 자신이 role=dialog 면 그대로(ntcNudge 등), 아니면
     //   내부 박스에 role/aria-modal 부여 후 제목(.smtit/.dmtit/.rgm-t/h1~h3)을 aria-labelledby 로 연결 (적대 검증 적발).
     function _focusTarget(el){
@@ -10557,12 +10560,12 @@ document.addEventListener('click', (e) => {
       return box;
     }
     function _onOpen(el){
-      if(el._ftOpen) return; el._ftOpen=true; _prev=document.activeElement;
+      if(el._ftOpen) return; el._ftOpen=true; el._ftPrev=document.activeElement; // 모달별 보관 — 중첩(상세→카드/오류신고) 닫힘 순서대로 복원(적대 검증 적발)
       const box=_focusTarget(el);
       if(!el.contains(document.activeElement)){ try{ box.focus({preventScroll:true}); }catch(_){} }
     }
     function _onClose(el){
-      if(!el._ftOpen) return; el._ftOpen=false; const p=_prev; _prev=null;
+      if(!el._ftOpen) return; el._ftOpen=false; const p=el._ftPrev; el._ftPrev=null;
       if(p&&p.focus&&document.contains(p)){ try{ p.focus({preventScroll:true}); }catch(_){} }
     }
     const attrObs=new MutationObserver(muts=>{ muts.forEach(mu=>{ const el=mu.target; if(_vis(el)) _onOpen(el); else _onClose(el); }); });
