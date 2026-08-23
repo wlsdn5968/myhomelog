@@ -172,25 +172,17 @@
   }
 </style>
 <script>
-  // 결제 시작 차단 — PG 가맹 심사(live 키 발급) 완료 전 임시
-  (function(){
-    const _origStart = window.startCheckout;
-    window.startCheckout = function(planId){
-      alert('결제 시스템은 전자결제(PG) 가맹 심사 완료 후 활성화됩니다.\n\n출시 알림을 받으시려면 wlsdn5968@gmail.com 으로 메일 주세요.\n\n무료 플랜 (5회/일)은 홈에서 로그인 없이도 사용 가능합니다.');
-      return false;
-    };
-    document.addEventListener('DOMContentLoaded', function(){
-      // 이미 렌더된 결제 버튼도 차단
-      setTimeout(function(){
-        document.querySelectorAll('#plansList button.btn').forEach(function(b){
-          if (/구독하기/.test(b.textContent)) {
-            b.disabled = true;
-            b.title = 'PG 가맹 심사 완료 후 활성화';
-          }
-        });
-      }, 1500);
+  // PG-LAUNCH-GATE-2026-08-20 (전수검증 코드 대조): 종전 window.startCheckout 오버라이드 스텁은 뒤에 오는
+  //   `async function startCheckout` 선언이 window 프로퍼티를 덮어써 **무효**였다(Node vm 실증). 차단은
+  //   startCheckout 본문 첫 줄의 PG_LAUNCH_BLOCKED 상수가 담당하고, 버튼 비활성은 renderPlans 직후에 적용한다.
+  //   출시 시: PG_LAUNCH_BLOCKED=false 로 바꾸고 index.html 쪽 차단도 함께 해제(출시 체크리스트).
+  window.PG_LAUNCH_BLOCKED = true;
+  window._applyLaunchBlock = function(){
+    if (!window.PG_LAUNCH_BLOCKED) return;
+    document.querySelectorAll('#plansList button.btn').forEach(function(b){
+      if (/구독하기/.test(b.textContent)) { b.disabled = true; b.title = 'PG 가맹 심사 완료 후 활성화'; }
     });
-  })();
+  };
 </script>
 
 <!-- Supabase SDK (auth 토큰 필요) -->
@@ -314,6 +306,7 @@ function renderPlans(){
       ${cta}
     </div>`;
   }).join('');
+  try{ window._applyLaunchBlock && window._applyLaunchBlock(); }catch(_){} // PG-LAUNCH-GATE-2026-08-20: 렌더 직후(타이머 경쟁 없음)
 }
 
 // ── 내 구독 상태 ─────────────────────────────────────────
@@ -345,6 +338,10 @@ async function loadMe(){
 
 // ── 결제 시작 ───────────────────────────────────────────
 async function startCheckout(planId){
+  if(window.PG_LAUNCH_BLOCKED){ // PG-LAUNCH-GATE-2026-08-20
+    alert('결제 시스템은 전자결제(PG) 가맹 심사 완료 후 활성화됩니다.\n\n출시 알림을 받으시려면 wlsdn5968@gmail.com 으로 연락해주세요.');
+    return false;
+  }
   if(!authSession){
     setStatus('warn', '🔐 결제하려면 먼저 <a href="/">홈에서 로그인</a>해주세요.');
     return;

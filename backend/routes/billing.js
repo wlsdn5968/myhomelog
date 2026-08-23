@@ -93,6 +93,11 @@ router.get('/me', async (req, res, next) => {
 // returns: { orderId, amount, customerKey, planName }
 router.post('/checkout', async (req, res, next) => {
   try {
+    // PG-LAUNCH-GATE-2026-08-20 (전수검증 코드 대조): 종전엔 /confirm 만 501 게이트가 있고 /checkout 은 키 유무와
+    //   무관하게 주문을 발급 — 프론트 tossClientKey 체크 한 곳에만 의존하는 단일 장애점이었다. 서버에서도 대칭 차단.
+    if (!process.env.TOSS_CLIENT_KEY || !process.env.TOSS_SECRET_KEY) {
+      return res.status(503).json({ error: '결제 시스템 준비 중 — 잠시 후 다시 시도해주세요.', code: 'pg_not_ready' });
+    }
     const { plan } = req.body || {};
     if (!plan || !['pro', 'team'].includes(plan)) {
       return res.status(400).json({ error: '유효하지 않은 플랜' });
@@ -101,7 +106,7 @@ router.post('/checkout', async (req, res, next) => {
     // admin 으로 플랜 가격 조회 (사용자가 price 를 위조하지 못하도록 서버가 결정)
     const admin = getSupabaseAdmin();
     if (!admin) {
-      return res.status(503).json({ error: '결제 시스템 초기화 중 (관리자 설정 필요)' });
+      return res.status(503).json({ error: '결제 시스템 준비 중 — 잠시 후 다시 시도해주세요.' }); // 내부 용어 제거
     }
     const { data: planRow, error: planErr } = await admin
       .from('billing_plans')
@@ -156,7 +161,7 @@ router.post('/confirm', async (req, res, next) => {
     if (!TOSS_SECRET_KEY) {
       return res.status(501).json({
         error: '결제 시스템 설정 미완료',
-        hint: '관리자에게 문의 — TOSS_SECRET_KEY 미설정',
+        hint: '결제 시스템 준비 중',
       });
     }
 
@@ -479,7 +484,7 @@ const REFUND_WINDOW_MS = 7 * 24 * 60 * 60 * 1000; // 7일 (청약철회)
 router.post('/payments/:id/refund', async (req, res, next) => {
   try {
     if (!TOSS_SECRET_KEY) {
-      return res.status(501).json({ error: '환불 시스템 설정 미완료', hint: 'TOSS_SECRET_KEY 미설정', code: 'refund_unavailable' });
+      return res.status(501).json({ error: '환불 시스템 설정 미완료', hint: '결제 시스템 준비 중', code: 'refund_unavailable' });
     }
     const admin = getSupabaseAdmin();
     if (!admin) return res.status(503).json({ error: '결제 시스템 초기화 중' });

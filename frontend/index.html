@@ -3260,7 +3260,9 @@ window.addEventListener('DOMContentLoaded',()=>{
       oauthDesc  = _hp.get('error_description') || _hp.get('msg') || '';
     }
     if (oauthError) {
-      var msg = '로그인 실패: ' + decodeURIComponent(oauthDesc || oauthError);
+      var _rawErr = oauthDesc || oauthError, _decErr = _rawErr;
+      try { _decErr = decodeURIComponent(_rawErr); } catch(_) {} // 잘못된 % 인코딩이면 원문 유지(종전엔 바깥 catch 로 전부 스킵)
+      var msg = '로그인 실패: ' + _decErr;
       if (/provider is not enabled|Unsupported provider/i.test(oauthDesc || oauthError)) {
         msg = '⚠ 해당 소셜 로그인 방식이 아직 활성화되지 않았어요. 이메일 로그인을 사용해주세요.';
       } else if (/access_denied|user.*denied|cancel/i.test(oauthDesc || oauthError)) {
@@ -3270,8 +3272,10 @@ window.addEventListener('DOMContentLoaded',()=>{
         if (typeof toast === 'function') toast(msg);
         // STAB-A P0#5 (2026-05-03): 잘못된 ID 'loginM' → 실제 'LM' (라인 1631 정의)
         //   기존: OAuth 실패 후 "다시 시도" 모달 못 열림 → 사용자 막힘
+        // OAUTH-MODAL-STUCK-2026-08-20 (전수검증 코드 대조): inline style.display='flex' 로 열면 ESC·배경·✕ 가
+        //   전부 .open 클래스 기준이라 어떤 방법으로도 닫히지 않았다(로그인 실패 직후 화면 고착). 표준 진입점 사용.
         var lm = document.getElementById('LM');
-        if (lm) lm.style.display = 'flex';
+        if (typeof openLogin === 'function') openLogin(); else if (lm) lm.classList.add('open');
         var st = document.getElementById('lmStatus');
         if (st) st.textContent = '❌ ' + msg;
       }, 200);
@@ -4280,7 +4284,7 @@ async function generateReport(_isRetry) {
       const j = await r.json().catch(() => ({}));
       // MOB-4 (2026-05-03): j.message (사용자 친화) 우선, j.error (코드) fallback.
       //   기존: e.message = "DAILY_LIMIT_EXCEEDED" 같은 코드만 노출 → "보고서 생성 실패: DAILY_LIMIT_EXCEEDED"
-      //   변경: j.message 우선 → "오늘의 무료 컨설팅 보고서 한도(0회)를 모두 사용했어요" 노출.
+      //   변경: j.message 우선 → "오늘의 무료 컨설팅 보고서 한도(0회)를 모두 사용했어요" 노출. ← (2026-08-20: 49109e7 이후 익명 한도 0 은 "로그인이 필요해요" 문구로 분기되어 이 예시는 더 이상 발생하지 않음)
       const err = new Error(j.message || j.error || `HTTP ${r.status}`);
       err.code = j.error || null;
       err.status = r.status;
@@ -7860,11 +7864,12 @@ function dlShareCard(){
 //   clipboard 권한과 prompt() 가 모두 막힐 수 있다 — 종전엔 prompt 가 throw 해 공유가 조용히 죽었다.
 //   execCommand('copy') 재시도 → prompt 도 try/catch → 마지막은 안내 토스트(막다른 길 없음).
 function _copyFallback(txt,url){
-  let ok=false;
+  let ok=false, ta=null;
   try{
-    const ta=document.createElement('textarea');ta.value=txt;ta.setAttribute('readonly','');ta.style.cssText='position:fixed;left:-9999px;top:0';
-    document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,txt.length);ok=document.execCommand('copy');ta.remove();
+    ta=document.createElement('textarea');ta.value=txt;ta.setAttribute('readonly','');ta.style.cssText='position:fixed;left:-9999px;top:0';
+    document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,txt.length);ok=document.execCommand('copy');
   }catch(_){}
+  finally{ try{ ta&&ta.remove(); }catch(_){} } // 적대 검증 적발: 예외 시 고아 textarea 누적 방지
   if(ok){toast('🔗 링크 복사 완료 — 붙여넣기로 공유하세요');return;}
   try{prompt('이 링크를 복사하세요:', url||txt);}
   catch(_){toast('이 환경은 자동 복사가 차단돼 있어요 — 일반 브라우저에서 열면 복사할 수 있어요');}
