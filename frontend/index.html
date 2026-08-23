@@ -6487,7 +6487,8 @@ async function shareCompare(){
     await navigator.clipboard.writeText(`${text}\n${url}`);
     toast('🔗 비교 링크 복사 완료 — 붙여넣기로 공유하세요');
   }catch{
-    prompt('이 링크를 복사하세요:', url);
+    _copyFallback(`${text}
+${url}`, url); // CLIP-FALLBACK-2026-08-20
   }
 }
 
@@ -7852,13 +7853,26 @@ function dlShareCard(){
     toast('⬇ 카드 저장 완료 — 인스타·스레드에 올려보세요');
   },'image/png');
 }
+// CLIP-FALLBACK-2026-08-20 (루프 회차 5, Sentry FRONTEND-S 'prompt() is not supported'): 웹뷰(카톡 인앱 등)는
+//   clipboard 권한과 prompt() 가 모두 막힐 수 있다 — 종전엔 prompt 가 throw 해 공유가 조용히 죽었다.
+//   execCommand('copy') 재시도 → prompt 도 try/catch → 마지막은 안내 토스트(막다른 길 없음).
+function _copyFallback(txt,url){
+  let ok=false;
+  try{
+    const ta=document.createElement('textarea');ta.value=txt;ta.setAttribute('readonly','');ta.style.cssText='position:fixed;left:-9999px;top:0';
+    document.body.appendChild(ta);ta.select();ta.setSelectionRange(0,txt.length);ok=document.execCommand('copy');ta.remove();
+  }catch(_){}
+  if(ok){toast('🔗 링크 복사 완료 — 붙여넣기로 공유하세요');return;}
+  try{prompt('이 링크를 복사하세요:', url||txt);}
+  catch(_){toast('이 환경은 자동 복사가 차단돼 있어요 — 일반 브라우저에서 열면 복사할 수 있어요');}
+}
 async function copyShareCardLink(){
   // RANKCARD-2026-08-19: 카드 종류별 링크 — 단지 카드=/share, 랭킹 카드=/briefing(각 open* 이 설정)
   let url=window._cardShareUrl||'';
   if(!url&&currentDetail){const u=new URL(location.origin+'/share');u.searchParams.set('apt',currentDetail.aptName);if(currentDetail.area)u.searchParams.set('area',currentDetail.area);url=u.toString();}
   if(!url){toast('복사할 링크가 없어요');return;}
   try{await navigator.clipboard.writeText(url);toast('🔗 링크 복사 완료');}
-  catch(_e){prompt('이 링크를 복사하세요:',url);}
+  catch(_e){_copyFallback(url,url);} // CLIP-FALLBACK-2026-08-20
 }
 // ============ /SHARECARD ============
 // ============ RANKCARD-2026-08-19 (Sprint NNNNNNN-13, 기획 킥 콘텐츠 2호) ============
@@ -7946,7 +7960,8 @@ async function shareCurrent(){
     await navigator.clipboard.writeText(`${text}\n${url}`);
     toast('🔗 링크 복사 완료 — 붙여넣기로 공유하세요');
   }catch{
-    prompt('이 링크를 복사하세요:', url);
+    _copyFallback(`${text}
+${url}`, url); // CLIP-FALLBACK-2026-08-20
   }
   if(history.replaceState)history.replaceState(null,'',url);
 }
