@@ -5969,7 +5969,10 @@ async function doSearch(){
       // LOGIN-CTA-2026-07-15 (Sprint LLLLL): 보고서·채팅 429 에는 로그인 CTA 가 있는데 검색만 toast 한 줄
       //   (2.6초 소멸)이라 로그인 전환 기회 유실 — dailyLimit 응답의 canBoostByLogin 활용해 동의형 CTA.
       if(j.canBoostByLogin && typeof openLogin==='function'){
-        if(confirm((j.message||'오늘의 무료 검색을 모두 사용했어요.')+'\n\n지금 로그인하고 추가 횟수를 받으시겠어요?')) openLogin();
+        // CONFIRM-GUARD-2026-08-20 (전수검증 실측): confirm() 이 억제된 환경(웹뷰·'추가 대화상자 차단')에선
+        //   즉시 false/throw 로 끝나 한도 초과 안내가 0 이었다 — 불발 시 최소 토스트로 이유를 알린다.
+        let _ok=false; try{ _ok=confirm((j.message||'오늘의 무료 검색을 모두 사용했어요.')+'\n\n지금 로그인하고 추가 횟수를 받으시겠어요?'); }catch(_){}
+        if(_ok) openLogin(); else toast(j.message||'오늘의 무료 검색을 모두 사용했어요. 로그인하면 추가 횟수를 받을 수 있어요.');
       } else {
         toast(j.message || '오늘의 무료 검색을 모두 사용했어요. 내일 다시 이용해주세요.');
       }
