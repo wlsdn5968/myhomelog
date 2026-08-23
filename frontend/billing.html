@@ -55,29 +55,35 @@
 <meta name="supabase-url" content="https://brxorvxdfrbxcavufspe.supabase.co">
 <meta name="supabase-publishable-key" content="sb_publishable_fqEpRTSJjPrwwhN8j4JqNA_zhTEzDDo">
 <style>
-  :root{--bg:#F7F8FB;--bg2:#EEF1F6;--t1:#222;--t2:#4a5159;--t3:#8a9099;--bd:#DDE2EA;--acc:#2A6DF4;--acc2:#0D46C2;--safe:#1F9D55;--warn:#D08700;--danger:#C4402A;--redL:#FDEEEE;--grL:#EAF7EE;}
+  /* BILL-DESIGN-2026-08-20 (Sprint NNNNNNN-21): 시안 design.html:13-24·500-560(isPricing) 토큰 코드화 — 골드 accent·panel/raise/line,
+     카드 16px·가격 34px·프로 카드 1.5px 골드 보더+'실수요자 추천' 배지·CTA=골드 배경+잉크 글자. 비교표는 항목 출처 미확정이라 도입하지 않음.
+     다크는 메인(index.html)의 localStorage 'mhl_theme' 를 읽어 동기화. */
+  :root{--bg:#F2F5FA;--bg2:#F7F9FC;--panel:#FFFFFF;--t1:#0B1524;--t2:#5A6A82;--t3:#8A98AC;--bd:#DEE5EF;--acc:#C98A00;--acc2:#A87200;--ink:#0B1524;--safe:#12855C;--warn:#D08700;--danger:#D93A3A;--redL:#FDEEEE;--grL:#EAF7EE;--shadow:0 1px 2px rgba(11,21,36,.06),0 10px 28px rgba(11,21,36,.07);--acc-ring:rgba(201,138,0,.18);}
+  html[data-theme="dark"]{--bg:#080E18;--bg2:#162336;--panel:#101B2B;--t1:#E8EFFA;--t2:#93A4BD;--t3:#63758F;--bd:#22334A;--acc:#FFC93C;--acc2:#F5A524;--ink:#0B1524;--safe:#3ED598;--danger:#FF6161;--redL:rgba(255,97,97,.12);--grL:rgba(62,213,152,.12);--shadow:0 1px 0 rgba(255,255,255,.03),0 12px 32px rgba(0,0,0,.35);--acc-ring:rgba(255,201,60,.22);}
   *{box-sizing:border-box}
-  html,body{margin:0;padding:0;background:var(--bg);color:var(--t1);font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--t1);font-family:"Pretendard Variable",Pretendard,system-ui,-apple-system,"Noto Sans KR",sans-serif}
   .wrap{max-width:720px;margin:0 auto;padding:18px 16px 80px}
   .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
   .hdr h1{font-size:20px;margin:0;font-weight:800}
   .hdr a{color:var(--acc);font-size:13px;text-decoration:none}
-  .card{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:18px;margin-bottom:14px}
+  .card{background:var(--panel);border:1px solid var(--bd);border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:var(--shadow)}
   .me-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
   .me-lbl{font-size:12px;color:var(--t3)}
   .me-val{font-size:14px;font-weight:700;color:var(--t1)}
-  .plan{border:1px solid var(--bd);border-radius:10px;padding:14px 16px;margin-bottom:10px;background:#fff}
-  .plan.on{border-color:var(--acc);box-shadow:0 0 0 3px rgba(42,109,244,.12)}
+  .plan{position:relative;border:1px solid var(--bd);border-radius:16px;padding:26px 24px;margin-bottom:12px;background:var(--panel);box-shadow:var(--shadow)}
+  .plan.pro{border:1.5px solid var(--acc)}
+  .plan-badge{position:absolute;top:-11px;left:24px;background:var(--acc);color:var(--ink);font-size:11px;font-weight:800;padding:3px 10px;border-radius:999px}
+  .plan.on{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-ring)}
   .plan-hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
   .plan-nm{font-size:16px;font-weight:800}
-  .plan-pr{font-size:18px;font-weight:800;color:var(--acc)}
-  .plan-pr small{font-size:11px;color:var(--t3);font-weight:500;margin-left:2px}
+  .plan-pr{font-size:34px;font-weight:800;color:var(--t1);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
+  .plan-pr small{font-size:12px;color:var(--t3);font-weight:500;margin-left:4px}
   .plan-ft{font-size:12px;color:var(--t2);line-height:1.7;list-style:none;padding:0;margin:6px 0 10px}
-  .plan-ft li::before{content:'✓ ';color:var(--safe);font-weight:700}
-  .btn{display:block;width:100%;padding:12px;border:none;border-radius:8px;background:var(--acc);color:#fff;font-size:14px;font-weight:700;cursor:pointer}
+  .plan-ft li::before{content:'· ';color:var(--t3);font-weight:700} /* 시안 design.html:515,527 */
+  .btn{display:block;width:100%;padding:12px;border:none;border-radius:10px;background:var(--acc);color:var(--ink);font-size:14px;font-weight:800;cursor:pointer}
   .btn:hover{background:var(--acc2)}
-  .btn:disabled{background:#C5CDD9;cursor:not-allowed}
-  .btn-sec{background:var(--bg2);color:var(--t1);border:1px solid var(--bd)}
+  .btn:disabled{background:var(--bd);color:var(--t3);cursor:not-allowed}
+  .btn-sec{background:var(--bg2);color:var(--t1);border:1px solid var(--bd);font-weight:700}
   .btn-sec:hover{background:#E3E8F0}
   .btn-dng{background:var(--danger)}
   .status{padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.6;margin-bottom:12px}
@@ -86,7 +92,7 @@
   .status.err{background:var(--redL);color:var(--danger);border:1px solid #EEC8C8}
   .status.ok{background:var(--grL);color:var(--safe);border:1px solid #C4E5CD}
   .note{font-size:11px;color:var(--t3);line-height:1.5;margin-top:10px}
-  .sp{display:inline-block;width:14px;height:14px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:sp .9s linear infinite;vertical-align:middle;margin-right:6px}
+  .sp{display:inline-block;width:14px;height:14px;border:2px solid var(--ink);border-top-color:transparent;border-radius:50%;animation:sp .9s linear infinite;vertical-align:middle;margin-right:6px}
   @keyframes sp{to{transform:rotate(360deg)}}
   #widgetArea{min-height:120px}
   #agreementArea{min-height:60px;margin-top:10px}
@@ -171,6 +177,7 @@
     opacity: 0.85;
   }
 </style>
+<script>(function(){try{if(localStorage.getItem('mhl_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(_){}})();</script>
 <script>
   // PG-LAUNCH-GATE-2026-08-20 (전수검증 코드 대조): 종전 window.startCheckout 오버라이드 스텁은 뒤에 오는
   //   `async function startCheckout` 선언이 window 프로퍼티를 덮어써 **무효**였다(Node vm 실증). 차단은
@@ -297,7 +304,8 @@ function renderPlans(){
     const cta = isFree
       ? '<button class="btn btn-sec" disabled>현재 플랜</button>'
       : `<button class="btn" data-plan="${escapeHtml(p.id)}" onclick="startCheckout(this.dataset.plan)">${escapeHtml(p.name)} 구독하기</button>`;
-    return `<div class="plan" data-plan="${escapeHtml(p.id)}">
+    return `<div class="plan${p.id==='pro'?' pro':''}" data-plan="${escapeHtml(p.id)}">
+      ${p.id==='pro'?'<span class="plan-badge">실수요자 추천</span>':''}
       <div class="plan-hd">
         <span class="plan-nm">${escapeHtml(p.name)}</span>
         <span class="plan-pr">${priceStr}${isFree?'':'<small>/월</small>'}</span>

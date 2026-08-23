@@ -553,6 +553,62 @@ html[data-theme="dark"] .ltxt em{color:#7FA1E8}
   .hsearch input::placeholder{color:var(--hd-ph)}
 }
 @media(min-width:1120px){ .hsearch{min-width:260px!important} }
+/* HDR-DESIGN-2026-08-20 (Sprint NNNNNNN-21): 시안 design.html:13-60 헤더 토큰 코드화 — 기존 --hd-* 토큰 값만 교체(뷰 스코프 패턴).
+   시안 원문: bg=--bg(#F2F5FA/#080E18)·line(#DEE5EF/#22334A)·tab=--tx2·활성=5px 골드 점(배경 변화 없음)·pill 버튼(panel+line, 초록 점 --ok)
+   ⚠ 시안엔 검색창·로그인·알림·사용량이 없지만 기능 요소는 유지(IA 변경은 운영자 결정) — 외형만 맞춘다. */
+header{
+  --hd-navy:#C98A00; --hd-ac:#C98A00; --hd-tab:#5A6A82; --hd-tab-act:#0B1524; --hd-tab-act-bg:transparent;
+  --hd-bd:#DEE5EF; --hd-search-bg:#F7F9FC; --hd-search-bd:#DEE5EF; --hd-ph:#8A98AC;
+  --hd-usage:#5A6A82; --hd-usage-dim:#8A98AC; --hd-usage-dot:#DEE5EF;
+  --hd-panel:#FFFFFF; --hd-raise:#F7F9FC; --hd-ok:#12855C; --hd-ok-glow:rgba(18,133,92,.18); --hd-logo-ink:#0B1524;
+  background:#F2F5FA;
+}
+html[data-theme="dark"] header{
+  --hd-navy:#FFC93C; --hd-ac:#FFC93C; --hd-tab:#93A4BD; --hd-tab-act:#E8EFFA; --hd-tab-act-bg:transparent;
+  --hd-bd:#22334A; --hd-search-bg:#162336; --hd-search-bd:#22334A; --hd-ph:#63758F;
+  --hd-usage:#93A4BD; --hd-usage-dim:#63758F; --hd-usage-dot:#22334A;
+  --hd-panel:#101B2B; --hd-raise:#162336; --hd-ok:#3ED598; --hd-ok-glow:rgba(62,213,152,.18); --hd-logo-ink:#0B1524;
+  background:#080E18;
+}
+.lmark{width:28px;height:28px;border-radius:8px}
+.lmark svg path{stroke:var(--hd-logo-ink)} /* SVG 속성(#fff)은 골드 위 대비 부족 — CSS 가 presentation attribute 를 덮는다 */
+.ltxt{font-family:var(--font-body);font-size:15px;display:flex;flex-direction:column;line-height:1.1}
+.ltxt em,html[data-theme="dark"] .ltxt em{color:var(--hd-tab-act)} /* 시안: 서비스명 단색 */
+.lsub{font-size:9px;font-weight:600;letter-spacing:.16em;color:var(--hd-usage-dim);margin-top:3px}
+@media(max-width:700px){.lsub{display:none}}
+.htab,.htab-tool{font-family:var(--font-body);font-size:13px;padding:7px 12px;border-radius:8px}
+.htab:hover,.htab-tool:hover{background:var(--hd-raise);color:var(--hd-tab-act)}
+.htab.on,.htab-tool.on{background:transparent;font-weight:600;color:var(--hd-tab-act)}
+.htabs > .htab.on::before,.htab-tool.on::before{content:'';display:inline-block;width:5px;height:5px;border-radius:99px;background:var(--hd-ac);margin-right:7px;vertical-align:2px}
+.hbtn{background:var(--hd-panel);border-color:var(--hd-bd);color:var(--hd-tab);border-radius:999px;font-weight:600;font-size:12px}
+.hbtn:hover{border-color:var(--hd-ac);color:var(--hd-tab-act)}
+#dataStatusBtn > span{background:var(--hd-ok)!important;box-shadow:0 0 0 3px var(--hd-ok-glow)}
+#themeToggle{border-radius:9px}
+/* SB-DESIGN-2026-08-20 (Sprint NNNNNNN-21): 사이드바 스킨 — 시안엔 '내 상황 위저드'가 없어(판단 불가) 시안 "조건 설정" 패널
+   (design.html:187-216)의 토큰만 .lp 스코프로 입힌다: panel 배경·line 보더·칩=raise+line+tx2·hover ac·CTA=ac 배경+잉크 글자(design.html:524 패턴).
+   칩 선택 상태는 시안 미정의 → 골드 배경+잉크(#0B1524, 대비 6.4:1) — 골드 위 흰 글자(3.3:1)는 AA 미달이라 쓰지 않는다.
+   구조(번호 배지·필수 태그·입력창)는 유지. 전역 --acc(네이비)는 건드리지 않는다(다른 뷰 무영향). */
+.lp{
+  --sb-panel:#FFFFFF; --sb-raise:#F7F9FC; --sb-line:#DEE5EF; --sb-tx:#0B1524; --sb-tx2:#5A6A82; --sb-tx3:#8A98AC;
+  --sb-ac:#C98A00; --sb-ac2:#A87200; --sb-ink:#0B1524; --sb-ac-tint:rgba(201,138,0,.14);
+  background:var(--sb-panel);border-right-color:var(--sb-line);
+}
+html[data-theme="dark"] .lp{
+  --sb-panel:#101B2B; --sb-raise:#162336; --sb-line:#22334A; --sb-tx:#E8EFFA; --sb-tx2:#93A4BD; --sb-tx3:#63758F;
+  --sb-ac:#FFC93C; --sb-ac2:#F5A524; --sb-ink:#0B1524; --sb-ac-tint:rgba(255,201,60,.16);
+}
+.lp .sec{border-bottom-color:var(--sb-line)}
+.lp .wnum{background:var(--sb-ac);color:var(--sb-ink)}
+.lp .wtitle{color:var(--sb-tx)}
+.lp .chip{background:var(--sb-raise);border-color:var(--sb-line);color:var(--sb-tx2)}
+.lp .chip:hover{border-color:var(--sb-ac);color:var(--sb-tx)}
+.lp .chip.on{background:var(--sb-ac);border-color:var(--sb-ac);color:var(--sb-ink)}
+.lp .inp{background:var(--sb-panel);border-color:var(--sb-line);color:var(--sb-tx)}
+.lp .inp:focus{border-color:var(--sb-ac);box-shadow:0 0 0 3px var(--sb-ac-tint)}
+.lp .abtn.a2,.lp-cta .abtn.a2{background:var(--sb-ac);color:var(--sb-ink);border-color:var(--sb-ac)}
+.lp .abtn.a2:hover,.lp-cta .abtn.a2:hover{background:var(--sb-ac2)}
+.lp .abtn.acc{background:var(--sb-raise);color:var(--sb-tx);border:1px solid var(--sb-line)}
+.lp .lp-cta{border-top-color:var(--sb-line);background:var(--sb-panel)}
 /* 계정 아바타 + 드롭다운 (시안 컷2) */
 .acct-dd{position:relative;display:none}
 .hbtn-avatar{display:flex;align-items:center;gap:4px;padding:3px 5px 3px 3px;border:1px solid var(--hd-bd);border-radius:22px;background:var(--hd-menu-bg);cursor:pointer;font-family:inherit;transition:border-color .15s}
@@ -1509,7 +1565,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 <header>
   <!-- 모바일 햄버거 — 사이드바 (내 상황 입력) drawer 토글 -->
   <button class="hamb" onclick="toggleDrawer()" aria-label="메뉴 열기" title="내 상황 / 관심단지 / 계약타임라인">☰</button>
-  <a class="logo" href="/"><div class="lmark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M3 11.2 12 4l9 7.2" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 9.8V20h13V9.8" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 20v-5h4v5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="ltxt">내집<em>로그</em></div></a>
+  <a class="logo" href="/"><div class="lmark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M3 11.2 12 4l9 7.2" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 9.8V20h13V9.8" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 20v-5h4v5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="ltxt"><span>내집<em>로그</em></span><span class="lsub" aria-hidden="true">HOUSING DATA TERMINAL</span></div></a>
   <!-- Sprint OOOOO-3 (운영자 지시): 탭 재배열 — 사용법을 첫 탭으로(헷갈린다는 사용자 다수), 뉴스를 보고서 옆으로,
        대출계산은 도구▾ 안으로. ⚠ sv() 탭 활성은 .htab DOM 순서 = htabOrder 배열 인덱스 매칭 — 여기 순서를 바꾸면
        반드시 htabOrder(sv 함수)도 함께 갱신할 것. 규제 요약(비뷰)은 항상 마지막(인덱스 밖 → 항상 off). -->
