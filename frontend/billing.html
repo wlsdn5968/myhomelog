@@ -54,6 +54,7 @@
 <!-- Supabase 공개 설정 — index.html 과 동일한 meta 태그 (세션 storage 공유) -->
 <meta name="supabase-url" content="https://brxorvxdfrbxcavufspe.supabase.co">
 <meta name="supabase-publishable-key" content="sb_publishable_fqEpRTSJjPrwwhN8j4JqNA_zhTEzDDo">
+<script>(function(){try{if(localStorage.getItem('mhl_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(_){}})();</script> <!-- 적대 검증: body 끝에 있으면 라이트 플래시(FOUC) -->
 <style>
   /* BILL-DESIGN-2026-08-20 (Sprint NNNNNNN-21): 시안 design.html:13-24·500-560(isPricing) 토큰 코드화 — 골드 accent·panel/raise/line,
      카드 16px·가격 34px·프로 카드 1.5px 골드 보더+'실수요자 추천' 배지·CTA=골드 배경+잉크 글자. 비교표는 항목 출처 미확정이라 도입하지 않음.
@@ -65,29 +66,30 @@
   .wrap{max-width:720px;margin:0 auto;padding:18px 16px 80px}
   .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
   .hdr h1{font-size:20px;margin:0;font-weight:800}
-  .hdr a{color:var(--acc);font-size:13px;text-decoration:none}
+  .hdr a{color:var(--t1);font-size:13px;text-decoration:underline;text-decoration-color:var(--acc)} /* 적대 검증: 골드 글자 2.7:1 미달 — 시안(a{color:var(--ac)})보다 접근성 우선 */
   .card{background:var(--panel);border:1px solid var(--bd);border-radius:16px;padding:18px;margin-bottom:14px;box-shadow:var(--shadow)}
   .me-row{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px}
   .me-lbl{font-size:12px;color:var(--t3)}
   .me-val{font-size:14px;font-weight:700;color:var(--t1)}
   .plan{position:relative;border:1px solid var(--bd);border-radius:16px;padding:26px 24px;margin-bottom:12px;background:var(--panel);box-shadow:var(--shadow)}
   .plan.pro{border:1.5px solid var(--acc)}
-  .plan-badge{position:absolute;top:-11px;left:24px;background:var(--acc);color:var(--ink);font-size:11px;font-weight:800;padding:3px 10px;border-radius:999px}
+  .plan-badge{position:absolute;top:-11px;left:24px;background:var(--acc);color:var(--ink);font-size:10.5px;font-weight:800;padding:4px 10px;border-radius:6px} /* design.html:521 */
   .plan.on{border-color:var(--acc);box-shadow:0 0 0 3px var(--acc-ring)}
   .plan-hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}
   .plan-nm{font-size:16px;font-weight:800}
   .plan-pr{font-size:34px;font-weight:800;color:var(--t1);letter-spacing:-.03em;font-variant-numeric:tabular-nums}
   .plan-pr small{font-size:12px;color:var(--t3);font-weight:500;margin-left:4px}
   .plan-ft{font-size:12px;color:var(--t2);line-height:1.7;list-style:none;padding:0;margin:6px 0 10px}
-  .plan-ft li::before{content:'· ';color:var(--t3);font-weight:700} /* 시안 design.html:515,527 */
+  .plan-ft li::before{content:'· ';color:var(--t3);font-weight:700} /* 시안 design.html:515 */
+  .plan.pro .plan-ft li::before{color:var(--acc)} /* 시안 design.html:527 — 프로 카드 불릿은 골드 */
   .btn{display:block;width:100%;padding:12px;border:none;border-radius:10px;background:var(--acc);color:var(--ink);font-size:14px;font-weight:800;cursor:pointer}
   .btn:hover{background:var(--acc2)}
   .btn:disabled{background:var(--bd);color:var(--t3);cursor:not-allowed}
   .btn-sec{background:var(--bg2);color:var(--t1);border:1px solid var(--bd);font-weight:700}
-  .btn-sec:hover{background:#E3E8F0}
+  .btn-sec:hover{background:var(--bd)}
   .btn-dng{background:var(--danger)}
   .status{padding:10px 12px;border-radius:8px;font-size:12px;line-height:1.6;margin-bottom:12px}
-  .status.info{background:#EEF4FF;color:var(--acc2);border:1px solid #C9DCF5}
+  .status.info{background:var(--bg2);color:var(--t1);border:1px solid var(--bd)} /* 적대 검증: 골드 글자 3.75:1·다크 1.85:1 */
   .status.warn{background:#FFF6E3;color:var(--warn);border:1px solid #F0D998}
   .status.err{background:var(--redL);color:var(--danger);border:1px solid #EEC8C8}
   .status.ok{background:var(--grL);color:var(--safe);border:1px solid #C4E5CD}
@@ -130,14 +132,14 @@
     <div id="myConsentBox" style="background:var(--bg2);border-radius:8px;padding:12px;margin-top:12px;font-size:12px;line-height:1.7;display:none">
       <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer;margin-bottom:6px">
         <input type="checkbox" id="cnRefund" style="margin-top:3px;flex-shrink:0">
-        <span><b>(필수)</b> <a href="/refund.html" target="_blank" style="color:var(--acc);text-decoration:underline">환불 정책</a>을 확인했고 이에 동의합니다. 결제 후 7일 이내·미사용 시 전액 환불 가능하며, 사용 시작 시 일할 정산됨을 이해했습니다.</span>
+        <span><b>(필수)</b> <a href="/refund.html" target="_blank" style="color:var(--t1);text-decoration:underline;text-decoration-color:var(--acc)">환불 정책</a>을 확인했고 이에 동의합니다. 결제 후 7일 이내·미사용 시 전액 환불 가능하며, 사용 시작 시 일할 정산됨을 이해했습니다.</span>
       </label>
       <div style="display:flex;align-items:flex-start;gap:6px;margin-bottom:6px;color:var(--t2)">
         <span>ℹ <b>본 결제는 30일 단건 이용권이며 자동 갱신되지 않습니다.</b> 만료 후 계속 이용하려면 다시 결제해주세요.</span>
       </div>
       <label style="display:flex;align-items:flex-start;gap:6px;cursor:pointer">
         <input type="checkbox" id="cnTerms" style="margin-top:3px;flex-shrink:0">
-        <span><b>(필수)</b> <a href="/terms.html" target="_blank" style="color:var(--acc);text-decoration:underline">이용약관</a> 및 <a href="/privacy.html" target="_blank" style="color:var(--acc);text-decoration:underline">개인정보 처리방침</a>에 동의합니다.</span>
+        <span><b>(필수)</b> <a href="/terms.html" target="_blank" style="color:var(--t1);text-decoration:underline;text-decoration-color:var(--acc)">이용약관</a> 및 <a href="/privacy.html" target="_blank" style="color:var(--t1);text-decoration:underline;text-decoration-color:var(--acc)">개인정보 처리방침</a>에 동의합니다.</span>
       </label>
     </div>
 
@@ -147,7 +149,7 @@
 
   <div class="note">
     결제는 Toss Payments 가 처리합니다. 카드 정보는 저희 서버에 저장되지 않습니다.<br>
-    결제 전 <a href="/terms.html" style="color:var(--acc)">이용약관</a>·<a href="/privacy.html" style="color:var(--acc)">개인정보 처리방침</a>·<a href="/refund.html" style="color:var(--acc)">환불정책</a> 을 확인하세요.<br>
+    결제 전 <a href="/terms.html" style="color:var(--t1);text-decoration:underline;text-decoration-color:var(--acc)">이용약관</a>·<a href="/privacy.html" style="color:var(--t1);text-decoration:underline;text-decoration-color:var(--acc)">개인정보 처리방침</a>·<a href="/refund.html" style="color:var(--t1);text-decoration:underline;text-decoration-color:var(--acc)">환불정책</a> 을 확인하세요.<br>
     <strong>전자상거래법 제17조</strong>에 따라 결제 후 7일 이내·미사용 시 청약철회(전액 환불) 가능합니다.
   </div>
 
@@ -155,13 +157,13 @@
        (주소는 운영자 결정에 따라 도로명까지 공개 · 연락처는 이메일 우선. 통신판매업 신고번호는 발급 시 갱신) -->
   <div class="card" style="margin-top:14px;background:#FFF6E6;border:2px solid #F0D6A2;font-size:11px;color:var(--t2);line-height:1.7">
     <div style="font-weight:700;color:#7A4F0E;margin-bottom:6px">⚠ 결제 시스템 준비 중 (전자결제 PG 가맹 심사 진행 중)</div>
-    <div>사업자 등록은 완료되었으며, PG 가맹 심사 완료 후 결제가 활성화됩니다. 출시 알림을 받으시려면 <a href="mailto:wlsdn5968@gmail.com?subject=출시 알림 신청" style="color:var(--acc)">wlsdn5968@gmail.com</a> 으로 메일 주세요.</div>
+    <div>사업자 등록은 완료되었으며, PG 가맹 심사 완료 후 결제가 활성화됩니다. 출시 알림을 받으시려면 <a href="mailto:wlsdn5968@gmail.com?subject=출시 알림 신청" style="color:var(--t1);text-decoration:underline;text-decoration-color:var(--acc)">wlsdn5968@gmail.com</a> 으로 메일 주세요.</div>
     <div style="margin-top:8px">· 상호: <span id="bizName">공명랩</span> (서비스명: 내집로그)</div>
     <div>· 대표자: 우진우</div>
     <div>· 사업자등록번호: 381-08-03668</div>
     <div>· 사업장 소재지: 서울특별시 노원구 섬밭로 139</div>
     <div>· 통신판매업 신고: 절차 진행 중 (부가가치세법상 간이과세자 — 신고면제 기준 해당)</div>
-    <div>· 고객센터: <a href="mailto:wlsdn5968@gmail.com" style="color:var(--acc)">wlsdn5968@gmail.com</a> (이메일 우선 응대)</div>
+    <div>· 고객센터: <a href="mailto:wlsdn5968@gmail.com" style="color:var(--t1);text-decoration:underline;text-decoration-color:var(--acc)">wlsdn5968@gmail.com</a> (이메일 우선 응대)</div>
     <div style="margin-top:8px;color:var(--t3);font-size:10px">PG 가맹 심사가 완료되기 전까지 결제 처리를 받지 않습니다.</div>
   </div>
 </div>
@@ -177,7 +179,6 @@
     opacity: 0.85;
   }
 </style>
-<script>(function(){try{if(localStorage.getItem('mhl_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(_){}})();</script>
 <script>
   // PG-LAUNCH-GATE-2026-08-20 (전수검증 코드 대조): 종전 window.startCheckout 오버라이드 스텁은 뒤에 오는
   //   `async function startCheckout` 선언이 window 프로퍼티를 덮어써 **무효**였다(Node vm 실증). 차단은
@@ -302,7 +303,7 @@ function renderPlans(){
     const isFree = p.price_krw === 0;
     const priceStr = isFree ? '무료' : fmtKrw(p.price_krw);
     const cta = isFree
-      ? '<button class="btn btn-sec" disabled>현재 플랜</button>'
+      ? '<button class="btn btn-sec" disabled>현재 이용 중</button>'
       : `<button class="btn" data-plan="${escapeHtml(p.id)}" onclick="startCheckout(this.dataset.plan)">${escapeHtml(p.name)} 구독하기</button>`;
     return `<div class="plan${p.id==='pro'?' pro':''}" data-plan="${escapeHtml(p.id)}">
       ${p.id==='pro'?'<span class="plan-badge">실수요자 추천</span>':''}
