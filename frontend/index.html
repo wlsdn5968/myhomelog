@@ -1370,7 +1370,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
    ⚠ 데스크톱(≥701px)에만 건다 — 모바일은 드로어 구조가 달라 실측 없이 적용하지 않는다.
    CTA-SLOT-2026-08-20 (전수조사 잔여 M, 좌표 실측): sticky 는 스크롤 중 버튼이 세부 구 칩(마포·용산·성동·노원·중구)을
    덮어 클릭을 막았다(elementFromPoint 실측). 부팅 시 버튼을 .lpsc 밖 하단 슬롯(.lp-cta)으로 옮겨 콘텐츠와
-   겹치지 않게 한다 — 도달성(항상 보임)은 유지, 덮임 0. 모바일은 .lp 자체가 숨김이라 무영향. */
+   겹치지 않게 한다 — 도달성(항상 보임)은 유지, 덮임 0. 모바일의 .lp 는 드로어(block)라 이동하지 않는다(JS 에서 >700px 게이트). */
 .lp-cta{flex-shrink:0;padding:10px 14px 12px;border-top:1px solid var(--bd);background:var(--s0)}
 .lp-cta #srchBtn{margin:0}
 /* LANDSCAPE-2026-08-17 (라이브 실측 844×390): 이 저장소의 미디어쿼리 19종이 **전부 width 기반**이라
@@ -3213,7 +3213,7 @@ html[data-theme="dark"] #view-news{
 <div class="smbg" id="QM" style="z-index:9998">
   <div class="smbox" style="max-width:420px">
     <div class="smhdr">
-      <span class="smtit" id="qmTit">⚡ AI 한도 도달</span>
+      <span class="smtit" id="qmTit">⚡ 도우미 채팅 한도 도달</span>
       <button class="smx" onclick="closeQuotaModal()" aria-label="닫기" title="닫기">✕</button>
     </div>
     <div class="smbody">
@@ -3267,13 +3267,13 @@ window.addEventListener('DOMContentLoaded',()=>{
       try { _decErr = decodeURIComponent(_rawErr); } catch(_) {} // 잘못된 % 인코딩이면 원문 유지(종전엔 바깥 catch 로 전부 스킵)
       // OAUTH-MSG-2026-08-20 (전수검증 코드 대조): 매핑 밖 provider 원문('server_error', 'KOE006' 등)이 그대로 노출됐다.
       //   사용자 문구 + 짧은 코드 병기(문의용) — 코드 의미는 단정하지 않는다(환각 차단).
-      var _code = (String(_rawErr).match(/KOE\d{3}/i) || [String(oauthError || '').slice(0, 40)])[0];
+      var _code = (String(_decErr).match(/KOE\d{3}/i) || [String(oauthError || '').slice(0, 40)])[0]; // 디코드본에서 추출(인코딩된 description 대응)
       var msg = '로그인 처리 중 문제가 생겼어요. 다시 시도하거나 다른 로그인 방식을 선택해주세요.' + (_code ? ' (코드: ' + _code + ')' : '');
       if (/provider is not enabled|Unsupported provider/i.test(oauthDesc || oauthError)) {
         msg = '⚠ 해당 소셜 로그인 방식이 아직 활성화되지 않았어요. 이메일 로그인을 사용해주세요.';
       } else if (/access_denied|user.*denied|cancel/i.test(oauthDesc || oauthError)) {
         msg = '로그인이 취소되었어요. 다시 시도하시거나 다른 방식을 선택해주세요.';
-      } else if (/KOE\d{3}/i.test(_rawErr)) {
+      } else if (/KOE\d{3}/i.test(_decErr)) {
         msg = '카카오 로그인 연동에 문제가 있어요 (코드: ' + _code + '). 다른 로그인 방식을 이용하시거나 운영자에게 코드를 알려주세요.';
       }
       setTimeout(function(){
@@ -5420,15 +5420,15 @@ function openQuotaModal(reason, msg, resetAt){
   const msgEl = document.getElementById('qmMsg');
   const resetEl = document.getElementById('qmReset');
   if(reason === 'monthly'){
-    if(tit) tit.textContent = '💰 이번 달 AI 한도 도달';
-    if(msgEl) msgEl.textContent = msg || '무료 플랜 월간 AI 사용 한도에 도달했어요. 다음 달 1일에 초기화됩니다.';
+    if(tit) tit.textContent = '💰 이번 달 도우미 채팅 한도 도달';
+    if(msgEl) msgEl.textContent = msg || '무료 플랜 월간 도우미 채팅 한도에 도달했어요. 다음 달 1일에 초기화됩니다.';
     if(resetEl && resetAt){
       const d = new Date(resetAt);
       resetEl.textContent = `초기화: ${d.toLocaleString('ko-KR')}`;
     } else if(resetEl) resetEl.textContent = '';
   } else if(reason === 'daily'){
-    if(tit) tit.textContent = '⚡ 오늘의 AI 한도 도달';
-    if(msgEl) msgEl.textContent = msg || '무료 플랜 일일 AI 사용 한도에 도달했어요. 내일 자정에 초기화됩니다.';
+    if(tit) tit.textContent = '⚡ 오늘의 도우미 채팅 한도 도달';
+    if(msgEl) msgEl.textContent = msg || '무료 플랜 일일 도우미 채팅 한도에 도달했어요. 내일 자정에 초기화됩니다.';
     if(resetEl) resetEl.textContent = '매일 자정(KST) 자동 초기화';
   } else {
     if(tit) tit.textContent = '⚡ 무료 플랜 사용량';
@@ -10543,21 +10543,38 @@ document.addEventListener('click', (e) => {
   }, true);
   function _initFocusRestore(){
     let _prev=null;
-    const obs=new MutationObserver(muts=>{
+    // 접근성 이름: 포커스 대상이 dialog 이름을 갖도록 — 자기 자신이 role=dialog 면 그대로(ntcNudge 등), 아니면
+    //   내부 박스에 role/aria-modal 부여 후 제목(.smtit/.dmtit/.rgm-t/h1~h3)을 aria-labelledby 로 연결 (적대 검증 적발).
+    function _focusTarget(el){
+      const box=(el.matches&&el.matches('[role="dialog"]'))?el:(el.querySelector('.smbox,.dm,.rgm,[role="dialog"]')||el.firstElementChild||el);
+      if(!box.getAttribute('role')) box.setAttribute('role','dialog');
+      if(!box.hasAttribute('aria-modal')) box.setAttribute('aria-modal','true');
+      if(!box.hasAttribute('aria-label')&&!box.hasAttribute('aria-labelledby')){
+        const t=box.querySelector('.smtit,.dmtit,.rgm-t,h1,h2,h3');
+        if(t){ if(!t.id) t.id='ft-ttl-'+Math.random().toString(36).slice(2,8); box.setAttribute('aria-labelledby',t.id); }
+      }
+      if(!box.hasAttribute('tabindex')) box.setAttribute('tabindex','-1');
+      return box;
+    }
+    function _onOpen(el){
+      if(el._ftOpen) return; el._ftOpen=true; _prev=document.activeElement;
+      const box=_focusTarget(el);
+      if(!el.contains(document.activeElement)){ try{ box.focus({preventScroll:true}); }catch(_){} }
+    }
+    function _onClose(el){
+      if(!el._ftOpen) return; el._ftOpen=false; const p=_prev; _prev=null;
+      if(p&&p.focus&&document.contains(p)){ try{ p.focus({preventScroll:true}); }catch(_){} }
+    }
+    const attrObs=new MutationObserver(muts=>{ muts.forEach(mu=>{ const el=mu.target; if(_vis(el)) _onOpen(el); else _onClose(el); }); });
+    const watch=el=>{ if(el._ftWatched) return; el._ftWatched=true; attrObs.observe(el,{attributes:true,attributeFilter:['class','style']}); if(_vis(el)) _onOpen(el); };
+    document.querySelectorAll(MODAL_SEL).forEach(watch);
+    // 동적 생성 모달(비교·규제요약): body 직계 추가/제거를 감시해 초기 포커스·복원까지 동일하게 적용
+    new MutationObserver(muts=>{
       muts.forEach(mu=>{
-        const el=mu.target, open=_vis(el);
-        if(open&&!el._ftOpen){
-          el._ftOpen=true; _prev=document.activeElement;
-          const box=el.querySelector('.smbox,.dm,.rgm,[role="dialog"]')||el.firstElementChild||el;
-          if(box&&!box.hasAttribute('tabindex')) box.setAttribute('tabindex','-1');
-          if(!el.contains(document.activeElement)){ try{ box.focus({preventScroll:true}); }catch(_){} }
-        } else if(!open&&el._ftOpen){
-          el._ftOpen=false; const p=_prev; _prev=null;
-          if(p&&p.focus&&document.contains(p)){ try{ p.focus({preventScroll:true}); }catch(_){} }
-        }
+        mu.addedNodes.forEach(n=>{ if(n.nodeType===1&&n.matches&&n.matches(MODAL_SEL)) watch(n); });
+        mu.removedNodes.forEach(n=>{ if(n.nodeType===1&&n._ftOpen) _onClose(n); });
       });
-    });
-    document.querySelectorAll(MODAL_SEL).forEach(el=>obs.observe(el,{attributes:true,attributeFilter:['class','style']}));
+    }).observe(document.body,{childList:true});
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_initFocusRestore); else _initFocusRestore();
 })();
@@ -10584,14 +10601,31 @@ window.addEventListener('load', () => {
 // 부팅 시 + DOM 변경 시 (chip 동적 추가) 재실행
 window.addEventListener('DOMContentLoaded', () => setTimeout(_enhanceA11y, 100));
 // CTA-SLOT-2026-08-20: 검색 CTA 를 사이드바 스크롤 영역(.lpsc) 밖 하단 슬롯으로 — sticky 가 구 칩을 덮던 결함 해소(CSS 주석 참조)
-window.addEventListener('DOMContentLoaded', () => {
-  try {
-    const lp = document.querySelector('.lp'), btn = document.getElementById('srchBtn');
-    if (!lp || !btn || btn.closest('.lp-cta')) return;
-    const slot = document.createElement('div'); slot.className = 'lp-cta';
-    slot.appendChild(btn); lp.appendChild(slot);
-  } catch(_) {}
-});
+//   CTA-SLOT-MOBILE-2026-08-20 (적대 검증 적발): 모바일(≤700px)의 .lp 는 block+overflow 드로어라 슬롯이 .lpsc 전체
+//   콘텐츠 뒤(드로어 맨 끝, 화면 밖)로 밀렸다 — 데스크톱(>700px)에서만 이동하고 모바일·리사이즈 시 원위치(폼 바로 아래)로 복귀.
+(function(){
+  let placeholder = null, slot = null;
+  function apply(){
+    try {
+      const lp = document.querySelector('.lp'), btn = document.getElementById('srchBtn');
+      if (!lp || !btn) return;
+      const desktop = window.innerWidth > 700;
+      if (desktop) {
+        if (btn.closest('.lp-cta')) return;
+        placeholder = placeholder || document.createComment('srchBtn-home');
+        btn.parentNode.insertBefore(placeholder, btn);
+        slot = slot || Object.assign(document.createElement('div'), { className: 'lp-cta' });
+        slot.appendChild(btn); lp.appendChild(slot);
+      } else {
+        if (!btn.closest('.lp-cta') || !placeholder || !placeholder.parentNode) return;
+        placeholder.parentNode.insertBefore(btn, placeholder);
+        if (slot) slot.remove();
+      }
+    } catch(_) {}
+  }
+  window.addEventListener('DOMContentLoaded', apply);
+  window.addEventListener('resize', () => { clearTimeout(window._ctaSlotT); window._ctaSlotT = setTimeout(apply, 150); });
+})();
 // MutationObserver — chip 동적 추가 감지 (검색 결과·세부구·플랜 목록 등)
 if (window.MutationObserver) {
   const _mo = new MutationObserver(() => clearTimeout(window._a11yT) || (window._a11yT = setTimeout(_enhanceA11y, 200)));
@@ -11901,7 +11935,7 @@ function closeRegionSummary(){
 
 function _renderRegionSummary(d){
   const body = document.getElementById('rgmBody'); if(!body) return;
-  if(d?.region?.name) document.getElementById('rgmT').textContent = d.region.name + ' 시장 요약';
+  if(d?.region?.name) document.getElementById('rgmT').textContent = _fmtSgg(d.region.name) + ' 시장 요약'; // 응답으로 덮어쓸 때도 표시 포맷(적대 검증 적발)
   const asOf = d?.generatedAt ? String(d.generatedAt).slice(0,10) : '';
   document.getElementById('rgmS').textContent = asOf ? `공식 통계 기준 · ${asOf}` : '공식 통계 기준';
 
@@ -12017,7 +12051,7 @@ function _renderRegionSummary(d){
     <div class="rg-ch"><span class="rg-cn">규제 상태</span></div>
     <div><span class="rg-badge${known ? '' : ' muted'}">${_escHtml(rg?.status || '확인 필요')}</span></div>
     ${known && rg.basis
-      ? `<div class="rg-note" style="color:var(--t2)">근거 · ${_escHtml(rg.basis)}</div>`
+      ? `<div class="rg-note" style="color:var(--t2)">근거 · ${_escHtml(_fmtSgg(rg.basis))}</div>`
       : `<div class="rg-note" style="color:var(--t2)">이 지역의 규제 지정 여부는 응답에 포함되지 않았어요. 국토교통부 공고로 확인해 주세요.</div>`}
     ${asOf ? `<div class="rg-src">기준일 · ${_escHtml(asOf)}</div>` : ''}
   </div>`);
