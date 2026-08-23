@@ -2249,9 +2249,8 @@ html[data-theme="dark"] #view-news{
         <a href="javascript:void(0)" onclick="copyBriefLink()" class="brf-btn">🔗 오늘 링크 복사</a>
       </div>
     </div>
-    <div id="briefWidgets" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 14px"></div>
-    <div id="brfRegLog" class="brf-card" style="margin:0 0 14px;display:none"></div>
-    <div id="newsSummary" class="brf-card" style="margin-bottom:14px;display:none">
+    <!-- BRF-ORDER-2026-08-20 (18 전수조사 잔여, 시안 design.html:93-180 원문 순서): 시장 3줄(1st, 전폭) → 청약·TOP5 → 변동 로그. 종전엔 5번째였다. -->
+    <div id="newsSummary" class="brf-card" style="margin:14px 0 14px;display:none">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
         <b style="font-size:15px;font-weight:800;letter-spacing:-.02em;color:var(--brf-tx)">오늘의 시장 3줄 <span style="color:var(--brf-tx3);font-weight:500;font-size:10.5px" id="newsSummaryTime"></span></b>
       </div>
@@ -2266,6 +2265,8 @@ html[data-theme="dark"] #view-news{
         </div>
       </div>
     </div>
+    <div id="briefWidgets" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 14px"></div>
+    <div id="brfRegLog" class="brf-card" style="margin:0 0 14px;display:none"></div>
     <div style="font-size:12px;font-weight:700;color:var(--t1);margin:2px 0 8px">📰 그 밖의 소식 <span style="font-weight:500;font-size:10px;color:var(--t3)">언론사 원문 링크 · 단순 인덱싱 (저작권은 각 언론사)</span></div>
     <div class="chips" id="news-cat" style="margin-bottom:14px">
       <span class="chip on" data-cat="hot" onclick="loadNews(this)">🔥 인기</span>
@@ -10066,6 +10067,9 @@ function sv(v,btn){
     const el=document.getElementById('view-'+id);
     if(el)el.style.display=id===v?meta.display:'none';
   });
+  // TAB-SCROLL-RESET-2026-08-20 (18 전수조사 잔여, 라이브 실측: #view-news scrollTop 500 이 탭 전환 후에도 유지돼
+  //   브리핑 중간 진입): 각 뷰가 자체 overflow 컨테이너라 display 토글만으론 위치가 남는다 — 탭 전환=새 컨텍스트, 상단으로.
+  try { const _tv=document.getElementById('view-'+v); if(_tv) _tv.scrollTop=0; } catch(_){}
   _rpOverlay=false; // 탭 전환 시 오버레이 초기화
   // MAP-INVALIDATE-2026-05-13 (Sprint FF + GG): 탭 전환 시 지도 view 활성화 → size 재계산
   if (v === 'map') setTimeout(() => {
@@ -10581,26 +10585,11 @@ document.addEventListener('click', (e) => {
   }
   if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',_initFocusRestore); else _initFocusRestore();
 })();
-// MOB-AUDIT-2026-05-03: 모바일 폰에서 Chrome "데스크톱 사이트 요청" 활성화 시 PC layout 노출 → 운영자 모바일 캡처 분석
-//   touch device + 폰 UA + window.innerWidth > 900 → 데스크톱 모드 의심 → toast 안내 (사용자 자율 — 강제 X)
-//   1회 표시 후 localStorage 로 dismiss (재방문 시 noise X)
-window.addEventListener('load', () => {
-  setTimeout(() => {
-    try {
-      if (localStorage.getItem('mhl_desktop_mode_warned') === '1') return;
-      const isTouch = (navigator.maxTouchPoints || 0) > 0;
-      // DESKTOP-WARN-UA-2026-08-20 (전수검증 코드 대조): 'android' 단독 매치가 안드로이드 태블릿(UA 에 Mobile 토큰 없음)
-      //   가로모드(>900px)를 오탐해 불필요한 "데스크톱 사이트 해제" 안내를 띄웠다 — 폰(Android+Mobile·iPhone)만 매치.
-      //   ⚠ 실제 '데스크톱 사이트' 모드는 UA 를 Linux/Macintosh 로 위장해 이 판정식으로는 원리적으로 감지 불가(운영자 보고).
-      const isMobileUA = /android.*mobile|iphone|ipod/i.test(navigator.userAgent);
-      const widthIsLarge = window.innerWidth > 900;
-      if (isTouch && isMobileUA && widthIsLarge) {
-        toast('💡 모바일 화면을 보려면 Chrome 메뉴 → "데스크톱 사이트" 체크 해제');
-        try { localStorage.setItem('mhl_desktop_mode_warned', '1'); } catch(_){}
-      }
-    } catch(_){}
-  }, 2500);
-});
+// DESKTOP-WARN-REMOVED-2026-08-20 (운영자 권고 승인): 2026-05-03 에 추가된 '데스크톱 사이트 모드' 경고를 제거했다.
+//   판정식(touch + 폰 UA + >900px)은 실제 데스크톱 모드를 원리적으로 잡지 못한다 — Chrome/Safari 는 그 모드에서
+//   UA 의 Android/Mobile/iPhone 토큰을 제거(Linux/Macintosh 로 위장)하므로 isMobileUA 가 항상 false. 발화 가능한 경우는
+//   폰 UA 그대로인 대형 화면(폴더블 펼침)뿐이라 '데스크톱 모드 해제' 안내가 오히려 오안내였다. localStorage 키
+//   'mhl_desktop_mode_warned' 는 잔존해도 무해(읽는 코드 없음).
 // 부팅 시 + DOM 변경 시 (chip 동적 추가) 재실행
 window.addEventListener('DOMContentLoaded', () => setTimeout(_enhanceA11y, 100));
 // CTA-SLOT-2026-08-20: 검색 CTA 를 사이드바 스크롤 영역(.lpsc) 밖 하단 슬롯으로 — sticky 가 구 칩을 덮던 결함 해소(CSS 주석 참조)
