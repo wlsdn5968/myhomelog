@@ -3447,7 +3447,7 @@ async function _landingAsyncRefresh(){
       if(top){
         const _set = (id, val) => { const e = document.getElementById(id); if(e && val !== undefined && val !== null) e.textContent = val; };
         _set('lv-aptName', top.aptName);
-        _set('lv-aptLoc', `${top.sigungu||''} ${top.umdNm||''} · ${top.buildYear || '?'}년`);
+        _set('lv-aptLoc', `${_fmtSgg(top.sigungu)} ${top.umdNm||''} · ${top.buildYear || '?'}년`);
         if(top.avgDealAmount) _set('lv-aptPrice', (top.avgDealAmount/10000).toFixed(1) + '억');
         if(top.dealCount60d != null) _set('lv-aptDeals', top.dealCount60d + '건');
         // LANDING-FAKE-2026-08-17: '실시간' 은 **실제 응답이 온 뒤에만** 단다.
@@ -4380,7 +4380,7 @@ function _renderReport(data) {
   // KOSIS-2026-07-14 (Sprint HHHHH): 지역 미분양 추이 — 국토부/KOSIS 실측 통계, 객관 수치만(판단어·예측 없음).
   const _us = data.unsoldTrend;
   const _usHtml = (_us && Array.isArray(_us.months) && _us.months.length) ? `<div style="background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:9px 13px;margin-bottom:12px;font-size:10.5px;line-height:1.7">
-      <b style="font-size:11px;color:var(--t1)">🏗️ ${_escHtml(_us.sido)} ${_escHtml(_us.sigungu)} 미분양 추이</b>
+      <b style="font-size:11px;color:var(--t1)">🏗️ ${_escHtml(_us.sido)} ${_escHtml(_fmtSgg(_us.sigungu))} 미분양 추이</b>
       <span style="color:var(--t2);margin-left:8px">${_us.months.map(m=>`${_escHtml(String(m.ym).slice(4))}월 <b>${Number(m.cnt).toLocaleString()}호</b>`).join(' → ')}</span>
       <div style="font-size:9.5px;color:var(--t3)">출처: ${_escHtml(_us.source||'KOSIS')} · 추천 1위 단지 지역 기준 · 수치 나열이며 시장 예측이 아닙니다</div>
     </div>` : '';
@@ -4388,7 +4388,7 @@ function _renderReport(data) {
   // REGION-TREND-2026-07-14 (Sprint KKKKK): 지역 월별 거래량 — 자체 DB 집계, 수치 나열만(예측 없음).
   const _tt = data.regionTxTrend;
   const _ttHtml = (_tt && Array.isArray(_tt.months) && _tt.months.length) ? `<div style="background:var(--s1);border:1px solid var(--bd);border-radius:10px;padding:9px 13px;margin-bottom:12px;font-size:10.5px;line-height:1.7">
-      <b style="font-size:11px;color:var(--t1)">📊 ${_escHtml(_tt.sigungu)} 월별 매매 거래량</b>
+      <b style="font-size:11px;color:var(--t1)">📊 ${_escHtml(_fmtSgg(_tt.sigungu))} 월별 매매 거래량</b>
       <span style="color:var(--t2);margin-left:8px">${_tt.months.map(m=>`${_escHtml(String(m.ym).slice(4))}월 <b>${Number(m.n).toLocaleString()}건</b>`).join(' → ')}</span>
       ${Array.isArray(_tt.ageBands) && _tt.ageBands.length >= 2 ? `<div style="color:var(--t2);margin-top:2px">🏗 준공연차별 평당가 <span style="font-size:9.5px;color:var(--t3)">(전용면적 환산·중위)</span> · ${_tt.ageBands.map(b=>`${_escHtml(b.band)} <b>${Number(b.medianPyeong).toLocaleString()}만</b><span style="font-size:9.5px;color:var(--t3)">(${Number(b.n).toLocaleString()}건)</span>`).join(' · ')}</div>` : ''}
       <div style="font-size:9.5px;color:var(--t3)">국토교통부 실거래 신고 기준 · 추천 1위 단지 지역 기준 · ${_escHtml(_tt.note||'최근 월은 신고 지연으로 집계 중일 수 있어요')} · 수치 나열이며 시장 예측이 아닙니다</div>
@@ -4941,7 +4941,7 @@ async function renderBriefing(){
     if(ps.length){
       popHtml=ps.slice(0,5).map((p2,i)=>`<button class="brf-top" onclick='goSearchResult(${_jsonAttr({aptName:p2.aptName,sigungu:p2.sigungu,umdNm:p2.umdNm,lawdCd:p2.lawdCd,buildYear:p2.buildYear,recentDealDate:p2.recentDealDate})})'>
         <span style="flex:0 0 18px;font-size:12px;font-weight:800;color:var(--brf-tx3);font-variant-numeric:tabular-nums">${i+1}</span>
-        <span style="flex:1;min-width:0"><span style="display:block;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(p2.aptName||'')}</span><span style="display:block;margin-top:2px;font-size:10.5px;color:var(--brf-tx3)">${_escHtml(p2.sigungu||'')}</span></span>
+        <span style="flex:1;min-width:0"><span style="display:block;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(p2.aptName||'')}</span><span style="display:block;margin-top:2px;font-size:10.5px;color:var(--brf-tx3)">${_escHtml(_fmtSgg(p2.sigungu))}</span></span>
         <span style="text-align:right;flex-shrink:0">${Number.isFinite(Number(p2.avgDealAmount))&&Number(p2.avgDealAmount)>0?`<span style="display:block;font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums">${(Number(p2.avgDealAmount)/10000).toFixed(2)}억</span>`:''}<span style="display:block;margin-top:2px;font-size:10.5px;font-weight:700;color:var(--brf-tx2);font-variant-numeric:tabular-nums">${p2.dealCount60d?p2.dealCount60d+'건':''}</span></span>
       </button>`).join('');
     } else { popHtml=`<div style="font-size:10.5px;color:var(--brf-tx3);padding:6px 0">조회 실패</div>`; }
@@ -5092,7 +5092,7 @@ function _mapSheetTry(kind,p){
     if(!window.matchMedia||!window.matchMedia('(max-width:700px)').matches)return false;
     const sh=document.getElementById('MSHEET'); if(!sh||!p)return false;
     try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_e2){} // VERIFY-FIX-2: 조기 return 이 IW 닫기를 건너뛰던 갭
-    const sub=[(p.sigungu||''),(p.umdNm||'')].filter(Boolean).join(' ')||String(p.area||'');
+    const sub=_fmtSgg([(p.sigungu||''),(p.umdNm||'')].filter(Boolean).join(' ')||String(p.area||''));
     let priceV='',priceL='';
     if(kind==='pop'){
       if(Number.isFinite(Number(p.avgDealAmount))&&Number(p.avgDealAmount)>0){priceV=(Number(p.avgDealAmount)/10000).toFixed(2)+'억';priceL='최근 60일 실거래 평균';}
@@ -5690,7 +5690,7 @@ function mkNaverIW(p){
       <button onclick="try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_){}" aria-label="닫기" title="닫기" style="position:absolute;top:-3px;right:-3px;width:22px;height:22px;border:none;background:transparent;color:var(--text-tertiary);font-size:15px;line-height:1;cursor:pointer;padding:0;z-index:3">✕</button>
       <div class="niw-n">${_escHtml(p.aptName || '')}</div>
       <div class="niw-pr">${(p.avgPrice||p.price||0).toFixed(2)}억</div>
-      <div class="niw-m">${_escHtml(p.area||'')} · ${_escHtml(p.buildYear||'')}년 · LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}</div>
+      <div class="niw-m">${_escHtml(_fmtSgg(p.area))} · ${_escHtml(p.buildYear||'')}년 · LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}</div>
       <div class="niw-g">${scoreLabel}</div>
       <div class="niw-tags">${tags}</div>
       <button class="niw-btn a2" onclick="showDetailById('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}',${p.lat},${p.lng})">📊 상세 리포트</button>
@@ -6130,7 +6130,7 @@ function renderPList(){
     const rank = p.rank ? _escHtml(p.rank)+'. ' : '';
     return`<div class="pi" id="pi-${i}" onclick="selP(${i})">
       <div class="pi-top"><div class="pi-name">${rank}${_escHtml(p.aptName||'')}</div><div class="pi-price" title="${_escHtml(p._priceBasis||'평균 실거래')}">${(Number(p.avgPrice)||0).toFixed(1)}억</div></div>
-      <div class="pi-sub">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}</div>
+      <div class="pi-sub">${_escHtml(_fmtSgg(p.area))} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}</div>
       <div class="pi-row">${tags}${p.score!=null?gSVG(Number(p.score),30):''}</div>
     </div>`;
   }).join('');
@@ -6166,7 +6166,7 @@ function renderListGrid(){
       if (!/^\d{5}$/.test(c)) continue;
       const cur = cnt.get(c) || { n: 0, nm: '' };
       cur.n++;
-      if (!cur.nm) cur.nm = String(p.sigungu || (p.area ? String(p.area).split(' ')[0] : '') || '');
+      if (!cur.nm) cur.nm = _fmtSgg(String(p.sigungu || (p.area ? String(p.area).split(' ')[0] : '') || '')); // 표시 라벨(판정은 lawd_cd)
       // AUDIT-FN-2026-08-19 (운영자 폰 재현 '11530 시장 요약'): recommend 응답엔 sigungu 필드가 없고
       //   area('금천구 시흥동')뿐 — 라벨은 area 첫 토큰 폴백(판정은 위에서 lawd_cd 로 이미 안전).
       cnt.set(c, cur);
@@ -6279,7 +6279,7 @@ function _renderListCard(p, i) {
       <span class="cmp-chk-lbl">비교</span>
     </label>
     <div class="lc-top" style="background:${_isRegProp(p)?'var(--accL)':'var(--a2L)'}">
-      <div class="lc-name">${_escHtml(p.aptName||'')}</div><div class="lc-area">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년</div>
+      <div class="lc-name">${_escHtml(p.aptName||'')}</div><div class="lc-area">${_escHtml(_fmtSgg(p.area))} | ${_escHtml(p.buildYear||'')}년</div>
       <div class="lc-g">${gSVG(s||0,50)}
         <div><div style="font-size:17px;font-weight:800;color:${_hasS?gc(s):'var(--text-tertiary)'}">${(Number(p.avgPrice)||0).toFixed(2)}억</div>
         <span class="lvl ${lv}">${lt}</span>
@@ -6584,7 +6584,7 @@ function renderCompareModal(data, bodyEl){
     return `<button class="cmp-chip ${active?'on':''}" onclick="_cmpPickBand(${c.center})">전용 ${c.center}㎡<span class="cmp-chip-sub">신뢰 ${c.reliableCount}/${results.length}</span></button>`;
   }).join('');
 
-  const nameCols = oResults.map(r=> `<th class="cmp-th"><div class="cmp-apt">${_escHtml(r.aptName||'')}</div><div class="cmp-apt-sub">${_escHtml((r.sigungu||'')+(r.umdNm?(' '+r.umdNm):''))}</div></th>`).join('');
+  const nameCols = oResults.map(r=> `<th class="cmp-th"><div class="cmp-apt">${_escHtml(r.aptName||'')}</div><div class="cmp-apt-sub">${_escHtml(_fmtSgg(r.sigungu)+(r.umdNm?(' '+r.umdNm):''))}</div></th>`).join('');
 
   const reliableVals = oPerResult.filter(b=>b&&b.reliable).map(b=>b.medianPyeongManwon);
   const maxVal = reliableVals.length ? Math.max(...reliableVals) : 0;
@@ -6869,7 +6869,7 @@ function showDetail(p){
     _ass.innerHTML =
       `<div class="ass-main">`
       + `<span class="ass-name">${_escHtml(p.aptName||'')}</span>`
-      + (p.area ? `<span class="ass-area">${_escHtml(p.area)}</span>` : '')
+      + (p.area ? `<span class="ass-area">${_escHtml(_fmtSgg(p.area))}</span>` : '')
       + _badge
       + (_hasScore
           ? `<span class="lvl ${lv}" style="font-size:10.5px;padding:1px 7px">${s}점 ${lt}</span>`
@@ -6884,7 +6884,7 @@ function showDetail(p){
       const _lc = String(p.lawdCd||'').trim();
       let _rb = _ass.querySelector('.rg-open');
       if (_lc) {
-        const _nm = String(p.sigungu || '').trim();
+        const _nm = _fmtSgg(String(p.sigungu || '').trim()); // 표시 전용(openRegionSummary name 인자는 제목에만 쓰임)
         if (!_rb) {
           _rb = document.createElement('button');
           _rb.className = 'rg-open';
@@ -6901,7 +6901,7 @@ function showDetail(p){
   const _scoreSection = _hasScore
     ? `<div class="gbw">${gSVG(s,90)}
         <div class="gi"><div class="gi-t">데이터 종합 점수 ${s}/100</div><span class="lvl ${lv}">${lt}</span>
-          <div class="gi-s">${_escHtml(p.area||'')} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}${p.maxLoan?` | 최대 ${_escHtml(p.maxLoan)}`:''}</div>
+          <div class="gi-s">${_escHtml(_fmtSgg(p.area))} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}${p.maxLoan?` | 최대 ${_escHtml(p.maxLoan)}`:''}</div>
         </div>
       </div>`
     : `<div class="score-pending">
@@ -6909,7 +6909,7 @@ function showDetail(p){
         <div class="sp-title">데이터 분석 대기</div>
         <div class="sp-msg">보고서 탭에서 주택 보유·자금·희망 지역 입력 후<br>"맞춤 보고서"를 받으면 정확한 점수가 분석됩니다.</div>
         <button class="sp-cta" onclick="cDM();sv('report')">📊 맞춤 보고서 만들기 →</button>
-        <div class="sp-meta">${_escHtml(p.area||'')}${p.buildYear?' · '+_escHtml(p.buildYear)+'년':''}${p.ltv?' · LTV '+_escHtml(p.ltv):''}</div>
+        <div class="sp-meta">${_escHtml(_fmtSgg(p.area))}${p.buildYear?' · '+_escHtml(p.buildYear)+'년':''}${p.ltv?' · LTV '+_escHtml(p.ltv):''}</div>
       </div>`;
   document.getElementById('t0').innerHTML=`
     ${_scoreSection}
@@ -7788,7 +7788,7 @@ function _drawShareCard(s,p){
   do{x.font='800 '+fs+'px Pretendard, sans-serif';fs-=4;}while(x.measureText(p.aptName||'').width>W-160&&fs>36);
   x.fillText(p.aptName||'',80,140);
   x.fillStyle='#8FA1B5';x.font='500 32px Pretendard, sans-serif';
-  const sub=(p.area||'')+(s.mode==='compare'?' · 전용 '+s.py+'평형 기준':'');
+  const sub=_fmtSgg(p.area)+(s.mode==='compare'?' · 전용 '+s.py+'평형 기준':'');
   x.fillText(sub,80,238);
   x.fillStyle='#22344E';x.fillRect(80,308,W-160,2);
   if(s.mode==='compare'){
@@ -7919,7 +7919,7 @@ function _drawRankCard(list){
     do{x.font='700 '+fs+'px Pretendard, sans-serif';fs-=2;}while(x.measureText(p.aptName||'').width>560&&fs>24);
     x.fillText(p.aptName||'',150,y);
     x.fillStyle='#8FA1B5';x.font='500 26px Pretendard, sans-serif';
-    x.fillText(p.sigungu||'',150,y+58);
+    x.fillText(_fmtSgg(p.sigungu),150,y+58);
     x.textAlign='right';
     if(Number.isFinite(Number(p.avgDealAmount))&&Number(p.avgDealAmount)>0){
       x.fillStyle='#DFE7EE';x.font='800 40px Pretendard, sans-serif';
@@ -7966,7 +7966,7 @@ async function shareCurrent(){
   const url=u.toString();
   const title=`${currentDetail.aptName} — 내집로그 데이터 분석`;
   // SCORE-HALLUC-FIX-2026-07-16 (Sprint SSSSS): 폐기된 60점 fallback 잔재 — 점수 없으면 표기 생략(외부 공유 텍스트라 특히 중요)
-  const text=`${currentDetail.aptName} (${currentDetail.area||''}) — 평균 ${(currentDetail.avgPrice||0).toFixed(2)}억${currentDetail.score?` / 점수 ${currentDetail.score}점`:''}\n※ 매수 추천이 아니며 참고용 정보입니다.`;
+  const text=`${currentDetail.aptName} (${_fmtSgg(currentDetail.area)}) — 평균 ${(currentDetail.avgPrice||0).toFixed(2)}억${currentDetail.score?` / 점수 ${currentDetail.score}점`:''}\n※ 매수 추천이 아니며 참고용 정보입니다.`;
   // Web Share API (모바일)
   if(navigator.share){
     try{await navigator.share({title,text,url});return;}catch(e){if(e.name==='AbortError')return;}
@@ -8591,7 +8591,7 @@ function renderBookmarks(){
       <div class="bk-item-row">
         <label onclick="event.stopPropagation()" title="비교 선택" style="display:flex;align-items:center;flex-shrink:0;cursor:pointer"><input type="checkbox" class="cmp-bk-input" data-i="${i}" ${cmpBkSel.has(i)?'checked':''} onclick="event.stopPropagation();toggleCmpBk(${i},this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--acc);margin:0"></label>
         ${hasVisit?'<div class="bk-visit-dot" title="임장 기록 있음"></div>':''}
-        <div><div class="bk-name">${_escHtml(b.aptName || '')}${b.newDealCount>0?`<span class="bk-new-badge" title="마지막 확인 이후 신규 실거래">🔔 새 거래 ${b.newDealCount}건</span>`:''}</div><div style="font-size:10px;color:var(--t3)">${_escHtml(b.area || '')}</div>${b.newDealCount>0&&Array.isArray(b.newDeals)&&b.newDeals.length?`<div style="font-size:9.5px;color:var(--acc);margin-top:1px" title="신규 실거래 요약 (최신 3건, 국토부 실거래가 기준)">${b.newDeals.map(d=>`${_escHtml(String(d.d||''))} ${Number(d.p)||0}억${Number(d.ar)>0?` ${Number(d.ar)}㎡`:''}`).join(' · ')}</div>`:''}</div>
+        <div><div class="bk-name">${_escHtml(b.aptName || '')}${b.newDealCount>0?`<span class="bk-new-badge" title="마지막 확인 이후 신규 실거래">🔔 새 거래 ${b.newDealCount}건</span>`:''}</div><div style="font-size:10px;color:var(--t3)">${_escHtml(_fmtSgg(b.area))}</div>${b.newDealCount>0&&Array.isArray(b.newDeals)&&b.newDeals.length?`<div style="font-size:9.5px;color:var(--acc);margin-top:1px" title="신규 실거래 요약 (최신 3건, 국토부 실거래가 기준)">${b.newDeals.map(d=>`${_escHtml(String(d.d||''))} ${Number(d.p)||0}억${Number(d.ar)>0?` ${Number(d.ar)}㎡`:''}`).join(' · ')}</div>`:''}</div>
         <span class="bk-price">${priceNow?priceNow.toFixed(1)+'억':''}</span>
         <button class="bk-del" onclick="delBookmark(event,${i})" aria-label="북마크 삭제">✕</button>
       </div>
@@ -8782,7 +8782,7 @@ function renderNtc(){
   </div>
   <div class="ntc-policy">🕘 매일 아침 1회 · 새 실거래가 반영된 날만 · 무료</div>
   <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 6px"><b style="font-size:12px;color:var(--t1)">알림 대상 관심단지 ${bks.length}</b><span style="font-size:10px;color:var(--t3)">최대 30개까지</span></div>
-  ${bks.length?`<div class="ntc-list">${bks.slice(0,30).map(b=>`<div class="ntc-li"><span style="color:var(--t1);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(b.aptName||'')}</span><span style="color:var(--t3);font-size:10.5px;flex-shrink:0;margin-left:8px">${_escHtml(((b.sigungu||'')+(b.umdNm?' '+b.umdNm:''))||b.area||'')}</span></div>`).join('')}</div>`
+  ${bks.length?`<div class="ntc-list">${bks.slice(0,30).map(b=>`<div class="ntc-li"><span style="color:var(--t1);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(b.aptName||'')}</span><span style="color:var(--t3);font-size:10.5px;flex-shrink:0;margin-left:8px">${_escHtml(_fmtSgg(((b.sigungu||'')+(b.umdNm?' '+b.umdNm:''))||b.area||''))}</span></div>`).join('')}</div>`
     :`<div style="font-size:11.5px;color:var(--t3);padding:14px;text-align:center;border:1px dashed var(--bd);border-radius:10px">관심단지가 아직 없어요 — 단지 상세에서 ⭐를 눌러 추가해주세요</div>`}`;
   _updateNtcDot();
 }
@@ -10177,7 +10177,7 @@ function toggleBmPop(){
       body.innerHTML=bks.map((b,i)=>{
         const priceNow=b.avgPrice||0;
         return `<div style="padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px" onclick="openBookmark(${i});toggleBmPop();">
-          <div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(b.aptName || '')}${b.newDealCount>0?`<span class="bk-new-badge">🔔 ${b.newDealCount}</span>`:''}</div><div style="font-size:10px;color:var(--t3)">${_escHtml(b.area || '')}</div></div>
+          <div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(b.aptName || '')}${b.newDealCount>0?`<span class="bk-new-badge">🔔 ${b.newDealCount}</span>`:''}</div><div style="font-size:10px;color:var(--t3)">${_escHtml(_fmtSgg(b.area))}</div></div>
           ${priceNow?`<span style="font-size:11px;font-weight:700;color:var(--acc);flex-shrink:0">${priceNow.toFixed(1)}억</span>`:''}
         </div>`;
       }).join('');
@@ -10261,7 +10261,7 @@ function buildRuleClause(b){
   essential.push({title:'대출 미승인 시 계약금 반환',content:'본 계약은 매수인의 주택담보대출 승인을 조건으로 하며, 대출이 미승인될 경우 매수인은 계약을 해제할 수 있고 매도인은 계약금 전액을 즉시 반환한다.',reason:'대출 규제 강화 — 사전심사 필수'});
   // 2) 전입 의무 — isRegFront 로 소재지 판정 (기존 fallback 은 무조건 표시 → 비규제 단지에 부정확)
   if (isReg === true) {
-    essential.push({title:'전입 의무 이행 (규제지역)',content:'매수인은 잔금 납부 후 6개월 이내에 해당 주택에 전입신고를 완료한다.',reason:`${b.area} — 규제지역 6개월 전입 의무 (2025.10.15~)`});
+    essential.push({title:'전입 의무 이행 (규제지역)',content:'매수인은 잔금 납부 후 6개월 이내에 해당 주택에 전입신고를 완료한다.',reason:`${_fmtSgg(b.area)} — 규제지역 6개월 전입 의무 (2025.10.15~)`});
   } else if (isReg === null) {
     essential.push({title:'전입 의무 이행 (규제지역 해당 시)',content:'매수인은 잔금 납부 후 6개월 이내에 해당 주택에 전입신고를 완료한다.',reason:'지역 미입력 — 소재지가 규제지역이면 6개월 전입 의무 적용'});
   } // isReg === false → 미포함 (비규제)
@@ -10307,7 +10307,7 @@ function buildRuleRisk(p){
   const isReg = (typeof isRegFront === 'function' && p.area) ? isRegFront(p.area, p.lawdCd) : null; // REG-DUAL-PATH-FIX-2026-08-16
   risks.push({level:'중간',title:'시세 하락 리스크',probability:'',scenario:'매수 후 금리 인상/규제 강화 시 단기 조정 가능성.',countermeasure:'5년 이상 보유, 전세 전환 플랜B 수립'});
   if (isReg === true) {
-    risks.push({level:'중간',title:'규제지역 의무·대출 제약',probability:'',scenario:`${p.area} — 규제지역이라 LTV 40%·잔금 후 6개월 전입 의무 등 제약이 있어요.`,countermeasure:'대출계산 탭에서 규제 기준 한도 확인 + 전입 계획 수립'});
+    risks.push({level:'중간',title:'규제지역 의무·대출 제약',probability:'',scenario:`${_fmtSgg(p.area)} — 규제지역이라 LTV 40%·잔금 후 6개월 전입 의무 등 제약이 있어요.`,countermeasure:'대출계산 탭에서 규제 기준 한도 확인 + 전입 계획 수립'});
   } else {
     risks.push({level:'중간',title:'대출 규제 추가 강화',probability:'',scenario:'갈아타기 시점 LTV 추가 규제 가능성.',countermeasure:'금융기관에서 DSR 한도 사전 확인 (기관 종류에 따라 한도가 다름)'});
   }
@@ -10754,7 +10754,7 @@ async function loadPopularMarkers() {
             content: `<div style="position:relative;font-size:12px;line-height:1.6;background:var(--bg-elev-1);padding:10px 12px;color:var(--text-primary);border-radius:var(--radius-md);border:1px solid var(--border-subtle);box-shadow:var(--shadow-lg)">
               <button onclick="try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_){}" aria-label="닫기" title="닫기" style="position:absolute;top:0;right:2px;width:20px;height:20px;border:none;background:transparent;color:var(--text-tertiary);font-size:14px;line-height:1;cursor:pointer;padding:0">✕</button>
               <div style="font-weight:700">${_escHtml(p.aptName)}</div>
-              <div style="font-size:10.5px;color:var(--text-tertiary)">${_escHtml(p.sigungu||'')} ${_escHtml(p.umdNm||'')} · ${p.buildYear||'?'}년</div>
+              <div style="font-size:10.5px;color:var(--text-tertiary)">${_escHtml(_fmtSgg(p.sigungu))} ${_escHtml(p.umdNm||'')} · ${p.buildYear||'?'}년</div>
               <div style="font-size:10.5px;color:var(--text-secondary);margin-top:4px">최근 60일 거래 <b>${p.dealCount60d}건</b></div>
               <button onclick='goSearchResult(${_pj})' style="margin-top:6px;padding:5px 10px;background:var(--accent-700);color:#fff;border:none;border-radius:var(--radius-sm);font-size:11px;cursor:pointer">상세 보기 →</button>
             </div>`,
@@ -10788,7 +10788,7 @@ async function loadPopularMarkers() {
           m.bindPopup(`
             <div style="font-size:12px;line-height:1.6;background:var(--bg-elev-1);padding:10px 12px;color:var(--text-primary)">
               <div style="font-weight:700">${_escHtml(p.aptName)}</div>
-              <div style="font-size:10.5px;color:var(--text-tertiary)">${_escHtml(p.sigungu||'')} ${_escHtml(p.umdNm||'')} · ${p.buildYear||'?'}년</div>
+              <div style="font-size:10.5px;color:var(--text-tertiary)">${_escHtml(_fmtSgg(p.sigungu))} ${_escHtml(p.umdNm||'')} · ${p.buildYear||'?'}년</div>
               <div style="font-size:10.5px;color:var(--text-secondary);margin-top:4px">최근 60일 거래 <b>${p.dealCount60d}건</b></div>
               <button onclick='goSearchResult(${_jsonAttr({aptName:p.aptName,sigungu:p.sigungu,umdNm:p.umdNm,lawdCd:p.lawdCd,buildYear:p.buildYear,recentDealDate:p.recentDealDate})})' style="margin-top:6px;padding:5px 10px;background:var(--accent-700);color:#fff;border:none;border-radius:var(--radius-sm);font-size:11px;cursor:pointer">상세 보기 →</button>
             </div>
@@ -10980,7 +10980,7 @@ async function onHeaderSearchInput(q) {
             if (sims.length) {
               suggestionHtml = `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg2);text-align:left">
                 <div style="font-size:10.5px;color:var(--t2);font-weight:600;margin-bottom:6px">💡 비슷한 검색어 결과:</div>
-                ${sims.map(r => `<div onclick='goSearchResult(${_jsonAttr(r)})' style="padding:6px 8px;cursor:pointer;font-size:11px;border-radius:4px" onmouseover="this.style.background='var(--s1)'" onmouseout="this.style.background='transparent'"><b>${_escHtml(r.aptName)}</b> <span style="color:var(--t3)">${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')}</span></div>`).join('')}
+                ${sims.map(r => `<div onclick='goSearchResult(${_jsonAttr(r)})' style="padding:6px 8px;cursor:pointer;font-size:11px;border-radius:4px" onmouseover="this.style.background='var(--s1)'" onmouseout="this.style.background='transparent'"><b>${_escHtml(r.aptName)}</b> <span style="color:var(--t3)">${_escHtml(_fmtSgg(r.sigungu))} ${_escHtml(r.umdNm||'')}</span></div>`).join('')}
               </div>`;
             }
           } catch(_) {}
@@ -11000,9 +11000,9 @@ async function onHeaderSearchInput(q) {
           // Phase 10 (2026-05-03): 거래량 인기 배지 — count 5건 이상 시 🔥, 10건 이상 시 🔥🔥
           const _hot = (r.dealCount >= 10) ? ' 🔥🔥' : (r.dealCount >= 5 ? ' 🔥' : '');
           const _cntStr = r.dealCount ? ` · ${r.dealCount}건` : '';
-          return `<div class="hsearch-item" data-idx="${i}" role="option" tabindex="0" aria-label="${_escHtml(r.aptName)} ${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')}" onclick='goSearchResult(${_jsonAttr(r)})' style="padding:7px 11px;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:12px;line-height:1.4" onmouseover="this.style.background='var(--s1)'" onmouseout="this.style.background=''">
+          return `<div class="hsearch-item" data-idx="${i}" role="option" tabindex="0" aria-label="${_escHtml(r.aptName)} ${_escHtml(_fmtSgg(r.sigungu))} ${_escHtml(r.umdNm||'')}" onclick='goSearchResult(${_jsonAttr(r)})' style="padding:7px 11px;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:12px;line-height:1.4" onmouseover="this.style.background='var(--s1)'" onmouseout="this.style.background=''">
             <div style="font-weight:700;color:var(--t1)">${_escHtml(r.aptName)}${_hot}</div>
-            <div style="font-size:10.5px;color:var(--t3);margin-top:2px">${_escHtml(r.sigungu||'')} ${_escHtml(r.umdNm||'')} · ${r.buildYear||'?'}년 · ${(r.recentDealDate||'').slice(0,10)}${_cntStr}</div>
+            <div style="font-size:10.5px;color:var(--t3);margin-top:2px">${_escHtml(_fmtSgg(r.sigungu))} ${_escHtml(r.umdNm||'')} · ${r.buildYear||'?'}년 · ${(r.recentDealDate||'').slice(0,10)}${_cntStr}</div>
           </div>`;
         }).join('');
       }
@@ -11108,7 +11108,7 @@ async function openAptDetail(r) {
       }
       _ld.innerHTML = `<div class="dml-spin"></div>`
         + `<div class="dml-name">${_escHtml(r.aptName||'')}</div>`
-        + `<div class="dml-msg">${_escHtml(`${r.sigungu||''} ${r.umdNm||''}`.trim())}</div>`
+        + `<div class="dml-msg">${_escHtml(`${_fmtSgg(r.sigungu)} ${r.umdNm||''}`.trim())}</div>`
         + `<div class="dml-msg">국토부 실거래 · 단지정보 불러오는 중… (보통 2~5초)</div>`;
       _ld.style.display = 'flex';
       _dm.classList.add('open');
@@ -11855,6 +11855,10 @@ function hk(e){if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();sM();}}
 function ah(el){el.style.height='auto';el.style.height=Math.min(el.scrollHeight,90)+'px';}
 function gt(){const n=new Date();return n.getHours().toString().padStart(2,'0')+':'+n.getMinutes().toString().padStart(2,'0');}
 // HTML escape — XSS 방어용 (AI/사용자/세션 복원 메시지 공통)
+// SGG-FMT-2026-08-20 (전수조사 잔여 S): MOLIT 원천 시군구는 시 산하 구가 붙어 있다('안양시만안구'). **표시 전용** —
+//   키·매칭·전송(비교 API·북마크·geocode·isRegFront/_regLtvLabel 인자)에는 절대 쓰지 말 것(공백 차이 매칭 사고 이력).
+//   'sigungu umd' 결합 문자열도 첫 토큰만 분리되며 광역시 구('강남구')·구 없는 시('시흥시')는 불변.
+function _fmtSgg(s){return String(s==null?'':s).replace(/^([가-힣]+?시)([가-힣]+구)(?=\s|$)/,'$1 $2');}
 function _escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 
 /* ── 지역 시장 요약 모달 (Sprint WWWWWW) ───────────────────────────────────────────
