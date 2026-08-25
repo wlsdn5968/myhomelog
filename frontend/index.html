@@ -621,12 +621,12 @@ header .hbtn:hover{border-color:var(--hd-ac);color:var(--hd-tab-act)}
    칩 선택 상태는 시안 미정의 → 골드 배경+잉크(#0B1524, 대비 6.4:1) — 골드 위 흰 글자(3.3:1)는 AA 미달이라 쓰지 않는다.
    구조(번호 배지·필수 태그·입력창)는 유지. 전역 --acc(네이비)는 건드리지 않는다(다른 뷰 무영향). */
 body .lp{ /* (0,1,1) — 이 블록보다 뒤에 선언된 전역 .lp{background:var(--s0)} 보다 앞에 있어도 이기도록 */
-  --sb-panel:#FFFFFF; --sb-raise:#F7F9FC; --sb-line:#DEE5EF; --sb-tx:#0B1524; --sb-tx2:#5A6A82; --sb-tx3:#8A98AC;
+  --sb-panel:#FFFFFF; --sb-raise:#F7F9FC; --sb-line:#DEE5EF; --sb-tx:#0B1524; --sb-tx2:#5A6A82; --sb-tx3:#5F6E86;
   --sb-ac:#C98A00; --sb-ac2:#A87200; --sb-ink:#0B1524; --sb-ac-tint:rgba(201,138,0,.14);
   background:var(--sb-panel);border-right-color:var(--sb-line);
 }
 html[data-theme="dark"] body .lp{ /* (0,1,2) — 뒤에 오는 전역 .lp{background:var(--s0)} 와 다크 --s0 상속을 이기도록 */
-  --sb-panel:#101B2B; --sb-raise:#162336; --sb-line:#22334A; --sb-tx:#E8EFFA; --sb-tx2:#93A4BD; --sb-tx3:#63758F;
+  --sb-panel:#101B2B; --sb-raise:#162336; --sb-line:#22334A; --sb-tx:#E8EFFA; --sb-tx2:#93A4BD; --sb-tx3:#8494AC;
   --sb-ac:#FFC93C; --sb-ac2:#F5A524; --sb-ink:#0B1524; --sb-ac-tint:rgba(255,201,60,.16);
   background:var(--sb-panel);border-right-color:var(--sb-line); /* 기존 다크 .lp 규칙(--s0)이 이기던 갭 — 같은 specificity 뒤 선언 */
 }
@@ -1918,13 +1918,13 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
    공유되고, 마커 클릭 플로우 변경은 회귀 위험이라 이번 범위에서 제외). */
 #view-map,.lp{
   --map-panel:#FFFFFF; --map-raise:#F7F9FC; --map-line:#DEE5EF;
-  --map-tx:#0B1524; --map-tx2:#5A6A82; --map-tx3:#8A98AC;
+  --map-tx:#0B1524; --map-tx2:#5A6A82; --map-tx3:#5F6E86;
   --map-ac:#C98A00;
   --map-shadow:0 1px 2px rgba(11,21,36,.06),0 10px 28px rgba(11,21,36,.07);
 }
 html[data-theme="dark"] #view-map,html[data-theme="dark"] .lp{
   --map-panel:#101B2B; --map-raise:#162336; --map-line:#22334A;
-  --map-tx:#E8EFFA; --map-tx2:#93A4BD; --map-tx3:#63758F;
+  --map-tx:#E8EFFA; --map-tx2:#93A4BD; --map-tx3:#8494AC;
   --map-ac:#FFC93C;
   --map-shadow:0 1px 0 rgba(255,255,255,.03),0 12px 32px rgba(0,0,0,.35);
 }
@@ -2296,13 +2296,13 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
    전역 토큰(--t1/--acc 등) 오염 금지 — 이 뷰 밖 화면은 무변경. */
 #view-news{
   --brf-panel:#FFFFFF; --brf-raise:#F7F9FC; --brf-line:#DEE5EF;
-  --brf-tx:#0B1524; --brf-tx2:#5A6A82; --brf-tx3:#8A98AC;
+  --brf-tx:#0B1524; --brf-tx2:#5A6A82; --brf-tx3:#5F6E86; --brf-ac-tx:#8A5C00;  /* 골드를 글자로 쓸 때 — #C98A00 은 흰 배경 2.95:1 (AA 미달) */
   --brf-ac:#C98A00;
   --brf-shadow:0 1px 2px rgba(11,21,36,.06),0 10px 28px rgba(11,21,36,.07);
 }
 html[data-theme="dark"] #view-news{
   --brf-panel:#101B2B; --brf-raise:#162336; --brf-line:#22334A;
-  --brf-tx:#E8EFFA; --brf-tx2:#93A4BD; --brf-tx3:#63758F;
+  --brf-tx:#E8EFFA; --brf-tx2:#93A4BD; --brf-tx3:#8494AC; --brf-ac-tx:#FFC93C;  /* 다크는 밝은 골드가 어두운 배경에서 그대로 통과 */
   --brf-ac:#FFC93C;
   --brf-shadow:0 1px 0 rgba(255,255,255,.03),0 12px 32px rgba(0,0,0,.35);
 }
@@ -2330,7 +2330,7 @@ html[data-theme="dark"] #view-news{
     <div id="briefTicker" class="brf-ticker" style="display:none"><div class="brf-tape" id="briefTape"></div></div>
     <div style="display:flex;justify-content:space-between;align-items:flex-end;flex-wrap:wrap;gap:10px;padding-bottom:14px;border-bottom:1px solid var(--brf-line);margin-bottom:4px">
       <div>
-        <div style="font-size:11px;font-weight:700;letter-spacing:.18em;color:var(--brf-ac)">오늘의 브리핑</div>
+        <div style="font-size:11px;font-weight:700;letter-spacing:.18em;color:var(--brf-ac-tx)">오늘의 브리핑</div>
         <h3 id="briefDate" style="margin:6px 0 4px;font-size:28px;font-weight:800;letter-spacing:-.03em;color:var(--brf-tx);font-variant-numeric:tabular-nums">—</h3>
         <div style="font-size:12px;color:var(--brf-tx3)">추천을 팔지 않습니다. 데이터를 팝니다.</div>
       </div>
@@ -4966,8 +4966,8 @@ async function loadNewsSummary(){
     // REG-STRUCT-2026-08-19 (Sprint NNNNNNN-15): 구조화 응답(items)이면 시안처럼 출처·기준일 캡션 분리(전부 escape)
     const its = Array.isArray(d.items) && d.items.length ? d.items : null;
     document.getElementById('newsSummaryLines').innerHTML = its
-      ? its.map((it,i)=>`<div class="brf-row"><div style="font-size:12px;font-weight:800;color:var(--brf-ac);font-variant-numeric:tabular-nums;padding-top:2px">${String(i+1).padStart(2,'0')}</div><div style="min-width:0"><div style="font-size:13px;line-height:1.55;font-weight:600;color:var(--brf-tx)">${_escHtml(it.text||'')}</div><div style="margin-top:5px;font-size:10px;color:var(--brf-tx3)">출처 ${_escHtml(it.src||'')}${it.date?` · 기준 ${_escHtml(String(it.date))}`:''}</div></div></div>`).join('')
-      : lines.map((l,i)=>`<div class="brf-row"><div style="font-size:12px;font-weight:800;color:var(--brf-ac);font-variant-numeric:tabular-nums;padding-top:2px">${String(i+1).padStart(2,'0')}</div><div style="min-width:0;font-size:13px;line-height:1.55;font-weight:600;color:var(--brf-tx)">${_escHtml(l)}</div></div>`).join('');
+      ? its.map((it,i)=>`<div class="brf-row"><div style="font-size:12px;font-weight:800;color:var(--brf-ac-tx);font-variant-numeric:tabular-nums;padding-top:2px">${String(i+1).padStart(2,'0')}</div><div style="min-width:0"><div style="font-size:13px;line-height:1.55;font-weight:600;color:var(--brf-tx)">${_escHtml(it.text||'')}</div><div style="margin-top:5px;font-size:10px;color:var(--brf-tx3)">출처 ${_escHtml(it.src||'')}${it.date?` · 기준 ${_escHtml(String(it.date))}`:''}</div></div></div>`).join('')
+      : lines.map((l,i)=>`<div class="brf-row"><div style="font-size:12px;font-weight:800;color:var(--brf-ac-tx);font-variant-numeric:tabular-nums;padding-top:2px">${String(i+1).padStart(2,'0')}</div><div style="min-width:0;font-size:13px;line-height:1.55;font-weight:600;color:var(--brf-tx)">${_escHtml(l)}</div></div>`).join('');
     // NEWS-ZERO-COST-2026-08-16 (Sprint PPPPPPP): 시황은 이제 공식 통계 전용이다(AI 생성 아님).
     //   mode 가 없으면 통계 3종이 모두 실패한 안내 문구이므로 출처 줄 자체를 감춘다 —
     //   종전엔 이 자리에 'AI가 헤드라인을 정리' 가 들어갔는데, AI 경로가 사라진 지금은 거짓 문구가 된다.
@@ -5050,7 +5050,7 @@ async function renderBriefing(){
         <div style="font-size:9px;color:var(--brf-tx3);margin-top:6px">청약홈 · 신청 전 applyhome.co.kr 최종 확인</div>
       </div>
       <div class="brf-card">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b class="brf-h2">인기 단지 TOP 5</b><span style="display:flex;gap:10px"><a href="javascript:void(0)" onclick="openRankCard()" style="font-size:10.5px;color:var(--brf-ac);text-decoration:none;font-weight:700">🖼 카드</a><a href="javascript:void(0)" onclick="sv('map')" style="font-size:10.5px;color:var(--brf-tx3);text-decoration:none">지도 ›</a></span></div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b class="brf-h2">인기 단지 TOP 5</b><span style="display:flex;gap:10px"><a href="javascript:void(0)" onclick="openRankCard()" style="font-size:10.5px;color:var(--brf-ac-tx);text-decoration:none;font-weight:700">🖼 카드</a><a href="javascript:void(0)" onclick="sv('map')" style="font-size:10.5px;color:var(--brf-tx3);text-decoration:none">지도 ›</a></span></div>
         ${popHtml}
         <div style="font-size:9px;color:var(--brf-tx3);margin-top:8px">최근 60일 국토부 실거래 많은 순 · 60일 평균가 · 매물 광고 아님</div>
       </div>`;
@@ -5064,7 +5064,7 @@ async function renderBriefing(){
         const fm=d=>d?String(d).slice(0,10).replace(/-/g,'.'):'';
         const rows=reglog.items.slice(0,4).map(it=>`<div class="brf-row" style="align-items:baseline;gap:12px;flex-wrap:wrap;padding:10px 13px;margin-bottom:8px">
           <span style="font-size:11px;font-weight:700;color:var(--brf-tx3);font-variant-numeric:tabular-nums;flex:0 0 88px">${fm(it.effectiveFrom)} 시행</span>
-          <span style="font-size:10px;font-weight:800;padding:3px 7px;border-radius:5px;background:var(--brf-panel);border:1px solid var(--brf-line);color:var(--brf-ac)">${_escHtml(it.tag||'')}</span>
+          <span style="font-size:10px;font-weight:800;padding:3px 7px;border-radius:5px;background:var(--brf-panel);border:1px solid var(--brf-line);color:var(--brf-ac-tx)">${_escHtml(it.tag||'')}</span>
           <span style="flex:1;min-width:150px;font-size:12px;font-weight:600;color:var(--brf-tx);line-height:1.5">${_escHtml(it.note||'')}${it.supersededAt?` <span style="color:var(--brf-tx3);font-weight:500">(→ ${fm(it.supersededAt)} 대체)</span>`:''}</span>
           ${it.verifiedAt?`<span style="font-size:10px;color:var(--brf-tx3)">확인 ${fm(it.verifiedAt)}</span>`:''}
         </div>`).join('');
