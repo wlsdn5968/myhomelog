@@ -2314,13 +2314,13 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
    전역 토큰(--t1/--acc 등) 오염 금지 — 이 뷰 밖 화면은 무변경. */
 #view-news{
   --brf-panel:#FFFFFF; --brf-raise:#F7F9FC; --brf-line:#DEE5EF;
-  --brf-tx:#0B1524; --brf-tx2:#5A6A82; --brf-tx3:#5F6E86; --brf-ac-tx:#8A5C00;  /* 골드를 글자로 쓸 때 — #C98A00 은 흰 배경 2.95:1 (AA 미달) */
+  --brf-tx:#0B1524; --brf-tx2:#5A6A82; --brf-tx3:#5F6E86; --brf-ac-tx:#8A5C00;  /* 골드를 글자로 쓸 때 — #C98A00 은 흰 배경 2.95:1 (AA 미달) */ --brf-ink:#0B1524;  /* 골드 '배경' 위에 얹는 글자 — 라이트 6.21:1 */
   --brf-ac:#C98A00;
   --brf-shadow:0 1px 2px rgba(11,21,36,.06),0 10px 28px rgba(11,21,36,.07);
 }
 html[data-theme="dark"] #view-news{
   --brf-panel:#101B2B; --brf-raise:#162336; --brf-line:#22334A;
-  --brf-tx:#E8EFFA; --brf-tx2:#93A4BD; --brf-tx3:#8494AC; --brf-ac-tx:#FFC93C;  /* 다크는 밝은 골드가 어두운 배경에서 그대로 통과 */
+  --brf-tx:#E8EFFA; --brf-tx2:#93A4BD; --brf-tx3:#8494AC; --brf-ac-tx:#FFC93C;  /* 다크는 밝은 골드가 어두운 배경에서 그대로 통과 */ --brf-ink:#0B1524;  /* 다크 골드(#FFC93C) 위에도 잉크 — 12.01:1 */
   --brf-ac:#FFC93C;
   --brf-shadow:0 1px 0 rgba(255,255,255,.03),0 12px 32px rgba(0,0,0,.35);
 }
@@ -4984,8 +4984,8 @@ async function loadNewsSummary(){
     // REG-STRUCT-2026-08-19 (Sprint NNNNNNN-15): 구조화 응답(items)이면 시안처럼 출처·기준일 캡션 분리(전부 escape)
     const its = Array.isArray(d.items) && d.items.length ? d.items : null;
     document.getElementById('newsSummaryLines').innerHTML = its
-      ? its.map((it,i)=>`<div class="brf-row"><div style="font-size:12px;font-weight:800;color:var(--brf-ac-tx);font-variant-numeric:tabular-nums;padding-top:2px">${String(i+1).padStart(2,'0')}</div><div style="min-width:0"><div style="font-size:13px;line-height:1.55;font-weight:600;color:var(--brf-tx)">${_escHtml(it.text||'')}</div><div style="margin-top:5px;font-size:10px;color:var(--brf-tx3)">출처 ${_escHtml(it.src||'')}${it.date?` · 기준 ${_escHtml(String(it.date))}`:''}</div></div></div>`).join('')
-      : lines.map((l,i)=>`<div class="brf-row"><div style="font-size:12px;font-weight:800;color:var(--brf-ac-tx);font-variant-numeric:tabular-nums;padding-top:2px">${String(i+1).padStart(2,'0')}</div><div style="min-width:0;font-size:13px;line-height:1.55;font-weight:600;color:var(--brf-tx)">${_escHtml(l)}</div></div>`).join('');
+      ? its.map((it,i)=>`<div class="brf-row"><div style="font-size:11px;font-weight:800;color:var(--brf-ink);background:var(--brf-ac);border-radius:var(--radius-sm);padding:2px 6px;line-height:1.5;align-self:flex-start;font-variant-numeric:tabular-nums;flex-shrink:0">${String(i+1).padStart(2,'0')}</div><div style="min-width:0"><div style="font-size:13px;line-height:1.55;font-weight:600;color:var(--brf-tx)">${_escHtml(it.text||'')}</div><div style="margin-top:5px;font-size:10px;color:var(--brf-tx3)">출처 ${_escHtml(it.src||'')}${it.date?` · 기준 ${_escHtml(String(it.date))}`:''}</div></div></div>`).join('')
+      : lines.map((l,i)=>`<div class="brf-row"><div style="font-size:11px;font-weight:800;color:var(--brf-ink);background:var(--brf-ac);border-radius:var(--radius-sm);padding:2px 6px;line-height:1.5;align-self:flex-start;font-variant-numeric:tabular-nums;flex-shrink:0">${String(i+1).padStart(2,'0')}</div><div style="min-width:0;font-size:13px;line-height:1.55;font-weight:600;color:var(--brf-tx)">${_escHtml(l)}</div></div>`).join('');
     // NEWS-ZERO-COST-2026-08-16 (Sprint PPPPPPP): 시황은 이제 공식 통계 전용이다(AI 생성 아님).
     //   mode 가 없으면 통계 3종이 모두 실패한 안내 문구이므로 출처 줄 자체를 감춘다 —
     //   종전엔 이 자리에 'AI가 헤드라인을 정리' 가 들어갔는데, AI 경로가 사라진 지금은 거짓 문구가 된다.
@@ -5349,6 +5349,9 @@ function updateQuota(usage){
   const info=document.getElementById('usageInfo');
   window._quotaUnlimited = !!usage.unlimited;
   if(wrap) wrap.style.display = usage.unlimited ? 'none' : 'flex';
+  // QUOTA-SYMMETRY-2026-08-25: 무제한이면 채팅 pill 은 '∞' 인데 검색 pill 만 직전 숫자가 남아 있었다.
+  //   행 자체가 숨겨져 눈에 띄진 않지만, admin 해제/세션 만료로 행이 다시 보일 때 옛 값이 노출된다.
+  if(pill && usage.unlimited){ pill.textContent='∞'; pill.style.color=''; }
   if(pill && !usage.unlimited){
     pill.textContent=`${usage.remaining}/${usage.limit}`;
     // 한도 임박 시 숫자만 색으로 신호 (시안: 배경 pill 없음)
