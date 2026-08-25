@@ -7895,56 +7895,56 @@ function _drawShareCard(s,p){
   const cv=document.createElement('canvas');cv.width=W;cv.height=H;
   const x=cv.getContext('2d');
   x.fillStyle='#0E1A2B';x.fillRect(0,0,W,H);
-  x.fillStyle='#F5B842';x.fillRect(0,0,W,10);
+  x.fillStyle='#FFC93C';x.fillRect(0,0,W,10);
   x.textBaseline='top';
-  x.fillStyle='#F5B842';x.font='800 30px Pretendard, sans-serif';
+  x.fillStyle='#FFC93C';x.font='800 30px "Pretendard Variable", Pretendard, system-ui, sans-serif';
   x.fillText('MYHOMELOG · 실거래 팩트 카드',80,84);
   let fs=72;x.fillStyle='#DFE7EE';
-  do{x.font='800 '+fs+'px Pretendard, sans-serif';fs-=4;}while(x.measureText(p.aptName||'').width>W-160&&fs>36);
+  do{x.font='800 '+fs+'px "Pretendard Variable", Pretendard, system-ui, sans-serif';fs-=4;}while(x.measureText(p.aptName||'').width>W-160&&fs>36);
   x.fillText(p.aptName||'',80,140);
-  x.fillStyle='#8FA1B5';x.font='500 32px Pretendard, sans-serif';
+  x.fillStyle='#8FA1B5';x.font='500 32px "Pretendard Variable", Pretendard, system-ui, sans-serif';
   const sub=_fmtSgg(p.area)+(s.mode==='compare'?' · 전용 '+s.py+'평형 기준':'');
   x.fillText(sub,80,238);
   x.fillStyle='#22344E';x.fillRect(80,308,W-160,2);
   if(s.mode==='compare'){
     const diff=s.newAvg-s.oldAvg;const pct=s.oldAvg>0?diff/s.oldAvg*100:0;
     const sign=diff>=0?'+':'';
-    x.fillStyle='#8FA1B5';x.font='500 32px Pretendard, sans-serif';
+    x.fillStyle='#8FA1B5';x.font='500 32px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText('약 1년 전 실거래 ('+s.oldRange+')',80,360);
-    x.fillStyle='#DFE7EE';x.font='800 92px Pretendard, sans-serif';
+    x.fillStyle='#DFE7EE';x.font='800 92px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText(s.oldAvg.toFixed(2)+'억',80,406);
-    x.fillStyle='#8FA1B5';x.font='500 30px Pretendard, sans-serif';
+    x.fillStyle='#8FA1B5';x.font='500 30px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText('실거래 평균 · '+s.oldN+'건',80,510);
-    x.fillStyle='#8FA1B5';x.font='500 32px Pretendard, sans-serif';
+    x.fillStyle='#8FA1B5';x.font='500 32px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText('최근 실거래 ('+s.newRange+')',80,600);
-    x.fillStyle='#DFE7EE';x.font='800 92px Pretendard, sans-serif';
+    x.fillStyle='#DFE7EE';x.font='800 92px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText(s.newAvg.toFixed(2)+'억',80,646);
-    x.fillStyle='#8FA1B5';x.font='500 30px Pretendard, sans-serif';
+    x.fillStyle='#8FA1B5';x.font='500 30px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText('실거래 평균 · '+s.newN+'건',80,750);
     // 차이 박스 — 상승/하락 색깔 판정 없이 앰버 단일(절대룰: 방향 유도 금지)
-    x.strokeStyle='#F5B842';x.lineWidth=3;x.strokeRect(80,830,W-160,150);
-    x.fillStyle='#F5B842';x.font='800 60px Pretendard, sans-serif';
+    x.strokeStyle='#FFC93C';x.lineWidth=3;x.strokeRect(80,830,W-160,150);
+    x.fillStyle='#FFC93C';x.font='800 60px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText('차이 '+sign+diff.toFixed(2)+'억 ('+sign+pct.toFixed(1)+'%)',110,872);
   }else{
-    x.fillStyle='#8FA1B5';x.font='500 32px Pretendard, sans-serif';
+    x.fillStyle='#8FA1B5';x.font='500 32px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText('최근 6개월 실거래 ('+s.range+')',80,380);
-    x.fillStyle='#DFE7EE';x.font='800 100px Pretendard, sans-serif';
+    x.fillStyle='#DFE7EE';x.font='800 100px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText(s.avg.toFixed(2)+'억',80,430);
-    x.fillStyle='#8FA1B5';x.font='500 34px Pretendard, sans-serif';
+    x.fillStyle='#8FA1B5';x.font='500 34px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText('전 평형 실거래 평균 · '+s.n+'건',80,548);
-    x.fillStyle='#DFE7EE';x.font='700 44px Pretendard, sans-serif';
+    x.fillStyle='#DFE7EE';x.font='700 44px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText('최고 '+s.max.toFixed(2)+'억',80,650);
     x.fillText('최저 '+s.min.toFixed(2)+'억',80,720);
-    x.fillStyle='#8FA1B5';x.font='500 30px Pretendard, sans-serif';
+    x.fillStyle='#8FA1B5';x.font='500 30px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText('약 1년 전 같은 평형 거래가 없어 비교 대신 최근 요약을 담았어요',80,810);
   }
   const d=new Date();
   const today=d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0');
   x.fillStyle='#22344E';x.fillRect(80,1130,W-160,2);
-  x.fillStyle='#8FA1B5';x.font='500 27px Pretendard, sans-serif';
+  x.fillStyle='#8FA1B5';x.font='500 27px "Pretendard Variable", Pretendard, system-ui, sans-serif';
   x.fillText('출처 국토교통부 실거래가 · 기준 '+today,80,1160);
   x.fillText('과거 실거래 기록의 요약입니다 · 미래 가격 예측·매수 추천이 아닙니다',80,1204);
-  x.fillStyle='#F5B842';x.font='800 34px Pretendard, sans-serif';
+  x.fillStyle='#FFC93C';x.font='800 34px "Pretendard Variable", Pretendard, system-ui, sans-serif';
   x.fillText('myhomelog.vercel.app',80,1268);
   _cardCanvas=cv;
 }
@@ -8015,42 +8015,42 @@ function _drawRankCard(list){
   const cv=document.createElement('canvas');cv.width=W;cv.height=H;
   const x=cv.getContext('2d');
   x.fillStyle='#0E1A2B';x.fillRect(0,0,W,H);
-  x.fillStyle='#F5B842';x.fillRect(0,0,W,10);
+  x.fillStyle='#FFC93C';x.fillRect(0,0,W,10);
   x.textBaseline='top';
-  x.fillStyle='#F5B842';x.font='800 30px Pretendard, sans-serif';
+  x.fillStyle='#FFC93C';x.font='800 30px "Pretendard Variable", Pretendard, system-ui, sans-serif';
   x.fillText('MYHOMELOG · 실거래 랭킹',80,84);
-  x.fillStyle='#DFE7EE';x.font='800 66px Pretendard, sans-serif';
+  x.fillStyle='#DFE7EE';x.font='800 66px "Pretendard Variable", Pretendard, system-ui, sans-serif';
   x.fillText('실거래 많은 단지 TOP 5',80,140);
   const d=new Date();
   const today=d.getFullYear()+'.'+String(d.getMonth()+1).padStart(2,'0')+'.'+String(d.getDate()).padStart(2,'0');
-  x.fillStyle='#8FA1B5';x.font='500 30px Pretendard, sans-serif';
+  x.fillStyle='#8FA1B5';x.font='500 30px "Pretendard Variable", Pretendard, system-ui, sans-serif';
   x.fillText('최근 60일 국토부 실거래 많은 순 · '+today+' 기준',80,232);
   x.fillStyle='#22344E';x.fillRect(80,300,W-160,2);
   let y=336;
   list.forEach((p,i)=>{
-    x.fillStyle='#F5B842';x.font='800 46px Pretendard, sans-serif';
+    x.fillStyle='#FFC93C';x.font='800 46px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText(String(i+1),80,y+18);
     let fs=40;x.fillStyle='#DFE7EE';
-    do{x.font='700 '+fs+'px Pretendard, sans-serif';fs-=2;}while(x.measureText(p.aptName||'').width>560&&fs>24);
+    do{x.font='700 '+fs+'px "Pretendard Variable", Pretendard, system-ui, sans-serif';fs-=2;}while(x.measureText(p.aptName||'').width>560&&fs>24);
     x.fillText(p.aptName||'',150,y);
-    x.fillStyle='#8FA1B5';x.font='500 26px Pretendard, sans-serif';
+    x.fillStyle='#8FA1B5';x.font='500 26px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText(_fmtSgg(p.sigungu),150,y+58);
     x.textAlign='right';
     if(Number.isFinite(Number(p.avgDealAmount))&&Number(p.avgDealAmount)>0){
-      x.fillStyle='#DFE7EE';x.font='800 40px Pretendard, sans-serif';
+      x.fillStyle='#DFE7EE';x.font='800 40px "Pretendard Variable", Pretendard, system-ui, sans-serif';
       x.fillText((Number(p.avgDealAmount)/10000).toFixed(2)+'억',W-80,y+2);
     }
-    x.fillStyle='#93A4BD';x.font='700 26px Pretendard, sans-serif';
+    x.fillStyle='#93A4BD';x.font='700 26px "Pretendard Variable", Pretendard, system-ui, sans-serif';
     x.fillText((p.dealCount60d?p.dealCount60d+'건':''),W-80,y+54);
     x.textAlign='left';
     if(i<list.length-1){x.fillStyle='#22344E';x.fillRect(80,y+112,W-160,1);}
     y+=138;
   });
   x.fillStyle='#22344E';x.fillRect(80,1096,W-160,2);
-  x.fillStyle='#8FA1B5';x.font='500 27px Pretendard, sans-serif';
+  x.fillStyle='#8FA1B5';x.font='500 27px "Pretendard Variable", Pretendard, system-ui, sans-serif';
   x.fillText('출처 국토교통부 실거래가 · 60일 평균가 · 기준 '+today,80,1126);
   x.fillText('매물 광고가 아닙니다 · 과거 실거래 기록이며 매수·매도 추천이 아닙니다',80,1170);
-  x.fillStyle='#F5B842';x.font='800 34px Pretendard, sans-serif';
+  x.fillStyle='#FFC93C';x.font='800 34px "Pretendard Variable", Pretendard, system-ui, sans-serif';
   x.fillText('myhomelog.vercel.app',80,1240);
   _cardCanvas=cv;
 }
@@ -10535,11 +10535,11 @@ function exportClausePDF(){
     h1, .sub, .cv-card, .cv-caution, footer, .legal-banner { position: relative; z-index: 1; }
     h1{font-size:16px;font-weight:700;margin-bottom:4px;color:#173A63}
     .sub{font-size:11px;color:#98938A;margin-bottom:14px}
-    .legal-banner{background:#FAEBEB;border:2px solid var(--accent-500);border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:#A82525;line-height:1.7}
+    .legal-banner{background:#FAEBEB;border:2px solid #173A63;border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:#A82525;line-height:1.7}
     .legal-banner b{font-size:13px;display:block;margin-bottom:4px}
     .cv-card{border:1px solid #E2DDD5;border-radius:8px;margin-bottom:8px;overflow:hidden;page-break-inside:avoid;background:var(--bg-base)}
     .cv-card-hdr{padding:8px 12px;background:#F0EDE7;display:flex;justify-content:space-between}
-    .cv-card-hdr.essential{background:#FAE9E2;border-bottom:1px solid var(--accent-100)}
+    .cv-card-hdr.essential{background:#FAE9E2;border-bottom:1px solid #D5E1EE}
     .cv-card-title{font-size:12px;font-weight:700}
     .cv-card-body{padding:10px 12px}
     .cv-card-content{font-size:11px;line-height:1.75;background:#F4F2ED;border-radius:6px;padding:8px 10px;margin-bottom:6px;white-space:pre-wrap}
