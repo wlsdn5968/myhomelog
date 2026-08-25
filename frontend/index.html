@@ -594,6 +594,11 @@ header .hbtn:hover{border-color:var(--hd-ac);color:var(--hd-tab-act)}
 @media (min-width:701px) and (max-width:900px){
   #dataStatusBtn .dsb-tx{display:none}
   #dataStatusBtn > span:first-child{margin-right:0}
+  /* 라벨만 접으면 768px 여유가 정확히 0px 이 된다 — 폰트 렌더링이 조금만 달라도(실기기·타 OS)
+     다시 넘친다. 검색창 최소폭을 이 구간에서만 170px(마크업 기본값)로 되돌려 30px 을 남긴다.
+     ⚠ 650~659 의 태블릿 블록이 `.hsearch{min-width:200px!important}` 를 **뒤에서** 선언하므로
+     같은 specificity 로는 진다 — `header .hsearch`(0,1,1)로 올려야 이긴다. */
+  header .hsearch{min-width:170px!important}
 }
 /* SB-DESIGN-2026-08-20 (Sprint NNNNNNN-21): 사이드바 스킨 — 시안엔 '내 상황 위저드'가 없어(판단 불가) 시안 "조건 설정" 패널
    (design.html:187-216)의 토큰만 .lp 스코프로 입힌다: panel 배경·line 보더·칩=raise+line+tx2·hover ac·CTA=ac 배경+잉크 글자(design.html:524 패턴).
