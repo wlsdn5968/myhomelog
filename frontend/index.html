@@ -8699,7 +8699,7 @@ function renderBookmarks(){
     </div>
     <div class="bk-memo-row" onclick="event.stopPropagation()" style="display:flex;gap:4px;margin-top:4px">
       <input type="text" placeholder="메모 (왜 이 가격?)" maxlength="40" value="${_escHtml(b.memo || '')}" id="bk-memo-${i}" oninput="event.stopPropagation()" style="flex:1;font-size:10.5px;padding:3px 6px;border:1px solid var(--bd);border-radius:5px;background:var(--bg-base);color:var(--t2)">
-      <button onclick="saveBookmarkMemo(${i},document.getElementById('bk-memo-${i}').value)" style="font-size:10px;padding:3px 8px;background:#F0F2F7;border:1px solid var(--bd);border-radius:5px;cursor:pointer;color:var(--t2)">저장</button>
+      <button onclick="saveBookmarkMemo(${i},document.getElementById('bk-memo-${i}').value)" style="font-size:10px;padding:3px 8px;background:var(--bg2);border:1px solid var(--bd);border-radius:5px;cursor:pointer;color:var(--t2)">저장</button>
     </div>
     ${lc?`<div style="font-size:9.5px;color:var(--t3);margin-top:3px;padding-left:2px">📊 ${b.lastCheckedCount||0}건${lc}</div>`:''}`;
     return`<div class="bk-item" onclick="openBookmark(${i})">
