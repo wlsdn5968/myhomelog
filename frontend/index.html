@@ -5408,6 +5408,29 @@ function updateAiPill(usage){
   pill.title = `오늘 남은 도우미 채팅 ${usage.remaining}/${usage.limit}회 — 매일 자정 리셋`; // GGGGGG: pill(남은)과 기준 통일
 }
 
+/* QUOTA-REALTIME-2026-08-25 (Sprint NNNNNNN-25): 서버는 **이미** 한도 대상 응답마다
+   X-Daily-Limit / X-Daily-Remaining 을 싣는다(backend/middleware/dailyLimit.js). 그런데 프론트는 그 헤더를
+   전혀 읽지 않고 /api/health 를 다시 불러 숫자를 갱신하고 있었다. 라이브 실측 결과:
+     · 검색 — 응답을 다 받은 뒤(11.7초) **한 번 더 왕복**해야 숫자가 바뀐다
+     · 채팅 — 전송부에 갱신 호출이 **아예 없어** 아무리 써도 화면이 그대로였다(서버 remaining 38 vs 화면 39)
+   응답 헤더를 그대로 쓰면 추가 왕복 없이 즉시 반영된다. same-origin 이라 헤더 접근 가능함도 실측 확인했다. */
+function _syncQuotaFromRes(res, kind){
+  try{
+    if(!res || !res.headers) return;
+    const lim = res.headers.get('X-Daily-Limit'), rem = res.headers.get('X-Daily-Remaining');
+    if(lim == null || rem == null) return;                 // 한도 대상이 아닌 응답은 건드리지 않는다
+    const unlimited = (lim === 'unlimited' || rem === 'unlimited');
+    let usage;
+    if(unlimited){ usage = {used:0, limit:'무제한', remaining:'무제한', unlimited:true}; }
+    else {
+      const limit = Number(lim), remaining = Number(rem);
+      if(!isFinite(limit) || !isFinite(remaining)) return;
+      usage = {used: Math.max(0, limit - remaining), limit, remaining};
+    }
+    if(kind === 'chat') updateAiPill(usage); else updateQuota(usage);
+  }catch(_){}
+}
+
 // DATA-QUALITY-2026-07-12 (Sprint BBBBB) → Sprint OOOOO: 헤더 dqPill 제거(시안), 계정 드롭다운
 //   「사용량·데이터 품질 정보」 서브라인(#acctDqSub)으로 이동. admin 만 실제 수치, 클릭 시 상세 toast 병행.
 function updateDataQuality(fq, isAdmin){
@@ -6088,6 +6111,7 @@ async function doSearch(){
     // Phase 4-2 단계 1 미세 (2026-05-05): /api/properties/recommend cold start 자동 1회 재시도
     // 첫 호출이 500 (lambda 콜드) 시 1.5s 후 재호출 → 두 번째는 warm 으로 95% 성공
     let res=await fetch(`${CFG.api}/properties/recommend`,{method:'POST',headers:_hdr,body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
+    _syncQuotaFromRes(res,'search');  // QUOTA-REALTIME-2026-08-25: health 재조회를 기다리지 않고 즉시 반영
     if(res.status===500){
       await new Promise(r=>setTimeout(r,1500));
       res=await fetch(`${CFG.api}/properties/recommend`,{method:'POST',headers:_hdr,body:JSON.stringify(body),signal:AbortSignal.timeout(30000)});
@@ -11676,6 +11700,7 @@ async function sM(){
   try{
     // MOB-AUDIT-2026-05-03: chat timeout 30s → 60s — Sonnet 4.5 가 1500 token 답변 시 25~30s 빈번
     const r=await fetch(`${CFG.api}/chat`,{method:'POST',headers:await _authHdr({'Content-Type':'application/json'}),body:JSON.stringify({message:txt,context:{history:chatH.slice(-18), session:sessionContext}}),signal:AbortSignal.timeout(60000)});
+    _syncQuotaFromRes(r,'chat');   // QUOTA-REALTIME-2026-08-25: 종전엔 채팅 후 갱신이 없었다
     if(r.status===429){
       const j=await r.json().catch(()=>({}));
       rmTyp();
