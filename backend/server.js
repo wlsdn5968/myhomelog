@@ -245,6 +245,11 @@ app.use('/api/news', optionalAuth, dataLimiter, newsRouter);
 app.use('/api/subscription', dataLimiter, subscriptionRouter);
 // 웹푸시 구독 (Sprint EEEEEE — 익명 동작, VAPID/테이블 게이트 미충족 시 no-op)
 app.use('/api/push', dataLimiter, require('./routes/push'));
+// 카카오 연결 해제 웹훅 (Sprint NNNNNNN-22) — 카카오 서버가 호출하는 엔드포인트.
+//   ⚠ dataLimiter 앞에 마운트하는 이유: 카카오는 3초 내 200 을 요구하고, 비-200 이 반복되면 웹훅을
+//     비활성화한다. 사용자 IP 기준 레이트리밋에 걸려 429 가 나가면 그 자체로 웹훅이 죽는다.
+//     대신 Authorization(어드민 키) 검증이 라우트 내부의 실질 게이트다.
+app.use('/api/kakao/unlink-callback', require('./routes/kakaoWebhook'));
 // 카카오톡 알림 연결 (Sprint FFFFFF — portai Memo API 패턴, 콘솔/테이블 게이트 미충족 시 no-op)
 app.use('/api/kakao', dataLimiter, require('./routes/kakao'));
 // 북마크 (Supabase 백엔드 — JWT 필수, RLS 적용)
