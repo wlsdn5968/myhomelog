@@ -423,6 +423,7 @@ window.MHL.auth = window.MHL.auth || {
   --accL:  var(--accent-tint);         /* → rgba(23,58,99,.08) (리디자인 Phase 1) */
   --accD:  var(--accent-600);          /* → #112C4C (리디자인 Phase 1) */
   --a2:    #1E5499;                    /* (변경 없음 — 단계 5 에서 별도 검증) */
+  --a2-bg: var(--a2);                  /* --a2 를 배경으로 쓸 때 — 라이트는 동일 */
   --a2L:   #E6EFF9;                    /* (변경 없음) */
   /* DESIGN-UNIFY-2026-06-13: 반복되던 인라인 라이트 literal 토큰화 (info 블루박스·동반 보더/텍스트) → 다크 자동적응 + 통일 */
   --info-bg: #F0F7FF;
@@ -465,7 +466,7 @@ html[data-theme="dark"]{
   /* DESIGN-UNIFY-2026-06-13: 보조 블루(a2)·info 박스·레드보더 다크 적응 (라이트값 100% 유지) */
   /* A11Y-SEMANTIC-2026-08-25: 다크에서는 같은 별칭이 반대로 밝아져야 한다. 종전엔 다크 오버라이드가
      아예 없어 라이트값(#10B981/#D97706/#DC2626)이 그대로 쓰였고 어두운 틴트 위에서 3.2~4.1:1 이었다. */
-  --grn:#34D399; --amb:#FBBF24; --red:#F87171;
+  --grn:#34D399; --amb:#FBBF24; --red:#FCA5A5;  /* red 는 표 셀에서 4.23:1 경계였어서 한 단계 밝게 */
   /* A11Y-ACCENT-SPLIT-2026-08-25 (Sprint NNNNNNN-24): 다크에서 accent 는 글자용과 배경용이 상충한다.
      밝게 두면 배경 위 텍스트가 무너지고(흰 글자 3.91:1), 어둡게 두면 글자로 쓸 때 무너진다(2.5:1).
      실측상 배경 34곳 · 글자 84곳이라 **둘 다 필요** → 용도별로 분리한다.
@@ -473,7 +474,7 @@ html[data-theme="dark"]{
        --acc-bg  배경용 #2E5F9E (흰 글자 6.54:1 · --text-primary 5.43:1)
      --acc-bg 가 어두워졌으므로 그 위 글자는 다시 흰색이 정답이다(--acc-ink 되돌림). */
   --acc:#7CABDD; --acc-bg:#2E5F9E; --acc-ink:#fff;
-  --a2:#4E83C4; --a2L:rgba(78,131,196,0.18);
+  --a2:#7CABDD; --a2-bg:#2E5F9E; --a2L:rgba(78,131,196,0.18);  /* accent 와 같은 글자용/배경용 분리 */
   --info-bg:rgba(78,131,196,0.13); --info-bd:rgba(78,131,196,0.34); --info-tx:#9FC2E8;
   --danger-bd:rgba(220,38,38,0.34);
   --warn-bd:rgba(217,119,6,0.40);
@@ -926,10 +927,10 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 @keyframes fup{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 .msg.user{flex-direction:row-reverse}
 .ava{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
-.ava.ai{background:var(--acc-bg);color:var(--acc-ink)}.ava.user{background:var(--a2);color:#fff}
+.ava.ai{background:var(--acc-bg);color:var(--acc-ink)}.ava.user{background:var(--a2-bg);color:#fff}
 .bbl{max-width:90%;padding:8px 12px;border-radius:12px;font-size:12px;line-height:1.65}
 .msg.ai .bbl{background:var(--s1);border:1px solid var(--bd);border-top-left-radius:3px}
-.msg.user .bbl{background:var(--a2);color:#fff;border-top-right-radius:3px}
+.msg.user .bbl{background:var(--a2-bg);color:#fff;border-top-right-radius:3px}
 .mt{font-size:10px;color:var(--t3);margin-top:2px;padding:0 2px}.msg.user .mt{text-align:right}
 .typing{display:flex;gap:4px;padding:8px 11px;background:var(--s1);border:1px solid var(--bd);border-radius:12px;border-top-left-radius:3px;width:fit-content}
 .tdot{width:5px;height:5px;border-radius:50%;background:var(--t3);animation:td 1.2s infinite}
@@ -1182,7 +1183,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
    .app{position:relative} 와 짝. 위 큰 여백 root cause = flex 자식 정렬 문제. */
 .clause-view{position:absolute;top:84px;left:0;right:0;bottom:0;overflow-y:auto;padding:10px 22px 22px;display:none;flex-direction:column;gap:0;background:var(--bg);z-index:1}
 .clause-view.active{display:flex}
-.cv-hero{background:linear-gradient(135deg,var(--acc),var(--accD));color:#fff;border-radius:var(--radius-md);padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+.cv-hero{background:linear-gradient(135deg,var(--acc-bg),var(--accD));color:#fff;border-radius:var(--radius-md);padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .cv-hero h2{font-size:14px;font-weight:700;margin:0}
 .cv-hero p{font-size:11px;opacity:.88;line-height:1.4;margin:0;flex:1;min-width:220px}
 .cv-form{background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--r);padding:18px;margin-bottom:14px;box-shadow:var(--sh)}
@@ -2504,8 +2505,8 @@ html[data-theme="dark"] #view-news{
               <tr><td style="padding:3px 0">경기 인기 (분당·판교·과천)</td><td style="text-align:right;font-weight:700;color:var(--amb)">58~67점</td></tr>
               <tr><td style="padding:3px 0">경기 일반 (수원·용인·고양)</td><td style="text-align:right;font-weight:700;color:var(--amb)">45~55점</td></tr>
               <tr><td style="padding:3px 0">인천 송도·청라</td><td style="text-align:right;font-weight:700;color:var(--amb)">50~60점</td></tr>
-              <tr><td style="padding:3px 0">지방 광역시 인기</td><td style="text-align:right;font-weight:700;color:#1F7A3A">40~55점</td></tr>
-              <tr><td style="padding:3px 0">지방 일반</td><td style="text-align:right;font-weight:700;color:#1F7A3A">25~45점</td></tr>
+              <tr><td style="padding:3px 0">지방 광역시 인기</td><td style="text-align:right;font-weight:700;color:var(--grn)">40~55점</td></tr>
+              <tr><td style="padding:3px 0">지방 일반</td><td style="text-align:right;font-weight:700;color:var(--grn)">25~45점</td></tr>
             </tbody>
           </table>
           <div style="font-size:9.5px;color:var(--t3);margin-top:5px;line-height:1.4">※ 단지·평형·시점별 편차 큼. 특별공급(생초·신혼·다자녀·신생아)은 별도 자격.<br>※ 위 범위는 <b>청약Home 단지별 당첨 가점 공고를 참고한 개략 값</b>이며, 기관이 공표한 지역별 평균 통계가 아닙니다. 실제 커트라인은 <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="color:var(--acc)">청약Home</a> 공고에서 확인하세요.</div>
@@ -11436,8 +11437,8 @@ function calcSubsScore(){
   //   공고 후에야 확정된다 — 우리가 인용할 수 있는 공시값이 존재하지 않는다.
   //   절대 룰 ②(공식 출처만 인용)에 따라 근거 없는 수치와 단정을 걷어내고 아래 청약Home 안내만 남긴다.
   //   (옛 문구는 계약 테스트의 금지 문자열이라 여기 적지 않는다.)
-  if (total >= 70) tier = '<b style="color:#1F7A3A">상위권</b> — 서울 인기 단지 일반공급 지원 가능 구간';
-  else if (total >= 60) tier = '<b style="color:#1F7A3A">중상위권</b> — 서울 일반 단지·수도권 인기 분양 도전 가능';
+  if (total >= 70) tier = '<b style="color:var(--grn)">상위권</b> — 서울 인기 단지 일반공급 지원 가능 구간';
+  else if (total >= 60) tier = '<b style="color:var(--grn)">중상위권</b> — 서울 일반 단지·수도권 인기 분양 도전 가능';
   else if (total >= 50) tier = '<b style="color:var(--amb)">중위권</b> — 수도권 일반·지방 인기 분양 도전 가능. 서울은 어려움';
   else if (total >= 35) tier = '<b style="color:var(--amb)">중하위권</b> — 지방 일반 분양 도전 권장. 특별공급(생초/신혼/신생아) 활용 필수';
   else tier = '<b style="color:var(--red)">하위권</b> — 일반공급 어려움. <b>특별공급(생초·신혼·다자녀·신생아)</b> 또는 <b>추첨제 단지</b> 노리기 권장';
