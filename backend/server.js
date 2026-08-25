@@ -72,6 +72,12 @@ app.use(helmet({
   contentSecurityPolicy: {
     directives: {
       defaultSrc: ["'self'"],
+      // ⚠ CSP-SHARE-2026-08-25 (Sprint NNNNNNN-22): 이 CSP 는 Express 를 거치는 경로에만 붙는다
+      //   (vercel.json 상 /api/*, /share*, /briefing*, /sitemap.xml). 루트 / 는 정적 서빙이라 CSP 가 없다.
+      //   그래서 **같은 index.html 인데 /share 에서만** 네이버 지도 SDK·Pretendard·Sora 가 차단되고 있었다
+      //   (라이브 콘솔 실측: "Refused to load ... violates ... Content Security Policy" 4건 + Leaflet 폴백).
+      //   공유 링크는 신규 방문자의 첫 화면이라 폰트·지도가 깨진 채 노출되던 것 — 아래 도메인은
+      //   루트에서 실제 로드되는 것만 performance.getEntriesByType('resource') 로 실측해 추가했다.
       scriptSrc: [
         "'self'",
         "'unsafe-inline'", // index.html 인라인 스크립트 (Phase 4 이후 nonce 로 교체)
@@ -79,12 +85,17 @@ app.use(helmet({
         'https://cdn.jsdelivr.net',
         'https://unpkg.com',
         'https://js.tosspayments.com',
+        'https://oapi.map.naver.com', // 네이버 지도 SDK 본체
+        'https://*.pstatic.net',      // 지도 SDK 가 이어서 부르는 스크립트(nrbe/ssl 등 호스트 분산)
       ],
       scriptSrcAttr: ["'unsafe-inline'"], // onclick="" 등 인라인 핸들러
       styleSrc: [
         "'self'",
         "'unsafe-inline'", // 인라인 style + <style> 블록
         'https://unpkg.com', // leaflet.css
+        'https://cdn.jsdelivr.net',    // Pretendard Variable
+        'https://fonts.googleapis.com', // Sora · JetBrains Mono
+        'https://*.pstatic.net',        // 지도 SDK 스타일
       ],
       imgSrc: [
         "'self'",
@@ -93,6 +104,7 @@ app.use(helmet({
         'https://*.tile.openstreetmap.org',
         'https://server.arcgisonline.com',
         'https://myhomelog.vercel.app',
+        'https://*.pstatic.net', // 네이버 지도 타일·마커 이미지
       ],
       connectSrc: [
         "'self'",
@@ -101,9 +113,17 @@ app.use(helmet({
         'https://api.tosspayments.com',
         'https://*.ingest.sentry.io',
         'https://*.ingest.us.sentry.io',
+        'https://oapi.map.naver.com',
+        'https://*.pstatic.net',
+        'https://*.navercorp.com', // 지도 SDK 내부 로그 수집(nelo) — 차단 시 콘솔 에러만 남는다
       ],
       frameSrc: ["'self'", 'https://js.tosspayments.com', 'https://*.tosspayments.com'],
-      fontSrc: ["'self'", 'data:'],
+      fontSrc: [
+        "'self'",
+        'data:',
+        'https://cdn.jsdelivr.net',  // Pretendard woff2
+        'https://fonts.gstatic.com', // Google Fonts 실제 폰트 파일
+      ],
       objectSrc: ["'none'"],
       baseUri: ["'self'"],
       formAction: ["'self'"],
