@@ -453,7 +453,7 @@ window.MHL.auth = window.MHL.auth || {
 /* ── 다크 모드 (리디자인 — 토글식, 라이트 기본) · 의미 토큰 오버라이드 ───── */
 html[data-theme="dark"]{
   --bg-base:#1A1F29; --bg-elev-1:#222834; --bg-elev-2:#2A313F; --bg:#0F131A; --bg2:#2A313F;
-  --text-primary:#E7EAEF; --text-secondary:#AEB4BF; --text-tertiary:#A8B0BD; /* A11Y-2026-08-25: #7E8694 는 패널 3.56:1·틴트 2.86:1 로 미달 */
+  --text-primary:#E7EAEF; --text-secondary:#AEB4BF; --text-tertiary:#A8B0BD; --text-quiet:#A1A1AA;  /* A11Y-2026-08-25: 다크 오버라이드가 없어 라이트값(#71717A)이 그대로 쓰여 3.06:1 이었다 */ /* A11Y-2026-08-25: #7E8694 는 패널 3.56:1·틴트 2.86:1 로 미달 */
   --border-faint:rgba(255,255,255,0.06); --border-subtle:rgba(255,255,255,0.11);
   --border-medium:rgba(255,255,255,0.17); --border-strong:rgba(255,255,255,0.26);
   --accent-500:#4E83C4; --accent-600:#3D6CA8; --accent-700:#7CABDD;
@@ -847,7 +847,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .niw-btn:hover{transform:translateY(-1px)}
 .niw-btn.a2{background:var(--accent-tint);color:var(--accent-700);border:1px solid var(--accent-tint-2);margin-bottom:5px}
 .niw-btn.a2:hover{background:var(--accent-tint-2)}
-.niw-btn.acc{background:linear-gradient(135deg,var(--accent-500),var(--accent-700));color:#fff;box-shadow:var(--accent-shadow)}
+.niw-btn.acc{background:linear-gradient(135deg,var(--acc-bg),var(--accent-600));color:#fff;box-shadow:var(--accent-shadow)}
 .niw-btn.acc:hover{box-shadow:var(--accent-shadow-strong)}
 
 /* Leaflet 팝업 커스텀 — Phase 4-2 단계 1 미세 P1 (2026-05-05): Concept C 통일 (border-subtle + bg-elev) */
@@ -879,7 +879,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .score-pending .sp-icon{font-size:32px;margin-bottom:8px}
 .score-pending .sp-title{font-family:var(--font-display);font-size:17px;font-weight:800;color:var(--text-primary);margin-bottom:8px;letter-spacing:-.3px}
 .score-pending .sp-msg{font-size:12.5px;color:var(--text-secondary);line-height:1.65;margin-bottom:16px}
-.score-pending .sp-cta{padding:10px 22px;background:linear-gradient(135deg,var(--accent-500),var(--accent-700));color:#fff;border:none;border-radius:var(--radius-md);font-family:var(--font-display);font-size:13px;font-weight:700;cursor:pointer;box-shadow:var(--accent-shadow);transition:all 200ms cubic-bezier(0.16,1,0.3,1)}
+.score-pending .sp-cta{padding:10px 22px;background:linear-gradient(135deg,var(--acc-bg),var(--accent-600));color:#fff;border:none;border-radius:var(--radius-md);font-family:var(--font-display);font-size:13px;font-weight:700;cursor:pointer;box-shadow:var(--accent-shadow);transition:all 200ms cubic-bezier(0.16,1,0.3,1)}
 .score-pending .sp-cta:hover{transform:translateY(-1px);box-shadow:var(--accent-shadow-strong)}
 .score-pending .sp-meta{margin-top:12px;font-family:var(--font-mono);font-size:10.5px;color:var(--text-tertiary)}
 
@@ -1549,7 +1549,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .hero-cta{
   display:inline-flex;align-items:center;gap:var(--space-2);
   padding:10px 20px;
-  background:linear-gradient(135deg,var(--accent-500),var(--accent-700));
+  background:linear-gradient(135deg,var(--acc-bg),var(--accent-600));
   color:#fff;
   border:none;border-radius:var(--radius-md);
   font-family:var(--font-display);font-size:13px;font-weight:700;
@@ -2604,7 +2604,7 @@ html[data-theme="dark"] #view-news{
         <b>비용</b>: 지금은 <b>무료</b>로 받아볼 수 있어요<br>
         <b>다운로드</b>: PDF로 가족·중개사와 공유 가능<br><br>
         <span style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:var(--radius-sm);padding:6px 10px;display:inline-block;font-size:11px;color:var(--accent-700)">⚠ 본 보고서는 정보 정리이며 투자자문업·중개업·대출모집인업 X. 매수·매도 추천 X.</span>
-        <button class="abtn" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px;background:var(--accent-500);color:#fff;border:none" onclick="sv('report')">📊 보고서 만들어보기 →</button>
+        <button class="abtn" style="display:block;margin-top:10px;padding:7px 14px;width:auto;font-size:11.5px;background:var(--acc-bg);color:var(--acc-ink);border:none" onclick="sv('report')">📊 보고서 만들어보기 →</button>
       </div>
     </details>
 
@@ -2755,7 +2755,7 @@ html[data-theme="dark"] #view-news{
 #view-landing > *{position:relative;z-index:1}
 #view-landing .lv-top{display:flex;align-items:center;padding:18px 24px;max-width:1280px;margin:0 auto}
 #view-landing .lv-logo{display:flex;align-items:center;gap:9px;background:transparent;border:none;cursor:pointer;font-family:var(--font-body);padding:0}
-#view-landing .lv-mark{width:34px;height:34px;background:linear-gradient(135deg,var(--accent-500),var(--accent-700));border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:16px;font-family:var(--font-display);box-shadow:var(--accent-shadow)}
+#view-landing .lv-mark{width:34px;height:34px;background:linear-gradient(135deg,var(--acc-bg),var(--accent-600));border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:16px;font-family:var(--font-display);box-shadow:var(--accent-shadow)}
 #view-landing .lv-text{font-family:var(--font-display);font-size:18px;font-weight:800;color:var(--text-primary);letter-spacing:-.5px}
 #view-landing .lv-text em{font-style:normal;background:linear-gradient(120deg,var(--accent-700),var(--accent-500));-webkit-background-clip:text;background-clip:text;color:transparent}
 #view-landing .lv-skip{margin-left:auto;font-family:var(--font-mono);font-size:11px;color:var(--text-tertiary);padding:8px 14px;border-radius:var(--radius-full);border:1px solid var(--border-faint);background:var(--glass-1);cursor:pointer;transition:all 200ms cubic-bezier(0.16,1,0.3,1)}
@@ -2766,7 +2766,7 @@ html[data-theme="dark"] #view-news{
 #view-landing .lv-h1 em{font-style:normal;background:linear-gradient(120deg,var(--accent-700),var(--accent-500));-webkit-background-clip:text;background-clip:text;color:transparent}
 #view-landing .lv-hero-sub{font-size:16px;color:var(--text-secondary);max-width:640px;margin-bottom:30px;line-height:1.55}
 #view-landing .lv-cta-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
-#view-landing .lv-cta-primary{display:inline-flex;align-items:center;gap:10px;padding:14px 24px;background:linear-gradient(135deg,var(--accent-500),var(--accent-700));color:#fff;border:none;border-radius:var(--radius-md);font-family:var(--font-display);font-size:14.5px;font-weight:700;cursor:pointer;box-shadow:var(--accent-shadow);transition:all 250ms cubic-bezier(0.16,1,0.3,1)}
+#view-landing .lv-cta-primary{display:inline-flex;align-items:center;gap:10px;padding:14px 24px;background:linear-gradient(135deg,var(--acc-bg),var(--accent-600));color:#fff;border:none;border-radius:var(--radius-md);font-family:var(--font-display);font-size:14.5px;font-weight:700;cursor:pointer;box-shadow:var(--accent-shadow);transition:all 250ms cubic-bezier(0.16,1,0.3,1)}
 #view-landing .lv-cta-primary:hover{transform:translateY(-2px);box-shadow:var(--accent-shadow-strong)}
 #view-landing .lv-cta-secondary{font-family:var(--font-display);font-size:13.5px;font-weight:600;color:var(--text-secondary);background:transparent;border:none;padding:8px 0;border-bottom:1px solid var(--border-subtle);cursor:pointer;transition:all 200ms}
 #view-landing .lv-cta-secondary:hover{color:var(--accent-700);border-color:var(--accent-500)}
