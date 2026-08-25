@@ -584,6 +584,17 @@ header .hbtn{background:var(--hd-panel);border-color:var(--hd-bd);color:var(--hd
 header .hbtn:hover{border-color:var(--hd-ac);color:var(--hd-tab-act)}
 #dataStatusBtn > span{background:var(--hd-ok)!important;box-shadow:0 0 0 3px var(--hd-ok-glow)}
 #themeToggle{border-radius:9px}
+/* HDR-TABLET-2026-08-25 (Sprint NNNNNNN-22): 701~900px 구간에서 헤더가 넘쳐 오른쪽 끝 버튼이 잘렸다.
+   라이브 실측(768px = iPad 세로, 새로 로드): header scrollWidth 808 > clientWidth 768 →
+   #themeToggle 이 x=772 로 **완전히 화면 밖**이고, header overflow-x 가 visible 이라
+   가로 스크롤도 불가능해 테마 전환 버튼에 아예 접근할 수 없었다(body scrollWidth 는 768 로 정상).
+   700px 브레이크포인트는 CSS 16곳·JS 5곳이 함께 쓰고 있어 건드리지 않고, 이 구간에서만
+   '데이터 상태' 라벨(84px)을 점만 남기고 접어 59px 을 회수한다(808 → 약 749).
+   ⚠ 텍스트가 이 버튼의 접근성 이름이었으므로 aria-label 을 마크업에 함께 넣었다(숨겨도 이름 유지). */
+@media (min-width:701px) and (max-width:900px){
+  #dataStatusBtn .dsb-tx{display:none}
+  #dataStatusBtn > span:first-child{margin-right:0}
+}
 /* SB-DESIGN-2026-08-20 (Sprint NNNNNNN-21): 사이드바 스킨 — 시안엔 '내 상황 위저드'가 없어(판단 불가) 시안 "조건 설정" 패널
    (design.html:187-216)의 토큰만 .lp 스코프로 입힌다: panel 배경·line 보더·칩=raise+line+tx2·hover ac·CTA=ac 배경+잉크 글자(design.html:524 패턴).
    칩 선택 상태는 시안 미정의 → 골드 배경+잉크(#0B1524, 대비 6.4:1) — 골드 위 흰 글자(3.3:1)는 AA 미달이라 쓰지 않는다.
@@ -1644,7 +1655,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       </div>
     </div>
     <button class="hbtn ntc-bell" id="ntcBell" onclick="openNtc()" title="알림 설정 — 관심단지 새 실거래 알림" aria-label="알림 설정" style="min-width:0;padding:6px 9px">🔔<span class="ntc-dot"></span></button>
-    <button class="hbtn" id="dataStatusBtn" onclick="openDataStatus()" title="데이터 신선도 전체 공개" style="min-width:0;padding:6px 10px;font-size:11px"><span style="display:inline-block;width:7px;height:7px;border-radius:99px;background:var(--grn);margin-right:5px;vertical-align:1px"></span>데이터 상태</button>
+    <button class="hbtn" id="dataStatusBtn" onclick="openDataStatus()" title="데이터 신선도 전체 공개" aria-label="데이터 상태" style="min-width:0;padding:6px 10px;font-size:11px"><span style="display:inline-block;width:7px;height:7px;border-radius:99px;background:var(--grn);margin-right:5px;vertical-align:1px"></span><span class="dsb-tx">데이터 상태</span></button>
     <button class="hbtn" id="themeToggle" onclick="toggleTheme()" title="다크/라이트 모드 전환" aria-label="테마 전환" style="min-width:0;padding:6px 9px">🌙</button>
     <button class="hbtn" id="settingsBtn" onclick="openSettings()" aria-label="서비스 정보">ⓘ<span class="sbtn-tx"> 정보</span></button>
   </div>
