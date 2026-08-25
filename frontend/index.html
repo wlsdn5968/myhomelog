@@ -2482,11 +2482,11 @@ html[data-theme="dark"] #view-news{
           <div style="font-size:11px;font-weight:700;color:var(--accent-700);margin-bottom:6px">📊 당첨 가점 개략 범위 (청약Home 공고 참고 · 2024~2025)</div>
           <table style="width:100%;font-size:10.5px;color:var(--t2);border-collapse:collapse">
             <tbody>
-              <tr><td style="padding:3px 0">서울 강남·서초·송파 인기 단지</td><td style="text-align:right;font-weight:700;color:#A82525">68~75점</td></tr>
-              <tr><td style="padding:3px 0">서울 일반 (강북·노원·도봉 등)</td><td style="text-align:right;font-weight:700;color:#A82525">55~65점</td></tr>
-              <tr><td style="padding:3px 0">경기 인기 (분당·판교·과천)</td><td style="text-align:right;font-weight:700;color:#9A5510">58~67점</td></tr>
-              <tr><td style="padding:3px 0">경기 일반 (수원·용인·고양)</td><td style="text-align:right;font-weight:700;color:#9A5510">45~55점</td></tr>
-              <tr><td style="padding:3px 0">인천 송도·청라</td><td style="text-align:right;font-weight:700;color:#9A5510">50~60점</td></tr>
+              <tr><td style="padding:3px 0">서울 강남·서초·송파 인기 단지</td><td style="text-align:right;font-weight:700;color:var(--red)">68~75점</td></tr>
+              <tr><td style="padding:3px 0">서울 일반 (강북·노원·도봉 등)</td><td style="text-align:right;font-weight:700;color:var(--red)">55~65점</td></tr>
+              <tr><td style="padding:3px 0">경기 인기 (분당·판교·과천)</td><td style="text-align:right;font-weight:700;color:var(--amb)">58~67점</td></tr>
+              <tr><td style="padding:3px 0">경기 일반 (수원·용인·고양)</td><td style="text-align:right;font-weight:700;color:var(--amb)">45~55점</td></tr>
+              <tr><td style="padding:3px 0">인천 송도·청라</td><td style="text-align:right;font-weight:700;color:var(--amb)">50~60점</td></tr>
               <tr><td style="padding:3px 0">지방 광역시 인기</td><td style="text-align:right;font-weight:700;color:#1F7A3A">40~55점</td></tr>
               <tr><td style="padding:3px 0">지방 일반</td><td style="text-align:right;font-weight:700;color:#1F7A3A">25~45점</td></tr>
             </tbody>
@@ -4836,7 +4836,7 @@ function openRegSummary(){
       </div>
       <!-- Sprint QQ (2026-05-19): 10.15 이후 후속 정책 (4.17 만기연장 금지 / 5.10 양도세 중과 / 5.12 보완책) -->
       <div style="background:#FFE8E8;border:1px solid #E8A0A0;border-radius:8px;padding:10px 12px;font-size:11px;color:#8B2914;line-height:1.6;margin-bottom:10px">
-        <b style="color:#A82525">⚡ 10.15 이후 후속 정책</b><br>
+        <b style="color:var(--red)">⚡ 10.15 이후 후속 정책</b><br>
         <b>2026.4.17~</b> 다주택자(2주택+) 주담대 만기연장 원칙 금지 (수도권·규제지역, 4조 1,000억 영향)<br>
         <b>2026.5.10~</b> 다주택자 양도세 중과 부활 (2주택 +20%p / 3주택+ +30%p, 5.9까지 양도분 배제·장기보유특별공제 배제)<br>
         <b>2026.5.12~</b> 보완책 — 매도 규제 일부 완화 (이사 등 실수요 일부 허용)<br>
@@ -5714,7 +5714,7 @@ async function loadAptsInBounds(south, west, north, east) {
 }
 
 // ── GAUGE ────────────────────────────────────────────────
-function gc(s){return s>=75?'#177038':s>=50?'#9A5510':'#A82525'}
+function gc(s){return s>=75?'var(--grn)':s>=50?'var(--amb)':'var(--red)'}
 function gSVG(score,sz){
   sz=sz||54;const r=sz/2-4,cx=sz/2,cy=sz/2,ci=2*Math.PI*r,off=ci*(1-score/100),c=gc(score);
   return`<div class="gw" style="width:${sz}px;height:${sz}px;position:relative;flex-shrink:0">
@@ -8345,7 +8345,7 @@ function renderAnalysis(d,p){
             }).join('')}
           </tbody>
         </table>
-        <div style="margin-top:8px;padding:7px 9px;background:#FAEBEB;border-left:3px solid #173A63;border-radius:4px;font-size:10px;color:#A82525;line-height:1.6">
+        <div style="margin-top:8px;padding:7px 9px;background:#FAEBEB;border-left:3px solid #173A63;border-radius:4px;font-size:10px;color:var(--red);line-height:1.6">
           <b>⚠ 사용자가 부담하는 위험</b>: 만기 시 부족분만큼 신용대출 / 매각 강제. 신용대출 1억 초과 시 1년간 규제지역 추가 매수 제한.<br>
           <b>전세대출 보유자</b>: 규제지역 3억 초과 매수 시 전세대출 즉시 회수 (보증금 반환 자금 별도 마련 필수).<br>
           <!-- TLZ-SCOPE-2026-08-16 (Sprint OOOOOOO-3): '강남 일부·송파·용산'은 **2025.10.15 이전** 범위였다.
@@ -10527,12 +10527,12 @@ function exportClausePDF(){
     .cv-card-body{padding:10px 12px}
     .cv-card-content{font-size:11px;line-height:1.75;background:#F4F2ED;border-radius:6px;padding:8px 10px;margin-bottom:6px;white-space:pre-wrap}
     .cv-card-reason{font-size:10px;color:#98938A}
-    .cv-caution{background:#FAF0E2;border:1px solid #E8C08A;border-radius:8px;padding:10px 12px;font-size:11px;color:#9A5510;margin-bottom:12px}
+    .cv-caution{background:#FAF0E2;border:1px solid #E8C08A;border-radius:8px;padding:10px 12px;font-size:11px;color:var(--amb);margin-bottom:12px}
     .rtag{display:inline-block;padding:2px 6px;border-radius:8px;font-size:10px;font-weight:700}
-    .rtag.r{background:#FAEBEB;color:#A82525}.rtag.y{background:#FAF0E2;color:#9A5510}
+    .rtag.r{background:#FAEBEB;color:var(--red)}.rtag.y{background:#FAF0E2;color:var(--amb)}
     .cpybtn{display:none}
     footer{margin-top:24px;font-size:10px;color:#98938A;border-top:1px solid #E2DDD5;padding-top:8px;line-height:1.7}
-    footer b{color:#A82525}
+    footer b{color:var(--red)}
   </style></head><body>
   <h1>${safeTitle}</h1>
   <div class="sub">내집로그 AI 특약 초안 · ${new Date().toLocaleDateString('ko-KR')}</div>
@@ -11421,9 +11421,9 @@ function calcSubsScore(){
   //   (옛 문구는 계약 테스트의 금지 문자열이라 여기 적지 않는다.)
   if (total >= 70) tier = '<b style="color:#1F7A3A">상위권</b> — 서울 인기 단지 일반공급 지원 가능 구간';
   else if (total >= 60) tier = '<b style="color:#1F7A3A">중상위권</b> — 서울 일반 단지·수도권 인기 분양 도전 가능';
-  else if (total >= 50) tier = '<b style="color:#9A5510">중위권</b> — 수도권 일반·지방 인기 분양 도전 가능. 서울은 어려움';
-  else if (total >= 35) tier = '<b style="color:#9A5510">중하위권</b> — 지방 일반 분양 도전 권장. 특별공급(생초/신혼/신생아) 활용 필수';
-  else tier = '<b style="color:#A82525">하위권</b> — 일반공급 어려움. <b>특별공급(생초·신혼·다자녀·신생아)</b> 또는 <b>추첨제 단지</b> 노리기 권장';
+  else if (total >= 50) tier = '<b style="color:var(--amb)">중위권</b> — 수도권 일반·지방 인기 분양 도전 가능. 서울은 어려움';
+  else if (total >= 35) tier = '<b style="color:var(--amb)">중하위권</b> — 지방 일반 분양 도전 권장. 특별공급(생초/신혼/신생아) 활용 필수';
+  else tier = '<b style="color:var(--red)">하위권</b> — 일반공급 어려움. <b>특별공급(생초·신혼·다자녀·신생아)</b> 또는 <b>추첨제 단지</b> 노리기 권장';
   tierEl.innerHTML = `예상 당첨 가능 분양: ${tier}<br><span style="font-size:10px;color:var(--t3)">※ 실제 커트라인은 단지·시점·평형별 다름. <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="color:var(--acc)">청약Home</a> 공고 필수 확인.</span>`;
 }
 
