@@ -530,7 +530,7 @@ html[data-theme="dark"] header{
 .lmark{
   width:32px;height:32px;
   background:var(--hd-navy);
-  border-radius:9px;
+  border-radius:var(--radius-base);
   display:flex;align-items:center;justify-content:center;
   color:#fff;
 }
@@ -541,7 +541,7 @@ html[data-theme="dark"] .ltxt em{color:#7FA1E8}
 .htabs{display:flex;gap:2px;margin-left:2px}
 .htab,.htabs button{white-space:nowrap}
 .htab{
-  padding:8px 13px;border-radius:9px;
+  padding:8px 13px;border-radius:var(--radius-base);
   font-family:var(--font-display);font-size:14.5px;font-weight:600;
   cursor:pointer;border:none;color:var(--hd-tab);
   background:transparent;transition:all var(--duration-fast) var(--ease-out);
@@ -555,12 +555,12 @@ html[data-theme="dark"] .ltxt em{color:#7FA1E8}
    사용법(첫 탭)·뉴스(보고서 옆)는 상단 승격.
    드롭다운 항목은 .htab 유지·DOM 순서 보존 → sv() 인덱스 활성 로직 무변경. 데스크톱 전용(.htabs 는 ≤700px 숨김). */
 .htab-dd{position:relative;display:flex}
-.htab-tool{padding:8px 11px;border-radius:9px;font-family:var(--font-display);font-size:14.5px;font-weight:600;cursor:pointer;border:none;color:var(--hd-tab);background:transparent;transition:all var(--duration-fast) var(--ease-out);display:flex;align-items:center;gap:5px}
+.htab-tool{padding:8px 11px;border-radius:var(--radius-base);font-family:var(--font-display);font-size:14.5px;font-weight:600;cursor:pointer;border:none;color:var(--hd-tab);background:transparent;transition:all var(--duration-fast) var(--ease-out);display:flex;align-items:center;gap:5px}
 .htab-tool:hover{background:var(--glass-1);color:var(--hd-tab-act)}
 .htab-tool.on{background:var(--hd-tab-act-bg);color:var(--hd-tab-act);font-weight:700}
 .htab-tool .ddcaret{font-size:9px;transition:transform var(--duration-fast) var(--ease-out)}
 .htab-dd.open .htab-tool .ddcaret{transform:rotate(180deg)}
-.htab-menu{display:none;position:absolute;top:calc(100% + 6px);left:0;min-width:158px;background:var(--hd-menu-bg);border:1px solid var(--hd-bd);border-radius:12px;box-shadow:0 12px 32px -10px rgba(19,35,75,.28);padding:5px;z-index:120}
+.htab-menu{display:none;position:absolute;top:calc(100% + 6px);left:0;min-width:158px;background:var(--hd-menu-bg);border:1px solid var(--hd-bd);border-radius:var(--radius-lg);box-shadow:0 12px 32px -10px rgba(19,35,75,.28);padding:5px;z-index:120}
 .htab-dd.open .htab-menu{display:block}
 .htab-menu .htab{display:flex;align-items:center;width:100%;padding:8px 10px;border-radius:var(--radius-base);font-size:13.5px}
 .htab-menu .htab.on{padding:8px 10px;border:none;background:var(--hd-tab-act-bg)}
@@ -579,8 +579,8 @@ html[data-theme="dark"] .ltxt em{color:#7FA1E8}
 .hbtn{padding:5px 12px;border-radius:var(--radius-xl);font-size:11px;border:1px solid var(--bd);background:var(--s1);color:var(--t2);cursor:pointer;font-family:inherit;transition:all .15s;white-space:nowrap}
 .hbtn:hover{border-color:var(--border-strong);color:var(--text-primary)}
 @media(min-width:701px){
-  #loginBtn{height:40px;padding:0 16px;border-radius:11px;font-size:13.5px}
-  .hsearch input{height:40px;background:var(--hd-search-bg);border:1px solid var(--hd-search-bd);border-radius:11px}
+  #loginBtn{height:40px;padding:0 16px;border-radius:var(--radius-md);font-size:13.5px}
+  .hsearch input{height:40px;background:var(--hd-search-bg);border:1px solid var(--hd-search-bd);border-radius:var(--radius-md)}
   .hsearch input::placeholder{color:var(--hd-ph)}
 }
 @media(min-width:1120px){ .hsearch{min-width:260px!important} }
@@ -617,7 +617,7 @@ header .hbtn:hover{border-color:var(--hd-ac);color:var(--hd-tab-act)}
    2026-08-25 태블릿 대응으로 라벨을 <span class="dsb-tx"> 로 감싼 순간 그 라벨까지 초록 배경 +
    회색 글자(대비 1.19:1)로 뭉개졌다 — 라이브 실측으로 잡았다. 점에만 걸리도록 클래스로 한정한다. */
 #dataStatusBtn .dsb-dot{background:var(--hd-ok)!important;box-shadow:0 0 0 3px var(--hd-ok-glow)}
-#themeToggle{border-radius:9px}
+#themeToggle{border-radius:var(--radius-base)}
 /* HDR-TABLET-2026-08-25 (Sprint NNNNNNN-22): 701~900px 구간에서 헤더가 넘쳐 오른쪽 끝 버튼이 잘렸다.
    라이브 실측(768px = iPad 세로, 새로 로드): header scrollWidth 808 > clientWidth 768 →
    #themeToggle 이 x=772 로 **완전히 화면 밖**이고, header overflow-x 가 visible 이라
@@ -675,13 +675,13 @@ html[data-theme="dark"] body .lp{ /* (0,1,2) — 뒤에 오는 전역 .lp{backgr
 .acct-name{font-size:14px;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .acct-plan{font-size:12px;color:var(--hd-menu-sub)}
 .acct-div{height:1px;background:var(--hd-menu-div);margin:2px 4px 6px}
-.acct-it{display:flex;align-items:flex-start;gap:11px;width:100%;padding:9px 10px;border-radius:9px;border:none;background:none;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--hd-menu-tx);text-align:left;transition:background .12s}
+.acct-it{display:flex;align-items:flex-start;gap:11px;width:100%;padding:9px 10px;border-radius:var(--radius-base);border:none;background:none;cursor:pointer;font-family:inherit;font-size:13.5px;font-weight:600;color:var(--hd-menu-tx);text-align:left;transition:background .12s}
 .acct-it:hover{background:var(--hd-tab-act-bg)}
 .acct-it svg{width:17px;height:17px;flex-shrink:0;margin-top:1px}
 .acct-it .acct-sub{display:block;font-size:11.5px;font-weight:500;color:var(--hd-menu-sub);margin-top:2px}
 .acct-it.danger{color:#C0392B}
 html[data-theme="dark"] .acct-it.danger{color:#E5766B}
-.acct-sw{width:38px;height:22px;border-radius:11px;background:#D6DBE4;position:relative;flex-shrink:0;margin-left:auto;align-self:center;transition:background .15s}
+.acct-sw{width:38px;height:22px;border-radius:var(--radius-md);background:#D6DBE4;position:relative;flex-shrink:0;margin-left:auto;align-self:center;transition:background .15s}
 .acct-sw .knob{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:var(--hd-logo-ink,#fff);box-shadow:0 1px 3px rgba(0,0,0,.2);transition:transform .15s}
 html[data-theme="dark"] .acct-sw{background:var(--hd-navy)}
 html[data-theme="dark"] .acct-sw .knob{transform:translateX(16px)}
@@ -796,7 +796,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .mbtn:hover{border-color:var(--border-strong);color:var(--text-primary)}.mbtn.on{background:var(--acc-bg);color:var(--acc-ink);border-color:var(--acc);box-shadow:0 2px 7px rgba(23,58,99,.24)}
 .msep{width:1px;height:16px;background:var(--bd)}
 #mapEl{flex:1;min-height:0;background:var(--s2)}
-.mhint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(18,14,8,.78);color:#fff;padding:6px 14px;border-radius:20px;font-size:11px;pointer-events:none;transition:opacity .35s;white-space:nowrap;z-index:10}
+.mhint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(18,14,8,.78);color:#fff;padding:6px 14px;border-radius:var(--radius-xl);font-size:11px;pointer-events:none;transition:opacity .35s;white-space:nowrap;z-index:10}
 .mhint.h{opacity:0}
 .map-no-key{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:var(--s2);z-index:5}
 .map-no-key h3{font-size:15px;font-weight:700;color:var(--t1)}
@@ -893,16 +893,16 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 /* 플로팅 관심단지 버튼 */
 .fab-bm{position:fixed;right:24px;bottom:92px;width:48px;height:48px;border-radius:50%;background:var(--bg-base);color:var(--t1);border:1px solid var(--bd);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.15);z-index:850;transition:transform .15s,box-shadow .15s}
 .fab-bm:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.20)}
-.fab-bm .fab-bm-cnt{position:absolute;top:-4px;right:-4px;background:var(--amb,#f5a623);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:9px;display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #fff}
+.fab-bm .fab-bm-cnt{position:absolute;top:-4px;right:-4px;background:var(--amb,#f5a623);color:#fff;font-size:10px;font-weight:700;min-width:18px;height:18px;border-radius:var(--radius-base);display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #fff}
 /* 관심단지 popover */
-.bm-pop{position:fixed;right:24px;bottom:150px;width:320px;max-width:calc(100vw - 40px);max-height:min(460px,calc(100vh - 200px));background:var(--bg-base);border:1px solid var(--bd);border-radius:12px;box-shadow:0 12px 36px rgba(0,0,0,.2);z-index:860;display:none;flex-direction:column;overflow:hidden}
+.bm-pop{position:fixed;right:24px;bottom:150px;width:320px;max-width:calc(100vw - 40px);max-height:min(460px,calc(100vh - 200px));background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-lg);box-shadow:0 12px 36px rgba(0,0,0,.2);z-index:860;display:none;flex-direction:column;overflow:hidden}
 .bm-pop.on{display:flex}
 .bm-pop-hdr{padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:700;background:var(--s0)}
 .bm-pop-close{background:transparent;border:none;cursor:pointer;font-size:16px;color:var(--t3);padding:2px 6px;border-radius:var(--radius-xs)}
 .bm-pop-close:hover{background:var(--s1)}
 .bm-pop-body{flex:1;overflow-y:auto}
 /* WATCH-FEED (Sprint EEEEEE): 관심단지 '새 거래' 배지 */
-.bk-new-badge{display:inline-block;margin-left:6px;padding:1px 7px;background:var(--red,#D64545);color:#fff;font-size:9.5px;font-weight:700;border-radius:9px;vertical-align:1px;white-space:nowrap}
+.bk-new-badge{display:inline-block;margin-left:6px;padding:1px 7px;background:var(--red,#D64545);color:#fff;font-size:9.5px;font-weight:700;border-radius:var(--radius-base);vertical-align:1px;white-space:nowrap}
 @media(max-width:700px){.fab-ai{bottom:72px;right:16px;width:52px;height:52px;font-size:22px}.fab-bm{bottom:132px;right:16px}.bm-pop{bottom:186px;right:16px}}
 /* Agent UX #8 (2026-05-04): metaLine 모바일 줄 분리 (가로 스크롤 차단) */
 @media(max-width:600px){.meta-line{font-size:10.5px!important;padding:7px 10px!important}.meta-line>div{margin-bottom:2px}}
@@ -928,11 +928,11 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .msg.user{flex-direction:row-reverse}
 .ava{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
 .ava.ai{background:var(--acc-bg);color:var(--acc-ink)}.ava.user{background:var(--a2-bg);color:#fff}
-.bbl{max-width:90%;padding:8px 12px;border-radius:12px;font-size:12px;line-height:1.65}
+.bbl{max-width:90%;padding:8px 12px;border-radius:var(--radius-lg);font-size:12px;line-height:1.65}
 .msg.ai .bbl{background:var(--s1);border:1px solid var(--bd);border-top-left-radius:3px}
 .msg.user .bbl{background:var(--a2-bg);color:#fff;border-top-right-radius:3px}
 .mt{font-size:10px;color:var(--t3);margin-top:2px;padding:0 2px}.msg.user .mt{text-align:right}
-.typing{display:flex;gap:4px;padding:8px 11px;background:var(--s1);border:1px solid var(--bd);border-radius:12px;border-top-left-radius:3px;width:fit-content}
+.typing{display:flex;gap:4px;padding:8px 11px;background:var(--s1);border:1px solid var(--bd);border-radius:var(--radius-lg);border-top-left-radius:3px;width:fit-content}
 .tdot{width:5px;height:5px;border-radius:50%;background:var(--t3);animation:td 1.2s infinite}
 .tdot:nth-child(2){animation-delay:.2s}.tdot:nth-child(3){animation-delay:.4s}
 @keyframes td{0%,60%,100%{transform:translateY(0);opacity:.4}30%{transform:translateY(-4px);opacity:1}}
@@ -950,7 +950,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 /* CCCCCC: 세로 중앙정렬이던 것 — 헤더(66px, z1000)가 오버레이(z400) 위에 그려져 키 큰 모달 상단(제목·공유·닫기)이 잘림. 상단 정렬 + 헤더 아래 오프셋 */
 .dmbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.42);z-index:400;align-items:flex-start;justify-content:center;padding:78px 16px 16px}
 .dmbg.open{display:flex}
-.dm{position:relative;background:var(--bg-base);border-radius:16px;width:100%;max-width:700px;max-height:calc(100vh - 94px);display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(16,24,40,.20)}
+.dm{position:relative;background:var(--bg-base);border-radius:var(--radius-xl);width:100%;max-width:700px;max-height:calc(100vh - 94px);display:flex;flex-direction:column;box-shadow:0 16px 48px rgba(16,24,40,.20)}
 /* DM-SKIN-2026-08-19 (Sprint NNNNNNN-10): 상세 모달 시안 정합 — 차트 액센트 토큰(라이트/다크) + 실거래 표 그리드.
    구조 클래스(.dm/.rtab 등)는 이미 앱 토큰 기반이라 무변경 — 하드코딩 색만 승격(다크 갭 해소).
    ⚠ SVG presentation attribute 는 var() 미지원 — style 속성으로 덮는다(renderPriceChart 참조). */
@@ -1008,7 +1008,7 @@ html[data-theme="dark"] .dmbg{--dm-ac:#FFC93C}
 .rpanel::-webkit-scrollbar{width:4px}.rpanel::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:2px}
 .tp{display:none}.tp.on{display:block}
 .rg2{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-bottom:13px}
-.rc{background:var(--bg-base);border-radius:12px;padding:12px 13px;border:1px solid var(--border-subtle);box-shadow:0 1px 3px rgba(16,24,40,.04)}
+.rc{background:var(--bg-base);border-radius:var(--radius-lg);padding:12px 13px;border:1px solid var(--border-subtle);box-shadow:0 1px 3px rgba(16,24,40,.04)}
 .rcl{font-size:10px;color:var(--t3);margin-bottom:2px}.rcv{font-size:18px;font-weight:700}
 .dtbl{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px}
 .dtbl td{padding:6px 0;border-bottom:1px solid var(--bd)}.dtbl tr:last-child td{border-bottom:none}
@@ -1034,7 +1034,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .rcard-t{font-size:12px;font-weight:700;flex:1}.rcard-p{font-size:10px;color:var(--t3)}
 .rcard-b{font-size:11px;color:var(--t2);line-height:1.65;margin-bottom:7px}
 .rcard-c{font-size:11px;color:var(--grn);background:var(--grnL);border-radius:var(--radius-sm);padding:6px 9px;line-height:1.5}
-.ccard{border:1px solid var(--border-subtle);border-radius:12px;margin-bottom:10px;overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,.04)}
+.ccard{border:1px solid var(--border-subtle);border-radius:var(--radius-lg);margin-bottom:10px;overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,.04)}
 .ccard-h{padding:9px 12px;background:var(--s1);border-bottom:1px solid var(--bd);display:flex;align-items:center;justify-content:space-between}
 .ccard-t{font-size:12px;font-weight:700}
 .ccard-b{padding:10px 12px}
@@ -1059,17 +1059,17 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
      z-index 600 — 단지 상세(.dmbg 400)·공유(.smbg 500) 위에 뜬다(상세에서 열리는 진입점이라 필수). */
 .rgbg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:600;align-items:center;justify-content:center;padding:16px}
 .rgbg.open{display:flex}
-.rgm{background:var(--s0);border:1px solid var(--bd);border-radius:16px;max-width:720px;width:100%;max-height:88vh;overflow:auto;padding:18px;box-shadow:0 18px 48px rgba(0,0,0,.22)}
+.rgm{background:var(--s0);border:1px solid var(--bd);border-radius:var(--radius-xl);max-width:720px;width:100%;max-height:88vh;overflow:auto;padding:18px;box-shadow:0 18px 48px rgba(0,0,0,.22)}
 .rgm-hd{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px}
 .rgm-t{font-size:17px;font-weight:800;color:var(--t1);letter-spacing:-.2px}
 .rgm-s{font-size:11.5px;color:var(--t3);margin-top:3px}
 .rgm-x{background:none;border:1px solid var(--bd);border-radius:var(--radius-base);width:28px;height:28px;cursor:pointer;color:var(--t2);font-size:14px;line-height:1;flex:none}
 .rg-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media(max-width:700px){.rg-grid{grid-template-columns:1fr}.rgm{padding:15px}}
-.rg-c{background:var(--s1);border:1px solid var(--bd);border-radius:12px;padding:12px 13px}
+.rg-c{background:var(--s1);border:1px solid var(--bd);border-radius:var(--radius-lg);padding:12px 13px}
 .rg-ch{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:8px}
 .rg-cn{font-size:12px;font-weight:700;color:var(--t1)}
-.rg-bg{font-size:10px;color:var(--t3);background:var(--s2);border-radius:5px;padding:2px 6px;white-space:nowrap}
+.rg-bg{font-size:10px;color:var(--t3);background:var(--s2);border-radius:var(--radius-sm);padding:2px 6px;white-space:nowrap}
 .rg-v{font-size:20px;font-weight:800;color:var(--t1);letter-spacing:-.3px}
 .rg-vu{font-size:11px;font-weight:600;color:var(--t3);margin-left:2px}
 .rg-vl{font-size:10.5px;color:var(--t3);margin-right:6px;font-weight:600}
@@ -1090,21 +1090,21 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .rg-disc{border-left:3px solid var(--acc);background:var(--accL);padding:9px 12px;border-radius:0 8px 8px 0;font-size:11px;color:var(--t2);line-height:1.55;margin-top:13px}
 .rg-load{text-align:center;padding:34px 0;color:var(--t3);font-size:12px;line-height:1.6}
 /* 진입점 — 단지 상세 sticky 요약 안의 링크 버튼 */
-.rg-open{background:var(--accL);color:var(--acc);border:1px solid var(--acc);border-radius:7px;font-size:11px;font-weight:700;padding:3px 9px;cursor:pointer;white-space:nowrap}
+.rg-open{background:var(--accL);color:var(--acc);border:1px solid var(--acc);border-radius:var(--radius-base);font-size:11px;font-weight:700;padding:3px 9px;cursor:pointer;white-space:nowrap}
 /* ── NTC (Sprint JJJJJJ): 알림 센터 + 구독 넛지 + 헤더 벨 — Claude Design 시안 '내집로그 알림 구독 UX' 반영 ── */
 .ntc-bell{position:relative}
 .ntc-dot{position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;background:var(--red,#DC2626);display:none}
 .ntc-bell.unsub .ntc-dot{display:block}
-.ntc-card{border:1px solid var(--bd);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--bg-base)}
+.ntc-card{border:1px solid var(--bd);border-radius:var(--radius-lg);padding:12px;margin-bottom:10px;background:var(--bg-base)}
 .ntc-card-head{display:flex;align-items:center;gap:9px}
-.ntc-ico{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.ntc-ico{width:34px;height:34px;border-radius:var(--radius-base);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
 .ntc-ico.kko{background:#FEE500}
 .ntc-ico.push{background:var(--acc-bg);color:var(--acc-ink)}
 .ntc-tit{font-weight:700;font-size:13px;color:var(--t1)}
 .ntc-sub{font-size:11px;color:var(--t3)}
 .ntc-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:var(--radius-full);vertical-align:1px}
 .ntc-badge.on{background:var(--grnL,#EAF6EF);color:var(--grn,#177038)}
-.ntc-btn{flex:1;padding:9px 10px;border-radius:9px;border:1px solid var(--bd);background:var(--bg-base);color:var(--t1);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
+.ntc-btn{flex:1;padding:9px 10px;border-radius:var(--radius-base);border:1px solid var(--bd);background:var(--bg-base);color:var(--t1);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
 .ntc-btn.kko{background:#FEE500;border-color:#FEE500;color:#191919}
 .ntc-btn.navy{background:var(--acc-bg);border-color:var(--acc);color:#fff}
 .ntc-prev{background:rgba(120,150,190,.18);border-radius:var(--radius-md);padding:10px;margin:10px 0}
@@ -1118,7 +1118,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 @media(min-width:701px){#ntcNudge{right:18px;bottom:18px;width:330px;border-radius:var(--radius-lg);padding:14px}}
 @media(max-width:700px){#ntcNudge{left:0;right:0;bottom:0;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))}}
 /* ── KKKKKK: 모바일 전용 요소 기본 정의 (표시 여부는 ≤700px MQ + JS .on 이 결정, 데스크톱은 아래 701px 규칙이 차단) ── */
-#mHeroChip{display:none;position:absolute;top:8px;left:8px;right:8px;z-index:26;align-items:center;gap:9px;background:var(--bg-base);border:1px solid var(--bd);border-radius:12px;padding:9px 10px;box-shadow:0 4px 14px rgba(16,24,40,.16)}
+#mHeroChip{display:none;position:absolute;top:8px;left:8px;right:8px;z-index:26;align-items:center;gap:9px;background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-lg);padding:9px 10px;box-shadow:0 4px 14px rgba(16,24,40,.16)}
 .mhc-ico{width:32px;height:32px;border-radius:var(--radius-base);background:var(--acc-bg);color:var(--acc-ink);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
 .mhc-txt{flex:1;text-align:left;background:none;border:none;font-family:inherit;font-size:13px;font-weight:700;color:var(--t1);cursor:pointer;padding:6px 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mhc-x{width:34px;height:34px;border:none;background:none;color:var(--t3);font-size:14px;cursor:pointer;flex-shrink:0}
@@ -1135,7 +1135,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .du-legal a{color:var(--t3);font-size:11px;text-decoration:underline;padding:10px 2px;min-height:44px;display:flex;align-items:center}
 @media(min-width:701px){#mHeroChip,#mHeroCard,#mMapCap,#drawerUtil{display:none!important}}
 .smbg.open{display:flex}
-.smbox{background:var(--bg-base);border-radius:16px;width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.15);overflow:hidden}
+.smbox{background:var(--bg-base);border-radius:var(--radius-xl);width:100%;max-width:480px;box-shadow:0 8px 40px rgba(0,0,0,.15);overflow:hidden}
 .smbox:focus,.dm:focus,.rgm:focus,[role="dialog"][tabindex="-1"]:focus{outline:none} /* FOCUS-TRAP-2026-08-20: 초기 포커스 컨테이너 링 제거 */
 .smhdr{padding:16px 20px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center}
 .smtit{font-size:14px;font-weight:700}.smx{width:26px;height:26px;border-radius:50%;border:1px solid var(--bd);background:var(--s1);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;color:var(--t2)}
@@ -1152,7 +1152,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .sm-status{margin-top:8px;padding:8px 11px;border-radius:var(--rs);font-size:11px;display:none}
 .sm-status.ok{background:var(--grnL);color:var(--grn);display:block}
 .sm-status.err{background:var(--redL);color:var(--red);display:block}
-.sm-badge{display:inline-block;padding:1px 6px;border-radius:9px;font-size:10px;font-weight:700;background:var(--grnL);color:var(--grn)}
+.sm-badge{display:inline-block;padding:1px 6px;border-radius:var(--radius-base);font-size:10px;font-weight:700;background:var(--grnL);color:var(--grn)}
 .sm-badge.no{background:var(--redL);color:var(--red)}
 
 /* gauge */
@@ -1160,7 +1160,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .gn{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
 
 /* toast */
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--t1);color:#fff;padding:9px 18px;border-radius:20px;font-size:12px;transition:transform .28s;z-index:999;pointer-events:none;white-space:nowrap;box-shadow:var(--sh2)}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--t1);color:#fff;padding:9px 18px;border-radius:var(--radius-xl);font-size:12px;transition:transform .28s;z-index:999;pointer-events:none;white-space:nowrap;box-shadow:var(--sh2)}
 .toast.show{transform:translateX(-50%) translateY(0)}
 
 @media(max-width:1100px){.rp{width:290px}}
@@ -1362,8 +1362,8 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 
 /* ── 가격 위치 백분위 바 ────────────────────────────────── */
 .pct-wrap{margin-bottom:14px}
-.pct-bar-bg{height:10px;background:var(--s2);border-radius:5px;position:relative;margin:7px 0 4px;overflow:visible}
-.pct-bar-fill{height:100%;border-radius:5px;transition:width .5s ease;background:linear-gradient(90deg,var(--grn),var(--amb),var(--red))}
+.pct-bar-bg{height:10px;background:var(--s2);border-radius:var(--radius-sm);position:relative;margin:7px 0 4px;overflow:visible}
+.pct-bar-fill{height:100%;border-radius:var(--radius-sm);transition:width .5s ease;background:linear-gradient(90deg,var(--grn),var(--amb),var(--red))}
 .pct-pin{position:absolute;top:-4px;width:18px;height:18px;border-radius:50%;background:var(--bg-base);border:2px solid var(--acc);transform:translateX(-50%);box-shadow:var(--sh)}
 .pct-labels{display:flex;justify-content:space-between;font-size:9px;color:var(--t3)}
 .pct-result{font-size:12px;font-weight:700;margin-top:5px}
@@ -1958,7 +1958,7 @@ html[data-theme="dark"] #view-map,html[data-theme="dark"] .lp{
 html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
 #mapTrustChip{display:none;align-items:baseline;gap:4px;font-size:10px;color:var(--map-tx3);background:var(--map-panel);border:1px solid var(--map-line);border-radius:var(--radius-sm);padding:3px 8px}
 #mapTrustChip b{color:var(--map-tx2);font-weight:700}
-#fltTrust{margin:6px 10px 2px;padding:11px 13px;background:var(--map-raise);border:1px solid var(--map-line);border-radius:11px}
+#fltTrust{margin:6px 10px 2px;padding:11px 13px;background:var(--map-raise);border:1px solid var(--map-line);border-radius:var(--radius-md)}
 /* MSHEET (①C): 모바일 하단 시트 — 데스크톱(>700px)은 표시 자체를 차단 */
 #MSHEET{display:none;position:absolute;left:0;right:0;bottom:0;z-index:380;background:var(--map-panel);border-top:1px solid var(--map-line);box-shadow:0 -12px 32px rgba(0,0,0,.28);padding:10px 16px 16px}
 #MSHEET.on{display:block}
@@ -2028,7 +2028,7 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
   <div class="ms-grab"></div>
   <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
     <b id="msName" style="font-size:16px;font-weight:800;letter-spacing:-.02em;color:var(--map-tx)"></b>
-    <span id="msSub" style="font-size:10px;font-weight:700;padding:3px 7px;border-radius:5px;background:var(--map-raise);border:1px solid var(--map-line);color:var(--map-tx2)"></span>
+    <span id="msSub" style="font-size:10px;font-weight:700;padding:3px 7px;border-radius:var(--radius-sm);background:var(--map-raise);border:1px solid var(--map-line);color:var(--map-tx2)"></span>
   </div>
   <div style="display:flex;gap:18px;align-items:flex-end;margin-top:8px;flex-wrap:wrap">
     <div><div id="msPriceL" style="font-size:10px;color:var(--map-tx3)"></div><div id="msPriceV" style="font-size:19px;font-weight:800;color:var(--map-tx);font-variant-numeric:tabular-nums;letter-spacing:-.02em"></div></div>
@@ -2331,8 +2331,8 @@ html[data-theme="dark"] #view-news{
 .brf-tk{display:flex;align-items:baseline;gap:8px;padding:9px 22px;border-right:1px solid var(--brf-line);white-space:nowrap}
 .brf-card{background:var(--brf-panel);border:1px solid var(--brf-line);border-radius:var(--radius-lg);box-shadow:var(--brf-shadow);padding:16px 18px;min-width:0}
 .brf-h2{margin:0;font-size:15px;font-weight:800;letter-spacing:-.02em;color:var(--brf-tx)}
-.brf-row{display:flex;gap:14px;padding:12px 14px;background:var(--brf-raise);border:1px solid var(--brf-line);border-radius:11px}
-.brf-btn{font-size:12px;font-weight:600;padding:8px 13px;border:1px solid var(--brf-line);border-radius:9px;color:var(--brf-tx2);text-decoration:none;background:var(--brf-panel)}
+.brf-row{display:flex;gap:14px;padding:12px 14px;background:var(--brf-raise);border:1px solid var(--brf-line);border-radius:var(--radius-md)}
+.brf-btn{font-size:12px;font-weight:600;padding:8px 13px;border:1px solid var(--brf-line);border-radius:var(--radius-base);color:var(--brf-tx2);text-decoration:none;background:var(--brf-panel)}
 .brf-btn:hover{border-color:var(--brf-ac);color:var(--brf-tx);text-decoration:none}
 .brf-top{display:flex;align-items:center;gap:12px;width:100%;padding:10px 4px;background:none;border:none;border-bottom:1px solid var(--brf-line);cursor:pointer;font-family:inherit;text-align:left;color:var(--brf-tx)}
 .brf-top:hover{background:var(--brf-raise)}
@@ -2365,8 +2365,8 @@ html[data-theme="dark"] #view-news{
       <div id="newsSummaryLines" style="display:flex;flex-direction:column;gap:10px"></div>
       <div id="newsSummarySrc" style="font-size:9.5px;color:var(--brf-tx3);margin-top:10px;line-height:1.5">공식 통계 기반 자동 정리 (한국은행 ECOS · 국토부 KOSIS · 국토부 실거래) · 매수·매도 추천이 아닙니다</div>
       <!-- BRF-DESIGN-2026-08-19: 집킴이 코너 — 시안 플레이스홀더(⌂). 캐릭터 원화는 운영자 제공 대기, 외형 추측 금지. -->
-      <div style="margin-top:12px;display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px dashed var(--brf-line);border-radius:11px">
-        <div style="flex:0 0 38px;height:38px;border-radius:11px;background:var(--brf-ac);display:grid;place-items:center;color:#0B1524;font-size:18px;font-weight:800">⌂</div>
+      <div style="margin-top:12px;display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px dashed var(--brf-line);border-radius:var(--radius-md)">
+        <div style="flex:0 0 38px;height:38px;border-radius:var(--radius-md);background:var(--brf-ac);display:grid;place-items:center;color:#0B1524;font-size:18px;font-weight:800">⌂</div>
         <div>
           <div style="font-size:12px;font-weight:700;color:var(--brf-tx)">집킴이 코너 <span style="color:var(--brf-tx3);font-weight:600">(캐릭터 준비 중)</span></div>
           <div id="brfMascotMsg" style="margin-top:4px;font-size:12px;color:var(--brf-tx2);line-height:1.5">값이 없는 항목은 추정하지 않고 비워둡니다.</div>
@@ -2560,7 +2560,7 @@ html[data-theme="dark"] #view-news{
     <p style="font-size:11.5px;color:var(--t3);margin:0 0 18px">3분 안에 핵심 가치 체험 + 자주 묻는 질문(FAQ)</p>
 
     <!-- 1. 30초 가이드 — Phase 5: 보고서 중심 -->
-    <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:12px;padding:16px 18px;margin-bottom:18px">
+    <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:18px">
       <div style="font-size:13px;font-weight:800;color:var(--accent-700);margin-bottom:8px">🚀 30초 가이드 — 처음이세요?</div>
       <div style="font-size:12px;color:var(--t1);line-height:1.8">
         1. 헤더 <b>보고서</b> 탭 클릭 → 화면의 <b>3단계(주택 보유 · 자금 · 희망 지역)</b> 입력<br>
@@ -3037,7 +3037,7 @@ html[data-theme="dark"] #view-news{
 <!-- SHARECARD-2026-08-19 (Sprint NNNNNNN-7A): 실거래 팩트 카드 미리보기 오버레이 (ESC 닫기는 공용 핸들러 CARDOV 등록) -->
 <div id="CARDOV" style="display:none;position:fixed;inset:0;background:rgba(8,14,24,.78);z-index:760;align-items:center;justify-content:center;padding:18px" onclick="if(event.target===this)closeShareCard()">
   <div style="max-width:420px;width:100%;display:flex;flex-direction:column;gap:10px">
-    <img id="cardImg" alt="실거래 팩트 카드 미리보기" style="width:100%;max-height:72vh;object-fit:contain;border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.5)">
+    <img id="cardImg" alt="실거래 팩트 카드 미리보기" style="width:100%;max-height:72vh;object-fit:contain;border-radius:var(--radius-lg);box-shadow:0 12px 40px rgba(0,0,0,.5)">
     <div style="display:flex;gap:8px;justify-content:center">
       <button class="bk-btn" onclick="dlShareCard()">⬇ PNG 저장</button>
       <button class="bk-btn" onclick="copyShareCardLink()">🔗 링크 복사</button>
@@ -3048,7 +3048,7 @@ html[data-theme="dark"] #view-news{
 <!-- DATA-STATUS-2026-08-19 (Sprint NNNNNNN-11): 데이터 상태 모달 — 시안 신선도 패널, 전부 /api/health 실측값.
      값 없는 행은 생략, 판정 기준(48h/30h)은 하단에 명시 — 추정·과장 금지. -->
 <div id="DSM" style="display:none;position:fixed;inset:0;background:rgba(8,14,24,.62);z-index:770;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeDataStatus()">
-  <div style="width:100%;max-width:520px;background:var(--bg-base);border:1px solid var(--bd);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.4);padding:20px 22px;max-height:82vh;overflow-y:auto">
+  <div style="width:100%;max-width:520px;background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-xl);box-shadow:0 24px 60px rgba(0,0,0,.4);padding:20px 22px;max-height:82vh;overflow-y:auto">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px">
       <div>
         <h2 style="margin:0;font-size:17px;font-weight:800;letter-spacing:-.02em;color:var(--t1)">데이터 상태</h2>
@@ -3062,18 +3062,18 @@ html[data-theme="dark"] #view-news{
 </div>
 <!-- DATA-ERR-2026-08-19 (Sprint NNNNNNN-16): 데이터 오류 신고 폼 — mailto 대체(메일 앱 없는 사용자 이탈 방지) -->
 <div id="ERM" style="display:none;position:fixed;inset:0;background:rgba(8,14,24,.62);z-index:780;align-items:center;justify-content:center;padding:20px" onclick="if(event.target===this)closeErrReport()">
-  <div style="width:100%;max-width:420px;background:var(--bg-base);border:1px solid var(--bd);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,.4);padding:20px 22px">
+  <div style="width:100%;max-width:420px;background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-xl);box-shadow:0 24px 60px rgba(0,0,0,.4);padding:20px 22px">
     <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:6px">
       <h2 style="margin:0;font-size:16px;font-weight:800;letter-spacing:-.02em;color:var(--t1)">데이터 오류 신고</h2>
       <button onclick="closeErrReport()" aria-label="오류 신고 닫기" style="width:28px;height:28px;border-radius:var(--radius-base);background:var(--bg2);border:1px solid var(--bd);color:var(--t2);cursor:pointer;font-size:13px">✕</button>
     </div>
     <div id="ermApt" style="font-size:12px;color:var(--t2);margin-bottom:10px">—</div>
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px">잘못된 항목</div>
-    <select id="ermField" style="width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:9px;background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:12.5px;margin-bottom:10px">
+    <select id="ermField" style="width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:var(--radius-base);background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:12.5px;margin-bottom:10px">
       <option>세대수</option><option>주차</option><option>실거래</option><option>좌표</option><option>학군</option><option selected>기타</option>
     </select>
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px">내용 <span style="font-weight:500;color:var(--t3)">(올바른 값을 아시면 함께 적어주세요)</span></div>
-    <textarea id="ermDetail" rows="4" maxlength="500" placeholder="예: 세대수가 1,200세대로 나오는데 실제는 2,400세대입니다" style="width:100%;box-sizing:border-box;padding:10px 11px;border:1px solid var(--bd);border-radius:9px;background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:12.5px;line-height:1.6;resize:vertical"></textarea>
+    <textarea id="ermDetail" rows="4" maxlength="500" placeholder="예: 세대수가 1,200세대로 나오는데 실제는 2,400세대입니다" style="width:100%;box-sizing:border-box;padding:10px 11px;border:1px solid var(--bd);border-radius:var(--radius-base);background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:12.5px;line-height:1.6;resize:vertical"></textarea>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
       <button class="bk-btn" onclick="closeErrReport()">취소</button>
       <button class="bk-btn on" id="ermSend" onclick="submitErrReport()">신고 보내기</button>
@@ -4547,7 +4547,7 @@ function _renderReport(data) {
         ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구 등급 <b>${_escHtml(f.district)}</b>`:null,f.builder?`시공사 <b>${_escHtml(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>${f.parking_total?` (총 ${_numFmt(f.parking_total)}대)`:''}${f.parking_uncertain?' <span style="color:var(--t3)">— 세대수 불일치로 참고용</span>':''}`:null,f.regulation?`규제 <b>${_escHtml(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>${_escHtml(a.sampleSpan||'최근 6개월')} ${_numFmt(f.new_high_count)}회 갱신</b>`:null].filter(Boolean);const am=f.amenities;
         /* MOB-AUDIT-2026-05-03: amenities 0 vs undefined 구분 — 좌표 호출 실패 시 "지하철 0개" 오해 차단 */
         const _amOk = am && (am.subway != null || am.mart != null || am.hospital != null || am.school != null);
-        const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway,'?')}</b>·마트 <b>${_numFmt(am.mart,'?')}</b>·종합병원 <b>${_numFmt(am.hospital,'?')}</b>·학교 <b>${_numFmt(am.school,'?')}</b>·공원 <b>${_numFmt(am.park,'?')}</b>`:(am?'주변 편의시설 좌표 미해결':'');if(!items.length && !amStr)return '';return `<div style="font-size:10.5px;color:var(--t2);background:var(--accent-50);border:1px solid var(--accent-100);border-radius:7px;padding:7px 10px;margin-top:5px">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` <span style="color:var(--acc);font-weight:600">· 매칭 ${_numFmt(a.matchScore)}점</span>`:''}</div>`;})()}
+        const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway,'?')}</b>·마트 <b>${_numFmt(am.mart,'?')}</b>·종합병원 <b>${_numFmt(am.hospital,'?')}</b>·학교 <b>${_numFmt(am.school,'?')}</b>·공원 <b>${_numFmt(am.park,'?')}</b>`:(am?'주변 편의시설 좌표 미해결':'');if(!items.length && !amStr)return '';return `<div style="font-size:10.5px;color:var(--t2);background:var(--accent-50);border:1px solid var(--accent-100);border-radius:var(--radius-base);padding:7px 10px;margin-top:5px">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` <span style="color:var(--acc);font-weight:600">· 매칭 ${_numFmt(a.matchScore)}점</span>`:''}</div>`;})()}
         ${a.matchReason ? `<div style="font-size:10.5px;color:var(--t3);background:var(--s1);border-radius:var(--radius-xs);padding:4px 8px;margin-top:4px">🏆 <b>왜 이 순위?</b> ${_escHtml(a.matchReason)}</div>` : ''}
         <div style="color:var(--acc);font-weight:600">📌 ${_escHtml(a.recommendation || '')}</div>
       </div>
@@ -4560,7 +4560,7 @@ function _renderReport(data) {
 
   result.innerHTML = `
     <!-- 핵심 방향 3줄 -->
-    <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:12px;padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(16,24,40,.04)">
+    <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(16,24,40,.04)">
       <div style="font-size:12px;font-weight:700;color:var(--accent-700);margin-bottom:8px">🎯 핵심 방향 (회원님 가구 상황 기반)</div>
       ${coreHtml}
     </div>
@@ -4831,7 +4831,7 @@ function openRegSummary(){
     m.id = 'regSummaryModal';
     m.className = 'dmbg';
     m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
-    m.innerHTML = `<div style="background:var(--bg-base);border-radius:12px;max-width:520px;width:100%;max-height:85vh;overflow-y:auto;padding:20px 22px;box-shadow:0 12px 40px rgba(0,0,0,0.3)">
+    m.innerHTML = `<div style="background:var(--bg-base);border-radius:var(--radius-lg);max-width:520px;width:100%;max-height:85vh;overflow-y:auto;padding:20px 22px;box-shadow:0 12px 40px rgba(0,0,0,0.3)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <h3 style="margin:0;font-size:16px;color:var(--t1)">📋 부동산 규제 요약 <span style="font-size:11px;font-weight:500;color:var(--t3)">2025.10.15 대책 + 2026.6.30 확대 반영</span></h3>
         <button onclick="document.getElementById('regSummaryModal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--t3)" aria-label="닫기">✕</button>
@@ -5082,7 +5082,7 @@ async function renderBriefing(){
         const fm=d=>d?String(d).slice(0,10).replace(/-/g,'.'):'';
         const rows=reglog.items.slice(0,4).map(it=>`<div class="brf-row" style="align-items:baseline;gap:12px;flex-wrap:wrap;padding:10px 13px;margin-bottom:8px">
           <span style="font-size:11px;font-weight:700;color:var(--brf-tx3);font-variant-numeric:tabular-nums;flex:0 0 88px">${fm(it.effectiveFrom)} 시행</span>
-          <span style="font-size:10px;font-weight:800;padding:3px 7px;border-radius:5px;background:var(--brf-panel);border:1px solid var(--brf-line);color:var(--brf-ac-tx)">${_escHtml(it.tag||'')}</span>
+          <span style="font-size:10px;font-weight:800;padding:3px 7px;border-radius:var(--radius-sm);background:var(--brf-panel);border:1px solid var(--brf-line);color:var(--brf-ac-tx)">${_escHtml(it.tag||'')}</span>
           <span style="flex:1;min-width:150px;font-size:12px;font-weight:600;color:var(--brf-tx);line-height:1.5">${_escHtml(it.note||'')}${it.supersededAt?` <span style="color:var(--brf-tx3);font-weight:500">(→ ${fm(it.supersededAt)} 대체)</span>`:''}</span>
           ${it.verifiedAt?`<span style="font-size:10px;color:var(--brf-tx3)">확인 ${fm(it.verifiedAt)}</span>`:''}
         </div>`).join('');
@@ -5299,7 +5299,7 @@ async function loadSubs(){
     const r = await fetch(url, {signal: AbortSignal.timeout(10000)});
     const d = await r.json();
     if(!r.ok){
-      box.innerHTML = `<div style="padding:30px 20px;text-align:center;color:var(--t3);line-height:1.7;background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:12px">
+      box.innerHTML = `<div style="padding:30px 20px;text-align:center;color:var(--t3);line-height:1.7;background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:var(--radius-lg)">
         <div style="font-size:34px;margin-bottom:8px">📅</div>
         <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px">청약 일정을 불러오지 못했어요</div>
         <div style="font-size:11.5px;color:var(--t2);margin-bottom:14px;line-height:1.6">일시적인 오류일 수 있어요. 잠시 후 다시 시도하거나<br>청약Home에서 직접 확인해주세요.</div>
@@ -6441,11 +6441,11 @@ function _ensureCmpStyles(){
 .cmp-bar-go{background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:var(--radius-full);padding:8px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
 .cmp-bar-go:disabled{opacity:.45;cursor:not-allowed}
 .cmp-bar-clr{background:transparent;color:var(--t2);border:1px solid var(--bd);border-radius:var(--radius-full);padding:7px 12px;font-size:12px;cursor:pointer;font-family:inherit}
-.cmp-chk{position:absolute;top:8px;right:8px;z-index:3;background:var(--bg-base);border:1px solid var(--bd);border-radius:7px;padding:3px 7px;display:flex;align-items:center;gap:4px;cursor:pointer;box-shadow:var(--shadow-sm)}
+.cmp-chk{position:absolute;top:8px;right:8px;z-index:3;background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-base);padding:3px 7px;display:flex;align-items:center;gap:4px;cursor:pointer;box-shadow:var(--shadow-sm)}
 .cmp-chk-input{width:15px;height:15px;cursor:pointer;accent-color:var(--acc);margin:0}
 .cmp-chk-lbl{font-size:10px;color:var(--t2);font-weight:700;user-select:none}
 .cmp-chips{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 4px}
-.cmp-chip{background:var(--bg-base);border:1px solid var(--bd);border-radius:12px;padding:6px 12px;font-size:12px;color:var(--t2);cursor:pointer;font-family:inherit;display:flex;flex-direction:column;align-items:center;line-height:1.25}
+.cmp-chip{background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-lg);padding:6px 12px;font-size:12px;color:var(--t2);cursor:pointer;font-family:inherit;display:flex;flex-direction:column;align-items:center;line-height:1.25}
 .cmp-chip.on{background:var(--acc-bg);color:var(--acc-ink);border-color:var(--acc)}
 .cmp-chip-sub{font-size:9px;opacity:.85;font-weight:500}
 .cmp-tbl{border-collapse:collapse;width:100%;font-size:12px;min-width:420px}
@@ -8699,8 +8699,8 @@ function renderBookmarks(){
       ${target?`<span class="bk-alert-tag ${isHit?'hit':'set'}">${isHit?'🎯 목표가':'▼'+target+'억'}</span>`:''}
     </div>
     <div class="bk-memo-row" onclick="event.stopPropagation()" style="display:flex;gap:4px;margin-top:4px">
-      <input type="text" placeholder="메모 (왜 이 가격?)" maxlength="40" value="${_escHtml(b.memo || '')}" id="bk-memo-${i}" oninput="event.stopPropagation()" style="flex:1;font-size:10.5px;padding:3px 6px;border:1px solid var(--bd);border-radius:5px;background:var(--bg-base);color:var(--t2)">
-      <button onclick="saveBookmarkMemo(${i},document.getElementById('bk-memo-${i}').value)" style="font-size:10px;padding:3px 8px;background:var(--bg2);border:1px solid var(--bd);border-radius:5px;cursor:pointer;color:var(--t2)">저장</button>
+      <input type="text" placeholder="메모 (왜 이 가격?)" maxlength="40" value="${_escHtml(b.memo || '')}" id="bk-memo-${i}" oninput="event.stopPropagation()" style="flex:1;font-size:10.5px;padding:3px 6px;border:1px solid var(--bd);border-radius:var(--radius-sm);background:var(--bg-base);color:var(--t2)">
+      <button onclick="saveBookmarkMemo(${i},document.getElementById('bk-memo-${i}').value)" style="font-size:10px;padding:3px 8px;background:var(--bg2);border:1px solid var(--bd);border-radius:var(--radius-sm);cursor:pointer;color:var(--t2)">저장</button>
     </div>
     ${lc?`<div style="font-size:9.5px;color:var(--t3);margin-top:3px;padding-left:2px">📊 ${b.lastCheckedCount||0}건${lc}</div>`:''}`;
     return`<div class="bk-item" onclick="openBookmark(${i})">
@@ -9095,7 +9095,7 @@ function showAlertBanner(hits){
   const existing=document.getElementById('alertBanner');if(existing)existing.remove();
   const b=document.createElement('div');
   b.id='alertBanner';
-  b.style.cssText='position:fixed;top:14px;left:14px;right:14px;max-width:520px;margin:0 auto;z-index:9999;background:linear-gradient(135deg,var(--accent-50),#FFE4C4);border:1px solid #E8A868;border-radius:12px;padding:14px 18px;box-shadow:0 4px 16px rgba(0,0,0,.14);font-size:13px;font-family:inherit';
+  b.style.cssText='position:fixed;top:14px;left:14px;right:14px;max-width:520px;margin:0 auto;z-index:9999;background:linear-gradient(135deg,var(--accent-50),#FFE4C4);border:1px solid #E8A868;border-radius:var(--radius-lg);padding:14px 18px;box-shadow:0 4px 16px rgba(0,0,0,.14);font-size:13px;font-family:inherit';
   b.innerHTML=`<button onclick="document.getElementById('alertBanner').remove()" style="float:right;background:transparent;border:none;font-size:18px;cursor:pointer;color:#8B5A2B;padding:0 6px;line-height:1" aria-label="닫기">✕</button>
     <div style="font-weight:700;color:#8B5A2B;margin-bottom:6px">🎯 목표가 달성 알림 (${hits.length}건)</div>
     ${hits.map(h=>`<div style="color:#5C3817;line-height:1.6;font-size:12px;margin-bottom:2px">・ <b>${_escHtml(h.name)}</b> — 현재 평균 ${h.price}억 (이전 ${h.prev?h.prev.toFixed(2)+'억':'?'} / 목표 ${h.target}억 이하)</div>`).join('')}
@@ -10088,7 +10088,7 @@ function renderClauseHistory(){
   if(!arr.length){el.innerHTML='';return;}
   el.innerHTML=`<div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 8px">💾 최근 생성 (${arr.length}/5)</div>
     <div style="display:flex;flex-wrap:wrap;gap:6px">${arr.map(it=>`
-      <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:7px;padding:6px 10px;font-size:11px;display:flex;align-items:center;gap:6px">
+      <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-base);padding:6px 10px;font-size:11px;display:flex;align-items:center;gap:6px">
         <span style="cursor:pointer;font-weight:600" onclick="loadClauseHistory(${it.id})" title="다시 불러오기">${_escHtml(it.aptName || '')}</span>
         <button onclick="delClauseHistory(${it.id})" style="background:transparent;border:none;cursor:pointer;color:var(--t3);font-size:12px;padding:0 2px" aria-label="조항 삭제">✕</button>
       </div>`).join('')}</div>`;
