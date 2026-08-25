@@ -559,14 +559,14 @@ html[data-theme="dark"] .ltxt em{color:#7FA1E8}
 header{
   --hd-navy:#C98A00; --hd-ac:#C98A00; --hd-tab:#5A6A82; --hd-tab-act:#0B1524; --hd-tab-act-bg:#F7F9FC;
   --hd-bd:#DEE5EF; --hd-search-bg:#F7F9FC; --hd-search-bd:#DEE5EF; --hd-ph:#8A98AC;
-  --hd-usage:#5A6A82; --hd-usage-dim:#8A98AC; --hd-usage-dot:#DEE5EF;
+  --hd-usage:#5A6A82; --hd-usage-dim:#5F6E86; --hd-usage-dot:#DEE5EF;
   --hd-panel:#FFFFFF; --hd-raise:#F7F9FC; --hd-ok:#12855C; --hd-ok-glow:rgba(18,133,92,.18); --hd-logo-ink:#0B1524;
   background:#F2F5FA;
 }
 html[data-theme="dark"] header{
   --hd-navy:#FFC93C; --hd-ac:#FFC93C; --hd-tab:#93A4BD; --hd-tab-act:#E8EFFA; --hd-tab-act-bg:#162336;
   --hd-bd:#22334A; --hd-search-bg:#162336; --hd-search-bd:#22334A; --hd-ph:#63758F;
-  --hd-usage:#93A4BD; --hd-usage-dim:#63758F; --hd-usage-dot:#22334A;
+  --hd-usage:#93A4BD; --hd-usage-dim:#8494AC; --hd-usage-dot:#22334A;
   --hd-panel:#101B2B; --hd-raise:#162336; --hd-ok:#3ED598; --hd-ok-glow:rgba(62,213,152,.18); --hd-logo-ink:#0B1524;
   background:#080E18;
 }
@@ -582,7 +582,10 @@ html[data-theme="dark"] header{
 .htabs > .htab.on::before,.htab-tool.on::before{content:'';display:inline-block;width:5px;height:5px;border-radius:99px;background:var(--hd-ac);margin-right:7px;vertical-align:2px}
 header .hbtn{background:var(--hd-panel);border-color:var(--hd-bd);color:var(--hd-tab);border-radius:999px;font-weight:600;font-size:12px} /* header 한정 — SM 모달의 .hbtn(테마 전환)은 --hd-* 토큰 밖 */
 header .hbtn:hover{border-color:var(--hd-ac);color:var(--hd-tab-act)}
-#dataStatusBtn > span{background:var(--hd-ok)!important;box-shadow:0 0 0 3px var(--hd-ok-glow)}
+/* ⚠ 셀렉터를 `> span` 으로 두면 버튼 안의 **모든** 자식 span 이 초록 알약이 된다. 실제로
+   2026-08-25 태블릿 대응으로 라벨을 <span class="dsb-tx"> 로 감싼 순간 그 라벨까지 초록 배경 +
+   회색 글자(대비 1.19:1)로 뭉개졌다 — 라이브 실측으로 잡았다. 점에만 걸리도록 클래스로 한정한다. */
+#dataStatusBtn .dsb-dot{background:var(--hd-ok)!important;box-shadow:0 0 0 3px var(--hd-ok-glow)}
 #themeToggle{border-radius:9px}
 /* HDR-TABLET-2026-08-25 (Sprint NNNNNNN-22): 701~900px 구간에서 헤더가 넘쳐 오른쪽 끝 버튼이 잘렸다.
    라이브 실측(768px = iPad 세로, 새로 로드): header scrollWidth 808 > clientWidth 768 →
@@ -593,7 +596,7 @@ header .hbtn:hover{border-color:var(--hd-ac);color:var(--hd-tab-act)}
    ⚠ 텍스트가 이 버튼의 접근성 이름이었으므로 aria-label 을 마크업에 함께 넣었다(숨겨도 이름 유지). */
 @media (min-width:701px) and (max-width:900px){
   #dataStatusBtn .dsb-tx{display:none}
-  #dataStatusBtn > span:first-child{margin-right:0}
+  #dataStatusBtn .dsb-dot{margin-right:0}
   /* 라벨만 접으면 768px 여유가 정확히 0px 이 된다 — 폰트 렌더링이 조금만 달라도(실기기·타 OS)
      다시 넘친다. 검색창 최소폭을 이 구간에서만 170px(마크업 기본값)로 되돌려 30px 을 남긴다.
      ⚠ 650~659 의 태블릿 블록이 `.hsearch{min-width:200px!important}` 를 **뒤에서** 선언하므로
@@ -1660,7 +1663,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       </div>
     </div>
     <button class="hbtn ntc-bell" id="ntcBell" onclick="openNtc()" title="알림 설정 — 관심단지 새 실거래 알림" aria-label="알림 설정" style="min-width:0;padding:6px 9px">🔔<span class="ntc-dot"></span></button>
-    <button class="hbtn" id="dataStatusBtn" onclick="openDataStatus()" title="데이터 신선도 전체 공개" aria-label="데이터 상태" style="min-width:0;padding:6px 10px;font-size:11px"><span style="display:inline-block;width:7px;height:7px;border-radius:99px;background:var(--grn);margin-right:5px;vertical-align:1px"></span><span class="dsb-tx">데이터 상태</span></button>
+    <button class="hbtn" id="dataStatusBtn" onclick="openDataStatus()" title="데이터 신선도 전체 공개" aria-label="데이터 상태" style="min-width:0;padding:6px 10px;font-size:11px"><span class="dsb-dot" style="display:inline-block;width:7px;height:7px;border-radius:99px;background:var(--grn);margin-right:5px;vertical-align:1px"></span><span class="dsb-tx">데이터 상태</span></button>
     <button class="hbtn" id="themeToggle" onclick="toggleTheme()" title="다크/라이트 모드 전환" aria-label="테마 전환" style="min-width:0;padding:6px 9px">🌙</button>
     <button class="hbtn" id="settingsBtn" onclick="openSettings()" aria-label="서비스 정보">ⓘ<span class="sbtn-tx"> 정보</span></button>
   </div>
