@@ -415,6 +415,7 @@ window.MHL.auth = window.MHL.auth || {
      흰 글자가 3.91:1 로 무너진다 — 라이브 실측상 다크 미달 62건 중 37건이 이 조합이었다.
      골드 스킨에서 쓴 처방과 같은 원리로 밝은 배경에는 잉크색을 얹는다. */
   --acc-ink: #fff;
+  --acc-bg:  var(--accent-500);       /* accent 를 배경으로 쓸 때 — 라이트는 현행과 동일 */
   --accL:  var(--accent-tint);         /* → rgba(23,58,99,.08) (리디자인 Phase 1) */
   --accD:  var(--accent-600);          /* → #112C4C (리디자인 Phase 1) */
   --a2:    #1E5499;                    /* (변경 없음 — 단계 5 에서 별도 검증) */
@@ -461,7 +462,13 @@ html[data-theme="dark"]{
   /* A11Y-SEMANTIC-2026-08-25: 다크에서는 같은 별칭이 반대로 밝아져야 한다. 종전엔 다크 오버라이드가
      아예 없어 라이트값(#10B981/#D97706/#DC2626)이 그대로 쓰였고 어두운 틴트 위에서 3.2~4.1:1 이었다. */
   --grn:#34D399; --amb:#FBBF24; --red:#F87171;
-  --acc-ink:#0B1524;  /* 다크 accent(#4E83C4) 위 잉크 — 4.68:1 */
+  /* A11Y-ACCENT-SPLIT-2026-08-25 (Sprint NNNNNNN-24): 다크에서 accent 는 글자용과 배경용이 상충한다.
+     밝게 두면 배경 위 텍스트가 무너지고(흰 글자 3.91:1), 어둡게 두면 글자로 쓸 때 무너진다(2.5:1).
+     실측상 배경 34곳 · 글자 84곳이라 **둘 다 필요** → 용도별로 분리한다.
+       --acc     글자용 #7CABDD (패널 위 5.88~7.25:1)
+       --acc-bg  배경용 #2E5F9E (흰 글자 6.54:1 · --text-primary 5.43:1)
+     --acc-bg 가 어두워졌으므로 그 위 글자는 다시 흰색이 정답이다(--acc-ink 되돌림). */
+  --acc:#7CABDD; --acc-bg:#2E5F9E; --acc-ink:#fff;
   --a2:#4E83C4; --a2L:rgba(78,131,196,0.18);
   --info-bg:rgba(78,131,196,0.13); --info-bd:rgba(78,131,196,0.34); --info-tx:#9FC2E8;
   --danger-bd:rgba(220,38,38,0.34);
@@ -691,7 +698,7 @@ html[data-theme="dark"] .acct-sw .knob{transform:translateX(16px)}
    #wizCore 는 사이드바(#wizHome)↔보고서(#wizSlot) 를 오가는 단일 노드 — 컨테이너별 밀도만 분기. */
 .wcard{background:var(--bg-base);border:1px solid var(--bd);border-radius:14px;padding:13px 14px;margin-bottom:10px}
 .wchead{display:flex;align-items:center;gap:8px;margin-bottom:9px}
-.wnum{width:21px;height:21px;border-radius:50%;background:var(--acc);color:var(--acc-ink);font-size:11.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
+.wnum{width:21px;height:21px;border-radius:50%;background:var(--acc-bg);color:var(--acc-ink);font-size:11.5px;font-weight:800;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0}
 .wtitle{font-size:12.5px;font-weight:700;color:var(--t1)}
 .wreq{font-size:9.5px;color:#C2410C;background:#FDEEE4;padding:2px 7px;border-radius:6px;font-weight:800}
 html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
@@ -711,7 +718,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 #wizProgWrap{display:flex;align-items:center;gap:10px;margin:4px 0 10px}
 #wizProgTx{font-size:12.5px;font-weight:800;white-space:nowrap;color:var(--acc)}
 #wizProgTrack{flex:1;height:8px;border-radius:999px;background:var(--bg2);overflow:hidden}
-#wizProgBar{height:100%;width:0;background:var(--acc);transition:width .25s ease}
+#wizProgBar{height:100%;width:0;background:var(--acc-bg);transition:width .25s ease}
 #reportGenBtn:disabled{background:var(--bd2)!important;border-color:transparent!important;color:#fff!important;cursor:not-allowed;transform:none!important;box-shadow:none!important}
 /* 지도 우측 컨트롤 스택 (Sprint PPPPP 시안 컷3 — 위성/서울전체 이동) */
 #mapCtrlStack{position:absolute;top:46px;right:10px;z-index:30;display:flex;flex-direction:column;gap:6px}
@@ -738,11 +745,11 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .mb9{margin-bottom:9px}
 .chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
 .chip{padding:4px 11px;border-radius:999px;font-size:11px;border:1px solid var(--border-subtle);cursor:pointer;transition:all .15s;color:var(--t2);background:var(--bg-base);font-family:inherit}
-.chip:hover{border-color:var(--border-strong);color:var(--text-primary)}.chip.on{background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}
+.chip:hover{border-color:var(--border-strong);color:var(--text-primary)}.chip.on{background:var(--acc-bg);color:var(--acc-ink);border-color:var(--acc)}
 .abtn{width:100%;padding:9px;border:none;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;display:flex;align-items:center;justify-content:center;gap:5px}
 /* Phase 4-3 후 sprint 단계 5 부분 (2026-05-05): MED risk 1 — .abtn.a2 #1E5499 → accent-tint variant
    (사이드바 검색·정리·계산 등 secondary action — accent system 일관) */
-.abtn.acc{background:var(--acc);color:var(--acc-ink);margin-top:7px}
+.abtn.acc{background:var(--acc-bg);color:var(--acc-ink);margin-top:7px}
 .abtn.a2{background:var(--accent-tint);color:var(--accent-700);border:1px solid var(--accent-tint-2);margin-top:9px;font-weight:700}
 .abtn.acc:hover{background:var(--accD)}
 .abtn.a2:hover{background:var(--accent-tint-2);border-color:var(--accent-500);color:var(--accent-700)}
@@ -781,7 +788,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .cp{flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative}
 .mtbar{padding:7px 12px;background:var(--s0);border-bottom:1px solid var(--bd);display:flex;align-items:center;gap:6px;flex-shrink:0;flex-wrap:wrap;box-shadow:var(--sh)}
 .mbtn{padding:5px 12px;border-radius:999px;font-size:11.5px;font-weight:600;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--t2);cursor:pointer;font-family:inherit;transition:all .15s;box-shadow:0 1px 2px rgba(16,24,40,.05)}
-.mbtn:hover{border-color:var(--border-strong);color:var(--text-primary)}.mbtn.on{background:var(--acc);color:var(--acc-ink);border-color:var(--acc);box-shadow:0 2px 7px rgba(23,58,99,.24)}
+.mbtn:hover{border-color:var(--border-strong);color:var(--text-primary)}.mbtn.on{background:var(--acc-bg);color:var(--acc-ink);border-color:var(--acc);box-shadow:0 2px 7px rgba(23,58,99,.24)}
 .msep{width:1px;height:16px;background:var(--bd)}
 #mapEl{flex:1;min-height:0;background:var(--s2)}
 .mhint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(18,14,8,.78);color:#fff;padding:6px 14px;border-radius:20px;font-size:11px;pointer-events:none;transition:opacity .35s;white-space:nowrap;z-index:10}
@@ -876,7 +883,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 /* .rp 오버레이 (플로팅 💬 버튼에서 호출) */
 .rp.rp-overlay{position:fixed;right:20px;bottom:84px;top:auto;width:360px;max-width:calc(100vw - 40px);height:min(560px,calc(100vh - 120px));z-index:900;border:1px solid var(--bd);border-radius:14px;box-shadow:0 12px 40px rgba(0,0,0,.22);overflow:hidden}
 /* 플로팅 AI 버튼 */
-.fab-ai{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border-radius:50%;background:var(--acc);color:var(--acc-ink);border:none;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:24px;box-shadow:0 6px 18px rgba(0,0,0,.22);z-index:850;transition:transform .15s,box-shadow .15s}
+.fab-ai{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border-radius:50%;background:var(--acc-bg);color:var(--acc-ink);border:none;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:24px;box-shadow:0 6px 18px rgba(0,0,0,.22);z-index:850;transition:transform .15s,box-shadow .15s}
 .fab-ai:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.28)}
 /* 플로팅 관심단지 버튼 */
 .fab-bm{position:fixed;right:24px;bottom:92px;width:48px;height:48px;border-radius:50%;background:var(--bg-base);color:var(--t1);border:1px solid var(--bd);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.15);z-index:850;transition:transform .15s,box-shadow .15s}
@@ -915,7 +922,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 @keyframes fup{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}
 .msg.user{flex-direction:row-reverse}
 .ava{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;flex-shrink:0}
-.ava.ai{background:var(--acc);color:var(--acc-ink)}.ava.user{background:var(--a2);color:#fff}
+.ava.ai{background:var(--acc-bg);color:var(--acc-ink)}.ava.user{background:var(--a2);color:#fff}
 .bbl{max-width:90%;padding:8px 12px;border-radius:12px;font-size:12px;line-height:1.65}
 .msg.ai .bbl{background:var(--s1);border:1px solid var(--bd);border-top-left-radius:3px}
 .msg.user .bbl{background:var(--a2);color:#fff;border-top-right-radius:3px}
@@ -931,7 +938,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .cir{padding:8px 10px;border-top:1px solid var(--bd);display:flex;gap:7px;align-items:flex-end;flex-shrink:0}
 .ci{flex:1;padding:7px 11px;border:1px solid var(--bd);border-radius:18px;font-size:12px;font-family:inherit;color:var(--t1);background:var(--s1);outline:none;resize:none;min-height:36px;max-height:90px;transition:border-color .15s}
 .ci:focus{border-color:var(--acc);background:var(--bg-base)}
-.cs{width:36px;height:36px;border-radius:50%;background:var(--acc);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .18s}
+.cs{width:36px;height:36px;border-radius:50%;background:var(--acc-bg);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .18s}
 .cs:hover{background:var(--accD);transform:scale(1.05)}.cs svg{width:14px;height:14px;fill:#fff}
 
 /* DETAIL MODAL */
@@ -1068,10 +1075,10 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .rg-badge.muted{background:transparent;color:var(--t3);border:1px dashed var(--bd2);font-weight:600}
 .rg-spark{display:flex;align-items:flex-end;gap:5px;height:34px;margin:7px 0 2px}
 .rg-slot{flex:1;position:relative;height:100%}
-.rg-dot{position:absolute;left:50%;transform:translateX(-50%);width:7px;height:7px;border-radius:50%;background:var(--acc)}
+.rg-dot{position:absolute;left:50%;transform:translateX(-50%);width:7px;height:7px;border-radius:50%;background:var(--acc-bg)}
 /* '미수신' 슬롯 = 점선 — 값을 만들어 넣지 않는다(시안 원칙) */
 .rg-dot.empty{width:64%;height:0;border-top:1px dashed var(--bd2);border-radius:0;background:none;bottom:46%;opacity:.65}
-.rg-bar{position:absolute;left:16%;right:16%;bottom:0;background:var(--acc);border-radius:3px 3px 0 0;min-height:3px}
+.rg-bar{position:absolute;left:16%;right:16%;bottom:0;background:var(--acc-bg);border-radius:3px 3px 0 0;min-height:3px}
 .rg-bar.empty{background:transparent;border:1px dashed var(--bd2);border-bottom:none;top:12%;opacity:.5}
 .rg-ax{display:flex;gap:5px;margin-top:3px}
 .rg-ax span{flex:1;text-align:center;font-size:9px;color:var(--t3)}
@@ -1087,14 +1094,14 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .ntc-card-head{display:flex;align-items:center;gap:9px}
 .ntc-ico{width:34px;height:34px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
 .ntc-ico.kko{background:#FEE500}
-.ntc-ico.push{background:var(--acc);color:var(--acc-ink)}
+.ntc-ico.push{background:var(--acc-bg);color:var(--acc-ink)}
 .ntc-tit{font-weight:700;font-size:13px;color:var(--t1)}
 .ntc-sub{font-size:11px;color:var(--t3)}
 .ntc-badge{font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px;vertical-align:1px}
 .ntc-badge.on{background:var(--grnL,#EAF6EF);color:var(--grn,#177038)}
 .ntc-btn{flex:1;padding:9px 10px;border-radius:9px;border:1px solid var(--bd);background:var(--bg-base);color:var(--t1);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit}
 .ntc-btn.kko{background:#FEE500;border-color:#FEE500;color:#191919}
-.ntc-btn.navy{background:var(--acc);border-color:var(--acc);color:#fff}
+.ntc-btn.navy{background:var(--acc-bg);border-color:var(--acc);color:#fff}
 .ntc-prev{background:rgba(120,150,190,.18);border-radius:10px;padding:10px;margin:10px 0}
 .ntc-bub{background:var(--bg-base);border-radius:4px 12px 12px 12px;padding:8px 10px;font-size:11.5px;line-height:1.5;color:var(--t1);max-width:88%;box-shadow:0 1px 2px rgba(0,0,0,.08)}
 .ntc-policy{display:flex;align-items:center;gap:6px;background:var(--grnL,#EAF6EF);color:var(--grn,#177038);border-radius:8px;padding:8px 10px;font-size:11px;font-weight:600;margin:10px 0}
@@ -1107,13 +1114,13 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 @media(max-width:700px){#ntcNudge{left:0;right:0;bottom:0;border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px))}}
 /* ── KKKKKK: 모바일 전용 요소 기본 정의 (표시 여부는 ≤700px MQ + JS .on 이 결정, 데스크톱은 아래 701px 규칙이 차단) ── */
 #mHeroChip{display:none;position:absolute;top:8px;left:8px;right:8px;z-index:26;align-items:center;gap:9px;background:var(--bg-base);border:1px solid var(--bd);border-radius:12px;padding:9px 10px;box-shadow:0 4px 14px rgba(16,24,40,.16)}
-.mhc-ico{width:32px;height:32px;border-radius:8px;background:var(--acc);color:var(--acc-ink);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
+.mhc-ico{width:32px;height:32px;border-radius:8px;background:var(--acc-bg);color:var(--acc-ink);display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0}
 .mhc-txt{flex:1;text-align:left;background:none;border:none;font-family:inherit;font-size:13px;font-weight:700;color:var(--t1);cursor:pointer;padding:6px 0;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .mhc-x{width:34px;height:34px;border:none;background:none;color:var(--t3);font-size:14px;cursor:pointer;flex-shrink:0}
 #mHeroCard{display:none;position:absolute;top:8px;left:8px;right:8px;z-index:27;background:var(--bg-base);border:1px solid var(--bd);border-radius:14px;padding:14px;box-shadow:0 10px 30px rgba(16,24,40,.22)}
 #mHeroCard.open{display:block}
 .mhc-chk{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--t2);margin-top:5px}
-.mhc-cta{width:100%;margin-top:11px;padding:12px;border:none;border-radius:10px;background:var(--acc);color:var(--acc-ink);font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
+.mhc-cta{width:100%;margin-top:11px;padding:12px;border:none;border-radius:10px;background:var(--acc-bg);color:var(--acc-ink);font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
 #mMapCap{display:none;position:absolute;left:8px;bottom:8px;z-index:25;background:rgba(255,255,255,.88);border:1px solid var(--bd);border-radius:99px;padding:4px 10px;font-size:10px;color:var(--t2);pointer-events:none}
 [data-theme="dark"] #mMapCap{background:rgba(26,31,41,.88)}
 #drawerUtil{display:none}
@@ -1135,7 +1142,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .sm-inp:focus{border-color:var(--acc);background:var(--bg-base)}
 .sm-link{color:var(--a2);text-decoration:none;font-size:11px}
 .sm-link:hover{text-decoration:underline}
-.sm-save{width:100%;padding:10px;background:var(--acc);color:var(--acc-ink);border:none;border-radius:var(--rs);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;margin-top:4px}
+.sm-save{width:100%;padding:10px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:var(--rs);font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .18s;margin-top:4px}
 .sm-save:hover{background:var(--accD)}
 .sm-status{margin-top:8px;padding:8px 11px;border-radius:var(--rs);font-size:11px;display:none}
 .sm-status.ok{background:var(--grnL);color:var(--grn);display:block}
@@ -1181,7 +1188,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .cv-result{background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--r);padding:16px;box-shadow:var(--sh)}
 .cv-result-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
 .cv-result-title{font-size:13px;font-weight:700}
-.pdf-btn{padding:6px 14px;background:var(--acc);color:var(--acc-ink);border:none;border-radius:18px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:5px}
+.pdf-btn{padding:6px 14px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:18px;font-size:11px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s;display:flex;align-items:center;gap:5px}
 .pdf-btn:hover{background:var(--accD)}
 .cv-section{margin-bottom:14px}
 .cv-section-title{font-size:11px;font-weight:700;color:var(--t3);letter-spacing:.6px;text-transform:uppercase;margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid var(--bd)}
@@ -1405,7 +1412,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .fn-date,.fn-memo{width:100%;padding:7px 11px;border:1px solid var(--bd);border-radius:var(--rs);font-size:12px;background:var(--s1);color:var(--t1);outline:none;font-family:inherit;transition:border-color .15s}
 .fn-date:focus,.fn-memo:focus{border-color:var(--acc);background:var(--bg-base)}
 .fn-memo{resize:vertical;min-height:80px;line-height:1.6}
-.fn-save{padding:8px 20px;background:var(--acc);color:var(--acc-ink);border:none;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
+.fn-save{padding:8px 20px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:var(--rs);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;transition:all .15s}
 .fn-save:hover{background:var(--accD)}.fn-save:active{transform:scale(.97)}
 .fn-saved-badge{display:inline-flex;align-items:center;gap:4px;font-size:10px;padding:2px 8px;border-radius:10px;background:var(--grnL);color:var(--grn);border:1px solid #B0D9BE}
 
@@ -3255,7 +3262,7 @@ html[data-theme="dark"] #view-news{
         </div>
         <div id="umHistList" class="sm-hint" style="margin-top:4px;max-height:160px;overflow-y:auto">로딩 중...</div>
       </div>
-      <a href="/billing" class="sm-save" onclick="try{window.va&&window.va('event',{name:'billing_click',data:{from:'settings'}})}catch(_){}" style="text-decoration:none;text-align:center;display:block;background:var(--acc);color:var(--acc-ink);margin-bottom:6px">💳 결제/구독 관리</a>
+      <a href="/billing" class="sm-save" onclick="try{window.va&&window.va('event',{name:'billing_click',data:{from:'settings'}})}catch(_){}" style="text-decoration:none;text-align:center;display:block;background:var(--acc-bg);color:var(--acc-ink);margin-bottom:6px">💳 결제/구독 관리</a>
       <div class="sm-row" style="margin-top:8px;border-top:1px solid var(--bd);padding-top:8px">
         <div class="sm-lbl">개인정보 자기결정권 (PIPA 제35·36조 / GDPR Art.15·17·22)</div>
         <div id="umDeletionBanner" style="display:none;margin:6px 0;padding:8px;background:#fff3cd;border:1px solid #ffc107;border-radius:6px;font-size:11px;color:#856404"></div>
@@ -3264,7 +3271,7 @@ html[data-theme="dark"] #view-news{
           <button class="sm-save" onclick="deleteMyAccount()" aria-label="회원 탈퇴" style="flex:1;background:var(--bg2);color:var(--red);border:1px solid var(--red);font-size:11px">🗑 회원 탈퇴</button>
         </div>
         <button class="sm-save" onclick="showAutomatedDecisionExplain()" aria-label="자동화 결정 설명" style="margin-top:6px;background:var(--bg2);color:var(--t1);border:1px solid var(--bd);font-size:11px;width:100%">🤖 자동화 결정 로직 설명 (GDPR Art.22)</button>
-        <button class="sm-save" id="umRestoreBtn" onclick="restoreMyAccount()" aria-label="계정 복구" style="display:none;margin-top:6px;background:var(--acc);color:var(--acc-ink);width:100%">♻ 계정 복구 (탈퇴 철회)</button>
+        <button class="sm-save" id="umRestoreBtn" onclick="restoreMyAccount()" aria-label="계정 복구" style="display:none;margin-top:6px;background:var(--acc-bg);color:var(--acc-ink);width:100%">♻ 계정 복구 (탈퇴 철회)</button>
       </div>
       <button class="sm-save" onclick="logout()" style="background:var(--t2)">로그아웃</button>
       <div class="sm-status" id="umStatus"></div>
@@ -3318,7 +3325,7 @@ html[data-theme="dark"] #view-news{
       <div style="background:var(--bg2);border:1px solid var(--bd);border-radius:8px;padding:12px;margin-bottom:12px">
         <div style="font-size:12px;color:var(--t1);line-height:1.7">⏰ 매일 자정(KST)에 한도가 자동으로 리셋돼요.<br>로그인하면 한도가 더 늘어나요.</div>
       </div>
-      <a href="mailto:wlsdn5968@gmail.com?subject=내집로그%20유료%20플랜%20출시%20알림%20신청" class="sm-save" onclick="try{window.va&&window.va('event',{name:'pro_mailto_click',data:{from:'quota_modal'}})}catch(_){}" style="display:block;text-align:center;background:var(--acc);color:var(--acc-ink);text-decoration:none;padding:12px;font-size:14px;font-weight:600">📧 유료 플랜 출시 알림 신청</a>
+      <a href="mailto:wlsdn5968@gmail.com?subject=내집로그%20유료%20플랜%20출시%20알림%20신청" class="sm-save" onclick="try{window.va&&window.va('event',{name:'pro_mailto_click',data:{from:'quota_modal'}})}catch(_){}" style="display:block;text-align:center;background:var(--acc-bg);color:var(--acc-ink);text-decoration:none;padding:12px;font-size:14px;font-weight:600">📧 유료 플랜 출시 알림 신청</a>
       <button class="sm-save" onclick="closeQuotaModal()" style="background:var(--bg2);color:var(--t2);border:1px solid var(--bd);margin-top:6px">닫기</button>
       <div id="qmReset" style="font-size:11px;color:var(--t3);text-align:center;margin-top:8px"></div>
     </div>
@@ -3619,7 +3626,7 @@ function renderDrawerUtil(){
   if (!el) return;
   const u = window.MHL?.auth?.user;
   const acct = u
-    ? `<div style="display:flex;align-items:center;gap:9px;padding:4px 2px 10px"><span class="avtr" style="width:32px;height:32px;border-radius:50%;background:var(--acc);color:var(--acc-ink);display:flex;align-items:center;justify-content:center;font-weight:700">${_escHtml(((u.email||'?')[0]||'?').toUpperCase())}</span><div style="min-width:0"><div style="font-size:12.5px;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml((u.email||'').split('@')[0])}</div><div style="font-size:10px;color:var(--t3)">로그인됨</div></div></div>
+    ? `<div style="display:flex;align-items:center;gap:9px;padding:4px 2px 10px"><span class="avtr" style="width:32px;height:32px;border-radius:50%;background:var(--acc-bg);color:var(--acc-ink);display:flex;align-items:center;justify-content:center;font-weight:700">${_escHtml(((u.email||'?')[0]||'?').toUpperCase())}</span><div style="min-width:0"><div style="font-size:12.5px;font-weight:700;color:var(--t1);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml((u.email||'').split('@')[0])}</div><div style="font-size:10px;color:var(--t3)">로그인됨</div></div></div>
        <button class="du-it" onclick="toggleDrawer();openUserMenu()">👤 내 정보</button>
        <button class="du-it danger" onclick="toggleDrawer();logout()">↩ 로그아웃</button>`
     : `<button class="du-it" onclick="toggleDrawer();openLogin()">🔐 로그인<span style="font-weight:400;color:var(--t3);font-size:10.5px">관심단지 기기 간 동기화</span></button>`;
@@ -4428,9 +4435,9 @@ async function generateReport(_isRetry) {
       if (_A?.user && e.canBoostByLogin) {
         // 재시도도 anonymous = 리프레시 토큰 만료(장기 미접속) → 재로그인 유도(admin 은 재로그인 시 무제한 복구).
         titleMsg = '로그인 세션이 만료된 것 같아요.';
-        extraHtml = `<div style="font-size:11px;color:var(--t2);margin-top:8px">로그아웃 후 다시 로그인하면 정상 이용할 수 있어요.</div><button onclick="logout&&logout()" style="margin-top:10px;padding:9px 18px;background:var(--acc);color:var(--acc-ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">↩ 다시 로그인</button>`;
+        extraHtml = `<div style="font-size:11px;color:var(--t2);margin-top:8px">로그아웃 후 다시 로그인하면 정상 이용할 수 있어요.</div><button onclick="logout&&logout()" style="margin-top:10px;padding:9px 18px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">↩ 다시 로그인</button>`;
       } else if (e.canBoostByLogin) {
-        extraHtml = `<button onclick="openLogin&&openLogin()" style="margin-top:14px;padding:9px 18px;background:var(--acc);color:var(--acc-ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🔓 로그인하고 +${e.bonusOnLogin || 1}회 추가로 받기</button>`;
+        extraHtml = `<button onclick="openLogin&&openLogin()" style="margin-top:14px;padding:9px 18px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer">🔓 로그인하고 +${e.bonusOnLogin || 1}회 추가로 받기</button>`;
       } else {
         // MOB-AUDIT-2026-05-03: 로그인 사용자 한도 도달 시 Pro 출시 알림 mailto 노출 — 가입 funnel 활성
         const _proMailto = e.plan === 'free' ? `<br><a href="mailto:wlsdn5968@gmail.com?subject=내집로그%20Pro%20출시%20알림%20신청&body=Pro%20플랜%20출시%20시%20알림%20부탁드립니다." style="color:var(--acc);text-decoration:underline" onclick="try{window.va&&window.va('event',{name:'pro_mailto_click',data:{from:'report_limit'}})}catch(_){}">📧 Pro 출시 알림 신청</a>` : '';
@@ -5291,7 +5298,7 @@ async function loadSubs(){
         <div style="font-size:34px;margin-bottom:8px">📅</div>
         <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px">청약 일정을 불러오지 못했어요</div>
         <div style="font-size:11.5px;color:var(--t2);margin-bottom:14px;line-height:1.6">일시적인 오류일 수 있어요. 잠시 후 다시 시도하거나<br>청약Home에서 직접 확인해주세요.</div>
-        <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="display:inline-block;padding:9px 18px;background:var(--acc);color:var(--acc-ink);border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;box-shadow:var(--sh)">🏠 청약Home 바로가기 ↗</a>
+        <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="display:inline-block;padding:9px 18px;background:var(--acc-bg);color:var(--acc-ink);border-radius:8px;font-size:12px;font-weight:600;text-decoration:none;box-shadow:var(--sh)">🏠 청약Home 바로가기 ↗</a>
         <button class="abtn a2" style="display:inline-block;margin-left:8px;padding:9px 18px;font-size:12px;width:auto;vertical-align:top" onclick="loadSubs()">🔄 다시 시도</button>
       </div>`;
       box.dataset.loaded = '1';
@@ -5625,7 +5632,7 @@ function _initPannBtn(){
   if (!mapEl) return;
   _pannBtn = document.createElement('button');
   _pannBtn.id = '_pannBtn';
-  _pannBtn.style.cssText = 'position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:350;padding:9px 18px;background:var(--acc);color:var(--acc-ink);border:none;border-radius:24px;font-size:12.5px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,0.22);cursor:pointer;font-family:inherit;white-space:nowrap';
+  _pannBtn.style.cssText = 'position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:350;padding:9px 18px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:24px;font-size:12.5px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,0.22);cursor:pointer;font-family:inherit;white-space:nowrap';
   _pannBtn.textContent = '🔍 이 지역 단지 보기';
   _pannBtn.onclick = _pannSearchNow;
   mapEl.appendChild(_pannBtn);
@@ -6298,7 +6305,7 @@ function renderListGrid(){
       <option value="oldBuild"${_curSortSel==='oldBuild'?' selected':''}>구축 우선</option>
     </select>
     <span style="font-size:11px;color:var(--t2);font-weight:600;margin-left:6px">필터</span>
-    <button id="lstFltAll" onclick="setLstFilter('all', this)" style="padding:5px 11px;border:1px solid var(--acc);background:var(--acc);color:var(--acc-ink);border-radius:18px;font-size:11px;cursor:pointer">전체</button>
+    <button id="lstFltAll" onclick="setLstFilter('all', this)" style="padding:5px 11px;border:1px solid var(--acc);background:var(--acc-bg);color:var(--acc-ink);border-radius:18px;font-size:11px;cursor:pointer">전체</button>
     <button id="lstFltReg" onclick="setLstFilter('regulated', this)" style="padding:5px 11px;border:1px solid var(--bd);background:var(--bg-base);color:var(--t2);border-radius:18px;font-size:11px;cursor:pointer">규제지역</button>
     <button id="lstFltNon" onclick="setLstFilter('non', this)" style="padding:5px 11px;border:1px solid var(--bd);background:var(--bg-base);color:var(--t2);border-radius:18px;font-size:11px;cursor:pointer">비규제</button>
     <span style="margin-left:auto;font-size:10.5px;color:var(--t3)">총 ${props.length}건</span>
@@ -6426,7 +6433,7 @@ function _ensureCmpStyles(){
 .cmp-bar{position:fixed;left:50%;bottom:18px;transform:translateX(-50%);z-index:550;display:flex;align-items:center;gap:10px;background:var(--bg-base);border:1px solid var(--bd);box-shadow:var(--shadow-lg);border-radius:999px;padding:8px 10px 8px 16px}
 .cmp-bar-cnt{font-size:12.5px;color:var(--t1);font-weight:600}
 .cmp-bar-cnt b{color:var(--acc)}
-.cmp-bar-go{background:var(--acc);color:var(--acc-ink);border:none;border-radius:999px;padding:8px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
+.cmp-bar-go{background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:999px;padding:8px 16px;font-size:12.5px;font-weight:700;cursor:pointer;font-family:inherit}
 .cmp-bar-go:disabled{opacity:.45;cursor:not-allowed}
 .cmp-bar-clr{background:transparent;color:var(--t2);border:1px solid var(--bd);border-radius:999px;padding:7px 12px;font-size:12px;cursor:pointer;font-family:inherit}
 .cmp-chk{position:absolute;top:8px;right:8px;z-index:3;background:var(--bg-base);border:1px solid var(--bd);border-radius:7px;padding:3px 7px;display:flex;align-items:center;gap:4px;cursor:pointer;box-shadow:var(--shadow-sm)}
@@ -6434,7 +6441,7 @@ function _ensureCmpStyles(){
 .cmp-chk-lbl{font-size:10px;color:var(--t2);font-weight:700;user-select:none}
 .cmp-chips{display:flex;flex-wrap:wrap;gap:6px;padding:10px 16px 4px}
 .cmp-chip{background:var(--bg-base);border:1px solid var(--bd);border-radius:12px;padding:6px 12px;font-size:12px;color:var(--t2);cursor:pointer;font-family:inherit;display:flex;flex-direction:column;align-items:center;line-height:1.25}
-.cmp-chip.on{background:var(--acc);color:var(--acc-ink);border-color:var(--acc)}
+.cmp-chip.on{background:var(--acc-bg);color:var(--acc-ink);border-color:var(--acc)}
 .cmp-chip-sub{font-size:9px;opacity:.85;font-weight:500}
 .cmp-tbl{border-collapse:collapse;width:100%;font-size:12px;min-width:420px}
 .cmp-tbl th,.cmp-tbl td{border-bottom:1px solid var(--bd);padding:9px 8px;text-align:center;vertical-align:middle}
@@ -6446,7 +6453,7 @@ function _ensureCmpStyles(){
 .cmp-val{font-size:14px;font-weight:800;color:var(--t1);font-family:var(--font-mono,monospace)}
 .cmp-unit{font-size:9.5px;color:var(--t3);font-weight:500;margin-left:1px;font-family:var(--font-body)}
 .cmp-track{height:6px;background:var(--s2);border-radius:4px;margin-top:5px;overflow:hidden}
-.cmp-fill{height:100%;background:var(--acc);border-radius:4px;transition:width .35s ease}
+.cmp-fill{height:100%;background:var(--acc-bg);border-radius:4px;transition:width .35s ease}
 .cmp-td-sub{font-size:9.5px;color:var(--t3);margin-top:1px}
 .cmp-insuf{font-size:12px;font-weight:700;color:var(--amb)}
 .cmp-insuf-sub{font-size:9.5px;color:var(--t3)}
@@ -7247,7 +7254,7 @@ function showDetail(p){
   window._peakTrendHtml = _peakTrendHtml;
   const _areaChipsHtml = _areaList.length
     ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 10px">
-        <button class="trend-area-chip" data-sqm="0" onclick="_selectTrendArea(0, this)" style="padding:4px 10px;border-radius:14px;border:1px solid var(--acc);font-size:11px;cursor:pointer;font-family:inherit;background:var(--acc);color:var(--acc-ink)">전체 ${(p.txHistory||[]).length}건</button>
+        <button class="trend-area-chip" data-sqm="0" onclick="_selectTrendArea(0, this)" style="padding:4px 10px;border-radius:14px;border:1px solid var(--acc);font-size:11px;cursor:pointer;font-family:inherit;background:var(--acc-bg);color:var(--acc-ink)">전체 ${(p.txHistory||[]).length}건</button>
         ${_areaList.map(a => {
           const py = Math.round(a.sqm / 3.3058);  // PYEONG-M2-2026-08-17
           return `<button class="trend-area-chip" data-sqm="${a.sqm}" onclick="_selectTrendArea(${a.sqm}, this)" style="padding:4px 10px;border-radius:14px;border:1px solid var(--bd);font-size:11px;cursor:pointer;font-family:inherit;background:var(--bg-base);color:var(--t2)">${a.sqm}㎡(${py}평) <span style="opacity:0.7;font-size:9.5px">${a.n}건</span></button>`;
@@ -8670,7 +8677,7 @@ function renderBookmarks(){
     el.innerHTML='<div class="bk-empty">관심 단지를 추가하면<br>여기서 빠르게 확인할 수 있어요.<br><br><span style="font-size:10.5px;color:var(--t3)">💡 단지 상세 → ⭐ 또는 지도 마커 → ⭐</span></div>';
     return;
   }
-  const _bkCmpBtn = bks.length>=2 ? `<button id="bkCmpBtn" onclick="openCompareBookmarks()" style="display:none;width:100%;margin-bottom:8px;padding:8px 10px;background:var(--acc);color:var(--acc-ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📊 선택 단지 비교 (<span id="bkCmpCnt">0</span>)</button>` : '';
+  const _bkCmpBtn = bks.length>=2 ? `<button id="bkCmpBtn" onclick="openCompareBookmarks()" style="display:none;width:100%;margin-bottom:8px;padding:8px 10px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:8px;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">📊 선택 단지 비교 (<span id="bkCmpCnt">0</span>)</button>` : '';
   el.innerHTML=_pushBtnHtml() + _kkoBtnHtml() + _bkCmpBtn + bks.map((b,i)=>{
     const alerts=getAlerts();
     const target=alerts[b.aptName];
@@ -11118,7 +11125,7 @@ async function onHeaderSearchInput(q) {
         }
         // Phase 8B: 0건 + fuzzy 0건 시 "지도에서 직접 찾기" CTA — 사용자 막다른 길 차단
         const _mapCta = !suggestionHtml
-          ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg2)"><button onclick="document.getElementById('hSearchInput').value='';document.getElementById('hSearchDrop').style.display='none';sv&&sv('map');" style="padding:6px 14px;background:var(--acc);color:var(--acc-ink);border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">🗺 지도에서 직접 찾기</button></div>`
+          ? `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg2)"><button onclick="document.getElementById('hSearchInput').value='';document.getElementById('hSearchDrop').style.display='none';sv&&sv('map');" style="padding:6px 14px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">🗺 지도에서 직접 찾기</button></div>`
           : '';
         drop.innerHTML = _degNote + `<div style="padding:14px;color:var(--t3);font-size:11.5px;text-align:center">
           <div style="font-size:24px;margin-bottom:6px">🔍</div>
@@ -11141,7 +11148,7 @@ async function onHeaderSearchInput(q) {
     } catch(e) {
       if (e.name === 'AbortError') return;
       // MOB-AUDIT-2026-05-03: 검색 fail 시 자동 재시도 X → retry 버튼 추가 (사용자 한 번에 재시도)
-      drop.innerHTML = `<div style="padding:14px;text-align:center;color:var(--red);font-size:11px">검색 실패 — 잠시 후 재시도<br><button onclick="onHeaderSearchInput(document.getElementById('hSearchInput')?.value||'')" style="margin-top:8px;padding:5px 14px;background:var(--acc);color:var(--acc-ink);border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">🔄 다시 검색</button></div>`;
+      drop.innerHTML = `<div style="padding:14px;text-align:center;color:var(--red);font-size:11px">검색 실패 — 잠시 후 재시도<br><button onclick="onHeaderSearchInput(document.getElementById('hSearchInput')?.value||'')" style="margin-top:8px;padding:5px 14px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">🔄 다시 검색</button></div>`;
       drop.style.display = 'block';
     }
   }, 250); // 250ms debounce
@@ -11681,7 +11688,7 @@ async function sM(){
         addMsg('ai', aiMsg);
         // STAB #72: 인라인 로그인 CTA 추가 — header 의 로그인 버튼은 작아서 attention 약함
         // P2-4: position:relative + z-index 100000 추가 (drawer 9990 보다 위)
-        const _loginCtaHtml = `<button onclick="openLogin&&openLogin()" style="margin-top:8px;padding:9px 18px;background:var(--acc);color:var(--acc-ink);border:none;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(42,109,244,0.25);position:relative;z-index:100000">🔓 로그인하고 +${j.bonusOnLogin}회 받기</button>`;
+        const _loginCtaHtml = `<button onclick="openLogin&&openLogin()" style="margin-top:8px;padding:9px 18px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:8px;font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(42,109,244,0.25);position:relative;z-index:100000">🔓 로그인하고 +${j.bonusOnLogin}회 받기</button>`;
         const _lastMsg = document.getElementById('cMsgs')?.lastChild?.querySelector('.bbl');
         if (_lastMsg) _lastMsg.insertAdjacentHTML('beforeend', '<br>' + _loginCtaHtml);
         // 헤더 로그인 버튼 강조 (기존)
