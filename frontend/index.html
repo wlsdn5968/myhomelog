@@ -4929,7 +4929,11 @@ function renderPolicyTimeline(){
   const folded=olderPast.length
     ? `<details><summary style="cursor:pointer;font-size:11px;color:var(--t3);padding:2px 0;user-select:none">▸ 지난 정책 ${olderPast.length}건 더 보기</summary><div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">${olderPast.join('')}</div></details>`
     : '';
-  box.innerHTML=folded+recentPast+futureHtml.join('');
+  /* DDAY-NOTE-2026-08-26 (Sprint NNNNNNN-26): D+/D-DAY/D- 라벨을 4907 행에서 이미 쓰고 있는데
+     "이건 카운트다운이 아니라 시행일 표기"라는 고지가 없었다(grep 0건). 절대 룰(매수 압박 금지)상
+     남은 일수 표기에는 고지가 붙어야 한다. 08-26 시안 문구를 그대로 채택. */
+  box.innerHTML=folded+recentPast+futureHtml.join('')
+    +'<div style="font-size:10px;color:var(--t3);line-height:1.5;padding:9px 2px 0;border-top:1px solid var(--bd);margin-top:9px">D-day는 시행일까지 남은 일수를 계산한 값이며, 행동을 권유하는 표시가 아닙니다. 반드시 고시 원문으로 확인하세요.</div>';
 }
 
 // ── 부동산 뉴스 ───────────────────────────────────────
@@ -7183,6 +7187,11 @@ function showDetail(p){
       ? txAll.filter(t => Math.abs((Math.round(Number(t.excluUseAr)||0)) - area) <= 2)
       : txAll;
     if (!filtered.length) return '<div style="padding:10px 0;color:var(--t3);font-size:11px">해당 평형 거래 없음</div>';
+    /* TX-NOTE-2026-08-26 (Sprint NNNNNNN-26): 08-26 시안에서 가져온 문구. 채택 전에 사실 확인을 끝냈다 —
+       backend/utils/molitParse.js:25-28 isCanceled(cdealType) 판정을 molitIngest.js:156 ·
+       transactionService.js:342-353 · rentService.js:117-126 세 경로가 모두 매핑 전에 적용한다.
+       "평균·추정가 미제공"은 절대 룰(미래 가격 예측 금지) 그대로다. */
+    const _TX_NOTE = '<div style="font-size:10px;color:var(--t3);line-height:1.5;padding:7px 2px 0">신고된 계약 원문 값만 표시합니다. 해제 신고분은 제외되며, 평균·추정가는 제공하지 않습니다.</div>';
     // DM-SKIN-2026-08-19 (Sprint NNNNNNN-10): 시안 실거래 표 — 그리드 4열(계약일/전용/층/거래금액)+헤더, tabular-nums.
     const _hd='<div class="dm-txgrid hd"><span>계약일</span><span>전용</span><span style="text-align:right">층</span><span style="text-align:right">거래금액</span></div>';
     return _hd + filtered.slice(0,30).map(t => {
@@ -7194,7 +7203,7 @@ function showDetail(p){
         <span style="text-align:right;color:var(--t2)">${t.floor||'?'}층</span>
         <span style="text-align:right;font-weight:800;color:var(--acc)">${((t.dealAmount||0)/10000).toFixed(2)}억</span>
       </div>`;
-    }).join('') + (filtered.length > 30 ? `<div style="text-align:center;color:var(--t3);font-size:10px;padding:6px">+${filtered.length - 30}건 더 있음</div>` : '');
+    }).join('') + (filtered.length > 30 ? `<div style="text-align:center;color:var(--t3);font-size:10px;padding:6px">+${filtered.length - 30}건 더 있음</div>` : '') + _TX_NOTE;
   }
   window._renderTxList = _renderTxList;
   // Sprint PP-1: _peakTrendHtml 도 window 에 노출 — _selectTrendArea 가 호출할 수 있도록
