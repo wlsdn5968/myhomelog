@@ -5637,7 +5637,7 @@ function _initPannBtn(){
   if (!mapEl) return;
   _pannBtn = document.createElement('button');
   _pannBtn.id = '_pannBtn';
-  _pannBtn.style.cssText = 'position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:350;padding:9px 18px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:24px;font-size:12.5px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,0.22);cursor:pointer;font-family:inherit;white-space:nowrap';
+  _pannBtn.style.cssText = 'position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:350;padding:9px 18px;background:var(--map-ac,var(--acc-bg));color:#0B1524;border:none;border-radius:24px;font-size:12.5px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,0.22);cursor:pointer;font-family:inherit;white-space:nowrap';
   _pannBtn.textContent = '🔍 이 지역 단지 보기';
   _pannBtn.onclick = _pannSearchNow;
   mapEl.appendChild(_pannBtn);
