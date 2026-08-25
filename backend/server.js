@@ -665,6 +665,11 @@ app.get('/api/health', optionalAuth, async (req, res) => {
     deploy: _deploy,
     ai_ready: _aiReady,
     naverMapsClientId: _naverMapsClientId,
+    // WEBHOOK-GATE-2026-08-25 (Sprint NNNNNNN-22): 카카오 연결 해제 웹훅의 처리 게이트 상태.
+    //   KAKAO_ADMIN_KEY 가 없으면 웹훅이 와도 인증 검증이 불가능해 **아무 처리도 하지 않는데**,
+    //   응답은 규격상 200 이라 밖에서는 정상과 구분이 안 됐다(env 반영 여부를 확인할 방법이 없었다).
+    //   노출하는 건 "설정됐는가" 뿐이고 키 값·길이는 싣지 않는다.
+    kakaoUnlinkWebhookReady: !!process.env.KAKAO_ADMIN_KEY,
     // SYNCTIME-2026-07-25 (Sprint VVVVVV): 프론트 배너용 **실제** 데이터 동기화 시각.
     //   `timestamp` 는 이 응답을 만든 시각일 뿐 데이터 갱신 시각이 아니다 — 둘을 혼동해
     //   배너가 항상 '방금 갱신'을 보여주던 것이 원래 결함. 모르면 null(프론트가 표기 생략).
