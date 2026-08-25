@@ -145,6 +145,11 @@ router.get('/', async (req, res) => {
 function _deriveMarketLines(items) {
   return (items || []).map(it => (it.srcInline ? `${it.text} — ${it.src}` : it.text));
 }
+/* EMOJI-DATALINE-2026-08-26 (Sprint NNNNNNN-26): 시장 3줄 앞 이모지(💰/🏘/🏛)를 뺐다.
+   근거 — 프론트 렌더(index.html:4988)가 이미 골드 01/02/03 배지로 순번을 표시하므로
+   이모지는 중복 표식이고, OS·폰트마다 렌더가 흔들리는데 SVG 같은 통제가 없다.
+   범위는 '수치가 들어가는 데이터 줄'로 한정 — 집킴이 코너·뉴스 카테고리 칩·경고(⚠)는 그대로 둔다.
+   과거 briefing_snapshots 페이로드는 소급 수정하지 않는다(기록 보존) — '어제 브리핑'에는 한동안 이모지가 남는다. */
 async function _dataMarketItems() {
   const items = [];
   try {
@@ -154,7 +159,7 @@ async function _dataMarketItems() {
       const parts = [];
       if (ecos.baseRate != null) parts.push(`한국은행 기준금리 ${ecos.baseRate}%`);
       if (ecos.mortgageRate != null) parts.push(`시중 주담대 평균 ${ecos.mortgageRate}%${m ? ` (${m} 신규취급)` : ''}`);
-      items.push({ text: `💰 ${parts.join(' · ')}`, src: '한국은행 ECOS', date: m || null, srcInline: true });
+      items.push({ text: `${parts.join(' · ')}`, src: '한국은행 ECOS', date: m || null, srcInline: true });
     }
   } catch (_) {}
   try {
@@ -164,7 +169,7 @@ async function _dataMarketItems() {
       const ym = String(unsold.latest.ym || '').replace(/^(\d{4})(\d{2})$/, '$1.$2');
       const prev = unsold.months && unsold.months.length >= 2 ? unsold.months[unsold.months.length - 2] : null;
       const diff = prev && Number.isFinite(prev.cnt) ? unsold.latest.cnt - prev.cnt : null;
-      items.push({ text: `🏘 서울 미분양 ${unsold.latest.cnt.toLocaleString()}호${ym ? ` (${ym})` : ''}${diff != null ? ` · 전월 대비 ${diff >= 0 ? '+' : ''}${diff.toLocaleString()}호` : ''}`, src: '국토부 KOSIS', date: ym || null, srcInline: true });
+      items.push({ text: `서울 미분양 ${unsold.latest.cnt.toLocaleString()}호${ym ? ` (${ym})` : ''}${diff != null ? ` · 전월 대비 ${diff >= 0 ? '+' : ''}${diff.toLocaleString()}호` : ''}`, src: '국토부 KOSIS', date: ym || null, srcInline: true });
     }
   } catch (_) {}
   try {
@@ -179,7 +184,7 @@ async function _dataMarketItems() {
         cache.set(CK, latest, 21600);
       }
       // 종전 문자열엔 출처 표기가 없던 라인 — 구조화로 처음 출처가 생긴다(srcInline:false 라 문자열은 불변).
-      items.push({ text: `🏛 2025.10.15 안정화 대책 · 2026.6.30 규제지역 확대 적용 중${latest ? ` · 실거래 ${latest.slice(0, 7).replace('-', '.')}월분까지 반영` : ''}`, src: '금융위·국토부 고시', date: latest ? latest.slice(0, 7).replace('-', '.') : null, srcInline: false });
+      items.push({ text: `2025.10.15 안정화 대책 · 2026.6.30 규제지역 확대 적용 중${latest ? ` · 실거래 ${latest.slice(0, 7).replace('-', '.')}월분까지 반영` : ''}`, src: '금융위·국토부 고시', date: latest ? latest.slice(0, 7).replace('-', '.') : null, srcInline: false });
     }
   } catch (_) {}
   return items;
@@ -208,7 +213,7 @@ async function _dataMarketLines() {
  *   그린다(TTL 만료까지 최대 3h). 키를 바꾸는 것이 확실하다.
  */
 router.get('/summary', async (req, res) => {
-  const cacheKey = 'news:summary:v4'; // REG-STRUCT: items 필드 추가로 스키마 변경
+  const cacheKey = 'news:summary:v5'; // EMOJI-DATALINE-2026-08-26: 문구 변경 → 구 캐시 무효화 (v4 = REG-STRUCT items 필드 추가)
   // CDN-CACHE-2026-06-14 → NEWS-ZERO-COST: 데이터 시황이 이제 정상 응답이므로 엣지 캐시 대상이다
   //   (종전엔 "AI 성공본만" 캐시하고 폴백은 무캐시였다 — 폴백이 주 경로가 된 지금은 반대가 맞다).
   const SUM_CDN = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=7200';
