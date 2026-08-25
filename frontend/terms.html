@@ -5,22 +5,29 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>이용약관 — 내집로그</title>
 <meta name="description" content="내집로그 이용약관 — 권리·의무·책임 범위">
+<!-- LEGAL-THEME-2026-08-25 (Sprint NNNNNNN-22): 본 페이지들은 index.html 에서 링크로 열리는데
+     ① Pretendard 를 로드하지 않아 본문 폰트가 메인과 달랐고 ② 다크 토큰이 아예 없어 다크 사용자가
+     라이트 화면을 만났다. head 에 두는 이유는 body 끝이면 라이트 플래시(FOUC)가 남기 때문. -->
+<script>(function(){try{if(localStorage.getItem('mhl_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(_){}})();</script>
+<link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
 <style>
-  :root{--bg:#F7F8FB;--bg2:#EEF1F6;--t1:#222;--t2:#4a5159;--t3:#8a9099;--bd:#DDE2EA;--acc:#2A6DF4;--acc2:#0D46C2;--warn:#D08700;}
+  :root{--bg:#F7F8FB;--bg2:#EEF1F6;--t1:#222;--t2:#4a5159;--t3:#8a9099;--bd:#DDE2EA;--acc:#2A6DF4;--acc2:#0D46C2;--warn:#D08700;--panel:#fff;--warn-bg:#FFF6E3;--warn-bd:#F0D998;--warn-tx:#7a5500;}
+  html[data-theme="dark"]{--bg:#080E18;--bg2:#162336;--t1:#E8EFFA;--t2:#93A4BD;--t3:#63758F;--bd:#22334A;--panel:#101B2B;--acc:#6BA5FF;--acc2:#8FBDFF;--warn:#F5C86B;--warn-bg:#2A2110;--warn-bd:#4A3A18;--warn-tx:#F5C86B;}
   *{box-sizing:border-box}
-  html,body{margin:0;padding:0;background:var(--bg);color:var(--t1);font-family:system-ui,-apple-system,"Noto Sans KR",sans-serif;line-height:1.7}
+  html,body{margin:0;padding:0;background:var(--bg);color:var(--t1);font-family:"Pretendard Variable",Pretendard,system-ui,-apple-system,"Noto Sans KR",sans-serif;line-height:1.7}
   .wrap{max-width:760px;margin:0 auto;padding:24px 16px 80px}
   .hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;flex-wrap:wrap;gap:8px}
   .hdr h1{font-size:22px;margin:0;font-weight:800}
   .hdr a{color:var(--acc);font-size:13px;text-decoration:none}
   .meta{font-size:12px;color:var(--t3);margin-bottom:18px}
-  .card{background:#fff;border:1px solid var(--bd);border-radius:12px;padding:22px;margin-bottom:14px}
+  .card{background:var(--panel);border:1px solid var(--bd);border-radius:12px;padding:22px;margin-bottom:14px}
   h2{font-size:16px;margin:24px 0 8px;font-weight:800}
   h2:first-child{margin-top:0}
   h3{font-size:14px;margin:14px 0 6px;font-weight:700;color:var(--t2)}
   p,li{font-size:14px;color:var(--t2)}
   ul,ol{padding-left:22px;margin:6px 0 12px}
-  .warn-box{background:#FFF6E3;border:1px solid #F0D998;border-radius:8px;padding:12px 14px;margin:12px 0;font-size:13px;color:#7a5500}
+  .warn-box{background:var(--warn-bg);border:1px solid var(--warn-bd);border-radius:8px;padding:12px 14px;margin:12px 0;font-size:13px;color:var(--warn-tx)}
   code{background:var(--bg2);padding:1px 4px;border-radius:4px;font-size:13px}
 </style>
 </head>
@@ -37,7 +44,7 @@
   <div class="card">
     <h2>제1조 (목적)</h2>
     <p>본 약관은 공명랩(서비스명: 내집로그, 이하 '회사')가 제공하는 부동산 정보 분석 서비스(이하 '서비스')의 이용과 관련하여 회사와 이용자의 권리·의무 및 책임사항을 규정함을 목적으로 합니다.</p>
-    <p style="font-size:12px;color:#666">사업자 정보: 공명랩 · 대표 우진우 · 사업자등록번호 381-08-03668 · 서울특별시 노원구 섬밭로 139 · 문의 wlsdn5968@gmail.com (이메일 우선 응대)</p>
+    <p style="font-size:12px;color:var(--t3)">사업자 정보: 공명랩 · 대표 우진우 · 사업자등록번호 381-08-03668 · 서울특별시 노원구 섬밭로 139 · 문의 wlsdn5968@gmail.com (이메일 우선 응대)</p>
 
     <h2>제2조 (용어의 정의)</h2>
     <ol>

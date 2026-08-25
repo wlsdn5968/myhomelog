@@ -55,6 +55,10 @@
 <meta name="supabase-url" content="https://brxorvxdfrbxcavufspe.supabase.co">
 <meta name="supabase-publishable-key" content="sb_publishable_fqEpRTSJjPrwwhN8j4JqNA_zhTEzDDo">
 <script>(function(){try{if(localStorage.getItem('mhl_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(_){}})();</script> <!-- 적대 검증: body 끝에 있으면 라이트 플래시(FOUC) -->
+<!-- LEGAL-THEME-2026-08-25 (Sprint NNNNNNN-22): font-family 에 "Pretendard Variable" 을 적어두고도 정작
+     폰트를 로드하지 않아, index.html 을 거치지 않고 이 페이지에 바로 들어오면 system-ui 로 폴백됐다. -->
+<link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
 <style>
   /* BILL-DESIGN-2026-08-20 (Sprint NNNNNNN-21): 시안 design.html:13-24·500-560(isPricing) 토큰 코드화 — 골드 accent·panel/raise/line,
      카드 16px·가격 34px·프로 카드 1.5px 골드 보더+'실수요자 추천' 배지·CTA=골드 배경+잉크 글자. 비교표는 항목 출처 미확정이라 도입하지 않음.
