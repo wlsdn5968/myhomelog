@@ -425,11 +425,11 @@ window.MHL.auth = window.MHL.auth || {
      #10B981 on #E7F8F2 = 2.31 · #D97706 on #FBF1E6 = 2.86 · #DC2626 on #FCEEEE = 4.28.
      본색(--positive/--warning/--negative)은 건드리지 않고 **글자용 별칭만** 진하게 내린다
      (점·막대·틴트는 본색을 그대로 쓰므로 시각적 신호 강도는 유지). */
-  --grn:   #047857;                    /* 텍스트용 — on #E7F8F2 4.99:1 */
+  --grn:   #036049;                    /* 텍스트용 — 실측 틴트(#D6EAE7) 위 6.1:1 */
   --grnL:  var(--positive-tint);       /* #E5F3EB → rgba(16,185,129,.10) */
   --red:   #B91C1C;                    /* 텍스트용 — on #FCEEEE 5.77:1 */
   --redL:  var(--negative-tint);       /* #FAEBEB → rgba(220,38,38,.08) */
-  --amb:   #A85B08;                    /* 텍스트용 — on #FBF1E6 4.54:1 */
+  --amb:   #8A4A06;                    /* 텍스트용 — 실측 틴트(#EAE3DB/#ECE7E0) 위 5.4~5.6:1 */
   --warn-bd:#E4C080;                  /* DARK-GAP-2026-08-19: 앰버 안내 박스 보더(다크 재정의 아래에 있음) */
   --ambL:  var(--warning-tint);        /* #FAF0E2 → rgba(217,119,6,.10) */
   --bg2:   var(--bg-elev-2);           /* #EEF1F6 → #F5F5F5 */
@@ -442,7 +442,7 @@ window.MHL.auth = window.MHL.auth || {
 /* ── 다크 모드 (리디자인 — 토글식, 라이트 기본) · 의미 토큰 오버라이드 ───── */
 html[data-theme="dark"]{
   --bg-base:#1A1F29; --bg-elev-1:#222834; --bg-elev-2:#2A313F; --bg:#0F131A; --bg2:#2A313F;
-  --text-primary:#E7EAEF; --text-secondary:#AEB4BF; --text-tertiary:#7E8694;
+  --text-primary:#E7EAEF; --text-secondary:#AEB4BF; --text-tertiary:#A8B0BD; /* A11Y-2026-08-25: #7E8694 는 패널 3.56:1·틴트 2.86:1 로 미달 */
   --border-faint:rgba(255,255,255,0.06); --border-subtle:rgba(255,255,255,0.11);
   --border-medium:rgba(255,255,255,0.17); --border-strong:rgba(255,255,255,0.26);
   --accent-500:#4E83C4; --accent-600:#3D6CA8; --accent-700:#7CABDD;
