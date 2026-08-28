@@ -121,6 +121,17 @@
     <button id="cancelBtn" class="btn btn-sec" style="margin-top:10px;display:none" onclick="cancelSubscription()">구독 해지</button>
   </div>
 
+  <!-- 결제내역 + 환불(청약철회) — REFUND-UI-2026-08-28 (Plan 034).
+       결제내역이 0건이면 카드를 띄우지 않는다(빈 카드는 노이즈). -->
+  <div class="card" id="payHistCard" style="display:none">
+    <div style="font-size:13px;font-weight:700;margin-bottom:10px">결제 내역</div>
+    <div id="payHistList"></div>
+    <div style="font-size:11px;color:var(--t3);margin-top:10px;line-height:1.6">
+      결제 후 7일 이내·미사용 시 청약철회로 전액 환불됩니다.
+      그 밖의 경우(부분 사용 후 환불 등)는 <a href="/refund">환불정책</a>의 신청 방법을 따라 주세요.
+    </div>
+  </div>
+
   <!-- 플랜 목록 (결제 대상 선택) -->
   <div id="plansView">
     <div id="plansList"></div>
@@ -346,6 +357,106 @@ async function loadMe(){
     }
   } catch(e){
     console.warn('[billing me] 실패', e);
+  }
+  loadPayments();   // Plan 034 — 구독 상태 아래에 결제내역
+}
+
+// ── 결제내역 + 환불(청약철회) — REFUND-UI-2026-08-28 (Plan 034) ──────────
+//   refund 라우트는 완성돼 있는데 프론트가 payment id 를 얻을 방법이 없어 호출이 불가능했다.
+//   ⚠ 7일 창 판정은 서버와 **같은 기준**이어야 한다: approved_at 우선, 없으면 created_at
+//     (backend/routes/billing.js 의 `new Date(pay.approved_at || pay.created_at)`).
+//     하나만 보면 대부분 맞지만 승인이 늦는 결제(가상계좌 등)에서 갈린다.
+const REFUND_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+function _esc(s){ return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+  { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c])); }
+
+function _payStatusLabel(st){
+  return st === 'captured' ? '결제 완료' : st === 'refunded' ? '환불 완료'
+    : st === 'requested' ? '결제 대기' : st === 'failed' ? '결제 실패'
+    : st === 'canceled' ? '취소됨' : (st || '—');
+}
+
+async function loadPayments(){
+  const card = document.getElementById('payHistCard');
+  if(!authSession){ card.style.display = 'none'; return; }
+  try {
+    const token = await getBillingAccessToken();
+    if(!token){ card.style.display = 'none'; return; }
+    const r = await fetch('/api/billing/payments', { headers:{ 'Authorization':'Bearer ' + token } });
+    if(!r.ok) throw new Error('HTTP ' + r.status);
+    const { payments } = await r.json();
+    if(!payments || !payments.length){ card.style.display = 'none'; return; }
+
+    document.getElementById('payHistList').innerHTML = payments.map(p => {
+      const paidAt = p.approved_at || p.created_at;
+      const inWindow = paidAt && (Date.now() - new Date(paidAt).getTime()) <= REFUND_WINDOW_MS;
+      const canRefund = p.status === 'captured' && inWindow;
+      const amt = Number(p.amount || 0).toLocaleString();
+      let action;
+      if(p.status === 'refunded'){
+        action = '<span style="font-size:11px;color:var(--grn);font-weight:700">환불 완료</span>';
+      } else if(canRefund){
+        action = '<button class="btn btn-sec" style="padding:5px 10px;font-size:11px"'
+          + ' onclick="refundPayment(\'' + _esc(p.id) + '\', this)">환불 신청</button>';
+      } else if(p.status === 'captured'){
+        action = '<span style="font-size:11px;color:var(--t3)">청약철회 기간(7일) 경과 — 이메일 신청</span>';
+      } else {
+        action = '';
+      }
+      return '<div class="me-row" style="align-items:center;gap:8px;flex-wrap:wrap">'
+        + '<span class="me-lbl">' + _esc(fmtDate(paidAt)) + '</span>'
+        + '<span class="me-val">' + amt + '원 · ' + _esc(String(p.plan || '').toUpperCase())
+        + ' · ' + _esc(_payStatusLabel(p.status)) + '</span>'
+        + action
+        + '<div style="flex-basis:100%;font-size:10px;color:var(--t3)">주문번호 ' + _esc(p.order_id) + '</div>'
+        + '</div>';
+    }).join('');
+    card.style.display = '';
+  } catch(e){
+    console.warn('[billing payments] 실패', e);
+    card.style.display = 'none';
+  }
+}
+
+// 응답 code → 사용자 문구. ⚠ 서버의 error/hint 원문은 화면에 뿌리지 않는다(내부 문자열 유출 차단).
+function _refundMessage(status, body){
+  const code = body && body.code;
+  if(status === 200) return { tone:'ok', msg:'이미 환불된 결제예요.' };
+  if(code === 'refund_unavailable') return { tone:'warn', msg:'지금은 온라인 환불 신청을 받을 수 없어요. 환불정책의 이메일로 신청해 주세요.' };
+  if(code === 'not_refundable') return { tone:'warn', msg:'지금 상태에서는 환불할 수 없어요. 이메일로 문의해 주세요.' };
+  if(code === 'no_payment_key') return { tone:'warn', msg:'결제 정보가 불완전해 자동 환불이 어려워요. 이메일로 문의해 주세요.' };
+  if(code === 'refund_window_expired') return { tone:'warn', msg:'청약철회 가능 기간(결제 후 7일)이 지났어요. 부분 사용 후 환불은 이메일로 신청해 주세요.' };
+  // Toss 취소는 성공했는데 DB 반영이 실패한 상태 — 재시도가 가장 위험하다.
+  if(code === 'refund_db_failed') return { tone:'err', msg:'환불은 접수됐지만 기록 반영에 실패했어요. 다시 누르지 마시고 이메일로 알려 주세요.', freeze:true };
+  if(status === 503) return { tone:'warn', msg:'결제 시스템을 준비하고 있어요. 잠시 후 다시 시도해 주세요.' };
+  if(status === 404) return { tone:'warn', msg:'결제 내역을 찾을 수 없어요. 새로고침 후 다시 시도해 주세요.' };
+  return { tone:'err', msg:'환불 처리 중 문제가 생겼어요. 잠시 후 다시 시도하거나 이메일로 문의해 주세요.' };
+}
+
+async function refundPayment(id, btn){
+  if(!confirm('결제 후 7일 이내 청약철회로 전액 환불합니다.\n\n진행할까요?')) return;
+  if(btn){ btn.disabled = true; btn.textContent = '처리 중...'; }
+  try {
+    const token = await getBillingAccessToken();
+    if(!token){ setStatus('warn', '로그인이 필요해요.'); return; }
+    const r = await fetch('/api/billing/payments/' + encodeURIComponent(id) + '/refund', {
+      method:'POST', headers:{ 'Authorization':'Bearer ' + token },
+    });
+    let body = null; try { body = await r.json(); } catch(_) {}
+    if(r.ok && r.status === 200 && body && body.status === 'refunded' && !body.note){
+      setStatus('ok', '환불이 접수됐어요. 결제 수단에 따라 반영까지 시간이 걸릴 수 있어요.');
+      loadMe();   // 목록·구독 상태 갱신
+      return;
+    }
+    const out = _refundMessage(r.status, body);
+    setStatus(out.tone === 'ok' ? 'ok' : 'warn', out.msg);
+    if(out.freeze && btn){ btn.textContent = '문의 필요'; return; }   // 재시도 금지 — disabled 유지
+    if(r.status === 200) loadMe();
+  } catch(e){
+    console.warn('[billing refund] 실패', e);
+    setStatus('warn', '환불 처리 중 문제가 생겼어요. 잠시 후 다시 시도해 주세요.');
+  } finally {
+    if(btn && btn.textContent === '처리 중...'){ btn.disabled = false; btn.textContent = '환불 신청'; }
   }
 }
 

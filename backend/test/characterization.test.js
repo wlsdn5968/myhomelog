@@ -938,8 +938,11 @@ function _mockRes() {
 //   (`.eq('user_id', req.user.id)`)를 **지워도 결제 테스트 9건이 전부 초록**이었다.
 //   돈 경로에 대해 잘못된 안심을 주는 구조라, 목이 필터를 기록하고 테스트가 그걸 단언한다.
 //   `seen.updateFilters` / `seen.selectFilters` 는 [[col, val], …] 형태로 호출 순서대로 쌓인다.
-function _mockAdmin({ payRow, casRows, billingRow }) {
-  const seen = { updates: [], updateFilters: [], selectFilters: [], upserts: [], tables: [] };
+// SELECT-RECORD-2026-08-28 (Plan 034): `.select()` 인자도 기록한다 — 응답에 내리면 안 되는 컬럼
+//   (toss_payment_key·raw_response·failure_reason)이 새는 것을 계약으로 막으려면 필요하다.
+//   목록 조회(`.order().limit()`) 경로도 지원한다: limit 이 await 대상이라 thenable 이어야 한다.
+function _mockAdmin({ payRow, casRows, billingRow, listRows }) {
+  const seen = { updates: [], updateFilters: [], selectFilters: [], upserts: [], tables: [], selects: [], clientCalls: [] };
   const upChain = (patch) => {
     const c = {
       eq: (col, val) => { seen.updateFilters.push([col, val]); return c; },
@@ -956,8 +959,10 @@ function _mockAdmin({ payRow, casRows, billingRow }) {
   //   테이블별로 다른 행을 돌려줘야 한다: payments 는 payRow, user_billing 은 billingRow.
   const makeSel = (table) => {
     const sel = {
-      select: () => sel,
+      select: (cols) => { if (cols !== undefined) seen.selects.push(String(cols)); return sel; },
       eq: (col, val) => { seen.selectFilters.push([col, val]); return sel; },
+      order: () => sel,
+      limit: async () => ({ data: listRows || [], error: null }),
       maybeSingle: async () => ({ data: table === 'user_billing' ? (billingRow || null) : payRow, error: null }),
       update: upChain,
       upsert: async (row) => { seen.upserts.push({ table, row }); return { data: null, error: null }; },
@@ -1120,17 +1125,21 @@ test('billing/confirm 성공 — 기존 구독이 남아 있으면 그 만료일
 //   webhook 은 Toss 재조회(axios)가 **사실상 서명 검증 역할**이라 axios 스텁이 필요하고,
 //   환불 7일 경계는 payRow 의 approved_at 을 조작하면 **타이머 제어 없이** 검증된다.
 //   여기서도 프로덕션 코드는 바꾸지 않는다 — 라우터 스택에서 핸들러만 꺼내 쓴다.
-async function _withBillingStub2({ payRow, casRows, tossKey, webhookSecret, axiosImpl, billingRow }, fn) {
+async function _withBillingStub2({ payRow, casRows, tossKey, webhookSecret, axiosImpl, billingRow, listRows }, fn) {
   const clientPath = require.resolve('../db/client');
   const billPath = require.resolve('../routes/billing');
   const axiosPath = require.resolve('axios');
   const saved = { c: require.cache[clientPath], b: require.cache[billPath], a: require.cache[axiosPath] };
   const savedEnv = { k: process.env.TOSS_SECRET_KEY, w: process.env.TOSS_WEBHOOK_SECRET };
-  const { client, seen } = _mockAdmin({ payRow, casRows, billingRow });
+  const { client, seen } = _mockAdmin({ payRow, casRows, billingRow, listRows });
   if (tossKey === undefined) delete process.env.TOSS_SECRET_KEY; else process.env.TOSS_SECRET_KEY = tossKey;
   if (webhookSecret === undefined) delete process.env.TOSS_WEBHOOK_SECRET; else process.env.TOSS_WEBHOOK_SECRET = webhookSecret;
+  // CLIENT-CALL-RECORD-2026-08-28 (Plan 034): 어느 팩토리를 썼는지 기록한다 — 조회 라우트가
+  //   service-role(getSupabaseAdmin)로 갈아타면 RLS 를 우회하게 되므로 그 회귀를 계약으로 막는다.
   require.cache[clientPath] = { id: clientPath, filename: clientPath, loaded: true, exports: {
-    getSupabaseAdmin: () => client, getSupabaseReadonly: () => client, getUserScopedClient: () => client } };
+    getSupabaseAdmin: () => { seen.clientCalls.push('admin'); return client; },
+    getSupabaseReadonly: () => { seen.clientCalls.push('readonly'); return client; },
+    getUserScopedClient: () => { seen.clientCalls.push('userScoped'); return client; } } };
   if (axiosImpl) {
     require.cache[axiosPath] = { id: axiosPath, filename: axiosPath, loaded: true, exports: axiosImpl };
   }
@@ -1223,6 +1232,48 @@ test('billing/refund — captured 가 아니면 409, 이미 refunded 면 멱등 
     await _billingHandler('/payments/:id/refund')(_req({ params: { id: 'p1' } }), res, () => {});
     assert.equal(res.statusCode, 200, '이미 환불된 건은 멱등 200 이어야 한다');
     assert.equal(res.body.status, 'refunded');
+  });
+});
+
+// ── Plan 034 (2026-08-28): GET /billing/payments 계약 ──────────────────────
+//   왜 계약 테스트인가: payments 테이블이 **0행**(2026-08-28 실측)이라 라이브로는 RLS 도,
+//   응답 필드도 증명할 수 없다. 그래서 "어느 클라이언트를 쓰는가 / 무엇을 select 하는가"를
+//   목이 기록하고 여기서 단언한다 — Plan 025 가 `.eq()` 인자를 기록해 소유자 필터를 고정한 것과 같은 방식.
+test('billing/payments — 본인 결제내역만, 내부 식별자·PG 원문은 내리지 않는다', async () => {
+  const rows = [
+    { id: 'p2', order_id: 'o2', amount: 9900, plan: 'pro', status: 'captured',
+      approved_at: '2026-08-27T00:00:00Z', created_at: '2026-08-27T00:00:00Z' },
+    { id: 'p1', order_id: 'o1', amount: 9900, plan: 'pro', status: 'refunded',
+      approved_at: '2026-08-01T00:00:00Z', created_at: '2026-08-01T00:00:00Z' },
+  ];
+  await _withBillingStub2({ payRow: null, casRows: [], tossKey: 'test', listRows: rows }, async (seen) => {
+    const res = _mockRes();
+    await _billingHandler('/payments')(_req({}), res, (e) => { assert.fail(`next(err): ${e && e.message}`); });
+
+    assert.equal(res.statusCode, 200);
+    assert.deepEqual(res.body, { payments: rows }, '결제내역이 그대로 내려가야 한다');
+
+    // ① RLS 를 타는 클라이언트여야 한다 — service-role 로 갈아타면 소유자 필터가 유일한 방어선이 된다
+    assert.ok(seen.clientCalls.includes('userScoped'),
+      'GET /payments 가 userScopedClient 를 쓰지 않는다 — RLS 우회');
+    assert.ok(!seen.clientCalls.includes('admin'),
+      'GET /payments 가 service-role(getSupabaseAdmin)을 쓴다 — RLS 를 우회하면 안 된다');
+
+    // ② 소유자 필터(이중 방어) — RLS 가 꺼지거나 정책이 바뀌어도 남의 결제가 새면 안 된다
+    assert.ok(_hasFilter(seen.selectFilters, 'user_id', 'u1'),
+      "GET /payments 에 .eq('user_id', req.user.id) 가 없다");
+
+    // ③ 응답에 새면 안 되는 컬럼 — select 문자열로 고정한다
+    const cols = seen.selects.join(' ');
+    assert.ok(seen.tables.includes('payments'), 'payments 테이블을 조회하지 않았다');
+    for (const forbidden of ['toss_payment_key', 'raw_response', 'failure_reason']) {
+      assert.ok(!cols.includes(forbidden),
+        `GET /payments 응답에 ${forbidden} 이 포함됐다 — 내부 식별자/PG 원문은 내리지 않는다`);
+    }
+    // 환불 버튼이 서버와 같은 기준으로 판단하려면 이 둘이 반드시 있어야 한다(7일 창 = approved_at || created_at)
+    for (const need of ['id', 'status', 'approved_at', 'created_at']) {
+      assert.ok(cols.includes(need), `GET /payments 응답에 ${need} 이 빠졌다 — 환불 버튼 판정이 불가능해진다`);
+    }
   });
 });
 

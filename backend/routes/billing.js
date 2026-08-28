@@ -88,6 +88,28 @@ router.get('/me', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// ── GET /billing/payments — 본인 결제내역 (환불 self-service 용) ────────────
+// REFUND-UI-2026-08-28 (Plan 034): refund 라우트(POST /payments/:id/refund)는 완성돼 있는데
+//   프론트가 payment id 를 얻을 방법이 없어 호출 자체가 불가능했다(/me 는 user_billing 만 본다).
+//   userScopedClient + RLS(payments_select_own, authenticated)로 본인 행만 — /me 와 동일 패턴.
+//   service-role(getSupabaseAdmin)을 조회에 쓰지 않는다: RLS 를 우회하면 소유자 필터를 손으로
+//   걸어야 하고 그게 실수의 여지다(.eq 는 이중 방어로 남긴다).
+// ⚠ toss_payment_key(결제 시스템 내부 식별자) · raw_response(PG 원문 JSONB) ·
+//   failure_reason(내부 실패 사유)은 **내리지 않는다**. 계약 테스트가 이 목록을 고정한다.
+router.get('/payments', async (req, res, next) => {
+  try {
+    const sb = userScopedClient(req.accessToken);
+    const { data, error } = await sb
+      .from('payments')
+      .select('id, order_id, amount, plan, status, approved_at, created_at')
+      .eq('user_id', req.user.id)
+      .order('created_at', { ascending: false })
+      .limit(50);   // 1인 구독 서비스에서 50건이면 충분 — 넘으면 페이징이 아니라 설계를 다시 볼 일이다
+    if (error) throw error;
+    res.json({ payments: data || [] });
+  } catch (e) { next(e); }
+});
+
 // ── POST /billing/checkout — 주문 생성 ────────────────────
 // body: { plan: 'pro'|'team' }
 // returns: { orderId, amount, customerKey, planName }
