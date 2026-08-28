@@ -5400,9 +5400,13 @@ async function refreshQuota(){
     // TOKEN-FRESH-2026-05-21: 신선한 토큰으로 health 의 admin/한도 표시 정확화.
     const tok = A?.getFreshToken ? await A.getFreshToken() : (A?.session?.access_token || null);
     if(tok) headers['Authorization'] = 'Bearer ' + tok;
-    const r=await fetch(`${CFG.api}/health`,{headers, signal:AbortSignal.timeout(5000)});
-    if(r.ok){
-      const d=await r.json();
+    // PERF-HEALTH-DEDUP-2026-08-28: **비로그인이면 인증 응답이 필요 없다** — 공유 캐시를 쓴다.
+    //   실측(비로그인 첫 방문): 토큰이 없어도 여기서 health 를 한 번 더 불러 총 2회였다.
+    //   토큰이 있을 때만 별도 호출(usage.unlimited·admin 판정이 응답에 반영돼야 하므로 캐시 공유 불가).
+    const d = tok
+      ? await fetch(`${CFG.api}/health`,{headers, signal:AbortSignal.timeout(5000)}).then(r=>r.ok?r.json():null)
+      : await healthJson(5000);
+    if(d){
       updateQuota(d.usage);
       if(d.chat) updateAiPill(d.chat);
       updateDataQuality(d.facilityQuality, !!(d.usage && d.usage.unlimited)); // 관리자 데이터 품질 뱃지 (Sprint BBBBB)
