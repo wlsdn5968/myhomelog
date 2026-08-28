@@ -116,7 +116,27 @@ where table_name = 'payments' order by ordinal_position;
 
 - 후보: 결제일시, 금액, 플랜명, 상태, (환불 버튼용) id
 - **`toss_payment_key` 는 화면에 내리지 마라** — 결제 시스템 내부 식별자다. 필요 없다.
-- 답: _(채울 것)_
+- **답 (2026-08-28 실측)**:
+
+  `information_schema.columns` 실조회 결과 `payments` 는 13컬럼이다:
+  `id`(uuid) · `user_id`(uuid) · `order_id`(text) · `toss_payment_key`(text, null 허용) ·
+  `amount`(numeric) · `currency`(text) · `status`(text) · `plan`(text) · `method`(text, null 허용) ·
+  `failure_reason`(text, null 허용) · `raw_response`(jsonb, null 허용) · `created_at`(timestamptz) ·
+  `approved_at`(timestamptz, null 허용).
+
+  **화면에 내릴 필드 6개**: `id`(환불 버튼용) · `approved_at` · `created_at` · `amount` · `plan` · `status`.
+  - `approved_at` 과 `created_at` 을 **둘 다** 내린다. 화면 표시는 `approved_at ?? created_at` 이지만,
+    7일 창 계산 근거가 서버와 같은 규칙이어야 버튼 노출이 어긋나지 않는다(Q2 참조).
+  - `method` 는 환불 처리 기간 안내(`refund.html` 5항: 카드 3~5일 / 계좌이체 1~3일)에 쓸 수 있어
+    **선택 후보**로 남긴다. 없어도 기능은 성립하므로 034 에서 최소 범위로 갈 때는 뺀다.
+
+  **내리지 않을 필드 4개와 그 이유**:
+  - `toss_payment_key` — 결제 시스템 내부 식별자(계획서 지시). 환불은 서버가 id 로 조회해 쓰므로 불필요.
+  - `raw_response` — PG 원문 JSONB. 개인정보·내부 구조가 그대로 들어 있다.
+  - `failure_reason` — 실패 결제의 내부 사유. 화면에는 상태 라벨로 충분하다.
+  - `user_id` — 본인 것만 내려오므로 정보량 0.
+  - `order_id` 는 **경계 케이스**다: 수기 환불(이메일) 안내가 "주문번호"를 요구하므로(`refund.html:82-83`)
+    남겨두면 사용자가 복사해 쓸 수 있다. 034 에서 **표시하되 강조하지 않는** 쪽을 권고한다.
 
 ### Q2. 환불 버튼을 언제 보여줄 것인가
 
@@ -125,7 +145,37 @@ where table_name = 'payments' order by ordinal_position;
 
 - 확인할 것: 7일 창 계산 기준이 `approved_at` 인가 `created_at` 인가 (코드에서 확정)
 - 확인할 것: `status` 가 어떤 값일 때만 환불 가능한가
-- 답: _(채울 것)_
+- **답 (2026-08-28, `backend/routes/billing.js:484-521` 실독)**:
+
+  refund 라우트가 거부하는 조건은 **6개**이고, 코드상 순서대로 다음과 같다.
+
+  | # | 조건 | 응답 | code |
+  |---|---|---|---|
+  | 1 | `TOSS_SECRET_KEY` 미설정 | 501 | `refund_unavailable` |
+  | 2 | Supabase admin 클라이언트 없음 | 503 | (code 없음) |
+  | 3 | 본인 payment 없음 (`.eq('id')` + `.eq('user_id')`) | 404 | (code 없음) |
+  | 4 | 이미 `status='refunded'` | **200** | (멱등 — `note:'already refunded'`) |
+  | 5 | `status !== 'captured'` | 409 | `not_refundable` |
+  | 6 | `toss_payment_key` 없음 | 409 | `no_payment_key` |
+  | 7 | 7일 창 초과 | 400 | `refund_window_expired` |
+
+  **7일 창 기준 (확정)**: `billing.js:518` — `const paidAt = new Date(pay.approved_at || pay.created_at);`
+  → **`approved_at` 우선, 없으면 `created_at`** 로 폴백한다. 창 길이는 `REFUND_WINDOW_MS = 7 * 24 * 60 * 60 * 1000`
+  (`billing.js:488`).
+
+  **환불 가능 상태 (확정)**: `status === 'captured'` **하나뿐**이다(`billing.js:511`).
+  `requested`/`failed`/`canceled` 는 409 로 거절된다.
+
+  **⇒ 프론트 버튼 노출 조건 (서버가 최종 판단, 프론트는 미리 감추는 용도)**:
+  ```
+  showRefundButton = (status === 'captured')
+                  && (Date.now() - new Date(approved_at ?? created_at) <= 7일)
+  ```
+  - `status === 'refunded'` 는 버튼 대신 **"환불 완료"** 배지로 표시한다(서버가 200 을 주므로
+    눌러도 사고는 안 나지만, 누를 이유가 없다).
+  - 창이 지난 `captured` 는 버튼을 감추고 **수기 신청 경로(Q4)** 를 그 자리에 안내한다.
+  - `toss_payment_key` 는 화면에 안 내리므로(Q1) 조건 6은 프론트에서 못 거른다 →
+    **서버 409 를 문구로 받는다**(Q3).
 
 ### Q3. 실패를 사용자에게 어떻게 말할 것인가
 
@@ -133,7 +183,31 @@ refund 라우트가 돌려주는 **에러 코드/상태**를 전부 수집하고
 예: `501 refund_unavailable`(설정 미완료)은 사용자에게 "지금은 신청이 안 된다" 로 보여야 하고,
 **내부 hint(`TOSS_SECRET_KEY 미설정`)를 화면에 노출하면 안 된다.**
 
-- 답: _(채울 것)_
+- **답 (2026-08-28)**:
+
+  ⚠ **계획서의 인용이 stale 하다**: 현재 코드의 501 hint 는 `'TOSS_SECRET_KEY 미설정'` 이 아니라
+  **`'결제 시스템 준비 중'`** 이다(`billing.js:487`). 즉 내부 키 이름 노출은 **이미 고쳐져 있다.**
+  그래도 원칙은 유지한다 — 프론트는 `hint` 를 **읽지 않는다**(서버가 나중에 다시 내부 문자열을
+  넣더라도 화면에 새지 않게).
+
+  응답별 사용자 문구(전부 `error`/`hint` 원문 대신 **프론트가 code 로 분기**):
+
+  | 응답 | code | 화면 문구 |
+  |---|---|---|
+  | 501 | `refund_unavailable` | 지금은 온라인 환불 신청을 받을 수 없어요. 아래 이메일로 신청해 주세요. |
+  | 503 | — | 결제 시스템을 준비하고 있어요. 잠시 후 다시 시도해 주세요. |
+  | 404 | — | 결제 내역을 찾을 수 없어요. 새로고침 후 다시 시도해 주세요. |
+  | 200 | (`note:'already refunded'`) | 이미 환불된 결제예요. |
+  | 409 | `not_refundable` | 지금 상태에서는 환불할 수 없어요. 이메일로 문의해 주세요. |
+  | 409 | `no_payment_key` | 결제 정보가 불완전해 자동 환불이 어려워요. 이메일로 문의해 주세요. |
+  | 400 | `refund_window_expired` | 청약철회 가능 기간(결제 후 7일)이 지났어요. 부분 사용 후 환불은 이메일로 신청해 주세요. |
+  | 500 | `refund_db_failed` | 환불은 접수됐지만 기록 반영에 실패했어요. **다시 누르지 말고** 이메일로 알려 주세요. |
+  | 그 외 (Toss 실패 502 등) | Toss `code` | 환불 처리 중 문제가 생겼어요. 잠시 후 다시 시도하거나 이메일로 문의해 주세요. |
+
+  **`refund_db_failed` 가 가장 위험한 문구다** — 코드 주석대로 "Toss 취소 성공 / DB 미반영" 상태라
+  사용자가 재시도하면 혼란이 커진다. 반드시 **"다시 누르지 마세요"** 를 넣고 버튼을 비활성화한다.
+
+  용어는 `refund.html` 과 맞춘다: "청약철회"·"부분 사용 후 환불"·"환불 신청" (같은 것을 다르게 부르지 않는다).
 
 ### Q4. 수기 절차를 없앨 것인가 남길 것인가
 
@@ -141,7 +215,19 @@ refund 라우트가 돌려주는 **에러 코드/상태**를 전부 수집하고
 권고: **남긴다.** self-service 가 실패하는 경우(창 초과, 시스템 오류)의 최후 경로가 필요하다.
 다만 "버튼으로 즉시 신청" 이 1순위로 보이게 순서를 바꾼다.
 
-- 답: _(채울 것)_
+- **답 (2026-08-28): 남긴다. 다만 `refund.html` 은 이번에 손대지 않는다.**
+
+  근거:
+  1. `refund.html:88-96`(5. 환불 신청 방법)은 **환불정책 문서**다. 전자상거래법상 표시의무 문서를
+     기능 릴리스와 같은 커밋에서 바꾸면, 나중에 "언제부터 어떤 정책이었는지"를 추적하기 어렵다.
+  2. self-service 로 못 푸는 경로가 실제로 **4개**나 된다(Q2 의 조건 5·6·7 + 부분 사용 후 일할 환불).
+     `refund.html:84`(4항 3호)이 일할 환불을 "별도 신청" 으로 명시하고 있어 이메일 경로는 필수다.
+  3. 결제가 아직 열리지 않아(`TOSS_SECRET_KEY` 미설정 → 501) **지금은 self-service 가 항상 실패한다.**
+     이 상태에서 정책 문서의 1순위를 버튼으로 바꾸면 문서가 사실과 어긋난다.
+
+  **⇒ 034 의 범위는 `billing.html` 뿐이다.** `refund.html` 순서 조정은 **결제가 실제로 열린 뒤**
+  별도 판단한다(034 의 Maintenance notes 에 기록). `billing.html` 의 결제내역 카드에서는
+  환불 버튼을 1순위로 두고, 그 아래에 "이 경우가 아니면 이메일로 신청" 을 작은 글씨로 안내한다.
 
 ### Q5. 결제 미오픈 상태에서 어떻게 검증할 것인가
 
@@ -151,7 +237,29 @@ refund 라우트가 돌려주는 **에러 코드/상태**를 전부 수집하고
 - 버튼 노출/숨김 조건이 의도대로인가 — 목 데이터로 검증 가능
 - 501 응답을 사용자 문구로 잘 바꾸는가 — 검증 가능
 
-- 답: _(채울 것)_
+- **답 (2026-08-28)**:
+
+  **검증 가능한 것 4가지**
+  1. **RLS 로 본인 행만 내려오는가** — `pg_policies` 실조회로 전제 확인 완료:
+     `payments_select_own`(SELECT, `{authenticated}`) · `user_billing_select_own`(SELECT, `{authenticated}`).
+     `GET /billing/me` 가 이미 `userScopedClient(req.accessToken)` 패턴을 쓰므로(`billing.js:79`)
+     같은 패턴으로 만들면 된다. 검증은 **서로 다른 두 계정 토큰으로 각각 호출해 교차 노출 0건**을 본다.
+     ⚠ 단, 현재 `payments` **실데이터 0행**이므로(2026-08-28 실측) 라이브만으로는 RLS 를 증명할 수 없다 →
+     계약 테스트에서 `.eq('user_id')`/userScopedClient 사용을 단언하는 쪽으로 고정한다
+     (`plans/025` 가 결제 목에서 `.eq()` 인자를 기록해 단언한 선례가 있다).
+  2. **버튼 노출/숨김 조건** — Q2 의 4가지 상태(`captured`+창 내 / `captured`+창 밖 / `refunded` /
+     그 외 상태)를 목 데이터로 렌더해 확인. 서버 없이 가능하다.
+  3. **501 → 사용자 문구 변환** — `TOSS_SECRET_KEY` 가 실제로 미설정이므로 **지금 라이브에서 그대로
+     재현된다.** 결제내역이 0행이라 버튼 자체가 안 보이므로, 검증은 목 응답으로 문구 매핑만 본다.
+  4. **응답에 금지 필드가 없는가** — `toss_payment_key`/`raw_response`/`failure_reason` 이
+     JSON 에 나타나지 않는지 계약 테스트로 단언(Q1 의 결정을 코드로 고정).
+
+  **검증할 수 없는 것 (정직하게 남긴다)**
+  - Toss `/v1/payments/{key}/cancel` 실호출과 그 실패 경로(502·`refund_db_failed`) — 결제 오픈 전에는
+    **끝까지 볼 수 없다.** 034 의 Done criteria 에 "실환불 1건 성공" 을 넣으면 안 된다.
+  - 실제 환불 후 `user_billing` 즉시 다운그레이드(`billing.js` 의 7) 단계) — 같은 이유.
+    (`user_billing` 도 **0행** 실측 — 2026-08-28)
+  - **⇒ 034 는 "결제가 열리면 수행할 사후 검증" 절을 별도로 갖는다.**
 
 ## 조사 방법 (읽기 전용)
 
