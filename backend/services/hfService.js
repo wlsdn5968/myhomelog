@@ -31,7 +31,17 @@ function _minMax(obj, prefix) {
   return { min: Math.min(...vals), max: Math.max(...vals) };
 }
 
-async function getHfRates() {
+/**
+ * @param {object} [opts]
+ * @param {number} [opts.retries=0] 외부 조회 실패 시 재시도 횟수.
+ *   RETRY-2026-08-28: 기본 0(현행 유지) — health 의 **비차단 백그라운드** 경로에서 재시도하면
+ *   응답 반환 후 서버리스가 동결돼 어차피 완주하지 못하고 시간만 늘린다.
+ *   **요청 경로에서 완주가 보장되는 cron 워밍(routes/cron.js RATE-WARM)만 retries:1** 을 준다 —
+ *   그 1회가 실패하면 Redis 12h 가 비어 **그날 하루를 하드코딩 fallback(stale 금리)으로 지낸다**
+ *   (2026-08-28 실측: 08-27 22:20 ECONNABORTED · 08-28 11:51 ETIMEDOUT 로 실제 발생).
+ *   HF 정상 응답은 18~70ms 실측이라 5s 타임아웃 × 2 + 대기 1.5s ≈ 최대 11.5s — cron 300s 대비 무해.
+ */
+async function getHfRates({ retries = 0 } = {}) {
   const hit = cache.get(CACHE_KEY);
   if (hit !== undefined) return hit;
   // REDIS-2026-08-08 (Sprint BBBBBBB-3): 성공 값 인스턴스 간 공유. health 의 비차단 갱신은 응답 후
@@ -42,6 +52,7 @@ async function getHfRates() {
   } catch (_) { /* Redis 실패는 무시하고 외부 조회 */ }
   const key = process.env.MOLIT_API_KEY;
   if (!key || key === 'your_molit_api_key') { cache.set(CACHE_KEY, null, 21600); return null; }
+  for (let attempt = 0; ; attempt++) {
   try {
     const params = { serviceKey: key, pageNo: 1, numOfRows: 5, dataType: 'JSON' };
     const [dR, uR] = await Promise.all([
@@ -65,6 +76,13 @@ async function getHfRates() {
     require('./cronStats').recordCronRun('hf-rates', { ok: 1 }).catch(() => {});
     return out;
   } catch (e) {
+    // RETRY-2026-08-28: cron 워밍(retries:1)만 여기로 들어온다. 실패 기록·null 캐시를 남기기 **전에**
+    //   재시도해야 한다 — 먼저 null 을 심으면 재호출이 캐시 히트로 즉시 null 을 돌려줘 무의미해진다.
+    if (attempt < retries) {
+      logger.warn({ err: e.message, attempt }, 'HF 금리 조회 실패 — 재시도');
+      await new Promise(r => setTimeout(r, 1500));
+      continue;
+    }
     logger.warn({ err: e.message }, 'HF 금리 조회 실패 — null (하드코딩 표 유지, 10분 후 재시도)');
     // EXT-OBSERV-2026-08-08 (Sprint AAAAAAA): ecosService 와 동일 — 사유를 health.crons 에.
     // EXT-OBSERV-2026-08-08-2 (Sprint AAAAAAA-2): HF 도 data.go.kr 게이트웨이라 molitErrReason 재사용 —
@@ -76,6 +94,7 @@ async function getHfRates() {
     require('./cronStats').recordCronRun('hf-rates', { ok: false, error: brief }).catch(() => {});
     cache.set(CACHE_KEY, null, 600);
     return null;
+  }
   }
 }
 
