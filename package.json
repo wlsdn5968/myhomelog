@@ -2,9 +2,9 @@
   "name": "myhomelog",
   "version": "1.0.0",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.116.0",
-    "@sentry/node": "^10.70.0",
-    "@supabase/supabase-js": "^2.112.2",
+    "@anthropic-ai/sdk": "^0.120.0",
+    "@sentry/node": "^10.71.0",
+    "@supabase/supabase-js": "^2.112.4",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.2",
     "axios": "^1.19.0",
@@ -26,6 +26,6 @@
     "lint:be": "eslint backend scripts api"
   },
   "devDependencies": {
-    "eslint": "^10.8.1"
+    "eslint": "^10.9.1"
   }
 }
