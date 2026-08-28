@@ -53,13 +53,25 @@ node server.js
 
 ### 4. 프론트엔드 실행
 
+⚠ **먼저 알아야 할 것**: 프론트는 API 를 상대경로(`/api`)로만 호출하고(`frontend/index.html` 의
+`DEFAULT_API = '/api'`), 백엔드는 정적 파일을 서빙하지 않는다(`backend/server.js` 에 `express.static`
+없음). 그래서 아래처럼 **프론트만 다른 포트로 띄우면 모든 API 호출이 404 된다** — 같은 오리진이라
+CORS 에러조차 뜨지 않고 화면만 비어 보인다.
+
+정적 화면(레이아웃·스타일)만 확인할 때:
+
 ```bash
 cd frontend
 python3 -m http.server 3000
-# → http://localhost:3000
+# → http://localhost:3000  (API 연동 기능은 동작하지 않음)
 ```
 
-또는 VS Code Live Server / npx serve 사용
+또는 VS Code Live Server / npx serve 사용 — 위 제약은 동일하다.
+
+API 까지 붙여서 확인하려면 **프론트와 API 가 같은 오리진**이어야 한다. 프로덕션에서는 Vercel 이
+그 역할을 한다(`vercel.json` route 룰). 로컬에서 같은 구성을 만드는 방법으로 `vercel dev` 가
+있으나 **이 저장소에서 실제로 돌려 확인한 적은 없다**(확인되지 않음). 현재 전체 동작을 확실히
+보려면 **배포된 프리뷰/프로덕션 URL** 에서 확인하는 것이 가장 확실하다.
 
 ### 5. 네이버 지도 (기본 지도 엔진)
 
