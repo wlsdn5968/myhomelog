@@ -197,10 +197,16 @@ async function runAptMasterSync() {
   const started = Date.now();
   const results = [];
 
+  // DEADLINE-2026-08-28 (Plan 032): 다른 backfill job(molitIngest·facility·geocache·buildingRegister)
+  //   과 동일한 maxDuration(300s) 보호. AptInfo 가 느려지면 지역 루프가 300s 를 넘겨 임의 시점에
+  //   잘린다. syncOneSgg 는 upsert 기반(멱등)이라 남은 큐는 다음 run 이 그대로 이어받는다.
+  const HARD_DEADLINE = started + 250000;
+
   // 동시 5 worker (AptInfo 는 MOLIT 보다 rate limit 여유 — 보통 일 10K 호출 가능)
   const queue = [...codes];
   async function worker() {
     while (queue.length) {
+      if (Date.now() > HARD_DEADLINE) break; // maxDuration 보호 — 남은 큐는 다음 run 이 이어받음(멱등)
       const code = queue.shift();
       if (!code) break;
       try {
@@ -226,9 +232,10 @@ async function runAptMasterSync() {
     inserted: insertedTotal,
     errors: errCount,
     elapsedMs,
+    remaining: queue.length,   // >0 이면 데드라인에 걸려 중단됐다는 뜻 — 다음 run 이 이어받는다
   }, 'apt-master-sync 완료');
 
-  return { sggs: codes.length, fetched: fetchedTotal, inserted: insertedTotal, errors: errCount, elapsedMs };
+  return { sggs: codes.length, fetched: fetchedTotal, inserted: insertedTotal, errors: errCount, elapsedMs, remaining: queue.length };
 }
 
 module.exports = { runAptMasterSync };

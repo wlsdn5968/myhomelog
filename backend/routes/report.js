@@ -1393,17 +1393,23 @@ async function fetchCandidateApts(admin, input, limit) {
       }
     }
     // amenities 병렬 (좌표 있는 단지만)
-    await Promise.all(out.map(async (c) => {
-      if (!c.lat || !c.lng) return;
-      try {
-        const amen = await getNearbyAmenities(c.lat, c.lng);
-        if (amen) {
-          c.amenities = amen; // { school, mart, hospital(종합병원), subway, cvs, park }
+    // FANOUT-CAP-2026-08-28 (Plan 032): 콜드 캐시일 때 out(최대 20) × Kakao 6콜 = 최대 120 동시 호출이
+    //   나갔다. 이 저장소의 다른 외부 API 팬아웃은 전부 동시성을 명시 제한한다(molitIngest 3, 지오코딩 4~8).
+    //   getNearbyAmenities 내부 캐시(3일)가 있어 캐시가 더운 경우엔 체감 변화가 없다 — 콜드 버스트만 막는다.
+    const AMENITY_CONCURRENCY = 4;
+    for (let i = 0; i < out.length; i += AMENITY_CONCURRENCY) {
+      await Promise.all(out.slice(i, i + AMENITY_CONCURRENCY).map(async (c) => {
+        if (!c.lat || !c.lng) return;
+        try {
+          const amen = await getNearbyAmenities(c.lat, c.lng);
+          if (amen) {
+            c.amenities = amen; // { school, mart, hospital(종합병원), subway, cvs, park }
+          }
+        } catch (e) {
+          logger.warn({ err: e.message, apt: c.apt_name }, 'amenities 호출 실패');
         }
-      } catch (e) {
-        logger.warn({ err: e.message, apt: c.apt_name }, 'amenities 호출 실패');
-      }
-    }));
+      }));
+    }
   } catch (e) {
     logger.warn({ err: e.message }, 'Phase 8 좌표/amenities 일괄 처리 실패 — 객관 점수만으로 진행');
   }
