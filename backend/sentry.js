@@ -40,6 +40,16 @@ if (dsn) {
     // 프로파일링은 Vercel serverless 에선 부적합 — 끔
     profilesSampleRate: 0,
 
+    // ── Logs 명시적 차단 (SENTRY-LOGS-2026-08-28) ──────────────
+    // @sentry/node 10.71.0 부터 `enableLogs` 기본값이 **true 로 바뀌었다**(실측: init 후
+    // getOptions().enableLogs === true). 지금은 전송되는 게 없다 — Sentry.logger.* 사용 0건이고
+    // Pino/ConsoleLogging 같은 log-forwarding 통합도 자동 로드 목록에 없다(실측: 통합 17개 중 미포함).
+    // 그래도 명시적으로 끈다:
+    //   ① 이 서비스의 설계는 "stdout 로그는 pino 로만, Sentry 는 에러만"이다(위 beforeBreadcrumb 주석).
+    //   ② 기본값이 버전업으로 바뀌었다는 것은 앞으로도 바뀔 수 있다는 뜻이다.
+    //   ③ 로그가 무료 플랜 쿼터를 잠식하면 정작 필요한 에러가 누락된다.
+    enableLogs: false,
+
     // PII 자동 수집 끔 (개인정보 최소화 원칙)
     sendDefaultPii: false,
 
