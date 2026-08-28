@@ -72,9 +72,11 @@ export default [
     },
   },
   {
-    // ── frontend/index.html 에서 뽑아낸 인라인 <script> (scripts/extract-inline-js.js) ──
-    //   .lint-tmp/*.js 는 원본 줄번호를 보존한다(앞을 개행으로 패딩) → 에러 줄번호를
-    //   그대로 frontend/index.html 의 줄번호로 읽으면 된다.
+    // ── frontend/*.html 에서 뽑아낸 인라인 <script> (scripts/extract-inline-js.js) ──
+    //   .lint-tmp/<base>-block<N>.js 는 원본 줄번호를 보존한다(앞을 개행으로 패딩) → 에러 줄번호를
+    //   그대로 frontend/<base>.html 의 줄번호로 읽으면 된다.
+    //   MULTI-HTML-2026-08-28: index.html 외에 billing·terms·privacy·refund.html 도 대상이다
+    //   (그전까지 그 4개는 로컬 lint·CI 어디서도 검사되지 않았다 — 결제 코드가 그 안에 있다).
     files: ['.lint-tmp/**/*.js'],
     languageOptions: {
       ecmaVersion: 2023,
@@ -94,6 +96,10 @@ export default [
         getComputedStyle: 'readonly', // FOCUS-TRAP-2026-08-20: 브라우저 내장(window.getComputedStyle) — 실존 전역
         atob: 'readonly', btoa: 'readonly', TextEncoder: 'readonly', TextDecoder: 'readonly',
         L: 'readonly',              // Leaflet (지도 라이브러리, 외부 <script src>)
+        // MULTI-HTML-2026-08-28: billing.html 을 린트 대상에 넣으면서 실측된 외부 SDK 전역 2개.
+        //   둘 다 frontend/billing.html 의 <script src> 로 로드된다(212·214행) — 오타가 아니다.
+        supabase: 'readonly',       // @supabase/supabase-js UMD
+        TossPayments: 'readonly',   // 토스페이먼츠 v2 standard SDK
         // ⚠ refreshQuota 는 **다른 인라인 블록에 선언된 우리 함수**다. classic script 는 전역을
         //   공유하므로 런타임엔 정상이지만(호출부도 typeof 가드가 있다), 블록별로 뽑아 린트하는
         //   이 설정에서는 알 수 없다. 진짜 오타를 놓치지 않으려면 이런 크로스블록 참조만 명시한다.

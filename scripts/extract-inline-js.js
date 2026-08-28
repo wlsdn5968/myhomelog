@@ -24,21 +24,19 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const SRC = path.join(ROOT, 'frontend', 'index.html');
+// MULTI-HTML-2026-08-28: index.html 하나만 읽던 것을 frontend/*.html 전체로 넓혔다.
+//   왜: billing/terms/privacy/refund.html 의 인라인 <script> 는 로컬 lint 도 CI 도 **한 번도 검사하지
+//   않았다**. 그 안에 결제·환불 코드가 들어 있어(billing.html 4블록) 문법 오류를 넣어도 게이트가
+//   전부 초록이고 브라우저에서만 죽는다 — Plan 034 작업 중 실측으로 드러난 구멍이다.
+const SRC_DIR = path.join(ROOT, 'frontend');
 const OUT = path.join(ROOT, '.lint-tmp');
 
 const JS_TYPE = /type\s*=\s*["']?(text\/javascript|module|application\/javascript)/i;
 
-function main() {
-  if (!fs.existsSync(SRC)) {
-    console.error(`[extract-inline-js] 원본을 찾지 못했다: ${SRC}`);
-    process.exit(1);
-  }
-  const html = fs.readFileSync(SRC, 'utf8');
-
-  fs.rmSync(OUT, { recursive: true, force: true });
-  fs.mkdirSync(OUT, { recursive: true });
-
+/** 한 HTML 에서 인라인 JS 블록을 뽑아 .lint-tmp/<base>-block<N>.js 로 쓴다. */
+function extractOne(file) {
+  const base = path.basename(file, '.html');
+  const html = fs.readFileSync(file, 'utf8');
   const re = /<script(?![^>]*\bsrc=)([^>]*)>([\s\S]*?)<\/script>/g;
   let m;
   let index = 0;
@@ -57,16 +55,47 @@ function main() {
     const openEnd = m.index + m[0].indexOf('>') + 1;
     const startLine = html.slice(0, openEnd).split('\n').length;
     const padded = '\n'.repeat(startLine - 1) + m[2];
-    fs.writeFileSync(path.join(OUT, `index-block${index}.js`), padded, 'utf8');
+    fs.writeFileSync(path.join(OUT, `${base}-block${index}.js`), padded, 'utf8');
     written += 1;
   }
+  return { base, written, skipped };
+}
 
-  if (written === 0) {
+function main() {
+  if (!fs.existsSync(SRC_DIR)) {
+    console.error(`[extract-inline-js] 원본 디렉터리를 찾지 못했다: ${SRC_DIR}`);
+    process.exit(1);
+  }
+  const files = fs.readdirSync(SRC_DIR)
+    .filter((f) => f.endsWith('.html'))
+    .sort()
+    .map((f) => path.join(SRC_DIR, f));
+  if (!files.length) {
+    console.error(`[extract-inline-js] frontend/*.html 이 하나도 없다: ${SRC_DIR}`);
+    process.exit(1);
+  }
+
+  fs.rmSync(OUT, { recursive: true, force: true });
+  fs.mkdirSync(OUT, { recursive: true });
+
+  let total = 0;
+  const parts = [];
+  for (const file of files) {
+    const r = extractOne(file);
+    total += r.written;
+    parts.push(`${r.base}:${r.written}` + (r.skipped.length ? `(건너뜀 ${r.skipped.join(',')})` : ''));
+  }
+
+  if (total === 0) {
     console.error('[extract-inline-js] 인라인 JS 블록을 하나도 찾지 못했다 — 셀렉터가 깨졌을 수 있다');
     process.exit(1);
   }
-  console.log(`[extract-inline-js] ${written}개 블록 → .lint-tmp/ (줄번호 = index.html 원본)`
-    + (skipped.length ? ` · 건너뜀: ${skipped.join(', ')}` : ''));
+  // index.html 은 이 저장소의 본체다. 여기서 0 이 나오면 정규식이 깨진 것이므로 별도로 막는다.
+  if (!parts.some((p) => p.startsWith('index:') && !p.startsWith('index:0'))) {
+    console.error('[extract-inline-js] index.html 에서 블록을 뽑지 못했다 — 셀렉터 확인 필요');
+    process.exit(1);
+  }
+  console.log(`[extract-inline-js] ${total}개 블록 → .lint-tmp/ (줄번호 = 각 원본 HTML 의 줄번호) · ${parts.join(' · ')}`);
 }
 
 main();

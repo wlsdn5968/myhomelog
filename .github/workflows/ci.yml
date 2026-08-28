@@ -204,8 +204,11 @@ jobs:
         run: npm ci --no-audit --no-fund
 
       - name: Lint (backend + scripts + api + 프론트 인라인 JS)
-        # npm run lint = scripts/extract-inline-js.js 로 index.html 인라인 <script> 를 .lint-tmp/ 에
-        # 뽑은 뒤(줄번호 보존) eslint 실행. 에러만 CI 를 막고 경고는 막지 않는다.
+        # npm run lint = scripts/extract-inline-js.js 로 **frontend/*.html 전체**의 인라인 <script> 를
+        # .lint-tmp/<base>-block<N>.js 에 뽑은 뒤(줄번호 보존) eslint 실행.
+        # MULTI-HTML-2026-08-28: index.html 만 보던 것을 billing·terms·privacy·refund 까지 넓혔다 —
+        #   그전까지 결제·환불 인라인 JS 는 이 게이트를 그냥 통과했다.
+        # 에러만 CI 를 막고 경고는 막지 않는다.
         run: npm run lint
 
   gitleaks:
