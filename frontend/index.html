@@ -68,12 +68,18 @@
 <title>내집로그 — 실거래가로 보는 부동산 의사결정 도구</title>
 
 <!-- MOB-AUDIT-2026-05-03: LCP 최적화 — 첫 paint 직후 사용되는 외부 리소스 preconnect/preload -->
+<!-- PERF-PRECONNECT-2026-08-28: 첫 화면은 **지도**인데 네이버 지도 도메인이 빠져 있었다.
+     라이브 실측(첫 방문): 리소스 91개 중 img 58개이고 그중 **52개가 nrbe.pstatic.net(지도 타일)** 이다.
+     preconnect 는 4~6개가 권장이라 무작정 늘리지 않고 우선순위를 재배치했다 —
+     폴백 경로(unpkg=Leaflet)와 모니터링(sentry-cdn)은 첫 paint 를 막지 않으므로 dns-prefetch 로 강등. -->
 <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin>
-<link rel="preconnect" href="https://unpkg.com" crossorigin>
-<link rel="preconnect" href="https://browser.sentry-cdn.com" crossorigin>
+<link rel="preconnect" href="https://oapi.map.naver.com" crossorigin>
+<link rel="preconnect" href="https://nrbe.pstatic.net" crossorigin>
 <link rel="preconnect" href="https://brxorvxdfrbxcavufspe.supabase.co" crossorigin>
 <link rel="preconnect" href="https://fonts.googleapis.com" crossorigin>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="dns-prefetch" href="https://unpkg.com">
+<link rel="dns-prefetch" href="https://browser.sentry-cdn.com">
 <link rel="dns-prefetch" href="https://api.iconify.design">
 
 <!-- Phase 4-2 단계 1 (2026-05-04): Concept C 폰트 stack — Pretendard Variable + Sora + JetBrains Mono.
