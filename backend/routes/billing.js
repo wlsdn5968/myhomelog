@@ -38,10 +38,38 @@ const TOSS_API_BASE = 'https://api.tosspayments.com';
 // 프론트가 Toss Widget 초기화에 필요한 clientKey 를 꺼내는 엔드포인트
 // tossClientKey 는 공개돼도 됨 (test_ck_* / live_ck_* 가 설계상 프론트 노출용)
 // secret 여부만 노출 — 서버 확인 가능 상태인지 신호
+// PG-MODE-2026-08-28 (결제 리허설): 프론트의 하드코딩 차단(PG_LAUNCH_BLOCKED=true)을 대체할
+//   **서버 판정** 을 내려준다. 종전에는 키를 넣어도 프론트 상수를 손으로 false 로 바꿔 재배포해야
+//   결제가 열렸고(=키 교체와 코드 변경이 따로 놀았다), 반대로 상수만 풀면 키 없이 버튼이 눌렸다.
+//   mode 판정:
+//     none         키 없음 → 차단(현행)
+//     test         test_ck_* → **개방하되 프론트가 "테스트 결제" 배너를 띄운다**(실제 청구 없음)
+//     live_locked  live_ck_* 인데 PAYMENTS_LIVE_ENABLED!=='true' → **차단**.
+//                  라이브 키가 들어가는 것만으로 실결제가 열리면 안 된다 — 의도적 플래그를 요구한다.
+//     live         live_ck_* + PAYMENTS_LIVE_ENABLED==='true' → 개방
+//     mismatch     ck 와 sk 의 환경(test/live)이 엇갈림 → **차단**. 섞이면 결제는 되는데 확정이
+//                  실패하거나(테스트 ck + 라이브 sk) 그 반대가 되어 금전 사고로 직결된다.
+//   ⚠ 키 값 자체는 내려보내지 않는다(clientKey 는 설계상 공개 대상이라 종전대로 유지).
+function _pgMode() {
+  const ck = process.env.TOSS_CLIENT_KEY || '';
+  const sk = process.env.TOSS_SECRET_KEY || '';
+  if (!ck) return 'none';
+  const ckTest = ck.startsWith('test_');
+  const skTest = sk.startsWith('test_');
+  if (sk && ckTest !== skTest) return 'mismatch';
+  if (ckTest) return 'test';
+  return process.env.PAYMENTS_LIVE_ENABLED === 'true' ? 'live' : 'live_locked';
+}
+
 router.get('/config', (req, res) => {
+  const mode = _pgMode();
   res.json({
     tossClientKey: process.env.TOSS_CLIENT_KEY || null,
     confirmEnabled: !!process.env.TOSS_SECRET_KEY,
+    mode,
+    // 프론트가 이 값 하나만 보고 버튼을 열면 되도록 — 판정 규칙을 양쪽에 복제하지 않는다
+    // ([[tax-law-crosscheck]] 의 "사본 2개" 함정과 같은 종류의 위험).
+    checkoutEnabled: (mode === 'test' || mode === 'live') && !!process.env.TOSS_SECRET_KEY,
   });
 });
 
@@ -117,7 +145,14 @@ router.post('/checkout', async (req, res, next) => {
   try {
     // PG-LAUNCH-GATE-2026-08-20 (전수검증 코드 대조): 종전엔 /confirm 만 501 게이트가 있고 /checkout 은 키 유무와
     //   무관하게 주문을 발급 — 프론트 tossClientKey 체크 한 곳에만 의존하는 단일 장애점이었다. 서버에서도 대칭 차단.
-    if (!process.env.TOSS_CLIENT_KEY || !process.env.TOSS_SECRET_KEY) {
+    // PG-MODE-2026-08-28: 키 유무만 보면 live_locked(라이브 키가 들어갔지만 아직 열지 않기로 한 상태)와
+    //   mismatch(ck/sk 환경 엇갈림)에서 주문이 발급된다. 프론트 차단은 API 직접 호출로 우회되므로
+    //   **서버가 같은 판정(_pgMode)으로 막는다** — 판정 규칙 사본을 만들지 않는다.
+    const _mode = _pgMode();
+    if (_mode !== 'test' && _mode !== 'live') {
+      return res.status(503).json({ error: '결제 시스템 준비 중 — 잠시 후 다시 시도해주세요.', code: 'pg_not_ready' });
+    }
+    if (!process.env.TOSS_SECRET_KEY) {
       return res.status(503).json({ error: '결제 시스템 준비 중 — 잠시 후 다시 시도해주세요.', code: 'pg_not_ready' });
     }
     const { plan } = req.body || {};

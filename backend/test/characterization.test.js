@@ -1125,15 +1125,19 @@ test('billing/confirm 성공 — 기존 구독이 남아 있으면 그 만료일
 //   webhook 은 Toss 재조회(axios)가 **사실상 서명 검증 역할**이라 axios 스텁이 필요하고,
 //   환불 7일 경계는 payRow 의 approved_at 을 조작하면 **타이머 제어 없이** 검증된다.
 //   여기서도 프로덕션 코드는 바꾸지 않는다 — 라우터 스택에서 핸들러만 꺼내 쓴다.
-async function _withBillingStub2({ payRow, casRows, tossKey, webhookSecret, axiosImpl, billingRow, listRows }, fn) {
+async function _withBillingStub2({ payRow, casRows, tossKey, webhookSecret, axiosImpl, billingRow, listRows, clientKey, liveEnabled }, fn) {
   const clientPath = require.resolve('../db/client');
   const billPath = require.resolve('../routes/billing');
   const axiosPath = require.resolve('axios');
   const saved = { c: require.cache[clientPath], b: require.cache[billPath], a: require.cache[axiosPath] };
-  const savedEnv = { k: process.env.TOSS_SECRET_KEY, w: process.env.TOSS_WEBHOOK_SECRET };
+  const savedEnv = { k: process.env.TOSS_SECRET_KEY, w: process.env.TOSS_WEBHOOK_SECRET,
+    ck: process.env.TOSS_CLIENT_KEY, lv: process.env.PAYMENTS_LIVE_ENABLED };
   const { client, seen } = _mockAdmin({ payRow, casRows, billingRow, listRows });
   if (tossKey === undefined) delete process.env.TOSS_SECRET_KEY; else process.env.TOSS_SECRET_KEY = tossKey;
   if (webhookSecret === undefined) delete process.env.TOSS_WEBHOOK_SECRET; else process.env.TOSS_WEBHOOK_SECRET = webhookSecret;
+  // PG-MODE-2026-08-28: /config·/checkout 의 mode 판정 테스트용 env.
+  if (clientKey === undefined) delete process.env.TOSS_CLIENT_KEY; else process.env.TOSS_CLIENT_KEY = clientKey;
+  if (liveEnabled === undefined) delete process.env.PAYMENTS_LIVE_ENABLED; else process.env.PAYMENTS_LIVE_ENABLED = liveEnabled;
   // CLIENT-CALL-RECORD-2026-08-28 (Plan 034): 어느 팩토리를 썼는지 기록한다 — 조회 라우트가
   //   service-role(getSupabaseAdmin)로 갈아타면 RLS 를 우회하게 되므로 그 회귀를 계약으로 막는다.
   require.cache[clientPath] = { id: clientPath, filename: clientPath, loaded: true, exports: {
@@ -1150,6 +1154,8 @@ async function _withBillingStub2({ payRow, casRows, tossKey, webhookSecret, axio
     if (saved.a) require.cache[axiosPath] = saved.a; else delete require.cache[axiosPath];
     if (savedEnv.k === undefined) delete process.env.TOSS_SECRET_KEY; else process.env.TOSS_SECRET_KEY = savedEnv.k;
     if (savedEnv.w === undefined) delete process.env.TOSS_WEBHOOK_SECRET; else process.env.TOSS_WEBHOOK_SECRET = savedEnv.w;
+    if (savedEnv.ck === undefined) delete process.env.TOSS_CLIENT_KEY; else process.env.TOSS_CLIENT_KEY = savedEnv.ck;
+    if (savedEnv.lv === undefined) delete process.env.PAYMENTS_LIVE_ENABLED; else process.env.PAYMENTS_LIVE_ENABLED = savedEnv.lv;
   }
 }
 const _req = (o) => ({ body: {}, user: { id: 'u1' }, params: {}, get: () => undefined, ip: '127.0.0.1', ...o });
@@ -1274,6 +1280,52 @@ test('billing/payments — 본인 결제내역만, 내부 식별자·PG 원문�
     for (const need of ['id', 'status', 'approved_at', 'created_at']) {
       assert.ok(cols.includes(need), `GET /payments 응답에 ${need} 이 빠졌다 — 환불 버튼 판정이 불가능해진다`);
     }
+  });
+});
+
+// ── PG-MODE (2026-08-28): 결제 개방 판정을 서버가 소유한다 ────────────────────
+//   왜 계약인가: 종전엔 프론트 상수(PG_LAUNCH_BLOCKED)가 차단을 담당해 **키 교체와 코드 변경이
+//   따로 놀았다**. 이제 /config 의 mode 하나로 결정하는데, 이 판정이 틀리면 곧바로 금전 사고다
+//   (라이브 키가 들어가자마자 실결제가 열리거나, ck/sk 가 섞여 결제는 되고 확정이 실패한다).
+test('billing/config — mode 판정 5종 (none·test·live_locked·live·mismatch)', async () => {
+  const cases = [
+    { name: 'none', env: {}, mode: 'none', open: false },
+    { name: 'test', env: { clientKey: 'test_ck_x', tossKey: 'test_sk_x' }, mode: 'test', open: true },
+    { name: 'live_locked', env: { clientKey: 'live_ck_x', tossKey: 'live_sk_x' }, mode: 'live_locked', open: false },
+    { name: 'live', env: { clientKey: 'live_ck_x', tossKey: 'live_sk_x', liveEnabled: 'true' }, mode: 'live', open: true },
+    { name: 'mismatch(ck test + sk live)', env: { clientKey: 'test_ck_x', tossKey: 'live_sk_x' }, mode: 'mismatch', open: false },
+    { name: 'mismatch(ck live + sk test)', env: { clientKey: 'live_ck_x', tossKey: 'test_sk_x', liveEnabled: 'true' }, mode: 'mismatch', open: false },
+  ];
+  for (const c of cases) {
+    await _withBillingStub2({ payRow: null, casRows: [], ...c.env }, async () => {
+      const res = _mockRes();
+      _billingHandler('/config')(_req({}), res, () => {});
+      assert.equal(res.body.mode, c.mode, `${c.name}: mode 오판 (${res.body.mode})`);
+      assert.equal(res.body.checkoutEnabled, c.open, `${c.name}: checkoutEnabled 오판`);
+    });
+  }
+});
+
+test('billing/checkout — 라이브 키만 있고 플래그가 없으면(live_locked) 주문을 발급하지 않는다', async () => {
+  // 프론트 차단은 API 직접 호출로 우회된다 → 서버가 같은 판정으로 막아야 한다.
+  const blocked = [
+    { name: 'live_locked', env: { clientKey: 'live_ck_x', tossKey: 'live_sk_x' } },
+    { name: 'mismatch', env: { clientKey: 'test_ck_x', tossKey: 'live_sk_x' } },
+  ];
+  for (const c of blocked) {
+    await _withBillingStub2({ payRow: null, casRows: [], ...c.env }, async (seen) => {
+      const res = _mockRes();
+      await _billingHandler('/checkout')(_req({ body: { plan: 'pro' } }), res, () => {});
+      assert.equal(res.statusCode, 503, `${c.name}: 주문이 발급됐다`);
+      assert.equal(res.body.code, 'pg_not_ready');
+      assert.equal(seen.upserts.length, 0, `${c.name}: 차단 상태인데 DB 쓰기가 일어났다`);
+    });
+  }
+  // 반대로 test 모드에서는 게이트를 통과해야 한다(여기서 막히면 리허설 자체가 불가능해진다).
+  await _withBillingStub2({ payRow: null, casRows: [], clientKey: 'test_ck_x', tossKey: 'test_sk_x' }, async () => {
+    const res = _mockRes();
+    await _billingHandler('/checkout')(_req({ body: { plan: 'pro' } }), res, () => {});
+    assert.notEqual(res.body && res.body.code, 'pg_not_ready', 'test 모드인데 결제 게이트가 막았다');
   });
 });
 

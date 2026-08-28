@@ -111,6 +111,12 @@
     <a href="/">← 홈으로</a>
   </div>
 
+  <!-- PG-MODE-2026-08-28: 테스트 키(test_ck_*)로 붙였을 때만 표시 — 실제 청구가 없음을 분명히 한다 -->
+  <div id="pgTestBanner">
+    🧪 <b>테스트 결제 환경</b>입니다. 토스페이먼츠 <b>테스트 키</b>로 동작하며 <b>실제 청구가 발생하지 않습니다.</b>
+    카드번호도 실제 카드가 아닌 테스트 카드만 승인됩니다.
+  </div>
+
   <div id="statusBox"></div>
 
   <!-- 내 구독 상태 -->
@@ -187,24 +193,45 @@
 <!-- BIZ-INFO-2026-08-09: 사업자등록은 완료 — 이 블록은 토스페이먼츠 live_ck/live_sk 발급 후 제거 -->
 
 <style>
-  #plansList .btn:not([disabled]) { opacity: 0.55; cursor: not-allowed !important; }
-  #plansList .btn[onclick*="startCheckout"]::after {
+  /* PG-MODE-2026-08-28: 종전엔 이 규칙이 무조건 적용돼 키를 넣어도 버튼이 죽어 있었다.
+     이제 body.pg-blocked 스코프 — 서버 /config 의 mode 판정으로만 붙였다 뗀다. */
+  body.pg-blocked #plansList .btn:not([disabled]) { opacity: 0.55; cursor: not-allowed !important; }
+  body.pg-blocked #plansList .btn[onclick*="startCheckout"]::after {
     content: " (출시 준비 중)";
     font-size: 11px;
     opacity: 0.85;
   }
+  /* 테스트 결제 환경 배너 — 실제 청구가 없다는 것을 화면에서 분명히 한다 */
+  #pgTestBanner { display:none; background:#FFF4CC; border:2px solid #E9C46A; color:#7A5B00;
+    border-radius:10px; padding:10px 12px; font-size:12px; font-weight:700; line-height:1.6; margin-bottom:12px }
+  body.pg-test #pgTestBanner { display:block }
 </style>
 <script>
   // PG-LAUNCH-GATE-2026-08-20 (전수검증 코드 대조): 종전 window.startCheckout 오버라이드 스텁은 뒤에 오는
   //   `async function startCheckout` 선언이 window 프로퍼티를 덮어써 **무효**였다(Node vm 실증). 차단은
   //   startCheckout 본문 첫 줄의 PG_LAUNCH_BLOCKED 상수가 담당하고, 버튼 비활성은 renderPlans 직후에 적용한다.
   //   출시 시: PG_LAUNCH_BLOCKED=false 로 바꾸고 index.html 쪽 차단도 함께 해제(출시 체크리스트).
+  // PG-MODE-2026-08-28: 기본값은 **차단**이고(서버 판정을 받기 전까지), /billing/config 의
+  //   mode·checkoutEnabled 를 받은 뒤에만 푼다. 판정 규칙은 서버에만 있다 — 프론트에 사본을 만들면
+  //   한쪽만 고쳐지는 사고가 난다(취득세 tier 사본 2개 실사고와 같은 종류).
   window.PG_LAUNCH_BLOCKED = true;
+  window.PG_MODE = 'none';
+  document.body.classList.add('pg-blocked');   // 서버 판정 전 기본 차단
   window._applyLaunchBlock = function(){
     if (!window.PG_LAUNCH_BLOCKED) return;
     document.querySelectorAll('#plansList button.btn').forEach(function(b){
       if (/구독하기/.test(b.textContent)) { b.disabled = true; b.title = 'PG 가맹 심사 완료 후 활성화'; }
     });
+  };
+  // 서버 판정 반영 — init 이 config 를 받은 직후 호출한다(loadPlans 보다 먼저).
+  window._applyPgMode = function(cfg){
+    var mode = (cfg && cfg.mode) || 'none';
+    var open = !!(cfg && cfg.checkoutEnabled);
+    window.PG_MODE = mode;
+    window.PG_LAUNCH_BLOCKED = !open;
+    document.body.classList.toggle('pg-blocked', !open);
+    document.body.classList.toggle('pg-test', mode === 'test');
+    return mode;
   };
 </script>
 
@@ -279,12 +306,20 @@ async function init(){
     const cfg = await fetch('/api/billing/config').then(r => r.json());
     tossClientKey = cfg.tossClientKey;
     confirmEnabled = cfg.confirmEnabled;
+    // PG-MODE-2026-08-28: 서버 판정으로 차단을 풀거나 유지한다(loadPlans 보다 먼저 실행돼야 한다).
+    window._applyPgMode(cfg);
   } catch(e){ console.warn('[billing config] 실패', e); }
 
+  // PG-MODE-2026-08-28: 서버 mode 판정별 안내. 차단 사유를 사용자에게 정확히 말한다.
   if(!tossClientKey){
     setStatus('warn', '⚙ 프로 플랜 정식 출시 준비 중 — 지금은 플랜 안내만 볼 수 있어요.');
   } else if(!confirmEnabled){
     setStatus('warn', '⚙ 결제 승인 서버 설정 미완료 — 결제는 곧 활성화됩니다.');
+  } else if(window.PG_MODE === 'mismatch'){
+    // ck/sk 환경이 엇갈린 상태. 결제는 시작되는데 확정이 실패하는 최악의 조합이라 반드시 막는다.
+    setStatus('warn', '⚙ 결제 설정 점검 중 — 잠시 후 다시 시도해주세요.');
+  } else if(window.PG_MODE === 'live_locked'){
+    setStatus('warn', '⚙ 결제 오픈 준비 중 — 최종 점검이 끝나면 바로 열립니다.');
   }
 
   // 3) URL 쿼리 — 결제 성공/실패 콜백 처리
@@ -462,8 +497,10 @@ async function refundPayment(id, btn){
 
 // ── 결제 시작 ───────────────────────────────────────────
 async function startCheckout(planId){
-  if(window.PG_LAUNCH_BLOCKED){ // PG-LAUNCH-GATE-2026-08-20
-    alert('결제 시스템은 전자결제(PG) 가맹 심사 완료 후 활성화됩니다.\n\n출시 알림을 받으시려면 wlsdn5968@gmail.com 으로 연락해주세요.');
+  if(window.PG_LAUNCH_BLOCKED){ // PG-LAUNCH-GATE-2026-08-20 → PG-MODE-2026-08-28 (서버 판정)
+    alert(window.PG_MODE === 'live_locked'
+      ? '결제 오픈 최종 점검 중입니다. 곧 활성화됩니다.'
+      : '결제 시스템은 전자결제(PG) 가맹 심사 완료 후 활성화됩니다.\n\n출시 알림을 받으시려면 wlsdn5968@gmail.com 으로 연락해주세요.');
     return false;
   }
   if(!authSession){
