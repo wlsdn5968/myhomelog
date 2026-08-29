@@ -146,7 +146,14 @@ const DENSITY_CONCURRENCY = 5;
 //   그 이전 단지는 호출해봐야 빈 값이라 대상에서 뺀다(무의미한 API 호출 절약).
 const DENSITY_MIN_APR = '1995';
 
-async function backfillDensity(admin, { cap = DENSITY_CAP, budgetMs = DENSITY_BUDGET_MS } = {}) {
+// DENSITY-THROUGHPUT-2026-08-29: cron 기본값(cap 200·70s·동시성 5)은 **회차당 90행**이 한계였다(실측).
+//   남은 후보 5,053행 기준 그 속도면 56일이 걸린다. 수동 실행에서 예산·동시성을 올릴 수 있게 인자로 연다.
+//   ⚠ cron 기본값은 그대로 둔다 — 300s maxDuration 안에서 수집 단계 예산을 잠식하면 안 된다.
+//   ⚠ 이 경로는 Kakao 를 호출하지 않는다(캐시 행의 법정동코드로 총괄표제부만) — 지도 쿼터와 무관.
+//     건축HUB 한도는 1만/일이라 동시성을 올려도 하루 총량은 여유가 있다.
+async function backfillDensity(admin, {
+  cap = DENSITY_CAP, budgetMs = DENSITY_BUDGET_MS, concurrency = DENSITY_CONCURRENCY,
+} = {}) {
   const t0 = Date.now();
   const { data, error } = await admin.from('building_register')
     .select('apt_key, sigungu_cd, bjdong_cd, bun, ji, title')
@@ -181,8 +188,9 @@ async function backfillDensity(admin, { cap = DENSITY_CAP, budgetMs = DENSITY_BU
       if (d.vlRat != null) filled++; else empty++;
     }
   }
-  await Promise.all(Array.from({ length: DENSITY_CONCURRENCY }, () => worker()));
-  logger.info({ scanned: rows.length, filled, empty, failed, elapsedMs: Date.now() - t0 },
+  const _conc = Math.min(Math.max(parseInt(concurrency) || DENSITY_CONCURRENCY, 1), 20);
+  await Promise.all(Array.from({ length: _conc }, () => worker()));
+  logger.info({ scanned: rows.length, filled, empty, failed, concurrency: _conc, elapsedMs: Date.now() - t0 },
     `밀도 백필: 용적률 ${filled} 채움 / ${empty} 값없음 / ${failed} 실패`);
   return { scanned: rows.length, filled, empty, failed };
 }
@@ -192,7 +200,10 @@ async function backfillDensity(admin, { cap = DENSITY_CAP, budgetMs = DENSITY_BU
  * @param {number} [opts.cap=100]        — 하루 total 처리 상한 (Kakao 쿼터 보호)
  * @param {number} [opts.budgetMs=180000]
  */
-async function run({ cap = DEFAULT_TOTAL_CAP, budgetMs = 180000 } = {}) {
+async function run({
+  cap = DEFAULT_TOTAL_CAP, budgetMs = 180000,
+  densityCap, densityBudgetMs, densityConcurrency, skipCollect = false,
+} = {}) {
   const started = Date.now();
   const admin = adminClient();
   if (!admin) return { ok: false, error: 'Supabase 미설정', processed: 0 };
@@ -210,8 +221,19 @@ async function run({ cap = DEFAULT_TOTAL_CAP, budgetMs = 180000 } = {}) {
   //   ("후보 없음"인 날에 통째로 건너뛰어지면 5,918행이 영원히 안 채워진다).
   //   자체 시간 상한(60s)을 둬서 아래 수집 단계의 예산을 잠식하지 않는다.
   let dens = { scanned: 0, filled: 0, empty: 0, failed: 0 };
-  try { dens = await backfillDensity(admin); }
-  catch (e) { logger.warn({ err: e.message }, '밀도 백필 실패(무시) — 수집은 계속한다'); }
+  try {
+    dens = await backfillDensity(admin, {
+      ...(densityCap != null ? { cap: parseInt(densityCap) } : {}),
+      ...(densityBudgetMs != null ? { budgetMs: parseInt(densityBudgetMs) } : {}),
+      ...(densityConcurrency != null ? { concurrency: parseInt(densityConcurrency) } : {}),
+    });
+  } catch (e) { logger.warn({ err: e.message }, '밀도 백필 실패(무시) — 수집은 계속한다'); }
+
+  // 수동 실행에서 밀도만 돌리고 싶을 때(수집 단계는 Kakao 를 쓰고 180s 를 먹는다).
+  // ⚠ cron 은 이 값을 넘기지 않으므로 기존 동작 무변경.
+  if (skipCollect) {
+    return { ok: true, processed: 0, brScanned: wb.scanned, brWritten: wb.written, dens, skippedCollect: true };
+  }
 
   // 후보 조회 — Postgres 함수(거래 n>=2 & building_register 미보유). 미생성 시 graceful no-op.
   let candidates = [];

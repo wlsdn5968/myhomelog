@@ -87,10 +87,19 @@ router.post('/run-push-notify', async (req, res) => {
 //   없었다 — geocache/molit-ingest 와 같은 admin 트리거를 붙인다.
 //   ⚠ 이 잡은 Kakao 를 **호출하지 않는다**(캐시 행의 법정동코드로 총괄표제부만 조회) — 지도 쿼터 무관.
 //   멱등: 처리한 행에 `title._densAt` 마커가 남아 재실행해도 같은 행을 다시 부르지 않는다.
+//   파라미터(전부 선택): densityCap · densityBudgetMs · densityConcurrency · skipCollect=1
+//   예) ?skipCollect=1&densityCap=900&densityBudgetMs=250000&densityConcurrency=12
+//   (cron 은 아무것도 넘기지 않으므로 기본 동작 무변경. maxDuration 은 300s 다.)
 async function handleRunBrBackfill(req, res) {
   const started = Date.now();
   try {
-    const summary = await require('../jobs/buildingRegisterBackfill').run();
+    const q = { ...(req.query || {}), ...(req.body || {}) };
+    const summary = await require('../jobs/buildingRegisterBackfill').run({
+      ...(q.densityCap != null ? { densityCap: q.densityCap } : {}),
+      ...(q.densityBudgetMs != null ? { densityBudgetMs: q.densityBudgetMs } : {}),
+      ...(q.densityConcurrency != null ? { densityConcurrency: q.densityConcurrency } : {}),
+      ...(String(q.skipCollect || '') === '1' ? { skipCollect: true } : {}),
+    });
     logger.info({ durationMs: Date.now() - started, summary, adminId: req.user.id }, 'admin/run-building-register-backfill OK');
     res.json({ ok: true, summary });
   } catch (e) {
