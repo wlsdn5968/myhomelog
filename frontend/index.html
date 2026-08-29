@@ -2541,7 +2541,7 @@ html[data-theme="dark"] #view-news{
   <div class="biz-section" style="max-width:840px;margin:0 auto">
     <div style="font-size:12px;font-weight:800;color:var(--acc);letter-spacing:.04em">맞춤 보고서</div>
     <h3 style="margin:4px 0 4px">회원님 가구 맞춤 단지 분석 보고서</h3>
-    <p style="font-size:11.5px;color:var(--t3);margin:0 0 14px">필수 3가지만 입력하면 바로 생성돼요. <b>보고서 생성에는 무료 로그인이 필요해요 — 하루 1회 제공.</b> (비공개 · 정부 정책 최신 반영)</p>
+    <p id="reportGateNote" style="font-size:11.5px;color:var(--t3);margin:0 0 14px">필수 3가지만 입력하면 바로 생성돼요. <b>보고서 생성에는 무료 로그인이 필요해요 — 하루 1회 제공.</b> (비공개 · 정부 정책 최신 반영)</p>
 
     <!-- Sprint PPPPP (시안 컷1·2): 위저드 슬롯 — _wizPlace 가 사이드바의 #wizCore 를 여기로 이동 -->
     <div id="wizSlot"></div>
@@ -10272,7 +10272,19 @@ function _wizPlace(v){
     if(v==='report' && typeof _updateInputProgress==='function') _updateInputProgress();
   }catch(_){}
 }
+// REPORT-GATE-NOTE-2026-08-29: 보고서 안내 문구를 **로그인 상태에 맞게** 바꾼다.
+//   [왜] 조건을 미리 알리려고 "보고서 생성에는 무료 로그인이 필요해요" 를 넣었는데(9a89160),
+//   **이미 로그인한 사용자에게도 그대로 노출**돼 혼란을 준다(로그인 상태 E2E 실측에서 확인).
+function _syncReportGateNote(){
+  const el = document.getElementById('reportGateNote');
+  if (!el) return;
+  const _in = !!(window.MHL && window.MHL.auth && window.MHL.auth.user);
+  el.innerHTML = _in
+    ? '필수 3가지만 입력하면 바로 생성돼요. <b>하루 1회 무료로 생성할 수 있어요.</b> (비공개 · 정부 정책 최신 반영)'
+    : '필수 3가지만 입력하면 바로 생성돼요. <b>보고서 생성에는 무료 로그인이 필요해요 — 하루 1회 제공.</b> (비공개 · 정부 정책 최신 반영)';
+}
 function sv(v,btn){
+  if (v === 'report') { try { _syncReportGateNote(); } catch (_) {} }
   // Phase 35 #5 (2026-05-04): DM 모달 열린 상태에서 헤더 탭 (특히 주황 보고서) 클릭 시 모달 close
   //   기존 회귀: 모바일에서 헤더 보고서 버튼 클릭해도 DM 가린 채로 view 전환 → "동작 X" 보임
   //   변경: sv() 호출 시 항상 DM/ADM/SM/LM 등 모달 닫기 (탭 전환 = 새 컨텍스트 진입)
