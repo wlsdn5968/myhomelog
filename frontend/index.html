@@ -3035,6 +3035,12 @@ html[data-theme="dark"] #view-news{
   · <a href="/privacy.html" style="color:var(--acc);text-decoration:underline">개인정보</a>
   · <a href="/refund.html" style="color:var(--acc);text-decoration:underline">환불</a>
   · © 2026 내집로그
+  <!-- INTERNAL-LINK-2026-08-29 (Sprint NNNNNNN-33): 서버렌더 페이지(지역 122 · 단지 15,954)로 가는
+       **앱 안의 유일한 링크**다. 실측 결과 `href="/region"`·`href="/apt` 가 index.html 에 0건이었다 —
+       sitemap 에만 있는 고아 페이지는 크롤·평가가 느리고 사용자도 발견할 수 없다.
+       ⚠ `<a href>` 여야 한다. JS 이동(onclick)은 크롤러가 링크로 세지 않는다. -->
+  <br><a href="/region" style="color:var(--acc);text-decoration:underline">지역별 실거래 데이터</a>
+  · <a href="/briefing" style="color:var(--acc);text-decoration:underline">오늘의 브리핑</a>
   <br><span style="opacity:.85">공명랩 · 대표 우진우 · 사업자등록번호 381-08-03668 · 서울특별시 노원구 섬밭로 139 · <a href="mailto:wlsdn5968@gmail.com" style="color:var(--t3);text-decoration:underline">wlsdn5968@gmail.com</a></span>
 </footer>
 
