@@ -3602,7 +3602,15 @@ window.addEventListener('DOMContentLoaded',()=>{
       },
     };
   })();
-  try { window._attr.send('first_load'); } catch(_){}
+  /* ⚠ 세션당 1회만 보낸다. 실측(2026-08-29)에서 한 번의 진입에 first_load 가 **2건** 기록된 적이 있다
+       (1초 간격). 원인을 확정하지 못했지만 원인을 쫓는 것보다 **지표를 멱등하게** 만드는 게 맞다 —
+       중복 계수는 채널 비교를 그대로 왜곡한다. sessionStorage 라 탭을 닫으면 다시 1회 센다(=방문 1회). */
+  try {
+    if (!sessionStorage.getItem('mhl_attr_fl')) {
+      sessionStorage.setItem('mhl_attr_fl', '1');
+      window._attr.send('first_load');
+    }
+  } catch(_) { try { window._attr.send('first_load'); } catch(_e){} }
 
   // Phase 17 (2026-05-03): 세션 길이 측정 (visibility 변경 시점) — retention/이탈 분석
   //   사용자가 탭 떠나는 시점 measure → 평균 세션 길이 = 사용자 가치 측정
@@ -3629,7 +3637,23 @@ window.addEventListener('DOMContentLoaded',()=>{
   //   - 온보딩 모달 전 100ms 지연으로 동시 노출 차단
   try {
     const _seenLanding = (localStorage.getItem('mhl_landing_seen') === '1');
-    const _hasParams = !!(location.search || location.hash);
+    /* ⚠ UTM-LANDING-2026-08-29 (Sprint NNNNNNN-32, 라이브 실측으로 발견):
+         종전 `!!(location.search || location.hash)` 는 **쿼리가 하나라도 있으면** 랜딩을 건너뛴다.
+         그래서 마케팅 링크에 `?utm_source=threads` 를 붙이는 순간 **그 유입자는 랜딩을 영영 못 본다**
+         — 유입 측정을 켜면 퍼널 첫 화면이 꺼지는 정반대 효과다(실측: utm 붙여 접속 시 view-landing display:none).
+       이 조건의 원래 의도는 주석대로 "즐겨찾기·공유링크 = 즉시 사용 의도" 를 보호하는 것이다.
+       utm_* / fbclid / gclid 는 **광고 태그이지 사용 의도가 아니다** → 판정에서 제외한다.
+       (남는 파라미터가 하나라도 있으면 종전대로 랜딩을 건너뛴다.) */
+    const _hasParams = (function(){
+      try {
+        if (location.hash) return true;
+        const p = new URLSearchParams(location.search);
+        for (const k of [...p.keys()]) {
+          if (/^utm_/i.test(k) || k === 'fbclid' || k === 'gclid' || k === 'igshid') p.delete(k);
+        }
+        return [...p.keys()].length > 0;
+      } catch(_) { return !!(location.search || location.hash); }
+    })();
     if(!_seenLanding && !_hasParams && !restored && !sp.get('apt')) {
       setTimeout(() => { if (typeof _showLanding === 'function') _showLanding(); }, 100);
     } else {

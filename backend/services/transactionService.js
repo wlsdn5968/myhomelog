@@ -701,4 +701,64 @@ const LAWD_CODE_TO_NAME = Object.fromEntries(
   Object.entries(LAWD_CODES).map(([name, code]) => [code, _stripCityPrefix(name)])
 );
 
-module.exports = { getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES };
+/**
+ * APT-PAGE-2026-08-29 (Sprint NNNNNNN-32): **apt_seq 로 정확 조회**.
+ *
+ * [왜 새로 만드는가] 기존 getTransactionsByApt 는 **단지명 유사도 매칭**이다(양방향 contains·LCS).
+ *   서버렌더 단지 페이지는 URL 이 곧 단지라 이름 매칭이 필요 없고, 오히려 위험하다 —
+ *   '현대'·'벽산' 같은 흔한 이름이 다른 단지를 끌어오면 공개 페이지에 남의 거래가 실린다.
+ *   apt_seq 는 MOLIT 이 부여한 식별자이고 전 22,473건이 `^\d{5}-\d+$` 형식임을 실측했다.
+ *
+ * ⚠ PostgREST 는 1000행에서 조용히 잘린다(레포 6회 재발). 단지 최다 거래가 477건(실측)이라
+ *   1페이지로 충분하지만, 그 사실이 바뀔 수 있으므로 **명시 limit + 잘림 여부 확인**을 남긴다.
+ */
+async function getTransactionsByAptSeq(aptSeq, monthsBack = 24) {
+  const admin = dbClient();
+  if (!admin) return null;
+  const seq = String(aptSeq || '').trim();
+  if (!/^\d{5}-\d+$/.test(seq)) return null;
+  const ck = `txseq:${seq}:${monthsBack}`;
+  const hit = cache.get(ck);
+  if (hit !== undefined) return hit;
+  try {
+    const since = new Date();
+    since.setMonth(since.getMonth() - (monthsBack - 1));
+    since.setDate(1);
+    const LIM = 1000;
+    const { data, error } = await admin
+      .from('molit_transactions')
+      .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq')
+      .eq('apt_seq', seq)
+      .gte('deal_date', since.toISOString().slice(0, 10))
+      .order('deal_date', { ascending: false })
+      .order('id', { ascending: false })
+      .limit(LIM);
+    if (error) throw error;
+    const rows = data || [];
+    if (rows.length >= LIM) {
+      logger.warn({ aptSeq: seq, limit: LIM }, 'apt_seq 거래가 조회 상한에 닿음 — 페이징 필요');
+    }
+    if (!rows.length) { cache.set(ck, null, 600); return null; }
+    const mapped = rows.map(r => ({
+      aptName: r.apt_name,
+      sigungu: r.sigungu || '',
+      umdNm: r.umd_nm || '',
+      excluUseAr: Number(r.exclu_use_ar) || 0,
+      buildYear: r.build_year || 0,
+      floor: r.floor || 0,
+      dealYear: r.deal_year,
+      dealMonth: r.deal_month,
+      dealDay: r.deal_day,
+      dealAmount: Number(r.deal_amount) || 0,
+      lawdCd: r.lawd_cd || '',
+      aptSeq: r.apt_seq || seq,
+    }));
+    cache.set(ck, mapped, 21600); // 6h — daily ingest 주기 기준(getRegionRecentTransactions 와 동일)
+    return mapped;
+  } catch (e) {
+    logger.warn({ err: e.message, aptSeq: seq }, 'apt_seq 거래 조회 실패');
+    return null;
+  }
+}
+
+module.exports = { getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES };

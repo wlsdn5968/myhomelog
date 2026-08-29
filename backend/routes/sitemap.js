@@ -80,6 +80,46 @@ router.get('/', async (req, res) => {
     logger.warn({ err: e.message }, 'sitemap: briefing 날짜 조회 예외 — 정적 URL 만 반환');
   }
 
+  // APT-PAGE-2026-08-29 (Sprint NNNNNNN-32): 단지 페이지.
+  //   [문턱 — 실측] 거래 3건 이상 + 최근 1년 = 15,954개(전체 22,473 중). 1~2건짜리는 통계가 아니라
+  //   잡음이고(TRUST 게이트와 같은 원칙), 얇은 페이지를 대량 색인시키면 사이트 전체 평가에 해롭다.
+  //   ⚠ PostgREST 는 1000행에서 조용히 잘린다(레포 6회 재발) — **range 페이징**으로만 넘을 수 있다
+  //     (선례: transactionService.getRegionRecentTransactions · geocacheBackfill).
+  //     2차 정렬키(apt_seq)로 페이지 경계 중복·누락을 막는다.
+  try {
+    const admin = getSupabaseAdmin();
+    if (admin) {
+      const since = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
+      const PAGE = 1000;
+      const MAX_PAGES = 40; // 40,000개 상한 — sitemap 1파일 한도(50,000) 안. 넘으면 경고하고 분할 검토.
+      let added = 0;
+      for (let p = 0; p < MAX_PAGES; p++) {
+        const { data, error } = await admin
+          .from('molit_apt_index')
+          .select('apt_seq, recent_deal_date')
+          .gte('deal_count', 3)
+          .gte('recent_deal_date', since)
+          .order('recent_deal_date', { ascending: false })
+          .order('apt_seq', { ascending: false })
+          .range(p * PAGE, p * PAGE + PAGE - 1);
+        if (error) throw error;
+        const rows = data || [];
+        for (const r of rows) {
+          const seq = String(r.apt_seq || '');
+          if (!/^\d{5}-\d+$/.test(seq)) continue; // 형식 밖은 sitemap 오염 방지 차원에서 제외
+          const lm = String(r.recent_deal_date || '').slice(0, 10);
+          entries.push(urlTag({ loc: `/apt/${seq}`, lastmod: /^\d{4}-\d{2}-\d{2}$/.test(lm) ? lm : today, priority: '0.6' }));
+          added++;
+        }
+        if (rows.length < PAGE) break;
+        if (p === MAX_PAGES - 1) logger.warn({ added }, 'sitemap: 단지 URL 이 페이지 상한에 닿음 — sitemap index 분할 검토');
+      }
+    }
+  } catch (e) {
+    // 실패해도 나머지 URL 은 그대로 나간다(fail-open) — sitemap 이 500 이면 크롤러가 재수집을 미룬다.
+    logger.warn({ err: e.message }, 'sitemap: 단지 URL 생성 실패 — 나머지는 정상 반환');
+  }
+
   const xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
     + '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
     + entries.join('\n') + '\n'
