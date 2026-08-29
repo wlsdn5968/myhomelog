@@ -218,6 +218,16 @@ window.MHL.auth = window.MHL.auth || {
               if (event === 'SIGNED_IN' && window.va) {
                 const provider = session?.user?.app_metadata?.provider || 'unknown';
                 window.va('event', { name: 'login_success', data: { provider } });
+                /* ATTRIBUTION-2026-08-29: 유입 채널별 가입 전환을 세려면 이 시점이 유일한 지점이다.
+                   ⚠ SIGNED_IN 은 재로그인 때도 뜬다 — **이 브라우저에서 처음 로그인한 경우만** 센다.
+                     (서버가 "신규 가입"을 알려주지 않으므로 이게 클라이언트에서 가능한 최선의 근사다.
+                      정확한 신규 가입 수는 auth.users 로 따로 세면 된다 — 여기선 **채널 비교**가 목적.) */
+                try {
+                  if (!localStorage.getItem('mhl_attr_signed')) {
+                    localStorage.setItem('mhl_attr_signed', '1');
+                    if (window._attr) window._attr.send('signup');
+                  }
+                } catch(_){}
               } else if (event === 'SIGNED_OUT' && window.va) {
                 window.va('event', { name: 'logout' });
               }
@@ -3553,6 +3563,46 @@ window.addEventListener('DOMContentLoaded',()=>{
       } });
     }
   } catch(_){}
+
+  /* ATTRIBUTION-2026-08-29 (Sprint NNNNNNN-31): 유입 채널을 **우리 DB 에도** 남긴다.
+     [왜] Vercel Web Analytics 는 이 플랜에서 **조회 API 가 404** 다(2026-08-29 확인) — 계측은
+       되는데 읽을 수가 없다. 게다가 프론트엔 `utm_` 를 다루는 코드가 0건이었다.
+       그래서 스레드·인스타 자동화가 돌아도 어느 채널이 먹히는지 판단할 근거가 없었다.
+     [무엇을 안 보내는가] user_id·IP·UA — 아무 개인 식별자도 보내지 않는다. 채널별 카운트만 센다.
+     [세션 유지] UTM 은 첫 진입 URL 에만 붙는다. 이후 이벤트(가입·검색)에도 귀속되도록
+       sessionStorage 에 담아 둔다(탭을 닫으면 사라짐 — 영구 추적이 아니다). */
+  window._attr = (function(){
+    var KEY = 'mhl_attr_v1';
+    function read(){ try { return JSON.parse(sessionStorage.getItem(KEY) || 'null'); } catch(_){ return null; } }
+    var a = read();
+    if (!a) {
+      var q = new URLSearchParams(location.search);
+      var host = '';
+      try { host = document.referrer ? new URL(document.referrer).hostname : ''; } catch(_){ host = ''; }
+      a = {
+        utmSource: q.get('utm_source') || null,
+        utmMedium: q.get('utm_medium') || null,
+        utmCampaign: q.get('utm_campaign') || null,
+        referrerHost: host || null,
+        landingPath: (location.pathname || '/').slice(0, 160),
+      };
+      try { sessionStorage.setItem(KEY, JSON.stringify(a)); } catch(_){}
+    }
+    return {
+      data: a,
+      // 실패는 조용히 — 계측이 사용자 경험을 막으면 안 된다.
+      send: function(event){
+        try {
+          fetch(`${CFG.api}/attribution`, {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(Object.assign({ event: event }, a)),
+            keepalive: true,
+          }).catch(function(){});
+        } catch(_){}
+      },
+    };
+  })();
+  try { window._attr.send('first_load'); } catch(_){}
 
   // Phase 17 (2026-05-03): 세션 길이 측정 (visibility 변경 시점) — retention/이탈 분석
   //   사용자가 탭 떠나는 시점 measure → 평균 세션 길이 = 사용자 가치 측정

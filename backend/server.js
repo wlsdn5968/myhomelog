@@ -280,6 +280,9 @@ app.use('/api/search', dataLimiter, searchRouter);
 app.use('/api/billing', dataLimiter, billingRouter);
 // AI 답변 사용자 피드백 (Phase 3 — 정합성 측정 인프라)
 app.use('/api/feedback', dataLimiter, require('./routes/feedback'));
+// ATTRIBUTION-2026-08-29 (Sprint NNNNNNN-31): 유입 채널 자체 기록(개인 식별자 미수집).
+//   Vercel Web Analytics 조회 API 가 이 플랜에서 404 라 채널 판단 근거가 없었다.
+app.use('/api/attribution', dataLimiter, require('./routes/attribution'));
 // 임장노트 클라우드 동기화 (Phase 4 — 기존 localStorage → DB sync)
 app.use('/api/field-notes', dataLimiter, require('./routes/fieldNotes'));
 // Phase 5 (2026-04-26): 1Page 컨설팅 보고서 자동 생성 — 핵심 USP
@@ -299,6 +302,10 @@ app.use('/api/admin', dataLimiter, require('./routes/admin'));
 app.use('/share', shareRouter);
 // BRIEFING-ARCHIVE-2026-08-19 (Sprint NNNNNNN-6): 날짜별 서버렌더 브리핑(SEO·공유 실체) — /share 와 같은 계열.
 app.use('/briefing', require('./routes/briefing'));
+// REGION-PAGE-2026-08-29 (Sprint NNNNNNN-31): 서버렌더 지역 페이지 118개 — /briefing 과 같은 계열.
+//   실측 배경: sitemap 이 16개 URL 뿐이었다(단지·지역 페이지 0개). SEO 유입과 SNS 링크 도착지를 동시에 만든다.
+//   ⚠ vercel.json 의 routes 에 `/region(.*)` 를 넣지 않으면 정적 catch-all 로 빠져 index.html 이 나간다.
+app.use('/region', require('./routes/regionPage'));
 // SITEMAP-DYNAMIC-2026-08-19 (Sprint NNNNNNN-7B): /sitemap.xml 동적 생성 — briefing 아카이브 반영(정적 파일 대체).
 app.use('/sitemap.xml', require('./routes/sitemap'));
 

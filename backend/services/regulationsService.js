@@ -298,11 +298,59 @@ async function getChangeLog() {
   }
 }
 
+/**
+ * REG-BY-LAWD-2026-08-29 (Sprint NNNNNNN-31): **lawd_cd 로 규제 여부를 판정**한다.
+ *
+ * [왜 별도 함수인가] getRegulatedKeywords 는 **사용자가 입력한 자유 문자열**("분당", "평촌")을
+ *   맞추는 용도다 — 그 경로엔 lawd_cd 가 없어서 문자열이 유일한 수단이다.
+ *   반면 지역 페이지·대시보드는 lawd_cd 를 이미 들고 있다. 거기서까지 문자열로 판정하면
+ *   '중구'·'서구' 같은 동명 구를 구별할 수 없다(레포에서 6회 재발한 사고).
+ *   ⚠ 두 판정이 갈리지 않도록 **계약 테스트가 전 122코드에서 일치를 강제**한다.
+ *
+ * [파생] 스냅샷의 regulatedRegions 를 LAWD_CODES 로 정확히 되짚는다.
+ *   경기 항목은 "성남시 분당구" 형태라 공백을 제거하면 LAWD_CODES 키("성남시분당구")와 맞는다.
+ *   맞는 키가 없으면 **조용히 버리지 않고 경고**한다 — 새 규제지역이 표에 없다는 신호다.
+ *
+ * @returns {{ codes: Set<string>, seoulRegulated: boolean, unmatched: string[] }}
+ */
+async function getRegulatedLawdCodes() {
+  const cacheKey = 'reg:lawdcodes:v1';
+  const hit = cache.get(cacheKey);
+  if (hit) return hit;
+
+  const { LAWD_CODES } = require('./transactionService');
+  const { data } = await getSnapshot('housing_loan_2025');
+  const reg = data?.regulatedRegions || {};
+  const seoulRegulated = !!reg.seoul;
+
+  const codes = new Set();
+  // 서울: 스냅샷이 "전 지역"이라고만 적는다 → lawd_cd 접두 '11' 로 확정(이름 매칭 불필요).
+  if (seoulRegulated) {
+    for (const [, code] of Object.entries(LAWD_CODES)) if (String(code).startsWith('11')) codes.add(String(code));
+  }
+  const unmatched = [];
+  for (const raw of (Array.isArray(reg.gyeonggi) ? reg.gyeonggi : [])) {
+    const key = String(raw || '').replace(/\s+/g, '').trim();
+    if (!key) continue;
+    const code = LAWD_CODES[key];
+    if (code) codes.add(String(code));
+    else unmatched.push(String(raw));
+  }
+  if (unmatched.length) {
+    logger.warn({ unmatched }, '규제지역 lawd_cd 매핑 실패 — LAWD_CODES 에 없는 지역이 규제 목록에 있다');
+  }
+
+  const out = { codes, seoulRegulated, unmatched };
+  cache.set(cacheKey, out, 600); // getRegulatedKeywords 와 동일 TTL
+  return out;
+}
+
 module.exports = {
   getSnapshot,
   getChangeLog,
   FALLBACK,
   getRegulatedKeywords,
+  getRegulatedLawdCodes,
   isRegulatedRegion,
   SEOUL_GU_KEYWORDS,
 };

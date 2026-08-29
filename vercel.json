@@ -12,6 +12,7 @@
     { "src": "/api/(.*)", "dest": "/api/index.js" },
     { "src": "/share(.*)", "dest": "/api/index.js" },
     { "src": "/briefing(.*)", "dest": "/api/index.js" },
+    { "src": "/region(.*)", "dest": "/api/index.js" },
     { "src": "/billing(/.*)?", "dest": "/frontend/billing.html" },
     { "src": "/privacy(\\.html)?", "dest": "/frontend/privacy.html" },
     { "src": "/terms(\\.html)?", "dest": "/frontend/terms.html" },

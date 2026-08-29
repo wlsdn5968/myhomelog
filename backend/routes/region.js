@@ -38,21 +38,24 @@ function resolveRegion({ lawdCd, name }) {
   return null;
 }
 
-router.get('/dashboard', async (req, res) => {
-  const region = resolveRegion({ lawdCd: req.query.lawdCd, name: req.query.name });
-  if (!region) {
-    return res.status(400).json({ error: '지역을 찾을 수 없어요. lawdCd(권장) 또는 정확한 지역명을 지정해주세요.' });
-  }
+/**
+ * REGION-PAGE-2026-08-29 (Sprint NNNNNNN-31): 대시보드 조립을 함수로 분리했다.
+ *   서버렌더 지역 페이지(/region/:lawdCd)가 **같은 함수**를 쓴다 — 사본 금지
+ *   (취득세 tier 사본 2개가 3주간 갈렸던 이력).
+ * @param {{lawdCd:string,name:string}} region  resolveRegion 의 결과
+ * @returns {object} payload — 캐시 읽기/쓰기까지 이 함수가 담당한다
+ */
+async function buildDashboard(region) {
   const ck = `region:dash:v3:${region.lawdCd}`; // v3 — 미분양 sido 수정 반영(구 캐시의 unsold:null 재사용 방지)
   // CACHE-2026-07-25 (Sprint TTTTTT-3, 실측): Vercel 서버리스는 요청마다 다른 인스턴스일 수 있어
   //   node-cache(인메모리)만으로는 재요청도 콜드였다 — 병렬화 후 재측정에서 캐시 히트가 4.1s 로
   //   콜드와 동일. Sprint AAAAAA 가 추천 경로에 쓴 것과 같은 **Redis 2차 캐시**를 적용해
   //   인스턴스 간 공유. Redis 미설정 시 rget/rset 이 no-op → 기존 동작으로 자연 폴백.
   const memHit = cache.get(ck);
-  if (memHit !== undefined && memHit) return res.json(memHit);
+  if (memHit !== undefined && memHit) return memHit;
   try {
     const rHit = await require('../services/redisCache').rget(ck);
-    if (rHit) { cache.set(ck, rHit, TTL); return res.json(rHit); }
+    if (rHit) { cache.set(ck, rHit, TTL); return rHit; }
   } catch (_) { /* Redis 실패는 무시하고 계산 경로로 */ }
 
   const started = Date.now();
@@ -115,11 +118,20 @@ router.get('/dashboard', async (req, res) => {
     })(),
     // ⑤ 규제 상태 — 스냅샷 기준(서울은 lawd_cd 11 prefix 로 확정, 그 외는 스냅샷 키워드)
     (async () => {
+      // REG-BY-LAWD-2026-08-29 (Sprint NNNNNNN-31): 문자열 `region.name.includes(kw)` 판정을 폐기하고
+      //   **lawd_cd 집합**으로 바꿨다. 이 이름은 LAWD_CODE_TO_NAME 이라 시도 접두가 떨어져 있어
+      //   '중구'(6곳)·'서구'(4곳)가 전부 같은 문자열이다 — 지금 키워드로는 우연히 충돌이 없지만
+      //   (전수 시뮬레이션 2026-08-29: 15/15 정확, 오탐 0) 규제 목록에 '중구'가 한 번만 들어와도 깨진다.
+      //   이 값은 이제 공개 지역 페이지 118개에 그대로 실린다 — 우연에 기대면 안 된다.
       try {
-        const { getRegulatedKeywords } = require('../services/regulationsService');
-        const { keywords, seoulRegulated } = await getRegulatedKeywords();
-        if (seoulRegulated && region.lawdCd.startsWith('11')) return { status: '규제지역', basis: '서울 전 지역' };
-        for (const kw of (keywords || [])) if (region.name.includes(kw)) return { status: '규제지역', basis: kw };
+        const { getRegulatedLawdCodes } = require('../services/regulationsService');
+        const { codes, seoulRegulated } = await getRegulatedLawdCodes();
+        if (codes.has(String(region.lawdCd))) {
+          return {
+            status: '규제지역',
+            basis: (seoulRegulated && String(region.lawdCd).startsWith('11')) ? '서울 전 지역' : region.name,
+          };
+        }
         return { status: '확인 필요', basis: null }; // 단정하지 않음
       } catch (_) { return null; }
     })(),
@@ -143,7 +155,15 @@ router.get('/dashboard', async (req, res) => {
 
   cache.set(ck, payload, TTL);
   require('../services/redisCache').rset(ck, payload, TTL).catch(() => {}); // 인스턴스 간 공유(fire-and-forget)
-  res.json(payload);
+  return payload;
+}
+
+router.get('/dashboard', async (req, res) => {
+  const region = resolveRegion({ lawdCd: req.query.lawdCd, name: req.query.name });
+  if (!region) {
+    return res.status(400).json({ error: '지역을 찾을 수 없어요. lawdCd(권장) 또는 정확한 지역명을 지정해주세요.' });
+  }
+  res.json(await buildDashboard(region));
 });
 
 // GWCHECK-REMOVED-2026-08-08 (Sprint AAAAAAA-5→6): 임시 진단 라우트 `_gwcheck` 삭제(1c7890a 에서 추가).
@@ -158,3 +178,6 @@ router.get('/dashboard', async (req, res) => {
 //     표마다 분류 단계가 달라 파라미터 조합은 표별 실호출로만 확정된다.
 
 module.exports = router;
+// 서버렌더 지역 페이지가 재사용한다(사본 금지).
+module.exports.buildDashboard = buildDashboard;
+module.exports.resolveRegion = resolveRegion;

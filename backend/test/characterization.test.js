@@ -3388,3 +3388,53 @@ test('지역 표시명: 표에 없는 코드는 원본 sigungu 로 폴백한다(
   assert.equal(regionLabel(null, '어딘가구'), '어딘가구');
   assert.equal(regionLabel('99999', ''), '');
 });
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * REG-BY-LAWD-2026-08-29 (Sprint NNNNNNN-31): 규제 판정을 **lawd_cd 로** 바꿨다.
+ *
+ * [왜 계약 테스트인가] 이제 판정이 두 벌 존재한다:
+ *   ① getRegulatedKeywords — 사용자가 입력한 자유 문자열("분당","평촌")용. lawd_cd 가 없는 경로.
+ *   ② getRegulatedLawdCodes — 지역 페이지·대시보드용. lawd_cd 를 이미 아는 경로.
+ *   둘이 갈리면 같은 지역이 화면마다 다르게 표시된다(취득세 tier 사본 2개가 3주간 갈렸던 그 사고).
+ *   그래서 **전 122코드에서 두 판정이 일치**함을 강제한다. 케이스를 손으로 고르지 않는다.
+ *
+ * DB 없이 돈다 — getSnapshot 이 FALLBACK 으로 떨어지고, 그 FALLBACK 이 현행 규제 목록이다.
+ * ───────────────────────────────────────────────────────────────────────────── */
+const _reg = require('../services/regulationsService');
+const { LAWD_CODES: _RLC, LAWD_CODE_TO_NAME: _RN } = require('../services/transactionService');
+
+test('규제 판정: 규제 목록의 모든 지역이 LAWD_CODES 로 해석된다 (미해석 0)', async () => {
+  const { codes, seoulRegulated, unmatched } = await _reg.getRegulatedLawdCodes();
+  assert.deepEqual(unmatched, [], `규제 목록에 LAWD_CODES 로 못 찾는 지역이 있다: ${unmatched.join(', ')}`);
+  assert.equal(seoulRegulated, true, '스냅샷상 서울 전 지역 규제가 꺼져 있다');
+  // 서울 25개 구가 전부 들어가야 한다 — 이름이 아니라 코드 접두로.
+  const seoul = Object.values(_RLC).map(String).filter(c => c.startsWith('11'));
+  for (const c of seoul) assert.ok(codes.has(c), `서울 ${c}(${_RN[c]}) 가 규제 집합에 없다`);
+  assert.ok(codes.size > seoul.length, '경기 규제지역이 하나도 포함되지 않았다');
+});
+
+test('규제 판정: lawd_cd 판정과 키워드 판정이 전 122코드에서 일치한다', async () => {
+  const { codes, seoulRegulated } = await _reg.getRegulatedLawdCodes();
+  const { keywords } = await _reg.getRegulatedKeywords();
+  const diffs = [];
+  for (const code of [...new Set(Object.values(_RLC).map(String))]) {
+    const byCode = codes.has(code);
+    // 종전 동작 재현: 서울은 접두, 그 외는 표시명 부분일치
+    const name = _RN[code] || '';
+    const byKeyword = (seoulRegulated && code.startsWith('11'))
+      || (keywords || []).some(kw => name.includes(kw));
+    if (byCode !== byKeyword) diffs.push(`${code}(${name}) code=${byCode} keyword=${byKeyword}`);
+  }
+  assert.deepEqual(diffs, [], `두 규제 판정이 갈린다:\n  ${diffs.join('\n  ')}`);
+});
+
+test('규제 판정: 동명 구가 코드로 구별된다 (문자열로는 원리적으로 불가)', async () => {
+  const { codes } = await _reg.getRegulatedLawdCodes();
+  // '중구' 는 6곳인데 규제는 서울만이다. 표시명은 전부 '중구' 라 문자열로는 못 가른다.
+  assert.equal(_RN['11140'], _RN['26110'], '전제 확인: 서울 중구와 부산 중구의 표시명이 같아야 한다');
+  assert.ok(codes.has('11140'), '서울 중구가 규제지역이어야 한다');
+  assert.equal(codes.has('26110'), false, '부산 중구가 규제지역으로 잘못 잡혔다');
+  // '강서구' 도 서울/부산 두 곳
+  assert.ok(codes.has('11500'), '서울 강서구가 규제지역이어야 한다');
+  assert.equal(codes.has('26440'), false, '부산 강서구가 규제지역으로 잘못 잡혔다');
+});

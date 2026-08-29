@@ -207,6 +207,25 @@ async function runIngestRunsRetention(admin) {
   return out;
 }
 
+// ATTRIBUTION-RETENTION-2026-08-29 (Sprint NNNNNNN-31): 유입 집계는 개인정보가 아니지만(식별자 미저장)
+//   무료 DB 500MB 중 이미 60% 를 쓰고 있어 무한 증식을 두면 안 된다. 채널 비교엔 반년이면 충분하다.
+const ATTRIBUTION_RETENTION_DAYS = 180;
+async function runAttributionRetention(admin) {
+  const out = { pruned: 0, error: null };
+  try {
+    const cut = new Date(Date.now() - ATTRIBUTION_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+    const { count, error } = await admin.from('visit_attribution')
+      .delete({ count: 'exact' })
+      .lt('created_at', cut);
+    if (error) throw error;
+    out.pruned = count ?? 0;
+    logger.info({ ...out, retentionDays: ATTRIBUTION_RETENTION_DAYS }, 'retention: visit_attribution 정리');
+  } catch (e) {
+    out.error = e.message;
+    logger.warn({ err: e.message }, 'retention: visit_attribution 정리 실패 (계속 진행)');
+  }
+  return out;
+}
 async function run() {
   const started = Date.now();
   const admin = adminClient();
@@ -216,6 +235,7 @@ async function run() {
   const searchHistResult = await runSearchHistoryRetention(admin);
   const chatResult = await runChatRetention(admin);
   const ingestRunsResult = await runIngestRunsRetention(admin);
+  const attributionResult = await runAttributionRetention(admin);
 
   const summary = {
     durationMs: Date.now() - started,
@@ -223,12 +243,13 @@ async function run() {
     searchHistory: searchHistResult,
     chat: chatResult,
     ingestRuns: ingestRunsResult,
+    attribution: attributionResult,
   };
   logger.info(summary, 'retention job 완료');
   return summary;
 }
 
-module.exports = { run, hardDeleteUser, runSoftDeleteExpiry, runSearchHistoryRetention, runChatRetention, runIngestRunsRetention };
+module.exports = { run, hardDeleteUser, runAttributionRetention, runSoftDeleteExpiry, runSearchHistoryRetention, runChatRetention, runIngestRunsRetention };
 
 // CLI 실행 지원
 if (require.main === module) {

@@ -79,6 +79,47 @@ router.post('/run-push-notify', async (req, res) => {
   }
 });
 
+// ATTRIBUTION-READ-2026-08-29 (Sprint NNNNNNN-31): 유입 채널 집계 조회(운영자 전용).
+//   ?days=30 (기본 30, 최대 365). 채널별 이벤트 수만 센다 — 개인 식별자는 애초에 저장하지 않는다.
+router.get('/attribution', async (req, res) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days) || 30, 1), 365);
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+    const { getSupabaseAdmin } = require('../db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return res.status(503).json({ error: 'DB 미설정' });
+    // ⚠ PostgREST 는 1000행에서 조용히 잘린다(레포 6회 재발) — 명시 limit + 잘림 여부를 응답에 밝힌다.
+    const LIM = 1000;
+    const { data, error } = await admin
+      .from('visit_attribution')
+      .select('event, utm_source, utm_medium, utm_campaign, referrer_host')
+      .gte('created_at', since)
+      .order('created_at', { ascending: false })
+      .limit(LIM);
+    if (error) throw error;
+    const rows = data || [];
+    const bump = (m, k) => { m[k] = (m[k] || 0) + 1; };
+    const byEvent = {}, bySource = {}, byReferrer = {}, byCampaign = {};
+    for (const r of rows) {
+      bump(byEvent, r.event || '(none)');
+      bump(bySource, r.utm_source || '(직접·미표기)');
+      bump(byReferrer, r.referrer_host || '(direct)');
+      if (r.utm_campaign) bump(byCampaign, r.utm_campaign);
+    }
+    const sort = o => Object.entries(o).sort((a, b) => b[1] - a[1]);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      days, since, sampled: rows.length,
+      truncated: rows.length >= LIM, // true 면 이 창의 일부만 본 것이다 — 기간을 줄여서 다시 봐라
+      byEvent: sort(byEvent), bySource: sort(bySource), byReferrer: sort(byReferrer), byCampaign: sort(byCampaign),
+    });
+  } catch (e) {
+    logger.error({ err: e.message }, 'admin/attribution 실패');
+    require('../utils/captureError').captureRouteError(e, 'admin');
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // CONTENT-DRAFT-2026-08-29 (Sprint NNNNNNN-30, 홍보 제안서 P2): 스레드 데이터 드랍 초안.
 //   운영자의 업로드 자동화가 **무엇이든**(자체 스크립트·n8n·Meta API) 가져갈 수 있게 JSON 으로 낸다.
 //   AI 호출 0 · 새 외부 수집 0 — 이미 계산해 둔 숫자를 관측된 실제 게시 형식에 끼워 넣을 뿐이다.

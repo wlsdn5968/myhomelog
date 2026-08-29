@@ -1,16 +1,37 @@
 # 내집로그 (MyHomeLog)
 
-> AI 기반 아파트 매수 전략 컨설팅 서비스  
-> 도메인: **myhomelog.vercel.app** (또는 커스텀 도메인)
+> 국토교통부 실거래가 기반 **부동산 정보 정리 도구**  
+> 도메인: **myhomelog.vercel.app**
+
+> ⚠ **이 서비스는 매수·매도를 추천하지 않고, 미래 가격을 예측하지 않습니다.**  
+> 투자자문·유사투자자문 서비스가 아닙니다. 공식 통계 수치를 정리해 보여줄 뿐이며,
+> 의사결정과 그 책임은 이용자 본인에게 있습니다.
+
+<!--
+  README-POSITIONING-2026-08-29 (Sprint NNNNNNN-31): 종전 문구는
+    "AI 기반 아파트 매수 전략 컨설팅 서비스" / "AI 단지 추천" 이었고 고지가 없었다.
+  ⚠ 그런데 앱에서는 '컨설팅' 표현을 **의도적으로 제거**했다(커밋 9a891602 — 바로 아래 고지가
+    "투자자문이 아님"인데 위에서 컨설팅이라고 말하는 모순 때문). 이 저장소는 public 이라
+    검색에 그대로 노출되는데 **앱과 정반대의 브랜드 진술**을 하고 있었다.
+    "매수 전략 컨설팅"은 유사투자자문 리스크 문구이기도 하다.
+  → 절대 룰(CLAUDE.md ①)과 앱 문구에 맞춰 정정. 기능 설명은 그대로 두되 표현만 사실에 맞춘다.
+-->
 
 ---
 
 ## 서비스 소개
 
-- 2025.10.15 규제 기준 실시간 LTV·DSR 대출 계산
-- 국토부 실거래가 API 기반 AI 단지 추천
+- 2025.10.15 규제 기준 **LTV·DSR 대출 한도 계산** (공식 고시 기준값 정리)
+- 국토부 실거래가 API 기반 **조건 부합 단지 찾기** (입력한 조건에 맞는 단지를 걸러 보여줍니다 — 추천이 아닙니다)
 - Leaflet + OpenStreetMap 지도 (위성: Esri World Imagery) + 카카오 지오코딩으로 위치 표시
-- 내집스캔 스타일 리포트 (종합의견 / 실거래가 / 리스크 / 맞춤특약)
+- 1page 리포트 (실거래 요약 / 비용 / 리스크 체크 / 특약 초안)
+- 지역별 공식 통계 정리 (거래량 · 가격지수 · 미분양 · 인구 순이동 · 규제 상태)
+
+### 데이터 출처
+
+국토교통부 실거래가 · 한국부동산원 R-ONE · KOSIS(미분양·인구이동) · 한국은행 ECOS ·
+한국주택금융공사(정책자금) · KAPT 공동주택 정보 · 금융위원회 고시.
+값이 없는 항목은 **추정하지 않고 비워둡니다.**
 
 ---
 
@@ -139,14 +160,14 @@ railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 | POST | /api/chat | optional | AI 채팅 (PII 차단 + filterAdviceOutput) |
 | POST | /api/clause | optional | 맞춤 특약 + 리스크 통합 (Phase B-3) |
 | POST | /api/clause/risk | optional | 리스크 시나리오 (legacy) |
-| POST | /api/report/generate | optional (비로그인 0/일 차단) | 1Page 컨설팅 보고서. server.js mount = `optionalAuth + chatLimiter + dailyLimit{limit:0,scope:'report',loggedInBonus:1}` — 비로그인은 0/일 → 사실상 로그인 필수, 로그인 시 dailyLimit 모듈이 plan별 한도 적용 |
+| POST | /api/report/generate | optional (비로그인 0/일 차단) | 1Page 정리 보고서. server.js mount = `optionalAuth + chatLimiter + dailyLimit{limit:0,scope:'report',loggedInBonus:1}` — 비로그인은 0/일 → 사실상 로그인 필수, 로그인 시 dailyLimit 모듈이 plan별 한도 적용 |
 | POST | /api/feedback/ai | optional | 답변 👍/👎 |
 
 ### 부동산 데이터
 | Method | Path | Auth | 설명 |
 |--------|------|------|------|
 | GET | /api/properties/info | optional | 단지 메타 |
-| POST | /api/properties/recommend | optional | AI 단지 추천 |
+| POST | /api/properties/recommend | optional | 조건 부합 단지 찾기 (추천 아님 — 입력 조건 필터링) |
 | GET | /api/properties/nearby | optional | 주변 단지 |
 | POST | /api/properties/transit | optional | 교통 분석 |
 | GET | /api/transactions(?...) | — | 실거래가 조회 |
@@ -195,6 +216,6 @@ railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 
 | 서비스 | 타겟 | 차별화 |
 |--------|------|--------|
-| 호갱노노 / 네이버부동산 | 정보 탐색 | 내집로그: **의사결정 지원** |
-| 내집스캔 | 전세 임차인 | 내집로그: **매수자 투자 전략** |
-| KB부동산 | 시세 조회 | 내집로그: **AI 맞춤 전략 + 특약** |
+| 호갱노노 / 네이버부동산 | 정보 탐색 | 내집로그: **판단 근거 정리(추천 아님)** |
+| 내집스캔 | 전세 임차인 | 내집로그: **매수 검토자용 데이터 정리** |
+| KB부동산 | 시세 조회 | 내집로그: **가구 조건별 비용 정리 + 특약 초안** |

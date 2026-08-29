@@ -40,6 +40,21 @@ router.get('/', async (req, res) => {
   const today = kstDayString();
   const entries = STATIC_URLS.map(u => urlTag(u.loc === '/' ? { ...u, lastmod: today } : u));
 
+  // REGION-PAGE-2026-08-29 (Sprint NNNNNNN-31): 지역 페이지 118개 + 허브 1개.
+  //   이 sitemap 이 16개 URL 뿐이던 것이 유입 0 의 직접 원인이었다(실측).
+  //   목록은 LAWD_CODES 에서 파생한다 — DB 조회가 없어 실패 경로가 없다(항상 나간다).
+  try {
+    const { LAWD_CODES } = require('../services/transactionService');
+    const codes = [...new Set(Object.values(LAWD_CODES).map(String))].sort();
+    entries.push(urlTag({ loc: '/region', lastmod: today, changefreq: 'weekly', priority: '0.8' }));
+    for (const c of codes) {
+      if (!/^\d{5}$/.test(c)) continue;
+      entries.push(urlTag({ loc: `/region/${c}`, lastmod: today, changefreq: 'daily', priority: '0.7' }));
+    }
+  } catch (e) {
+    logger.warn({ err: e.message }, 'sitemap: 지역 URL 생성 실패 — 나머지는 정상 반환');
+  }
+
   try {
     const admin = getSupabaseAdmin();
     if (admin) {
