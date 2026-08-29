@@ -1636,7 +1636,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button class="htab" onclick="sv('news',this)" title="오늘의 데이터 브리핑"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h12v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2"/><path d="M7.5 9h5"/><path d="M7.5 13h5"/><path d="M7.5 16.5h3"/></svg>브리핑</button>
     <button class="htab on" onclick="sv('map',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>지도</button>
     <button class="htab" onclick="sv('list',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>목록</button>
-    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 컨설팅 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서</button>
+    <button class="htab htab-feature" onclick="sv('report',this)" title="회원님 가구 맞춤 1page 맞춤 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서</button>
     <div class="htab-dd" id="htabToolDd">
       <button class="htab-tool" id="htabToolBtn" onclick="toggleToolMenu(event)" aria-haspopup="true" aria-expanded="false" title="특약 · 청약 · 대출계산 · 규제 요약"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>도구 <span class="ddcaret">▾</span></button>
       <div class="htab-menu" id="htabToolMenu">
@@ -2534,7 +2534,7 @@ html[data-theme="dark"] #view-news{
   <div class="biz-section" style="max-width:840px;margin:0 auto">
     <div style="font-size:12px;font-weight:800;color:var(--acc);letter-spacing:.04em">맞춤 보고서</div>
     <h3 style="margin:4px 0 4px">회원님 가구 맞춤 단지 분석 보고서</h3>
-    <p style="font-size:11.5px;color:var(--t3);margin:0 0 14px">필수 3가지만 입력하면 바로 생성돼요 — 이 화면에서 끝납니다. (비공개 · 정부 정책 최신 반영)</p>
+    <p style="font-size:11.5px;color:var(--t3);margin:0 0 14px">필수 3가지만 입력하면 바로 생성돼요. <b>보고서 생성에는 무료 로그인이 필요해요 — 하루 1회 제공.</b> (비공개 · 정부 정책 최신 반영)</p>
 
     <!-- Sprint PPPPP (시안 컷1·2): 위저드 슬롯 — _wizPlace 가 사이드바의 #wizCore 를 여기로 이동 -->
     <div id="wizSlot"></div>
@@ -2569,7 +2569,7 @@ html[data-theme="dark"] #view-news{
       <div style="font-size:13px;font-weight:800;color:var(--accent-700);margin-bottom:8px">🚀 30초 가이드 — 처음이세요?</div>
       <div style="font-size:12px;color:var(--t1);line-height:1.8">
         1. 헤더 <b>보고서</b> 탭 클릭 → 화면의 <b>3단계(주택 보유 · 자금 · 희망 지역)</b> 입력<br>
-        2. <b>📊 맞춤 보고서 생성하기</b> 클릭 → AI가 회원님 가구 상황에 맞는 <b>1page 컨설팅 보고서</b> 자동 생성<br>
+        2. <b>📊 맞춤 보고서 생성하기</b> 클릭 → AI가 회원님 가구 상황에 맞는 <b>1page 맞춤 보고서</b> 자동 생성<br>
         3. 보고서 안 단지명을 헤더 검색창에 입력 → 실거래가·평형·시세 추이 상세 확인<br>
         4. 마음에 드는 단지 → ⭐ 관심 추가 → 임장노트 작성
       </div>
@@ -2601,10 +2601,10 @@ html[data-theme="dark"] #view-news{
 
     <!-- Phase 5: 핵심 가치 = 1page 보고서 (AI 특약 자리에 강조 디자인 이동) -->
     <details style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:2px solid var(--accent-500);border-radius:var(--radius-md);padding:13px 16px;margin-bottom:10px" open>
-      <summary style="cursor:pointer;font-size:13px;font-weight:800;color:var(--accent-700);list-style:none">📊 1page 컨설팅 보고서 — 이 서비스의 핵심</summary>
+      <summary style="cursor:pointer;font-size:13px;font-weight:800;color:var(--accent-700);list-style:none">📊 1page 맞춤 보고서 — 이 서비스의 핵심</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         사용자 자금·자녀·거주기간·우선순위 → <b>AI가 컨설턴트 톤으로 1page 보고서 자동 생성</b><br>
-        포함: 회원님 핵심 방향 3줄 · 정부 정책 환경 · 매수 체크리스트 · 조건 부합 단지 7개 (단지별 컨설팅 코멘트) · 갈아타기 시나리오 · 매수 TIP<br><br>
+        포함: 회원님 핵심 방향 3줄 · 정부 정책 환경 · 매수 체크리스트 · 조건 부합 단지 7개 (단지별 분석 코멘트) · 갈아타기 시나리오 · 매수 TIP<br><br>
         <b>차별화</b>: 시세 검색에서 끝나지 않고, 내 자금·가구 상황 기반 1page 보고서까지<br>
         <b>비용</b>: 지금은 <b>무료</b>로 받아볼 수 있어요<br>
         <b>다운로드</b>: PDF로 가족·중개사와 공유 가능<br><br>
@@ -2937,7 +2937,10 @@ html[data-theme="dark"] #view-news{
 
   <section class="lv-bottom-cta">
     <h2 class="lv-bottom-cta-h">지금 바로 시작하기</h2>
-    <p class="lv-bottom-cta-d">30초면 충분합니다 · 회원가입 없이 무료 분석</p>
+    <!-- TRUTH-CTA-2026-08-29: 종전 "회원가입 없이 무료 분석" 은 **사실이 아니었다** — 보고서는
+         비로그인 0회(dailyLimit limit:0, loggedInBonus:1)라 3가지 입력을 마친 뒤에야 로그인 벽을 만났다.
+         진짜 강점(검색·단지상세가 가입 없이 열린다)을 앞에 두고, 보고서 조건을 정확히 적는다. -->
+    <p class="lv-bottom-cta-d">검색·단지분석은 가입 없이 무료 · 보고서는 무료 가입 후 하루 1회</p>
     <button class="lv-cta-primary" onclick="_landingCTA('bottom')"><svg class="lv-cta-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>맞춤 보고서 만들기 <span aria-hidden="true">→</span></button>
   </section>
 
@@ -2955,7 +2958,7 @@ html[data-theme="dark"] #view-news{
     <button class="bnav-item" onclick="sv('news',this)" data-view="news" aria-label="오늘의 브리핑"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v14a2 2 0 0 0 2 2H6a2 2 0 0 1-2-2Z"/><path d="M17 7h2a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2"/><path d="M8 7h5"/><path d="M8 11h5"/><path d="M8 15h3"/></svg></div>브리핑</button>
     <button class="bnav-item on" onclick="sv('map',this)" data-view="map" aria-label="지도 보기"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg></div>지도</button>
     <button class="bnav-item" onclick="sv('list',this)" data-view="list" aria-label="단지 목록"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg></div>목록</button>
-    <button class="bnav-item bnav-feature" onclick="sv('report',this)" data-view="report" title="회원님 가구 맞춤 1page 컨설팅 보고서" aria-label="맞춤 보고서"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg></div>보고서</button>
+    <button class="bnav-item bnav-feature" onclick="sv('report',this)" data-view="report" title="회원님 가구 맞춤 1page 맞춤 보고서" aria-label="맞춤 보고서"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg></div>보고서</button>
     <button class="bnav-item" onclick="sv('calc',this)" data-view="calc" aria-label="대출 한도 계산"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg></div>대출</button>
   </div>
 </nav>
@@ -3198,7 +3201,9 @@ html[data-theme="dark"] #view-news{
       <button class="smx" onclick="closeLogin()" aria-label="로그인 창 닫기" title="닫기">✕</button>
     </div>
     <div class="smbody">
-      <div class="sm-hint" style="margin-bottom:12px">
+      <!-- LOGIN-REASON-2026-08-29: 맥락별 문구. 보고서에서 막혀 온 사용자에게 "북마크 동기화"를
+           제안하면 지금 원하는 것과 어긋난다(E2E 실측에서 확인). openLogin(reason) 이 교체한다. -->
+      <div class="sm-hint" id="lmHint" style="margin-bottom:12px">
         로그인하면 북마크·메모가 모든 기기에서 동기화됩니다. <b>저장된 데이터는 본인만 조회 가능</b>합니다 (Postgres RLS).
       </div>
 
@@ -3710,9 +3715,19 @@ function openSettings(){document.getElementById('SM').classList.add('open');}
 function closeSM(){document.getElementById('SM').classList.remove('open');}
 
 // ── AUTH (로그인/세션) ───────────────────────────────────
-function openLogin(){
+// LOGIN-REASON-2026-08-29: reason 에 따라 안내 문구를 바꾼다.
+//   [왜] E2E 실측 — 보고서에서 로그인 벽을 만난 사용자에게 모달이 "북마크·메모 동기화"를 제안하고
+//   있었다. 지금 원하는 것(보고서)과 어긋나 전환이 떨어진다. 기본 문구는 그대로 두고 맥락만 얹는다.
+const _LM_HINTS = {
+  report: '로그인하면 <b>맞춤 보고서를 하루 1회 무료</b>로 받을 수 있어요. 저장된 데이터는 본인만 조회 가능합니다 (Postgres RLS).',
+  search: '로그인하면 <b>검색 횟수가 늘어나고</b> 관심단지를 저장할 수 있어요. 저장된 데이터는 본인만 조회 가능합니다 (Postgres RLS).',
+};
+const _LM_HINT_DEFAULT = '로그인하면 북마크·메모가 모든 기기에서 동기화됩니다. <b>저장된 데이터는 본인만 조회 가능</b>합니다 (Postgres RLS).';
+function openLogin(reason){
   document.getElementById('LM').classList.add('open');
   document.getElementById('lmStatus').textContent='';
+  const _h = document.getElementById('lmHint');
+  if (_h) _h.innerHTML = _LM_HINTS[reason] || _LM_HINT_DEFAULT;
   _restoreConsentCheckboxes();
 }
 function closeLogin(){ document.getElementById('LM').classList.remove('open'); }
@@ -4339,7 +4354,7 @@ window.addEventListener('DOMContentLoaded', ()=>{
 // 약관 모달
 function openTerms(){document.getElementById('TM').classList.add('open');}
 
-// Phase 5 (2026-04-26): 1Page 컨설팅 보고서 — 핵심 USP
+// Phase 5 (2026-04-26): 1Page 맞춤 보고서 — 핵심 USP
 async function generateReport(_isRetry) {
   const btn = document.getElementById('reportGenBtn');
   const sp = document.getElementById('reportGenSp');
@@ -4469,7 +4484,7 @@ async function generateReport(_isRetry) {
         titleMsg = '로그인 세션이 만료된 것 같아요.';
         extraHtml = `<div style="font-size:11px;color:var(--t2);margin-top:8px">로그아웃 후 다시 로그인하면 정상 이용할 수 있어요.</div><button onclick="logout&&logout()" style="margin-top:10px;padding:9px 18px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:var(--radius-base);font-size:12px;font-weight:700;cursor:pointer">↩ 다시 로그인</button>`;
       } else if (e.canBoostByLogin) {
-        extraHtml = `<button onclick="openLogin&&openLogin()" style="margin-top:14px;padding:9px 18px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:var(--radius-base);font-size:12px;font-weight:700;cursor:pointer">🔓 로그인하고 +${e.bonusOnLogin || 1}회 추가로 받기</button>`;
+        extraHtml = `<button onclick="openLogin&&openLogin('report')" style="margin-top:14px;padding:9px 18px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:var(--radius-base);font-size:12px;font-weight:700;cursor:pointer">🔓 로그인하고 +${e.bonusOnLogin || 1}회 추가로 받기</button>`;
       } else {
         // MOB-AUDIT-2026-05-03: 로그인 사용자 한도 도달 시 Pro 출시 알림 mailto 노출 — 가입 funnel 활성
         const _proMailto = e.plan === 'free' ? `<br><a href="mailto:wlsdn5968@gmail.com?subject=내집로그%20Pro%20출시%20알림%20신청&body=Pro%20플랜%20출시%20시%20알림%20부탁드립니다." style="color:var(--acc);text-decoration:underline" onclick="try{window.va&&window.va('event',{name:'pro_mailto_click',data:{from:'report_limit'}})}catch(_){}">📧 Pro 출시 알림 신청</a>` : '';
@@ -4496,7 +4511,7 @@ function _renderReport(data) {
   // AI-DEGRADE-2026-07-11 (Sprint HHHH): AI 실패 시 서버가 데이터 전용 보고서 + aiUnavailable 로 응답 —
   // 원인을 숨기지 않고 정직하게 안내 (기존: 전체 실패 + "잠시 후 재시도"만 노출).
   const _aiBanner = data.aiUnavailable
-    ? `<div style="background:var(--ambL);border:1px solid var(--amb);border-radius:var(--radius-base);padding:9px 12px;margin-bottom:10px;font-size:11.5px;line-height:1.6"><b>ℹ AI 컨설팅 코멘트 일시 중단</b> — 아래 보고서는 국토부 실거래·KAPT 세대수·주변시설 등 <b>객관 데이터만으로</b> 정리했어요.${data.aiUnavailableReason === 'budget' ? ' (이번 달 AI 한도 도달 — 다음 달 1일 리셋)' : ' AI 복구 후 다시 생성하면 컨설팅 코멘트가 포함돼요.'}</div>`
+    ? `<div style="background:var(--ambL);border:1px solid var(--amb);border-radius:var(--radius-base);padding:9px 12px;margin-bottom:10px;font-size:11.5px;line-height:1.6"><b>ℹ AI 분석 코멘트 일시 중단</b> — 아래 보고서는 국토부 실거래·KAPT 세대수·주변시설 등 <b>객관 데이터만으로</b> 정리했어요.${data.aiUnavailableReason === 'budget' ? ' (이번 달 AI 한도 도달 — 다음 달 1일 리셋)' : ' AI 복구 후 다시 생성하면 분석 코멘트가 포함돼요.'}</div>`
     : '';
 
   // DATA-BASIS-2026-07-13 (Sprint CCCCC): 검증 기준 박스 — 데이터 기준·규제 버전·출처를 보고서 상단에 명시(신뢰 시그널).
@@ -4750,9 +4765,9 @@ function _downloadReportPDF() {
   ].filter(Boolean).join(' · ');
 
   w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
-    <title>내집로그 1Page 컨설팅 보고서</title>
+    <title>내집로그 1Page 맞춤 보고서</title>
     <style>
-      @page { margin: 16mm 14mm; @bottom-center { content: "내집로그 1Page 컨설팅 · 매수·매도 추천 X · 미래 예측 X · " counter(page) "/" counter(pages); font-size: 8.5pt; color: #98938A; } }
+      @page { margin: 16mm 14mm; @bottom-center { content: "내집로그 1Page 맞춤 · 매수·매도 추천 X · 미래 예측 X · " counter(page) "/" counter(pages); font-size: 8.5pt; color: #98938A; } }
       * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       body { font-family: 'Malgun Gothic','맑은 고딕',sans-serif; padding: 0; margin: 0; font-size: 10.5pt; line-height: 1.55; color: #18160F; }
       h1 { font-size: 17pt; font-weight: 700; margin: 0 0 4px; color: #173A63; letter-spacing: -0.3px; }
@@ -4800,9 +4815,9 @@ function _downloadReportPDF() {
     </style>
   </head><body>
     <button class="noprint" onclick="window.print()">🖨 PDF 저장</button>
-    <h1>📊 내집로그 1Page 컨설팅 보고서</h1>
+    <h1>📊 내집로그 1Page 맞춤 보고서</h1>
     <div class="meta">생성 ${esc(ts)}${inputLine ? ` · <b>${inputLine}</b>` : ''}</div>
-    ${data.aiUnavailable ? `<div style="background:#FFF6E3;border:1px solid #E8C08A;border-radius:var(--radius-base);padding:9px 12px;margin-bottom:12px;font-size:10.5pt;color:#7A4F0E"><b>ℹ AI 컨설팅 코멘트 일시 중단</b> — 본 보고서는 국토부 실거래·KAPT 세대수·주변시설 등 객관 데이터만으로 구성됐습니다.</div>` : ''}
+    ${data.aiUnavailable ? `<div style="background:#FFF6E3;border:1px solid #E8C08A;border-radius:var(--radius-base);padding:9px 12px;margin-bottom:12px;font-size:10.5pt;color:#7A4F0E"><b>ℹ AI 분석 코멘트 일시 중단</b> — 본 보고서는 국토부 실거래·KAPT 세대수·주변시설 등 객관 데이터만으로 구성됐습니다.</div>` : ''}
 
     <div class="sec">
       <div class="sec-title">🎯 핵심 방향 (회원님 가구 상황 기반)</div>
@@ -11760,7 +11775,7 @@ async function sM(){
         addMsg('ai', aiMsg);
         // STAB #72: 인라인 로그인 CTA 추가 — header 의 로그인 버튼은 작아서 attention 약함
         // P2-4: position:relative + z-index 100000 추가 (drawer 9990 보다 위)
-        const _loginCtaHtml = `<button onclick="openLogin&&openLogin()" style="margin-top:8px;padding:9px 18px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:var(--radius-base);font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(42,109,244,0.25);position:relative;z-index:100000">🔓 로그인하고 +${j.bonusOnLogin}회 받기</button>`;
+        const _loginCtaHtml = `<button onclick="openLogin&&openLogin('search')" style="margin-top:8px;padding:9px 18px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:var(--radius-base);font-size:12.5px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(42,109,244,0.25);position:relative;z-index:100000">🔓 로그인하고 +${j.bonusOnLogin}회 받기</button>`;
         const _lastMsg = document.getElementById('cMsgs')?.lastChild?.querySelector('.bbl');
         if (_lastMsg) _lastMsg.insertAdjacentHTML('beforeend', '<br>' + _loginCtaHtml);
         // 헤더 로그인 버튼 강조 (기존)

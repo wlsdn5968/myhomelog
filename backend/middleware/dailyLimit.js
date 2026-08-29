@@ -171,7 +171,7 @@ function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
       // Phase B-5: scope 'report' 추가
       // Sprint NNNNNNN: 챗은 룰베이스 전환(CHAT-ZERO-COST)으로 AI 가 아니다 → '도우미 채팅'.
       const scopeName = scope === 'chat' ? '도우미 채팅'
-                       : scope === 'report' ? '컨설팅 보고서'
+                       : scope === 'report' ? '맞춤 보고서'
                        : '단지 검색';
       return res.status(429).json({
         error: 'DAILY_LIMIT_EXCEEDED',

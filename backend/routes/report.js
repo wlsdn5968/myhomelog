@@ -505,7 +505,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
     `아래 ${apartments.length}개 단지는 국토교통부 실거래 기준 조건 부합 단지 정리예요 — 의사결정 책임은 본인에게 있어요.`,
     fc.rate
       ? `현재 금리 기준: ${fc.rate} — 대출 한도·월 상환액은 상단 대출계산 탭에서 이 금리로 계산돼요.`
-      : 'AI 컨설팅 코멘트는 현재 일시 중단 — 실거래·세대수·주차·규제 등 객관 데이터만 표시해요.',
+      : 'AI 분석 코멘트는 현재 일시 중단 — 실거래·세대수·주차·규제 등 객관 데이터만 표시해요.',
   ];
   if (fc.unsold) coreMessages.push(`${fc.unsold} — 수치 나열이며 시장 예측이 아니에요.`);
   if (fc.txTrend) coreMessages.push(`${fc.txTrend} — 수치 나열이며 시장 예측이 아니에요.`);
