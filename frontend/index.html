@@ -2349,6 +2349,12 @@ html[data-theme="dark"] #view-news{
 .brf-top{display:flex;align-items:center;gap:12px;width:100%;padding:10px 4px;background:none;border:none;border-bottom:1px solid var(--brf-line);cursor:pointer;font-family:inherit;text-align:left;color:var(--brf-tx)}
 .brf-top:hover{background:var(--brf-raise)}
 .brf-top:last-of-type{border-bottom:none}
+/* PRICE-RECORDS-2026-08-29: 최고/최저 2열 — 좁은 폭에선 1열로 접는다(모바일 가로 스크롤 금지) */
+.brf-rec2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:640px){.brf-rec2{grid-template-columns:1fr}}
+.brf-rec{display:flex;align-items:center;gap:10px;width:100%;padding:9px 4px;background:none;border:none;border-bottom:1px solid var(--brf-line);cursor:pointer;font-family:inherit;text-align:left;color:var(--brf-tx)}
+.brf-rec:hover{background:var(--brf-raise)}
+.brf-rec:last-of-type{border-bottom:none}
 @media(prefers-reduced-motion:reduce){.brf-tape{animation:none}.brf-ticker{overflow-x:auto}}
 </style>
   <div class="biz-section">
@@ -2386,6 +2392,10 @@ html[data-theme="dark"] #view-news{
       </div>
     </div>
     <div id="briefWidgets" style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin:14px 0 14px"></div>
+    <!-- PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최근 실거래 최고·최저 경신.
+         전폭 카드 — 좌우 2열(최고/최저)이라 briefWidgets 그리드에 넣으면 안 된다.
+         값이 없으면 display:none 유지(미확인 원칙 — 0건이라고 단정하지 않는다). -->
+    <div id="brfRecords" class="brf-card" style="margin:0 0 14px;display:none"></div>
     <div id="brfRegLog" class="brf-card" style="margin:0 0 14px;display:none"></div>
     <div style="font-size:12px;font-weight:700;color:var(--t1);margin:2px 0 8px">📰 그 밖의 소식 <span style="font-weight:500;font-size:10px;color:var(--t3)">언론사 원문 링크 · 단순 인덱싱 (저작권은 각 언론사)</span></div>
     <div class="chips" id="news-cat" style="margin-bottom:14px">
@@ -5070,11 +5080,13 @@ async function renderBriefing(){
     const now=new Date();
     if(dEl){ const yo='일월화수목금토'[now.getDay()];
       dEl.textContent=`${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}(${yo})`; }
-    const [h,subs,pop,reglog]=await Promise.all([
+    const [h,subs,pop,reglog,recs]=await Promise.all([
       healthJson(6000),   // PERF-HEALTH-DEDUP-2026-08-28
       fetch(`${CFG.api}/subscription?sido=&days=30`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(`${CFG.api}/search/popular`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(`${CFG.api}/regulations/log`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
+      // PRICE-RECORDS-2026-08-29: 최고·최저 경신. 서버가 하루 1회만 계산해 캐시하므로 여기선 캐시 읽기다.
+      fetch(`${CFG.api}/transactions/records`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
     ]);
     // BRF-DESIGN-2026-08-19 (Sprint NNNNNNN-8): 시안 코드화 — 티커=무한 테이프(라벨/값/출처 구조).
     //   전 항목 실데이터, 값 없으면 항목째 생략. 델타(전월 대비)는 원자료에 이전 값이 없어 표시하지 않는다(추정 금지).
@@ -5129,6 +5141,44 @@ async function renderBriefing(){
         ${popHtml}
         <div style="font-size:9px;color:var(--brf-tx3);margin-top:8px">최근 60일 국토부 실거래 많은 순 · 60일 평균가 · 매물 광고 아님</div>
       </div>`;
+    // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최근 실거래 최고·최저 경신 카드.
+    //   [왜 양쪽을 같이 싣는가] 최고가만 보여주면 카드 자체가 매수 신호로 읽힌다 — 절대 룰 ①.
+    //     최저가 경신도 같은 비중으로 싣고, 색으로 좋고 나쁨을 암시하지 않는다(둘 다 같은 토큰).
+    //   [왜 '역대'가 아닌가] 우리 적재는 sinceDate(2025-05-01 실측)부터다. 그 앞은 우리에게 없다.
+    //     캡션에 그 날짜를 그대로 박아 "역대 신고가"로 읽히지 않게 한다.
+    //   [왜 직전 거래 건수를 노출하는가] 표본 3건짜리 경신과 35건짜리 경신은 무게가 다르다.
+    //     점수로 뭉개지 않고 원자료를 그대로 보여 사용자가 판단하게 한다.
+    try{
+      const rc=document.getElementById('brfRecords');
+      if(rc&&recs&&(Number(recs.highCount)||Number(recs.lowCount))){
+        const eok=v=>Number.isFinite(Number(v))?(Number(v)/10000).toFixed(2)+'억':'';
+        const row=(it,kind)=>`<button class="brf-rec" onclick='goSearchResult(${_jsonAttr({aptName:it.aptName,sigungu:it.sigungu,umdNm:it.umdNm,lawdCd:it.lawdCd,buildYear:it.buildYear,recentDealDate:it.dealDate})})'>
+          <span style="flex:1;min-width:0">
+            <span class="brf-ell" style="display:block;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(it.aptName||'')}</span>
+            <span style="display:block;margin-top:2px;font-size:10.5px;color:var(--brf-tx3)">${_escHtml(it.region||'')}${it.excluUseAr?' · 전용 '+_escHtml(String(it.excluUseAr))+'㎡':''}${it.floor!=null?' · '+Number(it.floor)+'층':''}</span>
+          </span>
+          <span style="text-align:right;flex-shrink:0">
+            <span style="display:block;font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums">${eok(it.dealAmount)}</span>
+            <span style="display:block;margin-top:2px;font-size:10px;color:var(--brf-tx3);font-variant-numeric:tabular-nums">직전 ${kind==='high'?'최고':'최저'} ${eok(kind==='high'?it.prevMax:it.prevMin)} · ${Number(it.priorCount)||0}건</span>
+          </span>
+        </button>`;
+        const col=(title,arr,kind,cnt)=>`<div>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+            <b style="font-size:12px;font-weight:800;color:var(--brf-tx)">${title}</b>
+            <span style="font-size:11px;font-weight:700;color:var(--brf-tx2);font-variant-numeric:tabular-nums">${Number(cnt)||0}건</span>
+          </div>
+          ${arr&&arr.length?arr.map(it=>row(it,kind)).join(''):'<div style="font-size:10.5px;color:var(--brf-tx3);padding:8px 0">해당 거래 없음</div>'}
+        </div>`;
+        rc.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+            <b class="brf-h2">최근 ${Number(recs.windowDays)||7}일 최고·최저 경신</b>
+            <span style="font-size:10px;color:var(--brf-tx3)">같은 단지·같은 전용면적 기준 · ${_escHtml(String(recs.sinceDate||'').replace(/-/g,'.'))} 이후 적재분 안에서</span>
+          </div>
+          <div style="font-size:11.5px;color:var(--brf-tx2);margin-bottom:10px">비교 가능 거래 ${(Number(recs.comparedCount)||0).toLocaleString()}건${recs.latestDeal?` · 최신 거래일 ${_escHtml(String(recs.latestDeal).replace(/-/g,'.'))}`:''}</div>
+          <div class="brf-rec2">${col('최고가 경신',recs.high,'high',recs.highCount)}${col('최저가 경신',recs.low,'low',recs.lowCount)}</div>
+          <div style="font-size:9px;color:var(--brf-tx3);margin-top:10px;line-height:1.6">국토부 실거래 · 직전 거래 ${Number(recs.minPrior)||3}건 이상인 평형만 비교 · 층·향·수리 상태는 보정하지 않습니다 · 매수·매도 추천이 아니며 미래 가격을 예측하지 않습니다</div>`;
+        rc.style.display='block';
+      }
+    }catch(_e){}
     // 집킴이 코너 — 실제 동기화 기준일만 문장에 사용(추정 금지)
     // REG-LOG-2026-08-19 (Sprint NNNNNNN-12): 규제·금융 변동 로그 카드 — regulations_snapshot 버전 체인
     //   (운영자 검증 후에만 행이 추가되는 구조 = 전 행이 검증된 이벤트). valid_from=시행일. 감시 cron 실행

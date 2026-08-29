@@ -3344,3 +3344,47 @@ test('facilityQuality — 건축물대장 해소분은 모집단 안에서만 �
   assert.match(body, /warn:[^;]*hhUnknown >= 50/, 'warn 이 실질 미확인이 아니라 옛 지표를 본다');
   assert.equal(/warn:[^;]*emp >= 50/.test(body), false, 'warn 에 옛 emp 임계가 남아 있다');
 });
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 지역 표시명은 **lawd_cd 에서만** 나온다.
+ *
+ * [왜 테스트로 묶는가] 동명 구를 문자열로 판정하다 6회 재발했다(서울 중구 LTV 오표기,
+ *   부산 강서구 오판 등). molit 의 sigungu 는 광역이 없어 '남구'(부산·대구·울산)·'중구'(6곳)·
+ *   '서구'(4곳)·'동구'(5곳)·'북구'(3곳)·'강서구'(2곳)가 **원리적으로 구별되지 않는다**.
+ *   그래서 표시명은 LAWD_CODES 에서 파생하고, 그 파생이 전 코드에서 충돌 없는지를 여기서 고정한다.
+ *   케이스를 손으로 고르면 빠뜨린다(중구 실사고) — **전수**로 돈다.
+ * ───────────────────────────────────────────────────────────────────────────── */
+const { regionLabel } = require('../services/priceRecordsService');
+const { LAWD_CODES: _LC } = require('../services/transactionService');
+
+test('지역 표시명: LAWD_CODES 전 코드가 매핑되고 표시명이 서로 충돌하지 않는다', () => {
+  const seen = new Map();
+  for (const [name, code] of Object.entries(_LC)) {
+    const label = regionLabel(code, '__FALLBACK__');
+    assert.notEqual(label, '__FALLBACK__', `${code}(${name}) 매핑 실패`);
+    assert.ok(label && label.length >= 2, `${code}(${name}) 표시명이 비었다`);
+    if (seen.has(label)) {
+      assert.fail(`표시명 충돌: "${label}" ← ${seen.get(label)} / ${name} — 동명 구가 화면에서 구별되지 않는다`);
+    }
+    seen.set(label, name);
+  }
+  assert.equal(seen.size, Object.keys(_LC).length);
+});
+
+test('지역 표시명: 동명 구는 광역이 붙어 구별된다', () => {
+  // 이름만으로는 같은 '남구'·'중구'·'서구' — 코드가 다르면 표시명도 달라야 한다.
+  const 남구 = ['26290', '27200', '31140'].map(c => regionLabel(c, ''));
+  assert.equal(new Set(남구).size, 3, `'남구' 3곳이 구별되지 않는다: ${남구.join(' / ')}`);
+  const 중구 = ['11140', '26110', '27110', '28110', '30140', '31110'].map(c => regionLabel(c, ''));
+  assert.equal(new Set(중구).size, 6, `'중구' 6곳이 구별되지 않는다: ${중구.join(' / ')}`);
+  // 서울은 LAWD_CODES 에 접두 없이 등재돼 있다 — 화면에선 '서울'이 붙어야 어느 시인지 알 수 있다.
+  assert.match(regionLabel('11140', ''), /^서울/, '서울 구에 광역 표기가 없다');
+  assert.match(regionLabel('11500', ''), /^서울/, '서울 강서구에 광역 표기가 없다');
+  assert.notEqual(regionLabel('11500', ''), regionLabel('26440', ''), '서울 강서구와 부산 강서구가 같은 표시명이다');
+});
+
+test('지역 표시명: 표에 없는 코드는 원본 sigungu 로 폴백한다(빈 문자열 아님)', () => {
+  assert.equal(regionLabel('99999', '어딘가구'), '어딘가구');
+  assert.equal(regionLabel(null, '어딘가구'), '어딘가구');
+  assert.equal(regionLabel('99999', ''), '');
+});

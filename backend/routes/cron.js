@@ -190,6 +190,12 @@ router.post('/retention', async (req, res) => {
     await checkRegionIngestFreshness(); // Sprint MMMMMMM-22 — 지역 단위 적재 중단 감시
     // BRIEFING-ARCHIVE-2026-08-19 (Sprint NNNNNNN-6): 오늘자 브리핑 스냅샷 보장 생성.
     //   멱등 upsert — lazy 생성(페이지 첫 조회)과 중복돼도 무해(Hobby cron 중복호출 대응 원칙).
+    // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최고·최저 경신 캐시 워밍.
+    //   이 cron(18:00 UTC)은 molit-ingest(17:00~17:30 UTC)보다 뒤라 그날 적재분이 반영된다.
+    //   ⚠ force 로 먼저 갱신해야 한다 — 아래 스냅샷 생성이 이 캐시를 읽으므로,
+    //     순서가 뒤집히면 오늘 아카이브에 어제 수치가 굳는다.
+    //   계산 자체가 2.5초대라 요청 경로에서 미리 완주시켜 Redis 에 남긴다(hfRates 워밍과 같은 취지).
+    try { await require('../services/priceRecordsService').getPriceRecords({ force: true }); } catch (_) {}
     try { const _bs = require('../services/briefingService'); await _bs.getOrCreateSnapshot(_bs.kstDayString()); } catch (_e) { logger.warn({ err: _e.message }, '브리핑 스냅샷 생성 실패(무시)'); }
     // RATE-WARM-2026-08-08 (Sprint BBBBBBB-3): HF·ECOS 금리 캐시 워밍 — health 의 비차단 백그라운드
     //   갱신은 응답 반환 후 서버리스 동결로 완주가 안 될 수 있다(HF 실측: 12:01 까지 반복 ECONNABORTED,
@@ -229,6 +235,12 @@ router.get('/retention', async (req, res) => {
     await checkRegionIngestFreshness(); // Sprint MMMMMMM-22 — 지역 단위 적재 중단 감시(POST 쌍둥이와 동일)
     // BRIEFING-ARCHIVE-2026-08-19 (Sprint NNNNNNN-6): 오늘자 브리핑 스냅샷 보장 생성.
     //   멱등 upsert — lazy 생성(페이지 첫 조회)과 중복돼도 무해(Hobby cron 중복호출 대응 원칙).
+    // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최고·최저 경신 캐시 워밍.
+    //   이 cron(18:00 UTC)은 molit-ingest(17:00~17:30 UTC)보다 뒤라 그날 적재분이 반영된다.
+    //   ⚠ force 로 먼저 갱신해야 한다 — 아래 스냅샷 생성이 이 캐시를 읽으므로,
+    //     순서가 뒤집히면 오늘 아카이브에 어제 수치가 굳는다.
+    //   계산 자체가 2.5초대라 요청 경로에서 미리 완주시켜 Redis 에 남긴다(hfRates 워밍과 같은 취지).
+    try { await require('../services/priceRecordsService').getPriceRecords({ force: true }); } catch (_) {}
     try { const _bs = require('../services/briefingService'); await _bs.getOrCreateSnapshot(_bs.kstDayString()); } catch (_e) { logger.warn({ err: _e.message }, '브리핑 스냅샷 생성 실패(무시)'); }
     try { await require('../services/hfService').getHfRates({ retries: 1 }); } catch (_) {}   // Sprint BBBBBBB-3 워밍
     try { await require('../services/ecosService').getEcosRates(); } catch (_) {}

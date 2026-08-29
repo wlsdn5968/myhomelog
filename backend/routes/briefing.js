@@ -115,6 +115,20 @@ router.get('/:date', async (req, res) => {
   const regs = (snap.regLog || []).slice(0, 4).map(it =>
     `<div class="ln" style="align-items:baseline"><b class="no" style="font-size:11px;min-width:86px">${esc(String(it.effectiveFrom || '').replace(/-/g, '.'))} 시행</b><span><span style="color:var(--amb);font-size:10.5px;font-weight:700">${esc(it.tag || '')}</span> ${esc(it.note || '')}${it.verifiedAt ? ` <span style="color:var(--sub);font-size:10px">· 확인 ${esc(String(it.verifiedAt).replace(/-/g, '.'))}</span>` : ''}</span></div>`).join('');
 
+  // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최근 실거래 최고·최저 경신 카드.
+  //   ⚠ '역대'가 아니라 **적재 시작일(sinceDate) 이후** 기록이다 — 문구에 그 날짜를 반드시 박는다.
+  //   최고가만 싣지 않고 최저가도 같이 싣는다 — 한쪽만 보이면 그 자체가 매수 신호로 읽힌다(절대 룰 ①).
+  const _eok = v => (Number.isFinite(Number(v)) ? (Number(v) / 10000).toFixed(2) + '억' : '');
+  const _rec = snap.records;
+  const _recRow = (it, kind) => `<div class="pop"><span>${esc(it.aptName || '')} <span style="color:var(--sub);font-size:10.5px">${esc(it.region || '')}${it.excluUseAr ? ' · 전용 ' + esc(String(it.excluUseAr)) + '㎡' : ''}</span></span><span style="color:var(--sub);white-space:nowrap"><b style="color:var(--amb)">${_eok(it.dealAmount)}</b> <span style="font-size:10px">직전 ${kind === 'high' ? '최고' : '최저'} ${_eok(kind === 'high' ? it.prevMax : it.prevMin)} · ${Number(it.priorCount) || 0}건</span></span></div>`;
+  const recs = (_rec && (Number(_rec.highCount) || Number(_rec.lowCount))) ? `<div class="card">
+      <h2>최근 ${Number(_rec.windowDays)}일 최고·최저 경신 <span style="font-weight:500;color:var(--sub);font-size:10px">같은 단지·같은 전용면적 기준 · ${esc(String(_rec.sinceDate || '').replace(/-/g, '.'))} 이후 적재분 안에서</span></h2>
+      <div style="font-size:12px;color:var(--sub);margin-bottom:8px">비교 가능 거래 ${Number(_rec.comparedCount).toLocaleString()}건 중 최고가 경신 <b style="color:var(--tx)">${Number(_rec.highCount)}건</b> · 최저가 경신 <b style="color:var(--tx)">${Number(_rec.lowCount)}건</b></div>
+      ${(_rec.high || []).slice(0, 3).map(it => _recRow(it, 'high')).join('')}
+      ${(_rec.low || []).slice(0, 3).map(it => _recRow(it, 'low')).join('')}
+      <div style="font-size:10px;color:var(--sub);margin-top:8px">직전 거래 ${Number(_rec.minPrior)}건 이상인 평형만 비교 · 층·향 차이는 보정하지 않음 · 매수·매도 추천이 아닙니다</div>
+    </div>` : '';
+
   const yo = '일월화수목금토'[new Date(day + 'T00:00:00Z').getUTCDay()];
   const title = `내집로그 브리핑 ${day.replace(/-/g, '.')}(${yo}) — 실거래·금리·시장 데이터`;
   const desc = (snap.lines && snap.lines[0]) ? String(snap.lines[0]).slice(0, 120) : '국토부 실거래·한국은행 금리 기반 일일 부동산 데이터 브리핑';
@@ -128,6 +142,7 @@ router.get('/:date', async (req, res) => {
     <div class="tag">추천을 팔지 않습니다. 데이터를 팝니다.</div>
     ${tk.length ? `<div class="ticker">${tk.join('<span style="color:var(--bd);margin:0 9px">|</span>')}</div>` : ''}
     <div class="card"><h2>오늘의 시장</h2>${lines || '<div style="font-size:12px;color:var(--sub)">기록된 시황이 없습니다.</div>'}</div>
+    ${recs}
     ${pops ? `<div class="card"><h2>인기 단지 TOP5 <span style="font-weight:500;color:var(--sub);font-size:10px">최근 60일 실거래 많은 순 · 매물 광고 아님</span></h2>${pops}</div>` : ''}
     ${regs ? `<div class="card"><h2>규제·금융 변동 로그 <span style="font-weight:500;color:var(--sub);font-size:10px">금융위·국토부 고시 · 검증된 이벤트만</span></h2>${regs}</div>` : ''}
     <div class="nav"><a href="/briefing/${dayNav(day, -1)}">← 전날 브리핑</a>${isToday ? '' : `<a href="/briefing/${dayNav(day, 1)}">다음날 →</a>`}</div>

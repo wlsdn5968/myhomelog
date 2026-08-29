@@ -65,6 +65,12 @@ async function buildBriefingPayload() {
     }
   } catch (_) { /* 생략 */ }
 
+  // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최근 실거래 최고·최저 경신.
+  // 앱 브리핑 카드와 **같은 서비스 함수**를 쓴다(사본 금지 — 세금계산 사본 2개 사고 이력).
+  // 하루 1회 캐시라 여기서 부르는 비용은 사실상 0. 실패하면 null 로 두고 렌더에서 통째 생략.
+  let records = null;
+  try { records = await require('./priceRecordsService').getPriceRecords(); } catch (_) { records = null; }
+
   // REG-LOG-2026-08-19 (Sprint NNNNNNN-14): 검증된 규정 이벤트 체인 — 아카이브 카드용(실패 시 빈 배열)
   let regLog = [];
   try { regLog = (await require('./regulationsService').getChangeLog()).items || []; } catch (_) { regLog = []; }
@@ -83,6 +89,7 @@ async function buildBriefingPayload() {
     syncedAt: dc && dc.lastIngestedAt ? String(dc.lastIngestedAt) : null,
     popular,
     regLog,
+    records,
   };
 }
 

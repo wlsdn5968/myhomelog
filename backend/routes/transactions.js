@@ -63,4 +63,21 @@ router.get('/codes', (req, res) => {
   res.json({ codes: LAWD_CODES });
 });
 
+// GET /api/transactions/records
+// PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최근 N일 실거래 중 같은 단지·같은 전용면적의
+//   직전 최고/최저를 넘은 거래. 브리핑 카드와 /briefing/:date 아카이브가 같은 함수를 쓴다(사본 금지).
+//   ⚠ 계산은 DB 함수가 하고 하루 1회만 갱신된다 — 캐시 미스 시에도 2.5초대라 s-maxage 로 엣지에 얹는다.
+router.get('/records', async (req, res) => {
+  try {
+    const data = await require('../services/priceRecordsService').getPriceRecords();
+    if (!data) return res.status(503).json({ error: '실거래 경신 집계 조회 실패' });
+    // 원자료는 daily cron 으로만 바뀐다 — 엣지 6시간, 그 뒤 하루까지는 낡은 값이라도 준다.
+    res.set('Cache-Control', 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
+    res.json(data);
+  } catch (err) {
+    require('../utils/captureError').captureRouteError(err, 'transactions');
+    res.status(500).json({ error: '실거래 경신 집계 조회 실패' });
+  }
+});
+
 module.exports = router;
