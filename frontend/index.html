@@ -6246,7 +6246,10 @@ async function doSearch(){
     //   지도 마커 0** 이라 사용자에겐 "아무 일도 안 일어난" 것으로 보였다(목록 탭을 직접 눌러야 나옴).
     //   데스크톱은 사이드바에 이미 보이므로 건드리지 않는다.
     //   ⚠ 검색 중 사용자가 다른 탭으로 옮겼으면 덮어쓰지 않는다 — **지도 뷰에 그대로 있을 때만** 전환.
-    if (window.innerWidth <= 700) {
+    //   ⚠ innerWidth 가 **0 인 순간**이 실재한다(창 최소화·숨겨진 pane 등 — 검증 중 실제로 관측).
+    //     `0 <= 700` 이 참이라 데스크톱이 모바일 분기를 타므로 0 을 명시적으로 배제한다.
+    const _w = window.innerWidth;
+    if (_w > 0 && _w <= 700) {
       const _mv = document.getElementById('view-map');
       if (_mv && getComputedStyle(_mv).display !== 'none') { try { sv('list'); } catch (_) {} }
     }
