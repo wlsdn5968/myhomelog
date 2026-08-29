@@ -19,6 +19,10 @@ const { getSupabaseAdmin } = require('../db/client');
 const { itemArray } = require('../utils/molitParse');
 
 const BR_TITLE_URL = 'https://apis.data.go.kr/1613000/BldRgstHubService/getBrTitleInfo';
+// DENSITY-2026-08-29 (실측): 표제부는 **동별 레코드**라 대지 단위 지표(platArea·bcRat·vlRat)가 비어 온다
+//   — 에스케이북한산시티 실호출에서 archArea 687.84 는 왔는데 vlRat/bcRat/platArea 는 전부 null 이었다.
+//   같은 서비스의 **총괄표제부**가 대지 단위라 여기서 가져온다(같은 키·같은 파라미터).
+const BR_RECAP_URL = 'https://apis.data.go.kr/1613000/BldRgstHubService/getBrRecapTitleInfo';
 const KAKAO_ADDRESS = 'https://dapi.kakao.com/v2/local/search/address.json';
 const MOLIT_DETAIL_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
 const OK = new Set(['00', '000']);
@@ -155,10 +159,10 @@ async function getBuildingTitle({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
         //   [왜 필요한가] 지금 재건축 판정은 연식 하나("준공 30년 이상")뿐이라, 같은 1989년이라도
         //   용적률 180% 단지와 300% 단지가 똑같이 표시된다 — 실제 여력은 정반대다.
         //   ⚠ 이것은 사실 표기이지 추천이 아니다(절대 룰 ①: 매수·매도 추천 금지).
-        //   ⚠ 대표동(best) 기준이다. 용적률·건폐율은 통상 **대지 단위**로 산정되어 같은 대지의
-        //     여러 동이 같은 값을 갖지만, 단지가 여러 대지에 걸치면 동별로 갈릴 수 있다
-        //     → 배포 후 다동 단지로 실측해 확인할 것(값이 갈리면 표기 방식을 다시 정한다).
-        //   ⚠ 응답에 없으면 null 이 되도록 방어적으로 파싱한다(문서상 제공되나 실측 전이다).
+        //   ⚠ **실측 결과(2026-08-29, 에스케이북한산시티 11305)**: 표제부(동별 레코드)에서 실제로 오는 건
+        //     archArea 뿐이고 platArea·bcRat·vlRat 은 **전부 null 이었다** — 대지 단위 지표라서다.
+        //     그래서 아래에서 **총괄표제부**로 보강한다. 여기 4줄은 표제부가 값을 주는 경우를 위한 것이고,
+        //     실제 값의 주 공급원은 총괄표제부다(둘 다 없으면 null 로 남고 화면에 칸이 안 뜬다).
         platArea: parseFloat(best.platArea) || null,   // 대지면적(㎡)
         archArea: parseFloat(best.archArea) || null,   // 건축면적(㎡)
         bcRat: parseFloat(best.bcRat) || null,         // 건폐율(%)
@@ -170,6 +174,34 @@ async function getBuildingTitle({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
     return null;
   }
   if (!title) return null;
+
+  // DENSITY-2026-08-29: 대지 단위 지표는 총괄표제부에서 보강한다. **실패해도 표제부 결과는 그대로 반환**
+  //   (부가 정보라 없다고 단지 정보를 버리면 안 된다). 파라미터는 표제부와 동일.
+  try {
+    const rr = await dgk.get(BR_RECAP_URL, {
+      params: {
+        serviceKey: process.env.MOLIT_API_KEY,
+        sigunguCd: region.sigunguCd, bjdongCd: region.bjdongCd,
+        platGbCd: '0', bun: parsed.bun, ji: parsed.ji,
+        numOfRows: 10, pageNo: 1, _type: 'json',
+      },
+      timeout: 8000, headers: { Accept: 'application/json' },
+    });
+    if (OK.has(rr.data?.response?.header?.resultCode)) {
+      const ra = itemArray(rr.data?.response?.body?.items?.item);
+      // 총괄표제부는 대지당 1건이 원칙 — 여러 건이면 연면적 최대(주된 대지)를 쓴다.
+      const rb = ra.slice().sort((a, b) => (parseFloat(b.totArea) || 0) - (parseFloat(a.totArea) || 0))[0];
+      if (rb) {
+        if (!title.platArea) title.platArea = parseFloat(rb.platArea) || null;
+        if (!title.archArea) title.archArea = parseFloat(rb.archArea) || null;
+        if (!title.bcRat) title.bcRat = parseFloat(rb.bcRat) || null;
+        if (!title.vlRat) title.vlRat = parseFloat(rb.vlRat) || null;
+      }
+    }
+  } catch (e) {
+    logger.warn({ err: e.message, aptName }, 'buildingRegister: 총괄표제부 보강 실패(무시)');
+  }
+
 
   try {
     await admin.from('building_register').upsert({
