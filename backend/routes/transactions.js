@@ -67,13 +67,35 @@ router.get('/codes', (req, res) => {
 // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최근 N일 실거래 중 같은 단지·같은 전용면적의
 //   직전 최고/최저를 넘은 거래. 브리핑 카드와 /briefing/:date 아카이브가 같은 함수를 쓴다(사본 금지).
 //   ⚠ 계산은 DB 함수가 하고 하루 1회만 갱신된다 — 캐시 미스 시에도 2.5초대라 s-maxage 로 엣지에 얹는다.
+//   ?lawdCd=11680  → 그 시군구만(창 30일). 지역별을 7일로 쪼개면 표본이 없다 — 실측: 7일 기준
+//                    107개 지역 중 54곳이 경신 0~2건. 30일이면 118곳 중 110곳이 3건 이상.
+//   ?withRegions=1 → 드롭다운용 지역 목록 동봉. 랜딩은 숫자 3개만 쓰므로 기본은 빼서 가볍게 둔다.
 router.get('/records', async (req, res) => {
   try {
-    const data = await require('../services/priceRecordsService').getPriceRecords();
-    if (!data) return res.status(503).json({ error: '실거래 경신 집계 조회 실패' });
+    const svc = require('../services/priceRecordsService');
     // 원자료는 daily cron 으로만 바뀐다 — 엣지 6시간, 그 뒤 하루까지는 낡은 값이라도 준다.
-    res.set('Cache-Control', 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
-    res.json(data);
+    const CC = 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400';
+
+    const lawdCd = String(req.query.lawdCd || '').trim();
+    if (lawdCd) {
+      if (!/^\d{5}$/.test(lawdCd)) return res.status(400).json({ error: 'lawdCd 형식 오류' });
+      const blob = await svc.getPriceRecordsByRegion();
+      if (!blob) return res.status(503).json({ error: '지역별 경신 집계 조회 실패' });
+      const slice = svc.sliceRegion(blob, lawdCd);
+      // 없는 지역을 0 으로 지어내지 않는다 — 비교 가능한 거래가 아예 없는 지역이 실제로 있다.
+      if (!slice) return res.status(404).json({ error: '이 지역은 비교 가능한 최근 거래가 없습니다.' });
+      res.set('Cache-Control', CC);
+      return res.json(slice);
+    }
+
+    const data = await svc.getPriceRecords();
+    if (!data) return res.status(503).json({ error: '실거래 경신 집계 조회 실패' });
+    let regions = [];
+    if (String(req.query.withRegions || '') === '1') {
+      try { regions = svc.regionMenu(await svc.getPriceRecordsByRegion()); } catch (_) { regions = []; }
+    }
+    res.set('Cache-Control', CC);
+    res.json({ ...data, scope: 'national', regions });
   } catch (err) {
     require('../utils/captureError').captureRouteError(err, 'transactions');
     res.status(500).json({ error: '실거래 경신 집계 조회 실패' });

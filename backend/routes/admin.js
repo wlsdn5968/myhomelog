@@ -79,6 +79,29 @@ router.post('/run-push-notify', async (req, res) => {
   }
 });
 
+// BR-MANUAL-2026-08-29 (Sprint NNNNNNN-30): 건축물대장 백필 수동 트리거.
+//   [왜 필요한가] 2026-08-29 실측 — vercel cron `0 6 * * *` 회차가 **통째로 누락**됐다.
+//   07:03 UTC(창 06:59 종료) 시점에 health.crons 의 마지막 기록이 전날 06:01 UTC 였고 DB 도 0건.
+//   Hobby 플랜 cron 은 사양상 best effort(회차 누락 가능·재시도 없음)라 코드 결함이 아니지만,
+//   그날치 백필이 그냥 사라진다. cron 은 CRON_SECRET Bearer 로만 열리므로 운영자가 손으로 돌릴 길이
+//   없었다 — geocache/molit-ingest 와 같은 admin 트리거를 붙인다.
+//   ⚠ 이 잡은 Kakao 를 **호출하지 않는다**(캐시 행의 법정동코드로 총괄표제부만 조회) — 지도 쿼터 무관.
+//   멱등: 처리한 행에 `title._densAt` 마커가 남아 재실행해도 같은 행을 다시 부르지 않는다.
+async function handleRunBrBackfill(req, res) {
+  const started = Date.now();
+  try {
+    const summary = await require('../jobs/buildingRegisterBackfill').run();
+    logger.info({ durationMs: Date.now() - started, summary, adminId: req.user.id }, 'admin/run-building-register-backfill OK');
+    res.json({ ok: true, summary });
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'admin/run-building-register-backfill 실패');
+    require('../utils/captureError').captureRouteError(e, 'admin');
+    res.status(500).json({ error: e.message });
+  }
+}
+router.post('/run-building-register-backfill', handleRunBrBackfill);
+router.get('/run-building-register-backfill', handleRunBrBackfill);
+
 router.post('/run-geocache-backfill', async (req, res) => {
   const started = Date.now();
   try {

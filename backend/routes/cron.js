@@ -196,6 +196,8 @@ router.post('/retention', async (req, res) => {
     //     순서가 뒤집히면 오늘 아카이브에 어제 수치가 굳는다.
     //   계산 자체가 2.5초대라 요청 경로에서 미리 완주시켜 Redis 에 남긴다(hfRates 워밍과 같은 취지).
     try { await require('../services/priceRecordsService').getPriceRecords({ force: true }); } catch (_) {}
+    // 지역별 블롭(147kB·118개 지역·계산 1.24초)도 같이 데운다 — 사용자 요청 경로에서 계산되면 안 된다.
+    try { await require('../services/priceRecordsService').getPriceRecordsByRegion({ force: true }); } catch (_) {}
     try { const _bs = require('../services/briefingService'); await _bs.getOrCreateSnapshot(_bs.kstDayString()); } catch (_e) { logger.warn({ err: _e.message }, '브리핑 스냅샷 생성 실패(무시)'); }
     // RATE-WARM-2026-08-08 (Sprint BBBBBBB-3): HF·ECOS 금리 캐시 워밍 — health 의 비차단 백그라운드
     //   갱신은 응답 반환 후 서버리스 동결로 완주가 안 될 수 있다(HF 실측: 12:01 까지 반복 ECONNABORTED,
@@ -241,6 +243,8 @@ router.get('/retention', async (req, res) => {
     //     순서가 뒤집히면 오늘 아카이브에 어제 수치가 굳는다.
     //   계산 자체가 2.5초대라 요청 경로에서 미리 완주시켜 Redis 에 남긴다(hfRates 워밍과 같은 취지).
     try { await require('../services/priceRecordsService').getPriceRecords({ force: true }); } catch (_) {}
+    // 지역별 블롭(147kB·118개 지역·계산 1.24초)도 같이 데운다 — 사용자 요청 경로에서 계산되면 안 된다.
+    try { await require('../services/priceRecordsService').getPriceRecordsByRegion({ force: true }); } catch (_) {}
     try { const _bs = require('../services/briefingService'); await _bs.getOrCreateSnapshot(_bs.kstDayString()); } catch (_e) { logger.warn({ err: _e.message }, '브리핑 스냅샷 생성 실패(무시)'); }
     try { await require('../services/hfService').getHfRates({ retries: 1 }); } catch (_) {}   // Sprint BBBBBBB-3 워밍
     try { await require('../services/ecosService').getEcosRates(); } catch (_) {}

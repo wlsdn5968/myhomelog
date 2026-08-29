@@ -5122,6 +5122,82 @@ async function loadNewsSummary(){
 // ── BRIEFING-HOME-2026-08-19 (Sprint NNNNNNN-5): 오늘의 브리핑 ──
 //   전부 기존 공식 데이터 재조합 — 새 수집·AI 호출 0. 값 없는 항목은 항목채 생략(미확인 원칙).
 //   3줄 시황은 기존 loadNewsSummary(#newsSummary)가 그린다 — 이 함수는 티커·날짜·위젯만.
+/* PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최고·최저 경신 카드 렌더.
+   전국 응답과 지역 응답이 **같은 모양**이라 한 함수로 그린다(백엔드 sliceRegion 이 모양을 맞춘다).
+   ⚠ 창(windowDays)이 전국 7일 / 지역 30일로 다르다 — 지역별을 7일로 쪼개면 표본이 없어서다
+     (실측: 7일이면 107개 지역 중 54곳이 경신 0~2건 / 30일이면 118곳 중 110곳이 3건 이상).
+     그래서 창을 **제목에 그대로 적는다** — 두 수치를 나란히 비교하는 오독을 막는 유일한 장치다. */
+function _renderRecordsCard(recs){
+  const rc=document.getElementById('brfRecords'); if(!rc) return;
+  const list=window._recRegions||[];
+  const cur=(recs&&recs.scope==='region')?String(recs.lawdCd||''):'';
+  window._recSel=cur;
+  const eok=v=>Number.isFinite(Number(v))?(Number(v)/10000).toFixed(2)+'억':'';
+  const selHtml=list.length?`<select id="brfRecRegion" onchange="_recPickRegion(this.value)" aria-label="지역 선택"
+      style="font-family:inherit;font-size:11.5px;font-weight:600;color:var(--brf-tx);background:var(--brf-raise);border:1px solid var(--brf-line);border-radius:var(--radius-base);padding:5px 8px;max-width:190px">
+      <option value=""${cur?'':' selected'}>전국</option>${list.map(r=>
+        `<option value="${_escHtml(r.lawdCd)}"${cur===String(r.lawdCd)?' selected':''}>${_escHtml(r.name)}</option>`).join('')}
+    </select>`:'';
+  // 조회 실패·자료 없음도 카드를 지우지 않는다 — 선택기가 사라지면 전국으로 돌아갈 길이 없다.
+  const hasAny=recs&&(Number(recs.highCount)||Number(recs.lowCount));
+  if(!recs||(!hasAny&&!cur)){ rc.style.display='none'; return; }
+  const scopeName=cur?(recs.regionName||(list.find(x=>String(x.lawdCd)===cur)||{}).name||''):'전국';
+  const row=(it,kind)=>`<button class="brf-rec" onclick='goSearchResult(${_jsonAttr({aptName:it.aptName,sigungu:it.sigungu,umdNm:it.umdNm,lawdCd:it.lawdCd,buildYear:it.buildYear,recentDealDate:it.dealDate})})'>
+      <span style="flex:1;min-width:0">
+        <span class="brf-ell" style="display:block;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(it.aptName||'')}</span>
+        <span style="display:block;margin-top:2px;font-size:10.5px;color:var(--brf-tx3)">${_escHtml(it.region||'')}${it.excluUseAr?' · 전용 '+_escHtml(String(it.excluUseAr))+'㎡':''}${it.floor!=null?' · '+Number(it.floor)+'층':''}</span>
+      </span>
+      <span style="text-align:right;flex-shrink:0">
+        <span style="display:block;font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums">${eok(it.dealAmount)}</span>
+        <span style="display:block;margin-top:2px;font-size:10px;color:var(--brf-tx3);font-variant-numeric:tabular-nums">직전 ${kind==='high'?'최고':'최저'} ${eok(kind==='high'?it.prevMax:it.prevMin)} · ${Number(it.priorCount)||0}건</span>
+      </span>
+    </button>`;
+  const col=(title,arr,kind,cnt)=>`<div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
+        <b style="font-size:12px;font-weight:800;color:var(--brf-tx)">${title}</b>
+        <span style="font-size:11px;font-weight:700;color:var(--brf-tx2);font-variant-numeric:tabular-nums">${Number(cnt)||0}건</span>
+      </div>
+      ${arr&&arr.length?arr.map(it=>row(it,kind)).join(''):'<div style="font-size:10.5px;color:var(--brf-tx3);padding:8px 0">해당 거래 없음</div>'}
+    </div>`;
+  const body=recs._err
+    ? `<div style="font-size:11.5px;color:var(--brf-tx3);padding:14px 0">${_escHtml(recs._err)}</div>`
+    : `<div style="font-size:11.5px;color:var(--brf-tx2);margin-bottom:10px">비교 가능 거래 ${(Number(recs.comparedCount)||0).toLocaleString()}건${recs.latestDeal?` · 최신 거래일 ${_escHtml(String(recs.latestDeal).replace(/-/g,'.'))}`:''}</div>
+       <div class="brf-rec2">${col('최고가 경신',recs.high,'high',recs.highCount)}${col('최저가 경신',recs.low,'low',recs.lowCount)}</div>`;
+  rc.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:4px">
+      <b class="brf-h2">최근 ${Number(recs.windowDays)||7}일 최고·최저 경신 <span style="font-weight:600;font-size:12px;color:var(--brf-tx2)">· ${_escHtml(scopeName)}</span></b>
+      ${selHtml}
+    </div>
+    <div style="font-size:10px;color:var(--brf-tx3);margin-bottom:8px">같은 단지·같은 전용면적 기준 · ${_escHtml(String(recs.sinceDate||'').replace(/-/g,'.'))} 이후 적재분 안에서${cur?' · 지역별은 거래가 적어 30일로 봅니다':''}</div>
+    ${body}
+    <div style="font-size:9px;color:var(--brf-tx3);margin-top:10px;line-height:1.6">국토부 실거래 · 직전 거래 ${Number(recs.minPrior)||3}건 이상인 평형만 비교 · 단지당 1건만 표시 · 층·향·수리 상태는 보정하지 않습니다 · 매수·매도 추천이 아니며 미래 가격을 예측하지 않습니다</div>`;
+  rc.style.display='block';
+}
+async function _recPickRegion(lawdCd){
+  const set=(d)=>{ try{ _renderRecordsCard(d); }catch(_e){} };
+  const nameOf=c=>((window._recRegions||[]).find(x=>String(x.lawdCd)===String(c))||{}).name||'';
+  const sel=document.getElementById('brfRecRegion'); if(sel) sel.disabled=true;
+  try{
+    const url=lawdCd
+      ? `${CFG.api}/transactions/records?lawdCd=${encodeURIComponent(lawdCd)}`
+      : `${CFG.api}/transactions/records?withRegions=1`;
+    const r=await fetch(url,{signal:AbortSignal.timeout(9000)});
+    if(!r.ok){
+      // 404 = 그 지역엔 비교 가능한 거래가 없다. 0 으로 지어내지 않고 그 사실을 적는다.
+      set({scope:lawdCd?'region':'national',lawdCd,regionName:nameOf(lawdCd),windowDays:lawdCd?30:7,
+        minPrior:3,comparedCount:0,highCount:0,lowCount:0,high:[],low:[],
+        _err:r.status===404?'이 지역은 최근 30일 안에 비교 가능한 거래가 없습니다.':'조회에 실패했어요. 잠시 후 다시 시도해 주세요.'});
+      return;
+    }
+    const d=await r.json();
+    if(Array.isArray(d.regions)&&d.regions.length) window._recRegions=d.regions;
+    set(d);
+  }catch(_e){
+    set({scope:lawdCd?'region':'national',lawdCd,regionName:nameOf(lawdCd),windowDays:lawdCd?30:7,
+      minPrior:3,comparedCount:0,highCount:0,lowCount:0,high:[],low:[],_err:'조회에 실패했어요. 잠시 후 다시 시도해 주세요.'});
+  }finally{
+    const s2=document.getElementById('brfRecRegion'); if(s2) s2.disabled=false;
+  }
+}
 async function renderBriefing(){
   try{
     const dEl=document.getElementById('briefDate');
@@ -5134,7 +5210,8 @@ async function renderBriefing(){
       fetch(`${CFG.api}/search/popular`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
       fetch(`${CFG.api}/regulations/log`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
       // PRICE-RECORDS-2026-08-29: 최고·최저 경신. 서버가 하루 1회만 계산해 캐시하므로 여기선 캐시 읽기다.
-      fetch(`${CFG.api}/transactions/records`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
+      //   withRegions=1 — 드롭다운용 지역 목록 동봉(랜딩은 숫자만 쓰므로 거기선 빼고 부른다).
+      fetch(`${CFG.api}/transactions/records?withRegions=1`,{signal:AbortSignal.timeout(9000)}).then(r=>r.ok?r.json():null).catch(()=>null),
     ]);
     // BRF-DESIGN-2026-08-19 (Sprint NNNNNNN-8): 시안 코드화 — 티커=무한 테이프(라벨/값/출처 구조).
     //   전 항목 실데이터, 값 없으면 항목째 생략. 델타(전월 대비)는 원자료에 이전 값이 없어 표시하지 않는다(추정 금지).
@@ -5197,35 +5274,8 @@ async function renderBriefing(){
     //   [왜 직전 거래 건수를 노출하는가] 표본 3건짜리 경신과 35건짜리 경신은 무게가 다르다.
     //     점수로 뭉개지 않고 원자료를 그대로 보여 사용자가 판단하게 한다.
     try{
-      const rc=document.getElementById('brfRecords');
-      if(rc&&recs&&(Number(recs.highCount)||Number(recs.lowCount))){
-        const eok=v=>Number.isFinite(Number(v))?(Number(v)/10000).toFixed(2)+'억':'';
-        const row=(it,kind)=>`<button class="brf-rec" onclick='goSearchResult(${_jsonAttr({aptName:it.aptName,sigungu:it.sigungu,umdNm:it.umdNm,lawdCd:it.lawdCd,buildYear:it.buildYear,recentDealDate:it.dealDate})})'>
-          <span style="flex:1;min-width:0">
-            <span class="brf-ell" style="display:block;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(it.aptName||'')}</span>
-            <span style="display:block;margin-top:2px;font-size:10.5px;color:var(--brf-tx3)">${_escHtml(it.region||'')}${it.excluUseAr?' · 전용 '+_escHtml(String(it.excluUseAr))+'㎡':''}${it.floor!=null?' · '+Number(it.floor)+'층':''}</span>
-          </span>
-          <span style="text-align:right;flex-shrink:0">
-            <span style="display:block;font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums">${eok(it.dealAmount)}</span>
-            <span style="display:block;margin-top:2px;font-size:10px;color:var(--brf-tx3);font-variant-numeric:tabular-nums">직전 ${kind==='high'?'최고':'최저'} ${eok(kind==='high'?it.prevMax:it.prevMin)} · ${Number(it.priorCount)||0}건</span>
-          </span>
-        </button>`;
-        const col=(title,arr,kind,cnt)=>`<div>
-          <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:4px">
-            <b style="font-size:12px;font-weight:800;color:var(--brf-tx)">${title}</b>
-            <span style="font-size:11px;font-weight:700;color:var(--brf-tx2);font-variant-numeric:tabular-nums">${Number(cnt)||0}건</span>
-          </div>
-          ${arr&&arr.length?arr.map(it=>row(it,kind)).join(''):'<div style="font-size:10.5px;color:var(--brf-tx3);padding:8px 0">해당 거래 없음</div>'}
-        </div>`;
-        rc.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px;flex-wrap:wrap;margin-bottom:4px">
-            <b class="brf-h2">최근 ${Number(recs.windowDays)||7}일 최고·최저 경신</b>
-            <span style="font-size:10px;color:var(--brf-tx3)">같은 단지·같은 전용면적 기준 · ${_escHtml(String(recs.sinceDate||'').replace(/-/g,'.'))} 이후 적재분 안에서</span>
-          </div>
-          <div style="font-size:11.5px;color:var(--brf-tx2);margin-bottom:10px">비교 가능 거래 ${(Number(recs.comparedCount)||0).toLocaleString()}건${recs.latestDeal?` · 최신 거래일 ${_escHtml(String(recs.latestDeal).replace(/-/g,'.'))}`:''}</div>
-          <div class="brf-rec2">${col('최고가 경신',recs.high,'high',recs.highCount)}${col('최저가 경신',recs.low,'low',recs.lowCount)}</div>
-          <div style="font-size:9px;color:var(--brf-tx3);margin-top:10px;line-height:1.6">국토부 실거래 · 직전 거래 ${Number(recs.minPrior)||3}건 이상인 평형만 비교 · 층·향·수리 상태는 보정하지 않습니다 · 매수·매도 추천이 아니며 미래 가격을 예측하지 않습니다</div>`;
-        rc.style.display='block';
-      }
+      window._recRegions = (recs && Array.isArray(recs.regions)) ? recs.regions : [];
+      _renderRecordsCard(recs);
     }catch(_e){}
     // 집킴이 코너 — 실제 동기화 기준일만 문장에 사용(추정 금지)
     // REG-LOG-2026-08-19 (Sprint NNNNNNN-12): 규제·금융 변동 로그 카드 — regulations_snapshot 버전 체인

@@ -21,12 +21,19 @@ const { rget, rset } = require('./redisCache');
 const { LAWD_CODES } = require('./transactionService');
 
 const CK = 'records:price:v1';
+const CK_REGION = 'records:priceByRegion:v1';
 const TTL_LOCAL = 6 * 3600;      // 인스턴스 캐시
 const TTL_REDIS = 30 * 3600;     // daily cron(24h) + Hobby ±59분 지연 여유
 
 const DEF_DAYS = 7;
 const DEF_MIN_PRIOR = 3;         // 거래 1~2건짜리는 통계가 아니라 잡음 — TRUST 게이트와 같은 취지
 const DEF_LIMIT = 5;
+
+// ⚠ 지역별은 **30일**이다. 7일로 쪼개면 지역당 표본이 없다 — 실측:
+//   7일 기준 107개 지역 중 **54곳이 경신 0~2건**(평균 3.3). 30일이면 118곳 중 110곳이 3건 이상(평균 31.1).
+//   창이 다르므로 응답의 windowDays 를 화면에 그대로 노출해 전국(7일)과 섞이지 않게 한다.
+const REGION_DAYS = 30;
+const REGION_LIMIT = 3;
 
 // ── 지역 표시명 ──────────────────────────────────────────────────────────────
 // ⚠ 지역 판정은 **lawd_cd 로만** 한다. molit 의 sigungu 문자열은 광역이 없어
@@ -139,4 +146,75 @@ async function getPriceRecords({ force = false } = {}) {
   return payload;
 }
 
-module.exports = { getPriceRecords, regionLabel, _SIDO_PREFIX: SIDO_PREFIX };
+/**
+ * 지역별(시군구) 경신 — 하루 1회 계산한 **전체 블롭**을 캐시하고, 요청마다 한 지역만 잘라 준다.
+ * 블롭 실측 147kB / 118개 지역 / 계산 1.24초 — 지역마다 온디맨드로 돌리면 감당이 안 된다.
+ * @returns {object|null} { windowDays, minPrior, latestDeal, sinceDate, regions: {lawdCd: {...}} }
+ */
+async function getPriceRecordsByRegion({ force = false } = {}) {
+  if (!force) {
+    const local = cache.get(CK_REGION);
+    if (local !== undefined) return local;
+    try {
+      const shared = await rget(CK_REGION);
+      if (shared) { cache.set(CK_REGION, shared, TTL_LOCAL); return shared; }
+    } catch (_) { /* Redis 미구성·장애는 계산으로 폴백 */ }
+  }
+  const admin = getSupabaseAdmin();
+  if (!admin) return null;
+  let data = null;
+  try {
+    const res = await admin.rpc('get_price_records_by_region', {
+      p_days: REGION_DAYS, p_min_prior: DEF_MIN_PRIOR, p_limit: REGION_LIMIT,
+    });
+    if (res.error) throw res.error;
+    data = res.data || null;
+  } catch (e) {
+    logger.warn({ err: e.message }, 'price records(지역) 조회 실패');
+    return null;
+  }
+  if (!data || !data.regions) return null;
+  cache.set(CK_REGION, data, TTL_LOCAL);
+  try { await rset(CK_REGION, data, TTL_REDIS); } catch (_) { /* 공유 캐시 실패는 삼킨다 */ }
+  return data;
+}
+
+/** 드롭다운용 지역 목록 — 표시명은 lawd_cd 파생(동명 구 구별), 이름순 정렬. */
+function regionMenu(blob) {
+  if (!blob || !blob.regions) return [];
+  return Object.entries(blob.regions)
+    .map(([lawdCd, v]) => ({
+      lawdCd,
+      name: regionLabel(lawdCd, ''),
+      highCount: Number(v.highCount) || 0,
+      lowCount: Number(v.lowCount) || 0,
+    }))
+    .filter(r => r.name)
+    .sort((a, b) => a.name.localeCompare(b.name, 'ko'));
+}
+
+/** 한 지역 슬라이스를 전국 응답과 **같은 모양**으로 — 프론트가 한 코드로 렌더하게. */
+function sliceRegion(blob, lawdCd) {
+  if (!blob || !blob.regions) return null;
+  const r = blob.regions[String(lawdCd)];
+  if (!r) return null;
+  return {
+    scope: 'region',
+    lawdCd: String(lawdCd),
+    regionName: regionLabel(lawdCd, ''),
+    latestDeal: blob.latestDeal || null,
+    sinceDate: blob.sinceDate || null,
+    windowDays: Number(blob.windowDays) || REGION_DAYS,
+    minPrior: Number(blob.minPrior) || DEF_MIN_PRIOR,
+    comparedCount: Number(r.comparedCount) || 0,
+    highCount: Number(r.highCount) || 0,
+    lowCount: Number(r.lowCount) || 0,
+    high: (r.high || []).map(shapeRow).filter(Boolean),
+    low: (r.low || []).map(shapeRow).filter(Boolean),
+  };
+}
+
+module.exports = {
+  getPriceRecords, getPriceRecordsByRegion, regionMenu, sliceRegion,
+  regionLabel, _SIDO_PREFIX: SIDO_PREFIX,
+};
