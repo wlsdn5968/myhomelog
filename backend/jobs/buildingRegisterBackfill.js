@@ -170,14 +170,24 @@ async function backfillDensity(admin, {
   const rows = data || [];
   if (!rows.length) return { scanned: 0, filled: 0, empty: 0, failed: 0 };
 
-  let filled = 0, empty = 0, failed = 0;
+  let filled = 0, empty = 0, failed = 0, attempted = 0, aborted = false;
+  const failReasons = {};   // 사유별 집계 — "왜 실패했는지"를 요약에 실어 다음 판단의 근거로 남긴다
+  // ⚠ QUOTA-GUARD-2026-08-29 (실사고): 동시성 12 로 올려 돌렸더니 900건 중 **892건이 실패**했다
+  //   (동시성 5 에서는 90건 중 실패 0). 처리량이 오르는 게 아니라 원천이 거부한다.
+  //   실패는 마커를 남기지 않아 데이터는 안전하지만, **건축HUB 하루 1만 쿼터를 헛되이 태운다**.
+  //   초반 표본에서 실패율이 절반을 넘으면 즉시 접는다 — 남은 쿼터를 다음 회차에 넘긴다.
+  const GUARD_MIN = 30, GUARD_RATE = 0.5;
   const queue = rows.slice();
   async function worker() {
     while (queue.length) {
+      if (aborted) return;
       if ((Date.now() - t0) > budgetMs - 8000) return;
+      if (attempted >= GUARD_MIN && failed / attempted > GUARD_RATE) { aborted = true; return; }
       const r = queue.shift();
+      attempted++;
       const d = await fetchRecapOnly({
         sigunguCd: r.sigungu_cd, bjdongCd: r.bjdong_cd, bun: r.bun, ji: r.ji,
+        onFail: (reason) => { failReasons[reason] = (failReasons[reason] || 0) + 1; },
       });
       // null = 호출 실패. 마커를 남기지 않아 다음 회차에 재시도한다(값 없음과 구별).
       if (!d) { failed++; continue; }
@@ -190,9 +200,10 @@ async function backfillDensity(admin, {
   }
   const _conc = Math.min(Math.max(parseInt(concurrency) || DENSITY_CONCURRENCY, 1), 20);
   await Promise.all(Array.from({ length: _conc }, () => worker()));
-  logger.info({ scanned: rows.length, filled, empty, failed, concurrency: _conc, elapsedMs: Date.now() - t0 },
-    `밀도 백필: 용적률 ${filled} 채움 / ${empty} 값없음 / ${failed} 실패`);
-  return { scanned: rows.length, filled, empty, failed };
+  logger.info({ scanned: rows.length, attempted, filled, empty, failed, aborted, failReasons, concurrency: _conc, elapsedMs: Date.now() - t0 },
+    `밀도 백필: 용적률 ${filled} 채움 / ${empty} 값없음 / ${failed} 실패${aborted ? ' (실패율 과다로 조기 중단)' : ''}`);
+  // scanned 는 '뽑아온 후보 수', attempted 는 '실제로 호출한 수' — 조기 중단이면 둘이 크게 갈린다.
+  return { scanned: rows.length, attempted, filled, empty, failed, aborted, failReasons };
 }
 
 /**

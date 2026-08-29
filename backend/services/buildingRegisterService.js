@@ -230,7 +230,7 @@ async function getBuildingTitle({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
  * @returns {Promise<{platArea:?number,archArea:?number,bcRat:?number,vlRat:?number}|null>}
  *          null = 호출 자체가 실패(재시도 가치 있음) / 객체 = 조회 성공(값은 전부 null 일 수 있음)
  */
-async function fetchRecapOnly({ sigunguCd, bjdongCd, bun, ji }) {
+async function fetchRecapOnly({ sigunguCd, bjdongCd, bun, ji, onFail }) {
   if (!sigunguCd || !bjdongCd || !bun) return null;
   try {
     const rr = await dgk.get(BR_RECAP_URL, {
@@ -241,7 +241,16 @@ async function fetchRecapOnly({ sigunguCd, bjdongCd, bun, ji }) {
       },
       timeout: 8000, headers: { Accept: 'application/json' },
     });
-    if (!OK.has(rr.data?.response?.header?.resultCode)) return null;
+    // ⚠ OBSERVE-2026-08-29 (실사고): 대량 백필에서 실패가 쏟아졌는데(900건 중 892건) 실패 사유를
+    //   아무 데도 남기지 않아 **원인을 코드로 좁힐 수 없었다** — 쿼터인지 스로틀인지 파라미터인지.
+    //   전건 로깅은 소음이라 실패 시 resultCode/Msg 만 남긴다(호출부가 집계한다).
+    const _rc = rr.data?.response?.header?.resultCode;
+    if (!OK.has(_rc)) {
+      const e = new Error('BR_RECAP_NOT_OK');
+      e.resultCode = String(_rc == null ? 'none' : _rc);
+      e.resultMsg = String(rr.data?.response?.header?.resultMsg || '').slice(0, 80);
+      throw e;
+    }
     const ra = itemArray(rr.data?.response?.body?.items?.item);
     const rb = ra.slice().sort((a, b) => (parseFloat(b.totArea) || 0) - (parseFloat(a.totArea) || 0))[0];
     // 조회는 됐는데 항목이 0건 = "이 대지엔 총괄표제부가 없다". 성공으로 취급해 전부 null 을 돌려준다
@@ -254,7 +263,12 @@ async function fetchRecapOnly({ sigunguCd, bjdongCd, bun, ji }) {
       vlRat: parseFloat(rb.vlRat) || null,
     };
   } catch (e) {
-    logger.warn({ err: e.message, sigunguCd, bjdongCd, bun }, 'buildingRegister: 총괄표제부 단독조회 실패');
+    // 사유를 호출부로 넘긴다(집계용). 전건 warn 은 대량 백필에서 로그를 덮으므로 콜백이 있으면 조용히.
+    const reason = e && e.resultCode
+      ? `code:${e.resultCode}`
+      : (e && e.code === 'ECONNABORTED' ? 'timeout' : `err:${String((e && e.message) || '').slice(0, 40)}`);
+    if (typeof onFail === 'function') { try { onFail(reason); } catch (_) { /* 집계 실패는 무시 */ } }
+    else logger.warn({ err: e.message, sigunguCd, bjdongCd, bun }, 'buildingRegister: 총괄표제부 단독조회 실패');
     return null;
   }
 }

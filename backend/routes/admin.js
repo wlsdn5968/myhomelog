@@ -79,6 +79,25 @@ router.post('/run-push-notify', async (req, res) => {
   }
 });
 
+// CONTENT-DRAFT-2026-08-29 (Sprint NNNNNNN-30, 홍보 제안서 P2): 스레드 데이터 드랍 초안.
+//   운영자의 업로드 자동화가 **무엇이든**(자체 스크립트·n8n·Meta API) 가져갈 수 있게 JSON 으로 낸다.
+//   AI 호출 0 · 새 외부 수집 0 — 이미 계산해 둔 숫자를 관측된 실제 게시 형식에 끼워 넣을 뿐이다.
+//   ?regionCount=N 으로 지역 집중 초안 개수 조절(기본 3).
+router.get('/content-draft', async (req, res) => {
+  try {
+    const rc = Math.min(Math.max(parseInt(req.query.regionCount) || 3, 0), 10);
+    const out = await require('../services/contentDraftService').buildDrafts({ regionCount: rc });
+    // 재료가 없으면 초안을 지어내지 않는다 — 빈 성공(200 + 빈 배열)으로 위장하지 않는다.
+    if (!out) return res.status(503).json({ error: '초안 재료(실거래 경신 집계) 조회 실패' });
+    res.set('Cache-Control', 'no-store'); // 운영자 전용 · 매번 최신
+    res.json(out);
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'admin/content-draft 실패');
+    require('../utils/captureError').captureRouteError(e, 'admin');
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // BR-MANUAL-2026-08-29 (Sprint NNNNNNN-30): 건축물대장 백필 수동 트리거.
 //   [왜 필요한가] 2026-08-29 실측 — vercel cron `0 6 * * *` 회차가 **통째로 누락**됐다.
 //   07:03 UTC(창 06:59 종료) 시점에 health.crons 의 마지막 기록이 전날 06:01 UTC 였고 DB 도 0건.
