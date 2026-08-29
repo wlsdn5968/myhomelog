@@ -4575,7 +4575,7 @@ function _renderReport(data) {
         /* MOB-AUDIT-2026-05-03: amenities 0 vs undefined 구분 — 좌표 호출 실패 시 "지하철 0개" 오해 차단 */
         const _amOk = am && (am.subway != null || am.mart != null || am.hospital != null || am.school != null);
         const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway,'?')}</b>·마트 <b>${_numFmt(am.mart,'?')}</b>·종합병원 <b>${_numFmt(am.hospital,'?')}</b>·학교 <b>${_numFmt(am.school,'?')}</b>·공원 <b>${_numFmt(am.park,'?')}</b>`:(am?'주변 편의시설 좌표 미해결':'');if(!items.length && !amStr)return '';return `<div style="font-size:10.5px;color:var(--t2);border-left:2px solid var(--acc);padding:2px 0 2px 9px;margin-top:7px">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` <span style="color:var(--acc);font-weight:600">· 매칭 ${_numFmt(a.matchScore)}점</span>`:''}</div>`;})()}
-        ${a.matchReason ? `<div style="font-size:10.5px;color:var(--t3);border-left:2px solid var(--bd);padding:2px 0 2px 9px;margin-top:5px">🏆 <b>왜 이 순위?</b> ${_escHtml(a.matchReason)}</div>` : ''}
+        ${a.matchReason ? `<div style="font-size:10.5px;color:var(--t3);border-left:2px solid var(--t3);padding:2px 0 2px 9px;margin-top:5px">🏆 <b>왜 이 순위?</b> ${_escHtml(a.matchReason)}</div>` : ''}
         <div style="color:var(--acc);font-weight:600">📌 ${_escHtml(a.recommendation || '')}</div>
       </div>
     </div>
