@@ -75,7 +75,7 @@
 - 최근 12 commit history 는 SPRINT_NOTES table 에 기록
 
 ### 검증 체크리스트
-- **backend test: `cd backend && npm test`** (돈 계산·규제 판정 회귀 안전망 — 2026-08-28 실측 106 pass)
+- **backend test: `cd backend && npm test`** (돈 계산·규제 판정·지역 표시명 회귀 안전망 — 2026-08-29 실측 112 pass)
 - backend syntax: `node -c <file>`
 - frontend syntax: inline `<script>` 블록 `new Function()` validate
 - vercel.json: `JSON.parse()`
