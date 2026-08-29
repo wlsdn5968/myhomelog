@@ -141,6 +141,8 @@ async function writeBackToMaster(admin) {
 const DENSITY_CAP = 200;
 const DENSITY_BUDGET_MS = 70000;
 const DENSITY_CONCURRENCY = 5;
+// 전체 호출 속도 상한(ms/회). 실측: 429 없이 지속된 회차의 실효 속도가 약 1.3회/초였다.
+const DENSITY_MIN_INTERVAL_MS = 700;
 // 준공 하한 — 실측(2026-08-29)상 1988년 이하는 총괄표제부가 없어 전부 null 이고, 2003년 이후는 전부 값이 왔다.
 //   경계가 그 사이 어디인지는 미확인이라 **1995** 로 잡아 미확인 구간까지 덮는다(4,984건).
 //   그 이전 단지는 호출해봐야 빈 값이라 대상에서 뺀다(무의미한 API 호출 절약).
@@ -153,6 +155,7 @@ const DENSITY_MIN_APR = '1995';
 //     건축HUB 한도는 1만/일이라 동시성을 올려도 하루 총량은 여유가 있다.
 async function backfillDensity(admin, {
   cap = DENSITY_CAP, budgetMs = DENSITY_BUDGET_MS, concurrency = DENSITY_CONCURRENCY,
+  minIntervalMs = DENSITY_MIN_INTERVAL_MS,
 } = {}) {
   const t0 = Date.now();
   const { data, error } = await admin.from('building_register')
@@ -178,6 +181,22 @@ async function backfillDensity(admin, {
   //   초반 표본에서 실패율이 절반을 넘으면 즉시 접는다 — 남은 쿼터를 다음 회차에 넘긴다.
   const GUARD_MIN = 30, GUARD_RATE = 0.5;
   const queue = rows.slice();
+
+  // ⚠ THROTTLE-2026-08-29 (실측으로 확정): 실패 사유가 전부 **upstream HTTP 429** 였다.
+  //   쿼터 소진도 파라미터 오류도 아닌 **레이트 리밋**이다. 그러니 동시성을 낮추는 게 아니라
+  //   **전체 호출 속도를 재야** 한다(동시성 5 라도 실패가 즉시 반환되면 초당 9회까지 튄다).
+  //   회차 1(90건 무실패)의 실효 속도가 약 1.3회/초 → 기본 간격 700ms(≈1.4회/초)에서 시작한다.
+  //   429 를 만나면 간격을 1.5배씩 늘린다(상한 4s). 성공이 이어지면 서서히 되돌린다.
+  let interval = Math.max(0, parseInt(minIntervalMs) >= 0 ? parseInt(minIntervalMs) : DENSITY_MIN_INTERVAL_MS);
+  let nextSlot = 0, throttleHits = 0;
+  async function pace() {
+    const now = Date.now();
+    const slot = Math.max(now, nextSlot);
+    nextSlot = slot + interval;
+    const wait = slot - now;
+    if (wait > 0) await new Promise(res => setTimeout(res, wait));
+  }
+
   async function worker() {
     while (queue.length) {
       if (aborted) return;
@@ -185,9 +204,14 @@ async function backfillDensity(admin, {
       if (attempted >= GUARD_MIN && failed / attempted > GUARD_RATE) { aborted = true; return; }
       const r = queue.shift();
       attempted++;
+      if (interval > 0) await pace();
       const d = await fetchRecapOnly({
         sigunguCd: r.sigungu_cd, bjdongCd: r.bjdong_cd, bun: r.bun, ji: r.ji,
-        onFail: (reason) => { failReasons[reason] = (failReasons[reason] || 0) + 1; },
+        onFail: (reason) => {
+          failReasons[reason] = (failReasons[reason] || 0) + 1;
+          // 429 면 속도를 낮춘다(상한 4s). 원천이 "천천히"라고 말하는 유일한 신호다.
+          if (/429/.test(reason)) { throttleHits++; interval = Math.min(4000, Math.max(200, Math.round(interval * 1.5)) || 700); }
+        },
       });
       // null = 호출 실패. 마커를 남기지 않아 다음 회차에 재시도한다(값 없음과 구별).
       if (!d) { failed++; continue; }
@@ -200,10 +224,10 @@ async function backfillDensity(admin, {
   }
   const _conc = Math.min(Math.max(parseInt(concurrency) || DENSITY_CONCURRENCY, 1), 20);
   await Promise.all(Array.from({ length: _conc }, () => worker()));
-  logger.info({ scanned: rows.length, attempted, filled, empty, failed, aborted, failReasons, concurrency: _conc, elapsedMs: Date.now() - t0 },
+  logger.info({ scanned: rows.length, attempted, filled, empty, failed, aborted, failReasons, throttleHits, intervalMs: interval, concurrency: _conc, elapsedMs: Date.now() - t0 },
     `밀도 백필: 용적률 ${filled} 채움 / ${empty} 값없음 / ${failed} 실패${aborted ? ' (실패율 과다로 조기 중단)' : ''}`);
   // scanned 는 '뽑아온 후보 수', attempted 는 '실제로 호출한 수' — 조기 중단이면 둘이 크게 갈린다.
-  return { scanned: rows.length, attempted, filled, empty, failed, aborted, failReasons };
+  return { scanned: rows.length, attempted, filled, empty, failed, aborted, failReasons, throttleHits, intervalMs: interval };
 }
 
 /**
@@ -213,7 +237,7 @@ async function backfillDensity(admin, {
  */
 async function run({
   cap = DEFAULT_TOTAL_CAP, budgetMs = 180000,
-  densityCap, densityBudgetMs, densityConcurrency, skipCollect = false,
+  densityCap, densityBudgetMs, densityConcurrency, densityMinIntervalMs, skipCollect = false,
 } = {}) {
   const started = Date.now();
   const admin = adminClient();
@@ -237,6 +261,7 @@ async function run({
       ...(densityCap != null ? { cap: parseInt(densityCap) } : {}),
       ...(densityBudgetMs != null ? { budgetMs: parseInt(densityBudgetMs) } : {}),
       ...(densityConcurrency != null ? { concurrency: parseInt(densityConcurrency) } : {}),
+      ...(densityMinIntervalMs != null ? { minIntervalMs: parseInt(densityMinIntervalMs) } : {}),
     });
   } catch (e) { logger.warn({ err: e.message }, '밀도 백필 실패(무시) — 수집은 계속한다'); }
 

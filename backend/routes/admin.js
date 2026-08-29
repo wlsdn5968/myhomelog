@@ -117,6 +117,7 @@ async function handleRunBrBackfill(req, res) {
       ...(q.densityCap != null ? { densityCap: q.densityCap } : {}),
       ...(q.densityBudgetMs != null ? { densityBudgetMs: q.densityBudgetMs } : {}),
       ...(q.densityConcurrency != null ? { densityConcurrency: q.densityConcurrency } : {}),
+      ...(q.densityMinIntervalMs != null ? { densityMinIntervalMs: q.densityMinIntervalMs } : {}),
       ...(String(q.skipCollect || '') === '1' ? { skipCollect: true } : {}),
     });
     logger.info({ durationMs: Date.now() - started, summary, adminId: req.user.id }, 'admin/run-building-register-backfill OK');
