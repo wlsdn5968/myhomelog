@@ -2810,14 +2810,24 @@ html[data-theme="dark"] #view-news{
 #view-landing .lv-bento .lv-ltv{grid-column:span 4}
 #view-landing .lv-bento .lv-source{grid-column:span 4}
 #view-landing .lv-bento .lv-updated{grid-column:span 4}
+/* PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최고·최저 경신 요약 밴드.
+   span 12 로 lv-apt 다음에 두면 행이 딱 맞는다 — row1 chart(8)+stat(4) / row2 chart+apt(4)
+   / row3 records(12) / row4 ltv+source+updated(12). 빈칸이 생기지 않는다. */
+#view-landing .lv-bento .lv-records{grid-column:span 12}
+#view-landing .lv-rec-row{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end}
+#view-landing .lv-rec-item{min-width:104px}
+#view-landing .lv-rec-v{font-family:var(--font-mono);font-size:30px;font-weight:700;color:var(--text-primary);letter-spacing:-1px;line-height:1}
+#view-landing .lv-rec-v span{font-size:15px;margin-left:2px;color:var(--text-secondary)}
+#view-landing .lv-rec-l{margin-top:6px;font-size:11.5px;color:var(--text-secondary)}
 @media(max-width:980px){
   #view-landing .lv-bento{grid-template-columns:repeat(2,1fr)}
   #view-landing .lv-bento .lv-chart{grid-column:span 2;grid-row:auto;min-height:220px}
   #view-landing .lv-bento .lv-stat,#view-landing .lv-bento .lv-apt,#view-landing .lv-bento .lv-ltv,#view-landing .lv-bento .lv-source,#view-landing .lv-bento .lv-updated{grid-column:span 1}
+  #view-landing .lv-bento .lv-records{grid-column:span 2}
 }
 @media(max-width:560px){
   #view-landing .lv-bento{grid-template-columns:1fr;padding:16px;gap:12px}
-  #view-landing .lv-bento .lv-chart,#view-landing .lv-bento .lv-stat,#view-landing .lv-bento .lv-apt,#view-landing .lv-bento .lv-ltv,#view-landing .lv-bento .lv-source,#view-landing .lv-bento .lv-updated{grid-column:auto}
+  #view-landing .lv-bento .lv-chart,#view-landing .lv-bento .lv-stat,#view-landing .lv-bento .lv-apt,#view-landing .lv-bento .lv-ltv,#view-landing .lv-bento .lv-source,#view-landing .lv-bento .lv-updated,#view-landing .lv-bento .lv-records{grid-column:auto}
   #view-landing .lv-bento .lv-chart{min-height:180px}
   #view-landing .lv-hero{padding:32px 16px 24px}
   #view-landing .lv-top{padding:14px 16px}
@@ -2923,6 +2933,22 @@ html[data-theme="dark"] #view-news{
         <div><div class="lv-apt-stat-v" id="lv-aptPrice">—</div><div class="lv-apt-stat-l">평균</div></div>
         <div><div class="lv-apt-stat-v" id="lv-aptDeals">—</div><div class="lv-apt-stat-l">60일 거래</div></div>
       </div>
+    </div>
+
+    <div class="lv-card lv-records">
+      <!-- PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최근 7일 최고·최저가 경신 요약.
+           ⚠ LANDING-FAKE-2026-08-17 선례를 그대로 따른다 — 초기값은 중립 플레이스홀더('—')이고
+             **실제 응답이 온 뒤에만** 숫자와 '실시간' 라벨을 채운다. 실패하면 '불러오지 못함'.
+             (하드코딩 숫자가 '실시간' 딱지를 달고 남으면 절대 룰 ② 위반이다.)
+           ⚠ 최고가만 싣지 않는다 — 한쪽만 보이면 밴드 자체가 매수 신호로 읽힌다(절대 룰 ①).
+           ⚠ '역대'가 아니라 적재 시작일(sinceDate) 이후다. 캡션에 그 날짜를 실제 값으로 박는다. -->
+      <div class="lv-card-head"><span class="lv-card-label">최근 7일 최고 · 최저 경신</span><span class="lv-card-meta" id="lv-recMeta">불러오는 중</span></div>
+      <div class="lv-rec-row">
+        <div class="lv-rec-item"><div class="lv-rec-v" id="lv-recHigh">—</div><div class="lv-rec-l">최고가 경신</div></div>
+        <div class="lv-rec-item"><div class="lv-rec-v" id="lv-recLow">—</div><div class="lv-rec-l">최저가 경신</div></div>
+        <div class="lv-rec-item"><div class="lv-rec-v" id="lv-recCompared">—</div><div class="lv-rec-l">비교 가능 거래</div></div>
+      </div>
+      <div class="lv-card-sub" id="lv-recSub">같은 단지 · 같은 전용면적의 직전 거래와 비교 — 매수·매도 추천이 아닙니다</div>
     </div>
 
     <div class="lv-card lv-ltv">
@@ -3622,6 +3648,28 @@ async function _landingAsyncRefresh(){
   //   (예전엔 하드코딩된 가짜 단지가 '실시간' 딱지를 단 채 그대로 보였다.)
   try {
     const _m = document.getElementById('lv-aptMeta');
+    if (_m && _m.textContent === '불러오는 중') _m.textContent = '불러오지 못함';
+  } catch(_){}
+  // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최고·최저 경신 요약.
+  //   LANDING-FAKE 선례 그대로 — 응답이 실제로 오고 세 값이 전부 유효할 때만 채우고 '실시간'을 단다.
+  //   숫자는 Number 로 강제하므로 innerHTML 에 넣어도 문자열이 마크업으로 새지 않는다(단위 span 때문).
+  //   문자열인 sinceDate 는 textContent 로만 쓴다.
+  try {
+    const r = await fetch(`${CFG.api}/transactions/records`, {signal:AbortSignal.timeout(5000)});
+    if(r.ok){
+      const d = await r.json();
+      const hi = Number(d.highCount), lo = Number(d.lowCount), cmp = Number(d.comparedCount);
+      if(Number.isFinite(hi) && Number.isFinite(lo) && Number.isFinite(cmp) && cmp > 0){
+        const put = (id, n) => { const e = document.getElementById(id); if(e) e.innerHTML = Number(n).toLocaleString() + '<span>건</span>'; };
+        put('lv-recHigh', hi); put('lv-recLow', lo); put('lv-recCompared', cmp);
+        const sub = document.getElementById('lv-recSub');
+        if(sub) sub.textContent = `같은 단지 · 같은 전용면적의 직전 거래와 비교${d.sinceDate ? ` · ${String(d.sinceDate).replace(/-/g,'.')} 이후 적재분 안에서` : ''} — 매수·매도 추천이 아닙니다`;
+        const m = document.getElementById('lv-recMeta'); if(m) m.textContent = '실시간';
+      }
+    }
+  } catch(_){}
+  try {
+    const _m = document.getElementById('lv-recMeta');
     if (_m && _m.textContent === '불러오는 중') _m.textContent = '불러오지 못함';
   } catch(_){}
   // LAST SYNC 시각 갱신
