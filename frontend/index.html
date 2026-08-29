@@ -7443,6 +7443,13 @@ function showDetail(p){
         ['주용도', t.mainPurpsCdNm || '미상'],
         ['구조', t.strctCdNm || '미상'],
       ];
+      // DENSITY-2026-08-29: 용적률·건폐율은 **값이 있을 때만** 줄을 추가한다('미상' 줄을 만들지 않는다).
+      //   ⚠ 실측(8개 단지)에서 **1988년 이하 준공은 5/5 전부 null**, 2003년 이후는 3/3 값이 왔다.
+      //     총괄표제부에 노후 건물 데이터가 없어서다 → "재건축 여력" 용도로는 못 쓴다(정작 대상이 비어 있다).
+      //     그래서 사실 표기로만 둔다(절대 룰 ①: 추천·예측 아님). 값이 없으면 칸 자체가 안 뜬다.
+      if (t.vlRat != null) rows.push(['용적률', t.vlRat + '%']);
+      if (t.bcRat != null) rows.push(['건폐율', t.bcRat + '%']);
+      if (t.platArea != null) rows.push(['대지면적', Math.round(t.platArea).toLocaleString() + '㎡']);
       el.innerHTML = `<div style="font-size:11px;font-weight:700;color:var(--t1);margin-bottom:6px">🏢 건축물대장 기본개요${t.bldNm ? ` · ${_escHtml(t.bldNm)}` : ''}</div>`
         + `<table class="rtbl" style="width:100%"><tbody>${rows.map(([k, v]) => `<tr><td style="color:var(--t3);width:34%">${k}</td><td style="font-weight:600">${_escHtml(String(v))}</td></tr>`).join('')}</tbody></table>`
         + `<div style="font-size:10px;color:var(--t3);margin-top:6px">출처: 국토교통부 건축HUB 건축물대장 (KAPT 미등록 단지 보강)</div>`;
