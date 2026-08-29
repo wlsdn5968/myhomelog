@@ -89,7 +89,7 @@ async function resolveJibun(admin, lawdCd, umdNm, aptName) {
 
 /**
  * 단지 표제부 조회 (캐시 우선). KAPT 없는 단지 fallback 용.
- * @returns {object|null} { bldNm, useAprDay(YYYYMMDD), hhldCnt, grndFlrCnt, ugrndFlrCnt, totArea, mainPurpsCdNm, strctCdNm, dongCnt, jibun } | null
+ * @returns {object|null} { bldNm, useAprDay(YYYYMMDD), hhldCnt, grndFlrCnt, ugrndFlrCnt, totArea, mainPurpsCdNm, strctCdNm, dongCnt, jibun, platArea, archArea, bcRat, vlRat } | null
  */
 async function getBuildingTitle({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
   const admin = getSupabaseAdmin();
@@ -151,6 +151,18 @@ async function getBuildingTitle({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
         strctCdNm: (best.strctCdNm || '').trim() || null,
         dongCnt: arr.length,
         jibun: ji.jibun,
+        // DENSITY-2026-08-29: **이미 같은 응답에 오는데 버리고 있던 필드들.**
+        //   [왜 필요한가] 지금 재건축 판정은 연식 하나("준공 30년 이상")뿐이라, 같은 1989년이라도
+        //   용적률 180% 단지와 300% 단지가 똑같이 표시된다 — 실제 여력은 정반대다.
+        //   ⚠ 이것은 사실 표기이지 추천이 아니다(절대 룰 ①: 매수·매도 추천 금지).
+        //   ⚠ 대표동(best) 기준이다. 용적률·건폐율은 통상 **대지 단위**로 산정되어 같은 대지의
+        //     여러 동이 같은 값을 갖지만, 단지가 여러 대지에 걸치면 동별로 갈릴 수 있다
+        //     → 배포 후 다동 단지로 실측해 확인할 것(값이 갈리면 표기 방식을 다시 정한다).
+        //   ⚠ 응답에 없으면 null 이 되도록 방어적으로 파싱한다(문서상 제공되나 실측 전이다).
+        platArea: parseFloat(best.platArea) || null,   // 대지면적(㎡)
+        archArea: parseFloat(best.archArea) || null,   // 건축면적(㎡)
+        bcRat: parseFloat(best.bcRat) || null,         // 건폐율(%)
+        vlRat: parseFloat(best.vlRat) || null,         // 용적률(%)
       };
     }
   } catch (e) {
