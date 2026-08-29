@@ -215,4 +215,48 @@ async function getBuildingTitle({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
   return title;
 }
 
-module.exports = { getBuildingTitle, parseJibun, resolveBjdong, resolveJibun };
+/**
+ * 총괄표제부만 단독 조회 — DENSITY-BACKFILL-2026-08-29
+ *
+ * 왜 별도 함수인가:
+ *   getBuildingTitle 은 지번→법정동코드 해석에 **Kakao 주소검색**을 쓴다(지도·지오코딩과 쿼터 공유).
+ *   그런데 building_register 에 이미 캐시된 행은 sigungu_cd/bjdong_cd/bun/ji 를 **컬럼으로 들고 있다**
+ *   (실측 2026-08-29: 5,918행 전부 완비). 그 값을 그대로 재사용하면 Kakao 를 **한 번도 안 쓰고**
+ *   총괄표제부만 다시 부를 수 있다 → 기존 캐시에 대지 단위 지표를 붙이는 백필이 쿼터 위험 없이 가능.
+ *
+ * ⚠ 값이 없는 게 정상인 경우가 많다 — 실측상 1988년 이하 준공은 총괄표제부 자체가 없다.
+ *   그래서 호출자는 "null 이어도 키를 기록"해 같은 행을 매 회차 재조회하지 않게 해야 한다.
+ *
+ * @returns {Promise<{platArea:?number,archArea:?number,bcRat:?number,vlRat:?number}|null>}
+ *          null = 호출 자체가 실패(재시도 가치 있음) / 객체 = 조회 성공(값은 전부 null 일 수 있음)
+ */
+async function fetchRecapOnly({ sigunguCd, bjdongCd, bun, ji }) {
+  if (!sigunguCd || !bjdongCd || !bun) return null;
+  try {
+    const rr = await dgk.get(BR_RECAP_URL, {
+      params: {
+        serviceKey: process.env.MOLIT_API_KEY,
+        sigunguCd, bjdongCd, platGbCd: '0', bun, ji: ji || '0000',
+        numOfRows: 10, pageNo: 1, _type: 'json',
+      },
+      timeout: 8000, headers: { Accept: 'application/json' },
+    });
+    if (!OK.has(rr.data?.response?.header?.resultCode)) return null;
+    const ra = itemArray(rr.data?.response?.body?.items?.item);
+    const rb = ra.slice().sort((a, b) => (parseFloat(b.totArea) || 0) - (parseFloat(a.totArea) || 0))[0];
+    // 조회는 됐는데 항목이 0건 = "이 대지엔 총괄표제부가 없다". 성공으로 취급해 전부 null 을 돌려준다
+    // (실패로 취급하면 값 없는 노후 단지를 영원히 재조회하게 된다).
+    if (!rb) return { platArea: null, archArea: null, bcRat: null, vlRat: null };
+    return {
+      platArea: parseFloat(rb.platArea) || null,
+      archArea: parseFloat(rb.archArea) || null,
+      bcRat: parseFloat(rb.bcRat) || null,
+      vlRat: parseFloat(rb.vlRat) || null,
+    };
+  } catch (e) {
+    logger.warn({ err: e.message, sigunguCd, bjdongCd, bun }, 'buildingRegister: 총괄표제부 단독조회 실패');
+    return null;
+  }
+}
+
+module.exports = { getBuildingTitle, parseJibun, resolveBjdong, resolveJibun, fetchRecapOnly };

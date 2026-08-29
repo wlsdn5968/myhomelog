@@ -20,7 +20,7 @@
  *     total cap 이 방어). 성공분은 building_register 에 남아 후보에서 제외(anti-join).
  *   - budgetMs 마진에서 종료(Vercel maxDuration 안전).
  */
-const { getBuildingTitle } = require('../services/buildingRegisterService');
+const { getBuildingTitle, fetchRecapOnly } = require('../services/buildingRegisterService');
 const logger = require('../logger');
 // SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 (null-게이트 의미 유지)
 const { getSupabaseAdmin } = require('../db/client');
@@ -122,6 +122,71 @@ async function writeBackToMaster(admin) {
   return { scanned: rows.length, written, ambiguous };
 }
 
+// DENSITY-BACKFILL-2026-08-29: 기존 캐시 행에 대지 단위 지표(용적률·건폐율·대지면적)를 채운다.
+//
+// [왜 별도 경로인가] 후보 함수 get_br_backfill_candidates 는 "building_register 미보유" 단지만 뽑는다.
+//   즉 **이미 캐시된 5,918행은 영원히 후보가 아니다** — 새 필드가 저절로 채워질 경로가 없다.
+//   실측(2026-08-29): 5,918행 중 vlRat 키를 가진 행 **0건**. 즉 화면에 이 값을 보는 사용자가 0명이다.
+//
+// [Kakao 를 쓰지 않는다] 캐시 행은 sigungu_cd/bjdong_cd/bun/ji 를 컬럼으로 들고 있고(실측 5,918/5,918
+//   완비), fetchRecapOnly 가 그 값으로 총괄표제부만 직접 부른다. 이 파일 상단 주석이 경고하는
+//   "Kakao 쿼터 공유" 위험이 이 경로엔 **없다**.
+//
+// [멱등·기아 방지] 처리한 행에는 값이 null 이어도 `title._densAt` 마커를 남긴다.
+//   실측상 1988년 이하 준공은 총괄표제부가 아예 없어 영구 null 이다 — 마커가 없으면 그 행들이
+//   매 회차 후보로 되돌아와 신축 행이 영원히 처리되지 않는다(기아).
+//   준공 최신순으로 처리해 **값이 실제로 오는 구간(2003년 이후 3,394건)부터** 채운다.
+// cap 200 · 동시성 5 — 이 경로는 **Kakao 를 쓰지 않으므로** 파일 상단이 경고하는 쿼터 제약과 무관하다.
+//   건축HUB 한도(1만/일) 대비 200 은 여유가 크다. 대상 4,984건(1995년 이후 미처리) → 약 25일 소요.
+const DENSITY_CAP = 200;
+const DENSITY_BUDGET_MS = 70000;
+const DENSITY_CONCURRENCY = 5;
+// 준공 하한 — 실측(2026-08-29)상 1988년 이하는 총괄표제부가 없어 전부 null 이고, 2003년 이후는 전부 값이 왔다.
+//   경계가 그 사이 어디인지는 미확인이라 **1995** 로 잡아 미확인 구간까지 덮는다(4,984건).
+//   그 이전 단지는 호출해봐야 빈 값이라 대상에서 뺀다(무의미한 API 호출 절약).
+const DENSITY_MIN_APR = '1995';
+
+async function backfillDensity(admin, { cap = DENSITY_CAP, budgetMs = DENSITY_BUDGET_MS } = {}) {
+  const t0 = Date.now();
+  const { data, error } = await admin.from('building_register')
+    .select('apt_key, sigungu_cd, bjdong_cd, bun, ji, title')
+    .is('title->_densAt', null)              // 아직 시도하지 않은 행 (apt_master._br 와 동일 패턴)
+    // ⚠ JSON 경로 정렬(.order('title->>useAprDay'))은 이 레포에 선례가 없어 쓰지 않는다.
+    //   대신 **필터**로 대상을 좁힌다 — `.eq('facility->>kaptdaCnt','0')` 로 이미 검증된 패턴이다.
+    //   useAprDay 는 'YYYYMMDD' 8자리 고정이라 문자열 비교가 곧 연도 비교다.
+    .gte('title->>useAprDay', DENSITY_MIN_APR)
+    .limit(cap);
+  if (error) {
+    logger.warn({ err: error.message }, '밀도 백필: 후보 조회 실패 — 건너뜀');
+    return { scanned: 0, filled: 0, empty: 0, failed: 0 };
+  }
+  const rows = data || [];
+  if (!rows.length) return { scanned: 0, filled: 0, empty: 0, failed: 0 };
+
+  let filled = 0, empty = 0, failed = 0;
+  const queue = rows.slice();
+  async function worker() {
+    while (queue.length) {
+      if ((Date.now() - t0) > budgetMs - 8000) return;
+      const r = queue.shift();
+      const d = await fetchRecapOnly({
+        sigunguCd: r.sigungu_cd, bjdongCd: r.bjdong_cd, bun: r.bun, ji: r.ji,
+      });
+      // null = 호출 실패. 마커를 남기지 않아 다음 회차에 재시도한다(값 없음과 구별).
+      if (!d) { failed++; continue; }
+      const title = { ...(r.title || {}), ...d, _densAt: new Date().toISOString() };
+      const { error: upErr } = await admin.from('building_register')
+        .update({ title }).eq('apt_key', r.apt_key);
+      if (upErr) { failed++; continue; }
+      if (d.vlRat != null) filled++; else empty++;
+    }
+  }
+  await Promise.all(Array.from({ length: DENSITY_CONCURRENCY }, () => worker()));
+  logger.info({ scanned: rows.length, filled, empty, failed, elapsedMs: Date.now() - t0 },
+    `밀도 백필: 용적률 ${filled} 채움 / ${empty} 값없음 / ${failed} 실패`);
+  return { scanned: rows.length, filled, empty, failed };
+}
+
 /**
  * @param {Object} opts
  * @param {number} [opts.cap=100]        — 하루 total 처리 상한 (Kakao 쿼터 보호)
@@ -141,6 +206,13 @@ async function run({ cap = DEFAULT_TOTAL_CAP, budgetMs = 180000 } = {}) {
   try { wb = await writeBackToMaster(admin); }
   catch (e) { logger.warn({ err: e.message }, 'BR 되쓰기 실패(무시) — 수집은 계속한다'); }
 
+  // DENSITY-BACKFILL-2026-08-29: 되쓰기와 같은 이유로 **조기 return 앞**에 둔다
+  //   ("후보 없음"인 날에 통째로 건너뛰어지면 5,918행이 영원히 안 채워진다).
+  //   자체 시간 상한(60s)을 둬서 아래 수집 단계의 예산을 잠식하지 않는다.
+  let dens = { scanned: 0, filled: 0, empty: 0, failed: 0 };
+  try { dens = await backfillDensity(admin); }
+  catch (e) { logger.warn({ err: e.message }, '밀도 백필 실패(무시) — 수집은 계속한다'); }
+
   // 후보 조회 — Postgres 함수(거래 n>=2 & building_register 미보유). 미생성 시 graceful no-op.
   let candidates = [];
   try {
@@ -148,14 +220,14 @@ async function run({ cap = DEFAULT_TOTAL_CAP, budgetMs = 180000 } = {}) {
     if (error) {
       // 42883: function 미존재 → 게이트 미충족(운영자 SQL 대기)
       logger.warn({ err: error.message, code: error.code }, 'building-register 백필: 후보 함수 미생성(운영자 SQL 대기) — no-op');
-      return { ok: true, gated: true, processed: 0, brScanned: wb.scanned, brWritten: wb.written, note: 'get_br_backfill_candidates 미생성' };
+      return { ok: true, gated: true, processed: 0, brScanned: wb.scanned, brWritten: wb.written, dens, note: 'get_br_backfill_candidates 미생성' };
     }
     candidates = Array.isArray(data) ? data : [];
   } catch (e) {
     logger.warn({ err: e.message }, 'building-register 백필: 후보 조회 실패 — no-op');
-    return { ok: true, processed: 0, brScanned: wb.scanned, brWritten: wb.written, error: e.message };
+    return { ok: true, processed: 0, brScanned: wb.scanned, brWritten: wb.written, dens, error: e.message };
   }
-  if (!candidates.length) return { ok: true, processed: 0, brScanned: wb.scanned, brWritten: wb.written, message: '후보 없음(캐시 최신)' };
+  if (!candidates.length) return { ok: true, processed: 0, brScanned: wb.scanned, brWritten: wb.written, dens, message: '후보 없음(캐시 최신)' };
 
   let filled = 0, missed = 0;
   const queue = candidates.slice(0, totalCap);
@@ -185,10 +257,10 @@ async function run({ cap = DEFAULT_TOTAL_CAP, budgetMs = 180000 } = {}) {
   }, `building-register 백필: ${filled} 채움 / ${missed} 미확인 · 마스터 되쓰기 ${wb.written}/${wb.scanned} (${elapsed}ms)`);
   return {
     ok: true, processed: filled + missed, filled, missed,
-    brScanned: wb.scanned, brWritten: wb.written, elapsedMs: elapsed,
+    brScanned: wb.scanned, brWritten: wb.written, dens, elapsedMs: elapsed,
   };
 }
 
 // writeBackToMaster 는 "좋은 KAPT 값을 덮지 않는다 · 동명은 건드리지 않는다 · 값이 없으면 아무것도 적지 않는다"
 //   라는 성질을 담당하므로 테스트에서 **직접 실행**해 고정한다(형태 검사로는 이 세 가지를 못 잡는다).
-module.exports = { run, writeBackToMaster };
+module.exports = { run, writeBackToMaster, backfillDensity };
