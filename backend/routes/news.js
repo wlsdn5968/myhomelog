@@ -97,7 +97,14 @@ router.get('/', async (req, res) => {
   const hit = cache.get(cacheKey);
   // CDN-CACHE-2026-06-14: 공개·비개인화 뉴스 → Vercel 엣지가 함수 호출 없이 서빙 → 콜드스타트/캐시미스 latency 제거.
   const NEWS_CDN = 'public, max-age=0, s-maxage=600, stale-while-revalidate=1800';
-  if (hit) { res.set('Cache-Control', NEWS_CDN); return res.json({ ...hit, fromCache: true }); }
+  // ⚠ CACHE-POISON-2026-08-29: 아래 132행은 빈 결과에 CDN 헤더를 안 붙이도록 이미 막고 있었는데,
+  //   **이 캐시 히트 경로가 그 가드를 우회했다.** 전체 실패로 빈 결과가 node-cache 에 들어가면
+  //   다음 요청이 여기서 s-maxage=600 을 붙여 빈 뉴스 목록이 엣지에 10분 고정된다.
+  //   주 경로만 고치고 히트 경로를 빠뜨리는 것 — 쌍둥이 미수정과 같은 종류의 누락이다.
+  if (hit) {
+    if (Number(hit.count) > 0) res.set('Cache-Control', NEWS_CDN);
+    return res.json({ ...hit, fromCache: true });
+  }
 
   // 키워드별 합쳐서 가져오기 (중복 제거)
   let items = [];
@@ -129,8 +136,11 @@ router.get('/', async (req, res) => {
     disclaimer: '뉴스 콘텐츠는 각 언론사의 저작권이며, 본 서비스는 단순 인덱싱·링크 제공만 합니다. 기사 내용에 대한 책임은 해당 언론사에 있습니다.',
     updatedAt: new Date().toISOString(),
   };
-  cache.set(cacheKey, out, 1800); // 30분
-  if (items.length) res.set('Cache-Control', NEWS_CDN); // 빈 결과(전체 실패)는 캐시 안 함 — 다음 요청서 재시도
+  // ⚠ 주석은 "빈 결과는 캐시 안 함"이라고 적혀 있었지만 실제로는 **무조건 30분 저장**했다.
+  //   빈 결과를 30분 들고 있으면 그 30분 동안 재시도 자체가 없다 — 주석이 약속한 동작이 아니다.
+  //   외부 API 쿼터를 생각해 아예 안 담지는 않고 60초만 담는다(재시도는 되면서 폭주는 막는다).
+  cache.set(cacheKey, out, items.length ? 1800 : 60);
+  if (items.length) res.set('Cache-Control', NEWS_CDN); // 빈 결과(전체 실패)는 엣지에 올리지 않는다
   res.json(out);
 });
 

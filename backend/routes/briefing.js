@@ -135,7 +135,15 @@ router.get('/:date', async (req, res) => {
 
   const isToday = day === kstDayString();
   // 과거 날짜는 불변 기록 — 엣지 캐시 길게. 오늘은 30분.
-  res.set('Cache-Control', isToday ? 'public, max-age=0, s-maxage=1800' : 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
+  // ⚠ CACHE-POISON-2026-08-29: getOrCreateSnapshot 은 **저장은 lines 가 있을 때만** 하면서
+  //   payload 자체는 lines 가 비어도 그대로 돌려준다(briefingService: `if (payload.lines.length) upsert`
+  //   뒤에 조건 없는 `return payload`). 그래서 원자료 조회가 통째로 실패한 날에도 200 이 나가고,
+  //   여기서 s-maxage 가 붙으면 "기록된 시황이 없습니다" 화면이 30분간 엣지에 굳는다.
+  //   저장할 가치가 없다고 판단한 payload 라면 캐시할 가치도 없다 — 판정을 서비스와 일치시킨다.
+  const _thin = !Array.isArray(snap.lines) || snap.lines.length === 0;
+  res.set('Cache-Control', _thin
+    ? 'no-store'
+    : (isToday ? 'public, max-age=0, s-maxage=1800' : 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800'));
   res.type('html').send(pageShell(title, desc, day, `
     <div class="eyebrow">MYHOMELOG BRIEFING</div>
     <h1>${esc(day.replace(/-/g, '.'))}(${yo})</h1>

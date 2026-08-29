@@ -41,8 +41,14 @@ router.get('/ltv', async (req, res) => {
 
 // REG-LOG-2026-08-19 (Sprint NNNNNNN-12→14): 로직은 regulationsService.getChangeLog 로 승격 — 서버렌더 브리핑 페이지와 공유(사본 금지).
 router.get('/log', async (req, res) => {
-  res.set('Cache-Control', 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
-  res.json(await require('../services/regulationsService').getChangeLog());
+  const out = await require('../services/regulationsService').getChangeLog();
+  // ⚠ CACHE-POISON-2026-08-29: getChangeLog 는 DB 미설정·조회 실패에도 `{ items: [] }` 를 200 으로 준다.
+  //   그걸 s-maxage=6h 로 캐시하면 **일시적 DB 장애가 6시간짜리 장애로 승격**된다
+  //   (프론트는 items.length 로 카드 표시를 결정하므로 규제 로그 카드가 6시간 사라진다).
+  //   운영자 검증을 거친 행만 쌓이는 구조라 정상 상태에서 빈 배열은 나오지 않는다 → 빈 배열 = 열화.
+  const degraded = !out || !Array.isArray(out.items) || out.items.length === 0;
+  res.set('Cache-Control', degraded ? 'no-store' : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
+  res.json(out);
 });
 
 module.exports = router;
