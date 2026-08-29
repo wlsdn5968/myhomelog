@@ -6241,6 +6241,15 @@ async function doSearch(){
       _chatSessionId = null;
     }
     renderPList();renderMarkers(props);renderListGrid();
+    // SEARCH-RESULT-MOBILE-2026-08-29: 좁은 화면은 사이드바가 **off-canvas**(.lp left:-319)라
+    //   renderPList 결과가 화면 밖에 그려진다. 375px 실측 — 검색 성공 15건인데 **보이는 카드 0 ·
+    //   지도 마커 0** 이라 사용자에겐 "아무 일도 안 일어난" 것으로 보였다(목록 탭을 직접 눌러야 나옴).
+    //   데스크톱은 사이드바에 이미 보이므로 건드리지 않는다.
+    //   ⚠ 검색 중 사용자가 다른 탭으로 옮겼으면 덮어쓰지 않는다 — **지도 뷰에 그대로 있을 때만** 전환.
+    if (window.innerWidth <= 700) {
+      const _mv = document.getElementById('view-map');
+      if (_mv && getComputedStyle(_mv).display !== 'none') { try { sv('list'); } catch (_) {} }
+    }
     // SEARCH-FITBOUNDS-2026-07-15 (Sprint MMMMM, 전수 실측): 검색 후에도 광역 줌 유지 → 결과 마커 pill
     //   겹침(9.0억↔5.2억 실캡처). 좌표 보유 결과에 맞춰 1회 fitBounds — GGGG 함정 회피(좌표 있는 것만·
     //   1건이면 setCenter+줌14). 이후 사용자가 지도를 움직이면 그대로 존중(재검색 시에만 재적용).
