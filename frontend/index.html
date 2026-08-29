@@ -1600,6 +1600,13 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
     width:32px;height:32px;
   }
 }
+
+  /* NARROW-NAME-2026-08-29: 320px 실측 — 브리핑의 청약·인기 단지명이 flex 로 **104px** 만 받아
+     "검암역 푸르지오 프라베뉴 (B-1BL…" 처럼 40% 만 보였다(말줄임이 걸려 레이아웃은 안전했지만
+     정보가 전달되지 않는다). 좁은 화면에서만 2줄까지 허용한다. 인라인 style 을 덮어야 해 !important. */
+  @media (max-width:360px){
+    .brf-ell{white-space:normal!important;display:-webkit-box!important;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden!important}
+  }
 </style>
 <!-- Vercel Web Analytics — 30일 검증 모드 계측 (2026-05-02 ~ 2026-06-01) -->
 <!-- Day 30 후 GO/PIVOT/STOP 결정에 사용 — 그 전엔 funnel 데이터만 수집 -->
@@ -5099,7 +5106,7 @@ async function renderBriefing(){
     if(items.length){
       subsHtml=items.slice(0,3).map(it=>`<div class="brf-row" style="align-items:center;gap:12px;padding:11px 13px;margin-bottom:8px">
         <div style="flex:0 0 56px;text-align:center"><div style="font-size:16px;font-weight:800;font-variant-numeric:tabular-nums">${dDayLabel(it.receiveStart)}</div><div style="font-size:9.5px;color:var(--brf-tx3)">접수</div></div>
-        <div style="min-width:0;flex:1"><div style="font-size:12.5px;font-weight:700;color:var(--brf-tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(it.name||'')}</div><div style="margin-top:2px;font-size:10.5px;color:var(--brf-tx2);font-variant-numeric:tabular-nums">접수 ${fmtSubsDate(it.receiveStart)}${it.receiveEnd?'~'+fmtSubsDate(it.receiveEnd):''}</div></div>
+        <div style="min-width:0;flex:1"><div class="brf-ell" style="font-size:12.5px;font-weight:700;color:var(--brf-tx);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(it.name||'')}</div><div style="margin-top:2px;font-size:10.5px;color:var(--brf-tx2);font-variant-numeric:tabular-nums">접수 ${fmtSubsDate(it.receiveStart)}${it.receiveEnd?'~'+fmtSubsDate(it.receiveEnd):''}</div></div>
       </div>`).join('');
     } else { subsHtml=`<div style="font-size:10.5px;color:var(--brf-tx3);padding:6px 0">30일 내 일정 없음 또는 조회 실패</div>`; }
     // 인기 단지 TOP5 — 시안 카드(rank·단지·구 + 60일 평균가·건수). 평균가는 popular avgDealAmount(만원) 실데이터.
@@ -5107,7 +5114,7 @@ async function renderBriefing(){
     if(ps.length){
       popHtml=ps.slice(0,5).map((p2,i)=>`<button class="brf-top" onclick='goSearchResult(${_jsonAttr({aptName:p2.aptName,sigungu:p2.sigungu,umdNm:p2.umdNm,lawdCd:p2.lawdCd,buildYear:p2.buildYear,recentDealDate:p2.recentDealDate})})'>
         <span style="flex:0 0 18px;font-size:12px;font-weight:800;color:var(--brf-tx3);font-variant-numeric:tabular-nums">${i+1}</span>
-        <span style="flex:1;min-width:0"><span style="display:block;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(p2.aptName||'')}</span><span style="display:block;margin-top:2px;font-size:10.5px;color:var(--brf-tx3)">${_escHtml(_fmtSgg(p2.sigungu))}</span></span>
+        <span style="flex:1;min-width:0"><span class="brf-ell" style="display:block;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(p2.aptName||'')}</span><span style="display:block;margin-top:2px;font-size:10.5px;color:var(--brf-tx3)">${_escHtml(_fmtSgg(p2.sigungu))}</span></span>
         <span style="text-align:right;flex-shrink:0">${Number.isFinite(Number(p2.avgDealAmount))&&Number(p2.avgDealAmount)>0?`<span style="display:block;font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums">${(Number(p2.avgDealAmount)/10000).toFixed(2)}억</span>`:''}<span style="display:block;margin-top:2px;font-size:10.5px;font-weight:700;color:var(--brf-tx2);font-variant-numeric:tabular-nums">${p2.dealCount60d?p2.dealCount60d+'건':''}</span></span>
       </button>`).join('');
     } else { popHtml=`<div style="font-size:10.5px;color:var(--brf-tx3);padding:6px 0">조회 실패</div>`; }
