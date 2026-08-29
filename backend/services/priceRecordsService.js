@@ -173,7 +173,11 @@ async function getPriceRecordsByRegion({ force = false } = {}) {
     logger.warn({ err: e.message }, 'price records(지역) 조회 실패');
     return null;
   }
-  if (!data || !data.regions) return null;
+  if (!data || !data.regions) {
+    // ⚠ 조용한 null 은 소비자에서 "빈 목록"과 구별되지 않는다 — 2026-08-29 캐시 오염 사고의 추적을 막았다.
+    logger.warn({ hasData: !!data }, 'price records(지역) 응답에 regions 가 없다');
+    return null;
+  }
   cache.set(CK_REGION, data, TTL_LOCAL);
   try { await rset(CK_REGION, data, TTL_REDIS); } catch (_) { /* 공유 캐시 실패는 삼킨다 */ }
   return data;

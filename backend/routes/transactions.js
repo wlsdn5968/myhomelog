@@ -91,10 +91,22 @@ router.get('/records', async (req, res) => {
     const data = await svc.getPriceRecords();
     if (!data) return res.status(503).json({ error: '실거래 경신 집계 조회 실패' });
     let regions = [];
+    let degraded = false;
     if (String(req.query.withRegions || '') === '1') {
-      try { regions = svc.regionMenu(await svc.getPriceRecordsByRegion()); } catch (_) { regions = []; }
+      try {
+        regions = svc.regionMenu(await svc.getPriceRecordsByRegion());
+      } catch (e) {
+        // ⚠ 조용히 삼키지 않는다. 2026-08-29 실사고에서 이 catch 가 원인을 지워
+        //   "왜 목록이 비었는지"를 코드로 좁힐 수 없었다.
+        require('../logger').warn({ err: e.message }, 'price records 지역 목록 생성 실패');
+      }
+      // 실제로 118개 지역이 있는데 0개면 그건 **열화된 응답**이지 사실이 아니다.
+      if (!regions.length) degraded = true;
     }
-    res.set('Cache-Control', CC);
+    // ⚠ CACHE-POISON-2026-08-29 (실사고): 콜드 경로에서 한 번 빈 목록이 나왔는데 s-maxage=6h 로
+    //   엣지에 그대로 굳어(`x-vercel-cache: HIT`, `age 134`, `regions 0`) 브리핑 지역 선택기가
+    //   통째로 사라졌다. **열화된 응답은 캐시하지 않는다** — 다음 요청이 다시 계산하게 둔다.
+    res.set('Cache-Control', degraded ? 'no-store' : CC);
     res.json({ ...data, scope: 'national', regions });
   } catch (err) {
     require('../utils/captureError').captureRouteError(err, 'transactions');
