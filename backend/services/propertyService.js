@@ -688,7 +688,16 @@ async function getAIRecommendations(userCondition) {
   // Step 4: 거래량 가중 정렬 → 실거래 단지 우선 상위 15건
   // 필터 활성 시 폭을 넓힌다 — 최종 판정(enrichment 뒤)에서 걸러내고도 15건을 채우기 위함.
   //   좌표·학군은 최종 15건에만 조회하므로 늘어나는 비용은 facility 해석분뿐이다(대부분 DB 1쿼리).
-  const RANK_N = _filterActive ? 45 : 15;
+  // SCORE-ORDER-2026-08-30 (Sprint OOOOOOO, 운영자 "객관 지표가 좋은 곳들을 순서대로 배치해줘"):
+  //   [실측] 경기 남부 6곳 복수 검색 결과가 **점수순이 아니었다** —
+  //     1위 황골마을주공1 69점 · 2위 수원하늘채더퍼스트2단지 94점 · 3위 서동탄역더샵파크시티 **98점**.
+  //   여기 `_score`(거래량 가중)로 정렬해 놓고, 카드에는 `score`(_calcBaseScore + facility 보정)를
+  //   표시한다 — **보이는 점수와 순서가 다른 두 값**이었다. 사용자는 "왜 94점이 69점 아래지" 라고 본다.
+  //   [왜 여기서 점수로 못 정렬했나] 최종 점수는 facility 가 붙은 **뒤**에 확정된다(_applyFacilityToScore).
+  //   → 이 단계는 **후보를 넓게 고르는 역할만** 하고(거래량순은 그 목적엔 타당하다),
+  //     최종 순서는 enrichment 뒤에서 확정된 점수로 다시 매긴다.
+  //   ⚠ 폭을 넓히면 facility 해석이 늘지만 그건 DB 배치 1쿼리다. 좌표·학군은 최종 15건에만 돈다.
+  const RANK_N = _filterActive ? 45 : 40;
   const ranked = candidatePool
     .map(a => ({ ...a, _score: a.dealCount * 10 + (a.buildYear || 1990) * 0.01 }))
     .sort((x, y) => y._score - x._score)
@@ -911,6 +920,20 @@ async function getAIRecommendations(userCondition) {
       'PropertyService 조건 필터 최종 판정');
     _rankedF = keep.map(i => ranked[i]);
     enrichedRecs = keep.map(i => enrichedRecs[i]);
+  }
+  // SCORE-ORDER-2026-08-30 (Sprint OOOOOOO): **최종 순서를 화면에 보이는 점수로 확정한다.**
+  //   여기까지 오면 facility 가 붙어 `rec.score` 가 최종값이다(_applyFacilityToScore 적용 후).
+  //   위 거래량 정렬은 후보를 넓게 고르는 용도였고, 사용자에게 보이는 순서는 이 점수여야 한다 —
+  //   [실측] 그 전에는 98점 단지가 3위, 69점 단지가 1위였다.
+  //   ⚠ 동점은 거래량으로 가른다(표본이 많은 쪽이 시세 신뢰도가 높다). 그래도 같으면 이름순 —
+  //     정렬이 결정적이어야 같은 검색이 매번 같은 순서를 준다.
+  {
+    const order = enrichedRecs.map((rec, i) => ({ rec, apt: _rankedF[i], i }));
+    order.sort((a, b) => (Number(b.rec?.score) || 0) - (Number(a.rec?.score) || 0)
+      || (Number(b.apt?.dealCount) || 0) - (Number(a.apt?.dealCount) || 0)
+      || String(a.rec?.aptName || '').localeCompare(String(b.rec?.aptName || ''), 'ko'));
+    _rankedF = order.map(o => o.apt);
+    enrichedRecs = order.map(o => o.rec);
   }
   _rankedF = _rankedF.slice(0, 15);
   enrichedRecs = enrichedRecs.slice(0, 15);

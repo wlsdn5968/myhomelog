@@ -881,10 +881,23 @@ function computeAptScore(c, ctx) {
   // TAG-AGE-FIX-2026-07-11 (Sprint OOOO): 아래 신축/재건축/장기거주 점수의 절대연도 하드코딩(≥2018/≥2012/≤1995/≤2000/≥2010)을
   //   현재연도 기준 상대 나이로 통일 — getAgeBonus 와 동일 패턴, 시간드리프트 방지(2026 동작 거의 동일).
   const _age = c.build_year ? (new Date().getFullYear() - Number(c.build_year)) : null;
+  // SCORE-FIX-2026-08-30 (Sprint OOOOOOO, 점수표 감사 — 적대검증 통과):
+  //   아래 학군·조용함·자녀학군은 **서울 구 이름 문자열만** 보고 점수를 준다. lawd_cd 게이트가 없어
+  //   부산·대구·인천·대전·울산의 '중구' 가 서울 중구용 18점을 받는다 —
+  //   이 저장소가 6회 겪은 [[region-judgment-by-lawdcd]] 의 재발이다. 여기서 원천 차단한다.
+  const _isSeoul = String(c.lawd_cd || '').startsWith('11');
+  // 거래건수 상한 — 아래 주석 참조(SCORE-CAP).
+  const _nCapped = Math.min(20, Number(c.n) || 0);
 
   // 1) priority 가중치 (Phase 9.1: 환금성 가중치 n*4 → n*1.5 — 외곽 거래활발이 핵심권 못 이기던 문제)
   if (p === '환금성') {
-    const sub = Math.round(c.n * 1.5) + (c.households >= 500 ? 25 : (c.households >= 300 ? 12 : 0));
+    // SCORE-CAP-2026-08-30: 여기 n*1.5 는 **상한이 없었고**, 아래 transactions 의 n*0.5 와 합쳐
+    //   환금성 선택 시 거래건수가 실효 2.0n 으로 **두 번** 반영됐다.
+    //   [실측] 상한 있는 모든 항목의 이론적 최대 합이 331점인데, n≈166 이면 거래건수 하나가 그와 같아지고
+    //   현실적 상한(150~200) 기준으로는 **n≈75~100 에서 이미 지배**한다 — 입지·연식·인프라가 무의미해진다.
+    //   → n 항은 transactions 한 곳으로만 반영하고(아래), 여기서는 세대수만 본다.
+    //   '환금성' 의 실질 의미(거래가 잘 되는가)는 transactions 항이 이미 담는다.
+    const sub = (c.households >= 500 ? 25 : (c.households >= 300 ? 12 : 0));
     r.priority_환금성 = sub; total += sub;
   } else if (p === '학군') {
     // MOB-AUDIT-2026-05-03: 외곽 학군 우선순위 사용자에게 ★★★ 0개 risk → 부분 매칭 보강
@@ -894,8 +907,18 @@ function computeAptScore(c, ctx) {
     const topSchoolGu = ['양천구', '강남구', '서초구', '송파구', '노원구', '광진구'];
     const midSchoolGu = ['마포구', '용산구', '성동구', '영등포구', '중구', '종로구', '동작구', '강동구'];
     const topSchoolDong = ['대치동', '목동', '잠실동', '중계동', '반포동', '서초동', '여의도동', '도곡동'];
-    let sub = topSchoolGu.includes(c.sigungu) ? 35 : (midSchoolGu.includes(c.sigungu) ? 18 : 8);
-    if (topSchoolDong.includes(c.umd_nm)) sub += 10; // 핵심 동 가산점
+    // SCORE-FIX-2026-08-30: 서울 구 목록은 **서울일 때만** 본다(동명 지방 중구 오판 차단).
+    //   비서울은 이 목록으로 변별이 안 돼 전 후보가 8점 상수였다 — 학군을 1순위로 고른 의미가 없었다.
+    //   대신 이미 수집하는 amenities.school(반경 1.2km 학교 수)로 상대 등급을 준다.
+    //   ⚠ amenities 는 KAPT 호출 뒤에 붙으므로 여기선 없을 수 있다 → 그때는 종전 8점(모름)을 쓴다.
+    let sub;
+    if (_isSeoul) {
+      sub = topSchoolGu.includes(c.sigungu) ? 35 : (midSchoolGu.includes(c.sigungu) ? 18 : 8);
+      if (topSchoolDong.includes(c.umd_nm)) sub += 10; // 핵심 동 가산점
+    } else {
+      const sc = c.amenities && Number(c.amenities.school);
+      sub = Number.isFinite(sc) ? (sc >= 12 ? 30 : sc >= 8 ? 22 : sc >= 4 ? 14 : 8) : 8;
+    }
     r.priority_학군 = sub; total += sub;
   } else if (p === '역세권') {
     const sub = c.n >= 12 ? 20 : (c.n >= 8 ? 12 : 5);
@@ -911,7 +934,8 @@ function computeAptScore(c, ctx) {
     r.priority_교통 = sub; total += sub;
   } else if (p === '조용함') {
     const quietGu = ['도봉구', '강북구', '중랑구', '은평구', '금천구'];
-    const sub = quietGu.includes(c.sigungu) ? 18 : 3;
+    // SCORE-FIX-2026-08-30: 서울 전용 목록 — 서울일 때만 적용(비서울은 종전대로 3점, 변별 불가를 인정).
+    const sub = (_isSeoul && quietGu.includes(c.sigungu)) ? 18 : 3;
     r.priority_조용함 = sub; total += sub;
   } else if (p === '갭투자') {
     const sub = c.n >= 10 ? 12 : 3;
@@ -921,7 +945,8 @@ function computeAptScore(c, ctx) {
   // 2) 가구 상황 보너스
   if (ctx.kidPlan === '초등' || ctx.kidPlan === '중등+') {
     const goodSchoolGu = ['양천구', '강남구', '서초구', '송파구', '노원구', '광진구'];
-    if (goodSchoolGu.includes(c.sigungu)) {
+    // SCORE-FIX-2026-08-30: 서울 전용 목록 — 동명 지방구가 서울용 가산점을 받지 않게 한다.
+    if (_isSeoul && goodSchoolGu.includes(c.sigungu)) {
       r.kids_school_bonus = 20; total += 20;
     }
   }
@@ -941,7 +966,10 @@ function computeAptScore(c, ctx) {
   }
 
   // 4) 거래량 (기본 점수) — Phase 9: n*0.5 로 축소 (이전엔 거래량이 점수 좌우)
-  const txnScore = Math.round(c.n * 0.5);
+  // SCORE-CAP-2026-08-30: 상한 없는 유일한 항이었다. n=300 이면 150점으로,
+  //   단일 최대 항목(행정구위계 60)의 2.5배·상한합 331 의 45% 를 혼자 차지했다.
+  //   ⚠ c.n 은 **후보 풀(평형 밴드 적용) 안의** 6개월 건수라 실제보다 작다 — 그래서 상한을 낮게 잡는다.
+  const txnScore = Math.min(15, Math.round(_nCapped * 0.75));
   if (txnScore > 0) { r.transactions = txnScore; total += txnScore; }
 
   // ※ 데이터 품질 + 객관 항목 + universal preference 는 KAPT 호출 후 (applyObjectiveScore)
@@ -981,6 +1009,31 @@ function applyObjectiveScore(c, seoulRegulated = true) {
   if (c.new_high_count > 0 && !r['객관_신고가갱신']) {
     const sub = c.new_high_count >= 3 ? 8 : (c.new_high_count >= 1 ? 4 : 0);
     if (sub) { r['객관_신고가갱신'] = sub; c.score += sub; }
+  }
+
+  // SUBWAY-PROXY-2026-08-30 (Sprint OOOOOOO, 점수표 감사 — 적대검증 통과):
+  //   '역세권'·'교통' 우선순위가 **지하철 데이터를 전혀 보지 않고 거래건수(c.n)로만** 판정하고 있었다
+  //   (computeAptScore: 역세권 `c.n>=12?20:...`, 교통 `c.n>=10?18:6`).
+  //   그런데 실제 지하철 개수는 amenities.subway 로 **이미 수집돼 있다** — 다만 '객관_생활인프라'
+  //   한 항목에만 쓰이고, 그 값은 우선순위와 무관하게 모두에게 똑같이 붙는다.
+  //   즉 사용자가 '역세권'을 1순위로 골라도 그 선택이 실제 역 개수를 더 무겁게 만들지 못했다.
+  //   → amenities 가 붙은 지금 시점에 그 두 항목을 **실측 지하철 수로 교체**한다.
+  //   ⚠ 좌표가 없거나 카카오 조회가 실패하면 amenities 자체가 없다 → 그때는 종전 값을 그대로 둔다
+  //     (모르는 것을 0으로 바꾸지 않는다 — [[unknown-treated-as-value]]).
+  if (c.amenities && Number.isFinite(Number(c.amenities.subway))) {
+    const sw = Number(c.amenities.subway);
+    if (r.priority_역세권 != null) {
+      const next = sw >= 4 ? 20 : sw >= 2 ? 14 : sw >= 1 ? 8 : 2;
+      c.score += (next - r.priority_역세권);
+      r.priority_역세권 = next;
+      r._역세권_근거 = `반경 1.2km 지하철역 ${sw}곳`;
+    }
+    if (r.priority_교통 != null) {
+      const next = sw >= 4 ? 18 : sw >= 2 ? 12 : sw >= 1 ? 7 : 2;
+      c.score += (next - r.priority_교통);
+      r.priority_교통 = next;
+      r._교통_근거 = `반경 1.2km 지하철역 ${sw}곳`;
+    }
   }
 
   // Phase 9: amenities (사용자 보편 선호 — 지하철 인접·학교 밀집·생활인프라 강세)
