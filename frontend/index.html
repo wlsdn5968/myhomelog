@@ -4763,6 +4763,7 @@ function _renderReport(data) {
         <div>✅ <b>장점</b>: ${_escHtml(a.pros || '')}</div>
         <div>⚠ <b>단점</b>: ${_escHtml(a.cons || '')}</div>
         <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--bg2)">💰 <b>예산 매칭</b>: ${_escHtml(a.priceFit || '')}</div>
+        ${(() => { const l = _peakFloorLine(a); return l ? `<div style="font-size:10.5px;color:var(--t3);margin-top:4px">📈 ${l}</div>` : ''; })()}
         ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구 등급 <b>${_escHtml(f.district)}</b>`:null,f.builder?`시공사 <b>${_escHtml(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>${f.parking_total?` (총 ${_numFmt(f.parking_total)}대)`:''}${f.parking_uncertain?' <span style="color:var(--t3)">— 세대수 불일치로 참고용</span>':''}`:null,f.regulation?`규제 <b>${_escHtml(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>${_escHtml(a.sampleSpan||'최근 6개월')} ${_numFmt(f.new_high_count)}회 갱신</b>`:null].filter(Boolean);const am=f.amenities;
         /* MOB-AUDIT-2026-05-03: amenities 0 vs undefined 구분 — 좌표 호출 실패 시 "지하철 0개" 오해 차단 */
         const _amOk = am && (am.subway != null || am.mart != null || am.hospital != null || am.school != null);
@@ -4903,6 +4904,22 @@ function _downloadReportPDF() {
   const ts = new Date(data.generatedAt || Date.now()).toLocaleString('ko-KR');
 
   const coreHtml = (r.coreMessages || []).map(m => `<li>${esc(m)}</li>`).join('');
+  // PEAK-FLOOR-2026-08-31: 최근 6개월 최고가 + 층별 가격대 문구.
+  //   ⚠ "전고점" 이라고 쓰지 않는다 — 우리 DB 는 2025-05 부터라 역대 최고가를 알 수 없다.
+  //   ⚠ 층별 가격대는 표본이 얇으면 백엔드가 아예 안 보낸다(null) — 없으면 줄을 만들지 않는다.
+  const _peakFloorLine = (a) => {
+    const bits = [];
+    if (Number.isFinite(Number(a.peak6mAuk))) bits.push(`최근 6개월 최고 <b>${Number(a.peak6mAuk).toFixed(2)}억</b>`);
+    const fb = a.floorBands;
+    if (fb && fb.low && fb.high) {
+      const seg = [`저층(~${fb.low.upTo}층) ${fb.low.auk}억`];
+      if (fb.mid) seg.push(`중층 ${fb.mid.auk}억`);
+      seg.push(`고층(${fb.high.from}층~) ${fb.high.auk}억`);
+      bits.push('층별 중위 ' + seg.join(' · '));
+    }
+    return bits.length ? bits.join(' | ') : '';
+  };
+
   // WATERMARK-ID-2026-08-31 (Sprint PPPPPPP, 운영자: "워터마크는 고객의 아이디로 특정할 수 있어야"):
   //   PDF 는 캡처·재배포되기 쉽다. 유출 시 **어느 계정에 발급된 문서인지** 되짚을 수 있어야 한다.
   //   ⚠ 그렇다고 이메일 전문을 큼직하게 박지 않는다 — 보고서를 정상적으로 공유하는 경우에도
@@ -4957,6 +4974,7 @@ function _downloadReportPDF() {
         <div>✅ <b>장점</b>: ${esc(a.pros||'')}</div>
         <div>⚠ <b>단점</b>: ${esc(a.cons||'')}</div>
         <div class="apt-fit">💰 <b>예산 매칭</b>: ${esc(a.priceFit||'')}</div>
+        ${(() => { const l = _peakFloorLine(a); return l ? `<div style="font-size:8.5pt;color:#6B5F4D;margin-top:3px">📈 ${l}</div>` : ''; })()}
         ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구위계 <b>${esc(f.district)}</b>`:null,f.builder?`시공사 <b>${esc(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>${f.parking_total?` (총 ${_numFmt(f.parking_total)}대)`:''}${f.parking_uncertain?' <span style="color:var(--t3)">— 세대수 불일치로 참고용</span>':''}`:null,f.regulation?`규제 <b>${esc(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>${esc(a.sampleSpan||'최근 6개월')} ${_numFmt(f.new_high_count)}회</b>`:null].filter(Boolean);const am=f.amenities;const _amOk=am&&(am.subway!=null||am.mart!=null||am.hospital!=null||am.school!=null);const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway,'?')}</b>·마트 <b>${_numFmt(am.mart,'?')}</b>·종합병원 <b>${_numFmt(am.hospital,'?')}</b>·학교 <b>${_numFmt(am.school,'?')}</b>·공원 <b>${_numFmt(am.park,'?')}</b>`:(am?'주변 편의시설 좌표 미해결':'');if(!items.length && !amStr)return '';return `<div class="apt-objfacts">📊 <b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>🏥 ${amStr}`:''}${a.matchScore?` · 매칭 <b>${_numFmt(a.matchScore)}점</b>`:''}</div>`;})()}
         ${a.matchReason ? `<div class="apt-match">🏆 <b>왜 이 순위?</b> ${esc(a.matchReason)}</div>` : ''}
         <div class="apt-rec">📌 ${esc(a.recommendation||'')}</div>

@@ -3096,6 +3096,45 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
 });
 
+// ── PEAK-FLOOR-2026-08-31 (Sprint PPPPPPP) ────────────────────────────────────
+// 운영자가 준 컨설팅 보고서는 단지마다 "전고점"과 층·동 조건(RR)을 함께 적었다.
+// 우리도 같은 판단 근거를 주되, **말할 수 있는 것만** 말한다:
+//   · 우리 DB 는 2025-05 부터라 **역대 전고점을 모른다** → "최근 6개월 최고" 로만 쓴다.
+//   · 층별 가격대는 표본이 얇으면 사례 하나에 끌려간다 → 층 정보 6건 미만이면 아예 만들지 않는다.
+test('보고서 최고가·층별 가격대 — 기간을 속이지 않고, 표본이 얇으면 만들지 않는다', () => {
+  const fs2 = require('node:fs'); const path2 = require('node:path');
+  const rpt = fs2.readFileSync(path2.join(__dirname, '../routes/report.js'), 'utf8');
+  const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+
+  // ① 값이 만들어지고 응답에 실린다.
+  assert.match(rpt, /c\.peak6m = stats\[0\]\.max;/, '대표 평형 최고가를 계산하지 않는다');
+  assert.match(rpt, /peak6mAuk:/, '최고가를 응답에 싣지 않는다');
+  assert.match(rpt, /floorBands:/, '층별 가격대를 응답에 싣지 않는다');
+
+  // ② ⚠ "전고점" 이라고 부르지 않는다 — 16개월치 DB 로 역대 최고가를 주장할 수 없다.
+  assert.ok(!/전고점/.test(fe.slice(fe.indexOf('_peakFloorLine'), fe.indexOf('_peakFloorLine') + 1200)),
+    '표시 문구가 "전고점" 을 주장한다 — 우리 DB(2025-05~)로는 알 수 없는 사실이다');
+  assert.match(fe, /최근 6개월 최고/, '기간을 밝히지 않은 최고가 문구다');
+
+  // ③ 층별 가격대 표본 하한이 있다.
+  assert.match(rpt, /if \(withF\.length >= 6\)/, '층 표본 하한이 없다 — 1~2건으로 층별 시세를 만든다');
+  assert.match(rpt, /g\.length >= 2 \?/, '구간별 표본 하한이 없다');
+  assert.match(rpt, /if \(b1 && b3\) floorBands =/,
+    '저층·고층 중 하나가 비어도 층별 가격대를 만든다 — 비교 대상이 없으면 의미가 없다');
+
+  // ④ 실제로 실행해 확인한다.
+  const m = fe.match(/const _peakFloorLine = \(a\) => \{[\s\S]*?\n  \};/);
+  assert.ok(m, '문구 빌더를 찾지 못했다');
+  const fn = new Function(`${m[0]}; return _peakFloorLine;`)();
+  assert.equal(fn({}), '', '값이 없는데 빈 줄을 만든다');
+  const withPeak = fn({ peak6mAuk: 8.35 });
+  assert.ok(withPeak.includes('8.35억') && withPeak.includes('최근 6개월 최고'), '최고가 문구가 비었다');
+  const full = fn({ peak6mAuk: 8.35, floorBands: { low: { upTo: 5, n: 3, auk: 7.1 }, mid: { n: 4, auk: 7.9 }, high: { from: 12, n: 3, auk: 8.2 } } });
+  assert.ok(full.includes('저층(~5층) 7.1억') && full.includes('고층(12층~) 8.2억'), '층별 문구가 비었다');
+  // 층 정보가 없으면 층 문구는 빠지고 최고가만 남는다.
+  assert.ok(!fn({ peak6mAuk: 8.35 }).includes('층별'), '층 정보가 없는데 층별 문구를 만든다');
+});
+
 // ── WATERMARK-ID-2026-08-31 (Sprint PPPPPPP) ──────────────────────────────────
 // 운영자: "워터마크는 고객의 아이디나 이런 걸로 특정할 수 있도록 해놓은 거 맞지? 제대로 하자."
 // 처음 넣은 워터마크는 브랜드명("내집로그 · myhomelog")뿐이라 **어느 계정에 발급된 문서인지

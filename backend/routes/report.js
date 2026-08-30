@@ -544,6 +544,17 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
         }))
         : undefined,
       areaBasis: '전용면적 (국토교통부 실거래 신고 기준)',
+      // PEAK-FLOOR-2026-08-31 (운영자 참고 보고서 구조 반영):
+      //   · peak6m — 대표 평형의 **최근 6개월 최고가**. 참고 보고서의 "전고점" 에 대응하지만,
+      //     우리 DB 는 2025-05 부터라 "역대 전고점" 이라고 부를 수 없다. 기간을 문구에 명시한다.
+      //   · floorBands — 같은 평형 안에서 저/중/고층 중위가. "RR(로열동로열층)" 판단 근거다.
+      //     ⚠ 표본이 얇으면(층 정보 6건 미만·구간별 2건 미만) 만들지 않는다 — null 이면 표시도 안 한다.
+      peak6mAuk: Number.isFinite(c.peak6m) ? Math.round((c.peak6m / 10000) * 100) / 100 : undefined,
+      floorBands: c.floorBands ? {
+        low: c.floorBands.low ? { upTo: c.floorBands.low.upTo, n: c.floorBands.low.n, auk: Math.round((c.floorBands.low.median / 10000) * 100) / 100 } : null,
+        mid: c.floorBands.mid ? { n: c.floorBands.mid.n, auk: Math.round((c.floorBands.mid.median / 10000) * 100) / 100 } : null,
+        high: c.floorBands.high ? { from: c.floorBands.high.from, n: c.floorBands.high.n, auk: Math.round((c.floorBands.high.median / 10000) * 100) / 100 } : null,
+      } : undefined,
       areaPyeong: areaMain ? Math.round(areaMain / 3.3058) : undefined,
       buildYear: c.build_year || 0,
       households: c.households || '미상',
@@ -1702,7 +1713,8 @@ async function fetchCandidateApts(admin, input, limit) {
       const _rows = [];
       for (let from = 0; from <= 9000; from += _PAGE) {
         let qq = admin.from('molit_transactions')
-          .select('apt_name, sigungu, umd_nm, exclu_use_ar, deal_amount, deal_date')
+          // PEAK-FLOOR-2026-08-31: 층을 함께 받는다 — 같은 평형이어도 층에 따라 값이 갈린다.
+          .select('apt_name, sigungu, umd_nm, exclu_use_ar, deal_amount, deal_date, floor')
           .in('apt_name', _names)
           .gte('exclu_use_ar', minSqm).lte('exclu_use_ar', maxSqm)
           .gte('deal_date', _sinceDate);
@@ -1722,18 +1734,33 @@ async function fetchCandidateApts(admin, input, limit) {
         const bySqm = _byKey.get(k);
         const sq = Math.round(t.exclu_use_ar);
         if (!bySqm.has(sq)) bySqm.set(sq, []);
-        bySqm.get(sq).push(Number(t.deal_amount) || 0);
+        bySqm.get(sq).push({ p: Number(t.deal_amount) || 0, f: Number(t.floor) || null });
       }
       for (const c of out) {
         const bySqm = _byKey.get(`${c.apt_name}|${c.sigungu}|${c.umd_nm}`);
         if (!bySqm || !bySqm.size) continue;
-        const stats = [...bySqm.entries()].map(([sqm, arr]) => {
+        const stats = [...bySqm.entries()].map(([sqm, recs]) => {
+          const arr = recs.map(r2 => r2.p);
           const sorted = [...arr].sort((x, y) => x - y);
+          // PEAK-FLOOR-2026-08-31: 층별 가격대 — 참고 컨설팅 보고서의 'RR(로열동로열층)' 판단 근거.
+          //   ⚠ 표본이 얇으면 만들지 않는다. 층 3구간에 각 2건 미만이면 숫자가 사례 하나에 끌려간다.
+          const withF = recs.filter(r2 => Number.isFinite(r2.f));
+          let floorBands = null;
+          if (withF.length >= 6) {
+            const fs2 = withF.map(r2 => r2.f).sort((x, y) => x - y);
+            const lo = fs2[Math.floor(fs2.length / 3)];
+            const hi = fs2[Math.floor((fs2.length * 2) / 3)];
+            const med = (a3) => { if (!a3.length) return null; const t2 = [...a3].sort((x, y) => x - y); return t2[Math.floor(t2.length / 2)]; };
+            const band = (pick) => { const g = withF.filter(pick); return g.length >= 2 ? { n: g.length, median: med(g.map(r2 => r2.p)) } : null; };
+            const b1 = band(r2 => r2.f <= lo), b2 = band(r2 => r2.f > lo && r2.f <= hi), b3 = band(r2 => r2.f > hi);
+            if (b1 && b3) floorBands = { low: Object.assign({ upTo: lo }, b1), mid: b2, high: Object.assign({ from: hi }, b3) };
+          }
           return {
             sqm: Number(sqm), n: arr.length,
             avg: arr.reduce((a2, b2) => a2 + b2, 0) / arr.length,
             min: sorted[0], max: sorted[sorted.length - 1],
             median: sorted[Math.floor(sorted.length / 2)],
+            floorBands,
           };
         // 대표 평형 = 거래가 가장 많은 면적. 동수면 큰 면적을 택한다(같은 값이면 결정적으로).
         }).sort((a2, b2) => (b2.n - a2.n) || (b2.sqm - a2.sqm));
@@ -1742,6 +1769,10 @@ async function fetchCandidateApts(admin, input, limit) {
         c.avgPriceFull = stats[0].avg;      // 대표 평형의 6개월 평균 (밴드 미적용)
         c.priceSampleFull = stats[0].n;
         c.areaTotalN = stats.reduce((a2, b2) => a2 + b2.n, 0);
+        // 최근 6개월 최고가(대표 평형) — 참고 보고서의 '전고점' 에 대응하되 **기간을 명시**한다.
+        //   ⚠ 우리 DB 는 2025-05 부터라 '역대 전고점' 이라고 부를 수 없다. 부르지 않는다.
+        c.peak6m = stats[0].max;
+        c.floorBands = stats[0].floorBands || null;
       }
       logger.info({ names: _names.length, rows: _rows.length, withStats: out.filter(c => c.primaryArea).length },
         '보고서 대표평형 재집계 (예산밴드 미적용)');
