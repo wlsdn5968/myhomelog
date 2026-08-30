@@ -304,6 +304,26 @@ async function getAIRecommendations(userCondition) {
   const fMinHh = parseInt(minHouseholds) || 0;
   const fMinPark = parseFloat(minParkingRatio) || 0;
   const fSaleOnly = saleOnly === true || saleOnly === 'true';
+  const _filterActive = fMinHh > 0 || fMinPark > 0 || fSaleOnly;
+  // COND-FILTER-SSOT-2026-08-30 (Sprint OOOOOOO, 운영자 "군포 4.4억에 500세대+ 를 걸면 0건"):
+  //   [실측] 군포 4.4억 무필터 결과 15곳이 **전부 500세대 이상**(충무주공 2,490 · 주몽2-10 2,119 …)
+  //   인데 500세대+ 필터는 0건이었다. 부천 원미 5.4억도 같았다.
+  //   근본 원인 — **판정이 두 벌**이었다:
+  //     · 카드(enrichment): KAPT 이름 매칭 실패 시 **건축물대장(_brHh)** 으로 세대수를 얻는다 → 2,490 표시
+  //     · 필터: 같은 이름 매칭이 실패하면 그냥 **제외**. 건축물대장 경로가 없다
+  //   MOLIT 거래명과 KAPT 명은 접두·어순이 다르다(실측: "충무주공(872)" ↔ "산본주공충무1",
+  //   "개나리주공13" ↔ "산본13단지개나리") — 괄호·접미 제거만으로는 절대 안 붙는다.
+  //   → 최종 판정을 **enrichment 뒤 한 곳**으로 옮긴다. 카드에 보이는 값과 필터가 같은 소스를 쓰면
+  //     원리적으로 갈릴 수 없다([[tax-law-crosscheck-2026-06-24]] 의 "사본 2개" 와 같은 구조).
+  const _condPass = (fac) => {
+    if (!fac) return false; // 최종 단계에서 모름 = 조건 확인 불가 → 제외(UI 안내와 일치)
+    if (fMinHh > 0 && !(fac.totalHouseholds >= fMinHh)) return false;
+    // HH-CONFLICT-2026-08-17: 세대수 원천이 갈린 단지는 주차 비율의 분모를 믿을 수 없다.
+    if (fMinPark > 0 && fac.householdsConflict) return false;
+    if (fMinPark > 0 && !(fac.parkingRatio != null && fac.parkingRatio >= fMinPark)) return false;
+    if (fSaleOnly && fac.saleType !== '분양') return false;
+    return true;
+  };
 
   // NFC 정규화 — Mac(NFD) ↔ Windows(NFC) 캐시 분리 방지
   const normReg = String(region || '').normalize('NFC').trim();
@@ -508,17 +528,10 @@ async function getAIRecommendations(userCondition) {
         return false;
       }
       const fac = stored ? buildFacility(stored, code, stored._dtl || null) : null;
-      if (!fac) return false;
-      if (fMinHh > 0 && !(fac.totalHouseholds >= fMinHh)) return false;
-      // HH-CONFLICT-2026-08-17 (Sprint MMMMMMM): 세대당 주차의 분모는 세대수다. KAPT 두 원천
-      //   (kaptdaCnt·hoCnt)이 20% 이상 어긋난 단지는 그 분모를 믿을 수 없어 비율이 부풀거나 꺼진다
-      //   (실측: 아스테리움용산 6.07대/세대 — 서울 평균 1.086의 5.6배). '주차 여유' 를 **조건으로 건**
-      //   사용자에게 그런 단지를 여유 단지로 넣어주면 안 된다 → 필터 사용 시에만 제외한다.
-      //   (필터를 안 걸면 종전대로 후보에 남는다 — 정보를 지우는 게 아니라 판단에서만 뺀다.)
-      if (fMinPark > 0 && fac.householdsConflict) return false;
-      if (fMinPark > 0 && !(fac.parkingRatio != null && fac.parkingRatio >= fMinPark)) return false;
-      if (fSaleOnly && fac.saleType !== '분양') return false;
-      return true;
+      // ⚠ 여기서 모르는 단지를 빼면 안 된다([[unknown-treated-as-value]]). 이 단계는 pool 축소일 뿐이고,
+      //   최종 판정은 enrichment 뒤에서 한다 — 그때는 건축물대장 폴백까지 붙은 값을 본다.
+      if (!fac) return true;
+      return _condPass(fac);
     });
     logger.info({ before: matched.length, after: candidatePool.length, fMinHh, fMinPark, fSaleOnly }, 'PropertyService 조건 필터 적용');
     if (!candidatePool.length) {
@@ -585,10 +598,13 @@ async function getAIRecommendations(userCondition) {
   }
 
   // Step 4: 거래량 가중 정렬 → 실거래 단지 우선 상위 15건
+  // 필터 활성 시 폭을 넓힌다 — 최종 판정(enrichment 뒤)에서 걸러내고도 15건을 채우기 위함.
+  //   좌표·학군은 최종 15건에만 조회하므로 늘어나는 비용은 facility 해석분뿐이다(대부분 DB 1쿼리).
+  const RANK_N = _filterActive ? 45 : 15;
   const ranked = candidatePool
     .map(a => ({ ...a, _score: a.dealCount * 10 + (a.buildYear || 1990) * 0.01 }))
     .sort((x, y) => y._score - x._score)
-    .slice(0, 15);
+    .slice(0, RANK_N);
 
   // Step 5: 결과 카드 생성 (AI 호출 없음, 즉시 응답)
   // 규제지역 키워드 1회 조회 → 단지별 sigungu 기준으로 정확하게 LTV 계산.
@@ -792,8 +808,21 @@ async function getAIRecommendations(userCondition) {
     return recommendations[idx];
   }));
 
-  // enrich는 항상 recommendations 와 길이 동일 — 그대로 사용
-  const enrichedRecs = enriched;
+  // enrich는 항상 recommendations 와 길이 동일
+  // COND-FILTER-SSOT-2026-08-30: **여기가 조건 필터의 최종 판정**이다(위 사전 필터는 pool 축소용).
+  //   카드에 표시되는 facility 와 같은 객체로 판정하므로 "카드엔 2,490세대인데 필터가 뺀다" 가 불가능하다.
+  let _rankedF = ranked;
+  let enrichedRecs = enriched;
+  if (_filterActive) {
+    const keep = [];
+    for (let i = 0; i < enrichedRecs.length; i++) if (_condPass(enrichedRecs[i] && enrichedRecs[i].facility)) keep.push(i);
+    logger.info({ before: enrichedRecs.length, after: keep.length, fMinHh, fMinPark, fSaleOnly },
+      'PropertyService 조건 필터 최종 판정');
+    _rankedF = keep.map(i => ranked[i]);
+    enrichedRecs = keep.map(i => enrichedRecs[i]);
+  }
+  _rankedF = _rankedF.slice(0, 15);
+  enrichedRecs = enrichedRecs.slice(0, 15);
 
   // Step 6: 좌표 해결 — DB 캐시 우선, miss 시 Kakao 지오코딩.
   // 여기서 lat/lng 를 채워야 프론트가 fallback/jitter 없이 정확한 위치에 마커를 찍는다.
@@ -802,7 +831,7 @@ async function getAIRecommendations(userCondition) {
   // NAMEFIX-2026-05-11: coordInputs 의 aptName 은 **raw** 그대로 — apt_geocache cache key 호환성 보존.
   //   (Kakao query 정확도 ↑ 는 geocodeCacheService.kakaoGeocode 함수 내부에서 normalize 적용.)
   const coordInputs = enrichedRecs.map((rec, i) => {
-    const apt = ranked[i];
+    const apt = _rankedF[i];
     return {
       kaptCode: rec.facility?.kaptCode || null,
       aptName: rec.aptName,
@@ -818,8 +847,8 @@ async function getAIRecommendations(userCondition) {
   const schoolCacheInputs = enrichedRecs.map((rec, i) => ({
     kaptCode: rec.facility?.kaptCode || null,
     aptName: rec.aptName,
-    sigungu: ranked[i].sigungu || '',
-    umdNm: ranked[i].umdNm || '',
+    sigungu: _rankedF[i].sigungu || '',
+    umdNm: _rankedF[i].umdNm || '',
   }));
   const [coords, schoolsCached] = await Promise.all([
     resolveCoordBatch(coordInputs, 8), // REC-PERF-2026-07-10: 4→8 (Kakao 실측 여유, 콜드 라운드 절반)

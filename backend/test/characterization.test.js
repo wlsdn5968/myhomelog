@@ -3100,6 +3100,11 @@ test('지역 메뉴가 LAWD_CODES 전수를 덮는다 (도달 불가 시군구 0
     const { LAWD_CODES, RETIRED_LAWD_CODES } = require('../services/transactionService');
     const want = [...new Set(Object.values(LAWD_CODES).map(String))].filter(c => !RETIRED_LAWD_CODES.has(c));
     const got = new Set(items.map(i => String(i.lawdCd)));
+    // MENU-EMPTY-2026-08-30: 운영 환경에서는 **실거래 0건 시군구**(실측: 인천 옹진군 하나)를 뺀다.
+    //   테스트 환경엔 DB 자격증명이 없어 그 조회가 실패하고 **fail-open**(전체 노출)으로 떨어진다 —
+    //   즉 여기서 검증되는 것은 "열화 시에도 목록이 비지 않는다" 이고, 그게 이 가드의 목적이다.
+    //   목록을 조용히 비우는 사고는 이미 겪었다([[degraded-response-cached-at-edge]]).
+    assert.equal(j.filtered, false, "DB 없이도 filtered=true 면 fail-open 이 깨진 것이다");
     const missing = want.filter(c => !got.has(c));
     assert.deepEqual(missing, [], `메뉴에서 고를 수 없는 시군구가 있다: ${missing.join(',')}`);
 

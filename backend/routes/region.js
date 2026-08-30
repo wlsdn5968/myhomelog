@@ -169,15 +169,49 @@ async function buildDashboard(region) {
  *     행정구역 판정" 결함 계열을 원천 차단한다([[region-judgment-by-lawdcd]]).
  *   ⚠ 이미 폐지된 코드(RETIRED_LAWD_CODES)는 뺀다 — 고르면 신규 거래가 0인 곳이다.
  */
+/**
+ * MENU-EMPTY-2026-08-30 (Sprint OOOOOOO): 메뉴에 있는데 **실거래가 0건**인 시군구를 뺀다.
+ *   전수조사에서 인천 옹진군(28720)이 4개 조건 모두 "데이터 조회 실패" 안내카드를 냈다
+ *   (molit_transactions 0행 — 섬 지역이라 아파트 거래 자체가 없다). 고를 수 있게 해놓고
+ *   고르면 실패를 보여주는 건 지역을 늘린 것의 반대 효과다.
+ *   ⚠ 실측 결과 **옹진군 하나뿐**이다 — 나머지 118곳은 최근 6개월 20건 이상.
+ *   ⚠ fail-open: 조회가 실패하면 **전부** 내보낸다(상위집합). 빈 목록을 캐시에 굳히는 사고를
+ *     이미 겪었다([[degraded-response-cached-at-edge]]) — 열화 시에는 짧은 캐시만 준다.
+ */
+const MENU_TX_CACHE_KEY = 'region:menu:activeLawd:v1';
+async function activeLawdCodes() {
+  const cache = require('../cache');
+  const hit = cache.get(MENU_TX_CACHE_KEY);
+  if (hit !== undefined) return hit;
+  try {
+    const { getSupabaseAdmin } = require('../db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return null;
+    const since = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
+    const { data, error } = await admin
+      .rpc('active_lawd_codes', { since_date: since });
+    if (error) throw error;
+    const set = new Set((data || []).map(r => String(r.lawd_cd)));
+    if (!set.size) throw new Error('빈 결과');
+    cache.set(MENU_TX_CACHE_KEY, set, 21600); // 6h
+    return set;
+  } catch (e) {
+    logger.warn({ err: e.message }, '지역 메뉴: 활성 시군구 조회 실패 — 전체 노출(fail-open)');
+    return null;
+  }
+}
+
 router.get('/menu', async (req, res) => {
   const { LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES } = require('../services/transactionService');
   const SIDO = {
     '11': '서울', '41': '경기', '28': '인천', '26': '부산', '27': '대구',
     '30': '대전', '31': '울산', '36': '세종', '43': '충북',
   };
+  const active = await activeLawdCodes();
   const groups = new Map();
   for (const code of new Set(Object.values(LAWD_CODES).map(String))) {
     if (RETIRED_LAWD_CODES.has(code)) continue;
+    if (active && !active.has(code)) continue; // 실거래 0건 — 고르면 실패만 보게 된다
     const sido = SIDO[code.slice(0, 2)];
     const label = LAWD_CODE_TO_NAME[code];
     if (!sido || !label) continue;
@@ -193,8 +227,12 @@ router.get('/menu', async (req, res) => {
   const out = ['서울', '경기', '인천', '지방'].filter(w => groups.has(w))
     .map(w => ({ wide: w, items: groups.get(w) }));
   // LAWD_CODES 는 코드 상수라 실패 경로가 없다 — 열화 캐시([[degraded-response-cached-at-edge]]) 위험 없음.
-  res.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
-  res.json({ groups: out, total: out.reduce((n, g) => n + g.items.length, 0) });
+  // 활성 시군구 조회가 열화됐을 때는 상위집합(전체)을 내보내므로 그 응답을 하루씩 굳히지 않는다
+  //   ([[degraded-response-cached-at-edge]]). 목록 자체는 LAWD_CODES 파생이라 절대 비지 않는다.
+  res.set('Cache-Control', active
+    ? 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800'
+    : 'public, max-age=0, s-maxage=300');
+  res.json({ groups: out, total: out.reduce((n, g) => n + g.items.length, 0), filtered: !!active });
 });
 
 router.get('/dashboard', async (req, res) => {
