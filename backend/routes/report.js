@@ -318,7 +318,15 @@ router.post('/generate', async (req, res) => {
         //   표시 escape(_escHtml)·scoring·prompt 로직 불변. 후보 부재 시(c 없음) AI name 그대로 둠.
         if (c?.apt_name) {
           const _loc = [c.sigungu, c.umd_nm].filter(Boolean).join(' ').trim();
-          a.name = _loc ? `${c.apt_name} (${_loc})` : c.apt_name;
+          // NAME-ADDR-2026-08-30 (Sprint OOOOOOO): 이 주입이 **데이터판이 만든 이름까지 덮어쓴다**
+          //   (주석대로 name 도 여기서 채운다). 그래서 buildDataOnlyReport 에서 정식명을 넣어도
+          //   여기서 다시 MOLIT 신고명으로 되돌아갔다 — 라이브 재생성에서 "롯데캐슬"로 확인.
+          //   같은 규칙(정식명 주 + 신고명 병기)을 여기에도 적용한다.
+          const _nrmN = (v) => String(v || '').normalize('NFC').replace(/\s/g, '').replace(/아파트$/, '');
+          const _base = c.master_name || c.apt_name;
+          const _alias = (c.master_name && _nrmN(c.master_name) !== _nrmN(c.apt_name))
+            ? ` (실거래 신고명 ${c.apt_name})` : '';
+          a.name = _loc ? `${_base}${_alias} (${_loc})` : `${_base}${_alias}`;
           // RPT-CARD-LINK-2026-07-22 (Sprint MMMMMM-4): AI판 카드도 상세 모달 연결 식별 필드 주입 —
           //   objectiveFacts·name 강제와 동일한 candidates[i] 인덱스 매칭(기존 패턴·동일 신뢰 수준).
           a.aptName = c.apt_name;
@@ -1059,7 +1067,7 @@ async function fetchCandidateApts(admin, input, limit) {
   let _regionOp = null;   // (qq) => qq · null 이면 지역 필터 없음
   const _newPageQuery = () => {
     let qq = admin.from('molit_transactions')
-      .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, exclu_use_ar, deal_amount, deal_date, apt_seq')
+      .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, exclu_use_ar, deal_amount, deal_date, apt_seq, jibun')
       .gte('exclu_use_ar', minSqm).lte('exclu_use_ar', maxSqm)
       .gte('deal_amount', minAmt).lte('deal_amount', maxAmt)
       .gte('deal_date', _sinceDate);
@@ -1283,7 +1291,7 @@ async function fetchCandidateApts(admin, input, limit) {
     if (!byApt[key]) byApt[key] = {
       apt_name: _canon, sigungu: t.sigungu, umd_nm: t.umd_nm,
       lawd_cd: t.lawd_cd,
-      sum: 0, n: 0, areas: new Set(), rawNames: new Set(), latest: t.deal_date,
+      sum: 0, n: 0, areas: new Set(), rawNames: new Set(), bonCnt: {}, latest: t.deal_date,
       buildYearCnt: {},
       deals: [], // Phase 8: 신고가 갱신 계산용
     };
@@ -1291,6 +1299,9 @@ async function fetchCandidateApts(admin, input, limit) {
     byApt[key].n++;
     byApt[key].areas.add(Math.round(t.exclu_use_ar));
     byApt[key].rawNames.add(t.apt_name);
+    // MERGE-GUARD-JIBUN-2026-08-30: 개명 단지를 필지로 이어붙이기 위한 최빈 본번 집계.
+    const _bon = String(t.jibun || '').trim().match(/^(\d+)/);
+    if (_bon) byApt[key].bonCnt[_bon[1]] = (byApt[key].bonCnt[_bon[1]] || 0) + 1;
     if (t.deal_date > byApt[key].latest) byApt[key].latest = t.deal_date;
     if (t.build_year) {
       byApt[key].buildYearCnt[t.build_year] = (byApt[key].buildYearCnt[t.build_year] || 0) + 1;
@@ -1324,6 +1335,11 @@ async function fetchCandidateApts(admin, input, limit) {
         avgPrice: a.sum / a.n,
         areas: [...a.areas].sort((x, y) => x - y),
         rawNames: [...a.rawNames],
+        // 최빈 지번 본번 — MERGE-GUARD 가 개명 단지를 필지로 확인할 때 쓴다.
+        jibunBon: (() => {
+          const e = Object.entries(a.bonCnt).sort((x, y) => y[1] - x[1])[0];
+          return e ? e[0] : null;
+        })(),
         build_year: mode ? Number(mode) : null,
         households: null,
         master_matched: false,
@@ -1383,9 +1399,25 @@ async function fetchCandidateApts(admin, input, limit) {
           .replace(/\((?:고층|저층)\)$/, '').replace(/(?:아파트|단지)$/, '');
         const _a = _nrm(c.apt_name);
         const _b = _nrm(f.official || f.raw.kaptName || '');
-        if (_a && _b && !(_a.includes(_b) || _b.includes(_a))) {
+        // MERGE-GUARD-JIBUN-2026-08-30 (Sprint OOOOOOO): **개명 단지가 이 가드에 막힌다.**
+        //   [실측] MOLIT 신고명 "동탄파크자이" ↔ KAPT 신규명 "동탄역자이 아파트" — 포함관계가 아니라
+        //   facility 가 통째로 미채택돼 주소·시공사가 카드에서 사라졌다(라이브 재생성으로 확인).
+        //   이름이 달라도 **같은 필지면 같은 단지**다. `verifyCandidate` 도 지번 일치를 'jibun-match'
+        //   강한 긍정 신호로 이미 쓰고 있으므로(aptFacilityService), 같은 근거를 여기서도 인정한다.
+        //   지번은 MOLIT 실거래(최빈 본번) ↔ KAPT kaptAddr 를 비교한다 — 둘 다 공식 출처다.
+        let _jibunOk = false;
+        try {
+          const { jibunFromKaptAddr, bonbun } = require('../services/aptFacilityService');
+          const kBon = bonbun(jibunFromKaptAddr(f.raw.kaptAddr));
+          if (kBon && c.jibunBon && kBon === c.jibunBon) _jibunOk = true;
+        } catch (_) { /* 판정 불가면 기존 이름 가드만 적용 */ }
+        if (_a && _b && !_jibunOk && !(_a.includes(_b) || _b.includes(_a))) {
           logger.info({ apt: c.apt_name, official: f.official || f.raw.kaptName }, 'MERGE-GUARD: 이름 불일치 — facility 미채택');
           return;
+        }
+        if (_jibunOk && _a && _b && !(_a.includes(_b) || _b.includes(_a))) {
+          logger.info({ apt: c.apt_name, official: f.official || f.raw.kaptName, bon: c.jibunBon },
+            'MERGE-GUARD: 이름은 다르나 지번 일치 — 개명으로 보고 채택');
         }
       }
       if (f?.raw) {
