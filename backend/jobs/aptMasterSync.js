@@ -32,6 +32,26 @@ const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
 let _diagLogged = false; // 한 번만 진단 로그 (전체 backfill 동안)
 
+// PACER-2026-08-30 (Sprint OOOOOOO): **워커 공용 페이서.**
+//   [무엇이 있었나] 동시성 5 로 KAPT 를 때리자 릴레이가 `upstream HTTP 429` 를 뱉어
+//   경기도 시군구 **대부분과 신규 화성 3개 구가 전부 실패**했다. 그런데 요약은 `errors: 0` 이었다 —
+//   syncOneSgg 가 페이지 실패 시 break 하고 `{fetched:0, inserted:0}` 을 돌려줘 실패가 집계에서 사라졌다.
+//   [왜 동시성이 아니라 속도인가] 429 는 즉시 반환돼 워커가 곧바로 다음 요청을 쏜다 —
+//   동시성을 낮춰도 초당 요청수가 안 떨어진다. 건축HUB 백필에서 이미 같은 것을 겪었고
+//   답은 **공용 페이서**였다([[br-recap-rate-limit-429]]). 같은 방식을 쓴다.
+//   429 를 만나면 간격을 늘려 스스로 물러난다(상한 4s).
+const SYNC_MIN_INTERVAL_MS = 250;
+let _interval = SYNC_MIN_INTERVAL_MS;
+let _nextSlot = 0;
+let _throttleHits = 0;
+async function pace() {
+  const now = Date.now();
+  const slot = Math.max(now, _nextSlot);
+  _nextSlot = slot + _interval;
+  const wait = slot - now;
+  if (wait > 0) await new Promise(res => setTimeout(res, wait));
+}
+
 // SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
 function adminClient() {
   return requireSupabaseAdmin('apt-master-sync 불가');
@@ -51,13 +71,15 @@ function adminClient() {
  *   </item></items>
  */
 async function syncOneSgg(admin, lawdCd) {
-  const all = [];
+  const all = [];
+  let _fetchError = null; // PACER-2026-08-30: 페이지 조회 실패 사유(요약에 싣는다)
   // ROBUSTNESS-2026-06-13: 페이지 재시도 상태 — 일시적 5xx 시 break(뒷페이지 전체 유실) 대신 동일 페이지 재시도.
   let _pageRetry = 0;
   const MAX_PAGE_RETRY = 2;
   for (let pageNo = 1; pageNo <= MAX_PAGES; pageNo++) {
-    let r;
-    try {
+    let r;
+    try {
+      await pace();
       r = await dgk.get(APT_LIST_URL, {
         params: {
           serviceKey: APT_INFO_KEY,
@@ -69,7 +91,12 @@ async function syncOneSgg(admin, lawdCd) {
         timeout: 8000,
         headers: { Accept: 'application/json' },
       });
-    } catch (e) {
+    } catch (e) {
+      // PACER-2026-08-30: 429 면 스스로 물러난다(공용 간격을 늘려 전 워커에 적용).
+      if (/429/.test(String(e && e.message))) {
+        _throttleHits++;
+        _interval = Math.min(4000, Math.round(_interval * 1.5) || 400);
+      }
       // 진단 (1회만): axios 에러 raw — 4xx/5xx 시 message+status+body
       if (!_diagLogged) {
         _diagLogged = true;
@@ -91,7 +118,10 @@ async function syncOneSgg(admin, lawdCd) {
         pageNo--; // 같은 페이지 재시도
         continue;
       }
-      logger.warn({ err: e.message, lawdCd, pageNo, retries: _pageRetry }, 'AptInfo 페이지 호출 실패 — 재시도 소진, 이 sgg 중단');
+      logger.warn({ err: e.message, lawdCd, pageNo, retries: _pageRetry }, 'AptInfo 페이지 호출 실패 — 재시도 소진, 이 sgg 중단');
+      // ⚠ 여기서 그냥 break 하면 `{fetched:0}` 이 돼 요약의 errors 에 잡히지 않는다 —
+      //   실제로 경기도 전역이 실패했는데 `errors: 0` 으로 보고된 원인이다. 사유를 들고 나간다.
+      _fetchError = e.message;
       break;
     }
     _pageRetry = 0; // 페이지 성공 → 재시도 카운터 리셋(페이지별 예산)
@@ -130,7 +160,7 @@ async function syncOneSgg(admin, lawdCd) {
     if (total != null && all.length >= total) break;
   }
 
-  if (!all.length) return { lawdCd, fetched: 0, inserted: 0 };
+  if (!all.length) return { lawdCd, fetched: 0, inserted: 0, ...(_fetchError ? { fetchError: _fetchError } : {}) };
 
   // NAME-REFRESH-2026-08-30 (Sprint OOOOOOO, 운영자 "동탄파크자이가 아니고 동탄역자이로 바뀐 거 아니야?"):
   //   여기는 오랫동안 `ignoreDuplicates: true`(= ON CONFLICT DO NOTHING) 였다. 그래서 **한 번 들어온
@@ -242,9 +272,10 @@ async function syncOneSgg(admin, lawdCd) {
       samples: renamed.slice(0, 5).map(r => `${prevName.get(r.kapt_code)} → ${r.apt_name}`),
     }, 'apt_master 단지명 변경 감지');
   }
-  return {
-    lawdCd, fetched: rows.length, inserted,
-    renamed: renamed.length,
+  return {
+    lawdCd, fetched: rows.length, inserted,
+    renamed: renamed.length,
+    ...(_fetchError ? { fetchError: _fetchError } : {}),
     ...(upsertError ? { upsertError } : {}),
   };
 }
@@ -284,7 +315,9 @@ async function runAptMasterSync() {
 
   const fetchedTotal = results.reduce((s, r) => s + (r.fetched || 0), 0);
   const insertedTotal = results.reduce((s, r) => s + (r.inserted || 0), 0);
-  const errCount = results.filter(r => r.error).length;
+  const errCount = results.filter(r => r.error || r.fetchError).length;
+  const renamedTotal = results.reduce((s2, r) => s2 + (r.renamed || 0), 0);
+  const failedLawds = results.filter(r => r.error || r.fetchError).map(r => r.lawdCd);
   const elapsedMs = Date.now() - started;
 
   logger.info({
@@ -292,12 +325,21 @@ async function runAptMasterSync() {
     sggs: codes.length,
     fetched: fetchedTotal,
     inserted: insertedTotal,
-    errors: errCount,
+    errors: errCount,
+    renamed: renamedTotal,
+    throttleHits: _throttleHits,
+    intervalMs: _interval,
+    failedLawds: failedLawds.slice(0, 40),
     elapsedMs,
     remaining: queue.length,   // >0 이면 데드라인에 걸려 중단됐다는 뜻 — 다음 run 이 이어받는다
   }, 'apt-master-sync 완료');
 
-  return { sggs: codes.length, fetched: fetchedTotal, inserted: insertedTotal, errors: errCount, elapsedMs, remaining: queue.length };
+  return {
+    sggs: codes.length, fetched: fetchedTotal, inserted: insertedTotal,
+    errors: errCount, renamed: renamedTotal, throttleHits: _throttleHits,
+    intervalMs: _interval, failedLawds: failedLawds.slice(0, 40),
+    elapsedMs, remaining: queue.length,
+  };
 }
 
 module.exports = { runAptMasterSync };
