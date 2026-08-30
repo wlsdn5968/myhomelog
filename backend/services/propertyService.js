@@ -449,25 +449,38 @@ function _applyFacilityToScore(base, facility, amen) {
   if (교통 === null) { 교통 = 15; why.push('교통 정보 미확인(중간값)'); } // 모름 → 중간
   b.교통 = 교통;
 
-  // ── 생활 인프라 20 ─────────────────────────────────────────────────────────
-  //   카카오 반경 카운트가 있으면 그걸로(학교 8 · 병원 6 · 마트 6),
-  //   없으면 KAPT 교육/편의시설 목록 유무로 대략(각 5) — 정밀도는 낮지만 0 보다 낫다.
+  // ── 생활 인프라 16 ─────────────────────────────────────────────────────────
+  //   카카오 반경 카운트(학교·병원·마트). 만점 배분은 학교 6 · 병원 5 · 마트 5.
+  //
+  // ⚠ NULL-NOT-ZERO-2026-08-30 (Sprint PPPPPPP): 조회 실패를 0 으로 읽으면
+  //   "주변에 병원이 없다" 는 **사실 주장**이 된다. 실제로 그런 일이 있었다 —
+  //   카카오 키워드 검색 `size` 상한이 15 인데 45 를 넘겨 전건 400 이 떨어졌고,
+  //   catch 가 0 을 돌려줘 화면엔 "종합병원 0" 이, 점수엔 0점이 찍혔다(런타임 로그 실측).
+  //   → 이제 실패는 null 이고, **아는 항목만으로 채점한 뒤 만점으로 환산**한다.
+  //     하나도 모르면 중간값. 모름을 나쁨으로 만들지 않는다([[unknown-treated-as-value]]).
   let 인프라 = null;
   if (amen) {
-    let v = 0;
-    const sc = Number(amen.school) || 0, hp = Number(amen.hospital) || 0, mt = Number(amen.mart) || 0;
-    v += sc >= 10 ? 8 : sc >= 5 ? 6 : sc >= 2 ? 3 : 0;
-    v += hp >= 3 ? 6 : hp >= 1 ? 4 : 0;
-    v += mt >= 3 ? 6 : mt >= 1 ? 4 : 0;
-    인프라 = Math.min(SCORE_V2_MAX.인프라, v);
-    why.push(`학교 ${sc}·병원 ${hp}·마트 ${mt}`);
-  } else {
+    const parts = [
+      { v: amen.school, max: 6, band: (n) => (n >= 10 ? 6 : n >= 5 ? 4 : n >= 2 ? 2 : 0) },
+      { v: amen.hospital, max: 5, band: (n) => (n >= 3 ? 5 : n >= 1 ? 3 : 0) },
+      { v: amen.mart, max: 5, band: (n) => (n >= 3 ? 5 : n >= 1 ? 3 : 0) },
+    ];
+    const known = parts.filter(p => p.v !== null && p.v !== undefined && Number.isFinite(Number(p.v)));
+    if (known.length) {
+      const got = known.reduce((a, p) => a + p.band(Number(p.v)), 0);
+      const cap = known.reduce((a, p) => a + p.max, 0);
+      인프라 = Math.round((got / cap) * SCORE_V2_MAX.인프라);
+      const fmt = (x) => (x === null || x === undefined ? '미확인' : x);
+      why.push(`학교 ${fmt(amen.school)}·병원 ${fmt(amen.hospital)}·마트 ${fmt(amen.mart)}`);
+    }
+  }
+  if (인프라 === null) {
     const edu = String((facility && facility.educationFacility) || '');
     const cvn = String((facility && facility.convenientFacility) || '');
     const meaningful = (t) => t.replace(/[가-힣A-Za-z]+\(\s*\)/g, '').replace(/[,\s]/g, '').length >= 5;
-    인프라 = (meaningful(edu) ? 5 : 0) + (meaningful(cvn) ? 5 : 0);
-    // 둘 다 없으면 10(중간) — 정보 없음이지 인프라 없음이 아니다.
-    if (인프라 === 0) { 인프라 = 10; why.push('생활시설 정보 미확인(중간값)'); }
+    인프라 = (meaningful(edu) ? 4 : 0) + (meaningful(cvn) ? 4 : 0);
+    // 둘 다 없으면 중간값 — 정보 없음이지 인프라 없음이 아니다.
+    if (인프라 === 0) { 인프라 = Math.round(SCORE_V2_MAX.인프라 * 0.5); why.push('생활시설 정보 미확인(중간값)'); }
   }
   b.인프라 = 인프라;
 
@@ -560,7 +573,7 @@ async function getAIRecommendations(userCondition) {
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
   // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
   const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
-  const cacheKey = `rec:v20:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v20: PPPPPPP 동명 단지 분리(준공년도 키 추가). v19 캐시에는 합쳐진 평균가·거래수가 남아 있다.
+  const cacheKey = `rec:v21:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v21: PPPPPPP 카카오 키워드 400 수정으로 인프라 점수가 바뀐다. v20 캐시에는 병원 0 으로 계산된 점수가 남아 있다.
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
   // REC-REDIS-2026-07-17 (Sprint AAAAAA, 운영자 "검색 더 빨리" — 실측: cold 12.6s vs warm 1.4s):

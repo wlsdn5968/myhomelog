@@ -3374,8 +3374,18 @@ test('점수 V2 — 교통이 최대 비중이고, 모르는 것은 0이 아니�
   //    0 처리하면 데이터 없는 단지가 부당하게 밀린다([[unknown-treated-as-value]]).
   assert.match(svc, /교통 === null\) \{ 교통 = 15;/,
     '교통 정보가 없을 때 0점을 준다 — 모름을 나쁨으로 만들면 안 된다');
-  assert.match(svc, /인프라 === 0\) \{ 인프라 = 10;/,
-    '인프라 정보가 없을 때 0점을 준다');
+  // ⚠ NULL-NOT-ZERO-2026-08-30: 카카오 조회 **실패**(null)를 0 으로 읽으면
+  //   "주변에 병원이 없다" 는 사실 주장이 된다. 실제로 키워드 검색 size 상한(15)에 45 를 넘겨
+  //   전건 400 이 떨어졌고, 화면엔 "종합병원 0" 이 점수엔 0점이 찍혔다(런타임 로그 실측).
+  //   → 아는 항목만으로 채점해 만점으로 환산하고, 하나도 모르면 중간값.
+  assert.match(svc, /const known = parts\.filter\(p => p\.v !== null/,
+    '인프라가 모르는 항목을 0 으로 섞어 계산한다');
+  assert.match(svc, /인프라 = Math\.round\(SCORE_V2_MAX\.인프라 \* 0\.5\)/,
+    '인프라를 하나도 모를 때 0점을 준다');
+  const kakao = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '../services/kakaoService.js'), 'utf8');
+  assert.ok(!/size: (?:[2-9]\d|1[6-9])/.test(kakao),
+    '카카오 검색 size 가 상한(15)을 넘는다 — 400 이 떨어지고 결과가 전부 0 이 된다');
 
   // ④ 점수 근거(breakdown·why)를 함께 내보낸다 — "왜 이 순서인가" 가 보여야 신뢰가 생긴다.
   assert.ok(/scoreBreakdown: _sc\.breakdown/.test(svc), '점수 근거(breakdown)를 응답에 싣지 않는다');

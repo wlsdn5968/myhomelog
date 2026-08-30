@@ -160,7 +160,11 @@ async function countNearbyKeyword(lat, lng, keyword, radius = 1200) {
   try {
     const r = await axios.get(KAKAO_KEY_SEARCH, {
       headers: { Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}` },
-      params: { query: keyword, x: lng, y: lat, radius, size: 45 },
+      // ⚠ SIZE-400-2026-08-30 (Sprint PPPPPPP): 카카오 키워드 검색의 `size` 상한은 **15** 다.
+      //   45 를 넘기면 **400** 이 떨어지고, catch 가 0 을 돌려줘 화면엔 "종합병원 0·공원 0" 이 찍힌다.
+      //   런타임 로그 실측: 한 요청에 공원·종합병원 조회가 전건 400 이었다.
+      //   즉 인프라 점수의 병원 몫이 통째로 죽어 있었다 — 조용한 실패가 아니라 **조용한 0점**이다.
+      params: { query: keyword, x: lng, y: lat, radius, size: 15 },
       timeout: 5000,
     });
     // AMENITY-KEYWORD-2026-08-30 (Sprint OOOOOOO, 운영자 "보고서가 개판이다" — PDF 실물에서 발각):
@@ -171,7 +175,7 @@ async function countNearbyKeyword(lat, lng, keyword, radius = 1200) {
     //   카테고리 검색(countNearby)이 학교 11·마트 6 처럼 현실적인 값을 내는 것과 대조된다 —
     //   차이는 집합이 category_group_code 로 닫혀 있느냐다.
     //   → 총건수 대신 **응답 문서를 category_name 으로 걸러** 센다. 무엇을 센 것인지가 분명해진다.
-    //   ⚠ 그래서 이 값은 size(45)로 상한이 생긴다 — 도보권 개수로는 충분하고, '398개' 처럼
+    //   ⚠ 그래서 이 값은 size(15, 카카오 상한)로 상한이 생긴다 — 도보권 개수로는 충분하고, '398개' 처럼
     //     사실이 아닌 큰 수를 보여주는 것보다 낫다.
     const docs = Array.isArray(r.data && r.data.documents) ? r.data.documents : [];
     const cnt = docs.filter(d => String((d && d.category_name) || '').includes(keyword)).length;
@@ -181,8 +185,10 @@ async function countNearbyKeyword(lat, lng, keyword, radius = 1200) {
   } catch (e) {
     // ⚠ 실패를 0 으로 돌려주면 '없음'과 구분되지 않는다([[unknown-treated-as-value]]).
     //   캐시에는 쓰지 않으니 다음 요청에 재시도되지만, 그동안 빈 catch 라 흔적조차 없었다.
-    logger.warn({ keyword, radius, err: e.message }, 'kakao 키워드 주변시설 조회 실패 — 0 으로 표시됨');
-    return 0;
+    logger.warn({ keyword, radius, status: e.response?.status || null, err: e.message },
+      'kakao 키워드 주변시설 조회 실패 — 모름(null)으로 표시');
+    // ⚠ 실패를 0 으로 돌려주면 "주변에 없다" 는 **사실 주장**이 된다. 모름은 null 이다.
+    return null;
   }
 }
 
