@@ -1199,8 +1199,11 @@ async function getAIRecommendations(userCondition) {
     let _interest = new Map();
     try {
       const dl = require('./naverDatalabService');
+      // ⚠ 추천 객체에는 `sigungu` 필드가 **없다**(area 로 합쳐져 있다).
+      //   rec.sigungu 로 키를 만들면 항상 빈 문자열이 되어 캐시가 영원히 미스다(실측: 히트 0).
       const items = enrichedRecs.map((rec, i) => ({
-        aptName: rec.aptName, sigungu: rec.sigungu,
+        aptName: rec.aptName,
+        sigungu: (_rankedF[i] && _rankedF[i].sigungu) || '',
         lat: coords[i] && coords[i].lat, lng: coords[i] && coords[i].lng,
       }));
       _interest = await dl.getCachedInterest(items);

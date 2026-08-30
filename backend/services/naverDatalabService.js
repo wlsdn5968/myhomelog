@@ -162,7 +162,25 @@ async function fetchBatch(names) {
 }
 
 // ── 캐시 (apt_amenities 재사용) ──────────────────────────────────────────
-function cacheKeyFor(name, sigungu) { return `ni:${name}|${sigungu || ''}`; }
+/**
+ * ⚠ KEY-MISMATCH-2026-08-30: 캐시를 채우는 쪽(apt_geocache 이름)과 읽는 쪽(MOLIT 이름)이
+ *   **다른 문자열**이라 히트가 0 이었다 — 1,551건을 채워놓고 점수는 전부 중간값이었다.
+ *   실측: geocache "서동탄역파크자이아파트" ↔ 추천 "서동탄역파크자이".
+ *   → 키를 **정규화형**으로 통일한다(괄호 제거 · 끝의 '아파트' 제거 · 공백 정리).
+ *   검색 키워드를 만들 때 쓰는 것과 같은 규칙이라 사본이 생기지 않는다.
+ */
+function normalizeAptName(name) {
+  return String(name || '')
+    .replace(/[([{<][^)\]}>]*[)\]}>]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/\s*아파트\s*$/, '')
+    .trim();
+}
+
+function cacheKeyFor(name, sigungu) {
+  return `ni:${normalizeAptName(name)}|${String(sigungu || '').trim()}`;
+}
 
 async function readCache(key) {
   const mem = cache.get(`dlni:${key}`);
@@ -298,4 +316,4 @@ function keyShape() {
   return { id: shape(process.env.NAVER_CLIENT_ID), secret: shape(process.env.NAVER_CLIENT_SECRET) };
 }
 
-module.exports = { getCachedInterest, warmInterest, hasKeys, keyShape, ANCHOR, fetchBatch, median };
+module.exports = { normalizeAptName, getCachedInterest, warmInterest, hasKeys, keyShape, ANCHOR, fetchBatch, median };

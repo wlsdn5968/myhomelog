@@ -3096,6 +3096,31 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
 });
 
+// ── INTEREST-KEY-2026-08-30 (Sprint PPPPPPP) ──────────────────────────────────
+// 캐시를 1,551건 채워놓고도 점수는 전부 중간값이었다 — **키가 양쪽에서 달랐다.**
+//   채우는 쪽: apt_geocache 이름 "서동탄역파크자이아파트"
+//   읽는 쪽  : MOLIT 이름 "서동탄역파크자이" + 게다가 추천 객체엔 `sigungu` 필드가 아예 없다
+//              (area 로 합쳐져 있어 rec.sigungu 는 항상 undefined → 키 뒷부분이 빈 문자열)
+// 캐시는 "채웠다" 와 "쓰인다" 가 다른 문제다. 채운 건수만 보고 됐다고 하면 안 된다.
+test('관심도 캐시 — 이름 표기가 달라도 같은 키를 만든다', () => {
+  const dl = require('../services/naverDatalabService');
+
+  // ① 표기 차이가 키에 영향을 주면 안 된다.
+  assert.equal(dl.normalizeAptName('서동탄역파크자이아파트'), '서동탄역파크자이');
+  assert.equal(dl.normalizeAptName('서동탄역파크자이'), '서동탄역파크자이');
+  assert.equal(dl.normalizeAptName('힐스테이트대명센트럴(101,102동)'), '힐스테이트대명센트럴');
+  // 단지 번호는 이름의 일부다 — 지우면 다른 단지와 뭉개진다.
+  assert.equal(dl.normalizeAptName('수원 호매실벨섬시티 14단지'), '수원 호매실벨섬시티 14단지');
+
+  // ② propertyService 가 sigungu 를 **실제 있는 곳**에서 가져온다.
+  const fs2 = require('node:fs'); const path2 = require('node:path');
+  const svc = fs2.readFileSync(path2.join(__dirname, '../services/propertyService.js'), 'utf8');
+  assert.ok(!/aptName: rec\.aptName, sigungu: rec\.sigungu/.test(svc),
+    '추천 객체에 없는 rec.sigungu 로 캐시 키를 만든다 — 키 뒷부분이 항상 비어 영원히 미스다');
+  assert.match(svc, /sigungu: \(_rankedF\[i\] && _rankedF\[i\]\.sigungu\)/,
+    'sigungu 를 실제 소스(_rankedF)에서 가져오지 않는다');
+});
+
 // ── INTEREST-BAND-2026-08-30 (Sprint PPPPPPP) ─────────────────────────────────
 // 장기 검색 관심도(네이버 데이터랩 36개월) 구간은 **실분포로 보정**했다.
 //   전국 1,551단지·103시군구 실측 분위수:
