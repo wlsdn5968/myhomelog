@@ -88,15 +88,42 @@ function windowDates() {
 }
 
 /**
+ * 검색 키워드 후보 만들기 — ⚠ **DB 원본명 그대로 물으면 검색량이 안 잡힌다.**
+ *
+ * [실측 2026-08-30, 36개월 중앙값]
+ *   "서동탄역파크자이아파트"(DB 원본) 0.003  ↔  "서동탄역파크자이"(정규화) **1.10** — 355배 차이
+ *   "SK VIEW Park 2차 아파트"          **데이터 없음(빈 배열)**
+ *   "에스케이뷰파크2차"+"SK뷰파크2차"   0.207
+ * 사람들은 등기부상 이름이 아니라 **부르는 이름**으로 검색한다.
+ *
+ * 데이터랩은 한 그룹의 키워드들을 합산하므로, 안전한 기계적 변형을 함께 넣는다.
+ * ⚠ 추측 변형(음역 SK↔에스케이 등)은 넣지 않는다 — 없는 단지를 끌어올 위험이 있다.
+ * ⚠ 정규화 후 3자 이하는 아예 묻지 않는다("현대"·"삼성" 같은 일반명이 남의 검색량을 삼킨다).
+ */
+function buildKeywords(name) {
+  const raw = String(name || '').trim();
+  if (!raw) return [];
+  const noParen = raw.replace(/[([{<][^)\]}>]*[)\]}>]/g, ' ').replace(/\s+/g, ' ').trim();
+  const noApt = noParen.replace(/\s*아파트\s*$/, '').trim();
+  const noSpace = noApt.replace(/\s+/g, '');
+  const set = new Set([raw, noParen, noApt, noSpace].filter(v => v && v.length >= 4));
+  // 정규화 결과가 너무 짧으면(일반명) 통째로 포기한다 — 잘못된 값보다 '모름'이 낫다.
+  if (!noApt || noApt.length < 4) return [];
+  return [...set].slice(0, 5);
+}
+
+/**
  * 데이터랩 1회 호출 — 앵커 + 대상 최대 4개.
  * @param {string[]} names 단지명
  * @returns {Promise<Map<string, number>|null>} 이름 → 앵커 대비 비율. 실패면 null(⚠ 0 아님)
  */
 async function fetchBatch(names) {
   if (!hasKeys() || !names.length) return null;
+  names = names.filter(n => buildKeywords(n).length);   // 물어봐야 의미 있는 것만
+  if (!names.length) return new Map();
   const { startDate, endDate } = windowDates();
   const keywordGroups = [{ groupName: '__anchor__', keywords: [ANCHOR] }]
-    .concat(names.slice(0, MAX_TARGETS_PER_CALL).map(n => ({ groupName: n, keywords: [n] })));
+    .concat(names.slice(0, MAX_TARGETS_PER_CALL).map(n => ({ groupName: n, keywords: buildKeywords(n) })));
   try {
     const r = await axios.post(DATALAB_URL,
       { startDate, endDate, timeUnit: 'month', keywordGroups },
@@ -118,7 +145,13 @@ async function fetchBatch(names) {
       return null;
     }
     const out = new Map();
-    for (const [name, med] of byName) out.set(name, med == null ? 0 : med / anchorMed);
+    for (const [name, med] of byName) {
+      // ⚠ 0·빈 데이터는 '인기 없음' 이 아니라 **우리 키워드가 안 맞는다는 신호**일 때가 많다
+      //   (실측: "SK VIEW Park 2차 아파트" 는 아예 빈 배열이었다).
+      //   0 으로 저장하면 멀쩡한 단지가 관심도 최저점을 받는다 → null(모름)로 두고 중간값을 받게 한다.
+      if (med == null || med <= 0) { out.set(name, null); continue; }
+      out.set(name, med / anchorMed);
+    }
     return out;
   } catch (e) {
     logger.warn({ err: e.message, status: e.response?.status, n: names.length },
@@ -236,7 +269,7 @@ async function warmInterest(items, maxCalls = 4) {
     if (!res) { lastError = lastFetchError; break; } // 실패하면 더 두드리지 않는다(한도·부하 보호)
     for (const c of chunk) {
       const ratio = res.get(c.aptName);
-      if (ratio == null) continue;
+      if (ratio == null) continue;   // 모름은 저장하지 않는다 — 이름이 나아지면 다시 시도한다
       await writeCache(cacheKeyFor(c.aptName, c.sigungu), ratio, c.lat, c.lng);
       filled++;
     }
