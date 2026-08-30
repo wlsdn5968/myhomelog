@@ -311,47 +311,117 @@ function buildTags(apt) {
 // ── 종합 점수 (Sprint Y 2026-05-13 — 운영자 발견 "왜 다 95점?") ──
 // 기존: `min(95, 50 + min(dealCount,30)*1.5)` 은 cap 으로 단지 차등 부족.
 // 다요인: 거래량/신축도/평형다양 (recommendations 단계, facility 없음)
+/**
+ * SCORE-V2-2026-08-30 (Sprint OOOOOOO, 운영자 "위치·교통·인프라·거래활발이 더 중요하다. 점수표를 다시 객관화"):
+ *
+ * [기존 모델의 문제 — 실측]
+ *   거래량 30점 · 신축 18 · 평형다양 8 · 세대수 8 · 주차 4 · **지하철 도보 4** · 교육 2.
+ *   운영자가 1순위로 꼽은 교통이 **거래량의 1/7.5** 였고, 병원·마트 같은 생활 인프라는
+ *   추천 경로 점수에 **아예 없었다**(amenities 를 쓰지 않았다).
+ *
+ * [무엇을 근거로 쓸 수 있나 — 전수 실측]
+ *   KAPT 지하철 도보시간 10,785/14,660(73.6%) · 버스 도보 13,815(94.2%) · 교육시설 11,048(75.4%)
+ *   도보시간은 이미 5단계로 들어온다(5분이내 / 5~10 / 10~15 / 15~20 / 20분초과) —
+ *   기존엔 앞 두 단계만 쓰고 4점·2점을 줬다. 경기 남부 892단지 기준 역5분내 69곳(7.7%)로 변별력 충분.
+ *
+ * [배점 — 총 100점] 운영자 승인
+ *   교통 30 · 생활인프라 20 · 단지규모/주차 15 · 거래활발 15 · 연식 12 · 평형다양 8
+ *
+ * ⚠ **모르는 것은 0점이 아니라 중간값**을 준다. 도보시간 미보유가 26% 인데 0점 처리하면
+ *   데이터 없는 단지가 부당하게 밀린다 — 이 저장소가 이미 겪은 실수다([[unknown-treated-as-value]]:
+ *   세대수 미확인 407곳이 소형으로 배제됐고, 교차검증한 17곳은 전부 100세대 이상이었다).
+ *
+ * ⚠ 점수는 **매수 추천이 아니다** — 객관 지표의 가중합이고, 근거를 breakdown 으로 함께 내보낸다.
+ */
+const SCORE_V2_MAX = { 교통: 30, 인프라: 20, 규모주차: 15, 거래: 15, 연식: 12, 평형: 8 };
+
+/** 거래·연식·평형 — facility 없이 계산 가능한 부분(총 35점). */
 function _calcBaseScore(apt) {
-  let s = 30; // 기본
-  // 1) 거래량 (max 30점) — 50건+ cap
-  s += Math.min(apt.dealCount || 0, 50) * 0.6;
-  // 2) 신축도 (max 18점) — age 단계
+  const b = {};
+  // 거래 활발 (15) — 6개월 거래건수. 상한을 30 → 15 로 낮춰 지배력을 없앤다.
+  //   20건이면 만점: 그 이상은 "활발하다" 는 사실을 더 강하게 만들지 않는다(포화).
+  b.거래 = Math.min(SCORE_V2_MAX.거래, Math.round((Math.min(apt.dealCount || 0, 20) / 20) * SCORE_V2_MAX.거래));
+  // 연식 (12)
   const yr = parseInt(apt.buildYear) || 0;
-  const age = yr ? (new Date().getFullYear() - yr) : 30;
-  if (age <= 5) s += 18;
-  else if (age <= 10) s += 14;
-  else if (age <= 20) s += 10;
-  else if (age <= 30) s += 5;
-  // 3) 평형 다양 (max 8점)
+  const age = yr ? (new Date().getFullYear() - yr) : null;
+  b.연식 = age === null ? 6 // 모름 → 중간값
+    : age <= 5 ? 12 : age <= 10 ? 10 : age <= 20 ? 7 : age <= 30 ? 4 : 2;
+  // 평형 다양 (8) — 갈아타기·가족 변화 대응 폭
   const distinctP = Array.isArray(apt.pyeongStats) ? new Set(apt.pyeongStats.map(p => p.pyeong)).size : 0;
-  s += Math.min(distinctP, 4) * 2;
-  return Math.max(20, Math.min(86, Math.round(s))); // facility 보정 12점 여유
+  b.평형 = Math.min(SCORE_V2_MAX.평형, distinctP * 2);
+  const total = b.거래 + b.연식 + b.평형;
+  return { total, breakdown: b };
 }
 
 // enriched 단계에서 facility 받은 후 추가 보정
 //   기본 (Sprint Y): 단지 규모 (max 8) + 주차 (max 4) = +12점
 //   확장 (Sprint CC+): 위치 가치 (지하철 도보 + 교육시설) = +6점
-function _applyFacilityToScore(baseScore, facility) {
-  let s = baseScore || 30;
-  const th = facility?.totalHouseholds || 0;
-  if (th >= 3000) s += 8;
-  else if (th >= 1000) s += 6;
-  else if (th >= 500) s += 3;
-  // HH-CONFLICT-2026-08-17 (Sprint MMMMMMM): 분모(세대수) 원천이 갈린 단지는 이 비율로 점수를
-  //   올리면 안 된다 — 실측상 세대당 6.07대까지 부푼다. 점수를 깎지도 않는다(모르는 것은 0이다).
-  const pr = facility?.householdsConflict ? 0 : (facility?.parkingRatio || 0);
-  if (pr >= 1.2) s += 4;
-  else if (pr >= 0.8) s += 2;
-  // LOC-SCORE-2026-05-13 (Sprint CC+): 위치 가치 (지하철 도보 + 교육시설)
-  //   KAPT detail 의 정성 정보 활용 — 사용자 입지 가치 인식 반영.
-  const sub = String(facility?.walkSubwayMin || '');
-  if (sub.includes('5분이내')) s += 4;
-  else if (sub.includes('5~10분')) s += 2;
-  const edu = String(facility?.educationFacility || '');
-  // 빈 괄호 noise 제거 후 길이 검사
-  const eduMeaningful = edu.replace(/[가-힣A-Za-z]+\(\s*\)/g, '').replace(/[,\s]/g, '');
-  if (eduMeaningful.length >= 5) s += 2; // 학교 정보 있으면 가산
-  return Math.max(20, Math.min(98, Math.round(s)));
+/**
+ * SCORE-V2-2026-08-30: 교통(30) + 인프라(20) + 규모·주차(15) 를 더해 100점을 완성한다.
+ * @param {object} base   _calcBaseScore 결과 { total, breakdown }
+ * @param {object} facility buildFacility 결과
+ * @param {object} [amen] 카카오 반경 카운트 { subway, school, hospital, mart, park } — 없으면 KAPT 로만
+ */
+function _applyFacilityToScore(base, facility, amen) {
+  const b = Object.assign({}, (base && base.breakdown) || {});
+  const why = [];
+
+  // ── 교통 30 ────────────────────────────────────────────────────────────────
+  //   1순위 KAPT 도보시간(가장 정확) → 2순위 카카오 반경 역 수 → 3순위 버스 도보.
+  //   ⚠ 셋 다 없으면 15점(중간) — '모름' 을 '나쁨' 으로 만들지 않는다.
+  const sub = String((facility && facility.walkSubwayMin) || '');
+  let 교통 = null;
+  if (sub.includes('5분이내')) { 교통 = 30; why.push('지하철 도보 5분 이내'); }
+  else if (sub.includes('5~10분')) { 교통 = 24; why.push('지하철 도보 5~10분'); }
+  else if (sub.includes('10~15분')) { 교통 = 16; why.push('지하철 도보 10~15분'); }
+  else if (sub.includes('15~20분')) { 교통 = 9; why.push('지하철 도보 15~20분'); }
+  else if (sub.includes('20분초과')) { 교통 = 4; why.push('지하철 도보 20분 초과'); }
+  if (교통 === null && amen && Number.isFinite(Number(amen.subway))) {
+    const n = Number(amen.subway);
+    교통 = n >= 4 ? 26 : n >= 2 ? 20 : n >= 1 ? 13 : 5;
+    why.push(`반경 1.2km 지하철역 ${n}곳`);
+  }
+  if (교통 === null) {
+    const bus = String((facility && facility.walkBusMin) || '');
+    if (bus.includes('5분이내')) { 교통 = 14; why.push('버스 도보 5분 이내'); }
+    else if (bus.includes('5~10분')) { 교통 = 11; why.push('버스 도보 5~10분'); }
+  }
+  if (교통 === null) { 교통 = 15; why.push('교통 정보 미확인(중간값)'); } // 모름 → 중간
+  b.교통 = 교통;
+
+  // ── 생활 인프라 20 ─────────────────────────────────────────────────────────
+  //   카카오 반경 카운트가 있으면 그걸로(학교 8 · 병원 6 · 마트 6),
+  //   없으면 KAPT 교육/편의시설 목록 유무로 대략(각 5) — 정밀도는 낮지만 0 보다 낫다.
+  let 인프라 = null;
+  if (amen) {
+    let v = 0;
+    const sc = Number(amen.school) || 0, hp = Number(amen.hospital) || 0, mt = Number(amen.mart) || 0;
+    v += sc >= 10 ? 8 : sc >= 5 ? 6 : sc >= 2 ? 3 : 0;
+    v += hp >= 3 ? 6 : hp >= 1 ? 4 : 0;
+    v += mt >= 3 ? 6 : mt >= 1 ? 4 : 0;
+    인프라 = Math.min(SCORE_V2_MAX.인프라, v);
+    why.push(`학교 ${sc}·병원 ${hp}·마트 ${mt}`);
+  } else {
+    const edu = String((facility && facility.educationFacility) || '');
+    const cvn = String((facility && facility.convenientFacility) || '');
+    const meaningful = (t) => t.replace(/[가-힣A-Za-z]+\(\s*\)/g, '').replace(/[,\s]/g, '').length >= 5;
+    인프라 = (meaningful(edu) ? 5 : 0) + (meaningful(cvn) ? 5 : 0);
+    // 둘 다 없으면 10(중간) — 정보 없음이지 인프라 없음이 아니다.
+    if (인프라 === 0) { 인프라 = 10; why.push('생활시설 정보 미확인(중간값)'); }
+  }
+  b.인프라 = 인프라;
+
+  // ── 단지 규모·주차 15 ──────────────────────────────────────────────────────
+  const th = (facility && facility.totalHouseholds) || 0;
+  let 규모 = th >= 3000 ? 9 : th >= 1500 ? 8 : th >= 1000 ? 7 : th >= 500 ? 5 : th > 0 ? 3 : 5; // 0=모름 → 중간
+  // HH-CONFLICT: 세대수 원천이 갈린 단지는 주차 비율의 분모를 믿을 수 없다(실측 6.07대/세대까지 부푼다).
+  //   점수를 깎지도 않는다 — 모르는 것은 중간값이다.
+  const pr = (facility && facility.householdsConflict) ? null : ((facility && facility.parkingRatio) || null);
+  const 주차 = pr === null ? 3 : pr >= 1.2 ? 6 : pr >= 1.0 ? 5 : pr >= 0.8 ? 4 : 2;
+  b.규모주차 = Math.min(SCORE_V2_MAX.규모주차, 규모 + 주차);
+
+  const total = Object.values(b).reduce((a, c) => a + (Number(c) || 0), 0);
+  return { total: Math.max(0, Math.min(100, Math.round(total))), breakdown: b, why };
 }
 
 /**
@@ -753,7 +823,10 @@ async function getAIRecommendations(userCondition) {
       // SCORE-MULTIFACTOR-2026-05-13 (Sprint Y — 운영자 발견: "왜 다 95점?"):
       //   기존: `min(95, 50 + min(dealCount,30)*1.5)` → dealCount ≥ 30 단지 모두 95점 (cap).
       //   변경: 다요인 합산 (거래량/신축/평형다양). facility-derived 보정은 enriched 단계에서.
-      score: _calcBaseScore(apt),
+      // SCORE-V2-2026-08-30: 여기선 facility 없이 계산 가능한 부분(거래·연식·평형, 35점)만.
+      //   교통 30 · 인프라 20 · 규모주차 15 는 enrichment 뒤에 더해진다.
+      _baseScore: _calcBaseScore(apt),
+      score: 0, // enrichment 에서 확정 — 그 전 값을 쓰면 순위가 뒤집힌다
       ltv: ltvInfo.ltv,
       maxLoan: ltvInfo.maxLoan,
       pros: `${p.pyeong}평형 6개월 ${p.dealCount}건 거래 · 평균 ${avgAuk}억 · ${apt.buildYear||'?'}년식`,
@@ -888,12 +961,14 @@ async function getAIRecommendations(userCondition) {
       if (parkingRatio && parkingRatio >= 1.2 && !facility?.householdsConflict) moreTags.push('주차여유');
       if (totalHouseholds >= 1000) moreTags.push('대단지');
       else if (totalHouseholds >= 500) moreTags.push('중대단지');
-      // SCORE-MULTIFACTOR-2026-05-13 (Sprint Y): facility 알게 된 후 score 보정.
-      const updatedScore = _applyFacilityToScore(rec.score, facility);
+      // SCORE-V2-2026-08-30: facility(+선택적 amenities)를 알게 된 뒤 100점 확정.
+      const _sc = _applyFacilityToScore(rec._baseScore, facility, rec._amen || null);
       return {
         ...rec,
         facility,
-        score: updatedScore,
+        score: _sc.total,
+        scoreBreakdown: _sc.breakdown, // 왜 이 점수인지 — 화면에 근거를 보여주기 위함
+        scoreWhy: _sc.why,
         tags: Array.from(new Set(moreTags)),
       };
     })
@@ -984,6 +1059,49 @@ async function getAIRecommendations(userCondition) {
     _schoolMissIdx.forEach((origI, k) => { schoolsArr[origI] = fetched[k] || []; });
   }
   _mark('schools');
+
+  // ── SCORE-V2 인프라(20점) — 좌표가 풀린 최종 15건에만 카카오 주변시설 조회 ──────────
+  //   [왜 여기인가] 인프라는 좌표가 있어야 센다. 교통 30점은 KAPT 도보시간이라 좌표 없이도
+  //   이미 반영돼 있으므로, 위 정렬은 이미 대부분 맞다 — 여기서는 인프라만 얹어 재확정한다.
+  //   ⚠ 후보 전체(40건)에 걸면 카카오 호출이 240회다. 최종 15건으로 묶어 비용을 고정한다
+  //     (운영자 승인 B안). 좌표·반경 캐시가 메모리 3일 + DB 90일이라 반복 검색은 대부분 캐시 히트.
+  //   ⚠ 실패·좌표없음은 amen=null → `_applyFacilityToScore` 가 KAPT 교육/편의시설로 대체하고,
+  //     그것도 없으면 중간값을 준다. **0점으로 떨어뜨리지 않는다**([[unknown-treated-as-value]]).
+  try {
+    const { getNearbyAmenities } = require('./kakaoService');
+    const _amenArr = await Promise.all(enrichedRecs.map(async (rec, i) => {
+      const c = coords[i];
+      if (!c || c.lat == null || c.lng == null) return null;
+      try { return await getNearbyAmenities(c.lat, c.lng); } catch (_) { return null; }
+    }));
+    let _rescored = 0;
+    for (let i = 0; i < enrichedRecs.length; i++) {
+      const amen = _amenArr[i];
+      if (!amen) continue;
+      const rec = enrichedRecs[i];
+      const _sc = _applyFacilityToScore(rec._baseScore, rec.facility, amen);
+      enrichedRecs[i] = { ...rec, amenities: amen, score: _sc.total, scoreBreakdown: _sc.breakdown, scoreWhy: _sc.why };
+      _rescored++;
+    }
+    if (_rescored) {
+      // 인프라가 반영됐으니 순서를 다시 확정한다(동점은 거래량 → 이름순으로 결정적).
+      // ⚠ **coords·schoolsArr 도 같은 순서로 옮겨야 한다** — 이 함수의 downstream 은 전부
+      //   `coords[i]`·`schoolsArr[i]` 처럼 **인덱스 대응**을 전제한다. 하나만 정렬하면
+      //   마커가 다른 단지 위치에 찍히고 학군이 뒤바뀐다(이 저장소가 겪은 Bug #2 와 같은 계열).
+      //   그래서 네 배열을 한 묶음으로 정렬한 뒤 되돌려 놓는다.
+      const order = enrichedRecs.map((rec, i) => ({ rec, apt: _rankedF[i], coord: coords[i], school: schoolsArr[i] }));
+      order.sort((a, b) => (Number(b.rec?.score) || 0) - (Number(a.rec?.score) || 0)
+        || (Number(b.apt?.dealCount) || 0) - (Number(a.apt?.dealCount) || 0)
+        || String(a.rec?.aptName || '').localeCompare(String(b.rec?.aptName || ''), 'ko'));
+      _rankedF = order.map(o => o.apt);
+      enrichedRecs = order.map(o => o.rec);
+      for (let i = 0; i < order.length; i++) { coords[i] = order[i].coord; schoolsArr[i] = order[i].school; }
+    }
+    logger.info({ n: enrichedRecs.length, rescored: _rescored }, 'SCORE-V2 인프라 반영');
+  } catch (e) {
+    logger.warn({ err: e.message }, 'SCORE-V2 인프라 조회 실패 — KAPT 기반 점수로 진행');
+  }
+
   // Sprint BBBBBB — 스테이지 분해 로그 (병목 실측 확정용, cold 에만 의미)
   logger.info({
     stageMs: {

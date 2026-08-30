@@ -2379,8 +2379,13 @@ test('세대당 주차 판정 5곳이 모두 세대수 불일치 가드를 거�
     '보고서가 판정을 따로 구현했다 — 임계값이 갈리면 같은 단지가 화면마다 다르게 나온다');
 
   // ① 점수 가산 ② 추천카드 태그 ③ 주차 필터 — propertyService
-  assert.match(svc, /const pr = facility\?\.householdsConflict \? 0 : \(facility\?\.parkingRatio \|\| 0\)/,
-    '점수 가산(+4)이 불일치 단지에도 붙는다');
+  // SCORE-V2-2026-08-30: 점수 함수가 100점 모델로 바뀌면서 표현이 달라졌다 —
+  //   가드의 **의도**(세대수 원천이 갈리면 주차 비율로 점수를 올리지 않는다)는 그대로여야 한다.
+  //   ⚠ 다만 이제는 0점이 아니라 **중간값**을 준다(모르는 것을 나쁨으로 만들지 않는다).
+  assert.match(svc, /facility && facility\.householdsConflict\) \? null : \(\(facility && facility\.parkingRatio\) \|\| null\)/,
+    '점수 가산이 세대수 불일치 단지에도 붙는다 — 실측상 세대당 6.07대까지 부푼다');
+  assert.match(svc, /const 주차 = pr === null \? 3 :/,
+    '세대수 불일치·주차 미확인을 0점으로 떨어뜨린다 — 모르는 것은 중간값이어야 한다');
   assert.match(svc, /parkingRatio >= 1\.2 && !facility\?\.householdsConflict/,
     '추천카드 주차여유 태그에 가드가 없다');
   assert.ok(svc.includes('if (fMinPark > 0 && fac.householdsConflict) return false;'),
@@ -3084,6 +3089,57 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
   // 어느 분기에도 안 걸리는 입력은 조용히 넘어가지 말고 흔적을 남긴다.
   assert.match(src, /지역 필터 미적용 — 전국이 후보 풀이 된다/,
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
+});
+
+// ── SCORE-V2-2026-08-30 (Sprint OOOOOOO) ──────────────────────────────────────
+// 운영자: "부동산은 위치·교통(지하철 도보 몇 분)·핵심 인프라·거래 활발이 더 중요하다.
+//          기존 점수표가 너무 별로다. 다시 객관화해라."
+// [기존 실측] 거래량 30 · 신축 18 · 평형 8 · 세대수 8 · 주차 4 · **지하철 도보 4** · 교육 2.
+//   교통이 거래량의 1/7.5 였고, 병원·마트는 추천 점수에 **아예 없었다**.
+// [새 배점 — 운영자 승인] 교통 30 · 인프라 20 · 규모주차 15 · 거래 15 · 연식 12 · 평형 8 = 100
+test('점수 V2 — 교통이 최대 비중이고, 모르는 것은 0이 아니라 중간값이다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const svc = fs2.readFileSync(path2.join(__dirname, '../services/propertyService.js'), 'utf8');
+
+  // ① 배점표가 한 곳에 선언되고 교통이 가장 크다(사본이 갈릴 자리를 만들지 않는다).
+  const m = svc.match(/const SCORE_V2_MAX = \{([^}]+)\}/);
+  assert.ok(m, '배점표 상수(SCORE_V2_MAX)가 없다 — 배점이 코드 곳곳에 흩어지면 또 갈린다');
+  const max = {};
+  for (const kv of m[1].split(',')) {
+    const [k, v] = kv.split(':').map(x => x.trim());
+    if (k) max[k] = Number(v);
+  }
+  assert.equal(Object.values(max).reduce((a, b) => a + b, 0), 100, '배점 합이 100 이 아니다');
+  assert.equal(max['교통'], 30, '교통 배점이 30 이 아니다');
+  assert.ok(max['교통'] > max['거래'], '교통이 거래량보다 작다 — 운영자 우선순위와 반대다');
+  assert.ok(max['인프라'] >= 20, '생활 인프라 배점이 20 미만이다');
+
+  // ② 지하철 **도보시간 5단계 전부** 를 쓴다(기존엔 앞 두 단계만 썼다).
+  for (const band of ['5분이내', '5~10분', '10~15분', '15~20분', '20분초과']) {
+    assert.ok(svc.includes(`sub.includes('${band}')`),
+      `지하철 도보 '${band}' 구간을 점수에 쓰지 않는다 — KAPT 가 5단계로 주는데 버리고 있다`);
+  }
+
+  // ③ ⚠ 모르는 것은 **0점이 아니라 중간값**. 도보시간 미보유가 전국 26% 다 —
+  //    0 처리하면 데이터 없는 단지가 부당하게 밀린다([[unknown-treated-as-value]]).
+  assert.match(svc, /교통 === null\) \{ 교통 = 15;/,
+    '교통 정보가 없을 때 0점을 준다 — 모름을 나쁨으로 만들면 안 된다');
+  assert.match(svc, /인프라 === 0\) \{ 인프라 = 10;/,
+    '인프라 정보가 없을 때 0점을 준다');
+
+  // ④ 점수 근거(breakdown·why)를 함께 내보낸다 — "왜 이 순서인가" 가 보여야 신뢰가 생긴다.
+  assert.ok(/scoreBreakdown: _sc\.breakdown/.test(svc), '점수 근거(breakdown)를 응답에 싣지 않는다');
+  assert.ok(/scoreWhy: _sc\.why/.test(svc), '점수 근거 문구(why)를 응답에 싣지 않는다');
+
+  // ⑤ 최종 순서가 **화면에 보이는 점수** 로 정해진다(거래량 정렬이 아니다).
+  assert.match(svc, /order\.sort\(\(a, b\) => \(Number\(b\.rec\?\.score\)/,
+    '최종 정렬이 표시 점수 기준이 아니다 — 98점이 3위, 69점이 1위이던 그 상태로 돌아간다');
+
+  // ⑥ ⚠ 재정렬 시 coords·schoolsArr 도 함께 옮긴다 —
+  //    downstream 이 인덱스 대응을 전제하므로 하나만 정렬하면 마커가 다른 단지에 찍힌다.
+  assert.match(svc, /coords\[i\] = order\[i\]\.coord; schoolsArr\[i\] = order\[i\]\.school;/,
+    '재정렬이 좌표·학군을 함께 옮기지 않는다 — 마커가 다른 단지 위치에 찍힌다');
 });
 
 // ── NOTICE-HONEST-2026-08-30 (Sprint OOOOOOO) ─────────────────────────────────
