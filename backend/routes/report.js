@@ -119,7 +119,7 @@ router.post('/generate', async (req, res) => {
   userInput.annualIncome = Number.isFinite(_inc) ? _clamp(_inc, 0, 1000000) : 0;
   // 자유입력 문자열 — 40자 제한 (prompt 토큰 폭주·injection 표면 축소).
   userInput.region = _str(userInput.region, 40);
-  userInput.lawdCd = _str(userInput.lawdCd, 5);
+  userInput.lawdCd = _str(userInput.lawdCd, 41); // MULTI-REGION-2026-08-30: 5자리×6 + 콤마 5
   userInput.workplaceArea = _str(userInput.workplaceArea, 40);
   // enum 필드 — 화이트리스트 외 값(garbage·injection 문자열)은 안전 기본값으로 정규화.
   userInput.houseStatus = _enum(userInput.houseStatus, ['무주택', '1주택', '1주택 (처분조건부)', '2주택+'], '무주택');
@@ -1037,7 +1037,10 @@ async function fetchCandidateApts(admin, input, limit) {
   const region = String(input.region || '').trim();
   // REGION-CODE-2026-08-30 (Sprint OOOOOOO): 프론트 지역 칩이 실어 보내는 시군구 코드.
   //   있으면 아래 pickRegions 가 문자열 해석을 건너뛴다 — 이름 매칭 결함 계열의 원천 차단.
-  const _reqLawdCd = /^\d{5}$/.test(String(input.lawdCd || '')) ? String(input.lawdCd) : '';
+  // MULTI-REGION-2026-08-30 (Sprint OOOOOOO): 콤마 구분 다중 코드 허용("41597,41595").
+  //   pickRegions 가 화이트리스트 검증·중복 제거·상한(6)을 이미 하므로 여기선 형식만 거른다.
+  const _reqLawdCd = String(input.lawdCd || '').split(',').map(x => x.trim())
+    .filter(x => /^\d{5}$/.test(x)).join(',');
   const pyeong = String(input.pyeong || '').trim();
   const ctx = {
     buy,

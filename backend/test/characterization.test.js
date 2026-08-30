@@ -3062,7 +3062,11 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
   // REGION-CODE-2026-08-30: 4번째 인자로 **시군구 코드**를 넘긴다 — 있으면 문자열 해석을 건너뛴다.
   assert.match(src, /pickRegions\(region, buy, '', _reqLawdCd\)/,
     'pickRegions 재사용 호출이 없다(또는 lawdCd 를 넘기지 않는다)');
-  assert.ok(/const _reqLawdCd = \/\^\\d\{5\}\$\/\.test\(String\(input\.lawdCd/.test(src),
+  // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드를 받는다. 형식 검증(5자리)은 그대로 —
+  //   화이트리스트(LAWD_CODES) 검증·중복 제거·상한(6)은 pickRegions 가 맡는다.
+  assert.ok(/const _reqLawdCd = String\(input\.lawdCd/.test(src),
+    'lawdCd 를 다중 코드로 받지 않는다 — 복수 지역 선택이 보고서에 전달되지 않는다');
+  assert.ok(/filter\(x => \/\^\\d\{5\}\$\/\.test\(x\)\)/.test(src),
     'lawdCd 를 5자리 숫자로 검증하지 않는다 — 임의 코드로 조회가 열린다');
 
   // ② ⚠ pickRegions 는 매칭 실패 시 **예산 기반 서울 인기 구**를 돌려준다(추천용 폴백).
@@ -3080,6 +3084,55 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
   // 어느 분기에도 안 걸리는 입력은 조용히 넘어가지 말고 흔적을 남긴다.
   assert.match(src, /지역 필터 미적용 — 전국이 후보 풀이 된다/,
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
+});
+
+// ── MULTI-REGION-2026-08-30 (Sprint OOOOOOO) ──────────────────────────────────
+// 운영자: "화성시 동탄·만세구·병점구·효행구 이런식으로 복수 선택이 되면 좋겠다."
+//   실제 생활권은 행정구 경계와 일치하지 않는다 — 화성시가 4개 구로 갈리면서 한 도시를 보려면
+//   네 번 검색해야 했다. 복수 선택은 그 자체가 기능이지만, **조용히 잘리면** 더 나쁘다
+//   (4개 골랐는데 3개만 분석하고 아무 말도 안 하는 것).
+test('복수 지역 선택 — 화이트리스트·중복제거·상한을 지키고 조용히 자르지 않는다', () => {
+  const { pickRegions } = require('../services/propertyService');
+
+  // ① 고른 만큼 그대로 돌려준다(화성 4개 구).
+  const four = pickRegions('경기', 6, '', '41597,41591,41593,41595');
+  assert.deepEqual(four.map(r => r.lawdCd), ['41597', '41591', '41593', '41595'],
+    '복수 선택이 조용히 잘렸다 — 사용자가 고른 지역이 분석에서 빠진다');
+  // name 이 광역 이름이면 보고서가 "해석 실패"로 보고 광역으로 내려간다.
+  assert.ok(!four.some(r => ['서울', '경기', '인천', '지방'].includes(r.name)),
+    'name 이 광역 이름이다 — 보고서 경로가 지역 해석 실패로 처리한다');
+
+  // ② 중복은 제거하고, LAWD_CODES 에 없는 코드는 버린다(임의 코드로 조회를 열지 않는다).
+  const dedup = pickRegions('경기', 6, '', '41597,41597,99999,41595');
+  assert.deepEqual(dedup.map(r => r.lawdCd), ['41597', '41595'],
+    '중복 제거 또는 화이트리스트 검증이 동작하지 않는다');
+
+  // ③ 상한 6 — 지역 수만큼 실거래·단지목록 조회가 늘어 무제한이면 타임아웃.
+  const many = pickRegions('서울', 9, '', '11110,11140,11170,11200,11215,11230,11260');
+  assert.equal(many.length, 6, '복수 선택 상한(6)이 지켜지지 않는다');
+
+  // ④ 단일 선택은 종전과 동일(회귀 방지).
+  assert.deepEqual(pickRegions('경기', 6, '', '41597').map(r => r.lawdCd), ['41597']);
+
+  // ⑤ 코드가 하나도 유효하지 않으면 문자열 해석으로 내려간다(빈 결과를 돌려주지 않는다).
+  const fallback = pickRegions('경기 분당', 9, '', '99999,88888');
+  assert.ok(fallback.length > 0, '유효 코드가 없을 때 빈 배열을 돌려준다 — 검색이 통째로 죽는다');
+  assert.equal(fallback[0].lawdCd, '41135', '문자열 폴백이 분당을 해석하지 못한다');
+});
+
+// 프론트 칩이 실제로 다중 선택을 보내는지 — 백엔드만 고치고 프론트가 단일이면 기능이 없는 것과 같다.
+test('프론트 지역 칩이 다중 선택을 보낸다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  // getRegionLawdCd 가 **모든** 선택 칩을 모아 콤마로 잇는다(querySelector 단건이 아니다).
+  assert.match(html, /function getRegionLawdCd\(\)\{[\s\S]{0,240}querySelectorAll\('#ch-r-sub \.chip\.on'\)/,
+    'getRegionLawdCd 가 칩 하나만 읽는다 — 복수 선택이 백엔드에 전달되지 않는다');
+  assert.match(html, /getRegionLawdCd\(\)[\s\S]{0,80}join\(','\)|join\(','\)/,
+    '선택된 코드를 콤마로 잇지 않는다');
+  // cpSub 가 형제 칩을 전부 끄지 않는다(단일 선택 강제 제거).
+  assert.doesNotMatch(html, /function cpSub\(el\)\{[\s\S]{0,200}parentNode\.querySelectorAll\('\.chip'\)\.forEach\(c=>c\.classList\.remove\('on'\)\)/,
+    'cpSub 가 여전히 단일 선택을 강제한다');
 });
 
 // ── JIBUN-MATCH-2026-08-30 (Sprint OOOOOOO) ───────────────────────────────────

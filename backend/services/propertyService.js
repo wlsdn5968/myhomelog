@@ -179,12 +179,27 @@ function lookupByJibun(idx, apt) {
  *     "세부 해석 성공" 여부를 판별하기 때문이다.
  */
 function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '', lawdCd = '') {
-  const _code = String(lawdCd || '').trim();
-  if (/^\d{5}$/.test(_code)) {
+  // MULTI-REGION-2026-08-30 (Sprint OOOOOOO, 운영자 "화성시 동탄·만세·병점·효행 이런식으로 복수 선택"):
+  //   `lawdCd` 는 콤마 구분 다중 코드를 받는다("41597,41595"). 실제 생활권은 행정구 경계와
+  //   일치하지 않는다 — 화성시가 4개 구로 갈리면서 한 도시를 보려면 4번 검색해야 했다.
+  //   ⚠ LAWD_CODES 화이트리스트를 통과한 코드만 채택하고, 중복은 제거한다.
+  //   ⚠ 상한 MAX_MULTI — 지역 수만큼 실거래·단지목록 조회가 늘어난다(무제한이면 타임아웃).
+  const MAX_MULTI = 6;
+  const _codes = String(lawdCd || '').split(',').map(s => s.trim()).filter(s => /^\d{5}$/.test(s));
+  if (_codes.length) {
     const { LAWD_CODE_TO_NAME } = require('./transactionService');
-    const nm = LAWD_CODE_TO_NAME[_code];
-    if (nm) return [{ lawdCd: _code, name: nm }];
-    logger.warn({ lawdCd: _code }, 'pickRegions: LAWD_CODES 에 없는 코드 — 문자열 해석으로 폴백');
+    const out = [];
+    const seen = new Set();
+    for (const c of _codes) {
+      if (seen.has(c)) continue;
+      const nm = LAWD_CODE_TO_NAME[c];
+      if (!nm) { logger.warn({ lawdCd: c }, 'pickRegions: LAWD_CODES 에 없는 코드 — 무시'); continue; }
+      seen.add(c);
+      out.push({ lawdCd: c, name: nm });
+      if (out.length >= MAX_MULTI) break;
+    }
+    if (out.length) return out;
+    logger.warn({ lawdCd }, 'pickRegions: 유효한 코드가 하나도 없다 — 문자열 해석으로 폴백');
   }
   // Unicode NFC 정규화 — 일부 OS(Mac)/브라우저에서 한글이 NFD(분해형)로 전달돼
   // "강북" 같은 NFC 키워드와 문자열 비교 실패하는 버그 방지
@@ -388,7 +403,8 @@ async function getAIRecommendations(userCondition) {
   // NFC 정규화 — Mac(NFD) ↔ Windows(NFC) 캐시 분리 방지
   const normReg = String(region || '').normalize('NFC').trim();
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
-  const _lawd = /^\d{5}$/.test(String(lawdCd || '')) ? String(lawdCd) : '';
+  // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
+  const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
   const cacheKey = `rec:v16:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v16: OOOOOOO KAPT V3 폐기로 필터가 전국 0건이던 결과가 Redis 에 3h 캐시돼 있다 — 구버전 캐시 차단
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
@@ -405,7 +421,12 @@ async function getAIRecommendations(userCondition) {
   const _mark = (k) => { _tt[k] = Date.now(); };
 
   // Step 1: 키워드 기반 빠른 지역 결정
-  const targetRegions = pickRegions(region, maxBudget, workplaceArea, _lawd).slice(0, 3);
+  // MULTI-REGION-2026-08-30: 사용자가 **직접 고른** 지역은 자르지 않는다.
+  //   slice(0,3) 은 키워드 해석이 광역 대표 구를 여러 개 돌려줄 때 비용을 막으려던 것인데,
+  //   복수 선택에 그대로 적용하면 "4개 골랐는데 3개만 본다" 가 된다(조용한 축소).
+  //   명시 선택은 pickRegions 가 이미 MAX_MULTI(6)로 상한을 두므로 여기선 그대로 쓴다.
+  const _picked = pickRegions(region, maxBudget, workplaceArea, _lawd);
+  const targetRegions = _lawd ? _picked : _picked.slice(0, 3);
 
   // Step 2: 병렬 조회 — (a) 시군구 전체 단지 목록 + (b) 실거래 내역
   // COLLECT-PAR-2026-07-18 (Sprint DDDDDD): aliasMap 이 대형 병렬 조회 뒤 직렬 1왕복이던 것 — 동시 시작

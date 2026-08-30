@@ -1624,6 +1624,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
   border:1px solid var(--bd);border-radius:var(--radius-base);background:var(--bg2);color:var(--t1)}
 .rsub-find::placeholder{color:var(--t3)}
 .rsub-none{font-size:11px;color:var(--t3);padding:6px 2px}
+.rsub-pick{font-size:11px;font-weight:700;color:var(--acc);padding:4px 2px 0}
 @media (max-width:768px){.rsub-box{max-height:150px}.rsub-find{padding:10px 9px}}
 </style>
 <!-- Vercel Web Analytics — 30일 검증 모드 계측 (2026-05-02 ~ 2026-06-01) -->
@@ -1804,9 +1805,10 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <div class="wcard">
           <div class="wchead"><span class="wnum">3</span><span class="wtitle">희망 지역</span><span class="wreq">필수</span></div>
           <div class="chips" id="ch-r"><span class="chip on" onclick="cp(this,'ch-r')">서울</span><span class="chip" onclick="cp(this,'ch-r')">경기</span><span class="chip" onclick="cp(this,'ch-r')">인천</span><span class="chip" onclick="cp(this,'ch-r')">지방</span></div>
-          <div style="font-size:10px;color:var(--t3);margin:4px 0 3px">세부 구 선택 (선택 시 그 지역만 분석 — 미선택 시 광역의 인기 구 분석)</div>
+          <div style="font-size:10px;color:var(--t3);margin:4px 0 3px">세부 지역 선택 · <b>여러 곳 선택 가능</b> (미선택 시 광역의 인기 구 분석)</div>
           <input id="ch-r-find" class="rsub-find" type="search" placeholder="지역 이름으로 좁히기 (예: 동탄)" oninput="filterRegionSub(this.value)" autocomplete="off">
           <div class="chips rsub-box" id="ch-r-sub" style="margin-top:2px"></div>
+          <div id="ch-r-pick" class="rsub-pick" style="display:none"></div>
           <div id="ch-r-none" class="rsub-none" style="display:none">그 이름의 지역이 없어요 — 다른 광역 탭도 확인해보세요</div>
         </div>
         <details class="wopt" id="wizOpt">
@@ -9958,21 +9960,46 @@ function populateRegionSub(wide){
   const f=document.getElementById('ch-r-find');
   if(f){ f.value=''; f.style.display=(items.length>12)?'':'none'; }
   const none=document.getElementById('ch-r-none'); if(none) none.style.display='none';
+  if(typeof _syncRegionPick==='function') _syncRegionPick();
   sub.scrollTop=0;
 }
+// MULTI-REGION-2026-08-30 (Sprint OOOOOOO, 운영자 "화성시 동탄·만세·병점·효행 이런식으로 복수 선택"):
+//   세부 지역 칩을 **다중 토글**로 바꾼다. 실제 생활권은 행정구 경계와 일치하지 않는다 —
+//   화성시가 4개 구로 갈리면서 한 도시를 보려면 네 번 검색해야 했다.
+//   ⚠ 상한 6 — 지역 수만큼 실거래·단지목록 조회가 늘어 무제한이면 타임아웃(백엔드 MAX_MULTI 와 동일).
+const REGION_SUB_MAX = 6;
 function cpSub(el){
-  const wasOn=el.classList.contains('on');
-  el.parentNode.querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
-  if(!wasOn) el.classList.add('on');
+  const on = el.classList.contains('on');
+  if(on){ el.classList.remove('on'); }
+  else {
+    const cur = el.parentNode.querySelectorAll('.chip.on').length;
+    if(cur >= REGION_SUB_MAX){
+      if(typeof toast==='function') toast(`지역은 최대 ${REGION_SUB_MAX}곳까지 함께 볼 수 있어요`);
+      return;
+    }
+    el.classList.add('on');
+  }
+  if(typeof _syncRegionPick==='function') _syncRegionPick();
+}
+/** 선택된 세부 지역 수를 화면에 알려준다 — 여러 개 고른 걸 사용자가 놓치지 않게. */
+function _syncRegionPick(){
+  const n = document.querySelectorAll('#ch-r-sub .chip.on').length;
+  const el = document.getElementById('ch-r-pick');
+  if(!el) return;
+  el.textContent = n ? `${n}곳 선택됨 — 함께 분석해요` : '';
+  el.style.display = n ? '' : 'none';
 }
 function getRegionForSearch(){
   const wide=gct('ch-r');
-  const sub=document.querySelector('#ch-r-sub .chip.on')?.textContent.trim()||'';
-  return sub ? `${wide} ${sub}` : wide;
+  // MULTI-REGION-2026-08-30: 여러 곳을 고르면 표시용 문자열은 '광역 A·B·C' 로 합친다.
+  //   ⚠ 지역 판정 자체는 lawdCd(아래)로 한다 — 이 문자열은 화면·URL 표기용이다.
+  const subs=[...document.querySelectorAll('#ch-r-sub .chip.on')].map(c=>c.textContent.trim()).filter(Boolean);
+  return subs.length ? `${wide} ${subs.join('·')}` : wide;
 }
-/** 선택된 세부 지역의 시군구 코드(없으면 ''). 백엔드가 이 값이 있으면 문자열 해석을 건너뛴다. */
+/** 선택된 세부 지역의 시군구 코드(콤마 구분, 없으면 ''). 백엔드가 있으면 문자열 해석을 건너뛴다. */
 function getRegionLawdCd(){
-  return document.querySelector('#ch-r-sub .chip.on')?.dataset.lawd || '';
+  return [...document.querySelectorAll('#ch-r-sub .chip.on')]
+    .map(c=>c.dataset.lawd).filter(Boolean).join(',');
 }
 // P1-14 (2026-05-04): LAWD_CODES 광역 (강원·충북·충남·전북·전남·경북·경남·제주) 미지원
 //   사용자가 미지원 지역 입력 시 사전 차단 — backend 데이터 0건 후 "조회 실패" 차단
@@ -10066,9 +10093,13 @@ function restoreSearchFromUrl(){
         //   URL(?region=경기 분당)도 칩이 잡히도록 정확일치 실패 시 포함 매칭으로 내려간다.
         //   (매칭이 안 돼도 region 문자열은 그대로 백엔드로 가 pickRegions 가 해석한다 — 결과는 불변.)
         const _chips=[...document.querySelectorAll('#ch-r-sub .chip')];
-        let _hit=_chips.find(c=>c.textContent.trim()===sub);
-        if(!_hit) _hit=_chips.find(c=>c.textContent.trim().replace(/\s/g,'').includes(sub.replace(/\s/g,'')));
-        if(_hit) _hit.classList.add('on');
+        // MULTI-REGION-2026-08-30: 여러 곳은 '·' 로 이어 붙여 저장된다 — 나눠서 각각 복원한다.
+        for(const _one of sub.split('·').map(x=>x.trim()).filter(Boolean)){
+          let _hit=_chips.find(c=>c.textContent.trim()===_one);
+          if(!_hit) _hit=_chips.find(c=>c.textContent.trim().replace(/\s/g,'').includes(_one.replace(/\s/g,'')));
+          if(_hit) _hit.classList.add('on');
+        }
+        if(typeof _syncRegionPick==='function') _syncRegionPick();
       }
     }
     // Phase 4-3 후 sprint C-3 (2026-05-05): URL 진입자 + budget/cash 미입력 시 입력 유도
