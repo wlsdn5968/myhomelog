@@ -1198,8 +1198,8 @@ async function getAIRecommendations(userCondition) {
         lat: coords[i] && coords[i].lat, lng: coords[i] && coords[i].lng,
       }));
       _interest = await dl.getCachedInterest(items);
-      // ⚠ await 하지 않는다 — 이 요청의 응답 시간에 영향을 주면 안 된다.
-      dl.warmInterest(items, 4).catch(() => {});
+      // ⚠ 여기서 채우지 않는다 — **서버리스는 응답 후 작업을 보장하지 않는다**(실측: 캐시 0행).
+      //   채우기는 admin/cron 경로(GET /api/admin/warm-interest)가 맡는다.
     } catch (e) {
       logger.warn({ err: e.message }, '관심도 조회 실패 — 중간값으로 진행');
     }

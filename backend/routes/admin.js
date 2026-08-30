@@ -493,5 +493,56 @@ router.get('/audit-transit', async (req, res) => {
   }
 });
 
+/**
+ * INTEREST-WARM-2026-08-30 (Sprint PPPPPPP): 장기 검색 관심도 캐시 채우기 + 키 진단.
+ *
+ * ⚠ 왜 요청 경로가 아니라 여기인가 — **서버리스는 응답을 보낸 뒤의 작업을 보장하지 않는다.**
+ *   추천 응답 후 fire-and-forget 으로 채우게 했더니 캐시가 **0행**이었다(실측).
+ *   그래서 채우기는 이 경로(관리자·크론)에서만 하고, 요청 경로는 **캐시만 읽는다**.
+ *
+ * 거래가 많은 단지부터 채운다 — 검색 결과에 실제로 등장할 확률이 높은 순서다.
+ * 데이터랩 일일 한도를 지키려고 호출 수를 인자로 묶는다(1콜 = 단지 4곳).
+ *
+ *   GET /api/admin/warm-interest?calls=10
+ */
+router.get('/warm-interest', async (req, res) => {
+  try {
+    const dl = require('../services/naverDatalabService');
+    if (!dl.hasKeys()) {
+      return res.status(503).json({ ok: false, reason: 'NAVER_CLIENT_ID/SECRET 미설정' });
+    }
+    const { getSupabaseAdmin } = require('../db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return res.status(503).json({ error: 'DB 미설정' });
+    const calls = Math.min(60, Math.max(1, parseInt(req.query.calls) || 10));
+
+    // 좌표가 있는 단지를 거래 많은 순으로 — apt_geocache 는 MOLIT 이름 기준이라 그대로 쓴다.
+    const { data: geo, error: gErr } = await admin.from('apt_geocache')
+      .select('apt_name, sigungu, lat, lng')
+      .not('lat', 'is', null)
+      .order('cached_at', { ascending: false })
+      .range(0, 999);
+    if (gErr) return res.status(500).json({ error: gErr.message });
+
+    const seen = new Set();
+    const items = [];
+    for (const g of geo || []) {
+      const k = `${g.apt_name}|${g.sigungu}`;
+      if (seen.has(k)) continue;
+      seen.add(k);
+      items.push({ aptName: g.apt_name, sigungu: g.sigungu, lat: Number(g.lat), lng: Number(g.lng) });
+    }
+    const t0 = Date.now();
+    const summary = await dl.warmInterest(items, calls);
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, anchor: dl.ANCHOR, candidates: items.length, elapsedMs: Date.now() - t0, ...summary });
+  } catch (e) {
+    logger.error({ err: e.message }, 'admin warm-interest 실패');
+    require('../utils/captureError').captureRouteError(e, 'admin');
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
+
 
