@@ -36,6 +36,7 @@ const axios = require('axios');
 const logger = require('../logger');
 const cache = require('../cache');
 
+let lastFetchError = null;
 const DATALAB_URL = 'https://openapi.naver.com/v1/datalab/search';
 
 /** 요청 간 비교를 가능하게 하는 고정 기준 키워드. 전국구 인지도 + 36개월 내내 비어 있지 않다(실측). */
@@ -79,8 +80,8 @@ async function fetchBatch(names) {
       { startDate, endDate, timeUnit: 'month', keywordGroups },
       {
         headers: {
-          'X-Naver-Client-Id': process.env.NAVER_CLIENT_ID,
-          'X-Naver-Client-Secret': process.env.NAVER_CLIENT_SECRET,
+          'X-Naver-Client-Id': String(process.env.NAVER_CLIENT_ID || '').trim(),
+          'X-Naver-Client-Secret': String(process.env.NAVER_CLIENT_SECRET || '').trim(),
           'Content-Type': 'application/json',
         },
         timeout: 8000,
@@ -104,6 +105,7 @@ async function fetchBatch(names) {
   } catch (e) {
     logger.warn({ err: e.message, status: e.response?.status, n: names.length },
       '네이버 데이터랩 조회 실패 — 관심도는 중간값 처리');
+    lastFetchError = { status: e.response?.status || null, message: e.response?.data?.errorMessage || e.message };
     return null;
   }
 }
@@ -129,6 +131,42 @@ async function readCache(key) {
   } catch (_) { return undefined; }
 }
 
+/**
+ * 캐시 존재 여부를 **한 번의 쿼리로** 확인한다.
+ * ⚠ 단건 readCache 를 목록에 돌리면 단지 수만큼 DB 왕복이 생긴다 —
+ *   실측으로 999건에 20초가 걸렸다(운영자: "최대한 부하가 안 걸리게").
+ * @returns {Promise<Map<string, number>>} cache_key → 비율(유효 기간 내인 것만)
+ */
+async function readCacheBulk(keys) {
+  const out = new Map();
+  if (!keys.length) return out;
+  // 메모리 히트 먼저 걷어낸다.
+  const miss = [];
+  for (const k of keys) {
+    const mem = cache.get(`dlni:${k}`);
+    if (mem !== undefined) out.set(k, mem); else miss.push(k);
+  }
+  if (!miss.length) return out;
+  try {
+    const { getSupabaseAdmin } = require('../db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return out;
+    for (let i = 0; i < miss.length; i += 200) {
+      const chunk = miss.slice(i, i + 200);
+      const { data } = await admin.from('apt_amenities')
+        .select('cache_key, count, fetched_at').in('cache_key', chunk).limit(chunk.length);
+      for (const row of data || []) {
+        const ageDays = (Date.now() - new Date(row.fetched_at).getTime()) / 86400000;
+        if (ageDays > CACHE_DAYS) continue;
+        const ratio = Number(row.count) / 10000;
+        out.set(row.cache_key, ratio);
+        cache.set(`dlni:${row.cache_key}`, ratio, 86400);
+      }
+    }
+  } catch (_) { /* 캐시 미스로 진행 — 조회 실패가 점수를 망가뜨리면 안 된다 */ }
+  return out;
+}
+
 async function writeCache(key, ratio, lat, lng) {
   try {
     const { getSupabaseAdmin } = require('../db/client');
@@ -151,13 +189,14 @@ async function writeCache(key, ratio, lat, lng) {
  * @returns {Promise<Map<string, number>>} `name|sigungu` → 앵커 대비 비율
  */
 async function getCachedInterest(items) {
+  const list = (items || []).filter(it => it && it.aptName);
+  const keys = list.map(it => cacheKeyFor(it.aptName, it.sigungu));
+  const byKey = await readCacheBulk(keys);
   const out = new Map();
-  await Promise.all((items || []).map(async (it) => {
-    if (!it || !it.aptName) return;
-    const k = cacheKeyFor(it.aptName, it.sigungu);
-    const v = await readCache(k);
-    if (v !== undefined) out.set(`${it.aptName}|${it.sigungu || ''}`, v);
-  }));
+  list.forEach((it, i) => {
+    const v = byKey.get(keys[i]);
+    if (v !== undefined) out.set(`${it.aptName}|${it.sigungu || ""}`, v);
+  });
   return out;
 }
 
@@ -167,18 +206,16 @@ async function getCachedInterest(items) {
  */
 async function warmInterest(items, maxCalls = 4) {
   if (!hasKeys()) return { skipped: 'no-key' };
-  const todo = [];
-  for (const it of items || []) {
-    if (!it || !it.aptName || it.lat == null || it.lng == null) continue;
-    const k = cacheKeyFor(it.aptName, it.sigungu);
-    if ((await readCache(k)) === undefined) todo.push(it);
-  }
-  let calls = 0, filled = 0;
+  const usable = (items || []).filter(it => it && it.aptName && it.lat != null && it.lng != null);
+  const keys = usable.map(it => cacheKeyFor(it.aptName, it.sigungu));
+  const have = await readCacheBulk(keys);   // ⚠ 단건 조회를 돌리면 단지 수만큼 DB 왕복이 생긴다
+  const todo = usable.filter((it, i) => have.get(keys[i]) === undefined);
+  let calls = 0, filled = 0, lastError = null;
   for (let i = 0; i < todo.length && calls < maxCalls; i += MAX_TARGETS_PER_CALL) {
     const chunk = todo.slice(i, i + MAX_TARGETS_PER_CALL);
     const res = await fetchBatch(chunk.map(c => c.aptName));
     calls++;
-    if (!res) break; // 실패하면 더 두드리지 않는다(한도·부하 보호)
+    if (!res) { lastError = lastFetchError; break; } // 실패하면 더 두드리지 않는다(한도·부하 보호)
     for (const c of chunk) {
       const ratio = res.get(c.aptName);
       if (ratio == null) continue;
@@ -187,7 +224,27 @@ async function warmInterest(items, maxCalls = 4) {
     }
   }
   if (calls) logger.info({ calls, filled, pending: Math.max(0, todo.length - filled) }, '관심도 워밍');
-  return { calls, filled, pending: Math.max(0, todo.length - filled) };
+  return { calls, filled, pending: Math.max(0, todo.length - filled), lastError };
 }
 
-module.exports = { getCachedInterest, warmInterest, hasKeys, ANCHOR, fetchBatch, median };
+/**
+ * 키 **형태만** 진단한다 — 값은 절대 반환하지 않는다.
+ * 401 을 만났을 때 "키가 틀렸다" 와 "권한이 없다" 를 가르기 위한 최소 정보다.
+ * 실측상 가장 흔한 사고는 복사·붙여넣기로 들어간 앞뒤 공백/개행이다.
+ */
+function keyShape() {
+  const shape = (v) => {
+    if (v == null) return { set: false };
+    const s = String(v);
+    return {
+      set: true,
+      len: s.length,
+      trimmedLen: s.trim().length,
+      hasSpace: /\s/.test(s),          // 공백·개행이 섞였는가
+      hasQuote: /["']/.test(s),        // 따옴표까지 같이 붙여넣었는가
+    };
+  };
+  return { id: shape(process.env.NAVER_CLIENT_ID), secret: shape(process.env.NAVER_CLIENT_SECRET) };
+}
+
+module.exports = { getCachedInterest, warmInterest, hasKeys, keyShape, ANCHOR, fetchBatch, median };

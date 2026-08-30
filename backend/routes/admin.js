@@ -509,7 +509,7 @@ router.get('/warm-interest', async (req, res) => {
   try {
     const dl = require('../services/naverDatalabService');
     if (!dl.hasKeys()) {
-      return res.status(503).json({ ok: false, reason: 'NAVER_CLIENT_ID/SECRET 미설정' });
+      return res.status(503).json({ ok: false, reason: 'NAVER_CLIENT_ID/SECRET 미설정', keyShape: dl.keyShape() });
     }
     const { getSupabaseAdmin } = require('../db/client');
     const admin = getSupabaseAdmin();
@@ -535,7 +535,7 @@ router.get('/warm-interest', async (req, res) => {
     const t0 = Date.now();
     const summary = await dl.warmInterest(items, calls);
     res.set('Cache-Control', 'no-store');
-    res.json({ ok: true, anchor: dl.ANCHOR, candidates: items.length, elapsedMs: Date.now() - t0, ...summary });
+    res.json({ ok: true, anchor: dl.ANCHOR, keyShape: dl.keyShape(), candidates: items.length, elapsedMs: Date.now() - t0, ...summary });
   } catch (e) {
     logger.error({ err: e.message }, 'admin warm-interest 실패');
     require('../utils/captureError').captureRouteError(e, 'admin');
