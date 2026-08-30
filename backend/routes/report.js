@@ -1608,4 +1608,9 @@ ${aptList}
 JSON만 반환. 다른 텍스트 X.`;
 }
 
+// REPORT-DRYRUN-2026-08-30 (Sprint OOOOOOO): 보고서의 **단지 선별 단계만** 따로 부를 수 있게 export.
+//   전 지역이 보고서를 낼 수 있는지 확인하려면 119곳을 돌려봐야 하는데, /generate 는 매 건 유료
+//   AI 를 호출한다. 후보가 0이면 그 자리에서 404 가 나므로 **결함은 이 단계에서 전부 드러난다** —
+//   유료 호출 없이 전수 확인이 가능하다. router 동작은 그대로다(export 추가뿐).
 module.exports = router;
+module.exports.fetchCandidateApts = fetchCandidateApts;

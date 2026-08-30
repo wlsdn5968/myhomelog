@@ -305,4 +305,39 @@ router.get('/debug-kapt-list', async (req, res) => {
   }
 });
 
+/**
+ * REPORT-DRYRUN-2026-08-30 (Sprint OOOOOOO, 운영자 "보고서까지 제대로 나오는지 확실하게 확인"):
+ *   GET /api/admin/report-candidates?lawdCd=41597&region=경기 화성시 동탄구&budget=7.3
+ *   보고서의 **단지 선별 단계만** 실행한다 — AI 호출 없음(비용 0). 후보가 0이면 /generate 는
+ *   그 자리에서 404 를 낸다. 즉 이 숫자가 "그 지역에서 보고서가 나오는가" 를 그대로 답한다.
+ *   전 지역 전수 점검용. 결과는 저장하지 않는다.
+ */
+router.get('/report-candidates', async (req, res) => {
+  try {
+    const { getSupabaseAdmin } = require('../db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return res.status(503).json({ error: 'DB 미설정' });
+    const { fetchCandidateApts } = require('./report');
+    if (typeof fetchCandidateApts !== 'function') return res.status(500).json({ error: 'dry-run 미노출' });
+    const input = {
+      maxBudget: parseFloat(req.query.budget) || 7,
+      myCash: 3, region: String(req.query.region || ''),
+      lawdCd: String(req.query.lawdCd || ''),
+      pyeong: '전체', priority: '환금성', kidPlan: '없음', stayYears: '5~10년',
+      isFirstBuyer: true, houseStatus: '무주택',
+    };
+    const t0 = Date.now();
+    const rows = await fetchCandidateApts(admin, input, 7);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      lawdCd: input.lawdCd, region: input.region, budget: input.maxBudget,
+      count: rows.length, ms: Date.now() - t0,
+      lawdSeen: [...new Set(rows.map(r => r.lawd_cd).filter(Boolean))],
+      names: rows.slice(0, 5).map(r => r.apt_name),
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
