@@ -3112,8 +3112,8 @@ test('보고서 최고가·층별 가격대 — 기간을 속이지 않고, 표�
   assert.match(rpt, /floorBands:/, '층별 가격대를 응답에 싣지 않는다');
 
   // ② ⚠ "전고점" 이라고 부르지 않는다 — 16개월치 DB 로 역대 최고가를 주장할 수 없다.
-  assert.ok(!/전고점/.test(fe.slice(fe.indexOf('_peakFloorLine'), fe.indexOf('_peakFloorLine') + 1200)),
-    '표시 문구가 "전고점" 을 주장한다 — 우리 DB(2025-05~)로는 알 수 없는 사실이다');
+  //    ⚠ 소스 문자열 창을 훑지 않는다 — 주석에 적힌 "전고점 이라고 쓰지 않는다" 를 잡아
+  //      멀쩡한 코드가 실패했다. **실제 출력**을 검사한다(아래 ④ 에서 만든 문구로).
   assert.match(fe, /최근 6개월 최고/, '기간을 밝히지 않은 최고가 문구다');
 
   // ③ 층별 가격대 표본 하한이 있다.
@@ -3123,12 +3123,26 @@ test('보고서 최고가·층별 가격대 — 기간을 속이지 않고, 표�
     '저층·고층 중 하나가 비어도 층별 가격대를 만든다 — 비교 대상이 없으면 의미가 없다');
 
   // ④ 실제로 실행해 확인한다.
-  const m = fe.match(/const _peakFloorLine = \(a\) => \{[\s\S]*?\n  \};/);
+  // ⚠ 공용 스코프로 옮기면서 들여쓰기가 사라졌다 — 앵커를 들여쓰기에 의존시키지 않는다.
+  const m = fe.match(/const _peakFloorLine = \(a\) => \{[\s\S]*?\n\};/);
   assert.ok(m, '문구 빌더를 찾지 못했다');
   const fn = new Function(`${m[0]}; return _peakFloorLine;`)();
   assert.equal(fn({}), '', '값이 없는데 빈 줄을 만든다');
   const withPeak = fn({ peak6mAuk: 8.35 });
   assert.ok(withPeak.includes('8.35억') && withPeak.includes('최근 6개월 최고'), '최고가 문구가 비었다');
+  // ⚠ 실제 출력에 "전고점" 이 있으면 안 된다 — 우리 DB(2025-05~)로는 알 수 없는 사실이다.
+  assert.ok(!withPeak.includes('전고점'), '표시 문구가 "전고점" 을 주장한다');
+
+  // ⑥ ⚠ 이 함수는 **화면·인쇄 두 렌더러가 공유**한다. 한쪽 함수 안에 정의하면
+  //    다른 쪽에서 `_peakFloorLine is not defined` 로 보고서가 통째로 죽는다(실제로 죽었다).
+  //    선언이 어느 함수 본문에도 들어가 있지 않은지 — 즉 공용 스코프인지 확인한다.
+  const defIdx = fe.indexOf('const _peakFloorLine = (a) =>');
+  assert.ok(defIdx > 0, '_peakFloorLine 선언을 찾지 못했다');
+  const before = fe.slice(0, defIdx);
+  const renderIdx = before.lastIndexOf('function _renderReport(data) {');
+  const pdfIdx = before.lastIndexOf('function _downloadReportPDF()');
+  assert.equal(renderIdx, -1, '_peakFloorLine 이 _renderReport 안에 갇혀 있다 — 인쇄 쪽에서 죽는다');
+  assert.equal(pdfIdx, -1, '_peakFloorLine 이 _downloadReportPDF 안에 갇혀 있다 — 화면 쪽에서 죽는다');
   const full = fn({ peak6mAuk: 8.35, floorBands: { low: { upTo: 5, n: 3, auk: 7.1 }, mid: { n: 4, auk: 7.9 }, high: { from: 12, n: 3, auk: 8.2 } } });
   assert.ok(full.includes('저층(~5층) 7.1억') && full.includes('고층(12층~) 8.2억'), '층별 문구가 비었다');
   // 층 정보가 없으면 층 문구는 빠지고 최고가만 남는다.

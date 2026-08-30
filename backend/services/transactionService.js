@@ -8,6 +8,7 @@ const dgk = require('./dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): �
 const { getSupabaseAdmin, hasAdminEnv } = require('../db/client');
 const cache = require('../cache');
 const logger = require('../logger');
+const { txWindowStart } = require('../utils/txWindow');
 // TXAPT-MATCH-2026-05-13 (Sprint Z + Z+): master 정식명 ↔ MOLIT raw 매칭
 //   - Z: 양방향 contains + baseAptName (suffix 정규화)
 //   - Z+: LCS insertion (builder/지역명 중간 삽입 case — 서강쌍용예가↔서강예가, 한신코아↔한신잠실코아)
@@ -113,10 +114,7 @@ async function getRegionRecentTransactions(lawdCd, monthsBack = 6) {
   const hit = cache.get(ck);
   if (hit !== undefined) return hit;
   try {
-    const since = new Date();
-    since.setMonth(since.getMonth() - (monthsBack - 1));
-    since.setDate(1);
-    const sinceStr = since.toISOString().slice(0, 10);
+    const sinceStr = txWindowStart(monthsBack);   // 규칙은 utils/txWindow 한 곳에만
     // REST-CAP-FIX-2026-07-10: Supabase REST 는 응답당 1000행 cap — .limit(12000) 요청도 서버가
     //   1000으로 자름(라이브 실측: analyzedCount 581→490, "구당 최근 1000행 cap" SQL 재현으로 490 정확 일치).
     //   → 1000행 range 페이징. 2차 정렬키 id 로 같은 deal_date 동점의 페이지 경계 중복/누락 차단.

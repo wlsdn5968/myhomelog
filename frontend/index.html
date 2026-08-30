@@ -4672,6 +4672,26 @@ async function generateReport(_isRetry) {
   }
 }
 
+// ⚠ SCOPE-2026-08-31: 이 함수는 **_renderReport(화면)와 _downloadReportPDF(인쇄) 둘 다** 쓴다.
+//   처음에 _downloadReportPDF 안에만 정의했다가 화면 렌더에서 `_peakFloorLine is not defined` 로
+//   프로덕션 보고서가 통째로 죽었다. 문법 검사·인라인 파싱은 전부 통과했다 — 런타임에서만 터진다
+//   ([[dangling-ref-after-refactor]]). 공용으로 쓸 것은 공용 스코프에 둔다.
+// PEAK-FLOOR-2026-08-31: 최근 6개월 최고가 + 층별 가격대 문구.
+//   ⚠ "전고점" 이라고 쓰지 않는다 — 우리 DB 는 2025-05 부터라 역대 최고가를 알 수 없다.
+//   ⚠ 층별 가격대는 표본이 얇으면 백엔드가 아예 안 보낸다(null) — 없으면 줄을 만들지 않는다.
+const _peakFloorLine = (a) => {
+  const bits = [];
+  if (Number.isFinite(Number(a.peak6mAuk))) bits.push(`최근 6개월 최고 <b>${Number(a.peak6mAuk).toFixed(2)}억</b>`);
+  const fb = a.floorBands;
+  if (fb && fb.low && fb.high) {
+    const seg = [`저층(~${fb.low.upTo}층) ${fb.low.auk}억`];
+    if (fb.mid) seg.push(`중층 ${fb.mid.auk}억`);
+    seg.push(`고층(${fb.high.from}층~) ${fb.high.auk}억`);
+    bits.push('층별 중위 ' + seg.join(' · '));
+  }
+  return bits.length ? bits.join(' | ') : '';
+};
+
 function _renderReport(data) {
   const r = data.report || {};
   const policy = data.policyContext || {};
@@ -4904,21 +4924,6 @@ function _downloadReportPDF() {
   const ts = new Date(data.generatedAt || Date.now()).toLocaleString('ko-KR');
 
   const coreHtml = (r.coreMessages || []).map(m => `<li>${esc(m)}</li>`).join('');
-  // PEAK-FLOOR-2026-08-31: 최근 6개월 최고가 + 층별 가격대 문구.
-  //   ⚠ "전고점" 이라고 쓰지 않는다 — 우리 DB 는 2025-05 부터라 역대 최고가를 알 수 없다.
-  //   ⚠ 층별 가격대는 표본이 얇으면 백엔드가 아예 안 보낸다(null) — 없으면 줄을 만들지 않는다.
-  const _peakFloorLine = (a) => {
-    const bits = [];
-    if (Number.isFinite(Number(a.peak6mAuk))) bits.push(`최근 6개월 최고 <b>${Number(a.peak6mAuk).toFixed(2)}억</b>`);
-    const fb = a.floorBands;
-    if (fb && fb.low && fb.high) {
-      const seg = [`저층(~${fb.low.upTo}층) ${fb.low.auk}억`];
-      if (fb.mid) seg.push(`중층 ${fb.mid.auk}억`);
-      seg.push(`고층(${fb.high.from}층~) ${fb.high.auk}억`);
-      bits.push('층별 중위 ' + seg.join(' · '));
-    }
-    return bits.length ? bits.join(' | ') : '';
-  };
 
   // WATERMARK-ID-2026-08-31 (Sprint PPPPPPP, 운영자: "워터마크는 고객의 아이디로 특정할 수 있어야"):
   //   PDF 는 캡처·재배포되기 쉽다. 유출 시 **어느 계정에 발급된 문서인지** 되짚을 수 있어야 한다.

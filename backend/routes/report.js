@@ -33,6 +33,7 @@ const { householdsConflictOf } = require('../utils/buildFacility');
 // SCORE-BANDS-2026-08-30 (Sprint PPPPPPP): 회전율·유형제외·신고가 구간은 **추천 화면과 같은 모듈**을 쓴다.
 //   점수표가 두 벌이면 한쪽만 고쳐지고 갈린다 — 오늘 교통 실측이 보고서에 안 갔던 이유가 그것이다.
 const { turnoverScore, isExcludedAptType, countNewHighByArea } = require('../utils/scoreBands');
+const { txWindowStart } = require('../utils/txWindow');
 const { resolveCoordBatch } = require('../services/geocodeCacheService');
 const { getNearbyAmenities, countNearby, keywordToCoord, getTransitMinutes } = require('../services/kakaoService');
 const cache = require('../cache');
@@ -1195,7 +1196,10 @@ async function fetchCandidateApts(admin, input, limit) {
   //   ⚠ 판정 **조건은 한 글자도 바꾸지 않았다** — `q = q.X(…)` 를 `_regionOp = qq => qq.X(…)` 로
   //     기계적으로 치환했을 뿐이다. 이 구간은 지역 판정 사고가 8회 재발한 자리라 의미 변경을 섞지 않는다.
   //   날짜 기준은 **밖에서 한 번** 계산한다 — 팩토리 안에서 계산하면 자정 경계에서 페이지마다 달라진다.
-  const _sinceDate = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  // TX-WINDOW-2026-08-31: 추천 경로와 **같은 시작일**을 쓴다.
+  //   종전 롤링 180일은 달 경계 기준과 며칠 어긋나, 같은 단지가 두 화면에서 다른 값을 보였다
+  //   (자연앤데시앙 85㎡ 고층: 보고서 11건·6.10억 ↔ 추천 기준 12건·5.98억).
+  const _sinceDate = txWindowStart(6);
   let _regionOp = null;   // (qq) => qq · null 이면 지역 필터 없음
   const _newPageQuery = () => {
     let qq = admin.from('molit_transactions')
