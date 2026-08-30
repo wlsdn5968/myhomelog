@@ -13,7 +13,7 @@
  */
 const { getTransactionsByApt, analyzeTransactions, getAliasCanonicalMap, getRegionRecentTransactions } = require('./transactionService');
 const { parseWalkBand, WALK_BAND_LABEL } = require('../utils/walkBand');
-const { turnoverScore, isExcludedAptType } = require('../utils/scoreBands');
+const { turnoverScore, isExcludedAptType, interestScore } = require('../utils/scoreBands');
 const { getAptListBySgg, getAptBasisInfo, getAptDtlInfo } = require('./aptInfoService');
 const { resolveCoordBatch } = require('./geocodeCacheService');
 const { resolveSchoolsBatch, getCachedSchoolsBatch } = require('./schoolService');
@@ -498,15 +498,13 @@ function _applyFacilityToScore(base, facility, amen) {
   //   [실측 기준점] 헬리오시티 1.15 · 서동탄역파크자이 0.057 · 푸른마을포스코더샵2차 0.0017
   //   → 검색량은 자릿수로 갈리므로 구간도 로그 간격으로 둔다.
   //   ⚠ 캐시에 없으면(=아직 안 채워짐) 7점(중간). 조회 실패를 '무명 단지' 로 만들지 않는다.
-  const _ni = amen && amen.interestRatio;
-  if (Number.isFinite(Number(_ni))) {
-    const r = Number(_ni);
-    b.관심도 = r >= 0.30 ? 14 : r >= 0.10 ? 12 : r >= 0.03 ? 9 : r >= 0.01 ? 6 : r >= 0.003 ? 3 : 1;
-    why.push(`검색 관심도 3년 지수 ${r >= 0.01 ? r.toFixed(2) : r.toFixed(4)} (기준 은마아파트=1)`);
-  } else {
-    b.관심도 = 7; // 모름 → 중간값
+  //   구간은 utils/scoreBands 한 곳에만 있다(전국 1,551단지 실분위수로 보정).
+  {
+    const _ni = amen && amen.interestRatio;
+    const it = interestScore(_ni == null ? null : _ni, SCORE_V2_MAX.관심도);
+    b.관심도 = it.score;
+    if (it.why) why.push(it.why);
   }
-
   const total = Object.values(b).reduce((a, c) => a + (Number(c) || 0), 0);
   return { total: Math.max(0, Math.min(100, Math.round(total))), breakdown: b, why };
 }
@@ -562,7 +560,7 @@ async function getAIRecommendations(userCondition) {
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
   // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
   const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
-  const cacheKey = `rec:v18:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v18: PPPPPPP 점수표 V3(회전율·관심도 신설·유형 제외). v17 캐시의 옛 점수·옛 구성이 3h 남아 있어 차단.
+  const cacheKey = `rec:v19:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v19: PPPPPPP 관심도 구간을 전국 1,551단지 실분위수로 재보정. v18 캐시에는 잠정 구간의 점수가 남아 있다.
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
   // REC-REDIS-2026-07-17 (Sprint AAAAAA, 운영자 "검색 더 빨리" — 실측: cold 12.6s vs warm 1.4s):

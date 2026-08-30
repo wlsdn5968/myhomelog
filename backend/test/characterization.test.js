@@ -3096,6 +3096,41 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
 });
 
+// ── INTEREST-BAND-2026-08-30 (Sprint PPPPPPP) ─────────────────────────────────
+// 장기 검색 관심도(네이버 데이터랩 36개월) 구간은 **실분포로 보정**했다.
+//   전국 1,551단지·103시군구 실측 분위수:
+//     p10 0.0001 · p25 0.0003 · p50 0.0062 · p75 0.0224 · p90 0.0563 · p97 0.1296 · 최대 1.304
+//   (초기 구간은 표본 3개로 잡은 값이었고, 그 구간에서는 45% 가 최저점을 받았다.)
+test('관심도 점수 — 모름은 중간값, 측정된 최저도 0 이 아니다', () => {
+  const { interestScore } = require('../utils/scoreBands');
+  const MAX = 14;
+
+  // ① ⚠ Number(null) === 0 이다. null 을 숫자로 흘리면 **모름이 최저점으로 둔갑**한다.
+  for (const unknown of [null, undefined, '', 'x', NaN]) {
+    const r = interestScore(unknown, MAX);
+    assert.equal(r.known, false, `${String(unknown)} 를 '측정됨' 으로 취급한다`);
+    assert.equal(r.score, 7, '모름이 중간값(7)을 받지 않는다 — 모름은 나쁨이 아니다');
+    assert.equal(r.why, null, '모르는데 근거 문구를 지어낸다');
+  }
+
+  // ② 측정된 값은 단조 증가하고, **바닥도 0 이 아니다**.
+  //    낮은 비율은 '인기 없음' 이기도 하지만 '우리 키워드가 안 맞는다' 는 신호이기도 하다
+  //    (실측: "서동탄역파크자이아파트" 0.003 ↔ "서동탄역파크자이" 1.10 — 355배).
+  const pts = [1.304, 0.1296, 0.0563, 0.0224, 0.0062, 0.0003, 0].map(r => interestScore(r, MAX).score);
+  for (let i = 1; i < pts.length; i++) {
+    assert.ok(pts[i] <= pts[i - 1], `관심도가 낮아졌는데 점수가 올랐다 (${pts[i - 1]} → ${pts[i]})`);
+  }
+  assert.equal(pts[0], MAX, '최상위가 만점이 아니다');
+  assert.ok(pts[pts.length - 1] > 0, '측정된 최저가 0 점이다 — 증거가 약한 쪽에 큰 벌점을 주면 안 된다');
+  assert.ok(pts[pts.length - 1] < 7, '측정된 최저가 모름(중간값)보다 높거나 같다 — 변별이 사라진다');
+
+  // ③ 구간 숫자는 scoreBands 한 곳에만 있어야 한다(소비자 복제 금지).
+  const fs2 = require('node:fs'); const path2 = require('node:path');
+  const svc = fs2.readFileSync(path2.join(__dirname, '../services/propertyService.js'), 'utf8');
+  assert.ok(!/r >= 0\.1296/.test(svc), '관심도 구간이 propertyService 에 복제돼 있다');
+  assert.match(svc, /interestScore\(/, 'propertyService 가 공유 구간 함수를 쓰지 않는다');
+});
+
 // ── SCORE-ZERO-2026-08-30 (Sprint PPPPPPP) ────────────────────────────────────
 // 전국 루프(121지역·2,259건) 검증 중 발각. KAPT 이름 매칭에 실패한 단지가 **0점**으로,
 // scoreBreakdown·scoreWhy 도 없이 화면에 찍혔다.
@@ -3127,9 +3162,9 @@ test('점수 — KAPT 매칭 실패 단지도 0점이 아니라 아는 만큼 �
   assert.ok(m, '_applyFacilityToScore 를 찾지 못했다');
   const bands = require('../utils/scoreBands');
   const walk = require('../utils/walkBand');
-  const fn = new Function('turnoverScore', 'parseWalkBand', 'WALK_BAND_LABEL', 'SCORE_V2_MAX',
+  const fn = new Function('turnoverScore', 'interestScore', 'parseWalkBand', 'WALK_BAND_LABEL', 'SCORE_V2_MAX',
     `${m[0]}; return _applyFacilityToScore;`)(
-    bands.turnoverScore, walk.parseWalkBand, walk.WALK_BAND_LABEL,
+    bands.turnoverScore, bands.interestScore, walk.parseWalkBand, walk.WALK_BAND_LABEL,
     { 교통: 28, 인프라: 16, 규모주차: 12, 거래: 14, 연식: 10, 평형: 6, 관심도: 14 });
   const out = fn({ total: 8, breakdown: { 연식: 6, 평형: 2 }, dealCount: 3 }, null, null);
   assert.ok(out.total > 0, `facility 가 없어도 점수가 0 이면 안 된다 (실제 ${out.total})`);

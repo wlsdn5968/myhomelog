@@ -79,4 +79,45 @@ function countNewHighByArea(deals) {
   return count;
 }
 
-module.exports = { turnoverScore, isExcludedAptType, EXCLUDED_APT_TYPES, countNewHighByArea };
+/**
+ * 장기 검색 관심도 → 점수. **실분포로 보정한 구간**(추측 아님).
+ *
+ * 근거: 네이버 데이터랩 36개월 지수를 앵커(은마아파트) 중앙값 대비 비율로 정규화해
+ *   전국 1,551단지·103시군구를 실측한 분위수 —
+ *     p10 0.0001 · p25 0.0003 · p50 0.0062 · p75 0.0224 · p90 0.0563 · p97 0.1296 · 최대 1.304
+ *   (초기 구간은 표본 3개로 잡은 값이었고, 그때는 45% 가 최저점을 받았다.)
+ *
+ * ⚠ **바닥을 0 근처로 두지 않는다.** 비율이 낮은 것은 '인기 없음' 의 증거이기도 하지만
+ *   '우리가 쓴 키워드가 사람들이 부르는 이름과 다르다' 는 신호이기도 하다
+ *   (실측: "서동탄역파크자이아파트" 0.003 ↔ "서동탄역파크자이" 1.10 — 355배).
+ *   증거가 약한 쪽에 큰 벌점을 주지 않는다. 모름(캐시 없음)은 중간값을 받는다.
+ *
+ * @param {number|null|undefined} ratio 앵커 대비 비율. 없으면 null 을 넘길 것
+ * @param {number} max 이 항목의 만점
+ * @returns {{score:number, known:boolean, why:string|null}}
+ */
+function interestScore(ratio, max) {
+  // ⚠ Number(null) === 0 이다. null 을 그대로 넘기면 **모름이 최저점으로 둔갑**한다 —
+  //   이 저장소가 반복해 겪은 실수라 여기서 명시적으로 먼저 걸러낸다.
+  if (ratio === null || ratio === undefined || ratio === '') {
+    return { score: Math.round(max * 0.5), known: false, why: null };
+  }
+  const r = Number(ratio);
+  if (!Number.isFinite(r)) {
+    // 모름 → 중간값. 조회 실패·미수집을 '무명 단지' 로 만들지 않는다.
+    return { score: Math.round(max * 0.5), known: false, why: null };
+  }
+  const frac = r >= 0.1296 ? 1        // 상위 3%
+    : r >= 0.0563 ? 0.857             // 상위 10%
+      : r >= 0.0224 ? 0.714           // 상위 25%
+        : r >= 0.0062 ? 0.5           // 중앙값
+          : r >= 0.0003 ? 0.357       // 하위 25% 경계
+            : 0.286;                  // 그 아래 — 바닥이지만 0 이 아니다
+  return {
+    score: Math.round(max * frac),
+    known: true,
+    why: `검색 관심도 3년 지수 ${r >= 0.01 ? r.toFixed(2) : r.toFixed(4)} (기준 은마아파트=1)`,
+  };
+}
+
+module.exports = { turnoverScore, isExcludedAptType, EXCLUDED_APT_TYPES, countNewHighByArea, interestScore };
