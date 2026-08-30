@@ -517,11 +517,14 @@ router.get('/warm-interest', async (req, res) => {
     const calls = Math.min(60, Math.max(1, parseInt(req.query.calls) || 10));
 
     // 좌표가 있는 단지를 거래 많은 순으로 — apt_geocache 는 MOLIT 이름 기준이라 그대로 쓴다.
+    // ⚠ 정렬을 cached_at 로 두면 **최근 적재 지역에 쏠린다** — 실측: 화성 3개 구가 표본의 26% 였다.
+    //   그 표본으로 점수 구간을 잡으면 편향된다. apt_key 순 + offset 으로 전국을 고르게 훑는다.
+    const off = Math.max(0, parseInt(req.query.offset) || 0);
     const { data: geo, error: gErr } = await admin.from('apt_geocache')
-      .select('apt_name, sigungu, lat, lng')
+      .select('apt_key, apt_name, sigungu, lat, lng')
       .not('lat', 'is', null)
-      .order('cached_at', { ascending: false })
-      .range(0, 999);
+      .order('apt_key', { ascending: true })
+      .range(off, off + 999);
     if (gErr) return res.status(500).json({ error: gErr.message });
 
     const seen = new Set();
@@ -535,7 +538,7 @@ router.get('/warm-interest', async (req, res) => {
     const t0 = Date.now();
     const summary = await dl.warmInterest(items, calls);
     res.set('Cache-Control', 'no-store');
-    res.json({ ok: true, anchor: dl.ANCHOR, keyShape: dl.keyShape(), candidates: items.length, elapsedMs: Date.now() - t0, ...summary });
+    res.json({ ok: true, anchor: dl.ANCHOR, keyShape: dl.keyShape(), offset: off, scanned: (geo || []).length, candidates: items.length, elapsedMs: Date.now() - t0, ...summary });
   } catch (e) {
     logger.error({ err: e.message }, 'admin warm-interest 실패');
     require('../utils/captureError').captureRouteError(e, 'admin');
