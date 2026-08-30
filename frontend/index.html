@@ -1617,6 +1617,14 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
      line-clamp 는 넘칠 때만 2줄이 되므로 짧은 이름은 1줄 그대로다(실측: 래미안안양메가트리아 15px 1줄).
      인라인 style 을 덮어야 해 !important. */
   .brf-ell{white-space:normal!important;display:-webkit-box!important;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden!important}
+/* REGION-CHIP-UI-2026-08-30 (Sprint OOOOOOO): 지역 칩이 52개 → 119개가 되면서 경기 탭 하나가
+   16줄·502px 을 먹어 아래 폼을 화면 밖으로 밀어냈다(실측). 높이를 묶고 검색으로 좁힌다. */
+.rsub-box{max-height:184px;overflow-y:auto;overscroll-behavior:contain;padding-right:2px}
+.rsub-find{width:100%;box-sizing:border-box;margin:0 0 4px;padding:7px 9px;font-size:12px;
+  border:1px solid var(--bd);border-radius:var(--radius-base);background:var(--bg2);color:var(--t1)}
+.rsub-find::placeholder{color:var(--t3)}
+.rsub-none{font-size:11px;color:var(--t3);padding:6px 2px}
+@media (max-width:768px){.rsub-box{max-height:150px}.rsub-find{padding:10px 9px}}
 </style>
 <!-- Vercel Web Analytics — 30일 검증 모드 계측 (2026-05-02 ~ 2026-06-01) -->
 <!-- Day 30 후 GO/PIVOT/STOP 결정에 사용 — 그 전엔 funnel 데이터만 수집 -->
@@ -1797,7 +1805,9 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
           <div class="wchead"><span class="wnum">3</span><span class="wtitle">희망 지역</span><span class="wreq">필수</span></div>
           <div class="chips" id="ch-r"><span class="chip on" onclick="cp(this,'ch-r')">서울</span><span class="chip" onclick="cp(this,'ch-r')">경기</span><span class="chip" onclick="cp(this,'ch-r')">인천</span><span class="chip" onclick="cp(this,'ch-r')">지방</span></div>
           <div style="font-size:10px;color:var(--t3);margin:4px 0 3px">세부 구 선택 (선택 시 그 지역만 분석 — 미선택 시 광역의 인기 구 분석)</div>
-          <div class="chips" id="ch-r-sub" style="margin-top:2px"></div>
+          <input id="ch-r-find" class="rsub-find" type="search" placeholder="지역 이름으로 좁히기 (예: 동탄)" oninput="filterRegionSub(this.value)" autocomplete="off">
+          <div class="chips rsub-box" id="ch-r-sub" style="margin-top:2px"></div>
+          <div id="ch-r-none" class="rsub-none" style="display:none">그 이름의 지역이 없어요 — 다른 광역 탭도 확인해보세요</div>
         </div>
         <details class="wopt" id="wizOpt">
           <summary>＋ 더 정확한 보고서 (선택) <span style="font-weight:400;color:var(--t3);font-size:11px">생애최초 · 연소득 · 자녀 · 거주기간 · 우선순위 · 평형 · 직장</span></summary>
@@ -9929,11 +9939,26 @@ async function loadRegionMenu(){
     if(on) populateRegionSub(on.textContent.trim()); // 이미 그려진 칩을 갱신
   }catch(e){ /* 폴백 목록 유지 — 조용히 비우지 않는다 */ }
 }
+/** 지역 칩 좁히기 — 119곳 중 이름으로 거른다. 공백은 무시('화성시 동탄구' 를 '동탄'으로 찾게). */
+function filterRegionSub(q){
+  const norm=v=>String(v||'').replace(/\s/g,'').toLowerCase();
+  const k=norm(q); let shown=0;
+  document.querySelectorAll('#ch-r-sub .chip').forEach(c=>{
+    const hit=!k||norm(c.textContent).includes(k);
+    c.style.display=hit?'':'none'; if(hit)shown++;
+  });
+  const none=document.getElementById('ch-r-none');
+  if(none) none.style.display=shown?'none':'';
+}
 function populateRegionSub(wide){
   const sub=document.getElementById('ch-r-sub');
   if(!sub) return;
   const items=REGION_MENU[wide]||[];
   sub.innerHTML=items.map(g=>`<span class="chip" data-lawd="${g.lawdCd||''}" onclick="cpSub(this)">${g.label}</span>`).join('');
+  const f=document.getElementById('ch-r-find');
+  if(f){ f.value=''; f.style.display=(items.length>12)?'':'none'; }
+  const none=document.getElementById('ch-r-none'); if(none) none.style.display='none';
+  sub.scrollTop=0;
 }
 function cpSub(el){
   const wasOn=el.classList.contains('on');
