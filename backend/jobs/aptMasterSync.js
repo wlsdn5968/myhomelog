@@ -13,8 +13,9 @@
  *   API 호출 ~250회 / job. 카카오·MOLIT 보다 가벼움.
  *
  * 멱등:
- *   apt_master.kapt_code PRIMARY KEY → ON CONFLICT DO NOTHING (이름 변경 무시).
- *   재실행해도 안전.
+ *   apt_master.kapt_code PRIMARY KEY → ON CONFLICT DO UPDATE (이름·법정동·시군구 갱신).
+ *   재실행해도 안전. facility·molit_aliases 는 이 upsert 의 컬럼이 아니라 보존된다.
+ *   ⚠ 2026-08-30 이전에는 DO NOTHING 이라 **이름 변경이 영원히 반영되지 않았다**(NAME-REFRESH 주석 참조).
  */
 const dgk = require('../services/dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): 직접+Edge 릴레이
 const { requireSupabaseAdmin } = require('../db/client');
@@ -131,7 +132,18 @@ async function syncOneSgg(admin, lawdCd) {
 
   if (!all.length) return { lawdCd, fetched: 0, inserted: 0 };
 
-  // ON CONFLICT (kapt_code) DO NOTHING — 신규만 INSERT
+  // NAME-REFRESH-2026-08-30 (Sprint OOOOOOO, 운영자 "동탄파크자이가 아니고 동탄역자이로 바뀐 거 아니야?"):
+  //   여기는 오랫동안 `ignoreDuplicates: true`(= ON CONFLICT DO NOTHING) 였다. 그래서 **한 번 들어온
+  //   단지의 이름은 KAPT 가 바꿔도 영원히 갱신되지 않았다.**
+  //   [실측] KAPT 라이브 kaptCode A10026074 = "동탄역자이 아파트" · 지번 영천동 892
+  //          우리 DB           = "동탄파크자이아파트" · 지번 영천동 651-1372
+  //          MOLIT 실거래 지번도 **892**(53건) 이고, 네이버 지도도 "동탄역자이아파트 · 영천동 892" 다.
+  //          → 바뀐 쪽이 맞고 우리가 안 따라간 것. 3개 독립 출처가 일치한다.
+  //   [규모] 전국 시군구 목록(getSigunguAptList4) 122콜 전수 대조: **119곳 중 63곳이 불일치**.
+  //          인천 제물포구(44)·영종구(61)는 DB 에 아예 없고, 서해구는 1/135·검단구는 2/128 만 있었다.
+  //   → 이름·법정동·시군구는 **갱신한다**. facility·molit_aliases 는 이 upsert 의 컬럼이 아니라 보존된다.
+  //   ⚠ uq_apt_master_name_lawd_umd 유니크 제약과 충돌하면 chunk 가 실패하는데, 아래 행별 fallback 이
+  //     이미 그 경우를 격리한다(2026-07-14 IIIII 에서 만든 경로를 그대로 탄다).
   const sigunguShort = LAWD_CODE_TO_NAME[lawdCd] || null;
   const mapped = all
     .filter(it => it.kaptCode && it.kaptName)
@@ -169,7 +181,7 @@ async function syncOneSgg(admin, lawdCd) {
     const chunk = rows.slice(i, i + 500);
     const { error, count } = await admin
       .from('apt_master')
-      .upsert(chunk, { onConflict: 'kapt_code', ignoreDuplicates: true, count: 'exact' });
+      .upsert(chunk, { onConflict: 'kapt_code', ignoreDuplicates: false, count: 'exact' });
     if (error) {
       // NAME-UNIQ-DEDUP-2026-07-14 fallback: chunk 실패(사전 dedup 못 잡는 기존 DB 행과의 이름 충돌 등) 시
       //   행별 upsert 로 격리 — 충돌 행만 유실, 나머지 전부 구제. DB-only 라 추가 API 비용 0.
@@ -178,7 +190,7 @@ async function syncOneSgg(admin, lawdCd) {
       for (const row of chunk) {
         const { error: e1, count: c1 } = await admin
           .from('apt_master')
-          .upsert(row, { onConflict: 'kapt_code', ignoreDuplicates: true, count: 'exact' });
+          .upsert(row, { onConflict: 'kapt_code', ignoreDuplicates: false, count: 'exact' });
         if (!e1) inserted += (c1 ?? 0);
       }
       continue;

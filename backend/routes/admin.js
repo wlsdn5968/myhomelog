@@ -340,4 +340,26 @@ router.get('/report-candidates', async (req, res) => {
   }
 });
 
+/**
+ * NAME-REFRESH-2026-08-30 (Sprint OOOOOOO): apt-master-sync 수동 실행.
+ *   주간 cron 은 월요일이라, 이름 갱신(DO NOTHING → DO UPDATE) 수정을 배포하고도
+ *   최대 일주일간 옛 이름이 남는다. 운영자가 바로 돌릴 수 있게 admin 경로를 연다.
+ *   cron 경로는 CRON_SECRET 이 필요해 브라우저에서 못 부른다 — 같은 잡을 admin 인증으로 부른다.
+ *   ⚠ 잡 자체는 멱등(upsert)이라 중복 실행이 안전하다.
+ */
+async function handleAptMasterSync(req, res) {
+  try {
+    const { runAptMasterSync } = require('../jobs/aptMasterSync');
+    const started = Date.now();
+    const summary = await runAptMasterSync();
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, elapsedMs: Date.now() - started, summary });
+  } catch (e) {
+    logger.error({ err: e.message }, 'admin apt-master-sync 실패');
+    res.status(500).json({ ok: false, error: e.message });
+  }
+}
+router.get('/run-apt-master-sync', handleAptMasterSync);
+router.post('/run-apt-master-sync', handleAptMasterSync);
+
 module.exports = router;

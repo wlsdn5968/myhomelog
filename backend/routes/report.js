@@ -446,7 +446,19 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
   const fc = _freeContextLines(policy || {}, freeCtx || {});
   const apartments = (candidates || []).map((c, i) => {
     const f = c.objectiveFacts || {};
-    const areaMain = Array.isArray(c.areas) && c.areas.length ? Number(c.areas[0]) : null;
+    // AREA-BASIS-2026-08-30 (Sprint OOOOOOO, 운영자 "아파트에 없는 평형대도 있다"):
+    //   [무엇이 문제였나] ① 표시 면적이 `areas[0]` = 후보 면적 중 **최솟값**이었다(대표 평형이 아니다).
+    //     ② 그 숫자를 그냥 "N평" 으로 적었는데 그건 **전용면적** 평수다. 네이버·호갱노노·아실은
+     //     **공급면적** 기준 평형("34평형")을 쓴다 — 전용 84.9㎡ 를 우리는 "26평", 시장은 "34평" 이라 부른다.
+    //     그래서 사용자 눈에는 "그 단지에 없는 평형" 으로 보인다.
+    //   [왜 공급면적을 만들지 않는가] 국토부 실거래는 **전용면적만** 준다. KAPT 의 kaptMarea(관리비부과면적)로
+    //     환산해 볼 수 있으나 실측상 단지별 비율이 0.51~0.77 로 흔들린다(동탄레이크자이더테라스 0.5055 vs
+    //     동탄역자이 0.7722) — 산정 기준이 단지마다 다르다. 출처 없는 숫자를 만들지 않는다(절대 룰).
+    //   → 대표 평형은 **거래가 가장 많은 면적**(primaryArea)으로 바꾸고, 라벨에 '전용'을 명시하며,
+    //     그 단지에서 실제 거래된 면적을 함께 나열한다.
+    const areaMain = (c.primaryArea && c.primaryArea.sqm)
+      ? Number(c.primaryArea.sqm)
+      : (Array.isArray(c.areas) && c.areas.length ? Number(c.areas[0]) : null);
     const age = (c.build_year && c.build_year > 1900) ? curYear - c.build_year : null;
     // POOL-COVERAGE-2026-08-17 (Sprint MMMMMMM-13): c.n 은 **후보 풀 안에서의** 거래 수다.
     //   풀이 잘렸으면 그 수는 6개월치가 아니다 — 실제로 덮은 기간으로 적는다.
@@ -471,14 +483,43 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
     ].filter(Boolean).join(' · ');
     return {
       rank: i + 1,
-      name: `${c.apt_name} (${c.sigungu} ${c.umd_nm})`,
+      // NAME-ADDR-2026-08-30 (Sprint OOOOOOO, 운영자 "이름도 없는 이름이고, 정확한 주소지도 써달라"):
+      //   [실측] 7번 단지가 그냥 "롯데캐슬" 로 나왔다 — MOLIT 신고명이 문자 그대로 그렇다.
+      //   그런데 동탄에만 롯데캐슬이 5개다(메타역·동탄역·석우동·알바트로스·동탄2) → 식별 불가.
+      //   KAPT 정식명은 이미 `c.master_name` 으로 들고 있었는데 **표시에 쓰지 않고 있었다.**
+      //   정식명이 있으면 그걸 주(主)로 쓰고, 신고명이 다르면 함께 적는다 —
+      //   실거래 탭은 신고명으로 조회되므로 둘 다 보여야 사용자가 이어서 찾을 수 있다.
+      name: (() => {
+        const norm = (v) => String(v || '').normalize('NFC').replace(/\s/g, '').replace(/아파트$/, '');
+        const raw = c.apt_name;
+        const official = c.master_name;
+        const base = official || raw;
+        const differs = official && norm(official) !== norm(raw);
+        const alias = differs ? ' (실거래 신고명 ' + raw + ')' : '';
+        return base + alias + ' (' + c.sigungu + ' ' + c.umd_nm + ')';
+      })(),
       // RPT-CARD-LINK-2026-07-22 (Sprint MMMMMM-4): 카드 → 단지 상세 모달 연결용 식별 필드.
       //   프론트 openAptDetail 필수 인자(aptName·sigungu·umdNm·lawdCd)와 동일 소스(c) — 표시용 name 과 별개.
       aptName: c.apt_name,
       sigungu: c.sigungu,
       umdNm: c.umd_nm,
       lawdCd: c.lawd_cd,
+      // NAME-ADDR-2026-08-30: 찾아갈 수 있게 KAPT 공식 주소를 함께 싣는다(도로명 + 지번).
+      //   없으면 필드 자체를 생략한다 — 추정 주소를 만들어 넣지 않는다.
+      roadAddress: c.road_address || undefined,
+      jibunAddress: c.jibun_address || undefined,
       areaSqm: areaMain || undefined,
+      // AREA-BASIS-2026-08-30: 이 단지에서 **실제 거래된** 면적들(전용, 최근 6개월·예산밴드 미적용).
+      //   "없는 평형" 오해를 없애고, 대표 평형이 어떤 근거로 뽑혔는지 사용자가 검증할 수 있게 한다.
+      areaBreakdown: Array.isArray(c.areaStats)
+        ? c.areaStats.slice(0, 6).map(a => ({
+          sqm: a.sqm,
+          pyeong: Math.round(a.sqm / 3.3058),
+          n: a.n,
+          avgAuk: Math.round((a.avg / 10000) * 100) / 100,
+        }))
+        : undefined,
+      areaBasis: '전용면적 (국토교통부 실거래 신고 기준)',
       areaPyeong: areaMain ? Math.round(areaMain / 3.3058) : undefined,
       buildYear: c.build_year || 0,
       households: c.households || '미상',
@@ -1226,13 +1267,14 @@ async function fetchCandidateApts(admin, input, limit) {
     if (!byApt[key]) byApt[key] = {
       apt_name: _canon, sigungu: t.sigungu, umd_nm: t.umd_nm,
       lawd_cd: t.lawd_cd,
-      sum: 0, n: 0, areas: new Set(), latest: t.deal_date,
+      sum: 0, n: 0, areas: new Set(), rawNames: new Set(), latest: t.deal_date,
       buildYearCnt: {},
       deals: [], // Phase 8: 신고가 갱신 계산용
     };
     byApt[key].sum += t.deal_amount;
     byApt[key].n++;
     byApt[key].areas.add(Math.round(t.exclu_use_ar));
+    byApt[key].rawNames.add(t.apt_name);
     if (t.deal_date > byApt[key].latest) byApt[key].latest = t.deal_date;
     if (t.build_year) {
       byApt[key].buildYearCnt[t.build_year] = (byApt[key].buildYearCnt[t.build_year] || 0) + 1;
@@ -1265,6 +1307,7 @@ async function fetchCandidateApts(admin, input, limit) {
         lawd_cd: a.lawd_cd, n: a.n, latest: a.latest,
         avgPrice: a.sum / a.n,
         areas: [...a.areas].sort((x, y) => x - y),
+        rawNames: [...a.rawNames],
         build_year: mode ? Number(mode) : null,
         households: null,
         master_matched: false,
@@ -1346,6 +1389,9 @@ async function fetchCandidateApts(admin, input, limit) {
         }
         c.master_matched = true;
         c.master_name = f.official; // 정식 단지명 (예: '답십리동서울한양')
+        // NAME-ADDR-2026-08-30: 주소는 KAPT 공식값 그대로. 카드에 실어 사용자가 찾아갈 수 있게 한다.
+        c.road_address = raw.doroJuso || null;
+        c.jibun_address = raw.kaptAddr || null;
         // PARK-FIX-2026-05-13 (Sprint AA): KAPT V4 주차는 detail (kaptdPcnt 지상 + kaptdPcntu 지하)
         const surfP = parseInt(detail.kaptdPcnt) || 0;
         const underP = parseInt(detail.kaptdPcntu) || 0;
@@ -1452,12 +1498,92 @@ async function fetchCandidateApts(admin, input, limit) {
       const deps = scoped.map(t => t._convertedDeposit || t.deposit || 0).filter(d => d > 0).sort((a, b) => a - b);
       if (deps.length < 4) continue;
       const med = deps[Math.floor(deps.length / 2)];
-      const ratio = Math.round((med / c.avgPrice) * 100);
+      // PRICE-BASIS-2026-08-30: 분모도 표시 가격과 같은 기준이어야 한다 — 밴드로 잘린 평균을
+      //   분모로 쓰면 전세가율이 실제와 어긋난다(분자 전세는 밴드와 무관하므로 한쪽만 잘린 비율이 된다).
+      const _basis = (c.avgPriceFull > 0) ? c.avgPriceFull : c.avgPrice;
+      const ratio = Math.round((med / _basis) * 100);
       if (ratio <= 0 || ratio > 130) continue; // 명백한 데이터 오류(면적 오매칭 등) 방어
       c.jeonse = { medianDeposit: med, n: deps.length, ratio };
     }
   } catch (e) {
     logger.warn({ err: e.message }, '전세가율 일괄 계산 실패 — 비노출로 진행');
+  }
+
+  // ══ PRICE-BASIS-2026-08-30 (Sprint OOOOOOO, 운영자 "실거래가에도 안 맞고 평형대도 다 이상하다") ══
+  //
+  // [무엇이 틀렸나 — PDF 실물 대조로 확정] 보고서가 적는 "평형대 평균"이 실제 시세가 아니었다.
+  //   원인 두 겹:
+  //   (a) 후보 풀 쿼리가 `deal_amount BETWEEN buy*0.7 AND buy*1.2` 로 **개별 거래**를 자른다.
+  //       그 잘린 부분집합의 평균을 "평균"이라고 적고 있었다.
+  //       [동탄 9억 실측] 호반베르디움센트럴포레 실제 6.53억(96건) → 보고서 6.99억(51건, +0.46억)
+  //                      동탄 더샵 레이크에듀타운 실제 10.12억(66건) → 보고서 9.69억(52건, -0.43억)
+  //                      호수공원역 센트럴시티     실제 9.57억(56건) → 보고서 9.15억(45건, -0.42억)
+  //       ⚠ 방향이 일정하지 않아 **단지 간 비교까지 왜곡**된다. 예산을 바꾸면 같은 단지의
+  //         "평균 시세"가 따라 움직인다 — 시세는 사용자의 예산과 무관해야 한다.
+  //   (b) 표시 면적은 `areas[0]`(= 후보 면적 중 **최솟값**)인데 가격은 **전 평형 통합 평균**이었다.
+  //       [동탄파크자이 실측] 라벨 "28평(93㎡)" · 표기 8.38억 — 그런데 93㎡ 실제 평균은 7.93억이고
+  //       8.38억은 93·100·103㎡ 를 섞은 값이다. 라벨과 가격이 **서로 다른 모집단**을 가리켰다.
+  //
+  // [고치는 방법] 최종 후보에 대해 **가격 밴드 없이** 같은 지역·같은 평형구간·같은 기간을 다시 조회해
+  //   면적(㎡ 반올림)별 통계를 만들고, **거래가 가장 많은 면적**을 대표 평형으로 삼는다.
+  //   표시 가격은 그 평형만의 평균이다 — 라벨과 가격이 같은 모집단이 된다.
+  //   후보 **선별**에는 기존 밴드를 그대로 둔다(예산과 동떨어진 단지를 띄우지 않기 위함) —
+  //   바뀌는 것은 "무엇을 보여주는가" 뿐이다.
+  //   ⚠ PostgREST 는 1000행에서 조용히 잘린다(레포 6회 재발) → range 페이징 + 2차 정렬키.
+  try {
+    const _names = [...new Set(out.flatMap(c => (c.rawNames && c.rawNames.length) ? c.rawNames : [c.apt_name]))];
+    if (_names.length) {
+      const _PAGE = 1000;
+      const _rows = [];
+      for (let from = 0; from <= 9000; from += _PAGE) {
+        let qq = admin.from('molit_transactions')
+          .select('apt_name, sigungu, umd_nm, exclu_use_ar, deal_amount, deal_date')
+          .in('apt_name', _names)
+          .gte('exclu_use_ar', minSqm).lte('exclu_use_ar', maxSqm)
+          .gte('deal_date', _sinceDate);
+        if (_regionOp) qq = _regionOp(qq);
+        const { data: page, error } = await qq.order('deal_date', { ascending: false }).order('id', { ascending: false })
+          .range(from, from + _PAGE - 1);
+        if (error) throw error;
+        if (page && page.length) _rows.push(...page);
+        if (!page || page.length < _PAGE) break;
+      }
+      // 후보 키(별칭 반영) → 면적별 버킷
+      const _byKey = new Map();
+      for (const t of _rows) {
+        const canon = _aliasMap.get(`${t.apt_name}|${t.umd_nm}`) || t.apt_name;
+        const k = `${canon}|${t.sigungu}|${t.umd_nm}`;
+        if (!_byKey.has(k)) _byKey.set(k, new Map());
+        const bySqm = _byKey.get(k);
+        const sq = Math.round(t.exclu_use_ar);
+        if (!bySqm.has(sq)) bySqm.set(sq, []);
+        bySqm.get(sq).push(Number(t.deal_amount) || 0);
+      }
+      for (const c of out) {
+        const bySqm = _byKey.get(`${c.apt_name}|${c.sigungu}|${c.umd_nm}`);
+        if (!bySqm || !bySqm.size) continue;
+        const stats = [...bySqm.entries()].map(([sqm, arr]) => {
+          const sorted = [...arr].sort((x, y) => x - y);
+          return {
+            sqm: Number(sqm), n: arr.length,
+            avg: arr.reduce((a2, b2) => a2 + b2, 0) / arr.length,
+            min: sorted[0], max: sorted[sorted.length - 1],
+            median: sorted[Math.floor(sorted.length / 2)],
+          };
+        // 대표 평형 = 거래가 가장 많은 면적. 동수면 큰 면적을 택한다(같은 값이면 결정적으로).
+        }).sort((a2, b2) => (b2.n - a2.n) || (b2.sqm - a2.sqm));
+        c.areaStats = stats;
+        c.primaryArea = stats[0];
+        c.avgPriceFull = stats[0].avg;      // 대표 평형의 6개월 평균 (밴드 미적용)
+        c.priceSampleFull = stats[0].n;
+        c.areaTotalN = stats.reduce((a2, b2) => a2 + b2.n, 0);
+      }
+      logger.info({ names: _names.length, rows: _rows.length, withStats: out.filter(c => c.primaryArea).length },
+        '보고서 대표평형 재집계 (예산밴드 미적용)');
+    }
+  } catch (e) {
+    // 실패해도 기존 값으로 보고서는 나간다 — 다만 그 사실을 남긴다(조용한 열화 금지).
+    logger.warn({ err: e.message }, '보고서 대표평형 재집계 실패 — 예산밴드 기준 값으로 표시됨');
   }
 
   // Phase 7 + 8 + 9: KAPT + amenities 호출 후 객관 점수 + objectiveFacts 적용

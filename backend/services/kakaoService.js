@@ -160,14 +160,28 @@ async function countNearbyKeyword(lat, lng, keyword, radius = 1200) {
   try {
     const r = await axios.get(KAKAO_KEY_SEARCH, {
       headers: { Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}` },
-      params: { query: keyword, x: lng, y: lat, radius, size: 15 },
+      params: { query: keyword, x: lng, y: lat, radius, size: 45 },
       timeout: 5000,
     });
-    const cnt = r.data?.meta?.total_count || 0;
+    // AMENITY-KEYWORD-2026-08-30 (Sprint OOOOOOO, 운영자 "보고서가 개판이다" — PDF 실물에서 발각):
+    //   여기서 `meta.total_count` 를 그대로 쓰면 **공원 398개** 같은 값이 나온다(동탄 실측 398·420·68·36).
+    //   카카오 키워드 검색은 상호명뿐 아니라 **주소·지명 토큰까지** 매칭한다 — '공원'은 근린공원 실체 외에
+    //   `○○공원점`(상가·약국·카페)과 `공원로/공원길` 주소를 가진 업소를 전부 총건수에 넣는다.
+    //   반대로 '종합병원'은 그 문자열이 상호에 잘 안 붙어 **0** 으로 과소 집계된다(동탄 7곳 중 6곳이 0).
+    //   카테고리 검색(countNearby)이 학교 11·마트 6 처럼 현실적인 값을 내는 것과 대조된다 —
+    //   차이는 집합이 category_group_code 로 닫혀 있느냐다.
+    //   → 총건수 대신 **응답 문서를 category_name 으로 걸러** 센다. 무엇을 센 것인지가 분명해진다.
+    //   ⚠ 그래서 이 값은 size(45)로 상한이 생긴다 — 도보권 개수로는 충분하고, '398개' 처럼
+    //     사실이 아닌 큰 수를 보여주는 것보다 낫다.
+    const docs = Array.isArray(r.data && r.data.documents) ? r.data.documents : [];
+    const cnt = docs.filter(d => String((d && d.category_name) || '').includes(keyword)).length;
     cache.set(ck, cnt, 86400 * 3);
     _dbSetAmenityCount(cacheKey, lat4, lng4, `kw:${keyword}`, radius, cnt).catch(() => {});
     return cnt;
   } catch (e) {
+    // ⚠ 실패를 0 으로 돌려주면 '없음'과 구분되지 않는다([[unknown-treated-as-value]]).
+    //   캐시에는 쓰지 않으니 다음 요청에 재시도되지만, 그동안 빈 catch 라 흔적조차 없었다.
+    logger.warn({ keyword, radius, err: e.message }, 'kakao 키워드 주변시설 조회 실패 — 0 으로 표시됨');
     return 0;
   }
 }

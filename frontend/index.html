@@ -4741,7 +4741,7 @@ function _renderReport(data) {
     return `
     <div ${_clickable ? `onclick="_rptOpenApt(${_ai})" role="button" tabindex="0" onkeydown="if(event.key==='Enter')_rptOpenApt(${_ai})"` : ''} style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:10px${_clickable ? ';cursor:pointer' : ''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:6px">
-        <div style="font-size:13px;font-weight:700;color:var(--t1)">${_numFmt(a.rank)}. ${_escHtml(a.name)} ${a.areaPyeong ? `<span style="font-weight:500;color:var(--t2);font-size:12px">${_numFmt(a.areaPyeong)}평 (${_numFmt(a.areaSqm)}㎡)</span>` : ''}</div>
+        <div style="font-size:13px;font-weight:700;color:var(--t1)">${_numFmt(a.rank)}. ${_escHtml(a.name)} ${a.areaPyeong ? `<span style="font-weight:500;color:var(--t2);font-size:12px" title="국토부 실거래는 전용면적만 제공해요. 네이버·호갱노노가 쓰는 '34평형' 같은 표기는 공급면적 기준이라 숫자가 다릅니다.">전용 ${_numFmt(a.areaSqm)}㎡ (전용 ${_numFmt(a.areaPyeong)}평)</span>` : ''}</div>
         ${_clickable ? '<span style="flex-shrink:0;font-size:10.5px;color:var(--acc);font-weight:600;white-space:nowrap;margin-left:8px">실거래 상세 →</span>' : ''}
       </div>
       <div style="font-size:11px;color:var(--t3);margin-bottom:6px">
@@ -4900,7 +4900,7 @@ function _downloadReportPDF() {
     const hN = Number(a.households);
     const hStr = (a.households && Number.isFinite(hN)) ? `${hN.toLocaleString()}세대` : '세대수 미상';
     return `<div class="apt">
-      <div class="apt-name">${_numFmt(a.rank)}. ${esc(a.name||'')} ${a.areaPyeong ? `<span class="apt-area">${_numFmt(a.areaPyeong)}평 (${_numFmt(a.areaSqm)}㎡)</span>` : ''}</div>
+      <div class="apt-name">${_numFmt(a.rank)}. ${esc(a.name||'')} ${a.areaPyeong ? `<span class="apt-area" title="국토부 실거래는 전용면적만 제공해요. 네이버·호갱노노의 '34평형' 표기는 공급면적 기준이라 숫자가 다릅니다.">전용 ${_numFmt(a.areaSqm)}㎡ (전용 ${_numFmt(a.areaPyeong)}평)</span>` : ''}</div>
       <div class="apt-meta">준공 ${_numFmt(a.buildYear, '?')} · ${hStr}</div>
       <div class="apt-body">
         <div>📍 <b>입지</b>: ${esc(a.location||'')}</div>
