@@ -1207,6 +1207,10 @@ async function getAIRecommendations(userCondition) {
         lat: coords[i] && coords[i].lat, lng: coords[i] && coords[i].lng,
       }));
       _interest = await dl.getCachedInterest(items);
+      // ⚠ "채웠다" 와 "쓰인다" 는 다른 문제다 — 1,551건을 채우고도 히트가 0 이던 적이 있다
+      //   (키가 양쪽에서 달랐다). 히트율을 상시로 남겨 그런 상태를 조용히 넘기지 않는다.
+      logger.info({ interestHits: _interest.size, of: items.length,
+        sample: items.slice(0, 2).map(x => `${x.aptName}|${x.sigungu}`) }, '관심도 캐시 히트');
       // ⚠ 여기서 채우지 않는다 — **서버리스는 응답 후 작업을 보장하지 않는다**(실측: 캐시 0행).
       //   채우기는 admin/cron 경로(GET /api/admin/warm-interest)가 맡는다.
     } catch (e) {
