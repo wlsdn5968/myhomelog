@@ -192,15 +192,21 @@ async function countNearbyKeyword(lat, lng, keyword, radius = 1200) {
  */
 async function getNearbyAmenities(lat, lng) {
   if (lat == null || lng == null) return null;
-  const [school, mart, hospital_general, subway, cvs, park] = await Promise.all([
+  const [school, mart, hospital_general, subway, cvs, park, nearest] = await Promise.all([
     countNearby(lat, lng, 'SC4', 1200),         // 학교 (초중고)
     countNearby(lat, lng, 'MT1', 1500),         // 대형마트
     countNearbyKeyword(lat, lng, '종합병원', 2000),  // 종합병원 (HP8 의원 노이즈 제거)
     countNearby(lat, lng, 'SW8', 1200),         // 지하철역
     countNearby(lat, lng, 'CS2', 500),          // 편의점
     countNearbyKeyword(lat, lng, '공원', 1200),  // 공원
+    nearestSubway(lat, lng, 3000),              // TRANSIT-TRUTH: 최근접 역 직선거리(신고값보다 우선)
   ]);
-  return { school, mart, hospital: hospital_general, subway, cvs, park };
+  // ⚠ nearest === undefined 는 **조회 실패**, null 은 **반경 3km 내 역 없음**. 섞지 말 것.
+  return {
+    school, mart, hospital: hospital_general, subway, cvs, park,
+    subwayNearestM: nearest === undefined ? undefined : (nearest ? nearest.distance : null),
+    subwayNearestName: nearest && nearest.name ? nearest.name : null,
+  };
 }
 
 /**
@@ -250,23 +256,44 @@ async function keywordToCoord(keyword) {
 }
 
 /**
- * TRANSIT-TRUTH-2026-08-30 (Sprint PPPPPPP): **최근접 지하철역까지의 실측 직선거리**.
+ * TRANSIT-TRUTH-2026-08-30 (Sprint PPPPPPP): **최근접 지하철역까지의 직선거리(m)**.
  *
  * 왜 필요한가 — KAPT `kaptdWtimesub` 는 관리사무소 **자기신고값**이고 검증이 없다.
- *   서동탄역더샵파크시티는 "10~15분이내" 로 신고돼 있으나 카카오 도보 실측은
- *   1,783m / 26.8분 이었다. 신고값을 그대로 점수에 쓰면 순위가 통째로 뒤틀린다.
+ *   좌표 보유 2,778 단지를 실측해 신고 밴드와 대조한 결과:
+ *     · 밴드별 중앙값은 단조 증가(272m → 488 → 772 → 1022 → 1294) — **경향은 맞다**
+ *     · 그러나 개별 일치율은 **42.6%** 뿐이고, **두 칸 이상 어긋난 단지가 15.8%(413곳)**
+ *     · 신고가 실제보다 가깝다고 말한 '과대신고' 347곳 (예: 동탄파크한양수자인
+ *       "10~15분" ↔ 최근접 동탄역 2,441m)
+ *   → 신고값은 **폴백**으로 내리고, 잰 거리를 1순위로 쓴다.
  *
- * 카카오 카테고리 검색은 x/y 를 주면 `distance`(직선거리 m) 를 돌려준다.
- *   sort=distance 로 최근접 1건만 받는다. 도보 실거리는 직선거리보다 길다(우회) —
- *   그 보정은 소비자(walkBand 판정) 쪽에서 하고, 여기서는 **잰 값 그대로** 돌려준다.
+ * 카카오 카테고리 검색은 x/y 를 주면 `distance`(**직선거리** m)를 돌려준다.
+ *   ⚠ 직선거리는 도보 실거리가 아니다. 실측 5건의 우회계수는 **1.40 ~ 1.97** 로 흔들린다
+ *     (보행속도는 62~67 m/분으로 일정). 그래서 이 값으로 "도보 몇 분" 을 **단정하지 않는다** —
+ *     점수 구간만 나누고, 사용자에게는 거리를 그대로 보여준다.
  *
- * @returns {Promise<{name:string,distance:number}|null>} 반경 내 역이 없으면 null
+ * @returns {Promise<{name:string,distance:number}|null>} 반경 내 역 없으면 null,
+ *          조회 실패면 undefined(⚠ '역 없음' 과 반드시 구분).
  */
+/** apt_amenities.count 에 거리를 담을 때 '반경 내 역 없음' 을 뜻하는 표식(거리는 음수가 될 수 없다). */
+const NO_STATION = -1;
+
 async function nearestSubway(lat, lng, radius = 3000) {
-  if (isKeyMissing()) return null;
-  const ck = `kknear:${Number(lat).toFixed(4)},${Number(lng).toFixed(4)}:${radius}`;
+  if (isKeyMissing()) return undefined;
+  if (lat == null || lng == null) return undefined;
+  const lat4 = Number(Number(lat).toFixed(4));
+  const lng4 = Number(Number(lng).toFixed(4));
+  const cacheKey = `${lat4},${lng4}:sw8near:${radius}`;
+  const ck = `kknear:${cacheKey}`;
   const cached = cache.get(ck);
   if (cached !== undefined) return cached;
+  // DB 캐시 — ⚠ count 컬럼에 **미터**를 넣는다(카운트가 아니다). 역이 없으면 NO_STATION(-1).
+  //   해석은 반드시 이 두 곳에서만 한다(딴 데서 count 로 읽으면 거리와 개수가 섞인다).
+  const fromDb = await _dbGetAmenityCount(cacheKey);
+  if (fromDb !== null) {
+    const out = fromDb === NO_STATION ? null : { name: null, distance: fromDb };
+    cache.set(ck, out, 86400 * 3);
+    return out;
+  }
   try {
     const r = await axios.get(KAKAO_CAT, {
       headers: { Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}` },
@@ -276,14 +303,17 @@ async function nearestSubway(lat, lng, radius = 3000) {
     const d = r.data?.documents?.[0];
     const out = d ? { name: d.place_name, distance: Number(d.distance) } : null;
     cache.set(ck, out, 86400 * 3);
+    _dbSetAmenityCount(cacheKey, lat4, lng4, 'sw8_nearest_m', radius,
+      out ? out.distance : NO_STATION).catch(() => {});
     return out;
   } catch (e) {
     logger.warn({ err: e.message, status: e.response?.status }, 'kakao 최근접 지하철역 조회 실패');
-    return undefined; // ⚠ null(역 없음) 과 구분 — 실패를 "역 없음" 으로 읽으면 안 된다
+    return undefined; // ⚠ 실패를 "역 없음" 으로 읽으면 안 된다 — 점수에서 최저점이 되어버린다
   }
 }
 
 module.exports = {
+
   getCarMinutes,
   getTransitMinutes,
   countNearby,

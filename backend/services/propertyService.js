@@ -368,27 +368,53 @@ function _applyFacilityToScore(base, facility, amen) {
   const why = [];
 
   // ── 교통 30 ─────────────────────────────────────────────────────────────
-  //   1순위 KAPT 도보시간 → 2순위 카카오 반경 역 수 → 3순위 버스 도보.
-  //   ⚠ 셋 다 없으면 15점(중간) — '모름' 을 '나쁨' 으로 만들지 않는다.
   //
-  // ⚠ WALK-BAND-2026-08-30: 여기서 **includes() 부분문자열 매칭을 쓰면 안 된다**.
-  //   `"10~15분이내".includes("5분이내")` 는 참이라 도보 10~15분 단지 2,429곳이
-  //   교통 만점을 받았다(만점 단지의 55.7% 가 가짜). parseWalkBand 로 닫힌 집합을 쓴다.
-  const band = parseWalkBand(facility && facility.walkSubwayMin);
+  // TRANSIT-TRUTH-2026-08-30: 우선순위가 **뒤집혔다**. 이전엔 KAPT 신고값이 1순위였다.
+  //   좌표 보유 2,778 단지를 카카오로 실측해 신고 밴드와 대조한 결과 —
+  //     일치 42.6% · 한 칸 차 41.6% · **두 칸 이상 어긋남 15.8%(413곳)**.
+  //   신고가 실제보다 가깝다고 말한 '과대신고' 347곳(동탄파크한양수자인 "10~15분" ↔ 동탄역 2,441m).
+  //   → **잰 거리(1순위) > 신고값(2순위) > 반경 역 수(3순위) > 버스 신고값(4순위) > 중간값**.
+  //
+  // 구간 근거 — 카카오 도보 길찾기 **실측 5건** 으로 보정했다(추정 아님):
+  //     미도 215m→4.5분 / 서동탄역파크자이 659m→20.2분 / 화서역파크푸르지오 861m→24.6분
+  //     권선자이e편한세상 1,072m→27.1분 / 서동탄역더샵파크시티 1,129m→26.8분
+  //   보행속도는 62~67 m/분으로 일정하나 **우회계수가 1.40~1.97 로 흔들린다**.
+  //   ⚠ 그래서 직선거리로 "도보 몇 분" 을 **단정하지 않는다**. 구간만 나누고,
+  //     사용자에게는 잰 값(역 이름 + 직선 m)을 그대로 보여준다.
+  //
+  // ⚠ 지하철이 없는 지역은 전 단지가 최저점이 되어 교통의 변별력이 0 이 된다.
+  //   그건 사실이므로 왜곡이 아니다 — 그 지역 순위는 나머지 70점으로 갈린다.
   let 교통 = null;
-  if (band) {
-    교통 = { LE5: 30, M5_10: 24, M10_15: 16, M15_20: 9, GT20: 4 }[band];
-    why.push(`지하철 도보 ${WALK_BAND_LABEL[band]}`);
+  const nearM = amen ? amen.subwayNearestM : undefined;
+  if (nearM === null) {
+    // 반경 3km 안에 역이 없다 — 실패가 아니라 **관측된 사실**이다.
+    교통 = 1;
+    why.push('반경 3km 내 지하철역 없음');
+  } else if (Number.isFinite(Number(nearM))) {
+    const d = Number(nearM);
+    교통 = d <= 250 ? 30 : d <= 450 ? 24 : d <= 650 ? 17 : d <= 900 ? 11 : d <= 1400 ? 6 : d <= 2500 ? 3 : 1;
+    const st = (amen && amen.subwayNearestName) ? amen.subwayNearestName : '지하철역';
+    why.push(`${st} 직선 ${d}m`);
+  }
+  // 2순위 — KAPT 자기신고 밴드. ⚠ includes() 부분문자열 매칭 금지:
+  //   `"10~15분이내".includes("5분이내")` 는 참이라, 예전엔 10~15분 단지 2,429곳이
+  //   교통 만점을 받았다(만점 단지의 55.7% 가 가짜). parseWalkBand 로 닫힌 집합을 쓴다.
+  if (교통 === null) {
+    const band = parseWalkBand(facility && facility.walkSubwayMin);
+    if (band) {
+      교통 = { LE5: 26, M5_10: 20, M10_15: 13, M15_20: 8, GT20: 4 }[band];
+      why.push(`지하철 도보 ${WALK_BAND_LABEL[band]}(관리사무소 신고값)`);
+    }
   }
   if (교통 === null && amen && Number.isFinite(Number(amen.subway))) {
     const n = Number(amen.subway);
-    교통 = n >= 4 ? 26 : n >= 2 ? 20 : n >= 1 ? 13 : 5;
+    교통 = n >= 4 ? 22 : n >= 2 ? 17 : n >= 1 ? 11 : 4;
     why.push(`반경 1.2km 지하철역 ${n}곳`);
   }
   if (교통 === null) {
     const busBand = parseWalkBand(facility && facility.walkBusMin);
-    if (busBand === 'LE5') { 교통 = 14; why.push('버스 도보 5분 이내'); }
-    else if (busBand === 'M5_10') { 교통 = 11; why.push('버스 도보 5~10분'); }
+    if (busBand === 'LE5') { 교통 = 12; why.push('버스 도보 5분 이내(신고값)'); }
+    else if (busBand === 'M5_10') { 교통 = 9; why.push('버스 도보 5~10분(신고값)'); }
   }
   if (교통 === null) { 교통 = 15; why.push('교통 정보 미확인(중간값)'); } // 모름 → 중간
   b.교통 = 교통;
