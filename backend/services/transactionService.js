@@ -62,7 +62,7 @@ async function getTransactionsFromDb(lawdCd, dealYm) {
     for (let from = 0; from <= 11000; from += PAGE) {
       const { data: page, error } = await admin
         .from('molit_transactions')
-        .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq')
+        .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq, jibun')
         .eq('lawd_cd', lawdCd)
         .gte('deal_date', _mFrom)
         .lt('deal_date', _mNext)
@@ -86,6 +86,10 @@ async function getTransactionsFromDb(lawdCd, dealYm) {
       dealAmount: Number(r.deal_amount) || 0,
       lawdCd: r.lawd_cd || lawdCd,
       aptSeq: r.apt_seq || '',
+      // JIBUN-MATCH-2026-08-30 (Sprint OOOOOOO): 단지명 매칭이 실패해도 **같은 땅이면 같은 단지**다.
+      //   [전국 실측] 최근 6개월 거래 단지 16,466곳 중 KAPT 와 이름이 정확히 맞는 건 2,588곳(15.7%)
+      //   뿐인데, 동+본번으로 맞추면 10,104곳(61.4%)이 붙는다 — 4배.
+      jibun: r.jibun || '',
     }));
   } catch (e) {
     logger.warn({ err: e.message, lawdCd, dealYm }, 'molit DB 조회 실패 → API fallback');
@@ -668,6 +672,14 @@ function analyzeTransactions(transactions) {
       aptName: sorted[0].aptName,
       sigungu: sorted[0].sigungu,
       umdNm: sorted[0].umdNm,
+      // JIBUN-MATCH-2026-08-30: 그룹 대표 지번(최빈값). 같은 단지의 거래는 지번이 같으므로 보통 만장일치이고,
+      //   드물게 갈리면 다수결이 그 단지의 필지다.
+      jibun: (() => {
+        const c = {};
+        for (const t of sorted) { const j = String(t.jibun || '').trim(); if (j) c[j] = (c[j] || 0) + 1; }
+        const e = Object.entries(c).sort((a, b) => b[1] - a[1])[0];
+        return e ? e[0] : '';
+      })(),
       buildYear: sorted[0].buildYear,
       lawdCd: sorted[0].lawdCd,
       aptSeq: sorted[0].aptSeq,

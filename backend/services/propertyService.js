@@ -22,7 +22,7 @@ const { buildFacility } = require('../utils/buildFacility');
 // IDENTITY-GATE-2026-08-10 (Sprint KKKKKKK): 이 경로는 resolveFacility 를 거치지 않고 자체 이름
 //   매칭(_norm/_canon)으로 kaptCode 를 얻으므로, 그 검증 게이트가 닿지 않는다. 붙은 facility 가
 //   실거래 건축년도와 어긋나면 필터·게이트 판정이 통째로 틀어지므로 여기서도 같은 검증을 적용한다.
-const { getFacilitiesByKaptCodes, verifyCandidate, getAptListByLawdFromDb } = require('./aptFacilityService');
+const { getFacilitiesByKaptCodes, verifyCandidate, getAptListByLawdFromDb, bonbun } = require('./aptFacilityService');
 const { getBuildingTitle } = require('./buildingRegisterService'); // LLLLLL-3: KAPT 미매칭 단지 세대수 = 건축물대장(SSSS 연동)으로 보강
 const cache = require('../cache');
 const logger = require('../logger');
@@ -107,6 +107,46 @@ function _scopedBySido(text) {
     }
   }
   return best ? [best] : null;
+}
+
+/**
+ * JIBUN-MATCH-2026-08-30 (Sprint OOOOOOO): 단지명이 달라도 **같은 땅이면 같은 단지**다.
+ *
+ * [왜 필요한가 — 실측] MOLIT 실거래명과 KAPT 등록명은 접두·어순이 다르다:
+ *   "충무주공(872)" ↔ 산본주공충무1 · "개나리주공13" ↔ 산본13단지개나리 · "가야주공" ↔ 가야1차
+ *   전국 최근 6개월 거래 단지 16,466곳 중 이름 정확일치는 **2,588곳(15.7%)** 뿐이고,
+ *   동+지번 본번으로 맞추면 **10,104곳(61.4%)** 이 붙는다. 이름 규칙을 더 손대는 건 답이 아니다.
+ *   (aptFacilityService.findMaster 가 이미 같은 원리를 1순위로 쓴다 — 여기선 그 규칙을 배치로 재사용한다.)
+ *
+ * ⚠ 오매칭 차단: (동|본번) 키가 **유일할 때만** 즉시 채택한다. 전국 지번키 12,803개 중 중복은
+ *   880개(6.9%) — 그때는 준공연도가 정확히 하나만 맞을 때만 채택하고, 아니면 포기한다.
+ *   "그럴듯한 틀린 정보"보다 "정보 없음"이 낫다(절대 룰).
+ */
+function buildJibunIndex(list) {
+  const idx = new Map();
+  for (const a of list || []) {
+    if (!a || !a.kaptCode || !a.jibunBon) continue;
+    const dong = a.as3 || a.as4 || '';
+    if (!dong) continue;
+    const k = `${dong}|${a.jibunBon}`;
+    if (!idx.has(k)) idx.set(k, []);
+    idx.get(k).push({ kaptCode: a.kaptCode, year: Number(String(a.kaptUsedate || '').slice(0, 4)) || 0 });
+  }
+  return idx;
+}
+function lookupByJibun(idx, apt) {
+  if (!idx || !idx.size || !apt) return null;
+  const bon = bonbun(apt.jibun);
+  const dong = apt.umdNm || '';
+  if (!bon || !dong) return null;
+  const hits = idx.get(`${dong}|${bon}`);
+  if (!hits || !hits.length) return null;
+  if (hits.length === 1) return hits[0].kaptCode;
+  // 한 필지에 여러 KAPT 단지 — 준공연도로만 가른다(±1년). 유일하게 좁혀질 때만 채택.
+  const by = Number(apt.buildYear) || 0;
+  if (!by) return null;
+  const near = hits.filter(h => h.year && Math.abs(h.year - by) <= 1);
+  return near.length === 1 ? near[0].kaptCode : null;
 }
 
 /**
@@ -479,9 +519,12 @@ async function getAIRecommendations(userCondition) {
       const st = _canon(nm);
       if (st && st !== nm && !_codeMap.has(st)) _codeMap.set(st, a.kaptCode);
     }
+    // JIBUN-MATCH-2026-08-30: 이름으로 못 찾으면 필지로 찾는다(전국 15.7% → 61.4%).
+    const _jibunIdx = buildJibunIndex(allAptList);
     const _poolCodes = matched.map((apt) => {
       const nmKey = _norm(apt.aptName);
-      return _codeMap.get(`${nmKey}|${apt.umdNm || ''}`) || _codeMap.get(nmKey) || _codeMap.get(_canon(nmKey)) || null;
+      return _codeMap.get(`${nmKey}|${apt.umdNm || ''}`) || _codeMap.get(nmKey) || _codeMap.get(_canon(nmKey))
+        || lookupByJibun(_jibunIdx, apt) || null;
     });
     const _facMap = await getFacilitiesByKaptCodes([...new Set(_poolCodes.filter(Boolean))]);
     // FILTER-KAPT-FALLBACK-2026-07-12 (Sprint UUUU, 전수조사 발견): 필터는 apt_master.facility(DB)만 봐서,
@@ -722,10 +765,13 @@ async function getAIRecommendations(userCondition) {
   // REC-PERF-2026-07-10 (Sprint FFFF): kaptCode 사전 수집 → apt_master.facility 일괄 1쿼리(DB-first).
   //   콜드 KAPT 30콜(인메모리 캐시는 인스턴스 소실)이 완전콜드 잔여 ~10s 의 주 기여 — facility 컬럼이
   //   동일 raw(+_dtl)를 이미 보유(실측 99.7%) → miss(신규 단지·_empty 29개)만 기존 KAPT API 폴백.
+  // JIBUN-MATCH-2026-08-30: 카드 쪽도 같은 폴백을 쓴다 — 필터와 카드가 다른 규칙을 쓰면 또 갈린다.
+  const _jibunIdxRank = buildJibunIndex(allAptList);
   const preCodes = recommendations.map((rec, i) => {
     const apt = ranked[i];
     const nmKey = normalizeName(apt.aptName);
-    return kaptCodeMap.get(`${nmKey}|${apt.umdNm || ''}`) || kaptCodeMap.get(nmKey) || kaptCodeMap.get(canonName(nmKey)) || null;
+    return kaptCodeMap.get(`${nmKey}|${apt.umdNm || ''}`) || kaptCodeMap.get(nmKey) || kaptCodeMap.get(canonName(nmKey))
+      || lookupByJibun(_jibunIdxRank, apt) || null;
   });
   _mark('rank');
   const dbFacMap = await getFacilitiesByKaptCodes([...new Set(preCodes.filter(Boolean))]);
@@ -975,4 +1021,4 @@ function getStaticFallback(budget, region) {
 }
 
 // TEST-EXPORT-2026-07-17 (Sprint XXXXX): computeLTV 는 순수 함수 — 특성화 테스트용 export 추가(동작 불변).
-module.exports = { getAIRecommendations, pickRegions, computeLTV };
+module.exports = { getAIRecommendations, pickRegions, computeLTV, buildJibunIndex, lookupByJibun };

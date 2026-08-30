@@ -686,7 +686,7 @@ async function getAptListByLawdFromDb(lawdCds) {
     for (let p = 0; p < 10; p++) {
       const { data, error } = await a
         .from('apt_master')
-        .select('kapt_code, apt_name, umd_nm')
+        .select('kapt_code, apt_name, umd_nm, facility')
         .in('lawd_cd', codes)
         .not('kapt_code', 'is', null)
         .order('kapt_code', { ascending: true })
@@ -694,7 +694,14 @@ async function getAptListByLawdFromDb(lawdCds) {
       if (error) throw error;
       const rows = data || [];
       for (const r of rows) {
-        out.push({ kaptCode: r.kapt_code, kaptName: r.apt_name, as3: r.umd_nm || '', as4: '' });
+        // JIBUN-MATCH-2026-08-30: 이름 매칭이 실패해도 필지로 이을 수 있게 지번 본번과 준공연도를 함께 싣는다.
+        //   (지번 파싱·검증은 이 파일이 이미 갖고 있는 jibunFromKaptAddr/bonbun 을 그대로 쓴다 — 사본을 만들지 않는다.)
+        const addr = r.facility && r.facility.kaptAddr;
+        out.push({
+          kaptCode: r.kapt_code, kaptName: r.apt_name, as3: r.umd_nm || '', as4: '',
+          jibunBon: bonbun(jibunFromKaptAddr(addr)) || '',
+          kaptUsedate: (r.facility && r.facility.kaptUsedate) || '',
+        });
       }
       if (rows.length < PAGE) break;
     }

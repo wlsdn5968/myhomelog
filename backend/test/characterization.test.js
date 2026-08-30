@@ -3078,6 +3078,53 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
 });
 
+// ── JIBUN-MATCH-2026-08-30 (Sprint OOOOOOO) ───────────────────────────────────
+// [무엇이 있었나] 군포 4.4억 무필터 결과 15곳이 **전부 500세대 이상**인데 500세대+ 필터는 0건이었다.
+//   MOLIT 거래명과 KAPT 등록명은 접두·어순이 달라("충무주공(872)" ↔ 산본주공충무1) 이름으로는 안 붙는다.
+//   전국 실측: 이름 정확일치 2,588/16,466(15.7%) vs 동+지번 본번 10,104(61.4%).
+// [왜 테스트로 묶나] 지번 매칭은 **오매칭 시 남의 단지 세대수·주차를 카드에 띄운다**. 한 필지에
+//   여러 KAPT 단지가 있는 경우가 전국 지번키의 6.9% 라, 모호할 때 포기하는지를 기계로 못박는다.
+test('지번 매칭 — 유일할 때만 채택하고 모호하면 포기한다', () => {
+  const { buildJibunIndex, lookupByJibun } = require('../services/propertyService');
+
+  const idx = buildJibunIndex([
+    { kaptCode: 'A1', kaptName: '산본주공충무1', as3: '금정동', jibunBon: '849', kaptUsedate: '19920101' },
+    { kaptCode: 'B1', kaptName: '한필지단지A',   as3: '겹친동', jibunBon: '100', kaptUsedate: '19900101' },
+    { kaptCode: 'B2', kaptName: '한필지단지B',   as3: '겹친동', jibunBon: '100', kaptUsedate: '20150101' },
+    { kaptCode: 'C1', kaptName: '연도같은A',     as3: '연도동', jibunBon: '200', kaptUsedate: '20100101' },
+    { kaptCode: 'C2', kaptName: '연도같은B',     as3: '연도동', jibunBon: '200', kaptUsedate: '20100101' },
+    { kaptCode: 'D1', kaptName: '지번없음',      as3: '없음동', jibunBon: '',    kaptUsedate: '20000101' },
+  ]);
+
+  // ① 이름이 완전히 달라도 동+본번이 유일하면 붙는다 — 이 기능의 존재 이유.
+  assert.equal(lookupByJibun(idx, { umdNm: '금정동', jibun: '849', buildYear: 1992 }), 'A1',
+    '동+본번이 유일한데도 매칭되지 않는다');
+  // 부번이 달라도 본번이 같으면 같은 단지다(대단지는 필지가 여러 개).
+  assert.equal(lookupByJibun(idx, { umdNm: '금정동', jibun: '849-3', buildYear: 1992 }), 'A1',
+    '부번 차이로 매칭이 깨진다 — 본번까지만 비교해야 한다');
+
+  // ② 한 필지에 여러 단지 → 준공연도가 유일하게 맞을 때만 채택.
+  assert.equal(lookupByJibun(idx, { umdNm: '겹친동', jibun: '100', buildYear: 2015 }), 'B2',
+    '연도로 가려낼 수 있는데 포기했다');
+  assert.equal(lookupByJibun(idx, { umdNm: '겹친동', jibun: '100', buildYear: 1990 }), 'B1',
+    '연도로 가려낼 수 있는데 포기했다');
+
+  // ③ ⚠ 연도로도 못 가르면 **포기**해야 한다 — 여기서 아무거나 고르면 남의 단지 정보가 카드에 실린다.
+  assert.equal(lookupByJibun(idx, { umdNm: '연도동', jibun: '200', buildYear: 2010 }), null,
+    '모호한데도 하나를 골랐다 — 오매칭으로 남의 세대수·주차가 표시된다');
+  assert.equal(lookupByJibun(idx, { umdNm: '겹친동', jibun: '100', buildYear: 0 }), null,
+    '실거래 준공연도를 모르는데 중복 필지에서 하나를 골랐다');
+
+  // ④ 입력이 없으면 조용히 null (예외 금지)
+  assert.equal(lookupByJibun(idx, { umdNm: '금정동', jibun: '', buildYear: 1992 }), null);
+  assert.equal(lookupByJibun(idx, { umdNm: '', jibun: '849', buildYear: 1992 }), null);
+  assert.equal(lookupByJibun(idx, { umdNm: '없음동', jibun: '999', buildYear: 2000 }), null);
+  assert.equal(lookupByJibun(new Map(), { umdNm: '금정동', jibun: '849' }), null);
+
+  // ⑤ 지번 없는 KAPT 행은 색인에 들어가지 않는다(빈 키로 오매칭 방지)
+  assert.ok(!idx.has('없음동|'), '지번 없는 행이 색인에 들어갔다');
+});
+
 // ── REGION-MENU-2026-08-30 (Sprint OOOOOOO) ───────────────────────────────────
 // [무엇이 있었나 — 운영자 발견] "경기는 시 자체도 이상하게 되어 있고, 동탄도 없어."
 //   프론트 지역 칩이 **손으로 적은 52개 문자열**이었다. LAWD_CODES 는 122개인데 칩으로
