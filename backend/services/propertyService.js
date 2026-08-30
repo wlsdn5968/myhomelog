@@ -526,8 +526,12 @@ async function getAIRecommendations(userCondition) {
   //   - 재도입 시 별도 섹션/별색 마커로 시각 구분 + 추정가 신뢰구간 표기 필요.
 
   if (!matched.length) {
+    // NOTICE-HONEST-2026-08-30: 여기는 **조회 성공 + 조건 미매칭** 이다. '조회 실패' 가 아니다.
     return {
-      recommendations: getStaticFallback(maxBudget, region),
+      recommendations: getNoMatchNotice(maxBudget, region, {
+        pyeongLabel: (minArea || maxArea) ? `전용 ${minPy}~${maxPy}평` : null,
+        analyzed: analyzed.length,
+      }),
       targetRegions,
       totalTxAnalyzed: analyzed.length,
       inBudgetCount: 0,
@@ -1037,6 +1041,37 @@ async function getAIRecommendations(userCondition) {
 }
 
 // ── 정적 폴백 (API 완전 실패 시) ─────────────────────────
+/**
+ * NOTICE-HONEST-2026-08-30 (Sprint OOOOOOO, 전수조사 847건에서 발각):
+ *   "조건에 맞는 단지 없음" 을 **"데이터 조회 실패"** 라고 표시하고 있었다.
+ *   [실측] 대형(전용 34평+) 조건에서 종로구·과천·구리·군포·동두천 5곳이 안내카드를 냈는데,
+ *   전부 조회는 **성공**했다(분석 단지 70·16·134·154·62곳). 매칭만 0이었다.
+ *   사용자에게 틀린 원인을 알려주면 "잠시 후 재시도" 하다가 서비스를 불신하게 된다 —
+ *   실제로는 조건을 바꿔야 하는 상황이다.
+ *   → 원인별로 문구를 가른다. 응답 형태(_notice 플래그·필드)는 그대로 둔다(소비자 호환).
+ */
+function getNoMatchNotice(budget, region, opts = {}) {
+  const { pyeongLabel, analyzed } = opts;
+  const scope = pyeongLabel ? `${pyeongLabel} 조건` : '입력하신 조건';
+  return [{
+    rank: 1,
+    _notice: true,
+    _reason: 'no-match', // 프론트가 '실패' 와 '조건 미매칭' 을 구분할 수 있게
+    aptName: '조건에 맞는 단지가 없어요',
+    area: `${region || '서울'} · 예산 ${budget}억 · ${scope}`,
+    avgPrice: budget,
+    score: 0,
+    pros: analyzed ? `이 지역 최근 6개월 거래 단지 ${analyzed}곳을 살펴봤어요 — 조회는 정상이에요` : '조회는 정상이에요',
+    cons: '예산 범위나 평형 조건이 이 지역 실거래 분포와 맞지 않아요',
+    strategy: '예산을 ±20% 넓히거나 평형 조건을 풀어보세요. 지역을 여러 곳 함께 선택할 수도 있어요.',
+    tags: ['조건조정필요'],
+    risk: '조건 미매칭 (데이터 이상 아님)',
+    recommend: false,
+    txHistory: [],
+    currentPriceByPyeong: [],
+  }];
+}
+
 function getStaticFallback(budget, region) {
   // NOTICE-FLAG-2026-08-17 (Sprint MMMMMMM-7): 이 항목은 **단지가 아니라 안내**다.
   //   예전엔 표식이 없어 프론트가 props.length 를 그대로 건수로 찍었고, 매칭 0건인데

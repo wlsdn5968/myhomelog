@@ -3086,6 +3086,38 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
 });
 
+// ── NOTICE-HONEST-2026-08-30 (Sprint OOOOOOO) ─────────────────────────────────
+// [무엇이 있었나 — 전수조사 847건에서 발각] "조건에 맞는 단지 없음" 을 화면에
+//   **"데이터 일시 조회 실패"** 라고 적고 있었다. 대형(전용 34평+) 조건에서 안내카드가 나온
+//   5곳(종로·과천·구리·군포·동두천)은 전부 조회가 **성공**했고(분석 단지 70·16·134·154·62곳)
+//   매칭만 0이었다. 틀린 원인을 알려주면 사용자는 "잠시 후 재시도" 를 반복하다 서비스를 불신한다 —
+//   실제로 필요한 행동은 조건을 바꾸는 것이다.
+test('안내 문구가 원인을 구분한다 — 조회 실패 vs 조건 미매칭', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const src = fs2.readFileSync(path2.join(__dirname, '../services/propertyService.js'), 'utf8');
+
+  // ① 두 분기가 서로 다른 생성기를 쓴다(같은 문구를 재사용하면 다시 갈린다).
+  assert.match(src, /if \(!analyzed \|\| !analyzed\.length\) \{[\s\S]{0,200}getStaticFallback/,
+    '진짜 조회 실패 분기가 getStaticFallback 을 쓰지 않는다');
+  assert.match(src, /if \(!matched\.length\) \{[\s\S]{0,400}getNoMatchNotice/,
+    '조건 미매칭 분기가 여전히 "조회 실패" 문구를 쓴다 — 사용자에게 틀린 원인을 알려준다');
+
+  // ② 조건 미매칭 안내는 실패라고 말하지 않는다.
+  const noMatch = src.slice(src.indexOf('function getNoMatchNotice'),
+    src.indexOf('function getStaticFallback'));
+  assert.ok(!/조회 실패|API 응답 없음/.test(noMatch),
+    '조건 미매칭 안내에 "조회 실패" 표현이 남아 있다');
+  assert.ok(/_reason: 'no-match'/.test(noMatch),
+    '프론트가 두 안내를 구분할 수 있는 플래그가 없다');
+  assert.ok(/_notice: true/.test(noMatch),
+    '_notice 플래그가 없다 — 프론트가 이 항목을 단지 1건으로 세어 "1건" 이라고 표시한다');
+
+  // ③ 진짜 조회 실패 안내는 종전대로 실패라고 말한다(반대 방향 회귀 방지).
+  const staticFb = src.slice(src.indexOf('function getStaticFallback'));
+  assert.ok(/조회 실패/.test(staticFb), '진짜 실패 안내에서 실패 표현이 사라졌다');
+});
+
 // ── MULTI-REGION-2026-08-30 (Sprint OOOOOOO) ──────────────────────────────────
 // 운영자: "화성시 동탄·만세구·병점구·효행구 이런식으로 복수 선택이 되면 좋겠다."
 //   실제 생활권은 행정구 경계와 일치하지 않는다 — 화성시가 4개 구로 갈리면서 한 도시를 보려면
