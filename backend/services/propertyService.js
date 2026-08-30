@@ -333,25 +333,57 @@ function buildTags(apt) {
  *   세대수 미확인 407곳이 소형으로 배제됐고, 교차검증한 17곳은 전부 100세대 이상이었다).
  *
  * ⚠ 점수는 **매수 추천이 아니다** — 객관 지표의 가중합이고, 근거를 breakdown 으로 함께 내보낸다.
+ *
+ * ── SCORE-V3-2026-08-30 (Sprint PPPPPPP) — 운영자 보고서 리뷰 반영 ──────────
+ * 운영자: "회전율도 별로 안 좋은 것 같고, 사람들이 좋아하는 매물은 가격도 많이 오른다.
+ *          호갱노노 순위 같은 것도 중요하다 — 단기 말고 1년·3년 오래 검색되는 곳."
+ *
+ * [실측으로 확인된 결함] 거래 점수가 **절대 건수**라 대단지가 자동으로 유리했다.
+ *   보고서 1위 푸른마을포스코더샵2차는 43건으로 건수 1위였지만 1,226세대라
+ *   회전율은 3.51% 로 4위였다(서동탄역파크자이 6.42% · 동탄파크푸르지오 5.81% · 자연앤데시앙 4.42%).
+ *   → 거래는 **세대수로 정규화한 회전율**로 판정한다.
+ *   전국 회전율 분포(6개월, 100세대 이상 2,981단지 실측):
+ *     p10 0.70% · p25 1.25% · p50 2.03% · p75 3.02% · p90 4.11% · p99 7.41%
+ *
+ * [신설] 관심도 14점 — 네이버 데이터랩 36개월 검색 지수(앵커 정규화 중앙값).
+ *   호갱노노는 공개 API 가 없고 스크래핑은 약관 위반이라, 같은 목적을 공식 API 로 달성한다.
+ *   ⚠ 검색량은 '좋은 단지' 가 아니라 '많이 회자되는 단지' 다 — 근거 문구에 그대로 쓴다.
  */
-const SCORE_V2_MAX = { 교통: 30, 인프라: 20, 규모주차: 15, 거래: 15, 연식: 12, 평형: 8 };
+const SCORE_V2_MAX = { 교통: 28, 인프라: 16, 규모주차: 12, 거래: 14, 연식: 10, 평형: 6, 관심도: 14 };
 
-/** 거래·연식·평형 — facility 없이 계산 가능한 부분(총 35점). */
+/**
+ * 아파트가 아닌 유형 — 추천 순위에서 제외한다(검색·상세는 그대로 둔다).
+ * 운영자: "오피스텔 느낌은 다들 안 좋아하니 이런 매물은 다 제외시켜줘."
+ * KAPT `codeAptNm` 실측 분포: 아파트 12,730 · 주상복합 1,261 · 연립주택 185 ·
+ *   도시형 생활주택 144 · 다세대 9 · 미상 331.
+ * ⚠ **주상복합은 제외하지 않는다** — 1,261곳이고 대형 브랜드 단지가 다수라
+ *   '오피스텔 느낌' 과 동의어가 아니다. 근거 없이 자르면 멀쩡한 단지를 지운다.
+ * ⚠ 유형이 비어 있으면(331곳) 제외하지 않는다 — 모름은 배제 사유가 아니다
+ *   ([[unknown-treated-as-value]]).
+ */
+const EXCLUDED_APT_TYPES = ['도시형 생활주택', '연립주택', '다세대'];
+
+/** facility 의 유형이 추천에서 배제 대상인가. 모르면 false(통과). */
+function _isExcludedType(facility) {
+  const t = String((facility && facility.aptType) || '').trim();
+  if (!t) return false;
+  return EXCLUDED_APT_TYPES.some(x => t.includes(x));
+}
+
+/** 연식·평형 — facility 없이 계산 가능한 부분. 거래는 세대수가 필요해 뒤로 미룬다. */
 function _calcBaseScore(apt) {
   const b = {};
-  // 거래 활발 (15) — 6개월 거래건수. 상한을 30 → 15 로 낮춰 지배력을 없앤다.
-  //   20건이면 만점: 그 이상은 "활발하다" 는 사실을 더 강하게 만들지 않는다(포화).
-  b.거래 = Math.min(SCORE_V2_MAX.거래, Math.round((Math.min(apt.dealCount || 0, 20) / 20) * SCORE_V2_MAX.거래));
-  // 연식 (12)
+  // 연식 (10)
   const yr = parseInt(apt.buildYear) || 0;
   const age = yr ? (new Date().getFullYear() - yr) : null;
-  b.연식 = age === null ? 6 // 모름 → 중간값
-    : age <= 5 ? 12 : age <= 10 ? 10 : age <= 20 ? 7 : age <= 30 ? 4 : 2;
-  // 평형 다양 (8) — 갈아타기·가족 변화 대응 폭
+  b.연식 = age === null ? 5 // 모름 → 중간값
+    : age <= 5 ? 10 : age <= 10 ? 8 : age <= 20 ? 6 : age <= 30 ? 3 : 2;
+  // 평형 다양 (6) — 갈아타기·가족 변화 대응 폭
   const distinctP = Array.isArray(apt.pyeongStats) ? new Set(apt.pyeongStats.map(p => p.pyeong)).size : 0;
   b.평형 = Math.min(SCORE_V2_MAX.평형, distinctP * 2);
-  const total = b.거래 + b.연식 + b.평형;
-  return { total, breakdown: b };
+  const total = b.연식 + b.평형;
+  // dealCount 를 들려 보낸다 — 회전율은 세대수를 아는 _applyFacilityToScore 에서 계산한다.
+  return { total, breakdown: b, dealCount: Number(apt.dealCount) || 0 };
 }
 
 // enriched 단계에서 facility 받은 후 추가 보정
@@ -392,7 +424,7 @@ function _applyFacilityToScore(base, facility, amen) {
     why.push('반경 3km 내 지하철역 없음');
   } else if (Number.isFinite(Number(nearM))) {
     const d = Number(nearM);
-    교통 = d <= 250 ? 30 : d <= 450 ? 24 : d <= 650 ? 17 : d <= 900 ? 11 : d <= 1400 ? 6 : d <= 2500 ? 3 : 1;
+    교통 = d <= 250 ? 28 : d <= 450 ? 22 : d <= 650 ? 16 : d <= 900 ? 10 : d <= 1400 ? 6 : d <= 2500 ? 3 : 1;
     const st = (amen && amen.subwayNearestName) ? amen.subwayNearestName : '지하철역';
     why.push(`${st} 직선 ${d}m`);
   }
@@ -402,7 +434,7 @@ function _applyFacilityToScore(base, facility, amen) {
   if (교통 === null) {
     const band = parseWalkBand(facility && facility.walkSubwayMin);
     if (band) {
-      교통 = { LE5: 26, M5_10: 20, M10_15: 13, M15_20: 8, GT20: 4 }[band];
+      교통 = { LE5: 24, M5_10: 18, M10_15: 12, M15_20: 7, GT20: 3 }[band];
       why.push(`지하철 도보 ${WALK_BAND_LABEL[band]}(관리사무소 신고값)`);
     }
   }
@@ -449,6 +481,38 @@ function _applyFacilityToScore(base, facility, amen) {
   const pr = (facility && facility.householdsConflict) ? null : ((facility && facility.parkingRatio) || null);
   const 주차 = pr === null ? 3 : pr >= 1.2 ? 6 : pr >= 1.0 ? 5 : pr >= 0.8 ? 4 : 2;
   b.규모주차 = Math.min(SCORE_V2_MAX.규모주차, 규모 + 주차);
+
+  // ── 거래 회전율 14 ─────────────────────────────────────────────────────
+  //   ⚠ 절대 건수가 아니라 **세대수 대비 비율**이다. 건수로 재면 대단지가 자동으로 이긴다 —
+  //   운영자가 보고서에서 짚은 결함이다(43건/1,226세대 = 3.51% 가 건수 1위로 표시됐다).
+  //   구간은 전국 실측 분위수(6개월, 100세대 이상 2,981단지): p25 1.25 · p50 2.03 · p75 3.02 · p90 4.11.
+  const _deals = Number(base && base.dealCount) || 0;
+  const _hh = (facility && facility.totalHouseholds) || 0;
+  if (_hh > 0) {
+    const tr = (_deals / _hh) * 100;
+    b.거래 = tr >= 4.11 ? 14 : tr >= 3.02 ? 12 : tr >= 2.03 ? 9 : tr >= 1.25 ? 6 : tr >= 0.70 ? 4 : 2;
+    why.push(`6개월 회전율 ${tr.toFixed(1)}% (${_deals}건 / ${_hh}세대)`);
+  } else {
+    // 세대수를 모른다 → 회전율을 만들 수 없다. 건수만으로 **중간값 부근**만 준다.
+    //   모름을 나쁨으로 만들지 않되, 잰 회전율과 같은 대접도 하지 않는다.
+    b.거래 = _deals >= 20 ? 9 : _deals >= 8 ? 7 : 5;
+    why.push(`6개월 거래 ${_deals}건 (세대수 미확인 — 회전율 산출 불가)`);
+  }
+
+  // ── 장기 관심도 14 ─────────────────────────────────────────────────────
+  //   네이버 데이터랩 36개월 검색 지수를 앵커(은마아파트) 중앙값 대비 비율로 정규화한 값.
+  //   운영자: "단기 일주일 순위보다 1년·3년 오래 검색되는 곳이 좋다."
+  //   [실측 기준점] 헬리오시티 1.15 · 서동탄역파크자이 0.057 · 푸른마을포스코더샵2차 0.0017
+  //   → 검색량은 자릿수로 갈리므로 구간도 로그 간격으로 둔다.
+  //   ⚠ 캐시에 없으면(=아직 안 채워짐) 7점(중간). 조회 실패를 '무명 단지' 로 만들지 않는다.
+  const _ni = amen && amen.interestRatio;
+  if (Number.isFinite(Number(_ni))) {
+    const r = Number(_ni);
+    b.관심도 = r >= 0.30 ? 14 : r >= 0.10 ? 12 : r >= 0.03 ? 9 : r >= 0.01 ? 6 : r >= 0.003 ? 3 : 1;
+    why.push(`검색 관심도 3년 지수 ${r >= 0.01 ? r.toFixed(2) : r.toFixed(4)} (기준 은마아파트=1)`);
+  } else {
+    b.관심도 = 7; // 모름 → 중간값
+  }
 
   const total = Object.values(b).reduce((a, c) => a + (Number(c) || 0), 0);
   return { total: Math.max(0, Math.min(100, Math.round(total))), breakdown: b, why };
@@ -505,7 +569,7 @@ async function getAIRecommendations(userCondition) {
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
   // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
   const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
-  const cacheKey = `rec:v17:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v17: PPPPPPP 교통 점수 산식이 바뀌었다(신고값 → 잰 거리). v16 캐시에는 옛 점수·옛 순서가 3h 남아 있어 차단.
+  const cacheKey = `rec:v18:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v18: PPPPPPP 점수표 V3(회전율·관심도 신설·유형 제외). v17 캐시의 옛 점수·옛 구성이 3h 남아 있어 차단.
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
   // REC-REDIS-2026-07-17 (Sprint AAAAAA, 운영자 "검색 더 빨리" — 실측: cold 12.6s vs warm 1.4s):
@@ -1026,6 +1090,25 @@ async function getAIRecommendations(userCondition) {
     _rankedF = keep.map(i => ranked[i]);
     enrichedRecs = keep.map(i => enrichedRecs[i]);
   }
+  // TYPE-EXCLUDE-2026-08-30 (Sprint PPPPPPP): 아파트가 아닌 유형을 추천 순위에서 뺀다.
+  //   운영자: "오피스텔 느낌은 다들 안 좋아하니 이런 매물들은 다 제외시켜줘."
+  //   ⚠ facility 가 붙은 **뒤에** 판정한다 — 사전 단계에서 자르면 KAPT 매칭 실패 단지가
+  //     '유형 모름' 으로 함께 잘린다([[unknown-treated-as-value]] 의 재발).
+  //   ⚠ 검색·상세는 건드리지 않는다. 있는 단지를 없다고 하는 게 아니라 **추천 정렬에서만** 뺀다.
+  {
+    const keep2 = [];
+    const dropped = [];
+    for (let i = 0; i < enrichedRecs.length; i++) {
+      const fac = enrichedRecs[i] && enrichedRecs[i].facility;
+      if (_isExcludedType(fac)) { dropped.push(`${enrichedRecs[i].aptName}(${fac.aptType})`); continue; }
+      keep2.push(i);
+    }
+    if (dropped.length) {
+      logger.info({ dropped: dropped.slice(0, 10), n: dropped.length }, '추천 제외 — 아파트가 아닌 유형');
+      _rankedF = keep2.map(i => _rankedF[i]);
+      enrichedRecs = keep2.map(i => enrichedRecs[i]);
+    }
+  }
   // SCORE-ORDER-2026-08-30 (Sprint OOOOOOO): **최종 순서를 화면에 보이는 점수로 확정한다.**
   //   여기까지 오면 facility 가 붙어 `rec.score` 가 최종값이다(_applyFacilityToScore 적용 후).
   //   위 거래량 정렬은 후보를 넓게 고르는 용도였고, 사용자에게 보이는 순서는 이 점수여야 한다 —
@@ -1104,13 +1187,32 @@ async function getAIRecommendations(userCondition) {
       if (!c || c.lat == null || c.lng == null) return null;
       try { return await getNearbyAmenities(c.lat, c.lng); } catch (_) { return null; }
     }));
+    // INTEREST-2026-08-30: 장기 검색 관심도 — **캐시에 있는 것만** 읽는다(외부 호출 0, 지연 0).
+    //   미스는 백그라운드로 채우고(응답을 기다리게 하지 않는다) 다음 검색부터 실값이 붙는다.
+    //   운영자 지시 "최대한 부하가 안 걸리게" 를 이 구조로 지킨다.
+    let _interest = new Map();
+    try {
+      const dl = require('./naverDatalabService');
+      const items = enrichedRecs.map((rec, i) => ({
+        aptName: rec.aptName, sigungu: rec.sigungu,
+        lat: coords[i] && coords[i].lat, lng: coords[i] && coords[i].lng,
+      }));
+      _interest = await dl.getCachedInterest(items);
+      // ⚠ await 하지 않는다 — 이 요청의 응답 시간에 영향을 주면 안 된다.
+      dl.warmInterest(items, 4).catch(() => {});
+    } catch (e) {
+      logger.warn({ err: e.message }, '관심도 조회 실패 — 중간값으로 진행');
+    }
     let _rescored = 0;
     for (let i = 0; i < enrichedRecs.length; i++) {
       const amen = _amenArr[i];
-      if (!amen) continue;
       const rec = enrichedRecs[i];
-      const _sc = _applyFacilityToScore(rec._baseScore, rec.facility, amen);
-      enrichedRecs[i] = { ...rec, amenities: amen, score: _sc.total, scoreBreakdown: _sc.breakdown, scoreWhy: _sc.why };
+      const ir = _interest.get(`${rec.aptName}|${rec.sigungu || ''}`);
+      // amen 이 없어도 관심도만으로 재계산할 값이 있으면 진행한다.
+      if (!amen && ir === undefined) continue;
+      const _amen2 = Object.assign({}, amen || {}, ir === undefined ? {} : { interestRatio: ir });
+      const _sc = _applyFacilityToScore(rec._baseScore, rec.facility, amen ? _amen2 : _amen2);
+      enrichedRecs[i] = { ...rec, amenities: amen || null, score: _sc.total, scoreBreakdown: _sc.breakdown, scoreWhy: _sc.why };
       _rescored++;
     }
     if (_rescored) {

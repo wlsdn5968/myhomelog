@@ -196,7 +196,13 @@ function buildFacility(info, kaptCode, detail) {
     builtDate: info.kaptUsedate || null,
     heatType: info.codeHeatNm || null,
     mgrType: info.codeMgrNm || null,
-    address: info.doroJuso || info.codeAptNm || null,
+    // ADDR-FALLBACK-2026-08-30 (Sprint PPPPPPP): 폴백이 codeAptNm 이었다 —
+    //   도로명주소가 없으면 주소 칸에 **"아파트"** 라는 글자가 찍힌다(전수 실측 80곳).
+    //   유형명은 주소가 아니다. 지번주소(kaptAddr)로 폴백한다(도로명 없는 345곳 중 84곳이 지번 보유).
+    address: info.doroJuso || info.kaptAddr || null,
+    // TYPE-2026-08-30: 단지 유형·복도유형을 그대로 노출 — 추천에서 아파트가 아닌 유형을 걸러내는 데 쓴다.
+    aptType: info.codeAptNm || null,
+    hallType: info.codeHallNm || null,
     floorAreaRatio: info.kaptTarea || null,
     topFloor: parseInt(info.kaptTopFloor) || null,
     // BOTTOM-FLOOR-FIX-2026-05-13 (Sprint X — 운영자 발견):
