@@ -8,6 +8,7 @@ const express = require('express');
 const router = express.Router();
 const axios = require('axios');
 const cache = require('../cache');
+const logger = require('../logger');
 // NEWS-ZERO-COST-2026-08-16 (Sprint PPPPPPP): 3줄 시황의 Anthropic 유료 호출을 **구조적으로 제거**했다.
 //   callAI / filterAdviceOutput import 도 함께 삭제 — 재유입은 scripts/security-regression-check.js 가 차단.
 //   (필터는 AI 생성문 전용 사후 안전망이었다. 이제 시황 문구는 우리가 조립한 사실 서술뿐이라 대상이 없다.)
@@ -109,7 +110,17 @@ router.get('/', async (req, res) => {
   // 키워드별 합쳐서 가져오기 (중복 제거)
   let items = [];
   try {
-    const results = await Promise.all(keywords.map(k => fetchNaverNews(k, 6).catch(() => null)));
+    // ⚠ SILENT-FAIL-2026-08-30: 예전엔 catch 로 null 만 돌려 **사유를 통째로 삼켰다**.
+    //   그래서 키가 401 로 거부되는데도 로그가 한 줄도 없었고, 화면은 조용히 RSS 로 떨어졌다.
+    //   키가 없어서 안 쓰는 것과 키가 거부되는 것은 전혀 다른 상황이다 — 구분해 남긴다.
+    const results = await Promise.all(keywords.map(k => fetchNaverNews(k, 6).catch((e) => {
+      if (process.env.NAVER_CLIENT_ID) {
+        logger.warn({ status: e.response?.status || null,
+          naverMsg: e.response?.data?.errorMessage || e.message, keyword: k },
+        '네이버 뉴스 API 실패 — RSS 로 폴백');
+      }
+      return null;
+    })));
     if (results.every(r => r === null)) {
       // 네이버 키 없음 → RSS fallback (카테고리별 쿼리)
       items = await fetchRssFallback(cat);

@@ -543,6 +543,55 @@ router.get('/warm-interest', async (req, res) => {
   }
 });
 
+/**
+ * NAVER-PROBE-2026-08-30 (Sprint PPPPPPP): 네이버 자격증명 진단.
+ *
+ * 데이터랩이 401 인데 원인이 둘로 갈린다 —
+ *   (a) Client ID/Secret 자체가 틀렸다  (b) 앱에 '검색어트렌드' API 가 안 켜져 있다.
+ * **같은 키로 두 API 를 찔러보면 갈린다**: 둘 다 401 이면 (a), 뉴스만 되면 (b).
+ * ⚠ 응답에 **키 값은 절대 싣지 않는다** — 상태코드와 네이버가 준 메시지만 낸다.
+ *
+ *   GET /api/admin/naver-probe
+ */
+router.get('/naver-probe', async (req, res) => {
+  const axios2 = require('axios');
+  const dl = require('../services/naverDatalabService');
+  const id = String(process.env.NAVER_CLIENT_ID || '').trim();
+  const secret = String(process.env.NAVER_CLIENT_SECRET || '').trim();
+  const H = { 'X-Naver-Client-Id': id, 'X-Naver-Client-Secret': secret };
+  const out = { keyShape: dl.keyShape() };
+
+  // ① 검색(뉴스) API — 가장 기본. 이게 되면 자격증명 자체는 유효하다.
+  try {
+    const r = await axios2.get('https://openapi.naver.com/v1/search/news.json',
+      { headers: H, params: { query: '부동산', display: 1 }, timeout: 6000 });
+    out.news = { ok: true, status: r.status, total: r.data?.total ?? null };
+  } catch (e) {
+    out.news = { ok: false, status: e.response?.status || null,
+      message: e.response?.data?.errorMessage || e.response?.data?.message || e.message };
+  }
+
+  // ② 데이터랩 검색어트렌드 — 앱에 별도로 켜야 하는 API.
+  try {
+    const r = await axios2.post('https://openapi.naver.com/v1/datalab/search',
+      { startDate: '2026-01-01', endDate: '2026-02-01', timeUnit: 'month',
+        keywordGroups: [{ groupName: 'probe', keywords: ['은마아파트'] }] },
+      { headers: Object.assign({ 'Content-Type': 'application/json' }, H), timeout: 6000 });
+    out.datalab = { ok: true, status: r.status, groups: (r.data?.results || []).length };
+  } catch (e) {
+    out.datalab = { ok: false, status: e.response?.status || null,
+      message: e.response?.data?.errorMessage || e.response?.data?.message || e.message };
+  }
+
+  out.verdict = out.news.ok && out.datalab.ok ? '정상'
+    : (!out.news.ok && !out.datalab.ok) ? '자격증명 자체가 거부됨 — Client ID/Secret 확인'
+      : out.news.ok ? "자격증명은 유효 — 앱에 '검색어트렌드' API 가 안 켜져 있음"
+        : '뉴스만 실패 — 예상 밖 조합, 메시지를 볼 것';
+  res.set('Cache-Control', 'no-store');
+  res.json(out);
+});
+
 module.exports = router;
+
 
 
