@@ -521,7 +521,7 @@ router.get('/warm-interest', async (req, res) => {
     //   그 표본으로 점수 구간을 잡으면 편향된다. apt_key 순 + offset 으로 전국을 고르게 훑는다.
     const off = Math.max(0, parseInt(req.query.offset) || 0);
     const { data: geo, error: gErr } = await admin.from('apt_geocache')
-      .select('apt_key, apt_name, sigungu, lat, lng')
+      .select('apt_key, apt_name, sigungu, umd_nm, lat, lng')
       .not('lat', 'is', null)
       .order('apt_key', { ascending: true })
       .range(off, off + 999);
@@ -530,10 +530,12 @@ router.get('/warm-interest', async (req, res) => {
     const seen = new Set();
     const items = [];
     for (const g of geo || []) {
-      const k = `${g.apt_name}|${g.sigungu}`;
+      // ⚠ 중복 제거 키에도 동을 넣는다 — 같은 구의 동명 단지를 한 건으로 접으면
+      //   둘 중 하나는 영원히 안 채워진다(실측: 같은 이름·같은 시군구·다른 동 340건).
+      const k = `${g.apt_name}|${g.sigungu}|${g.umd_nm || ''}`;
       if (seen.has(k)) continue;
       seen.add(k);
-      items.push({ aptName: g.apt_name, sigungu: g.sigungu, lat: Number(g.lat), lng: Number(g.lng) });
+      items.push({ aptName: g.apt_name, sigungu: g.sigungu, umd: g.umd_nm || '', lat: Number(g.lat), lng: Number(g.lng) });
     }
     const t0 = Date.now();
     const summary = await dl.warmInterest(items, calls);

@@ -613,7 +613,15 @@ function analyzeTransactions(transactions) {
     //     가격범위 왜곡 (예: 현대 5.65~12.1억 = 상계동·중계동 별개 현대 단지 합산).
     //   변경: aptName|lawdCd|umdNm 복합키로 물리적 단지 분리 (report path fetchCandidateApts 와 동일 정책).
     //   주: BUG2 의 alias 병합(서로 다른 이름 = 같은 단지)과는 반대 방향 — 같은 이름 = 다른 단지를 분리.
-    const gkey = `${t.aptName}|${t.lawdCd || ''}|${t.umdNm || ''}`;
+    // SAME-DONG-SPLIT-2026-08-30 (Sprint PPPPPPP, 운영자 발견 "광해리드빌이 두 군데 있는 것 같은데"):
+    //   이름+동까지 같아도 **준공년도가 다르면 물리적으로 다른 단지**다.
+    //   [실측] 부천 소사본동 "주공": 지번 400-8(1995년·전용 37~58㎡·평균 2.78억·43건) 과
+     //         지번 407-1(2006년·전용 59.5㎡·평균 4.23억·6건) 이 한 단지로 합쳐져 있었다.
+     //         합치면 "주공 2.97억" 이 되어 **둘 다 틀린 값**이 된다.
+    //   전수: 다중 aptSeq 그룹 31 중 **준공년도까지 다른 것 20그룹·204거래**(최대 30년 차이).
+    //   ⚠ apt_seq 로 나누지 않는다 — 한 단지에 여러 seq 가 붙는 경우(11그룹)까지 쪼개진다.
+    //     준공년도는 "다르면 확실히 별개" 라는 **결정적 증거**이고, 과분할은 2그룹뿐이다(실측).
+    const gkey = `${t.aptName}|${t.lawdCd || ''}|${t.umdNm || ''}|${t.buildYear || ''}`;
     if (!byApt[gkey]) byApt[gkey] = [];
     byApt[gkey].push(t);
   }

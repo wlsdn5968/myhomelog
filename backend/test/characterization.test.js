@@ -3096,6 +3096,37 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
 });
 
+// ── SAME-DONG-SPLIT-2026-08-30 (Sprint PPPPPPP) ───────────────────────────────
+// 운영자 발견: "광해리드빌이 미추로 61에도 있고 주안로 171에도 있는 것 같은데?
+//              이런 것들도 많을 테니 확인 잘 해."
+// 전수 실측(최근 6개월 거래):
+//   · 같은 이름·같은 시군구인데 **다른 동** 340건 → 집계 키에 동이 있어 이미 분리됨(안전)
+//   · 같은 이름·같은 동인데 다른 apt_seq 31그룹 중 **준공년도까지 다른 것 20그룹·204거래**
+//     [사례] 부천 소사본동 "주공": 400-8(1995년·평균 2.78억·43건) ↔ 407-1(2006년·평균 4.23억·6건).
+//            합치면 "2.97억" 이 되어 **둘 다 틀린 값**이 된다. 최대 준공년차 30년.
+//   · ⚠ apt_seq 로 나누지 않는다 — 한 단지에 여러 seq 가 붙는 11그룹까지 쪼개진다.
+//     준공년도는 "다르면 확실히 별개" 라는 결정적 증거이고 과분할은 2그룹뿐이다.
+test('단지 식별 — 이름·동이 같아도 준공년도가 다르면 다른 단지로 센다', () => {
+  const fs2 = require('node:fs'); const path2 = require('node:path');
+  const tx = fs2.readFileSync(path2.join(__dirname, '../services/transactionService.js'), 'utf8');
+  const rpt = fs2.readFileSync(path2.join(__dirname, '../routes/report.js'), 'utf8');
+
+  // ① 추천 경로
+  assert.match(tx, /const gkey = `\$\{t\.aptName\}\|\$\{t\.lawdCd \|\| ''\}\|\$\{t\.umdNm \|\| ''\}\|\$\{t\.buildYear \|\| ''\}`/,
+    '거래 집계 키에 준공년도가 없다 — 1995년 단지와 2006년 단지가 한 평균으로 합쳐진다');
+
+  // ② 보고서 경로도 **같은 정책**이어야 한다(두 경로가 갈리면 또 어긋난다).
+  assert.match(rpt, /const key = `\$\{_canon\}\|\$\{t\.sigungu\}\|\$\{t\.umd_nm\}\|\$\{t\.build_year \|\| ''\}`/,
+    '보고서 집계 키가 추천 경로와 다르다 — 같은 단지가 두 화면에서 다른 값을 갖는다');
+
+  // ③ 관심도 캐시 키에도 동이 들어가야 한다(같은 구 동명 단지 340건).
+  const dl = fs2.readFileSync(path2.join(__dirname, '../services/naverDatalabService.js'), 'utf8');
+  assert.match(dl, /function cacheKeyFor\(name, sigungu, umd\)/,
+    '관심도 캐시 키에 동이 없다 — 같은 구의 동명 단지가 뭉개진다');
+  assert.ok(!/ni:\$\{normalizeAptName\(name\)\}\|\$\{String\(sigungu \|\| ''\)\.trim\(\)\}`/.test(dl),
+    '옛 2단 키(이름|시군구)가 남아 있다');
+});
+
 // ── INTEREST-KEY-2026-08-30 (Sprint PPPPPPP) ──────────────────────────────────
 // 캐시를 1,551건 채워놓고도 점수는 전부 중간값이었다 — **키가 양쪽에서 달랐다.**
 //   채우는 쪽: apt_geocache 이름 "서동탄역파크자이아파트"

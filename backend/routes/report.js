@@ -1363,7 +1363,9 @@ async function fetchCandidateApts(admin, input, limit) {
   const byApt = {};
   for (const t of txList) {
     const _canon = _aliasMap.get(`${t.apt_name}|${t.umd_nm}`) || t.apt_name;
-    const key = `${_canon}|${t.sigungu}|${t.umd_nm}`;
+    // SAME-DONG-SPLIT-2026-08-30: 추천 경로(transactionService.analyzeTransactions)와 **같은 정책**.
+    //   이름+동이 같아도 준공년도가 다르면 다른 단지다(실측 20그룹·204거래).
+    const key = `${_canon}|${t.sigungu}|${t.umd_nm}|${t.build_year || ''}`;
     if (!byApt[key]) byApt[key] = {
       apt_name: _canon, sigungu: t.sigungu, umd_nm: t.umd_nm,
       lawd_cd: t.lawd_cd,

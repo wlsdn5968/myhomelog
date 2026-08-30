@@ -560,7 +560,7 @@ async function getAIRecommendations(userCondition) {
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
   // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
   const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
-  const cacheKey = `rec:v19:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v19: PPPPPPP 관심도 구간을 전국 1,551단지 실분위수로 재보정. v18 캐시에는 잠정 구간의 점수가 남아 있다.
+  const cacheKey = `rec:v20:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v20: PPPPPPP 동명 단지 분리(준공년도 키 추가). v19 캐시에는 합쳐진 평균가·거래수가 남아 있다.
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
   // REC-REDIS-2026-07-17 (Sprint AAAAAA, 운영자 "검색 더 빨리" — 실측: cold 12.6s vs warm 1.4s):
@@ -1204,6 +1204,7 @@ async function getAIRecommendations(userCondition) {
       const items = enrichedRecs.map((rec, i) => ({
         aptName: rec.aptName,
         sigungu: (_rankedF[i] && _rankedF[i].sigungu) || '',
+        umd: (_rankedF[i] && _rankedF[i].umdNm) || '',
         lat: coords[i] && coords[i].lat, lng: coords[i] && coords[i].lng,
       }));
       _interest = await dl.getCachedInterest(items);

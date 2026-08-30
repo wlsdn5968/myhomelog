@@ -178,8 +178,12 @@ function normalizeAptName(name) {
     .trim();
 }
 
-function cacheKeyFor(name, sigungu) {
-  return `ni:${normalizeAptName(name)}|${String(sigungu || '').trim()}`;
+function cacheKeyFor(name, sigungu, umd) {
+  // ⚠ SAME-NAME-2026-08-30 (운영자 발견): 같은 시군구에 동명 단지가 있다.
+  //   최근 6개월 거래 기준 **같은 이름·같은 시군구인데 다른 동이 340건**이다.
+  //   구까지만 키로 쓰면 두 단지의 관심도가 뭉개진다 → 동까지 넣는다
+  //   (apt_geocache 키가 이미 이름|시군구|동 형태인 것과 같은 이유다).
+  return `ni:${normalizeAptName(name)}|${String(sigungu || '').trim()}|${String(umd || '').trim()}`;
 }
 
 async function readCache(key) {
@@ -259,7 +263,7 @@ async function writeCache(key, ratio, lat, lng) {
  */
 async function getCachedInterest(items) {
   const list = (items || []).filter(it => it && it.aptName);
-  const keys = list.map(it => cacheKeyFor(it.aptName, it.sigungu));
+  const keys = list.map(it => cacheKeyFor(it.aptName, it.sigungu, it.umd));
   const byKey = await readCacheBulk(keys);
   const out = new Map();
   list.forEach((it, i) => {
@@ -276,7 +280,7 @@ async function getCachedInterest(items) {
 async function warmInterest(items, maxCalls = 4) {
   if (!hasKeys()) return { skipped: 'no-key' };
   const usable = (items || []).filter(it => it && it.aptName && it.lat != null && it.lng != null);
-  const keys = usable.map(it => cacheKeyFor(it.aptName, it.sigungu));
+  const keys = usable.map(it => cacheKeyFor(it.aptName, it.sigungu, it.umd));
   const have = await readCacheBulk(keys);   // ⚠ 단건 조회를 돌리면 단지 수만큼 DB 왕복이 생긴다
   const todo = usable.filter((it, i) => have.get(keys[i]) === undefined);
   let calls = 0, filled = 0, lastError = null;
@@ -288,7 +292,7 @@ async function warmInterest(items, maxCalls = 4) {
     for (const c of chunk) {
       const ratio = res.get(c.aptName);
       if (ratio == null) continue;   // 모름은 저장하지 않는다 — 이름이 나아지면 다시 시도한다
-      await writeCache(cacheKeyFor(c.aptName, c.sigungu), ratio, c.lat, c.lng);
+      await writeCache(cacheKeyFor(c.aptName, c.sigungu, c.umd), ratio, c.lat, c.lng);
       filled++;
     }
   }
