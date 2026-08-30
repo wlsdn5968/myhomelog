@@ -3096,6 +3096,54 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
 });
 
+// ── PRIMARY-SAMPLE-2026-08-31 (Sprint PPPPPPP) ────────────────────────────────
+// 전국 실측(101지역·1,793건): 헤드라인 가격의 대표 평형이 거래 **1건**인 경우 **16.9%**,
+//   2건 이하 29.1%. [사례] 이편한세상강동에코포레 — 단지 전체 11건인데 대표 16평은 1건,
+//   그 한 건의 12.6억이 헤드라인이 됐다.
+// 원인: 대표 평형을 **예산 근접만** 보고 골랐고 표본을 전혀 보지 않았다.
+test('대표 평형 — 표본이 충분한 평형을 우선하되, 없으면 버리지 않는다', () => {
+  const fs2 = require('node:fs'); const path2 = require('node:path');
+  const svc = fs2.readFileSync(path2.join(__dirname, '../services/propertyService.js'), 'utf8');
+
+  // ① 표본 하한이 존재하고, 충분한 것들 중에서 고른다.
+  assert.match(svc, /const MIN_PRIMARY_N = 3;/, '대표 평형 표본 하한이 없다');
+  assert.match(svc, /const _enough = fitPyeongs\.filter\(p => \(p\.dealCount \|\| 0\) >= MIN_PRIMARY_N\)/,
+    '표본이 충분한 평형을 추려내지 않는다');
+
+  // ② ⚠ 표본이 적다고 **단지를 버리지 않는다** — 예산대에 그 평형뿐일 수 있다.
+  assert.match(svc, /_pickClosest\(_enough\.length \? _enough : fitPyeongs\)/,
+    '표본이 부족하면 단지가 통째로 사라진다 — 폴백이 없다');
+
+  // ③ 표본 수를 응답에 실어 화면이 "1건 기준" 임을 밝힐 수 있게 한다.
+  assert.match(svc, /priceSampleN: p\.dealCount \|\| 0,/, '표본 수를 응답에 싣지 않는다');
+
+  // ④ 실제 선택 로직을 돌려 확인한다 — 소스 검사만으로는 동작을 보장하지 못한다.
+  const m = svc.match(/const MIN_PRIMARY_N = 3;[\s\S]*?const primaryPyeong = _pickClosest\(_enough\.length \? _enough : fitPyeongs\);/);
+  assert.ok(m, '대표 평형 선택 블록을 찾지 못했다');
+  const run = (fitPyeongs, maxBudget) => new Function('fitPyeongs', 'maxBudget',
+    `${m[0]}; return primaryPyeong;`)(fitPyeongs, maxBudget);
+
+  //   예산 12억. 16평은 1건(12.6억, 예산에 더 가까움) · 26평은 9건(11.0억).
+  //   표본을 보지 않으면 16평이 뽑힌다 — 그게 이번에 고친 결함이다.
+  const picked = run([
+    { pyeong: 16, avgPrice: 126000, dealCount: 1 },
+    { pyeong: 26, avgPrice: 110000, dealCount: 9 },
+  ], 12);
+  assert.equal(picked.pyeong, 26, '1건짜리 평형이 9건짜리를 제치고 대표가 된다');
+
+  //   충분한 표본이 하나도 없으면 종전대로 예산 근접으로 고른다(단지를 버리지 않는다).
+  const only = run([
+    { pyeong: 16, avgPrice: 126000, dealCount: 1 },
+    { pyeong: 26, avgPrice: 90000, dealCount: 2 },
+  ], 12);
+  assert.equal(only.pyeong, 16, '표본이 모두 부족할 때 예산 근접 폴백이 동작하지 않는다');
+
+  // ⑤ 화면이 표본 적음을 밝힌다.
+  const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  assert.match(fe, /Number\(p\.priceSampleN\) <= 2/,
+    '표본 1~2건인 가격에 아무 표시가 없다 — 사용자가 시세로 읽는다');
+});
+
 // ── REPORT-DEPTH-2026-08-31 (Sprint PPPPPPP) ──────────────────────────────────
 // 운영자: "예전에 받았던 컨설팅 보고서처럼 요약 총평·매매 시 주의할 점·뭘 봐야 하는지·
 //          어떤 집을 피해야 하는지가 들어가면 좋겠다. 로고랑 워터마크도."

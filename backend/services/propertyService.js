@@ -573,7 +573,7 @@ async function getAIRecommendations(userCondition) {
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
   // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
   const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
-  const cacheKey = `rec:v21:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v21: PPPPPPP 카카오 키워드 400 수정으로 인프라 점수가 바뀐다. v20 캐시에는 병원 0 으로 계산된 점수가 남아 있다.
+  const cacheKey = `rec:v22:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v22: PPPPPPP 대표 평형에 표본 하한(3건) 도입 — v21 캐시에는 1건짜리 평형이 헤드라인인 결과가 남아 있다.
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
   // REC-REDIS-2026-07-17 (Sprint AAAAAA, 운영자 "검색 더 빨리" — 실측: cold 12.6s vs warm 1.4s):
@@ -676,12 +676,26 @@ async function getAIRecommendations(userCondition) {
       p.avgPrice <= budgetMaxMan && p.avgPrice >= budgetMinMan
     );
     if (fitPyeongs.length === 0) continue;
-    // 사용자 예산 가장 잘 맞는 평형
-    const primaryPyeong = fitPyeongs.reduce((best, p) => {
+    // PRIMARY-SAMPLE-2026-08-31 (Sprint PPPPPPP): 대표 평형은 **예산 근접 + 표본 크기** 로 고른다.
+    //
+    // [전국 실측 — 101지역·1,793건] 헤드라인 가격의 대표 평형이
+    //   거래 **1건**인 경우가 **16.9%(303건)**, 2건 이하가 29.1% 였다.
+    //   [사례] 이편한세상강동에코포레: 단지 전체 11건인데 대표로 뽑힌 16평은 **1건**,
+    //          그 한 건의 12.6억이 헤드라인이 됐다.
+    // 원인: 예산에 가장 가까운 평형만 골랐고 **표본을 전혀 보지 않았다**.
+    //   1~2건 평균은 시세라기보다 개별 사례에 가깝다 — 그걸 단지의 대표값으로 쓰면 안 된다.
+    //
+    // ⚠ 표본이 적다고 단지를 **버리지는 않는다**. 예산대에 그 평형밖에 없을 수 있다.
+    //   충분한 표본(3건 이상)이 있으면 그중에서 고르고, 하나도 없으면 종전대로 예산 근접으로 고른다.
+    //   대신 표본 수를 응답에 실어 화면이 "1건 기준" 임을 밝힐 수 있게 한다.
+    const MIN_PRIMARY_N = 3;
+    const _pickClosest = (arr) => arr.reduce((best, p) => {
       const diff = Math.abs(p.avgPrice - maxBudget * 10000);
       const bestDiff = Math.abs(best.avgPrice - maxBudget * 10000);
       return diff < bestDiff ? p : best;
-    }, fitPyeongs[0]);
+    }, arr[0]);
+    const _enough = fitPyeongs.filter(p => (p.dealCount || 0) >= MIN_PRIMARY_N);
+    const primaryPyeong = _pickClosest(_enough.length ? _enough : fitPyeongs);
     matched.push({ ...apt, fitPyeongs, primaryPyeong });
   }
 
@@ -918,6 +932,8 @@ async function getAIRecommendations(userCondition) {
       maxPrice: maxAuk,
       buildYear: apt.buildYear,
       pyeong: `${p.pyeong}평 (전용 ${p.excluUseAr}㎡)`,
+      // 이 가격이 몇 건 위에서 계산됐는지 — 화면이 "표본 적음" 을 밝힐 수 있게 한다.
+      priceSampleN: p.dealCount || 0,
       // SCORE-MULTIFACTOR-2026-05-13 (Sprint Y — 운영자 발견: "왜 다 95점?"):
       //   기존: `min(95, 50 + min(dealCount,30)*1.5)` → dealCount ≥ 30 단지 모두 95점 (cap).
       //   변경: 다요인 합산 (거래량/신축/평형다양). facility-derived 보정은 enriched 단계에서.

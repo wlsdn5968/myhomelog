@@ -6643,6 +6643,7 @@ function renderPList(){
     return`<div class="pi" id="pi-${i}" onclick="selP(${i})">
       <div class="pi-top"><div class="pi-name">${rank}${_escHtml(p.aptName||'')}</div><div class="pi-price" title="${_escHtml(p._priceBasis||'평균 실거래')}">${(Number(p.avgPrice)||0).toFixed(1)}억</div></div>
       <div class="pi-sub">${_escHtml(_fmtSgg(p.area))} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}</div>
+      ${(Number(p.priceSampleN) > 0 && Number(p.priceSampleN) <= 2) ? `<div style="font-size:10px;color:var(--warn-ink,#8A6100);background:var(--warn-bg,#FFF6E3);border:1px solid var(--warn-bd,#E8C08A);border-radius:var(--radius-xs);padding:2px 6px;margin-top:4px;display:inline-block">⚠ 이 가격은 6개월 ${Number(p.priceSampleN)}건 기준 — 시세보다 개별 사례에 가까워요</div>` : ''}
       <div class="pi-row">${tags}${p.score!=null?gSVG(Number(p.score),30):''}</div>
     </div>`;
   }).join('');
