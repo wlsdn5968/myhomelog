@@ -327,8 +327,17 @@ router.post('/generate', async (req, res) => {
           a.lawdCd = c.lawd_cd;
         }
         // PRICE-INTEGRITY-2026-06-14: priceFit(예산매칭) 을 backend 결정론 계산으로 주입 — AI 전사 환각 차단.
-        //   c.avgPrice(회원님 평형대 실거래 평균) + maxBudget → 정확 비교. name·objectiveFacts 와 같은 candidate[i] 출처라 일관.
-        const _pf = _buildPriceFit(c?.avgPrice, userInput.maxBudget);
+        //   name·objectiveFacts 와 같은 candidate[i] 출처라 일관.
+        // PRICE-BASIS-2026-08-30 (Sprint OOOOOOO): 기준을 `avgPrice`(예산 밴드로 잘린 부분집합 평균)에서
+        //   **대표 평형의 밴드 미적용 평균**(avgPriceFull)으로 바꾼다. 옛 기준은 예산을 바꾸면 같은 단지의
+        //   "시세"가 따라 움직였다(동탄 실측: 표기 9.69억 vs 실제 10.09억).
+        //   ⚠ 라벨도 '회원님 평형대' → **실제 면적**으로 명시한다 — 어떤 평형의 평균인지 모호하면
+        //     사용자가 다른 평형 가격으로 오해한다(라벨과 모집단이 갈리던 그 결함의 재발 방지).
+        const _basis = (c && c.avgPriceFull > 0) ? c.avgPriceFull : (c && c.avgPrice);
+        const _areaLabel = (c && c.primaryArea && c.primaryArea.sqm)
+          ? `전용 ${c.primaryArea.sqm}㎡` : '회원님 평형대';
+        const _pf = _buildPriceFit(_basis, userInput.maxBudget, _areaLabel,
+          (c && c.priceSampleFull) || null);
         if (_pf) a.priceFit = _pf;
       });
     }
@@ -464,13 +473,17 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
     //   풀이 잘렸으면 그 수는 6개월치가 아니다 — 실제로 덮은 기간으로 적는다.
     //   ⚠ 서버 런타임 TZ 는 UTC 이므로 날짜 차이는 UTC 기준으로 계산한다([[server-runtime-timezone-utc]]).
     const _span = poolSpanLabel(c);
+    // PRICE-BASIS-2026-08-30: 거래 건수도 **예산 밴드로 잘리지 않은** 수를 쓴다.
+    //   c.n 은 후보 풀(밴드 적용) 안의 건수라 실제보다 적다(동탄 실측: 표기 52건 vs 실제 66건).
+    //   areaTotalN = 같은 평형 구간·같은 6개월의 전체 건수(밴드 미적용).
+    const _n = Number(c.areaTotalN) > 0 ? Number(c.areaTotalN) : (c.n || 0);
     const pros = [
       (c.households && c.households >= 1000) ? `대단지 ${Number(c.households).toLocaleString()}세대` : null,
       // HH-CONFLICT-2026-08-17 (Sprint MMMMMMM): '장점' 은 판단이다 — 분모를 못 믿으면 쓰지 않는다.
       (f.parking_per_household && f.parking_per_household >= 1 && !f.parking_uncertain)
         ? `주차 세대당 ${f.parking_per_household}대` : null,
       // 잘린 풀에서도 n 은 **하한**이라 '거래 활발'은 여전히 참이다(실제는 더 많다) → 유지.
-      (c.n >= 20) ? `${_span} 거래 ${c.n}건 (거래 활발)` : null,
+      (_n >= 20) ? `${_span} 거래 ${_n}건 (거래 활발)` : null,
       f.builder ? `시공 ${f.builder}` : null,
       f.jeonse_ratio ? `전세가율 ${f.jeonse_ratio} (회원님 평형대 전세 ${f.jeonse_sample}건)` : null, // Sprint KKKKK
     ].filter(Boolean).join(' · ');
@@ -479,7 +492,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
       // ⚠ 반대로 '표본 적음'은 잘린 풀에서 **거짓 경고**가 된다 — 실제로 30건인 단지가 풀에선 3건일 수
       //   있고, 그때 "시세 판단 주의"를 붙이면 없는 위험을 만든다. 잘렸으면 이 판정을 하지 않는다.
       //   (모르는 것은 말하지 않는다 — 억지로 반대쪽 단정을 넣지도 않는다.)
-      (!c._poolTruncated && c.n <= 5) ? `최근 6개월 거래 ${c.n}건 — 표본 적음(시세 판단 주의)` : null,
+      (!c._poolTruncated && _n <= 5) ? `최근 6개월 거래 ${_n}건 — 표본 적음(시세 판단 주의)` : null,
     ].filter(Boolean).join(' · ');
     return {
       rank: i + 1,
@@ -524,8 +537,8 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
       buildYear: c.build_year || 0,
       households: c.households || '미상',
       ratio: c._poolTruncated
-        ? `${_span} 실거래 ${c.n || 0}건 (후보 표본 기준)`
-        : `최근 6개월 실거래 ${c.n || 0}건`,
+        ? `${_span} 실거래 ${_n}건 (후보 표본 기준)`
+        : `최근 6개월 실거래 ${_n}건`,
       // 프론트가 같은 판정을 **자기 문자열로 다시 만들지 않도록** 기간 라벨을 함께 내려보낸다.
       //   (index.html 의 카드가 '6개월' 을 하드코딩하고 있어 여기 값이 바뀌면 조용히 갈렸다.)
       sampleSpan: _span,
@@ -622,7 +635,7 @@ function stripMarkdownDeep(obj) {
  *  @param avgPriceManwon 회원님 평형대 실거래 평균가 (만원, c.avgPrice)
  *  @param maxBudgetEok 매수가 (억, userInput.maxBudget)
  *  운영자 #1 룰(환각 차단·공식 출처): 가격 비교는 AI 가 아니라 DB 실거래 평균으로 보장. */
-function _buildPriceFit(avgPriceManwon, maxBudgetEok) {
+function _buildPriceFit(avgPriceManwon, maxBudgetEok, areaLabel, sampleN) {
   const avg = Number(avgPriceManwon), bud = Number(maxBudgetEok);
   if (!Number.isFinite(avg) || avg <= 0 || !Number.isFinite(bud) || bud <= 0) return null;
   const avgEok = avg / 10000;
@@ -630,7 +643,10 @@ function _buildPriceFit(avgPriceManwon, maxBudgetEok) {
   const label = Math.abs(diffPct) <= 2 ? '예산 일치'
               : diffPct > 0 ? `${diffPct}% 초과`
               : `${Math.abs(diffPct)}% 여유`;
-  return `매수가 ${bud}억 vs 회원님 평형대 평균 ${avgEok.toFixed(2)}억 (${label})`;
+  // PRICE-BASIS-2026-08-30: 어떤 면적의, 몇 건 평균인지 함께 적는다. 표본 수가 없으면 그 부분만 생략.
+  const who = areaLabel || '회원님 평형대';
+  const n = Number(sampleN) > 0 ? ` · 최근 6개월 ${Number(sampleN)}건` : '';
+  return `매수가 ${bud}억 vs ${who} 평균 ${avgEok.toFixed(2)}억${n} (${label})`;
 }
 
 // DATA-BASIS-2026-07-13 (Sprint CCCCC, 집사닷컴 벤치마킹 "검증 기준 박스"):
