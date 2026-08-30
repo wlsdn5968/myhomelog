@@ -558,7 +558,8 @@ router.get('/naver-probe', async (req, res) => {
   const dl = require('../services/naverDatalabService');
   const id = String(process.env.NAVER_CLIENT_ID || '').trim();
   const secret = String(process.env.NAVER_CLIENT_SECRET || '').trim();
-  const H = { 'X-Naver-Client-Id': id, 'X-Naver-Client-Secret': secret };
+  // NAVER API HUB(NCP) 공통 헤더 — 구형 X-Naver-Client-* 는 401 이다(공식 문서·실측).
+  const H = { 'X-NCP-APIGW-API-KEY-ID': id, 'X-NCP-APIGW-API-KEY': secret };
   // ⚠ **이름만** 낸다(값 금지). 변수 이름 오타로 편집이 엉뚱한 곳에 갔는지 가려낸다 —
   //   값이 두 번 연속 같은 길이로 남아 있으면 "저장이 반영 안 됐다" 와 "같은 값을 다시 넣었다" 를
   //   구분해야 하는데, 이름 목록이 그 실마리를 준다.
@@ -567,8 +568,8 @@ router.get('/naver-probe', async (req, res) => {
 
   // ① 검색(뉴스) API — 가장 기본. 이게 되면 자격증명 자체는 유효하다.
   try {
-    const r = await axios2.get('https://openapi.naver.com/v1/search/news.json',
-      { headers: H, params: { query: '부동산', display: 1 }, timeout: 6000 });
+    const r = await axios2.get('https://naverapihub.apigw.ntruss.com/search/v1/news',
+      { headers: H, params: { query: '부동산', display: 1, format: 'json' }, timeout: 6000 });
     out.news = { ok: true, status: r.status, total: r.data?.total ?? null };
   } catch (e) {
     out.news = { ok: false, status: e.response?.status || null,
@@ -577,7 +578,7 @@ router.get('/naver-probe', async (req, res) => {
 
   // ② 데이터랩 검색어트렌드 — 앱에 별도로 켜야 하는 API.
   try {
-    const r = await axios2.post('https://openapi.naver.com/v1/datalab/search',
+    const r = await axios2.post('https://naverapihub.apigw.ntruss.com/search-trend/v1/search',
       { startDate: '2026-01-01', endDate: '2026-02-01', timeUnit: 'month',
         keywordGroups: [{ groupName: 'probe', keywords: ['은마아파트'] }] },
       { headers: Object.assign({ 'Content-Type': 'application/json' }, H), timeout: 6000 });

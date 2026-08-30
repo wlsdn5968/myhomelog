@@ -37,7 +37,29 @@ const logger = require('../logger');
 const cache = require('../cache');
 
 let lastFetchError = null;
-const DATALAB_URL = 'https://openapi.naver.com/v1/datalab/search';
+/**
+ * NAVER API HUB (NCP) 규격 — 2026-08-30 공식 문서 실측으로 확정.
+ *
+ * ⚠ **구형 openapi.naver.com + X-Naver-Client-* 는 이 계정에서 401 이다.**
+ *   네이버 오픈 API 발급이 개발자센터 → **NAVER Cloud Platform 의 NAVER API HUB** 로 이관됐다.
+ *   운영자가 넣은 40자 Secret 은 틀린 값이 아니라 **NCP Client Secret 으로 정상**이었고,
+ *   틀린 쪽은 우리 코드였다(구형 호스트·구형 헤더).
+ *
+ * [출처 — api.ncloud-docs.com 원문 그대로]
+ *   검색어트렌드: POST https://naverapihub.apigw.ntruss.com/search-trend/v1/search
+ *   뉴스 검색  : GET  https://naverapihub.apigw.ntruss.com/search/v1/news
+ *   공통 헤더  : X-NCP-APIGW-API-KEY-ID: {Client ID} · X-NCP-APIGW-API-KEY: {Client Secret}
+ *   요청 바디는 구형과 동일(startDate·endDate·timeUnit·keywordGroups).
+ */
+const DATALAB_URL = 'https://naverapihub.apigw.ntruss.com/search-trend/v1/search';
+
+/** NAVER API HUB 공통 인증 헤더. 값은 로그·응답에 절대 싣지 않는다. */
+function ncpHeaders() {
+  return {
+    'X-NCP-APIGW-API-KEY-ID': String(process.env.NAVER_CLIENT_ID || '').trim(),
+    'X-NCP-APIGW-API-KEY': String(process.env.NAVER_CLIENT_SECRET || '').trim(),
+  };
+}
 
 /** 요청 간 비교를 가능하게 하는 고정 기준 키워드. 전국구 인지도 + 36개월 내내 비어 있지 않다(실측). */
 const ANCHOR = '은마아파트';
@@ -79,11 +101,7 @@ async function fetchBatch(names) {
     const r = await axios.post(DATALAB_URL,
       { startDate, endDate, timeUnit: 'month', keywordGroups },
       {
-        headers: {
-          'X-Naver-Client-Id': String(process.env.NAVER_CLIENT_ID || '').trim(),
-          'X-Naver-Client-Secret': String(process.env.NAVER_CLIENT_SECRET || '').trim(),
-          'Content-Type': 'application/json',
-        },
+        headers: Object.assign({ 'Content-Type': 'application/json' }, ncpHeaders()),
         timeout: 8000,
       });
     const results = r.data?.results || [];

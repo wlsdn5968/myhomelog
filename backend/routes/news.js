@@ -13,7 +13,10 @@ const logger = require('../logger');
 //   callAI / filterAdviceOutput import 도 함께 삭제 — 재유입은 scripts/security-regression-check.js 가 차단.
 //   (필터는 AI 생성문 전용 사후 안전망이었다. 이제 시황 문구는 우리가 조립한 사실 서술뿐이라 대상이 없다.)
 
-const NAVER_NEWS_URL = 'https://openapi.naver.com/v1/search/news.json';
+// NCP-MIGRATION-2026-08-30 (Sprint PPPPPPP): 네이버 오픈 API 발급이 개발자센터 →
+//   **NAVER Cloud Platform 의 NAVER API HUB** 로 이관됐다. 구형 openapi.naver.com +
+//   X-Naver-Client-* 조합은 이 계정에서 401 이다(실측). 공식 문서 규격으로 교체한다.
+const NAVER_NEWS_URL = 'https://naverapihub.apigw.ntruss.com/search/v1/news';
 
 // 부동산 키워드 풀 (탭별 분류)
 const KEYWORDS = {
@@ -31,13 +34,13 @@ function stripHtml(s) {
 }
 
 async function fetchNaverNews(query, display = 10) {
-  const id = process.env.NAVER_CLIENT_ID;
-  const secret = process.env.NAVER_CLIENT_SECRET;
+  const id = String(process.env.NAVER_CLIENT_ID || '').trim();
+  const secret = String(process.env.NAVER_CLIENT_SECRET || '').trim();
   if (!id || !secret) return null;
 
   const r = await axios.get(NAVER_NEWS_URL, {
-    headers: { 'X-Naver-Client-Id': id, 'X-Naver-Client-Secret': secret },
-    params: { query, display, sort: 'date' },
+    headers: { 'X-NCP-APIGW-API-KEY-ID': id, 'X-NCP-APIGW-API-KEY': secret },
+    params: { query, display, sort: 'date', format: 'json' },
     timeout: 5000,
   });
   // Phase 2.15: 본문 인용은 90자 이내 + 말줄임 처리 — 저작권법 인용 범위(필요 최소한) 준수.
