@@ -1556,7 +1556,10 @@ test('getRegulationPenalty — 서울 외 지역을 규제지역으로 단정하
 test('applyObjectiveScore — 지방 단지 카드에 서울 위계·규제 문구가 찍히지 않는다 (실사고 재현)', () => {
   const deps = ['getDistrictTier', 'getBuilderTier', 'getHouseholdBonus',
     'getParkingBonus', 'getAgeBonus', 'getRegulationPenalty'];
-  const applyObjectiveScore = _reportFn('applyObjectiveScore', deps, deps.map((n) => _reportFn(n)));
+  // ⚠ 하네스는 함수를 떼어내 실행한다 — 모듈 import(공유 구간)는 명시 주입해야 한다.
+  const applyObjectiveScore = _reportFn('applyObjectiveScore',
+    deps.concat(['turnoverScore']),
+    deps.map((n) => _reportFn(n)).concat([require('../utils/scoreBands').turnoverScore]));
 
   const mk = (sigungu, lawd_cd) => ({
     sigungu, lawd_cd, umd_nm: '테스트동',

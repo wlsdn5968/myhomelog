@@ -975,8 +975,11 @@ function computeAptScore(c, ctx) {
   // TURNOVER-2026-08-30 (Sprint PPPPPPP): 절대 건수 → **세대수 대비 회전율**.
   //   운영자 지적: 보고서 1위가 43건으로 건수 1위였지만 1,226세대라 회전율은 3.51% 로 4위였다.
   //   구간은 utils/scoreBands 한 곳에만 둔다(추천 화면과 동일 기준).
-  const _turn = turnoverScore(_nCapped, c.households, 15);
-  if (_turn.score > 0) { r.transactions = _turn.score; total += _turn.score; c._turnoverWhy = _turn.why; }
+  //   ⚠ 이 시점엔 KAPT 를 아직 안 불러 **세대수를 모른다**. 그래서 여기서는 건수 기반 폴백만 매기고,
+  //     세대수를 아는 applyObjectiveScore 에서 회전율로 **교체**한다.
+  //   ⚠ 분자에 _nCapped(20 상한)를 쓰면 안 된다 — 큰 단지가 전부 같은 회전율로 뭉개진다.
+  const _turn = turnoverScore(Number(c.n) || 0, 0, 15);
+  if (_turn.score > 0) { r.transactions = _turn.score; total += _turn.score; }
 
   // ※ 데이터 품질 + 객관 항목 + universal preference 는 KAPT 호출 후 (applyObjectiveScore)
 
@@ -1010,6 +1013,17 @@ function applyObjectiveScore(c, seoulRegulated = true) {
 
   const reg = getRegulationPenalty(c.sigungu, c.lawd_cd, seoulRegulated);
   if (reg.bonus && !r['객관_규제']) { r['객관_규제'] = reg.bonus; c.score += reg.bonus; }
+
+  // TURNOVER-2026-08-30 (Sprint PPPPPPP): 세대수를 아는 지금 **회전율로 교체**한다.
+  //   computeAptScore 는 KAPT 호출 전이라 건수 폴백밖에 못 매겼다.
+  //   구간은 utils/scoreBands 한 곳에만 있다 — 추천 화면과 같은 기준이다.
+  if (Number(c.households) > 0) {
+    const t = turnoverScore(Number(c.n) || 0, Number(c.households), 15);
+    const prev = Number(r.transactions) || 0;
+    c.score += (t.score - prev);
+    r.transactions = t.score;
+    c._turnoverWhy = t.why;
+  }
 
   // Phase 8: 신고가 갱신 횟수 (6개월 내)
   if (c.new_high_count > 0 && !r['객관_신고가갱신']) {
