@@ -381,4 +381,117 @@ async function handleFacilityBackfill(req, res) {
 router.get('/run-facility-backfill', handleFacilityBackfill);
 router.post('/run-facility-backfill', handleFacilityBackfill);
 
+
+/**
+ * TRANSIT-TRUTH-2026-08-30 (Sprint PPPPPPP): KAPT 도보시간 **자기신고값 검증**.
+ *
+ * 운영자 지적: "서동탄역더샵파크시티는 누가봐도 도보 30분 이상인데 지하철 5분 이내는
+ *   무슨 소리냐. DB 가 잘못된 거냐." → 실제로 **결함이 두 개 겹쳐** 있었다.
+ *   ① 코드: `"10~15분이내".includes("5분이내")` 가 참이라 10~15분 단지가 교통 만점을 받았다.
+ *   ② 원본: KAPT 신고값 "10~15분이내" 조차 틀렸다(카카오 도보 실측 1,783m / 26.8분).
+ *
+ * ①은 walkBand.js 로 고쳤다. ②는 **재보지 않으면 알 수 없다** — 그래서 이 엔드포인트가 있다.
+ *   좌표 보유 단지의 최근접 지하철역 직선거리를 카카오로 재고 KAPT 밴드와 나란히 돌려준다.
+ *   ⚠ 여기서 판정하지 않는다. 관측치만 낸다 — 무엇을 신뢰할지는 집계를 보고 정한다.
+ *
+ *   GET /api/admin/audit-transit?offset=0&limit=400
+ */
+router.get('/audit-transit', async (req, res) => {
+  try {
+    const { getSupabaseAdmin } = require('../db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return res.status(503).json({ error: 'DB 미설정' });
+    const { nearestSubway } = require('../services/kakaoService');
+    const { parseWalkBand } = require('../utils/walkBand');
+    const offset = Math.max(0, parseInt(req.query.offset) || 0);
+    const limit = Math.min(600, Math.max(1, parseInt(req.query.limit) || 400));
+
+    // ⚠ 프로덕션 DDL 없이 — apt_master 페이지를 읽고 좌표를 코드/이름으로 붙인다.
+    //   [[postgrest-silent-row-cap]]: range 를 명시하지 않으면 1000 에서 조용히 잘린다.
+    const { data: masters, error: mErr } = await admin
+      .from('apt_master')
+      .select('kapt_code, apt_name, sigungu, facility')
+      .order('kapt_code', { ascending: true })
+      .range(offset, offset + limit - 1);
+    if (mErr) return res.status(500).json({ error: mErr.message });
+
+    const cand = (masters || [])
+      .map(m => ({
+        kaptCode: m.kapt_code, aptName: m.apt_name, sigungu: m.sigungu,
+        rawBand: (m.facility && m.facility._dtl && m.facility._dtl.kaptdWtimesub) || null,
+      }))
+      .filter(m => m.rawBand);
+
+    const byKapt = new Map();
+    const byName = new Map();
+    if (cand.length) {
+      const keys = cand.map(c => `kapt:${c.kaptCode}`);
+      for (let i = 0; i < keys.length; i += 200) {
+        const chunk = keys.slice(i, i + 200);
+        const { data: g1 } = await admin.from('apt_geocache')
+          .select('apt_key, lat, lng').in('apt_key', chunk).limit(chunk.length);
+        for (const g of g1 || []) byKapt.set(g.apt_key, g);
+      }
+      const names = [...new Set(cand.map(c => c.aptName))];
+      for (let i = 0; i < names.length; i += 100) {
+        const chunk = names.slice(i, i + 100);
+        const { data: g2 } = await admin.from('apt_geocache')
+          .select('apt_name, sigungu, lat, lng').in('apt_name', chunk).limit(3000);
+        for (const g of g2 || []) byName.set(`${g.apt_name}|${g.sigungu}`, g);
+      }
+    }
+
+    let noCoord = 0;
+    const targets = [];
+    for (const c of cand) {
+      const g = byKapt.get(`kapt:${c.kaptCode}`) || byName.get(`${c.aptName}|${c.sigungu}`);
+      if (!g || g.lat == null || g.lng == null) { noCoord++; continue; }
+      targets.push(Object.assign({}, c, { lat: Number(g.lat), lng: Number(g.lng) }));
+    }
+
+    // 공용 페이서 — 카카오 레이트리밋은 동시성이 아니라 **속도** 로 터진다.
+    //   [[br-recap-rate-limit-429]]: 동시성만 낮추면 실패가 즉시 반환돼 오히려 초당 호출이 튄다.
+    let nextAt = 0;
+    const GAP_MS = 30;
+    const pace = async () => {
+      const now = Date.now();
+      const at = Math.max(now, nextAt);
+      nextAt = at + GAP_MS;
+      if (at > now) await new Promise(r => setTimeout(r, at - now));
+    };
+
+    const out = [];
+    let failed = 0;
+    let cursor = 0;
+    await Promise.all(Array.from({ length: 6 }, async () => {
+      for (;;) {
+        const i = cursor++;
+        if (i >= targets.length) return;
+        const t = targets[i];
+        await pace();
+        const near = await nearestSubway(t.lat, t.lng, 3000);
+        if (near === undefined) { failed++; continue; } // ⚠ 실패 ≠ 역 없음
+        out.push({
+          kaptCode: t.kaptCode, name: t.aptName, sigungu: t.sigungu,
+          band: parseWalkBand(t.rawBand), rawBand: t.rawBand,
+          station: near ? near.name : null,
+          distM: near ? near.distance : null,
+        });
+      }
+    }));
+
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      offset, limit,
+      scanned: (masters || []).length, withBand: cand.length, noCoord,
+      measurable: targets.length, measured: out.length, failed, rows: out,
+    });
+  } catch (e) {
+    logger.error({ err: e.message }, 'admin audit-transit 실패');
+    require('../utils/captureError').captureRouteError(e, 'admin');
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
+

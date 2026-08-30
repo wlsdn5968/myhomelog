@@ -3091,6 +3091,50 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
 });
 
+// ── WALK-BAND-2026-08-30 (Sprint PPPPPPP) ─────────────────────────────────────
+// 운영자: "서동탄역더샵파크시티는 누가봐도 도보 30분 이상인데 지하철 5분 이내는
+//          무슨 소리를 하는거야;; db가 잘못된거야 뭐야."
+// [실측 — 이 테스트가 고정하는 사실]
+//   · KAPT 원본 kaptdWtimesub = "10~15분이내" (5분이내 아님)
+//   · 카카오 도보 실측 = 1,783m / 1,606초 = 26.8분
+//   · `"10~15분이내".includes("5분이내")` === true  ← **버그의 정체**
+//   · 그래서 도보 10~15분 단지 2,429곳이 교통 만점(30)을 받았다.
+//     만점 단지 4,357곳 중 55.7% 가 가짜였다 → 검색 상위가 통째로 뒤틀렸다.
+test('도보시간 밴드 — 부분문자열 매칭 금지(10~15분이 5분이내로 읽히면 안 된다)', () => {
+  const { parseWalkBand, WALK_BAND_LABEL } = require('../utils/walkBand');
+
+  // ① 밴드가 1:1 로 정확히 갈린다. 특히 10~15 는 절대 LE5 가 아니다.
+  assert.equal(parseWalkBand('5분이내'), 'LE5');
+  assert.equal(parseWalkBand('5~10분이내'), 'M5_10');
+  assert.equal(parseWalkBand('10~15분이내'), 'M10_15',
+    '"10~15분이내" 가 5분이내로 읽힌다 — 이 버그가 2,429 단지를 교통 만점으로 올렸다');
+  assert.equal(parseWalkBand('15~20분이내'), 'M15_20');
+  assert.equal(parseWalkBand('20분초과'), 'GT20');
+
+  // ② 모르는 값은 조용히 통과시키지 말고 null(=모름). 뒤에서 중간값을 받는다.
+  for (const junk of ['', null, undefined, '거리없음', '해당없음']) {
+    assert.equal(parseWalkBand(junk), null, `인식 못 하는 값(${junk})은 null 이어야 한다`);
+  }
+
+  // ③ ⚠ 회귀 방지의 핵심: 순진한 includes 구현이었다면 ①이 깨진다는 것을 여기서 못박는다.
+  assert.ok('10~15분이내'.includes('5분이내'),
+    '전제가 바뀌었다 — 이 substring 함정이 사라졌다면 위 주석을 갱신하라');
+
+  // ④ 점수 소비자가 includes 로 되돌아가지 못하게 한다.
+  const svc = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '../services/propertyService.js'), 'utf8');
+  assert.ok(!/sub\.includes\('5분이내'\)/.test(svc),
+    'propertyService 가 다시 부분문자열 매칭을 쓴다 — parseWalkBand 를 쓸 것');
+  assert.ok(/parseWalkBand\(facility && facility\.walkSubwayMin\)/.test(svc),
+    '지하철 도보시간이 parseWalkBand 를 거치지 않는다');
+  assert.ok(/parseWalkBand\(facility && facility\.walkBusMin\)/.test(svc),
+    '버스 도보시간도 같은 함정에 있다 — parseWalkBand 를 거칠 것');
+
+  // ⑤ 라벨은 밴드마다 달라야 한다(표시가 겹치면 사용자가 구분 못 한다).
+  const labels = Object.values(WALK_BAND_LABEL);
+  assert.equal(new Set(labels).size, labels.length, '밴드 라벨이 중복된다');
+});
+
 // ── SCORE-V2-2026-08-30 (Sprint OOOOOOO) ──────────────────────────────────────
 // 운영자: "부동산은 위치·교통(지하철 도보 몇 분)·핵심 인프라·거래 활발이 더 중요하다.
 //          기존 점수표가 너무 별로다. 다시 객관화해라."
@@ -3115,10 +3159,15 @@ test('점수 V2 — 교통이 최대 비중이고, 모르는 것은 0이 아니�
   assert.ok(max['교통'] > max['거래'], '교통이 거래량보다 작다 — 운영자 우선순위와 반대다');
   assert.ok(max['인프라'] >= 20, '생활 인프라 배점이 20 미만이다');
 
-  // ② 지하철 **도보시간 5단계 전부** 를 쓴다(기존엔 앞 두 단계만 썼다).
-  for (const band of ['5분이내', '5~10분', '10~15분', '15~20분', '20분초과']) {
-    assert.ok(svc.includes(`sub.includes('${band}')`),
-      `지하철 도보 '${band}' 구간을 점수에 쓰지 않는다 — KAPT 가 5단계로 주는데 버리고 있다`);
+  // ② 지하철 **도보시간 5단계 전부** 를 쓰고, 단계마다 점수가 **다르다**(기존엔 앞 두 단계만 썼다).
+  //    ⚠ WALK-BAND-2026-08-30: 예전엔 `sub.includes('5분이내')` 로 검사했는데, 그 구현 자체가
+  //    "10~15분이내" 를 5분이내로 읽는 버그였다. 이제 문자열이 아니라 **밴드→점수 표** 로 검사한다.
+  const bandMap = svc.match(/\{ LE5: (\d+), M5_10: (\d+), M10_15: (\d+), M15_20: (\d+), GT20: (\d+) \}/);
+  assert.ok(bandMap, '지하철 도보 5단계 → 점수 표가 없다 — KAPT 가 5단계로 주는데 버리고 있다');
+  const pts = bandMap.slice(1, 6).map(Number);
+  assert.equal(pts[0], max['교통'], '도보 5분 이내가 교통 만점이 아니다');
+  for (let i = 1; i < pts.length; i++) {
+    assert.ok(pts[i] < pts[i - 1], `도보 시간이 늘었는데 점수가 줄지 않는다(${pts[i - 1]} → ${pts[i]})`);
   }
 
   // ③ ⚠ 모르는 것은 **0점이 아니라 중간값**. 도보시간 미보유가 전국 26% 다 —

@@ -12,6 +12,7 @@
  * 대신 최신 실거래가가 가장 객관적인 시세 지표로 동등하게 기능함.
  */
 const { getTransactionsByApt, analyzeTransactions, getAliasCanonicalMap, getRegionRecentTransactions } = require('./transactionService');
+const { parseWalkBand, WALK_BAND_LABEL } = require('../utils/walkBand');
 const { getAptListBySgg, getAptBasisInfo, getAptDtlInfo } = require('./aptInfoService');
 const { resolveCoordBatch } = require('./geocodeCacheService');
 const { resolveSchoolsBatch, getCachedSchoolsBatch } = require('./schoolService');
@@ -366,25 +367,28 @@ function _applyFacilityToScore(base, facility, amen) {
   const b = Object.assign({}, (base && base.breakdown) || {});
   const why = [];
 
-  // ── 교통 30 ────────────────────────────────────────────────────────────────
-  //   1순위 KAPT 도보시간(가장 정확) → 2순위 카카오 반경 역 수 → 3순위 버스 도보.
+  // ── 교통 30 ─────────────────────────────────────────────────────────────
+  //   1순위 KAPT 도보시간 → 2순위 카카오 반경 역 수 → 3순위 버스 도보.
   //   ⚠ 셋 다 없으면 15점(중간) — '모름' 을 '나쁨' 으로 만들지 않는다.
-  const sub = String((facility && facility.walkSubwayMin) || '');
+  //
+  // ⚠ WALK-BAND-2026-08-30: 여기서 **includes() 부분문자열 매칭을 쓰면 안 된다**.
+  //   `"10~15분이내".includes("5분이내")` 는 참이라 도보 10~15분 단지 2,429곳이
+  //   교통 만점을 받았다(만점 단지의 55.7% 가 가짜). parseWalkBand 로 닫힌 집합을 쓴다.
+  const band = parseWalkBand(facility && facility.walkSubwayMin);
   let 교통 = null;
-  if (sub.includes('5분이내')) { 교통 = 30; why.push('지하철 도보 5분 이내'); }
-  else if (sub.includes('5~10분')) { 교통 = 24; why.push('지하철 도보 5~10분'); }
-  else if (sub.includes('10~15분')) { 교통 = 16; why.push('지하철 도보 10~15분'); }
-  else if (sub.includes('15~20분')) { 교통 = 9; why.push('지하철 도보 15~20분'); }
-  else if (sub.includes('20분초과')) { 교통 = 4; why.push('지하철 도보 20분 초과'); }
+  if (band) {
+    교통 = { LE5: 30, M5_10: 24, M10_15: 16, M15_20: 9, GT20: 4 }[band];
+    why.push(`지하철 도보 ${WALK_BAND_LABEL[band]}`);
+  }
   if (교통 === null && amen && Number.isFinite(Number(amen.subway))) {
     const n = Number(amen.subway);
     교통 = n >= 4 ? 26 : n >= 2 ? 20 : n >= 1 ? 13 : 5;
     why.push(`반경 1.2km 지하철역 ${n}곳`);
   }
   if (교통 === null) {
-    const bus = String((facility && facility.walkBusMin) || '');
-    if (bus.includes('5분이내')) { 교통 = 14; why.push('버스 도보 5분 이내'); }
-    else if (bus.includes('5~10분')) { 교통 = 11; why.push('버스 도보 5~10분'); }
+    const busBand = parseWalkBand(facility && facility.walkBusMin);
+    if (busBand === 'LE5') { 교통 = 14; why.push('버스 도보 5분 이내'); }
+    else if (busBand === 'M5_10') { 교통 = 11; why.push('버스 도보 5~10분'); }
   }
   if (교통 === null) { 교통 = 15; why.push('교통 정보 미확인(중간값)'); } // 모름 → 중간
   b.교통 = 교통;

@@ -249,6 +249,40 @@ async function keywordToCoord(keyword) {
   }
 }
 
+/**
+ * TRANSIT-TRUTH-2026-08-30 (Sprint PPPPPPP): **최근접 지하철역까지의 실측 직선거리**.
+ *
+ * 왜 필요한가 — KAPT `kaptdWtimesub` 는 관리사무소 **자기신고값**이고 검증이 없다.
+ *   서동탄역더샵파크시티는 "10~15분이내" 로 신고돼 있으나 카카오 도보 실측은
+ *   1,783m / 26.8분 이었다. 신고값을 그대로 점수에 쓰면 순위가 통째로 뒤틀린다.
+ *
+ * 카카오 카테고리 검색은 x/y 를 주면 `distance`(직선거리 m) 를 돌려준다.
+ *   sort=distance 로 최근접 1건만 받는다. 도보 실거리는 직선거리보다 길다(우회) —
+ *   그 보정은 소비자(walkBand 판정) 쪽에서 하고, 여기서는 **잰 값 그대로** 돌려준다.
+ *
+ * @returns {Promise<{name:string,distance:number}|null>} 반경 내 역이 없으면 null
+ */
+async function nearestSubway(lat, lng, radius = 3000) {
+  if (isKeyMissing()) return null;
+  const ck = `kknear:${Number(lat).toFixed(4)},${Number(lng).toFixed(4)}:${radius}`;
+  const cached = cache.get(ck);
+  if (cached !== undefined) return cached;
+  try {
+    const r = await axios.get(KAKAO_CAT, {
+      headers: { Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}` },
+      params: { category_group_code: 'SW8', x: lng, y: lat, radius, sort: 'distance', size: 1 },
+      timeout: 5000,
+    });
+    const d = r.data?.documents?.[0];
+    const out = d ? { name: d.place_name, distance: Number(d.distance) } : null;
+    cache.set(ck, out, 86400 * 3);
+    return out;
+  } catch (e) {
+    logger.warn({ err: e.message, status: e.response?.status }, 'kakao 최근접 지하철역 조회 실패');
+    return undefined; // ⚠ null(역 없음) 과 구분 — 실패를 "역 없음" 으로 읽으면 안 된다
+  }
+}
+
 module.exports = {
   getCarMinutes,
   getTransitMinutes,
@@ -256,4 +290,5 @@ module.exports = {
   countNearbyKeyword,
   getNearbyAmenities,
   keywordToCoord,
+  nearestSubway,
 };
