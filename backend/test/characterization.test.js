@@ -3096,6 +3096,42 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
 });
 
+// ── REPORT-DEPTH-2026-08-31 (Sprint PPPPPPP) ──────────────────────────────────
+// 운영자: "예전에 받았던 컨설팅 보고서처럼 요약 총평·매매 시 주의할 점·뭘 봐야 하는지·
+//          어떤 집을 피해야 하는지가 들어가면 좋겠다. 로고랑 워터마크도."
+// ⚠ 참고로 받은 컨설팅 보고서에는 "상승여력 2~5억", "○○구역을 추천함" 같은 표현이 있었다.
+//   그건 **옮기지 않는다** — 이 서비스의 절대 룰(매수·매도 추천 X · 미래 가격 예측 X)이 우선한다.
+//   넣는 것은 매수 실무에서 **확인해야 할 항목**과 **우리가 잰 사실**뿐이다.
+test('보고서 확인사항 — 실무 항목만 넣고 추천·예측 표현은 넣지 않는다', () => {
+  const fs2 = require('node:fs'); const path2 = require('node:path');
+  const rpt = fs2.readFileSync(path2.join(__dirname, '../routes/report.js'), 'utf8');
+
+  // ① 섹션이 존재하고 응답에 실린다.
+  assert.match(rpt, /const cautions = \[/, '확인사항(cautions) 섹션이 없다');
+  assert.match(rpt, /^\s*cautions,$/m, 'cautions 가 보고서 응답에 실리지 않는다');
+
+  // ② ⚠ 절대 룰 — cautions 본문에 가격 예측·매수 권유 표현이 없어야 한다.
+  const block = rpt.slice(rpt.indexOf('const cautions = ['), rpt.indexOf('  return {', rpt.indexOf('const cautions = [')));
+  const banned = ['상승여력', '오를 것', '유망', '저평가', '추천함', '사세요', '매수하세요', '지금이 기회'];
+  for (const w of banned) {
+    assert.ok(!block.includes(w), `확인사항에 금지 표현이 들어갔다: "${w}" — 절대 룰(추천 X·예측 X) 위반`);
+  }
+  // 권유가 아니라는 점을 본문에 명시한다.
+  assert.ok(/매수·매도 권유가 아니에요/.test(block),
+    '확인사항이 권유가 아니라는 문장이 없다 — 조언으로 읽힐 수 있다');
+
+  // ③ 화면·인쇄 **양쪽** 에 그려야 한다(한쪽만 그리면 PDF 와 화면이 갈린다).
+  const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  assert.match(fe, /const cautionsHtml =/, '인쇄 보고서가 확인사항을 그리지 않는다');
+  assert.match(fe, /const _cautionsWeb =/, '화면 보고서가 확인사항을 그리지 않는다');
+
+  // ④ 로고·워터마크 (운영자 명시 요청)
+  assert.match(fe, /class="brandbar"/, '인쇄 보고서에 로고가 없다');
+  assert.match(fe, /class="wmark"/, '인쇄 보고서에 워터마크가 없다');
+  // 워터마크가 본문 선택·클릭을 막으면 안 된다.
+  assert.match(fe, /\.wmark \{[^}]*pointer-events: none/, '워터마크가 본문 조작을 막는다');
+});
+
 // ── SAME-DONG-SPLIT-2026-08-30 (Sprint PPPPPPP) ───────────────────────────────
 // 운영자 발견: "광해리드빌이 미추로 61에도 있고 주안로 171에도 있는 것 같은데?
 //              이런 것들도 많을 테니 확인 잘 해."

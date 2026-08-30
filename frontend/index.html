@@ -4721,6 +4721,14 @@ function _renderReport(data) {
     </div>`
   ).join('');
 
+  // REPORT-DEPTH-2026-08-31: 화면 보고서에도 확인 항목을 그린다(인쇄본과 같은 데이터).
+  const _cautionsWeb = (r.cautions && r.cautions.length) ? `<div style="margin:14px 0 8px;font-size:13px;font-weight:700;color:var(--t1)">⚠ 매매 시 꼭 확인할 것</div>` +
+    r.cautions.map(g => {
+      const items = (g.items || []).map(t =>
+        `<li style="margin-bottom:4px">${_escHtml(String(t)).replace(/**([^*]+)**/g, '<b>$1</b>')}</li>`).join('');
+      return `<div style="border:1px solid var(--bd);border-left:3px solid var(--warn-bd,#C9973F);border-radius:var(--radius-base);padding:9px 12px;margin-bottom:7px;background:var(--bg2)"><div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:5px">${_escHtml(g.title || '')}</div><ul style="margin:0;padding-left:17px;font-size:11.5px;line-height:1.65;color:var(--t2)">${items}</ul></div>`;
+    }).join('') : '';
+
   const checklistHtml = (r.checklist || []).map(c => {
     const stars = '★'.repeat(c.stars || 1) + '☆'.repeat(Math.max(0, 3 - (c.stars || 1)));
     return `<div style="display:flex;gap:8px;padding:5px 0;font-size:12px;border-bottom:1px dashed var(--bg2)">
@@ -4799,6 +4807,8 @@ function _renderReport(data) {
       <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px">✅ 매수·갈아타기 체크리스트</div>
       ${checklistHtml}
     </div>
+
+    ${_cautionsWeb}
 
     <!-- 단지 후보 -->
     <div style="font-size:13px;font-weight:700;color:var(--t1);margin:14px 0 8px">🏘 회원님 조건 부합 단지 ${(r.apartments || []).length}개</div>
@@ -4893,6 +4903,17 @@ function _downloadReportPDF() {
   const ts = new Date(data.generatedAt || Date.now()).toLocaleString('ko-KR');
 
   const coreHtml = (r.coreMessages || []).map(m => `<li>${esc(m)}</li>`).join('');
+  // REPORT-DEPTH-2026-08-31: 백엔드가 보내는 cautions(확인 항목·주의 사항)를 렌더링한다.
+  //   ⚠ 매수 권유·가격 예측은 넣지 않는다 — 확인해야 할 실무 항목과 잰 사실만.
+  const cautionsHtml = (r.cautions && r.cautions.length) ? r.cautions.map(g => {
+    const items = (g.items || []).map(t => {
+      // **강조** 만 굵게 — 나머지는 이스케이프 그대로(원문 주입 차단).
+      const safe = esc(String(t)).replace(/**([^*]+)**/g, '<b>$1</b>');
+      return `<li>${safe}</li>`;
+    }).join('');
+    return `<div class="caution"><div class="caution-t">${esc(g.title || '')}</div><ul>${items}</ul></div>`;
+  }).join('') : '';
+
   const checklistHtml = (r.checklist && r.checklist.length) ? r.checklist.map(c => {
     const n = Math.max(1, Math.min(3, c.stars||1));
     const stars = '★'.repeat(n) + '☆'.repeat(3-n);
@@ -4964,10 +4985,28 @@ function _downloadReportPDF() {
       .apt-rec { color: #173A63; font-weight: 600; margin-top: 2px; }
       .longterm { background: #F0F7FF; border: 1px solid #BFD7F7; border-radius: 5px; padding: 9px 13px; font-size: 10pt; line-height: 1.7; color: #1B4F8A; }
       .longterm-warn { font-size: 8.5pt; color: #98938A; margin-top: 5px; }
+      .caution { border: 1px solid #E2DDD5; border-left: 3px solid #C9973F; border-radius: 4px; padding: 8px 12px; margin-bottom: 7px; background: #FDFBF6; page-break-inside: avoid; }
+      .caution-t { font-size: 10pt; font-weight: 700; color: #6B4E14; margin-bottom: 4px; }
+      .caution ul { margin: 0; padding-left: 18px; font-size: 9.5pt; line-height: 1.65; color: #3A3530; }
+      .caution li { margin-bottom: 3px; }
       .tips ul { margin: 0; padding-left: 20px; font-size: 9.5pt; line-height: 1.7; }
       .tips li { margin-bottom: 2px; }
       .disclaimer { margin-top: 14px; padding: 9px 13px; background: #FAEBEB; border: 1px solid #173A63; border-radius: 5px; font-size: 8.5pt; color: #A82525; line-height: 1.6; page-break-inside: avoid; }
       .disclaimer b { display: block; margin-bottom: 3px; font-size: 9pt; }
+      /* BRAND-2026-08-31 (Sprint PPPPPPP, 운영자 요청 "로고랑 워터마크도 보고서에 들어가면 좋겠어") */
+      .brandbar { display: flex; align-items: center; gap: 9px; margin-bottom: 10px; }
+      .brandbar .bmark { width: 26px; height: 26px; border-radius: 6px; background: #173A63; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+      .brandbar .bname { font-size: 12pt; font-weight: 800; color: #18160F; letter-spacing: -.02em; }
+      .brandbar .bname em { font-style: normal; color: #173A63; }
+      .brandbar .btag { font-size: 7.5pt; color: #98938A; letter-spacing: .08em; margin-left: 2px; }
+      /* 워터마크 — 인쇄·화면 모두. 내용 위에 얇게 깔리되 클릭·선택을 막지 않는다. */
+      .wmark { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
+      .wmark span { position: absolute; top: 42%; left: 50%; transform: translate(-50%,-50%) rotate(-24deg);
+        font-size: 58pt; font-weight: 800; color: #173A63; opacity: .05; white-space: nowrap; letter-spacing: .02em; }
+      body > *:not(.wmark) { position: relative; z-index: 1; }
+      /* 인쇄 시 매 페이지 하단에 출처를 남긴다 — PDF 가 단독으로 돌아다녀도 출처가 붙어 있게. */
+      .pfoot { margin-top: 16px; padding-top: 8px; border-top: 1px solid #E2DDD5; font-size: 8pt; color: #98938A; display: flex; justify-content: space-between; }
+      @media print { .wmark span { opacity: .06; } }
       @media print { body { padding: 0; margin: 0; } .noprint { display: none !important; } }
       /* MOB-AUDIT-2026-05-03: 모바일 print 가독성 — iOS Safari 폰 print 시 폰트·여백 보강 */
       @media print and (max-width: 600px) {
@@ -4984,6 +5023,15 @@ function _downloadReportPDF() {
     </style>
   </head><body>
     <button class="noprint" onclick="window.print()">🖨 PDF 저장</button>
+    <div class="wmark" aria-hidden="true"><span>내집로그 · myhomelog</span></div>
+    <div class="brandbar">
+      <div class="bmark"><svg viewBox="0 0 24 24" width="16" height="16" fill="none">
+        <path d="M3 11.2 12 4l9 7.2" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M5.5 9.8V20h13V9.8" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+        <path d="M10 20v-5h4v5" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg></div>
+      <div><span class="bname">내집<em>로그</em></span><span class="btag">HOUSING DATA TERMINAL</span></div>
+    </div>
     <h1>📊 내집로그 1Page 맞춤 보고서</h1>
     <div class="meta">생성 ${esc(ts)}${inputLine ? ` · <b>${inputLine}</b>` : ''}</div>
     ${data.aiUnavailable ? `<div style="background:#FFF6E3;border:1px solid #E8C08A;border-radius:var(--radius-base);padding:9px 12px;margin-bottom:12px;font-size:10.5pt;color:#7A4F0E"><b>ℹ AI 분석 코멘트 일시 중단</b> — 본 보고서는 국토부 실거래·KAPT 세대수·주변시설 등 객관 데이터만으로 구성됐습니다.</div>` : ''}
@@ -5009,6 +5057,7 @@ function _downloadReportPDF() {
       ${checklistHtml}
     </div>
 
+    ${cautionsHtml ? `<div class="sec"><div class="sec-title">⚠ 매매 시 꼭 확인할 것</div>${cautionsHtml}</div>` : ''}
     <div class="sec">
       <div class="sec-title">🏘 회원님 조건 부합 단지 ${(r.apartments||[]).length}개</div>
       ${aptsHtml}
