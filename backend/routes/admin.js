@@ -559,7 +559,11 @@ router.get('/naver-probe', async (req, res) => {
   const id = String(process.env.NAVER_CLIENT_ID || '').trim();
   const secret = String(process.env.NAVER_CLIENT_SECRET || '').trim();
   const H = { 'X-Naver-Client-Id': id, 'X-Naver-Client-Secret': secret };
-  const out = { keyShape: dl.keyShape() };
+  // ⚠ **이름만** 낸다(값 금지). 변수 이름 오타로 편집이 엉뚱한 곳에 갔는지 가려낸다 —
+  //   값이 두 번 연속 같은 길이로 남아 있으면 "저장이 반영 안 됐다" 와 "같은 값을 다시 넣었다" 를
+  //   구분해야 하는데, 이름 목록이 그 실마리를 준다.
+  const naverEnvNames = Object.keys(process.env).filter(k => /naver/i.test(k)).sort();
+  const out = { keyShape: dl.keyShape(), naverEnvNames };
 
   // ① 검색(뉴스) API — 가장 기본. 이게 되면 자격증명 자체는 유효하다.
   try {
