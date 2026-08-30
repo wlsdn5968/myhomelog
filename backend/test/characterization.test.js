@@ -3096,6 +3096,46 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
 });
 
+// ── SCORE-ZERO-2026-08-30 (Sprint PPPPPPP) ────────────────────────────────────
+// 전국 루프(121지역·2,259건) 검증 중 발각. KAPT 이름 매칭에 실패한 단지가 **0점**으로,
+// scoreBreakdown·scoreWhy 도 없이 화면에 찍혔다.
+//   [실측] 용산구 12억 검색 → '삼라마이다스빌2'(158세대·6개월 2건)가 0점으로 8위.
+// 원인: recommendations 는 `score: 0` 으로 만들어지고 "enrichment 에서 확정" 하기로 돼 있는데,
+//   KAPT 코드가 없는 갈래가 **점수 계산 없이 조기 반환**해 확정이 일어나지 않았다.
+// 매칭 실패는 우리 사정이지 단지의 결함이 아니다 — 아는 만큼으로 점수를 낸다.
+test('점수 — KAPT 매칭 실패 단지도 0점이 아니라 아는 만큼 받는다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const svc = fs2.readFileSync(path2.join(__dirname, '../services/propertyService.js'), 'utf8');
+
+  // ① KAPT 코드 없는 갈래가 점수를 확정한다.
+  const branch = svc.slice(svc.indexOf('if (!kaptCode) {'), svc.indexOf('// DTL-INFO-2026-05-13'));
+  assert.ok(branch.length > 0, 'KAPT 미매칭 분기를 찾지 못했다');
+  assert.match(branch, /_applyFacilityToScore\(/,
+    'KAPT 매칭 실패 분기가 점수를 계산하지 않는다 — 그 단지는 영원히 0점이다');
+  assert.match(branch, /scoreBreakdown: _sc0\.breakdown/,
+    '근거(breakdown)를 싣지 않는다 — 화면에 0점이 이유 없이 찍힌다');
+
+  // ② 세대수를 못 구해도(건축물대장도 실패) 점수는 나와야 한다.
+  //    `if (!brHh) return rec;` 로 되돌아가면 이 검사가 깨진다.
+  assert.ok(!/if \(!brHh\) return rec;/.test(svc),
+    '건축물대장까지 실패하면 다시 0점으로 돌아간다 — 모름은 0점이 아니다');
+
+  // ③ 실제로 계산해 본다 — facility 가 null 이어도 0 보다 커야 한다.
+  //    (교통 15 중간값 + 인프라 10 + 규모주차 중간 + 관심도 7 … 최소한 양수)
+  const m = svc.match(/function _applyFacilityToScore[\s\S]*?\n\}/);
+  assert.ok(m, '_applyFacilityToScore 를 찾지 못했다');
+  const bands = require('../utils/scoreBands');
+  const walk = require('../utils/walkBand');
+  const fn = new Function('turnoverScore', 'parseWalkBand', 'WALK_BAND_LABEL', 'SCORE_V2_MAX',
+    `${m[0]}; return _applyFacilityToScore;`)(
+    bands.turnoverScore, walk.parseWalkBand, walk.WALK_BAND_LABEL,
+    { 교통: 28, 인프라: 16, 규모주차: 12, 거래: 14, 연식: 10, 평형: 6, 관심도: 14 });
+  const out = fn({ total: 8, breakdown: { 연식: 6, 평형: 2 }, dealCount: 3 }, null, null);
+  assert.ok(out.total > 0, `facility 가 없어도 점수가 0 이면 안 된다 (실제 ${out.total})`);
+  assert.ok(Array.isArray(out.why) && out.why.length > 0, '근거 문구가 비어 있다');
+});
+
 // ── WALK-BAND-2026-08-30 (Sprint PPPPPPP) ─────────────────────────────────────
 // 운영자: "서동탄역더샵파크시티는 누가봐도 도보 30분 이상인데 지하철 5분 이내는
 //          무슨 소리를 하는거야;; db가 잘못된거야 뭐야."

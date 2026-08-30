@@ -1003,10 +1003,25 @@ async function getAIRecommendations(userCondition) {
       const kaptCode = preCodes[i];
       if (!kaptCode) {
         // 이름 매칭 실패(KAPT 미등록/미매칭) — 건축물대장 세대수만이라도 보강해 카드 표시 + HH 게이트가 판정 가능하게.
+        //
+        // ⚠ SCORE-ZERO-2026-08-30 (Sprint PPPPPPP): 이 두 갈래가 **점수를 계산하지 않고 조기 반환**했다.
+        //   recommendations 는 score:0 으로 만들어지고 "enrichment 에서 확정" 하기로 돼 있는데,
+        //   여기로 빠지면 확정이 일어나지 않는다 → KAPT 이름이 안 붙은 단지는 **무조건 0점**이고
+        //   scoreBreakdown·scoreWhy 도 비어 화면에 근거 없이 최하위로 찍힌다.
+        //   [실측] 용산구 12억 검색에서 '삼라마이다스빌2'(158세대·6개월 2건)가 0점으로 8위였다.
+        //   매칭 실패는 **우리 사정**이지 단지의 결함이 아니다 — 아는 만큼으로 점수를 낸다.
         const brHh = await _brHh(ranked[i]);
-        if (!brHh) return rec;
+        const _fac = brHh ? { totalHouseholds: brHh, source: 'buildingRegister' } : null;
+        const _sc0 = _applyFacilityToScore(rec._baseScore, _fac, rec._amen || null);
         const t2 = [...(rec.tags || []), ...(brHh >= 1000 ? ['대단지'] : brHh >= 500 ? ['중대단지'] : [])];
-        return { ...rec, facility: { totalHouseholds: brHh, source: 'buildingRegister' }, tags: Array.from(new Set(t2)) };
+        return {
+          ...rec,
+          ...(_fac ? { facility: _fac } : {}),
+          score: _sc0.total,
+          scoreBreakdown: _sc0.breakdown,
+          scoreWhy: _sc0.why,
+          tags: Array.from(new Set(t2)),
+        };
       }
       // DTL-INFO-2026-05-13 (Sprint X): BasisInfo + Detail 병렬 fetch (주차 정보 포함)
       // Sprint FFFF: DB 보유분은 KAPT 콜 생략 (stored raw 의 _dtl 이 detail 역할)
