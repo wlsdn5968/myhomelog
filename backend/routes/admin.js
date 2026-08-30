@@ -599,7 +599,115 @@ router.get('/naver-probe', async (req, res) => {
   res.json(out);
 });
 
+/**
+ * CROSS-CHECK-2026-08-30 (Sprint PPPPPPP): 우리 DB 를 **외부 공식 출처와 대조**한다.
+ *
+ * 운영자 요구: "네이버 부동산·호갱노노·아실 같은 곳과 우리 DB 를 비교해서 제대로 들어가 있는지
+ *   전수조사해라. 인천·청주·고양·화성 이런 식으로 구·동을 바꿔가면서."
+ *
+ * ⚠ 호갱노노·아실은 **공개 API 가 없고 스크래핑은 이용약관 위반**이라 쓰지 않는다.
+ *   대신 같은 사실을 확인할 수 있는 공식 출처로 대조한다:
+ *     · 네이버 지역검색 (NAVER API HUB, GET /search/v1/local) — 단지가 실재하는가 · 주소가 맞는가
+ *     · 우리 DB(KAPT) — 이름 · 도로명주소 · 세대수 · 준공년
+ *
+ * 무엇을 판정하는가:
+ *   · found      — 네이버가 그 이름으로 장소를 찾는가(우리에게만 있는 유령 단지 탐지)
+ *   · addrMatch  — 네이버 주소와 우리 도로명주소의 **행정구역 + 도로명**이 일치하는가
+ *   ⚠ 번지까지 비교하지 않는다 — 네이버는 대표 지점(정문·상가)을 줄 수 있어 오탐이 난다.
+ *     "다르다" 를 섣불리 결함으로 부르지 않기 위해서다.
+ *
+ *   GET /api/admin/cross-check?sigungu=연수구&limit=20
+ */
+router.get('/cross-check', async (req, res) => {
+  try {
+    const axios2 = require('axios');
+    const { getSupabaseAdmin } = require('../db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return res.status(503).json({ error: 'DB 미설정' });
+    const id = String(process.env.NAVER_CLIENT_ID || '').trim();
+    const secret = String(process.env.NAVER_CLIENT_SECRET || '').trim();
+    if (!id || !secret) return res.status(503).json({ error: 'NAVER 키 미설정' });
+
+    const sigungu = String(req.query.sigungu || '').trim();
+    const limit = Math.min(40, Math.max(1, parseInt(req.query.limit) || 20));
+    if (!sigungu) return res.status(400).json({ error: 'sigungu 필수' });
+
+    let q = admin.from('apt_master')
+      .select('apt_name, sigungu, umd_nm, facility')
+      .eq('sigungu', sigungu)
+      .order('apt_name', { ascending: true })
+      .range(0, limit - 1);
+    const { data, error } = await q;
+    if (error) return res.status(500).json({ error: error.message });
+
+    const strip = (s) => String(s || '').replace(/<[^>]*>/g, '').trim();
+    // 도로명까지만 비교한다(번지 제외) — 네이버 대표 지점이 정문·상가일 수 있다.
+    const roadKey = (s) => {
+      const t = String(s || '').replace(/\s+/g, ' ').trim();
+      const m = t.match(/^(.*?(?:로|길))\s*\d/);
+      return (m ? m[1] : t).replace(/\s+/g, '');
+    };
+
+    const rows = [];
+    let nextAt = 0;
+    for (const m of data || []) {
+      const f = m.facility || {};
+      const ourRoad = f.doroJuso || null;
+      const ourHh = parseInt(f.kaptdaCnt) || parseInt(f.hoCnt) || null;
+      const ourYr = String(f.kaptUsedate || '').slice(0, 4) || null;
+      // 공용 페이서 — 외부 API 를 몰아치지 않는다.
+      const now = Date.now();
+      const at = Math.max(now, nextAt);
+      nextAt = at + 120;
+      if (at > now) await new Promise(r => setTimeout(r, at - now));
+      let nv = null, nvErr = null;
+      try {
+        const r = await axios2.get('https://naverapihub.apigw.ntruss.com/search/v1/local', {
+          headers: { 'X-NCP-APIGW-API-KEY-ID': id, 'X-NCP-APIGW-API-KEY': secret },
+          params: { query: `${m.sigungu} ${m.apt_name}`, display: 3, format: 'json' },
+          timeout: 6000,
+        });
+        const items = (r.data && r.data.items) || [];
+        nv = items.length ? {
+          title: strip(items[0].title),
+          road: strip(items[0].roadAddress) || null,
+          jibun: strip(items[0].address) || null,
+        } : null;
+      } catch (e) {
+        nvErr = { status: e.response?.status || null, msg: e.response?.data?.errorMessage || e.message };
+      }
+      rows.push({
+        name: m.apt_name, umd: m.umd_nm,
+        ourRoad, ourHh, ourYr,
+        naver: nv, naverErr: nvErr,
+        found: !!nv,
+        // ⚠ 판정 불가(우리 주소가 없거나 네이버가 못 찾음)는 **불일치가 아니다**.
+        addrMatch: (nv && nv.road && ourRoad) ? (roadKey(nv.road) === roadKey(ourRoad)) : null,
+      });
+    }
+
+    const found = rows.filter(r => r.found).length;
+    const cmp = rows.filter(r => r.addrMatch !== null);
+    res.set('Cache-Control', 'no-store');
+    res.json({
+      sigungu, checked: rows.length,
+      네이버검색됨: found,
+      주소대조가능: cmp.length,
+      주소일치: cmp.filter(r => r.addrMatch).length,
+      주소불일치: cmp.filter(r => !r.addrMatch).length,
+      우리주소없음: rows.filter(r => !r.ourRoad).length,
+      세대수없음: rows.filter(r => !r.ourHh).length,
+      rows,
+    });
+  } catch (e) {
+    logger.error({ err: e.message }, 'admin cross-check 실패');
+    require('../utils/captureError').captureRouteError(e, 'admin');
+    res.status(500).json({ error: e.message });
+  }
+});
+
 module.exports = router;
+
 
 
 
