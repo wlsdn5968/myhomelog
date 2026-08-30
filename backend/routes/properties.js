@@ -45,7 +45,7 @@ router.get('/info', async (req, res) => {
 router.post('/recommend', validatePropertySearch, async (req, res) => {
   const {
     maxBudget, myCash, availableLoan,
-    region, houseStatus, isFirstBuyer,
+    region, lawdCd, houseStatus, isFirstBuyer,
     purpose, schoolNeeded, childPlan, workplaceArea,
     minArea, maxArea,
     minHouseholds, minParkingRatio, saleOnly, // FILTER-2026-07-12: 좋은-아파트 조건 필터
@@ -64,6 +64,8 @@ router.post('/recommend', validatePropertySearch, async (req, res) => {
     myCash: parseFloat(myCash) || 0,
     availableLoan: parseFloat(availableLoan) || 0,
     region: region || '서울',
+    lawdCd, // REGION-CODE-2026-08-30: 있으면 문자열 해석 대신 이 코드로 확정
+
     houseStatus: houseStatus || '무주택',
     isFirstBuyer: isFirstBuyer === true || isFirstBuyer === 'true',
     purpose: purpose || '실거주',

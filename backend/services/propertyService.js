@@ -22,7 +22,7 @@ const { buildFacility } = require('../utils/buildFacility');
 // IDENTITY-GATE-2026-08-10 (Sprint KKKKKKK): 이 경로는 resolveFacility 를 거치지 않고 자체 이름
 //   매칭(_norm/_canon)으로 kaptCode 를 얻으므로, 그 검증 게이트가 닿지 않는다. 붙은 facility 가
 //   실거래 건축년도와 어긋나면 필터·게이트 판정이 통째로 틀어지므로 여기서도 같은 검증을 적용한다.
-const { getFacilitiesByKaptCodes, verifyCandidate } = require('./aptFacilityService');
+const { getFacilitiesByKaptCodes, verifyCandidate, getAptListByLawdFromDb } = require('./aptFacilityService');
 const { getBuildingTitle } = require('./buildingRegisterService'); // LLLLLL-3: KAPT 미매칭 단지 세대수 = 건축물대장(SSSS 연동)으로 보강
 const cache = require('../cache');
 const logger = require('../logger');
@@ -109,7 +109,23 @@ function _scopedBySido(text) {
   return best ? [best] : null;
 }
 
-function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '') {
+/**
+ * REGION-CODE-2026-08-30 (Sprint OOOOOOO, 운영자 "경기는 시 자체도 이상하고 동탄이 없다"):
+ *   `lawdCd` 를 받으면 **문자열 해석을 건너뛴다**. 이 저장소가 6회 반복해 겪은 결함이
+ *   전부 "행정구역을 이름 문자열로 판정"에서 나왔다([[region-judgment-by-lawdcd]]).
+ *   프론트 칩이 코드를 그대로 실어 보내면 그 계열 전체가 원천 제거된다.
+ *   ⚠ 반드시 LAWD_CODES 에 실재하는 코드만 채택한다 — 임의 코드로 조회를 열지 않는다.
+ *   ⚠ name 은 시군구 이름을 준다(광역 이름이면 안 된다) — report.js 가 name 으로
+ *     "세부 해석 성공" 여부를 판별하기 때문이다.
+ */
+function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '', lawdCd = '') {
+  const _code = String(lawdCd || '').trim();
+  if (/^\d{5}$/.test(_code)) {
+    const { LAWD_CODE_TO_NAME } = require('./transactionService');
+    const nm = LAWD_CODE_TO_NAME[_code];
+    if (nm) return [{ lawdCd: _code, name: nm }];
+    logger.warn({ lawdCd: _code }, 'pickRegions: LAWD_CODES 에 없는 코드 — 문자열 해석으로 폴백');
+  }
   // Unicode NFC 정규화 — 일부 OS(Mac)/브라우저에서 한글이 NFD(분해형)로 전달돼
   // "강북" 같은 NFC 키워드와 문자열 비교 실패하는 버그 방지
   const r = String(userRegion || '').normalize('NFC').replace(/\s+/g,'');
@@ -275,6 +291,7 @@ async function getAIRecommendations(userCondition) {
     workplaceArea,
     minArea, // 평 단위 (예: 18)
     maxArea, // 평 단위 (예: 35)
+    lawdCd,          // REGION-CODE-2026-08-30: 프론트 칩이 실어 보내는 시군구 코드(문자열 해석 우회)
     minHouseholds,   // FILTER-2026-07-12: 세대수 하한 (예: 500)
     minParkingRatio, // FILTER-2026-07-12: 세대당 주차 하한 (예: 1.5)
     saleOnly,        // FILTER-2026-07-12: 분양만(임대·혼합 제외)
@@ -291,7 +308,8 @@ async function getAIRecommendations(userCondition) {
   // NFC 정규화 — Mac(NFD) ↔ Windows(NFC) 캐시 분리 방지
   const normReg = String(region || '').normalize('NFC').trim();
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
-  const cacheKey = `rec:v15:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v15: LLLLLL-6 가격하한 0.5→0.7 (보고서와 통일) — 구버전 캐시 차단
+  const _lawd = /^\d{5}$/.test(String(lawdCd || '')) ? String(lawdCd) : '';
+  const cacheKey = `rec:v16:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v16: OOOOOOO KAPT V3 폐기로 필터가 전국 0건이던 결과가 Redis 에 3h 캐시돼 있다 — 구버전 캐시 차단
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
   // REC-REDIS-2026-07-17 (Sprint AAAAAA, 운영자 "검색 더 빨리" — 실측: cold 12.6s vs warm 1.4s):
@@ -307,11 +325,15 @@ async function getAIRecommendations(userCondition) {
   const _mark = (k) => { _tt[k] = Date.now(); };
 
   // Step 1: 키워드 기반 빠른 지역 결정
-  const targetRegions = pickRegions(region, maxBudget, workplaceArea).slice(0, 3);
+  const targetRegions = pickRegions(region, maxBudget, workplaceArea, _lawd).slice(0, 3);
 
   // Step 2: 병렬 조회 — (a) 시군구 전체 단지 목록 + (b) 실거래 내역
   // COLLECT-PAR-2026-07-18 (Sprint DDDDDD): aliasMap 이 대형 병렬 조회 뒤 직렬 1왕복이던 것 — 동시 시작
   const aliasMapPromise = getAliasCanonicalMap(targetRegions.map(r => r.lawdCd));
+  // APTLIST-DB-2026-08-30 (Sprint OOOOOOO): 단지 목록의 **1순위는 DB(apt_master)** 다.
+  //   라이브 KAPT 목록만 쓰다가 그 API 가 폐기되자 전국 필터가 0건이 됐다(실측) —
+  //   같은 데이터를 DB 가 이미 들고 있었는데도. 두 소스를 합치고 kaptCode 로 중복 제거한다.
+  const dbAptListPromise = getAptListByLawdFromDb(targetRegions.map(r => r.lawdCd));
   const [aptListArrays, txArrays] = await Promise.all([
     Promise.allSettled(
       targetRegions.map(r => getAptListBySgg(r.lawdCd))
@@ -329,7 +351,16 @@ async function getAIRecommendations(userCondition) {
     })),
   ]);
   _mark('collectQ');
-  const allAptList = aptListArrays.flat();
+  // 라이브 목록 + DB 목록 병합(kaptCode 유일). 라이브가 죽어도 필터가 살아 있어야 한다.
+  const _dbAptList = await dbAptListPromise;
+  const _seenKapt = new Set();
+  const allAptList = [];
+  for (const a of [...aptListArrays.flat(), ..._dbAptList]) {
+    const c = a && (a.kaptCode || a.kapt_code);
+    if (!c || _seenKapt.has(c)) continue;
+    _seenKapt.add(c);
+    allAptList.push(a);
+  }
   const allTx = txArrays.flat();
   // ALIAS-MERGE-2026-05-21 (전수조사: BUG2 동일 클래스): raw MOLIT명(풍림아파트A/B)을
   //   canonical master명(공릉풍림아이원)으로 relabel → analyzeTransactions 그룹화 시 1개 단지로 병합
@@ -344,7 +375,8 @@ async function getAIRecommendations(userCondition) {
   const analyzed = analyzeTransactions(relabeledTx);
   _mark('collect');
   logger.info({
-    aptListTotal: allAptList.length, analyzedCount: analyzed.length,
+    aptListTotal: allAptList.length, aptListLive: aptListArrays.flat().length, aptListDb: _dbAptList.length,
+    analyzedCount: analyzed.length,
   }, 'PropertyService 지역 집계 완료');
 
   if (!analyzed || !analyzed.length) {

@@ -14,15 +14,31 @@ const logger = require('../logger');
 // BASIS-V4-2026-05-13 (Sprint BB): aptFacilityService.fetchFromApi 는 이미 V4 사용 중.
 //   getAptBasisInfo (propertyService 추천 path + /api/properties/info) 만 V3 단일 사용 — V4 미사용.
 //   V4 가 더 완전한 데이터 (kaptMparea60~136 평형 구간 등) → V4 / V3 fallback chain.
+// KAPT-V5-2026-08-30 (Sprint OOOOOOO, 운영자 "500세대+ 필터에 아무것도 안 나온다"):
+//   ⚠ **K-apt 계열 V1~V4 가 전부 폐기됐다** — 실호출 실측(2026-08-30):
+//     AptListService3/getSigunguAptList3      → 400 returnReasonCode 12 (NO_OPENAPI_SERVICE_ERROR)
+//     AptListService3/getRoadnameAptList3     → 400 / 12
+//     AptBasisInfoServiceV2·V3·V4             → 400 / 12
+//     AptBasisInfoServiceV4/getAphusDtlInfoV4 → 400 / 12
+//   살아있는 것: **AptListService4** · **AptBasisInfoServiceV5**(응답 필드명은 V3 와 동일 —
+//   kaptCode·kaptName·kaptdaCnt·hoCnt·kaptdPcnt·codeSaleNm·as1~as4·bjdCode, 실측 대조).
+//   그래서 URL 교체만으로 복구된다(파서 변경 불요. List4 는 body.items 가 직접 배열 — 기존 분기 그대로).
+//
+//   ⚠ 이 고장은 **조용했다**: dgk 릴레이는 returnReasonCode '10'(IP 거부)만 폴백 대상이라
+//     '12'(서비스 폐기)는 그대로 throw → getAptListBySgg 가 [] 를 반환 → 필터가 전건 제외.
+//     "폐기"는 릴레이로 못 고친다. 그래서 소비자 쪽에 DB 폴백을 함께 넣었다(propertyService).
+//   과거 버전은 뒤에 남긴다 — 되살아나도 손해가 없고, 되돌리기 이력이 된다.
 const APT_BASIS_URLS = [
+  'https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusBassInfoV5',
   'https://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusBassInfoV4',
   'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3',
 ];
-const APT_LIST_URL = 'https://apis.data.go.kr/1613000/AptListService3/getRoadnameAptList3';
-const APT_LIST_SGG_URL = 'https://apis.data.go.kr/1613000/AptListService3/getSigunguAptList3';
-// DTL-INFO-2026-05-13 (Sprint X): KAPT V4 detail endpoint (주차/승강기/CCTV/편의시설 정보)
-//   BasisInfo 와 별개 endpoint. data.go.kr 표준 — V4 / V3 fallback.
+const APT_LIST_URL = 'https://apis.data.go.kr/1613000/AptListService4/getRoadnameAptList4';
+const APT_LIST_SGG_URL = 'https://apis.data.go.kr/1613000/AptListService4/getSigunguAptList4';
+// DTL-INFO-2026-05-13 (Sprint X): KAPT detail endpoint (주차/승강기/CCTV/편의시설 정보)
+//   BasisInfo 와 별개 endpoint. V5 → V4 → V3 fallback (위 KAPT-V5 주석 참조).
 const APT_DTL_URLS = [
+  'https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusDtlInfoV5',
   'https://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusDtlInfoV4',
   'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusDtlInfoV3',
 ];

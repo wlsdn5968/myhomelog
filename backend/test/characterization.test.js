@@ -3002,8 +3002,10 @@ test('지역 세부 칩 전부가 광역보다 좁게 해석된다 (프론트 �
   const fs = require('node:fs');
   const path = require('node:path');
   const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
-  const m = html.match(/const REGION_SUB = (\{[\s\S]*?\});/);
-  assert.ok(m, 'index.html 에서 REGION_SUB 를 찾지 못했다 (칩 목록 형태가 바뀌었다면 이 테스트도 갱신할 것)');
+  // REGION-MENU-2026-08-30: 칩 목록은 이제 `/api/region/menu`(LAWD_CODES 파생)에서 온다.
+  //   index.html 에 남은 표는 **네트워크 실패 시 폴백**이다 — 그것도 여전히 해석돼야 하므로 같이 검사한다.
+  const m = html.match(/const REGION_SUB_FALLBACK = (\{[\s\S]*?\});/);
+  assert.ok(m, 'index.html 에서 REGION_SUB_FALLBACK 을 찾지 못했다 (칩 목록 형태가 바뀌었다면 이 테스트도 갱신할 것)');
   const REGION_SUB = new Function(`return ${m[1]}`)();
   assert.deepEqual(Object.keys(REGION_SUB).sort(), ['경기', '서울', '인천', '지방'],
     '광역 칩 구성이 바뀌었다 — report.js 의 광역 분기도 함께 확인할 것');
@@ -3053,7 +3055,11 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
   // ① 별도 표를 새로 만들지 않고 propertyService 의 매핑을 재사용한다(세 번째 사본 방지).
   assert.match(src, /require\('\.\.\/services\/propertyService'\)/,
     '보고서가 검증된 지역 매핑을 재사용하지 않는다 — 사본을 새로 만들면 또 갈린다');
-  assert.match(src, /pickRegions\(region, buy, ''\)/, 'pickRegions 재사용 호출이 없다');
+  // REGION-CODE-2026-08-30: 4번째 인자로 **시군구 코드**를 넘긴다 — 있으면 문자열 해석을 건너뛴다.
+  assert.match(src, /pickRegions\(region, buy, '', _reqLawdCd\)/,
+    'pickRegions 재사용 호출이 없다(또는 lawdCd 를 넘기지 않는다)');
+  assert.ok(/const _reqLawdCd = \/\^\\d\{5\}\$\/\.test\(String\(input\.lawdCd/.test(src),
+    'lawdCd 를 5자리 숫자로 검증하지 않는다 — 임의 코드로 조회가 열린다');
 
   // ② ⚠ pickRegions 는 매칭 실패 시 **예산 기반 서울 인기 구**를 돌려준다(추천용 폴백).
   //    그게 그대로 새면 "경기 보고서에 서울 단지" 가 된다 → 시도 접두 검증이 반드시 있어야 한다.
@@ -3070,6 +3076,52 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
   // 어느 분기에도 안 걸리는 입력은 조용히 넘어가지 말고 흔적을 남긴다.
   assert.match(src, /지역 필터 미적용 — 전국이 후보 풀이 된다/,
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
+});
+
+// ── REGION-MENU-2026-08-30 (Sprint OOOOOOO) ───────────────────────────────────
+// [무엇이 있었나 — 운영자 발견] "경기는 시 자체도 이상하게 되어 있고, 동탄도 없어."
+//   프론트 지역 칩이 **손으로 적은 52개 문자열**이었다. LAWD_CODES 는 122개인데 칩으로
+//   도달 가능한 시군구는 pickRegions 전수 계산 결과 **56개뿐** — 적재 실거래 448,508건 중
+//   **194,951건(43.5%)이 선택 자체가 불가능**했다(동탄 9,784건 포함).
+// [왜 테스트로 묶나] 목록을 손으로 관리하는 한 지역이 늘 때마다 다시 어긋난다. 여기서
+//   메뉴가 LAWD_CODES 전수를 덮는지 기계로 확인한다 — 사람이 케이스를 고르면 반드시 빠뜨린다.
+test('지역 메뉴가 LAWD_CODES 전수를 덮는다 (도달 불가 시군구 0)', async () => {
+  const express = require('express');
+  const app = express();
+  app.use('/api/region', require('../routes/region'));
+  const srv = app.listen(0);
+  try {
+    const port = srv.address().port;
+    const res = await fetch(`http://127.0.0.1:${port}/api/region/menu`);
+    assert.equal(res.status, 200, '지역 메뉴 엔드포인트가 200 이 아니다');
+    const j = await res.json();
+    const items = (j.groups || []).flatMap(g => g.items || []);
+
+    const { LAWD_CODES, RETIRED_LAWD_CODES } = require('../services/transactionService');
+    const want = [...new Set(Object.values(LAWD_CODES).map(String))].filter(c => !RETIRED_LAWD_CODES.has(c));
+    const got = new Set(items.map(i => String(i.lawdCd)));
+    const missing = want.filter(c => !got.has(c));
+    assert.deepEqual(missing, [], `메뉴에서 고를 수 없는 시군구가 있다: ${missing.join(',')}`);
+
+    // 폐지 코드는 **빼야** 한다 — 고르면 신규 거래가 0 인 곳이다.
+    const retiredShown = [...got].filter(c => RETIRED_LAWD_CODES.has(c));
+    assert.deepEqual(retiredShown, [], `폐지된 시군구가 메뉴에 남아 있다: ${retiredShown.join(',')}`);
+
+    // 라벨 중복은 사용자가 두 칩을 구별할 수 없다는 뜻이다.
+    const labels = items.map(i => `${i.label}`);
+    assert.equal(new Set(labels).size, labels.length, '지역 라벨이 중복된다 — 사용자가 구별할 수 없다');
+
+    // ⚠ 핵심: 칩이 실어 보내는 lawdCd 가 **그 코드 그대로** 해석돼야 한다.
+    //   이름 문자열 경로였다면 동명 구(중구 6곳)에서 갈렸다 — 그 계열의 원천 차단을 여기서 못박는다.
+    const { pickRegions } = require('../services/propertyService');
+    for (const it of items) {
+      const picked = pickRegions('무의미한 문자열', 9, '', it.lawdCd) || [];
+      assert.deepEqual(picked.map(x => x.lawdCd), [String(it.lawdCd)],
+        `'${it.label}'(${it.lawdCd}) 칩이 다른 코드로 해석된다: ${picked.map(x => x.lawdCd).join(',')}`);
+      assert.ok(!['서울', '경기', '인천', '지방'].includes(picked[0].name),
+        `'${it.label}'(${it.lawdCd}) 의 name 이 광역 이름이다 — 보고서가 해석 실패로 보고 광역으로 내려간다`);
+    }
+  } finally { srv.close(); }
 });
 
 // ── HH-UNKNOWN-2026-08-17 (Sprint MMMMMMM-19) ─────────────────────────────────

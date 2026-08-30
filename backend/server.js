@@ -374,10 +374,10 @@ app.get('/api/health/apis', async (req, res) => {
     }
   }
 
-  // 2) K-apt 단지 리스트 (AptListService3)
+  // 2) K-apt 단지 리스트 (AptListService4 — V3 는 2026-08-30 폐기 확인)
   if (molit) {
     try {
-      const r = await dgk.get('https://apis.data.go.kr/1613000/AptListService3/getSigunguAptList3', {
+      const r = await dgk.get('https://apis.data.go.kr/1613000/AptListService4/getSigunguAptList4', {
         params: { serviceKey: molit, sigunguCode: '11350', numOfRows: 1, pageNo: 1, _type: 'json' },
         timeout: 6000,
       });
@@ -388,10 +388,10 @@ app.get('/api/health/apis', async (req, res) => {
     } catch (e) { checks.kapt_list = false; checks.kapt_list_err = e.response?.status ? `HTTP ${e.response.status}` : e.message; }
   }
 
-  // 3) K-apt 단지 기본정보 (AptBasisInfoServiceV3)
+  // 3) K-apt 단지 기본정보 (AptBasisInfoServiceV5 — V2~V4 는 2026-08-30 폐기 확인)
   if (molit) {
     try {
-      const r = await dgk.get('https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3', {
+      const r = await dgk.get('https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusBassInfoV5', {
         params: { serviceKey: molit, kaptCode: 'A10020255', _type: 'json' },
         timeout: 6000,
         headers: { Accept: 'application/json' },

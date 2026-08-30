@@ -24,7 +24,8 @@ const { LAWD_CODES, LAWD_CODE_TO_NAME } = require('../services/transactionServic
 // 공공데이터포털 API (data.go.kr) — AptInfo 전용 키 (별도 발급)
 const APT_INFO_KEY = process.env.APT_INFO_API_KEY || process.env.MOLIT_API_KEY;
 // 시군구 코드 기반 단지 목록 endpoint (getSigunguAptList3)
-const APT_LIST_URL = 'https://apis.data.go.kr/1613000/AptListService3/getSigunguAptList3';
+// KAPT-V5-2026-08-30 (Sprint OOOOOOO): AptListService3 폐기(400/12) → V4. 응답 필드명 동일(실측).
+const APT_LIST_URL = 'https://apis.data.go.kr/1613000/AptListService4/getSigunguAptList4';
 
 const PAGE_SIZE = 100;
 const MAX_PAGES = 20;

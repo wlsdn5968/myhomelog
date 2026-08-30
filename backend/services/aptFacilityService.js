@@ -23,6 +23,8 @@ const APT_INFO_KEY = process.env.APT_INFO_API_KEY || process.env.MOLIT_API_KEY;
 // AptInfo 기본정보 endpoint 후보 — 첫 호출 시 동작하는 것 발견하면 이후 캐시 사용.
 // Phase 8+ (2026-04-26): 사용자 활용신청 endpoint V4 가 표준. V3/V2/V1 fallback.
 const FACILITY_ENDPOINTS = [
+  // KAPT-V5-2026-08-30 (Sprint OOOOOOO): V1~V4 전부 폐기(400/12) — V5 만 살아있다. aptInfoService 상단 주석 참조.
+  'https://apis.data.go.kr/1613000/AptBasisInfoServiceV5/getAphusBassInfoV5',
   'https://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusBassInfoV4',
   'http://apis.data.go.kr/1613000/AptBasisInfoServiceV4/getAphusBassInfoV4',
   'https://apis.data.go.kr/1613000/AptBasisInfoServiceV3/getAphusBassInfoV3',
@@ -662,8 +664,49 @@ async function getFacilitiesByKaptCodes(kaptCodes) {
   }
 }
 
+/**
+ * APTLIST-DB-2026-08-30 (Sprint OOOOOOO, 운영자 "500세대+ 필터에 아무 곳도 안 나온다"):
+ *   추천의 조건 필터는 단지명 → kaptCode 매핑을 **라이브 KAPT 시군구 목록에서만** 만들었다.
+ *   그 API 가 폐기(400/12)되자 목록이 [] 가 되고, 매핑이 전부 null 이라 **전국 모든 지역에서
+ *   필터 결과가 0건**이 됐다(라이브 실측: 강남·노원·분당·동탄·송도·해운대 전부 0).
+ *   apt_master 는 같은 원천을 이미 담고 있다(동탄 193/193·강남 234/234 facility 보유) —
+ *   그걸 두고 외부 API 응답에만 기대던 것이 결함이다. **DB 를 1순위 소스로 삼는다.**
+ *
+ *   반환 shape 은 KAPT getSigunguAptList 아이템과 맞춘다(kaptCode·kaptName·as3·as4) —
+ *   호출부(propertyService)가 두 소스를 그대로 합칠 수 있게.
+ *   ⚠ PostgREST 는 1000행에서 조용히 잘린다(레포 6회 재발) → range 페이징 + 2차 정렬키.
+ */
+async function getAptListByLawdFromDb(lawdCds) {
+  const a = admin();
+  const codes = [...new Set((lawdCds || []).map(String).filter(Boolean))];
+  if (!a || !codes.length) return [];
+  const PAGE = 1000;
+  const out = [];
+  try {
+    for (let p = 0; p < 10; p++) {
+      const { data, error } = await a
+        .from('apt_master')
+        .select('kapt_code, apt_name, umd_nm')
+        .in('lawd_cd', codes)
+        .not('kapt_code', 'is', null)
+        .order('kapt_code', { ascending: true })
+        .range(p * PAGE, p * PAGE + PAGE - 1);
+      if (error) throw error;
+      const rows = data || [];
+      for (const r of rows) {
+        out.push({ kaptCode: r.kapt_code, kaptName: r.apt_name, as3: r.umd_nm || '', as4: '' });
+      }
+      if (rows.length < PAGE) break;
+    }
+    return out;
+  } catch (e) {
+    logger.warn({ err: e.message, codes: codes.length }, 'apt_master 단지목록 조회 실패 — 라이브 목록만 사용');
+    return out;
+  }
+}
+
 module.exports = {
-  resolveFacility, backfillFacilityByKaptCode, getFacilitiesByKaptCodes,
+  resolveFacility, backfillFacilityByKaptCode, getFacilitiesByKaptCodes, getAptListByLawdFromDb,
   // IDENTITY-GATE 검증용 (테스트에서 직접 호출)
   findMaster, molitIdentity, verifyCandidate, jibunFromKaptAddr, bonbun,
 };

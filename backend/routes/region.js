@@ -158,6 +158,45 @@ async function buildDashboard(region) {
   return payload;
 }
 
+/**
+ * REGION-MENU-2026-08-30 (Sprint OOOOOOO, 운영자 "경기는 시 자체도 이상하게 되어 있고, 동탄도 없어"):
+ *   프론트 지역 칩이 **손으로 적은 52개 문자열**이었다. LAWD_CODES 는 122개인데
+ *   칩으로 도달 가능한 시군구는 **56개뿐**(pickRegions 로 전수 계산) — 적재된 실거래
+ *   448,508건 중 **194,951건(43.5%)이 선택 자체가 불가능**했다(동탄 9,784건 포함).
+ *   목록을 손으로 관리하는 한 지역이 늘 때마다 다시 어긋난다 → **LAWD_CODES 에서 파생**한다.
+ *
+ *   ⚠ 칩은 이름이 아니라 `lawdCd` 를 실어 보낸다 — 이 저장소가 6회 겪은 "이름 문자열로
+ *     행정구역 판정" 결함 계열을 원천 차단한다([[region-judgment-by-lawdcd]]).
+ *   ⚠ 이미 폐지된 코드(RETIRED_LAWD_CODES)는 뺀다 — 고르면 신규 거래가 0인 곳이다.
+ */
+router.get('/menu', async (req, res) => {
+  const { LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES } = require('../services/transactionService');
+  const SIDO = {
+    '11': '서울', '41': '경기', '28': '인천', '26': '부산', '27': '대구',
+    '30': '대전', '31': '울산', '36': '세종', '43': '충북',
+  };
+  const groups = new Map();
+  for (const code of new Set(Object.values(LAWD_CODES).map(String))) {
+    if (RETIRED_LAWD_CODES.has(code)) continue;
+    const sido = SIDO[code.slice(0, 2)];
+    const label = LAWD_CODE_TO_NAME[code];
+    if (!sido || !label) continue;
+    // 프론트 광역 탭은 서울·경기·인천·지방 4개다 — 그 외 시도는 '지방' 아래에 시도명을 붙여 모은다.
+    const wide = ['서울', '경기', '인천'].includes(sido) ? sido : '지방';
+    // '고양시덕양구' → '고양시 덕양구' (시+구 결합형에만 공백. priceRecordsService.regionLabel 과 같은 규칙)
+    const pretty = label.replace(/^([가-힣]{2,}시)([가-힣]+[구군])$/, '$1 $2');
+    const shown = wide === '지방' ? `${sido} ${pretty}` : pretty;
+    if (!groups.has(wide)) groups.set(wide, []);
+    groups.get(wide).push({ label: shown, lawdCd: code });
+  }
+  for (const arr of groups.values()) arr.sort((a, b) => a.label.localeCompare(b.label, 'ko'));
+  const out = ['서울', '경기', '인천', '지방'].filter(w => groups.has(w))
+    .map(w => ({ wide: w, items: groups.get(w) }));
+  // LAWD_CODES 는 코드 상수라 실패 경로가 없다 — 열화 캐시([[degraded-response-cached-at-edge]]) 위험 없음.
+  res.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
+  res.json({ groups: out, total: out.reduce((n, g) => n + g.items.length, 0) });
+});
+
 router.get('/dashboard', async (req, res) => {
   const region = resolveRegion({ lawdCd: req.query.lawdCd, name: req.query.name });
   if (!region) {

@@ -3456,7 +3456,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   document.getElementById('it').textContent=gt();
   // 잔존 BYOK 키 정리 (이전 사용자)
   ['cfg_api','cfg_naver','cfg_ai'].forEach(k=>localStorage.removeItem(k));
-  populateRegionSub('서울'); // 초기 광역 chips 채우기
+  populateRegionSub('서울'); // 초기 광역 chips 채우기 (폴백 목록 — 아래에서 서버 목록으로 교체)
+  if(typeof loadRegionMenu==='function') loadRegionMenu(); // REGION-MENU-2026-08-30: LAWD_CODES 파생 전체 목록
   renderPolicyTimeline(); // 정책 타임라인 렌더
   // OAuth 콜백 error param 친절 안내 (Supabase provider 비활성화·취소 등)
   // 기존: Supabase 도메인에서 raw JSON 에러 페이지 → 사용자가 막힘
@@ -4581,7 +4582,7 @@ async function generateReport(_isRetry) {
       method: 'POST',
       headers,
       body: JSON.stringify({
-        maxBudget: buy, myCash: cash, annualIncome: inc, region,
+        maxBudget: buy, myCash: cash, annualIncome: inc, region, lawdCd: getRegionLawdCd(),
         houseStatus, isFirstBuyer, pyeong, schoolNeeded,
         kidPlan, stayYears, priority, workplaceArea,
       }),
@@ -6378,7 +6379,7 @@ async function doSearch(){
     maxBudget:parseFloat(document.getElementById('bp').value)||7,
     myCash:parseFloat(document.getElementById('mc').value)||3,
     availableLoan:getLoanAmt(),
-    region:getRegionForSearch(),houseStatus:gct('ch-h'),
+    region:getRegionForSearch(),lawdCd:getRegionLawdCd(),houseStatus:gct('ch-h'),
     isFirstBuyer:gct('ch-f')==='예',
     schoolNeeded:gct('ch-sc')==='학군 중요',
     workplaceArea:document.getElementById('wp').value.trim(),
@@ -9894,16 +9895,45 @@ function _isRegProp(p){
   //     보여주는 것보다 '—'(모름)이 정직하다. 여기서 고치는 것은 색·필터 분류뿐이다.
   return _regLtvLabel(p?.area || p?.sigungu, p?.lawdCd) === '40%';
 }
-const REGION_SUB = {
+// REGION-MENU-2026-08-30 (Sprint OOOOOOO, 운영자 "경기는 시 자체도 이상하게 되어 있고, 동탄도 없어"):
+//   이 목록은 **손으로 적은 52개 문자열**이었다. 백엔드 LAWD_CODES 는 122개인데 칩으로 도달
+//   가능한 시군구는 56개뿐(pickRegions 로 전수 계산) — 적재 실거래 448,508건 중 **194,951건
+//   (43.5%)이 선택 자체가 불가능**했다(동탄 9,784건 포함). 손 목록은 지역이 늘 때마다 어긋난다.
+//   → `/api/region/menu` (LAWD_CODES 파생) 를 받아 채운다. 아래 표는 **네트워크 실패 시 폴백**일 뿐이다.
+//   ⚠ 칩은 이름이 아니라 `lawdCd` 를 실어 보낸다 — 이름 문자열로 행정구역을 판정하다 6회 재발한
+//     결함 계열의 원천 차단([[region-judgment-by-lawdcd]]).
+const REGION_SUB_FALLBACK = {
   '서울': ['강남구','서초구','송파구','강동구','마포구','용산구','성동구','노원구','도봉구','강북구','은평구','구로구','금천구','강서구','양천구','영등포구','관악구','동작구','성북구','동대문구','광진구','중랑구','서대문구','종로구','중구'],
   '경기': ['과천','광명','분당','판교','평촌','안양','수지','용인','하남','미사','영통','수원','일산','고양','의왕','시흥'],
   '인천': ['연수(송도)','남동','부평','계양','서구','미추홀'],
   '지방': ['해운대','수영','수성','유성','청주'],
 };
+// wide → [{label, lawdCd}] . 서버 메뉴가 도착하면 덮어쓴다.
+let REGION_MENU = Object.fromEntries(Object.entries(REGION_SUB_FALLBACK)
+  .map(([w, arr]) => [w, arr.map(l => ({ label: l, lawdCd: '' }))]));
+let _regionMenuLoaded = false;
+async function loadRegionMenu(){
+  if(_regionMenuLoaded) return;
+  try{
+    const r = await fetch(`${CFG.api}/region/menu`);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const j = await r.json();
+    const next = {};
+    for(const g of (j.groups||[])){
+      if(Array.isArray(g.items) && g.items.length) next[g.wide] = g.items;
+    }
+    // 빈 응답을 그대로 채택하면 지역 선택기가 통째로 사라진다([[degraded-response-cached-at-edge]]).
+    if(!Object.keys(next).length) throw new Error('빈 메뉴');
+    REGION_MENU = next; _regionMenuLoaded = true;
+    const on = document.querySelector('#ch-r .chip.on');
+    if(on) populateRegionSub(on.textContent.trim()); // 이미 그려진 칩을 갱신
+  }catch(e){ /* 폴백 목록 유지 — 조용히 비우지 않는다 */ }
+}
 function populateRegionSub(wide){
   const sub=document.getElementById('ch-r-sub');
   if(!sub) return;
-  sub.innerHTML=(REGION_SUB[wide]||[]).map(g=>`<span class="chip" onclick="cpSub(this)">${g}</span>`).join('');
+  const items=REGION_MENU[wide]||[];
+  sub.innerHTML=items.map(g=>`<span class="chip" data-lawd="${g.lawdCd||''}" onclick="cpSub(this)">${g.label}</span>`).join('');
 }
 function cpSub(el){
   const wasOn=el.classList.contains('on');
@@ -9914,6 +9944,10 @@ function getRegionForSearch(){
   const wide=gct('ch-r');
   const sub=document.querySelector('#ch-r-sub .chip.on')?.textContent.trim()||'';
   return sub ? `${wide} ${sub}` : wide;
+}
+/** 선택된 세부 지역의 시군구 코드(없으면 ''). 백엔드가 이 값이 있으면 문자열 해석을 건너뛴다. */
+function getRegionLawdCd(){
+  return document.querySelector('#ch-r-sub .chip.on')?.dataset.lawd || '';
 }
 // P1-14 (2026-05-04): LAWD_CODES 광역 (강원·충북·충남·전북·전남·경북·경남·제주) 미지원
 //   사용자가 미지원 지역 입력 시 사전 차단 — backend 데이터 0건 후 "조회 실패" 차단
@@ -10002,10 +10036,14 @@ function restoreSearchFromUrl(){
       setChip('ch-r',wide);
       populateRegionSub(wide);
       if(sub){
-        // 생성된 서브 chip 중 매칭
-        document.querySelectorAll('#ch-r-sub .chip').forEach(c=>{
-          if(c.textContent.trim()===sub)c.classList.add('on');
-        });
+        // 생성된 서브 chip 중 매칭.
+        // ⚠ REGION-MENU-2026-08-30 으로 라벨이 '분당' → '성남시 분당구' 로 바뀌었다. 예전에 공유된
+        //   URL(?region=경기 분당)도 칩이 잡히도록 정확일치 실패 시 포함 매칭으로 내려간다.
+        //   (매칭이 안 돼도 region 문자열은 그대로 백엔드로 가 pickRegions 가 해석한다 — 결과는 불변.)
+        const _chips=[...document.querySelectorAll('#ch-r-sub .chip')];
+        let _hit=_chips.find(c=>c.textContent.trim()===sub);
+        if(!_hit) _hit=_chips.find(c=>c.textContent.trim().replace(/\s/g,'').includes(sub.replace(/\s/g,'')));
+        if(_hit) _hit.classList.add('on');
       }
     }
     // Phase 4-3 후 sprint C-3 (2026-05-05): URL 진입자 + budget/cash 미입력 시 입력 유도
