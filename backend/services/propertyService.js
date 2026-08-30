@@ -148,7 +148,18 @@ function lookupByJibun(idx, apt) {
   const bon = bonbun(apt.jibun);
   const dong = apt.umdNm || '';
   if (!bon || !dong) return null;
-  const hits = idx.get(`${dong}|${bon}`);
+  let hits = idx.get(`${dong}|${bon}`);
+  // EUPMYEON-FALLBACK-2026-08-30 (Sprint OOOOOOO): 군(郡)·읍면 지역은 표기 단위가 다르다 —
+  //   MOLIT 은 "와부읍 덕소리"(읍/면 + 리)로 신고하는데 KAPT 는 "와부읍"(읍/면 단독)으로 등록한다.
+  //   그래서 동등 비교가 **전건 실패**한다. aptFacilityService.findMaster 가 이미 같은 폴백을 갖고 있고
+  //   그때 실측이 231/240(96.3%) 였다 — 배치 색인에도 같은 규칙을 준다(사본이 아니라 같은 규칙의 적용).
+  //   [이번 실측] 미매칭 8,093 단지 중 '그 동에 KAPT 0곳'이 1,919 단지·17,310 거래인데,
+  //   상위가 전부 이 패턴이다(남양주 와부읍 덕소리 365건 · 오남읍 오남리 272건 · 대구 유가읍 봉리 225건).
+  //   ⚠ 지번 본번까지 함께 맞아야 채택되므로 읍/면 단위로 넓혀도 오매칭 위험은 커지지 않는다.
+  if ((!hits || !hits.length) && /\s/.test(dong)) {
+    const eupMyeon = dong.trim().split(/\s+/)[0];
+    if (eupMyeon && eupMyeon !== dong) hits = idx.get(`${eupMyeon}|${bon}`);
+  }
   if (!hits || !hits.length) return null;
   if (hits.length === 1) return hits[0].kaptCode;
   // 한 필지에 여러 KAPT 단지 — 준공연도로만 가른다(±1년). 유일하게 좁혀질 때만 채택.

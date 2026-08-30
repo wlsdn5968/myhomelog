@@ -3119,6 +3119,24 @@ test('지번 매칭 — 유일할 때만 채택하고 모호하면 포기한다'
   assert.equal(lookupByJibun(idx, { umdNm: '겹친동', jibun: '100', buildYear: 0 }), null,
     '실거래 준공연도를 모르는데 중복 필지에서 하나를 골랐다');
 
+  // ⑤ EUPMYEON-FALLBACK-2026-08-30: 군(郡)·읍면은 표기 단위가 다르다 —
+  //    MOLIT "와부읍 덕소리"(읍/면+리) vs KAPT "와부읍"(읍/면 단독). 동등 비교는 전건 실패한다.
+  //    [실측] 이 폴백만으로 거래 매칭률 76.3% → 81.3% (846단지·9,144거래 추가).
+  //    ⚠ 지번 본번까지 함께 맞아야 채택되므로 읍/면으로 넓혀도 오매칭 위험은 커지지 않는다.
+  {
+    const idx2 = buildJibunIndex([
+      { kaptCode: 'E1', kaptName: '덕소한강', as3: '와부읍', jibunBon: '410', kaptUsedate: '20050101' },
+      { kaptCode: 'E2', kaptName: '다른읍단지', as3: '오남읍', jibunBon: '410', kaptUsedate: '20050101' },
+    ]);
+    assert.equal(lookupByJibun(idx2, { umdNm: '와부읍 덕소리', jibun: '410-2', buildYear: 2005 }), 'E1',
+      '읍/면+리 표기가 읍/면 단독 등록과 매칭되지 않는다 — 군 지역이 통째로 빠진다');
+    // 읍/면이 다르면 본번이 같아도 붙으면 안 된다(다른 읍의 같은 번지는 다른 땅이다).
+    assert.equal(lookupByJibun(idx2, { umdNm: '진접읍 금곡리', jibun: '410', buildYear: 2005 }), null,
+      '다른 읍/면인데 본번만 같다고 매칭했다 — 남의 단지 정보가 붙는다');
+    // 공백 없는 일반 동은 폴백을 타지 않는다(기존 동작 불변).
+    assert.equal(lookupByJibun(idx2, { umdNm: '와부읍', jibun: '410', buildYear: 2005 }), 'E1');
+  }
+
   // ④ 입력이 없으면 조용히 null (예외 금지)
   assert.equal(lookupByJibun(idx, { umdNm: '금정동', jibun: '', buildYear: 1992 }), null);
   assert.equal(lookupByJibun(idx, { umdNm: '', jibun: '849', buildYear: 1992 }), null);
