@@ -362,4 +362,23 @@ async function handleAptMasterSync(req, res) {
 router.get('/run-apt-master-sync', handleAptMasterSync);
 router.post('/run-apt-master-sync', handleAptMasterSync);
 
+/** RENAME-REFRESH-2026-08-30: facility 백필 수동 실행(개명 단지 주소·주차 즉시 갱신용). */
+async function handleFacilityBackfill(req, res) {
+  try {
+    const { run } = require('../jobs/facilityBackfill');
+    const started = Date.now();
+    const summary = await run({
+      chunk: Math.min(Math.max(parseInt(req.query.chunk) || 40, 1), 200),
+      budgetMs: Math.min(Math.max(parseInt(req.query.budgetMs) || 240000, 5000), 280000),
+    });
+    res.set('Cache-Control', 'no-store');
+    res.json({ ok: true, elapsedMs: Date.now() - started, summary });
+  } catch (e) {
+    logger.error({ err: e.message }, 'admin facility-backfill 실패');
+    res.status(500).json({ ok: false, error: e.message });
+  }
+}
+router.get('/run-facility-backfill', handleFacilityBackfill);
+router.post('/run-facility-backfill', handleFacilityBackfill);
+
 module.exports = router;

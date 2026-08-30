@@ -53,6 +53,15 @@ async function runOneChunk(admin, limit, mode = 'null') {
     //   fetched_at 갱신 → stale 조건에서 빠져 무한재시도 차단(incomplete 모드와 동일 진행 보장 구조).
     const cutoff = new Date(Date.now() - 14 * 24 * 3600 * 1000).toISOString();
     q = q.not('facility->_empty', 'is', null).lt('facility_fetched_at', cutoff);
+  } else if (mode === 'renamed') {
+    // RENAME-REFRESH-2026-08-30 (Sprint OOOOOOO, 운영자 "동탄파크자이가 아니고 동탄역자이 아니야?"):
+    //   apt-master-sync 가 단지명 변경을 감지하면 `facility_fetched_at = null` 로 표시한다.
+    //   facility(주소·주차·세대수)는 이름과 **같은 KAPT 레코드**에서 오므로, 이름이 바뀌었다는 건
+    //   그 레코드가 갱신됐다는 뜻이다. 그런데 위 세 모드는 **완전한 레코드를 절대 재조회하지 않아**
+    //   이름은 새 값인데 주소는 옛 값인 상태가 남는다(실측: 동탄역자이 지번이 651-1372 → 892 로
+    //   바뀌었는데 우리 DB 는 옛 값. MOLIT 실거래·네이버 지도 모두 892 였다).
+    //   ⚠ facility 값 자체는 지우지 않았다 — 지우면 그 사이 카드에서 세대수·주차가 사라진다.
+    q = q.not('facility', 'is', null).is('facility_fetched_at', null);
   } else {
     q = q.is('facility', null);
   }
@@ -95,7 +104,10 @@ async function run({ chunk = DEFAULT_CHUNK, budgetMs = 240000 } = {}) {
   // Phase A(null): 최초 적재 우선. Phase B(incomplete): _dtl(주차) 누락 self-heal (Sprint YYYY).
   // Phase C(empty): 조회실패 sentinel 재시도 (Sprint IIIII).
   //   각 chunk 후 fetched_at 갱신되어 stale 조건에서 빠지므로 같은 후보 재조회 없이 진행.
-  for (const mode of ['null', 'incomplete', 'empty']) {
+  // Phase D(renamed): 단지명이 바뀐 곳 — facility 도 옛 KAPT 레코드다 (RENAME-REFRESH-2026-08-30).
+  //   'null' 다음에 둔다: 미적재가 더 급하지만, 개명은 **틀린 주소를 보여주는 상태**라
+  //   _dtl 누락(정보 일부 없음)보다 앞선다. "그럴듯한 틀린 정보"가 "정보 없음"보다 나쁘다.
+  for (const mode of ['null', 'renamed', 'incomplete', 'empty']) {
     while ((Date.now() - started) < budgetMs - 15000) {
       const t = await runOneChunk(admin, limit, mode);
       if (!t.processed) break; // 이 mode 후보 소진 → 다음 mode

@@ -174,6 +174,34 @@ async function syncOneSgg(admin, lawdCd) {
 
   if (!rows.length) return { lawdCd, fetched: all.length, inserted: 0 };
 
+  // RENAME-DETECT-2026-08-30 (Sprint OOOOOOO): **무엇이 바뀌었는지 알 수 있게** 갱신 전 이름을 찍어둔다.
+  //   [왜 필요한가] ① 그동안 이 잡은 "몇 건 넣었다"만 반환해 **이름이 바뀐 사실 자체가 보이지 않았다**.
+  //     동탄역자이 개명을 3개월 넘게 아무도 몰랐던 이유다.
+  //   ② facility(주소·주차·세대수)는 이름과 **같은 KAPT 레코드**에서 온다. 이름이 바뀌었다는 건
+  //     그 레코드가 갱신됐다는 뜻인데, facilityBackfill 은 `facility IS NULL`·`_dtl 없음`만 대상으로 삼아
+  //     **완전한 레코드는 영원히 재조회하지 않는다**(실측: 동탄 facility 가 2026-07-07 자, 90일 TTL).
+  //     그래서 이름은 새 값인데 주소는 옛 값인 상태가 생긴다 → 개명 단지는 facility 를 무효화한다.
+  //   ⚠ PostgREST 는 1000행에서 조용히 잘린다(레포 6회 재발) → range 페이징. 최대 지역이 328행이라
+  //     한 페이지로 끝나지만, 지역이 커져도 조용히 틀리지 않게 페이징을 둔다.
+  const prevName = new Map();
+  try {
+    for (let from = 0; from <= 4000; from += 1000) {
+      const { data: page, error } = await admin
+        .from('apt_master').select('kapt_code, apt_name')
+        .eq('lawd_cd', lawdCd)
+        .order('kapt_code', { ascending: true })
+        .range(from, from + 999);
+      if (error) throw error;
+      for (const r of (page || [])) prevName.set(r.kapt_code, r.apt_name);
+      if (!page || page.length < 1000) break;
+    }
+  } catch (e) {
+    logger.warn({ err: e.message, lawdCd }, '개명 감지용 기존 이름 조회 실패 — 이번 회차는 감지 생략');
+  }
+  const renamed = prevName.size
+    ? rows.filter(r => prevName.has(r.kapt_code) && prevName.get(r.kapt_code) !== r.apt_name)
+    : [];
+
   // 500개씩 batch upsert
   let inserted = 0;
   let upsertError = null; // 실패 사유가 로그로만 남아 조용히 유실되던 것 — 반환에 포함(runAptMasterSync 가시성)
@@ -197,7 +225,28 @@ async function syncOneSgg(admin, lawdCd) {
     }
     inserted += (count ?? 0);
   }
-  return { lawdCd, fetched: rows.length, inserted, ...(upsertError ? { upsertError } : {}) };
+  // RENAME-DETECT-2026-08-30: 개명 단지는 facility 도 옛 KAPT 레코드다 → 재조회 대상으로 표시.
+  //   facility 값 자체는 지우지 않는다(지우면 그 사이 카드에서 세대수·주차가 사라진다) —
+  //   `facility_fetched_at = null` 로만 표시하고 facilityBackfill 이 그걸 보고 다시 받아간다.
+  let renamedMarked = 0;
+  if (renamed.length) {
+    const codes = renamed.map(r => r.kapt_code);
+    for (let i = 0; i < codes.length; i += 200) {
+      const { error } = await admin.from('apt_master')
+        .update({ facility_fetched_at: null }).in('kapt_code', codes.slice(i, i + 200));
+      if (error) { logger.warn({ err: error.message, lawdCd }, '개명 단지 facility 무효화 실패'); break; }
+      renamedMarked += Math.min(200, codes.length - i);
+    }
+    logger.info({
+      lawdCd, renamed: renamed.length, marked: renamedMarked,
+      samples: renamed.slice(0, 5).map(r => `${prevName.get(r.kapt_code)} → ${r.apt_name}`),
+    }, 'apt_master 단지명 변경 감지');
+  }
+  return {
+    lawdCd, fetched: rows.length, inserted,
+    renamed: renamed.length,
+    ...(upsertError ? { upsertError } : {}),
+  };
 }
 
 async function runAptMasterSync() {
