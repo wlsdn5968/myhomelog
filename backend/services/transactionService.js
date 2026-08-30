@@ -424,9 +424,20 @@ async function getTransactionsByApt(lawdCd, aptName, monthsBack = 6) {
     months.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
   }
 
+  // ⚠ SILENT-SAMPLE-2026-08-30 (Sprint PPPPPPP): 실패한 달을 빈 배열로 삼키면
+  //   가격 백분위·거래량이 **불완전한 표본 위에서** 계산되는데 아무도 모른다.
+  //   [[cron-observability-hobby-1h]] 과 같은 교훈 — 기록이 비었다 ≠ 데이터가 없다.
+  const _failedMonths = [];
   const allResults = await Promise.all(
-    months.map(m => getTransactions(lawdCd, m).catch(() => []))
+    months.map(m => getTransactions(lawdCd, m).catch((e) => {
+      _failedMonths.push(m);
+      return [];
+    }))
   );
+  if (_failedMonths.length) {
+    logger.warn({ lawdCd, failed: _failedMonths, of: months.length },
+      '매매 월별 조회 실패 — 그만큼 표본이 빠진 채로 집계된다');
+  }
 
   const flat = allResults.flat();
   // TXAPT-MATCH-2026-05-13 (Sprint Z — 운영자 발견 "안 맞는 아파트 너무 많아" [VERIFIED]):

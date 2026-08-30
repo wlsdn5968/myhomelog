@@ -191,11 +191,24 @@ async function getJeonseByApt(lawdCd, aptName) {
   //   동시 2개 청크로 초당 요청을 한도 아래로 낮춘다. 웜 경로(24h 캐시 히트)는 체감 차이 없음.
   const CONC = 2;
   const allResults = [];
+  // ⚠ SILENT-SAMPLE-2026-08-30 (Sprint PPPPPPP): 위 주석이 문제를 적어뒀지만 **조용함 자체는 남아 있었다.**
+  //   실패한 달이 빈 배열이 되면 전세가율은 계산되지만 **표본이 소리 없이 얇아진 값**이다.
+   //   "값이 틀렸다" 보다 "값이 왜 그런지 모른다" 가 더 나쁘다 — 몇 달이 빠졌는지 남긴다.
+  const _failedMonths = [];
   for (let i = 0; i < months.length; i += CONC) {
     const chunk = await Promise.all(
-      months.slice(i, i + CONC).map(m => getRentTransactions(lawdCd, m).catch(() => []))
+      months.slice(i, i + CONC).map(m => getRentTransactions(lawdCd, m).catch((e) => {
+        _failedMonths.push(m);
+        logger.warn({ lawdCd, month: m, status: e.response?.status || null, err: e.message },
+          '전월세 월별 조회 실패 — 그 달이 표본에서 빠진다');
+        return [];
+      }))
     );
     allResults.push(...chunk);
+  }
+  if (_failedMonths.length) {
+    logger.warn({ lawdCd, failed: _failedMonths, of: months.length },
+      '전월세 표본 불완전 — 전세가율은 남은 달로만 계산된다');
   }
 
   const flat = allResults.flat();
