@@ -30,6 +30,9 @@ const { resolveFacility } = require('../services/aptFacilityService');
 // HH-CONFLICT-2026-08-17 (Sprint MMMMMMM): 세대수 원천 불일치 판정은 buildFacility 의 것 하나만 쓴다.
 //   (보고서는 buildFacility 자체는 호출하지 않지만, **판정 기준까지 따로 두면 두 화면이 갈린다.**)
 const { householdsConflictOf } = require('../utils/buildFacility');
+// SCORE-BANDS-2026-08-30 (Sprint PPPPPPP): 회전율·유형제외·신고가 구간은 **추천 화면과 같은 모듈**을 쓴다.
+//   점수표가 두 벌이면 한쪽만 고쳐지고 갈린다 — 오늘 교통 실측이 보고서에 안 갔던 이유가 그것이다.
+const { turnoverScore, isExcludedAptType, countNewHighByArea } = require('../utils/scoreBands');
 const { resolveCoordBatch } = require('../services/geocodeCacheService');
 const { getNearbyAmenities, countNearby, keywordToCoord, getTransitMinutes } = require('../services/kakaoService');
 const cache = require('../cache');
@@ -969,8 +972,11 @@ function computeAptScore(c, ctx) {
   // SCORE-CAP-2026-08-30: 상한 없는 유일한 항이었다. n=300 이면 150점으로,
   //   단일 최대 항목(행정구위계 60)의 2.5배·상한합 331 의 45% 를 혼자 차지했다.
   //   ⚠ c.n 은 **후보 풀(평형 밴드 적용) 안의** 6개월 건수라 실제보다 작다 — 그래서 상한을 낮게 잡는다.
-  const txnScore = Math.min(15, Math.round(_nCapped * 0.75));
-  if (txnScore > 0) { r.transactions = txnScore; total += txnScore; }
+  // TURNOVER-2026-08-30 (Sprint PPPPPPP): 절대 건수 → **세대수 대비 회전율**.
+  //   운영자 지적: 보고서 1위가 43건으로 건수 1위였지만 1,226세대라 회전율은 3.51% 로 4위였다.
+  //   구간은 utils/scoreBands 한 곳에만 둔다(추천 화면과 동일 기준).
+  const _turn = turnoverScore(_nCapped, c.households, 15);
+  if (_turn.score > 0) { r.transactions = _turn.score; total += _turn.score; c._turnoverWhy = _turn.why; }
 
   // ※ 데이터 품질 + 객관 항목 + universal preference 는 KAPT 호출 후 (applyObjectiveScore)
 
@@ -1362,22 +1368,16 @@ async function fetchCandidateApts(admin, input, limit) {
     if (t.build_year) {
       byApt[key].buildYearCnt[t.build_year] = (byApt[key].buildYearCnt[t.build_year] || 0) + 1;
     }
-    byApt[key].deals.push({ date: t.deal_date, amount: t.deal_amount });
+    // area 를 함께 싣는다 — 평형별 신고가 판정에 필요하다.
+    byApt[key].deals.push({ date: t.deal_date, amount: t.deal_amount, area: t.exclu_use_ar ?? t.excluUseAr });
   }
 
-  // Phase 8: 신고가 갱신 카운트 (최근 6개월 내 누적 max 갱신 횟수)
-  function countNewHigh(deals) {
-    const sorted = [...deals].sort((a, b) => a.date.localeCompare(b.date));
-    let runningMax = 0, count = 0;
-    for (const d of sorted) {
-      if (d.amount > runningMax) {
-        if (runningMax > 0) count++; // 첫 거래는 갱신으로 안 침
-        runningMax = d.amount;
-      }
-    }
-    return count;
-  }
-
+  // NEWHIGH-AREA-2026-08-30 (Sprint PPPPPPP): 신고가 갱신은 **평형별**로 센다.
+  //   기존 구현은 평형을 섞어 누적 최대값을 봤다 — 큰 평형이 한 번 최고가를 찍으면
+   //   그 뒤 소형의 신고가가 영영 세지지 않는다. 과대가 아니라 **과소**였다.
+  //   [실측] 푸른마을포스코더샵2차(전용 76~117㎡): 혼합 4회 ↔ 평형별 18회.
+  //   판정은 utils/scoreBands 한 곳에만 둔다.
+  const countNewHigh = countNewHighByArea;
   let pool = Object.values(byApt)
     .filter(a => a.n >= 1)
     .map(a => {

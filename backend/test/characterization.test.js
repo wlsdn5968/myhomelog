@@ -1605,7 +1605,8 @@ test('getAgeBonus — 노후도는 절대 연도가 아니라 현재 연도 기�
 });
 
 test('computeAptScore — 신축/재건축 우선순위도 상대 나이 기준이다 (절대연도 하드코딩 복귀 차단)', () => {
-  const computeAptScore = _reportFn('computeAptScore');
+  // ⚠ 하네스는 함수를 떼어내 실행하므로 모듈 import 가 없다 — 공유 구간 모듈을 주입한다.
+  const computeAptScore = _reportFn('computeAptScore', ['turnoverScore'], [require('../utils/scoreBands').turnoverScore]);
   const Y = new Date().getFullYear();
   // 다른 항목을 전부 0 으로 만들어 priority 만 남긴다:
   //   n=0 → 거래량 가산 없음 / avgPrice·buy 비 = 0.79999 → 예산 fit 두 구간 모두 밖 / 가구상황 전부 무해
@@ -1629,7 +1630,8 @@ test('computeAptScore — 신축/재건축 우선순위도 상대 나이 기준�
 });
 
 test('computeAptScore — 예산 fit 구간 경계 (예산 ±10%/±20% 양쪽 끝)', () => {
-  const computeAptScore = _reportFn('computeAptScore');
+  // ⚠ 하네스는 함수를 떼어내 실행하므로 모듈 import 가 없다 — 공유 구간 모듈을 주입한다.
+  const computeAptScore = _reportFn('computeAptScore', ['turnoverScore'], [require('../utils/scoreBands').turnoverScore]);
   const Y = new Date().getFullYear();
   // priority '신축' + 15년 구축 → priority 기여 0. n=0 → 거래량 0. 남는 것은 budget_fit 뿐.
   const ctx = { buy: 10, priority: '신축', kidPlan: '없음', stayYears: '5~10년', isFirstBuyer: false };
@@ -3166,21 +3168,46 @@ test('점수 V2 — 교통이 최대 비중이고, 모르는 것은 0이 아니�
   //   [실측 결함] 푸른마을포스코더샵2차는 43건으로 건수 1위였지만 1,226세대라 회전율 3.51% 로 4위였다
   //   (서동탄역파크자이 6.42% · 동탄파크푸르지오 5.81% · 자연앤데시앙 4.42%).
   //   구간은 전국 분위수 실측(6개월·100세대 이상 2,981단지): p25 1.25 · p50 2.03 · p75 3.02 · p90 4.11.
-  assert.match(svc, /const tr = \(_deals \/ _hh\) \* 100;/,
-    '거래 점수가 세대수로 정규화되지 않는다 — 건수로 재면 대단지가 자동으로 이긴다');
-  assert.match(svc, /tr >= 4\.11 \?/, '회전율 구간이 실측 분위수(p90 4.11)를 쓰지 않는다');
-  assert.ok(!/apt\.dealCount \|\| 0, 20\)/.test(svc),
-    '옛 절대 건수 산식이 남아 있다');
+  const bands = require('../utils/scoreBands');
+  const hi = bands.turnoverScore(63, 982, 14);   // 6.42% — 상위 10%
+  const lo = bands.turnoverScore(43, 1226, 14);  // 3.51% — 상위 25% 언저리
+  assert.ok(hi.score > lo.score,
+    '회전율 6.42% 가 3.51% 보다 높은 점수를 받지 않는다');
+  assert.ok(lo.turnover > 3 && lo.turnover < 4, '회전율 계산이 세대수 대비가 아니다');
+  // ⚠ 건수만 크고 세대수도 큰 단지가 이기면 안 된다 — 이 저장소가 실제로 겪은 결함이다.
+  assert.ok(bands.turnoverScore(43, 1226, 14).score < bands.turnoverScore(20, 300, 14).score,
+    '대단지의 큰 건수가 소단지의 높은 회전율을 이긴다 — 정규화가 안 된 것이다');
   // 세대수를 모를 때 0 점으로 떨어뜨리지 않는다.
-  assert.match(svc, /b\.거래 = _deals >= 20 \? 9 : _deals >= 8 \? 7 : 5;/,
+  assert.ok(bands.turnoverScore(3, 0, 14).score > 0,
     '세대수 미확인 단지가 거래 0점을 받는다 — 모름은 나쁨이 아니다');
+  assert.equal(bands.turnoverScore(3, 0, 14).turnover, null, '모름인데 회전율 숫자를 지어낸다');
+
+  // ②-0-1 ⚠ **두 화면이 같은 구간을 쓴다.** 점수표가 두 벌이면 한쪽만 고쳐지고 갈린다
+  //   ([[tax-law-crosscheck-2026-06-24]]: 취득세 tier 사본 2개로 3주간 과다 표기).
+  const rpt = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '../routes/report.js'), 'utf8');
+  for (const [file, src] of [['propertyService', svc], ['report', rpt]]) {
+    assert.match(src, /require\('\.\.\/utils\/scoreBands'\)/,
+      `${file} 가 공유 구간 모듈을 쓰지 않는다 — 사본이 갈린다`);
+  }
+  assert.ok(!/tr >= 4\.11 \?/.test(svc) && !/tr >= 4\.11 \?/.test(rpt),
+    '회전율 구간 숫자가 소비자 쪽에 복제돼 있다 — scoreBands 한 곳에만 두라');
 
   // ②-1 아파트가 아닌 유형은 추천에서 뺀다. ⚠ 단, **모름은 빼지 않는다**.
-  assert.match(svc, /const EXCLUDED_APT_TYPES = \[/, '유형 제외 목록이 없다');
-  assert.ok(!/EXCLUDED_APT_TYPES = \[[^\]]*주상복합/.test(svc),
+  assert.ok(bands.isExcludedAptType('도시형 생활주택(아파트)'), '도시형생활주택이 제외되지 않는다');
+  assert.ok(!bands.isExcludedAptType('주상복합'),
     '주상복합까지 제외한다 — 1,261곳이고 오피스텔과 동의어가 아니다(근거 없는 배제)');
-  assert.match(svc, /if \(!t\) return false;/,
-    '유형이 비면 제외해 버린다 — 미상 331곳이 통째로 사라진다');
+  assert.ok(!bands.isExcludedAptType(''), '유형 미상(331곳)이 통째로 제외된다');
+
+  // ②-2 신고가 갱신은 **평형별**로 센다.
+  //   [실측] 평형을 섞으면 큰 평형이 최고가를 찍은 뒤 소형 신고가가 영영 안 세진다 —
+  //   푸른마을포스코더샵2차: 혼합 4회 ↔ 평형별 18회(과대가 아니라 과소였다).
+  const nh = bands.countNewHighByArea([
+    { date: '2026-01', amount: 50000, area: 76 },
+    { date: '2026-02', amount: 90000, area: 117 },
+    { date: '2026-03', amount: 60000, area: 76 },
+  ]);
+  assert.equal(nh, 1, '평형을 섞어 세면 76㎡ 의 신고가 갱신이 사라진다');
 
   // ② 지하철 접근성은 **잰 거리(1순위)** 로 매기고, KAPT 자기신고값은 **폴백**이다.
   //    TRANSIT-TRUTH-2026-08-30 실측(좌표 보유 2,778 단지, 카카오 최근접역):

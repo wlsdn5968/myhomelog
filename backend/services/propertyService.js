@@ -13,6 +13,7 @@
  */
 const { getTransactionsByApt, analyzeTransactions, getAliasCanonicalMap, getRegionRecentTransactions } = require('./transactionService');
 const { parseWalkBand, WALK_BAND_LABEL } = require('../utils/walkBand');
+const { turnoverScore, isExcludedAptType } = require('../utils/scoreBands');
 const { getAptListBySgg, getAptBasisInfo, getAptDtlInfo } = require('./aptInfoService');
 const { resolveCoordBatch } = require('./geocodeCacheService');
 const { resolveSchoolsBatch, getCachedSchoolsBatch } = require('./schoolService');
@@ -361,15 +362,12 @@ const SCORE_V2_MAX = { 교통: 28, 인프라: 16, 규모주차: 12, 거래: 14, 
  * ⚠ 유형이 비어 있으면(331곳) 제외하지 않는다 — 모름은 배제 사유가 아니다
  *   ([[unknown-treated-as-value]]).
  */
-const EXCLUDED_APT_TYPES = ['도시형 생활주택', '연립주택', '다세대'];
+// EXCLUDED_APT_TYPES 는 utils/scoreBands 에 있다(사본 금지).
 
-/** facility 의 유형이 추천에서 배제 대상인가. 모르면 false(통과). */
+/** facility 의 유형이 추천에서 배제 대상인가. 판정은 utils/scoreBands 한 곳에만 둔다. */
 function _isExcludedType(facility) {
-  const t = String((facility && facility.aptType) || '').trim();
-  if (!t) return false;
-  return EXCLUDED_APT_TYPES.some(x => t.includes(x));
+  return isExcludedAptType(facility && facility.aptType);
 }
-
 /** 연식·평형 — facility 없이 계산 가능한 부분. 거래는 세대수가 필요해 뒤로 미룬다. */
 function _calcBaseScore(apt) {
   const b = {};
@@ -488,17 +486,12 @@ function _applyFacilityToScore(base, facility, amen) {
   //   구간은 전국 실측 분위수(6개월, 100세대 이상 2,981단지): p25 1.25 · p50 2.03 · p75 3.02 · p90 4.11.
   const _deals = Number(base && base.dealCount) || 0;
   const _hh = (facility && facility.totalHouseholds) || 0;
-  if (_hh > 0) {
-    const tr = (_deals / _hh) * 100;
-    b.거래 = tr >= 4.11 ? 14 : tr >= 3.02 ? 12 : tr >= 2.03 ? 9 : tr >= 1.25 ? 6 : tr >= 0.70 ? 4 : 2;
-    why.push(`6개월 회전율 ${tr.toFixed(1)}% (${_deals}건 / ${_hh}세대)`);
-  } else {
-    // 세대수를 모른다 → 회전율을 만들 수 없다. 건수만으로 **중간값 부근**만 준다.
-    //   모름을 나쁨으로 만들지 않되, 잰 회전율과 같은 대접도 하지 않는다.
-    b.거래 = _deals >= 20 ? 9 : _deals >= 8 ? 7 : 5;
-    why.push(`6개월 거래 ${_deals}건 (세대수 미확인 — 회전율 산출 불가)`);
+  {
+    // ⚠ 구간은 utils/scoreBands 한 곳에만 있다 — 보고서 경로와 **같은 기준**을 써야 한다.
+    const t = turnoverScore(_deals, _hh, SCORE_V2_MAX.거래);
+    b.거래 = t.score;
+    why.push(t.why);
   }
-
   // ── 장기 관심도 14 ─────────────────────────────────────────────────────
   //   네이버 데이터랩 36개월 검색 지수를 앵커(은마아파트) 중앙값 대비 비율로 정규화한 값.
   //   운영자: "단기 일주일 순위보다 1년·3년 오래 검색되는 곳이 좋다."
