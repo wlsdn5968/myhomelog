@@ -3096,6 +3096,52 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
     '예상치 못한 지역 문자열이 조용히 전국 조회가 된다');
 });
 
+// ── WATERMARK-ID-2026-08-31 (Sprint PPPPPPP) ──────────────────────────────────
+// 운영자: "워터마크는 고객의 아이디나 이런 걸로 특정할 수 있도록 해놓은 거 맞지? 제대로 하자."
+// 처음 넣은 워터마크는 브랜드명("내집로그 · myhomelog")뿐이라 **어느 계정에 발급된 문서인지
+// 되짚을 수 없었다.** PDF 는 캡처·재배포되기 쉬우므로 발급 대상이 남아야 한다.
+// ⚠ 그렇다고 이메일 전문을 박지 않는다 — 정상적으로 공유하는 경우에도 개인정보가 그대로 노출된다.
+//   마스킹된 아이디(본인 식별) + 해시 8자(운영자가 DB 대조로 특정) 조합을 쓴다.
+test('워터마크 — 발급 대상을 특정할 수 있되 이메일 전문은 노출하지 않는다', () => {
+  const fs2 = require('node:fs'); const path2 = require('node:path');
+  const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+
+  const m = fe.match(/const _issuedTo = \(\(\) => \{[\s\S]*?\}\)\(\);/);
+  assert.ok(m, '발급 대상 식별자 생성 블록을 찾지 못했다');
+
+  // 실제로 실행해 동작을 확인한다(소스 검사만으로는 부족하다).
+  const run = (session) => {
+    const localStorage = { getItem: () => JSON.stringify(session || {}) };
+    return new Function('localStorage', `${m[0]}; return _issuedTo;`)(localStorage);
+  };
+
+  const r = run({ user: { email: 'wlsdn5968@kakao.com', id: 'fd15c0b7-6330-4bfa-a671-0aa6bcf4a2e3' } });
+  assert.ok(r, '로그인 세션인데 발급 대상이 비었다');
+  // ① 이메일 전문이 그대로 들어가면 안 된다.
+  assert.ok(!r.label.includes('wlsdn5968'), '이메일 아이디가 마스킹되지 않았다');
+  // ② 그러나 본인이 알아볼 수는 있어야 한다(앞 3자 + 도메인 유지).
+  assert.ok(r.label.startsWith('wls'), '본인이 알아볼 단서가 없다');
+  assert.ok(r.label.endsWith('@kakao.com'), '도메인이 사라져 식별이 어렵다');
+  // ③ 운영자가 DB 와 대조할 수 있는 해시가 있어야 한다.
+  assert.match(r.tag, /^[0-9a-f]{8}$/, '대조용 해시가 8자 16진수가 아니다');
+  // ④ 같은 계정은 항상 같은 값이어야 대조가 된다.
+  assert.equal(run({ user: { email: 'wlsdn5968@kakao.com', id: 'fd15c0b7-6330-4bfa-a671-0aa6bcf4a2e3' } }).tag, r.tag,
+    '같은 계정인데 해시가 매번 달라진다 — 유출 추적이 불가능하다');
+  // ⑤ 다른 계정은 달라야 한다.
+  assert.notEqual(run({ user: { email: 'other@x.com', id: 'aaaaaaaa-0000-0000-0000-000000000000' } }).tag, r.tag,
+    '다른 계정인데 해시가 같다');
+  // ⑥ 짧은 아이디도 마스킹된다.
+  assert.ok(!run({ user: { email: 'ab@x.com', id: 'u2' } }).label.startsWith('ab@'),
+    '짧은 아이디가 마스킹 없이 그대로 노출된다');
+  // ⑦ 비로그인/저장소 차단이면 null — 없는 사람을 지어내지 않는다.
+  assert.equal(run({}), null, '세션이 없는데 발급 대상을 만들어낸다');
+
+  // ⑧ 워터마크·하단에 실제로 쓰인다.
+  assert.match(fe, /class="wmark"[^>]*><span>\$\{_issuedTo \?/, '워터마크가 발급 대상을 쓰지 않는다');
+  assert.match(fe, /발급 대상 /, '하단에 발급 대상 표기가 없다');
+  assert.match(fe, /제3자 공개·재배포를 삼가주세요/, '재배포 주의 문구가 없다');
+});
+
 // ── PRIMARY-SAMPLE-2026-08-31 (Sprint PPPPPPP) ────────────────────────────────
 // 전국 실측(101지역·1,793건): 헤드라인 가격의 대표 평형이 거래 **1건**인 경우 **16.9%**,
 //   2건 이하 29.1%. [사례] 이편한세상강동에코포레 — 단지 전체 11건인데 대표 16평은 1건,

@@ -4903,6 +4903,32 @@ function _downloadReportPDF() {
   const ts = new Date(data.generatedAt || Date.now()).toLocaleString('ko-KR');
 
   const coreHtml = (r.coreMessages || []).map(m => `<li>${esc(m)}</li>`).join('');
+  // WATERMARK-ID-2026-08-31 (Sprint PPPPPPP, 운영자: "워터마크는 고객의 아이디로 특정할 수 있어야"):
+  //   PDF 는 캡처·재배포되기 쉽다. 유출 시 **어느 계정에 발급된 문서인지** 되짚을 수 있어야 한다.
+  //   ⚠ 그렇다고 이메일 전문을 큼직하게 박지 않는다 — 보고서를 정상적으로 공유하는 경우에도
+  //     개인정보가 그대로 노출된다. **마스킹 + 짧은 해시** 조합을 쓴다:
+  //       · 마스킹된 아이디 — 본인은 자기 것임을 알아본다
+  //       · 해시 8자 — 운영자가 DB 와 대조해 계정을 특정할 수 있다(되돌릴 수는 없다)
+  //   ⚠ 이 값은 브라우저 안에서만 만들어지고 외부로 전송되지 않는다.
+  const _issuedTo = (() => {
+    let email = '', uid = '';
+    try {
+      const ss = JSON.parse(localStorage.getItem('mhl-auth-session') || '{}');
+      email = (ss.user && ss.user.email) || '';
+      uid = (ss.user && ss.user.id) || '';
+    } catch (_) { /* 비로그인·저장소 차단 — 아래에서 익명 처리 */ }
+    if (!email && !uid) return null;
+    const local = email.split('@')[0] || '';
+    const dom = email.split('@')[1] || '';
+    const masked = local.length <= 3 ? (local ? local[0] + '**' : '****')
+      : local.slice(0, 3) + '*'.repeat(Math.min(6, local.length - 3));
+    // FNV-1a 32bit — 짧고 결정적이면 충분하다(암호 용도 아님).
+    let h = 0x811c9dc5;
+    for (const ch of (uid || email)) { h ^= ch.charCodeAt(0); h = Math.imul(h, 0x01000193) >>> 0; }
+    const tag = h.toString(16).padStart(8, '0');
+    return { label: dom ? masked + '@' + dom : masked, tag };
+  })();
+
   // REPORT-DEPTH-2026-08-31: 백엔드가 보내는 cautions(확인 항목·주의 사항)를 렌더링한다.
   //   ⚠ 매수 권유·가격 예측은 넣지 않는다 — 확인해야 할 실무 항목과 잰 사실만.
   const cautionsHtml = (r.cautions && r.cautions.length) ? r.cautions.map(g => {
@@ -5023,7 +5049,7 @@ function _downloadReportPDF() {
     </style>
   </head><body>
     <button class="noprint" onclick="window.print()">🖨 PDF 저장</button>
-    <div class="wmark" aria-hidden="true"><span>내집로그 · myhomelog</span></div>
+    <div class="wmark" aria-hidden="true"><span>${_issuedTo ? esc(_issuedTo.label + ' · ' + _issuedTo.tag) : '내집로그 · myhomelog'}</span></div>
     <div class="brandbar">
       <div class="bmark"><svg viewBox="0 0 24 24" width="16" height="16" fill="none">
         <path d="M3 11.2 12 4l9 7.2" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -5072,6 +5098,12 @@ function _downloadReportPDF() {
       <div class="sec-title">💡 매수 실무 TIP</div>
       <ul>${tipsHtml}</ul>
     </div>
+
+    <div class="pfoot">
+      <span>내집로그 · myhomelog.com · ${esc(ts)}</span>
+      <span>${_issuedTo ? esc('발급 대상 ' + _issuedTo.label + ' (' + _issuedTo.tag + ')') : ''}</span>
+    </div>
+    <div style="font-size:8pt;color:#98938A;margin-top:4px">본 보고서는 위 계정에 발급된 문서예요. 제3자 공개·재배포를 삼가주세요.</div>
 
     <div class="disclaimer">
       <b>⚠ 본 보고서는 정보 정리이며 투자자문업·중개업·대출모집인업이 아닙니다.</b>
