@@ -4594,3 +4594,37 @@ test('SEO: /share 는 크롤 가능하되 색인은 막는다 (링크 미리보�
     '/share 가 noindex 를 내려주지 않는다 — 크롤 허용과 함께라면 SPA 중복 색인이 생긴다');
 });
 
+// ── INTRO-KEY-SYNC-2026-09-02 (감사 P1-7) ──────────────────────────────────────
+//   [왜] 랜딩을 벗어나는 두 경로(_landingDismiss·_landingCTA)는 mhl_landing_seen 과 mhl_hero_dismissed 를
+//     함께 세팅해 소개 메시지의 중복 노출을 막고 있었다. 그런데 dismissHero 만 반대가 비어 있었다 —
+//     공유링크·UTM 으로 들어와 랜딩을 건너뛴 사용자가 히어로만 닫으면 다음 방문에 **랜딩 전면이 다시** 떴다.
+//     라이브 실측으로 재현: dismissHero() 호출 후 mhl_hero_dismissed=1 이지만 mhl_landing_seen 은 null.
+test('진입 소개: 히어로를 닫으면 랜딩도 본 것으로 기록한다 (같은 메시지 재노출 차단)', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const i = html.indexOf('function dismissHero()');
+  assert.ok(i > 0, 'dismissHero 를 찾지 못했다 — 테스트를 갱신할 것');
+  const body = html.slice(i, i + 900);
+  assert.ok(body.indexOf("setItem('mhl_hero_dismissed', '1')") >= 0, 'dismissHero 가 히어로 키를 남기지 않는다');
+  assert.ok(body.indexOf("setItem('mhl_landing_seen', '1')") >= 0,
+    'dismissHero 가 mhl_landing_seen 을 남기지 않는다 — 히어로만 닫은 사용자에게 랜딩이 다시 뜬다');
+});
+
+test('진입 소개: 제거된 온보딩 모달(OB)을 기다리는 죽은 코드가 없다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  // id="OB" 는 OB-REMOVE-2026-07-17 에 사라졌다 — 그걸 참조하는 **코드**가 남으면 도달 불가 분기다.
+  assert.equal(html.indexOf('id="OB"'), -1, 'OB 모달이 되살아났다 — 이 테스트의 전제를 갱신할 것');
+  const i = html.indexOf('function _maybeShowHero()');
+  assert.ok(i > 0, '_maybeShowHero 를 찾지 못했다');
+  const body = html.slice(i, i + 1600);
+  // 주석 줄은 제외하고 실제 코드만 본다(제거 사유를 주석으로 남겨뒀다).
+  const code = body.split(/\r?\n/).filter((l) => !l.trim().startsWith('//')).join('\n');
+  assert.equal(/getElementById\(['\"]OB['\"]\)/.test(code), false,
+    '_maybeShowHero 가 다시 OB 를 참조한다 — 항상 null 이라 그 분기는 실행되지 않는다');
+  assert.equal(/setInterval/.test(code), false,
+    '_maybeShowHero 에 도달 불가 폴링이 되살아났다');
+});
+

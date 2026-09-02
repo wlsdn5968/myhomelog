@@ -3801,6 +3801,12 @@ function _heroFunnel(action){
 }
 function dismissHero(){
   try { localStorage.setItem('mhl_hero_dismissed', '1'); } catch(_){}
+  // INTRO-KEY-SYNC-2026-09-02 (감사 P1-7): 랜딩을 벗어나는 경로(_landingDismiss·_landingCTA)는
+  //   두 키를 **함께** 세팅해 중복 노출을 이미 막고 있었다. 그런데 이 경로만 반대가 비어 있었다 —
+  //   공유링크·UTM 으로 들어와 랜딩을 건너뛴 사용자가 히어로만 닫으면 `mhl_landing_seen` 이 안 남아,
+  //   다음에 쿼리 없이 재방문하면 **같은 메시지의 랜딩 전면이 다시** 뜬다(실측 재현).
+  //   히어로를 봤다는 건 그 소개를 이미 봤다는 뜻이므로 랜딩도 본 것으로 취급한다.
+  try { localStorage.setItem('mhl_landing_seen', '1'); } catch(_){}
   const el = document.getElementById('heroBand');
   if (el) el.style.display = 'none';
   // KKKKKK: 모바일 칩·확장 카드도 함께 종료 (표시 로직 공유)
@@ -3845,29 +3851,12 @@ function renderDrawerUtil(){
 function _maybeShowHero(){
   try {
     if (localStorage.getItem('mhl_hero_dismissed') === '1') return;
-    const obEl = document.getElementById('OB');
-    const isOnboarding = localStorage.getItem('mhl_onboarded') !== '1';
-    if (isOnboarding && obEl) {
-      // 폴링: OB 가 열렸다 닫힐 때까지 대기 (200ms tick)
-      let opened = false;
-      const checker = setInterval(() => {
-        const isOpen = obEl.classList.contains('open');
-        if (isOpen) opened = true;
-        if (opened && !isOpen) {
-          clearInterval(checker);
-          setTimeout(_showHeroNow, 200);
-        }
-      }, 200);
-      // 60s safety timeout — onboarding 무한 대기 차단 + fallback 노출
-      setTimeout(() => {
-        clearInterval(checker);
-        // timeout 도달 시 onboarding 가 닫혔을 가능성 ↑ → fallback hero 노출
-        if (obEl && !obEl.classList.contains('open')) {
-          _showHeroNow();
-        }
-      }, 60000);
-      return;
-    }
+    // DEAD-OB-2026-09-02 (감사 P1-7): 여기 있던 온보딩 대기 로직(200ms 폴링 + 60초 세이프티)은
+    //   **영구 도달 불가**였다. `document.getElementById('OB')` 가 참조하던 4단계 온보딩 모달은
+    //   OB-REMOVE-2026-07-17 에 제거돼 저장소에 `id="OB"` 가 0건이다(전수 확인) → obEl 은 항상 null,
+    //   `if (isOnboarding && obEl)` 는 항상 false 라 그 블록이 한 번도 실행되지 않았다.
+    //   동작은 늘 아래 폴백을 탔으므로 회귀 없이 지운다 — 남겨두면 "온보딩 대기가 살아있다" 고 오독한다
+    //   ([[dangling-ref-after-refactor]]: 리팩터 범위 밖 사용처가 남은 전형).
     _showHeroNow();
   } catch(_){}
 }
