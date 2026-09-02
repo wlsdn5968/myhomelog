@@ -934,6 +934,26 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 @media(max-width:480px){.co-grid{grid-template-columns:repeat(2,1fr)!important}}
 /* Agent UX P1 #20: chip focus 시각 표시 (색약자 대응 + 키보드 navigation) */
 .chip:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+/* TOUCH-TARGET-2026-09-02: 모바일 탭 타깃 하한.
+   [실측] 라이브 375x812 에서 보고서 화면의 조작 요소 18개가 **전부 44px 미만**이었다
+     — .chip 61개가 39px, .inp 43px, .rsub-find 41px, 도움말 .wi 는 12~16px.
+     Apple HIG·Material 의 최소 타깃(44/48px)에 못 미친다. 손가락으로 고르는 화면이라
+     오터치가 곧 잘못된 조건 입력이 된다(보고서 결과가 달라진다).
+   [범위] 모바일에서만 키운다 — 데스크톱은 마우스라 39px 로 충분하고, 전역으로 키우면
+     칩이 많은 화면(지역 51개)의 세로 길이가 불필요하게 늘어난다.
+   [방법] 글자 크기·여백은 그대로 두고 min-height 로만 올린 뒤 세로 중앙 정렬한다
+     — 폰트를 키우면 줄바꿈이 바뀌어 레이아웃이 흔들린다. */
+@media(max-width:700px){
+  .chips .chip{min-height:44px;display:inline-flex;align-items:center;justify-content:center;gap:3px}
+  .inp,.rsub-find{min-height:44px}
+  /* ⚠ 배포 전 라이브 주입 검증에서 잡은 것 3가지:
+     ① .chip 전역이 아니라 **.chips 안**만 — 밖에도 칩 모양 요소가 생기면 배지가 눌리는 모양이 된다.
+     ② .wi 에 **좌우** 여백을 주면 (margin-left:auto 라) 제목을 밀어 줄바꿈시키고
+        '필수' 배지가 세로 두 줄로 쪼개진다 → 좌우 0, 위아래만 늘린다.
+     ③ inline-flex 로 바뀌면 ::before 의 '✓ ' 뒤 공백이 사라진다 → gap 으로 대체.
+     도움말은 글자가 작아야 하지만 누를 수는 있어야 한다 — 여백으로만 넓힌다 */
+  .wchead .wi,.lbl .wi{padding:8px 0;margin-top:-8px;margin-bottom:-8px}
+}
 .chip.on::before{content:'✓ ';font-weight:700} /* 색약자 시각 cue */
 .chdr{padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 .ctit{font-size:12px;font-weight:700}.cst{font-size:11px;font-weight:600}

@@ -5410,3 +5410,32 @@ test('OG 폰트 — 한글 음절 전 구간을 서브셋이 덮는다 (표본 �
   }
 });
 
+// ── TOUCH-TARGET-2026-09-02 (감사 후속: 모바일) ───────────────────────────────
+//   [실측] 라이브 375x812 보고서 화면의 조작 요소 18개가 전부 44px 미만이었다(.chip 61개가 39px).
+//     오터치는 곧 잘못된 조건 입력이고, 그러면 보고서 결과 자체가 달라진다.
+//   [왜 소스 검사인가] CSS 규칙은 "코드의 형태" 자체가 요구사항이라 정규식이 옳은 도구다
+//     (실행 대조가 필요한 계산 로직과 다르다).
+test('모바일 탭 타깃 — 44px 하한이 모바일에서만, 그리고 .chips 안에만 걸린다', () => {
+  const html = require('node:fs').readFileSync(
+    require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const i = html.indexOf('TOUCH-TARGET-2026-09-02');
+  assert.ok(i > 0, '모바일 탭 타깃 규칙이 사라졌다');
+  const block = html.slice(i, i + 1600);
+
+  // ① 모바일 전용이어야 한다 — 전역으로 키우면 칩이 많은 화면이 불필요하게 길어진다
+  assert.match(block, /@media\(max-width:700px\){/,
+    '모바일 미디어쿼리 안이 아니다');
+
+  // ② ★ .chip 전역이 아니라 .chips 안만. 전역이면 칩 모양 배지까지 눌린 모양이 된다
+  assert.match(block, /\.chips \.chip{[^}]*min-height:44px/,
+    '.chips 안 칩에 44px 하한이 없다');
+  assert.equal(/^\s*\.chip{/m.test(block), false,
+    '.chip 을 전역으로 키우고 있다 — 배지가 세로로 쪼개진다(라이브 검증에서 실제로 재현됐다)');
+
+  // ③ ★ 도움말(.wi)에 좌우 여백을 주면 margin-left:auto 때문에 제목을 밀어 줄바꿈시킨다
+  const wi = block.match(/\.wchead \.wi[^{]*{([^}]*)}/);
+  assert.ok(wi, '.wi 규칙을 찾지 못했다');
+  assert.match(wi[1], /padding:8px 0/,
+    '.wi 에 좌우 여백이 들어갔다 — 제목이 줄바꿈되고 필수 배지가 세로로 쪼개진다');
+});
+
