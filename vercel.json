@@ -4,8 +4,8 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 300,
-      "includeFiles": "frontend/index.html",
-      "excludeFiles": "{**/*.{test,spec}.js,**/{test,tests,__tests__,docs,coverage}/**,**/*.{md,map},**/.env*,**/.{git,github,vscode,idea}/**,supabase/**,scripts/**,frontend/{billing,privacy,terms,refund}.html,**/node_modules/{typescript,@types,.bin}/**,**/node_modules/@fontsource/noto-sans-kr/files/*.woff2,**/node_modules/@fontsource/noto-sans-kr/files/*-100-normal.woff,**/node_modules/@fontsource/noto-sans-kr/files/*-200-normal.woff,**/node_modules/@fontsource/noto-sans-kr/files/*-300-normal.woff,**/node_modules/@fontsource/noto-sans-kr/files/*-500-normal.woff,**/node_modules/@fontsource/noto-sans-kr/files/*-600-normal.woff,**/node_modules/@fontsource/noto-sans-kr/files/*-800-normal.woff,**/node_modules/@fontsource/noto-sans-kr/files/*-900-normal.woff}"
+      "includeFiles": "{frontend/index.html,backend/assets/fonts/**}",
+      "excludeFiles": "{**/*.{test,spec}.js,**/{test,tests,__tests__,docs,coverage}/**,**/*.{md,map},**/.env*,**/.{git,github,vscode,idea}/**,supabase/**,scripts/**,frontend/{billing,privacy,terms,refund}.html,**/node_modules/{typescript,@types,.bin}/**}"
     }
   },
   "routes": [

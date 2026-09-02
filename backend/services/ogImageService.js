@@ -16,14 +16,14 @@
  *   · 그래서 그 래퍼가 감싸고 있는 것을 직접 쓴다: satori(→SVG) + @resvg/resvg-js(→PNG).
  *     둘 합쳐 약 11.6MB 이고 CommonJS 에서 정상 동작한다.
  *     실측: SVG 3~59ms · PNG 약 200ms · 결과 18~24KB.
- *   · 폰트는 @fontsource/noto-sans-kr(OFL-1.1). 통짜 한글 폰트는 5MB 가 넘는데, 이 패키지는
- *     125개 유니코드 서브셋으로 쪼개져 있다 → **그릴 글자에 필요한 서브셋만** 고른다.
- *     실측: 실제 단지명 기준 5~8개 파일 · 52~86KB · 미커버 글자 0.
+ *   · 폰트는 Noto Sans KR(OFL-1.1)의 유니코드 서브셋. 통짜 한글 폰트는 5MB 가 넘지만 서브셋은
+ *     **그릴 글자에 필요한 것만** 고르면 된다.
+ *     실측: 실제 단지명 기준 5~8개 파일 · 52~86KB 로드 · 미커버 글자 0.
  *
- * [번들 크기] @fontsource/noto-sans-kr 는 통째로 **55MB·2,250파일**(9개 굵기 x woff/woff2)이다.
- *   우리는 400·700 의 woff 만 쓰므로 vercel.json 의 excludeFiles 로 나머지를 함수 번들에서 뺐다
- *   → 6.9MB. ⚠ 그 제외 규칙이 400·700 까지 지우면 이 서비스는 폰트를 못 찾아 폴백으로만 돈다
- *   (계약 테스트가 그 실수를 막는다).
+ * [번들 크기] 폰트는 패키지 의존이 아니라 backend/assets/fonts 에 벤더링돼 있다(2.46MB).
+ *   패키지(@fontsource, 55MB)를 그대로 두면 excludeFiles 256자 제한에 걸리고, node_modules 의
+ *   파일은 런타임 fs 읽기라 Vercel 파일 추적도 못 잡는다. ⚠ vendor 디렉터리가 includeFiles 에서
+ *   빠지면 이 서비스는 폰트를 못 찾아 폴백으로만 돈다(계약 테스트가 그 실수를 막는다).
  *
  * [비용 통제] satori·resvg 는 이 파일 안에서 **지연 로드**한다. 앱의 다른 모든 요청은
  *   이 코드를 건드리지 않으므로 콜드스타트가 무거워지지 않는다.
@@ -37,37 +37,22 @@ const logger = require('../logger');
 const W = 1200;
 const H = 630;
 
-// ── 폰트 서브셋 인덱스 ────────────────────────────────────────────────────────
-//   @fontsource 의 CSS 에 적힌 unicode-range 를 파싱해 [파일 → 코드포인트 구간] 표를 만든다.
-//   파싱은 최초 1회. 실패해도 렌더 전체를 죽이지 않고 null 을 돌려 호출부가 폴백하게 한다.
-let _fontIndex = null;      // { weight: [{file, ranges:[[a,b],…]}] }
+// ── 폰트 (저장소에 벤더링) ───────────────────────────────────────────────────
+//   VENDORED-FONT-2026-09-02: @fontsource 패키지를 런타임 의존으로 두지 않는다.
+//     ① 패키지는 통째로 55MB(9굵기 x woff/woff2)라 vercel.json 의 excludeFiles 로 잘라내려 했더니
+//        **256자 제한**에 걸려 배포가 스키마 검증 단계에서 통째로 실패했다(실제로 겪음).
+//     ② 더 근본적으로, node_modules 안의 폰트는 런타임 `fs` 읽기라 Vercel 의 파일 추적이
+//        잡지 못한다 — 배포는 성공하는데 프로덕션에서만 폰트를 못 찾았을 것이다.
+//   그래서 **필요한 서브셋만** 저장소에 넣었다: 한글 음절 11,172자 + ASCII + 기호를 덮는
+//   85개/굵기 = 170파일 · 2.46MB(미커버 0자 실측). 라이선스 OFL-1.1(LICENSE.txt 동봉).
+//   ⚠ 이 디렉터리는 vercel.json 의 includeFiles 에 들어가야 함수 번들에 실린다.
+const FONT_DIR = path.join(__dirname, '../assets/fonts/noto-sans-kr');
+let _fontIndex = null;        // { "400": [[파일명, [[a,b],…]], …], "700": […] }
 const _fontCache = new Map(); // 파일명 → Buffer
-
-function fontDir() {
-  return path.dirname(require.resolve('@fontsource/noto-sans-kr/package.json'));
-}
-
-function parseWeight(weight) {
-  const css = fs.readFileSync(path.join(fontDir(), `${weight}.css`), 'utf8');
-  const out = [];
-  for (const block of css.split('@font-face')) {
-    const fm = block.match(/files\/(noto-sans-kr-\d+-\d+-normal)\.woff\)/);
-    const um = block.match(/unicode-range:\s*([^;]+);/);
-    if (!fm || !um) continue;
-    const ranges = um[1].split(',').map((s) => {
-      const m = s.trim().match(/^U\+([0-9a-fA-F]+)(?:-([0-9a-fA-F]+))?$/);
-      if (!m) return null;
-      const a = parseInt(m[1], 16);
-      return [a, m[2] ? parseInt(m[2], 16) : a];
-    }).filter(Boolean);
-    if (ranges.length) out.push({ file: `${fm[1]}.woff`, ranges });
-  }
-  return out;
-}
 
 function fontIndex() {
   if (_fontIndex) return _fontIndex;
-  _fontIndex = { 400: parseWeight(400), 700: parseWeight(700) };
+  _fontIndex = JSON.parse(fs.readFileSync(path.join(FONT_DIR, 'index.json'), 'utf8'));
   return _fontIndex;
 }
 
@@ -84,17 +69,17 @@ function fontIndex() {
  * @returns {{fonts: Array, family: string}}
  */
 function pickFonts(text, weight, prefix) {
-  const idx = fontIndex()[weight] || [];
+  const idx = fontIndex()[String(weight)] || [];
   const need = new Set();
   const missing = [];
   for (const ch of new Set([...String(text)])) {
     const cp = ch.codePointAt(0);
     if (cp === 32 || cp === 10) continue;
-    const hit = idx.find((s) => s.ranges.some(([a, b]) => cp >= a && cp <= b));
-    if (hit) need.add(hit.file); else missing.push(ch);
+    const hit = idx.find(([, ranges]) => ranges.some(([a, b]) => cp >= a && cp <= b));
+    if (hit) need.add(hit[0]); else missing.push(ch);
   }
   if (missing.length) logger.warn({ missing: missing.join(''), weight }, 'og: 폰트 서브셋이 못 덮는 글자');
-  const dir = path.join(fontDir(), 'files');
+  const dir = FONT_DIR;
   const fonts = [...need].map((f, i) => {
     if (!_fontCache.has(f)) _fontCache.set(f, fs.readFileSync(path.join(dir, f)));
     return { name: `${prefix}${i}`, data: _fontCache.get(f), weight, style: 'normal' };

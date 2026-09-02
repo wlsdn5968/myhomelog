@@ -5342,38 +5342,71 @@ test('OG 배선 — 단지 페이지가 사실을 한 곳에서만 만들고, �
     '얇은 페이지에도 동적 이미지를 걸고 있다 — 빈 카드가 공유된다');
 });
 
-//   OG-FONT-BUNDLE-2026-09-02: 폰트 패키지는 통째로 55MB(9개 굵기 x woff/woff2)라 함수 번들에서 잘라냈다.
-//     ⚠ 그 제외 규칙이 우리가 **쓰는** 굵기까지 지우면 카드가 조용히 폴백으로만 돌게 된다
-//     — 배포는 성공하고 테스트도 통과하는데 링크 미리보기만 예전 그림으로 돌아간다.
-test('OG 폰트 번들 — 쓰는 굵기(400·700 woff)가 함수 번들에서 제외되지 않는다', () => {
+//   OG-FONT-BUNDLE-2026-09-02: 폰트를 어떻게 함수 번들에 싣느냐로 **배포가 한 번 죽었다.**
+//     ① @fontsource 패키지(55MB)를 excludeFiles 로 잘라내려 했더니 그 값이 256자를 넘어
+//        Vercel 이 vercel.json 스키마 검증에서 배포를 통째로 거부했다(빌드 로그조차 없다).
+//     ② 설령 통과했어도 node_modules 안의 폰트는 런타임 fs 읽기라 파일 추적이 못 잡는다 —
+//        배포는 성공하는데 프로덕션에서만 폰트를 못 찾아 카드가 조용히 폴백으로 돌았을 것이다.
+//     → 필요한 서브셋만 저장소에 벤더링하고 includeFiles 로 명시한다.
+test('OG 폰트 번들 — 벤더 폰트가 함수 번들에 실리고, vercel.json 이 스키마 한도를 지킨다', () => {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
   const root = path2.join(__dirname, '../..');
   const vj = JSON.parse(fs2.readFileSync(path2.join(root, 'vercel.json'), 'utf8'));
-  const ex = String(((vj.functions || {})['api/index.js'] || {}).excludeFiles || '');
-  assert.ok(ex.length > 0, 'excludeFiles 가 사라졌다');
+  const fn = (vj.functions || {})['api/index.js'] || {};
 
-  // 쓰는 것: 400·700 의 woff. 이 패턴이 제외 목록에 있으면 안 된다.
+  // ① 배포를 죽인 바로 그 한도. 넘으면 빌드가 아니라 **배포 자체**가 거부된다.
+  for (const k of ['includeFiles', 'excludeFiles']) {
+    const v = String(fn[k] || '');
+    assert.ok(v.length <= 256,
+      `vercel.json 의 ${k} 가 ${v.length}자 — Vercel 스키마 한도(256)를 넘어 배포가 거부된다`);
+  }
+
+  // ② 벤더 폰트가 번들에 포함돼야 한다. 빠지면 배포·테스트는 통과하는데 카드만 폴백으로 돈다.
+  assert.match(String(fn.includeFiles || ''), /backend\/assets\/fonts/,
+    'includeFiles 에 벤더 폰트 경로가 없다 — 프로덕션에서 폰트를 못 찾아 카드가 조용히 기본 이미지로 떨어진다');
+  assert.match(String(fn.includeFiles || ''), /frontend\/index\.html/,
+    'includeFiles 에서 index.html 이 빠졌다 — 기존 동작이 깨진다');
+
+  // ③ 벤더 파일이 실제로 있어야 한다(패키지 의존을 끊었으므로 저장소가 유일한 출처다)
+  const dir = path2.join(root, 'backend/assets/fonts/noto-sans-kr');
+  assert.ok(fs2.existsSync(path2.join(dir, 'index.json')), '폰트 인덱스가 없다');
+  assert.ok(fs2.existsSync(path2.join(dir, 'LICENSE.txt')), 'OFL 라이선스 사본이 없다 — 재배포 조건 위반');
+  const idx = JSON.parse(fs2.readFileSync(path2.join(dir, 'index.json'), 'utf8'));
   for (const w of ['400', '700']) {
-    assert.equal(ex.includes(`*-${w}-normal.woff`), false,
-      `쓰는 굵기(${w})가 번들에서 제외됐다 — OG 카드가 조용히 폴백으로만 돈다`);
-  }
-  // 통짜 제외도 금지 (woff2 만 지우는 것과 구분된다)
-  assert.equal(/noto-sans-kr[^,}]*\*\.woff(?!2)/.test(ex), false,
-    'woff 를 통째로 제외하고 있다 — 400·700 까지 사라진다');
-
-  // 안 쓰는 것은 실제로 잘라내고 있어야 한다(안 그러면 55MB 가 그대로 실린다)
-  assert.ok(ex.includes('noto-sans-kr/files/*.woff2'), 'woff2 를 번들에서 빼지 않았다 — 25MB 낭비');
-  for (const w of ['100', '900']) {
-    assert.ok(ex.includes(`*-${w}-normal.woff`), `안 쓰는 굵기(${w})가 번들에 남아 있다`);
+    assert.ok(Array.isArray(idx[w]) && idx[w].length > 50, `가중치 ${w} 인덱스가 비었거나 너무 작다`);
+    for (const [file] of idx[w]) {
+      assert.ok(fs2.existsSync(path2.join(dir, file)), `인덱스가 가리키는 폰트 파일이 없다: ${file}`);
+    }
   }
 
-  // 실제로 그 파일들이 존재하는지 — 경로 규칙이 바뀌면 제외도 무의미해진다
-  const dir = path2.join(root, 'node_modules/@fontsource/noto-sans-kr/files');
-  if (fs2.existsSync(dir)) {
-    const names = fs2.readdirSync(dir);
-    assert.ok(names.some((n) => n.endsWith('-400-normal.woff')), '400 굵기 woff 파일이 없다 — 경로 규칙이 바뀌었다');
-    assert.ok(names.some((n) => n.endsWith('-700-normal.woff')), '700 굵기 woff 파일이 없다');
+  // ④ 런타임이 npm 패키지에 다시 기대지 않는다(그 경로는 파일 추적이 못 잡는다)
+  const svc = fs2.readFileSync(path2.join(root, 'backend/services/ogImageService.js'), 'utf8');
+  assert.equal(/require\(['"]@fontsource/.test(svc), false,
+    'ogImageService 가 다시 @fontsource 패키지를 require 한다 — 프로덕션에서 폰트를 못 찾는다');
+  const pkg = JSON.parse(fs2.readFileSync(path2.join(root, 'package.json'), 'utf8'));
+  assert.equal('@fontsource/noto-sans-kr' in (pkg.dependencies || {}), false,
+    '@fontsource 의존이 되살아났다 — 55MB 가 함수 번들에 실린다');
+});
+
+//   한글 커버리지는 **실행**으로 확인한다 — 인덱스가 있어도 글자를 못 덮으면 두부(□)가 그려진다.
+test('OG 폰트 — 한글 음절 전 구간을 서브셋이 덮는다 (표본 실행)', () => {
+  const { pickFonts } = require('../services/ogImageService');
+  // 가·힣 양끝 + 중간을 고르게 뽑은 표본 + 실제 단지명에 흔한 글자
+  const chars = [];
+  for (let cp = 0xac00; cp <= 0xd7a3; cp += 97) chars.push(String.fromCodePoint(cp));
+  const sample = chars.join('') + '가힣아파트단지동호실거래평균억건년준공전용㎡·~→';
+  for (const w of [400, 700]) {
+    const r = pickFonts(sample, w, 'X');
+    assert.ok(r.fonts.length > 0, `가중치 ${w} 에서 서브셋을 하나도 못 골랐다`);
+    // 못 덮는 글자가 있으면 pickFonts 가 경고를 남기지만, 여기서는 커버 자체를 직접 센다
+    const idx = require('node:fs').existsSync ? null : null;
+    const covered = [...new Set([...sample])].filter((ch) => {
+      const one = pickFonts(ch, w, 'Y');
+      return one.fonts.length > 0;
+    });
+    assert.equal(covered.length, new Set([...sample]).size,
+      `가중치 ${w} 에서 못 덮는 글자가 있다 — 카드에 □ 로 그려진다`);
   }
 });
 
