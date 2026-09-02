@@ -141,7 +141,8 @@ router.post('/generate', async (req, res) => {
   // SCORE-VER-2026-09-02 (감사 P0-2): 캐시 키가 **입력 해시뿐**이라 산식을 바꿔도 옛 결과가 그대로 나온다.
   //   (같은 함정을 추천 경로는 `rec:vNN` 으로 이미 막고 있었다 — 보고서만 버전이 없었다.)
   //   점수·표시 규칙을 바꾸면 이 값을 올릴 것.
-  const SCORE_VERSION = 'v2';
+  //   v2 감사 P0-2(카카오 실패 null) · v3 감사 P1-5(모름 보너스 중간값) — 올릴 때 사유를 한 줄 추가할 것.
+  const SCORE_VERSION = 'v3';
   const cacheKey = `report:${SCORE_VERSION}:${crypto.createHash('sha256').update(JSON.stringify(_sortedInput)).digest('hex').slice(0, 16)}`;
   let hit = cache.get(cacheKey);
   // REDIS-CACHE-2026-07-14 (Sprint KKKKK): 로컬 미스 시 Redis 2차 조회 — 다른 인스턴스가 만든 보고서
@@ -867,8 +868,13 @@ function getBuilderTier(builder) {
 }
 
 /** 세대수 등급 보너스 (Phase 9: 사용자 보편 선호 — 대단지 = 환금성·인프라·관리효율 동시) */
+// UNKNOWN-MID-2026-09-02 (감사 P1-5): 종전엔 세대수를 **모르면 0** 을 돌려줬다. 이 점수는 가산식이라
+//   0 은 곧 최하위이고, "확인된 300세대 미만"(4,606곳)과 "모름"(734곳)이 **구별되지 않는다**.
+//   같은 저장소가 HH-GATE 에서는 이미 "모름은 소형으로 배제하지 않는다"고 정해 두었고
+//   propertyService 는 "모름 → 중간값" 을 쓴다 — 보고서만 모름을 나쁨으로 만들고 있었다.
+//   → 모름은 null 로 돌려 호출부가 중간 밴드를 준다([[unknown-treated-as-value]]).
 function getHouseholdBonus(n) {
-  if (!n || !Number.isFinite(Number(n))) return 0;
+  if (!n || !Number.isFinite(Number(n))) return null;   // 모름 (0 아님)
   const v = Number(n);
   if (v >= 3000) return 30;
   if (v >= 2000) return 25;
@@ -885,7 +891,7 @@ function getHouseholdBonus(n) {
 //   실측상 세대당 6.07대까지 부푸는데 그걸로 점수를 주면 순위가 뒤틀린다.
 function getParkingBonus(parkingTotal, households, householdsConflict) {
   const p = Number(parkingTotal), h = Number(households);
-  if (!p || !h) return { ratio: null, bonus: 0 };
+  if (!p || !h) return { ratio: null, bonus: null };   // UNKNOWN-MID-2026-09-02: 모름 (0 아님)
   if (householdsConflict) return { ratio: (p / h).toFixed(2), bonus: 0, uncertain: true };
   const ratio = p / h;
   if (ratio >= 1.3) return { ratio: ratio.toFixed(2), bonus: 12 };
@@ -896,7 +902,7 @@ function getParkingBonus(parkingTotal, households, householdsConflict) {
 
 /** 노후도 점수 (Phase 9: 신축 강세 — 사용자 보편 선호) */
 function getAgeBonus(buildYear) {
-  if (!buildYear) return { years: null, bonus: 0 };
+  if (!buildYear) return { years: null, bonus: null };   // UNKNOWN-MID-2026-09-02: 모름 (0 아님)
   const years = new Date().getFullYear() - Number(buildYear);
   if (years <= 5) return { years, bonus: 25 };
   if (years <= 10) return { years, bonus: 18 };
@@ -1083,14 +1089,21 @@ function applyObjectiveScore(c, seoulRegulated = true, regulatedCodes = null) {
   const builder = getBuilderTier(c.kaptInfo?.builder);
   if (builder.bonus && !r['객관_시공사']) { r['객관_시공사'] = builder.bonus; c.score += builder.bonus; }
 
+  // UNKNOWN-MID-2026-09-02 (감사 P1-5): 모름(null)은 각 항목 밴드의 **중간값**을 준다.
+   //   0 을 주면 "확인된 최하위" 와 같아져 데이터가 없다는 이유만으로 순위가 밀린다.
+   //   중간값 근거: 세대수 30/25/20/12/5/0 → 12 · 주차 12/8/3/0 → 3 · 노후도 25/18/12/6/2/0 → 6.
+  const UNKNOWN_MID = { households: 12, parking: 3, age: 6 };
   const hhBonus = getHouseholdBonus(c.households);
-  if (hhBonus && !r['객관_세대수']) { r['객관_세대수'] = hhBonus; c.score += hhBonus; }
+  const hhApplied = (hhBonus === null) ? UNKNOWN_MID.households : hhBonus;
+  if (hhApplied && !r['객관_세대수']) { r['객관_세대수'] = hhApplied; c.score += hhApplied; if (hhBonus === null) r['객관_세대수_미확인'] = true; }
 
   const parking = getParkingBonus(c.kaptInfo?.parking, c.households, c.householdsConflict);
-  if (parking.bonus && !r['객관_주차']) { r['객관_주차'] = parking.bonus; c.score += parking.bonus; }
+  const parkApplied = (parking.bonus === null) ? UNKNOWN_MID.parking : parking.bonus;
+  if (parkApplied && !r['객관_주차']) { r['객관_주차'] = parkApplied; c.score += parkApplied; if (parking.bonus === null) r['객관_주차_미확인'] = true; }
 
   const age = getAgeBonus(c.build_year);
-  if (age.bonus && !r['객관_노후도']) { r['객관_노후도'] = age.bonus; c.score += age.bonus; }
+  const ageApplied = (age.bonus === null) ? UNKNOWN_MID.age : age.bonus;
+  if (ageApplied && !r['객관_노후도']) { r['객관_노후도'] = ageApplied; c.score += ageApplied; if (age.bonus === null) r['객관_노후도_미확인'] = true; }
 
   const reg = getRegulationPenalty(c.sigungu, c.lawd_cd, seoulRegulated, regulatedCodes);
   if (reg.bonus && !r['객관_규제']) { r['객관_규제'] = reg.bonus; c.score += reg.bonus; }

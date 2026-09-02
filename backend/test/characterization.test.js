@@ -1609,9 +1609,12 @@ test('getAgeBonus — 노후도는 절대 연도가 아니라 현재 연도 기�
   assert.deepEqual(getAgeBonus(Y - 21), { years: 21, bonus: 2 });
   assert.deepEqual(getAgeBonus(Y - 30), { years: 30, bonus: 2 });
   assert.deepEqual(getAgeBonus(Y - 31), { years: 31, bonus: 0 });
-  // 준공년도 미상 → 추정하지 않는다(0)
-  assert.deepEqual(getAgeBonus(null), { years: null, bonus: 0 });
-  assert.deepEqual(getAgeBonus(0), { years: null, bonus: 0 });
+  // UNKNOWN-MID-2026-09-02 (감사 P1-5): 준공년도 미상은 **0 이 아니라 null**(모름) 이다.
+  //   이 점수는 가산식이라 0 은 곧 "확인된 31년 초과" 와 같은 최하위였다 — 데이터가 없다는 이유로
+  //   순위가 밀렸다. 호출부(applyObjectiveScore)가 null 을 보고 중간 밴드를 준다.
+  //   years 는 여전히 null — 나이를 **추정하지는 않는다**(표시는 미확인).
+  assert.deepEqual(getAgeBonus(null), { years: null, bonus: null });
+  assert.deepEqual(getAgeBonus(0), { years: null, bonus: null });
 });
 
 test('computeAptScore — 신축/재건축 우선순위도 상대 나이 기준이다 (절대연도 하드코딩 복귀 차단)', () => {
@@ -1667,10 +1670,12 @@ test('getHouseholdBonus·getParkingBonus — 등급 경계 + 0 나눗셈 방어'
     [999, 12], [500, 12], [499, 5], [300, 5], [299, 0]]) {
     assert.equal(getHouseholdBonus(n), want, `세대수 ${n} 의 보너스가 ${want} 가 아니다`);
   }
-  // 세대수 미상은 0 — KAPT 미매칭 단지를 대단지로 오인하지 않는다
-  assert.equal(getHouseholdBonus(null), 0);
-  assert.equal(getHouseholdBonus(0), 0);
-  assert.equal(getHouseholdBonus('많음'), 0);
+  // UNKNOWN-MID-2026-09-02 (감사 P1-5): 세대수 미상은 **null**(모름) — 0 이 아니다.
+  //   실측: 세대수 미확인 734곳(5.0%) 이 "확인된 300세대 미만" 4,606곳과 똑같이 0 점을 받고 있었다.
+  //   여전히 대단지로 오인하지는 않는다(중간 밴드 12 점, 최고 30 점과 구별).
+  assert.equal(getHouseholdBonus(null), null);
+  assert.equal(getHouseholdBonus(0), null);
+  assert.equal(getHouseholdBonus('많음'), null);
 
   // 주차 비율 — ratio 는 **문자열**(toFixed(2))이다. 프론트가 그대로 표시하므로 타입이 계약의 일부다.
   assert.deepEqual(getParkingBonus(1300, 1000), { ratio: '1.30', bonus: 12 });
@@ -1678,9 +1683,10 @@ test('getHouseholdBonus·getParkingBonus — 등급 경계 + 0 나눗셈 방어'
   assert.deepEqual(getParkingBonus(700, 1000), { ratio: '0.70', bonus: 3 });
   assert.deepEqual(getParkingBonus(699, 1000), { ratio: '0.70', bonus: 0 }); // 표시는 반올림, 판정은 원값
   // ★ 0 나눗셈·미상 방어 — Infinity/NaN 이 점수에 섞이면 그 단지가 상위권을 통째로 차지한다
-  assert.deepEqual(getParkingBonus(1000, 0), { ratio: null, bonus: 0 });
-  assert.deepEqual(getParkingBonus(0, 1000), { ratio: null, bonus: 0 });
-  assert.deepEqual(getParkingBonus(null, null), { ratio: null, bonus: 0 });
+  //   UNKNOWN-MID-2026-09-02: 미상은 bonus null(모름). ratio 는 여전히 null — 비율을 지어내지 않는다.
+  assert.deepEqual(getParkingBonus(1000, 0), { ratio: null, bonus: null });
+  assert.deepEqual(getParkingBonus(0, 1000), { ratio: null, bonus: null });
+  assert.deepEqual(getParkingBonus(null, null), { ratio: null, bonus: null });
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -4628,5 +4634,33 @@ test('진입 소개: 제거된 온보딩 모달(OB)을 기다리는 죽은 코�
     '_maybeShowHero 가 다시 OB 를 참조한다 — 항상 null 이라 그 분기는 실행되지 않는다');
   assert.equal(/setInterval/.test(code), false,
     '_maybeShowHero 에 도달 불가 폴링이 되살아났다');
+});
+
+test('보고서 점수: 데이터가 없다는 이유로 순위가 밀리지 않는다 (모름 ≠ 최하위)', () => {
+  const { applyObjectiveScore } = require('../routes/report');
+  const mk = (over) => Object.assign({
+    score: 0, sigungu: '수지구', lawd_cd: '41465', households: 1200, build_year: new Date().getFullYear() - 3,
+    kaptInfo: { parking: 1500 }, amenities: null, scoreBreakdown: {},
+  }, over);
+
+  const known = mk({}); applyObjectiveScore(known, true, null);
+  // 세대수만 모르는 단지 vs 확인된 소형(250세대)
+  const unknownHh = mk({ households: null, kaptInfo: { parking: null } }); applyObjectiveScore(unknownHh, true, null);
+  const smallHh = mk({ households: 250, kaptInfo: { parking: 100 } }); applyObjectiveScore(smallHh, true, null);
+
+  assert.ok(unknownHh.scoreBreakdown['객관_세대수'] > 0,
+    '세대수를 모른다는 이유로 0 점을 받았다 — 확인된 최하위와 구별되지 않는다');
+  assert.ok(unknownHh.scoreBreakdown['객관_세대수_미확인'] === true,
+    '미확인 표시가 없다 — 화면이 추정값을 사실처럼 보여줄 수 있다');
+  // 보너스가 0 이면 breakdown 키 자체가 생기지 않는다(undefined) — 비교 전에 0 으로 보정한다.
+  assert.ok(unknownHh.scoreBreakdown['객관_세대수'] > (smallHh.scoreBreakdown['객관_세대수'] || 0),
+    '모름이 확인된 소형보다 낮거나 같다 — 모름을 나쁨으로 만들고 있다');
+  assert.ok(unknownHh.scoreBreakdown['객관_세대수'] < known.scoreBreakdown['객관_세대수'],
+    '모름이 확인된 대단지와 같은 점수다 — 모름을 좋음으로 만들고 있다');
+
+  // 준공년도도 같은 규칙
+  const unknownAge = mk({ build_year: null }); applyObjectiveScore(unknownAge, true, null);
+  assert.ok(unknownAge.scoreBreakdown['객관_노후도'] > 0, '준공년도 미상이 0 점이다');
+  assert.equal(unknownAge.scoreBreakdown['객관_노후도_미확인'], true, '노후도 미확인 표시가 없다');
 });
 
