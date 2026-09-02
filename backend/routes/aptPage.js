@@ -35,7 +35,10 @@ const comma = (v) => Number(v).toLocaleString('ko-KR');
 const eok = (v) => (Number.isFinite(Number(v)) ? (Number(v) / 10000).toFixed(2) + '억' : '');
 
 /** /briefing·/region 과 동일한 단일 테마 셸 — 의도된 커미트먼트. */
-function pageShell({ title, desc, canonical, body, noindex }) {
+function pageShell({ title, desc, canonical, body, noindex, image }) {
+  // OG-IMAGE-DYNAMIC-2026-09-02: 단지 사실이 있으면 그 단지 카드를, 없으면 기본 이미지를 쓴다.
+  //   `image` 를 안 넘긴 호출(404 셸 등)은 종전대로 정적 og.png 를 쓴다.
+  const ogImg = image || `${ORIGIN}/og.png`;
   return `<!DOCTYPE html><html lang="ko"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title>
@@ -49,13 +52,13 @@ function pageShell({ title, desc, canonical, body, noindex }) {
      카카오톡·X·스레드에 링크를 붙여도 미리보기 이미지가 나오지 않아, 공개 페이지를 공유해도
      타임라인에서 눈에 띄지 않았다(운영자 SNS 자산과 직결). 단지별 동적 이미지는 별도 과제이고,
      우선 앱과 같은 기본 이미지라도 붙여 카드가 그려지게 한다. -->
-<meta property="og:image" content="${ORIGIN}/og.png">
+<meta property="og:image" content="${esc(ogImg)}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${esc(title)}">
 <meta name="twitter:description" content="${esc(desc)}">
-<meta name="twitter:image" content="${ORIGIN}/og.png">
+<meta name="twitter:image" content="${esc(ogImg)}">
 <meta name="robots" content="${noindex ? 'noindex, follow' : 'index, follow'}">
 <style>
   :root{--bg:#080E18;--card:#101B2B;--bd:#22334A;--tx:#E8EFFA;--sub:#93A4BD;--amb:#FFC93C;--acc:#4C8DFF}
@@ -102,6 +105,32 @@ async function loadIndexRow(aptSeq) {
   return (data || [])[0] || null;
 }
 
+/**
+ * APT-FACTS-SSOT-2026-09-02 (Sprint RRRRRRR): 단지 사실을 **한 곳에서만** 만든다.
+ *   [왜] 링크 미리보기 이미지(/api/og/apt/:seq)가 같은 단지의 숫자를 따로 계산하면,
+ *     카드에는 "63건 평균 19.2억" 이 뜨는데 페이지에는 다른 값이 나올 수 있다. 이 저장소는
+ *     이미 취득세·규제판정에서 **사본 2개가 갈리는** 사고를 반복해서 겪었다
+ *     ([[tax-law-crosscheck-2026-06-24]]). 그래서 페이지와 이미지가 이 함수를 같이 쓴다.
+ *   거래도 인덱스도 없으면 null — 호출부가 "없음" 을 각자 표현한다.
+ */
+async function loadAptFacts(seq) {
+  const svc = require('../services/transactionService');
+  let idx = null, txs = null;
+  try { idx = await loadIndexRow(seq); } catch (e) { logger.warn({ err: e.message, seq }, '/apt 인덱스 예외'); }
+  try { txs = await svc.getTransactionsByAptSeq(seq, 24); } catch (e) { logger.warn({ err: e.message, seq }, '/apt 거래 예외'); }
+  if (!idx && (!txs || !txs.length)) return null;
+
+  const { regionLabel } = require('../services/priceRecordsService');
+  const lawdCd = String((idx && idx.lawd_cd) || (txs && txs[0] && txs[0].lawdCd) || '').trim();
+  const region = regionLabel(lawdCd, (idx && idx.sigungu) || (txs && txs[0] && txs[0].sigungu) || '');
+  const aptName = (idx && idx.apt_name) || (txs && txs[0] && txs[0].aptName) || '';
+  const umd = (idx && idx.umd_nm) || (txs && txs[0] && txs[0].umdNm) || '';
+  const buildYear = num(idx && idx.build_year) || num(txs && txs[0] && txs[0].buildYear);
+  // analyzeTransactions 는 aptName|lawdCd|umdNm 로 묶는다 — apt_seq 한 건만 넣었으니 그룹은 1개다.
+  const stat = (txs && txs.length) ? (svc.analyzeTransactions(txs) || [])[0] : null;
+  return { idx, txs, lawdCd, region, aptName, umd, buildYear, stat };
+}
+
 router.get('/:aptSeq', async (req, res) => {
   const seq = String(req.params.aptSeq || '').trim();
   if (!/^\d{5}-\d+$/.test(seq)) {
@@ -115,12 +144,9 @@ router.get('/:aptSeq', async (req, res) => {
     }));
   }
 
-  const svc = require('../services/transactionService');
-  let idx = null, txs = null;
-  try { idx = await loadIndexRow(seq); } catch (e) { logger.warn({ err: e.message, seq }, '/apt 인덱스 예외'); }
-  try { txs = await svc.getTransactionsByAptSeq(seq, 24); } catch (e) { logger.warn({ err: e.message, seq }, '/apt 거래 예외'); }
+  const af = await loadAptFacts(seq);
 
-  if (!idx && (!txs || !txs.length)) {
+  if (!af) {
     res.set('Cache-Control', 'no-store'); // 없는 단지를 캐시하지 않는다
     return res.status(404).type('html').send(pageShell({
       title: '단지를 찾을 수 없습니다 | 내집로그', desc: '요청한 단지의 실거래 기록이 없습니다.',
@@ -131,15 +157,7 @@ router.get('/:aptSeq', async (req, res) => {
     }));
   }
 
-  const { regionLabel } = require('../services/priceRecordsService');
-  const lawdCd = String((idx && idx.lawd_cd) || (txs && txs[0] && txs[0].lawdCd) || '').trim();
-  const region = regionLabel(lawdCd, (idx && idx.sigungu) || (txs && txs[0] && txs[0].sigungu) || '');
-  const aptName = (idx && idx.apt_name) || (txs && txs[0] && txs[0].aptName) || '';
-  const umd = (idx && idx.umd_nm) || (txs && txs[0] && txs[0].umdNm) || '';
-  const buildYear = num(idx && idx.build_year) || num(txs && txs[0] && txs[0].buildYear);
-
-  // analyzeTransactions 는 aptName|lawdCd|umdNm 로 묶는다 — apt_seq 한 건만 넣었으니 그룹은 1개다.
-  const stat = (txs && txs.length) ? (svc.analyzeTransactions(txs) || [])[0] : null;
+  const { txs, lawdCd, region, aptName, umd, buildYear, stat } = af;
 
   const cards = [];
   const facts = [];
@@ -202,7 +220,11 @@ router.get('/:aptSeq', async (req, res) => {
   // ⚠ CACHE-POISON-2026-08-29 의 교훈: 열화 상태(카드 0)에 긴 캐시를 붙이지 않는다.
   const thin = !cards.length;
   res.set('Cache-Control', thin ? 'no-store' : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
-  res.type('html').send(pageShell({ title, desc, canonical: `${ORIGIN}/apt/${seq}`, body, noindex: thin }));
+  res.type('html').send(pageShell({ title, desc, canonical: `${ORIGIN}/apt/${seq}`, body, noindex: thin,
+    // 얇은 페이지(거래 0)는 카드에 쓸 숫자가 없으므로 기본 이미지를 유지한다.
+    image: thin ? null : `${ORIGIN}/api/og/apt/${encodeURIComponent(seq)}` }));
 });
 
 module.exports = router;
+// 링크 미리보기 이미지 라우트가 같은 사실을 쓰도록 함께 내보낸다 (APT-FACTS-SSOT-2026-09-02)
+module.exports.loadAptFacts = loadAptFacts;

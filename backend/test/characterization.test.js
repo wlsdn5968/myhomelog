@@ -5218,3 +5218,127 @@ test('취득세 사본 — 프론트 계산기를 실제로 실행해 백엔드�
   assert.deepEqual(bad.slice(0, 8), [], `프론트 계산기와 백엔드가 갈렸다(${bad.length}/${checked}건):\n  ` + bad.slice(0, 8).join('\n  '));
 });
 
+// ── OG-IMAGE-DYNAMIC-2026-09-02 (Sprint RRRRRRR) ────────────────────────────────
+//   단지별 링크 미리보기 이미지. 카카오톡·X 에서 이 카드가 사실상 유일한 광고면이라
+//   ① 틀린 숫자를 그리면 안 되고 ② 추천·예측 표현이 들어가면 절대 룰 위반이며
+//   ③ 렌더가 실패해도 링크 미리보기 자체는 살아 있어야 한다.
+test('OG 카드 문구 — 실거래 사실만 싣고, 없는 숫자를 지어내지 않는다', () => {
+  const { buildCard } = require('../routes/ogImage');
+
+  const withStat = buildCard({
+    region: '서울 성동구', aptName: 'e편한세상옥수파크힐스', umd: '옥수동', buildYear: 2016,
+    stat: { dealCount: 63, avgPriceAuk: '19.2', medianPrice: 189000, minPrice: 154000, maxPrice: 231000, recentDeal: '2026-08-20' },
+  });
+  assert.equal(withStat.title, 'e편한세상옥수파크힐스');
+  assert.equal(withStat.eyebrow, '서울 성동구 · 옥수동');
+  const joined = withStat.lines.join(' | ');
+  assert.match(joined, /최근 24개월 63건/, '거래 건수가 카드에 없다');
+  assert.match(joined, /평균 19.2억/, '평균가가 카드에 없다');
+  assert.match(joined, /중앙값 18.9억/, '중앙값이 만원→억 변환을 안 거쳤다');
+  assert.match(joined, /15.4억~23.1억/, '가격 범위가 없다');
+  assert.ok(withStat.lines.length <= 2, '줄이 3개 이상이면 630px 안에서 답답해진다');
+  assert.match(withStat.footer, /국토교통부/, '출처가 이미지에 박히지 않는다');
+
+  // ★ 통계가 없으면 숫자를 만들어내지 않는다 (0 건·0 억 같은 거짓 사실 금지)
+  const noStat = buildCard({ region: '부산 해운대구', aptName: '테스트', umd: '', buildYear: null, stat: null });
+  const nj = noStat.lines.join(' ');
+  assert.equal(/[0-9]+건|[0-9.]+억/.test(nj), false, `통계가 없는데 숫자를 그렸다: ${nj}`);
+
+  // ★ 절대 룰 — 추천·예측·권유 표현 금지
+  const BANNED = ['추천', '유망', '전망', '오를', '내릴', '매수', '매도', '투자하', '지금이 기회', '저평가'];
+  for (const card of [withStat, noStat]) {
+    const all = [card.eyebrow, card.title, ...card.lines, card.footer].join(' ');
+    for (const w of BANNED) {
+      assert.equal(all.includes(w), false, `OG 카드에 금지 표현이 들어갔다: "${w}" in "${all}"`);
+    }
+  }
+});
+
+test('OG 폰트 — 실제 단지명이 서브셋으로 전부 덮인다 (두부 글자 0)', () => {
+  const { pickFonts, titleSize } = require('../services/ogImageService');
+
+  // 실제 단지명에서 뽑은 표본 — 영문 혼용·중점·㎡·물결까지 포함한다
+  const SAMPLES = [
+    'e편한세상옥수파크힐스 서울 성동구 · 옥수동',
+    '래미안원베일리 최근 24개월 128건 · 평균 21.7억',
+    '경희궁자이2단지 중앙값 18.9억 · 15.4억~23.1억 · 최근 거래 2026-08-20',
+    '국토교통부 실거래가 공개시스템 · 층·향 보정 없음',
+    'MYHOMELOG 전용 84㎡ 2016년 준공',
+  ];
+  for (const s of SAMPLES) {
+    const r = pickFonts(s, 400, 'T');
+    assert.ok(r.fonts.length > 0, `서브셋을 하나도 못 골랐다: ${s}`);
+
+    // ★ FONT-FAMILY-DISTINCT: 서브셋마다 이름이 달라야 satori 가 폴백 체인을 탄다.
+    //   같은 이름으로 넘겼다가 한글 대부분이 두부(□)로 그려진 적이 있다.
+    const names = r.fonts.map((f) => f.name);
+    assert.equal(new Set(names).size, names.length,
+      '서브셋 폰트 이름이 겹친다 — satori 가 하나만 쓰고 나머지 글자를 □ 로 그린다');
+    assert.equal(r.family, names.join(', '), 'fontFamily 폴백 목록이 폰트 목록과 다르다');
+  }
+
+  // 이름이 길수록 글자를 줄인다(넘치면 카드 밖으로 나간다)
+  assert.ok(titleSize('파크뷰') > titleSize('e편한세상옥수파크힐스'), '긴 이름이 줄어들지 않는다');
+  assert.ok(titleSize('아'.repeat(30)) <= 40, '아주 긴 이름이 충분히 줄지 않는다');
+});
+
+test('OG 렌더 — 1200x630 PNG 를 실제로 만든다', async () => {
+  const { renderCard, W, H } = require('../services/ogImageService');
+  const png = await renderCard({
+    eyebrow: '서울 성동구 · 옥수동', title: 'e편한세상옥수파크힐스',
+    lines: ['최근 24개월 63건 · 평균 19.2억'], footer: '국토교통부 실거래가 공개시스템',
+  });
+  assert.ok(Buffer.isBuffer(png) && png.length > 5000, `PNG 가 비정상적으로 작다(${png && png.length})`);
+  // PNG 시그니처 + IHDR 에서 실제 픽셀 크기를 읽는다 (헤더만 믿지 않는다)
+  assert.equal(png.slice(1, 4).toString('latin1'), 'PNG', 'PNG 시그니처가 아니다');
+  assert.equal(png.readUInt32BE(16), W, `가로가 ${W} 가 아니다`);
+  assert.equal(png.readUInt32BE(20), H, `세로가 ${H} 가 아니다`);
+});
+
+test('OG 라우트 — 실패·미존재는 정적 이미지로 떨어지고 절대 캐시되지 않는다', async () => {
+  // 열화된 응답을 엣지에 굳히면 장애가 캐시 수명만큼 지속된다(이 저장소의 실제 사고).
+  const router = require('../routes/ogImage');
+  const layer = router.stack.find((l) => l.route);
+  assert.ok(layer, 'ogImage 라우터에 라우트가 없다');
+  const handle = layer.route.stack[0].handle;
+
+  const mkRes = () => {
+    const r = { headers: {}, redirected: null, sent: null, code: 200 };
+    r.set = (k, v) => { r.headers[k] = v; return r; };
+    r.status = (c) => { r.code = c; return r; };
+    r.redirect = (c, url) => { r.code = c; r.redirected = url; return r; };
+    r.send = (b) => { r.sent = b; return r; };
+    return r;
+  };
+
+  // ① 형식이 틀린 코드 — 이름으로 조회하지 않는다(동명 단지가 남의 시세를 끌어온다)
+  const bad = mkRes();
+  await handle({ params: { aptSeq: '반포자이' } }, bad, () => {});
+  assert.equal(bad.redirected, '/og.png', '잘못된 코드인데 정적 이미지로 떨어지지 않았다');
+  assert.equal(bad.headers['Cache-Control'], 'no-store', '열화 응답에 캐시가 붙었다');
+  assert.equal(bad.headers['X-Og-Fallback'], 'bad-seq', '폴백 사유를 남기지 않아 라이브에서 원인을 못 본다');
+
+  // ② 사실 조회가 null (DB 미설정 환경) — 여기서도 캐시 금지
+  const none = mkRes();
+  await handle({ params: { aptSeq: '11200-1234' } }, none, () => {});
+  assert.equal(none.redirected, '/og.png', '데이터가 없는데 정적 이미지로 떨어지지 않았다');
+  assert.equal(none.headers['Cache-Control'], 'no-store', '열화 응답에 캐시가 붙었다');
+});
+
+test('OG 배선 — 단지 페이지가 사실을 한 곳에서만 만들고, 얇은 페이지엔 동적 이미지를 안 건다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const src = fs2.readFileSync(path2.join(__dirname, '../routes/aptPage.js'), 'utf8');
+
+  // ① 사실 생성은 loadAptFacts 한 곳 — 카드와 페이지가 다른 숫자를 말하면 안 된다
+  assert.equal(typeof require('../routes/aptPage').loadAptFacts, 'function',
+    'loadAptFacts 가 내보내져 있지 않다 — OG 라우트가 사실을 따로 계산하게 된다');
+  // ⚠ 주석에도 이 이름이 나오므로 **호출 형태**(svc.analyzeTransactions()) 로 좁혀 센다.
+  assert.equal((src.match(/svc\.analyzeTransactions\(/g) || []).length, 1,
+    'analyzeTransactions 호출이 2곳 이상이다 — 사실 계산이 다시 사본이 됐다');
+
+  // ② 거래가 없는 얇은 페이지는 그릴 숫자가 없으므로 기본 이미지를 쓴다
+  assert.match(src, /image: thin \? null :/,
+    '얇은 페이지에도 동적 이미지를 걸고 있다 — 빈 카드가 공유된다');
+});
+
