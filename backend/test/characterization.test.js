@@ -4200,3 +4200,45 @@ test('보안 헤더: 모든 정적 라우트에 클릭재킹·MIME 방어 헤더
   assert.ok(EXPRESS_DESTS.length === 1);
 });
 
+// ── SHARE-ZERO-2026-09-02 (감사 P0-5) ──────────────────────────────────────
+//   [왜] `/share?apt=...` 로 들어온 신규 방문자에게 "현재 평균가 0.00억 · 가격 범위 0.0~0.0억" 이
+//     떴다(라이브 실측). handleShareUrl 이 실거래 조회에 실패하면 **그냥 return** 해서
+//     avgPrice:0 stub 이 화면에 남았고, 렌더러는 `(p.minPrice||0).toFixed(1)` 로 그 0 을 값으로 찍었다.
+//     공유 링크는 첫인상이라 0 원 표기의 파급이 크다. [[unknown-treated-as-value]] 의 전형.
+//   [무엇을 고정하나] "모름"을 0 으로 찍던 raw 패턴의 재유입과, 실패 경로의 조용한 return.
+test('공유 링크: 가격 미확인 상태를 0 으로 표시하지 않는다 (raw 패턴 재유입 차단)', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+
+  // ① 유효성 게이트가 존재해야 한다 (avgPrice 가 0 이하면 숫자 대신 상태 문구)
+  assert.ok(html.indexOf('!(Number(p.avgPrice) > 0)') >= 0,
+    '가격 유효성 게이트가 사라졌다 — 0 원이 다시 값으로 표시된다');
+
+  // ② 0 을 가격 범위로 찍던 raw 패턴이 돌아오면 실패
+  const RAW_RANGE = '(p.minPrice||0).toFixed(1)}~${(p.maxPrice||0).toFixed(1)}억';
+  assert.equal(html.indexOf(RAW_RANGE), -1, `0 원 가격범위 raw 패턴이 재유입됐다: ${RAW_RANGE}`);
+
+  // ③ 공유 텍스트도 0 을 내보내면 안 된다
+  assert.equal(html.indexOf('평균 ${(currentDetail.avgPrice||0).toFixed(2)}억'), -1,
+    '외부 공유 문구가 다시 "평균 0.00억" 을 내보낸다');
+});
+
+test('공유 링크: 실거래 조회 실패 경로가 조용히 return 하지 않는다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const from = html.indexOf('async function handleShareUrl()');
+  assert.ok(from > 0, 'handleShareUrl 을 찾지 못했다 — 테스트를 갱신할 것');
+  const body = html.slice(from, from + 3000);
+
+  // 실패 3경로(지역 미해석·거래 0건·예외)가 전부 화면을 다시 그려야 한다
+  assert.equal(body.indexOf('if(!lawdCd)return;'), -1, '지역 미해석 시 조용히 return 하고 있다');
+  assert.equal(body.indexOf('if(!items.length)return;'), -1, '거래 0건일 때 조용히 return 하고 있다');
+  assert.equal(body.indexOf('조용히 실패 — stub 유지'), -1, 'catch 가 여전히 조용히 삼킨다');
+  // 호출 3곳(지역 미해석·거래 0건·예외). 정의는 `_reshow=` 라 이 정규식에 잡히지 않는다.
+  const reshow = (body.match(/_reshow\(\{/g) || []).length;
+  assert.ok(reshow >= 3, `실패 경로 재렌더가 ${reshow}회뿐 — 3경로 모두 다시 그려야 한다`);
+  assert.ok(body.indexOf('const _reshow=') >= 0, '_reshow 헬퍼 정의가 사라졌다');
+});
+

@@ -7513,11 +7513,11 @@ function showDetail(p){
     ${_scoreSection}
     <div style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:var(--radius-base);padding:9px 11px;margin:8px 0 10px;font-size:11px;color:var(--red);font-weight:600;line-height:1.5">⚠ 점수·신호는 <u>과거 실거래 통계 정리</u>이며 매수 추천이 아닙니다. 가격 하락 위험은 본인이 부담합니다.</div>
     <div class="rg2">
-      ${p._txFailed && !(p.txHistory||[]).length
-        ? `<div class="rc"><div class="rcl">현재 평균가</div><div class="rcv" style="color:var(--t3);font-size:12.5px">일시 조회 실패</div></div>
-      <div class="rc"><div class="rcl">가격 범위</div><div class="rcv" style="color:var(--t3);font-size:12.5px">단지를 다시 열어주세요</div></div>`
+      ${!(Number(p.avgPrice) > 0)
+        ? `<div class="rc"><div class="rcl">현재 평균가</div><div class="rcv" style="color:var(--t3);font-size:12.5px">${p._txFailed ? '일시 조회 실패' : p._pxPending ? '실거래 조회 중…' : '최근 실거래 없음'}</div></div>
+      <div class="rc"><div class="rcl">가격 범위</div><div class="rcv" style="color:var(--t3);font-size:12.5px">${p._txFailed ? '단지를 다시 열어주세요' : p._pxPending ? '잠시만 기다려주세요' : '표시할 거래가 없어요'}</div></div>`
         : `<div class="rc"><div class="rcl">현재 평균가</div><div class="rcv" style="color:var(--acc)">${(p.avgPrice||0).toFixed(2)}억</div></div>
-      <div class="rc"><div class="rcl">가격 범위</div><div class="rcv">${(p.minPrice||0).toFixed(1)}~${(p.maxPrice||0).toFixed(1)}억</div></div>`}
+      <div class="rc"><div class="rcl">가격 범위</div><div class="rcv">${(Number(p.minPrice) > 0 && Number(p.maxPrice) > 0) ? `${Number(p.minPrice).toFixed(1)}~${Number(p.maxPrice).toFixed(1)}억` : '—'}</div></div>`}
     </div>
     ${p.facility?`<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:var(--radius-base);padding:9px 11px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
       <div style="font-weight:700;color:var(--t1);margin-bottom:4px">🏢 단지 기본정보</div>
@@ -8576,7 +8576,9 @@ async function shareCurrent(){
   const url=u.toString();
   const title=`${currentDetail.aptName} — 내집로그 데이터 분석`;
   // SCORE-HALLUC-FIX-2026-07-16 (Sprint SSSSS): 폐기된 60점 fallback 잔재 — 점수 없으면 표기 생략(외부 공유 텍스트라 특히 중요)
-  const text=`${currentDetail.aptName} (${_fmtSgg(currentDetail.area)}) — 평균 ${(currentDetail.avgPrice||0).toFixed(2)}억${currentDetail.score?` / 점수 ${currentDetail.score}점`:''}\n※ 매수 추천이 아니며 참고용 정보입니다.`;
+  // SHARE-ZERO-2026-09-02: 가격이 없을 때 "평균 0.00억" 을 외부로 내보내던 문구 — 점수와 같은 방식으로 생략한다.
+  const _shPx=Number(currentDetail.avgPrice) > 0 ? ` — 평균 ${Number(currentDetail.avgPrice).toFixed(2)}억` : '';
+  const text=`${currentDetail.aptName} (${_fmtSgg(currentDetail.area)})${_shPx}${currentDetail.score?` / 점수 ${currentDetail.score}점`:''}\n※ 매수 추천이 아니며 참고용 정보입니다.`;
   // Web Share API (모바일)
   if(navigator.share){
     try{await navigator.share({title,text,url});return;}catch(e){if(e.name==='AbortError')return;}
@@ -8605,16 +8607,23 @@ async function handleShareUrl(){
   if(found){showDetail(found);return;}
   // stub 단지 즉시 표시 (로딩 느낌)
   // STAB-AUDIT-2026-05-07: score=60 환각 차단 → null (분석 대기 표시)
-  showDetail({aptName:apt, area, avgPrice:0, minPrice:0, maxPrice:0, score:null, ltv:null, maxLoan:null, pros:'공유 링크로 진입 — 실거래 데이터 조회 중...', cons:'', strategy:'', tags:[], txHistory:[]});
+  // SHARE-ZERO-2026-09-02 (감사 P0-5): 종전에는 조회가 실패하면 **그냥 return** 해서
+  //   avgPrice:0 stub 이 화면에 그대로 남았다 → `/share?apt=반포자이` 가 "0.00억 · 0.0~0.0억" 으로
+  //   떴다(라이브 실측). 공유 링크는 신규 방문자의 **첫 화면**이라 0 원 표기가 그대로 첫인상이 된다.
+  //   [[unknown-treated-as-value]] 의 전형 — 이제 상태(_pxPending/_pxNone/_txFailed)를 실어 다시 그린다.
+  const _stub=(extra)=>Object.assign({aptName:apt, area, avgPrice:0, minPrice:0, maxPrice:0,
+    score:null, ltv:null, maxLoan:null, pros:'', cons:'', strategy:'', tags:[], txHistory:[]}, extra);
+  const _reshow=(extra)=>{ if(currentDetail && currentDetail.aptName===apt) showDetail(_stub(extra)); };
+  showDetail(_stub({_pxPending:true, pros:'공유 링크로 진입 — 실거래 데이터 조회 중...'}));
   // area에서 구 추출 → lawdCd 매핑 후 실거래 조회 시도
   try{
     const lawdCd=await resolveLawdCdFromArea(area);
-    if(!lawdCd)return;
+    if(!lawdCd){ _reshow({_txFailed:true, pros:'공유 링크에 지역 정보가 없어 실거래를 조회하지 못했어요.', strategy:'상단 검색창에서 단지명을 검색하면 최신 실거래가 표시됩니다.'}); return; }
     // 최근 3개월 합산 — 현재 달은 MOLIT 신고 지연으로 거래 거의 없음
     const items=await fetchRecentTx(lawdCd, apt);
     // 공유 링크 진입 — 단지명 검색으로 기록 (실거래 0건이어도 사용자가 그 단지를 찾았다는 신호)
     _logSearch('kapt', apt, items.length);
-    if(!items.length)return;
+    if(!items.length){ _reshow({_pxNone:true, lawdCd, pros:'최근 6개월 실거래 신고 내역이 없어요.', strategy:'국토부 실거래는 계약 후 30일 이내 신고라 최근 거래가 늦게 반영될 수 있습니다.'}); return; }
     // 최근 평균 계산
     const prices=items.map(t=>t.dealAmount/10000); // 억
     const avg=prices.reduce((a,b)=>a+b,0)/prices.length;
@@ -8634,7 +8643,10 @@ async function handleShareUrl(){
     if(currentDetail && currentDetail.aptName===apt){
       showDetail(aptEnriched);
     }
-  }catch{/* 조용히 실패 — stub 유지 */}
+  }catch{
+    // 조용히 삼키면 "조회 중…" 문구가 영구히 남는다 — 사용자에게 상태를 알린다.
+    _reshow({_txFailed:true, pros:'실거래 조회에 실패했어요.', strategy:'잠시 후 다시 시도하거나 상단 검색창에서 단지명을 검색해주세요.'});
+  }
 }
 // YYYYMM 현재
 function currentYm(){
