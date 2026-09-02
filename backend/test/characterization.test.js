@@ -4953,3 +4953,75 @@ test('마이그레이션 기록: 생애최초 취득세 현행 필드가 사후 
   assert.ok(joined.indexOf('deductManwon') >= 0, '생애최초 공제액(200만) 기록이 없다');
 });
 
+// ── ACQ-CROSSCOPY-BEHAVIORAL-2026-09-02 (감사 후속: 테스트 행위화) ─────────────────────
+//   [왜] 취득세는 프론트 계산기와 백엔드에 **각각 사본**이 있다. 2026-07-25 에 백엔드만 고쳐져
+//     6억 매물에 600만원 과다 표기가 3주간 프로덕션에 남았다. 그때 있던 계약 테스트는
+//     "두 사본의 **식 모양**이 같은가" 를 정규식으로 봤다 — 모양이 같아도 앞뒤 분기가 다르면
+//     결과는 갈린다. 그래서 여기서는 **프론트 함수를 실제로 실행해** 백엔드와 값을 맞춘다.
+//   [무엇을 고정하나] 세율 하나가 아니라 화면에 나가는 최종 금액 전체(취득세·교육세·농특세·
+//     중개보수·등기비·갭)를 매수가 × 보유주택 × 생애최초 × 조정지역 × 대출 조합으로 대조한다.
+//     스냅샷 경로와 폴백 경로를 **둘 다** 돈다 — "폴백이 맞으니 주 경로도 맞다" 는 판단이
+//     이 저장소에서 이미 틀렸기 때문. (2026-09-02 실측: 792 조합 불일치 0)
+test('취득세 사본 — 프론트 계산기를 실제로 실행해 백엔드와 전 조합 대조 (모양이 아니라 값)', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+
+  const grab = (name) => {
+    const m = html.match(new RegExp('function ' + name + '\\([\\s\\S]*?\\n\\}'));
+    assert.ok(m, `frontend/index.html 에서 ${name} 을 찾지 못했다 — 함수명이 바뀌었다면 이 테스트도 갱신할 것`);
+    return m[0];
+  };
+  const src = [grab('_pickTierRate'), grab('_pickTierRateUnder'), grab('calcTotalCostHTML')].join('\n');
+
+  // 프로덕션 regulations_snapshot 실측 형태 (2026-08-16 DB)
+  const TIERS = [{ underAuk: 6, rate: 0.01 }, { underAuk: 9, rate: 0.02 }, { underAuk: 999, rate: 0.03 }];
+  const CFG = {
+    acquisitionTax: {
+      noHouse: { tiers: TIERS, firstBuyerExempt: { deductManwon: 200, eligibleUnderAuk: 12 } },
+      oneHouse: { tiers: TIERS },
+      twoHousePlus: { rate: 0.08 },
+    },
+    commission: [
+      { rate: 0.006, underAuk: 0.5 }, { rate: 0.005, underAuk: 2 }, { rate: 0.004, underAuk: 9 },
+      { rate: 0.005, underAuk: 12 }, { rate: 0.006, underAuk: 15 }, { rate: 0.007, underAuk: 999 },
+    ],
+    eduTaxRate: 0.1, spclTaxRate: 0.002, spclTaxThreshold: 0.01,
+    regFee: { rate: 0.0015, baseManwon: 20 },
+  };
+
+  const { calcTotalCost } = require('../services/analysisService');
+  // 경계를 낀 매수가 — 6·9(취득세 구간), 12(생애최초 한도), 0.5~15(중개보수 구간)
+  const PRICES = [0.4, 0.5, 3, 5, 6, 6.5, 7, 8, 9, 9.01, 11, 12, 12.01, 15, 20];
+  const STATUS = ['무주택', '1주택', '2주택+'];
+  const REG = [true, false, undefined];   // undefined = 지역 모름 → 보수적 중과 유지
+
+  let checked = 0;
+  const bad = [];
+  for (const useCfg of [true, false]) {   // 스냅샷 경로 · 폴백 경로 둘 다
+    const fn = new Function('window', `${src}; return calcTotalCostHTML;`)(
+      { __TAX_CONFIG: useCfg ? CFG : undefined });
+    for (const price of PRICES) for (const hs of STATUS) for (const fb of [false, true]) {
+      for (const reg of REG) for (const loan of [0, 1, 3]) {
+        const out = fn(price, loan, hs, fb, reg);
+        const be = calcTotalCost(price, loan, hs, fb, useCfg ? CFG : undefined, reg);
+        checked++;
+        const label = `cfg=${useCfg} ${price}억 ${hs} 생애최초=${fb} 조정=${reg} 대출=${loan}`;
+        const mRate = out.match(/취득세 \(([\d.]+)%\)/);
+        const mTot = out.match(/약 (-?[\d.]+)~(-?[\d.]+)억/);
+        if (!mRate || !mTot) { bad.push(label + ` → 화면 문자열을 파싱할 수 없다`); continue; }
+        if (Number(mRate[1]) !== be.taxRate) bad.push(label + ` 세율 프론트=${mRate[1]} 백엔드=${be.taxRate}`);
+        if (Number(mTot[1]) !== be.totalLow) bad.push(label + ` 필요현금 하한 프론트=${mTot[1]} 백엔드=${be.totalLow}`);
+        if (Number(mTot[2]) !== be.totalHigh) bad.push(label + ` 필요현금 상한 프론트=${mTot[2]} 백엔드=${be.totalHigh}`);
+        // ⚠ 백엔드의 firstBuyerDeduct 는 **억 단위 2자리 반올림된 표시값**이다(0.4억 매물의 40만원 공제는 0.00 이 된다).
+        //   그래서 "공제가 있었나" 를 불리언으로 보면 거짓 불일치가 난다 — 프론트가 찍은 금액과 같은 단위로 맞춘다.
+        const mFb = out.match(/생애최초 감면[\s\S]*?>-([\d.]+)억</);
+        const feFbVal = mFb ? Number(mFb[1]) : 0;
+        if (feFbVal !== be.firstBuyerDeduct) bad.push(label + ` 생애최초 감면 프론트=${feFbVal} 백엔드=${be.firstBuyerDeduct}`);
+      }
+    }
+  }
+  assert.ok(checked >= 700, `대조 조합이 너무 적다(${checked}) — 그리드가 축소됐는지 확인할 것`);
+  assert.deepEqual(bad.slice(0, 8), [], `프론트 계산기와 백엔드가 갈렸다(${bad.length}/${checked}건):\n  ` + bad.slice(0, 8).join('\n  '));
+});
+
