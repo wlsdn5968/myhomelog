@@ -50,6 +50,63 @@ const TOSS_API_BASE = 'https://api.tosspayments.com';
 //     mismatch     ck 와 sk 의 환경(test/live)이 엇갈림 → **차단**. 섞이면 결제는 되는데 확정이
 //                  실패하거나(테스트 ck + 라이브 sk) 그 반대가 되어 금전 사고로 직결된다.
 //   ⚠ 키 값 자체는 내려보내지 않는다(clientKey 는 설계상 공개 대상이라 종전대로 유지).
+/**
+ * BILLING-REPAIR-2026-09-02 (감사 P1-6): "결제는 됐는데 이용권이 없는" 구멍을 메운다.
+ *
+ * [문제] confirm·webhook 모두 ① payments CAS(requested→captured) ② user_billing upsert 를
+ *   **별개 await** 로 실행한다. ①과 ② 사이에 죽거나 ②만 실패하면 결제는 captured 인데 플랜이 없다.
+ *   더 나쁜 건 ② 의 `error` 를 아무도 확인하지 않았다는 점 — 크래시가 없어도 DB 순간 오류만으로
+ *   같은 증상이 조용히 생긴다. 그리고 재시도는 두 조기반환("이미 captured", "CAS 0행 = 이미 처리됨")에
+ *   걸려 ②를 **영영 다시 시도하지 않는다**.
+ *
+ * [왜 무조건 보정하면 안 되나] 그 조기반환 지점에서 그냥 이용권을 채워주면, **지난달 주문서로
+ *   confirm 을 다시 부르는 것만으로 30일이 공짜로 연장된다**. 그래서 판별 기준이 필요하다.
+ *
+ * [판별] `user_billing` 에는 `trg_user_billing_updated` 트리거가 있어(프로덕션 실측)
+ *   성공적으로 쓰일 때마다 `updated_at` 이 갱신된다. 따라서
+ *     - 행이 아예 없거나
+ *     - 이 결제의 승인 시각(approved_at)이 마지막 이용권 갱신(updated_at)보다 **뒤**라면
+ *   → 이 결제의 지급이 반영되지 않은 것이다. 반대로 옛 주문 재요청은 approved_at < updated_at 이라
+ *   보정 대상이 아니다(무료 연장 불가).
+ *
+ * 실패해도 응답은 막지 않는다 — 다음 재시도(사용자 새로고침·Toss webhook 재전송)가 또 시도한다.
+ * @returns {Promise<'repaired'|'ok'|'skipped'>}
+ */
+async function ensureBillingActive(admin, userId, plan, approvedAtIso) {
+  if (!admin || !userId || !plan) return 'skipped';
+  try {
+    const { data: row, error } = await admin.from('user_billing')
+      .select('plan, status, current_period_end, updated_at').eq('user_id', userId).maybeSingle();
+    if (error) throw error;
+    const approvedAt = approvedAtIso ? new Date(approvedAtIso) : null;
+    const updatedAt = row && row.updated_at ? new Date(row.updated_at) : null;
+    const neverApplied = !row
+      || (approvedAt && Number.isFinite(approvedAt.getTime())
+          && (!updatedAt || !Number.isFinite(updatedAt.getTime()) || approvedAt > updatedAt));
+    if (!neverApplied) return 'ok';
+
+    const now = new Date();
+    const periodEnd = require('../services/planService').computePeriodEnd(row && row.current_period_end, now);
+    const { error: upErr } = await admin.from('user_billing').upsert({
+      user_id: userId,
+      plan,
+      status: 'active',
+      current_period_start: now.toISOString(),
+      current_period_end: periodEnd.toISOString(),
+      canceled_at: null,
+    }, { onConflict: 'user_id' });
+    if (upErr) throw upErr;
+    try { require('../services/planService').invalidatePlanCache(userId); } catch (_) { /* 캐시 실패는 무해 */ }
+    logger.warn({ userId, plan }, '결제 보정: captured 인데 이용권이 없어 다시 채웠다');
+    return 'repaired';
+  } catch (e) {
+    // 보정 실패가 응답을 막으면 안 된다 — 다음 재시도가 또 시도한다. 다만 흔적은 남긴다.
+    logger.error({ userId, plan, err: e.message }, '결제 보정 실패 — 수동 확인 필요');
+    try { Sentry.captureException(e); } catch (_) { /* noop */ }
+    return 'skipped';
+  }
+}
+
 function _pgMode() {
   const ck = process.env.TOSS_CLIENT_KEY || '';
   const sk = process.env.TOSS_SECRET_KEY || '';
@@ -235,7 +292,9 @@ router.post('/confirm', async (req, res, next) => {
     if (payErr) throw payErr;
     if (!pay) return res.status(404).json({ error: '주문을 찾을 수 없음' });
     if (pay.status === 'captured') {
-      return res.json({ status: 'captured', plan: pay.plan }); // 멱등
+      // 멱등 — 다만 그냥 200 만 주면 "captured 인데 이용권 없음" 을 영구히 은폐한다(감사 P1-6).
+      await ensureBillingActive(admin, req.user.id, pay.plan, pay.approved_at);
+      return res.json({ status: 'captured', plan: pay.plan });
     }
     if (Number(pay.amount) !== Number(amount)) {
       // P2-5 (2026-05-04): 정확 금액 log 제외 — PIPA 제3조 최소수집 원칙
@@ -294,6 +353,8 @@ router.post('/confirm', async (req, res, next) => {
     if (!capRows || capRows.length === 0) {
       // webhook 이 이미 처리함 — 멱등 응답
       logger.info({ userId: req.user.id, orderId }, 'confirm: 이미 처리됨 (멱등)');
+      // webhook 이 CAS 만 성공시키고 user_billing 직전에 죽었다면 이 분기가 그 구멍을 은폐한다(감사 P1-6).
+      await ensureBillingActive(admin, req.user.id, pay.plan, pay.approved_at || new Date().toISOString());
       return res.json({ status: 'captured', plan: pay.plan, note: 'already processed' });
     }
 
@@ -305,7 +366,10 @@ router.post('/confirm', async (req, res, next) => {
     const { data: existing } = await admin.from('user_billing').select('current_period_end').eq('user_id', req.user.id).maybeSingle();
     // Plan 004: 인라인 이월 계산을 planService.computePeriodEnd 로 단일화(webhook 과 동일 소스, 동작 불변)
     const periodEnd = require('../services/planService').computePeriodEnd(existing?.current_period_end, now);
-    await admin.from('user_billing').upsert({
+    // ⚠ BILLING-UPSERT-ERR-2026-09-02 (감사 P1-6): 종전엔 이 upsert 의 error 를 **아무도 보지 않았다**.
+    //   그래서 DB 순간 오류만으로도 "결제 승인 완료" 로그를 찍고 200 을 주면서 이용권만 조용히 없었다.
+    //   이제 실패하면 던져서 500 으로 드러낸다 — 사용자는 재시도하고, 그 재시도가 위 보정 경로를 탄다.
+    const { error: _upErr } = await admin.from('user_billing').upsert({
       user_id: req.user.id,
       plan: pay.plan,
       status: 'active',
@@ -313,6 +377,7 @@ router.post('/confirm', async (req, res, next) => {
       current_period_end: periodEnd.toISOString(),
       canceled_at: null,
     }, { onConflict: 'user_id' });
+    if (_upErr) throw _upErr;
 
     // Phase 3 (2026-04-25): plan 캐시 invalidate — dailyLimit/budget 즉시 신규 한도 적용
     try {
@@ -405,6 +470,8 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
 
     // 멱등: 이미 최종 상태인 경우 재처리 X
     if (pay.status === 'captured' && tossStatus === 'DONE') {
+      // Toss 는 전달 실패 시 재전송한다 — 매번 검증 없이 200 만 주면 이용권 누락이 영구히 묻힌다(감사 P1-6).
+      await ensureBillingActive(admin, pay.user_id, pay.plan, pay.approved_at || tossData.approvedAt);
       return res.json({ ok: true, note: 'already captured' });
     }
 
@@ -442,6 +509,8 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
       }).eq('order_id', orderId).eq('status', 'requested').select();
       if (!capRows || capRows.length === 0) {
         logger.info({ orderId }, 'webhook: 이미 captured (멱등 — confirm 이 먼저 처리)');
+        // confirm 이 CAS 만 성공시키고 user_billing 직전에 죽었을 수 있다(감사 P1-6).
+        await ensureBillingActive(admin, pay.user_id, pay.plan, tossData.approvedAt || pay.approved_at);
         return res.json({ ok: true, status: tossStatus, note: 'already captured' });
       }
 
@@ -450,7 +519,8 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
       const now = new Date();
       const { data: existing } = await admin.from('user_billing').select('current_period_end').eq('user_id', pay.user_id).maybeSingle();
       const periodEnd = require('../services/planService').computePeriodEnd(existing?.current_period_end, now);
-      await admin.from('user_billing').upsert({
+      // ⚠ 감사 P1-6: confirm 과 마찬가지로 이 upsert 의 error 를 확인하지 않았다 — 조용한 이용권 누락 경로.
+      const { error: _upErr2 } = await admin.from('user_billing').upsert({
         user_id: pay.user_id,
         plan: pay.plan,
         status: 'active',
@@ -458,6 +528,7 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
         current_period_end: periodEnd.toISOString(),
         canceled_at: null,
       }, { onConflict: 'user_id' });
+      if (_upErr2) throw _upErr2;
 
       try {
         const { invalidatePlanCache } = require('../services/planService');

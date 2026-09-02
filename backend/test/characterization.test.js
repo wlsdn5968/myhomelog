@@ -941,7 +941,7 @@ function _mockRes() {
 // SELECT-RECORD-2026-08-28 (Plan 034): `.select()` 인자도 기록한다 — 응답에 내리면 안 되는 컬럼
 //   (toss_payment_key·raw_response·failure_reason)이 새는 것을 계약으로 막으려면 필요하다.
 //   목록 조회(`.order().limit()`) 경로도 지원한다: limit 이 await 대상이라 thenable 이어야 한다.
-function _mockAdmin({ payRow, casRows, billingRow, listRows }) {
+function _mockAdmin({ payRow, casRows, billingRow, listRows, upsertError }) {
   const seen = { updates: [], updateFilters: [], selectFilters: [], upserts: [], tables: [], selects: [], clientCalls: [] };
   const upChain = (patch) => {
     const c = {
@@ -965,7 +965,8 @@ function _mockAdmin({ payRow, casRows, billingRow, listRows }) {
       limit: async () => ({ data: listRows || [], error: null }),
       maybeSingle: async () => ({ data: table === 'user_billing' ? (billingRow || null) : payRow, error: null }),
       update: upChain,
-      upsert: async (row) => { seen.upserts.push({ table, row }); return { data: null, error: null }; },
+      // BILLING-REPAIR-2026-09-02: upsert 실패를 주입할 수 있어야 '조용한 이용권 누락' 을 테스트할 수 있다.
+      upsert: async (row) => { seen.upserts.push({ table, row }); return { data: null, error: upsertError || null }; },
     };
     return sel;
   };
@@ -1131,14 +1132,14 @@ test('billing/confirm 성공 — 기존 구독이 남아 있으면 그 만료일
 //   webhook 은 Toss 재조회(axios)가 **사실상 서명 검증 역할**이라 axios 스텁이 필요하고,
 //   환불 7일 경계는 payRow 의 approved_at 을 조작하면 **타이머 제어 없이** 검증된다.
 //   여기서도 프로덕션 코드는 바꾸지 않는다 — 라우터 스택에서 핸들러만 꺼내 쓴다.
-async function _withBillingStub2({ payRow, casRows, tossKey, webhookSecret, axiosImpl, billingRow, listRows, clientKey, liveEnabled }, fn) {
+async function _withBillingStub2({ payRow, casRows, tossKey, webhookSecret, axiosImpl, billingRow, listRows, clientKey, liveEnabled, upsertError }, fn) {
   const clientPath = require.resolve('../db/client');
   const billPath = require.resolve('../routes/billing');
   const axiosPath = require.resolve('axios');
   const saved = { c: require.cache[clientPath], b: require.cache[billPath], a: require.cache[axiosPath] };
   const savedEnv = { k: process.env.TOSS_SECRET_KEY, w: process.env.TOSS_WEBHOOK_SECRET,
     ck: process.env.TOSS_CLIENT_KEY, lv: process.env.PAYMENTS_LIVE_ENABLED };
-  const { client, seen } = _mockAdmin({ payRow, casRows, billingRow, listRows });
+  const { client, seen } = _mockAdmin({ payRow, casRows, billingRow, listRows, upsertError });
   if (tossKey === undefined) delete process.env.TOSS_SECRET_KEY; else process.env.TOSS_SECRET_KEY = tossKey;
   if (webhookSecret === undefined) delete process.env.TOSS_WEBHOOK_SECRET; else process.env.TOSS_WEBHOOK_SECRET = webhookSecret;
   // PG-MODE-2026-08-28: /config·/checkout 의 mode 판정 테스트용 env.
@@ -4504,5 +4505,61 @@ test('규제 요약 표: 스냅샷으로 그리되, 미로드 시 정적 표로 
   const evil = run({ ltvTable: [{ condition: '<img src=x onerror=alert(1)>', ltv: 40, cap: null, note: '<b>x</b>' }] });
   assert.equal(evil.indexOf('<img'), -1, '규제 표가 DB 문자열의 태그를 그대로 렌더한다 (XSS)');
   assert.equal(evil.indexOf('<b>x</b>'), -1, 'note 가 이스케이프되지 않는다');
+});
+
+// ── BILLING-REPAIR-2026-09-02 (감사 P1-6) ──────────────────────────────────────
+//   [왜] confirm·webhook 은 ① payments CAS ② user_billing upsert 를 별개 await 로 한다.
+//     ①만 되고 ②가 안 되면 **결제는 됐는데 이용권이 없다**. 게다가 ②의 error 를 아무도 확인하지
+//     않아 크래시 없이도 같은 증상이 났고, 재시도는 "이미 처리됨" 조기반환에 걸려 ②를 영영 안 했다.
+//   [왜 무조건 보정하면 안 되나] 그 지점에서 그냥 채워주면 **지난달 주문서로 confirm 을 다시 부르는
+//     것만으로 30일이 공짜 연장**된다. 그래서 approved_at 과 user_billing.updated_at 을 비교한다
+//     (updated_at 은 trg_user_billing_updated 트리거가 갱신 — 프로덕션 실측).
+test('billing/confirm — captured 인데 이용권이 없으면 보정한다', async () => {
+  const payRow = { order_id: 'o1', user_id: 'u1', amount: 9900, status: 'captured', plan: 'pro',
+    approved_at: new Date(Date.now() - 60 * 1000).toISOString() };
+  // user_billing 행이 아예 없다 = 지급이 한 번도 반영되지 않았다.
+  await _withBillingStub2({ payRow, casRows: [], tossKey: 'test', billingRow: null }, async (seen) => {
+    const res = _mockRes();
+    await _billingHandler('/confirm')(
+      { body: { paymentKey: 'pk', orderId: 'o1', amount: 9900 }, user: { id: 'u1' } }, res, (e) => { assert.fail(`next(err): ${e && e.message}`); });
+    assert.equal(res.statusCode, 200, '멱등 응답이어야 한다');
+    const up = seen.upserts.find((u) => u.table === 'user_billing');
+    assert.ok(up, '이용권이 비어 있는데 보정 upsert 가 없다 — 결제됐는데 플랜이 없는 상태가 영구히 남는다');
+    assert.equal(up.row.plan, 'pro');
+    assert.equal(up.row.status, 'active');
+  });
+});
+
+test('billing/confirm — 옛 주문 재요청은 보정하지 않는다 (무료 연장 차단)', async () => {
+  // 승인은 30일 전, 이용권은 그 직후 정상 반영(=updated_at 이 approved_at 보다 뒤).
+  const approved = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const updated = new Date(approved.getTime() + 1000);
+  const payRow = { order_id: 'oOld', user_id: 'u1', amount: 9900, status: 'captured', plan: 'pro',
+    approved_at: approved.toISOString() };
+  const billingRow = { plan: 'pro', status: 'active', current_period_end: new Date(Date.now() - 1000).toISOString(),
+    updated_at: updated.toISOString() };
+  await _withBillingStub2({ payRow, casRows: [], tossKey: 'test', billingRow }, async (seen) => {
+    const res = _mockRes();
+    await _billingHandler('/confirm')(
+      { body: { paymentKey: 'pk', orderId: 'oOld', amount: 9900 }, user: { id: 'u1' } }, res, () => {});
+    const up = seen.upserts.find((u) => u.table === 'user_billing');
+    assert.equal(up, undefined,
+      '이미 반영된 옛 결제인데 이용권을 다시 연장했다 — 주문서 재사용만으로 30일이 공짜가 된다');
+  });
+});
+
+test('billing/confirm — user_billing 저장 실패를 성공으로 응답하지 않는다', async () => {
+  const payRow = { order_id: 'o1', user_id: 'u1', amount: 9900, status: 'requested', plan: 'pro' };
+  const axiosImpl = { post: async () => ({ data: { orderId: 'o1', status: 'DONE', totalAmount: 9900, method: '카드', approvedAt: new Date().toISOString() } }) };
+  await _withBillingStub2({ payRow, casRows: [{ order_id: 'o1' }], tossKey: 'test', axiosImpl,
+    upsertError: { message: 'db down' } }, async (seen) => {
+    const res = _mockRes();
+    let passedErr = null;
+    await _billingHandler('/confirm')(
+      { body: { paymentKey: 'pk', orderId: 'o1', amount: 9900 }, user: { id: 'u1' } }, res, (e) => { passedErr = e; });
+    assert.ok(passedErr, '이용권 저장이 실패했는데 오류로 처리되지 않았다 — 사용자는 성공으로 알고 떠난다');
+    assert.notEqual(res.body && res.body.status, 'captured',
+      '저장 실패인데 captured 성공 응답을 돌려줬다');
+  });
 });
 
