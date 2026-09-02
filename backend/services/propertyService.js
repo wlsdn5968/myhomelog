@@ -575,7 +575,12 @@ async function getAIRecommendations(userCondition) {
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
   // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
   const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
-  const cacheKey = `rec:v23:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v22: PPPPPPP 대표 평형에 표본 하한(3건) 도입 — v21 캐시에는 1건짜리 평형이 헤드라인인 결과가 남아 있다.
+  const cacheKey = `rec:v23:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
+  // 버전 이력(산식·표시가 바뀌면 반드시 올릴 것 — 안 올리면 최대 3h 동안 옛 점수가 그대로 나간다):
+  //   v22 PPPPPPP 대표 평형에 표본 하한(3건) 도입
+  //   v23 감사 P0-2 — 카카오 조회 실패를 0 이 아니라 null 로 다루면서 교통·인프라 점수가 달라짐
+  // ⚠ 종전엔 키만 올리고 주석은 v22 사유를 그대로 뒀다. 그 탓에 교차검증에서 "오늘 사유로 안 올라갔다"는
+  //   **오독**이 나왔다 — 버전을 올릴 때 이 목록에 한 줄을 같이 추가할 것. — v21 캐시에는 1건짜리 평형이 헤드라인인 결과가 남아 있다.
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
   // REC-REDIS-2026-07-17 (Sprint AAAAAA, 운영자 "검색 더 빨리" — 실측: cold 12.6s vs warm 1.4s):
