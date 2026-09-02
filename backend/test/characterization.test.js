@@ -2250,16 +2250,59 @@ test('buildFacility — 세대수 원천 2개가 20% 이상 어긋나면 househo
     'HH-HOCNT-FALLBACK(위례래미안이편한세상 [VERIFIED]) 이 깨졌다');
 });
 
-test('주차 필터 — 세대수 불일치 단지는 minParkingRatio 조건에서 빠진다 (소스 계약)', () => {
-  // 단위 테스트로는 못 잡는 종류다(필터가 DB·KAPT 응답에 얽혀 있다) → 배선의 **형태**를 고정한다.
-  const fs = require('node:fs');
-  const path = require('node:path');
-  const src = fs.readFileSync(path.join(__dirname, '../services/propertyService.js'), 'utf8');
-  const guard = src.indexOf('if (fMinPark > 0 && fac.householdsConflict) return false;');
-  const ratio = src.indexOf('if (fMinPark > 0 && !(fac.parkingRatio != null && fac.parkingRatio >= fMinPark)) return false;');
-  assert.ok(guard > 0, '세대수 불일치 가드가 사라졌다 — 분모를 못 믿는 단지가 "주차 여유"로 추천된다');
-  assert.ok(ratio > 0, '주차 비율 필터 자체가 사라졌다');
-  assert.ok(guard < ratio, '가드가 비율 검사보다 뒤에 있다 — 순서가 바뀌어도 결과는 같지만 의도가 흐려진다');
+// ── COND-FILTER-BEHAVIORAL-2026-09-02 (감사 후속: 테스트 행위화) ─────────────
+//   [왜] 추천 조건 필터(_condPass)는 "모름"을 어떻게 다루느냐가 곧 결과다. 이 저장소는 이미
+//     미확인 세대수를 0 으로 읽어 407곳(서울 56)을 소형으로 잘못 배제한 적이 있다.
+//   [무엇이 바뀌었나] 종전 테스트는 소스에서 두 줄의 **존재와 순서**만 봤다("단위 테스트로는
+//     못 잡는다"고 스스로 적어 뒀다). 그런데 _condPass 는 fMinHh/fMinPark/fSaleOnly 세 값만
+//     닫아 쓰는 순수 클로저다 — 소스에서 그대로 **추출해 실행**하면 DB 없이 판정을 확인할 수 있다.
+//     (프론트 함수에 쓰던 추출 기법과 같다. 프로덕션 코드는 건드리지 않는다.)
+test('추천 조건 필터 — 실제로 실행해 판정을 확인한다 (모름·불일치·경계)', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const src = fs2.readFileSync(path2.join(__dirname, '../services/propertyService.js'), 'utf8');
+  const m = src.match(/ {2}const _condPass = \(fac\) => \{[\s\S]*?\n {2}\};/);
+  assert.ok(m, 'propertyService 에서 _condPass 를 찾지 못했다 — 이름/형태가 바뀌었다면 이 테스트도 갱신할 것');
+
+  // 클로저가 닫아 쓰는 값만 주입해 실제 함수를 만든다
+  const make = (fMinHh, fMinPark, fSaleOnly) =>
+    new Function('fMinHh', 'fMinPark', 'fSaleOnly', m[0] + '\nreturn _condPass;')(fMinHh, fMinPark, fSaleOnly);
+
+  const none = make(0, 0, false);
+  const park = make(0, 1.5, false);
+  const hh = make(500, 0, false);
+  const sale = make(0, 0, true);
+
+  // ① 필터가 없으면 통과 — 단, facility 자체를 모르면 조건을 확인할 수 없으니 제외한다
+  //    (UI 안내와 같은 의미: "조건 확인 불가"이지 "조건 미달"이 아니다)
+  assert.equal(none({ totalHouseholds: 100 }), true, '무필터인데 걸러졌다');
+  assert.equal(none(null), false, 'facility 를 모르는데 조건을 만족한다고 봤다');
+
+  // ② 주차 비율 — 경계와 **모름**
+  assert.equal(park({ parkingRatio: 1.6 }), true, '기준 이상인데 걸러졌다');
+  assert.equal(park({ parkingRatio: 1.5 }), true, '경계값(1.5)은 통과해야 한다');
+  assert.equal(park({ parkingRatio: 1.4 }), false, '기준 미달이 통과했다');
+  assert.equal(park({ parkingRatio: null }), false, '주차 비율을 모르는데 통과시켰다');
+
+  // ③ ★ 세대수 원천이 갈린 단지는 주차 비율의 **분모를 믿을 수 없다** → 주차 조건에서 제외.
+  //    이 가드가 빠지면 "주차 여유"라며 근거 없는 단지가 추천된다.
+  assert.equal(park({ parkingRatio: 1.6, householdsConflict: true }), false,
+    '세대수 불일치 단지가 주차 조건을 통과했다 — 분모를 못 믿는 값으로 추천된다');
+  // 단, 주차 조건을 안 걸었으면 불일치는 배제 사유가 아니다(과잉 배제 방지)
+  assert.equal(none({ parkingRatio: 1.6, householdsConflict: true }), true,
+    '주차 필터를 안 걸었는데 세대수 불일치만으로 배제했다');
+
+  // ④ 세대수 — 경계와 모름. `null` 과 `0` 둘 다 통과시키지 않는다
+  //    (모름을 0 으로 표현한 생산자가 있어서 실제로 사고가 났던 지점이다)
+  assert.equal(hh({ totalHouseholds: 500 }), true, '경계값(500)은 통과해야 한다');
+  assert.equal(hh({ totalHouseholds: 499 }), false, '기준 미달이 통과했다');
+  assert.equal(hh({ totalHouseholds: null }), false, '세대수를 모르는데 통과시켰다');
+  assert.equal(hh({ totalHouseholds: 0 }), false, '0(=모름의 잘못된 표현)이 통과했다');
+
+  // ⑤ 분양만
+  assert.equal(sale({ saleType: '분양' }), true, '분양 단지가 걸러졌다');
+  assert.equal(sale({ saleType: '임대' }), false, '임대 단지가 분양만 조건을 통과했다');
+  assert.equal(sale({}), false, '분양 여부를 모르는데 통과시켰다');
 });
 
 test('지도 마커 — 좌표가 같은 단지는 세로로 쌓여 서로를 가리지 않는다', () => {
