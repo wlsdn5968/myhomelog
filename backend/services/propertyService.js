@@ -436,7 +436,9 @@ function _applyFacilityToScore(base, facility, amen) {
       why.push(`지하철 도보 ${WALK_BAND_LABEL[band]}(관리사무소 신고값)`);
     }
   }
-  if (교통 === null && amen && Number.isFinite(Number(amen.subway))) {
+  // ⚠ NULL-NOT-ZERO-2026-09-02 (감사 P0-2): `Number(null) === 0` → null 체크가 없으면
+  //   카카오 조회 실패가 "반경 1.2km 지하철역 0곳"(교통 4점, 최저 밴드)으로 둔갑한다.
+  if (교통 === null && amen && amen.subway != null && Number.isFinite(Number(amen.subway))) {
     const n = Number(amen.subway);
     교통 = n >= 4 ? 22 : n >= 2 ? 17 : n >= 1 ? 11 : 4;
     why.push(`반경 1.2km 지하철역 ${n}곳`);
@@ -573,7 +575,7 @@ async function getAIRecommendations(userCondition) {
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
   // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
   const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
-  const cacheKey = `rec:v22:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v22: PPPPPPP 대표 평형에 표본 하한(3건) 도입 — v21 캐시에는 1건짜리 평형이 헤드라인인 결과가 남아 있다.
+  const cacheKey = `rec:v23:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`; // v22: PPPPPPP 대표 평형에 표본 하한(3건) 도입 — v21 캐시에는 1건짜리 평형이 헤드라인인 결과가 남아 있다.
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
   // REC-REDIS-2026-07-17 (Sprint AAAAAA, 운영자 "검색 더 빨리" — 실측: cold 12.6s vs warm 1.4s):
@@ -1413,4 +1415,6 @@ function getStaticFallback(budget, region) {
 }
 
 // TEST-EXPORT-2026-07-17 (Sprint XXXXX): computeLTV 는 순수 함수 — 특성화 테스트용 export 추가(동작 불변).
-module.exports = { getAIRecommendations, pickRegions, computeLTV, buildJibunIndex, lookupByJibun };
+// TEST-EXPORT-2026-09-02 (감사 P0-2): _applyFacilityToScore 도 순수 함수라 export 한다.
+//   "카카오 조회 실패(null)를 0 곳으로 채점하지 않는다" 를 **텍스트 검사 대신 실제 실행**으로 고정하기 위함.
+module.exports = { getAIRecommendations, pickRegions, computeLTV, buildJibunIndex, lookupByJibun, _applyFacilityToScore };

@@ -1102,8 +1102,14 @@ test('billing/confirm 성공 — user_billing 에 plan·active·기간이 실제
 });
 
 test('billing/confirm 성공 — 기존 구독이 남아 있으면 그 만료일 기준으로 이월된다', async () => {
-  // 미래 만료(2026-09-01)가 남은 상태에서 재결제 → now+30 이 아니라 기존 만료+30 이어야 한다.
-  const existingEnd = '2026-09-01T00:00:00.000Z';
+  // 미래 만료가 남은 상태에서 재결제 → now+30 이 아니라 기존 만료+30 이어야 한다.
+  // ⚠ TEST-DATE-ROT-2026-09-02 (감사 중 발견): 종전엔 `'2026-09-01T00:00:00.000Z'` 하드코딩이었다.
+  //   그 날짜가 **2026-09-01 부로 과거가 되면서** computePeriodEnd 가 "기존 만료 기준 이월" 대신
+  //   `now + 30일` 분기를 타기 시작했다 → ① 이 테스트가 검증하려던 이월 경로가 **무커버리지**가 되고
+  //   ② 라우트의 new Date() 와 테스트의 new Date() 가 1ms 어긋나면 실패 → CI 가 무작위로 빨개졌다
+  //   (실측: 16회 중 3회 실패, actual …040Z vs expected …041Z).
+  //   → 절대 날짜를 쓰지 말고 **항상 미래**가 되도록 상대 시각으로 만든다.
+  const existingEnd = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
   await _withBillingStub2(_confirmOk({ billingRow: { current_period_end: existingEnd } }), async (seen) => {
     const res = _mockRes();
     await _billingHandler('/confirm')(
@@ -4240,5 +4246,55 @@ test('공유 링크: 실거래 조회 실패 경로가 조용히 return 하지 �
   const reshow = (body.match(/_reshow\(\{/g) || []).length;
   assert.ok(reshow >= 3, `실패 경로 재렌더가 ${reshow}회뿐 — 3경로 모두 다시 그려야 한다`);
   assert.ok(body.indexOf('const _reshow=') >= 0, '_reshow 헬퍼 정의가 사라졌다');
+});
+
+// ── NULL-NOT-ZERO-2026-09-02 (감사 P0-2) ─────────────────────────────────────
+//   [왜] 카카오 주변시설 카운트가 **키 없음·예외 시 0** 을 돌려줬다. 소비자는 그 0 을
+//     "반경 안에 0곳" 이라는 사실로 읽어 점수를 최저 밴드로 떨어뜨리고 화면에 "지하철역 0곳" 을 찍었다.
+//     같은 병을 키워드 검색(countNearbyKeyword)은 2026-08-30 에 고쳤는데 카테고리 검색은 남아 있었고,
+//     소비자(propertyService 인프라 채점)는 이미 "실패는 null" 을 전제로 하드닝돼 있어 **생산 함수만 어긋나** 있었다.
+//   [함정] `Number(null) === 0` 이라 `Number.isFinite(Number(x))` 만으로는 null 이 그대로 통과한다.
+//   [무엇을 고정하나] 실패는 null 이고, 채점은 아는 항목만으로 하며, null 이 0 점 취급되지 않는다.
+test('주변시설: 카카오 키가 없으면 0 이 아니라 null(모름) 을 돌려준다', async () => {
+  const kakao = require('../services/kakaoService');
+  const saved = process.env.KAKAO_REST_API_KEY;
+  delete process.env.KAKAO_REST_API_KEY;   // isKeyMissing 은 호출 시점에 env 를 읽는다 → 네트워크 없음
+  try {
+    assert.equal(await kakao.countNearby(37.5, 127.0, 'SC4', 1200), null,
+      'countNearby 가 키 없음에 0 을 돌려준다 — "학교 0곳" 이라는 사실 주장이 된다');
+    assert.equal(await kakao.countNearbyKeyword(37.5, 127.0, '종합병원', 2000), null,
+      'countNearbyKeyword 가 키 없음에 0 을 돌려준다');
+    const amen = await kakao.getNearbyAmenities(37.5, 127.0);
+    assert.ok(amen && typeof amen === 'object', 'getNearbyAmenities 가 객체를 돌려줘야 한다');
+    for (const k of ['school', 'mart', 'hospital', 'subway', 'cvs', 'park']) {
+      assert.equal(amen[k], null, `amenities.${k} 가 null 이 아니다(${amen[k]}) — 모름이 값으로 샌다`);
+    }
+  } finally {
+    if (saved === undefined) delete process.env.KAKAO_REST_API_KEY;
+    else process.env.KAKAO_REST_API_KEY = saved;
+  }
+});
+
+test('추천 점수: 주변시설 null 은 0 곳으로 채점되지 않는다 (Number(null)===0 함정)', () => {
+  const { _applyFacilityToScore } = require('../services/propertyService');
+  const base = { breakdown: {} };
+  // 교통 근거가 하나도 없는 단지 — facility 신고값도 없다.
+  const facility = {};
+  const unknown = _applyFacilityToScore(base, facility, { school: null, mart: null, hospital: null, subway: null, cvs: null, park: null });
+  const zero = _applyFacilityToScore(base, facility, { school: 0, mart: 0, hospital: 0, subway: 0, cvs: 0, park: 0 });
+
+  // ① 모름(null)과 실제 0 곳은 **다른 점수**여야 한다. 같아지면 조회 실패가 최저점으로 둔갑한다.
+  assert.notEqual(unknown.breakdown.교통, zero.breakdown.교통,
+    `모름과 0곳이 같은 교통 점수(${unknown.breakdown.교통})다 — null 이 0 으로 읽히고 있다`);
+  assert.ok(unknown.breakdown.교통 > zero.breakdown.교통,
+    '모름이 실제 0곳보다 낮게 채점됐다 — 모름을 나쁨으로 만들면 안 된다');
+
+  // ② 모름일 때 근거 문구에 "0곳" 같은 사실 주장이 들어가면 안 된다.
+  const whyText = (unknown.why || []).join(' ');
+  assert.equal(/지하철역\s*0\s*곳/.test(whyText), false, `모름인데 근거에 "0곳" 이 적혔다: ${whyText}`);
+
+  // ③ 인프라도 마찬가지 — 전부 모르면 아는 항목이 없으니 카카오 기반 점수를 매기지 않는다.
+  assert.notEqual(unknown.breakdown.인프라, 0,
+    '전부 모름인데 인프라가 0 점이다 — 조회 실패가 감점이 된다');
 });
 

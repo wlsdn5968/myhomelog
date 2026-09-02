@@ -105,7 +105,9 @@ async function getTransitMinutes(originLat, originLng, destLat, destLng) {
  * 카테고리: SC4(학교) MT1(대형마트) HP8(병원) SW8(지하철역) CS2(편의점)
  */
 async function countNearby(lat, lng, categoryCode, radius = 800) {
-  if (isKeyMissing()) return 0;
+  // NULL-NOT-ZERO-2026-09-02 (감사 P0-2): 키가 없으면 **조회를 못 한 것**이지 시설이 없는 게 아니다.
+  //   0 을 돌려주면 소비자가 그걸 "반경 안에 0곳"이라는 사실로 읽는다(아래 catch 도 동일).
+  if (isKeyMissing()) return null;
   // Phase B-6: 좌표 4자리(~11m) 정규화 → DB cache 공유
   const lat4 = Number(lat.toFixed(4));
   const lng4 = Number(lng.toFixed(4));
@@ -136,7 +138,15 @@ async function countNearby(lat, lng, categoryCode, radius = 800) {
     _dbSetAmenityCount(cacheKey, lat4, lng4, categoryCode, radius, cnt).catch(() => {});
     return cnt;
   } catch (e) {
-    return 0;
+    // ⚠ NULL-NOT-ZERO-2026-09-02 (감사 P0-2): 종전엔 여기서 0 을 돌려줬다.
+    //   그러면 카카오 장애·쿼터 소진이 그대로 "지하철역 0곳 / 학교 0곳" 이라는 **사실 주장**이 되고
+    //   점수까지 최저 밴드로 떨어진다. 같은 병을 countNearbyKeyword 는 2026-08-30 에 고쳤는데
+    //   (`size` 400 사고) 카테고리 검색 쪽은 그대로 남아 있었다 — 소비자(propertyService 인프라 채점)는
+    //   이미 "실패는 null" 을 전제로 하드닝돼 있었으므로 생산 함수만 어긋나 있던 셈이다.
+    //   실패는 캐시하지 않으므로 다음 요청에 재시도된다.
+    logger.warn({ categoryCode, radius, status: e.response?.status || null, err: e.message },
+      'kakao 카테고리 주변시설 조회 실패 — 모름(null)으로 표시');
+    return null;
   }
 }
 
@@ -144,7 +154,8 @@ async function countNearby(lat, lng, categoryCode, radius = 800) {
  * 키워드 검색 카운트 (반경 m) — 카테고리 없는 시설 (종합병원·공원 등)
  */
 async function countNearbyKeyword(lat, lng, keyword, radius = 1200) {
-  if (isKeyMissing()) return 0;
+  // NULL-NOT-ZERO-2026-09-02: catch 는 2026-08-30 에 null 로 고쳤지만 이 경로만 0 이 남아 있었다.
+  if (isKeyMissing()) return null;
   // Phase B-6: 좌표 정규화 + DB cache
   const lat4 = Number(lat.toFixed(4));
   const lng4 = Number(lng.toFixed(4));

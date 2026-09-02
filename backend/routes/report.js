@@ -138,7 +138,11 @@ router.post('/generate', async (req, res) => {
   // MOB-AUDIT-2026-05-03: JSON.stringify 의 key 순서 비결정성 → 동일 입력 두 번째 호출이 fresh 가 될 수 있음
   //   → keys sort 후 stringify (결정성 보장) — 비용 절감
   const _sortedInput = Object.keys(userInput).sort().reduce((o, k) => { o[k] = userInput[k]; return o; }, {});
-  const cacheKey = `report:${crypto.createHash('sha256').update(JSON.stringify(_sortedInput)).digest('hex').slice(0, 16)}`;
+  // SCORE-VER-2026-09-02 (감사 P0-2): 캐시 키가 **입력 해시뿐**이라 산식을 바꿔도 옛 결과가 그대로 나온다.
+  //   (같은 함정을 추천 경로는 `rec:vNN` 으로 이미 막고 있었다 — 보고서만 버전이 없었다.)
+  //   점수·표시 규칙을 바꾸면 이 값을 올릴 것.
+  const SCORE_VERSION = 'v2';
+  const cacheKey = `report:${SCORE_VERSION}:${crypto.createHash('sha256').update(JSON.stringify(_sortedInput)).digest('hex').slice(0, 16)}`;
   let hit = cache.get(cacheKey);
   // REDIS-CACHE-2026-07-14 (Sprint KKKKK): 로컬 미스 시 Redis 2차 조회 — 다른 인스턴스가 만든 보고서
   //   재사용(동일 입력의 AI 재호출 차단). 미설정/오류 시 undefined → 기존 흐름 그대로.
@@ -1097,7 +1101,9 @@ function applyObjectiveScore(c, seoulRegulated = true) {
   //   → amenities 가 붙은 지금 시점에 그 두 항목을 **실측 지하철 수로 교체**한다.
   //   ⚠ 좌표가 없거나 카카오 조회가 실패하면 amenities 자체가 없다 → 그때는 종전 값을 그대로 둔다
   //     (모르는 것을 0으로 바꾸지 않는다 — [[unknown-treated-as-value]]).
-  if (c.amenities && Number.isFinite(Number(c.amenities.subway))) {
+  // ⚠ NULL-NOT-ZERO-2026-09-02 (감사 P0-2): `Number(null) === 0` 이라 null 체크 없이
+  //   Number.isFinite 만 보면 **조회 실패가 "역 0곳"으로 통과**한다. 실제로 그랬다.
+  if (c.amenities && c.amenities.subway != null && Number.isFinite(Number(c.amenities.subway))) {
     const sw = Number(c.amenities.subway);
     if (r.priority_역세권 != null) {
       const next = sw >= 4 ? 20 : sw >= 2 ? 14 : sw >= 1 ? 8 : 2;

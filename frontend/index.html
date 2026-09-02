@@ -8326,7 +8326,15 @@ async function loadAmenities(p){
     const tranHtml=tran&&tran.available?`<div style="margin-top:4px;font-weight:600;color:var(--a2)">🚇 ${tran.destinationName} 통근: 대중교통 추정 ~${tran.transitMinutes}분 / 차량 ~${tran.carMinutes}분</div>`:'';
     box.innerHTML=`<div style="background:#F0F7F0;border:1px solid #CFE5CF;border-radius:var(--radius-base);padding:9px 11px;line-height:1.6">
       <div style="font-weight:700;color:var(--t1)">🗺️ 주변 <span style="font-weight:400;color:var(--t3);font-size:10px" title="항목마다 반경이 다릅니다 — 편의점 500m · 학교/지하철/공원 1.2km · 대형마트 1.5km · 종합병원 2km">(항목별 500m~2km)</span></div>
-      <div>🏫 학교 ${near.school}곳 · 🚇 지하철역 ${near.subway}곳 · 🛒 대형마트 ${near.mart}곳 · 🏥 병원 ${near.hospital}곳 · 🏪 편의점 ${near.cvs}곳</div>
+      <div>${(()=>{
+        // NULL-NOT-ZERO-2026-09-02 (감사 P0-2): 백엔드가 조회 실패를 null 로 준다.
+        //   그대로 넣으면 "학교 null곳" 이 되고, 0 으로 바꾸면 "학교 0곳" 이라는 사실 주장이 된다.
+        //   모르는 항목은 아예 빼고, 전부 모르면 문구로 알린다.
+        const _f=[['🏫 학교',near.school],['🚇 지하철역',near.subway],['🛒 대형마트',near.mart],['🏥 병원',near.hospital],['🏪 편의점',near.cvs]]
+          .filter(([,v])=>v!==null&&v!==undefined&&Number.isFinite(Number(v)))
+          .map(([k,v])=>`${k} ${Number(v)}곳`);
+        return _f.length?_f.join(' · '):'주변 시설 정보를 불러오지 못했어요 (잠시 후 다시 시도해주세요)';
+      })()}</div>
       ${tranHtml}
     </div>`;
   }catch{box.style.display='none';}
