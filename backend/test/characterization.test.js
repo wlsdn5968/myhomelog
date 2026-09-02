@@ -3996,19 +3996,96 @@ test('BR 되쓰기 — 캐시된 세대수만 붙이고 동명·값없음은 건
   assert.equal(r.ambiguous, 2, '동명으로 건너뛴 수가 안 맞는다');
 });
 
-test('_br 보존 — facility 통째 교체 경로가 건축물대장 값을 지우지 않는다', () => {
-  const fs = require('fs'); const path = require('path');
-  const src = fs.readFileSync(path.join(__dirname, '../services/aptFacilityService.js'), 'utf8');
-  const i = src.indexOf('async function backfillFacilityByKaptCode');
-  assert.ok(i >= 0, 'backfillFacilityByKaptCode 를 못 찾았다');
-  const body = src.slice(i, i + 3000);
-  // 이 함수는 facility 를 **통째로 교체**한다. 보존이 빠지면 empty 재시도(14일 주기)마다 건축물대장
-  //   세대수가 지워져 "채웠는데 며칠 뒤 다시 미상" 이 된다 — 사후 원인 추적이 매우 어렵다.
-  assert.match(body, /select\('facility'\)/, '기존 facility 를 읽지 않으면 보존할 수 없다');
-  assert.match(body, /_empty: true, _br: prevBr/, '실패 sentinel 경로가 _br 을 버린다');
-  assert.match(body, /facilityToStore\._br = prevBr/, '성공 경로가 _br 을 버린다');
-  // raw 를 그대로 넘기면 _br 을 붙일 때 상류 객체를 오염시킨다 → 복사본이어야 한다
-  assert.match(body, /detail \? \{ \.\.\.raw, _dtl: detail \} : \{ \.\.\.raw \}/, 'facilityToStore 가 raw 참조를 그대로 쓴다');
+// ── BR-PRESERVE-BEHAVIORAL-2026-09-02 (감사 후속: 테스트 행위화) ─────────────
+//   [왜] backfillFacilityByKaptCode 는 facility 를 **통째로 교체**한다. 건축물대장 보강값(`_br`)을
+//     살려두지 않으면 empty 재시도(14일 주기)마다 세대수가 지워져 "채웠는데 며칠 뒤 다시 미상" 이
+//     되고, 원인을 사후에 찾기가 대단히 어렵다.
+//   [무엇이 바뀌었나] 종전에는 소스에서 `_empty: true, _br: prevBr` 같은 **문자열 모양**을 봤다.
+//     그건 리팩터링 한 번이면 의미 없이 깨지고, 반대로 모양이 남아도 앞단 분기가 바뀌면 통과한다.
+//     이제 함수를 **실제로 실행**해 DB 에 쓰려던 payload 를 그대로 확인한다.
+//     외부 의존은 require.cache 스텁으로 끊는다(이 파일의 결제 테스트와 같은 방식).
+test('_br 보존 — 백필을 실제로 실행해 건축물대장 값이 payload 에 남는지 확인한다', async () => {
+  const facPath = require.resolve('../services/aptFacilityService');
+  const clientPath = require.resolve('../db/client');
+  const dgkPath = require.resolve('../services/dataGoKrClient');
+  const aptInfoPath = require.resolve('../services/aptInfoService');
+
+  // apt_master 한 행만 흉내내는 최소 목 — update 로 넘어온 payload 를 기록한다
+  const makeAdmin = (prevFacility) => {
+    const seen = { updates: [], tables: [], selects: [] };
+    const upChain = (patch) => {
+      // 실패 sentinel 경로가 `.then(()=>{},()=>{})` 로 호출하므로 thenable 이어야 한다
+      const c = { eq: () => c, then: (r, j) => Promise.resolve({ error: null }).then(r, j) };
+      seen.updates.push(patch);
+      return c;
+    };
+    const mk = () => {
+      const s = {
+        select: (c) => { seen.selects.push(String(c)); return s; },
+        eq: () => s,
+        maybeSingle: async () => ({ data: prevFacility === undefined ? null : { facility: prevFacility }, error: null }),
+        update: upChain,
+      };
+      return s;
+    };
+    return { client: { from: (tb) => { seen.tables.push(tb); return mk(); } }, seen };
+  };
+
+  const run = async ({ prevFacility, apiOk, detail }) => {
+    const paths = [facPath, clientPath, dgkPath, aptInfoPath];
+    const saved = {};
+    for (const q of paths) saved[q] = require.cache[q];
+    const savedKey = process.env.APT_INFO_API_KEY;
+    const { client, seen } = makeAdmin(prevFacility);
+    const stub = (q, exp) => { require.cache[q] = { id: q, filename: q, loaded: true, exports: exp }; };
+    stub(clientPath, { getSupabaseAdmin: () => client });
+    stub(dgkPath, { get: async () => {
+      if (!apiOk) throw new Error('네트워크 없음');
+      return { data: { response: { header: { resultCode: '00' },
+        body: { item: { kaptName: '테스트단지', kaptCode: 'A1', kaptdaCnt: 500 } } } } };
+    } });
+    stub(aptInfoPath, { getAptListBySgg: async () => [], getAptDtlInfo: async () => detail || null });
+    // APT_INFO_KEY 는 모듈 로드 시 상수라 env 를 먼저 세우고 다시 require 해야 한다
+    process.env.APT_INFO_API_KEY = 'xxxxxxxx-test-only';
+    delete require.cache[facPath];
+    try {
+      const { backfillFacilityByKaptCode } = require(facPath);
+      const res = await backfillFacilityByKaptCode('A1');
+      return { res, updates: seen.updates, selects: seen.selects };
+    } finally {
+      for (const q of paths) { if (saved[q]) require.cache[q] = saved[q]; else delete require.cache[q]; }
+      if (savedKey === undefined) delete process.env.APT_INFO_API_KEY;
+      else process.env.APT_INFO_API_KEY = savedKey;
+    }
+  };
+
+  const BR = { hhldCnt: 300, src: 'building_register' };
+
+  // ① KAPT 실패 → 실패 sentinel 을 쓰는데, 여기서 _br 을 버리면 안 된다
+  //   (주석이 지적하듯 **오히려 이쪽이** 건축물대장 값이 꼭 필요한 단지다)
+  const a = await run({ prevFacility: { _br: BR, kaptName: '옛값' }, apiOk: false });
+  assert.equal(a.res.reason, 'no-basisinfo', 'KAPT 실패 경로를 타지 않았다 — 스텁이 안 먹었다');
+  assert.equal(a.updates.length, 1, 'sentinel 을 한 번 써야 한다');
+  assert.equal(a.updates[0].facility._empty, true, 'sentinel 표식이 없다 — 무한 재시도로 돌아간다');
+  assert.deepEqual(a.updates[0].facility._br, BR,
+    '실패 sentinel 이 건축물대장 값을 지웠다 — 14일 주기 재시도마다 세대수가 미상으로 되돌아간다');
+  assert.ok(a.selects.includes('facility'), '기존 facility 를 읽지 않으면 애초에 보존할 수 없다');
+
+  // ② KAPT 성공 → 새 값으로 갈아끼우되 _br 은 남긴다 (buildFacility 가 3순위로 쓴다)
+  const b = await run({ prevFacility: { _br: BR }, apiOk: true, detail: { kaptdPcnt: 400 } });
+  assert.equal(b.res.ok, true, 'KAPT 성공 경로가 실패했다');
+  assert.deepEqual(b.updates[0].facility._br, BR, '성공 경로가 건축물대장 값을 지웠다');
+  assert.deepEqual(b.updates[0].facility._dtl, { kaptdPcnt: 400 }, '상세정보가 병합되지 않았다');
+  assert.equal(b.updates[0].facility.kaptName, '테스트단지', 'KAPT 응답이 반영되지 않았다');
+
+  // ③ 보존할 값이 없으면 _br 키를 만들지 않는다 (없는 값을 지어내지 않는다)
+  const c = await run({ prevFacility: { kaptName: '옛값' }, apiOk: false });
+  assert.deepEqual(c.updates[0].facility, { _empty: true }, '보존할 _br 이 없는데 키가 생겼다');
+
+  // ④ 기존 행이 아예 없어도 죽지 않고 정상 저장한다
+  const d = await run({ prevFacility: undefined, apiOk: true, detail: null });
+  assert.equal(d.res.ok, true, '기존 행이 없을 때 백필이 실패한다');
+  assert.equal('_br' in d.updates[0].facility, false, '없던 _br 이 생겼다');
 });
 
 // ── CRON-MISS-2026-08-17 (Sprint MMMMMMM-24) ──────────────────────────────────
