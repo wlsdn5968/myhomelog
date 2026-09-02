@@ -13,6 +13,27 @@
  */
 const Sentry = require('@sentry/node');
 
+// IGNORE-CONTRACT-2026-09-02 (감사 P0-4): Sentry 가 **무엇을 안 보고할지**는 조용히 넓어지기 쉬운 설정이다.
+//   너무 넓은 패턴 하나가 진짜 장애를 통째로 삼킬 수 있어, 배열을 상수로 뽑아 계약 테스트로 고정한다.
+const IGNORED_ERROR_PATTERNS = [
+  // 사용자 네트워크 이슈 — 서버 책임 아님
+  'ECONNRESET', 'EPIPE', 'ETIMEDOUT',
+  // Axios 취소 (AbortController)
+  'canceled',
+  // AI-EXPECTED-2026-09-02 (감사 P0-4): Anthropic 크레딧 잔액 부족.
+  //   [왜 노이즈인가] 운영 방침상 크레딧은 의도적으로 채우지 않는다. 그 상태에서 보고서는
+  //   buildDataOnlyReport 로 **정상 열화**하고 사용자는 데이터판 보고서를 받는다(aiUnavailable 표기).
+  //   즉 코드 결함이 아니라 **설계된 정상 경로**인데, Sentry 의 Anthropic 자동 계측이
+  //   우리 try/catch 보다 먼저 잡아 error 로 올렸다 — 실측 태그: `mechanism: auto.ai.anthropic`,
+  //   `handled: no`, culprit `POST /api/report/generate` (NODE-7, 36건).
+  //   그 결과 운영자의 위험 신호("Sentry 신규 오류 0건")가 상시 오염돼 **진짜 오류가 묻힌다**.
+  //   [왜 이 문자열인가] Anthropic API 응답 본문의 고유 문구다. 같은 SDK 의 다른 실패
+  //   (타임아웃·5xx·invalid_request 등)는 이 문구를 포함하지 않아 그대로 보고된다 — 좁게 잡았다.
+  //   [가시성] 버리기만 하면 안 되므로 report.js 열화 지점에서 observeDegrade(`report-ai-*`) 로
+  //   카운터를 남긴다 → /api/health 의 searchDegrade 에서 확인 가능(Redis 21일).
+  'credit balance',
+];
+
 const dsn = process.env.SENTRY_DSN;
 
 if (dsn) {
@@ -82,15 +103,12 @@ if (dsn) {
       return event;
     },
 
-    // 무시할 에러 (노이즈 감축)
-    ignoreErrors: [
-      // 사용자 네트워크 이슈 — 서버 책임 아님
-      'ECONNRESET', 'EPIPE', 'ETIMEDOUT',
-      // Axios 취소 (AbortController)
-      'canceled',
-    ],
+    // 무시할 에러 (노이즈 감축) — 목록은 파일 상단 IGNORED_ERROR_PATTERNS 에 있다(계약 테스트 대상).
+    ignoreErrors: IGNORED_ERROR_PATTERNS,
   });
 }
 
 module.exports = Sentry;
 module.exports.isEnabled = !!dsn;
+// TEST-EXPORT-2026-09-02: 무시 목록이 과도하게 넓어지는지 계약 테스트가 실제 배열로 검사한다.
+module.exports.IGNORED_ERROR_PATTERNS = IGNORED_ERROR_PATTERNS;

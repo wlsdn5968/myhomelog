@@ -4333,3 +4333,47 @@ test('보고서 점수: amenities.subway 가 null 이면 역세권 근거·점�
     '실제 0곳일 때는 근거에 0곳이 적혀야 한다(대조군)');
 });
 
+// ── SENTRY-IGNORE-2026-09-02 (감사 P0-4) ─────────────────────────────────────
+//   [왜] Anthropic 크레딧 부족 에러가 error 로 36건 쌓여 운영자의 위험 신호
+//     ("Sentry 신규 오류 0건")를 상시 오염시켰다. 실측 태그 `mechanism: auto.ai.anthropic`,
+//     `handled: no` — Sentry 의 자동 계측이 우리 try/catch 보다 먼저 잡은 것이다.
+//     보고서는 그 상황에서도 데이터판으로 정상 열화하므로 **결함이 아니라 설계된 경로**다.
+//   [무엇을 고정하나] ① 그 문구가 실제로 걸러지는가 ② 필터가 **과도하게 넓어져** 진짜 장애를
+//     삼키지 않는가. ②가 이 테스트의 진짜 목적이다 — 무시 목록은 조용히 넓어지기 쉽다.
+test('Sentry 무시 목록: 예상된 AI 열화만 걸러내고 진짜 장애는 통과시킨다', () => {
+  const { IGNORED_ERROR_PATTERNS } = require('../sentry');
+  assert.ok(Array.isArray(IGNORED_ERROR_PATTERNS), "sentry.js 가 IGNORED_ERROR_PATTERNS 를 export 하지 않는다");
+
+  // Sentry 의 ignoreErrors 는 문자열이면 부분일치, 정규식이면 test 로 매칭한다.
+  const ignored = (msg) => IGNORED_ERROR_PATTERNS.some((pat) =>
+    (typeof pat === 'string' ? msg.includes(pat) : pat.test(msg)));
+
+  // ① 예상된 열화는 걸러진다
+  const credit = 'Error: 400 {"type":"error","error":{"type":"invalid_request_error",'
+    + '"message":"Your credit balance is too low to access the Anthropic API."}}';
+  assert.ok(ignored(credit), '크레딧 부족 에러가 여전히 Sentry 로 올라간다 — 신규 오류 감시가 오염된다');
+
+  // ② 진짜 장애는 반드시 통과해야 한다 (필터가 넓어지면 여기서 걸린다)
+  const mustReport = [
+    'Error: 500 {"type":"error","error":{"type":"api_error","message":"Internal server error"}}',
+    'Error: 529 {"type":"error","error":{"type":"overloaded_error"}}',
+    'Error: 401 {"type":"error","error":{"type":"authentication_error","message":"invalid x-api-key"}}',
+    'Error: 400 {"type":"error","error":{"type":"invalid_request_error","message":"max_tokens is too large"}}',
+    'TypeError: Cannot read properties of undefined (reading \'score\')',
+    'AbortError: The operation was aborted due to timeout',
+    'PostgrestError: permission denied for table molit_transactions',
+  ];
+  const swallowed = mustReport.filter(ignored);
+  assert.deepEqual(swallowed, [],
+    `Sentry 무시 목록이 너무 넓다 — 진짜 장애를 삼킨다:\n  ${swallowed.join('\n  ')}`);
+});
+
+test('보고서 AI 열화는 Sentry 대신 degrade 카운터로 관측된다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const src = fs2.readFileSync(path2.join(__dirname, '../routes/report.js'), 'utf8');
+  // Sentry 에서 걸러내는 대신 관측 경로를 남겨야 한다 — 둘 다 없으면 크레딧 소진이 무성지대가 된다.
+  assert.ok(/observeDegrade\(`report-ai-/.test(src),
+    'AI 열화 지점에 observeDegrade 기록이 없다 — Sentry 에서 걸러내면 관측 수단이 사라진다');
+});
+

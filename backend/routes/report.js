@@ -292,6 +292,12 @@ router.post('/generate', async (req, res) => {
       _aiDown = aiErr instanceof _BE ? 'budget' : 'upstream';
       logger.warn({ err: aiErr.message, mode: _aiDown, userId: userId || null },
         '보고서 AI 실패 — 데이터 전용 보고서로 degrade');
+      // SENTRY-EXPECTED-2026-09-02 (감사 P0-4): 이 열화는 **설계된 정상 경로**다(사용자는 데이터판 보고서를 받는다).
+      //   그런데 Sentry 의 Anthropic 자동 계측(mechanism: auto.ai.anthropic, handled:no)이 우리 catch 보다
+      //   먼저 잡아 error 로 올려, "신규 오류 0건" 감시를 오염시켰다(NODE-7 36건).
+      //   → Sentry 에서는 걸러내되(sentry.js IGNORED_ERROR_PATTERNS) **가시성은 여기서 유지**한다:
+      //     observeDegrade 는 Redis 21일 카운터라 /api/health 의 searchDegrade 로 그대로 보인다.
+      try { await require('../services/degradeStats').observeDegrade(`report-ai-${_aiDown}`); } catch (_) { /* 관측 실패가 보고서를 막지 않는다 */ }
       parsed = buildDataOnlyReport(userInput, candidates, policyData, _freeCtx);
     }
 
