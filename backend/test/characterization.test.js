@@ -2647,7 +2647,11 @@ test('평↔㎡ 환산 계수가 저장소 전체에서 하나다 (Sprint MMMMMM
   // 정확 계수가 실제로 쓰이고 있는지(전부 지워지는 사고 방지)
   const ana = fs.readFileSync(path.join(__dirname, '../services/analysisService.js'), 'utf8');
   assert.ok(ana.includes('_PYEONG_M2 = 3.3058'), '기준 상수가 사라졌다');
-  assert.ok(ana.includes('/ 3.3058'), 'analysisService 가 정확 계수를 쓰지 않는다');
+  // PYEONG-CONST-2026-09-02: 리터럴 나눗셈(`/ 3.3058`)을 상수(`/ _PYEONG_M2`)로 바꿨다.
+  //   이 단언의 의도는 '계수가 실제로 쓰이는가'(전부 지워지는 사고 방지)이므로, 리터럴이 아니라
+  //   **상수를 쓰는 나눗셈이 존재하는가**로 확인한다.
+  const divs = (ana.match(/\/\s*_PYEONG_M2/g) || []).length;
+  assert.ok(divs >= 2, `analysisService 가 정확 계수를 나눗셈에 쓰지 않는다(${divs}회)`);
 });
 
 test('표본·범위 표기가 실제 집계와 맞다 (Sprint MMMMMMM-11)', () => {
@@ -4838,5 +4842,46 @@ test('취득세: 프론트 계산기도 같은 지역 규칙을 쓴다 (사본 �
   // 단지 상세 호출부가 실제로 지역을 넘겨야 한다(안 넘기면 화면이 여전히 갈린다)
   assert.ok(fe.indexOf('calcTotalCostHTML(pr,loanAmt,houseS,isF,_costIsReg)') >= 0,
     '단지 상세 계산기 호출부가 지역을 넘기지 않는다 — 같은 화면의 세금 카드와 값이 갈린다');
+});
+
+// ── SCOPE-GATE-TRUTH-2026-09-02 (감사 P2) ────────────────────────────────────────
+//   [왜] 이 저장소에서 **프로덕션을 세 번 죽인** 결함 클래스는 "매달린 참조"다 — 선언 범위 밖에서
+//     식별자를 쓰는 것. 문법검사·계약테스트를 전부 통과하고 런타임에서만 죽는다.
+//     그 목적으로 만들어져 있던 scripts/check-inline-scope.js 는 정규식이 `'\b'`(백스페이스 문자)라
+//     **한 번도 매치한 적 없는 no-op** 이었다(실측: 선언만 개명해 미선언 상태를 만들어도 0건 보고).
+//     실제로 잡는 것은 eslint no-undef 였다(같은 실측에서 사용처 2곳을 정확히 지적).
+//   [무엇을 고정하나] 그 lint 배선이 끊기면 이 방어가 통째로 사라진다 — 배선 자체를 계약으로 건다.
+test('품질 게이트: 프론트 인라인 JS 가 lint(no-undef)를 실제로 통과하도록 배선돼 있다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const root = path2.join(__dirname, '../..');
+  const pkg = JSON.parse(fs2.readFileSync(path2.join(root, 'package.json'), 'utf8'));
+  const ci = fs2.readFileSync(path2.join(root, '.github/workflows/ci.yml'), 'utf8');
+  const eslintCfg = fs2.readFileSync(path2.join(root, 'eslint.config.mjs'), 'utf8');
+
+  // ① lint 스크립트가 인라인 JS 를 추출해서 eslint 에 넣어야 한다
+  const lint = String(pkg.scripts && pkg.scripts.lint || '');
+  assert.ok(lint.indexOf('extract-inline-js') >= 0, 'lint 가 인라인 JS 를 추출하지 않는다 — 프론트가 검사 사각지대가 된다');
+  assert.ok(/eslint[^&]*\.lint-tmp/.test(lint), 'lint 가 추출된 .lint-tmp 를 검사하지 않는다');
+
+  // ② CI 가 그 스크립트를 실제로 실행해야 한다
+  assert.ok(/run:\s*npm run lint/.test(ci), 'CI 에 npm run lint 스텝이 없다 — 로컬에서만 도는 게이트는 게이트가 아니다');
+
+  // ③ no-undef 규칙이 켜져 있어야 한다(이게 매달린 참조를 잡는 실체다)
+  assert.ok(/['\"]no-undef['\"]\s*:\s*['\"]error['\"]/.test(eslintCfg),
+    'eslint no-undef 가 error 로 켜져 있지 않다 — 런타임에서만 죽는 스코프 오류를 아무도 못 잡는다');
+
+  // ④ 추출기가 index.html 을 실제로 대상에 넣는지(파일명 하드코딩 회귀 방지)
+  const ext = fs2.readFileSync(path2.join(root, 'scripts/extract-inline-js.js'), 'utf8');
+  assert.ok(ext.indexOf('index') >= 0, '추출기가 index.html 을 대상에서 빠뜨렸다');
+});
+
+test('품질 게이트: no-op 로 판명된 스코프 검사기가 되살아나지 않는다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const root = path2.join(__dirname, '../..');
+  assert.equal(fs2.existsSync(path2.join(root, 'scripts/check-inline-scope.js')), false,
+    'check-inline-scope.js 가 돌아왔다 — 정규식이 백스페이스 문자라 항상 0건을 보고하는 no-op 이었다. '
+    + '되살리려면 반드시 \'선언만 개명해 미선언 상태를 만들었을 때 실패하는가\' 를 먼저 실측할 것.');
 });
 

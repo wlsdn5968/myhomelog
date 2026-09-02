@@ -208,6 +208,12 @@ jobs:
         # .lint-tmp/<base>-block<N>.js 에 뽑은 뒤(줄번호 보존) eslint 실행.
         # MULTI-HTML-2026-08-28: index.html 만 보던 것을 billing·terms·privacy·refund 까지 넓혔다 —
         #   그전까지 결제·환불 인라인 JS 는 이 게이트를 그냥 통과했다.
+        # SCOPE-GATE-TRUTH-2026-09-02 (감사 P2): **매달린 참조(런타임에서만 죽는 스코프 오류)를
+        #   실제로 잡는 게이트는 이 lint 다.** 실측: `_peakFloorLine` 선언만 개명해 미선언 상태를
+        #   만들었더니 eslint 가 사용처 2곳을 `no-undef` 로 정확히 잡았다(4777·4973행).
+        #   ⚠ 같은 목적으로 만들어져 있던 scripts/check-inline-scope.js 는 정규식이
+        #   `'\b'`(백스페이스 문자)라 **한 번도 매치한 적이 없는 no-op** 이었다 — 같은 실측에서
+        #   0건을 보고했다. 거짓 안심을 주므로 제거했다. 이 스텝을 지우면 그 방어가 통째로 사라진다.
         # 에러만 CI 를 막고 경고는 막지 않는다.
         run: npm run lint
 

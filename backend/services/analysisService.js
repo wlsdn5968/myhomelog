@@ -12,6 +12,11 @@ const { resolveFacility } = require('./aptFacilityService');
 const { buildFacility } = require('../utils/buildFacility');
 const cache = require('../cache');
 
+// PYEONG-CONST-2026-09-02 (감사 P2): 같은 파일 안에서 한 자리만 리터럴 3.3058 을 쓰고 있었다.
+//   값은 이미 같아 라이브 위험은 없었지만, 계수를 다시 손볼 때 그 한 곳만 놓치기 쉽다.
+//   선언을 사용처보다 **위로** 올린다 — 종전 위치(파일 하단)로는 TDZ 로 죽는다.
+const _PYEONG_M2 = 3.3058; // 1평 = 3.3058㎡ (전용면적 기준 평당가 환산)
+
 // ── 지역명 → lawdCd 역조회 ────────────────────────────────
 function getLawdCdFromArea(area) {
   if (!area) return null;
@@ -65,7 +70,7 @@ function filterAnomalies(transactions) {
     //   [영향 실측] 20~250㎡ 전 구간에서 반올림 결과가 갈리는 비율 7.2%. 다만 실제 대표 평형
     //   (59.82·84.92·114.97·134.9·164.9㎡)은 **전부 동일**하고, 불일치는 21~25㎡ 같은 소형 구간에 몰린다.
     //   ⚠ 회귀 위험: 평형 필터(15~60평) 경계에 걸린 극소수 매물이 들고날 수 있다.
-    const py = Math.round((t.excluUseAr || 0) / 3.3058);
+    const py = Math.round((t.excluUseAr || 0) / _PYEONG_M2);   // PYEONG-CONST-2026-09-02: 리터럴 → 상수
     if (!groups[py]) groups[py] = [];
     groups[py].push(t);
   }
@@ -593,7 +598,7 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
 //   facility(세대수·주차/세대·준공·시공사·동수)는 있으면 표시/없으면 '수집 중'(점진 충실화).
 // 재사용(회귀 0): getTransactionsByAptInclAliases(검증된 alias·이름매칭) + filterAnomalies(평형별 MAD)
 //                + resolveFacility/buildFacility(검증된 KAPT 매칭). 신규 매칭/조인 코드 없음.
-const _PYEONG_M2 = 3.3058; // 1평 = 3.3058㎡ (전용면적 기준 평당가 환산)
+
 
 function _medianNum(nums) {
   if (!nums || !nums.length) return 0;
