@@ -4377,3 +4377,80 @@ test('보고서 AI 열화는 Sentry 대신 degrade 카운터로 관측된다', (
     'AI 열화 지점에 observeDegrade 기록이 없다 — Sentry 에서 걸러내면 관측 수단이 사라진다');
 });
 
+// ── REG-NONSEOUL-2026-09-02 (감사 P1-9) ──────────────────────────────────────
+//   [왜] 보고서의 규제 판정은 **서울만** 하고 비서울은 무조건 미확인이었다. 그 사이 2026.6.30 로
+//     화성 동탄구·용인 기흥구·구리시가 규제지역에 추가됐는데 보고서는 한 글자도 반영하지 못했고,
+//     같은 서비스의 지역 대시보드(routes/region.js)는 이미 정확히 판정하고 있었다 —
+//     **같은 서비스가 서로 다른 사실을 말하는** 상태였다(절대룰 ②).
+//   [무엇을 고정하나] 이름 문자열이 아니라 lawd_cd 집합으로 판정하고, 손으로 고른 몇 건이 아니라
+//     **전 코드 전수 스윕**으로 양방향(누락·오탐)을 확인한다.
+//     (이 저장소는 "케이스를 손으로 골라 중구를 빠뜨린" 사고를 겪었다 — 그래서 전수다.)
+test('보고서 규제 판정: 규제 lawd_cd 집합 전수 — 누락도 오탐도 없다', async () => {
+  const { getRegulatedLawdCodes } = require('../services/regulationsService');
+  const { LAWD_CODES } = require('../services/transactionService');
+  const getRegulationPenalty = _reportFn('getRegulationPenalty');
+  const { codes, seoulRegulated, unmatched } = await getRegulatedLawdCodes();
+
+  // 전제: 스냅샷(또는 폴백)이 실제로 해석된다. 미매핑이 있으면 그 지역은 조용히 빠진다.
+  assert.deepEqual(unmatched, [], `규제지역 이름이 lawd_cd 로 해석되지 않았다: ${unmatched.join(', ')}`);
+  assert.ok(codes.size >= 40, `규제 코드가 ${codes.size}개뿐 — 스냅샷 해석이 깨졌다`);
+
+  const byCode = new Map();
+  for (const [name, code] of Object.entries(LAWD_CODES)) if (!byCode.has(String(code))) byCode.set(String(code), name);
+
+  // ① 누락 없음 — 규제 집합의 모든 코드가 규제로 판정돼야 한다
+  const missed = [];
+  for (const code of codes) {
+    const name = byCode.get(String(code)) || code;
+    const sgg = name.replace(/^(서울|경기|인천|부산|대구|대전|광주|울산|세종)\s*/, '') || name;
+    const r = getRegulationPenalty(sgg, code, seoulRegulated, codes);
+    if (r.status === '미확인') missed.push(`${code}(${name})`);
+  }
+  assert.deepEqual(missed, [],
+    `규제지역인데 '미확인' 으로 빠진 코드:\n  ${missed.join('\n  ')}`);
+
+  // ② 오탐 없음 — 규제 집합 밖의 코드는 절대 규제로 판정되면 안 된다(동명 구 오판 차단)
+  const falsePos = [];
+  for (const [name, code] of Object.entries(LAWD_CODES)) {
+    const c = String(code);
+    if (codes.has(c)) continue;
+    const sgg = name.replace(/^(서울|경기|인천|부산|대구|대전|광주|울산|세종)\s*/, '') || name;
+    const r = getRegulationPenalty(sgg, c, seoulRegulated, codes);
+    if (r.status !== '미확인') falsePos.push(`${c}(${name}) → ${r.status}`);
+  }
+  assert.deepEqual(falsePos, [],
+    `비규제 지역이 규제로 잘못 판정됐다:\n  ${falsePos.join('\n  ')}`);
+});
+
+test('보고서 규제 판정: 2026.6.30 신규 지정 3곳이 실제로 반영된다', async () => {
+  const { getRegulatedLawdCodes } = require('../services/regulationsService');
+  const getRegulationPenalty = _reportFn('getRegulationPenalty');
+  const { codes, seoulRegulated } = await getRegulatedLawdCodes();
+  // 화성시 동탄구 41597 · 용인시 기흥구 41463 · 구리시 41310 (LAWD_CODES 실값)
+  for (const [sgg, code] of [['동탄구', '41597'], ['기흥구', '41463'], ['구리시', '41310']]) {
+    const r = getRegulationPenalty(sgg, code, seoulRegulated, codes);
+    assert.equal(r.status, '조정대상지역', `${sgg}(${code}) 가 규제로 판정되지 않는다 — 2026.6.30 지정 누락`);
+    assert.ok(r.bonus < 0, `${sgg} 규제 감점이 반영되지 않았다`);
+  }
+});
+
+test('보고서 규제 판정: 서울 해제가 경기 판정을 흔들지 않는다 (독립성)', async () => {
+  const { getRegulatedLawdCodes } = require('../services/regulationsService');
+  const getRegulationPenalty = _reportFn('getRegulationPenalty');
+  const { codes } = await getRegulatedLawdCodes();
+  // 서울이 해제된 스냅샷을 가정 — 서울은 미확인으로 떨어지고, 경기는 그대로 규제여야 한다.
+  assert.equal(getRegulationPenalty('강남구', '11680', false, codes).status, '미확인',
+    '서울 해제 스냅샷인데 서울이 여전히 규제로 표시된다');
+  assert.equal(getRegulationPenalty('동탄구', '41597', false, codes).status, '조정대상지역',
+    '서울 해제가 경기 규제 판정까지 꺼버렸다 — 두 판정은 독립이어야 한다');
+});
+
+test('보고서 규제 판정: 코드 집합을 못 받으면 비서울은 미확인 (실패를 비규제로 단정하지 않는다)', () => {
+  const getRegulationPenalty = _reportFn('getRegulationPenalty');
+  // 조회 실패(regulatedCodes=null) 시 종전 동작 유지 — 하위호환이자 보수적 폴백.
+  assert.equal(getRegulationPenalty('동탄구', '41597', true, null).status, '미확인',
+    '집합 조회 실패인데 비서울을 단정했다');
+  assert.equal(getRegulationPenalty('강남구', '11680', true, null).status, '투기과열·토허구역 일부',
+    '집합이 없어도 서울 판정은 종전대로 동작해야 한다');
+});
+

@@ -920,7 +920,14 @@ function getAgeBonus(buildYear) {
 //     **기본값 true(규제)** 는 의도적이다 — 스냅샷 조회 실패 시 보수적으로 규제로 보는 것이
 //     프론트 `_regLtvLabel`(미로드면 '40%')과 같은 방향이고, 한도·의무를 과소 안내하지 않는다.
 //   ⚠ 한계(프론트와 동일): 스냅샷의 `seoul` 이 문자열 + `!!` 라 **부분 해제는 표현 불가**다.
-function getRegulationPenalty(sigungu, lawdCd, seoulRegulated = true) {
+// REG-NONSEOUL-2026-09-02 (감사 P1-9): 종전엔 **서울만** 판정하고 비서울은 무조건 '미확인' 이었다.
+//   그 사이 2026.6.30 로 화성 동탄구·용인 기흥구·구리시가 규제지역에 추가됐는데(스냅샷 실측: 경기 15곳),
+//   보고서는 그 사실을 한 글자도 반영하지 못했다 — 같은 서비스의 지역 대시보드(routes/region.js)는
+//   이미 `getRegulatedLawdCodes()` 로 정확히 판정하고 있었으므로 **두 화면이 서로 다른 사실**을 말했다.
+//   이제 호출측이 그 코드 집합을 넘겨준다. 이름 문자열 매칭은 절대 하지 않는다(동명 구 오판 — 8회 재발).
+//   ⚠ 스냅샷에는 '투기과열' 서브셋 정보가 없다 → 강남·서초·송파·용산의 -8 구분은 서울 안에서만 쓰는
+//     상수로 남긴다(비서울 동명 위험이 없는 위치라 안전).
+function getRegulationPenalty(sigungu, lawdCd, seoulRegulated = true, regulatedCodes = null) {
   if (!sigungu) return { status: '미확인', bonus: 0 };
   const code = String(lawdCd || '').trim();
   const isSeoul = code ? code.startsWith('11') : false;
@@ -934,7 +941,14 @@ function getRegulationPenalty(sigungu, lawdCd, seoulRegulated = true) {
   if (isSeoul && sigungu.endsWith('구')) {
     return { status: '조정대상지역', bonus: -3 };
   }
-  // 서울 외 지역은 코드만으로 규제 여부를 단정할 수 없음 → 미확인(하위 표시에서 생략)
+  // 서울 외: 스냅샷에서 만든 규제 lawd_cd 집합으로만 판정한다(이름 문자열 금지).
+  //   경기 15곳 = 과천·광명·성남3구·수원3구·안양동안·용인수지·의왕·하남 + 2026.6.30 추가된
+  //   구리시·용인 기흥구·화성 동탄구. 15/15 전부 LAWD_CODES 로 해석됨을 실측 확인했다.
+  if (!isSeoul && regulatedCodes && typeof regulatedCodes.has === 'function' && code && regulatedCodes.has(code)) {
+    return { status: '조정대상지역', bonus: -3 };
+  }
+  // 집합을 못 받았거나(조회 실패) 집합에 없으면 → 미확인(하위 표시에서 생략)
+  //   ⚠ 조회 실패를 '비규제' 로 단정하지 않는다 — 아래 REG-UNKNOWN 근거와 같은 이유다.
   //   REG-UNKNOWN-2026-08-16 (감사 #9): 예전엔 코드가 **없을 때** '비규제' 로 떨어졌다.
   //   그런데 `regulation` 필드는 '미확인' 이면 null 로 생략되지만 '비규제' 는 **화면에 그대로 뜬다**(:908).
   //   즉 lawd_cd 없이 부르면 강남구에도 "비규제" 라는 **사실 아닌 라벨**이 붙는다.
@@ -1054,7 +1068,7 @@ function computeAptScore(c, ctx) {
 }
 
 /** Phase 7: 객관 데이터 점수 추가 — KAPT API 호출 후 별도 적용 */
-function applyObjectiveScore(c, seoulRegulated = true) {
+function applyObjectiveScore(c, seoulRegulated = true, regulatedCodes = null) {
   // c.score, c.scoreBreakdown 이 이미 1차 계산되어 있다고 가정
   const r = c.scoreBreakdown;
 
@@ -1078,7 +1092,7 @@ function applyObjectiveScore(c, seoulRegulated = true) {
   const age = getAgeBonus(c.build_year);
   if (age.bonus && !r['객관_노후도']) { r['객관_노후도'] = age.bonus; c.score += age.bonus; }
 
-  const reg = getRegulationPenalty(c.sigungu, c.lawd_cd, seoulRegulated);
+  const reg = getRegulationPenalty(c.sigungu, c.lawd_cd, seoulRegulated, regulatedCodes);
   if (reg.bonus && !r['객관_규제']) { r['객관_규제'] = reg.bonus; c.score += reg.bonus; }
 
   // TURNOVER-2026-08-30 (Sprint PPPPPPP): 세대수를 아는 지금 **회전율로 교체**한다.
@@ -1803,13 +1817,26 @@ async function fetchCandidateApts(admin, input, limit) {
   //   여기서 1회만 읽어 루프에 넘긴다(후보마다 조회하면 N번 왕복).
   //   조회 실패 시 true(규제) — 보수적 폴백. 프론트 `_regLtvLabel` 의 미로드 동작과 같은 방향이다.
   let _seoulRegulated = true;
+  // REG-NONSEOUL-2026-09-02 (감사 P1-9): 비서울 규제지역(경기 15곳)을 판정할 lawd_cd 집합도 함께 읽는다.
+  //   routes/region.js 가 이미 쓰는 canonical 경로와 같은 함수라 두 화면이 같은 답을 낸다.
+  //   실패하면 null 로 남겨 종전대로 '미확인' — 조회 실패를 '비규제' 로 단정하지 않는다.
+  let _regCodes = null;
   try {
     const _snap = await getSnapshot('housing_loan_2025').catch(() => null);
     const _seoul = _snap?.data?.regulatedRegions?.seoul;
     if (_snap && _snap.data) _seoulRegulated = !!_seoul; // 스냅샷을 읽은 경우에만 반영
   } catch (_) { /* 보수적 기본값 유지 */ }
+  try {
+    const _rc = await require('../services/regulationsService').getRegulatedLawdCodes();
+    if (_rc && _rc.codes) _regCodes = _rc.codes;
+    // 스냅샷에 있는데 LAWD_CODES 로 해석 못 한 지역은 **조용히 빠진다** — 보고서 경로에서도 보이게 남긴다.
+    //   (행정구역 개편·오타로 규제지역이 소리 없이 누락되는 것을 막기 위함.)
+    if (_rc && Array.isArray(_rc.unmatched) && _rc.unmatched.length) {
+      logger.warn({ unmatched: _rc.unmatched }, '보고서 규제 판정: 미매핑 규제지역 — 해당 지역은 미확인으로 표시된다');
+    }
+  } catch (_) { /* null 유지 → 비서울은 종전대로 미확인 */ }
   for (const c of out) {
-    applyObjectiveScore(c, _seoulRegulated);
+    applyObjectiveScore(c, _seoulRegulated, _regCodes);
   }
   // HH-GATE (Sprint LLLLLL, 운영자 지시 "100세대 미만은 가능하면 추천하지 말 것"):
   //   세대수 확인된 소형(<100)만 제외 — 미확인(null)은 유지(이름 매칭 실패한 실제 대단지 오배제 방지).
