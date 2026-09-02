@@ -1701,10 +1701,10 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <div id="hUsage" onclick="openSettings()" title="오늘 무료 사용량 — 매일 자정 리셋 (클릭: 상세 정보)" role="status">
       <!-- GGGGGG (운영자 실측 "2/5·2/3 의미 모르겠다"): 숫자만으론 사용/잔여 구분 불가 — '남은' 텍스트 라벨 명시.
            좁은 폭(≤1119px)은 .hu-lbl 숨김(아이콘+숫자 유지) — 헤더 오버플로 방지. -->
-      <span class="hu-dim">오늘 남은</span>
-      <span class="hu-item" aria-label="오늘 남은 무료 단지 검색"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/><path d="m19.5 19.5-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="hu-lbl">검색</span><b id="quotaPill">—</b></span>
-      <span class="hu-dot">·</span>
-      <span class="hu-item" aria-label="오늘 남은 도우미 채팅"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5.5h16v10H9l-4 3.5v-3.5H4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="hu-lbl">채팅</span><b id="aiPill">—</b></span>
+      <span class="hu-dim" id="huDimLabel">오늘 남은</span>
+      <span class="hu-item" id="huSearchItem" aria-label="오늘 남은 무료 단지 검색"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/><path d="m19.5 19.5-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="hu-lbl">검색</span><b id="quotaPill">—</b></span>
+      <span class="hu-dot" id="huDot">·</span>
+      <span class="hu-item" id="huChatItem" aria-label="오늘 남은 도우미 채팅"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5.5h16v10H9l-4 3.5v-3.5H4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="hu-lbl">채팅</span><b id="aiPill">—</b></span>
     </div>
     <!-- Phase 4 (2026-04-26): 서버 정상 시 hide, 장애 시만 빨간 표시 — "항상 초록"의 의미 없음 해소 -->
     <span class="hst off" id="apiSt" style="display:none">확인 중...</span>
@@ -5762,13 +5762,41 @@ async function loadSubs(){
 
 // 사용량 표시 갱신 (헤더 사용량 텍스트 + 정보 모달)
 // Sprint OOOOO (시안): pill → 테두리 없는 텍스트 "오늘 🔎4/5 · 💬2/3". 무제한(admin)은 행 자체를 숨김.
+/* QUOTA-NEAR-ONLY-2026-09-02 (감사 P1-7, 운영자 승인): 헤더의 "오늘 남은 검색 5/5 · 채팅 30/30" 은
+   admin 이 아니면 **상시 노출**이었다. 서비스를 처음 연 사람이 제일 먼저 읽는 숫자가 무료 한도라는 뜻이라,
+   첫인상이 "제한된 체험판" 이 된다. → 한도에 **근접했을 때만** 보여준다.
+   임계값은 새로 만들지 않고 이미 코드에 있는 amber 경고선을 그대로 쓴다 — 검색 잔여 ≤2 · 채팅 ≤3
+   (updateQuota·updateAiPill 의 색상 분기와 같은 수). 두 항목은 서로 다른 시점에 갱신되므로
+   마지막 값을 기억해 두고 한 곳에서 함께 동기화한다(한쪽만 보일 때 구분점 "·" 이 남는 것도 여기서 처리).
+   ⚠ 숨겨도 한도 자체는 그대로다 — 상세는 계정 메뉴·데이터 상태에서 계속 볼 수 있다. */
+window._quotaNear = { search: null, chat: null };
+function _syncHUsage(){
+  try {
+    const wrap = document.getElementById('hUsage');
+    if (!wrap) return;
+    const unlimited = !!window._quotaUnlimited;
+    const s = window._quotaNear.search, c = window._quotaNear.chat;
+    const showS = !unlimited && Number.isFinite(s) && s <= 2;
+    const showC = !unlimited && Number.isFinite(c) && c <= 3;
+    const si = document.getElementById('huSearchItem');
+    const ci = document.getElementById('huChatItem');
+    const dot = document.getElementById('huDot');
+    const dim = document.getElementById('huDimLabel');
+    if (si) si.style.display = showS ? '' : 'none';
+    if (ci) ci.style.display = showC ? '' : 'none';
+    if (dot) dot.style.display = (showS && showC) ? '' : 'none';
+    if (dim) dim.style.display = (showS || showC) ? '' : 'none';
+    wrap.style.display = (showS || showC) ? 'flex' : 'none';
+  } catch(_) { /* 표시 동기화 실패가 화면을 막지 않는다 */ }
+}
 function updateQuota(usage){
   if(!usage)return;
   const wrap=document.getElementById('hUsage');
   const pill=document.getElementById('quotaPill');
   const info=document.getElementById('usageInfo');
   window._quotaUnlimited = !!usage.unlimited;
-  if(wrap) wrap.style.display = usage.unlimited ? 'none' : 'flex';
+  // QUOTA-NEAR-ONLY-2026-09-02: wrap 을 여기서 직접 켜지 않는다 — _syncHUsage 가 두 항목을 함께 판정한다.
+  window._quotaNear.search = usage.unlimited ? null : Number(usage.remaining);
   // QUOTA-SYMMETRY-2026-08-25: 무제한이면 채팅 pill 은 '∞' 인데 검색 pill 만 직전 숫자가 남아 있었다.
   //   행 자체가 숨겨져 눈에 띄진 않지만, admin 해제/세션 만료로 행이 다시 보일 때 옛 값이 노출된다.
   if(pill && usage.unlimited){ pill.textContent='∞'; pill.style.color=''; }
@@ -5780,6 +5808,7 @@ function updateQuota(usage){
     if(wrap) wrap.title=`오늘 남은 무료 단지 검색 ${usage.remaining}/${usage.limit}회 — 매일 자정 리셋 (클릭: 상세 정보)`;
   }
   // USAGE-INFO-2026-07-16 (Sprint SSSSS): 정적 안내("로그인 시 10회/일 · 특약·채팅 별도 한도")가 이 덮어쓰기로 소실되던 것 — 항상 뒤에 유지
+  _syncHUsage();
   if(info)info.textContent = usage.unlimited ? '검색 무제한 (운영자·관리자)' : `오늘 ${usage.used}/${usage.limit}회 사용 (남은 무료 검색 ${usage.remaining}회) · 매일 자정 리셋 · 로그인 시 10회/일 · 매수특약·도우미 채팅은 별도 한도`;
 }
 async function refreshQuota(){
@@ -5829,9 +5858,11 @@ function updateAiPill(usage){
     : `무료 하루 ${usage.limit}회 · 매일 자정 리셋`;
   const pill = document.getElementById('aiPill');
   if(!pill) return;
-  if(usage.unlimited){ pill.textContent='∞'; pill.style.color=''; return; }
+  if(usage.unlimited){ pill.textContent='∞'; pill.style.color=''; window._quotaNear.chat = null; _syncHUsage(); return; }
   pill.textContent = `${usage.remaining}/${usage.limit}`;
   pill.style.color = usage.remaining<=1 ? 'var(--red)' : (usage.remaining<=3 ? 'var(--amb)' : '');
+  window._quotaNear.chat = Number(usage.remaining);
+  _syncHUsage();
   pill.title = `오늘 남은 도우미 채팅 ${usage.remaining}/${usage.limit}회 — 매일 자정 리셋`; // GGGGGG: pill(남은)과 기준 통일
 }
 

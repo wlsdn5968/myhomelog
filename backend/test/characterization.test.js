@@ -4664,3 +4664,64 @@ test('보고서 점수: 데이터가 없다는 이유로 순위가 밀리지 않
   assert.equal(unknownAge.scoreBreakdown['객관_노후도_미확인'], true, '노후도 미확인 표시가 없다');
 });
 
+// ── QUOTA-NEAR-ONLY-2026-09-02 (감사 P1-7, 운영자 승인) ───────────────────────────
+//   [왜] 헤더의 "오늘 남은 검색 5/5 · 채팅 30/30" 이 admin 이 아니면 상시 노출이라,
+//     서비스를 처음 연 사람이 가장 먼저 읽는 숫자가 무료 한도였다 — 첫인상이 "제한된 체험판" 이 된다.
+//     한도에 근접했을 때만 보이게 바꿨다. 임계값은 새로 만들지 않고 코드에 이미 있던 amber 경고선
+//     (검색 잔여 ≤2 · 채팅 ≤3)을 그대로 재사용한다.
+//   [무엇을 고정하나] 4가지 상태(여유·검색임박·채팅임박·둘다) + 무제한에서의 표시 조합.
+//     한쪽만 보일 때 구분점("·")이 홀로 남는 시각 버그도 함께 막는다.
+test('헤더 한도: 근접했을 때만 보이고, 한쪽만 보일 때 구분점이 남지 않는다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+
+  // 항목별 토글이 가능하려면 id 가 있어야 한다(종전엔 wrap 하나뿐이라 개별 제어 자체가 불가능했다).
+  for (const id of ['huSearchItem', 'huChatItem', 'huDot', 'huDimLabel']) {
+    assert.ok(html.indexOf('id="' + id + '"') > 0, `헤더 한도 항목 id 가 없다: ${id}`);
+  }
+
+  // 실제 _syncHUsage 를 꺼내 stub DOM 으로 실행한다.
+  const i = html.indexOf('function _syncHUsage()');
+  assert.ok(i > 0, '_syncHUsage 를 찾지 못했다 — 테스트를 갱신할 것');
+  const end = html.indexOf('function updateQuota(usage){', i);
+  assert.ok(end > i, '_syncHUsage 범위를 찾지 못했다');
+  const src = html.slice(i, end);
+
+  const run = (unlimited, search, chat) => {
+    const els = {};
+    for (const id of ['hUsage', 'huSearchItem', 'huChatItem', 'huDot', 'huDimLabel']) els[id] = { style: {} };
+    const win = { _quotaUnlimited: unlimited, _quotaNear: { search, chat } };
+    const doc = { getElementById: (id) => els[id] || null };
+    new Function('document', 'window', src + '; _syncHUsage();')(doc, win);
+    const vis = (e) => e.style.display !== 'none';
+    return { wrap: vis(els.hUsage), s: vis(els.huSearchItem), c: vis(els.huChatItem), dot: vis(els.huDot), dim: vis(els.huDimLabel) };
+  };
+
+  // ① 여유 상태(신규 방문자) — 아무것도 보이지 않는다
+  assert.deepEqual(run(false, 5, 30), { wrap: false, s: false, c: false, dot: false, dim: false },
+    '한도가 넉넉한데 헤더에 숫자가 노출된다 — 첫인상이 무료 한도가 된다');
+
+  // ② 검색만 임박(잔여 2) — 검색만, 구분점은 숨김
+  assert.deepEqual(run(false, 2, 30), { wrap: true, s: true, c: false, dot: false, dim: true },
+    '검색 임박인데 표시가 틀렸다(구분점이 홀로 남았을 수 있다)');
+
+  // ③ 채팅만 임박(잔여 3) — 채팅만
+  assert.deepEqual(run(false, 5, 3), { wrap: true, s: false, c: true, dot: false, dim: true },
+    '채팅 임박인데 표시가 틀렸다');
+
+  // ④ 둘 다 임박 — 구분점 표시
+  assert.deepEqual(run(false, 1, 1), { wrap: true, s: true, c: true, dot: true, dim: true },
+    '둘 다 임박인데 구분점이 없다');
+
+  // ⑤ 무제한(운영자·관리자) — 종전과 동일하게 숨김
+  assert.deepEqual(run(true, null, null), { wrap: false, s: false, c: false, dot: false, dim: false },
+    '무제한인데 한도 표시가 뜬다');
+
+  // ⑥ 경계 — 검색 3 은 아직 여유, 2 부터 표시 (amber 임계값과 같은 수)
+  assert.equal(run(false, 3, 30).s, false, '검색 잔여 3 은 아직 여유여야 한다');
+  assert.equal(run(false, 2, 30).s, true, '검색 잔여 2 부터 보여야 한다');
+  assert.equal(run(false, 5, 4).c, false, '채팅 잔여 4 는 아직 여유여야 한다');
+  assert.equal(run(false, 5, 3).c, true, '채팅 잔여 3 부터 보여야 한다');
+});
+
