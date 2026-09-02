@@ -1946,3 +1946,6 @@ JSON만 반환. 다른 텍스트 X.`;
 //   유료 호출 없이 전수 확인이 가능하다. router 동작은 그대로다(export 추가뿐).
 module.exports = router;
 module.exports.fetchCandidateApts = fetchCandidateApts;
+// TEST-EXPORT-2026-09-02 (감사 P0-2): 회귀 주입 실측 결과 이 함수의 null 가드가 **무커버리지**였다
+//   (가드를 지우고 테스트를 돌렸더니 136 pass 로 그냥 통과했다). 순수 함수라 export 해서 실제 실행으로 고정한다.
+module.exports.applyObjectiveScore = applyObjectiveScore;

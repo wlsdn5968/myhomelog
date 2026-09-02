@@ -4298,3 +4298,38 @@ test('추천 점수: 주변시설 null 은 0 곳으로 채점되지 않는다 (N
     '전부 모름인데 인프라가 0 점이다 — 조회 실패가 감점이 된다');
 });
 
+// ── REPORT-SUBWAY-NULL-2026-09-02 (감사 P0-2, 회귀 주입으로 발견한 무커버리지) ─────────
+//   [왜] report.js 의 null 가드를 지우고 테스트를 돌렸더니 **136 pass 로 그냥 통과**했다.
+//     즉 그 가드는 아무도 지키지 않고 있었다 — 다음 리팩터에서 조용히 사라질 수 있었다.
+//   [무엇을 고정하나] 카카오 조회 실패(null)가 "반경 1.2km 지하철역 0곳" 이라는 사실 주장으로
+//     둔갑하지 않고, 역세권·교통 점수를 최저 밴드로 깎지도 않는다.
+test('보고서 점수: amenities.subway 가 null 이면 역세권 근거·점수를 만들지 않는다', () => {
+  const { applyObjectiveScore } = require('../routes/report');
+  const mk = (subway) => ({
+    score: 0, sigungu: '강남구', lawd_cd: '11680', households: null, build_year: null,
+    amenities: { subway, school: null, mart: null, hospital: null, park: null, cvs: null },
+    scoreBreakdown: { priority_역세권: 10, priority_교통: 10 },
+  });
+
+  const unknown = mk(null);
+  applyObjectiveScore(unknown, true);
+  const zero = mk(0);
+  applyObjectiveScore(zero, true);
+
+  // ① 모름은 기존 우선순위 점수를 건드리지 않는다(코드 주석의 "모르는 것을 0 으로 바꾸지 않는다").
+  assert.equal(unknown.scoreBreakdown.priority_역세권, 10,
+    `조회 실패(null)인데 역세권 점수가 ${unknown.scoreBreakdown.priority_역세권} 로 덮어써졌다`);
+  assert.equal(unknown.scoreBreakdown.priority_교통, 10,
+    `조회 실패(null)인데 교통 점수가 ${unknown.scoreBreakdown.priority_교통} 로 덮어써졌다`);
+
+  // ② 실제 0 곳은 반대로 반영돼야 한다 — 그래야 ①이 "그냥 아무것도 안 함" 이 아님이 증명된다.
+  assert.equal(zero.scoreBreakdown.priority_역세권, 2,
+    '실제 0곳인데 최저 밴드가 적용되지 않았다 — 테스트 전제가 깨졌다');
+
+  // ③ 모름일 때 "0곳" 이라는 사실 주장 문구가 생기면 안 된다.
+  assert.equal(unknown.scoreBreakdown._역세권_근거, undefined,
+    `조회 실패인데 근거 문구가 붙었다: ${unknown.scoreBreakdown._역세권_근거}`);
+  assert.ok(/0\s*곳/.test(String(zero.scoreBreakdown._역세권_근거 || '')),
+    '실제 0곳일 때는 근거에 0곳이 적혀야 한다(대조군)');
+});
+
