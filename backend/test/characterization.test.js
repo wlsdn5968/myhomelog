@@ -4885,3 +4885,71 @@ test('품질 게이트: no-op 로 판명된 스코프 검사기가 되살아나�
     + '되살리려면 반드시 \'선언만 개명해 미선언 상태를 만들었을 때 실패하는가\' 를 먼저 실측할 것.');
 });
 
+// ── SCHEMA-SNAPSHOT-2026-09-02 (감사 후속) ─────────────────────────────────────
+//   [왜] supabase/migrations 만으로는 프로덕션을 재현할 수 없다 — CREATE TABLE 이 어느 파일에도
+//     없는 테이블이 9개, 시퀀스 없는 파일이 7개, "이미 적용된 걸 나중에 커밋" 이 8개다.
+//     이 저장소는 이미 "파일 존재 ≠ 프로덕션 적용" 으로 3개월짜리 미적용 제약을 겪었다.
+//     그래서 pg_catalog 를 직접 읽은 **현재 상태 스냅샷**(supabase/schema.sql)을 뒀다.
+//   [무엇을 고정하나] 스냅샷은 방치되면 즉시 거짓말이 된다. 그래서 "코드가 실제로 부르는
+//     테이블·RPC 가 스냅샷에 전부 있는가" 를 건다 — 스냅샷이 **중요한 방향으로** 낡으면 깨진다.
+//     (2026-09-02 실측: 테이블 28/28, RPC 10/10 일치)
+test('스키마 스냅샷: 코드가 참조하는 테이블·RPC 가 supabase/schema.sql 에 전부 선언돼 있다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const root = path2.join(__dirname, '../..');
+  const schemaPath = path2.join(root, 'supabase/schema.sql');
+  assert.ok(fs2.existsSync(schemaPath), 'supabase/schema.sql 이 사라졌다 — 마이그레이션만으로는 프로덕션을 재현할 수 없다');
+  const schema = fs2.readFileSync(schemaPath, 'utf8');
+
+  // 스냅샷이 선언하는 것들
+  const declaredTables = new Set();
+  for (const m of schema.matchAll(/^create (?:table|materialized view)(?: if not exists)? public\.([a-zA-Z0-9_]+)/gm)) declaredTables.add(m[1]);
+  const declaredFns = new Set();
+  for (const m of schema.matchAll(/^CREATE OR REPLACE FUNCTION public\.([a-zA-Z0-9_]+)/gm)) declaredFns.add(m[1]);
+  assert.ok(declaredTables.size >= 27, `스냅샷 테이블이 비정상적으로 적다(${declaredTables.size}) — 덤프가 잘렸을 수 있다`);
+
+  // 코드가 실제로 부르는 것들 (backend + api 전 소스)
+  const srcFiles = [];
+  const walk = (dir) => {
+    if (!fs2.existsSync(dir)) return;
+    for (const e of fs2.readdirSync(dir, { withFileTypes: true })) {
+      if (e.name === 'node_modules' || e.name === '.lint-tmp') continue;
+      const fp = path2.join(dir, e.name);
+      if (e.isDirectory()) walk(fp);
+      else if (/\.(js|mjs|cjs)$/.test(e.name)) srcFiles.push(fp);
+    }
+  };
+  walk(path2.join(root, 'backend'));
+  walk(path2.join(root, 'api'));
+  const usedTables = new Map();
+  const usedFns = new Map();
+  for (const fp of srcFiles) {
+    const src = fs2.readFileSync(fp, 'utf8');
+    for (const m of src.matchAll(/\.from\(\s*['"`]([a-zA-Z0-9_]+)/g)) {
+      if (!usedTables.has(m[1])) usedTables.set(m[1], fp);
+    }
+    for (const m of src.matchAll(/\.rpc\(\s*['"`]([a-zA-Z0-9_]+)/g)) {
+      if (!usedFns.has(m[1])) usedFns.set(m[1], fp);
+    }
+  }
+  assert.ok(usedTables.size >= 20, `테이블 참조 수집이 실패했다(${usedTables.size}) — 정규식이 깨졌을 수 있다`);
+
+  const missT = [...usedTables.keys()].filter((x) => !declaredTables.has(x));
+  const missF = [...usedFns.keys()].filter((x) => !declaredFns.has(x));
+  assert.deepEqual(missT, [], `코드가 쓰는데 스냅샷에 없는 테이블: ${missT.map((x) => x + '(' + usedTables.get(x) + ')').join(', ')} — 스냅샷을 다시 뽑을 것`);
+  assert.deepEqual(missF, [], `코드가 쓰는데 스냅샷에 없는 RPC: ${missF.map((x) => x + '(' + usedFns.get(x) + ')').join(', ')} — 스냅샷을 다시 뽑을 것`);
+});
+
+//   [왜] 취득세 생애최초 항목은 파일(구법 firstBuyerDiscount)과 프로덕션(현행 firstBuyerExempt)이
+//     어긋나 있었다 — 운영자가 2026-06-27 DB 만 직접 고쳤기 때문. 그 사실을 저장소에 기록했다.
+test('마이그레이션 기록: 생애최초 취득세 현행 필드가 사후 기록으로 남아 있다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const dir = path2.join(__dirname, '../../supabase/migrations');
+  const files = fs2.readdirSync(dir).filter((f) => f.indexOf('acquisition_tax') >= 0);
+  const joined = files.map((f) => fs2.readFileSync(path2.join(dir, f), 'utf8')).join('\n');
+  assert.ok(joined.indexOf('firstBuyerExempt') >= 0,
+    '마이그레이션 어디에도 firstBuyerExempt 가 없다 — 코드가 읽는 필드명이 저장소에 기록되지 않았다는 뜻');
+  assert.ok(joined.indexOf('deductManwon') >= 0, '생애최초 공제액(200만) 기록이 없다');
+});
+
