@@ -4092,25 +4092,98 @@ test('_br 보존 — 백필을 실제로 실행해 건축물대장 값이 payloa
 // Vercel 공식 문서로 확정한 사실: cron 전달은 best effort 라 회차가 통째로 누락될 수 있고,
 // 그때 런타임 로그조차 안 남으며, 실패해도 재시도하지 않는다. 따라서 알림 job 은
 // "한 회차 걸러도 다음 회차가 따라잡는" 창을 가져야 한다. 그 창을 여기서 고정한다.
-test('pushNotify — 누락 내성 창 72h + 캡에서 최신을 버리지 않는다', () => {
-  const fs = require('fs'); const path = require('path');
-  const src = fs.readFileSync(path.join(__dirname, '../jobs/pushNotify.js'), 'utf8');
+// ── PUSH-WINDOW-BEHAVIORAL-2026-09-02 (감사 후속: 테스트 행위화) ─────────────
+//   [왜] 알림 조회 창이 좁아지면 사용자는 관심단지 거래를 놓치고, **놓쳤다는 사실조차 모른다**.
+//     종전 테스트는 소스에서 `NOTIFY_FLOOR_MS = 72 * 3600 * 1000` 이라는 **글자**를 봤다.
+//     상수가 그대로여도 뒤에서 floorTs 를 덮어쓰면 통과하고, 상수를 다른 식으로 쓰면(예: 3일)
+//     동작이 같은데도 실패한다 — 둘 다 틀린 신호다.
+//   [무엇이 바뀌었나] run() 을 실제로 실행하고, 조회에 넘어간 `gte(ingested_at, ...)` 값을
+//     관측해 **계산된 창**을 확인한다. 외부 의존은 require.cache 스텁으로 끊는다.
+//     (web-push 는 VAPID env 가 있을 때만 지연 로드되므로 스텁이 필요 없다 — 발송은 일어나지 않는다)
+test('pushNotify — 조회 창을 실제로 계산시켜 확인한다 (72h 바닥 · 워터마크 · 정렬)', async () => {
+  const jobPath = require.resolve('../jobs/pushNotify');
+  const clientPath = require.resolve('../db/client');
+  const txPath = require.resolve('../services/transactionService');
+  const kakaoPath = require.resolve('../services/kakaoMemoService');
 
-  // (1) 바닥 창 = 72h. 48h 면 하루만 걸러도 경계이고 이틀 연속이면 그 사이 신고 거래가 영구 유실된다.
-  //     cronStats 의 미실행 임계 50h(=2회 연속 누락)와 같은 기준으로 맞춘 값이다.
-  assert.match(src, /NOTIFY_FLOOR_MS\s*=\s*72\s*\*\s*3600\s*\*\s*1000/,
-    '알림 바닥 창이 72h 가 아니다 — cron 누락 2회 내성이 깨진다');
-  assert.equal(/48\s*\*\s*3600\s*\*\s*1000/.test(src), false, '옛 48h 창이 남아 있다');
+  const makeAdmin = (pushRows) => {
+    const seen = { gte: [], order: [], tables: [] };
+    const mk = (table) => {
+      const s = {
+        select: () => s,
+        limit: async () => ({ data: table === 'push_subscriptions' ? pushRows : [], error: null }),
+        in: () => s,
+        gte: (col, val) => { seen.gte.push([col, val]); return s; },
+        order: (col, opt) => { seen.order.push([col, opt && opt.ascending]); return s; },
+        range: async () => ({ data: [], error: null }),   // 거래 0건 → 발송 경로는 타지 않는다
+        update: () => ({ eq: async () => ({ error: null }), in: async () => ({ error: null }) }),
+        delete: () => ({ eq: async () => ({ error: null }) }),
+      };
+      return s;
+    };
+    return { client: { from: (tb) => { seen.tables.push(tb); return mk(tb); } }, seen };
+  };
 
-  // (2) 거래 조회 정렬은 **내림차순**이어야 한다. 안전캡에 걸릴 때 오름차순이면 최신이 잘린다 —
-  //     "새 실거래 알림" 에서 최신을 버리는 것은 정확히 반대 동작이다.
-  const q = src.slice(src.indexOf("from('molit_transactions')"));
-  assert.match(q.slice(0, 600), /order\('ingested_at',\s*\{\s*ascending:\s*false\s*\}\)/,
-    '거래 조회가 오름차순이라 캡에 걸리면 최신 거래가 잘린다');
-  assert.match(q.slice(0, 600), /order\('id',\s*\{\s*ascending:\s*false\s*\}\)/,
-    '2차 정렬키 방향이 어긋나면 페이지 경계가 흔들린다');
+  const runJob = async (pushRows) => {
+    const paths = [jobPath, clientPath, txPath, kakaoPath];
+    const saved = {};
+    for (const q of paths) saved[q] = require.cache[q];
+    const { client, seen } = makeAdmin(pushRows);
+    const stub = (q, exp) => { require.cache[q] = { id: q, filename: q, loaded: true, exports: exp }; };
+    stub(clientPath, { getSupabaseAdmin: () => client });
+    stub(txPath, { getAliasCanonicalMap: async () => new Map() });
+    stub(kakaoPath, { isKakaoConfigured: () => false, sendKakaoMemo: async () => ({}), refreshKakaoToken: async () => null });
+    delete require.cache[jobPath];
+    try {
+      const { run } = require(jobPath);
+      const res = await run();
+      return { res, seen };
+    } finally {
+      for (const q of paths) { if (saved[q]) require.cache[q] = saved[q]; else delete require.cache[q]; }
+    }
+  };
 
-  // (3) 캡·상한에 닿으면 침묵하지 않는다 — 조용히 잘리면 건수가 틀린 채로 발송된다.
+  const H = 3600 * 1000;
+  const now = Date.now();
+  const sub = (id, agoMs) => ({
+    id, endpoint: 'https://example.invalid/' + id, p256dh: 'k', auth: 'a', fail_count: 0,
+    items: [{ lawdCd: '11680', name: '테스트단지' }],
+    last_notified_at: agoMs == null ? null : new Date(now - agoMs).toISOString(),
+  });
+  const windowH = (seen) => {
+    const g = seen.gte.find(([c]) => c === 'ingested_at');
+    assert.ok(g, '거래 조회에 ingested_at 하한이 없다 — 창 자체가 사라졌다');
+    return (now - new Date(g[1]).getTime()) / H;
+  };
+
+  // ① 워터마크가 없으면 바닥까지 훑는다. 72h = cron 2회 연속 누락 내성
+  //    (Vercel cron 은 best effort 라 회차가 통째로 빠질 수 있고 재시도도 없다).
+  const a = await runJob([sub(1, null)]);
+  assert.ok(Math.abs(windowH(a.seen) - 72) < 0.2,
+    `조회 창이 72h 가 아니다(${windowH(a.seen).toFixed(1)}h) — cron 이 이틀 연속 누락되면 그 사이 거래가 영구히 안 나간다`);
+
+  // ② 모두 최근에 받았으면 가장 오래된 워터마크까지만 — 매번 72h 를 재훑지 않는다
+  const b = await runJob([sub(1, 10 * H), sub(2, 20 * H)]);
+  assert.ok(Math.abs(windowH(b.seen) - 20) < 0.2,
+    `가장 오래된 워터마크(20h)를 따르지 않는다(${windowH(b.seen).toFixed(1)}h)`);
+
+  // ③ 아주 오래 못 받은 구독이 있어도 바닥에서 멈춘다 — 전수 재훑기로 번지지 않는다
+  const c = await runJob([sub(1, 200 * H), sub(2, 5 * H)]);
+  assert.ok(Math.abs(windowH(c.seen) - 72) < 0.2,
+    `오래된 워터마크가 바닥을 넘어 확장됐다(${windowH(c.seen).toFixed(1)}h)`);
+
+  // ④ 정렬은 **내림차순**이어야 한다. 안전캡(5,000행)에 걸릴 때 오름차순이면 최신이 잘린다 —
+  //    "새 실거래 알림" 에서 최신을 버리는 것은 정확히 반대 동작이다. 2차 키(id)도 같은 방향.
+  assert.deepEqual(a.seen.order, [['ingested_at', false], ['id', false]],
+    '거래 조회 정렬이 바뀌었다 — 오름차순이면 캡에 걸릴 때 최신 거래가 잘린다');
+
+  // ⑤ 발송 게이트가 꺼진 상태에서도 죽지 않고 이유를 밝힌다(관측 가능해야 한다)
+  assert.equal(a.res.webGate, 'off(VAPID/pkg)', '웹푸시 게이트 상태를 보고하지 않는다');
+  assert.equal(a.res.kakaoGate, 'off(env)', '카카오 게이트 상태를 보고하지 않는다');
+
+  // ⑥ 캡·상한에 닿으면 침묵하지 않는다 — 조용히 잘리면 건수가 틀린 채로 발송된다.
+  //    (경고 자체는 로그 경로라 소스로 확인한다)
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../jobs/pushNotify.js'), 'utf8');
   assert.match(src, /rows\.length >= ROW_CAP/, '거래 조회 캡 도달 경고가 없다');
   assert.match(src, /상한\(500\)에 닿음/, '구독자 조회 상한 경고가 없다');
 });
