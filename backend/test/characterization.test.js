@@ -4147,3 +4147,56 @@ test('규제 판정: 동명 구가 코드로 구별된다 (문자열로는 원�
   assert.ok(codes.has('11500'), '서울 강서구가 규제지역이어야 한다');
   assert.equal(codes.has('26440'), false, '부산 강서구가 규제지역으로 잘못 잡혔다');
 });
+
+// ── STATIC-SEC-HEADERS-2026-09-02 (감사 P0-3) ────────────────────────────────
+//   [왜] vercel.json 상 `/`·`/billing`·법적 페이지는 Express 를 거치지 않아 helmet 이 붙지 않는다.
+//     그래서 같은 index.html 인데 **루트에만** CSP·X-Frame-Options 가 없었다(라이브 헤더 실측).
+//     헤더를 vercel.json 에 복제해 해결했는데, 복제는 곧 **드리프트 위험**이다 —
+//     server.js CSP 에 외부 호스트를 추가하고 vercel.json 을 잊으면 정적 경로에서만 조용히 차단된다.
+//   [무엇을 고정하나] server.js helmet CSP 에 등장하는 모든 외부 출처가
+//     vercel.json 의 정적 라우트 CSP 에도 존재해야 한다(부분집합 관계).
+test('보안 헤더: vercel.json 정적 라우트 CSP 가 server.js helmet CSP 의 상위집합이다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const vercel = JSON.parse(fs2.readFileSync(path2.join(__dirname, '../../vercel.json'), 'utf8'));
+  const srv = fs2.readFileSync(path2.join(__dirname, '../server.js'), 'utf8');
+
+  // helmet CSP 블록만 잘라낸다 (다른 곳의 URL 문자열을 섞지 않기 위해)
+  const from = srv.indexOf('contentSecurityPolicy');
+  const to = srv.indexOf('crossOriginEmbedderPolicy');
+  assert.ok(from > 0 && to > from, 'server.js 에서 helmet CSP 블록을 찾지 못했다 — 테스트를 갱신할 것');
+  const block = srv.slice(from, to);
+  const hosts = [...new Set((block.match(/'(?:https|wss):\/\/[^']+'/g) || []).map(s => s.slice(1, -1)))];
+  assert.ok(hosts.length >= 10, `helmet CSP 호스트 추출 실패(${hosts.length}건) — 정규식을 갱신할 것`);
+
+  const staticRoutes = vercel.routes.filter(r => r.headers && (r.headers['Content-Security-Policy'] || r.headers['Content-Security-Policy-Report-Only']));
+  assert.ok(staticRoutes.length >= 5, `정적 라우트 CSP 가 ${staticRoutes.length}개뿐이다 — 헤더가 빠졌다`);
+
+  for (const r of staticRoutes) {
+    const csp = r.headers['Content-Security-Policy'] || r.headers['Content-Security-Policy-Report-Only'];
+    const missing = hosts.filter(h => csp.indexOf(h) < 0);
+    assert.deepEqual(missing, [], `${r.src} CSP 에 server.js 의 호스트가 빠졌다: ${missing.join(', ')}`);
+  }
+});
+
+test('보안 헤더: 모든 정적 라우트에 클릭재킹·MIME 방어 헤더가 붙는다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const vercel = JSON.parse(fs2.readFileSync(path2.join(__dirname, '../../vercel.json'), 'utf8'));
+  // Express 로 가는 라우트는 helmet 이 담당하므로 제외한다.
+  const EXPRESS_DESTS = ['/api/index.js'];
+  const staticHtml = vercel.routes.filter(r => typeof r.dest === 'string'
+    && r.dest.indexOf('/frontend/') === 0 && r.dest.endsWith('.html'));
+  assert.ok(staticHtml.length >= 5, `정적 HTML 라우트가 ${staticHtml.length}개 — 라우트 구조가 바뀌었다`);
+  const bad = [];
+  for (const r of staticHtml) {
+    const h = r.headers || {};
+    if (h['X-Frame-Options'] !== 'SAMEORIGIN') bad.push(r.src + ': X-Frame-Options');
+    if (h['X-Content-Type-Options'] !== 'nosniff') bad.push(r.src + ': X-Content-Type-Options');
+    if (!h['Referrer-Policy']) bad.push(r.src + ': Referrer-Policy');
+    if (!h['Content-Security-Policy'] && !h['Content-Security-Policy-Report-Only']) bad.push(r.src + ': CSP');
+  }
+  assert.deepEqual(bad, [], `정적 HTML 라우트에 보안 헤더 누락:\n  ${bad.join('\n  ')}`);
+  assert.ok(EXPRESS_DESTS.length === 1);
+});
+
