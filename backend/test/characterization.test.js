@@ -5342,3 +5342,38 @@ test('OG 배선 — 단지 페이지가 사실을 한 곳에서만 만들고, �
     '얇은 페이지에도 동적 이미지를 걸고 있다 — 빈 카드가 공유된다');
 });
 
+//   OG-FONT-BUNDLE-2026-09-02: 폰트 패키지는 통째로 55MB(9개 굵기 x woff/woff2)라 함수 번들에서 잘라냈다.
+//     ⚠ 그 제외 규칙이 우리가 **쓰는** 굵기까지 지우면 카드가 조용히 폴백으로만 돌게 된다
+//     — 배포는 성공하고 테스트도 통과하는데 링크 미리보기만 예전 그림으로 돌아간다.
+test('OG 폰트 번들 — 쓰는 굵기(400·700 woff)가 함수 번들에서 제외되지 않는다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const root = path2.join(__dirname, '../..');
+  const vj = JSON.parse(fs2.readFileSync(path2.join(root, 'vercel.json'), 'utf8'));
+  const ex = String(((vj.functions || {})['api/index.js'] || {}).excludeFiles || '');
+  assert.ok(ex.length > 0, 'excludeFiles 가 사라졌다');
+
+  // 쓰는 것: 400·700 의 woff. 이 패턴이 제외 목록에 있으면 안 된다.
+  for (const w of ['400', '700']) {
+    assert.equal(ex.includes(`*-${w}-normal.woff`), false,
+      `쓰는 굵기(${w})가 번들에서 제외됐다 — OG 카드가 조용히 폴백으로만 돈다`);
+  }
+  // 통짜 제외도 금지 (woff2 만 지우는 것과 구분된다)
+  assert.equal(/noto-sans-kr[^,}]*\*\.woff(?!2)/.test(ex), false,
+    'woff 를 통째로 제외하고 있다 — 400·700 까지 사라진다');
+
+  // 안 쓰는 것은 실제로 잘라내고 있어야 한다(안 그러면 55MB 가 그대로 실린다)
+  assert.ok(ex.includes('noto-sans-kr/files/*.woff2'), 'woff2 를 번들에서 빼지 않았다 — 25MB 낭비');
+  for (const w of ['100', '900']) {
+    assert.ok(ex.includes(`*-${w}-normal.woff`), `안 쓰는 굵기(${w})가 번들에 남아 있다`);
+  }
+
+  // 실제로 그 파일들이 존재하는지 — 경로 규칙이 바뀌면 제외도 무의미해진다
+  const dir = path2.join(root, 'node_modules/@fontsource/noto-sans-kr/files');
+  if (fs2.existsSync(dir)) {
+    const names = fs2.readdirSync(dir);
+    assert.ok(names.some((n) => n.endsWith('-400-normal.woff')), '400 굵기 woff 파일이 없다 — 경로 규칙이 바뀌었다');
+    assert.ok(names.some((n) => n.endsWith('-700-normal.woff')), '700 굵기 woff 파일이 없다');
+  }
+});
+
