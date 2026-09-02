@@ -29,21 +29,35 @@
       "purpose": "maskable"
     }
   ],
-  "categories": ["finance", "productivity", "lifestyle"],
+  "categories": [
+    "finance",
+    "productivity",
+    "lifestyle"
+  ],
   "shortcuts": [
     {
       "name": "1page 보고서",
       "short_name": "보고서",
-      "description": "AI 맞춤 컨설팅 보고서",
+      "description": "국토부 실거래 기반 1page 보고서",
       "url": "/?view=report",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     },
     {
-      "name": "AI 챗",
-      "short_name": "AI 상담",
-      "description": "부동산 정보 AI 챗",
+      "name": "데이터 도우미",
+      "short_name": "도우미",
+      "description": "공식 통계로 답하는 데이터 도우미",
       "url": "/?view=chat",
-      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+      "icons": [
+        {
+          "src": "/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

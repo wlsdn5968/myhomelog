@@ -3562,6 +3562,8 @@ window.addEventListener('DOMContentLoaded',()=>{
 
   // 공유 URL 진입 처리
   setTimeout(handleShareUrl, 300);
+  // PWA-SHORTCUT-2026-09-02: manifest 바로가기(?view=report|chat)를 실제 화면으로 연결한다.
+  setTimeout(handleViewParam, 350);
   // 비교 공유 딥링크 진입 처리 (?cmp=) (COMPARE-SHARE-2026-06-21)
   setTimeout(handleCompareUrl, 350);
 
@@ -6105,7 +6107,8 @@ function initNaverMap(){
 
 // MOBILE-2026-06-13: "이 영역 단지 보기" 줌 임계값 — 모바일은 작은 화면+핀치줌 마찰로 기본 zoom 12 에 머물러
 //   임계 13 이면 버튼이 거의 안 뜸(운영자 발견 "PC엔 있는데 모바일엔 없다"). 버튼 자체는 정상 — 임계만 모바일 12/데스크톱 13.
-function _pannMinZoom(){ try{ return (window.innerWidth <= 700) ? 12 : 13; }catch(_){ return 13; } }
+// DEAD-FN-2026-09-02 (감사 P2-11): _pannMinZoom 제거 — 정의 1회·호출 0회(전 파일 실측).
+//   아래 PANN-PERSIST 주석대로 "줌 임계 노출" 방식 자체가 폐기되고 상시 노출로 바뀌면서 쓰이지 않게 됐다.
 
 // PANN-PERSIST-2026-06-14 (운영자 "근처 단지 보기 버튼이 또 없어졌다 — 항상 보여야 누르지"):
 //   [근본 원인] _pannBtn 을 idle/moveend 에서 지연 생성 + zoom>=임계에서만 노출 → 초기 로드/저줌에선
@@ -7400,11 +7403,8 @@ function renderPriceChart(rows){
     </div>
   </div>`;
 }
-// 레거시: 서버가 priceHistory(지수)로 내려주는 경우만 사용
-function renderLegacyPriceBars(ph){
-  const mx=Math.max(...ph.map(h=>h.p),1);
-  return ph.map(h=>`<div class="br"><div class="bry">${h.y}</div><div class="brb"><div class="brf" style="width:${Math.round(h.p/mx*100)}%"></div></div><div class="brv">${h.p}</div></div>`).join('');
-}
+// DEAD-FN-2026-09-02 (감사 P2-11): renderLegacyPriceBars 제거 — 정의 1회·호출 0회.
+//   주석 스스로 "서버가 priceHistory(지수)로 내려주는 경우만 사용" 이라 적었는데 그 경로가 현재 없다.
 
 // ── DETAIL MODAL ─────────────────────────────────────────
 // FACILITY-SPLIT-2026-07-11 (Sprint IIII): t0 학교 섹션 렌더 — showDetail 인라인 IIFE 에서 추출.
@@ -8645,6 +8645,28 @@ ${url}`, url); // CLIP-FALLBACK-2026-08-20
   if(history.replaceState)history.replaceState(null,'',url);
 }
 
+// PWA-SHORTCUT-2026-09-02 (감사 P2-11): manifest.json 의 바로가기 2개가 `/?view=report`·`/?view=chat`
+//   인데 **`view` 파라미터를 읽는 코드가 없었다**(전수 grep 0건) — 홈 화면에 추가한 사용자가
+//   바로가기를 눌러도 그냥 기본 화면이 떴다. 이제 실제로 그 화면을 연다.
+//   ⚠ 허용값은 VIEW_DISPLAY 에 있는 것만 — 임의 문자열로 sv() 를 호출하지 않는다.
+function handleViewParam(){
+  try {
+    const v = new URLSearchParams(location.search).get('view');
+    if (!v) return false;
+    if (v === 'chat') {   // 챗은 독립 뷰가 아니라 우측 패널 오버레이다
+      if (typeof sv === 'function') sv('map');
+      const fab = document.getElementById('fabAI');
+      if (fab) { fab.click(); return true; }
+      return false;
+    }
+    if (typeof VIEW_DISPLAY === 'object' && VIEW_DISPLAY && VIEW_DISPLAY[v] && typeof sv === 'function') {
+      sv(v);
+      return true;
+    }
+  } catch(_) { /* 잘못된 파라미터가 진입을 막지 않는다 */ }
+  return false;
+}
+
 // 진입 시 ?apt= 파라미터 처리 → 자동 상세 표시 (딥링크)
 async function handleShareUrl(){
   const sp=new URLSearchParams(location.search);
@@ -8699,11 +8721,7 @@ async function handleShareUrl(){
     _reshow({_txFailed:true, pros:'실거래 조회에 실패했어요.', strategy:'잠시 후 다시 시도하거나 상단 검색창에서 단지명을 검색해주세요.'});
   }
 }
-// YYYYMM 현재
-function currentYm(){
-  const d=new Date();
-  return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}`;
-}
+// DEAD-FN-2026-09-02 (감사 P2-11): currentYm 제거 — 정의 1회·호출 0회. prevYm 만 실제로 쓰인다.
 // YYYYMM N개월 전 (MOLIT 신고 30일 지연 대응 — 직전 달이 가장 데이터 풍부)
 function prevYm(monthsBack){
   const d=new Date();

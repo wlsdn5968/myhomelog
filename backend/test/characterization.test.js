@@ -4725,3 +4725,67 @@ test('헤더 한도: 근접했을 때만 보이고, 한쪽만 보일 때 구분�
   assert.equal(run(false, 5, 3).c, true, '채팅 잔여 3 부터 보여야 한다');
 });
 
+// ── PWA-SHORTCUT-2026-09-02 (감사 P2-11) ──────────────────────────────────────
+//   [왜] manifest.json 의 바로가기 2개가 `/?view=report`·`/?view=chat` 를 가리키는데
+//     `view` 파라미터를 읽는 코드가 **한 줄도 없었다**(전수 grep 0건). 홈 화면에 추가한 사용자가
+//     바로가기를 눌러도 그냥 기본 화면이 떴다 — 기능이 있는 척만 하던 상태.
+//   [무엇을 고정하나] manifest 가 가리키는 값과 코드가 처리하는 값이 **다시 어긋나지 않게**.
+test('PWA 바로가기: manifest 의 view 값을 코드가 실제로 처리한다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const manifest = JSON.parse(fs2.readFileSync(path2.join(__dirname, '../../frontend/manifest.json'), 'utf8'));
+  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+
+  const shortcuts = manifest.shortcuts || [];
+  assert.ok(shortcuts.length > 0, 'PWA 바로가기가 사라졌다 — 이 테스트의 전제를 갱신할 것');
+
+  // 파서가 존재해야 한다
+  const i = html.indexOf('function handleViewParam()');
+  assert.ok(i > 0, 'view 파라미터 파서가 없다 — manifest 바로가기가 아무 동작도 하지 않는다');
+  const fnEnd = html.indexOf(String.fromCharCode(10) + '}', i);
+  const body = html.slice(i, fnEnd > i ? fnEnd : i + 1200);
+
+  // 파서가 실제로 호출돼야 한다(정의만 있고 부르지 않는 죽은 코드 방지)
+  const callCount = (html.match(/handleViewParam\s*[,(]/g) || []).length;
+  assert.ok(callCount >= 2, `handleViewParam 이 호출되지 않는다(출현 ${callCount}회) — 정의만 있는 죽은 코드다`);
+
+  // manifest 의 모든 view 값이 파서에서 다뤄져야 한다
+  const unhandled = [];
+  for (const s of shortcuts) {
+    const m = String(s.url || '').match(/[?&]view=([A-Za-z0-9_-]+)/);
+    if (!m) continue;
+    const v = m[1];
+    const handled = v === 'chat'
+      ? body.indexOf("'chat'") >= 0
+      : body.indexOf('VIEW_DISPLAY') >= 0;   // 그 외는 VIEW_DISPLAY 화이트리스트로 처리
+    if (!handled) unhandled.push(v);
+  }
+  assert.deepEqual(unhandled, [],
+    `manifest 바로가기의 view 값을 코드가 처리하지 않는다: ${unhandled.join(', ')}`);
+
+  // 임의 문자열로 sv() 를 부르지 않는다(화이트리스트 게이트 유지)
+  assert.ok(body.indexOf('VIEW_DISPLAY') >= 0,
+    'view 값 화이트리스트 검사가 사라졌다 — 임의 파라미터가 sv() 로 들어간다');
+});
+
+test('죽은 코드: 호출되지 않던 함수 3종이 되살아나지 않는다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  // 정의가 다시 생기면(=주석이 아니라 실제 function 선언) 실패한다.
+  for (const fn of ['_pannMinZoom', 'renderLegacyPriceBars', 'currentYm']) {
+    const re = new RegExp('function\\s+' + fn + '\\s*\\(');
+    assert.equal(re.test(html), false, `${fn} 정의가 되살아났다 — 호출 0회였던 죽은 함수다`);
+  }
+});
+
+test('죽은 서비스: 참조 0이던 schoolClusterService 가 되살아나지 않는다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const svc = path2.join(__dirname, '../services/schoolClusterService.js');
+  const data = path2.join(__dirname, '../data/schoolClusters.js');
+  assert.equal(fs2.existsSync(svc), false,
+    'schoolClusterService 가 돌아왔다 — 학군 권역은 절대룰②(공식 출처)로 2026-08-19 퇴역했다');
+  assert.equal(fs2.existsSync(data), false, 'schoolClusters 데이터가 돌아왔다');
+});
+
