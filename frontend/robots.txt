@@ -4,7 +4,9 @@
 User-agent: *
 Allow: /
 Disallow: /api/
-Disallow: /share
+# /share 는 공유 링크의 OG 메타 전용 경로다. Disallow 하면 카카오톡·X 링크 미리보기가 깨진다.
+#   중복 색인은 share 라우트가 내려주는 <meta name="robots" content="noindex, follow"> 로 막는다.
+#   (2026-09-02 감사 P1-8)
 
 # AI 크롤러 (학습 거부) — 운영자 데이터 보호
 # 단, 일반 검색 엔진(Googlebot·Bingbot·Naverbot·Yetibot)은 환영

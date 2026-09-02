@@ -79,6 +79,30 @@ function pageShell({ title, desc, canonical, body }) {
 }
 
 /** 전 지역 목록 — 표시명은 lawd_cd 파생(동명 구 구별). 이름순. */
+// SEO-REGION-APT-LINKS-2026-09-02 (감사 P1-8): 단지 페이지 15,954개가 **사이트맵에만** 있고
+//   어떤 페이지도 /apt/* 로 링크하지 않았다(전수 grep: 앱 0 · SSR 0). 내부 링크가 없는 URL 은
+//   크롤 우선순위가 낮다 — 구글 색인이 1페이지에 머문 구조적 이유다.
+//   지역 페이지가 그 지역 단지로 링크하면 119개 지역 × N 으로 단지 페이지가 링크 그래프에 들어온다.
+async function topAptsOfRegion(lawdCd, limit = 30) {
+  const { getSupabaseAdmin } = require('../db/client');
+  const admin = getSupabaseAdmin();
+  if (!admin) return [];
+  try {
+    const { data, error } = await admin
+      .from('molit_apt_index')
+      .select('apt_seq, apt_name, umd_nm, build_year, deal_count')
+      .eq('lawd_cd', String(lawdCd))
+      .order('deal_count', { ascending: false })
+      .limit(limit);
+    if (error) throw error;
+    // apt_seq 형식이 맞는 것만 — /apt 라우트가 거부하는 형식을 링크하면 죽은 링크가 된다.
+    return (data || []).filter(r => r && /^\d{5}-\d+$/.test(String(r.apt_seq || '')));
+  } catch (e) {
+    logger.warn({ err: e.message, lawdCd }, '/region 단지 링크 조회 실패');
+    return [];
+  }
+}
+
 function regionList() {
   const { LAWD_CODES } = require('../services/transactionService');
   const { regionLabel } = require('../services/priceRecordsService');
@@ -198,6 +222,14 @@ router.get('/:lawdCd', async (req, res) => {
   }
 
   // 형제 지역 링크 — 크롤러가 118개를 순회할 수 있게(같은 시도 우선, 없으면 앞뒤 이름순)
+  // 이 지역 단지 페이지로의 내부 링크 (SEO-REGION-APT-LINKS-2026-09-02)
+  const apts = await topAptsOfRegion(region.lawdCd, 30);
+  if (apts.length) {
+    cards.push(`<div class="card"><h2>이 지역 주요 단지 <span class="src">최근 실거래 많은 순 · 매물 광고 아님</span></h2>
+      <div class="links">${apts.map(a => `<a href="/apt/${esc(a.apt_seq)}">${esc(a.apt_name || '')}${a.umd_nm ? ` <span class="k">${esc(a.umd_nm)}</span>` : ''}</a>`).join('')}</div>
+      <div class="src" style="margin-top:8px">단지명을 누르면 그 단지의 실거래 요약을 봅니다.</div></div>`);
+  }
+
   const all = regionList();
   const idx = all.findIndex(r => r.lawdCd === region.lawdCd);
   const sameSido = all.filter(r => r.lawdCd.slice(0, 2) === region.lawdCd.slice(0, 2) && r.lawdCd !== region.lawdCd);

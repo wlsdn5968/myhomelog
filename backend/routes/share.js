@@ -63,7 +63,13 @@ router.get('/', (req, res) => {
       .replace(/<meta property="og:url" content="[^"]*">/, `<meta property="og:url" content="${u}">`)
       .replace(/<meta name="twitter:title" content="[^"]*">/, `<meta name="twitter:title" content="${t}">`)
       .replace(/<meta name="twitter:description" content="[^"]*">/, `<meta name="twitter:description" content="${d}">`)
-      .replace(/<link rel="canonical" href="[^"]*">/, `<link rel="canonical" href="${u}">`);
+      .replace(/<link rel="canonical" href="[^"]*">/, `<link rel="canonical" href="${u}">`)
+    // SHARE-NOINDEX-2026-09-02 (감사 P1-8): robots.txt 가 /share 를 Disallow 하고 있어서
+    //   카카오톡·X·스레드의 링크 미리보기 크롤러가 이 페이지를 아예 못 읽었다 — OG 메타를
+    //   동적 치환하는 라우트인데 정작 그 목적이 막혀 있던 셈이다(운영자 SNS 자동화와 직결).
+    //   → robots.txt 에서 Disallow 를 풀고, 대신 여기서 noindex 로 **중복 색인만** 막는다.
+    //   follow 는 유지해 링크 그래프는 살린다.
+    .replace(/<meta name="robots" content="[^"]*">/, `<meta name="robots" content="noindex, follow">`);
     res.set('Cache-Control', 'public, max-age=600, s-maxage=600');
     return res.type('html').send(rewritten);
   }
@@ -87,7 +93,13 @@ router.get('/', (req, res) => {
     .replace(/<meta property="og:url" content="[^"]*">/, `<meta property="og:url" content="${u}">`)
     .replace(/<meta name="twitter:title" content="[^"]*">/, `<meta name="twitter:title" content="${t}">`)
     .replace(/<meta name="twitter:description" content="[^"]*">/, `<meta name="twitter:description" content="${d}">`)
-    .replace(/<link rel="canonical" href="[^"]*">/, `<link rel="canonical" href="${u}">`);
+    .replace(/<link rel="canonical" href="[^"]*">/, `<link rel="canonical" href="${u}">`)
+    // SHARE-NOINDEX-2026-09-02 (감사 P1-8): robots.txt 가 /share 를 Disallow 하고 있어서
+    //   카카오톡·X·스레드의 링크 미리보기 크롤러가 이 페이지를 아예 못 읽었다 — OG 메타를
+    //   동적 치환하는 라우트인데 정작 그 목적이 막혀 있던 셈이다(운영자 SNS 자동화와 직결).
+    //   → robots.txt 에서 Disallow 를 풀고, 대신 여기서 noindex 로 **중복 색인만** 막는다.
+    //   follow 는 유지해 링크 그래프는 살린다.
+    .replace(/<meta name="robots" content="[^"]*">/, `<meta name="robots" content="noindex, follow">`);
   // 크롤러 캐시 친화 + 동일 쿼리 재방문 시 빠르게
   res.set('Cache-Control', 'public, max-age=600, s-maxage=600');
   res.type('html').send(rewritten);

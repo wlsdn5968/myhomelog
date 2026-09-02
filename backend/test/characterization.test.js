@@ -4563,3 +4563,34 @@ test('billing/confirm — user_billing 저장 실패를 성공으로 응답하�
   });
 });
 
+// ── SEO-LINKGRAPH-2026-09-02 (감사 P1-8) ──────────────────────────────────────
+//   [왜] 사이트맵에 단지 URL 이 15,954개인데 **어떤 페이지도 /apt/* 로 링크하지 않았다**(전수 grep: 앱 0 · SSR 0).
+//     내부 링크가 없는 URL 은 크롤 우선순위가 낮다 — 구글 색인이 1페이지에 머문 구조적 이유다.
+//     그리고 robots.txt 가 `/share` 를 Disallow 해서, OG 메타를 동적 치환하는 그 라우트를
+//     정작 카카오톡·X 링크 미리보기 크롤러가 못 읽었다(운영자 SNS 자동화와 직결).
+//   [무엇을 고정하나] 링크 그래프가 다시 끊기는 회귀. 수치가 아니라 **구조**를 본다.
+test('SEO: 지역 페이지가 단지 페이지로 내부 링크를 만든다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const src = fs2.readFileSync(path2.join(__dirname, '../routes/regionPage.js'), 'utf8');
+  assert.ok(src.indexOf('/apt/') >= 0, '지역 페이지에 /apt 링크가 없다 — 단지 페이지가 링크 그래프 밖으로 나간다');
+  assert.ok(/molit_apt_index/.test(src), '단지 목록 조회가 사라졌다');
+  // 죽은 링크 방지: /apt 라우트가 받는 형식만 링크해야 한다
+  assert.ok(src.indexOf('d{5}-') >= 0, 'apt_seq 형식 필터가 없다 — /apt 가 404 로 거부하는 링크를 뿌릴 수 있다');
+});
+
+test('SEO: /share 는 크롤 가능하되 색인은 막는다 (링크 미리보기 유지 + 중복 색인 방지)', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const robots = fs2.readFileSync(path2.join(__dirname, '../../frontend/robots.txt'), 'utf8');
+  const share = fs2.readFileSync(path2.join(__dirname, '../routes/share.js'), 'utf8');
+
+  // robots.txt 의 "Disallow: /share" 는 주석(#)이 아닌 실제 지시문일 때만 문제다.
+  const active = robots.split(/\r?\n/).filter((l) => !l.trim().startsWith('#'));
+  const blocked = active.some((l) => /^\s*Disallow:\s*\/share/i.test(l));
+  assert.equal(blocked, false, 'robots.txt 가 /share 를 다시 막았다 — 카카오톡·X 링크 미리보기가 깨진다');
+
+  assert.ok(/noindex,\s*follow/.test(share),
+    '/share 가 noindex 를 내려주지 않는다 — 크롤 허용과 함께라면 SPA 중복 색인이 생긴다');
+});
+
