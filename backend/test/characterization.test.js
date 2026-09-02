@@ -4789,3 +4789,54 @@ test('죽은 서비스: 참조 0이던 schoolClusterService 가 되살아나지 
   assert.equal(fs2.existsSync(data), false, 'schoolClusters 데이터가 돌아왔다');
 });
 
+// ── ACQ-REG-CALC-2026-09-02 (감사 후속: 한 화면에 취득세 두 값) ─────────────────
+//   [왜] 다주택 취득세 중과는 **조정대상지역** 기준인데(지방세법 §13-2), 실투자금 계산기는
+//     2주택+ 를 지역과 무관하게 항상 8% 로 계산했다. 같은 단지 상세 화면의 세금 시뮬레이션 카드는
+//     이미 지역을 보고 계산하고 있어서, 비조정지역 단지에서 **같은 화면에 서로 다른 취득세**가 떴다.
+//   [무엇을 고정하나] ① 비조정지역이 확인되면 기본세율 ② 모르면(undefined) 종전대로 중과 8%
+//     — 모를 때 낮게 안내하면 과소 안내가 된다 ③ 프론트·백엔드가 같은 규칙을 쓴다.
+test('취득세: 2주택+ 중과는 조정대상지역일 때만 (모르면 보수적으로 중과 유지)', () => {
+  const { calcTotalCost } = require('../services/analysisService');
+  const rate = (price, isRegulated) => calcTotalCost(price, 3, '2주택+', false, undefined, isRegulated).taxRate;
+
+  // ① 조정대상지역 확인 → 중과 8%
+  assert.equal(rate(7, true), 8, '조정대상지역 2주택+ 가 중과 8% 가 아니다');
+
+  // ② 지역을 모름(undefined) → 종전대로 8% (과소 안내 금지)
+  assert.equal(rate(7, undefined), 8, '지역을 모르는데 중과를 풀었다 — 세금을 낮게 안내하면 안 된다');
+
+  // ③ 비조정지역 확인 → 기본세율(무주택 tier 와 같은 값)
+  //    5억 1% · 7억 누진 · 10억 3% — 무주택 결과와 정확히 같아야 한다(사본이 갈리지 않았다는 증거).
+  for (const px of [5, 6, 6.5, 7, 9, 10]) {
+    const basic = calcTotalCost(px, 3, '무주택', false).taxRate;
+    assert.equal(rate(px, false), basic,
+      `비조정지역 2주택+(${px}억) 세율이 기본세율과 다르다: ${rate(px, false)} vs ${basic}`);
+  }
+
+  // ④ 중과와 기본세율이 실제로 다른 값이어야 한다(테스트가 무의미해지지 않게)
+  assert.notEqual(rate(7, true), rate(7, false), '조정/비조정 결과가 같다 — 분기가 동작하지 않는다');
+});
+
+test('취득세: 프론트 계산기도 같은 지역 규칙을 쓴다 (사본 드리프트 차단)', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const be = fs2.readFileSync(path2.join(__dirname, '../services/analysisService.js'), 'utf8');
+
+  // 두 사본 모두 isRegulated 인자를 받아야 한다
+  assert.ok(/function calcTotalCostHTML\([^)]*isRegulated/.test(fe),
+    '프론트 계산기가 isRegulated 를 받지 않는다 — 지역을 알아도 반영할 수 없다');
+  assert.ok(/function calcTotalCost\([^)]*isRegulated/.test(be),
+    '백엔드 계산기가 isRegulated 를 받지 않는다');
+
+  // 두 사본 모두 `=== false` 로만 중과를 푼다(truthy 판정이면 undefined 가 새어 들어간다)
+  const feHits = (fe.match(/isRegulated\s*===\s*false/g) || []).length;
+  const beHits = (be.match(/isRegulated\s*===\s*false/g) || []).length;
+  assert.ok(feHits >= 2, `프론트의 isRegulated === false 검사가 ${feHits}회뿐 — tier·폴백 양쪽에 있어야 한다`);
+  assert.ok(beHits >= 2, `백엔드의 isRegulated === false 검사가 ${beHits}회뿐`);
+
+  // 단지 상세 호출부가 실제로 지역을 넘겨야 한다(안 넘기면 화면이 여전히 갈린다)
+  assert.ok(fe.indexOf('calcTotalCostHTML(pr,loanAmt,houseS,isF,_costIsReg)') >= 0,
+    '단지 상세 계산기 호출부가 지역을 넘기지 않는다 — 같은 화면의 세금 카드와 값이 갈린다');
+});
+

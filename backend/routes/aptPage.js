@@ -45,6 +45,17 @@ function pageShell({ title, desc, canonical, body, noindex }) {
 <meta property="og:description" content="${esc(desc)}">
 <meta property="og:url" content="${esc(canonical)}">
 <meta property="og:type" content="article">
+<!-- OG-IMAGE-2026-09-02 (감사 P3): 이 세 SSR 페이지에는 og:image·twitter 카드가 **아예 없었다**.
+     카카오톡·X·스레드에 링크를 붙여도 미리보기 이미지가 나오지 않아, 공개 페이지를 공유해도
+     타임라인에서 눈에 띄지 않았다(운영자 SNS 자산과 직결). 단지별 동적 이미지는 별도 과제이고,
+     우선 앱과 같은 기본 이미지라도 붙여 카드가 그려지게 한다. -->
+<meta property="og:image" content="${ORIGIN}/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="${esc(title)}">
+<meta name="twitter:description" content="${esc(desc)}">
+<meta name="twitter:image" content="${ORIGIN}/og.png">
 <meta name="robots" content="${noindex ? 'noindex, follow' : 'index, follow'}">
 <style>
   :root{--bg:#080E18;--card:#101B2B;--bd:#22334A;--tx:#E8EFFA;--sub:#93A4BD;--amb:#FFC93C;--acc:#4C8DFF}

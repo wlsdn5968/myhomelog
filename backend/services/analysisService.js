@@ -345,7 +345,13 @@ const calcBuySignal = summarizeMarketSignal;
 //   - taxConfig 인자 (snapshot.data) 가 있으면 그 값 사용
 //   - 없으면 기존 하드코딩 fallback (backwards-compat — frontend sync 호출 등)
 // price: 억 / loanAmount: 억
-function calcTotalCost(price, loanAmount, houseStatus, isFirstBuyer, taxConfig) {
+// ACQ-REG-CALC-2026-09-02 (감사 후속): 다주택 취득세 중과는 **조정대상지역** 기준이다(지방세법 §13-2).
+//   종전엔 2주택+ 를 지역과 무관하게 항상 8% 로 계산했다 — 화면에 "비조정지역은 더 낮을 수 있다" 고
+//   각주는 달아뒀지만, 같은 단지 상세 화면의 세금 시뮬레이션 카드는 이미 지역을 보고 계산하고 있어서
+//   **한 화면에 서로 다른 취득세 금액 두 개**가 동시에 떴다.
+//   → 지역을 아는 호출부는 isRegulated 를 넘겨 정확히 계산하고, 모르면 종전대로 보수적 8%.
+//   ⚠ 기본값이 undefined 인 이유: 기존 호출부·계약 테스트의 동작을 그대로 두기 위해서다.
+function calcTotalCost(price, loanAmount, houseStatus, isFirstBuyer, taxConfig, isRegulated) {
   const priceW = price * 10000; // 만원
 
   // ── 취득세율 ──
@@ -353,7 +359,10 @@ function calcTotalCost(price, loanAmount, houseStatus, isFirstBuyer, taxConfig) 
   if (taxConfig?.acquisitionTax) {
     const at = taxConfig.acquisitionTax;
     if (houseStatus === '2주택+') {
-      rate = at.twoHousePlus?.rate ?? 0.08;
+      // ACQ-REG-CALC-2026-09-02: 비조정지역이 확인되면 중과 대신 무주택 tier(기본세율).
+      rate = (isRegulated === false)
+        ? pickTierRate(at.noHouse?.tiers || [], price, 0.03)
+        : (at.twoHousePlus?.rate ?? 0.08);
     } else if (houseStatus === '1주택') {
       const tiers = at.oneHouse?.tiers || [];
       rate = pickTierRate(tiers, price, 0.03);
@@ -362,12 +371,13 @@ function calcTotalCost(price, loanAmount, houseStatus, isFirstBuyer, taxConfig) 
     }
   } else {
     // ── 하드코딩 fallback ──
-    if (houseStatus === '2주택+') rate = 0.08;
+    if (houseStatus === '2주택+') rate = (isRegulated === false) ? (price <= 6 ? 0.01 : price <= 9 ? 0.02 : 0.03) : 0.08;
     else if (houseStatus === '1주택') rate = price <= 6 ? 0.01 : price <= 9 ? 0.02 : 0.03;
     else rate = price <= 6 ? 0.01 : price <= 9 ? 0.02 : 0.03;
   }
   // 지방세법 §11①8호 나목: 1주택·무주택 6~9억 취득세 누진(1~3%) — frontend calcTotalCostHTML 와 정합 (2026-06-24 law.go.kr 검증)
-  if (houseStatus !== '2주택+' && price > 6 && price <= 9) rate = (price * 2 / 3 - 3) / 100;
+  // ACQ-REG-CALC-2026-09-02: 비조정지역이 확인된 2주택+ 도 같은 식을 탄다(사본을 늘리지 않는다).
+  if ((houseStatus !== '2주택+' || isRegulated === false) && price > 6 && price <= 9) rate = (price * 2 / 3 - 3) / 100;
 
   const eduRate  = taxConfig?.eduTaxRate       ?? 0.1;
   const spclRate = taxConfig?.spclTaxRate      ?? 0.002;
