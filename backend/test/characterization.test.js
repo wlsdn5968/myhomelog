@@ -4454,3 +4454,55 @@ test('보고서 규제 판정: 코드 집합을 못 받으면 비서울은 미�
     '집합이 없어도 서울 판정은 종전대로 동작해야 한다');
 });
 
+// ── REG-TABLE-DYNAMIC-2026-09-02 (감사 P1-9 프론트) ─────────────────────────────
+//   [왜] 규제 요약 모달의 표가 2025.10.15 수치를 리터럴로 박아둔 정적 HTML 이었다.
+//     regulations_snapshot 이 갱신돼도 이 표만 옛 값을 말한다(재배포 없는 갱신이 설계 의도였는데).
+//     DB 와 대조한 실측 차이: 생애최초 비규제 80% 행 없음 · 2주택 이상 행 없음 ·
+//     생애최초 규제의 15/25억 구간 캡 생략(20억 매수 시 실제 4억인데 표에는 "6억 한도") · 처분조건부 단서 누락.
+//   [무엇을 고정하나] index.html 에 실제로 들어간 렌더 IIFE 를 **그대로 꺼내 실행**해서
+//     ① 스냅샷이 있으면 그 값으로 그리고 ② 없으면 정적 표로 떨어지고 ③ 값이 이스케이프되는지 확인한다.
+test('규제 요약 표: 스냅샷으로 그리되, 미로드 시 정적 표로 떨어진다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+
+  assert.ok(html.indexOf('window.__REG_FULL = d;') >= 0,
+    '규제 스냅샷 전문을 보존하지 않는다 — 표를 동적으로 그릴 데이터가 없어진다');
+
+  const marker = html.indexOf('REG-TABLE-DYNAMIC-RENDER');
+  assert.ok(marker > 0, '규제 표 동적 렌더러가 사라졌다 — 정적 표로 되돌아갔다');
+  const startTok = '${(() => {';
+  const s = html.lastIndexOf(startTok, marker);
+  const e = html.indexOf('})()}', marker);
+  assert.ok(s > 0 && e > s, '렌더러 IIFE 범위를 찾지 못했다 — 테스트를 갱신할 것');
+  const body = html.slice(s + startTok.length, e);
+
+  const esc = (x) => String(x).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const run = (regFull) => new Function('window', '_escHtml', '"use strict"; return (() => {' + body + '})();')({ __REG_FULL: regFull }, esc);
+
+  // ① 스냅샷 기반 렌더 — DB 실측 구조(regulations_snapshot.housing_loan_2025.ltvTable)
+  const ltvTable = [
+    { condition: '무주택 — 규제지역', ltv: 40, cap: [{ under: 15, max: 6 }, { under: 25, max: 4 }, { over: 25, max: 2 }] },
+    { condition: '생애최초 — 규제지역', ltv: 70, note: '6개월 이내 전입 의무', cap: [{ under: 15, max: 6 }, { under: 25, max: 4 }, { over: 25, max: 2 }] },
+    { condition: '생애최초 — 비규제', ltv: 80, cap: null },
+    { condition: '2주택 이상', ltv: 0, cap: null, note: '규제지역·수도권 구입 불가' },
+  ];
+  const dyn = run({ ltvTable });
+  assert.equal((dyn.match(/<tr>/g) || []).length, 4, '스냅샷 행 수만큼 그려지지 않았다');
+  for (const need of ['25억↑ 2억', '생애최초 — 비규제', '2주택 이상', '6개월 이내 전입 의무']) {
+    assert.ok(dyn.indexOf(need) >= 0, `표에 "${need}" 가 없다 — 스냅샷 값이 반영되지 않는다`);
+  }
+
+  // ② 미로드·빈 스냅샷 → 정적 표 fallback (빈 표를 만들지 않는다)
+  for (const empty of [null, undefined, {}, { ltvTable: [] }]) {
+    const fb = run(empty);
+    assert.ok((fb.match(/<tr>/g) || []).length >= 4, `스냅샷 미로드(${JSON.stringify(empty)})에서 표가 비었다`);
+    assert.ok(fb.indexOf('무주택') >= 0, '정적 fallback 내용이 사라졌다');
+  }
+
+  // ③ 스냅샷 값은 DB 문자열이다 — 이스케이프 없이 innerHTML 에 들어가면 안 된다
+  const evil = run({ ltvTable: [{ condition: '<img src=x onerror=alert(1)>', ltv: 40, cap: null, note: '<b>x</b>' }] });
+  assert.equal(evil.indexOf('<img'), -1, '규제 표가 DB 문자열의 태그를 그대로 렌더한다 (XSS)');
+  assert.equal(evil.indexOf('<b>x</b>'), -1, 'note 가 이스케이프되지 않는다');
+});
+

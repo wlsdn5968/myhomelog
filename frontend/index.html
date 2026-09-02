@@ -5154,11 +5154,34 @@ function openRegSummary(){
       <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px">
         <thead><tr style="background:var(--s1)"><th style="padding:8px;text-align:left;border-bottom:1px solid var(--bd)">구분</th><th style="padding:8px;border-bottom:1px solid var(--bd)">LTV</th><th style="padding:8px;border-bottom:1px solid var(--bd)">한도/조건</th></tr></thead>
         <tbody>
-          <tr><td style="padding:8px;border-bottom:1px solid var(--bd)"><b>무주택 규제</b></td><td style="padding:8px;color:var(--red);font-weight:700;text-align:center;border-bottom:1px solid var(--bd)">40%</td><td style="padding:8px;font-size:11px;border-bottom:1px solid var(--bd)">15억↓ 6억 / ~25억 4억 / 25억↑ 2억</td></tr>
-          <tr><td style="padding:8px;border-bottom:1px solid var(--bd)">생애최초 규제</td><td style="padding:8px;color:var(--amb);font-weight:700;text-align:center;border-bottom:1px solid var(--bd)">70%</td><td style="padding:8px;font-size:11px;border-bottom:1px solid var(--bd)">6억 한도 + 6개월 전입의무</td></tr>
-          <tr><td style="padding:8px;border-bottom:1px solid var(--bd)">비규제</td><td style="padding:8px;color:var(--grn);font-weight:700;text-align:center;border-bottom:1px solid var(--bd)">70%</td><td style="padding:8px;font-size:11px;border-bottom:1px solid var(--bd)">LTV 한도 자유</td></tr>
-          <tr><td style="padding:8px;border-bottom:1px solid var(--bd)">1주택+ 추가</td><td style="padding:8px;color:var(--red);font-weight:700;text-align:center;border-bottom:1px solid var(--bd)">0%</td><td style="padding:8px;font-size:11px;border-bottom:1px solid var(--bd)">대출 불가</td></tr>
-          <tr><td style="padding:8px">지방 생애최초</td><td style="padding:8px;color:var(--grn);font-weight:700;text-align:center">80%</td><td style="padding:8px;font-size:11px">LTV 완화</td></tr>
+          ${(() => {
+            // REG-TABLE-DYNAMIC-RENDER-2026-09-02 (감사 P1-9): 이 표는 2025.10.15 수치를 리터럴로 박아둔
+            //   정적 HTML 이었다. regulations_snapshot 이 갱신돼도(재배포 없는 갱신이 Sprint QQ 설계 의도) 이
+            //   모달만 옛 값을 말했고, 실제로 DB 와 어긋나 있었다 — 생애최초 비규제 80% 행 없음 ·
+            //   2주택 이상 행 없음 · 생애최초 규제의 15/25억 구간 캡 생략(20억이면 실제 4억인데 "6억 한도") ·
+            //   처분조건부 단서 누락. 이제 부팅 시 받아둔 스냅샷(window.__REG_FULL)으로 그린다.
+            //   ⚠ 로드 전(부팅 직후 클릭)·fetch 실패 시에는 **아래 정적 표를 그대로** 쓴다 — 빈 표를 만들지 않는다.
+            const _rows = (window.__REG_FULL && Array.isArray(window.__REG_FULL.ltvTable)) ? window.__REG_FULL.ltvTable : null;
+            if (!_rows || !_rows.length) return `<tr><td style="padding:8px;border-bottom:1px solid var(--bd)"><b>무주택 규제</b></td><td style="padding:8px;color:var(--red);font-weight:700;text-align:center;border-bottom:1px solid var(--bd)">40%</td><td style="padding:8px;font-size:11px;border-bottom:1px solid var(--bd)">15억↓ 6억 / ~25억 4억 / 25억↑ 2억</td></tr><tr><td style="padding:8px;border-bottom:1px solid var(--bd)">생애최초 규제</td><td style="padding:8px;color:var(--amb);font-weight:700;text-align:center;border-bottom:1px solid var(--bd)">70%</td><td style="padding:8px;font-size:11px;border-bottom:1px solid var(--bd)">6억 한도 + 6개월 전입의무</td></tr><tr><td style="padding:8px;border-bottom:1px solid var(--bd)">비규제</td><td style="padding:8px;color:var(--grn);font-weight:700;text-align:center;border-bottom:1px solid var(--bd)">70%</td><td style="padding:8px;font-size:11px;border-bottom:1px solid var(--bd)">LTV 한도 자유</td></tr><tr><td style="padding:8px;border-bottom:1px solid var(--bd)">1주택+ 추가</td><td style="padding:8px;color:var(--red);font-weight:700;text-align:center;border-bottom:1px solid var(--bd)">0%</td><td style="padding:8px;font-size:11px;border-bottom:1px solid var(--bd)">대출 불가</td></tr><tr><td style="padding:8px">지방 생애최초</td><td style="padding:8px;color:var(--grn);font-weight:700;text-align:center">80%</td><td style="padding:8px;font-size:11px">LTV 완화</td></tr>`;
+            const _cap = (cap, note) => {
+              const parts = [];
+              if (Array.isArray(cap) && cap.length) {
+                parts.push(cap.map(c => (c && c.under != null) ? `${c.under}억↓ ${c.max}억`
+                  : (c && c.over != null) ? `${c.over}억↑ ${c.max}억` : ``).filter(Boolean).join(' / '));
+              }
+              if (note) parts.push(_escHtml(String(note)));
+              return parts.length ? parts.join(' · ') : 'LTV 한도 자유';
+            };
+            const _c = (v) => v >= 80 ? 'var(--grn)' : v >= 70 ? 'var(--amb)' : 'var(--red)';
+            const _bd = `padding:8px;border-bottom:1px solid var(--bd)`;
+            return _rows.map(r => {
+              const ltv = Number(r && r.ltv);
+              const ltvTxt = Number.isFinite(ltv) ? `${ltv}%` : '—';
+              return `<tr><td style="${_bd}">${_escHtml(String((r && r.condition) || ''))}</td>`
+                + `<td style="${_bd};color:${_c(ltv)};font-weight:700;text-align:center">${ltvTxt}</td>`
+                + `<td style="${_bd};font-size:11px">${_cap(r && r.cap, r && r.note)}</td></tr>`;
+            }).join('');
+          })()}
         </tbody>
       </table>
       <div style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:var(--radius-base);padding:10px 12px;font-size:11px;color:var(--accent-700);line-height:1.6;margin-bottom:10px">
@@ -9948,6 +9971,12 @@ async function loadRegulatedKeywords(){
     // 규제 구 동네 별칭(판교=분당구·평촌=동안구·미사=하남시 — 2026-06-24 공식검증): 칩/검색어 매칭 보완
     ['판교','평촌','미사'].forEach(a => set.add(a));
     window.__REG_KW = { keywords: Array.from(set), seoulRegulated };
+    // REG-TABLE-DYNAMIC-2026-09-02 (감사 P1-9): 응답에는 ltvTable·dsrRules·additionalRules 도 들어 있는데
+    //   여기서 regulatedRegions 파생값과 tax 만 남기고 **나머지를 버리고 있었다**.
+    //   그래서 규제 요약 모달이 스냅샷과 무관한 정적 표로 남았고, 실제로 어긋나 있었다(대조 실측):
+    //   생애최초 비규제 80% 행 없음 · 2주택 이상 행 없음 · 생애최초 규제의 15/25억 구간 캡 생략
+    //   (20억 매수 시 실제 한도는 4억인데 표에는 "6억 한도"로만 보였다) · 처분조건부 단서 누락.
+    window.__REG_FULL = d;
     // P1 (2026-04-25): 세제 스냅샷도 함께 캐시 — calcTotalCostHTML 에서 사용
     if (d.tax) window.__TAX_CONFIG = d.tax;
     // 이미 입력된 buy 값 있으면 표기 갱신
