@@ -4616,7 +4616,9 @@ test('진입 소개: 제거된 온보딩 모달(OB)을 기다리는 죽은 코�
   const path2 = require('node:path');
   const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
   // id="OB" 는 OB-REMOVE-2026-07-17 에 사라졌다 — 그걸 참조하는 **코드**가 남으면 도달 불가 분기다.
-  assert.equal(html.indexOf('id="OB"'), -1, 'OB 모달이 되살아났다 — 이 테스트의 전제를 갱신할 것');
+  // ⚠ 단순 문자열 검색은 **이 수정의 설명 주석**까지 잡는다(실제로 한 번 오탐이 났다).
+  //   실제 마크업만 보도록 태그 문맥을 요구한다.
+  assert.equal(/<[a-zA-Z][^>]*sid="OB"/.test(html), false, 'OB 모달 엘리먼트가 되살아났다 — 이 테스트의 전제를 갱신할 것');
   const i = html.indexOf('function _maybeShowHero()');
   assert.ok(i > 0, '_maybeShowHero 를 찾지 못했다');
   const body = html.slice(i, i + 1600);
