@@ -334,7 +334,7 @@ router.post('/confirm', async (req, res, next) => {
         .update({ status: 'failed', failure_reason: data.message || err.message, raw_response: data })
         .eq('order_id', orderId);
       logger.error({ userId: req.user.id, orderId, status, data }, 'Toss confirm 실패');
-      try { Sentry.captureException(new Error(data.message || 'Toss confirm 실패'), { tags: { route: 'billing.confirm' }, extra: { orderId, status } }); } catch(_){}
+      try { Sentry.captureException(new Error(data.message || 'Toss confirm 실패'), { tags: { route: 'billing.confirm' }, extra: { orderId, status } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
       return res.status(status).json({ error: data.message || '결제 승인 실패', code: data.code });
     }
 
@@ -383,7 +383,7 @@ router.post('/confirm', async (req, res, next) => {
     try {
       const { invalidatePlanCache } = require('../services/planService');
       invalidatePlanCache(req.user.id);
-    } catch (_) {}
+    } catch (e) { logger.warn({ err: e && e.message }, 'plan 캐시 무효화 실패 — 새 한도 반영이 TTL 만큼 늦을 수 있다'); }
 
     logger.info({ userId: req.user.id, plan: pay.plan, orderId }, '결제 승인 완료');
     res.json({ status: 'captured', plan: pay.plan });
@@ -537,7 +537,7 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
       try {
         const { invalidatePlanCache } = require('../services/planService');
         invalidatePlanCache(pay.user_id);
-      } catch (_) {}
+      } catch (e) { logger.warn({ err: e && e.message }, 'plan 캐시 무효화 실패 — 새 한도 반영이 TTL 만큼 늦을 수 있다'); }
 
       logger.info({ orderId, userId: pay.user_id, source: 'webhook' }, '결제 승인 완료 (webhook)');
     } else if (tossStatus === 'CANCELED') {
@@ -562,7 +562,7 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
         try {
           const { invalidatePlanCache } = require('../services/planService');
           invalidatePlanCache(pay.user_id);
-        } catch (_) {}
+        } catch (e) { logger.warn({ err: e && e.message }, 'plan 캐시 무효화 실패 — 새 한도 반영이 TTL 만큼 늦을 수 있다'); }
         logger.info({ orderId, userId: pay.user_id }, 'webhook CANCELED: captured → refunded 정합');
       } else {
         // requested/failed 등 비-captured 상태의 CANCELED — 상태 덮어쓰기 없이 raw_response 만 기록.
@@ -583,7 +583,7 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
     return res.json({ ok: true, status: tossStatus });
   } catch (e) {
     logger.error({ err: e }, 'webhook 처리 예외');
-    try { Sentry.captureException(e, { tags: { route: 'billing.webhook' } }); } catch(_){}
+    try { Sentry.captureException(e, { tags: { route: 'billing.webhook' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
     // 500 을 주면 Toss 가 재시도함 — 의도됨
     return res.status(500).json({ error: 'internal' });
   }
@@ -602,7 +602,7 @@ router.post('/cancel', async (req, res, next) => {
     try {
       const { invalidatePlanCache } = require('../services/planService');
       invalidatePlanCache(req.user.id);
-    } catch (_) {}
+    } catch (e) { logger.warn({ err: e && e.message }, 'plan 캐시 무효화 실패 — 새 한도 반영이 TTL 만큼 늦을 수 있다'); }
     logger.info({ userId: req.user.id }, '구독 해지');
     res.json({ ok: true });
   } catch (e) { next(e); }
@@ -669,7 +669,7 @@ router.post('/payments/:id/refund', async (req, res, next) => {
       const status = err.response?.status || 502;
       const data = err.response?.data || {};
       logger.error({ userId: req.user.id, paymentId: pay.id, status, data }, 'Toss 환불(cancel) 실패');
-      try { Sentry.captureException(new Error(data.message || 'Toss 환불 실패'), { tags: { route: 'billing.refund' }, extra: { paymentId: pay.id, status } }); } catch (_) {}
+      try { Sentry.captureException(new Error(data.message || 'Toss 환불 실패'), { tags: { route: 'billing.refund' }, extra: { paymentId: pay.id, status } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
       // DB 미변경 — payment 는 captured 그대로 유지(재시도 가능). 돈은 아직 환불 안 됨.
       return res.status(status).json({ error: data.message || '환불 처리 실패', code: data.code });
     }
@@ -683,7 +683,7 @@ router.post('/payments/:id/refund', async (req, res, next) => {
       // Toss 환불은 성공했으나 DB 반영 실패/경합 → 수동 정합 필요 (Toss=취소, DB=captured 잔존).
       //   복구: 관리자가 payments.status 를 'refunded' 로 수동 갱신 (Toss 는 멱등이라 재호출 무해).
       logger.error({ userId: req.user.id, paymentId: pay.id, updErr: updErr?.message }, '환불 DB 반영 실패 — Toss 취소 성공/DB 미반영, 수동 정합 필요');
-      try { Sentry.captureException(new Error('refund DB update failed after Toss cancel'), { tags: { route: 'billing.refund' }, extra: { paymentId: pay.id } }); } catch (_) {}
+      try { Sentry.captureException(new Error('refund DB update failed after Toss cancel'), { tags: { route: 'billing.refund' }, extra: { paymentId: pay.id } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
       return res.status(500).json({ error: '환불은 접수됐으나 기록 반영에 실패했어요. 고객센터로 문의해주세요.', code: 'refund_db_failed' });
     }
 
@@ -697,7 +697,7 @@ router.post('/payments/:id/refund', async (req, res, next) => {
     try {
       const { invalidatePlanCache } = require('../services/planService');
       invalidatePlanCache(req.user.id);
-    } catch (_) {}
+    } catch (e) { logger.warn({ err: e && e.message }, 'plan 캐시 무효화 실패 — 새 한도 반영이 TTL 만큼 늦을 수 있다'); }
 
     logger.info({ userId: req.user.id, paymentId: pay.id, orderId: pay.order_id }, '환불 완료');
     res.json({ status: 'refunded', paymentId: pay.id });

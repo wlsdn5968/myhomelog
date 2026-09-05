@@ -195,20 +195,20 @@ router.post('/retention', async (req, res) => {
     //   ⚠ force 로 먼저 갱신해야 한다 — 아래 스냅샷 생성이 이 캐시를 읽으므로,
     //     순서가 뒤집히면 오늘 아카이브에 어제 수치가 굳는다.
     //   계산 자체가 2.5초대라 요청 경로에서 미리 완주시켜 Redis 에 남긴다(hfRates 워밍과 같은 취지).
-    try { await require('../services/priceRecordsService').getPriceRecords({ force: true }); } catch (_) {}
+    try { await require('../services/priceRecordsService').getPriceRecords({ force: true }); } catch (e) { logger.warn({ err: e && e.message }, '경신 카드 워밍 실패(비차단 — 요청 경로가 다시 계산한다)'); }
     // 지역별 블롭(147kB·118개 지역·계산 1.24초)도 같이 데운다 — 사용자 요청 경로에서 계산되면 안 된다.
-    try { await require('../services/priceRecordsService').getPriceRecordsByRegion({ force: true }); } catch (_) {}
+    try { await require('../services/priceRecordsService').getPriceRecordsByRegion({ force: true }); } catch (e) { logger.warn({ err: e && e.message }, '지역별 경신 블롭 워밍 실패(비차단 — 요청 경로가 다시 계산한다)'); }
     try { const _bs = require('../services/briefingService'); await _bs.getOrCreateSnapshot(_bs.kstDayString()); } catch (_e) { logger.warn({ err: _e.message }, '브리핑 스냅샷 생성 실패(무시)'); }
     // RATE-WARM-2026-08-08 (Sprint BBBBBBB-3): HF·ECOS 금리 캐시 워밍 — health 의 비차단 백그라운드
     //   갱신은 응답 반환 후 서버리스 동결로 완주가 안 될 수 있다(HF 실측: 12:01 까지 반복 ECONNABORTED,
     //   신규 실패 기록조차 없는 "잘림" 상태). 요청 경로인 여기서 하루 1회 완주시켜 Redis 에 남기면
     //   전 인스턴스가 12h 공유한다. 실패해도 retention 은 정상(삼킴).
-    try { await require('../services/hfService').getHfRates({ retries: 1 }); } catch (_) {}
-    try { await require('../services/ecosService').getEcosRates(); } catch (_) {}
+    try { await require('../services/hfService').getHfRates({ retries: 1 }); } catch (e) { logger.warn({ err: e && e.message }, 'HF 정책금리 워밍 실패(비차단 — 요청 경로가 다시 계산한다)'); }
+    try { await require('../services/ecosService').getEcosRates(); } catch (e) { logger.warn({ err: e && e.message }, 'ECOS 금리 워밍 실패(비차단 — 요청 경로가 다시 계산한다)'); }
     res.json({ ok: true, summary, popularSnapshot });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/retention 실패');
-    try { Sentry.captureException(e, { tags: { route: 'cron.retention' } }); } catch(_){}
+    try { Sentry.captureException(e, { tags: { route: 'cron.retention' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
     await require('../services/cronStats').recordCronRun('retention', { ok: false, error: e.message }).catch(() => {}); // Sprint MMMMMMM-12
     res.status(500).json({ error: e.message });
   }
@@ -242,17 +242,17 @@ router.get('/retention', async (req, res) => {
     //   ⚠ force 로 먼저 갱신해야 한다 — 아래 스냅샷 생성이 이 캐시를 읽으므로,
     //     순서가 뒤집히면 오늘 아카이브에 어제 수치가 굳는다.
     //   계산 자체가 2.5초대라 요청 경로에서 미리 완주시켜 Redis 에 남긴다(hfRates 워밍과 같은 취지).
-    try { await require('../services/priceRecordsService').getPriceRecords({ force: true }); } catch (_) {}
+    try { await require('../services/priceRecordsService').getPriceRecords({ force: true }); } catch (e) { logger.warn({ err: e && e.message }, '경신 카드 워밍 실패(비차단 — 요청 경로가 다시 계산한다)'); }
     // 지역별 블롭(147kB·118개 지역·계산 1.24초)도 같이 데운다 — 사용자 요청 경로에서 계산되면 안 된다.
-    try { await require('../services/priceRecordsService').getPriceRecordsByRegion({ force: true }); } catch (_) {}
+    try { await require('../services/priceRecordsService').getPriceRecordsByRegion({ force: true }); } catch (e) { logger.warn({ err: e && e.message }, '지역별 경신 블롭 워밍 실패(비차단 — 요청 경로가 다시 계산한다)'); }
     try { const _bs = require('../services/briefingService'); await _bs.getOrCreateSnapshot(_bs.kstDayString()); } catch (_e) { logger.warn({ err: _e.message }, '브리핑 스냅샷 생성 실패(무시)'); }
-    try { await require('../services/hfService').getHfRates({ retries: 1 }); } catch (_) {}   // Sprint BBBBBBB-3 워밍
-    try { await require('../services/ecosService').getEcosRates(); } catch (_) {}
+    try { await require('../services/hfService').getHfRates({ retries: 1 }); } catch (e) { logger.warn({ err: e && e.message }, 'HF 정책금리 워밍 실패(비차단 — 요청 경로가 다시 계산한다)'); }   // Sprint BBBBBBB-3 워밍
+    try { await require('../services/ecosService').getEcosRates(); } catch (e) { logger.warn({ err: e && e.message }, 'ECOS 금리 워밍 실패(비차단 — 요청 경로가 다시 계산한다)'); }
     res.json({ ok: true, summary, popularSnapshot });
   } catch (e) {
     // SENTRY-GAP-2026-07-17 (Sprint XXXXX): POST 쌍둥이(72행)만 캡처하고 GET 은 무로그·무캡처였음 — 동일 처리
     logger.error({ err: e.message, stack: e.stack }, 'cron/retention(GET) 실패');
-    try { Sentry.captureException(e, { tags: { route: 'cron.retention' } }); } catch(_){}
+    try { Sentry.captureException(e, { tags: { route: 'cron.retention' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
     await require('../services/cronStats').recordCronRun('retention', { ok: false, error: e.message }).catch(() => {}); // Sprint MMMMMMM-12 (POST 쌍둥이와 동일)
     res.status(500).json({ error: e.message });
   }
@@ -297,7 +297,7 @@ async function handleMolitIngest(req, res) {
             extra: { ok: summary.ok, err: summary.err, skipped: summary.skipped, monthsRange: summary.monthsRange,
               firstError: summary.firstError } }
         );
-      } catch (_) {}
+      } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
     }
     // CRON-OBSERV-2026-08-08 (Sprint AAAAAAA): geocache-backfill 과 동일하게 health.crons 로 노출 —
     //   실거래 적재가 며칠 멈춰도 로그(1h 보존)·Sentry 를 안 보면 몰랐다. 숫자+대표 사유만(_pick 화이트리스트).
@@ -332,7 +332,7 @@ async function handleMolitIngest(req, res) {
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/molit-ingest 실패');
-    try { Sentry.captureException(e, { tags: { route: 'cron.molit-ingest' } }); } catch(_){}
+    try { Sentry.captureException(e, { tags: { route: 'cron.molit-ingest' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
     await require('../services/cronStats').recordCronRun('molit-ingest', { ok: false, error: e.message }).catch(() => {}); // Sprint MMMMMMM-12
     res.status(500).json({ error: e.message });
   }
@@ -351,7 +351,7 @@ async function handleAptMasterSync(req, res) {
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/apt-master-sync 실패');
-    try { Sentry.captureException(e, { tags: { route: 'cron.apt-master-sync' } }); } catch(_){}
+    try { Sentry.captureException(e, { tags: { route: 'cron.apt-master-sync' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
     await require('../services/cronStats').recordCronRun('apt-master-sync', { ok: false, error: e.message }).catch(() => {});
     res.status(500).json({ error: e.message });
   }
@@ -370,7 +370,7 @@ async function handleRegulationsCheck(req, res) {
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/regulations-check 실패');
-    try { Sentry.captureException(e, { tags: { route: 'cron.regulations-check' } }); } catch(_){}
+    try { Sentry.captureException(e, { tags: { route: 'cron.regulations-check' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
     await require('../services/cronStats').recordCronRun('regulations-check', { ok: false, error: e.message }).catch(() => {});
     res.status(500).json({ error: e.message });
   }
@@ -398,7 +398,7 @@ async function handleRegulationsAutoFetch(req, res) {
     res.json({ ok: true, ...result });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/regulations-auto-fetch 실패');
-    try { Sentry.captureException(e, { tags: { route: 'cron.regulations-auto-fetch' } }); } catch(_){}
+    try { Sentry.captureException(e, { tags: { route: 'cron.regulations-auto-fetch' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
     await require('../services/cronStats').recordCronRun('regulations-auto-fetch', { ok: false, error: e.message }).catch(() => {});
     res.status(500).json({ error: e.message });
   }
@@ -416,7 +416,7 @@ async function handleAuditPrune(req, res) {
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/audit-prune 실패');
-    try { Sentry.captureException(e, { tags: { route: 'cron.audit-prune' } }); } catch(_){}
+    try { Sentry.captureException(e, { tags: { route: 'cron.audit-prune' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
     await require('../services/cronStats').recordCronRun('audit-prune', { ok: false, error: e.message }).catch(() => {});
     res.status(500).json({ error: e.message });
   }
@@ -446,7 +446,7 @@ async function handleGeocacheBackfill(req, res) {
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/geocache-backfill 실패');
-    try { Sentry.captureException(e, { tags: { route: 'cron.geocache-backfill' } }); } catch(_){}
+    try { Sentry.captureException(e, { tags: { route: 'cron.geocache-backfill' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
     // Sprint MMMMMMM-12: **실패도 기록한다**. 종전엔 이 저장소의 cron 핸들러 중 실패 경로에
     //   기록을 남기는 것이 **하나도 없었다**(popular-snapshot 만 try 안에서 ok:false 를 남겼다).
     //   그래서 2026-08-16 에 기록이 빈 cron 을 두고 "안 돈 건지 실패한 건지" 를 구별할 수 없었다.
@@ -472,7 +472,7 @@ async function handleFacilityBackfill(req, res) {
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/facility-backfill 실패');
-    try { Sentry.captureException(e, { tags: { route: 'cron.facility-backfill' } }); } catch(_){}
+    try { Sentry.captureException(e, { tags: { route: 'cron.facility-backfill' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
     await require('../services/cronStats').recordCronRun('facility-backfill', { ok: false, error: e.message }).catch(() => {}); // Sprint MMMMMMM-12
     res.status(500).json({ error: e.message });
   }
@@ -495,7 +495,7 @@ async function handleBrBackfill(req, res) {
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/building-register-backfill 실패');
-    try { Sentry.captureException(e, { tags: { route: 'cron.building-register-backfill' } }); } catch(_){}
+    try { Sentry.captureException(e, { tags: { route: 'cron.building-register-backfill' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
     await require('../services/cronStats').recordCronRun('building-register-backfill', { ok: false, error: e.message }).catch(() => {}); // Sprint MMMMMMM-12
     res.status(500).json({ error: e.message });
   }
@@ -517,7 +517,7 @@ async function handlePushNotify(req, res) {
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/push-notify 실패');
-    try { Sentry.captureException(e, { tags: { route: 'cron.push-notify' } }); } catch(_){}
+    try { Sentry.captureException(e, { tags: { route: 'cron.push-notify' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
     await require('../services/cronStats').recordCronRun('push-notify', { ok: false, error: e.message }).catch(() => {});
     res.status(500).json({ error: e.message });
   }

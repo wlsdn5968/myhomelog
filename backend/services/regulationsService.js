@@ -164,7 +164,7 @@ async function getSnapshot(key = 'housing_loan_2025') {
         }
         out.daysSinceEffective = daysSince;
       }
-    } catch(_){}
+    } catch (e) { logger.warn({ err: e && e.message }, '규제 스냅샷 stale 판정 실패'); }
     cache.set(cacheKey, out, 600); // 10분
     return out;
   } catch (e) {

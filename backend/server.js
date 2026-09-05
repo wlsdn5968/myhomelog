@@ -623,7 +623,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
       housing_loan: { effectiveDate: housing?.effectiveDate, daysSince: housing?.daysSinceEffective, stale: (housing?.daysSinceEffective || 0) > 180, source: housing?.source },
       acquisition_tax: { effectiveDate: tax?.effectiveDate, daysSince: tax?.daysSinceEffective, stale: (tax?.daysSinceEffective || 0) > 180, source: tax?.source },
     };
-  } catch(_){}
+  } catch (e) { logger.warn({ err: e && e.message }, 'health 규제 메타 생략 — 스냅샷 조회 실패'); }
   // NAVER-MAPS-2026-05-13 (Sprint GG): NCP Web Dynamic Map client ID 노출 (public — frontend SDK 로드용)
   //   env NAVER_MAPS_CLIENT_ID 설정 시 frontend 가 네이버 지도 사용, 미설정 시 Leaflet/OSM fallback.
   //   NCP 정책: client ID 는 도메인 등록 기반 보호 (다른 도메인에서 사용 불가) — 공개해도 안전.
@@ -639,10 +639,10 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   if (_facQuality === undefined) { _facQuality = null; getFacilityQuality().catch(() => {}); }
   // ECOS-2026-07-13 (Sprint FFFFF): 시중 금리(기준금리·주담대 가중평균) — facilityQuality 와 동일 비차단 패턴.
   let _ecosRates = cache.get('ecos:rates:v1');
-  if (_ecosRates === undefined) { _ecosRates = null; try { require('./services/ecosService').getEcosRates().catch(() => {}); } catch (_) {} }
+  if (_ecosRates === undefined) { _ecosRates = null; try { require('./services/ecosService').getEcosRates().catch(() => {}); } catch (_) { /* 모듈 로드 실패는 health 응답을 막지 않는다 — 비동기 실패는 .catch 가 받는다 */ } }
   // HF-2026-07-14 (Sprint HHHHH): 정책자금 공시 금리(디딤돌·u-보금자리론) — 동일 비차단 패턴.
   let _hfRates = cache.get('hf:rates:v1');
-  if (_hfRates === undefined) { _hfRates = null; try { require('./services/hfService').getHfRates().catch(() => {}); } catch (_) {} }
+  if (_hfRates === undefined) { _hfRates = null; try { require('./services/hfService').getHfRates().catch(() => {}); } catch (_) { /* 모듈 로드 실패는 health 응답을 막지 않는다 — 비동기 실패는 .catch 가 받는다 */ } }
   // INTENT-OBSERVE-2026-08-12 (Sprint KKKKKKK-20): 데이터 도우미 의도 분포(오늘·어제) + 최근
   //   미매칭 원문 10개 — "다음 인텐트"를 실사용이 결정하게 하는 관측 창. 실패는 null(fail-open).
   let _chatIntents = null;
@@ -659,7 +659,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   //   나중에 누가 응답 조립부를 고쳐도 값이 애초에 존재하지 않아 구조적으로 샐 수 없다.
   //   집계 카운터(today/yesterday = 인텐트별 건수)는 개인정보가 아니므로 그대로 공개한다.
   let _isAdmin = false;
-  try { _isAdmin = require('./services/planService').isAdminEmail(req.user?.email); } catch (_) {}
+  try { _isAdmin = require('./services/planService').isAdminEmail(req.user?.email); } catch (e) { logger.warn({ err: e && e.message }, 'admin 판정 실패 — 일반 사용자로 처리'); }
   try {
     const r = require('./redis').getRedis();
     if (r) {
@@ -689,7 +689,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
       else if (_plan !== 'free') { const _pl = getLimitsForPlan(_plan); _searchLimit = _pl.dailySearch || _searchLimit; _chatLimit = _pl.dailyChat || _chatLimit; }
       else { _searchLimit += 5; _chatLimit += 10; } // 로그인 free 보너스 (loggedInBonus: search 5·chat 10)
     }
-  } catch (_) {}
+  } catch (e) { logger.warn({ err: e && e.message }, '플랜 한도 조회 실패 — 기본 한도 사용'); }
   res.json({
     status: 'ok',
     timestamp: new Date().toISOString(),

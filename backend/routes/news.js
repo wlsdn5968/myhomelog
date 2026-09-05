@@ -185,7 +185,7 @@ async function _dataMarketItems() {
       if (ecos.mortgageRate != null) parts.push(`시중 주담대 평균 ${ecos.mortgageRate}%${m ? ` (${m} 신규취급)` : ''}`);
       items.push({ text: `${parts.join(' · ')}`, src: '한국은행 ECOS', date: m || null, srcInline: true });
     }
-  } catch (_) {}
+  } catch (e) { logger.warn({ err: e && e.message }, '시황 라인 생략: ECOS 금리 조회 실패'); }
   try {
     // KOSIS 시도 합계 행(C2_NM='계') — kosisService 실측 주석 근거. 미존재 시 null → 줄 생략.
     const unsold = await require('../services/kosisService').getUnsoldTrend('서울', '계');
@@ -195,7 +195,7 @@ async function _dataMarketItems() {
       const diff = prev && Number.isFinite(prev.cnt) ? unsold.latest.cnt - prev.cnt : null;
       items.push({ text: `서울 미분양 ${unsold.latest.cnt.toLocaleString()}호${ym ? ` (${ym})` : ''}${diff != null ? ` · 전월 대비 ${diff >= 0 ? '+' : ''}${diff.toLocaleString()}호` : ''}`, src: '국토부 KOSIS', date: ym || null, srcInline: true });
     }
-  } catch (_) {}
+  } catch (e) { logger.warn({ err: e && e.message }, '시황 라인 생략: 미분양 조회 실패'); }
   try {
     const { getSupabaseAdmin } = require('../db/client');
     const admin = getSupabaseAdmin();
@@ -210,7 +210,7 @@ async function _dataMarketItems() {
       // 종전 문자열엔 출처 표기가 없던 라인 — 구조화로 처음 출처가 생긴다(srcInline:false 라 문자열은 불변).
       items.push({ text: `2025.10.15 안정화 대책 · 2026.6.30 규제지역 확대 적용 중${latest ? ` · 실거래 ${latest.slice(0, 7).replace('-', '.')}월분까지 반영` : ''}`, src: '금융위·국토부 고시', date: latest ? latest.slice(0, 7).replace('-', '.') : null, srcInline: false });
     }
-  } catch (_) {}
+  } catch (e) { logger.warn({ err: e && e.message }, '시황 라인 생략: 규제·적재 시점 조회 실패'); }
   return items;
 }
 async function _dataMarketLines() {

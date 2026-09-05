@@ -65,7 +65,7 @@ router.post('/ai', optionalAuth, async (req, res) => {
   } catch (e) {
     logger.warn({ err: e.message }, 'feedback insert 실패');
     // MOB-AUDIT-2026-05-03: insert fail 누적 시 운영자 알림 — Sentry capture
-    try { Sentry.captureException(e, { tags: { route: 'feedback.ai', persisted: 'false' } }); } catch(_){}
+    try { Sentry.captureException(e, { tags: { route: 'feedback.ai', persisted: 'false' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
     return res.json({ ok: true, persisted: false }); // 사용자 흐름엔 성공 처리
   }
 });

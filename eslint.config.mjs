@@ -51,6 +51,10 @@ export default [
       //      계속 참조 → 카카오 알림 OAuth 의 state 서명이 통째로 죽어 있었다(무증상 3개월).
       //   globals 는 위에서 실측으로 채웠고 이 규칙 도입 시점 위반은 **0** 이다.
       'no-undef': 'error',
+      // NO-EMPTY-2026-09-05 (감사 P2-12): 빈 catch 44곳이 실패를 소리 없이 삼켰다 — 열화 응답이 엣지에 굳은 사고의
+      //   원인 추적을 막은 것도 `catch(_){}` 였다. 삼켜야 하면 **왜 삼키는지 주석**을 남긴다(주석이 있으면 통과).
+      //   도입 시점 위반 0 (44곳 전부 주석 또는 logger.warn 으로 전환).
+      'no-empty': ['error', { allowEmptyCatch: false }],
       // ★ 실사고 클래스 — 중복 키/인자/분기
       'no-dupe-keys': 'error',
       'no-dupe-args': 'error',

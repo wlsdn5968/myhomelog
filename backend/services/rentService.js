@@ -159,7 +159,7 @@ async function getRentTransactions(lawdCd, dealYm) {
     try {
       const brief = require('../jobs/molitIngest').molitErrReason(err);
       require('./cronStats').recordCronRun('rent-live', { ok: false, error: brief }).catch(() => {});
-    } catch (_) {}
+    } catch (_) { /* 관측 기록 실패는 본 기능을 막지 않는다 */ }
     // 에러 캐시 5분 — 일시적 5xx/timeout 시 매 요청마다 외부 API 두드리는 부하 방지
     cache.set(cacheKey, [], 300);
     const apiErr = new Error(`국토부 전월세 API 호출 실패: ${err.message}`);

@@ -141,7 +141,7 @@ async function run() {
   }
 
   let aliasMap = new Map();
-  try { aliasMap = await getAliasCanonicalMap(lawds); } catch (_) {}
+  try { aliasMap = await getAliasCanonicalMap(lawds); } catch (e) { logger.warn({ err: e && e.message }, '지역 별칭→코드 매핑 실패 — 지역명 그대로 사용'); }
 
   // ── 채널 1: 웹푸시 ──
   let sent = 0, removed = 0, failed = 0;

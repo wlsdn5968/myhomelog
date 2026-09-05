@@ -269,7 +269,7 @@ async function callAI(messages, useCache = true, opts = {}) {
       cache_hit_pct: hitPct,
       endpoint: opts.systemSpecific ? 'specific' : (opts.system ? 'legacy' : 'default'),
     }, 'AI usage');
-  } catch(_){}
+  } catch (_) { /* 사용량 로그 실패는 삼킨다 */ }
 
   // ── 2) post-call 사용량 기록 — await (실패는 삼킴, 응답은 정상) ──
   // FREEZE-FIX-2026-08-09 (Plan 003): 기존 fire-and-forget 은 응답 반환 후 서버리스 동결로 완주

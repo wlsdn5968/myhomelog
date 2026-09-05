@@ -755,7 +755,7 @@ async function getDataBasis() {
         rateBasis = `시중 주담대 평균 ${ecos.mortgageRate}%${ecos.baseRate != null ? ` · 기준금리 ${ecos.baseRate}%` : ''} (한국은행 ECOS ${m})`;
         ecosSource = true;
       }
-    } catch (_) {}
+    } catch (e) { logger.warn({ err: e && e.message }, '금리 근거(ECOS) 생략 — 스냅샷 금리로 대체'); }
     const out = {
       txLatest: latest,                                   // 예: '2026-07-07'
       txLatestLabel: latest ? `${latest.slice(0, 7)} 실거래까지 반영` : null,
@@ -1457,7 +1457,7 @@ async function fetchCandidateApts(admin, input, limit) {
   try {
     const { getAliasCanonicalMap } = require('../services/transactionService');
     _aliasMap = await getAliasCanonicalMap([...new Set(txList.map(t => t.lawd_cd).filter(Boolean))]); // ALIAS-REGION-FIX-2026-07-12: sigungu 명→lawd_cd (getAliasCanonicalMap 조회키 통일)
-  } catch (_) {}
+  } catch (e) { logger.warn({ err: e && e.message }, '지역 별칭→코드 매핑 실패 — 지역명 그대로 사용'); }
 
   // 단지 그룹화 + build_year mode + 신고가 갱신 카운트
   const byApt = {};

@@ -5586,3 +5586,25 @@ test('죽은 엔드포인트는 되살아나지 않는다 — /analysis/total-co
   // 오라클은 남긴다 — 프론트 취득세 사본과의 1,620조합 대조가 이 함수를 쓴다
   assert.equal(typeof require('../services/analysisService').calcTotalCost, 'function');
 });
+
+// ── NO-EMPTY-CATCH-2026-09-05 (감사 P2-12: 빈 catch 44곳 → 0) ───────────────────────────────
+//   삼켜야 하는 곳은 "왜" 를 주석으로 남기고, 사용자 결과에 닿는 곳은 logger.warn 을 남긴다.
+//   eslint no-empty(allowEmptyCatch:false) 가 같은 것을 막지만, 린트가 꺼지거나 우회돼도 이 테스트가 남는다.
+test('백엔드 앱 코드에 빈 catch 블록이 없다', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const RE = /catch *\((?:_|_e|e)?\) *\{ *\}/;
+  const hits = [];
+  (function walk(d) {
+    for (const f of fs.readdirSync(d)) {
+      if (f === 'node_modules' || f === 'test') continue;
+      const p = path.join(d, f);
+      if (fs.statSync(p).isDirectory()) { walk(p); continue; }
+      if (!f.endsWith('.js')) continue;
+      fs.readFileSync(p, 'utf8').split(/\r?\n/).forEach((l, i) => { if (RE.test(l)) hits.push(path.relative(root, p) + ':' + (i + 1)); });
+    }
+  })(root);
+  assert.deepEqual(hits, [], '빈 catch 가 생겼다 — 삼키려면 이유를 주석으로, 아니면 logger.warn: ' + hits.join(', '));
+  const eslint = fs.readFileSync(path.join(__dirname, '../../eslint.config.mjs'), 'utf8');
+  assert.match(eslint, /'no-empty': \['error', \{ allowEmptyCatch: false \}\]/, 'eslint no-empty 규칙이 빠졌다');
+});
