@@ -1904,7 +1904,9 @@ test('강등 관측 배선 — popular-stale 은 응답 전에 await 된다 (서
 
   // 3) await 가 res.json 보다 **앞**이어야 의미가 있다
   const awaitIdx = src.indexOf("await _observeDegrade('popular-stale')");
-  const jsonIdx = src.indexOf('res.json({ results: stale, stale: true })');
+  // POPULAR-WINDOW-2026-09-05: 응답 객체에 window 가 추가돼 완전 일치가 깨졌다 — 이 단언의 의도는
+  //   "await 가 응답보다 앞"이므로 응답 **지점**만 찾으면 된다(이 접두는 파일에서 유일).
+  const jsonIdx = src.indexOf('res.json({ results: stale,');
   assert.ok(awaitIdx >= 0 && jsonIdx >= 0 && awaitIdx < jsonIdx,
     `await 가 응답(res.json)보다 뒤에 있다 — await ${awaitIdx} vs json ${jsonIdx}`);
 
@@ -6584,4 +6586,69 @@ test('전월세 예열 cron — 최근 2개월은 전 지역, 이전 4개월은 
   assert.equal(wr.schedule, '30 20 * * *', '스케줄이 하루 1회(20:30 UTC = 05:30 KST)가 아니다');
   const rentSrc = require('node:fs').readFileSync(require.resolve('../services/rentService'), 'utf8');
   assert.match(rentSrc, /apiErr\.reason = brief;/, '일 한도 판별용 reason 이 오류에 실리지 않는다(예열이 한도를 인식 못 한다)');
+});
+
+// ── POPULAR-WINDOW-2026-09-05 ─────────────────────────────────────────────────────
+test('인기 단지 집계 창 — 스냅샷이면 계산 시점, 라이브면 지금 기준으로 UTC 날짜 60일 창을 만든다', () => {
+  const { popularWindow } = require('../services/popularService');
+  // 스냅샷 시각 기준 (DB·서버 모두 UTC — RPC 는 deal_date >= CURRENT_DATE - 60)
+  assert.deepEqual(popularWindow('2026-09-05T14:54:22.012Z'), { days: 60, since: '2026-07-07', until: '2026-09-05' });
+  // UTC 경계: KST 로 계산하면 하루 어긋난다(로컬 09-06 09:00 = UTC 09-06 00:00)
+  assert.deepEqual(popularWindow('2026-09-06T00:00:00.000Z'), { days: 60, since: '2026-07-08', until: '2026-09-06' });
+  assert.deepEqual(popularWindow('2026-01-01T23:59:59.000Z'), { days: 60, since: '2025-11-02', until: '2026-01-01' });
+  // 라이브(인자 없음) = 지금 UTC 날짜
+  const now = popularWindow();
+  const today = new Date().toISOString().slice(0, 10);
+  assert.equal(now.until, today, '라이브 창의 종료일이 오늘(UTC)이 아니다');
+  assert.equal(now.days, 60);
+  assert.equal(Math.round((new Date(now.until + 'T00:00:00Z') - new Date(now.since + 'T00:00:00Z')) / 86400000), 60, '창 길이가 60일이 아니다');
+  // 못 믿을 값은 null (지어내지 않는다)
+  assert.equal(popularWindow('nonsense'), null);
+});
+
+test('인기 단지 스냅샷 — 계산 시점을 배열에 실어 보내 호출부 4곳의 반환 계약을 깨지 않는다', async () => {
+  const dbPath = require.resolve('../db/client');
+  const popPath = require.resolve('../services/popularService');
+  const saved = { db: require.cache[dbPath], pop: require.cache[popPath] };
+  const computedAt = new Date(Date.now() - 3600 * 1000).toISOString();
+  const rows = Array.from({ length: 12 }, (_, i) => ({ aptName: 'A' + i, sigungu: '노원구', dealCount60d: 30 - i }));
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: {
+    getSupabaseReadonly: () => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { payload: rows, computed_at: computedAt }, error: null }) }) }) }) }),
+    getSupabaseAdmin: () => null, hasAdminEnv: () => false,
+  } };
+  try {
+    delete require.cache[popPath];
+    const { readPopularSnapshot, popularWindow } = require('../services/popularService');
+    const got = await readPopularSnapshot(12);
+    assert.ok(Array.isArray(got), '배열이 아니다 — 기존 호출부(브리핑·챗·검색)가 깨진다');
+    assert.equal(got.length, 12);
+    assert.equal(got[0].aptName, 'A0');
+    assert.equal(got.computedAt, computedAt, '계산 시점이 실리지 않았다');
+    assert.deepEqual(popularWindow(got.computedAt), popularWindow(computedAt));
+  } finally {
+    if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
+    if (saved.pop) require.cache[popPath] = saved.pop; else delete require.cache[popPath];
+  }
+});
+
+test('인기 단지 응답·화면 — 집계 기간은 서버가 싣고 화면은 그 값만 쓴다(날짜 하드코딩 금지)', () => {
+  const fs2 = require('node:fs');
+  const src = fs2.readFileSync(require.resolve('../routes/search'), 'utf8');
+  const i = src.indexOf("router.get('/popular'");
+  const j = src.indexOf("router.get('/in-bounds'");
+  assert.ok(i > 0 && j > i, 'popular 라우트 범위를 찾지 못했다');
+  const block = src.slice(i, j);
+  // 세 응답 경로(스냅샷·라이브·만료 폴백) 전부에 window 가 실려야 한다 — 하나라도 빠지면 그 경로만 기간이 사라진다
+  const payloads = block.match(/res\.json\(\{[^}]*\}/g) || [];
+  const jsonReturns = (block.match(/return res\.json\(/g) || []).length;
+  assert.ok(jsonReturns >= 4, `popular 응답 경로가 ${jsonReturns}개뿐이다 — 검사 대상이 바뀌었는지 확인`);
+  assert.ok((block.match(/window: popularWindow\(/g) || []).length >= 3,
+    '집계 기간(window)이 응답 경로 3곳(스냅샷·라이브·만료 폴백)에 실리지 않는다');
+  const html = fs2.readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const card = html.slice(html.indexOf('id="popTitleCard"'), html.indexOf('id="mapCtrlStack"'));
+  assert.match(card, /id="popWindowNote"/, '인기 카드에 집계 기간 자리가 없다');
+  assert.doesNotMatch(card, /20\d\d\.\d\d\.\d\d/, '인기 카드에 날짜가 하드코딩됐다 — 매일 바뀌는 값이라 박으면 안 된다');
+  const fn = html.slice(html.indexOf('async function loadPopularMarkers'), html.indexOf('async function loadPopularMarkers') + 9000);
+  assert.match(fn, /j\.window/, '프론트가 서버의 window 를 읽지 않는다');
+  assert.match(fn, /_pwn\.textContent = [\s\S]{0,240}: ''/, '기간이 없을 때 비우지 않는다(옛 값이 남는다)');
 });

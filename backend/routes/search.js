@@ -49,7 +49,7 @@ const { resolveAcademies } = require('../services/academyService');
 // NAME-MERGE-2026-05-12 (Sprint S): baseAptName helper 로 동/letter/층 suffix 분리 신고 통합
 const { normalizeAptName, baseAptName } = require('../utils/aptName');
 // SNAPSHOT-2026-07-11 (Sprint LLLL): 인기 단지 집계 서비스 분리 + 일별 사전집계 스냅샷
-const { buildPopularResults, readPopularSnapshot, storePopularSnapshot } = require('../services/popularService');
+const { buildPopularResults, readPopularSnapshot, storePopularSnapshot, popularWindow } = require('../services/popularService');
 const { buildFacility } = require('../utils/buildFacility');
 
 const router = express.Router();
@@ -568,7 +568,8 @@ router.get('/popular', async (req, res) => {
     // ② 일별 사전집계 스냅샷 — 콜드 RPC timeout 근본 회피 (밀리초 응답)
     const snap = await readPopularSnapshot(limit);
     if (snap) {
-      const payload = { results: snap };
+      // POPULAR-WINDOW-2026-09-05: 스냅샷은 cron 이 만든 것이라 **그때의** 창을 적어야 한다(오늘이 아니다).
+      const payload = { results: snap, window: popularWindow(snap.computedAt) };
       cache.set(pck, payload, 1800);
       res.set('Cache-Control', CDN_OK);
       return res.json(payload);
@@ -578,7 +579,7 @@ router.get('/popular', async (req, res) => {
     res.set('Cache-Control', usedFallback
       ? 'public, max-age=0, s-maxage=120, stale-while-revalidate=600'
       : CDN_OK);
-    const payload = { results: out };
+    const payload = { results: out, window: popularWindow() }; // 라이브 집계 = 지금(UTC) 기준 창
     if (out.length) cache.set(pck, payload, usedFallback ? 120 : 1800); // 빈 응답은 캐시 안 함
     // 정상 품질(RPC 성공본)이면 스냅샷도 갱신 — 다음 콜드 사용자를 위해.
     // FREEZE-FIX-2026-08-16 (Plan 011): 종전엔 await 없이 던져만 뒀다. Vercel 서버리스는
@@ -604,7 +605,7 @@ router.get('/popular', async (req, res) => {
       //   (위 molit/master 강등 경로는 이후 처리가 더 이어지므로 그대로 둔다 — 지연을 안 만드는 쪽이 낫다.)
       await _observeDegrade('popular-stale');
       res.set('Cache-Control', 'public, max-age=0, s-maxage=120');
-      return res.json({ results: stale, stale: true });
+      return res.json({ results: stale, stale: true, window: popularWindow(stale.computedAt) });
     }
     captureRouteError(e, 'search/popular');
     res.status(500).json({ error: '조회 실패' });

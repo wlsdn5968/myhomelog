@@ -2079,7 +2079,7 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
   <div id="popTitleCard" style="display:none;position:absolute;top:46px;left:10px;z-index:30;background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-md);padding:8px 26px 8px 12px;box-shadow:0 4px 14px rgba(16,24,40,.14);pointer-events:none;max-width:250px">
     <button onclick="var c=document.getElementById('popTitleCard');if(c)c.style.display='none';try{sessionStorage.setItem('mhl_popcard_hide','1')}catch(_){}" aria-label="인기 단지 안내 닫기" title="닫기 (이번 접속 동안 다시 표시 안 함)" style="position:absolute;top:3px;right:4px;width:19px;height:19px;line-height:1;border:none;background:transparent;color:var(--t3);font-size:14px;cursor:pointer;pointer-events:auto;padding:0">✕</button>
     <div style="font-size:12.5px;font-weight:800;color:var(--t1)">🔥 지금 인기 단지 TOP 12</div>
-    <div style="font-size:10.5px;color:var(--t3);margin-top:2px;line-height:1.5">최근 60일 국토부 실거래 많은 순 (최근 21일 거래 단지 우선 · 지역 쏠림 완화 · 좌표 확인된 단지)<br>실거래 통계 기반 정보 — 매물 광고가 아니에요</div>
+    <div style="font-size:10.5px;color:var(--t3);margin-top:2px;line-height:1.5">최근 60일 국토부 실거래 많은 순 (최근 21일 거래 단지 우선 · 지역 쏠림 완화 · 좌표 확인된 단지)<span id="popWindowNote"></span><br>실거래 통계 기반 정보 — 매물 광고가 아니에요</div>
   </div>
   <!-- Sprint PPPPP (시안 컷3): 지도 우측 컨트롤 스택 — 뷰 이동·타일 토글은 필터가 아니라서 툴바에서 분리 -->
   <div id="mapCtrlStack">
@@ -11738,6 +11738,16 @@ async function loadPopularMarkers() {
       //   기준을 공개하는 이 범례가 표시 위치로 맞다. 정상 응답이면 아무 변화 없음.
       const _staleEl = document.getElementById('popStaleNote');
       if (_staleEl) _staleEl.style.display = j.stale ? '' : 'none';
+    }
+    // POPULAR-WINDOW-2026-09-05: "최근 60일" 이 정확히 어느 기간인지 서버가 준 값으로 적는다.
+    //   ⚠ 프론트에서 계산하지 않는다 — 집계 기준일은 DB(UTC)의 CURRENT_DATE 이고 스냅샷 경로는 cron 이
+    //   돈 날짜라, 사용자 로컬 시각으로 만들면 어긋난다. 값이 없으면 비운다(옛 값 잔류 금지).
+    const _pwn = document.getElementById('popWindowNote');
+    if (_pwn) {
+      const _w = j.window;
+      _pwn.textContent = (_w && _w.since && _w.until)
+        ? ` · 집계 ${String(_w.since).replace(/-/g, '.')}~${String(_w.until).replace(/-/g, '.')}`
+        : '';
     }
     // POP-TITLE (Sprint MMMM): 지도 위 타이틀 카드 — 인기 단지 정체 명시 (매물 오해 방지)
     // Sprint PPPPP: ✕ 로 닫으면 세션 동안 재표시 안 함(sessionStorage) — 반복 노출 피로 제거(시안 컷3)

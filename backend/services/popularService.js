@@ -29,6 +29,24 @@ const { resolveCoordBatch } = require('./geocodeCacheService');
 const { isValidKoreaCoord } = require('../utils/geo');
 
 const SNAPSHOT_MAX_AGE_MS = 36 * 60 * 60 * 1000; // 36시간 — daily cron 1회 실패까지 허용
+
+// POPULAR-WINDOW-2026-09-05: 랭킹의 집계 창을 화면이 정확히 적을 수 있게 서버가 계산해 준다.
+//   RPC search_popular_apts 는 `deal_date >= CURRENT_DATE - 60` 이고 **DB TimeZone·Vercel 런타임 모두 UTC**
+//   (실측 2026-09-05: db_tz=UTC · current_date=2026-09-05 · window_start=2026-07-07)라
+//   기준일 = 그 집계가 돈 시점의 UTC 날짜다 — 스냅샷이면 computed_at, 라이브면 지금.
+//   ⚠ 프론트가 자체 계산하면 사용자 로컬(KST)이라 09시 이전에 하루 어긋난다([[server-runtime-timezone-utc]]).
+//   값을 못 믿으면 null 을 준다 — 화면은 항목째 비운다(지어내지 않는다).
+const POPULAR_WINDOW_DAYS = 60;
+function popularWindow(computedAt) {
+  const base = computedAt ? new Date(computedAt) : new Date();
+  const ms = base.getTime();
+  if (!Number.isFinite(ms)) return null;
+  return {
+    days: POPULAR_WINDOW_DAYS,
+    since: new Date(ms - POPULAR_WINDOW_DAYS * 86400000).toISOString().slice(0, 10),
+    until: base.toISOString().slice(0, 10),
+  };
+}
 const SNAPSHOT_SIZE = 12; // 프론트 고정 limit 와 동일 기준으로 저장
 
 // 읽기용(공개 데이터) = getSupabaseReadonly, 쓰기용(RLS bypass) = getSupabaseAdmin — 키 체인 동일
@@ -183,7 +201,11 @@ async function readPopularSnapshot(limit = 12, maxAgeMs = SNAPSHOT_MAX_AGE_MS) {
     const age = Date.now() - new Date(data.computed_at).getTime();
     if (!(age >= 0 && age < maxAgeMs)) return null;
     if (data.payload.length < Math.min(limit, SNAPSHOT_SIZE)) return null;
-    return data.payload.slice(0, limit);
+    // 계산 시점을 **배열 속성**으로 싣는다 — 반환 형태를 바꾸면 호출부 4곳(검색 2·브리핑·챗)과
+    //   테스트 스텁까지 함께 고쳐야 하고, 그 중 하나만 놓쳐도 조용히 빈 결과가 된다.
+    const rows = data.payload.slice(0, limit);
+    rows.computedAt = data.computed_at;
+    return rows;
   } catch (_) { return null; }
 }
 
@@ -245,4 +267,4 @@ async function computeAndStoreSnapshot() {
   return { ...r, usedFallback };
 }
 
-module.exports = { buildPopularResults, readPopularSnapshot, storePopularSnapshot, computeAndStoreSnapshot };
+module.exports = { buildPopularResults, readPopularSnapshot, storePopularSnapshot, computeAndStoreSnapshot, popularWindow };
