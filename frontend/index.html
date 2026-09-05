@@ -6798,8 +6798,17 @@ function renderListGrid(){
     return;
   }
   // Agent UX #8 (2026-05-04): 모바일 가로 스크롤 차단 — flex column 으로 줄 분리
+  // BROAD-META-2026-09-05: 광역 검색은 시도 전체(서울 25·인천 11·경기 47)를 본다 — 이름 25개를 나열하지 않는다.
+  const _regionLabel = (regs) => {
+    if (!Array.isArray(regs) || !regs.length) return '';
+    if (regs.length >= 7) {
+      const w = document.querySelector('#ch-r .chip.on');
+      return `${w ? w.textContent.trim() : ''} 전체 ${regs.length}개 시군구`.trim();
+    }
+    return regs.map(String).join(', ');
+  };
   const metaLine = searchMeta && searchMeta.regions.length
-    ? `<div class="meta-line" style="margin:10px 14px 0;padding:8px 12px;background:var(--info-bg);border:1px solid var(--info-bd);border-radius:var(--radius-base);color:var(--info-tx);font-size:11px;line-height:1.55"><div>📊 <b>분석 지역:</b> ${_escHtml(searchMeta.regions.map(String).join(', '))}</div>${(()=>{try{const _wideOn=document.querySelector('#ch-r .chip.on');const _subOn=document.querySelectorAll('#ch-r-sub .chip.on').length;return (_wideOn&&!_subOn)?`<div style="font-size:10px;opacity:.85">${_escHtml(_wideOn.textContent.trim())} 전체 중 예산에 맞는 구를 골라 분석했어요 — 세부 구를 직접 선택하면 그 지역만 분석합니다</div>`:'';}catch(_e){return '';}})()}<div>전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> · 예산 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b></div><div title="analyzeTransactions 가 (단지명·법정동) 기준으로 묶은 결과 수입니다. 거래 건수가 아니라 단지 수예요.">최근 6개월 거래가 있는 단지 ${(Number(searchMeta.totalTx)||0).toLocaleString()}곳 분석</div></div>`
+    ? `<div class="meta-line" style="margin:10px 14px 0;padding:8px 12px;background:var(--info-bg);border:1px solid var(--info-bd);border-radius:var(--radius-base);color:var(--info-tx);font-size:11px;line-height:1.55"><div>📊 <b>분석 지역:</b> ${_escHtml(_regionLabel(searchMeta.regions))}</div>${(()=>{try{const _wideOn=document.querySelector('#ch-r .chip.on');const _subOn=document.querySelectorAll('#ch-r-sub .chip.on').length;return (_wideOn&&!_subOn)?`<div style="font-size:10px;opacity:.85">${_escHtml(_wideOn.textContent.trim())} 전체 ${searchMeta.regions.length}개 시군구를 분석했어요 — 세부 구를 직접 선택하면 그 지역만 분석합니다</div>`:'';}catch(_e){return '';}})()}<div>전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> · 예산 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b></div><div title="analyzeTransactions 가 (단지명·법정동) 기준으로 묶은 결과 수입니다. 거래 건수가 아니라 단지 수예요.">최근 6개월 거래가 있는 단지 ${(Number(searchMeta.totalTx)||0).toLocaleString()}곳 분석</div></div>`
     : '';
   // REGION-ENTRY-2-2026-07-25 (Sprint ZZZZZZ, 기획안 §3 A안의 '추천 결과 상단'분):
   //   결과에 실제로 등장하는 지역만 노출한다. ⚠ searchMeta.regions(이름 배열)를 쓰지 않고

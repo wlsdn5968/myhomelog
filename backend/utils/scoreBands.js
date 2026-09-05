@@ -26,9 +26,16 @@ function turnoverScore(deals, households, max) {
   //   거래가 아예 없는 단지가 중간값을 받는다([[unknown-treated-as-value]] 의 반대 방향 실수).
   if (d <= 0) return { score: 0, turnover: hh > 0 ? 0 : null, why: '최근 6개월 거래 없음' };
   if (hh > 0) {
-    const tr = (d / hh) * 100;
+    // HH-FLOOR-2026-09-05: 구간은 100세대 이상 단지의 분위수다. 17세대 건물의 2건(11.8%)을 그 구간에 넣으면
+    //   만점이 된다(실측: 17세대 건물이 회전율 만점으로 76점 1위). 100세대 미만은 분모를 100으로 올려
+    //   보정 범위 안에서 잰다 — 소규모의 우연한 거래를 '활발한 시장'으로 읽지 않는다. 실제 세대수는 그대로 밝힌다.
+    const hhEff = Math.max(hh, 100);
+    const tr = (d / hhEff) * 100;
     const frac = tr >= 4.11 ? 1 : tr >= 3.02 ? 0.857 : tr >= 2.03 ? 0.643 : tr >= 1.25 ? 0.429 : tr >= 0.70 ? 0.286 : 0.143;
-    return { score: Math.round(max * frac), turnover: tr, why: `6개월 회전율 ${tr.toFixed(1)}% (${d}건 / ${hh}세대)` };
+    const why = hhEff === hh
+      ? `6개월 회전율 ${tr.toFixed(1)}% (${d}건 / ${hh}세대)`
+      : `6개월 회전율 ${tr.toFixed(1)}% (${d}건 / ${hh}세대 — 100세대 기준 환산)`;
+    return { score: Math.round(max * frac), turnover: tr, why };
   }
   // ⚠ 세대수를 모르면 회전율을 만들 수 없다. 중간값 부근만 주고 0 으로 떨어뜨리지 않는다
   //   ([[unknown-treated-as-value]]).

@@ -220,40 +220,33 @@ function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '', lawdCd 
       return codes.map(c => ({ lawdCd: c, name: kw }));
     }
   }
-  // 2) 광역만 입력 시 예산 기반 자동 추천 (서울 인기 구)
-  // REC-BROAD-2026-09-05 (운영자 실사고): 이 하드코딩이 "서울 + 6.5억" 을 **구로·금천·은평 3개 구**로
-  //   좁혀 왔다. 같은 예산 밴드(0.55~1.05x)의 최근 6개월 실거래 분포 실측은 노원 2,311건(1위)·도봉 947·
-  //   구로 847·중랑 695·강서 599 — 1·2위를 통째로 버려서, 노원을 직접 고르면 74점이 나오는데
-  //   '서울' 로는 60점대가 최고인 모순이 생겼다. 목록은 **DB 조회 실패 시 폴백**으로만 남기고
-  //   _broad 마커를 달아 호출측(getAIRecommendations)이 예산 밴드 분포 상위 구로 대체하게 한다.
+  // 2) 광역만 입력 — REC-BROAD-ALL-2026-09-05 (운영자 재실사고 "서울 6.5억 결과가 더 이상해졌다"):
+  //   종전 ① 예산 구간별 하드코딩 3구 → ② 예산 밴드 실거래 분포 상위 5구(REC-BROAD, 같은 날 1차 수정)
+  //   둘 다 틀렸다. 서울 25개 구를 **전부 개별 조회해 합친** 상위 15곳과 5구 결과는 **2곳만 겹쳤다**
+  //   (라이브 실측). "어느 구를 볼지"를 예산으로 미리 고르는 발상 자체가 정답을 놓친다 — '서울'을 고른
+  //   사용자에게 대상은 **서울 전체**다(보고서 경로는 이미 25구 전수). 그래서 광역은 그 시도의 **모든
+  //   시군구**를 돌려준다. 비용은 호출측(getAIRecommendations)이 광역 모드로 통제한다
+  //   (DB 단일쿼리만·라이브 KAPT 목록 생략·MOLIT API 폴백 생략).
+  //   ⚠ 폐지 코드(RETIRED_LAWD_CODES)는 뺀다 — 적재가 멈춘 코드에 빈 조회를 던질 이유가 없다.
   const _mkBroad = (arr, pfx) => Object.assign(arr, { _broad: pfx });
-  if (!r || r.includes('서울')) {
-    if (maxBudget <= 6) return _mkBroad([
-      { lawdCd: '11350', name: '노원구' },
-      { lawdCd: '11320', name: '도봉구' },
-      { lawdCd: '11305', name: '강북구' },
-    ], '11');
-    if (maxBudget <= 9) return _mkBroad([
-      { lawdCd: '11530', name: '구로구' },
-      { lawdCd: '11545', name: '금천구' },
-      { lawdCd: '11380', name: '은평구' },
-    ], '11');
-    if (maxBudget <= 14) return _mkBroad([
-      { lawdCd: '11290', name: '성북구' },
-      { lawdCd: '11470', name: '양천구' },
-      { lawdCd: '11440', name: '마포구' },
-    ], '11');
-    return _mkBroad([
-      { lawdCd: '11650', name: '서초구' },
-      { lawdCd: '11680', name: '강남구' },
-      { lawdCd: '11710', name: '송파구' },
-    ], '11');
-  }
-  // 3) 광역 매칭 (인천/경기) — 동일하게 폴백 + 마커
+  const _sidoOf = (pfx) => {
+    const { LAWD_CODES: _LC, RETIRED_LAWD_CODES: _RET } = require('./transactionService');
+    const seen = new Set();
+    const out = [];
+    for (const [name, code] of Object.entries(_LC)) {
+      const c = String(code);
+      if (!c.startsWith(pfx) || seen.has(c) || (_RET && _RET.has(c))) continue;
+      seen.add(c);
+      out.push({ lawdCd: c, name });
+    }
+    return out;
+  };
+  if (!r || r.includes('서울')) return _mkBroad(_sidoOf('11'), '11');
+  // 3) 광역 매칭 (인천/경기) — 동일하게 시도 전체 + 마커
   for (const wide of ['인천', '경기']) {
     if (r.includes(wide)) {
-      return _mkBroad(REGION_KEYWORDS[wide].map(c => ({ lawdCd: c, name: wide })),
-        wide === '인천' ? '28' : '41');
+      const pfx = wide === '인천' ? '28' : '41';
+      return _mkBroad(_sidoOf(pfx), pfx);
     }
   }
   // 4) 기본 (수도권 인기 지역)
@@ -262,68 +255,6 @@ function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '', lawdCd 
     { lawdCd: '41290', name: '과천시' },
     { lawdCd: '41135', name: '성남시 분당구' },
   ];
-}
-
-// ── REC-BROAD-2026-09-05: 광역 검색의 대상 구를 "예산 밴드 실거래 분포"로 고른다 ──────────
-//   [원리] 광역(서울 등)만 고른 사용자에게 보여줄 구는 "그 예산으로 실제 거래가 일어나는 구"다.
-//   밴드 = 예산의 0.55~1.05배(추천 후보의 예산 적합 구간과 같은 취지 — 상한 5% 여유·과소가 절반 밑이면 무관).
-//   [구현] 최근 6개월·밴드 내 거래를 **최신순 최대 1,000건 표본**으로 뽑아 구별로 센다 —
-//   PostgREST 는 group by 가 없고, 전량을 세면 페이지 8~9회가 든다. 상위 구 선정엔 표본이면 충분하다
-//   (6.5억 서울 실측: 표본으로도 전수로도 1~3위가 노원·도봉·구로로 동일).
-//   ⚠ limit(1000)은 의도된 표본 상한이다 — PostgREST 조용한 1000행 컷과 같은 값이지만 여기선 설계값.
-//   [안전] 조회 실패·표본 부족(<50)이면 종전 하드코딩 목록으로 폴백 — 더 나빠질 길이 없다.
-const BROAD_K = 5;                 // 광역 검색이 실제로 살펴볼 구 수(기존 3 → 5)
-const BROAD_MIN_SAMPLE = 50;
-/** 표본 행(lawd_cd 만)에서 상위 K 구를 뽑는다 — 순수 함수(테스트가 직접 실행). */
-function _rankBroadRows(rows, k = BROAD_K) {
-  const cnt = new Map();
-  for (const r of rows || []) {
-    const c = r && String(r.lawd_cd || '').trim();
-    if (!/^\d{5}$/.test(c)) continue;
-    cnt.set(c, (cnt.get(c) || 0) + 1);
-  }
-  return [...cnt.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-    .slice(0, k).map(([lawdCd, n]) => ({ lawdCd, bandDeals: n }));
-}
-async function pickBroadRegionsByBudget(pfx, maxBudget, fallback) {
-  const band = Math.round(Number(maxBudget) * 2) / 2;   // 0.5억 단위로 캐시 버킷
-  const ck = `broadpick:v1:${pfx}:${band}`;
-  const memHit = cache.get(ck);
-  if (memHit) return memHit;
-  try {
-    const rHit = await require('./redisCache').rget(ck);
-    if (rHit && Array.isArray(rHit) && rHit.length) { cache.set(ck, rHit, 21600); return rHit; }
-  } catch (_) { /* redis 미설정/실패 — 아래 DB 경로가 처리 */ }
-  try {
-    const { getSupabaseAdmin } = require('../db/client');
-    const a = getSupabaseAdmin();
-    if (!a) return fallback;
-    const since = new Date(Date.now() - 183 * 86400000).toISOString().slice(0, 10);
-    const lo = Math.round(Number(maxBudget) * 10000 * 0.55);
-    const hi = Math.round(Number(maxBudget) * 10000 * 1.05);
-    const { data, error } = await a.from('molit_transactions').select('lawd_cd')
-      .gte('lawd_cd', pfx + '000').lte('lawd_cd', pfx + '999')
-      .gte('deal_date', since).gte('deal_amount', lo).lte('deal_amount', hi)
-      .order('deal_date', { ascending: false }).limit(1000);
-    if (error || !data || data.length < BROAD_MIN_SAMPLE) {
-      logger.warn({ pfx, maxBudget, n: data ? data.length : null, err: error && error.message },
-        'REC-BROAD: 표본 부족/조회 실패 — 하드코딩 폴백');
-      return fallback;
-    }
-    const { LAWD_CODE_TO_NAME } = require('./transactionService');
-    const top = _rankBroadRows(data, BROAD_K)
-      .map(({ lawdCd }) => ({ lawdCd, name: LAWD_CODE_TO_NAME[lawdCd] }))
-      .filter(r => r.name);                                   // 화이트리스트 밖 코드는 채택하지 않는다
-    if (!top.length) return fallback;
-    cache.set(ck, top, 21600);
-    require('./redisCache').rset(ck, top, 21600).catch(() => {});
-    logger.info({ pfx, maxBudget, sample: data.length, top: top.map(t => `${t.name}:${t.lawdCd}`).join(',') },
-      'REC-BROAD: 예산 밴드 분포로 광역 → 구 선정');
-    return top;
-  } catch (e) {
-    logger.warn({ pfx, maxBudget, err: e.message }, 'REC-BROAD 예외 — 하드코딩 폴백');
-    return fallback;
-  }
 }
 
 // ── LTV/대출한도 단순 계산 ─────────────────────────────
@@ -646,8 +577,10 @@ async function getAIRecommendations(userCondition) {
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
   // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
   const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
-  const cacheKey = `rec:v24:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
+  const cacheKey = `rec:v25:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
   // 버전 이력(산식·표시가 바뀌면 반드시 올릴 것 — 안 올리면 최대 3h 동안 옛 점수가 그대로 나간다):
+  //   v25 REC-BROAD-ALL·BUDGET-CAP·REC-RANK-PROV·RANK-SEQ — 광역=시도 전체, 예산 상한 1.0x, 후보 컷 임시점수순,
+  //       rank 재부여. 같은 키가 완전히 다른 후보 집합·가격 상한을 보므로 반드시 분리.
   //   v24 REC-BROAD — 광역 검색 대상 구가 하드코딩 3구 → 예산 밴드 상위 5구로. 같은 '서울:6.5' 키가
   //       완전히 다른 지역 집합을 보므로 반드시 분리(+ 미매칭 facility 를 resolveFacility 로 복원).
   //   v22 PPPPPPP 대표 평형에 표본 하한(3건) 도입
@@ -674,14 +607,11 @@ async function getAIRecommendations(userCondition) {
   //   복수 선택에 그대로 적용하면 "4개 골랐는데 3개만 본다" 가 된다(조용한 축소).
   //   명시 선택은 pickRegions 가 이미 MAX_MULTI(6)로 상한을 두므로 여기선 그대로 쓴다.
   const _picked = pickRegions(region, maxBudget, workplaceArea, _lawd);
-  let targetRegions = _lawd ? _picked : _picked.slice(0, 3);
-  // REC-BROAD-2026-09-05: 광역만 고른 검색(_broad 마커)은 하드코딩 3구가 아니라
-  //   예산 밴드 실거래 분포 상위 BROAD_K(5)개 구를 본다. slice(0,3)를 태우지 않는 것이 의도다 —
-  //   광역 검색의 요점이 "어느 구인지 모르니 넓게" 인데 3개로 자르면 결함(노원 배제)이 재현된다.
-  //   실패 시 pickBroadRegionsByBudget 이 _picked(종전 목록)를 그대로 돌려준다.
-  if (!_lawd && _picked._broad && Number(maxBudget) > 0) {
-    targetRegions = await pickBroadRegionsByBudget(_picked._broad, maxBudget, _picked);
-  }
+  // REC-BROAD-ALL-2026-09-05: 광역(_broad)은 그 시도의 모든 시군구다 — 자르지 않는다.
+  //   [실측] 서울 25구 개별 조회 합집합 상위 15곳 vs 5구 결과 = 2곳 겹침. "어느 구를 볼지"를 미리 고르는
+  //   방식은 어떤 기준(하드코딩·예산 밴드)이든 정답을 놓친다. 비용은 광역 모드(_broadMode)에서 통제한다.
+  const _broadMode = !_lawd && !!_picked._broad;
+  const targetRegions = (_lawd || _broadMode) ? _picked : _picked.slice(0, 3);
 
   // Step 2: 병렬 조회 — (a) 시군구 전체 단지 목록 + (b) 실거래 내역
   // COLLECT-PAR-2026-07-18 (Sprint DDDDDD): aliasMap 이 대형 병렬 조회 뒤 직렬 1왕복이던 것 — 동시 시작
@@ -690,14 +620,20 @@ async function getAIRecommendations(userCondition) {
   //   라이브 KAPT 목록만 쓰다가 그 API 가 폐기되자 전국 필터가 0건이 됐다(실측) —
   //   같은 데이터를 DB 가 이미 들고 있었는데도. 두 소스를 합치고 kaptCode 로 중복 제거한다.
   const dbAptListPromise = getAptListByLawdFromDb(targetRegions.map(r => r.lawdCd));
+  // REC-BROAD-ALL-2026-09-05 광역 모드 비용 통제: 시도 전체(서울 25·인천 11·경기 47)를 볼 때는
+  //   ① 라이브 KAPT 시군구 목록(외부 API, 지역당 최대 10페이지)을 생략하고 DB(apt_master)만 쓴다 —
+  //      DB 가 1순위 소스다(APTLIST-DB). 미등재 신축은 enrichment 의 resolveFacility 폴백이 받는다.
+  //   ② DB 에 그 지역 거래가 없어도 MOLIT 월별 API(지역당 6콜)로 내려가지 않는다 — 전수 조회의 목적은
+  //      있는 것을 놓치지 않는 것이고, 적재가 비어 있는 지역은 "거래 없음"으로 두는 것이 맞다.
   const [aptListArrays, txArrays] = await Promise.all([
     Promise.allSettled(
-      targetRegions.map(r => getAptListBySgg(r.lawdCd))
+      targetRegions.map(r => (_broadMode ? Promise.resolve([]) : getAptListBySgg(r.lawdCd)))
     ).then(results => results.map(r => r.status === 'fulfilled' ? r.value : [])),
     Promise.allSettled(
       // REC-PERF-2026-07-10 (Sprint EEEE): 지역 단일쿼리 우선(12왕복→1왕복/지역, 131ms 실측) —
       //   null(미ingest·실패)이면 기존 월별 경로(MOLIT API 폴백 포함)로 안전 fallback.
-      targetRegions.map(async r => (await getRegionRecentTransactions(r.lawdCd)) ?? await getTransactionsByApt(r.lawdCd, ''))
+      targetRegions.map(async r => (await getRegionRecentTransactions(r.lawdCd))
+        ?? (_broadMode ? [] : await getTransactionsByApt(r.lawdCd, '')))
     ).then(results => results.map((r, i) => {
       if (r.status === 'fulfilled') return r.value;
       logger.warn({
@@ -747,7 +683,10 @@ async function getAIRecommendations(userCondition) {
   }
 
   // Step 3: 평형별 예산 매칭 — 단지 안에서 사용자 예산에 맞는 평형 1개 이상 있어야 통과
-  const budgetMaxMan = maxBudget * 10000 * 1.05; // 5% 여유
+  // BUDGET-CAP-2026-09-05 (운영자 "6.5억인데 6.8억이 나온다 — 예산이 안 맞는다"): 종전 5% 여유(1.05x)로
+  //   6.81·6.74·6.59·6.56억이 6.5억 검색에 실렸다(라이브 실측 15곳 중 4곳). 사용자가 적은 값은 **상한**이다 —
+  //   여유가 필요하면 사용자가 예산을 올리면 된다. 표시 기준(대표 평형 6개월 가중평균)이 예산 이하인 단지만 통과.
+  const budgetMaxMan = maxBudget * 10000;
   // PRICE-FLOOR-2026-07-19 (Sprint LLLLLL-6, 운영자 "25억 검색에 14.5억이 뜨는 게 어색"):
   //   하한 0.5→0.7 배 — 보고서(fetchCandidateApts minAmt=buy*0.7)와 동일 기준으로 통일(기존 추천만 0.5로 느슨했음).
   //   보고서가 0.7 로 이미 전 지역 정상 동작(공백 없음) = 0.7 viable 실증. 예산의 70~105% 평균시세 단지만 노출.
@@ -923,9 +862,11 @@ async function getAIRecommendations(userCondition) {
       const st = _c(nm);
       if (st && st !== nm && !_m.has(st)) _m.set(st, a.kaptCode);
     }
+    // REC-RANK-PROV-2026-09-05: 이름 매칭 실패는 지번으로 한 번 더(카드·필터와 같은 규칙 — 사본 금지).
+    const _jIdx = buildJibunIndex(allAptList);
     const _codes = candidatePool.map((apt) => {
       const k = _n(apt.aptName);
-      return _m.get(`${k}|${apt.umdNm || ''}`) || _m.get(k) || _m.get(_c(k)) || null;
+      return _m.get(`${k}|${apt.umdNm || ''}`) || _m.get(k) || _m.get(_c(k)) || lookupByJibun(_jIdx, apt) || null;
     });
     let _hhMap = new Map();
     try { _hhMap = await getFacilitiesByKaptCodes([...new Set(_codes.filter(Boolean))]); } catch (_) { /* graceful — 게이트 ② 비활성 */ }
@@ -944,14 +885,29 @@ async function getAIRecommendations(userCondition) {
     // LLLLLL-2 (배포 검증에서 완화 로직이 게이트 무력화 실측 — 성동구 후보 4개<5 → 1건짜리 복귀):
     //   TRUST(거래 1건 배제)는 **무조건** — 표본 1은 어떤 경우에도 부적격(정직한 빈 결과 > 무의미 추천).
     //   HH(<100 확인분)만 후보 부족 시 완화('가능하면'). 인덱스 안전 위해 hh 를 객체에 동반.
-    const _withHh = candidatePool.map((a, i) => ({ a, hh: _hh[i] }));
+    // REC-RANK-PROV-2026-09-05: 후보 컷(RANK_N)을 **거래 건수순**에서 **임시 점수순**으로 바꾼다.
+    //   [실측] 서울 6.5억 중형: 예산 안 후보 262곳 중 거래 상위 40곳만 채점됐다 — 거래가 적어도 역세권·
+    //   중대단지인 곳은 채점 자체를 못 받았다. 여기서 이미 확보한 facility(DB 배치 1회)로 100점 산식의
+    //   임시값(교통은 신고밴드·인프라는 시설문구·규모주차·회전율·연식·평형)을 매기고, 그 순서로 자른다.
+    //   최종 점수는 종전대로 enrichment 뒤 실측 교통·인프라로 확정한다(상위 15곳).
+    //   ⚠ 검증 티어: 세대수가 **확인된 100세대 이상**(KAPT, 연도 검증 통과) 후보를 미확인보다 앞에 둔다 —
+    //     미확인은 대개 KAPT 미등록(의무관리 대상이 아닌 소규모) 건물이었다(실측: 17·103·121세대짜리가
+    //     76~82점으로 1~3위). 미확인을 나쁨으로 만드는 게 아니라([[unknown-treated-as-value]]), 확인된
+    //     후보가 충분할 때 검증된 정보를 우선하는 정렬이다. 확인된 후보가 RANK_N 에 못 미치면 미확인이 채운다.
+    const _withHh = candidatePool.map((a, i) => {
+      const code = _codes[i];
+      const st = code && _hhMap.get(code);
+      const fac = (st && _hh[i] != null) ? buildFacility(st, code, st._dtl || null) : null;
+      const prov = _applyFacilityToScore(_calcBaseScore(a), fac, null).total;
+      return { a, hh: _hh[i], fac, prov };
+    });
     const _base = _withHh.filter(x => (x.a.dealCount || 0) >= 2);            // TRUST: 무조건
     let _gated = _base.filter(x => !(x.hh != null && x.hh < 100));           // HH: 확인된 소형 제외
     if (_gated.length < 3) _gated = _base;                                    // HH 만 완화 (희소 지역)
     if (_gated.length !== candidatePool.length) {
       logger.info({ before: candidatePool.length, after: _gated.length }, 'PropertyService TRUST+HH 게이트');
     }
-    candidatePool = _gated.map(x => x.a);
+    candidatePool = _gated.map(x => ({ ...x.a, _prov: x.prov, _verified: x.hh != null && x.hh >= 100 }));
   }
 
   // Step 4: 거래량 가중 정렬 → 실거래 단지 우선 상위 15건
@@ -967,9 +923,13 @@ async function getAIRecommendations(userCondition) {
   //     최종 순서는 enrichment 뒤에서 확정된 점수로 다시 매긴다.
   //   ⚠ 폭을 넓히면 facility 해석이 늘지만 그건 DB 배치 1쿼리다. 좌표·학군은 최종 15건에만 돈다.
   const RANK_N = _filterActive ? 45 : 40;
+  // REC-RANK-PROV-2026-09-05: 검증 티어 → 임시 점수 → 거래 건수 → 이름(결정적). 종전 거래 건수 가중은 폐기.
   const ranked = candidatePool
-    .map(a => ({ ...a, _score: a.dealCount * 10 + (a.buildYear || 1990) * 0.01 }))
-    .sort((x, y) => y._score - x._score)
+    .map(a => ({ ...a, _score: Number(a._prov) || 0 }))
+    .sort((x, y) => (Number(y._verified) - Number(x._verified))
+      || (y._score - x._score)
+      || ((y.dealCount || 0) - (x.dealCount || 0))
+      || String(x.aptName || '').localeCompare(String(y.aptName || ''), 'ko'))
     .slice(0, RANK_N);
 
   // Step 5: 결과 카드 생성 (AI 호출 없음, 즉시 응답)
@@ -1204,6 +1164,7 @@ async function getAIRecommendations(userCondition) {
       if (parkingRatio && parkingRatio >= 1.2 && !facility?.householdsConflict) moreTags.push('주차여유');
       if (totalHouseholds >= 1000) moreTags.push('대단지');
       else if (totalHouseholds >= 500) moreTags.push('중대단지');
+      else if (totalHouseholds > 0 && totalHouseholds < 100) moreTags.push('소규모');
       // SCORE-V2-2026-08-30: facility(+선택적 amenities)를 알게 된 뒤 100점 확정.
       const _sc = _applyFacilityToScore(rec._baseScore, facility, rec._amen || null);
       return {
@@ -1413,6 +1374,9 @@ async function getAIRecommendations(userCondition) {
     const c = coords[i];
     return {
       ...rec,
+      // RANK-SEQ-2026-09-05 (라이브 실측: 화면 순번이 5·22·20·29… 로 보였다): rank 는 거래량 컷 시점 번호였고
+      //   점수순 재정렬 뒤에도 그대로였다. 표시 순서가 곧 순번이어야 한다.
+      rank: i + 1,
       aptName: normalizeAptName(rec.aptName),
       lat: c?.lat ?? null,
       lng: c?.lng ?? null,
@@ -1450,7 +1414,7 @@ async function getAIRecommendations(userCondition) {
     const _big = withCoords.filter(r => !_isKnownSmall(r));
     if (_big.length >= 1 && _big.length !== withCoords.length) {
       logger.info({ before: withCoords.length, after: _big.length }, 'PropertyService HH-GATE(건축물대장 보강): 100세대 미만 제외');
-      finalRecs = _big;
+      finalRecs = _big.map((r, i) => ({ ...r, rank: i + 1 })); // RANK-SEQ: 게이트로 빠진 뒤에도 1부터 이어진다
     }
   }
 
@@ -1529,4 +1493,4 @@ function getStaticFallback(budget, region) {
 // TEST-EXPORT-2026-07-17 (Sprint XXXXX): computeLTV 는 순수 함수 — 특성화 테스트용 export 추가(동작 불변).
 // TEST-EXPORT-2026-09-02 (감사 P0-2): _applyFacilityToScore 도 순수 함수라 export 한다.
 //   "카카오 조회 실패(null)를 0 곳으로 채점하지 않는다" 를 **텍스트 검사 대신 실제 실행**으로 고정하기 위함.
-module.exports = { getAIRecommendations, pickRegions, computeLTV, buildJibunIndex, lookupByJibun, _applyFacilityToScore, _rankBroadRows, pickBroadRegionsByBudget };
+module.exports = { getAIRecommendations, pickRegions, computeLTV, buildJibunIndex, lookupByJibun, _applyFacilityToScore };

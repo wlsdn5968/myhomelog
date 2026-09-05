@@ -5840,94 +5840,6 @@ test('상세 첫 탭 — 실거래 요약이 기본, 점수 없으면 큰 CTA �
   assert.equal(/class="rg2"/.test(html), false, 'rg2 카드가 남아 평균가가 두 번 그려진다');
 });
 
-// ── REC-BROAD-2026-09-05 (운영자 실사고: "서울 6.5억"이 노원 74점 단지를 구조적으로 배제) ─────────────
-//   [실측 근거] 6.5억 밴드(0.55~1.05x)·최근 6개월 서울 분포: 노원 2,311건(1위)·도봉 947·구로 847·중랑 695·강서 599.
-//   종전 하드코딩(구로·금천·은평)은 1·2위를 통째로 버렸다 — '서울' 최고 60점대 vs 노원 직접 선택 74점의 원인.
-test('광역 검색 — 예산 밴드 분포 상위 구 선정(_rankBroadRows 실행) + 폴백 마커 배선', async () => {
-  const svc = require('../services/propertyService');
-
-  // ① 순수 랭커: 최다 구 순, 동수는 코드 오름차순, K 개 제한, 쓰레기 코드 무시
-  const rows = [
-    ...Array.from({ length: 30 }, () => ({ lawd_cd: '11350' })),
-    ...Array.from({ length: 12 }, () => ({ lawd_cd: '11320' })),
-    ...Array.from({ length: 12 }, () => ({ lawd_cd: '11530' })),
-    ...Array.from({ length: 5 }, () => ({ lawd_cd: '11260' })),
-    { lawd_cd: 'bad' }, { lawd_cd: null }, {},
-  ];
-  assert.deepEqual(svc._rankBroadRows(rows, 3).map(r => r.lawdCd), ['11350', '11320', '11530'],
-    '노원이 1위가 아니거나 동수 타이브레이크(코드 오름차순)가 깨졌다');
-  assert.equal(svc._rankBroadRows(rows, 3)[0].bandDeals, 30);
-
-  // ② 마커: 광역 브랜치는 _broad 접두를 단다(폴백 목록은 종전과 동일하게 유지)
-  const seoul65 = svc.pickRegions('서울', 6.5, '');
-  assert.equal(seoul65._broad, '11', "'서울' 이 _broad 마커를 잃었다 — 하드코딩 3구로 회귀");
-  assert.deepEqual(seoul65.map(r => r.lawdCd), ['11530', '11545', '11380'], '폴백 목록(종전 하드코딩)이 변했다');
-  assert.equal(svc.pickRegions('', 6.5, '')._broad, '11', '빈 지역(기본=서울)도 데이터 기반이어야 한다');
-  assert.equal(svc.pickRegions('인천', 5, '')._broad, '28');
-  assert.equal(svc.pickRegions('경기', 5, '')._broad, '41');
-  assert.equal(svc.pickRegions('노원', 6.5, '')._broad, undefined, '구를 직접 고른 검색까지 광역 확장하면 안 된다');
-  assert.equal(svc.pickRegions('경기', 6, '', '41597')._broad, undefined, 'lawdCd 명시 선택은 광역 확장 금지');
-
-  // ③ pickBroadRegionsByBudget 행위 — db/client 를 require.cache 스텁으로 갈아끼우고 실제 실행
-  const dbPath = require.resolve('../db/client');
-  const redisPath = require.resolve('../services/redisCache');
-  const saved = { db: require.cache[dbPath], redis: require.cache[redisPath] };
-  const calls = [];
-  const fakeRows = [
-    ...Array.from({ length: 40 }, () => ({ lawd_cd: '11350' })),
-    ...Array.from({ length: 30 }, () => ({ lawd_cd: '11320' })),
-    ...Array.from({ length: 20 }, () => ({ lawd_cd: '11530' })),
-    ...Array.from({ length: 15 }, () => ({ lawd_cd: '11260' })),
-    ...Array.from({ length: 10 }, () => ({ lawd_cd: '11500' })),
-    ...Array.from({ length: 8 }, () => ({ lawd_cd: '11380' })),
-  ];
-  const mkQ = (result) => {
-    const q = { _f: {} };
-    for (const m of ['select', 'gte', 'lte', 'order', 'eq']) q[m] = (...a) => { calls.push([m, ...a]); return q; };
-    q.limit = (n) => { calls.push(['limit', n]); return Promise.resolve(result); };
-    return q;
-  };
-  let dbResult = { data: fakeRows, error: null };
-  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: {
-    getSupabaseAdmin: () => ({ from: (t) => { calls.push(['from', t]); return mkQ(dbResult); } }),
-  } };
-  require.cache[redisPath] = { id: redisPath, filename: redisPath, loaded: true, exports: {
-    rget: async () => null, rset: async () => {},
-  } };
-  try {
-    const fb = [{ lawdCd: '11530', name: '구로구' }];
-    const top = await svc.pickBroadRegionsByBudget('11', 6.5, fb);
-    assert.deepEqual(top.map(r => r.lawdCd), ['11350', '11320', '11530', '11260', '11500'],
-      '예산 밴드 상위 5구가 아니다(노원·도봉이 앞이어야 한다)');
-    assert.equal(top[0].name, '노원구', 'LAWD_CODE_TO_NAME 매핑이 빠졌다');
-    // 밴드·기간·표본 상한이 쿼리에 실제로 걸렸는가 (설정이 사라지면 분포가 왜곡된다)
-    const flat = JSON.stringify(calls);
-    assert.ok(flat.includes('["gte","deal_amount",35750]'), '예산 하한(0.55x)이 빠졌다: ' + flat.slice(0, 200));
-    assert.ok(flat.includes('["lte","deal_amount",68250]'), '예산 상한(1.05x)이 빠졌다');
-    assert.ok(flat.includes('["limit",1000]'), '표본 상한 1000 이 빠졌다');
-    assert.ok(flat.includes('["gte","lawd_cd","11000"]') && flat.includes('["lte","lawd_cd","11999"]'), '접두 범위가 빠졌다');
-
-    // 표본 부족 → 폴백 (밴드에 거래가 거의 없는 예산이면 종전 목록이 낫다)
-    cacheDel('broadpick:v1:11:0.5');
-    dbResult = { data: fakeRows.slice(0, 10), error: null };
-    assert.deepEqual(await svc.pickBroadRegionsByBudget('11', 0.5, fb), fb, '표본 부족인데 폴백하지 않았다');
-    // 조회 오류 → 폴백
-    cacheDel('broadpick:v1:11:99');
-    dbResult = { data: null, error: { message: 'boom' } };
-    assert.deepEqual(await svc.pickBroadRegionsByBudget('11', 99, fb), fb, '조회 실패인데 폴백하지 않았다');
-  } finally {
-    if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
-    if (saved.redis) require.cache[redisPath] = saved.redis; else delete require.cache[redisPath];
-  }
-  function cacheDel(k) { try { require('../cache').del(k); } catch (_) { /* 캐시 미존재 무시 */ } }
-
-  // ④ 배선·캐시 계약(소스): 광역이면 slice(0,3) 대신 확장 경로, 캐시 키는 v24
-  const src = require('node:fs').readFileSync(require.resolve('../services/propertyService'), 'utf8');
-  assert.match(src, /if \(!_lawd && _picked\._broad && Number\(maxBudget\) > 0\) \{\s*targetRegions = await pickBroadRegionsByBudget/,
-    '광역 확장 배선이 끊겼다 — 서울이 다시 3구로 좁아진다');
-  assert.ok(src.includes('rec:v24:'), '캐시 키 버전이 v24 가 아니다 — 옛 3구 결과가 3시간 서빙된다');
-});
-
 // ── REC-RESOLVE-FALLBACK-2026-09-05 (벽산·동부골든: 추천 카드만 부실 facility) ──────────────────
 test('추천 kapt 미매칭 — BR 세대수로 끝내기 전에 resolveFacility(검증된 단건 매처)를 먼저 시도한다', () => {
   const src = require('node:fs').readFileSync(require.resolve('../services/propertyService'), 'utf8');
@@ -5952,4 +5864,127 @@ test('단지정보 탭 — /search/facility 응답이 있으면 추천 카드의
   assert.match(html.slice(i, i + 500),
     /p\._facilityRes && p\._facilityRes\.facility && p\._facilityRes\.facility\.kaptCode/,
     't6 이 _facilityRes(kaptCode 보유분)를 우선하지 않는다');
+});
+
+// ── REC-BROAD-ALL-2026-09-05 (운영자 재실사고: 5구 결과 vs 서울 25구 개별 조회 합집합 상위 15 = 2곳 겹침) ────
+//   같은 날 1차 수정(예산 밴드 상위 5구)도 정답을 놓쳤다. 광역은 그 시도의 모든 시군구를 본다.
+test('광역 검색 — 시도 전체 시군구를 본다(서울 25·인천·경기 전부) + 광역 모드 비용 통제 배선', () => {
+  const svc = require('../services/propertyService');
+  const { LAWD_CODES, RETIRED_LAWD_CODES } = require('../services/transactionService');
+  const cnt = (pfx) => new Set(Object.values(LAWD_CODES).map(String)
+    .filter(c => c.startsWith(pfx) && !RETIRED_LAWD_CODES.has(c))).size;
+  const seoul = svc.pickRegions('서울', 6.5, '');
+  assert.equal(seoul._broad, '11', "'서울' 이 _broad 마커를 잃었다");
+  assert.equal(seoul.length, cnt('11'), `서울 광역이 ${seoul.length}개 구만 본다(전체 ${cnt('11')})`);
+  assert.equal(seoul.length, 25, '서울은 25개 구다');
+  assert.ok(seoul.every(r => String(r.lawdCd).startsWith('11')), '서울 광역에 다른 시도 코드가 섞였다');
+  assert.ok(seoul.some(r => r.lawdCd === '11350') && seoul.some(r => r.lawdCd === '11680'), '노원·강남이 빠졌다');
+  assert.equal(new Set(seoul.map(r => r.lawdCd)).size, seoul.length, '코드 중복');
+  // 예산이 달라도 대상은 같다 — 예산으로 구를 고르는 발상이 결함이었다
+  assert.deepEqual(svc.pickRegions('서울', 3, '').map(r => r.lawdCd).sort(), seoul.map(r => r.lawdCd).sort(),
+    '예산에 따라 서울 대상 구가 달라진다(하드코딩·밴드 선정 회귀)');
+  assert.equal(svc.pickRegions('', 6.5, '').length, cnt('11'), '빈 지역(기본=서울)도 전체여야 한다');
+  const inc = svc.pickRegions('인천', 5, '');
+  assert.equal(inc._broad, '28'); assert.equal(inc.length, cnt('28'), '인천 광역이 전체가 아니다');
+  assert.ok(inc.every(r => !RETIRED_LAWD_CODES.has(r.lawdCd)), '폐지 코드에 빈 조회를 던진다');
+  const gg = svc.pickRegions('경기', 5, '');
+  assert.equal(gg._broad, '41'); assert.equal(gg.length, cnt('41'), '경기 광역이 전체가 아니다');
+  assert.equal(svc.pickRegions('노원', 6.5, '')._broad, undefined, '구를 직접 고른 검색까지 광역 확장하면 안 된다');
+  assert.equal(svc.pickRegions('경기', 6, '', '41597')._broad, undefined, 'lawdCd 명시 선택은 광역 확장 금지');
+  assert.equal(svc.pickRegions('서울 노원구', 6.5, '').length, 1, '세부 구 문자열이 광역으로 새면 안 된다');
+  assert.equal(typeof svc.pickBroadRegionsByBudget, 'undefined', '예산 밴드 구 선정 코드가 남아 있다(죽은 코드)');
+
+  const src = require('node:fs').readFileSync(require.resolve('../services/propertyService'), 'utf8');
+  assert.match(src, /const _broadMode = !_lawd && !!_picked\._broad;/, '광역 모드 판정이 없다');
+  assert.match(src, /const targetRegions = \(_lawd \|\| _broadMode\) \? _picked : _picked\.slice\(0, 3\);/,
+    '광역이 slice(0,3)에 잘린다 — 서울이 다시 3구가 된다');
+  assert.match(src, /_broadMode \? Promise\.resolve\(\[\]\) : getAptListBySgg\(r\.lawdCd\)/,
+    '광역 모드에서 라이브 KAPT 목록(지역당 최대 10페이지 외부 호출)을 생략하지 않는다');
+  assert.match(src, /\?\? \(_broadMode \? \[\] : await getTransactionsByApt\(r\.lawdCd, ''\)\)/,
+    '광역 모드에서 MOLIT 월별 API 폴백(지역당 6콜)을 막지 않는다');
+  assert.ok(!src.includes('pickBroadRegionsByBudget('), '예산 밴드 구 선정 호출이 남아 있다');
+  assert.ok(src.includes('rec:v25:'), '캐시 키 버전이 v25 가 아니다 — 옛 5구 결과가 3시간 서빙된다');
+});
+
+// ── BUDGET-CAP-2026-09-05 (운영자 "6.5억인데 6.8억이 나온다") ──────────────────────────────
+test('추천 예산 상한 — 대표가격이 예산 이하인 단지만(5% 여유 제거)', () => {
+  const src = require('node:fs').readFileSync(require.resolve('../services/propertyService'), 'utf8');
+  assert.match(src, /const budgetMaxMan = maxBudget \* 10000;/, '예산 상한이 1.0x 가 아니다');
+  assert.ok(!/budgetMaxMan = maxBudget \* 10000 \* 1\.05/.test(src), '5% 여유가 되살아났다 — 6.5억 검색에 6.8억이 실린다');
+  assert.match(src, /p\.avgPrice <= budgetMaxMan && p\.avgPrice >= budgetMinMan/, '표시값(avgPrice) 기준 예산 필터가 사라졌다');
+});
+
+// ── REC-RANK-PROV-2026-09-05 (후보 컷을 거래 건수순 → 검증 티어·임시 점수순) ──────────────────
+test('추천 후보 컷 — 거래 건수가 아니라 임시 점수(검증된 세대수 우선)로 RANK_N 을 고른다 + rank 순번 재부여', () => {
+  const src = require('node:fs').readFileSync(require.resolve('../services/propertyService'), 'utf8');
+  assert.ok(!/_score: a\.dealCount \* 10 \+ \(a\.buildYear \|\| 1990\) \* 0\.01/.test(src),
+    '거래 건수 가중 컷이 되살아났다 — 거래가 적은 역세권·중대단지가 채점도 못 받는다');
+  assert.match(src, /const prov = _applyFacilityToScore\(_calcBaseScore\(a\), fac, null\)\.total;/, '임시 점수 계산이 없다');
+  assert.match(src, /\(Number\(y\._verified\) - Number\(x\._verified\)\)\s*\|\| \(y\._score - x\._score\)/,
+    '검증 티어 → 임시 점수 정렬이 아니다');
+  assert.match(src, /_verified: x\.hh != null && x\.hh >= 100/, '검증 티어 판정(확인된 100세대 이상)이 없다');
+  assert.match(src, /\|\| lookupByJibun\(_jIdx, apt\) \|\| null;/, 'TRUST+HH 게이트의 코드 매칭에 지번 폴백이 없다');
+  // rank 는 표시 순서다(라이브 실측: 5·22·20·29… 로 보였다)
+  const wc = src.indexOf('const withCoords = enrichedRecs.map((rec, i) => {');
+  assert.ok(wc > 0, 'withCoords 조립이 사라졌다');
+  assert.match(src.slice(wc, wc + 700), /rank: i \+ 1,/, 'withCoords 에서 rank 를 재부여하지 않는다');
+  assert.match(src, /finalRecs = _big\.map\(\(r, i\) => \(\{ \.\.\.r, rank: i \+ 1 \}\)\);/, '최종 HH 게이트 뒤 순번이 비어 보인다');
+  assert.match(src, /else if \(totalHouseholds > 0 && totalHouseholds < 100\) moreTags\.push\('소규모'\);/, '소규모 태그가 없다');
+});
+
+// ── FAC-BATCH-CHUNK-2026-09-05 ──────────────────────────────────────────────────
+test('facility 배치 조회 — 150개 청크로 나눠 병렬 조회하고 결과를 합친다(URL 한계·1000행 컷 회피)', async () => {
+  const dbPath = require.resolve('../db/client');
+  const facPath = require.resolve('../services/aptFacilityService');
+  const saved = { db: require.cache[dbPath], fac: require.cache[facPath] };
+  const calls = [];
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: {
+    getSupabaseAdmin: () => ({ from: () => ({ select: () => ({ in: (col, codes) => {
+      calls.push(codes.length);
+      return Promise.resolve({ data: codes.map(c => ({ kapt_code: c, facility: { kaptdaCnt: '500' } })), error: null });
+    } }) }) }),
+  } };
+  try {
+    delete require.cache[facPath];
+    const { getFacilitiesByKaptCodes } = require('../services/aptFacilityService');
+    const codes = Array.from({ length: 400 }, (_, i) => 'A' + String(i).padStart(8, '0'));
+    const m = await getFacilitiesByKaptCodes(codes.concat(codes.slice(0, 5)));
+    assert.deepEqual(calls, [150, 150, 100], '청크 분할이 150/150/100 이 아니다: ' + JSON.stringify(calls));
+    assert.equal(m.size, 400, '청크 결과 병합이 깨졌다');
+  } finally {
+    if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
+    if (saved.fac) require.cache[facPath] = saved.fac; else delete require.cache[facPath];
+  }
+});
+
+// ── HH-FLOOR-2026-09-05 ─────────────────────────────────────────────────────────
+test('회전율 — 100세대 미만은 분모를 100으로 올려 잰다(17세대 2건이 만점이 되지 않는다)', () => {
+  const bands = require('../utils/scoreBands');
+  const tiny = bands.turnoverScore(2, 17, 14);
+  assert.equal(tiny.score, bands.turnoverScore(2, 100, 14).score, '17세대 2건이 100세대 2건과 다르게 채점된다');
+  assert.ok(tiny.score < 14, '17세대 2건(11.8%)이 회전율 만점이다');
+  assert.match(tiny.why, /100세대 기준 환산/, '환산 사실을 밝히지 않는다');
+  assert.ok(tiny.why.includes('17세대'), '실제 세대수를 숨긴다');
+  assert.equal(bands.turnoverScore(43, 1226, 14).why, '6개월 회전율 3.5% (43건 / 1226세대)', '100세대 이상 문구가 달라졌다');
+});
+
+// ── REPORT-CANDIDATE-2026-09-05 (보고서 7곳 중 6곳이 n=2 소형 건물) ─────────────────────────
+test('보고서 후보 — 표본 3건 우선 + 후보 컷 24 + 최종 정렬(예산 이하 → 세대수 확인 → 점수)', () => {
+  const src = require('node:fs').readFileSync(require.resolve('../routes/report'), 'utf8');
+  assert.match(src, /const REPORT_PRECUT = 24;/, '후보 컷 상수가 없다');
+  assert.match(src, /pool = _n3\.length >= REPORT_PRECUT \? _n3 : pool\.filter\(a => a\.n >= 2\);/, '표본 3건 우선 규칙이 없다');
+  assert.ok(!src.includes('Math.min(limit * 3, 20)'), '옛 20개 컷이 남아 있다');
+  assert.match(src, /out\.sort\(\(a, b\) => \(Number\(_inBudget\(b\)\) - Number\(_inBudget\(a\)\)\)\s*\|\| \(Number\(_verified\(b\)\) - Number\(_verified\(a\)\)\)\s*\|\| \(b\.score - a\.score\)\);/,
+    '최종 정렬이 예산 이하 → 세대수 확인 → 점수 순이 아니다');
+  assert.match(src, /const _verified = \(c\) => Number\.isFinite\(c\.households\) && c\.households >= 100;/, '세대수 확인 판정이 없다');
+  assert.match(src, /const _inBudget = \(c\) => Number\.isFinite\(_priceOf\(c\)\) && _priceOf\(c\) <= ctx\.buy \* 10000;/, '예산 이하 판정이 없다');
+});
+
+// ── BROAD-META-2026-09-05 ──────────────────────────────────────────────────────
+test('분석 지역 안내 — 광역 검색은 시군구 이름을 나열하지 않고 "전체 N개 시군구" 로 말한다', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  assert.match(html, /const _regionLabel = \(regs\) => \{/, '지역 라벨 헬퍼가 없다');
+  assert.match(html, /전체 \$\{regs\.length\}개 시군구/, '광역 라벨이 "전체 N개 시군구" 가 아니다');
+  assert.ok(!html.includes('전체 중 예산에 맞는 구를 골라 분석했어요'), '옛 안내("예산에 맞는 구를 골라")가 남아 있다 — 사실과 다르다');
+  assert.match(html, /전체 \$\{searchMeta\.regions\.length\}개 시군구를 분석했어요/, '광역 안내 문구가 없다');
 });

@@ -651,14 +651,23 @@ async function getFacilitiesByKaptCodes(kaptCodes) {
   const a = admin();
   if (!a || !Array.isArray(kaptCodes) || !kaptCodes.length) return new Map();
   try {
-    const { data, error } = await a
+    // FAC-BATCH-CHUNK-2026-09-05: 광역 전수(REC-BROAD-ALL)에서 코드가 수백~천 단위로 온다. `.in()` 하나에
+    //   다 넣으면 URL 길이 한계(수 KB)에 걸리고, 1,000행 넘는 응답은 조용히 잘린다([[postgrest-silent-row-cap]]).
+    //   150개씩 나눠 병렬 조회하면 둘 다 원리적으로 피한다(청크당 최대 150행).
+    const CHUNK = 150;
+    const uniq = [...new Set(kaptCodes.filter(Boolean))];
+    const chunks = [];
+    for (let i = 0; i < uniq.length; i += CHUNK) chunks.push(uniq.slice(i, i + CHUNK));
+    const pages = await Promise.all(chunks.map((codes) => a
       .from('apt_master')
       .select('kapt_code, facility')
-      .in('kapt_code', kaptCodes);
-    if (error) throw error;
+      .in('kapt_code', codes)));
     const m = new Map();
-    for (const r of (data || [])) {
-      if (r.facility && !r.facility._empty) m.set(r.kapt_code, r.facility);
+    for (const { data, error } of pages) {
+      if (error) throw error;
+      for (const r of (data || [])) {
+        if (r.facility && !r.facility._empty) m.set(r.kapt_code, r.facility);
+      }
     }
     return m;
   } catch (e) {

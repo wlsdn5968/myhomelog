@@ -1542,7 +1542,14 @@ async function fetchCandidateApts(admin, input, limit) {
   //   별도 단지처럼 보고서에 오르는 유일한 채널.
   //   LLLLLL-2: **무조건 배제** — 배포 검증에서 '후보 부족 시 완화'가 게이트를 무력화(성동 후보 4개 → 1건짜리
   //   복귀) 실측. 표본 1은 어떤 경우에도 부적격 — 0건이면 기존 인접 구 확장/빈 결과 안내가 정직한 처리.
-  pool = pool.filter(a => a.n >= 2);
+  // SAMPLE-3-2026-09-05: 대표가격 표본 3건 미만은 시세가 아니라 개별 사례다(추천 MIN_PRIMARY_N 과 같은 기준).
+  //   [실측] 서울 6.5억 보고서 7곳 중 6곳이 n=2 소형 건물(골드하임(101동)·하이브·길동3차이룸…)이었다.
+  //   3건 이상이 후보 컷(REPORT_PRECUT)을 채울 만큼 있으면 그쪽만, 부족하면 종전 2건 기준으로 채운다.
+  const REPORT_PRECUT = 24; // 종전 min(limit*3, 20) — 표본·세대수·예산 게이트 뒤에도 limit 를 채우도록 넓힌다
+  {
+    const _n3 = pool.filter(a => a.n >= 3);
+    pool = _n3.length >= REPORT_PRECUT ? _n3 : pool.filter(a => a.n >= 2);
+  }
 
   // Phase 9: 다양성 강제 제거 — 한 구에 몰려도 OK. 사용자 의도: "최적 매물 우선"
   //   상위 limit*2 개 후보를 KAPT 호출 대상으로 (API 호출 비용 절감)
@@ -1554,7 +1561,7 @@ async function fetchCandidateApts(admin, input, limit) {
     logger.warn({ region, pool_size: pool.length },
       '후보 풀 부족 — 인접 구 확장 권장 (사용자에 안내)');
   }
-  let out = pool.slice(0, Math.min(limit * 3, 20)); // LLLLLL: HH-GATE 재할당 위해 let
+  let out = pool.slice(0, REPORT_PRECUT); // LLLLLL: HH-GATE 재할당 위해 let
 
   // Phase 6+ (2026-04-26): KAPT API 통합 — 선정된 N개 단지만 facility 병렬 fetch
   //   resolveFacility() 가 ILIKE 토큰 매칭 + KAPT API + DB 캐시 (90일) 다 처리.
@@ -1864,7 +1871,16 @@ async function fetchCandidateApts(admin, input, limit) {
     }
   }
   // Phase 9: 객관 점수 (universal preference) 적용 후 최종 정렬
-  out.sort((a, b) => b.score - a.score);
+  // VERIFIED-TIER-2026-09-05: 최종 limit 곳은 ① 대표가격이 예산 이하 ② 세대수 확인(KAPT·건축물대장 100세대 이상)
+  //   순으로 앞세우고 그 안에서 점수순. 예산 초과·미확인은 앞 티어가 limit 를 못 채울 때만 내려온다(빈 보고서보다 낫다).
+  //   ⚠ 미확인을 소형으로 단정해 배제하는 게 아니다([[unknown-treated-as-value]]) — 확인된 후보가 있을 때
+  //     확인된 것을 먼저 보여주는 정렬이다. 예산 판정 값은 화면과 같은 기준(avgPriceFull, 없으면 avgPrice).
+  const _priceOf = (c) => (c.avgPriceFull > 0 ? c.avgPriceFull : c.avgPrice);
+  const _inBudget = (c) => Number.isFinite(_priceOf(c)) && _priceOf(c) <= ctx.buy * 10000;
+  const _verified = (c) => Number.isFinite(c.households) && c.households >= 100;
+  out.sort((a, b) => (Number(_inBudget(b)) - Number(_inBudget(a)))
+    || (Number(_verified(b)) - Number(_verified(a)))
+    || (b.score - a.score));
   const finalOut = out.slice(0, limit);
   finalOut.forEach((c, i) => { c.rank = i + 1; });
 
