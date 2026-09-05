@@ -20,6 +20,33 @@ const MOLIT_RENT_URL =
 // MOLIT API 성공 코드: '00'(구버전) 또는 '000'(신버전)
 const MOLIT_OK_CODES = new Set(['00', '000']);
 
+// RENT-PACE-2026-09-05 (프로덕션 로그 실측 2026-09-05 12:46Z): 보고서가 14개 구 × 6개월을 동시에 조회해 국토부
+//   초당 한도(HTTP 429 code=23)가 다발 — 노원·양천·강동·성북·은평·영등포는 6개월 중 4개월을 잃고 전세가율을
+//   "남은 달로만" 계산했다(구별 CONC=2 는 한 구 안에서만 제한했고, 구가 여러 개면 곱으로 튄다).
+//   → 프로세스 공용 페이서: 어떤 호출 경로든 국토부 전월세 요청의 **시작 시각** 간격을 RENT_MIN_GAP_MS 이상으로.
+//     요청 자체는 겹쳐도 되며(응답 대기 중 다음 요청 시작 가능) 초당 시작 횟수만 상한이 걸린다.
+//   기본 350ms(≈2.9회/초): 건축HUB 실측(9회/초 실패 · 1.3회/초 성공)과 종전 CONC=2 단일 구 성공 사이의 보수값.
+//   같은 (구,월) 동시 조회는 한 번만 나가도록 인플라이트 프라미스를 공유한다(분석탭·보고서가 겹칠 때 중복 콜 제거).
+const RENT_MIN_GAP_MS = (() => {
+  const v = parseInt(process.env.RENT_MIN_GAP_MS, 10);
+  return Number.isFinite(v) && v >= 0 ? v : 350;
+})();
+const _pace = { chain: Promise.resolve(), last: 0 };
+async function _paced(fn) {
+  const slot = _pace.chain.then(async () => {
+    const wait = _pace.last + RENT_MIN_GAP_MS - Date.now();
+    if (wait > 0) await new Promise(r => setTimeout(r, wait));
+    _pace.last = Date.now();
+  });
+  _pace.chain = slot.catch(() => { /* 예약 단계는 실패하지 않지만 체인이 끊기지 않게 */ });
+  await slot;
+  return fn();
+}
+const _inflight = new Map(); // cacheKey → Promise (같은 (구,월) 동시 조회 병합)
+// 국토부 JSON 은 숫자처럼 보이는 값을 숫자로 내려준다 — 단지명 '101' 이 number 로 와서 .trim() 이 TypeError 를 내고
+// 그 달 전체가 유실됐다(영등포 202608·202606 실측). 항상 문자열로 정규화한다.
+const _str = (v) => (v == null ? '' : String(v)).trim();
+
 function isMolitKeyMissing() {
   const key = process.env.MOLIT_API_KEY;
   return !key || key === 'your_molit_api_key';
@@ -31,6 +58,16 @@ function isMolitKeyMissing() {
  *   - cdealType 해제 거래 제외 — 네이버와 시세 불일치 원인 차단.
  */
 async function getRentTransactions(lawdCd, dealYm) {
+  const key = `rent:${lawdCd}:${dealYm}`;
+  const hit = cache.get(key);
+  if (hit !== undefined) return hit || [];
+  if (_inflight.has(key)) return _inflight.get(key);
+  const p = _fetchRentMonth(lawdCd, dealYm).finally(() => _inflight.delete(key));
+  _inflight.set(key, p);
+  return p;
+}
+
+async function _fetchRentMonth(lawdCd, dealYm) {
   if (isMolitKeyMissing()) {
     const err = new Error('MOLIT API 키 미설정');
     err.code = 'MOLIT_KEY_MISSING';
@@ -54,7 +91,7 @@ async function getRentTransactions(lawdCd, dealYm) {
     let cancelledCount = 0;
 
     for (let pageNo = 1; pageNo <= MAX_PAGES; pageNo++) {
-      const _fetch = () => dgk.get(MOLIT_RENT_URL, { // RELAY (Sprint BBBBBBB)
+      const _fetch = () => _paced(() => dgk.get(MOLIT_RENT_URL, { // RELAY (Sprint BBBBBBB) · 페이서 경유(RENT-PACE)
         params: {
           serviceKey: process.env.MOLIT_API_KEY,
           LAWD_CD: lawdCd,
@@ -65,7 +102,7 @@ async function getRentTransactions(lawdCd, dealYm) {
         },
         timeout: 10000,
         headers: { Accept: 'application/json' },
-      });
+      }));
       // RENT-429-RETRY-2026-08-12 (Sprint KKKKKKK-13): 국토부 게이트웨이 **초당** 요청 한도
       //   (HTTP 429 code=23, health 실측)는 다음 초에 자연 해제되는 순간 한도다. 그런데 종전엔
       //   429 도 일반 실패로 떨어져 이 (lawd,월)이 빈 배열로 5분 캐시됐다 — **일시 한도가
@@ -125,8 +162,8 @@ async function getRentTransactions(lawdCd, dealYm) {
         return true;
       })
       .map(item => ({
-        aptName: item.aptNm?.trim() || '',
-        umdNm: item.umdNm?.trim() || '',
+        aptName: _str(item.aptNm),
+        umdNm: _str(item.umdNm),
         excluUseAr: parseFloat(item.excluUseAr) || 0,
         floor: parseInt(item.floor) || 0,
         dealYear: parseInt(item.dealYear) || 0,
@@ -225,11 +262,16 @@ async function getJeonseByApt(lawdCd, aptName) {
       return { ...t, _convertedDeposit: convertedDeposit, _isHalfJeonse: !isJeonse };
     });
 
-  return filtered.sort((a, b) => {
+  const sorted = filtered.sort((a, b) => {
     const da = a.dealYear * 10000 + a.dealMonth * 100 + a.dealDay;
     const db = b.dealYear * 10000 + b.dealMonth * 100 + b.dealDay;
     return db - da;
   });
+  // 표본 메타: 몇 달이 빠졌는지 호출자가 알 수 있게 배열 속성으로 싣는다(JSON 직렬화엔 나가지 않는다).
+  //   "값이 틀렸다" 보다 "값이 왜 그런지 모른다" 가 더 나쁘다 — 보고서는 이 값으로 '표본 n/6개월' 을 적는다.
+  sorted.monthsTotal = months.length;
+  sorted.monthsFailed = _failedMonths.slice();
+  return sorted;
 }
 
 module.exports = { getRentTransactions, getJeonseByApt };

@@ -518,7 +518,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
       // 잘린 풀에서도 n 은 **하한**이라 '거래 활발'은 여전히 참이다(실제는 더 많다) → 유지.
       (_n >= 20) ? `${_span} 거래 ${_n}건 (거래 활발)` : null,
       f.builder ? `시공 ${f.builder}` : null,
-      f.jeonse_ratio ? `전세가율 ${f.jeonse_ratio} (회원님 평형대 전세 ${f.jeonse_sample}건)` : null, // Sprint KKKKK
+      f.jeonse_ratio ? `전세가율 ${f.jeonse_ratio} (회원님 평형대 전세 ${f.jeonse_sample}건${f.jeonse_months ? ` · 표본 ${f.jeonse_months}개월` : ''})` : null, // Sprint KKKKK · 표본 개월(JEONSE-FINAL)
     ].filter(Boolean).join(' · ');
     const cons = [
       (age != null && age >= 25) ? `준공 ${age}년차 — 수리·관리 상태 임장 확인 필요` : null,
@@ -1209,6 +1209,7 @@ function applyObjectiveScore(c, seoulRegulated = true, regulatedCodes = null) {
     // Sprint KKKKK: 전세가율 — 회원님 평형대 전세 실거래 중위 환산보증금 / 같은 평형대 매매 평균 (수치만)
     jeonse_ratio: c.jeonse ? `${c.jeonse.ratio}%` : null,
     jeonse_sample: c.jeonse ? c.jeonse.n : null,
+    jeonse_months: null, // JEONSE-FINAL 블록이 최종 후보에 대해 사후 기입(불완전 표본일 때 'n/6')
   };
 
   c.score = Math.round(c.score);
@@ -1705,49 +1706,9 @@ async function fetchCandidateApts(admin, input, limit) {
     logger.warn({ err: e.message }, 'Phase 8 좌표/amenities 일괄 처리 실패 — 객관 점수만으로 진행');
   }
 
-  // JEONSE-2026-07-14 (Sprint KKKKK): 후보별 전세가율 — 무료 MOLIT 전월세 실거래(getJeonseByApt).
-  //   ⚠ 후보별 개별 호출은 같은 구 후보 7개가 월별 캐시(rent:{lawd}:{ym}) 미스를 "동시에" 때려
-  //   MOLIT 콜이 7배 증폭(in-flight dedup 없음) → lawd 당 1회(getJeonseByApt(lawd, '') = 전체 목록)만
-  //   조회하고 단지명 필터는 여기서 수행. 콜드 시 구당 정확히 6콜(월별), 이후 24h 캐시.
-  //   분석탭(analysisService)과 동일 소스·동일 표본 임계(getJeonseReliability NONE: <4건 → 비노출).
-  //   회원님 평형대(±5㎡) 전세만 스코프 — 매매 avgPrice(같은 평형대)와 비교 정합.
-  //   절대룰: 수치 나열만(전세가율 %·표본수). 판단·전망·갭투자 서술 없음.
-  try {
-    const { getJeonseByApt } = require('../services/rentService');
-    const _lawds = [...new Set(out.map(c => c.lawd_cd).filter(Boolean))];
-    const _rentByLawd = new Map();
-    await Promise.all(_lawds.map(async (l) => {
-      try { _rentByLawd.set(l, await getJeonseByApt(l, '')); } // query '' → 전체 목록 (includes('') 항상 true)
-      catch (_) { _rentByLawd.set(l, []); }
-    }));
-    for (const c of out) {
-      if (!c.lawd_cd || !(c.avgPrice > 0)) continue;
-      const all = _rentByLawd.get(c.lawd_cd) || [];
-      const q = String(c.apt_name || '').replace(/\s/g, '');
-      if (!q) continue;
-      const areas = Array.isArray(c.areas) ? c.areas : [...(c.areas || [])];
-      // JEONSE-SCOPE-FIX-2026-07-15 (Sprint KKKKK-3, 라이브 '동신 9%' 실측 발각):
-      //   ① 순수 전세(monthlyRent=0)만 — 소액보증금 월세가 환산돼도 중위를 심하게 끌어내림(9% 왜곡).
-      //     라벨 '전세 N건'과도 정합. ② 2글자 이하 단지명은 정확 일치만 — '동신' includes 가
-      //     '당현천동신' 등 다른 단지 전세를 흡수하는 오병합 차단(KAPT-LOOKUP 短이름 가드와 동일 원칙).
-      const scoped = all.filter(t =>
-        t.monthlyRent === 0 &&
-        (q.length >= 3 ? t.aptName.replace(/\s/g, '').includes(q) : t.aptName.replace(/\s/g, '') === q) &&
-        areas.some(a => Math.abs((t.excluUseAr || 0) - a) <= 5));
-      if (scoped.length < 4) continue; // 표본 부족 — 분석탭 jeonseReliability NONE 관례와 동일
-      const deps = scoped.map(t => t._convertedDeposit || t.deposit || 0).filter(d => d > 0).sort((a, b) => a - b);
-      if (deps.length < 4) continue;
-      const med = deps[Math.floor(deps.length / 2)];
-      // PRICE-BASIS-2026-08-30: 분모도 표시 가격과 같은 기준이어야 한다 — 밴드로 잘린 평균을
-      //   분모로 쓰면 전세가율이 실제와 어긋난다(분자 전세는 밴드와 무관하므로 한쪽만 잘린 비율이 된다).
-      const _basis = (c.avgPriceFull > 0) ? c.avgPriceFull : c.avgPrice;
-      const ratio = Math.round((med / _basis) * 100);
-      if (ratio <= 0 || ratio > 130) continue; // 명백한 데이터 오류(면적 오매칭 등) 방어
-      c.jeonse = { medianDeposit: med, n: deps.length, ratio };
-    }
-  } catch (e) {
-    logger.warn({ err: e.message }, '전세가율 일괄 계산 실패 — 비노출로 진행');
-  }
+  // 전세가율 블록은 최종 선별(finalOut) 뒤로 옮겼다 — 아래 JEONSE-FINAL-2026-09-05 참조.
+  //   여기(컷 전 24곳)에서 조회하면 14개 구 × 6개월이 동시에 나가 국토부 초당 한도에 걸리고, 분모(avgPrice)도
+  //   아직 재집계 전 값이라 표시 가격과 기준이 달랐다.
 
   // ══ PRICE-BASIS-2026-08-30 (Sprint OOOOOOO, 운영자 "실거래가에도 안 맞고 평형대도 다 이상하다") ══
   //
@@ -1897,6 +1858,58 @@ async function fetchCandidateApts(admin, input, limit) {
   const finalOut = out.slice(0, limit);
   finalOut.forEach((c, i) => { c.rank = i + 1; });
 
+  // JEONSE-2026-07-14 (Sprint KKKKK) → JEONSE-FINAL-2026-09-05: 전세가율은 **최종 limit 곳**에 대해서만 조회한다.
+  //   [프로덕션 로그 실측 2026-09-05 12:46Z] 컷 전 24곳(14개 구)을 동시에 조회해 국토부 초당 한도(429)가 다발 →
+  //   노원·양천·강동·성북·은평·영등포가 6개월 중 4개월을 잃고 "남은 달로만" 전세가율을 냈다(로그에만 남고 화면엔 없었다).
+  //   최종 후보만 조회하면 구 수가 절반 이하로 줄고, rentService 의 공용 페이서(RENT_MIN_GAP_MS)가 초당 시작 횟수를 잡는다.
+  //   분모는 표시 가격과 같은 기준(avgPriceFull, PRICE-BASIS) — 종전엔 이 블록이 재집계 **앞**에 있어 밴드로 잘린
+  //   avgPrice 가 분모였다(분자 전세는 밴드와 무관 → 비율이 한쪽만 잘렸다).
+  //   lawd 당 1회(query '' = 전체 목록)만 조회하고 단지명 필터는 여기서 수행. 콜드 시 구당 6콜(월별), 이후 24h 캐시.
+  //   분석탭(analysisService)과 동일 소스·동일 표본 임계(getJeonseReliability NONE: <4건 → 비노출).
+  //   회원님 평형대(±5㎡) 전세만 스코프 — 매매 대표가격(같은 평형대)과 비교 정합.
+  //   절대룰: 수치 나열만(전세가율 %·표본수·표본 개월). 판단·전망·갭투자 서술 없음.
+  try {
+    const { getJeonseByApt } = require('../services/rentService');
+    const _lawds = [...new Set(finalOut.map(c => c.lawd_cd).filter(Boolean))];
+    const _rentByLawd = new Map();
+    await Promise.all(_lawds.map(async (l) => {
+      try { _rentByLawd.set(l, await getJeonseByApt(l, '')); } // query '' → 전체 목록 (includes('') 항상 true)
+      catch (_) { _rentByLawd.set(l, []); }
+    }));
+    for (const c of finalOut) {
+      if (!c.lawd_cd || !(c.avgPrice > 0)) continue;
+      const all = _rentByLawd.get(c.lawd_cd) || [];
+      const q = String(c.apt_name || '').replace(/\s/g, '');
+      if (!q) continue;
+      const areas = Array.isArray(c.areas) ? c.areas : [...(c.areas || [])];
+      // JEONSE-SCOPE-FIX-2026-07-15 (Sprint KKKKK-3, 라이브 '동신 9%' 실측 발각):
+      //   ① 순수 전세(monthlyRent=0)만 — 소액보증금 월세가 환산돼도 중위를 심하게 끌어내림(9% 왜곡).
+      //     라벨 '전세 N건'과도 정합. ② 2글자 이하 단지명은 정확 일치만 — '동신' includes 가
+      //     '당현천동신' 등 다른 단지 전세를 흡수하는 오병합 차단(KAPT-LOOKUP 短이름 가드와 동일 원칙).
+      const scoped = all.filter(t =>
+        t.monthlyRent === 0 &&
+        (q.length >= 3 ? t.aptName.replace(/\s/g, '').includes(q) : t.aptName.replace(/\s/g, '') === q) &&
+        areas.some(a => Math.abs((t.excluUseAr || 0) - a) <= 5));
+      if (scoped.length < 4) continue; // 표본 부족 — 분석탭 jeonseReliability NONE 관례와 동일
+      const deps = scoped.map(t => t._convertedDeposit || t.deposit || 0).filter(d => d > 0).sort((a, b) => a - b);
+      if (deps.length < 4) continue;
+      const med = deps[Math.floor(deps.length / 2)];
+      const _basis = (c.avgPriceFull > 0) ? c.avgPriceFull : c.avgPrice;
+      const ratio = Math.round((med / _basis) * 100);
+      if (ratio <= 0 || ratio > 130) continue; // 명백한 데이터 오류(면적 오매칭 등) 방어
+      const _tot = Number(all.monthsTotal) || 6;
+      const _failed = Array.isArray(all.monthsFailed) ? all.monthsFailed.length : 0;
+      c.jeonse = { medianDeposit: med, n: deps.length, ratio, monthsSampled: _tot - _failed, monthsTotal: _tot };
+      if (c.facts) { // facts 는 applyObjectiveScore 가 이미 만들었다(전세는 점수에 쓰이지 않으므로 사후 기입이 안전)
+        c.facts.jeonse_ratio = `${ratio}%`;
+        c.facts.jeonse_sample = deps.length;
+        c.facts.jeonse_months = _failed > 0 ? `${_tot - _failed}/${_tot}` : null;
+      }
+    }
+  } catch (e) {
+    logger.warn({ err: e.message }, '전세가율 일괄 계산 실패 — 비노출로 진행');
+  }
+
   // 진단 로그 — 운영자가 매칭 추적
   logger.info({
     region, priority: ctx.priority, pool_size: pool.length,
@@ -1942,7 +1955,7 @@ function buildReportPrompt(input, policy, candidates, freeCtx) {
       facts.regulation ? `규제: ${facts.regulation}` : null,
       // POOL-COVERAGE-2026-08-17: 신고가 갱신 횟수도 후보 풀 안에서 센 값이다 — 기간을 정확히 적는다.
       facts.new_high_count > 0 ? `${poolSpanLabel(c)} 신고가 ${facts.new_high_count}회 갱신` : null,
-      facts.jeonse_ratio ? `전세가율: ${facts.jeonse_ratio} (회원님 평형대 전세 ${facts.jeonse_sample}건 기준)` : null, // Sprint KKKKK
+      facts.jeonse_ratio ? `전세가율: ${facts.jeonse_ratio} (회원님 평형대 전세 ${facts.jeonse_sample}건 기준${facts.jeonse_months ? ` · 표본 ${facts.jeonse_months}개월` : ''})` : null, // Sprint KKKKK · 표본 개월(JEONSE-FINAL)
       amStr,
     ].filter(Boolean).join(' | ');
     return `${i + 1}. ${displayName} (${c.sigungu} ${c.umd_nm})

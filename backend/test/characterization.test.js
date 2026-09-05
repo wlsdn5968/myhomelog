@@ -6383,3 +6383,90 @@ test('보고서 행정구 위계 가점 — 객관 데이터(세대수 최대 30
   const b = (g, c) => getDistrictTier(g, c).bonus;
   assert.ok(b('강남구', '11680') > b('마포구', '11440') && b('마포구', '11440') > b('과천시', '41290') && b('과천시', '41290') > b('양천구', '11470') && b('양천구', '11470') > b('노원구', '11350') && b('노원구', '11350') > b('해운대구', '26350'), '위계 순서가 깨졌다');
 });
+
+// ── 결제 안내 스코프 (2026-09-05) ─────────────────────────────────────────────────
+test('billing.html — "PG 심사 진행 중" 안내는 서버 mode 차단(body.pg-blocked)일 때만, 표시의무 항목은 항상', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/billing.html'), 'utf8');
+  assert.match(html, /class="pg-blocked-only"[^>]*>⚠ 결제 시스템 준비 중/, '심사 안내 제목이 pg-blocked-only 스코프가 아니다');
+  assert.match(html, /class="pg-blocked-only"[^>]*>PG 가맹 심사가 완료되기 전까지 결제 처리를 받지 않습니다\./, '"결제 처리를 받지 않습니다" 문구가 스코프 밖이다(결제가 열려도 보인다)');
+  assert.match(html, /body:not\(\.pg-blocked\) \.pg-blocked-only \{ display:none \}/, '스코프 CSS 규칙이 없다');
+  assert.match(html, /<div(?: style="[^"]*")?>· 상호: <span id="bizName">/, '표시의무 항목(상호)이 조건부로 바뀌었다 — 항상 노출이어야 한다');
+  assert.doesNotMatch(html, /class="pg-blocked-only"[^>]*>· (상호|대표자|사업장 소재지|고객센터)/, '표시의무 항목이 pg-blocked-only 안에 들어갔다');
+});
+
+// ── 전세 조회 페이서·인플라이트 병합·숫자 단지명 (2026-09-05) ────────────────────────
+test('전세 실거래 조회 — 요청 시작 간격을 공용 페이서가 보장하고, 같은 (구,월) 동시 조회는 한 번만 나가며, 숫자 단지명에 죽지 않는다', async () => {
+  const dgkPath = require.resolve('../services/dataGoKrClient');
+  const rentPath = require.resolve('../services/rentService');
+  const saved = { dgk: require.cache[dgkPath], rent: require.cache[rentPath], key: process.env.MOLIT_API_KEY, gap: process.env.RENT_MIN_GAP_MS };
+  const starts = [];
+  const seen = [];
+  const failMonth = new Set();
+  const stub = {
+    get: async (url, cfg) => {
+      const ym = String(cfg.params.DEAL_YMD);
+      starts.push(Date.now());
+      seen.push(cfg.params.LAWD_CD + ':' + ym);
+      if (failMonth.has(ym)) { const e = new Error('boom'); e.response = { status: 500, data: {} }; throw e; }
+      return { status: 200, data: { response: { header: { resultCode: '000', resultMsg: 'OK' }, body: { totalCount: 2, items: { item: [
+        { aptNm: 101, umdNm: 202, excluUseAr: '84.9', floor: '3', dealYear: ym.slice(0, 4), dealMonth: String(Number(ym.slice(4))), dealDay: '1', deposit: '50,000', monthlyRent: '0' },
+        { aptNm: ' 상계주공 ', umdNm: '상계동', excluUseAr: '59.3', floor: '5', dealYear: ym.slice(0, 4), dealMonth: String(Number(ym.slice(4))), dealDay: '2', deposit: '30,000', monthlyRent: '0' },
+      ] } } } } };
+    },
+    _isBlockedPattern: () => false, _buildFullUrl: () => '', ALLOWED_HOSTS: new Set(),
+  };
+  process.env.MOLIT_API_KEY = 'xxxxxxxx-test-molit-key';
+  process.env.RENT_MIN_GAP_MS = '60';
+  require.cache[dgkPath] = { id: dgkPath, filename: dgkPath, loaded: true, exports: stub };
+  const cache = require('../cache');
+  try {
+    delete require.cache[rentPath];
+    const { getJeonseByApt, getRentTransactions } = require('../services/rentService');
+    // ① 6개월 조회 — 시작 간격 ≥ 페이서(60ms 설정 → 50ms 이상으로 관대하게 판정)
+    const rows = await getJeonseByApt('99981', '');
+    assert.equal(seen.filter(s => s.startsWith('99981:')).length, 6, '월별 6회가 아니다');
+    const gaps = starts.slice(1).map((t, i) => t - starts[i]);
+    assert.ok(gaps.every(g => g >= 50), '요청 시작 간격이 페이서 미만이다: ' + JSON.stringify(gaps));
+    assert.ok(rows.some(r => r.aptName === '101' && r.umdNm === '202'), '숫자 단지명·동명이 문자열로 파싱되지 않았다(종전 aptNm.trim 타입 오류로 그 달 전체 유실)');
+    assert.ok(rows.some(r => r.aptName === '상계주공'), '공백 트림이 깨졌다');
+    assert.equal(rows.monthsTotal, 6, '표본 개월 메타가 없다');
+    assert.deepEqual(rows.monthsFailed, [], '실패 달이 없는데 메타에 있다');
+    // ② 같은 (구,월) 동시 조회 → 업스트림 1회
+    starts.length = 0; seen.length = 0;
+    const [a, b] = await Promise.all([getRentTransactions('99982', '202601'), getRentTransactions('99982', '202601')]);
+    assert.equal(seen.length, 1, '인플라이트 병합이 안 돼 같은 달을 두 번 조회했다: ' + JSON.stringify(seen));
+    assert.equal(a.length, 2); assert.equal(b.length, 2);
+    // ③ 한 달이 실패하면 그 달만 빠지고 메타에 남는다
+    seen.length = 0;
+    const months = [];
+    { const now = new Date(); for (let i = 0; i < 6; i++) { const d = new Date(now.getFullYear(), now.getMonth() - i, 1); months.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`); } }
+    failMonth.add(months[2]);
+    const rows3 = await getJeonseByApt('99983', '');
+    assert.deepEqual(rows3.monthsFailed, [months[2]], '실패한 달이 메타에 남지 않는다');
+    assert.equal(rows3.length, 10, '실패 달만 빠져야 한다(5개월 × 2건)');
+  } finally {
+    for (const k of cache.keys()) if (/^rent:9998[123]:/.test(k)) cache.del(k);
+    if (saved.dgk) require.cache[dgkPath] = saved.dgk; else delete require.cache[dgkPath];
+    if (saved.rent) require.cache[rentPath] = saved.rent; else delete require.cache[rentPath];
+    if (saved.key === undefined) delete process.env.MOLIT_API_KEY; else process.env.MOLIT_API_KEY = saved.key;
+    if (saved.gap === undefined) delete process.env.RENT_MIN_GAP_MS; else process.env.RENT_MIN_GAP_MS = saved.gap;
+  }
+});
+
+test('보고서 전세가율 — 최종 limit 곳에 대해서만 조회하고(컷 전 24곳·14개 구 동시 조회가 429 를 불렀다), 분모는 재집계 뒤 가격, 표본 개월을 적는다', () => {
+  const rpt = require('node:fs').readFileSync(require.resolve('../routes/report'), 'utf8');
+  const iFinal = rpt.indexOf('const finalOut = out.slice(0, limit);');
+  const iJeonse = rpt.indexOf('getJeonseByApt');
+  assert.ok(iFinal > 0 && iJeonse > iFinal, '전세가율 조회가 최종 선별 앞에 있다(후보 24곳 전부를 조회한다)');
+  assert.match(rpt, /_lawds = \[\.\.\.new Set\(finalOut\.map\(c => c\.lawd_cd\)\.filter\(Boolean\)\)\]/, '전세 조회 대상이 finalOut 이 아니다');
+  const iBasis = rpt.indexOf('c.avgPriceFull = stats[0].avg;');
+  assert.ok(iBasis > 0 && iJeonse > iBasis, '전세가율 분모가 대표평형 재집계(avgPriceFull) 앞에서 계산된다 — 밴드로 잘린 평균이 분모가 된다');
+  assert.ok((rpt.match(/jeonse_months/g) || []).length >= 3, '표본 개월(jeonse_months)이 facts·장점·프롬프트에 실리지 않는다');
+});
+
+test('.env.example 게이트 — Vercel 자동 주입 변수 VERCEL_BRANCH_URL 은 플랫폼 제공으로 분류된다(CI #911 실패 원인)', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../scripts/check-env-example.js'), 'utf8');
+  assert.match(src, /'VERCEL_BRANCH_URL',/, 'PLATFORM_PROVIDED 에 VERCEL_BRANCH_URL 이 없다');
+  const ex = require('node:fs').readFileSync(require('node:path').join(__dirname, '../.env.example'), 'utf8');
+  assert.match(ex, /^RENT_MIN_GAP_MS=/m, 'RENT_MIN_GAP_MS 자리표시자가 .env.example 에 없다');
+});

@@ -176,21 +176,21 @@
 
   <!-- 전자상거래법 제10조·제13조 표시의무사항 — BIZ-INFO-2026-08-09: 사업자등록 완료 실값 반영
        (주소는 운영자 결정에 따라 도로명까지 공개 · 연락처는 이메일 우선. 통신판매업 신고번호는 발급 시 갱신) -->
-  <div class="card" style="margin-top:14px;background:#FFF6E6;border:2px solid #F0D6A2;font-size:11px;color:var(--t2);line-height:1.7">
-    <div style="font-weight:700;color:#7A4F0E;margin-bottom:6px">⚠ 결제 시스템 준비 중 (전자결제 PG 가맹 심사 진행 중)</div>
-    <div>사업자 등록은 완료되었으며, PG 가맹 심사 완료 후 결제가 활성화됩니다. 출시 알림을 받으시려면 <a href="mailto:wlsdn5968@gmail.com?subject=출시 알림 신청" style="color:var(--t1);text-decoration:underline;text-decoration-color:var(--acc)">wlsdn5968@gmail.com</a> 으로 메일 주세요.</div>
+  <div class="card" id="bizInfoCard" style="margin-top:14px;background:#FFF6E6;border:2px solid #F0D6A2;font-size:11px;color:var(--t2);line-height:1.7">
+    <div class="pg-blocked-only" style="font-weight:700;color:#7A4F0E;margin-bottom:6px">⚠ 결제 시스템 준비 중 (전자결제 PG 가맹 심사 진행 중)</div>
+    <div class="pg-blocked-only">사업자 등록은 완료되었으며, PG 가맹 심사 완료 후 결제가 활성화됩니다. 출시 알림을 받으시려면 <a href="mailto:wlsdn5968@gmail.com?subject=출시 알림 신청" style="color:var(--t1);text-decoration:underline;text-decoration-color:var(--acc)">wlsdn5968@gmail.com</a> 으로 메일 주세요.</div>
     <div style="margin-top:8px">· 상호: <span id="bizName">공명랩</span> (서비스명: 내집로그)</div>
     <div>· 대표자: 우진우</div>
     <div>· 사업자등록번호: 381-08-03668</div>
     <div>· 사업장 소재지: 서울특별시 노원구 섬밭로 139</div>
     <div>· 통신판매업 신고: 절차 진행 중 (부가가치세법상 간이과세자 — 신고면제 기준 해당)</div>
     <div>· 고객센터: <a href="mailto:wlsdn5968@gmail.com" style="color:var(--t1);text-decoration:underline;text-decoration-color:var(--acc)">wlsdn5968@gmail.com</a> (이메일 우선 응대)</div>
-    <div style="margin-top:8px;color:var(--t3);font-size:10px">PG 가맹 심사가 완료되기 전까지 결제 처리를 받지 않습니다.</div>
+    <div class="pg-blocked-only" style="margin-top:8px;color:var(--t3);font-size:10px">PG 가맹 심사가 완료되기 전까지 결제 처리를 받지 않습니다.</div>
   </div>
 </div>
 
-<!-- P0 (2026-04-25→2026-08-09 갱신): PG 가맹 심사 완료(live 키 수령) 전까지 결제 버튼 강제 비활성화 -->
-<!-- BIZ-INFO-2026-08-09: 사업자등록은 완료 — 이 블록은 토스페이먼츠 live_ck/live_sk 발급 후 제거 -->
+<!-- PG-NOTICE-SCOPE-2026-09-05: "심사 진행 중" 안내(.pg-blocked-only)와 카드 경고색은 body.pg-blocked 일 때만 —
+     서버 /billing/config 의 mode 가 test/live 로 열리면 코드 수정 없이 사라진다(종전 TODO "live 키 발급 후 제거" 대체). 표시의무 항목은 항상 노출. -->
 
 <style>
   /* PG-MODE-2026-08-28: 종전엔 이 규칙이 무조건 적용돼 키를 넣어도 버튼이 죽어 있었다.
@@ -205,6 +205,9 @@
   #pgTestBanner { display:none; background:#FFF4CC; border:2px solid #E9C46A; color:#7A5B00;
     border-radius:10px; padding:10px 12px; font-size:12px; font-weight:700; line-height:1.6; margin-bottom:12px }
   body.pg-test #pgTestBanner { display:block }
+  /* 결제가 열린 상태(pg-blocked 해제)에서는 심사 안내를 숨기고 카드 경고색을 푼다 — 표시의무 항목은 그대로 */
+  body:not(.pg-blocked) .pg-blocked-only { display:none }
+  body:not(.pg-blocked) #bizInfoCard { background:var(--bg2) !important; border-color:transparent !important }
 </style>
 <script>
   // PG-LAUNCH-GATE-2026-08-20 (전수검증 코드 대조): 종전 window.startCheckout 오버라이드 스텁은 뒤에 오는
