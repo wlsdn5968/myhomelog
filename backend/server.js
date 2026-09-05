@@ -135,6 +135,16 @@ app.use(helmet({
 
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || 'http://localhost:5173')
   .split(',').map(o => o.trim());
+// PREVIEW-CORS-2026-09-05: 프리뷰 배포는 호스트가 매번 달라 ALLOWED_ORIGINS 에 있을 수 없다 — 그래서 프리뷰
+//   페이지의 **자기 출처** POST 가 500(CORS 차단)으로 죽었고, 배포 전 실측이 불가능했다(라이브 실측:
+//   /api/properties/recommend 500 · "CORS 차단: 허용되지 않은 출처"). 프리뷰 환경에서만 Vercel 이 주입하는
+//   자기 호스트(VERCEL_URL·VERCEL_BRANCH_URL)를 허용한다. 와일드카드가 아니라 그 배포의 호스트 둘뿐이고,
+//   프로덕션(VERCEL_ENV=production)에서는 아무것도 바뀌지 않는다.
+if (process.env.VERCEL_ENV === 'preview') {
+  for (const h of [process.env.VERCEL_URL, process.env.VERCEL_BRANCH_URL]) {
+    if (h && !allowedOrigins.includes(`https://${h}`)) allowedOrigins.push(`https://${h}`);
+  }
+}
 
 app.use(cors({
   origin: (origin, cb) => {

@@ -5988,3 +5988,13 @@ test('분석 지역 안내 — 광역 검색은 시군구 이름을 나열하지
   assert.ok(!html.includes('전체 중 예산에 맞는 구를 골라 분석했어요'), '옛 안내("예산에 맞는 구를 골라")가 남아 있다 — 사실과 다르다');
   assert.match(html, /전체 \$\{searchMeta\.regions\.length\}개 시군구를 분석했어요/, '광역 안내 문구가 없다');
 });
+
+// ── PREVIEW-CORS-2026-09-05 ─────────────────────────────────────────────────────
+test('CORS — 프리뷰 배포는 자기 호스트(VERCEL_URL·VERCEL_BRANCH_URL)만 추가 허용하고 프로덕션은 그대로', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../server.js'), 'utf8');
+  assert.match(src, /if \(process\.env\.VERCEL_ENV === 'preview'\) \{/, '프리뷰 한정 분기가 없다 — 프리뷰 자기 출처 POST 가 500 으로 죽는다');
+  assert.match(src, /for \(const h of \[process\.env\.VERCEL_URL, process\.env\.VERCEL_BRANCH_URL\]\)/, '자기 호스트 두 개만 허용해야 한다');
+  assert.ok(!/allowedOrigins\.push\('\*'\)|origin: '\*'|origin: true/.test(src), '와일드카드 CORS 가 들어갔다');
+  // 프로덕션에서는 분기 밖 로직이 그대로여야 한다
+  assert.match(src, /if \(!origin \|\| allowedOrigins\.includes\(origin\)\) return cb\(null, true\);/, '허용 목록 판정이 바뀌었다');
+});
