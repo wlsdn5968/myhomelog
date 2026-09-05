@@ -4428,7 +4428,8 @@ test('공유 링크: 가격 미확인 상태를 0 으로 표시하지 않는다 
   const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
 
   // ① 유효성 게이트가 존재해야 한다 (avgPrice 가 0 이하면 숫자 대신 상태 문구)
-  assert.ok(html.indexOf('!(Number(p.avgPrice) > 0)') >= 0,
+  // T0-HERO-2026-09-05: rg2 카드가 히어로로 대체되며 게이트가 if (Number(p.avgPrice) > 0) {...} else {상태 문구} 형태가 됐다.
+  assert.ok(html.indexOf('if (Number(p.avgPrice) > 0) {') >= 0,
     '가격 유효성 게이트가 사라졌다 — 0 원이 다시 값으로 표시된다');
 
   // ② 0 을 가격 범위로 찍던 raw 패턴이 돌아오면 실패
@@ -5808,4 +5809,33 @@ test('admin 판정 — 이메일이 맞아도 확인되지 않은 이메일(emai
   }
   const plan = fs.readFileSync(path.join(__dirname, '../services/planService.js'), 'utf8');
   assert.match(plan, /ADMIN_EMAILS\.includes\(email\) && _verified/, 'getActivePlan 의 admin 분기가 확인 여부를 보지 않는다');
+});
+
+// ── T0-HERO-2026-09-05 (감사 P1-5, claude.ai/design 시안 코드화: 첫 탭 = 실거래 요약 기본) ──────────
+//   [왜 소스 검사인가] 마크업 구조(무엇이 항상 있고, 무엇이 조건부인가) 자체가 요구사항이다.
+test('상세 첫 탭 — 실거래 요약이 기본, 점수 없으면 큰 CTA 카드가 아니라 링크 한 줄', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const i = html.indexOf('T0-HERO-2026-09-05: 실거래 요약 히어로');
+  assert.ok(i > 0, '히어로 빌더가 사라졌다');
+  const blk = html.slice(i, i + 2600);
+  // ① 히어로가 점수보다 먼저 그려진다
+  assert.match(html, /\$\{_heroSection\}\s*\$\{_scoreSection\}/, '히어로가 첫 자리가 아니다');
+  // ② 점수 없음 = 큰 CTA 카드 금지(시안 명세) — score-pending 은 저장소에서 사라져야 한다
+  assert.equal(/class="score-pending"/.test(html), false, '"분석 대기" 전면 CTA 카드가 되살아났다 — 검색 진입자의 첫 화면이 다시 dead-end 가 된다');
+  assert.match(html, /class="t0-rep-link" onclick="cDM\(\);sv\('report'\)">자금·가족·희망지역을 입력하면/, '보고서 유도 링크 한 줄이 없다');
+  // ③ 값이 있는 셀만 — 건수·최근 거래일·준공년도는 각각 값 가드 뒤에서만 push 된다
+  assert.match(blk, /if \(Number\(p\.dealCount\) > 0\) _t0Cells\.push\(_t0hc\('거래 건수'/, '건수 셀이 값 가드 없이 그려진다(0건이 값처럼 보인다)');
+  assert.match(blk, /if \(p\.recentDealDate\) _t0Cells\.push\(_t0hc\('최근 거래일'/, '최근 거래일 셀 가드가 없다');
+  assert.match(blk, /if \(p\.buildYear\) _t0Cells\.push\(_t0hc\('준공년도'/, '준공년도 셀 가드가 없다');
+  // ④ 평균가 라벨은 경로가 세팅한 _priceBasis — "최근 24개월"·"시간 가중" 같은 창 단정을 하드코딩하면
+  //    추천 경로(6개월 가중)에서 거짓 라벨이 된다
+  assert.match(blk, /_t0hc\(_escHtml\(p\._priceBasis\|\|'평균 실거래'\)/, '평균가 라벨이 _priceBasis 를 쓰지 않는다');
+  const blkCode = blk.split(/\r?\n/).map(l => l.split('//')[0]).join('\n'); // 주석 제외 — 주석이 정규식에 잡힌 사고 5회째
+  assert.equal(/24개월|시간 가중/.test(blkCode), false, '히어로가 데이터 창을 단정한다(경로별로 다르다 — 환각)');
+  // ⑤ 조회 실패·조회 중 상태 문구는 종전 그대로 유지된다(rg2 를 대체하면서 상태 처리를 잃지 않았는가)
+  for (const s of ['일시 조회 실패', '실거래 조회 중…', '최근 실거래 없음', '단지를 다시 열어주세요', '잠시만 기다려주세요', '표시할 거래가 없어요']) {
+    assert.ok(blk.includes(s), '상태 문구가 사라졌다: ' + s);
+  }
+  // ⑥ 옛 rg2 평균가 카드는 히어로가 대체 — t0 에 rg2 잔존 금지(같은 값이 두 번 그려진다)
+  assert.equal(/class="rg2"/.test(html), false, 'rg2 카드가 남아 평균가가 두 번 그려진다');
 });

@@ -891,13 +891,21 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .ass-age.semi{background:var(--warning-tint);color:var(--warning)}
 .ass-age.recon{background:var(--info-tint);color:var(--info)}
 .ass-age.remod{background:var(--glass-2);color:var(--text-tertiary)}
-.score-pending{background:var(--bg-elev-1);border:1px solid var(--accent-tint-2);border-radius:var(--radius-lg);padding:24px 20px;text-align:center;margin-bottom:14px}
-.score-pending .sp-icon{font-size:32px;margin-bottom:8px}
-.score-pending .sp-title{font-family:var(--font-display);font-size:17px;font-weight:800;color:var(--text-primary);margin-bottom:8px;letter-spacing:-.3px}
-.score-pending .sp-msg{font-size:12.5px;color:var(--text-secondary);line-height:1.65;margin-bottom:16px}
-.score-pending .sp-cta{padding:10px 22px;background:linear-gradient(135deg,var(--acc-bg),var(--accent-600));color:#fff;border:none;border-radius:var(--radius-md);font-family:var(--font-display);font-size:13px;font-weight:700;cursor:pointer;box-shadow:var(--accent-shadow);transition:all 200ms cubic-bezier(0.16,1,0.3,1)}
-.score-pending .sp-cta:hover{transform:translateY(-1px);box-shadow:var(--accent-shadow-strong)}
-.score-pending .sp-meta{margin-top:12px;font-family:var(--font-mono);font-size:10.5px;color:var(--text-tertiary)}
+/* T0-HERO-2026-09-05 (감사 P1-5, claude.ai/design 시안 코드화): 상세 첫 탭의 기본은 "실거래 요약".
+   종전 .score-pending(점수 없으면 화면 전체가 "분석 대기" CTA 카드)은 검색·지도 진입자에게 dead-end 였다 — 제거.
+   시안 구조(라벨/값/출처 셀 그리드 + 표본 배지)를 앱 토큰으로 옮긴다 — 시안 팔레트(터미널 다크)는 풀 리디자인
+   프로젝트의 전 화면 과제라 이 탭만 먼저 입히지 않는다(라이트 테마 모달 안에서 충돌). */
+.t0-hero{background:var(--bg-elev-1);border:1px solid var(--bd);border-radius:var(--radius-lg);padding:13px 14px;margin-bottom:10px}
+.t0-hero .t0h-hd{display:flex;align-items:center;gap:8px;margin-bottom:9px;font-size:12.5px;font-weight:800;color:var(--t1)}
+.t0-hero .t0h-bdg{font-size:10px;font-weight:700;padding:2px 7px;border-radius:var(--radius-sm);background:var(--bg2);border:1px solid var(--bd);color:var(--t2);font-variant-numeric:tabular-nums}
+.t0-hero .t0h-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px}
+.t0-hero .t0h-c{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--radius-base);padding:9px 10px}
+.t0-hero .t0h-l{font-size:10px;color:var(--t3)}
+.t0-hero .t0h-v{margin-top:4px;font-size:15.5px;font-weight:800;letter-spacing:-.02em;color:var(--t1);font-variant-numeric:tabular-nums}
+.t0-hero .t0h-v.dim{color:var(--t3);font-size:12px;font-weight:600}
+.t0-hero .t0h-s{margin-top:4px;font-size:9px;color:var(--t3)}
+.t0-rep-link{display:inline-block;margin:2px 0 8px;font-size:12px;font-weight:600;color:var(--acc);text-decoration:none}
+.t0-rep-link:hover{text-decoration:underline}
 
 /* RIGHT CHAT */
 .rp{width:340px;flex-shrink:0;display:flex;flex-direction:column;border-left:1px solid var(--bd);background:var(--s0)}
@@ -7560,30 +7568,39 @@ function showDetail(p){
     </details>`;
   })();
 
-  // 점수 환각 fix: score 없으면 "분석 대기" 카드 + 사이드바 진입 유도 CTA (60 fallback 제거)
+  // T0-HERO-2026-09-05 (감사 P1-5, 시안 코드화): 점수가 없으면 화면을 CTA 카드로 채우지 않는다 —
+  //   실거래 요약(아래 히어로)이 기본이고, 보고서 유도는 작은 텍스트 링크 한 줄뿐이다(시안 명세).
   const _scoreSection = _hasScore
     ? `<div class="gbw">${gSVG(s,90)}
         <div class="gi"><div class="gi-t">데이터 종합 점수 ${s}/100</div><span class="lvl ${lv}">${lt}</span>
           <div class="gi-s">${_escHtml(_fmtSgg(p.area))} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}${p.maxLoan?` | 최대 ${_escHtml(p.maxLoan)}`:''}</div>
         </div>
       </div>${_scoreDetail}`
-    : `<div class="score-pending">
-        <div class="sp-icon">📊</div>
-        <div class="sp-title">데이터 분석 대기</div>
-        <div class="sp-msg">보고서 탭에서 주택 보유·자금·희망 지역 입력 후<br>"맞춤 보고서"를 받으면 정확한 점수가 분석됩니다.</div>
-        <button class="sp-cta" onclick="cDM();sv('report')">📊 맞춤 보고서 만들기 →</button>
-        <div class="sp-meta">${_escHtml(_fmtSgg(p.area))}${p.buildYear?' · '+_escHtml(p.buildYear)+'년':''}${p.ltv?' · LTV '+_escHtml(p.ltv):''}</div>
-      </div>`;
+    : `<a href="javascript:void(0)" class="t0-rep-link" onclick="cDM();sv('report')">자금·가족·희망지역을 입력하면 이 단지의 맞춤 보고서를 만들 수 있어요 →</a>`;
+
+  // T0-HERO-2026-09-05: 실거래 요약 히어로 — **값이 있는 셀만** 만든다(미확인 원칙).
+  //   평균가 라벨은 진입 경로가 세팅한 _priceBasis 를 그대로 쓴다(추천 경로 = "회원님 평형대 · 6개월 가중평균",
+  //   검색 경로 = 대표 평형 기준). 여기서 "최근 24개월"·"시간 가중" 등을 **단정하면 경로에 따라 거짓**이 된다.
+  const _t0hc = (l, v, dim, sub) => `<div class="t0h-c"><div class="t0h-l">${l}</div><div class="t0h-v${dim?' dim':''}">${v}</div>${sub?`<div class="t0h-s">${sub}</div>`:''}</div>`;
+  const _t0Cells = [];
+  if (Number(p.avgPrice) > 0) {
+    _t0Cells.push(_t0hc(_escHtml(p._priceBasis||'평균 실거래'), `${(p.avgPrice||0).toFixed(2)}억`, false, '국토교통부 실거래가'));
+    if (Number(p.minPrice) > 0 && Number(p.maxPrice) > 0) _t0Cells.push(_t0hc('가격 범위', `${Number(p.minPrice).toFixed(1)}~${Number(p.maxPrice).toFixed(1)}억`, false, ''));
+  } else {
+    _t0Cells.push(_t0hc('평균 실거래', p._txFailed ? '일시 조회 실패' : p._pxPending ? '실거래 조회 중…' : '최근 실거래 없음', true, ''));
+    _t0Cells.push(_t0hc('가격 범위', p._txFailed ? '단지를 다시 열어주세요' : p._pxPending ? '잠시만 기다려주세요' : '표시할 거래가 없어요', true, ''));
+  }
+  if (Number(p.dealCount) > 0) _t0Cells.push(_t0hc('거래 건수', `${Number(p.dealCount).toLocaleString()}건`, false, ''));
+  if (p.recentDealDate) _t0Cells.push(_t0hc('최근 거래일', _escHtml(String(p.recentDealDate).slice(0,10).replace(/-/g,'.')), false, ''));
+  if (p.buildYear) _t0Cells.push(_t0hc('준공년도', `${_escHtml(p.buildYear)}년`, false, 'KAPT·건축물대장'));
+  const _heroSection = `<div class="t0-hero">
+    <div class="t0h-hd">실거래 요약${Number(p.dealCount)>0?`<span class="t0h-bdg">표본 ${Number(p.dealCount).toLocaleString()}건</span>`:''}</div>
+    <div class="t0h-g">${_t0Cells.join('')}</div>
+  </div>`;
   document.getElementById('t0').innerHTML=`
+    ${_heroSection}
     ${_scoreSection}
-    <div style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:var(--radius-base);padding:9px 11px;margin:8px 0 10px;font-size:11px;color:var(--red);font-weight:600;line-height:1.5">⚠ 점수·신호는 <u>과거 실거래 통계 정리</u>이며 매수 추천이 아닙니다. 가격 하락 위험은 본인이 부담합니다.</div>
-    <div class="rg2">
-      ${!(Number(p.avgPrice) > 0)
-        ? `<div class="rc"><div class="rcl">현재 평균가</div><div class="rcv" style="color:var(--t3);font-size:12.5px">${p._txFailed ? '일시 조회 실패' : p._pxPending ? '실거래 조회 중…' : '최근 실거래 없음'}</div></div>
-      <div class="rc"><div class="rcl">가격 범위</div><div class="rcv" style="color:var(--t3);font-size:12.5px">${p._txFailed ? '단지를 다시 열어주세요' : p._pxPending ? '잠시만 기다려주세요' : '표시할 거래가 없어요'}</div></div>`
-        : `<div class="rc"><div class="rcl">현재 평균가</div><div class="rcv" style="color:var(--acc)">${(p.avgPrice||0).toFixed(2)}억</div></div>
-      <div class="rc"><div class="rcl">가격 범위</div><div class="rcv">${(Number(p.minPrice) > 0 && Number(p.maxPrice) > 0) ? `${Number(p.minPrice).toFixed(1)}~${Number(p.maxPrice).toFixed(1)}억` : '—'}</div></div>`}
-    </div>
+    <div style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:var(--radius-base);padding:9px 11px;margin:8px 0 10px;font-size:11px;color:var(--red);font-weight:600;line-height:1.5">⚠ 수치·점수는 <u>과거 실거래 통계 정리</u>이며 매수 추천이 아닙니다. 가격 하락 위험은 본인이 부담합니다.</div>
     ${p.facility?`<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:var(--radius-base);padding:9px 11px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
       <div style="font-weight:700;color:var(--t1);margin-bottom:4px">🏢 단지 기본정보</div>
       ${p.facility.totalHouseholds?`총 ${p.facility.totalHouseholds.toLocaleString()}세대`:''}${p.facility.dongCount?` · ${p.facility.dongCount}개동`:''}${p.facility.parkingRatio?` · 주차 세대당 ${p.facility.parkingRatio}대`:''}${p.facility.builtDate?` · 사용승인 ${p.facility.builtDate.slice(0,4)}.${p.facility.builtDate.slice(4,6)}`:''}${p.facility.heatType?` · ${p.facility.heatType}`:''}
