@@ -6462,6 +6462,14 @@ test('보고서 전세가율 — 최종 limit 곳에 대해서만 조회하고(�
   const iBasis = rpt.indexOf('c.avgPriceFull = stats[0].avg;');
   assert.ok(iBasis > 0 && iJeonse > iBasis, '전세가율 분모가 대표평형 재집계(avgPriceFull) 앞에서 계산된다 — 밴드로 잘린 평균이 분모가 된다');
   assert.ok((rpt.match(/jeonse_months/g) || []).length >= 3, '표본 개월(jeonse_months)이 facts·장점·프롬프트에 실리지 않는다');
+  // 사후 기입 대상은 applyObjectiveScore 가 만드는 객체와 **같은 속성명**이어야 한다 — 라이브 실측(2026-09-05): c.facts 로 적어
+  //   한 번도 기입되지 않았고 오류도 없었다(빌더는 c.objectiveFacts). 읽는 쪽 둘(데이터판·프롬프트)도 같은 이름을 써야 한다.
+  const builderProp = (rpt.match(/\n  c\.(\w+) = \{\s*\n[\s\S]{0,600}?district: district\.tier/) || [])[1];
+  assert.ok(builderProp, 'objective fact 객체를 만드는 대입문을 찾지 못했다');
+  const writes = rpt.match(/c\.(\w+)\.jeonse_ratio = /g) || [];
+  assert.ok(writes.length >= 1, '전세가율 사후 기입이 없다');
+  for (const w of writes) assert.equal(w, `c.${builderProp}.jeonse_ratio = `, '사후 기입 속성명이 빌더와 다르다(매달린 참조): ' + w);
+  for (const rd of ['const f = c.objectiveFacts || {};', 'const facts = c.objectiveFacts || {};']) assert.ok(rpt.includes(rd.replace('objectiveFacts', builderProp)), '읽는 쪽 속성명이 빌더와 다르다: ' + rd);
 });
 
 test('.env.example 게이트 — Vercel 자동 주입 변수 VERCEL_BRANCH_URL 은 플랫폼 제공으로 분류된다(CI #911 실패 원인)', () => {

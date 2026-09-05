@@ -1900,10 +1900,13 @@ async function fetchCandidateApts(admin, input, limit) {
       const _tot = Number(all.monthsTotal) || 6;
       const _failed = Array.isArray(all.monthsFailed) ? all.monthsFailed.length : 0;
       c.jeonse = { medianDeposit: med, n: deps.length, ratio, monthsSampled: _tot - _failed, monthsTotal: _tot };
-      if (c.facts) { // facts 는 applyObjectiveScore 가 이미 만들었다(전세는 점수에 쓰이지 않으므로 사후 기입이 안전)
-        c.facts.jeonse_ratio = `${ratio}%`;
-        c.facts.jeonse_sample = deps.length;
-        c.facts.jeonse_months = _failed > 0 ? `${_tot - _failed}/${_tot}` : null;
+      // objectiveFacts 는 applyObjectiveScore 가 이미 만들었다(전세는 점수에 쓰이지 않으므로 사후 기입이 안전).
+      //   ⚠ 2026-09-05 라이브 실측: 처음엔 c.facts 로 적어 **한 번도 기입되지 않았고 오류도 없었다**(속성명 매달림) —
+      //   buildDataOnlyReport(490)·buildReportPrompt(1947) 가 읽는 이름과 같아야 한다. 계약 테스트가 두 이름을 묶는다.
+      if (c.objectiveFacts) {
+        c.objectiveFacts.jeonse_ratio = `${ratio}%`;
+        c.objectiveFacts.jeonse_sample = deps.length;
+        c.objectiveFacts.jeonse_months = _failed > 0 ? `${_tot - _failed}/${_tot}` : null;
       }
     }
   } catch (e) {
