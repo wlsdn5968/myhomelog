@@ -6286,7 +6286,7 @@ test('일일 한도 — 캐시 히트처럼 비용이 없는 요청은 한도를
   await req.dailyLimitRefund();
   assert.equal(await getUsage(req, 'report'), 0, '0 아래로 내려간다');
   const rpt = require('node:fs').readFileSync(require.resolve('../routes/report'), 'utf8');
-  assert.match(rpt, /if \(hit\) \{[\s\S]{0,400}req\.dailyLimitRefund[\s\S]{0,300}return res\.json\(\{ \.\.\.hit, fromCache: true \}\);/, '보고서 캐시 히트가 한도를 되돌리지 않는다');
+  assert.match(rpt, /if \(hit\) \{[\s\S]{0,400}await req\.dailyLimitRefund\(\);[\s\S]{0,300}return res\.json\(\{ \.\.\.hit, fromCache: true \}\);/, '보고서 캐시 히트가 한도를 되돌리지 않는다(주입 실측: typeof 검사만 남아도 통과했다)');
 });
 
 // ── INTEREST-WARM-2026-09-05 ──────────────────────────────────────────────────────
@@ -6326,6 +6326,7 @@ test('관심도 워밍 cron — 거래 많은 단지부터 좌표 있는 것만 
     assert.equal(got.calls, 33, '호출 상한이 전달되지 않았다');
     assert.equal(got.items.length, 800, `좌표 없는 단지가 걸러지지 않았다(${got.items.length})`);
     assert.equal(got.items[0].aptName, 'A1', '거래 많은 순서가 아니다');
+    assert.match(require('node:fs').readFileSync(jobPath, 'utf8'), /\.order\('deal_count', \{ ascending: false \}\)/, '거래 많은 순 정렬이 소스에서 사라졌다(스텁은 order 를 무시해 행위로는 못 잡는다)');
     assert.ok(got.items.every(it => it.lat === 37.6 && it.umd === '상계동'), '좌표·동이 실리지 않았다');
     assert.equal(out.top, 1200); assert.equal(out.withCoord, 800); assert.equal(out.filled, 8);
   } finally {
