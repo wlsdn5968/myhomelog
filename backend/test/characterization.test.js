@@ -6061,6 +6061,8 @@ test('추천 후보 컷 — 임시 점수·거래 건수·확인된 세대수 �
   const ts = src.indexOf('TRANSIT-STAGE-2026-09-05: 최종 15곳');
   assert.ok(sg > 0 && sg < ts, '컷 전 소형 게이트가 없거나 역 거리 단계 뒤에 있다(15곳 컷 뒤에 빠져 13곳만 남는다)');
   assert.match(src.slice(sg, sg + 1200), /Number\.isFinite\(hh\) && hh > 0 && hh < 100;/, '소형 판정이 확인된 값(0 제외)만 보지 않는다');
+  // 가드 형태 고정 — 'if (false && …)' 류로 게이트만 꺼두는 회귀를 잡는다(주입 실측: 위 단언들은 전부 초록이었다)
+  assert.match(src.slice(sg, sg + 1200), /if \(keep3\.length >= 1 && keep3\.length !== enrichedRecs\.length\) \{/, '컷 전 소형 게이트가 실행되지 않는 형태로 바뀌었다');
   // 배점 — 규모 18 · 관심도 10 · 평형 4 · 합 100
   const m = src.match(/const SCORE_V2_MAX = \{([^}]+)\}/);
   const max = Object.fromEntries(m[1].split(',').map(kv => kv.split(':').map(s => s.trim())).map(([k, v]) => [k, Number(v)]));
