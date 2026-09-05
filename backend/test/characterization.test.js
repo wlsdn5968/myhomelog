@@ -6006,6 +6006,8 @@ test('추천 — 최종 15곳을 고르기 전에 후보 전체의 최근접 역
   assert.ok(i > 0, '역 거리 사전 단계가 없다 — 신고밴드로 고른 15곳에 역세권 대단지가 빠진다');
   const blk = src.slice(i, i + 3200);
   assert.match(blk, /const \{ nearestSubway \} = require\('\.\/kakaoService'\);/, 'nearestSubway 를 쓰지 않는다');
+  // 가드 형태 고정 — 'false ? … : []' 류로 단계만 꺼두는 회귀를 잡는다(주입 실측: 아래 단언들은 전부 초록이었다)
+  assert.match(blk, /const stageCoords = await resolveCoordBatch\(stageInputs, 8\);/, '역 거리 단계가 실행되지 않는 형태로 바뀌었다');
   assert.match(blk, /dists\[i \+ k\] = await nearestSubway\(c\.lat, c\.lng, 3000\)/, '후보 전체에 역 거리 조회를 걸지 않는다');
   assert.match(blk, /if \(ns === undefined\) continue;/, '조회 실패를 "역 없음" 으로 읽는다(최저점 오염)');
   assert.match(blk, /subwayNearestM: ns \? ns\.distance : null/, '역 없음(null)을 사실로 반영하지 않는다');
