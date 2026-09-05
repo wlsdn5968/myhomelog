@@ -6644,6 +6644,15 @@ test('인기 단지 응답·화면 — 집계 기간은 서버가 싣고 화면�
   assert.ok(jsonReturns >= 4, `popular 응답 경로가 ${jsonReturns}개뿐이다 — 검사 대상이 바뀌었는지 확인`);
   assert.ok((block.match(/window: popularWindow\(/g) || []).length >= 3,
     '집계 기간(window)이 응답 경로 3곳(스냅샷·라이브·만료 폴백)에 실리지 않는다');
+  // ⚠ 주입 실측(2026-09-05): 개수만 세면 **기준 시점이 바뀐 것**을 못 잡는다. 스냅샷은 cron 이 만든
+  //   시점(최대 36h 전)의 창이어야 하는데 popularWindow() 로 바꾸면 오늘 기준이 되어 하루 어긋난다 —
+  //   시안이 07.08 로 잘못 적었던 것과 같은 종류의 오류다.
+  assert.match(block, /results: snap, window: popularWindow\(snap\.computedAt\)/,
+    '스냅샷 경로가 계산 시점이 아니라 지금 기준으로 창을 만든다(랭킹은 어제 것인데 기간은 오늘)');
+  assert.match(block, /results: stale, stale: true, window: popularWindow\(stale\.computedAt\)/,
+    '만료 폴백 경로가 계산 시점 기준이 아니다');
+  assert.match(block, /results: out, window: popularWindow\(\)/,
+    '라이브 집계 경로가 지금 기준이 아니다');
   const html = fs2.readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
   const card = html.slice(html.indexOf('id="popTitleCard"'), html.indexOf('id="mapCtrlStack"'));
   assert.match(card, /id="popWindowNote"/, '인기 카드에 집계 기간 자리가 없다');
