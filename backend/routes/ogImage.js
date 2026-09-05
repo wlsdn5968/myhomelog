@@ -146,10 +146,14 @@ function buildBriefingCard(day, snap) {
   const lines = [];
   const rates = tk.filter(t => t.label === '기준금리' || t.label === '주담대 평균').map(t => `${t.label} ${t.value}`).join(' · ');
   if (rates) lines.push(rates);
-  const first = (snap && Array.isArray(snap.lines2) && snap.lines2[0] && snap.lines2[0].text)
-    || (snap && Array.isArray(snap.lines) && snap.lines[0]) || null;
+  // 시황 줄은 첫 줄(금리)과 겹치지 않는 것 중 첫 번째 — 라이브 실측(2026-09-05): 첫 시황이 금리 문장이라 카드에 금리가 두 번 찍혔다.
+  //   40자를 넘는 시황은 싣지 않는다(잘라서 숫자를 훼손하지 않는다 · 둘째 줄이 두 줄로 접히지 않게).
+  const texts = (snap && Array.isArray(snap.lines2) && snap.lines2.length)
+    ? snap.lines2.map(it => (it && it.text) || '')
+    : ((snap && Array.isArray(snap.lines)) ? snap.lines : []);
+  const first = texts.map(s => (s == null ? '' : String(s))).find(s => s && !/기준금리|주담대/.test(s)) || null;
   const tx = tk.find(t => t.label === '실거래 누적');
-  const sub = [tx ? `${tx.label} ${tx.value}` : null, (first && String(first).length <= 48) ? String(first) : null].filter(Boolean).join(' · ');
+  const sub = [tx ? `${tx.label} ${tx.value}` : null, (first && first.length <= 40) ? first : null].filter(Boolean).join(' · ');
   if (sub) lines.push(sub);
   return {
     eyebrow: '일일 부동산 데이터 브리핑',

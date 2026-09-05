@@ -5754,6 +5754,10 @@ test('OG 카드 — 지역·브리핑 라우트가 있고, 사실이 없으면 �
   assert.equal(bc.lines[1], '실거래 누적 456,561건 · 서울 아파트 거래 8월 1,234건');
   const long = og.buildBriefingCard('2026-09-05', { txTotal: 1, lines: ['x'.repeat(60)] });
   assert.equal(long.lines[1], undefined, '긴 시황은 잘라 싣지 않는다(숫자 훼손 방지)');
+  // 라이브 실측: 첫 시황이 금리 문장이면 첫 줄과 중복 — 금리와 겹치지 않는 첫 시황을 고른다
+  const dup = og.buildBriefingCard('2026-09-05', { ecos: { baseRate: 3 }, lines: ['한국은행 기준금리 3% · 시중 주담대 평균 4.48%', '서울 미분양 1,234호'] });
+  assert.equal(dup.lines[0], '기준금리 3%');
+  assert.equal(dup.lines[1], '서울 미분양 1,234호', '금리 문장이 카드에 두 번 찍힌다');
   const all = JSON.stringify([card, bc]).replace(/매수(·매도)? 추천이 아닙니다/g, '');
   for (const w of ['추천', '예측', '전망', '유망', '오를', '상승 기대']) assert.equal(all.includes(w), false, '금지어: ' + w);
   // 실제 렌더 1회 — 지역 카드도 1200x630 PNG 로 나온다
