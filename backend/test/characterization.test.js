@@ -5903,7 +5903,7 @@ test('광역 검색 — 시도 전체 시군구를 본다(서울 25·인천·경
   assert.match(src, /\?\? \(_broadMode \? \[\] : await getTransactionsByApt\(r\.lawdCd, ''\)\)/,
     '광역 모드에서 MOLIT 월별 API 폴백(지역당 6콜)을 막지 않는다');
   assert.ok(!src.includes('pickBroadRegionsByBudget('), '예산 밴드 구 선정 호출이 남아 있다');
-  assert.ok(src.includes('rec:v26:'), '캐시 키 버전이 v26 이 아니다 — 옛 결과가 3시간 서빙된다');
+  assert.ok(src.includes('rec:v27:'), '캐시 키 버전이 v27 이 아니다 — 옛 결과가 3시간 서빙된다');
 });
 
 // ── BUDGET-CAP-2026-09-05 (운영자 "6.5억인데 6.8억이 나온다") ──────────────────────────────
@@ -5920,8 +5920,8 @@ test('추천 후보 컷 — 거래 건수가 아니라 임시 점수(검증된 �
   assert.ok(!/_score: a\.dealCount \* 10 \+ \(a\.buildYear \|\| 1990\) \* 0\.01/.test(src),
     '거래 건수 가중 컷이 되살아났다 — 거래가 적은 역세권·중대단지가 채점도 못 받는다');
   assert.match(src, /const prov = _applyFacilityToScore\(_calcBaseScore\(a\), fac, null\)\.total;/, '임시 점수 계산이 없다');
-  assert.match(src, /\(Number\(y\._verified\) - Number\(x\._verified\)\)\s*\|\| \(y\._score - x\._score\)/,
-    '검증 티어 → 임시 점수 정렬이 아니다');
+  assert.match(src, /_tier\(x, y\) \|\| \(y\._score - x\._score\)/, '검증 티어 → 임시 점수 정렬이 아니다');
+  assert.match(src, /const _tier = \(x, y\) => \(Number\(y\._verified\) - Number\(x\._verified\)\);/, '검증 티어 키가 없다');
   assert.match(src, /_verified: x\.hh != null && x\.hh >= 100/, '검증 티어 판정(확인된 100세대 이상)이 없다');
   assert.match(src, /\|\| lookupByJibun\(_jIdx, apt\) \|\| null;/, 'TRUST+HH 게이트의 코드 매칭에 지번 폴백이 없다');
   // rank 는 표시 순서다(라이브 실측: 5·22·20·29… 로 보였다)
@@ -6015,7 +6015,7 @@ test('추천 — 최종 15곳을 고르기 전에 후보 전체의 최근접 역
   const so = src.indexOf('SCORE-ORDER-2026-08-30 (Sprint OOOOOOO): **최종 순서를');
   const sl = src.indexOf('_rankedF = _rankedF.slice(0, 15);');
   assert.ok(i < so && so < sl, '역 거리 단계가 정렬·15곳 컷보다 뒤에 있다 — 컷에 반영되지 않는다');
-  assert.match(src, /const RANK_N = _filterActive \? 65 : 60;/, '후보 컷 폭이 60/65 가 아니다');
+  assert.match(src, /const LENS_PROV = _filterActive \? 45 : 40;/, '세 렌즈 합집합 컷(임시 점수 렌즈)이 없다');
   // 표본 티어 — **선택**(15곳 컷 전 정렬)에만 1회. 표시 순서는 점수순(SCORE-ORDER 계약)이어야 한다.
   const tiers = src.match(/const _sOk = \(o\) => Number\(\(Number\(o\.rec\?\.priceSampleN\) \|\| 0\) >= 3\);/g) || [];
   assert.equal(tiers.length, 1, `표본 티어 키는 선택 정렬 한 곳에만 있어야 한다(현재 ${tiers.length})`);
@@ -6037,6 +6037,69 @@ test('점수 — 회전율은 절대 건수를 넘지 못하고, 300세대 미�
   const sc = (th) => _applyFacilityToScore({ total: 0, breakdown: {}, dealCount: 0 }, { totalHouseholds: th, parkingRatio: null }, null).breakdown.규모주차;
   assert.equal(sc(150), 1 + 3, '100~299세대 규모가 1점이 아니다');
   assert.equal(sc(350), 3 + 3, '300~499세대 규모가 3점이 아니다');
-  assert.equal(sc(0), 5 + 3, '모름(0)이 중간값이 아니다');
+  assert.equal(sc(0), 6 + 3, '모름(0)이 중간값이 아니다');
   assert.ok(sc(1590) > sc(350) && sc(350) > sc(150), '규모 단조성이 깨졌다');
+});
+
+// ── MULTI-LENS-2026-09-05 ─────────────────────────────────────────────────────────
+test('추천 후보 컷 — 임시 점수·거래 건수·확인된 세대수 세 렌즈의 합집합을 역 거리 실측에 넘긴다 + 컷 전 소형 게이트', () => {
+  const src = require('node:fs').readFileSync(require.resolve('../services/propertyService'), 'utf8');
+  const i = src.indexOf('MULTI-LENS-2026-09-05: 후보 컷을');
+  assert.ok(i > 0, '세 렌즈 합집합 컷이 없다 — 신고 밴드 하나로 고른 후보에서 역세권 대단지가 빠진다');
+  const blk = src.slice(i, i + 2600);
+  assert.match(blk, /const LENS_DEALS = 20;/, '거래 건수 렌즈가 없다');
+  assert.match(blk, /const LENS_SCALE = 20;/, '세대수 렌즈가 없다');
+  assert.match(blk, /\(\(Number\(y\._hh\) \|\| 0\) - \(Number\(x\._hh\) \|\| 0\)\)/, '세대수 렌즈가 확인된 세대수(_hh)로 정렬하지 않는다');
+  assert.match(blk, /for \(const a of byDeals\.slice\(0, LENS_DEALS\)\) _lensPick\.add\(a\);/, '거래 렌즈 결과가 합집합에 들어가지 않는다');
+  assert.match(blk, /for \(const a of byScale\.slice\(0, LENS_SCALE\)\) _lensPick\.add\(a\);/, '세대수 렌즈 결과가 합집합에 들어가지 않는다');
+  assert.match(blk, /const ranked = byProv\.filter\(a => _lensPick\.has\(a\)\);/, '합집합이 ranked 로 이어지지 않는다');
+  assert.match(src, /_hh: x\.hh, _verified: x\.hh != null && x\.hh >= 100/, '후보에 확인 세대수(_hh)를 싣지 않는다');
+  // 모든 렌즈의 1차 키는 검증 티어
+  assert.equal((blk.match(/\.sort\(\(x, y\) => _tier\(x, y\) \|\|/g) || []).length, 3, '세 렌즈 모두 검증 티어를 1차 키로 써야 한다');
+  // 컷 전 소형 게이트 — TRANSIT-STAGE 보다 앞
+  const sg = src.indexOf('SMALL-GATE-EARLY-2026-09-05');
+  const ts = src.indexOf('TRANSIT-STAGE-2026-09-05: 최종 15곳');
+  assert.ok(sg > 0 && sg < ts, '컷 전 소형 게이트가 없거나 역 거리 단계 뒤에 있다(15곳 컷 뒤에 빠져 13곳만 남는다)');
+  assert.match(src.slice(sg, sg + 1200), /Number\.isFinite\(hh\) && hh > 0 && hh < 100;/, '소형 판정이 확인된 값(0 제외)만 보지 않는다');
+  // 배점 — 규모 18 · 관심도 10 · 평형 4 · 합 100
+  const m = src.match(/const SCORE_V2_MAX = \{([^}]+)\}/);
+  const max = Object.fromEntries(m[1].split(',').map(kv => kv.split(':').map(s => s.trim())).map(([k, v]) => [k, Number(v)]));
+  assert.equal(max['규모주차'], 18, '규모주차 배점이 18 이 아니다');
+  assert.equal(max['관심도'], 10); assert.equal(max['평형'], 4);
+  assert.equal(Object.values(max).reduce((a, b) => a + b, 0), 100, '배점 합이 100 이 아니다');
+  const { _applyFacilityToScore } = require('../services/propertyService');
+  const sc = (th) => _applyFacilityToScore({ total: 0, breakdown: {}, dealCount: 0 }, { totalHouseholds: th, parkingRatio: null }, null).breakdown.규모주차;
+  assert.equal(sc(3169), 12 + 3, '3,000세대 이상 규모가 12점이 아니다');
+  assert.equal(sc(1590), 10 + 3); assert.equal(sc(133), 1 + 3);
+});
+
+// ── ALIAS-NONEMPTY + APTLIST-LEAN-2026-09-05 ──────────────────────────────────────
+test('광역 전수 조회 경량화 — 별칭은 비어 있지 않은 행만, 단지목록은 두 JSON 키만 + 병렬 페이지', async () => {
+  const tx = require('node:fs').readFileSync(require.resolve('../services/transactionService'), 'utf8');
+  assert.match(tx, /\.not\('molit_aliases', 'is', null\)[\s\S]{0,400}\.neq\('molit_aliases', '\[\]'\)/, '빈 별칭 배열 행을 걸러내지 않는다(경기 13초)');
+  const fac = require('node:fs').readFileSync(require.resolve('../services/aptFacilityService'), 'utf8');
+  assert.match(fac, /\.select\('kapt_code, apt_name, umd_nm, facility->>kaptAddr, facility->>kaptUsedate'\)/, '단지목록이 facility JSON 통째(경기 7.7MB)를 받는다');
+  assert.ok(!/select\('kapt_code, apt_name, umd_nm, facility'\)/.test(fac), '옛 통째 select 가 남아 있다');
+  // 행위: 첫 페이지 단독 → 가득 찼으면 다음 4페이지 병렬, 짧은 페이지에서 멈춤. JSON 경로 키(kaptAddr)를 그대로 읽는다.
+  const dbPath = require.resolve('../db/client');
+  const facPath = require.resolve('../services/aptFacilityService');
+  const saved = { db: require.cache[dbPath], fac: require.cache[facPath] };
+  const ranges = [];
+  const mkRows = (from, n) => Array.from({ length: n }, (_, i) => ({ kapt_code: 'A' + String(from + i).padStart(6, '0'), apt_name: 'x', umd_nm: 'd', kaptAddr: '서울특별시 노원구 상계동 ' + (from + i + 100) + '-1', kaptUsedate: '19890101' }));
+  const total = 2300;
+  const q = () => { const s = { select() { return s; }, in() { return s; }, not() { return s; }, order() { return s; },
+    range(a) { ranges.push(a); const n = Math.max(0, Math.min(1000, total - a)); return Promise.resolve({ data: mkRows(a, n), error: null }); } }; return s; };
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { getSupabaseAdmin: () => ({ from: () => q() }) } };
+  try {
+    delete require.cache[facPath];
+    const { getAptListByLawdFromDb } = require('../services/aptFacilityService');
+    const out = await getAptListByLawdFromDb(['11350', '11320']);
+    assert.equal(out.length, total, '페이지 병합 행수가 다르다');
+    assert.deepEqual(ranges, [0, 1000, 2000, 3000, 4000], '첫 페이지 단독 → 4페이지 병렬 순서가 아니다: ' + JSON.stringify(ranges));
+    assert.equal(out[0].jibunBon, '100', 'JSON 경로 키(kaptAddr)에서 지번 본번을 읽지 못한다');
+    assert.equal(out[0].kaptUsedate, '19890101', 'JSON 경로 키(kaptUsedate)를 읽지 못한다');
+  } finally {
+    if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
+    if (saved.fac) require.cache[facPath] = saved.fac; else delete require.cache[facPath];
+  }
 });

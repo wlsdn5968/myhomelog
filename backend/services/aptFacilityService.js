@@ -695,27 +695,42 @@ async function getAptListByLawdFromDb(lawdCds) {
   const PAGE = 1000;
   const out = [];
   try {
-    for (let p = 0; p < 10; p++) {
-      const { data, error } = await a
-        .from('apt_master')
-        .select('kapt_code, apt_name, umd_nm, facility')
-        .in('lawd_cd', codes)
-        .not('kapt_code', 'is', null)
-        .order('kapt_code', { ascending: true })
-        .range(p * PAGE, p * PAGE + PAGE - 1);
-      if (error) throw error;
-      const rows = data || [];
+    // APTLIST-LEAN-2026-09-05: facility JSON 통째(경기 47개 시군구 = 7.7MB)를 받아 kaptAddr·kaptUsedate 두 키만 쓰던 것을
+    //   PostgREST JSON 경로 select 로 두 키만 받는다. 첫 페이지는 단독(1~3지역의 통상 경로는 1회로 끝난다), 가득 찼으면
+    //   다음 페이지들을 4개씩 병렬로 — 광역 전수(서울 4·경기 6페이지)가 직렬 6왕복에서 2왕복으로 준다.
+    // JIBUN-MATCH-2026-08-30: 이름 매칭이 실패해도 필지로 이을 수 있게 지번 본번과 준공연도를 함께 싣는다
+    //   (지번 파싱·검증은 이 파일의 jibunFromKaptAddr/bonbun 을 그대로 쓴다 — 사본을 만들지 않는다).
+    const page = (p) => a
+      .from('apt_master')
+      .select('kapt_code, apt_name, umd_nm, facility->>kaptAddr, facility->>kaptUsedate')
+      .in('lawd_cd', codes)
+      .not('kapt_code', 'is', null)
+      .order('kapt_code', { ascending: true })
+      .range(p * PAGE, p * PAGE + PAGE - 1);
+    const push = (rows) => {
       for (const r of rows) {
-        // JIBUN-MATCH-2026-08-30: 이름 매칭이 실패해도 필지로 이을 수 있게 지번 본번과 준공연도를 함께 싣는다.
-        //   (지번 파싱·검증은 이 파일이 이미 갖고 있는 jibunFromKaptAddr/bonbun 을 그대로 쓴다 — 사본을 만들지 않는다.)
-        const addr = r.facility && r.facility.kaptAddr;
         out.push({
           kaptCode: r.kapt_code, kaptName: r.apt_name, as3: r.umd_nm || '', as4: '',
-          jibunBon: bonbun(jibunFromKaptAddr(addr)) || '',
-          kaptUsedate: (r.facility && r.facility.kaptUsedate) || '',
+          jibunBon: bonbun(jibunFromKaptAddr(r.kaptAddr)) || '',
+          kaptUsedate: r.kaptUsedate || '',
         });
       }
-      if (rows.length < PAGE) break;
+    };
+    const first = await page(0);
+    if (first.error) throw first.error;
+    push(first.data || []);
+    if ((first.data || []).length === PAGE) {
+      const CONC = 4;
+      for (let p0 = 1; p0 < 10; p0 += CONC) {
+        const results = await Promise.all(Array.from({ length: Math.min(CONC, 10 - p0) }, (_, k) => page(p0 + k)));
+        let short = false;
+        for (const { data, error } of results) {
+          if (error) throw error;
+          push(data || []);
+          if ((data || []).length < PAGE) short = true;
+        }
+        if (short) break;
+      }
     }
     return out;
   } catch (e) {
