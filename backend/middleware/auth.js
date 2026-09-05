@@ -85,7 +85,14 @@ async function verifyToken(token) {
   try {
     const { data, error } = await sb.auth.getUser(token);
     if (error || !data?.user) return { user: null, deletionPending: false };
-    const user = { id: data.user.id, email: data.user.email };
+    // ADMIN-VERIFIED-2026-09-05 (감사 H-LOW): admin 판정이 "확인된 이메일" 만 인정하도록 검증 상태를 함께 싣는다.
+    //   Supabase 가 확인한 이메일(email_confirmed_at) 또는 OAuth 제공자가 검증한 이메일(user_metadata.email_verified).
+    //   실측(2026-09-05, auth.users 7명): 전원 confirmed=true·email_verified=true — 이메일 가입자도 확인 절차를 거쳤다.
+    const _mv = data.user.user_metadata && data.user.user_metadata.email_verified;
+    const user = {
+      id: data.user.id, email: data.user.email,
+      emailVerified: Boolean(data.user.email_confirmed_at) || _mv === true || _mv === 'true',
+    };
     const deletionPending = await checkDeletionPending(user.id);
 
     // P0-1: cache TTL = min(jwt exp, micro-cache TTL) — JWT 만료 후 5초 우회 차단

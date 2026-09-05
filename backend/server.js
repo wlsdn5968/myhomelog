@@ -659,7 +659,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   //   나중에 누가 응답 조립부를 고쳐도 값이 애초에 존재하지 않아 구조적으로 샐 수 없다.
   //   집계 카운터(today/yesterday = 인텐트별 건수)는 개인정보가 아니므로 그대로 공개한다.
   let _isAdmin = false;
-  try { _isAdmin = require('./services/planService').isAdminEmail(req.user?.email); } catch (e) { logger.warn({ err: e && e.message }, 'admin 판정 실패 — 일반 사용자로 처리'); }
+  try { _isAdmin = require('./services/planService').isAdminUser(req.user); } catch (e) { logger.warn({ err: e && e.message }, 'admin 판정 실패 — 일반 사용자로 처리'); }
   try {
     const r = require('./redis').getRedis();
     if (r) {

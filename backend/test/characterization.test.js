@@ -5770,3 +5770,36 @@ test('OG 카드 — 지역·브리핑 라우트가 있고, 사실이 없으면 �
   const png = await require('../services/ogImageService').renderCard(card);
   assert.equal(png.readUInt32BE(16), 1200); assert.equal(png.readUInt32BE(20), 630);
 });
+
+// ── ADMIN-VERIFIED-2026-09-05 (감사 H-LOW: admin 은 확인된 이메일만) ─────────────────────────────
+//   [행위 테스트] ADMIN_EMAILS 를 세우고 planService 를 다시 로드해 isAdminUser 를 실제 실행한다.
+test('admin 판정 — 이메일이 맞아도 확인되지 않은 이메일(emailVerified=false)은 admin 이 아니다', () => {
+  const p = require.resolve('../services/planService');
+  const saved = { mod: require.cache[p], env: process.env.ADMIN_EMAILS };
+  try {
+    process.env.ADMIN_EMAILS = 'ops@example.test';
+    delete require.cache[p];
+    const { isAdminUser, isAdminEmail } = require('../services/planService');
+    assert.equal(isAdminUser({ email: 'ops@example.test', emailVerified: true }), true);
+    assert.equal(isAdminUser({ email: 'OPS@example.test', emailVerified: true }), true, '대소문자 무시(종전 규칙 유지)');
+    assert.equal(isAdminUser({ email: 'ops@example.test', emailVerified: false }), false, '미확인 이메일이 admin 이 됐다');
+    assert.equal(isAdminUser({ email: 'ops@example.test' }), true, '필드가 없으면(옛 캐시·다른 경로) 운영자를 잠그지 않는다 — 명시적 false 만 거부');
+    assert.equal(isAdminUser({ email: 'someone@example.test', emailVerified: true }), false);
+    assert.equal(isAdminUser(null), false);
+    assert.equal(isAdminEmail('ops@example.test'), true, '문자열 판정은 남는다(다른 소비자 호환)');
+  } finally {
+    if (saved.env === undefined) delete process.env.ADMIN_EMAILS; else process.env.ADMIN_EMAILS = saved.env;
+    if (saved.mod) require.cache[p] = saved.mod; else delete require.cache[p];
+  }
+  // 배선: 토큰 검증이 emailVerified 를 싣고, 무제한 판정 5곳이 사용자 객체로 부른다
+  const fs = require('node:fs'), path = require('node:path');
+  const auth = fs.readFileSync(path.join(__dirname, '../middleware/auth.js'), 'utf8');
+  assert.match(auth, /emailVerified: Boolean\(data\.user\.email_confirmed_at\)/, 'auth 미들웨어가 검증 상태를 싣지 않는다');
+  for (const f of ['../middleware/dailyLimit.js', '../middleware/rateLimit.js', '../routes/clause.js', '../server.js']) {
+    const src = fs.readFileSync(path.join(__dirname, f), 'utf8');
+    assert.equal(src.includes('isAdminEmail(req.user?.email)'), false, f + ' 가 문자열 판정으로 되돌아갔다');
+    assert.ok(src.includes('isAdminUser(req.user)'), f + ' 가 isAdminUser 를 쓰지 않는다');
+  }
+  const plan = fs.readFileSync(path.join(__dirname, '../services/planService.js'), 'utf8');
+  assert.match(plan, /ADMIN_EMAILS\.includes\(email\) && _verified/, 'getActivePlan 의 admin 분기가 확인 여부를 보지 않는다');
+});

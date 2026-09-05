@@ -40,7 +40,10 @@ async function getActivePlan(userId) {
     try {
       const { data } = await admin.auth.admin.getUserById(userId);
       const email = data?.user?.email?.toLowerCase();
-      if (email && ADMIN_EMAILS.includes(email)) {
+      // ADMIN-VERIFIED-2026-09-05 (감사 H-LOW): 확인되지 않은 이메일은 admin 이 아니다(아래 isAdminUser 와 같은 규칙).
+      const _mv = data?.user?.user_metadata?.email_verified;
+      const _verified = Boolean(data?.user?.email_confirmed_at) || _mv === true || _mv === 'true';
+      if (email && ADMIN_EMAILS.includes(email) && _verified) {
         cache.set(memKey, 'admin', 60);
         return 'admin';
       }
@@ -108,6 +111,15 @@ function isAdminEmail(email) {
   return ADMIN_EMAILS.includes(String(email).toLowerCase());
 }
 
+// ADMIN-VERIFIED-2026-09-05 (감사 H-LOW): 이메일 **문자열**만 맞으면 admin 이던 것을, 확인된 이메일일 때만으로.
+//   미확인 이메일로 가입한 계정이 운영자 주소를 쓰면 무제한 권한을 얻는 경로를 막는다.
+//   req.user.emailVerified 는 auth 미들웨어가 싣는다. 값이 **명시적으로 false** 일 때만 거부한다 — 필드가 아예 없는
+//   (옛 캐시·다른 경로) 객체 때문에 운영자가 잠기는 사고를 내지 않기 위해서다(운영자 검색 리밋 절대 금지).
+function isAdminUser(user) {
+  if (!user || !isAdminEmail(user.email)) return false;
+  return user.emailVerified !== false;
+}
+
 /** 캐시 invalidate — 결제 완료/해지 시 호출 (billing 라우트 hook) */
 function invalidatePlanCache(userId) {
   cache.del(`plan:${userId}`);
@@ -121,4 +133,4 @@ function computePeriodEnd(existingEndIso, now) {
   return new Date(base.getTime() + 30 * 24 * 60 * 60 * 1000);
 }
 
-module.exports = { getActivePlan, getLimitsForPlan, invalidatePlanCache, PLAN_LIMITS, isAdminEmail, computePeriodEnd };
+module.exports = { getActivePlan, getLimitsForPlan, invalidatePlanCache, PLAN_LIMITS, isAdminEmail, isAdminUser, computePeriodEnd };

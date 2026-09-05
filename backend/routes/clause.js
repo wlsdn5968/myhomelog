@@ -37,8 +37,8 @@ router.post('/', async (req, res) => {
   //   않는다 — 여기 게이트는 **API 직접 호출로 남는 마지막 LLM 비용 경로**를 막는 방어선이다.
   //   pro 플랜(결제 개통 시) 또는 admin(운영자 검증용)만 통과. 익명·free 는 403.
   try {
-    const { getActivePlan, isAdminEmail } = require('../services/planService');
-    const _admin = isAdminEmail(req.user?.email);
+    const { getActivePlan, isAdminUser } = require('../services/planService');
+    const _admin = isAdminUser(req.user);
     const _plan = _admin ? 'admin' : (req.user?.id ? await getActivePlan(req.user.id) : 'free');
     if (!_admin && _plan !== 'pro') {
       return res.status(403).json({
