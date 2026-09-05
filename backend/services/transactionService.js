@@ -125,7 +125,10 @@ async function getRegionRecentTransactions(lawdCd, monthsBack = 6) {
     for (let from = 0; from <= 11000; from += PAGE) {
       const { data: page, error } = await admin
         .from('molit_transactions')
-        .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq')
+        // JIBUN-COL-2026-09-05: jibun 이 빠져 있었다 — analyzeTransactions 가 단지 지번(최빈값)을 여기서 만들고,
+        //   추천 경로의 JIBUN-MATCH(게이트·카드) 는 그 값으로 KAPT 를 찾는다. 컬럼이 없으니 지번 매칭이 **한 번도 성립한 적이
+        //   없었다**(프리뷰 실측: 서울 6.5억 후보 258곳 중 세대수 확인 45곳 = 이름 정확일치 비율 그대로).
+        .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq, jibun')
         .eq('lawd_cd', lawdCd)
         .gte('deal_date', sinceStr)
         .order('deal_date', { ascending: false })
@@ -149,6 +152,7 @@ async function getRegionRecentTransactions(lawdCd, monthsBack = 6) {
       dealAmount: Number(r.deal_amount) || 0,
       lawdCd: r.lawd_cd || lawdCd,
       aptSeq: r.apt_seq || '',
+      jibun: r.jibun || '', // JIBUN-COL-2026-09-05
     }));
     cache.set(ck, mapped, 21600); // 6h — daily ingest 주기 기준
     return mapped;

@@ -5903,7 +5903,7 @@ test('광역 검색 — 시도 전체 시군구를 본다(서울 25·인천·경
   assert.match(src, /\?\? \(_broadMode \? \[\] : await getTransactionsByApt\(r\.lawdCd, ''\)\)/,
     '광역 모드에서 MOLIT 월별 API 폴백(지역당 6콜)을 막지 않는다');
   assert.ok(!src.includes('pickBroadRegionsByBudget('), '예산 밴드 구 선정 호출이 남아 있다');
-  assert.ok(src.includes('rec:v27:'), '캐시 키 버전이 v27 이 아니다 — 옛 결과가 3시간 서빙된다');
+  assert.ok(src.includes('rec:v28:'), '캐시 키 버전이 v28 이 아니다 — 옛 결과가 3시간 서빙된다');
 });
 
 // ── BUDGET-CAP-2026-09-05 (운영자 "6.5억인데 6.8억이 나온다") ──────────────────────────────
@@ -6056,6 +6056,14 @@ test('추천 후보 컷 — 임시 점수·거래 건수·확인된 세대수 �
   assert.match(src, /_hh: x\.hh, _verified: x\.hh != null && x\.hh >= 100/, '후보에 확인 세대수(_hh)를 싣지 않는다');
   // 모든 렌즈의 1차 키는 검증 티어
   assert.equal((blk.match(/\.sort\(\(x, y\) => _tier\(x, y\) \|\|/g) || []).length, 3, '세 렌즈 모두 검증 티어를 1차 키로 써야 한다');
+  // 미확인 거래 상위 렌즈 — 확인된 후보가 적을 때 세 렌즈가 같은 집합으로 수렴하던 것(프리뷰 258→45)의 안전판
+  assert.match(blk, /const LENS_UNVERIFIED = 15;/, '미확인 거래 상위 렌즈가 없다');
+  assert.match(blk, /const byDealsUnverified = _lensBase\.filter\(a => !a\._verified\)/, '미확인 렌즈가 미확인만 고르지 않는다');
+  assert.match(blk, /for \(const a of byDealsUnverified\.slice\(0, LENS_UNVERIFIED\)\) _lensPick\.add\(a\);/, '미확인 렌즈 결과가 합집합에 들어가지 않는다');
+  // 지역 단일쿼리에 jibun — 없으면 지번 매칭(게이트·카드)이 한 번도 성립하지 않는다
+  const txs = require('node:fs').readFileSync(require.resolve('../services/transactionService'), 'utf8');
+  assert.match(txs, /deal_amount, lawd_cd, apt_seq, jibun'\)/, '지역 단일쿼리 select 에 jibun 이 없다 — 추천 경로 지번 매칭이 죽는다');
+  assert.match(txs, /jibun: r\.jibun \|\| '',/, '지역 단일쿼리 매핑에 jibun 이 없다');
   // 컷 전 소형 게이트 — TRANSIT-STAGE 보다 앞
   const sg = src.indexOf('SMALL-GATE-EARLY-2026-09-05');
   const ts = src.indexOf('TRANSIT-STAGE-2026-09-05: 최종 15곳');

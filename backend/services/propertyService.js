@@ -584,8 +584,9 @@ async function getAIRecommendations(userCondition) {
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
   // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
   const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
-  const cacheKey = `rec:v27:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
+  const cacheKey = `rec:v28:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
   // 버전 이력(산식·표시가 바뀌면 반드시 올릴 것 — 안 올리면 최대 3h 동안 옛 점수가 그대로 나간다):
+  //   v28 JIBUN-COL·LENS-UNVERIFIED — 지역 단일쿼리에 jibun 복원(지번 매칭 부활), 미확인 거래 상위 렌즈 추가.
   //   v27 MULTI-LENS·WEIGHTS-V3·SMALL-GATE-EARLY — 세 렌즈 합집합 컷, 규모주차 18/관심도 10/평형 4, 컷 전 소형 게이트.
   //   v26 TRANSIT-STAGE·SAMPLE-TIER·COUNT-CAP·SCALE-BANDS — 후보 전체 역 거리 실측 뒤 컷, 표본 3건 티어, 회전율 건수 상한, 규모 밴드.
   //   v25 REC-BROAD-ALL·BUDGET-CAP·REC-RANK-PROV·RANK-SEQ — 광역=시도 전체, 예산 상한 1.0x, 후보 컷 임시점수순,
@@ -949,12 +950,21 @@ async function getAIRecommendations(userCondition) {
     || (y._score - x._score) || _byName(x, y));
   const byScale = [..._lensBase].sort((x, y) => _tier(x, y) || ((Number(y._hh) || 0) - (Number(x._hh) || 0))
     || (y._score - x._score) || _byName(x, y));
+  // LENS-UNVERIFIED-2026-09-05: 검증 티어가 1차 키라 확인된 후보가 렌즈 폭보다 적으면 세 렌즈가 **같은 집합**으로
+  //   수렴한다(프리뷰 실측: 후보 258 → 합집합 45 = 확인된 45곳 전부, 미확인은 0곳). 이름이 KAPT 와 다른 대단지
+  //   (벽산 ↔ 상계벽산)가 게이트 매칭에서 미확인이 되면 채점 기회 자체가 없었다. 미확인 중 **거래 상위**는 따로 싣는다 —
+  //   enrichment 의 resolveFacility(단건 매처)가 거기서 세대수를 확인해 준다.
+  const LENS_UNVERIFIED = 15;
+  const byDealsUnverified = _lensBase.filter(a => !a._verified)
+    .sort((x, y) => ((y.dealCount || 0) - (x.dealCount || 0)) || (y._score - x._score) || _byName(x, y));
   const _lensPick = new Set();
   for (const a of byProv.slice(0, LENS_PROV)) _lensPick.add(a);
   for (const a of byDeals.slice(0, LENS_DEALS)) _lensPick.add(a);
   for (const a of byScale.slice(0, LENS_SCALE)) _lensPick.add(a);
+  for (const a of byDealsUnverified.slice(0, LENS_UNVERIFIED)) _lensPick.add(a);
   const ranked = byProv.filter(a => _lensPick.has(a)); // 임시 점수순 유지(결정적)
-  logger.info({ pool: candidatePool.length, lens: ranked.length }, 'PropertyService 세 렌즈 합집합 컷');
+  logger.info({ pool: candidatePool.length, verified: _lensBase.filter(a => a._verified).length, lens: ranked.length },
+    'PropertyService 렌즈 합집합 컷');
 
   // Step 5: 결과 카드 생성 (AI 호출 없음, 즉시 응답)
   // 규제지역 키워드 1회 조회 → 단지별 sigungu 기준으로 정확하게 LTV 계산.
