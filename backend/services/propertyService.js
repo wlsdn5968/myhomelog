@@ -352,7 +352,12 @@ function buildTags(apt) {
  *   호갱노노는 공개 API 가 없고 스크래핑은 약관 위반이라, 같은 목적을 공식 API 로 달성한다.
  *   ⚠ 검색량은 '좋은 단지' 가 아니라 '많이 회자되는 단지' 다 — 근거 문구에 그대로 쓴다.
  */
-const SCORE_V2_MAX = { 교통: 28, 인프라: 16, 규모주차: 12, 거래: 14, 연식: 10, 평형: 6, 관심도: 14 };
+// WEIGHTS-V3-2026-09-05: 규모주차 12 → 18(관심도 14 → 10 · 평형 6 → 4 에서 가져옴). 합 100 유지, 교통 28 최대 유지.
+//   [근거] 프리뷰 실측에서 133세대·역 343m 단지(68점)가 3,169세대·100건 거래 단지(60점)를 앉혔다. 이 서비스의
+//   보고서 산식은 이미 500세대 이상을 환금성 최대 가점(25)으로 두는데, 추천 산식은 규모에 최대 9점만 줬다 —
+//   같은 서비스가 규모를 두 잣대로 재던 것. 관심도는 캐시 미충전으로 거의 전 단지가 중간값(7)이라 변별력이 없었고,
+//   평형 다양성은 약한 신호다. 두 항목을 줄여 규모에 옮긴다.
+const SCORE_V2_MAX = { 교통: 28, 인프라: 16, 규모주차: 18, 거래: 14, 연식: 10, 평형: 4, 관심도: 10 };
 
 /**
  * 아파트가 아닌 유형 — 추천 순위에서 제외한다(검색·상세는 그대로 둔다).
@@ -492,7 +497,7 @@ function _applyFacilityToScore(base, facility, amen) {
   const th = (facility && facility.totalHouseholds) || 0;
   // SCALE-BANDS-2026-09-05: 100~299세대를 300~499와 같은 3점으로 두면 규모 항목이 소단지를 변별하지 못했다
   //   (프리뷰 실측: 111~340세대 소단지가 상위 15를 채웠다). 300 미만 1점·300~499 3점. 0=모름은 종전대로 중간(5).
-  let 규모 = th >= 3000 ? 9 : th >= 1500 ? 8 : th >= 1000 ? 7 : th >= 500 ? 5 : th >= 300 ? 3 : th > 0 ? 1 : 5;
+  let 규모 = th >= 3000 ? 12 : th >= 1500 ? 10 : th >= 1000 ? 8 : th >= 500 ? 6 : th >= 300 ? 3 : th > 0 ? 1 : 6; // 0=모름 → 중간(6)
   // HH-CONFLICT: 세대수 원천이 갈린 단지는 주차 비율의 분모를 믿을 수 없다(실측 6.07대/세대까지 부푼다).
   //   점수를 깎지도 않는다 — 모르는 것은 중간값이다.
   const pr = (facility && facility.householdsConflict) ? null : ((facility && facility.parkingRatio) || null);
@@ -579,8 +584,9 @@ async function getAIRecommendations(userCondition) {
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
   // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
   const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
-  const cacheKey = `rec:v26:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
+  const cacheKey = `rec:v27:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
   // 버전 이력(산식·표시가 바뀌면 반드시 올릴 것 — 안 올리면 최대 3h 동안 옛 점수가 그대로 나간다):
+  //   v27 MULTI-LENS·WEIGHTS-V3·SMALL-GATE-EARLY — 세 렌즈 합집합 컷, 규모주차 18/관심도 10/평형 4, 컷 전 소형 게이트.
   //   v26 TRANSIT-STAGE·SAMPLE-TIER·COUNT-CAP·SCALE-BANDS — 후보 전체 역 거리 실측 뒤 컷, 표본 3건 티어, 회전율 건수 상한, 규모 밴드.
   //   v25 REC-BROAD-ALL·BUDGET-CAP·REC-RANK-PROV·RANK-SEQ — 광역=시도 전체, 예산 상한 1.0x, 후보 컷 임시점수순,
   //       rank 재부여. 같은 키가 완전히 다른 후보 집합·가격 상한을 보므로 반드시 분리.
@@ -910,7 +916,7 @@ async function getAIRecommendations(userCondition) {
     if (_gated.length !== candidatePool.length) {
       logger.info({ before: candidatePool.length, after: _gated.length }, 'PropertyService TRUST+HH 게이트');
     }
-    candidatePool = _gated.map(x => ({ ...x.a, _prov: x.prov, _verified: x.hh != null && x.hh >= 100 }));
+    candidatePool = _gated.map(x => ({ ...x.a, _prov: x.prov, _hh: x.hh, _verified: x.hh != null && x.hh >= 100 }));
   }
 
   // Step 4: 거래량 가중 정렬 → 실거래 단지 우선 상위 15건
@@ -925,15 +931,30 @@ async function getAIRecommendations(userCondition) {
   //   → 이 단계는 **후보를 넓게 고르는 역할만** 하고(거래량순은 그 목적엔 타당하다),
   //     최종 순서는 enrichment 뒤에서 확정된 점수로 다시 매긴다.
   //   ⚠ 폭을 넓히면 facility 해석이 늘지만 그건 DB 배치 1쿼리다. 좌표·학군은 최종 15건에만 돈다.
-  const RANK_N = _filterActive ? 65 : 60; // TRANSIT-STAGE-2026-09-05: 역 거리 실측을 후보 전체에 걸 수 있어 컷을 넓힌다(종전 40/45)
-  // REC-RANK-PROV-2026-09-05: 검증 티어 → 임시 점수 → 거래 건수 → 이름(결정적). 종전 거래 건수 가중은 폐기.
-  const ranked = candidatePool
-    .map(a => ({ ...a, _score: Number(a._prov) || 0 }))
-    .sort((x, y) => (Number(y._verified) - Number(x._verified))
-      || (y._score - x._score)
-      || ((y.dealCount || 0) - (x.dealCount || 0))
-      || String(x.aptName || '').localeCompare(String(y.aptName || ''), 'ko'))
-    .slice(0, RANK_N);
+  // MULTI-LENS-2026-09-05: 후보 컷을 **세 렌즈의 합집합**으로 뽑는다(종전 RANK_N 단일 컷 폐기).
+  //   [프리뷰 실측] 임시 점수(신고 밴드가 교통 대리값) 상위 60만 재면 벽산(역 108m·1,590세대·39건)이 컷 밖이었다 —
+  //   신고 밴드가 없거나 틀린 대단지는 임시 점수로는 올라오지 못한다. 대리값 하나에 의존하지 않고
+  //   ① 임시 점수 상위 ② 거래 건수 상위(유동성) ③ 확인된 세대수 상위(규모) 를 합쳐 역 거리 실측(TRANSIT-STAGE)에 넘긴다.
+  //   최종 점수는 실측으로 확정되므로 렌즈는 "놓치지 않기" 용도다. 합집합 상한 = 40(45)+20+20 = 80(85).
+  //   REC-RANK-PROV-2026-09-05: 모든 렌즈에서 검증 티어(확인된 100세대 이상)가 1차 키다.
+  const LENS_PROV = _filterActive ? 45 : 40;
+  const LENS_DEALS = 20;
+  const LENS_SCALE = 20;
+  const _lensBase = candidatePool.map(a => ({ ...a, _score: Number(a._prov) || 0 }));
+  const _tier = (x, y) => (Number(y._verified) - Number(x._verified));
+  const _byName = (x, y) => String(x.aptName || '').localeCompare(String(y.aptName || ''), 'ko');
+  const byProv = [..._lensBase].sort((x, y) => _tier(x, y) || (y._score - x._score)
+    || ((y.dealCount || 0) - (x.dealCount || 0)) || _byName(x, y));
+  const byDeals = [..._lensBase].sort((x, y) => _tier(x, y) || ((y.dealCount || 0) - (x.dealCount || 0))
+    || (y._score - x._score) || _byName(x, y));
+  const byScale = [..._lensBase].sort((x, y) => _tier(x, y) || ((Number(y._hh) || 0) - (Number(x._hh) || 0))
+    || (y._score - x._score) || _byName(x, y));
+  const _lensPick = new Set();
+  for (const a of byProv.slice(0, LENS_PROV)) _lensPick.add(a);
+  for (const a of byDeals.slice(0, LENS_DEALS)) _lensPick.add(a);
+  for (const a of byScale.slice(0, LENS_SCALE)) _lensPick.add(a);
+  const ranked = byProv.filter(a => _lensPick.has(a)); // 임시 점수순 유지(결정적)
+  logger.info({ pool: candidatePool.length, lens: ranked.length }, 'PropertyService 세 렌즈 합집합 컷');
 
   // Step 5: 결과 카드 생성 (AI 호출 없음, 즉시 응답)
   // 규제지역 키워드 1회 조회 → 단지별 sigungu 기준으로 정확하게 LTV 계산.
@@ -1222,7 +1243,21 @@ async function getAIRecommendations(userCondition) {
       enrichedRecs = keep2.map(i => enrichedRecs[i]);
     }
   }
-  // TRANSIT-STAGE-2026-09-05: 최종 15곳을 고르기 전에 후보 전체(≤RANK_N)의 **최근접 역 직선거리**를 잰다.
+  // SMALL-GATE-EARLY-2026-09-05: 확인된 100세대 미만은 여기서 뺀다(종전엔 15곳 컷 **뒤**에서 빼 13곳만 남았다 — 프리뷰 실측).
+  //   facility(건축물대장 보강 포함)는 이미 붙어 있으므로 판정 재료가 뒤의 최종 게이트와 같다.
+  //   0=미확인은 빼지 않는다([[unknown-treated-as-value]]). 전부 소형이면 유지(빈 결과 방지).
+  {
+    const _small = (r) => { const hh = r && r.facility && r.facility.totalHouseholds; return Number.isFinite(hh) && hh > 0 && hh < 100; };
+    const keep3 = [];
+    for (let i = 0; i < enrichedRecs.length; i++) if (!_small(enrichedRecs[i])) keep3.push(i);
+    if (keep3.length >= 1 && keep3.length !== enrichedRecs.length) {
+      logger.info({ before: enrichedRecs.length, after: keep3.length }, 'PropertyService SMALL-GATE(컷 전): 확인된 100세대 미만 제외');
+      _rankedF = keep3.map(i => _rankedF[i]);
+      enrichedRecs = keep3.map(i => enrichedRecs[i]);
+    }
+  }
+
+  // TRANSIT-STAGE-2026-09-05: 최종 15곳을 고르기 전에 후보 전체(세 렌즈 합집합)의 **최근접 역 직선거리**를 잰다.
   //   [프리뷰 실측] 임시 점수(관리사무소 신고 밴드)로 15곳을 고르자 벽산(역 108m·1,590세대·최종 73점)이
   //   컷에서 빠지고 111~340세대 소단지가 상위를 채웠다. 교통 28점은 산식 최대 항목이라 여기서 틀리면 다 틀린다.
   //   역 거리는 카카오 SW8 1콜(apt_amenities 90일 + 메모리 3일 캐시)이라 후보 전체에 걸 수 있다.

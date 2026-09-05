@@ -549,6 +549,9 @@ async function getAliasCanonicalMap(lawdCds) {
         .select('kapt_code, apt_name, umd_nm, molit_aliases')
         .in('lawd_cd', uniq)
         .not('molit_aliases', 'is', null)
+        // ALIAS-NONEMPTY-2026-09-05: 별칭이 **있는** 행만 받는다. 실측 — 서울 3,397행 중 별칭 보유 1행, 경기 5,659행 중 0행인데
+        //   빈 배열까지 전부 받아 경기 광역 검색에서 6페이지·13초를 썼다(프리뷰 스테이지 타이밍 alias 13,767ms).
+        .neq('molit_aliases', '[]')
         .order('kapt_code', { ascending: true })
         .range(from, from + PAGE - 1);
       if (error) throw new Error(error.message);
