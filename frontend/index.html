@@ -1698,7 +1698,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   <!-- HEADER-SQUEEZE-2026-07-15 (Sprint MMMMM, 실측): pill 8개(admin) 시 검색창 173px·1050px 창 44px 붕괴 → min-width 확보 -->
   <div class="hsearch" style="position:relative;flex:1;min-width:170px;max-width:480px;margin:0 4px">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-faint);pointer-events:none;z-index:1"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
-    <input id="hSearchInput" class="inp" type="text" placeholder="단지명·동명 검색 (예: 마포래미안푸르지오, 공덕동)" style="margin:0;font-size:13.5px;padding:7px 10px 7px 34px" oninput="onHeaderSearchInput(this.value)" onkeydown="onHeaderSearchKey(event)" onfocus="if(this.value)onHeaderSearchInput(this.value)" onblur="setTimeout(()=>document.getElementById('hSearchDrop').style.display='none',200)" autocomplete="off">
+    <input aria-label="단지명·동명 검색" id="hSearchInput" class="inp" type="text" placeholder="단지명·동명 검색 (예: 마포래미안푸르지오, 공덕동)" style="margin:0;font-size:13.5px;padding:7px 10px 7px 34px" oninput="onHeaderSearchInput(this.value)" onkeydown="onHeaderSearchKey(event)" onfocus="if(this.value)onHeaderSearchInput(this.value)" onblur="setTimeout(()=>document.getElementById('hSearchDrop').style.display='none',200)" autocomplete="off">
     <script>
     // Agent UX #11 (2026-05-04): 모바일 ≤480px placeholder 잘림 → JS 로 단순화
     (function _adjustHSearchPlaceholder(){
@@ -1826,7 +1826,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
           <div class="wchead"><span class="wnum">3</span><span class="wtitle">희망 지역</span><span class="wreq">필수</span></div>
           <div class="chips" id="ch-r"><span class="chip on" onclick="cp(this,'ch-r')">서울</span><span class="chip" onclick="cp(this,'ch-r')">경기</span><span class="chip" onclick="cp(this,'ch-r')">인천</span><span class="chip" onclick="cp(this,'ch-r')">지방</span></div>
           <div style="font-size:10px;color:var(--t3);margin:4px 0 3px">세부 지역 선택 · <b>여러 곳 선택 가능</b> (미선택 시 광역의 인기 구 분석)</div>
-          <input id="ch-r-find" class="rsub-find" type="search" placeholder="지역 이름으로 좁히기 (예: 동탄)" oninput="filterRegionSub(this.value)" autocomplete="off">
+          <input aria-label="지역 이름으로 좁히기" id="ch-r-find" class="rsub-find" type="search" placeholder="지역 이름으로 좁히기 (예: 동탄)" oninput="filterRegionSub(this.value)" autocomplete="off">
           <div class="chips rsub-box" id="ch-r-sub" style="margin-top:2px"></div>
           <div id="ch-r-pick" class="rsub-pick" style="display:none"></div>
           <div id="ch-r-none" class="rsub-none" style="display:none">그 이름의 지역이 없어요 — 다른 광역 탭도 확인해보세요</div>
@@ -1946,11 +1946,11 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <div class="sh" onclick="ts('s-deal')"><span class="st">📅 계약 타임라인</span><span class="sa">▲</span></div>
     <div class="sb" id="dealTracker">
       <div style="font-size:11px;color:var(--t3);margin-bottom:10px">계약금·잔금 일정을 입력하면 D-day를 알려드립니다.</div>
-      <label class="lbl">단지명</label>
+      <label class="lbl" for="deal-apt">단지명</label>
       <input class="inp mb9" id="deal-apt" placeholder="예: 래미안 OO">
       <div class="r2">
-        <div><label class="lbl">계약일</label><input class="inp" id="deal-contract" type="date" onchange="renderDealDays()"></div>
-        <div><label class="lbl">잔금일</label><input class="inp" id="deal-balance" type="date" onchange="renderDealDays()"></div>
+        <div><label class="lbl" for="deal-contract">계약일</label><input class="inp" id="deal-contract" type="date" onchange="renderDealDays()"></div>
+        <div><label class="lbl" for="deal-balance">잔금일</label><input class="inp" id="deal-balance" type="date" onchange="renderDealDays()"></div>
       </div>
       <div id="deal-days" style="margin-top:8px"></div>
       <button class="abtn acc" style="margin-top:8px" onclick="saveDeal()">저장</button>
@@ -2316,7 +2316,7 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
     <h3>💰 중개보수(복비) 계산기</h3>
     <p style="font-size:11px;color:var(--t3);margin-bottom:13px">공인중개사법 시행규칙 기준 · 2025년 현행</p>
     <div class="cv-r2" style="margin-bottom:9px">
-      <div><label class="lbl">거래금액 (억)</label><input class="inp" id="biz_price" type="number" inputmode="decimal" placeholder="8.5" step="0.1" oninput="calcComm()"></div>
+      <div><label class="lbl" for="biz_price">거래금액 (억)</label><input class="inp" id="biz_price" type="number" inputmode="decimal" placeholder="8.5" step="0.1" oninput="calcComm()"></div>
       <div>
         <label class="lbl">거래 유형</label>
         <div class="chips" id="biz-type" style="margin-top:4px">
@@ -2430,7 +2430,9 @@ html[data-theme="dark"] #view-news{
       <div id="newsSummaryLines" style="display:flex;flex-direction:column;gap:10px"></div>
       <div id="newsSummarySrc" style="font-size:9.5px;color:var(--brf-tx3);margin-top:10px;line-height:1.5">공식 통계 기반 자동 정리 (한국은행 ECOS · 국토부 KOSIS · 국토부 실거래) · 매수·매도 추천이 아닙니다</div>
       <!-- BRF-DESIGN-2026-08-19: 집킴이 코너 — 시안 플레이스홀더(⌂). 캐릭터 원화는 운영자 제공 대기, 외형 추측 금지. -->
-      <div style="margin-top:12px;display:flex;gap:12px;align-items:flex-start;padding:12px 14px;border:1px dashed var(--brf-line);border-radius:var(--radius-md)">
+      <!-- MASCOT-HIDDEN-2026-09-05 (감사 E·J, 운영자 승인): "(캐릭터 준비 중)" 이라는 미완성 신호를 사용자에게 보이지 않는다.
+           캐릭터 원화가 도착하면 아래 display:none 을 flex 로 되돌리기만 하면 된다(마크업·brfMascotMsg 갱신 로직은 그대로). -->
+      <div style="margin-top:12px;display:none;gap:12px;align-items:flex-start;padding:12px 14px;border:1px dashed var(--brf-line);border-radius:var(--radius-md)">
         <div style="flex:0 0 38px;height:38px;border-radius:var(--radius-md);background:var(--brf-ac);display:grid;place-items:center;color:#0B1524;font-size:18px;font-weight:800">⌂</div>
         <div>
           <div style="font-size:12px;font-weight:700;color:var(--brf-tx)">집킴이 코너 <span style="color:var(--brf-tx3);font-weight:600">(캐릭터 준비 중)</span></div>
@@ -2498,7 +2500,7 @@ html[data-theme="dark"] #view-news{
       <div style="margin-top:10px;font-size:11px;color:var(--t2);line-height:1.7">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
           <div>
-            <label class="lbl">무주택 기간 (1년 미만 2점 · 1년당 +2점 · 최대 32점)</label>
+            <label class="lbl" for="cs_noHome">무주택 기간 (1년 미만 2점 · 1년당 +2점 · 최대 32점)</label>
             <select class="inp" id="cs_noHome" onchange="calcSubsScore()">
               <option value="0">0년 (유주택)</option>
               <option value="2">1년 미만 (2점)</option>
@@ -2520,7 +2522,7 @@ html[data-theme="dark"] #view-news{
             </select>
           </div>
           <div>
-            <label class="lbl">부양가족 (5점+5점/명·최대 35점)</label>
+            <label class="lbl" for="cs_dep">부양가족 (5점+5점/명·최대 35점)</label>
             <select class="inp" id="cs_dep" onchange="calcSubsScore()">
               <option value="5">0명 (본인만, 5점)</option>
               <option value="10">1명 (10점)</option>
@@ -2533,7 +2535,7 @@ html[data-theme="dark"] #view-news{
           </div>
         </div>
         <div style="margin-bottom:10px">
-          <label class="lbl">청약통장 가입기간 (6개월 미만 1점 · 1년당 +1점 · 최대 17점)</label>
+          <label class="lbl" for="cs_bank">청약통장 가입기간 (6개월 미만 1점 · 1년당 +1점 · 최대 17점)</label>
           <select class="inp" id="cs_bank" onchange="calcSubsScore()">
             <option value="1">6개월 미만 (1점)</option>
             <option value="2">6개월~1년 (2점)</option>
@@ -3177,11 +3179,11 @@ html[data-theme="dark"] #view-news{
     </div>
     <div id="ermApt" style="font-size:12px;color:var(--t2);margin-bottom:10px">—</div>
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px">잘못된 항목</div>
-    <select id="ermField" style="width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:var(--radius-base);background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:12.5px;margin-bottom:10px">
+    <select aria-label="잘못된 항목" id="ermField" style="width:100%;padding:9px 10px;border:1px solid var(--bd);border-radius:var(--radius-base);background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:12.5px;margin-bottom:10px">
       <option>세대수</option><option>주차</option><option>실거래</option><option>좌표</option><option>학군</option><option selected>기타</option>
     </select>
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:6px">내용 <span style="font-weight:500;color:var(--t3)">(올바른 값을 아시면 함께 적어주세요)</span></div>
-    <textarea id="ermDetail" rows="4" maxlength="500" placeholder="예: 세대수가 1,200세대로 나오는데 실제는 2,400세대입니다" style="width:100%;box-sizing:border-box;padding:10px 11px;border:1px solid var(--bd);border-radius:var(--radius-base);background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:12.5px;line-height:1.6;resize:vertical"></textarea>
+    <textarea aria-label="신고 내용" id="ermDetail" rows="4" maxlength="500" placeholder="예: 세대수가 1,200세대로 나오는데 실제는 2,400세대입니다" style="width:100%;box-sizing:border-box;padding:10px 11px;border:1px solid var(--bd);border-radius:var(--radius-base);background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:12.5px;line-height:1.6;resize:vertical"></textarea>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
       <button class="bk-btn" onclick="closeErrReport()">취소</button>
       <button class="bk-btn on" id="ermSend" onclick="submitErrReport()">신고 보내기</button>
@@ -3339,7 +3341,7 @@ html[data-theme="dark"] #view-news{
       <div style="text-align:center;font-size:11px;color:var(--t3);margin:6px 0">또는</div>
 
       <label class="lbl">이메일 (Magic Link — 별도 설정 불필요)</label>
-      <input class="inp mb9" type="email" id="lmEmail" placeholder="이메일 (예: hong@gmail.com)" autocomplete="email" inputmode="email">
+      <input aria-label="이메일" class="inp mb9" type="email" id="lmEmail" placeholder="이메일 (예: hong@gmail.com)" autocomplete="email" inputmode="email">
       <button class="sm-save" onclick="loginEmail()">메일로 로그인 링크 받기</button>
 
       <div class="sm-status" id="lmStatus"></div>
@@ -3403,7 +3405,7 @@ html[data-theme="dark"] #view-news{
     </div>
     <div class="smbody">
       <!-- Phase 4 (2026-04-26): 이력 검색 — 100+ 누적 시 핵심 -->
-      <input id="chHistFilter" type="text" placeholder="🔍 제목 검색 (예: 강남, 래미안)" style="width:100%;padding:7px 11px;border:1px solid var(--bd);border-radius:var(--radius-sm);font-size:12px;margin-bottom:8px;font-family:inherit" oninput="filterChatHistory(this.value)">
+      <input aria-label="대화 제목 검색" id="chHistFilter" type="text" placeholder="🔍 제목 검색 (예: 강남, 래미안)" style="width:100%;padding:7px 11px;border:1px solid var(--bd);border-radius:var(--radius-sm);font-size:12px;margin-bottom:8px;font-family:inherit" oninput="filterChatHistory(this.value)">
       <div id="chList" style="max-height:380px;overflow-y:auto;font-size:12px">로딩 중...</div>
       <button class="sm-save" style="margin-top:10px" onclick="newChatSession(true);closeChatHistory()">+ 새 대화 시작</button>
     </div>
@@ -4172,7 +4174,7 @@ async function deleteMyAccount(){
     modal.innerHTML = `<div class="smbox" style="max-width:380px;padding:18px">
       <div style="font-weight:700;font-size:14px;margin-bottom:10px;color:var(--red)">🗑 회원 탈퇴 최종 확인</div>
       <div style="font-size:12px;color:var(--t2);margin-bottom:12px;line-height:1.6">취소할 수 없는 작업입니다.<br>아래에 <b>대문자 DELETE</b> 를 입력하세요.</div>
-      <input type="text" id="_delConfirmInp" class="inp" placeholder="DELETE" autocomplete="off" autocapitalize="characters" style="margin-bottom:12px;font-family:monospace;letter-spacing:2px">
+      <input aria-label="탈퇴 확인 문구 입력" type="text" id="_delConfirmInp" class="inp" placeholder="DELETE" autocomplete="off" autocapitalize="characters" style="margin-bottom:12px;font-family:monospace;letter-spacing:2px">
       <div style="display:flex;gap:8px">
         <button class="sm-save" id="_delConfirmCancel" style="flex:1;background:var(--bg2);color:var(--t1);border:1px solid var(--bd)">취소</button>
         <button class="sm-save" id="_delConfirmOk" style="flex:1;background:var(--red);color:#fff">탈퇴 진행</button>
@@ -5752,7 +5754,7 @@ async function loadSubs(){
       return;
     }
     if(!d.items || !d.items.length){
-      box.innerHTML = `<div style="padding:24px;text-align:center;color:var(--t3)">${d.sido} 향후 ${d.days}일 이내 분양 일정이 없습니다.</div>`;
+      box.innerHTML = `<div style="padding:24px;text-align:center;color:var(--t3)">${_escHtml(d.sido)} 향후 ${d.days}일 이내 분양 일정이 없습니다.</div>`;
       box.dataset.loaded = '1';
       return;
     }
@@ -5774,7 +5776,7 @@ async function loadSubs(){
         </div>
       </div>
     `).join('');
-    const head = `<div style="font-size:11px;color:var(--t3);margin-bottom:9px">📍 ${d.sido} · 향후 ${d.days}일 · 총 <strong style="color:var(--acc)">${d.count}건</strong>${d.fromCache?' · 캐시':''}</div>`;
+    const head = `<div style="font-size:11px;color:var(--t3);margin-bottom:9px">📍 ${_escHtml(d.sido)} · 향후 ${d.days}일 · 총 <strong style="color:var(--acc)">${d.count}건</strong>${d.fromCache?' · 캐시':''}</div>`;
     box.innerHTML = head + cards;
     box.dataset.loaded = '1';
   }catch(e){
@@ -6820,7 +6822,7 @@ function renderListGrid(){
   <!-- Phase 4 (2026-04-26): 정렬·필터 — 추천 결과 비교 핵심 -->
   <div style="margin:0 14px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
     <span style="font-size:11px;color:var(--t2);font-weight:600">정렬</span>
-    <select id="lstSort" onchange="renderListGrid()" style="padding:5px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm);font-size:11.5px;background:var(--bg-base);cursor:pointer;font-family:inherit">
+    <select aria-label="정렬 기준" id="lstSort" onchange="renderListGrid()" style="padding:5px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm);font-size:11.5px;background:var(--bg-base);cursor:pointer;font-family:inherit">
       <option value="score"${_curSortSel==='score'?' selected':''}>점수 높은 순</option>
       <option value="priceAsc"${_curSortSel==='priceAsc'?' selected':''}>가격 낮은 순</option>
       <option value="priceDesc"${_curSortSel==='priceDesc'?' selected':''}>가격 높은 순</option>
@@ -9302,12 +9304,12 @@ function renderBookmarks(){
     const _aptNameJs = _escHtml(JSON.stringify(b.aptName || ''));
     const alertHtml=`<div class="bk-alert-row" onclick="event.stopPropagation()">
       <span style="font-size:10px;color:var(--t3);flex-shrink:0">목표가</span>
-      <input class="bk-alert-inp" type="number" inputmode="decimal" step="0.1" placeholder="억" value="${target||''}" id="bk-alert-${i}" oninput="event.stopPropagation()">
+      <input aria-label="목표가 (억)" class="bk-alert-inp" type="number" inputmode="decimal" step="0.1" placeholder="억" value="${target||''}" id="bk-alert-${i}" oninput="event.stopPropagation()">
       <button class="bk-alert-set" onclick="setAlert(${_aptNameJs},document.getElementById('bk-alert-${i}').value)">설정</button>
       ${target?`<span class="bk-alert-tag ${isHit?'hit':'set'}">${isHit?'🎯 목표가':'▼'+target+'억'}</span>`:''}
     </div>
     <div class="bk-memo-row" onclick="event.stopPropagation()" style="display:flex;gap:4px;margin-top:4px">
-      <input type="text" placeholder="메모 (왜 이 가격?)" maxlength="40" value="${_escHtml(b.memo || '')}" id="bk-memo-${i}" oninput="event.stopPropagation()" style="flex:1;font-size:10.5px;padding:3px 6px;border:1px solid var(--bd);border-radius:var(--radius-sm);background:var(--bg-base);color:var(--t2)">
+      <input aria-label="북마크 메모" type="text" placeholder="메모 (왜 이 가격?)" maxlength="40" value="${_escHtml(b.memo || '')}" id="bk-memo-${i}" oninput="event.stopPropagation()" style="flex:1;font-size:10.5px;padding:3px 6px;border:1px solid var(--bd);border-radius:var(--radius-sm);background:var(--bg-base);color:var(--t2)">
       <button onclick="saveBookmarkMemo(${i},document.getElementById('bk-memo-${i}').value)" style="font-size:10px;padding:3px 8px;background:var(--bg2);border:1px solid var(--bd);border-radius:var(--radius-sm);cursor:pointer;color:var(--t2)">저장</button>
     </div>
     ${lc?`<div style="font-size:9.5px;color:var(--t3);margin-top:3px;padding-left:2px">📊 ${b.lastCheckedCount||0}건${lc}</div>`:''}`;
@@ -9768,11 +9770,11 @@ function renderFieldNote(p){
     </div>
     <div class="fn-section">
       <div class="fn-title">📅 방문일</div>
-      <input type="date" class="fn-date" id="fn-date-${safeId}" value="${_escHtml(vd)}">
+      <input aria-label="방문일" type="date" class="fn-date" id="fn-date-${safeId}" value="${_escHtml(vd)}">
     </div>
     <div class="fn-section">
       <div class="fn-title">📝 메모</div>
-      <textarea class="fn-memo" id="fn-memo-${safeId}" placeholder="채광, 소음, 주변 분위기, 기억할 것들...">${_escHtml(memo)}</textarea>
+      <textarea aria-label="임장 메모" class="fn-memo" id="fn-memo-${safeId}" placeholder="채광, 소음, 주변 분위기, 기억할 것들...">${_escHtml(memo)}</textarea>
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between">
       <button class="fn-save" onclick='saveFieldNote(${nJs},${sidJs})'>저장</button>
@@ -10211,7 +10213,7 @@ function populateRegionSub(wide){
   const sub=document.getElementById('ch-r-sub');
   if(!sub) return;
   const items=REGION_MENU[wide]||[];
-  sub.innerHTML=items.map(g=>`<span class="chip" data-lawd="${g.lawdCd||''}" onclick="cpSub(this)">${g.label}</span>`).join('');
+  sub.innerHTML=items.map(g=>`<span class="chip" data-lawd="${_escHtml(g.lawdCd||'')}" onclick="cpSub(this)">${_escHtml(g.label)}</span>`).join('');
   const f=document.getElementById('ch-r-find');
   if(f){ f.value=''; f.style.display=(items.length>12)?'':'none'; }
   const none=document.getElementById('ch-r-none'); if(none) none.style.display='none';
