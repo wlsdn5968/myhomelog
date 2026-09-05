@@ -42,6 +42,7 @@ const PLATFORM_PROVIDED = new Set([
   'VERCEL',                  // 이하 Vercel 자동 주입 (.env.example 하단 주석에도 명시돼 있음)
   'VERCEL_ENV',
   'VERCEL_URL',
+  'VERCEL_BRANCH_URL',       // server.js 프리뷰 자기출처 CORS(PREVIEW-CORS-2026-09-05)가 읽는다 — Vercel 자동 주입(system env). CI #911 이 이 누락으로 막혔다
   'VERCEL_REGION',           // logger.js 가 읽지만 Vercel 이 넣어준다
   'VERCEL_GIT_COMMIT_SHA',
 ]);
