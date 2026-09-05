@@ -106,7 +106,8 @@ router.get('/records', async (req, res) => {
     // ⚠ CACHE-POISON-2026-08-29 (실사고): 콜드 경로에서 한 번 빈 목록이 나왔는데 s-maxage=6h 로
     //   엣지에 그대로 굳어(`x-vercel-cache: HIT`, `age 134`, `regions 0`) 브리핑 지역 선택기가
     //   통째로 사라졌다. **열화된 응답은 캐시하지 않는다** — 다음 요청이 다시 계산하게 둔다.
-    res.set('Cache-Control', degraded ? 'no-store' : CC);
+    // RECORDS-STALE-2026-09-05: 마지막 성공 스냅샷(stale)은 다음 요청이 신선한 값을 집도록 엣지에 굳히지 않는다.
+    res.set('Cache-Control', (degraded || data.stale) ? 'no-store' : CC);
     res.json({ ...data, scope: 'national', regions });
   } catch (err) {
     require('../utils/captureError').captureRouteError(err, 'transactions');

@@ -6122,3 +6122,149 @@ test('광역 전수 조회 경량화 — 별칭은 비어 있지 않은 행만, 
     if (saved.fac) require.cache[facPath] = saved.fac; else delete require.cache[facPath];
   }
 });
+
+// ── DSR-STATE-2026-09-05 ─────────────────────────────────────────────────────────
+//   외부 검토(Codex) 재현: 7억·연소득 5,000·기존 월 200만원·현금 3억·무주택·생애최초·서울규제 → 추천한도 4.90억 · 부족 '충분' · DSR 104%.
+//   원인: dc() 의 `Math.min(lL, dL>0 ? dL : lL)` 이 계산값 0 을 소득 미입력으로 읽었다.
+test('상세 대출계산 — 소득 미입력 / 여력 0 / 양수 한도를 구분하고 대표 숫자·월상환·부족자금이 같은 상태에서 나온다', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const m = html.match(/function calcLoanLimitsPure\(\{[\s\S]*?\r?\n\}\r?\n/);
+  assert.ok(m, '순수 산식 calcLoanLimitsPure 가 없다');
+  const fn = new Function(`${m[0]}; return calcLoanLimitsPure;`)();
+  const base = { buy: 7, inc: 5000, rate: 0.04, yrs: 30, cash: 3, ltv: 0.7, cap: 6, isLoc: false };
+  // ① 기존 월상환 200만원 > 허용 166.7만원 → 여력 0: 한도 0·월상환 0·부족 4억·DSR 은 기존 부채만으로 48%
+  const zero = fn({ ...base, exAdded: 200 });
+  assert.equal(zero.dsrState, 'zero');
+  assert.equal(zero.fin, 0, '여력 0 인데 LTV 한도로 되돌아갔다(외부 검토 재현 결함)');
+  assert.equal(zero.mo, 0);
+  assert.equal(zero.need, 4, '부족자금이 매수가-현금(4억)이 아니다');
+  assert.equal(zero.dsr, 48);
+  assert.ok(Math.abs(zero.lL - 4.9) < 1e-9, 'LTV 한도 자체는 4.9억이어야 한다(표시용)');
+  // ② 소득 미입력 → DSR 미반영, LTV 한도만
+  const none = fn({ ...base, inc: 0, exAdded: 200 });
+  assert.equal(none.dsrState, 'none'); assert.ok(Math.abs(none.fin - 4.9) < 1e-9); assert.equal(none.dL, 0); assert.equal(none.dsr, 0);
+  // ③ 여력이 정확히 0(허용액과 같은 기존 상환) → 여력 0
+  const exact = fn({ ...base, exAdded: 5000 * 0.4 / 12 });
+  assert.equal(exact.dsrState, 'zero'); assert.equal(exact.fin, 0);
+  // ④ 작은 양수 여력(기존 150만원 → 월 16.7만원) → 양수 한도이되 LTV 보다 훨씬 작다
+  const small = fn({ ...base, exAdded: 150 });
+  assert.equal(small.dsrState, 'ok'); assert.ok(small.dL > 0 && small.dL < 1, `작은 여력의 한도가 이상하다: ${small.dL}`);
+  assert.equal(small.fin, small.dL); assert.ok(small.mo > 0 && small.need > 2);
+  // ⑤ 기존 부채 없음 → 종전 정상 계산 보존(LTV 4.9억이 DSR 한도보다 작아 4.9억)
+  const normal = fn({ ...base, exAdded: 0 });
+  //   연소득 5,000 → 월 허용 166.7만원 → 스트레스 7%·30년 환산 ≈ 2.5억 < LTV 4.9억 → DSR 한도가 대표값(종전 코드와 같은 결과)
+  assert.equal(normal.dsrState, 'ok'); assert.equal(normal.fin, normal.dL); assert.ok(normal.dL > 2 && normal.dL < 3, `DSR 한도가 예상 범위 밖: ${normal.dL}`);
+  assert.ok(normal.mo > 100 && normal.mo < 130, `월상환이 예상 범위 밖: ${normal.mo}`); assert.ok(normal.dsr > 0 && normal.dsr <= 40, `정상 케이스 DSR 이상: ${normal.dsr}`);
+  assert.ok(normal.need > 1 && normal.need < 2, `부족자금이 예상 범위 밖: ${normal.need}`);
+  // ⑥ LTV 0(2주택+) 은 무엇이든 0
+  const noltv = fn({ ...base, exAdded: 0, ltv: 0 });
+  assert.equal(noltv.fin, 0); assert.equal(noltv.mo, 0);
+  // ⑦ 금리 0 이어도 NaN 이 나오지 않는다(원금균등 근사)
+  const r0 = fn({ ...base, exAdded: 0, rate: 0 });
+  assert.ok(Number.isFinite(r0.fin) && Number.isFinite(r0.mo) && r0.mo > 0, '금리 0 에서 NaN');
+  // dc() 가 순수 함수를 쓰고, 옛 결함 패턴이 남아 있지 않다
+  const dcStart = html.indexOf('function dc(){');
+  const dcBody = html.slice(dcStart, dcStart + 6000);
+  assert.match(dcBody, /const _r=calcLoanLimitsPure\(\{buy,inc,rate,yrs,exAdded,cash,ltv,cap,isLoc\}\);/, 'dc() 가 순수 산식을 쓰지 않는다');
+  assert.ok(!/dL>0\?dL:lL/.test(dcBody), '옛 결함 패턴(dL>0?dL:lL)이 남아 있다');
+  assert.match(dcBody, /dsrState==='zero'\?'0원 \(기존 부채로 여력 없음\)'/, '여력 0 표시가 없다');
+  assert.match(dcBody, /dsrState==='none'\?'소득 입력 필요'/, '소득 미입력 표시가 없다');
+});
+
+// ── FIRST-UNKNOWN-2026-09-05 ──────────────────────────────────────────────────────
+test('생애최초 — 접힌 선택 항목의 기본값이 우대(예)가 아니고, 미선택은 미확인으로 요약·보고서에 드러난다', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const chf = html.match(/<div class="chips" id="ch-f">[\s\S]*?<\/div>/);
+  assert.ok(chf, 'ch-f 칩 그룹이 없다');
+  assert.ok(!/chip on/.test(chf[0]), '보고서·검색 폼의 생애최초가 기본 선택돼 있다(외부 검토 재현: 확인 없이 우대 조건 적용)');
+  const ccf = html.match(/<div class="chips" id="cc-f">[\s\S]*?<\/div>/);
+  assert.ok(ccf && /<span class="chip on"[^>]*>아니오<\/span>/.test(ccf[0]), '상세계산기 생애최초 기본값이 우대(예)다');
+  assert.match(html, /const firstBuyerKnown = gct\('ch-f'\) !== '';/, '미확인 상태를 만들지 않는다');
+  assert.match(html, /생애최초 \$\{firstBuyerKnown \? \(isFirstBuyer \? '예' : '아니오'\) : '미확인\(일반 기준\)'\}/, '입력 요약이 미확인을 밝히지 않는다');
+  assert.match(html, /houseStatus, isFirstBuyer, firstBuyerKnown, pyeong, schoolNeeded,/, '보고서 요청에 firstBuyerKnown 이 없다');
+  assert.match(html, /if\(body\.firstBuyerKnown!==false\)s\.set\('first',body\.isFirstBuyer\?'1':'0'\);/, 'URL 저장이 미확인을 기록한다');
+  assert.match(html, /if\(_f==='1'\)setChip\('ch-f','예'\); else if\(_f==='0'\)setChip\('ch-f','아니오'\);/, 'URL 복원이 파라미터 없을 때 아니오를 강제한다');
+  const rpt = require('node:fs').readFileSync(require.resolve('../routes/report'), 'utf8');
+  assert.match(rpt, /userInput\.firstBuyerKnown = userInput\.firstBuyerKnown !== false;/, '백엔드가 미확인 플래그를 받지 않는다');
+  assert.match(rpt, /if \(userInput\.firstBuyerKnown === false\) coreMessages\.push\('생애최초 여부를 선택하지 않아/, '데이터판이 미확인을 밝히지 않는다');
+  assert.match(rpt, /생애 최초: \$\{input\.firstBuyerKnown === false \? '미확인/, 'AI 프롬프트가 미확인을 밝히지 않는다');
+});
+
+// ── LOGIN-GATE + REPORT-TIMEOUT-2026-09-05 ─────────────────────────────────────────
+test('보고서 — 익명은 요청 전에 로그인으로 잇고(입력 보존), 제한 시간과 안내 문구는 한 상수에서 나온다', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const g = html.indexOf('async function generateReport(_isRetry) {');
+  const body = html.slice(g, g + 9000);
+  const gate = body.indexOf("if (!(window.MHL && window.MHL.auth && window.MHL.auth.user)) {");
+  const fetchAt = body.indexOf('await fetch(`${CFG.api}/report/generate`');
+  assert.ok(gate > 0 && fetchAt > 0 && gate < fetchAt, '익명 로그인 게이트가 없거나 요청 뒤에 있다');
+  assert.match(body.slice(gate, gate + 1200), /report_login_required/, '로그인 필요 이벤트가 실패 이벤트와 구분되지 않는다');
+  assert.match(body.slice(gate, gate + 1200), /openLogin&&openLogin\('report'\)/, '로그인 CTA 가 없다');
+  assert.match(html, /const REPORT_TIMEOUT_MS = 90000;/, '타임아웃 상수가 없다');
+  assert.match(html, /signal: AbortSignal\.timeout\(REPORT_TIMEOUT_MS\),/, '요청 제한이 상수를 쓰지 않는다');
+  assert.ok(!html.includes("중단했어요 (3분)"), "옛 '3분' 문구가 남아 있다");
+  assert.ok(!html.includes('보고서 생성 중... (1~3분)'), "옛 '1~3분' 문구가 남아 있다");
+  assert.match(html, /응답 시간이 너무 길어 중단했어요 \(\$\{Math\.round\(REPORT_TIMEOUT_MS\/1000\)\}초\)/, '중단 안내가 상수에서 나오지 않는다');
+});
+
+// ── RECORDS-LAST-2026-09-05 ────────────────────────────────────────────────────────
+test('경신 카드 — 재계산 실패 시 503 대신 마지막 성공 스냅샷(stale)을 주고, 성공 시 스냅샷을 남기며, 워밍은 1회 재시도한다', async () => {
+  const dbPath = require.resolve('../db/client');
+  const redisPath = require.resolve('../services/redisCache');
+  const svcPath = require.resolve('../services/priceRecordsService');
+  const saved = { db: require.cache[dbPath], redis: require.cache[redisPath], svc: require.cache[svcPath] };
+  const store = new Map();
+  let rpcMode = 'fail'; let rpcCalls = 0;
+  require.cache[redisPath] = { id: redisPath, filename: redisPath, loaded: true, exports: {
+    rget: async (k) => (store.has(k) ? store.get(k) : null), rset: async (k, v) => { store.set(k, v); },
+  } };
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: {
+    getSupabaseAdmin: () => ({ rpc: async () => {
+      rpcCalls++;
+      if (rpcMode === 'fail') return { data: null, error: { message: 'canceling statement due to statement timeout' } };
+      if (rpcMode === 'failOnce') { rpcMode = 'ok'; return { data: null, error: { message: 'timeout' } }; }
+      return { data: { latestDeal: '2026-09-03', sinceDate: '2026-08-27', comparedCount: 2148, highCount: 369, lowCount: 123, high: [], low: [] }, error: null };
+    } }),
+  } };
+  const cache = require('../cache');
+  try {
+    delete require.cache[svcPath];
+    const svc = require('../services/priceRecordsService');
+    for (const k of ['records:price:v1', 'records:price:computeFailedAt']) cache.del(k);
+    // ① 스냅샷도 없고 RPC 도 실패 → null(503) — 실패를 0 으로 꾸미지 않는다
+    assert.equal(await svc.getPriceRecords(), null);
+    // ② 성공 → 신선 캐시 + 마지막 성공 스냅샷 저장
+    cache.del('records:price:v1'); cache.del('records:price:computeFailedAt');
+    rpcMode = 'ok';
+    const fresh = await svc.getPriceRecords();
+    assert.equal(fresh.highCount, 369); assert.ok(!fresh.stale);
+    assert.ok(store.has('records:price:last'), '마지막 성공 스냅샷이 저장되지 않았다');
+    // ③ 신선 캐시가 비고 RPC 가 다시 실패 → stale 스냅샷(computedAt 포함)
+    cache.del('records:price:v1'); store.delete('records:price:v1');
+    rpcMode = 'fail';
+    const stale = await svc.getPriceRecords();
+    assert.ok(stale && stale.stale === true && stale.highCount === 369 && stale.computedAt, '재계산 실패에 마지막 성공 스냅샷을 주지 않는다');
+    // ④ 백오프 중에는 RPC 를 다시 부르지 않는다
+    const before = rpcCalls;
+    const again = await svc.getPriceRecords();
+    assert.equal(rpcCalls, before, '실패 직후 요청이 다시 8초짜리 RPC 를 태운다');
+    assert.ok(again.stale);
+    // ⑤ 워밍(force)은 1회 재시도로 살아난다
+    cache.del('records:price:computeFailedAt');
+    rpcMode = 'failOnce'; const c0 = rpcCalls;
+    const warmed = await svc.getPriceRecords({ force: true });
+    assert.equal(rpcCalls - c0, 2, '워밍이 실패 후 재시도하지 않는다');
+    assert.ok(warmed && !warmed.stale && warmed.highCount === 369);
+  } finally {
+    for (const k of ['records:price:v1', 'records:price:computeFailedAt']) cache.del(k);
+    if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
+    if (saved.redis) require.cache[redisPath] = saved.redis; else delete require.cache[redisPath];
+    if (saved.svc) require.cache[svcPath] = saved.svc; else delete require.cache[svcPath];
+  }
+  const route = require('node:fs').readFileSync(require.resolve('../routes/transactions'), 'utf8');
+  assert.match(route, /res\.set\('Cache-Control', \(degraded \|\| data\.stale\) \? 'no-store' : CC\);/, 'stale 응답이 엣지 6시간에 굳는다');
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  assert.match(html, /async function _loadPriceRecordsCard\(\)\{/, '랜딩 경신 카드 로더가 함수가 아니다(재시도 불가)');
+  assert.match(html, /_meta\.textContent = \(d\.stale && _at && !isNaN\(_at\)\) \? `[^`]*기준` : '실시간';/, 'stale 스냅샷을 실시간이라 부른다');
+  assert.match(html, /_meta\.textContent='불러오지 못함 · 다시 시도'; _meta\.style\.cursor='pointer'; _meta\.title='클릭하면 다시 불러와요'; _meta\.onclick=\(\)=>_loadPriceRecordsCard\(\);/, '실패 시 재시도 동작이 없다');
+});

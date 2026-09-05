@@ -133,6 +133,9 @@ router.post('/generate', async (req, res) => {
   userInput.kidPlan     = _enum(userInput.kidPlan, ['없음', '예정', '0~6세', '초등', '중등+'], '없음');
   userInput.stayYears   = _enum(userInput.stayYears, ['3년 이하', '5~10년', '10년+'], '5~10년');
   userInput.isFirstBuyer = !!userInput.isFirstBuyer;
+  // FIRST-UNKNOWN-2026-09-05: 프론트가 미선택(미확인)을 알려주면 계산은 일반 기준(false)으로 하되 보고서가 그 사실을 밝힌다.
+  //   구버전 클라이언트(필드 없음)는 종전대로 '확인됨'으로 본다.
+  userInput.firstBuyerKnown = userInput.firstBuyerKnown !== false;
   userInput.schoolNeeded = !!userInput.schoolNeeded;
 
   // 캐시 키 — 동일 입력 30분 캐시
@@ -599,6 +602,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
   ];
   if (fc.unsold) coreMessages.push(`${fc.unsold} — 수치 나열이며 시장 예측이 아니에요.`);
   if (fc.txTrend) coreMessages.push(`${fc.txTrend} — 수치 나열이며 시장 예측이 아니에요.`);
+  if (userInput.firstBuyerKnown === false) coreMessages.push('생애최초 여부를 선택하지 않아 일반(비우대) 기준으로 정리했어요 — 생애최초에 해당하면 LTV·취득세 우대가 달라질 수 있어요.');
 
   const checklist = [
     { text: '등기부등본 최신본 확인 (계약 직전 재확인)', stars: 3 },
@@ -1946,7 +1950,7 @@ function buildReportPrompt(input, policy, candidates, freeCtx) {
 - 자기자본: ${input.myCash || '?'}억
 - 연소득: ${input.annualIncome ? input.annualIncome + '만원' : '미입력'} (참고용 — DSR 계산은 사이드바 대출계산 탭)
 - 보유 주택: ${input.houseStatus || '?'}
-- 생애 최초: ${input.isFirstBuyer ? '예' : '아니오'}
+- 생애 최초: ${input.firstBuyerKnown === false ? '미확인 — 일반(비우대) 기준으로 계산했고, 해당 시 우대 가능성만 언급할 것' : (input.isFirstBuyer ? '예' : '아니오')}
 - 희망 지역: ${input.region}
 - 평형: ${input.pyeong || '전체'}
 - 학군 중요도: ${input.schoolNeeded ? '중요' : '보통'}

@@ -24,6 +24,21 @@ const CK = 'records:price:v1';
 const CK_REGION = 'records:priceByRegion:v1';
 const TTL_LOCAL = 6 * 3600;      // 인스턴스 캐시
 const TTL_REDIS = 30 * 3600;     // daily cron(24h) + Hobby ±59분 지연 여유
+// RECORDS-LAST-2026-09-05 (외부 검토 P1 채택 — 운영 실측: 20:14 KST 요청 경로 RPC 가 statement timeout(8s) 으로 503 두 번):
+//   authenticator 롤의 statement_timeout 이 8s 인데 이 RPC 는 pg_stat_statements 평균 4.7s·최대 6.6s 라 요청 경로에서
+//   재계산하면 언제든 잘릴 수 있다. 성공한 결과는 **별도 키에 오래(14일)** 남겨, 신선 캐시가 비었을 때 503 대신
+//   마지막 성공 스냅샷(stale:true·computedAt)을 준다. 신선 캐시는 daily cron 이 채우고, 실패한 재계산은 10분간 재시도하지 않는다.
+const CK_LAST = 'records:price:last';
+const CK_REGION_LAST = 'records:priceByRegion:last';
+const TTL_LAST = 14 * 86400;
+const CK_FAIL = 'records:price:computeFailedAt';
+const FAIL_BACKOFF_S = 600;
+async function _lastGood(key) {
+  try { const v = await rget(key); return v || null; } catch (_) { return null; }
+}
+function _withStale(snap) {
+  return { ...snap, stale: true };
+}
 
 const DEF_DAYS = 7;
 const DEF_MIN_PRIOR = 3;         // 거래 1~2건짜리는 통계가 아니라 잡음 — TRUST 게이트와 같은 취지
@@ -112,16 +127,21 @@ async function getPriceRecords({ force = false } = {}) {
       const shared = await rget(CK);
       if (shared) { cache.set(CK, shared, TTL_LOCAL); return shared; }
     } catch (_) { /* Redis 미구성·장애는 계산으로 폴백 */ }
+    // 신선 캐시가 비었다. 최근 재계산이 실패했으면(백오프) 마지막 성공 스냅샷을 준다 — 요청마다 8초를 태우지 않는다.
+    if (cache.get(CK_FAIL) !== undefined) {
+      const last = await _lastGood(CK_LAST);
+      if (last) return _withStale(last);
+    }
   }
 
   const admin = getSupabaseAdmin();
-  if (!admin) return null;
+  if (!admin) return force ? null : _withStaleOrNull(await _lastGood(CK_LAST));
 
   let payload = null;
   try {
-    const { data, error } = await admin.rpc('get_price_records', {
+    const { data, error } = await _rpcWithRetry(admin, 'get_price_records', {
       p_days: DEF_DAYS, p_min_prior: DEF_MIN_PRIOR, p_limit: DEF_LIMIT,
-    });
+    }, force ? 1 : 0);
     if (error) throw error;
     if (!data) return null;
     payload = {
@@ -138,12 +158,31 @@ async function getPriceRecords({ force = false } = {}) {
     };
   } catch (e) {
     logger.warn({ err: e.message }, 'price records 조회 실패');
+    cache.set(CK_FAIL, Date.now(), FAIL_BACKOFF_S);
+    // 실패는 실패다 — 다만 마지막 성공 스냅샷이 있으면 503 대신 그것을(기준 시각과 함께) 준다.
+    const last = await _lastGood(CK_LAST);
+    if (last) {
+      logger.info({ computedAt: last.computedAt }, 'price records: 재계산 실패 → 마지막 성공 스냅샷(stale) 제공');
+      return _withStale(last);
+    }
     return null;
   }
 
   cache.set(CK, payload, TTL_LOCAL);
   try { await rset(CK, payload, TTL_REDIS); } catch (_) { /* 공유 캐시 실패는 삼킨다 */ }
+  try { await rset(CK_LAST, payload, TTL_LAST); } catch (_) { /* 스냅샷 저장 실패도 삼킨다 */ }
   return payload;
+}
+function _withStaleOrNull(last) { return last ? _withStale(last) : null; }
+/** RPC 1회 + (retries 회) 재시도 — 첫 실행이 버퍼를 데워 두 번째가 시간 안에 끝나는 경우가 있다(워밍 전용). */
+async function _rpcWithRetry(admin, fn, args, retries = 0) {
+  let res = await admin.rpc(fn, args);
+  for (let i = 0; i < retries && res.error; i++) {
+    logger.warn({ err: res.error.message, fn, attempt: i + 1 }, 'price records RPC 실패 — 재시도');
+    await new Promise(r => setTimeout(r, 1500));
+    res = await admin.rpc(fn, args);
+  }
+  return res;
 }
 
 /**
@@ -161,16 +200,18 @@ async function getPriceRecordsByRegion({ force = false } = {}) {
     } catch (_) { /* Redis 미구성·장애는 계산으로 폴백 */ }
   }
   const admin = getSupabaseAdmin();
-  if (!admin) return null;
+  if (!admin) return force ? null : _withStaleOrNull(await _lastGood(CK_REGION_LAST));
   let data = null;
   try {
-    const res = await admin.rpc('get_price_records_by_region', {
+    const res = await _rpcWithRetry(admin, 'get_price_records_by_region', {
       p_days: REGION_DAYS, p_min_prior: DEF_MIN_PRIOR, p_limit: REGION_LIMIT,
-    });
+    }, force ? 1 : 0);
     if (res.error) throw res.error;
     data = res.data || null;
   } catch (e) {
     logger.warn({ err: e.message }, 'price records(지역) 조회 실패');
+    const last = await _lastGood(CK_REGION_LAST);
+    if (last) return _withStale(last);
     return null;
   }
   if (!data || !data.regions) {
@@ -180,6 +221,7 @@ async function getPriceRecordsByRegion({ force = false } = {}) {
   }
   cache.set(CK_REGION, data, TTL_LOCAL);
   try { await rset(CK_REGION, data, TTL_REDIS); } catch (_) { /* 공유 캐시 실패는 삼킨다 */ }
+  try { await rset(CK_REGION_LAST, { ...data, computedAt: new Date().toISOString() }, TTL_LAST); } catch (_) { /* 스냅샷 저장 실패도 삼킨다 */ }
   return data;
 }
 

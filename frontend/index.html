@@ -1844,7 +1844,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <details class="wopt" id="wizOpt">
           <summary>＋ 더 정확한 보고서 (선택) <span style="font-weight:400;color:var(--t3);font-size:11px">생애최초 · 연소득 · 자녀 · 거주기간 · 우선순위 · 평형 · 직장</span></summary>
           <div style="margin-top:10px">
-          <div class="mb9"><span class="lbl">생애 최초 <span class="wi" onclick="toast(this.title)" title="생애최초: 세대원 전원이 지금까지 한 번도 주택을 소유한 적 없는 경우. LTV 우대·취득세 감면 등 혜택 판단에 쓰여요.">ⓘ</span></span><div class="chips" id="ch-f"><span class="chip on" onclick="cp(this,'ch-f')">예</span><span class="chip" onclick="cp(this,'ch-f')">아니오</span></div></div>
+          <div class="mb9"><span class="lbl">생애 최초 <span class="wi" onclick="toast(this.title)" title="생애최초: 세대원 전원이 지금까지 한 번도 주택을 소유한 적 없는 경우. LTV 우대·취득세 감면 등 혜택 판단에 쓰여요.">ⓘ</span></span><div class="chips" id="ch-f"><span class="chip" onclick="cp(this,'ch-f')">예</span><span class="chip" onclick="cp(this,'ch-f')">아니오</span></div></div>
           <details id="polQualBox" style="margin-bottom:9px"><summary style="cursor:pointer;font-size:11px;color:var(--t2);user-select:none;list-style:none">▸ 정책자금 자격 (신혼·신생아 해당 시)</summary>
             <div style="margin-top:6px;padding-left:4px;border-left:2px solid var(--bd)">
               <div class="mb9"><span class="lbl">신혼부부 (혼인 7년 이내)</span><div class="chips" id="ch-nw"><span class="chip" onclick="cp(this,'ch-nw')">예</span><span class="chip on" onclick="cp(this,'ch-nw')">아니오</span></div></div>
@@ -2132,7 +2132,7 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:11px">
       <div><span class="lbl">주택보유</span><div class="chips" id="cc-h"><span class="chip on" onclick="cp(this,'cc-h')">무주택</span><span class="chip" onclick="cp(this,'cc-h')">1주택</span><span class="chip" onclick="cp(this,'cc-h')">2주택+</span></div></div>
-      <div><span class="lbl">생애최초</span><div class="chips" id="cc-f"><span class="chip on" onclick="cp(this,'cc-f')">예</span><span class="chip" onclick="cp(this,'cc-f')">아니오</span></div></div>
+      <div><span class="lbl">생애최초</span><div class="chips" id="cc-f"><span class="chip" onclick="cp(this,'cc-f')">예</span><span class="chip on" onclick="cp(this,'cc-f')">아니오</span></div></div>
       <div><span class="lbl">지역</span><div class="chips" id="cc-r"><span class="chip on" onclick="cp(this,'cc-r')">서울규제</span><span class="chip" onclick="cp(this,'cc-r')">비규제</span><span class="chip" onclick="cp(this,'cc-r')">지방</span></div></div>
     </div>
     <button class="abtn acc" style="margin-top:0" onclick="dc()">계산하기</button>
@@ -3788,24 +3788,33 @@ async function _landingAsyncRefresh(){
   //   LANDING-FAKE 선례 그대로 — 응답이 실제로 오고 세 값이 전부 유효할 때만 채우고 '실시간'을 단다.
   //   숫자는 Number 로 강제하므로 innerHTML 에 넣어도 문자열이 마크업으로 새지 않는다(단위 span 때문).
   //   문자열인 sinceDate 는 textContent 로만 쓴다.
-  try {
-    const r = await fetch(`${CFG.api}/transactions/records`, {signal:AbortSignal.timeout(5000)});
-    if(r.ok){
-      const d = await r.json();
-      const hi = Number(d.highCount), lo = Number(d.lowCount), cmp = Number(d.comparedCount);
-      if(Number.isFinite(hi) && Number.isFinite(lo) && Number.isFinite(cmp) && cmp > 0){
-        const put = (id, n) => { const e = document.getElementById(id); if(e) e.innerHTML = Number(n).toLocaleString() + '<span>건</span>'; };
-        put('lv-recHigh', hi); put('lv-recLow', lo); put('lv-recCompared', cmp);
-        const sub = document.getElementById('lv-recSub');
-        if(sub) sub.textContent = `같은 단지 · 같은 전용면적의 직전 거래와 비교${d.sinceDate ? ` · ${String(d.sinceDate).replace(/-/g,'.')} 이후 적재분 안에서` : ''} — 매수·매도 추천이 아닙니다`;
-        const m = document.getElementById('lv-recMeta'); if(m) m.textContent = '실시간';
+  // RECORDS-STALE-2026-09-05 (외부 검토 P1 채택): 서버가 마지막 성공 스냅샷(stale)을 주면 '실시간' 대신 기준 시각을 밝히고,
+  //   실패하면 0 으로 꾸미지 않고 클릭으로 다시 시도할 수 있게 한다(함수로 분리 — 재시도가 같은 코드를 탄다).
+  async function _loadPriceRecordsCard(){
+    const _meta = document.getElementById('lv-recMeta');
+    if(_meta){ _meta.textContent='불러오는 중'; _meta.onclick=null; _meta.style.cursor=''; _meta.title=''; }
+    try {
+      const r = await fetch(`${CFG.api}/transactions/records`, {signal:AbortSignal.timeout(5000)});
+      if(r.ok){
+        const d = await r.json();
+        const hi = Number(d.highCount), lo = Number(d.lowCount), cmp = Number(d.comparedCount);
+        if(Number.isFinite(hi) && Number.isFinite(lo) && Number.isFinite(cmp) && cmp > 0){
+          const put = (id, n) => { const e = document.getElementById(id); if(e) e.innerHTML = Number(n).toLocaleString() + '<span>건</span>'; };
+          put('lv-recHigh', hi); put('lv-recLow', lo); put('lv-recCompared', cmp);
+          const sub = document.getElementById('lv-recSub');
+          if(sub) sub.textContent = `같은 단지 · 같은 전용면적의 직전 거래와 비교${d.sinceDate ? ` · ${String(d.sinceDate).replace(/-/g,'.')} 이후 적재분 안에서` : ''} — 매수·매도 추천이 아닙니다`;
+          if(_meta){
+            const _at = d.computedAt ? new Date(d.computedAt) : null;
+            const _p = (x) => String(x).padStart(2,'0');
+            _meta.textContent = (d.stale && _at && !isNaN(_at)) ? `${_p(_at.getMonth()+1)}.${_p(_at.getDate())} ${_p(_at.getHours())}:${_p(_at.getMinutes())} 기준` : '실시간';
+          }
+          return;
+        }
       }
-    }
-  } catch(_){}
-  try {
-    const _m = document.getElementById('lv-recMeta');
-    if (_m && _m.textContent === '불러오는 중') _m.textContent = '불러오지 못함';
-  } catch(_){}
+    } catch(_){}
+    if(_meta){ _meta.textContent='불러오지 못함 · 다시 시도'; _meta.style.cursor='pointer'; _meta.title='클릭하면 다시 불러와요'; _meta.onclick=()=>_loadPriceRecordsCard(); }
+  }
+  await _loadPriceRecordsCard();
   // LAST SYNC 시각 갱신
   // SYNCTIME-FIX-2026-07-25 (Sprint VVVVVV): 여기도 `d.timestamp`(응답 생성 시각 = 지금)를 쓰면서
   //   주석엔 "정확값"이라고 적혀 있었다 — 라이브뷰 카드도 배너와 똑같이 항상 현재 시각을 보여줬다.
@@ -4546,6 +4555,9 @@ window.addEventListener('DOMContentLoaded', ()=>{
 // 약관 모달
 function openTerms(){document.getElementById('TM').classList.add('open');}
 
+// REPORT-TIMEOUT-2026-09-05 (외부 검토 P2 채택): 요청 제한(90s)과 안내 문구('3분'·'1~3분')가 따로 놀았다 — 한 상수에서 뽑는다.
+//   제한값 자체는 유지(DUPKEY-FIX 의 결정: 90s 로 잘리는 사례가 관측되면 재검토).
+const REPORT_TIMEOUT_MS = 90000;
 // Phase 5 (2026-04-26): 1Page 맞춤 보고서 — 핵심 USP
 async function generateReport(_isRetry) {
   const btn = document.getElementById('reportGenBtn');
@@ -4561,6 +4573,9 @@ async function generateReport(_isRetry) {
   const region = getRegionForSearch();
   const houseStatus = gct('ch-h');
   const isFirstBuyer = gct('ch-f') === '예';
+  // FIRST-UNKNOWN-2026-09-05 (외부 검토 P1 후보 채택): 접힌 선택 항목의 기본값 '예'가 확인 없이 우대 조건으로 들어갔다.
+  //   미선택은 '미확인'이다 — 계산은 일반(비우대) 기준으로 하되, 요약·보고서가 그 사실을 밝힌다(조용히 '아니오'로 바꾸지 않는다).
+  const firstBuyerKnown = gct('ch-f') !== '';
   const pyeong = gct('ch-py');
   const schoolNeeded = gct('ch-sc') === '학군 중요';
   const kidPlan = gct('ch-kid') || '없음';
@@ -4595,16 +4610,24 @@ async function generateReport(_isRetry) {
   summary.innerHTML = `
     📋 <b>입력 조건</b><br>
     매수가 <b>${buy}억</b> · 자기자본 ${cash || '?'}억 · 지역 <b>${_escHtml(region)}</b><br>
-    보유 ${_escHtml(houseStatus||'?')} · 생애최초 ${isFirstBuyer ? '예' : '아니오'} · 평형 ${_escHtml(pyeong||'전체')}<br>
+    보유 ${_escHtml(houseStatus||'?')} · 생애최초 ${firstBuyerKnown ? (isFirstBuyer ? '예' : '아니오') : '미확인(일반 기준)'} · 평형 ${_escHtml(pyeong||'전체')}<br>
     자녀 ${_escHtml(kidPlan)} · 거주 ${_escHtml(stayYears)} · 1순위 <b>${_escHtml(priority)}</b>
   `;
+
+  // LOGIN-GATE-2026-09-05 (외부 검토 P2 채택): 익명 사용자의 서버 한도는 0(server.js dailyLimit) — 요청을 보내 봐야 429 다.
+  //   실패로 기록·표시하지 않고 입력을 보존한 채 로그인으로 잇는다. 서버의 인증·한도 검사는 그대로다(클라이언트 안내가 대체하지 않는다).
+  if (!(window.MHL && window.MHL.auth && window.MHL.auth.user)) {
+    try { window.va && window.va('event', { name: 'report_login_required', data: { region } }); } catch(_){}
+    result.innerHTML = `<div style="padding:26px;text-align:center;font-size:13px;line-height:1.6;color:var(--t1)">🔓 보고서 생성에는 무료 로그인이 필요해요<div style="font-size:11px;color:var(--t2);margin-top:6px">입력한 조건은 그대로 남아 있어요 — 로그인 후 「맞춤 보고서 생성하기」를 다시 누르면 바로 생성돼요 (하루 1회 무료).</div><button onclick="openLogin&&openLogin('report')" style="margin-top:14px;padding:9px 18px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:var(--radius-base);font-size:12px;font-weight:700;cursor:pointer">로그인하고 보고서 만들기</button></div>`;
+    return;
+  }
 
   // 생성 시작 (Phase 8: + 카카오 좌표/amenities → 70~120초)
   btn.disabled = true;
   sp.style.display = 'inline-block';
   // STAB-A P1#19 (2026-05-03): "70~120초" → "1~3분" — backend timeout 180s 와 일치, 사용자 기대 정확화
-  tx.textContent = ' 보고서 생성 중... (1~3분)';
-  result.innerHTML = '<div style="padding:30px;text-align:center;color:var(--t3);font-size:12px">📊 회원님 가구 상황 분석 중... (1~3분 소요)<br><span style="font-size:11px">단지 1500건 → KAPT 세대수 → 카카오 주변 편의시설 → AI 분석</span></div>';
+  tx.textContent = ` 보고서 생성 중... (최대 ${Math.round(REPORT_TIMEOUT_MS/1000)}초)`;
+  result.innerHTML = `<div style="padding:30px;text-align:center;color:var(--t3);font-size:12px">📊 회원님 가구 상황 분석 중... (보통 20~60초 · 최대 ${Math.round(REPORT_TIMEOUT_MS/1000)}초)<br><span style="font-size:11px">단지 1500건 → KAPT 세대수 → 카카오 주변 편의시설 → AI 분석</span></div>`;
 
   try {
     // Phase 5+ (2026-04-26): 로그인 사용자는 Authorization 헤더 추가 — 서버에서 user.id/email 인식 → admin/Pro plan 한도 적용
@@ -4618,7 +4641,7 @@ async function generateReport(_isRetry) {
       headers,
       body: JSON.stringify({
         maxBudget: buy, myCash: cash, annualIncome: inc, region, lawdCd: getRegionLawdCd(),
-        houseStatus, isFirstBuyer, pyeong, schoolNeeded,
+        houseStatus, isFirstBuyer, firstBuyerKnown, pyeong, schoolNeeded,
         kidPlan, stayYears, priority, workplaceArea,
       }),
       // AUDIT-2026-07-05: 유일하게 타임아웃 없던 사용자 대기 fetch — 서버 지연 시 최대 300s(Vercel) 대기하던 것을 90s로 제한(AI 보고서 정상 소요 감안). TimeoutError는 기존 catch else("잠시 후 다시 시도")로 처리됨.
@@ -4629,7 +4652,7 @@ async function generateReport(_isRetry) {
       //    이 fetch 가 무거운 구간이라는 뜻이다. 90s 로 잘리는 사례가 관측되면 이 값을 재검토할 것 —
       //    실패는 기존 catch 의 else 분기가 "잠시 후 다시 시도" 로 흡수한다.)
       //   ⚠ 이 종류(중복 키)는 린터(no-dupe-keys)로 잡히는 결함인데 이 저장소엔 린트 설정이 없다.
-      signal: AbortSignal.timeout(90000),
+      signal: AbortSignal.timeout(REPORT_TIMEOUT_MS),
     });
     if (!r.ok) {
       const j = await r.json().catch(() => ({}));
@@ -4659,8 +4682,8 @@ async function generateReport(_isRetry) {
     let titleMsg = e.message || '보고서를 생성하지 못했어요.';
     let extraHtml = '';
     if (e.name === 'AbortError' || /aborted|timeout/i.test(String(e.message))) {
-      titleMsg = '응답 시간이 너무 길어 중단했어요 (3분).';
-      extraHtml = `<div style="font-size:11px;color:var(--t2);margin-top:8px">단지 데이터·AI 처리 둘 다 부하가 큰 시간일 수 있어요. 잠시 후 다시 시도해주세요.</div>`;
+      titleMsg = `응답 시간이 너무 길어 중단했어요 (${Math.round(REPORT_TIMEOUT_MS/1000)}초).`;
+      extraHtml = `<div style="font-size:11px;color:var(--t2);margin-top:8px">단지 데이터·AI 처리 둘 다 부하가 큰 시간일 수 있어요. 서버가 뒤늦게 완료한 보고서는 같은 조건으로 다시 생성하면 바로 받을 수 있어요.</div>`;
     } else if (e.code === 'DAILY_LIMIT_EXCEEDED') {
       const _A = window.MHL?.auth;
       // TOKEN-STALE-RETRY-2026-07-20 (운영자 "admin인데 보고서 1회만 됨"): 프론트는 로그인 상태(_A.user)인데
@@ -6575,6 +6598,7 @@ async function doSearch(){
     availableLoan:getLoanAmt(),
     region:getRegionForSearch(),lawdCd:getRegionLawdCd(),houseStatus:gct('ch-h'),
     isFirstBuyer:gct('ch-f')==='예',
+    firstBuyerKnown:gct('ch-f')!=='', // FIRST-UNKNOWN-2026-09-05: URL 기록·요약용(백엔드 추천은 무시)
     schoolNeeded:gct('ch-sc')==='학군 중요',
     workplaceArea:document.getElementById('wp').value.trim(),
     purpose:'실거주',
@@ -10330,7 +10354,7 @@ function persistSearchToUrl(body){
     // 비민감 항목 → URL 유지 (공유 편의 보존)
     if(body.region)s.set('region',body.region);
     if(body.houseStatus)s.set('house',body.houseStatus);
-    if(body.isFirstBuyer)s.set('first','1');
+    if(body.firstBuyerKnown!==false)s.set('first',body.isFirstBuyer?'1':'0'); // FIRST-UNKNOWN: 미확인은 기록하지 않는다
     if(body.schoolNeeded)s.set('school','1');
     const pyChip=gct('ch-py');if(pyChip)s.set('py',pyChip);
     history.replaceState(null,'',u.toString());
@@ -10366,7 +10390,7 @@ function restoreSearchFromUrl(){
     const cash=s.get('cash')||_stC;if(cash&&document.getElementById('mc'))document.getElementById('mc').value=cash;
     const wp=s.get('wp')||_stW;if(wp&&document.getElementById('wp'))document.getElementById('wp').value=wp;
     const house=s.get('house');if(house)setChip('ch-h',house);
-    setChip('ch-f',s.get('first')==='1'?'예':'아니오');
+    { const _f=s.get('first'); if(_f==='1')setChip('ch-f','예'); else if(_f==='0')setChip('ch-f','아니오'); } // FIRST-UNKNOWN: 파라미터 없으면 미확인 유지
     setChip('ch-sc',s.get('school')==='1'?'학군 중요':'보통');
     const py=s.get('py');if(py)setChip('ch-py',py);
     const region=s.get('region');
@@ -10666,6 +10690,26 @@ function cl_inner(buy){
     }
   }
 }
+// DSR-STATE-2026-09-05: 상세 대출계산의 순수 산식. DOM 을 만지지 않으므로 테스트가 입력→출력으로 직접 실행한다.
+//   단위: buy·cash·lL·dL·fin 억 / inc 만원(연) / exAdded 만원(월) / rate 소수(0.04) / mo 만원(월) / dsr %.
+//   dsrState — 'none': 소득 미입력(DSR 미반영, LTV 한도만) · 'zero': 소득 입력·신규 여력 없음(한도 0) · 'ok': 양수 한도.
+function calcLoanLimitsPure({buy,inc,rate,yrs,exAdded,cash,ltv,cap,isLoc}){
+  const n=Math.max(1,Math.round((yrs||30)*12)),mr=(rate||0)/12,smr=((rate||0)+(isLoc?.0075:.03))/12;
+  const lL=Math.min(buy*ltv,cap);
+  const annuity=(monthly,r)=>(r>0?monthly*(1-Math.pow(1+r,-n))/r:monthly*n);             // 월 납입액 → 원금(원)
+  const payment=(principalEok,r)=>(principalEok>0?(r>0?principalEok*1e8*r/(1-Math.pow(1+r,-n)):principalEok*1e8/n)/10000:0); // 원금(억) → 월 납입(만원)
+  let dsrState='none',dL=0,headroom=null;
+  if(inc>0){
+    headroom=inc*10000*.4/12-exAdded*10000;                                               // 신규 여력(원/월)
+    if(headroom>0){dL=Math.round(annuity(headroom,smr)/1e8*100)/100;dsrState=dL>0?'ok':'zero';}
+    else dsrState='zero';
+  }
+  const fin=ltv===0?0:(dsrState==='ok'?Math.min(lL,dL):dsrState==='zero'?0:lL);
+  const mo=Math.round(payment(fin,mr));
+  const need=Math.max(0,buy-cash-fin);
+  const dsr=inc>0?Math.round((mo+exAdded)*12/inc*100):0;
+  return {lL,dL,dsrState,headroom,fin,mo,need,dsr,dsrExceed:dsr>40};
+}
 function dc(){
   const buy=parseFloat(document.getElementById('c_b')?.value)||0;
   if(!buy){document.getElementById('co').style.display='none';return;}
@@ -10686,17 +10730,18 @@ function dc(){
   else{ltv=isLoc?(isF?.8:.7):!isR?(isF?.8:.7):(isF?.7:.4);warn=isR&&isF?'생애최초 70%: 6개월 전입의무':isR?'무주택 규제지역 LTV 40%':'';}
   if(isR)cap=buy<=15?6:buy<=25?4:2;
   // STRESS-DSR-2026-06-24: 규제지역 스트레스금리 하한 1.5%→3.0% (금융위 10.15 대책, 변동형 기준). 기존 1.5%는 규제지역 한도 과대표시.
-  const lL=Math.min(buy*ltv,cap),n=yrs*12,mr=rate/12,smr=(rate+(isLoc?.0075:.03))/12;
-  let dL=0;
-  if(inc>0){const mx=inc*10000*.4/12-exAdded*10000;if(mx>0)dL=Math.round(mx*(1-Math.pow(1+smr,-n))/smr/1e8*100)/100;}
-  const fin=Math.min(lL,dL>0?dL:lL),mo=fin>0?Math.round(fin*1e8*mr/(1-Math.pow(1+mr,-n))/10000):0,need=Math.max(0,buy-cash-fin);
-  // DSR = (신규 월원리금 + 기존+신용+전세대출 추정 월원리금) × 12 / 연소득 × 100
-  const dsr=inc>0?Math.round((mo+exAdded)*12/inc*100):0;
-  const dsrExceed=dsr>40;
+  // DSR-STATE-2026-09-05 (외부 검토 P1 재현·확정): 소득을 입력했는데 기존 월상환이 DSR 40% 허용액을 넘으면 신규 여력은 0이다.
+  //   종전 `Math.min(lL, dL>0 ? dL : lL)` 은 계산 결과 0 을 '소득 미입력'과 같은 값으로 읽어 LTV 한도를 대표값으로 되돌렸다
+  //   (연소득 5,000·기존 200만원·7억 실측: 추천한도 4.90억 · 부족 '충분' · DSR 104% 라는 모순 화면).
+  //   계산은 순수 함수(calcLoanLimitsPure)로 분리해 상태를 셋('none' 소득 미입력 / 'zero' 여력 0 / 'ok')으로 나누고,
+  //   대표 숫자·월상환·부족자금·DSR 을 같은 상태에서 뽑는다. 테스트가 입력→출력으로 직접 실행한다.
+  const n=yrs*12;
+  const _r=calcLoanLimitsPure({buy,inc,rate,yrs,exAdded,cash,ltv,cap,isLoc});
+  const lL=_r.lL,dL=_r.dL,fin=_r.fin,mo=_r.mo,need=_r.need,dsr=_r.dsr,dsrExceed=_r.dsrExceed,dsrState=_r.dsrState;
   document.getElementById('co').style.display='block';
   document.getElementById('co_l').textContent=ltv===0?'불가':lL.toFixed(2)+'억';
-  document.getElementById('co_d').textContent=dL>0?dL.toFixed(2)+'억':'소득필요';
-  document.getElementById('co_f').textContent=ltv===0?'불가':fin.toFixed(2)+'억';
+  document.getElementById('co_d').textContent=dsrState==='none'?'소득 입력 필요':dsrState==='zero'?'0원 (기존 부채로 여력 없음)':dL.toFixed(2)+'억';
+  document.getElementById('co_f').textContent=ltv===0?'불가':dsrState==='zero'?'0원 (DSR 초과)':fin.toFixed(2)+'억';
   document.getElementById('co_m').textContent=mo?mo+'만원':'—';
   document.getElementById('co_n').textContent=need>0?need.toFixed(2)+'억 부족':'충분';
   document.getElementById('co_p').textContent=buy>0?Math.round(fin/buy*100)+'%':'—';
@@ -10706,8 +10751,10 @@ function dc(){
     dsrEl.style.color=dsrExceed?'var(--red)':dsr>=35?'var(--amb)':'';
   }
   // DSR-NOTE-FIX-2026-07-16 (Sprint SSSSS): 신용·전세대출 잔액은 Phase 4(2026-04-26)부터 추정 월상환액으로
-  //   exAdded 에 이미 합산됨(8316-8319) — 구 disclaimer "미반영"이 계산 로직과 정반대로 안내되던 것 정정.
-  const dsrNote=dsr>0?(dsrExceed?` · ⛔ DSR ${dsr}% 초과 (한도 40%) — 대출 거절 가능`:dsr>=35?` · ⚠ DSR ${dsr}% — 한도 근접`:` · ✅ DSR ${dsr}% 여유`):'';
+  //   exAdded 에 이미 합산됨 — 구 disclaimer "미반영"이 계산 로직과 정반대로 안내되던 것 정정.
+  const _allowMan=inc>0?Math.round(inc*.4/12):0;
+  const dsrNote=dsrState==='zero'?` · ⛔ 기존 월상환 ${Math.round(exAdded)}만원이 DSR 40% 허용액(월 ${_allowMan}만원)을 넘어 신규 대출 여력이 없어요`
+    :dsr>0?(dsrExceed?` · ⛔ DSR ${dsr}% 초과 (한도 40%) — 대출 거절 가능`:dsr>=35?` · ⚠ DSR ${dsr}% — 한도 근접`:` · ✅ DSR ${dsr}% 여유`):'';
   const dsrDisclaimer = dsr>0 ? ' · ℹ 신용·전세대출 잔액은 추정 월상환액(신용 6%/5년·전세 4%/2년 가정)으로 반영 — 금융기관 실제 심사값과 다를 수 있음' : '';
   document.getElementById('co_w').textContent=(warn||'')+dsrNote+dsrDisclaimer;
   const mos=[0,.01,.02].map(d2=>fin>0?Math.round(fin*1e8*(rate+d2)/12/(1-Math.pow(1+(rate+d2)/12,-n))/10000):0);
@@ -12370,6 +12417,7 @@ function buildChatContext(){
     region:gct('ch-r')||null,
     houseStatus:gct('ch-h')||null,
     isFirstBuyer:gct('ch-f')==='예',
+    firstBuyerKnown:gct('ch-f')!=='', // FIRST-UNKNOWN-2026-09-05: URL 기록·요약용(백엔드 추천은 무시)
     schoolNeeded:gct('ch-sc')==='학군 중요',
     workplaceArea:document.getElementById('wp')?.value?.trim()||null,
   };
