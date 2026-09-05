@@ -70,8 +70,8 @@ function buildFacility(info, kaptCode, detail) {
   if (!info) {
     return {
       kaptCode,
-      totalHouseholds: 0,
-      householdsSource: null,   // HH-BR-FALLBACK-2026-08-17: 위 0 은 "모름"이다(형태 일치용으로 명시)
+      totalHouseholds: null,    // HH-NULL-2026-09-05 (감사 G-7): "모름" 은 null — 0 은 값이다(소비자가 0 을 소형으로 읽은 사고)
+      householdsSource: null,
       dongCount: 0,
       parkingTotal: 0,
       parkingRatio: null,
@@ -103,7 +103,11 @@ function buildFacility(info, kaptCode, detail) {
   //   출처를 함께 내보낸다 — 어느 원천의 값인지 화면이 밝힐 수 있어야 한다(절대 룰 ②).
   const _kaptHh = _posInt(info.kaptdaCnt) || _posInt(info.hoCnt);
   const _brHh = _posInt(info._br && info._br.hhldCnt);
-  const totalHouseholds = _kaptHh || _brHh;
+  // HH-NULL-2026-09-05 (감사 G-7): 세 원천이 전부 비면 0 이 아니라 **null** 을 내보낸다. 종전엔 생산 함수가 0 을 넣어
+  //   "모름" 이 값처럼 흘렀고, 소비자 7곳이 각자 0 을 모름으로 방어해야 했다(방어 하나가 빠지면 '소형' 오판).
+  //   소비자 전수(propertyService 490·503·565·1087·1093·1340 · analysisService 690 · 프론트 7271·7587·7928·7933·7938·8208·8228·11132)가
+  //   null 을 안전하게 다루는 것을 확인했다(전부 truthy 검사·Number()||0·_num 가드).
+  const totalHouseholds = _kaptHh || _brHh || null;
   const householdsSource = _kaptHh ? 'kapt' : (_brHh ? 'buildingRegister' : null);
   // HH-CONFLICT-2026-08-17 (Sprint MMMMMMM — 서울 전수조사 4회차 실측):
   //   kaptdaCnt(관리세대수)와 hoCnt(호수)가 **둘 다 0이 아니면서 서로 다른** 단지가 서울에만 207곳이다.

@@ -75,9 +75,16 @@ async function buildBriefingPayload() {
   let regLog = [];
   try { regLog = (await require('./regulationsService').getChangeLog()).items || []; } catch (_) { regLog = []; }
 
+  // PARTIAL-SNAPSHOT-2026-09-05 (감사 G-5): 어떤 재료가 비었는지 스냅샷에 남긴다 — 렌더는 그대로 생략하되,
+  //   그날 하루 굳히지 않고 getOrCreateSnapshot 이 30분 뒤 다시 만들어 **더 완전해졌을 때만** 덮어쓴다.
+  //   종전엔 첫 조회 순간에 ECOS 가 잠깐 죽으면 그날 아카이브의 금리 칸이 하루 종일 비었다.
+  const partial = [
+    !lines.length && 'lines', !ecos && 'ecos', !dc && 'counts', !popular.length && 'popular', !records && 'records',
+  ].filter(Boolean);
   return {
     day: kstDayString(),
     generatedAt: new Date().toISOString(),
+    partial,
     lines,
     lines2,
     ecos: ecos ? {
@@ -98,22 +105,41 @@ async function buildBriefingPayload() {
  * 아카이브는 "그날 실제로 만들어진 기록"이어야 신뢰 장치가 된다(소급 생성 = 조작 가능성).
  * @returns {object|null} payload — null 이면 해당 일자 기록 없음
  */
+const PARTIAL_RETRY_MS = 30 * 60 * 1000;
+
 async function getOrCreateSnapshot(day) {
   const admin = getSupabaseAdmin();
   if (!admin) return null;
+  let stored = null;
   try {
     const { data } = await admin.from('briefing_snapshots').select('payload').eq('day', day).maybeSingle();
-    if (data && data.payload) return data.payload;
+    stored = (data && data.payload) || null;
   } catch (e) {
     logger.warn({ err: e.message, day }, 'briefing 스냅샷 조회 실패');
     return null;
   }
-  if (day !== kstDayString()) return null;
+  const isToday = day === kstDayString();
+  if (stored) {
+    // PARTIAL-SNAPSHOT-2026-09-05 (감사 G-5): 재료 일부가 비어 저장된 **오늘** 스냅샷은 30분마다 다시 만들어 보고,
+    //   더 완전해졌을 때만 덮어쓴다. 과거 날짜는 절대 손대지 않는다(아카이브 불변 — 소급 생성 = 조작 가능성).
+    const partial = Array.isArray(stored.partial) ? stored.partial : [];
+    const age = Date.now() - (Date.parse(stored.generatedAt || '') || 0);
+    if (!isToday || !partial.length || age < PARTIAL_RETRY_MS) return stored;
+    const fresh = await buildBriefingPayload();
+    if (!fresh.lines.length || (fresh.partial || []).length >= partial.length) return stored;
+    await admin.from('briefing_snapshots').upsert({ day, payload: fresh }).then(() => {}, (e) => {
+      logger.warn({ err: e && e.message, day }, 'briefing 스냅샷 재저장 실패(부분 결손 보완) — 다음 요청이 재시도');
+    });
+    return fresh;
+  }
+  if (!isToday) return null;
 
   const payload = await buildBriefingPayload();
   if (payload.lines.length) {
-    // 저장 실패는 삼킨다 — 페이지 응답을 막지 않는다(다음 요청이 재시도)
-    await admin.from('briefing_snapshots').upsert({ day, payload }).then(() => {}, () => {});
+    // 저장 실패는 페이지 응답을 막지 않는다(다음 요청이 재시도) — 다만 기록은 남긴다
+    await admin.from('briefing_snapshots').upsert({ day, payload }).then(() => {}, (e) => {
+      logger.warn({ err: e && e.message, day }, 'briefing 스냅샷 저장 실패');
+    });
   }
   return payload;
 }

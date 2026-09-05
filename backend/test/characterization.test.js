@@ -3946,15 +3946,15 @@ test('buildFacility — 세대수는 KAPT 우선, 둘 다 0일 때만 건축물�
   assert.equal(onEmpty.totalHouseholds, 630);
   assert.equal(onEmpty.householdsSource, 'buildingRegister');
 
-  // (3) 아무 원천도 없으면 **모름**이다. 0 이 나오되 출처는 null — 이 null 이 "0을 값으로 읽지 말라"는 표시다.
+  // (3) 아무 원천도 없으면 **모름**이다. HH-NULL-2026-09-05 부터 값 자체가 null 이다(종전엔 0 을 내고 출처 null 로만 표시).
   const none = buildFacility({ kaptdaCnt: '0', hoCnt: '0' }, 'A5', null);
-  assert.equal(none.totalHouseholds, 0);
+  assert.equal(none.totalHouseholds, null, 'HH-NULL-2026-09-05: 모름은 null — 0 은 값이다');
   assert.equal(none.householdsSource, null, '미확인인데 출처가 붙으면 0이 값으로 읽힌다');
 
   // BR 값이 0/음수/쓰레기면 채택하지 않는다(모름 유지) — 상류가 0을 줄 수 있다
   for (const bad of [0, -1, null, undefined, 'N/A']) {
     const r = buildFacility({ kaptdaCnt: '0', hoCnt: '0', _br: { hhldCnt: bad } }, 'A6', null);
-    assert.equal(r.totalHouseholds, 0, '쓸 수 없는 BR 값이 채택됐다: ' + String(bad));
+    assert.equal(r.totalHouseholds, null, '쓸 수 없는 BR 값이 채택됐다(모름은 null): ' + String(bad));
     assert.equal(r.householdsSource, null);
   }
 
@@ -5607,4 +5607,75 @@ test('백엔드 앱 코드에 빈 catch 블록이 없다', () => {
   assert.deepEqual(hits, [], '빈 catch 가 생겼다 — 삼키려면 이유를 주석으로, 아니면 logger.warn: ' + hits.join(', '));
   const eslint = fs.readFileSync(path.join(__dirname, '../../eslint.config.mjs'), 'utf8');
   assert.match(eslint, /'no-empty': \['error', \{ allowEmptyCatch: false \}\]/, 'eslint no-empty 규칙이 빠졌다');
+});
+
+// ── PARTIAL-SNAPSHOT-2026-09-05 (감사 G-5: 부분 결손 브리핑 스냅샷을 하루 종일 굳히지 않는다) ─────
+//   [행위 테스트] 실제 buildBriefingPayload/getOrCreateSnapshot 을 돌린다. 재료 소스는 require.cache 스텁.
+test('브리핑 스냅샷 — 결손 재료는 partial 로 남고, 30분 뒤 더 완전해졌을 때만 덮어쓴다', async () => {
+  const R = (p) => require.resolve(p);
+  const paths = {
+    svc: R('../services/briefingService'), client: R('../db/client'), cache: R('../cache'), news: R('../routes/news'),
+    ecos: R('../services/ecosService'), redis: R('../services/redisCache'), pop: R('../services/popularService'),
+    rec: R('../services/priceRecordsService'), reg: R('../services/regulationsService'),
+  };
+  const saved = Object.fromEntries(Object.entries(paths).map(([k, p]) => [k, require.cache[p]]));
+  const stub = (p, exports) => { require.cache[p] = { id: p, filename: p, loaded: true, exports }; };
+  const store = {};
+  const admin = {
+    from: () => ({
+      select: () => ({ eq: (_k, day) => ({ maybeSingle: async () => ({ data: store[day] ? { payload: store[day] } : null }) }) }),
+      upsert: async ({ day, payload }) => { store[day] = payload; return {}; },
+    }),
+  };
+  let ecosOk = false;
+  try {
+    stub(paths.client, { getSupabaseAdmin: () => admin });
+    stub(paths.cache, { get: () => undefined, set: () => {} });
+    stub(paths.news, { _dataMarketItems: async () => [{ text: '시황 1', src: '테스트' }], _deriveMarketLines: (items) => items.map(i => i.text) });
+    stub(paths.ecos, { getEcosRates: async () => { if (!ecosOk) throw new Error('ecos down'); return { baseRate: 2.5, mortgageRate: 3.9, mortgageRateMonth: '202607' }; } });
+    stub(paths.redis, { rget: async () => ({ tx: 456561, lastIngestedAt: '2026-09-01T18:08:00Z' }) });
+    stub(paths.pop, { readPopularSnapshot: async () => [{ aptName: 'A', sigungu: 'S', dealCount60d: 10 }] });
+    stub(paths.rec, { getPriceRecords: async () => ({ highCount: 1, lowCount: 1 }) });
+    stub(paths.reg, { getChangeLog: async () => ({ items: [] }) });
+    delete require.cache[paths.svc];
+    const svc = require('../services/briefingService');
+    const today = svc.kstDayString();
+
+    const p1 = await svc.getOrCreateSnapshot(today);
+    assert.deepEqual(p1.partial, ['ecos'], '비어 있던 재료(ecos)가 partial 에 남아야 한다');
+    assert.equal(p1.ecos, null);
+    assert.equal(store[today], p1, '부분 결손이어도 시황이 있으면 저장한다(종전 규칙 유지)');
+
+    ecosOk = true;
+    const p2 = await svc.getOrCreateSnapshot(today);
+    assert.equal(p2, p1, '30분이 안 지났으면 재시도하지 않는다(요청마다 재계산 금지)');
+
+    store[today] = { ...p1, generatedAt: new Date(Date.now() - 31 * 60 * 1000).toISOString() };
+    const p3 = await svc.getOrCreateSnapshot(today);
+    assert.equal(p3.ecos && p3.ecos.baseRate, 2.5, '30분 뒤 재시도로 금리가 채워져야 한다');
+    assert.deepEqual(p3.partial, []);
+    assert.equal(store[today], p3, '더 완전해진 스냅샷으로 덮어써야 한다');
+
+    ecosOk = false;
+    const stale = { ...p3, ecos: null, partial: ['ecos'], generatedAt: new Date(Date.now() - 31 * 60 * 1000).toISOString() };
+    store[today] = stale;
+    const p4 = await svc.getOrCreateSnapshot(today);
+    assert.equal(p4, stale, '더 나아지지 않았으면 기존 스냅샷을 유지한다(덮어쓰기 없음)');
+
+    const past = '2026-01-02';
+    const old = { lines: ['x'], partial: ['ecos'], generatedAt: '2026-01-02T00:00:00Z' };
+    store[past] = old;
+    assert.equal(await svc.getOrCreateSnapshot(past), old, '과거 날짜는 절대 다시 만들지 않는다(아카이브 불변)');
+  } finally {
+    for (const [k, p] of Object.entries(paths)) { if (saved[k]) require.cache[p] = saved[k]; else delete require.cache[p]; }
+  }
+});
+
+// ── HH-NULL-2026-09-05 (감사 G-7: 세대수 "모름" 은 생산 함수에서 null) ─────────────────────────
+test('세대수 "모름" 은 null 로 생산된다 — 0 은 값이다', () => {
+  const { buildFacility } = require('../utils/buildFacility');
+  assert.equal(buildFacility(null, 'K1', null).totalHouseholds, null, 'KAPT 정보가 없을 때');
+  assert.equal(buildFacility({ kaptdaCnt: '0', hoCnt: '0' }, 'K1', null).totalHouseholds, null, '두 원천이 모두 0(=모름)일 때');
+  assert.equal(buildFacility({ kaptdaCnt: '0', hoCnt: '0', _br: { hhldCnt: '630' } }, 'K1', null).totalHouseholds, 630, '건축물대장 폴백은 그대로');
+  assert.equal(buildFacility({ kaptdaCnt: '0', hoCnt: '0' }, 'K1', null).parkingRatio, null, '분모를 모르면 비율도 모름');
 });
