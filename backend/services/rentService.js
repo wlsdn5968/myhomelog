@@ -12,6 +12,7 @@
  */
 const dgk = require('./dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): 직접+Edge 릴레이
 const cache = require('../cache');
+const { rget, rset } = require('./redisCache'); // RENT-REDIS-2026-09-05: 인스턴스 공유 2차 캐시(예열 크론이 채운다)
 const logger = require('../logger');
 const { itemArray, parseAmountManwon, isCanceled } = require('../utils/molitParse');
 
@@ -43,6 +44,27 @@ async function _paced(fn) {
   return fn();
 }
 const _inflight = new Map(); // cacheKey → Promise (같은 (구,월) 동시 조회 병합)
+// RENT-REDIS-2026-09-05: 서버리스는 인스턴스마다 로컬 캐시가 따로라 요청 경로의 콜드 조회(구당 6콜×350ms)가 매번 되풀이된다.
+//   예열 크론(jobs/rentWarm.js)이 Redis 에 채운 (구,월) 을 어느 인스턴스든 읽는다. 로컬 미스일 때만 1회 조회(fail-open).
+//   TTL: 최근 2개월은 30h(매일 예열·계약 등록 지연 반영), 그 이전 달은 8일(등록은 계약 후 30일 안이라 두 달 지나면 거의 고정,
+//   예열이 지역을 7조로 나눠 주 1회 갱신). 로컬 캐시는 종전대로 24h.
+const RENT_MEM_TTL_S = 86400;
+function monthsWindow(now = new Date()) {
+  const months = [];
+  for (let i = 0; i < 6; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    months.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
+  }
+  return months;
+}
+function rentTtlSec(dealYm, now = new Date()) {
+  return monthsWindow(now).slice(0, 2).includes(String(dealYm)) ? 30 * 3600 : 8 * 86400;
+}
+async function isRentCached(lawdCd, dealYm) {
+  const key = `rent:${lawdCd}:${dealYm}`;
+  if (cache.get(key) !== undefined) return true;
+  return Array.isArray(await rget(key));
+}
 // 국토부 JSON 은 숫자처럼 보이는 값을 숫자로 내려준다 — 단지명 '101' 이 number 로 와서 .trim() 이 TypeError 를 내고
 // 그 달 전체가 유실됐다(영등포 202608·202606 실측). 항상 문자열로 정규화한다.
 const _str = (v) => (v == null ? '' : String(v)).trim();
@@ -62,7 +84,13 @@ async function getRentTransactions(lawdCd, dealYm) {
   const hit = cache.get(key);
   if (hit !== undefined) return hit || [];
   if (_inflight.has(key)) return _inflight.get(key);
-  const p = _fetchRentMonth(lawdCd, dealYm).finally(() => _inflight.delete(key));
+  const p = (async () => {
+    const shared = await rget(key); // 로컬 미스 → Redis(예열분) → 업스트림
+    if (Array.isArray(shared)) { cache.set(key, shared, RENT_MEM_TTL_S); return shared; }
+    const rows = await _fetchRentMonth(lawdCd, dealYm);
+    rset(key, rows, rentTtlSec(dealYm)).catch(() => { /* rset 은 스스로 삼키지만 체인 경고 방지 */ });
+    return rows;
+  })().finally(() => _inflight.delete(key));
   _inflight.set(key, p);
   return p;
 }
@@ -193,8 +221,9 @@ async function _fetchRentMonth(lawdCd, dealYm) {
     // EXT-OBSERV-2026-08-08 (Sprint AAAAAAA-4): 실패 사유(게이트웨이 errMsg·code)를 health.crons 에 기록 —
     //   08-02 부터 전월세 라이브가 조용히 0건이 되는 동안 사유를 어디서도 볼 수 없었다.
     //   molitErrReason 은 화이트리스트 추출이라 키 에코 없음(테스트 고정). 실패 기록은 관측이 본 기능을 막지 않게 삼킨다.
+    let brief = null;
     try {
-      const brief = require('../jobs/molitIngest').molitErrReason(err);
+      brief = require('../jobs/molitIngest').molitErrReason(err);
       require('./cronStats').recordCronRun('rent-live', { ok: false, error: brief }).catch(() => {});
     } catch (_) { /* 관측 기록 실패는 본 기능을 막지 않는다 */ }
     // 에러 캐시 5분 — 일시적 5xx/timeout 시 매 요청마다 외부 API 두드리는 부하 방지
@@ -202,6 +231,7 @@ async function _fetchRentMonth(lawdCd, dealYm) {
     const apiErr = new Error(`국토부 전월세 API 호출 실패: ${err.message}`);
     apiErr.code = 'MOLIT_RENT_API_ERROR';
     apiErr.status = 502;
+    apiErr.reason = brief; // RENT-WARM-2026-09-05: 게이트웨이 사유(일 한도 code=22 등) — 예열 크론이 이걸 보고 멈춘다
     throw apiErr;
   }
 }
@@ -215,12 +245,7 @@ async function _fetchRentMonth(lawdCd, dealYm) {
  *   t.deposit (만원) → t._convertedDeposit 필드 추가 (호출자가 사용)
  */
 async function getJeonseByApt(lawdCd, aptName) {
-  const now = new Date();
-  const months = [];
-  for (let i = 0; i < 6; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
-  }
+  const months = monthsWindow(); // 예열 크론과 같은 창(RENT-REDIS)
 
   // RENT-429-2026-08-12 (Sprint KKKKKKK-13): 6개월 일괄 병렬(Promise.all)이 캐시 콜드 지역에서
   //   국토부 초당 한도(429 code=23)를 정면으로 때렸다 — health.crons.rent-live 실측. 걸린 달은
@@ -274,4 +299,4 @@ async function getJeonseByApt(lawdCd, aptName) {
   return sorted;
 }
 
-module.exports = { getRentTransactions, getJeonseByApt };
+module.exports = { getRentTransactions, getJeonseByApt, monthsWindow, rentTtlSec, isRentCached };

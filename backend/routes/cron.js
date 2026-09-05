@@ -548,4 +548,25 @@ async function handleWarmInterest(req, res) {
 }
 router.get('/warm-interest', handleWarmInterest);
 
+// RENT-WARM-2026-09-05: 전월세 월별 캐시 예열(하루 1회, 20:30 UTC = 05:30 KST). 상세는 jobs/rentWarm.js.
+async function handleWarmRent(req, res) {
+  try {
+    const started = Date.now();
+    const { run: runRentWarm } = require('../jobs/rentWarm');
+    const summary = await runRentWarm({
+      budgetMs: req.query.budgetMs ? parseInt(req.query.budgetMs) : undefined,
+      concurrency: req.query.concurrency ? parseInt(req.query.concurrency) : undefined,
+    });
+    logger.info({ durationMs: Date.now() - started, summary }, 'cron/warm-rent OK');
+    await require('../services/cronStats').recordCronRun('warm-rent', summary).catch(() => {});
+    res.json({ ok: true, summary });
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'cron/warm-rent 실패');
+    await require('../services/cronStats').recordCronRun('warm-rent', { ok: false, error: e.message }).catch(() => {}); // 실패도 기록 — health.crons 에 흔적을 남긴다
+    try { Sentry.captureException(e, { tags: { route: 'cron.warm-rent' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 */ }
+    res.status(500).json({ ok: false, error: e.message });
+  }
+}
+router.get('/warm-rent', handleWarmRent);
+
 module.exports = router;

@@ -6478,3 +6478,110 @@ test('.env.example 게이트 — Vercel 자동 주입 변수 VERCEL_BRANCH_URL �
   const ex = require('node:fs').readFileSync(require('node:path').join(__dirname, '../.env.example'), 'utf8');
   assert.match(ex, /^RENT_MIN_GAP_MS=/m, 'RENT_MIN_GAP_MS 자리표시자가 .env.example 에 없다');
 });
+
+// ── 전월세 2차 캐시(Redis)·월 창·TTL (2026-09-05) ────────────────────────────────────
+test('전세 실거래 조회 — 로컬 미스면 Redis 공유 캐시를 먼저 읽고, 업스트림 성공은 월 나이에 맞는 TTL 로 Redis 에 쓴다', async () => {
+  const dgkPath = require.resolve('../services/dataGoKrClient');
+  const rcPath = require.resolve('../services/redisCache');
+  const rentPath = require.resolve('../services/rentService');
+  const saved = { dgk: require.cache[dgkPath], rc: require.cache[rcPath], rent: require.cache[rentPath], key: process.env.MOLIT_API_KEY, gap: process.env.RENT_MIN_GAP_MS };
+  const upstream = [];
+  const rsets = [];
+  const shared = new Map();
+  const dgkStub = { get: async (url, cfg) => { upstream.push(cfg.params.LAWD_CD + ':' + cfg.params.DEAL_YMD);
+    return { status: 200, data: { response: { header: { resultCode: '000' }, body: { totalCount: 1, items: { item: [{ aptNm: '가나다', umdNm: '동', excluUseAr: '84', floor: '1', dealYear: '2026', dealMonth: '1', dealDay: '1', deposit: '10,000', monthlyRent: '0' }] } } } } }; },
+    _isBlockedPattern: () => false, _buildFullUrl: () => '', ALLOWED_HOSTS: new Set() };
+  const rcStub = { rget: async (k) => shared.get(k), rset: async (k, v, ttl) => { rsets.push([k, Array.isArray(v) ? v.length : v, ttl]); } };
+  process.env.MOLIT_API_KEY = 'xxxxxxxx-test-molit-key';
+  process.env.RENT_MIN_GAP_MS = '0';
+  require.cache[dgkPath] = { id: dgkPath, filename: dgkPath, loaded: true, exports: dgkStub };
+  require.cache[rcPath] = { id: rcPath, filename: rcPath, loaded: true, exports: rcStub };
+  const cache = require('../cache');
+  try {
+    delete require.cache[rentPath];
+    const rent = require('../services/rentService');
+    // 월 창·TTL 규칙
+    const w = rent.monthsWindow(new Date(2026, 8, 5));
+    assert.deepEqual(w, ['202609', '202608', '202607', '202606', '202605', '202604'], '최근 6개월 창이 다르다');
+    assert.equal(rent.rentTtlSec('202609', new Date(2026, 8, 5)), 30 * 3600, '최근 달 TTL 이 30h 가 아니다');
+    assert.equal(rent.rentTtlSec('202606', new Date(2026, 8, 5)), 8 * 86400, '이전 달 TTL 이 8일이 아니다');
+    // ① Redis 히트 → 업스트림 0
+    shared.set('rent:99971:202601', [{ aptName: '공유', umdNm: 'x', excluUseAr: 59, floor: 2, dealYear: 2026, dealMonth: 1, dealDay: 3, deposit: 5000, monthlyRent: 0 }]);
+    const a = await rent.getRentTransactions('99971', '202601');
+    assert.equal(upstream.length, 0, 'Redis 에 있는데 업스트림을 불렀다');
+    assert.equal(a[0].aptName, '공유');
+    assert.ok(cache.get('rent:99971:202601'), '공유 캐시 값이 로컬에 채워지지 않았다');
+    assert.equal(await rent.isRentCached('99971', '202601'), true);
+    // ② Redis 미스 → 업스트림 1회 → rset(월 나이 TTL)
+    const recentYm = rent.monthsWindow()[0];
+    const olderYm = rent.monthsWindow()[4];
+    await rent.getRentTransactions('99972', recentYm);
+    await rent.getRentTransactions('99972', olderYm);
+    assert.deepEqual(upstream, ['99972:' + recentYm, '99972:' + olderYm], '업스트림 호출이 예상과 다르다: ' + JSON.stringify(upstream));
+    await new Promise(r => setTimeout(r, 10));
+    const byKey = Object.fromEntries(rsets.map(([k, n, ttl]) => [k, [n, ttl]]));
+    assert.deepEqual(byKey['rent:99972:' + recentYm], [1, 30 * 3600], '최근 달 Redis 저장(TTL 30h)이 없다');
+    assert.deepEqual(byKey['rent:99972:' + olderYm], [1, 8 * 86400], '이전 달 Redis 저장(TTL 8일)이 없다');
+    assert.equal(await rent.isRentCached('99973', '202601'), false, '없는 키가 캐시됨으로 나온다');
+  } finally {
+    for (const k of cache.keys()) if (/^rent:9997[123]:/.test(k)) cache.del(k);
+    if (saved.dgk) require.cache[dgkPath] = saved.dgk; else delete require.cache[dgkPath];
+    if (saved.rc) require.cache[rcPath] = saved.rc; else delete require.cache[rcPath];
+    if (saved.rent) require.cache[rentPath] = saved.rent; else delete require.cache[rentPath];
+    if (saved.key === undefined) delete process.env.MOLIT_API_KEY; else process.env.MOLIT_API_KEY = saved.key;
+    if (saved.gap === undefined) delete process.env.RENT_MIN_GAP_MS; else process.env.RENT_MIN_GAP_MS = saved.gap;
+  }
+});
+
+// ── 전월세 예열 크론 (2026-09-05) ────────────────────────────────────────────────────
+test('전월세 예열 cron — 최근 2개월은 전 지역, 이전 4개월은 7조 중 오늘 조만, 캐시된 달은 건너뛰고, 일 한도(code=22)를 만나면 멈춘다', async () => {
+  const rentPath = require.resolve('../services/rentService');
+  const jobPath = require.resolve('../jobs/rentWarm');
+  const saved = { rent: require.cache[rentPath], job: require.cache[jobPath] };
+  const calls = [];
+  const cached = new Set(['10001:202609']);
+  let quotaAt = null;
+  const stub = {
+    monthsWindow: () => ['202609', '202608', '202607', '202606', '202605', '202604'],
+    isRentCached: async (c, ym) => cached.has(c + ':' + ym),
+    getRentTransactions: async (c, ym) => { calls.push(c + ':' + ym); if (quotaAt && c + ':' + ym === quotaAt) { const e = new Error('국토부 전월세 API 호출 실패: Request failed with status code 429'); e.reason = 'HTTP 429 LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR code=22'; throw e; } return []; },
+  };
+  require.cache[rentPath] = { id: rentPath, filename: rentPath, loaded: true, exports: stub };
+  try {
+    delete require.cache[jobPath];
+    const { run } = require('../jobs/rentWarm');
+    const codes = Array.from({ length: 14 }, (_, i) => String(10001 + i));
+    // ① 계획: 14×2 + (i%7===3 인 2개 지역)×4 = 36 · 캐시 1건 건너뜀
+    const out = await run({ codes, dayIdx: 3, concurrency: 2 });
+    assert.equal(out.planned, 36, '계획 건수가 다르다: ' + out.planned);
+    assert.equal(out.skipped, 1, '캐시된 달을 건너뛰지 않았다');
+    assert.equal(out.fetched, 35, '조회 건수가 다르다: ' + out.fetched);
+    assert.equal(out.stopped, null);
+    const older = calls.filter(s => /:20260[4-7]$/.test(s)).map(s => s.split(':')[0]);
+    assert.deepEqual([...new Set(older)].sort(), ['10004', '10011'], '이전 달을 오늘 조(3, 10) 외 지역에도 조회했다: ' + JSON.stringify([...new Set(older)]));
+    assert.ok(!calls.includes('10001:202609'), '캐시된 달을 조회했다');
+    // ② 일 한도 → 즉시 중단·사유 기록
+    calls.length = 0; quotaAt = '10002:202609';
+    const out2 = await run({ codes, dayIdx: 3, concurrency: 1 });
+    assert.equal(out2.stopped, 'quota', '일 한도에서 멈추지 않았다');
+    assert.ok(out2.remaining > 0, '중단 뒤 남은 건수가 기록되지 않았다');
+    assert.ok(calls.length <= 3, '한도 이후에도 계속 조회했다: ' + calls.length);
+    // ③ 시간 예산 0 → 아무것도 조회하지 않고 budget 으로 멈춘다
+    calls.length = 0; quotaAt = null;
+    const out3 = await run({ codes, dayIdx: 3, budgetMs: 0 });
+    assert.equal(out3.stopped, 'budget'); assert.equal(calls.length, 0);
+  } finally {
+    if (saved.rent) require.cache[rentPath] = saved.rent; else delete require.cache[rentPath];
+    if (saved.job) require.cache[jobPath] = saved.job; else delete require.cache[jobPath];
+  }
+  const cron = require('node:fs').readFileSync(require.resolve('../routes/cron'), 'utf8');
+  assert.match(cron, /router\.get\('\/warm-rent', handleWarmRent\);/, 'cron 라우트가 없다');
+  assert.match(cron, /recordCronRun\('warm-rent', summary\)/, '성공 기록이 없다');
+  assert.match(cron, /recordCronRun\('warm-rent', \{ ok: false, error: e\.message \}\)/, '실패 기록이 없다(health.crons 에 흔적이 안 남는다)');
+  const vercel = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../../vercel.json'), 'utf8'));
+  const wr = (vercel.crons || []).find(c => c.path === '/api/cron/warm-rent');
+  assert.ok(wr, 'vercel.json 에 warm-rent cron 이 없다');
+  assert.equal(wr.schedule, '30 20 * * *', '스케줄이 하루 1회(20:30 UTC = 05:30 KST)가 아니다');
+  const rentSrc = require('node:fs').readFileSync(require.resolve('../services/rentService'), 'utf8');
+  assert.match(rentSrc, /apiErr\.reason = brief;/, '일 한도 판별용 reason 이 오류에 실리지 않는다(예열이 한도를 인식 못 한다)');
+});

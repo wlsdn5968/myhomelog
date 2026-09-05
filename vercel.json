@@ -162,6 +162,10 @@
     {
       "path": "/api/cron/warm-interest",
       "schedule": "0 19 * * *"
+    },
+    {
+      "path": "/api/cron/warm-rent",
+      "schedule": "30 20 * * *"
     }
   ]
 }
