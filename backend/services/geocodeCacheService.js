@@ -105,14 +105,18 @@ async function getFromDb(key) {
 //   - 카운터는 in-process — serverless instance 별로 분산되지만 단일 인스턴스 폭주 감지엔 충분.
 const KAKAO_DAILY_THRESHOLD = 60000; // 60K 도달 시 경고 (안전 마진 40%)
 let _kakaoCallCount = 0;
-let _kakaoCountResetAt = new Date().setHours(24, 0, 0, 0); // 자정 reset
+// KAKAO-COUNTER-KST-2026-09-05 (감사 G-8): 종전 구현(setHours 24시)은 **호스트 TZ 자정**이라 프로덕션(UTC)에서는
+//   KST 09시에 리셋됐다 — 카카오 일일 쿼터(KST 자정)와 9시간 어긋나 하루치가 두 구간에 걸쳐 세어졌다.
+//   '하루' 는 명시적 +9h 로만 계산한다(utils/kstTime).
+const { nextKstMidnight } = require('../utils/kstTime');
+let _kakaoCountResetAt = nextKstMidnight(Date.now());
 let _kakaoAlertSent = false;
 function _trackKakaoCall() {
   const now = Date.now();
   if (now >= _kakaoCountResetAt) {
     _kakaoCallCount = 0;
     _kakaoAlertSent = false;
-    _kakaoCountResetAt = new Date(now).setHours(24, 0, 0, 0);
+    _kakaoCountResetAt = nextKstMidnight(now);
   }
   _kakaoCallCount += 1;
   if (!_kakaoAlertSent && _kakaoCallCount >= KAKAO_DAILY_THRESHOLD) {

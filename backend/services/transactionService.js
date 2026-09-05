@@ -9,6 +9,7 @@ const { getSupabaseAdmin, hasAdminEnv } = require('../db/client');
 const cache = require('../cache');
 const logger = require('../logger');
 const { txWindowStart } = require('../utils/txWindow');
+const { PYEONG_M2 } = require('../utils/pyeong'); // PYEONG-SSOT-2026-09-05: 리터럴 → 단일 출처
 // TXAPT-MATCH-2026-05-13 (Sprint Z + Z+): master 정식명 ↔ MOLIT raw 매칭
 //   - Z: 양방향 contains + baseAptName (suffix 정규화)
 //   - Z+: LCS insertion (builder/지역명 중간 삽입 case — 서강쌍용예가↔서강예가, 한신코아↔한신잠실코아)
@@ -646,7 +647,7 @@ function analyzeTransactions(transactions) {
       //   [영향 실측] 20~250㎡ 전 구간에서 반올림 결과가 갈리는 비율 7.2%. 다만 실제 대표 평형
       //   (59.82·84.92·114.97·134.9·164.9㎡)은 **전부 동일**하고, 불일치는 21~25㎡ 같은 소형 구간에 몰린다.
       //   ⚠ 회귀 위험: 평형 필터(15~60평) 경계에 걸린 극소수 매물이 들고날 수 있다.
-      const py = Math.round(t.excluUseAr / 3.3058);
+      const py = Math.round(t.excluUseAr / PYEONG_M2);
       if (!byPyeong[py]) byPyeong[py] = [];
       byPyeong[py].push(t);
     }

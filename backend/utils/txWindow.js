@@ -13,11 +13,19 @@
  * @param {number} monthsBack 개월 수(기본 6)
  * @returns {string} 'YYYY-MM-DD'
  */
-function txWindowStart(monthsBack = 6) {
-  const since = new Date();
-  since.setMonth(since.getMonth() - (monthsBack - 1));
-  since.setDate(1);
-  return since.toISOString().slice(0, 10);
+// TXWINDOW-KST-2026-09-05 (감사 G-8): 두 가지를 고쳤다.
+//   ① 호스트 TZ 의존 — 로컬(KST)에서 09시 이전에 실행하면 setDate(1) 뒤 toISOString() 이 **전월 말일**
+//      (UTC 로 9시간 전)을 돌려줬다. 프로덕션(UTC)은 반대로 매달 1일 00~09시 KST 에 아직 전달을 봤다.
+//      같은 코드가 환경·시각마다 다른 답을 내는 것 자체가 사고 유형이다.
+//   ② 31일 오버플로 — setMonth 를 먼저 하면 7/31 → "2/31" → 3/3 로 넘친 뒤 setDate(1) 이 **3/1** 을 돌려줬다
+//      (6개월 창의 시작이 2월이어야 하는데 3월). 달 경계는 날짜를 1로 만든 **뒤에** 달을 옮겨야 한다.
+//   경계는 KST 로 고정한다 — "최근 6개월" 은 한국 달력의 달이다. now 는 테스트 주입용(기본 현재).
+function txWindowStart(monthsBack = 6, now = Date.now()) {
+  const { KST_OFFSET_MS } = require('./kstTime');
+  const k = new Date(now + KST_OFFSET_MS);          // KST 벽시계를 UTC 필드로 다룬다
+  k.setUTCDate(1);
+  k.setUTCMonth(k.getUTCMonth() - (monthsBack - 1));
+  return k.toISOString().slice(0, 10);
 }
 
 module.exports = { txWindowStart };

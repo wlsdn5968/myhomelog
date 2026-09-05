@@ -15,7 +15,7 @@ const cache = require('../cache');
 // PYEONG-CONST-2026-09-02 (감사 P2): 같은 파일 안에서 한 자리만 리터럴 3.3058 을 쓰고 있었다.
 //   값은 이미 같아 라이브 위험은 없었지만, 계수를 다시 손볼 때 그 한 곳만 놓치기 쉽다.
 //   선언을 사용처보다 **위로** 올린다 — 종전 위치(파일 하단)로는 TDZ 로 죽는다.
-const _PYEONG_M2 = 3.3058; // 1평 = 3.3058㎡ (전용면적 기준 평당가 환산)
+const { PYEONG_M2: _PYEONG_M2 } = require('../utils/pyeong'); // 1평 = 3.3058㎡ — 계수의 단일 출처는 utils/pyeong.js (PYEONG-SSOT-2026-09-05)
 
 // ── 지역명 → lawdCd 역조회 ────────────────────────────────
 function getLawdCdFromArea(area) {

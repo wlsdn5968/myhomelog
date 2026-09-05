@@ -407,8 +407,12 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
     // (선택적) 정적 헤더 검증
     const expectedSecret = process.env.TOSS_WEBHOOK_SECRET;
     if (expectedSecret) {
-      const got = req.get('x-webhook-secret') || req.get('X-Webhook-Secret');
-      if (!got || got !== expectedSecret) {
+      // WEBHOOK-TSE-2026-09-05 (감사 H-LOW): 정적 시크릿을 상수 시간으로 비교한다. 1차 방어는 Toss 재조회라
+      //   실익은 작지만, 문자열 !== 는 첫 불일치 바이트에서 끝나 비교 시간이 샌다. 길이가 다르면 즉시 거부.
+      //   (req.get 은 헤더 이름 대소문자를 구분하지 않는다 — 두 번 읽던 것은 중복이었다.)
+      const got = String(req.get('x-webhook-secret') || '');
+      const _gotBuf = Buffer.from(got), _expBuf = Buffer.from(String(expectedSecret));
+      if (!got || _gotBuf.length !== _expBuf.length || !require('crypto').timingSafeEqual(_gotBuf, _expBuf)) {
         logger.warn({ ip: req.ip }, 'Toss webhook: 정적 시크릿 불일치');
         return res.status(401).json({ error: 'unauthorized' });
       }

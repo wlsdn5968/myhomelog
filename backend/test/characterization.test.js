@@ -5439,3 +5439,133 @@ test('모바일 탭 타깃 — 44px 하한이 모바일에서만, 그리고 .chi
     '.wi 에 좌우 여백이 들어갔다 — 제목이 줄바꿈되고 필수 배지가 세로로 쪼개진다');
 });
 
+// ── KST-TIME-2026-09-05 (감사 G-8: '하루' 경계는 호스트 TZ 가 아니라 KST) ─────────────────
+test('KST 하루 경계 — 호스트 TZ 와 무관하게 KST 자정을 계산한다', () => {
+  const { nextKstMidnight, kstDate } = require('../utils/kstTime');
+  // 2026-09-05 12:00 KST(=03:00Z) → 다음 KST 자정 = 2026-09-06 00:00 KST = 2026-09-05T15:00Z
+  assert.equal(nextKstMidnight(Date.parse('2026-09-05T03:00:00Z')), Date.parse('2026-09-05T15:00:00Z'));
+  assert.equal(nextKstMidnight(Date.parse('2026-09-05T14:59:00Z')), Date.parse('2026-09-05T15:00:00Z'));
+  // 자정 정각은 그 날의 시작 → 다음 자정은 하루 뒤
+  assert.equal(nextKstMidnight(Date.parse('2026-09-05T15:00:00Z')), Date.parse('2026-09-06T15:00:00Z'));
+  assert.equal(kstDate(Date.parse('2026-09-05T15:00:00Z')), '2026-09-06');
+  assert.equal(kstDate(Date.parse('2026-09-05T14:59:59Z')), '2026-09-05');
+});
+
+test('카카오 일일 카운터 — KST 자정 리셋 (호스트 TZ setHours 금지)', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../services/geocodeCacheService.js'), 'utf8');
+  const code = src.split(/\r?\n/).map(l => l.split('//')[0]).join('\n'); // 주석은 제외 — 주석이 정규식에 잡힌 사고 4회
+  assert.equal(/setHours\(24/.test(code), false, '호스트 TZ 자정으로 되돌아갔다 — 프로덕션(UTC)에서는 KST 09시 리셋');
+  assert.match(src, /_kakaoCountResetAt = nextKstMidnight\(now\)/);
+});
+
+// ── TXWINDOW-KST-2026-09-05 (감사 G-8) ────────────────────────────────────────────
+//   [실측] 옛 구현은 두 가지가 틀렸다: setMonth 오버플로(7/31 → 3/1) · 호스트 TZ 의존(KST 로컬 09시 이전 = 전월 말일).
+test('txWindowStart — 31일 오버플로와 KST 달 경계 (옛 코드는 둘 다 틀렸다)', () => {
+  const { txWindowStart } = require('../utils/txWindow');
+  // 7/31 19:00 KST: 6개월 창은 2월부터. 옛 코드는 "2/31" 오버플로로 3/1 을 냈다.
+  assert.equal(txWindowStart(6, Date.parse('2026-07-31T10:00:00Z')), '2026-02-01');
+  // 8/31 16:00Z = 9/1 01:00 KST → KST 로는 이미 9월 → 4월부터. 옛 코드(UTC 호스트)는 8월로 보고 3/1 을 냈다.
+  assert.equal(txWindowStart(6, Date.parse('2026-08-31T16:00:00Z')), '2026-04-01');
+  // 8/31 14:00Z = 8/31 23:00 KST → 아직 8월 → 3월부터
+  assert.equal(txWindowStart(6, Date.parse('2026-08-31T14:00:00Z')), '2026-03-01');
+  assert.equal(txWindowStart(6, Date.parse('2026-09-05T03:00:00Z')), '2026-04-01');
+  assert.equal(txWindowStart(24, Date.parse('2026-09-05T03:00:00Z')), '2024-10-01');
+  assert.match(txWindowStart(6), /^\d{4}-\d{2}-01$/, '기본 인자(now 생략)도 달 경계를 돌려줘야 한다');
+});
+
+// ── PYEONG-SSOT-2026-09-05 (감사 P2-11: 평↔㎡ 계수 사본 통합) ─────────────────────
+test('평↔㎡ 계수 — 코드의 리터럴 3.3058 은 utils/pyeong.js 한 곳에만', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const root = path.join(__dirname, '..');
+  const hits = [];
+  (function walk(d) {
+    for (const f of fs.readdirSync(d)) {
+      if (f === 'node_modules' || f === 'test') continue;
+      const p = path.join(d, f);
+      if (fs.statSync(p).isDirectory()) { walk(p); continue; }
+      if (!f.endsWith('.js')) continue;
+      fs.readFileSync(p, 'utf8').split(/\r?\n/).forEach((line, i) => {
+        const code = line.split('//')[0];                 // 줄 주석은 제외 — 주석 속 설명 숫자는 사본이 아니다
+        if (/(?<![\w.])3\.3058\b/.test(code)) hits.push(path.relative(root, p).replace(/\\/g, '/') + ':' + (i + 1));
+      });
+    }
+  })(root);
+  assert.deepEqual(hits.map(h => h.split(':')[0]), ['utils/pyeong.js'],
+    '평형 계수 리터럴이 다른 파일에 생겼다 — 한쪽만 고치면 화면마다 평당가가 갈린다: ' + hits.join(', '));
+  const { PYEONG_M2, toPyeong } = require('../utils/pyeong');
+  assert.equal(PYEONG_M2, 3.3058);
+  assert.equal(toPyeong(84.97).toFixed(2), '25.70');
+  assert.equal(toPyeong('abc'), null);
+});
+
+// ── ESC-SERVER-VALUES-2026-09-05 (감사 H-LOW) ─────────────────────────────────────
+test('서버 통제값도 이스케이프 — 청약 sido · 지역 칩 label', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  assert.equal((html.match(/\$\{d\.sido\}/g) || []).length, 0, '청약 sido 가 생으로 삽입된다');
+  assert.equal((html.match(/\$\{_escHtml\(d\.sido\)\}/g) || []).length, 2);
+  assert.ok(html.includes('onclick="cpSub(this)">${_escHtml(g.label)}</span>'), '지역 칩 label 이 생으로 삽입된다');
+});
+
+// ── A11Y-LABELS-2026-09-05 (감사 E 접근성: 이름 없는 입력 19개 → 0) ─────────────────
+//   [왜 소스 검사인가] "입력에 이름이 있는가"는 마크업의 형태 자체가 요구사항이다.
+test('접근성 — 이름 없는 입력 요소 0개 (aria-label · label[for] · 부모 label 중 하나)', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const labelFor = new Set([...html.matchAll(/<label[^>]*\bfor="([^"]+)"/g)].map(m => m[1]));
+  const re = /<(input|select|textarea)\b([^>]*)>/g;
+  const bad = []; let m;
+  while ((m = re.exec(html))) {
+    const attrs = m[2];
+    const type = (attrs.match(/\btype="([^"]+)"/) || [])[1] || '';
+    if (['hidden', 'submit', 'button', 'checkbox', 'radio'].includes(type)) continue;
+    if (/\baria-label(ledby)?=/.test(attrs) || /\btitle=/.test(attrs)) continue;
+    const id = (attrs.match(/\bid="([^"]+)"/) || [])[1];
+    if (id && labelFor.has(id)) continue;
+    const before = html.slice(Math.max(0, m.index - 400), m.index);
+    if (before.lastIndexOf('<label') > before.lastIndexOf('</label>')) continue; // 부모 <label> 로 감싸짐
+    bad.push(html.slice(0, m.index).split('\n').length + ':' + m[1] + '#' + (id || '?'));
+  }
+  assert.deepEqual(bad, [], '이름 없는 입력이 생겼다 — 스크린리더가 "편집 가능 텍스트"라고만 읽는다');
+});
+
+// ── WEBHOOK-TSE-2026-09-05 (감사 H-LOW) ───────────────────────────────────────────
+test('Toss 웹훅 정적 시크릿 — 상수 시간 비교 (길이 선검사 + timingSafeEqual)', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../routes/billing.js'), 'utf8');
+  assert.equal(src.includes('got !== expectedSecret'), false, '문자열 !== 비교로 되돌아갔다');
+  assert.match(src, /_gotBuf\.length !== _expBuf\.length \|\| !require\('crypto'\)\.timingSafeEqual\(_gotBuf, _expBuf\)/);
+});
+
+// ── FACILITY-STORE-LOG-2026-09-05 (감사 G-6) ──────────────────────────────────────
+test('facility 갱신 저장 실패는 기록된다 (fire-and-forget 금지)', () => {
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../services/aptFacilityService.js'), 'utf8');
+  assert.equal(src.includes(".eq('kapt_code', m.kapt_code).then(() => {}, () => {})"), false, '저장 실패가 다시 삼켜진다');
+  assert.match(src, /'facility 갱신 저장 실패'/);
+});
+
+// ── ENV-GATE-2026-09-05 (감사 M) ──────────────────────────────────────────────────
+test('CI — .env.example 드리프트 검사는 차단 게이트다 (|| true 금지)', () => {
+  const ci = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../.github/workflows/ci.yml'), 'utf8');
+  const i = ci.indexOf('scripts/check-env-example.js');
+  assert.ok(i > 0, 'env.example 검사 스텝이 사라졌다');
+  const line = ci.slice(ci.lastIndexOf('\n', i) + 1, ci.indexOf('\n', i));
+  assert.equal(/\|\|\s*true/.test(line), false, '.env.example 검사가 다시 비차단이 됐다: ' + line.trim());
+});
+
+// ── ROBOTS-OG-ALLOW-2026-09-05 ────────────────────────────────────────────────────
+//   [실측] Search Console 이 "robots.txt 에 의해 차단됨" 1건을 보고했다. 동적 OG 이미지가 /api/og/ 아래에 있는데
+//   robots.txt 가 /api/ 전체를 막고 있어, robots.txt 를 존중하는 스크래퍼는 카드 이미지를 못 가져간다.
+test('robots.txt — /api/ 는 막되 /api/og/ 는 허용 (Allow 가 Disallow 보다 앞)', () => {
+  const txt = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/robots.txt'), 'utf8');
+  const star = txt.slice(txt.indexOf('User-agent: *'), txt.indexOf('User-agent: GPTBot'));
+  const allow = star.indexOf('Allow: /api/og/'), dis = star.indexOf('Disallow: /api/');
+  assert.ok(allow >= 0, 'OG 이미지 경로 허용이 사라졌다 — 카카오톡·X 카드 이미지가 막힌다');
+  assert.ok(dis >= 0, '/api/ 차단이 사라졌다');
+  assert.ok(allow < dis, '단순 파서(첫 매치 우선)를 위해 Allow 가 Disallow 보다 앞에 있어야 한다');
+});
+
+// ── MASCOT-HIDDEN-2026-09-05 (감사 E·J) ───────────────────────────────────────────
+test('브리핑 — "(캐릭터 준비 중)" 플레이스홀더는 사용자에게 보이지 않는다', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const i = html.indexOf('MASCOT-HIDDEN-2026-09-05');
+  assert.ok(i > 0, '집킴이 코너 숨김 마커가 사라졌다');
+  assert.match(html.slice(i, i + 800), /<div style="margin-top:12px;display:none;/, '집킴이 코너가 다시 보인다(캐릭터 원화 도착 전)');
+});

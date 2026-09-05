@@ -34,6 +34,7 @@ const { householdsConflictOf } = require('../utils/buildFacility');
 //   점수표가 두 벌이면 한쪽만 고쳐지고 갈린다 — 오늘 교통 실측이 보고서에 안 갔던 이유가 그것이다.
 const { turnoverScore, isExcludedAptType, countNewHighByArea } = require('../utils/scoreBands');
 const { txWindowStart } = require('../utils/txWindow');
+const { PYEONG_M2 } = require('../utils/pyeong'); // PYEONG-SSOT-2026-09-05: 리터럴 3.3058 4곳 → 단일 출처
 const { resolveCoordBatch } = require('../services/geocodeCacheService');
 const { getNearbyAmenities, countNearby, keywordToCoord, getTransitMinutes } = require('../services/kakaoService');
 const cache = require('../cache');
@@ -204,7 +205,7 @@ router.post('/generate', async (req, res) => {
             if (!t.buildYear || t.buildYear < 1900 || !(t.excluUseAr > 10) || !(t.dealAmount > 0)) continue;
             const age = _curYear - t.buildYear;
             const bi = _bandDefs.findIndex(([lo, hi]) => age >= lo && age <= hi);
-            if (bi >= 0) _byBand[bi].push(t.dealAmount / (t.excluUseAr / 3.3058));
+            if (bi >= 0) _byBand[bi].push(t.dealAmount / (t.excluUseAr / PYEONG_M2));
           }
           const ageBands = _bandDefs.map(([, , label], i) => {
             const arr = _byBand[i];
@@ -550,7 +551,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
       areaBreakdown: Array.isArray(c.areaStats)
         ? c.areaStats.slice(0, 6).map(a => ({
           sqm: a.sqm,
-          pyeong: Math.round(a.sqm / 3.3058),
+          pyeong: Math.round(a.sqm / PYEONG_M2),
           n: a.n,
           avgAuk: Math.round((a.avg / 10000) * 100) / 100,
         }))
@@ -567,7 +568,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
         mid: c.floorBands.mid ? { n: c.floorBands.mid.n, auk: Math.round((c.floorBands.mid.median / 10000) * 100) / 100 } : null,
         high: c.floorBands.high ? { from: c.floorBands.high.from, n: c.floorBands.high.n, auk: Math.round((c.floorBands.high.median / 10000) * 100) / 100 } : null,
       } : undefined,
-      areaPyeong: areaMain ? Math.round(areaMain / 3.3058) : undefined,
+      areaPyeong: areaMain ? Math.round(areaMain / PYEONG_M2) : undefined,
       buildYear: c.build_year || 0,
       households: c.households || '미상',
       ratio: c._poolTruncated
@@ -1917,7 +1918,7 @@ function buildReportPrompt(input, policy, candidates, freeCtx) {
     ].filter(Boolean).join(' | ');
     return `${i + 1}. ${displayName} (${c.sigungu} ${c.umd_nm})
    - 준공: ${c.build_year || '미상'}년 / 세대수: ${householdsStr}
-   - 회원님 평형대 (${c.areas.map(a => `${a}㎡(${Math.round(a / 3.3058)}평)`).join(', ')}) 만 노출됨
+   - 회원님 평형대 (${c.areas.map(a => `${a}㎡(${Math.round(a / PYEONG_M2)}평)`).join(', ')}) 만 노출됨
    - 회원님 평형대 평균가: ${(c.avgPrice / 10000).toFixed(2)}억원 (해당 평형 ${c.n}건 거래, 최근 ${c.latest})
    - 객관 fact: ${factsList || '데이터 부족'}
    - 매칭 점수: ${c.score}점 (${breakdownStr})`;

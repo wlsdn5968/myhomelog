@@ -568,7 +568,10 @@ async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, 
           facility: facilityToStore,
           facility_fetched_at: new Date().toISOString(),
           updated_at: new Date().toISOString(),
-        }).eq('kapt_code', m.kapt_code).then(() => {}, () => {});
+        }).eq('kapt_code', m.kapt_code).then(() => {}, (e) => {
+          // FACILITY-STORE-LOG-2026-09-05 (감사 G-6): 저장 실패를 삼키지 않는다 — 응답은 정상(다음 조회가 재시도)
+          logger.warn({ err: e && e.message, kaptCode: m.kapt_code }, 'facility 갱신 저장 실패');
+        });
       }
     }
 
