@@ -1496,10 +1496,10 @@ test('getDistrictTier — 행정구 위계는 lawd_cd 로만 판정한다 (동�
   const getDistrictTier = _reportFn('getDistrictTier');
 
   // 서울(lawd_cd 11 접두) — 등급이 실제로 붙는다
-  assert.deepEqual(getDistrictTier('강남구', LAWD.강남구), { tier: '강남3구', bonus: 60 });
-  assert.deepEqual(getDistrictTier('마포구', LAWD.마포구), { tier: '마용성광', bonus: 50 });
-  assert.deepEqual(getDistrictTier('양천구', LAWD.양천구), { tier: '서울 핵심구', bonus: 30 });
-  assert.deepEqual(getDistrictTier('노원구', LAWD.노원구), { tier: '서울 외곽구', bonus: 5 });
+  assert.deepEqual(getDistrictTier('강남구', LAWD.강남구), { tier: '강남3구', bonus: 20 });
+  assert.deepEqual(getDistrictTier('마포구', LAWD.마포구), { tier: '마용성광', bonus: 16 });
+  assert.deepEqual(getDistrictTier('양천구', LAWD.양천구), { tier: '서울 핵심구', bonus: 10 });
+  assert.deepEqual(getDistrictTier('노원구', LAWD.노원구), { tier: '서울 외곽구', bonus: 2 });
 
   // ★ 실사고 재발 차단: 지방 광역시 구에 '서울 …' 라벨이 붙으면 안 된다.
   //   MOLIT sigungu 에는 광역 접두가 없어 이름만 보면 서울 구와 구별할 수 없다.
@@ -1508,7 +1508,7 @@ test('getDistrictTier — 행정구 위계는 lawd_cd 로만 판정한다 (동�
   assert.deepEqual(getDistrictTier('연수구', LAWD.연수구), { tier: '기타', bonus: 0 });
 
   // ★ 완전 동명 구 — 문자열로는 원리적으로 구별 불가능한 조합
-  assert.deepEqual(getDistrictTier('중구', LAWD.서울중구), { tier: '서울 외곽구', bonus: 5 });
+  assert.deepEqual(getDistrictTier('중구', LAWD.서울중구), { tier: '서울 외곽구', bonus: 2 });
   assert.deepEqual(getDistrictTier('중구', LAWD.부산중구), { tier: '기타', bonus: 0 });
   assert.deepEqual(getDistrictTier('서구', LAWD.부산서구), { tier: '기타', bonus: 0 });
   assert.deepEqual(getDistrictTier('서구', LAWD.인천서구), { tier: '기타', bonus: 0 });
@@ -1522,8 +1522,8 @@ test('getDistrictTier — 행정구 위계는 lawd_cd 로만 판정한다 (동�
 
   // 경기 과천·분당·판교는 **의도적으로** 문자열 매칭이다(report.js:667 — 동명 지역이 없어 안전).
   //   lawd_cd 에 의존하지 않는다는 것 자체가 계약이므로 코드 유무 양쪽을 고정한다.
-  assert.deepEqual(getDistrictTier('과천시', LAWD.과천시), { tier: '분당·과천·판교', bonus: 35 });
-  assert.deepEqual(getDistrictTier('분당구', ''), { tier: '분당·과천·판교', bonus: 35 });
+  assert.deepEqual(getDistrictTier('과천시', LAWD.과천시), { tier: '분당·과천·판교', bonus: 12 });
+  assert.deepEqual(getDistrictTier('분당구', ''), { tier: '분당·과천·판교', bonus: 12 });
 });
 
 test('getRegulationPenalty — 서울 외 지역을 규제지역으로 단정하지 않는다 (금전 오판 차단)', () => {
@@ -6108,7 +6108,7 @@ test('광역 전수 조회 경량화 — 별칭은 비어 있지 않은 행만, 
   const total = 2300;
   const q = () => { const s = { select() { return s; }, in() { return s; }, not() { return s; }, order() { return s; },
     range(a) { ranges.push(a); const n = Math.max(0, Math.min(1000, total - a)); return Promise.resolve({ data: mkRows(a, n), error: null }); } }; return s; };
-  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { getSupabaseAdmin: () => ({ from: () => q() }) } };
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { hasAdminEnv: () => true, getSupabaseAdmin: () => ({ from: () => q() }) } };
   try {
     delete require.cache[facPath];
     const { getAptListByLawdFromDb } = require('../services/aptFacilityService');
@@ -6267,4 +6267,118 @@ test('경신 카드 — 재계산 실패 시 503 대신 마지막 성공 스냅�
   assert.match(html, /async function _loadPriceRecordsCard\(\)\{/, '랜딩 경신 카드 로더가 함수가 아니다(재시도 불가)');
   assert.match(html, /_meta\.textContent = \(d\.stale && _at && !isNaN\(_at\)\) \? `[^`]*기준` : '실시간';/, 'stale 스냅샷을 실시간이라 부른다');
   assert.match(html, /_meta\.textContent='불러오지 못함 · 다시 시도'; _meta\.style\.cursor='pointer'; _meta\.title='클릭하면 다시 불러와요'; _meta\.onclick=\(\)=>_loadPriceRecordsCard\(\);/, '실패 시 재시도 동작이 없다');
+});
+
+// ── REFUND-2026-09-05 ─────────────────────────────────────────────────────────────
+test('일일 한도 — 캐시 히트처럼 비용이 없는 요청은 한도를 되돌린다(보고서 타임아웃 뒤 재시도가 무료 1회를 또 먹던 것)', async () => {
+  const { dailyLimit, getUsage, decrementUsage } = require('../middleware/dailyLimit');
+  assert.equal(typeof decrementUsage, 'function', 'decrementUsage 가 없다');
+  const ip = '203.0.113.' + Math.floor(Math.random() * 250);
+  const req = { method: 'POST', ip, headers: {}, user: null };
+  const res = { setHeader() {}, status() { return this; }, json() { return this; } };
+  let nexted = 0;
+  await dailyLimit({ limit: 5, scope: 'report', loggedInBonus: 1 })(req, res, () => { nexted++; });
+  assert.equal(nexted, 1, '한도 안인데 next 가 불리지 않았다');
+  assert.equal(await getUsage(req, 'report'), 1, '증가가 기록되지 않았다');
+  assert.equal(typeof req.dailyLimitRefund, 'function', '환불 함수가 요청에 실리지 않았다');
+  await req.dailyLimitRefund();
+  assert.equal(await getUsage(req, 'report'), 0, '환불 뒤 사용량이 0 이 아니다');
+  await req.dailyLimitRefund();
+  assert.equal(await getUsage(req, 'report'), 0, '0 아래로 내려간다');
+  const rpt = require('node:fs').readFileSync(require.resolve('../routes/report'), 'utf8');
+  assert.match(rpt, /if \(hit\) \{[\s\S]{0,400}req\.dailyLimitRefund[\s\S]{0,300}return res\.json\(\{ \.\.\.hit, fromCache: true \}\);/, '보고서 캐시 히트가 한도를 되돌리지 않는다');
+});
+
+// ── INTEREST-WARM-2026-09-05 ──────────────────────────────────────────────────────
+test('관심도 워밍 cron — 거래 많은 단지부터 좌표 있는 것만 네이버 데이터랩 캐시를 채운다', async () => {
+  const dbPath = require.resolve('../db/client');
+  const dlPath = require.resolve('../services/naverDatalabService');
+  const jobPath = require.resolve('../jobs/interestWarm');
+  const saved = { db: require.cache[dbPath], dl: require.cache[dlPath], job: require.cache[jobPath] };
+  const q = (table) => {
+    const s = { _t: table, _in: null,
+      select() { return s; }, order() { return s; }, not() { return s; },
+      in(col, vals) { s._in = vals; return s; },
+      range(a, b) {
+        if (table === 'molit_apt_index') {
+          const rows = Array.from({ length: 1200 }, (_, i) => ({ apt_name: 'A' + i, sigungu: '노원구', umd_nm: '상계동', deal_count: 5000 - i }));
+          return Promise.resolve({ data: rows.slice(a, b + 1), error: null });
+        }
+        return Promise.resolve({ data: [], error: null });
+      },
+      then(resolve) { // apt_geocache 는 range 없이 await 된다
+        const rows = (s._in || []).filter(n => Number(n.slice(1)) % 3 !== 0).map(n => ({ apt_name: n, sigungu: '노원구', umd_nm: '상계동', lat: 37.6, lng: 127.0 }));
+        resolve({ data: rows, error: null });
+      },
+    };
+    return s;
+  };
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { getSupabaseAdmin: () => ({ from: (t) => q(t) }) } };
+  let got = null;
+  require.cache[dlPath] = { id: dlPath, filename: dlPath, loaded: true, exports: {
+    hasKeys: () => true, warmInterest: async (items, calls) => { got = { items, calls }; return { calls: 2, filled: 8, pending: 0 }; },
+  } };
+  try {
+    delete require.cache[jobPath];
+    const { run } = require('../jobs/interestWarm');
+    const out = await run({ calls: 33, top: 1200 });
+    assert.ok(got, 'warmInterest 가 호출되지 않았다');
+    assert.equal(got.calls, 33, '호출 상한이 전달되지 않았다');
+    assert.equal(got.items.length, 800, `좌표 없는 단지가 걸러지지 않았다(${got.items.length})`);
+    assert.equal(got.items[0].aptName, 'A1', '거래 많은 순서가 아니다');
+    assert.ok(got.items.every(it => it.lat === 37.6 && it.umd === '상계동'), '좌표·동이 실리지 않았다');
+    assert.equal(out.top, 1200); assert.equal(out.withCoord, 800); assert.equal(out.filled, 8);
+  } finally {
+    if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
+    if (saved.dl) require.cache[dlPath] = saved.dl; else delete require.cache[dlPath];
+    if (saved.job) require.cache[jobPath] = saved.job; else delete require.cache[jobPath];
+  }
+  const cron = require('node:fs').readFileSync(require.resolve('../routes/cron'), 'utf8');
+  assert.match(cron, /router\.get\('\/warm-interest', handleWarmInterest\);/, 'cron 라우트가 없다');
+  assert.match(cron, /recordCronRun\('warm-interest', summary\)/, '실행 기록이 남지 않는다(health.crons 에서 안 보인다)');
+  const vercel = JSON.parse(require('node:fs').readFileSync(require('node:path').join(__dirname, '../../vercel.json'), 'utf8'));
+  const wi = (vercel.crons || []).find(c => c.path === '/api/cron/warm-interest');
+  assert.ok(wi, 'vercel.json 에 warm-interest cron 이 없다');
+  assert.equal(wi.schedule, '0 19 * * *', '스케줄이 하루 1회(19:00 UTC = 04:00 KST)가 아니다');
+  const cs = require('node:fs').readFileSync(require.resolve('../services/cronStats'), 'utf8');
+  assert.match(cs, /'warm-interest': 50,/, 'cronStats 기대 소요에 등록되지 않았다');
+  assert.match(cs, /'\/api\/cron\/warm-interest': \['warm-interest'\],/, 'cronStats 경로 매핑에 등록되지 않았다');
+});
+
+// ── TX-PAGE-PAR-2026-09-05 ─────────────────────────────────────────────────────────
+test('지역 거래 단일쿼리 — 첫 페이지 단독, 가득 찼으면 다음 4페이지 병렬, 짧은 페이지에서 멈춘다', async () => {
+  const dbPath = require.resolve('../db/client');
+  const txPath = require.resolve('../services/transactionService');
+  const saved = { db: require.cache[dbPath], tx: require.cache[txPath] };
+  const ranges = [];
+  const total = 2300;
+  const mk = (from, n) => Array.from({ length: n }, (_, i) => ({ apt_name: 'x', sigungu: '노원구', umd_nm: '상계동', exclu_use_ar: 84.9, build_year: 1989, floor: 3, deal_year: 2026, deal_month: 8, deal_day: 1, deal_amount: 60000, lawd_cd: '99999', apt_seq: '99999-1', jibun: '1-1' }));
+  const q = () => { const s = { select() { return s; }, eq() { return s; }, gte() { return s; }, order() { return s; },
+    range(a) { ranges.push(a); const n = Math.max(0, Math.min(1000, total - a)); return Promise.resolve({ data: mk(a, n), error: null }); } }; return s; };
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { hasAdminEnv: () => true, getSupabaseAdmin: () => ({ from: () => q() }) } };
+  try {
+    delete require.cache[txPath];
+    const { getRegionRecentTransactions } = require('../services/transactionService');
+    require('../cache').del('txregion:99999:6');
+    const rows = await getRegionRecentTransactions('99999');
+    assert.equal(rows.length, total, '페이지 병합 행수가 다르다');
+    assert.deepEqual(ranges, [0, 1000, 2000, 3000, 4000], '첫 페이지 단독 → 4페이지 병렬 순서가 아니다: ' + JSON.stringify(ranges));
+    assert.equal(rows[0].jibun, '1-1', 'jibun 매핑이 사라졌다');
+  } finally {
+    require('../cache').del('txregion:99999:6');
+    if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
+    if (saved.tx) require.cache[txPath] = saved.tx; else delete require.cache[txPath];
+  }
+});
+
+// ── DISTRICT-SCALE-2026-09-05 ─────────────────────────────────────────────────────
+test('보고서 행정구 위계 가점 — 객관 데이터(세대수 최대 30)를 넘지 않는다(양천 169세대가 3,169세대를 앉히던 것)', () => {
+  const getDistrictTier = _reportFn('getDistrictTier');
+  const getHouseholdBonus = _reportFn('getHouseholdBonus');
+  const maxDistrict = Math.max(...['강남구', '마포구', '양천구', '노원구'].map(g => getDistrictTier(g, { 강남구: '11680', 마포구: '11440', 양천구: '11470', 노원구: '11350' }[g]).bonus), getDistrictTier('과천시', '41290').bonus);
+  assert.ok(maxDistrict <= 20, `위계 가점 최대가 ${maxDistrict} — 객관 가점을 압도한다`);
+  assert.ok(maxDistrict < getHouseholdBonus(3000), '위계 가점이 3,000세대 가점보다 크다');
+  // 순서는 유지(강남3구 > 마용성광 > 분당·과천·판교 > 서울 핵심구 > 서울 외곽구 > 기타)
+  const b = (g, c) => getDistrictTier(g, c).bonus;
+  assert.ok(b('강남구', '11680') > b('마포구', '11440') && b('마포구', '11440') > b('과천시', '41290') && b('과천시', '41290') > b('양천구', '11470') && b('양천구', '11470') > b('노원구', '11350') && b('노원구', '11350') > b('해운대구', '26350'), '위계 순서가 깨졌다');
 });

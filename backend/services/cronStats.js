@@ -151,6 +151,7 @@ const CRON_MAX_AGE_H = {
   'facility-backfill': 50,
   'building-register-backfill': 50,
   'push-notify': 50,
+  'warm-interest': 50,   // INTEREST-WARM-2026-09-05: 일간
 };
 
 /**
@@ -170,6 +171,7 @@ const CRON_PATH_TO_JOBS = {
   '/api/cron/facility-backfill': ['facility-backfill'],
   '/api/cron/building-register-backfill': ['building-register-backfill'],
   '/api/cron/push-notify': ['push-notify'],
+  '/api/cron/warm-interest': ['warm-interest'],
 };
 
 /**

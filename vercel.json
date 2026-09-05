@@ -158,6 +158,10 @@
     {
       "path": "/api/cron/push-notify",
       "schedule": "30 22 * * *"
+    },
+    {
+      "path": "/api/cron/warm-interest",
+      "schedule": "0 19 * * *"
     }
   ]
 }

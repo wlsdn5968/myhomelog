@@ -82,6 +82,28 @@ async function incrementUsage(key, ttl) {
   }
 }
 
+// REFUND-2026-09-05 (외부 검토 후속): 비용이 들지 않은 요청(보고서 캐시 히트)은 한도에서 되돌린다.
+//   보고서는 타임아웃 뒤 같은 조건으로 다시 누르면 서버 캐시가 답하는데, 그 재시도가 무료 1회를 또 소비했다.
+//   0 아래로는 내리지 않는다(Redis decr 가 음수를 만들면 0 으로 되돌린다).
+async function decrementUsage(key, ttl) {
+  const redis = getRedis();
+  if (!redis) {
+    const used = Math.max(0, (cache.get(key) || 0) - 1);
+    cache.set(key, used, ttl);
+    return used;
+  }
+  try {
+    const v = await redis.decr(key);
+    if (v < 0) { await redis.set(key, 0); await redis.expire(key, ttl); return 0; }
+    return v;
+  } catch (e) {
+    logger.warn({ err: e, key }, 'Redis decr 실패 — in-memory fallback');
+    const used = Math.max(0, (cache.get(key) || 0) - 1);
+    cache.set(key, used, ttl);
+    return used;
+  }
+}
+
 async function readUsage(key) {
   const redis = getRedis();
   if (!redis) return cache.get(key) || 0;
@@ -161,6 +183,7 @@ function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
     //         동시 2 요청이 readUsage 4 만 보고 둘 다 incr → used=6 (limit 5 우회)
     //   변경: incr 먼저 (atomic) → 후속 체크 시 used > limit 면 거부 (1회 over 허용 — 무해)
     const { used, source } = await incrementUsage(key, ttl);
+    req.dailyLimitRefund = () => decrementUsage(key, ttl); // REFUND-2026-09-05: 핸들러가 "비용 0" 을 확인하면 되돌린다
     if (used > effectiveLimit) {
       logger.info({
         scope, limit: effectiveLimit, used, plan,
@@ -207,4 +230,4 @@ async function getUsage(req, scope = 'search') {
 }
 
 // todayKey/secondsUntilMidnight 도 export — KST 경계 계약을 테스트로 고정하기 위함(Sprint OOOOOOO).
-module.exports = { dailyLimit, getUsage, getClientIp, getLimitIdentity, todayKey, secondsUntilMidnight };
+module.exports = { dailyLimit, getUsage, getClientIp, getLimitIdentity, todayKey, secondsUntilMidnight, decrementUsage };

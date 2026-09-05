@@ -121,9 +121,10 @@ async function getRegionRecentTransactions(lawdCd, monthsBack = 6) {
     //   → 1000행 range 페이징. 2차 정렬키 id 로 같은 deal_date 동점의 페이지 경계 중복/누락 차단.
     //   최대 지역(구로 6mo 2,007행 실측) = 3왕복 — 기존 월별 12왕복 대비 여전히 1/4.
     const PAGE = 1000;
-    let data = [];
-    for (let from = 0; from <= 11000; from += PAGE) {
-      const { data: page, error } = await admin
+    // TX-PAGE-PAR-2026-09-05: 첫 페이지는 단독(대부분의 지역은 1페이지로 끝난다), 가득 찼으면 다음 4페이지를 병렬로.
+    //   광역 전수(서울 25구)에서 가장 큰 지역(노원 3,568행 = 4페이지)이 직렬 4왕복이라 전체 대기의 바닥이었다.
+    //   정렬키(deal_date desc, id desc)가 페이지 경계를 고정하므로 병렬 range 가 안전하다.
+    const _page = (from) => admin
         .from('molit_transactions')
         // JIBUN-COL-2026-09-05: jibun 이 빠져 있었다 — analyzeTransactions 가 단지 지번(최빈값)을 여기서 만들고,
         //   추천 경로의 JIBUN-MATCH(게이트·카드) 는 그 값으로 KAPT 를 찾는다. 컬럼이 없으니 지번 매칭이 **한 번도 성립한 적이
@@ -134,9 +135,22 @@ async function getRegionRecentTransactions(lawdCd, monthsBack = 6) {
         .order('deal_date', { ascending: false })
         .order('id', { ascending: false })
         .range(from, from + PAGE - 1);
-      if (error) throw error;
-      if (page && page.length) data = data.concat(page);
-      if (!page || page.length < PAGE) break;
+    let data = [];
+    const first = await _page(0);
+    if (first.error) throw first.error;
+    data = data.concat(first.data || []);
+    if ((first.data || []).length === PAGE) {
+      const CONC = 4;
+      for (let p0 = 1; p0 <= 11; p0 += CONC) {
+        const results = await Promise.all(Array.from({ length: Math.min(CONC, 12 - p0) }, (_, k) => _page((p0 + k) * PAGE)));
+        let short = false;
+        for (const r of results) {
+          if (r.error) throw r.error;
+          data = data.concat(r.data || []);
+          if ((r.data || []).length < PAGE) short = true;
+        }
+        if (short) break;
+      }
     }
     if (!data.length) { cache.set(ck, null, 300); return null; } // 미ingest → 기존 경로 폴백
     const mapped = data.map(r => ({

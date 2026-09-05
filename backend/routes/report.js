@@ -146,7 +146,7 @@ router.post('/generate', async (req, res) => {
   //   (같은 함정을 추천 경로는 `rec:vNN` 으로 이미 막고 있었다 — 보고서만 버전이 없었다.)
   //   점수·표시 규칙을 바꾸면 이 값을 올릴 것.
   //   v2 감사 P0-2(카카오 실패 null) · v3 감사 P1-5(모름 보너스 중간값) — 올릴 때 사유를 한 줄 추가할 것.
-  const SCORE_VERSION = 'v3';
+  const SCORE_VERSION = 'v4'; // DISTRICT-SCALE-2026-09-05 위계 가점 축소
   const cacheKey = `report:${SCORE_VERSION}:${crypto.createHash('sha256').update(JSON.stringify(_sortedInput)).digest('hex').slice(0, 16)}`;
   let hit = cache.get(cacheKey);
   // REDIS-CACHE-2026-07-14 (Sprint KKKKK): 로컬 미스 시 Redis 2차 조회 — 다른 인스턴스가 만든 보고서
@@ -155,7 +155,13 @@ router.post('/generate', async (req, res) => {
     hit = await require('../services/redisCache').rget(cacheKey);
     if (hit) cache.set(cacheKey, hit, 1800); // 로컬에도 복사(같은 인스턴스 후속 요청 fast path)
   }
-  if (hit) return res.json({ ...hit, fromCache: true });
+  if (hit) {
+    // REFUND-2026-09-05: 캐시 히트는 AI 비용이 0 이다 — 한도(무료 1회)를 소비하지 않는다(타임아웃 뒤 재시도가 한도를 또 먹던 것).
+    if (typeof req.dailyLimitRefund === 'function') {
+      try { await req.dailyLimitRefund(); res.set('X-Daily-Refunded', '1'); } catch (_) { /* 환불 실패가 응답을 막지 않는다 */ }
+    }
+    return res.json({ ...hit, fromCache: true });
+  }
 
   try {
     const admin = getSupabaseAdmin();
@@ -839,12 +845,15 @@ function getDistrictTier(sigungu, lawdCd) {
   if (!sigungu) return { tier: '기타', bonus: 0 };
   const code = String(lawdCd || '').trim();
   const isSeoul = code ? code.startsWith('11') : false;
-  if (isSeoul && ['강남구', '서초구', '송파구'].includes(sigungu)) return { tier: '강남3구', bonus: 60 };
-  if (isSeoul && ['마포구', '용산구', '성동구', '광진구'].includes(sigungu)) return { tier: '마용성광', bonus: 50 };
-  if (isSeoul && ['양천구', '영등포구', '강동구'].includes(sigungu)) return { tier: '서울 핵심구', bonus: 30 };
+  // DISTRICT-SCALE-2026-09-05 (라이브 실측: 양천 169세대 단지가 위계 30 + 예산적합 30 으로 3,169세대 단지를 앉혔다):
+  //   위계는 '입지 사전확률'일 뿐인데 60/50/30/5 는 세대수 최대 30·주차 12·노후 25 등 객관 가점을 압도했다.
+  //   순서는 그대로 두고 크기만 1/3 로(강남3구 20 · 마용성광 16 · 분당과천판교 12 · 서울 핵심구 10 · 서울 외곽구 2).
+  if (isSeoul && ['강남구', '서초구', '송파구'].includes(sigungu)) return { tier: '강남3구', bonus: 20 };
+  if (isSeoul && ['마포구', '용산구', '성동구', '광진구'].includes(sigungu)) return { tier: '마용성광', bonus: 16 };
+  if (isSeoul && ['양천구', '영등포구', '강동구'].includes(sigungu)) return { tier: '서울 핵심구', bonus: 10 };
   // 경기 과천·분당·판교는 시/구 이름이 고유해 문자열 매칭이 안전(동명 지역 없음)
-  if (['과천시', '분당구', '판교'].some(k => sigungu.includes(k))) return { tier: '분당·과천·판교', bonus: 35 };
-  if (isSeoul && sigungu.endsWith('구')) return { tier: '서울 외곽구', bonus: 5 };
+  if (['과천시', '분당구', '판교'].some(k => sigungu.includes(k))) return { tier: '분당·과천·판교', bonus: 12 };
+  if (isSeoul && sigungu.endsWith('구')) return { tier: '서울 외곽구', bonus: 2 };
   return { tier: '기타', bonus: 0 };
 }
 

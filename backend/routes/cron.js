@@ -527,4 +527,25 @@ async function handlePushNotify(req, res) {
 router.post('/push-notify', handlePushNotify);
 router.get('/push-notify', handlePushNotify);
 
+// INTEREST-WARM-2026-09-05: 관심도 캐시 워밍(하루 1회, 19:00 UTC = 04:00 KST). 상세는 jobs/interestWarm.js.
+async function handleWarmInterest(req, res) {
+  try {
+    const started = Date.now();
+    const { run: runInterestWarm } = require('../jobs/interestWarm');
+    const summary = await runInterestWarm({
+      calls: req.query.calls ? parseInt(req.query.calls) : undefined,
+      top: req.query.top ? parseInt(req.query.top) : undefined,
+    });
+    logger.info({ durationMs: Date.now() - started, summary }, 'cron/warm-interest OK');
+    await require('../services/cronStats').recordCronRun('warm-interest', summary).catch(() => {});
+    res.json({ ok: true, summary });
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'cron/warm-interest 실패');
+    await require('../services/cronStats').recordCronRun('warm-interest', { ok: false, error: e.message }).catch(() => {}); // 실패도 기록 — health.crons 에 흔적을 남긴다
+    try { Sentry.captureException(e, { tags: { route: 'cron.warm-interest' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 */ }
+    res.status(500).json({ ok: false, error: e.message });
+  }
+}
+router.get('/warm-interest', handleWarmInterest);
+
 module.exports = router;
