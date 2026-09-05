@@ -906,6 +906,8 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .t0-hero .t0h-s{margin-top:4px;font-size:9px;color:var(--t3)}
 .t0-rep-link{display:inline-block;margin:2px 0 8px;font-size:12px;font-weight:600;color:var(--acc);text-decoration:none}
 .t0-rep-link:hover{text-decoration:underline}
+/* 모바일 탭 타깃 — 라이브 실측 19px(44 미만). 글자 크기는 그대로, 높이만 키워 세로 중앙 정렬(9/2 모바일 터치 타깃 작업과 같은 방식 — 마커 원문은 테스트 indexOf 충돌로 쓰지 않는다) */
+@media(max-width:700px){.t0-rep-link{display:flex;align-items:center;min-height:44px;margin:0 0 4px}}
 
 /* RIGHT CHAT */
 .rp{width:340px;flex-shrink:0;display:flex;flex-direction:column;border-left:1px solid var(--bd);background:var(--s0)}
