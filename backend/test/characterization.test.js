@@ -6067,8 +6067,12 @@ test('추천 후보 컷 — 임시 점수·거래 건수·확인된 세대수 �
   assert.match(blk, /for \(const a of byDealsUnverified\.slice\(0, LENS_UNVERIFIED\)\) _lensPick\.add\(a\);/, '미확인 렌즈 결과가 합집합에 들어가지 않는다');
   // 지역 단일쿼리에 jibun — 없으면 지번 매칭(게이트·카드)이 한 번도 성립하지 않는다
   const txs = require('node:fs').readFileSync(require.resolve('../services/transactionService'), 'utf8');
-  assert.match(txs, /deal_amount, lawd_cd, apt_seq, jibun'\)/, '지역 단일쿼리 select 에 jibun 이 없다 — 추천 경로 지번 매칭이 죽는다');
-  assert.match(txs, /jibun: r\.jibun \|\| '',/, '지역 단일쿼리 매핑에 jibun 이 없다');
+  // ⚠ 함수 범위로 한정 — 다른 함수(getTransactionsByAptSeq)의 같은 매핑 줄이 검사를 대신 통과시켰다(주입 실측 MISSED).
+  const rrt = txs.indexOf('async function getRegionRecentTransactions(');
+  assert.ok(rrt > 0, 'getRegionRecentTransactions 가 없다');
+  const rrtBody = txs.slice(rrt, txs.indexOf('cache.set(ck, mapped, 21600)', rrt) + 40);
+  assert.match(rrtBody, /deal_amount, lawd_cd, apt_seq, jibun'\)/, '지역 단일쿼리 select 에 jibun 이 없다 — 추천 경로 지번 매칭이 죽는다');
+  assert.match(rrtBody, /jibun: r\.jibun \|\| '',/, '지역 단일쿼리 매핑에 jibun 이 없다');
   // 컷 전 소형 게이트 — TRANSIT-STAGE 보다 앞
   const sg = src.indexOf('SMALL-GATE-EARLY-2026-09-05');
   const ts = src.indexOf('TRANSIT-STAGE-2026-09-05: 최종 15곳');
