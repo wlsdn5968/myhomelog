@@ -5839,3 +5839,115 @@ test('상세 첫 탭 — 실거래 요약이 기본, 점수 없으면 큰 CTA �
   // ⑥ 옛 rg2 평균가 카드는 히어로가 대체 — t0 에 rg2 잔존 금지(같은 값이 두 번 그려진다)
   assert.equal(/class="rg2"/.test(html), false, 'rg2 카드가 남아 평균가가 두 번 그려진다');
 });
+
+// ── REC-BROAD-2026-09-05 (운영자 실사고: "서울 6.5억"이 노원 74점 단지를 구조적으로 배제) ─────────────
+//   [실측 근거] 6.5억 밴드(0.55~1.05x)·최근 6개월 서울 분포: 노원 2,311건(1위)·도봉 947·구로 847·중랑 695·강서 599.
+//   종전 하드코딩(구로·금천·은평)은 1·2위를 통째로 버렸다 — '서울' 최고 60점대 vs 노원 직접 선택 74점의 원인.
+test('광역 검색 — 예산 밴드 분포 상위 구 선정(_rankBroadRows 실행) + 폴백 마커 배선', async () => {
+  const svc = require('../services/propertyService');
+
+  // ① 순수 랭커: 최다 구 순, 동수는 코드 오름차순, K 개 제한, 쓰레기 코드 무시
+  const rows = [
+    ...Array.from({ length: 30 }, () => ({ lawd_cd: '11350' })),
+    ...Array.from({ length: 12 }, () => ({ lawd_cd: '11320' })),
+    ...Array.from({ length: 12 }, () => ({ lawd_cd: '11530' })),
+    ...Array.from({ length: 5 }, () => ({ lawd_cd: '11260' })),
+    { lawd_cd: 'bad' }, { lawd_cd: null }, {},
+  ];
+  assert.deepEqual(svc._rankBroadRows(rows, 3).map(r => r.lawdCd), ['11350', '11320', '11530'],
+    '노원이 1위가 아니거나 동수 타이브레이크(코드 오름차순)가 깨졌다');
+  assert.equal(svc._rankBroadRows(rows, 3)[0].bandDeals, 30);
+
+  // ② 마커: 광역 브랜치는 _broad 접두를 단다(폴백 목록은 종전과 동일하게 유지)
+  const seoul65 = svc.pickRegions('서울', 6.5, '');
+  assert.equal(seoul65._broad, '11', "'서울' 이 _broad 마커를 잃었다 — 하드코딩 3구로 회귀");
+  assert.deepEqual(seoul65.map(r => r.lawdCd), ['11530', '11545', '11380'], '폴백 목록(종전 하드코딩)이 변했다');
+  assert.equal(svc.pickRegions('', 6.5, '')._broad, '11', '빈 지역(기본=서울)도 데이터 기반이어야 한다');
+  assert.equal(svc.pickRegions('인천', 5, '')._broad, '28');
+  assert.equal(svc.pickRegions('경기', 5, '')._broad, '41');
+  assert.equal(svc.pickRegions('노원', 6.5, '')._broad, undefined, '구를 직접 고른 검색까지 광역 확장하면 안 된다');
+  assert.equal(svc.pickRegions('경기', 6, '', '41597')._broad, undefined, 'lawdCd 명시 선택은 광역 확장 금지');
+
+  // ③ pickBroadRegionsByBudget 행위 — db/client 를 require.cache 스텁으로 갈아끼우고 실제 실행
+  const dbPath = require.resolve('../db/client');
+  const redisPath = require.resolve('../services/redisCache');
+  const saved = { db: require.cache[dbPath], redis: require.cache[redisPath] };
+  const calls = [];
+  const fakeRows = [
+    ...Array.from({ length: 40 }, () => ({ lawd_cd: '11350' })),
+    ...Array.from({ length: 30 }, () => ({ lawd_cd: '11320' })),
+    ...Array.from({ length: 20 }, () => ({ lawd_cd: '11530' })),
+    ...Array.from({ length: 15 }, () => ({ lawd_cd: '11260' })),
+    ...Array.from({ length: 10 }, () => ({ lawd_cd: '11500' })),
+    ...Array.from({ length: 8 }, () => ({ lawd_cd: '11380' })),
+  ];
+  const mkQ = (result) => {
+    const q = { _f: {} };
+    for (const m of ['select', 'gte', 'lte', 'order', 'eq']) q[m] = (...a) => { calls.push([m, ...a]); return q; };
+    q.limit = (n) => { calls.push(['limit', n]); return Promise.resolve(result); };
+    return q;
+  };
+  let dbResult = { data: fakeRows, error: null };
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: {
+    getSupabaseAdmin: () => ({ from: (t) => { calls.push(['from', t]); return mkQ(dbResult); } }),
+  } };
+  require.cache[redisPath] = { id: redisPath, filename: redisPath, loaded: true, exports: {
+    rget: async () => null, rset: async () => {},
+  } };
+  try {
+    const fb = [{ lawdCd: '11530', name: '구로구' }];
+    const top = await svc.pickBroadRegionsByBudget('11', 6.5, fb);
+    assert.deepEqual(top.map(r => r.lawdCd), ['11350', '11320', '11530', '11260', '11500'],
+      '예산 밴드 상위 5구가 아니다(노원·도봉이 앞이어야 한다)');
+    assert.equal(top[0].name, '노원구', 'LAWD_CODE_TO_NAME 매핑이 빠졌다');
+    // 밴드·기간·표본 상한이 쿼리에 실제로 걸렸는가 (설정이 사라지면 분포가 왜곡된다)
+    const flat = JSON.stringify(calls);
+    assert.ok(flat.includes('["gte","deal_amount",35750]'), '예산 하한(0.55x)이 빠졌다: ' + flat.slice(0, 200));
+    assert.ok(flat.includes('["lte","deal_amount",68250]'), '예산 상한(1.05x)이 빠졌다');
+    assert.ok(flat.includes('["limit",1000]'), '표본 상한 1000 이 빠졌다');
+    assert.ok(flat.includes('["gte","lawd_cd","11000"]') && flat.includes('["lte","lawd_cd","11999"]'), '접두 범위가 빠졌다');
+
+    // 표본 부족 → 폴백 (밴드에 거래가 거의 없는 예산이면 종전 목록이 낫다)
+    cacheDel('broadpick:v1:11:0.5');
+    dbResult = { data: fakeRows.slice(0, 10), error: null };
+    assert.deepEqual(await svc.pickBroadRegionsByBudget('11', 0.5, fb), fb, '표본 부족인데 폴백하지 않았다');
+    // 조회 오류 → 폴백
+    cacheDel('broadpick:v1:11:99');
+    dbResult = { data: null, error: { message: 'boom' } };
+    assert.deepEqual(await svc.pickBroadRegionsByBudget('11', 99, fb), fb, '조회 실패인데 폴백하지 않았다');
+  } finally {
+    if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
+    if (saved.redis) require.cache[redisPath] = saved.redis; else delete require.cache[redisPath];
+  }
+  function cacheDel(k) { try { require('../cache').del(k); } catch (_) { /* 캐시 미존재 무시 */ } }
+
+  // ④ 배선·캐시 계약(소스): 광역이면 slice(0,3) 대신 확장 경로, 캐시 키는 v24
+  const src = require('node:fs').readFileSync(require.resolve('../services/propertyService'), 'utf8');
+  assert.match(src, /if \(!_lawd && _picked\._broad && Number\(maxBudget\) > 0\) \{\s*targetRegions = await pickBroadRegionsByBudget/,
+    '광역 확장 배선이 끊겼다 — 서울이 다시 3구로 좁아진다');
+  assert.ok(src.includes('rec:v24:'), '캐시 키 버전이 v24 가 아니다 — 옛 3구 결과가 3시간 서빙된다');
+});
+
+// ── REC-RESOLVE-FALLBACK-2026-09-05 (벽산·동부골든: 추천 카드만 부실 facility) ──────────────────
+test('추천 kapt 미매칭 — BR 세대수로 끝내기 전에 resolveFacility(검증된 단건 매처)를 먼저 시도한다', () => {
+  const src = require('node:fs').readFileSync(require.resolve('../services/propertyService'), 'utf8');
+  const i = src.indexOf('REC-RESOLVE-FALLBACK-2026-09-05');
+  assert.ok(i > 0, '미매칭 복원 분기가 사라졌다 — 벽산류 단지의 단지정보 탭이 다시 전부 미상이 된다');
+  const blk = src.slice(i, i + 2400);
+  assert.match(blk, /resolveFacility\(\{\s*aptName: ranked\[i\]\.aptName/, 'resolveFacility 호출이 없다');
+  assert.match(blk, /_applyFacilityToScore\(rec\._baseScore, facility/, '복원 경로가 점수를 확정하지 않는다(SCORE-ZERO 재발)');
+  // 순서: resolveFacility 시도가 BR(_brHh 단독 경로)보다 앞
+  const brIdx = src.indexOf('const brHh = await _brHh(ranked[i]);');
+  assert.ok(i < brIdx, 'resolveFacility 가 BR 폴백보다 뒤에 있다 — 부실 facility 가 먼저 확정된다');
+  assert.ok(src.includes("resolveFacility } = require('./aptFacilityService')"), 'resolveFacility 임포트가 빠졌다');
+});
+
+// ── T6-SOURCE-2026-09-05 ─────────────────────────────────────────────────────────
+test('단지정보 탭 — /search/facility 응답이 있으면 추천 카드의 부실 facility 보다 우선한다', () => {
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const i = html.indexOf('T6-SOURCE-2026-09-05');
+  assert.ok(i > 0, 't6 소스 우선순위 마커가 사라졌다');
+  assert.match(html.slice(i, i + 500),
+    /p\._facilityRes && p\._facilityRes\.facility && p\._facilityRes\.facility\.kaptCode/,
+    't6 이 _facilityRes(kaptCode 보유분)를 우선하지 않는다');
+});

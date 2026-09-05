@@ -24,7 +24,7 @@ const { buildFacility } = require('../utils/buildFacility');
 // IDENTITY-GATE-2026-08-10 (Sprint KKKKKKK): 이 경로는 resolveFacility 를 거치지 않고 자체 이름
 //   매칭(_norm/_canon)으로 kaptCode 를 얻으므로, 그 검증 게이트가 닿지 않는다. 붙은 facility 가
 //   실거래 건축년도와 어긋나면 필터·게이트 판정이 통째로 틀어지므로 여기서도 같은 검증을 적용한다.
-const { getFacilitiesByKaptCodes, verifyCandidate, getAptListByLawdFromDb, bonbun } = require('./aptFacilityService');
+const { getFacilitiesByKaptCodes, verifyCandidate, getAptListByLawdFromDb, bonbun, resolveFacility } = require('./aptFacilityService');
 const { getBuildingTitle } = require('./buildingRegisterService'); // LLLLLL-3: KAPT 미매칭 단지 세대수 = 건축물대장(SSSS 연동)으로 보강
 const cache = require('../cache');
 const logger = require('../logger');
@@ -221,31 +221,40 @@ function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '', lawdCd 
     }
   }
   // 2) 광역만 입력 시 예산 기반 자동 추천 (서울 인기 구)
+  // REC-BROAD-2026-09-05 (운영자 실사고): 이 하드코딩이 "서울 + 6.5억" 을 **구로·금천·은평 3개 구**로
+  //   좁혀 왔다. 같은 예산 밴드(0.55~1.05x)의 최근 6개월 실거래 분포 실측은 노원 2,311건(1위)·도봉 947·
+  //   구로 847·중랑 695·강서 599 — 1·2위를 통째로 버려서, 노원을 직접 고르면 74점이 나오는데
+  //   '서울' 로는 60점대가 최고인 모순이 생겼다. 목록은 **DB 조회 실패 시 폴백**으로만 남기고
+  //   _broad 마커를 달아 호출측(getAIRecommendations)이 예산 밴드 분포 상위 구로 대체하게 한다.
+  const _mkBroad = (arr, pfx) => Object.assign(arr, { _broad: pfx });
   if (!r || r.includes('서울')) {
-    if (maxBudget <= 6) return [
+    if (maxBudget <= 6) return _mkBroad([
       { lawdCd: '11350', name: '노원구' },
       { lawdCd: '11320', name: '도봉구' },
       { lawdCd: '11305', name: '강북구' },
-    ];
-    if (maxBudget <= 9) return [
+    ], '11');
+    if (maxBudget <= 9) return _mkBroad([
       { lawdCd: '11530', name: '구로구' },
       { lawdCd: '11545', name: '금천구' },
       { lawdCd: '11380', name: '은평구' },
-    ];
-    if (maxBudget <= 14) return [
+    ], '11');
+    if (maxBudget <= 14) return _mkBroad([
       { lawdCd: '11290', name: '성북구' },
       { lawdCd: '11470', name: '양천구' },
       { lawdCd: '11440', name: '마포구' },
-    ];
-    return [
+    ], '11');
+    return _mkBroad([
       { lawdCd: '11650', name: '서초구' },
       { lawdCd: '11680', name: '강남구' },
       { lawdCd: '11710', name: '송파구' },
-    ];
+    ], '11');
   }
-  // 3) 광역 매칭 (인천/경기)
+  // 3) 광역 매칭 (인천/경기) — 동일하게 폴백 + 마커
   for (const wide of ['인천', '경기']) {
-    if (r.includes(wide)) return REGION_KEYWORDS[wide].map(c => ({ lawdCd: c, name: wide }));
+    if (r.includes(wide)) {
+      return _mkBroad(REGION_KEYWORDS[wide].map(c => ({ lawdCd: c, name: wide })),
+        wide === '인천' ? '28' : '41');
+    }
   }
   // 4) 기본 (수도권 인기 지역)
   return [
@@ -253,6 +262,68 @@ function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '', lawdCd 
     { lawdCd: '41290', name: '과천시' },
     { lawdCd: '41135', name: '성남시 분당구' },
   ];
+}
+
+// ── REC-BROAD-2026-09-05: 광역 검색의 대상 구를 "예산 밴드 실거래 분포"로 고른다 ──────────
+//   [원리] 광역(서울 등)만 고른 사용자에게 보여줄 구는 "그 예산으로 실제 거래가 일어나는 구"다.
+//   밴드 = 예산의 0.55~1.05배(추천 후보의 예산 적합 구간과 같은 취지 — 상한 5% 여유·과소가 절반 밑이면 무관).
+//   [구현] 최근 6개월·밴드 내 거래를 **최신순 최대 1,000건 표본**으로 뽑아 구별로 센다 —
+//   PostgREST 는 group by 가 없고, 전량을 세면 페이지 8~9회가 든다. 상위 구 선정엔 표본이면 충분하다
+//   (6.5억 서울 실측: 표본으로도 전수로도 1~3위가 노원·도봉·구로로 동일).
+//   ⚠ limit(1000)은 의도된 표본 상한이다 — PostgREST 조용한 1000행 컷과 같은 값이지만 여기선 설계값.
+//   [안전] 조회 실패·표본 부족(<50)이면 종전 하드코딩 목록으로 폴백 — 더 나빠질 길이 없다.
+const BROAD_K = 5;                 // 광역 검색이 실제로 살펴볼 구 수(기존 3 → 5)
+const BROAD_MIN_SAMPLE = 50;
+/** 표본 행(lawd_cd 만)에서 상위 K 구를 뽑는다 — 순수 함수(테스트가 직접 실행). */
+function _rankBroadRows(rows, k = BROAD_K) {
+  const cnt = new Map();
+  for (const r of rows || []) {
+    const c = r && String(r.lawd_cd || '').trim();
+    if (!/^\d{5}$/.test(c)) continue;
+    cnt.set(c, (cnt.get(c) || 0) + 1);
+  }
+  return [...cnt.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+    .slice(0, k).map(([lawdCd, n]) => ({ lawdCd, bandDeals: n }));
+}
+async function pickBroadRegionsByBudget(pfx, maxBudget, fallback) {
+  const band = Math.round(Number(maxBudget) * 2) / 2;   // 0.5억 단위로 캐시 버킷
+  const ck = `broadpick:v1:${pfx}:${band}`;
+  const memHit = cache.get(ck);
+  if (memHit) return memHit;
+  try {
+    const rHit = await require('./redisCache').rget(ck);
+    if (rHit && Array.isArray(rHit) && rHit.length) { cache.set(ck, rHit, 21600); return rHit; }
+  } catch (_) { /* redis 미설정/실패 — 아래 DB 경로가 처리 */ }
+  try {
+    const { getSupabaseAdmin } = require('../db/client');
+    const a = getSupabaseAdmin();
+    if (!a) return fallback;
+    const since = new Date(Date.now() - 183 * 86400000).toISOString().slice(0, 10);
+    const lo = Math.round(Number(maxBudget) * 10000 * 0.55);
+    const hi = Math.round(Number(maxBudget) * 10000 * 1.05);
+    const { data, error } = await a.from('molit_transactions').select('lawd_cd')
+      .gte('lawd_cd', pfx + '000').lte('lawd_cd', pfx + '999')
+      .gte('deal_date', since).gte('deal_amount', lo).lte('deal_amount', hi)
+      .order('deal_date', { ascending: false }).limit(1000);
+    if (error || !data || data.length < BROAD_MIN_SAMPLE) {
+      logger.warn({ pfx, maxBudget, n: data ? data.length : null, err: error && error.message },
+        'REC-BROAD: 표본 부족/조회 실패 — 하드코딩 폴백');
+      return fallback;
+    }
+    const { LAWD_CODE_TO_NAME } = require('./transactionService');
+    const top = _rankBroadRows(data, BROAD_K)
+      .map(({ lawdCd }) => ({ lawdCd, name: LAWD_CODE_TO_NAME[lawdCd] }))
+      .filter(r => r.name);                                   // 화이트리스트 밖 코드는 채택하지 않는다
+    if (!top.length) return fallback;
+    cache.set(ck, top, 21600);
+    require('./redisCache').rset(ck, top, 21600).catch(() => {});
+    logger.info({ pfx, maxBudget, sample: data.length, top: top.map(t => `${t.name}:${t.lawdCd}`).join(',') },
+      'REC-BROAD: 예산 밴드 분포로 광역 → 구 선정');
+    return top;
+  } catch (e) {
+    logger.warn({ pfx, maxBudget, err: e.message }, 'REC-BROAD 예외 — 하드코딩 폴백');
+    return fallback;
+  }
 }
 
 // ── LTV/대출한도 단순 계산 ─────────────────────────────
@@ -575,8 +646,10 @@ async function getAIRecommendations(userCondition) {
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
   // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
   const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
-  const cacheKey = `rec:v23:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
+  const cacheKey = `rec:v24:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
   // 버전 이력(산식·표시가 바뀌면 반드시 올릴 것 — 안 올리면 최대 3h 동안 옛 점수가 그대로 나간다):
+  //   v24 REC-BROAD — 광역 검색 대상 구가 하드코딩 3구 → 예산 밴드 상위 5구로. 같은 '서울:6.5' 키가
+  //       완전히 다른 지역 집합을 보므로 반드시 분리(+ 미매칭 facility 를 resolveFacility 로 복원).
   //   v22 PPPPPPP 대표 평형에 표본 하한(3건) 도입
   //   v23 감사 P0-2 — 카카오 조회 실패를 0 이 아니라 null 로 다루면서 교통·인프라 점수가 달라짐
   // ⚠ 종전엔 키만 올리고 주석은 v22 사유를 그대로 뒀다. 그 탓에 교차검증에서 "오늘 사유로 안 올라갔다"는
@@ -601,7 +674,14 @@ async function getAIRecommendations(userCondition) {
   //   복수 선택에 그대로 적용하면 "4개 골랐는데 3개만 본다" 가 된다(조용한 축소).
   //   명시 선택은 pickRegions 가 이미 MAX_MULTI(6)로 상한을 두므로 여기선 그대로 쓴다.
   const _picked = pickRegions(region, maxBudget, workplaceArea, _lawd);
-  const targetRegions = _lawd ? _picked : _picked.slice(0, 3);
+  let targetRegions = _lawd ? _picked : _picked.slice(0, 3);
+  // REC-BROAD-2026-09-05: 광역만 고른 검색(_broad 마커)은 하드코딩 3구가 아니라
+  //   예산 밴드 실거래 분포 상위 BROAD_K(5)개 구를 본다. slice(0,3)를 태우지 않는 것이 의도다 —
+  //   광역 검색의 요점이 "어느 구인지 모르니 넓게" 인데 3개로 자르면 결함(노원 배제)이 재현된다.
+  //   실패 시 pickBroadRegionsByBudget 이 _picked(종전 목록)를 그대로 돌려준다.
+  if (!_lawd && _picked._broad && Number(maxBudget) > 0) {
+    targetRegions = await pickBroadRegionsByBudget(_picked._broad, maxBudget, _picked);
+  }
 
   // Step 2: 병렬 조회 — (a) 시군구 전체 단지 목록 + (b) 실거래 내역
   // COLLECT-PAR-2026-07-18 (Sprint DDDDDD): aliasMap 이 대형 병렬 조회 뒤 직렬 1왕복이던 것 — 동시 시작
@@ -1036,6 +1116,33 @@ async function getAIRecommendations(userCondition) {
     recommendations.map(async (rec, i) => {
       const kaptCode = preCodes[i];
       if (!kaptCode) {
+        // REC-RESOLVE-FALLBACK-2026-09-05 (운영자 실사고 '벽산'·'동부골든'): 배치 매처(정확명·canon·지번)가
+        //   못 붙여도, 단건 매처 resolveFacility(molit 신원 60행 집계 → 지번 1순위 → 부분·공백·토큰 + 연도 게이트)는
+        //   붙는 경우가 실재한다 — /search/facility 는 상계벽산 1,590세대를 정확히 돌려주는데 추천 카드만
+        //   건축물대장 세대수 1개짜리 부실 facility 를 실어 단지정보 탭 전체가 '미상'으로 떴다.
+        //   비용: 미매칭 항목(최대 15)에만 · 인메모리/DB 캐시 공유 · 실패하면 종전 BR 경로 그대로.
+        const rf = await resolveFacility({
+          aptName: ranked[i].aptName, sigungu: ranked[i].sigungu || '',
+          umdNm: ranked[i].umdNm || '', lawdCd: ranked[i].lawdCd,
+        }).catch(() => null);
+        if (rf && rf.kaptCode && rf.raw) {
+          const _rfDetail = rf.detail || (rf.raw && rf.raw._dtl) || null;
+          const facility = buildFacility(rf.raw, rf.kaptCode, _rfDetail);
+          if (facility && !(facility.totalHouseholds > 0)) {
+            const _bh = await _brHh(ranked[i]);
+            if (_bh) facility.totalHouseholds = _bh;
+          }
+          const _tagsR = [...(rec.tags || [])];
+          const _thR = (facility && facility.totalHouseholds) || 0;
+          if (facility && facility.parkingRatio >= 1.2 && !facility.householdsConflict) _tagsR.push('주차여유');
+          if (_thR >= 1000) _tagsR.push('대단지'); else if (_thR >= 500) _tagsR.push('중대단지');
+          const _scR = _applyFacilityToScore(rec._baseScore, facility, rec._amen || null);
+          return {
+            ...rec, facility,
+            score: _scR.total, scoreBreakdown: _scR.breakdown, scoreWhy: _scR.why,
+            tags: Array.from(new Set(_tagsR)),
+          };
+        }
         // 이름 매칭 실패(KAPT 미등록/미매칭) — 건축물대장 세대수만이라도 보강해 카드 표시 + HH 게이트가 판정 가능하게.
         //
         // ⚠ SCORE-ZERO-2026-08-30 (Sprint PPPPPPP): 이 두 갈래가 **점수를 계산하지 않고 조기 반환**했다.
@@ -1422,4 +1529,4 @@ function getStaticFallback(budget, region) {
 // TEST-EXPORT-2026-07-17 (Sprint XXXXX): computeLTV 는 순수 함수 — 특성화 테스트용 export 추가(동작 불변).
 // TEST-EXPORT-2026-09-02 (감사 P0-2): _applyFacilityToScore 도 순수 함수라 export 한다.
 //   "카카오 조회 실패(null)를 0 곳으로 채점하지 않는다" 를 **텍스트 검사 대신 실제 실행**으로 고정하기 위함.
-module.exports = { getAIRecommendations, pickRegions, computeLTV, buildJibunIndex, lookupByJibun, _applyFacilityToScore };
+module.exports = { getAIRecommendations, pickRegions, computeLTV, buildJibunIndex, lookupByJibun, _applyFacilityToScore, _rankBroadRows, pickBroadRegionsByBudget };

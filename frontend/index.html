@@ -7925,7 +7925,10 @@ function showDetail(p){
     }
   };
   document.getElementById('t6').innerHTML = (() => {
-    const f = p.facility || null;
+    // T6-SOURCE-2026-09-05 (운영자 실사고): 추천 경로의 p.facility 는 배치 매칭 실패 시 세대수 1개짜리
+    //   부실 객체일 수 있다. /search/facility 응답(_facilityRes)이 있으면 그쪽(단건 매처, kaptCode 보유)을 우선.
+    const f = (p._facilityRes && p._facilityRes.facility && p._facilityRes.facility.kaptCode)
+      ? p._facilityRes.facility : (p.facility || null);
     const _v = v => (v == null || v === '' ? '<span style="color:var(--t3)">미상</span>' : _escHtml(String(v)));
     const _ymd = ymd => {
       if (!ymd) return '<span style="color:var(--t3)">미상</span>';
