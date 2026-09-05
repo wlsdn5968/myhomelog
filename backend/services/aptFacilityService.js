@@ -491,9 +491,14 @@ async function _lookupKaptByName(lawdCd, aptName, sigungu, umdNm) {
  *
  * @returns {{ kaptCode, official, raw }|null}
  */
-async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, ignored */, lawdCd }) {
+// NO-LIVE-2026-09-05: `noLive` — 라이브 KAPT 시군구 목록 조회(_lookupKaptByName → data.go.kr 릴레이, 타임아웃 13s)를 건너뛴다.
+//   추천 배치 복원 경로(propertyService REC-RESOLVE-FALLBACK)가 미매칭 후보 여러 개에 이 함수를 병렬로 걸자
+//   릴레이 타임아웃이 그대로 응답 시간이 됐다(프로덕션 실측: facility 스테이지 14.7s / 전체 20.4s, ECONNABORTED 13000ms).
+//   DB 매처(molitIdentity → findMaster: 지번·이름·연도 게이트)만으로도 apt_master 에 있는 단지는 다 찾는다 —
+//   라이브 목록은 apt_master 에 아직 없는 신규 단지용이라 단건(단지정보 탭) 경로에만 남긴다.
+async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, ignored */, lawdCd, noLive = false }) {
   if (!aptName) return null;
-  const memKey = `facility:${aptName}|${sigungu||''}|${umdNm||''}|${aptSeq||''}|${lawdCd||''}`;
+  const memKey = `facility:${aptName}|${sigungu||''}|${umdNm||''}|${aptSeq||''}|${lawdCd||''}|${noLive ? 'nolive' : 'live'}`;
   const mem = cache.get(memKey);
   if (mem !== undefined) return mem;
 
@@ -505,7 +510,7 @@ async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, 
 
   // KAPT-LOOKUP-2026-05-12 (Sprint N): master 매칭 실패 시 KAPT SigunguAptList3 runtime lookup.
   //   apt_master sync 아직 누락된 단지도 즉시 catch + 자동 upsert.
-  if (!m?.kapt_code && lawdCd) {
+  if (!m?.kapt_code && lawdCd && !noLive) {
     const lookup = await _lookupKaptByName(lawdCd, aptName, sigungu, umdNm);
     if (lookup?.kaptCode) {
       m = { kapt_code: lookup.kaptCode, apt_name: lookup.kaptName };

@@ -584,8 +584,9 @@ async function getAIRecommendations(userCondition) {
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
   // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
   const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
-  const cacheKey = `rec:v28:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
+  const cacheKey = `rec:v29:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
   // 버전 이력(산식·표시가 바뀌면 반드시 올릴 것 — 안 올리면 최대 3h 동안 옛 점수가 그대로 나간다):
+  //   v29 NO-LIVE — 배치 복원 경로가 라이브 KAPT 목록을 건너뛴다(결과 집합이 달라질 수 있어 분리).
   //   v28 JIBUN-COL·LENS-UNVERIFIED — 지역 단일쿼리에 jibun 복원(지번 매칭 부활), 미확인 거래 상위 렌즈 추가.
   //   v27 MULTI-LENS·WEIGHTS-V3·SMALL-GATE-EARLY — 세 렌즈 합집합 컷, 규모주차 18/관심도 10/평형 4, 컷 전 소형 게이트.
   //   v26 TRANSIT-STAGE·SAMPLE-TIER·COUNT-CAP·SCALE-BANDS — 후보 전체 역 거리 실측 뒤 컷, 표본 3건 티어, 회전율 건수 상한, 규모 밴드.
@@ -1115,9 +1116,10 @@ async function getAIRecommendations(userCondition) {
         //   붙는 경우가 실재한다 — /search/facility 는 상계벽산 1,590세대를 정확히 돌려주는데 추천 카드만
         //   건축물대장 세대수 1개짜리 부실 facility 를 실어 단지정보 탭 전체가 '미상'으로 떴다.
         //   비용: 미매칭 항목(최대 15)에만 · 인메모리/DB 캐시 공유 · 실패하면 종전 BR 경로 그대로.
+        // NO-LIVE-2026-09-05: 배치 경로는 DB 매처만(라이브 KAPT 목록 조회 생략) — 릴레이 13s 타임아웃이 응답 시간을 먹었다(프로덕션 실측 20.4s).
         const rf = await resolveFacility({
           aptName: ranked[i].aptName, sigungu: ranked[i].sigungu || '',
-          umdNm: ranked[i].umdNm || '', lawdCd: ranked[i].lawdCd,
+          umdNm: ranked[i].umdNm || '', lawdCd: ranked[i].lawdCd, noLive: true,
         }).catch(() => null);
         if (rf && rf.kaptCode && rf.raw) {
           const _rfDetail = rf.detail || (rf.raw && rf.raw._dtl) || null;

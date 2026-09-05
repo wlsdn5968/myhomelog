@@ -5854,6 +5854,11 @@ test('추천 kapt 미매칭 — BR 세대수로 끝내기 전에 resolveFacility
   const brIdx = src.indexOf('const brHh = await _brHh(ranked[i]);');
   assert.ok(i < brIdx, 'resolveFacility 가 BR 폴백보다 뒤에 있다 — 부실 facility 가 먼저 확정된다');
   assert.ok(src.includes("resolveFacility } = require('./aptFacilityService')"), 'resolveFacility 임포트가 빠졌다');
+  // NO-LIVE: 배치 복원은 라이브 KAPT 목록(릴레이 13s 타임아웃)을 타지 않는다 — 프로덕션 실측 facility 14.7s 의 원인
+  assert.match(blk, /lawdCd: ranked\[i\]\.lawdCd, noLive: true,/, '배치 복원이 라이브 KAPT 목록 조회를 건너뛰지 않는다(응답 20초)');
+  const facSrc = require('node:fs').readFileSync(require.resolve('../services/aptFacilityService'), 'utf8');
+  assert.match(facSrc, /if \(!m\?\.kapt_code && lawdCd && !noLive\) \{/, 'resolveFacility 가 noLive 를 존중하지 않는다');
+  assert.match(facSrc, /noLive \? 'nolive' : 'live'/, 'noLive 결과가 라이브 경로 캐시 키와 섞인다');
 });
 
 // ── T6-SOURCE-2026-09-05 ─────────────────────────────────────────────────────────
@@ -5903,7 +5908,7 @@ test('광역 검색 — 시도 전체 시군구를 본다(서울 25·인천·경
   assert.match(src, /\?\? \(_broadMode \? \[\] : await getTransactionsByApt\(r\.lawdCd, ''\)\)/,
     '광역 모드에서 MOLIT 월별 API 폴백(지역당 6콜)을 막지 않는다');
   assert.ok(!src.includes('pickBroadRegionsByBudget('), '예산 밴드 구 선정 호출이 남아 있다');
-  assert.ok(src.includes('rec:v28:'), '캐시 키 버전이 v28 이 아니다 — 옛 결과가 3시간 서빙된다');
+  assert.ok(src.includes('rec:v29:'), '캐시 키 버전이 v29 가 아니다 — 옛 결과가 3시간 서빙된다');
 });
 
 // ── BUDGET-CAP-2026-09-05 (운영자 "6.5억인데 6.8억이 나온다") ──────────────────────────────
