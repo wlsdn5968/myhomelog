@@ -4,7 +4,7 @@
   "functions": {
     "api/index.js": {
       "maxDuration": 300,
-      "includeFiles": "{frontend/index.html,backend/assets/fonts/**}",
+      "includeFiles": "{frontend/index.html,backend/assets/fonts/**,node_modules/harfbuzzjs/hb.wasm}",
       "excludeFiles": "{**/*.{test,spec}.js,**/{test,tests,__tests__,docs,coverage}/**,**/*.{md,map},**/.env*,**/.{git,github,vscode,idea}/**,supabase/**,scripts/**,frontend/{billing,privacy,terms,refund}.html,**/node_modules/{typescript,@types,.bin}/**}"
     }
   },

@@ -5679,3 +5679,19 @@ test('세대수 "모름" 은 null 로 생산된다 — 0 은 값이다', () => {
   assert.equal(buildFacility({ kaptdaCnt: '0', hoCnt: '0', _br: { hhldCnt: '630' } }, 'K1', null).totalHouseholds, 630, '건축물대장 폴백은 그대로');
   assert.equal(buildFacility({ kaptdaCnt: '0', hoCnt: '0' }, 'K1', null).parkingRatio, null, '분모를 모르면 비율도 모름');
 });
+
+// ── OG-HB-WASM-2026-09-05 (프로덕션 실사고: satori 0.33 의 harfbuzzjs 가 hb.wasm 을 파일로 읽는다) ──────
+//   [실측] 로컬(node_modules 있음)은 통과, 프로덕션은 ENOENT /var/task/node_modules/harfbuzzjs/hb.wasm → 302 폴백.
+//   런타임 fs 읽기는 Vercel 파일 추적이 못 잡는다(폰트 벤더링 때와 같은 사고 유형) → includeFiles 에 명시.
+//   폴백이 무증상이라 prod-smoke 의 OG 프로브가 실제 방어선이다. 이 테스트는 설정이 되돌아가는 것을 막는다.
+test('OG 렌더러의 wasm — includeFiles 에 harfbuzzjs/hb.wasm 이 있고 파일이 실재한다', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const v = JSON.parse(fs.readFileSync(path.join(__dirname, '../../vercel.json'), 'utf8'));
+  const inc = v.functions['api/index.js'].includeFiles;
+  assert.ok(inc.includes('node_modules/harfbuzzjs/hb.wasm'), 'hb.wasm 이 includeFiles 에서 빠졌다 — 프로덕션 OG 가 전부 정적 이미지로 떨어진다');
+  assert.ok(inc.length <= 256, 'includeFiles 256자 초과 — 배포가 스키마 검증에서 거부된다');
+  const exists = ['../../node_modules/harfbuzzjs/hb.wasm', '../node_modules/harfbuzzjs/hb.wasm'].some(p => fs.existsSync(path.join(__dirname, p)));
+  assert.ok(exists, 'harfbuzzjs/hb.wasm 이 설치돼 있지 않다 — satori 가 harfbuzzjs 를 더 쓰지 않으면 includeFiles 에서 빼고 이 테스트를 갱신할 것');
+  const smoke = fs.readFileSync(path.join(__dirname, '../../scripts/prod-smoke.sh'), 'utf8');
+  assert.match(smoke, /\/api\/og\/apt\/43114-58\?smoke=/, 'prod-smoke 의 동적 OG 프로브가 사라졌다 — 폴백은 무증상이라 이 프로브가 유일한 감지선');
+});

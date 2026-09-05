@@ -77,6 +77,20 @@ else
   echo "[smoke] /api/regulations FAIL ($rg_code)"; cat /tmp/rg.json; fail=1
 fi
 
+# OG-SMOKE-2026-09-05: 동적 OG 카드는 "로컬에선 되고 프로덕션에서만 죽는" 종류의 실패가 있다 —
+#   satori 0.33 의 harfbuzzjs 가 런타임에 hb.wasm 을 **파일로** 읽는데 Vercel 파일 추적이 못 잡아 번들에 없었다
+#   (2026-09-05 실사고: ENOENT /var/task/node_modules/harfbuzzjs/hb.wasm → 302 폴백). includeFiles 로 해결.
+#   폴백(302 → 정적 og.png)이 사용자에겐 무증상이라 **이 프로브가 없으면 아무도 모른다**.
+#   ?smoke= 로 엣지 캐시를 비켜 함수가 실제로 렌더하게 한다. -L 없이 호출해 302 는 그대로 실패로 본다.
+echo "[smoke] /api/og/apt/43114-58 동적 카드 회귀 (200 image/png 기대 — 302 폴백이면 실패)..."
+og_out=$(curl -sS -o /tmp/og.png -w "%{http_code} %{content_type}" --max-time 30 "$HOST/api/og/apt/43114-58?smoke=$RANDOM" || echo "000 none")
+og_code=${og_out%% *}; og_type=${og_out#* }
+if [ "$og_code" = "200" ] && [ "${og_type%%;*}" = "image/png" ]; then
+  echo "[smoke] /api/og PASS ($(wc -c < /tmp/og.png) bytes)"
+else
+  echo "[smoke] /api/og FAIL — expected 200 image/png got '$og_out' (X-Og-Fallback 헤더로 사유 확인)"; fail=1
+fi
+
 # /api/cron/* 는 인증 필수 — Bearer 없이 호출 시 401/403 이어야 정상 (auth gate 정상 동작)
 echo "[smoke] /api/cron/molit-ingest 인증 게이트 회귀 (401/403 기대)..."
 cr_code=$(curl -sS -o /dev/null -w "%{http_code}" --max-time 5 -X POST "$HOST/api/cron/molit-ingest" || echo 000)
