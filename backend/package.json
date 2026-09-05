@@ -12,9 +12,9 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.122.0",
+    "@anthropic-ai/sdk": "^0.123.0",
     "@resvg/resvg-js": "^2.6.2",
-    "@sentry/node": "^10.72.0",
+    "@sentry/node": "^10.73.0",
     "@supabase/supabase-js": "^2.112.4",
     "@upstash/ratelimit": "^2.0.8",
     "@upstash/redis": "^1.38.3",
