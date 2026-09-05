@@ -66,6 +66,11 @@ function _pick(summary) {
   if (typeof summary.zeroFetchLawds === 'string' && summary.zeroFetchLawds.trim()) {
     out.zeroFetchLawds = summary.zeroFetchLawds.slice(0, 120);
   }
+  // MV-REFRESH-ERROR-2026-09-05 (감사 G-4): 검색 MV 갱신 실패 **사유**. 종전엔 mvRefreshMs 가 빠지는 것으로만
+  //   알 수 있었는데, 필드 부재는 아무도 알아채지 못한다(stale MV 를 신호 없이 서빙). error 와 같은 길이 제한.
+  if (typeof summary.mvRefreshError === 'string' && summary.mvRefreshError.trim()) {
+    out.mvRefreshError = summary.mvRefreshError.slice(0, 120);
+  }
   return out;
 }
 

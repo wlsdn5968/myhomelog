@@ -171,6 +171,12 @@ test('cronStats._pick — 숫자 화이트리스트만 통과, 그 외 필드는
   assert.equal(err.error.length, 120);
   // 숫자가 아닌 값이 숫자 필드에 와도 통과시키지 않는다
   assert.deepEqual(_pick({ inserted: 'NaN아님', processed: null }), {});
+  // MV-REFRESH-ERROR-2026-09-05 (감사 G-4): 실패 사유는 통과하되 길이 제한 · 빈 문자열은 키 자체를 만들지 않는다
+  assert.equal(_pick({ mvRefreshError: 'x'.repeat(300) }).mvRefreshError.length, 120);
+  assert.equal('mvRefreshError' in _pick({ mvRefreshError: '  ' }), false);
+  const cronSrc = require('node:fs').readFileSync(require('node:path').join(__dirname, '../routes/cron.js'), 'utf8');
+  assert.match(cronSrc, /mvRefreshError: _mvRefreshError,/, 'cron 이 MV 갱신 실패 사유를 기록에 넘기지 않는다');
+  assert.match(cronSrc, /if \(_mvErr\) \{ _mvRefreshError = _mvErr\.message;/, 'RPC 오류가 사유로 남지 않는다');
   assert.deepEqual(_pick(null), {});
   // Sprint AAAAAAA: molit-ingest 카운터(ok·err·skipped)는 숫자일 때 통과, boolean 실패 표기와 공존
   assert.deepEqual(_pick({ ok: 0, err: 9, skipped: 108 }), { ok: 0, err: 9, skipped: 108 });

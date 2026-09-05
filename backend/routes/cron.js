@@ -306,21 +306,23 @@ async function handleMolitIngest(req, res) {
     //   안 하면 새 거래가 검색에 영영 안 잡힌다. `CONCURRENTLY` 라 갱신 중에도 읽기는 안 막힌다(실측).
     //   ⚠ RPC 는 SECURITY DEFINER 라 service_role 전용이다(anon·authenticated 실행 권한 회수 완료).
     //   실패해도 ingest 응답은 ok — 검색은 직전 스냅샷으로 계속 동작하고 다음 cron 이 재시도한다.
-    let _mvRefreshMs;
+    let _mvRefreshMs, _mvRefreshError;   // MV-REFRESH-ERROR-2026-09-05 (감사 G-4): 실패 사유를 health 로
     try {
       const sc = require('../db/client').getSupabaseAdmin();
       if (!sc) {
+        _mvRefreshError = 'service_role 미설정';
         logger.warn('검색 MV 갱신 skip — service_role 미설정(적재는 정상)');
       } else {
         const _t = Date.now();
         const { error: _mvErr } = await sc.rpc('refresh_molit_apt_index')
           .abortSignal(AbortSignal.timeout(MV_REFRESH_ABORT_MS));
-        if (_mvErr) logger.warn({ err: _mvErr.message }, '검색 MV 갱신 실패 — 적재는 정상(다음 cron 재시도)');
+        if (_mvErr) { _mvRefreshError = _mvErr.message; logger.warn({ err: _mvErr.message }, '검색 MV 갱신 실패 — 적재는 정상(다음 cron 재시도)'); }
         else _mvRefreshMs = Date.now() - _t;
       }
-    } catch (e) { logger.warn({ err: e.message }, '검색 MV 갱신 예외 — 적재는 정상'); }
+    } catch (e) { _mvRefreshError = e.message; logger.warn({ err: e.message }, '검색 MV 갱신 예외 — 적재는 정상'); }
     await require('../services/cronStats').recordCronRun('molit-ingest', {
       mvRefreshMs: _mvRefreshMs,
+      mvRefreshError: _mvRefreshError,   // 실패하면 사유가 health.crons 에 보인다(부재는 눈에 안 띈다)
       ok: summary.ok, err: summary.err, skipped: summary.skipped, elapsedMs: summary.elapsedMs,
       retried: summary.gapBackfill && summary.gapBackfill.retried, filled: summary.gapBackfill && summary.gapBackfill.filled,
       error: summary.firstError || summary.reason || undefined, // reason = 키 미설정 skip 케이스
