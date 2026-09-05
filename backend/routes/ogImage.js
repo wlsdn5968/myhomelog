@@ -117,8 +117,8 @@ router.get('/region/:lawdCd', async (req, res) => {
   let facts = [], label = '';
   try {
     const rp = require('./regionPage');
-    const { dash, rec } = await rp.loadRegionData(region);
-    facts = rp.regionFacts(dash, rec);
+    const { dash, rec, weekly } = await rp.loadRegionData(region);
+    facts = rp.regionFacts(dash, rec, weekly);
     label = require('../services/priceRecordsService').regionLabel(region.lawdCd, region.name);
   } catch (e) {
     logger.warn({ err: e.message, code }, 'og: 지역 사실 조회 실패');

@@ -154,15 +154,31 @@ async function loadRegionData(region) {
     const svc = require('../services/priceRecordsService');
     rec = svc.sliceRegion(await svc.getPriceRecordsByRegion(), region.lawdCd);
   } catch (e) { logger.warn({ err: e.message, code: region.lawdCd }, '/region 경신 조회 실패'); }
-  return { dash, rec };
+  // WEEKLY-DISCLOSURE-2026-09-05 (감사 P3-14 "주간 변동"): 계약일 기준 주간 변동은 만들지 않는다 — 국토부 공개는
+  //   신고 후 최대 30일 지연·배치라 주별 등락이 시장이 아니라 공개 일정을 반영한다(실측: 전국 신규 공개 전주 5,390 →
+  //   이번 주 11,763건). 대신 **"이번 주 새로 공개된 거래"** 를 그 사실 그대로 낸다(적재일 ingested_at 기준, 계약일 아님).
+  //   지역별 중간값 41건/주(2026-09-05 실측)라 대부분 지역에서 의미 있는 숫자가 나온다. 0건이면 카드·문장 모두 생략.
+  let weekly = null;
+  try {
+    const { getSupabaseAdmin } = require('../db/client');
+    const admin = getSupabaseAdmin();
+    if (admin) {
+      const since = new Date(Date.now() - 7 * 86400000).toISOString();
+      const { count, error } = await admin.from('molit_transactions').select('*', { count: 'exact', head: true })
+        .eq('lawd_cd', String(region.lawdCd)).gte('ingested_at', since);
+      if (!error && Number.isFinite(Number(count))) weekly = { count: Number(count), sinceDate: since.slice(0, 10) };
+    }
+  } catch (e) { logger.warn({ err: e.message, code: region.lawdCd }, '/region 주간 공개 건수 조회 실패'); }
+  return { dash, rec, weekly };
 }
 
 /** 값이 있는 것만, 페이지 카드와 같은 순서로(경신 → 거래량 → 가격지수 → 미분양 → 순이동). 0·추정 금지. */
-function regionFacts(dash, rec) {
+function regionFacts(dash, rec, weekly) {
   const facts = [];
   if (rec && (num(rec.highCount) || num(rec.lowCount))) {
     facts.push(`최근 ${num(rec.windowDays) || 30}일 최고가 경신 ${num(rec.highCount) || 0}건 · 최저가 경신 ${num(rec.lowCount) || 0}건`);
   }
+  if (weekly && num(weekly.count) > 0) facts.push(`최근 7일 신규 공개 ${comma(num(weekly.count))}건`);
   const tx = dash && dash.txTrend;
   if (tx && Array.isArray(tx.months) && tx.months.length) {
     const last = tx.months[tx.months.length - 1];
@@ -203,11 +219,11 @@ router.get('/:lawdCd', async (req, res) => {
   const { regionLabel } = require('../services/priceRecordsService');
   const label = regionLabel(region.lawdCd, region.name);
 
-  const { dash, rec } = await loadRegionData(region);
+  const { dash, rec, weekly } = await loadRegionData(region);
 
   // ── 카드들 — 값이 없으면 카드 자체를 만들지 않는다(0·추정 금지) ──
   const cards = [];
-  const facts = regionFacts(dash, rec);   // description·OG 카드가 같은 문장을 쓴다(사본 금지)
+  const facts = regionFacts(dash, rec, weekly);   // description·OG 카드가 같은 문장을 쓴다(사본 금지)
 
   if (rec && (num(rec.highCount) || num(rec.lowCount))) {
     const row = (it, kind) => `<div class="row"><span>${esc(it.aptName || '')} <span class="k">${esc(it.umdNm || '')}${it.excluUseAr ? ' · 전용 ' + esc(String(it.excluUseAr)) + '㎡' : ''}</span></span><span class="num" style="white-space:nowrap"><b style="color:var(--amb)">${eok(it.dealAmount)}</b> <span class="k">직전 ${kind === 'high' ? '최고' : '최저'} ${eok(kind === 'high' ? it.prevMax : it.prevMin)} · ${num(it.priorCount) || 0}건</span></span></div>`;
@@ -218,6 +234,12 @@ router.get('/:lawdCd', async (req, res) => {
       ${(rec.low || []).slice(0, 3).map(it => row(it, 'low')).join('')}
       <div class="src" style="margin-top:8px">직전 거래 ${num(rec.minPrior) || 3}건 이상인 평형만 비교 · 단지당 1건만 표시 · 층·향은 보정하지 않음</div>
     </div>`);
+  }
+
+  if (weekly && num(weekly.count) > 0) {
+    cards.push(`<div class="card"><h2>최근 7일 새로 공개된 실거래 <span class="src">국토교통부 신고 → 공개일 기준 · ${esc(String(weekly.sinceDate || '').replace(/-/g, '.'))} 이후</span></h2>
+      <div class="big">${comma(num(weekly.count))}<span style="font-size:13px;font-weight:600">건</span></div>
+      <div class="src">계약일이 아니라 <b>공개된 시점</b> 기준입니다. 신고·공개 일정에 따라 주별 편차가 크므로 시장의 주간 변동으로 읽지 마세요.</div></div>`);
   }
 
   const tx = dash && dash.txTrend;

@@ -5717,6 +5717,12 @@ test('지역 사실 문장 — regionFacts 는 페이지 description 과 OG 카�
     '최근 30일 최고가 경신 5건 · 최저가 경신 2건', '2026.08 실거래 123건', '2026.08 매매가격지수 98.2', '미분양 12호(2026.07)', '인구 순이동 -340명(2026.07)',
   ]);
   assert.deepEqual(rp.regionFacts(null, null), [], '원자료가 없으면 문장을 지어내지 않는다');
+  // WEEKLY-DISCLOSURE-2026-09-05: 신규 공개 건수는 경신 다음 자리 · 0건은 문장 자체를 만들지 않는다(적재 0 을 "거래 없음"으로 읽히지 않게)
+  assert.equal(rp.regionFacts(dash, rec, { count: 123, sinceDate: '2026-08-29' })[1], '최근 7일 신규 공개 123건');
+  assert.equal(rp.regionFacts(dash, rec, { count: 0 }).length, 5, '0건은 문장을 만들지 않는다');
+  assert.equal(rp.regionFacts(dash, rec, null).length, 5);
+  assert.equal(require('../routes/ogImage').buildRegionCard('x', ['최근 7일 신규 공개 123건', '2026.08 실거래 60건']).lines[0], '2026.08 실거래 60건',
+    'OG 카드 첫 줄은 월별 실거래 건수 — 신규 공개 문장이 그 자리를 가로채면 안 된다');
   // 페이지 본문에 facts.push 가 regionFacts 밖에 남아 있으면 사본이다
   const src = require('node:fs').readFileSync(require.resolve('../routes/regionPage'), 'utf8');
   const fnStart = src.indexOf('function regionFacts('), fnEnd = src.indexOf('\n}', fnStart);
