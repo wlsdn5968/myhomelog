@@ -208,8 +208,6 @@ const transactionRouter = require('./routes/transactions');
 const propertiesRouter = require('./routes/properties');
 const regulationsRouter = require('./routes/regulations');
 const clauseRouter = require('./routes/clause');
-// Sprint RR (2026-05-19): 9bow/legalize-kr 통합 — 정부 공식 법령 직접 인용 (환각 차단)
-const legalRouter = require('./routes/legal');
 const geocodeRouter = require('./routes/geocode');
 const analysisRouter = require('./routes/analysis');
 const newsRouter = require('./routes/news');
@@ -254,8 +252,8 @@ app.use('/api/regulations', regulationsRouter);
 // REGION-DASH-2026-07-25 (Sprint TTTTTT): 지역 대시보드 — 공식 통계 조립(AI 0·DB 변경 0).
 //   공개 정보라 인증 불필요, dataLimiter 만 적용(검색과 동일 등급).
 app.use('/api/region', dataLimiter, require('./routes/region'));
-// Sprint RR: 정부 공식 법령 API (인증 불필요 — 공개 정보)
-app.use('/api/legal', dataLimiter, legalRouter);
+// DEAD-ENDPOINT-REMOVED-2026-09-05 (감사 P2-11): /api/legal(법령 코퍼스) 제거 — 프론트는 law.go.kr 을 직접 링크하고
+//   이 API 를 부르는 곳이 없었다(호출 0건). RAG/법령 효력 비교는 감사 L(만들지 말 것)에서 폐기 확정.
 app.use('/api/clause', optionalAuth, chatLimiter, dailyLimit({ limit: DAILY_CLAUSE_LIMIT, scope: 'clause', loggedInBonus: 10 }), clauseRouter);
 // GEOCAP-2026-08-09 (Plan 002): 공개 라우트 + 자유 텍스트 캐시 키 = Kakao 호출 증폭 벡터 —
 //   IP 일일 캡(요청 단위 60/일, 정상 지도 사용 여유) + 라우트 내부 전역 일일 캡(geocode.js) 이중 상한.

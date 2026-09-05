@@ -12,7 +12,7 @@ const cache = require('../cache');
 const logger = require('../logger');
 
 // BASIS-V4-2026-05-13 (Sprint BB): aptFacilityService.fetchFromApi 는 이미 V4 사용 중.
-//   getAptBasisInfo (propertyService 추천 path + /api/properties/info) 만 V3 단일 사용 — V4 미사용.
+//   getAptBasisInfo (propertyService 추천 path) 만 V3 단일 사용 — V4 미사용.
 //   V4 가 더 완전한 데이터 (kaptMparea60~136 평형 구간 등) → V4 / V3 fallback chain.
 // KAPT-V5-2026-08-30 (Sprint OOOOOOO, 운영자 "500세대+ 필터에 아무것도 안 나온다"):
 //   ⚠ **K-apt 계열 V1~V4 가 전부 폐기됐다** — 실호출 실측(2026-08-30):

@@ -5569,3 +5569,20 @@ test('브리핑 — "(캐릭터 준비 중)" 플레이스홀더는 사용자에�
   assert.ok(i > 0, '집킴이 코너 숨김 마커가 사라졌다');
   assert.match(html.slice(i, i + 800), /<div style="margin-top:12px;display:none;/, '집킴이 코너가 다시 보인다(캐릭터 원화 도착 전)');
 });
+
+// ── DEAD-ENDPOINTS-2026-09-05 (감사 P2-11: 프론트 호출 0건 엔드포인트 4 + legal 라우터 제거) ─────────
+//   [왜 소스 검사인가] "그 경로가 존재하지 않는다" 는 부재 계약이다 — 정규식이 옳은 도구.
+test('죽은 엔드포인트는 되살아나지 않는다 — /analysis/total-cost · /properties/info · /regulations/ltv · /api/legal', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const read = (p) => fs.readFileSync(path.join(__dirname, p), 'utf8');
+  assert.equal(/router\.post\('\/total-cost'/.test(read('../routes/analysis.js')), false, 'POST /total-cost 가 되살아났다(프론트 호출 0건)');
+  assert.equal(/router\.get\('\/info'/.test(read('../routes/properties.js')), false, 'GET /properties/info 가 되살아났다(/api/search/facility 가 대체)');
+  assert.equal(/router\.get\('\/ltv'/.test(read('../routes/regulations.js')), false, 'GET /regulations/ltv 가 되살아났다');
+  assert.equal(fs.existsSync(path.join(__dirname, '../routes/legal.js')), false, 'routes/legal.js 가 되살아났다');
+  assert.equal(fs.existsSync(path.join(__dirname, '../services/legalCorpusService.js')), false, 'legalCorpusService 가 되살아났다');
+  const server = read('../server.js');
+  assert.equal(/\/api\/legal'/.test(server), false, 'server.js 가 /api/legal 을 다시 마운트한다');
+  assert.equal(/routes\/legal'/.test(server), false, 'server.js 가 routes/legal 을 다시 require 한다');
+  // 오라클은 남긴다 — 프론트 취득세 사본과의 1,620조합 대조가 이 함수를 쓴다
+  assert.equal(typeof require('../services/analysisService').calcTotalCost, 'function');
+});

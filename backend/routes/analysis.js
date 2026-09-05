@@ -1,10 +1,10 @@
 /**
  * GET  /api/analysis?aptName=래미안&area=노원구&price=8.5
- * POST /api/analysis/total-cost
+ * (POST /total-cost 는 2026-09-05 제거 — 프론트 호출 0건)
  */
 const express = require('express');
 const router = express.Router();
-const { analyzeApt, calcTotalCost, getLawdCdFromArea, compareBatch } = require('../services/analysisService');
+const { analyzeApt, getLawdCdFromArea, compareBatch } = require('../services/analysisService');
 
 // GET /api/analysis
 router.get('/', async (req, res) => {
@@ -53,18 +53,7 @@ router.post('/compare', async (req, res) => {
   }
 });
 
-// POST /api/analysis/total-cost
-router.post('/total-cost', (req, res) => {
-  const { price, loanAmount, houseStatus, isFirstBuyer } = req.body;
-  if (!price) return res.status(400).json({ error: 'price 필수' });
-
-  const result = calcTotalCost(
-    parseFloat(price),
-    parseFloat(loanAmount) || 0,
-    houseStatus || '무주택',
-    !!isFirstBuyer,
-  );
-  res.json(result);
-});
+// DEAD-ENDPOINT-REMOVED-2026-09-05 (감사 P2-11): POST /total-cost 제거 — 프론트 호출 0건(grep 실측). 취득세·총비용은
+//   클라이언트가 계산한다. analysisService.calcTotalCost 는 프론트 사본과의 1,620조합 대조(계약 테스트)의 오라클로 남긴다.
 
 module.exports = router;

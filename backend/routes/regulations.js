@@ -29,15 +29,7 @@ router.get('/', async (req, res) => {
   });
 });
 
-router.get('/ltv', async (req, res) => {
-  const snap = await getSnapshot('housing_loan_2025');
-  res.set('Cache-Control', 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400');
-  res.json({
-    ltvTable: snap.data.ltvTable,
-    lastUpdated: snap.data.lastUpdated,
-    _meta: { source: snap.source, validFrom: snap.validFrom },
-  });
-});
+// DEAD-ENDPOINT-REMOVED-2026-09-05 (감사 P2-11): GET /ltv 제거 — 프론트는 GET / 한 번으로 LTV 표까지 받는다(호출 0건).
 
 // REG-LOG-2026-08-19 (Sprint NNNNNNN-12→14): 로직은 regulationsService.getChangeLog 로 승격 — 서버렌더 브리핑 페이지와 공유(사본 금지).
 router.get('/log', async (req, res) => {

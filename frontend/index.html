@@ -4828,7 +4828,7 @@ function _renderReport(data) {
         <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--bg2);font-size:10.5px;color:var(--t3)">
           ※ ${_escHtml(policy.note || '')}<br>
           ※ 자세한 자격·신청은 <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:var(--acc)">${_escHtml(policy.policyContact || '')}</a><br>
-          ${(()=>{ /* LEGAL-LINKS-2026-07-11 (Sprint KKKK): 법령 원문 링크 — 서비스 내장 law.go.kr 코퍼스(/api/legal) 목록과 동일 5종 */
+          ${(()=>{ /* LEGAL-LINKS-2026-07-11 (Sprint KKKK): 법령 원문 링크 — law.go.kr 직접 링크 5종(옛 /api/legal 코퍼스는 2026-09-05 제거 — 호출 0건) */
             const _lw=[['주택법','https://www.law.go.kr/법령/%EC%A3%BC%ED%83%9D%EB%B2%95'],['지방세법','https://www.law.go.kr/법령/%EC%A7%80%EB%B0%A9%EC%84%B8%EB%B2%95'],['종합부동산세법','https://www.law.go.kr/법령/%EC%A2%85%ED%95%A9%EB%B6%80%EB%8F%99%EC%82%B0%EC%84%B8%EB%B2%95'],['소득세법','https://www.law.go.kr/법령/%EC%86%8C%EB%93%9D%EC%84%B8%EB%B2%95'],['주택임대차보호법','https://www.law.go.kr/법령/%EC%A3%BC%ED%83%9D%EC%9E%84%EB%8C%80%EC%B0%A8%EB%B3%B4%ED%98%B8%EB%B2%95']];
             return '※ 관련 법령 원문(국가법령정보센터): ' + _lw.map(([n,u])=>`<a href="${u}" target="_blank" rel="noopener" style="color:var(--acc)">${n}</a>`).join(' · ');
           })()}
