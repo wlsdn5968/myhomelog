@@ -490,7 +490,9 @@ function _applyFacilityToScore(base, facility, amen) {
 
   // ── 단지 규모·주차 15 ──────────────────────────────────────────────────────
   const th = (facility && facility.totalHouseholds) || 0;
-  let 규모 = th >= 3000 ? 9 : th >= 1500 ? 8 : th >= 1000 ? 7 : th >= 500 ? 5 : th > 0 ? 3 : 5; // 0=모름 → 중간
+  // SCALE-BANDS-2026-09-05: 100~299세대를 300~499와 같은 3점으로 두면 규모 항목이 소단지를 변별하지 못했다
+  //   (프리뷰 실측: 111~340세대 소단지가 상위 15를 채웠다). 300 미만 1점·300~499 3점. 0=모름은 종전대로 중간(5).
+  let 규모 = th >= 3000 ? 9 : th >= 1500 ? 8 : th >= 1000 ? 7 : th >= 500 ? 5 : th >= 300 ? 3 : th > 0 ? 1 : 5;
   // HH-CONFLICT: 세대수 원천이 갈린 단지는 주차 비율의 분모를 믿을 수 없다(실측 6.07대/세대까지 부푼다).
   //   점수를 깎지도 않는다 — 모르는 것은 중간값이다.
   const pr = (facility && facility.householdsConflict) ? null : ((facility && facility.parkingRatio) || null);
@@ -577,8 +579,9 @@ async function getAIRecommendations(userCondition) {
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
   // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
   const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
-  const cacheKey = `rec:v25:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
+  const cacheKey = `rec:v26:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
   // 버전 이력(산식·표시가 바뀌면 반드시 올릴 것 — 안 올리면 최대 3h 동안 옛 점수가 그대로 나간다):
+  //   v26 TRANSIT-STAGE·SAMPLE-TIER·COUNT-CAP·SCALE-BANDS — 후보 전체 역 거리 실측 뒤 컷, 표본 3건 티어, 회전율 건수 상한, 규모 밴드.
   //   v25 REC-BROAD-ALL·BUDGET-CAP·REC-RANK-PROV·RANK-SEQ — 광역=시도 전체, 예산 상한 1.0x, 후보 컷 임시점수순,
   //       rank 재부여. 같은 키가 완전히 다른 후보 집합·가격 상한을 보므로 반드시 분리.
   //   v24 REC-BROAD — 광역 검색 대상 구가 하드코딩 3구 → 예산 밴드 상위 5구로. 같은 '서울:6.5' 키가
@@ -922,7 +925,7 @@ async function getAIRecommendations(userCondition) {
   //   → 이 단계는 **후보를 넓게 고르는 역할만** 하고(거래량순은 그 목적엔 타당하다),
   //     최종 순서는 enrichment 뒤에서 확정된 점수로 다시 매긴다.
   //   ⚠ 폭을 넓히면 facility 해석이 늘지만 그건 DB 배치 1쿼리다. 좌표·학군은 최종 15건에만 돈다.
-  const RANK_N = _filterActive ? 45 : 40;
+  const RANK_N = _filterActive ? 65 : 60; // TRANSIT-STAGE-2026-09-05: 역 거리 실측을 후보 전체에 걸 수 있어 컷을 넓힌다(종전 40/45)
   // REC-RANK-PROV-2026-09-05: 검증 티어 → 임시 점수 → 거래 건수 → 이름(결정적). 종전 거래 건수 가중은 폐기.
   const ranked = candidatePool
     .map(a => ({ ...a, _score: Number(a._prov) || 0 }))
@@ -1219,6 +1222,46 @@ async function getAIRecommendations(userCondition) {
       enrichedRecs = keep2.map(i => enrichedRecs[i]);
     }
   }
+  // TRANSIT-STAGE-2026-09-05: 최종 15곳을 고르기 전에 후보 전체(≤RANK_N)의 **최근접 역 직선거리**를 잰다.
+  //   [프리뷰 실측] 임시 점수(관리사무소 신고 밴드)로 15곳을 고르자 벽산(역 108m·1,590세대·최종 73점)이
+  //   컷에서 빠지고 111~340세대 소단지가 상위를 채웠다. 교통 28점은 산식 최대 항목이라 여기서 틀리면 다 틀린다.
+  //   역 거리는 카카오 SW8 1콜(apt_amenities 90일 + 메모리 3일 캐시)이라 후보 전체에 걸 수 있다.
+  //   나머지 시설 6종(학교·병원·마트…)은 종전대로 최종 15곳에만 건다(운영자 승인 B안 유지).
+  //   ⚠ 조회 실패(undefined)는 신고밴드 점수를 그대로 둔다. '반경 내 역 없음'(null)은 사실이므로 반영한다.
+  try {
+    const { nearestSubway } = require('./kakaoService');
+    const stageInputs = enrichedRecs.map((rec, i) => ({
+      kaptCode: rec.facility?.kaptCode || null,
+      aptName: rec.aptName,
+      sigungu: (_rankedF[i] && _rankedF[i].sigungu) || '',
+      umdNm: (_rankedF[i] && _rankedF[i].umdNm) || '',
+      address: rec.facility?.address || null,
+    }));
+    const stageCoords = await resolveCoordBatch(stageInputs, 8);
+    const STAGE_CONC = 8;
+    const dists = new Array(enrichedRecs.length).fill(undefined);
+    for (let i = 0; i < enrichedRecs.length; i += STAGE_CONC) {
+      await Promise.all(enrichedRecs.slice(i, i + STAGE_CONC).map(async (_r, k) => {
+        const c = stageCoords[i + k];
+        if (!c || c.lat == null || c.lng == null) return;
+        try { dists[i + k] = await nearestSubway(c.lat, c.lng, 3000); } catch (_) { /* 모름 유지 */ }
+      }));
+    }
+    let measured = 0;
+    for (let i = 0; i < enrichedRecs.length; i++) {
+      const ns = dists[i];
+      if (ns === undefined) continue;
+      const rec = enrichedRecs[i];
+      const amen = { subwayNearestM: ns ? ns.distance : null, subwayNearestName: ns && ns.name ? ns.name : null };
+      const _sc = _applyFacilityToScore(rec._baseScore, rec.facility, amen);
+      enrichedRecs[i] = { ...rec, score: _sc.total, scoreBreakdown: _sc.breakdown, scoreWhy: _sc.why };
+      measured++;
+    }
+    logger.info({ n: enrichedRecs.length, measured }, 'TRANSIT-STAGE 역 거리 반영');
+  } catch (e) {
+    logger.warn({ err: e.message }, 'TRANSIT-STAGE 실패 — 신고밴드 점수로 진행');
+  }
+
   // SCORE-ORDER-2026-08-30 (Sprint OOOOOOO): **최종 순서를 화면에 보이는 점수로 확정한다.**
   //   여기까지 오면 facility 가 붙어 `rec.score` 가 최종값이다(_applyFacilityToScore 적용 후).
   //   위 거래량 정렬은 후보를 넓게 고르는 용도였고, 사용자에게 보이는 순서는 이 점수여야 한다 —
@@ -1227,7 +1270,10 @@ async function getAIRecommendations(userCondition) {
   //     정렬이 결정적이어야 같은 검색이 매번 같은 순서를 준다.
   {
     const order = enrichedRecs.map((rec, i) => ({ rec, apt: _rankedF[i], i }));
-    order.sort((a, b) => (Number(b.rec?.score) || 0) - (Number(a.rec?.score) || 0)
+    // SAMPLE-TIER-2026-09-05: 헤드라인 가격 표본 3건 이상을 앞세운다(부족하면 1~2건이 채운다 — 화면이 '1건 기준' 을 밝힌다).
+    const _sOk = (o) => Number((Number(o.rec?.priceSampleN) || 0) >= 3);
+    order.sort((a, b) => (_sOk(b) - _sOk(a))
+      || (Number(b.rec?.score) || 0) - (Number(a.rec?.score) || 0)
       || (Number(b.apt?.dealCount) || 0) - (Number(a.apt?.dealCount) || 0)
       || String(a.rec?.aptName || '').localeCompare(String(b.rec?.aptName || ''), 'ko'));
     _rankedF = order.map(o => o.apt);
@@ -1340,7 +1386,9 @@ async function getAIRecommendations(userCondition) {
       //   마커가 다른 단지 위치에 찍히고 학군이 뒤바뀐다(이 저장소가 겪은 Bug #2 와 같은 계열).
       //   그래서 네 배열을 한 묶음으로 정렬한 뒤 되돌려 놓는다.
       const order = enrichedRecs.map((rec, i) => ({ rec, apt: _rankedF[i], coord: coords[i], school: schoolsArr[i] }));
-      order.sort((a, b) => (Number(b.rec?.score) || 0) - (Number(a.rec?.score) || 0)
+      const _sOk = (o) => Number((Number(o.rec?.priceSampleN) || 0) >= 3); // SAMPLE-TIER: 1차 정렬과 같은 키
+      order.sort((a, b) => (_sOk(b) - _sOk(a))
+        || (Number(b.rec?.score) || 0) - (Number(a.rec?.score) || 0)
         || (Number(b.apt?.dealCount) || 0) - (Number(a.apt?.dealCount) || 0)
         || String(a.rec?.aptName || '').localeCompare(String(b.rec?.aptName || ''), 'ko'));
       _rankedF = order.map(o => o.apt);

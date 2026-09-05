@@ -5903,7 +5903,7 @@ test('광역 검색 — 시도 전체 시군구를 본다(서울 25·인천·경
   assert.match(src, /\?\? \(_broadMode \? \[\] : await getTransactionsByApt\(r\.lawdCd, ''\)\)/,
     '광역 모드에서 MOLIT 월별 API 폴백(지역당 6콜)을 막지 않는다');
   assert.ok(!src.includes('pickBroadRegionsByBudget('), '예산 밴드 구 선정 호출이 남아 있다');
-  assert.ok(src.includes('rec:v25:'), '캐시 키 버전이 v25 가 아니다 — 옛 5구 결과가 3시간 서빙된다');
+  assert.ok(src.includes('rec:v26:'), '캐시 키 버전이 v26 이 아니다 — 옛 결과가 3시간 서빙된다');
 });
 
 // ── BUDGET-CAP-2026-09-05 (운영자 "6.5억인데 6.8억이 나온다") ──────────────────────────────
@@ -5997,4 +5997,41 @@ test('CORS — 프리뷰 배포는 자기 호스트(VERCEL_URL·VERCEL_BRANCH_UR
   assert.ok(!/allowedOrigins\.push\('\*'\)|origin: '\*'|origin: true/.test(src), '와일드카드 CORS 가 들어갔다');
   // 프로덕션에서는 분기 밖 로직이 그대로여야 한다
   assert.match(src, /if \(!origin \|\| allowedOrigins\.includes\(origin\)\) return cb\(null, true\);/, '허용 목록 판정이 바뀌었다');
+});
+
+// ── TRANSIT-STAGE-2026-09-05 ─────────────────────────────────────────────────────
+test('추천 — 최종 15곳을 고르기 전에 후보 전체의 최근접 역 거리를 재고, 표본 3건 이상을 앞세운다', () => {
+  const src = require('node:fs').readFileSync(require.resolve('../services/propertyService'), 'utf8');
+  const i = src.indexOf('TRANSIT-STAGE-2026-09-05: 최종 15곳');
+  assert.ok(i > 0, '역 거리 사전 단계가 없다 — 신고밴드로 고른 15곳에 역세권 대단지가 빠진다');
+  const blk = src.slice(i, i + 3200);
+  assert.match(blk, /const \{ nearestSubway \} = require\('\.\/kakaoService'\);/, 'nearestSubway 를 쓰지 않는다');
+  assert.match(blk, /dists\[i \+ k\] = await nearestSubway\(c\.lat, c\.lng, 3000\)/, '후보 전체에 역 거리 조회를 걸지 않는다');
+  assert.match(blk, /if \(ns === undefined\) continue;/, '조회 실패를 "역 없음" 으로 읽는다(최저점 오염)');
+  assert.match(blk, /subwayNearestM: ns \? ns\.distance : null/, '역 없음(null)을 사실로 반영하지 않는다');
+  // 단계 순서: TRANSIT-STAGE → SCORE-ORDER(정렬) → slice(0, 15)
+  const so = src.indexOf('SCORE-ORDER-2026-08-30 (Sprint OOOOOOO): **최종 순서를');
+  const sl = src.indexOf('_rankedF = _rankedF.slice(0, 15);');
+  assert.ok(i < so && so < sl, '역 거리 단계가 정렬·15곳 컷보다 뒤에 있다 — 컷에 반영되지 않는다');
+  assert.match(src, /const RANK_N = _filterActive \? 65 : 60;/, '후보 컷 폭이 60/65 가 아니다');
+  // 표본 티어 — 두 정렬 모두
+  const tiers = src.match(/const _sOk = \(o\) => Number\(\(Number\(o\.rec\?\.priceSampleN\) \|\| 0\) >= 3\);/g) || [];
+  assert.equal(tiers.length, 2, `표본 티어 키가 정렬 두 곳에 있어야 한다(현재 ${tiers.length})`);
+  assert.equal((src.match(/order\.sort\(\(a, b\) => \(_sOk\(b\) - _sOk\(a\)\)/g) || []).length, 2, '두 정렬의 1차 키가 표본 티어가 아니다');
+});
+
+// ── COUNT-CAP + SCALE-BANDS-2026-09-05 ──────────────────────────────────────────
+test('점수 — 회전율은 절대 건수를 넘지 못하고, 300세대 미만은 규모 1점', () => {
+  const bands = require('../utils/scoreBands');
+  const small = bands.turnoverScore(8, 133, 14);   // 6.0% 이지만 8건
+  const big = bands.turnoverScore(39, 1590, 14);   // 2.5% · 39건
+  assert.equal(small.score, big.score, `133세대 8건(${small.score})이 1,590세대 39건(${big.score})과 다르다`);
+  assert.ok(bands.turnoverScore(2, 100, 14).score < bands.turnoverScore(5, 100, 14).score, '건수 2와 5가 같은 점수다');
+  assert.equal(bands.turnoverScore(63, 982, 14).score, 14, '대단지 고회전(63건·6.4%)이 만점이 아니다');
+  const { _applyFacilityToScore } = require('../services/propertyService');
+  const sc = (th) => _applyFacilityToScore({ total: 0, breakdown: {}, dealCount: 0 }, { totalHouseholds: th, parkingRatio: null }, null).breakdown.규모주차;
+  assert.equal(sc(150), 1 + 3, '100~299세대 규모가 1점이 아니다');
+  assert.equal(sc(350), 3 + 3, '300~499세대 규모가 3점이 아니다');
+  assert.equal(sc(0), 5 + 3, '모름(0)이 중간값이 아니다');
+  assert.ok(sc(1590) > sc(350) && sc(350) > sc(150), '규모 단조성이 깨졌다');
 });

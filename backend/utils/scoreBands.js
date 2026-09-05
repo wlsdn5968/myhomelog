@@ -31,7 +31,11 @@ function turnoverScore(deals, households, max) {
     //   보정 범위 안에서 잰다 — 소규모의 우연한 거래를 '활발한 시장'으로 읽지 않는다. 실제 세대수는 그대로 밝힌다.
     const hhEff = Math.max(hh, 100);
     const tr = (d / hhEff) * 100;
-    const frac = tr >= 4.11 ? 1 : tr >= 3.02 ? 0.857 : tr >= 2.03 ? 0.643 : tr >= 1.25 ? 0.429 : tr >= 0.70 ? 0.286 : 0.143;
+    const fracRatio = tr >= 4.11 ? 1 : tr >= 3.02 ? 0.857 : tr >= 2.03 ? 0.643 : tr >= 1.25 ? 0.429 : tr >= 0.70 ? 0.286 : 0.143;
+    // COUNT-CAP-2026-09-05: 회전율(수요 강도)은 절대 건수(표본 신뢰)를 넘지 못한다 — 133세대 8건(6.0%)이
+    //   1,590세대 39건(2.5%)보다 5점 높게 채점되던 것(프리뷰 실측). 두 값의 작은 쪽을 쓴다.
+    const fracCount = d >= 20 ? 1 : d >= 10 ? 0.857 : d >= 5 ? 0.643 : d >= 3 ? 0.429 : 0.286;
+    const frac = Math.min(fracRatio, fracCount);
     const why = hhEff === hh
       ? `6개월 회전율 ${tr.toFixed(1)}% (${d}건 / ${hh}세대)`
       : `6개월 회전율 ${tr.toFixed(1)}% (${d}건 / ${hh}세대 — 100세대 기준 환산)`;
