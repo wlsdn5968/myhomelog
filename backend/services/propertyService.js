@@ -1281,6 +1281,17 @@ async function getAIRecommendations(userCondition) {
   }
   _rankedF = _rankedF.slice(0, 15);
   enrichedRecs = enrichedRecs.slice(0, 15);
+  // DISPLAY-ORDER-2026-09-05: 위 정렬은 **어느 15곳을 고를지**(표본 3건 우선)를 정했다. 화면 순서는 언제나
+  //   표시 점수순이어야 한다(SCORE-ORDER 계약 — 98점이 3위에 놓이던 결함의 재발 금지). 시설 반영 뒤 2차 정렬이
+  //   다시 점수순으로 잡지만, 그 단계가 건너뛰어질 때(카카오 실패)도 순서가 점수순이도록 여기서 확정한다.
+  {
+    const disp = enrichedRecs.map((rec, i) => ({ rec, apt: _rankedF[i] }));
+    disp.sort((a, b) => (Number(b.rec?.score) || 0) - (Number(a.rec?.score) || 0)
+      || (Number(b.apt?.dealCount) || 0) - (Number(a.apt?.dealCount) || 0)
+      || String(a.rec?.aptName || '').localeCompare(String(b.rec?.aptName || ''), 'ko'));
+    _rankedF = disp.map(o => o.apt);
+    enrichedRecs = disp.map(o => o.rec);
+  }
 
   // Step 6: 좌표 해결 — DB 캐시 우선, miss 시 Kakao 지오코딩.
   // 여기서 lat/lng 를 채워야 프론트가 fallback/jitter 없이 정확한 위치에 마커를 찍는다.
@@ -1386,9 +1397,7 @@ async function getAIRecommendations(userCondition) {
       //   마커가 다른 단지 위치에 찍히고 학군이 뒤바뀐다(이 저장소가 겪은 Bug #2 와 같은 계열).
       //   그래서 네 배열을 한 묶음으로 정렬한 뒤 되돌려 놓는다.
       const order = enrichedRecs.map((rec, i) => ({ rec, apt: _rankedF[i], coord: coords[i], school: schoolsArr[i] }));
-      const _sOk = (o) => Number((Number(o.rec?.priceSampleN) || 0) >= 3); // SAMPLE-TIER: 1차 정렬과 같은 키
-      order.sort((a, b) => (_sOk(b) - _sOk(a))
-        || (Number(b.rec?.score) || 0) - (Number(a.rec?.score) || 0)
+      order.sort((a, b) => (Number(b.rec?.score) || 0) - (Number(a.rec?.score) || 0)
         || (Number(b.apt?.dealCount) || 0) - (Number(a.apt?.dealCount) || 0)
         || String(a.rec?.aptName || '').localeCompare(String(b.rec?.aptName || ''), 'ko'));
       _rankedF = order.map(o => o.apt);

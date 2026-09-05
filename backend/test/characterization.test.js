@@ -6014,10 +6014,13 @@ test('추천 — 최종 15곳을 고르기 전에 후보 전체의 최근접 역
   const sl = src.indexOf('_rankedF = _rankedF.slice(0, 15);');
   assert.ok(i < so && so < sl, '역 거리 단계가 정렬·15곳 컷보다 뒤에 있다 — 컷에 반영되지 않는다');
   assert.match(src, /const RANK_N = _filterActive \? 65 : 60;/, '후보 컷 폭이 60/65 가 아니다');
-  // 표본 티어 — 두 정렬 모두
+  // 표본 티어 — **선택**(15곳 컷 전 정렬)에만 1회. 표시 순서는 점수순(SCORE-ORDER 계약)이어야 한다.
   const tiers = src.match(/const _sOk = \(o\) => Number\(\(Number\(o\.rec\?\.priceSampleN\) \|\| 0\) >= 3\);/g) || [];
-  assert.equal(tiers.length, 2, `표본 티어 키가 정렬 두 곳에 있어야 한다(현재 ${tiers.length})`);
-  assert.equal((src.match(/order\.sort\(\(a, b\) => \(_sOk\(b\) - _sOk\(a\)\)/g) || []).length, 2, '두 정렬의 1차 키가 표본 티어가 아니다');
+  assert.equal(tiers.length, 1, `표본 티어 키는 선택 정렬 한 곳에만 있어야 한다(현재 ${tiers.length})`);
+  assert.equal((src.match(/order\.sort\(\(a, b\) => \(_sOk\(b\) - _sOk\(a\)\)/g) || []).length, 1, '선택 정렬의 1차 키가 표본 티어가 아니다');
+  // 15곳 컷 직후 표시용 점수순 재정렬 — 시설 단계가 건너뛰어져도 화면은 점수순
+  assert.match(src, /enrichedRecs = enrichedRecs\.slice\(0, 15\);\s*\/\/ DISPLAY-ORDER-2026-09-05[\s\S]{0,900}disp\.sort\(\(a, b\) => \(Number\(b\.rec\?\.score\) \|\| 0\) - \(Number\(a\.rec\?\.score\) \|\| 0\)/,
+    '15곳 컷 뒤 표시용 점수순 재정렬이 없다 — 표본 티어 순서가 화면에 그대로 나간다');
 });
 
 // ── COUNT-CAP + SCALE-BANDS-2026-09-05 ──────────────────────────────────────────
