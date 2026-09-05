@@ -5936,6 +5936,8 @@ test('추천 kapt 미매칭 — BR 세대수로 끝내기 전에 resolveFacility
   const blk = src.slice(i, i + 2400);
   assert.match(blk, /resolveFacility\(\{\s*aptName: ranked\[i\]\.aptName/, 'resolveFacility 호출이 없다');
   assert.match(blk, /_applyFacilityToScore\(rec\._baseScore, facility/, '복원 경로가 점수를 확정하지 않는다(SCORE-ZERO 재발)');
+  // 가드 형태 고정 — 'if (false && rf)' 류로 분기만 꺼두는 회귀를 잡는다(주입 실측: 기존 단언들은 전부 초록이었다)
+  assert.match(blk, /if \(rf && rf\.kaptCode && rf\.raw\) \{/, '복원 분기 가드가 변형됐다 — 실행되지 않는 코드일 수 있다');
   // 순서: resolveFacility 시도가 BR(_brHh 단독 경로)보다 앞
   const brIdx = src.indexOf('const brHh = await _brHh(ranked[i]);');
   assert.ok(i < brIdx, 'resolveFacility 가 BR 폴백보다 뒤에 있다 — 부실 facility 가 먼저 확정된다');
