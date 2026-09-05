@@ -36,7 +36,8 @@ const ym = (s) => {
 };
 
 /** /briefing/:date 와 동일한 단일 테마 셸 — 의도된 커미트먼트(뷰어 테마와 무관하게 고정). */
-function pageShell({ title, desc, canonical, body }) {
+function pageShell({ title, desc, canonical, body, image }) {
+  const ogImg = image || `${ORIGIN}/og.png`; // OG-REGION-2026-09-05: 통계가 있는 지역은 동적 카드(/api/og/region)
   return `<!DOCTYPE html><html lang="ko"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title>
@@ -50,13 +51,13 @@ function pageShell({ title, desc, canonical, body }) {
      카카오톡·X·스레드에 링크를 붙여도 미리보기 이미지가 나오지 않아, 공개 페이지를 공유해도
      타임라인에서 눈에 띄지 않았다(운영자 SNS 자산과 직결). 단지별 동적 이미지는 별도 과제이고,
      우선 앱과 같은 기본 이미지라도 붙여 카드가 그려지게 한다. -->
-<meta property="og:image" content="${ORIGIN}/og.png">
+<meta property="og:image" content="${ogImg}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${esc(title)}">
 <meta name="twitter:description" content="${esc(desc)}">
-<meta name="twitter:image" content="${ORIGIN}/og.png">
+<meta name="twitter:image" content="${ogImg}">
 <meta name="robots" content="index, follow">
 <style>
   :root{--bg:#080E18;--card:#101B2B;--bd:#22334A;--tx:#E8EFFA;--sub:#93A4BD;--amb:#FFC93C;--acc:#4C8DFF}
@@ -144,10 +145,48 @@ router.get('/', (req, res) => {
   }));
 });
 
+// OG-REGION-2026-09-05 (감사 P3-14): 지역 페이지의 description 과 OG 카드가 **같은 함수**로 사실 문장을 만든다.
+//   따로 만들면 "카드엔 123건, 페이지엔 다른 값" — 취득세 사본 2개가 3주간 다른 값을 낸 사고와 같은 구조다.
+async function loadRegionData(region) {
+  let dash = null, rec = null;
+  try { dash = await require('./region').buildDashboard(region); } catch (e) { logger.warn({ err: e.message, code: region.lawdCd }, '/region 대시보드 실패'); }
+  try {
+    const svc = require('../services/priceRecordsService');
+    rec = svc.sliceRegion(await svc.getPriceRecordsByRegion(), region.lawdCd);
+  } catch (e) { logger.warn({ err: e.message, code: region.lawdCd }, '/region 경신 조회 실패'); }
+  return { dash, rec };
+}
+
+/** 값이 있는 것만, 페이지 카드와 같은 순서로(경신 → 거래량 → 가격지수 → 미분양 → 순이동). 0·추정 금지. */
+function regionFacts(dash, rec) {
+  const facts = [];
+  if (rec && (num(rec.highCount) || num(rec.lowCount))) {
+    facts.push(`최근 ${num(rec.windowDays) || 30}일 최고가 경신 ${num(rec.highCount) || 0}건 · 최저가 경신 ${num(rec.lowCount) || 0}건`);
+  }
+  const tx = dash && dash.txTrend;
+  if (tx && Array.isArray(tx.months) && tx.months.length) {
+    const last = tx.months[tx.months.length - 1];
+    if (last) facts.push(`${ym(last.ym)} 실거래 ${comma(num(last.n) || 0)}건`);
+  }
+  const pi = dash && dash.priceIndex;
+  if (pi && Array.isArray(pi.months) && pi.months.length) {
+    const last = pi.months[pi.months.length - 1];
+    if (last && last.sale != null) facts.push(`${ym(last.ym)} 매매가격지수 ${last.sale}`);
+  }
+  const un = dash && dash.unsold;
+  if (un && un.latest && num(un.latest.cnt) != null) facts.push(`미분양 ${comma(num(un.latest.cnt))}호(${ym(un.latest.ym)})`);
+  const mg = dash && dash.netMigration;
+  if (mg && mg.latest && num(mg.latest.net) != null) {
+    const n = num(mg.latest.net);
+    facts.push(`인구 순이동 ${n > 0 ? '+' : ''}${comma(n)}명(${ym(mg.latest.ym)})`);
+  }
+  return facts;
+}
+
 // ── GET /region/:lawdCd ────────────────────────────────────────────────────────
 router.get('/:lawdCd', async (req, res) => {
   const code = String(req.params.lawdCd || '').trim();
-  const { resolveRegion, buildDashboard } = require('./region');
+  const { resolveRegion } = require('./region');
   const region = /^\d{5}$/.test(code) ? resolveRegion({ lawdCd: code }) : null;
   if (!region) {
     res.set('Cache-Control', 'no-store'); // 없는 지역을 캐시하지 않는다
@@ -164,16 +203,11 @@ router.get('/:lawdCd', async (req, res) => {
   const { regionLabel } = require('../services/priceRecordsService');
   const label = regionLabel(region.lawdCd, region.name);
 
-  let dash = null, rec = null;
-  try { dash = await buildDashboard(region); } catch (e) { logger.warn({ err: e.message, code }, '/region 대시보드 실패'); }
-  try {
-    const svc = require('../services/priceRecordsService');
-    rec = svc.sliceRegion(await svc.getPriceRecordsByRegion(), region.lawdCd);
-  } catch (e) { logger.warn({ err: e.message, code }, '/region 경신 조회 실패'); }
+  const { dash, rec } = await loadRegionData(region);
 
   // ── 카드들 — 값이 없으면 카드 자체를 만들지 않는다(0·추정 금지) ──
   const cards = [];
-  const facts = [];   // description 에 실을 실제 수치
+  const facts = regionFacts(dash, rec);   // description·OG 카드가 같은 문장을 쓴다(사본 금지)
 
   if (rec && (num(rec.highCount) || num(rec.lowCount))) {
     const row = (it, kind) => `<div class="row"><span>${esc(it.aptName || '')} <span class="k">${esc(it.umdNm || '')}${it.excluUseAr ? ' · 전용 ' + esc(String(it.excluUseAr)) + '㎡' : ''}</span></span><span class="num" style="white-space:nowrap"><b style="color:var(--amb)">${eok(it.dealAmount)}</b> <span class="k">직전 ${kind === 'high' ? '최고' : '최저'} ${eok(kind === 'high' ? it.prevMax : it.prevMin)} · ${num(it.priorCount) || 0}건</span></span></div>`;
@@ -184,7 +218,6 @@ router.get('/:lawdCd', async (req, res) => {
       ${(rec.low || []).slice(0, 3).map(it => row(it, 'low')).join('')}
       <div class="src" style="margin-top:8px">직전 거래 ${num(rec.minPrior) || 3}건 이상인 평형만 비교 · 단지당 1건만 표시 · 층·향은 보정하지 않음</div>
     </div>`);
-    facts.push(`최근 ${num(rec.windowDays) || 30}일 최고가 경신 ${num(rec.highCount) || 0}건 · 최저가 경신 ${num(rec.lowCount) || 0}건`);
   }
 
   const tx = dash && dash.txTrend;
@@ -193,8 +226,6 @@ router.get('/:lawdCd', async (req, res) => {
     cards.push(`<div class="card"><h2>월별 실거래 건수 <span class="src">${esc(tx.source || '')}</span></h2>
       ${ms.map(m => `<div class="row"><span class="k">${esc(ym(m.ym))}</span><span class="num">${comma(num(m.n) || 0)}건</span></div>`).join('')}
       ${tx.note ? `<div class="src" style="margin-top:8px">${esc(tx.note)}</div>` : ''}</div>`);
-    const last = ms[ms.length - 1];
-    if (last) facts.push(`${ym(last.ym)} 실거래 ${comma(num(last.n) || 0)}건`);
   }
 
   const pi = dash && dash.priceIndex;
@@ -203,8 +234,6 @@ router.get('/:lawdCd', async (req, res) => {
     cards.push(`<div class="card"><h2>아파트 가격지수 <span class="src">${esc(pi.source || '')}</span></h2>
       ${ms.map(m => `<div class="row"><span class="k">${esc(ym(m.ym))}</span><span class="num">매매 ${esc(String(m.sale))}${m.jeonse != null ? ` · 전세 ${esc(String(m.jeonse))}` : ''}</span></div>`).join('')}
       ${pi.basis ? `<div class="src" style="margin-top:8px">${esc(pi.basis)}</div>` : ''}</div>`);
-    const last = ms[ms.length - 1];
-    if (last && last.sale != null) facts.push(`${ym(last.ym)} 매매가격지수 ${last.sale}`);
   }
 
   const half = [];
@@ -213,7 +242,6 @@ router.get('/:lawdCd', async (req, res) => {
     half.push(`<div class="card"><h2>미분양 <span class="src">${esc(un.source || '')}</span></h2>
       <div class="big">${comma(num(un.latest.cnt))}<span style="font-size:13px;font-weight:600">호</span></div>
       <div class="src">${esc(ym(un.latest.ym))} 기준${un.sido ? ` · ${esc(un.sido)} ${esc(un.sigungu || '')}` : ''}</div></div>`);
-    facts.push(`미분양 ${comma(num(un.latest.cnt))}호(${ym(un.latest.ym)})`);
   }
   const mg = dash && dash.netMigration;
   if (mg && mg.latest && num(mg.latest.net) != null) {
@@ -221,7 +249,6 @@ router.get('/:lawdCd', async (req, res) => {
     half.push(`<div class="card"><h2>인구 순이동 <span class="src">${esc(mg.source || '')}</span></h2>
       <div class="big">${n > 0 ? '+' : ''}${comma(n)}<span style="font-size:13px;font-weight:600">명</span></div>
       <div class="src">${esc(ym(mg.latest.ym))} 기준${mg.basis ? ` · ${esc(mg.basis)}` : ''}</div></div>`);
-    facts.push(`인구 순이동 ${n > 0 ? '+' : ''}${comma(n)}명(${ym(mg.latest.ym)})`);
   }
   if (half.length) cards.push(`<div class="grid">${half.join('')}</div>`);
 
@@ -264,7 +291,12 @@ router.get('/:lawdCd', async (req, res) => {
   res.set('Cache-Control', cards.length
     ? 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400'
     : 'no-store');
-  res.type('html').send(pageShell({ title, desc, canonical: `${ORIGIN}/region/${region.lawdCd}`, body }));
+  res.type('html').send(pageShell({
+    title, desc, canonical: `${ORIGIN}/region/${region.lawdCd}`, body,
+    image: facts.length ? `${ORIGIN}/api/og/region/${region.lawdCd}` : null,
+  }));
 });
 
 module.exports = router;
+module.exports.loadRegionData = loadRegionData;   // OG 카드와 공유
+module.exports.regionFacts = regionFacts;

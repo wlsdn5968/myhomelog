@@ -26,8 +26,9 @@ function dayNav(day, delta) {
   return d.toISOString().slice(0, 10);
 }
 
-function pageShell(title, desc, day, body) {
+function pageShell(title, desc, day, body, image) {
   const canonical = `${ORIGIN}/briefing/${day}`;
+  const ogImg = image || `${ORIGIN}/og.png`; // OG-BRIEFING-2026-09-05: 기록이 있는 날은 동적 카드(/api/og/briefing)
   return `<!DOCTYPE html><html lang="ko"><head>
 <meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${esc(title)}</title>
@@ -41,13 +42,13 @@ function pageShell(title, desc, day, body) {
      카카오톡·X·스레드에 링크를 붙여도 미리보기 이미지가 나오지 않아, 공개 페이지를 공유해도
      타임라인에서 눈에 띄지 않았다(운영자 SNS 자산과 직결). 단지별 동적 이미지는 별도 과제이고,
      우선 앱과 같은 기본 이미지라도 붙여 카드가 그려지게 한다. -->
-<meta property="og:image" content="${ORIGIN}/og.png">
+<meta property="og:image" content="${ogImg}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${esc(title)}">
 <meta name="twitter:description" content="${esc(desc)}">
-<meta name="twitter:image" content="${ORIGIN}/og.png">
+<meta name="twitter:image" content="${ogImg}">
 <style>
   /* ARCH-SKIN-2026-08-19 (Sprint NNNNNNN-14): 앱 시안 dark 팔레트와 1:1 정합(단일 테마 페이지 — 의도된 커미트먼트) */
   :root{--bg:#080E18;--card:#101B2B;--bd:#22334A;--tx:#E8EFFA;--sub:#93A4BD;--amb:#FFC93C;--acc:#4C8DFF}
@@ -73,6 +74,25 @@ function pageShell(title, desc, day, body) {
 <div class="foot">⚠ 매수·매도 추천이 아닙니다 · 미래 가격 예측을 하지 않습니다 · 의사결정 책임은 본인에게 있습니다.<br>
 출처: 국토교통부 실거래가 · 한국은행 ECOS · 국토부 KOSIS · © 내집로그</div>
 </main></body></html>`;
+}
+
+// OG-BRIEFING-2026-09-05 (감사 P3-14): 티커 항목(라벨·값·출처)을 한 곳에서 만든다 — 페이지와 OG 카드가 공유.
+//   값이 없는 항목은 넣지 않는다(미확인 원칙).
+function briefingTicker(snap) {
+  const tk = [];
+  if (snap.ecos && snap.ecos.baseRate != null) tk.push({ label: '기준금리', value: `${snap.ecos.baseRate}%`, src: '한국은행' });
+  if (snap.ecos && snap.ecos.mortgageRate != null) {
+    tk.push({ label: '주담대 평균', value: `${snap.ecos.mortgageRate}%`,
+      src: `ECOS ${String(snap.ecos.mortgageRateMonth || '').replace(/^(\d{4})(\d{2})$/, '$1.$2')}` });
+  }
+  if (snap.txTotal) {
+    tk.push({ label: '실거래 누적', value: `${Number(snap.txTotal).toLocaleString()}건`,
+      src: `국토부${snap.syncedAt ? ' · ' + String(snap.syncedAt).slice(5, 10).replace('-', '.') + ' 동기화' : ''}` });
+  }
+  // REG-LOG (Sprint NNNNNNN-14): 현행 대출·규제 기준 시행일 — 스냅샷 사실값
+  const rl = (snap.regLog || []).find(x => x.key === 'housing_loan_2025' && !x.supersededAt);
+  if (rl && rl.effectiveFrom) tk.push({ label: '대출·규제 기준', value: `${String(rl.effectiveFrom).replace(/-/g, '.')} 시행`, src: '금융위' });
+  return tk;
 }
 
 // GET /briefing → 오늘로 리다이렉트
@@ -103,14 +123,8 @@ router.get('/:date', async (req, res) => {
        <a class="cta" href="/?briefing=${esc(day)}">앱에서 열기 →</a>`));
   }
 
-  // 티커 — 값 있는 항목만 (미확인 원칙)
-  const tk = [];
-  if (snap.ecos && snap.ecos.baseRate != null) tk.push(`기준금리 <b>${esc(String(snap.ecos.baseRate))}%</b> <span class="src">한국은행</span>`);
-  if (snap.ecos && snap.ecos.mortgageRate != null) tk.push(`주담대 평균 <b>${esc(String(snap.ecos.mortgageRate))}%</b> <span class="src">ECOS ${esc(String(snap.ecos.mortgageRateMonth || '').replace(/^(\d{4})(\d{2})$/, '$1.$2'))}</span>`);
-  if (snap.txTotal) tk.push(`실거래 누적 <b>${Number(snap.txTotal).toLocaleString()}건</b> <span class="src">국토부${snap.syncedAt ? ' · ' + String(snap.syncedAt).slice(5, 10).replace('-', '.') + ' 동기화' : ''}</span>`);
-  // REG-LOG (Sprint NNNNNNN-14): 현행 대출·규제 기준 시행일 — 스냅샷 사실값
-  const _rl = (snap.regLog || []).find(x => x.key === 'housing_loan_2025' && !x.supersededAt);
-  if (_rl && _rl.effectiveFrom) tk.push(`대출·규제 기준 <b>${esc(String(_rl.effectiveFrom).replace(/-/g, '.'))} 시행</b> <span class="src">금융위</span>`);
+  // 티커 — 값 있는 항목만 (미확인 원칙). 문장은 briefingTicker 한 곳에서 만든다(OG 카드와 공유 — 사본 금지).
+  const tk = briefingTicker(snap).map(t => `${esc(t.label)} <b>${esc(t.value)}</b> <span class="src">${esc(t.src)}</span>`);
 
   // REG-STRUCT-2026-08-19 (Sprint NNNNNNN-15): 구조화 스냅샷(lines2)이면 출처·기준일 캡션 분리 — 구 스냅샷은 기존 렌더.
   const _l2 = Array.isArray(snap.lines2) && snap.lines2.length ? snap.lines2 : null;
@@ -165,7 +179,9 @@ router.get('/:date', async (req, res) => {
     ${pops ? `<div class="card"><h2>인기 단지 TOP5 <span style="font-weight:500;color:var(--sub);font-size:10px">최근 60일 실거래 많은 순 · 매물 광고 아님</span></h2>${pops}</div>` : ''}
     ${regs ? `<div class="card"><h2>규제·금융 변동 로그 <span style="font-weight:500;color:var(--sub);font-size:10px">금융위·국토부 고시 · 검증된 이벤트만</span></h2>${regs}</div>` : ''}
     <div class="nav"><a href="/briefing/${dayNav(day, -1)}">← 전날 브리핑</a>${isToday ? '' : `<a href="/briefing/${dayNav(day, 1)}">다음날 →</a>`}</div>
-    <a class="cta" href="/?briefing=${esc(day)}">앱에서 지도·계산기와 함께 보기 →</a>`));
+    <a class="cta" href="/?briefing=${esc(day)}">앱에서 지도·계산기와 함께 보기 →</a>`,
+    _thin ? null : `${ORIGIN}/api/og/briefing/${day}`));
 });
 
 module.exports = router;
+module.exports.briefingTicker = briefingTicker;   // OG 카드와 공유

@@ -5695,3 +5695,68 @@ test('OG 렌더러의 wasm — includeFiles 에 harfbuzzjs/hb.wasm 이 있고 �
   const smoke = fs.readFileSync(path.join(__dirname, '../../scripts/prod-smoke.sh'), 'utf8');
   assert.match(smoke, /\/api\/og\/apt\/43114-58\?smoke=/, 'prod-smoke 의 동적 OG 프로브가 사라졌다 — 폴백은 무증상이라 이 프로브가 유일한 감지선');
 });
+
+// ── OG-REGION/BRIEFING-2026-09-05 (감사 P3-14: 지역·브리핑 링크 미리보기 카드) ────────────────────
+//   [원칙] 카드 문장은 페이지와 **같은 함수**에서 나온다. 아래 두 순수 함수를 실제로 실행해 값을 고정한다.
+test('지역 사실 문장 — regionFacts 는 페이지 description 과 OG 카드의 단일 출처', () => {
+  const rp = require('../routes/regionPage');
+  const dash = {
+    txTrend: { months: [{ ym: '202607', n: 80 }, { ym: '202608', n: 123 }] },
+    priceIndex: { months: [{ ym: '202608', sale: 98.2, jeonse: 97.1 }] },
+    unsold: { latest: { cnt: 12, ym: '202607' } },
+    netMigration: { latest: { net: -340, ym: '202607' } },
+  };
+  const rec = { windowDays: 30, highCount: 5, lowCount: 2 };
+  assert.deepEqual(rp.regionFacts(dash, rec), [
+    '최근 30일 최고가 경신 5건 · 최저가 경신 2건', '2026.08 실거래 123건', '2026.08 매매가격지수 98.2', '미분양 12호(2026.07)', '인구 순이동 -340명(2026.07)',
+  ]);
+  assert.deepEqual(rp.regionFacts(null, null), [], '원자료가 없으면 문장을 지어내지 않는다');
+  // 페이지 본문에 facts.push 가 regionFacts 밖에 남아 있으면 사본이다
+  const src = require('node:fs').readFileSync(require.resolve('../routes/regionPage'), 'utf8');
+  const fnStart = src.indexOf('function regionFacts('), fnEnd = src.indexOf('\n}', fnStart);
+  const inFn = (src.slice(fnStart, fnEnd).match(/facts\.push\(/g) || []).length;
+  assert.equal((src.match(/facts\.push\(/g) || []).length, inFn, 'regionFacts 밖에 facts.push 가 있다 — description 과 카드가 갈린다');
+  assert.ok(inFn >= 5);
+  assert.match(src, /image: facts\.length \? `\$\{ORIGIN\}\/api\/og\/region\/\$\{region\.lawdCd\}` : null/, '지역 페이지가 동적 카드를 가리키지 않는다');
+});
+
+test('브리핑 티커 — briefingTicker 는 페이지와 OG 카드의 단일 출처', () => {
+  const b = require('../routes/briefing');
+  const tk = b.briefingTicker({
+    ecos: { baseRate: 2.5, mortgageRate: 3.9, mortgageRateMonth: '202607' }, txTotal: 456561, syncedAt: '2026-09-01T18:08:00Z',
+    regLog: [{ key: 'housing_loan_2025', effectiveFrom: '2025-10-15' }],
+  });
+  assert.deepEqual(tk, [
+    { label: '기준금리', value: '2.5%', src: '한국은행' },
+    { label: '주담대 평균', value: '3.9%', src: 'ECOS 2026.07' },
+    { label: '실거래 누적', value: '456,561건', src: '국토부 · 09.01 동기화' },
+    { label: '대출·규제 기준', value: '2025.10.15 시행', src: '금융위' },
+  ]);
+  assert.deepEqual(b.briefingTicker({}), [], '값이 없으면 항목을 만들지 않는다');
+  const src = require('node:fs').readFileSync(require.resolve('../routes/briefing'), 'utf8');
+  const fnStart = src.indexOf('function briefingTicker('), fnEnd = src.indexOf('\n}', fnStart);
+  assert.equal((src.match(/tk\.push\(/g) || []).length, (src.slice(fnStart, fnEnd).match(/tk\.push\(/g) || []).length, 'briefingTicker 밖에 tk.push 가 있다');
+  assert.match(src, /_thin \? null : `\$\{ORIGIN\}\/api\/og\/briefing\/\$\{day\}`/, '브리핑 페이지가 동적 카드를 가리키지 않는다');
+});
+
+test('OG 카드 — 지역·브리핑 라우트가 있고, 사실이 없으면 정적 이미지로 폴백(no-store)', async () => {
+  const og = require('../routes/ogImage');
+  const src = require('node:fs').readFileSync(require.resolve('../routes/ogImage'), 'utf8');
+  assert.match(src, /router\.get\('\/region\/:lawdCd'/); assert.match(src, /router\.get\('\/briefing\/:day'/);
+  assert.match(src, /fallback\(res, 'no-facts'\)/); assert.match(src, /fallback\(res, 'no-snapshot'\)/);
+  const card = og.buildRegionCard('서울 강남구', ['최근 30일 최고가 경신 5건 · 최저가 경신 2건', '2026.08 실거래 123건', '2026.08 매매가격지수 98.2']);
+  assert.equal(card.title, '서울 강남구');
+  assert.equal(card.lines[0], '2026.08 실거래 123건', '가장 확실하고 짧은 사실(거래 건수)이 첫 줄');
+  assert.equal(card.lines[1], '최근 30일 최고가 경신 5건 · 최저가 경신 2건 · 2026.08 매매가격지수 98.2');
+  const bc = og.buildBriefingCard('2026-09-05', { ecos: { baseRate: 2.5, mortgageRate: 3.9 }, txTotal: 456561, lines: ['서울 아파트 거래 8월 1,234건'] });
+  assert.equal(bc.title, '2026.09.05(토) 브리핑');
+  assert.equal(bc.lines[0], '기준금리 2.5% · 주담대 평균 3.9%');
+  assert.equal(bc.lines[1], '실거래 누적 456,561건 · 서울 아파트 거래 8월 1,234건');
+  const long = og.buildBriefingCard('2026-09-05', { txTotal: 1, lines: ['x'.repeat(60)] });
+  assert.equal(long.lines[1], undefined, '긴 시황은 잘라 싣지 않는다(숫자 훼손 방지)');
+  const all = JSON.stringify([card, bc]).replace(/매수(·매도)? 추천이 아닙니다/g, '');
+  for (const w of ['추천', '예측', '전망', '유망', '오를', '상승 기대']) assert.equal(all.includes(w), false, '금지어: ' + w);
+  // 실제 렌더 1회 — 지역 카드도 1200x630 PNG 로 나온다
+  const png = await require('../services/ogImageService').renderCard(card);
+  assert.equal(png.readUInt32BE(16), 1200); assert.equal(png.readUInt32BE(20), 630);
+});

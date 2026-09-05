@@ -93,5 +93,98 @@ router.get('/apt/:aptSeq', async (req, res) => {
   return res.send(png);
 });
 
+// ── OG-REGION-2026-09-05 (감사 P3-14): GET /api/og/region/:lawdCd ────────────────────────────
+//   사실 문장은 regionPage.regionFacts() — 페이지 description 과 같은 함수(사본 금지).
+//   첫 줄(가장 크게)에는 가장 확실하고 짧은 사실인 "월 실거래 건수"를 놓고, 나머지는 둘째 줄에 최대 2개.
+function buildRegionCard(label, facts) {
+  const tx = facts.find(f => / 실거래 [\d,]+건$/.test(f)) || facts[0];
+  const rest = facts.filter(f => f !== tx).slice(0, 2).join(' · ');
+  return {
+    eyebrow: '지역 실거래 · 공식 통계',
+    title: label || '지역',
+    lines: [tx, rest].filter(Boolean),
+    footer: '국토교통부 · 한국부동산원 · KOSIS 공식 통계 정리 — 매수 추천이 아닙니다',
+  };
+}
+
+router.get('/region/:lawdCd', async (req, res) => {
+  const code = String(req.params.lawdCd || '').trim();
+  if (!/^\d{5}$/.test(code)) return fallback(res, 'bad-code');
+  let region = null;
+  try { region = require('./region').resolveRegion({ lawdCd: code }); } catch (e) { logger.warn({ err: e.message, code }, 'og: 지역 해석 실패'); }
+  if (!region) return fallback(res, 'not-found');
+
+  let facts = [], label = '';
+  try {
+    const rp = require('./regionPage');
+    const { dash, rec } = await rp.loadRegionData(region);
+    facts = rp.regionFacts(dash, rec);
+    label = require('../services/priceRecordsService').regionLabel(region.lawdCd, region.name);
+  } catch (e) {
+    logger.warn({ err: e.message, code }, 'og: 지역 사실 조회 실패');
+    return fallback(res, 'facts-error');
+  }
+  if (!facts.length) return fallback(res, 'no-facts');   // 통계를 하나도 못 불러온 상태 — 캐시하지 않는다
+
+  let png;
+  try {
+    png = await require('../services/ogImageService').renderCard(buildRegionCard(label, facts));
+  } catch (e) {
+    logger.warn({ err: e.message, code }, 'og: 지역 카드 렌더 실패');
+    return fallback(res, 'render-error');
+  }
+  res.set('Cache-Control', 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
+  res.set('Content-Type', 'image/png');
+  return res.send(png);
+});
+
+// ── OG-BRIEFING-2026-09-05 (감사 P3-14): GET /api/og/briefing/:day ───────────────────────────
+//   티커 문장은 briefing.briefingTicker() — 페이지와 같은 함수. 시황 첫 줄은 길면 싣지 않는다(잘라서 숫자를 훼손하지 않는다).
+function buildBriefingCard(day, snap) {
+  const tk = require('./briefing').briefingTicker(snap || {});
+  const yo = '일월화수목금토'[new Date(day + 'T00:00:00Z').getUTCDay()];
+  const lines = [];
+  const rates = tk.filter(t => t.label === '기준금리' || t.label === '주담대 평균').map(t => `${t.label} ${t.value}`).join(' · ');
+  if (rates) lines.push(rates);
+  const first = (snap && Array.isArray(snap.lines2) && snap.lines2[0] && snap.lines2[0].text)
+    || (snap && Array.isArray(snap.lines) && snap.lines[0]) || null;
+  const tx = tk.find(t => t.label === '실거래 누적');
+  const sub = [tx ? `${tx.label} ${tx.value}` : null, (first && String(first).length <= 48) ? String(first) : null].filter(Boolean).join(' · ');
+  if (sub) lines.push(sub);
+  return {
+    eyebrow: '일일 부동산 데이터 브리핑',
+    title: `${day.replace(/-/g, '.')}(${yo}) 브리핑`,
+    lines,
+    footer: '국토교통부 실거래가 · 한국은행 ECOS · 공식 통계 — 매수·매도 추천이 아닙니다',
+  };
+}
+
+router.get('/briefing/:day', async (req, res) => {
+  const day = String(req.params.day || '').trim();
+  const { kstDayString, getOrCreateSnapshot } = require('../services/briefingService');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(day + 'T00:00:00Z')) || day < '2026-01-01' || day > kstDayString()) {
+    return fallback(res, 'bad-day');
+  }
+  let snap = null;
+  try { snap = await getOrCreateSnapshot(day); } catch (e) { logger.warn({ err: e.message, day }, 'og: 브리핑 스냅샷 실패'); }
+  if (!snap || !Array.isArray(snap.lines) || !snap.lines.length) return fallback(res, 'no-snapshot');
+
+  let png;
+  try {
+    png = await require('../services/ogImageService').renderCard(buildBriefingCard(day, snap));
+  } catch (e) {
+    logger.warn({ err: e.message, day }, 'og: 브리핑 카드 렌더 실패');
+    return fallback(res, 'render-error');
+  }
+  // 과거 날짜는 불변 기록 — 길게. 오늘은 페이지와 같은 30분.
+  res.set('Cache-Control', day === kstDayString()
+    ? 'public, max-age=0, s-maxage=1800'
+    : 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
+  res.set('Content-Type', 'image/png');
+  return res.send(png);
+});
+
 module.exports = router;
 module.exports.buildCard = buildCard;
+module.exports.buildRegionCard = buildRegionCard;
+module.exports.buildBriefingCard = buildBriefingCard;
