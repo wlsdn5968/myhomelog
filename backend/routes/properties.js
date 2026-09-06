@@ -9,13 +9,14 @@ const { validatePropertySearch } = require('../middleware/validation');
 
 // POST /api/properties/recommend
 router.post('/recommend', validatePropertySearch, async (req, res) => {
+  // EXPRESS5-BODY-2026-09-06 (Plan 073): body-parser 2.x 는 파싱 안 되면 req.body 가 undefined.
   const {
     maxBudget, myCash, availableLoan,
     region, lawdCd, houseStatus, isFirstBuyer,
     purpose, schoolNeeded, childPlan, workplaceArea,
     minArea, maxArea,
     minHouseholds, minParkingRatio, saleOnly, // FILTER-2026-07-12: 좋은-아파트 조건 필터
-  } = req.body;
+  } = req.body || {};
 
   if (!maxBudget || maxBudget <= 0) {
     return res.status(400).json({ error: '매수 예산(maxBudget) 필수' });
@@ -81,7 +82,8 @@ router.get('/nearby', async (req, res) => {
 // POST /api/properties/transit  단지→직장 통근시간
 // body: { aptLat, aptLng, workplace }  workplace는 키워드(주소 또는 장소명)
 router.post('/transit', async (req, res) => {
-  const { aptLat, aptLng, workplace } = req.body;
+  // EXPRESS5-BODY-2026-09-06 (Plan 073): body-parser 2.x 는 파싱 안 되면 req.body 가 undefined.
+  const { aptLat, aptLng, workplace } = req.body || {};
   if (!aptLat || !aptLng || !workplace) {
     return res.status(400).json({ error: 'aptLat,aptLng,workplace 필수' });
   }

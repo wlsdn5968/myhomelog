@@ -68,7 +68,8 @@ function collectClientPIIText(message, context) {
 }
 
 router.post('/', validateChatInput, async (req, res) => {
-  const { message, context } = req.body;
+  // EXPRESS5-BODY-2026-09-06 (Plan 073): body-parser 2.x 는 파싱 안 되면 req.body 가 undefined.
+  const { message, context } = req.body || {};
 
   // PII 차단 — Anthropic 으로 보내기 전 즉시 reject (message + context.history + context.session 문자열 전수 검사)
   const piiFound = detectPII(collectClientPIIText(message, context));

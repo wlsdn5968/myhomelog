@@ -421,7 +421,9 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
     const { eventType, data } = req.body || {};
     // Toss 표준 payload: { eventType: 'PAYMENT_STATUS_CHANGED', data: { paymentKey, orderId, status, ... } }
     // 일부 구버전은 body 자체가 payment object — 둘 다 수용
-    const p = data && data.paymentKey ? data : req.body;
+    // EXPRESS5-BODY-2026-09-06 (Plan 073): req.body 를 여기서 다시 읽는다 — 위에서 `|| {}` 로
+    //   뽑았어도 이 줄이 raw req.body(undefined 가능)를 재사용하므로 다시 가드.
+    const p = data && data.paymentKey ? data : (req.body || {});
     const paymentKey = p?.paymentKey;
     const orderId = p?.orderId;
     if (!paymentKey || !orderId) {

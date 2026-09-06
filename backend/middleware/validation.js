@@ -34,7 +34,9 @@ function sanitizeNumber(val, min, max) {
 
 // 채팅 입력 검증
 function validateChatInput(req, res, next) {
-  const { message, context } = req.body;
+  // EXPRESS5-BODY-2026-09-06 (Plan 073): body-parser 2.x 는 content-type 이 안 맞거나
+  //   본문이 없으면 req.body 가 undefined (v4 는 {}) — 가드 없으면 400 대신 500.
+  const { message, context } = req.body || {};
   if (!message || typeof message !== 'string') {
     return res.status(400).json({ error: '메시지가 필요합니다.' });
   }

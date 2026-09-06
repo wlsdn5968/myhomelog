@@ -96,7 +96,12 @@ function briefingTicker(snap) {
 }
 
 // GET /briefing → 오늘로 리다이렉트
-router.get('/', (req, res) => res.redirect(302, `/briefing/${kstDayString()}`));
+// EXPRESS5-REDIRECT-2026-09-06 (Plan 073): kstDayString() 이 빈 값이면 '/briefing/undefined' 같은
+//   깨진 경로로 redirect 하지 않도록 가드(5.2.0부터 res.redirect 에 undefined 인자 deprecation 경고).
+router.get('/', (req, res) => {
+  const day = kstDayString();
+  res.redirect(302, day ? `/briefing/${day}` : '/');
+});
 
 router.get('/:date', async (req, res) => {
   const day = String(req.params.date || '').trim();

@@ -119,7 +119,8 @@ async function kakaoGeocode(key, aptName, area, sigungu, umdNm) {
 
 // POST /api/geocode  - 단건
 router.post('/', async (req, res) => {
-  const { aptName, area, sigungu, umdNm } = req.body;
+  // EXPRESS5-BODY-2026-09-06 (Plan 073): body-parser 2.x 는 파싱 안 되면 req.body 가 undefined.
+  const { aptName, area, sigungu, umdNm } = req.body || {};
   if (!aptName) return res.status(400).json({ error: 'aptName 필수' });
   // STAB-AUDIT-2026-05-06: 캐시 키에 sigungu·umdNm 포함 — 동명 단지 충돌 차단
   const sgg = String(sigungu || '').trim();
@@ -158,7 +159,8 @@ router.post('/', async (req, res) => {
 const MAX_BATCH_ITEMS = 50;
 const BATCH_CONCURRENCY = 5;
 router.post('/batch', async (req, res) => {
-  const { items } = req.body;
+  // EXPRESS5-BODY-2026-09-06 (Plan 073): body-parser 2.x 는 파싱 안 되면 req.body 가 undefined.
+  const { items } = req.body || {};
   if (!Array.isArray(items)) return res.status(400).json({ error: 'items[] 필수' });
   if (items.length > MAX_BATCH_ITEMS) {
     return res.status(400).json({ error: 'too_many_items', max: MAX_BATCH_ITEMS });

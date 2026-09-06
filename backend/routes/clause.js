@@ -29,7 +29,8 @@ function _safeStr(s, max = 200) {
 //   응답에 risks + overallRisk + summary 필드 추가 (frontend 가 t2 영역 채움).
 //   /clause/risk endpoint 는 backward compat 위해 그대로 유지 (legacy frontend 호환).
 router.post('/', async (req, res) => {
-  let { aptName, area, price, ltv, houseStatus, isFirstBuyer, buildYear, issues, score } = req.body;
+  // EXPRESS5-BODY-2026-09-06 (Plan 073): body-parser 2.x 는 파싱 안 되면 req.body 가 undefined.
+  let { aptName, area, price, ltv, houseStatus, isFirstBuyer, buildYear, issues, score } = req.body || {};
   if (!aptName) return res.status(400).json({ error: 'aptName 필수' });
 
   // PRO-GATE-2026-08-19 (Sprint NNNNNNN-3, 사업기획 v2): 무료 경로의 AI 특약 제거.
