@@ -3653,6 +3653,18 @@ window.addEventListener('DOMContentLoaded',()=>{
           }).catch(function(){});
         } catch(_){}
       },
+      // ATTR-ACTIVATION-2026-09-06:
+      // [왜] search 는 first_load 보다 훨씬 자주 일어난다. 상한 없이 보내면 admin 집계의 1000행 캡을
+      //   검색 이벤트가 혼자 먹어 first_load·signup·report 가 밀려난다 — 퍼널을 보려고 만든 계측이
+      //   퍼널을 못 보게 만든다. 세션당 1회면 "이 방문에서 검색까지 갔는가" 라는 퍼널 질문에 충분하다.
+      sendOnce: function(event){
+        try {
+          var k = 'mhl_attr_1_' + event;
+          if (sessionStorage.getItem(k)) return;
+          sessionStorage.setItem(k, '1');
+        } catch(_){ /* sessionStorage 불가(프라이빗 모드 등) — 가드 없이 1회 보낸다 */ }
+        this.send(event);
+      },
     };
   })();
   /* 세션당 1회만 보낸다 — SPA 재초기화·뒤로가기로 같은 방문이 여러 번 세지면 채널 비교가 왜곡된다.
@@ -4672,6 +4684,8 @@ async function generateReport(_isRetry) {
     window._lastReportInput = { maxBudget: buy, myCash: cash, region, pyeong, priority, kidPlan, stayYears, houseStatus };
     // Day 1-② Vercel Analytics — REPORT_GENERATE 성공 funnel event
     try { window.va && window.va('event', { name: 'report_generate_success', data: { region, priority, isFirstBuyer: !!isFirstBuyer } }); } catch(_){}
+    // ATTR-ACTIVATION-2026-09-06: 보고서 성공 이벤트 전송 (캐시 히트도 포함 — 사용자 입장엔 보고서를 받은 것)
+    try { if (window._attr) window._attr.sendOnce('report'); } catch(_){}
     _renderReport(data);
   } catch (e) {
     // Day 1-② REPORT_GENERATE 실패 event (이탈 원인 분석용)
@@ -6675,6 +6689,14 @@ async function doSearch(){
       if(data.filteredOut){ try{ toast('🔎 선택한 단지 조건에 맞는 결과가 없어요. 필터(세대수·주차·분양)를 완화해보세요.'); }catch(_){} }
       // 로그인 사용자면 검색 이력 기록 (fire-and-forget — 실패해도 UX 영향 X)
       _logSearch('recommend', body.region || '', (data.recommendations||[]).length);
+      // ATTR-ACTIVATION-2026-09-06: 검색 성공 이벤트 — 세션당 1회.
+      //   ⚠ _notice 응답은 원소 1개짜리 배열이라 length 검사만으로는 걸러지지 않는다
+      //   (propertyService 의 no-match·조회실패 두 경로 모두 그렇다 — 그 파일 주석이 같은 함정을 기록해 뒀다).
+      //   실제 추천이 하나라도 있을 때만 "검색까지 갔다" 로 센다.
+      try {
+        var _recs = (data.recommendations || []);
+        if (_recs.some(function(r){ return r && !r._notice; }) && window._attr) window._attr.sendOnce('search');
+      } catch(_){}
     }
   }catch(e){
     // MOB-3 (2026-05-03): 단지 검색 catch — 네트워크 vs 타임아웃 vs 일반 에러 구분

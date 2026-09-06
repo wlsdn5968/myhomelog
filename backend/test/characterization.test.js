@@ -7349,3 +7349,47 @@ test('REC-BEHAVIORAL-2026-09-06: 소형 게이트(실행) — 확인된 100세�
     assert.ok(names.includes('미확인단지'), '세대수 미확인 단지가 소형으로 오배제됐다(모름=0 취급 회귀)');
   });
 });
+
+// ── ATTR-ACTIVATION-2026-09-06: 계측 화이트리스트 ↔ 프론트 배선 계약 ───────────────────
+//   [왜] 이 저장소는 "백엔드가 4종 이벤트를 받도록 했는데 프론트가 2종만 보낸" 상태가 3개월 방치됐다.
+//   배선이 빠지면 관찰할 수 없는 퍼널 구간이 생긴다 — 유입 분석을 원점부터 해야 한다.
+//   [무엇을 검증] 화이트리스트의 전 이벤트가 프론트에서 호출되는지, 그리고
+//   대량 이벤트 상한이 있는 이벤트(세션당 1회)는 sendOnce 로만 간다.
+test('ATTR-ACTIVATION-2026-09-06: 화이트리스트 이벤트가 전부 프론트에서 전송되는지 (배선 계약)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+
+  const attrSrc = fs.readFileSync(path.join(__dirname, '../routes/attribution.js'), 'utf8');
+  const eventsMatch = attrSrc.match(/const EVENTS = new Set\(\[([^\]]+)\]\);/);
+  assert.ok(eventsMatch, 'backend/routes/attribution.js 에서 EVENTS 를 찾지 못했다');
+  const eventsStr = eventsMatch[1];
+  const events = eventsStr.match(/'([^']+)'/g).map(s => s.slice(1, -1));
+  assert.ok(events.length >= 4, '화이트리스트가 4종 미만이다');
+
+  const htmlSrc = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+
+  for (const e of events) {
+    const hasSend = new RegExp(`\\.send\\('${e}'\\)`).test(htmlSrc);
+    const hasSendOnce = new RegExp(`\\.sendOnce\\('${e}'\\)`).test(htmlSrc);
+    assert.ok(hasSend || hasSendOnce, `화이트리스트 이벤트가 프론트에서 발견되지 않음: ${e}`);
+  }
+
+  assert.ok(new RegExp(`\\.sendOnce\\('search'\\)`).test(htmlSrc), '상한이 있는 이벤트가 sendOnce 로 보내지지 않음');
+  assert.ok(new RegExp(`\\.sendOnce\\('report'\\)`).test(htmlSrc), '상한이 있는 이벤트가 sendOnce 로 보내지지 않음');
+
+  // 모양만 본다 — 속성명(e.g. _notice)은 안 본다
+  assert.ok(/\.some\(function\(r\)\{\s*return\s+r\s*&&\s*!r\./.test(htmlSrc), '검색 전송 가드 모양이 변경됐다 (형태만 감시)');
+
+  // 실행형: 조건식을 함수로 만들어 의미를 단언
+  const m = htmlSrc.match(/var _recs = \(data\.recommendations \|\| \[\]\);[\s\S]{0,200}?if \((_recs\.some\([\s\S]*?\))\s*&&\s*window\._attr\)/);
+  assert.ok(m, 'frontend 에서 검색 전송 가드를 찾지 못했다 (형태 변경 시 이 테스트도 갱신할 것)');
+  const pred = new Function('data', 'var _recs = (data.recommendations || []); return !!(' + m[1] + ');');
+
+  // 테스트 케이스: _notice 응답은 거부, 실제 추천(aptName)은 전송
+  assert.strictEqual(pred({ recommendations: [{ _notice: true, aptName: '데이터 일시 조회 실패' }] }), false, '_notice 전용 응답은 거부돼야 함');
+  assert.strictEqual(pred({ recommendations: [{ _notice: true }, { _notice: true }] }), false, '_notice만 있는 모든 응답은 거부돼야 함');
+  assert.strictEqual(pred({ recommendations: [{ aptName: '반포자이' }] }), true, '실제 추천(aptName 있음)은 전송돼야 함');
+  assert.strictEqual(pred({ recommendations: [{ _notice: true }, { aptName: '반포자이' }] }), true, '혼합 응답은 실제 추천 때문에 전송돼야 함');
+  assert.strictEqual(pred({ recommendations: [] }), false, '빈 추천 배열은 거부돼야 함');
+  assert.strictEqual(pred({}), false, '필드 자체 없음은 거부돼야 함');
+});
