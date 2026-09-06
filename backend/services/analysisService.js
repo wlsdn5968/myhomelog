@@ -245,7 +245,7 @@ function calcGap(saleTx, jeonseT) {
 //   즉 **표본은 6개월**이다. 표기만 두 배로 부풀어 있었다 — 사용자는 더 긴 기간의 위치로 읽는다.
 //   표본을 1년으로 늘리는 선택도 있으나 그건 MOLIT 호출량·캐시 키가 바뀌는 별개 결정이라,
 //   여기서는 **표기를 실제에 맞춘다**(같은 화면의 다른 지표도 전부 6개월 기준이다).
-function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate) {
+function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate, jeonseSample) {
   let score = 0;
   const conditions = [];
   const vs = typeof volumeSignalObj === 'object' ? volumeSignalObj : { signal: volumeSignalObj, seasonalBias: false };
@@ -301,15 +301,26 @@ function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate) {
 
   // ③ 전세가율 — 계산된 비율 + 근거(6개월 창)만 제시. "역전세 위험 확인 필요"는 예측이 아니라
   //   확인할 항목 안내로 남긴다(등급 라벨 '낮음' 만 제거).
+  // JEONSE-SAMPLE-2026-09-06: "최근 6개월" 은 사실 주장이다 — 국토부 조회가 일부 달에 실패하면
+  //   표본은 6개월보다 얇다(rentService.js 의 monthsFailed). jeonseSample 이 없거나(모름) 결측이
+  //   0이면 기존 문구를 그대로 쓴다(하위호환) — 결측이 있을 때만 실제로 쓴 개월 수를 밝힌다.
+  //   ⚠ 얻지 못한 것을 얻은 것처럼 6/6 으로 단정하지 않는다.
+  const _jeonseSampleComplete = !jeonseSample
+    || !Number.isFinite(jeonseSample.total)
+    || !Number.isFinite(jeonseSample.failed)
+    || jeonseSample.failed <= 0;
+  const jeonseBasisDesc = _jeonseSampleComplete
+    ? '최근 6개월 전세 실거래 기준'
+    : `전세 실거래 ${jeonseSample.total - jeonseSample.failed}/${jeonseSample.total}개월 표본`;
   if (jeonseRate !== null) {
     if (jeonseRate >= 60) {
       score += 2;
-      conditions.push({ label: '전세가율', status: 'green', desc: `${jeonseRate}% (최근 6개월 전세 실거래 기준)` });
+      conditions.push({ label: '전세가율', status: 'green', desc: `${jeonseRate}% (${jeonseBasisDesc})` });
     } else if (jeonseRate >= 45) {
       score += 1;
-      conditions.push({ label: '전세가율', status: 'yellow', desc: `${jeonseRate}% (최근 6개월 전세 실거래 기준)` });
+      conditions.push({ label: '전세가율', status: 'yellow', desc: `${jeonseRate}% (${jeonseBasisDesc})` });
     } else {
-      conditions.push({ label: '전세가율', status: 'red', desc: `${jeonseRate}% (최근 6개월 전세 실거래 기준) — 역전세 위험 확인 필요` });
+      conditions.push({ label: '전세가율', status: 'red', desc: `${jeonseRate}% (${jeonseBasisDesc}) — 역전세 위험 확인 필요` });
     }
   }
 
@@ -529,6 +540,13 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
     }
   }
 
+  // JEONSE-SAMPLE-2026-09-06:
+  // [왜] getJeonseByApt 는 monthsTotal·monthsFailed 를 **배열 속성**으로 싣는데,
+  //   아래 filter 가 새 배열을 만들면서 그 속성이 사라진다. 반드시 여기서 꺼내 둔다.
+  //   전체 실패(.catch(() => [])) 면 속성 자체가 없다 → 모름으로 둔다(0 으로 만들지 않는다).
+  const _jTotal = Number.isFinite(jeonseT.monthsTotal) ? jeonseT.monthsTotal : null;
+  const _jFailed = Array.isArray(jeonseT.monthsFailed) ? jeonseT.monthsFailed.length : null;
+
   // CROSS-REGION-FIX-2026-06-03 (운영자 발견 클래스 — 가격시그널이 실거래가 탭과 표본 불일치):
   //   analyzeApt 가 lawdCd(구)+aptName 으로만 거래 fetch → "현대"/"벽산"/"청구" 등 generic 이름이
   //   구 안에서 동(umd)을 넘어 과합산 (실측 2026-06-03: "현대" 노원구 139건 = 하계동·중계동·상계동 별개 단지 혼합).
@@ -571,7 +589,12 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
   // LOW 이상일 때만 시세 위치 요약 계산 (NONE은 null)
   // P1 (2026-04-25 D2): buySignal → marketSummary alias 동시 노출 (호환성)
   const marketSummary = reliability !== 'NONE'
-    ? summarizeMarketSignal(percentile, volumeSignalObj, gapData.jeonseRate)
+    ? summarizeMarketSignal(
+        percentile,
+        volumeSignalObj,
+        gapData.jeonseRate,
+        _jTotal !== null ? { total: _jTotal, failed: _jFailed } : null,
+      )
     : null;
   const buySignal = marketSummary; // 하위 호환
 

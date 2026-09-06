@@ -7645,3 +7645,68 @@ test('JIBUN-COL-2026-09-06: getTransactionsByAptSeq 매퍼가 jibun 을 반환�
   assert.ok(selectCount === 3, `3개의 select 를 찾아야 한다 (찾은 개수: ${selectCount})`);
   assert.ok(jibunCount === 3, `3개 select 모두 jibun 을 포함해야 한다 (jibun 포함: ${jibunCount})`);
 });
+test('전세가율 표본 완전성 — 결측 달이 있으면 실제 개월 수를 밝히고, 없으면 기존 문구를 유지한다 (Plan 046)', () => {
+  // Plan 041 이 "최근 6개월 전세 실거래 기준" 이라는 사실 주장을 추가했다. 그런데 국토부 조회가
+  // 일부 달에 실패하면 표본은 6개월보다 얇다(rentService.js 의 monthsFailed) — 그때 "6개월" 은
+  // 거짓말이 된다. summarizeMarketSignal 의 네 번째 인자(jeonseSample)로 표본 완전성을 받아
+  // 결측이 있을 때만 실제 개월 수를 밝힌다.
+  const { _internals } = require('../services/analysisService');
+  const { calcBuySignal } = _internals;
+
+  // ① 3인자 호출(기존 호출 형태, characterization.test.js:2539/2548 과 동일 패턴) → 문구 불변.
+  //   ★ 하위호환 고정 — 네 번째 인자는 선택적이어야 한다.
+  const r1 = calcBuySignal(50, { signal: 'neutral' }, 49);
+  const jeonse1 = r1.conditions.find(c => c.label === '전세가율');
+  assert.match(jeonse1.desc, /49% \(최근 6개월 전세 실거래 기준\)/,
+    '3인자 호출은 기존 문구 그대로여야 한다(하위호환)');
+
+  // ② 표본이 완전(failed: 0) → 기존 문구와 동일.
+  const r2 = calcBuySignal(50, { signal: 'neutral' }, 49, { total: 6, failed: 0 });
+  const jeonse2 = r2.conditions.find(c => c.label === '전세가율');
+  assert.match(jeonse2.desc, /49% \(최근 6개월 전세 실거래 기준\)/,
+    '결측 0건이면 기존 문구를 유지해야 한다');
+
+  // ③ 표본이 불완전(failed: 2/6) → "6개월" 이라 단정하지 않고 실제 4/6 을 밝힌다.
+  const r3 = calcBuySignal(50, { signal: 'neutral' }, 49, { total: 6, failed: 2 });
+  const jeonse3 = r3.conditions.find(c => c.label === '전세가율');
+  assert.match(jeonse3.desc, /49% \(전세 실거래 4\/6개월 표본\)/,
+    '결측이 있으면 실제 개월 수(4/6)를 밝혀야 한다');
+  assert.equal(/최근 6개월 전세 실거래 기준/.test(jeonse3.desc), false,
+    '표본이 얇은데 "최근 6개월" 이라 단정하면 안 된다');
+
+  // ④ 메타를 모른다(total/failed 가 null) → 모름을 0으로 만들지 않고 기존 문구로 처리.
+  const r4 = calcBuySignal(50, { signal: 'neutral' }, 49, { total: null, failed: null });
+  const jeonse4 = r4.conditions.find(c => c.label === '전세가율');
+  assert.match(jeonse4.desc, /49% \(최근 6개월 전세 실거래 기준\)/,
+    '표본 메타를 모르면(null) 기존 문구로 처리해야 한다 — "0/0" 등으로 표현하면 안 된다');
+
+  // ⑤ 절대 룰 ① — 어떤 경우에도 desc 에 매수 권유·가격 예측 표현이 없어야 한다.
+  for (const c of [...r1.conditions, ...r2.conditions, ...r3.conditions, ...r4.conditions]) {
+    assert.equal(/매수|매도|사세요|파세요|오를|내릴|상승할|하락할/.test(c.desc), false,
+      `조건 카드 desc 에 매수·매도 권유 또는 가격 예측 표현이 있다: ${c.desc}`);
+  }
+
+  // ⑥ red 분기의 "역전세 위험 확인 필요" 는 041 이 의도적으로 남긴 문구 — 표본 표기가 바뀌어도 유지.
+  const rRed = calcBuySignal(50, { signal: 'neutral' }, 30, { total: 6, failed: 2 });
+  const jeonseRed = rRed.conditions.find(c => c.label === '전세가율');
+  assert.match(jeonseRed.desc, /30% \(전세 실거래 4\/6개월 표본\) — 역전세 위험 확인 필요/,
+    'red 분기의 역전세 위험 확인 필요 문구가 표본 표기와 함께 유지돼야 한다');
+});
+
+test('전세가율 표본 메타 추출은 filter 보다 앞에 있어야 한다 (Plan 046 — 계약 고정)', () => {
+  // getJeonseByApt 는 monthsTotal·monthsFailed 를 배열의 "커스텀 속성"으로 싣는다.
+  // Array.prototype.filter 는 새 배열을 반환하므로, filter 뒤에서 메타를 꺼내면 항상 undefined 가
+  // 되어 조용히 "모름" 으로 빠진다(겉으로는 에러 없이 그냥 항상 기존 문구만 나온다 — 이 계획이
+  // 고치려는 결함 자체가 재발한다). 소스 순서를 인덱스 비교로 고정한다.
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../services/analysisService.js'), 'utf8');
+
+  const metaIdx = src.indexOf('const _jTotal = Number.isFinite(jeonseT.monthsTotal)');
+  const filterIdx = src.indexOf('jeonseT = jeonseT.filter(_scope)');
+
+  assert.ok(metaIdx !== -1, '메타 추출 코드를 찾을 수 없다 — 계획서 발췌와 소스가 어긋났다');
+  assert.ok(filterIdx !== -1, 'jeonseT filter 코드를 찾을 수 없다 — 계획서 발췌와 소스가 어긋났다');
+  assert.ok(metaIdx < filterIdx,
+    '표본 메타 추출이 filter 보다 뒤에 있다 — monthsTotal/monthsFailed 가 조용히 사라진다');
+});
