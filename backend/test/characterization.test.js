@@ -7952,3 +7952,122 @@ test('KST-SSOT-2026-09-06: rentService.monthsWindow — 매월 1일 KST 00~09시
     'KST 09-15 12:00 비경계 케이스가 달라졌다'
   );
 });
+
+// ── Plan 054 (2026-09-06): 열화(stale) 응답이 캐시에 굳는 경로 2종 ───────────────────────────
+//   [실사고 이력] 2026-08-29 콜드 경로가 돌려준 regions:[] 가 s-maxage=6h 로 엣지에 굳어 브리핑
+//   지역 선택기가 통째로 사라졌다. 이번 라운드는 같은 계열이 지역별 슬라이스와 전월세 읽기 측에
+//   남아 있던 것을 고친다(Step 1~3).
+
+test('Plan 054 Step 1 — sliceRegion 이 열화 blob 의 stale·computedAt 을 슬라이스에도 싣는다(정상일 땐 지어내지 않는다)', () => {
+  const { sliceRegion } = require('../services/priceRecordsService');
+  const baseRegions = { '11350': { comparedCount: 5, highCount: 2, lowCount: 1, high: [], low: [] } };
+
+  // ① 열화 blob(_withStale 이 만드는 형태 그대로) — stale·computedAt 이 슬라이스에도 실려야 한다
+  const staleBlob = {
+    stale: true, computedAt: '2026-08-20T00:00:00.000Z',
+    latestDeal: '2026-08-19', sinceDate: '2026-08-01', windowDays: 30, minPrior: 3,
+    regions: baseRegions,
+  };
+  const staleSlice = sliceRegion(staleBlob, '11350');
+  assert.equal(staleSlice.stale, true, '열화 blob 인데 슬라이스가 stale 을 안 실었다 — 라우트가 캐시 여부를 판정 못 한다');
+  assert.equal(staleSlice.computedAt, '2026-08-20T00:00:00.000Z', 'computedAt 이 슬라이스로 전달되지 않았다');
+
+  // ② 정상 blob — stale 을 지어내지 않는다(false 로 채우면 이 저장소가 반복해 당한 결함이 된다)
+  const freshBlob = {
+    latestDeal: '2026-09-03', sinceDate: '2026-08-04', windowDays: 30, minPrior: 3,
+    regions: baseRegions,
+  };
+  const freshSlice = sliceRegion(freshBlob, '11350');
+  assert.equal('stale' in freshSlice, false, '정상 응답인데 stale 키가 생겼다(지어낸 값일 위험)');
+  assert.equal('computedAt' in freshSlice, false, '정상 응답인데 없는 computedAt 을 지어냈다');
+});
+
+function _stubRecordsRoute(mode) {
+  const svcPath = require.resolve('../services/priceRecordsService');
+  const routePath = require.resolve('../routes/transactions');
+  const saved = { svc: require.cache[svcPath], route: require.cache[routePath] };
+  const svcStub = {
+    getPriceRecordsByRegion: async () => ({ regions: { '11350': {} } }), // sliceRegion 자체를 스텁하므로 형태만 있으면 된다
+    sliceRegion: () => (mode === 'stale'
+      ? { scope: 'region', lawdCd: '11350', stale: true, computedAt: '2026-08-20T00:00:00.000Z' }
+      : { scope: 'region', lawdCd: '11350' }),
+    getPriceRecords: async () => ({ highCount: 0, lowCount: 0 }),
+    regionMenu: () => [],
+  };
+  require.cache[svcPath] = { id: svcPath, filename: svcPath, loaded: true, exports: svcStub };
+  delete require.cache[routePath];
+  const router = require('../routes/transactions');
+  const restore = () => {
+    if (saved.svc) require.cache[svcPath] = saved.svc; else delete require.cache[svcPath];
+    delete require.cache[routePath]; // 다음 요청자가 실제 파일을 다시 읽게
+  };
+  const layer = router.stack.find(l => l.route && l.route.path === '/records');
+  if (!layer) { restore(); throw new Error('/records 라우트를 못 찾았다(경로가 바뀌었나)'); }
+  return { handle: layer.route.stack[0].handle, restore };
+}
+function _mkRecordsRes() {
+  const r = { headers: {}, code: 200, body: null };
+  r.set = (k, v) => { r.headers[k] = v; return r; };
+  r.status = (c) => { r.code = c; return r; };
+  r.json = (b) => { r.body = b; return r; };
+  return r;
+}
+
+test('Plan 054 Step 2 — GET /transactions/records?lawdCd= 가 지역 슬라이스 열화 시 no-store', async () => {
+  // 전엔 항상 CC 가 붙어 6시간+SWR24시간 엣지에 굳었다(2026-08-29 실사고와 같은 계열).
+  const { handle, restore } = _stubRecordsRoute('stale');
+  try {
+    const res = _mkRecordsRes();
+    await handle({ query: { lawdCd: '11350' } }, res, () => {});
+    assert.equal(res.headers['Cache-Control'], 'no-store', '열화 지역 슬라이스에 긴 캐시가 붙었다');
+  } finally { restore(); }
+});
+
+test('Plan 054 Step 2 — GET /transactions/records?lawdCd= 가 지역 슬라이스 정상 시 기존 캐시 헤더를 유지한다(회귀 아님)', async () => {
+  const { handle, restore } = _stubRecordsRoute('fresh');
+  try {
+    const res = _mkRecordsRes();
+    await handle({ query: { lawdCd: '11350' } }, res, () => {});
+    assert.match(res.headers['Cache-Control'], /s-maxage=21600/, '정상 지역 슬라이스의 캐시 헤더가 사라졌다(회귀)');
+  } finally { restore(); }
+});
+
+test('Plan 054 Step 3 — getRentTransactions: 배포 이전에 이미 공유 Redis 에 굳은 빈 배열은 히트로 치지 않고 업스트림을 다시 부른다', async () => {
+  const dgkPath = require.resolve('../services/dataGoKrClient');
+  const rcPath = require.resolve('../services/redisCache');
+  const rentPath = require.resolve('../services/rentService');
+  const saved = { dgk: require.cache[dgkPath], rc: require.cache[rcPath], rent: require.cache[rentPath], key: process.env.MOLIT_API_KEY, gap: process.env.RENT_MIN_GAP_MS };
+  let dgkCalls = 0;
+  const dgkStub = {
+    get: async () => {
+      dgkCalls++;
+      return { status: 200, data: { response: { header: { resultCode: '000', resultMsg: 'OK' }, body: { totalCount: 1, items: { item: [
+        { aptNm: '테스트아파트', umdNm: '역삼동', excluUseAr: '84.9', floor: '5', dealYear: '2026', dealMonth: '9', dealDay: '1', deposit: '10,000', monthlyRent: '0' },
+      ] } } } } };
+    },
+    _isBlockedPattern: () => false, _buildFullUrl: () => '', ALLOWED_HOSTS: new Set(),
+  };
+  // 037 은 "쓰기 측"만 막았다 — 배포 이전에 이미 Redis 에 심긴 오염된 빈 배열을 흉내낸다.
+  const rcStub = { rget: async () => [], rset: async () => {} };
+  process.env.MOLIT_API_KEY = 'xxxxxxxx-test-molit-key';
+  process.env.RENT_MIN_GAP_MS = '0';
+  require.cache[dgkPath] = { id: dgkPath, filename: dgkPath, loaded: true, exports: dgkStub };
+  require.cache[rcPath] = { id: rcPath, filename: rcPath, loaded: true, exports: rcStub };
+  const cache = require('../cache');
+  try {
+    delete require.cache[rentPath];
+    const rent = require('../services/rentService');
+    const lawd = '99994';
+    const ym = rent.monthsWindow()[0];
+    const rows = await rent.getRentTransactions(lawd, ym);
+    assert.equal(dgkCalls, 1, '공유 Redis 의 굳은 빈 배열을 히트로 쳐서 업스트림을 다시 부르지 않았다');
+    assert.equal(rows.length, 1, '업스트림 재조회 결과가 반영되지 않았다');
+  } finally {
+    for (const k of cache.keys()) if (k.startsWith('rent:99994:')) cache.del(k);
+    if (saved.dgk) require.cache[dgkPath] = saved.dgk; else delete require.cache[dgkPath];
+    if (saved.rc) require.cache[rcPath] = saved.rc; else delete require.cache[rcPath];
+    if (saved.rent) require.cache[rentPath] = saved.rent; else delete require.cache[rentPath];
+    if (saved.key === undefined) delete process.env.MOLIT_API_KEY; else process.env.MOLIT_API_KEY = saved.key;
+    if (saved.gap === undefined) delete process.env.RENT_MIN_GAP_MS; else process.env.RENT_MIN_GAP_MS = saved.gap;
+  }
+});
