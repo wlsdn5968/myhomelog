@@ -5826,7 +5826,7 @@ test('상세 첫 탭 — 실거래 요약이 기본, 점수 없으면 큰 CTA �
   assert.equal(/class="score-pending"/.test(html), false, '"분석 대기" 전면 CTA 카드가 되살아났다 — 검색 진입자의 첫 화면이 다시 dead-end 가 된다');
   assert.match(html, /class="t0-rep-link" onclick="cDM\(\);sv\('report'\)">자금·가족·희망지역을 입력하면/, '보고서 유도 링크 한 줄이 없다');
   // ③ 값이 있는 셀만 — 건수·최근 거래일·준공년도는 각각 값 가드 뒤에서만 push 된다
-  assert.match(blk, /if \(Number\(p\.dealCount\) > 0\) _t0Cells\.push\(_t0hc\('거래 건수'/, '건수 셀이 값 가드 없이 그려진다(0건이 값처럼 보인다)');
+  assert.match(blk, /if \(_t0DealN > 0\) _t0Cells\.push\(_t0hc\('거래 건수'/, '건수 셀이 값 가드 없이 그려진다(0건이 값처럼 보인다)');
   assert.match(blk, /if \(p\.recentDealDate\) _t0Cells\.push\(_t0hc\('최근 거래일'/, '최근 거래일 셀 가드가 없다');
   assert.match(blk, /if \(p\.buildYear\) _t0Cells\.push\(_t0hc\('준공년도'/, '준공년도 셀 가드가 없다');
   // ④ 평균가 라벨은 경로가 세팅한 _priceBasis — "최근 24개월"·"시간 가중" 같은 창 단정을 하드코딩하면
@@ -6661,3 +6661,39 @@ test('인기 단지 응답·화면 — 집계 기간은 서버가 싣고 화면�
   assert.match(fn, /j\.window/, '프론트가 서버의 window 를 읽지 않는다');
   assert.match(fn, /_pwn\.textContent = [\s\S]{0,240}: ''/, '기간이 없을 때 비우지 않는다(옛 값이 남는다)');
 });
+
+test('T0-HERO-FIELD (Plan 038) — 추천 응답 dealCount6m을 히어로가 읽고, 렌더 순서가 올바르다', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+
+  // 결함: 추천 경로는 dealCount6m 으로, 검색·지도 경로는 dealCount 로 응답하는데,
+  //   히어로가 dealCount 만 읽어 추천 카드의 거래 건수·표본 배지가 통째로 빠졌다.
+  //   또한 recentDealDate 정규화가 렌더 뒤에 있어 같은 카드를 두 번째로 열 때만 나타났다.
+
+  // 계약 1: propertyService.js 가 dealCount6m 을 싣는다
+  const psJs = fs.readFileSync(path.join(__dirname, '../services/propertyService.js'), 'utf8');
+  assert.match(psJs, /dealCount6m:\s*apt\.dealCount/,
+    'propertyService.js 에서 dealCount6m 필드를 찾지 못했다');
+
+  // 계약 2: frontend/index.html 에서 dealCount6m 을 ?? 연산자로 읽는다
+  assert.match(html, /p\.dealCount\s*\?\?\s*p\.dealCount6m/,
+    'frontend 에서 ?? 연산자로 dealCount6m 을 읽지 않는다');
+
+  // 계약 3: 렌더 순서 — recentDealDate 정규화(RECENTDEAL 마커)가 const _heroSection 앞에 있다
+  const regIdx = html.indexOf('RECENTDEAL-2026-08-19');
+  const heroIdx = html.indexOf('const _heroSection');
+  assert.ok(regIdx > -1, 'frontend 에서 RECENTDEAL-2026-08-19 마커를 찾지 못했다');
+  assert.ok(heroIdx > -1, 'frontend 에서 const _heroSection 을 찾지 못했다');
+  assert.ok(regIdx < heroIdx,
+    '렌더 순서 계약 위반: recentDealDate 정규화가 _heroSection 뒤에 있다 (' + regIdx + ' vs ' + heroIdx + ')');
+
+  // 계약 4: 히어로가 _t0DealN 변수를 사용해 거래 건수·표본 배지를 표시한다
+  assert.match(html, /const _t0DealN = Number\(p\.dealCount \?\? p\.dealCount6m\)/,
+    '_t0DealN 정규화 줄을 찾지 못했다');
+  assert.match(html, /if \(_t0DealN > 0\)[\s\S]{0,100}?_t0hc\('거래 건수'/,
+    '거래 건수 셀이 _t0DealN 을 쓰지 않는다');
+  assert.match(html, /<span class="t0h-bdg">표본 \$\{_t0DealN\.toLocaleString\(\)\}건<\/span>/,
+    '표본 배지가 _t0DealN 을 쓰지 않는다');
+});
+
