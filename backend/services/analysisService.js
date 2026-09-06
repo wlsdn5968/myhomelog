@@ -350,12 +350,20 @@ const calcBuySignal = summarizeMarketSignal;
 //   - taxConfig 인자 (snapshot.data) 가 있으면 그 값 사용
 //   - 없으면 기존 하드코딩 fallback (backwards-compat — frontend sync 호출 등)
 // price: 억 / loanAmount: 억
-// ACQ-REG-CALC-2026-09-02 (감사 후속): 다주택 취득세 중과는 **조정대상지역** 기준이다(지방세법 §13-2).
-//   종전엔 2주택+ 를 지역과 무관하게 항상 8% 로 계산했다 — 화면에 "비조정지역은 더 낮을 수 있다" 고
-//   각주는 달아뒀지만, 같은 단지 상세 화면의 세금 시뮬레이션 카드는 이미 지역을 보고 계산하고 있어서
-//   **한 화면에 서로 다른 취득세 금액 두 개**가 동시에 떴다.
-//   → 지역을 아는 호출부는 isRegulated 를 넘겨 정확히 계산하고, 모르면 종전대로 보수적 8%.
-//   ⚠ 기본값이 undefined 인 이유: 기존 호출부·계약 테스트의 동작을 그대로 두기 위해서다.
+// ACQ-UNKNOWN-COUNT-2026-09-06 (ACQ-REG-CALC-2026-09-02 되돌림):
+//   [09-02 가 왜 있었나] 다주택 취득세 중과는 **조정대상지역** 기준이다(지방세법 §13-2). 종전엔
+//     2주택+ 를 지역과 무관하게 항상 8% 로 계산했다 — 화면에 "비조정지역은 더 낮을 수 있다" 고
+//     각주는 달아뒀지만, 같은 단지 상세 화면의 세금 시뮬레이션 카드는 이미 지역을 보고 계산하고
+//     있어서 **한 화면에 서로 다른 취득세 금액 두 개**가 동시에 떴다.
+//   [09-02 가 놓친 것] '2주택+' 칩은 2주택과 3주택 이상을 **구분하지 않는다**. 지방세법 §13-2 상
+//     비조정지역은 2주택=기본세율 / 3주택=8% / 4주택+=12% 라, 이 칩에 기본세율을 주면 3주택
+//     이상에 과소 안내가 된다(9억 기준 7,200만원 → 2,700만원, 약 4,500만원 과소 — 09-02 가 바로
+//     그 상태였다). 금전 도구에서 과소 안내는 과대 안내보다 실제 피해가 크다.
+//   [지금 고정하는 것] 주택 수가 불확정(2주택+)이면 조정/비조정과 무관하게 보수적 중과(8%)를
+//     쓴다. isRegulated 인자는 시그니처에 남긴다 — 각주(frontend)가 여전히 그 개념을 설명하고,
+//     기존 호출부·계약 테스트가 넘긴다. 근본 해결(칩을 2주택/3주택+ 로 분리)은 범위 밖이다
+//     (문자열 비교 지점이 프론트 12·백엔드 5곳이라 L 급 + UI 변경이라 디자인 기획 선행 필요 —
+//     plans/README.md 백로그 참조).
 function calcTotalCost(price, loanAmount, houseStatus, isFirstBuyer, taxConfig, isRegulated) {
   const priceW = price * 10000; // 만원
 
@@ -364,10 +372,7 @@ function calcTotalCost(price, loanAmount, houseStatus, isFirstBuyer, taxConfig, 
   if (taxConfig?.acquisitionTax) {
     const at = taxConfig.acquisitionTax;
     if (houseStatus === '2주택+') {
-      // ACQ-REG-CALC-2026-09-02: 비조정지역이 확인되면 중과 대신 무주택 tier(기본세율).
-      rate = (isRegulated === false)
-        ? pickTierRate(at.noHouse?.tiers || [], price, 0.03)
-        : (at.twoHousePlus?.rate ?? 0.08);
+      rate = (at.twoHousePlus?.rate ?? 0.08);
     } else if (houseStatus === '1주택') {
       const tiers = at.oneHouse?.tiers || [];
       rate = pickTierRate(tiers, price, 0.03);
@@ -376,13 +381,15 @@ function calcTotalCost(price, loanAmount, houseStatus, isFirstBuyer, taxConfig, 
     }
   } else {
     // ── 하드코딩 fallback ──
-    if (houseStatus === '2주택+') rate = (isRegulated === false) ? (price <= 6 ? 0.01 : price <= 9 ? 0.02 : 0.03) : 0.08;
+    if (houseStatus === '2주택+') rate = 0.08;
     else if (houseStatus === '1주택') rate = price <= 6 ? 0.01 : price <= 9 ? 0.02 : 0.03;
     else rate = price <= 6 ? 0.01 : price <= 9 ? 0.02 : 0.03;
   }
   // 지방세법 §11①8호 나목: 1주택·무주택 6~9억 취득세 누진(1~3%) — frontend calcTotalCostHTML 와 정합 (2026-06-24 law.go.kr 검증)
-  // ACQ-REG-CALC-2026-09-02: 비조정지역이 확인된 2주택+ 도 같은 식을 탄다(사본을 늘리지 않는다).
-  if ((houseStatus !== '2주택+' || isRegulated === false) && price > 6 && price <= 9) rate = (price * 2 / 3 - 3) / 100;
+  // ACQ-UNKNOWN-COUNT-2026-09-06: '2주택+' 는 주택 수 불확정이라 위에서 이미 보수적 중과(8%)로
+  //   고정했다 — 비조정지역이 확인돼도 이 누진식(무주택·1주택 전용)으로 되돌리지 않는다.
+  //   ⚠ 누진식 사본을 새로 만들지 않는다 — 조건만 좁혀 기존 식을 재사용한다(계약 테스트가 사본 수를 센다).
+  if (houseStatus !== '2주택+' && price > 6 && price <= 9) rate = (price * 2 / 3 - 3) / 100;
 
   const eduRate  = taxConfig?.eduTaxRate       ?? 0.1;
   const spclRate = taxConfig?.spclTaxRate      ?? 0.002;

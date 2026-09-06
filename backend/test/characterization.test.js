@@ -4995,55 +4995,61 @@ test('죽은 서비스: 참조 0이던 schoolClusterService 가 되살아나지 
   assert.equal(fs2.existsSync(data), false, 'schoolClusters 데이터가 돌아왔다');
 });
 
-// ── ACQ-REG-CALC-2026-09-02 (감사 후속: 한 화면에 취득세 두 값) ─────────────────
-//   [왜] 다주택 취득세 중과는 **조정대상지역** 기준인데(지방세법 §13-2), 실투자금 계산기는
-//     2주택+ 를 지역과 무관하게 항상 8% 로 계산했다. 같은 단지 상세 화면의 세금 시뮬레이션 카드는
-//     이미 지역을 보고 계산하고 있어서, 비조정지역 단지에서 **같은 화면에 서로 다른 취득세**가 떴다.
-//   [무엇을 고정하나] ① 비조정지역이 확인되면 기본세율 ② 모르면(undefined) 종전대로 중과 8%
-//     — 모를 때 낮게 안내하면 과소 안내가 된다 ③ 프론트·백엔드가 같은 규칙을 쓴다.
-test('취득세: 2주택+ 중과는 조정대상지역일 때만 (모르면 보수적으로 중과 유지)', () => {
+// ── ACQ-REG-CALC-2026-09-02 (감사 후속) → ACQ-UNKNOWN-COUNT-2026-09-06 (Plan 036, 되돌림) ──
+//   [09-02 가 왜 있었나] 다주택 취득세 중과는 **조정대상지역** 기준인데(지방세법 §13-2), 실투자금
+//     계산기는 2주택+ 를 지역과 무관하게 항상 8% 로 계산했다. 같은 단지 상세 화면의 세금 시뮬레이션
+//     카드는 이미 지역을 보고 계산하고 있어서, 비조정지역 단지에서 **같은 화면에 서로 다른 취득세**가
+//     떴다. 그래서 09-02 는 "비조정지역이 확인되면 기본세율" 로 풀었다.
+//   [09-02 가 놓친 것] '2주택+' 칩은 2주택과 3주택 이상을 **구분하지 않는다**. 비조정지역은
+//     2주택=기본세율 / 3주택=8% / 4주택+=12% 라(§13-2), 이 칩에 기본세율을 주면 3주택 이상에
+//     과소 안내가 된다(9억 기준 7,200만원 → 2,700만원, 약 4,500만원 과소). 아래 첫 테스트가 그
+//     09-02 케이스를 대체한다 — 파일 상단 방침대로 "의도한 정책 갱신이라 기대값을 함께 갱신".
+//   [09-06 이 무엇을 고정하나] '2주택+' 는 isRegulated 값(true/false/undefined)과 무관하게
+//     **항상** 보수적 중과(8%). 칩을 2주택/3주택+ 로 쪼개는 근본 해결은 범위 밖(plans/README.md).
+test('취득세: 2주택+ 는 주택수 불확정 — 조정/비조정 무관 항상 보수적 중과(8%)', () => {
   const { calcTotalCost } = require('../services/analysisService');
   const rate = (price, isRegulated) => calcTotalCost(price, 3, '2주택+', false, undefined, isRegulated).taxRate;
 
-  // ① 조정대상지역 확인 → 중과 8%
+  // ① 조정대상지역 확인 → 중과 8% (변화 없음)
   assert.equal(rate(7, true), 8, '조정대상지역 2주택+ 가 중과 8% 가 아니다');
 
-  // ② 지역을 모름(undefined) → 종전대로 8% (과소 안내 금지)
+  // ② 지역을 모름(undefined) → 종전대로 8% (과소 안내 금지, 변화 없음)
   assert.equal(rate(7, undefined), 8, '지역을 모르는데 중과를 풀었다 — 세금을 낮게 안내하면 안 된다');
 
-  // ③ 비조정지역 확인 → 기본세율(무주택 tier 와 같은 값)
-  //    5억 1% · 7억 누진 · 10억 3% — 무주택 결과와 정확히 같아야 한다(사본이 갈리지 않았다는 증거).
+  // ③★ 비조정지역이 확인돼도 8% 를 유지한다 — 이것이 09-02 를 되돌리는 핵심 케이스다.
+  //    (09-02 당시엔 여기서 무주택 기본세율로 풀려 3주택 이상에 과소 안내를 냈다)
   for (const px of [5, 6, 6.5, 7, 9, 10]) {
-    const basic = calcTotalCost(px, 3, '무주택', false).taxRate;
-    assert.equal(rate(px, false), basic,
-      `비조정지역 2주택+(${px}억) 세율이 기본세율과 다르다: ${rate(px, false)} vs ${basic}`);
+    assert.equal(rate(px, false), 8,
+      `비조정지역이 확인돼도 2주택+ 는 8% 를 유지해야 한다(${px}억 결과=${rate(px, false)})`);
   }
 
-  // ④ 중과와 기본세율이 실제로 다른 값이어야 한다(테스트가 무의미해지지 않게)
-  assert.notEqual(rate(7, true), rate(7, false), '조정/비조정 결과가 같다 — 분기가 동작하지 않는다');
+  // ④ 조정·비조정·미상 세 값이 모두 같다 — 지역 분기가 실제로 사라졌는지 확인(재발 시 여기서 갈린다).
+  assert.equal(rate(7, true), rate(7, false), '조정·비조정 결과가 갈린다 — 지역 분기가 아직 남아있다');
+  assert.equal(rate(7, undefined), rate(7, false), '미상·비조정 결과가 갈린다');
 });
 
-test('취득세: 프론트 계산기도 같은 지역 규칙을 쓴다 (사본 드리프트 차단)', () => {
+test('취득세: 프론트 계산기도 같은 시그니처를 쓰고(사본 드리프트 차단), 2주택+ 에 지역 분기가 없다', () => {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
   const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
   const be = fs2.readFileSync(path2.join(__dirname, '../services/analysisService.js'), 'utf8');
 
-  // 두 사본 모두 isRegulated 인자를 받아야 한다
+  // 두 사본 모두 isRegulated 인자를 계속 받아야 한다(각주가 여전히 그 개념을 설명한다 — 시그니처는 유지)
   assert.ok(/function calcTotalCostHTML\([^)]*isRegulated/.test(fe),
-    '프론트 계산기가 isRegulated 를 받지 않는다 — 지역을 알아도 반영할 수 없다');
+    '프론트 계산기가 isRegulated 를 받지 않는다 — 각주(ACQ-UNKNOWN-COUNT-2026-09-06)가 인자를 잃는다');
   assert.ok(/function calcTotalCost\([^)]*isRegulated/.test(be),
     '백엔드 계산기가 isRegulated 를 받지 않는다');
 
-  // 두 사본 모두 `=== false` 로만 중과를 푼다(truthy 판정이면 undefined 가 새어 들어간다)
+  // ACQ-UNKNOWN-COUNT-2026-09-06: '2주택+' 는 더 이상 isRegulated === false 로 중과를 풀지
+  //   않는다 — 이 패턴이 되돌아오면 3주택 이상에 과소 안내가 재발한다. 두 사본 모두 0이어야 한다.
   const feHits = (fe.match(/isRegulated\s*===\s*false/g) || []).length;
   const beHits = (be.match(/isRegulated\s*===\s*false/g) || []).length;
-  assert.ok(feHits >= 2, `프론트의 isRegulated === false 검사가 ${feHits}회뿐 — tier·폴백 양쪽에 있어야 한다`);
-  assert.ok(beHits >= 2, `백엔드의 isRegulated === false 검사가 ${beHits}회뿐`);
+  assert.equal(feHits, 0, `프론트에 isRegulated === false 완화가 되살아났다(${feHits}건) — 3주택 이상 과소 안내 재발`);
+  assert.equal(beHits, 0, `백엔드에 isRegulated === false 완화가 되살아났다(${beHits}건)`);
 
-  // 단지 상세 호출부가 실제로 지역을 넘겨야 한다(안 넘기면 화면이 여전히 갈린다)
+  // 단지 상세 호출부는 여전히 지역을 넘긴다(세금 시뮬레이션 카드 등 다른 용도에 계속 쓰인다)
   assert.ok(fe.indexOf('calcTotalCostHTML(pr,loanAmt,houseS,isF,_costIsReg)') >= 0,
-    '단지 상세 계산기 호출부가 지역을 넘기지 않는다 — 같은 화면의 세금 카드와 값이 갈린다');
+    '단지 상세 계산기 호출부가 지역을 넘기지 않는다');
 });
 
 // ── SCOPE-GATE-TRUTH-2026-09-02 (감사 P2) ────────────────────────────────────────
@@ -6804,5 +6810,74 @@ test('전세 실거래 조회 — 실제 0건(정상 resultCode) 은 공유 Redi
     if (saved.rent) require.cache[rentPath] = saved.rent; else delete require.cache[rentPath];
     if (saved.key === undefined) delete process.env.MOLIT_API_KEY; else process.env.MOLIT_API_KEY = saved.key;
     if (saved.gap === undefined) delete process.env.RENT_MIN_GAP_MS; else process.env.RENT_MIN_GAP_MS = saved.gap;
+  }
+});
+// ── ACQ-UNKNOWN-COUNT-2026-09-06 (Plan 036: 3주택 이상 4,500만원 과소 안내 되돌림) ──────
+//   [왜 추가하나] ACQ-REG-CALC-2026-09-02 는 '2주택+' 가 확인된 비조정지역이면 무주택
+//     기본세율(1~3%)을 쓰게 했다. 그런데 '2주택+' 칩은 2주택과 3주택 이상을 **구분하지 않는다**
+//     (지방세법 §13-2 상 비조정지역은 2주택=기본세율/3주택=8%/4주택+=12%). 그래서 09-02 는
+//     비조정지역 3주택 이상에게 8% 대신 1~3% 를 안내해 9억 매수 기준 약 4,500만원을
+//     **과소 안내**했다(정답 7,200만원 → 표기 2,700만원). 금전 도구에서 과소 안내는 실제 피해다.
+//   [무엇을 고정하나] '2주택+' 는 isRegulated 값(true/false/undefined)과 무관하게 항상 보수적
+//     중과(8%, 또는 taxConfig.twoHousePlus.rate)를 쓰고, 무주택·1주택의 6~9억 누진은 영향받지
+//     않는다. 프론트(calcTotalCostHTML)와 백엔드(calcTotalCost)를 **실제로 실행해** 값을 맞춘다
+//     ("소스가 이렇게 생겼다" 는 정규식 검사는 분기 반전을 못 잡는다는 것이 이 저장소에서
+//     실측됐다 — 468/1,620 조합이 갈렸는데 그런 검사는 전부 초록이었다).
+test('취득세: 2주택+ 는 주택수 불확정 — 프론트·백엔드 실행값이 조정/비조정 무관 8%로 일치(Plan 036)', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const { calcTotalCost } = require('../services/analysisService');
+
+  const grab = (name) => {
+    const m = html.match(new RegExp('function ' + name + '\\([\\s\\S]*?\\n\\}'));
+    assert.ok(m, `frontend/index.html 에서 ${name} 을 찾지 못했다 — 함수명이 바뀌었다면 이 테스트도 갱신할 것`);
+    return m[0];
+  };
+  const src = [grab('_pickTierRate'), grab('_pickTierRateUnder'), grab('calcTotalCostHTML')].join('\n');
+
+  const TIERS = [{ underAuk: 6, rate: 0.01 }, { underAuk: 9, rate: 0.02 }, { underAuk: 999, rate: 0.03 }];
+  const CFG = {
+    acquisitionTax: { noHouse: { tiers: TIERS }, oneHouse: { tiers: TIERS }, twoHousePlus: { rate: 0.08 } },
+  };
+  // 무주택 6~9억 누진 기대값 — 지방세법 §11①8호, 기존 특성화 테스트(:44)의 7억 taxRate:1.7 과 동일 공식.
+  const expectedProgRate = Math.round(((7 * 2 / 3 - 3) / 100) * 1000) / 10;
+
+  for (const useCfg of [true, false]) {   // snapshot 경로 · 폴백 경로 둘 다(어느 한쪽만 고치는 재발 차단)
+    const tag = useCfg ? 'snapshot' : 'fallback';
+    const fn = new Function('window', `${src}; return calcTotalCostHTML;`)({ __TAX_CONFIG: useCfg ? CFG : undefined });
+
+    // calcTotalCostHTML 은 HTML 문자열을 반환하므로 "취득세 (N%)" 라벨을 파싱한다 — 프론트·백엔드
+    // 둘 다 Math.round(rate*1000)/10 로 반올림해 taxRate 와 같은 단위로 비교할 수 있다.
+    const frontRate = (price, houseStatus, isRegulated) => {
+      const out = fn(price, 0, houseStatus, false, isRegulated);
+      const m = out.match(/취득세 \(([\d.]+)%\)/);
+      assert.ok(m, `[${tag}] 프론트 출력에서 취득세율을 파싱하지 못했다: ${out.slice(0, 200)}`);
+      return Number(m[1]);
+    };
+    const backRate = (price, houseStatus, isRegulated) =>
+      calcTotalCost(price, 0, houseStatus, false, useCfg ? CFG : undefined, isRegulated).taxRate;
+
+    // ①★ 비조정(isRegulated===false) + 2주택+ + 9억 → 8% — 이번 결함의 핵심 케이스.
+    assert.equal(frontRate(9, '2주택+', false), 8, `[${tag}] 프론트: 비조정 2주택+ 9억이 8%가 아니다`);
+    assert.equal(backRate(9, '2주택+', false), 8, `[${tag}] 백엔드: 비조정 2주택+ 9억이 8%가 아니다`);
+
+    // ② 조정(isRegulated===true) + 2주택+ + 9억 → 8% (변화 없음)
+    assert.equal(frontRate(9, '2주택+', true), 8, `[${tag}] 프론트: 조정 2주택+ 9억이 8%가 아니다`);
+    assert.equal(backRate(9, '2주택+', true), 8, `[${tag}] 백엔드: 조정 2주택+ 9억이 8%가 아니다`);
+
+    // ③ isRegulated 미지정(undefined) + 2주택+ → 8% (종전 동작 유지)
+    assert.equal(frontRate(9, '2주택+', undefined), 8, `[${tag}] 프론트: 미상 2주택+ 9억이 8%가 아니다`);
+    assert.equal(backRate(9, '2주택+', undefined), 8, `[${tag}] 백엔드: 미상 2주택+ 9억이 8%가 아니다`);
+
+    // ④ 무주택·1주택의 6~9억 누진은 이 변경과 무관하게 그대로다: 7억 무주택 → (7*2/3-3)/100
+    assert.equal(frontRate(7, '무주택', false), expectedProgRate, `[${tag}] 프론트: 무주택 7억 누진이 달라졌다`);
+    assert.equal(backRate(7, '무주택', false), expectedProgRate, `[${tag}] 백엔드: 무주택 7억 누진이 달라졌다`);
+
+    // ⑤ 프론트·백엔드가 위 네 케이스 전부 같은 값을 낸다(한쪽만 고치는 재발을 여기서 잡는다)
+    for (const [price, hs, reg] of [[9, '2주택+', false], [9, '2주택+', true], [9, '2주택+', undefined], [7, '무주택', false]]) {
+      assert.equal(frontRate(price, hs, reg), backRate(price, hs, reg),
+        `[${tag}] 프론트·백엔드 불일치: ${price}억 ${hs} 조정=${reg}`);
+    }
   }
 });
