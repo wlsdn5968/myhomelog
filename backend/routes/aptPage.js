@@ -122,13 +122,17 @@ async function loadAptFacts(seq) {
 
   const { regionLabel } = require('../services/priceRecordsService');
   const lawdCd = String((idx && idx.lawd_cd) || (txs && txs[0] && txs[0].lawdCd) || '').trim();
-  const region = regionLabel(lawdCd, (idx && idx.sigungu) || (txs && txs[0] && txs[0].sigungu) || '');
+  // APT-PAGE-ENRICH-2026-09-06 (Plan 069): 학교·좌표 캐시 키(buildKey)는 원본(짧은) sigungu 가
+  //   필요하다("강남구" 형태 — apt_geocache/apt_schools 저장 규약과 동일, geocode.js:135 참조).
+  //   regionLabel() 이 만드는 `region`("서울 강남구")은 화면 표시용이라 그대로 쓰면 캐시 키가 어긋난다.
+  const sigunguRaw = String((idx && idx.sigungu) || (txs && txs[0] && txs[0].sigungu) || '').trim();
+  const region = regionLabel(lawdCd, sigunguRaw);
   const aptName = (idx && idx.apt_name) || (txs && txs[0] && txs[0].aptName) || '';
   const umd = (idx && idx.umd_nm) || (txs && txs[0] && txs[0].umdNm) || '';
   const buildYear = num(idx && idx.build_year) || num(txs && txs[0] && txs[0].buildYear);
   // analyzeTransactions 는 aptName|lawdCd|umdNm 로 묶는다 — apt_seq 한 건만 넣었으니 그룹은 1개다.
   const stat = (txs && txs.length) ? (svc.analyzeTransactions(txs) || [])[0] : null;
-  return { idx, txs, lawdCd, region, aptName, umd, buildYear, stat };
+  return { idx, txs, lawdCd, region, aptName, umd, buildYear, stat, sigungu: sigunguRaw };
 }
 
 // ── APT-PAGE-INFO-2026-09-06 (Plan 063) ────────────────────────────────────────────
@@ -213,9 +217,16 @@ function buildAptInfoCard(row) {
     builtYmd = s.length === 8 ? `${s.slice(0, 4)}.${s.slice(4, 6)}.${s.slice(6, 8)}` : (s.length === 6 ? `${s.slice(0, 4)}.${s.slice(4, 6)}` : esc(s));
     rows.push(['준공일', builtYmd]);
   }
+  // APT-PAGE-ENRICH-2026-09-06 (Plan 069): fac.address 는 buildFacility 가 이미 도로명→지번
+  //   폴백을 마친 값이다(ADDR-FALLBACK-2026-08-30) — 여기서 새로 판단하지 않고 그대로 노출만 한다.
+  if (fac.address) rows.push(['주소', esc(String(fac.address))]);
   const parkTotal = posInt(fac.parkingTotal);
   if (parkTotal) rows.push(['총 주차대수', `${comma(parkTotal)}대${fac.parkingRatio ? ` (세대당 ${fac.parkingRatio}대)` : ''}`]);
   if (fac.heatType) rows.push(['난방방식', esc(String(fac.heatType))]);
+  // STRUCTURE-2026-09-06 (Plan 068/069): fac.structureType 은 _dtl.codeStr(진짜 건물 구조,
+  //   예: 철근콘크리트구조) — hallType(복도유형, 아래)과는 다른 필드다. Plan 065 가 바로잡은
+  //   라벨 규칙을 유지: "구조" 라는 라벨은 이 필드에만 쓴다.
+  if (fac.structureType) rows.push(['구조', esc(String(fac.structureType))]);
   // APT-PAGE-LABEL-2026-09-06 (Plan 065): fac.hallType(buildFacility.js 의 codeHallNm)은
   //   현관 접근 방식(계단식/복도식/혼합식)이지 건물 구조(codeStr)가 아니다. Plan 063 이
   //   "구조" 라고 잘못 표기했다 — 라벨만 사실대로 바로잡는다(값·필드는 그대로).
@@ -237,6 +248,29 @@ function buildAptInfoCard(row) {
     householdsFact: hh ? `${comma(hh)}세대` : null,
     builtYearFact: (Number.isFinite(builtYear) && builtYear > 1900) ? `${builtYear}년 준공` : null,
   };
+}
+
+// ── APT-PAGE-ENRICH-2026-09-06 (Plan 069) ──────────────────────────────────────────
+// [왜] 063/065/068 이 붙인 K-apt 단지정보 카드에 이어, 이미 캐시된(비용 0) 학교·좌표 데이터를
+//   붙인다. ⚠ 절대 제약: 외부 API 호출 0 — resolveSchools/kakaoSearchSchools/resolveCoord
+//   (캐시 미스 시 Kakao 재호출)는 이 파일 어디서도 참조하지 않는다. 캐시 전용 함수만 쓴다:
+//   schoolService.getCachedSchoolsBatch·geocodeCacheService.resolveCoordFromCacheOnly.
+// [키] 유사도 매칭 금지 원칙을 그대로 따른다 — 학교·좌표 키는 063 이 확정한 apt_master `row`
+//   (alias/완전일치로 고른 행)의 kapt_code/apt_name 으로만 만든다. row 가 없으면(매칭 불가·
+//   오류) 학교·좌표 조회 자체를 하지 않는다 — 이름만으로 별도 후보를 찾지 않는다.
+
+/** 초·중·고 순으로 정렬해 "주변 학교" 카드를 만든다. 값이 없으면 빈 문자열(카드 생략).
+ *  ⚠ schoolService._normalizeSchoolsList 가 캐시 히트 시 거리순 재정렬을 하므로(초/중/고
+ *  뒤섞일 수 있음), 여기서 type 기준으로 다시 그룹핑해 표시 순서를 보장한다. */
+function buildSchoolsCard(schools) {
+  if (!Array.isArray(schools) || !schools.length) return '';
+  const TYPE_ORDER = { 초: 0, 중: 1, 고: 2 };
+  const valid = schools.filter((s) => s && s.name && Number.isFinite(Number(s.distance_m)));
+  if (!valid.length) return '';
+  const sorted = [...valid].sort((a, b) => (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9));
+  return `<div class="card"><h2>주변 학교 <span class="src">카카오 지도 · 교육청 공시(캐시)</span></h2>
+    ${sorted.map((s) => `<div class="row"><span class="k">${esc(String(s.type || ''))} ${esc(String(s.name))}</span><span class="num">${comma(Math.round(Number(s.distance_m)))}m</span></div>`).join('')}
+  </div>`;
 }
 
 router.get('/:aptSeq', async (req, res) => {
@@ -265,7 +299,7 @@ router.get('/:aptSeq', async (req, res) => {
     }));
   }
 
-  const { txs, lawdCd, region, aptName, umd, buildYear, stat } = af;
+  const { txs, lawdCd, region, aptName, umd, buildYear, stat, sigungu } = af;
 
   const cards = [];
   const facts = [];
@@ -318,6 +352,14 @@ router.get('/:aptSeq', async (req, res) => {
   // APT-PAGE-INFO-2026-09-06 (Plan 063): 단지정보(K-apt) 카드 — cards/thin 과 분리해서 붙인다.
   let infoCardHtml = '';
   let aptMasterErrored = false;
+  let hasKaptFact = false;
+  // APT-PAGE-ENRICH-2026-09-06 (Plan 069): 학교·지도 링크 — 왕복 예산(apt_master 1 + 학교 1 +
+  //   좌표 1 = 최대 3) 안에서 학교·좌표는 Promise.all 로 병렬 조회한다. 오류 시(같은 방식으로
+  //   aptMasterErrored 처럼) 긴 캐시를 막는다 — "못 읽음"과 "정말 없음"을 구분 못 하면 열화
+  //   응답(카드 없음)이 엣지에 6시간 굳는다([[degraded-response-cached-at-edge]]).
+  let schoolsCardHtml = '';
+  let mapLinkHtml = '';
+  let enrichErrored = false;
   if (lawdCd && aptName) {
     const { errored, row } = await loadAptMasterMatch(lawdCd, umd, aptName);
     aptMasterErrored = errored;
@@ -326,6 +368,31 @@ router.get('/:aptSeq', async (req, res) => {
       infoCardHtml = cardInfo.html;
       if (cardInfo.householdsFact) facts.push(cardInfo.householdsFact);
       if (cardInfo.builtYearFact) facts.push(cardInfo.builtYearFact);
+      hasKaptFact = !!(cardInfo.householdsFact || cardInfo.builtYearFact);
+
+      // 학교·좌표는 063 이 확정한 이 row(kapt_code/apt_name)로만 키를 만든다 — 유사도 매칭 금지.
+      const schoolCoordApt = { kaptCode: row.kapt_code || null, aptName: row.apt_name, sigungu, umdNm: umd };
+      try {
+        const schoolSvc = require('../services/schoolService');
+        const geoSvc = require('../services/geocodeCacheService');
+        const [schoolsBatch, coord] = await Promise.all([
+          schoolSvc.getCachedSchoolsBatch([schoolCoordApt]),
+          geoSvc.resolveCoordFromCacheOnly(schoolCoordApt),
+        ]);
+        schoolsCardHtml = buildSchoolsCard(schoolsBatch && schoolsBatch[0]);
+        if (coord && Number.isFinite(Number(coord.lat)) && Number.isFinite(Number(coord.lng))) {
+          // MAP-DEEPLINK-2026-09-06 (Plan 069): frontend/index.html:8800-8810 의 handleShareUrl() 이
+          //   ?apt=&area= 를 읽어 자동으로 상세를 띄운다(부팅 시 setTimeout(handleShareUrl,300), :3596).
+          //   이 저장소가 이미 이 규약으로 공유 링크를 만든다(backend/routes/share.js:97) — 같은 형식을 쓴다.
+          //   지도 임베드는 하지 않는다(공개 페이지는 정적 HTML 유지) — 좌표는 "링크를 보여줄지"의 게이트로만 쓴다.
+          const areaLabel = `${region}${umd ? ' ' + umd : ''}`;
+          const deepLink = `${ORIGIN}/?apt=${encodeURIComponent(aptName)}&area=${encodeURIComponent(areaLabel)}`;
+          mapLinkHtml = `<a href="${esc(deepLink)}">지도에서 보기</a>`;
+        }
+      } catch (e) {
+        enrichErrored = true;
+        logger.warn({ err: e.message, lawdCd, umd }, 'APT-PAGE-ENRICH-2026-09-06: 학교/좌표 캐시 조회 예외');
+      }
     }
   }
 
@@ -335,8 +402,9 @@ router.get('/:aptSeq', async (req, res) => {
     ${cards.length ? cards.join('') : `<div class="card"><h2>최근 거래 없음</h2>
       <div style="font-size:12.5px;color:var(--sub)">최근 24개월 안에 신고된 거래가 없어요. 값을 지어내지 않고 비워둡니다.</div></div>`}
     ${infoCardHtml}
+    ${schoolsCardHtml}
     <div class="card"><h2>이 지역 더 보기</h2>
-      <div class="links">${lawdCd ? `<a href="/region/${esc(lawdCd)}">${esc(region)} 지역 데이터</a>` : ''}<a href="/region">전국 시군구 전체</a></div>
+      <div class="links">${lawdCd ? `<a href="/region/${esc(lawdCd)}">${esc(region)} 지역 데이터</a>` : ''}<a href="/region">전국 시군구 전체</a>${mapLinkHtml}</div>
     </div>
     <a class="cta" href="${ORIGIN}/">${esc(aptName)} 대출 한도·비용 계산 →</a>`;
 
@@ -345,16 +413,21 @@ router.get('/:aptSeq', async (req, res) => {
   //   이미 확정됨)으로 가른다 — Plan 063 은 facts.length 로 갈라서, 거래가 0건인데 K-apt 세대수·
   //   준공년도 fact 만으로 facts.length>0 이 돼 "국토교통부 실거래 신고 자료 정리" 분기를 탔다.
   //   거래 0 인 경우는 그 사실이 항상 남아야 하고, KAPT 출처 fact 에는 국토교통부를 붙이지 않는다.
+  // APT-PAGE-DESC-SRC-2026-09-06 (Plan 069): 거래 있음(!thin) 분기에서 facts 에 KAPT 사실
+  //   (세대수·준공)이 하나라도 섞였으면 출처 문구도 그 사실대로 바꾼다 — 지금까지는 K-apt 사실이
+  //   있어도 "국토교통부 실거래 신고 자료 정리" 라고만 말했다(사실과 문구 불일치). 거래 0 분기(065)는
+  //   그대로 둔다 — 이미 KAPT 출처에 국토교통부를 안 붙이는 문구를 쓰고 있다.
+  const txSourceLabel = hasKaptFact ? '국토교통부 실거래·K-apt 단지정보 정리' : '국토교통부 실거래 신고 자료 정리';
   const desc = !thin
-    ? `${aptName}(${region}${umd ? ' ' + umd : ''}) ${facts.join(' · ')}. 국토교통부 실거래 신고 자료 정리 — 매수 추천이 아닙니다.`
+    ? `${aptName}(${region}${umd ? ' ' + umd : ''}) ${facts.join(' · ')}. ${txSourceLabel} — 매수 추천이 아닙니다.`
     : (facts.length
       ? `${aptName}(${region}${umd ? ' ' + umd : ''}) 최근 24개월 거래 기록이 없습니다. K-apt 단지정보 ${facts.join(' · ')} — 매수 추천이 아닙니다.`
       : `${aptName}(${region}${umd ? ' ' + umd : ''}) 국토교통부 실거래 신고 자료. 최근 24개월 거래 기록이 없습니다 — 매수 추천이 아닙니다.`);
 
-  // APT-PAGE-INFO-2026-09-06: 단지정보 조회가 "오류로 실패"했을 때도 긴 캐시를 붙이지 않는다 —
-  //   "있을 수도 있는데 못 읽음"과 "정말 없음"을 구분 못 하면 열화 응답이 엣지에 굳는다
+  // APT-PAGE-INFO-2026-09-06: 단지정보/학교/좌표 조회가 "오류로 실패"했을 때도 긴 캐시를 붙이지
+  //   않는다 — "있을 수도 있는데 못 읽음"과 "정말 없음"을 구분 못 하면 열화 응답이 엣지에 굳는다
   //   ([[degraded-response-cached-at-edge]]). thin·noindex 판정 자체는 건드리지 않는다(위에서 이미 확정).
-  const cacheUnsafe = thin || aptMasterErrored;
+  const cacheUnsafe = thin || aptMasterErrored || enrichErrored;
   res.set('Cache-Control', cacheUnsafe ? 'no-store' : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
   res.type('html').send(pageShell({ title, desc, canonical: `${ORIGIN}/apt/${seq}`, body, noindex: thin,
     // 얇은 페이지(거래 0)는 카드에 쓸 숫자가 없으므로 기본 이미지를 유지한다.

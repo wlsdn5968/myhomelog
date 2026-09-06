@@ -172,9 +172,14 @@ test('APT-PAGE-DESC — 거래 0 + 단지정보 없음: 기존 문구를 유지�
 
 
 test('APT-PAGE-DESC — 거래 있음: desc 형식이 변하지 않는다(하위호환) (Plan 065 Step 2)', async () => {
+  // APT-PAGE-DESC-SRC-2026-09-06 (Plan 069): 이 fixture 는 원래 kaptdaCnt/kaptUsedate 를 채워
+  //   KAPT fact 가 있는 상태였다. Plan 069 가 "거래 있음 + KAPT fact 있으면 출처 문구에 K-apt 를
+  //   덧붙인다"를 **의도적으로** 추가해 그 조합의 출처 문구가 바뀌었다(하위호환 대상이 아니게 됨) —
+  //   이 테스트의 "형식 불변" 취지는 KAPT fact 가 없는 기본 케이스로 좁혀 유지하고, KAPT fact
+  //   있는 조합의 새 문구는 backend/test/apt-page-enrich.test.js 가 별도로 검증한다.
   const row = {
     kapt_code: 'P065C1', apt_name: '거래있는단지', molit_aliases: ['거래있는단지'],
-    facility: { kaptdaCnt: '700', kaptUsedate: '20010101' },
+    facility: {},
   };
   const res = await _p063Run({ aptMasterRows: [row], idxRow: _p063Idx('거래있는단지'), statFixture: _P063_STAT });
   assert.equal(res.statusCode, 200);
