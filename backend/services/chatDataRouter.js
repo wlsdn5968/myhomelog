@@ -16,6 +16,9 @@
  */
 const { getSupabaseAdmin } = require('../db/client');
 const logger = require('../logger');
+// APT-RESOLVE-2026-09-06: 단지명 정규화·형제 그룹핑은 backend/utils/aptNameMatch.js 로 이전
+//   (search.js 등 다른 경로도 재사용할 수 있도록 순수 함수만 모아둔 신규 모듈).
+const { normalizeName, stripAptSuffix, siblingKey, groupSiblings, dice } = require('../utils/aptNameMatch');
 
 // ── 의도 분류 (순수 함수 — characterization 테스트 고정 대상) ─────────────────
 // 순서 중요: 구체적 의도(특약·금리·정책자금·규제·한도·인기·전세)를 먼저, 시세(광범위)는 뒤에.
@@ -39,13 +42,10 @@ const INTENT_RULES = [
 
 // 시세 질의에서 단지명 후보 추출 시 걷어낼 조사·상투어.
 // ⚠ '아파트'는 여기 넣지 않는다 — "신동아아파트1" 처럼 이름 중간에 낀 경우를 훼손한다.
-//   대신 아래 _stripAptSuffix 가 **끝에 붙은** "아파트(단지)"만 제거(search.js SEARCH-SUFFIX 와 동일 규칙:
+//   대신 아래 stripAptSuffix(aptNameMatch) 가 **끝에 붙은** "아파트(단지)"만 제거(search.js SEARCH-SUFFIX 와 동일 규칙:
 //   MOLIT 은 "은마"로 저장하는데 사용자는 "은마아파트"로 묻는 비대칭 해소, 제거 후 2자 미만이면 원본 유지).
 const MARKET_STOPWORDS = /(시세|실거래가?|매매가|평당가|가격|얼마(예요|에요|야|인가요|임|죠|지)?|알려\s*줘요?|알려주세요|어때(요)?|궁금해?요?|보여\s*줘요?|좀|요즘|최근|근처|주변)\s*/g;
-function _stripAptSuffix(q) {
-  const s = String(q || '').replace(/\s*아파트(?:단지)?$/, '').trim();
-  return s.length >= 2 ? s : String(q || '').trim();
-}
+// _stripAptSuffix 는 backend/utils/aptNameMatch.js 의 stripAptSuffix 로 이전됨(사본 금지).
 
 // 인기 질의에서 지역 토큰 추출용 상투어 ("공덕 인기단지" → "공덕")
 const POPULAR_STOPWORDS = /(인기|단지|아파트|거래|많은|많이|요즘|핫한|뜨는|알려\s*줘요?|알려주세요|어디(예요|야)?|보여\s*줘요?|좀|추천해?\s*줘요?|top\s*\d*)\s*/gi;
@@ -63,7 +63,7 @@ function classifyIntent(message) {
       }
       if (r.intent === 'market' || r.intent === 'jeonse') {
         let q = m.replace(MARKET_STOPWORDS, ' ').replace(/[?!.~,]/g, ' ').replace(/\s+/g, ' ').trim();
-        q = _stripAptSuffix(q);
+        q = stripAptSuffix(q);
         return { intent: r.intent, query: q.length >= 2 ? q : null };
       }
       return { intent: r.intent };
@@ -74,7 +74,7 @@ function classifyIntent(message) {
   //   오인돼 어색한 응답이 나왔다. 어미는 **끝 위치만** 본다("해모로"류 단지명 훼손 방지).
   if (/^[가-힣A-Za-z0-9\s()]{2,20}$/.test(m) && !/[?]/.test(m)
       && !/(줘|줄래|주세요|해요|할까요|하세요|인가요|일까요|나요|세요|습니다|어요|게요|네요|죠|해봐|해봐요)$/.test(m)) {
-    return { intent: 'market', query: _stripAptSuffix(m) };
+    return { intent: 'market', query: stripAptSuffix(m) };
   }
   return { intent: 'fallback' };
 }
@@ -108,6 +108,10 @@ async function _market(query, context) {
   if (!admin) return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
   const since = new Date(); since.setMonth(since.getMonth() - 6);
   const _safeQ = q.replace(/[%_]/g, '');
+  // APT-RESOLVE-2026-09-06: 공백 제거판 — MOLIT 이름의 99.2%는 공백이 없어 "지역 단지명"
+  //   형태(예: "공릉 풍림아이원")는 _safeQ 로는 원리적으로 0건이다. _nq 가 그걸 잡는다.
+  const _nq = normalizeName(q);
+  const _hasNq = _nq !== _safeQ;
 
   // MARKET-SAMPLE-2026-08-17 (Sprint MMMMMMM-13): **단지 선택**과 **통계 계산**을 분리한다.
   //
@@ -127,26 +131,54 @@ async function _market(query, context) {
   //
   //   ⚠ MV 의 deal_count 는 **전 기간** 누적이다(정의에 날짜 필터 없음). 그래서 후보 **순위**에만
   //     쓰고, 사용자에게 보여주는 건수·평균은 아래 6개월 조회 결과로만 만든다. 두 기준을 섞지 않는다.
+  //
+  // APT-RESOLVE-2026-09-06 (Plan 051): 위 3개(원문 _safeQ)에 더해 ② 공백 제거판 접두·부분
+  //   ③ apt_master(정식 KAPT 등록명) 부분일치를 **같은 Promise.all** 에 묶는다(왕복 증가 없이
+  //   기존 3 → 최대 7). apt_master 는 챗이 지금까지 전혀 보지 않던 테이블이라(76.6% 미도달의
+  //   근본 원인) 사용자가 앱에 표시된 정식명 그대로 물어도 여기서 잡힌다.
   const _mvSel = 'apt_name, lawd_cd, sigungu, umd_nm, build_year, deal_count';
   const _mv = () => admin.from('molit_apt_index').select(_mvSel);
-  const [exactRes, prefixRes, substrRes] = await Promise.all([
+  const _amSel = 'apt_name, lawd_cd, sigungu, umd_nm, kapt_code, molit_aliases';
+  const _am = () => admin.from('apt_master').select(_amSel);
+  const _jobs = [
     _mv().eq('apt_name', _safeQ).limit(50),
     _mv().ilike('apt_name', `${_safeQ}%`).order('deal_count', { ascending: false }).limit(200),
     _mv().ilike('apt_name', `%${_safeQ}%`).order('deal_count', { ascending: false }).limit(500),
-  ]);
-  if (exactRes.error && prefixRes.error && substrRes.error) {
+  ];
+  if (_hasNq) {
+    _jobs.push(_mv().ilike('apt_name', `${_nq}%`).order('deal_count', { ascending: false }).limit(200));
+    _jobs.push(_mv().ilike('apt_name', `%${_nq}%`).order('deal_count', { ascending: false }).limit(500));
+  }
+  const _molitJobCount = _jobs.length;
+  _jobs.push(_am().ilike('apt_name', `%${_nq}%`).limit(50));
+  if (_hasNq) _jobs.push(_am().ilike('apt_name', `%${_safeQ}%`).limit(50));
+  const _results = await Promise.all(_jobs);
+  if (_results.every(r => r && r.error)) {
     return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
+  }
+  const molitRows = [];
+  for (let i = 0; i < _molitJobCount; i++) {
+    const r = _results[i];
+    if (r && !r.error && r.data) molitRows.push(...r.data);
+  }
+  const amRowsRaw = [];
+  for (let i = _molitJobCount; i < _results.length; i++) {
+    const r = _results[i];
+    if (r && !r.error && r.data) amRowsRaw.push(...r.data);
   }
 
   // NAME-RANK-2026-08-12 (라이브 실채팅에서 발각): 건수만으로 정렬하면 부분문자열 오매칭이
   //   1위를 먹는다 — 실사고: "은마"(강남)가 "동탄시범**다은마**을…"에 밀렸다.
   //   **이름 정확일치 > 접두 일치 > 부분 포함** 순으로 먼저 가르고, 같은 등급 안에서만 건수순.
-  const _tier = (name) => name === _safeQ ? 3 : String(name || '').startsWith(_safeQ) ? 2 : 1;
-  // ⚠ 세 결과는 서로 포함관계(정확 ⊂ 접두 ⊂ 부분)라 같은 MV 행이 여러 번 온다.
+  // APT-RESOLVE-2026-09-06: 정규화 문자열끼리 비교하도록 고쳤다 — 그러지 않으면 공백 제거판으로
+  //   잡힌 정확일치 행이 원문(_safeQ) 기준으로는 "부분 포함"으로 강등돼 순위가 뒤집힌다
+  //   (이 저장소가 "은마" 사고로 배운 지점과 같은 함정).
+  const _tier = (name) => { const nn = normalizeName(name); return nn === _nq ? 3 : nn.startsWith(_nq) ? 2 : 1; };
+  // ⚠ 여러 결과가 서로 포함관계라 같은 MV 행이 여러 번 온다.
   //   MV 행 고유키로 먼저 걸러내지 않으면 deal_count 가 2~3배로 부풀어 순위가 뒤집힌다.
   const seenRow = new Set();
-  const cand = new Map();   // "이름|시군구" → { aptName, sigungu, dealCount, tier }
-  for (const r of [...(exactRes.data || []), ...(prefixRes.data || []), ...(substrRes.data || [])]) {
+  const cand = new Map();   // "이름|시군구" → { aptName, sigungu, lawdCd, umdNm, dealCount, tier }
+  for (const r of molitRows) {
     if (!r || !r.apt_name) continue;
     const rowKey = `${r.apt_name}|${r.lawd_cd}|${r.sigungu}|${r.umd_nm}|${r.build_year}`;
     if (seenRow.has(rowKey)) continue;
@@ -156,49 +188,165 @@ async function _market(query, context) {
     const k = `${r.apt_name}|${r.sigungu || ''}`;
     const cur = cand.get(k);
     if (cur) cur.dealCount += (r.deal_count || 0);
-    else cand.set(k, { aptName: r.apt_name, sigungu: r.sigungu || '', dealCount: r.deal_count || 0, tier: _tier(r.apt_name) });
+    else cand.set(k, { aptName: r.apt_name, sigungu: r.sigungu || '', lawdCd: r.lawd_cd, umdNm: r.umd_nm || '', dealCount: r.deal_count || 0, tier: _tier(r.apt_name) });
   }
   const ranked = [...cand.values()].sort((a, b) => b.tier !== a.tier ? b.tier - a.tier : b.dealCount - a.dealCount);
-  if (!ranked.length) {
+
+  // APT-RESOLVE-2026-09-06: apt_master 후보 — kapt_code 로 중복 제거, 질의와의 유사도(후보
+  //   정렬용, 자동 채택 아님)로 정렬해 상위 2개까지만 본다(동 조회 폭증 방지).
+  const amDedup = new Map();
+  for (const r of amRowsRaw) {
+    if (!r || !r.apt_name) continue;
+    const key = r.kapt_code || `${r.apt_name}|${r.lawd_cd}|${r.umd_nm}`;
+    if (!amDedup.has(key)) amDedup.set(key, r);
+  }
+  const amCandidates = [...amDedup.values()]
+    .sort((a, b) => dice(normalizeName(b.apt_name), _nq) - dice(normalizeName(a.apt_name), _nq))
+    .slice(0, 2);
+
+  // APT-RESOLVE-2026-09-06 (Plan 051 STOP 조건 준수): "찾지 못했어요"는 molit_apt_index 와
+  //   apt_master 양쪽 다 0건일 때만 — apt_master 히트가 있는데 이 문구를 반환하는 경로는 없다.
+  if (!ranked.length && !amCandidates.length) {
     return `"${q}" 이름이 들어간 단지를 국토부 실거래 데이터에서 찾지 못했어요.\n` +
-      `· 단지명을 조금 다르게(공백·차수 없이) 적어보시거나\n· 상단 검색창 자동완성으로 정확한 이름을 확인해 보세요.`;
+      `· 단지명을 조금 다르게(공백·차수 없이) 적어보시거나\n· 상단 검색창 자동완성으로 정확한 이름을 확인해 보세요.` +
+      (_hasNq ? `\n· "${_nq}"(공백 없이)로도 다시 물어봐 주시겠어요?` : '');
   }
 
-  // 상위 후보부터 6개월 거래를 조회 — 전 기간 순위 1위가 최근 6개월엔 거래가 없을 수 있다.
-  const TX_CAP = 400;   // 단지 하나 기준 실측 최대 209건(400 초과 0곳). 닿으면 아래에서 사실대로 밝힌다.
-  let picked = null, txs = null;
-  for (const c of ranked.slice(0, 3)) {
+  const TX_CAP = 400;   // 단지 하나(또는 A/B 합산) 기준 실측 최대 209건(400 초과 0곳).
+  // 조회 조건(이름 집합) 하나로 6개월 거래를 가져온다 — Step 4: A/B 는 .in() 으로 합산 조회.
+  async function _fetchTx(names, sigunguVal) {
     let tq = admin.from('molit_transactions')
       .select('apt_name, sigungu, umd_nm, deal_amount, deal_date, exclu_use_ar')
-      .eq('apt_name', c.aptName)
+      .in('apt_name', names)
       .gte('deal_date', since.toISOString().slice(0, 10));
-    tq = c.sigungu ? tq.eq('sigungu', c.sigungu) : tq.is('sigungu', null);
-    const { data, error } = await tq.order('deal_date', { ascending: false }).limit(TX_CAP);
-    if (error) return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
-    if (data && data.length) { picked = c; txs = data; break; }
-  }
-  if (!picked) {
-    const names = ranked.slice(0, 3).map(c => `${c.aptName}${c.sigungu ? `(${c.sigungu})` : ''}`).join(' · ');
-    return `"${q}" 로 찾은 단지(${names})는 최근 6개월 국토부 실거래가 없어요.\n` +
-      `· 상단 검색창에서 단지명을 검색하면 더 이전 거래까지 볼 수 있어요.`;
+    tq = sigunguVal ? tq.eq('sigungu', sigunguVal) : tq.is('sigungu', null);
+    return tq.order('deal_date', { ascending: false }).limit(TX_CAP);
   }
 
-  const aptName = picked.aptName, sigungu = picked.sigungu;
+  // APT-RESOLVE-2026-09-06: 동(lawd_cd, umd_nm) 조회는 이 호출 전체에서 **최대 1회**만 — 그
+  //   1회를 어느 후보에 쓸지가 아래 분기의 핵심이다(왕복 폭증 방지, 유지보수 메모 참조).
+  let dongQueried = false;
+  async function _dongRowsOnce(lawdCd, umdNm) {
+    if (dongQueried || !lawdCd || !umdNm) return null;
+    dongQueried = true;
+    const { data, error } = await _mv().eq('lawd_cd', lawdCd).eq('umd_nm', umdNm).limit(200);
+    if (error || !data) return null;
+    return data;
+  }
+
+  let picked = null, txs = null, mergedNote = null, displayName = null;
+
+  if (ranked.length) {
+    // ── 기존 경로: molit_apt_index 직접 히트가 있다 ──────────────────────────
+    // Step 4: 동 조회를 하지 않은 경로(직접 히트)에서도 형제 병합이 필요하다 — 1등 후보에
+    //   한해 그 동을 한 번 조회해 A/B 형제 그룹인지 확인한다.
+    const top = ranked[0];
+    const dongRows = await _dongRowsOnce(top.lawdCd, top.umdNm);
+    let names = [top.aptName], mergedGroup = null;
+    if (dongRows) {
+      const groups = groupSiblings(dongRows.map(r => ({ apt_name: r.apt_name, build_year: r.build_year })));
+      const g = groups.find(gr => gr.names.includes(top.aptName));
+      if (g) { names = g.names; mergedNote = names; mergedGroup = g; }
+    }
+    const attempts = [{ c: top, names }, ...ranked.slice(1, 3).map(c => ({ c, names: [c.aptName] }))];
+    for (const a of attempts) {
+      const { data, error } = await _fetchTx(a.names, a.c.sigungu);
+      if (error) return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
+      if (data && data.length) { picked = a.c; txs = data; if (a.names !== names) { mergedNote = null; mergedGroup = null; } break; }
+    }
+    if (!picked) {
+      const names2 = ranked.slice(0, 3).map(c => `${c.aptName}${c.sigungu ? `(${c.sigungu})` : ''}`).join(' · ');
+      return `"${q}" 로 찾은 단지(${names2})는 최근 6개월 국토부 실거래가 없어요.\n` +
+        `· 상단 검색창에서 단지명을 검색하면 더 이전 거래까지 볼 수 있어요.`;
+    }
+    // Step 4: apt_master 정식명이 없는 경로라 stem + 접미문자 합산 표기로 밝힌다
+    //   (예: "상목에버빌(A·B 합산)") — 그냥 top 후보 이름 하나만 쓰면 합산 사실이 안 보인다.
+    displayName = mergedGroup
+      ? `${mergedGroup.stem}(${mergedGroup.names.map(n => (siblingKey(n) || {}).suffix).join('·')} 합산)`
+      : picked.aptName;
+  } else {
+    // ── APT-RESOLVE-2026-09-06 (Plan 051 핵심 경로): 직접 히트가 0건이라 apt_master 만 있다.
+    if (amCandidates.length >= 2) {
+      // Step 5 두 번째 원칙: 확정 후보가 2곳 이상이면 바로 답하지 말고 되묻는다
+      //   (_regionMarket 의 ambiguousSidos 분기와 같은 패턴).
+      const opts = amCandidates.map(a => `${a.apt_name}${a.sigungu ? `(${a.sigungu})` : ''}`).join(' · ');
+      return {
+        text: `"${q}" 로 여러 단지가 걸려요: ${opts}\n혹시 이 중에 있나요? 아래에서 눌러 고르시거나 지역명을 함께 적어주세요.`,
+        suggestions: amCandidates.slice(0, 3).map(a => `${a.apt_name} 시세`),
+      };
+    }
+    const am = amCandidates[0];
+    const dongRows = await _dongRowsOnce(am.lawd_cd, am.umd_nm);
+    if (!dongRows || !dongRows.length) {
+      // apt_master 에는 있으나 그 동에 국토부 실거래 자체가 안 잡힌다 — 그래도 "찾지 못했어요"는
+      // 금지(Step 5 첫 원칙). 단지 존재는 확인해주고 검색창으로 안내한다.
+      return `"${am.apt_name}"(${am.sigungu || ''}${am.umd_nm ? ' ' + am.umd_nm : ''}) 단지 정보는 있는데,\n` +
+        `국토부 실거래 데이터에서는 아직 짝이 맞는 이름을 찾지 못했어요.\n` +
+        `· 상단 검색창에서 "${am.apt_name}"을 검색해 상세 정보를 확인해 보세요.`;
+    }
+    // Step 3: 전개 규칙 — ① alias 확정 ② 정규화 완전일치 확정 ③ 그 외엔 후보만(확정 아님).
+    const aliases = Array.isArray(am.molit_aliases) ? am.molit_aliases.filter(a => typeof a === 'string' && a) : [];
+    let names = null;
+    if (aliases.length) {
+      const aliasSet = new Set(aliases);
+      const hit = [...new Set(dongRows.filter(r => aliasSet.has(r.apt_name)).map(r => r.apt_name))];
+      if (hit.length) names = hit;
+    }
+    if (!names) {
+      const exact = dongRows.find(r => normalizeName(r.apt_name) === normalizeName(am.apt_name));
+      if (exact) names = [exact.apt_name];
+    }
+    if (!names) {
+      const groups = groupSiblings(dongRows.map(r => ({ apt_name: r.apt_name, build_year: r.build_year })));
+      const g = groups.find(gr => normalizeName(am.apt_name).includes(normalizeName(gr.stem)) || normalizeName(gr.stem).includes(normalizeName(am.apt_name)));
+      if (g) names = g.names;
+    }
+    if (!names) {
+      // 확정 불가 — dice 상위 3개를 "혹시 이 중에" 후보로만 제시(자동 채택 아님, IDENTITY-GATE).
+      const scored = dongRows
+        .map(r => ({ name: r.apt_name, sigungu: r.sigungu, score: dice(normalizeName(r.apt_name), normalizeName(am.apt_name)) }))
+        .sort((a, b) => b.score - a.score)
+        .slice(0, 3);
+      return {
+        text: `"${am.apt_name}"(${am.sigungu || ''}${am.umd_nm ? ' ' + am.umd_nm : ''}) 단지를 찾았어요.\n` +
+          `다만 국토부 실거래에는 다른 이름으로 등록돼 있을 수 있어요 — 혹시 이 중에 있나요?\n` +
+          scored.map(s => `· ${s.name}`).join('\n') +
+          `\n\n지역명을 함께 적어주시거나 아래에서 눌러 확인해 보세요.`,
+        suggestions: scored.map(s => `${s.name} 시세`),
+      };
+    }
+    const { data, error } = await _fetchTx(names, am.sigungu || null);
+    if (error) return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
+    if (!data || !data.length) {
+      return `"${am.apt_name}"(${am.sigungu || ''}${am.umd_nm ? ' ' + am.umd_nm : ''})는 최근 6개월 국토부 실거래가 없어요.\n` +
+        `· 상단 검색창에서 단지명을 검색하면 더 이전 거래까지 볼 수 있어요.`;
+    }
+    picked = { aptName: am.apt_name, sigungu: am.sigungu };
+    txs = data;
+    displayName = am.apt_name;   // 정식명(KAPT 등록명)이 있으면 그걸 표시한다.
+    if (names.length > 1) mergedNote = names;
+  }
+
+  const sigungu = picked.sigungu;
   const avg = txs.reduce((s, t) => s + Number(t.deal_amount || 0), 0) / txs.length;
   const recent = txs.slice(0, 3)
     .map(t => `· ${mmdd(t.deal_date)} · 전용 ${Number(t.exclu_use_ar || 0).toFixed(0)}㎡ · ${eok(t.deal_amount)}`)
     .join('\n');
-  let out = `📊 ${aptName} (${sigungu}${txs[0].umd_nm ? ' ' + txs[0].umd_nm : ''}) — 최근 6개월 국토부 실거래\n` +
+  let out = `📊 ${displayName} (${sigungu}${txs[0].umd_nm ? ' ' + txs[0].umd_nm : ''}) — 최근 6개월 국토부 실거래\n` +
     `${recent}\n거래 ${txs.length}건 · 단순평균 ${eok(avg)}`;
   // 실측상 닿지 않는 상한이지만, 닿았다면 그 사실을 숨기지 않는다(조용한 절단 재발 방지).
   if (txs.length >= TX_CAP) out += `\n(최신 ${TX_CAP}건까지만 집계한 값이에요)`;
+  // Step 4: 합산했으면 어떤 원본명을 합쳤는지 밝힌다 — 값이 왜 그런지 모르는 게 값이 틀린 것보다 나쁘다.
+  if (mergedNote && mergedNote.length > 1) {
+    out += `\n※ 국토부에는 ${mergedNote.join('·')} 로 나뉘어 있어 합쳐서 계산했어요.`;
+  }
   if (ranked.length > 1) {
     // ⚠ 여기 건수를 붙이지 않는다 — MV 의 deal_count 는 전 기간이라 위의 6개월 건수와 기준이 다르다.
     //   같은 줄에 두 기준의 숫자가 나란히 놓이면 사용자가 비교 가능한 값으로 읽는다.
     const others = ranked.slice(1, 3).map(c => `${c.aptName}(${c.sigungu || '지역미상'})`).join(' · ');
     out += `\n\n같은 이름의 다른 단지도 있어요: ${others}\n지역명을 함께 적어주시면 좁혀드려요.`;
   }
-  out += `\n\n🔍 전세가율·연식·학군 등 상세는 상단 검색창에서 "${aptName}" 을 검색해 보세요.`;
+  out += `\n\n🔍 전세가율·연식·학군 등 상세는 상단 검색창에서 "${displayName}" 을 검색해 보세요.`;
   // 후속 질문 칩 — 그 단지의 동네로 시야 확장 + 동명 단지 바로가기 (KKKKKKK-19)
   const sug = [];
   if (sigungu) sug.push(`${sigungu} 인기단지`);
