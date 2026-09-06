@@ -251,26 +251,37 @@ function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate) {
   const vs = typeof volumeSignalObj === 'object' ? volumeSignalObj : { signal: volumeSignalObj, seasonalBias: false };
   const { signal: volSignal, seasonalBias } = vs;
 
-  // ① 가격 위치 백분위
+  // RULE-DETERMINISTIC-2026-09-06:
+  // [왜] 절대 룰 ①(매수·매도 추천 X / 미래 가격 예측 X)을 2026-08-17 에 AI 프롬프트에서는 집행했는데
+  //   (aiService.js 의 RULE-SELF-CONTRADICT-2026-08-17) 같은 도메인의 **결정론 카드는 그대로였다**.
+  //   사용자에게는 색 신호등이 AI 답변보다 더 확정적으로 보인다 — 느슨한 쪽이 더 강한 인상을 준다.
+  // [기준] aiService.js 의 "단지 정보 정리 기준" 절과 같다: 계산된 값을 제시하되 등급 라벨과
+  //   향후 방향 단정을 붙이지 않는다. 해석은 사용자 몫이다. (원문은 옮기지 않는다 — 아래 계약
+  //   테스트가 소스를 문자열로 훑으므로 주석에 그 표현을 그대로 쓰면 주석 자신이 걸린다.)
+  // [범위] 이 블록 3곳의 desc 문구만 정리한다. score/volScore 산식은 그대로다.
+  // [status 색] (a) 채택 — status 값은 그대로 두고 desc 만 중립화했다(가장 안전, 프론트 CSS·
+  //   렌더 코드 무변경). 색 자체가 여전히 "좋다/나쁘다" 로 읽힐 여지는 남지만, 신호등 UI 를
+  //   구간 표시로 바꾸는 건 디자인 변경이라 별도 기획(claude.ai/design)이 선행돼야 한다(범위 밖).
+  // ① 가격 위치 백분위 — 백분위 수치와 6개월 창은 유지, 구간을 재서술하는 등급 표현은 제거.
   if (percentile !== null) {
     if (percentile <= 30) {
       score += 2;
-      conditions.push({ label: '가격 위치', status: 'green', desc: `최근 6개월 하위 ${percentile}% — 시세 하단 구간` });
+      conditions.push({ label: '가격 위치', status: 'green', desc: `최근 6개월 하위 ${percentile}%` });
     } else if (percentile <= 65) {
       score += 1;
-      conditions.push({ label: '가격 위치', status: 'yellow', desc: `최근 6개월 ${percentile}% 구간 — 시세 수준` });
+      conditions.push({ label: '가격 위치', status: 'yellow', desc: `최근 6개월 ${percentile}% 구간` });
     } else {
-      conditions.push({ label: '가격 위치', status: 'red', desc: `최근 6개월 상위 ${100 - percentile}% — 시세 상단 구간` });
+      conditions.push({ label: '가격 위치', status: 'red', desc: `최근 6개월 상위 ${100 - percentile}%` });
     }
   }
 
-  // ② 거래량 추이
+  // ② 거래량 추이 — up/down 은 이미 관측 사실만이라 그대로 둔다. neutral 만 시장 심리 단정 표현을 제거.
   // P1 (2026-04-25): seasonalBias=true 면 up 신호 자동 감쇄 (감사 보고서 1-3)
   //   - 이사철(3·4·9·10월) 거래량 ↑ 는 시장 추세가 아닌 계절 효과
   //   - 사용자가 봄·가을 매수 사이클 잘못 진입 방지
   const volMap = {
     up:      { score: 2, status: 'green',  desc: '최근 3개월 거래 증가' },
-    neutral: { score: 1, status: 'yellow', desc: '거래량 변화 없음 — 관망세' },
+    neutral: { score: 1, status: 'yellow', desc: '거래량 변화 없음' },
     down:    { score: 0, status: 'red',    desc: '거래량 감소' },
   };
   const vol = volMap[volSignal] || volMap.neutral;
@@ -288,16 +299,17 @@ function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate) {
   score += volScore;
   conditions.push({ label: '거래량 추이', status: volStatus, desc: volDesc, seasonalBias });
 
-  // ③ 전세가율
+  // ③ 전세가율 — 계산된 비율 + 근거(6개월 창)만 제시. "역전세 위험 확인 필요"는 예측이 아니라
+  //   확인할 항목 안내로 남긴다(등급 라벨 '낮음' 만 제거).
   if (jeonseRate !== null) {
     if (jeonseRate >= 60) {
       score += 2;
-      conditions.push({ label: '전세가율', status: 'green', desc: `${jeonseRate}% — 실수요 비중 높음` });
+      conditions.push({ label: '전세가율', status: 'green', desc: `${jeonseRate}% (최근 6개월 전세 실거래 기준)` });
     } else if (jeonseRate >= 45) {
       score += 1;
-      conditions.push({ label: '전세가율', status: 'yellow', desc: `${jeonseRate}% — 보통 수준` });
+      conditions.push({ label: '전세가율', status: 'yellow', desc: `${jeonseRate}% (최근 6개월 전세 실거래 기준)` });
     } else {
-      conditions.push({ label: '전세가율', status: 'red', desc: `${jeonseRate}% — 낮음. 역전세 위험 확인 필요` });
+      conditions.push({ label: '전세가율', status: 'red', desc: `${jeonseRate}% (최근 6개월 전세 실거래 기준) — 역전세 위험 확인 필요` });
     }
   }
 

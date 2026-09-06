@@ -2483,6 +2483,7 @@ test('절대 규칙 — 화면·프롬프트가 추천/예측/대출알선을 �
   const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
   const ai = fs.readFileSync(path.join(__dirname, '../services/aiService.js'), 'utf8');
   const clause = fs.readFileSync(path.join(__dirname, '../routes/clause.js'), 'utf8');
+  const ana = fs.readFileSync(path.join(__dirname, '../services/analysisService.js'), 'utf8');
 
   // ① 미래 사건 확률 — AI 가 지어낸 "발생 가능성 35%" 가 필터를 우회해 화면에 뜨고 있었다.
   //    (aiOutputFilter 의 CLAUSE_FILTER_FIELDS 는 risks.probability 를 의도적으로 제외한다.)
@@ -2515,6 +2516,54 @@ test('절대 규칙 — 화면·프롬프트가 추천/예측/대출알선을 �
   assert.equal(/id="lv-aptPrice">\d/.test(html), false, '랜딩 카드에 하드코딩 가격이 되돌아왔다');
   assert.match(html, /id="lv-aptMeta">불러오는 중</, '초기 라벨이 플레이스홀더가 아니다');
   assert.match(html, /_set\('lv-aptMeta', '실시간'\)/, "'실시간' 라벨을 응답 수신 후에 달지 않는다");
+
+  // ⑤ 결정론 조건 카드 — 절대 룰 ①을 AI 프롬프트에서만 집행하고 있었다(RULE-DETERMINISTIC-2026-09-06).
+  //    aiService.js "단지 정보 정리 기준"(등급 라벨 금지, 위 ③에서 이미 검사)을
+  //    analysisService.js 의 conditions 카드에도 동일하게 적용한다.
+  //    ★ 제거 대상 원문은 여기에 옮기지 않는다 — 이 테스트는 주석을 걸러내지 않고 파일 전체를
+  //      정규식으로 훑으므로, 주석에 원문을 쓰면 그 주석 자신이 걸린다.
+  assert.equal(/실수요 비중 높음/.test(ana), false,
+    '전세가율 조건 카드가 다시 수요 성격을 단정한다');
+  assert.equal(/관망세/.test(ana), false,
+    '거래량 조건 카드가 다시 시장 심리를 단정한다');
+  assert.equal(/보통 수준/.test(ana), false,
+    '조건 카드가 다시 등급 라벨을 붙인다');
+});
+
+test('결정론 조건 카드 — desc 가 실제로 계산된 값을 담고 런타임 출력에도 등급 라벨이 없다 (Plan 041)', () => {
+  // 위 절대 규칙 테스트는 소스 문자열만 훑는다 — 함수를 직접 호출해 실제 출력을 검증한다.
+  const { _internals } = require('../services/analysisService');
+  const { calcBuySignal } = _internals;
+
+  // 가격 위치 하단(green) · 거래량 neutral · 전세가율 상단(green)
+  const r1 = calcBuySignal(20, { signal: 'neutral', seasonalBias: false }, 65);
+  const price1 = r1.conditions.find(c => c.label === '가격 위치');
+  const vol1 = r1.conditions.find(c => c.label === '거래량 추이');
+  const jeonse1 = r1.conditions.find(c => c.label === '전세가율');
+  assert.match(price1.desc, /최근 6개월 하위 20%/, '백분위 실값이 desc 에 없다');
+  assert.equal(vol1.desc, '거래량 변화 없음');
+  assert.match(jeonse1.desc, /65% \(최근 6개월 전세 실거래 기준\)/, '전세가율 실값이 desc 에 없다');
+
+  // 가격 위치 상단(red) · 거래량 down · 전세가율 하단(red)
+  const r2 = calcBuySignal(80, { signal: 'down', seasonalBias: false }, 30);
+  const price2 = r2.conditions.find(c => c.label === '가격 위치');
+  const vol2 = r2.conditions.find(c => c.label === '거래량 추이');
+  const jeonse2 = r2.conditions.find(c => c.label === '전세가율');
+  assert.match(price2.desc, /최근 6개월 상위 20%/);
+  assert.equal(vol2.desc, '거래량 감소');
+  assert.match(jeonse2.desc, /30% \(최근 6개월 전세 실거래 기준\) — 역전세 위험 확인 필요/);
+
+  // status 매핑은 이 계획에서 건드리지 않았다 — green/yellow/red 값 그대로인지 확인
+  assert.equal(price1.status, 'green');
+  assert.equal(price2.status, 'red');
+  assert.equal(jeonse1.status, 'green');
+  assert.equal(jeonse2.status, 'red');
+
+  // 소스 문자열 검사(위 ⑤)와 별개로, 실제 런타임 desc 에도 등급 라벨이 없는지 재확인
+  for (const c of [...r1.conditions, ...r2.conditions]) {
+    assert.equal(/실수요 비중 높음|보통 수준/.test(c.desc), false,
+      `조건 카드 desc 에 등급 라벨이 남아 있다: ${c.desc}`);
+  }
 });
 
 test('공유링크 거래 건수 — 같은 6개월 응답을 3번 합산하지 않는다 (Sprint MMMMMMM-4)', () => {
