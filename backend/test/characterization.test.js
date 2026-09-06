@@ -9343,3 +9343,211 @@ test('Plan 061 ⑤: sendOnce 주변에 "가드 없이 1회 보낸다" 라는 사
   assert.match(fe, /SENDONCE-MEMFALLBACK-2026-09-06/,
     '인메모리 폴백을 설명하는 정정 마커 주석이 없다');
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// Plan 062 (2026-09-06) — 검색창('/api/search/apt')도 "지역 + 단지명" 질의를
+//   splitRegionName 재시도로 좁혀 찾는다(챗은 057/059 로 이미 됐다).
+//   [왜] 운영자 요구 "지역+아파트 명이면 대충이라도 검색은 되어야지" — 챗은 라이브로 확인됐지만
+//   검색창은 그대로였다. Plan 052 의 공백 제거 변형은 "대치 은마"를 "대치은마"로 붙이기만
+//   해서, molit_apt_index·apt_master 어디에도 없는 이름이라 여전히 0건이었다(DB 실측,
+//   계획서 062 참조). splitRegionName(aptNameMatch.js, 057 신설·059 개선)은 이 파일에서
+//   **읽기(임포트)만** 한다 — 구현은 고치지 않는다(챗이 같은 함수를 쓴다).
+//   [방식] 위 Plan 052 테스트의 require.cache 스텁 관례(_withSearchDbStub)를 그대로 쓰되,
+//   지역 분리 재시도는 이중 .ilike 체인(.ilike(region%).ilike(%name%))이라 **마지막 호출만
+//   기록하는 기존 _searchAdminStub 으로는 못 잰다** — 체인 전체를 기록하는 스텁을 새로
+//   추가한다(기존 스텁·테스트는 그대로 둔다, 파일 끝에만 추가).
+// ══════════════════════════════════════════════════════════════════════════
+
+// 이중 ilike 체인까지 기록하는 스텁 — chatDataRouter 테스트의 _adminWithIlikeChainTracker 와
+//   같은 목적(왕복을 "총 호출 수" 추측이 아니라 신호로 직접 잰다)을 search.js 의
+//   require.cache 스텁 관례에 맞춰 다시 구현한다. routes 는 { table, ilikes:[{col,pattern},...],
+//   result } 형태로 체인 전체(호출 순서·개수)를 매칭한다 — 기존 _searchAdminStub 의
+//   "마지막 호출만" 매칭과 달리 두 조건(region ILIKE + name ILIKE)을 모두 검증할 수 있다.
+function _searchAdminStubChain(routes) {
+  const seen = { calls: [], doubleIlikeChains: 0 };
+  function makeChain(table) {
+    const ilikes = [];
+    const c = {
+      select: () => c,
+      ilike: (col, pattern) => { ilikes.push({ col, pattern }); return c; },
+      order: () => c,
+      limit: () => c,
+      abortSignal: () => c,
+      then: (resolve, reject) => {
+        seen.calls.push({ table, ilikes: ilikes.slice() });
+        if (ilikes.length === 2) seen.doubleIlikeChains++;
+        const match = (routes || []).find((r) =>
+          r.table === table &&
+          r.ilikes.length === ilikes.length &&
+          r.ilikes.every((ri, i) => ri.col === ilikes[i].col && ri.pattern === ilikes[i].pattern)
+        );
+        if (match && match.reject) {
+          return Promise.reject(match.error || new Error('PLAN062-stub-fail')).then(resolve, reject);
+        }
+        const out = match ? match.result : { data: [], error: null };
+        return Promise.resolve(out).then(resolve, reject);
+      },
+    };
+    return c;
+  }
+  return { client: { from: (table) => makeChain(table) }, seen };
+}
+// db/client·search.js 를 require.cache 스텁으로 갈아치우는 절차는 _withSearchDbStub 과 동일한
+//   이유(search.js 가 모듈 로드 시 구조분해하므로 스텁을 심은 뒤 캐시를 지우고 재로드해야 한다).
+async function _withSearchDbStubChain(routes, fn) {
+  const clientPath = require.resolve('../db/client');
+  const searchPath = require.resolve('../routes/search');
+  const saved = { c: require.cache[clientPath], s: require.cache[searchPath] };
+  const { client, seen } = _searchAdminStubChain(routes);
+  require.cache[clientPath] = {
+    id: clientPath, filename: clientPath, loaded: true,
+    exports: { getSupabaseAdmin: () => client, getSupabaseReadonly: () => client, getUserScopedClient: () => client },
+  };
+  delete require.cache[searchPath];
+  try {
+    const router = require('../routes/search');
+    const layer = router.stack.find((l) => l.route && l.route.path === '/apt');
+    assert.ok(layer, "search 라우터에서 '/apt' 를 찾지 못했다(경로 변경 시 이 테스트도 갱신할 것)");
+    const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+    return await fn(handler, seen);
+  } finally {
+    if (saved.c) require.cache[clientPath] = saved.c; else delete require.cache[clientPath];
+    if (saved.s) require.cache[searchPath] = saved.s; else delete require.cache[searchPath];
+  }
+}
+
+test('검색 자동완성 — "대치 은마"가 지역 분리 재시도로 은마를 준다 (Plan 062 핵심, 운영자 재현)', async () => {
+  const eunmaRow = {
+    apt_name: '은마', sigungu: '강남구', umd_nm: '대치동', lawd_cd: '11680',
+    build_year: 1979, recent_deal_date: '2026-08-01', deal_count: 233, apt_seq: '11680-100',
+  };
+  const routes = [
+    // 지역 분리 1라운드(splitRegionName('대치 은마') === [{region:'대치',name:'은마'}])의
+    // umd_nm 경로에서만 실제로 은마를 찾도록 stub — 나머지(원본 5조회 + sigungu 경로 +
+    // apt_master 경로)는 기본값(빈 결과)이다.
+    { table: 'molit_apt_index', ilikes: [{ col: 'umd_nm', pattern: '대치%' }, { col: 'apt_name', pattern: '%은마%' }],
+      result: { data: [eunmaRow], error: null } },
+  ];
+  await _withSearchDbStubChain(routes, async (handler, seen) => {
+    const res = _mockRes();
+    await handler({ query: { q: '대치 은마', limit: 10 } }, res, () => {});
+    assert.equal(res.statusCode, 200);
+    assert.ok(res.body.results.some((r) => r.aptName === '은마' && r.sigungu === '강남구'),
+      `"대치 은마" 검색 결과에 은마가 없다: ${JSON.stringify(res.body.results)}`);
+    assert.equal(seen.doubleIlikeChains, 3,
+      `지역 분리 재시도는 1라운드(3조회)에서 성공해 멈춰야 한다(${seen.doubleIlikeChains}개) — 왕복 상한 위반`);
+    assert.equal(res.body.degraded, undefined, '지역 분리 재시도 성공인데 degraded 가 표시됐다');
+  });
+});
+
+test('검색 자동완성 — 원 질의로 이미 찾히면(성공 경로) 지역 분리 재시도가 전혀 돌지 않는다 (Plan 062, 왕복 불변)', async () => {
+  // 케이스 ①: 단일 토큰("은마") — splitRegionName 이 애초에 후보를 안 낸다(토큰 1개).
+  await _withSearchDbStubChain(
+    [{ table: 'molit_apt_index', ilikes: [{ col: 'apt_name', pattern: '%은마%' }],
+       result: { data: [{ apt_name: '은마', sigungu: '강남구', umd_nm: '대치동', lawd_cd: '11680', build_year: 1979, recent_deal_date: '2026-08-01', deal_count: 233, apt_seq: 'x' }], error: null } }],
+    async (handler, seen) => {
+      const res = _mockRes();
+      await handler({ query: { q: '은마', limit: 10 } }, res, () => {});
+      assert.equal(res.statusCode, 200);
+      assert.equal(seen.calls.length, 3,
+        `성공 경로인데 왕복 수가 3이 아니다(${seen.calls.length}) — 재시도가 돈 것으로 의심됨: ${JSON.stringify(seen.calls)}`);
+      assert.equal(seen.doubleIlikeChains, 0, '직접 히트가 있는데 지역 분리 재시도(이중 ilike 체인)가 실행됐다');
+    }
+  );
+
+  // 케이스 ②: 다중 토큰이지만 원본(공백 포함) 질의로 이미 직접 히트 — splitRegionName 은
+  //   후보를 **낸다**(region:'PLAN062', name:'다중토큰직접매치')는 점에서 케이스 ①과 다르다.
+  //   게이트가 무조건 실행으로 망가지면 이 케이스에서만 체인이 잡힌다(케이스 ①은 애초에
+  //   후보가 없어 게이트가 깨져도 감지가 안 된다 — 그래서 이 케이스가 필요하다).
+  await _withSearchDbStubChain(
+    [{ table: 'molit_apt_index', ilikes: [{ col: 'apt_name', pattern: '%PLAN062 다중토큰직접매치%' }],
+       result: { data: [{ apt_name: 'PLAN062 다중토큰직접매치', sigungu: '노원구', umd_nm: '공릉동', lawd_cd: '11350', build_year: 2001, recent_deal_date: '2026-08-01', deal_count: 10, apt_seq: 'y' }], error: null } }],
+    async (handler, seen) => {
+      const res = _mockRes();
+      await handler({ query: { q: 'PLAN062 다중토큰직접매치', limit: 10 } }, res, () => {});
+      assert.equal(res.statusCode, 200);
+      assert.ok(res.body.results.some((r) => r.aptName === 'PLAN062 다중토큰직접매치'));
+      assert.equal(seen.doubleIlikeChains, 0,
+        '원 질의로 이미 확정됐는데(splitRegionName 은 후보를 내는 질의인데도) 지역 분리 재시도가 실행됐다 — 왕복 계약 위반');
+    }
+  );
+});
+
+test('검색 자동완성 — 3토큰 질의는 최대 2라운드까지만 재시도한다(왕복 상한, Plan 062)', async () => {
+  const row = {
+    apt_name: '은마', sigungu: '강남구', umd_nm: '대치동', lawd_cd: '11680',
+    build_year: 1979, recent_deal_date: '2026-08-01', deal_count: 233, apt_seq: 'x',
+  };
+  // splitRegionName('서울 강남 은마') === [{region:'강남',name:'은마'}, {region:'서울',name:'강남 은마'}].
+  // 1라운드(강남/은마) 후보는 stub 이 없어 실패 → 2라운드(서울/강남 은마)에서만 성공하도록 둔다.
+  const routes = [
+    { table: 'molit_apt_index', ilikes: [{ col: 'umd_nm', pattern: '서울%' }, { col: 'apt_name', pattern: '%강남 은마%' }],
+      result: { data: [row], error: null } },
+  ];
+  await _withSearchDbStubChain(routes, async (handler, seen) => {
+    const res = _mockRes();
+    await handler({ query: { q: '서울 강남 은마', limit: 10 } }, res, () => {});
+    assert.equal(res.statusCode, 200);
+    assert.ok(res.body.results.some((r) => r.aptName === '은마'));
+    assert.equal(seen.doubleIlikeChains, 6,
+      `2라운드(6조회)까지만 돌아야 한다(${seen.doubleIlikeChains}개) — 3개 후보를 전부 도는 9조회가 아니다`);
+  });
+});
+
+test('검색 자동완성 — 지역 분리 재시도가 실패해도 500 이 아니라 200 + 빈 결과로 응답한다(_softQuery, Plan 062)', async () => {
+  const routes = [
+    // 지역 분리 유일 후보(대치/없는단지) 3조회를 전부 실패로 주입 — 원본 5조회는 이미 빈 결과(기본값)다.
+    { table: 'molit_apt_index', ilikes: [{ col: 'umd_nm', pattern: '대치%' }, { col: 'apt_name', pattern: '%없는단지%' }],
+      reject: true, error: new Error('PLAN062 주입 실패 — molit umd') },
+    { table: 'molit_apt_index', ilikes: [{ col: 'sigungu', pattern: '대치%' }, { col: 'apt_name', pattern: '%없는단지%' }],
+      reject: true, error: new Error('PLAN062 주입 실패 — molit sigungu') },
+    { table: 'apt_master', ilikes: [{ col: 'umd_nm', pattern: '대치%' }, { col: 'apt_name', pattern: '%없는단지%' }],
+      reject: true, error: new Error('PLAN062 주입 실패 — master umd') },
+  ];
+  await _withSearchDbStubChain(routes, async (handler, seen) => {
+    const res = _mockRes();
+    await handler({ query: { q: '대치 없는단지', limit: 10 } }, res, () => {});
+    assert.equal(res.statusCode, 200,
+      '지역 분리 재시도 조회의 실패가 500 으로 번졌다 — _softQuery 로 감싸지 않았을 수 있다');
+    assert.deepEqual(res.body.results, []);
+    assert.equal(seen.doubleIlikeChains, 3, '유일한 후보 1라운드만 시도하고 끝나야 한다(실패해도 재시도 루프가 멈추지 않으면 안 된다는 뜻은 아니다 — 후보가 1개뿐이라 원래 1라운드)');
+  });
+});
+
+test('검색 자동완성 — 지역 분리 재시도 조회 3개가 모두 _softQuery 로 감싸여 있다(소스 계약, Plan 062)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const raw = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
+  // 줄 주석 제거 후 검사 — 마커·설명 주석 문자열이 검사를 오검출시킨 전례(6회 재발) 방지.
+  const src = raw.split('\n').map((l) => l.replace(/\/\/[^\r\n]*/, '')).join('\n');
+  const startIdx = src.indexOf('async function _regionSplitRetry()');
+  assert.ok(startIdx >= 0, '_regionSplitRetry 함수를 찾지 못했다 — 지역 분리 재시도 구조가 바뀌었다');
+  // 주석 제거 후에는 "트리거" 같은 설명 주석 텍스트가 사라지므로, 함수 뒤에 이어지는 실제
+  // 코드(트리거 if 문)를 경계로 잡는다 — 마커·주석 문자열 자기충돌(6회 재발 전례) 회피.
+  const endIdx = src.indexOf('if (!molitRows.length', startIdx);
+  assert.ok(endIdx > startIdx, '_regionSplitRetry 함수 다음의 트리거 if 문을 찾지 못했다 — 구조가 바뀌었다');
+  const block = src.slice(startIdx, endIdx);
+  const softCount = (block.match(/_softQuery\(/g) || []).length;
+  assert.equal(softCount, 3,
+    `지역 분리 재시도 조회 중 _softQuery 로 감싸이지 않은 것이 있다(${softCount}/3) — 실패가 500 으로 번질 수 있다`);
+});
+
+test('검색 자동완성 — 지역 분리 재시도 트리거는 기존 두 출처가 둘 다 비었을 때만 실행된다(소스 계약, Plan 062)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const raw = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
+  const src = raw.split('\n').map((l) => l.replace(/\/\/[^\r\n]*/, '')).join('\n');
+  assert.match(src, /if\s*\(\s*!molitRows\.length\s*&&\s*!\(\(masterRes\.data\s*\|\|\s*\[\]\)\.length\)\s*\)\s*\{[\s\S]{0,40}const _regionRetry = await _regionSplitRetry\(\);/,
+    '지역 분리 재시도 호출이 "molitRows·masterRes.data 둘 다 빈 경우" 게이트 뒤에 있지 않다 — ' +
+    '무조건 실행되면 성공 경로의 조회 수가 늘어난다(완료 기준 위반)');
+});
+
+test('검색 자동완성 — 캐시 키 버전이 v3 이다(Plan 062, 엣지 캐시 실사고 방지)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const raw = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
+  const src = raw.split('\n').map((l) => l.replace(/\/\/[^\r\n]*/, '')).join('\n');
+  assert.match(src, /const sck = `searchapt:v3:/,
+    '검색 캐시 키가 v3 이 아니다 — 지역 분리 재시도로 응답 모양이 바뀌었는데 캐시 키를 안 올리면 ' +
+    '배포 전 캐시된 "빈 결과"가 서버 10분 + CDN s-maxage=600(+SWR 3600) 만큼 계속 나간다');
+});

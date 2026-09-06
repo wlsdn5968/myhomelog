@@ -50,7 +50,10 @@ const { resolveAcademies } = require('../services/academyService');
 const { normalizeAptName, baseAptName } = require('../utils/aptName');
 // PLAN-052 (2026-09-06): 공백 제거 변형 질의에 재사용 — 051 이 backend/utils/aptNameMatch.js 에
 //   만든 순수 정규화 함수. 사본을 새로 만들지 않는다(이 저장소는 정규화 사본이 갈리는 결함 계열이 확립돼 있다).
-const { normalizeName } = require('../utils/aptNameMatch');
+// SEARCH-REGION-SPLIT-2026-09-06 (Plan 062): splitRegionName 도 같은 파일에서 가져온다 — 챗
+//   (057/059, backend/services/chatDataRouter.js)이 이미 쓰는 순수 함수를 그대로 재사용한다.
+//   이 파일은 읽기(임포트)만 한다 — 구현은 여기서 고치지 않는다(챗도 같은 함수를 쓰기 때문).
+const { normalizeName, splitRegionName } = require('../utils/aptNameMatch');
 // SNAPSHOT-2026-07-11 (Sprint LLLL): 인기 단지 집계 서비스 분리 + 일별 사전집계 스냅샷
 const { buildPopularResults, readPopularSnapshot, storePopularSnapshot, popularWindow } = require('../services/popularService');
 const { buildFacility } = require('../utils/buildFacility');
@@ -191,7 +194,10 @@ router.get('/apt', async (req, res) => {
   //   (+SWR 3600) 만큼 계속 나간다. 이 저장소는 열화 응답이 엣지에 6시간 굳은 실사고가 있다.
   //   ⚠ 엣지 캐시는 URL 기준이라 이 서버 키 변경만으로는 비워지지 않는다 — 배포 직후 최대
   //   10분(s-maxage)은 캐시된 URL 에 옛 응답이 그대로 나갈 수 있다(신규 질의어는 즉시 새 로직).
-  const sck = `searchapt:v2:${q.toLowerCase()}:${limit}`;
+  // SEARCH-REGION-SPLIT-2026-09-06 (Plan 062): v2 → v3. 지역 분리 재시도로 "대치 은마" 같은
+  //   질의가 빈 결과 대신 실제 단지를 반환하도록 바뀌었다 — 버전을 안 올리면 이미 캐시된
+  //   v2 시절의 "빈 결과"가 같은 만료 시간(서버 10분 + CDN s-maxage 600 + SWR 3600)만큼 계속 나간다.
+  const sck = `searchapt:v3:${q.toLowerCase()}:${limit}`;
   const cached = cache.get(sck);
   if (cached) {
     res.set('Cache-Control', SEARCH_CDN);
@@ -355,6 +361,62 @@ router.get('/apt', async (req, res) => {
     if (_molitErr && !_isMolitTimeout) captureRouteError(_molitErr, 'search/apt-molit');
     // 한쪽만 죽은 응답은 불완전 → 캐시에 굳히면 안 된다(서버 10분 + CDN s-maxage 600 은 전 사용자 공유).
     const _degraded = _dg.degraded;
+
+    // SEARCH-REGION-SPLIT-2026-09-06 (Plan 062): 검색창도 챗(057/059, chatDataRouter.js)과 같은
+    //   splitRegionName 재시도를 쓴다. [왜] "지역+단지명"(예: "대치 은마") 질의는 위 qApt·
+    //   공백제거 두 변형 모두 원리적으로 0건이다 — molit_apt_index·apt_master 어디에도
+    //   "대치은마"라는 이름은 없고, "은마"는 "대치동"에 있다(DB 실측, 계획서 062 참조).
+    //   ⚠ 성공 경로의 조회 수는 그대로다 — molitRows·masterRes.data 가 **둘 다 비었을 때만** 돈다
+    //   (아래 트리거 조건). 왕복 상한: splitRegionName 후보를 순차 최대 2개까지 시도하고 결과가
+    //   있으면 즉시 멈춘다(최선 1라운드=3조회, 최악 2라운드=6조회 — 후보 3개를 전부 도는 9조회가
+    //   아니다). region·name 은 %·_ 만 제거한다 — normalizeName 은 공백까지 지워 지역·이름
+    //   경계가 사라지므로 여기엔 쓸 수 없다(챗의 REGION-SPLIT-2026-09-06 과 동일 근거).
+    //   결과는 아래 molitRows/masterRes.data 에 그대로 합류시켜 기존 그룹핑(aptMap 등·_w 가중치)을
+    //   그대로 타게 한다 — 새 그룹핑 코드를 만들지 않는다.
+    async function _regionSplitRetry() {
+      const stripWild = (s) => String(s || '').replace(/[%_]/g, '');
+      const splitCandidates = splitRegionName(qApt).slice(0, 2);
+      for (const c of splitCandidates) {
+        const region = stripWild(c.region), name = stripWild(c.name);
+        if (region.length < 2 || name.length < 2) continue;
+        const [byUmd, bySigungu, amByRegion] = await Promise.all([
+          _softQuery(admin.from('molit_apt_index')
+            .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, recent_deal_date, deal_count, apt_seq')
+            .ilike('umd_nm', `${region}%`).ilike('apt_name', `%${name}%`)
+            .order('recent_deal_date', { ascending: false })
+            .limit(limit * 30)
+            .abortSignal(AbortSignal.timeout(MOLIT_ABORT_MS))),
+          _softQuery(admin.from('molit_apt_index')
+            .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, recent_deal_date, deal_count, apt_seq')
+            .ilike('sigungu', `${region}%`).ilike('apt_name', `%${name}%`)
+            .order('recent_deal_date', { ascending: false })
+            .limit(limit * 30)
+            .abortSignal(AbortSignal.timeout(MOLIT_ABORT_MS))),
+          _softQuery(admin.from('apt_master').select(_masterSel)
+            .ilike('umd_nm', `${region}%`).ilike('apt_name', `%${name}%`)
+            .limit(limit * 5)),
+        ]);
+        const rMolitRows = [];
+        if (byUmd && !byUmd.error && byUmd.data) rMolitRows.push(...byUmd.data);
+        if (bySigungu && !bySigungu.error && bySigungu.data) rMolitRows.push(...bySigungu.data);
+        const rMasterRows = (amByRegion && !amByRegion.error && amByRegion.data) ? amByRegion.data : [];
+        if (rMolitRows.length || rMasterRows.length) return { molitRows: rMolitRows, masterRows: rMasterRows };
+      }
+      return null;
+    }
+    // 트리거: 기존 두 출처(molitRows·masterRes.data) 결과가 **둘 다** 비었을 때만 — 성공 경로
+    //   (한쪽이라도 결과가 있는 경우)는 이 블록을 절대 통과하지 않는다(왕복 불변 계약).
+    if (!molitRows.length && !((masterRes.data || []).length)) {
+      const _regionRetry = await _regionSplitRetry();
+      if (_regionRetry) {
+        molitRows = molitRows.concat(_regionRetry.molitRows.map((r) => ({
+          ...r,
+          deal_date: r.recent_deal_date != null ? r.recent_deal_date : r.deal_date,
+          _w: Number(r.deal_count) > 0 ? Number(r.deal_count) : 1,
+        })));
+        masterRes = { data: (masterRes.data || []).concat(_regionRetry.masterRows) };
+      }
+    }
 
     // NAME-MERGE-2026-05-12 (Sprint S — 운영자 발견 + 3-source cross-check [VERIFIED]):
     //   MOLIT 가 한 단지를 동/letter/층 suffix 로 분리 신고 → dropdown 에 같은 단지 2+ row.
