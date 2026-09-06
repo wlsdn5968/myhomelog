@@ -5907,6 +5907,8 @@ test('광역 검색 — 시도 전체 시군구를 본다(서울 25·인천·경
   assert.equal(svc.pickRegions('서울 노원구', 6.5, '').length, 1, '세부 구 문자열이 광역으로 새면 안 된다');
   assert.equal(typeof svc.pickBroadRegionsByBudget, 'undefined', '예산 밴드 구 선정 코드가 남아 있다(죽은 코드)');
 
+  //   ⚠ 아래 단언은 **소스의 모양**만 본다 — 분기 반전·인자 교체는 못 잡는다.
+  //     그 계약은 REC-BEHAVIORAL-2026-09-06 의 실행 테스트가 지킨다.
   const src = require('node:fs').readFileSync(require.resolve('../services/propertyService'), 'utf8');
   assert.match(src, /const _broadMode = !_lawd && !!_picked\._broad;/, '광역 모드 판정이 없다');
   assert.match(src, /const targetRegions = \(_lawd \|\| _broadMode\) \? _picked : _picked\.slice\(0, 3\);/,
@@ -5920,6 +5922,8 @@ test('광역 검색 — 시도 전체 시군구를 본다(서울 25·인천·경
 });
 
 // ── BUDGET-CAP-2026-09-05 (운영자 "6.5억인데 6.8억이 나온다") ──────────────────────────────
+//   ⚠ 아래 단언은 **소스의 모양**만 본다 — 분기 반전·인자 교체는 못 잡는다.
+//     그 계약은 REC-BEHAVIORAL-2026-09-06 의 실행 테스트가 지킨다.
 test('추천 예산 상한 — 대표가격이 예산 이하인 단지만(5% 여유 제거)', () => {
   const src = require('node:fs').readFileSync(require.resolve('../services/propertyService'), 'utf8');
   assert.match(src, /const budgetMaxMan = maxBudget \* 10000;/, '예산 상한이 1.0x 가 아니다');
@@ -6013,6 +6017,8 @@ test('CORS — 프리뷰 배포는 자기 호스트(VERCEL_URL·VERCEL_BRANCH_UR
 });
 
 // ── TRANSIT-STAGE-2026-09-05 ─────────────────────────────────────────────────────
+//   ⚠ 아래 단언은 **소스의 모양**만 본다 — 분기 반전·인자 교체는 못 잡는다.
+//     그 계약은 REC-BEHAVIORAL-2026-09-06 의 실행 테스트가 지킨다.
 test('추천 — 최종 15곳을 고르기 전에 후보 전체의 최근접 역 거리를 재고, 표본 3건 이상을 앞세운다', () => {
   const src = require('node:fs').readFileSync(require.resolve('../services/propertyService'), 'utf8');
   const i = src.indexOf('TRANSIT-STAGE-2026-09-05: 최종 15곳');
@@ -6055,6 +6061,8 @@ test('점수 — 회전율은 절대 건수를 넘지 못하고, 300세대 미�
 });
 
 // ── MULTI-LENS-2026-09-05 ─────────────────────────────────────────────────────────
+//   ⚠ 아래 단언은 **소스의 모양**만 본다 — 분기 반전·인자 교체는 못 잡는다.
+//     그 계약은 REC-BEHAVIORAL-2026-09-06 의 실행 테스트가 지킨다.
 test('추천 후보 컷 — 임시 점수·거래 건수·확인된 세대수 세 렌즈의 합집합을 역 거리 실측에 넘긴다 + 컷 전 소형 게이트', () => {
   const src = require('node:fs').readFileSync(require.resolve('../services/propertyService'), 'utf8');
   const i = src.indexOf('MULTI-LENS-2026-09-05: 후보 컷을');
@@ -7011,4 +7019,284 @@ test('share.js 방어 배선 — lit() 함수형 치환과 escapeHtml $ 이스�
   assert.match(fnBody, mapRe,
     `escapeHtml 매핑 객체에 ${D} → &#36; 항목이 없다 — 문자 클래스에서 매치돼도 변환표가 없으면 `
     + `undefined 로 치환돼 조용히 깨지거나, 실제로는 원문 ${D} 가 그대로 새어나간다.`);
+});
+// ══════════════════════════════════════════════════════════════════════════════
+// REC-BEHAVIORAL-2026-09-06 (Plan 039): 추천 엔진 계약을 소스 문자열이 아니라 **실행 값**으로 고정한다.
+//
+//   [왜] 위 REC-BROAD-ALL·BUDGET-CAP·REC-RANK-PROV·TRANSIT-STAGE·MULTI-LENS 테스트는 전부
+//   assert.match(src, …) 다 — 소스가 "그렇게 생겼는지"만 보고, 실제로 그렇게 **동작하는지**는
+//   보지 않는다. 이 저장소는 그 한계를 실측했다 — 취득세의 조정지역 분기를 뒤집었더니 1,620개
+//   조합 중 468개가 갈렸는데 모양 검사는 전부 초록이었다([[regex-contract-tests-miss-branch-flips]]).
+//   정규식 계약 테스트는 "앞단 분기 반전" 과 "인자 교체" 를 원리적으로 잡지 못한다.
+//
+//   [방식] 프로덕션 코드는 한 줄도 바꾸지 않는다 — require.cache 에 고정 픽스처를 심어
+//   외부 의존(DB·공공API·카카오·Redis)만 대체하고, propertyService 자신은 실제 소스 그대로
+//   다시 로드해 돌린다(getAIRecommendations 는 파일 마지막 줄에 이미 export 돼 있다).
+//     ⚠ ./transactionService 는 통째로 대체하지 않는다 — 실제 모듈을 펼친 뒤 네트워크 함수
+//       (getRegionRecentTransactions)만 덮어쓴다. 통째로 바꾸면 LAWD_CODES 등 상수가 사라져
+//       지역 판정이 무너진다.
+//     ⚠ ./aptFacilityService 도 실제 모듈을 펼친다 — verifyCandidate·bonbun 은 DB 호출이 없는
+//       순수 함수라 사본을 새로 만들지 않고 그대로 재사용한다(연도 허용오차 로직을 베끼면
+//       드리프트 위험만 생긴다). getFacilitiesByKaptCodes·getAptListByLawdFromDb·resolveFacility
+//       세 개만 고정 픽스처로 덮어쓴다.
+//     ⚠ ./regulationsService 는 건드리지 않는다 — 지역 판정이 실제 스냅샷/폴백 로직을 타야
+//       의미가 있다(DB 미설정 환경에선 하드코딩 FALLBACK_BY_KEY 로 정상 동작한다 — 네트워크 호출 없음).
+//     ⚠ ../cache(node-cache)는 실제 모듈을 그대로 쓰되, 시작 시 'rec:' 로 시작하는 키를 지운다.
+//       지우지 않으면 앞선 테스트가 남긴 최대 3시간짜리 결과 캐시에 맞아 스텁이 무시된 채
+//       통과하는 위양성 초록이 나온다(characterization.test.js 의 'rent:' 청소와 같은 패턴).
+//
+//   [복원] require.cache 교체는 반드시 try/finally 로 원복한다 — 빠뜨리면 그 뒤 수천 줄의
+//   테스트가 오염된 스텁으로 통과한다(실패가 아니라 위양성 초록이라 아무도 못 알아챈다).
+//   finally 안에서 복원이 실제로 성사됐는지까지 단언한다.
+// ══════════════════════════════════════════════════════════════════════════════
+
+/**
+ * getAIRecommendations 의 외부 의존을 고정 픽스처로 바꾼 뒤 fn(propertyService) 을 실행하고,
+ * 무슨 일이 있어도(예외 포함) require.cache 를 원래대로 되돌린다.
+ *
+ * @param {object} fixture
+ *   - lawdCd, sigungu, umdNm: 대상 지역 기본값(개별 complex 에서 override 가능)
+ *   - complexes: [{ name, buildYear, excluUseAr, price|prices, n, households, matched, parkingRatio }]
+ *       · price(+n) 또는 prices(배열) 중 하나로 6개월 raw 거래를 생성한다(동일 평형 1개로 묶인다).
+ *       · households: 세대수(확인). **undefined 로 두면** KAPT/DB 목록에서 그 단지를 아예 빼서
+ *         "이름 매칭 실패 → 세대수 미확인" 을 재현한다(0 이 아니라 정말 모르는 상태).
+ *       · matched: false 를 주면 households 가 있어도 매칭 목록에서 제외한다.
+ *   - coordsByName / subwayByName: 특정 단지에만 좌표·최근접 역 거리를 주고 싶을 때(이름 키).
+ *     기본은 전부 좌표 미해결(null) — 대부분의 계약(예산·게이트)엔 좌표가 필요 없다.
+ *   - getNearbyAmenitiesFixed: getNearbyAmenities 가 항상 돌려줄 값(기본 null = 중간값 경로).
+ * @param {(ps: typeof import('../services/propertyService')) => Promise<any>} fn
+ */
+async function _withRecStubs(fixture, fn) {
+  const txPath = require.resolve('../services/transactionService');
+  const facPath = require.resolve('../services/aptFacilityService');
+  const aptInfoPath = require.resolve('../services/aptInfoService');
+  const geoPath = require.resolve('../services/geocodeCacheService');
+  const schoolPath = require.resolve('../services/schoolService');
+  const brPath = require.resolve('../services/buildingRegisterService');
+  const kakaoPath = require.resolve('../services/kakaoService');
+  const naverPath = require.resolve('../services/naverDatalabService');
+  const redisPath = require.resolve('../services/redisCache');
+  const propPath = require.resolve('../services/propertyService');
+
+  // ⚠ 통째로 대체하지 않는다 — require.cache 를 건드리기 전에 실제 모듈을 먼저 읽는다
+  //   (LAWD_CODES·verifyCandidate·bonbun 등 상수/순수함수를 보존하기 위함).
+  const realTx = require(txPath);
+  const realFac = require(facPath);
+  const recCache = require('../cache');
+
+  const rawTx = [];
+  const aptList = [];
+  const facMap = new Map();
+  (fixture.complexes || []).forEach((c, idx) => {
+    const lawdCd = c.lawdCd || fixture.lawdCd;
+    const prices = c.prices || Array.from({ length: c.n || 2 }, () => c.price);
+    prices.forEach((price, i) => {
+      rawTx.push({
+        aptName: c.name, sigungu: c.sigungu || fixture.sigungu, umdNm: c.umdNm || fixture.umdNm,
+        excluUseAr: c.excluUseAr || 84.9, buildYear: c.buildYear,
+        floor: 3 + (i % 20), dealYear: 2026, dealMonth: 1, dealDay: (i % 28) + 1,
+        dealAmount: price, lawdCd, aptSeq: `${lawdCd}-${idx}`, jibun: '',
+      });
+    });
+    // households 가 undefined 면 이 단지는 아예 목록에 없다 — "KAPT 미등록/이름 매칭 실패" 를
+    // 정직하게 재현한다(0을 넣어 '확인된 소형'으로 둔갑시키지 않는다 — [[unknown-treated-as-value]]).
+    const matched = c.matched !== false && c.households !== undefined;
+    if (matched) {
+      const kaptCode = `K${String(idx).padStart(8, '0')}`;
+      aptList.push({
+        kaptCode, kaptName: c.name, as3: c.umdNm || fixture.umdNm, as4: '',
+        jibunBon: '', kaptUsedate: `${c.buildYear}0101`,
+      });
+      if (c.households != null) {
+        facMap.set(kaptCode, {
+          kaptdaCnt: c.households, kaptUsedate: `${c.buildYear}0101`, kaptAddr: '',
+          ...(c.parkingRatio ? { kaptdPcnt: Math.round(c.households * c.parkingRatio), kaptdPcntu: 0 } : {}),
+        });
+      }
+    }
+  });
+
+  const coordsByName = fixture.coordsByName || {};
+  const subwayByName = fixture.subwayByName || {};
+  const coordKeyToName = new Map(); // resolveCoordBatch 가 만든 좌표를 nearestSubway 가 역추적한다
+
+  const stubs = {
+    [txPath]: {
+      ...realTx,
+      // ⚠ 네트워크/DB 함수만 덮어쓴다 — LAWD_CODES·LAWD_CODE_TO_NAME·RETIRED_LAWD_CODES 는 실값 그대로.
+      getRegionRecentTransactions: async (lawdCd) => rawTx.filter(t => t.lawdCd === lawdCd),
+    },
+    [facPath]: {
+      ...realFac, // verifyCandidate·bonbun 은 순수 함수라 실제 구현을 그대로 재사용한다(사본 금지)
+      getFacilitiesByKaptCodes: async (codes) => {
+        const m = new Map();
+        for (const c of codes || []) if (facMap.has(c)) m.set(c, facMap.get(c));
+        return m;
+      },
+      getAptListByLawdFromDb: async () => aptList,
+      resolveFacility: async () => null, // 이름 매칭 실패 단지는 이 폴백도 실패해야 "미확인" 이 유지된다
+    },
+    [aptInfoPath]: {
+      getAptListBySgg: async () => [], // DB(getAptListByLawdFromDb)가 1순위 소스 — 라이브 목록은 비워도 무방
+      getAptBasisInfo: async () => null,
+      getAptDtlInfo: async () => null,
+      findAptByRoadName: async () => null,
+    },
+    [geoPath]: {
+      resolveCoordBatch: async (inputs) => inputs.map((inp) => {
+        const c = coordsByName[inp.aptName];
+        if (!c) return null;
+        coordKeyToName.set(`${c.lat},${c.lng}`, inp.aptName);
+        return c;
+      }),
+      resolveCoord: async () => null, resolveCoordFromCacheOnly: () => null, getKakaoUsageStats: () => ({}),
+      kakaoGeocode: async () => null, kakaoAddressGeocode: async () => null, markGeoFail: () => {},
+      filterOutGeoFailed: (x) => x, buildKey: () => '', saveToDb: async () => {},
+      NON_APT_PATTERNS: [], NON_APT_CATEGORY: new Set(), AMBIGUOUS_SGG: new Set(),
+    },
+    [schoolPath]: {
+      resolveSchools: async () => [],
+      resolveSchoolsBatch: async (inputs) => inputs.map(() => []),
+      getCachedSchoolsBatch: async (inputs) => inputs.map(() => []), // 전부 히트(빈 배열) → 2차 조회가 안 걸린다
+    },
+    [brPath]: {
+      getBuildingTitle: async () => null, // 건축물대장 보강도 실패해야 "미확인" 이 끝까지 유지된다
+      parseJibun: () => null, resolveBjdong: async () => null, resolveJibun: async () => null, fetchRecapOnly: async () => null,
+    },
+    [kakaoPath]: {
+      getCarMinutes: async () => null, getTransitMinutes: async () => null,
+      countNearby: async () => null, countNearbyKeyword: async () => null,
+      getNearbyAmenities: async () => (fixture.getNearbyAmenitiesFixed != null ? fixture.getNearbyAmenitiesFixed : null),
+      keywordToCoord: async () => null,
+      // 단지별로 다른 거리를 주는 결정적 함수 — 좌표(coordsByName)가 있는 단지만 조회되므로
+      // 좌표→이름 역맵으로 그 단지에 지정된 값을 돌려준다(지정 없으면 "역 정보 없음"=null).
+      nearestSubway: async (lat, lng) => {
+        const nm = coordKeyToName.get(`${lat},${lng}`);
+        const s = nm ? subwayByName[nm] : undefined;
+        return s === undefined ? null : s;
+      },
+    },
+    [naverPath]: {
+      normalizeAptName: (s) => s, getCachedInterest: async () => new Map(), warmInterest: async () => ({}),
+      hasKeys: () => false, keyShape: () => null, ANCHOR: '', fetchBatch: async () => ({}), median: () => 0,
+    },
+    [redisPath]: {
+      rget: async () => null, // 항상 미스 — 픽스처가 실제로 실행되도록 강제한다(캐시 우회 방지)
+      rset: async () => {},
+    },
+  };
+
+  const saved = new Map();
+  for (const [p, exp] of Object.entries(stubs)) {
+    saved.set(p, require.cache[p]);
+    require.cache[p] = { id: p, filename: p, loaded: true, exports: exp };
+  }
+  saved.set(propPath, require.cache[propPath]);
+  delete require.cache[propPath]; // propertyService 자신은 다시 읽어 top-level require 가 위 스텁을 보게 한다
+
+  // 이전 테스트가 남긴 'rec:' 결과 캐시(최대 3h)에 맞아 스텁이 무시된 채 통과하는 위양성을 막는다.
+  for (const k of recCache.keys()) if (k.startsWith('rec:')) recCache.del(k);
+
+  try {
+    const ps = require(propPath);
+    return await fn(ps);
+  } finally {
+    for (const [p, prev] of saved) {
+      if (prev) require.cache[p] = prev; else delete require.cache[p];
+    }
+    // 복원 확인 — 여기서 어긋나면 이후 수천 줄이 오염된 스텁으로 통과한다(위양성 초록이라 아무도 못 잡는다).
+    for (const [p, prev] of saved) {
+      assert.equal(require.cache[p], prev, `require.cache 복원 실패: ${p}`);
+    }
+  }
+}
+
+// ── REC-BEHAVIORAL-2026-09-06 (A) 예산 상한 — BUDGET-CAP 계약을 실행으로 고정 ──────────────
+//   운영자 실사고 "6.5억인데 6.8억이 나온다" 를 낳은 값(6.8) 그대로 재현한다.
+test('REC-BEHAVIORAL-2026-09-06: 추천 예산 상한(실행) — 대표가격이 예산 이하인 단지만 남는다', async () => {
+  const LAWD = '11350'; // 노원구 — transactionService.LAWD_CODES 실값(임의 코드 금지)
+  const buildYear = 2015;
+  await _withRecStubs({
+    lawdCd: LAWD, sigungu: '노원구', umdNm: '상계동',
+    complexes: [
+      { name: '예산단지64', buildYear, price: 64000, n: 3, households: 1000 }, // 6.4억 — 포함
+      { name: '예산단지65', buildYear, price: 65000, n: 3, households: 1000 }, // 6.5억(경계) — 포함("이하")
+      { name: '예산단지66', buildYear, price: 66000, n: 3, households: 1000 }, // 6.6억 — 제외
+      { name: '예산단지68', buildYear, price: 68000, n: 3, households: 1000 }, // 6.8억 — 제외(운영자 실사고 값)
+      // FIELD-SWAP-GUARD: 나머지 4곳은 평형 안 가격이 전부 동일해 avgPrice·medianPrice·minPrice 가
+      // 우연히 같은 값이 된다 — 그러면 "다른 가격 필드로 교체" 회귀를 구분 못 한다. 이 단지는
+      // 3건 6.0억 + 2건 9.0억(날짜 동일 → 가중치 동일)을 섞어 세 통계를 일부러 갈라놓는다.
+      //   avgPrice(가중평균) = (3*6.0+2*9.0)/5 = 7.2억 → 예산(6.5억) 초과, 제외가 맞다.
+      //   medianPrice = 6.0억, minPrice = 6.0억 → 둘 다 예산 이내라, 필터가 그중 하나로 바뀌면
+      //   이 단지가 잘못 포함된다(실측: 위 두 값으로 교체 시 실제로 포함됨을 확인했다).
+      { name: '필드검증단지', buildYear, prices: [60000, 60000, 60000, 90000, 90000], households: 1000 },
+    ],
+  }, async (ps) => {
+    const result = await ps.getAIRecommendations({
+      maxBudget: 6.5, lawdCd: LAWD, houseStatus: '무주택', isFirstBuyer: false,
+    });
+    // ⚠ 필드명은 실행해 직접 확인했다(추측 아님) — 최종 avgPrice 는 억 단위(예: 6.5).
+    assert.ok(result.recommendations.length > 0, '결과가 비어 있다 — 픽스처가 어느 단계에서 걸렀는지 먼저 확인할 것');
+    for (const r of result.recommendations) {
+      assert.ok(r.avgPrice <= 6.5, `avgPrice ${r.avgPrice} 가 예산 6.5억을 넘는다(${r.aptName})`);
+    }
+    const names = result.recommendations.map(r => r.aptName);
+    assert.ok(!names.includes('예산단지68'), '6.8억 단지가 6.5억 검색 결과에 있다(5% 여유 부활과 같은 결함)');
+    assert.ok(!names.includes('예산단지66'), '6.6억 단지가 6.5억 검색 결과에 있다');
+    assert.ok(names.includes('예산단지65'), '예산과 정확히 같은(6.5억) 단지가 빠졌다 — 경계를 "미만"으로 잘못 좁혔다');
+    assert.ok(names.includes('예산단지64'), '예산 이하(6.4억) 단지가 빠졌다');
+    assert.ok(!names.includes('필드검증단지'),
+      '평균가 7.2억 단지가 6.5억 검색 결과에 있다 — 예산 판정이 avgPrice 가 아닌 다른 필드(median/min)를 본다');
+  });
+});
+
+// ── REC-BEHAVIORAL-2026-09-06 (B) MULTI-LENS — 임시 점수가 낮아도 거래·세대수 렌즈로 산다 ──
+//   [픽스처 설계] 필러 40곳은 최근 신축·대형(5,000세대)·주차 여유로 임시 점수(_prov)를 target 보다
+//   높이고(신축급 연식 만점+규모주차 만점) 확인 세대수도 target(1,590) 보다 훨씬 크게 잡아
+//   LENS_PROV(top40)·LENS_SCALE(top20) 를 전부 채운다. 대신 거래는 최소(2건)만 둬서
+//   LENS_DEALS(top20) 에서는 target(39건) 에 밀리게 한다 — target 이 **오직 거래 렌즈**로만
+//   합집합에 들어오게 설계했다(실측: LENS_DEALS 합집합 줄을 지우면 이 target 만 사라진다).
+test('REC-BEHAVIORAL-2026-09-06: MULTI-LENS(실행) — 임시 점수 45위인 고회전·대단지가 결과에 남는다', async () => {
+  const LAWD = '11350';
+  const thisYear = new Date().getFullYear();
+  const fillers = Array.from({ length: 40 }, (_, i) => ({
+    name: `필러단지${String(i).padStart(2, '0')}`,
+    buildYear: thisYear - 2, excluUseAr: 84.9,
+    price: 45000, n: 2, households: 5000, parkingRatio: 1.3,
+  }));
+  const targetName = '벽산형단지';
+  const target = { name: targetName, buildYear: thisYear - 32, excluUseAr: 59.9, price: 45000, n: 39, households: 1590 };
+  await _withRecStubs({
+    lawdCd: LAWD, sigungu: '노원구', umdNm: '상계동',
+    complexes: [...fillers, target],
+    coordsByName: { [targetName]: { lat: 37.6, lng: 127.0 } },
+    subwayByName: { [targetName]: { distance: 108, name: '테스트역' } },
+  }, async (ps) => {
+    const result = await ps.getAIRecommendations({ maxBudget: 5, lawdCd: LAWD, houseStatus: '무주택', isFirstBuyer: false });
+    const names = result.recommendations.map(r => r.aptName);
+    assert.ok(names.includes(targetName),
+      '거래 39건·1,590세대·역 108m 단지가 결과에 없다 — 임시 점수(top40) 단일 컷으로 후보를 골랐다는 뜻');
+  });
+});
+
+// ── REC-BEHAVIORAL-2026-09-06 (C) 소형 게이트 — 확인된 소형만 제외, 미확인은 유지 ──────────
+//   이 저장소는 "모름을 0으로 취급해 세대수 미확인 407곳을 소형으로 잘못 배제한" 실사고가 있다
+//   ([[unknown-treated-as-value]]). 여기서 그 방향(모름 ≠ 소형)을 실행으로 고정한다.
+test('REC-BEHAVIORAL-2026-09-06: 소형 게이트(실행) — 확인된 100세대 미만만 빠지고 미확인은 남는다', async () => {
+  const LAWD = '11350';
+  const buildYear = 2015;
+  await _withRecStubs({
+    lawdCd: LAWD, sigungu: '노원구', umdNm: '상계동',
+    complexes: [
+      { name: '소형확인단지', buildYear, price: 45000, n: 2, households: 80 },      // 확인된 소형 — 제외돼야 함
+      { name: '미확인단지', buildYear, price: 45000, n: 2, households: undefined }, // KAPT 미매칭 — 남아야 함
+      { name: '일반단지1', buildYear, price: 45000, n: 2, households: 500 },
+      { name: '일반단지2', buildYear, price: 45000, n: 2, households: 500 },
+    ],
+  }, async (ps) => {
+    const result = await ps.getAIRecommendations({ maxBudget: 5, lawdCd: LAWD, houseStatus: '무주택', isFirstBuyer: false });
+    const names = result.recommendations.map(r => r.aptName);
+    assert.ok(!names.includes('소형확인단지'), '확인된 100세대 미만 단지가 제외되지 않았다');
+    assert.ok(names.includes('미확인단지'), '세대수 미확인 단지가 소형으로 오배제됐다(모름=0 취급 회귀)');
+  });
 });
