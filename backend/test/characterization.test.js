@@ -8907,3 +8907,30 @@ test('AI 도우미 시세 — 지역 분리 재시도 응답 어디에도 매수
     } finally { restore(); }
   }
 });
+
+test('AI 도우미 시세 — 지역 분리 재시도의 등급 판정은 name 기준이다(원 질의 기준이면 순위가 뒤집힌다) (Plan 057 Step 2)', async () => {
+  // '은마'(name 과 완전일치 → tier3)와 '은마상가'(name 으로 시작 → tier2, 그러나 dealCount 는
+  // 훨씬 크다)를 함께 둔다. _tier 를 원 질의(_nq='대치은마') 기준으로 매기면 둘 다 매칭에
+  // 실패해 tier1 로 동률이 되고, 그러면 dealCount 순으로 뒤집혀 '은마상가'가 앞에 온다 —
+  // name 기준이 아니면 못 잡는 회귀(계획서 Step 5 주입 ③이 실제로 이 순서를 뒤집었다).
+  const { admin } = _adminWithIlikeChainTracker({
+    molit_apt_index: [
+      { apt_name: '은마', lawd_cd: '11680', sigungu: '강남구', umd_nm: '대치동', build_year: 1979, deal_count: 50 },
+      { apt_name: '은마상가', lawd_cd: '11680', sigungu: '강남구', umd_nm: '대치동', build_year: 2000, deal_count: 900 },
+    ],
+    apt_master: [],
+    molit_transactions: [],
+  });
+  const { router, restore } = _requireRouterWithAdmin(admin);
+  try {
+    const { reply, suggestions } = await router.route('대치 은마 시세', null);
+    // 후보가 2곳이라 Step 3 되묻기로 가는데, 그 나열 순서 자체가 등급 판정의 산출물이다.
+    assert.match(reply, /혹시 이 중에 있나요/);
+    const iEunma = reply.indexOf('은마(');
+    const iEunmaSanga = reply.indexOf('은마상가');
+    assert.ok(iEunma >= 0 && iEunmaSanga >= 0, '두 후보 모두 나열돼야 한다');
+    assert.ok(iEunma < iEunmaSanga,
+      `등급이 name("은마") 기준이 아니라 원 질의 기준으로 매겨져 순서가 뒤집혔다: ${reply}`);
+    assert.equal(suggestions[0], '은마 시세', 'name 완전일치(tier3)가 1순위 제안이어야 한다');
+  } finally { restore(); }
+});
