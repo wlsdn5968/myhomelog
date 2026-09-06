@@ -6748,13 +6748,18 @@ test('T0-HERO-FIELD (Plan 038) — 추천 응답 dealCount6m을 히어로가 읽
   assert.match(html, /p\.dealCount\s*\?\?\s*p\.dealCount6m/,
     'frontend 에서 ?? 연산자로 dealCount6m 을 읽지 않는다');
 
-  // 계약 3: 렌더 순서 — recentDealDate 정규화(RECENTDEAL 마커)가 const _heroSection 앞에 있다
-  const regIdx = html.indexOf('RECENTDEAL-2026-08-19');
+  // 계약 3: 렌더 순서 — recentDealDate 정규화(실제 대입 코드)가 const _heroSection 앞에 있다.
+  //   ⚠ Plan 060 ③: 원래는 주석 한 줄(RECENTDEAL-2026-08-19 마커)의 위치만 봤다 — 그 주석은
+  //   그대로 두고 실제 정규화 블록(try{...}catch(_e){}) 만 뒤로 옮겨도 통과했다(감사자 실측,
+  //   Plan 038 이 고친 증상이 그대로 복원됨). 실제 대입 코드를 정규식으로 찾아 그 위치를 쓴다 —
+  //   변수명(_t0 등)은 구조에서 자유롭게 둬 의미 보존 리팩터에는 fail 하지 않는다.
+  const assignRe = /p\.recentDealDate\s*=\s*\w+\.dealYear/;
+  const regIdx = html.search(assignRe);
   const heroIdx = html.indexOf('const _heroSection');
-  assert.ok(regIdx > -1, 'frontend 에서 RECENTDEAL-2026-08-19 마커를 찾지 못했다');
+  assert.ok(regIdx > -1, 'frontend 에서 recentDealDate 대입 코드(p.recentDealDate=...dealYear)를 찾지 못했다');
   assert.ok(heroIdx > -1, 'frontend 에서 const _heroSection 을 찾지 못했다');
   assert.ok(regIdx < heroIdx,
-    '렌더 순서 계약 위반: recentDealDate 정규화가 _heroSection 뒤에 있다 (' + regIdx + ' vs ' + heroIdx + ')');
+    '렌더 순서 계약 위반: recentDealDate 정규화 코드가 _heroSection 뒤에 있다 (' + regIdx + ' vs ' + heroIdx + ')');
 
   // 계약 4: 히어로가 _t0DealN 변수를 사용해 거래 건수·표본 배지를 표시한다
   assert.match(html, /const _t0DealN = Number\(p\.dealCount \?\? p\.dealCount6m\)/,
@@ -7073,6 +7078,27 @@ test('share.js 방어 배선 — lit() 함수형 치환과 escapeHtml $ 이스�
   assert.match(fnBody, mapRe,
     `escapeHtml 매핑 객체에 ${D} → &#36; 항목이 없다 — 문자 클래스에서 매치돼도 변환표가 없으면 `
     + `undefined 로 치환돼 조용히 깨지거나, 실제로는 원문 ${D} 가 그대로 새어나간다.`);
+
+  // ── GATE-CALLSITE-2026-09-06 (Plan 060 ①): **호출부** 실행 검증.
+  //   [왜] 위 두 검사는 escapeHtml "정의" 만 본다 — `const t = escapeHtml(title)` 를
+  //   `const t = title` 로(호출부 삭제) 바꿔도 위 단언은 전부 그대로 통과한다(감사자 실측).
+  //   그 상태에서 실제 핸들러를 호출하면 응답에 `</title><script>alert(1)</script>` 가
+  //   원문 그대로 실린다 — /share 는 인증·레이트리밋이 없는 공개 SSR 경로이고 server.js 의
+  //   CSP scriptSrc 에 'unsafe-inline' 이 있어 브라우저에서 실제 실행된다.
+  //   [방식] 소스 문자열이 아니라 실제 라우터 핸들러(_shareHandler)를 그대로 실행해 응답
+  //   본문을 확인한다 — 변수명·공백을 바꾸는 의미 보존 리팩터로는 절대 fail 하지 않는다.
+  const handle = _shareHandler();
+  const evilApt = '</title><script>alert(1)</script>';
+  const req = { query: { apt: evilApt, area: '' }, protocol: 'https', get: () => 'myhomelog.example' };
+  const res = _shareMockRes();
+  handle(req, res);
+  assert.equal(typeof res.body, 'string', '/share 응답 본문이 문자열이 아니다');
+  assert.ok(!res.body.includes('<script>alert(1)</script>'),
+    '/share 가 apt 값을 이스케이프 없이 그대로 응답에 실었다 — escapeHtml 호출부가 사라지면 '
+    + '이 문자열이 원문 그대로 새어나간다(XSS, /share 는 인증·레이트리밋 없는 공개 경로)');
+  assert.ok(res.body.includes('&lt;script&gt;alert(1)&lt;/script&gt;'),
+    '/share 응답에서 이스케이프된 형태(&lt;script&gt;…)를 찾지 못했다 — escapeHtml 호출부가 '
+    + '사라졌거나 title 이 이스케이프를 거치지 않고 응답에 실렸을 가능성이 있다');
 });
 // ══════════════════════════════════════════════════════════════════════════════
 // REC-BEHAVIORAL-2026-09-06 (Plan 039): 추천 엔진 계약을 소스 문자열이 아니라 **실행 값**으로 고정한다.
@@ -7372,15 +7398,20 @@ test('ATTR-ACTIVATION-2026-09-06: 화이트리스트 이벤트가 전부 프론�
   assert.ok(events.length >= 4, '화이트리스트가 4종 미만이다');
 
   const htmlSrc = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  // GATE-LIVE-CALL-2026-09-06 (Plan 060 ⑤): 원문 문자열 존재만 보면 **주석 처리된 호출**도 통과한다
+  //   (`sendOnce('report')` 호출 줄을 `//` 로 지워도 pass 249 / fail 0 이었다 — 감사자 실측).
+  //   줄 주석을 지운 뒤에 검사한다 — CRLF 라 줄 끝 '\r' 이 남으므로 '$' 없이 '//'~줄 끝까지 지운다
+  //   (이 저장소 기존 관례: characterization.test.js 의 TXWINDOW-TWIN-2026-09-06 과 동일 패턴).
+  const htmlNoComments = htmlSrc.split('\n').map((l) => l.replace(/\/\/[^\r\n]*/, '')).join('\n');
 
   for (const e of events) {
-    const hasSend = new RegExp(`\\.send\\('${e}'\\)`).test(htmlSrc);
-    const hasSendOnce = new RegExp(`\\.sendOnce\\('${e}'\\)`).test(htmlSrc);
-    assert.ok(hasSend || hasSendOnce, `화이트리스트 이벤트가 프론트에서 발견되지 않음: ${e}`);
+    const hasSend = new RegExp(`\\.send\\('${e}'\\)`).test(htmlNoComments);
+    const hasSendOnce = new RegExp(`\\.sendOnce\\('${e}'\\)`).test(htmlNoComments);
+    assert.ok(hasSend || hasSendOnce, `화이트리스트 이벤트가 프론트에서 발견되지 않음(주석 처리된 호출은 무효): ${e}`);
   }
 
-  assert.ok(new RegExp(`\\.sendOnce\\('search'\\)`).test(htmlSrc), '상한이 있는 이벤트가 sendOnce 로 보내지지 않음');
-  assert.ok(new RegExp(`\\.sendOnce\\('report'\\)`).test(htmlSrc), '상한이 있는 이벤트가 sendOnce 로 보내지지 않음');
+  assert.ok(new RegExp(`\\.sendOnce\\('search'\\)`).test(htmlNoComments), '상한이 있는 이벤트가 sendOnce 로 보내지지 않음(또는 주석 처리됨)');
+  assert.ok(new RegExp(`\\.sendOnce\\('report'\\)`).test(htmlNoComments), '상한이 있는 이벤트가 sendOnce 로 보내지지 않음(또는 주석 처리됨)');
 
   // 모양만 본다 — 속성명(e.g. _notice)은 안 본다
   assert.ok(/\.some\(function\(r\)\{\s*return\s+r\s*&&\s*!r\./.test(htmlSrc), '검색 전송 가드 모양이 변경됐다 (형태만 감시)');
@@ -7615,37 +7646,37 @@ test('브리핑 스냅샷 — buildBriefingPayload 구성요소 실패 시에도
   }
 });
 
-test('JIBUN-COL-2026-09-06: getTransactionsByAptSeq 매퍼가 jibun 을 반환한다', async () => {
-  // 계약: transactionService.js 의 세 select 매퍼(getTransactionsFromDb, getRegionRecentTransactions, getTransactionsByAptSeq)
-  //   는 모두 jibun 을 포함해야 한다 (analyzeTransactions 가 단지 지번 최빈값을 계산할 때 필요).
-  // 검증 방식: 소스 문자열 정규식 (배선 계약 — 컬럼 목록이 같은 집합인지)
-  //   실행 검증은 이미 npm test 가 하고, 여기선 대칭성 결함을 명시적으로 고정한다.
-  //   (소스 대조 이유: select 컬럼 목록은 배선이고, 정규식이 옳은 도구)
+test('JIBUN-COL-2026-09-06: 세 매퍼 모두 select 문뿐 아니라 반환 객체 매핑에도 jibun 이 있다', async () => {
+  // 계약: transactionService.js 의 세 select 매퍼(getTransactionsFromDb, getRegionRecentTransactions,
+  //   getTransactionsByAptSeq)는 select 문과 반환 객체 매핑 **둘 다**에 jibun 을 실어야 한다
+  //   (analyzeTransactions 가 단지 지번 최빈값을 계산할 때 매핑된 필드를 읽는다).
+  // ⚠ Plan 060 ②: 원래는 `.select('apt_name...` 로 시작하는 줄만 라인 단위로 세서 select 문자열
+  //   안에 jibun 이 있는지만 봤다 — `jibun: r.jibun || ''` 매핑 줄만 지워도(select 는 그대로 둔 채)
+  //   pass 249 / fail 0 이었다(감사자 실측). 함수 범위로 잘라 select 와 매핑을 둘 다 본다 —
+  //   같은 파일의 MULTI-LENS 테스트(characterization.test.js:6136-6142 부근)가 이미 쓰는 방식.
   const fs = require('fs');
   const path = require('path');
   const svcPath = path.join(__dirname, '../services/transactionService.js');
-  const source = fs.readFileSync(svcPath, 'utf8');
+  const src = fs.readFileSync(svcPath, 'utf8');
 
-  // 세 select 의 라인 단위 검증:
-  // select('apt_name, ..., jibun') 형태를 명시적으로 찾는다. 정규식 [\s\S]* 는 주석도 매칭하므로
-  // 라인별로 검사하고, jibun 이 select() 괄호 안에 있는지 확인한다.
-  const lines = source.split('\n');
-  let selectCount = 0;
-  let jibunCount = 0;
-  for (const line of lines) {
-    if (line.includes('.select(\'apt_name')) {
-      selectCount++;
-      // 같은 라인 또는 이어지는 부분에서 select의 닫는 괄호까지를 컬럼 목록으로 본다.
-      // 간단한 검증: 해당 라인에 jibun 이 있는지 (select 시작부터 ')' 전까지)
-      const selectPart = line.substring(line.indexOf('.select('));
-      if (selectPart.match(/\.select\('[^']*jibun[^']*'\)/)) {
-        jibunCount++;
-      }
-    }
-  }
+  const SELECT_JIBUN_RE = /\.select\('[^']*\bjibun\b[^']*'\)/;
+  const MAP_JIBUN_RE = /jibun:\s*r\.jibun\s*\|\|\s*''/;
 
-  assert.ok(selectCount === 3, `3개의 select 를 찾아야 한다 (찾은 개수: ${selectCount})`);
-  assert.ok(jibunCount === 3, `3개 select 모두 jibun 을 포함해야 한다 (jibun 포함: ${jibunCount})`);
+  const checkMapper = (label, startMarker, endMarker) => {
+    const start = src.indexOf(startMarker);
+    assert.ok(start >= 0, `${label} 함수를 찾지 못했다 — 이름이 바뀌었으면 이 테스트도 갱신할 것`);
+    const end = src.indexOf(endMarker, start);
+    assert.ok(end > start, `${label} 의 끝 경계('${endMarker}')를 찾지 못했다`);
+    const body = src.slice(start, end);
+    assert.match(body, SELECT_JIBUN_RE, `${label} 의 select 문에 jibun 이 없다`);
+    assert.match(body, MAP_JIBUN_RE,
+      `${label} 의 반환 객체 매핑에 jibun 이 없다 — select 에는 있어도 매핑이 없으면 `
+      + 'analyzeTransactions 가 지번을 못 읽는다(select 문자열만 보는 검사로는 이 결함을 놓친다)');
+  };
+
+  checkMapper('getTransactionsFromDb', 'async function getTransactionsFromDb(', 'async function getRegionRecentTransactions(');
+  checkMapper('getRegionRecentTransactions', 'async function getRegionRecentTransactions(', 'async function getTransactions(');
+  checkMapper('getTransactionsByAptSeq', 'async function getTransactionsByAptSeq(', 'module.exports = {');
 });
 test('전세가율 표본 완전성 — 결측 달이 있으면 실제 개월 수를 밝히고, 없으면 기존 문구를 유지한다 (Plan 046)', () => {
   // Plan 041 이 "최근 6개월 전세 실거래 기준" 이라는 사실 주장을 추가했다. 그런데 국토부 조회가
@@ -7818,7 +7849,15 @@ test('Plan 050: verify 가 backend 테스트를 TZ=UTC 로 실행한다 (호스�
 //   ⚠ 절대 날짜는 "고정 입력"으로만 쓴다(Date.now() 에 의존하는 단언 금지) — 입력·기대값 둘 다 고정.
 //   ⚠ Date.now 만 모킹하면 `new Date()`(무인자) 는 영향받지 않는다(V8 이 내부 시계를 직접 참조) —
 //   briefingService.kstDayString() 의 무인자 분기를 검증하려면 생성자 자체를 모킹해야 한다.
-function _withMockedDate(ts, fn) {
+// GATE-ASYNC-MOCK-2026-09-06 (Plan 060 ⑦): `try { return fn(); } finally { global.Date = OrigDate; }` 는
+//   fn 이 동기면 문제없지만, fn 이 **async** 면 `fn()` 호출이 첫 await 에서 즉시 pending Promise 를
+//   반환하고 그 순간 finally 가 실행돼 Date 를 원복해 버린다 — fn 내부의 첫 await **뒤** 코드는
+//   이미 원래 Date 로 돌아간 채 실행된다(감사자 실측). account.js:351 이 첫 await **앞**에서 연도를
+//   계산해 지금은 우연히 통과할 뿐이다 — `await Promise.resolve();` 한 줄만 그 앞에 넣으면(프로덕션
+//   동작은 동일) 그 즉시 실패로 드러난다(fail-loud 이지 위양성 초록은 아니다. 다만 의미 보존
+//   리팩터가 이유 없는 실패를 만든다는 점에서 이 헬퍼 자체가 결함이다). `await fn()` 으로 고쳐
+//   finally 가 fn 의 프라미스가 실제로 끝난 뒤에만 실행되게 한다.
+async function _withMockedDate(ts, fn) {
   const OrigDate = global.Date;
   class MockDate extends OrigDate {
     constructor(...args) {
@@ -7829,13 +7868,13 @@ function _withMockedDate(ts, fn) {
   }
   global.Date = MockDate;
   try {
-    return fn();
+    return await fn();
   } finally {
     global.Date = OrigDate;
   }
 }
 
-test('KST-SSOT-2026-09-06: dailyLimit·briefingService 사본이 SSOT(kstTime) 와 경계에서 같은 값을 낸다', () => {
+test('KST-SSOT-2026-09-06: dailyLimit·briefingService 사본이 SSOT(kstTime) 와 경계에서 같은 값을 낸다', async () => {
   const { todayKey, secondsUntilMidnight } = require('../middleware/dailyLimit');
   const { kstDayString } = require('../services/briefingService');
   const { kstDate, nextKstMidnight } = require('../utils/kstTime');
@@ -7852,7 +7891,9 @@ test('KST-SSOT-2026-09-06: dailyLimit·briefingService 사본이 SSOT(kstTime) �
     const ts = Date.parse(iso);
 
     // (1) dailyLimit — 고정 기대값 + SSOT 교차검증
-    _withMockedDate(ts, () => {
+    // _withMockedDate 가 async 로 바뀌었으므로 await 없이 부르면 finally 원복 시점이
+    // 다음 반복과 경합할 수 있다 — 반드시 await 한다(⑦ 수정과 짝을 이루는 호출부 수정).
+    await _withMockedDate(ts, () => {
       assert.equal(todayKey(), expTodayKey, `${label}: todayKey 고정 기대값 불일치`);
       assert.equal(todayKey(), kstDate(ts).replace(/-/g, ''), `${label}: todayKey 가 SSOT(kstDate) 와 다르다`);
       assert.equal(secondsUntilMidnight(), expSecUntilMidnight, `${label}: secondsUntilMidnight 고정 기대값 불일치`);
@@ -7873,7 +7914,7 @@ test('KST-SSOT-2026-09-06: dailyLimit·briefingService 사본이 SSOT(kstTime) �
   }
 
   // 하한 가드: KST 자정 1초 전이어도 최소 60초 TTL (SSOT 치환 후에도 유지돼야 한다)
-  _withMockedDate(Date.parse('2026-09-06T14:59:59Z'), () => {
+  await _withMockedDate(Date.parse('2026-09-06T14:59:59Z'), () => {
     assert.equal(secondsUntilMidnight(), 60, 'TTL 하한 60초 가드가 사라짐(Math.max(60, …) 유지 확인)');
   });
 });
@@ -7883,8 +7924,17 @@ test('KST-SSOT-2026-09-06: account.js POST /activity 의 kstYear 가 SSOT(kstDat
   //   req/res 목으로 호출해 실제 반환 연도를 확인한다(billing 테스트와 같은 패턴).
   const clientPath = require.resolve('../db/client');
   const accountPath = require.resolve('../routes/account');
+  // GATE-STUB-CONTAMINATION-2026-09-06 (Plan 060 ⑥): middleware/auditLog.js 가 모듈 스코프에서
+  //   `const { requireSupabaseAdmin } = require('../db/client')` 로 구조분해한다 — routes/account
+  //   가 auditLog 를 require 하는데, 이 시점에 auditLog 가 아직 require.cache 에 없으면 방금
+  //   스텁한 db/client(throw 하는 함수)를 auditLog 의 클로저에 영구히 가둔다. finally 가
+  //   db/client·routes/account 두 캐시만 복원해서는 이걸 못 되돌린다(감사자 실측: 이 테스트
+  //   뒤에 writeAudit 을 부르는 프로브를 붙이면 "이 테스트에서 사용되지 않아야 한다" 로 fail).
+  //   auditLog 도 같은 생애주기로 저장·삭제·복원한다.
+  const auditLogPath = require.resolve('../middleware/auditLog');
   const savedClient = require.cache[clientPath];
   const savedAccount = require.cache[accountPath];
+  const savedAuditLog = require.cache[auditLogPath];
   try {
     const rpcCalls = [];
     require.cache[clientPath] = {
@@ -7898,6 +7948,7 @@ test('KST-SSOT-2026-09-06: account.js POST /activity 의 kstYear 가 SSOT(kstDat
       },
     };
     delete require.cache[accountPath];
+    delete require.cache[auditLogPath]; // account 와 함께 다시 로드되게 강제 — 스텁 창 밖으로 새지 않는다
     const router = require('../routes/account');
     const layer = router.stack.find((l) => l.route && l.route.path === '/activity' && l.route.methods && l.route.methods.post);
     assert.ok(layer, 'account 라우터에서 POST /activity 를 찾지 못했다(경로 변경 시 이 테스트도 갱신할 것)');
@@ -7925,6 +7976,30 @@ test('KST-SSOT-2026-09-06: account.js POST /activity 의 kstYear 가 SSOT(kstDat
   } finally {
     if (savedClient) require.cache[clientPath] = savedClient; else delete require.cache[clientPath];
     if (savedAccount) require.cache[accountPath] = savedAccount; else delete require.cache[accountPath];
+    if (savedAuditLog) require.cache[auditLogPath] = savedAuditLog; else delete require.cache[auditLogPath];
+  }
+});
+
+test('GATE-STUB-CONTAMINATION-2026-09-06: 위 테스트 직후에도 writeAudit 이 db/client 스텁에 오염되지 않는다', async () => {
+  // 이 테스트는 반드시 바로 위 테스트 **다음**에 있어야 의미가 있다(순서 의존) — 바로 위
+  // 테스트가 db/client 를 스텁하는 동안 middleware/auditLog.js 가 그 스텁을 클로저에 가두면,
+  // 그 다음으로 auditLog 를 쓰는 코드가 바로 이 테스트다. writeAudit 은 실패를 내부에서 삼키므로
+  // (파일 상단 "장애 허용" 설계) 예외 발생 여부로는 오염을 못 잡는다 — logger.warn 호출 인자를
+  // 가로채 실제로 흘러간 에러 메시지를 확인한다. 오염됐다면 db/client 미설정 메시지
+  // ('Supabase 미설정 — …') 대신 스텁의 '이 테스트에서 사용되지 않아야 한다' 가 찍힌다.
+  const logger = require('../logger');
+  const origWarn = logger.warn;
+  let captured = null;
+  logger.warn = (obj) => { captured = obj; };
+  try {
+    const { writeAudit } = require('../middleware/auditLog');
+    await writeAudit({ headers: {}, ip: '127.0.0.1' }, 'test.probe', 'test', 'probe-id', {});
+  } finally {
+    logger.warn = origWarn;
+  }
+  if (captured) {
+    assert.notEqual(captured.err, '이 테스트에서 사용되지 않아야 한다',
+      'auditLog 가 위 테스트의 db/client 스텁을 영구히 클로저에 가두고 있다(require.cache 전이 오염)');
   }
 });
 
@@ -9850,4 +9925,74 @@ test('Plan 064 ⑩: reliability===NONE 이라 marketSummary 가 null 이어도 g
   assert.equal(marketSummary, null, 'reliability=NONE 인데 marketSummary 가 null 이 아니다(테스트 전제 확인)');
   assert.equal(gapData.jeonseBasis, '전세 실거래 4/6개월 표본',
     'reliability=NONE 경로에서 gapData.jeonseBasis 가 옳게 채워지지 않는다');
+});
+
+// ── WIRE-JEONSE-SAMPLE-2026-09-06 (Plan 060 ④): analyzeApt 의 배선을 실행으로 확인한다 ──────
+//   [왜] analysisService.js:596 은 `_jTotal !== null ? { total: _jTotal, failed: _jFailed } : null`
+//   로 전세 표본 결측 메타를 summarizeMarketSignal 의 4번째 인자에 넘긴다. 기존 테스트 2개는
+//   (a) calcBuySignal 을 직접 호출해 4번째 인자를 손으로 채우고, (b) 메타 추출 코드가 filter
+//   보다 앞에 있는지 소스 인덱스만 비교한다 — **그 사이의 배선**(analyzeApt 가 그 인자를 실제로
+//   채워 넘기는가)은 아무도 안 본다. 감사자 실측: :596 을 `null,` 로 바꿔(무조건 "모름") 넣어도
+//   pass 249 / fail 0, eslint 도 통과했다(`_` 접두라 미사용 경고도 안 뜬다).
+//   [방식] REC-BEHAVIORAL 테스트의 require.cache 기법과 동일 — analyzeApt 자신은 실제 소스
+//   그대로 실행하고, 외부 I/O(transactionService·rentService)만 고정 픽스처로 바꾼다.
+//   ⚠ 프로덕션 코드는 건드리지 않는다 — 지금 값(:596)은 옳다, 이 테스트는 그걸 지킨다.
+test('WIRE-JEONSE-SAMPLE-2026-09-06: analyzeApt 가 전세 표본 결측(_jTotal/_jFailed)을 marketSummary 까지 실제로 넘긴다', async () => {
+  const txPath = require.resolve('../services/transactionService');
+  const rentPath = require.resolve('../services/rentService');
+  const asPath = require.resolve('../services/analysisService');
+  const realTx = require(txPath);
+  const cache = require('../cache');
+
+  const LAWD = '11350'; // 노원구 — transactionService.LAWD_CODES 실값
+  const buildYear = 2015;
+  const now = new Date();
+  const saleTx = Array.from({ length: 10 }, (_, i) => ({
+    aptName: '배선단지', sigungu: '노원구', umdNm: '상계동',
+    excluUseAr: 84.9, buildYear, floor: 5 + i,
+    dealYear: now.getFullYear(), dealMonth: now.getMonth() + 1, dealDay: (i % 28) + 1,
+    dealAmount: 60000, lawdCd: LAWD, aptSeq: `${LAWD}-0`, jibun: '',
+  }));
+  // getJeonseByApt 가 돌려주는 배열 자체에 monthsTotal/monthsFailed 를 싣는다
+  // (rentService 실제 계약과 같은 모양 — 배열의 "커스텀 속성").
+  const jeonseArr = [
+    { deposit: 42000, monthlyRent: 0 },
+    { deposit: 41000, monthlyRent: 0 },
+  ];
+  jeonseArr.monthsTotal = 6;
+  // ⚠ rentService.js:342 의 실제 계약은 monthsFailed 가 "실패한 달 문자열의 배열"이다(길이가
+  //   실패 개월 수) — analysisService.js:548 이 `Array.isArray(...) ? .length : null` 로 읽는다.
+  //   숫자를 직접 넣으면(Array.isArray 가 false) _jFailed 가 null 이 되어 이 테스트 자체가
+  //   무의미해진다(최초 작성 때 실제로 이 실수로 오탐 없이 조용히 "완전 표본" 분기로 샜다).
+  jeonseArr.monthsFailed = ['202608', '202607']; // 2개월 결측 → "전세 실거래 4/6개월 표본" 문구가 나와야 한다
+
+  const stubs = {
+    [txPath]: { ...realTx, getTransactionsByAptInclAliases: async () => saleTx },
+    [rentPath]: { getJeonseByApt: async () => jeonseArr },
+  };
+  const saved = new Map();
+  for (const [p, exp] of Object.entries(stubs)) {
+    saved.set(p, require.cache[p]);
+    require.cache[p] = { id: p, filename: p, loaded: true, exports: exp };
+  }
+  saved.set(asPath, require.cache[asPath]);
+  delete require.cache[asPath]; // analysisService 자신은 다시 읽어 위 스텁을 보게 한다
+
+  cache.del('analysis:11350:배선단지::'); // 이전 실행의 캐시가 남아있으면 픽스처가 무시된다
+
+  try {
+    const { analyzeApt } = require(asPath);
+    const result = await analyzeApt(LAWD, '배선단지', 6.0);
+    assert.ok(result.marketSummary, 'marketSummary 가 계산되지 않았다 — 픽스처의 saleTx 표본(8건 이상)이 부족한지 확인');
+    const jeonseCond = result.marketSummary.conditions.find(c => c.label === '전세가율');
+    assert.ok(jeonseCond, '전세가율 조건 카드가 없다 — 픽스처의 jeonse 표본으로 jeonseRate 가 계산되지 않았다');
+    assert.match(jeonseCond.desc, /전세 실거래 4\/6개월 표본/,
+      'analyzeApt 가 _jTotal/_jFailed 를 marketSummary 까지 넘기지 않는다 — '
+      + ':596 이 무조건 null 을 넘기면(배선 삭제) 결측이 있어도 "최근 6개월 전세 실거래 기준"으로 나온다');
+    assert.doesNotMatch(jeonseCond.desc, /최근 6개월 전세 실거래 기준/,
+      '결측이 있는데 "최근 6개월" 로 단정한다 — 표본 메타가 analyzeApt 에서 끊겼다');
+  } finally {
+    for (const [p, prev] of saved) { if (prev) require.cache[p] = prev; else delete require.cache[p]; }
+    for (const [p, prev] of saved) assert.equal(require.cache[p], prev, `require.cache 복원 실패: ${p}`);
+  }
 });
