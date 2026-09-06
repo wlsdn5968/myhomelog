@@ -6881,3 +6881,74 @@ test('취득세: 2주택+ 는 주택수 불확정 — 프론트·백엔드 실�
     }
   }
 });
+// ── Plan 035 (2026-09-06): /share 치환 문자열의 $ 패턴 확장 차단 ──────────
+//   [왜] backend/routes/share.js 의 OG 메타 치환 8+1개가 String.replace 에 **문자열**
+//   replacement 를 줬다. JS 는 문자열 replacement 안의 특수 패턴(매치 전체·매치 앞부분·
+//   매치 뒷부분·리터럴 달러)을 다시 확장하는데, 이 값은 요청 쿼리에서 오고 치환이 커지는
+//   문자열 위에서 연쇄되므로 증폭이 곱으로 쌓인다. 실측(계획 작성 시): 확장 패턴 20자
+//   입력 → 응답 43배(35,784,867자). 40자(=apt 상한 60자 이내)면 V8 문자열 상한을 넘겨
+//   RangeError. /share 는 인증·레이트리밋이 없고, 결제·인증·cron 과 같은 서버리스 함수
+//   인스턴스를 공유한다(vercel.json 의 api/index.js). 수정은 replacement 를 함수(lit())로
+//   바꿔 재스캔 자체를 원리적으로 막는다 — 치환 결과 문자열의 의미는 바뀌지 않는다.
+//   [이 테스트가 고정하는 것] 확장 패턴을 담은 입력이 응답 길이를 원본 HTML + 4,096자
+//   넘게 부풀리지 못한다(?apt=, ?cmp= 두 분기 모두). 정상 입력의 치환은 여전히 동작한다.
+//   ⚠ 확장 패턴 문자열은 문자 코드로 조립한다 — 소스에 리터럴로 두면 정적 검사가 자기
+//   자신을 잡는 자충수(이 저장소에서 6회 재발)가 생긴다.
+function _shareHandler() {
+  const router = require('../routes/share');
+  const layer = router.stack.find((l) => l.route && l.route.path === '/');
+  assert.ok(layer, "share 라우터에서 '/' 를 찾지 못했다 (경로 변경 시 이 테스트도 갱신할 것)");
+  return layer.route.stack[layer.route.stack.length - 1].handle;
+}
+function _shareMockRes() {
+  return {
+    statusCode: 200, body: null,
+    status(c) { this.statusCode = c; return this; },
+    set() { return this; },
+    type() { return this; },
+    redirect(c) { this.statusCode = c; return this; },
+    send(b) { this.body = b; return this; },
+  };
+}
+// 확장 패턴("매치 앞부분 전체" 로 확장되는 두 글자, $ 와 백틱)을 문자 코드로 조립한다.
+const _SHARE_EXPAND_PAIR = String.fromCharCode(36) + String.fromCharCode(96);
+
+test('/share?apt= — 확장 패턴 입력이 응답 길이를 증폭시키지 않는다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const originalLen = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8').length;
+  const handle = _shareHandler();
+  const evil = _SHARE_EXPAND_PAIR.repeat(10); // 20자 — 계획 실측과 같은 강도, apt 상한(60자) 이내
+  const req = { query: { apt: evil, area: '' }, protocol: 'https', get: () => 'myhomelog.example' };
+  const res = _shareMockRes();
+  handle(req, res);
+  assert.equal(typeof res.body, 'string', '응답 본문이 문자열이 아니다');
+  assert.ok(res.body.length <= originalLen + 4096,
+    `치환이 증폭됐다 — 원본 ${originalLen}자, 응답 ${res.body.length}자 (상한 ${originalLen + 4096}자)`);
+});
+
+test('/share?apt= — 정상 입력에서는 치환이 여전히 동작한다 (회귀 방지)', () => {
+  const handle = _shareHandler();
+  const req = { query: { apt: '반포자이', area: '' }, protocol: 'https', get: () => 'myhomelog.example' };
+  const res = _shareMockRes();
+  handle(req, res);
+  assert.equal(typeof res.body, 'string');
+  assert.match(res.body, /<title>반포자이[^<]*<\/title>/, 'apt 값이 <title> 에 반영되지 않았다 — 치환이 깨졌다');
+});
+
+test('/share?cmp= — 비교 공유 분기도 같은 길이 상한을 지킨다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const originalLen = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8').length;
+  const handle = _shareHandler();
+  const evil = _SHARE_EXPAND_PAIR.repeat(10); // aptName 상한 40자 이내
+  const arr = [{ aptName: evil }, { aptName: evil }];
+  const cmp = Buffer.from(JSON.stringify(arr), 'utf8').toString('base64')
+    .replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  const req = { query: { apt: '', cmp }, protocol: 'https', get: () => 'myhomelog.example' };
+  const res = _shareMockRes();
+  handle(req, res);
+  assert.equal(typeof res.body, 'string', '응답 본문이 문자열이 아니다');
+  assert.ok(res.body.length <= originalLen + 4096,
+    `cmp 분기 치환이 증폭됐다 — 원본 ${originalLen}자, 응답 ${res.body.length}자 (상한 ${originalLen + 4096}자)`);
+});

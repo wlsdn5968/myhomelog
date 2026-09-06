@@ -28,10 +28,23 @@ function loadHtml() {
 }
 
 function escapeHtml(s) {
-  return String(s || '').replace(/[<>"'&]/g, c => ({
-    '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '&': '&amp;',
+  // SHARE-REPLACE-LITERAL-2026-09-06: `$` 도 함께 이스케이프한다 — 아래 lit() 이 이미 확장을
+  //   막지만, 나중에 문자열 형태 치환이 다시 들어와도 안전하도록 두 겹으로 둔다.
+  return String(s || '').replace(/[<>"'&$]/g, c => ({
+    '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '&': '&amp;', '$': '&#36;',
   }[c]));
 }
+
+// SHARE-REPLACE-LITERAL-2026-09-06:
+// [왜] String.replace 의 replacement 가 **문자열**이면 JS 가 그 안의 특수 패턴
+//   (매치 전체 / 매치 앞부분 / 매치 뒷부분 / 리터럴 달러) 4종을 다시 확장한다.
+//   여기 들어가는 값은 요청 쿼리에서 오고, 치환 8개가 커지는 문자열 위에서 연쇄되므로
+//   증폭이 곱으로 쌓인다.
+// [실측 2026-09-06] apt 에 확장 패턴 10개(20자) → 응답 35,784,867자(원본 823,777자의 43배).
+//   20개(40자)면 V8 문자열 상한을 넘겨 RangeError. apt 상한이 60자이므로 상한 입력은 항상 그 구간이다.
+//   결제·인증·cron 이 같은 서버리스 함수에 있어 그 인스턴스가 함께 죽는다.
+// [해결] replacement 를 **함수**로 준다 — 함수 반환값은 절대 재스캔되지 않는다.
+const lit = (s) => () => s;
 
 router.get('/', (req, res) => {
   const html = loadHtml();
@@ -56,20 +69,20 @@ router.get('/', (req, res) => {
     const shareUrl = `${origin}/share?cmp=${encodeURIComponent(cmp)}`;
     const t = escapeHtml(title), d = escapeHtml(desc), u = escapeHtml(shareUrl);
     const rewritten = html
-      .replace(/<title>[^<]*<\/title>/, `<title>${t}</title>`)
-      .replace(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${d}">`)
-      .replace(/<meta property="og:title" content="[^"]*">/, `<meta property="og:title" content="${t}">`)
-      .replace(/<meta property="og:description" content="[^"]*">/, `<meta property="og:description" content="${d}">`)
-      .replace(/<meta property="og:url" content="[^"]*">/, `<meta property="og:url" content="${u}">`)
-      .replace(/<meta name="twitter:title" content="[^"]*">/, `<meta name="twitter:title" content="${t}">`)
-      .replace(/<meta name="twitter:description" content="[^"]*">/, `<meta name="twitter:description" content="${d}">`)
-      .replace(/<link rel="canonical" href="[^"]*">/, `<link rel="canonical" href="${u}">`)
+      .replace(/<title>[^<]*<\/title>/, lit(`<title>${t}</title>`))
+      .replace(/<meta name="description" content="[^"]*">/, lit(`<meta name="description" content="${d}">`))
+      .replace(/<meta property="og:title" content="[^"]*">/, lit(`<meta property="og:title" content="${t}">`))
+      .replace(/<meta property="og:description" content="[^"]*">/, lit(`<meta property="og:description" content="${d}">`))
+      .replace(/<meta property="og:url" content="[^"]*">/, lit(`<meta property="og:url" content="${u}">`))
+      .replace(/<meta name="twitter:title" content="[^"]*">/, lit(`<meta name="twitter:title" content="${t}">`))
+      .replace(/<meta name="twitter:description" content="[^"]*">/, lit(`<meta name="twitter:description" content="${d}">`))
+      .replace(/<link rel="canonical" href="[^"]*">/, lit(`<link rel="canonical" href="${u}">`))
     // SHARE-NOINDEX-2026-09-02 (감사 P1-8): robots.txt 가 /share 를 Disallow 하고 있어서
     //   카카오톡·X·스레드의 링크 미리보기 크롤러가 이 페이지를 아예 못 읽었다 — OG 메타를
     //   동적 치환하는 라우트인데 정작 그 목적이 막혀 있던 셈이다(운영자 SNS 자동화와 직결).
     //   → robots.txt 에서 Disallow 를 풀고, 대신 여기서 noindex 로 **중복 색인만** 막는다.
     //   follow 는 유지해 링크 그래프는 살린다.
-    .replace(/<meta name="robots" content="[^"]*">/, `<meta name="robots" content="noindex, follow">`);
+    .replace(/<meta name="robots" content="[^"]*">/, lit(`<meta name="robots" content="noindex, follow">`));
     res.set('Cache-Control', 'public, max-age=600, s-maxage=600');
     return res.type('html').send(rewritten);
   }
@@ -86,20 +99,20 @@ router.get('/', (req, res) => {
   const d = escapeHtml(desc);
   const u = escapeHtml(shareUrl);
   const rewritten = html
-    .replace(/<title>[^<]*<\/title>/, `<title>${t}</title>`)
-    .replace(/<meta name="description" content="[^"]*">/, `<meta name="description" content="${d}">`)
-    .replace(/<meta property="og:title" content="[^"]*">/, `<meta property="og:title" content="${t}">`)
-    .replace(/<meta property="og:description" content="[^"]*">/, `<meta property="og:description" content="${d}">`)
-    .replace(/<meta property="og:url" content="[^"]*">/, `<meta property="og:url" content="${u}">`)
-    .replace(/<meta name="twitter:title" content="[^"]*">/, `<meta name="twitter:title" content="${t}">`)
-    .replace(/<meta name="twitter:description" content="[^"]*">/, `<meta name="twitter:description" content="${d}">`)
-    .replace(/<link rel="canonical" href="[^"]*">/, `<link rel="canonical" href="${u}">`)
+    .replace(/<title>[^<]*<\/title>/, lit(`<title>${t}</title>`))
+    .replace(/<meta name="description" content="[^"]*">/, lit(`<meta name="description" content="${d}">`))
+    .replace(/<meta property="og:title" content="[^"]*">/, lit(`<meta property="og:title" content="${t}">`))
+    .replace(/<meta property="og:description" content="[^"]*">/, lit(`<meta property="og:description" content="${d}">`))
+    .replace(/<meta property="og:url" content="[^"]*">/, lit(`<meta property="og:url" content="${u}">`))
+    .replace(/<meta name="twitter:title" content="[^"]*">/, lit(`<meta name="twitter:title" content="${t}">`))
+    .replace(/<meta name="twitter:description" content="[^"]*">/, lit(`<meta name="twitter:description" content="${d}">`))
+    .replace(/<link rel="canonical" href="[^"]*">/, lit(`<link rel="canonical" href="${u}">`))
     // SHARE-NOINDEX-2026-09-02 (감사 P1-8): robots.txt 가 /share 를 Disallow 하고 있어서
     //   카카오톡·X·스레드의 링크 미리보기 크롤러가 이 페이지를 아예 못 읽었다 — OG 메타를
     //   동적 치환하는 라우트인데 정작 그 목적이 막혀 있던 셈이다(운영자 SNS 자동화와 직결).
     //   → robots.txt 에서 Disallow 를 풀고, 대신 여기서 noindex 로 **중복 색인만** 막는다.
     //   follow 는 유지해 링크 그래프는 살린다.
-    .replace(/<meta name="robots" content="[^"]*">/, `<meta name="robots" content="noindex, follow">`);
+    .replace(/<meta name="robots" content="[^"]*">/, lit(`<meta name="robots" content="noindex, follow">`));
   // 크롤러 캐시 친화 + 동일 쿼리 재방문 시 빠르게
   res.set('Cache-Control', 'public, max-age=600, s-maxage=600');
   res.type('html').send(rewritten);
