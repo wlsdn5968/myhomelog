@@ -7612,3 +7612,36 @@ test('브리핑 스냅샷 — buildBriefingPayload 구성요소 실패 시에도
     for (const [k, p] of Object.entries(paths)) { if (saved[k]) require.cache[p] = saved[k]; else delete require.cache[p]; }
   }
 });
+
+test('JIBUN-COL-2026-09-06: getTransactionsByAptSeq 매퍼가 jibun 을 반환한다', async () => {
+  // 계약: transactionService.js 의 세 select 매퍼(getTransactionsFromDb, getRegionRecentTransactions, getTransactionsByAptSeq)
+  //   는 모두 jibun 을 포함해야 한다 (analyzeTransactions 가 단지 지번 최빈값을 계산할 때 필요).
+  // 검증 방식: 소스 문자열 정규식 (배선 계약 — 컬럼 목록이 같은 집합인지)
+  //   실행 검증은 이미 npm test 가 하고, 여기선 대칭성 결함을 명시적으로 고정한다.
+  //   (소스 대조 이유: select 컬럼 목록은 배선이고, 정규식이 옳은 도구)
+  const fs = require('fs');
+  const path = require('path');
+  const svcPath = path.join(__dirname, '../services/transactionService.js');
+  const source = fs.readFileSync(svcPath, 'utf8');
+
+  // 세 select 의 라인 단위 검증:
+  // select('apt_name, ..., jibun') 형태를 명시적으로 찾는다. 정규식 [\s\S]* 는 주석도 매칭하므로
+  // 라인별로 검사하고, jibun 이 select() 괄호 안에 있는지 확인한다.
+  const lines = source.split('\n');
+  let selectCount = 0;
+  let jibunCount = 0;
+  for (const line of lines) {
+    if (line.includes('.select(\'apt_name')) {
+      selectCount++;
+      // 같은 라인 또는 이어지는 부분에서 select의 닫는 괄호까지를 컬럼 목록으로 본다.
+      // 간단한 검증: 해당 라인에 jibun 이 있는지 (select 시작부터 ')' 전까지)
+      const selectPart = line.substring(line.indexOf('.select('));
+      if (selectPart.match(/\.select\('[^']*jibun[^']*'\)/)) {
+        jibunCount++;
+      }
+    }
+  }
+
+  assert.ok(selectCount === 3, `3개의 select 를 찾아야 한다 (찾은 개수: ${selectCount})`);
+  assert.ok(jibunCount === 3, `3개 select 모두 jibun 을 포함해야 한다 (jibun 포함: ${jibunCount})`);
+});

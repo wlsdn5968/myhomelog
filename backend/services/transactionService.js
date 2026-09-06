@@ -787,7 +787,7 @@ async function getTransactionsByAptSeq(aptSeq, monthsBack = 24) {
     const LIM = 1000;
     const { data, error } = await admin
       .from('molit_transactions')
-      .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq')
+      .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq, jibun')
       .eq('apt_seq', seq)
       .gte('deal_date', since.toISOString().slice(0, 10))
       .order('deal_date', { ascending: false })
@@ -799,6 +799,10 @@ async function getTransactionsByAptSeq(aptSeq, monthsBack = 24) {
       logger.warn({ aptSeq: seq, limit: LIM }, 'apt_seq 거래가 조회 상한에 닿음 — 페이징 필요');
     }
     if (!rows.length) { cache.set(ck, null, 600); return null; }
+    // JIBUN-COL-2026-09-06 (Plan 048): jibun 이 빠져 있었다 — analyzeTransactions 가 단지 지번(최빈값)을 여기서
+    //   만들고, 추천 경로의 JIBUN-MATCH(게이트·카드) 는 그 값으로 KAPT 를 찾는다. 컬럼이 없으니 지번 매칭이 한 번도
+    //   성립한 적이 없었다 → 세대수 확인 감소. 직전 2026-09-05 스프린트가 두 번째 사본(:132)을 고쳤는데
+    //   세 번째 사본은 놓쳤다 — 대칭성 결함.
     const mapped = rows.map(r => ({
       aptName: r.apt_name,
       sigungu: r.sigungu || '',
@@ -812,6 +816,7 @@ async function getTransactionsByAptSeq(aptSeq, monthsBack = 24) {
       dealAmount: Number(r.deal_amount) || 0,
       lawdCd: r.lawd_cd || '',
       aptSeq: r.apt_seq || seq,
+      jibun: r.jibun || '',
     }));
     cache.set(ck, mapped, 21600); // 6h — daily ingest 주기 기준(getRegionRecentTransactions 와 동일)
     return mapped;
