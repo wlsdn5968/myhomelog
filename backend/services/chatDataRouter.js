@@ -248,15 +248,35 @@ async function _market(query, context) {
     if (retry) {
       const rRanked = _buildRanked(retry.molitRows, retry.name);
       const rAm = _buildAmCandidates(retry.amRows, retry.name);
-      // Step 3(운영자 요구 "여러개가 뜨면 선택하라고 하던지"): 지역으로 좁혔는데도 후보가
-      //   2곳 이상이면 051 이 이미 쓰는 되묻기 형식(아래 amCandidates>=2 분기와 동일 문구
-      //   틀)을 그대로 재사용한다 — 새 문구 체계를 만들지 않는다.
-      if (rRanked.length + rAm.length >= 2) {
-        const opts = [
-          ...rRanked.map(c => `${c.aptName}${c.sigungu ? `(${c.sigungu})` : ''}`),
-          ...rAm.map(a => `${a.apt_name}${a.sigungu ? `(${a.sigungu})` : ''}`),
-        ].slice(0, 3);
-        const sugNames = [...rRanked.map(c => c.aptName), ...rAm.map(a => a.apt_name)].slice(0, 3);
+      // CAND-DEDUP-2026-09-06 (Plan 059): rRanked(MOLIT 원본명)와 rAm(apt_master 정식명)를
+      //   그냥 이어붙이면 같은 단지가 두 출처에 하나씩 있을 때 두 번 세어진다 — 라이브 실측
+      //   ("대치 은마 시세" → molit_apt_index 1행 + apt_master 1행, 실제로는 한 단지인데
+      //   "은마(강남구) · 은마(강남구)" 두 번 나열되며 되물었다). 단지 단위 키로 먼저 합쳐
+      //   실제 서로 다른 단지 수만 센다 — 그 수가 2 이상일 때만 되묻는다(운영자 요구 "여러개가
+      //   뜨면 선택하라고 하던지" — 하나뿐이면 그냥 답한다).
+      //   키 = normalizeName(이름)|sigungu. umd_nm 은 넣지 않는다 — apt_master.umd_nm(KAPT
+      //   as3, aptMasterSync.js)과 molit_apt_index.umd_nm(MOLIT 원본, molitIngest.js)은 같은
+      //   법정동을 서로 다른 문자열로 적을 수 있음이 이 저장소에 이미 실측·기록돼 있다
+      //   (aptFacilityService.js EUPMYEON-FALLBACK 주석: 읍/면 지역에서 전국 1,146개 umd_nm
+      //   조합 중 apt_master 는 "범서읍"처럼 읍/면 단독, molit 은 "범서읍 구영리"처럼 읍/면+리
+      //   결합으로 저장돼 240건이 umd_nm 을 키에 넣으면 매칭 자체가 깨진다). sigungu 까지만
+      //   쓰는 지금 설계가 옳다는 근거다.
+      const mergedCand = new Map();
+      for (const c of rRanked) {
+        const key = `${normalizeName(c.aptName)}|${c.sigungu || ''}`;
+        if (!mergedCand.has(key)) mergedCand.set(key, { name: c.aptName, sigungu: c.sigungu || '' });
+      }
+      for (const a of rAm) {
+        const key = `${normalizeName(a.apt_name)}|${a.sigungu || ''}`;
+        if (!mergedCand.has(key)) mergedCand.set(key, { name: a.apt_name, sigungu: a.sigungu || '' });
+      }
+      const merged = [...mergedCand.values()];
+      // Step 3(운영자 요구 "여러개가 뜨면 선택하라고 하던지"): 지역으로 좁혔는데도 실제
+      //   단지 수가 2곳 이상이면 051 이 이미 쓰는 되묻기 형식(아래 amCandidates>=2 분기와
+      //   동일 문구 틀)을 그대로 재사용한다 — 새 문구 체계를 만들지 않는다.
+      if (merged.length >= 2) {
+        const opts = merged.map(c => `${c.name}${c.sigungu ? `(${c.sigungu})` : ''}`).slice(0, 3);
+        const sugNames = merged.map(c => c.name).slice(0, 3);
         return {
           text: `"${q}" 로 여러 단지가 걸려요: ${opts.join(' · ')}\n혹시 이 중에 있나요? 아래에서 눌러 고르시거나 지역명을 함께 적어주세요.`,
           suggestions: sugNames.map(n => `${n} 시세`),

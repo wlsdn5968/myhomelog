@@ -95,12 +95,21 @@ function dice(a, b) {
 //   stem 2자 이상 요구 등)와 같은 취지로, 너무 짧은 조각은 전체매칭 위험을 키운다.
 //   반환 순서는 name 이 짧은(= region 을 더 많이 떼어낸) 후보 우선 — 좁을수록 정확하다.
 //   왕복 상한과 짝을 맞추기 위해 최대 3개까지만 반환한다.
+//
+// REGION-TOKEN-SINGLE-2026-09-06 (Plan 059 Step 2): region 을 접두 전체(tokens.slice(0,i))가
+//   아니라 분할점 바로 앞의 **단일 토큰**(tokens[i-1])만 쓰도록 바꿨다. [왜 바뀌었나] DB 의
+//   umd_nm·sigungu 는 항상 공백 없는 단일 토큰이다("대치동", "강남구") — 접두 전체를 region 으로
+//   쓰면 3토큰 질의("서울 강남 은마")에서 region 후보가 '서울 강남'(공백 포함) 또는 '서울'
+//   (sigungu 실제값 '강남구'와 불일치) 뿐이라 두 라운드 모두 원리적으로 0건이 된다 — 정답인
+//   {region:'강남', name:'은마'} 는 애초에 후보에 없었다(계획서 057 실행자가 스스로 보고한
+//   불확실성, 계획서 059 "결함 ②"). 2토큰 질의는 tokens[i-1] 이 곧 tokens.slice(0,i) 와 같은
+//   값이라 동작이 그대로다(하위호환, 아래 테스트가 고정).
 function splitRegionName(q) {
   const tokens = String(q == null ? '' : q).trim().split(/\s+/).filter(Boolean);
   if (tokens.length < 2) return []; // 토큰 1개 이하면 지역/이름을 나눌 대상이 없다.
   const out = [];
   for (let i = 1; i < tokens.length; i++) {
-    const region = tokens.slice(0, i).join(' ');
+    const region = tokens[i - 1];              // 단일 토큰만 — DB umd_nm/sigungu 와 형태를 맞춘다.
     const name = tokens.slice(i).join(' ');
     if (region.length < 2 || name.length < 2) continue;
     out.push({ region, name });

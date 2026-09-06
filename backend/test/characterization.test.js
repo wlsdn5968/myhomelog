@@ -8761,13 +8761,21 @@ function _adminWithIlikeChainTracker(tables) {
 // 절대 날짜 하드코딩 금지(레포 교훈 test-absolute-date-rot) — "지금부터 N일 전"으로 계산.
 const _recentDealDate = (daysAgo) => { const d = new Date(); d.setDate(d.getDate() - daysAgo); return d.toISOString().slice(0, 10); };
 
-test('splitRegionName — 지역·이름 분할 순수 함수 (Plan 057 Step 1, 계획서 값 그대로)', () => {
+test('splitRegionName — 지역·이름 분할 순수 함수 (Plan 057 Step 1 신설 → Plan 059 Step 2 에서 기대값 갱신)', () => {
   const { splitRegionName } = require('../utils/aptNameMatch');
   assert.deepEqual(splitRegionName('은마'), [], '토큰이 1개면 나눌 지역이 없다');
-  assert.deepEqual(splitRegionName('대치 은마'), [{ region: '대치', name: '은마' }]);
+  assert.deepEqual(splitRegionName('대치 은마'), [{ region: '대치', name: '은마' }], '2토큰 결과는 057 과 완전히 같다(하위호환)');
+  // REGION-TOKEN-SINGLE-2026-09-06 (Plan 059 Step 2): 아래 두 기대값은 057 시점(접두 전체를
+  //   region 으로 삼음: {region:'서울 강남', name:'은마'} / {region:'서울', name:'강남 은마'})
+  //   에서 바뀌었다. [왜] DB 의 umd_nm·sigungu 는 항상 공백 없는 단일 토큰("대치동","강남구")
+  //   인데 접두 전체는 공백을 포함해('서울 강남') ilike 매칭이 원리적으로 0건이고, 남은 후보
+  //   '서울' 도 sigungu 실제값('강남구')과 불일치해 역시 0건이었다(계획서 059 "결함 ②",
+  //   057 실행자가 스스로 보고한 불확실성) — 즉 3토큰 질의는 재시도 2라운드가 둘 다 헛돌아
+  //   실패했다. region 을 분할점 바로 앞 단일 토큰(tokens[i-1])으로 바꾸면 {region:'강남',
+  //   name:'은마'} 후보가 생겨 매칭된다.
   const three = splitRegionName('서울 강남 은마');
   assert.equal(three.length, 2, '분할점 2곳 모두 2자 이상 조건을 만족한다');
-  assert.deepEqual(three[0], { region: '서울 강남', name: '은마' }, 'name 이 짧은(지역을 더 뗀) 후보가 먼저 와야 한다');
+  assert.deepEqual(three[0], { region: '강남', name: '은마' }, 'name 이 짧은(지역을 더 뗀) 후보가 먼저 와야 한다 — 단일 토큰 region 이라 실제 DB 에 매칭된다');
   assert.deepEqual(three[1], { region: '서울', name: '강남 은마' });
   // 가드: 2자 미만 조각은 버린다.
   assert.deepEqual(splitRegionName('a 은마'), [], 'region 1자는 버려야 한다');
@@ -9161,4 +9169,87 @@ test('OG 지역 카드 — rec.stale 이면 이미지는 그대로 만들되 캐
       'stale 이라고 fallback(정적 이미지)으로 떨어졌다 — 실제 통계 카드가 있는데 규약을 깼다');
     assert.equal(res.headers['Content-Type'], 'image/png');
   } finally { rp.loadRegionData = saved; }
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// Plan 059 (2026-09-06) — 지역 분리 재시도에서 같은 단지를 두 번 세지 않는다.
+//   [왜] 057 배포 뒤 프로덕션 라이브 실측: "대치 은마 시세" → "은마(강남구) · 은마(강남구)"
+//   같은 단지가 두 번 나열되며 되물었다. DB 실측상 molit_apt_index 1행 + apt_master 1행,
+//   실제로는 한 단지다 — rRanked.length + rAm.length 로 단순 합산해 세는 게 결함이었다.
+//   [범위] chatDataRouter._market 의 지역 분리 재시도 결과 처리 블록(CAND-DEDUP-2026-09-06)만.
+//   _regionSplitRetry 의 조회 구성·_buildRanked/_buildAmCandidates 내부 로직·051 원 질의
+//   경로(amCandidates.length>=2 분기)는 손대지 않았다.
+// ══════════════════════════════════════════════════════════════════════════
+
+test('AI 도우미 시세 — 같은 단지가 두 출처(molit_apt_index·apt_master)에 하나씩 있으면 되묻지 않고 실거래를 답한다 (Plan 059 핵심, 운영자 재현 "대치 은마 시세")', async () => {
+  const { admin, tracker } = _adminWithIlikeChainTracker({
+    molit_apt_index: [
+      { apt_name: '은마', lawd_cd: '11680', sigungu: '강남구', umd_nm: '대치동', build_year: 1979, deal_count: 51 },
+    ],
+    apt_master: [
+      { apt_name: '은마', lawd_cd: '11680', sigungu: '강남구', umd_nm: '대치동', kapt_code: 'A13583507', molit_aliases: null },
+    ],
+    molit_transactions: [
+      { apt_name: '은마', sigungu: '강남구', umd_nm: '대치동', deal_amount: 250000, deal_date: _recentDealDate(10), exclu_use_ar: 84.4 },
+    ],
+  });
+  const { router, restore } = _requireRouterWithAdmin(admin);
+  try {
+    const { reply, suggestions } = await router.route('대치 은마 시세', null);
+    assert.equal(/혹시 이 중에 있나요/.test(reply), false,
+      'Plan 059 이전엔 여기서 되물었다(같은 단지가 두 출처에 있어 합계가 2로 셈) — 재현이 안 되면 STOP 대상');
+    assert.equal(/찾지 못했어요/.test(reply), false);
+    assert.match(reply, /거래 1건/, '되묻지 않고 실거래 데이터로 바로 답해야 한다');
+    assert.match(reply, /은마 \(강남구 대치동\)/);
+    assert.equal(tracker.doubleIlikeChains, 3, '1라운드(3조회)에서 성공해 멈춰야 한다 — 왕복 상한 불변(Plan 059 는 조회 구성을 건드리지 않는다)');
+    assert.equal(_NO_PROMO.test(reply), false);
+    assert.ok(Array.isArray(suggestions));
+  } finally { restore(); }
+});
+
+test('splitRegionName — Step 2 값 고정 (Plan 059, 계획서 검증 절 3케이스 그대로)', () => {
+  const { splitRegionName } = require('../utils/aptNameMatch');
+  // 계획서 059 Step 2 "검증" 절에 나열된 값 그대로 — 실행자가 실제로 찍어 보고에 남긴 값이기도 하다.
+  assert.deepEqual(splitRegionName('은마'), []);
+  assert.deepEqual(splitRegionName('대치 은마'), [{ region: '대치', name: '은마' }]);
+  assert.deepEqual(splitRegionName('서울 강남 은마'),
+    [{ region: '강남', name: '은마' }, { region: '서울', name: '강남 은마' }],
+    '1순위가 {region:"강남", name:"은마"} 여야 한다 — 계획서 059 완료 기준 항목');
+});
+
+test('splitRegionName — 2토큰 질의 결과가 Plan 057 시점과 완전히 같다 (Plan 059, 하위호환 회귀 고정)', () => {
+  const { splitRegionName } = require('../utils/aptNameMatch');
+  // region 계산을 tokens.slice(0,i).join(' ') → tokens[i-1] 로 바꿨지만, i=1 일 때는
+  // 두 식이 항상 같은 값(토큰 1개)이라 2토큰 질의는 원리적으로 영향받지 않는다 — 그 사실을
+  // "대치 은마"(057 핵심 재현 질의) 뿐 아니라 "공릉 풍림아이원"(051 핵심 재현 질의, 위 8154행
+  // normalizeName 테스트와 같은 문자열)으로도 고정해 둘 다 깨지지 않았음을 확인한다.
+  assert.deepEqual(splitRegionName('대치 은마'), [{ region: '대치', name: '은마' }]);
+  assert.deepEqual(splitRegionName('공릉 풍림아이원'), [{ region: '공릉', name: '풍림아이원' }]);
+});
+
+test('AI 도우미 시세 — 지역 분리 재시도에서 진짜로 다른 두 단지는 여전히 되묻고, 목록에 중복이 없다 (Plan 059, 대조군 — 과잉 병합 방지)', async () => {
+  const { admin, tracker } = _adminWithIlikeChainTracker({
+    molit_apt_index: [
+      { apt_name: '은마', lawd_cd: '11680', sigungu: '강남구', umd_nm: '대치동', build_year: 1979, deal_count: 51 },
+    ],
+    // apt_master 의 '은마타운'은 apt_name ILIKE '%은마%' 에 걸리지만(정규화해도 '은마'와
+    // 다른 이름) 실제로는 다른 단지다 — dedup 키가 이름까지 구분하는지 확인하는 대조군.
+    apt_master: [
+      { apt_name: '은마타운', lawd_cd: '11680', sigungu: '강남구', umd_nm: '대치동', kapt_code: 'A00000099', molit_aliases: null },
+    ],
+    molit_transactions: [],
+  });
+  const { router, restore } = _requireRouterWithAdmin(admin);
+  try {
+    const { reply, suggestions } = await router.route('대치 은마 시세', null);
+    assert.match(reply, /혹시 이 중에 있나요/, '진짜 서로 다른 두 단지는 여전히 되물어야 한다 — dedup 이 과잉 병합하면 안 된다');
+    const firstIdx = reply.indexOf('은마(강남구)');
+    const secondIdx = reply.indexOf('은마(강남구)', firstIdx + 1);
+    assert.ok(firstIdx >= 0, '은마(강남구) 표시가 목록에 없다');
+    assert.equal(secondIdx, -1, '같은 표시 문자열이 목록에 두 번 나왔다 — 중복 제거가 깨졌다');
+    assert.match(reply, /은마타운\(강남구\)/, '두 번째(실제로 다른) 단지 은마타운이 목록에서 빠졌다');
+    assert.equal(new Set(suggestions).size, suggestions.length, 'suggestions 에 중복이 있다');
+    assert.equal(tracker.doubleIlikeChains, 3, '되묻기 전까지 1라운드만 돌아야 한다');
+    assert.equal(_NO_PROMO.test(reply), false);
+  } finally { restore(); }
 });
