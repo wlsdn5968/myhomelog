@@ -8325,3 +8325,22 @@ test('AI 도우미 시세 — molit·apt_master 둘 다 0건이면 그제서야 
     assert.equal(_NO_PROMO.test(reply), false);
   } finally { restore(); }
 });
+
+test('_market — "찾지 못했어요" 는 molit·apt_master 둘 다 0건인 분기에만 있다 (Plan 051 완료기준)', () => {
+  const fs = require('node:fs');
+  const src = fs.readFileSync(require.resolve('../services/chatDataRouter.js'), 'utf8');
+  const start = src.indexOf('async function _market(');
+  assert.ok(start >= 0, '_market 함수를 찾지 못했다');
+  // 중괄호 카운팅으로 함수 본문만 추출 — 다음 핸들러(_rates 등)의 문구까지 섞이면 오탐한다.
+  let depth = 0, i = src.indexOf('{', start), bodyEnd = -1;
+  for (; i < src.length; i++) {
+    if (src[i] === '{') depth++;
+    else if (src[i] === '}') { depth--; if (depth === 0) { bodyEnd = i; break; } }
+  }
+  assert.ok(bodyEnd > start, '_market 함수의 닫는 중괄호를 찾지 못했다');
+  const body = src.slice(start, bodyEnd)
+    .split('\n').filter(l => !l.trim().startsWith('//')).join('\n'); // 설명 주석 제거 — 자기 충돌 방지
+  const hits = body.split('찾지 못했어요').length - 1;
+  assert.equal(hits, 1,
+    `_market 안에 "찾지 못했어요" 가 ${hits}번 있다(1번이어야 한다) — apt_master 히트 분기로 샜을 수 있다`);
+});

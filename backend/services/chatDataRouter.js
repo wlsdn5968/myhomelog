@@ -278,10 +278,11 @@ async function _market(query, context) {
     const am = amCandidates[0];
     const dongRows = await _dongRowsOnce(am.lawd_cd, am.umd_nm);
     if (!dongRows || !dongRows.length) {
-      // apt_master 에는 있으나 그 동에 국토부 실거래 자체가 안 잡힌다 — 그래도 "찾지 못했어요"는
-      // 금지(Step 5 첫 원칙). 단지 존재는 확인해주고 검색창으로 안내한다.
-      return `"${am.apt_name}"(${am.sigungu || ''}${am.umd_nm ? ' ' + am.umd_nm : ''}) 단지 정보는 있는데,\n` +
-        `국토부 실거래 데이터에서는 아직 짝이 맞는 이름을 찾지 못했어요.\n` +
+      // apt_master 에는 있으나 그 동에 국토부 실거래 자체가 안 잡힌다 — 그래도 "찾지 못했어요"
+      // 문구는 절대 금지(Step 5 첫 원칙, apt_master 히트가 있는 경로다). 단지 존재는 확인해주고
+      // 검색창으로 안내한다.
+      return `"${am.apt_name}"(${am.sigungu || ''}${am.umd_nm ? ' ' + am.umd_nm : ''}) 단지 정보는 있어요.\n` +
+        `다만 국토부 실거래 데이터에는 아직 짝이 맞는 등록명이 확인되지 않았어요.\n` +
         `· 상단 검색창에서 "${am.apt_name}"을 검색해 상세 정보를 확인해 보세요.`;
     }
     // Step 3: 전개 규칙 — ① alias 확정 ② 정규화 완전일치 확정 ③ 그 외엔 후보만(확정 아님).
