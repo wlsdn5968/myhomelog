@@ -701,10 +701,673 @@ CREATE OR REPLACE FUNCTION public.refresh_molit_apt_index()
  LANGUAGE plpgsql
  SECURITY DEFINER
  SET search_path TO 'public'
+ SET statement_timeout TO '120s'
 AS $function$
 BEGIN
   REFRESH MATERIALIZED VIEW CONCURRENTLY public.molit_apt_index;
 END;
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.refresh_molit_aliases()
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+ SET statement_timeout TO '300s'
+AS $function$
+DECLARE n integer;
+BEGIN
+  WITH mj AS (
+    SELECT lawd_cd, umd_nm, apt_name, build_year, jibun,
+           row_number() OVER (PARTITION BY lawd_cd,umd_nm,apt_name,build_year ORDER BY cnt DESC, jibun) AS rn
+    FROM (SELECT lawd_cd,umd_nm,apt_name,build_year,jibun,count(*) cnt FROM molit_transactions
+          WHERE jibun IS NOT NULL AND jibun<>'' GROUP BY 1,2,3,4,5) t
+  ), m AS (
+    SELECT kapt_code, apt_name, lawd_cd, umd_nm,
+           left(facility->>'kaptUsedate',4)::int AS yr,
+           (regexp_match(facility->>'kaptAddr','(?:^|\s)([0-9]+(?:-[0-9]+)?)(?:\s|$)'))[1] AS jb,
+           regexp_replace(replace(apt_name,' ',''),'\([^)]*\)','','g') AS nn
+    FROM apt_master WHERE facility->>'kaptUsedate' ~ '^[0-9]{8}'
+  ), i AS (
+    SELECT apt_name, lawd_cd, umd_nm, build_year,
+           regexp_replace(replace(apt_name,' ',''),'\([^)]*\)','','g') AS nn
+    FROM molit_apt_index
+  ), cand AS (
+    SELECT m.kapt_code, m.lawd_cd, m.umd_nm, i.apt_name AS molit,
+           (mj.jibun IS NOT NULL) AS by_jibun,
+           (m.nn=i.nn OR starts_with(i.nn,m.nn) OR starts_with(m.nn,i.nn)) AS by_name,
+           (regexp_replace(m.nn,'[^0-9]','','g')=regexp_replace(i.nn,'[^0-9]','','g')
+            OR regexp_replace(m.nn,'[^0-9]','','g')='' OR regexp_replace(i.nn,'[^0-9]','','g')='') AS digits_ok
+    FROM m JOIN i ON i.lawd_cd=m.lawd_cd AND i.umd_nm=m.umd_nm AND i.build_year=m.yr
+    LEFT JOIN mj ON mj.rn=1 AND mj.lawd_cd=m.lawd_cd AND mj.umd_nm=m.umd_nm
+                AND mj.build_year=m.yr AND mj.apt_name=i.apt_name AND mj.jibun=m.jb
+  ), acc0 AS (
+    SELECT * FROM cand
+    WHERE (by_jibun OR (by_name AND digits_ok))
+      AND molit !~ '상가|근린|근생|판매시설|오피스텔'
+  ), acc AS (
+    SELECT * FROM acc0 WHERE (molit,lawd_cd,umd_nm) NOT IN
+      (SELECT molit,lawd_cd,umd_nm FROM acc0 GROUP BY 1,2,3 HAVING count(DISTINCT kapt_code)>1)
+  ), sib AS (
+    SELECT DISTINCT a.kapt_code, s.apt_name AS molit
+    FROM acc a
+    JOIN molit_apt_index base ON base.lawd_cd=a.lawd_cd AND base.umd_nm=a.umd_nm AND base.apt_name=a.molit
+    JOIN molit_apt_index s ON s.lawd_cd=a.lawd_cd AND s.umd_nm=a.umd_nm AND s.build_year=base.build_year
+    WHERE base.apt_name ~ '[A-Za-z가나다라]
+
+CREATE OR REPLACE FUNCTION public.search_popular_apts(p_limit integer DEFAULT 12)
+ RETURNS TABLE("aptName" text, sigungu text, "umdNm" text, "lawdCd" text, "buildYear" integer, "recentDealDate" text, "dealCount60d" bigint, "avgDealAmount" numeric)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO ''
+AS $function$
+  SELECT
+    t.apt_name::text,
+    t.sigungu::text,
+    t.umd_nm::text,
+    (array_agg(t.lawd_cd ORDER BY t.deal_date DESC))[1]::text,
+    (array_agg(t.build_year ORDER BY t.deal_date DESC))[1]::integer,
+    max(t.deal_date)::text,
+    count(*)::bigint,
+    round(avg(t.deal_amount)::numeric, 0)
+  FROM public.molit_transactions t
+  WHERE t.deal_date >= (CURRENT_DATE - 60)
+  GROUP BY t.apt_name, t.sigungu, t.umd_nm
+  ORDER BY count(*) DESC, max(t.deal_date) DESC
+  LIMIT GREATEST(COALESCE(p_limit, 12), 1);
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.tg_set_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+;
+
+
+-- ============ TRIGGERS ============
+CREATE TRIGGER bookmarks_set_updated_at BEFORE UPDATE ON public.bookmarks FOR EACH ROW EXECUTE FUNCTION tg_set_updated_at();
+CREATE TRIGGER trg_user_billing_updated BEFORE UPDATE ON public.user_billing FOR EACH ROW EXECUTE FUNCTION tg_set_updated_at();
+
+-- ============ RLS ============
+alter table public.account_deletion_requests enable row level security;
+alter table public.activity_counters enable row level security;
+alter table public.ai_feedback enable row level security;
+alter table public.apt_amenities enable row level security;
+alter table public.apt_geocache enable row level security;
+alter table public.apt_master enable row level security;
+alter table public.apt_schools enable row level security;
+alter table public.audit_log enable row level security;
+alter table public.billing_plans enable row level security;
+alter table public.bookmarks enable row level security;
+alter table public.briefing_snapshots enable row level security;
+alter table public.building_register enable row level security;
+alter table public.chat_messages enable row level security;
+alter table public.chat_sessions enable row level security;
+alter table public.data_error_reports enable row level security;
+alter table public.field_notes enable row level security;
+alter table public.kakao_notify_tokens enable row level security;
+alter table public.molit_ingest_runs enable row level security;
+alter table public.molit_transactions enable row level security;
+alter table public.payments enable row level security;
+alter table public.popular_apts_snapshot enable row level security;
+alter table public.push_subscriptions enable row level security;
+alter table public.regulations_snapshot enable row level security;
+alter table public.search_history enable row level security;
+alter table public.user_billing enable row level security;
+alter table public.user_budget enable row level security;
+alter table public.visit_attribution enable row level security;
+
+-- ============ POLICIES ============
+create policy adr_select_own on public.account_deletion_requests as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+create policy ai_feedback_insert_anon on public.ai_feedback as permissive for insert to anon with check ((user_id IS NULL));
+create policy ai_feedback_insert_own on public.ai_feedback as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy ai_feedback_select_own on public.ai_feedback as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy ai_feedback_service_all on public.ai_feedback as permissive for all to service_role using (true) with check (true);
+create policy apt_amenities_public_read on public.apt_amenities as permissive for select to anon, authenticated using (true);
+create policy apt_amenities_service_write on public.apt_amenities as permissive for all to service_role using (true) with check (true);
+create policy apt_geocache_public_read on public.apt_geocache as permissive for select to public using (true);
+create policy apt_master_public_read on public.apt_master as permissive for select to anon, authenticated using (true);
+create policy apt_master_service_write on public.apt_master as permissive for all to service_role using (true) with check (true);
+create policy apt_schools_public_read on public.apt_schools as permissive for select to anon, authenticated using (true);
+create policy apt_schools_service_write on public.apt_schools as permissive for all to service_role using (true) with check (true);
+create policy audit_log_select_own on public.audit_log as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+create policy billing_plans_public_read on public.billing_plans as permissive for select to public using ((active = true));
+create policy bookmarks_delete_own on public.bookmarks as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_insert_own on public.bookmarks as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_select_own on public.bookmarks as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_update_own on public.bookmarks as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id)) with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy br_read on public.building_register as permissive for select to public using (true);
+create policy chat_messages_delete_own on public.chat_messages as permissive for delete to authenticated using ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_messages_insert_own on public.chat_messages as permissive for insert to authenticated with check ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_messages_select_own on public.chat_messages as permissive for select to authenticated using ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_sessions_delete_own on public.chat_sessions as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_insert_own on public.chat_sessions as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_select_own on public.chat_sessions as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_update_own on public.chat_sessions as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id)) with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_delete_own on public.field_notes as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_insert_own on public.field_notes as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_select_own on public.field_notes as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_update_own on public.field_notes as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy molit_runs_no_read on public.molit_ingest_runs as permissive for select to public using (false);
+create policy molit_tx_public_read on public.molit_transactions as permissive for select to public using (true);
+create policy payments_select_own on public.payments as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy popular_snapshot_read on public.popular_apts_snapshot as permissive for select to public using (true);
+create policy reg_snapshot_public_read on public.regulations_snapshot as permissive for select to public using (true);
+create policy search_history_delete_own on public.search_history as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy search_history_insert_own on public.search_history as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy search_history_select_own on public.search_history as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy user_billing_select_own on public.user_billing as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy user_budget_select_own on public.user_budget as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+ AND s.apt_name ~ '[A-Za-z가나다라]
+
+CREATE OR REPLACE FUNCTION public.search_popular_apts(p_limit integer DEFAULT 12)
+ RETURNS TABLE("aptName" text, sigungu text, "umdNm" text, "lawdCd" text, "buildYear" integer, "recentDealDate" text, "dealCount60d" bigint, "avgDealAmount" numeric)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO ''
+AS $function$
+  SELECT
+    t.apt_name::text,
+    t.sigungu::text,
+    t.umd_nm::text,
+    (array_agg(t.lawd_cd ORDER BY t.deal_date DESC))[1]::text,
+    (array_agg(t.build_year ORDER BY t.deal_date DESC))[1]::integer,
+    max(t.deal_date)::text,
+    count(*)::bigint,
+    round(avg(t.deal_amount)::numeric, 0)
+  FROM public.molit_transactions t
+  WHERE t.deal_date >= (CURRENT_DATE - 60)
+  GROUP BY t.apt_name, t.sigungu, t.umd_nm
+  ORDER BY count(*) DESC, max(t.deal_date) DESC
+  LIMIT GREATEST(COALESCE(p_limit, 12), 1);
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.tg_set_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+;
+
+
+-- ============ TRIGGERS ============
+CREATE TRIGGER bookmarks_set_updated_at BEFORE UPDATE ON public.bookmarks FOR EACH ROW EXECUTE FUNCTION tg_set_updated_at();
+CREATE TRIGGER trg_user_billing_updated BEFORE UPDATE ON public.user_billing FOR EACH ROW EXECUTE FUNCTION tg_set_updated_at();
+
+-- ============ RLS ============
+alter table public.account_deletion_requests enable row level security;
+alter table public.activity_counters enable row level security;
+alter table public.ai_feedback enable row level security;
+alter table public.apt_amenities enable row level security;
+alter table public.apt_geocache enable row level security;
+alter table public.apt_master enable row level security;
+alter table public.apt_schools enable row level security;
+alter table public.audit_log enable row level security;
+alter table public.billing_plans enable row level security;
+alter table public.bookmarks enable row level security;
+alter table public.briefing_snapshots enable row level security;
+alter table public.building_register enable row level security;
+alter table public.chat_messages enable row level security;
+alter table public.chat_sessions enable row level security;
+alter table public.data_error_reports enable row level security;
+alter table public.field_notes enable row level security;
+alter table public.kakao_notify_tokens enable row level security;
+alter table public.molit_ingest_runs enable row level security;
+alter table public.molit_transactions enable row level security;
+alter table public.payments enable row level security;
+alter table public.popular_apts_snapshot enable row level security;
+alter table public.push_subscriptions enable row level security;
+alter table public.regulations_snapshot enable row level security;
+alter table public.search_history enable row level security;
+alter table public.user_billing enable row level security;
+alter table public.user_budget enable row level security;
+alter table public.visit_attribution enable row level security;
+
+-- ============ POLICIES ============
+create policy adr_select_own on public.account_deletion_requests as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+create policy ai_feedback_insert_anon on public.ai_feedback as permissive for insert to anon with check ((user_id IS NULL));
+create policy ai_feedback_insert_own on public.ai_feedback as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy ai_feedback_select_own on public.ai_feedback as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy ai_feedback_service_all on public.ai_feedback as permissive for all to service_role using (true) with check (true);
+create policy apt_amenities_public_read on public.apt_amenities as permissive for select to anon, authenticated using (true);
+create policy apt_amenities_service_write on public.apt_amenities as permissive for all to service_role using (true) with check (true);
+create policy apt_geocache_public_read on public.apt_geocache as permissive for select to public using (true);
+create policy apt_master_public_read on public.apt_master as permissive for select to anon, authenticated using (true);
+create policy apt_master_service_write on public.apt_master as permissive for all to service_role using (true) with check (true);
+create policy apt_schools_public_read on public.apt_schools as permissive for select to anon, authenticated using (true);
+create policy apt_schools_service_write on public.apt_schools as permissive for all to service_role using (true) with check (true);
+create policy audit_log_select_own on public.audit_log as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+create policy billing_plans_public_read on public.billing_plans as permissive for select to public using ((active = true));
+create policy bookmarks_delete_own on public.bookmarks as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_insert_own on public.bookmarks as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_select_own on public.bookmarks as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_update_own on public.bookmarks as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id)) with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy br_read on public.building_register as permissive for select to public using (true);
+create policy chat_messages_delete_own on public.chat_messages as permissive for delete to authenticated using ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_messages_insert_own on public.chat_messages as permissive for insert to authenticated with check ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_messages_select_own on public.chat_messages as permissive for select to authenticated using ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_sessions_delete_own on public.chat_sessions as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_insert_own on public.chat_sessions as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_select_own on public.chat_sessions as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_update_own on public.chat_sessions as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id)) with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_delete_own on public.field_notes as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_insert_own on public.field_notes as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_select_own on public.field_notes as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_update_own on public.field_notes as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy molit_runs_no_read on public.molit_ingest_runs as permissive for select to public using (false);
+create policy molit_tx_public_read on public.molit_transactions as permissive for select to public using (true);
+create policy payments_select_own on public.payments as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy popular_snapshot_read on public.popular_apts_snapshot as permissive for select to public using (true);
+create policy reg_snapshot_public_read on public.regulations_snapshot as permissive for select to public using (true);
+create policy search_history_delete_own on public.search_history as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy search_history_insert_own on public.search_history as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy search_history_select_own on public.search_history as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy user_billing_select_own on public.user_billing as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy user_budget_select_own on public.user_budget as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+
+      AND length(regexp_replace(base.apt_name,'[A-Za-z가나다라]
+
+CREATE OR REPLACE FUNCTION public.search_popular_apts(p_limit integer DEFAULT 12)
+ RETURNS TABLE("aptName" text, sigungu text, "umdNm" text, "lawdCd" text, "buildYear" integer, "recentDealDate" text, "dealCount60d" bigint, "avgDealAmount" numeric)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO ''
+AS $function$
+  SELECT
+    t.apt_name::text,
+    t.sigungu::text,
+    t.umd_nm::text,
+    (array_agg(t.lawd_cd ORDER BY t.deal_date DESC))[1]::text,
+    (array_agg(t.build_year ORDER BY t.deal_date DESC))[1]::integer,
+    max(t.deal_date)::text,
+    count(*)::bigint,
+    round(avg(t.deal_amount)::numeric, 0)
+  FROM public.molit_transactions t
+  WHERE t.deal_date >= (CURRENT_DATE - 60)
+  GROUP BY t.apt_name, t.sigungu, t.umd_nm
+  ORDER BY count(*) DESC, max(t.deal_date) DESC
+  LIMIT GREATEST(COALESCE(p_limit, 12), 1);
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.tg_set_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+;
+
+
+-- ============ TRIGGERS ============
+CREATE TRIGGER bookmarks_set_updated_at BEFORE UPDATE ON public.bookmarks FOR EACH ROW EXECUTE FUNCTION tg_set_updated_at();
+CREATE TRIGGER trg_user_billing_updated BEFORE UPDATE ON public.user_billing FOR EACH ROW EXECUTE FUNCTION tg_set_updated_at();
+
+-- ============ RLS ============
+alter table public.account_deletion_requests enable row level security;
+alter table public.activity_counters enable row level security;
+alter table public.ai_feedback enable row level security;
+alter table public.apt_amenities enable row level security;
+alter table public.apt_geocache enable row level security;
+alter table public.apt_master enable row level security;
+alter table public.apt_schools enable row level security;
+alter table public.audit_log enable row level security;
+alter table public.billing_plans enable row level security;
+alter table public.bookmarks enable row level security;
+alter table public.briefing_snapshots enable row level security;
+alter table public.building_register enable row level security;
+alter table public.chat_messages enable row level security;
+alter table public.chat_sessions enable row level security;
+alter table public.data_error_reports enable row level security;
+alter table public.field_notes enable row level security;
+alter table public.kakao_notify_tokens enable row level security;
+alter table public.molit_ingest_runs enable row level security;
+alter table public.molit_transactions enable row level security;
+alter table public.payments enable row level security;
+alter table public.popular_apts_snapshot enable row level security;
+alter table public.push_subscriptions enable row level security;
+alter table public.regulations_snapshot enable row level security;
+alter table public.search_history enable row level security;
+alter table public.user_billing enable row level security;
+alter table public.user_budget enable row level security;
+alter table public.visit_attribution enable row level security;
+
+-- ============ POLICIES ============
+create policy adr_select_own on public.account_deletion_requests as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+create policy ai_feedback_insert_anon on public.ai_feedback as permissive for insert to anon with check ((user_id IS NULL));
+create policy ai_feedback_insert_own on public.ai_feedback as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy ai_feedback_select_own on public.ai_feedback as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy ai_feedback_service_all on public.ai_feedback as permissive for all to service_role using (true) with check (true);
+create policy apt_amenities_public_read on public.apt_amenities as permissive for select to anon, authenticated using (true);
+create policy apt_amenities_service_write on public.apt_amenities as permissive for all to service_role using (true) with check (true);
+create policy apt_geocache_public_read on public.apt_geocache as permissive for select to public using (true);
+create policy apt_master_public_read on public.apt_master as permissive for select to anon, authenticated using (true);
+create policy apt_master_service_write on public.apt_master as permissive for all to service_role using (true) with check (true);
+create policy apt_schools_public_read on public.apt_schools as permissive for select to anon, authenticated using (true);
+create policy apt_schools_service_write on public.apt_schools as permissive for all to service_role using (true) with check (true);
+create policy audit_log_select_own on public.audit_log as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+create policy billing_plans_public_read on public.billing_plans as permissive for select to public using ((active = true));
+create policy bookmarks_delete_own on public.bookmarks as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_insert_own on public.bookmarks as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_select_own on public.bookmarks as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_update_own on public.bookmarks as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id)) with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy br_read on public.building_register as permissive for select to public using (true);
+create policy chat_messages_delete_own on public.chat_messages as permissive for delete to authenticated using ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_messages_insert_own on public.chat_messages as permissive for insert to authenticated with check ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_messages_select_own on public.chat_messages as permissive for select to authenticated using ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_sessions_delete_own on public.chat_sessions as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_insert_own on public.chat_sessions as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_select_own on public.chat_sessions as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_update_own on public.chat_sessions as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id)) with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_delete_own on public.field_notes as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_insert_own on public.field_notes as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_select_own on public.field_notes as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_update_own on public.field_notes as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy molit_runs_no_read on public.molit_ingest_runs as permissive for select to public using (false);
+create policy molit_tx_public_read on public.molit_transactions as permissive for select to public using (true);
+create policy payments_select_own on public.payments as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy popular_snapshot_read on public.popular_apts_snapshot as permissive for select to public using (true);
+create policy reg_snapshot_public_read on public.regulations_snapshot as permissive for select to public using (true);
+create policy search_history_delete_own on public.search_history as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy search_history_insert_own on public.search_history as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy search_history_select_own on public.search_history as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy user_billing_select_own on public.user_billing as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy user_budget_select_own on public.user_budget as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+,'')) >= 2
+      AND regexp_replace(base.apt_name,'[A-Za-z가나다라]
+
+CREATE OR REPLACE FUNCTION public.search_popular_apts(p_limit integer DEFAULT 12)
+ RETURNS TABLE("aptName" text, sigungu text, "umdNm" text, "lawdCd" text, "buildYear" integer, "recentDealDate" text, "dealCount60d" bigint, "avgDealAmount" numeric)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO ''
+AS $function$
+  SELECT
+    t.apt_name::text,
+    t.sigungu::text,
+    t.umd_nm::text,
+    (array_agg(t.lawd_cd ORDER BY t.deal_date DESC))[1]::text,
+    (array_agg(t.build_year ORDER BY t.deal_date DESC))[1]::integer,
+    max(t.deal_date)::text,
+    count(*)::bigint,
+    round(avg(t.deal_amount)::numeric, 0)
+  FROM public.molit_transactions t
+  WHERE t.deal_date >= (CURRENT_DATE - 60)
+  GROUP BY t.apt_name, t.sigungu, t.umd_nm
+  ORDER BY count(*) DESC, max(t.deal_date) DESC
+  LIMIT GREATEST(COALESCE(p_limit, 12), 1);
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.tg_set_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+;
+
+
+-- ============ TRIGGERS ============
+CREATE TRIGGER bookmarks_set_updated_at BEFORE UPDATE ON public.bookmarks FOR EACH ROW EXECUTE FUNCTION tg_set_updated_at();
+CREATE TRIGGER trg_user_billing_updated BEFORE UPDATE ON public.user_billing FOR EACH ROW EXECUTE FUNCTION tg_set_updated_at();
+
+-- ============ RLS ============
+alter table public.account_deletion_requests enable row level security;
+alter table public.activity_counters enable row level security;
+alter table public.ai_feedback enable row level security;
+alter table public.apt_amenities enable row level security;
+alter table public.apt_geocache enable row level security;
+alter table public.apt_master enable row level security;
+alter table public.apt_schools enable row level security;
+alter table public.audit_log enable row level security;
+alter table public.billing_plans enable row level security;
+alter table public.bookmarks enable row level security;
+alter table public.briefing_snapshots enable row level security;
+alter table public.building_register enable row level security;
+alter table public.chat_messages enable row level security;
+alter table public.chat_sessions enable row level security;
+alter table public.data_error_reports enable row level security;
+alter table public.field_notes enable row level security;
+alter table public.kakao_notify_tokens enable row level security;
+alter table public.molit_ingest_runs enable row level security;
+alter table public.molit_transactions enable row level security;
+alter table public.payments enable row level security;
+alter table public.popular_apts_snapshot enable row level security;
+alter table public.push_subscriptions enable row level security;
+alter table public.regulations_snapshot enable row level security;
+alter table public.search_history enable row level security;
+alter table public.user_billing enable row level security;
+alter table public.user_budget enable row level security;
+alter table public.visit_attribution enable row level security;
+
+-- ============ POLICIES ============
+create policy adr_select_own on public.account_deletion_requests as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+create policy ai_feedback_insert_anon on public.ai_feedback as permissive for insert to anon with check ((user_id IS NULL));
+create policy ai_feedback_insert_own on public.ai_feedback as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy ai_feedback_select_own on public.ai_feedback as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy ai_feedback_service_all on public.ai_feedback as permissive for all to service_role using (true) with check (true);
+create policy apt_amenities_public_read on public.apt_amenities as permissive for select to anon, authenticated using (true);
+create policy apt_amenities_service_write on public.apt_amenities as permissive for all to service_role using (true) with check (true);
+create policy apt_geocache_public_read on public.apt_geocache as permissive for select to public using (true);
+create policy apt_master_public_read on public.apt_master as permissive for select to anon, authenticated using (true);
+create policy apt_master_service_write on public.apt_master as permissive for all to service_role using (true) with check (true);
+create policy apt_schools_public_read on public.apt_schools as permissive for select to anon, authenticated using (true);
+create policy apt_schools_service_write on public.apt_schools as permissive for all to service_role using (true) with check (true);
+create policy audit_log_select_own on public.audit_log as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+create policy billing_plans_public_read on public.billing_plans as permissive for select to public using ((active = true));
+create policy bookmarks_delete_own on public.bookmarks as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_insert_own on public.bookmarks as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_select_own on public.bookmarks as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_update_own on public.bookmarks as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id)) with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy br_read on public.building_register as permissive for select to public using (true);
+create policy chat_messages_delete_own on public.chat_messages as permissive for delete to authenticated using ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_messages_insert_own on public.chat_messages as permissive for insert to authenticated with check ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_messages_select_own on public.chat_messages as permissive for select to authenticated using ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_sessions_delete_own on public.chat_sessions as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_insert_own on public.chat_sessions as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_select_own on public.chat_sessions as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_update_own on public.chat_sessions as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id)) with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_delete_own on public.field_notes as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_insert_own on public.field_notes as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_select_own on public.field_notes as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_update_own on public.field_notes as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy molit_runs_no_read on public.molit_ingest_runs as permissive for select to public using (false);
+create policy molit_tx_public_read on public.molit_transactions as permissive for select to public using (true);
+create policy payments_select_own on public.payments as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy popular_snapshot_read on public.popular_apts_snapshot as permissive for select to public using (true);
+create policy reg_snapshot_public_read on public.regulations_snapshot as permissive for select to public using (true);
+create policy search_history_delete_own on public.search_history as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy search_history_insert_own on public.search_history as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy search_history_select_own on public.search_history as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy user_billing_select_own on public.user_billing as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy user_budget_select_own on public.user_budget as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+,'') = regexp_replace(s.apt_name,'[A-Za-z가나다라]
+
+CREATE OR REPLACE FUNCTION public.search_popular_apts(p_limit integer DEFAULT 12)
+ RETURNS TABLE("aptName" text, sigungu text, "umdNm" text, "lawdCd" text, "buildYear" integer, "recentDealDate" text, "dealCount60d" bigint, "avgDealAmount" numeric)
+ LANGUAGE sql
+ STABLE
+ SET search_path TO ''
+AS $function$
+  SELECT
+    t.apt_name::text,
+    t.sigungu::text,
+    t.umd_nm::text,
+    (array_agg(t.lawd_cd ORDER BY t.deal_date DESC))[1]::text,
+    (array_agg(t.build_year ORDER BY t.deal_date DESC))[1]::integer,
+    max(t.deal_date)::text,
+    count(*)::bigint,
+    round(avg(t.deal_amount)::numeric, 0)
+  FROM public.molit_transactions t
+  WHERE t.deal_date >= (CURRENT_DATE - 60)
+  GROUP BY t.apt_name, t.sigungu, t.umd_nm
+  ORDER BY count(*) DESC, max(t.deal_date) DESC
+  LIMIT GREATEST(COALESCE(p_limit, 12), 1);
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.tg_set_updated_at()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+begin
+  new.updated_at = now();
+  return new;
+end;
+$function$
+;
+
+
+-- ============ TRIGGERS ============
+CREATE TRIGGER bookmarks_set_updated_at BEFORE UPDATE ON public.bookmarks FOR EACH ROW EXECUTE FUNCTION tg_set_updated_at();
+CREATE TRIGGER trg_user_billing_updated BEFORE UPDATE ON public.user_billing FOR EACH ROW EXECUTE FUNCTION tg_set_updated_at();
+
+-- ============ RLS ============
+alter table public.account_deletion_requests enable row level security;
+alter table public.activity_counters enable row level security;
+alter table public.ai_feedback enable row level security;
+alter table public.apt_amenities enable row level security;
+alter table public.apt_geocache enable row level security;
+alter table public.apt_master enable row level security;
+alter table public.apt_schools enable row level security;
+alter table public.audit_log enable row level security;
+alter table public.billing_plans enable row level security;
+alter table public.bookmarks enable row level security;
+alter table public.briefing_snapshots enable row level security;
+alter table public.building_register enable row level security;
+alter table public.chat_messages enable row level security;
+alter table public.chat_sessions enable row level security;
+alter table public.data_error_reports enable row level security;
+alter table public.field_notes enable row level security;
+alter table public.kakao_notify_tokens enable row level security;
+alter table public.molit_ingest_runs enable row level security;
+alter table public.molit_transactions enable row level security;
+alter table public.payments enable row level security;
+alter table public.popular_apts_snapshot enable row level security;
+alter table public.push_subscriptions enable row level security;
+alter table public.regulations_snapshot enable row level security;
+alter table public.search_history enable row level security;
+alter table public.user_billing enable row level security;
+alter table public.user_budget enable row level security;
+alter table public.visit_attribution enable row level security;
+
+-- ============ POLICIES ============
+create policy adr_select_own on public.account_deletion_requests as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+create policy ai_feedback_insert_anon on public.ai_feedback as permissive for insert to anon with check ((user_id IS NULL));
+create policy ai_feedback_insert_own on public.ai_feedback as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy ai_feedback_select_own on public.ai_feedback as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy ai_feedback_service_all on public.ai_feedback as permissive for all to service_role using (true) with check (true);
+create policy apt_amenities_public_read on public.apt_amenities as permissive for select to anon, authenticated using (true);
+create policy apt_amenities_service_write on public.apt_amenities as permissive for all to service_role using (true) with check (true);
+create policy apt_geocache_public_read on public.apt_geocache as permissive for select to public using (true);
+create policy apt_master_public_read on public.apt_master as permissive for select to anon, authenticated using (true);
+create policy apt_master_service_write on public.apt_master as permissive for all to service_role using (true) with check (true);
+create policy apt_schools_public_read on public.apt_schools as permissive for select to anon, authenticated using (true);
+create policy apt_schools_service_write on public.apt_schools as permissive for all to service_role using (true) with check (true);
+create policy audit_log_select_own on public.audit_log as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+create policy billing_plans_public_read on public.billing_plans as permissive for select to public using ((active = true));
+create policy bookmarks_delete_own on public.bookmarks as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_insert_own on public.bookmarks as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_select_own on public.bookmarks as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy bookmarks_update_own on public.bookmarks as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id)) with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy br_read on public.building_register as permissive for select to public using (true);
+create policy chat_messages_delete_own on public.chat_messages as permissive for delete to authenticated using ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_messages_insert_own on public.chat_messages as permissive for insert to authenticated with check ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_messages_select_own on public.chat_messages as permissive for select to authenticated using ((EXISTS ( SELECT 1
+   FROM chat_sessions s
+  WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
+create policy chat_sessions_delete_own on public.chat_sessions as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_insert_own on public.chat_sessions as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_select_own on public.chat_sessions as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy chat_sessions_update_own on public.chat_sessions as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id)) with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_delete_own on public.field_notes as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_insert_own on public.field_notes as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_select_own on public.field_notes as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy field_notes_update_own on public.field_notes as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy molit_runs_no_read on public.molit_ingest_runs as permissive for select to public using (false);
+create policy molit_tx_public_read on public.molit_transactions as permissive for select to public using (true);
+create policy payments_select_own on public.payments as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy popular_snapshot_read on public.popular_apts_snapshot as permissive for select to public using (true);
+create policy reg_snapshot_public_read on public.regulations_snapshot as permissive for select to public using (true);
+create policy search_history_delete_own on public.search_history as permissive for delete to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy search_history_insert_own on public.search_history as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
+create policy search_history_select_own on public.search_history as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy user_billing_select_own on public.user_billing as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
+create policy user_budget_select_own on public.user_budget as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+,'')
+      AND right(base.apt_name,1) <> right(s.apt_name,1)
+      AND s.apt_name !~ '상가|근린|근생|판매시설|오피스텔'
+  ), fin AS (
+    SELECT kapt_code, molit FROM acc
+    UNION SELECT kapt_code, molit FROM sib
+  ), agg AS (
+    SELECT kapt_code, jsonb_agg(DISTINCT molit) AS aliases FROM fin GROUP BY kapt_code
+  )
+  UPDATE apt_master a
+  SET molit_aliases = agg.aliases, updated_at = now()
+  FROM agg
+  WHERE a.kapt_code = agg.kapt_code
+    AND a.molit_aliases IS DISTINCT FROM agg.aliases;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END
 $function$
 ;
 
