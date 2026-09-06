@@ -39,6 +39,11 @@ function urlTag({ loc, lastmod, changefreq, priority }) {
 router.get('/', async (req, res) => {
   const today = kstDayString();
   const entries = STATIC_URLS.map(u => urlTag(u.loc === '/' ? { ...u, lastmod: today } : u));
+  // CACHE-DEGRADED-2026-09-06 (Plan 070): 아래 세 구간은 전부 "fail-open"(실패해도 나머지 URL 은
+  //   그대로 낸다)이라 항상 200 이 나간다 — 그런데 그중 하나라도 실패하면 지역·브리핑·단지 URL
+  //   수천~수만 개가 통째로 빠진 채로 6시간(+SWR 24시간) 엣지에 굳을 수 있다. 이 파일이 고치려던
+  //   바로 그 문제(sitemap 16개뿐이던 유입 0)를 다른 모양으로 반복하는 셈이라 실패 시엔 캐시하지 않는다.
+  let degraded = false;
 
   // REGION-PAGE-2026-08-29 (Sprint NNNNNNN-31): 지역 페이지 118개 + 허브 1개.
   //   이 sitemap 이 16개 URL 뿐이던 것이 유입 0 의 직접 원인이었다(실측).
@@ -52,6 +57,7 @@ router.get('/', async (req, res) => {
       entries.push(urlTag({ loc: `/region/${c}`, lastmod: today, changefreq: 'daily', priority: '0.7' }));
     }
   } catch (e) {
+    degraded = true;
     logger.warn({ err: e.message }, 'sitemap: 지역 URL 생성 실패 — 나머지는 정상 반환');
   }
 
@@ -73,10 +79,12 @@ router.get('/', async (req, res) => {
           entries.push(urlTag({ loc: `/briefing/${day}`, lastmod: day, priority: '0.5' }));
         }
       } else if (error) {
+        degraded = true;
         logger.warn({ err: error.message }, 'sitemap: briefing 날짜 조회 실패 — 정적 URL 만 반환');
       }
     }
   } catch (e) {
+    degraded = true;
     logger.warn({ err: e.message }, 'sitemap: briefing 날짜 조회 예외 — 정적 URL 만 반환');
   }
 
@@ -117,6 +125,7 @@ router.get('/', async (req, res) => {
     }
   } catch (e) {
     // 실패해도 나머지 URL 은 그대로 나간다(fail-open) — sitemap 이 500 이면 크롤러가 재수집을 미룬다.
+    degraded = true;
     logger.warn({ err: e.message }, 'sitemap: 단지 URL 생성 실패 — 나머지는 정상 반환');
   }
 
@@ -125,7 +134,7 @@ router.get('/', async (req, res) => {
     + entries.join('\n') + '\n'
     + '</urlset>\n';
 
-  res.set('Cache-Control', 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
+  res.set('Cache-Control', degraded ? 'no-store' : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
   res.type('application/xml').send(xml);
 });
 

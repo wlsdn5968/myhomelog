@@ -17,7 +17,13 @@ router.get('/', async (req, res) => {
     getSnapshot('acquisition_tax_2025').catch(() => ({ data: null, source: 'missing' })),
   ]);
   // CDN-CACHE-2026-06-14: 규제정보는 정책변경 시에만 갱신(드묾)인데 매 부팅 fetch(loadRegulatedKeywords) → 엣지 캐시 효과 큼.
-  res.set('Cache-Control', 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400');
+  // CACHE-DEGRADED-2026-09-06 (Plan 070): housing.source 가 'db' 가 아니면 regulationsService.getSnapshot
+  //   이 DB 미설정/조회 실패로 하드코딩 FALLBACK 을 돌려준 것이다(로컬 캐시 TTL 60초 — 금방 재시도됨).
+  //   이 상태를 30분(+SWR 24시간) 엣지에 굳히면, 운영자가 DB 에 새 규제 값을 넣은 직후 하필 조회가
+  //   한 번 실패했을 때 **낡은 하드코딩 값이 최대 하루 가까이** 나갈 수 있다 — 아래 /log 엔드포인트가
+  //   이미 같은 원칙(degraded → no-store)을 적용 중인 것과 대칭.
+  const degraded = housing.source !== 'db';
+  res.set('Cache-Control', degraded ? 'no-store' : 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400');
   res.json({
     ...housing.data,
     tax: tax.data || null,

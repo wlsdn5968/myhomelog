@@ -676,29 +676,35 @@ router.get('/popular', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 12, 30);
   try {
     const CDN_OK = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400';
+    const CDN_FALLBACK = 'public, max-age=0, s-maxage=120, stale-while-revalidate=600';
     // ① 서버 인메모리 캐시 (Sprint HHHH)
     const pck = `popular:${limit}`;
     const pcached = cache.get(pck);
     if (pcached) {
-      res.set('Cache-Control', CDN_OK);
-      return res.json(pcached);
+      // CACHE-DEGRADED-2026-09-06 (Plan 070): 이 캐시 봉투엔 품질에 따라 TTL 만 다를 뿐(1800s/120s)
+      //   저품질(usedFallback) 결과도 같은 키(pck)에 그대로 들어간다(아래 cache.set). 예전엔 여기서
+      //   그 사실을 모른 채 무조건 CDN_OK(긴 캐시)를 붙였다 — 로컬 캐시가 살아 있는 최대 120초 동안
+      //   들어온 요청은 실제로는 열화된 결과인데 엣지엔 30분(+SWR 24시간)짜리 헤더가 나갔다.
+      //   응답 바디(payload)는 그대로 두고 캐시 봉투에만 품질 표식(cc)을 같이 저장해 재사용한다
+      //   (client 로 나가는 JSON 모양은 불변 — payload 만 res.json 한다).
+      res.set('Cache-Control', pcached.cc);
+      return res.json(pcached.payload);
     }
     // ② 일별 사전집계 스냅샷 — 콜드 RPC timeout 근본 회피 (밀리초 응답)
     const snap = await readPopularSnapshot(limit);
     if (snap) {
       // POPULAR-WINDOW-2026-09-05: 스냅샷은 cron 이 만든 것이라 **그때의** 창을 적어야 한다(오늘이 아니다).
       const payload = { results: snap, window: popularWindow(snap.computedAt) };
-      cache.set(pck, payload, 1800);
+      cache.set(pck, { payload, cc: CDN_OK }, 1800);
       res.set('Cache-Control', CDN_OK);
       return res.json(payload);
     }
     // ③ 라이브 집계 — POPULAR-QUALITY-FIX-2026-07-11: fallback(저품질) 결과는 캐시 2분만
     const { results: out, usedFallback } = await buildPopularResults(limit);
-    res.set('Cache-Control', usedFallback
-      ? 'public, max-age=0, s-maxage=120, stale-while-revalidate=600'
-      : CDN_OK);
+    const _pcc = usedFallback ? CDN_FALLBACK : CDN_OK;
+    res.set('Cache-Control', _pcc);
     const payload = { results: out, window: popularWindow() }; // 라이브 집계 = 지금(UTC) 기준 창
-    if (out.length) cache.set(pck, payload, usedFallback ? 120 : 1800); // 빈 응답은 캐시 안 함
+    if (out.length) cache.set(pck, { payload, cc: _pcc }, usedFallback ? 120 : 1800); // 빈 응답은 캐시 안 함
     // 정상 품질(RPC 성공본)이면 스냅샷도 갱신 — 다음 콜드 사용자를 위해.
     // FREEZE-FIX-2026-08-16 (Plan 011): 종전엔 await 없이 던져만 뒀다. Vercel 서버리스는
     //   res.json() 직후 인스턴스를 동결하므로 남은 upsert 가 유실될 수 있다 — 유실되면 스냅샷

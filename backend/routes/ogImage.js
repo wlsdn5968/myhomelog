@@ -88,7 +88,13 @@ router.get('/apt/:aptSeq', async (req, res) => {
 
   // 성공했을 때만 길게 캐시한다. 실거래는 하루 단위로 갱신되므로 6시간이면 충분하고,
   // stale-while-revalidate 로 갱신 중에도 크롤러가 기다리지 않게 한다.
-  res.set('Cache-Control', 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
+  // CACHE-DEGRADED-2026-09-06 (Plan 070): af.stat 이 없으면(거래 0건 — aptPage.js 의 `thin` 과 같은
+  //   신호, loadAptFacts 는 SSOT) buildCard 가 "준비 중" 문구로 대체하지만, loadIndexRow/
+  //   getTransactionsByAptSeq 가 각자 catch 로 실패를 삼키므로(aptPage.js:119-120) "진짜 거래 0건"과
+  //   "일시적 조회 실패"를 여기서 구분할 수 없다 — aptPage.js 가 이미 같은 값으로 thin 페이지를
+  //   no-store 하는 것과 동일하게, 이 이미지도 보수적으로 캐시하지 않는다.
+  const thin = !af.stat;
+  res.set('Cache-Control', thin ? 'no-store' : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
   res.set('Content-Type', 'image/png');
   return res.send(png);
 });
