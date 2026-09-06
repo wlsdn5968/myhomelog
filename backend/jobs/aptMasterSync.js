@@ -32,6 +32,11 @@ const PAGE_SIZE = 100;
 const MAX_PAGES = 20;
 let _diagLogged = false; // 한 번만 진단 로그 (전체 backfill 동안)
 
+// ALIAS-REFRESH-ABORT-2026-09-06 (Plan 067): 이 함수는 이미 HARD_DEADLINE(250s)까지 upsert 에 쓸 수
+//   있어, 뒤이어 도는 별칭 RPC 가 함수 전체 maxDuration(300s) 잔여 예산을 통째로 먹으면 안 된다.
+//   cron.js 의 MV_REFRESH_ABORT_MS 와 같은 상한 규약을 그대로 적용한다.
+const ALIAS_REFRESH_ABORT_MS = 30000;
+
 // PACER-2026-08-30 (Sprint OOOOOOO): **워커 공용 페이서.**
 //   [무엇이 있었나] 동시성 5 로 KAPT 를 때리자 릴레이가 `upstream HTTP 429` 를 뱉어
 //   경기도 시군구 **대부분과 신규 화성 3개 구가 전부 실패**했다. 그런데 요약은 `errors: 0` 이었다 —
@@ -313,6 +318,20 @@ async function runAptMasterSync() {
   }
   await Promise.all(Array.from({ length: 5 }, () => worker()));
 
+  // ALIAS-REFRESH-2026-09-06 (Plan 067): 위 upsert 가 새 단지를 넣어도 molit_aliases 는 이 upsert 의
+  //   컬럼이 아니라 빈 채로 남는다(파일 헤더 주석·Plan 053 1회 backfill 참조) — 시간이 갈수록 챗
+  //   도달률·단지정보 커버리지가 조용히 떨어진다. upsert 가 끝난 **직후** DB 함수로 다시 채운다.
+  //   실패해도 sync 결과는 ok(기존 검색 MV 갱신과 동일 규약 — cron.js mvRefreshError 패턴을 그대로 따름).
+  //   "모름"을 0 으로 지어내지 않는다 — 실패 시 aliasRefreshed 필드 자체를 아래 return 에서 생략한다.
+  let _aliasRefreshed, _aliasRefreshError;
+  try {
+    const { data: _aliasData, error: _aliasErr } = await admin
+      .rpc('refresh_molit_aliases')
+      .abortSignal(AbortSignal.timeout(ALIAS_REFRESH_ABORT_MS));
+    if (_aliasErr) _aliasRefreshError = _aliasErr.message;
+    else _aliasRefreshed = _aliasData;
+  } catch (e) { _aliasRefreshError = e.message; }
+
   const fetchedTotal = results.reduce((s, r) => s + (r.fetched || 0), 0);
   const insertedTotal = results.reduce((s, r) => s + (r.inserted || 0), 0);
   const errCount = results.filter(r => r.error || r.fetchError).length;
@@ -339,6 +358,8 @@ async function runAptMasterSync() {
     errors: errCount, renamed: renamedTotal, throttleHits: _throttleHits,
     intervalMs: _interval, failedLawds: failedLawds.slice(0, 40),
     elapsedMs, remaining: queue.length,
+    ...(_aliasRefreshed != null ? { aliasRefreshed: _aliasRefreshed } : {}),
+    ...(_aliasRefreshError ? { aliasRefreshError: _aliasRefreshError } : {}),
   };
 }
 

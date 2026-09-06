@@ -417,6 +417,17 @@ async function handleAptMasterSync(req, res) {
     const started = Date.now();
     const summary = await runAptMasterSync();
     logger.info({ durationMs: Date.now() - started, summary }, 'cron/apt-master-sync OK');
+    // ALIAS-REFRESH-WATCH-2026-09-06 (Plan 067): molit_aliases 자동 갱신 실패를 경보로 — 조용히
+    //   쌓이면 신규 단지 별칭이 계속 비어 챗 도달률·단지정보 커버리지가 서서히 떨어진다
+    //   (molit-ingest 의 MV 경보 블록과 같은 축 — 고정 메시지 + 가변값은 extra 규약을 그대로 따른다).
+    if (summary && summary.aliasRefreshError) {
+      try {
+        Sentry.captureMessage('cron 감시: molit_aliases 자동 갱신 실패 — 신규 단지 별칭이 빈 채로 남을 수 있음', {
+          level: 'warning', tags: { route: 'cron.apt-master-sync', monitor: 'alias-refresh' },
+          extra: { aliasRefreshError: summary.aliasRefreshError },
+        });
+      } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
+    }
     await require('../services/cronStats').recordCronRun('apt-master-sync', summary).catch(() => {}); // Sprint MMMMMMM-12
     res.json({ ok: true, summary });
   } catch (e) {

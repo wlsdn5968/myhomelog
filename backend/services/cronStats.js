@@ -51,7 +51,8 @@ function _pick(summary) {
     // MV-STALE-WATCH-2026-09-06 (Plan 058): 검색 MV(molit_apt_index)가 원본(molit_transactions)보다
     //   며칠 뒤처졌는지. 화이트리스트에 없으면 cron.js 가 계산해 넘겨도 여기서 조용히 버려져 health 에
     //   전혀 안 보인다 — 이 필드가 정확히 이 계획의 목적(관측값을 실제로 드러내는 것)이라 필수로 추가한다.
-    'searchIndexLagDays'];
+    'searchIndexLagDays',
+    'aliasRefreshed']; // ALIAS-REFRESH-2026-09-06 (Plan 067): molit_aliases 자동 갱신 행수 — 실패 시 필드 자체가 생략된다(0 으로 지어내지 않음)
   const out = {};
   for (const k of NUM) {
     const v = summary[k];
@@ -75,6 +76,7 @@ function _pick(summary) {
   if (typeof summary.mvRefreshError === 'string' && summary.mvRefreshError.trim()) {
     out.mvRefreshError = summary.mvRefreshError.slice(0, 120);
   }
+  if (typeof summary.aliasRefreshError === 'string' && summary.aliasRefreshError.trim()) out.aliasRefreshError = summary.aliasRefreshError.slice(0, 120); // ALIAS-REFRESH-2026-09-06 (Plan 067)
   return out;
 }
 
