@@ -8073,3 +8073,255 @@ test('Plan 054 Step 3 — getRentTransactions: 배포 이전에 이미 공유 Re
     if (saved.gap === undefined) delete process.env.RENT_MIN_GAP_MS; else process.env.RENT_MIN_GAP_MS = saved.gap;
   }
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// Plan 051 — 챗이 apt_master(정식 KAPT 등록명)를 보게 하고, 국토부에 A/B 로 분리
+//   등록된 한 단지를 합산해 답한다. 운영자 재현: "공릉 풍림아이원 시세"가 "찾지 못했어요"로
+//   끝났다(그 단지는 DB 에 있다 — molit 원본만 풍림아파트A/B 로 나뉘어 있었다).
+// ══════════════════════════════════════════════════════════════════════════
+
+// 아래 두 헬퍼는 이 섹션의 통합 테스트가 공유한다 — PostgREST 쿼리 빌더를 흉내 낸
+// 최소 스텁(체이닝 메서드는 상태만 기록, then() 에서 필터를 실제로 적용).
+function _mockPgTable(rows) {
+  const state = { filters: [], order: null, limitN: null, range: null };
+  const applyOne = (r, f) => {
+    const v = r[f.col];
+    if (f.op === 'eq') return v === f.val;
+    if (f.op === 'is') return f.val === null ? (v === null || v === undefined) : v === f.val;
+    if (f.op === 'gte') return String(v) >= String(f.val);
+    if (f.op === 'in') return Array.isArray(f.val) && f.val.includes(v);
+    if (f.op === 'ilike') {
+      const raw = String(f.val);
+      const lead = raw.startsWith('%'), trail = raw.endsWith('%');
+      const core = raw.replace(/^%/, '').replace(/%$/, '').toLowerCase();
+      const hay = String(v == null ? '' : v).toLowerCase();
+      if (lead && trail) return hay.includes(core);
+      if (trail) return hay.startsWith(core);
+      if (lead) return hay.endsWith(core);
+      return hay === core;
+    }
+    return true;
+  };
+  const s = {
+    select() { return s; },
+    eq(col, val) { state.filters.push({ op: 'eq', col, val }); return s; },
+    ilike(col, val) { state.filters.push({ op: 'ilike', col, val }); return s; },
+    is(col, val) { state.filters.push({ op: 'is', col, val }); return s; },
+    gte(col, val) { state.filters.push({ op: 'gte', col, val }); return s; },
+    in(col, val) { state.filters.push({ op: 'in', col, val }); return s; },
+    order(col, opts) { state.order = { col, asc: !(opts && opts.ascending === false) }; return s; },
+    limit(n) { state.limitN = n; return s; },
+    range(a, b) { state.range = [a, b]; return s; },
+    then(resolve) {
+      let data = rows.filter(r => state.filters.every(f => applyOne(r, f)));
+      if (state.order) {
+        const { col, asc } = state.order;
+        data = [...data].sort((a, b) => (a[col] > b[col] ? 1 : a[col] < b[col] ? -1 : 0) * (asc ? 1 : -1));
+      }
+      if (state.range) data = data.slice(state.range[0], state.range[1] + 1);
+      if (state.limitN != null) data = data.slice(0, state.limitN);
+      resolve({ data, error: null });
+    },
+  };
+  return s;
+}
+function _mockAptAdmin(tables) {
+  return { from: (t) => _mockPgTable((tables && tables[t]) || []) };
+}
+// 챗 라우터를 DB 스텁과 함께 새로 불러온다 — db/client 를 require.cache 에서 갈아치운 뒤
+// chatDataRouter 자신도 캐시에서 지워야 새 destructure 가 스텁을 집는다(이 파일의 기존 관례).
+function _requireRouterWithAdmin(admin) {
+  const clientPath = require.resolve('../db/client');
+  const routerPath = require.resolve('../services/chatDataRouter');
+  const saved = { client: require.cache[clientPath], router: require.cache[routerPath] };
+  require.cache[clientPath] = { id: clientPath, filename: clientPath, loaded: true, exports: { getSupabaseAdmin: () => admin, hasAdminEnv: () => true } };
+  delete require.cache[routerPath];
+  const router = require('../services/chatDataRouter');
+  return {
+    router,
+    restore() {
+      if (saved.client) require.cache[clientPath] = saved.client; else delete require.cache[clientPath];
+      if (saved.router) require.cache[routerPath] = saved.router; else delete require.cache[routerPath];
+    },
+  };
+}
+const _NO_PROMO = /사세요|파세요|매수하세요|추천드려요|오를 겁니다|떨어질 겁니다/;
+
+test('aptNameMatch — 순수 함수 고정 (Plan 051 Step 1)', () => {
+  const { normalizeName, siblingKey, groupSiblings, dice, stripAptSuffix } = require('../utils/aptNameMatch');
+
+  // normalizeName: %·_ 제거 + 공백 전부 제거. 소문자화하지 않는다.
+  assert.equal(normalizeName('공릉 풍림아이원'), '공릉풍림아이원');
+  assert.equal(normalizeName('%자이_'), '자이');
+  assert.equal(normalizeName(null), '');
+
+  // siblingKey: <stem 2자+><단일 접미문자> 형태만 값을 준다.
+  assert.deepEqual(siblingKey('풍림아파트A'), { stem: '풍림아파트', suffix: 'A' });
+  assert.equal(siblingKey('은마'), null, '길이가 짧아 stem+접미문자로 쪼갤 수 없다');
+  assert.equal(siblingKey('현대'), null);
+
+  // groupSiblings — 계획서 Step 1 의 3케이스 그대로.
+  assert.deepEqual(groupSiblings([{ apt_name: '태강CITY', build_year: 2018 }, { apt_name: '태강CITY', build_year: 2016 }]), [],
+    '접미문자가 같은(=이름이 동일한) 행은 형제가 아니다');
+  assert.deepEqual(groupSiblings([{ apt_name: '현대A', build_year: 1995 }, { apt_name: '현대C', build_year: 1996 }]), [],
+    'build_year 가 다르면 형제가 아니다(남양주 현대A/C/D 오매칭 방지)');
+  const g = groupSiblings([{ apt_name: '풍림아파트A', build_year: 2001 }, { apt_name: '풍림아파트B', build_year: 2001 }]);
+  assert.equal(g.length, 1, '운영자 사례(풍림아파트A/B)는 그룹 1개여야 한다');
+  assert.deepEqual(g[0], { stem: '풍림아파트', names: ['풍림아파트A', '풍림아파트B'], buildYear: 2001 });
+
+  // stripAptSuffix — chatDataRouter 의 옛 동작과 동일해야 한다(이전 검증).
+  assert.equal(stripAptSuffix('은마아파트'), '은마');
+  assert.equal(stripAptSuffix('신동아아파트1'), '신동아아파트1', '중간에 낀 아파트는 보존');
+
+  // dice — IDENTITY-GATE 예시: 유사도가 높아도(0.7+) 자동 채택 판정에 쓰면 안 된다는
+  //   것은 아래 별도 소스 계약 테스트가 확인한다. 여기서는 값 산출만 고정.
+  assert.ok(dice('강일리버파크11단지', '강일리버파크1단지') > 0.7, '두 단지는 실제로 유사도가 높다 — 그래서 위험하다');
+  assert.equal(dice('', '아무거나'), 0);
+  assert.equal(dice('은마', '은마'), 1);
+});
+
+test('stripAptSuffix — 저장소에 정의가 1곳뿐이다 (Plan 051 Step 1, 사본 금지)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const walk = (dir, out = []) => {
+    for (const name of fs.readdirSync(dir)) {
+      if (name === 'node_modules' || name.startsWith('.')) continue;
+      const p = path.join(dir, name);
+      const st = fs.statSync(p);
+      if (st.isDirectory()) walk(p, out);
+      else if (name.endsWith('.js')) out.push(p);
+    }
+    return out;
+  };
+  const files = walk(path.join(__dirname, '..'));
+  const defs = files.filter(f => {
+    const src = fs.readFileSync(f, 'utf8').split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+    return /function\s+stripAptSuffix\s*\(/.test(src);
+  });
+  assert.equal(defs.length, 1, `stripAptSuffix 정의가 ${defs.length}곳이다(1곳이어야 한다): ${defs.join(', ')}`);
+  assert.match(defs[0], /aptNameMatch\.js$/, '정의가 backend/utils/aptNameMatch.js 에 있지 않다');
+  const chatSrc = fs.readFileSync(require.resolve('../services/chatDataRouter.js'), 'utf8');
+  assert.match(chatSrc, /require\(['"]\.\.\/utils\/aptNameMatch['"]\)/, 'chatDataRouter 가 aptNameMatch 모듈을 가져다 쓰지 않는다');
+});
+
+test('aptNameMatch.dice — 호출부가 전부 후보 정렬/점수 문맥 안에만 있다 (IDENTITY-GATE, Plan 051 Step 6-3)', () => {
+  const fs = require('node:fs');
+  const src = fs.readFileSync(require.resolve('../services/chatDataRouter.js'), 'utf8')
+    .split('\n').filter(l => !l.trim().startsWith('//')).join('\n'); // 주석 줄 제거 — 자기 충돌 방지
+  assert.equal(/if\s*\([^)]*dice\(/.test(src), false,
+    'dice() 유사도가 if() 자동 채택 조건에 쓰였다 — IDENTITY-GATE 위반');
+  let idx = -1, count = 0;
+  while ((idx = src.indexOf('dice(', idx + 1)) !== -1) {
+    count++;
+    const window = src.slice(Math.max(0, idx - 150), idx + 150);
+    assert.ok(/sort|score/.test(window), `dice() 호출이 정렬/점수 문맥 밖에 있다: …${window}…`);
+  }
+  assert.ok(count >= 2, 'dice() 가 후보 정렬에 전혀 쓰이지 않는다(apt_master 후보 정렬·미확정 후보 점수 둘 다 있어야 한다)');
+});
+
+// ── Step 0 특성화: 기존(직접 히트, 형제 없음) 경로가 리팩터 후에도 그대로다 ──────────────
+test('AI 도우미 시세 — 직접 히트 + 형제 없음(기존 동작 그대로, Plan 051 Step 0)', async () => {
+  const admin = _mockAptAdmin({
+    molit_apt_index: [
+      { apt_name: '은마', lawd_cd: '11680', sigungu: '강남구', umd_nm: '대치동', build_year: 1979, deal_count: 233 },
+    ],
+    molit_transactions: [
+      { apt_name: '은마', sigungu: '강남구', umd_nm: '대치동', deal_amount: 250000, deal_date: '2026-08-20', exclu_use_ar: 84.4 },
+      { apt_name: '은마', sigungu: '강남구', umd_nm: '대치동', deal_amount: 240000, deal_date: '2026-07-10', exclu_use_ar: 76.8 },
+    ],
+  });
+  const { router, restore } = _requireRouterWithAdmin(admin);
+  try {
+    const { reply, suggestions } = await router.route('은마 시세', null);
+    assert.match(reply, /은마/);
+    assert.match(reply, /거래 2건/);
+    assert.equal(/국토부에는/.test(reply), false, '형제가 없는데 합산 문구가 붙었다');
+    assert.equal(/찾지 못했어요/.test(reply), false);
+    assert.equal(_NO_PROMO.test(reply), false);
+    assert.ok(suggestions.includes('강남구 인기단지'), '동네 후속 칩이 없다');
+  } finally { restore(); }
+});
+
+// ── Step 4 핵심 경로 ①: apt_master + alias 확정 + A/B 실제 합산 (운영자 재현 사례) ─────────
+test('AI 도우미 시세 — apt_master 히트를 alias 로 확정해 A/B 를 실제로 합산한다 (Plan 051 핵심)', async () => {
+  const admin = _mockAptAdmin({
+    apt_master: [
+      { apt_name: '공릉풍림아이원', lawd_cd: '11350', sigungu: '노원구', umd_nm: '공릉동', kapt_code: 'A13980513', molit_aliases: ['풍림아파트A', '풍림아파트B'] },
+    ],
+    molit_apt_index: [
+      // 정식명("공릉풍림아이원")으로는 국토부에 단 한 건도 없다 — 이게 이 결함의 본질.
+      { apt_name: '풍림아파트A', lawd_cd: '11350', sigungu: '노원구', umd_nm: '공릉동', build_year: 2001, deal_count: 90 },
+      { apt_name: '풍림아파트B', lawd_cd: '11350', sigungu: '노원구', umd_nm: '공릉동', build_year: 2001, deal_count: 21 },
+      { apt_name: '공릉두산', lawd_cd: '11350', sigungu: '노원구', umd_nm: '공릉동', build_year: 1999, deal_count: 15 },
+    ],
+    molit_transactions: [
+      { apt_name: '풍림아파트A', sigungu: '노원구', umd_nm: '공릉동', deal_amount: 60000, deal_date: '2026-08-20', exclu_use_ar: 59.9 },
+      { apt_name: '풍림아파트A', sigungu: '노원구', umd_nm: '공릉동', deal_amount: 58000, deal_date: '2026-07-10', exclu_use_ar: 59.9 },
+      { apt_name: '풍림아파트B', sigungu: '노원구', umd_nm: '공릉동', deal_amount: 57000, deal_date: '2026-06-15', exclu_use_ar: 59.9 },
+    ],
+  });
+  const { router, restore } = _requireRouterWithAdmin(admin);
+  try {
+    const { reply } = await router.route('공릉 풍림아이원 시세', null);
+    assert.match(reply, /공릉풍림아이원/, '정식명(apt_master)으로 응답하지 않는다');
+    assert.match(reply, /거래 3건/, 'A(2건)+B(1건) 합산 건수가 아니다');
+    assert.match(reply, /풍림아파트A·풍림아파트B/, '합쳐진 원본명이 밝혀지지 않는다');
+    assert.match(reply, /합쳐서 계산했어요/);
+    assert.equal(/찾지 못했어요/.test(reply), false, 'apt_master 히트가 있는데 못 찾았다고 답한다');
+    assert.equal(_NO_PROMO.test(reply), false);
+  } finally { restore(); }
+});
+
+// ── Step 4 핵심 경로 ②: apt_master 를 거치지 않는 직접 히트에서도 형제 병합이 적용된다 ──────
+test('AI 도우미 시세 — apt_master 없이도 직접 히트 경로에서 A/B 형제를 병합한다 (Plan 051 Step 4)', async () => {
+  const admin = _mockAptAdmin({
+    molit_apt_index: [
+      { apt_name: '상목에버빌A', lawd_cd: '11620', sigungu: '관악구', umd_nm: '신림동', build_year: 2004, deal_count: 50 },
+      { apt_name: '상목에버빌B', lawd_cd: '11620', sigungu: '관악구', umd_nm: '신림동', build_year: 2004, deal_count: 30 },
+    ],
+    molit_transactions: [
+      { apt_name: '상목에버빌A', sigungu: '관악구', umd_nm: '신림동', deal_amount: 70000, deal_date: '2026-08-10', exclu_use_ar: 59.9 },
+      { apt_name: '상목에버빌B', sigungu: '관악구', umd_nm: '신림동', deal_amount: 68000, deal_date: '2026-07-05', exclu_use_ar: 59.9 },
+    ],
+  });
+  const { router, restore } = _requireRouterWithAdmin(admin);
+  try {
+    const { reply } = await router.route('상목에버빌A', null);   // 단독 입력 — market 인텐트로 폴백
+    assert.match(reply, /상목에버빌\(A·B 합산\)/, 'apt_master 정식명이 없을 때 stem+합산 표기가 아니다');
+    assert.match(reply, /거래 2건/);
+    assert.match(reply, /상목에버빌A·상목에버빌B/);
+    assert.equal(_NO_PROMO.test(reply), false);
+  } finally { restore(); }
+});
+
+// ── Step 5: apt_master 후보가 2곳 이상이면 되묻는다(동명 단지 등) ─────────────────────
+test('AI 도우미 시세 — apt_master 후보가 여럿이면 바로 답하지 않고 되묻는다 (Plan 051 Step 5)', async () => {
+  const admin = _mockAptAdmin({
+    apt_master: [
+      { apt_name: '테스트단지1차', lawd_cd: '11110', sigungu: '종로구', umd_nm: 'A동', kapt_code: 'K1', molit_aliases: [] },
+      { apt_name: '테스트단지2차', lawd_cd: '11140', sigungu: '중구', umd_nm: 'B동', kapt_code: 'K2', molit_aliases: [] },
+    ],
+    molit_apt_index: [],
+    molit_transactions: [],
+  });
+  const { router, restore } = _requireRouterWithAdmin(admin);
+  try {
+    const { reply, suggestions } = await router.route('테스트단지', null);
+    assert.match(reply, /테스트단지1차/);
+    assert.match(reply, /테스트단지2차/);
+    assert.equal(/찾지 못했어요/.test(reply), false);
+    assert.ok(suggestions.length >= 1 && suggestions.length <= 3);
+    assert.equal(_NO_PROMO.test(reply), false);
+  } finally { restore(); }
+});
+
+// ── 완전 무결과 + 공백 제안 (Step 5 세 번째 원칙) ────────────────────────────────────
+test('AI 도우미 시세 — molit·apt_master 둘 다 0건이면 그제서야 찾지 못했다고 답한다', async () => {
+  const admin = _mockAptAdmin({ molit_apt_index: [], apt_master: [], molit_transactions: [] });
+  const { router, restore } = _requireRouterWithAdmin(admin);
+  try {
+    const { reply } = await router.route('아무개단지구백구백 시세', null);
+    assert.match(reply, /찾지 못했어요/);
+    assert.equal(_NO_PROMO.test(reply), false);
+  } finally { restore(); }
+});
