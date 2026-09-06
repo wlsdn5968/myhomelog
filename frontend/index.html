@@ -9088,10 +9088,19 @@ function renderAnalysis(d,p){
     //   red 의 위험 고지(백엔드와 같은 판단 — 확인할 항목 안내이지 예측이 아니다)는 유지하고,
     //   green/yellow 는 등급 라벨을 다른 말로 바꿔치기하지 않고 gap-sub 자체를 생략한다
     //   (수치는 바로 위 gap-val 에 이미 있고, 옆 카드가 매매/전세 평균을 이미 보여준다 — 중복 문구를 새로 만들지 않는다).
+    // GAP-SAMPLE-FRONT-2026-09-06 (Plan 064): 바로 위 조건 카드(전세가율)는 analysisService.js 의
+    //   jeonseBasisDesc 로 표본 완전성(예: "전세 실거래 4/6개월 표본")을 밝히는데, 이 갭 카드는 같은
+    //   전세가율 수치를 아무 단서 없이 보여줬다 — 국토부 조회가 일부 달 실패해도 사용자는 몰랐다.
+    //   [설계] 임계값(60/45)·total-failed 산술을 여기서 다시 계산하지 않는다 — 백엔드가 만든
+    //   gapData.jeonseBasis 문자열을 그대로 그린다(취득세 tier 2사본 결함 재발 방지, plans/064).
+    //   [모름] gapData.jeonseBasis 가 없으면(표본 자체를 모름) 아무것도 그리지 않는다 — "모름"을
+    //   "완전한 6개월"로 보이게 하면 이 계획이 고치려는 결함을 그대로 재현한다.
+    //   [레이아웃] red 분기의 "역전세 위험 확인 필요"(041 이 의도적으로 남긴 위험 고지)는 유지하고,
+    //   표본 문구가 있으면 같은 gap-sub 한 줄에 " · " 로 이어 붙인다(새 CSS 클래스를 만들지 않는다).
     gapHtml=`<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:7px">🏠 전세가율 · 갭 분석</div>
     <div class="ibox b" style="margin-bottom:7px;font-size:10px">전세 ${d.jeonseCount||0}건 기준${d.jeonseReliability&&d.jeonseReliability!=='NONE'?` · 전세 표본 신뢰도 <b>${({LOW:'낮음',MED:'보통',HIGH:'높음'})[d.jeonseReliability]||_escHtml(String(d.jeonseReliability))}</b>`:''}. 갱신계약 포함 시 실제 시세와 다를 수 있습니다.</div>
     <div class="gap-grid">
-      <div class="gap-card"><div class="gap-lbl">전세가율</div><div class="gap-val" style="color:${g.jeonseRate>=60?'var(--grn)':g.jeonseRate>=45?'var(--amb)':'var(--red)'}">${g.jeonseRate}%</div>${g.jeonseRate<45?'<div class="gap-sub">역전세 위험 확인 필요</div>':''}</div>
+      <div class="gap-card"><div class="gap-lbl">전세가율</div><div class="gap-val" style="color:${g.jeonseRate>=60?'var(--grn)':g.jeonseRate>=45?'var(--amb)':'var(--red)'}">${g.jeonseRate}%</div>${g.jeonseBasis?`<div class="gap-sub">${_escHtml(g.jeonseBasis)}${g.jeonseRate<45?' · 역전세 위험 확인 필요':''}</div>`:(g.jeonseRate<45?'<div class="gap-sub">역전세 위험 확인 필요</div>':'')}</div>
       <div class="gap-card"><div class="gap-lbl">갭 (매매-전세)</div><div class="gap-val">${g.gap}억</div><div class="gap-sub">매매 ${g.avgSale}억 / 전세 ${g.avgJeonse}억</div></div>
     </div>
     ${jeonseSimHtml}

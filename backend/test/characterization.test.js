@@ -9715,3 +9715,139 @@ test('APT-PAGE-INFO — 단지정보 fact 가 더해져도 desc 끝의 절대 �
   assert.ok(desc.includes('700세대') || desc.includes('2001년 준공'), '단지정보 fact(세대수·준공년도)가 desc 에 안 들어갔다');
   assert.ok(desc.endsWith('매수 추천이 아닙니다.'), 'desc 끝의 절대 룰 문구가 사라졌다: ' + desc);
 });
+
+// ── Plan 064 (2026-09-06): 갭 카드 전세가율에 표본 완전성 표기가 없다 (046 의 마지막 절반) ──────
+//   [왜] Plan 046 이 조건 카드(전세가율)에는 표본 완전성(jeonseBasisDesc)을 밝히게 했는데, 같은
+//   화면(t4)의 갭 카드(gap-grid)는 같은 수치를 아무 단서 없이 보여줬다 — 국토부 조회가 일부 달
+//   실패해도 사용자는 몰랐다. 백엔드가 gapData.jeonseBasis 로 같은 문자열을 payload 에 실어 보내고,
+//   프론트는 그 문자열을 그대로 그린다(임계값·산술 사본 금지 — 취득세 tier 2사본 결함 재발 방지).
+//   [방식] 이 저장소 확립 패턴(소스 문자열 추출 + new Function 실행)을 그대로 쓴다.
+function _plan064ExtractGapAttach() {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const src = fs2.readFileSync(path2.join(__dirname, '../services/analysisService.js'), 'utf8');
+  const startTok = 'const gapData = calcGap(filteredTx, jeonsePure);';
+  const endTok = '// LOW 이상일 때만 시세 위치 요약 계산';
+  const s = src.indexOf(startTok);
+  if (s < 0) throw new Error('Plan 064 테스트: gapData 시작 토큰을 못 찾았다 — 소스가 옮겨졌다');
+  const e = src.indexOf(endTok, s);
+  if (e < 0) throw new Error('Plan 064 테스트: 끝 토큰을 못 찾았다 — 소스가 옮겨졌다');
+  return src.slice(s, e);
+}
+
+function _plan064RunGapAttach(jTotal, jFailed) {
+  const { _internals } = require('../services/analysisService');
+  const block = _plan064ExtractGapAttach();
+  const filteredTx = [{ dealAmount: 85000 }];   // 8.5억 (만원 단위)
+  const jeonsePure = [{ deposit: 50000 }];      // 5억
+  const fn = new Function('calcGap', 'computeJeonseBasisDesc', 'filteredTx', 'jeonsePure', '_jTotal', '_jFailed',
+    block + '\nreturn gapData;');
+  return fn(_internals.calcGap, _internals.computeJeonseBasisDesc, filteredTx, jeonsePure, jTotal, jFailed);
+}
+
+function _plan064ExtractNoneReliability() {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const src = fs2.readFileSync(path2.join(__dirname, '../services/analysisService.js'), 'utf8');
+  const startTok = "const percentileObj = reliability !== 'NONE' ? calcPricePercentile(filteredTx, priceW) : null;";
+  const endTok = 'const buySignal = marketSummary; // 하위 호환';
+  const s = src.indexOf(startTok);
+  if (s < 0) throw new Error('Plan 064 NONE 테스트: 시작 토큰을 못 찾았다 — 소스가 옮겨졌다');
+  const e = src.indexOf(endTok, s);
+  if (e < 0) throw new Error('Plan 064 NONE 테스트: 끝 토큰을 못 찾았다 — 소스가 옮겨졌다');
+  return src.slice(s, e + endTok.length);
+}
+
+function _plan064RunNoneReliability(opts) {
+  const { _internals } = require('../services/analysisService');
+  const block = _plan064ExtractNoneReliability();
+  const saleTx = [{ dealAmount: 85000 }];
+  const filteredTx = saleTx;
+  const jeonsePure = [{ deposit: 50000 }];
+  const priceW = 85000;
+  const fn = new Function(
+    'reliability', 'calcPricePercentile', 'calcVolumeSignal', 'calcGap', 'computeJeonseBasisDesc',
+    'summarizeMarketSignal', 'saleTx', 'filteredTx', 'jeonsePure', 'priceW', '_jTotal', '_jFailed',
+    block + '\nreturn { gapData, marketSummary };'
+  );
+  return fn(
+    opts.reliability, _internals.calcPricePercentile, _internals.calcVolumeSignal, _internals.calcGap,
+    _internals.computeJeonseBasisDesc, _internals.calcBuySignal, saleTx, filteredTx, jeonsePure, priceW,
+    opts.jTotal, opts.jFailed
+  );
+}
+
+test('Plan 064 ①: 결측이 있으면 gapData.jeonseBasis 에 실제 개월 수(4/6)가 실린다', () => {
+  const g = _plan064RunGapAttach(6, 2);
+  assert.equal(g.jeonseBasis, '전세 실거래 4/6개월 표본',
+    '결측 2/6인데 gapData.jeonseBasis 가 실제 개월 수를 밝히지 않는다');
+});
+
+test('Plan 064 ②: 결측이 없으면(0/6) 조건 카드와 같은 문구를 쓰고 "6/6" 단정을 만들지 않는다', () => {
+  const g = _plan064RunGapAttach(6, 0);
+  assert.equal(g.jeonseBasis, '최근 6개월 전세 실거래 기준',
+    '결측 0건인데 조건 카드와 다른 문구를 만들었다');
+  assert.equal(/\d+\/\d+/.test(g.jeonseBasis), false,
+    '결측이 없는데 "n/6" 형태의 단정 문구가 생겼다 — 얻지 못한 정밀도를 만들어낸 것');
+});
+
+test('Plan 064 ③: 표본 자체를 모르면(_jTotal===null) gapData.jeonseBasis 키가 아예 없다', () => {
+  const g = _plan064RunGapAttach(null, null);
+  assert.equal(Object.prototype.hasOwnProperty.call(g, 'jeonseBasis'), false,
+    '표본을 모르는데 jeonseBasis 키가 생겼다 — "모름" 을 "완전한 6개월" 로 오독시킬 위험');
+});
+
+test('Plan 064 ④: summarizeMarketSignal 기존 3인자 호출 동작은 변하지 않는다 (하위호환)', () => {
+  const { _internals } = require('../services/analysisService');
+  const { calcBuySignal } = _internals;
+  const r = calcBuySignal(50, { signal: 'neutral' }, 49);
+  const jeonse = r.conditions.find(c => c.label === '전세가율');
+  assert.match(jeonse.desc, /49% \(최근 6개월 전세 실거래 기준\)/,
+    '3인자 호출(jeonseSample 생략)의 조건 카드 문구가 바뀌었다 — 하위호환 파손');
+});
+
+test('Plan 064 ⑤: 갭 카드가 백엔드 jeonseBasis 문구를 그대로 그린다(결측 있음)', () => {
+  const html = _plan056RunGap(70, { jeonseBasis: '전세 실거래 4/6개월 표본' });
+  assert.ok(html.indexOf('전세 실거래 4/6개월 표본') >= 0,
+    '갭 카드가 백엔드가 준 표본 문구를 그리지 않는다');
+});
+
+test('Plan 064 ⑥: gapData.jeonseBasis 가 없으면(모름) 갭 카드에 표본 문구가 없다', () => {
+  const html = _plan056RunGap(70, {});
+  assert.equal(/개월 표본|전세 실거래 기준/.test(html), false,
+    '표본을 모르는데 갭 카드에 표본 관련 문구가 나왔다');
+});
+
+test('Plan 064 ⑦: red 분기 — "역전세 위험 확인 필요" 와 표본 문구가 함께 나온다(레이아웃 확인)', () => {
+  const html = _plan056RunGap(40, { jeonseBasis: '전세 실거래 4/6개월 표본' });
+  assert.ok(html.indexOf('역전세 위험 확인 필요') >= 0, 'red 분기 위험 고지가 사라졌다');
+  assert.ok(html.indexOf('전세 실거래 4/6개월 표본') >= 0, 'red 분기에서 표본 문구가 사라졌다');
+});
+
+test('Plan 064 ⑧: red 분기인데 jeonseBasis 가 없으면(모름) 위험 고지만 나오고 표본 문구는 없다', () => {
+  const html = _plan056RunGap(40, {});
+  assert.ok(html.indexOf('역전세 위험 확인 필요') >= 0, 'red 분기 위험 고지가 사라졌다(기존 동작 회귀)');
+  assert.equal(/개월 표본|전세 실거래 기준/.test(html), false,
+    '표본을 모르는데 red 분기에서 표본 문구가 나왔다');
+});
+
+test('Plan 064 ⑨: 프론트는 임계값(60/45)·total-failed 산술을 다시 만들지 않는다 (소스 계약)', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const s = fe.indexOf("let gapHtml=''");
+  const e = fe.indexOf('// ─ 실투자금 계산기', s);
+  const block = fe.slice(s, e);
+  // 줄 주석을 먼저 제거한 뒤 검사한다(자기 주석 오검출 6회 재발 이력 — test-marker-self-collision).
+  const noComments = block.split('\n').filter(l => !l.trim().startsWith('//')).join('\n');
+  assert.equal(/jeonseSample|monthsTotal|monthsFailed|\.total\s*-\s*\.?failed/.test(noComments), false,
+    '프론트 gapHtml 이 표본 산술(total-failed)을 다시 계산하는 코드를 만들었다 — 백엔드 문자열을 그대로 써야 한다');
+  assert.ok(/g\.jeonseBasis/.test(noComments), '프론트가 gapData.jeonseBasis 를 읽지 않는다');
+});
+
+test('Plan 064 ⑩: reliability===NONE 이라 marketSummary 가 null 이어도 gapData.jeonseBasis 는 옳게 채워진다', () => {
+  const { gapData, marketSummary } = _plan064RunNoneReliability({ reliability: 'NONE', jTotal: 6, jFailed: 2 });
+  assert.equal(marketSummary, null, 'reliability=NONE 인데 marketSummary 가 null 이 아니다(테스트 전제 확인)');
+  assert.equal(gapData.jeonseBasis, '전세 실거래 4/6개월 표본',
+    'reliability=NONE 경로에서 gapData.jeonseBasis 가 옳게 채워지지 않는다');
+});

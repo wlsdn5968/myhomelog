@@ -245,6 +245,23 @@ function calcGap(saleTx, jeonseT) {
 //   즉 **표본은 6개월**이다. 표기만 두 배로 부풀어 있었다 — 사용자는 더 긴 기간의 위치로 읽는다.
 //   표본을 1년으로 늘리는 선택도 있으나 그건 MOLIT 호출량·캐시 키가 바뀌는 별개 결정이라,
 //   여기서는 **표기를 실제에 맞춘다**(같은 화면의 다른 지표도 전부 6개월 기준이다).
+// Plan 064: jeonseBasisDesc 계산을 순수 함수로 뽑는다(마커는 아래 실제 노출 지점에 1회만 둔다).
+//   [왜] 조건 카드(summarizeMarketSignal 안)와 갭 카드(gapData, 호출부에서 직접)가 같은 화면에서
+//   같은 전세가율 수치를 보여주는데, 표본 완전성 문구는 조건 카드에만 있었다 — 갭 카드는 그 재료를
+//   받을 방법이 없었다(Plan 064 배경). 임계값·문자열을 프론트에 복제하는 대신, 이 저장소가 반복
+//   겪은 "같은 판단 두 사본" 결함(취득세 tier 3주 오표기)을 피하려고 이 함수를 양쪽이 공유한다.
+//   ⚠ 동작은 기존과 완전히 동일하다(로직을 옮기기만 했다) — jeonseSample 이 없거나(모름) 결측이
+//   0이면 기존 문구, 결측이 있으면 실제 개월 수를 밝힌다.
+function computeJeonseBasisDesc(jeonseSample) {
+  const _jeonseSampleComplete = !jeonseSample
+    || !Number.isFinite(jeonseSample.total)
+    || !Number.isFinite(jeonseSample.failed)
+    || jeonseSample.failed <= 0;
+  return _jeonseSampleComplete
+    ? '최근 6개월 전세 실거래 기준'
+    : `전세 실거래 ${jeonseSample.total - jeonseSample.failed}/${jeonseSample.total}개월 표본`;
+}
+
 function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate, jeonseSample) {
   let score = 0;
   const conditions = [];
@@ -305,13 +322,7 @@ function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate, jeonseSa
   //   표본은 6개월보다 얇다(rentService.js 의 monthsFailed). jeonseSample 이 없거나(모름) 결측이
   //   0이면 기존 문구를 그대로 쓴다(하위호환) — 결측이 있을 때만 실제로 쓴 개월 수를 밝힌다.
   //   ⚠ 얻지 못한 것을 얻은 것처럼 6/6 으로 단정하지 않는다.
-  const _jeonseSampleComplete = !jeonseSample
-    || !Number.isFinite(jeonseSample.total)
-    || !Number.isFinite(jeonseSample.failed)
-    || jeonseSample.failed <= 0;
-  const jeonseBasisDesc = _jeonseSampleComplete
-    ? '최근 6개월 전세 실거래 기준'
-    : `전세 실거래 ${jeonseSample.total - jeonseSample.failed}/${jeonseSample.total}개월 표본`;
+  const jeonseBasisDesc = computeJeonseBasisDesc(jeonseSample);
   if (jeonseRate !== null) {
     if (jeonseRate >= 60) {
       score += 2;
@@ -586,6 +597,18 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
   //   기존: outlier 1건 30억 → 평균 +18% 왜곡 → 잘못된 전세가율 → 매수 신호 RED 오판
   const gapData = calcGap(filteredTx, jeonsePure); // Sprint MMMMM — 순수 전세 기준(보고서와 통일)
 
+  // GAP-SAMPLE-2026-09-06 (Plan 064): 같은 화면(t4)의 조건 카드는 jeonseBasisDesc 로 표본
+  //   완전성을 밝히는데, 그 옆 갭 카드(gap-grid)는 같은 전세가율 수치를 아무 단서 없이 보여줬다
+  //   (프론트가 이 재료를 받을 방법이 없었다). 조건 카드와 **같은 순수 함수**로 같은 문자열을 만들어
+  //   gapData 에 실어 보낸다 — 임계값·문자열을 프론트에 복제하지 않는다(설계 방침, plans/064).
+  //   reliability==='NONE' 이라 marketSummary 가 null 이어도 갭 카드는 그려지므로, 이 값은
+  //   marketSummary 와 무관하게 여기서 직접 채운다.
+  //   ⚠ 표본 자체를 모르면(_jTotal===null — 국토부 조회 전체 실패 등) 필드를 아예 넣지 않는다.
+  //   "모름"에 기본 문구를 채우면 프론트가 "완전한 6개월"로 오독한다 — 이 계획이 고치려는 결함이다.
+  if (_jTotal !== null) {
+    gapData.jeonseBasis = computeJeonseBasisDesc({ total: _jTotal, failed: _jFailed });
+  }
+
   // LOW 이상일 때만 시세 위치 요약 계산 (NONE은 null)
   // P1 (2026-04-25 D2): buySignal → marketSummary alias 동시 노출 (호환성)
   const marketSummary = reliability !== 'NONE'
@@ -763,5 +786,5 @@ async function compareBatch(apts, opts = {}) {
 module.exports = {
   analyzeApt, calcTotalCost, getLawdCdFromArea, compareBatch,
   // 테스트·디버그 용 — 외부 호출 금지
-  _internals: { calcBuySignal, calcVolumeSignal, calcPricePercentile, filterAnomalies, detectSeasonalBias, getDataReliability, calcGap, compareOne: _compareOne },
+  _internals: { calcBuySignal, calcVolumeSignal, calcPricePercentile, filterAnomalies, detectSeasonalBias, getDataReliability, calcGap, compareOne: _compareOne, computeJeonseBasisDesc },
 };
