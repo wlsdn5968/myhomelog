@@ -9996,3 +9996,61 @@ test('WIRE-JEONSE-SAMPLE-2026-09-06: analyzeApt 가 전세 표본 결측(_jTotal
     for (const [p, prev] of saved) assert.equal(require.cache[p], prev, `require.cache 복원 실패: ${p}`);
   }
 });
+
+// ── APT-PAGE-ACCURACY-2026-09-06 (Plan 065): 063 표기 정확성 2건 수정 확인 ──────────────────
+//   [실행 테스트] 위 _p063Run·_p063Idx·_P063_STAT 인프라(라인 9560 부근)를 그대로 재사용한다.
+//   ① 복도유형(codeHallNm) 값이 "구조" 라벨로 표기되지 않는다(진짜 구조는 codeStr — 별도 필드).
+//   ② 거래 0 페이지의 desc 가 "거래 기록 없음" 사실을 유지하고, KAPT 사실에 국토교통부를 붙이지 않는다.
+test('APT-PAGE-LABEL — 복도유형 값이 "구조" 라벨로 표기되지 않는다 (Plan 065 Step 1)', async () => {
+  const row = {
+    kapt_code: 'P065A1', apt_name: '복도유형단지', molit_aliases: ['복도유형단지'],
+    facility: { kaptdaCnt: '600', codeHallNm: '계단식' },
+  };
+  const res = await _p063Run({ aptMasterRows: [row], idxRow: _p063Idx('복도유형단지'), statFixture: _P063_STAT });
+  assert.equal(res.statusCode, 200);
+  assert.ok(res.body.includes('<span class="k">복도유형</span>'), '복도유형 라벨이 없다');
+  assert.ok(res.body.includes('계단식'), '복도유형 값(계단식)이 안 보인다');
+  assert.ok(!res.body.includes('<span class="k">구조</span>'),
+    '복도유형 값이 여전히 잘못된 라벨로 나온다 — 진짜 구조(codeStr)와 다른 값인데 그렇게 말한다');
+});
+
+test('APT-PAGE-DESC — 거래 0 + 단지정보 있음: 거래 없음 사실이 남고 KAPT 사실에 국토교통부를 붙이지 않는다 (Plan 065 Step 2)', async () => {
+  const row = {
+    kapt_code: 'P065B1', apt_name: '무거래단지', molit_aliases: ['무거래단지'],
+    facility: { kaptdaCnt: '1601', kaptUsedate: '20010101' },
+  };
+  const res = await _p063Run({ aptMasterRows: [row], idxRow: _p063Idx('무거래단지'), statFixture: null });
+  assert.equal(res.statusCode, 200);
+  const m = res.body.match(/<meta name="description" content="([^"]*)">/);
+  assert.ok(m, 'description 메타가 없다');
+  const desc = m[1].replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  assert.ok(desc.includes('최근 24개월 거래 기록이 없습니다'), '거래 0 인데 거래 없음 사실이 desc 에서 사라졌다: ' + desc);
+  assert.ok(!desc.includes('국토교통부'), 'KAPT 출처 사실(세대수·준공년도)에 국토교통부가 붙었다: ' + desc);
+  assert.ok(desc.includes('1,601세대') || desc.includes('2001년 준공'), 'KAPT 단지정보 fact 가 desc 에서 사라졌다: ' + desc);
+  assert.ok(desc.endsWith('매수 추천이 아닙니다.'), '거래 0 + 단지정보 있음 분기에 절대 룰 문구가 없다: ' + desc);
+});
+
+test('APT-PAGE-DESC — 거래 0 + 단지정보 없음: 기존 문구를 유지하되 절대 룰 문구가 붙는다 (Plan 065 Step 2)', async () => {
+  const res = await _p063Run({ aptMasterRows: [], idxRow: _p063Idx('정보없는단지'), statFixture: null });
+  assert.equal(res.statusCode, 200);
+  const m = res.body.match(/<meta name="description" content="([^"]*)">/);
+  assert.ok(m, 'description 메타가 없다');
+  const desc = m[1].replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  assert.ok(desc.includes('최근 24개월 거래 기록이 없습니다'), '거래 0 사실이 desc 에서 사라졌다: ' + desc);
+  assert.ok(desc.endsWith('매수 추천이 아닙니다.'), '거래 0 + 단지정보 없음 분기에 절대 룰 문구가 없다: ' + desc);
+});
+
+test('APT-PAGE-DESC — 거래 있음: desc 형식이 변하지 않는다(하위호환) (Plan 065 Step 2)', async () => {
+  const row = {
+    kapt_code: 'P065C1', apt_name: '거래있는단지', molit_aliases: ['거래있는단지'],
+    facility: { kaptdaCnt: '700', kaptUsedate: '20010101' },
+  };
+  const res = await _p063Run({ aptMasterRows: [row], idxRow: _p063Idx('거래있는단지'), statFixture: _P063_STAT });
+  assert.equal(res.statusCode, 200);
+  const m = res.body.match(/<meta name="description" content="([^"]*)">/);
+  assert.ok(m, 'description 메타가 없다');
+  const desc = m[1].replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  assert.ok(desc.includes('국토교통부 실거래 신고 자료 정리'), '거래 있는 페이지의 desc 형식이 바뀌었다: ' + desc);
+  assert.ok(!desc.includes('거래 기록이 없습니다'), '거래가 있는데 거래 기록 없음 문구가 들어갔다: ' + desc);
+  assert.ok(desc.endsWith('매수 추천이 아닙니다.'), '거래 있는 분기의 절대 룰 문구가 사라졌다: ' + desc);
+});

@@ -216,7 +216,10 @@ function buildAptInfoCard(row) {
   const parkTotal = posInt(fac.parkingTotal);
   if (parkTotal) rows.push(['총 주차대수', `${comma(parkTotal)}대${fac.parkingRatio ? ` (세대당 ${fac.parkingRatio}대)` : ''}`]);
   if (fac.heatType) rows.push(['난방방식', esc(String(fac.heatType))]);
-  if (fac.hallType) rows.push(['구조', esc(String(fac.hallType))]);
+  // APT-PAGE-LABEL-2026-09-06 (Plan 065): fac.hallType(buildFacility.js 의 codeHallNm)은
+  //   현관 접근 방식(계단식/복도식/혼합식)이지 건물 구조(codeStr)가 아니다. Plan 063 이
+  //   "구조" 라고 잘못 표기했다 — 라벨만 사실대로 바로잡는다(값·필드는 그대로).
+  if (fac.hallType) rows.push(['복도유형', esc(String(fac.hallType))]);
   const elev = posInt(fac.elevatorCount);
   if (elev) rows.push(['승강기', `${comma(elev)}대`]);
   const cctv = posInt(fac.cctvCount);
@@ -338,9 +341,15 @@ router.get('/:aptSeq', async (req, res) => {
     <a class="cta" href="${ORIGIN}/">${esc(aptName)} 대출 한도·비용 계산 →</a>`;
 
   const title = `${aptName} 실거래가 — ${region}${umd ? ' ' + umd : ''} | 내집로그`;
-  const desc = facts.length
+  // APT-PAGE-DESC-2026-09-06 (Plan 065): 분기는 facts.length 가 아니라 thin(거래 유무, 위에서
+  //   이미 확정됨)으로 가른다 — Plan 063 은 facts.length 로 갈라서, 거래가 0건인데 K-apt 세대수·
+  //   준공년도 fact 만으로 facts.length>0 이 돼 "국토교통부 실거래 신고 자료 정리" 분기를 탔다.
+  //   거래 0 인 경우는 그 사실이 항상 남아야 하고, KAPT 출처 fact 에는 국토교통부를 붙이지 않는다.
+  const desc = !thin
     ? `${aptName}(${region}${umd ? ' ' + umd : ''}) ${facts.join(' · ')}. 국토교통부 실거래 신고 자료 정리 — 매수 추천이 아닙니다.`
-    : `${aptName}(${region}${umd ? ' ' + umd : ''}) 국토교통부 실거래 신고 자료. 최근 24개월 거래 기록이 없습니다.`;
+    : (facts.length
+      ? `${aptName}(${region}${umd ? ' ' + umd : ''}) 최근 24개월 거래 기록이 없습니다. K-apt 단지정보 ${facts.join(' · ')} — 매수 추천이 아닙니다.`
+      : `${aptName}(${region}${umd ? ' ' + umd : ''}) 국토교통부 실거래 신고 자료. 최근 24개월 거래 기록이 없습니다 — 매수 추천이 아닙니다.`);
 
   // APT-PAGE-INFO-2026-09-06: 단지정보 조회가 "오류로 실패"했을 때도 긴 캐시를 붙이지 않는다 —
   //   "있을 수도 있는데 못 읽음"과 "정말 없음"을 구분 못 하면 열화 응답이 엣지에 굳는다
