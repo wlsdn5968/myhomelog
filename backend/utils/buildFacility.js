@@ -207,6 +207,10 @@ function buildFacility(info, kaptCode, detail) {
     // TYPE-2026-08-30: 단지 유형·복도유형을 그대로 노출 — 추천에서 아파트가 아닌 유형을 걸러내는 데 쓴다.
     aptType: info.codeAptNm || null,
     hallType: info.codeHallNm || null,
+    // STRUCTURE-2026-09-06 (Plan 068): 진짜 건물 구조 노출 — apt_master.facility->'_dtl'->>'codeStr' 14,196행 미사용이었다.
+    //   codeStr 은 detail(_dtl 인자)에 있다 — info 가 아니다. hallType(복도유형)과는 다른 필드.
+    //   값 없으면 null(미확인 원칙 — '미상' 문자열을 여기서 만들지 않는다. 표시는 소비자 쪽에서 처리).
+    structureType: (detail && detail.codeStr) || null,
     floorAreaRatio: info.kaptTarea || null,
     topFloor: parseInt(info.kaptTopFloor) || null,
     // BOTTOM-FLOOR-FIX-2026-05-13 (Sprint X — 운영자 발견):

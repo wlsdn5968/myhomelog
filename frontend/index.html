@@ -8076,6 +8076,7 @@ function showDetail(p){
         <tr><td>사용승인일</td><td>${_ymd(f.builtDate)}</td></tr>
         <tr><td>총 세대수</td><td>${hh ? hh + '세대' : '<span style="color:var(--t3)">미상</span>'}${f.householdsConflict ? `<div style="font-size:10px;color:var(--t3);margin-top:3px">원천 불일치 — 관리세대수 ${_num(f.householdsConflict.kaptdaCnt)} · 호수 ${_num(f.householdsConflict.hoCnt)}</div>` : ''}</td></tr>
         <tr><td>총 동수</td><td>${dong ? dong + '개동' : '<span style="color:var(--t3)">미상</span>'}</td></tr>
+        ${f.structureType ? `<tr><td>구조</td><td>${_escHtml(f.structureType)}</td></tr>` : ''}
         <tr><td>층수</td><td>${floorRange ? _escHtml(floorRange) : '<span style="color:var(--t3)">미상</span>'}</td></tr>
         <tr><td>총 주차대수</td><td>${parkTotal ? parkTotal + `대${f.parkingRatio ? ` (세대당 ${f.parkingRatio}대${f.householdsConflict ? ' — 세대수 불일치로 참고용' : ''})` : ''}` : '<span style="color:var(--t3)">미상</span>'}</td></tr>
         <tr><td>승강기</td><td>${_num(f.elevatorCount) ? _num(f.elevatorCount) + '대' : '<span style="color:var(--t3)">미상</span>'}</td></tr>
