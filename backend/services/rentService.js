@@ -60,10 +60,30 @@ function monthsWindow(now = new Date()) {
 function rentTtlSec(dealYm, now = new Date()) {
   return monthsWindow(now).slice(0, 2).includes(String(dealYm)) ? 30 * 3600 : 8 * 86400;
 }
+// RENT-DEGRADED-2026-09-06: 실패를 빈 배열로 캐시하면 5분 안의 다음 호출이 예외 없이 []를 받고,
+//   getJeonseByApt 의 _failedMonths 가 비어 "표본 n/6개월" 표기가 사라진다 = 화면은 6/6 으로 읽힌다.
+//   백오프(5분, 외부 API 재타격 방지)는 유지하되 **실패였다는 사실**을 캐시에 담는다.
+// ⚠ isRentCached 는 이 표식을 히트로 보면 안 된다 — Array.isArray 검사가 이미 막는다(표식은 배열이 아니다).
+const RENT_FAIL = Symbol.for('myhomelog.rent.fail');
+const _failMark = (reason) => ({ [RENT_FAIL]: true, reason: reason || null });
+const _isFailMark = (v) => !!(v && typeof v === 'object' && !Array.isArray(v) && v[RENT_FAIL]);
+function _throwFailMark(mark) {
+  const err = new Error(`국토부 전월세 API 호출 실패(5분 캐시된 실패): ${mark.reason || ''}`);
+  err.code = 'MOLIT_RENT_API_ERROR';
+  err.status = 502;
+  err.reason = mark.reason; // rentWarm.js 의 QUOTA_RE 가 이걸 본다
+  throw err;
+}
 async function isRentCached(lawdCd, dealYm) {
   const key = `rent:${lawdCd}:${dealYm}`;
-  if (cache.get(key) !== undefined) return true;
-  return Array.isArray(await rget(key));
+  // RENT-DEGRADED-2026-09-06: 빈 배열을 "캐시됨" 으로 보면 예열 cron 이 그 (구,월)을 TTL 내내
+  //   건너뛰어 오염이 스스로 복구되지 않는다(rentWarm.js 의 skipped 경로). 빈 결과는 "실제로 거래가
+  //   0건인 달을 매일 다시 조회" 하는 비용을 치르더라도 캐시로 치지 않는다 — 비용은 하루 몇 콜
+  //   수준이고(그런 달은 소수), 조용한 오염이 TTL(최대 8일) 동안 지속되는 것보다 낫다.
+  const local = cache.get(key);
+  if (Array.isArray(local) && local.length) return true;
+  const shared = await rget(key);
+  return Array.isArray(shared) && shared.length > 0;
 }
 // 국토부 JSON 은 숫자처럼 보이는 값을 숫자로 내려준다 — 단지명 '101' 이 number 로 와서 .trim() 이 TypeError 를 내고
 // 그 달 전체가 유실됐다(영등포 202608·202606 실측). 항상 문자열로 정규화한다.
@@ -82,13 +102,19 @@ function isMolitKeyMissing() {
 async function getRentTransactions(lawdCd, dealYm) {
   const key = `rent:${lawdCd}:${dealYm}`;
   const hit = cache.get(key);
-  if (hit !== undefined) return hit || [];
+  if (hit !== undefined) {
+    if (_isFailMark(hit)) _throwFailMark(hit); // RENT-DEGRADED-2026-09-06: 캐시된 실패도 실패로 던진다
+    return hit || [];
+  }
   if (_inflight.has(key)) return _inflight.get(key);
   const p = (async () => {
     const shared = await rget(key); // 로컬 미스 → Redis(예열분) → 업스트림
     if (Array.isArray(shared)) { cache.set(key, shared, RENT_MEM_TTL_S); return shared; }
     const rows = await _fetchRentMonth(lawdCd, dealYm);
-    rset(key, rows, rentTtlSec(dealYm)).catch(() => { /* rset 은 스스로 삼키지만 체인 경고 방지 */ });
+    // RENT-DEGRADED-2026-09-06: 빈 결과는 공유 캐시에 쓰지 않는다. Step 1 이 열화를 예외로 올렸지만,
+    //   "그 달에 실제로 거래가 0건" 인 경우와 구별이 안 되는 값을 전 인스턴스에 최대 8일 심는 것은
+    //   이득보다 위험이 크다(거래 0건인 달은 다음 조회가 다시 0건을 받을 뿐이다).
+    if (rows.length) rset(key, rows, rentTtlSec(dealYm)).catch(() => { /* rset 은 스스로 삼키지만 체인 경고 방지 */ });
     return rows;
   })().finally(() => _inflight.delete(key));
   _inflight.set(key, p);
@@ -105,7 +131,10 @@ async function _fetchRentMonth(lawdCd, dealYm) {
 
   const cacheKey = `rent:${lawdCd}:${dealYm}`;
   const cached = cache.get(cacheKey);
-  if (cached !== undefined) return cached || [];
+  if (cached !== undefined) {
+    if (_isFailMark(cached)) _throwFailMark(cached); // RENT-DEGRADED-2026-09-06: 캐시된 실패도 실패로 던진다
+    return cached || [];
+  }
 
   try {
     // ── 페이징 완전 구현 (transactionService 와 동일 패턴) ──
@@ -151,18 +180,17 @@ async function _fetchRentMonth(lawdCd, dealYm) {
       totalCount = body?.totalCount != null ? parseInt(body.totalCount, 10) : totalCount;
       const pageItems = itemArray(body?.items?.item);
 
+      // RENT-DEGRADED-2026-09-06:
+      // [왜] 종전엔 `break` 라 비정상 응답이 **정상 0건**으로 흘러 cache.set(24h)·
+      //   recordCronRun({ok:1})·rset(공유 Redis, 최대 8일)까지 갔다. 매매 경로
+      //   (jobs/molitIngest.js 의 resultCode 검사)는 같은 조건에서 던지는데 여기만 갈려 있었다.
+      // [영향] 예열 cron 이 isRentCached 로 그 (구,월)을 TTL 내내 skip 해 스스로 복구되지 않고,
+      //   일 한도(code=22) 감지도 e.reason 이 없어 작동하지 않았다.
+      // [해결] 던진다 — 아래 catch 가 5분 음성 캐시 + 사유 기록 + reason 부착을 이미 한다.
       if (header && header.resultCode && !MOLIT_OK_CODES.has(header.resultCode)) {
-        logger.warn({
-          source: 'molit-rent', lawdCd, dealYm, pageNo,
-          resultCode: header.resultCode, resultMsg: header.resultMsg,
-        }, 'MOLIT 전월세 비정상 응답코드');
-        break;
+        throw new Error(`MOLIT 전월세 resultCode=${header.resultCode} msg=${header.resultMsg || ''}`);
       } else if (!header && typeof response.data === 'string') {
-        logger.warn({
-          source: 'molit-rent', lawdCd, dealYm, pageNo,
-          sample: String(response.data).slice(0, 200),
-        }, 'MOLIT 전월세 비-JSON 응답');
-        break;
+        throw new Error('MOLIT 전월세 비-JSON 응답');
       }
 
       allItems.push(...pageItems);
@@ -226,8 +254,10 @@ async function _fetchRentMonth(lawdCd, dealYm) {
       brief = require('../jobs/molitIngest').molitErrReason(err);
       require('./cronStats').recordCronRun('rent-live', { ok: false, error: brief }).catch(() => {});
     } catch (_) { /* 관측 기록 실패는 본 기능을 막지 않는다 */ }
-    // 에러 캐시 5분 — 일시적 5xx/timeout 시 매 요청마다 외부 API 두드리는 부하 방지
-    cache.set(cacheKey, [], 300);
+    // 에러 캐시 5분 — 일시적 5xx/timeout 시 매 요청마다 외부 API 두드리는 부하 방지.
+    // RENT-DEGRADED-2026-09-06: 빈 배열이 아니라 실패 표식을 심는다 — 위 캐시 히트 경로들이
+    // 이 표식을 만나면 다시 던진다(백오프는 유지하되 실패를 실패로 남긴다).
+    cache.set(cacheKey, _failMark(brief), 300);
     const apiErr = new Error(`국토부 전월세 API 호출 실패: ${err.message}`);
     apiErr.code = 'MOLIT_RENT_API_ERROR';
     apiErr.status = 502;

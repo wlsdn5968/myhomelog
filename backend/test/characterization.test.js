@@ -6697,3 +6697,112 @@ test('T0-HERO-FIELD (Plan 038) — 추천 응답 dealCount6m을 히어로가 읽
     '표본 배지가 _t0DealN 을 쓰지 않는다');
 });
 
+// ── 전월세 열화 응답(200+비정상 resultCode) 공유 캐시 오염 차단 (2026-09-06, RENT-DEGRADED) ──────
+test('전세 실거래 조회 — 200+비정상 resultCode 는 예외로 승격되어 reject 하고, 공유 Redis 에 쓰이지 않으며, 캐시됨으로도 보이지 않는다', async () => {
+  const dgkPath = require.resolve('../services/dataGoKrClient');
+  const rcPath = require.resolve('../services/redisCache');
+  const rentPath = require.resolve('../services/rentService');
+  const saved = { dgk: require.cache[dgkPath], rc: require.cache[rcPath], rent: require.cache[rentPath], key: process.env.MOLIT_API_KEY, gap: process.env.RENT_MIN_GAP_MS };
+  const rsets = [];
+  const dgkStub = {
+    get: async () => ({ status: 200, data: { response: { header: { resultCode: '22', resultMsg: '일 트래픽 제한 초과' }, body: {} } } }),
+    _isBlockedPattern: () => false, _buildFullUrl: () => '', ALLOWED_HOSTS: new Set(),
+  };
+  const rcStub = { rget: async () => undefined, rset: async (k, v, ttl) => { rsets.push([k, Array.isArray(v) ? v.length : v, ttl]); } };
+  process.env.MOLIT_API_KEY = 'xxxxxxxx-test-molit-key';
+  process.env.RENT_MIN_GAP_MS = '0';
+  require.cache[dgkPath] = { id: dgkPath, filename: dgkPath, loaded: true, exports: dgkStub };
+  require.cache[rcPath] = { id: rcPath, filename: rcPath, loaded: true, exports: rcStub };
+  const cache = require('../cache');
+  try {
+    delete require.cache[rentPath];
+    const rent = require('../services/rentService');
+    const lawd = '99991';
+    const ym = rent.monthsWindow()[0];
+    // ① 비정상 resultCode → reject (Step 1: break 를 throw 로 승격 — 매매 경로와 동일)
+    await assert.rejects(rent.getRentTransactions(lawd, ym), /MOLIT/, '비정상 resultCode 가 reject 로 승격되지 않았다');
+    // ② 실패는 공유 Redis 에 쓰이지 않는다(애초에 rows 를 만들지 못했으니 rset 호출 자체가 없어야 한다, Step 2)
+    assert.equal(rsets.length, 0, '실패했는데 rset 이 호출됐다 — 열화가 공유 캐시에 심긴다');
+    // ③ 실패가 "캐시됨" 으로 보이지 않는다(Step 3) — 예열 cron 이 이 (구,월)을 계속 건너뛰면 안 된다
+    assert.equal(await rent.isRentCached(lawd, ym), false, '실패가 캐시됨으로 보인다');
+  } finally {
+    for (const k of cache.keys()) if (k.startsWith('rent:99991:')) cache.del(k);
+    if (saved.dgk) require.cache[dgkPath] = saved.dgk; else delete require.cache[dgkPath];
+    if (saved.rc) require.cache[rcPath] = saved.rc; else delete require.cache[rcPath];
+    if (saved.rent) require.cache[rentPath] = saved.rent; else delete require.cache[rentPath];
+    if (saved.key === undefined) delete process.env.MOLIT_API_KEY; else process.env.MOLIT_API_KEY = saved.key;
+    if (saved.gap === undefined) delete process.env.RENT_MIN_GAP_MS; else process.env.RENT_MIN_GAP_MS = saved.gap;
+  }
+});
+
+test('전세 실거래 조회 — 5분 안의 재조회(캐시된 실패 히트 경로)에서도 실패가 실패로 남아 getJeonseByApt 의 표본 집계가 정직하다', async () => {
+  const dgkPath = require.resolve('../services/dataGoKrClient');
+  const rcPath = require.resolve('../services/redisCache');
+  const rentPath = require.resolve('../services/rentService');
+  const saved = { dgk: require.cache[dgkPath], rc: require.cache[rcPath], rent: require.cache[rentPath], key: process.env.MOLIT_API_KEY, gap: process.env.RENT_MIN_GAP_MS };
+  const dgkStub = {
+    get: async () => ({ status: 200, data: { response: { header: { resultCode: '22', resultMsg: '일 트래픽 제한 초과' }, body: {} } } }),
+    _isBlockedPattern: () => false, _buildFullUrl: () => '', ALLOWED_HOSTS: new Set(),
+  };
+  const rcStub = { rget: async () => undefined, rset: async () => {} };
+  process.env.MOLIT_API_KEY = 'xxxxxxxx-test-molit-key';
+  process.env.RENT_MIN_GAP_MS = '0';
+  require.cache[dgkPath] = { id: dgkPath, filename: dgkPath, loaded: true, exports: dgkStub };
+  require.cache[rcPath] = { id: rcPath, filename: rcPath, loaded: true, exports: rcStub };
+  const cache = require('../cache');
+  try {
+    delete require.cache[rentPath];
+    const rent = require('../services/rentService');
+    const lawd = '99993';
+    const ym = rent.monthsWindow()[0]; // getJeonseByApt 가 도는 6개월 중 첫 달과 같아야 5분 캐시 히트 경로(Step 4)를 탄다
+    // 사전 준비: 한 번 실패시켜 5분 실패 표식을 심는다(위 테스트와 같은 결과, 여기선 준비 단계일 뿐)
+    await assert.rejects(rent.getRentTransactions(lawd, ym), /MOLIT/);
+    // Step 4 핵심: 캐시된 실패 히트 경로에서도 실패가 실패로 남는다 —
+    //   getJeonseByApt 의 표본 집계(monthsFailed)로 확인한다. ym 이 6개월 창의 첫 달이므로 이 경로를 반드시 탄다.
+    //   (Step 4 없이 빈 배열만 캐시했다면 이 달은 예외 없이 [] 를 받아 "실패" 로 잡히지 않는다 — 5/6 로 위장된다.)
+    const rows = await rent.getJeonseByApt(lawd, '아무단지');
+    assert.equal(rows.monthsFailed.length, 6, `표본 6개월 중 일부가 실패로 잡히지 않았다(화면엔 그만큼 n/6 이 부풀려 보인다): ${JSON.stringify(rows.monthsFailed)}`);
+  } finally {
+    for (const k of cache.keys()) if (k.startsWith('rent:99993:')) cache.del(k);
+    if (saved.dgk) require.cache[dgkPath] = saved.dgk; else delete require.cache[dgkPath];
+    if (saved.rc) require.cache[rcPath] = saved.rc; else delete require.cache[rcPath];
+    if (saved.rent) require.cache[rentPath] = saved.rent; else delete require.cache[rentPath];
+    if (saved.key === undefined) delete process.env.MOLIT_API_KEY; else process.env.MOLIT_API_KEY = saved.key;
+    if (saved.gap === undefined) delete process.env.RENT_MIN_GAP_MS; else process.env.RENT_MIN_GAP_MS = saved.gap;
+  }
+});
+
+test('전세 실거래 조회 — 실제 0건(정상 resultCode) 은 공유 Redis 에 쓰지 않고 캐시됨으로도 보지 않는다(예열 cron 이 매일 재확인한다)', async () => {
+  const dgkPath = require.resolve('../services/dataGoKrClient');
+  const rcPath = require.resolve('../services/redisCache');
+  const rentPath = require.resolve('../services/rentService');
+  const saved = { dgk: require.cache[dgkPath], rc: require.cache[rcPath], rent: require.cache[rentPath], key: process.env.MOLIT_API_KEY, gap: process.env.RENT_MIN_GAP_MS };
+  const rsets = [];
+  const dgkStub = {
+    get: async () => ({ status: 200, data: { response: { header: { resultCode: '000', resultMsg: 'OK' }, body: { totalCount: 0, items: '' } } } }),
+    _isBlockedPattern: () => false, _buildFullUrl: () => '', ALLOWED_HOSTS: new Set(),
+  };
+  const rcStub = { rget: async () => undefined, rset: async (k, v, ttl) => { rsets.push([k, Array.isArray(v) ? v.length : v, ttl]); } };
+  process.env.MOLIT_API_KEY = 'xxxxxxxx-test-molit-key';
+  process.env.RENT_MIN_GAP_MS = '0';
+  require.cache[dgkPath] = { id: dgkPath, filename: dgkPath, loaded: true, exports: dgkStub };
+  require.cache[rcPath] = { id: rcPath, filename: rcPath, loaded: true, exports: rcStub };
+  const cache = require('../cache');
+  try {
+    delete require.cache[rentPath];
+    const rent = require('../services/rentService');
+    const lawd = '99992';
+    const ym = rent.monthsWindow()[0];
+    const rows = await rent.getRentTransactions(lawd, ym);
+    assert.deepEqual(rows, [], '정상 0건 응답이 빈 배열이 아니다');
+    assert.equal(rsets.length, 0, '빈 결과인데 rset 이 호출됐다 — 공유 캐시에 최대 8일 굳는 문제 재발(Step 2)');
+    assert.equal(await rent.isRentCached(lawd, ym), false, '빈 결과가 캐시됨으로 보인다 — 예열 cron 이 계속 건너뛴다(Step 3)');
+  } finally {
+    for (const k of cache.keys()) if (k.startsWith('rent:99992:')) cache.del(k);
+    if (saved.dgk) require.cache[dgkPath] = saved.dgk; else delete require.cache[dgkPath];
+    if (saved.rc) require.cache[rcPath] = saved.rc; else delete require.cache[rcPath];
+    if (saved.rent) require.cache[rentPath] = saved.rent; else delete require.cache[rentPath];
+    if (saved.key === undefined) delete process.env.MOLIT_API_KEY; else process.env.MOLIT_API_KEY = saved.key;
+    if (saved.gap === undefined) delete process.env.RENT_MIN_GAP_MS; else process.env.RENT_MIN_GAP_MS = saved.gap;
+  }
+});
