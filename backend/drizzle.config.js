@@ -9,7 +9,8 @@
  * ⚠️ 실제 적용은 Supabase Dashboard SQL Editor 또는 MCP apply_migration 으로.
  *    drizzle-kit push 는 프로덕션에서 쓰지 않음 (마이그레이션 이력 유실).
  */
-require('dotenv').config();
+// dotenv 17.x quiet 기본값 false → CLI 실행 시 stdout 오염 방지 (Plan 072)
+require('dotenv').config({ quiet: true });
 
 /** @type {import('drizzle-kit').Config} */
 module.exports = {

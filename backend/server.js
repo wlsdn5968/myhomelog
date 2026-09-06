@@ -13,7 +13,10 @@ const helmet = require('helmet');
 const dotenv = require('dotenv');
 const { makeRateLimiter } = require('./middleware/rateLimit');
 
-dotenv.config();
+// dotenv 17.x 는 quiet 기본값이 true→false 로 바뀌어, .env 가 없는 프로덕션(Vercel)에서도
+// "◇ injected env (0)" + 랜덤 팁(외부 링크)을 stdout 에 찍는다 → 콜드스타트마다 Vercel 로그·
+// Sentry console breadcrumb 오염. quiet: true 로 명시 복원(Plan 072).
+dotenv.config({ quiet: true });
 
 const logger = require('./logger');
 const { maskIp } = require('./logger');
