@@ -2,12 +2,12 @@
   "name": "myhomelog",
   "version": "1.0.0",
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.123.0",
+    "@anthropic-ai/sdk": "^0.124.0",
     "@resvg/resvg-js": "^2.6.2",
     "@sentry/node": "^10.73.0",
-    "@supabase/supabase-js": "^2.112.4",
+    "@supabase/supabase-js": "^2.115.0",
     "@upstash/ratelimit": "^2.0.8",
-    "@upstash/redis": "^1.38.3",
+    "@upstash/redis": "^1.38.4",
     "axios": "^1.20.0",
     "cors": "^2.8.5",
     "dotenv": "^16.3.1",
@@ -29,6 +29,6 @@
     "verify": "npm run lint && node scripts/check-json-config.js && node scripts/check-deps-sync.js && node scripts/check-env-example.js && node scripts/security-regression-check.js && node scripts/run-backend-tests-utc.js"
   },
   "devDependencies": {
-    "eslint": "^10.9.1"
+    "eslint": "^10.10.0"
   }
 }
