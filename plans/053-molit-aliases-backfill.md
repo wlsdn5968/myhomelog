@@ -202,3 +202,128 @@ Step 2 를 통과한 이름이 여러 개면 **전부** alias 에 넣어라. 하
   cron 에 심을지는 1회 검증 결과를 보고 운영자가 결정한다.
 - **리뷰에서 볼 것**: 거부 사유 집계가 있는지, 표본 검수표가 실제로 사람 판정을 담고 있는지.
   숫자만 있고 검수가 없으면 이 저장소가 956건 오매칭을 냈을 때와 같은 상태다.
+
+---
+
+# 부록 A — 판정 규칙 확정 + 표본 검수 결과 (계획자 직접 수행, 2026-09-06)
+
+> Step 1~4 를 계획자가 **읽기 전용 DB 조회**로 직접 수행했다. 실행자는 이 부록의 SQL 을
+> 그대로 쓰되, **운영자 승인 없이는 적용하지 마라**(절대 룰 ③).
+
+## A-1. 확정된 판정 규칙
+
+**공통 필수 (전부 만족)**
+1. 같은 `(lawd_cd, umd_nm)`
+2. `apt_master.facility->>'kaptUsedate'` 의 **연도** == `molit_apt_index.build_year`
+   · `kaptUsedate` 없으면 채택하지 않는다(모름을 값으로 만들지 않는다)
+
+**채택 경로 (둘 중 하나)**
+- **경로 A (지번)**: `kaptAddr` 에서 뽑은 지번 == 그 MOLIT 이름의 **최빈 jibun**
+- **경로 B (이름)**: 정규화(공백·괄호 제거) 후 완전일치 또는 접두 포함, **그리고** 숫자열 일치
+
+**거부 (전부 적용)**
+- MOLIT 이름이 `상가|근린|근생|판매시설|오피스텔` 을 포함
+- 한 MOLIT 이름이 **2개 이상 kapt_code** 에 매칭(어느 단지 것인지 모름)
+
+**확장**
+- **A/B 형제**: 채택된 이름과 같은 동·같은 `build_year`·stem 동일·**끝 1글자만 다른** 이름을 함께 넣는다
+
+## A-2. 왜 이 규칙인가 — 실측 근거
+
+| 사실 | 값 | 규칙에 준 영향 |
+|---|---|---|
+| `similarity('공릉풍림아이원','풍림아파트A')` | **0.071** | **이름 유사도로는 운영자 사례를 원리적으로 못 잡는다** → 지번 경로 필수 |
+| `강일리버파크11단지`(KAPT 2015) ↔ `강일리버파크1단지`(MOLIT 2009) | 유사도 0.750 | **연도 게이트만으로 이미 거부됨** |
+| `molit_transactions.jibun` 채움률 | **48.8%** | 지번은 **채택만**, 거부 근거로 쓰지 않는다 |
+| `공릉풍림아이원` 지번 725 ↔ `풍림아파트B` 지번 **727** | 불일치 | 지번으로 거부했다면 **B 가 탈락**했다 — 형제 확장이 필요한 이유 |
+| 상가류 이름이 붙는 페어 | 11,747 중 **5** | 배제 비용이 사실상 0 |
+
+## A-3. 표본 30건 적대 검증 (3렌즈 × 90표)
+
+**ok 26 · reject 1 · partial 3** — 그런데 **partial 3 중 2건은 검증 방식의 artifact** 였다
+(검증자에게 쌍을 하나씩만 보여줬다). 계획자가 DB 로 실제 채택 집합을 재확인한 결과:
+
+| # | 후보 | 검증자 판정 | **실제 채택 집합(DB 확인)** | 최종 |
+|---|---|---|---|---|
+| 5 | 올림픽선수기자촌아파트 → 3단지 | partial(1·2단지 누락) | **1단지(33) + 2단지(52) + 3단지(29) 전부** | ✅ ok |
+| 7 | 가락3차쌍용스윗닷홈 → 104동 | partial | **103동 + 104동 둘 다** | ✅ ok |
+| 26 | 위례중앙푸르지오아파트 → 2단지 | partial | 2단지만 | ⚠ partial 유지 |
+| 2 | 풍납대아아파트 → **대아(제101상가동)** | **reject** | 거래 2건·전용 60.00㎡ 단일·이름이 상가동 | ❌ **규칙으로 배제** |
+
+⚠ **교훈**: 적대 검증에 후보를 **낱개로** 주면 "부분 매칭" 오탐이 난다. 다음에 같은 검증을 할 때는
+**kapt_code 단위로 채택 집합 전체**를 보여줘라.
+
+## A-4. 최종 규모
+
+| | 값 |
+|---|---|
+| 최종 페어 | **10,682** |
+| 최종 단지 | **10,405** (전체 14,661 의 71.0%) |
+| 형제 확장으로 추가된 페어 | 2 |
+| 운영자 사례 결과 | `공릉풍림아이원` → **`풍림아파트A, 풍림아파트B`** ✅ |
+
+## A-5. 적용 SQL (⚠ 운영자 승인 후에만 실행)
+
+```sql
+WITH mj AS (
+  SELECT lawd_cd, umd_nm, apt_name, build_year, jibun,
+         row_number() OVER (PARTITION BY lawd_cd,umd_nm,apt_name,build_year ORDER BY cnt DESC, jibun) AS rn
+  FROM (SELECT lawd_cd,umd_nm,apt_name,build_year,jibun,count(*) cnt FROM molit_transactions
+        WHERE jibun IS NOT NULL AND jibun<>'' GROUP BY 1,2,3,4,5) t
+), m AS (
+  SELECT kapt_code, apt_name, lawd_cd, umd_nm,
+         left(facility->>'kaptUsedate',4)::int AS yr,
+         (regexp_match(facility->>'kaptAddr','(?:^|\s)([0-9]+(?:-[0-9]+)?)(?:\s|$)'))[1] AS jb,
+         regexp_replace(replace(apt_name,' ',''),'\([^)]*\)','','g') AS n
+  FROM apt_master WHERE facility->>'kaptUsedate' ~ '^[0-9]{8}'
+), i AS (
+  SELECT apt_name, lawd_cd, umd_nm, build_year,
+         regexp_replace(replace(apt_name,' ',''),'\([^)]*\)','','g') AS n
+  FROM molit_apt_index
+), cand AS (
+  SELECT m.kapt_code, m.lawd_cd, m.umd_nm, i.apt_name AS molit,
+         (mj.jibun IS NOT NULL) AS by_jibun,
+         (m.n=i.n OR starts_with(i.n,m.n) OR starts_with(m.n,i.n)) AS by_name,
+         (regexp_replace(m.n,'[^0-9]','','g')=regexp_replace(i.n,'[^0-9]','','g')
+          OR regexp_replace(m.n,'[^0-9]','','g')='' OR regexp_replace(i.n,'[^0-9]','','g')='') AS digits_ok
+  FROM m JOIN i ON i.lawd_cd=m.lawd_cd AND i.umd_nm=m.umd_nm AND i.build_year=m.yr
+  LEFT JOIN mj ON mj.rn=1 AND mj.lawd_cd=m.lawd_cd AND mj.umd_nm=m.umd_nm
+              AND mj.build_year=m.yr AND mj.apt_name=i.apt_name AND mj.jibun=m.jb
+), acc0 AS (
+  SELECT * FROM cand
+  WHERE (by_jibun OR (by_name AND digits_ok))
+    AND molit !~ '상가|근린|근생|판매시설|오피스텔'
+), acc AS (
+  SELECT * FROM acc0 WHERE (molit,lawd_cd,umd_nm) NOT IN
+    (SELECT molit,lawd_cd,umd_nm FROM acc0 GROUP BY 1,2,3 HAVING count(DISTINCT kapt_code)>1)
+), sib AS (
+  SELECT DISTINCT a.kapt_code, s.apt_name AS molit
+  FROM acc a
+  JOIN molit_apt_index base ON base.lawd_cd=a.lawd_cd AND base.umd_nm=a.umd_nm AND base.apt_name=a.molit
+  JOIN molit_apt_index s ON s.lawd_cd=a.lawd_cd AND s.umd_nm=a.umd_nm AND s.build_year=base.build_year
+  WHERE base.apt_name ~ '[A-Za-z가나다라]$' AND s.apt_name ~ '[A-Za-z가나다라]$'
+    AND length(regexp_replace(base.apt_name,'[A-Za-z가나다라]$','')) >= 2
+    AND regexp_replace(base.apt_name,'[A-Za-z가나다라]$','') = regexp_replace(s.apt_name,'[A-Za-z가나다라]$','')
+    AND right(base.apt_name,1) <> right(s.apt_name,1)
+    AND s.apt_name !~ '상가|근린|근생|판매시설|오피스텔'
+), fin AS (
+  SELECT kapt_code, molit FROM acc
+  UNION SELECT kapt_code, molit FROM sib
+), agg AS (
+  SELECT kapt_code, jsonb_agg(DISTINCT molit) AS aliases FROM fin GROUP BY kapt_code
+)
+UPDATE apt_master a
+SET molit_aliases = agg.aliases, updated_at = now()
+FROM agg
+WHERE a.kapt_code = agg.kapt_code
+  AND a.molit_aliases IS DISTINCT FROM agg.aliases;
+```
+
+**적용 후 반드시 실측할 것**
+1. `SELECT count(*) FROM apt_master WHERE molit_aliases::text NOT IN ('[]','{}','null');` → **10,405 기대**(적용 전 1)
+2. `SELECT molit_aliases FROM apt_master WHERE apt_name='공릉풍림아이원';` → `["풍림아파트A","풍림아파트B"]`
+3. 챗 도달률 재측정(본문 실측 쿼리 재사용) — 적용 전 23.4%
+4. `get_advisors` 재실행
+
+⚠ **되돌리기**: 적용 전 `SELECT kapt_code, molit_aliases FROM apt_master WHERE molit_aliases::text <> '[]'`
+결과를 백업해 두면 원복할 수 있다(적용 전엔 1행뿐이라 백업이 사실상 공짜다).
