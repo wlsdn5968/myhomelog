@@ -261,14 +261,16 @@ function buildAptInfoCard(row) {
 
 /** 초·중·고 순으로 정렬해 "주변 학교" 카드를 만든다. 값이 없으면 빈 문자열(카드 생략).
  *  ⚠ schoolService._normalizeSchoolsList 가 캐시 히트 시 거리순 재정렬을 하므로(초/중/고
- *  뒤섞일 수 있음), 여기서 type 기준으로 다시 그룹핑해 표시 순서를 보장한다. */
+ *  뒤섞일 수 있음), 여기서 type 기준으로 다시 그룹핑해 표시 순서를 보장한다.
+ *  [출처 라벨] 이 카드의 데이터는 카카오 지도 키워드 검색(schoolService 캐시 방식) 뿐이다 —
+ *  NEIS/교육청 자료는 이 경로에 연동돼 있지 않으므로 라벨에 '교육청' 을 쓰지 않는다(2026-09-06 정정). */
 function buildSchoolsCard(schools) {
   if (!Array.isArray(schools) || !schools.length) return '';
   const TYPE_ORDER = { 초: 0, 중: 1, 고: 2 };
   const valid = schools.filter((s) => s && s.name && Number.isFinite(Number(s.distance_m)));
   if (!valid.length) return '';
   const sorted = [...valid].sort((a, b) => (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9));
-  return `<div class="card"><h2>주변 학교 <span class="src">카카오 지도 · 교육청 공시(캐시)</span></h2>
+  return `<div class="card"><h2>주변 학교 <span class="src">카카오 지도 검색(캐시)</span></h2>
     ${sorted.map((s) => `<div class="row"><span class="k">${esc(String(s.type || ''))} ${esc(String(s.name))}</span><span class="num">${comma(Math.round(Number(s.distance_m)))}m</span></div>`).join('')}
   </div>`;
 }

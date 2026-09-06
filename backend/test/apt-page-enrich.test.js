@@ -154,6 +154,9 @@ test('APT-PAGE-ENRICH — 학교 캐시 있음: 주변 학교 카드가 초·중
   });
   assert.equal(res.statusCode, 200);
   assert.ok(res.body.includes('주변 학교'), '주변 학교 카드가 없다');
+  // SCHOOL-SRC-LABEL-2026-09-06: 학교 캐시는 카카오 지도 검색뿐 — 연동되지 않은 출처(교육청/NEIS)를 라벨에 쓰지 않는다
+  assert.ok(res.body.includes('카카오 지도 검색(캐시)'), '학교 카드 출처 라벨은 카카오 지도 검색(캐시)');
+  assert.ok(!res.body.includes('교육청'), '학교 카드에 미연동 출처(교육청) 표기 금지');
   assert.ok(res.body.includes('대치초등학교') && res.body.includes('320m'), '초등학교 이름·거리가 없다');
   assert.ok(res.body.includes('대치중학교') && res.body.includes('550m'), '중학교 이름·거리가 없다');
   assert.ok(res.body.includes('대치고등학교') && res.body.includes('900m'), '고등학교 이름·거리가 없다');
