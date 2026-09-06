@@ -48,6 +48,9 @@ const { resolveAcademies } = require('../services/academyService');
 // NAMEFIX-2026-05-11 + FACILITY-HELPER-2026-05-12: 검색 path 정규화 + facility schema 일관
 // NAME-MERGE-2026-05-12 (Sprint S): baseAptName helper 로 동/letter/층 suffix 분리 신고 통합
 const { normalizeAptName, baseAptName } = require('../utils/aptName');
+// PLAN-052 (2026-09-06): 공백 제거 변형 질의에 재사용 — 051 이 backend/utils/aptNameMatch.js 에
+//   만든 순수 정규화 함수. 사본을 새로 만들지 않는다(이 저장소는 정규화 사본이 갈리는 결함 계열이 확립돼 있다).
+const { normalizeName } = require('../utils/aptNameMatch');
 // SNAPSHOT-2026-07-11 (Sprint LLLL): 인기 단지 집계 서비스 분리 + 일별 사전집계 스냅샷
 const { buildPopularResults, readPopularSnapshot, storePopularSnapshot, popularWindow } = require('../services/popularService');
 const { buildFacility } = require('../utils/buildFacility');
@@ -170,10 +173,25 @@ router.get('/apt', async (req, res) => {
   //   가드: 제거 후 2자 미만이면 원본 유지("아파트"만 입력 시 전체매칭 방지).
   const _qStrip = q.replace(/\s*아파트(?:단지)?\s*$/, '').trim();
   const qApt = _qStrip.length >= 2 ? _qStrip : q;
+  // PLAN-052 (2026-09-06, 운영자 재현 "공릉 풍림아이원" → 0건): qApt 는 끝의 "아파트" 접미사만
+  //   제거할 뿐 문자열 중간의 공백은 그대로 둔다. 그런데 molit_apt_index 이름의 0.8%(189개)·
+  //   apt_master 이름의 15.4%(2,251개)가 공백을 포함해서, 사용자가 화면 표시명(공백 포함)이나
+  //   "지역 단지명" 형태로 입력하면 `%공백 포함%` ILIKE 가 원리적으로 0건이 된다.
+  //   ⚠ qApt 자체는 바꾸지 않는다 — 공백 든 이름은 기존 경로로만 잡힌다. 공백을 제거한 변형은
+  //   **추가** 조회로만 쓴다(아래 Promise.all). 정규화는 051 의 normalizeName 재사용(사본 금지).
+  const _qNo = normalizeName(qApt);
+  // 가드: 원본과 같으면(이미 공백 없음) 조회를 추가하지 않는다(왕복 증가 방지) — 2자 미만도 제외
+  // (전체매칭 방지, 기존 2자 미만 가드와 같은 취지).
+  const _needsNoSpace = _qNo !== qApt && _qNo.length >= 2;
   // SEARCH-PERF-2026-07-10 (Sprint DDDD): q별 결과 캐시 + CDN 공유 캐시.
   //   자동완성은 인증 무관 동일 응답(공개 데이터) → Vercel edge s-maxage 로 전 사용자 공유(인기 검색어 즉시).
   const SEARCH_CDN = 'public, s-maxage=600, stale-while-revalidate=3600';
-  const sck = `searchapt:${q.toLowerCase()}:${limit}`;
+  // PLAN-052: 캐시 키에 버전 성분 추가(v2) — 공백 제거 변형 조회로 응답 모양이 바뀌었다.
+  //   버전을 안 올리면 이미 캐시된 "빈 결과"(구버전 응답)가 서버 10분 + CDN s-maxage=600
+  //   (+SWR 3600) 만큼 계속 나간다. 이 저장소는 열화 응답이 엣지에 6시간 굳은 실사고가 있다.
+  //   ⚠ 엣지 캐시는 URL 기준이라 이 서버 키 변경만으로는 비워지지 않는다 — 배포 직후 최대
+  //   10분(s-maxage)은 캐시된 URL 에 옛 응답이 그대로 나갈 수 있다(신규 질의어는 즉시 새 로직).
+  const sck = `searchapt:v2:${q.toLowerCase()}:${limit}`;
   const cached = cache.get(sck);
   if (cached) {
     res.set('Cache-Control', SEARCH_CDN);
@@ -196,7 +214,7 @@ router.get('/apt', async (req, res) => {
     //   → 파라미터 인코딩되는 .ilike() 2회 병렬 + 병합으로 교체 — "상계주공9(고층)" 같은 괄호 검색어도 무손실.
     const _masterSel = 'apt_name, sigungu, umd_nm, lawd_cd, kapt_code';
     const _tQuery = Date.now();
-    const [molitRes, masterNameRes, masterUmdRes] = await Promise.all([
+    const [molitRes, masterNameRes, masterUmdRes, molitNoSpaceRes, masterNoSpaceRes] = await Promise.all([
       // SEARCH-MV-2026-08-16 (Sprint TTTTTTT): 조회 대상을 거래 테이블 → **단지 단위 집계 MV** 로 교체.
       //   [실측] 동일 ILIKE 가 molit_transactions(435,613행) **917ms** → molit_apt_index(22,473행) **32ms**
       //   = 약 29배. 원인은 CPU 바운드 Seq Scan 이었고 행수를 19.4배 줄인 것이 그대로 반영됐다.
@@ -212,6 +230,20 @@ router.get('/apt', async (req, res) => {
         .abortSignal(AbortSignal.timeout(MOLIT_ABORT_MS))),
       _softQuery(admin.from('apt_master').select(_masterSel).ilike('apt_name', `%${qApt}%`).limit(limit * 5)), // 접미사 정규화명
       _softQuery(admin.from('apt_master').select(_masterSel).ilike('umd_nm', `%${q}%`).limit(limit * 5)),      // 동명은 원본
+      // PLAN-052: 공백 제거 변형 — 조건부(_needsNoSpace)일 때만 실제 조회를 쏜다. 조건이 거짓이면
+      //   즉시 resolve 되는 더미를 넣어 Promise.all 자리(개수)만 맞춘다 — 왕복은 늘지 않는다.
+      //   조건이 참이면 위 3개와 **병렬**로 실행되므로(Promise.all) 총 지연은 합이 아니라 최댓값에 가깝다.
+      _needsNoSpace
+        ? _softQuery(admin.from('molit_apt_index')
+            .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, recent_deal_date, deal_count, apt_seq')
+            .ilike('apt_name', `%${_qNo}%`)
+            .order('recent_deal_date', { ascending: false })
+            .limit(limit * 30)
+            .abortSignal(AbortSignal.timeout(MOLIT_ABORT_MS)))
+        : Promise.resolve({ data: null, error: null }),
+      _needsNoSpace
+        ? _softQuery(admin.from('apt_master').select(_masterSel).ilike('apt_name', `%${_qNo}%`).limit(limit * 5))
+        : Promise.resolve({ data: null, error: null }),
     ]);
     const _msQuery = Date.now() - _tQuery;
     // SEARCH-DEGRADE-2026-08-16 (Sprint LLLLLLL — Sentry NODE-5): molit 조회 실패를 500 으로 올리던 것을
@@ -232,6 +264,20 @@ router.get('/apt', async (req, res) => {
       deal_date: r.recent_deal_date != null ? r.recent_deal_date : r.deal_date,
       _w: Number(r.deal_count) > 0 ? Number(r.deal_count) : 1,
     }));
+    // PLAN-052 (Step 3): 공백 제거 변형 결과를 같은 모양으로 합쳐 그룹핑(mergeKey)에 맡긴다 —
+    //   그룹핑은 이미 baseName|sigungu|umd_nm|build_year 로 동일 단지를 흡수하므로(아래 aptMap),
+    //   여기서 별도 dedup 을 새로 만들지 않는다. 실패는 soft-fail — 기존 결과만으로 응답한다.
+    if (_needsNoSpace && molitNoSpaceRes && molitNoSpaceRes.data) {
+      molitRows = molitRows.concat(molitNoSpaceRes.data.map((r) => ({
+        ...r,
+        deal_date: r.recent_deal_date != null ? r.recent_deal_date : r.deal_date,
+        _w: Number(r.deal_count) > 0 ? Number(r.deal_count) : 1,
+      })));
+    }
+    if (_needsNoSpace && molitNoSpaceRes && molitNoSpaceRes.error) {
+      logger.warn({ err: molitNoSpaceRes.error.message, q, qNo: _qNo },
+        'molit 공백제거 조회 실패 — 무시(기존 qApt 결과만으로 응답, 500 아님)');
+    }
     const _molitErr = molitRes.error || null;
     // 57014(statement timeout)는 위 EXPLAIN 으로 원인이 확정된 기지 사항 → Sentry 노이즈만 만든다.
     //   그 외 오류(권한·스키마 드리프트 등)는 조용히 강등되면 안 되므로 캡처 — 단 캡처 시점은
@@ -261,15 +307,25 @@ router.get('/apt', async (req, res) => {
     if (_dg.masterAllFailed) {
       masterRes = { error: _mNameErr };
     } else {
+      // PLAN-052 (Step 3): 공백 제거 변형(apt_master)도 같은 dedup 키(apt_name|lawd_cd|umd_nm)로
+      //   흡수시킨다 — 새 조회가 기존 두 조회와 겹쳐도 여기서 1행으로 합쳐진다.
       const _seenMk = new Set();
       const _rows = [];
-      for (const r of [...(masterNameRes.data || []), ...(masterUmdRes.data || [])]) {
+      for (const r of [
+        ...(masterNameRes.data || []),
+        ...(masterUmdRes.data || []),
+        ...((_needsNoSpace && masterNoSpaceRes && masterNoSpaceRes.data) || []),
+      ]) {
         const k = `${r.apt_name}|${r.lawd_cd}|${r.umd_nm}`;
         if (_seenMk.has(k)) continue;
         _seenMk.add(k);
         _rows.push(r);
       }
       masterRes = { data: _rows };
+    }
+    if (_needsNoSpace && masterNoSpaceRes && masterNoSpaceRes.error) {
+      logger.warn({ err: masterNoSpaceRes.error.message, q, qNo: _qNo },
+        'apt_master 공백제거 조회 실패 — 무시(기존 결과만으로 응답, 500 아님)');
     }
     if (masterRes.error) {
       // apt_master 미존재/접근 실패는 fallback (molit 만 사용)

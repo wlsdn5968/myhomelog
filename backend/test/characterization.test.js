@@ -8553,3 +8553,175 @@ test('Plan 056 ⑤: 절대 룰 ① — pctHtml·gap-grid 카드 어디에도 매
     assert.equal(banned.test(gridPart), false, `gap-grid(rate=${rate})에 금지 표현이 있다`);
   }
 });
+
+// ── Plan 052 (2026-09-06): 검색창 자동완성 — 공백 제거 변형 조회 ──────────────────
+//   [왜] 운영자 재현 "공릉 풍림아이원" → 0건. molit_apt_index 이름의 0.8%(189개)·apt_master
+//   이름의 15.4%(2,251개)가 공백을 포함하는데, 기존 qApt 는 끝 "아파트" 접미사만 제거하고
+//   중간 공백은 그대로 둬서 `%공백 포함 질의%` ILIKE 가 원리적으로 0건이 됐다.
+//   [방식] billing 테스트의 require.cache 스텁 패턴을 그대로 써서 db/client 를 목으로 갈아치우고
+//   search.js 의 실제 '/apt' 핸들러를 꺼내 호출한다 — 정규식 형태 검사가 아니라 실제 실행 결과로
+//   "조건부로만 조회가 추가되는지" · "실패해도 500 이 안 되는지" · "추가 결과가 실제로 반영되는지"를 본다.
+//   프로덕션 코드는 바꾸지 않는다.
+function _searchAdminStub(routes) {
+  const seen = { calls: [] };
+  function makeChain(table) {
+    let col = null, pattern = null;
+    const c = {
+      select: () => c,
+      ilike: (cCol, cPattern) => { col = cCol; pattern = cPattern; return c; },
+      order: () => c,
+      limit: () => c,
+      abortSignal: () => c,
+      then: (resolve, reject) => {
+        seen.calls.push({ table, col, pattern });
+        const match = (routes || []).find((r) => r.table === table && r.col === col && r.pattern === pattern);
+        if (match && match.reject) {
+          return Promise.reject(match.error || new Error('stub-fail')).then(resolve, reject);
+        }
+        const out = match ? match.result : { data: [], error: null };
+        return Promise.resolve(out).then(resolve, reject);
+      },
+    };
+    return c;
+  }
+  return { client: { from: (table) => makeChain(table) }, seen };
+}
+// db/client·search.js 를 require.cache 스텁으로 갈아치우고 '/apt' 핸들러를 꺼내 fn 에 넘긴다.
+//   ⚠ search.js 는 모듈 로드 시 `const { getSupabaseReadonly } = require('../db/client')` 로
+//   구조분해하므로, db/client 스텁을 심은 **뒤** search.js 캐시를 지워 재로드해야 스텁이 반영된다
+//   (billing 테스트의 `_withBillingStub` 과 같은 이유·같은 순서).
+async function _withSearchDbStub(routes, fn) {
+  const clientPath = require.resolve('../db/client');
+  const searchPath = require.resolve('../routes/search');
+  const saved = { c: require.cache[clientPath], s: require.cache[searchPath] };
+  const { client, seen } = _searchAdminStub(routes);
+  require.cache[clientPath] = {
+    id: clientPath, filename: clientPath, loaded: true,
+    exports: { getSupabaseAdmin: () => client, getSupabaseReadonly: () => client, getUserScopedClient: () => client },
+  };
+  delete require.cache[searchPath];
+  try {
+    const router = require('../routes/search');
+    const layer = router.stack.find((l) => l.route && l.route.path === '/apt');
+    assert.ok(layer, "search 라우터에서 '/apt' 를 찾지 못했다(경로 변경 시 이 테스트도 갱신할 것)");
+    const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+    return await fn(handler, seen);
+  } finally {
+    if (saved.c) require.cache[clientPath] = saved.c; else delete require.cache[clientPath];
+    if (saved.s) require.cache[searchPath] = saved.s; else delete require.cache[searchPath];
+  }
+}
+
+test('Plan 052 ①: 공백 없는 질의는 추가 조회가 붙지 않는다(_qNo === qApt → 왕복 3 유지)', async () => {
+  await _withSearchDbStub([], async (handler, seen) => {
+    const res = _mockRes();
+    // "아파트"로 끝나지 않고 공백도 없는 질의 — _qStrip === q === qApt, normalizeName 도 동일해야 한다.
+    await handler({ query: { q: 'PLAN052무공백단지', limit: 10 } }, res, () => {});
+    assert.equal(res.statusCode, 200);
+    assert.equal(seen.calls.length, 3,
+      `공백 없는 질의인데 DB 조회가 3개가 아니다(${seen.calls.length}개) — ` +
+      `공백 제거 변형이 조건 없이 추가됐을 수 있다: ${JSON.stringify(seen.calls)}`);
+    const shapes = seen.calls.map((c) => `${c.table}.${c.col}`).sort();
+    assert.deepEqual(shapes, ['apt_master.apt_name', 'apt_master.umd_nm', 'molit_apt_index.apt_name'].sort(),
+      `기존 3개 조회의 모양이 바뀌었다: ${JSON.stringify(shapes)}`);
+  });
+});
+
+test('Plan 052 ②: 공백 든 질의는 조건부로 조회 2개가 추가되고, 공백 제거로만 찾히는 단지가 결과에 반영된다', async () => {
+  const { normalizeName } = require('../utils/aptNameMatch');
+  const q = 'PLAN052 공백질의확인';       // "아파트"로 끝나지 않음 → qApt === q (공백 포함)
+  const qApt = q;
+  const qNo = normalizeName(qApt);       // 공백 제거 변형
+  assert.notEqual(qNo, qApt, '테스트 전제가 깨졌다 — qNo 가 qApt 와 같다(공백이 없어졌다)');
+
+  const fixtureRow = {
+    apt_name: 'PLAN052공백질의확인', sigungu: '노원구', umd_nm: '공릉동', lawd_cd: '11350',
+    build_year: 2000, recent_deal_date: '2026-01-01', deal_count: 2, apt_seq: 'PLAN052-SEQ',
+  };
+  const routes = [
+    // 원본(공백 포함) 패턴은 0건 — "공릉 풍림아이원"이 재현하는 바로 그 상황.
+    { table: 'molit_apt_index', col: 'apt_name', pattern: `%${qApt}%`, result: { data: [], error: null } },
+    // 공백 제거 패턴으로만 실제 단지가 잡힌다.
+    { table: 'molit_apt_index', col: 'apt_name', pattern: `%${qNo}%`, result: { data: [fixtureRow], error: null } },
+  ];
+
+  await _withSearchDbStub(routes, async (handler, seen) => {
+    const res = _mockRes();
+    await handler({ query: { q, limit: 10 } }, res, () => {});
+    assert.equal(res.statusCode, 200);
+
+    assert.equal(seen.calls.length, 5,
+      `공백 든 질의인데 DB 조회가 5개가 아니다(${seen.calls.length}개): ${JSON.stringify(seen.calls)}`);
+    const molitAptCalls = seen.calls.filter((c) => c.table === 'molit_apt_index' && c.col === 'apt_name');
+    assert.equal(molitAptCalls.length, 2,
+      'molit_apt_index.apt_name 조회가 조건부로 추가되지 않았다(원본 + 공백제거 변형 2개여야 한다)');
+    assert.ok(molitAptCalls.some((c) => c.pattern === `%${qNo}%`),
+      '공백 제거 패턴(%qNo%)으로 molit_apt_index 를 조회하지 않았다');
+    const masterAptCalls = seen.calls.filter((c) => c.table === 'apt_master' && c.col === 'apt_name');
+    assert.equal(masterAptCalls.length, 2, 'apt_master.apt_name 조회도 조건부로 2개(원본+공백제거)여야 한다');
+
+    // Step 3: 공백 제거 변형으로만 찾힌 단지가 기존 그룹핑(aptMap mergeKey)을 그대로 통과해
+    //   결과에 실제로 나타나는지 — 여기서 흡수/전달이 끊기면 조회만 추가되고 사용자는 여전히 0건을 본다.
+    assert.equal(res.body.results.length, 1,
+      `공백 제거 변형으로만 찾힌 단지가 결과에 반영되지 않았다: ${JSON.stringify(res.body.results)}`);
+    assert.equal(res.body.results[0].sigungu, '노원구');
+    assert.equal(res.body.results[0].dealCount, 2);
+    assert.equal(res.body.degraded, undefined, '정상 조회인데 degraded 가 표시됐다');
+  });
+});
+
+test('Plan 052 ③: 공백 제거 변형 조회가 실패해도 500 이 아니라 기존 결과로 200 응답한다(_softQuery)', async () => {
+  const { normalizeName } = require('../utils/aptNameMatch');
+  const q = 'PLAN052 실패주입질의';
+  const qApt = q;
+  const qNo = normalizeName(qApt);
+  assert.notEqual(qNo, qApt, '테스트 전제가 깨졌다 — qNo 가 qApt 와 같다');
+
+  const okRow = {
+    apt_name: 'PLAN052 실패주입질의', sigungu: '강남구', umd_nm: '역삼동', lawd_cd: '11680',
+    build_year: 1999, recent_deal_date: '2026-02-01', deal_count: 1, apt_seq: 'PLAN052-OK',
+  };
+  const routes = [
+    // 기존(공백 포함) 조회는 정상 — 이 결과가 살아남아야 "500 이 아니라 기존 결과로 응답"이 성립한다.
+    { table: 'molit_apt_index', col: 'apt_name', pattern: `%${qApt}%`, result: { data: [okRow], error: null } },
+    // 공백 제거 변형 조회만 실패로 주입.
+    { table: 'molit_apt_index', col: 'apt_name', pattern: `%${qNo}%`, reject: true, error: new Error('PLAN052 주입 실패') },
+    { table: 'apt_master', col: 'apt_name', pattern: `%${qNo}%`, reject: true, error: new Error('PLAN052 주입 실패') },
+  ];
+
+  await _withSearchDbStub(routes, async (handler) => {
+    const res = _mockRes();
+    await handler({ query: { q, limit: 10 } }, res, () => {});
+    assert.equal(res.statusCode, 200,
+      '공백 제거 변형 조회의 실패가 500 으로 번졌다 — _softQuery 로 감싸지 않았을 수 있다');
+    assert.equal(res.body.degraded, undefined,
+      '공백 제거 변형(추가 조회)의 실패가 degraded 로 잡혔다 — 기존 3개 조회만으로 판정해야 한다(범위 밖)');
+    assert.ok(res.body.results.some((r) => r.sigungu === '강남구'),
+      '추가 조회 실패로 기존(qApt) 조회 결과까지 사라졌다');
+  });
+});
+
+test('Plan 052 ④: 공백 제거 변형 조회 2개가 모두 _softQuery 로 감싸여 있다(소스 계약)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const raw = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
+  // 줄 주석 제거 후 검사 — 마커·설명 주석 문자열이 검사를 오검출시킨 전례(6회 재발) 방지.
+  const src = raw.split('\n').map((l) => l.replace(/\/\/[^\r\n]*/, '')).join('\n');
+  const startIdx = src.indexOf('const [molitRes, masterNameRes, masterUmdRes, molitNoSpaceRes, masterNoSpaceRes]');
+  assert.ok(startIdx >= 0, 'Promise.all 5개 구조분해를 찾지 못했다 — 공백 제거 변형 조회 구조가 바뀌었다');
+  const block = src.slice(startIdx, src.indexOf(']);', startIdx));
+  const wrapped = block.match(/_needsNoSpace[\s\S]{0,20}?\?[\s\S]{0,20}?_softQuery\(/g) || [];
+  assert.equal(wrapped.length, 2,
+    `_needsNoSpace 조건부 _softQuery 래핑이 2개가 아니다(${wrapped.length}개) — ` +
+    `공백 제거 변형 조회(molit·master) 중 하나가 _softQuery 없이 직결됐을 수 있다`);
+});
+
+test('Plan 052 ⑤: 검색 자동완성 캐시 키에 버전 성분이 있다(엣지 캐시 실사고 방지)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const raw = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
+  const src = raw.split('\n').map((l) => l.replace(/\/\/[^\r\n]*/, '')).join('\n');
+  assert.match(src, /const sck = `searchapt:v\d+:/,
+    '검색 캐시 키에 버전 성분(searchapt:vN:)이 없다 — 응답 모양이 바뀌었는데 캐시 키가 그대로면 ' +
+    '배포 전 캐시된 옛 응답이 서버 10분 + CDN s-maxage=600(+SWR 3600) 만큼 계속 나간다');
+});
