@@ -8416,3 +8416,140 @@ test('TXWINDOW-TWIN-2026-09-06: transactionService.js 소스에 창 계산용 �
   assert.match(src, /const since = txWindowStart\(monthsBack\)/,
     '트윈②(getTransactionsByAptSeq)가 SSOT(txWindowStart) 를 쓰지 않는다');
 });
+
+// ── Plan 056 (2026-09-06): 프론트 사본 3종 — 등급 라벨 · 필드명 · 주석 드리프트 ──────────
+//   [왜 추가하나] Plan 041 이 backend/services/analysisService.js 의 조건 카드에서 지운 등급 표현이
+//     frontend/index.html 의 pctHtml(가격 위치)·gapHtml(전세가율) 렌더 사본에는 그대로 남아 있었다 —
+//     같은 화면에서 사용자가 중립화된 조건 카드 바로 아래에서 등급 라벨을 다시 보는 상태였다.
+//     RULE-DETERMINISTIC-FRONT-2026-09-06 로 정리했다. 아래 테스트는 등급 라벨이 되살아나면 fail 하고,
+//     수치·red 위험 고지·pop 경로는 건드리지 않았는지도 함께 고정한다.
+//   [방식] 이 저장소의 확립된 패턴대로 index.html 에서 실제 렌더 블록을 문자열로 그대로 꺼내
+//     new Function 으로 실행한다(정규식 매칭이 아니라 진짜 실행 결과를 본다).
+function _plan056Html() {
+  if (!_plan056Html._cache) {
+    const fs2 = require('node:fs');
+    const path2 = require('node:path');
+    _plan056Html._cache = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  }
+  return _plan056Html._cache;
+}
+
+function _plan056Extract(startTok, endTok) {
+  const html = _plan056Html();
+  const s = html.indexOf(startTok);
+  if (s < 0) throw new Error('Plan 056 테스트: 시작 토큰을 못 찾았다 — 렌더 코드가 옮겨졌다: ' + startTok);
+  const e = html.indexOf(endTok, s);
+  if (e < 0) throw new Error('Plan 056 테스트: 끝 토큰을 못 찾았다 — 렌더 코드가 옮겨졌다: ' + endTok);
+  return html.slice(s, e);
+}
+
+function _plan056RunPct(pct, extraD) {
+  const block = _plan056Extract("let pctHtml=''", '// ─ 월별 거래량 차트');
+  const d = Object.assign({
+    percentile: pct,
+    percentileLow: Math.max(0, pct - 5),
+    percentileHigh: Math.min(100, pct + 5),
+    percentileN: 40,
+    filteredTxCount: 40,
+    txCount: 40,
+    anomalyCount: 0,
+  }, extraD);
+  return new Function('d', 'reliability', block + '\nreturn pctHtml;')(d, 'HIGH');
+}
+
+function _plan056RunGap(jeonseRate, extraG, extraD) {
+  const block = _plan056Extract("let gapHtml=''", '// ─ 실투자금 계산기');
+  const _escHtml = (x) => String(x == null ? '' : x)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  const g = Object.assign({ jeonseRate, gap: 3.5, avgSale: 8.5, avgJeonse: 5 }, extraG);
+  const d = Object.assign({
+    aptName: '테스트단지', jeonseCount: 12, jeonseReliability: 'HIGH',
+    recentJeonseTx: [], molitAvailable: true, gapData: g,
+  }, extraD);
+  return new Function('d', '_escHtml', block + '\nreturn gapHtml;')(d, _escHtml);
+}
+
+function _plan056RunSheetMeta(p, kind) {
+  const block = _plan056Extract('const meta=[(p.buildYear', "document.getElementById('msName')").trimEnd();
+  return new Function('p', 'kind', block + '\nreturn meta;')(p, kind);
+}
+
+test('Plan 056 ①-a: pctHtml — 041 이 지운 등급 표현이 프론트 사본에서도 사라졌다', () => {
+  for (const pct of [20, 50, 80]) {
+    const html = _plan056RunPct(pct);
+    for (const banned of ['시세 하단 구간', '시세 중간 구간', '시세 상단 구간']) {
+      assert.equal(html.indexOf(banned), -1, `pct=${pct}: 등급 표현 "${banned}" 이 되살아났다`);
+    }
+  }
+});
+
+test('Plan 056 ①-a: pctHtml — 등급 표현을 지워도 백분위 수치·신뢰구간·표본 건수는 그대로다', () => {
+  const low = _plan056RunPct(20);
+  assert.ok(low.indexOf('하위 20%') >= 0, '백분위 라벨(하위 20%)이 사라졌다');
+  assert.ok(low.indexOf('95% 신뢰 구간 15~25%') >= 0, '신뢰구간 수치가 사라졌다');
+  assert.ok(low.indexOf('표본 40건') >= 0, '표본 건수가 사라졌다');
+
+  const high = _plan056RunPct(80);
+  assert.ok(high.indexOf('상위 20%') >= 0, '50% 초과 시 상위 % 전환(PCT-LABEL-2026-07-15)이 사라졌다');
+});
+
+test('Plan 056 ①-b: gapHtml — green/yellow 등급 라벨은 사라지고 red 위험 고지는 유지된다', () => {
+  const green = _plan056RunGap(70);
+  assert.equal(green.indexOf('역전세 위험 낮음'), -1, 'green 등급 라벨이 되살아났다');
+
+  const yellow = _plan056RunGap(50);
+  assert.equal(yellow.indexOf('보통'), -1, 'yellow 등급 라벨이 되살아났다');
+
+  const red = _plan056RunGap(40);
+  assert.ok(red.indexOf('역전세 위험 확인 필요') >= 0,
+    'red 의 위험 고지(041 이 의도적으로 남긴 문구, 백엔드와 같은 판단)가 사라졌다');
+
+  // 수치 자체는 등급 판정과 무관하게 항상 그대로 나온다.
+  for (const rate of [70, 50, 40]) {
+    const out = _plan056RunGap(rate);
+    assert.ok(out.indexOf(`${rate}%`) >= 0, `jeonseRate=${rate}: 수치 자체가 사라졌다`);
+  }
+});
+
+test('Plan 056 ②: 모바일 하단 시트 — dealCount 없이 dealCount6m 만 있어도 거래 건수가 표시된다', () => {
+  // 추천 응답 형태: dealCount 는 undefined, dealCount6m 만 있다 — T0-HERO-FIELD-2026-09-06 과 같은 상황.
+  const recLike = { buildYear: 2005, dealCount6m: 7 };
+  const meta = _plan056RunSheetMeta(recLike, 'search');
+  assert.ok(meta.indexOf('거래 7건') >= 0,
+    '추천 응답 형태(dealCount6m 만 있음)에서 거래 건수가 하단 시트 meta 에 나오지 않는다');
+
+  // 검색·지도 응답 형태: dealCount 가 있으면 그것을 우선한다(기존 동작 유지, ?? 는 좌항이 있으면 좌항).
+  const searchLike = { buildYear: 2005, dealCount: 3, dealCount6m: 99 };
+  const meta2 = _plan056RunSheetMeta(searchLike, 'search');
+  assert.ok(meta2.indexOf('거래 3건') >= 0, 'dealCount 가 있는데 dealCount6m 이 대신 쓰였다');
+
+  // 0건은 유효한 값이다(?? 를 쓰는 이유) — || 였다면 0 도 "없음"으로 뭉개진다.
+  const zeroLike = { buildYear: 2005, dealCount: 0, dealCount6m: 5 };
+  const meta3 = _plan056RunSheetMeta(zeroLike, 'search');
+  assert.equal(meta3.indexOf('거래 0건') >= 0, false, '0건은 표시하지 않는 기존 동작(빈 문자열)이 바뀌었다');
+  assert.equal(meta3.indexOf('거래 5건'), -1, 'dealCount=0(유효값)인데 dealCount6m 으로 넘어갔다 — ??/|| 혼동');
+
+  // 인기 단지(pop) 경로는 dealCount60d 를 쓴다 — 이 경로는 건드리지 않는다.
+  const popLike = { buildYear: 2005, dealCount60d: 12, dealCount: 999 };
+  const meta4 = _plan056RunSheetMeta(popLike, 'pop');
+  assert.ok(meta4.indexOf('60일 12건') >= 0, 'pop 경로가 dealCount60d 대신 다른 필드를 썼다');
+});
+
+test('Plan 056 ⑤: 절대 룰 ① — pctHtml·gap-grid 카드 어디에도 매수 권유·가격 예측 표현이 없다', () => {
+  const banned = /매수|매도|사세요|파세요|오를|내릴|상승할|하락할/;
+  for (const pct of [20, 50, 80]) {
+    const html = _plan056RunPct(pct);
+    assert.equal(banned.test(html), false, `pctHtml(pct=${pct})에 금지 표현이 있다`);
+  }
+  // gapHtml 전체에는 041 이전부터 있던 역전세 시뮬레이터의 규제 고지문(예: "규제지역 추가 매수 제한")이
+  // 포함돼 "매수" 라는 단어 자체가 정당하게 나온다 — 그건 매수 "권유"가 아니라 매수 "제한" 규제 설명이다.
+  // 이번 계획이 실제로 건드린 gap-grid 카드(전세가율·갭) 구간만 좁혀서 검사한다.
+  for (const rate of [70, 50, 40]) {
+    const html = _plan056RunGap(rate);
+    const simIdx = html.indexOf('역전세 시뮬레이터');
+    assert.ok(simIdx > 0, `gapHtml(rate=${rate}): 역전세 시뮬레이터 섹션을 못 찾았다 — 구조가 바뀌었다`);
+    const gridPart = html.slice(0, simIdx);
+    assert.equal(banned.test(gridPart), false, `gap-grid(rate=${rate})에 금지 표현이 있다`);
+  }
+});

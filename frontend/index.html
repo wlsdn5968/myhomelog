@@ -5708,7 +5708,11 @@ function _mapSheetTry(kind,p){
       const v=Number(p.avgPrice||p.price||0);
       if(v>0){priceV=v.toFixed(2)+'억';priceL=p._priceBasis||'평균 실거래';} // VERIFY-FIX-2: 개인화 가중평균에 '평균 실거래' 라벨 금지(기존 두 지점과 동일 원칙)
     }
-    const meta=[(p.buildYear?`${p.buildYear}년 준공`:''),(kind==='pop'?(p.dealCount60d?`60일 ${p.dealCount60d}건`:''):(p.dealCount?`거래 ${p.dealCount}건`:''))].filter(Boolean).join(' · ');
+    // SHEET-FIELD-2026-09-06 (Plan 056): 추천 응답은 dealCount6m(6개월 창), 검색·지도 응답은
+    //   dealCount(그룹 합산)로 다른 이름을 쓴다(T0-HERO-FIELD-2026-09-06 참고). 이 하단 시트가
+    //   dealCount 만 읽어 추천 경로 마커를 모바일에서 탭하면 거래 건수가 조용히 사라졌다.
+    //   ⚠ ??(0 을 유효값으로 다루는 연산자)를 쓴다 — ||였다면 0건도 미확인으로 뭉개진다.
+    const meta=[(p.buildYear?`${p.buildYear}년 준공`:''),(kind==='pop'?(p.dealCount60d?`60일 ${p.dealCount60d}건`:''):((p.dealCount??p.dealCount6m)?`거래 ${p.dealCount??p.dealCount6m}건`:''))].filter(Boolean).join(' · ');
     document.getElementById('msName').textContent=p.aptName||'';
     document.getElementById('msSub').textContent=sub||'—';
     document.getElementById('msPriceV').textContent=priceV||'—(미확인)';
@@ -8963,7 +8967,9 @@ function renderAnalysis(d,p){
     const pct=d.percentile;
     const basedOn=d.filteredTxCount||d.txCount||0;
     const pctColor=pct<=30?'var(--grn)':pct<=65?'var(--amb)':'var(--red)';
-    const pctDesc=pct<=30?'시세 하단 구간':pct<=65?'시세 중간 구간':'시세 상단 구간';
+    // RULE-DETERMINISTIC-FRONT-2026-09-06 (Plan 056): 041 이 backend/services/analysisService.js 의
+    //   조건 카드에서 지운 등급 표현('시세 하단/중간/상단 구간')이 이 프론트 사본에는 남아 있었다 —
+    //   절대 룰 ①(등급·해석 표현 금지) 위반. desc 를 지우고 수치(pctLabel)만 남긴다.
     // PCT-LABEL-2026-07-15 (Sprint MMMMM, 실측 발각): "하위 97% — 시세 상단"은 '하위'가 정반대 인상 —
     //   50% 초과면 "상위 X%"로 자동 전환(같은 수치, 읽기만 직관화).
     const pctLabel = pct > 50 ? `상위 ${100-pct}%` : `하위 ${pct}%`;
@@ -8981,7 +8987,7 @@ function renderAnalysis(d,p){
         <div class="pct-pin" style="left:${pct}%"></div>
       </div>
       <div class="pct-labels"><span>최저가</span><span>중간</span><span>최고가</span></div>
-      <div class="pct-result" style="color:${pctColor}">${pctLabel} — ${pctDesc}<br><span style="font-size:10px;color:var(--t3)">${rangeText}${d.anomalyCount>0?' · 이상거래 '+d.anomalyCount+'건 제외':''}</span></div>
+      <div class="pct-result" style="color:${pctColor}">${pctLabel}<br><span style="font-size:10px;color:var(--t3)">${rangeText}${d.anomalyCount>0?' · 이상거래 '+d.anomalyCount+'건 제외':''}</span></div>
     </div>`;
   }
 
@@ -9059,10 +9065,15 @@ function renderAnalysis(d,p){
       </div>
     </details>`;
 
+    // RULE-DETERMINISTIC-FRONT-2026-09-06 (Plan 056): 041 이 backend/services/analysisService.js:315-323 에서
+    //   지운 등급 라벨('낮음'/'보통')이 이 프론트 사본에는 남아 있었다 — 절대 룰 ①(등급·해석 표현 금지) 위반.
+    //   red 의 위험 고지(백엔드와 같은 판단 — 확인할 항목 안내이지 예측이 아니다)는 유지하고,
+    //   green/yellow 는 등급 라벨을 다른 말로 바꿔치기하지 않고 gap-sub 자체를 생략한다
+    //   (수치는 바로 위 gap-val 에 이미 있고, 옆 카드가 매매/전세 평균을 이미 보여준다 — 중복 문구를 새로 만들지 않는다).
     gapHtml=`<div style="font-size:11px;font-weight:700;color:var(--t2);margin-bottom:7px">🏠 전세가율 · 갭 분석</div>
     <div class="ibox b" style="margin-bottom:7px;font-size:10px">전세 ${d.jeonseCount||0}건 기준${d.jeonseReliability&&d.jeonseReliability!=='NONE'?` · 전세 표본 신뢰도 <b>${({LOW:'낮음',MED:'보통',HIGH:'높음'})[d.jeonseReliability]||_escHtml(String(d.jeonseReliability))}</b>`:''}. 갱신계약 포함 시 실제 시세와 다를 수 있습니다.</div>
     <div class="gap-grid">
-      <div class="gap-card"><div class="gap-lbl">전세가율</div><div class="gap-val" style="color:${g.jeonseRate>=60?'var(--grn)':g.jeonseRate>=45?'var(--amb)':'var(--red)'}">${g.jeonseRate}%</div><div class="gap-sub">${g.jeonseRate>=60?'역전세 위험 낮음':g.jeonseRate>=45?'보통':'역전세 위험 확인 필요'}</div></div>
+      <div class="gap-card"><div class="gap-lbl">전세가율</div><div class="gap-val" style="color:${g.jeonseRate>=60?'var(--grn)':g.jeonseRate>=45?'var(--amb)':'var(--red)'}">${g.jeonseRate}%</div>${g.jeonseRate<45?'<div class="gap-sub">역전세 위험 확인 필요</div>':''}</div>
       <div class="gap-card"><div class="gap-lbl">갭 (매매-전세)</div><div class="gap-val">${g.gap}억</div><div class="gap-sub">매매 ${g.avgSale}억 / 전세 ${g.avgJeonse}억</div></div>
     </div>
     ${jeonseSimHtml}
@@ -9077,7 +9088,15 @@ function renderAnalysis(d,p){
   const houseS=gct('ch-h');
   const isF=gct('ch-f')==='예';
   const pr=p.avgPrice||0;
-  // 같은 화면의 세금 카드(_acqIsReg)와 **같은 근거**로 계산한다 — 한 화면에서 취득세가 갈리지 않게.
+  // ACQ-DUAL-BASIS-2026-09-06 (Plan 056, 사실 정정): 이 주석은 한때 "같은 화면의 세금 카드(_acqIsReg)와
+  //   같은 근거로 계산한다"고 말했지만 지금은 사실이 아니다 — Plan 036(ACQ-UNKNOWN-COUNT-2026-09-06)이
+  //   '2주택+' 를 지역과 무관하게 항상 보수적 중과로 고정했고, calcTotalCostHTML(:9151 부근)은 이 값을
+  //   받기만 하고 계산에 쓰지 않는다. 반면 위쪽 세금 시뮬레이션 카드(_acqIsReg, :7735 부근)는 여전히
+  //   isRegFront 로 지역을 판정해 조정/비조정을 나눠 계산한다 — 한 화면에 두 기준이 있다.
+  //   이 갈림은 실수가 아니라 Plan 036 이 승인한 것이다: '2주택+' 는 2주택/3주택 이상을 구분하지
+  //   못해 지역 분기까지 얹으면 3주택 이상에 과소 안내가 될 위험이 더 크다(백엔드 analysisService.js:376
+  //   부근과 같은 판단). isRegulated 인자를 그래도 시그니처에 남기는 이유는 calcTotalCostHTML 의 각주가
+  //   여전히 그 개념을 설명하고 기존 호출부·계약 테스트가 이 인자를 넘기기 때문이다.
   const _costIsReg = (p.area && typeof isRegFront === 'function') ? isRegFront(p.area, p.lawdCd) : undefined;
   const costHtml=calcTotalCostHTML(pr,loanAmt,houseS,isF,_costIsReg);
 
@@ -9132,12 +9151,17 @@ function _pickTierRateUnder(tiers, priceAuk, fallbackRate){
   }
   return fallbackRate;
 }
-// ACQ-REG-CALC-2026-09-02 (감사 후속): 다주택 취득세 중과는 **조정대상지역** 기준이다(지방세법 §13-2).
-//   종전엔 2주택+ 를 지역과 무관하게 항상 8% 로 계산했다. 각주로 "비조정지역은 더 낮을 수 있다"고
-//   고지는 했지만, 같은 단지 상세 화면의 세금 시뮬레이션 카드는 이미 지역을 보고 계산하고 있어서
-//   **한 화면에 서로 다른 취득세 금액 두 개**가 동시에 떴다.
-//   → 지역을 아는 호출부는 isRegulated 를 넘겨 정확히 계산한다. 모르면 undefined → 종전대로 보수적 8%
-//     (모를 때 낮게 안내하면 과소 안내가 된다). 백엔드 calcTotalCost 와 같은 규칙·같은 인자다.
+// ACQ-REG-CALC-2026-09-02 (감사 후속, 이 함수에서는 폐기됨 → 아래 ACQ-UNKNOWN-COUNT-2026-09-06 이
+//   되돌렸다): 다주택 취득세 중과는 조정대상지역 기준이라(지방세법 §13-2), 이 계산기가 2주택+ 를
+//   지역과 무관하게 항상 8% 로 계산하는 게 한때 문제로 지적됐다 — 세금 시뮬레이션 카드(_acqIsReg,
+//   :7735 부근)는 이미 지역을 보고 계산해서, 같은 화면에 서로 다른 취득세 금액이 동시에 떴었다.
+//   그래서 09-02 는 이 함수도 isRegulated 를 받아 비조정지역이면 기본세율로 풀게 했다.
+// ACQ-UNKNOWN-COUNT-2026-09-06 (Plan 036, 지금 코드는 이 상태): '2주택+' 칩은 2주택과 3주택 이상을
+//   구분하지 않는다. 비조정지역이 확인돼도 기본세율로 풀면 3주택 이상에 과소 안내가 된다(9억 기준
+//   7,200만원 → 2,700만원). 그래서 지금은 isRegulated 값(true/false/undefined 무엇이든)과 무관하게
+//   **항상** 보수적 중과(8%)를 쓴다 — 아래 함수 본문은 이 인자를 실제로 읽지 않는다. 시그니처에
+//   남기는 이유와 세금 시뮬레이션 카드와의 갈림 근거는 :9091(ACQ-DUAL-BASIS-2026-09-06) 참고.
+//   백엔드 calcTotalCost(analysisService.js:376 부근)와 같은 규칙이다.
 function calcTotalCostHTML(price,loan,houseStatus,isFirstBuyer,isRegulated){
   if(!price)return`<div class="ibox y">매수가 정보 없음</div>`;
   const tc = window.__TAX_CONFIG;
