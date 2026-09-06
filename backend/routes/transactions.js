@@ -28,7 +28,13 @@ function handleMolitError(err, res) {
 //   sigungu + umdNm 옵션 필터 추가. 미지정 시 기존 동작 유지 (회귀 0).
 //   이유: aptName substring 매칭만으로는 동/단지 구분 불가 (예: "공릉풍림아이원" query 가 월계동 "풍림아이원" 7건 잘못 반환).
 router.get('/', validateTransactionQuery, async (req, res) => {
-  const { lawdCd, dealYm, aptName, sigungu, umdNm, monthsBack } = req.query;
+  const { lawdCd, dealYm, sigungu, umdNm, monthsBack } = req.query;
+  // EXPRESS5-QUERY-GETTER-2026-09-06 (Plan 073): req.query 는 Express 5부터 접근마다
+  //   재파싱되는 getter라 validateTransactionQuery 가 req.query.aptName 에 쓴 정제값이
+  //   여기선 원문으로 되돌아간다(실행 재현 확인 — '<script>' 그대로 통과했었다).
+  //   req.sanitized.aptName(미들웨어가 실었을 때만)을 우선 사용 — 없으면(=정제 자체가
+  //   안 일어난 falsy 원문) req.query.aptName 그대로(둘 다 falsy 라 안전).
+  const aptName = req.sanitized?.aptName !== undefined ? req.sanitized.aptName : req.query.aptName;
   if (!lawdCd || !dealYm) return res.status(400).json({ error: 'lawdCd, dealYm 필수' });
 
   try {

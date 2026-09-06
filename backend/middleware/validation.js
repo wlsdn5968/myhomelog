@@ -65,8 +65,13 @@ function validateTransactionQuery(req, res, next) {
   if (dealYm && !/^\d{6}$/.test(dealYm)) {
     return res.status(400).json({ error: '거래년월 형식: YYYYMM' });
   }
+  // EXPRESS5-QUERY-GETTER-2026-09-06 (Plan 073): Express 5부터 req.query 는 접근할 때마다
+  //   재파싱되는 getter — 여기서 req.query.aptName 에 정제값을 대입해도 다음 접근(소비자)에서는
+  //   원문(예: '<script>')으로 되돌아간다(실행 재현 확인). req.sanitized 에 실어 소비자가 이걸
+  //   읽게 한다. 소비자: routes/transactions.js.
   if (aptName) {
-    req.query.aptName = sanitizeString(aptName, 50);
+    req.sanitized = req.sanitized || {};
+    req.sanitized.aptName = sanitizeString(aptName, 50);
   }
   next();
 }
@@ -74,12 +79,19 @@ function validateTransactionQuery(req, res, next) {
 // 단지 검색 검증 — POST body 기반 (일부 엔드포인트는 query string)
 function validatePropertySearch(req, res, next) {
   // POST /recommend 은 body, GET 엔드포인트는 query
-  const src = req.method === 'POST' ? (req.body || {}) : (req.query || {});
+  const isPost = req.method === 'POST';
+  const src = isPost ? (req.body || {}) : (req.query || {});
   const { query, minPrice, maxPrice, region } = src;
 
-  if (query) src.query = sanitizeString(query, 100);
-  if (minPrice !== undefined) src.minPrice = sanitizeNumber(minPrice, 0, 999);
-  if (maxPrice !== undefined) src.maxPrice = sanitizeNumber(maxPrice, 0, 999);
+  // EXPRESS5-QUERY-GETTER-2026-09-06 (Plan 073): req.body 는 body-parser 가 만든 고정 객체라
+  //   직접 mutate 해도 안전(POST 는 기존 그대로). req.query 는 Express 5 부터 접근마다 재파싱되는
+  //   getter라 GET 분기에서 src(=req.query)에 쓴 값은 다음 접근에서 원문으로 되돌아간다 —
+  //   GET 은 req.sanitized 로 우회.
+  const out = isPost ? src : (req.sanitized = req.sanitized || {});
+
+  if (query) out.query = sanitizeString(query, 100);
+  if (minPrice !== undefined) out.minPrice = sanitizeNumber(minPrice, 0, 999);
+  if (maxPrice !== undefined) out.maxPrice = sanitizeNumber(maxPrice, 0, 999);
 
   // 광역 키워드 화이트리스트 — "서울 강북구" 같은 복합 입력도 허용
   // METRO-SUB-2026-07-17 (Sprint UUUUU): 프론트 REGION_SUB['지방'] 은 "지방 해운대" 형태로 보내 시/도명이
@@ -93,7 +105,7 @@ function validatePropertySearch(req, res, next) {
     '해운대','수영','수성','유성','청주'];
   if (region) {
     const normalized = String(region).normalize('NFC').trim();
-    src.region = normalized;
+    out.region = normalized;
     const passesWide = allowedWide.some(w => normalized.includes(w));
     if (!passesWide) {
       return res.status(400).json({ error: '유효하지 않은 지역입니다.', region: normalized });
