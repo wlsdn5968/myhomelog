@@ -54,7 +54,7 @@
 | **039** | **추천 예산 상한·컷·게이트를 소스 검사 → 실제 실행으로 승격 (프로덕션 코드 무변경)** | **P1** | M | — | DONE (96f1d8b, 2026-09-06) — 프로덕션 0 변경 · ⚠ 계획서 주입 5건은 정규식도 전부 잡았고 진짜 간극은 "같은 줄 두고 주변 로직 무력화" 형태(리뷰어 독립 재현) |
 | **040** | **실패가 스스로 복구되게 — 지역 경신 백오프·관심도 워밍 기아·브리핑 비수렴 3종** | P2 | S | — | TODO |
 | **041** | **절대 룰 ① 을 결정론 카드에도 (AI 채널만 정화돼 있었다)** | P2 | S | — | TODO |
-| **042** | **express major 를 dependabot 예외로 — "보이지 않는 기본값" 을 결정으로 (마이그레이션 아님)** | P2 | S | — | TODO |
+| **042** | **express major 를 dependabot 예외로 — "보이지 않는 기본값" 을 결정으로 (마이그레이션 아님)** | P2 | S | — | DONE (문서 기록만, 2026-09-06) — ⚠ **설정 변경은 공식 정책상 불가**(아래 결정 기록 참조). 코드·설정 변경 0 |
 | **043** | **계측기의 나머지 절반 — `search`·`report` 이벤트 전송** | P2 | S | — | TODO |
 | **044** | **(스파이크) 고아 페이지 12,000개를 링크 그래프에 — 4주 측정 계획 포함** | P3 | M | 043 권장 | TODO |
 | **045** | **(스파이크) 공개 페이지 → 앱 CTA 가 맥락을 버린다 — 열린 질문 2개 먼저** | P3 | S | 043 권장 · 044 와 함께 | TODO |
@@ -390,6 +390,65 @@ Status values: TODO | IN PROGRESS | DONE | BLOCKED (한 줄 사유) | REJECTED (
   "다른 함수의 같은 매핑 줄이 주입을 통과시켰다"(`7fc05d1`) 처럼 스스로 사고를 자인한다.
   ⚠ 착수 전 **골든 스냅샷**(같은 입력 → 같은 15곳·같은 순서) 고정이 필수.
   ⚠ `index.html` 분할을 09-05 에 보류한 선례가 있다 — 사용자 0 상태의 대형 리팩터링 판단은 운영자 몫.
+
+## 의존성 정책 결정 — express 4 유지 (Plan 042, 2026-09-06)
+
+계획 042 의 실제 산출물이다. **설정 변경은 하지 못했고, 그 이유가 이 기록의 절반이다.**
+
+### 실측 (2026-09-06, `npm audit --omit=dev`)
+
+**moderate 5건** — 구성은 다음과 같다:
+
+| 패키지 | 취약점 | 유입 경로 |
+|---|---|---|
+| `fflate` 0.7.0–0.7.4 | unzipSync 무한 루프(악성 ZIP64) | `satori@0.33.4` → `fflate@0.7.3` |
+| `qs` 2.2.5–6.15.3 | array-limit bypass · isBuffer DoS (2건) | `express@4.22.2` |
+| `body-parser` 1.20.5–1.20.6 | 위 qs 연쇄 | `express` |
+| `express` 4.22.2 | 위 두 개 연쇄 | 직접 의존 |
+
+⚠ **감사 원본 기재를 정정한다.** 2026-09-06 감사에서 이 5건을 "qs/body-parser/express" 로만 적었는데
+`fflate` 1건이 빠져 있었다(측정 시 grep 이 그 세 이름만 봤다). 개수 5는 맞고 **구성이 틀렸다.**
+
+**`fflate` 도달 가능성 — 낮음(코드 확인).** 이 advisory 는 `unzipSync` 가 **공격자가 준 ZIP 아카이브**를
+파싱할 때 무한 루프에 빠지는 것이다. 우리 OG 렌더 경로는 **저장소에 벤더링한 폰트 파일만** 읽고
+(`backend/services/ogImageService.js`), 사용자 입력에서 온 아카이브를 satori 에 넘기지 않는다.
+npm 이 제시하는 해결은 `satori@0.32.0` 으로의 **다운그레이드**인데, 0.33 은 하드 요구사항이었다
+(0.10→0.33 승격은 이미 프로덕션 사고를 거쳐 안착했다 — `1890804`). 되돌리지 않는다.
+
+### 왜 dependabot 설정을 바꾸지 못했나 (공식 문서 확인)
+
+목표는 "express 5 PR 이 **보이게** 만드는 것" 이었다. 세 방법을 전부 검토했고 전부 막혔다:
+
+1. **같은 ecosystem 에 블록 2개** (계획서 원안) — ❌ 불가.
+   GitHub 공식 문서: *"If you need to use more than one block in the configuration file to define
+   updates for a single target branch of an ecosystem, you must ensure that all values are unique
+   and there is no overlap in directories defined."*
+   현재 블록이 `directories: ["/", "/backend"]` 라 두 번째 블록은 반드시 겹친다.
+2. **와일드카드 `ignore` 에 express 예외** — ❌ 불가. 부정(negation) 문법이 없다.
+   `allow` 로 되살리는 것도 안 된다: *"If a dependency is matched by an `allow` and an `ignore`
+   statement, then it is ignored."*
+3. **디렉터리를 분리해 블록 2개** — ❌ **이 저장소가 이미 겪고 되돌린 방식이다.**
+   `.github/dependabot.yml` 의 `DEPENDABOT-EXP-2026-05-10` 주석: 블록을 `/` 와 `/backend` 로
+   나눴더니 root PR + backend PR 이 따로 생성돼 한쪽만 적용될 때 `scripts/check-deps-sync.js` 의
+   versionMismatch 로 **CI 가 막혔다**(실제 사례 PR #43 + #28). 되돌릴 이유가 없다.
+
+**남은 유일한 수단**은 와일드카드를 **express 를 뺀 나머지 15개 패키지 명시 목록**으로 바꾸는 것인데,
+그러면 `package.json` 과 드리프트하는 새 목록이 생긴다(이 저장소가 반복해서 당한 실패 유형이고,
+그 목록을 지켜 줄 게이트도 없다). **채택하지 않는다.**
+
+### 결정 기록 (계획 042 의 산출물)
+
+- **결정**: **express 4 를 유지한다.**
+  근거 — moderate 5건의 유일한 해결이 breaking major 이고, blast radius 는 `backend/routes/` 32파일
+  + `server.js` + `api/` 진입점이다. 사용자 0 상태에서 그 위험을 감수할 이득이 없다.
+- **수용한 위험**: `qs` array-limit bypass · `qs` isBuffer DoS(둘 다 moderate, 모든 쿼리스트링·
+  `express.json()` 요청이 도달 경로) · `fflate` unzipSync 무한 루프(위 근거로 **도달 불가 판단**).
+- **재검토 시점** (셋 중 **먼저 오는 것**):
+  (a) 심각도가 **high 이상으로 상향** · (b) express 4 **EOL 공지** · (c) **결제 오픈으로 실사용자 진입**.
+- **관측 방법**: 릴리스 전 `npm audit --omit=dev` 육안 확인.
+  CI 의 차단 게이트는 `--audit-level=high` 라 moderate 는 신호를 남기지 않는다 — **그래서 이 기록이 필요하다.**
+  ⚠ dependabot 이 express 5 PR 을 **영영 만들지 않는다**는 사실이 이 결정의 전제다.
+  즉 "언젠가 PR 이 오면 그때 보자" 는 성립하지 않는다. 위 세 트리거를 사람이 봐야 한다.
 
 ## Findings considered and rejected (재감사 방지)
 
