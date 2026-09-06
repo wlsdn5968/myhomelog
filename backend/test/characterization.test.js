@@ -8801,22 +8801,56 @@ test('AI 도우미 시세 — "대치 은마 시세"가 지역 분리 재시도�
 });
 
 test('AI 도우미 시세 — 직접 히트가 있으면 지역 분리 재시도(이중 ilike 체인)가 전혀 일어나지 않는다 (Plan 057 Step 2, 성공 경로 왕복 불변)', async () => {
-  const { admin, tracker } = _adminWithIlikeChainTracker({
-    molit_apt_index: [
-      { apt_name: '은마', lawd_cd: '11680', sigungu: '강남구', umd_nm: '대치동', build_year: 1979, deal_count: 233 },
-    ],
-    molit_transactions: [
-      { apt_name: '은마', sigungu: '강남구', umd_nm: '대치동', deal_amount: 250000, deal_date: _recentDealDate(10), exclu_use_ar: 84.4 },
-    ],
-  });
-  const { router, restore } = _requireRouterWithAdmin(admin);
-  try {
-    const { reply } = await router.route('은마 시세', null);
-    assert.match(reply, /은마/);
-    assert.equal(/찾지 못했어요/.test(reply), false);
-    assert.equal(tracker.doubleIlikeChains, 0,
-      '직접 히트가 있는데 지역 분리 재시도 조회(이중 ilike 체인)가 실행됐다 — 성공 경로의 조회 수가 늘었다');
-  } finally { restore(); }
+  // 케이스 ①: 단일 토큰("은마") — splitRegionName 이 애초에 후보를 안 낸다(토큰 1개).
+  //   이 케이스만으로는 "성공했으니 재시도 게이트를 건너뛰었다"와 "애초에 나눌 후보가
+  //   없어 안 돌았다"를 구분 못한다 — 아래 케이스 ②가 그 구분을 한다.
+  {
+    const { admin, tracker } = _adminWithIlikeChainTracker({
+      molit_apt_index: [
+        { apt_name: '은마', lawd_cd: '11680', sigungu: '강남구', umd_nm: '대치동', build_year: 1979, deal_count: 233 },
+      ],
+      molit_transactions: [
+        { apt_name: '은마', sigungu: '강남구', umd_nm: '대치동', deal_amount: 250000, deal_date: _recentDealDate(10), exclu_use_ar: 84.4 },
+      ],
+    });
+    const { router, restore } = _requireRouterWithAdmin(admin);
+    try {
+      const { reply } = await router.route('은마 시세', null);
+      assert.match(reply, /은마/);
+      assert.equal(/찾지 못했어요/.test(reply), false);
+      assert.equal(tracker.doubleIlikeChains, 0,
+        '직접 히트가 있는데 지역 분리 재시도 조회(이중 ilike 체인)가 실행됐다 — 성공 경로의 조회 수가 늘었다');
+    } finally { restore(); }
+  }
+
+  // 케이스 ②: 다중 토큰("공릉 풍림아이원", Plan 051 사례)인데도 apt_master 직접 히트로
+  //   이미 확정된다 — splitRegionName('공릉 풍림아이원')은 후보를 **낸다**(region:'공릉',
+  //   name:'풍림아이원'). 그런데도 amCandidates 가 이미 1개라 재시도는 돌면 안 된다.
+  //   게이트를 `if (true)`로 무조건 실행하게 망가뜨리면 이 케이스에서만 체인이 잡힌다
+  //   (케이스 ①은 애초에 후보가 없어 게이트가 깨져도 감지가 안 된다 — 그래서 이 케이스가 필요).
+  {
+    const { admin, tracker } = _adminWithIlikeChainTracker({
+      apt_master: [
+        { apt_name: '공릉풍림아이원', lawd_cd: '11350', sigungu: '노원구', umd_nm: '공릉동', kapt_code: 'A13980513', molit_aliases: ['풍림아파트A', '풍림아파트B'] },
+      ],
+      molit_apt_index: [
+        { apt_name: '풍림아파트A', lawd_cd: '11350', sigungu: '노원구', umd_nm: '공릉동', build_year: 2001, deal_count: 90 },
+        { apt_name: '풍림아파트B', lawd_cd: '11350', sigungu: '노원구', umd_nm: '공릉동', build_year: 2001, deal_count: 21 },
+      ],
+      molit_transactions: [
+        { apt_name: '풍림아파트A', sigungu: '노원구', umd_nm: '공릉동', deal_amount: 60000, deal_date: _recentDealDate(10), exclu_use_ar: 59.9 },
+        { apt_name: '풍림아파트B', sigungu: '노원구', umd_nm: '공릉동', deal_amount: 57000, deal_date: _recentDealDate(20), exclu_use_ar: 59.9 },
+      ],
+    });
+    const { router, restore } = _requireRouterWithAdmin(admin);
+    try {
+      const { reply } = await router.route('공릉 풍림아이원 시세', null);
+      assert.match(reply, /공릉풍림아이원/, 'apt_master 직접 히트(alias 확정)로 답해야 한다 — Plan 051 동작 불변');
+      assert.equal(/찾지 못했어요/.test(reply), false);
+      assert.equal(tracker.doubleIlikeChains, 0,
+        'apt_master 로 이미 확정됐는데(splitRegionName 은 후보를 내는 질의인데도) 지역 분리 재시도가 실행됐다 — 왕복 계약 위반');
+    } finally { restore(); }
+  }
 });
 
 test('AI 도우미 시세 — 지역으로 좁혀도 후보가 2곳 이상이면 바로 답하지 않고 되묻는다 (Plan 057 Step 3, 운영자 요구)', async () => {
