@@ -8725,3 +8725,151 @@ test('Plan 052 ⑤: 검색 자동완성 캐시 키에 버전 성분이 있다(�
     '검색 캐시 키에 버전 성분(searchapt:vN:)이 없다 — 응답 모양이 바뀌었는데 캐시 키가 그대로면 ' +
     '배포 전 캐시된 옛 응답이 서버 10분 + CDN s-maxage=600(+SWR 3600) 만큼 계속 나간다');
 });
+
+// ══════════════════════════════════════════════════════════════════════════
+// Plan 057 (2026-09-06) — "지역 + 단지명" 질의를 지역으로 좁혀 찾는다.
+//   [왜] 운영자 재현: "대치 은마 시세"가 051 배포 후에도 "찾지 못했어요"였다. 051 은 공백만
+//   지워 "대치은마"로 붙이는데, MOLIT·apt_master 는 "은마"로만 저장해 붙인 문자열은 원리적으로
+//   0건이다. 지역 토큰(대치)을 분리해 이름(은마)만 남기면 찾을 수 있다(DB 실측, 계획서 참조).
+//   [범위] aptNameMatch.splitRegionName(신설, 순수 함수) + chatDataRouter._market 의 실패
+//   직전 재시도 경로만. _regionMarket·_resolveRegionRows·classifyIntent 는 손대지 않았다.
+// ══════════════════════════════════════════════════════════════════════════
+
+// 이중 ilike 체인 추적기 — REGION-SPLIT-2026-09-06 재시도 쿼리(.ilike(지역%).ilike(%이름%))만
+//   갖는 고유 시그니처다(기존 _market 쿼리는 전부 ilike 를 체인 안에서 1번만 쓴다). 이 카운터로
+//   "성공 경로에서 재시도 조회가 실제로 0번 실행됐는지"를 총 호출 수 추측 없이 직접 잰다.
+function _adminWithIlikeChainTracker(tables) {
+  const base = _mockAptAdmin(tables);
+  const tracker = { doubleIlikeChains: 0, fromCalls: 0 };
+  const admin = {
+    from(t) {
+      tracker.fromCalls++;
+      const table = base.from(t);
+      let ilikeCount = 0;
+      const origIlike = table.ilike;
+      table.ilike = function (col, val) {
+        ilikeCount++;
+        const res = origIlike.call(table, col, val);
+        if (ilikeCount === 2) tracker.doubleIlikeChains++;
+        return res;
+      };
+      return table;
+    },
+  };
+  return { admin, tracker };
+}
+// 절대 날짜 하드코딩 금지(레포 교훈 test-absolute-date-rot) — "지금부터 N일 전"으로 계산.
+const _recentDealDate = (daysAgo) => { const d = new Date(); d.setDate(d.getDate() - daysAgo); return d.toISOString().slice(0, 10); };
+
+test('splitRegionName — 지역·이름 분할 순수 함수 (Plan 057 Step 1, 계획서 값 그대로)', () => {
+  const { splitRegionName } = require('../utils/aptNameMatch');
+  assert.deepEqual(splitRegionName('은마'), [], '토큰이 1개면 나눌 지역이 없다');
+  assert.deepEqual(splitRegionName('대치 은마'), [{ region: '대치', name: '은마' }]);
+  const three = splitRegionName('서울 강남 은마');
+  assert.equal(three.length, 2, '분할점 2곳 모두 2자 이상 조건을 만족한다');
+  assert.deepEqual(three[0], { region: '서울 강남', name: '은마' }, 'name 이 짧은(지역을 더 뗀) 후보가 먼저 와야 한다');
+  assert.deepEqual(three[1], { region: '서울', name: '강남 은마' });
+  // 가드: 2자 미만 조각은 버린다.
+  assert.deepEqual(splitRegionName('a 은마'), [], 'region 1자는 버려야 한다');
+  assert.deepEqual(splitRegionName('대치 a'), [], 'name 1자는 버려야 한다');
+});
+
+test('AI 도우미 시세 — "대치 은마 시세"가 지역 분리 재시도로 은마 실거래를 준다 (Plan 057 핵심, 운영자 재현)', async () => {
+  const { admin, tracker } = _adminWithIlikeChainTracker({
+    molit_apt_index: [
+      { apt_name: '은마', lawd_cd: '11680', sigungu: '강남구', umd_nm: '대치동', build_year: 1979, deal_count: 233 },
+      // NAME-RANK-2026-08-12 사고 재현용 잡음 — 지역으로 좁히지 않으면 "은마" 부분일치로
+      // 이 반송동 단지도 걸린다(이 저장소가 실제로 겪은 사고).
+      { apt_name: '동탄시범다은마을센트럴파크뷰', lawd_cd: '41590', sigungu: '화성시', umd_nm: '반송동', build_year: 2015, deal_count: 500 },
+    ],
+    apt_master: [],
+    molit_transactions: [
+      { apt_name: '은마', sigungu: '강남구', umd_nm: '대치동', deal_amount: 250000, deal_date: _recentDealDate(10), exclu_use_ar: 84.4 },
+    ],
+  });
+  const { router, restore } = _requireRouterWithAdmin(admin);
+  try {
+    const { reply, suggestions } = await router.route('대치 은마 시세', null);
+    assert.match(reply, /은마/);
+    assert.match(reply, /거래 1건/);
+    assert.equal(/찾지 못했어요/.test(reply), false, 'Plan 057 이전엔 이 문구가 나왔다 — 재현이 안 되면 STOP 대상');
+    assert.equal(/동탄시범다은마을/.test(reply), false, '지역으로 좁히지 않고 전국 부분일치로 갔다면 반송동 잡음이 섞였을 것');
+    assert.equal(tracker.doubleIlikeChains, 3, '지역 분리 재시도는 1라운드(3조회)에서 성공해 멈춰야 한다 — 왕복 상한 위반(2라운드까지 돌았다)');
+    assert.equal(_NO_PROMO.test(reply), false);
+    assert.ok(Array.isArray(suggestions));
+  } finally { restore(); }
+});
+
+test('AI 도우미 시세 — 직접 히트가 있으면 지역 분리 재시도(이중 ilike 체인)가 전혀 일어나지 않는다 (Plan 057 Step 2, 성공 경로 왕복 불변)', async () => {
+  const { admin, tracker } = _adminWithIlikeChainTracker({
+    molit_apt_index: [
+      { apt_name: '은마', lawd_cd: '11680', sigungu: '강남구', umd_nm: '대치동', build_year: 1979, deal_count: 233 },
+    ],
+    molit_transactions: [
+      { apt_name: '은마', sigungu: '강남구', umd_nm: '대치동', deal_amount: 250000, deal_date: _recentDealDate(10), exclu_use_ar: 84.4 },
+    ],
+  });
+  const { router, restore } = _requireRouterWithAdmin(admin);
+  try {
+    const { reply } = await router.route('은마 시세', null);
+    assert.match(reply, /은마/);
+    assert.equal(/찾지 못했어요/.test(reply), false);
+    assert.equal(tracker.doubleIlikeChains, 0,
+      '직접 히트가 있는데 지역 분리 재시도 조회(이중 ilike 체인)가 실행됐다 — 성공 경로의 조회 수가 늘었다');
+  } finally { restore(); }
+});
+
+test('AI 도우미 시세 — 지역으로 좁혀도 후보가 2곳 이상이면 바로 답하지 않고 되묻는다 (Plan 057 Step 3, 운영자 요구)', async () => {
+  const { admin, tracker } = _adminWithIlikeChainTracker({
+    molit_apt_index: [
+      { apt_name: '스카이타워', lawd_cd: '11410', sigungu: '서대문구', umd_nm: '신촌동', build_year: 2010, deal_count: 10 },
+      { apt_name: '스카이빌', lawd_cd: '11410', sigungu: '서대문구', umd_nm: '신촌동', build_year: 2011, deal_count: 5 },
+    ],
+    apt_master: [],
+    molit_transactions: [],
+  });
+  const { router, restore } = _requireRouterWithAdmin(admin);
+  try {
+    const { reply, suggestions } = await router.route('신촌 스카이 시세', null);
+    assert.match(reply, /스카이타워/);
+    assert.match(reply, /스카이빌/);
+    assert.match(reply, /혹시 이 중에 있나요/, '051 이 이미 쓰는 되묻기 문구 형식이 아니다');
+    assert.equal(/찾지 못했어요/.test(reply), false);
+    assert.ok(suggestions.length >= 1 && suggestions.length <= 3);
+    assert.ok(suggestions.every(s => /시세$/.test(s)));
+    assert.equal(tracker.doubleIlikeChains, 3, '되묻기 전까지 1라운드만 돌아야 한다');
+    assert.equal(_NO_PROMO.test(reply), false);
+  } finally { restore(); }
+});
+
+test('AI 도우미 시세 — 지역 분리 재시도 응답 어디에도 매수 권유·가격 예측 표현이 없다 (절대 룰 ①, Plan 057)', async () => {
+  const cases = [
+    {
+      query: '대치 은마 시세',
+      tables: {
+        molit_apt_index: [{ apt_name: '은마', lawd_cd: '11680', sigungu: '강남구', umd_nm: '대치동', build_year: 1979, deal_count: 233 }],
+        apt_master: [],
+        molit_transactions: [{ apt_name: '은마', sigungu: '강남구', umd_nm: '대치동', deal_amount: 250000, deal_date: _recentDealDate(5), exclu_use_ar: 84.4 }],
+      },
+    },
+    {
+      query: '신촌 스카이 시세',
+      tables: {
+        molit_apt_index: [
+          { apt_name: '스카이타워', lawd_cd: '11410', sigungu: '서대문구', umd_nm: '신촌동', build_year: 2010, deal_count: 10 },
+          { apt_name: '스카이빌', lawd_cd: '11410', sigungu: '서대문구', umd_nm: '신촌동', build_year: 2011, deal_count: 5 },
+        ],
+        apt_master: [],
+        molit_transactions: [],
+      },
+    },
+  ];
+  for (const c of cases) {
+    const { admin } = _adminWithIlikeChainTracker(c.tables);
+    const { router, restore } = _requireRouterWithAdmin(admin);
+    try {
+      const { reply } = await router.route(c.query, null);
+      assert.equal(_NO_PROMO.test(reply), false, `"${c.query}" 응답에 매수·매도 권유/예측 표현이 있다: ${reply}`);
+    } finally { restore(); }
+  }
+});

@@ -18,7 +18,7 @@ const { getSupabaseAdmin } = require('../db/client');
 const logger = require('../logger');
 // APT-RESOLVE-2026-09-06: 단지명 정규화·형제 그룹핑은 backend/utils/aptNameMatch.js 로 이전
 //   (search.js 등 다른 경로도 재사용할 수 있도록 순수 함수만 모아둔 신규 모듈).
-const { normalizeName, stripAptSuffix, siblingKey, groupSiblings, dice } = require('../utils/aptNameMatch');
+const { normalizeName, stripAptSuffix, siblingKey, groupSiblings, dice, splitRegionName } = require('../utils/aptNameMatch');
 
 // ── 의도 분류 (순수 함수 — characterization 테스트 고정 대상) ─────────────────
 // 순서 중요: 구체적 의도(특약·금리·정책자금·규제·한도·인기·전세)를 먼저, 시세(광범위)는 뒤에.
@@ -173,39 +173,103 @@ async function _market(query, context) {
   // APT-RESOLVE-2026-09-06: 정규화 문자열끼리 비교하도록 고쳤다 — 그러지 않으면 공백 제거판으로
   //   잡힌 정확일치 행이 원문(_safeQ) 기준으로는 "부분 포함"으로 강등돼 순위가 뒤집힌다
   //   (이 저장소가 "은마" 사고로 배운 지점과 같은 함정).
-  const _tier = (name) => { const nn = normalizeName(name); return nn === _nq ? 3 : nn.startsWith(_nq) ? 2 : 1; };
-  // ⚠ 여러 결과가 서로 포함관계라 같은 MV 행이 여러 번 온다.
-  //   MV 행 고유키로 먼저 걸러내지 않으면 deal_count 가 2~3배로 부풀어 순위가 뒤집힌다.
-  const seenRow = new Set();
-  const cand = new Map();   // "이름|시군구" → { aptName, sigungu, lawdCd, umdNm, dealCount, tier }
-  for (const r of molitRows) {
-    if (!r || !r.apt_name) continue;
-    const rowKey = `${r.apt_name}|${r.lawd_cd}|${r.sigungu}|${r.umd_nm}|${r.build_year}`;
-    if (seenRow.has(rowKey)) continue;
-    seenRow.add(rowKey);
-    // (단지, 시군구) 그룹핑 — 동명 단지 분리 (문자열 지역 판정 아님: 표시 그룹핑 용도만).
-    //   종전과 같은 그룹 키를 유지한다 — 여기서 바꾸면 화면에 보이는 묶음이 달라진다(별개 결정).
-    const k = `${r.apt_name}|${r.sigungu || ''}`;
-    const cur = cand.get(k);
-    if (cur) cur.dealCount += (r.deal_count || 0);
-    else cand.set(k, { aptName: r.apt_name, sigungu: r.sigungu || '', lawdCd: r.lawd_cd, umdNm: r.umd_nm || '', dealCount: r.deal_count || 0, tier: _tier(r.apt_name) });
+  // APT-RESOLVE-2026-09-06 (Plan 057 REGION-SPLIT): _tier 를 순수 함수로 뽑았다 — 지역 분리
+  //   재시도 결과는 "은마"(name) 기준으로 다시 매겨야 하고, 원 질의(_nq="대치은마") 기준으로
+  //   매기면 startsWith 가 전부 실패해 전부 등급 1이 된다(계획서 Step 2 지시).
+  const _tierOf = (name, basis) => { const nn = normalizeName(name); return nn === basis ? 3 : nn.startsWith(basis) ? 2 : 1; };
+  // APT-RESOLVE-2026-09-06 (Plan 057): 051 이 인라인으로 짜뒀던 ranked 구성 로직을 함수로
+  //   뽑았다 — 지역 분리 재시도가 나온 rows 도 같은 로직으로 구성해야 중복 코드가 안 생긴다.
+  function _buildRanked(rows, basis) {
+    // ⚠ 여러 결과가 서로 포함관계라 같은 MV 행이 여러 번 온다.
+    //   MV 행 고유키로 먼저 걸러내지 않으면 deal_count 가 2~3배로 부풀어 순위가 뒤집힌다.
+    const seenRow = new Set();
+    const cand = new Map();   // "이름|시군구" → { aptName, sigungu, lawdCd, umdNm, dealCount, tier }
+    for (const r of rows) {
+      if (!r || !r.apt_name) continue;
+      const rowKey = `${r.apt_name}|${r.lawd_cd}|${r.sigungu}|${r.umd_nm}|${r.build_year}`;
+      if (seenRow.has(rowKey)) continue;
+      seenRow.add(rowKey);
+      // (단지, 시군구) 그룹핑 — 동명 단지 분리 (문자열 지역 판정 아님: 표시 그룹핑 용도만).
+      //   종전과 같은 그룹 키를 유지한다 — 여기서 바꾸면 화면에 보이는 묶음이 달라진다(별개 결정).
+      const k = `${r.apt_name}|${r.sigungu || ''}`;
+      const cur = cand.get(k);
+      if (cur) cur.dealCount += (r.deal_count || 0);
+      else cand.set(k, { aptName: r.apt_name, sigungu: r.sigungu || '', lawdCd: r.lawd_cd, umdNm: r.umd_nm || '', dealCount: r.deal_count || 0, tier: _tierOf(r.apt_name, basis) });
+    }
+    return [...cand.values()].sort((a, b) => b.tier !== a.tier ? b.tier - a.tier : b.dealCount - a.dealCount);
   }
-  const ranked = [...cand.values()].sort((a, b) => b.tier !== a.tier ? b.tier - a.tier : b.dealCount - a.dealCount);
 
-  // APT-RESOLVE-2026-09-06: apt_master 후보 — kapt_code 로 중복 제거, 질의와의 유사도(후보
-  //   정렬용, 자동 채택 아님)로 정렬해 상위 2개까지만 본다(동 조회 폭증 방지).
-  const amDedup = new Map();
-  for (const r of amRowsRaw) {
-    if (!r || !r.apt_name) continue;
-    const key = r.kapt_code || `${r.apt_name}|${r.lawd_cd}|${r.umd_nm}`;
-    if (!amDedup.has(key)) amDedup.set(key, r);
+  // APT-RESOLVE-2026-09-06 (Plan 057): apt_master 후보 구성도 함수로 뽑았다(위와 같은 이유).
+  //   dice 유사도는 후보 정렬용일 뿐 자동 채택에 쓰지 않는다(IDENTITY-GATE).
+  function _buildAmCandidates(rowsRaw, basis) {
+    const amDedup = new Map();
+    for (const r of rowsRaw) {
+      if (!r || !r.apt_name) continue;
+      const key = r.kapt_code || `${r.apt_name}|${r.lawd_cd}|${r.umd_nm}`;
+      if (!amDedup.has(key)) amDedup.set(key, r);
+    }
+    return [...amDedup.values()]
+      .sort((a, b) => dice(normalizeName(b.apt_name), basis) - dice(normalizeName(a.apt_name), basis))
+      .slice(0, 2);
   }
-  const amCandidates = [...amDedup.values()]
-    .sort((a, b) => dice(normalizeName(b.apt_name), _nq) - dice(normalizeName(a.apt_name), _nq))
-    .slice(0, 2);
+
+  let ranked = _buildRanked(molitRows, _nq);
+  let amCandidates = _buildAmCandidates(amRowsRaw, _nq);
+
+  // REGION-SPLIT-2026-09-06 (Plan 057): 직접 히트(molit_apt_index·apt_master 원 질의 조회)가
+  //   **둘 다 0건일 때만** 지역 분리 재시도를 한다 — 성공 경로의 조회 수는 그대로다(완료기준).
+  //   왕복 상한: splitRegionName 후보를 순차로 최대 2개까지만 시도하고, 하나라도 결과가
+  //   있으면 즉시 멈춘다 — 최선의 경우 1라운드(3조회), 최악이어도 2라운드(6조회)다
+  //   (후보 3개를 전부 도는 9조회가 아니다 — 계획서 Step 2 "왕복 상한을 코드 주석에 명시").
+  //   region·name 은 %·_ 만 제거한다 — normalizeName 은 공백까지 지워 지역·이름 경계가
+  //   사라지므로 여기엔 쓸 수 없다.
+  async function _regionSplitRetry() {
+    const stripWild = (s) => String(s || '').replace(/[%_]/g, '');
+    const splitCandidates = splitRegionName(q).slice(0, 2);
+    for (const c of splitCandidates) {
+      const region = stripWild(c.region), name = stripWild(c.name);
+      if (region.length < 2 || name.length < 2) continue;
+      const [byUmd, bySigungu, amByRegion] = await Promise.all([
+        _mv().ilike('umd_nm', `${region}%`).ilike('apt_name', `%${name}%`).order('deal_count', { ascending: false }).limit(100),
+        _mv().ilike('sigungu', `${region}%`).ilike('apt_name', `%${name}%`).order('deal_count', { ascending: false }).limit(100),
+        _am().ilike('umd_nm', `${region}%`).ilike('apt_name', `%${name}%`).limit(50),
+      ]);
+      const rMolitRows = [];
+      if (byUmd && !byUmd.error && byUmd.data) rMolitRows.push(...byUmd.data);
+      if (bySigungu && !bySigungu.error && bySigungu.data) rMolitRows.push(...bySigungu.data);
+      const rAmRows = (amByRegion && !amByRegion.error && amByRegion.data) ? amByRegion.data : [];
+      if (rMolitRows.length || rAmRows.length) return { molitRows: rMolitRows, amRows: rAmRows, name };
+    }
+    return null;
+  }
+
+  if (!ranked.length && !amCandidates.length) {
+    const retry = await _regionSplitRetry();
+    if (retry) {
+      const rRanked = _buildRanked(retry.molitRows, retry.name);
+      const rAm = _buildAmCandidates(retry.amRows, retry.name);
+      // Step 3(운영자 요구 "여러개가 뜨면 선택하라고 하던지"): 지역으로 좁혔는데도 후보가
+      //   2곳 이상이면 051 이 이미 쓰는 되묻기 형식(아래 amCandidates>=2 분기와 동일 문구
+      //   틀)을 그대로 재사용한다 — 새 문구 체계를 만들지 않는다.
+      if (rRanked.length + rAm.length >= 2) {
+        const opts = [
+          ...rRanked.map(c => `${c.aptName}${c.sigungu ? `(${c.sigungu})` : ''}`),
+          ...rAm.map(a => `${a.apt_name}${a.sigungu ? `(${a.sigungu})` : ''}`),
+        ].slice(0, 3);
+        const sugNames = [...rRanked.map(c => c.aptName), ...rAm.map(a => a.apt_name)].slice(0, 3);
+        return {
+          text: `"${q}" 로 여러 단지가 걸려요: ${opts.join(' · ')}\n혹시 이 중에 있나요? 아래에서 눌러 고르시거나 지역명을 함께 적어주세요.`,
+          suggestions: sugNames.map(n => `${n} 시세`),
+        };
+      }
+      ranked = rRanked;
+      amCandidates = rAm;
+    }
+  }
 
   // APT-RESOLVE-2026-09-06 (Plan 051 STOP 조건 준수): "찾지 못했어요"는 molit_apt_index 와
   //   apt_master 양쪽 다 0건일 때만 — apt_master 히트가 있는데 이 문구를 반환하는 경로는 없다.
+  //   (Plan 057: 위 지역 분리 재시도까지 실패한 뒤에도 이 분기다 — 문구 변경 없음.)
   if (!ranked.length && !amCandidates.length) {
     return `"${q}" 이름이 들어간 단지를 국토부 실거래 데이터에서 찾지 못했어요.\n` +
       `· 단지명을 조금 다르게(공백·차수 없이) 적어보시거나\n· 상단 검색창 자동완성으로 정확한 이름을 확인해 보세요.` +

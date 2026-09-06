@@ -85,4 +85,28 @@ function dice(a, b) {
   return total ? (2 * intersection) / total : 0;
 }
 
-module.exports = { normalizeName, stripAptSuffix, siblingKey, groupSiblings, dice };
+// REGION-SPLIT-2026-09-06 (Plan 057): "지역 + 단지명" 한 문장을 공백 기준 분할점마다
+//   { region, name } 후보로 낸다. [왜] normalizeName 은 공백을 전부 지워 "대치 은마"를
+//   "대치은마"로 붙이기만 한다 — MOLIT·apt_master 는 "은마"로만 저장하므로 붙인 문자열은
+//   원리적으로 0건이다(계획서 057 DB 실측). 지역 토큰을 분리해야 "은마"만 남길 수 있다.
+//   이 함수는 어디서 자를지 후보만 순수하게 만든다 — 실제 DB 조회는 호출부(chatDataRouter)
+//   책임이다(이 모듈은 DB 를 모르는 순수 모듈이라는 파일 상단 원칙 유지).
+//   ⚠ name·region 둘 다 2자 미만인 분할은 버린다 — 이 파일의 기존 가드(siblingKey 의
+//   stem 2자 이상 요구 등)와 같은 취지로, 너무 짧은 조각은 전체매칭 위험을 키운다.
+//   반환 순서는 name 이 짧은(= region 을 더 많이 떼어낸) 후보 우선 — 좁을수록 정확하다.
+//   왕복 상한과 짝을 맞추기 위해 최대 3개까지만 반환한다.
+function splitRegionName(q) {
+  const tokens = String(q == null ? '' : q).trim().split(/\s+/).filter(Boolean);
+  if (tokens.length < 2) return []; // 토큰 1개 이하면 지역/이름을 나눌 대상이 없다.
+  const out = [];
+  for (let i = 1; i < tokens.length; i++) {
+    const region = tokens.slice(0, i).join(' ');
+    const name = tokens.slice(i).join(' ');
+    if (region.length < 2 || name.length < 2) continue;
+    out.push({ region, name });
+  }
+  out.sort((a, b) => a.name.length - b.name.length);
+  return out.slice(0, 3);
+}
+
+module.exports = { normalizeName, stripAptSuffix, siblingKey, groupSiblings, dice, splitRegionName };
