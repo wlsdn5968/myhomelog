@@ -9253,3 +9253,93 @@ test('AI 도우미 시세 — 지역 분리 재시도에서 진짜로 다른 두
     assert.equal(_NO_PROMO.test(reply), false);
   } finally { restore(); }
 });
+
+// ── Plan 061 (2026-09-06): sendOnce 세션 1회 가드 — 스토리지 차단 시 인메모리 폴백 ──────────
+//   [배경] frontend/index.html 의 window._attr.sendOnce 는 sessionStorage.getItem/setItem 이
+//     throw 하면(사파리 프라이빗 모드·사이트 데이터 전면 차단 등) 실패를 기억할 인메모리 플래그가
+//     없어 catch 뒤의 this.send(event) 가 조건 없이 실행됐다 — 옛 주석은 "가드 없이 1회 보낸다"고
+//     적었지만 실제로는 호출할 때마다(예: 5회 호출 시 5회) 보냈다(적대 감사 실측).
+//     SENDONCE-MEMFALLBACK-2026-09-06 로 인메모리 폴백을 추가해 스토리지가 실패해도 그 페이지가
+//     살아있는 동안은 1회를 보장한다. 아래는 이 저장소의 확립된 패턴대로 sendOnce 블록을 문자열로
+//     그대로 꺼내 new Function 으로 실행한다(정규식 매칭이 아니라 진짜 실행 결과를 본다).
+//   [앵커] 문자열 탐색만 쓰고 매치 수를 단언한다(정규식 `\n` 앵커가 CRLF 파일에서 0매치가 되는
+//     레포 기존 함정 회피).
+function _plan061SendOnceFn(sessionStorageStub, sentOnceMem) {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+
+  const startMarker = 'sendOnce: function(event){';
+  const startCount = fe.split(startMarker).length - 1;
+  assert.equal(startCount, 1, `sendOnce 정의가 정확히 1곳이어야 하는데 ${startCount}곳이다`);
+  const startIdx = fe.indexOf(startMarker);
+  const endMarker = '\n    };';
+  const endIdx = fe.indexOf(endMarker, startIdx);
+  assert.ok(endIdx > startIdx, 'sendOnce 종료 지점(반환 객체 리터럴 닫힘)을 찾지 못했다');
+
+  const block = fe.slice(startIdx, endIdx);
+  const fnSrc = block.replace(/^sendOnce:\s*/, '').replace(/,\s*$/, '');
+  return new Function('sessionStorage', '_sentOnceMem', `return (${fnSrc});`)(sessionStorageStub, sentOnceMem);
+}
+
+function _plan061NormalStorage() {
+  const store = {};
+  return { getItem: (k) => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = v; } };
+}
+function _plan061SetItemThrows() {
+  const store = {};
+  return { getItem: (k) => (k in store ? store[k] : null), setItem: () => { throw new Error('QuotaExceededError'); } };
+}
+function _plan061GetItemThrows() {
+  return { getItem: () => { throw new Error('SecurityError'); }, setItem: () => { throw new Error('SecurityError'); } };
+}
+
+test('Plan 061 ①: sendOnce — 정상 sessionStorage 면 5회 호출해도 send 는 1회(정상 경로 회귀 없음)', () => {
+  const sends = [];
+  const obj = { send: (e) => sends.push(e) };
+  const fn = _plan061SendOnceFn(_plan061NormalStorage(), Object.create(null));
+  for (let i = 0; i < 5; i++) fn.call(obj, 'search');
+  assert.equal(sends.length, 1, `정상 스토리지인데 send 가 ${sends.length}회 호출됐다`);
+});
+
+test('Plan 061 ②: sendOnce — setItem 만 throw 해도(사파리 프라이빗 계열) 인메모리 폴백으로 send 는 1회', () => {
+  const sends = [];
+  const obj = { send: (e) => sends.push(e) };
+  const fn = _plan061SendOnceFn(_plan061SetItemThrows(), Object.create(null));
+  for (let i = 0; i < 5; i++) fn.call(obj, 'search');
+  assert.equal(sends.length, 1, `setItem 만 throw 하는데 send 가 ${sends.length}회 호출됐다(수정 전 결함=5회)`);
+});
+
+test('Plan 061 ③: sendOnce — getItem 부터 throw 해도(사이트 데이터 전면 차단) 인메모리 폴백으로 send 는 1회', () => {
+  const sends = [];
+  const obj = { send: (e) => sends.push(e) };
+  const fn = _plan061SendOnceFn(_plan061GetItemThrows(), Object.create(null));
+  for (let i = 0; i < 5; i++) fn.call(obj, 'search');
+  assert.equal(sends.length, 1, `getItem 부터 throw 하는데 send 가 ${sends.length}회 호출됐다(수정 전 결함=5회)`);
+});
+
+test('Plan 061 ④: sendOnce — 스토리지 차단 상태에서도 서로 다른 이벤트는 각각 독립으로 1회씩 보낸다', () => {
+  const sends = [];
+  const obj = { send: (e) => sends.push(e) };
+  const mem = Object.create(null);
+  const fn = _plan061SendOnceFn(_plan061GetItemThrows(), mem);
+  fn.call(obj, 'search'); fn.call(obj, 'search');
+  fn.call(obj, 'report'); fn.call(obj, 'report');
+  fn.call(obj, 'search');
+  assert.deepEqual(sends, ['search', 'report'], `이벤트별 독립 가드가 깨졌다: ${JSON.stringify(sends)}`);
+});
+
+test('Plan 061 ⑤: sendOnce 주변에 "가드 없이 1회 보낸다" 라는 사실과 다른 옛 주석이 더 이상 없다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  // ⚠ 줄 주석을 지우면 검사 대상(주석 문구 자체)까지 사라져 이 테스트가 무력화된다 — 그래서
+  // 여기서는 줄 주석 제거 없이, 옛 catch 블록의 정확한 원문(따옴표·괄호·em dash 포함)을
+  // 문자열 그대로 탐색한다. 이 정확한 문구는 이 계획의 정정 설명(재인용 시에도 표현을 바꿔 씀)
+  // 어디에도 다시 등장하지 않는다 — 마커 자기충돌(6회 재발 이력) 없이 옛 문구의 생존만 잡아낸다.
+  const OLD_FALSE_CATCH = "catch(_){ /* sessionStorage 불가(프라이빗 모드 등) — 가드 없이 1회 보낸다 */ }";
+  assert.equal(fe.includes(OLD_FALSE_CATCH), false,
+    '옛 catch 블록의 사실과 다른 인라인 주석("가드 없이 1회 보낸다")이 그대로 남아 있다');
+  assert.match(fe, /SENDONCE-MEMFALLBACK-2026-09-06/,
+    '인메모리 폴백을 설명하는 정정 마커 주석이 없다');
+});

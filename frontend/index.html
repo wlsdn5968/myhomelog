@@ -3641,6 +3641,9 @@ window.addEventListener('DOMContentLoaded',()=>{
       };
       try { sessionStorage.setItem(KEY, JSON.stringify(a)); } catch(_){}
     }
+    // SENDONCE-MEMFALLBACK-2026-09-06: sendOnce 가 sessionStorage 실패 시 쓰는 인메모리
+    // 1회 플래그. 이 페이지가 살아있는 동안만 유지된다(새로고침하면 사라짐 — 의도된 동작).
+    var _sentOnceMem = Object.create(null);
     return {
       data: a,
       // 실패는 조용히 — 계측이 사용자 경험을 막으면 안 된다.
@@ -3657,13 +3660,28 @@ window.addEventListener('DOMContentLoaded',()=>{
       // [왜] search 는 first_load 보다 훨씬 자주 일어난다. 상한 없이 보내면 admin 집계의 1000행 캡을
       //   검색 이벤트가 혼자 먹어 first_load·signup·report 가 밀려난다 — 퍼널을 보려고 만든 계측이
       //   퍼널을 못 보게 만든다. 세션당 1회면 "이 방문에서 검색까지 갔는가" 라는 퍼널 질문에 충분하다.
+      // SENDONCE-MEMFALLBACK-2026-09-06:
+      // [정정] 바로 아래 옛 주석은 "sessionStorage 불가 시 가드 없이 1회 보낸다" 라고 적었지만
+      //   사실이 아니었다 — getItem/setItem 이 던지면 곧장 catch 로 빠지고 그 뒤 this.send(event) 가
+      //   조건 없이 실행돼, 호출할 때마다(예: 5회 호출이면 5회) 보냈다. 실측(스텁 sessionStorage
+      //   5회 호출): 정상 1회 / setItem 만 throw 5회 / getItem 부터 throw 5회.
+      // [무엇이 언제 1회를 보장하는가] sessionStorage 가 정상이면 그 자체가 1회를 보장한다
+      //   (세션 저장소 — 탭을 닫으면 리셋돼 다음 방문에 다시 1회 보낸다, 기존 의도 그대로 유지).
+      //   getItem 또는 setItem 이 throw 하면(프라이빗 모드·사이트 데이터 전면 차단 등) 이 클로저의
+      //   인메모리 플래그 _sentOnceMem 로 폴백해 "이 페이지가 살아있는 동안은 1회"를 보장한다.
+      //   ⚠ 새로고침하면 인메모리는 사라져 다시 1회 보낸다 — "방문 1회"라는 의도와 어긋나지 않는다
+      //   (새로고침도 새 방문으로 본다).
       sendOnce: function(event){
+        var already = false;
         try {
           var k = 'mhl_attr_1_' + event;
-          if (sessionStorage.getItem(k)) return;
-          sessionStorage.setItem(k, '1');
-        } catch(_){ /* sessionStorage 불가(프라이빗 모드 등) — 가드 없이 1회 보낸다 */ }
-        this.send(event);
+          if (sessionStorage.getItem(k)) { already = true; }
+          else { sessionStorage.setItem(k, '1'); }
+        } catch(_){
+          if (_sentOnceMem[event]) { already = true; }
+          else { _sentOnceMem[event] = true; }
+        }
+        if (!already) this.send(event);
       },
     };
   })();
