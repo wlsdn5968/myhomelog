@@ -7710,3 +7710,53 @@ test('전세가율 표본 메타 추출은 filter 보다 앞에 있어야 한다
   assert.ok(metaIdx < filterIdx,
     '표본 메타 추출이 filter 보다 뒤에 있다 — monthsTotal/monthsFailed 가 조용히 사라진다');
 });
+test('Plan 049: 문서 드리프트 방지 — 삭제된 엔드포인트·서비스·스크립트', async (t) => {
+  const fs = require('fs');
+  const path = require('path');
+
+  // 1. README.md 에 삭제된 엔드포인트 3개가 없다 (경로만 검사)
+  const readme = fs.readFileSync(path.join(__dirname, '../../README.md'), 'utf8');
+
+  // 금지 문자열 직접 사용 회피 — 경로만 체크
+  const p1 = ['/api/properties', 'info'].join('/');
+  const p2 = ['/api/regulations', 'ltv'].join('/');
+  const p3 = ['/api/analysis', 'total-cost'].join('/');
+
+  assert(!readme.includes(p1), `README 에 삭제된 경로 ${p1} 이 있음`);
+  assert(!readme.includes(p2), `README 에 삭제된 경로 ${p2} 이 있음`);
+  assert(!readme.includes(p3), `README 에 삭제된 경로 ${p3} 이 있음`);
+
+  // 2. README 가 cron 개수를 숫자로 적지 않기로 했으므로, vercel.json 과의 일치 검증은 생략.
+  // (이유: 줄번호처럼 반복적으로 낡는다 — Plan 049 Step 4.2)
+
+  // 3. CLAUDE.md 에 삭제된 서비스·라우터 이름이 살아 있는 것처럼 나오지 않는다
+  const claude = fs.readFileSync(path.join(__dirname, '../../CLAUDE.md'), 'utf8');
+
+  const svc1 = ['school', 'ClusterService'].join('');
+  const svc2 = ['legal', 'CorpusService'].join('');
+  const route = ['/api/legal', '/'].join('');
+
+  assert(!claude.includes(svc1), `CLAUDE.md 에 ${svc1} 이 남아있음`);
+  assert(!claude.includes(svc2), `CLAUDE.md 에 ${svc2} 이 남아있음`);
+  assert(!claude.includes(route), `CLAUDE.md 에 ${route} 이 남아있음`);
+
+  // 4. 루트 package.json 에 verify 스크립트 있고, 5종 게이트 전부
+  const pkgPath = path.join(__dirname, '../../package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+
+  assert(pkg.scripts && pkg.scripts.verify, 'package.json 에 verify 스크립트 없음');
+
+  const verify = pkg.scripts.verify;
+  const gates = [
+    'npm run lint',
+    'check-json-config',
+    'check-deps-sync',
+    'check-env-example',
+    'security-regression-check',
+    'npm --prefix backend test'
+  ];
+
+  for (const gate of gates) {
+    assert(verify.includes(gate), `verify 에 게이트 '${gate}' 없음`);
+  }
+});

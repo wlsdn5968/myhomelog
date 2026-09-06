@@ -75,13 +75,16 @@
 - 최근 12 commit history 는 SPRINT_NOTES table 에 기록
 
 ### 검증 체크리스트
-- **backend test: `cd backend && npm test`** (돈 계산·규제 판정·지역 표시명 회귀 안전망 — 2026-08-29 실측 112 pass)
-- backend syntax: `node -c <file>`
-- frontend syntax: inline `<script>` 블록 `new Function()` validate
-- vercel.json: `JSON.parse()`
-- deploy verify: `/api/health` deploy id 매치
-- Sentry: `is:unresolved firstSeen:-30m`
-- Chrome MCP (UI): 핵심 flow screenshot
+
+**로컬**: `npm run verify` (린트·JSON·의존성·환경·보안·backend test 6종 게이트)
+
+⚠ **verify 가 덮지 않는 것**:
+- `Clause XSS raw-pattern guard` (CI 전용 인라인 스크립트)
+- `gitleaks` (비밀 스캔 CI 전용)
+
+**배포 후**:
+- `/api/health` deploy id 일치 확인
+- Sentry `is:unresolved firstSeen:-30m` 신규 오류 확인
 
 ---
 
@@ -94,9 +97,7 @@
 | 좌표 | Kakao Map API | apt_geocache (Sprint LL 점수 매칭) |
 | 학교 | Kakao + NEIS 학교알리미 | nearbySchools |
 | 학원 | Kakao Map API | nearbyAcademies (Sprint OO) |
-| 학군 권역 | 강연 자료 + KB 보고서 | schoolClusters static (Sprint OO) |
 | 정책/규제 | korea.kr 정책브리핑 + 금융위 RSS | regulations_snapshot (Sprint QQ) |
-| **법령 원문** | **law.go.kr → 9bow/legalize-kr (MIT)** | **/api/legal/** (Sprint RR) |
 
 ---
 
@@ -135,7 +136,7 @@
 - Sprint 기록: `.local-notes/SPRINT_NOTES_20260512.md` (gitignored, sandbox local)
 - NCP setup: `.local-notes/NAVER_MAPS_SETUP_GUIDE.md`
 - vercel cron: `vercel.json`
-- backend services: `backend/services/` (geocodeCacheService / schoolService / academyService / schoolClusterService / legalCorpusService 등)
+- backend services: `backend/services/` (geocodeCacheService / schoolService / academyService 등)
 - backend jobs (cron): `backend/jobs/` (molitIngest / regulationsAutoFetch / aptMasterSync 등)
 - frontend: `frontend/index.html` (단일 파일 SPA)
 
@@ -151,4 +152,4 @@
 
 ---
 
-마지막 갱신: 2026-08-28 (검증 체크리스트에 backend test 추가 — Plan 031)
+마지막 갱신: 2026-09-06 (검증 체크리스트 재작성 + 삭제된 서비스 제거 — Plan 049)

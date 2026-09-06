@@ -25,7 +25,8 @@
   },
   "scripts": {
     "lint": "node scripts/extract-inline-js.js && eslint backend scripts api .lint-tmp",
-    "lint:be": "eslint backend scripts api"
+    "lint:be": "eslint backend scripts api",
+    "verify": "npm run lint && node scripts/check-json-config.js && node scripts/check-deps-sync.js && node scripts/check-env-example.js && node scripts/security-regression-check.js && npm --prefix backend test"
   },
   "devDependencies": {
     "eslint": "^10.9.1"

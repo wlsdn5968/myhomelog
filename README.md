@@ -44,15 +44,13 @@ cd backend
 cp .env.example .env
 ```
 
-`.env` 파일 편집:
-```
-ANTHROPIC_API_KEY=sk-ant-...      # Anthropic 콘솔에서 발급
-MOLIT_API_KEY=...                  # data.go.kr 국토부 실거래가 API (무료)
-KAKAO_REST_API_KEY=...             # developers.kakao.com REST API 키
-PORT=3001
-NODE_ENV=development
-ALLOWED_ORIGINS=http://localhost:3000,http://localhost:5173
-```
+`backend/.env.example` 이 유일한 환경변수 선언 목록입니다:
+
+- **필수** — PORT, NODE_ENV, ANTHROPIC_API_KEY, MOLIT_API_KEY, KAKAO_REST_API_KEY, SUPABASE_*, DATABASE_URL, JWT_SECRET, ALLOWED_ORIGINS
+- **결제** — TOSS_SECRET_KEY, TOSS_CLIENT_KEY, TOSS_WEBHOOK_SECRET, PAYMENTS_LIVE_ENABLED
+- **관측** — SENTRY_DSN, UPSTASH_REDIS_*, ECOS_API_KEY, KOSIS_API_KEY, LAW_GO_KR_OC
+- **알림** — VAPID_*, KAKAO_*
+- **선택** — NAVER_MAPS_CLIENT_ID, NEIS_API_KEY, NAVER_CLIENT_ID/SECRET, HEALTH_API_KEY, ADMIN_EMAILS, SUPPORT_EMAIL, 캐시/레이트리밋
 
 ### 2. API 키 발급
 
@@ -126,7 +124,7 @@ Vercel Dashboard → Settings → Environment Variables 등록 키:
 - 운영 — `CRON_SECRET` (cron 인증), `ADMIN_EMAILS` (admin endpoint 화이트리스트), `HEALTH_API_KEY`, `ALLOWED_ORIGINS`
 - 로컬 개발에서 `frontend/index.html` 의 `API` 상수는 `/api` 상대 경로 사용 — 별도 백엔드 URL 교체 불필요.
 
-cron 10개(라우트 기준)는 `vercel.json` 의 `crons` 배열로 자동 등록됩니다 — retention · molit-ingest(3슬롯 분할) · apt-master-sync(월요일) · regulations-check · regulations-auto-fetch · audit-prune · geocache-backfill · facility-backfill · building-register-backfill · push-notify(관심단지 웹푸시·카톡 발송). (Hobby plan: daily 만 — hourly 미지원)
+cron 은 `vercel.json` 의 `crons` 배열로 자동 등록됩니다 — retention · molit-ingest(3슬롯 분할) · apt-master-sync(월요일) · regulations-check · regulations-auto-fetch · audit-prune · geocache-backfill · facility-backfill · building-register-backfill · push-notify(관심단지 웹푸시·카톡 발송) · warm-interest · warm-rent. 목록은 `vercel.json` 을 참고하세요. (Hobby plan: daily 만 — hourly 미지원)
 
 ## Railway 배포 (현재 미사용 — 옵션 메모)
 
@@ -145,7 +143,7 @@ railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 
 ## API 엔드포인트
 
-> 모든 mount 의 출처는 `backend/server.js` (line 177~216).
+> 모든 마운트는 `backend/server.js` 에 정의됩니다.
 > `JWT` = `requireAuth` (Supabase access_token 필수) · `optional` = 비로그인 허용 (로그인 시 daily limit bonus)
 
 ### 헬스
@@ -166,7 +164,6 @@ railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 ### 부동산 데이터
 | Method | Path | Auth | 설명 |
 |--------|------|------|------|
-| GET | /api/properties/info | optional | 단지 메타 |
 | POST | /api/properties/recommend | optional | 조건 부합 단지 찾기 (추천 아님 — 입력 조건 필터링) |
 | GET | /api/properties/nearby | optional | 주변 단지 |
 | POST | /api/properties/transit | optional | 교통 분석 |
@@ -174,10 +171,8 @@ railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 | GET | /api/transactions/analyze | — | 실거래 통계 |
 | GET | /api/transactions/codes | — | 시군구 코드 |
 | GET | /api/regulations | — | 현행 규제 (LTV·DSR snapshot) |
-| GET | /api/regulations/ltv | — | LTV 표 |
 | POST | /api/geocode, /api/geocode/batch | — | 카카오 지오코딩 |
 | GET | /api/analysis | — | 분석 결과 |
-| POST | /api/analysis/total-cost | — | 취득세·금리 등 총비용 |
 | GET | /api/news, /api/news/summary | optional | 부동산 뉴스 |
 | GET | /api/search/{apt,popular,in-bounds,facility} | — | 단지 검색 |
 | POST·GET·DELETE | /api/search/history | JWT | 본인 검색 이력 |
@@ -207,8 +202,22 @@ railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 | Method | Path | Auth | 설명 |
 |--------|------|------|------|
 | GET·POST | /api/admin/run-geocache-backfill | JWT + ADMIN_EMAILS | 백필 즉시 trigger |
-| GET·POST | /api/cron/{retention, molit-ingest, apt-master-sync, regulations-check, regulations-auto-fetch, audit-prune, geocache-backfill, facility-backfill, building-register-backfill, push-notify} | CRON_SECRET | `vercel.json` `crons` 자동 등록 10개 라우트 (molit-ingest 는 3슬롯 분할, Hobby plan: daily 만) |
+| GET·POST | /api/cron/{...} | CRON_SECRET | `vercel.json` `crons` 자동 등록 (molit-ingest 는 3슬롯 분할, Hobby plan: daily 만) — 목록은 `vercel.json` 참조 |
 | GET | /share?... | — | 공유 딥링크 (OG 메타 치환 HTML) |
+
+---
+
+## 공개 페이지 (SSR · 정적 제공)
+
+| 경로 | 설명 |
+|------|------|
+| `/apt/:seq` | 단지 상세 정보 페이지 (OG 메타 포함) |
+| `/region/:lawdCd` | 지역 시장 분석 페이지 |
+| `/region` | 지역 선택 허브 |
+| `/briefing` | 지역 시장 브리핑 |
+| `/sitemap.xml` | Google / Naver 사이트맵 |
+| `/api/og/*` | 동적 OG 이미지 생성 (Open Graph) |
+| `/share` | 공유 링크 정적 HTML (메타 치환) |
 
 ---
 
