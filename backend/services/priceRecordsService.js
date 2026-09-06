@@ -32,6 +32,7 @@ const CK_LAST = 'records:price:last';
 const CK_REGION_LAST = 'records:priceByRegion:last';
 const TTL_LAST = 14 * 86400;
 const CK_FAIL = 'records:price:computeFailedAt';
+const CK_REGION_FAIL = 'records:priceByRegion:computeFailedAt';
 const FAIL_BACKOFF_S = 600;
 async function _lastGood(key) {
   try { const v = await rget(key); return v || null; } catch (_) { return null; }
@@ -198,6 +199,15 @@ async function getPriceRecordsByRegion({ force = false } = {}) {
       const shared = await rget(CK_REGION);
       if (shared) { cache.set(CK_REGION, shared, TTL_LOCAL); return shared; }
     } catch (_) { /* Redis 미구성·장애는 계산으로 폴백 */ }
+    // SELF-HEAL-2026-09-06:
+    // [왜] 쌍둥이 getPriceRecords 에는 있는 실패 백오프가 여기에만 없었다. 워밍 cron 이 하루 한 번
+    //   실패하면(Hobby cron 은 재시도가 없다) 그날 내내 엣지 캐시 미스마다 30일 창 RPC 를 다시 부른다.
+    //   PostgREST authenticator 의 statement_timeout 이 8초라, free 티어에서 그 반복은 다른 요청까지 끌고 간다.
+    // [소비 경로] routes/transactions.js · routes/regionPage.js · routes/ogImage.js(→ loadRegionData) 셋.
+    if (cache.get(CK_REGION_FAIL) !== undefined) {
+      const last = await _lastGood(CK_REGION_LAST);
+      if (last) return _withStale(last);
+    }
   }
   const admin = getSupabaseAdmin();
   if (!admin) return force ? null : _withStaleOrNull(await _lastGood(CK_REGION_LAST));
@@ -210,6 +220,7 @@ async function getPriceRecordsByRegion({ force = false } = {}) {
     data = res.data || null;
   } catch (e) {
     logger.warn({ err: e.message }, 'price records(지역) 조회 실패');
+    cache.set(CK_REGION_FAIL, Date.now(), FAIL_BACKOFF_S);
     const last = await _lastGood(CK_REGION_LAST);
     if (last) return _withStale(last);
     return null;

@@ -276,15 +276,27 @@ async function getCachedInterest(items) {
 /**
  * 캐시에 없는 단지를 배치로 채운다 — **백그라운드 전용**(await 하지 말 것).
  * 한 번에 도는 총량을 제한해 데이터랩 일일 한도를 지킨다.
+ *
+ * SELF-HEAL-2026-09-06: 형제 cron(rentWarm.js)처럼 시간 예산(budgetMs)을 받아 루프 진입마다 확인한다
+ *   (interestWarm.run 은 시간 예산이 없었다). 세 번째 인자를 옵션 객체로 둬 기본값을 주면
+ *   기존 2-인자 호출부(interestWarm.js·routes/admin.js)가 그대로 동작한다.
+ *   ⚠ ratio 가 null 일 때의 `continue`(모름은 저장하지 않는다)는 그대로 둔다 — 그 기아 문제는
+ *   호출부(interestWarm.js)의 큐 회전이 해결한다.
  */
-async function warmInterest(items, maxCalls = 4) {
+async function warmInterest(items, maxCalls = 4, { budgetMs = 240000 } = {}) {
+  // ⚠ maxCalls 기본값 = 4
+  //   · 호출부가 모두 명시하므로 현재 영향 0
+  //   · 하지만 undefined 가 되면 루프 조건 `calls < maxCalls` 가 false 가 되어 조용히 0회가 된다
+  //   · 이 저장소의 "조용한 실패" 패턴을 방지하기 위해 명시적 기본값을 유지한다
   if (!hasKeys()) return { skipped: 'no-key' };
   const usable = (items || []).filter(it => it && it.aptName && it.lat != null && it.lng != null);
   const keys = usable.map(it => cacheKeyFor(it.aptName, it.sigungu, it.umd));
   const have = await readCacheBulk(keys);   // ⚠ 단건 조회를 돌리면 단지 수만큼 DB 왕복이 생긴다
   const todo = usable.filter((it, i) => have.get(keys[i]) === undefined);
-  let calls = 0, filled = 0, lastError = null;
+  let calls = 0, filled = 0, lastError = null, stopped = null;
+  const t0 = Date.now();
   for (let i = 0; i < todo.length && calls < maxCalls; i += MAX_TARGETS_PER_CALL) {
+    if (Date.now() - t0 >= budgetMs) { stopped = 'budget'; break; }
     const chunk = todo.slice(i, i + MAX_TARGETS_PER_CALL);
     const res = await fetchBatch(chunk.map(c => c.aptName));
     calls++;
@@ -296,8 +308,8 @@ async function warmInterest(items, maxCalls = 4) {
       filled++;
     }
   }
-  if (calls) logger.info({ calls, filled, pending: Math.max(0, todo.length - filled) }, '관심도 워밍');
-  return { calls, filled, pending: Math.max(0, todo.length - filled), lastError };
+  if (calls) logger.info({ calls, filled, pending: Math.max(0, todo.length - filled), stopped }, '관심도 워밍');
+  return { calls, filled, pending: Math.max(0, todo.length - filled), lastError, stopped };
 }
 
 /**

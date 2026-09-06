@@ -6386,7 +6386,10 @@ test('관심도 워밍 cron — 거래 많은 단지부터 좌표 있는 것만 
   try {
     delete require.cache[jobPath];
     const { run } = require('../jobs/interestWarm');
-    const out = await run({ calls: 33, top: 1200 });
+    // SELF-HEAL-2026-09-06: dayIdx:0 을 고정한다 — 회전(rotated) 도입 이후 dayIdx 를 생략하면
+    //   오늘 날짜에 따라 오프셋이 달라져 아래 "거래 많은 순서" 단언이 요일마다 깨진다(실측: 실패).
+    //   off=0 이면 rotated === items(항등) 이므로 이 테스트의 기존 기대값은 그대로 유효하다.
+    const out = await run({ calls: 33, top: 1200, dayIdx: 0 });
     assert.ok(got, 'warmInterest 가 호출되지 않았다');
     assert.equal(got.calls, 33, '호출 상한이 전달되지 않았다');
     assert.equal(got.items.length, 800, `좌표 없는 단지가 걸러지지 않았다(${got.items.length})`);
@@ -7392,4 +7395,220 @@ test('ATTR-ACTIVATION-2026-09-06: 화이트리스트 이벤트가 전부 프론�
   assert.strictEqual(pred({ recommendations: [{ _notice: true }, { aptName: '반포자이' }] }), true, '혼합 응답은 실제 추천 때문에 전송돼야 함');
   assert.strictEqual(pred({ recommendations: [] }), false, '빈 추천 배열은 거부돼야 함');
   assert.strictEqual(pred({}), false, '필드 자체 없음은 거부돼야 함');
+});
+// ── SELF-HEAL-2026-09-06 (A) ────────────────────────────────────────────────────────
+//   [행위 테스트] 지역 경신 블롭(getPriceRecordsByRegion)에도 쌍둥이(getPriceRecords)와 같은
+//   실패 백오프가 걸리는지 확인한다 — 패턴은 위 RECORDS-LAST-2026-09-05 테스트와 같다.
+test('지역 경신 블롭 — 재계산이 반복 실패해도 마지막 성공 스냅샷으로 백오프한다(요청마다 30일 창 RPC 를 다시 태우지 않는다)', async () => {
+  const dbPath = require.resolve('../db/client');
+  const redisPath = require.resolve('../services/redisCache');
+  const svcPath = require.resolve('../services/priceRecordsService');
+  const saved = { db: require.cache[dbPath], redis: require.cache[redisPath], svc: require.cache[svcPath] };
+  const store = new Map();
+  store.set('records:priceByRegion:last', { regions: { '11680': { highCount: 3, lowCount: 1 } }, computedAt: '2026-09-01T00:00:00Z' });
+  let rpcCalls = 0;
+  require.cache[redisPath] = { id: redisPath, filename: redisPath, loaded: true, exports: {
+    rget: async (k) => (store.has(k) ? store.get(k) : null), rset: async (k, v) => { store.set(k, v); },
+  } };
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: {
+    getSupabaseAdmin: () => ({ rpc: async () => { rpcCalls++; return { data: null, error: { message: 'canceling statement due to statement timeout' } }; } }),
+  } };
+  const cache = require('../cache');
+  try {
+    delete require.cache[svcPath];
+    const svc = require('../services/priceRecordsService');
+    for (const k of ['records:priceByRegion:v1', 'records:priceByRegion:computeFailedAt']) cache.del(k);
+    const first = await svc.getPriceRecordsByRegion();
+    assert.equal(rpcCalls, 1, '캐시가 비어 있으니 첫 호출은 RPC 를 불러야 한다');
+    assert.ok(first && first.stale === true, '실패 시 마지막 성공 스냅샷을 stale 로 줘야 한다');
+    const before = rpcCalls;
+    const second = await svc.getPriceRecordsByRegion();
+    assert.equal(rpcCalls, before, '백오프 중인데 두 번째 호출이 다시 30일 창 RPC 를 태운다(쌍둥이 getPriceRecords 에는 있던 보호가 없다)');
+    assert.ok(second && second.stale === true, '백오프 중에도 마지막 성공 스냅샷을 줘야 한다');
+  } finally {
+    for (const k of ['records:priceByRegion:v1', 'records:priceByRegion:computeFailedAt']) cache.del(k);
+    if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
+    if (saved.redis) require.cache[redisPath] = saved.redis; else delete require.cache[redisPath];
+    if (saved.svc) require.cache[svcPath] = saved.svc; else delete require.cache[svcPath];
+  }
+});
+
+// ── SELF-HEAL-2026-09-06 (B) ────────────────────────────────────────────────────────
+//   [행위 테스트] ① dayIdx 가 다르면 워밍 큐가 실제로 회전하는지, ② budgetMs 를 넘기면
+//   naverDatalabService.warmInterest 실체가 네트워크 호출 전에 멈추는지 확인한다.
+test('관심도 워밍 — dayIdx 로 매일 다른 구간을 회전시키고, budgetMs 예산을 넘기면 즉시 멈춘다', async () => {
+  const dbPath = require.resolve('../db/client');
+  const dlPath = require.resolve('../services/naverDatalabService');
+  const jobPath = require.resolve('../jobs/interestWarm');
+  const saved = { db: require.cache[dbPath], dl: require.cache[dlPath], job: require.cache[jobPath] };
+  const q = (table) => {
+    const s = { _t: table, _in: null,
+      select() { return s; }, order() { return s; }, not() { return s; },
+      in(col, vals) { s._in = vals; return s; },
+      range(a, b) {
+        if (table === 'molit_apt_index') {
+          const rows = Array.from({ length: 1200 }, (_, i) => ({ apt_name: 'A' + i, sigungu: '노원구', umd_nm: '상계동', deal_count: 5000 - i }));
+          return Promise.resolve({ data: rows.slice(a, b + 1), error: null });
+        }
+        return Promise.resolve({ data: [], error: null });
+      },
+      then(resolve) { // apt_geocache 는 range 없이 await 된다 — 전부 좌표가 있는 것으로 만든다(회전만 본다)
+        const rows = (s._in || []).map(n => ({ apt_name: n, sigungu: '노원구', umd_nm: '상계동', lat: 37.6, lng: 127.0 }));
+        resolve({ data: rows, error: null });
+      },
+    };
+    return s;
+  };
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { getSupabaseAdmin: () => ({ from: (t) => q(t) }) } };
+  let got = null;
+  require.cache[dlPath] = { id: dlPath, filename: dlPath, loaded: true, exports: {
+    hasKeys: () => true, warmInterest: async (items, calls) => { got = { items, calls }; return { calls: 0, filled: 0, pending: items.length, stopped: null }; },
+  } };
+  try {
+    delete require.cache[jobPath];
+    const { run } = require('../jobs/interestWarm');
+    const out0 = await run({ calls: 10, top: 1200, dayIdx: 0 });
+    const items0 = got.items;
+    const out3 = await run({ calls: 10, top: 1200, dayIdx: 3 });
+    const items3 = got.items;
+    assert.equal(items0.length, items3.length, '회전은 항목 수를 바꾸면 안 된다');
+    assert.notEqual(items0[0].aptName, items3[0].aptName, 'dayIdx 가 달라도 매일 같은 앞자리를 처리한다(회전이 없다) — 기아 회귀');
+    assert.deepEqual(items0.map(i => i.aptName).slice().sort(), items3.map(i => i.aptName).slice().sort(),
+      '회전은 순서만 바꿔야 한다 — 집합 자체가 달라졌다');
+    assert.equal(out0.slot, 0, '반환 요약에 slot 이 없다'); assert.equal(out3.slot, 3);
+    assert.ok(Number.isFinite(out0.off) && Number.isFinite(out3.off), '반환 요약에 off 가 없다');
+  } finally {
+    if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
+    if (saved.dl) require.cache[dlPath] = saved.dl; else delete require.cache[dlPath];
+    if (saved.job) require.cache[jobPath] = saved.job; else delete require.cache[jobPath];
+  }
+
+  // budgetMs — naverDatalabService.warmInterest 실체(스텁 아님)를 직접 호출한다.
+  // budgetMs:0 이면 루프 진입 즉시 멈춰야 한다 — 그래야 네트워크(fetchBatch)를 타지 않는다는 것도 같이 확인된다.
+  const savedId = process.env.NAVER_CLIENT_ID, savedSecret = process.env.NAVER_CLIENT_SECRET;
+  process.env.NAVER_CLIENT_ID = 'test-id';
+  process.env.NAVER_CLIENT_SECRET = 'test-secret';
+  try {
+    const dl = require('../services/naverDatalabService');
+    const items = [{ aptName: 'SELF-HEAL 예산 테스트 단지', sigungu: '노원구', umd: '상계동', lat: 37.6, lng: 127.0 }];
+    const res = await dl.warmInterest(items, 5, { budgetMs: 0 });
+    assert.equal(res.stopped, 'budget', 'budgetMs 를 0 으로 줘도 stopped 가 budget 이 아니다');
+    assert.equal(res.calls, 0, '예산을 넘기면 호출(fetchBatch) 전에 멈춰야 한다');
+  } finally {
+    if (savedId === undefined) delete process.env.NAVER_CLIENT_ID; else process.env.NAVER_CLIENT_ID = savedId;
+    if (savedSecret === undefined) delete process.env.NAVER_CLIENT_SECRET; else process.env.NAVER_CLIENT_SECRET = savedSecret;
+  }
+});
+
+// ── SELF-HEAL-2026-09-06 (C) ────────────────────────────────────────────────────────
+//   [행위 테스트] 개선 실패(같은 결손 반복) 뒤에도 재시도 간격 동안 buildBriefingPayload 가
+//   다시 불리지 않는지 확인한다 — 위 PARTIAL-SNAPSHOT 테스트는 cache 를 무조건 미스로 스텁해
+//   이 마커를 검증하지 못한다. 여기서는 Map 기반 가짜 cache 로 마커가 실제로 걸리는지 본다.
+test('브리핑 스냅샷 — 개선 실패 뒤에는 재시도 간격 동안 buildBriefingPayload 를 다시 부르지 않는다', async () => {
+  const R = (p) => require.resolve(p);
+  const paths = {
+    svc: R('../services/briefingService'), client: R('../db/client'), cache: R('../cache'), news: R('../routes/news'),
+    ecos: R('../services/ecosService'), redis: R('../services/redisCache'), pop: R('../services/popularService'),
+    rec: R('../services/priceRecordsService'), reg: R('../services/regulationsService'),
+  };
+  const saved = Object.fromEntries(Object.entries(paths).map(([k, p]) => [k, require.cache[p]]));
+  const stub = (p, exports) => { require.cache[p] = { id: p, filename: p, loaded: true, exports }; };
+  const store = {};
+  const admin = {
+    from: () => ({
+      select: () => ({ eq: (_k, day) => ({ maybeSingle: async () => ({ data: store[day] ? { payload: store[day] } : null }) }) }),
+      upsert: async ({ day, payload }) => { store[day] = payload; return {}; },
+    }),
+  };
+  const cacheStore = new Map();
+  let buildCalls = 0;
+  try {
+    stub(paths.client, { getSupabaseAdmin: () => admin });
+    stub(paths.cache, {
+      get: (k) => (cacheStore.has(k) ? cacheStore.get(k) : undefined),
+      set: (k, v) => { cacheStore.set(k, v); return true; },
+    });
+    stub(paths.news, { _dataMarketItems: async () => { buildCalls++; return [{ text: '시황 1', src: '테스트' }]; }, _deriveMarketLines: (items) => items.map(i => i.text) });
+    stub(paths.ecos, { getEcosRates: async () => { throw new Error('ecos down'); } }); // 항상 같은 결손(ecos) — "개선 실패" 를 고정한다
+    stub(paths.redis, { rget: async () => ({ tx: 1, lastIngestedAt: '2026-09-01T00:00:00Z' }) });
+    stub(paths.pop, { readPopularSnapshot: async () => [{ aptName: 'A', sigungu: 'S', dealCount60d: 1 }] });
+    stub(paths.rec, { getPriceRecords: async () => ({ highCount: 1, lowCount: 1 }) });
+    stub(paths.reg, { getChangeLog: async () => ({ items: [] }) });
+    delete require.cache[paths.svc];
+    const svc = require('../services/briefingService');
+    const today = svc.kstDayString();
+
+    const old = { lines: ['x'], partial: ['ecos'], generatedAt: new Date(Date.now() - 31 * 60 * 1000).toISOString() };
+    store[today] = old;
+
+    const p1 = await svc.getOrCreateSnapshot(today);
+    assert.equal(buildCalls, 1, '재시도 조건(30분 경과+결손)을 만족하면 첫 호출은 재계산을 시도해야 한다');
+    assert.equal(p1, old, '개선에 실패했으므로 기존 스냅샷을 그대로 반환해야 한다');
+
+    const p2 = await svc.getOrCreateSnapshot(today);
+    assert.equal(buildCalls, 1, '재시도 간격 안에는 개선 실패 뒤에도 buildBriefingPayload 를 다시 부르면 안 된다(무한 재계산 방지)');
+    assert.equal(p2, old, '재시도가 생략되는 동안에는 기존 스냅샷을 그대로 반환해야 한다');
+  } finally {
+    for (const [k, p] of Object.entries(paths)) { if (saved[k]) require.cache[p] = saved[k]; else delete require.cache[p]; }
+  }
+});
+
+test('브리핑 스냅샷 — buildBriefingPayload 구성요소 실패 시에도 재시도 마커는 먼저 심어진다', async () => {
+  // ⚠ SELF-HEAL-2026-09-06: 마커 순서 (E) 주입 검증.
+  //   buildBriefingPayload 내부의 일부 요소(_dataMarketItems)가 실패하면, 그것이 예외로 표현될 수 있다.
+  //   이때 마커를 buildBriefingPayload 호출 **전에** 심어야, 재계산 실패 후에도
+  //   다음 호출이 buildBriefingPayload 를 다시 부르지 않는다 (30분 간격 유지).
+  //   buildBriefingPayload 는 내부 try/catch 로 모든 실패를 부분 결손으로 변환하므로,
+  //   일부만 실패해도 반환값은 항상 { ..., partial: [...] } 형태다 — 단 반환된다.
+  const R = (p) => require.resolve(p);
+  const paths = {
+    svc: R('../services/briefingService'), client: R('../db/client'), cache: R('../cache'), news: R('../routes/news'),
+    ecos: R('../services/ecosService'), redis: R('../services/redisCache'), pop: R('../services/popularService'),
+    rec: R('../services/priceRecordsService'), reg: R('../services/regulationsService'),
+  };
+  const saved = Object.fromEntries(Object.entries(paths).map(([k, p]) => [k, require.cache[p]]));
+  const stub = (p, exports) => { require.cache[p] = { id: p, filename: p, loaded: true, exports }; };
+  const store = {};
+  const admin = {
+    from: () => ({
+      select: () => ({ eq: (_k, day) => ({ maybeSingle: async () => ({ data: store[day] ? { payload: store[day] } : null }) }) }),
+      upsert: async ({ day, payload }) => { store[day] = payload; return {}; },
+    }),
+  };
+  const cacheStore = new Map();
+  let buildCalls = 0;
+  try {
+    stub(paths.client, { getSupabaseAdmin: () => admin });
+    stub(paths.cache, {
+      get: (k) => (cacheStore.has(k) ? cacheStore.get(k) : undefined),
+      set: (k, v) => { cacheStore.set(k, v); return true; },
+    });
+    stub(paths.news, {
+      _dataMarketItems: async () => { buildCalls++; throw new Error('news 조회 실패'); },
+      _deriveMarketLines: (items) => items.map(i => i.text)
+    });
+    stub(paths.ecos, { getEcosRates: async () => ({ baseRate: 3.5, mortgageRate: 5.2 }) });
+    stub(paths.redis, { rget: async () => ({ tx: 1, lastIngestedAt: '2026-09-01T00:00:00Z' }) });
+    stub(paths.pop, { readPopularSnapshot: async () => [{ aptName: 'A', sigungu: 'S', dealCount60d: 1 }] });
+    stub(paths.rec, { getPriceRecords: async () => ({ highCount: 1, lowCount: 1 }) });
+    stub(paths.reg, { getChangeLog: async () => ({ items: [] }) });
+    delete require.cache[paths.svc];
+    const svc = require('../services/briefingService');
+    const today = svc.kstDayString();
+
+    const old = { lines: [], partial: ['lines', 'ecos'], generatedAt: new Date(Date.now() - 31 * 60 * 1000).toISOString() };
+    store[today] = old;
+
+    const p1 = await svc.getOrCreateSnapshot(today);
+    assert.equal(buildCalls, 1, '첫 호출은 buildBriefingPayload 를 호출했어야 한다');
+    // buildBriefingPayload 가 _dataMarketItems 실패를 내부 처리하고 partial 이 있는 객체를 반환한다.
+    // p1.partial 이 old.partial 보다 많으므로(lines+ecos), 개선 실패로 판정해 stored 를 반환한다.
+    assert.equal(p1, old, '개선 실패(partial 감소 없음)이므로 저장된 스냅샷을 그대로 반환해야 한다');
+
+    const p2 = await svc.getOrCreateSnapshot(today);
+    assert.equal(buildCalls, 1, '재시도 마커가 있으므로 두 번째 호출은 buildBriefingPayload 를 부르지 않아야 한다');
+    assert.equal(p2, old, '재시도 마커로 인해 stored 를 반환해야 한다');
+  } finally {
+    for (const [k, p] of Object.entries(paths)) { if (saved[k]) require.cache[p] = saved[k]; else delete require.cache[p]; }
+  }
 });

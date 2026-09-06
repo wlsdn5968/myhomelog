@@ -125,6 +125,17 @@ async function getOrCreateSnapshot(day) {
     const partial = Array.isArray(stored.partial) ? stored.partial : [];
     const age = Date.now() - (Date.parse(stored.generatedAt || '') || 0);
     if (!isToday || !partial.length || age < PARTIAL_RETRY_MS) return stored;
+    // SELF-HEAL-2026-09-06:
+    // [왜] 개선 실패 시 stored 를 그대로 반환하고 아무것도 쓰지 않아 generatedAt 이 갱신되지 않는다.
+    //   그러면 age >= PARTIAL_RETRY_MS 가 계속 참이라, 업스트림이 하루 종일 죽어 있으면
+    //   그날 내내 **모든 캐시 미스가 전체 payload 를 다시 만든다**(ECOS·HF·price records·popular).
+    //   호출부가 페이지·OG 이미지·cron 셋이라 각각 미스를 낸다. 주석이 약속한 "30분마다" 가 코드에 없었다.
+    // [해결] 재시도 시각을 프로세스 캐시에 남긴다. DB 스키마·아카이브 의미를 건드리지 않는다.
+    //   ⚠ 서버리스는 인스턴스마다 이 캐시가 따로다 — 완전한 상한이 아니라 **인스턴스당 상한**이다.
+    //   그래도 종전(무제한)보다 원본 부하가 인스턴스 수 배수로 줄어든다.
+    const rk = 'briefing:retry:' + day;
+    if (cache.get(rk) !== undefined) return stored;
+    cache.set(rk, Date.now(), PARTIAL_RETRY_MS / 1000);
     const fresh = await buildBriefingPayload();
     if (!fresh.lines.length || (fresh.partial || []).length >= partial.length) return stored;
     await admin.from('briefing_snapshots').upsert({ day, payload: fresh }).then(() => {}, (e) => {

@@ -11,7 +11,15 @@
 const { getSupabaseAdmin } = require('../db/client');
 const logger = require('../logger');
 
-async function run({ calls = 60, top = 2000 } = {}) {
+// SELF-HEAL-2026-09-06:
+// [왜] warmInterest 는 캐시 미스 목록(todo)을 **앞에서부터** 하루 예산만큼만 처리하고,
+//   ratio 가 null 인 항목은 아무것도 저장하지 않아 다음 날 todo 의 같은 앞자리에 그대로 남는다.
+//   정렬이 deal_count desc 로 매일 같으므로, 원리적으로 값을 못 얻는 이름(정규화 후 4자 미만 등)이
+//   누적되면 유효 처리량이 단조 감소하고 240건(60콜×4)에 이르면 워밍이 완전히 멈춘다.
+// [해결] 회전. 마커를 DB 에 쓰는 대안은 apt_amenities 의 제약을 프로덕션에서 확인해야 하고
+//   (이 저장소는 sentinel 설계가 CHECK 로 100% 거부된 사고가 있다) 절대 룰 ③ 상 DDL 은 별도 승인이라,
+//   스키마를 건드리지 않는 이 방식을 고른다.
+async function run({ calls = 60, top = 2000, dayIdx, budgetMs = 240000 } = {}) {
   const dl = require('../services/naverDatalabService');
   if (!dl.hasKeys()) return { skipped: 'no-key' };
   const admin = getSupabaseAdmin();
@@ -42,9 +50,12 @@ async function run({ calls = 60, top = 2000 } = {}) {
     if (!g || g.lat == null || g.lng == null) continue;
     items.push({ aptName: r.apt_name, sigungu: r.sigungu, umd: r.umd_nm || g.umd_nm || '', lat: Number(g.lat), lng: Number(g.lng) });
   }
+  const slot = dayIdx != null ? dayIdx : Math.floor(Date.now() / 86400000) % 7;
+  const off = items.length ? (slot * Math.ceil(items.length / 7)) % items.length : 0;
+  const rotated = off ? items.slice(off).concat(items.slice(0, off)) : items;
   const t0 = Date.now();
-  const summary = await dl.warmInterest(items, calls);
-  const out = { top: idx.length, withCoord: items.length, elapsedMs: Date.now() - t0, ...summary };
+  const summary = await dl.warmInterest(rotated, calls, { budgetMs });
+  const out = { top: idx.length, withCoord: items.length, slot, off, elapsedMs: Date.now() - t0, ...summary };
   logger.info(out, 'cron/warm-interest');
   return out;
 }
