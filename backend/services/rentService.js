@@ -119,7 +119,11 @@ async function getRentTransactions(lawdCd, dealYm) {
   if (_inflight.has(key)) return _inflight.get(key);
   const p = (async () => {
     const shared = await rget(key); // 로컬 미스 → Redis(예열분) → 업스트림
-    if (Array.isArray(shared)) { cache.set(key, shared, RENT_MEM_TTL_S); return shared; }
+    // RENT-EMPTY-READ-2026-09-06: 빈 배열은 히트로 치지 않는다 — 037 이 "빈 결과는 rset 하지 않는다"
+    //   로 쓰기 측만 막아서, 배포 이전에 이미 Redis 에 굳은 오염된 [] 는 여기서 그대로 히트가 됐다.
+    //   isRentCached(:89-92) 와 같은 판단을 따른다: "그 달 실제 거래 0건" 은 업스트림을 다시 불러도 된다
+    //   (그런 달은 다시 [] 를 받을 뿐) — 그 비용이 최대 8일 조용한 오염보다 낫다.
+    if (Array.isArray(shared) && shared.length) { cache.set(key, shared, RENT_MEM_TTL_S); return shared; }
     const rows = await _fetchRentMonth(lawdCd, dealYm);
     // RENT-DEGRADED-2026-09-06: 빈 결과는 공유 캐시에 쓰지 않는다. Step 1 이 열화를 예외로 올렸지만,
     //   "그 달에 실제로 거래가 0건" 인 경우와 구별이 안 되는 값을 전 인스턴스에 최대 8일 심는 것은

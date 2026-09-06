@@ -255,7 +255,7 @@ function sliceRegion(blob, lawdCd) {
   if (!blob || !blob.regions) return null;
   const r = blob.regions[String(lawdCd)];
   if (!r) return null;
-  return {
+  const out = {
     scope: 'region',
     lawdCd: String(lawdCd),
     regionName: regionLabel(lawdCd, ''),
@@ -269,6 +269,12 @@ function sliceRegion(blob, lawdCd) {
     high: (r.high || []).map(shapeRow).filter(Boolean),
     low: (r.low || []).map(shapeRow).filter(Boolean),
   };
+  // STALE-PROPAGATE-2026-09-06: blob 이 _withStale() 이 붙인 열화 스냅샷이면 그 표식을 슬라이스에도
+  //   실어야 라우트가 캐시 여부를 판정할 수 있다(전에는 여기서 버려져 6시간+SWR24시간이 엣지에 굳었다).
+  //   ⚠ 모름은 모름으로 둔다 — 정상일 때 stale:false 를 지어내지 않는다(이 저장소가 반복해 당한 결함).
+  if (blob.stale) out.stale = true;
+  if (blob.computedAt !== undefined) out.computedAt = blob.computedAt;
+  return out;
 }
 
 module.exports = {

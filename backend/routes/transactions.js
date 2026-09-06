@@ -84,7 +84,9 @@ router.get('/records', async (req, res) => {
       const slice = svc.sliceRegion(blob, lawdCd);
       // 없는 지역을 0 으로 지어내지 않는다 — 비교 가능한 거래가 아예 없는 지역이 실제로 있다.
       if (!slice) return res.status(404).json({ error: '이 지역은 비교 가능한 최근 거래가 없습니다.' });
-      res.set('Cache-Control', CC);
+      // STALE-NOCACHE-2026-09-06: 전국 경로(:110)와 같은 원칙 — 열화 스냅샷을 엣지에 6시간+SWR24시간
+      //   굳히지 않는다. sliceRegion 이 blob.stale 을 실어 왔을 때만 no-store.
+      res.set('Cache-Control', slice.stale ? 'no-store' : CC);
       return res.json(slice);
     }
 
