@@ -131,6 +131,111 @@ async function loadAptFacts(seq) {
   return { idx, txs, lawdCd, region, aptName, umd, buildYear, stat };
 }
 
+// ── APT-PAGE-INFO-2026-09-06 (Plan 063) ────────────────────────────────────────────
+// [왜] 공개 단지 페이지가 실거래만 보여준다. 이미 가진 KAPT 단지정보(apt_master.facility)를
+//   붙인다 — 새 외부 API 호출 없이(비용 0) 페이지를 두껍게 만든다.
+// [매칭 규칙 — 유사도 매칭 절대 금지] 이 저장소는 이름 유사도 단독 매칭으로 전국 956건을
+//   오매칭한 이력이 있다([[apt-kapt-mismatch-identity-gate]]). 채택은 이 두 가지 정확일치뿐이다:
+//   ① molit_aliases 배열에 이름이 정확히 들어 있다(가장 확실) ② 공백 제거 후 이름 완전일치.
+//   후보가 2개 이상이면(같은 lawd_cd·umd_nm 안에서 어느 쪽 기준으로도) 카드를 만들지 않는다 —
+//   확신 없으면 안 보여준다. 이 함수는 이 판단만 한다(DB 조회는 loadAptMasterMatch).
+function _normAptName(s) {
+  return String(s || '').replace(/\s+/g, '');
+}
+function pickAptMasterMatch(rows, aptName) {
+  if (!Array.isArray(rows) || !rows.length || !aptName) return null;
+  const aliasMatches = rows.filter((r) => Array.isArray(r.molit_aliases) && r.molit_aliases.includes(aptName));
+  if (aliasMatches.length === 1) return aliasMatches[0];
+  if (aliasMatches.length >= 2) return null; // 후보 2개 이상 — 확신 불가
+  const target = _normAptName(aptName);
+  const nameMatches = rows.filter((r) => _normAptName(r.apt_name) === target);
+  if (nameMatches.length === 1) return nameMatches[0];
+  return null; // 0개 또는 2개 이상 — 카드를 만들지 않는다
+}
+
+/**
+ * apt_master 에서 단지정보 후보를 찾는다.
+ * @returns {Promise<{errored: boolean, row: object|null}>}
+ *   errored=true 는 "조회를 못 읽었다"(있을 수도 있는데 확인 불가) — 호출부가 긴 캐시를 붙이면
+ *   안 된다([[degraded-response-cached-at-edge]] 의 교훈: 열화 응답을 엣지에 굳히면 사고가 난다).
+ *   errored=false·row=null 은 "조회는 됐는데 정말 매칭이 없다"(또는 후보 2개 이상이라 확신 불가) —
+ *   이때는 기존 캐시 정책을 그대로 쓴다.
+ */
+async function loadAptMasterMatch(lawdCd, umd, aptName) {
+  const { getSupabaseAdmin } = require('../db/client');
+  const admin = getSupabaseAdmin();
+  // DB 연결 자체가 안 되면 "정말 없음"과 구분할 수 없다 — 보수적으로 errored 취급.
+  if (!admin) return { errored: true, row: null };
+  try {
+    let q = admin.from('apt_master').select('kapt_code, apt_name, molit_aliases, facility').eq('lawd_cd', lawdCd);
+    q = umd ? q.eq('umd_nm', umd) : q.limit(300); // umd 없으면 lawd_cd 전체 조회 — 상한 필수
+    const { data, error } = await q;
+    if (error) {
+      logger.warn({ err: error.message, lawdCd, umd }, 'APT-PAGE-INFO-2026-09-06: apt_master 조회 실패');
+      return { errored: true, row: null };
+    }
+    return { errored: false, row: pickAptMasterMatch(data || [], aptName) };
+  } catch (e) {
+    logger.warn({ err: e.message, lawdCd, umd }, 'APT-PAGE-INFO-2026-09-06: apt_master 조회 예외');
+    return { errored: true, row: null };
+  }
+}
+
+/**
+ * 단지정보 카드를 만든다 — "미확인 원칙": 값이 없는 항목은 행 자체를 만들지 않는다
+ * (`0`·`미상` 금지 — 이 저장소가 반복해 당한 결함). buildFacility(앱 상세와 같은 함수)를
+ * 재사용만 하고 고치지 않는다 — 그 함수가 이미 담은 판단(세대수 원천 등)을 그대로 쓴다.
+ * ⚠ KAPT 도보시간(kaptdWtimesub/kaptdWtimebus)은 관리사무소 자기신고값이라 넣지 않는다
+ * ([[substring-band-matching-and-selfreported-data]] — 실측 일치율 42.6%).
+ * @returns {{html: string, householdsFact: string|null, builtYearFact: string|null}}
+ */
+function buildAptInfoCard(row) {
+  const { buildFacility } = require('../utils/buildFacility');
+  const stored = (row.facility && !row.facility._empty) ? row.facility : null;
+  const fac = buildFacility(stored, row.kapt_code, (stored && stored._dtl) || null);
+  const empty = { html: '', householdsFact: null, builtYearFact: null };
+  if (!fac) return empty;
+
+  // buildFacility 는 "모름"을 0(dongCount·parkingTotal)이나 null 로 섞어 내보낸다(그 함수의 기존
+  // 설계 — 고치지 않는다). 여기서는 표시 목적으로만 양수만 값으로 인정한다.
+  const posInt = (v) => (Number.isFinite(Number(v)) && Number(v) > 0 ? Number(v) : null);
+  const rows = [];
+  const hh = posInt(fac.totalHouseholds);
+  if (hh) rows.push(['총 세대수', `${comma(hh)}세대`]);
+  const dong = posInt(fac.dongCount);
+  if (dong) rows.push(['총 동수', `${comma(dong)}개동`]);
+  const floorRange = (posInt(fac.bottomFloor) && posInt(fac.topFloor)) ? `${fac.bottomFloor}~${fac.topFloor}층`
+    : (posInt(fac.topFloor) ? `최고 ${fac.topFloor}층` : null);
+  if (floorRange) rows.push(['층수', floorRange]);
+  let builtYmd = null;
+  if (fac.builtDate) {
+    const s = String(fac.builtDate);
+    builtYmd = s.length === 8 ? `${s.slice(0, 4)}.${s.slice(4, 6)}.${s.slice(6, 8)}` : (s.length === 6 ? `${s.slice(0, 4)}.${s.slice(4, 6)}` : esc(s));
+    rows.push(['준공일', builtYmd]);
+  }
+  const parkTotal = posInt(fac.parkingTotal);
+  if (parkTotal) rows.push(['총 주차대수', `${comma(parkTotal)}대${fac.parkingRatio ? ` (세대당 ${fac.parkingRatio}대)` : ''}`]);
+  if (fac.heatType) rows.push(['난방방식', esc(String(fac.heatType))]);
+  if (fac.hallType) rows.push(['구조', esc(String(fac.hallType))]);
+  const elev = posInt(fac.elevatorCount);
+  if (elev) rows.push(['승강기', `${comma(elev)}대`]);
+  const cctv = posInt(fac.cctvCount);
+  if (cctv) rows.push(['CCTV', `${comma(cctv)}대`]);
+
+  if (!rows.length) return empty; // 보여줄 값이 하나도 없으면 카드 자체를 만들지 않는다
+
+  const html = `<div class="card"><h2>단지정보 <span class="src">한국부동산원 공동주택관리정보시스템(K-apt)</span></h2>
+    ${rows.map(([k, v]) => `<div class="row"><span class="k">${esc(k)}</span><span class="num">${v}</span></div>`).join('')}
+  </div>`;
+
+  const builtYear = fac.builtDate ? parseInt(String(fac.builtDate).slice(0, 4)) : null;
+  return {
+    html,
+    householdsFact: hh ? `${comma(hh)}세대` : null,
+    builtYearFact: (Number.isFinite(builtYear) && builtYear > 1900) ? `${builtYear}년 준공` : null,
+  };
+}
+
 router.get('/:aptSeq', async (req, res) => {
   const seq = String(req.params.aptSeq || '').trim();
   if (!/^\d{5}-\d+$/.test(seq)) {
@@ -201,11 +306,32 @@ router.get('/:aptSeq', async (req, res) => {
     }
   }
 
+  // 거래가 없으면 색인시키지 않는다 — 얇은 페이지를 대량으로 색인시키면 사이트 전체 평가에 해롭다.
+  // ⚠ CACHE-POISON-2026-08-29 의 교훈: 열화 상태(카드 0)에 긴 캐시를 붙이지 않는다.
+  // ⚠ APT-PAGE-INFO-2026-09-06: thin 은 여기서, 아래 단지정보 카드를 붙이기 전에 확정한다 —
+  //   단지정보가 있다고 거래 0 페이지를 색인시키면 안 된다(Plan 063 범위 밖 — thin 판정 불변).
+  const thin = !cards.length;
+
+  // APT-PAGE-INFO-2026-09-06 (Plan 063): 단지정보(K-apt) 카드 — cards/thin 과 분리해서 붙인다.
+  let infoCardHtml = '';
+  let aptMasterErrored = false;
+  if (lawdCd && aptName) {
+    const { errored, row } = await loadAptMasterMatch(lawdCd, umd, aptName);
+    aptMasterErrored = errored;
+    if (row) {
+      const cardInfo = buildAptInfoCard(row);
+      infoCardHtml = cardInfo.html;
+      if (cardInfo.householdsFact) facts.push(cardInfo.householdsFact);
+      if (cardInfo.builtYearFact) facts.push(cardInfo.builtYearFact);
+    }
+  }
+
   const body = `<div class="eyebrow">MYHOMELOG APT</div>
     <h1>${esc(aptName)} 실거래가</h1>
     <div class="tag">${esc(region)}${umd ? ' ' + esc(umd) : ''} · 단지코드 ${esc(seq)}</div>
     ${cards.length ? cards.join('') : `<div class="card"><h2>최근 거래 없음</h2>
       <div style="font-size:12.5px;color:var(--sub)">최근 24개월 안에 신고된 거래가 없어요. 값을 지어내지 않고 비워둡니다.</div></div>`}
+    ${infoCardHtml}
     <div class="card"><h2>이 지역 더 보기</h2>
       <div class="links">${lawdCd ? `<a href="/region/${esc(lawdCd)}">${esc(region)} 지역 데이터</a>` : ''}<a href="/region">전국 시군구 전체</a></div>
     </div>
@@ -216,10 +342,11 @@ router.get('/:aptSeq', async (req, res) => {
     ? `${aptName}(${region}${umd ? ' ' + umd : ''}) ${facts.join(' · ')}. 국토교통부 실거래 신고 자료 정리 — 매수 추천이 아닙니다.`
     : `${aptName}(${region}${umd ? ' ' + umd : ''}) 국토교통부 실거래 신고 자료. 최근 24개월 거래 기록이 없습니다.`;
 
-  // 거래가 없으면 색인시키지 않는다 — 얇은 페이지를 대량으로 색인시키면 사이트 전체 평가에 해롭다.
-  // ⚠ CACHE-POISON-2026-08-29 의 교훈: 열화 상태(카드 0)에 긴 캐시를 붙이지 않는다.
-  const thin = !cards.length;
-  res.set('Cache-Control', thin ? 'no-store' : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
+  // APT-PAGE-INFO-2026-09-06: 단지정보 조회가 "오류로 실패"했을 때도 긴 캐시를 붙이지 않는다 —
+  //   "있을 수도 있는데 못 읽음"과 "정말 없음"을 구분 못 하면 열화 응답이 엣지에 굳는다
+  //   ([[degraded-response-cached-at-edge]]). thin·noindex 판정 자체는 건드리지 않는다(위에서 이미 확정).
+  const cacheUnsafe = thin || aptMasterErrored;
+  res.set('Cache-Control', cacheUnsafe ? 'no-store' : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
   res.type('html').send(pageShell({ title, desc, canonical: `${ORIGIN}/apt/${seq}`, body, noindex: thin,
     // 얇은 페이지(거래 0)는 카드에 쓸 숫자가 없으므로 기본 이미지를 유지한다.
     image: thin ? null : `${ORIGIN}/api/og/apt/${encodeURIComponent(seq)}` }));

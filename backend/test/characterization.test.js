@@ -9551,3 +9551,167 @@ test('검색 자동완성 — 캐시 키 버전이 v3 이다(Plan 062, 엣지 �
     '검색 캐시 키가 v3 이 아니다 — 지역 분리 재시도로 응답 모양이 바뀌었는데 캐시 키를 안 올리면 ' +
     '배포 전 캐시된 "빈 결과"가 서버 10분 + CDN s-maxage=600(+SWR 3600) 만큼 계속 나간다');
 });
+
+// ── APT-PAGE-INFO-2026-09-06 (Plan 063): 공개 단지 페이지에 단지정보(K-apt) 카드를 붙인다 ──────
+//   [실행 테스트] aptPage.js 는 db/client·services/transactionService 를 함수 안에서 그때그때
+//   require() 한다 — 라우터 자신을 다시 로드할 필요 없이, 호출 시점에 require.cache 를 갈아치우면
+//   그대로 먹힌다(이 파일의 기존 require.cache 스텁 관례). 매칭 규칙(유사도 매칭 금지)이 새면
+//   이 스위트가 잡아야 한다([[apt-kapt-mismatch-identity-gate]] — 유사도 단독 매칭 전국 956건 오매칭 이력).
+function _p063MockTable(rows, error) {
+  const s = {
+    select() { return s; },
+    eq() { return s; },
+    limit() { return s; },
+    then(resolve) {
+      if (error) return resolve({ data: null, error });
+      resolve({ data: rows, error: null });
+    },
+  };
+  return s;
+}
+function _p063MockAdmin(tables, errorTables) {
+  return {
+    from(t) {
+      const rows = (tables && tables[t]) || [];
+      const err = (errorTables && errorTables[t]) || null;
+      return _p063MockTable(rows, err);
+    },
+  };
+}
+function _p063MockRes() {
+  const r = { headers: {}, statusCode: 200, body: null };
+  r.set = (k, v) => { r.headers[k] = v; return r; };
+  r.status = (c) => { r.statusCode = c; return r; };
+  r.type = () => r;
+  r.send = (b) => { r.body = b; return r; };
+  return r;
+}
+function _p063Idx(aptName) {
+  // idx(molit_apt_index) 가 정체성(aptName·lawdCd·umdNm)을 준다 — 거래가 0건이어도 af 가 null 이 되지 않는다.
+  return { apt_seq: '11680-9001', apt_name: aptName, lawd_cd: '11680', sigungu: '강남구', umd_nm: '대치동', build_year: 1999, recent_deal_date: '2026-08-01', deal_count: 5 };
+}
+const _P063_STAT = {
+  dealCount: 5, avgPriceAuk: '12.3', medianPrice: 123000, minPrice: 110000, maxPrice: 135000,
+  recentDeal: '2026-08-01', trimmedAvgPrice: 122000, pyeongStats: [], rawList: [], floorAdjustmentNote: '',
+};
+// statFixture 가 있으면 거래 1건짜리로 취급(stat 이 생긴다) — null 이면 거래 0(thin) 케이스.
+async function _p063Run({ aptMasterRows, aptMasterError, idxRow, statFixture }) {
+  const dbPath = require.resolve('../db/client');
+  const svcPath = require.resolve('../services/transactionService');
+  const saved = { db: require.cache[dbPath], svc: require.cache[svcPath] };
+  const admin = _p063MockAdmin(
+    { molit_apt_index: idxRow ? [idxRow] : [], apt_master: aptMasterRows || [] },
+    aptMasterError ? { apt_master: aptMasterError } : null,
+  );
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { getSupabaseAdmin: () => admin } };
+  require.cache[svcPath] = { id: svcPath, filename: svcPath, loaded: true, exports: {
+    getTransactionsByAptSeq: async () => (statFixture ? [{ _p063fixture: true }] : []),
+    analyzeTransactions: () => (statFixture ? [statFixture] : []),
+  } };
+  try {
+    const router = require('../routes/aptPage');
+    const layer = router.stack.find((l) => l.route && l.route.path === '/:aptSeq');
+    const handle = layer.route.stack[layer.route.stack.length - 1].handle;
+    const res = _p063MockRes();
+    await handle({ params: { aptSeq: '11680-9001' } }, res, () => {});
+    return res;
+  } finally {
+    if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
+    if (saved.svc) require.cache[svcPath] = saved.svc; else delete require.cache[svcPath];
+  }
+}
+
+test('APT-PAGE-INFO — molit_aliases 정확일치로 매칭되면 단지정보 카드가 나온다 (Plan 063 Step 1-2)', async () => {
+  const row = {
+    kapt_code: 'P063A1', apt_name: '정식단지명', molit_aliases: ['정식단지명별칭'],
+    facility: {
+      kaptdaCnt: '520', hoCnt: '520', kaptDongCnt: '6', kaptUsedate: '19990305',
+      codeHeatNm: '개별난방', codeHallNm: '복도식', kaptTopFloor: '20',
+      _dtl: { kaptdPcnt: '300', kaptdPcntu: '250', kaptdEcnt: '12', kaptdCccnt: '80' },
+    },
+  };
+  // apt_master.apt_name('정식단지명')은 aptName('정식단지명별칭')과 정규화해도 다르다 — alias 경로만으로 매칭되는지 격리.
+  const res = await _p063Run({ aptMasterRows: [row], idxRow: _p063Idx('정식단지명별칭'), statFixture: _P063_STAT });
+  assert.equal(res.statusCode, 200);
+  assert.ok(res.body.includes('한국부동산원 공동주택관리정보시스템(K-apt)'), 'alias 정확일치인데 단지정보 카드가 안 나왔다');
+  assert.ok(res.body.includes('<span class="k">총 세대수</span>') && res.body.includes('520세대'), '세대수 행이 없다');
+});
+
+test('APT-PAGE-INFO — 공백 제거 후 이름 완전일치로 매칭되면 단지정보 카드가 나온다 (Plan 063 Step 1-2)', async () => {
+  const row = {
+    kapt_code: 'P063A2', apt_name: '공백 있는 단지', molit_aliases: [],
+    facility: { kaptdaCnt: '300', kaptDongCnt: '3', kaptUsedate: '20050101' },
+  };
+  // alias 는 비어 있다 — 정규화 이름 경로만으로 매칭되는지 격리.
+  const res = await _p063Run({ aptMasterRows: [row], idxRow: _p063Idx('공백있는단지'), statFixture: _P063_STAT });
+  assert.equal(res.statusCode, 200);
+  assert.ok(res.body.includes('한국부동산원 공동주택관리정보시스템(K-apt)'), '공백 제거 완전일치인데 단지정보 카드가 안 나왔다');
+  assert.ok(res.body.includes('300세대'));
+});
+
+test('APT-PAGE-INFO — 후보가 2개 이상이면 카드를 만들지 않는다(확신 없으면 안 보여준다) (Plan 063 Step 1)', async () => {
+  const rows = [
+    { kapt_code: 'P063B1', apt_name: '중복단지', molit_aliases: ['중복이름'], facility: { kaptdaCnt: '400' } },
+    { kapt_code: 'P063B2', apt_name: '중복단지2', molit_aliases: ['중복이름'], facility: { kaptdaCnt: '450' } },
+  ];
+  const res = await _p063Run({ aptMasterRows: rows, idxRow: _p063Idx('중복이름'), statFixture: _P063_STAT });
+  assert.equal(res.statusCode, 200);
+  assert.ok(!res.body.includes('한국부동산원 공동주택관리정보시스템(K-apt)'), '후보 2개인데 단지정보 카드가 나왔다 — 오매칭 위험');
+  assert.ok(!res.body.includes('400세대') && !res.body.includes('450세대'), '어느 후보의 세대수도 노출되면 안 된다');
+  // 모호함은 조회 오류가 아니다(쿼리 자체는 성공) — 캐시 정책은 평소 그대로(긴 캐시)여야 한다.
+  assert.equal(res.headers['Cache-Control'], 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400',
+    '후보 모호(쿼리 성공)인데 조회 오류처럼 캐시가 막혔다');
+});
+
+test('APT-PAGE-INFO — 값이 없는 항목은 행 자체가 없다("미상"·"0" 금지, 미확인 원칙) (Plan 063 Step 2)', async () => {
+  const row = {
+    kapt_code: 'P063C1', apt_name: '부분정보단지', molit_aliases: ['부분정보단지'],
+    facility: { kaptdaCnt: '300', hoCnt: '300' }, // 세대수만 있고 동수·층수·준공일·주차·난방·구조·승강기·CCTV 는 전부 없음
+  };
+  const res = await _p063Run({ aptMasterRows: [row], idxRow: _p063Idx('부분정보단지'), statFixture: _P063_STAT });
+  assert.equal(res.statusCode, 200);
+  assert.ok(res.body.includes('<span class="k">총 세대수</span>') && res.body.includes('300세대'), '있는 값(세대수)마저 안 나왔다');
+  for (const label of ['총 동수', '층수', '준공일', '총 주차대수', '난방방식', '구조', '승강기', 'CCTV']) {
+    assert.ok(!res.body.includes(`<span class="k">${label}</span>`), `값이 없는 "${label}" 행이 만들어졌다`);
+  }
+  assert.ok(!res.body.includes('미상'), '"미상" 문자열이 나왔다 — 미확인 원칙 위반(0·미상 금지)');
+});
+
+test('APT-PAGE-INFO — apt_master 조회가 오류로 실패하면 긴 캐시를 붙이지 않는다(thin·noindex 은 그대로) (Plan 063 Step 4)', async () => {
+  const res = await _p063Run({
+    aptMasterRows: [], aptMasterError: new Error('APT-PAGE-TEST 주입 오류'),
+    idxRow: _p063Idx('아무단지'), statFixture: _P063_STAT,
+  });
+  assert.equal(res.statusCode, 200);
+  assert.equal(res.headers['Cache-Control'], 'no-store', '단지정보 조회 오류인데 긴 캐시가 붙었다 — 열화 응답이 엣지에 굳는다');
+  assert.ok(!res.body.includes('한국부동산원 공동주택관리정보시스템(K-apt)'), '조회가 실패했는데 단지정보 카드가 나왔다 — "못 읽음"과 "없음"을 못 지켰다');
+  assert.ok(res.body.includes('<meta name="robots" content="index, follow">'),
+    '거래는 있는데(thin=false) noindex 로 바뀌었다 — 캐시 판정과 색인 판정이 섞였다');
+});
+
+test('APT-PAGE-INFO — 거래 0 페이지는 단지정보가 있어도 여전히 noindex+no-store 다(색인 정책 불변, out-of-scope 확인) (Plan 063 Step 4)', async () => {
+  const row = {
+    kapt_code: 'P063D1', apt_name: '거래없는단지', molit_aliases: ['거래없는단지'],
+    facility: { kaptdaCnt: '900', kaptDongCnt: '8' },
+  };
+  const res = await _p063Run({ aptMasterRows: [row], idxRow: _p063Idx('거래없는단지'), statFixture: null });
+  assert.equal(res.statusCode, 200);
+  assert.ok(res.body.includes('한국부동산원 공동주택관리정보시스템(K-apt)'), '단지정보 카드는 직접 링크 대응으로 여전히 보여야 한다');
+  assert.ok(res.body.includes('<meta name="robots" content="noindex, follow">'),
+    '거래 0인데 단지정보가 있다고 index 로 바뀌었다 — thin 판정이 거래 기반이 아니게 됐다');
+  assert.equal(res.headers['Cache-Control'], 'no-store', '거래 0 페이지에 긴 캐시가 붙었다');
+});
+
+test('APT-PAGE-INFO — 단지정보 fact 가 더해져도 desc 끝의 절대 룰 문구가 유지된다 (Plan 063 Step 3)', async () => {
+  const row = {
+    kapt_code: 'P063E1', apt_name: '설명단지', molit_aliases: ['설명단지'],
+    facility: { kaptdaCnt: '700', kaptUsedate: '20010101' },
+  };
+  const res = await _p063Run({ aptMasterRows: [row], idxRow: _p063Idx('설명단지'), statFixture: _P063_STAT });
+  assert.equal(res.statusCode, 200);
+  const m = res.body.match(/<meta name="description" content="([^"]*)">/);
+  assert.ok(m, 'description 메타가 없다');
+  const desc = m[1].replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+  assert.ok(desc.includes('700세대') || desc.includes('2001년 준공'), '단지정보 fact(세대수·준공년도)가 desc 에 안 들어갔다');
+  assert.ok(desc.endsWith('매수 추천이 아닙니다.'), 'desc 끝의 절대 룰 문구가 사라졌다: ' + desc);
+});
