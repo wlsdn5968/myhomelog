@@ -310,7 +310,12 @@ router.get('/:lawdCd', async (req, res) => {
 
   // ⚠ CACHE-POISON-2026-08-29 의 교훈: **열화된 응답에는 긴 캐시를 붙이지 않는다.**
   //   카드가 하나도 없으면 원자료 조회가 통째로 실패한 상태다 — 그걸 하루 굳히면 장애가 하루가 된다.
-  res.set('Cache-Control', cards.length
+  // STALE-PAGE-2026-09-06 (Plan 058): 카드가 있어도 rec.stale(최대 14일 된 스냅샷 — priceRecordsService
+  //   가 재계산 실패 시 돌려주는 마지막 성공 스냅샷, sliceRegion 이 Plan 054 에서 그 표식을 보존하도록
+  //   고쳤다)이면 그 숫자 자체가 낡은 것이다. cards.length 만 보면 이 열화를 못 잡고 6시간+SWR 24시간이
+  //   그대로 굳는다 — "장애"가 아니라 "낡은 값을 정상처럼 보여주는 상태"가 하루 넘게 지속된다.
+  const isStale = !!(rec && rec.stale);
+  res.set('Cache-Control', (cards.length && !isStale)
     ? 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400'
     : 'no-store');
   res.type('html').send(pageShell({

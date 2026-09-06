@@ -47,7 +47,11 @@ function _pick(summary) {
     'mvRefreshMs',
     // HH-BR-WRITEBACK-2026-08-17 (Sprint MMMMMMM-23): 건축물대장 세대수가 apt_master 로 실제 합류했는지.
     //   이 값이 0에 머물면 "수집은 되는데 화면엔 여전히 미상" 상태가 재현된 것이다.
-    'brScanned', 'brWritten', 'brAmbiguous'];
+    'brScanned', 'brWritten', 'brAmbiguous',
+    // MV-STALE-WATCH-2026-09-06 (Plan 058): 검색 MV(molit_apt_index)가 원본(molit_transactions)보다
+    //   며칠 뒤처졌는지. 화이트리스트에 없으면 cron.js 가 계산해 넘겨도 여기서 조용히 버려져 health 에
+    //   전혀 안 보인다 — 이 필드가 정확히 이 계획의 목적(관측값을 실제로 드러내는 것)이라 필수로 추가한다.
+    'searchIndexLagDays'];
   const out = {};
   for (const k of NUM) {
     const v = summary[k];

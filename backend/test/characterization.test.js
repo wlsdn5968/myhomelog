@@ -8934,3 +8934,231 @@ test('AI 도우미 시세 — 지역 분리 재시도의 등급 판정은 name �
     assert.equal(suggestions[0], '은마 시세', 'name 완전일치(tier3)가 1순위 제안이어야 한다');
   } finally { restore(); }
 });
+
+// ── MV-STALE-WATCH-2026-09-06 (Plan 058) ──────────────────────────────────────────────────────
+// [실측 배경] 2026-09-06 라이브: molit_apt_index(검색 색인) 최신 거래일 2026-08-14 vs
+//   molit_transactions(원본) 2026-09-04 — 21일 지연, 418개 단지가 검색에서 사라졌다. 원인은
+//   health.crons.mvRefreshError 에 매일 정직하게 남아 있었지만("8초 statement timeout") 경보가
+//   없어 아무도 보지 않았다. 이 계획은 DB 를 고치지 않는다(운영자 승인 대기) — 같은 실패가 또
+//   조용히 지나가지 않도록 ① 실패를 경보로 ② 낡음 자체를 숫자로 남긴다.
+//
+// [실행 방식] cron.js 의 handleMolitIngest 는 GET/POST 양쪽에 같은 함수가 물려 있다. authorizeCron
+//   미들웨어는 router.use 레이어라 라우트 핸들러를 직접 뽑아 호출하면 우회된다(인증은 이미 별도
+//   계약 테스트가 고정한다) — 이 파일의 기존 'OG 라우트' 테스트와 같은 기법이다. db/client·
+//   jobs/molitIngest·@sentry/node·services/cronStats 를 require.cache 로 갈아치운 뒤 cron.js 자신의
+//   캐시만 지워 다시 불러온다(이 파일의 require.cache 스텁 관례 그대로).
+function _mockCronAdmin({ rpcError, mvDate, txDate, mvErr, txErr } = {}) {
+  const mkQuery = (row, err) => {
+    const q = {
+      select: () => q,
+      eq: () => q,
+      order: () => q,
+      limit: () => q,
+      maybeSingle: () => Promise.resolve({ data: err ? null : row, error: err || null }),
+    };
+    return q;
+  };
+  return {
+    rpc: () => ({ abortSignal: () => Promise.resolve({ error: rpcError || null }) }),
+    from: (table) => {
+      if (table === 'molit_apt_index') return mkQuery({ recent_deal_date: mvDate }, mvErr);
+      if (table === 'molit_transactions') return mkQuery({ deal_date: txDate }, txErr);
+      return mkQuery(null, null);
+    },
+  };
+}
+function _requireCronMolitHandler(admin) {
+  const dbPath = require.resolve('../db/client');
+  const jobPath = require.resolve('../jobs/molitIngest');
+  const sentryPath = require.resolve('@sentry/node');
+  const statsPath = require.resolve('../services/cronStats');
+  const cronPath = require.resolve('../routes/cron');
+  const saved = {
+    db: require.cache[dbPath], job: require.cache[jobPath],
+    sentry: require.cache[sentryPath], stats: require.cache[statsPath], cron: require.cache[cronPath],
+  };
+  const sentryCalls = [];
+  const statsCalls = [];
+  require.cache[sentryPath] = { id: sentryPath, filename: sentryPath, loaded: true, exports: {
+    captureMessage: (msg, opts) => sentryCalls.push({ msg, opts }),
+    captureException: () => {},
+  } };
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { getSupabaseAdmin: () => admin } };
+  require.cache[jobPath] = { id: jobPath, filename: jobPath, loaded: true, exports: {
+    runMolitIngest: async () => ({ ok: 5, err: 0, skipped: 0, elapsedMs: 10, monthsRange: 'test' }),
+    molitErrReason: () => null,
+  } };
+  require.cache[statsPath] = { id: statsPath, filename: statsPath, loaded: true, exports: {
+    recordCronRun: (name, summary) => { statsCalls.push({ name, summary }); return Promise.resolve(); },
+  } };
+  delete require.cache[cronPath];
+  const cronRouter = require('../routes/cron');
+  const layer = cronRouter.stack.find(l => l.route && l.route.path === '/molit-ingest' && l.route.methods.get);
+  if (!layer) throw new Error('GET /molit-ingest 라우트를 못 찾았다 — cron.js 구조가 바뀌었다');
+  const handle = layer.route.stack[layer.route.stack.length - 1].handle;
+  return {
+    handle, sentryCalls, statsCalls,
+    restore() {
+      if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
+      if (saved.job) require.cache[jobPath] = saved.job; else delete require.cache[jobPath];
+      if (saved.sentry) require.cache[sentryPath] = saved.sentry; else delete require.cache[sentryPath];
+      if (saved.stats) require.cache[statsPath] = saved.stats; else delete require.cache[statsPath];
+      if (saved.cron) require.cache[cronPath] = saved.cron; else delete require.cache[cronPath];
+    },
+  };
+}
+function _mkCronRes() {
+  const r = { code: 200, body: null };
+  r.json = (b) => { r.body = b; return r; };
+  r.status = (c) => { r.code = c; return r; };
+  return r;
+}
+
+test('MV 갱신 실패 시 Sentry 경보가 고정 메시지 + extra 로 나간다 (Plan 058 Step 1)', async () => {
+  // service_role 미설정 경로(admin=null) — 기존 mvRefreshError 분기를 그대로 탄다.
+  const { handle, sentryCalls, restore } = _requireCronMolitHandler(null);
+  try {
+    const res = _mkCronRes();
+    await handle({ query: {} }, res);
+    assert.equal(sentryCalls.length, 1, 'mvRefreshError(service_role 미설정)인데 Sentry 경보가 안 나갔다');
+    const call = sentryCalls[0];
+    assert.equal(typeof call.msg, 'string', 'Sentry 메시지가 문자열이 아니다');
+    assert.equal(/\$\{|`/.test(call.msg), false,
+      'Sentry 메시지에 template literal 흔적이 있다 — 이슈가 매일 새로 생겨 그룹핑이 깨진다');
+    assert.equal(call.opts.level, 'warning');
+    assert.equal(call.opts.tags.route, 'cron.molit-ingest');
+    assert.equal(call.opts.extra.mvRefreshError, 'service_role 미설정');
+    assert.equal(res.body && res.body.ok, true, 'MV 경보가 나가도 cron 응답 자체는 ok 여야 한다(기존 규약)');
+  } finally { restore(); }
+});
+
+test('검색 색인 lag — 임계값(7일) 초과 시 경보가 나가고, 정상 범위면 조용하다 (Plan 058 Step 2)', async () => {
+  // ① 21일 지연 — 이번 실사고의 실측값 그대로. 경보가 나가야 한다.
+  {
+    const admin = _mockCronAdmin({ mvDate: '2026-08-14', txDate: '2026-09-04' });
+    const { handle, sentryCalls, restore } = _requireCronMolitHandler(admin);
+    try {
+      const res = _mkCronRes();
+      await handle({ query: {} }, res);
+      assert.equal(sentryCalls.length, 1, '21일 지연인데 경보가 정확히 1건(lag) 나가지 않았다');
+      assert.equal(sentryCalls[0].opts.extra.searchIndexLagDays, 21, 'lag 계산값이 실측(21일)과 다르다');
+      assert.equal(/\$\{|`/.test(sentryCalls[0].msg), false, 'lag 경보 메시지에 template literal 흔적 — 그룹핑 계약 위반');
+      assert.equal(sentryCalls[0].opts.tags.route, 'cron.molit-ingest');
+    } finally { restore(); }
+  }
+  // ② 1일 지연 — 정상 범위(실측 기준 0~1일). 경보가 없어야 한다.
+  {
+    const admin = _mockCronAdmin({ mvDate: '2026-09-03', txDate: '2026-09-04' });
+    const { handle, sentryCalls, restore } = _requireCronMolitHandler(admin);
+    try {
+      const res = _mkCronRes();
+      await handle({ query: {} }, res);
+      assert.equal(sentryCalls.length, 0, '1일 지연(정상)인데 경보가 나갔다 — 오탐');
+    } finally { restore(); }
+  }
+});
+
+test('검색 색인 lag 조회 실패 시 필드가 생략된다 — 0 을 지어내지 않는다 (Plan 058 Step 2)', async () => {
+  // molit_apt_index 조회 자체가 에러를 반환하는 상황(예: 순간적 통신 장애) — lag 을 알 수 없다.
+  const admin = _mockCronAdmin({ mvErr: new Error('조회 실패') });
+  const { handle, sentryCalls, statsCalls, restore } = _requireCronMolitHandler(admin);
+  try {
+    const res = _mkCronRes();
+    await handle({ query: {} }, res);
+    const rec = statsCalls.find(c => c.name === 'molit-ingest');
+    assert.ok(rec, 'molit-ingest 실행 기록이 recordCronRun 으로 안 남았다');
+    assert.equal(rec.summary.searchIndexLagDays, undefined,
+      'lag 조회가 실패했는데 값이 채워졌다 — 0 을 지어내면 "지연 없음"으로 오독된다');
+    assert.equal(sentryCalls.length, 0, '조회 실패는 lag 미상일 뿐 경보 사유가 아니다(오탐 방지)');
+    assert.equal(res.body && res.body.ok, true, 'lag 조회 실패해도 cron 응답은 ok 여야 한다');
+  } finally { restore(); }
+});
+
+test('cronStats._pick — searchIndexLagDays 화이트리스트를 통과하고, 미상은 0 으로 둔갑하지 않는다 (Plan 058 Step 2)', () => {
+  const { _pick } = require('../services/cronStats');
+  assert.equal(_pick({ searchIndexLagDays: 21 }).searchIndexLagDays, 21);
+  assert.equal(_pick({ searchIndexLagDays: 0 }).searchIndexLagDays, 0, '0(지연 없음)도 유효한 값이라 통과해야 한다');
+  assert.equal('searchIndexLagDays' in _pick({ searchIndexLagDays: undefined }), false,
+    '미상(undefined)이 화이트리스트를 통과해 0 으로 오독될 값을 남기면 안 된다');
+  assert.equal('searchIndexLagDays' in _pick({}), false);
+});
+
+// ── STALE-PAGE-2026-09-06 (Plan 058 Step 3) ───────────────────────────────────────────────────
+// [배경] priceRecordsService.sliceRegion 은 Plan 054 에서 blob.stale(최대 14일 된 마지막 성공
+//   스냅샷)을 rec.stale 로 보존하도록 고쳤다. 이 계획이 확인할 몫은 그 표식이 loadRegionData()
+//   반환까지 실제로 도달하는지, 그리고 두 라우트가 그것을 **읽어서 캐시를 막는지**다.
+//   [도달 확인] regionPage.js 의 loadRegionData 는 `rec = svc.sliceRegion(await svc.getPriceRecordsByRegion(), region.lawdCd);`
+//   로 sliceRegion 의 반환을 그대로 rec 에 담아 `{ dash, rec, weekly }` 로 돌려준다 — 가공·재포장 없음.
+//   따라서 `rec.stale` 은 별도 배선 없이 그대로 도달한다(코드 인용, STOP 조건 아님).
+test('지역 페이지 — rec.stale 이면 긴 캐시가 붙지 않는다 (Plan 058 Step 3)', async () => {
+  const express = require('express');
+  const app = express();
+  app.use('/region', require('../routes/regionPage'));
+  const svc = require('../services/priceRecordsService');
+  const regionMod = require('../routes/region');
+  const saved = { getByRegion: svc.getPriceRecordsByRegion, buildDashboard: regionMod.buildDashboard };
+  try {
+    // buildDashboard 는 실제 R-ONE·KOSIS 호출을 타므로 테스트에선 null 로 막는다 — 이 테스트의
+    // 관심사는 경신(rec) 카드 하나로 cards.length>0 을 만들고 stale 판정만 보는 것이다.
+    regionMod.buildDashboard = async () => null;
+
+    // ① stale 스냅샷 — 카드는 있지만(highCount>0) 캐시는 no-store 여야 한다.
+    svc.getPriceRecordsByRegion = async () => ({
+      stale: true, sinceDate: '2026-08-01', windowDays: 30, minPrior: 3,
+      regions: { 11680: { comparedCount: 10, highCount: 3, lowCount: 1, high: [], low: [] } },
+    });
+    const srv1 = app.listen(0);
+    try {
+      const port = srv1.address().port;
+      const res = await fetch(`http://127.0.0.1:${port}/region/11680`);
+      assert.equal(res.status, 200);
+      assert.equal(res.headers.get('cache-control'), 'no-store',
+        'rec.stale 인데 긴 캐시(s-maxage=21600 + SWR 86400)가 붙었다 — 낡은 스냅샷이 하루 넘게 굳는다');
+    } finally { srv1.close(); }
+
+    // ② 대조군: stale 이 아니면(정상) 기존대로 긴 캐시가 붙어야 한다 — 이번 변경이 정상 경로까지
+    //    no-store 로 만들지 않았는지 확인한다(과잉 적용 방지).
+    svc.getPriceRecordsByRegion = async () => ({
+      stale: false, sinceDate: '2026-08-01', windowDays: 30, minPrior: 3,
+      regions: { 11680: { comparedCount: 10, highCount: 3, lowCount: 1, high: [], low: [] } },
+    });
+    const srv2 = app.listen(0);
+    try {
+      const port = srv2.address().port;
+      const res = await fetch(`http://127.0.0.1:${port}/region/11680`);
+      assert.match(res.headers.get('cache-control') || '', /s-maxage=21600/,
+        '정상(비 stale) 응답인데도 긴 캐시가 사라졌다 — 이번 변경이 과잉 적용됐다');
+    } finally { srv2.close(); }
+  } finally {
+    svc.getPriceRecordsByRegion = saved.getByRegion;
+    regionMod.buildDashboard = saved.buildDashboard;
+  }
+});
+
+test('OG 지역 카드 — rec.stale 이면 이미지는 그대로 만들되 캐시만 막는다 (Plan 058 Step 3)', async () => {
+  // fallback() 규약(카드를 못 만듦 → no-store + 정적 이미지)과 구별: stale 은 "실제 통계가 있지만
+  // 낡았다"는 뜻이라 og.png 로 떨어뜨리면 규약을 깨는 것이다 — 코드를 읽고 판단한 근거를 계획서에 남겼다.
+  const og = require('../routes/ogImage');
+  const rp = require('../routes/regionPage');
+  const saved = rp.loadRegionData;
+  try {
+    rp.loadRegionData = async () => ({ dash: null, rec: { stale: true, highCount: 2, lowCount: 0 }, weekly: null });
+    const layer = og.stack.find(l => l.route && l.route.path === '/region/:lawdCd');
+    assert.ok(layer, 'ogImage 라우터에서 /region/:lawdCd 를 못 찾았다');
+    const handle = layer.route.stack[layer.route.stack.length - 1].handle;
+
+    const mkRes = () => {
+      const r = { headers: {}, code: 200, sent: null, type: null };
+      r.set = (k, v) => { r.headers[k] = v; return r; };
+      r.status = (c) => { r.code = c; return r; };
+      r.send = (b) => { r.sent = b; return r; };
+      return r;
+    };
+    const res = mkRes();
+    await handle({ params: { lawdCd: '11680' } }, res, () => {});
+    assert.equal(res.headers['Cache-Control'], 'no-store', 'stale 인데 긴 캐시가 붙었다');
+    assert.ok(Buffer.isBuffer(res.sent) && res.sent.length > 5000,
+      'stale 이라고 fallback(정적 이미지)으로 떨어졌다 — 실제 통계 카드가 있는데 규약을 깼다');
+    assert.equal(res.headers['Content-Type'], 'image/png');
+  } finally { rp.loadRegionData = saved; }
+});

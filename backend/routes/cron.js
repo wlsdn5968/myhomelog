@@ -43,6 +43,21 @@ const Sentry = require('@sentry/node');
 //   CONCURRENTLY 는 선행 갱신이 끝날 때까지 대기하므로 겹치면 대기 시간이 실제로 늘어난다.
 const MV_REFRESH_ABORT_MS = 60000;
 
+// MV-STALE-WATCH-2026-09-06 (Plan 058): 두 날짜 문자열(YYYY-MM-DD...)의 일수 차이. 순수 함수 —
+//   입력이 없거나 해석 불가면 NaN 을 돌려준다. "모름"을 0 으로 지어내지 않는다 — 호출부가
+//   Number.isFinite 로 걸러 필드 자체를 생략한다(이 저장소가 반복해 당한 결함: 0 이 값으로 오독됨).
+function _searchIndexLagDaysFrom(mvDateStr, txDateStr) {
+  if (!mvDateStr || !txDateStr) return NaN;
+  const mv = Date.parse(`${String(mvDateStr).slice(0, 10)}T00:00:00Z`);
+  const tx = Date.parse(`${String(txDateStr).slice(0, 10)}T00:00:00Z`);
+  if (!Number.isFinite(mv) || !Number.isFinite(tx)) return NaN;
+  return Math.round((tx - mv) / 86400000);
+}
+// 근거(2026-09-06 실측): 정상 시 molit_apt_index 와 molit_transactions 의 최신 거래일 차이는 0~1일
+//   (같은 cron 안에서 적재 직후 MV 를 갱신하므로). 이번 사고는 21일이었다 — 7일이면 정상 변동에는
+//   안 뜨면서 사고를 훨씬 일찍(1/3 지점) 잡는다.
+const SEARCH_INDEX_LAG_ALERT_DAYS = 7;
+
 const router = express.Router();
 
 function authorizeCron(req, res, next) {
@@ -320,9 +335,62 @@ async function handleMolitIngest(req, res) {
         else _mvRefreshMs = Date.now() - _t;
       }
     } catch (e) { _mvRefreshError = e.message; logger.warn({ err: e.message }, '검색 MV 갱신 예외 — 적재는 정상'); }
+
+    // MV-STALE-WATCH-2026-09-06 (Plan 058): "기록이 정직했는데 경보가 없어서" 21일이 조용히 지나갔다.
+    //   [실측 2026-09-06] health.crons.mvRefreshError 에 실패 사유(8초 statement timeout)가 매일 정확히
+    //   기록되고 있었는데 경보가 없어 아무도 보지 않았다 — molit_apt_index 최신 거래일 2026-08-14 vs
+    //   molit_transactions 2026-09-04(21일차), 418개 단지가 검색에서 사라졌다. 적재 cron 자체는 매일
+    //   ok(err=0)라 기존 summary.err>0 경보에는 걸리지 않는다(그 경보는 그대로 옳다 — 이건 다른 실패축).
+    // Step 1: 실패 사유를 경보로 — 고정 메시지 + 가변값은 extra(그룹핑 유지, summary.err>0 블록과 동일 규약).
+    if (_mvRefreshError) {
+      try {
+        Sentry.captureMessage('cron 감시: 검색 MV 갱신 실패 — 검색 색인이 원본 거래보다 낡아가는 중일 수 있음', {
+          level: 'warning', tags: { route: 'cron.molit-ingest', monitor: 'mv-refresh' },
+          extra: { mvRefreshError: _mvRefreshError },
+        });
+      } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
+    }
+
+    // Step 2: 실패 여부와 무관하게 "얼마나 낡았는지" 자체를 숫자로 남긴다 — 실패 사유만으로는 낡음의
+    //   정도를 모른다(과거 여러 회 실패가 쌓인 뒤 이번 회가 성공해도 지연은 그대로 남아 있을 수 있다).
+    //   조회 방법: `.order().limit(1).maybeSingle()` — 이 파일의 checkIngestFreshness·
+    //   checkRegionIngestFreshness 가 이미 같은 형태로 max(날짜)를 얻고 있고, molit_transactions 는
+    //   idx_molit_deal_date(deal_date DESC) 인덱스가 정확히 이 패턴을 위해 있다
+    //   (supabase/migrations/20260816000003_search_mv_and_indexes.sql, 실측 0.119ms). molit_apt_index 는
+    //   22K 행 규모라 전용 인덱스 없이도 정렬 비용이 무시할 수준이다 — PostgREST 집계함수(`max()`) 문법을
+    //   추측하지 않고 이미 검증된 형태만 쓴다.
+    let _searchIndexLagDays;
+    try {
+      const _lagSc = require('../db/client').getSupabaseAdmin();
+      if (_lagSc) {
+        const [_mvLatest, _txLatest] = await Promise.all([
+          _lagSc.from('molit_apt_index').select('recent_deal_date')
+            .order('recent_deal_date', { ascending: false }).limit(1).maybeSingle(),
+          _lagSc.from('molit_transactions').select('deal_date')
+            .order('deal_date', { ascending: false }).limit(1).maybeSingle(),
+        ]);
+        if (!_mvLatest.error && !_txLatest.error) {
+          const _lag = _searchIndexLagDaysFrom(
+            _mvLatest.data && _mvLatest.data.recent_deal_date,
+            _txLatest.data && _txLatest.data.deal_date,
+          );
+          if (Number.isFinite(_lag)) _searchIndexLagDays = _lag;   // 아니면 undefined 로 남아 필드가 생략된다
+        }
+      }
+    } catch (e) { logger.warn({ err: e.message }, '검색 색인 낡음 측정 실패(무시) — 필드는 생략된다(0 을 지어내지 않는다)'); }
+    if (Number.isFinite(_searchIndexLagDays) && _searchIndexLagDays > SEARCH_INDEX_LAG_ALERT_DAYS) {
+      try {
+        Sentry.captureMessage('cron 감시: 검색 색인이 원본 거래보다 크게 뒤처짐 — MV 갱신 상태 확인 필요', {
+          level: 'warning', tags: { route: 'cron.molit-ingest', monitor: 'mv-refresh' },
+          extra: { searchIndexLagDays: _searchIndexLagDays },
+        });
+      } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
+    }
+
     await require('../services/cronStats').recordCronRun('molit-ingest', {
       mvRefreshMs: _mvRefreshMs,
       mvRefreshError: _mvRefreshError,   // 실패하면 사유가 health.crons 에 보인다(부재는 눈에 안 띈다)
+      searchIndexLagDays: _searchIndexLagDays, // MV-STALE-WATCH-2026-09-06: 검색 색인 낡음(일). 미상이면 필드 생략.
       ok: summary.ok, err: summary.err, skipped: summary.skipped, elapsedMs: summary.elapsedMs,
       retried: summary.gapBackfill && summary.gapBackfill.retried, filled: summary.gapBackfill && summary.gapBackfill.filled,
       error: summary.firstError || summary.reason || undefined, // reason = 키 미설정 skip 케이스

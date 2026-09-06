@@ -114,11 +114,12 @@ router.get('/region/:lawdCd', async (req, res) => {
   try { region = require('./region').resolveRegion({ lawdCd: code }); } catch (e) { logger.warn({ err: e.message, code }, 'og: 지역 해석 실패'); }
   if (!region) return fallback(res, 'not-found');
 
-  let facts = [], label = '';
+  let facts = [], label = '', isStale = false;
   try {
     const rp = require('./regionPage');
     const { dash, rec, weekly } = await rp.loadRegionData(region);
     facts = rp.regionFacts(dash, rec, weekly);
+    isStale = !!(rec && rec.stale);   // STALE-PAGE-2026-09-06 (Plan 058): regionPage 와 같은 판정
     label = require('../services/priceRecordsService').regionLabel(region.lawdCd, region.name);
   } catch (e) {
     logger.warn({ err: e.message, code }, 'og: 지역 사실 조회 실패');
@@ -133,7 +134,13 @@ router.get('/region/:lawdCd', async (req, res) => {
     logger.warn({ err: e.message, code }, 'og: 지역 카드 렌더 실패');
     return fallback(res, 'render-error');
   }
-  res.set('Cache-Control', 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
+  // STALE-PAGE-2026-09-06 (Plan 058): facts 는 있지만(경신 통계가 낡은 스냅샷에서 나왔을 수 있다)
+  //   rec.stale 이면 그 숫자가 최대 14일 낡았다. fallback() 은 "카드를 만들지 못했다"는 뜻이라 여기 쓰면
+  //   그 규약이 깨진다 — 카드는 실제 과거 통계이지 지어낸 값이 아니므로 그대로 만들되, 캐시만 막아
+  //   다음 요청이 최신 데이터로 다시 시도하게 한다(regionPage.js 와 같은 원칙, fallback 규약은 유지).
+  res.set('Cache-Control', isStale
+    ? 'no-store'
+    : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
   res.set('Content-Type', 'image/png');
   return res.send(png);
 });
