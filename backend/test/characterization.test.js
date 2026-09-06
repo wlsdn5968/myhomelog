@@ -7760,3 +7760,147 @@ test('Plan 049: 문서 드리프트 방지 — 삭제된 엔드포인트·서비
     assert(verify.includes(gate), `verify 에 게이트 '${gate}' 없음`);
   }
 });
+// ── Plan 047 (2026-09-06): KST 하루 경계 SSOT 단일화 — 남은 사본 3벌 + monthsWindow ──────────
+//   왜 추가하나: utils/kstTime.js 가 SSOT 라고 선언했지만 dailyLimit·account·briefingService 가
+//   각자 +9h 계산을 사본으로 들고 있었다(임포트 0). 사본을 SSOT 호출로 치환했고(Step 0 에서
+//   치환 전/후 값이 KST 자정·연말·월말 경계에서 전부 일치함을 실측 대조 완료), 이 테스트가 그
+//   계약을 고정한다 — 셋 중 하나라도 다시 SSOT 없이 자체 계산을 들이면 여기서 잡힌다.
+//   ⚠ 절대 날짜는 "고정 입력"으로만 쓴다(Date.now() 에 의존하는 단언 금지) — 입력·기대값 둘 다 고정.
+//   ⚠ Date.now 만 모킹하면 `new Date()`(무인자) 는 영향받지 않는다(V8 이 내부 시계를 직접 참조) —
+//   briefingService.kstDayString() 의 무인자 분기를 검증하려면 생성자 자체를 모킹해야 한다.
+function _withMockedDate(ts, fn) {
+  const OrigDate = global.Date;
+  class MockDate extends OrigDate {
+    constructor(...args) {
+      if (args.length === 0) super(ts);
+      else super(...args);
+    }
+    static now() { return ts; }
+  }
+  global.Date = MockDate;
+  try {
+    return fn();
+  } finally {
+    global.Date = OrigDate;
+  }
+}
+
+test('KST-SSOT-2026-09-06: dailyLimit·briefingService 사본이 SSOT(kstTime) 와 경계에서 같은 값을 낸다', () => {
+  const { todayKey, secondsUntilMidnight } = require('../middleware/dailyLimit');
+  const { kstDayString } = require('../services/briefingService');
+  const { kstDate, nextKstMidnight } = require('../utils/kstTime');
+
+  // [라벨, UTC ISO, 기대 todayKey, 기대 secondsUntilMidnight, 기대 kstDayString]
+  const CASES = [
+    ['KST자정 직전(09-06 23:59:59)', '2026-09-06T14:59:59Z', '20260906', 60, '2026-09-06'],
+    ['KST자정 직후=날짜변경(09-07 00:00:00)', '2026-09-06T15:00:00Z', '20260907', 86400, '2026-09-07'],
+    ['연말경계(KST 2027-01-01 00:00:00)', '2026-12-31T15:00:00Z', '20270101', 86400, '2027-01-01'],
+    ['월말경계(KST 10-01 00:00:00)', '2026-09-30T15:00:00Z', '20261001', 86400, '2026-10-01'],
+  ];
+
+  for (const [label, iso, expTodayKey, expSecUntilMidnight, expDayString] of CASES) {
+    const ts = Date.parse(iso);
+
+    // (1) dailyLimit — 고정 기대값 + SSOT 교차검증
+    _withMockedDate(ts, () => {
+      assert.equal(todayKey(), expTodayKey, `${label}: todayKey 고정 기대값 불일치`);
+      assert.equal(todayKey(), kstDate(ts).replace(/-/g, ''), `${label}: todayKey 가 SSOT(kstDate) 와 다르다`);
+      assert.equal(secondsUntilMidnight(), expSecUntilMidnight, `${label}: secondsUntilMidnight 고정 기대값 불일치`);
+      assert.equal(
+        secondsUntilMidnight(),
+        Math.max(60, Math.floor((nextKstMidnight(ts) - ts) / 1000)),
+        `${label}: secondsUntilMidnight 이 SSOT(nextKstMidnight) 와 다르다`
+      );
+
+      // (2) briefingService.kstDayString — 무인자 분기(현재 시각 모킹 경유)
+      assert.equal(kstDayString(), expDayString, `${label}: kstDayString() 무인자 고정 기대값 불일치`);
+      assert.equal(kstDayString(), kstDate(ts), `${label}: kstDayString() 이 SSOT(kstDate) 와 다르다`);
+    });
+
+    // (3) briefingService.kstDayString(d) — 인자 있는 분기(Date.now 모킹과 무관하게 항상 성립해야 함)
+    assert.equal(kstDayString(iso), expDayString, `${label}: kstDayString(d) 인자 있는 호출 고정 기대값 불일치`);
+    assert.equal(kstDayString(iso), kstDate(ts), `${label}: kstDayString(d) 가 SSOT(kstDate) 와 다르다`);
+  }
+
+  // 하한 가드: KST 자정 1초 전이어도 최소 60초 TTL (SSOT 치환 후에도 유지돼야 한다)
+  _withMockedDate(Date.parse('2026-09-06T14:59:59Z'), () => {
+    assert.equal(secondsUntilMidnight(), 60, 'TTL 하한 60초 가드가 사라짐(Math.max(60, …) 유지 확인)');
+  });
+});
+
+test('KST-SSOT-2026-09-06: account.js POST /activity 의 kstYear 가 SSOT(kstDate) 와 경계에서 같은 값을 낸다', async () => {
+  // ⚠ 프로덕션 코드는 이미 SSOT 로 치환됐다 — 여기선 라우터 스택에서 핸들러만 꺼내
+  //   req/res 목으로 호출해 실제 반환 연도를 확인한다(billing 테스트와 같은 패턴).
+  const clientPath = require.resolve('../db/client');
+  const accountPath = require.resolve('../routes/account');
+  const savedClient = require.cache[clientPath];
+  const savedAccount = require.cache[accountPath];
+  try {
+    const rpcCalls = [];
+    require.cache[clientPath] = {
+      id: clientPath, filename: clientPath, loaded: true,
+      exports: {
+        getUserScopedClient: () => null,
+        requireSupabaseAdmin: () => { throw new Error('이 테스트에서 사용되지 않아야 한다'); },
+        getSupabaseAdmin: () => ({
+          rpc: async (name, params) => { rpcCalls.push({ name, params }); return { error: null }; },
+        }),
+      },
+    };
+    delete require.cache[accountPath];
+    const router = require('../routes/account');
+    const layer = router.stack.find((l) => l.route && l.route.path === '/activity' && l.route.methods && l.route.methods.post);
+    assert.ok(layer, 'account 라우터에서 POST /activity 를 찾지 못했다(경로 변경 시 이 테스트도 갱신할 것)');
+    const handle = layer.route.stack[layer.route.stack.length - 1].handle;
+
+    // [라벨, UTC ISO, 기대 연도]
+    const CASES = [
+      ['KST자정 직전(09-06 23:59:59, 연도 안바뀜)', '2026-09-06T14:59:59Z', 2026],
+      ['연말경계(KST 2027-01-01 00:00:00, 연도 바뀜)', '2026-12-31T15:00:00Z', 2027],
+    ];
+    for (const [label, iso, expYear] of CASES) {
+      const ts = Date.parse(iso);
+      await _withMockedDate(ts, async () => {
+        const req = { user: { id: `plan047-test-${ts}` }, body: { kind: 'search' } };
+        let statusCode = 200, body = null;
+        const res = { status(c) { statusCode = c; return this; }, json(b) { body = b; return this; } };
+        await handle(req, res);
+        assert.equal(statusCode, 200, `${label}: 상태코드 200 이 아니다 — ${JSON.stringify(body)}`);
+        assert.equal(body && body.persisted, true, `${label}: persisted 가 true 가 아니다 — ${JSON.stringify(body)}`);
+        const last = rpcCalls[rpcCalls.length - 1];
+        assert.equal(last.name, 'bump_activity_counter', `${label}: rpc 이름이 다르다`);
+        assert.equal(last.params.p_year, expYear, `${label}: p_year 고정 기대값 불일치`);
+      });
+    }
+  } finally {
+    if (savedClient) require.cache[clientPath] = savedClient; else delete require.cache[clientPath];
+    if (savedAccount) require.cache[accountPath] = savedAccount; else delete require.cache[accountPath];
+  }
+});
+
+// ── Plan 047 (2026-09-06): rentService.monthsWindow — KST 기준으로 고정 ──────────
+//   왜 추가하나: 종전엔 getFullYear()/getMonth() 로 **호스트 로컬 TZ** 를 썼다. 프로덕션(Vercel,
+//   TZ=UTC)에서 매월 1일 KST 00~09시엔 아직 "전달"로 읽혀 6개월 창이 한 달 밀렸다(이 저장소의
+//   로컬(KST) 개발 환경에선 절대 재현되지 않는 종류 — 로컬 host TZ 가 우연히 KST 와 같아서
+//   Date 의 로컬 getter 가 이미 KST 를 돌려주기 때문. 실측: 이 회귀는 host TZ 를 실제로 UTC 로
+//   바꿔야만(`TZ=UTC node …`) 잡힌다 — Plan 047 실행 로그의 Step 4 검증 참고).
+//   입력은 오프셋이 명시된 ISO 문자열(`+09:00`)이라 host TZ 와 무관하게 같은 절대시각을 가리킨다.
+test('KST-SSOT-2026-09-06: rentService.monthsWindow — 매월 1일 KST 00~09시 경계에서도 그 달이 창의 첫 원소다', () => {
+  const { monthsWindow } = require('../services/rentService');
+
+  // 경계: KST 10-01 03:00 (버그 노출 지점) — 첫 원소는 반드시 '202610'
+  const boundary = new Date('2026-10-01T03:00:00+09:00');
+  assert.deepEqual(
+    monthsWindow(boundary),
+    ['202610', '202609', '202608', '202607', '202606', '202605'],
+    'KST 10-01 03:00 경계에서 6개월 창이 한 달 밀렸다(host TZ 의존 회귀)'
+  );
+
+  // 비경계 참고 케이스: 경계에서 먼 시각은 당연히 안정적이어야 한다
+  const midMonth = new Date('2026-09-15T12:00:00+09:00');
+  assert.deepEqual(
+    monthsWindow(midMonth),
+    ['202609', '202608', '202607', '202606', '202605', '202604'],
+    'KST 09-15 12:00 비경계 케이스가 달라졌다'
+  );
+});

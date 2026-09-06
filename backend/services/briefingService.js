@@ -18,13 +18,15 @@
 const cache = require('../cache');
 const logger = require('../logger');
 const { getSupabaseAdmin } = require('../db/client');
+// KST-SSOT-2026-09-06 (Plan 047): 아래 kstDayString 자체 +9h 계산 사본을 utils/kstTime(SSOT) 로 치환.
+const { kstDate } = require('../utils/kstTime');
 
 /**
  * KST 기준 날짜 문자열. ⚠ 서버 런타임 TZ=UTC(실사고 이력) — '하루'는 반드시 +9h 명시 계산.
+ * ⚠ 인자 있는 호출과 형식(YYYY-MM-DD)을 그대로 유지한다(Step 0 대조 완료) — d 미전달 시 현재 시각.
  */
 function kstDayString(d) {
-  const base = d ? new Date(d) : new Date();
-  return new Date(base.getTime() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  return kstDate(d ? new Date(d).getTime() : Date.now());
 }
 
 /** 오늘 브리핑 재료 조합 — 전부 기존 소스 재사용, 새 외부 수집 0 */

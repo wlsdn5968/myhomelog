@@ -32,6 +32,8 @@ const { writeAudit } = require('../middleware/auditLog');
 const logger = require('../logger');
 // MOB-AUDIT-2026-05-03: maskIp import 누락 — line 154 호출 시 ReferenceError → 회원 탈퇴 500 → P0
 const { maskIp } = require('../logger');
+// KST-SSOT-2026-09-06 (Plan 047): 아래 kstYear 자체 계산 사본을 utils/kstTime(SSOT) 로 치환하기 위한 import.
+const { kstDate } = require('../utils/kstTime');
 
 const router = express.Router();
 
@@ -345,7 +347,8 @@ router.post('/activity', async (req, res) => {
     const admin = getSupabaseAdmin();
     if (!admin) return res.json({ ok: true, persisted: false });
     // 연도는 KST 기준(서버 TZ=UTC 함정 — 자정 전후 연도 갈림 방지)
-    const kstYear = new Date(Date.now() + 9 * 3600 * 1000).getUTCFullYear();
+    // KST-SSOT-2026-09-06 (Plan 047): 자체 +9h 계산 사본을 SSOT(kstDate) 로 치환(산식 동일, Step 0 대조 완료).
+    const kstYear = Number(kstDate(Date.now()).slice(0, 4));
     const { error } = await admin.rpc('bump_activity_counter', { p_user: req.user.id, p_year: kstYear, p_kind: kind });
     if (error) throw error;
     return res.json({ ok: true, persisted: true });

@@ -49,11 +49,21 @@ const _inflight = new Map(); // cacheKey → Promise (같은 (구,월) 동시 �
 //   TTL: 최근 2개월은 30h(매일 예열·계약 등록 지연 반영), 그 이전 달은 8일(등록은 계약 후 30일 안이라 두 달 지나면 거의 고정,
 //   예열이 지역을 7조로 나눠 주 1회 갱신). 로컬 캐시는 종전대로 24h.
 const RENT_MEM_TTL_S = 86400;
+// KST-SSOT-2026-09-06 (Plan 047): 종전엔 getFullYear()/getMonth() 로 **호스트 로컬 TZ** 를 썼다.
+//   프로덕션(Vercel, TZ=UTC)에서 매월 1일 KST 00~09시(=UTC 로 전달 15~24시)엔 이 시각이 아직
+//   "전달"로 읽혀 6개월 창이 통째로 한 달 밀린다(로컬 KST 개발 환경에선 절대 재현되지 않는다).
+//   utils/txWindow.js 가 이미 쓰는 방식대로 +9h 를 명시한 뒤 UTC 필드로만 다룬다.
+//   ⚠ setUTCDate(1) 을 **먼저** 하고 setUTCMonth 를 나중에 한다 — 순서를 바꾸면 31일 달에서
+//   setUTCMonth 가 다음 달로 오버플로한 뒤 setUTCDate(1) 이 그 다음 달 1일을 돌려준다(txWindow 주석 ②).
+const { KST_OFFSET_MS } = require('../utils/kstTime');
 function monthsWindow(now = new Date()) {
+  const ts = now instanceof Date ? now.getTime() : Number(now);
   const months = [];
   for (let i = 0; i < 6; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
+    const d = new Date(ts + KST_OFFSET_MS); // KST 벽시계를 UTC 필드로 다룬다
+    d.setUTCDate(1);
+    d.setUTCMonth(d.getUTCMonth() - i);
+    months.push(`${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
   }
   return months;
 }

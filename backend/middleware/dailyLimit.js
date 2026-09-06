@@ -38,19 +38,17 @@ function getClientIp(req) {
 //   TZ 환경변수로 런타임 전역을 바꾸는 방식은 로그 타임스탬프·cron 기록 등 다른 Date 사용처까지
 //   함께 흔들므로 채택하지 않고, 이 두 함수만 KST 오프셋으로 계산한다.
 //   ⚠ 계산에 getUTC* 만 쓴다 — 서버 타임존이 UTC 든 KST 든 **같은 결과**가 나와야 하기 때문이다.
-const KST_OFFSET_MS = 9 * 60 * 60 * 1000;
+// KST-SSOT-2026-09-06 (Plan 047): 이 파일의 자체 KST_OFFSET_MS 사본을 제거하고 utils/kstTime(SSOT)
+//   로 치환한다 — 근거는 위 QUOTA-TZ-2026-08-16 그대로이며 산식은 대수적으로 동일(Step 0 before/after 대조 완료).
+const { nextKstMidnight, kstDate } = require('../utils/kstTime');
 
 function todayKey() {
-  const d = new Date(Date.now() + KST_OFFSET_MS); // UTC 시각 +9h = KST 벽시계
-  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}${String(
-    d.getUTCDate()
-  ).padStart(2, '0')}`;
+  return kstDate(Date.now()).replace(/-/g, ''); // 'YYYY-MM-DD' → 'YYYYMMDD'
 }
 
 function secondsUntilMidnight() {
-  const kstNow = Date.now() + KST_OFFSET_MS;
-  const kstNextMidnight = Math.floor(kstNow / 86400000) * 86400000 + 86400000;
-  return Math.max(60, Math.floor((kstNextMidnight - kstNow) / 1000));
+  const now = Date.now();
+  return Math.max(60, Math.floor((nextKstMidnight(now) - now) / 1000));
 }
 
 /**
