@@ -78,6 +78,10 @@
 
 **로컬**: `npm run verify` (린트·JSON·의존성·환경·보안·backend test 6종 게이트)
 
+⚠ backend test 는 `scripts/run-backend-tests-utc.js` 래퍼로 **TZ=UTC** 강제 실행된다 —
+프로덕션(Vercel) 런타임이 UTC 고정인데 개발 호스트는 Asia/Seoul(KST)이라, 호스트 TZ 로만
+돌리면 host-local getter 회귀(예: rentService.monthsWindow, Plan 047)를 로컬에서 못 잡는다.
+
 ⚠ **verify 가 덮지 않는 것**:
 - `Clause XSS raw-pattern guard` (CI 전용 인라인 스크립트)
 - `gitleaks` (비밀 스캔 CI 전용)
@@ -152,4 +156,4 @@
 
 ---
 
-마지막 갱신: 2026-09-06 (검증 체크리스트 재작성 + 삭제된 서비스 제거 — Plan 049)
+마지막 갱신: 2026-09-06 (verify 의 backend test 를 TZ=UTC 로 강제 — Plan 050)

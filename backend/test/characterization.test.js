@@ -7740,7 +7740,10 @@ test('Plan 049: 문서 드리프트 방지 — 삭제된 엔드포인트·서비
   assert(!claude.includes(svc2), `CLAUDE.md 에 ${svc2} 이 남아있음`);
   assert(!claude.includes(route), `CLAUDE.md 에 ${route} 이 남아있음`);
 
-  // 4. 루트 package.json 에 verify 스크립트 있고, 5종 게이트 전부
+  // 4. 루트 package.json 에 verify 스크립트 있고, 6종 게이트 전부
+  //    (Plan 050: backend test 게이트가 `npm --prefix backend test` 직접 호출에서
+  //     `run-backend-tests-utc.js` 래퍼 경유로 바뀌었다 — TZ=UTC 계약은 아래 별도
+  //     테스트에서 더 구체적으로 고정한다.)
   const pkgPath = path.join(__dirname, '../../package.json');
   const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
 
@@ -7753,12 +7756,57 @@ test('Plan 049: 문서 드리프트 방지 — 삭제된 엔드포인트·서비
     'check-deps-sync',
     'check-env-example',
     'security-regression-check',
-    'npm --prefix backend test'
+    'run-backend-tests-utc'
   ];
 
   for (const gate of gates) {
     assert(verify.includes(gate), `verify 에 게이트 '${gate}' 없음`);
   }
+});
+
+// ── Plan 050 (2026-09-06): verify 가 backend 테스트를 TZ=UTC 로 돌리는지 계약 고정 ──────
+//   왜 추가하나: 프로덕션(Vercel) 런타임은 TZ=UTC 고정인데 개발 호스트는 Asia/Seoul(KST) 이다.
+//   `npm run verify` 가 호스트 TZ 로만 backend 테스트를 돌리면, host-local getter 를 쓰는
+//   회귀(rentService.monthsWindow 실사고, Plan 047)를 로컬에서 절대 못 잡는다 — "로컬 통과는
+//   CI 초록의 근거가 아니다"가 여기서도 재발할 수 있다. `TZ=UTC npm test` 는 POSIX 셸 문법이라
+//   Windows cmd.exe(npm 기본 script-shell)에서 동작하지 않으므로, 이 저장소는 작은 Node 래퍼
+//   (scripts/run-backend-tests-utc.js)로 child_process 를 TZ=UTC 환경에서 spawn 한다.
+//   누군가 나중에 verify 에서 이 래퍼를 빼고 다시 `npm --prefix backend test` 로 되돌리면
+//   여기서 잡는다.
+test('Plan 050: verify 가 backend 테스트를 TZ=UTC 로 실행한다 (호스트 TZ 직접 실행이 아니다)', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const pkgPath = path.join(__dirname, '../../package.json');
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'));
+  const verify = pkg.scripts && pkg.scripts.verify;
+
+  assert.ok(verify, 'package.json 에 verify 스크립트 없음');
+  assert.ok(
+    verify.includes('run-backend-tests-utc'),
+    'verify 가 backend 테스트를 run-backend-tests-utc 래퍼 경유로 돌리지 않는다 — ' +
+      '호스트 TZ 직접 실행(npm --prefix backend test 등)으로 되돌아간 것으로 보인다'
+  );
+  assert.ok(
+    !/\bTZ=UTC\s+npm\b/.test(verify),
+    'verify 가 POSIX 전용 `TZ=UTC npm ...` 문법을 직접 쓰고 있다 — Windows cmd.exe(npm 기본 ' +
+      'script-shell)에서 깨진다. child_process 래퍼(run-backend-tests-utc.js)를 경유할 것'
+  );
+
+  // 래퍼 스크립트 자체가 TZ 를 실제로 UTC 로 덮어쓰는지 소스에서 고정 (문자열 존재만으로는
+  // "덮어쓴다"는 보장이 안 되므로, env 조립 지점과 'UTC' 리터럴이 같이 있는지 확인한다).
+  const wrapperPath = path.join(__dirname, '../../scripts/run-backend-tests-utc.js');
+  assert.ok(fs.existsSync(wrapperPath), 'scripts/run-backend-tests-utc.js 가 없다');
+  const wrapperSrc = fs.readFileSync(wrapperPath, 'utf8');
+  assert.match(
+    wrapperSrc,
+    /TZ:\s*['"]UTC['"]/,
+    'run-backend-tests-utc.js 가 자식 프로세스 env 에 TZ: \'UTC\' 를 심지 않는다'
+  );
+  assert.match(
+    wrapperSrc,
+    /require\(['"]child_process['"]\)/,
+    'run-backend-tests-utc.js 가 child_process 를 쓰지 않는다 — 셸 문법(TZ=UTC cmd) 로 되돌아간 것으로 보인다'
+  );
 });
 // ── Plan 047 (2026-09-06): KST 하루 경계 SSOT 단일화 — 남은 사본 3벌 + monthsWindow ──────────
 //   왜 추가하나: utils/kstTime.js 가 SSOT 라고 선언했지만 dailyLimit·account·briefingService 가
