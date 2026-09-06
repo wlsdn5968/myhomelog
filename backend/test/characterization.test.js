@@ -6952,3 +6952,63 @@ test('/share?cmp= — 비교 공유 분기도 같은 길이 상한을 지킨다'
   assert.ok(res.body.length <= originalLen + 4096,
     `cmp 분기 치환이 증폭됐다 — 원본 ${originalLen}자, 응답 ${res.body.length}자 (상한 ${originalLen + 4096}자)`);
 });
+
+// ── Plan 035 후속 (2026-09-06): 방어층 "존재" 자체를 배선 계약으로 고정 ──────────────
+//   [왜] 위 3개 테스트는 "증폭이 일어나지 않는다"는 결과만 본다. 그런데 layer①(lit 함수형
+//   치환)과 layer②(escapeHtml 의 $ 이스케이프)는 어느 한쪽만 남아도 그 결과를 만족시킨다 —
+//   리뷰어 실측: lit() 만 제거해도 escapeHtml 이 이미 $ 를 지워버려 기존 테스트는 fail 0,
+//   두 겹을 전부 제거해야 fail 2 로 드러난다. 결과만 보면 두 방어 중 하나가 조용히 사라져도
+//   아무도 모른다 — 그래서 결과가 아니라 "두 방어가 각각 소스에 존재하는가" 를 직접 고정한다.
+//   배선/부재 계약이라 소스 문자열 검사가 맞는 도구다(이 저장소의 확립된 판단 기준).
+//   ⚠ 검사 대상 리터럴은 문자 코드로 조립한다 — 자기 문서를 잡는 자충수가 이 저장소에서
+//   6회 재발했다(위 _SHARE_EXPAND_PAIR 와 같은 이유).
+test('share.js 방어 배선 — lit() 함수형 치환과 escapeHtml $ 이스케이프가 각각 소스에 남아 있다', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../routes/share.js'), 'utf8');
+
+  // ── 방어층 ①: HTML 태그 치환(.replace(/<..., ...)) 은 전부 lit() 로 감싸져야 한다.
+  //    (base64 문자 치환 .replace(/-/g,'+') 류는 정규식이 '<' 로 시작하지 않아 범위 밖이고,
+  //     escapeHtml 자신의 .replace(/[<>"'&$]/g, c => ...) 도 대괄호로 시작해 범위 밖이다 — 오탐 아님)
+  const TAG_REPLACE_RE = /\.replace\(\/<(?:\\.|[^\\/])*\/[a-z]*\s*,\s*(lit\()?/g;
+  const calls = [...src.matchAll(TAG_REPLACE_RE)];
+  assert.ok(calls.length >= 18,
+    `HTML 태그 치환(.replace(/<...)) 호출이 ${calls.length}건뿐이다 — 기대 18건(분기 2개 × 9치환). `
+    + '치환 블록 자체가 줄었다면 이 기대치부터 갱신하고 원인을 확인할 것.');
+  const bare = calls.filter((m) => !m[1]).length;
+  assert.equal(bare, 0,
+    `.replace(/<...) 호출 ${calls.length}건 중 ${bare}건이 lit() 로 감싸지지 않았다 — `
+    + 'replacement 가 문자열/템플릿 리터럴로 되돌아가면 $ 확장 재스캔 방어(층①)가 그 자리에서 사라진다. '
+    + 'escapeHtml 의 $ 이스케이프(층②)가 아직 살아 있는 동안은 증폭이 재현되지 않아 결과 기반 테스트로는 '
+    + '못 잡는다(리뷰어 실측: lit() 만 제거 → 기존 테스트 fail 0) — 그래서 이 배선 자체를 고정한다.');
+
+  const litRefs = (src.match(/\blit\(/g) || []).length;
+  assert.ok(litRefs >= 19,
+    `lit( 참조가 ${litRefs}건 — 기대 19건 이상(치환 18 + 헬퍼 정의/주석 참조). `
+    + '줄었다면 어딘가의 lit(...) 호출이 문자열 치환으로 되돌아간 것이다.');
+
+  // lit 헬퍼 자신이 "인자 없는 함수를 반환하는 함수" 모양이어야 한다 — 호출부가 전부
+  // lit(...) 를 쓰고 있어도 lit 자신이 (s) => s 처럼 문자열을 그대로 반환해 버리면
+  // 호출부 표기(lit(...))는 그대로 남은 채로 재스캔 방어만 조용히 무효화된다.
+  assert.match(src, /const lit\s*=\s*\([^()]*\)\s*=>\s*\(\)\s*=>\s*[^;]+;/,
+    'lit 헬퍼가 "인자 없는 함수를 반환하는" 모양이 아니다 — lit(s) 의 반환값이 함수여야 '
+    + '.replace() 가 그 반환값을 재스캔하지 않는다. 헬퍼가 문자열을 직접 반환하도록 바뀌면 '
+    + '호출부의 lit(...) 표기만으로는 이 회귀를 알아챌 수 없다.');
+
+  // ── 방어층 ②: escapeHtml 이 '$' 를 이스케이프하는지 — 문자 클래스 + 매핑 객체 둘 다 확인.
+  //    (하나만 확인하면 "문자 클래스엔 있는데 매핑 테이블에서만 빠짐" 같은 절반 회귀를 놓친다)
+  const fnStart = src.indexOf('function escapeHtml(');
+  assert.ok(fnStart >= 0, 'share.js 에서 escapeHtml 함수를 찾지 못했다 — 이름이 바뀌었으면 이 테스트도 갱신할 것');
+  const fnBody = src.slice(fnStart, src.indexOf('\n}', fnStart));
+
+  const D = String.fromCharCode(36); // '$' — 소스에 리터럴로 안 쓰고 조립(자충수 방지, _SHARE_EXPAND_PAIR 와 같은 이유)
+  const classRe = new RegExp('\\[[^\\]]*\\' + D + '[^\\]]*\\]');
+  assert.match(fnBody, classRe,
+    `escapeHtml 의 정규식 문자 클래스에 ${D} 이스케이프 대상이 없다 — 이스케이프 대상에서 빠지면 `
+    + `layer① 이 지워졌을 때 되돌아갈 안전망(층②)이 없는 상태가 된다.`);
+
+  const mapRe = new RegExp("['\"]\\" + D + "['\"]\\s*:\\s*['\"]&#36;['\"]");
+  assert.match(fnBody, mapRe,
+    `escapeHtml 매핑 객체에 ${D} → &#36; 항목이 없다 — 문자 클래스에서 매치돼도 변환표가 없으면 `
+    + `undefined 로 치환돼 조용히 깨지거나, 실제로는 원문 ${D} 가 그대로 새어나간다.`);
+});
