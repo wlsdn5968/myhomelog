@@ -8344,3 +8344,75 @@ test('_market — "찾지 못했어요" 는 molit·apt_master 둘 다 0건인 �
   assert.equal(hits, 1,
     `_market 안에 "찾지 못했어요" 가 ${hits}번 있다(1번이어야 한다) — apt_master 히트 분기로 샜을 수 있다`);
 });
+
+// ── Plan 055 (2026-09-06): 거래 창 계산의 남은 쌍둥이 2벌 ──────────────────────────
+//   왜 추가하나: utils/txWindow.js 가 SSOT 라고 선언했지만 transactionService.js 안에 두 함정이
+//   그대로 남아 있었다(Plan 047 은 rentService.monthsWindow 만 고쳤다).
+//   트윈① getTransactionsByApt(:436-441 이었던 곳) — getFullYear()/getMonth() 호스트 로컬 TZ.
+//   트윈② getTransactionsByAptSeq(:784-786 이었던 곳) — setMonth 를 setDate(1) 보다 먼저 호출해
+//   31일 말일에 오버플로. 두 곳 모두 utils/txWindow 의 SSOT(txWindowMonths·txWindowStart) 로 치환했다.
+test('TXWINDOW-TWIN-2026-09-06: txWindowMonths — 매월 1일 KST 00~09시 경계에서도 그 달이 창의 첫 원소다 (트윈① 회귀 고정)', () => {
+  const { txWindowMonths } = require('../utils/txWindow');
+
+  // 함정①: 2026-09-30T23:00:00Z = KST 2026-10-01 08:00. 옛 코드(호스트 로컬 getter)는
+  //   프로덕션(TZ=UTC) 에서 이 순간에도 UTC 필드가 아직 9월이라 첫 원소로 '202609' 를 냈다.
+  assert.deepEqual(
+    txWindowMonths(6, Date.parse('2026-09-30T23:00:00Z')),
+    ['202610', '202609', '202608', '202607', '202606', '202605'],
+    'KST 로 이미 10월인데 UTC 필드로 계산해 9월을 첫 원소로 낸다면 회귀(트윈①)'
+  );
+
+  // 같은 함정의 연도 경계 변형: 2026-12-31T15:00:00Z = KST 2027-01-01 00:00.
+  assert.equal(
+    txWindowMonths(6, Date.parse('2026-12-31T15:00:00Z'))[0],
+    '202701',
+    'KST 로 이미 새해인데 UTC 필드로 계산해 작년 12월을 첫 원소로 낸다면 회귀(트윈①, 연도 경계)'
+  );
+
+  // 비경계 참고 케이스 — 트윈①과 무관, 안 바뀌어야 한다(같은 달력일이 UTC·KST 양쪽에서 8/31).
+  assert.equal(
+    txWindowMonths(6, Date.parse('2026-08-31T12:00:00Z'))[0],
+    '202608',
+    '월 경계에서 먼 시각까지 흔들리면 함정과 무관한 케이스가 바뀐 것 — STOP 조건'
+  );
+});
+
+test('TXWINDOW-TWIN-2026-09-06: txWindowStart(24, …) — 31일 말일에도 오버플로 없이 24개월 창이 나온다 (트윈② 회귀 고정)', () => {
+  const { txWindowStart } = require('../utils/txWindow');
+
+  // 함정②: 2026-08-31 로부터 24개월 전은 2024-09 인데, setMonth 를 setDate(1) 보다 먼저 부르면
+  //   "9월 31일" 이 없어 10월로 넘친다 — 옛 코드는 '2024-10-01' 을 냈다(한 달 밀림).
+  assert.equal(
+    txWindowStart(24, Date.parse('2026-08-31T12:00:00Z')),
+    '2024-09-01',
+    '31일 말일 + 24개월 창이 한 달 밀렸다면 day-overflow 회귀(트윈②)'
+  );
+});
+
+test('TXWINDOW-TWIN-2026-09-06: txWindowStart — 기존 반환값이 바뀌지 않았다 (SSOT 보호, Plan 055 는 함수를 고치지 않는다)', () => {
+  const { txWindowStart } = require('../utils/txWindow');
+
+  // 감사 G-8 계약 테스트(위 TXWINDOW-KST-2026-09-05)와 같은 입력·같은 기대값 — txWindowStart 의
+  // 구현 자체는 이 계획에서 건드리지 않았으므로 그대로 성립해야 한다.
+  assert.equal(txWindowStart(6, Date.parse('2026-07-31T10:00:00Z')), '2026-02-01');
+  assert.equal(txWindowStart(24, Date.parse('2026-09-05T03:00:00Z')), '2024-10-01');
+});
+
+test('TXWINDOW-TWIN-2026-09-06: transactionService.js 소스에 창 계산용 호스트 로컬 TZ 게터가 남아 있지 않다', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const raw = fs.readFileSync(path.join(__dirname, '../services/transactionService.js'), 'utf8');
+  // 줄 주석 제거 후 검사 — 마커·설명 주석 문자열이 검사를 오검출시킨 전례(6회 재발) 방지.
+  // ⚠ 레포가 CRLF 라 줄마다 끝에 '\r' 이 남는다 — '.' 은 '\r' 을 못 건너뛰어 `$` 앵커가 0매치
+  // 되는 함정(레포 기존 교훈)이 있으므로 `$` 없이 '//' 부터 줄 끝(비-개행 문자)까지 지운다.
+  const src = raw.split('\n').map((l) => l.replace(/\/\/[^\r\n]*/, '')).join('\n');
+
+  assert.doesNotMatch(
+    src, /getFullYear\(\)|getMonth\(\)/,
+    '호스트 로컬 TZ 게터(getFullYear/getMonth)가 코드에 남아 있다 — 트윈이 되살아났을 수 있다'
+  );
+  assert.match(src, /const months = txWindowMonths\(monthsBack\)/,
+    '트윈①(getTransactionsByApt)이 SSOT(txWindowMonths) 를 쓰지 않는다');
+  assert.match(src, /const since = txWindowStart\(monthsBack\)/,
+    '트윈②(getTransactionsByAptSeq)가 SSOT(txWindowStart) 를 쓰지 않는다');
+});

@@ -28,4 +28,30 @@ function txWindowStart(monthsBack = 6, now = Date.now()) {
   return k.toISOString().slice(0, 10);
 }
 
-module.exports = { txWindowStart };
+// TXWINDOW-TWIN-2026-09-06 (Plan 055): 트윈 ① — transactionService.js:436-441(getTransactionsByApt)
+//   가 getFullYear()/getMonth()(호스트 로컬 TZ) 로 'YYYYMM' 목록을 직접 만들던 것을 대체한다.
+//   txWindowStart 와 반환 형태가 달라(문자열 하나 vs 목록) 그대로 치환할 수 없으므로 새 함수로
+//   추가한다 — 기존 txWindowStart 구현은 바꾸지 않는다. 같은 방식(KST_OFFSET_MS 로 KST 벽시계를
+//   UTC 필드로 다룬 뒤, 날짜를 1로 고정하고 Date.UTC 로 달을 옮겨 31일 오버플로를 원천 차단)으로
+//   같은 두 함정을 피한다. 배열은 최신 달이 index 0(원본 반환 순서 보존).
+/**
+ * @param {number} monthsBack 개월 수(기본 6)
+ * @param {number} now epoch ms(기본 현재, 테스트 주입용)
+ * @returns {string[]} 'YYYYMM' 목록, 최신 달부터 과거 순
+ */
+function txWindowMonths(monthsBack = 6, now = Date.now()) {
+  const { KST_OFFSET_MS } = require('./kstTime');
+  const k = new Date(now + KST_OFFSET_MS);          // KST 벽시계를 UTC 필드로 다룬다
+  k.setUTCDate(1);
+  const y = k.getUTCFullYear();
+  const m = k.getUTCMonth();
+  const months = [];
+  for (let i = 0; i < monthsBack; i++) {
+    // day=1 고정 상태에서 Date.UTC 로 달만 옮긴다 — setMonth 오버플로 함정과 무관하다.
+    const d = new Date(Date.UTC(y, m - i, 1));
+    months.push(`${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+  }
+  return months;
+}
+
+module.exports = { txWindowStart, txWindowMonths };

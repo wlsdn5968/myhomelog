@@ -8,7 +8,7 @@ const dgk = require('./dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): �
 const { getSupabaseAdmin, hasAdminEnv } = require('../db/client');
 const cache = require('../cache');
 const logger = require('../logger');
-const { txWindowStart } = require('../utils/txWindow');
+const { txWindowStart, txWindowMonths } = require('../utils/txWindow');
 const { PYEONG_M2 } = require('../utils/pyeong'); // PYEONG-SSOT-2026-09-05: 리터럴 → 단일 출처
 // TXAPT-MATCH-2026-05-13 (Sprint Z + Z+): master 정식명 ↔ MOLIT raw 매칭
 //   - Z: 양방향 contains + baseAptName (suffix 정규화)
@@ -429,17 +429,16 @@ async function getTransactionsByApt(lawdCd, aptName, monthsBack = 6) {
     throw err;
   }
 
-  const cacheKey = `txapt:${lawdCd}:${aptName}:${monthsBack}`;
+  // TXWINDOW-TWIN-2026-09-06 (Plan 055): 창 산식이 바뀌었다 — v2 로 올려 옛(버그) 결과가
+  //   TTL(1800s)만큼 남는 것을 막는다. 다른 소비자 없음(grep 확인).
+  const cacheKey = `txapt:v2:${lawdCd}:${aptName}:${monthsBack}`;
   const cached = cache.get(cacheKey);
   if (cached) return cached;
 
-  const now = new Date();
-  const months = [];
-  // 최근 N개월 조회 — 거래 희소 단지까지 커버
-  for (let i = 0; i < monthsBack; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    months.push(`${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`);
-  }
+  // TXWINDOW-TWIN-2026-09-06 (Plan 055): getFullYear()/getMonth() 는 호스트 로컬 TZ 라
+  //   프로덕션(UTC)에서 매달 1일 KST 00~09시 동안 전달을 보는 함정이 있었다 — utils/txWindow 의
+  //   SSOT(txWindowMonths, KST 기준)로 치환한다.
+  const months = txWindowMonths(monthsBack);
 
   // ⚠ SILENT-SAMPLE-2026-08-30 (Sprint PPPPPPP): 실패한 달을 빈 배열로 삼키면
   //   가격 백분위·거래량이 **불완전한 표본 위에서** 계산되는데 아무도 모른다.
@@ -777,19 +776,22 @@ async function getTransactionsByAptSeq(aptSeq, monthsBack = 24) {
   if (!admin) return null;
   const seq = String(aptSeq || '').trim();
   if (!/^\d{5}-\d+$/.test(seq)) return null;
-  const ck = `txseq:${seq}:${monthsBack}`;
+  // TXWINDOW-TWIN-2026-09-06 (Plan 055): 창 산식이 바뀌었다 — v2 로 올려 옛(버그) 결과가
+  //   TTL(6h)만큼 공개 단지 페이지에 남는 것을 막는다. 다른 소비자 없음(grep 확인).
+  const ck = `txseq:v2:${seq}:${monthsBack}`;
   const hit = cache.get(ck);
   if (hit !== undefined) return hit;
   try {
-    const since = new Date();
-    since.setMonth(since.getMonth() - (monthsBack - 1));
-    since.setDate(1);
+    // TXWINDOW-TWIN-2026-09-06 (Plan 055): setMonth 를 setDate(1) 보다 먼저 호출하면 31일인 달에서
+    //   오버플로가 났고(예: 7/31 → "2/31" → 3/3 → setDate(1) 이 3/1), new Date() 자체도 호스트 로컬
+    //   TZ 라 프로덕션(UTC)에서 트윈 ①과 같은 함정을 겹으로 안고 있었다 — SSOT 로 치환한다.
+    const since = txWindowStart(monthsBack);
     const LIM = 1000;
     const { data, error } = await admin
       .from('molit_transactions')
       .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq, jibun')
       .eq('apt_seq', seq)
-      .gte('deal_date', since.toISOString().slice(0, 10))
+      .gte('deal_date', since)
       .order('deal_date', { ascending: false })
       .order('id', { ascending: false })
       .limit(LIM);
