@@ -161,9 +161,15 @@ price_records 성능 마이그레이션 · SSR 공유 페이지).
 - **011**: `await storePopularSnapshot`, `MV_REFRESH_ABORT_MS=60000`(실측 11,451ms 근거),
   degraded 주석 정정.
 
-⚠ **실행 방식 메모**: `execute` 의 worktree 격리를 쓰지 못했다 — 이 저장소는 상위 디렉터리가
-git repo 가 아니라(`myhomelog_deploy_1/myhomelog` 가 repo) worktree 생성이 실패한다.
-격리 없는 실행자를 붙이는 대신 계획서의 단계·검증을 그대로 따라 직접 실행했다.
+⚠ **실행 방식 메모(2026-08-16 시점)**: `execute` 의 worktree 격리를 쓰지 못해 계획서의 단계·검증을
+그대로 따라 직접 실행했다.
+
+> ✅ **2026-09-06 정정 — 위 서술의 원인 진단이 틀렸다.** "상위 디렉터리가 git repo 가 아니라
+> worktree 생성이 실패한다" 고 적었으나 `git worktree add` 는 **정상 작동한다**(실측).
+> 실패했던 것은 Agent 도구의 `isolation:"worktree"` 옵션이지 git 자체가 아니었다.
+> 2026-09-06 라운드는 워크트리 5개에 실행자 5명을 붙여 **완전 격리 병렬 실행**했고 커밋 섞임 0.
+> 절차·함정(짧은 경로 · node_modules junction 공유 · EOF 충돌 해소 · **정리 시 junction 먼저 끊기**)은
+> 메모리 `concurrent-sessions-shared-worktree` 에 기록했다.
 
 ⚠ **계획서 criteria 결함 1건(011)**: `grep -c "fire-and-forget" backend/routes/search.js → 0`
 을 파일 전체 대상으로 썼는데, 9행의 **다른 라우트**(`/search/history`) 헤더 설명에도 같은 표현이
