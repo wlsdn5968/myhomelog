@@ -84,7 +84,7 @@
 | **069** | **공개 단지 페이지 2탄: 학교·주소·구조 + desc 출처 (캐시 전용, 외부 호출 0)** | P2 | S | 068 | TODO — 계획서 작성 완료 |
 | **070** | **긴 `s-maxage` 36지점 전수 — 성공/열화 미구분 잔여** | P2 | M | — | TODO |
 | **071** | **minor/patch 의존성 4종 갱신 (메이저 5종은 조사 후)** | P2 | XS | — | DONE (81e3330, 2026-09-06) — ⚠ 실측: Windows `npm install` 은 정션을 해제하고 워크트리에 실제 node_modules 를 만든다(원본 무손상·미갱신 → 리뷰어가 머지 후 원본에서 `npm install`) |
-| **072** | **메이저 4종 갱신 — helmet 8·rate-limit 8·pino 10·dotenv 17 (조사+반증: 코드 변경은 dotenv `quiet` 1줄)** | P2 | S | 071 | TODO |
+| **072** | **메이저 4종 갱신 — helmet 8·rate-limit 8·pino 10·dotenv 17 (조사+반증: 코드 변경은 dotenv `quiet` 1줄)** | P2 | S | 071 | DONE (9b4e3c3, 2026-09-06) — 라이브: HSTS 365일·CSP 13지시어 집합 동일. dotenv 호출부 2곳 `quiet:true` |
 | **073** | **express 4→5.2.1 — audit moderate 5건 중 4건 원인. 실행 재현된 영향 2종(`req.query` 정제값 유실=보안 회귀 · `req.body` undefined 8곳)** | **P1** | M | 071·072 | TODO |
 | **058** | **조용한 낡음 감시 — 검색 색인 21일 정지가 경보 없었다 + 열화 전파 2곳** | **P1** | S | 054 | DONE (197ec1c, 2026-09-06) — searchIndexLagDays 지표 신설·임계 7일. ⚠ 근본 수정(DB)은 운영자 승인 대기
 
