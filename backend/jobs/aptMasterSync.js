@@ -76,15 +76,15 @@ function adminClient() {
  *   </item></items>
  */
 async function syncOneSgg(admin, lawdCd) {
-  const all = [];
-  let _fetchError = null; // PACER-2026-08-30: 페이지 조회 실패 사유(요약에 싣는다)
+  const all = [];
+  let _fetchError = null; // PACER-2026-08-30: 페이지 조회 실패 사유(요약에 싣는다)
   // ROBUSTNESS-2026-06-13: 페이지 재시도 상태 — 일시적 5xx 시 break(뒷페이지 전체 유실) 대신 동일 페이지 재시도.
   let _pageRetry = 0;
   const MAX_PAGE_RETRY = 2;
   for (let pageNo = 1; pageNo <= MAX_PAGES; pageNo++) {
-    let r;
-    try {
-      await pace();
+    let r;
+    try {
+      await pace();
       r = await dgk.get(APT_LIST_URL, {
         params: {
           serviceKey: APT_INFO_KEY,
@@ -96,12 +96,12 @@ async function syncOneSgg(admin, lawdCd) {
         timeout: 8000,
         headers: { Accept: 'application/json' },
       });
-    } catch (e) {
-      // PACER-2026-08-30: 429 면 스스로 물러난다(공용 간격을 늘려 전 워커에 적용).
-      if (/429/.test(String(e && e.message))) {
-        _throttleHits++;
-        _interval = Math.min(4000, Math.round(_interval * 1.5) || 400);
-      }
+    } catch (e) {
+      // PACER-2026-08-30: 429 면 스스로 물러난다(공용 간격을 늘려 전 워커에 적용).
+      if (/429/.test(String(e && e.message))) {
+        _throttleHits++;
+        _interval = Math.min(4000, Math.round(_interval * 1.5) || 400);
+      }
       // 진단 (1회만): axios 에러 raw — 4xx/5xx 시 message+status+body
       if (!_diagLogged) {
         _diagLogged = true;
@@ -123,10 +123,10 @@ async function syncOneSgg(admin, lawdCd) {
         pageNo--; // 같은 페이지 재시도
         continue;
       }
-      logger.warn({ err: e.message, lawdCd, pageNo, retries: _pageRetry }, 'AptInfo 페이지 호출 실패 — 재시도 소진, 이 sgg 중단');
-      // ⚠ 여기서 그냥 break 하면 `{fetched:0}` 이 돼 요약의 errors 에 잡히지 않는다 —
-      //   실제로 경기도 전역이 실패했는데 `errors: 0` 으로 보고된 원인이다. 사유를 들고 나간다.
-      _fetchError = e.message;
+      logger.warn({ err: e.message, lawdCd, pageNo, retries: _pageRetry }, 'AptInfo 페이지 호출 실패 — 재시도 소진, 이 sgg 중단');
+      // ⚠ 여기서 그냥 break 하면 `{fetched:0}` 이 돼 요약의 errors 에 잡히지 않는다 —
+      //   실제로 경기도 전역이 실패했는데 `errors: 0` 으로 보고된 원인이다. 사유를 들고 나간다.
+      _fetchError = e.message;
       break;
     }
     _pageRetry = 0; // 페이지 성공 → 재시도 카운터 리셋(페이지별 예산)
@@ -277,9 +277,9 @@ async function syncOneSgg(admin, lawdCd) {
       samples: renamed.slice(0, 5).map(r => `${prevName.get(r.kapt_code)} → ${r.apt_name}`),
     }, 'apt_master 단지명 변경 감지');
   }
-  return {
-    lawdCd, fetched: rows.length, inserted,
-    renamed: renamed.length,
+  return {
+    lawdCd, fetched: rows.length, inserted,
+    renamed: renamed.length,
     ...(_fetchError ? { fetchError: _fetchError } : {}),
     ...(upsertError ? { upsertError } : {}),
   };
@@ -344,11 +344,11 @@ async function runAptMasterSync() {
     sggs: codes.length,
     fetched: fetchedTotal,
     inserted: insertedTotal,
-    errors: errCount,
-    renamed: renamedTotal,
-    throttleHits: _throttleHits,
-    intervalMs: _interval,
-    failedLawds: failedLawds.slice(0, 40),
+    errors: errCount,
+    renamed: renamedTotal,
+    throttleHits: _throttleHits,
+    intervalMs: _interval,
+    failedLawds: failedLawds.slice(0, 40),
     elapsedMs,
     remaining: queue.length,   // >0 이면 데드라인에 걸려 중단됐다는 뜻 — 다음 run 이 이어받는다
   }, 'apt-master-sync 완료');
