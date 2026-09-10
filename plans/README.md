@@ -86,9 +86,9 @@
 | **071** | **minor/patch 의존성 4종 갱신 (메이저 5종은 조사 후)** | P2 | XS | — | DONE (81e3330, 2026-09-06) — ⚠ 실측: Windows `npm install` 은 정션을 해제하고 워크트리에 실제 node_modules 를 만든다(원본 무손상·미갱신 → 리뷰어가 머지 후 원본에서 `npm install`) |
 | **072** | **메이저 4종 갱신 — helmet 8·rate-limit 8·pino 10·dotenv 17 (조사+반증: 코드 변경은 dotenv `quiet` 1줄)** | P2 | S | 071 | DONE (9b4e3c3, 2026-09-06) — 라이브: HSTS 365일·CSP 13지시어 집합 동일. dotenv 호출부 2곳 `quiet:true` |
 | **073** | **express 4→5.2.1 — audit moderate 5건 중 4건 원인. 실행 재현된 영향 2종(`req.query` 정제값 유실=보안 회귀 · `req.body` undefined 8곳)** | **P1** | M | 071·072 | DONE (f440f8b·5669513·536d8b4·b3371f6, 2026-09-06) — 380 pass · audit moderate 5→2(fflate/satori 연쇄만, "5→1" 기대는 카운팅 오해) · 리뷰어 추가 전수: 경로 문법·제거 API·query parser/urlencoded 기본값 전부 0건 + server.js 로드 스모크(스택 75) · 라이브 POST 4종 400(500 아님)·정제 도달·Sentry 45분 신규 0 |
-| **074** | **`validatePropertySearch` 죽은 GET 분기 제거 (소비자는 POST /recommend 뿐 — 073 이 테스트로 죽은 분기를 붙들어 둠)** | P3 | XS | 073 | TODO |
-| **075** | **satori 중첩 fflate 0.7.3 → 0.7.5 override (audit moderate 2 → 0, satori 는 inflateSync 만 사용)** | P2 | XS | — | TODO |
-| **076** | **잡무 3건: 스키마 스캔 정규식 `Buffer.from` 오탐 · aptMasterSync.js CR CR LF 23줄 · pino redact 2·3단계 (pino `*` 는 한 단계뿐 — 실측)** | P3 | S | — | TODO |
+| **074** | **`validatePropertySearch` 죽은 GET 분기 제거 (소비자는 POST /recommend 뿐 — 073 이 테스트로 죽은 분기를 붙들어 둠)** | P3 | XS | 073 | DONE (3050689, 2026-09-10) — haiku 실행자 3분/86K, 380 유지(테스트 1개 교체), 회귀 주입 통과. 라이브 POST /recommend 본문 유무 모두 400 |
+| **075** | **satori 중첩 fflate 0.7.3 → 0.7.5 override (audit moderate 2 → 0, satori 는 inflateSync 만 사용)** | P2 | XS | — | DONE (f3dba8d, 2026-09-10) — overrides 로 중첩 fflate 0.7.3 제거, root·backend audit **0**. og-image 렌더 테스트 + 라이브 /api/og/apt/11350-183 200 PNG(39KB) 확인 |
+| **076** | **잡무 3건: 스키마 스캔 정규식 `Buffer.from` 오탐 · aptMasterSync.js CR CR LF 23줄 · pino redact 2·3단계 (pino `*` 는 한 단계뿐 — 실측)** | P3 | S | — | DONE (8fa5bda·52b350c·d2fe951, 2026-09-10) — 382 pass. ⚠ CRLF 커밋은 23줄이 아니라 372줄 전체: 이 파일만 blob 에 CR 이 있던 유일한 예외(js 127개 중 1)라 LF 관례로 정규화된 것 — `git diff -w` 빈 출력으로 공백 외 변경 0 확인 |
 | **077** | **`refresh_molit_aliases` v2 적용 기록 — CTE MATERIALIZED 로 108.5s → 9.5s (067 cron 30s 중단 원인, Sentry NODE-D)** | **P1** | XS | 운영자 DB 승인 | TODO — 승인 대기 |
 | **058** | **조용한 낡음 감시 — 검색 색인 21일 정지가 경보 없었다 + 열화 전파 2곳** | **P1** | S | 054 | DONE (197ec1c, 2026-09-06) — searchIndexLagDays 지표 신설·임계 7일. ⚠ 근본 수정(DB)은 운영자 승인 대기
 
