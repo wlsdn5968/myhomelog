@@ -14,6 +14,26 @@ const pino = require('pino');
 
 const isProd = process.env.NODE_ENV === 'production';
 
+// REDACT-DEPTH-2026-09-10 (Plan 076): pino 의 `*` 는 정확히 한 단계만 매치한다(실측). 중첩 객체
+//   ({ config: { kakao: { apiKey } } }) 를 그대로 로그에 넣어도 가려지도록 2·3단계를 명시한다.
+const SECRET_KEYS = ['apiKey', 'api_key', 'serviceKey', 'password', 'token'];
+const REDACT_PATHS = [
+  // 흔한 PII 필드명
+  'email', 'phoneNumber', 'phone', 'name', 'fullName',
+  'ssn', 'rrn', 'creditScore',
+  // HTTP req/res 안의 토큰
+  'req.headers.authorization',
+  'req.headers.cookie',
+  'req.headers["x-api-key"]',
+  'req.headers["set-cookie"]',
+  'res.headers["set-cookie"]',
+  // 외부 API 키가 실수로 객체 안에 들어간 경우 — 최상위·1·2·3단계
+  ...SECRET_KEYS,
+  ...SECRET_KEYS.map((k) => `*.${k}`),
+  ...SECRET_KEYS.map((k) => `*.*.${k}`),
+  ...SECRET_KEYS.map((k) => `*.*.*.${k}`),
+];
+
 // /24 마스킹: 121.131.45.123 → 121.131.45.0  (GDPR/개보법 친화)
 //             2001:db8:abcd:1234:: → 2001:db8:abcd::  (앞 3 segment 만 유지)
 function maskIp(ip) {
@@ -42,24 +62,7 @@ const logger = pino({
 
   // ── PII redaction ──────────────────────────────────────────
   // pino redact: 매칭 경로의 값을 '[REDACTED]' 로 치환
-  redact: {
-    paths: [
-      // 흔한 PII 필드명
-      'email', 'phoneNumber', 'phone', 'name', 'fullName',
-      'ssn', 'rrn', 'creditScore',
-      // HTTP req/res 안의 토큰
-      'req.headers.authorization',
-      'req.headers.cookie',
-      'req.headers["x-api-key"]',
-      'req.headers["set-cookie"]',
-      'res.headers["set-cookie"]',
-      // 외부 API 키가 실수로 객체 안에 들어간 경우
-      '*.apiKey', '*.api_key', '*.serviceKey', '*.password', '*.token',
-      'serviceKey', 'apiKey', 'token', 'password',
-    ],
-    censor: '[REDACTED]',
-    remove: false,
-  },
+  redact: { paths: REDACT_PATHS, censor: '[REDACTED]', remove: false },
 
   // ── 직렬화 커스터마이즈 ────────────────────────────────────
   serializers: {
@@ -98,3 +101,4 @@ const logger = pino({
 
 module.exports = logger;
 module.exports.maskIp = maskIp;
+module.exports.REDACT_PATHS = REDACT_PATHS;
