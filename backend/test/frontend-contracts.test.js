@@ -1182,6 +1182,10 @@ test('품질 게이트: no-op 로 판명된 스코프 검사기가 되살아나�
 //   [무엇을 고정하나] 스냅샷은 방치되면 즉시 거짓말이 된다. 그래서 "코드가 실제로 부르는
 //     테이블·RPC 가 스냅샷에 전부 있는가" 를 건다 — 스냅샷이 **중요한 방향으로** 낡으면 깨진다.
 //     (2026-09-02 실측: 테이블 28/28, RPC 10/10 일치)
+
+// SCHEMA-SCAN-RE-2026-09-10 (Plan 076): `Buffer.from('…')` 은 테이블 참조가 아니다 — lookbehind 로 제외.
+const TABLE_REF_RE = /(?<!Buffer)\.from\(\s*['"`]([a-zA-Z0-9_]+)/g;
+
 test('스키마 스냅샷: 코드가 참조하는 테이블·RPC 가 supabase/schema.sql 에 전부 선언돼 있다', () => {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
@@ -1214,7 +1218,7 @@ test('스키마 스냅샷: 코드가 참조하는 테이블·RPC 가 supabase/sc
   const usedFns = new Map();
   for (const fp of srcFiles) {
     const src = fs2.readFileSync(fp, 'utf8');
-    for (const m of src.matchAll(/\.from\(\s*['"`]([a-zA-Z0-9_]+)/g)) {
+    for (const m of src.matchAll(TABLE_REF_RE)) {
       if (!usedTables.has(m[1])) usedTables.set(m[1], fp);
     }
     for (const m of src.matchAll(/\.rpc\(\s*['"`]([a-zA-Z0-9_]+)/g)) {
@@ -1227,6 +1231,12 @@ test('스키마 스냅샷: 코드가 참조하는 테이블·RPC 가 supabase/sc
   const missF = [...usedFns.keys()].filter((x) => !declaredFns.has(x));
   assert.deepEqual(missT, [], `코드가 쓰는데 스냅샷에 없는 테이블: ${missT.map((x) => x + '(' + usedTables.get(x) + ')').join(', ')} — 스냅샷을 다시 뽑을 것`);
   assert.deepEqual(missF, [], `코드가 쓰는데 스냅샷에 없는 RPC: ${missF.map((x) => x + '(' + usedFns.get(x) + ')').join(', ')} — 스냅샷을 다시 뽑을 것`);
+});
+
+test('SCHEMA-SCAN-RE (Plan 076): Buffer.from 은 테이블 참조로 잡지 않고 supabase .from 은 잡는다', () => {
+  const sample = "const b = Buffer.from('abc'); const r = await admin.from('apt_master').select('*'); db.from(`molit_transactions`)";
+  const got = [...sample.matchAll(TABLE_REF_RE)].map((m) => m[1]);
+  assert.deepEqual(got, ['apt_master', 'molit_transactions']);
 });
 
 

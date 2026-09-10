@@ -176,9 +176,9 @@ async function _withOgAptStub({ facts, renderFail }, fn) {
   _stubModule(ogSvcPath, {
     renderCard: async () => {
       if (renderFail) throw new Error('렌더 실패 주입(Plan 070 회귀 테스트)');
-      // ⚠ SCHEMA-SNAPSHOT-SCAN (characterization.test.js): `\.from\(` 정규식은 Supabase 여부를
-      //   구분하지 않고 소스 전체를 훑는다 — `Buffer.from('문자열')` 도 "테이블 참조"로 오검출된다.
-      //   Buffer.alloc 으로 만들어 그 스캔을 건드리지 않는다(내용은 테스트에서 안 본다).
+      // ⚠ SCHEMA-SNAPSHOT-SCAN (frontend-contracts.test.js, TABLE_REF_RE): 소스 전체에서 `.from('…')` 을
+      //   테이블 참조로 모은다. Plan 076 부터 `Buffer.from` 은 lookbehind 로 제외되지만, 여기는 그 스캔과
+      //   무관하게 Buffer.alloc 으로 둔다(내용은 테스트에서 안 본다).
       return Buffer.alloc(8, 0x50);
     },
   });
