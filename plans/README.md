@@ -86,6 +86,10 @@
 | **071** | **minor/patch 의존성 4종 갱신 (메이저 5종은 조사 후)** | P2 | XS | — | DONE (81e3330, 2026-09-06) — ⚠ 실측: Windows `npm install` 은 정션을 해제하고 워크트리에 실제 node_modules 를 만든다(원본 무손상·미갱신 → 리뷰어가 머지 후 원본에서 `npm install`) |
 | **072** | **메이저 4종 갱신 — helmet 8·rate-limit 8·pino 10·dotenv 17 (조사+반증: 코드 변경은 dotenv `quiet` 1줄)** | P2 | S | 071 | DONE (9b4e3c3, 2026-09-06) — 라이브: HSTS 365일·CSP 13지시어 집합 동일. dotenv 호출부 2곳 `quiet:true` |
 | **073** | **express 4→5.2.1 — audit moderate 5건 중 4건 원인. 실행 재현된 영향 2종(`req.query` 정제값 유실=보안 회귀 · `req.body` undefined 8곳)** | **P1** | M | 071·072 | DONE (f440f8b·5669513·536d8b4·b3371f6, 2026-09-06) — 380 pass · audit moderate 5→2(fflate/satori 연쇄만, "5→1" 기대는 카운팅 오해) · 리뷰어 추가 전수: 경로 문법·제거 API·query parser/urlencoded 기본값 전부 0건 + server.js 로드 스모크(스택 75) · 라이브 POST 4종 400(500 아님)·정제 도달·Sentry 45분 신규 0 |
+| **074** | **`validatePropertySearch` 죽은 GET 분기 제거 (소비자는 POST /recommend 뿐 — 073 이 테스트로 죽은 분기를 붙들어 둠)** | P3 | XS | 073 | TODO |
+| **075** | **satori 중첩 fflate 0.7.3 → 0.7.5 override (audit moderate 2 → 0, satori 는 inflateSync 만 사용)** | P2 | XS | — | TODO |
+| **076** | **잡무 3건: 스키마 스캔 정규식 `Buffer.from` 오탐 · aptMasterSync.js CR CR LF 23줄 · pino redact 2·3단계 (pino `*` 는 한 단계뿐 — 실측)** | P3 | S | — | TODO |
+| **077** | **`refresh_molit_aliases` v2 적용 기록 — CTE MATERIALIZED 로 108.5s → 9.5s (067 cron 30s 중단 원인, Sentry NODE-D)** | **P1** | XS | 운영자 DB 승인 | TODO — 승인 대기 |
 | **058** | **조용한 낡음 감시 — 검색 색인 21일 정지가 경보 없었다 + 열화 전파 2곳** | **P1** | S | 054 | DONE (197ec1c, 2026-09-06) — searchIndexLagDays 지표 신설·임계 7일. ⚠ 근본 수정(DB)은 운영자 승인 대기
 
 ### 051~053 라운드 (2026-09-06, 운영자 실사용 실패 신고에서 출발)
