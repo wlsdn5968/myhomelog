@@ -11,6 +11,11 @@
     "db:introspect": "drizzle-kit introspect",
     "db:studio": "drizzle-kit studio"
   },
+  "overrides": {
+    "satori": {
+      "fflate": "0.7.5"
+    }
+  },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.124.0",
     "@resvg/resvg-js": "^2.6.2",
