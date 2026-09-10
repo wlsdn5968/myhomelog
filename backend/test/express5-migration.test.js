@@ -128,16 +128,14 @@ test('EXPRESS5-A(단위): validateTransactionQuery — 정제값을 req.sanitize
   assert.equal(req.sanitized && req.sanitized.aptName, '&lt;b&gt;x&lt;/b&gt;', 'req.sanitized.aptName 이 정제값이 아니다');
 });
 
-test('EXPRESS5-A(단위): validatePropertySearch GET 분기 — req.query 대신 req.sanitized 에 정제값을 싣는다', () => {
-  // GET 분기는 이 저장소에서 현재 실제로 마운트된 소비자가 없다(properties.js 는 POST 만 사용) —
-  // 그래도 미들웨어 자체의 패턴 결함(req.query 재대입)은 동일해 함께 고쳤다. 여기서는
-  // "미들웨어가 어디에 쓰는가"를 단위로 확인한다(실HTTP 소비자가 없어 통합 재현은 불가능).
+test('DEAD-GET-BRANCH (Plan 074): validatePropertySearch 는 method 와 무관하게 req.body 만 본다 — GET 에서 req.sanitized 를 만들지 않는다', () => {
   const { validatePropertySearch } = require('../middleware/validation');
-  const req = { method: 'GET', query: { query: '<i>x</i>' } };
+  const req = { method: 'GET', query: { query: '<i>x</i>', region: '서울' } };
   let nextCalled = false;
   validatePropertySearch(req, mkRes(), () => { nextCalled = true; });
-  assert.ok(nextCalled);
-  assert.equal(req.sanitized && req.sanitized.query, '&lt;i&gt;x&lt;/i&gt;', 'GET 분기 정제값이 req.sanitized 에 없다');
+  assert.ok(nextCalled, 'body 없는 GET 도 next() 로 통과해야 한다(검증 대상이 없으므로)');
+  assert.equal(req.sanitized, undefined, '죽은 GET 분기가 되살아났다 — req.sanitized 가 만들어졌다');
+  assert.equal(req.query.query, '<i>x</i>', 'req.query 를 건드리면 안 된다');
 });
 
 test('EXPRESS5-A(회귀 없음): validatePropertySearch POST 분기 — req.body 직접 mutate 는 기존 그대로 안전하다', () => {

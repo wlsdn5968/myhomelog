@@ -80,16 +80,14 @@ function validateTransactionQuery(req, res, next) {
 
 // 단지 검색 검증 — POST body 기반 (일부 엔드포인트는 query string)
 function validatePropertySearch(req, res, next) {
-  // POST /recommend 은 body, GET 엔드포인트는 query
-  const isPost = req.method === 'POST';
-  const src = isPost ? (req.body || {}) : (req.query || {});
-  const { query, minPrice, maxPrice, region } = src;
-
-  // EXPRESS5-QUERY-GETTER-2026-09-06 (Plan 073): req.body 는 body-parser 가 만든 고정 객체라
-  //   직접 mutate 해도 안전(POST 는 기존 그대로). req.query 는 Express 5 부터 접근마다 재파싱되는
-  //   getter라 GET 분기에서 src(=req.query)에 쓴 값은 다음 접근에서 원문으로 되돌아간다 —
-  //   GET 은 req.sanitized 로 우회.
-  const out = isPost ? src : (req.sanitized = req.sanitized || {});
+  // DEAD-GET-BRANCH-2026-09-10 (Plan 074): 유일한 소비자는 POST /api/properties/recommend
+  //   (routes/properties.js:11). GET 분기(req.query → req.sanitized)는 실소비자가 없어 제거했다.
+  //   GET 소비자를 다시 붙일 때는 Express 5 의 req.query 가 접근마다 재파싱되는 getter 라
+  //   req.query 에 대입하지 말고 req.sanitized 에 실어야 한다(Plan 073, validateTransactionQuery 참고).
+  // EXPRESS5-BODY-2026-09-06 (Plan 073): body-parser 2.x 는 파싱 안 되면 req.body 가 undefined.
+  //   req.body 는 body-parser 가 만든 고정 객체라 직접 mutate 해도 안전하다.
+  const out = req.body || {};
+  const { query, minPrice, maxPrice, region } = out;
 
   if (query) out.query = sanitizeString(query, 100);
   if (minPrice !== undefined) out.minPrice = sanitizeNumber(minPrice, 0, 999);
