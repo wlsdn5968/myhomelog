@@ -1022,6 +1022,13 @@ html[data-theme="dark"] .dmbg{--dm-ac:#FFC93C}
 .rtab{padding:11px 12px;font-size:12.5px;font-weight:600;color:var(--t3);border:none;background:transparent;cursor:pointer;border-bottom:2.5px solid transparent;margin-bottom:-1px;font-family:inherit;transition:all .15s;white-space:nowrap;flex-shrink:0}
 .rtab:hover{color:var(--t1)}
 .rtab.on{color:var(--acc);border-bottom-color:var(--acc)}
+/* TABS-CUE-2026-09-16 (Plan 081): 좁은 화면에서 탭바가 넘칠 때 오른쪽 끝을 흐리게 해 "더 있다"를 알린다.
+   .rtabs 는 overflow-x:auto 라 스크롤은 되지만 5번째 탭이 통째로 잘려 단서가 없었다(375px 실측 605px). */
+@media (max-width: 700px) {
+  .rtabs { scroll-snap-type: x proximity; padding-right: 40px; }
+  .rtab { scroll-snap-align: start; padding: 11px 9px; font-size: 12px; white-space: nowrap; }
+  .rtabs.has-more { -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 44px), transparent); }
+}
 /* Phase 33 #2 (2026-05-04): 모바일 6 탭 가로 스크롤 → priority 3 + "더보기" overflow scroll */
 @media(max-width:600px){
   .rtabs{overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:thin}
@@ -7972,6 +7979,8 @@ function showDetail(p){
       <br><span style="font-size:10px;color:var(--t3)">※ 한국도시연구소 분석에 따르면 2025년 거래 해제건수가 대폭 증가 (시장교란 행위 가능성). 전체 해제 이력은 <a href="http://rtdown.molit.go.kr/" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">국토부 실거래가 공개시스템</a> 별도 확인.</span>
     </div>
     <div class="ibox y" style="margin-top:12px">국토부 공공 API 기반. 거래 없는 월은 보간하지 않습니다.</div>`;
+  try { _rtabsCue(); } catch(_) {}
+  const _rtabsEl = document.querySelector('#DM .rtabs'); if (_rtabsEl && !_rtabsEl._cueBound) { _rtabsEl._cueBound = 1; _rtabsEl.addEventListener('scroll', _rtabsCue, { passive: true }); }
 
   document.getElementById('t2').innerHTML=`<div class="tld"><div class="tsp"></div>AI 리스크 분석 중...</div>`;
   document.getElementById('t3').innerHTML=`<div class="tld"><div class="tsp"></div>AI 특약 초안 생성 중...</div>`;
@@ -8517,7 +8526,13 @@ async function loadAmenities(p){
   }catch{box.style.display='none';}
 }
 
-function stb(btn,id){document.querySelectorAll('.rtab').forEach(b=>b.classList.remove('on'));document.querySelectorAll('.tp').forEach(t=>t.classList.remove('on'));btn.classList.add('on');document.getElementById(id).classList.add('on');/* LAZY-2026-06-13: 리스크(t2)·특약(t3) 탭을 처음 열 때만 AI 로드 */if((id==='t2'||id==='t3')&&currentDetail)loadClauseAndRisk(currentDetail);}
+// TABS-CUE-2026-09-16 (Plan 081): 탭바가 오른쪽으로 더 스크롤될 수 있을 때만 has-more(끝 흐림).
+function _rtabsCue(){
+  const el = document.querySelector('#DM .rtabs'); if (!el) return;
+  const more = el.scrollWidth - el.clientWidth - el.scrollLeft > 8;
+  el.classList.toggle('has-more', more);
+}
+function stb(btn,id){document.querySelectorAll('.rtab').forEach(b=>b.classList.remove('on'));document.querySelectorAll('.tp').forEach(t=>t.classList.remove('on'));btn.classList.add('on');document.getElementById(id).classList.add('on');/* LAZY-2026-06-13: 리스크(t2)·특약(t3) 탭을 처음 열 때만 AI 로드 */if((id==='t2'||id==='t3')&&currentDetail)loadClauseAndRisk(currentDetail);try { btn.scrollIntoView({ block: 'nearest', inline: 'nearest' }); _rtabsCue(); } catch(_) {}}
 function cDM(){document.getElementById('DM').classList.remove('open');currentDetail=null;
   // URL의 ?apt= 파라미터 정리
   if(history.replaceState){const u=new URL(location.href);u.searchParams.delete('apt');u.searchParams.delete('area');history.replaceState(null,'',u);}
