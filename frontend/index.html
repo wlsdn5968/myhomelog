@@ -10113,7 +10113,7 @@ function renderRisk(d){
       <div class="ibox b" style="margin-bottom:12px">아래는 <b>일반적인 매수 리스크 예시</b>입니다. 사이드바에서 <b>🔍 조건에 맞는 단지 찾기</b>를 실행하면 이 단지 맞춤 리스크 분석이 제공돼요.</div>
       <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">시세 하락 리스크</div></div><div class="rcard-b">매수 후 금리 인상/규제 강화 시 단기 조정 가능성.</div><div class="rcard-c">💡 5년 이상 보유, 전세 전환 플랜B 수립</div></div>
       <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">대출 규제 추가 강화</div></div><div class="rcard-b">갈아타기 시점 LTV 추가 규제 가능성.</div><div class="rcard-c">💡 금융기관에서 DSR 한도 사전 확인 (기관 종류에 따라 한도가 다름)</div></div>
-      <div class="rcard"><div class="rcard-top"><span class="lvl safe">낮음</span><div class="rcard-t">환금성 리스크</div></div><div class="rcard-b">세대수 적을 경우 매도 시 거래 부재.</div><div class="rcard-c">💡 RR(로열동·로열호) 여부 임장 확인</div></div>`;
+      <div class="rcard"><div class="rcard-top"><span class="lvl safe">낮음</span><div class="rcard-t">환금성 리스크</div></div><div class="rcard-b">세대수 정보가 없어 확인이 필요해요 — 소단지(300세대 미만)는 매도 시 거래가 드물 수 있어요.</div><div class="rcard-c">💡 KAPT·건축물대장에서 세대수 확인 후 판단</div></div>`;
     return;
   }
   const lm={높음:'danger',중간:'warn',낮음:'safe'};
@@ -11339,8 +11339,9 @@ function buildRuleRisk(p){
   }
   if (hh != null && hh < 300) {
     risks.push({level:'낮음',title:'환금성 리스크',probability:'',scenario:`세대수 ${hh.toLocaleString()}세대(소단지) — 매도 시 거래 부재 가능성.`,countermeasure:'같은 생활권 대단지 시세와 비교 확인'});
-  } else {
-    risks.push({level:'낮음',title:'환금성 리스크',probability:'',scenario:'세대수 적을 경우 매도 시 거래 부재.',countermeasure:'RR(로열동·로열호) 여부 임장 확인'});
+  } else if (hh == null) {
+    // RISK-HH-2026-09-16 (Plan 093): 세대수를 모를 때만 조건부 일반론. 대단지(≥300)엔 환금성 항목을 넣지 않는다 — 데이터로 아는 사실에 반하는 문장 금지.
+    risks.push({level:'낮음',title:'환금성 리스크',probability:'',scenario:'세대수 정보가 없어 확인이 필요해요 — 소단지(300세대 미만)는 매도 시 거래가 드물 수 있어요.',countermeasure:'KAPT·건축물대장에서 세대수 확인 후 판단'});
   }
   return {
     overallRisk:'보통',

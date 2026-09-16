@@ -1989,3 +1989,19 @@ test('Plan 061 ⑤: sendOnce 주변에 "가드 없이 1회 보낸다" 라는 사
   assert.match(fe, /SENDONCE-MEMFALLBACK-2026-09-06/,
     '인메모리 폴백을 설명하는 정정 마커 주석이 없다');
 });
+
+
+
+test('Plan 093 — 세대수 아는 대단지에 "세대수 적을 경우" 일반론 표시 안 함', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  
+  // 옛 일반론 문자열은 없어야 함 — 세대수를 아는 경우에만 환금성 리스크를 표시해야 한다
+  assert.equal(html.includes('세대수 적을 경우 매도 시 거래 부재.'), false,
+    '옛 일반론 문자열이 남아 있다 — 세대수를 아는 대단지(≥300)에도 조건부 일반론이 표시된다');
+  
+  // 신규 패치 마커는 정확히 1회 있어야 함
+  const matches = html.match(/RISK-HH-2026-09-16/g);
+  assert.equal(matches?.length, 1, `RISK-HH-2026-09-16 패치 마크가 ${matches?.length || 0}회 발견됐다 — 정확히 1회여야 한다`);
+});
