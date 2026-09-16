@@ -2005,3 +2005,21 @@ test('Plan 093 — 세대수 아는 대단지에 "세대수 적을 경우" 일�
   const matches = html.match(/RISK-HH-2026-09-16/g);
   assert.equal(matches?.length, 1, `RISK-HH-2026-09-16 패치 마크가 ${matches?.length || 0}회 발견됐다 — 정확히 1회여야 한다`);
 });
+
+test('Plan 096 — Escape 핸들러가 알림 센터·드로어·규제 요약·단지 비교도 닫는다', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const m = html.match(/const closers = \[[\s\S]*?\n  \];/);
+  assert.ok(m, 'Escape 핸들러의 closers 배열을 찾지 못했다');
+  const src = m[0];
+  for (const id of ['NTC', 'drawerBg', 'cmpModal', 'regSummaryModal']) assert.ok(src.includes(`id: '${id}'`), `${id} 가 Escape closers 에 없다`);
+  assert.match(src, /id: 'regSummaryModal', fn: '_closeRegSummary', present: true/);
+  assert.match(src, /id: 'cmpModal', fn: '_closeCmpModal', present: true/);
+  assert.match(html, /\(present \|\| el\.classList\.contains\('open'\)\)/, 'present 분기가 없다 — 동적 생성 모달은 open 클래스가 없어 못 닫는다');
+  assert.match(html, /\nfunction _closeRegSummary\(\)\{/, '_closeRegSummary 전역 함수가 없다');
+  assert.match(html, /\nfunction _closeCmpModal\(\)\{/, '_closeCmpModal 전역 함수가 없다');
+  // 순서 = z-index 역순(위에 뜬 것부터): regSummary(99998) → cmp(9999) → QM(9998) … ; 드로어는 마지막
+  const idx = (id) => src.indexOf(`id: '${id}'`);
+  assert.ok(idx('regSummaryModal') < idx('cmpModal') && idx('cmpModal') < idx('QM'), 'closers 순서가 z-index 역순이 아니다');
+  assert.ok(idx('drawerBg') > idx('LM') && idx('NTC') > idx('LM'), 'NTC·드로어는 기존 항목 뒤여야 한다');
+});

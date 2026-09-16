@@ -5297,6 +5297,8 @@ function openRegSummary(){
     document.body.appendChild(m);
   }
 }
+// ESC-2026-09-16 (Plan 096): Escape 핸들러용 — 동적 생성 모달은 닫기 = 제거.
+function _closeRegSummary(){ const m=document.getElementById('regSummaryModal'); if(m) m.remove(); }
 function closeTerms(){document.getElementById('TM').classList.remove('open');}
 
 // ── 정책 타임라인 ─────────────────────────────────────
@@ -7152,6 +7154,8 @@ function _cmpModalShell(){
   document.body.appendChild(bg);
   return bg;
 }
+// ESC-2026-09-16 (Plan 096): Escape 핸들러용. backdrop 클릭은 open 만 떼고 요소를 남기므로(inline display:flex) 여기서는 제거한다.
+function _closeCmpModal(){ const m=document.getElementById('cmpModal'); if(m) m.remove(); }
 
 // 공유 비교 실행 — apts:[{aptName,sigungu,umdNm,lawdCd}] (목록·관심단지 양쪽 재사용)
 async function _runCompare(apts){
@@ -11518,6 +11522,9 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   // 열린 모달 우선순위 (위쪽이 나중에 열림 → 먼저 닫음)
   const closers = [
+    // ESC-2026-09-16 (Plan 096): 동적 생성 모달은 open 클래스가 없다 — present:true 는 "요소가 있으면 열림" 판정.
+    { id: 'regSummaryModal', fn: '_closeRegSummary', present: true }, // 규제 요약 (z99998, 동적 생성)
+    { id: 'cmpModal', fn: '_closeCmpModal', present: true },          // 단지 비교 (z9999, 동적 생성)
     { id: 'QM', fn: 'closeQuotaModal' },  // quota 모달 (z-index 9998)
     { id: 'ERM', fn: 'closeErrReport' }, // 오류 신고 (z780)
     { id: 'DSM', fn: 'closeDataStatus' }, // 데이터 상태 (z770)
@@ -11527,15 +11534,18 @@ document.addEventListener('keydown', (e) => {
     { id: 'SM', fn: 'closeSM' },          // 설정
     { id: 'UM', fn: 'closeUserMenu' },    // 계정 메뉴
     { id: 'LM', fn: 'closeLogin' },       // 로그인
+    { id: 'NTC', fn: 'closeNtc' },        // 알림 센터 (smbg z500) — Plan 096
+    { id: 'drawerBg', fn: 'closeDrawer' }, // 모바일 햄버거 드로어 (z9990) — 마지막: 위에 뜬 모달부터 닫는다 — Plan 096
   ];
-  for (const { id, fn } of closers) {
+  for (const { id, fn, present } of closers) {
     const el = document.getElementById(id);
-    if (el && el.classList.contains('open')) {
+    if (el && (present || el.classList.contains('open'))) {
       const closer = window[fn];
       if (typeof closer === 'function') { closer(); return; } // 한 번에 하나만 닫음
     }
   }
 });
+
 // MOB-AUDIT-2026-05-03: backdrop 영역 클릭 시 모달 닫기 — 모바일 사용자 한 번에 닫기 편의
 //   .smbg 자체 클릭 (= backdrop) 만 잡고 .smbox 내부 클릭은 무시 (event.target 으로 분기)
 document.addEventListener('click', (e) => {
