@@ -12,6 +12,7 @@
 //     DB_STOP_MB(470 = 500 무료 티어 - 30 안전여유)를 넘으면 그 달을 완료로 남기지 않고 정지한다.
 //   - molit_hist_runs 에 완료한 (lawd_cd, deal_ym) 을 PRIMARY KEY 로 기록해 재실행 시 건너뛴다
 //     (유니크 인덱스 없이 PK 만으로 멱등 확보).
+//   - Vercel Hobby 플랜은 cron 이 하루 1회만(매시 표현식은 배포 자체가 거부됨 — 2026-09-16 실사례). 그래서 vercel.json 에 같은 경로를 ?slot=0~9 로 10개(2시간 간격, ±59분 지터에도 겹치지 않음) 등록하고, 한 실행은 TIME_BUDGET_MS 까지 순차 처리한다.
 const logger = require('../logger');
 const { fetchRegionMonth } = require('./molitIngest');
 const { LAWD_CODES } = require('../services/transactionService');
@@ -20,7 +21,9 @@ const { requireSupabaseAdmin } = require('../db/client'); // molitIngest 와 같
 const START_YM = '202504';                 // 현재 테이블(2025-05~)과 겹치지 않는 첫 달
 const FLOOR_YM = '201901';                 // 이론상 하한(용량이 먼저 멈춘다)
 const DB_STOP_MB = 470;                    // 무료 티어 500 MB — 30 MB 안전 여유
-const REGION_MONTHS_PER_RUN = 30;          // 300s 예산: 실측 region-month 당 2~4s
+const REGION_MONTHS_PER_RUN = 200;         // 실행당 상한 — 실제 종료는 아래 TIME_BUDGET_MS 가 결정
+const TIME_BUDGET_MS = 235_000;            // maxDuration 300s − 여유 65s(마지막 region-month 최대 ~10s + 응답)
+const MAX_CONSEC_ERR = 3;                  // 연속 실패(쿼터 소진·API 장애)면 남은 대상을 두들기지 않고 이번 회차를 끝낸다
 const CHUNK = 1000;
 
 function prevYm(ym) { const y = +ym.slice(0, 4), m = +ym.slice(4); return m === 1 ? `${y - 1}12` : `${y}${String(m - 1).padStart(2, '0')}`; }
@@ -85,11 +88,13 @@ async function nextTargets(admin, limit) {
 
 async function runHistBackfill(opts = {}) {
   const admin = requireSupabaseAdmin('hist backfill 불가');
-  const limit = Math.max(1, Math.min(parseInt(opts.limit) || REGION_MONTHS_PER_RUN, 120));
+  const limit = Math.max(1, Math.min(parseInt(opts.limit) || REGION_MONTHS_PER_RUN, 200));
+  const t0 = Date.now();
+  const budgetMs = opts.timeBudgetMs != null ? Number(opts.timeBudgetMs) : TIME_BUDGET_MS;
   const mb0 = await dbSizeMb(admin);
   if (mb0 >= DB_STOP_MB) return { stopped: true, reason: 'db-size', dbMb: mb0, done: 0 };
   const targets = await nextTargets(admin, limit);
-  let done = 0, rows = 0, err = 0, lastYm = null;
+  let done = 0, rows = 0, err = 0, lastYm = null, budgetHit = false, consec = 0;
   for (const [lawdCd, ym] of targets) {
     try {
       const raw = await fetchRegionMonth(lawdCd, ym);
@@ -111,25 +116,31 @@ async function runHistBackfill(opts = {}) {
       }
       const { error: e2 } = await admin.from('molit_hist_runs').upsert({ lawd_cd: lawdCd, deal_ym: ym, rows: hist.length });
       if (e2) throw e2;
-      done++; rows += hist.length; lastYm = ym;
+      done++; rows += hist.length; lastYm = ym; consec = 0;
     } catch (e) {
       err++;
+      consec++;
       logger.warn({ err: e.message, lawdCd, ym }, 'molit-hist-backfill: region-month 실패(다음 실행에서 재시도)');
     }
     if ((done + err) % 10 === 0) {
       const mb = await dbSizeMb(admin);
-      if (mb >= DB_STOP_MB) return { stopped: true, reason: 'db-size', dbMb: mb, done, rows, err, lastYm };
+      if (mb >= DB_STOP_MB) return { stopped: true, reason: 'db-size', dbMb: mb, done, rows, err, lastYm, budgetHit, elapsedMs: Date.now() - t0 };
     }
+    if (consec >= MAX_CONSEC_ERR) {
+      logger.warn({ consec, lawdCd, ym }, 'molit-hist-backfill: 연속 실패 — 이번 회차 종료(다음 슬롯이 재시도)');
+      return { stopped: false, reason: 'errors', dbMb: await dbSizeMb(admin), done, rows, err, lastYm, budgetHit, elapsedMs: Date.now() - t0 };
+    }
+    if (Date.now() - t0 >= budgetMs) { budgetHit = true; break; }
   }
   return {
     stopped: targets.length === 0,
     reason: targets.length === 0 ? 'complete' : null,
     dbMb: await dbSizeMb(admin),
-    done, rows, err, lastYm,
+    done, rows, err, lastYm, budgetHit, elapsedMs: Date.now() - t0,
   };
 }
 
-module.exports = { runHistBackfill, toHistRow, prevYm, START_YM, DB_STOP_MB };
+module.exports = { runHistBackfill, toHistRow, prevYm, START_YM, DB_STOP_MB, TIME_BUDGET_MS, REGION_MONTHS_PER_RUN };
 
 // CLI: node backend/jobs/molitHistBackfill.js [limit]
 if (require.main === module) {

@@ -263,6 +263,25 @@ test('cron 라우터 배선 — authorizeCron 이 모든 엔드포인트 앞에 
   assert.ok(routeCount >= 5, `cron 라우트가 ${routeCount}개뿐 — 파일 구조가 바뀌었는지 확인할 것`);
 });
 
+test('vercel.json cron 스케줄 — Hobby 플랜 계약: 전부 하루 1회 · hist-backfill 슬롯은 2시간 이상 간격 · 일간 적재 창(17~18시 UTC) 회피', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const vercel = JSON.parse(fs.readFileSync(path.join(__dirname, '../../vercel.json'), 'utf8'));
+  // HOBBY-CRON-2026-09-16 (Plan 094): 매시/분 표현식("20 * * * *")은 Vercel Hobby 에서 배포 자체가 거부된다
+  //   (GitHub 상태 "Deployment failed", Vercel 에 배포 기록 없음 — 951d341·d5924bb 실사례). 분·시가 숫자여야 하루 1회다.
+  const DAILY = /^\d{1,2} \d{1,2} (\*|\d{1,2}) (\*|\d{1,2}) (\*|[0-6])$/;
+  for (const c of vercel.crons) assert.match(c.schedule, DAILY, `하루 1회가 아닌 cron: ${c.path} "${c.schedule}" — Hobby 플랜은 배포가 거부된다`);
+  const hist = vercel.crons.filter(c => c.path.startsWith('/api/cron/molit-hist-backfill'));
+  assert.ok(hist.length >= 2, 'hist-backfill 일일 슬롯이 2개 미만이다');
+  assert.equal(new Set(hist.map(c => c.path)).size, hist.length, '슬롯 경로(?slot=N)가 중복된다');
+  const hours = hist.map(c => Number(c.schedule.split(' ')[1])).sort((a, b) => a - b);
+  for (let i = 0; i < hours.length; i++) {
+    const next = i + 1 < hours.length ? hours[i + 1] : hours[0] + 24;
+    assert.ok(next - hours[i] >= 2, `슬롯 간격이 2시간 미만(${hours[i]}h→${next % 24}h) — ±59분 지터에 두 실행이 겹쳐 중복 삽입 위험`);
+    assert.ok(hours[i] !== 17 && hours[i] !== 18, `슬롯 ${hours[i]}h 는 일간 적재(molit-ingest 17:00~17:30 UTC, 지터 포함 18:29) 창과 겹친다 — MOLIT 쿼터 경쟁`);
+  }
+});
+
+
 
 
 // ── 감사 #45 (2026-08-16): 응답 직전 관측이 **await 되는지** 소스 계약 ────────────────

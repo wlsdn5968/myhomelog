@@ -83,6 +83,7 @@ function _pick(summary) {
   //   전용)를 못 탄다. stopped 는 true(정지)·false(정상 진행) 둘 다 의미가 있어 ok 와 달리 양쪽 다 남긴다.
   //   reason 은 'db-size'|'complete' 고정값(자유 입력 아님)이라 error 류보다 짧게 제한한다.
   if (typeof summary.stopped === 'boolean') out.stopped = summary.stopped;
+  if (typeof summary.budgetHit === 'boolean') out.budgetHit = summary.budgetHit;
   if (typeof summary.reason === 'string' && summary.reason.trim()) out.reason = summary.reason.slice(0, 40);
   if (typeof summary.lastYm === 'string' && summary.lastYm.trim()) out.lastYm = summary.lastYm.slice(0, 10);
   return out;
@@ -167,10 +168,8 @@ const CRON_MAX_AGE_H = {
   'push-notify': 50,
   'warm-interest': 50,   // INTEREST-WARM-2026-09-05: 일간
   'warm-rent': 50,       // RENT-WARM-2026-09-05: 일간
-  // HIST-BACKFILL-2026-09-16 (Plan 091): 매시(20분) 실행 — "2회 연속 누락" 원칙을 시간 단위로 축소.
-  //   완주(reason:'complete') 이후에도 이 엔드포인트 자체는 계속 매시 호출되므로(stopped:true 로 응답)
-  //   정지된 잡이 여기서 다시 stale 로 오인되지는 않는다 — 여긴 "호출됐는가" 만 본다.
-  'molit-hist-backfill': 3,
+  // HIST-BACKFILL-2026-09-16 (Plan 094): Hobby 플랜(하루 1회 cron)이라 일일 슬롯 10개(2시간 간격, ±59분 지터). 최대 공백은 13:20→19:20 UTC ≈ 7h — 9h 넘게 조용하면 경보. 완주(reason:'complete')·용량 정지 뒤에도 엔드포인트는 계속 호출·기록되므로 stale 오인은 없다.
+  'molit-hist-backfill': 9,
 };
 
 /**

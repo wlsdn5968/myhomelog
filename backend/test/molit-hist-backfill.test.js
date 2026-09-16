@@ -186,12 +186,41 @@ test('runHistBackfill — 스텁 admin 시나리오: 용량 정지 · 정상 처
   }
 
   // ⑤ 더 처리할 대상이 없으면(전 구간 완료) stopped:true, reason:'complete'
-  {
     const { prevYm, START_YM } = require('../jobs/molitHistBackfill');
     const doneRuns = [];
     for (let ym = START_YM; ym >= '201901'; ym = prevYm(ym)) doneRuns.push({ lawd_cd: '11111', deal_ym: ym });
     const { client } = _makeAdmin({ dbMb: 100, doneRuns });
     const res = await _runWithStubs({ limit: 5 }, client, async () => { throw new Error('호출되면 안 된다 — 대상이 없어야 한다'); }, { '테스트구': '11111' });
-    assert.deepEqual(res, { stopped: true, reason: 'complete', dbMb: 100, done: 0, rows: 0, err: 0, lastYm: null });
+    assert.equal(res.stopped, true);
+    assert.equal(res.reason, 'complete');
+    assert.equal(res.dbMb, 100);
+    assert.equal(res.done, 0);
+    assert.equal(res.rows, 0);
+    assert.equal(res.err, 0);
+    assert.equal(res.lastYm, null);
+    assert.equal(res.budgetHit, false);
+    assert.ok(typeof res.elapsedMs === 'number');
+
+  // ⑥ 시간예산: timeBudgetMs:0 이면 첫 region-month 를 끝낸 직후 멈춘다(budgetHit) — 대상이 남았으니 stopped:false
+  {
+    const { client } = _makeAdmin({ dbMb: 100 });
+    const fetchCalls = [];
+    const res = await _runWithStubs({ limit: 5, timeBudgetMs: 0 }, client, async (l, y) => { fetchCalls.push([l, y]); return []; }, { '테스트구1': '11111', '테스트구2': '22222' });
+    assert.equal(fetchCalls.length, 1, '예산 0 이면 정확히 1개만 처리하고 멈춰야 한다');
+    assert.equal(res.budgetHit, true);
+    assert.equal(res.stopped, false);
+    assert.equal(typeof res.elapsedMs, 'number');
+  }
+
+  // ⑦ 연속 실패 3회면 남은 대상을 두들기지 않고 reason:'errors' 로 끝낸다(다음 슬롯이 재시도)
+  {
+    const { client, calls } = _makeAdmin({ dbMb: 100 });
+    let n = 0;
+    const res = await _runWithStubs({ limit: 10 }, client, async () => { n++; throw new Error('MOLIT 쿼터 소진(테스트)'); }, { '테스트구1': '11111', '테스트구2': '22222', '테스트구3': '33333', '테스트구4': '44444', '테스트구5': '55555' });
+    assert.equal(n, 3, '3회 연속 실패 뒤엔 더 호출하면 안 된다');
+    assert.equal(res.reason, 'errors');
+    assert.equal(res.err, 3);
+    assert.equal(res.stopped, false);
+    assert.equal(calls.upserted.length, 0);
   }
 });
