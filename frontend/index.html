@@ -7697,7 +7697,7 @@ function showDetail(p){
     ${_heroSection}
     ${_scoreSection}
     <div style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:var(--radius-base);padding:9px 11px;margin:8px 0 10px;font-size:11px;color:var(--red);font-weight:600;line-height:1.5">⚠ 수치·점수는 <u>과거 실거래 통계 정리</u>이며 매수 추천이 아닙니다. 가격 하락 위험은 본인이 부담합니다.</div>
-    ${p.facility?`<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:var(--radius-base);padding:9px 11px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
+    ${p.facility?`<div id="facilityQuickT0" style="background:var(--bg2);border:1px solid var(--bd);border-radius:var(--radius-base);padding:9px 11px;margin:6px 0 8px;font-size:11px;color:var(--t2);line-height:1.6">
       <div style="font-weight:700;color:var(--t1);margin-bottom:4px">🏢 단지 기본정보</div>
       ${p.facility.totalHouseholds?`총 ${p.facility.totalHouseholds.toLocaleString()}세대`:''}${p.facility.dongCount?` · ${p.facility.dongCount}개동`:''}${p.facility.parkingRatio?` · 주차 세대당 ${p.facility.parkingRatio}대`:''}${p.facility.builtDate?` · 사용승인 ${p.facility.builtDate.slice(0,4)}.${p.facility.builtDate.slice(4,6)}`:''}${p.facility.heatType?` · ${p.facility.heatType}`:''}
       ${p.facility.address?`<br><span style="font-size:10px;color:var(--t3)">${_escHtml(p.facility.address)}</span>`:''}
@@ -8357,6 +8357,8 @@ async function loadFacility(p){
         &nbsp;|&nbsp; 실거래 최신 <b style="color:var(--t1)">${_lastDeal||'—'}</b> · 국토부${_syncDay?` · 동기화 ${_syncDay}`:''}
         <div style="font-size:9.5px;color:var(--t3);margin-top:3px">※ 값이 없으면 추정하지 않고 '미확인'으로 표시합니다.</div>
       </div>`;
+      // T0-DEDUP-2026-09-16 (Plan 080): 상세본(AptInfo)이 채워지면 showDetail 의 요약본은 숨긴다 — 같은 탭 중복 제거.
+      try { const q = document.getElementById('facilityQuickT0'); if (q) q.style.display = 'none'; } catch(_) {}
     } else {
       fbox.style.display='none';
     }
@@ -8434,6 +8436,8 @@ function _fillDetailSchoolBoxes(r){
         <div style="font-size:9.5px;color:var(--t3);margin-top:6px">※ 가장 가까운 학교 거리 (학구도 정확 매핑 미적용 — 학구도 매년 변동). 배정 학교는 <a href="https://schoolinfo.go.kr" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">학교알리미(schoolinfo.go.kr)</a> 또는 시·도 교육청에서 확인.</div>
       </div>`;
       sbox.style.display='block';
+      // T0-DEDUP-2026-09-16 (Plan 080): 상세 학교 블록(#schoolBox)이 채워지면 요약 블록(#schoolsBoxT0)은 숨긴다.
+      try { const q = document.getElementById('schoolsBoxT0'); if (q) q.style.display = 'none'; } catch(_) {}
     } else if (sbox) {
       sbox.style.display='none';
     }
