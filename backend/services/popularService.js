@@ -49,7 +49,8 @@ function popularWindow(computedAt) {
     until: base.toISOString().slice(0, 10),
   };
 }
-const SNAPSHOT_SIZE = 12; // 프론트 고정 limit 와 동일 기준으로 저장
+const SNAPSHOT_SIZE = 18; // 저장은 넉넉히(프론트 limit 12 + 여유 6) — 읽을 때 limit 개로 자른다. SNAP-SLACK-2026-09-16 (Plan 097)
+const SNAPSHOT_MIN_ROWS = 8; // SNAP-SLACK-2026-09-16 (Plan 097): 스냅샷이 이 이상이면 모자라도 쓴다 — 090 필터로 1행 빠진 12행 스냅샷이 null 이 되어 anon RPC(3s 컷) → 전국 표본 폴백(건수 절반 왜곡)으로 떨어진 라이브 회귀의 재발 방지. 스냅샷의 8행이 폴백 12행보다 정확하다.
 
 // 읽기용(공개 데이터) = getSupabaseReadonly, 쓰기용(RLS bypass) = getSupabaseAdmin — 키 체인 동일
 const anonClient = () => getSupabaseReadonly();
@@ -215,7 +216,8 @@ async function readPopularSnapshot(limit = 12, maxAgeMs = SNAPSHOT_MAX_AGE_MS) {
     // POPULAR-UNNAMED-2026-09-16 (Plan 090): 이 스냅샷이 090 적용 전에 저장됐을 수 있다(옛 스냅샷
     //   대비) — 반환 전에 같은 필터를 한 번 더 걸고, displayName 이 없는 행은 채워준다.
     const named = (data.payload || []).filter(p => !isUnnamedApt(p && p.aptName));
-    if (named.length < Math.min(limit, SNAPSHOT_SIZE)) return null;
+    // Plan 097: 부족분 허용 — 아래 SNAPSHOT_MIN_ROWS
+    if (named.length < Math.min(limit, SNAPSHOT_MIN_ROWS)) return null;
     // 계산 시점을 **배열 속성**으로 싣는다 — 반환 형태를 바꾸면 호출부 4곳(검색 2·브리핑·챗)과
     //   테스트 스텁까지 함께 고쳐야 하고, 그 중 하나만 놓쳐도 조용히 빈 결과가 된다.
     const rows = named.slice(0, limit).map(p => (p.displayName ? p : { ...p, displayName: displayAptName(p.aptName, { umdNm: p.umdNm }) }));
@@ -282,4 +284,4 @@ async function computeAndStoreSnapshot() {
   return { ...r, usedFallback };
 }
 
-module.exports = { buildPopularResults, readPopularSnapshot, storePopularSnapshot, computeAndStoreSnapshot, popularWindow };
+module.exports = { buildPopularResults, readPopularSnapshot, storePopularSnapshot, computeAndStoreSnapshot, popularWindow, SNAPSHOT_MIN_ROWS, SNAPSHOT_SIZE };
