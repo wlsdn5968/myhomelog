@@ -5542,7 +5542,7 @@ async function renderBriefing(){
     if(er&&er.baseRate!=null) tk.push({l:'기준금리',v:_escHtml(String(er.baseRate))+'%',s:'한국은행'});
     if(er&&er.mortgageRate!=null) tk.push({l:'주담대 평균',v:_escHtml(String(er.mortgageRate))+'%',s:'ECOS '+_escHtml(String(er.mortgageRateMonth||'').replace(/^(\d{4})(\d{2})$/,'$1.$2'))});
     if(dc&&dc.tx) tk.push({l:'실거래 누적',v:Number(dc.tx).toLocaleString()+'건',s:'국토부'+(dc.lastIngestedAt?' · '+String(dc.lastIngestedAt).slice(5,10).replace('-','.')+' 동기화':'')});
-    if(ps.length&&ps[0].dealCount60d) tk.push({l:'실거래 최다·60일',v:_escHtml(ps[0].aptName||'')+' '+ps[0].dealCount60d+'건',s:'국토부'});
+    if(ps.length&&ps[0].dealCount60d) tk.push({l:'실거래 최다·60일',v:_escHtml((ps[0].displayName||_dispAptName(ps[0].aptName, ps[0].umdNm))||'')+' '+ps[0].dealCount60d+'건',s:'국토부'});
     if(items.length&&items[0].name) tk.push({l:'청약 임박',v:_escHtml(items[0].name||''),s:'청약홈'});
     // REG-LOG: 현행 대출·규제 기준의 시행일(valid_from)·확인일 — 전부 스냅샷 사실값
     const _rh=(reglog&&Array.isArray(reglog.items))?reglog.items.find(x=>x.key==='housing_loan_2025'&&!x.supersededAt):null;
