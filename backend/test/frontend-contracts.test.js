@@ -2031,3 +2031,14 @@ test('Plan 098 — 챗 비-OK 응답은 서버 사유를 그대로 보여주고,
   assert.ok(!html.includes("throw new Error('http_' + r.status)"), '400 을 예외로 던져 "일시 오류"로 위장하는 옛 분기가 남아 있다');
   assert.match(html, /addMsg\('ai', userMsg\);\s*\n\s*replied=true;/, 'catch 에서 replied=true 를 안 세우면 "응답을 받지 못했어요" 가 두 번째 말풍선으로 붙는다');
 });
+
+test('Plan 099 — 표시 이름 정책이 리스크 제목·비교 헤더·단지정보 단지명·마커 팝업·유사 단지 목록에도 적용된다', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  assert.ok(html.includes("summary:`${_dispAptName(p.aptName, p.umdNm)||'이 단지'} 조건(연식·세대수·규제 여부)"), '리스크 탭 제목이 원문 단지명을 쓴다');
+  assert.ok(html.includes('<div class="cmp-apt">${_escHtml(r.displayName || _dispAptName(r.aptName, r.umdNm) || \'\')}</div>'), '단지 비교 헤더가 원문 단지명을 쓴다');
+  assert.ok(html.includes('<tr><td>단지명</td><td>${_v(_dispAptName(p.aptName, p.umdNm))}</td></tr>'), '단지정보 표 단지명이 원문을 쓴다');
+  assert.equal((html.match(/<div style="font-weight:700">\$\{_escHtml\(p\.displayName \|\| _dispAptName\(p\.aptName, p\.umdNm\)\)\}<\/div>/g) || []).length, 2, '마커 팝업 2종(네이버·Leaflet)이 표시 이름을 써야 한다');
+  assert.ok(html.includes('<b>${_escHtml(r.displayName || _dispAptName(r.aptName, r.umdNm))}</b>'), '유사 단지 목록이 원문을 쓴다');
+  assert.equal((html.match(/<div style="font-weight:700">\$\{_escHtml\(p\.aptName\)\}<\/div>/g) || []).length, 0, '원문 단지명 팝업이 남아 있다');
+});

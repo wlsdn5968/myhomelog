@@ -7326,7 +7326,7 @@ function renderCompareModal(data, bodyEl){
     return `<button class="cmp-chip ${active?'on':''}" onclick="_cmpPickBand(${c.center})">전용 ${c.center}㎡<span class="cmp-chip-sub">신뢰 ${c.reliableCount}/${results.length}</span></button>`;
   }).join('');
 
-  const nameCols = oResults.map(r=> `<th class="cmp-th"><div class="cmp-apt">${_escHtml(r.aptName||'')}</div><div class="cmp-apt-sub">${_escHtml(_fmtSgg(r.sigungu)+(r.umdNm?(' '+r.umdNm):''))}</div></th>`).join('');
+  const nameCols = oResults.map(r=> `<th class="cmp-th"><div class="cmp-apt">${_escHtml(r.displayName || _dispAptName(r.aptName, r.umdNm) || '')}</div><div class="cmp-apt-sub">${_escHtml(_fmtSgg(r.sigungu)+(r.umdNm?(' '+r.umdNm):''))}</div></th>`).join('');
 
   const reliableVals = oPerResult.filter(b=>b&&b.reliable).map(b=>b.medianPyeongManwon);
   const maxVal = reliableVals.length ? Math.max(...reliableVals) : 0;
@@ -8094,7 +8094,7 @@ function showDetail(p){
       ${f._partial ? '<div class="ibox y" style="margin-bottom:8px;font-size:11px">⚠ KAPT 전체 응답 중 일부만 조회되었습니다 (부분 정보)</div>' : ''}
       ${tags.length ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px">${tags.map(t=>`<span style="background:var(--info-bg);color:var(--a2);border:1px solid var(--info-bd);border-radius:var(--radius-xs);padding:3px 7px;font-size:10px;font-weight:600">${t}</span>`).join('')}</div>` : ''}
       <table class="dtbl">
-        <tr><td>단지명</td><td>${_v(p.aptName)}</td></tr>
+        <tr><td>단지명</td><td>${_v(_dispAptName(p.aptName, p.umdNm))}</td></tr>
         <tr><td>도로명 주소</td><td>${_v(f.address)}</td></tr>
         <tr><td>사용승인일</td><td>${_ymd(f.builtDate)}</td></tr>
         <tr><td>총 세대수</td><td>${hh ? hh + '세대' : '<span style="color:var(--t3)">미상</span>'}${f.householdsConflict ? `<div style="font-size:10px;color:var(--t3);margin-top:3px">원천 불일치 — 관리세대수 ${_num(f.householdsConflict.kaptdaCnt)} · 호수 ${_num(f.householdsConflict.hoCnt)}</div>` : ''}</td></tr>
@@ -11353,7 +11353,8 @@ function buildRuleRisk(p){
   }
   return {
     overallRisk:'보통',
-    summary:`${p.aptName||'이 단지'} 조건(연식·세대수·규제 여부)을 반영한 일반 리스크 정리예요 — 매수 판단이 아닌 확인 목록입니다.`,
+    // DISP-NAME-2026-09-16 (Plan 099)
+    summary:`${_dispAptName(p.aptName, p.umdNm)||'이 단지'} 조건(연식·세대수·규제 여부)을 반영한 일반 리스크 정리예요 — 매수 판단이 아닌 확인 목록입니다.`,
     risks,
   };
 }
@@ -11815,7 +11816,7 @@ async function loadPopularMarkers() {
           const iw = new naver.maps.InfoWindow({
             content: `<div style="position:relative;font-size:12px;line-height:1.6;background:var(--bg-elev-1);padding:10px 12px;color:var(--text-primary);border-radius:var(--radius-md);border:1px solid var(--border-subtle);box-shadow:var(--shadow-lg)">
               <button onclick="try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_){}" aria-label="닫기" title="닫기" style="position:absolute;top:0;right:2px;width:20px;height:20px;border:none;background:transparent;color:var(--text-tertiary);font-size:14px;line-height:1;cursor:pointer;padding:0">✕</button>
-              <div style="font-weight:700">${_escHtml(p.aptName)}</div>
+              <div style="font-weight:700">${_escHtml(p.displayName || _dispAptName(p.aptName, p.umdNm))}</div>
               <div style="font-size:10.5px;color:var(--text-tertiary)">${_escHtml(_fmtSgg(p.sigungu))} ${_escHtml(p.umdNm||'')} · ${p.buildYear||'?'}년</div>
               <div style="font-size:10.5px;color:var(--text-secondary);margin-top:4px">최근 60일 거래 <b>${p.dealCount60d}건</b></div>
               <button onclick='goSearchResult(${_pj})' style="margin-top:6px;padding:5px 10px;background:var(--accent-700);color:#fff;border:none;border-radius:var(--radius-sm);font-size:11px;cursor:pointer">상세 보기 →</button>
@@ -11849,7 +11850,7 @@ async function loadPopularMarkers() {
           m.on('click',()=>{ if(_mapSheetTry('pop',p)){ setTimeout(()=>{try{m.closePopup();}catch(_){}},0); } }); // MSHEET (①C, VERIFY-FIX-2): 클릭 시점 판정
           m.bindPopup(`
             <div style="font-size:12px;line-height:1.6;background:var(--bg-elev-1);padding:10px 12px;color:var(--text-primary)">
-              <div style="font-weight:700">${_escHtml(p.aptName)}</div>
+              <div style="font-weight:700">${_escHtml(p.displayName || _dispAptName(p.aptName, p.umdNm))}</div>
               <div style="font-size:10.5px;color:var(--text-tertiary)">${_escHtml(_fmtSgg(p.sigungu))} ${_escHtml(p.umdNm||'')} · ${p.buildYear||'?'}년</div>
               <div style="font-size:10.5px;color:var(--text-secondary);margin-top:4px">최근 60일 거래 <b>${p.dealCount60d}건</b></div>
               <button onclick='goSearchResult(${_jsonAttr({aptName:p.aptName,sigungu:p.sigungu,umdNm:p.umdNm,lawdCd:p.lawdCd,buildYear:p.buildYear,recentDealDate:p.recentDealDate})})' style="margin-top:6px;padding:5px 10px;background:var(--accent-700);color:#fff;border:none;border-radius:var(--radius-sm);font-size:11px;cursor:pointer">상세 보기 →</button>
@@ -12059,7 +12060,7 @@ async function onHeaderSearchInput(q) {
             if (sims.length) {
               suggestionHtml = `<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--bg2);text-align:left">
                 <div style="font-size:10.5px;color:var(--t2);font-weight:600;margin-bottom:6px">💡 비슷한 검색어 결과:</div>
-                ${sims.map(r => `<div onclick='goSearchResult(${_jsonAttr(r)})' style="padding:6px 8px;cursor:pointer;font-size:11px;border-radius:var(--radius-xs)" onmouseover="this.style.background='var(--s1)'" onmouseout="this.style.background='transparent'"><b>${_escHtml(r.aptName)}</b> <span style="color:var(--t3)">${_escHtml(_fmtSgg(r.sigungu))} ${_escHtml(r.umdNm||'')}</span></div>`).join('')}
+                ${sims.map(r => `<div onclick='goSearchResult(${_jsonAttr(r)})' style="padding:6px 8px;cursor:pointer;font-size:11px;border-radius:var(--radius-xs)" onmouseover="this.style.background='var(--s1)'" onmouseout="this.style.background='transparent'"><b>${_escHtml(r.displayName || _dispAptName(r.aptName, r.umdNm))}</b> <span style="color:var(--t3)">${_escHtml(_fmtSgg(r.sigungu))} ${_escHtml(r.umdNm||'')}</span></div>`).join('')}
               </div>`;
             }
           } catch(_) {}
