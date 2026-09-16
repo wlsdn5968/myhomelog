@@ -97,60 +97,61 @@ test('BRIEF-PAST-NAV-086-5: pastDaysNav — 2026-01-03 → 2개(2026-01-01 이�
   assert.equal(result[1].day, '2026-01-01', '마지막 항목 2026-01-01');
 });
 
-test('BRIEF-RENDER-086-6: GET /briefing/2026-09-16 — 지난 브리핑 링크 포함 + 라이브 건수·동기화 시각', () => {
-  // mergeLiveCounts와 briefingTicker 조합 테스트
-  const { mergeLiveCounts, pastDaysNav, briefingTicker } = require('../routes/briefing');
+test('BRIEF-RENDER-086-6: GET /briefing/2026-09-16 — 렌더된 HTML에 라이브 건수·동기화 시각 포함', async () => {
+  // 핸들러 호출 후 **응답 HTML** 검증 (함수 반환값 아님)
   const cache = require('../cache');
 
   // 캐시에 라이브 건수 설정
   cache.set('meta:dataCounts:v2', { tx: 123456, lastIngestedAt: '2026-09-15T17:45:00.000Z' });
 
+  let restoreBriefingService, restoreLogger;
   try {
-    // 스냅샷 준비 (스터브와 동일한 구조)
-    const snap = {
-      lines: ['시황 요약'],
-      txTotal: 100,
-      syncedAt: null,
-      ecos: null,
-      regLog: [],
-    };
+    // briefingService.kstDayString() → '2026-09-16' 고정
+    // briefingService.getOrCreateSnapshot(day) → 스냅샷 반환
+    restoreBriefingService = stubModule(
+      '../services/briefingService',
+      {
+        kstDayString() { return '2026-09-16'; },
+        async getOrCreateSnapshot(day) {
+          if (day === '2026-09-16') {
+            return {
+              lines: ['시황 요약'],
+              txTotal: 100,         // 스냅샷 원래 값
+              syncedAt: null,        // 스냅샷에는 동기화 정보 없음
+              ecos: null,
+              regLog: [],
+            };
+          }
+          return null;
+        },
+      }
+    );
 
-    // DC 캐시 값
-    const dc = cache.get('meta:dataCounts:v2');
-    assert.ok(dc, 'DC 캐시가 설정되어야 함');
-    assert.equal(dc.tx, 123456, 'DC의 tx 값이 정확해야 함');
+    // logger (warn 호출 무시)
+    restoreLogger = stubModule('../logger', { warn() {} });
 
-    // mergeLiveCounts 호출 (오늘)
-    const merged = mergeLiveCounts(snap, dc, true);
-    assert.equal(merged.txTotal, 123456, '라이브 건수가 병합되어야 함');
-    assert.equal(merged.syncedAt, '2026-09-15T17:45:00.000Z', '동기화 시각이 병합되어야 함');
+    // 라우터 재로드
+    delete require.cache[require.resolve('../routes/briefing')];
+    const briefingRouter = require('../routes/briefing');
+    const handler = extractLastHandler(briefingRouter, '/:date', 'get');
 
-    // briefingTicker에 병합된 snap 전달
-    const tk = briefingTicker(merged);
-    assert.ok(tk.length > 0, '티커 항목이 있어야 함');
-    const txItem = tk.find(t => t.label === '실거래 누적');
-    assert.ok(txItem, '실거래 누적 항목이 있어야 함');
-    assert.match(txItem.value, /123,456건/, '라이브 건수가 포함되어야 함');
-    assert.match(txItem.src, /09\.15 동기화/, '동기화 시각이 포함되어야 함');
+    // 모의 요청/응답
+    const req = { params: { date: '2026-09-16' } };
+    const res = mkRes();
 
-    // pastDaysNav 테스트
-    const pastDays = pastDaysNav('2026-09-16');
-    assert.equal(pastDays.length, 7, '7개의 지난 날짜가 있어야 함');
-    assert.match(pastDays.map(p => p.day).join(','), /2026-09-09/, '2026-09-09이 포함되어야 함');
+    // 핸들러 호출
+    await handler(req, res);
 
-    // HTML 렌더 시뮬레이션
-    const html = `<div class="ticker">실거래 누적 <b>${txItem.value}</b> <span class="src">${txItem.src}</span></div>
-      <div class="nav">${pastDays.map(p => `<a href="/briefing/${p.day}">${p.label}</a>`).join(' · ')}</div>`;
-
-    // 단언 (line 161~163)
-    assert.match(html, /123,456건/, '라이브 건수 123,456건 포함되어야 함');
-    assert.match(html, /09\.15 동기화/, '동기화 시각 09.15 포함되어야 함');
-    assert.doesNotMatch(html, /\b100건/, '스냅샷 원래 값 100건은 포함되면 안 됨');
-    assert.match(html, /\/briefing\/2026-09-15/, '지난 브리핑 링크 09-15 포함');
-    assert.match(html, /\/briefing\/2026-09-09/, '지난 브리핑 링크 09-09 포함');
+    // 응답 HTML 검증
+    assert.equal(res.statusCode, 200, '상태 코드 200');
+    assert.ok(res.body, '응답 본문 있음');
+    assert.match(res.body, /123,456건/, 'HTML에 라이브 건수 123,456건 포함되어야 함');
+    assert.match(res.body, /09\.15 동기화/, 'HTML에 동기화 시각 09.15 포함되어야 함');
+    assert.doesNotMatch(res.body, /\b100건/, 'HTML에 스냅샷 원래 값 100건은 포함되면 안 됨 (라이브로 덮어씌워짐)');
+    assert.match(res.body, /\/briefing\/2026-09-09/, 'HTML에 지난 브리핑 링크 09-09 포함');
   } finally {
-    try {
-      cache.del('meta:dataCounts:v2');
-    } catch (_) { /* 캐시 삭제 무시 */ }
+    try { cache.del('meta:dataCounts:v2'); } catch (_) { /* 캐시 삭제 무시 */ }
+    if (restoreBriefingService) restoreBriefingService();
+    if (restoreLogger) restoreLogger();
   }
 });

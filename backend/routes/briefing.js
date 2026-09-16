@@ -142,6 +142,16 @@ router.get('/:date', async (req, res) => {
        <a class="cta" href="/?briefing=${esc(day)}">앱에서 열기 →</a>`));
   }
 
+  // BRIEF-LIVE-TOTAL-2026-09-16 (Plan 086): 오늘 페이지는 실거래 누적을 앱과 같은 캐시 값으로 덮어씀.
+  //   라이브 값 적용이 티커 생성 **앞**에 와야 반영된다(Plan 086 정정).
+  const isToday = day === kstDayString();
+  if (isToday) {
+    let dc = null;
+    try { dc = require('../cache').get('meta:dataCounts:v2') || null; } catch (_) { dc = null; }
+    if (!dc) { try { dc = await require('../services/redisCache').rget('meta:dataCounts:v2'); } catch (_) { dc = null; } }
+    snap = mergeLiveCounts(snap, dc, isToday);
+  }
+
   // 티커 — 값 있는 항목만 (미확인 원칙). 문장은 briefingTicker 한 곳에서 만든다(OG 카드와 공유 — 사본 금지).
   const tk = briefingTicker(snap).map(t => `${esc(t.label)} <b>${esc(t.value)}</b> <span class="src">${esc(t.src)}</span>`);
 
@@ -176,16 +186,6 @@ router.get('/:date', async (req, res) => {
   const yo = '일월화수목금토'[new Date(day + 'T00:00:00Z').getUTCDay()];
   const title = `내집로그 브리핑 ${day.replace(/-/g, '.')}(${yo}) — 실거래·금리·시장 데이터`;
   const desc = (snap.lines && snap.lines[0]) ? String(snap.lines[0]).slice(0, 120) : '국토부 실거래·한국은행 금리 기반 일일 부동산 데이터 브리핑';
-
-  const isToday = day === kstDayString();
-
-  // BRIEF-LIVE-TOTAL-2026-09-16 (Plan 086): briefingService.buildBriefingPayload 와 같은 캐시 경로.
-  if (isToday) {
-    let dc = null;
-    try { dc = require('../cache').get('meta:dataCounts:v2') || null; } catch (_) { dc = null; }
-    if (!dc) { try { dc = await require('../services/redisCache').rget('meta:dataCounts:v2'); } catch (_) { dc = null; } }
-    snap = mergeLiveCounts(snap, dc, isToday);
-  }
 
   // 과거 날짜는 불변 기록 — 엣지 캐시 길게. 오늘은 30분.
   // ⚠ CACHE-POISON-2026-08-29: getOrCreateSnapshot 은 **저장은 lines 가 있을 때만** 하면서
