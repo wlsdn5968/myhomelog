@@ -5570,7 +5570,7 @@ async function renderBriefing(){
     if(ps.length){
       popHtml=ps.slice(0,5).map((p2,i)=>`<button class="brf-top" onclick='goSearchResult(${_jsonAttr({aptName:p2.aptName,sigungu:p2.sigungu,umdNm:p2.umdNm,lawdCd:p2.lawdCd,buildYear:p2.buildYear,recentDealDate:p2.recentDealDate})})'>
         <span style="flex:0 0 18px;font-size:12px;font-weight:800;color:var(--brf-tx3);font-variant-numeric:tabular-nums">${i+1}</span>
-        <span style="flex:1;min-width:0"><span class="brf-ell" style="display:block;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(p2.aptName||'')}</span><span style="display:block;margin-top:2px;font-size:10.5px;color:var(--brf-tx3)">${_escHtml(_fmtSgg(p2.sigungu))}</span></span>
+        <span style="flex:1;min-width:0"><span class="brf-ell" style="display:block;font-size:12.5px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(p2.displayName || _dispAptName(p2.aptName, p2.umdNm) || '')}</span><span style="display:block;margin-top:2px;font-size:10.5px;color:var(--brf-tx3)">${_escHtml(_fmtSgg(p2.sigungu))}</span></span>
         <span style="text-align:right;flex-shrink:0">${Number.isFinite(Number(p2.avgDealAmount))&&Number(p2.avgDealAmount)>0?`<span style="display:block;font-size:12.5px;font-weight:800;font-variant-numeric:tabular-nums">${(Number(p2.avgDealAmount)/10000).toFixed(2)}억</span>`:''}<span style="display:block;margin-top:2px;font-size:10.5px;font-weight:700;color:var(--brf-tx2);font-variant-numeric:tabular-nums">${p2.dealCount60d?p2.dealCount60d+'건':''}</span></span>
       </button>`).join('');
     } else { popHtml=`<div style="font-size:10.5px;color:var(--brf-tx3);padding:6px 0">조회 실패</div>`; }
@@ -7017,7 +7017,7 @@ function _renderListCard(p, i) {
       <span class="cmp-chk-lbl">비교</span>
     </label>
     <div class="lc-top" style="background:${_isRegProp(p)?'var(--accL)':'var(--a2L)'}">
-      <div class="lc-name">${_escHtml(p.aptName||'')}</div><div class="lc-area">${_escHtml(_fmtSgg(p.area))} | ${_escHtml(p.buildYear||'')}년</div>
+      <div class="lc-name">${_escHtml(p.displayName || _dispAptName(p.aptName, p.umdNm) || '')}</div><div class="lc-area">${_escHtml(_fmtSgg(p.area))} | ${_escHtml(p.buildYear||'')}년</div>
       <div class="lc-g">${gSVG(s||0,50)}
         <div><div style="font-size:17px;font-weight:800;color:${_hasS?gc(s):'var(--text-tertiary)'}">${(Number(p.avgPrice)||0).toFixed(2)}억</div>
         <span class="lvl ${lv}">${lt}</span>
@@ -7571,7 +7571,9 @@ function showDetail(p){
   if(!p)return;
   // Day 1-② Vercel Analytics — APT_DETAIL funnel event (단지 상세 클릭)
   try { window.va && window.va('event', { name: 'apt_detail_open', data: { aptName: String(p.aptName||'').slice(0,40), sigungu: p.sigungu||'' } }); } catch(_){}
-  document.getElementById('dmT').textContent=p.aptName;
+  // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — p.aptName(조회 키·API 인자)은 그대로 두고
+  //   모달 제목만 감싼다.
+  document.getElementById('dmT').textContent=p.displayName || _dispAptName(p.aptName, p.umdNm);
   // 점수 라벨 사실 진술화 (P1, 2026-04-25)
   // 점수 환각 fix (2026-05-05): score 없으면 "분석 대기" (60 fallback 제거 — 90% 사용자 환각 차단)
   const _hasScore = p.score != null;
@@ -7603,7 +7605,7 @@ function showDetail(p){
     const _badge = _ageLabel ? _ageLabel.replace('<span class="ass-sep">·</span>','') : '';
     _ass.innerHTML =
       `<div class="ass-main">`
-      + `<span class="ass-name">${_escHtml(p.aptName||'')}</span>`
+      + `<span class="ass-name">${_escHtml(p.displayName || _dispAptName(p.aptName, p.umdNm) || '')}</span>`
       + (p.area ? `<span class="ass-area">${_escHtml(_fmtSgg(p.area))}</span>` : '')
       + _badge
       + (_hasScore
@@ -9487,7 +9489,7 @@ function renderBookmarks(){
       <div class="bk-item-row">
         <label onclick="event.stopPropagation()" title="비교 선택" style="display:flex;align-items:center;flex-shrink:0;cursor:pointer"><input type="checkbox" class="cmp-bk-input" data-i="${i}" ${cmpBkSel.has(i)?'checked':''} onclick="event.stopPropagation();toggleCmpBk(${i},this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--acc);margin:0"></label>
         ${hasVisit?'<div class="bk-visit-dot" title="임장 기록 있음"></div>':''}
-        <div><div class="bk-name">${_escHtml(b.aptName || '')}${b.newDealCount>0?`<span class="bk-new-badge" title="마지막 확인 이후 신규 실거래">🔔 새 거래 ${b.newDealCount}건</span>`:''}</div><div style="font-size:10px;color:var(--t3)">${_escHtml(_fmtSgg(b.area))}</div>${b.newDealCount>0&&Array.isArray(b.newDeals)&&b.newDeals.length?`<div style="font-size:9.5px;color:var(--acc);margin-top:1px" title="신규 실거래 요약 (최신 3건, 국토부 실거래가 기준)">${b.newDeals.map(d=>`${_escHtml(String(d.d||''))} ${Number(d.p)||0}억${Number(d.ar)>0?` ${Number(d.ar)}㎡`:''}`).join(' · ')}</div>`:''}</div>
+        <div><div class="bk-name">${_escHtml(_dispAptName(b.aptName, b.umdNm))}${b.newDealCount>0?`<span class="bk-new-badge" title="마지막 확인 이후 신규 실거래">🔔 새 거래 ${b.newDealCount}건</span>`:''}</div><div style="font-size:10px;color:var(--t3)">${_escHtml(_fmtSgg(b.area))}</div>${b.newDealCount>0&&Array.isArray(b.newDeals)&&b.newDeals.length?`<div style="font-size:9.5px;color:var(--acc);margin-top:1px" title="신규 실거래 요약 (최신 3건, 국토부 실거래가 기준)">${b.newDeals.map(d=>`${_escHtml(String(d.d||''))} ${Number(d.p)||0}억${Number(d.ar)>0?` ${Number(d.ar)}㎡`:''}`).join(' · ')}</div>`:''}</div>
         <span class="bk-price">${priceNow?priceNow.toFixed(1)+'억':''}</span>
         <button class="bk-del" onclick="delBookmark(event,${i})" aria-label="북마크 삭제">✕</button>
       </div>
@@ -9727,7 +9729,9 @@ function delBookmark(e,i){
   renderBookmarks();
   // 서버에 _serverId 가 있으면 명시적 DELETE (upsert 기반 push 는 삭제 불가)
   if(removed?._serverId){ _deleteBookmarkOnServer(removed._serverId).catch(()=>{}); }
-  if(currentDetail&&currentDetail.aptName===document.getElementById('dmT').textContent){
+  // APT-DISPLAY-NAME-2026-09-16 (Plan 090): dmT.textContent 는 이제 표시용 이름(_dispAptName 적용 후)일
+  //   수 있어 raw aptName 과 달라질 수 있다 — 조회 키(removed.aptName)로 직접 비교한다(더 정확한 비교이기도 하다).
+  if(currentDetail&&currentDetail.aptName===removed?.aptName){
     document.getElementById('bkToggle').textContent='⭐ 관심 추가';
     document.getElementById('bkToggle').classList.remove('on');
   }
@@ -11773,7 +11777,9 @@ async function loadPopularMarkers() {
     popular.forEach((p, _pi) => {
       try {
         const _rank = _pi + 1;
-        const _nm = String(p.aptName||'');
+        // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — 아래 _pj/goSearchResult 의 p.aptName(키)은
+        //   그대로 두고, 마커에 보이는 라벨(_nm)만 감싼다.
+        const _nm = String(p.displayName || _dispAptName(p.aptName, p.umdNm) || '');
         const _disp = (_nm.length <= 5 && _sggShort(p.sigungu)) ? `${_sggShort(p.sigungu)} ${_nm}` : _nm;
         if (isNaver) {
           // Sprint KK (2026-05-16): CustomOverlay deprecated → Marker + icon.content (HTML)
@@ -12063,8 +12069,11 @@ async function onHeaderSearchInput(q) {
           // Phase 10 (2026-05-03): 거래량 인기 배지 — count 5건 이상 시 🔥, 10건 이상 시 🔥🔥
           const _hot = (r.dealCount >= 10) ? ' 🔥🔥' : (r.dealCount >= 5 ? ' 🔥' : '');
           const _cntStr = r.dealCount ? ` · ${r.dealCount}건` : '';
-          return `<div class="hsearch-item" data-idx="${i}" role="option" tabindex="0" aria-label="${_escHtml(r.aptName)} ${_escHtml(_fmtSgg(r.sigungu))} ${_escHtml(r.umdNm||'')}" onclick='goSearchResult(${_jsonAttr(r)})' style="padding:7px 11px;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:12px;line-height:1.4" onmouseover="this.style.background='var(--s1)'" onmouseout="this.style.background=''">
-            <div style="font-weight:700;color:var(--t1)">${_escHtml(r.aptName)}${_hot}</div>
+          // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — goSearchResult(${_jsonAttr(r)}) 의
+          //   r(키·API 인자)은 원본 그대로, 아래 두 표시 지점(aria-label·이름)만 감싼다.
+          const _rDisp = r.displayName || _dispAptName(r.aptName, r.umdNm);
+          return `<div class="hsearch-item" data-idx="${i}" role="option" tabindex="0" aria-label="${_escHtml(_rDisp)} ${_escHtml(_fmtSgg(r.sigungu))} ${_escHtml(r.umdNm||'')}" onclick='goSearchResult(${_jsonAttr(r)})' style="padding:7px 11px;border-bottom:1px solid var(--bg2);cursor:pointer;font-size:12px;line-height:1.4" onmouseover="this.style.background='var(--s1)'" onmouseout="this.style.background=''">
+            <div style="font-weight:700;color:var(--t1)">${_escHtml(_rDisp)}${_hot}</div>
             <div style="font-size:10.5px;color:var(--t3);margin-top:2px">${_escHtml(_fmtSgg(r.sigungu))} ${_escHtml(r.umdNm||'')} · ${r.buildYear||'?'}년 · ${(r.recentDealDate||'').slice(0,10)}${_cntStr}</div>
           </div>`;
         }).join('');
@@ -12926,6 +12935,26 @@ function gt(){const n=new Date();return n.getHours().toString().padStart(2,'0')+
 //   'sigungu umd' 결합 문자열도 첫 토큰만 분리되며 광역시 구('강남구')·구 없는 시('시흥시')는 불변.
 function _fmtSgg(s){return String(s==null?'':s).replace(/^([가-힣]+?시)([가-힣]+구)(?=\s|$)/,'$1 $2');}
 function _escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
+// APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — data-*/API 호출 인자/비교 키는 이 결과로 바꾸지 않는다.
+//   backend/utils/aptDisplayName.js 와 두 정규식이 문자 그대로 동일해야 한다(드리프트 테스트로 고정).
+const UNNAMED_RE = /^\(?\s*\d+(?:-\d+)?\s*\)?$/;
+const JIBUN_SUFFIX_RE = /\s*\(\s*(\d+(?:-\d+)?)\s*\)\s*$/;
+function _isUnnamedApt(name){
+  const s = String(name==null?'':name).trim();
+  if (!s) return true;
+  if (UNNAMED_RE.test(s) || /^\([^)]*\)$/.test(s)) return true;
+  return s.replace(/[^가-힣A-Za-z]/g,'').length < 2;
+}
+function _dispAptName(name, umdNm, kaptName){
+  if (kaptName && String(kaptName).trim()) return String(kaptName).trim();
+  const s = String(name==null?'':name).trim();
+  if (_isUnnamedApt(s)) {
+    const jb = (s.match(/\d+(?:-\d+)?/)||[''])[0];
+    return [umdNm?String(umdNm).trim():'', jb?`${jb}번지`:'', '단지 (이름 미등록)'].filter(Boolean).join(' ');
+  }
+  const m = s.match(JIBUN_SUFFIX_RE);
+  return m ? `${s.slice(0,m.index).trim()} (${m[1]}번지)` : s;
+}
 
 /* ── 지역 시장 요약 모달 (Sprint WWWWWW) ───────────────────────────────────────────
    claude.ai/design 시안 '지역 시장 요약 모달' 을 우리 토큰으로 재구현.
