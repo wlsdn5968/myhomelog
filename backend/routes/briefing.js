@@ -26,6 +26,20 @@ function dayNav(day, delta) {
   return d.toISOString().slice(0, 10);
 }
 
+// BRIEF-LIVE-TOTAL-2026-09-16 (Plan 086): 오늘 페이지의 실거래 누적은 앱(/api/health)과 같은 캐시 값을 쓴다.
+//   스냅샷은 생성 시점 값이라 그날 적재가 돌면 어긋났다(라이브 466,356 vs 468,303). 과거 날짜는 기록 그대로.
+function mergeLiveCounts(snap, dc, isToday) {
+  if (!isToday || !snap || !dc || !dc.tx) return snap;
+  return { ...snap, txTotal: Number(dc.tx), syncedAt: dc.lastIngestedAt || snap.syncedAt || null };
+}
+
+// BRIEF-PAST-NAV-2026-09-16 (Plan 086): 지난 n일 링크 — 아카이브 페이지끼리의 내부 링크(서비스 시작 2026-01-01 이전은 제외).
+function pastDaysNav(day, n = 7) {
+  const out = [];
+  for (let k = 1; k <= n; k++) { const d = dayNav(day, -k); if (d < '2026-01-01') break; out.push({ day: d, label: d.slice(5).replace('-', '.') }); }
+  return out;
+}
+
 function pageShell(title, desc, day, body, image) {
   const canonical = `${ORIGIN}/briefing/${day}`;
   const ogImg = image || `${ORIGIN}/og.png`; // OG-BRIEFING-2026-09-05: 기록이 있는 날은 동적 카드(/api/og/briefing)
@@ -164,6 +178,15 @@ router.get('/:date', async (req, res) => {
   const desc = (snap.lines && snap.lines[0]) ? String(snap.lines[0]).slice(0, 120) : '국토부 실거래·한국은행 금리 기반 일일 부동산 데이터 브리핑';
 
   const isToday = day === kstDayString();
+
+  // BRIEF-LIVE-TOTAL-2026-09-16 (Plan 086): briefingService.buildBriefingPayload 와 같은 캐시 경로.
+  if (isToday) {
+    let dc = null;
+    try { dc = require('../cache').get('meta:dataCounts:v2') || null; } catch (_) { dc = null; }
+    if (!dc) { try { dc = await require('../services/redisCache').rget('meta:dataCounts:v2'); } catch (_) { dc = null; } }
+    snap = mergeLiveCounts(snap, dc, isToday);
+  }
+
   // 과거 날짜는 불변 기록 — 엣지 캐시 길게. 오늘은 30분.
   // ⚠ CACHE-POISON-2026-08-29: getOrCreateSnapshot 은 **저장은 lines 가 있을 때만** 하면서
   //   payload 자체는 lines 가 비어도 그대로 돌려준다(briefingService: `if (payload.lines.length) upsert`
@@ -184,9 +207,12 @@ router.get('/:date', async (req, res) => {
     ${pops ? `<div class="card"><h2>인기 단지 TOP5 <span style="font-weight:500;color:var(--sub);font-size:10px">최근 60일 실거래 많은 순 · 매물 광고 아님</span></h2>${pops}</div>` : ''}
     ${regs ? `<div class="card"><h2>규제·금융 변동 로그 <span style="font-weight:500;color:var(--sub);font-size:10px">금융위·국토부 고시 · 검증된 이벤트만</span></h2>${regs}</div>` : ''}
     <div class="nav"><a href="/briefing/${dayNav(day, -1)}">← 전날 브리핑</a>${isToday ? '' : `<a href="/briefing/${dayNav(day, 1)}">다음날 →</a>`}</div>
+    ${(() => { const p = pastDaysNav(day); return p.length ? `<div class="nav" aria-label="지난 브리핑">지난 브리핑: ${p.map((x) => `<a href="/briefing/${esc(x.day)}">${esc(x.label)}</a>`).join(' · ')}</div>` : ''; })()}
     <a class="cta" href="/?briefing=${esc(day)}">앱에서 지도·계산기와 함께 보기 →</a>`,
     _thin ? null : `${ORIGIN}/api/og/briefing/${day}`));
 });
 
 module.exports = router;
 module.exports.briefingTicker = briefingTicker;   // OG 카드와 공유
+module.exports.mergeLiveCounts = mergeLiveCounts;
+module.exports.pastDaysNav = pastDaysNav;
