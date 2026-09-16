@@ -718,18 +718,20 @@ CREATE OR REPLACE FUNCTION public.refresh_molit_aliases()
 AS $function$
 DECLARE n integer;
 BEGIN
-  WITH mj AS (
-    SELECT lawd_cd, umd_nm, apt_name, build_year, jibun,
-           row_number() OVER (PARTITION BY lawd_cd,umd_nm,apt_name,build_year ORDER BY cnt DESC, jibun) AS rn
-    FROM (SELECT lawd_cd,umd_nm,apt_name,build_year,jibun,count(*) cnt FROM molit_transactions
-          WHERE jibun IS NOT NULL AND jibun<>'' GROUP BY 1,2,3,4,5) t
-  ), m AS (
+  WITH mj AS MATERIALIZED (
+    SELECT lawd_cd, umd_nm, apt_name, build_year, jibun
+    FROM (SELECT lawd_cd, umd_nm, apt_name, build_year, jibun,
+                 row_number() OVER (PARTITION BY lawd_cd,umd_nm,apt_name,build_year ORDER BY cnt DESC, jibun) AS rn
+          FROM (SELECT lawd_cd,umd_nm,apt_name,build_year,jibun,count(*) cnt FROM molit_transactions
+                WHERE jibun IS NOT NULL AND jibun<>'' GROUP BY 1,2,3,4,5) t) r
+    WHERE rn = 1
+  ), m AS MATERIALIZED (
     SELECT kapt_code, apt_name, lawd_cd, umd_nm,
            left(facility->>'kaptUsedate',4)::int AS yr,
            (regexp_match(facility->>'kaptAddr','(?:^|\s)([0-9]+(?:-[0-9]+)?)(?:\s|$)'))[1] AS jb,
            regexp_replace(replace(apt_name,' ',''),'\([^)]*\)','','g') AS nn
     FROM apt_master WHERE facility->>'kaptUsedate' ~ '^[0-9]{8}'
-  ), i AS (
+  ), i AS MATERIALIZED (
     SELECT apt_name, lawd_cd, umd_nm, build_year,
            regexp_replace(replace(apt_name,' ',''),'\([^)]*\)','','g') AS nn
     FROM molit_apt_index
@@ -740,7 +742,7 @@ BEGIN
            (regexp_replace(m.nn,'[^0-9]','','g')=regexp_replace(i.nn,'[^0-9]','','g')
             OR regexp_replace(m.nn,'[^0-9]','','g')='' OR regexp_replace(i.nn,'[^0-9]','','g')='') AS digits_ok
     FROM m JOIN i ON i.lawd_cd=m.lawd_cd AND i.umd_nm=m.umd_nm AND i.build_year=m.yr
-    LEFT JOIN mj ON mj.rn=1 AND mj.lawd_cd=m.lawd_cd AND mj.umd_nm=m.umd_nm
+    LEFT JOIN mj ON mj.lawd_cd=m.lawd_cd AND mj.umd_nm=m.umd_nm
                 AND mj.build_year=m.yr AND mj.apt_name=i.apt_name AND mj.jibun=m.jb
   ), acc0 AS (
     SELECT * FROM cand
