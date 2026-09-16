@@ -89,7 +89,8 @@
 | **074** | **`validatePropertySearch` 죽은 GET 분기 제거 (소비자는 POST /recommend 뿐 — 073 이 테스트로 죽은 분기를 붙들어 둠)** | P3 | XS | 073 | DONE (3050689, 2026-09-10) — haiku 실행자 3분/86K, 380 유지(테스트 1개 교체), 회귀 주입 통과. 라이브 POST /recommend 본문 유무 모두 400 |
 | **075** | **satori 중첩 fflate 0.7.3 → 0.7.5 override (audit moderate 2 → 0, satori 는 inflateSync 만 사용)** | P2 | XS | — | DONE (f3dba8d, 2026-09-10) — overrides 로 중첩 fflate 0.7.3 제거, root·backend audit **0**. og-image 렌더 테스트 + 라이브 /api/og/apt/11350-183 200 PNG(39KB) 확인 |
 | **076** | **잡무 3건: 스키마 스캔 정규식 `Buffer.from` 오탐 · aptMasterSync.js CR CR LF 23줄 · pino redact 2·3단계 (pino `*` 는 한 단계뿐 — 실측)** | P3 | S | — | DONE (8fa5bda·52b350c·d2fe951, 2026-09-10) — 382 pass. ⚠ CRLF 커밋은 23줄이 아니라 372줄 전체: 이 파일만 blob 에 CR 이 있던 유일한 예외(js 127개 중 1)라 LF 관례로 정규화된 것 — `git diff -w` 빈 출력으로 공백 외 변경 0 확인 |
-| **077** | **`refresh_molit_aliases` v2 적용 기록 — CTE MATERIALIZED 로 108.5s → 9.5s (067 cron 30s 중단 원인, Sentry NODE-D)** | **P1** | XS | 운영자 DB 승인 | TODO — 승인 대기 |
+| **077** | **`refresh_molit_aliases` v2 적용 기록 — CTE MATERIALIZED 로 108.5s → 9.5s (067 cron 30s 중단 원인, Sentry NODE-D)** | **P1** | XS | 운영자 DB 승인 | DONE (2026-09-16) — 운영자 승인 후 v2 적용: `EXPLAIN ANALYZE SELECT refresh_molit_aliases()` **9,867 ms**(기존 108,541), 첫 실행 8행 갱신(09-14 회차는 클라이언트만 끊기고 DB UPDATE 완료돼 있었음). 마이그레이션·schema.sql 함수 블록 md5 = DB pg_get_functiondef 와 동일. 다음 확인 09-21 aliasRefreshed |
+| **078** | **`check-deps-sync` 가 npm `overrides` 동일성도 검사 (075 이후 루트/백엔드가 갈려도 초록이던 구멍)** | P3 | XS | 075 | DONE (c5d4004, 2026-09-16) — overrides 깊은 비교, 회귀 주입(0.7.4) exit 1 확인 |
 | **058** | **조용한 낡음 감시 — 검색 색인 21일 정지가 경보 없었다 + 열화 전파 2곳** | **P1** | S | 054 | DONE (197ec1c, 2026-09-06) — searchIndexLagDays 지표 신설·임계 7일. ⚠ 근본 수정(DB)은 운영자 승인 대기
 
 ### 051~053 라운드 (2026-09-06, 운영자 실사용 실패 신고에서 출발)

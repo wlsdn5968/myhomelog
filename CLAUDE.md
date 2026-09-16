@@ -122,7 +122,10 @@
   14,661행 중 별칭 보유 **1행**뿐이었다(그 1행이 운영자가 반복 지적한 공릉풍림아이원).
   같은 날 **1회 backfill 적용 → 10,505행**(Plan 053 부록 A, 운영자 승인 후 실행).
   판정 규칙: 동+건축년도 필수 · 채택은 지번 또는 이름(숫자열 일치) · 상가류·다중충돌 배제 · A/B 형제 확장.
-  ⚠ **여전히 자동이 아니다** — `aptMasterSync` 가 새 단지를 넣을 때 별칭은 빈 채로 들어온다.
+  **자동화 완료(Plan 067, 2026-09-06)**: `aptMasterSync` cron 이 upsert 뒤 `refresh_molit_aliases()` 를 호출한다.
+  ⚠ 2026-09-07·14 회차는 함수가 108초 걸려 cron 의 30초 중단(`TimeoutError`)에 걸렸다(DB 쪽 UPDATE 는 완료됨).
+  2026-09-16 운영자 승인 후 CTE 3개를 MATERIALIZED 로 바꿔 **9.9초**(Plan 077, `supabase/migrations/20260910_*`).
+  다음 확인: 09-21 주간 회차 `/api/health` crons['apt-master-sync'].aliasRefreshed 가 숫자여야 한다.
 - ~~단지 모달 inline 법령 노출~~ (완료)
 
 ### 폐기 (운영자 방침·판정)
@@ -131,7 +134,6 @@
 
 ### 미진행 (long-term, 게이트 있음)
 - 건축물대장 기반 KAPT 소형단지 갭 보강 확대 (온디맨드는 동작 중 — 대량 backfill 은 필요 시)
-- `molit_aliases` 신규 단지 자동 편입(`aptMasterSync` cron) — 1회 backfill 은 2026-09-06 적용 완료, 자동화는 운영자 결정 대기
 - 헤더 pill 구조·사이드바·IA 재편 — 운영자 "시안 먼저" 보류 (2026-07-15 실측이 헤더 혼잡 정량 실증)
 
 ### 폐기 추가 (운영자 확정)
@@ -161,4 +163,4 @@
 
 ---
 
-마지막 갱신: 2026-09-06 (검색 색인 MV 갱신 정상화 + molit_aliases 1회 backfill 적용 — Plan 053/058)
+마지막 갱신: 2026-09-16 (molit_aliases 자동 갱신 함수 v2 적용 9.9초 — Plan 077 · Express 5 · 테스트 382)
