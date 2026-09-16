@@ -2962,8 +2962,8 @@ html[data-theme="dark"] #view-news{
 
   <section class="lv-bento">
     <div class="lv-card lv-chart">
-      <div class="lv-card-head"><span class="lv-card-label">참고 · 5Y 가격 추세 시각화</span><span class="lv-card-meta">참고용</span></div>
-      <svg viewBox="0 0 720 220" preserveAspectRatio="xMidYMid meet" class="lv-chart-svg" aria-label="5년 가격 추이 차트">
+      <div class="lv-card-head"><span class="lv-card-label">예시 · 가격 흐름 시각화(실제 데이터 아님)</span><span class="lv-card-meta">참고용</span></div>
+      <svg viewBox="0 0 720 220" preserveAspectRatio="xMidYMid meet" class="lv-chart-svg" aria-label="가격 흐름 예시 그래프 — 실제 데이터 아님">
         <defs>
           <linearGradient id="lvChartGrad" x1="0" x2="1"><stop offset="0%" stop-color="#2E5E94"/><stop offset="100%" stop-color="var(--accent-500)"/></linearGradient>
           <linearGradient id="lvChartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="var(--accent-500)" stop-opacity="0.22"/><stop offset="100%" stop-color="var(--accent-500)" stop-opacity="0"/></linearGradient>
@@ -2974,9 +2974,10 @@ html[data-theme="dark"] #view-news{
         <text class="lv-chart-axis" x="35" y="164" text-anchor="end">6억</text>
         <path class="lv-chart-area" d="M 40 145 L 100 132 L 160 124 L 220 108 L 280 92 L 340 84 L 400 92 L 460 76 L 520 60 L 580 50 L 640 56 L 700 48 L 700 200 L 40 200 Z"/>
         <path class="lv-chart-line" d="M 40 145 L 100 132 L 160 124 L 220 108 L 280 92 L 340 84 L 400 92 L 460 76 L 520 60 L 580 50 L 640 56 L 700 48"/>
-        <text class="lv-chart-axis" x="40" y="195">2021</text><text class="lv-chart-axis" x="200" y="195">2022</text><text class="lv-chart-axis" x="360" y="195">2023</text><text class="lv-chart-axis" x="520" y="195">2024</text><text class="lv-chart-axis" x="680" y="195">2025</text>
+        <text class="lv-chart-axis" x="40" y="195"></text><text class="lv-chart-axis" x="200" y="195"></text><text class="lv-chart-axis" x="360" y="195"></text><text class="lv-chart-axis" x="520" y="195"></text><text class="lv-chart-axis" x="680" y="195"></text>
       </svg>
-      <div class="lv-card-sub" style="margin-top:8px">단지 선택 시 실 데이터 차트</div>
+      <!-- DATA-RANGE-2026-09-16: molit_transactions min(deal_date)=2025-05-01 실측 -->
+      <div class="lv-card-sub" style="margin-top:8px">단지 선택 시 2025.05 이후 실거래 표·가격 위치·월별 거래량 (국토부 신고 기준)</div>
     </div>
 
     <div class="lv-card lv-stat">
