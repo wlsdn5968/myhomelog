@@ -198,3 +198,43 @@ test('회귀 주입 준비 — JIBUN_SUFFIX_RE 패턴 동작 확인', () => {
   assert.ok(m, '원본 패턴이 지번 괄호를 매칭하지 못한다');
   assert.equal(m[1], '872', '캡처 그룹 오류');
 });
+
+// POPULAR-UNNAMED-REGRESSION-2026-09-16 (Plan 095): popularService.js 의 이름 미등록 필터 두 줄을 지우면 이 테스트가 실패해야 한다.
+//   스텁 형태는 cron-observability.test.js 의 popularService 테스트와 동일(rpc→abortSignal thenable, apt_geocache select→in).
+test('buildPopularResults — 이름 미등록("(50-5)")은 인기 순위에서 빠지고, 지번 괄호 이름은 displayName 만 정리되어 남는다', async () => {
+  const geoPath = require.resolve('../services/geocodeCacheService');
+  const svcPath = require.resolve('../services/popularService');
+  const saved = { g: require.cache[geoPath], s: require.cache[svcPath] };
+  const today = new Date().toISOString().slice(0, 10);
+  // 13행: 2번째가 이름 미등록, 3번째가 지번 괄호 접미. 시군구를 전부 다르게 해 시군구 캡(≤2)에 걸리지 않게 한다.
+  const names = ['공릉풍림아이원', '(50-5)', '충무주공(872)', '단지4', '단지5', '단지6', '단지7', '단지8', '단지9', '단지10', '단지11', '단지12', '단지13'];
+  const rows = names.map((n, i) => ({
+    aptName: n, sigungu: `시군구${i}`, umdNm: i === 1 ? '공항동' : `동${i}`, lawdCd: `111${String(i).padStart(2, '0')}`,
+    buildYear: 2000, recentDealDate: today, dealCount60d: 100 - i, avgDealAmount: 100000,
+  }));
+  const coords = rows.map(r => ({ apt_name: r.aptName, sigungu: r.sigungu, umd_nm: r.umdNm, lat: 37.5, lng: 127.0 }));
+  const client = {
+    rpc: () => ({ abortSignal: () => Promise.resolve({ data: rows, error: null }) }),
+    from: (table) => {
+      if (table !== 'apt_geocache') throw new Error('예상 밖 테이블 ' + table);
+      return { select: () => ({ in: () => Promise.resolve({ data: coords, error: null }) }) };
+    },
+  };
+  require.cache[geoPath] = { id: geoPath, filename: geoPath, loaded: true, exports: { resolveCoordBatch: async () => [] } };
+  delete require.cache[svcPath];
+  try {
+    const { buildPopularResults } = require('../services/popularService');
+    const { results, usedFallback } = await buildPopularResults(12, { client });
+    assert.equal(usedFallback, false);
+    assert.equal(results.length, 12, '이름 미등록 1건을 빼고도 후보 12건으로 limit 을 채워야 한다');
+    assert.ok(!results.some(r => r.aptName === '(50-5)'), '이름 미등록 단지가 인기 순위에 남아 있다 — popularService 의 named 필터 회귀');
+    const cm = results.find(r => r.aptName === '충무주공(872)');
+    assert.ok(cm, '지번 괄호 이름은 (제외가 아니라) 표시만 정리되어 남아야 한다');
+    assert.equal(cm.displayName, '충무주공 (872번지)');
+    assert.equal(results[0].displayName, '공릉풍림아이원');
+    assert.ok(results.every(r => typeof r.displayName === 'string' && r.displayName), '모든 행에 displayName 이 있어야 한다');
+  } finally {
+    if (saved.g) require.cache[geoPath] = saved.g; else delete require.cache[geoPath];
+    if (saved.s) require.cache[svcPath] = saved.s; else delete require.cache[svcPath];
+  }
+});
