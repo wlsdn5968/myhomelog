@@ -27,6 +27,8 @@ const { getSupabaseReadonly, getSupabaseAdmin } = require('../db/client');
 const logger = require('../logger');
 const { resolveCoordBatch } = require('./geocodeCacheService');
 const { isValidKoreaCoord } = require('../utils/geo');
+// APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(조회 키)은 바꾸지 않는다.
+const { isUnnamedApt, displayAptName } = require('../utils/aptDisplayName');
 
 const SNAPSHOT_MAX_AGE_MS = 36 * 60 * 60 * 1000; // 36시간 — daily cron 1회 실패까지 허용
 
@@ -121,6 +123,9 @@ async function buildPopularResults(limit = 12, opts = {}) {
   }
   if (!top || !top.length) return { results: [], usedFallback };
 
+  // POPULAR-QUALITY (c): MOLIT raw 접두("산척동,") 제거 — 표시용만 (좌표 join 키는 raw 유지)
+  const _cleanName = (n) => String(n || '').replace(/^[가-힣0-9]{1,8}(동|리|가),\s*/, '');
+
   // ⑥ POPULAR-QUALITY-2026-07-11 (Sprint GGGG): (a) 21일 지속거래 필터 — 신축 일괄등기 버스트 차단
   //   (b) lawd_cd(시군구 고유코드)당 최대 2곳 캡 — 동탄 도배 방지 (sigungu 문자열은 '서구' 충돌 실측).
   //   캡 초과분은 뒤로 밀어 limit 미달 시에만 재투입 (항상 꽉 채움 보장 유지).
@@ -138,6 +143,13 @@ async function buildPopularResults(limit = 12, opts = {}) {
     top = capped.concat(overflow);
   }
 
+  // POPULAR-UNNAMED-2026-09-16 (Plan 090 정책 4번): 이름 미등록 단지(지번/괄호뿐인 이름, 예: "(50-5)")는
+  //   실거래는 있어도 인기 순위 노출에서 뺀다(검색·상세는 2번 라벨로 그대로 노출 — 여긴 순위만의 예외).
+  //   위 21일 필터·시군구 캡과 같은 패턴: 필터 후에도 limit 을 채울 만큼 남을 때만 적용하고,
+  //   limit+6 후보로 넉넉히 남겨 아래 좌표 매칭에서 일부가 또 빠져도 여유를 준다.
+  const named = top.filter(t => !isUnnamedApt(_cleanName(t.apt_name)));
+  if (named.length >= limit) top = named.slice(0, limit + 6);
+
   // ③ apt_geocache 좌표 join — 환각 차단(2026-05-06): (apt_name|sigungu|umd_nm) 정확 키만
   const names = [...new Set(top.map(t => t.apt_name))];
   const { data: coords } = await admin.from('apt_geocache')
@@ -150,13 +162,13 @@ async function buildPopularResults(limit = 12, opts = {}) {
     if (!isValidKoreaCoord(Number(c.lat), Number(c.lng))) continue;
     coordMap.set(`${c.apt_name}|${c.sigungu || ''}|${c.umd_nm || ''}`, c);
   }
-  // POPULAR-QUALITY (c): MOLIT raw 접두("산척동,") 제거 — 표시용만 (좌표 join 키는 raw 유지)
-  const _cleanName = (n) => String(n || '').replace(/^[가-힣0-9]{1,8}(동|리|가),\s*/, '');
   const _row = (t, c) => ({
     aptName: _cleanName(t.apt_name), sigungu: t.sigungu, umdNm: t.umd_nm,
     lawdCd: t.lawd_cd, buildYear: t.build_year,
     recentDealDate: t.latest, dealCount60d: t.count, avgDealAmount: t.deal_amount,
     lat: Number(c.lat), lng: Number(c.lng),
+    // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(위, 조회 키)은 그대로 두고 별도 필드로만 얹는다.
+    displayName: displayAptName(_cleanName(t.apt_name), { umdNm: t.umd_nm }),
   });
 
   // ④ 상위 limit 후보의 미좌표만 즉시 lazy-fill (첫 호출만 수초, 이후 apt_geocache 영속 hit)
@@ -200,10 +212,13 @@ async function readPopularSnapshot(limit = 12, maxAgeMs = SNAPSHOT_MAX_AGE_MS) {
     if (error || !data || !Array.isArray(data.payload)) return null;
     const age = Date.now() - new Date(data.computed_at).getTime();
     if (!(age >= 0 && age < maxAgeMs)) return null;
-    if (data.payload.length < Math.min(limit, SNAPSHOT_SIZE)) return null;
+    // POPULAR-UNNAMED-2026-09-16 (Plan 090): 이 스냅샷이 090 적용 전에 저장됐을 수 있다(옛 스냅샷
+    //   대비) — 반환 전에 같은 필터를 한 번 더 걸고, displayName 이 없는 행은 채워준다.
+    const named = (data.payload || []).filter(p => !isUnnamedApt(p && p.aptName));
+    if (named.length < Math.min(limit, SNAPSHOT_SIZE)) return null;
     // 계산 시점을 **배열 속성**으로 싣는다 — 반환 형태를 바꾸면 호출부 4곳(검색 2·브리핑·챗)과
     //   테스트 스텁까지 함께 고쳐야 하고, 그 중 하나만 놓쳐도 조용히 빈 결과가 된다.
-    const rows = data.payload.slice(0, limit);
+    const rows = named.slice(0, limit).map(p => (p.displayName ? p : { ...p, displayName: displayAptName(p.aptName, { umdNm: p.umdNm }) }));
     rows.computedAt = data.computed_at;
     return rows;
   } catch (_) { return null; }

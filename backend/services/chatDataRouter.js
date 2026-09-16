@@ -19,6 +19,8 @@ const logger = require('../logger');
 // APT-RESOLVE-2026-09-06: 단지명 정규화·형제 그룹핑은 backend/utils/aptNameMatch.js 로 이전
 //   (search.js 등 다른 경로도 재사용할 수 있도록 순수 함수만 모아둔 신규 모듈).
 const { normalizeName, stripAptSuffix, siblingKey, groupSiblings, dice, splitRegionName } = require('../utils/aptNameMatch');
+// APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(조회 키)은 바꾸지 않는다.
+const { displayAptName } = require('../utils/aptDisplayName');
 
 // ── 의도 분류 (순수 함수 — characterization 테스트 고정 대상) ─────────────────
 // 순서 중요: 구체적 의도(특약·금리·정책자금·규제·한도·인기·전세)를 먼저, 시세(광범위)는 뒤에.
@@ -339,21 +341,25 @@ async function _market(query, context) {
       if (data && data.length) { picked = a.c; txs = data; if (a.names !== names) { mergedNote = null; mergedGroup = null; } break; }
     }
     if (!picked) {
-      const names2 = ranked.slice(0, 3).map(c => `${c.aptName}${c.sigungu ? `(${c.sigungu})` : ''}`).join(' · ');
+      // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — c.aptName(조회 키)은 그대로, 문구만 감싼다.
+      const names2 = ranked.slice(0, 3).map(c => `${displayAptName(c.aptName, { umdNm: c.umdNm })}${c.sigungu ? `(${c.sigungu})` : ''}`).join(' · ');
       return `"${q}" 로 찾은 단지(${names2})는 최근 6개월 국토부 실거래가 없어요.\n` +
         `· 상단 검색창에서 단지명을 검색하면 더 이전 거래까지 볼 수 있어요.`;
     }
     // Step 4: apt_master 정식명이 없는 경로라 stem + 접미문자 합산 표기로 밝힌다
     //   (예: "상목에버빌(A·B 합산)") — 그냥 top 후보 이름 하나만 쓰면 합산 사실이 안 보인다.
+    // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 합산 라벨은 이미 합성된 표시문구라 그대로 두고,
+    //   단일 후보(raw MOLIT 이름)일 때만 표시 정책을 적용한다.
     displayName = mergedGroup
       ? `${mergedGroup.stem}(${mergedGroup.names.map(n => (siblingKey(n) || {}).suffix).join('·')} 합산)`
-      : picked.aptName;
+      : displayAptName(picked.aptName, { umdNm: picked.umdNm });
   } else {
     // ── APT-RESOLVE-2026-09-06 (Plan 051 핵심 경로): 직접 히트가 0건이라 apt_master 만 있다.
     if (amCandidates.length >= 2) {
       // Step 5 두 번째 원칙: 확정 후보가 2곳 이상이면 바로 답하지 말고 되묻는다
       //   (_regionMarket 의 ambiguousSidos 분기와 같은 패턴).
-      const opts = amCandidates.map(a => `${a.apt_name}${a.sigungu ? `(${a.sigungu})` : ''}`).join(' · ');
+      // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — a.apt_name(조회 키)은 그대로, 문구만 감싼다.
+      const opts = amCandidates.map(a => `${displayAptName(a.apt_name, { umdNm: a.umd_nm })}${a.sigungu ? `(${a.sigungu})` : ''}`).join(' · ');
       return {
         text: `"${q}" 로 여러 단지가 걸려요: ${opts}\n혹시 이 중에 있나요? 아래에서 눌러 고르시거나 지역명을 함께 적어주세요.`,
         suggestions: amCandidates.slice(0, 3).map(a => `${a.apt_name} 시세`),
@@ -393,7 +399,8 @@ async function _market(query, context) {
         .sort((a, b) => b.score - a.score)
         .slice(0, 3);
       return {
-        text: `"${am.apt_name}"(${am.sigungu || ''}${am.umd_nm ? ' ' + am.umd_nm : ''}) 단지를 찾았어요.\n` +
+        // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — am.apt_name(조회 키)은 그대로, 문구만 감싼다.
+        text: `"${displayAptName(am.apt_name, { umdNm: am.umd_nm })}"(${am.sigungu || ''}${am.umd_nm ? ' ' + am.umd_nm : ''}) 단지를 찾았어요.\n` +
           `다만 국토부 실거래에는 다른 이름으로 등록돼 있을 수 있어요 — 혹시 이 중에 있나요?\n` +
           scored.map(s => `· ${s.name}`).join('\n') +
           `\n\n지역명을 함께 적어주시거나 아래에서 눌러 확인해 보세요.`,
@@ -403,7 +410,8 @@ async function _market(query, context) {
     const { data, error } = await _fetchTx(names, am.sigungu || null);
     if (error) return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
     if (!data || !data.length) {
-      return `"${am.apt_name}"(${am.sigungu || ''}${am.umd_nm ? ' ' + am.umd_nm : ''})는 최근 6개월 국토부 실거래가 없어요.\n` +
+      // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — am.apt_name(조회 키)은 그대로, 문구만 감싼다.
+      return `"${displayAptName(am.apt_name, { umdNm: am.umd_nm })}"(${am.sigungu || ''}${am.umd_nm ? ' ' + am.umd_nm : ''})는 최근 6개월 국토부 실거래가 없어요.\n` +
         `· 상단 검색창에서 단지명을 검색하면 더 이전 거래까지 볼 수 있어요.`;
     }
     picked = { aptName: am.apt_name, sigungu: am.sigungu };
@@ -428,7 +436,8 @@ async function _market(query, context) {
   if (ranked.length > 1) {
     // ⚠ 여기 건수를 붙이지 않는다 — MV 의 deal_count 는 전 기간이라 위의 6개월 건수와 기준이 다르다.
     //   같은 줄에 두 기준의 숫자가 나란히 놓이면 사용자가 비교 가능한 값으로 읽는다.
-    const others = ranked.slice(1, 3).map(c => `${c.aptName}(${c.sigungu || '지역미상'})`).join(' · ');
+    // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — c.aptName(조회 키)은 그대로, 문구만 감싼다.
+    const others = ranked.slice(1, 3).map(c => `${displayAptName(c.aptName, { umdNm: c.umdNm })}(${c.sigungu || '지역미상'})`).join(' · ');
     out += `\n\n같은 이름의 다른 단지도 있어요: ${others}\n지역명을 함께 적어주시면 좁혀드려요.`;
   }
   out += `\n\n🔍 전세가율·연식·학군 등 상세는 상단 검색창에서 "${displayName}" 을 검색해 보세요.`;
@@ -543,8 +552,10 @@ async function _popularNationwide() {
   try {
     const snap = await require('./popularService').readPopularSnapshot(5);
     if (snap && snap.length) {
+      // APT-DISPLAY-NAME-2026-09-16 (Plan 090): popularService 가 이미 displayName 을 얹어 준다 —
+      //   없는(옛 캐시) 경우에만 여기서 계산한다.
       const rows = snap.map((p, i) =>
-        `${i + 1}. ${p.aptName} (${p.sigungu}) — 최근 60일 ${p.dealCount60d}건 · 평균 ${eok(p.avgDealAmount)}`).join('\n');
+        `${i + 1}. ${p.displayName || displayAptName(p.aptName, { umdNm: p.umdNm })} (${p.sigungu}) — 최근 60일 ${p.dealCount60d}건 · 평균 ${eok(p.avgDealAmount)}`).join('\n');
       return `🔥 지금 인기 단지 TOP 5 (최근 60일 국토부 실거래 많은 순 · 최근 21일 거래 단지 우선 · 지역 쏠림 완화)\n${rows}\n\n지도 탭에서 위치와 함께 전체 12곳을 볼 수 있어요.` + DISCLAIMER;
     }
   } catch (_) { /* 아래 안내 */ }

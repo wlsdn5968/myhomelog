@@ -19,6 +19,8 @@
 const express = require('express');
 const logger = require('../logger');
 const router = express.Router();
+// APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(조회 키)은 바꾸지 않는다.
+const { displayAptName } = require('../utils/aptDisplayName');
 
 const ORIGIN = 'https://myhomelog.vercel.app';
 
@@ -285,8 +287,10 @@ router.get('/:lawdCd', async (req, res) => {
   // 이 지역 단지 페이지로의 내부 링크 (SEO-REGION-APT-LINKS-2026-09-02)
   const apts = await topAptsOfRegion(region.lawdCd, 30);
   if (apts.length) {
+    // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — a.apt_name(href 의 apt_seq 는 조회 키 그대로)은
+    //   링크 텍스트에서만 감싼다.
     cards.push(`<div class="card"><h2>이 지역 주요 단지 <span class="src">최근 실거래 많은 순 · 매물 광고 아님</span></h2>
-      <div class="links">${apts.map(a => `<a href="/apt/${esc(a.apt_seq)}">${esc(a.apt_name || '')}${a.umd_nm ? ` <span class="k">${esc(a.umd_nm)}</span>` : ''}</a>`).join('')}</div>
+      <div class="links">${apts.map(a => `<a href="/apt/${esc(a.apt_seq)}">${esc(displayAptName(a.apt_name, { umdNm: a.umd_nm }) || '')}${a.umd_nm ? ` <span class="k">${esc(a.umd_nm)}</span>` : ''}</a>`).join('')}</div>
       <div class="src" style="margin-top:8px">단지명을 누르면 그 단지의 실거래 요약을 봅니다.</div></div>`);
   }
 

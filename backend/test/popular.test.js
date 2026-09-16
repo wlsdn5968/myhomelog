@@ -82,7 +82,10 @@ test('인기 단지 스냅샷 — 계산 시점을 배열에 실어 보내 호�
   const popPath = require.resolve('../services/popularService');
   const saved = { db: require.cache[dbPath], pop: require.cache[popPath] };
   const computedAt = new Date(Date.now() - 3600 * 1000).toISOString();
-  const rows = Array.from({ length: 12 }, (_, i) => ({ aptName: 'A' + i, sigungu: '노원구', dealCount60d: 30 - i }));
+  // POPULAR-UNNAMED-2026-09-16 (Plan 090): 이름을 'A0'.. 처럼 알파벳+숫자로만 두면 안 된다 —
+  //   readPopularSnapshot 이 이제 isUnnamedApt 로 한 번 더 거르는데, 숫자를 뗀 'A' 는 1글자라
+  //   전부 "이름 미등록"으로 걸러져 이 테스트의 관심사(계산 시점 반환 계약)와 무관하게 실패한다.
+  const rows = Array.from({ length: 12 }, (_, i) => ({ aptName: '테스트단지' + i, sigungu: '노원구', dealCount60d: 30 - i }));
   require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: {
     getSupabaseReadonly: () => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { payload: rows, computed_at: computedAt }, error: null }) }) }) }) }),
     getSupabaseAdmin: () => null, hasAdminEnv: () => false,
@@ -93,7 +96,7 @@ test('인기 단지 스냅샷 — 계산 시점을 배열에 실어 보내 호�
     const got = await readPopularSnapshot(12);
     assert.ok(Array.isArray(got), '배열이 아니다 — 기존 호출부(브리핑·챗·검색)가 깨진다');
     assert.equal(got.length, 12);
-    assert.equal(got[0].aptName, 'A0');
+    assert.equal(got[0].aptName, '테스트단지0');
     assert.equal(got.computedAt, computedAt, '계산 시점이 실리지 않았다');
     assert.deepEqual(popularWindow(got.computedAt), popularWindow(computedAt));
   } finally {

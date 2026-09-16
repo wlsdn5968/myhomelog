@@ -10,6 +10,8 @@
 const express = require('express');
 const logger = require('../logger');
 const { kstDayString, getOrCreateSnapshot } = require('../services/briefingService');
+// APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(조회 키)은 바꾸지 않는다.
+const { displayAptName } = require('../utils/aptDisplayName');
 const router = express.Router();
 
 const ORIGIN = 'https://myhomelog.vercel.app';
@@ -162,8 +164,10 @@ router.get('/:date', async (req, res) => {
       `<div class="ln"><b class="no">${String(i + 1).padStart(2, '0')}</b><span>${esc(it.text || '')}<span style="display:block;margin-top:4px;font-size:10px;color:var(--sub)">출처 ${esc(it.src || '')}${it.date ? ` · 기준 ${esc(String(it.date))}` : ''}</span></span></div>`).join('')
     : (snap.lines || []).map((l, i) =>
       `<div class="ln"><b class="no">${String(i + 1).padStart(2, '0')}</b><span>${esc(l)}</span></div>`).join('');
+  // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — p.displayName 이 있으면 그걸(popularService
+  //   가 이미 얹어 준다), 없으면(옛 스냅샷) 여기서 계산한다. p.aptName(조회 키)은 바꾸지 않는다.
   const pops = (snap.popular || []).filter(p => p && p.aptName).map((p, i) =>
-    `<div class="pop"><span><b style="color:var(--amb)">${i + 1}</b> ${esc(p.aptName)}${p.sigungu ? ` <span style="color:var(--sub);font-size:10.5px">${esc(p.sigungu)}</span>` : ''}</span><span style="color:var(--sub)">${p.dealCount60d != null ? p.dealCount60d + '건' : ''}</span></div>`).join('');
+    `<div class="pop"><span><b style="color:var(--amb)">${i + 1}</b> ${esc(p.displayName || displayAptName(p.aptName, { umdNm: p.umdNm }))}${p.sigungu ? ` <span style="color:var(--sub);font-size:10.5px">${esc(p.sigungu)}</span>` : ''}</span><span style="color:var(--sub)">${p.dealCount60d != null ? p.dealCount60d + '건' : ''}</span></div>`).join('');
 
   // REG-LOG (Sprint NNNNNNN-14): 규제·금융 변동 로그 카드(있을 때만 — 과거 스냅샷은 필드 없음)
   const regs = (snap.regLog || []).slice(0, 4).map(it =>

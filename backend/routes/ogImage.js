@@ -16,6 +16,9 @@
 const express = require('express');
 const logger = require('../logger');
 const router = express.Router();
+// APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptPage.js 의 loadAptFacts(SSOT)가 주는
+//   aptName(조회 키)은 이 파일에서도 조회에 쓰지 않는다(이미 안 쓴다) — 카드 title 만 감싼다.
+const { displayAptName } = require('../utils/aptDisplayName');
 
 const FALLBACK = '/og.png';
 
@@ -57,7 +60,9 @@ function buildCard(af) {
   if (buildYear) lines.push(`${buildYear}년 준공`);
   return {
     eyebrow,
-    title: aptName || '단지',
+    // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — loadAptFacts 는 apt_master 매칭명을
+    //   싣지 않으므로(SSOT 범위 밖) kaptName 없이 이름 미등록·지번 접미만 정리한다.
+    title: displayAptName(aptName, { umdNm: umd }) || '단지',
     lines: lines.slice(0, 2),   // 3줄부터는 630px 안에서 답답해진다
     footer: '국토교통부 실거래가 공개시스템 · 층·향 보정 없음',
   };

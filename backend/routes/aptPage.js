@@ -22,6 +22,8 @@
 const express = require('express');
 const logger = require('../logger');
 const router = express.Router();
+// APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(조회 키)은 바꾸지 않는다.
+const { displayAptName } = require('../utils/aptDisplayName');
 
 const ORIGIN = 'https://myhomelog.vercel.app';
 
@@ -387,10 +389,14 @@ router.get('/:aptSeq', async (req, res) => {
   let schoolsCardHtml = '';
   let mapLinkHtml = '';
   let enrichErrored = false;
+  // APT-DISPLAY-NAME-2026-09-16 (Plan 090): apt_master 매칭 row 의 정식명 — 확정되면 표시용 이름은
+  //   무조건 이걸 쓴다(아래 displayAptName 의 kaptName 인자로 넘김).
+  let kaptMatchedName = null;
   if (lawdCd && aptName) {
     const { errored, row } = await loadAptMasterMatch(lawdCd, umd, aptName);
     aptMasterErrored = errored;
     if (row) {
+      kaptMatchedName = row.apt_name || null;
       const cardInfo = buildAptInfoCard(row);
       infoCardHtml = cardInfo.html;
       if (cardInfo.householdsFact) facts.push(cardInfo.householdsFact);
@@ -425,14 +431,20 @@ router.get('/:aptSeq', async (req, res) => {
 
   // APT-PAGE-LINKS-2026-09-16 (Plan 084)
   const { errored: sameDongErrored, rows: dongRows } = await sameDongApts(lawdCd, umd, seq);
+  // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — r.apt_name(href 의 apt_seq 는 조회 키 그대로)은
+  //   링크 텍스트에서만 감싼다.
   const sameDongHtml = dongRows.length
     ? `<div class="card"><h2>같은 동 다른 단지 <span class="src">최근 실거래 많은 순 · 매물 광고 아님</span></h2>
-      <div class="links">${dongRows.map((r) => `<a href="/apt/${esc(r.apt_seq)}">${esc(r.apt_name || '')}</a>`).join('')}</div>
+      <div class="links">${dongRows.map((r) => `<a href="/apt/${esc(r.apt_seq)}">${esc(displayAptName(r.apt_name, { umdNm: r.umd_nm }) || '')}</a>`).join('')}</div>
     </div>`
     : '';
 
+  // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(조회 키·API 인자·deepLink 쿼리)은
+  //   위에서 전부 원문 그대로 썼다. 아래 h1·title·desc·OG 카드(ogImage.js)만 이 표시용 이름을 쓴다.
+  const displayName = displayAptName(aptName, { umdNm: umd, kaptName: kaptMatchedName });
+
   const body = `<div class="eyebrow">MYHOMELOG APT</div>
-    <h1>${esc(aptName)} 실거래가</h1>
+    <h1>${esc(displayName)} 실거래가</h1>
     <div class="tag">${esc(region)}${umd ? ' ' + esc(umd) : ''} · 단지코드 ${esc(seq)}</div>
     ${cards.length ? cards.join('') : `<div class="card"><h2>최근 거래 없음</h2>
       <div style="font-size:12.5px;color:var(--sub)">최근 24개월 안에 신고된 거래가 없어요. 값을 지어내지 않고 비워둡니다.</div></div>`}
@@ -444,7 +456,7 @@ router.get('/:aptSeq', async (req, res) => {
     </div>
     <a class="cta" href="${ORIGIN}/">${esc(aptName)} 대출 한도·비용 계산 →</a>`;
 
-  const title = `${aptName} 실거래가 — ${region}${umd ? ' ' + umd : ''} | 내집로그`;
+  const title = `${displayName} 실거래가 — ${region}${umd ? ' ' + umd : ''} | 내집로그`;
   // APT-PAGE-DESC-2026-09-06 (Plan 065): 분기는 facts.length 가 아니라 thin(거래 유무, 위에서
   //   이미 확정됨)으로 가른다 — Plan 063 은 facts.length 로 갈라서, 거래가 0건인데 K-apt 세대수·
   //   준공년도 fact 만으로 facts.length>0 이 돼 "국토교통부 실거래 신고 자료 정리" 분기를 탔다.
@@ -455,10 +467,10 @@ router.get('/:aptSeq', async (req, res) => {
   //   그대로 둔다 — 이미 KAPT 출처에 국토교통부를 안 붙이는 문구를 쓰고 있다.
   const txSourceLabel = hasKaptFact ? '국토교통부 실거래·K-apt 단지정보 정리' : '국토교통부 실거래 신고 자료 정리';
   const desc = !thin
-    ? `${aptName}(${region}${umd ? ' ' + umd : ''}) ${facts.join(' · ')}. ${txSourceLabel} — 매수 추천이 아닙니다.`
+    ? `${displayName}(${region}${umd ? ' ' + umd : ''}) ${facts.join(' · ')}. ${txSourceLabel} — 매수 추천이 아닙니다.`
     : (facts.length
-      ? `${aptName}(${region}${umd ? ' ' + umd : ''}) 최근 24개월 거래 기록이 없습니다. K-apt 단지정보 ${facts.join(' · ')} — 매수 추천이 아닙니다.`
-      : `${aptName}(${region}${umd ? ' ' + umd : ''}) 국토교통부 실거래 신고 자료. 최근 24개월 거래 기록이 없습니다 — 매수 추천이 아닙니다.`);
+      ? `${displayName}(${region}${umd ? ' ' + umd : ''}) 최근 24개월 거래 기록이 없습니다. K-apt 단지정보 ${facts.join(' · ')} — 매수 추천이 아닙니다.`
+      : `${displayName}(${region}${umd ? ' ' + umd : ''}) 국토교통부 실거래 신고 자료. 최근 24개월 거래 기록이 없습니다 — 매수 추천이 아닙니다.`);
 
   // APT-PAGE-INFO-2026-09-06: 단지정보/학교/좌표 조회가 "오류로 실패"했을 때도 긴 캐시를 붙이지
   //   않는다 — "있을 수도 있는데 못 읽음"과 "정말 없음"을 구분 못 하면 열화 응답이 엣지에 굳는다

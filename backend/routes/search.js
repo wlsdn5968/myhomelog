@@ -48,6 +48,8 @@ const { resolveAcademies } = require('../services/academyService');
 // NAMEFIX-2026-05-11 + FACILITY-HELPER-2026-05-12: 검색 path 정규화 + facility schema 일관
 // NAME-MERGE-2026-05-12 (Sprint S): baseAptName helper 로 동/letter/층 suffix 분리 신고 통합
 const { normalizeAptName, baseAptName } = require('../utils/aptName');
+// APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(조회 키)은 바꾸지 않는다.
+const { displayAptName } = require('../utils/aptDisplayName');
 // PLAN-052 (2026-09-06): 공백 제거 변형 질의에 재사용 — 051 이 backend/utils/aptNameMatch.js 에
 //   만든 순수 정규화 함수. 사본을 새로 만들지 않는다(이 저장소는 정규화 사본이 갈리는 결함 계열이 확립돼 있다).
 // SEARCH-REGION-SPLIT-2026-09-06 (Plan 062): splitRegionName 도 같은 파일에서 가져온다 — 챗
@@ -505,6 +507,8 @@ router.get('/apt', async (req, res) => {
         source: 'molit',
         // NAME-MERGE 디버깅 + 거래 fetch 시 base 매칭 보강
         aliasNames: grp.rawNames.size > 1 ? Array.from(grp.rawNames) : undefined,
+        // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(위, 조회 키)은 그대로 두고 별도 필드로만 얹는다.
+        displayName: displayAptName(grp.baseName, { umdNm: row.umd_nm }),
       });
       if (out.length >= limit) break;
     }
@@ -539,6 +543,8 @@ router.get('/apt', async (req, res) => {
           kaptCode: row.kapt_code,
           aptSeq: row.kapt_code || null, // master 는 kaptCode = aptSeq 동일 (KAPT 표준)
           source: 'master',
+          // APT-DISPLAY-NAME-2026-09-16 (Plan 090): master 행은 이미 KAPT 정식명이라 그대로 얹는다.
+          displayName: base,
         });
         if (out.length >= limit) break;
       }
