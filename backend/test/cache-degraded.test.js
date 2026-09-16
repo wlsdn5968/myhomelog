@@ -81,7 +81,7 @@ test('regulations GET / — DB 실패로 하드코딩 FALLBACK 을 썼으면 no-
   });
 });
 
-// ── sitemap.js GET '/' ────────────────────────────────────────────────────
+// ── sitemap.js GET '/'(인덱스) + sitemaps.js GET '/*.xml'(유형별) — Plan 087 ────────────
 function _sitemapAdminStub({ briefingResult, aptPages }) {
   let aptIdx = 0;
   function makeChain(table) {
@@ -101,67 +101,98 @@ function _sitemapAdminStub({ briefingResult, aptPages }) {
   }
   return { from: (table) => makeChain(table) };
 }
+// SITEMAP-INDEX-SPLIT-2026-09-16 (Plan 087): routes/sitemap 과 routes/sitemaps 둘 다 재로드해서
+//   fn({ index, typed }) 로 두 라우터를 넘긴다 — sitemaps.js 가 내부에서 require('./sitemap') 으로
+//   _builders 를 가져오므로, sitemap 을 먼저 재로드해 두면 sitemaps 도 같은(스텁된) 인스턴스를 쓴다.
 async function _withSitemapStub({ briefingResult, aptPages, lawdCodes }, fn) {
   const dbPath = require.resolve('../db/client');
   const txSvcPath = require.resolve('../services/transactionService');
   const briefSvcPath = require.resolve('../services/briefingService');
   const routePath = require.resolve('../routes/sitemap');
+  const typedRoutePath = require.resolve('../routes/sitemaps');
   const saved = {
     db: require.cache[dbPath], tx: require.cache[txSvcPath],
-    br: require.cache[briefSvcPath], r: require.cache[routePath],
+    br: require.cache[briefSvcPath], r: require.cache[routePath], t: require.cache[typedRoutePath],
   };
   _stubModule(dbPath, { getSupabaseAdmin: () => _sitemapAdminStub({ briefingResult, aptPages }) });
   _stubModule(txSvcPath, { LAWD_CODES: lawdCodes || { seoul: '11680' } });
   _stubModule(briefSvcPath, { kstDayString: () => '2026-09-06' });
   delete require.cache[routePath];
+  delete require.cache[typedRoutePath];
   try {
-    const router = require('../routes/sitemap');
-    const handler = _routeHandler(router, '/');
-    return await fn(handler);
+    const index = require('../routes/sitemap');
+    const typed = require('../routes/sitemaps');
+    return await fn({ index, typed });
   } finally {
     if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
     if (saved.tx) require.cache[txSvcPath] = saved.tx; else delete require.cache[txSvcPath];
     if (saved.br) require.cache[briefSvcPath] = saved.br; else delete require.cache[briefSvcPath];
     if (saved.r) require.cache[routePath] = saved.r; else delete require.cache[routePath];
+    if (saved.t) require.cache[typedRoutePath] = saved.t; else delete require.cache[typedRoutePath];
   }
 }
 
-test('sitemap GET / — 지역·브리핑·단지 조회가 전부 성공이면 기존 6시간 캐시가 붙는다', async () => {
+test('sitemap index GET / — 유형별 조회에 실패를 주입해도 인덱스는 DB 를 읽지 않아 항상 6시간 캐시 + 4개 유형 loc 이 나간다', async () => {
   await _withSitemapStub({
-    briefingResult: { data: [{ day: '2026-09-01' }], error: null },
-    aptPages: [{ data: [], error: null }],
-  }, async (handler) => {
+    briefingResult: { data: null, error: { message: 'DB 장애 주입(Plan 087 회귀 테스트)' } },
+    aptPages: [{ data: null, error: { message: '단지 URL 조회 실패 주입' } }],
+  }, async ({ index }) => {
+    const handler = _routeHandler(index, '/');
     const res = _mockRes();
     await handler({}, res, () => {});
-    assert.equal(res.headers['Cache-Control'], 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
-    assert.match(res.sent, /<urlset/, 'sitemap XML 이 생성되지 않았다');
-    assert.match(res.sent, /<loc>https:\/\/myhomelog\.vercel\.app\/region\/11680<\/loc>/);
+    assert.equal(res.headers['Cache-Control'], 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400',
+      '인덱스는 DB 조회가 없으므로 유형별 실패와 무관하게 6시간 캐시여야 한다');
+    assert.match(res.sent, /<sitemapindex/, 'sitemap 인덱스 XML 이 생성되지 않았다');
+    for (const name of ['static', 'region', 'briefing', 'apt']) {
+      assert.match(res.sent, new RegExp(`<loc>https://myhomelog\\.vercel\\.app/sitemaps/${name}\\.xml</loc>`),
+        `인덱스에 ${name}.xml loc 이 없다`);
+    }
   });
 });
 
-test('sitemap GET / — briefing_snapshots 조회가 실패(부분 실패)하면 no-store(열화를 6시간 굳히지 않는다)', async () => {
+test('sitemap typed GET /briefing.xml — briefing 조회 실패는 no-store, 같은 상태의 /region.xml 은 영향받지 않는다(유형 간 격리)', async () => {
   await _withSitemapStub({
     briefingResult: { data: null, error: { message: 'DB 장애 주입(Plan 070 회귀 테스트)' } },
     aptPages: [{ data: [], error: null }],
-  }, async (handler) => {
-    const res = _mockRes();
-    await handler({}, res, () => {});
-    assert.equal(res.headers['Cache-Control'], 'no-store',
+  }, async ({ typed }) => {
+    const briefingRes = _mockRes();
+    await _routeHandler(typed, '/briefing.xml')({}, briefingRes, () => {});
+    assert.equal(briefingRes.headers['Cache-Control'], 'no-store',
       '부분 실패(briefing 조회 오류)인데 6시간 캐시가 붙었다 — CACHE-POISON-2026-08-29 와 같은 계열의 결함');
-    // fail-open 원칙 — 실패해도 나머지(정적 + 지역) URL 은 그대로 나가야 한다.
-    assert.match(res.sent, /<loc>https:\/\/myhomelog\.vercel\.app\/region\/11680<\/loc>/,
-      '부분 실패가 나머지 URL 생성까지 막았다(fail-open 이 깨졌다)');
+
+    // 유형 격리 확인 — briefing.xml 이 실패해도 같은 배치의 region.xml 파일은 무사해야 한다(옛 fail-open
+    //   이 "한 urlset 안에서 나머지 URL 유지"였다면, 분할 후엔 "다른 유형 파일이 통째로 무영향"으로 강화된다).
+    const regionRes = _mockRes();
+    await _routeHandler(typed, '/region.xml')({}, regionRes, () => {});
+    assert.equal(regionRes.headers['Cache-Control'], 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400',
+      'briefing.xml 실패가 무관한 region.xml 의 캐시에 번졌다(유형 격리가 깨졌다)');
+    assert.match(regionRes.sent, /<loc>https:\/\/myhomelog\.vercel\.app\/region\/11680<\/loc>/);
   });
 });
 
-test('sitemap GET / — 단지(molit_apt_index) 조회 예외도 no-store(부분 실패의 다른 경로)', async () => {
+test('sitemap typed GET /apt.xml — 단지(molit_apt_index) 조회 예외는 no-store(부분 실패 경로)', async () => {
   await _withSitemapStub({
     briefingResult: { data: [], error: null },
     aptPages: [{ data: null, error: { message: '단지 URL 조회 실패 주입' } }],
-  }, async (handler) => {
+  }, async ({ typed }) => {
+    const handler = _routeHandler(typed, '/apt.xml');
     const res = _mockRes();
     await handler({}, res, () => {});
     assert.equal(res.headers['Cache-Control'], 'no-store', '단지 URL 생성 실패인데 6시간 캐시가 붙었다');
+  });
+});
+
+test('sitemap typed GET /apt.xml — 조회 성공(1건)이면 기존 6시간 캐시 + 해당 단지 loc 이 생성된다', async () => {
+  await _withSitemapStub({
+    briefingResult: { data: [], error: null },
+    aptPages: [{ data: [{ apt_seq: '11680-123', recent_deal_date: '2026-08-01' }], error: null }],
+  }, async ({ typed }) => {
+    const handler = _routeHandler(typed, '/apt.xml');
+    const res = _mockRes();
+    await handler({}, res, () => {});
+    assert.equal(res.headers['Cache-Control'], 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
+    assert.match(res.sent, /<urlset/, 'apt sitemap XML 이 생성되지 않았다');
+    assert.match(res.sent, /<loc>https:\/\/myhomelog\.vercel\.app\/apt\/11680-123<\/loc>/);
   });
 });
 

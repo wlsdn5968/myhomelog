@@ -7,12 +7,18 @@
  *
  * [원칙] DB 조회 실패 시에도 정적 5개 URL 은 항상 반환한다(fail-open) — sitemap 이 500 이면
  * 크롤러가 사이트 전체 재수집을 미룬다.
+ *
+ * SITEMAP-INDEX-SPLIT-2026-09-16 (Plan 087): Search Console 은 사이트맵 파일 단위로 커버리지를
+ * 보여주는데, 기존엔 정적·지역·브리핑·단지가 한 urlset(16,625 URL)에 섞여 있어 유형별 색인률을
+ * 볼 수 없었다. 이 라우트는 이제 <sitemapindex> 만 반환하고(DB 조회 없음 → 항상 6시간 캐시),
+ * 실제 URL 목록은 backend/routes/sitemaps.js 의 유형별 라우트
+ * (/sitemaps/{static,region,briefing,apt}.xml)가 낸다. 블록별 로직(조건·필터·상한·로그 문구)은
+ * 그대로 이 파일의 빌더 함수로 옮겼다(module.exports._builders 로 공유).
  */
 'use strict';
 
 const express = require('express');
 const logger = require('../logger');
-const { getSupabaseAdmin } = require('../db/client');
 const { kstDayString } = require('../services/briefingService');
 const router = express.Router();
 
@@ -36,18 +42,16 @@ function urlTag({ loc, lastmod, changefreq, priority }) {
     + '  </url>';
 }
 
-router.get('/', async (req, res) => {
-  const today = kstDayString();
-  const entries = STATIC_URLS.map(u => urlTag(u.loc === '/' ? { ...u, lastmod: today } : u));
-  // CACHE-DEGRADED-2026-09-06 (Plan 070): 아래 세 구간은 전부 "fail-open"(실패해도 나머지 URL 은
-  //   그대로 낸다)이라 항상 200 이 나간다 — 그런데 그중 하나라도 실패하면 지역·브리핑·단지 URL
-  //   수천~수만 개가 통째로 빠진 채로 6시간(+SWR 24시간) 엣지에 굳을 수 있다. 이 파일이 고치려던
-  //   바로 그 문제(sitemap 16개뿐이던 유입 0)를 다른 모양으로 반복하는 셈이라 실패 시엔 캐시하지 않는다.
-  let degraded = false;
+function buildStaticEntries(today) {
+  return STATIC_URLS.map(u => urlTag(u.loc === '/' ? { ...u, lastmod: today } : u));
+}
 
-  // REGION-PAGE-2026-08-29 (Sprint NNNNNNN-31): 지역 페이지 118개 + 허브 1개.
-  //   이 sitemap 이 16개 URL 뿐이던 것이 유입 0 의 직접 원인이었다(실측).
-  //   목록은 LAWD_CODES 에서 파생한다 — DB 조회가 없어 실패 경로가 없다(항상 나간다).
+// REGION-PAGE-2026-08-29 (Sprint NNNNNNN-31): 지역 페이지 118개 + 허브 1개.
+//   이 sitemap 이 16개 URL 뿐이던 것이 유입 0 의 직접 원인이었다(실측).
+//   목록은 LAWD_CODES 에서 파생한다 — DB 조회가 없어 실패 경로가 없다(항상 나간다).
+function buildRegionEntries(today) {
+  const entries = [];
+  let degraded = false;
   try {
     const { LAWD_CODES } = require('../services/transactionService');
     const codes = [...new Set(Object.values(LAWD_CODES).map(String))].sort();
@@ -60,9 +64,13 @@ router.get('/', async (req, res) => {
     degraded = true;
     logger.warn({ err: e.message }, 'sitemap: 지역 URL 생성 실패 — 나머지는 정상 반환');
   }
+  return { entries, degraded };
+}
 
+async function buildBriefingEntries(admin) {
+  const entries = [];
+  let degraded = false;
   try {
-    const admin = getSupabaseAdmin();
     if (admin) {
       // ⚠ PostgREST 는 1000행에서 조용히 잘린다(레포 6회 재발) — 명시 limit + 최신순.
       //   1일 1행이라 1000행 = 약 2.7년치. 그때가 오면 sitemap index 분할이 필요하다.
@@ -87,15 +95,19 @@ router.get('/', async (req, res) => {
     degraded = true;
     logger.warn({ err: e.message }, 'sitemap: briefing 날짜 조회 예외 — 정적 URL 만 반환');
   }
+  return { entries, degraded };
+}
 
-  // APT-PAGE-2026-08-29 (Sprint NNNNNNN-32): 단지 페이지.
-  //   [문턱 — 실측] 거래 3건 이상 + 최근 1년 = 15,954개(전체 22,473 중). 1~2건짜리는 통계가 아니라
-  //   잡음이고(TRUST 게이트와 같은 원칙), 얇은 페이지를 대량 색인시키면 사이트 전체 평가에 해롭다.
-  //   ⚠ PostgREST 는 1000행에서 조용히 잘린다(레포 6회 재발) — **range 페이징**으로만 넘을 수 있다
-  //     (선례: transactionService.getRegionRecentTransactions · geocacheBackfill).
-  //     2차 정렬키(apt_seq)로 페이지 경계 중복·누락을 막는다.
+// APT-PAGE-2026-08-29 (Sprint NNNNNNN-32): 단지 페이지.
+//   [문턱 — 실측] 거래 3건 이상 + 최근 1년 = 15,954개(전체 22,473 중). 1~2건짜리는 통계가 아니라
+//   잡음이고(TRUST 게이트와 같은 원칙), 얇은 페이지를 대량 색인시키면 사이트 전체 평가에 해롭다.
+//   ⚠ PostgREST 는 1000행에서 조용히 잘린다(레포 6회 재발) — **range 페이징**으로만 넘을 수 있다
+//     (선례: transactionService.getRegionRecentTransactions · geocacheBackfill).
+//     2차 정렬키(apt_seq)로 페이지 경계 중복·누락을 막는다.
+async function buildAptEntries(admin, today) {
+  const entries = [];
+  let degraded = false;
   try {
-    const admin = getSupabaseAdmin();
     if (admin) {
       const since = new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10);
       const PAGE = 1000;
@@ -128,14 +140,43 @@ router.get('/', async (req, res) => {
     degraded = true;
     logger.warn({ err: e.message }, 'sitemap: 단지 URL 생성 실패 — 나머지는 정상 반환');
   }
+  return { entries, degraded };
+}
 
-  const xml = '<?xml version="1.0" encoding="UTF-8"?>\n'
+function wrapUrlset(entries) {
+  return '<?xml version="1.0" encoding="UTF-8"?>\n'
     + '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
     + entries.join('\n') + '\n'
     + '</urlset>\n';
+}
 
-  res.set('Cache-Control', degraded ? 'no-store' : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
-  res.type('application/xml').send(xml);
+function wrapIndex(items) {
+  const body = items.map(({ loc, lastmod }) => (
+    '  <sitemap>\n'
+    + `    <loc>${loc}</loc>\n`
+    + `    <lastmod>${lastmod}</lastmod>\n`
+    + '  </sitemap>'
+  )).join('\n');
+  return '<?xml version="1.0" encoding="UTF-8"?>\n'
+    + '<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n'
+    + body + '\n'
+    + '</sitemapindex>\n';
+}
+
+const CACHE_OK = 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400';
+
+router.get('/', (req, res) => {
+  const today = kstDayString();
+  const items = ['static', 'region', 'briefing', 'apt'].map(name => ({
+    loc: `${ORIGIN}/sitemaps/${name}.xml`,
+    lastmod: today,
+  }));
+  // 인덱스는 DB 를 조회하지 않는다 — 항상 6시간 캐시(열화 분기 없음).
+  res.set('Cache-Control', CACHE_OK);
+  res.type('application/xml').send(wrapIndex(items));
 });
 
 module.exports = router;
+module.exports._builders = {
+  buildStaticEntries, buildRegionEntries, buildBriefingEntries, buildAptEntries, wrapUrlset, CACHE_OK,
+};

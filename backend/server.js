@@ -326,6 +326,8 @@ app.use('/apt', require('./routes/aptPage'));
 app.use('/api/og', require('./routes/ogImage'));
 // SITEMAP-DYNAMIC-2026-08-19 (Sprint NNNNNNN-7B): /sitemap.xml 동적 생성 — briefing 아카이브 반영(정적 파일 대체).
 app.use('/sitemap.xml', require('./routes/sitemap'));
+// SITEMAP-INDEX-SPLIT-2026-09-16 (Plan 087): 유형별 sitemap(apt/region/briefing/static) — 위 인덱스가 가리킨다.
+app.use('/sitemaps', require('./routes/sitemaps'));
 
 // STAB-3 (2026-05-03): /api/admin/kapt-diag endpoint 제거
 //   사유: KAPT API 키 진단용 임시 endpoint. 활용신청 확인 후 역할 종료.
