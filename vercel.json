@@ -167,6 +167,10 @@
     {
       "path": "/api/cron/warm-rent",
       "schedule": "30 20 * * *"
+    },
+    {
+      "path": "/api/cron/molit-hist-backfill",
+      "schedule": "20 * * * *"
     }
   ]
 }

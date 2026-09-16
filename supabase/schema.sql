@@ -895,3 +895,38 @@ create policy search_history_insert_own on public.search_history as permissive f
 create policy search_history_select_own on public.search_history as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
 create policy user_billing_select_own on public.user_billing as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
 create policy user_budget_select_own on public.user_budget as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
+
+-- ============ MOLIT HIST BACKFILL (Plan 091, 2026-09-16 프로덕션 적용) ============
+-- 출처: supabase/migrations/20260916_molit_hist.sql (적용 기록). 함수 치환 사고 재발 방지 —
+--   기존 내용은 한 글자도 바꾸지 않고 파일 끝에 append 만 한다(치환 스크립트 금지 방침).
+create table if not exists public.molit_transactions_hist (
+  apt_seq text not null,
+  deal_date date not null,
+  exclu_use_ar smallint not null,
+  deal_amount integer not null,
+  floor smallint
+);
+
+create table if not exists public.molit_hist_runs (
+  lawd_cd text not null,
+  deal_ym text not null,
+  rows integer not null,
+  finished_at timestamp with time zone default now() not null
+);
+
+alter table public.molit_hist_runs add constraint molit_hist_runs_pkey PRIMARY KEY (lawd_cd, deal_ym);
+
+CREATE INDEX idx_molit_hist_seq_date ON public.molit_transactions_hist USING btree (apt_seq text_pattern_ops, deal_date);
+
+alter table public.molit_transactions_hist enable row level security;
+alter table public.molit_hist_runs enable row level security;
+
+create policy hist_read on public.molit_transactions_hist as permissive for select to anon, authenticated using (true);
+
+CREATE OR REPLACE FUNCTION public.db_size_mb()
+ RETURNS numeric
+ LANGUAGE sql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$ SELECT round(pg_database_size(current_database()) / 1048576.0, 1) $function$
+;

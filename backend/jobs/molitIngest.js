@@ -495,7 +495,7 @@ async function runMolitIngest(opts = {}) {
 }
 
 // molitErrReason 은 "응답 본문을 통째로 저장하지 않는다(키 에코 차단)" 보안 성질을 테스트로 고정하기 위해 export.
-module.exports = { runMolitIngest, molitErrReason };
+module.exports = { runMolitIngest, molitErrReason, fetchRegionMonth };
 
 // CLI: node backend/jobs/molitIngest.js
 if (require.main === module) {

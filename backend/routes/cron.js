@@ -648,4 +648,29 @@ async function handleWarmRent(req, res) {
 }
 router.get('/warm-rent', handleWarmRent);
 
+// HIST-BACKFILL-2026-09-16 (Plan 091): 과거 실거래 협폭 이력 backfill(매시 20분). 최신월부터 거꾸로
+//   region-month 를 적재하고, DB 용량이 470MB(무료 티어 500MB - 30MB 안전여유)를 넘으면 그 회차를
+//   완료로 남기지 않고 정지한다. 정지는 설계상 정상 종료라 Sentry 경보가 아니라 정보 로그만 남긴다.
+async function handleMolitHistBackfill(req, res) {
+  try {
+    const started = Date.now();
+    const { runHistBackfill } = require('../jobs/molitHistBackfill');
+    const summary = await runHistBackfill({
+      limit: req.query.limit ? parseInt(req.query.limit) : undefined,
+    });
+    logger.info({ durationMs: Date.now() - started, summary }, 'cron/molit-hist-backfill OK');
+    if (summary && summary.stopped && summary.reason === 'db-size') {
+      logger.info({ dbMb: summary.dbMb }, 'molit-hist-backfill: DB 용량 임계 도달 — 이번 회차 정상 정지(경보 아님)');
+    }
+    await require('../services/cronStats').recordCronRun('molit-hist-backfill', summary).catch(() => {});
+    res.json({ ok: true, summary });
+  } catch (e) {
+    logger.error({ err: e.message, stack: e.stack }, 'cron/molit-hist-backfill 실패');
+    await require('../services/cronStats').recordCronRun('molit-hist-backfill', { ok: false, error: e.message }).catch(() => {}); // 실패도 기록 — health.crons 에 흔적을 남긴다
+    try { Sentry.captureException(e, { tags: { route: 'cron.molit-hist-backfill' } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 */ }
+    res.status(500).json({ ok: false, error: e.message });
+  }
+}
+router.get('/molit-hist-backfill', handleMolitHistBackfill);
+
 module.exports = router;
