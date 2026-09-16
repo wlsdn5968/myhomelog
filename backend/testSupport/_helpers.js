@@ -1088,6 +1088,8 @@ function _p063MockTable(rows, error) {
     select() { return s; },
     eq() { return s; },
     limit() { return s; },
+    // P084-ORDER-2026-09-16: aptPage.sameDongApts 가 .order() 를 부른다 — 통과(no-op)
+    order() { return s; },
     then(resolve) {
       if (error) return resolve({ data: null, error });
       resolve({ data: rows, error: null });

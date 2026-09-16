@@ -185,6 +185,31 @@ async function loadAptMasterMatch(lawdCd, umd, aptName) {
   }
 }
 
+// APT-PAGE-LINKS-2026-09-16 (Plan 084): 같은 동(umd_nm) 다른 단지 — 공개 페이지끼리의 내부 링크.
+//   molit_apt_index 만 읽는다(외부 호출 0). 실패는 { errored:true } 로 알려 긴 캐시를 막는다.
+async function sameDongApts(lawdCd, umdNm, excludeSeq, limit = 8) {
+  const { getSupabaseAdmin } = require('../db/client');
+  const admin = getSupabaseAdmin();
+  if (!admin || !lawdCd || !umdNm) return { errored: false, rows: [] };
+  try {
+    const { data, error } = await admin
+      .from('molit_apt_index')
+      .select('apt_seq, apt_name, umd_nm, deal_count')
+      .eq('lawd_cd', String(lawdCd))
+      .eq('umd_nm', String(umdNm))
+      .order('deal_count', { ascending: false })
+      .limit(limit + 1);
+    if (error) throw error;
+    const rows = (data || [])
+      .filter((r) => r && /^\d{5}-\d+$/.test(String(r.apt_seq || '')) && String(r.apt_seq) !== String(excludeSeq))
+      .slice(0, limit);
+    return { errored: false, rows };
+  } catch (e) {
+    logger.warn({ err: e.message, lawdCd, umdNm }, 'APT-PAGE-LINKS-2026-09-16: 같은 동 단지 조회 실패');
+    return { errored: true, rows: [] };
+  }
+}
+
 /**
  * 단지정보 카드를 만든다 — "미확인 원칙": 값이 없는 항목은 행 자체를 만들지 않는다
  * (`0`·`미상` 금지 — 이 저장소가 반복해 당한 결함). buildFacility(앱 상세와 같은 함수)를
@@ -398,6 +423,14 @@ router.get('/:aptSeq', async (req, res) => {
     }
   }
 
+  // APT-PAGE-LINKS-2026-09-16 (Plan 084)
+  const { errored: sameDongErrored, rows: dongRows } = await sameDongApts(lawdCd, umd, seq);
+  const sameDongHtml = dongRows.length
+    ? `<div class="card"><h2>같은 동 다른 단지 <span class="src">최근 실거래 많은 순 · 매물 광고 아님</span></h2>
+      <div class="links">${dongRows.map((r) => `<a href="/apt/${esc(r.apt_seq)}">${esc(r.apt_name || '')}</a>`).join('')}</div>
+    </div>`
+    : '';
+
   const body = `<div class="eyebrow">MYHOMELOG APT</div>
     <h1>${esc(aptName)} 실거래가</h1>
     <div class="tag">${esc(region)}${umd ? ' ' + esc(umd) : ''} · 단지코드 ${esc(seq)}</div>
@@ -405,6 +438,7 @@ router.get('/:aptSeq', async (req, res) => {
       <div style="font-size:12.5px;color:var(--sub)">최근 24개월 안에 신고된 거래가 없어요. 값을 지어내지 않고 비워둡니다.</div></div>`}
     ${infoCardHtml}
     ${schoolsCardHtml}
+    ${sameDongHtml}
     <div class="card"><h2>이 지역 더 보기</h2>
       <div class="links">${lawdCd ? `<a href="/region/${esc(lawdCd)}">${esc(region)} 지역 데이터</a>` : ''}<a href="/region">전국 시군구 전체</a>${mapLinkHtml}</div>
     </div>
@@ -429,7 +463,7 @@ router.get('/:aptSeq', async (req, res) => {
   // APT-PAGE-INFO-2026-09-06: 단지정보/학교/좌표 조회가 "오류로 실패"했을 때도 긴 캐시를 붙이지
   //   않는다 — "있을 수도 있는데 못 읽음"과 "정말 없음"을 구분 못 하면 열화 응답이 엣지에 굳는다
   //   ([[degraded-response-cached-at-edge]]). thin·noindex 판정 자체는 건드리지 않는다(위에서 이미 확정).
-  const cacheUnsafe = thin || aptMasterErrored || enrichErrored;
+  const cacheUnsafe = thin || aptMasterErrored || enrichErrored || sameDongErrored;
   res.set('Cache-Control', cacheUnsafe ? 'no-store' : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
   res.type('html').send(pageShell({ title, desc, canonical: `${ORIGIN}/apt/${seq}`, body, noindex: thin,
     // 얇은 페이지(거래 0)는 카드에 쓸 숫자가 없으므로 기본 이미지를 유지한다.
