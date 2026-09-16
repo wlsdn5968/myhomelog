@@ -23,7 +23,8 @@ const PII_PATTERNS = {
   passport:   { re: /\b[A-Z]\d{8}\b/g,                              label: '여권번호' },
 };
 function detectPII(text) {
-  const t = String(text || '');
+  // PII-DATE-2026-09-16 (Plan 098): ISO 날짜(2026-09-15)가 bankAcct 패턴(\d{3,6}-\d{2,6}-\d{2,7})에 걸려 "계좌번호" 오탐 — 날짜를 지운 뒤 검사한다.
+  const t = String(text || '').replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ');
   const found = [];
   for (const [k, { re, label }] of Object.entries(PII_PATTERNS)) {
     if (re.test(t)) found.push(label);
@@ -41,7 +42,10 @@ function collectClientPIIText(message, context) {
   const parts = [String(message || '')];
   const hist = context && context.history;
   if (Array.isArray(hist)) {
-    for (const h of hist) { if (h && typeof h.content === 'string') parts.push(h.content); }
+    // PII-SCOPE-2026-09-16 (Plan 098): assistant 답변은 서버가 만든 텍스트(콜센터 1599-0001 등)라 검사 대상이
+    //   아니다 — 검사하면 그 답변이 이력에 남는 순간 이후 모든 질문이 400 으로 죽는다(2026-09-16 운영자 실사고).
+    //   사용자 입력(role 이 'assistant' 가 아닌 이력·message·session 자유입력)만 본다.
+    for (const h of hist) { if (h && typeof h.content === 'string' && h.role !== 'assistant') parts.push(h.content); }
   }
   const s = context && context.session;
   if (s) {
@@ -113,3 +117,4 @@ router.post('/', validateChatInput, async (req, res) => {
 });
 
 module.exports = router;
+module.exports._pii = { detectPII, collectClientPIIText }; // 테스트용(Plan 098) — 라우트 동작 불변

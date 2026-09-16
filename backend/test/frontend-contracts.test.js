@@ -2023,3 +2023,11 @@ test('Plan 096 — Escape 핸들러가 알림 센터·드로어·규제 요약·
   assert.ok(idx('regSummaryModal') < idx('cmpModal') && idx('cmpModal') < idx('QM'), 'closers 순서가 z-index 역순이 아니다');
   assert.ok(idx('drawerBg') > idx('LM') && idx('NTC') > idx('LM'), 'NTC·드로어는 기존 항목 뒤여야 한다');
 });
+
+test('Plan 098 — 챗 비-OK 응답은 서버 사유를 그대로 보여주고, 실패 말풍선은 한 번만 붙는다', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  assert.equal((html.match(/CHAT-ERR-HONEST-2026-09-16/g) || []).length, 1, '비-OK 분기 패치 마크가 정확히 1회여야 한다');
+  assert.ok(!html.includes("throw new Error('http_' + r.status)"), '400 을 예외로 던져 "일시 오류"로 위장하는 옛 분기가 남아 있다');
+  assert.match(html, /addMsg\('ai', userMsg\);\s*\n\s*replied=true;/, 'catch 에서 replied=true 를 안 세우면 "응답을 받지 못했어요" 가 두 번째 말풍선으로 붙는다');
+});

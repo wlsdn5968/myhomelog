@@ -12675,7 +12675,11 @@ async function sM(){
       } catch(_) {}
       replied=true;
     } else if(!r.ok){
-      throw new Error('http_' + r.status);
+      // CHAT-ERR-HONEST-2026-09-16 (Plan 098): 서버가 준 사유(error)를 그대로 보여준다 — 400(pii_blocked 등)을 "일시 오류"로 위장하지 않는다.
+      const j=await r.json().catch(()=>({}));
+      rmTyp();
+      addMsg('ai', (j && typeof j.error === 'string' && j.error.trim()) ? j.error : `⚠ 요청을 처리하지 못했어요 (HTTP ${r.status}). 잠시 후 다시 시도해주세요.`);
+      replied=true;
     } else {
       const d=await r.json();rmTyp();chatH.push({role:'assistant',content:d.reply});addMsg('ai',d.reply);
       // KKKKKKK-19: 서버가 문맥 맞는 후속 질문(suggestions)을 주면 응답 밑에 탭 칩으로 렌더 —
@@ -12727,6 +12731,7 @@ async function sM(){
       userMsg = '⚠ 일시 오류 — 잠시 후 다시 시도해주세요.';
     }
     addMsg('ai', userMsg);
+    replied=true; // Plan 098: 아래 generic fallback 이 두 번째 말풍선을 붙이지 않게
   }
 
   // MOB-3 (2026-05-03): generic catch fallback — 더 구체적 안내 + 대체 경로 제시
