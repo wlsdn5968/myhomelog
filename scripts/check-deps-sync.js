@@ -12,6 +12,7 @@
  * 실패 조건:
  *   - 소스가 require 하는 npm 패키지가 루트 deps 에 없음
  *   - 루트·백엔드 공통 패키지인데 버전 레인지가 다름
+ *   - 루트·백엔드 overrides 가 다름
  *
  * 성공 시 exit 0, 실패 시 exit 1 + 상세 메시지.
  *
@@ -96,8 +97,15 @@ function main() {
     }
   }
 
-  if (missingInRoot.length === 0 && versionMismatch.length === 0) {
-    console.log(`✓ deps-sync OK — ${required.size} external packages, all present in root package.json`);
+  // OVERRIDES-SYNC-2026-09-16 (Plan 078): npm `overrides` 는 dependencies 비교에 안 잡힌다.
+  //   한쪽에만 있으면 Vercel(루트)과 로컬(backend)이 서로 다른 트리를 설치한다(075: satori→fflate 0.7.5).
+  //   키 순서와 무관하게 깊은 동일성으로 비교한다.
+  const canon = (o) => JSON.stringify(o, (k, v) =>
+    (v && typeof v === 'object' && !Array.isArray(v)) ? Object.fromEntries(Object.entries(v).sort()) : v);
+  const overridesMismatch = canon(rootPkg.overrides || {}) !== canon(backendPkg.overrides || {});
+
+  if (missingInRoot.length === 0 && versionMismatch.length === 0 && !overridesMismatch) {
+    console.log(`✓ deps-sync OK — ${required.size} external packages, all present in root package.json, overrides 동일`);
     process.exit(0);
   }
 
@@ -116,6 +124,13 @@ function main() {
       console.error(`    - ${m.pkg}: root=${m.root}, backend=${m.backend}`);
     }
     console.error('  → 두 파일의 버전을 일치시켜 로컬/프로덕션 동작 차이를 제거.');
+  }
+
+  if (overridesMismatch) {
+    console.error('\n✗ 루트와 backend/package.json 의 `overrides` 가 다름:');
+    console.error(`    root:    ${JSON.stringify(rootPkg.overrides || {})}`);
+    console.error(`    backend: ${JSON.stringify(backendPkg.overrides || {})}`);
+    console.error('  → 두 파일의 overrides 를 동일하게 맞추고 양쪽에서 `npm install` 실행.');
   }
 
   process.exit(1);
