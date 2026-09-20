@@ -385,7 +385,7 @@ alter table public.field_notes add constraint field_notes_user_id_fkey FOREIGN K
 alter table public.kakao_notify_tokens add constraint kakao_notify_tokens_pkey PRIMARY KEY (user_id);
 alter table public.kakao_notify_tokens add constraint kakao_notify_tokens_user_fk FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 alter table public.molit_ingest_runs add constraint molit_ingest_runs_pkey PRIMARY KEY (id);
-alter table public.molit_ingest_runs add constraint molit_ingest_runs_status_chk CHECK ((status = ANY (ARRAY['running'::text, 'ok'::text, 'error'::text, 'skipped'::text])));
+alter table public.molit_ingest_runs add constraint molit_ingest_runs_status_chk CHECK ((status = ANY (ARRAY['running'::text, 'ok'::text, 'error'::text, 'skipped'::text, 'timeout'::text])));
 alter table public.molit_transactions add constraint molit_transactions_pkey PRIMARY KEY (id);
 alter table public.payments add constraint payments_order_id_key UNIQUE (order_id);
 alter table public.payments add constraint payments_pkey PRIMARY KEY (id);

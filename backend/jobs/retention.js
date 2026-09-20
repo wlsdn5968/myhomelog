@@ -189,6 +189,9 @@ async function runChatRetention(admin) {
  */
 async function runIngestRunsRetention(admin) {
   const out = { staleRunningFixed: 0, okPruned: 0, error: null };
+  // STEP-ISOLATION-2026-09-20 (Plan 110): 종전엔 ①이 throw 하면 ②(프루닝 RPC)가 통째로 건너뛰어졌다.
+  //   실제로 CHECK 제약이 'timeout' 을 금지해 ①이 90일간 매일 실패했고, 그 사실이 어디에도 안 보였다.
+  //   두 단계는 서로 독립이므로 각자 실패하고 각자 기록한다.
   try {
     const staleCut = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     const { count: sc, error: e1 } = await admin.from('molit_ingest_runs')
@@ -197,15 +200,19 @@ async function runIngestRunsRetention(admin) {
       .lt('started_at', staleCut);
     if (e1) throw e1;
     out.staleRunningFixed = sc ?? 0;
-
+  } catch (e) {
+    out.error = `staleRunning: ${e.message}`;
+    logger.warn({ err: e.message }, 'retention: 고아 running 정리 실패 (프루닝은 계속 진행)');
+  }
+  try {
     const { data: pruned, error: e2 } = await admin.rpc('prune_molit_ingest_runs', { p_keep_days: INGEST_RUNS_OK_RETENTION_DAYS });
     if (e2) throw e2;
     out.okPruned = Number(pruned) || 0;
-    logger.info({ ...out, okRetentionDays: INGEST_RUNS_OK_RETENTION_DAYS }, 'retention: molit_ingest_runs 정리');
   } catch (e) {
-    out.error = e.message;
-    logger.warn({ err: e.message }, 'retention: molit_ingest_runs 정리 실패 (계속 진행)');
+    out.error = out.error ? `${out.error} | prune: ${e.message}` : `prune: ${e.message}`;
+    logger.warn({ err: e.message }, 'retention: molit_ingest_runs 프루닝 실패');
   }
+  logger.info({ ...out, okRetentionDays: INGEST_RUNS_OK_RETENTION_DAYS }, 'retention: molit_ingest_runs 정리');
   return out;
 }
 
@@ -246,6 +253,11 @@ async function run() {
     chat: chatResult,
     ingestRuns: ingestRunsResult,
     attribution: attributionResult,
+    // OBSERV-FLAT-2026-09-20 (Plan 110): cronStats._pick 은 최상위 키만 본다 — 중첩된 ingestRuns 의
+    //   성과·실패가 health.crons['retention'] 에 90일간 한 번도 안 보였다. 평탄화 키를 함께 싣는다.
+    okPruned: ingestRunsResult && ingestRunsResult.okPruned,
+    staleRunningFixed: ingestRunsResult && ingestRunsResult.staleRunningFixed,
+    ...(ingestRunsResult && ingestRunsResult.error ? { error: ingestRunsResult.error } : {}),
   };
   logger.info(summary, 'retention job 완료');
   return summary;

@@ -62,7 +62,7 @@ test('runIngestRunsRetention — RPC 가 오류를 돌려주면 out.error 에 �
   const { admin } = _makeFakeAdmin({ rpcError: { message: 'function prune_molit_ingest_runs does not exist' } });
   const out = await runIngestRunsRetention(admin); // 예외 없이 완료돼야 한다(다른 retention 작업에 영향 없음)
 
-  assert.equal(out.error, 'function prune_molit_ingest_runs does not exist');
+  assert.equal(out.error, 'prune: function prune_molit_ingest_runs does not exist', 'Plan 110: 두 단계가 독립이라 어느 쪽이 실패했는지 접두사로 구분한다');
   assert.equal(out.okPruned, 0, 'RPC 실패 시 okPruned 는 초기값 0 을 유지해야 한다(지어낸 값이 아니어야 한다)');
 });
 
@@ -71,6 +71,6 @@ test('runIngestRunsRetention — RPC 호출 자체가 reject 해도(네트워크
   admin.rpc = () => Promise.reject(new Error('fetch failed'));
   const out = await runIngestRunsRetention(admin);
 
-  assert.equal(out.error, 'fetch failed');
+  assert.equal(out.error, 'prune: fetch failed', 'Plan 110: 두 단계가 독립이라 어느 쪽이 실패했는지 접두사로 구분한다');
   assert.equal(out.okPruned, 0);
 });
