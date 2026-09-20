@@ -45,3 +45,16 @@
 | SQL: `search_popular_apts`(60일)·`get_br_backfill_candidates`(180일)·`geocache_backfill_candidates`(호출부 180일) | 최근 집계 | ≤ 6개월 | 일부 | 없음 |
 - 쓰기: `jobs/molitIngest.js`(upsert, 최근 3개월)·`jobs/molitHistBackfill.js`(동결).
 - 결론: 설계 방향 유지. 보존 테이블 컬럼에 `jibun` 추가가 필요하다는 것이 0단계의 새 발견.
+
+### 부록 A-2 — 독립 재검증 결과 (2026-09-20, HEAD `9cf5f5d`; 조사자가 부록 A 를 **보지 않은 상태**에서 전수 재조사 → 계획자가 전 항목을 코드로 재확인)
+부록 A 의 인용은 **낡은 것이 하나도 없었다**(전 항목이 현재 HEAD 에 같은 줄 번호로 존재). 아래 5건은 부록 A 가 **덜 적었거나 빠뜨린** 것으로, 계획자가 직접 파일을 열어 확인했다.
+
+| # | 발견 | 근거(계획자 재확인) | 부록 A 와의 차이 | 107 에서 할 일 |
+|---|---|---|---|---|
+| A2-1 | **`/apt/:seq` 공개 페이지가 404 + `noindex` 로 사라진다** — 16개월간 거래 없는 단지는 MV 행과 거래가 **동시에** 비어 페이지 자체가 죽는다. 이미 색인된 URL 이 사라지는 것이라 SEO 손실이다 | `routes/aptPage.js:118-123` `if (!idx && (!txs \|\| !txs.length)) return null;` → `:318-324` `res.status(404)` + `noindex: true`. `loadIndexRow`(`:97-108`)는 MV `molit_apt_index` 만 보고, `getTransactionsByAptSeq(seq, 24)`(`:122`)는 **라이브 API 폴백이 없다** | 부록 A 38행은 "24개월 요청은 16개월치만 나온다 → 문구 조정" 으로 **심각도를 낮게** 적었다. 실제 귀결은 문구가 아니라 **페이지 소실** | 107a 보존 테이블을 `loadAptFacts` 의 3번째 소스로 넣거나, `aptHistoryService`(원본+이력 병합을 이미 할 줄 안다)를 쓰게 한다. **이것이 107 의 최우선 선행조건** |
+| A2-2 | **MV `deal_count` 가 검색 랭킹 가중치와 화면 숫자를 먹인다** — 창을 자르면 값이 줄어 순위가 바뀌고 "거래 N건" 이 조용히 작아진다 | MV 정의(`supabase/schema.sql:456-466`)에 하한 없음. 소비처: `routes/search.js:273,282` `_w = deal_count`(랭킹 가중치) · `routes/regionPage.js:107-109`·`routes/aptPage.js:199-202`(정렬) · `jobs/interestWarm.js:31-32`(워밍 우선순위) · 프론트 `index.html:5750` "거래 N건" | 부록 A 43행은 MV 를 "검색 색인" 으로만 적어 **소속 여부**(단지가 빠지는가)만 다뤘다. **`deal_count` 값 자체가 랭킹·표시에 쓰인다**는 축은 빠져 있었다 | MV 에 `deal_count` 를 원본+보존 테이블 합계로 내거나, 랭킹 가중치를 창 안 건수로 **의도적으로** 바꾼다고 명시(둘 중 무엇이든 선택을 문서에 남긴다) |
+| A2-3 | **비교 API 가 24개월까지 받는다** — 15개월 화이트리스트 밖의 두 번째 경로 | `services/analysisService.js:775` `Math.min(Math.max(dealMonths\|\|12, 6), 24)` ← `routes/analysis.js:37` 이 요청 본문의 `dealMonths` 를 그대로 넘긴다(현재 프론트는 12만 보냄) | 부록 A 37행은 `routes/transactions.js` 의 12·15 만 "창 16 의 근거" 로 들었다. 이 경로는 미언급 | 16개월 창 결정의 근거에 포함. 24 요청은 라이브 폴백으로 느려질 뿐이나, **창을 16 이하로 더 줄이자는 제안이 나오면 이 경로가 반례** |
+| A2-4 | **랜딩 문구 "2025.05 이후" 가 하드코딩** | `frontend/index.html:2987` (`DATA-RANGE-2026-09-16` 주석과 함께 정적 문자열) | 부록 A 는 방법론상 backend+SQL 만 훑어 프론트 정적 카피가 범위 밖이었다 | 창이 굴러가면 매달 틀려진다 → `/api/health` 나 `aptHistoryService` 의 `since` 를 받아 **동적으로** 렌더 |
+| A2-5 | **`dataCounts.tx` 가 "누적" 라벨로 3곳에 노출** | `server.js:501` `count:'exact'` 하한 없음 → `/api/health` → `index.html:5546·5652`(랜딩)·`services/briefingService.js:97` → `routes/briefing.js:104-105`("실거래 누적") → `routes/ogImage.js:161-182`(공유 이미지에 박제) | 부록 A 41행이 "누적 건수만 원본+이력 합계로" 라고 이미 적었다 — **방향은 맞으나 노출 표면이 3곳(OG 이미지 포함)이라는 점**이 빠져 있었다 | 원본+이력 합계로 바꾸되 **OG 이미지 캐시까지** 무효화 대상에 넣는다 |
+
+**미확인(재검증자·계획자 모두)**: ① 프로덕션 함수 본문이 `schema.sql` 스냅샷과 지금 이 순간 100% 같은지(파일은 "생성 + 적용 기록 append" 방식) ② `molit_transactions` 의 RLS 가 `using (true)` 전체 공개 읽기(`schema.sql:934`)라 **프론트가 anon 키로 원본을 직접 조회할 여지**가 열려 있다 — 현재 `frontend/index.html` 에 그런 호출은 없음을 grep 으로 확인했으나, 이는 "지금 없다" 일 뿐이다.
