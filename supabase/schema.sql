@@ -220,6 +220,24 @@ create table if not exists public.kakao_notify_tokens (
   fail_count integer default 0 not null
 );
 
+-- APT-DIM-FALLBACK-2026-09-20 (Plan 107a): 단지 차원 보존 테이블 — apt_seq 하나당 1행.
+--   원본을 16개월 창으로 자르면(107c) 창 밖 apt_seq 의 이름·지번·준공연도가 사라진다 —
+--   자르기 전에 여기로 떠내 /apt/:seq 의 3번째 소스(loadDimRow)가 읽게 한다.
+--   원본에 없어진 apt_seq 의 행은 지우지 않는다(그게 이 테이블의 존재 이유).
+create table if not exists public.molit_apt_dim (
+  apt_seq         text primary key,
+  apt_name        text,
+  lawd_cd         text,
+  sigungu         text,
+  umd_nm          text,
+  build_year      smallint,
+  jibun           text,
+  first_deal_date date,
+  last_deal_date  date,
+  deal_count      integer,
+  refreshed_at    timestamptz not null default now()
+);
+
 create table if not exists public.molit_ingest_runs (
   id bigint default nextval('molit_ingest_runs_id_seq'::regclass) not null,
   started_at timestamp with time zone default now() not null,
@@ -738,6 +756,51 @@ END;
 $function$
 ;
 
+-- APT-DIM-FALLBACK-2026-09-20 (Plan 107a): 채움/갱신 — 원본에서 apt_seq 별 최신 1건의
+--   이름·지번을 떠낸다. 이름은 시간에 따라 바뀔 수 있으므로(개명·표기 변경) 가장 최근
+--   거래의 값을 권위로 삼는다. where 절이 붙은 do update 인 이유: 주간 갱신이 바뀐 행만
+--   쓰게 하기 위해서다 — 통째 upsert 는 apt_master 가 힙의 절반을 빈 공간으로 들고 있던
+--   원인이었다(plans/104 관리규칙 4). first/last_deal_date·deal_count 에 least/greatest 를
+--   쓴 이유: 창을 자른 뒤에는 원본의 집계가 줄어든다 — 보존 테이블이 과거 최대치를 잊으면 안 된다.
+--   ⚠ 계획자 오류 교정(2026-09-20): 이 함수는 public 의 제 테이블(molit_apt_dim·molit_transactions)만
+--   다루므로 security definer 가 필요 없다(최소 권한) — 적용본은 prosecdef=false, 여기도 맞춘다.
+CREATE OR REPLACE FUNCTION public.refresh_molit_apt_dim()
+ RETURNS integer
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+declare n integer;
+begin
+  with src as (
+    select distinct on (apt_seq)
+           apt_seq, apt_name, lawd_cd, sigungu, umd_nm, build_year, jibun
+      from public.molit_transactions
+     where apt_seq is not null
+     order by apt_seq, deal_date desc, id desc
+  ), agg as (
+    select apt_seq, min(deal_date) f, max(deal_date) l, count(*)::int c
+      from public.molit_transactions where apt_seq is not null group by apt_seq
+  )
+  insert into public.molit_apt_dim
+        (apt_seq, apt_name, lawd_cd, sigungu, umd_nm, build_year, jibun, first_deal_date, last_deal_date, deal_count, refreshed_at)
+  select s.apt_seq, s.apt_name, s.lawd_cd, s.sigungu, s.umd_nm, s.build_year, s.jibun, a.f, a.l, a.c, now()
+    from src s join agg a using (apt_seq)
+  on conflict (apt_seq) do update set
+        apt_name = excluded.apt_name, lawd_cd = excluded.lawd_cd, sigungu = excluded.sigungu,
+        umd_nm = excluded.umd_nm, build_year = excluded.build_year, jibun = excluded.jibun,
+        first_deal_date = least(public.molit_apt_dim.first_deal_date, excluded.first_deal_date),
+        last_deal_date  = greatest(public.molit_apt_dim.last_deal_date, excluded.last_deal_date),
+        deal_count = greatest(public.molit_apt_dim.deal_count, excluded.deal_count),
+        refreshed_at = now()
+   where public.molit_apt_dim.apt_name is distinct from excluded.apt_name
+      or public.molit_apt_dim.jibun    is distinct from excluded.jibun
+      or public.molit_apt_dim.last_deal_date is distinct from excluded.last_deal_date
+      or public.molit_apt_dim.deal_count     is distinct from excluded.deal_count;
+  get diagnostics n = row_count;
+  return n;
+end $function$
+;
+
 CREATE OR REPLACE FUNCTION public.refresh_molit_apt_index()
  RETURNS void
  LANGUAGE plpgsql
@@ -879,6 +942,7 @@ alter table public.chat_sessions enable row level security;
 alter table public.data_error_reports enable row level security;
 alter table public.field_notes enable row level security;
 alter table public.kakao_notify_tokens enable row level security;
+alter table public.molit_apt_dim enable row level security;
 alter table public.molit_ingest_runs enable row level security;
 alter table public.molit_transactions enable row level security;
 alter table public.payments enable row level security;

@@ -107,6 +107,26 @@ async function loadIndexRow(aptSeq) {
   return (data || [])[0] || null;
 }
 
+// APT-DIM-FALLBACK-2026-09-20 (Plan 107a): MV(molit_apt_index)도 원본 24개월 조회도 원본
+//   molit_transactions 만 본다 — 원본을 16개월 창으로 자르면(107c) 창 밖 단지의 페이지가
+//   404 + noindex 로 **사라진다**(aptPage.js:123 → :318). 자르기 전에 이름·지번을 떠낸
+//   molit_apt_dim 을 3번째 소스로 깔아 둔다. 오늘은 dim 이 원본의 상위집합이라 동작 변화가 없다.
+async function loadDimRow(aptSeq) {
+  const { getSupabaseAdmin } = require('../db/client');
+  const admin = getSupabaseAdmin();
+  if (!admin) return null;
+  const { data, error } = await admin
+    .from('molit_apt_dim')
+    .select('apt_seq, apt_name, lawd_cd, sigungu, umd_nm, build_year, last_deal_date, deal_count')
+    .eq('apt_seq', aptSeq)
+    .limit(1);
+  if (error) { logger.warn({ err: error.message, aptSeq }, '/apt 차원 조회 실패'); return null; }
+  const r = (data || [])[0];
+  if (!r) return null;
+  // loadAptFacts 가 idx 와 같은 모양으로 쓰도록 컬럼명을 MV 에 맞춘다.
+  return { ...r, recent_deal_date: r.last_deal_date };
+}
+
 /**
  * APT-FACTS-SSOT-2026-09-02 (Sprint RRRRRRR): 단지 사실을 **한 곳에서만** 만든다.
  *   [왜] 링크 미리보기 이미지(/api/og/apt/:seq)가 같은 단지의 숫자를 따로 계산하면,
@@ -120,6 +140,8 @@ async function loadAptFacts(seq) {
   let idx = null, txs = null;
   try { idx = await loadIndexRow(seq); } catch (e) { logger.warn({ err: e.message, seq }, '/apt 인덱스 예외'); }
   try { txs = await svc.getTransactionsByAptSeq(seq, 24); } catch (e) { logger.warn({ err: e.message, seq }, '/apt 거래 예외'); }
+  // APT-DIM-FALLBACK-2026-09-20 (Plan 107a): MV 에 없을 때만 차원 테이블을 본다.
+  if (!idx) { try { idx = await loadDimRow(seq); } catch (e) { logger.warn({ err: e.message, seq }, '/apt 차원 예외'); } }
   if (!idx && (!txs || !txs.length)) return null;
 
   const { regionLabel } = require('../services/priceRecordsService');
