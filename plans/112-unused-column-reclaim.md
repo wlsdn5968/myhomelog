@@ -76,11 +76,15 @@ async function _dbSetAmenityCount(cacheKey, lat, lng, category, radius, count) {
 `sLat`/`sLng` 는 바로 윗줄 `distanceM(lat, lng, sLat, sLng)` 에서 계속 쓰이므로 **그 변수 자체는 지우지 마라**.
 
 ### ⚠ 실행자가 반드시 먼저 확인할 것 (STOP 조건)
-아래를 실행해 **출력이 비어 있는지** 확인하라. 한 건이라도 나오면 **코드를 고치지 말고 멈춰서 그 줄을 보고하라**.
+**찾는 것은 "학교 객체의 `lat`/`lng`/`address` 를 읽는 코드" 하나뿐이다.** 아래를 실행해 **출력이 비어 있는지** 확인하라. 한 건이라도 나오면 **코드를 고치지 말고 멈춰서 그 줄을 보고하라**.
 ```
-grep -rnE "\.(lat|lng|address)\b" backend/services/schoolService.js backend/services/schoolNeisService.js backend/routes/search.js | grep -iv "coord\|kakao\|apt\.\|d\.address_name\|road_address"
-grep -nE "school[^.]*\.(lat|lng|address)" frontend/index.html
+grep -rnE "\b(s|sc|school|sch|item|e)\.(lat|lng|address)\b" backend/services/schoolService.js backend/services/schoolNeisService.js
+grep -rnE "\b(s|sc|school|sch)\.(lat|lng|address)\b" frontend/index.html
+grep -rn "nearbySchools" backend/routes/search.js
 ```
+세 번째 grep 은 학교 배열이 응답으로 나가기까지의 경로만 확인하는 용도다 — `nearbySchools` 에 `lat`/`lng`/`address` 를 **덧붙이거나 읽는** 줄이 있으면 멈춰라. 단순 대입·전달(`nearbySchools = enriched`, `res.json({ ..., nearbySchools, ... })`)은 정상이다.
+
+> **⚠ 계획자 오류 기록(2026-09-20, 실행자가 STOP 으로 잡아냄)**: 이 자리의 첫 grep 은 `backend/routes/search.js` 를 통째로 훑고 `.lat`/`.lng` 를 파일 단위로 잡았다. 그 파일은 **단지 좌표**(`apt_geocache` 의 `c.lat`·`c.lng`, `CANON-COORD-FIX-2026-06-03` 지도 마커 보정)도 다루기 때문에 **학교와 무관한 5건이 걸렸다**(`search.js:868,894,911,930,931`). 계획자가 다섯 줄을 전부 열어 오탐임을 확인했다. 교훈: **"이 필드를 읽는가" 를 확인하는 grep 은 필드명이 아니라 그 필드를 담은 변수까지 함께 묶어라.** 파일 전체를 훑는 grep 은 같은 이름의 다른 개념을 반드시 데려온다.
 
 ---
 
