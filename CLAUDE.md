@@ -116,13 +116,13 @@
 
 ## 📊 진행 중 / 운영자 결정 대기 (2026-09-20 갱신)
 
-### ⚠ DB 용량 — Supabase 무료 한도 500MB (2026-09-20 실측 450.5MB · 운영자 결정 대기 항목 있음)
-- 한도 기준은 **클러스터 전 DB 합계**: `SELECT sum(pg_database_size(datname)) FROM pg_database`(현재 DB + 14.4MB). 넘으면 **읽기 전용 모드**(공식 문서 "Understanding Database and Disk Size"). 원본 `molit_transactions` 가 월 ≈13.9MB 증가.
-- 2026-09-20: 482.2MB(96%) 발견 → backfill 2020-09 **동결**(Plan 100, 다시 돌리지 말 것) → 이력 인덱스 단일키 교체 −39.3MB(Plan 101) → 경신 기준선 요약 테이블 +7.6MB(Plan 103) = **450.5MB**.
-- 과거 이력 `molit_transactions_hist`: 2020-09 ~ 2025-04, 1,290,112행. 사용처: 장기 추세(`/api/transactions/history`, Plan 102)·경신 기준선(`molit_hist_peaks`, Plan 103).
-- **승인 대기**: Plan 105(용량 감시를 위 측정식으로 + 85%/93% Sentry 경보 — 함수 2개 본문 교체) · Plan 106(REINDEX·apt_master 바뀐 행만 upsert 후 VACUUM FULL·적재 기록 "최신 ok 영구+14일"·autovacuum 2% — 회수 ≈40MB). 종합 설계는 `plans/104-db-capacity-management.md`.
-- **2027-01 전**: Plan 107 원본 16개월 순환 보관(안 하면 106 적용 후에도 2027-03 경 한도).
-- `db_size_mb()`·`get_db_size_bytes()`(health 의 `db`)는 105 적용 전까지 현재 DB 만 잰다(14.4MB 작게 나온다).
+### DB 용량 — Supabase 무료 한도 500MB 중 **405MB(81%)** (2026-09-20 정리 완료)
+- 한도 기준은 **클러스터 전 DB 합계**: `SELECT sum(pg_database_size(datname)) FROM pg_database`. 넘으면 **읽기 전용 모드**. health 의 `db`(RPC `get_db_size_bytes`)와 `db_size_mb()` 가 이제 같은 식을 쓴다(Plan 105).
+- 하루 경과: 482(96%) → backfill 2020-09 동결(100) → 이력 인덱스 단일키(101) → 경신 기준선 6년(103) → **유지보수 회수(106) = 405MB**. 원본 `molit_transactions` 는 월 ≈13.9MB 증가.
+- **경보**: retention cron 이 매일 85%(425MB)에서 Sentry warning, 93%(465MB)에서 error(`monitor:db-capacity`).
+- **다시 하지 말 것**: 이력 backfill 재개(동결됨) · 통째 upsert(apt_master 는 바뀐 행만 쓴다) · `molit_ingest_runs` 의 ok 를 기간만으로 전부 삭제((지역,월)별 최신 1건은 영구 보존 — 사라지면 그 달 조회가 MOLIT API 로 추락).
+- **유지보수 재실행 시**: 적재 창(17:00~19:00 UTC)·apt-master-sync(월 20:00 UTC)를 피하고, 명령 전후로 위 합계 쿼리를 잰다. 절차·실측은 `supabase/migrations/20260920_maintenance_reclaim.sql`.
+- **2027-01 전**: Plan 107 원본 16개월 순환 보관(안 하면 2027-03 경 다시 한도). 종합 설계 `plans/104-db-capacity-management.md`.
 
 
 ### 완료되어 목록에서 제거 (이력)
@@ -172,4 +172,4 @@
 
 ---
 
-마지막 갱신: 2026-09-20 (DB 용량: 482→450.5MB — backfill 동결·이력 인덱스 교체·경신 기준선 6년 · 장기 추세 차트 · 105/106 승인 대기 · 테스트 436)
+마지막 갱신: 2026-09-20 (DB 482→405MB 정리 완료 — 동결·인덱스·경신 기준선·유지보수 회수 · 용량 경보 신설 · 장기 추세 차트 · 테스트 442)

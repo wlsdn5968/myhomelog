@@ -7,7 +7,9 @@
 - 라이브 `/api/health` → `"db":{"usedMb":468,"limitMb":500,"pct":94,"warn":true}`. `backend/server.js:521~538` `getDbUsage()` 가 RPC `get_db_size_bytes` 를 읽어 `warn: pct >= 80` 만 세운다(6h 캐시). **경보 발송은 없다.**
 - 경보 패턴: `backend/routes/cron.js:87~111` `checkIngestFreshness()` — `Sentry.captureMessage(고정 메시지, { level, tags:{ route:'cron.retention', monitor:'…' }, extra:{…} })`, 실패는 `logger.warn` 으로 삼킴. retention 은 **POST(`:181`)·GET(`:233`) 쌍둥이**이고 계약 테스트 `backend/test/cron-observability.test.js:420~432` 가 양쪽에 `await checkCronStaleness()`·`await checkRegionIngestFreshness()` 가 있는지 본다(쌍둥이 한쪽만 고쳐 사고 난 전례).
 
-## Step 0 — DDL (운영자 승인 후 리뷰어 실행)
+## Step 0 — DDL (**리뷰어가 직접 실행한다 — 실행자는 건너뛴다**)
+> 실행자에게: 아래 SQL 은 리뷰어가 프로덕션에 적용한다. 너는 Step 1~3(코드·테스트·기록)만 하고, 맨 아래 STOP 조건의 "Step 0 이 적용되지 않았다" 항목은 **무시**하라.
+> ⚠ **`supabase/schema.sql` 은 `:541` 의 `get_db_size_bytes` 와 `:961` 의 `db_size_mb` 두 함수 본문만** 고친다(2026-09-20 기준 줄 번호 — grep 으로 재확인). 파일의 **다른 곳은 절대 건드리지 마라** — 다른 실행자가 같은 시각에 `:694`~`:723` 구간에 함수를 추가하고 있다.
 ```sql
 CREATE OR REPLACE FUNCTION public.get_db_size_bytes() RETURNS bigint LANGUAGE sql SECURITY DEFINER SET search_path TO 'public'
 AS $function$ select sum(pg_database_size(datname))::bigint from pg_database $function$;
