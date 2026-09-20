@@ -720,6 +720,25 @@ END;
 $function$
 ;
 
+CREATE OR REPLACE FUNCTION public.prune_molit_ingest_runs(p_keep_days integer DEFAULT 14)
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE n integer;
+BEGIN
+  -- (지역,월)별 가장 최근 ok 1건은 영구 보존 — getTransactionsFromDb 가 "이 달은 적재됐다" 를 이 기록으로 판단한다.
+  DELETE FROM public.molit_ingest_runs r
+  USING (SELECT lawd_cd, deal_ym, max(id) AS keep_id FROM public.molit_ingest_runs WHERE status = 'ok' GROUP BY 1, 2) k
+  WHERE r.status = 'ok' AND r.lawd_cd = k.lawd_cd AND r.deal_ym = k.deal_ym AND r.id <> k.keep_id
+    AND r.started_at < now() - make_interval(days => p_keep_days);
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END;
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.refresh_molit_apt_index()
  RETURNS void
  LANGUAGE plpgsql

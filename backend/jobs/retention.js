@@ -31,8 +31,13 @@ const SEARCH_HISTORY_RETENTION_MONTHS = 12;
 const CHAT_RETENTION_MONTHS = 24;
 // DB-STABILITY-2026-07-11 (Sprint OOOO): molit_ingest_runs 는 매일 (lawd×월) 재적재로 무한 grow
 //   (실측 pair당 ~17배 중복). gap-retry(retryFailedGaps)는 error/timeout(18개월) 기반이라
-//   '성공(ok)' 로그만 90일 후 파기해도 재시도 로직에 무영향 — 테이블을 ~90일치로 bound.
-const INGEST_RUNS_OK_RETENTION_DAYS = parseInt(process.env.INGEST_RUNS_OK_RETENTION_DAYS || '90', 10);
+//   '성공(ok)' 로그만 파기해도 재시도 로직에 무영향 — 테이블을 bound.
+// RETAIN-LATEST-OK-2026-09-20 (Plan 106): 90일은 너무 길어 43,455행(9.6MB)까지 불었다. 그런데 단순
+//   기간 삭제로 줄이면 getTransactionsFromDb(services/transactionService.js)가 그 (지역,월)의 ok 기록이
+//   하나도 없을 때 "안 채워짐"으로 오판해 MOLIT API 로 직접 나간다 — 실측 40지역×3개월이 이미 이 상태.
+//   그래서 (지역,월)별 최신 ok 1건은 DB 함수(prune_molit_ingest_runs)가 영구 보존하고, 나머지만
+//   기간 기준으로 지운다. 기본 보관일도 90 → 14 로 낮춘다(최신 1건은 어차피 영구 보존되니 나머지는 짧아도 안전).
+const INGEST_RUNS_OK_RETENTION_DAYS = parseInt(process.env.INGEST_RUNS_OK_RETENTION_DAYS || '14', 10);
 
 // SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
 function adminClient() {
@@ -178,7 +183,8 @@ async function runChatRetention(admin) {
 /**
  * molit_ingest_runs 운영 로그 정리 (DB-STABILITY-2026-07-11).
  *   1) 고아 'running'(크래시 잔존, 2시간+) → 'timeout' (gap-retry 가 재시도하도록 · runMolitIngest 시작부 15분 정리의 이중 안전망)
- *   2) 성공('ok') 90일 경과 로그 파기 — 무한 grow 차단. gap-retry 는 error/timeout(18개월) 기반이라 안전.
+ *   2) ok 는 (지역,월)별 최신 1건 영구 보존 + 나머지 14일 — 최신 ok 가 사라지면 그 달 조회가 MOLIT API 로
+ *      떨어진다(2026-09-20 실측 40지역×3개월). DB 함수 prune_molit_ingest_runs(Plan 106)가 그 불변식을 지킨다.
  * 전부 PostgREST 단순 필터(자기조인/DDL 불요). 실패해도 다른 retention 작업엔 무영향.
  */
 async function runIngestRunsRetention(admin) {
@@ -192,13 +198,9 @@ async function runIngestRunsRetention(admin) {
     if (e1) throw e1;
     out.staleRunningFixed = sc ?? 0;
 
-    const okCut = new Date(Date.now() - INGEST_RUNS_OK_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
-    const { count: oc, error: e2 } = await admin.from('molit_ingest_runs')
-      .delete({ count: 'exact' })
-      .eq('status', 'ok')
-      .lt('started_at', okCut);
+    const { data: pruned, error: e2 } = await admin.rpc('prune_molit_ingest_runs', { p_keep_days: INGEST_RUNS_OK_RETENTION_DAYS });
     if (e2) throw e2;
-    out.okPruned = oc ?? 0;
+    out.okPruned = Number(pruned) || 0;
     logger.info({ ...out, okRetentionDays: INGEST_RUNS_OK_RETENTION_DAYS }, 'retention: molit_ingest_runs 정리');
   } catch (e) {
     out.error = e.message;
