@@ -116,12 +116,13 @@
 
 ## 📊 진행 중 / 운영자 결정 대기 (2026-09-20 갱신)
 
-### ⚠ DB 용량 — 무료 한도 500MB 의 96% (2026-09-20 실측, 운영자 결정 대기)
-- Supabase 무료 한도는 **클러스터 전 DB 합계**(`SELECT sum(pg_database_size(datname)) FROM pg_database` = 현재 DB + 14.4MB)이고 넘으면 **읽기 전용 모드**(공식 문서 "Understanding Database and Disk Size"). 2026-09-20 실측 **482.2MB**. 원본 `molit_transactions` 가 월 ≈13.9MB 증가.
-- 과거 실거래 이력 `molit_transactions_hist`: **2020-09 ~ 2025-04, 1,290,112행**(122.7MB). backfill 은 2020-09 에서 **동결**(Plan 100) — 다시 돌리지 말 것.
-- **승인 대기(프로덕션 DDL)**: Plan 101 이력 인덱스 교체(−33~38MB, 데이터 삭제 없음) → Plan 103 경신 기준선 6년(요약 테이블 +7MB). SQL 은 `plans/101-*.md`·`plans/103-*.md` 와 SPRINT_NOTES 20부.
-- **2026-11 말까지**: Plan 104 원본 순환 보관(오래된 달을 협폭 이력으로 이동 — 검색 색인 MV·단지 페이지 24개월 조회·별칭 갱신을 먼저 이력 인지형으로). 안 하면 101 적용 후에도 약 3개월 뒤 한도.
-- 용량 판단은 반드시 위 합계 쿼리로. `db_size_mb()` 는 현재 DB 만 잰다(14.4MB 작게 나온다).
+### ⚠ DB 용량 — Supabase 무료 한도 500MB (2026-09-20 실측 450.5MB · 운영자 결정 대기 항목 있음)
+- 한도 기준은 **클러스터 전 DB 합계**: `SELECT sum(pg_database_size(datname)) FROM pg_database`(현재 DB + 14.4MB). 넘으면 **읽기 전용 모드**(공식 문서 "Understanding Database and Disk Size"). 원본 `molit_transactions` 가 월 ≈13.9MB 증가.
+- 2026-09-20: 482.2MB(96%) 발견 → backfill 2020-09 **동결**(Plan 100, 다시 돌리지 말 것) → 이력 인덱스 단일키 교체 −39.3MB(Plan 101) → 경신 기준선 요약 테이블 +7.6MB(Plan 103) = **450.5MB**.
+- 과거 이력 `molit_transactions_hist`: 2020-09 ~ 2025-04, 1,290,112행. 사용처: 장기 추세(`/api/transactions/history`, Plan 102)·경신 기준선(`molit_hist_peaks`, Plan 103).
+- **승인 대기**: Plan 105(용량 감시를 위 측정식으로 + 85%/93% Sentry 경보 — 함수 2개 본문 교체) · Plan 106(REINDEX·apt_master 바뀐 행만 upsert 후 VACUUM FULL·적재 기록 "최신 ok 영구+14일"·autovacuum 2% — 회수 ≈40MB). 종합 설계는 `plans/104-db-capacity-management.md`.
+- **2027-01 전**: Plan 107 원본 16개월 순환 보관(안 하면 106 적용 후에도 2027-03 경 한도).
+- `db_size_mb()`·`get_db_size_bytes()`(health 의 `db`)는 105 적용 전까지 현재 DB 만 잰다(14.4MB 작게 나온다).
 
 
 ### 완료되어 목록에서 제거 (이력)
@@ -171,4 +172,4 @@
 
 ---
 
-마지막 갱신: 2026-09-20 (DB 용량 96% 발견 → backfill 동결(Plan 100) · 장기 추세 차트(Plan 102) · 101/103 DDL 승인 대기 · 테스트 436)
+마지막 갱신: 2026-09-20 (DB 용량: 482→450.5MB — backfill 동결·이력 인덱스 교체·경신 기준선 6년 · 장기 추세 차트 · 105/106 승인 대기 · 테스트 436)
