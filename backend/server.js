@@ -531,7 +531,7 @@ async function getDbUsage() {
     const usedMb = Math.round(Number(data) / (1024 * 1024));
     const limitMb = parseInt(process.env.DB_LIMIT_MB || '500', 10); // Supabase free tier
     const pct = limitMb > 0 ? Math.round((usedMb / limitMb) * 100) : null;
-    const out = { usedMb, limitMb, pct, warn: pct != null && pct >= 80 };
+    const out = { usedMb, limitMb, pct, warn: pct != null && pct >= 85, critical: pct != null && pct >= 93, basis: 'all-databases' }; // Plan 105: 측정식 = sum(pg_database_size) — Supabase 한도 기준
     cache.set(CK, out, 21600); // 6h — DB 용량은 일 단위 완만 변동
     return out;
   } catch (e) { return null; }

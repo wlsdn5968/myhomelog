@@ -429,6 +429,7 @@ test('cron 실행 기록이 성공·실패 양쪽에 남는다 + await 로 유�
     // Sprint MMMMMMM-22: 지역 단위 적재 중단 감시도 쌍둥이 양쪽에 있어야 한다.
     //   실제로 Vercel cron 이 호출하는 쪽이 GET 이었던 전례가 있다(GET-PARITY 주석) — 한쪽만 넣으면 감시가 안 돈다.
     assert.match(part, /await checkRegionIngestFreshness\(\)/, `retention ${name} 에 지역 적재 중단 감시가 없다`);
+    assert.match(part, /await checkDbCapacity\(\)/, `retention ${name} 에 DB 용량 감시가 없다`);
   }
 
   // ④ 감시 대상 목록이 vercel.json 과 1:1 이다 — 새 cron 이 감시에서 조용히 빠지는 것을 막는다.

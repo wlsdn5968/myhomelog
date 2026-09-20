@@ -178,6 +178,35 @@ async function checkRegionIngestFreshness() {
   } catch (e) { logger.warn({ err: e.message }, '지역 신선도 점검 실패(무시)'); }
 }
 
+// DB-CAPACITY-2026-09-20 (Plan 105): Supabase 무료 한도(500MB, 전 DB 합계 — 초과 시 읽기 전용)를 매일 본다.
+//   2026-09-20 실사고: health 의 warn 플래그만 있고 경보가 없어 96%(482MB)가 될 때까지 아무도 몰랐다.
+//   고정 메시지(이슈 그룹 유지) + 가변값은 extra. 실패는 삼킨다(감시가 retention 을 죽이면 안 된다).
+const DB_CAPACITY_WARN_PCT = 85, DB_CAPACITY_ERROR_PCT = 93;
+function dbCapacityLevel(usedMb, limitMb) {
+  if (!(usedMb > 0) || !(limitMb > 0)) return null;
+  const pct = (usedMb / limitMb) * 100;
+  return pct >= DB_CAPACITY_ERROR_PCT ? 'error' : pct >= DB_CAPACITY_WARN_PCT ? 'warning' : null;
+}
+async function checkDbCapacity() {
+  try {
+    const { getSupabaseAdmin } = require('../db/client');
+    const admin = getSupabaseAdmin();
+    if (!admin) return null;
+    const { data, error } = await admin.rpc('get_db_size_bytes');
+    if (error || data == null) return null;
+    const usedMb = Math.round(Number(data) / 1048576 * 10) / 10;
+    const limitMb = parseInt(process.env.DB_LIMIT_MB || '500', 10);
+    const level = dbCapacityLevel(usedMb, limitMb);
+    if (level) {
+      Sentry.captureMessage('cron 감시: DB 용량이 무료 한도에 근접 — 초과 시 읽기 전용(적재·저장 중단)', {
+        level, tags: { route: 'cron.retention', monitor: 'db-capacity' }, extra: { usedMb, limitMb, pct: Math.round(usedMb / limitMb * 100) },
+      });
+      logger[level === 'error' ? 'error' : 'warn']({ usedMb, limitMb }, 'DB 용량 임계 초과');
+    }
+    return { usedMb, limitMb, level };
+  } catch (e) { logger.warn({ err: e.message }, 'DB 용량 점검 실패(무시)'); return null; }
+}
+
 router.post('/retention', async (req, res) => {
   try {
     const started = Date.now();
@@ -203,6 +232,7 @@ router.post('/retention', async (req, res) => {
     await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시(실패는 내부에서 삼킴)
     await checkCronStaleness();   // Sprint MMMMMMM-12 — 안 돈 cron 감시
     await checkRegionIngestFreshness(); // Sprint MMMMMMM-22 — 지역 단위 적재 중단 감시
+    await checkDbCapacity(); // Plan 105 — DB 용량 감시
     // BRIEFING-ARCHIVE-2026-08-19 (Sprint NNNNNNN-6): 오늘자 브리핑 스냅샷 보장 생성.
     //   멱등 upsert — lazy 생성(페이지 첫 조회)과 중복돼도 무해(Hobby cron 중복호출 대응 원칙).
     // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최고·최저 경신 캐시 워밍.
@@ -250,6 +280,7 @@ router.get('/retention', async (req, res) => {
     await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시
     await checkCronStaleness();   // Sprint MMMMMMM-12 — 안 돈 cron 감시(POST 쌍둥이와 동일)
     await checkRegionIngestFreshness(); // Sprint MMMMMMM-22 — 지역 단위 적재 중단 감시(POST 쌍둥이와 동일)
+    await checkDbCapacity(); // Plan 105 — DB 용량 감시
     // BRIEFING-ARCHIVE-2026-08-19 (Sprint NNNNNNN-6): 오늘자 브리핑 스냅샷 보장 생성.
     //   멱등 upsert — lazy 생성(페이지 첫 조회)과 중복돼도 무해(Hobby cron 중복호출 대응 원칙).
     // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최고·최저 경신 캐시 워밍.
@@ -674,3 +705,4 @@ async function handleMolitHistBackfill(req, res) {
 router.get('/molit-hist-backfill', handleMolitHistBackfill);
 
 module.exports = router;
+module.exports._dbCapacityLevel = dbCapacityLevel; // 테스트용

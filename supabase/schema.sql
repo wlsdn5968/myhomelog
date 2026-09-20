@@ -543,7 +543,7 @@ CREATE OR REPLACE FUNCTION public.get_db_size_bytes()
  LANGUAGE sql
  SECURITY DEFINER
  SET search_path TO 'public'
-AS $function$ select pg_database_size(current_database()) $function$
+AS $function$ select sum(pg_database_size(datname))::bigint from pg_database $function$
 ;
 
 CREATE OR REPLACE FUNCTION public.get_price_records(p_days integer DEFAULT 7, p_min_prior integer DEFAULT 3, p_limit integer DEFAULT 6)
@@ -963,5 +963,5 @@ CREATE OR REPLACE FUNCTION public.db_size_mb()
  LANGUAGE sql
  SECURITY DEFINER
  SET search_path TO 'public'
-AS $function$ SELECT round(pg_database_size(current_database()) / 1048576.0, 1) $function$
+AS $function$ select round(sum(pg_database_size(datname)) / 1048576.0, 1) from pg_database $function$
 ;
