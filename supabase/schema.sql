@@ -552,20 +552,34 @@ CREATE OR REPLACE FUNCTION public.get_price_records(p_days integer DEFAULT 7, p_
  STABLE SECURITY DEFINER
  SET search_path TO 'public', 'pg_temp'
 AS $function$
-with maxd as (select max(deal_date) as d, min(deal_date) as since from public.molit_transactions),
+-- PERF-2026-09-05: maxd 참조를 스칼라 서브쿼리(InitPlan, 1회 평가)로 — 종전 `from t, maxd` 는 라테럴 안에서 행마다
+--   CTE Scan(55,475회)을 돌렸다. 커버링 인덱스 idx_molit_aptseq_area_date_amt(+VACUUM) 로 Heap Fetches 0.
+--   EXPLAIN ANALYZE 실측 13.1s → 1.26s. 결과(집계·목록)는 동일.
+-- BASELINE-6Y-2026-09-20 (Plan 103): 직전 최고·최저 기준선에 과거 이력(molit_transactions_hist 2020-09~2025-04)의
+--   (단지, 면적)별 요약 molit_hist_peaks 를 합친다. since 도 이력 시작월까지 넓힌다. 실측(전국 7일): 최고 경신 351 → 159.
+--   이력 힙을 직접 읽으면 콜드 13.9s 라 요약 테이블(PK 조회)로 붙인다 — 웜 98ms → 104ms.
+with maxd as (select max(deal_date) as d,
+                     least(min(deal_date), (select to_date(min(deal_ym), 'YYYYMM') from public.molit_hist_runs)) as since
+              from public.molit_transactions),
 recent as (
   select t.apt_seq, t.apt_name, t.sigungu, t.lawd_cd, t.umd_nm, t.exclu_use_ar,
          t.deal_date, t.deal_amount, t.floor, t.build_year
-  from public.molit_transactions t, maxd
-  where t.deal_date > maxd.d - p_days and t.apt_seq is not null
+  from public.molit_transactions t
+  where t.deal_date > (select d from maxd) - p_days and t.apt_seq is not null
 ),
 pairs as (select distinct apt_seq, exclu_use_ar from recent),
 st as (
-  select p.apt_seq, p.exclu_use_ar, s.mx, s.mn, s.n from pairs p cross join lateral (
+  select p.apt_seq, p.exclu_use_ar,
+         greatest(s.mx, k.mx) as mx, least(s.mn, k.mn) as mn, s.n + coalesce(k.n, 0) as n
+  from pairs p
+  cross join lateral (
     select max(t.deal_amount) mx, min(t.deal_amount) mn, count(*) n
-    from public.molit_transactions t, maxd
-    where t.apt_seq = p.apt_seq and t.exclu_use_ar = p.exclu_use_ar and t.deal_date <= maxd.d - p_days
-  ) s where s.n >= p_min_prior
+    from public.molit_transactions t
+    where t.apt_seq = p.apt_seq and t.exclu_use_ar = p.exclu_use_ar and t.deal_date <= (select d from maxd) - p_days
+  ) s
+  left join public.molit_hist_peaks k
+    on k.apt_seq = p.apt_seq and k.exclu_use_ar = least(round(p.exclu_use_ar * 100), 32767)::smallint
+  where s.n + coalesce(k.n, 0) >= p_min_prior
 ),
 j as (select r.*, st.mx as prev_max, st.mn as prev_min, st.n as prev_n
       from recent r join st on st.apt_seq = r.apt_seq and st.exclu_use_ar = r.exclu_use_ar),
@@ -598,20 +612,30 @@ CREATE OR REPLACE FUNCTION public.get_price_records_by_region(p_days integer DEF
  STABLE SECURITY DEFINER
  SET search_path TO 'public', 'pg_temp'
 AS $function$
-with maxd as (select max(deal_date) as d, min(deal_date) as since from public.molit_transactions),
+-- PERF-2026-09-05: get_price_records 와 같은 수정(maxd 스칼라 서브쿼리 + 커버링 인덱스). 결과 동일.
+-- BASELINE-6Y-2026-09-20 (Plan 103): get_price_records 와 같은 수정 — 기준선에 molit_hist_peaks(2020-09~2025-04 요약)를 합치고 since 를 이력 시작월까지.
+with maxd as (select max(deal_date) as d,
+                     least(min(deal_date), (select to_date(min(deal_ym), 'YYYYMM') from public.molit_hist_runs)) as since
+              from public.molit_transactions),
 recent as (
   select t.apt_seq, t.apt_name, t.sigungu, t.lawd_cd, t.umd_nm, t.exclu_use_ar,
          t.deal_date, t.deal_amount, t.floor, t.build_year
-  from public.molit_transactions t, maxd
-  where t.deal_date > maxd.d - p_days and t.apt_seq is not null
+  from public.molit_transactions t
+  where t.deal_date > (select d from maxd) - p_days and t.apt_seq is not null
 ),
 pairs as (select distinct apt_seq, exclu_use_ar from recent),
 st as (
-  select p.apt_seq, p.exclu_use_ar, s.mx, s.mn, s.n from pairs p cross join lateral (
+  select p.apt_seq, p.exclu_use_ar,
+         greatest(s.mx, k.mx) as mx, least(s.mn, k.mn) as mn, s.n + coalesce(k.n, 0) as n
+  from pairs p
+  cross join lateral (
     select max(t.deal_amount) mx, min(t.deal_amount) mn, count(*) n
-    from public.molit_transactions t, maxd
-    where t.apt_seq = p.apt_seq and t.exclu_use_ar = p.exclu_use_ar and t.deal_date <= maxd.d - p_days
-  ) s where s.n >= p_min_prior
+    from public.molit_transactions t
+    where t.apt_seq = p.apt_seq and t.exclu_use_ar = p.exclu_use_ar and t.deal_date <= (select d from maxd) - p_days
+  ) s
+  left join public.molit_hist_peaks k
+    on k.apt_seq = p.apt_seq and k.exclu_use_ar = least(round(p.exclu_use_ar * 100), 32767)::smallint
+  where s.n + coalesce(k.n, 0) >= p_min_prior
 ),
 j as (select r.*, st.mx as prev_max, st.mn as prev_min, st.n as prev_n
       from recent r join st on st.apt_seq = r.apt_seq and st.exclu_use_ar = r.exclu_use_ar),
@@ -916,10 +940,21 @@ create table if not exists public.molit_hist_runs (
 
 alter table public.molit_hist_runs add constraint molit_hist_runs_pkey PRIMARY KEY (lawd_cd, deal_ym);
 
-CREATE INDEX idx_molit_hist_seq_date ON public.molit_transactions_hist USING btree (apt_seq text_pattern_ops, deal_date);
+create table if not exists public.molit_hist_peaks (
+  apt_seq text not null,
+  exclu_use_ar smallint not null,
+  mx integer not null,
+  mn integer not null,
+  n integer not null
+);
+
+alter table public.molit_hist_peaks add constraint molit_hist_peaks_pkey PRIMARY KEY (apt_seq, exclu_use_ar);
+
+CREATE INDEX idx_molit_hist_seq ON public.molit_transactions_hist USING btree (apt_seq);
 
 alter table public.molit_transactions_hist enable row level security;
 alter table public.molit_hist_runs enable row level security;
+alter table public.molit_hist_peaks enable row level security;
 
 create policy hist_read on public.molit_transactions_hist as permissive for select to anon, authenticated using (true);
 

@@ -105,8 +105,8 @@ async function runHistBackfill(opts = {}) {
       const hist = raw.map(toHistRow).filter(Boolean);
       // GUARD-2026-09-16 (Plan 091): 실패한 region-month 는 아래 catch 로 빠져 runs 에 안 남고
       //   다음 실행이 재시도한다 — 그때 부분 삽입분 위에 또 insert 하면 중복이 생긴다. 삽입 전에
-      //   그 region-month 를 비운다(apt_seq LIKE '<lawd>-%' 는 idx_molit_hist_seq_date 의
-      //   text_pattern_ops 인덱스로 빠르게 처리된다).
+      //   그 region-month 를 비운다(Plan 101 로 인덱스가 (apt_seq) 단일로 바뀌어 이 삭제는 순차 스캔이다 —
+      //   backfill 은 Plan 100 으로 동결되어 호출되지 않는다).
       const { first, last } = monthRange(ym);
       const { error: eDel } = await admin.from('molit_transactions_hist')
         .delete()
