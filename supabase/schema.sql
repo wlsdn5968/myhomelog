@@ -449,6 +449,8 @@ CREATE UNIQUE INDEX uq_apt_geocache_name_region ON public.apt_geocache USING btr
 CREATE UNIQUE INDEX uq_apt_master_name_lawd_umd ON public.apt_master USING btree (apt_name, lawd_cd, COALESCE(umd_nm, ''::text));
 CREATE UNIQUE INDEX uq_molit_apt_index ON public.molit_apt_index USING btree (apt_name, lawd_cd, sigungu, umd_nm, build_year);
 CREATE UNIQUE INDEX uq_molit_dedup ON public.molit_transactions USING btree (dedup_key);
+-- AUTOVACUUM-2026-09-20 (Plan 106): 기본 임계(20% ≈ 94,510 죽은 튜플)에 못 미쳐 autovacuum 이 08-22 이후 0회였다 — 가시성 맵이 낡아 경신 집계가 콜드 9.3초(8초 제한 초과). 2% 로 낮춰 하루 한 번꼴로 돌게 한다.
+alter table public.molit_transactions set (autovacuum_vacuum_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.02);
 
 -- ============ MATERIALIZED VIEWS ============
 create materialized view if not exists public.molit_apt_index as
