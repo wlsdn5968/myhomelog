@@ -211,6 +211,14 @@ router.post('/retention', async (req, res) => {
   try {
     const started = Date.now();
     const summary = await runRetention();
+    // DB-CAPACITY-SERIES-2026-09-20 (Plan 111): 종전엔 checkDbCapacity 호출이 recordCronRun 뒤에 있어
+    //   잰 값이 그대로 버려졌다 — "지난달 대비 얼마나 늘었나" 를 물을 수단이 없었다(plans/104 §8.4).
+    //   측정을 앞으로 당겨 retention 요약에 실어 cronStats 에 남긴다. 실패해도 retention 은 계속 간다.
+    const _cap = await checkDbCapacity();
+    if (_cap && Number.isFinite(_cap.usedMb)) {
+      summary.dbUsedMb = _cap.usedMb;
+      summary.dbPct = Math.round((_cap.usedMb / _cap.limitMb) * 100);
+    }
     logger.info({ durationMs: Date.now() - started }, 'cron/retention OK');
     // Sprint MMMMMMM-12: retention 자신의 실행 기록 — 종전엔 popular-snapshot 만 남아
     //   "retention 이 돌았는가" 를 스냅샷 성패로 유추해야 했다.
@@ -232,7 +240,6 @@ router.post('/retention', async (req, res) => {
     await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시(실패는 내부에서 삼킴)
     await checkCronStaleness();   // Sprint MMMMMMM-12 — 안 돈 cron 감시
     await checkRegionIngestFreshness(); // Sprint MMMMMMM-22 — 지역 단위 적재 중단 감시
-    await checkDbCapacity(); // Plan 105 — DB 용량 감시
     // BRIEFING-ARCHIVE-2026-08-19 (Sprint NNNNNNN-6): 오늘자 브리핑 스냅샷 보장 생성.
     //   멱등 upsert — lazy 생성(페이지 첫 조회)과 중복돼도 무해(Hobby cron 중복호출 대응 원칙).
     // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최고·최저 경신 캐시 워밍.
@@ -263,6 +270,13 @@ router.post('/retention', async (req, res) => {
 router.get('/retention', async (req, res) => {
   try {
     const summary = await runRetention();
+    // DB-CAPACITY-SERIES-2026-09-20 (Plan 111): POST 쌍둥이와 동일 — checkDbCapacity 호출을
+    //   recordCronRun 앞으로 당겨 측정값이 버려지지 않게 한다. 실패해도 retention 은 계속 간다.
+    const _cap = await checkDbCapacity();
+    if (_cap && Number.isFinite(_cap.usedMb)) {
+      summary.dbUsedMb = _cap.usedMb;
+      summary.dbPct = Math.round((_cap.usedMb / _cap.limitMb) * 100);
+    }
     await require('../services/cronStats').recordCronRun('retention', summary).catch(() => {}); // Sprint MMMMMMM-12
     // GET-PARITY-2026-08-09 (Sprint BBBBBBB-5, 실측): popular 스냅샷 계산이 **POST 쌍둥이에만** 있었는데
     //   스냅샷 도입(7/11) 이래 computed_at 이 cron 시각(18:00 UTC)이었던 적이 없다 — Vercel cron 이
@@ -280,7 +294,6 @@ router.get('/retention', async (req, res) => {
     await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시
     await checkCronStaleness();   // Sprint MMMMMMM-12 — 안 돈 cron 감시(POST 쌍둥이와 동일)
     await checkRegionIngestFreshness(); // Sprint MMMMMMM-22 — 지역 단위 적재 중단 감시(POST 쌍둥이와 동일)
-    await checkDbCapacity(); // Plan 105 — DB 용량 감시
     // BRIEFING-ARCHIVE-2026-08-19 (Sprint NNNNNNN-6): 오늘자 브리핑 스냅샷 보장 생성.
     //   멱등 upsert — lazy 생성(페이지 첫 조회)과 중복돼도 무해(Hobby cron 중복호출 대응 원칙).
     // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최고·최저 경신 캐시 워밍.

@@ -37,6 +37,9 @@ function _pick(summary) {
     // INGEST-RUNS-OBSERV-2026-09-20 (Plan 110): retention 의 molit_ingest_runs 단계 독립 결과
     //   (고아 running 정리 건수 · 프루닝 건수)를 health 로 노출한다.
     'okPruned', 'staleRunningFixed',
+    // DB-CAPACITY-SERIES-2026-09-20 (Plan 111): 용량 추세를 health 에 남긴다 —
+    //   경보(85%)는 임계를 넘어야 울리므로, 그 전에 "차오르는 속도" 를 볼 지표가 따로 필요하다.
+    'dbUsedMb', 'dbPct',
     'skippedKnownFail', 'sentinelMarked', 'elapsedMs', 'updated', 'scanned', 'gapsFixed',
     'ok', 'err', 'skipped', 'retried', 'filled', 'missed', 'addrTried', 'addrInserted',
     'verifyTried', 'verifyOk', 'verifyFixed', 'verifyNoAddr', 'verifyMs',
