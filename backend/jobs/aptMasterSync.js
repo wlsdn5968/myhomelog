@@ -219,15 +219,16 @@ async function syncOneSgg(admin, lawdCd) {
   //   ⚠ PostgREST 는 1000행에서 조용히 잘린다(레포 6회 재발) → range 페이징. 최대 지역이 328행이라
   //     한 페이지로 끝나지만, 지역이 커져도 조용히 틀리지 않게 페이징을 둔다.
   const prevName = new Map();
+  const prevRow = new Map();
   try {
     for (let from = 0; from <= 4000; from += 1000) {
       const { data: page, error } = await admin
-        .from('apt_master').select('kapt_code, apt_name')
+        .from('apt_master').select('kapt_code, apt_name, lawd_cd, sigungu, umd_nm, source')
         .eq('lawd_cd', lawdCd)
         .order('kapt_code', { ascending: true })
         .range(from, from + 999);
       if (error) throw error;
-      for (const r of (page || [])) prevName.set(r.kapt_code, r.apt_name);
+      for (const r of (page || [])) { prevName.set(r.kapt_code, r.apt_name); prevRow.set(r.kapt_code, r); }
       if (!page || page.length < 1000) break;
     }
   } catch (e) {
@@ -237,11 +238,17 @@ async function syncOneSgg(admin, lawdCd) {
     ? rows.filter(r => prevName.has(r.kapt_code) && prevName.get(r.kapt_code) !== r.apt_name)
     : [];
 
+  // SKIP-UNCHANGED-2026-09-20 (Plan 106): 바뀐 행·새 행만 쓴다. 이 테이블은 facility jsonb(평균 1.4KB)가 같은 튜플에 있어
+  //   이름이 같아도 upsert 하면 2.9KB 튜플 전체가 새로 쓰인다 — 매주 14,678행 전부를 다시 써 힙의 47%(19MB)가 빈 공간이었다.
+  const _same = (a, b) => ['apt_name', 'lawd_cd', 'sigungu', 'umd_nm', 'source'].every(k => (a[k] ?? null) === (b[k] ?? null));
+  const toWrite = prevRow.size ? rows.filter(r => { const p = prevRow.get(r.kapt_code); return !p || !_same(p, r); }) : rows;
+  const unchanged = rows.length - toWrite.length;
+
   // 500개씩 batch upsert
   let inserted = 0;
   let upsertError = null; // 실패 사유가 로그로만 남아 조용히 유실되던 것 — 반환에 포함(runAptMasterSync 가시성)
-  for (let i = 0; i < rows.length; i += 500) {
-    const chunk = rows.slice(i, i + 500);
+  for (let i = 0; i < toWrite.length; i += 500) {
+    const chunk = toWrite.slice(i, i + 500);
     const { error, count } = await admin
       .from('apt_master')
       .upsert(chunk, { onConflict: 'kapt_code', ignoreDuplicates: false, count: 'exact' });
@@ -279,7 +286,7 @@ async function syncOneSgg(admin, lawdCd) {
   }
   return {
     lawdCd, fetched: rows.length, inserted,
-    renamed: renamed.length,
+    renamed: renamed.length, unchanged,
     ...(_fetchError ? { fetchError: _fetchError } : {}),
     ...(upsertError ? { upsertError } : {}),
   };
@@ -336,6 +343,9 @@ async function runAptMasterSync() {
   const insertedTotal = results.reduce((s, r) => s + (r.inserted || 0), 0);
   const errCount = results.filter(r => r.error || r.fetchError).length;
   const renamedTotal = results.reduce((s2, r) => s2 + (r.renamed || 0), 0);
+  // SKIP-UNCHANGED-2026-09-20 (Plan 106): 바뀐 행·새 행만 upsert 한 결과 — 지역 결과 배열에서 다른
+  //   합산값(fetched·inserted·renamed)과 같은 방식으로 합산한다.
+  const unchangedTotal = results.reduce((s3, r) => s3 + (r.unchanged || 0), 0);
   const failedLawds = results.filter(r => r.error || r.fetchError).map(r => r.lawdCd);
   const elapsedMs = Date.now() - started;
 
@@ -346,6 +356,7 @@ async function runAptMasterSync() {
     inserted: insertedTotal,
     errors: errCount,
     renamed: renamedTotal,
+    unchanged: unchangedTotal,
     throttleHits: _throttleHits,
     intervalMs: _interval,
     failedLawds: failedLawds.slice(0, 40),
@@ -355,7 +366,7 @@ async function runAptMasterSync() {
 
   return {
     sggs: codes.length, fetched: fetchedTotal, inserted: insertedTotal,
-    errors: errCount, renamed: renamedTotal, throttleHits: _throttleHits,
+    errors: errCount, renamed: renamedTotal, unchanged: unchangedTotal, throttleHits: _throttleHits,
     intervalMs: _interval, failedLawds: failedLawds.slice(0, 40),
     elapsedMs, remaining: queue.length,
     ...(_aliasRefreshed != null ? { aliasRefreshed: _aliasRefreshed } : {}),
@@ -364,6 +375,7 @@ async function runAptMasterSync() {
 }
 
 module.exports = { runAptMasterSync };
+module.exports._syncOneSgg = syncOneSgg; // 테스트용
 
 if (require.main === module) {
   runAptMasterSync()

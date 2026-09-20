@@ -33,7 +33,7 @@ function _pick(summary) {
   //   reheal 의 성과가 여기 화이트리스트에 없어 health 로 전혀 보이지 않았다 — run 이 객체
   //   ({reheal},{addrVerify})로 돌려주는데 _pick 은 숫자만 통과시키기 때문. 오염 좌표 948건이
   //   며칠에 걸쳐 실제로 줄고 있는지 측정할 수단이 없어 튜닝이 추측이 된다. 평탄화 키를 추가한다.
-  const NUM = ['processed', 'inserted', 'failed', 'batches', 'rawPoolSize', 'poolSize',
+  const NUM = ['processed', 'inserted', 'unchanged', 'failed', 'batches', 'rawPoolSize', 'poolSize',
     'skippedKnownFail', 'sentinelMarked', 'elapsedMs', 'updated', 'scanned', 'gapsFixed',
     'ok', 'err', 'skipped', 'retried', 'filled', 'missed', 'addrTried', 'addrInserted',
     'verifyTried', 'verifyOk', 'verifyFixed', 'verifyNoAddr', 'verifyMs',
