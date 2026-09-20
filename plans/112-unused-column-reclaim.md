@@ -118,7 +118,18 @@ grep -cE "^\s+(lat|lng|address):" backend/services/schoolService.js     → 0
 ## Step 5 — 리뷰어 전용: 배포 **확인 후** DB 에 적용 (실행자는 절대 실행 금지)
 **순서가 핵심이다.** 코드가 프로덕션에 올라간 것을 `/api/health` 의 deploy id 로 확인한 **뒤에** 아래를 적용한다. 순서를 뒤집으면 배포 전 인스턴스가 없는 컬럼에 upsert 해 **캐시 쓰기가 전부 실패**한다.
 
+> **⚠ 계획자 오류 기록(2026-09-20) — 무중단 순서가 빠져 있었다.** 이 계획서의 최초 Step 5 는 "코드 배포 → `DROP COLUMN`" 순서만 적었는데, `schema.sql` 실측 결과 그 네 컬럼은 **`not null`** 이었다. 그러면 **어느 쪽을 먼저 해도 창이 생긴다**: 코드를 먼저 올리면 신규 캐시 INSERT 가 NOT NULL 위반으로 실패하고(기존 행 UPDATE 는 통과), `DROP COLUMN` 을 먼저 하면 아직 떠 있는 구버전이 없는 컬럼에 쓰려다 **전부** 실패한다. 양쪽 다 `catch` 로 삼켜져 사용자에겐 안 보이지만 그동안 카카오 API 를 헛으로 더 부른다.
+> **교정**: 배포 **전에** `NOT NULL` 부터 푼다(아래 ⓪). 그러면 두 버전이 동시에 동작해 창이 **0** 이 된다. 적용 완료 — `lat`·`lng`·`category`·`radius` 는 `attnotnull=false`, `cache_key`·`count` 는 그대로 `not null`, 30,722행 불변.
+> **교훈: 컬럼을 payload 에서 빼는 변경은 "코드냐 DDL 이냐" 가 아니라 `NOT NULL`·`DEFAULT` 부터 확인한다. 제약을 먼저 느슨하게 만들면 순서 문제 자체가 사라진다.**
+
 ```sql
+-- ⓪ 배포 **전에** 먼저 (무중단): 제약을 풀어 구·신 버전이 동시에 동작하게 한다
+alter table public.apt_amenities
+  alter column lat      drop not null,
+  alter column lng      drop not null,
+  alter column category drop not null,
+  alter column radius   drop not null;
+
 -- ① 적용 전 측정
 select round(pg_total_relation_size('public.apt_amenities')/1048576.0,2) as amen_mb,
        round(pg_total_relation_size('public.apt_schools')/1048576.0,2)   as schools_mb,
