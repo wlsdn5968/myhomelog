@@ -19,8 +19,12 @@ const { LAWD_CODES } = require('../services/transactionService');
 const { requireSupabaseAdmin } = require('../db/client'); // molitIngest 와 같은 헬퍼
 
 const START_YM = '202504';                 // 현재 테이블(2025-05~)과 겹치지 않는 첫 달
-const FLOOR_YM = '201901';                 // 이론상 하한(용량이 먼저 멈춘다)
-const DB_STOP_MB = 470;                    // 무료 티어 500 MB — 30 MB 안전 여유
+// HIST-FREEZE-2026-09-20 (Plan 100): 2020-09 에서 동결. 2026-09-20 실측 — 56개월×125지역(7,000 region-month,
+//   1,290,112행) 완료 시점에 Supabase 기준 DB 크기가 482.2/500 MB 였다. Supabase 의 무료 한도는 **클러스터 전
+//   DB 합계**(postgres + template0 + template1 = +14.4 MB)인데 아래 DB_STOP_MB 는 db_size_mb()(현재 DB 만)와
+//   비교해 14.4 MB 늦게 멈춘다. 용량을 되찾아도 다시 채우지 않도록 임계값이 아니라 하한을 고정한다.
+const FLOOR_YM = '202009';
+const DB_STOP_MB = 470;                    // 무료 티어 500 MB — 30 MB 안전 여유 ⚠ db_size_mb() 는 현재 DB 만 잰다 — Supabase 한도 기준(전 DB 합계)으로는 +14.4 MB (Plan 100)
 const REGION_MONTHS_PER_RUN = 200;         // 실행당 상한 — 실제 종료는 아래 TIME_BUDGET_MS 가 결정
 const TIME_BUDGET_MS = 235_000;            // maxDuration 300s − 여유 65s(마지막 region-month 최대 ~10s + 응답)
 const MAX_CONSEC_ERR = 3;                  // 연속 실패(쿼터 소진·API 장애)면 남은 대상을 두들기지 않고 이번 회차를 끝낸다
@@ -140,7 +144,7 @@ async function runHistBackfill(opts = {}) {
   };
 }
 
-module.exports = { runHistBackfill, toHistRow, prevYm, START_YM, DB_STOP_MB, TIME_BUDGET_MS, REGION_MONTHS_PER_RUN };
+module.exports = { runHistBackfill, toHistRow, prevYm, START_YM, FLOOR_YM, DB_STOP_MB, TIME_BUDGET_MS, REGION_MONTHS_PER_RUN };
 
 // CLI: node backend/jobs/molitHistBackfill.js [limit]
 if (require.main === module) {

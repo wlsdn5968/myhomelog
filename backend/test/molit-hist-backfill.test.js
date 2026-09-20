@@ -224,3 +224,17 @@ test('runHistBackfill — 스텁 admin 시나리오: 용량 정지 · 정상 처
     assert.equal(calls.upserted.length, 0);
   }
 });
+
+test('FLOOR_YM — 2020-09 에서 동결: START_YM~2020-09 가 끝났으면 2020-08 이전은 대상이 아니다 (용량 보호, Plan 100)', async () => {
+  const { prevYm, START_YM, FLOOR_YM } = require('../jobs/molitHistBackfill');
+  assert.equal(FLOOR_YM, '202009');
+  const doneRuns = [];
+  for (let ym = START_YM; ym >= '202009'; ym = prevYm(ym)) doneRuns.push({ lawd_cd: '11111', deal_ym: ym });
+  const { client, calls } = _makeAdmin({ dbMb: 100, doneRuns });
+  let fetchCalled = false;
+  const res = await _runWithStubs({ limit: 5 }, client, async () => { fetchCalled = true; return []; }, { '테스트구': '11111' });
+  assert.equal(fetchCalled, false, '2020-08 이전을 가져오면 안 된다 — 되찾은 DB 공간을 backfill 이 다시 채운다');
+  assert.equal(res.stopped, true);
+  assert.equal(res.reason, 'complete');
+  assert.equal(calls.inserted.length, 0);
+});
