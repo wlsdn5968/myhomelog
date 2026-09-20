@@ -20,8 +20,9 @@ const { getSupabaseAdmin } = require('../db/client');
 const { rget, rset } = require('./redisCache');
 const { LAWD_CODES } = require('./transactionService');
 
-const CK = 'records:price:v1';
-const CK_REGION = 'records:priceByRegion:v1';
+// BASELINE-6Y-2026-09-20 (Plan 103): 기준선이 2020-09 이후 이력까지 넓어졌다 — v2 로 올려 옛 기준선 결과(최대 30시간)가 섞이지 않게.
+const CK = 'records:price:v2';
+const CK_REGION = 'records:priceByRegion:v2';
 const TTL_LOCAL = 6 * 3600;      // 인스턴스 캐시
 const TTL_REDIS = 30 * 3600;     // daily cron(24h) + Hobby ±59분 지연 여유
 // RECORDS-LAST-2026-09-05 (외부 검토 P1 채택 — 운영 실측: 20:14 KST 요청 경로 RPC 가 statement timeout(8s) 으로 503 두 번):

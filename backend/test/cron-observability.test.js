@@ -702,17 +702,17 @@ test('경신 카드 — 재계산 실패 시 503 대신 마지막 성공 스냅�
   try {
     delete require.cache[svcPath];
     const svc = require('../services/priceRecordsService');
-    for (const k of ['records:price:v1', 'records:price:computeFailedAt']) cache.del(k);
+    for (const k of ['records:price:v2', 'records:price:computeFailedAt']) cache.del(k);
     // ① 스냅샷도 없고 RPC 도 실패 → null(503) — 실패를 0 으로 꾸미지 않는다
     assert.equal(await svc.getPriceRecords(), null);
     // ② 성공 → 신선 캐시 + 마지막 성공 스냅샷 저장
-    cache.del('records:price:v1'); cache.del('records:price:computeFailedAt');
+    cache.del('records:price:v2'); cache.del('records:price:computeFailedAt');
     rpcMode = 'ok';
     const fresh = await svc.getPriceRecords();
     assert.equal(fresh.highCount, 369); assert.ok(!fresh.stale);
     assert.ok(store.has('records:price:last'), '마지막 성공 스냅샷이 저장되지 않았다');
     // ③ 신선 캐시가 비고 RPC 가 다시 실패 → stale 스냅샷(computedAt 포함)
-    cache.del('records:price:v1'); store.delete('records:price:v1');
+    cache.del('records:price:v2'); store.delete('records:price:v2');
     rpcMode = 'fail';
     const stale = await svc.getPriceRecords();
     assert.ok(stale && stale.stale === true && stale.highCount === 369 && stale.computedAt, '재계산 실패에 마지막 성공 스냅샷을 주지 않는다');
@@ -728,7 +728,7 @@ test('경신 카드 — 재계산 실패 시 503 대신 마지막 성공 스냅�
     assert.equal(rpcCalls - c0, 2, '워밍이 실패 후 재시도하지 않는다');
     assert.ok(warmed && !warmed.stale && warmed.highCount === 369);
   } finally {
-    for (const k of ['records:price:v1', 'records:price:computeFailedAt']) cache.del(k);
+    for (const k of ['records:price:v2', 'records:price:computeFailedAt']) cache.del(k);
     if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
     if (saved.redis) require.cache[redisPath] = saved.redis; else delete require.cache[redisPath];
     if (saved.svc) require.cache[svcPath] = saved.svc; else delete require.cache[svcPath];
@@ -825,7 +825,7 @@ test('지역 경신 블롭 — 재계산이 반복 실패해도 마지막 성공
   try {
     delete require.cache[svcPath];
     const svc = require('../services/priceRecordsService');
-    for (const k of ['records:priceByRegion:v1', 'records:priceByRegion:computeFailedAt']) cache.del(k);
+    for (const k of ['records:priceByRegion:v2', 'records:priceByRegion:computeFailedAt']) cache.del(k);
     const first = await svc.getPriceRecordsByRegion();
     assert.equal(rpcCalls, 1, '캐시가 비어 있으니 첫 호출은 RPC 를 불러야 한다');
     assert.ok(first && first.stale === true, '실패 시 마지막 성공 스냅샷을 stale 로 줘야 한다');
@@ -834,7 +834,7 @@ test('지역 경신 블롭 — 재계산이 반복 실패해도 마지막 성공
     assert.equal(rpcCalls, before, '백오프 중인데 두 번째 호출이 다시 30일 창 RPC 를 태운다(쌍둥이 getPriceRecords 에는 있던 보호가 없다)');
     assert.ok(second && second.stale === true, '백오프 중에도 마지막 성공 스냅샷을 줘야 한다');
   } finally {
-    for (const k of ['records:priceByRegion:v1', 'records:priceByRegion:computeFailedAt']) cache.del(k);
+    for (const k of ['records:priceByRegion:v2', 'records:priceByRegion:computeFailedAt']) cache.del(k);
     if (saved.db) require.cache[dbPath] = saved.db; else delete require.cache[dbPath];
     if (saved.redis) require.cache[redisPath] = saved.redis; else delete require.cache[redisPath];
     if (saved.svc) require.cache[svcPath] = saved.svc; else delete require.cache[svcPath];
