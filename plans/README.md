@@ -120,6 +120,7 @@
 | **108** | **101·103 적용분 저장소 기록: 마이그레이션 2 · schema.sql(인덱스·요약 테이블·함수 2개 — 기존 PERF 드리프트도 해소) · 경신 캐시 키 v2** | P1 | S | 101·103 | DONE (cfc2783·50a44ec, 2026-09-20) — 436 pass |
 | **109** | **2026-09-20 유지보수 적용 기록 정합 — 마이그레이션 헤더 2건 교정·신규 기록 1건·schema.sql 에 autovacuum 파라미터(재구성 시 유실 방지)** | P1 | XS | 105·106 | DONE (6f2b26b, 2026-09-20) |
 | **110** | **`molit_ingest_runs_status_chk` 가 코드가 쓰는 `'timeout'` 을 금지 → 적재기록 정리가 90일간 매일 조용히 실패(그 상태 행 0건·멈춘 running 21건·gap-retry 의 timeout 분기 사문화). 같은 try 안 후속 프루닝 RPC 까지 막아 106 을 무력화하고, 중첩 summary 탓에 health 에 안 보였다** | **P0** | S | 106 | DONE (DDL + 코드 7be97df, 2026-09-20) — CHECK 확장(convalidated) · 두 단계 독립 try(`staleRunning:`/`prune:` 접두사) · `okPruned`·`staleRunningFixed` 평탄화 후 `NUM` 등록, 테스트 445(+3). 실행 전 적대 검증 워크플로가 찾은 기존 버그 |
+| **111** | **용량을 "관리 가능" 하게 — `checkDbCapacity()` 가 잰 값이 `recordCronRun` 뒤에 있어 그대로 버려진다(추세를 볼 수단 0). 1단계: 측정을 앞으로 당겨 `dbUsedMb`·`dbPct` 를 health 에(코드만) · 2단계: `get_table_health()` 로 테이블별 급증·autovacuum 정지 감시(DDL 1문)** | **P1** | S | 105·110 | TODO — 425MB 경보 도달 예상 2026-10-24~29 전에. 근거 `plans/104` §8.4(`apt_geocache` 가 29일째 autovacuum 미실행인데 어떤 신호로도 안 보였다) |
 | **058** | **조용한 낡음 감시 — 검색 색인 21일 정지가 경보 없었다 + 열화 전파 2곳** | **P1** | S | 054 | DONE (197ec1c, 2026-09-06) — searchIndexLagDays 지표 신설·임계 7일. ⚠ 근본 수정(DB)은 운영자 승인 대기
 
 ### 051~053 라운드 (2026-09-06, 운영자 실사용 실패 신고에서 출발)
