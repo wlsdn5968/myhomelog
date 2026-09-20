@@ -68,12 +68,9 @@ create table if not exists public.ai_feedback (
   created_at timestamp with time zone default now()
 );
 
+-- UNUSED-COL-2026-09-20 (Plan 112): lat/lng/category/radius 제거 — 값이 cache_key 에 이미 있고 읽는 코드가 0건이었다(−0.77MB).
 create table if not exists public.apt_amenities (
   cache_key text not null,
-  lat numeric not null,
-  lng numeric not null,
-  category text not null,
-  radius integer not null,
   count integer not null,
   fetched_at timestamp with time zone default now(),
   updated_at timestamp with time zone default now()

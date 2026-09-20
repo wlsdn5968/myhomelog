@@ -136,9 +136,10 @@ async function kakaoSearchSchools(lat, lng) {
           name: baseName,  // 부속 (지성관/청원관/교무실 등) 제거된 정식명
           type,
           distance_m: distanceM(lat, lng, sLat, sLng),
-          lat: sLat,
-          lng: sLng,
-          address: d.address_name || d.road_address_name || null,
+          // UNUSED-COL-2026-09-20 (Plan 112): lat/lng/address 는 읽는 코드가 0건인데
+          //   schools jsonb 평균 929.9B 의 절반 이상을 먹었다(슬림 421.0B). 거리는 여기서
+          //   이미 distance_m 으로 환산되고, NEIS 풍부화는 sigungu·lawdCd 로 매칭하며
+          //   주소는 NEIS 가 따로 준다(schoolNeisService.js:132). 만들지 않는다.
         });
       }
     } catch (e) {

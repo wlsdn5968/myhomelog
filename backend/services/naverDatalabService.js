@@ -25,7 +25,8 @@
  *   · **요청 경로에서는 캐시만 읽는다.** 미스면 중간값을 주고 백그라운드로 채운다 —
  *     사용자 응답 지연 0, 두 번째 검색부터 실값. [[degraded-response-cached-at-edge]] 와 달리
  *     이건 점수 항목 하나라 열화가 응답 전체를 망가뜨리지 않는다.
- *   · 캐시 90일(apt_amenities 재사용, category='naver_interest').
+ *   · 캐시 90일(apt_amenities 재사용). UNUSED-COL-2026-09-20 (Plan 112) 이전엔 `category='naver_interest'`
+ *     로 구분했으나 그 컬럼을 더 이상 쓰지 않는다 — 이제 구분은 `cache_key` 접두사로만 가능하다.
  *     ⚠ `count` 에 **지수×10000** 을 정수로 담는다(카운트가 아니다). 해석은 이 파일에서만.
  *
  * ⚠ 한계 — 정직하게 적어둔다
@@ -244,9 +245,10 @@ async function writeCache(key, ratio, lat, lng) {
   try {
     const { getSupabaseAdmin } = require('../db/client');
     const admin = getSupabaseAdmin();
-    if (!admin || lat == null || lng == null) return;
+    if (!admin || lat == null || lng == null) return;   // ← 이 줄은 그대로 둔다
+    // UNUSED-COL-2026-09-20 (Plan 112): 좌표는 key 에 이미 들어 있다 — 위 가드로만 쓰고 저장은 안 한다.
     await admin.from('apt_amenities').upsert({
-      cache_key: key, lat, lng, category: 'naver_interest', radius: 0,
+      cache_key: key,
       count: Math.round(ratio * 10000),
       fetched_at: new Date().toISOString(), updated_at: new Date().toISOString(),
     }, { onConflict: 'cache_key' });
@@ -332,4 +334,6 @@ function keyShape() {
   return { id: shape(process.env.NAVER_CLIENT_ID), secret: shape(process.env.NAVER_CLIENT_SECRET) };
 }
 
-module.exports = { normalizeAptName, getCachedInterest, warmInterest, hasKeys, keyShape, ANCHOR, fetchBatch, median };
+// TEST-EXPORT-2026-09-20 (Plan 112): writeCache 는 upsert payload 키 집합·null 가드 회귀
+//   테스트용으로 export 한다(동작 불변).
+module.exports = { normalizeAptName, getCachedInterest, warmInterest, hasKeys, keyShape, ANCHOR, fetchBatch, median, writeCache };

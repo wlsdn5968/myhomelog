@@ -46,8 +46,11 @@ async function _dbSetAmenityCount(cacheKey, lat, lng, category, radius, count) {
   const a = _dbClient();
   if (!a) return;
   try {
+    // UNUSED-COL-2026-09-20 (Plan 112): lat/lng/category/radius 는 cache_key
+    //   ('35.8663,128.693:MT1:1500') 에 이미 들어 있고 읽는 코드가 0건이라 저장하지 않는다.
+    //   시그니처는 유지한다 — 호출부를 건드리지 않기 위해서다(값은 cache_key 를 만들 때 이미 쓰였다).
     await a.from('apt_amenities').upsert(
-      { cache_key: cacheKey, lat, lng, category, radius, count, fetched_at: new Date().toISOString(), updated_at: new Date().toISOString() },
+      { cache_key: cacheKey, count, fetched_at: new Date().toISOString(), updated_at: new Date().toISOString() },
       { onConflict: 'cache_key' }
     );
   } catch (e) {
@@ -338,4 +341,6 @@ module.exports = {
   getNearbyAmenities,
   keywordToCoord,
   nearestSubway,
+  // TEST-EXPORT-2026-09-20 (Plan 112): upsert payload 키 집합 회귀 테스트용 export(동작 불변).
+  _dbSetAmenityCount,
 };
