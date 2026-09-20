@@ -69,6 +69,18 @@ router.get('/codes', (req, res) => {
   res.json({ codes: LAWD_CODES });
 });
 
+// GET /api/transactions/history?aptSeq=11500-10189[,11500-10190]  (최대 3개 — A/B 병합 단지)
+// APT-HISTORY-2026-09-20 (Plan 102): (월, 전용㎡)별 합계·건수. 원자료는 하루 1회만 바뀐다 → 엣지 6시간. 실패는 no-store(열화 캐시 금지).
+router.get('/history', async (req, res) => {
+  const svc = require('../services/aptHistoryService');
+  const seqs = svc.parseSeqs(req.query.aptSeq);
+  if (!seqs) return res.status(400).json({ error: 'aptSeq 형식 오류 (예: 11500-10189, 최대 3개)' });
+  const data = await svc.getAptHistoryMonthly(seqs);
+  if (!data) { res.set('Cache-Control', 'no-store'); return res.status(503).json({ error: '장기 실거래 이력 조회 실패' }); }
+  res.set('Cache-Control', data.capped ? 'no-store' : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
+  res.json({ ...data, source: '국토교통부 실거래가 공개시스템 (적재분)' });
+});
+
 // GET /api/transactions/records
 // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최근 N일 실거래 중 같은 단지·같은 전용면적의
 //   직전 최고/최저를 넘은 거래. 브리핑 카드와 /briefing/:date 아카이브가 같은 함수를 쓴다(사본 금지).
