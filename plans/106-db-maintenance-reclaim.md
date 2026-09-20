@@ -60,7 +60,7 @@ GRANT EXECUTE ON FUNCTION public.prune_molit_ingest_runs(integer) TO service_rol
 
 ```sql
 -- ① 행 삭제 (드라이런 완료: 36,274행 삭제 · ok 를 전부 잃는 (지역,월) 쌍 0)
-SELECT public.prune_molit_ingest_runs(14);
+SELECT public.prune_molit_ingest_runs(14);   -- 실측: 43,455 → 7,181행(36,274 삭제)
 -- ② 파일 축소 — 여기서 ≈ 8 MB 회수
 VACUUM FULL public.molit_ingest_runs;
 -- ③ Step 1 코드가 **배포된 뒤에만** — ≈ 19 MB 회수 (안 그러면 월요일 20:00 UTC 동기화가 다시 부풀린다)
@@ -68,12 +68,12 @@ VACUUM FULL public.apt_master;
 -- ④ 위 둘로 확보한 여유 위에서 인덱스 재구성 (각 실행 전 합계 크기 재측정)
 REINDEX INDEX CONCURRENTLY public.uq_molit_dedup;            -- 34.8 → ≈ 26 (피크 +26)
 REINDEX INDEX CONCURRENTLY public.molit_transactions_pkey;   -- 16.7 → ≈ 10 (피크 +10)
--- ⑤ 가시성 맵 — 즉시·무잠금
+-- ⑤ 가시성 맵 (ALTER 는 SHARE UPDATE EXCLUSIVE — 읽기·쓰기는 안 막지만 VACUUM/ANALYZE 와 충돌)
 ALTER TABLE public.molit_transactions SET (autovacuum_vacuum_scale_factor = 0.02);
 ```
 **예상 최종**: 450.6 → ≈ **408 MB**. 각 단계 뒤 `SELECT round(sum(pg_database_size(datname))/1048576.0,1) FROM pg_database;` 로 실측하고, 어느 단계든 **480 MB 를 넘으면 즉시 중단**하고 보고한다.
 **삭제 안전성 근거(리뷰어 실측)**: `okSet` 을 만드는 gap-retry 조회(`backend/jobs/molitIngest.js:322~327`)는 `(lawd_cd, deal_ym)` **쌍**만 모으고 날짜 필터가 없다 → 쌍당 1건을 남기면 집합이 **완전히 동일**하다. 덤으로 그 조회의 20,000행 페이징 상한(`:296`) 위험도 함께 줄어든다(ok 43,097 → ≈ 6,823).
-- **가시성 맵(성능)**: 원본은 일간 적재가 최근 3개월 전 행을 매일 다시 upsert 한다(갱신 669만 회 · 삽입 24만 회). 기본 autovacuum 임계(행의 20% ≈ 9.4만 죽은 튜플)에 못 미쳐 **2026-08-22 이후 autovacuum 이 한 번도 돌지 않았고**(죽은 튜플 35,379), 가시성 맵이 낡아 경신 집계의 index-only scan 이 힙을 **29,233번** 읽는다 — 2026-09-20 실측: 콜드 9.3초(PostgREST 8초 제한 초과), 웜 0.1초. 임계를 2% 로 낮추면 하루 한 번꼴로 돌아 힙 조회가 0 에 가까워진다(2026-09-05 PERF 기록: VACUUM 직후 1.26초).
+- **가시성 맵(성능)**: 원본은 일간 적재가 최근 3개월 전 행을 매일 다시 upsert 한다(갱신 669만 회 · 삽입 24만 회). 기본 autovacuum 임계(행의 20% ≈ 9.4만 죽은 튜플)에 못 미쳐 **2026-08-22 이후 autovacuum 이 한 번도 돌지 않았고**(죽은 튜플 35,379), 가시성 맵이 낡아 경신 집계의 index-only scan 이 힙을 **29,233번** 읽는다 — 2026-09-20 실측: 콜드 9.3초(PostgREST 8초 제한 초과), 웜 0.1초. 임계를 2% 로 낮추면 **주 1회꼴**(죽은 튜플 실측 ≈1,230/일 ÷ 새 임계 9,496 ≈ 7.7일)로 돌아 힙 조회가 0 에 가까워진다(2026-09-05 PERF 기록: VACUUM 직후 1.26초).
 - SQL 실행 도구가 문장을 트랜잭션으로 감싸 `CONCURRENTLY`·`VACUUM` 이 거부되면: REINDEX 는 `CONCURRENTLY` 없이(두 인덱스는 읽기 미사용이라 무해), VACUUM FULL 은 pg_cron 1회성 작업으로(`SELECT cron.schedule('once-vacuum-full-apt-master', '<분> <시> <일> <월> *', 'VACUUM FULL public.apt_master');` → 실행 확인 후 `SELECT cron.unschedule('once-vacuum-full-apt-master');`). pg_cron 설치 확인됨.
 - `REINDEX CONCURRENTLY` 가 중간에 실패하면 `_ccnew` 접미 invalid 인덱스가 남는다 → `DROP INDEX` 로 치우고 보고.
 
@@ -85,3 +85,7 @@ ALTER TABLE public.molit_transactions SET (autovacuum_vacuum_scale_factor = 0.02
 ## STOP 조건
 - `aptMasterSync.js` 의 upsert 루프·`prevName` 조회가 위 설명과 다르다 → 보고 후 STOP.
 - `runAptMasterSync` 의 합산 구조에 `unchanged` 를 넣을 자리가 불명확하다 → 지역 결과 배열에서 합산하는 코드를 보고하고 STOP.
+
+## ⚠ Step 3 은 2026-09-20 에 이미 실행됐다 (재실행 금지 — 실측은 plans/104 §7)
+적대 검증 워크플로의 렌즈들은 **실행 전 스냅샷**을 보고 판단했으므로 그 JSON 을 근거로 "아직 미적용" 이라 여기지 말 것. 재실행은 REINDEX 의 +26 MB 피크와 VACUUM FULL 의 ACCESS EXCLUSIVE 락을 이유 없이 다시 만든다.
+또한 이 계획이 고치려던 **적재 기록 정리는 별개 버그로 프로덕션에서 아예 실행되지 못하고 있었다**(CHECK 가 `timeout` 을 금지 → 1단계 예외가 2단계 RPC 를 막음) → **Plan 110** 이 이어받는다.
