@@ -2042,3 +2042,30 @@ test('Plan 099 — 표시 이름 정책이 리스크 제목·비교 헤더·단�
   assert.ok(html.includes('<b>${_escHtml(r.displayName || _dispAptName(r.aptName, r.umdNm))}</b>'), '유사 단지 목록이 원문을 쓴다');
   assert.equal((html.match(/<div style="font-weight:700">\$\{_escHtml\(p\.aptName\)\}<\/div>/g) || []).length, 0, '원문 단지명 팝업이 남아 있다');
 });
+
+test('Plan 102 — buildLongTrend 은 (월,㎡) 합계를 칩 규칙(±2㎡)으로 평균하고, 장기 추이 UI·분기·점 반지름·면책 문구가 배선돼 있다', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const grab = (re, what) => {
+    const m = html.match(re);
+    assert.ok(m, `frontend/index.html 에서 ${what} 을 찾지 못했다`);
+    return m[0];
+  };
+  const fnSrc = grab(/function buildLongTrend\(rows, areaSqm\)\{[\s\S]*?\n\}/, 'buildLongTrend');
+  const { buildLongTrend } = new Function(`${fnSrc}\nreturn { buildLongTrend };`)();
+
+  const rows = [
+    { ym: '2021-03', sqm: 85, sum: 200000, n: 2 },
+    { ym: '2021-03', sqm: 84, sum: 90000, n: 1 },
+    { ym: '2021-04', sqm: 60, sum: 70000, n: 1 },
+  ];
+  const out = buildLongTrend(rows, 84);
+  assert.equal(out.length, 1, '60㎡(±2㎡ 범위 밖)는 제외되고 84·85㎡ 만 84 기준으로 합쳐져 1행이어야 한다');
+  assert.deepEqual(out[0], { label: '21.03', sortKey: 2021 * 12 + 3, avgAuk: (290000 / 3) / 10000, count: 3 });
+
+  // 소스 계약 — 회귀 시 조용히 사라지기 쉬운 배선(버튼 onclick·모드 분기·점 반지름·면책 문구).
+  assert.ok(html.includes("onclick=\"_setTrendMode('long')\""), '장기 버튼 onclick 배선이 없다');
+  assert.ok(html.includes("if (window._trendMode === 'long') return _longTrendHtml(area);"), '_trendHtml 의 장기 분기가 없다');
+  assert.ok(html.includes('r="${_dotR}"'), '점 반지름이 rows.length 에 따른 동적값(_dotR)이 아니다');
+  assert.ok(html.includes('매수·매도 추천 아님'), '장기 추이 캡션에 면책 문구가 없다');
+});

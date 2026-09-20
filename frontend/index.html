@@ -7445,6 +7445,12 @@ function _selectTrendArea(sqm, btn) {
   // 2) 차트 재렌더 (trendChartBox)
   const chartBox = document.getElementById('trendChartBox');
   if (!chartBox) return;
+  if (window._trendMode === 'long') { // Plan 102
+    chartBox.innerHTML = _longTrendHtml(sqm);
+    const _pk = document.getElementById('peakTrendBox');
+    if (_pk && typeof window._peakTrendHtml === 'function') _pk.innerHTML = window._peakTrendHtml(sqm);
+    return;
+  }
   if (!sqm) {
     chartBox.innerHTML = '<div style="font-size:11px;color:var(--t3);padding:14px 8px;text-align:center;background:var(--bg2);border:1px dashed var(--bd);border-radius:var(--radius-base)">📊 위 평형 chip 을 클릭하면 그 평형의 월별 시세 추이가 표시돼요</div>';
     return;
@@ -7460,6 +7466,63 @@ function _selectTrendArea(sqm, btn) {
   }
 }
 
+// LONG-TREND-2026-09-20 (Plan 102): 장기(2020.09~) 월별 추세 — /api/transactions/history 의 (월, ㎡)별 합계를 칩 규칙(±2㎡)으로 평균.
+function buildLongTrend(rows, areaSqm){
+  if(!Array.isArray(rows)||!rows.length||!areaSqm)return[];
+  const b={};
+  for(const r of rows){
+    const k=String((r&&r.ym)||'');
+    if(!/^\d{4}-\d{2}$/.test(k))continue;
+    if(Math.abs(Number(r.sqm)-areaSqm)>2)continue;
+    if(!b[k])b[k]={sum:0,n:0};
+    b[k].sum+=Number(r.sum)||0; b[k].n+=Number(r.n)||0;
+  }
+  return Object.keys(b).sort().filter(k=>b[k].n>0).map(k=>({label:k.slice(2,4)+'.'+k.slice(5,7),sortKey:Number(k.slice(0,4))*12+Number(k.slice(5,7)),avgAuk:(b[k].sum/b[k].n)/10000,count:b[k].n}));
+}
+function _longTrendSeqs(){
+  const c={};
+  for(const t of (window._curTrendApt||[])){ const s=String((t&&t.aptSeq)||''); if(/^\d{5}-\d+$/.test(s)) c[s]=(c[s]||0)+1; }
+  const seqs=Object.keys(c).sort((a,b)=>c[b]-c[a]).slice(0,3);
+  const hint=String(window._curTrendSeqHint||'');
+  if(!seqs.length && /^\d{5}-\d+$/.test(hint)) seqs.push(hint);
+  return seqs.sort();
+}
+function _longTrendHtml(area){
+  const box=(t)=>`<div style="font-size:11px;color:var(--t3);padding:14px 8px;text-align:center;background:var(--bg2);border:1px dashed var(--bd);border-radius:var(--radius-base)">${t}</div>`;
+  const L=window._curTrendLong;
+  if(!L||L.state==='loading')return box('장기 이력을 불러오는 중…');
+  if(L.state==='error')return box('장기 이력을 불러오지 못했어요 — "장기" 버튼을 다시 눌러 주세요.');
+  if(!Array.isArray(L.rows)||!L.rows.length)return box('이 단지는 2020.09 이후 적재분에 거래 이력이 없어요.');
+  if(!area){
+    // 평형 칩이 있으면 고르게 안내. 최근 거래가 없어 칩이 없는 단지는 장기 이력에서 거래가 가장 많은 면적을 자동 선택한다.
+    if(document.querySelector('.trend-area-chip[data-sqm]:not([data-sqm="0"])'))return box('📊 위 평형 chip 을 클릭하면 그 평형의 장기 추이를 보여드려요.');
+    const tot={}; for(const r of L.rows){ tot[r.sqm]=(tot[r.sqm]||0)+(Number(r.n)||0); }
+    area=Number(Object.keys(tot).sort((a,b)=>tot[b]-tot[a])[0]);
+    if(!(area>0))return box('이 단지는 2020.09 이후 적재분에 거래 이력이 없어요.');
+  }
+  const td=buildLongTrend(L.rows,area);
+  if(td.length<2)return `<div style="font-size:11px;color:var(--t3);padding:10px 0">${area}㎡(${Math.round(area/3.3058)}평) 장기 시세 추이 데이터 부족 (거래 2개월 이상)</div>`;
+  const since=String(L.since||'').replace('-','.');
+  return renderPriceChart(td)+`<div style="font-size:10px;color:var(--t3);margin-top:4px;line-height:1.5">국토교통부 실거래 · ${_escHtml(since)} 이후 적재분 · 전용 ${area}㎡(±2㎡) 월별 단순평균 · 거래 없는 달은 건너뜀 · 해제 거래 제외 · 매수·매도 추천 아님</div>`;
+}
+async function _setTrendMode(mode){
+  window._trendMode = mode==='long' ? 'long' : 'recent';
+  document.querySelectorAll('.trend-mode-btn').forEach(b=>{ const on=b.dataset.mode===window._trendMode; b.style.background=on?'var(--acc)':'var(--bg-base)'; b.style.color=on?'#fff':'var(--t2)'; b.style.borderColor=on?'var(--acc)':'var(--bd)'; b.setAttribute('aria-pressed',on?'true':'false'); });
+  const paint=()=>{ const el=document.getElementById('trendChartBox'); if(el && typeof window._trendHtml==='function') el.innerHTML=window._trendHtml(window._curTrendArea||0); };
+  if(window._trendMode==='long' && !(window._curTrendLong && window._curTrendLong.state==='ok')){
+    const key=_longTrendSeqs().join(',');
+    if(!key){ window._curTrendLong={state:'error',key:''}; paint(); return; }
+    window._curTrendLong={state:'loading',key}; paint();
+    try{
+      const r=await fetch(`${CFG.api}/transactions/history?aptSeq=${encodeURIComponent(key)}`,{signal:AbortSignal.timeout(12000)});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      const j=await r.json();
+      if(!window._curTrendLong||window._curTrendLong.key!==key)return; // 그 사이 다른 단지를 열었다
+      window._curTrendLong={state:'ok',key,rows:Array.isArray(j.rows)?j.rows:[],since:j.since||null,until:j.until||null};
+    }catch(_){ if(window._curTrendLong&&window._curTrendLong.key===key) window._curTrendLong={state:'error',key}; }
+  }
+  paint();
+}
 // Phase 4 (2026-04-26): areaSqm 인자 — 특정 평형만 필터 (없으면 전체 평균 — 의미 약함)
 function buildPriceTrend(txHistory, areaSqm){
   if(!Array.isArray(txHistory)||!txHistory.length)return[];
@@ -7505,7 +7568,8 @@ function renderPriceChart(rows){
   const yLabels=`
     <text x="${pad.l-4}" y="${(pad.t+4).toFixed(1)}" text-anchor="end" fill="#888" style="fill:var(--t3)" font-size="9">${vMax.toFixed(1)}</text>
     <text x="${pad.l-4}" y="${(pad.t+innerH).toFixed(1)}" text-anchor="end" fill="#888" style="fill:var(--t3)" font-size="9">${vMin.toFixed(1)}</text>`;
-  const dots=pts.map((p,i)=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="2.5" fill="#2E7DF0" style="fill:var(--dm-ac,#2E7DF0)"><title>${rows[i].label}: ${rows[i].avgAuk.toFixed(2)}억 (${rows[i].count}건)</title></circle>`).join('');
+  const _dotR = rows.length > 30 ? 1.3 : 2.5; // Plan 102: 장기(수십 개월)에서 점이 겹치지 않게
+  const dots=pts.map((p,i)=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${_dotR}" fill="#2E7DF0" style="fill:var(--dm-ac,#2E7DF0)"><title>${rows[i].label}: ${rows[i].avgAuk.toFixed(2)}억 (${rows[i].count}건)</title></circle>`).join('');
   const first=rows[0].avgAuk, last=rows[rows.length-1].avgAuk;
   const delta=last-first, deltaPct=first>0?(delta/first*100):0;
   const deltaColor=delta>0.05?'#D94545':delta<-0.05?'#2A8F3F':'#888';
@@ -7876,13 +7940,16 @@ function showDetail(p){
   // default = 0 (전체) — 사용자가 모든 평형 보고 자기 예산 평형 클릭
   window._curTrendApt = p.txHistory || [];
   window._curTrendArea = 0;
+  window._trendMode = 'recent'; window._curTrendLong = null; window._curTrendSeqHint = p.aptSeq || null; // Plan 102
 
   function _trendHtml(area) {
+    if (window._trendMode === 'long') return _longTrendHtml(area);
     if (!area) return '<div style="font-size:11px;color:var(--t3);padding:14px 8px;text-align:center;background:var(--bg2);border:1px dashed var(--bd);border-radius:var(--radius-base)">📊 위 평형 chip 을 클릭하면 그 평형의 월별 시세 추이가 표시돼요</div>';
     const td = buildPriceTrend(window._curTrendApt, area);
     if (td.length >= 2) return renderPriceChart(td);
     return `<div style="font-size:11px;color:var(--t3);padding:10px 0">${area}㎡(${Math.round(area/3.3058)}평) 시세 추이 데이터 부족 (거래 2개월 이상)</div>`;
   }
+  window._trendHtml = _trendHtml;
 
   // Sprint PP-1 (2026-05-19, 한국도시연구소 100대 아파트 분석 방법론 차용):
   //   단지의 "신고가 경신" 이벤트 추출. cumulative max 갱신 시점만 표시.
@@ -7981,7 +8048,13 @@ function showDetail(p){
     ${_areaChipsHtml}
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 8px">📋 개별 거래 <span style="font-weight:500;color:var(--t3)">(최대 30건)</span></div>
     <div id="txListBox">${_renderTxList(0)}</div>
-    <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 4px">📈 월별 시세 추이</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 4px">
+      <div style="font-size:11px;font-weight:700;color:var(--t2)">📈 월별 시세 추이</div>
+      <div role="group" aria-label="추이 기간" style="display:flex;gap:4px">
+        <button type="button" class="trend-mode-btn" data-mode="recent" aria-pressed="true" onclick="_setTrendMode('recent')" style="font-size:10.5px;padding:3px 9px;border-radius:999px;border:1px solid var(--acc);background:var(--acc);color:#fff;cursor:pointer">최근</button>
+        <button type="button" class="trend-mode-btn" data-mode="long" aria-pressed="false" onclick="_setTrendMode('long')" style="font-size:10.5px;padding:3px 9px;border-radius:999px;border:1px solid var(--bd);background:var(--bg-base);color:var(--t2);cursor:pointer">장기</button>
+      </div>
+    </div>
     <div id="trendChartBox">${_trendHtml(0)}</div>
     <!-- Sprint PP-1 (2026-05-19): 신고가 경신 추이 (한국도시연구소 100대 아파트 방법론) -->
     <div style="font-size:11px;font-weight:700;color:var(--t2);margin:14px 0 4px">🏆 신고가 경신 추이</div>
@@ -12330,6 +12403,7 @@ async function openAptDetail(r) {
     ltv: r.ltv || null, maxLoan: r.maxLoan || null,
     buildYear: r.buildYear || 0,
     lawdCd: r.lawdCd,
+    aptSeq: r.aptSeq || null, // Plan 102: 최근 거래가 0건인 단지도 장기 이력을 열 수 있게
     txHistory,
     // FACILITY-HELPER-2026-05-12: search path 도 facility + nearbySchools 주입 → 단지정보 탭 정상.
     facility: _facilityRes?.facility || null,
