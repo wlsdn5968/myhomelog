@@ -45,8 +45,17 @@ create table if not exists public.molit_apt_dim (
 -- 채움/갱신: 원본에서 apt_seq 별 최신 1건의 이름·지번을 떠낸다.
 --   ⚠ 이름은 시간에 따라 바뀔 수 있으므로(개명·표기 변경) **가장 최근 거래의 값**을 권위로 삼는다.
 --   ⚠ 원본에 없어진 apt_seq 의 행은 **지우지 않는다** — 그게 이 테이블의 존재 이유다.
+-- ⚠ 적용 시 교정 1 — **RLS 를 반드시 같이 켠다.** Supabase 는 public 스키마 신규 테이블에
+--    anon/authenticated 기본 권한(SELECT/INSERT/UPDATE/DELETE)을 준다. RLS 가 꺼져 있으면
+--    PostgREST 로 **누구나 쓸 수 있다**. 이 테이블은 서버(service_role)만 쓰므로 정책 없이 켠다
+--    (`molit_hist_peaks` 와 같은 패턴: relrowsecurity=true, policies=0 → service_role 만 통과).
+alter table public.molit_apt_dim enable row level security;
+
+-- ⚠ 적용 시 교정 2 — **`security definer` 를 쓰지 않는다.** 이 함수는 public 스키마의 제 테이블만
+--    읽고 쓰므로 호출자(service_role) 권한으로 충분하다. `get_db_size_bytes` 가 DEFINER 인 것은
+--    `pg_database` 를 읽기 때문이고 여기는 해당 없다(최소 권한).
 create or replace function public.refresh_molit_apt_dim()
-returns integer language plpgsql security definer set search_path to 'public' as $function$
+returns integer language plpgsql set search_path to 'public' as $function$
 declare n integer;
 begin
   with src as (
@@ -84,6 +93,8 @@ select public.refresh_molit_apt_dim();   -- 최초 채움
 - `first/last_deal_date`·`deal_count` 에 `least/greatest` 를 쓴 이유: 창을 자른 뒤에는 원본의 집계가 **줄어든다** — 보존 테이블이 과거 최대치를 잊으면 안 된다.
 - 되돌리기: `drop function public.refresh_molit_apt_dim(); drop table public.molit_apt_dim;`
 - 적용 기록을 `supabase/migrations/20260920_molit_apt_dim.sql` 에 되돌리기 SQL 과 함께 남긴다(Plan 026 관례).
+
+> **⚠ 계획자 오류 기록(2026-09-20)**: 이 계획서의 최초 Step 0 은 ① **RLS 를 켜라는 줄이 없었고** ② 함수에 불필요한 `security definer` 를 달고 있었다. 리뷰어가 적용할 때 ②는 알아서 뺐지만 ①은 **빠뜨린 채 테이블을 만들었다** — 약 20분간 `molit_apt_dim` 이 `rls_enabled=false` + 정책 0 + anon 에 DML 권한이 있는 상태로 노출됐다(PostgREST 로 누구나 쓰기 가능). 22,672행 전부 `refreshed_at` 이 최초 INSERT 시각 하나로 동일함을 확인해 **그 창 동안 쓰기가 0건**이었음을 실증했고, `enable row level security` 로 막은 뒤 `public` 전체를 훑어 RLS 가 꺼진 테이블이 **0개**임을 확인했다. **교훈: `create table` 을 쓰는 순간 같은 문단에 `enable row level security` 를 함께 적는다. Supabase 에서 RLS 없는 public 테이블은 "내부용" 이 아니라 "공개 쓰기 가능" 이다.**
 
 **검증(리뷰어)**
 ```sql
