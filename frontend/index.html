@@ -2704,10 +2704,11 @@ html[data-theme="dark"] #view-news{
     </details>
 
     <!-- ✍ AI 특약 (보조 도구로 강등) -->
+    <!-- COPY-FACT-2026-09-26 (Plan 115): 무료 경로는 규칙 엔진 템플릿(clause.js 는 pro/admin 외 403) — 없는 능력을 주장하지 않는다. -->
     <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-md);padding:13px 16px;margin-bottom:10px">
-      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">✍ AI 특약 초안 (보조 도구)</summary>
+      <summary style="cursor:pointer;font-size:13px;font-weight:700;color:var(--t1);list-style:none">✍ 표준 특약 초안 (보조 도구)</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
-        계약 직전 단지 결정 후 → 매수 정보 입력 → AI 특약 초안<br>
+        계약 직전 단지 결정 후 → 매수 정보 입력 → 조건 반영 표준 특약 초안<br>
         ⚠ <b>변호사·공인중개사 최종 검토 필수</b> — <a href="https://www.koreanbar.or.kr" target="_blank" rel="noopener" style="color:var(--acc)">대한변호사협회</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:var(--acc)">한국공인중개사협회</a>
       </div>
     </details>
@@ -2983,8 +2984,8 @@ html[data-theme="dark"] #view-news{
         <path class="lv-chart-line" d="M 40 145 L 100 132 L 160 124 L 220 108 L 280 92 L 340 84 L 400 92 L 460 76 L 520 60 L 580 50 L 640 56 L 700 48"/>
         <text class="lv-chart-axis" x="40" y="195"></text><text class="lv-chart-axis" x="200" y="195"></text><text class="lv-chart-axis" x="360" y="195"></text><text class="lv-chart-axis" x="520" y="195"></text><text class="lv-chart-axis" x="680" y="195"></text>
       </svg>
-      <!-- DATA-RANGE-2026-09-16: molit_transactions min(deal_date)=2025-05-01 실측 -->
-      <div class="lv-card-sub" style="margin-top:8px">단지 선택 시 2025.05 이후 실거래 표·가격 위치·월별 거래량 (국토부 신고 기준)</div>
+      <!-- DATA-RANGE-2026-09-26 (Plan 115): 원본 하한은 창(107c)에 따라 굴러가므로 적지 않는다 · 이력 하한 2020-09 는 동결값(Plan 100) -->
+      <div class="lv-card-sub" style="margin-top:8px">단지 선택 시 실거래 표·가격 위치·월별 거래량 (국토부 신고 기준 · 장기 추세는 2020.09 이후)</div>
     </div>
 
     <div class="lv-card lv-stat">
@@ -8070,7 +8071,7 @@ function showDetail(p){
   const _rtabsEl = document.querySelector('#DM .rtabs'); if (_rtabsEl && !_rtabsEl._cueBound) { _rtabsEl._cueBound = 1; _rtabsEl.addEventListener('scroll', _rtabsCue, { passive: true }); }
 
   document.getElementById('t2').innerHTML=`<div class="tld"><div class="tsp"></div>AI 리스크 분석 중...</div>`;
-  document.getElementById('t3').innerHTML=`<div class="tld"><div class="tsp"></div>AI 특약 초안 생성 중...</div>`;
+  document.getElementById('t3').innerHTML=`<div class="tld"><div class="tsp"></div>표준 특약 초안 생성 중...</div>`;
   document.getElementById('t4').innerHTML=`<div class="tld"><div class="tsp"></div>가격 시그널 분석 중...</div>`;
   // DETAILTAB-2026-05-12 (운영자 발견 — 네이버 부동산 수준 단지정보 노출):
   //   facility (backend KAPT API 응답) 의 핵심 필드를 표로 표시. 데이터 부재 시 '미상' 표기.
@@ -11509,10 +11510,10 @@ function exportClausePDF(){
   // → 사선 워터마크 (page-break-inside 무시 + position:fixed) + @media print 강제 표시.
   w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>${safeTitle}</title>
   <style>
-    @page { margin: 24mm 16mm; @bottom-center { content: "AI 생성 초안 · 법적 효력 없음 · 변호사·공인중개사 검토 필수 · " counter(page) "/" counter(pages); font-size: 9px; color: #173A63; } }
+    @page { margin: 24mm 16mm; @bottom-center { content: "자동 생성 초안 · 법적 효력 없음 · 변호사·공인중개사 검토 필수 · " counter(page) "/" counter(pages); font-size: 9px; color: #173A63; } }
     body{font-family:'Malgun Gothic',sans-serif;padding:28px;font-size:13px;line-height:1.7;color:#18160F;position:relative}
     /* ── 워터마크 (사선) ── */
-    body::before{content:"AI 생성 초안";position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-32deg);font-size:120px;color:rgba(200,75,24,0.12);pointer-events:none;z-index:0;font-weight:900;white-space:nowrap;letter-spacing:8px}
+    body::before{content:"자동 생성 초안";position:fixed;top:50%;left:50%;transform:translate(-50%,-50%) rotate(-32deg);font-size:120px;color:rgba(200,75,24,0.12);pointer-events:none;z-index:0;font-weight:900;white-space:nowrap;letter-spacing:8px}
     body::after{content:"법적 효력 없음";position:fixed;top:55%;left:50%;transform:translate(-50%,0) rotate(-32deg);font-size:36px;color:rgba(200,75,24,0.18);pointer-events:none;z-index:0;font-weight:700;white-space:nowrap;letter-spacing:4px}
     @media print {
       body::before, body::after { display: block !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -11538,14 +11539,14 @@ function exportClausePDF(){
     footer b{color:var(--red)}
   </style></head><body>
   <h1>${safeTitle}</h1>
-  <div class="sub">내집로그 AI 특약 초안 · ${new Date().toLocaleDateString('ko-KR')}</div>
+  <div class="sub">내집로그 표준 특약 초안 · ${new Date().toLocaleDateString('ko-KR')}</div>
   <div class="legal-banner">
-    <b>⚠ 본 문서는 AI 가 생성한 초안이며 법적 효력이 없습니다.</b>
-    실제 계약 체결 전 반드시 <b>변호사·공인중개사·법무사</b> 검토를 받으세요. 본 초안의 오류·환각으로 인한 손해는 운영자가 책임지지 않습니다.
+    <b>⚠ 본 문서는 자동 생성 초안이며 법적 효력이 없습니다.</b>
+    실제 계약 체결 전 반드시 <b>변호사·공인중개사·법무사</b> 검토를 받으세요. 본 초안의 오류로 인한 손해는 운영자가 책임지지 않습니다.
   </div>
   ${content}
   <footer>
-    <b>면책</b>: 본 특약은 AI 가 생성한 초안이며 법적 효력이 없습니다. 실제 계약서 작성 전 변호사·공인중개사·법무사 검토는 필수이며, 본 초안의 오류·환각·법령 변경으로 인한 손해(매매 차손·계약 분쟁·세금 등)에 대해 운영자(내집로그)는 어떠한 책임도 부담하지 않습니다.<br>
+    <b>면책</b>: 본 특약은 자동 생성 초안이며 법적 효력이 없습니다. 실제 계약서 작성 전 변호사·공인중개사·법무사 검토는 필수이며, 본 초안의 오류·법령 변경으로 인한 손해(매매 차손·계약 분쟁·세금 등)에 대해 운영자(내집로그)는 어떠한 책임도 부담하지 않습니다.<br>
     출력일시: ${new Date().toLocaleString('ko-KR')} · ©내집로그 (https://myhomelog.vercel.app)
   </footer>
   </body></html>`);

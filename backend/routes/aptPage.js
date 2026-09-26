@@ -476,7 +476,10 @@ router.get('/:aptSeq', async (req, res) => {
     <div class="card"><h2>이 지역 더 보기</h2>
       <div class="links">${lawdCd ? `<a href="/region/${esc(lawdCd)}">${esc(region)} 지역 데이터</a>` : ''}<a href="/region">전국 시군구 전체</a>${mapLinkHtml}</div>
     </div>
-    <a class="cta" href="${ORIGIN}/">${esc(aptName)} 대출 한도·비용 계산 →</a>`;
+    <!-- DEEPLINK-CTX-2026-09-26 (Plan 115): 종전 href="${ORIGIN}/" 는 구글에서 이 단지 페이지로 온 방문자를
+      단지를 잊은 랜딩에 떨어뜨렸다(라이브 실측). SPA 의 handleShareUrl(?apt=&area=)이 상세 모달을 바로
+      연다 — /share 가 쓰는 검증된 형식과 동일. area 는 구 이름 부분일치라 region("청주시 청원구")을 쓴다. -->
+    <a class="cta" href="${ORIGIN}/?apt=${encodeURIComponent(aptName)}&area=${encodeURIComponent(region)}">${esc(aptName)} 대출 한도·비용 계산 →</a>`;
 
   const title = `${displayName} 실거래가 — ${region}${umd ? ' ' + umd : ''} | 내집로그`;
   // APT-PAGE-DESC-2026-09-06 (Plan 065): 분기는 facts.length 가 아니라 thin(거래 유무, 위에서

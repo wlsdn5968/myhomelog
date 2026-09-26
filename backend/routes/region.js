@@ -132,7 +132,7 @@ async function buildDashboard(region) {
             basis: (seoulRegulated && String(region.lawdCd).startsWith('11')) ? '서울 전 지역' : region.name,
           };
         }
-        return { status: '확인 필요', basis: null }; // 단정하지 않음
+        return { status: '고시된 규제지역 목록에 없음', basis: null }; // 단정하지 않음 — "비규제" 라고 쓰지 않는다
       } catch (_) { return null; }
     })(),
   ]);
