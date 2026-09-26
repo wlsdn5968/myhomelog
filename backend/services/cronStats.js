@@ -63,7 +63,10 @@ function _pick(summary) {
     'searchIndexLagDays',
     'aliasRefreshed', // ALIAS-REFRESH-2026-09-06 (Plan 067): molit_aliases 자동 갱신 행수 — 실패 시 필드 자체가 생략된다(0 으로 지어내지 않음)
     // HIST-BACKFILL-2026-09-16 (Plan 091): 과거 실거래 이력 backfill — 이번 회차 처리 개수·행수·DB 용량(MB).
-    'done', 'rows', 'dbMb'];
+    'done', 'rows', 'dbMb',
+    // DIM-RECOVERY-2026-09-26 (Plan 117): 이력 전용 단지 이름 복구 — 이번 회차 신규로 채운 이름 수·
+    //   큐에 남은 (lawd_cd,deal_ym) 수. 이 값이 사라지면(필드 부재) 잡이 실패했거나 아직 안 돈 것이다.
+    'namesInserted', 'remaining'];
   const out = {};
   for (const k of NUM) {
     const v = summary[k];

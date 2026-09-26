@@ -124,7 +124,10 @@ async function loadDimRow(aptSeq) {
   const r = (data || [])[0];
   if (!r) return null;
   // loadAptFacts 가 idx 와 같은 모양으로 쓰도록 컬럼명을 MV 에 맞춘다.
-  return { ...r, recent_deal_date: r.last_deal_date };
+  // DIM-RECOVERY-2026-09-26 (Plan 117): _fromDim 은 이 함수(3번째 소스)가 채웠다는 표식이다 —
+  //   loadIndexRow(MV)가 준 idx 는 이 표식이 없다. 아래 렌더 코드가 "원본 24개월엔 없지만
+  //   이력엔 있다"를 구분하는 유일한 방법이라(Step 3), 값 자체가 아니라 출처를 남긴다.
+  return { ...r, recent_deal_date: r.last_deal_date, _fromDim: true };
 }
 
 /**
@@ -350,7 +353,7 @@ router.get('/:aptSeq', async (req, res) => {
     }));
   }
 
-  const { txs, lawdCd, region, aptName, umd, buildYear, stat, sigungu } = af;
+  const { idx, txs, lawdCd, region, aptName, umd, buildYear, stat, sigungu } = af;
 
   const cards = [];
   const facts = [];
@@ -465,11 +468,19 @@ router.get('/:aptSeq', async (req, res) => {
   //   위에서 전부 원문 그대로 썼다. 아래 h1·title·desc·OG 카드(ogImage.js)만 이 표시용 이름을 쓴다.
   const displayName = displayAptName(aptName, { umdNm: umd, kaptName: kaptMatchedName });
 
+  // DIM-RECOVERY-2026-09-26 (Plan 117): "최근 거래 없음" 카드는 사실이지만 원본(24개월) 창 밖에
+  //   이력이 있다는 걸 안 알려준다 — idx 가 molit_apt_dim(3번째 소스)에서 왔고 이력 건수가
+  //   있을 때만 그 카드 아래 한 줄을 붙인다. 숫자는 dim 행 값 그대로(지어내지 않음).
+  const dimDealCount = idx && idx._fromDim ? num(idx.deal_count) : null;
+  const histRecoveryLine = (thin && dimDealCount && dimDealCount > 0)
+    ? `<div style="font-size:12.5px;color:var(--sub);margin:-4px 0 12px">2020.09 이후 이력 ${comma(dimDealCount)}건 · 마지막 거래 ${esc(String(idx.last_deal_date || ''))} — 아래 장기 추세에서 볼 수 있어요</div>`
+    : '';
+
   const body = `<div class="eyebrow">MYHOMELOG APT</div>
     <h1>${esc(displayName)} 실거래가</h1>
     <div class="tag">${esc(region)}${umd ? ' ' + esc(umd) : ''} · 단지코드 ${esc(seq)}</div>
     ${cards.length ? cards.join('') : `<div class="card"><h2>최근 거래 없음</h2>
-      <div style="font-size:12.5px;color:var(--sub)">최근 24개월 안에 신고된 거래가 없어요. 값을 지어내지 않고 비워둡니다.</div></div>`}
+      <div style="font-size:12.5px;color:var(--sub)">최근 24개월 안에 신고된 거래가 없어요. 값을 지어내지 않고 비워둡니다.</div></div>${histRecoveryLine}`}
     ${infoCardHtml}
     ${schoolsCardHtml}
     ${sameDongHtml}

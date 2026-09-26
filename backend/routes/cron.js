@@ -763,6 +763,23 @@ async function handleMolitHistBackfill(req, res) {
       logger.info({ dbMb: summary.dbMb }, 'molit-hist-backfill: DB 용량 임계 도달 — 이번 회차 정상 정지(경보 아님)');
     }
     await require('../services/cronStats').recordCronRun('molit-hist-backfill', summary).catch(() => {});
+    // DIM-RECOVERY-2026-09-26 (Plan 117): hist backfill 이 더 할 일이 없어(reason:'complete') 이번
+    //   슬롯이 사실상 비어 끝났을 때만, 그 빈 슬롯을 옆 작업(이력 전용 단지 이름 복구)에 재사용한다.
+    //   큐(apt_dim_recovery_queue)로 진행 상태를 남기는 이유는 hist backfill 과 같다 — 슬롯이 하루
+    //   10번 끊겨 돌아 "어디까지 했나"를 함수 호출 사이에 기억할 곳이 DB 말고 없다. 기록은 hist 와
+    //   섞이지 않게 별도 이름('apt-dim-recovery')으로 남긴다 — 같은 이름이면 health.crons 에서
+    //   한쪽이 다른 쪽을 덮어써 둘 다 관측 불가능해진다. 실패해도 hist backfill 응답엔 영향 없다.
+    if (summary && summary.stopped === true && summary.reason === 'complete') {
+      try {
+        const { runAptDimNameRecovery } = require('../jobs/aptDimNameRecovery');
+        const dimSummary = await runAptDimNameRecovery({ timeBudgetMs: 200_000 });
+        logger.info({ dimSummary }, 'cron/molit-hist-backfill: apt-dim-recovery 이어서 실행');
+        await require('../services/cronStats').recordCronRun('apt-dim-recovery', dimSummary).catch(() => {});
+      } catch (e2) {
+        logger.warn({ err: e2.message }, 'apt-dim-recovery 실패 (hist backfill 정상 응답엔 무영향)');
+        await require('../services/cronStats').recordCronRun('apt-dim-recovery', { ok: false, error: e2.message }).catch(() => {});
+      }
+    }
     res.json({ ok: true, summary });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/molit-hist-backfill 실패');
