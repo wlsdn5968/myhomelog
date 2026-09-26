@@ -685,6 +685,33 @@ select jsonb_build_object(
 $function$
 ;
 
+-- TABLE-HEALTH-2026-09-26 (Plan 111 2단계, 운영자 승인): 리뷰어가 프로덕션에 직접 적용(적용 기록·
+--   되돌리기 SQL 은 supabase/migrations/20260926_get_table_health.sql). 스키마 스냅샷
+--   (frontend-contracts.test.js "코드가 참조하는 RPC 가 스냅샷에 전부 선언돼 있다")이 요구해
+--   실제 적용본과 문자 단위로 동일하게 문서화한다(여기서 SQL 을 실행하지 않는다).
+--   ⚠ 분모는 n_dead_tup / (n_live_tup + n_dead_tup) 다 — n_live_tup 만으로 잡으면 과대 보고된다
+--   (2026-09-20 감사에서 에이전트 2개가 이 실수를 했다). 컬럼명은 days_since_vacuum(계획서 초안의
+--   days_since_autovacuum 이 아니다) — auto/수동 vacuum 중 최근 것 기준.
+--   ⚠ SECURITY DEFINER 를 쓰지 않는다 — pg_stat_user_tables·pg_class 는 호출자(service_role)
+--   권한으로 읽힌다(최소 권한).
+CREATE OR REPLACE FUNCTION public.get_table_health()
+ RETURNS TABLE(relname text, total_mb numeric, dead_pct numeric, days_since_vacuum integer)
+ LANGUAGE sql
+ SET search_path TO 'public'
+AS $function$
+  select c.relname::text,
+         round(pg_total_relation_size(c.oid) / 1048576.0, 1),
+         round(100.0 * s.n_dead_tup / nullif(s.n_live_tup + s.n_dead_tup, 0), 2),
+         extract(day from now() - greatest(s.last_autovacuum, s.last_vacuum))::integer
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    join pg_stat_user_tables s on s.relid = c.oid
+   where n.nspname = 'public' and c.relkind = 'r'
+     and pg_total_relation_size(c.oid) > 1048576
+   order by pg_total_relation_size(c.oid) desc
+$function$
+;
+
 CREATE OR REPLACE FUNCTION public.increment_user_budget(p_user_id uuid, p_month date, p_input_tokens bigint, p_output_tokens bigint, p_cost_usd_x1000 bigint)
  RETURNS void
  LANGUAGE plpgsql

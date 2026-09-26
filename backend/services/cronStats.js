@@ -40,6 +40,9 @@ function _pick(summary) {
     // DB-CAPACITY-SERIES-2026-09-20 (Plan 111): 용량 추세를 health 에 남긴다 —
     //   경보(85%)는 임계를 넘어야 울리므로, 그 전에 "차오르는 속도" 를 볼 지표가 따로 필요하다.
     'dbUsedMb', 'dbPct',
+    // TABLE-HEALTH-2026-09-26 (Plan 111 2단계): 테이블별 급증·autovacuum 정지 경보 건수 —
+    //   합계만 보는 dbUsedMb/dbPct 로는 특정 테이블 하나만 폭증해도 안 보인다.
+    'tableHealthWarns',
     'skippedKnownFail', 'sentinelMarked', 'elapsedMs', 'updated', 'scanned', 'gapsFixed',
     'ok', 'err', 'skipped', 'retried', 'filled', 'missed', 'addrTried', 'addrInserted',
     'verifyTried', 'verifyOk', 'verifyFixed', 'verifyNoAddr', 'verifyMs',

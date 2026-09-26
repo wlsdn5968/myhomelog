@@ -187,6 +187,12 @@ function dbCapacityLevel(usedMb, limitMb) {
   const pct = (usedMb / limitMb) * 100;
   return pct >= DB_CAPACITY_ERROR_PCT ? 'error' : pct >= DB_CAPACITY_WARN_PCT ? 'warning' : null;
 }
+
+// TABLE-HEALTH-2026-09-26 (Plan 111 2단계): 전체 합계만 보는 용량 경보(위)는 테이블 한 곳만
+//   폭증하거나 autovacuum 이 멈춰도 침묵한다 — apt_geocache 가 29일째 autovacuum 미실행(죽은
+//   튜플 14%)이었는데 어떤 신호로도 안 보였다(104 §8.4 실측). 임계 상수는 여기 한 곳에만
+//   둔다 — 흩어지면 다음 사람이 한쪽만 고친다.
+const TABLE_DEAD_PCT_WARN = 20, TABLE_VACUUM_STALE_DAYS = 14, TABLE_GROWTH_WARN_PCT = 20;
 async function checkDbCapacity() {
   try {
     const { getSupabaseAdmin } = require('../db/client');
@@ -203,7 +209,53 @@ async function checkDbCapacity() {
       });
       logger[level === 'error' ? 'error' : 'warn']({ usedMb, limitMb }, 'DB 용량 임계 초과');
     }
-    return { usedMb, limitMb, level };
+    // TABLE-HEALTH-2026-09-26 (Plan 111 2단계): 용량 경보 본체와 별도 try — get_table_health()
+    //   실패(DDL 미적용·일시 오류)가 위 usedMb/level 반환을 막으면 안 된다.
+    let tableHealthWarns = 0;
+    try {
+      const { data: tableRows, error: tableErr } = await admin.rpc('get_table_health');
+      if (tableErr || !Array.isArray(tableRows)) {
+        logger.warn({ err: tableErr && tableErr.message }, 'get_table_health 조회 실패(무시)');
+      } else {
+        // 조건 A — autovacuum 이 사실상 정지: 죽은 튜플 비율↑ + 마지막 vacuum(auto 든 수동이든) 이후 경과일↑.
+        const autovacuumStale = tableRows
+          .filter((t) => Number(t.dead_pct) >= TABLE_DEAD_PCT_WARN && Number(t.days_since_vacuum) >= TABLE_VACUUM_STALE_DAYS)
+          .map((t) => ({ relname: t.relname, deadPct: Number(t.dead_pct), daysSinceVacuum: Number(t.days_since_vacuum) }));
+
+        // 조건 B — 직전 회차 대비 테이블별 급증. 직전 값은 Redis(meta:tableHealth:prev, TTL 48h)
+        //   에서 읽는다 — Redis 미설정이면 rget 이 undefined 라 급증 비교만 조용히 건너뛴다(예외 없음).
+        const { rget, rset } = require('../services/redisCache');
+        const prev = await rget('meta:tableHealth:prev');
+        const prevTables = (prev && prev.tables) || {};
+        const growth = [];
+        for (const t of tableRows) {
+          const prevMb = Number(prevTables[t.relname]);
+          if (!(prevMb > 0)) continue; // 직전 값 없음(신규 테이블·최초 회차) → 비교 불가, 조용히 스킵
+          const totalMb = Number(t.total_mb);
+          const growthPct = ((totalMb - prevMb) / prevMb) * 100;
+          if (growthPct >= TABLE_GROWTH_WARN_PCT) {
+            growth.push({ relname: t.relname, prevMb, totalMb, growthPct: Math.round(growthPct) });
+          }
+        }
+
+        if (autovacuumStale.length || growth.length) {
+          // 고정 메시지 — 값은 extra 로만(105 규약, 이슈 그룹이 매번 새로 쪼개지지 않게).
+          Sentry.captureMessage('cron 감시: 특정 테이블 급증 또는 autovacuum 정지 — 용량 한도 전에 확인 필요', {
+            level: 'warning', tags: { route: 'cron.retention', monitor: 'db-table-health' },
+            extra: { autovacuumStale, growth },
+          });
+          logger.warn({ autovacuumStale, growth }, '테이블별 급증 또는 autovacuum 정지 감지');
+        }
+        tableHealthWarns = autovacuumStale.length + growth.length;
+
+        // 이번 회차 값을 다음 비교를 위해 남긴다(fire-and-forget — 저장 실패가 감시를 막으면 안 된다).
+        const tables = {};
+        for (const t of tableRows) tables[t.relname] = Number(t.total_mb);
+        rset('meta:tableHealth:prev', { at: new Date().toISOString(), tables }, 172800).catch(() => {});
+      }
+    } catch (e) { logger.warn({ err: e.message }, '테이블별 건강 상태 점검 실패(무시)'); }
+
+    return { usedMb, limitMb, level, tableHealthWarns };
   } catch (e) { logger.warn({ err: e.message }, 'DB 용량 점검 실패(무시)'); return null; }
 }
 
@@ -218,6 +270,8 @@ router.post('/retention', async (req, res) => {
     if (_cap && Number.isFinite(_cap.usedMb)) {
       summary.dbUsedMb = _cap.usedMb;
       summary.dbPct = Math.round((_cap.usedMb / _cap.limitMb) * 100);
+      // TABLE-HEALTH-2026-09-26 (Plan 111 2단계): 테이블별 급증·autovacuum 정지 경보 건수.
+      summary.tableHealthWarns = _cap.tableHealthWarns;
     }
     logger.info({ durationMs: Date.now() - started }, 'cron/retention OK');
     // Sprint MMMMMMM-12: retention 자신의 실행 기록 — 종전엔 popular-snapshot 만 남아
@@ -276,6 +330,8 @@ router.get('/retention', async (req, res) => {
     if (_cap && Number.isFinite(_cap.usedMb)) {
       summary.dbUsedMb = _cap.usedMb;
       summary.dbPct = Math.round((_cap.usedMb / _cap.limitMb) * 100);
+      // TABLE-HEALTH-2026-09-26 (Plan 111 2단계): 테이블별 급증·autovacuum 정지 경보 건수.
+      summary.tableHealthWarns = _cap.tableHealthWarns;
     }
     await require('../services/cronStats').recordCronRun('retention', summary).catch(() => {}); // Sprint MMMMMMM-12
     // GET-PARITY-2026-08-09 (Sprint BBBBBBB-5, 실측): popular 스냅샷 계산이 **POST 쌍둥이에만** 있었는데
@@ -719,3 +775,4 @@ router.get('/molit-hist-backfill', handleMolitHistBackfill);
 
 module.exports = router;
 module.exports._dbCapacityLevel = dbCapacityLevel; // 테스트용
+module.exports._checkDbCapacity = checkDbCapacity; // TEST-EXPORT-2026-09-26 (Plan 111 2단계): 테이블별 급증·autovacuum 정지 감시 고정용
