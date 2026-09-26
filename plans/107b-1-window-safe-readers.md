@@ -69,3 +69,6 @@ async function findByName({ aptName, umdNm, sigungu, lawdCd }) → { aptSeq, apt
 - `getTransactionsByAptSeq` 의 반환 행 필드명이 계획과 다르면(`analyzeTransactions` 가 기대하는 키) 추측하지 말고 소스에서 읽어 맞추고, 못 찾으면 멈춰라.
 - 원본 조회를 dim 으로 **대체**하고 싶어지면 멈춰라 — 폴백만 한다.
 - DDL·SQL 실행 금지. 기존 테스트 파일 수정 금지.
+
+> **⚠ 계획자 오류 기록(2026-09-26, 실행자가 STOP 으로 잡음 — Plan 106↔110 과 같은 유형)**: B7 의 `aptPage.js` 호출 교체는 `transactionService` 를 **통째로 인라인 스텁**하는 기존 테스트 2개(`apt-page-enrich.test.js:101`·`apt-page-links.test.js:112`)와 `testSupport/_helpers.js` 의 스텁을 깨뜨린다(새 함수 키가 없어 `is not a function` → catch 로 삼켜져 거래 0건). 계획서 "범위" 에 이 파일들을 넣지 않았다. 실행자는 규칙대로 커밋하지 않고 1줄짜리 수정안을 제시했고, 리뷰어가 (a) 를 승인했다. **교훈(재확인)**: 어떤 함수의 호출부를 바꾸는 계획은 `grep -rn "<모듈명>" backend/test backend/testSupport` 로 그 모듈을 스텁하는 테스트를 먼저 찾아 범위에 명시한다 — 스텁은 "당시 인터페이스의 사본" 이라 새 키를 보태는 것이 옳다.
+> **B4 설계 변경(실행자 절충, 승인)**: 계획서의 "반환 객체 4키" 를 그대로 하면 Plan 113 의 `data-counts-sync.test.js`(from 3회·3키 고정)가 깨진다 → `getDataCounts({ includeHist })` opt-in, 실호출부(`/api/health`)만 true. 브리핑·OG 는 같은 캐시를 읽으므로 전파된다.
