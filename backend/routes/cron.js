@@ -436,6 +436,31 @@ async function handleMolitIngest(req, res) {
       }
     } catch (e) { _mvRefreshError = e.message; logger.warn({ err: e.message }, '검색 MV 갱신 예외 — 적재는 정상'); }
 
+    // DIM-DAILY-2026-09-26 (Plan 107b-1/B3): molit_apt_dim 은 09-20 최초 채움 뒤 한 번도 갱신되지
+    //   않았다(실측 max(refreshed_at)=2026-09-20). 원본 창을 16개월로 자르기(107c) 전에 신규 단지가
+    //   매일 보존돼야 dim 이 지번·준공연도 폴백(B6)·`/apt` 헤더 폴백(107a)의 안전판 노릇을 할 수
+    //   있다. RPC 는 바뀐 행만 upsert 하므로 매일 돌려도 싸다. 실패해도 적재 자체는 이미 끝난
+    //   뒤라 계속한다(_mvRefreshError 와 동일하게 fail-open).
+    let _dimRefreshed, _dimRefreshMs, _dimRefreshError;
+    try {
+      const _dimAdmin = require('../db/client').getSupabaseAdmin();
+      if (!_dimAdmin) {
+        _dimRefreshError = 'service_role 미설정';
+      } else {
+        const _dt0 = Date.now();
+        const { data: _dimN, error: _dimErr } = await _dimAdmin.rpc('refresh_molit_apt_dim');
+        if (_dimErr) throw _dimErr;
+        _dimRefreshed = Number(_dimN) || 0;
+        _dimRefreshMs = Date.now() - _dt0;
+      }
+    } catch (e) {
+      _dimRefreshError = String(e.message || e).slice(0, 120);
+      logger.warn({ err: _dimRefreshError }, 'molit_apt_dim 갱신 실패(적재는 계속)');
+    }
+    summary.dimRefreshed = _dimRefreshed;
+    summary.dimRefreshMs = _dimRefreshMs;
+    summary.dimRefreshError = _dimRefreshError;
+
     // MV-STALE-WATCH-2026-09-06 (Plan 058): "기록이 정직했는데 경보가 없어서" 21일이 조용히 지나갔다.
     //   [실측 2026-09-06] health.crons.mvRefreshError 에 실패 사유(8초 statement timeout)가 매일 정확히
     //   기록되고 있었는데 경보가 없어 아무도 보지 않았다 — molit_apt_index 최신 거래일 2026-08-14 vs
@@ -491,6 +516,9 @@ async function handleMolitIngest(req, res) {
       mvRefreshMs: _mvRefreshMs,
       mvRefreshError: _mvRefreshError,   // 실패하면 사유가 health.crons 에 보인다(부재는 눈에 안 띈다)
       searchIndexLagDays: _searchIndexLagDays, // MV-STALE-WATCH-2026-09-06: 검색 색인 낡음(일). 미상이면 필드 생략.
+      // DIM-DAILY-2026-09-26 (Plan 107b-1/B3): summary.* 는 위 블록에서 직접 담았다(_pick 은 이 객체의
+      //   최상위 키만 본다 — summary 를 그대로 넘겨도 자동으로 안 실린다, Plan 110 의 교훈).
+      dimRefreshed: summary.dimRefreshed, dimRefreshMs: summary.dimRefreshMs, dimRefreshError: summary.dimRefreshError,
       ok: summary.ok, err: summary.err, skipped: summary.skipped, elapsedMs: summary.elapsedMs,
       retried: summary.gapBackfill && summary.gapBackfill.retried, filled: summary.gapBackfill && summary.gapBackfill.filled,
       error: summary.firstError || summary.reason || undefined, // reason = 키 미설정 skip 케이스

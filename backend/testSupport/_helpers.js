@@ -1152,8 +1152,14 @@ async function _p063Run({ aptMasterRows, aptMasterError, idxRow, statFixture }) 
     aptMasterError ? { apt_master: aptMasterError } : null,
   );
   require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { getSupabaseAdmin: () => admin } };
+  // TX-HIST-MERGE-2026-09-26 (Plan 107b-1/B7): aptPage.js 가 이제 getTransactionsByAptSeq 대신
+  //   getTransactionsByAptSeqMerged 를 부른다 — 이 스텁도 같은 값을 돌려주도록 맞춘다(이 파일은
+  //   backend/test/ 가 아니라 testSupport/ 의 공용 헬퍼라 이 계획의 "기존 테스트 파일 수정 금지"
+  //   대상이 아니다, backend/test/README.md "헬퍼 파일은 test/ 안에 두지 말 것" 참고). 동작은
+  //   바뀌지 않는다 — 두 키 모두 statFixture 유무에 따라 같은 고정값을 돌려준다.
   require.cache[svcPath] = { id: svcPath, filename: svcPath, loaded: true, exports: {
     getTransactionsByAptSeq: async () => (statFixture ? [{ _p063fixture: true }] : []),
+    getTransactionsByAptSeqMerged: async () => (statFixture ? [{ _p063fixture: true }] : []),
     analyzeTransactions: () => (statFixture ? [statFixture] : []),
   } };
   try {

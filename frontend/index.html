@@ -5748,7 +5748,10 @@ function _mapSheetTry(kind,p){
     //   dealCount(그룹 합산)로 다른 이름을 쓴다(T0-HERO-FIELD-2026-09-06 참고). 이 하단 시트가
     //   dealCount 만 읽어 추천 경로 마커를 모바일에서 탭하면 거래 건수가 조용히 사라졌다.
     //   ⚠ ??(0 을 유효값으로 다루는 연산자)를 쓴다 — ||였다면 0건도 미확인으로 뭉개진다.
-    const meta=[(p.buildYear?`${p.buildYear}년 준공`:''),(kind==='pop'?(p.dealCount60d?`60일 ${p.dealCount60d}건`:''):((p.dealCount??p.dealCount6m)?`거래 ${p.dealCount??p.dealCount6m}건`:''))].filter(Boolean).join(' · ');
+    // LABEL-WINDOW-2026-09-26 (Plan 107b-1/B2): p.dealCount 는 MV(molit_apt_index)의 원본 전 기간
+    //   집계다 — 107c 로 원본을 16개월 창으로 자르면 "거래 N건"은 사실 "최근 16개월 N건"이 된다.
+    //   숫자는 그대로 두고(창 자르기 전에는 전 기간과 같아 변화 없음) 문구만 정확하게 바꾼다.
+    const meta=[(p.buildYear?`${p.buildYear}년 준공`:''),(kind==='pop'?(p.dealCount60d?`60일 ${p.dealCount60d}건`:''):((p.dealCount??p.dealCount6m)?`최근 거래 ${p.dealCount??p.dealCount6m}건`:''))].filter(Boolean).join(' · ');
     document.getElementById('msName').textContent=p.aptName||'';
     document.getElementById('msSub').textContent=sub||'—';
     document.getElementById('msPriceV').textContent=priceV||'—(미확인)';

@@ -66,7 +66,9 @@ function _pick(summary) {
     'done', 'rows', 'dbMb',
     // DIM-RECOVERY-2026-09-26 (Plan 117): 이력 전용 단지 이름 복구 — 이번 회차 신규로 채운 이름 수·
     //   큐에 남은 (lawd_cd,deal_ym) 수. 이 값이 사라지면(필드 부재) 잡이 실패했거나 아직 안 돈 것이다.
-    'namesInserted', 'remaining'];
+    'namesInserted', 'remaining',
+    // DIM-DAILY-2026-09-26 (Plan 107b-1/B3): molit_apt_dim 일일 갱신 — 바뀐 행수·소요(ms). 실패 시 필드 생략(0 을 지어내지 않음).
+    'dimRefreshed', 'dimRefreshMs'];
   const out = {};
   for (const k of NUM) {
     const v = summary[k];

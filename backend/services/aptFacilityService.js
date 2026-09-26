@@ -129,7 +129,18 @@ async function molitIdentity(aptName, sigungu, umdNm) {
       .eq('apt_name', aptName).eq('sigungu', sigungu).eq('umd_nm', umdNm)
       .order('deal_date', { ascending: false })
       .limit(60);
-    if (error || !data || !data.length) return null;
+    if (error) return null;
+    // DIM-FALLBACK-2026-09-26 (Plan 107b-1/B6): 원본 창 안에 이 단지 거래가 0건이면(창 밖 단지)
+    //   보존 차원(molit_apt_dim)에서 지번·준공연도를 폴백한다. 원본이 있으면(설령 연도·지번을
+    //   못 뽑아도 아래 buildYear/jibunBon 둘 다 null 인 채로) 이 폴백을 타지 않는다 — 원본 우선 불변.
+    if (!data || !data.length) {
+      const dim = await require('./aptDimService').findByName({ aptName, umdNm, sigungu });
+      if (!dim) return null;
+      const jibunBon = bonbun(dim.jibun);
+      const buildYear = dim.buildYear || null;
+      if (!buildYear && !jibunBon) return null;
+      return { buildYear, jibunBon };
+    }
     const years = new Map(), jibuns = new Map();
     for (const r of data) {
       if (r.build_year > 1900) years.set(r.build_year, (years.get(r.build_year) || 0) + 1);

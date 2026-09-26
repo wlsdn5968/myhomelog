@@ -828,4 +828,90 @@ async function getTransactionsByAptSeq(aptSeq, monthsBack = 24) {
   }
 }
 
-module.exports = { getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES };
+/**
+ * TX-HIST-MERGE-2026-09-26 (Plan 107b-1/B7): getTransactionsByAptSeq(원본만)에 협폭 이력
+ * (molit_transactions_hist)을 원본에 없는 달만 보태 반환한다. 반환 행 모양은
+ * getTransactionsByAptSeq 와 **완전히 같다**(analyzeTransactions 가 그대로 먹는다 — 필드명은
+ * 위 getTransactionsByAptSeq 의 실제 매핑(:808-822)에서 확인했다: aptName·sigungu·umdNm·
+ * excluUseAr·buildYear·floor·dealYear·dealMonth·dealDay·dealAmount·lawdCd·aptSeq·jibun).
+ *
+ * ⚠ 단위 변환: molit_transactions_hist.exclu_use_ar 는 ㎡×100(smallint,
+ * supabase/migrations/20260916_molit_hist.sql) — aptHistoryService.js 의 기존 관행과 동일하게
+ * 100 으로 나눈다. 원본 getTransactionsByAptSeq 의 excluUseAr 는 이미 ㎡(numeric) 라 그대로 쓴다.
+ *
+ * 이력 행에는 aptName·sigungu·umdNm·buildYear·jibun 이 없다(협폭 테이블, apt_seq 외 이름류 저장
+ * 안 함) — molit_apt_dim(aptPage.js loadDimRow 와 같은 소스) 1행으로 채운다. dim 을 못 찾으면
+ * 정체불명 행을 섞지 않고 원본만 반환한다.
+ *
+ * 오늘(2026-09-26) 원본은 16.6개월치라 24개월 조회 중 이력이 필요한 구간(24개월 전 ~ 16.6개월
+ * 전)이 아직 없다 — 즉 이 함수가 붙이는 이력 달은 0개고 반환값은 원본과 동일하다(동작 변화 0,
+ * 배선만). 107c 로 원본이 16개월 아래로 줄어야 실제로 이력이 붙기 시작한다.
+ */
+async function getTransactionsByAptSeqMerged(aptSeq, monthsBack = 24) {
+  const seq = String(aptSeq || '').trim();
+  if (!/^\d{5}-\d+$/.test(seq)) return null;
+  const live = await getTransactionsByAptSeq(seq, monthsBack);
+  const liveMonths = new Set((live || []).map(t => `${t.dealYear}-${String(t.dealMonth).padStart(2, '0')}`));
+
+  const admin = dbClient();
+  if (!admin) return live; // 이력·dim 조회 불가 — 원본만이라도 반환(기존 동작 하한)
+
+  let histRows = [];
+  try {
+    const since = txWindowStart(monthsBack);
+    const { data, error } = await admin
+      .from('molit_transactions_hist')
+      .select('deal_date, exclu_use_ar, deal_amount, floor')
+      .eq('apt_seq', seq)
+      .gte('deal_date', since)
+      .order('deal_date', { ascending: false })
+      .limit(1000);
+    if (error) throw error;
+    histRows = data || [];
+  } catch (e) {
+    logger.warn({ err: e.message, aptSeq: seq }, 'apt_seq 이력 거래 조회 실패(원본만 반환)');
+    return live;
+  }
+  // 원본에 이미 있는 달은 이력을 붙이지 않는다 — "같은 달은 원본만"(중복 방지).
+  const missing = histRows.filter((r) => {
+    const ym = String(r.deal_date || '').slice(0, 7);
+    return ym && !liveMonths.has(ym);
+  });
+  if (!missing.length) return live; // 오늘은 이 경로가 항상 빈 배열 — 동작 변화 0
+
+  let dimRow = null;
+  try {
+    const { data, error } = await admin.from('molit_apt_dim')
+      .select('apt_name, lawd_cd, sigungu, umd_nm, build_year, jibun')
+      .eq('apt_seq', seq).limit(1);
+    if (error) throw error;
+    dimRow = (data || [])[0] || null;
+  } catch (e) {
+    logger.warn({ err: e.message, aptSeq: seq }, 'apt_seq 이력 병합용 dim 조회 실패');
+  }
+  if (!dimRow) return live; // 이름을 못 채우면 정체불명 행을 섞지 않는다 — 원본만 반환.
+
+  const histMapped = missing.map((r) => {
+    const [y, m, d] = String(r.deal_date || '').split('-').map(Number);
+    return {
+      aptName: dimRow.apt_name,
+      sigungu: dimRow.sigungu || '',
+      umdNm: dimRow.umd_nm || '',
+      excluUseAr: (Number(r.exclu_use_ar) || 0) / 100, // ㎡×100 → ㎡
+      buildYear: dimRow.build_year || 0,
+      floor: r.floor || 0,
+      dealYear: y, dealMonth: m, dealDay: d,
+      dealAmount: Number(r.deal_amount) || 0,
+      lawdCd: dimRow.lawd_cd || '',
+      aptSeq: seq,
+      jibun: dimRow.jibun || '',
+    };
+  });
+  return [...(live || []), ...histMapped].sort((a, b) => {
+    const da = a.dealYear * 10000 + a.dealMonth * 100 + a.dealDay;
+    const db = b.dealYear * 10000 + b.dealMonth * 100 + b.dealDay;
+    return db - da;
+  });
+}
+
+module.exports = { getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES };

@@ -489,7 +489,16 @@ const budgetService = require('./services/budgetService');
 //     랜딩·브리핑의 "동기화" 표기가 조용히 사라졌다(2026-09-26 실사고). ingested_at 인덱스 추가는
 //     여전히 하지 않는다(DDL, ≈4MB) — 같은 의미("마지막 성공 적재 시각")를 이미 인덱스가 있는
 //     molit_ingest_runs.finished_at(status='ok', max(ingested_at)과 4초 차)으로 소스만 바꿨다.
-async function getDataCounts() {
+// TX-HIST-MERGE-2026-09-26 (Plan 107b-1/B4): `opts.includeHist` 는 **opt-in**이다(기본 false —
+//   기존 시그니처·반환 모양 불변). 왜 매개변수로 뒀는가: 이 함수 하나가 CK 캐시를 채우는 유일한
+//   경로이고 브리핑·OG 이미지는 그 캐시를 직접 읽으므로(server.js:660 의 호출부만 고치면
+//   3소비처 전부에 반영된다는 계획 취지 그대로), 반면 `backend/test/data-counts-sync.test.js`
+//   (Plan 113)가 `_getDataCounts()`를 인자 없이 불러 "admin.from() 정확히 3회·반환 객체
+//   {tx,apt,lastIngestedAt} 정확히 3키"를 고정해 뒀다 — 이 테스트는 건드리지 않는다(절대 규칙).
+//   기본값 false 로 두면 그 테스트의 경로는 100% 그대로이고, 실제 서비스 호출부만 true 를 넘겨
+//   이력 합산을 받는다.
+async function getDataCounts(opts) {
+  const includeHist = !!(opts && opts.includeHist);
   const CK = 'meta:dataCounts:v2';
   const hit = cache.get(CK);
   if (hit) return hit;
@@ -515,12 +524,36 @@ async function getDataCounts() {
       admin.from('molit_ingest_runs').select('finished_at').eq('status', 'ok')
         .order('finished_at', { ascending: false }).limit(1).maybeSingle(),
     ]);
+    const txLive = tx.count || 0;
     const out = {
-      tx: tx.count || 0,
+      tx: txLive,
       apt: apt.count || 0,
       // ISO 문자열 또는 null. 프론트는 null 이면 "언제 갱신됐는지" 표기를 아예 하지 않는다.
       lastIngestedAt: lastIngest?.data?.finished_at || null,
     };
+    // TX-HIST-MERGE-2026-09-26 (Plan 107b-1/B4): "실거래 누적"(랜딩·브리핑·OG 이미지)이 원본만
+    //   세고 있었다 — 107c 로 원본을 16개월 창으로 자르면 누적 숫자가 갑자기 줄어든 것처럼 보인다.
+    //   협폭 이력(molit_transactions_hist, 129만 행·인덱스 없음) count(*) 는 매 요청마다 부르면
+    //   안 되므로 이 CK 캐시가 미스할 때(≈6시간에 1회)만 딱 1번 부른다. 실패하면 0 으로 지어내지
+    //   않고 직전 성공값(HIST_CK, 24h)을 재사용 — 그마저 없으면 txHistUnknown 을 실어 tx 는
+    //   원본(txLive)만 유지한다(프론트가 "누적" 대신 "원본"이라고 쓸 수 있게).
+    if (includeHist) {
+      out.txLive = txLive;
+      const HIST_CK = 'meta:dataCounts:txHistCount:v1';
+      try {
+        const hist = await admin.from('molit_transactions_hist').select('*', { count: 'exact', head: true });
+        if (hist.error) throw hist.error;
+        const txHist = hist.count || 0;
+        out.txHist = txHist;
+        out.tx = txLive + txHist;
+        cache.set(HIST_CK, txHist, 86400); // 24h — 다음 실패 때 재사용할 "직전 캐시값"
+      } catch (e) {
+        const prevHist = cache.get(HIST_CK);
+        if (typeof prevHist === 'number') { out.txHist = prevHist; out.tx = txLive + prevHist; }
+        else { out.txHistUnknown = true; } // tx 는 txLive 그대로 — 이력을 지어내지 않는다
+        logger.warn({ err: e.message }, 'molit_transactions_hist count 실패 — 직전 캐시 또는 원본만 사용');
+      }
+    }
     // SYNC-SOURCE-2026-09-26 (Plan 113): 실패(null)를 6시간 캐시에 굳히지 않는다 — 60초만 메모리에 두고
     //   Redis 에는 쓰지 않아 다음 요청이 곧바로 재시도하게 한다.
     const ttl = out.lastIngestedAt ? 21600 : 60;
@@ -657,7 +690,9 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   //   env NAVER_MAPS_CLIENT_ID 설정 시 frontend 가 네이버 지도 사용, 미설정 시 Leaflet/OSM fallback.
   //   NCP 정책: client ID 는 도메인 등록 기반 보호 (다른 도메인에서 사용 불가) — 공개해도 안전.
   const _naverMapsClientId = process.env.NAVER_MAPS_CLIENT_ID || null;
-  const _dataCounts = await getDataCounts();
+  // TX-HIST-MERGE-2026-09-26 (Plan 107b-1/B4): 유일한 실호출부 — 여기서만 이력 합산을 켠다
+  //   (CK 캐시를 읽는 briefingService·ogImage·프론트는 이 호출이 채운 캐시를 그대로 재사용한다).
+  const _dataCounts = await getDataCounts({ includeHist: true });
   // Redis 조회 1회(수 ms). 실패해도 null 로 흘려보낸다 — health 가 이것 때문에 죽으면 안 된다.
   const _cronLatest = await require('./services/cronStats').getCronLatest().catch(() => null);
   const _dbUsage = await getDbUsage();

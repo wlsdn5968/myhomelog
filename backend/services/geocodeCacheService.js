@@ -398,7 +398,13 @@ async function molitJibunAddress({ aptName, sigungu, umdNm }) {
       .not('jibun', 'is', null).neq('jibun', '')
       .order('deal_date', { ascending: false })
       .limit(40);
-    if (!data || !data.length) return null;
+    if (!data || !data.length) {
+      // DIM-FALLBACK-2026-09-26 (Plan 107b-1/B6): 원본 창 안에 이 단지 거래가 0건이면(창 밖 단지)
+      //   보존 차원(molit_apt_dim)의 지번으로 대체 — 조립 형식은 원본 성공 경로와 동일하게
+      //   유지한다(시도 접두를 붙이지 않는 것도 기존 동작 그대로).
+      const dim = await require('./aptDimService').findByName({ aptName, umdNm, sigungu });
+      return (dim && dim.jibun) ? `${sggWithSpace(sigungu)} ${umdNm} ${dim.jibun}`.trim() : null;
+    }
     const freq = new Map();
     for (const r of data) {
       const j = String(r.jibun || '').trim();

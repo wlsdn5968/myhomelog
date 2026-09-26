@@ -142,7 +142,10 @@ async function loadAptFacts(seq) {
   const svc = require('../services/transactionService');
   let idx = null, txs = null;
   try { idx = await loadIndexRow(seq); } catch (e) { logger.warn({ err: e.message, seq }, '/apt 인덱스 예외'); }
-  try { txs = await svc.getTransactionsByAptSeq(seq, 24); } catch (e) { logger.warn({ err: e.message, seq }, '/apt 거래 예외'); }
+  // TX-HIST-MERGE-2026-09-26 (Plan 107b-1/B7): 원본만 보던 getTransactionsByAptSeq 대신 이력
+  //   병합판을 쓴다 — 107c 로 원본 창이 24개월보다 짧아져도 요약 건수가 줄지 않게 한다.
+  //   오늘은 원본이 16.6개월이라 이력이 붙는 달이 0개 = 동작 변화 0(배선만).
+  try { txs = await svc.getTransactionsByAptSeqMerged(seq, 24); } catch (e) { logger.warn({ err: e.message, seq }, '/apt 거래 예외'); }
   // APT-DIM-FALLBACK-2026-09-20 (Plan 107a): MV 에 없을 때만 차원 테이블을 본다.
   if (!idx) { try { idx = await loadDimRow(seq); } catch (e) { logger.warn({ err: e.message, seq }, '/apt 차원 예외'); } }
   if (!idx && (!txs || !txs.length)) return null;

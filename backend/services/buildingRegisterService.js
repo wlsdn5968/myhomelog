@@ -70,6 +70,14 @@ async function resolveJibun(admin, lawdCd, umdNm, aptName) {
     if (umdNm) q = q.eq('umd_nm', umdNm);
     const { data } = await q;
     if (data && data[0] && data[0].jibun) return { jibun: String(data[0].jibun).trim(), sigungu: data[0].sigungu || '', umdNm: data[0].umd_nm || '' };
+  } catch (_) { /* fall through to dim */ }
+
+  // DIM-FALLBACK-2026-09-26 (Plan 107b-1/B6): 원본에 지번이 없으면(창 밖 단지) 보존 차원
+  //   (molit_apt_dim)의 지번으로 대체한다 — 그래도 없으면 기존 MOLIT 라이브 폴백으로 진행한다
+  //   (순서: 원본 → dim → 라이브).
+  try {
+    const dim = await require('./aptDimService').findByName({ aptName, umdNm, lawdCd });
+    if (dim && dim.jibun) return { jibun: dim.jibun, sigungu: dim.sigungu || '', umdNm: dim.umdNm || umdNm || '' };
   } catch (_) { /* fall through to live */ }
 
   const key = process.env.MOLIT_API_KEY;

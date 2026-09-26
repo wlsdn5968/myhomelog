@@ -110,6 +110,7 @@ async function _run({ idxRow, sameDong, aptMasterRows, aptMasterError, statFixtu
   require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { getSupabaseAdmin: () => admin } };
   require.cache[svcPath] = { id: svcPath, filename: svcPath, loaded: true, exports: {
     getTransactionsByAptSeq: async () => (statFixture ? [{ _fixture: true }] : []),
+    getTransactionsByAptSeqMerged: async () => (statFixture ? [{ _fixture: true }] : []), // Plan 107b-1: 스텁 인터페이스 완성(동작 동일)
     analyzeTransactions: () => (statFixture ? [statFixture] : []),
   } };
   require.cache[schoolPath] = { id: schoolPath, filename: schoolPath, loaded: true, exports: {
