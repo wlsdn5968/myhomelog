@@ -482,9 +482,13 @@ const budgetService = require('./services/budgetService');
 //   [문제 2 — 정확성] 프론트 배너 "마지막 데이터 동기화"가 `health.timestamp`(= 응답 생성 시각 = 지금)를
 //     쓰고 있어 **언제 접속하든 항상 '방금 갱신됨'** 으로 보였다. 데이터가 며칠 안 들어와도 알 수 없는
 //     허위 신뢰 시그널(절대 룰 ② 위반). → 실제 최신 적재 시각(molit ingested_at 최대값)을 함께 반환.
-//     MAX(ingested_at) 은 인덱스가 없어 975ms(seq scan)지만 위 count 들과 **병렬**이라 캐시 미스 시
-//     벽시계 증가는 ~200ms 뿐이고, Redis 캐시로 미스 자체가 하루 몇 번으로 줄어든다.
-//     ⚠ ingested_at 인덱스 추가는 DDL — 운영자 승인 사항이라 하지 않았다(현 비용으로 충분히 수용 가능).
+//   SYNC-SOURCE-2026-09-26 (Plan 113): 위 "MAX(ingested_at) 은 인덱스 없이 975ms" 문단은 34만 행 시절
+//     실측이라 지금은 사실이 아니다 — 476,716행 기준 웜 EXPLAIN ANALYZE 재실측은 3,945ms(Parallel Seq
+//     Scan)다. PostgREST 접속 역할 authenticator 의 statement_timeout 8s 에 콜드스타트·동시부하로
+//     걸리면 supabase-js 는 throw 없이 {data:null} 을 주고, 그 null 이 6시간 캐시(메모리+Redis)에 굳어
+//     랜딩·브리핑의 "동기화" 표기가 조용히 사라졌다(2026-09-26 실사고). ingested_at 인덱스 추가는
+//     여전히 하지 않는다(DDL, ≈4MB) — 같은 의미("마지막 성공 적재 시각")를 이미 인덱스가 있는
+//     molit_ingest_runs.finished_at(status='ok', max(ingested_at)과 4초 차)으로 소스만 바꿨다.
 async function getDataCounts() {
   const CK = 'meta:dataCounts:v2';
   const hit = cache.get(CK);
@@ -492,7 +496,9 @@ async function getDataCounts() {
   const redisCache = require('./services/redisCache');
   try {
     const rHit = await redisCache.rget(CK);
-    if (rHit) { cache.set(CK, rHit, 21600); return rHit; }
+    // SYNC-SOURCE-2026-09-26 (Plan 113): rHit.lastIngestedAt 이 null 이면 과거 실패가 굳은 오염 캐시다 —
+    //   히트로 쓰지 말고 미스로 취급해 아래 DB 재조회로 넘어간다(Redis 오염 복구, 배포 후 6시간 대기 방지).
+    if (rHit && rHit.lastIngestedAt) { cache.set(CK, rHit, 21600); return rHit; }
   } catch (_) { /* Redis 실패는 무시하고 DB 조회 */ }
   try {
     const { getSupabaseAdmin } = require('./db/client');
@@ -501,17 +507,25 @@ async function getDataCounts() {
     const [tx, apt, lastIngest] = await Promise.all([
       admin.from('molit_transactions').select('*', { count: 'exact', head: true }),
       admin.from('apt_master').select('*', { count: 'exact', head: true }),
-      // 최신 1건의 ingested_at — 실패해도 아래에서 null 로 흘려보낸다(배너는 시각 표기만 생략).
-      admin.from('molit_transactions').select('ingested_at').order('ingested_at', { ascending: false }).limit(1).maybeSingle(),
+      // SYNC-SOURCE-2026-09-26 (Plan 113): 종전에는 ingested_at 컬럼을 내림차순 정렬해 최신 1건을
+      //   가져왔는데 그 컬럼에 인덱스가 없어 476K 행 병렬 seq scan(웜 3,945ms 실측)이라
+      //   authenticator 의 statement_timeout 8s 에 걸리면
+      //   null 이 6시간 캐시에 굳었다(2026-09-26 실사고 — 랜딩·브리핑 "동기화" 표기 소실).
+      //   마지막 성공 적재 시각은 molit_ingest_runs 가 이미 갖고 있다(7K 행·status 인덱스, 4초 차).
+      admin.from('molit_ingest_runs').select('finished_at').eq('status', 'ok')
+        .order('finished_at', { ascending: false }).limit(1).maybeSingle(),
     ]);
     const out = {
       tx: tx.count || 0,
       apt: apt.count || 0,
       // ISO 문자열 또는 null. 프론트는 null 이면 "언제 갱신됐는지" 표기를 아예 하지 않는다.
-      lastIngestedAt: lastIngest?.data?.ingested_at || null,
+      lastIngestedAt: lastIngest?.data?.finished_at || null,
     };
-    cache.set(CK, out, 21600); // 6h
-    redisCache.rset(CK, out, 21600).catch(() => {}); // 인스턴스 간 공유(fire-and-forget)
+    // SYNC-SOURCE-2026-09-26 (Plan 113): 실패(null)를 6시간 캐시에 굳히지 않는다 — 60초만 메모리에 두고
+    //   Redis 에는 쓰지 않아 다음 요청이 곧바로 재시도하게 한다.
+    const ttl = out.lastIngestedAt ? 21600 : 60;
+    cache.set(CK, out, ttl);
+    if (out.lastIngestedAt) redisCache.rset(CK, out, 21600).catch(() => {}); // 인스턴스 간 공유(fire-and-forget)
     return out;
   } catch (e) { return null; }
 }
@@ -792,3 +806,8 @@ if (process.env.VERCEL !== '1') {
 
 module.exports = app;
 module.exports.cache = cache;
+
+// TEST-EXPORT-2026-09-26 (Plan 113): getDataCounts 는 지금까지 export 돼 있지 않았다 — 테스트가
+//   Redis 오염 복구·null 캐시 TTL 분기(data-counts-sync.test.js)를 직접 호출로 고정하려면 필요하다.
+//   `_` 접두는 저장소 관례(_dbCapacityLevel·_dbSetAmenityCount 등)와 동일 — 프로덕션 코드는 쓰지 않는다.
+module.exports._getDataCounts = getDataCounts;
