@@ -712,6 +712,7 @@ $function$
 --   days_since_autovacuum 이 아니다) — auto/수동 vacuum 중 최근 것 기준.
 --   ⚠ SECURITY DEFINER 를 쓰지 않는다 — pg_stat_user_tables·pg_class 는 호출자(service_role)
 --   권한으로 읽힌다(최소 권한).
+-- 2026-09-27 (Plan 111 2단계 보정): relkind in ('r','m') — MV(molit_apt_index) 도 감시. 적용 기록 supabase/migrations/20260927_get_table_health_include_mv.sql
 CREATE OR REPLACE FUNCTION public.get_table_health()
  RETURNS TABLE(relname text, total_mb numeric, dead_pct numeric, days_since_vacuum integer)
  LANGUAGE sql
@@ -724,7 +725,7 @@ AS $function$
     from pg_class c
     join pg_namespace n on n.oid = c.relnamespace
     join pg_stat_user_tables s on s.relid = c.oid
-   where n.nspname = 'public' and c.relkind = 'r'
+   where n.nspname = 'public' and c.relkind in ('r', 'm')
      and pg_total_relation_size(c.oid) > 1048576
    order by pg_total_relation_size(c.oid) desc
 $function$
