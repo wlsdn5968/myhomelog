@@ -72,7 +72,11 @@ function _pick(summary) {
     // VISIBLE-FAIL-2026-09-27 (Plan 107b-2/B3 가시성): dimRefreshError 는 문자열이라 이 화이트리스트가
     //   숫자만 통과시키는 성질상 실패 "횟수" 로 집계될 수 없었다(Plan 110 과 같은 성질의 사각지대) —
     //   0/1 숫자 플래그를 별도로 등록해 health 에서 실패가 누적되는지 추적 가능하게 한다.
-    'dimRefreshFailed'];
+    'dimRefreshFailed',
+    // SILENT-HOLE-2026-09-27 (Plan 119): molit_ingest_runs 에 행 자체가 없는 "조용한 구멍"(회로차단
+    //   skipped·backfill offset 경계) 후보 총수 — retryFailedGaps 의 기존 gaps(오류 기반)와 별개로
+    //   health 에 노출해 매일 줄어드는지(0 도달) 관측한다.
+    'gapHoles'];
   const out = {};
   for (const k of NUM) {
     const v = summary[k];

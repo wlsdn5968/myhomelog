@@ -526,6 +526,9 @@ async function handleMolitIngest(req, res) {
       dimRefreshFailed: summary.dimRefreshFailed, // VISIBLE-FAIL-2026-09-27 (Plan 107b-2/B3): NUM 집계용 숫자 플래그(0/1)
       ok: summary.ok, err: summary.err, skipped: summary.skipped, elapsedMs: summary.elapsedMs,
       retried: summary.gapBackfill && summary.gapBackfill.retried, filled: summary.gapBackfill && summary.gapBackfill.filled,
+      // SILENT-HOLE-2026-09-27 (Plan 119): 기록이 아예 없는 (지역,월) 구멍 후보 총수(자르기 전) —
+      //   매일 회차마다 줄어 0 에 도달하는지가 검증 기준(계획서 §5).
+      gapHoles: summary.gapBackfill && summary.gapBackfill.holes,
       error: summary.firstError || summary.reason || undefined, // reason = 키 미설정 skip 케이스
       // ZERO-FETCH-WATCH-2026-08-10 (Sprint KKKKKKK-4): 광주 5개 구 44일 무적재가 status='ok' 라
       //   기존 지표(ok/err)로는 전혀 안 보였다 — 지역 단위 0건을 health 로 올린다.

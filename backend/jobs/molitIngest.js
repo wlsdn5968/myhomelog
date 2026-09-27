@@ -314,31 +314,98 @@ async function retryFailedGaps(admin, { maxGaps = 15, lookbackMonths = WINDOW_MO
       .gte('deal_ym', minYm));
   } catch (e) {
     logger.warn({ err: e.message }, 'molit gap-backfill 실패목록 조회 실패');
-    return { gaps: 0, retried: 0, filled: 0 };
+    return { gaps: 0, retried: 0, filled: 0, holes: 0 };
   }
-  if (!fails.length) return { gaps: 0, retried: 0, filled: 0 };
 
   const failPairs = [...new Set(fails.map(r => `${r.lawd_cd}|${r.deal_ym}`))];
   const failLawds = [...new Set(fails.map(r => r.lawd_cd))];
   const failYms = [...new Set(fails.map(r => r.deal_ym))];
 
-  let oks = [];
-  try {
-    oks = await pageAll(() => admin.from('molit_ingest_runs')
-      .select('id, lawd_cd, deal_ym')
-      .eq('status', 'ok')
-      .in('lawd_cd', failLawds)
-      .in('deal_ym', failYms));
-  } catch (e) {
-    // ok 목록을 온전히 못 받으면 재적재 오판이 생기므로 이번 run 은 갭 처리를 건너뛴다(안전 우선).
-    logger.warn({ err: e.message }, 'molit gap-backfill 성공목록 조회 실패 — 이번 run 갭 처리 skip');
-    return { gaps: 0, retried: 0, filled: 0 };
+  // SILENT-HOLE-2026-09-27 (Plan 119): 예전엔 실패 기록이 하나도 없으면(failPairs 0개) 바로 return 했다.
+  //   그런데 회로차단(CIRCUIT_BREAK_CONSECUTIVE_FAILURES)에 걸려 skipped 로 넘어간 작업은 ingestOne 을
+  //   아예 안 타 molit_ingest_runs 에 행이 안 생긴다 — failPairs 는 영원히 0인 채로 그 구멍만 남는다.
+  //   그래서 실패 기록 유무와 무관하게 항상 아래 구멍 탐지까지 내려간다. ok 목록 조회만 failPairs 가
+  //   있을 때로 한정한다(불필요한 조회 생략 — 기존 조기 return 이 하던 일과 결과적으로 동일).
+  let okSet = new Set();
+  if (failPairs.length) {
+    let oks;
+    try {
+      oks = await pageAll(() => admin.from('molit_ingest_runs')
+        .select('id, lawd_cd, deal_ym')
+        .eq('status', 'ok')
+        .in('lawd_cd', failLawds)
+        .in('deal_ym', failYms));
+    } catch (e) {
+      // ok 목록을 온전히 못 받으면 재적재 오판이 생기므로 이번 run 은 갭 처리를 건너뛴다(안전 우선).
+      logger.warn({ err: e.message }, 'molit gap-backfill 성공목록 조회 실패 — 이번 run 갭 처리 skip');
+      return { gaps: 0, retried: 0, filled: 0, holes: 0 };
+    }
+    okSet = new Set(oks.map(r => `${r.lawd_cd}|${r.deal_ym}`));
   }
-  const okSet = new Set(oks.map(r => `${r.lawd_cd}|${r.deal_ym}`));
 
-  const gaps = failPairs.filter(p => !okSet.has(p)).slice(0, maxGaps);
+  // GAP-ALL-2026-09-27 (Plan 119 리뷰 정정): gaps 는 maxGaps 로 자른 "이번에 실제로 재시도할" 목록이다.
+  //   구멍 탐지의 제외 집합(gapSet)은 잘리기 전 gapAll 을 써야 한다 — gaps 로 만들면 오류 기반 후보가
+  //   maxGaps 를 넘을 때 16번째 이후(이미 error 행이 있는 쌍)가 gapSet 에도 coveredSet 에도 없어
+  //   "기록이 아예 없는 쌍"이 아닌데도 holes(=health gapHoles)에 잘못 집계된다.
+  const gapAll = failPairs.filter(p => !okSet.has(p));
+  const gaps = gapAll.slice(0, maxGaps);
+
+  // SILENT-HOLE-2026-09-27 (Plan 119): "조용한 구멍" — error/timeout 행조차 없이 molit_ingest_runs 에
+  //   행 자체가 없는 (지역,월). 원인 ① 회로차단에 걸려 skipped 로 넘어간 작업(ingestOne 미호출 → 무기록)
+  //   ② 신규 편입 지역 backfill 의 offset 이 실제 시작월보다 최근 달을 건너뛰는 경계 오류. 최신 3개월은
+  //   본 적재가 매일 다시 채우므로 후보에서 제외한다. "신설 코드의 생성 전 달"은 한 번 조회하면
+  //   rows 0 → status='ok' 로 기록되고(ingestOne 기존 동작) 다음 회차부턴 covered 로 잡혀 자연 소멸한다
+  //   (무한 재시도 없음).
+  const windowYms = recentYearMonths(lookbackMonths); // 최신 → 과거
+  const holeYms = windowYms.slice(3); // 최신 3개월 제외
+  let holeCandidates = [];
+  if (holeYms.length) {
+    const oldestHoleYm = holeYms[holeYms.length - 1];
+    const newestHoleYm = holeYms[0];
+    const gapSet = new Set(gapAll); // 잘리기 전 전체 — 위 GAP-ALL-2026-09-27 주석 참고
+    try {
+      const covered = await pageAll(() => admin.from('molit_ingest_runs')
+        .select('lawd_cd, deal_ym')
+        .in('status', ['ok', 'archived'])
+        .gte('deal_ym', oldestHoleYm)
+        .lte('deal_ym', newestHoleYm));
+      const coveredSet = new Set(covered.map(r => `${r.lawd_cd}|${r.deal_ym}`));
+      const coveredRangeByLawd = new Map(); // 지역별 covered 최소~최대 월(내부 구멍 판정용)
+      for (const r of covered) {
+        const cur = coveredRangeByLawd.get(r.lawd_cd);
+        if (!cur) coveredRangeByLawd.set(r.lawd_cd, { min: r.deal_ym, max: r.deal_ym });
+        else {
+          if (r.deal_ym < cur.min) cur.min = r.deal_ym;
+          if (r.deal_ym > cur.max) cur.max = r.deal_ym;
+        }
+      }
+      const inner = [], outer = []; // ① 그 지역 covered 범위 안의 내부 구멍 ② 나머지(신설·늦은 편입)
+      for (const lawd of Object.values(LAWD_CODES)) {
+        const range = coveredRangeByLawd.get(lawd);
+        for (const ym of holeYms) {
+          const key = `${lawd}|${ym}`;
+          if (coveredSet.has(key) || gapSet.has(key)) continue; // 이미 커버됨 또는 이미 gaps 후보
+          const isInner = !!range && ym >= range.min && ym <= range.max;
+          (isInner ? inner : outer).push({ key, ym });
+        }
+      }
+      const byYmDesc = (a, b) => (a.ym < b.ym ? 1 : a.ym > b.ym ? -1 : 0); // 같은 묶음 안에서는 최신 달 먼저
+      inner.sort(byYmDesc);
+      outer.sort(byYmDesc);
+      holeCandidates = [...inner, ...outer].map(o => o.key);
+    } catch (e) {
+      // covered 조회 실패 시 구멍 처리만 건너뛴다 — 기존 갭 처리는 그대로 계속한다(부분 목록으로
+      // 오판 재적재하지 않는다 — 위 oks 실패 처리와 같은 원칙).
+      logger.warn({ err: e.message }, 'molit gap-backfill 구멍후보 조회 실패 — 이번 run 구멍 처리만 skip');
+    }
+  }
+
+  // 재시도 목록 = gaps(기존, 우선) + holes 를 합쳐 총 maxGaps 개까지 — 같은 루프(ingestOne·연속 실패
+  // 차단·deadline)로 처리한다.
+  const picked = [...gaps, ...holeCandidates].slice(0, maxGaps);
+
   let retried = 0, filled = 0, consec = 0;
-  for (const p of gaps) {
+  for (const p of picked) {
     if (consec >= CIRCUIT_BREAK_CONSECUTIVE_FAILURES) break; // MOLIT 장애 시 중단
     if (Date.now() > deadline) break;                        // maxDuration 보호 — 남은 갭은 다음 run
     const idx = p.lastIndexOf('|');
@@ -347,11 +414,11 @@ async function retryFailedGaps(admin, { maxGaps = 15, lookbackMonths = WINDOW_MO
     retried++;
     if (r.ok) { filled++; consec = 0; } else { consec++; }
   }
-  if (gaps.length) {
-    logger.info({ source: 'molit-ingest-gap', candidateGaps: failPairs.length, picked: gaps.length, retried, filled },
+  if (picked.length) {
+    logger.info({ source: 'molit-ingest-gap', candidateGaps: failPairs.length, candidateHoles: holeCandidates.length, picked: picked.length, retried, filled },
       `molit-ingest gap-backfill: ${filled}/${retried} 적재`);
   }
-  return { gaps: gaps.length, retried, filled };
+  return { gaps: gaps.length, retried, filled, holes: holeCandidates.length };
 }
 
 /** 전체 실행 — Vercel Cron entrypoint 에서 호출 */
@@ -499,6 +566,7 @@ async function runMolitIngest(opts = {}) {
 
 // molitErrReason 은 "응답 본문을 통째로 저장하지 않는다(키 에코 차단)" 보안 성질을 테스트로 고정하기 위해 export.
 module.exports = { runMolitIngest, molitErrReason, fetchRegionMonth };
+module.exports._retryFailedGaps = retryFailedGaps; // TEST-EXPORT-2026-09-27 (Plan 119): 구멍 감지 고정용
 
 // CLI: node backend/jobs/molitIngest.js
 if (require.main === module) {
