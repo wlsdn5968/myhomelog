@@ -5898,7 +5898,11 @@ function _mapSheetTry(kind,p){
     // LABEL-WINDOW-2026-09-26 (Plan 107b-1/B2): p.dealCount 는 MV(molit_apt_index)의 원본 전 기간
     //   집계다 — 107c 로 원본을 16개월 창으로 자르면 "거래 N건"은 사실 "최근 16개월 N건"이 된다.
     //   숫자는 그대로 두고(창 자르기 전에는 전 기간과 같아 변화 없음) 문구만 정확하게 바꾼다.
-    const meta=[(p.buildYear?`${p.buildYear}년 준공`:''),(kind==='pop'?(p.dealCount60d?`60일 ${p.dealCount60d}건`:''):((p.dealCount??p.dealCount6m)?`최근 거래 ${p.dealCount??p.dealCount6m}건`:''))].filter(Boolean).join(' · ');
+    // LABEL-HIST-2026-09-27 (Plan 107b-2): D2 MV 는 dealCount(원본 창 안)가 0 일 수 있다(복구된
+    //   5,126 단지·KAPT 전용 폴백 행 — 원본 거래는 없지만 이력엔 있다). dealCount 가 0 이면
+    //   "최근 거래 0건" 대신(위 ??는 0을 유효값으로 다뤄 빈 문자열로 빠진다) dealCountAll(이력
+    //   포함 전체 건수)이 있을 때만 "이력 N건" 으로 폴백한다 — 거래를 지어내지 않는다.
+    const meta=[(p.buildYear?`${p.buildYear}년 준공`:''),(kind==='pop'?(p.dealCount60d?`60일 ${p.dealCount60d}건`:''):((p.dealCount??p.dealCount6m)?`최근 거래 ${p.dealCount??p.dealCount6m}건`:(p.dealCount===0&&p.dealCountAll>0?`이력 ${p.dealCountAll}건`:'')))].filter(Boolean).join(' · ');
     document.getElementById('msName').textContent=p.aptName||'';
     document.getElementById('msSub').textContent=sub||'—';
     document.getElementById('msPriceV').textContent=priceV||'—(미확인)';

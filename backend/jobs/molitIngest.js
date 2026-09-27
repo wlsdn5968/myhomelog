@@ -34,6 +34,9 @@ const API_CONCURRENCY = 3;
 const CIRCUIT_BREAK_CONSECUTIVE_FAILURES = 3;
 const BATCH_INSERT_SIZE = 500;
 
+// WINDOW-2026-09-27 (Plan 107b-2/B8): 원본 창(107c)과 같게 — 창 밖 달의 error/timeout 을 재적재하면 안 된다.
+const WINDOW_MONTHS = 16;
+
 function adminClient() {
   return requireSupabaseAdmin('ETL 불가');
 }
@@ -282,7 +285,7 @@ async function ingestOne(admin, lawdCd, dealYm) {
  *   - 빈 월(MOLIT 데이터 없음)은 ingestOne 이 rows=0 으로 status='ok' 처리 → 갭에서 자동 제외(무한재시도 차단).
  *   - 연속 3 실패 시 중단(MOLIT 장애 보호). 시간가드는 호출부(runMolitIngest)에서.
  */
-async function retryFailedGaps(admin, { maxGaps = 15, lookbackMonths = 18, deadline = Infinity } = {}) {
+async function retryFailedGaps(admin, { maxGaps = 15, lookbackMonths = WINDOW_MONTHS, deadline = Infinity } = {}) {
   const minYm = recentYearMonths(lookbackMonths).slice(-1)[0]; // 가장 오래된 YYYYMM
 
   // REST-CAP-FIX-2026-07-25 (Sprint QQQQQQ, improve 감사 CONFIRMED — DB 실측으로 발동 확인):
@@ -474,7 +477,7 @@ async function runMolitIngest(opts = {}) {
   let gapBackfill = { gaps: 0, retried: 0, filled: 0 };
   if (Date.now() - started < 200000) {
     try {
-      gapBackfill = await retryFailedGaps(admin, { maxGaps: 15, lookbackMonths: 18, deadline: started + 270000 });
+      gapBackfill = await retryFailedGaps(admin, { maxGaps: 15, lookbackMonths: WINDOW_MONTHS, deadline: started + 270000 });
     } catch (e) {
       logger.warn({ err: e.message }, 'molit-ingest gap-backfill 실패 (정상 적재엔 무영향)');
     }

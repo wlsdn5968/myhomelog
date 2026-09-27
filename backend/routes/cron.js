@@ -460,6 +460,10 @@ async function handleMolitIngest(req, res) {
     summary.dimRefreshed = _dimRefreshed;
     summary.dimRefreshMs = _dimRefreshMs;
     summary.dimRefreshError = _dimRefreshError;
+    // VISIBLE-FAIL-2026-09-27 (Plan 107b-2/B3 가시성): _dimRefreshError 는 문자열이라 cronStats.NUM
+    //   이 집계 못 하고(Plan 110 의 교훈과 동일 성질) health 에 실패 횟수가 안 보였다 — 숫자 플래그를
+    //   따로 남긴다(admin 없음 · rpc 예외 둘 다 위에서 _dimRefreshError 를 채운다).
+    summary.dimRefreshFailed = _dimRefreshError ? 1 : 0;
 
     // MV-STALE-WATCH-2026-09-06 (Plan 058): "기록이 정직했는데 경보가 없어서" 21일이 조용히 지나갔다.
     //   [실측 2026-09-06] health.crons.mvRefreshError 에 실패 사유(8초 statement timeout)가 매일 정확히
@@ -519,6 +523,7 @@ async function handleMolitIngest(req, res) {
       // DIM-DAILY-2026-09-26 (Plan 107b-1/B3): summary.* 는 위 블록에서 직접 담았다(_pick 은 이 객체의
       //   최상위 키만 본다 — summary 를 그대로 넘겨도 자동으로 안 실린다, Plan 110 의 교훈).
       dimRefreshed: summary.dimRefreshed, dimRefreshMs: summary.dimRefreshMs, dimRefreshError: summary.dimRefreshError,
+      dimRefreshFailed: summary.dimRefreshFailed, // VISIBLE-FAIL-2026-09-27 (Plan 107b-2/B3): NUM 집계용 숫자 플래그(0/1)
       ok: summary.ok, err: summary.err, skipped: summary.skipped, elapsedMs: summary.elapsedMs,
       retried: summary.gapBackfill && summary.gapBackfill.retried, filled: summary.gapBackfill && summary.gapBackfill.filled,
       error: summary.firstError || summary.reason || undefined, // reason = 키 미설정 skip 케이스

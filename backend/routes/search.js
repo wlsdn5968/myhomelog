@@ -230,8 +230,10 @@ router.get('/apt', async (req, res) => {
       //   300행을 다 먹어 다른 단지가 잘렸다(주석에 남아 있던 '상계주공1 119건' 문제) — 이제 안 잘린다.
       //   [주의] MV 는 cron 이 REFRESH 한다(molit-ingest 직후). 갱신 전엔 최신 거래가 최대 1일 늦다 —
       //   자동완성 목록의 recentDealDate 표시에만 영향이고, 단지 상세·거래 목록은 원본을 그대로 읽는다.
+      // HIST-COUNT-2026-09-27 (Plan 107b-2 추가 1건): deal_count_all(MV D2 신규 컬럼) 을 얹어야
+      //   원본 거래 0건 단지(dealCount=0)에도 "이력 N건" 폴백을 계산할 수 있다(아래 정규화의 _nAll).
       _softQuery(admin.from('molit_apt_index')
-        .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, recent_deal_date, deal_count, apt_seq')
+        .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, recent_deal_date, deal_count, deal_count_all, apt_seq')
         .ilike('apt_name', `%${qApt}%`)  // qApt: 접미사 정규화
         .order('recent_deal_date', { ascending: false })
         .limit(limit * 30)
@@ -243,7 +245,7 @@ router.get('/apt', async (req, res) => {
       //   조건이 참이면 위 3개와 **병렬**로 실행되므로(Promise.all) 총 지연은 합이 아니라 최댓값에 가깝다.
       _needsNoSpace
         ? _softQuery(admin.from('molit_apt_index')
-            .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, recent_deal_date, deal_count, apt_seq')
+            .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, recent_deal_date, deal_count, deal_count_all, apt_seq')
             .ilike('apt_name', `%${_qNo}%`)
             .order('recent_deal_date', { ascending: false })
             .limit(limit * 30)
@@ -267,10 +269,19 @@ router.get('/apt', async (req, res) => {
     //   MV 행은 이미 단지 단위 집계라 그 전제가 깨진다 → 컬럼명(recent_deal_date→deal_date)과
     //   가중치(_w = 그 행이 대표하는 거래 건수)를 **여기서 한 번에** 맞춰 그룹핑 본체는 그대로 둔다.
     //   ⚠ `_w` 기본값 1 — 혹시 원본 테이블로 되돌려도 그룹핑이 종전과 동일하게 작동한다(하위 호환).
+    //   ⚠ `_w` 는 대표 apt_seq 선택·seqCounts 가중치 전용으로 남긴다(0 이면 대표를 못 뽑는다) —
+    //   바꾸지 않는다. HIST-COUNT-2026-09-27 (Plan 107b-2 추가 1건, 리뷰어 실측): D2 MV 는
+    //   `deal_count`(원본 창 안 건수)가 0 일 수 있는데(복구된 5,126 단지·KAPT 전용 폴백 행) 그동안
+    //   `_w` 의 "0 이면 1" 폴백이 그대로 `dealCount` 에도 흘러 들어가 원본 거래가 실제로는 0건인
+    //   단지가 "최근 거래 1건" 으로 지어내졌다(예: 시티팰리스9차 — 실제 원본 0·이력 146,
+    //   API 는 dealCount:1). `_n`(실측, 0 허용)·`_nAll`(dim 이 보존한 전체 건수)을 따로 얹어
+    //   그룹핑 count 는 `_n` 을 쓰게 한다(아래).
     let molitRows = (molitRes.data || []).map((r) => ({
       ...r,
       deal_date: r.recent_deal_date != null ? r.recent_deal_date : r.deal_date,
       _w: Number(r.deal_count) > 0 ? Number(r.deal_count) : 1,
+      _n: Number(r.deal_count) || 0,
+      _nAll: Number(r.deal_count_all) || 0,
     }));
     // PLAN-052 (Step 3): 공백 제거 변형 결과를 같은 모양으로 합쳐 그룹핑(mergeKey)에 맡긴다 —
     //   그룹핑은 이미 baseName|sigungu|umd_nm|build_year 로 동일 단지를 흡수하므로(아래 aptMap),
@@ -280,6 +291,8 @@ router.get('/apt', async (req, res) => {
         ...r,
         deal_date: r.recent_deal_date != null ? r.recent_deal_date : r.deal_date,
         _w: Number(r.deal_count) > 0 ? Number(r.deal_count) : 1,
+        _n: Number(r.deal_count) || 0,
+        _nAll: Number(r.deal_count_all) || 0,
       })));
     }
     if (_needsNoSpace && molitNoSpaceRes && molitNoSpaceRes.error) {
@@ -383,13 +396,13 @@ router.get('/apt', async (req, res) => {
         if (region.length < 2 || name.length < 2) continue;
         const [byUmd, bySigungu, amByRegion] = await Promise.all([
           _softQuery(admin.from('molit_apt_index')
-            .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, recent_deal_date, deal_count, apt_seq')
+            .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, recent_deal_date, deal_count, deal_count_all, apt_seq')
             .ilike('umd_nm', `${region}%`).ilike('apt_name', `%${name}%`)
             .order('recent_deal_date', { ascending: false })
             .limit(limit * 30)
             .abortSignal(AbortSignal.timeout(MOLIT_ABORT_MS))),
           _softQuery(admin.from('molit_apt_index')
-            .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, recent_deal_date, deal_count, apt_seq')
+            .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, recent_deal_date, deal_count, deal_count_all, apt_seq')
             .ilike('sigungu', `${region}%`).ilike('apt_name', `%${name}%`)
             .order('recent_deal_date', { ascending: false })
             .limit(limit * 30)
@@ -415,6 +428,8 @@ router.get('/apt', async (req, res) => {
           ...r,
           deal_date: r.recent_deal_date != null ? r.recent_deal_date : r.deal_date,
           _w: Number(r.deal_count) > 0 ? Number(r.deal_count) : 1,
+          _n: Number(r.deal_count) || 0,
+          _nAll: Number(r.deal_count_all) || 0,
         })));
         masterRes = { data: (masterRes.data || []).concat(_regionRetry.masterRows) };
       }
@@ -444,13 +459,18 @@ router.get('/apt', async (req, res) => {
       //   이 치환이 빠지면 dealCount 와 대표 apt_seq 선택이 **거래량이 아니라 행수 기준**이 되어
       //   인기 정렬(SEARCH-RANK)이 통째로 뒤틀린다.
       const _w = row._w || 1;
+      // HIST-COUNT-2026-09-27 (Plan 107b-2 추가 1건): `dealCount`(응답, count) 는 `_w` 가 아니라
+      //   실측 `_n`(0 허용)을 합산한다 — `_w` 는 대표 apt_seq 선택(seqCounts)·랭킹 가중치 전용으로
+      //   그대로 남긴다(바꾸면 안 된다). `_n` 이 없는 행(이번 범위 밖의 폴백 행)은 `??` 로 `_w` 를
+      //   그대로 써 종전과 동일하게 동작한다. `countAll` 은 dim 이 보존한 전체 건수 합산(신규).
       const cur = aptMap.get(mergeKey);
       if (cur) {
-        cur.count += _w;
+        cur.count += (row._n ?? row._w);
+        cur.countAll += (row._nAll ?? 0);
         if (String(row.deal_date || '') > String(cur.firstRow.deal_date || '')) {
           cur.firstRow = row; // 최신 거래 row 를 firstRow 로 갱신
         }
-        // apt_seq 별 거래량 counter (대표 apt_seq 선택용)
+        // apt_seq 별 거래량 counter (대표 apt_seq 선택용) — 랭킹 가중치라 `_w` 그대로
         const seqCnt = cur.seqCounts.get(row.apt_seq) || 0;
         cur.seqCounts.set(row.apt_seq, seqCnt + _w);
         // alias raw name 누적 (set 으로 중복 제거)
@@ -459,7 +479,8 @@ router.get('/apt', async (req, res) => {
         const seqCounts = new Map();
         if (row.apt_seq) seqCounts.set(row.apt_seq, _w);
         aptMap.set(mergeKey, {
-          count: _w,
+          count: (row._n ?? row._w),
+          countAll: (row._nAll ?? 0),
           firstRow: row,
           baseName: base,
           seqCounts,
@@ -502,7 +523,8 @@ router.get('/apt', async (req, res) => {
         lawdCd: row.lawd_cd,
         buildYear: row.build_year,
         recentDealDate: row.deal_date,
-        dealCount: grp.count, // 그룹 전체 거래량 합산
+        dealCount: grp.count, // 그룹 전체 거래량 합산(0 허용 — HIST-COUNT-2026-09-27, Plan 107b-2 추가 1건)
+        dealCountAll: grp.countAll, // HIST-COUNT-2026-09-27 (Plan 107b-2 추가 1건): dim 이 보존한 전체(이력 포함) 건수
         aptSeq: repSeq, // 대표 apt_seq
         source: 'molit',
         // NAME-MERGE 디버깅 + 거래 fetch 시 base 매칭 보강

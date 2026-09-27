@@ -1,0 +1,65 @@
+-- ============================================================================
+-- 2026-09-27 — 이미 프로덕션에 적용됨(리뷰어가 운영자 승인 하에 execute_sql 로 실행).
+--   이 파일은 **적용 기록**이다(Plan 026 관례, 20260926_get_table_health.sql 과 같은 형식).
+--   plans/107b-2-window-safe-ddl.md 기반. 부모 설계: plans/107b-107c-window-cut-design.md §0~§1.
+-- ============================================================================
+-- [무엇인가] 원본 창(107c, 최근 16개월만 유지)을 자르기 **전에** 안전해야 하는 DDL 4건.
+--   순서대로 적용, 각 단계 전후 실측. 실행자(코드)는 이 파일을 SQL 을 다시 실행하는 데
+--   쓰지 않는다 — 이미 적용된 사실을 schema.sql·마이그레이션 기록에 반영하는 용도뿐이다.
+--
+-- [1. refresh_molit_apt_dim() timeout 교정 — B3]
+--   실측: 함수가 37초(2026-09-27 02:33Z, 3,181행 갱신) 걸려 PostgREST 의 8초 컷에 매일
+--   실패했다(cronStats._pick 이 문자열만 버려 health 에 dimRefreshed 가 "없는 것"으로만
+--   보였다). refresh_molit_apt_index() 와 같은 처방으로 120초로 늘린다.
+--   SQL: alter function public.refresh_molit_apt_dim() set statement_timeout = '120s';
+--   되돌리기: alter function public.refresh_molit_apt_dim() reset statement_timeout;
+--
+-- [2. D1 — 경신 요약 증분 함수 upsert_hist_peaks_for_month(p_ym text) — B5]
+--   107c 가 원본 창 밖 달을 지우기 전에 그 달을 molit_hist_peaks 로 증분 반영해 두는 함수.
+--   103 의 1회성 채움 SQL(2020-09~2025-04)을 월 단위로 파라미터화했다. mx/mn 은
+--   greatest/least 라 재실행해도 멱등, n 은 합산이라 같은 달을 두 번 넣으면 이중
+--   계상된다 — 107c 절차에서 삭제 **전** 1회만 호출(호출 자체는 107c-1 의 몫, 이 단계는
+--   함수 생성만).
+--   면적 변환식 least(round(exclu_use_ar*100),32767)::smallint 는 get_price_records* 의
+--   조인식과 글자 단위로 같아야 한다(다르면 조인이 빗나간다).
+--   SQL: schema.sql 의 public.upsert_hist_peaks_for_month 정의 참고(적용 SQL 그대로).
+--   되돌리기: drop function public.upsert_hist_peaks_for_month(text);
+--
+-- [3. D2 — MV molit_apt_index 를 molit_apt_dim 기반으로 — B1]
+--   옛 정의(FROM molit_transactions 만 집계)는 원본 창이 잘리면 창 밖 단지가 MV 에서
+--   통째로 사라졌다. molit_apt_dim(apt_seq 전수 보존, 107a)을 기반으로 바꾸고 원본은
+--   LEFT JOIN 으로 창 안 집계만 얹는다.
+--     - deal_count = 원본 창 안 건수(랭킹·정렬·"최근 거래 N건" 그대로, B2 결정 — 오늘은 값
+--       변화 0, 창을 자른 뒤부터 뜻이 "최근 N개월" 로 정확해진다)
+--     - deal_count_all = 신규 컬럼. dim 이 보존한 전체 건수("/apt 누적"용) — 기존 소비자는
+--       select 목록에 없으면 무시하므로 변경 없음
+--     - apt_seq 선택 규칙(최근 거래 우선)·그룹 키(apt_name,lawd_cd,sigungu,umd_nm,build_year)
+--       ·유일 인덱스 이름(uq_molit_apt_index)은 그대로
+--   절차: v2 를 새로 만들어 행수·정의를 검토한 뒤, 한 트랜잭션에서 drop+rename 교체
+--   (독자는 커밋 전까지 옛 MV 를 본다. refresh_molit_apt_index() 는 이름으로 참조하므로
+--   그대로 동작).
+--   실측: 23,061행/5.59MB → 27,780행/4.96MB(복구된 5,126 단지 포함), 첫 CONCURRENTLY
+--   갱신 13s → 3.2s.
+--   오늘 즉시 효과: 복구된 5,126 단지가 검색·자동완성·/region 후보에 포함된다(사이트맵은
+--   recent_deal_date ≥ 1년 필터로 계속 제외 — B9, 117 의 마지막 조각).
+--   SQL: schema.sql 의 public.molit_apt_index 정의 참고(적용 SQL 그대로, v2 생성 → 트랜잭션
+--   내 drop molit_apt_index + rename v2 → molit_apt_index + rename 인덱스).
+--   되돌리기: 옛 정의(git 히스토리의 schema.sql 이전 버전 — FROM molit_transactions 집계,
+--   deal_count_all 없음)로 같은 v2→교체 절차를 역순으로.
+--
+-- [4. D3 — molit_ingest_runs_status_chk 에 'archived' 추가 — B8]
+--   107c 가 창 밖으로 옮긴 달의 molit_ingest_runs 를 'archived' 로 표시할 예정이라 CHECK 에
+--   먼저 추가한다(Plan 110 의 교훈 — 코드가 쓰는 값이 CHECK 에 없으면 조용히 실패한다.
+--   'timeout' 이 90일간 그렇게 막혔었다).
+--   SQL:
+--     alter table public.molit_ingest_runs drop constraint molit_ingest_runs_status_chk;
+--     alter table public.molit_ingest_runs add constraint molit_ingest_runs_status_chk
+--       check (status = any (array['running'::text,'ok'::text,'error'::text,'skipped'::text,'timeout'::text,'archived'::text]));
+--   되돌리기: 'archived' 뺀 배열로 같은 방식 재생성(그 값을 가진 행이 없을 때만 — 있으면
+--   먼저 그 행들을 다른 status 로 옮기거나 지워야 DROP+ADD 가 통과한다).
+--
+-- [완료 기준 — plans/107b-2-window-safe-ddl.md]
+--   D2 후 count(*) ≥ 23,017 · 복구 단지(예: 30200-736)가 MV 에 있음 ·
+--   refresh_molit_apt_index() 실측 ≤ 60s · search API 로 복구 단지 이름 검색 시 결과 포함.
+--   위 실측치(27,780행/4.96MB, 3.2s)로 충족 확인됨.
+-- ============================================================================

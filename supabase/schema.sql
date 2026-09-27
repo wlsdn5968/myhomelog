@@ -400,7 +400,10 @@ alter table public.field_notes add constraint field_notes_user_id_fkey FOREIGN K
 alter table public.kakao_notify_tokens add constraint kakao_notify_tokens_pkey PRIMARY KEY (user_id);
 alter table public.kakao_notify_tokens add constraint kakao_notify_tokens_user_fk FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 alter table public.molit_ingest_runs add constraint molit_ingest_runs_pkey PRIMARY KEY (id);
-alter table public.molit_ingest_runs add constraint molit_ingest_runs_status_chk CHECK ((status = ANY (ARRAY['running'::text, 'ok'::text, 'error'::text, 'skipped'::text, 'timeout'::text])));
+-- ARCHIVED-STATUS-2026-09-27 (Plan 107b-2/D3, B8 — 리뷰어 적용): 107c 가 창 밖으로 옮긴 달의
+--   molit_ingest_runs 를 'archived' 로 표시할 예정이라 CHECK 에 먼저 추가한다(110 의 교훈 —
+--   코드가 쓰는 값이 CHECK 에 없으면 조용히 실패한다).
+alter table public.molit_ingest_runs add constraint molit_ingest_runs_status_chk CHECK ((status = ANY (ARRAY['running'::text, 'ok'::text, 'error'::text, 'skipped'::text, 'timeout'::text, 'archived'::text])));
 alter table public.molit_transactions add constraint molit_transactions_pkey PRIMARY KEY (id);
 alter table public.payments add constraint payments_order_id_key UNIQUE (order_id);
 alter table public.payments add constraint payments_pkey PRIMARY KEY (id);
@@ -468,17 +471,32 @@ CREATE UNIQUE INDEX uq_molit_dedup ON public.molit_transactions USING btree (ded
 alter table public.molit_transactions set (autovacuum_vacuum_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.02);
 
 -- ============ MATERIALIZED VIEWS ============
+-- DIM-BASED-MV-2026-09-27 (Plan 107b-2/D2, B1 — 리뷰어 적용): 옛 정의는 molit_transactions 만
+--   집계해 원본 창(107c)이 잘리면 창 밖 단지가 MV 에서 통째로 사라졌다. molit_apt_dim(apt_seq
+--   전수 보존, 107a)을 기반으로 바꾸고 원본은 LEFT JOIN 으로 창 안 집계만 얹는다 —
+--   deal_count 는 원본 창 안 건수(랭킹·정렬·"최근 거래 N건", B2 결정으로 불변), 신규
+--   deal_count_all 은 dim 이 보존한 전체 건수(과거 최대치, "/apt 누적"용). apt_seq 선택은
+--   기존과 동일하게 최근 거래 우선(coalesce(l.recent, g.last_deal_date) desc). 그룹 키·유일
+--   인덱스(uq_molit_apt_index)는 그대로. 실측: 23,061행/5.59MB → 27,780행/4.96MB,
+--   refresh_molit_apt_index() 13s → 3.2s. 되돌리기: 옛 정의(위 커밋 히스토리)로 같은
+--   교체 절차(v2 생성 → 트랜잭션 안에서 drop+rename) 역순.
 create materialized view if not exists public.molit_apt_index as
- SELECT apt_name,
-    lawd_cd,
-    sigungu,
-    umd_nm,
-    build_year,
-    max(deal_date) AS recent_deal_date,
-    count(*)::integer AS deal_count,
-    (array_agg(apt_seq ORDER BY deal_date DESC))[1] AS apt_seq
-   FROM molit_transactions
-  GROUP BY apt_name, lawd_cd, sigungu, umd_nm, build_year;
+with g as (
+  select d.apt_name, d.lawd_cd, d.sigungu, d.umd_nm, d.build_year,
+         d.apt_seq, d.last_deal_date, d.deal_count as dim_count
+    from public.molit_apt_dim d
+   where d.apt_name is not null and d.lawd_cd is not null
+), live as (
+  select t.apt_seq, max(t.deal_date) as recent, count(*)::integer as cnt
+    from public.molit_transactions t where t.apt_seq is not null group by t.apt_seq
+)
+select g.apt_name, g.lawd_cd, g.sigungu, g.umd_nm, g.build_year,
+       greatest(max(l.recent), max(g.last_deal_date))                       as recent_deal_date,
+       coalesce(sum(l.cnt), 0)::integer                                       as deal_count,       -- 원본 창 안 건수(랭킹·정렬·"최근 거래 N건")
+       coalesce(sum(g.dim_count), 0)::integer                                 as deal_count_all,   -- 보존된 전체 건수(신규)
+       (array_agg(g.apt_seq order by coalesce(l.recent, g.last_deal_date) desc nulls last))[1] as apt_seq
+  from g left join live l on l.apt_seq = g.apt_seq
+ group by g.apt_name, g.lawd_cd, g.sigungu, g.umd_nm, g.build_year;
 
 -- ============ FUNCTIONS ============
 CREATE OR REPLACE FUNCTION public.active_lawd_codes(since_date date DEFAULT NULL::date)
@@ -791,10 +809,14 @@ $function$
 --   쓴 이유: 창을 자른 뒤에는 원본의 집계가 줄어든다 — 보존 테이블이 과거 최대치를 잊으면 안 된다.
 --   ⚠ 계획자 오류 교정(2026-09-20): 이 함수는 public 의 제 테이블(molit_apt_dim·molit_transactions)만
 --   다루므로 security definer 가 필요 없다(최소 권한) — 적용본은 prosecdef=false, 여기도 맞춘다.
+-- TIMEOUT-2026-09-27 (Plan 107b-2 리뷰어 적용): 실측 37초(02:33Z, 3,181행 갱신)라 PostgREST 의
+--   8초 컷에 매일 실패했다(cronStats._pick 이 문자열만 버려 health 에 dimRefreshed 가 아예 없는
+--   것으로만 드러났다) — refresh_molit_apt_index 와 같은 처방으로 120초로 늘린다.
 CREATE OR REPLACE FUNCTION public.refresh_molit_apt_dim()
  RETURNS integer
  LANGUAGE plpgsql
  SET search_path TO 'public'
+ SET statement_timeout TO '120s'
 AS $function$
 declare n integer;
 begin
@@ -944,6 +966,33 @@ begin
   return new;
 end;
 $function$
+;
+
+-- HIST-PEAKS-INCREMENTAL-2026-09-27 (Plan 107b-2/D1, B5): 107c 가 원본 창(16개월) 밖 달을 지우기
+--   전에 그 달을 molit_hist_peaks 로 증분 반영해 두는 함수 — 103 의 1회성 채움 SQL 을 월 단위로
+--   파라미터화했다. mx/mn 은 greatest/least 라 재실행해도 멱등, n 은 합산이라 같은 달을 두 번
+--   넣으면 이중 계상된다(107c 절차는 삭제 **전** 1회만 호출). 면적 변환식은 get_price_records*
+--   의 조인식과 글자 단위로 같아야 한다(다르면 조인이 빗나간다). 이 단계는 함수만 만들고
+--   호출하지 않는다 — 호출은 107c-1 의 절차 b.
+CREATE OR REPLACE FUNCTION public.upsert_hist_peaks_for_month(p_ym text)   -- 'YYYYMM'
+ RETURNS integer
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+ SET statement_timeout TO '120s'
+AS $function$
+declare n integer; d0 date := to_date(p_ym, 'YYYYMM'); d1 date := (to_date(p_ym, 'YYYYMM') + interval '1 month')::date;
+begin
+  insert into public.molit_hist_peaks (apt_seq, exclu_use_ar, mx, mn, n)
+  select t.apt_seq, least(round(t.exclu_use_ar * 100), 32767)::smallint, max(t.deal_amount), min(t.deal_amount), count(*)
+    from public.molit_transactions t
+   where t.deal_date >= d0 and t.deal_date < d1 and t.apt_seq is not null
+   group by 1, 2
+  on conflict (apt_seq, exclu_use_ar) do update
+     set mx = greatest(public.molit_hist_peaks.mx, excluded.mx),
+         mn = least(public.molit_hist_peaks.mn, excluded.mn),
+         n  = public.molit_hist_peaks.n + excluded.n;
+  get diagnostics n = row_count; return n;
+end $function$
 ;
 
 

@@ -68,7 +68,11 @@ function _pick(summary) {
     //   큐에 남은 (lawd_cd,deal_ym) 수. 이 값이 사라지면(필드 부재) 잡이 실패했거나 아직 안 돈 것이다.
     'namesInserted', 'remaining',
     // DIM-DAILY-2026-09-26 (Plan 107b-1/B3): molit_apt_dim 일일 갱신 — 바뀐 행수·소요(ms). 실패 시 필드 생략(0 을 지어내지 않음).
-    'dimRefreshed', 'dimRefreshMs'];
+    'dimRefreshed', 'dimRefreshMs',
+    // VISIBLE-FAIL-2026-09-27 (Plan 107b-2/B3 가시성): dimRefreshError 는 문자열이라 이 화이트리스트가
+    //   숫자만 통과시키는 성질상 실패 "횟수" 로 집계될 수 없었다(Plan 110 과 같은 성질의 사각지대) —
+    //   0/1 숫자 플래그를 별도로 등록해 health 에서 실패가 누적되는지 추적 가능하게 한다.
+    'dimRefreshFailed'];
   const out = {};
   for (const k of NUM) {
     const v = summary[k];
