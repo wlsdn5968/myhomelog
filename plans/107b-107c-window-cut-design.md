@@ -68,3 +68,18 @@ h. 측정: 원본 행수·hist 행수·get_price_records comparable·MV 행수·
 - **107b-2**(DDL+코드): B1 MV 재정의 + B5 함수 + B8 CHECK/lookback — 리뷰어 DDL, 실행자 코드.
 - **107c-1**(리뷰어, 운영자 최종 승인): 2025-05 한 달 절차 a~h + 라이브 전수.
 - 시점: 107b-1 은 지금 착수 가능 · 107b-2 는 107b-1 검증 뒤 · 107c-1 은 둘 다 배포 뒤. **10-21 경보 전에 107b 까지** 끝내는 것이 목표.
+
+## 5. 107c-1 실행 기록 — 2025-05 (2026-09-27 03:0x~03:10Z, 운영자 승인)
+적재 창 밖(03Z). 절차 §2 의 글자와 다른 점: b 는 D1 함수 `upsert_hist_peaks_for_month('202505')`, c 의 면적·층 변환은 `least(round(exclu_use_ar*100),32767)::smallint` · `least(greatest(coalesce(floor,0),-32768),32767)::smallint`(이력 규약), 각 DML 은 `apply_migration` 으로(auto-mode 분류기가 `execute_sql` 쓰기를 막는다 — VACUUM 은 `execute_sql`, 트랜잭션 밖).
+| 단계 | 실행 | 실측 |
+|---|---|---|
+| a | dim 확인 | 5월 apt_seq 의 dim 누락 0 |
+| b | `select upsert_hist_peaks_for_month('202505')` | 반환 17,993 · peaks **81,462 → 81,918**(⚠ 같은 문장에서 count 를 읽으면 변화 0 으로 보인다 — 별도 문장으로 재측정) |
+| c | `20260927_107c1_copy_202505_to_hist` | 사전: 원본 5월 31,299(전부 apt_seq 보유) · 이력 5월 0(hist max 04-30 / live min 05-01) → 복사 31,299 |
+| d | 대조 | 31,299 = 31,299 · 양방향 차집합 0 · 금액 합 동일 → 삭제 허용 |
+| e+f | `20260927_107c1_delete_202505_from_live` | delete 31,299 · `molit_ingest_runs` 202505 → `archived` |
+| g | `refresh_molit_apt_index()` · `vacuum (analyze) molit_transactions` | 5.1s · 완료 |
+| h | 측정 | 원본 **445,420** · 이력 **1,321,411** · MV 27,780 · comparedCount 2,684/206/64 **변화 0** · `/apt/43114-58` 75건 유지 · 원본 파일 **222.02MB 그대로**(§0) · DB 408.0 → 413.1MB(+5.1 는 peaks·dim·ingest_runs 갱신 churn) |
+- 되돌리기: 이력에 5월이 남아 있으므로 원본 복구는 `fetchRegionMonth` 로 (lawd_cd, 202505) 재적재(MOLIT API, 무료).
+- 기록 파일: `supabase/migrations/20260927_107c1_cut_202505.sql`(fc20e1f).
+- **다음**: 2025-06 은 운영자 승인 뒤 같은 절차(1달씩). 3개월 이상 옮긴 뒤 `REINDEX INDEX CONCURRENTLY`(큰 것부터, 적재 창 밖). 첫 달 라이브 전수(검색·`/apt`·`/region`·브리핑 경신·챗·사이트맵·`dataCounts.tx`)는 `/apt`·검색·경신·dataCounts 4종만 확인했고 `/region`·챗·사이트맵 건수는 미확인.

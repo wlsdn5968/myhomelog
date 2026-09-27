@@ -87,3 +87,9 @@ DDL: D2 후 `count(*)` ≥ 23,017 · 복구 단지(예: `30200-736`)가 MV 에 �
 - DDL 을 직접 실행하지 마라. `schema.sql` 은 리뷰어가 보고한 **적용 SQL** 로만 맞춘다.
 - `search.js` 의 `_w`·정렬·사이트맵 필터를 바꾸지 마라(B2·B9 결정은 "유지").
 - `lookbackMonths` 외 `retryFailedGaps` 로직을 건드리지 마라.
+
+## 적용 기록 (2026-09-27)
+- DDL: `20260927_refresh_molit_apt_dim_timeout`(02:34Z) · D1 `20260927_upsert_hist_peaks_for_month`(02:39Z) · D2 `20260927_molit_apt_index_v2_create`(02:39Z) → `20260927_molit_apt_index_v2_swap`(02:41Z) · D3 `20260927_ingest_runs_archived_status`(02:39Z). 실측: MV 23,061행/5.59MB → **27,780행/4.96MB**, `refresh_molit_apt_index()` 13s → **3.2s**, 복구 단지 30200-736 검색 편입, `43114-58` 건수 59=59.
+- ⚠ MV 는 **같은 문장에서 refresh + select 를 못 한다**(55006) — 갱신은 단독 문장으로. deal_count 가 달라진 740그룹은 전부 v2 가 큼(옛 MV 의 이름 표기 분열을 dim 최신 이름으로 합침).
+- 코드: fc6d704 (506 pass) — `WINDOW_MONTHS = 16` · `dimRefreshFailed` 0/1 + NUM · `search.js` 4곳 `deal_count_all` 선택, `_n`(0 허용)/`_nAll`, 응답 `dealCountAll` · 프론트 시트 메타 "이력 N건" 폴백 · `supabase/migrations/20260927_window_safe_ddl.sql` · `window-safe-ddl.test.js`. STOP 조건 "`_w`·정렬·사이트맵 필터 유지" 는 계획자가 검색 "1건" 지어내기 결함을 발견해 **표시 건수만** `_n` 으로 분리하는 것으로 좁혀 승인(정렬 가중치 `_w` 는 유지).
+- 라이브: 시티팰리스9차 `dealCount 0 / dealCountAll 146`. 17:45Z 회차 `dimRefreshed` 숫자·`dimRefreshFailed: 0` 은 시간 게이트라 미확인.

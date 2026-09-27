@@ -116,7 +116,7 @@
 
 ## 📊 진행 중 / 운영자 결정 대기 (2026-09-20 갱신)
 
-### DB 용량 — Supabase 무료 한도 500MB 중 **404MB(81%)** (2026-09-20 정리 완료)
+### DB 용량 — Supabase 무료 한도 500MB 중 **413MB(83%)** (2026-09-27 실측 · 107c 창 자르기 시작)
 - 한도 기준은 **클러스터 전 DB 합계**: `SELECT sum(pg_database_size(datname)) FROM pg_database`. 넘으면 **읽기 전용 모드**. health 의 `db`(RPC `get_db_size_bytes`)와 `db_size_mb()` 가 이제 같은 식을 쓴다(Plan 105).
 - 하루 경과: 482(96%) → backfill 2020-09 동결(100) → 이력 인덱스 단일키(101) → 경신 기준선 6년(103) → **유지보수 회수(106) = 405MB**. 원본 `molit_transactions` 는 월 ≈13.9MB 증가.
 - **경보**: retention cron 이 매일 85%(425MB)에서 Sentry warning, 93%(465MB)에서 error(`monitor:db-capacity`).
@@ -124,6 +124,8 @@
 - **유지보수 재실행 시**: 적재 창(17:00~19:00 UTC)·apt-master-sync(월 20:00 UTC)를 피하고, 명령 전후로 위 합계 쿼리를 잰다. 절차·실측은 `supabase/migrations/20260920_maintenance_reclaim.sql`.
 - **2027-01 전**: Plan 107 원본 16개월 순환 보관(안 하면 2027-03 경 다시 한도). 종합 설계 `plans/104-db-capacity-management.md`.
 - **첫 경보(425MB)는 2026-10-21 전후**로 예상된다(증가 ≈16MB/월 실측). **경보는 고장이 아니라 예고** — 울린 뒤 107(L 규모)을 시작하면 늦다. 남은 무손실 절약은 사실상 소진됐고(104 §8.2) 구조적 답은 107 뿐이다.
+- **원본 창 자르기 시작(107c, 2026-09-27)**: 2025-05 를 이력으로 옮겼다(원본 476,719 → 445,420 · 이력 1,321,411 · `molit_ingest_runs` 202505 = `archived`). 절차 a~h 는 `plans/107b-107c-window-cut-design.md` §2, 실행 기록 §5 + `supabase/migrations/20260927_107c1_cut_202505.sql`. **자르기는 파일 크기를 줄이지 않는다**(222MB 그대로) — 월 +16MB 성장을 멈추는 것이 목적. 다음 달(2025-06)은 **운영자 승인 뒤** 같은 절차, 한 번에 한 달, 적재 창 밖, **d 단계 건수 대조를 통과하지 못하면 절대 지우지 않는다**. 3개월 이상 옮긴 뒤 `REINDEX INDEX CONCURRENTLY` 로 인덱스 회수. 쓰기와 측정은 **별도 문장**(같은 문장은 스냅샷 때문에 변화 0 으로 보인다).
+- ⚠ **`pg_class` 를 읽는 감시 SQL 은 `relkind in ('r','m')`** (Plan 111 보정, 2026-09-27): `get_table_health` 가 `'r'` 만 봐 MV `molit_apt_index` 가 하루 감시 밖이었다 — 2026-09-20 감사 함정 1번의 재발. 적용 직후 결과에 MV 이름이 보이는지 확인.
 - ⚠ **`create table` 에는 `enable row level security` 를 붙일 것** (Plan 107a, 2026-09-20): Supabase 는 public 스키마 신규 테이블에 `anon`·`authenticated` 기본 DML 권한을 준다 — **RLS 가 꺼져 있으면 PostgREST 로 누구나 쓸 수 있다**. `molit_apt_dim` 이 약 20분간 그 상태였다(쓰기 0건 실증 후 차단). 내부 전용 테이블은 **RLS on + 정책 0**(= service_role 만 통과, `molit_hist_peaks` 패턴). 만든 직후 점검: `select relname from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='r' and c.relrowsecurity=false` → **0행**이어야 한다.
 - ⚠ **컬럼을 payload 에서 빼기 전에 `not null` 부터 풀 것** (Plan 112, 2026-09-20): 코드를 먼저 배포하면 신규 INSERT 가 NOT NULL 위반, `DROP COLUMN` 을 먼저 하면 구버전 upsert 가 전부 실패한다. **제약을 먼저 느슨하게** 만들면 두 버전이 동시에 동작해 무중단 창이 0 이 된다.
 - ⚠ **상태 문자열은 DB CHECK 과 대조할 것** (Plan 110, 2026-09-20): `molit_ingest_runs_status_chk` 가 코드가 쓰는 `'timeout'` 을 금지해 적재기록 정리가 **90일간 매일 조용히 실패**했다(그 상태 행 0건·멈춘 `running` 21건·gap-retry 의 timeout 분기 사문화). 같은 try 안 **뒤 단계까지** 막았고, `run()` 이 결과를 중첩시켜 `cronStats._pick`(최상위 키만 본다)이 못 봐 health 에도 안 보였다. → 독립 정리 단계는 **각자 try**, cron 결과는 **평탄화 + `NUM` 등록**, "그 값을 가진 행이 0건" 은 쓰기 실패 신호.
@@ -176,4 +178,4 @@
 
 ---
 
-마지막 갱신: 2026-09-26 (114 방향 제안 실행 — 딥링크·문구(115)·테이블 감시(111-2)·이름 복구 잡(117)·시안 2건(116) · 107b/c 설계 · 테스트 472)
+마지막 갱신: 2026-09-27 (시안 구현 116a/116b 배포 · 107b-2 DDL+코드 · 107c-1 첫 달(2025-05) 적용 · get_table_health MV 보정 · 테스트 509)
