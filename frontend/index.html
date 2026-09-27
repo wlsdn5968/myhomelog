@@ -2969,29 +2969,22 @@ html[data-theme="dark"] #view-news{
   </section>
 
   <section class="lv-bento">
-    <div class="lv-card lv-chart">
-      <div class="lv-card-head"><span class="lv-card-label">예시 · 가격 흐름 시각화(실제 데이터 아님)</span><span class="lv-card-meta">참고용</span></div>
-      <svg viewBox="0 0 720 220" preserveAspectRatio="xMidYMid meet" class="lv-chart-svg" aria-label="가격 흐름 예시 그래프 — 실제 데이터 아님">
-        <defs>
-          <linearGradient id="lvChartGrad" x1="0" x2="1"><stop offset="0%" stop-color="#2E5E94"/><stop offset="100%" stop-color="var(--accent-500)"/></linearGradient>
-          <linearGradient id="lvChartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="var(--accent-500)" stop-opacity="0.22"/><stop offset="100%" stop-color="var(--accent-500)" stop-opacity="0"/></linearGradient>
-        </defs>
-        <g class="lv-chart-grid"><line x1="40" x2="700" y1="40" y2="40"/><line x1="40" x2="700" y1="100" y2="100"/><line x1="40" x2="700" y1="160" y2="160"/></g>
-        <text class="lv-chart-axis" x="35" y="44" text-anchor="end">14억</text>
-        <text class="lv-chart-axis" x="35" y="104" text-anchor="end">10억</text>
-        <text class="lv-chart-axis" x="35" y="164" text-anchor="end">6억</text>
-        <path class="lv-chart-area" d="M 40 145 L 100 132 L 160 124 L 220 108 L 280 92 L 340 84 L 400 92 L 460 76 L 520 60 L 580 50 L 640 56 L 700 48 L 700 200 L 40 200 Z"/>
-        <path class="lv-chart-line" d="M 40 145 L 100 132 L 160 124 L 220 108 L 280 92 L 340 84 L 400 92 L 460 76 L 520 60 L 580 50 L 640 56 L 700 48"/>
-        <text class="lv-chart-axis" x="40" y="195"></text><text class="lv-chart-axis" x="200" y="195"></text><text class="lv-chart-axis" x="360" y="195"></text><text class="lv-chart-axis" x="520" y="195"></text><text class="lv-chart-axis" x="680" y="195"></text>
-      </svg>
-      <!-- DATA-RANGE-2026-09-26 (Plan 115): 원본 하한은 창(107c)에 따라 굴러가므로 적지 않는다 · 이력 하한 2020-09 는 동결값(Plan 100) -->
-      <div class="lv-card-sub" style="margin-top:8px">단지 선택 시 실거래 표·가격 위치·월별 거래량 (국토부 신고 기준 · 장기 추세는 2020.09 이후)</div>
-    </div>
-
-    <div class="lv-card lv-stat">
-      <div class="lv-card-head"><span class="lv-card-label">데이터 종합 점수</span><span class="lv-card-meta">예시</span></div>
-      <div style="font-family:var(--font-display);font-size:22px;font-weight:800;color:var(--text-primary);letter-spacing:-.5px;line-height:1.2;margin-top:8px">60/100 거래보통</div>
-      <div class="lv-card-sub" style="margin-top:10px">평균가 · 범위 · LTV · 학군 종합 — 단지 선택 시 실제 점수로 계산</div>
+    <!-- HERO-REAL-2026-09-27 (Plan 116a): 예시(가짜) 카드 2장(가격 흐름 시각화 · 종합 점수 예시)을
+         지우고 TOP 카드와 같은 1위 단지의 실제 24개월 월평균 실거래가 카드로 교체(시안 "내집로그 히어로
+         카드 리디자인"). 초기값은 중립 스켈레톤 — 실제 응답이 온 뒤에만 채운다(LANDING-FAKE-2026-08-17 선례).
+         차트는 상세 모달 장기 추세(Plan 102)의 renderPriceChart 를 그대로 재사용 — _loadHeroChart 참고.
+         ⚠ 종합 점수 라벨 문구는 단지 모달의 실제 점수 기능(Sprint C-2)에서 정당하게 재사용되므로
+         이 파일 전체에서 그 문구를 0 회로 만들면 안 된다 — 지운 것은 lv-stat 클래스의 예시 카드뿐이다. -->
+    <div class="lv-card lv-chart" id="lv-heroChart">
+      <div class="lv-card-head">
+        <span class="lv-card-label">실거래 · <span id="lv-heroName">불러오는 중</span><span style="display:inline-block;margin-left:6px;padding:1px 6px;font-size:9px;font-weight:600;letter-spacing:.2px;color:var(--text-tertiary);background:var(--bg-elev-2);border:1px solid var(--border-faint);border-radius:var(--radius-full);vertical-align:middle">국토부 신고</span></span>
+        <span class="lv-card-meta" id="lv-heroMeta">최근 24개월 —건</span>
+      </div>
+      <div id="lv-heroChartBody" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:150px">
+        <div style="font-size:12px;color:var(--text-tertiary)">불러오는 중</div>
+      </div>
+      <div class="lv-card-sub" id="lv-heroLine" style="margin-top:8px;font-variant-numeric:tabular-nums">&nbsp;</div>
+      <div class="lv-card-sub" id="lv-heroCaption" style="margin-top:2px;font-size:10.5px;color:var(--text-quiet)">같은 단지 실거래 월별 평균 · 참고용 · 매수·매도 추천이 아닙니다</div>
     </div>
 
     <div class="lv-card lv-apt">
@@ -3808,11 +3801,12 @@ function _landingCTA(type){
 }
 async function _landingAsyncRefresh(){
   // 인기 단지 1건 갱신
+  let top; // HERO-REAL-2026-09-27 (Plan 116a): try 밖에서도 참조 — 히어로 실거래 카드가 같은 단지를 쓴다.
   try {
     const r = await fetch(`${CFG.api}/search/popular`, {signal:AbortSignal.timeout(5000)});
     if(r.ok){
       const d = await r.json();
-      const top = (d.results || [])[0];
+      top = (d.results || [])[0];
       if(top){
         const _set = (id, val) => { const e = document.getElementById(id); if(e && val !== undefined && val !== null) e.textContent = val; };
         _set('lv-aptName', top.aptName);
@@ -3830,6 +3824,10 @@ async function _landingAsyncRefresh(){
     const _m = document.getElementById('lv-aptMeta');
     if (_m && _m.textContent === '불러오는 중') _m.textContent = '불러오지 못함';
   } catch(_){}
+  // HERO-REAL-2026-09-27 (Plan 116a): 히어로 실거래 카드 — TOP 카드와 같은 1위 단지.
+  //   top 이 없으면(TOP 카드 자체 실패) 예시로 채우지 않고 바로 실패 문구로 정리한다.
+  //   await 하지 않는다 — 아래 경신 카드 로딩을 기다리게 하지 않기 위한 fire-and-forget.
+  if (top) { _loadHeroChart(top); } else { _heroChartFail(); }
   // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최고·최저 경신 요약.
   //   LANDING-FAKE 선례 그대로 — 응답이 실제로 오고 세 값이 전부 유효할 때만 채우고 '실시간'을 단다.
   //   숫자는 Number 로 강제하므로 innerHTML 에 넣어도 문자열이 마크업으로 새지 않는다(단위 span 때문).
@@ -3877,6 +3875,92 @@ async function _landingAsyncRefresh(){
       }
     }
   } catch(_){}
+}
+
+// HERO-REAL-2026-09-27 (Plan 116a): 랜딩 히어로 첫 카드 — TOP 카드와 같은 1위 단지의 실제 24개월
+//   월평균 실거래가. 선그래프 렌더는 상세 모달 장기 추세(Plan 102)의 renderPriceChart 를 그대로
+//   재사용한다(새 차트 스타일 금지). 실패·표본 부족일 때도 값을 지어내지 않는다(운영자 절대 룰 ②).
+const HERO_SAMPLE_MIN = 12; // 24개월 합계 거래건수가 이 미만이면 선그래프 대신 타임라인 상태
+function _heroChartFail(msg){
+  try {
+    const body = document.getElementById('lv-heroChartBody');
+    if (body) body.innerHTML = `<div style="font-size:12px;color:var(--text-tertiary);text-align:center;padding:28px 0">${_escHtml(msg || '실거래 흐름을 불러오지 못했어요')}</div>`;
+    const meta = document.getElementById('lv-heroMeta');
+    if (meta) meta.textContent = '불러오지 못함';
+  } catch(_){}
+}
+// /transactions/history 의 (월,평형)별 합계·건수(rows)를 평형 구분 없이 월 단위로 합쳐(거래 가중 평균)
+// 최근 24개월만 남긴다. aptHistoryService.aggregateMonthly 의 반환 필드는 { ym, sqm, sum, n }
+// (avg 가 아니다 — backend/services/aptHistoryService.js:34 실측) 이므로 여기서 sum/n 으로 평균낸다.
+function _heroMonthlyRows(rows){
+  const b = {};
+  for (const r of (Array.isArray(rows) ? rows : [])) {
+    const k = String((r && r.ym) || '');
+    if (!/^\d{4}-\d{2}$/.test(k)) continue;
+    if (!b[k]) b[k] = { ym: k, sum: 0, n: 0 };
+    b[k].sum += Number(r.sum) || 0;
+    b[k].n += Number(r.n) || 0;
+  }
+  return Object.keys(b).sort().filter(k => b[k].n > 0).map(k => b[k]).slice(-24);
+}
+// 표본 부족(24개월 합계 12건 미만) 상태 — 선그래프 대신 얇은 타임라인(거래 있었던 월에 점).
+function _heroTimelineHtml(months){
+  const withData = (months || []).filter(m => m.n > 0);
+  if (!withData.length) return '';
+  const toIdx = (ym) => Number(ym.slice(0, 4)) * 12 + Number(ym.slice(5, 7));
+  const first = withData[0], last = withData[withData.length - 1];
+  const span = Math.max(toIdx(last.ym) - toIdx(first.ym), 1);
+  const dots = withData.map(m => {
+    const pct = ((toIdx(m.ym) - toIdx(first.ym)) / span) * 100;
+    const label = m.ym.replace('-', '.');
+    return `<span title="${_escHtml(label)} · ${m.n}건" style="position:absolute;left:${pct.toFixed(1)}%;top:50%;transform:translate(-50%,-50%);width:7px;height:7px;border-radius:50%;background:var(--accent-500)"></span>`;
+  }).join('');
+  return `<div style="position:relative;height:32px;margin:20px 6px 6px;border-top:1px solid var(--border-faint)">${dots}</div>
+    <div style="display:flex;justify-content:space-between;font-size:9.5px;color:var(--text-quiet);padding:0 6px">
+      <span>${_escHtml(first.ym.replace('-', '.'))}</span><span>${_escHtml(last.ym.replace('-', '.'))}</span>
+    </div>`;
+}
+async function _loadHeroChart(top){
+  const nameEl = document.getElementById('lv-heroName');
+  if (nameEl && top && top.aptName) nameEl.textContent = top.aptName;
+  // POPULARSNAP-2026-09-27: 스냅샷이 이 배포 전에 계산됐으면 아직 aptSeq 가 없을 수 있다 — 예시로
+  //   채우지 않고 실패 문구로 정리한다(다음 cron 회차부터 자연 해소).
+  if (!top || !top.aptSeq) { _heroChartFail(); return; }
+  try {
+    const r = await fetch(`${CFG.api}/transactions/history?aptSeq=${encodeURIComponent(top.aptSeq)}`, {signal: AbortSignal.timeout(8000)});
+    if (!r.ok) throw new Error('HTTP ' + r.status);
+    const j = await r.json();
+    const months = _heroMonthlyRows(j.rows);
+    const totalN = months.reduce((s, m) => s + m.n, 0);
+    const metaEl = document.getElementById('lv-heroMeta');
+    if (metaEl) metaEl.textContent = `최근 24개월 ${totalN}건`;
+    const lineEl = document.getElementById('lv-heroLine');
+    const capEl = document.getElementById('lv-heroCaption');
+    const bodyEl = document.getElementById('lv-heroChartBody');
+    if (!months.length || totalN < HERO_SAMPLE_MIN) {
+      // 표본 부족 — 그래프 대신 타임라인, 캡션에서 "월별 평균" 제거
+      if (bodyEl) bodyEl.innerHTML = _heroTimelineHtml(months) || '<div style="font-size:12px;color:var(--text-tertiary);text-align:center;padding:28px 0">최근 24개월 거래가 없어요</div>';
+      if (lineEl) lineEl.textContent = `최근 24개월 거래 ${totalN}건 · 월별 추세를 그리기엔 표본이 적어요`;
+      if (capEl) capEl.textContent = '같은 단지 실거래 · 참고용 · 매수·매도 추천이 아닙니다';
+      return;
+    }
+    // 정상 — 장기 추세 차트(Plan 102)의 렌더 함수를 그대로 재사용(새 차트 코드 없음)
+    const chartRows = months.map(m => ({
+      label: m.ym.slice(2, 4) + '.' + m.ym.slice(5, 7),
+      sortKey: Number(m.ym.slice(0, 4)) * 12 + Number(m.ym.slice(5, 7)),
+      avgAuk: (m.sum / m.n) / 10000,
+      count: m.n,
+    }));
+    if (bodyEl) bodyEl.innerHTML = renderPriceChart(chartRows);
+    const lastM = months[months.length - 1];
+    const lastAvgAuk = (lastM.sum / lastM.n) / 10000;
+    const totalSum = months.reduce((s, m) => s + m.sum, 0);
+    const overallAvgAuk = (totalSum / totalN) / 10000;
+    if (lineEl) lineEl.textContent = `${lastM.ym.replace('-', '.')} · 최근월 평균 ${lastAvgAuk.toFixed(1)}억 · 24개월 평균 ${overallAvgAuk.toFixed(1)}억`;
+    if (capEl) capEl.textContent = '같은 단지 실거래 월별 평균 · 참고용 · 매수·매도 추천이 아닙니다';
+  } catch (_) {
+    _heroChartFail();
+  }
 }
 
 // ── Phase 4-1 단계 1 (2026-05-04): Hero band 노출/dismiss 로직 ──

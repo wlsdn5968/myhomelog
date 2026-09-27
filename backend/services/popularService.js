@@ -163,6 +163,23 @@ async function buildPopularResults(limit = 12, opts = {}) {
     if (!isValidKoreaCoord(Number(c.lat), Number(c.lng))) continue;
     coordMap.set(`${c.apt_name}|${c.sigungu || ''}|${c.umd_nm || ''}`, c);
   }
+  // HERO-REAL-2026-09-27 (Plan 116a): 랜딩 히어로 실거래 카드가 /transactions/history 를 부르려면
+  //   1위 단지의 apt_seq 가 필요하다 — search_popular_apts RPC·raw fallback 모두 이 컬럼을 안 준다
+  //   (SQL 변경 금지라 RPC 는 못 고친다). 좌표 join과 같은 패턴으로 molit_transactions 에서
+  //   (apt_name,sigungu,umd_nm) 키로 아무 1건의 apt_seq 만 얻는다 — 한 단지 안에서 apt_seq 는 사실상
+  //   불변값이라 최신순일 필요가 없다. limit 은 안전 상한(흔한 이름은 실거래가 수천 건일 수 있다).
+  const seqMap = new Map();
+  try {
+    const { data: seqRows } = await admin.from('molit_transactions')
+      .select('apt_name, sigungu, umd_nm, apt_seq')
+      .in('apt_name', names)
+      .not('apt_seq', 'is', null)
+      .limit(3000);
+    for (const s of (seqRows || [])) {
+      const k = `${s.apt_name}|${s.sigungu || ''}|${s.umd_nm || ''}`;
+      if (!seqMap.has(k)) seqMap.set(k, s.apt_seq);
+    }
+  } catch (_) { /* aptSeq 는 부가 정보 — 실패해도 인기 목록 자체는 그대로 낸다(프론트는 null 이면 실패 문구) */ }
   const _row = (t, c) => ({
     aptName: _cleanName(t.apt_name), sigungu: t.sigungu, umdNm: t.umd_nm,
     lawdCd: t.lawd_cd, buildYear: t.build_year,
@@ -170,6 +187,8 @@ async function buildPopularResults(limit = 12, opts = {}) {
     lat: Number(c.lat), lng: Number(c.lng),
     // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(위, 조회 키)은 그대로 두고 별도 필드로만 얹는다.
     displayName: displayAptName(_cleanName(t.apt_name), { umdNm: t.umd_nm }),
+    // HERO-REAL-2026-09-27 (Plan 116a): 랜딩 히어로 실거래 카드용 — 없으면 null(프론트가 실패 문구로 처리, 지어내지 않음).
+    aptSeq: seqMap.get(`${t.apt_name}|${t.sigungu || ''}|${t.umd_nm || ''}`) || null,
   });
 
   // ④ 상위 limit 후보의 미좌표만 즉시 lazy-fill (첫 호출만 수초, 이후 apt_geocache 영속 hit)
