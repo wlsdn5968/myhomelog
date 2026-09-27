@@ -1822,7 +1822,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 <div id="heroBand" class="hero-band" style="display:none" role="region" aria-label="서비스 소개">
   <div class="hero-inner">
     <div class="hero-content">
-      <div class="hero-tag">DATA · <span class="jstxk">277K</span> · <span class="japtk">10K</span> · DAILY</div>
+      <div class="hero-tag">DATA · <span class="jstxk">1.7M+</span> · <span class="japtk">10K+</span> · DAILY</div>
       <div class="hero-msg">
         <span class="hero-icon" aria-hidden="true">🏠</span>
         <strong>30초 입력으로 받는 <em>1page 부동산 보고서</em></strong>
@@ -2987,9 +2987,9 @@ html[data-theme="dark"] #view-news{
   </header>
 
   <section class="lv-hero">
-    <div class="lv-tag">DATA · <span class="jstxk">277K</span> · <span class="japtk">10K</span> · DAILY</div>
+    <div class="lv-tag">DATA · <span class="jstxk">1.7M+</span> · <span class="japtk">10K+</span> · DAILY</div>
     <h1 class="lv-h1">30초 입력으로 받는<br><em>1page 부동산 보고서</em></h1>
-    <p class="lv-hero-sub">국토부 실거래 <span class="jstxm">27만</span>건 + KAPT <span class="japtm">1만</span> 단지 + 금융위 규제. 객관적 점수로 정리한 매수 결정 도구.</p>
+    <p class="lv-hero-sub">국토부 실거래 <span class="jstxm">170만+</span>건 + KAPT <span class="japtm">1만+</span> 단지 + 금융위 규제. 객관적 점수로 정리한 매수 결정 도구.</p>
     <div class="lv-cta-row">
       <button class="lv-cta-primary" onclick="_landingCTA('primary')"><svg class="lv-cta-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>맞춤 보고서 시작 <span aria-hidden="true">→</span></button>
       <button class="lv-cta-secondary" onclick="_landingCTA('secondary')"><svg class="lv-cta-ic" style="margin-right:7px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>지도로 둘러보기 →</button>
@@ -12748,7 +12748,7 @@ function calcComm(){
 }
 
 // ── API STATUS ────────────────────────────────────────────
-// DATA-COUNTS-2026-06-14: /api/health.dataCounts 로 랜딩/배너 건수 동적 채움(하드코딩 stale 방지). 실패 시 정적 fallback 유지.
+// DATA-COUNTS-2026-06-14: /api/health.dataCounts 로 랜딩/배너 건수 동적 채움. PLACEHOLDER-2026-09-27 (Plan 118): 실패 시 남는 정적 값은 "1.7M+ / 10K+ / 170만+ / 1만+" 하한 표기 — 이전 정적값(약 1/6 수준)과 달랐다(사실과 다른 숫자를 남기지 않는다).
 function _applyStatTags(){
   try{
     const c=window._dataCounts; if(!c||!c.tx) return;
