@@ -1317,6 +1317,30 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
   }
   .lp.open{transform:translateX(0)!important}
   .bnav{display:block}
+  /* TOOLS-SHEET-2026-09-27 (Plan 116b): "도구" 탭 바텀시트 — .bnav 와 같은 미디어쿼리 안에서만
+     렌더/동작(데스크톱 변화 0). 딤은 탭바(53px, 07-19 실측 + safe-area)를 제외한 영역만 덮어
+     "도구" 탭이 활성 상태로 보이게 한다(시안 사양). */
+  html[data-theme="dark"]{--ts-active:#8DB3E2} /* 다크: 딥네이비(--acc 라이트값)는 대비 부족 — 시안 결정 */
+  #bnavToolsBtn.on{color:var(--ts-active,var(--acc))}
+  .tsheet-dim{position:fixed;top:0;left:0;right:0;bottom:calc(53px + env(safe-area-inset-bottom,0px));background:rgba(0,0,0,.42);z-index:510;opacity:0;visibility:hidden;transition:opacity .2s ease,visibility 0s linear .2s}
+  .tsheet-dim.open{opacity:1;visibility:visible;transition:opacity .2s ease}
+  .tsheet{position:fixed;left:0;right:0;bottom:calc(53px + env(safe-area-inset-bottom,0px));z-index:511;background:var(--bg-base);border-radius:16px 16px 0 0;box-shadow:0 -12px 32px rgba(0,0,0,.28);padding:10px 6px 6px;transform:translateY(12px);opacity:0;visibility:hidden;transition:transform .2s ease,opacity .2s ease,visibility 0s linear .2s}
+  .tsheet.open{transform:translateY(0);opacity:1;visibility:visible;transition:transform .2s ease,opacity .2s ease}
+  .tsheet .ts-handle{width:36px;height:4px;border-radius:var(--radius-full);background:var(--bd2);margin:2px auto 8px}
+  .tsheet .ts-item{display:flex;align-items:center;gap:12px;width:100%;padding:11px 10px;border:none;background:none;cursor:pointer;font-family:inherit;text-align:left;color:var(--t1);border-radius:var(--radius-md);transition:background .12s}
+  .tsheet .ts-item:hover,.tsheet .ts-item:active{background:var(--bg-elev-1)}
+  .tsheet .ts-ic{width:36px;height:36px;border-radius:var(--radius-full);background:var(--accL);display:flex;align-items:center;justify-content:center;flex-shrink:0;color:var(--acc)}
+  .tsheet .ts-ic svg{width:19px;height:19px}
+  .tsheet .ts-body{flex:1;min-width:0;display:flex;flex-direction:column}
+  .tsheet .ts-title{font-size:13.5px;font-weight:700;color:var(--t1)}
+  .tsheet .ts-desc{font-size:11px;color:var(--t3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tsheet .ts-check{display:none;color:var(--ts-active,var(--acc));font-size:14px;font-weight:700}
+  .tsheet .ts-item[aria-current="true"] .ts-check{display:inline}
+  .tsheet .ts-arrow{color:var(--t3);font-size:14px;flex-shrink:0}
+  .tsheet .ts-close{display:block;width:100%;margin:4px 0 2px;padding:11px;border:1px solid var(--bd);border-radius:var(--radius-md);background:var(--bg-elev-1);color:var(--t2);font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
+  @media(prefers-reduced-motion:reduce){
+    .tsheet-dim,.tsheet{transition:none}
+  }
   body{padding-bottom:60px}
   .legal-footer{margin-bottom:60px}
   .htabs{display:none}
@@ -2042,6 +2066,9 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
 #MSHEET.on{display:block}
 .ms-grab{width:40px;height:4px;border-radius:var(--radius-full);background:var(--map-line);margin:0 auto 10px}
 @media(min-width:701px){#MSHEET{display:none!important}}
+/* TOOLS-SHEET-2026-09-27 (Plan 116b): MSHEET 와 같은 방어 패턴 — 폭이 바뀌어도(리사이즈 등)
+   데스크톱에서는 무조건 안 보이게 한다(데스크톱 "변화 0" 을 스타일로도 보장). */
+@media(min-width:701px){#toolsSheet,#toolsSheetDim{display:none!important}}
 @media(max-width:700px){ #mapTrustChip{display:none!important} #popLegend::before{content:""} }
 /* AUDIT-FN-2026-08-19 (운영자 제안 검토): 모바일 헤더 공간 — 데이터 상태는 점 아이콘만(기능·신호 유지, 문구는 데스크톱 전용) */
 @media(max-width:700px){ #dataStatusBtn{font-size:0!important;padding:6px 9px!important} #dataStatusBtn span{margin-right:0!important} }
@@ -3074,9 +3101,45 @@ html[data-theme="dark"] #view-news{
     <button class="bnav-item on" onclick="sv('map',this)" data-view="map" aria-label="지도 보기"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg></div>지도</button>
     <button class="bnav-item" onclick="sv('list',this)" data-view="list" aria-label="단지 목록"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg></div>목록</button>
     <button class="bnav-item bnav-feature" onclick="sv('report',this)" data-view="report" title="회원님 가구 맞춤 1page 맞춤 보고서" aria-label="맞춤 보고서"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg></div>보고서</button>
-    <button class="bnav-item" onclick="sv('calc',this)" data-view="calc" aria-label="대출 한도 계산"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg></div>대출</button>
+    <!-- TOOLS-SHEET-2026-09-27 (Plan 116b): 5번째 탭 "대출"→"도구" — 데스크톱 "도구 ▾" 드롭다운
+         (htabToolDd: 특약·청약·대출계산·규제 요약)에만 있던 4항목의 모바일 진입점이 없었다(.htabs 는
+         ≤700px 숨김, 실측). sv('calc') 직행 대신 toggleToolsSheet() 로 바텀시트를 연다. -->
+    <button class="bnav-item" id="bnavToolsBtn" onclick="toggleToolsSheet(this)" data-view="tools" aria-label="도구" aria-haspopup="dialog" aria-expanded="false"><div class="bnav-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg></div>도구</button>
   </div>
 </nav>
+
+<!-- TOOLS-SHEET-2026-09-27 (Plan 116b): 모바일 "도구" 바텀시트 — 데스크톱 드롭다운(htabToolDd)과 같은
+     순서(특약·청약·대출계산·규제 요약). CSS/JS 는 .bnav 와 같은 @media(max-width:700px) 안에서만
+     렌더/동작 — 데스크톱(>700px)은 변화 없음(#toolsSheet,#toolsSheetDim 도 그 폭에서 display:none 강제).
+     ESC(closers 배열)·딤 클릭·다른 탭 클릭(sv() 진입부)에서 닫힌다. -->
+<div class="tsheet-dim" id="toolsSheetDim" onclick="closeToolsSheet()" aria-hidden="true"></div>
+<div class="tsheet" id="toolsSheet" role="dialog" aria-modal="true" aria-label="도구" hidden>
+  <div class="ts-handle" aria-hidden="true"></div>
+  <button type="button" class="ts-item" data-tool="clause" aria-current="false" onclick="closeToolsSheet();sv('clause',this)">
+    <span class="ts-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg></span>
+    <span class="ts-body"><span class="ts-title">특약 초안</span><span class="ts-desc">조건 반영 표준 특약 템플릿</span></span>
+    <span class="ts-check" aria-hidden="true">✓</span>
+    <span class="ts-arrow" aria-hidden="true">→</span>
+  </button>
+  <button type="button" class="ts-item" data-tool="subs" aria-current="false" onclick="closeToolsSheet();sv('subs',this)">
+    <span class="ts-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18"/><path d="M8 2.5v4"/><path d="M16 2.5v4"/></svg></span>
+    <span class="ts-body"><span class="ts-title">청약 캘린더</span><span class="ts-desc">청약Home 일정 + 가점 계산기</span></span>
+    <span class="ts-check" aria-hidden="true">✓</span>
+    <span class="ts-arrow" aria-hidden="true">→</span>
+  </button>
+  <button type="button" class="ts-item" data-tool="calc" aria-current="false" onclick="closeToolsSheet();sv('calc',this)">
+    <span class="ts-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg></span>
+    <span class="ts-body"><span class="ts-title">대출 계산</span><span class="ts-desc">LTV·DSR·정책자금 4종</span></span>
+    <span class="ts-check" aria-hidden="true">✓</span>
+    <span class="ts-arrow" aria-hidden="true">→</span>
+  </button>
+  <button type="button" class="ts-item" onclick="closeToolsSheet();openRegSummary()">
+    <span class="ts-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3.5v5c0 4.4-3 7.6-7 9.5-4-1.9-7-5.1-7-9.5v-5Z"/></svg></span>
+    <span class="ts-body"><span class="ts-title">규제 요약</span><span class="ts-desc">금융위 고시 기준</span></span>
+    <span class="ts-arrow" aria-hidden="true">→</span>
+  </button>
+  <button type="button" class="ts-close" onclick="closeToolsSheet()">닫기</button>
+</div>
 
 <!-- 정보 제공 안내 -->
 <!-- STAB-AUDIT #53 (2026-05-03): 600자+ → 1줄 요약 + "전문 보기" 모달 — 모바일 가독성 ↑ -->
@@ -11248,6 +11311,7 @@ function sv(v,btn){
     const adm = document.getElementById('ADM');
     if (adm && adm.classList.contains('open')) adm.classList.remove('open');
     try { closeMapSheet(); } catch(_){} // MSHEET (①C): 탭 전환 = 새 컨텍스트 — 시트 stale 재노출 방지
+    try { closeToolsSheet(); } catch(_){} // TOOLS-SHEET-2026-09-27 (Plan 116b): 탭 전환 = 새 컨텍스트 — 시트 stale 재노출 방지
   } catch(_){}
   // 적대 검증: 같은 탭 재클릭(이미 활성)엔 스크롤을 건드리지 않는다 — 토글 전에 판정
   const _wasActive=(()=>{try{const e=document.getElementById('view-'+v);return !!e&&e.style.display!=='none'&&getComputedStyle(e).display!=='none';}catch(_){return false;}})();
@@ -11318,6 +11382,14 @@ function sv(v,btn){
   }catch(_){}
   // 모바일 하단 탭 활성화
   document.querySelectorAll('.bnav-item').forEach(b=>b.classList.toggle('on',b.dataset.view===v));
+  // TOOLS-SHEET-2026-09-27 (Plan 116b): "도구" 탭의 data-view 는 'tools' 라서 위 일반 판정(===v)엔
+  //   절대 걸리지 않는다 — 도구 뷰(특약·청약·대출계산) 활성 시엔 별도로 켜준다(데스크톱 htabToolBtn 과 동일 패턴).
+  //   시트 안 항목의 체크(aria-current)도 같은 기준으로 매번 재계산.
+  try{
+    const _bnavTools=document.getElementById('bnavToolsBtn');
+    if(_bnavTools)_bnavTools.classList.toggle('on',['clause','subs','calc'].includes(v));
+    document.querySelectorAll('#toolsSheet .ts-item[data-tool]').forEach(b=>b.setAttribute('aria-current',b.dataset.tool===v?'true':'false'));
+  }catch(_){}
   _wizPlace(v); // Sprint PPPPP: 위저드 코어를 뷰에 맞는 슬롯으로
   if(v==='list')renderListGrid();
   if(v==='news' && !document.getElementById('newsList').dataset.loaded){loadNews();}
@@ -11336,6 +11408,38 @@ function toggleToolMenu(e){
 function closeToolMenu(){
   const dd=document.getElementById('htabToolDd'), btn=document.getElementById('htabToolBtn');
   if(dd&&dd.classList.contains('open')){dd.classList.remove('open');if(btn)btn.setAttribute('aria-expanded','false');}
+}
+// TOOLS-SHEET-2026-09-27 (Plan 116b): 모바일 하단 "도구" 탭 바텀시트 열기/닫기 — 데스크톱 "도구 ▾"
+//   드롭다운(toggleToolMenu/closeToolMenu 위)과 같은 4항목의 모바일 전용 진입점.
+let _tsCloseTimer=null;
+function toggleToolsSheet(){
+  const sh=document.getElementById('toolsSheet');
+  if(!sh)return;
+  if(sh.classList.contains('open')){ closeToolsSheet(); return; }
+  const dim=document.getElementById('toolsSheetDim');
+  clearTimeout(_tsCloseTimer);
+  sh.hidden=false;
+  if(dim)dim.hidden=false;
+  void sh.offsetHeight; // 강제 리플로우 — hidden 해제와 open 클래스 부여를 별도 프레임으로 갈라야 열림 transition 이 재생된다
+  sh.classList.add('open');
+  if(dim)dim.classList.add('open');
+  const tb=document.getElementById('bnavToolsBtn');
+  if(tb)tb.setAttribute('aria-expanded','true');
+  const first=sh.querySelector('.ts-item');
+  if(first)first.focus();
+}
+function closeToolsSheet(){
+  const sh=document.getElementById('toolsSheet');
+  if(!sh||sh.hidden)return; // 이미 닫힌 상태 — sv() 가 탭 전환마다 방어적으로 호출하므로 중복은 조용히 무시
+  const dim=document.getElementById('toolsSheetDim');
+  sh.classList.remove('open');
+  if(dim)dim.classList.remove('open');
+  const tb=document.getElementById('bnavToolsBtn');
+  if(tb){ tb.setAttribute('aria-expanded','false'); tb.focus(); }
+  const reduced=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  clearTimeout(_tsCloseTimer);
+  const _hide=()=>{ sh.hidden=true; if(dim)dim.hidden=true; };
+  if(reduced) _hide(); else _tsCloseTimer=setTimeout(_hide,200);
 }
 document.addEventListener('click',function(e){
   const dd=document.getElementById('htabToolDd');
@@ -11684,6 +11788,9 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   // 열린 모달 우선순위 (위쪽이 나중에 열림 → 먼저 닫음)
   const closers = [
+    // TOOLS-SHEET-2026-09-27 (Plan 116b): 모바일 "도구" 바텀시트(z511) — sv() 가 다른 탭 전환마다
+    //   닫으므로 다른 모달과 동시에 열릴 일이 없지만, ESC 는 안전하게 최우선으로 둔다.
+    { id: 'toolsSheet', fn: 'closeToolsSheet' },
     // ESC-2026-09-16 (Plan 096): 동적 생성 모달은 open 클래스가 없다 — present:true 는 "요소가 있으면 열림" 판정.
     { id: 'regSummaryModal', fn: '_closeRegSummary', present: true }, // 규제 요약 (z99998, 동적 생성)
     { id: 'cmpModal', fn: '_closeCmpModal', present: true },          // 단지 비교 (z9999, 동적 생성)
