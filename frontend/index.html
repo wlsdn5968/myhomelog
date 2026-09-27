@@ -1338,6 +1338,10 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
   .tsheet .ts-item[aria-current="true"] .ts-check{display:inline}
   .tsheet .ts-arrow{color:var(--t3);font-size:14px;flex-shrink:0}
   .tsheet .ts-close{display:block;width:100%;margin:4px 0 2px;padding:11px;border:1px solid var(--bd);border-radius:var(--radius-md);background:var(--bg-elev-1);color:var(--t2);font-family:inherit;font-size:13.5px;font-weight:700;cursor:pointer}
+  /* TOOLS-SHEET-FAB-2026-09-27 (Plan 116b 보완): 시트 z-index(511)가 FAB(850)보다 낮아 열림 중
+     "규제 요약" 화살표가 FAB 에 가려졌다(375×812 실측) — display:none 대신 visibility:hidden 으로
+     레이아웃·기존 노출 로직(_fab.style.display='flex' 등)과 충돌 없이 겹침만 없앤다. */
+  body.tools-sheet-open .fab-ai, body.tools-sheet-open .fab-bm { visibility: hidden; }
   @media(prefers-reduced-motion:reduce){
     .tsheet-dim,.tsheet{transition:none}
   }
@@ -3986,8 +3990,22 @@ function _heroTimelineHtml(months){
 async function _loadHeroChart(top){
   const nameEl = document.getElementById('lv-heroName');
   if (nameEl && top && top.aptName) nameEl.textContent = top.aptName;
-  // POPULARSNAP-2026-09-27: 스냅샷이 이 배포 전에 계산됐으면 아직 aptSeq 가 없을 수 있다 — 예시로
-  //   채우지 않고 실패 문구로 정리한다(다음 cron 회차부터 자연 해소).
+  // POPULARSNAP-2026-09-27: 스냅샷이 이 배포 전에 계산됐으면 아직 aptSeq 가 없을 수 있다.
+  // HERO-SEQ-FALLBACK-2026-09-27 (Plan 116a 보완): 인기 스냅샷은 하루 1회라 aptSeq 가 빠질 수 있다(116a 배포 직후 실측) — 검색 API 로 이름→seq 를 해결한다. 값을 지어내지 않는다.
+  if (top && !top.aptSeq && top.aptName) {
+    try {
+      const rs = await fetch(`${CFG.api}/search/apt?q=${encodeURIComponent(top.aptName)}`, {signal: AbortSignal.timeout(8000)});
+      if (rs.ok) {
+        const js = await rs.json();
+        const rows = Array.isArray(js.results) ? js.results : [];
+        const wantSgg = String(top.sigungu || '').replace(/\s+/g, '');
+        let hit = rows.find(row => row.aptName === top.aptName && String(row.sigungu || '').replace(/\s+/g, '') === wantSgg && row.aptSeq);
+        if (!hit) hit = rows.find(row => row.aptName === top.aptName && row.aptSeq);
+        if (hit) top.aptSeq = hit.aptSeq; // 세션 내 재호출 방지 — top 객체에 캐시
+      }
+    } catch (_) { /* 실패하면 아래 가드에서 기존 실패 문구로 정리 */ }
+  }
+  //   여기까지도 aptSeq 가 없으면 예시로 채우지 않고 실패 문구로 정리한다(다음 cron 회차부터 자연 해소).
   if (!top || !top.aptSeq) { _heroChartFail(); return; }
   try {
     const r = await fetch(`${CFG.api}/transactions/history?aptSeq=${encodeURIComponent(top.aptSeq)}`, {signal: AbortSignal.timeout(8000)});
@@ -11427,6 +11445,10 @@ function toggleToolsSheet(){
   void sh.offsetHeight; // 강제 리플로우 — hidden 해제와 open 클래스 부여를 별도 프레임으로 갈라야 열림 transition 이 재생된다
   sh.classList.add('open');
   if(dim)dim.classList.add('open');
+  // TOOLS-SHEET-FAB-2026-09-27 (Plan 116b 보완): 시트가 열려 있는 동안 우하단 FAB(⭐ 관심단지 #fabBM,
+  //   💬 데이터 도우미 #fabAI)가 시트보다 z-index 가 높아 "규제 요약" 행 화살표를 가렸다(375×812 실측).
+  //   body 클래스로 시트 열림 상태를 표시하고, 아래 CSS(visibility:hidden)로 겹침만 없앤다.
+  try { document.body.classList.toggle('tools-sheet-open', true); } catch(_){}
   const tb=document.getElementById('bnavToolsBtn');
   if(tb)tb.setAttribute('aria-expanded','true');
   const first=sh.querySelector('.ts-item');
@@ -11438,6 +11460,8 @@ function closeToolsSheet(){
   const dim=document.getElementById('toolsSheetDim');
   sh.classList.remove('open');
   if(dim)dim.classList.remove('open');
+  // TOOLS-SHEET-FAB-2026-09-27 (Plan 116b 보완): 시트 닫힘 — 숨겼던 FAB 복원.
+  try { document.body.classList.toggle('tools-sheet-open', false); } catch(_){}
   const tb=document.getElementById('bnavToolsBtn');
   if(tb){ tb.setAttribute('aria-expanded','false'); tb.focus(); }
   const reduced=window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
