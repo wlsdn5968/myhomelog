@@ -74,3 +74,14 @@ grep -c "order('ingested_at'" backend/server.js  → 0
 
 ## 참고(범위 밖, 기록)
 `backend/jobs/pushNotify.js:124-133` 도 `ingested_at >= minSince` + `order('ingested_at')` 로 같은 seq scan 을 한다. 구독자가 2명이라 지금은 무해하지만, 구독자가 늘면 같은 8초 컷에 걸린다. 그때는 `idx_molit_deal_date` 처럼 ≈4MB 짜리 인덱스를 살지, 적재 run 단위로 바꿀지 결정해야 한다.
+
+## 정정 (2026-09-27, 계획자 실측)
+§참고의 "`pushNotify.js:124-133` 도 같은 seq scan" 은 **EXPLAIN 없이 쓴 문장**이었다. 실측(`explain (analyze, buffers)`, 실제 구독 지역 `11350`·since `2026-09-26T23:10:49Z` = 마지막 알림 시각):
+```
+Limit -> Sort (ingested_at desc, id desc) -> Index Scan using idx_molit_lawd_date on molit_transactions
+  Index Cond: (lawd_cd = '11350')   Filter: (ingested_at >= …)   Rows Removed by Filter: 9317
+  Buffers: shared hit=4505 read=23   Execution Time: 1429.510 ms
+```
+- seq scan 이 아니라 **지역당 ≈1만 행 인덱스 스캔 + 힙 필터**다. 구독 3명(push 2·kakao 1)·지역 1곳이라 8s 컷의 1/5 — **지금은 결함이 아니고 변경하지 않는다**(운영자 후속표 4번 "pushNotify seq scan" 은 이 실측으로 철회).
+- 커지는 조건: 구독 지역 수에 비례(≈1.4s/지역). ≈5곳 이상이면 컷 근접. 그때의 코드 전용 선택지: `.gte('deal_date', since − 120일)` 을 붙여 `(lawd_cd, deal_date desc)` 인덱스로 범위를 좁힌다 — 재시도로 늦게 들어온 오래된 달의 거래는 "새 실거래" 알림에서 빠지는 의미 변화가 있으니 그때 결정. 인덱스(`ingested_at`, ≈4MB)는 113 결정대로 사지 않는다.
+- 교훈: "seq scan" 같은 성능 결함 주장은 **EXPLAIN 출력 없이 계획서에 쓰지 않는다**(process-rework-root-causes).
