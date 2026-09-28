@@ -1100,7 +1100,7 @@ async function getAIRecommendations(userCondition) {
   const dbFacMap = await getFacilitiesByKaptCodes([...new Set(preCodes.filter(Boolean))]);
   // LLLLLL-3 (운영자 제보 'YM프라젠 83세대 소형이 세대수 null 로 게이트 우회'): KAPT 미매칭·세대수 null 단지는
   //   건축물대장(getBuildingTitle, SSSS 연동)으로 세대수 보강. building_register 캐시 우선 → miss 만
-  //   지번(적재분)+Kakao 법정동+건축HUB(graceful 8s). 실패 시 null(기존 동작). top-15 로 bounded, Redis 캐시로 콜드 1회만.
+  //   지번(적재분)+Kakao 법정동+건축HUB(graceful 8s). 실패 시 null(기존 동작). 렌즈 합집합 전체(겹침 제외 최대 100 — 15곳 컷은 보강 뒤 :1329)에 대해 실행, Redis 캐시로 콜드 1회만. STALE-COMMENT-2026-09-28 (Plan 123): 종전 "top-15 로 bounded" 는 MULTI-LENS(2026-09-05) 이후 사실이 아니다.
   const _brHh = async (apt) => {
     try {
       const t = await getBuildingTitle({ lawdCd: apt.lawdCd, sigungu: apt.sigungu || '', umdNm: apt.umdNm || '', aptName: apt.aptName });
@@ -1115,7 +1115,7 @@ async function getAIRecommendations(userCondition) {
         //   못 붙여도, 단건 매처 resolveFacility(molit 신원 60행 집계 → 지번 1순위 → 부분·공백·토큰 + 연도 게이트)는
         //   붙는 경우가 실재한다 — /search/facility 는 상계벽산 1,590세대를 정확히 돌려주는데 추천 카드만
         //   건축물대장 세대수 1개짜리 부실 facility 를 실어 단지정보 탭 전체가 '미상'으로 떴다.
-        //   비용: 미매칭 항목(최대 15)에만 · 인메모리/DB 캐시 공유 · 실패하면 종전 BR 경로 그대로.
+        //   비용: 렌즈 합집합의 미매칭 항목 전체(최대 100 — 15곳 컷은 보강 뒤)에 · 인메모리/DB 캐시 공유 · 실패하면 종전 BR 경로 그대로.
         // NO-LIVE-2026-09-05: 배치 경로는 DB 매처만(라이브 KAPT 목록 조회 생략) — 릴레이 13s 타임아웃이 응답 시간을 먹었다(프로덕션 실측 20.4s).
         const rf = await resolveFacility({
           aptName: ranked[i].aptName, sigungu: ranked[i].sigungu || '',
