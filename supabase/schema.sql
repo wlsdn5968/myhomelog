@@ -238,6 +238,19 @@ create table if not exists public.molit_apt_dim (
   refreshed_at    timestamptz not null default now()
 );
 
+-- APT-DIM-RECOVERY-QUEUE-2026-09-26 (Plan 117): 이력 전용 단지 이름 복구 작업 큐 — 2026-09-27 소진(2,748 조합 전부 ok).
+create table if not exists public.apt_dim_recovery_queue (
+  lawd_cd       text not null,
+  deal_ym       text not null,
+  apt_seqs      integer not null,
+  status        text not null default 'pending' check (status in ('pending','ok','error')),
+  tried_at      timestamptz,
+  names_found   integer,
+  error_message text,
+  primary key (lawd_cd, deal_ym)
+);
+alter table public.apt_dim_recovery_queue enable row level security;
+
 create table if not exists public.molit_ingest_runs (
   id bigint default nextval('molit_ingest_runs_id_seq'::regclass) not null,
   started_at timestamp with time zone default now() not null,
@@ -449,7 +462,8 @@ CREATE INDEX idx_chat_sessions_user ON public.chat_sessions USING btree (user_id
 CREATE INDEX idx_field_notes_user_updated ON public.field_notes USING btree (user_id, updated_at DESC);
 CREATE INDEX idx_molit_apt_seq ON public.molit_transactions USING btree (apt_seq) WHERE (apt_seq IS NOT NULL);
 CREATE INDEX idx_molit_aptname_trgm ON public.molit_transactions USING gin (apt_name gin_trgm_ops);
-CREATE INDEX idx_molit_aptseq_area_date ON public.molit_transactions USING btree (apt_seq, exclu_use_ar, deal_date) WHERE (apt_seq IS NOT NULL);
+-- SCHEMA-SYNC-2026-09-28 (Plan 120): 운영 정의로 교체 — 옛 idx_molit_aptseq_area_date 는 20260905_price_records_perf 에서 _amt(INCLUDE deal_amount)로 바뀌었다.
+CREATE INDEX idx_molit_aptseq_area_date_amt ON public.molit_transactions USING btree (apt_seq, exclu_use_ar, deal_date) INCLUDE (deal_amount) WHERE (apt_seq IS NOT NULL);
 CREATE INDEX idx_molit_deal_date ON public.molit_transactions USING btree (deal_date DESC);
 CREATE INDEX idx_molit_lawd_date ON public.molit_transactions USING btree (lawd_cd, deal_date DESC);
 CREATE INDEX idx_molit_runs_lawd_ym ON public.molit_ingest_runs USING btree (lawd_cd, deal_ym, status);
@@ -798,8 +812,7 @@ BEGIN
     AND r.started_at < now() - make_interval(days => p_keep_days);
   GET DIAGNOSTICS n = ROW_COUNT;
   RETURN n;
-END;
-$function$
+END $function$
 ;
 
 -- APT-DIM-FALLBACK-2026-09-20 (Plan 107a): 채움/갱신 — 원본에서 apt_seq 별 최신 1건의
@@ -975,7 +988,8 @@ $function$
 --   넣으면 이중 계상된다(107c 절차는 삭제 **전** 1회만 호출). 면적 변환식은 get_price_records*
 --   의 조인식과 글자 단위로 같아야 한다(다르면 조인이 빗나간다). 이 단계는 함수만 만들고
 --   호출하지 않는다 — 호출은 107c-1 의 절차 b.
-CREATE OR REPLACE FUNCTION public.upsert_hist_peaks_for_month(p_ym text)   -- 'YYYYMM'
+--   p_ym 형식: 'YYYYMM'
+CREATE OR REPLACE FUNCTION public.upsert_hist_peaks_for_month(p_ym text)
  RETURNS integer
  LANGUAGE plpgsql
  SET search_path TO 'public'
