@@ -151,10 +151,16 @@
 
 ### 구성요소 버전 정책 (2026-09-28, Plan 126)
 - **Node**: 두 package.json `engines.node = "24.x"` 고정 — Vercel 은 engines 가 프로젝트 설정보다 우선이고 열린 범위(`>=22`)는 지원 최고 메이저로 해석해 26.x 추가 시 무검증 자동 승격된다. 24.x 는 2026-10-20 Maintenance LTS, 26.x 는 2026-10-28 Active LTS 전환 — Vercel 지원 뒤 별도 계획으로 옮긴다.
-- **Sentry**: 10.75.3 유지. **11 로 올릴 때는 `dataCollection` 을 v10 동등(제한)으로 명시 필수** — v11 은 설정을 비우면 userInfo·cookies·요청/응답 본문·DB 쿼리를 기본 수집한다(공식 MIGRATION.md). `backend/test/components-guard.test.js` 가 메이저 11 이상인데 `dataCollection` 이 없으면 막는다. 브라우저 CDN 번들 버전은 백엔드와 같게.
+- **Sentry**: 10.75.3 유지. **11 로 올릴 때는 `dataCollection` 을 v10 동등(제한)으로 명시 필수** — v11 은 설정을 비우면 userInfo·cookies·요청/응답 본문·DB 쿼리를 기본 수집한다(공식 MIGRATION.md). `backend/test/components-guard.test.js` 가 메이저 11 이상인데 `dataCollection:` 옵션이 없으면 막는다. 브라우저 CDN 번들 버전은 백엔드와 같게.
+- **Sentry 로 나가는 데이터는 `backend/sentry.js` 의 `scrubEvent` 가 오류(beforeSend)·성능(beforeSendTransaction) 모두 거른다**(Plan 128, 2026-09-28): `sendDefaultPii:false` 만으로는 요청 본문·쿠키가 나갔고, 성능 표본에는 beforeSend 가 안 걸려 Authorization·OIDC 토큰·클라이언트 IP 까지 나갔다(운영 30일 93,230건 실측). 규칙: 본문·쿠키 삭제 · 헤더 허용목록 · 클라이언트 주소 삭제 · 환경변수 비밀값·PostgREST 필터 값·UUID 치환. ⚠ **11 은 성능 데이터를 span 항목으로 보내 beforeSendTransaction 을 우회**(실측) — `backend/test/sentry-scrub.test.js` 의 실제 SDK E2E 가 막는다. 새 외부 API 키 환경변수는 이름에 KEY/SECRET/TOKEN/PASSWORD 를 넣어야 자동 치환된다.
 - **CDN 스크립트·스타일은 SRI 필수**: 버전을 바꾸면 integrity 도 같이 바꿔야 로드된다. 해시는 npm tarball(sha512 무결성 검증) 또는 공식 게시값과 대조해 계산. jsDelivr 의 `.min.js` 자동 압축본은 npm 원본이 아니다 — 원본 파일 경로를 쓴다.
 - **drizzle-kit(dev) 중간 4건**: esbuild 개발 서버 권고 — 상류 수정판 없음, 배포 제외, 운영 감사(`--omit=dev`) 0건 → 수용. `overrides.satori.fflate = 0.7.5` 는 satori 가 계속 취약 버전을 고정하므로 유지.
 - **결제 페이지 CSP 는 보고 전용**(2026-09-02 c8e6137 결정 — 결제 게이트 해제 전 위젯 호스트 측정 불가). 운영자가 결제 주제를 꺼내기 전에는 변경하지 않는다.
+
+### 보안 — 운영자 결정 대기 (2026-09-28)
+- **공개 키 노출면 축소(Plan 129)**: 공개 키(`index.html` 메타)만으로 원본 거래·이력·MV·단지 마스터를 1,000행씩 무제한 REST 조회할 수 있고 백엔드 전용 invoker 함수 6개도 anon 실행 가능(운영 실측). 위험은 기밀이 아니라 **무료 전송량 5GB 소진 → 전 API 402**. 1단계(DB 권한만, 코드 0) SQL·되돌리기는 `plans/129-public-key-surface-reduction.md` — **운영자 SQL 승인 전 적용 금지**. 2단계는 사용자 경로 DB 상한 3s→8s 절충이 있어 운영자 결정.
+- **개인정보처리방침 문구**(`frontend/privacy.html:97,107` "오류 발생 시 마스킹된 요청 정보") — 성능 표본(요청 10%)도 Sentry 로 간다. 법적 고지라 운영자 결정.
+- **Sentry 프로젝트 설정**(무료, 운영자 로그인 필요): Security & Privacy 의 "Prevent Storing of IP Addresses" 켜기 · Data Scrubber 켜짐 확인. ECOS 키 재발급은 선택(노출 범위 = 운영자 Sentry 조직, 저장분 2026-10-21 전후 자동 만료).
 
 ### 미진행 (long-term, 게이트 있음)
 - 전면 IA 재편(헤더·사이드바 너머의 정보구조 전체) — 계획 문서 없음, 원하면 운영자 "시안 먼저" (헤더 pill 8→3 은 84cf075, 사이드바 검색 콕핏 재구성은 d8d4538 로 2026-07-16 시안 승인 후 **이미 구현**됨 — 2026-09-27 대조)
@@ -187,4 +193,4 @@
 
 ---
 
-마지막 갱신: 2026-09-28 오후 (123~125 백로그 · 126 구성요소 최신화·CDN SRI·Node 24.x 고정·HSTS 1년 · 127 폰트 CSS SRI · 테스트 588)
+마지막 갱신: 2026-09-28 밤 (128 Sentry 개인정보·비밀값 스크럽 · 129 공개 키 노출면 축소 결정 문서 · 테스트 595)
