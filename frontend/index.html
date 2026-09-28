@@ -111,9 +111,9 @@
     var env = _isProd ? (document.querySelector('meta[name="sentry-environment"]')?.content || 'production') : 'preview';
     var tsr = parseFloat(document.querySelector('meta[name="sentry-traces-sample-rate"]')?.content || '0.1');
     var s = document.createElement('script');
-    s.src = 'https://browser.sentry-cdn.com/10.69.0/bundle.tracing.min.js'; // SENTRY-V10-2026-08-09: backend @sentry/node 10.69.0 과 버전 정합
+    s.src = 'https://browser.sentry-cdn.com/10.75.3/bundle.tracing.min.js'; // SENTRY-V10-2026-08-09: backend @sentry/node 10.75.3 과 버전 정합 (COMPONENTS-2026-09-28, Plan 126)
     s.crossOrigin = 'anonymous';
-    s.integrity = ''; // SRI 는 버전 픽스 시 추가 권장
+    s.integrity = 'sha384-ENViSvvjnFnHdP3y+sWEP8HvdBvPRNPHZiqJRjV8Sdf7Ya0dURGrhZTi9ZD3Q02p'; // SRI-2026-09-28 (Plan 126): CDN 바이트 sha384 — 버전을 바꾸면 이 값도 같이 바꿔야 로드된다
     s.onload = function(){
       if (!window.Sentry) return;
       window.Sentry.init({
@@ -181,7 +181,8 @@ window.MHL.auth = window.MHL.auth || {
     if (!url || !key) return; // stub 모드
     var s = document.createElement('script');
     // Supabase JS v2 UMD — window.supabase.createClient 노출
-    s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.105.4/dist/umd/supabase.min.js';
+    s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.2/dist/umd/supabase.js'; // SRI-2026-09-28 (Plan 126): jsDelivr 자동 압축본(.min.js)은 npm 원본이 아니다 — 원본 파일로 교체
+    s.integrity = 'sha384-Rj26LVGvoeRVR6+mwQmFfcR3QOBEwT+ZmuCWpuiqeTzJpCs0ER4ITAWGb4Hiy3Ok';
     s.crossOrigin = 'anonymous';
     s.onload = function(){
       try {
@@ -6432,8 +6433,8 @@ function _pannSearchNow(){
 }
 function loadLeaflet(){
   if(window.L){initLeaflet();return;}
-  const lk=document.createElement('link');lk.rel='stylesheet';lk.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';document.head.appendChild(lk);
-  const sc=document.createElement('script');sc.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';sc.onload=initLeaflet;document.head.appendChild(sc);
+  const lk=document.createElement('link');lk.rel='stylesheet';lk.href='https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';lk.integrity='sha384-sHL9NAb7lN7rfvG5lfHpm643Xkcjzp4jFvuavGOndn6pjVqS6ny56CAt3nsEVT4H';lk.crossOrigin='anonymous';document.head.appendChild(lk);
+  const sc=document.createElement('script');sc.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';sc.integrity='sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH';sc.crossOrigin='anonymous';sc.onload=initLeaflet;document.head.appendChild(sc);
 }
 
 function initLeaflet(){
