@@ -213,6 +213,18 @@ const dataLimiter = makeRateLimiter({
   message: '데이터 조회 한도 초과. 잠시 후 다시 시도해주세요.',
 });
 
+// SHARE-OG-LIMIT-2026-09-28 (Plan 122): /share 는 /api/ 밖이라 어떤 리미터도 없었고, /api/og 는 PNG 렌더(CPU)가
+//   general(60/분)만 거쳐 서로 다른 aptSeq 를 돌면 엣지 캐시가 소용없었다. 둘 다 유료 AI 가 아니라 fail-open(가용성 우선) —
+//   링크 미리보기 크롤러는 공유 1건당 1~2회만 가져가므로 아래 한도는 정상 트래픽에 닿지 않는다.
+const shareLimiter = makeRateLimiter({
+  limit: 60, windowSec: 60, scope: 'share', keySuffix: ':share',
+  message: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+});
+const ogLimiter = makeRateLimiter({
+  limit: 30, windowSec: 60, scope: 'og', keySuffix: ':og',
+  message: '미리보기 이미지 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+});
+
 app.use('/api/', generalLimiter);
 
 // ── 라우터 연결 ────────────────────────────────────────────
@@ -310,7 +322,7 @@ app.use('/api/cron', cronRouter);
 // STAB-AUDIT-2026-05-07: geocache 백필 즉시 trigger 등 (cron 다음 tick 전 운영자 직접 호출)
 app.use('/api/admin', dataLimiter, require('./routes/admin'));
 // 공유 딥링크 — 크롤러용 OG 메타 치환 (HTML 서빙)
-app.use('/share', shareRouter);
+app.use('/share', shareLimiter, shareRouter);
 // BRIEFING-ARCHIVE-2026-08-19 (Sprint NNNNNNN-6): 날짜별 서버렌더 브리핑(SEO·공유 실체) — /share 와 같은 계열.
 app.use('/briefing', require('./routes/briefing'));
 // REGION-PAGE-2026-08-29 (Sprint NNNNNNN-31): 서버렌더 지역 페이지 118개 — /briefing 과 같은 계열.
@@ -323,7 +335,7 @@ app.use('/apt', require('./routes/aptPage'));
 // OG-IMAGE-DYNAMIC-2026-09-02 (Sprint RRRRRRR): 단지별 링크 미리보기 이미지.
 //   `/api/(.*)` 가 이미 이 함수로 라우팅되므로 vercel.json 변경은 필요 없다(실측 확인).
 //   satori·resvg 는 렌더 시점에만 지연 로드된다 — 다른 요청의 콜드스타트에 얹히지 않는다.
-app.use('/api/og', require('./routes/ogImage'));
+app.use('/api/og', ogLimiter, require('./routes/ogImage'));
 // SITEMAP-DYNAMIC-2026-08-19 (Sprint NNNNNNN-7B): /sitemap.xml 동적 생성 — briefing 아카이브 반영(정적 파일 대체).
 app.use('/sitemap.xml', require('./routes/sitemap'));
 // SITEMAP-INDEX-SPLIT-2026-09-16 (Plan 087): 유형별 sitemap(apt/region/briefing/static) — 위 인덱스가 가리킨다.
