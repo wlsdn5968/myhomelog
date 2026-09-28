@@ -71,7 +71,7 @@ test('index.html 의 Sentry CDN 버전이 루트 package.json 의 @sentry/node �
 test('Sentry 11 가드 — 메이저가 11 이상이면 dataCollection 설정이 있어야 한다 (PII 기본 수집 방지)', () => {
   const backendRange = parseRange(rootPkg.dependencies['@sentry/node'], "루트 package.json 의 @sentry/node");
   if (backendRange.major >= 11) {
-    assert.match(sentryJs, /dataCollection/,
+    assert.match(sentryJs, /\bdataCollection\s*:/,
       '@sentry/node 가 11 이상으로 올라갔는데 backend/sentry.js 에 dataCollection 설정이 없다 — ' +
       'v11 은 dataCollection 미설정 시 IP·쿠키·요청/응답 본문·DB 쿼리를 기본 수집한다(공식 MIGRATION.md)');
   }
