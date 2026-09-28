@@ -21,7 +21,7 @@
 const express = require('express');
 const cache = require('../cache');
 const logger = require('../logger');
-const { LAWD_CODES, LAWD_CODE_TO_NAME } = require('../services/transactionService');
+const { LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES } = require('../services/transactionService');
 
 const router = express.Router();
 const TTL = 6 * 3600;
@@ -201,27 +201,45 @@ async function activeLawdCodes() {
   }
 }
 
+// SIDO-2026-09-28 (Plan 125): /menu·menuEntryForLawd 가 함께 쓰는 시도 코드 접두 표.
+const SIDO = {
+  '11': '서울', '41': '경기', '28': '인천', '26': '부산', '27': '대구',
+  '30': '대전', '31': '울산', '36': '세종', '43': '충북',
+};
+/**
+ * REGION-MENU-EXTRACT-2026-09-28 (Plan 125): `/menu` 핸들러 안에서만 계산되던 광역·라벨 규칙을
+ *   모듈 수준 순수 함수로 뽑았다 — `/region/:lawdCd` 상세 CTA(regionPage.js) 가 앱 딥링크
+ *   (`?region=<광역> <세부>`, restoreSearchFromUrl() 이 그 형식을 그대로 파싱)에 쓸 라벨을
+ *   **같은 규칙**으로 만들어야 한다. 사본을 두면 이 저장소가 반복 겪은 "두 곳이 갈리는" 결함이
+ *   재발한다(취득세 tier 사본 2개가 3주간 갈렸던 이력 — 위 44행 주석 참고).
+ *   ⚠ 출력 계약은 바꾸지 않았다 — `/menu` 핸들러는 이 함수 결과에 active 필터·정렬·캐시 헤더를
+ *   그대로 얹어 종전과 바이트 동일한 JSON 을 낸다(회귀 고정: backend/test/region-deeplink.test.js).
+ * @param {string} code  lawd_cd (5자리 문자열)
+ * @returns {{wide:string,label:string}|null}  퇴역 코드·시도 표에 없음·이름 없음이면 null
+ */
+function menuEntryForLawd(code) {
+  const c = String(code || '');
+  if (RETIRED_LAWD_CODES.has(c)) return null;
+  const sido = SIDO[c.slice(0, 2)];
+  const label = LAWD_CODE_TO_NAME[c];
+  if (!sido || !label) return null;
+  // 프론트 광역 탭은 서울·경기·인천·지방 4개다 — 그 외 시도는 '지방' 아래에 시도명을 붙여 모은다.
+  const wide = ['서울', '경기', '인천'].includes(sido) ? sido : '지방';
+  // '고양시덕양구' → '고양시 덕양구' (시+구 결합형에만 공백. priceRecordsService.regionLabel 과 같은 규칙)
+  const pretty = label.replace(/^([가-힣]{2,}시)([가-힣]+[구군])$/, '$1 $2');
+  const shown = wide === '지방' ? `${sido} ${pretty}` : pretty;
+  return { wide, label: shown };
+}
+
 router.get('/menu', async (req, res) => {
-  const { LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES } = require('../services/transactionService');
-  const SIDO = {
-    '11': '서울', '41': '경기', '28': '인천', '26': '부산', '27': '대구',
-    '30': '대전', '31': '울산', '36': '세종', '43': '충북',
-  };
   const active = await activeLawdCodes();
   const groups = new Map();
   for (const code of new Set(Object.values(LAWD_CODES).map(String))) {
-    if (RETIRED_LAWD_CODES.has(code)) continue;
     if (active && !active.has(code)) continue; // 실거래 0건 — 고르면 실패만 보게 된다
-    const sido = SIDO[code.slice(0, 2)];
-    const label = LAWD_CODE_TO_NAME[code];
-    if (!sido || !label) continue;
-    // 프론트 광역 탭은 서울·경기·인천·지방 4개다 — 그 외 시도는 '지방' 아래에 시도명을 붙여 모은다.
-    const wide = ['서울', '경기', '인천'].includes(sido) ? sido : '지방';
-    // '고양시덕양구' → '고양시 덕양구' (시+구 결합형에만 공백. priceRecordsService.regionLabel 과 같은 규칙)
-    const pretty = label.replace(/^([가-힣]{2,}시)([가-힣]+[구군])$/, '$1 $2');
-    const shown = wide === '지방' ? `${sido} ${pretty}` : pretty;
-    if (!groups.has(wide)) groups.set(wide, []);
-    groups.get(wide).push({ label: shown, lawdCd: code });
+    const entry = menuEntryForLawd(code);
+    if (!entry) continue; // 퇴역 코드·시도 표에 없음·이름 없음
+    if (!groups.has(entry.wide)) groups.set(entry.wide, []);
+    groups.get(entry.wide).push({ label: entry.label, lawdCd: code });
   }
   for (const arr of groups.values()) arr.sort((a, b) => a.label.localeCompare(b.label, 'ko'));
   const out = ['서울', '경기', '인천', '지방'].filter(w => groups.has(w))
@@ -258,3 +276,4 @@ module.exports = router;
 // 서버렌더 지역 페이지가 재사용한다(사본 금지).
 module.exports.buildDashboard = buildDashboard;
 module.exports.resolveRegion = resolveRegion;
+module.exports.menuEntryForLawd = menuEntryForLawd;

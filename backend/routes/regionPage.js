@@ -295,13 +295,19 @@ router.get('/:lawdCd', async (req, res) => {
   const sameSido = all.filter(r => r.lawdCd.slice(0, 2) === region.lawdCd.slice(0, 2) && r.lawdCd !== region.lawdCd);
   const near = (sameSido.length ? sameSido : all.filter((_, i) => i !== idx)).slice(0, 24);
 
+  // REGION-DEEPLINK-2026-09-28 (Plan 125): 앱 검색 조건 복원(restoreSearchFromUrl)이 읽는
+  //   ?region=<광역> <세부> — 라벨은 /api/region/menu 와 같은 함수.
+  const { menuEntryForLawd } = require('./region');
+  const menuEntry = menuEntryForLawd(region.lawdCd);
+  const ctaHref = menuEntry ? `${ORIGIN}/?region=${encodeURIComponent(`${menuEntry.wide} ${menuEntry.label}`)}` : `${ORIGIN}/`;
+
   const body = `<div class="eyebrow">MYHOMELOG REGION</div>
     <h1>${esc(label)} 아파트 실거래 데이터</h1>
     <div class="tag">추천을 팔지 않습니다. 데이터를 팝니다. · 지역코드 ${esc(region.lawdCd)}</div>
     ${cards.length ? cards.join('') : '<div class="card"><h2>준비 중</h2><div style="font-size:12.5px;color:var(--sub)">이 지역의 공식 통계를 아직 불러오지 못했어요. 값을 지어내지 않고 비워둡니다.</div></div>'}
     <div class="card"><h2>주변 지역</h2><div class="links">${near.map(r => `<a href="/region/${esc(r.lawdCd)}">${esc(r.name)}</a>`).join('')}</div>
       <div style="margin-top:10px"><a href="/region">전국 ${all.length}개 시군구 전체 보기 →</a></div></div>
-    <a class="cta" href="${ORIGIN}/">${esc(label)} 단지 검색·대출 계산 →</a>`;
+    <a class="cta" href="${ctaHref}">${esc(label)} 단지 검색·대출 계산 →</a>`;
 
   const title = `${label} 아파트 실거래 데이터 — 거래량·가격지수·미분양 | 내집로그`;
   const desc = facts.length
