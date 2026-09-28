@@ -27,11 +27,7 @@ const { displayAptName } = require('../utils/aptDisplayName');
 
 const ORIGIN = 'https://myhomelog.vercel.app';
 
-function esc(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+const { escHtml: esc } = require('../utils/htmlEscape'); // ESC-UNIFY-2026-09-28 (Plan 124)
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 const comma = (v) => Number(v).toLocaleString('ko-KR');
 const eok = (v) => (Number.isFinite(Number(v)) ? (Number(v) / 10000).toFixed(2) + '억' : '');

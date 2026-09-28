@@ -24,11 +24,7 @@ const { displayAptName } = require('../utils/aptDisplayName');
 
 const ORIGIN = 'https://myhomelog.vercel.app';
 
-function esc(s) {
-  return String(s == null ? '' : s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-}
+const { escHtml: esc } = require('../utils/htmlEscape'); // ESC-UNIFY-2026-09-28 (Plan 124)
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 const comma = (v) => Number(v).toLocaleString('ko-KR');
 const eok = (v) => (Number.isFinite(Number(v)) ? (Number(v) / 10000).toFixed(2) + '억' : '');
@@ -53,13 +49,13 @@ function pageShell({ title, desc, canonical, body, image }) {
      카카오톡·X·스레드에 링크를 붙여도 미리보기 이미지가 나오지 않아, 공개 페이지를 공유해도
      타임라인에서 눈에 띄지 않았다(운영자 SNS 자산과 직결). 단지별 동적 이미지는 별도 과제이고,
      우선 앱과 같은 기본 이미지라도 붙여 카드가 그려지게 한다. -->
-<meta property="og:image" content="${ogImg}">
+<meta property="og:image" content="${esc(ogImg)}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="${esc(title)}">
 <meta name="twitter:description" content="${esc(desc)}">
-<meta name="twitter:image" content="${ogImg}">
+<meta name="twitter:image" content="${esc(ogImg)}">
 <meta name="robots" content="index, follow">
 <style>
   :root{--bg:#080E18;--card:#101B2B;--bd:#22334A;--tx:#E8EFFA;--sub:#93A4BD;--amb:#FFC93C;--acc:#4C8DFF}

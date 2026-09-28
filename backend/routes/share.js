@@ -30,7 +30,8 @@ function loadHtml() {
 function escapeHtml(s) {
   // SHARE-REPLACE-LITERAL-2026-09-06: `$` 도 함께 이스케이프한다 — 아래 lit() 이 이미 확장을
   //   막지만, 나중에 문자열 형태 치환이 다시 들어와도 안전하도록 두 겹으로 둔다.
-  return String(s || '').replace(/[<>"'&$]/g, c => ({
+  // ESC-UNIFY-2026-09-28 (Plan 124): 0·false 를 빈 문자열로 만들던 s || '' 를 다른 SSR escape 와 같은 null 기준으로.
+  return String(s == null ? '' : s).replace(/[<>"'&$]/g, c => ({
     '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '&': '&amp;', '$': '&#36;',
   }[c]));
 }
