@@ -84,8 +84,8 @@
 
 <!-- Phase 4-2 단계 1 (2026-05-04): Concept C 폰트 stack — Pretendard Variable + Sora + JetBrains Mono.
      LCP 영향 +50~100ms (모바일 4G 1.2s → 1.25-1.30s). preconnect + preload + display:swap 으로 FOUT 최소. -->
-<link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
+<link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css" integrity="sha384-5BlC3z5PiUASCwi5iNqbsXbtE1SBi8nn1Upz4JWJg2upbZKNNDXLRPKEcn79qArn" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css" integrity="sha384-5BlC3z5PiUASCwi5iNqbsXbtE1SBi8nn1Upz4JWJg2upbZKNNDXLRPKEcn79qArn" crossorigin="anonymous">
 <!-- PERF-2026-06-13: 2차 폰트(Sora 헤드라인·JetBrains 숫자)는 비-렌더블로킹 비동기 로드 — FCP/LCP 단축.
      로드 전엔 Pretendard/system 폴백(display=swap). 본문 Pretendard 는 위에서 동기 로드 유지(LCP 폰트). -->
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">

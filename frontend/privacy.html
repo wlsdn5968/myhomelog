@@ -9,8 +9,8 @@
      ① Pretendard 를 로드하지 않아 본문 폰트가 메인과 달랐고 ② 다크 토큰이 아예 없어 다크 사용자가
      라이트 화면을 만났다. head 에 두는 이유는 body 끝이면 라이트 플래시(FOUC)가 남기 때문. -->
 <script>(function(){try{if(localStorage.getItem('mhl_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(_){}})();</script>
-<link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css">
+<link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css" integrity="sha384-5BlC3z5PiUASCwi5iNqbsXbtE1SBi8nn1Upz4JWJg2upbZKNNDXLRPKEcn79qArn" crossorigin="anonymous">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css" integrity="sha384-5BlC3z5PiUASCwi5iNqbsXbtE1SBi8nn1Upz4JWJg2upbZKNNDXLRPKEcn79qArn" crossorigin="anonymous">
 <style>
   :root{--bg:#F7F8FB;--bg2:#EEF1F6;--t1:#222;--t2:#4a5159;--t3:#5F6773;--bd:#DDE2EA;--acc:#2A6DF4;--acc2:#0D46C2;--panel:#fff;}
   html[data-theme="dark"]{--bg:#080E18;--bg2:#162336;--t1:#E8EFFA;--t2:#93A4BD;--t3:#8494AC;--bd:#22334A;--panel:#101B2B;--acc:#6BA5FF;--acc2:#8FBDFF;}
