@@ -161,7 +161,7 @@
 ### 보안 — 운영자 결정 대기 (2026-09-28)
 - **공개 키 노출면 축소(Plan 129·132)**: 공개 키(`index.html` 메타)만으로 대형 테이블을 1,000행씩 무제한 REST 조회할 수 있었다(위험 = 무료 전송량 5GB 소진 → 전 API 402). **1단계 적용 완료(2026-10-02, 운영자 SQL Editor 실행 — 기록 `supabase/migrations/20261002_public_key_surface_stage1.sql`)**: 이력·편의시설·학교·건축물대장 공개 읽기 제거, 백엔드 전용 함수 5개 공개 실행 회수. **2단계 코드 완료(Plan 132, 77833fb)**: 검색·지도·인기 라이브 집계가 service_role 로 읽는다(`backend/test/public-key-surface.test.js` 가 고정 — 공개 키로 되돌리면 DB 권한을 닫은 뒤 42501). 절충(운영자 결정): 사용자 경로 DB 상한 anon 3s → 8s. **2단계 DB SQL(`plans/129` §4)은 24시간 관찰 뒤 운영자 직접 실행** — 이 환경에서 계획자의 DB 권한·정책 변경은 확인 단계에서 거절된다. 공개 유지: `popular_apts_snapshot`·`regulations_snapshot`·`billing_plans`.
 - **개인정보처리방침 문구**(`frontend/privacy.html:97,107` "오류 발생 시 마스킹된 요청 정보") — 성능 표본(요청 10%)도 Sentry 로 간다. 법적 고지라 운영자 결정.
-- **Sentry 프로젝트 설정**(무료, 운영자 로그인 필요): Security & Privacy 의 "Prevent Storing of IP Addresses" 켜기 · Data Scrubber 켜짐 확인. ECOS 키 재발급은 선택(노출 범위 = 운영자 Sentry 조직, 저장분 2026-10-21 전후 자동 만료).
+- **Sentry 프로젝트 설정** — ✅ 2026-10-02 적용: 조직 Security & Privacy 의 "Prevent Storing of IP Addresses" 켬(운영자가 로그인해 둔 크롬에서 계획자가 그 토글 하나만 변경 — 두 프로젝트 `node`·`myhomelog-frontend` 에 잠금 표시로 강제 적용 확인). 프로젝트별 Data Scrubber·Use Default Scrubbers 는 원래 켜져 있었다. ECOS 키 재발급은 선택(노출 범위 = 운영자 Sentry 조직, 저장분 2026-10-21 전후 자동 만료).
 
 ### 미진행 (long-term, 게이트 있음)
 - 전면 IA 재편(헤더·사이드바 너머의 정보구조 전체) — 계획 문서 없음, 원하면 운영자 "시안 먼저" (헤더 pill 8→3 은 84cf075, 사이드바 검색 콕핏 재구성은 d8d4538 로 2026-07-16 시안 승인 후 **이미 구현**됨 — 2026-09-27 대조)
