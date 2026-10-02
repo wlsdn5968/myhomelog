@@ -1051,12 +1051,10 @@ create policy ai_feedback_insert_anon on public.ai_feedback as permissive for in
 create policy ai_feedback_insert_own on public.ai_feedback as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
 create policy ai_feedback_select_own on public.ai_feedback as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
 create policy ai_feedback_service_all on public.ai_feedback as permissive for all to service_role using (true) with check (true);
-create policy apt_amenities_public_read on public.apt_amenities as permissive for select to anon, authenticated using (true);
 create policy apt_amenities_service_write on public.apt_amenities as permissive for all to service_role using (true) with check (true);
 create policy apt_geocache_public_read on public.apt_geocache as permissive for select to public using (true);
 create policy apt_master_public_read on public.apt_master as permissive for select to anon, authenticated using (true);
 create policy apt_master_service_write on public.apt_master as permissive for all to service_role using (true) with check (true);
-create policy apt_schools_public_read on public.apt_schools as permissive for select to anon, authenticated using (true);
 create policy apt_schools_service_write on public.apt_schools as permissive for all to service_role using (true) with check (true);
 create policy audit_log_select_own on public.audit_log as permissive for select to authenticated using ((user_id = ( SELECT auth.uid() AS uid)));
 create policy billing_plans_public_read on public.billing_plans as permissive for select to public using ((active = true));
@@ -1064,7 +1062,6 @@ create policy bookmarks_delete_own on public.bookmarks as permissive for delete 
 create policy bookmarks_insert_own on public.bookmarks as permissive for insert to authenticated with check ((( SELECT auth.uid() AS uid) = user_id));
 create policy bookmarks_select_own on public.bookmarks as permissive for select to authenticated using ((( SELECT auth.uid() AS uid) = user_id));
 create policy bookmarks_update_own on public.bookmarks as permissive for update to authenticated using ((( SELECT auth.uid() AS uid) = user_id)) with check ((( SELECT auth.uid() AS uid) = user_id));
-create policy br_read on public.building_register as permissive for select to public using (true);
 create policy chat_messages_delete_own on public.chat_messages as permissive for delete to authenticated using ((EXISTS ( SELECT 1
    FROM chat_sessions s
   WHERE ((s.id = chat_messages.session_id) AND (s.user_id = ( SELECT auth.uid() AS uid))))));
@@ -1129,7 +1126,7 @@ alter table public.molit_transactions_hist enable row level security;
 alter table public.molit_hist_runs enable row level security;
 alter table public.molit_hist_peaks enable row level security;
 
-create policy hist_read on public.molit_transactions_hist as permissive for select to anon, authenticated using (true);
+-- PUBLIC-KEY-SURFACE-2026-10-02 (Plan 129 1단계): 공개 읽기 정책 hist_read·apt_amenities_public_read·apt_schools_public_read·br_read 제거 + anon/authenticated 권한 회수(기록: supabase/migrations/20261002_public_key_surface_stage1.sql). 이 네 테이블은 RLS on + 공개 정책 0 = service_role 만 통과.
 
 CREATE OR REPLACE FUNCTION public.db_size_mb()
  RETURNS numeric
