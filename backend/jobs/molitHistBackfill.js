@@ -29,6 +29,15 @@ const REGION_MONTHS_PER_RUN = 200;         // 실행당 상한 — 실제 종료
 const TIME_BUDGET_MS = 235_000;            // maxDuration 300s − 여유 65s(마지막 region-month 최대 ~10s + 응답)
 const MAX_CONSEC_ERR = 3;                  // 연속 실패(쿼터 소진·API 장애)면 남은 대상을 두들기지 않고 이번 회차를 끝낸다
 const CHUNK = 1000;
+// HIST-PATCH-2026-10-02 (Plan 131): 이미 자른 달 가운데 이력에 빠진 (지역, 월) — 지정 보강 대상.
+//   107c-1 이 2025-05 를 이력으로 옮길 때 화성 신설 3구(만세 41591·효행 41593·병점 41595)는 원본에 그 달이
+//   없었다(그때는 자르기 전 적재 구멍 점검 P5 가 없었다). 실측 2026-10-02: 이력의 화성(apt_seq 41590-…)
+//   2025-04 = 만세 113·효행 130·병점 168·동탄 420 인데 2025-05 = 동탄 499 뿐. Plan 130 은 자른 달을 원본에
+//   다시 적재하지 않으므로 이 경로(이력 직접 적재)로 한 번 채운다. 끝나면 molit_hist_runs 에 기록돼 다시
+//   돌지 않는다. LAWD_CODES 에 없는 코드는 무시한다.
+//   ⚠ 인천 신설 4구의 2025-05 는 넣지 말 것 — 옛 코드(28110·28140·28260)분으로 이미 이력에 있어 중복된다.
+const EXTRA_TARGETS = [['41591', '202505'], ['41593', '202505'], ['41595', '202505']];
+const SEQ_CHUNK = 100;                     // apt_seq IN 목록은 URL 에 실린다 — 길이 제한 회피
 
 function prevYm(ym) { const y = +ym.slice(0, 4), m = +ym.slice(4); return m === 1 ? `${y - 1}12` : `${y}${String(m - 1).padStart(2, '0')}`; }
 
@@ -80,6 +89,12 @@ async function nextTargets(admin, limit) {
   // 동일하게 dedup 해 같은 지역을 두 번 처리하지 않는다.
   const regions = [...new Set(Object.values(LAWD_CODES))];
   const out = [];
+  // HIST-PATCH-2026-10-02 (Plan 131): 지정 보강 대상을 먼저 — 완료됐거나 LAWD_CODES 에 없는 코드는 건너뛴다.
+  for (const [lawdCd, ym] of EXTRA_TARGETS) {
+    if (!regions.includes(lawdCd) || done.has(`${lawdCd}|${ym}`)) continue;
+    out.push([lawdCd, ym]);
+    if (out.length >= limit) return out;
+  }
   for (let ym = START_YM; ym >= FLOOR_YM; ym = prevYm(ym)) {
     for (const lawdCd of regions) {
       if (done.has(`${lawdCd}|${ym}`)) continue;
@@ -88,6 +103,48 @@ async function nextTargets(admin, limit) {
     }
   }
   return out;
+}
+
+// HIST-PATCH-2026-10-02 (Plan 131): 지정 보강 뒤 경신 기준선(molit_hist_peaks) 맞추기.
+//   molit_hist_peaks 는 이력의 (apt_seq, exclu_use_ar)별 최고·최저·건수와 같다(2026-10-02 운영 실측: 81,918키
+//   전부 일치). 그래서 더하지 않고, 영향받은 단지의 요약을 이력 전체에서 **다시 계산해 덮어쓴다** — 같은
+//   대상을 다시 돌려도 결과가 같다(건수 이중 계상 없음). 이력에는 유일 키가 없어 페이지 경계가 흔들리지
+//   않도록 전 컬럼으로 정렬한다(완전히 같은 행끼리는 순서가 바뀌어도 집계가 같다).
+async function recomputeHistPeaks(admin, aptSeqs) {
+  const PAGE = 1000;
+  for (let i = 0; i < aptSeqs.length; i += SEQ_CHUNK) {
+    const chunk = aptSeqs.slice(i, i + SEQ_CHUNK);
+    const agg = new Map();
+    for (let from = 0; ; from += PAGE) {
+      const { data, error } = await admin.from('molit_transactions_hist')
+        .select('apt_seq, exclu_use_ar, deal_amount')
+        .in('apt_seq', chunk)
+        .order('apt_seq', { ascending: true })
+        .order('deal_date', { ascending: true })
+        .order('exclu_use_ar', { ascending: true })
+        .order('deal_amount', { ascending: true })
+        .order('floor', { ascending: true })
+        .range(from, from + PAGE - 1);
+      if (error) throw error;
+      if (!data || !data.length) break;
+      for (const r of data) {
+        const key = `${r.apt_seq}|${r.exclu_use_ar}`;
+        const a = agg.get(key);
+        if (!a) agg.set(key, { apt_seq: r.apt_seq, exclu_use_ar: r.exclu_use_ar, mx: r.deal_amount, mn: r.deal_amount, n: 1 });
+        else {
+          if (r.deal_amount > a.mx) a.mx = r.deal_amount;
+          if (r.deal_amount < a.mn) a.mn = r.deal_amount;
+          a.n++;
+        }
+      }
+      if (data.length < PAGE) break;
+    }
+    const rows = [...agg.values()];
+    for (let j = 0; j < rows.length; j += CHUNK) {
+      const { error } = await admin.from('molit_hist_peaks').upsert(rows.slice(j, j + CHUNK), { onConflict: 'apt_seq,exclu_use_ar' });
+      if (error) throw error;
+    }
+  }
 }
 
 async function runHistBackfill(opts = {}) {
@@ -108,16 +165,32 @@ async function runHistBackfill(opts = {}) {
       //   그 region-month 를 비운다(Plan 101 로 인덱스가 (apt_seq) 단일로 바뀌어 이 삭제는 순차 스캔이다 —
       //   backfill 은 Plan 100 으로 동결되어 호출되지 않는다).
       const { first, last } = monthRange(ym);
-      const { error: eDel } = await admin.from('molit_transactions_hist')
-        .delete()
-        .like('apt_seq', `${lawdCd}-%`)
-        .gte('deal_date', first)
-        .lte('deal_date', last);
-      if (eDel) throw eDel;
+      // HIST-PATCH-2026-10-02 (Plan 131): 지정 보강 대상은 apt_seq 접두어가 지역 코드와 다르다(화성 신설구 →
+      //   41590-…) — 접두어 삭제로는 재시도 때 앞선 삽입분을 못 비운다. 가져온 단지의 그 달 행만 비운다.
+      const isExtra = EXTRA_TARGETS.some(([l, y]) => l === lawdCd && y === ym);
+      const seqs = isExtra ? [...new Set(hist.map((h) => h.apt_seq))] : [];
+      if (isExtra) {
+        for (let i = 0; i < seqs.length; i += SEQ_CHUNK) {
+          const { error: eDelSeq } = await admin.from('molit_transactions_hist')
+            .delete()
+            .in('apt_seq', seqs.slice(i, i + SEQ_CHUNK))
+            .gte('deal_date', first)
+            .lte('deal_date', last);
+          if (eDelSeq) throw eDelSeq;
+        }
+      } else {
+        const { error: eDel } = await admin.from('molit_transactions_hist')
+          .delete()
+          .like('apt_seq', `${lawdCd}-%`)
+          .gte('deal_date', first)
+          .lte('deal_date', last);
+        if (eDel) throw eDel;
+      }
       for (let i = 0; i < hist.length; i += CHUNK) {
         const { error } = await admin.from('molit_transactions_hist').insert(hist.slice(i, i + CHUNK));
         if (error) throw error;
       }
+      if (isExtra) await recomputeHistPeaks(admin, seqs);
       const { error: e2 } = await admin.from('molit_hist_runs').upsert({ lawd_cd: lawdCd, deal_ym: ym, rows: hist.length });
       if (e2) throw e2;
       done++; rows += hist.length; lastYm = ym; consec = 0;
@@ -144,7 +217,7 @@ async function runHistBackfill(opts = {}) {
   };
 }
 
-module.exports = { runHistBackfill, toHistRow, prevYm, START_YM, FLOOR_YM, DB_STOP_MB, TIME_BUDGET_MS, REGION_MONTHS_PER_RUN };
+module.exports = { runHistBackfill, toHistRow, prevYm, START_YM, FLOOR_YM, DB_STOP_MB, TIME_BUDGET_MS, REGION_MONTHS_PER_RUN, EXTRA_TARGETS };
 
 // CLI: node backend/jobs/molitHistBackfill.js [limit]
 if (require.main === module) {

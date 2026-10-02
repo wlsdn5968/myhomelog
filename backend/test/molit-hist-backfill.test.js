@@ -238,3 +238,146 @@ test('FLOOR_YM — 2020-09 에서 동결: START_YM~2020-09 가 끝났으면 2020
   assert.equal(res.reason, 'complete');
   assert.equal(calls.inserted.length, 0);
 });
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// HIST-PATCH-2026-10-02 (Plan 131) — 이미 자른 달 가운데 이력에 빠진 (지역, 월) 지정 보강.
+//   실사례: 107c-1 이 2025-05 를 자를 때 화성 신설 3구는 원본에 그 달이 없어 이력에도 없다.
+//   아래 스텁은 이력·경신 기준선을 메모리 배열로 흉내 낸다(in/like 삭제, 정렬+range 조회, peaks upsert).
+// ══════════════════════════════════════════════════════════════════════════
+function _makeMemAdmin({ histRows = [], peaks = [], doneRuns = [], failRunsUpsertOnce = false } = {}) {
+  const state = {
+    hist: histRows.map((r) => ({ ...r })),
+    peaks: new Map(peaks.map((p) => [`${p.apt_seq}|${p.exclu_use_ar}`, { ...p }])),
+    runs: [],
+    peaksUpserts: 0,
+  };
+  let runsFail = failRunsUpsertOnce;
+  const inMonth = (r, first, last) => r.deal_date >= first && r.deal_date <= last;
+  const client = {
+    rpc: async (name) => (name === 'db_size_mb' ? { data: 100, error: null } : { data: null, error: new Error('예상 밖 rpc ' + name) }),
+    from(table) {
+      if (table === 'molit_hist_runs') {
+        return {
+          select: () => ({ order: () => ({ range: async (from) => (from === 0 ? { data: [...doneRuns, ...state.runs], error: null } : { data: [], error: null }) }) }),
+          upsert: async (row) => {
+            if (runsFail) { runsFail = false; return { error: new Error('runs upsert 실패(테스트)') }; }
+            state.runs.push(row); return { error: null };
+          },
+        };
+      }
+      if (table === 'molit_transactions_hist') {
+        return {
+          delete: () => ({
+            like: (_c, pat) => ({ gte: (_c2, first) => ({ lte: async (_c3, last) => {
+              const prefix = pat.replace(/%$/, '');
+              state.hist = state.hist.filter((r) => !(r.apt_seq.startsWith(prefix) && inMonth(r, first, last)));
+              return { error: null };
+            } }) }),
+            in: (_c, vals) => ({ gte: (_c2, first) => ({ lte: async (_c3, last) => {
+              state.hist = state.hist.filter((r) => !(vals.includes(r.apt_seq) && inMonth(r, first, last)));
+              return { error: null };
+            } }) }),
+          }),
+          insert: async (rows) => { state.hist.push(...rows.map((r) => ({ ...r }))); return { error: null }; },
+          select: () => {
+            let vals = [];
+            const chain = {
+              in(_c, v) { vals = v; return chain; },
+              order() { return chain; },
+              range: async (from, to) => {
+                const out = state.hist.filter((r) => vals.includes(r.apt_seq))
+                  .sort((a, b) => (a.apt_seq < b.apt_seq ? -1 : a.apt_seq > b.apt_seq ? 1 : a.deal_date < b.deal_date ? -1 : a.deal_date > b.deal_date ? 1 : a.deal_amount - b.deal_amount));
+                return { data: out.slice(from, to + 1).map((r) => ({ apt_seq: r.apt_seq, exclu_use_ar: r.exclu_use_ar, deal_amount: r.deal_amount })), error: null };
+              },
+            };
+            return chain;
+          },
+        };
+      }
+      if (table === 'molit_hist_peaks') {
+        return {
+          upsert: async (rows, opts) => {
+            assert.equal(opts && opts.onConflict, 'apt_seq,exclu_use_ar', 'peaks upsert 의 충돌 키가 PK 와 다르다');
+            state.peaksUpserts++;
+            for (const p of rows) state.peaks.set(`${p.apt_seq}|${p.exclu_use_ar}`, { ...p });
+            return { error: null };
+          },
+        };
+      }
+      throw new Error('molit-hist-backfill 메모리 스텁: 예상 밖 테이블 ' + table);
+    },
+  };
+  return { client, state };
+}
+
+// 화성 만세구(41591) 2025-05 — MOLIT 이 돌려주는 원천 행(apt_seq 접두어는 옛 통합코드 41590).
+const _EXTRA_FETCH = [
+  { apt_seq: '41590-100', deal_date: '2025-05-03', exclu_use_ar: 84.99, deal_amount: 52000, floor: 5 },
+  { apt_seq: '41590-100', deal_date: '2025-05-20', exclu_use_ar: 84.99, deal_amount: 47000, floor: 9 },
+  { apt_seq: '41590-200', deal_date: '2025-05-11', exclu_use_ar: 59.5, deal_amount: 31000, floor: 2 },
+];
+// 이미 이력에 있는 행: 같은 단지의 다른 달(2025-04) · 같은 달의 다른 단지(동탄, 건드리면 안 됨).
+const _EXTRA_EXISTING = [
+  { apt_seq: '41590-100', deal_date: '2025-04-10', exclu_use_ar: 8499, deal_amount: 50000, floor: 3 },
+  { apt_seq: '41590-900', deal_date: '2025-05-07', exclu_use_ar: 8400, deal_amount: 90000, floor: 11 },
+];
+const _EXTRA_EXISTING_PEAKS = [
+  { apt_seq: '41590-100', exclu_use_ar: 8499, mx: 50000, mn: 50000, n: 1 },
+  { apt_seq: '41590-900', exclu_use_ar: 8400, mx: 90000, mn: 90000, n: 1 },
+];
+
+test('지정 보강(Plan 131) — 대상 목록은 화성 신설 3구의 2025-05 뿐이고, LAWD_CODES 에 없는 코드는 무시한다', async () => {
+  const { EXTRA_TARGETS } = require('../jobs/molitHistBackfill');
+  assert.deepEqual(EXTRA_TARGETS, [['41591', '202505'], ['41593', '202505'], ['41595', '202505']],
+    '인천 신설구 등을 넣으면 옛 코드분으로 이미 이력에 있는 행이 중복된다');
+  const { client } = _makeMemAdmin();
+  const fetchCalls = [];
+  await _runWithStubs({ limit: 2 }, client, async (l, y) => { fetchCalls.push([l, y]); return []; }, { '테스트구': '11111' });
+  assert.ok(fetchCalls.every(([, ym]) => ym !== '202505'), 'LAWD_CODES 에 없는 지정 대상이 처리됐다');
+});
+
+test('지정 보강(Plan 131) — 먼저 처리되고, 가져온 단지의 그 달 행만 바꾸며, 경신 기준선을 이력 전체에서 다시 계산한다', async () => {
+  const { client, state } = _makeMemAdmin({ histRows: _EXTRA_EXISTING, peaks: _EXTRA_EXISTING_PEAKS });
+  const fetchCalls = [];
+  const fetchImpl = async (l, y) => { fetchCalls.push([l, y]); return l === '41591' && y === '202505' ? _EXTRA_FETCH : []; };
+  const res = await _runWithStubs({ limit: 1 }, client, fetchImpl, { '화성만세': '41591', '테스트구': '11111' });
+
+  assert.deepEqual(fetchCalls, [['41591', '202505']], '지정 대상이 START_YM 대상보다 먼저여야 한다');
+  assert.equal(res.done, 1);
+  assert.equal(res.rows, 3);
+  assert.deepEqual(state.runs, [{ lawd_cd: '41591', deal_ym: '202505', rows: 3 }]);
+  assert.equal(state.hist.length, 5, '기존 2행 + 새 3행');
+  assert.ok(state.hist.some((r) => r.apt_seq === '41590-900' && r.deal_date === '2025-05-07'), '같은 달의 다른 단지(동탄) 행이 지워졌다');
+  assert.ok(state.hist.some((r) => r.apt_seq === '41590-100' && r.deal_date === '2025-04-10'), '같은 단지의 다른 달 행이 지워졌다');
+  assert.deepEqual(state.peaks.get('41590-100|8499'), { apt_seq: '41590-100', exclu_use_ar: 8499, mx: 52000, mn: 47000, n: 3 },
+    '기준선 = 이력 전체(4월 1건 + 5월 2건)의 최고·최저·건수');
+  assert.deepEqual(state.peaks.get('41590-200|5950'), { apt_seq: '41590-200', exclu_use_ar: 5950, mx: 31000, mn: 31000, n: 1 });
+  assert.deepEqual(state.peaks.get('41590-900|8400'), { apt_seq: '41590-900', exclu_use_ar: 8400, mx: 90000, mn: 90000, n: 1 }, '가져오지 않은 단지의 기준선이 바뀌었다');
+});
+
+test('지정 보강(Plan 131) — 기록 실패로 다시 돌아도 이력 중복·건수 이중 계상이 없다', async () => {
+  const { client, state } = _makeMemAdmin({ histRows: _EXTRA_EXISTING, peaks: _EXTRA_EXISTING_PEAKS, failRunsUpsertOnce: true });
+  const fetchImpl = async (l, y) => (l === '41591' && y === '202505' ? _EXTRA_FETCH : []);
+  const first = await _runWithStubs({ limit: 1 }, client, fetchImpl, { '화성만세': '41591' });
+  assert.equal(first.err, 1, '첫 회차는 runs 기록 실패로 err 여야 한다');
+  assert.equal(state.runs.length, 0);
+  const second = await _runWithStubs({ limit: 1 }, client, fetchImpl, { '화성만세': '41591' });
+  assert.equal(second.done, 1);
+  assert.equal(state.hist.filter((r) => r.apt_seq === '41590-100' && r.deal_date >= '2025-05-01').length, 2, '재시도로 5월 행이 중복됐다');
+  assert.equal(state.hist.length, 5);
+  assert.equal(state.peaks.get('41590-100|8499').n, 3, '재시도로 건수가 이중 계상됐다');
+});
+
+test('지정 보강(Plan 131) — 이미 기록된 대상은 건너뛰고, 일반 대상의 접두어 삭제 경로는 그대로다', async () => {
+  const { client, state } = _makeMemAdmin({
+    doneRuns: [{ lawd_cd: '41591', deal_ym: '202505' }],
+    histRows: [{ apt_seq: '41591-7', deal_date: '2025-04-02', exclu_use_ar: 8400, deal_amount: 1, floor: 1 }],
+  });
+  const fetchCalls = [];
+  const res = await _runWithStubs({ limit: 1 }, client, async (l, y) => { fetchCalls.push([l, y]); return []; }, { '화성만세': '41591' });
+  assert.deepEqual(fetchCalls, [['41591', '202504']], '완료된 지정 대상을 다시 처리했거나 일반 대상 순서가 바뀌었다');
+  assert.equal(res.done, 1);
+  assert.equal(state.hist.length, 0, '일반 대상은 종전처럼 접두어(lawd-%)로 그 달을 비워야 한다');
+  assert.equal(state.peaksUpserts, 0, '일반 대상은 기준선을 건드리지 않는다');
+});
