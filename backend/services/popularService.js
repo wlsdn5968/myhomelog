@@ -52,7 +52,9 @@ function popularWindow(computedAt) {
 const SNAPSHOT_SIZE = 18; // 저장은 넉넉히(프론트 limit 12 + 여유 6) — 읽을 때 limit 개로 자른다. SNAP-SLACK-2026-09-16 (Plan 097)
 const SNAPSHOT_MIN_ROWS = 8; // SNAP-SLACK-2026-09-16 (Plan 097): 스냅샷이 이 이상이면 모자라도 쓴다 — 090 필터로 1행 빠진 12행 스냅샷이 null 이 되어 anon RPC(3s 컷) → 전국 표본 폴백(건수 절반 왜곡)으로 떨어진 라이브 회귀의 재발 방지. 스냅샷의 8행이 폴백 12행보다 정확하다.
 
-// 읽기용(공개 데이터) = getSupabaseReadonly, 쓰기용(RLS bypass) = getSupabaseAdmin — 키 체인 동일
+// 스냅샷 읽기(작은 공개 테이블) = getSupabaseReadonly, 라이브 집계·쓰기 = getSupabaseAdmin
+//   PUBLIC-KEY-SURFACE-2026-10-02 (Plan 132): 라이브 집계가 읽는 원본 거래·좌표는 공개 키 권한을 닫을
+//   대상이라 service_role 로 읽는다(plans/129 §4). popular_apts_snapshot 은 공개 유지.
 const anonClient = () => getSupabaseReadonly();
 const serviceClient = () => getSupabaseAdmin();
 
@@ -60,12 +62,12 @@ const serviceClient = () => getSupabaseAdmin();
  * 인기 단지 라이브 집계 — search.js /popular 에서 이동 (Sprint LLLL, 로직 무변경).
  * @param {number} limit
  * @param {{client?: object, rpcTimeoutMs?: number}} opts  SNAPROLE-2026-08-16: 조회 클라이언트 주입점.
- *   미지정이면 종전과 동일하게 공개키(anon) — 사용자 요청 경로 동작 불변.
- *   cron 만 service_role 을 넘긴다(아래 computeAndStoreSnapshot 주석에 실측 근거).
+ *   미지정이면 service_role(PUBLIC-KEY-SURFACE-2026-10-02, Plan 132 — 그전에는 공개키였다).
+ *   cron 은 종전대로 service_role 과 긴 rpcTimeoutMs 를 넘긴다(아래 computeAndStoreSnapshot 주석에 실측 근거).
  * @returns {{ results: Array, usedFallback: boolean }}
  */
 async function buildPopularResults(limit = 12, opts = {}) {
-  const admin = opts.client || anonClient();
+  const admin = opts.client || serviceClient();
   if (!admin) throw new Error('Supabase 미설정');
 
   // ① 전국 60일 실거래량 top — RPC 집계 (정직한 거래량순)
@@ -285,6 +287,9 @@ async function computeAndStoreSnapshot() {
   //   [안전성] cron 은 서버 내부 작업이고 조회 대상도 동일한 공개 데이터라 RLS 우회 키로 노출면이
   //   늘지 않는다(스냅샷 저장은 이미 service_role — 읽기만 anon 이던 비대칭을 맞추는 것).
   //   ⚠ 사용자 요청 경로(/popular 라이브 집계)는 종전대로 공개키 — 방어층 불변.
+  //     → 2026-10-02 (Plan 132, 운영자 결정) 사용자 경로도 service_role 로 바꿨다. 이 경로는 스냅샷이 36h 넘게
+  //       낡았을 때만 타고 결과가 30분 캐시된다. anon 3s 에서 끊기면 저품질 폴백(원본 10회 페이지 조회)으로
+  //       갔는데, 이제는 RPC 가 클라이언트 컷(기본 7s) 안에서 끝까지 돈다.
   //   [확인 지점] 다음 18:00 UTC 실행 후 health.crons['popular-snapshot'].ok 로 판정.
   const sc = serviceClient();
   const opts = sc ? { client: sc, rpcTimeoutMs: 25000 } : {};  // 25s: 300s 예산 안에서 재시도 포함 2회

@@ -22,7 +22,7 @@
  */
 const express = require('express');
 // SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
-const { getUserScopedClient: userScopedClient, getSupabaseReadonly } = require('../db/client');
+const { getUserScopedClient: userScopedClient, getSupabaseAdmin } = require('../db/client');
 const { requireAuth } = require('../middleware/auth');
 const logger = require('../logger');
 // SEARCH-PERF-2026-07-10 (Sprint DDDD): 자동완성 결과 캐시 — 실측 웜 1.4~1.6s(은마 1,641ms).
@@ -71,7 +71,17 @@ const HISTORY_LIMIT = 50;
 // molit_transactions 의 pg_trgm 인덱스 (idx_molit_aptname_trgm) 활용 — ILIKE 고속.
 // SSOT-2026-08-09 (Plan 007): 구명 adminClient 는 실권한과 불일치(공개키 우선 readonly) —
 //   db/client.getSupabaseReadonly 로 통합(키 체인 동일, 콜사이트 이름만 정리).
-const adminClient = () => getSupabaseReadonly();
+// PUBLIC-KEY-SURFACE-2026-10-02 (Plan 132 = Plan 129 2단계 코드): 공개 키 → service_role.
+//   [왜] 공개 키(프런트 메타 태그에 공개)가 원본 거래·단지·좌표·검색 색인을 읽을 수 있어야 이 라우트가
+//     동작했고, 그 때문에 누구나 같은 키로 Supabase REST 를 직접 불러 우리 레이트리밋 밖에서 대량 조회할 수
+//     있었다(무료 전송량 5GB 소진 → 전 API 402 위험). 백엔드가 service_role 로 읽으면 그 테이블들의
+//     공개 읽기 권한을 닫을 수 있다(DB 쪽은 배포 24시간 관찰 뒤 별도 적용 — plans/129 §4).
+//   [절충 — 운영자 결정 2026-10-02] anon 의 DB statement_timeout 3s 방어층 대신 8s(authenticator)가 된다.
+//     실측(전환 전 24시간): 이 경로의 공개 키 요청 302건 평균 0.6s·최대 1.5s. 아래 _softQuery 의
+//     소프트 타임아웃(1~2.5s)은 그대로라 사용자 응답 시간은 같다.
+//   여기서 읽는 것은 전부 공개 데이터(실거래·단지·좌표)다 — 사용자 소유 행(search_history)은 아래에서
+//   종전대로 userScopedClient(RLS)로만 다룬다.
+const adminClient = () => getSupabaseAdmin();
 
 // SEARCH-DEGRADE-OBSERVE-2026-08-16 (Sprint LLLLLLL): 강등 빈도를 Redis 일별 카운터로 남긴다.
 //   Hobby 로그는 1시간이면 증발해 "얼마나 자주 강등되는가"를 사후에 알 수 없다. 실제로
