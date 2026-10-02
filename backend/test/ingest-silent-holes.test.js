@@ -376,3 +376,121 @@ test('cron.js·cronStats.js — gapHoles 가 recordCronRun 호출부와 NUM 화�
   assert.deepEqual(_pick({ gapHoles: 5 }), { gapHoles: 5 }, '_pick 이 gapHoles 숫자를 통과시키지 않는다');
   assert.deepEqual(_pick({ gapHoles: 0 }), { gapHoles: 0 });
 });
+
+
+// ══════════════════════════════════════════════════════════════════════════
+// LIVE-TAIL-2026-10-02 (Plan 130) — 표준 창보다 오래됐지만 아직 자르지 않은 원본 달의 구멍.
+//   실사례: 202506 의 신설 코드 7곳이 채워지기 전에 2026-10-01 로 달이 넘어가 탐지 창(16개월) 밖으로
+//   밀렸다 → gapHoles 0 인데 창 자르기 사전 점검 P5 = 7. 아래 테스트는 "꼬리 달" 판정을 고정한다.
+//   공통 설정: LB=6 → 표준 구멍-대상 달 3개(yms[3..5]), 꼬리 후보는 그보다 오래된 달(tail[0] 이 가장 최신).
+// ══════════════════════════════════════════════════════════════════════════
+function _tailSetup(LB) {
+  const { mod, restore } = _loadMolitIngest(() => Promise.resolve({ data: {} }));
+  const maxTail = mod._LIVE_TAIL_MAX_MONTHS;
+  restore();
+  const all = _recentYms(LB + maxTail);
+  return { holeYms: all.slice(3, LB), tail: all.slice(LB), maxTail };
+}
+/** 표준 창의 구멍-대상 달을 3지역 모두 ok 로 채운 기록(표준 창 구멍 0 — 꼬리 달만 보려는 것). */
+function _coverStandard(holeYms, startId = 1) {
+  const rows = [];
+  let id = startId;
+  for (const code of Object.values(STUB_LAWD_CODES)) for (const ym of holeYms) rows.push({ id: id++, lawd_cd: code, deal_ym: ym, status: 'ok' });
+  return rows;
+}
+
+test('retryFailedGaps — 표준 창 밖이어도 아직 자르지 않은 달(ok 있음·archived 0)의 구멍은 재시도된다 (Plan 130)', async () => {
+  const LB = 6;
+  const { holeYms, tail } = _tailSetup(LB);
+  const A = STUB_LAWD_CODES['A동'], B = STUB_LAWD_CODES['B동'], C = STUB_LAWD_CODES['C동'];
+  const dgk = _dgkStub();
+  const admin = _fakeIngestAdmin([
+    ..._coverStandard(holeYms),
+    { id: 101, lawd_cd: A, deal_ym: tail[0], status: 'ok' },
+    { id: 102, lawd_cd: B, deal_ym: tail[0], status: 'ok' },
+  ]);
+  const result = await _run(admin, dgk, { maxGaps: 15, lookbackMonths: LB });
+
+  assert.equal(result.holes, 1, `꼬리 달의 C동 1건만 구멍이어야 한다(실제 ${result.holes})`);
+  assert.deepEqual(dgk.calls, [{ lawdCd: C, dealYm: tail[0] }], `실제 재시도: ${JSON.stringify(dgk.calls)}`);
+  assert.equal(result.filled, 1);
+});
+
+test('retryFailedGaps — 이미 자른 달(archived 기록이 하나라도 있음)은 표준 창 밖에서 구멍 후보가 아니다 (Plan 130)', async () => {
+  const LB = 6;
+  const { holeYms, tail } = _tailSetup(LB);
+  const A = STUB_LAWD_CODES['A동'], B = STUB_LAWD_CODES['B동'];
+  for (const statuses of [['archived', 'archived'], ['ok', 'archived']]) {
+    const dgk = _dgkStub();
+    const admin = _fakeIngestAdmin([
+      ..._coverStandard(holeYms),
+      { id: 101, lawd_cd: A, deal_ym: tail[0], status: statuses[0] },
+      { id: 102, lawd_cd: B, deal_ym: tail[0], status: statuses[1] },
+    ]);
+    const result = await _run(admin, dgk, { maxGaps: 15, lookbackMonths: LB });
+    assert.equal(result.holes, 0, `자른 달(${statuses.join('+')})이 구멍 후보가 됐다 — 자른 달을 원본에 다시 적재하게 된다`);
+    assert.equal(dgk.calls.length, 0);
+  }
+});
+
+test('retryFailedGaps — 표준 창 밖에서 기록이 전혀 없는 달은 구멍 후보가 아니다 (Plan 130)', async () => {
+  const LB = 6;
+  const { holeYms } = _tailSetup(LB);
+  const dgk = _dgkStub();
+  const admin = _fakeIngestAdmin(_coverStandard(holeYms)); // 꼬리 달 기록 0
+  const result = await _run(admin, dgk, { maxGaps: 15, lookbackMonths: LB });
+  assert.equal(result.holes, 0, '한 번도 적재한 적 없는 과거 달까지 구멍으로 세면 원본 창 밖 과거를 끝없이 적재한다');
+  assert.equal(dgk.calls.length, 0);
+});
+
+test('retryFailedGaps — 꼬리는 최신 쪽부터 이어지는 동안만: 자른 달보다 과거의 달은 ok 가 있어도 제외 (Plan 130)', async () => {
+  const LB = 6;
+  const { holeYms, tail } = _tailSetup(LB);
+  const A = STUB_LAWD_CODES['A동'];
+  const dgk = _dgkStub();
+  const admin = _fakeIngestAdmin([
+    ..._coverStandard(holeYms),
+    { id: 101, lawd_cd: A, deal_ym: tail[0], status: 'archived' }, // 자른 달
+    { id: 102, lawd_cd: A, deal_ym: tail[1], status: 'ok' },       // 그보다 과거 — 원본에 없다
+  ]);
+  const result = await _run(admin, dgk, { maxGaps: 15, lookbackMonths: LB });
+  assert.equal(result.holes, 0);
+  assert.equal(dgk.calls.length, 0);
+});
+
+test('retryFailedGaps — 자르기가 밀려 꼬리가 2개월이면 둘 다 탐지하고, 표준 창의 구멍이 꼬리보다 먼저 뽑힌다 (Plan 130)', async () => {
+  const LB = 6;
+  const { holeYms, tail } = _tailSetup(LB);
+  const A = STUB_LAWD_CODES['A동'], B = STUB_LAWD_CODES['B동'], C = STUB_LAWD_CODES['C동'];
+  const dgk = _dgkStub();
+  // 표준 창: C동의 가장 오래된 달 1건만 비워 둔다(신설 구멍). 꼬리 2개월: A동만 ok → B·C 가 구멍.
+  const standard = _coverStandard(holeYms).filter(r => !(r.lawd_cd === C && r.deal_ym === holeYms[holeYms.length - 1]));
+  const admin = _fakeIngestAdmin([
+    ...standard,
+    { id: 101, lawd_cd: A, deal_ym: tail[0], status: 'ok' },
+    { id: 102, lawd_cd: A, deal_ym: tail[1], status: 'ok' },
+  ]);
+  const result = await _run(admin, dgk, { maxGaps: 15, lookbackMonths: LB });
+  assert.equal(result.holes, 5, `표준 창 1 + 꼬리 2개월 × 2지역 = 5 (실제 ${result.holes})`);
+  // B동은 표준 창에 기록이 있고 꼬리 달은 그 범위 밖(더 과거)이라 신설 구멍, C동도 범위 밖 → 전부 같은 묶음, 최신 달 먼저.
+  assert.deepEqual(dgk.calls, [
+    { lawdCd: C, dealYm: holeYms[holeYms.length - 1] },
+    { lawdCd: B, dealYm: tail[0] }, { lawdCd: C, dealYm: tail[0] },
+    { lawdCd: B, dealYm: tail[1] }, { lawdCd: C, dealYm: tail[1] },
+  ], `실제 재시도 순서: ${JSON.stringify(dgk.calls)}`);
+});
+
+test('pickLiveTailYms — 상한(LIVE_TAIL_MAX_MONTHS)과 판정 규칙 (Plan 130)', () => {
+  const { mod, restore } = _loadMolitIngest(() => Promise.resolve({ data: {} }));
+  try {
+    const pick = mod._pickLiveTailYms;
+    assert.equal(mod._LIVE_TAIL_MAX_MONTHS, 6);
+    const ok = (ym) => ({ lawd_cd: '11111', deal_ym: ym, status: 'ok' });
+    const ar = (ym) => ({ lawd_cd: '11111', deal_ym: ym, status: 'archived' });
+    assert.deepEqual(pick(['202506', '202505'], [ok('202506'), ar('202505')]), ['202506']);
+    assert.deepEqual(pick(['202506', '202505'], [ok('202506'), ok('202505')]), ['202506', '202505']);
+    assert.deepEqual(pick(['202506', '202505'], [ar('202506'), ok('202505')]), []);
+    assert.deepEqual(pick(['202506', '202505'], [ok('202505')]), []);
+    assert.deepEqual(pick([], [ok('202506')]), []);
+  } finally { restore(); }
+});

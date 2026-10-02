@@ -285,6 +285,32 @@ async function ingestOne(admin, lawdCd, dealYm) {
  *   - 빈 월(MOLIT 데이터 없음)은 ingestOne 이 rows=0 으로 status='ok' 처리 → 갭에서 자동 제외(무한재시도 차단).
  *   - 연속 3 실패 시 중단(MOLIT 장애 보호). 시간가드는 호출부(runMolitIngest)에서.
  */
+// LIVE-TAIL-2026-10-02 (Plan 130): 표준 창 밖에서 "아직 자르지 않은 달"을 몇 달까지 따라갈지의 상한.
+//   자르기는 달 M 을 (M+1)-01 + 15개월 이후에 하므로 정상 리듬이면 꼬리는 1개월이다. 자르기가 밀려도
+//   따라가도록 여유를 둔다(DB 용량상 원본에 6개월 넘게 더 쌓일 수는 없다).
+const LIVE_TAIL_MAX_MONTHS = 6;
+
+/**
+ * 표준 창보다 오래된 달(tailYms, 최신 → 과거) 중 아직 원본에 살아 있는 달을 고른다.
+ * 살아 있음 = 그 달에 ok 기록이 1건 이상 있고 archived 기록이 0건(자르기는 그 달 기록을 전부 archived 로 바꾼다).
+ * 최신 쪽부터 이어지는 동안만 — 자른 달이나 기록이 전혀 없는 달을 만나면 멈춘다(그보다 과거는 원본에 없다).
+ */
+function pickLiveTailYms(tailYms, coveredRows) {
+  const byYm = new Map();
+  for (const r of coveredRows) {
+    const s = byYm.get(r.deal_ym) || { ok: 0, archived: 0 };
+    if (r.status === 'archived') s.archived++; else s.ok++;
+    byYm.set(r.deal_ym, s);
+  }
+  const live = [];
+  for (const ym of tailYms) {
+    const s = byYm.get(ym);
+    if (!s || !s.ok || s.archived) break;
+    live.push(ym);
+  }
+  return live;
+}
+
 async function retryFailedGaps(admin, { maxGaps = 15, lookbackMonths = WINDOW_MONTHS, deadline = Infinity } = {}) {
   const minYm = recentYearMonths(lookbackMonths).slice(-1)[0]; // 가장 오래된 YYYYMM
 
@@ -358,17 +384,28 @@ async function retryFailedGaps(admin, { maxGaps = 15, lookbackMonths = WINDOW_MO
   //   (무한 재시도 없음).
   const windowYms = recentYearMonths(lookbackMonths); // 최신 → 과거
   const holeYms = windowYms.slice(3); // 최신 3개월 제외
+  // LIVE-TAIL-2026-10-02 (Plan 130): 표준 창(lookbackMonths)보다 오래됐지만 **아직 자르지 않은** 원본 달.
+  //   달이 바뀌면 가장 오래된 원본 달이 표준 창 밖으로 밀리는데, 창 자르기(107c)는 그 뒤 며칠~몇 주 뒤에
+  //   한다 — 그 사이 그 달의 구멍은 탐지되지 않았다(실측 2026-10-02: 202506 의 신설 코드 7곳이 남은 채
+  //   10-01 에 창이 넘어가 gapHoles 0, 자르기 사전 점검 P5 = 7). 그래서 표준 창 바로 뒤 달부터 과거로
+  //   "ok 기록이 있고 archived 가 하나도 없는 달"이 이어지는 동안만 탐지 대상에 더한다.
+  const tailYms = recentYearMonths(lookbackMonths + LIVE_TAIL_MAX_MONTHS).slice(lookbackMonths); // 최신 → 과거
   let holeCandidates = [];
   if (holeYms.length) {
-    const oldestHoleYm = holeYms[holeYms.length - 1];
+    const oldestQueryYm = tailYms.length ? tailYms[tailYms.length - 1] : holeYms[holeYms.length - 1];
     const newestHoleYm = holeYms[0];
     const gapSet = new Set(gapAll); // 잘리기 전 전체 — 위 GAP-ALL-2026-09-27 주석 참고
     try {
-      const covered = await pageAll(() => admin.from('molit_ingest_runs')
-        .select('lawd_cd, deal_ym')
+      const coveredAll = await pageAll(() => admin.from('molit_ingest_runs')
+        .select('lawd_cd, deal_ym, status')
         .in('status', ['ok', 'archived'])
-        .gte('deal_ym', oldestHoleYm)
+        .gte('deal_ym', oldestQueryYm)
         .lte('deal_ym', newestHoleYm));
+      const targetYms = [...holeYms, ...pickLiveTailYms(tailYms, coveredAll)];
+      const targetYmSet = new Set(targetYms);
+      // 내부/신설 구멍 판정(coveredRangeByLawd)은 탐지 대상 달의 기록만으로 한다 — 이미 자른 달의
+      //   archived 기록이 섞이면 범위 최소값이 달라져 표준 창의 재시도 순서가 바뀐다.
+      const covered = coveredAll.filter(r => targetYmSet.has(r.deal_ym));
       const coveredSet = new Set(covered.map(r => `${r.lawd_cd}|${r.deal_ym}`));
       const coveredRangeByLawd = new Map(); // 지역별 covered 최소~최대 월(내부 구멍 판정용)
       for (const r of covered) {
@@ -382,7 +419,7 @@ async function retryFailedGaps(admin, { maxGaps = 15, lookbackMonths = WINDOW_MO
       const inner = [], outer = []; // ① 그 지역 covered 범위 안의 내부 구멍 ② 나머지(신설·늦은 편입)
       for (const lawd of Object.values(LAWD_CODES)) {
         const range = coveredRangeByLawd.get(lawd);
-        for (const ym of holeYms) {
+        for (const ym of targetYms) {
           const key = `${lawd}|${ym}`;
           if (coveredSet.has(key) || gapSet.has(key)) continue; // 이미 커버됨 또는 이미 gaps 후보
           const isInner = !!range && ym >= range.min && ym <= range.max;
@@ -566,7 +603,10 @@ async function runMolitIngest(opts = {}) {
 
 // molitErrReason 은 "응답 본문을 통째로 저장하지 않는다(키 에코 차단)" 보안 성질을 테스트로 고정하기 위해 export.
 module.exports = { runMolitIngest, molitErrReason, fetchRegionMonth };
-module.exports._retryFailedGaps = retryFailedGaps; // TEST-EXPORT-2026-09-27 (Plan 119): 구멍 감지 고정용
+module.exports._retryFailedGaps = retryFailedGaps;
+// TEST-EXPORT-2026-10-02 (Plan 130)
+module.exports._pickLiveTailYms = pickLiveTailYms;
+module.exports._LIVE_TAIL_MAX_MONTHS = LIVE_TAIL_MAX_MONTHS; // TEST-EXPORT-2026-09-27 (Plan 119): 구멍 감지 고정용
 
 // CLI: node backend/jobs/molitIngest.js
 if (require.main === module) {
