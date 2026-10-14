@@ -97,9 +97,15 @@ test('도구 탭·시트 체크 표시 — 다크 모드 활성색 #8DB3E2 가 �
   // ⚠ 계획서 문구는 "미디어쿼리 다크 블록"이지만, 이 코드베이스의 실제 다크 모드는
   //   @media(prefers-color-scheme) 가 아니라 html[data-theme="dark"] 속성 선택자다(파일 상단
   //   :root 블록·다른 컴포넌트 오버라이드 전부 이 패턴 — 소스 확인 완료). 그 실제 패턴을 검사한다.
-  const hexMatches = html.match(/#8DB3E2/g) || [];
-  assert.equal(hexMatches.length, 1,
-    `#8DB3E2 리터럴이 파일에 ${hexMatches.length}회 등장한다 — CSS 변수(--ts-active)로 한 번만 정의하고 재사용해야 중복 실수를 막는다`);
+  // Plan 144: 디자인 규칙 v2 §1 이 다크 pri 를 #8DB3E2 로 정하면서 전역 다크 토큰(--accent-500·--acc·--acc-bg·--a2)도
+  //   같은 값을 쓰게 됐다. 이 테스트의 의도는 "값 자체"가 아니라 '도구 탭/체크 전용 활성색을 --ts-active 변수
+  //   **한 곳**에서만 정의하고 규칙에서는 리터럴 대신 변수를 재사용한다'는 구조이므로, 그 구조를 직접 검사한다.
+  const tsDefs = html.match(/--ts-active:\s*#8DB3E2/g) || [];
+  assert.equal(tsDefs.length, 1,
+    `--ts-active:#8DB3E2 정의가 ${tsDefs.length}회 등장한다 — CSS 변수(--ts-active)로 한 번만 정의해야 중복 실수를 막는다`);
+  const toolsRules = (html.match(/(?:#bnavToolsBtn\.on|\.ts-check)\{[^}]*\}/g) || []).join('');
+  assert.ok(toolsRules.length > 0, '도구 탭/체크 규칙을 찾지 못했다');
+  assert.ok(!/#8DB3E2/i.test(toolsRules), '도구 탭/체크 규칙이 --ts-active 대신 #8DB3E2 리터럴을 직접 쓴다');
 
   // .bnav 시트 CSS 가 있는 모바일 @media(max-width:700px) 블록 근처(.bnav{display:block} 바로 뒤)에서
   // html[data-theme="dark"] 속성 선택자로 정의됐는지 — 라이트/전역에 새면 라이트 대비가 깨진다.
