@@ -116,14 +116,14 @@
 
 ## 📊 진행 중 / 운영자 결정 대기 (2026-09-20 갱신)
 
-### DB 용량 — Supabase 무료 한도 500MB 중 **424MB(85%)** (2026-10-02 실측 · 107c 창 자르기 진행 중)
+### DB 용량 — Supabase 무료 한도 500MB 중 **437MB(87%, 경보선 85% 넘음)** (2026-10-14 health 실측 · 107c 창 자르기 2달 완료)
 - 한도 기준은 **클러스터 전 DB 합계**: `SELECT sum(pg_database_size(datname)) FROM pg_database`. 넘으면 **읽기 전용 모드**. health 의 `db`(RPC `get_db_size_bytes`)와 `db_size_mb()` 가 이제 같은 식을 쓴다(Plan 105).
 - 하루 경과: 482(96%) → backfill 2020-09 동결(100) → 이력 인덱스 단일키(101) → 경신 기준선 6년(103) → **유지보수 회수(106) = 405MB**. 원본 `molit_transactions` 는 월 ≈13.9MB 증가.
 - **경보**: retention cron 이 매일 85%(425MB)에서 Sentry warning, 93%(465MB)에서 error(`monitor:db-capacity`).
 - **다시 하지 말 것**: 이력 backfill 재개(동결됨) · 통째 upsert(apt_master 는 바뀐 행만 쓴다) · `molit_ingest_runs` 의 ok 를 기간만으로 전부 삭제((지역,월)별 최신 1건은 영구 보존 — 사라지면 그 달 조회가 MOLIT API 로 추락).
 - **유지보수 재실행 시**: 적재 창(17:00~19:00 UTC)·apt-master-sync(월 20:00 UTC)를 피하고, 명령 전후로 위 합계 쿼리를 잰다. 절차·실측은 `supabase/migrations/20260920_maintenance_reclaim.sql`.
-- **2027-01 전**: Plan 107 원본 16개월 순환 보관(안 하면 2027-03 경 다시 한도). 종합 설계 `plans/104-db-capacity-management.md`. 진행: 0단계·107a·107b-1·107b-2·107c-1 완료, 107c-2(2025-06)는 **10-05 전후 목표**(2026-10-01 이후만 가능, 실행 직전 운영자 재확인 — `plans/107c-2-cut-202506.md`).
-- **첫 경보(425MB)는 2026-10-21 전후**로 예상된다(증가 ≈16MB/월 실측). **경보는 고장이 아니라 예고** — 울린 뒤 107(L 규모)을 시작하면 늦다. 남은 무손실 절약은 사실상 소진됐고(104 §8.2) 구조적 답은 107 뿐이다.
+- **2027-01 전**: Plan 107 원본 16개월 순환 보관(안 하면 2027-03 경 다시 한도). 종합 설계 `plans/104-db-capacity-management.md`. 진행: 0단계·107a·107b-1·107b-2·107c-1·**107c-2(2025-06, 2026-10-03 — e+f 는 운영자 SQL Editor)** 완료. **다음 2025-07 은 2026-11-01 이후**(같은 절차 — `plans/107c-2-cut-202506.md` 를 복제해 날짜만 바꾼다).
+- **경보선(85%) 도달 — 2026-10-14 health `db.usedMb` 437(87%, `warn:true`)**: 예상(10-21)보다 이르다. 107c-2 직후 415MB(현재 DB 기준) → 10-14 423MB(현재 DB) / 437MB(전 DB 합계). 원본 파일은 자르기로 늘지 않는다(230.8MB 그대로) — 나머지 테이블·카탈로그 증가는 아직 분해하지 않았다. **경보는 고장이 아니라 예고** — 93%(465MB)까지 약 28MB. 다음 수단: 11-01 이후 107c-3(2025-07) · 3개월분 이동 뒤 REINDEX.
 - **조용한 구멍 자동 재적재(Plan 119, 2026-09-28 병합 d209abc)**: `retryFailedGaps` 가 이제 적재 기록 자체가 없는 (지역, 월)도 찾아 채운다(최신 3개월 제외, 슬롯당 15). 남은 수는 `/api/health` `crons['molit-ingest'].gapHoles` — 0 이 정상.
 - **2026-10-02 실측**: 119 가 09-28~10-01 에 163쌍(약 3.9만 행)을 채워 원본 480,036행·클러스터 423.7MB(경보선 425MB 직전, 용량 경보 Sentry 는 아직 0건). ⚠ **탐지 창(16개월)의 빈틈**: 가장 오래된 원본 달은 매달 1일부터 자르는 날까지 탐지 밖 — 202506 의 신설 코드 7곳(인천 4·화성 3)이 남아 107c-2 P5 = 7. `gapHoles: 0` 은 "창 안 0" 이다. **Plan 130(8068509)으로 수정**: 표준 창 뒤로 "ok 있고 archived 0 인 달"이 이어지는 동안도 탐지한다(자른 달은 archived 라 제외 — 창 자르기 e+f 단계의 archived 표시에 의존). P5 = 0 확인 전 자르기 금지(`plans/107c-2-cut-202506.md` §2-1). 화성 3구 2025-05 는 이미 자른 달이라 이력에 없었다 → **Plan 131(7b4b778)**: 이력 backfill 지정 대상 3쌍 + 경신 기준선 재계산(기준선 ≡ 이력 집계, 81,918키 실측 일치).
 - ⚠ **과거분 백필 뒤에는 월별 지역 수 연속성을 볼 것** (Plan 119, 2026-09-27): 2026-08-16 경기 백필의 한 회차가 연속 실패 차단기에 걸려 남은 작업을 `skipped` 로 넘겼고 **skipped 는 `molit_ingest_runs` 에 행을 남기지 않아** 경기 36곳 2025-11~2026-01 이 6주간 조용히 비어 있었다(당시 검증은 "최소 날짜가 2025-05 까지 내려왔나" 만 봤다). 검증 SQL: `select deal_ym, count(distinct lawd_cd) from molit_ingest_runs where status in ('ok','archived') group by 1 order by 1` — 한 달만 지역 수가 꺼지면 구멍. 자르기(107c) 전 P5 점검도 같은 이유.
@@ -158,8 +158,14 @@
 - **drizzle-kit(dev) 중간 4건**: esbuild 개발 서버 권고 — 상류 수정판 없음, 배포 제외, 운영 감사(`--omit=dev`) 0건 → 수용. `overrides.satori.fflate = 0.7.5` 는 satori 가 계속 취약 버전을 고정하므로 유지.
 - **결제 페이지 CSP 는 보고 전용**(2026-09-02 c8e6137 결정 — 결제 게이트 해제 전 위젯 호스트 측정 불가). 운영자가 결제 주제를 꺼내기 전에는 변경하지 않는다.
 
+### 🚨 Upstash Redis 무료 한도 초과 (2026-10-14 발견)
+- 운영 Redis 가 **월 500,000 명령**을 넘어 모든 명령이 `ERR max requests limit exceeded` 로 실패 중(Vercel 런타임 로그). 시작 시각·소진 원인·초기화 시점은 **Upstash 콘솔에서만** 보인다(운영자). 유료 전환 금지 방침.
+- 영향(코드 원문 확인): **유료 AI(`/api/report`·`/api/clause`)는 fail-closed 503 으로 막힘**(비용 안전) · 무료 룰베이스 챗도 같은 리미터라 503 → **Plan 133** · 일반·데이터·og·share 요청 제한은 fail-open(제한 없음) · `/api/geocode` 전역 Kakao 일일 상한(8,000)도 fail-open(인스턴스별 일일 60 만 남음) · Redis 2차 캐시 전부 미스(같은 시기 지역 가격 기록 함수 `get_price_records_by_region` 의 시간 초과가 10-04 0건 → 10-11~12 13건으로 늘었다 — 인과는 미확정) · `/api/health` 의 `crons`·`searchDegrade`·`chatIntents` null · `usage.used` 0 표시.
+- 코드상 health 1회 = Redis 명령 8개(웜, 비로그인) — 5분 간격 모니터만으로 월 약 6.9만(한도의 14%). 나머지 소진원은 코드만으로 특정 못 함.
+
+
 ### 보안 — 운영자 결정 대기 (2026-09-28)
-- **공개 키 노출면 축소(Plan 129·132)**: 공개 키(`index.html` 메타)만으로 대형 테이블을 1,000행씩 무제한 REST 조회할 수 있었다(위험 = 무료 전송량 5GB 소진 → 전 API 402). **1단계 적용 완료(2026-10-02, 운영자 SQL Editor 실행 — 기록 `supabase/migrations/20261002_public_key_surface_stage1.sql`)**: 이력·편의시설·학교·건축물대장 공개 읽기 제거, 백엔드 전용 함수 5개 공개 실행 회수. **2단계 코드 완료(Plan 132, 77833fb)**: 검색·지도·인기 라이브 집계가 service_role 로 읽는다(`backend/test/public-key-surface.test.js` 가 고정 — 공개 키로 되돌리면 DB 권한을 닫은 뒤 42501). 절충(운영자 결정): 사용자 경로 DB 상한 anon 3s → 8s. **2단계 DB SQL(`plans/129` §4)은 24시간 관찰 뒤 운영자 직접 실행** — 이 환경에서 계획자의 DB 권한·정책 변경은 확인 단계에서 거절된다. 공개 유지: `popular_apts_snapshot`·`regulations_snapshot`·`billing_plans`.
+- **공개 키 노출면 축소(Plan 129·132)**: 공개 키(`index.html` 메타)만으로 대형 테이블을 1,000행씩 무제한 REST 조회할 수 있었다(위험 = 무료 전송량 5GB 소진 → 전 API 402). **1단계 적용 완료(2026-10-02, 운영자 SQL Editor 실행 — 기록 `supabase/migrations/20261002_public_key_surface_stage1.sql`)**: 이력·편의시설·학교·건축물대장 공개 읽기 제거, 백엔드 전용 함수 5개 공개 실행 회수. **2단계 코드 완료(Plan 132, 77833fb)**: 검색·지도·인기 라이브 집계가 service_role 로 읽는다(`backend/test/public-key-surface.test.js` 가 고정 — 공개 키로 되돌리면 DB 권한을 닫은 뒤 42501). 절충(운영자 결정): 사용자 경로 DB 상한 anon 3s → 8s. **2단계 DB SQL(`plans/129` §4) 적용 조건 충족(2026-10-14 게이트웨이 로그 24h: 공개 키로 대상 5개 요청 0건 — 공개 키는 regulations_snapshot·popular_apts_snapshot 만)** — 계획자 `apply_migration` 은 같은 날 다시 declined → **운영자 SQL Editor 실행 대기**. 공개 유지: `popular_apts_snapshot`·`regulations_snapshot`·`billing_plans`.
 - **개인정보처리방침 문구**(`frontend/privacy.html:97,107` "오류 발생 시 마스킹된 요청 정보") — 성능 표본(요청 10%)도 Sentry 로 간다. 법적 고지라 운영자 결정.
 - **Sentry 프로젝트 설정** — ✅ 2026-10-02 적용: 조직 Security & Privacy 의 "Prevent Storing of IP Addresses" 켬(운영자가 로그인해 둔 크롬에서 계획자가 그 토글 하나만 변경 — 두 프로젝트 `node`·`myhomelog-frontend` 에 잠금 표시로 강제 적용 확인). 프로젝트별 Data Scrubber·Use Default Scrubbers 는 원래 켜져 있었다. ECOS 키 재발급은 선택(노출 범위 = 운영자 Sentry 조직, 저장분 2026-10-21 전후 자동 만료).
 
@@ -194,4 +200,4 @@
 
 ---
 
-마지막 갱신: 2026-10-02 밤 (129 1단계 적용 완료·132 2단계 코드 · 130 구멍 탐지 꼬리 달 · 131 화성 3구 2025-05 이력 보강 · 107c-2 는 P5 해소 확인 뒤 · DB 424MB · 테스트 608)
+마지막 갱신: 2026-10-14 (107c-2 완료 기록 · Upstash 한도 초과 발견 → 133 챗 리미터 분리·134 건축물대장 후보 오분류 · 129 2단계 SQL 운영자 대기 · DB 437MB 87% · 테스트 618)
