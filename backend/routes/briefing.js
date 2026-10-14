@@ -210,7 +210,7 @@ router.get('/:date', async (req, res) => {
     ${regs ? `<div class="card"><h2>규제·금융 변경 내역 <span style="font-weight:500;color:var(--ink3);font-size:12px">금융위·국토부 고시 중 확인된 것만</span></h2>${regs}</div>` : ''}
     <div class="nav"><a href="/briefing/${dayNav(day, -1)}">← 전날 브리핑</a>${isToday ? '' : `<a href="/briefing/${dayNav(day, 1)}">다음날 →</a>`}</div>
     ${(() => { const p = pastDaysNav(day); return p.length ? `<div class="nav" aria-label="지난 브리핑">지난 브리핑: ${p.map((x) => `<a href="/briefing/${esc(x.day)}">${esc(x.label)}</a>`).join(' · ')}</div>` : ''; })()}
-    <a class="cta" href="/?briefing=${esc(day)}">앱에서 지도·계산기와 함께 보기 →</a>`,
+    <a class="cta" href="/?briefing=${esc(day)}">앱에서 브리핑 보기 →</a>`,
     _thin ? null : `${ORIGIN}/api/og/briefing/${day}`));
 });
 

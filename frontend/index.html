@@ -1737,11 +1737,14 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button class="htab" onclick="sv('list',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>목록</button>
     <button class="htab htab-feature" onclick="sv('report',this)" title="내 가구 상황에 맞춘 한 장 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서</button>
     <div class="htab-dd" id="htabToolDd">
-      <button class="htab-tool" id="htabToolBtn" onclick="toggleToolMenu(event)" aria-haspopup="true" aria-expanded="false" title="특약, 청약, 대출계산, 규제 요약"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>도구 <span class="ddcaret">▾</span></button>
+      <button class="htab-tool" id="htabToolBtn" onclick="toggleToolMenu(event)" aria-haspopup="true" aria-expanded="false" title="특약, 청약, 대출계산, 복비 계산, 사용법, 규제 요약"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>도구 <span class="ddcaret">▾</span></button>
       <div class="htab-menu" id="htabToolMenu">
     <button class="htab" onclick="sv('clause',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>특약</button>
     <button class="htab" onclick="sv('subs',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18"/><path d="M8 2.5v4"/><path d="M16 2.5v4"/></svg>청약</button>
     <button class="htab" onclick="sv('calc',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg>대출계산</button>
+    <!-- TOOLMENU-EXPOSE-2026-10-14 (Plan 148): 복비 계산·사용법 진입 — 로그아웃 데스크톱엔 사용법 경로가 없었다. 인덱스(htabOrder) 밖이라 항상 off. -->
+    <button class="htab" onclick="sv('biz',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg>복비 계산</button>
+    <button class="htab" onclick="sv('guide',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>사용법</button>
     <!-- Sprint OOOOO: 규제 요약(비뷰 버튼) — 반드시 마지막 유지(인덱스 밖 → 항상 off) -->
     <button class="htab" onclick="closeToolMenu();openRegSummary()" title="부동산 규제 요약 (2025.10.15 대책 + 2026 후속 반영)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3.5v5c0 4.4-3 7.6-7 9.5-4-1.9-7-5.1-7-9.5v-5Z"/></svg>규제 요약</button>
       </div>
@@ -1964,7 +1967,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
           </div>
         </div>
       </div></div>
-        <div style="margin-top:8px;font-size:12px;text-align:right"><a href="javascript:void(0)" onclick="sv('calc')" style="color:var(--acc);font-weight:700;text-decoration:none">상세 대출 시뮬레이터 →</a></div>
+        <div style="margin-top:8px;font-size:12px;text-align:right"><a href="javascript:void(0)" onclick="openCalcFromSidebar()" style="color:var(--acc);font-weight:700;text-decoration:none">상세 대출 시뮬레이터 →</a></div>
         </div>
       </details>
     </div>
@@ -3138,6 +3141,18 @@ html[data-theme="dark"] #view-news{
     <span class="ts-check" aria-hidden="true">✓</span>
     <span class="ts-arrow" aria-hidden="true">→</span>
   </button>
+  <button type="button" class="ts-item" data-tool="biz" aria-current="false" onclick="closeToolsSheet();sv('biz',this)">
+    <span class="ts-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg></span>
+    <span class="ts-body"><span class="ts-title">복비 계산</span><span class="ts-desc">공인중개사법 시행규칙 기준</span></span>
+    <span class="ts-check" aria-hidden="true">✓</span>
+    <span class="ts-arrow" aria-hidden="true">→</span>
+  </button>
+  <button type="button" class="ts-item" data-tool="guide" aria-current="false" onclick="closeToolsSheet();sv('guide',this)">
+    <span class="ts-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg></span>
+    <span class="ts-body"><span class="ts-title">사용법</span><span class="ts-desc">3분 가이드와 자주 묻는 질문</span></span>
+    <span class="ts-check" aria-hidden="true">✓</span>
+    <span class="ts-arrow" aria-hidden="true">→</span>
+  </button>
   <button type="button" class="ts-item" onclick="closeToolsSheet();openRegSummary()">
     <span class="ts-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3.5v5c0 4.4-3 7.6-7 9.5-4-1.9-7-5.1-7-9.5v-5Z"/></svg></span>
     <span class="ts-body"><span class="ts-title">규제 요약</span><span class="ts-desc">금융위 고시 기준</span></span>
@@ -3657,6 +3672,27 @@ window.addEventListener('DOMContentLoaded',()=>{
   // RESTORE-TOAST-2026-08-19 (Sprint NNNNNNN-18, 운영자 지적 "매번 뜬다·의미 있나"):
   //   본인 이전 입력(localStorage) 복원까지 '공유 링크' 문구로 매 세션 토스트하던 오작동 —
   //   문구도 거짓이고 실효도 없다. 진짜 공유 URL(파라미터 진입)일 때만 1회 안내, 그 외엔 조용히.
+  // REGION-AUTOSEARCH-2026-10-14 (Plan 148): [근본 원인] 지역 서버 페이지의 CTA(/?region=…)로 들어와도 앱은 칩만 채우고
+  //   멈춰, 사용자가 사이드바 '단지 찾기'를 다시 눌러야 했다(페이지의 약속 '단지 검색'이 끊김).
+  //   ?region 이 있는 URL 진입이면 지도 화면에서 doSearch() 를 1회 자동 실행한다(검색 일일 한도 1회 사용).
+  //   새로고침마다 한도를 쓰지 않도록 탭 세션(sessionStorage)에서 같은 region 값은 1회만.
+  const _autoRegion=(restored==='url') && new URLSearchParams(location.search).has('region');
+  if(_autoRegion){
+    let _doAuto=true;
+    try{
+      const _akey='mhl_auto_search:'+new URLSearchParams(location.search).get('region');
+      if(sessionStorage.getItem(_akey)) _doAuto=false; else sessionStorage.setItem(_akey,'1');
+    }catch(_){ /* sessionStorage 비가용 시 fail-open: 자동 검색 */ }
+    if(_doAuto){
+      setTimeout(()=>{
+        try{
+          sv('map',document.querySelectorAll('.htab')[1]);
+          if(typeof toast==='function')toast('링크의 조건으로 단지를 찾고 있어요');
+          if(typeof doSearch==='function')doSearch();
+        }catch(_){}
+      },900);
+    }
+  } else
   if(restored==='url'){
     try {
       const _urlKey = 'mhl_restore_toast:' + location.search;
@@ -4101,6 +4137,7 @@ function renderDrawerUtil(){
     + `<button class="du-it" onclick="toggleTheme()">다크/라이트 모드 전환</button>
        <button class="du-it" onclick="toggleDrawer();sv('guide')">사용법 · 3분 가이드</button>
        <button class="du-it" onclick="toggleDrawer();openSettings()">ⓘ 서비스 정보 · 사용량</button>
+       <div class="du-legal"><a href="/region">지역별 실거래</a><a href="/briefing">브리핑 기록</a></div>
        <div class="du-legal"><a href="/terms.html" target="_blank">이용약관</a><a href="/privacy.html" target="_blank">개인정보처리방침</a><a href="/refund.html" target="_blank">환불정책</a></div>`;
 }
 function _maybeShowHero(){
@@ -9079,11 +9116,14 @@ async function handleShareUrl(){
   const apt=sp.get('apt');
   if(!apt)return;
   const area=sp.get('area')||'';
+  // CALC-DEEPLINK-2026-10-14 (Plan 148): 단지 서버 페이지의 '대출 한도·비용 계산' CTA(&calc=1) — 상세가 단지 평균가를
+  //   채운 뒤(found 또는 실거래 조회 성공) 그 가격으로 계산기를 연다. 평균가를 못 구하면(avgPrice 0) 상세에 머문다.
+  const wantCalc=sp.get('calc')==='1';
   // 탭 타이틀 동기화 (브라우저·북마크 가독성)
   document.title=`${apt}${area?` · ${area}`:''} — 내집로그 분석`;
   // props에 이미 있으면 즉시 표시
   const found=props.find(p=>p.aptName===apt);
-  if(found){showDetail(found);return;}
+  if(found){showDetail(found);if(wantCalc&&found.avgPrice>0)goCalcFromDetail(found.avgPrice);return;}
   // stub 단지 즉시 표시 (로딩 느낌)
   // STAB-AUDIT-2026-05-07: score=60 환각 차단 → null (분석 대기 표시)
   // SHARE-ZERO-2026-09-02 (감사 P0-5): 종전에는 조회가 실패하면 **그냥 return** 해서
@@ -9121,6 +9161,7 @@ async function handleShareUrl(){
     // 현재 열린 상세가 동일 단지면 재렌더
     if(currentDetail && currentDetail.aptName===apt){
       showDetail(aptEnriched);
+      if(wantCalc&&aptEnriched.avgPrice>0)goCalcFromDetail(aptEnriched.avgPrice);
     }
   }catch{
     // 조용히 삼키면 "조회 중…" 문구가 영구히 남는다 — 사용자에게 상태를 알린다.
@@ -11169,6 +11210,9 @@ function searchWithBudget(buy,cash,loan,house,isFirst,regStr){
   // 내 상황 섹션에 값 채움
   const bpEl=document.getElementById('bp');if(bpEl)bpEl.value=buy;
   const mcEl=document.getElementById('mc');if(mcEl)mcEl.value=cash;
+  // CALC-CARRY-2026-10-14 (Plan 148): 계산기 연소득(c_i, 만원) → 사이드바 #inc(만원) — 단위 동일. 비어 있으면 건드리지 않는다.
+  const _ci=parseFloat(document.getElementById('c_i')?.value),_incEl=document.getElementById('inc');
+  if(_incEl&&_ci>0)_incEl.value=_ci;
   // 주택보유 칩 선택
   ['ch-h','ch-f'].forEach(gid=>{});
   const setChip=(gid,val)=>{document.querySelectorAll('#'+gid+' .chip').forEach(c=>c.classList.toggle('on',c.textContent.trim()===val));};
@@ -11203,11 +11247,28 @@ function goClauseFromDetail(aptName,area,price,excluUseAr,buildYear){
     toast('매매 정보를 자동으로 채웠어요. 생성 버튼을 눌러 주세요');
   },180);
 }
+// CALC-CARRY-2026-10-14 (Plan 148): 사이드바 입력 → 계산기 이어 주기. 단위가 두 칸에서 같다(소스 확인):
+//   #bp 매수 예정가(억)=c_b 매수가(억) · #mc 자기 자본(억)=c_c 보유 현금(억) · #inc 연 소득(만원)=c_i 연소득(만).
+//   계산기 칸이 비어 있을 때만 복사한다(이미 입력한 값은 덮지 않음).
+function _carrySidebarToCalc(withBuy){
+  const pairs=[['c_c','mc'],['c_i','inc']];
+  if(withBuy)pairs.unshift(['c_b','bp']);
+  pairs.forEach(([cid,sid])=>{
+    const c=document.getElementById(cid),sb=document.getElementById(sid);
+    if(c&&sb&&!c.value&&parseFloat(sb.value)>0)c.value=sb.value;
+  });
+  if(typeof dc==='function')dc();
+}
+function openCalcFromSidebar(){
+  sv('calc');
+  _carrySidebarToCalc(true);
+}
 // 상세 모달 → 대출 계산 컨텍스트 전달
 function goCalcFromDetail(price){
   sv('calc',document.querySelectorAll('.htab')[2]);
   setTimeout(()=>{
     const cb=document.getElementById('c_b');if(cb&&price){cb.value=price.toFixed(2);}
+    _carrySidebarToCalc(false);
     if(typeof cDM==='function')cDM();
     if(typeof dc==='function')dc();
     document.getElementById('c_b')?.scrollIntoView({behavior:'smooth',block:'center'});
@@ -11427,7 +11488,7 @@ function sv(v,btn){
   // "도구 ▾" 드롭다운 버튼 — 도구 뷰(특약·청약·대출계산) 활성 시 하이라이트 + 탭 전환 시 메뉴 닫기 (OOOOO-3: 뉴스·사용법 승격, calc 편입)
   try{
     const _toolBtn=document.getElementById('htabToolBtn');
-    if(_toolBtn)_toolBtn.classList.toggle('on',['clause','subs','calc'].includes(v));
+    if(_toolBtn)_toolBtn.classList.toggle('on',['clause','subs','calc','biz','guide'].includes(v));
     closeToolMenu();
   }catch(_){}
   // 모바일 하단 탭 활성화
@@ -11437,7 +11498,7 @@ function sv(v,btn){
   //   시트 안 항목의 체크(aria-current)도 같은 기준으로 매번 재계산.
   try{
     const _bnavTools=document.getElementById('bnavToolsBtn');
-    if(_bnavTools)_bnavTools.classList.toggle('on',['clause','subs','calc'].includes(v));
+    if(_bnavTools)_bnavTools.classList.toggle('on',['clause','subs','calc','biz','guide'].includes(v));
     document.querySelectorAll('#toolsSheet .ts-item[data-tool]').forEach(b=>b.setAttribute('aria-current',b.dataset.tool===v?'true':'false'));
   }catch(_){}
   _wizPlace(v); // Sprint PPPPP: 위저드 코어를 뷰에 맞는 슬롯으로
@@ -12982,21 +13043,7 @@ async function sM(){
         '· 아래 바로가기 버튼의 대출계산기, 규제요약, 특약초안(표준 양식)\n' +
         '· 사이드바에서 "내 상황 입력"을 한 뒤 "조건에 맞는 단지 찾기"\n' +
         '· 상단 보고서 탭 (객관 데이터 버전)');
-      // LEGAL-FALLBACK-2026-07-11 (Sprint JJJJ): 질문 키워드로 법령 원문 검색(law.go.kr 코퍼스,
-      //   무료·환각 0) — 관련 조문이 있으면 참고로 안내. addMsg 는 _escHtml 처리라 XSS 안전.
-      try {
-        const lq = txt.replace(/\s+/g, ' ').trim().slice(0, 40);
-        if (lq.length >= 2) {
-          const lr = await fetch(`${CFG.api}/legal/search?q=${encodeURIComponent(lq)}&max=3`, { signal: AbortSignal.timeout(6000) })
-            .then(x => x.ok ? x.json() : null).catch(() => null);
-          if (lr?.results?.length) {
-            const lines = lr.results.slice(0, 3).map(l =>
-              `· ${l.name}${l.snippets?.[0]?.text ? ` — "${String(l.snippets[0].text).trim().slice(0, 70)}…"` : ''}`
-            ).join('\n');
-            addMsg('ai', `질문 키워드와 일치하는 법령 원문(국가법령정보센터 자료):\n${lines}\n\n※ 자동 검색 결과라 참고용이에요. 전체 조문은 law.go.kr에서 확인하세요.`);
-          }
-        }
-      } catch(_) {}
+      // LEGAL-FALLBACK 제거(Plan 148): /api/legal 은 서버에서 삭제됨(server.js DEAD-ENDPOINT-REMOVED-2026-09-05) — 죽은 호출 삭제.
       replied=true;
     } else if(!r.ok){
       // CHAT-ERR-HONEST-2026-09-16 (Plan 098): 서버가 준 사유(error)를 그대로 보여준다 — 400(pii_blocked 등)을 "일시 오류"로 위장하지 않는다.
@@ -13456,8 +13503,13 @@ function _renderRegionSummary(d){
     ${asOf ? `<div class="rg-src">기준일 · ${_escHtml(asOf)}</div>` : ''}
   </div>`);
 
+  // RGM-PAGELINK-2026-10-14 (Plan 148): 막다른 길 해소 — 같은 지역의 서버 페이지 링크. 서버 라우트는 5자리 시군구 코드만
+  //   받는다(regionPage.js /^\d{5}$/ + resolveRegion). 응답 region.lawdCd 는 같은 resolveRegion 결과라 형식이 아니면 링크를 숨긴다.
+  const _rgCode=String(d?.region?.lawdCd||'');
+  const _rgLink=/^\d{5}$/.test(_rgCode)
+    ? `<div class="rg-disc"><a href="/region/${_rgCode}" style="color:var(--acc);text-decoration:underline">이 지역 실거래 데이터 페이지 보기</a></div>` : '';
   body.innerHTML = `<div class="rg-grid">${cards.join('')}</div>
-    <div class="rg-disc">${_escHtml(d?.disclaimer || '공식 통계 수치를 정리한 정보예요. 매수·매도 추천이나 가격 예측이 아니에요.')}</div>`;
+    <div class="rg-disc">${_escHtml(d?.disclaimer || '공식 통계 수치를 정리한 정보예요. 매수·매도 추천이나 가격 예측이 아니에요.')}</div>${_rgLink}`;
 }
 // inline onclick 의 JSON 인자 안전 삽입: JSON.stringify(JS escape) + _escHtml(HTML attr escape) 이중 인코딩.
 // 브라우저 attribute decode 후 JSON 원형 복원 → &quot; 등 entity 문자열 데이터에도 안전 (e177c1b setAlert 와 동일 패턴).

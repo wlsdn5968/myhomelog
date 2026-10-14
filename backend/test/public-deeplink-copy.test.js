@@ -24,7 +24,7 @@ test('PUBLIC-DEEPLINK — 단지 페이지 CTA 가 /?apt=&area= 딥링크로 가
   // _p063Idx 는 lawd_cd='11680'(강남구) 로 고정 — regionLabel('11680','강남구') = '서울 강남구'(구 이름 포함 보장).
   const res = await _p063Run({ aptMasterRows: [], idxRow: _p063Idx(aptName), statFixture: _P063_STAT });
   assert.equal(res.statusCode, 200);
-  const expectedHref = `href="https://myhomelog.vercel.app/?apt=${encodeURIComponent(aptName)}&area=${encodeURIComponent('서울 강남구')}"`;
+  const expectedHref = `href="https://myhomelog.vercel.app/?apt=${encodeURIComponent(aptName)}&area=${encodeURIComponent('서울 강남구')}&calc=1"`; // Plan 148: &calc=1 — 앱이 평균가로 계산기까지 연다
   assert.ok(res.body.includes(expectedHref),
     `CTA href 가 예상한 딥링크 형식이 아니다. 기대: ${expectedHref} / 실제 CTA: ${(res.body.match(/<a class="cta"[^>]*>/) || [])[0]}`);
   assert.ok(!res.body.includes('<a class="cta" href="https://myhomelog.vercel.app/">'),
@@ -33,7 +33,7 @@ test('PUBLIC-DEEPLINK — 단지 페이지 CTA 가 /?apt=&area= 딥링크로 가
 
 test('PUBLIC-DEEPLINK — aptPage.js 소스에도 딥링크 템플릿이 있다 (렌더 검증의 보강)', () => {
   const src = fs.readFileSync(path.join(__dirname, '../routes/aptPage.js'), 'utf8');
-  assert.ok(src.includes('href="${ORIGIN}/?apt=${encodeURIComponent(aptName)}&area=${encodeURIComponent(region)}"'),
+  assert.ok(src.includes('href="${ORIGIN}/?apt=${encodeURIComponent(aptName)}&area=${encodeURIComponent(region)}&calc=1"'),
     'aptPage.js 에 딥링크 CTA 템플릿 문자열이 없다');
   assert.ok(!/class="cta" href="\$\{ORIGIN\}\/">/.test(src),
     'aptPage.js 에 여전히 맥락 없는 루트 단독 CTA(href="${ORIGIN}/") 가 남아 있다');

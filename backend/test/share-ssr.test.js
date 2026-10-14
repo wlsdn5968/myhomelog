@@ -73,7 +73,7 @@ test('공유 링크: 실거래 조회 실패 경로가 조용히 return 하지 �
   const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
   const from = html.indexOf('async function handleShareUrl()');
   assert.ok(from > 0, 'handleShareUrl 을 찾지 못했다 — 테스트를 갱신할 것');
-  const body = html.slice(from, from + 3000);
+  const body = html.slice(from, from + 3600); // Plan 148: calc=1 처리 주석·변수 추가로 함수가 길어져 구간을 넓힘(검사 의도 불변)
 
   // 실패 3경로(지역 미해석·거래 0건·예외)가 전부 화면을 다시 그려야 한다
   assert.equal(body.indexOf('if(!lawdCd)return;'), -1, '지역 미해석 시 조용히 return 하고 있다');

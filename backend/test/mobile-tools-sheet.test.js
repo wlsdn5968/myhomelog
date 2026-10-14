@@ -54,12 +54,15 @@ test('도구 바텀시트 — 항목 4개가 데스크톱 "도구 ▾" 드롭다
   const itemOnclicks = [...sheet.matchAll(/<button[^>]*onclick="([^"]*)"/g)]
     .map((x) => x[1])
     .filter((s) => s.includes("sv(") || s.includes('openRegSummary('));
-  assert.equal(itemOnclicks.length, 4, `시트 안 이동 항목이 4개가 아니라 ${itemOnclicks.length}개다`);
+  // Plan 148: 데스크톱 드롭다운에 복비 계산·사용법이 추가되어 시트도 같은 순서로 6항목(특약→청약→대출계산→복비 계산→사용법→규제 요약).
+  assert.equal(itemOnclicks.length, 6, `시트 안 이동 항목이 6개가 아니라 ${itemOnclicks.length}개다`);
 
   assert.ok(itemOnclicks[0].includes("sv('clause'"), `1번째 항목이 특약(sv('clause')) 이 아니다: ${itemOnclicks[0]}`);
   assert.ok(itemOnclicks[1].includes("sv('subs'"), `2번째 항목이 청약(sv('subs')) 이 아니다: ${itemOnclicks[1]}`);
   assert.ok(itemOnclicks[2].includes("sv('calc'"), `3번째 항목이 대출 계산(sv('calc')) 이 아니다: ${itemOnclicks[2]}`);
-  assert.ok(itemOnclicks[3].includes('openRegSummary('), `4번째 항목이 규제 요약(openRegSummary()) 이 아니다: ${itemOnclicks[3]}`);
+  assert.ok(itemOnclicks[3].includes("sv('biz'"), `4번째 항목이 복비 계산(sv('biz')) 이 아니다: ${itemOnclicks[3]}`);
+  assert.ok(itemOnclicks[4].includes("sv('guide'"), `5번째 항목이 사용법(sv('guide')) 이 아니다: ${itemOnclicks[4]}`);
+  assert.ok(itemOnclicks[5].includes('openRegSummary('), `6번째 항목이 규제 요약(openRegSummary()) 이 아니다: ${itemOnclicks[5]}`);
 
   // 운영자 사양: "각 항목 클릭 = closeToolsSheet() 후 이동" — 4항목 전부 closeToolsSheet() 로 시작
   itemOnclicks.forEach((s, i) => {
@@ -70,6 +73,8 @@ test('도구 바텀시트 — 항목 4개가 데스크톱 "도구 ▾" 드롭다
   assert.equal((sheet.match(/data-tool="clause"/g) || []).length, 1);
   assert.equal((sheet.match(/data-tool="subs"/g) || []).length, 1);
   assert.equal((sheet.match(/data-tool="calc"/g) || []).length, 1);
+  assert.equal((sheet.match(/data-tool="biz"/g) || []).length, 1);
+  assert.equal((sheet.match(/data-tool="guide"/g) || []).length, 1);
 
   // 닫기 버튼 1개
   assert.equal((sheet.match(/class="ts-close"/g) || []).length, 1, '닫기 버튼이 없거나 1개가 아니다');
