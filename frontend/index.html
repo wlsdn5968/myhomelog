@@ -1061,6 +1061,8 @@ html[data-theme="dark"] .dmbg{--dm-ac:#FFC93C}
   /* 하단 고정 바가 있는 동안 우하단 FAB·비교 바가 바를 가리지 않게 한다(도구 시트의 tools-sheet-open 과 같은 방식) */
   body.dm-nxb-on .fab-ai,body.dm-nxb-on .fab-bm{visibility:hidden}
   body.dm-nxb-on .cmp-bar{bottom:104px}
+  /* 전체 화면 상세엔 앱 하단 탭이 없다(시안 A). 하단 탭(z 500)이 고정 바·시트 아래쪽을 덮던 것(미리보기 실측: 바 717~812 · 탭 754~812) */
+  body.dm-nxb-on .bnav{display:none}
   body.dm-nxs-open .cmp-bar{display:none}
 }
 .dmhdr{padding:15px 18px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
