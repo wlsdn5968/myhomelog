@@ -147,7 +147,7 @@ router.get('/', async (req, res) => {
     count: items.length,
     items,
     source: items[0]?.source === 'naver' ? '네이버 뉴스' : 'Google News RSS',
-    disclaimer: '뉴스 콘텐츠는 각 언론사의 저작권이며, 본 서비스는 단순 인덱싱·링크 제공만 합니다. 기사 내용에 대한 책임은 해당 언론사에 있습니다.',
+    disclaimer: '뉴스 저작권은 각 언론사에 있어요. 내집로그는 기사를 모아 링크로 연결할 뿐이고, 기사 내용의 책임도 그 언론사에 있어요.',
     updatedAt: new Date().toISOString(),
   };
   // ⚠ 주석은 "빈 결과는 캐시 안 함"이라고 적혀 있었지만 실제로는 **무조건 30분 저장**했다.
@@ -258,7 +258,7 @@ router.get('/summary', async (req, res) => {
       items: dataItems, // REG-STRUCT: 출처·기준일 분리 렌더용(프론트가 있으면 우선 사용)
       mode: 'data',
       updatedAt: new Date().toISOString(),
-      disclaimer: '본 시황은 공식 통계 수치 정리이며, 매수·매도 추천이 아닙니다.',
+      disclaimer: '공식 통계 수치를 정리한 것이며, 매수·매도 추천이 아니에요.',
     };
     cache.set(cacheKey, out, 1800);
     require('../services/redisCache').rset(cacheKey, out, 1800);
@@ -267,7 +267,7 @@ router.get('/summary', async (req, res) => {
   }
   // 외부 통계 3종이 모두 실패한 경우 — 캐시하지 않는다(다음 요청서 재시도).
   res.json({
-    summary: ['오늘 뉴스를 불러왔어요. 상세는 아래 목록을 확인하세요.'],
+    summary: ['오늘 뉴스를 불러왔어요. 자세한 내용은 아래 목록에서 확인하세요.'],
     updatedAt: new Date().toISOString(),
     fromCache: false,
   });

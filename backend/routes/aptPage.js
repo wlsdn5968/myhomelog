@@ -85,8 +85,8 @@ ${FONT_LINK}
   .foot{color:var(--ink3);font-size:12px;margin-top:20px;line-height:1.8}
   .cta{display:inline-block;margin-top:14px;padding:10px 18px;background:var(--pri);color:var(--onpri);border-radius:9px;font-weight:700;font-size:14px}
 </style></head><body><main>${body}
-<div class="foot">⚠ 국토교통부 실거래가 신고 자료를 정리한 것이며, <strong>매수·매도 추천이 아닙니다</strong>. 미래 가격을 예측하지 않습니다.<br>
-층·향·수리 상태에 따른 가격 차이는 보정하지 않습니다 — 실제 판단은 임장으로 확인하세요.<br>
+<div class="foot">국토교통부 실거래가 신고 자료를 정리한 것이에요. <strong>매수·매도 추천이 아니고</strong>, 미래 가격도 예측하지 않아요.<br>
+층·향·수리 상태에 따른 가격 차이는 반영하지 않았어요. 실제 판단은 현장에서 직접 확인하세요.<br>
 © 내집로그 · <a href="${ORIGIN}/">myhomelog.vercel.app</a></div>
 </main></body></html>`;
 }
@@ -333,7 +333,7 @@ router.get('/:aptSeq', async (req, res) => {
   if (!/^\d{5}-\d+$/.test(seq)) {
     res.set('Cache-Control', 'no-store');
     return res.status(404).type('html').send(pageShell({
-      title: '단지를 찾을 수 없습니다 | 내집로그', desc: '요청한 단지 코드에 해당하는 페이지가 없습니다.',
+      title: '단지를 찾을 수 없습니다 | 내집로그', desc: '단지 코드에 맞는 페이지가 없어요.',
       canonical: `${ORIGIN}/region`, noindex: true,
       body: `<div class="eyebrow">MYHOMELOG APT</div><h1>단지 없음</h1>
         <p style="font-size:14px;color:var(--ink3)">요청한 단지 코드 형식이 올바르지 않아요.</p>
@@ -346,10 +346,10 @@ router.get('/:aptSeq', async (req, res) => {
   if (!af) {
     res.set('Cache-Control', 'no-store'); // 없는 단지를 캐시하지 않는다
     return res.status(404).type('html').send(pageShell({
-      title: '단지를 찾을 수 없습니다 | 내집로그', desc: '요청한 단지의 실거래 기록이 없습니다.',
+      title: '단지를 찾을 수 없습니다 | 내집로그', desc: '이 단지의 실거래 기록이 없어요.',
       canonical: `${ORIGIN}/region`, noindex: true,
       body: `<div class="eyebrow">MYHOMELOG APT</div><h1>기록 없음</h1>
-        <p style="font-size:14px;color:var(--ink3)">이 단지의 실거래 기록이 없어요. 값을 지어내지 않고 비워둡니다.</p>
+        <p style="font-size:14px;color:var(--ink3)">이 단지의 실거래 기록이 없어요.</p>
         <a class="cta" href="/region">지역별로 찾아보기 →</a>`,
     }));
   }
@@ -370,7 +370,7 @@ router.get('/:aptSeq', async (req, res) => {
       <div class="row"><span class="k">가격 범위</span><span class="num">${eok(stat.minPrice)} ~ ${eok(stat.maxPrice)}</span></div>
       <div class="row"><span class="k">최근 거래일</span><span class="num">${esc(String(stat.recentDeal))}</span></div>
       ${buildYear ? `<div class="row"><span class="k">준공</span><span class="num">${buildYear}년</span></div>` : ''}
-      <div class="src" style="margin-top:8px">평균가는 최근 거래에 가중치를 둔 값입니다. 절사평균(상하 10% 제외) ${eok(stat.trimmedAvgPrice)}.</div>
+      <div class="src" style="margin-top:8px">평균가는 최근 거래에 비중을 더 둔 값이에요. 절사평균(위아래 10% 제외) ${eok(stat.trimmedAvgPrice)}.</div>
     </div>`);
     facts.push(`최근 24개월 ${comma(num(stat.dealCount) || 0)}건`);
     facts.push(`평균 ${stat.avgPriceAuk}억`);
@@ -474,14 +474,14 @@ router.get('/:aptSeq', async (req, res) => {
   //   있을 때만 그 카드 아래 한 줄을 붙인다. 숫자는 dim 행 값 그대로(지어내지 않음).
   const dimDealCount = idx && idx._fromDim ? num(idx.deal_count) : null;
   const histRecoveryLine = (thin && dimDealCount && dimDealCount > 0)
-    ? `<div style="font-size:12px;color:var(--ink3);margin:-4px 0 12px">2020.09 이후 이력 ${comma(dimDealCount)}건 · 마지막 거래 ${esc(String(idx.last_deal_date || ''))} — 아래 장기 추세에서 볼 수 있어요</div>`
+    ? `<div style="font-size:12px;color:var(--ink3);margin:-4px 0 12px">2020.09 이후 이력 ${comma(dimDealCount)}건 · 마지막 거래 ${esc(String(idx.last_deal_date || ''))}. 아래 장기 추세에서 볼 수 있어요</div>`
     : '';
 
   const body = `<div class="eyebrow">MYHOMELOG APT</div>
     <h1>${esc(displayName)} 실거래가</h1>
     <div class="tag">${esc(region)}${umd ? ' ' + esc(umd) : ''}</div>
     ${cards.length ? cards.join('') : `<div class="card"><h2>최근 거래 없음</h2>
-      <div style="font-size:12px;color:var(--ink3)">최근 24개월 안에 신고된 거래가 없어요. 값을 지어내지 않고 비워둡니다.</div></div>${histRecoveryLine}`}
+      <div style="font-size:12px;color:var(--ink3)">최근 24개월 안에 신고된 거래가 없어요.</div></div>${histRecoveryLine}`}
     ${infoCardHtml}
     ${schoolsCardHtml}
     ${sameDongHtml}

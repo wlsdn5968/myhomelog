@@ -68,6 +68,6 @@ test('HERO-REAL — lv-heroChart 카드 블록 안에 "매수·매도 추천이 
   const cardEnd = html.indexOf('<div class="lv-card lv-apt">', cardStart);
   assert.ok(cardEnd > cardStart, 'lv-heroChart 다음 카드(lv-apt) 경계를 못 찾았다 — 카드 순서가 바뀌었을 수 있다');
   const cardBlock = html.slice(cardStart, cardEnd);
-  assert.ok(cardBlock.includes('매수·매도 추천이 아닙니다'),
+  assert.ok(/매수·매도 추천이 (아닙니다|아니에요)/.test(cardBlock),
     'lv-heroChart 카드 블록 안에 "매수·매도 추천이 아닙니다" 캡션이 없다');
 });

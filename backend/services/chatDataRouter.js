@@ -90,7 +90,7 @@ const eok = (manwon) => {
 const mmdd = (d) => { const s = String(d || ''); return s.length >= 10 ? `${s.slice(5, 7)}.${s.slice(8, 10)}` : s; };
 
 const DISCLAIMER = '\n\n※ 공식 데이터 정리이며 매수·매도 추천이 아니에요.';
-const EXAMPLES = '예를 들어 이렇게 물어보실 수 있어요:\n· "은마 시세" · "오늘 금리" · "동탄 규제"\n· "5억 대출 한도" · "요즘 인기 단지" · "디딤돌 조건"';
+const EXAMPLES = '이렇게 물어보세요.\n· "은마 시세", "오늘 금리", "동탄 규제"\n· "5억 대출 한도", "요즘 인기 단지", "디딤돌 조건"';
 
 // ── 인텐트별 핸들러 ──────────────────────────────────────────────────────────
 async function _market(query, context) {
@@ -100,7 +100,7 @@ async function _market(query, context) {
       && typeof context.session.focusProperty.aptName === 'string') {
     q = context.session.focusProperty.aptName.slice(0, 40);
   }
-  if (!q) return { text: `어느 단지가 궁금하세요? 단지명이나 동네 이름을 함께 적어주세요.`, suggestions: ['은마 시세', '공덕 시세', '노원구 시세'] };
+  if (!q) return { text: `어느 단지가 궁금하세요? 단지명이나 동네 이름을 함께 적어 주세요.`, suggestions: ['은마 시세', '공덕 시세', '노원구 시세'] };
   // REGION-MARKET-2026-08-12 (KKKKKKK-18): 지역(구·동) 토큰이면 지역 요약 우선 — "공덕 시세"는
   //   단지가 아니라 동네 질문이다. 단지명("은마" 등)은 sigungu/umd 에 없어 여기서 자연히 걸러지고
   //   기존 단지 경로로 폴백한다(회귀 없음 — 라이브 재검증으로 확인).
@@ -280,7 +280,7 @@ async function _market(query, context) {
         const opts = merged.map(c => `${c.name}${c.sigungu ? `(${c.sigungu})` : ''}`).slice(0, 3);
         const sugNames = merged.map(c => c.name).slice(0, 3);
         return {
-          text: `"${q}" 로 여러 단지가 걸려요: ${opts.join(' · ')}\n혹시 이 중에 있나요? 아래에서 눌러 고르시거나 지역명을 함께 적어주세요.`,
+          text: `"${q}"로 여러 단지가 나와요: ${opts.join(' · ')}\n혹시 이 중에 있나요? 아래에서 눌러 고르거나 지역명을 함께 적어 주세요.`,
           suggestions: sugNames.map(n => `${n} 시세`),
         };
       }
@@ -343,7 +343,7 @@ async function _market(query, context) {
     if (!picked) {
       // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — c.aptName(조회 키)은 그대로, 문구만 감싼다.
       const names2 = ranked.slice(0, 3).map(c => `${displayAptName(c.aptName, { umdNm: c.umdNm })}${c.sigungu ? `(${c.sigungu})` : ''}`).join(' · ');
-      return `"${q}" 로 찾은 단지(${names2})는 최근 6개월 국토부 실거래가 없어요.\n` +
+      return `"${q}"로 찾은 단지(${names2})는 최근 6개월 국토부 실거래가 없어요.\n` +
         `· 상단 검색창에서 단지명을 검색하면 더 이전 거래까지 볼 수 있어요.`;
     }
     // Step 4: apt_master 정식명이 없는 경로라 stem + 접미문자 합산 표기로 밝힌다
@@ -361,7 +361,7 @@ async function _market(query, context) {
       // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — a.apt_name(조회 키)은 그대로, 문구만 감싼다.
       const opts = amCandidates.map(a => `${displayAptName(a.apt_name, { umdNm: a.umd_nm })}${a.sigungu ? `(${a.sigungu})` : ''}`).join(' · ');
       return {
-        text: `"${q}" 로 여러 단지가 걸려요: ${opts}\n혹시 이 중에 있나요? 아래에서 눌러 고르시거나 지역명을 함께 적어주세요.`,
+        text: `"${q}"로 여러 단지가 나와요: ${opts}\n혹시 이 중에 있나요? 아래에서 눌러 고르거나 지역명을 함께 적어 주세요.`,
         suggestions: amCandidates.slice(0, 3).map(a => `${a.apt_name} 시세`),
       };
     }
@@ -372,7 +372,7 @@ async function _market(query, context) {
       // 문구는 절대 금지(Step 5 첫 원칙, apt_master 히트가 있는 경로다). 단지 존재는 확인해주고
       // 검색창으로 안내한다.
       return `"${am.apt_name}"(${am.sigungu || ''}${am.umd_nm ? ' ' + am.umd_nm : ''}) 단지 정보는 있어요.\n` +
-        `다만 국토부 실거래 데이터에는 아직 짝이 맞는 등록명이 확인되지 않았어요.\n` +
+        `다만 국토교통부 실거래 데이터에서는 아직 같은 이름으로 등록된 단지가 확인되지 않았어요.\n` +
         `· 상단 검색창에서 "${am.apt_name}"을 검색해 상세 정보를 확인해 보세요.`;
     }
     // Step 3: 전개 규칙 — ① alias 확정 ② 정규화 완전일치 확정 ③ 그 외엔 후보만(확정 아님).
@@ -401,9 +401,9 @@ async function _market(query, context) {
       return {
         // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — am.apt_name(조회 키)은 그대로, 문구만 감싼다.
         text: `"${displayAptName(am.apt_name, { umdNm: am.umd_nm })}"(${am.sigungu || ''}${am.umd_nm ? ' ' + am.umd_nm : ''}) 단지를 찾았어요.\n` +
-          `다만 국토부 실거래에는 다른 이름으로 등록돼 있을 수 있어요 — 혹시 이 중에 있나요?\n` +
+          `다만 국토부 실거래에는 다른 이름으로 등록돼 있을 수 있어요. 혹시 이 중에 있나요?\n` +
           scored.map(s => `· ${s.name}`).join('\n') +
-          `\n\n지역명을 함께 적어주시거나 아래에서 눌러 확인해 보세요.`,
+          `\n\n지역명을 함께 적어 주시거나 아래에서 눌러 확인해 보세요.`,
         suggestions: scored.map(s => `${s.name} 시세`),
       };
     }
@@ -431,16 +431,16 @@ async function _market(query, context) {
   if (txs.length >= TX_CAP) out += `\n(최신 ${TX_CAP}건까지만 집계한 값이에요)`;
   // Step 4: 합산했으면 어떤 원본명을 합쳤는지 밝힌다 — 값이 왜 그런지 모르는 게 값이 틀린 것보다 나쁘다.
   if (mergedNote && mergedNote.length > 1) {
-    out += `\n※ 국토부에는 ${mergedNote.join('·')} 로 나뉘어 있어 합쳐서 계산했어요.`;
+    out += `\n※ 국토부에는 ${mergedNote.join('·')}로 나뉘어 있어 합쳐서 계산했어요.`;
   }
   if (ranked.length > 1) {
     // ⚠ 여기 건수를 붙이지 않는다 — MV 의 deal_count 는 전 기간이라 위의 6개월 건수와 기준이 다르다.
     //   같은 줄에 두 기준의 숫자가 나란히 놓이면 사용자가 비교 가능한 값으로 읽는다.
     // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — c.aptName(조회 키)은 그대로, 문구만 감싼다.
     const others = ranked.slice(1, 3).map(c => `${displayAptName(c.aptName, { umdNm: c.umdNm })}(${c.sigungu || '지역미상'})`).join(' · ');
-    out += `\n\n같은 이름의 다른 단지도 있어요: ${others}\n지역명을 함께 적어주시면 좁혀드려요.`;
+    out += `\n\n같은 이름의 다른 단지도 있어요: ${others}\n지역명을 함께 적어 주시면 좁혀 드려요.`;
   }
-  out += `\n\n전세가율·연식·학군 등 상세는 상단 검색창에서 "${displayName}" 을 검색해 보세요.`;
+  out += `\n\n전세가율·연식·학군 등 상세는 상단 검색창에서 "${displayName}"을 검색해 보세요.`;
   // 후속 질문 칩 — 그 단지의 동네로 시야 확장 + 동명 단지 바로가기 (KKKKKKK-19)
   const sug = [];
   if (sigungu) sug.push(`${sigungu} 인기단지`);
@@ -453,17 +453,17 @@ async function _rates() {
   try {
     const e = await require('./ecosService').getEcosRates();
     if (e && e.baseRate != null) lines.push(`· 한국은행 기준금리: ${e.baseRate}% (${String(e.baseRateDate || '').replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3')})`);
-    if (e && e.mortgageRate != null) lines.push(`· 주담대 가중평균(신규취급): ${e.mortgageRate}% (${String(e.mortgageRateMonth || '').replace(/(\d{4})(\d{2})/, '$1.$2')}월, ECOS)`);
+    if (e && e.mortgageRate != null) lines.push(`· 주담대 가중평균(신규취급): ${e.mortgageRate}% (${String(e.mortgageRateMonth || '').replace(/(\d{4})(\d{2})/, '$1.$2')}월 기준, 한국은행)`);
   } catch (_) { /* 줄 생략 */ }
   try {
     const h = await require('./hfService').getHfRates();
-    if (h && h.didimdol) lines.push(`· 디딤돌: ${h.didimdol.min}~${h.didimdol.max}% (HF ${String(h.didimdol.applyDy || '').replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3')} 공시)`);
+    if (h && h.didimdol) lines.push(`· 디딤돌: ${h.didimdol.min}~${h.didimdol.max}% (한국주택금융공사 ${String(h.didimdol.applyDy || '').replace(/(\d{4})(\d{2})(\d{2})/, '$1.$2.$3')} 공시)`);
     if (h && h.bogeum) lines.push(`· 보금자리론: ${h.bogeum.min}~${h.bogeum.max}%`);
   } catch (_) { /* 줄 생략 */ }
   if (!lines.length) {
-    return '지금 금리 공시 조회가 잠시 어려워요. 잠시 후 다시 물어봐 주시거나, 대출 탭의 정책자금 비교표를 확인해 주세요.';
+    return '지금 금리 공시 조회가 잠시 어려워요. 잠시 뒤 다시 물어봐 주세요. 도구 › 대출 계산 화면의 정책자금 비교표에서도 볼 수 있어요.';
   }
-  return `오늘의 금리 (공식 공시 기준)\n${lines.join('\n')}\n\n개인 조건(소득·만기·우대)에 따라 실제 금리는 달라요 — 대출 탭에서 내 조건으로 계산해 보세요.`;
+  return `오늘의 금리 (공식 공시 기준)\n${lines.join('\n')}\n\n개인 조건(소득·만기·우대)에 따라 실제 금리는 달라요. 대출 계산 화면에서 내 조건으로 계산해 보세요.`;
 }
 
 async function _policyLoan() {
@@ -475,17 +475,17 @@ async function _policyLoan() {
       const p = [];
       if (h.didimdol) p.push(`디딤돌 ${h.didimdol.min}~${h.didimdol.max}%`);
       if (h.bogeum) p.push(`보금자리론 ${h.bogeum.min}~${h.bogeum.max}%`);
-      rateLine = `\n오늘 공시 금리: ${p.join(' · ')} (HF)`;
+      rateLine = `\n오늘 공시 금리: ${p.join(' · ')} (한국주택금융공사)`;
     }
   } catch (_) { /* 생략 */ }
-  return { text: '정책자금 4종 핵심 요건 (주택도시기금·HF 공시)\n' +
-    '· 디딤돌: 부부합산 소득 6~7천만↓ · 집값 5억↓ · 한도 2~2.4억\n' +
-    '· 신혼 디딤돌: 소득 8.5천만↓ · 집값 6억↓ · 한도 3.2억\n' +
-    '· 신생아 특례: 소득 1.3억↓ · 집값 9억↓ · 한도 4억\n' +
-    '· 보금자리론: 소득 7천만↓ · 집값 6억↓ · 한도 3.6~4.2억' + rateLine +
-    '\n\n자격·서류 요건은 별도예요 — 주택도시기금(nhuf.molit.go.kr) · 1599-0001 에서 확정 확인.\n대출 탭에 4종 비교표와 내 조건 계산기가 있어요.',
+  return { text: '정책자금 4종 요건 (주택도시기금·한국주택금융공사 공시)\n' +
+    '· 디딤돌: 부부합산 소득 6~7천만 이하, 집값 5억 이하, 한도 2~2.4억\n' +
+    '· 신혼 디딤돌: 소득 8.5천만 이하, 집값 6억 이하, 한도 3.2억\n' +
+    '· 신생아 특례: 소득 1.3억 이하, 집값 9억 이하, 한도 4억\n' +
+    '· 보금자리론: 소득 7천만 이하, 집값 6억 이하, 한도 3.6~4.2억' + rateLine +
+    '\n\n자격·서류 요건은 별도예요. 주택도시기금(nhuf.molit.go.kr) 또는 전화 1599-0001로 최종 확인하세요.\n도구 › 대출 계산 화면에 4종 비교표와 내 조건 계산기가 있어요.',
     // KKKKKKK-20 제안 C: 정책자금 관심자도 보고서 퍼널 진입점
-    suggestions: [{ label: '내 조건 맞춤 보고서 만들기', view: 'report' }, '오늘 금리 알려줘'] };
+    suggestions: [{ label: '내 조건 보고서 만들기', view: 'report' }, '오늘 금리 알려줘'] };
 }
 
 async function _regulation(message) {
@@ -500,16 +500,16 @@ async function _regulation(message) {
   const basis = '(2025.10.15 대책 + 2026.6.30 확대 기준)';
   if (kw) {
     return `"${kw}" — 현행 규제지역 목록에 있는 지역이에요 ${basis}\n` +
-      '· 투기과열지구·조정대상지역 — LTV 40%(무주택 기준)·대출한도 제한·전입 의무 등 적용\n' +
+      '· 투기과열지구·조정대상지역에는 LTV 40%(무주택 기준), 대출 한도 제한, 전입 의무 등이 적용돼요\n' +
       '· 상세 항목별 내용은 규제요약 버튼(아래)에서 표로 볼 수 있어요.' + DISCLAIMER;
   }
   if (/서울/.test(message) && seoulAll) {
-    return `서울은 전 지역이 규제지역이에요 ${basis} — LTV 40%(무주택 기준)·한도 제한 적용.\n상세는 규제요약 버튼에서 확인하세요.` + DISCLAIMER;
+    return `서울은 전 지역이 규제지역이에요 ${basis}. LTV 40%(무주택 기준)와 한도 제한이 적용돼요.\n자세한 내용은 규제요약 버튼에서 확인하세요.` + DISCLAIMER;
   }
   let out = `현행 규제지역 ${basis}\n`;
   if (seoulAll) out += '· 서울: 전 지역\n';
   if (sample.length) out += `· 수도권 일부: ${sample.join(' · ')} 등\n`;
-  out += '\n특정 지역이 궁금하면 지역명을 함께 적어주세요 (예: "동탄 규제 맞아?").\n' +
+  out += '\n특정 지역이 궁금하면 지역명을 함께 적어 주세요 (예: "동탄 규제 맞아?").\n' +
     '목록에 없는 지역이 곧 비규제라는 뜻은 아니니, 계약 전 반드시 공식 공고를 확인하세요.\n상세 표는 규제요약 버튼에 있어요.';
   return out;
 }
@@ -517,21 +517,21 @@ async function _regulation(message) {
 function _loanLimit(message) {
   const m = String(message).match(/(\d+(?:\.\d+)?)\s*억/);
   const price = m ? parseFloat(m[1]) : null;
-  let out = '주택담보대출 한도의 큰 틀 (무주택 기준)\n' +
+  let out = '주택담보대출 한도 기본 구조 (무주택 기준)\n' +
     '· 비규제지역: LTV 70%\n· 규제지역: LTV 40% + 한도 제한\n' +
     '· 여기에 스트레스 DSR(수도권 +3.0%p 가산 심사)로 소득 대비 한도가 다시 줄어요.\n';
   if (price) {
     const nonReg = (price * 0.7), reg = (price * 0.4);
-    out = `매수가 ${price}억 기준, LTV 만 보면 (무주택)\n` +
+    out = `매수가 ${price}억 기준, LTV만 보면 (무주택)\n` +
       `· 비규제지역: 최대 약 ${nonReg.toFixed(1).replace(/\.0$/, '')}억 (70%)\n` +
       `· 규제지역: 최대 약 ${reg.toFixed(1).replace(/\.0$/, '')}억 (40%)\n` +
       '· 실제 한도는 소득 기반 스트레스 DSR 심사로 이보다 줄 수 있어요.\n';
   }
-  out += '\n연소득까지 넣은 정밀 계산은 대출 탭 계산기에서 바로 돼요 (생애최초·정책자금 분기 포함).\n' +
-    '⚠ 참고용 계산이며 실제 한도는 금융기관 심사로 확정돼요.';
+  out += '\n연소득까지 넣은 계산은 대출 계산 화면에서 바로 할 수 있어요 (생애최초·정책자금 조건 반영).\n' +
+    '참고용 계산이고, 실제 한도는 금융기관 심사로 정해져요.';
   // KKKKKKK-20 제안 C: 한도 질문자는 보고서 퍼널의 최적 진입점 — 이동형 칩(view) 동봉
   return { text: out, suggestions: [
-    { label: '내 조건 맞춤 보고서 만들기', view: 'report' },
+    { label: '내 조건 보고서 만들기', view: 'report' },
     '디딤돌 조건 알려줘',
   ] };
 }
@@ -543,7 +543,7 @@ async function _popular(regionQuery) {
     if (scoped) return scoped;
     // 지역 해석 실패 → 전국 TOP 으로 자연 폴백하되 그 사실을 정직하게 앞에 밝힘
     const nation = await _popularNationwide();
-    return `"${regionQuery}" 지역의 최근 60일 실거래를 찾지 못했어요 — 구·동 이름(예: "노원구 인기단지", "공덕 인기단지")으로 물어봐 주세요.\n\n대신 전국 기준으로 보여드려요:\n\n${nation}`;
+    return `"${regionQuery}" 지역의 최근 60일 실거래를 찾지 못했어요. 구·동 이름(예: "노원구 인기단지", "공덕 인기단지")으로 물어봐 주세요.\n\n대신 전국 기준으로 보여드려요.\n\n${nation}`;
   }
   return _popularNationwide();
 }
@@ -556,10 +556,10 @@ async function _popularNationwide() {
       //   없는(옛 캐시) 경우에만 여기서 계산한다.
       const rows = snap.map((p, i) =>
         `${i + 1}. ${p.displayName || displayAptName(p.aptName, { umdNm: p.umdNm })} (${p.sigungu}) — 최근 60일 ${p.dealCount60d}건 · 평균 ${eok(p.avgDealAmount)}`).join('\n');
-      return `지금 인기 단지 TOP 5 (최근 60일 국토부 실거래 많은 순 · 최근 21일 거래 단지 우선 · 지역 쏠림 완화)\n${rows}\n\n지도 탭에서 위치와 함께 전체 12곳을 볼 수 있어요.` + DISCLAIMER;
+      return `지금 인기 단지 상위 5곳 (최근 60일 국토교통부 실거래 건수가 많은 순, 최근 21일 거래 단지 우선, 한 지역에 쏠리지 않게 조정)\n${rows}\n\n지도 탭에서 위치와 함께 전체 12곳을 볼 수 있어요.` + DISCLAIMER;
     }
   } catch (_) { /* 아래 안내 */ }
-  return '인기 단지 집계를 지금 불러오지 못했어요 — 지도 탭에서 숫자 라벨(인기 단지)로 확인할 수 있어요.';
+  return '인기 단지 집계를 지금 불러오지 못했어요. 지도 탭에서 숫자 라벨(인기 단지)로 확인할 수 있어요.';
 }
 
 // lawd_cd 앞 2자리 → 시도명 (routes/region.js SIDO_BY_PREFIX 와 동일 값 — 코드 기반 판정, 이름 판정 아님)
@@ -651,14 +651,14 @@ async function _regionPopular(regionQuery) {
   if (res.ambiguousSidos) {
     // 되묻기도 칩으로 — 시도별 선택지를 눌러서 바로 확정 (KKKKKKK-19)
     return {
-      text: `"${res.token}" 는 여러 지역에 있어요 (${res.ambiguousSidos.join('·')}) — 아래에서 눌러 고르시거나 광역시·도를 함께 적어주세요.`,
+      text: `"${res.token}"는 여러 지역에 있어요 (${res.ambiguousSidos.join('·')}). 아래에서 눌러 고르거나 광역시·도를 함께 적어 주세요.`,
       suggestions: res.ambiguousSidos.slice(0, 3).map(s => `${s} ${res.token} 인기단지`),
     };
   }
   const top = _topGroups(res.rows, 5);
   const top1 = top[0][0].split('|')[0];
   return {
-    text: `${res.scopeLabel} 최근 60일 거래 많은 단지 TOP ${top.length} (국토부 실거래 ${res.rows.length}건 기준)\n${_groupLines(top)}` + DISCLAIMER,
+    text: `${res.scopeLabel} 최근 60일 거래 많은 단지 상위 ${top.length}곳 (국토부 실거래 ${res.rows.length}건 기준)\n${_groupLines(top)}` + DISCLAIMER,
     suggestions: [`${top1} 시세`, `${regionQuery} 시세`],
   };
 }
@@ -672,7 +672,7 @@ async function _regionMarket(regionQuery) {
   if (!res) return null;
   if (res.ambiguousSidos) {
     return {
-      text: `"${res.token}" 는 여러 지역에 있어요 (${res.ambiguousSidos.join('·')}) — 아래에서 눌러 고르시거나 광역시·도를 함께 적어주세요.`,
+      text: `"${res.token}"는 여러 지역에 있어요 (${res.ambiguousSidos.join('·')}). 아래에서 눌러 고르거나 광역시·도를 함께 적어 주세요.`,
       suggestions: res.ambiguousSidos.slice(0, 3).map(s => `${s} ${res.token} 시세`),
     };
   }
@@ -684,7 +684,7 @@ async function _regionMarket(regionQuery) {
   const top1 = top[0][0].split('|')[0];
   return {
     text: `${res.scopeLabel} 최근 60일 실거래 요약 (국토부 ${res.rows.length}건)\n` +
-      `· 단순평균 ${eok(avg)} · 거래 범위 ${eok(min)} ~ ${eok(max)} (평형·연식 섞인 전체 범위예요)\n\n` +
+      `· 단순평균 ${eok(avg)} · 거래 범위 ${eok(min)} ~ ${eok(max)} (평형·연식이 섞인 전체 범위예요)\n\n` +
       `거래 많은 단지:\n${_groupLines(top)}` + DISCLAIMER,
     suggestions: [`${top1} 시세`, `${regionQuery} 인기단지`],
   };
@@ -692,25 +692,27 @@ async function _regionMarket(regionQuery) {
 
 function _jeonseGuide(query) {
   let out = '전세가율·갭은 단지별 실거래(매매+전세)로 계산해 보여드려요.\n' +
-    '· 상단 검색창에서 단지 검색 → 단지 상세에 전세가율·갭 표시\n' +
+    '· 상단 검색창에서 단지를 검색하면 단지 상세에서 전세가율·갭을 볼 수 있어요\n' +
     '· 전세 실거래는 국토부 신고 기준(무료 공개 데이터)이에요.';
-  if (query) out += `\n\n"${query}" 는 검색창에 그대로 입력하면 상세에서 확인할 수 있어요.`;
+  if (query) out += `\n\n"${query}"는 검색창에 그대로 입력하면 상세에서 확인할 수 있어요.`;
   return out;
 }
 
 function _clauseGuide() {
-  return '특약 초안은 법령 인용 표준 템플릿으로 무료 제공돼요 — 아래 "특약초안" 버튼을 눌러보세요.\n' +
-    '전세사기 예방 기본 3종(등기부 확인 · 보증금 반환 특약 · 전입+확정일자)도 템플릿에 들어 있어요.\n' +
-    '⚠ 법률 자문이 아니며, 중요 계약은 전문가 검토를 권해요.';
+  return '특약 초안은 법령을 인용한 표준 양식으로 무료로 볼 수 있어요. 아래 "특약초안" 버튼을 눌러 보세요.\n' +
+    '전세사기 예방 기본 3가지(등기부 확인, 보증금 반환 특약, 전입+확정일자)도 양식에 들어 있어요.\n' +
+    '법률 자문이 아니에요. 중요한 계약은 전문가 검토를 받아 보세요.';
 }
 
 function _howto() {
   return '이렇게 쓰실 수 있어요\n' +
-    '· 지도 탭: 인기 단지·실거래 마커 탐색\n' +
-    '· 목록 탭: "내 상황" 입력 → 조건에 맞는 단지 정리\n' +
-    '· 보고서 탭: 3가지만 입력하면 30초 만에 1page 맞춤 보고서\n' +
-    '· 대출 탭: 규제 반영 한도 계산 + 정책자금 4종 비교\n' +
-    '· 여기(도우미): "은마 시세" · "오늘 금리" 처럼 물어보면 공식 데이터로 바로 답해드려요.';
+    '· 지도 탭: 인기 단지와 실거래 위치 둘러보기\n' +
+    '· 목록 탭: "내 상황"을 입력하면 조건에 맞는 단지를 정리해요\n' +
+    '· 보고서 탭: 3가지만 입력하면 30초 만에 1장짜리 보고서가 나와요\n' +
+    '· 브리핑 탭: 오늘 시황 3줄, 최고·최저가 경신, 청약 일정, 뉴스\n' +
+    '· 도구 › 대출 계산: 규제를 반영한 한도 계산과 정책자금 4종 비교\n' +
+    '· 도구 › 특약·청약·규제 요약: 표준 특약 초안, 청약 일정, 지금 대출 규제 표\n' +
+    '· 여기(도우미): "은마 시세", "오늘 금리"처럼 물어보면 공식 데이터로 바로 답해요.';
 }
 
 function _greeting() {
@@ -732,7 +734,7 @@ async function _watch(context) {
       suggestions: ['노원구 인기단지', '은마 시세'] };
   }
   const admin = getSupabaseAdmin();
-  if (!admin) return '지금 조회가 잠시 어려워요. 잠시 후 다시 시도해주세요.';
+  if (!admin) return '지금 조회가 잠시 어려워요. 잠시 후 다시 시도해 주세요.';
   const since = new Date(); since.setDate(since.getDate() - 60);
   const sinceStr = since.toISOString().slice(0, 10);
   const lines = [];
@@ -760,10 +762,10 @@ async function _watch(context) {
 }
 
 function _recommendAsk() {
-  return '매수·매도 추천은 정책상 하지 않아요 (정보 정리 도구예요)\n\n대신 이렇게 도와드릴 수 있어요:\n' +
-    '· 조건에 맞는 단지 정리: 목록 탭 → "내 상황" 입력 → 조건 검색\n' +
-    '· 특정 단지 데이터: "○○ 시세" 라고 물어보세요\n' +
-    '· 요즘 거래 많은 곳: "인기 단지" 라고 물어보세요\n\n판단에 필요한 공식 데이터를 정리해드리는 게 제 역할이에요.';
+  return '매수·매도 추천은 정책상 하지 않아요 (정보 정리 도구예요)\n\n대신 이런 건 알려드려요.\n' +
+    '· 조건에 맞는 단지 정리: 목록 탭에서 "내 상황"을 입력해 조건 검색\n' +
+    '· 특정 단지 데이터: "○○ 시세"라고 물어보세요\n' +
+    '· 요즘 거래 많은 곳: "인기 단지" 라고 물어보세요\n\n판단에 필요한 공식 데이터를 정리해 드리는 게 제 역할이에요.';
 }
 
 function _fallback() {

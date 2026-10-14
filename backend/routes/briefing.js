@@ -85,8 +85,8 @@ ${FONT_LINK}
   .foot{color:var(--ink3);font-size:12px;margin-top:20px;line-height:1.8}
   .cta{display:inline-block;margin-top:14px;padding:10px 18px;background:var(--pri);color:var(--onpri);border-radius:9px;font-weight:700;font-size:14px}
 </style></head><body><main>${body}
-<div class="foot">⚠ 매수·매도 추천이 아닙니다 · 미래 가격 예측을 하지 않습니다 · 의사결정 책임은 본인에게 있습니다.<br>
-출처: 국토교통부 실거래가 · 한국은행 ECOS · 국토부 KOSIS · © 내집로그</div>
+<div class="foot">매수·매도 추천이 아니고, 미래 가격도 예측하지 않아요. 판단과 책임은 본인에게 있어요.<br>
+출처: 국토교통부 실거래가 · 한국은행 경제통계시스템(ECOS) · KOSIS 국가통계포털 · © 내집로그</div>
 </main></body></html>`;
 }
 
@@ -123,7 +123,7 @@ router.get('/:date', async (req, res) => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || Number.isNaN(Date.parse(day + 'T00:00:00Z'))
       || day < '2026-01-01' || day > kstDayString()) {
     return res.status(404).type('html').send(pageShell(
-      '내집로그 브리핑', '요청한 날짜의 브리핑이 없습니다.', kstDayString(),
+      '내집로그 브리핑', '이 날짜의 브리핑이 없어요.', kstDayString(),
       `<div class="eyebrow">MYHOMELOG BRIEFING</div><h1>브리핑 없음</h1>
        <p style="font-size:14px;color:var(--ink3)">요청한 날짜의 브리핑이 없어요.</p>
        <a class="cta" href="/briefing/${kstDayString()}">오늘 브리핑 보기 →</a>`));
@@ -135,9 +135,9 @@ router.get('/:date', async (req, res) => {
   }
   if (!snap) {
     return res.status(404).type('html').send(pageShell(
-      `내집로그 브리핑 ${day}`, '해당 일자의 브리핑 기록이 없습니다.', day,
+      `내집로그 브리핑 ${day}`, '이 날짜의 브리핑 기록이 없어요.', day,
       `<div class="eyebrow">MYHOMELOG BRIEFING</div><h1>${esc(day)}</h1>
-       <p style="font-size:14px;color:var(--ink3)">이 날짜의 브리핑 기록이 없어요. 아카이브는 서비스가 기록을 시작한 날부터 쌓입니다.</p>
+       <p style="font-size:14px;color:var(--ink3)">이 날짜의 브리핑 기록이 없어요. 기록은 저장을 시작한 날부터 쌓여요.</p>
        <div class="nav"><a href="/briefing/${dayNav(day, -1)}">← 전날</a><a href="/briefing/${kstDayString()}">오늘 →</a></div>
        <a class="cta" href="/?briefing=${esc(day)}">앱에서 열기 →</a>`));
   }
@@ -178,16 +178,16 @@ router.get('/:date', async (req, res) => {
   const _rec = snap.records;
   const _recRow = (it, kind) => `<div class="pop"><span>${esc(it.aptName || '')} <span style="color:var(--ink3);font-size:12px">${esc(it.region || '')}${it.excluUseAr ? ' · 전용 ' + esc(String(it.excluUseAr)) + '㎡' : ''}</span></span><span style="color:var(--ink3);white-space:nowrap"><b style="color:var(--pri)">${_eok(it.dealAmount)}</b> <span style="font-size:12px">직전 ${kind === 'high' ? '최고' : '최저'} ${_eok(kind === 'high' ? it.prevMax : it.prevMin)} · ${Number(it.priorCount) || 0}건</span></span></div>`;
   const recs = (_rec && (Number(_rec.highCount) || Number(_rec.lowCount))) ? `<div class="card">
-      <h2>최근 ${Number(_rec.windowDays)}일 최고·최저 경신 <span style="font-weight:500;color:var(--ink3);font-size:12px">같은 단지·같은 전용면적 기준 · ${esc(String(_rec.sinceDate || '').replace(/-/g, '.'))} 이후 적재분 안에서</span></h2>
+      <h2>최근 ${Number(_rec.windowDays)}일 최고·최저 경신 <span style="font-weight:500;color:var(--ink3);font-size:12px">같은 단지·같은 전용면적 기준 · ${esc(String(_rec.sinceDate || '').replace(/-/g, '.'))} 이후 쌓인 거래 안에서</span></h2>
       <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">비교 가능 거래 ${Number(_rec.comparedCount).toLocaleString()}건 중 최고가 경신 <b style="color:var(--ink)">${Number(_rec.highCount)}건</b> · 최저가 경신 <b style="color:var(--ink)">${Number(_rec.lowCount)}건</b></div>
       ${(_rec.high || []).slice(0, 3).map(it => _recRow(it, 'high')).join('')}
       ${(_rec.low || []).slice(0, 3).map(it => _recRow(it, 'low')).join('')}
-      <div style="font-size:12px;color:var(--ink3);margin-top:8px">직전 거래 ${Number(_rec.minPrior)}건 이상인 평형만 비교 · 층·향 차이는 보정하지 않음 · 매수·매도 추천이 아닙니다</div>
+      <div style="font-size:12px;color:var(--ink3);margin-top:8px">직전 거래 ${Number(_rec.minPrior)}건 이상인 평형만 비교해요. 층·향 차이는 반영하지 않았고, 매수·매도 추천이 아니에요</div>
     </div>` : '';
 
   const yo = '일월화수목금토'[new Date(day + 'T00:00:00Z').getUTCDay()];
   const title = `내집로그 브리핑 ${day.replace(/-/g, '.')}(${yo}) — 실거래·금리·시장 데이터`;
-  const desc = (snap.lines && snap.lines[0]) ? String(snap.lines[0]).slice(0, 120) : '국토부 실거래·한국은행 금리 기반 일일 부동산 데이터 브리핑';
+  const desc = (snap.lines && snap.lines[0]) ? String(snap.lines[0]).slice(0, 120) : '국토교통부 실거래와 한국은행 금리로 정리한 일일 부동산 브리핑';
 
   // 과거 날짜는 불변 기록 — 엣지 캐시 길게. 오늘은 30분.
   // ⚠ CACHE-POISON-2026-08-29: getOrCreateSnapshot 은 **저장은 lines 가 있을 때만** 하면서
@@ -204,10 +204,10 @@ router.get('/:date', async (req, res) => {
     <h1>${esc(day.replace(/-/g, '.'))}(${yo})</h1>
     <div class="tag">실거래·금리·시장 공개 데이터 정리</div>
     ${tk.length ? `<div class="ticker">${tk.join('<span style="color:var(--line);margin:0 9px">|</span>')}</div>` : ''}
-    <div class="card"><h2>오늘의 시장</h2>${lines || '<div style="font-size:12px;color:var(--ink3)">기록된 시황이 없습니다.</div>'}</div>
+    <div class="card"><h2>오늘의 시장</h2>${lines || '<div style="font-size:12px;color:var(--ink3)">기록된 시황이 없어요.</div>'}</div>
     ${recs}
     ${pops ? `<div class="card"><h2>인기 단지 TOP5 <span style="font-weight:500;color:var(--ink3);font-size:12px">최근 60일 실거래 많은 순 · 매물 광고 아님</span></h2>${pops}</div>` : ''}
-    ${regs ? `<div class="card"><h2>규제·금융 변동 로그 <span style="font-weight:500;color:var(--ink3);font-size:12px">금융위·국토부 고시 · 검증된 이벤트만</span></h2>${regs}</div>` : ''}
+    ${regs ? `<div class="card"><h2>규제·금융 변경 내역 <span style="font-weight:500;color:var(--ink3);font-size:12px">금융위·국토부 고시 중 확인된 것만</span></h2>${regs}</div>` : ''}
     <div class="nav"><a href="/briefing/${dayNav(day, -1)}">← 전날 브리핑</a>${isToday ? '' : `<a href="/briefing/${dayNav(day, 1)}">다음날 →</a>`}</div>
     ${(() => { const p = pastDaysNav(day); return p.length ? `<div class="nav" aria-label="지난 브리핑">지난 브리핑: ${p.map((x) => `<a href="/briefing/${esc(x.day)}">${esc(x.label)}</a>`).join(' · ')}</div>` : ''; })()}
     <a class="cta" href="/?briefing=${esc(day)}">앱에서 지도·계산기와 함께 보기 →</a>`,

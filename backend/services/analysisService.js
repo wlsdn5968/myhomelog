@@ -779,7 +779,7 @@ async function compareBatch(apts, opts = {}) {
     results: results.filter(Boolean),
     dealMonths,
     generatedAt: new Date().toISOString(),
-    disclaimer: `평당가는 전용면적 기준·동일 전용면적대 최근 ${dealMonths}개월 실거래의 중앙값입니다. 시점·층·향·동은 보정되지 않았고, 표본 8건 미만은 통계적으로 신뢰하기 어려워 값 대신 '표본 부족'으로 표기합니다. 본 정보는 매수·매도 추천이 아니며 투자 판단의 근거가 될 수 없습니다. 출처: 국토교통부 실거래가·KAPT 공동주택 기본정보.`,
+    disclaimer: `평당가는 전용면적 기준으로, 같은 전용면적대의 최근 ${dealMonths}개월 실거래 중앙값이에요. 시점·층·향·동 차이는 반영하지 않았고, 표본이 8건 미만이면 신뢰하기 어려워 값 대신 '표본 부족'으로 표시해요. 매수·매도 추천이 아니며 투자 판단의 근거가 될 수 없어요. 출처: 국토교통부 실거래가·공동주택 기본정보(K-apt).`,
   };
 }
 

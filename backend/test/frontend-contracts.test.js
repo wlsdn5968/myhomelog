@@ -437,7 +437,7 @@ test('표본·범위 표기가 실제 집계와 맞다 (Sprint MMMMMMM-11)', () 
   assert.equal(html.includes('주변 (반경 800m~1km)'), false, '단일 반경 표기가 되돌아왔다');
 
   // ③ 층 분포는 전량이 아니라 화면에 불러온 표본 기준이다
-  assert.ok(html.includes('최근 6개월 MOLIT · 표본 기준'), '층 분포가 전량 집계처럼 표기된다');
+  assert.ok(html.includes('최근 6개월 국토교통부 실거래 · 표본 기준'), '층 분포가 전량 집계처럼 표기된다');
 });
 
 
@@ -1923,7 +1923,7 @@ test('Plan 056 ⑤: 절대 룰 ① — pctHtml·gap-grid 카드 어디에도 매
   // 이번 계획이 실제로 건드린 gap-grid 카드(전세가율·갭) 구간만 좁혀서 검사한다.
   for (const rate of [70, 50, 40]) {
     const html = _plan056RunGap(rate);
-    const simIdx = html.indexOf('역전세 시뮬레이터');
+    const simIdx = html.indexOf('역전세 모의계산');
     assert.ok(simIdx > 0, `gapHtml(rate=${rate}): 역전세 시뮬레이터 섹션을 못 찾았다 — 구조가 바뀌었다`);
     const gridPart = html.slice(0, simIdx);
     assert.equal(banned.test(gridPart), false, `gap-grid(rate=${rate})에 금지 표현이 있다`);

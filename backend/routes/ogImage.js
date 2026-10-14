@@ -55,7 +55,7 @@ function buildCard(af) {
     ].filter(Boolean).join(' · ');
     if (sub) lines.push(sub);
   } else {
-    lines.push('실거래 기록을 준비 중입니다');
+    lines.push('실거래 기록을 준비하고 있어요');
   }
   if (buildYear) lines.push(`${buildYear}년 준공`);
   return {

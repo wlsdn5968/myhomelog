@@ -78,11 +78,11 @@ const ERR_FIELDS = ['세대수', '주차', '실거래', '좌표', '학군', '기
 router.post('/data-error', optionalAuth, async (req, res) => {
   const { aptName, lawdCd, field, detail, page } = req.body || {};
   if (!detail || typeof detail !== 'string' || detail.trim().length < 5) {
-    return res.status(400).json({ error: '내용을 5자 이상 적어주세요.' });
+    return res.status(400).json({ error: '내용을 5자 이상 적어 주세요.' });
   }
   const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
   const rk = 'errRate:' + ip;
-  if (_errRateCache.get(rk)) return res.status(429).json({ error: '잠시 후 다시 신고해주세요.' });
+  if (_errRateCache.get(rk)) return res.status(429).json({ error: '잠시 뒤 다시 신고해 주세요.' });
   _errRateCache.set(rk, 1, 30);
   const row = {
     apt_name: (typeof aptName === 'string' ? aptName.trim().slice(0, 50) : null) || null,
