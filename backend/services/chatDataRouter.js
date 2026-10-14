@@ -807,8 +807,9 @@ async function _observe(intent, message) {
     const r = require('../redis').getRedis();
     if (!r) return;
     const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    await r.hincrby(`chatint:${day}`, intent, 1);
-    await r.expire(`chatint:${day}`, 60 * 60 * 24 * 21);
+    // Plan 139: TTL 은 그날 키가 처음 생길 때(hincrby 결과 1) 한 번만 건다 — 이후 요청의 expire 명령을 없앤다.
+    const n = await r.hincrby(`chatint:${day}`, intent, 1);
+    if (Number(n) === 1) await r.expire(`chatint:${day}`, 60 * 60 * 24 * 21);
     if (intent === 'fallback') {
       await r.lpush('chatint:misses', String(message || '').slice(0, 80));
       await r.ltrim('chatint:misses', 0, 49);

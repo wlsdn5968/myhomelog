@@ -12,6 +12,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const dotenv = require('dotenv');
 const { makeRateLimiter } = require('./middleware/rateLimit');
+const rateLimit = require('express-rate-limit');
 
 // dotenv 17.x 는 quiet 기본값이 true→false 로 바뀌어, .env 가 없는 프로덕션(Vercel)에서도
 // "◇ injected env (0)" + 랜덤 팁(외부 링크)을 stdout 에 찍는다 → 콜드스타트마다 Vercel 로그·
@@ -238,6 +239,19 @@ const ogLimiter = makeRateLimiter({
   message: '미리보기 이미지 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
 });
 
+// REDIS-BUDGET-2026-10-14 (Plan 139): Upstash 무료 한도(월 500,000 명령) 초과로 2026-10-05 16:49Z 이후 쓰기가 실패했다.
+//   /api/health(모든 페이지 로드 + 모니터링 폴링)와 /api/cron/*(CRON_SECRET 필수 — routes/cron.js 의 router.use(authorizeCron))은
+//   generalLimiter(Redis 슬라이딩 윈도우) 에서 빼서 요청마다 나가던 Redis 명령을 없앤다.
+//   health 는 대신 인스턴스 메모리 제한(IP 당 분당 60 = generalLimiter 기본값과 동일)만 건다 — 이 둘은 반드시 generalLimiter 마운트보다 앞이어야 한다.
+const healthMemLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
+});
+app.use('/api/health', healthMemLimiter);
+app.use('/api/cron', require('./routes/cron'));
 app.use('/api/', generalLimiter);
 
 // ── 라우터 연결 ────────────────────────────────────────────
@@ -256,7 +270,6 @@ const searchRouter = require('./routes/search');
 const billingRouter = require('./routes/billing');
 const chatSessionsRouter = require('./routes/chatSessions');
 const accountRouter = require('./routes/account');
-const cronRouter = require('./routes/cron');
 const automatedDecisionRouter = require('./routes/automatedDecision');
 
 // 일일 무료 한도 (BYOK 제거에 따른 무료 체험 정책)
@@ -330,7 +343,7 @@ app.use('/api/report', optionalAuth, chatLimiter, dailyLimit({ limit: 0, scope: 
 app.use('/api/account/automated-decision', dataLimiter, automatedDecisionRouter);
 app.use('/api/account', dataLimiter, accountRouter);
 // Cron 엔드포인트 — Vercel Cron 에서 호출 (CRON_SECRET 필수)
-app.use('/api/cron', cronRouter);
+// (/api/cron 은 generalLimiter 보다 앞에서 마운트했다 — Plan 139)
 // 관리자 전용 엔드포인트 — ADMIN_EMAILS 화이트리스트 인증
 // STAB-AUDIT-2026-05-07: geocache 백필 즉시 trigger 등 (cron 다음 tick 전 운영자 직접 호출)
 app.use('/api/admin', dataLimiter, require('./routes/admin'));
@@ -674,6 +687,11 @@ async function getFacilityQuality() {
   } catch (e) { return null; }
 }
 
+const _healthObs = require('./services/healthObserveCache').createHealthObserveCache({
+  getRedis: () => require('./redis').getRedis(),
+  getCronLatest: () => require('./services/cronStats').getCronLatest(),
+});
+
 app.get('/api/health', optionalAuth, async (req, res) => {
   const [searchUsed, chatUsed] = await Promise.all([
     getUsage(req, 'search'),
@@ -719,7 +737,8 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   //   (CK 캐시를 읽는 briefingService·ogImage·프론트는 이 호출이 채운 캐시를 그대로 재사용한다).
   const _dataCounts = await getDataCounts({ includeHist: true });
   // Redis 조회 1회(수 ms). 실패해도 null 로 흘려보낸다 — health 가 이것 때문에 죽으면 안 된다.
-  const _cronLatest = await require('./services/cronStats').getCronLatest().catch(() => null);
+  // Plan 139: 사용자별이 아닌 값 — 인스턴스 메모리 5분 캐시(healthObserveCache)
+  const _cronLatest = await _healthObs.cronLatest();
   const _dbUsage = await getDbUsage();
   // 데이터 품질 모니터 (Sprint AAAAA) — HOTPATH-NONBLOCK-2026-07-12 (Sprint DDDDD): count 5개가 콜드 health 를
   //   ~2s 느리게 해 chkAPI 5s 타임아웃 오프라인 오표시 유발 → health 핫패스에선 캐시만 읽고, 미스 시 백그라운드
@@ -750,18 +769,14 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   let _isAdmin = false;
   try { _isAdmin = require('./services/planService').isAdminUser(req.user); } catch (e) { logger.warn({ err: e && e.message }, 'admin 판정 실패 — 일반 사용자로 처리'); }
   try {
-    const r = require('./redis').getRedis();
-    if (r) {
-      const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-      const yday = new Date(Date.now() - 864e5).toISOString().slice(0, 10).replace(/-/g, '');
-      const [today, yesterday, recentMisses, degToday, degYday] = await Promise.all([
-        r.hgetall(`chatint:${day}`), r.hgetall(`chatint:${yday}`),
-        _isAdmin ? r.lrange('chatint:misses', 0, 9) : Promise.resolve(null),
-        r.hgetall(`searchdeg:${day}`), r.hgetall(`searchdeg:${yday}`),
-      ]);
-      _chatIntents = { today: today || {}, yesterday: yesterday || {} };
+    // Plan 139: hgetall 4개(오늘·어제 × chatint·searchdeg)는 5분 캐시. recentMisses(lrange)는 관리자 전용·원문 PII 라 캐시하지 않는다.
+    const obs = await _healthObs.intentCounters();
+    if (obs) {
+      _chatIntents = { today: obs.chatIntents.today, yesterday: obs.chatIntents.yesterday };
+      const r = require('./redis').getRedis();
+      const recentMisses = r ? await (_isAdmin ? r.lrange('chatint:misses', 0, 9) : Promise.resolve(null)) : null;
       if (_isAdmin) _chatIntents.recentMisses = recentMisses || [];
-      _searchDegrade = { today: degToday || {}, yesterday: degYday || {} };
+      _searchDegrade = obs.searchDegrade;
     }
   } catch (_) { /* 관측 실패 무시 */ }
   // QUOTA-PLAN-2026-07-12 (Sprint YYYY, 운영자 "admin 인데 검색 0/5 표시"): usage 한도를 사용자 plan 반영.
