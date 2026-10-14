@@ -146,27 +146,38 @@ router.get('/', (req, res) => {
 // OG-REGION-2026-09-05 (감사 P3-14): 지역 페이지의 description 과 OG 카드가 **같은 함수**로 사실 문장을 만든다.
 //   따로 만들면 "카드엔 123건, 페이지엔 다른 값" — 취득세 사본 2개가 3주간 다른 값을 낸 사고와 같은 구조다.
 async function loadRegionData(region) {
-  let dash = null, rec = null;
-  try { dash = await require('./region').buildDashboard(region); } catch (e) { logger.warn({ err: e.message, code: region.lawdCd }, '/region 대시보드 실패'); }
-  try {
-    const svc = require('../services/priceRecordsService');
-    rec = svc.sliceRegion(await svc.getPriceRecordsByRegion(), region.lawdCd);
-  } catch (e) { logger.warn({ err: e.message, code: region.lawdCd }, '/region 경신 조회 실패'); }
+  // PARALLEL-2026-10-14 (Plan 140): dash·rec·weekly 는 서로의 결과를 쓰지 않는다(입력은 전부 region 하나) —
+  //   직렬이면 지연이 합산된다. 각 단계는 자기 try/catch 로 null 을 돌려주므로 Promise.all 이 reject 되는 일이 없고,
+  //   한 단계가 실패해도 나머지 값은 종전과 똑같이 채워진다(부분 실패 처리 불변).
+  const dashP = (async () => {
+    try { return await require('./region').buildDashboard(region); }
+    catch (e) { logger.warn({ err: e.message, code: region.lawdCd }, '/region 대시보드 실패'); return null; }
+  })();
+  const recP = (async () => {
+    try {
+      const svc = require('../services/priceRecordsService');
+      return svc.sliceRegion(await svc.getPriceRecordsByRegion(), region.lawdCd);
+    } catch (e) { logger.warn({ err: e.message, code: region.lawdCd }, '/region 경신 조회 실패'); return null; }
+  })();
   // WEEKLY-DISCLOSURE-2026-09-05 (감사 P3-14 "주간 변동"): 계약일 기준 주간 변동은 만들지 않는다 — 국토부 공개는
   //   신고 후 최대 30일 지연·배치라 주별 등락이 시장이 아니라 공개 일정을 반영한다(실측: 전국 신규 공개 전주 5,390 →
   //   이번 주 11,763건). 대신 **"이번 주 새로 공개된 거래"** 를 그 사실 그대로 낸다(적재일 ingested_at 기준, 계약일 아님).
   //   지역별 중간값 41건/주(2026-09-05 실측)라 대부분 지역에서 의미 있는 숫자가 나온다. 0건이면 카드·문장 모두 생략.
-  let weekly = null;
-  try {
-    const { getSupabaseAdmin } = require('../db/client');
-    const admin = getSupabaseAdmin();
-    if (admin) {
-      const since = new Date(Date.now() - 7 * 86400000).toISOString();
-      const { count, error } = await admin.from('molit_transactions').select('*', { count: 'exact', head: true })
-        .eq('lawd_cd', String(region.lawdCd)).gte('ingested_at', since);
-      if (!error && Number.isFinite(Number(count))) weekly = { count: Number(count), sinceDate: since.slice(0, 10) };
-    }
-  } catch (e) { logger.warn({ err: e.message, code: region.lawdCd }, '/region 주간 공개 건수 조회 실패'); }
+  const weeklyP = (async () => {
+    let weekly = null;
+    try {
+      const { getSupabaseAdmin } = require('../db/client');
+      const admin = getSupabaseAdmin();
+      if (admin) {
+        const since = new Date(Date.now() - 7 * 86400000).toISOString();
+        const { count, error } = await admin.from('molit_transactions').select('*', { count: 'exact', head: true })
+          .eq('lawd_cd', String(region.lawdCd)).gte('ingested_at', since);
+        if (!error && Number.isFinite(Number(count))) weekly = { count: Number(count), sinceDate: since.slice(0, 10) };
+      }
+    } catch (e) { logger.warn({ err: e.message, code: region.lawdCd }, '/region 주간 공개 건수 조회 실패'); }
+    return weekly;
+  })();
+  const [dash, rec, weekly] = await Promise.all([dashP, recP, weeklyP]);
   return { dash, rec, weekly };
 }
 
@@ -217,7 +228,9 @@ router.get('/:lawdCd', async (req, res) => {
   const { regionLabel } = require('../services/priceRecordsService');
   const label = regionLabel(region.lawdCd, region.name);
 
-  const { dash, rec, weekly } = await loadRegionData(region);
+  // PARALLEL-2026-10-14 (Plan 140): 지역 데이터와 주요 단지 목록은 서로 독립(둘 다 region.lawdCd 만 입력) — 함께 기다린다.
+  //   topAptsOfRegion 은 내부 try/catch 로 실패 시 [] 를 돌려주므로 종전과 같은 부분 실패 동작이다.
+  const [{ dash, rec, weekly }, apts] = await Promise.all([loadRegionData(region), topAptsOfRegion(region.lawdCd, 30)]);
 
   // ── 카드들 — 값이 없으면 카드 자체를 만들지 않는다(0·추정 금지) ──
   const cards = [];
@@ -281,7 +294,6 @@ router.get('/:lawdCd', async (req, res) => {
 
   // 형제 지역 링크 — 크롤러가 118개를 순회할 수 있게(같은 시도 우선, 없으면 앞뒤 이름순)
   // 이 지역 단지 페이지로의 내부 링크 (SEO-REGION-APT-LINKS-2026-09-02)
-  const apts = await topAptsOfRegion(region.lawdCd, 30);
   if (apts.length) {
     // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — a.apt_name(href 의 apt_seq 는 조회 키 그대로)은
     //   링크 텍스트에서만 감싼다.

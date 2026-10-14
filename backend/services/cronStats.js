@@ -190,8 +190,10 @@ const CRON_MAX_AGE_H = {
   'push-notify': 50,
   'warm-interest': 50,   // INTEREST-WARM-2026-09-05: 일간
   'warm-rent': 50,       // RENT-WARM-2026-09-05: 일간
-  // HIST-BACKFILL-2026-09-16 (Plan 094): Hobby 플랜(하루 1회 cron)이라 일일 슬롯 10개(2시간 간격, ±59분 지터). 최대 공백은 13:20→19:20 UTC ≈ 7h — 9h 넘게 조용하면 경보. 완주(reason:'complete')·용량 정지 뒤에도 엔드포인트는 계속 호출·기록되므로 stale 오인은 없다.
-  'molit-hist-backfill': 9,
+  // HIST-BACKFILL-2026-09-16 (Plan 094) → Plan 140: 이력 backfill 은 이미 완주(reason:'complete')라 슬롯을 10→2개(19:20·21:20 UTC)로 줄였다.
+  //   Hobby ±59분 지터를 넣은 정상 최대 공백 = 21:00(오늘) → 19:59(내일) ≈ 23h. 1회 누락(best effort)까지 허용하면 ≈ 25h, 그래서 다른 일간 잡과 같은 50h(2회 연속 누락)로 맞춘다.
+  //   (종전 9h 는 슬롯 10개·2시간 간격의 최대 공백 7h 기준이라 슬롯이 2개면 매일 오탐한다.) 완주·용량 정지 뒤에도 엔드포인트는 계속 호출·기록되므로 stale 오인은 없다.
+  'molit-hist-backfill': 50,
 };
 
 /**

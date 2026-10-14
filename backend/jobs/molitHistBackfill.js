@@ -12,7 +12,7 @@
 //     DB_STOP_MB(470 = 500 무료 티어 - 30 안전여유)를 넘으면 그 달을 완료로 남기지 않고 정지한다.
 //   - molit_hist_runs 에 완료한 (lawd_cd, deal_ym) 을 PRIMARY KEY 로 기록해 재실행 시 건너뛴다
 //     (유니크 인덱스 없이 PK 만으로 멱등 확보).
-//   - Vercel Hobby 플랜은 cron 이 하루 1회만(매시 표현식은 배포 자체가 거부됨 — 2026-09-16 실사례). 그래서 vercel.json 에 같은 경로를 ?slot=0~9 로 10개(2시간 간격, ±59분 지터에도 겹치지 않음) 등록하고, 한 실행은 TIME_BUDGET_MS 까지 순차 처리한다.
+//   - Vercel Hobby 플랜은 cron 이 하루 1회만(매시 표현식은 배포 자체가 거부됨 — 2026-09-16 실사례). 그래서 vercel.json 에 같은 경로를 ?slot=N 으로 등록하고(원래 10개 2시간 간격, 완주 뒤 Plan 140 에서 slot=0·1 두 개로 축소; ±59분 지터에도 겹치지 않음), 한 실행은 TIME_BUDGET_MS 까지 순차 처리한다.
 const logger = require('../logger');
 const { fetchRegionMonth } = require('./molitIngest');
 const { LAWD_CODES } = require('../services/transactionService');
