@@ -206,6 +206,19 @@ const chatLimiter = makeRateLimiter({
   message: 'AI 채팅 요청 한도를 초과했습니다. 1분 후 다시 시도해주세요.',
 });
 
+// CHAT-FREE-LIMITER-2026-10-14 (Plan 133): /api/chat 은 룰베이스 데이터 라우터라 유료 AI 호출이 0 이다(CHAT-ZERO-COST-2026-08-12).
+//   그런데 유료 경로(/api/report·/api/clause)와 같은 chatLimiter(scope 'chat' = COST_SENSITIVE → Redis 장애 시 fail-closed 503)를
+//   써서, Upstash 무료 한도(월 500,000 명령) 초과로 모든 Redis 명령이 실패한 2026-10-14 에 챗이 전원 503 이었다(실측).
+//   챗은 별도 scope 로 fail-open(가용성 우선) — 한도·창·키 접미사는 chatLimiter 와 같다. 일일 한도(dailyLimit scope 'chat')는
+//   Redis 실패 시 인스턴스 메모리로 내려가 계속 센다. 유료 두 경로는 chatLimiter(fail-closed) 그대로.
+const chatDataLimiter = makeRateLimiter({
+  limit: 20,
+  windowSec: 60,
+  scope: 'chatdata',
+  keySuffix: ':chat',
+  message: '채팅 요청 한도를 초과했습니다. 1분 후 다시 시도해주세요.',
+});
+
 const dataLimiter = makeRateLimiter({
   limit: 30,
   windowSec: 60,
@@ -270,7 +283,7 @@ app.use('/api/chat/sessions', dataLimiter, chatSessionsRouter);
 //     사용법 탭도 그 옛 숫자("무료 일 3회")를 하드코딩해 사용자에게 **실제의 1/10** 로 안내했다.
 //     한도 숫자는 이 상수(그리고 /api/health 응답)가 유일한 진실 — 주석·HTML 에 복제하지 말 것.
 //   search: base = DAILY_SEARCH_LIMIT(기본 5) + 로그인 +5 = 10
-app.use('/api/chat', optionalAuth, chatLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat', loggedInBonus: 10 }), chatRouter);
+app.use('/api/chat', optionalAuth, chatDataLimiter, dailyLimit({ limit: DAILY_CHAT_LIMIT, scope: 'chat', loggedInBonus: 10 }), chatRouter);
 app.use('/api/transactions', dataLimiter, transactionRouter);
 app.use('/api/properties', optionalAuth, dataLimiter, dailyLimit({ limit: DAILY_SEARCH_LIMIT, scope: 'search', loggedInBonus: 5 }), propertiesRouter);
 app.use('/api/regulations', regulationsRouter);
