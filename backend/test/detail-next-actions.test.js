@@ -309,7 +309,7 @@ test('모바일 — 더보기 시트의 행 순서가 사양과 같고, 하단 �
 test('모바일 — 분기 폭은 상세 모달이 전체 화면이 되는 기존 600px 이고, 시트는 ESC·포커스 가둠에 등록돼 있다 (Plan 150)', () => {
   // 새 CSS 의 모바일 분기는 기존 .dm 전체 화면 규칙과 같은 폭
   assert.match(html, /@media\(max-width:600px\)\{[^@]*?\.dmbg\{padding:0!important;align-items:stretch!important\}\s*\n\s*\.dm\{max-width:100%!important/, '기존 상세 모달 전체 화면 분기가 600px 가 아니다');
-  assert.ok(html.includes('@media(max-width:600px){\n  .nxt-band{display:none}'), '새 영역 모바일 분기가 600px 가 아니다');
+  assert.match(html, /@media\(max-width:600px\)\{\r?\n  \.nxt-band\{display:none\}/, '새 영역 모바일 분기가 600px 가 아니다');
   // 데스크톱에서는 하단 바·시트가 기본 숨김(.nxb,.nxs,.nxs-dim{display:none}) 이고 모바일 분기에서만 켜진다
   assert.ok(html.includes('.nxb,.nxs,.nxs-dim{display:none}'));
   assert.ok(html.includes('.nxb.on{display:flex}') && html.includes('.nxs.open{display:flex}'));
