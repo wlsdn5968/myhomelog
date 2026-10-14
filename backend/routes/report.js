@@ -603,7 +603,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
     // '추천' 단어는 자체 단언표현 필터(filterAdviceOutputDeep)에 걸림 (라이브 확인) — 필터 안전 문구 사용
     `아래 ${apartments.length}개 단지는 국토교통부 실거래 기준 조건 부합 단지 정리예요 — 의사결정 책임은 본인에게 있어요.`,
     fc.rate
-      ? `현재 금리 기준: ${fc.rate} — 대출 한도·월 상환액은 상단 대출 계산 화면에서 이 금리로 계산돼요.`
+      ? `현재 금리 기준: ${fc.rate} — 대출 한도·월 상환액은 도구 › 대출 계산 화면에서 이 금리로 계산돼요.`
       : 'AI 분석 코멘트는 현재 일시 중단 — 실거래·세대수·주차·규제 등 객관 데이터만 표시해요.',
   ];
   if (fc.unsold) coreMessages.push(`${fc.unsold} — 수치 나열이며 시장 예측이 아니에요.`);
@@ -613,7 +613,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
   const checklist = [
     { text: '등기부등본 최신본 확인 (계약 직전 재확인)', stars: 3 },
     {
-      text: fc.dsr ? `대출 사전심사 — ${fc.dsr}` : '대출 사전심사 — 스트레스 DSR 반영 한도 확인 (상단 대출 계산)',
+      text: fc.dsr ? `대출 사전심사 — ${fc.dsr}` : '대출 사전심사 — 스트레스 DSR 반영 한도 확인 (도구 › 대출 계산)',
       stars: 3,
     },
     // KKKKK-3: fc.ltv 없으면 항목 생략 — fallback 문구가 아래 '규제지역 확인'과 중복되던 것(라이브 발각) 제거.
@@ -1973,7 +1973,7 @@ function buildReportPrompt(input, policy, candidates, freeCtx) {
   return `## 내 가구 상황
 - 매수가: ${input.maxBudget}억
 - 자기자본: ${input.myCash || '?'}억
-- 연소득: ${input.annualIncome ? input.annualIncome + '만원' : '미입력'} (참고용 — DSR 계산은 사이드바 대출 계산)
+- 연소득: ${input.annualIncome ? input.annualIncome + '만원' : '미입력'} (참고용 — DSR 계산은 도구 › 대출 계산)
 - 보유 주택: ${input.houseStatus || '?'}
 - 생애 최초: ${input.firstBuyerKnown === false ? '미확인 — 일반(비우대) 기준으로 계산했고, 해당 시 우대 가능성만 언급할 것' : (input.isFirstBuyer ? '예' : '아니오')}
 - 희망 지역: ${input.region}
