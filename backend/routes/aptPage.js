@@ -477,7 +477,7 @@ router.get('/:aptSeq', async (req, res) => {
 
   const body = `<div class="eyebrow">MYHOMELOG APT</div>
     <h1>${esc(displayName)} 실거래가</h1>
-    <div class="tag">${esc(region)}${umd ? ' ' + esc(umd) : ''} · 단지코드 ${esc(seq)}</div>
+    <div class="tag">${esc(region)}${umd ? ' ' + esc(umd) : ''}</div>
     ${cards.length ? cards.join('') : `<div class="card"><h2>최근 거래 없음</h2>
       <div style="font-size:12.5px;color:var(--sub)">최근 24개월 안에 신고된 거래가 없어요. 값을 지어내지 않고 비워둡니다.</div></div>${histRecoveryLine}`}
     ${infoCardHtml}

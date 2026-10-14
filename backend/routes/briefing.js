@@ -200,7 +200,7 @@ router.get('/:date', async (req, res) => {
   res.type('html').send(pageShell(title, desc, day, `
     <div class="eyebrow">MYHOMELOG BRIEFING</div>
     <h1>${esc(day.replace(/-/g, '.'))}(${yo})</h1>
-    <div class="tag">추천을 팔지 않습니다. 데이터를 팝니다.</div>
+    <div class="tag">실거래·금리·시장 공개 데이터 정리</div>
     ${tk.length ? `<div class="ticker">${tk.join('<span style="color:var(--bd);margin:0 9px">|</span>')}</div>` : ''}
     <div class="card"><h2>오늘의 시장</h2>${lines || '<div style="font-size:12px;color:var(--sub)">기록된 시황이 없습니다.</div>'}</div>
     ${recs}
