@@ -7959,7 +7959,7 @@ function showDetail(p){
       const _lc = String(p.lawdCd||'').trim();
       let _rb = _ass.querySelector('.rg-open');
       if (_lc) {
-        const _nm = _fmtSgg(String(p.sigungu || '').trim()); // 표시 전용(openRegionSummary name 인자는 제목에만 쓰임)
+        const _nm = _fmtSgg(String(p.sigungu || '').trim()) || _sggFromArea(p.area); // 표시 전용(openRegionSummary name 인자는 제목에만 쓰임)
         if (!_rb) {
           _rb = document.createElement('button');
           _rb.className = 'rg-open';
@@ -11358,6 +11358,8 @@ const _NXT_IC = {
 };
 function _nxtIc(k){ return `<svg class="nx-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${_NXT_IC[k]||''}</svg>`; }
 // 청약 화면 시도 칩에 있는 시도만(칩 목록은 #subs-sido .chip[data-sido] 가 근거 — 없으면 '' → 버튼 숨김)
+// SGG-FROM-AREA-2026-10-15 (Plan 150 보정): 링크(?apt=)로 열린 상세엔 sigungu 가 없다 — 표시 전용으로 area('강남구 수서동')의 첫 단어가 시·군·구로 끝날 때만 쓴다.
+function _sggFromArea(area){const w=String(area||'').trim().split(/\s+/)[0]||'';return /[시군구]$/.test(w)?_fmtSgg(w):'';}
 function _nxtSido(p){
   const lc = String((p && p.lawdCd) || '').trim();
   if(!/^\d{2}/.test(lc)) return '';
@@ -11387,7 +11389,7 @@ function _nxtItems(p){
   const sido = _nxtSido(p);
   if(sido) items.push({ k:'subs', tier:'sec', l: sido + ' 청약 일정 보기', oc:'nxtOpenSubs()' });
   if(String(p.lawdCd||'').trim()){ // 시장 요약은 lawdCd 가 있을 때만(이름으로 지역을 특정하면 동명 구 오매칭 — 기존 .rg-open 과 같은 규칙)
-    const nm = _fmtSgg(String(p.sigungu || '').trim());
+    const nm = _fmtSgg(String(p.sigungu || '').trim()) || _sggFromArea(p.area);
     items.push({ k:'region', tier:'txt', l: (nm ? nm + ' ' : '') + '시장 요약', oc:'nxtOpenRegion()' });
   }
   items.push({ k:'ask', tier:'txt', l:'데이터 도우미에게 시세 묻기',
