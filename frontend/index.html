@@ -1012,6 +1012,57 @@ html[data-theme="dark"] .dmbg{--dm-ac:#FFC93C}
 .dm-loading .dml-spin{width:26px;height:26px;border:3px solid var(--bd);border-top-color:var(--acc);border-radius:50%;animation:sp .8s linear infinite}
 .dm-loading .dml-name{font-weight:800;font-size:14px;color:var(--t1)}
 .dm-loading .dml-msg{font-size:12px;color:var(--t3);line-height:1.5}
+
+/* NEXT-ACTIONS-2026-10-15 (Plan 150, 디자인 규칙 v2 화면 A): 단지 상세 "다음에 할 일" — 색은 토큰만(--accent-tint=prit, --acc-bg/--acc-ink=pri/onpri,
+   --bd=line, --bd2=line2, --bg-base=sf, --t1/--t2/--t3=ink/ink2/ink3, --acc=글자용 pri). 직접 색은 시안의 시트 딤 rgba(14,21,32,.48) 하나뿐.
+   모바일 분기 = 상세 모달이 전체 화면이 되는 기존 폭(max-width:600px, 위 .dmbg/.dm 규칙)과 같다. */
+.nxt{border-top:1px solid var(--bd);margin-top:24px;padding-top:24px;display:flex;flex-direction:column;gap:16px;font-variant-numeric:tabular-nums}
+.nxt-t{margin:0;font-size:20px;font-weight:700;color:var(--t1)}
+.nxt-band{display:flex;align-items:center;justify-content:space-between;gap:20px;padding:18px 20px;background:var(--accent-tint);border-radius:8px}
+.nxt-bt{min-width:0}
+.nxt-b1{font-size:16px;font-weight:600;color:var(--t1);line-height:1.6}
+.nxt-b2{font-size:14px;font-weight:400;color:var(--t2);line-height:1.6}
+.nxt-pri{flex-shrink:0;display:inline-flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 18px;border:none;border-radius:8px;background:var(--acc-bg);color:var(--acc-ink);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.nxt-sec{display:grid;grid-template-columns:repeat(var(--nxt-n,4),1fr);gap:8px}
+.nxt-sec .nx-b{display:flex;align-items:center;justify-content:center;gap:8px;height:44px;padding:0 10px;border:1px solid var(--bd2);border-radius:8px;background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.nxt-txt{display:flex;flex-wrap:wrap;gap:4px 16px}
+.nxt-txt .nx-t{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 4px;border:none;background:none;color:var(--acc);font-family:inherit;font-size:14px;font-weight:600;text-decoration:none;cursor:pointer}
+.nxt-foot{display:flex;justify-content:space-between;gap:4px 12px;flex-wrap:wrap;font-size:12px;font-weight:500;color:var(--t3)}
+.nx-ic{width:18px;height:18px;flex-shrink:0;display:block}
+.nx-n{font-size:12px;font-weight:500;color:var(--t3)}
+.nx-b[data-nxt="bk"].on .nx-ic,.nxs-r[data-nxt="bk"].on .nx-ic{fill:currentColor}
+.nxb,.nxs,.nxs-dim{display:none}
+.nxb{flex-shrink:0;gap:8px;padding:12px 16px max(30px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--bd);background:var(--bg-base)}
+.nxb-main{flex:1;min-width:0;display:flex;align-items:center;justify-content:center;gap:8px;height:52px;border:none;border-radius:8px;background:var(--acc-bg);color:var(--acc-ink);font-family:inherit;font-size:16px;font-weight:600;cursor:pointer}
+.nxb-main .nx-ic{width:20px;height:20px}
+.nxb-more{flex-shrink:0;width:52px;height:52px;margin-left:auto;display:flex;align-items:center;justify-content:center;border:1px solid var(--bd2);border-radius:8px;background:var(--bg-base);color:var(--t1);cursor:pointer}
+.nxb-more .nx-ic{width:20px;height:20px}
+.nxs-dim{position:fixed;inset:0;background:rgba(14,21,32,.48);z-index:429}
+.nxs{position:fixed;left:0;right:0;bottom:0;max-height:88vh;overflow-y:auto;z-index:430;flex-direction:column;background:var(--bg-base);border-radius:16px 16px 0 0}
+.nxs-h{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 8px 8px 20px}
+.nxs-t{font-size:16px;font-weight:700;color:var(--t1);line-height:1.6}
+.nxs-x{flex-shrink:0;width:44px;height:44px;display:flex;align-items:center;justify-content:center;border:none;background:none;color:var(--t2);cursor:pointer}
+.nxs-x .nx-ic{width:20px;height:20px}
+.nxs-r{display:flex;align-items:center;gap:12px;width:100%;min-height:52px;padding:0 20px;border:none;border-top:1px solid var(--bd);background:none;color:var(--t1);font-family:inherit;font-size:16px;font-weight:400;text-align:left;text-decoration:none;cursor:pointer}
+.nxs-r .nx-ic{width:20px;height:20px;color:var(--t2)}
+.nxs-r .nx-n{margin-left:auto}
+.nxs-f{display:flex;flex-direction:column;gap:8px;padding:12px 16px max(30px,env(safe-area-inset-bottom,0px));border-top:1px solid var(--bd);text-align:center;font-size:12px;font-weight:500;color:var(--t3)}
+.nxs-f .nxb-main{flex:none;width:100%}
+@media(max-width:600px){
+  .nxt-band{display:none}
+  .nxt-sec{grid-template-columns:1fr 1fr}
+  .nxt-sec .nx-b{height:48px;justify-content:flex-start}
+  .nxt-txt{flex-direction:column;flex-wrap:nowrap;gap:0}
+  .nxt-txt .nx-t{width:100%;height:44px;border-bottom:1px solid var(--bd)}
+  .nxt-txt .nx-t .nx-n{margin-left:auto}
+  .nxb.on{display:flex}
+  .nxs.open{display:flex}
+  .nxs-dim.open{display:block}
+  /* 하단 고정 바가 있는 동안 우하단 FAB·비교 바가 바를 가리지 않게 한다(도구 시트의 tools-sheet-open 과 같은 방식) */
+  body.dm-nxb-on .fab-ai,body.dm-nxb-on .fab-bm{visibility:hidden}
+  body.dm-nxb-on .cmp-bar{bottom:104px}
+  body.dm-nxs-open .cmp-bar{display:none}
+}
 .dmhdr{padding:15px 18px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
 .dmtit{font-size:14px;font-weight:700}
 .dmx{width:26px;height:26px;border-radius:50%;border:1px solid var(--bd);background:var(--s1);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--t2);transition:all .15s}
@@ -3321,6 +3372,15 @@ html[data-theme="dark"] #view-news{
       <div class="tp" id="t4"></div>
       <div class="tp" id="t5"></div>
       <div class="tp" id="t6"></div>
+    </div>
+    <!-- NEXT-ACTIONS-2026-10-15 (Plan 150): 모바일 하단 고정 바 + 더보기 시트(내용은 showDetail 이 _nxtRenderMobile 로 채운다).
+         .dm 안에 둬서 포커스 가둠(FOCUS-TRAP)이 같은 모달로 본다. 데스크톱(>600px)은 CSS 로 표시 자체를 막는다. -->
+    <div class="nxb" id="dmNxtBar"></div>
+    <div class="nxs-dim" id="dmNxtDim" onclick="closeDmNxtSheet()" aria-hidden="true"></div>
+    <div class="nxs" id="dmNxtSheet" role="dialog" aria-modal="true" aria-labelledby="dmNxtSheetT">
+      <div class="nxs-h"><div class="nxs-t" id="dmNxtSheetT"></div><button type="button" class="nxs-x" aria-label="닫기" onclick="closeDmNxtSheet()"><svg class="nx-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button></div>
+      <div id="dmNxtRows"></div>
+      <div class="nxs-f" id="dmNxtSheetF"></div>
     </div>
   </div>
 </div>
@@ -7248,6 +7308,7 @@ const CMP_MAX = 6;
 let _cmpBand = null;   // 현재 선택된 비교 전용㎡ 밴드
 let _cmpSort = null;   // 평당가 정렬 (null=선택순 | 'asc' 낮은순 | 'desc' 높은순)
 let _cmpData = null;   // 최근 compare 응답 캐시
+const _cmpExtra = {};   // Plan 150: 상세에서 담은, 현재 검색 결과(props)에 없는 단지 — cmpSel 에 'd:이름|시군구|동' 문자열 키로 들어가고 여기서 조회한다
 let _cmpApts = null;   // 최근 compare 입력 단지(공유 딥링크 직렬화용) (COMPARE-SHARE-2026-06-21)
 
 // base64url(유니코드 안전) — 공유 URL ?cmp= 직렬화. +/=/ 문자 회피로 URL 안전.
@@ -7321,11 +7382,13 @@ function toggleCmp(i, checked){
 
 function clearCmp(){
   cmpSel.clear();
+  for(const k in _cmpExtra) delete _cmpExtra[k]; // Plan 150: 상세에서 담은 항목도 함께 비운다
   document.querySelectorAll('.cmp-chk-input').forEach(cb=>{ cb.checked=false; });
   renderCmpBar();
 }
 
 function renderCmpBar(){
+  try{ _nxtRefresh(); }catch(_){} // Plan 150: 상세의 "비교에 담기/빼기" 라벨 동기화
   _ensureCmpStyles();
   let bar = document.getElementById('cmpBar');
   if(!cmpSel || cmpSel.size < 1){ if(bar) bar.remove(); return; }
@@ -7389,7 +7452,7 @@ async function _runCompare(apts){
 
 async function openCompare(){
   if(!cmpSel || cmpSel.size < 2){ toast('비교할 단지를 2개 이상 담아 주세요'); return; }
-  const apts = [...cmpSel].map(i=>props[i]).filter(Boolean).map(p=>({
+  const apts = [...cmpSel].map(i=>typeof i==='string'?_cmpExtra[i]:props[i]).filter(Boolean).map(p=>({
     aptName: p.aptName, sigungu: p.sigungu||'', umdNm: p.umdNm||'', lawdCd: p.lawdCd||''
   }));
   return _runCompare(apts);
@@ -8068,11 +8131,7 @@ function showDetail(p){
     ${p.pros?`<div class="ibox g"><b>장점</b> ${_escHtml(p.pros)}</div>`:''}
     ${p.cons?`<div class="ibox r"><b>단점</b> ${_escHtml(p.cons)}</div>`:''}
     ${p.strategy?`<div class="ibox b"><b>전략</b> ${_escHtml(p.strategy)}</div>`:''}
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:8px">
-      <button class="abtn a2" style="margin:0;font-size:12px" onclick="goCalcFromDetail(${p.avgPrice||0})">대출 계산</button>
-      <button class="abtn" style="margin:0;font-size:12px;background:var(--info-bg);color:var(--a2);border:1px solid var(--info-bd)" onclick="goClauseFromCurrentDetail()">특약 초안 만들기</button>
-    </div>
-    <button class="abtn acc" style="margin-top:6px" onclick="askP('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}','${p.avgPrice||0}','${encodeURIComponent(p.area||'').replace(/'/g,'%27')}');cDM()">도우미에게 시세 묻기</button>`;
+    ${_nxtHtml(p)}`;
 
   // Phase 4 (2026-04-26): 평형 표시 + 단일 단지 통합 표시
   // 평형별 평균 카드 = 모든 평형 (개요)
@@ -8581,6 +8640,7 @@ function showDetail(p){
   const bkBtn=document.getElementById('bkToggle');
   bkBtn.textContent=isBk?'관심 중':'관심 추가';
   bkBtn.classList.toggle('on',isBk);
+  try { _nxtRenderMobile(p); } catch(_) {} // Plan 150: 모바일 하단 바·더보기 시트
   document.getElementById('DM').classList.add('open');
   // Phase 35 #1 (2026-05-04): 모달 열림 시 "이 영역 단지 보기" 버튼 hide (모달 가림 회귀 fix)
   try { window._pannBtnHide && window._pannBtnHide(); } catch(_){}
@@ -8828,6 +8888,7 @@ function _rtabsCue(){
 }
 function stb(btn,id){document.querySelectorAll('.rtab').forEach(b=>b.classList.remove('on'));document.querySelectorAll('.tp').forEach(t=>t.classList.remove('on'));btn.classList.add('on');document.getElementById(id).classList.add('on');/* LAZY-2026-06-13: 리스크(t2)·특약(t3) 탭을 처음 열 때만 AI 로드 */if((id==='t2'||id==='t3')&&currentDetail)loadClauseAndRisk(currentDetail);try { btn.scrollIntoView({ block: 'nearest', inline: 'nearest' }); _rtabsCue(); } catch(_) {}}
 function cDM(){document.getElementById('DM').classList.remove('open');currentDetail=null;
+  try{ _nxtClear(); }catch(_){} // Plan 150: 모바일 하단 바·시트 정리
   // URL의 ?apt= 파라미터 정리
   if(history.replaceState){const u=new URL(location.href);u.searchParams.delete('apt');u.searchParams.delete('area');history.replaceState(null,'',u);}
   // Phase 35 #1 (2026-05-04): DM 닫힘 시 _pannBtn 다시 노출 가능 (zoom>=13 + 모달 X 일 때만)
@@ -9741,6 +9802,7 @@ function toggleBookmark(){
 }
 
 function renderBookmarks(){
+  try{ _nxtRefresh(); }catch(_){} // Plan 150: 상세의 "관심 추가/해제" 라벨 동기화
   const bks=getBookmarks();
   document.getElementById('bkCnt').textContent=bks.length||'0';
   const fbc=document.getElementById('fabBmCnt');if(fbc)fbc.textContent=bks.length||'0';
@@ -11275,6 +11337,176 @@ function goCalcFromDetail(price){
     toast('매수가를 자동으로 채웠어요');
   },180);
 }
+// ════ NEXT-ACTIONS-2026-10-15 (Plan 150): 단지 상세 "다음에 할 일" ════
+//   사양 plans/design-spec-v2-screens-AB-2026-10-15.md "화면 A". 주 행동(대출 계산) 띠 + 보조 4 + 텍스트 5, 모바일은 하단 바 + 더보기 시트.
+//   버튼은 기존 동작 함수를 그대로 부른다(goCalcFromDetail·goClauseFromCurrentDetail·toggleBookmark·askP·openRegionSummary·shareCurrent·openShareCard).
+//   모달 헤더의 카드·공유·관심 추가 버튼은 그대로 둔다. 값이 없으면 항목을 숨긴다(지어내지 않는다).
+const _NXT_SIDO = { '11':'서울', '41':'경기', '28':'인천', '26':'부산', '27':'대구', '30':'대전' }; // 법정동코드 앞 2자리(backend/routes/region.js SIDO_BY_PREFIX 와 같은 값) → 청약 화면 시도 칩 data-sido
+// Lucide(ISC) 선 아이콘 — 파일 상단 라이선스 주석 참조
+const _NXT_IC = {
+  calc:'<rect width="16" height="20" x="4" y="2" rx="2"/><line x1="8" x2="16" y1="6" y2="6"/><line x1="16" x2="16" y1="14" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/>',
+  cmp:'<circle cx="5" cy="6" r="3"/><path d="M12 6h5a2 2 0 0 1 2 2v7"/><path d="m15 9-3-3 3-3"/><circle cx="19" cy="18" r="3"/><path d="M12 18H7a2 2 0 0 1-2-2V9"/><path d="m9 15 3 3-3 3"/>',
+  bk:'<path d="M11.525 2.295a.53.53 0 0 1 .95 0l2.31 4.679a2.123 2.123 0 0 0 1.595 1.16l5.166.756a.53.53 0 0 1 .294.904l-3.736 3.638a2.123 2.123 0 0 0-.611 1.878l.882 5.14a.53.53 0 0 1-.771.56l-4.618-2.428a2.122 2.122 0 0 0-1.973 0L6.396 21.01a.53.53 0 0 1-.77-.56l.881-5.139a2.122 2.122 0 0 0-.611-1.879L2.16 9.795a.53.53 0 0 1 .294-.906l5.165-.755a2.122 2.122 0 0 0 1.597-1.16z"/>',
+  clause:'<path d="M14.364 13.634a2 2 0 0 0-.506.854l-.837 2.87a.5.5 0 0 0 .62.62l2.87-.837a2 2 0 0 0 .854-.506l4.013-4.009a1 1 0 0 0-3.004-3.004z"/><path d="M14.487 7.858A1 1 0 0 1 14 7V2"/><path d="M20 19.645V20a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l2.516 2.516"/><path d="M8 18h1"/>',
+  subs:'<path d="M8 2v3"/><path d="M16 2v3"/><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M8 13h.01"/><path d="M12 13h.01"/><path d="M16 13h.01"/><path d="M8 17h.01"/><path d="M12 17h.01"/><path d="M16 17h.01"/>',
+  region:'<path d="M18 8c0 3.613-3.869 7.429-5.393 8.795a1 1 0 01-1.214 0C9.87 15.429 6 11.613 6 8a6 6 0 0112 0"/><path d="M4.474 15h-.197a1 1 0 00-.969.753l-1.097 4.35a1.5 1.5 0 001.444 1.898L20.344 22a1.5 1.5 0 001.446-1.897l-1.098-4.35a1 1 0 00-.969-.753h-.197"/><circle cx="12" cy="8" r="2"/>',
+  ask:'<path d="M2.992 16.342a2 2 0 0 1 .094 1.167l-1.065 3.29a1 1 0 0 0 1.236 1.168l3.413-.998a2 2 0 0 1 1.099.092 10 10 0 1 0-4.777-4.719"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><path d="M12 17h.01"/>',
+  share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/>',
+  card:'<path d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.814.014L6 21"/><path d="m14 19 3 3v-5.5"/><path d="m17 22 3-3"/><circle cx="9" cy="9" r="2"/>',
+  page:'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
+  more:'<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>'
+};
+function _nxtIc(k){ return `<svg class="nx-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${_NXT_IC[k]||''}</svg>`; }
+// 청약 화면 시도 칩에 있는 시도만(칩 목록은 #subs-sido .chip[data-sido] 가 근거 — 없으면 '' → 버튼 숨김)
+function _nxtSido(p){
+  const lc = String((p && p.lawdCd) || '').trim();
+  if(!/^\d{2}/.test(lc)) return '';
+  const name = _NXT_SIDO[lc.slice(0,2)];
+  if(!name) return '';
+  return [...document.querySelectorAll('#subs-sido .chip[data-sido]')].some(c => c.dataset.sido === name) ? name : '';
+}
+// /apt/:aptSeq 라우트(backend/routes/aptPage.js)가 받는 형식 ^\d{5}-\d+$ 와 같을 때만
+function _nxtAptSeq(p){ const q = String((p && p.aptSeq) || '').trim(); return /^\d{5}-\d+$/.test(q) ? q : ''; }
+// 비교 키: 현재 검색 결과(props)에 같은 단지가 있으면 그 인덱스(목록 체크박스와 한 항목으로 취급), 없으면 문자열 키
+function _nxtCmpKey(p){
+  const same = (a,b) => a && b && a.aptName === b.aptName && (a.sigungu||'') === (b.sigungu||'') && (a.umdNm||'') === (b.umdNm||'');
+  const i = (typeof props !== 'undefined' && Array.isArray(props)) ? props.findIndex(x => same(x,p)) : -1;
+  return i >= 0 ? i : 'd:' + [p.aptName, p.sigungu||'', p.umdNm||''].join('|');
+}
+function _nxtIsBk(p){
+  let key = ''; try { key = _aptKey(p); } catch(_) {}
+  return getBookmarks().some(b => (b.aptKey && key && b.aptKey === key) || b.aptName === p.aptName);
+}
+// 항목 단일 목록 — 데스크톱 영역과 모바일 시트가 같은 순서·같은 동작을 쓴다(사양 시트 순서: 비교 · 관심 · 특약 · 청약 · 시장 요약 · 도우미 · 공유 · 카드 · 단지 페이지)
+function _nxtItems(p){
+  const items = [];
+  const isC = cmpSel.has(_nxtCmpKey(p)), isB = _nxtIsBk(p);
+  items.push({ k:'cmp', tier:'sec', on:isC, l: isC ? '비교에서 빼기' : '비교에 담기', oc:'nxtToggleCmp()' });
+  items.push({ k:'bk', tier:'sec', on:isB, l: isB ? '관심 해제' : '관심 추가', oc:'toggleBookmark()' });
+  items.push({ k:'clause', tier:'sec', l:'특약 초안 만들기', oc:'goClauseFromCurrentDetail()' });
+  const sido = _nxtSido(p);
+  if(sido) items.push({ k:'subs', tier:'sec', l: sido + ' 청약 일정 보기', oc:'nxtOpenSubs()' });
+  if(String(p.lawdCd||'').trim()){ // 시장 요약은 lawdCd 가 있을 때만(이름으로 지역을 특정하면 동명 구 오매칭 — 기존 .rg-open 과 같은 규칙)
+    const nm = _fmtSgg(String(p.sigungu || '').trim());
+    items.push({ k:'region', tier:'txt', l: (nm ? nm + ' ' : '') + '시장 요약', oc:'nxtOpenRegion()' });
+  }
+  items.push({ k:'ask', tier:'txt', l:'데이터 도우미에게 시세 묻기',
+    oc:`askP('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}','${p.avgPrice||0}','${encodeURIComponent(p.area||'').replace(/'/g,'%27')}');cDM()` });
+  items.push({ k:'share', tier:'txt', l:'공유', oc:'shareCurrent()' });
+  items.push({ k:'card', tier:'txt', l:'실거래 카드 저장', oc:'openShareCard()' });
+  const seq = _nxtAptSeq(p);
+  if(seq) items.push({ k:'page', tier:'txt', l:'단지 페이지 열기', href:'/apt/' + seq, note:'새 탭' });
+  return items;
+}
+// 주 행동 띠 설명: 평균가의 기준 라벨은 상세 가격 칸이 쓰는 p._priceBasis 를 그대로 쓴다(진입 경로마다 기간이 달라 "최근 N개월" 을 단정하면 거짓이 된다. 검색 경로는 "전 평형 최근 N건 평균").
+function _nxtBandSub(p){
+  const v = Number(p.avgPrice).toFixed(2) + '억';
+  const basis = String(p._priceBasis || '').trim();
+  return basis ? `${_escHtml(basis)} ${v}을 매수가로 넣어 계산 화면을 열어요` : `이 단지 평균가 ${v}을 매수가로 넣어 계산 화면을 열어요`;
+}
+function _nxtBtn(it, cls){
+  const inner = `${_nxtIc(it.k)}<span class="nx-l">${_escHtml(it.l)}</span>` + (it.note ? `<span class="nx-n">${_escHtml(it.note)}</span>` : '');
+  if(it.href) return `<a class="${cls}" data-nxt="${it.k}" href="${_escHtml(it.href)}" target="_blank" rel="noopener">${inner}</a>`;
+  return `<button type="button" class="${cls}${it.on?' on':''}" data-nxt="${it.k}" onclick="${it.oc}">${inner}</button>`;
+}
+function _nxtHtml(p){
+  const items = _nxtItems(p), sec = items.filter(i => i.tier === 'sec'), txt = items.filter(i => i.tier === 'txt');
+  const price = Number(p.avgPrice) || 0;
+  const band = price > 0
+    ? `<div class="nxt-band"><div class="nxt-bt"><div class="nxt-b1">이 단지 평균가로 대출 한도를 계산해요</div><div class="nxt-b2">${_nxtBandSub(p)}</div></div>`
+      + `<button type="button" class="nxt-pri" data-nxt="calc" onclick="goCalcFromDetail(${price})">${_nxtIc('calc')}<span>대출 계산</span></button></div>`
+    : '';
+  const dt = p.recentDealDate ? _escHtml(String(p.recentDealDate).slice(0,10).replace(/-/g,'.')) : '';
+  return `<section class="nxt" id="nxtArea" aria-labelledby="nxtT">
+    <h3 class="nxt-t" id="nxtT">다음에 할 일</h3>
+    ${band}
+    <div class="nxt-sec" style="--nxt-n:${sec.length}">${sec.map(i => _nxtBtn(i,'nx-b')).join('')}</div>
+    <div class="nxt-txt">${txt.map(i => _nxtBtn(i,'nx-t')).join('')}</div>
+    <div class="nxt-foot"><span>매수·매도 추천이 아니에요. 출처 국토교통부 실거래가</span>${dt ? `<span>최근 거래 ${dt}</span>` : ''}</div>
+  </section>`;
+}
+// 상세의 관심·비교 상태가 바뀌면 라벨만 갈아 끼운다(renderBookmarks·renderCmpBar 가 호출)
+function _nxtRefresh(){
+  const p = currentDetail; if(!p) return;
+  const isC = cmpSel.has(_nxtCmpKey(p)), isB = _nxtIsBk(p);
+  const set = (k, on, a, b) => document.querySelectorAll(`[data-nxt="${k}"]`).forEach(el => {
+    const l = el.querySelector('.nx-l'); if(l) l.textContent = on ? b : a;
+    el.classList.toggle('on', on);
+  });
+  set('cmp', isC, '비교에 담기', '비교에서 빼기');
+  set('bk', isB, '관심 추가', '관심 해제');
+}
+function nxtToggleCmp(){
+  const p = currentDetail; if(!p) return;
+  const k = _nxtCmpKey(p);
+  if(cmpSel.has(k)){
+    toggleCmp(k, false);
+    if(typeof k === 'string') delete _cmpExtra[k];
+    toast('비교에서 뺐어요');
+  } else {
+    if(typeof k === 'string') _cmpExtra[k] = { aptName:p.aptName, sigungu:p.sigungu||'', umdNm:p.umdNm||'', lawdCd:p.lawdCd||'' };
+    toggleCmp(k, true); // 최대 개수 초과면 기존 안내("비교는 최대 N개까지 담을 수 있어요")를 그대로 띄우고 담지 않는다
+    if(cmpSel.has(k)) toast(`비교에 담았어요 (${cmpSel.size}/${CMP_MAX})`);
+    else if(typeof k === 'string') delete _cmpExtra[k];
+  }
+  if(typeof k === 'number'){ const cb = document.querySelector(`.cmp-chk-input[data-i="${k}"]`); if(cb) cb.checked = cmpSel.has(k); } // 목록 체크박스도 맞춘다
+}
+// "{시도} 청약 일정 보기": 시도 칩을 고른 채 청약 화면을 연다. sv('subs') 가 처음 진입이면 스스로 loadSubs() 를 부르므로(sv 안) 칩을 먼저 바꾸고,
+//   이미 불러온 적이 있을 때만 loadSubs() 를 다시 부른다(두 요청이 엇갈려 칩과 다른 목록이 남는 것을 막는다).
+function nxtOpenSubs(){
+  const p = currentDetail; if(!p) return;
+  const sido = _nxtSido(p); if(!sido) return;
+  const chip = [...document.querySelectorAll('#subs-sido .chip[data-sido]')].find(c => c.dataset.sido === sido);
+  if(!chip) return;
+  const box = document.getElementById('subsList');
+  const wasLoaded = !!(box && box.dataset.loaded);
+  chip.parentElement.querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
+  chip.classList.add('on');
+  sv('subs', document.querySelectorAll('.htab')[5]);
+  if(wasLoaded) loadSubs();
+}
+function nxtOpenRegion(){
+  const p = currentDetail; if(!p) return;
+  const lc = String(p.lawdCd || '').trim(); if(!lc) return;
+  openRegionSummary(lc, _fmtSgg(String(p.sigungu || '').trim()));
+}
+// ── 모바일: 하단 고정 바 + 더보기 시트 ──
+function _nxtRenderMobile(p){
+  const bar = document.getElementById('dmNxtBar'), rows = document.getElementById('dmNxtRows');
+  if(!bar || !rows) return;
+  closeDmNxtSheet(true);
+  const price = Number(p.avgPrice) || 0;
+  const mainBtn = (pre) => price > 0
+    ? `<button type="button" class="nxb-main" data-nxt="calc" aria-label="평균가로 대출 계산" onclick="${pre}goCalcFromDetail(${price})">${_nxtIc('calc')}<span>평균가로 대출 계산</span></button>`
+    : '';
+  bar.innerHTML = mainBtn('') + `<button type="button" class="nxb-more" id="dmNxtMore" aria-label="더보기" aria-haspopup="dialog" aria-expanded="false" onclick="openDmNxtSheet()">${_nxtIc('more')}</button>`;
+  bar.classList.add('on');
+  try { document.body.classList.add('dm-nxb-on'); } catch(_) {}
+  document.getElementById('dmNxtSheetT').textContent = (document.getElementById('dmT').textContent || '이 단지') + '에서 할 수 있는 일';
+  rows.innerHTML = _nxtItems(p).map(i => _nxtBtn(i.href ? i : Object.assign({}, i, { oc:'closeDmNxtSheet(true);' + i.oc }), 'nxs-r')).join('');
+  document.getElementById('dmNxtSheetF').innerHTML = mainBtn('closeDmNxtSheet(true);') + '<div>매수·매도 추천이 아니에요</div>';
+}
+function openDmNxtSheet(){
+  const sh = document.getElementById('dmNxtSheet'), dim = document.getElementById('dmNxtDim');
+  if(!sh || sh.classList.contains('open')) return;
+  sh.classList.add('open'); if(dim) dim.classList.add('open');
+  try { document.body.classList.add('dm-nxs-open'); } catch(_) {}
+  const mb = document.getElementById('dmNxtMore'); if(mb) mb.setAttribute('aria-expanded','true');
+  const first = sh.querySelector('.nxs-r'); if(first) first.focus();
+}
+function closeDmNxtSheet(quiet){
+  const sh = document.getElementById('dmNxtSheet'), dim = document.getElementById('dmNxtDim');
+  if(!sh || !sh.classList.contains('open')) return;
+  sh.classList.remove('open'); if(dim) dim.classList.remove('open');
+  try { document.body.classList.remove('dm-nxs-open'); } catch(_) {}
+  const mb = document.getElementById('dmNxtMore');
+  if(mb){ mb.setAttribute('aria-expanded','false'); if(quiet !== true) mb.focus(); }
+}
+function _nxtClear(){
+  closeDmNxtSheet(true);
+  const bar = document.getElementById('dmNxtBar'); if(bar){ bar.classList.remove('on'); bar.innerHTML = ''; }
+  try { document.body.classList.remove('dm-nxb-on'); document.body.classList.remove('dm-nxs-open'); } catch(_) {}
+}
 // 특약 생성 완료 → 관심단지 저장
 function saveClauseAptToBookmark(){
   const apt=document.getElementById('cl_apt').value.trim();
@@ -11905,6 +12137,7 @@ document.addEventListener('keydown', (e) => {
   if (e.key !== 'Escape') return;
   // 열린 모달 우선순위 (위쪽이 나중에 열림 → 먼저 닫음)
   const closers = [
+    { id: 'dmNxtSheet', fn: 'closeDmNxtSheet' }, // 단지 상세 모바일 더보기 시트(Plan 150) — 같은 모달 안에서 가장 위
     // TOOLS-SHEET-2026-09-27 (Plan 116b): 모바일 "도구" 바텀시트(z511) — sv() 가 다른 탭 전환마다
     //   닫으므로 다른 모달과 동시에 열릴 일이 없지만, ESC 는 안전하게 최우선으로 둔다.
     { id: 'toolsSheet', fn: 'closeToolsSheet' },
@@ -11952,6 +12185,9 @@ document.addEventListener('click', (e) => {
   const FOCUSABLE='a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   const _vis=el=>{ if(!el||!el.isConnected||el.offsetHeight<=0)return false; const cs=getComputedStyle(el); return cs.display!=='none'&&cs.visibility!=='hidden'; };
   function _activeModal(){
+    // Plan 150: 상세의 더보기 시트(.dm 안)가 열려 있고 포커스가 그 안이면 시트 안에서만 Tab 을 돌린다.
+    const _sh=document.getElementById('dmNxtSheet');
+    if(_sh&&_sh.classList.contains('open')&&_sh.contains(document.activeElement)) return _sh;
     // 포커스가 이미 어떤 모달 안에 있으면 그 모달이 활성(중첩·z-index 역전 대응) — 없으면 보이는 것 중 z-index 최상단
     const cur=document.activeElement; const own=cur&&cur.closest?cur.closest(MODAL_SEL):null;
     if(own&&_vis(own)) return own;
