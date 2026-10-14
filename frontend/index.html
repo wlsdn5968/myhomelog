@@ -111,9 +111,9 @@
     var env = _isProd ? (document.querySelector('meta[name="sentry-environment"]')?.content || 'production') : 'preview';
     var tsr = parseFloat(document.querySelector('meta[name="sentry-traces-sample-rate"]')?.content || '0.1');
     var s = document.createElement('script');
-    s.src = 'https://browser.sentry-cdn.com/10.75.3/bundle.tracing.min.js'; // SENTRY-V10-2026-08-09: backend @sentry/node 10.75.3 과 버전 정합 (COMPONENTS-2026-09-28, Plan 126)
+    s.src = 'https://browser.sentry-cdn.com/10.76.2/bundle.tracing.min.js'; // SENTRY-V10-2026-08-09: backend @sentry/node 10.76.2 과 버전 정합 (COMPONENTS-2026-10-14, Plan 137)
     s.crossOrigin = 'anonymous';
-    s.integrity = 'sha384-ENViSvvjnFnHdP3y+sWEP8HvdBvPRNPHZiqJRjV8Sdf7Ya0dURGrhZTi9ZD3Q02p'; // SRI-2026-09-28 (Plan 126): CDN 바이트 sha384 — 버전을 바꾸면 이 값도 같이 바꿔야 로드된다
+    s.integrity = 'sha384-BqXQi3B9SFi6WiAcbDTLzqa9A2e7ZDXDn8xcqqAmznB00bkKr7PmxAR1S0/sM1pl'; // SRI-2026-10-14 (Plan 137): CDN 바이트 sha384 = 공식 레지스트리 값과 일치 — 버전을 바꾸면 이 값도 같이 바꿔야 로드된다
     s.onload = function(){
       if (!window.Sentry) return;
       window.Sentry.init({

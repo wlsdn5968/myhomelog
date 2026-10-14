@@ -10,7 +10,7 @@
  *     우선시키고 열린 범위는 "지원하는 최고 메이저"로 해석한다 — Vercel 이 새 메이저를 추가하는
  *     순간 무검증 자동 승격 위험이 생긴다(계획 §1).
  *   - @sentry/node 11.0.0 은 `sendDefaultPii` 가 제거되고 `dataCollection` 미설정 시
- *     IP·쿠키·요청/응답 본문·DB 쿼리를 **기본 수집**한다(공식 MIGRATION.md). 지금은 10.75.3 까지만
+ *     IP·쿠키·요청/응답 본문·DB 쿼리를 **기본 수집**한다(공식 MIGRATION.md). 지금은 10.76.x(10대) 까지만
  *     고정했지만, 나중에 누가 버전만 올리고 dataCollection 이전을 빠뜨리면 여기서 걸려야 한다.
  *   - 브라우저 CDN 스크립트 4곳(Sentry·supabase·Leaflet js·Leaflet css)은 SRI 없이 로드되면
  *     변조된 CDN 응답을 그대로 실행하게 된다 — integrity 가 비어있는 채로 되돌아가면 안 된다.

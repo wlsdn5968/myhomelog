@@ -358,3 +358,13 @@ test('OG 지역 카드 — rec.stale 이면 이미지는 그대로 만들되 캐
     assert.equal(res.headers['Content-Type'], 'image/png');
   } finally { rp.loadRegionData = saved; }
 });
+
+// ── OG-BOXSIZING-2026-10-14 (Plan 137, satori 0.33→0.44) ───────────────────────────────────────────
+//   [실측] satori 0.44 는 height:'100%' + padding 을 브라우저처럼 content-box 로 계산해 루트가 630px 를
+//   128px 넘친다 — 하단 블록(통계 줄·출처 푸터)이 밀려 잘린다. 0.33 은 border-box 로 계산해 멀쩡했다.
+//   루트에 boxSizing:'border-box' 를 명시하면 두 버전 모두 같은 그림이 나온다(두 버전 PNG 픽셀 비교 실측).
+test('OG 카드 루트 요소는 boxSizing:border-box 를 명시한다 — satori 버전과 무관하게 패딩이 630px 안에 든다', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../services/ogImageService.js'), 'utf8');
+  assert.match(src, /width: '100%', height: '100%', boxSizing: 'border-box'/, 'OG 카드 루트에 boxSizing:border-box 가 없다 — satori 0.44+ 에서 하단 푸터가 카드 밖으로 밀려난다');
+});

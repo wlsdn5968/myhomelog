@@ -128,7 +128,7 @@ async function renderCard(card) {
   if (!fonts.length) throw new Error('사용할 수 있는 폰트 서브셋이 없다');
 
   const el = h('div', {
-    width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+    width: '100%', height: '100%', boxSizing: 'border-box', display: 'flex', flexDirection: 'column',
     justifyContent: 'space-between', padding: '64px 72px',
     backgroundColor: C.bg, color: C.tx, fontFamily: reg.family,
   },
