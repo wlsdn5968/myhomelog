@@ -18,6 +18,7 @@ const cache = require('../cache');
 const logger = require('../logger');
 const { getSupabaseAdmin } = require('../db/client');
 const { rget, rset } = require('./redisCache');
+const { getSnapshot, getLastSnapshot, putSnapshot } = require('./snapshotStore');
 const { LAWD_CODES } = require('./transactionService');
 
 // BASELINE-6Y-2026-09-20 (Plan 103): 기준선이 2020-09 이후 이력까지 넓어졌다 — v2 로 올려 옛 기준선 결과(최대 30시간)가 섞이지 않게.
@@ -40,6 +41,14 @@ async function _lastGood(key) {
 }
 function _withStale(snap) {
   return { ...snap, stale: true };
+}
+// SNAPSHOT-2026-10-14 (Plan 142): Redis 가 막혀도 DB 스냅샷(computed_snapshots)에서 읽는다. 키는 Redis 키와 같다.
+//   국가 payload 는 computedAt 을 품고 있다. 지역 블롭은 RPC 원본 모양을 지키려 computedAt 없이 저장하므로,
+//   stale 대체 때만 DB 의 computed_at 을 붙인다(Redis LAST 와 같은 모양).
+async function _dbLast(key, withComputedAt) {
+  const s = await getLastSnapshot(key);
+  if (!s) return null;
+  return withComputedAt ? { ...s.payload, computedAt: s.computedAt } : s.payload;
 }
 
 const DEF_DAYS = 7;
@@ -129,15 +138,17 @@ async function getPriceRecords({ force = false } = {}) {
       const shared = await rget(CK);
       if (shared) { cache.set(CK, shared, TTL_LOCAL); return shared; }
     } catch (_) { /* Redis 미구성·장애는 계산으로 폴백 */ }
+    const snap = await getSnapshot(CK, TTL_REDIS * 1000);
+    if (snap) { cache.set(CK, snap.payload, TTL_LOCAL); return snap.payload; }
     // 신선 캐시가 비었다. 최근 재계산이 실패했으면(백오프) 마지막 성공 스냅샷을 준다 — 요청마다 8초를 태우지 않는다.
     if (cache.get(CK_FAIL) !== undefined) {
-      const last = await _lastGood(CK_LAST);
+      const last = (await _lastGood(CK_LAST)) || (await _dbLast(CK, false));
       if (last) return _withStale(last);
     }
   }
 
   const admin = getSupabaseAdmin();
-  if (!admin) return force ? null : _withStaleOrNull(await _lastGood(CK_LAST));
+  if (!admin) return force ? null : _withStaleOrNull((await _lastGood(CK_LAST)) || (await _dbLast(CK, false)));
 
   let payload = null;
   try {
@@ -162,7 +173,7 @@ async function getPriceRecords({ force = false } = {}) {
     logger.warn({ err: e.message }, 'price records 조회 실패');
     cache.set(CK_FAIL, Date.now(), FAIL_BACKOFF_S);
     // 실패는 실패다 — 다만 마지막 성공 스냅샷이 있으면 503 대신 그것을(기준 시각과 함께) 준다.
-    const last = await _lastGood(CK_LAST);
+    const last = (await _lastGood(CK_LAST)) || (await _dbLast(CK, false));
     if (last) {
       logger.info({ computedAt: last.computedAt }, 'price records: 재계산 실패 → 마지막 성공 스냅샷(stale) 제공');
       return _withStale(last);
@@ -173,6 +184,7 @@ async function getPriceRecords({ force = false } = {}) {
   cache.set(CK, payload, TTL_LOCAL);
   try { await rset(CK, payload, TTL_REDIS); } catch (_) { /* 공유 캐시 실패는 삼킨다 */ }
   try { await rset(CK_LAST, payload, TTL_LAST); } catch (_) { /* 스냅샷 저장 실패도 삼킨다 */ }
+  await putSnapshot(CK, payload);   // 절대 throw 하지 않는다 — Redis 장애 시 다음 콜드 인스턴스의 재계산을 막는다
   return payload;
 }
 function _withStaleOrNull(last) { return last ? _withStale(last) : null; }
@@ -200,18 +212,20 @@ async function getPriceRecordsByRegion({ force = false } = {}) {
       const shared = await rget(CK_REGION);
       if (shared) { cache.set(CK_REGION, shared, TTL_LOCAL); return shared; }
     } catch (_) { /* Redis 미구성·장애는 계산으로 폴백 */ }
+    const snap = await getSnapshot(CK_REGION, TTL_REDIS * 1000);
+    if (snap) { cache.set(CK_REGION, snap.payload, TTL_LOCAL); return snap.payload; }
     // SELF-HEAL-2026-09-06:
     // [왜] 쌍둥이 getPriceRecords 에는 있는 실패 백오프가 여기에만 없었다. 워밍 cron 이 하루 한 번
     //   실패하면(Hobby cron 은 재시도가 없다) 그날 내내 엣지 캐시 미스마다 30일 창 RPC 를 다시 부른다.
     //   PostgREST authenticator 의 statement_timeout 이 8초라, free 티어에서 그 반복은 다른 요청까지 끌고 간다.
     // [소비 경로] routes/transactions.js · routes/regionPage.js · routes/ogImage.js(→ loadRegionData) 셋.
     if (cache.get(CK_REGION_FAIL) !== undefined) {
-      const last = await _lastGood(CK_REGION_LAST);
+      const last = (await _lastGood(CK_REGION_LAST)) || (await _dbLast(CK_REGION, true));
       if (last) return _withStale(last);
     }
   }
   const admin = getSupabaseAdmin();
-  if (!admin) return force ? null : _withStaleOrNull(await _lastGood(CK_REGION_LAST));
+  if (!admin) return force ? null : _withStaleOrNull((await _lastGood(CK_REGION_LAST)) || (await _dbLast(CK_REGION, true)));
   let data = null;
   try {
     const res = await _rpcWithRetry(admin, 'get_price_records_by_region', {
@@ -222,7 +236,7 @@ async function getPriceRecordsByRegion({ force = false } = {}) {
   } catch (e) {
     logger.warn({ err: e.message }, 'price records(지역) 조회 실패');
     cache.set(CK_REGION_FAIL, Date.now(), FAIL_BACKOFF_S);
-    const last = await _lastGood(CK_REGION_LAST);
+    const last = (await _lastGood(CK_REGION_LAST)) || (await _dbLast(CK_REGION, true));
     if (last) return _withStale(last);
     return null;
   }
@@ -234,6 +248,7 @@ async function getPriceRecordsByRegion({ force = false } = {}) {
   cache.set(CK_REGION, data, TTL_LOCAL);
   try { await rset(CK_REGION, data, TTL_REDIS); } catch (_) { /* 공유 캐시 실패는 삼킨다 */ }
   try { await rset(CK_REGION_LAST, { ...data, computedAt: new Date().toISOString() }, TTL_LAST); } catch (_) { /* 스냅샷 저장 실패도 삼킨다 */ }
+  await putSnapshot(CK_REGION, data);   // 블롭 그대로 저장 — 읽을 때 RPC 원본과 같은 모양
   return data;
 }
 
