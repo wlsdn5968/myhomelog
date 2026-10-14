@@ -16,6 +16,7 @@ const router = express.Router();
 
 const ORIGIN = 'https://myhomelog.vercel.app';
 
+const { THEME_CSS, FONT_STACK, FONT_LINK } = require('./_ssrTheme'); // Plan 145: 공용 테마
 const { escHtml: esc } = require('../utils/htmlEscape'); // ESC-UNIFY-2026-09-28 (Plan 124)
 
 function dayNav(day, delta) {
@@ -61,27 +62,28 @@ function pageShell(title, desc, day, body, image) {
 <meta name="twitter:title" content="${esc(title)}">
 <meta name="twitter:description" content="${esc(desc)}">
 <meta name="twitter:image" content="${esc(ogImg)}">
+${FONT_LINK}
 <style>
-  /* ARCH-SKIN-2026-08-19 (Sprint NNNNNNN-14): 앱 시안 dark 팔레트와 1:1 정합(단일 테마 페이지 — 의도된 커미트먼트) */
-  :root{--bg:#080E18;--card:#101B2B;--bd:#22334A;--tx:#E8EFFA;--sub:#93A4BD;--amb:#FFC93C;--acc:#4C8DFF}
+  /* ARCH-SKIN-2026-08-19 → Plan 145: 팔레트는 _ssrTheme.js(디자인 규칙 v2 §1 — 밝은 기본, 다크는 prefers-color-scheme) */
+  ${THEME_CSS}
   *{box-sizing:border-box;margin:0}
-  body{background:var(--bg);color:var(--tx);font-family:Pretendard,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;line-height:1.7;padding:28px 16px}
+  body{background:var(--bg);color:var(--ink);font-family:${FONT_STACK};line-height:1.7;padding:28px 16px}
   main{max-width:640px;margin:0 auto}
-  .eyebrow{color:var(--amb);font-size:11px;font-weight:800;letter-spacing:2px}
-  h1{font-size:30px;margin:4px 0 2px;font-variant-numeric:tabular-nums}
-  .tag{color:var(--sub);font-size:12px;margin-bottom:18px}
-  .ticker{font-size:12px;color:var(--tx);border-top:1px solid var(--bd);border-bottom:1px solid var(--bd);padding:9px 2px;margin-bottom:20px;overflow-x:auto;white-space:nowrap}
-  .ticker .src{color:var(--sub);font-size:10px}
-  .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px 16px;margin-bottom:12px}
-  .card h2{font-size:13px;color:var(--amb);margin-bottom:8px}
-  .ln{display:flex;gap:10px;padding:6px 0;font-size:13.5px}
-  .ln b.no{color:var(--amb);font-variant-numeric:tabular-nums}
-  .pop{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed var(--bd);font-size:12.5px}
+  .eyebrow{color:var(--pri);font-size:12px;font-weight:800;letter-spacing:2px}
+  h1{font-size:28px;margin:4px 0 2px;font-variant-numeric:tabular-nums}
+  .tag{color:var(--ink3);font-size:12px;margin-bottom:18px}
+  .ticker{font-size:12px;color:var(--ink);border-top:1px solid var(--line);border-bottom:1px solid var(--line);padding:9px 2px;margin-bottom:20px;overflow-x:auto;white-space:nowrap}
+  .ticker .src{color:var(--ink3);font-size:12px}
+  .card{background:var(--sf);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+  .card h2{font-size:14px;color:var(--pri);margin-bottom:8px}
+  .ln{display:flex;gap:10px;padding:6px 0;font-size:14px}
+  .ln b.no{color:var(--pri);font-variant-numeric:tabular-nums}
+  .pop{display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px dashed var(--line);font-size:12px}
   .pop:last-child{border-bottom:none}
   .nav{display:flex;justify-content:space-between;margin:18px 0;font-size:12px}
-  a{color:var(--acc);text-decoration:none}
-  .foot{color:var(--sub);font-size:10.5px;margin-top:20px;line-height:1.8}
-  .cta{display:inline-block;margin-top:14px;padding:10px 18px;background:var(--amb);color:#1A2436;border-radius:9px;font-weight:700;font-size:13px}
+  a{color:var(--pri);text-decoration:none}
+  .foot{color:var(--ink3);font-size:12px;margin-top:20px;line-height:1.8}
+  .cta{display:inline-block;margin-top:14px;padding:10px 18px;background:var(--pri);color:var(--onpri);border-radius:9px;font-weight:700;font-size:14px}
 </style></head><body><main>${body}
 <div class="foot">⚠ 매수·매도 추천이 아닙니다 · 미래 가격 예측을 하지 않습니다 · 의사결정 책임은 본인에게 있습니다.<br>
 출처: 국토교통부 실거래가 · 한국은행 ECOS · 국토부 KOSIS · © 내집로그</div>
@@ -123,7 +125,7 @@ router.get('/:date', async (req, res) => {
     return res.status(404).type('html').send(pageShell(
       '내집로그 브리핑', '요청한 날짜의 브리핑이 없습니다.', kstDayString(),
       `<div class="eyebrow">MYHOMELOG BRIEFING</div><h1>브리핑 없음</h1>
-       <p style="font-size:13px;color:var(--sub)">요청한 날짜의 브리핑이 없어요.</p>
+       <p style="font-size:14px;color:var(--ink3)">요청한 날짜의 브리핑이 없어요.</p>
        <a class="cta" href="/briefing/${kstDayString()}">오늘 브리핑 보기 →</a>`));
   }
 
@@ -135,7 +137,7 @@ router.get('/:date', async (req, res) => {
     return res.status(404).type('html').send(pageShell(
       `내집로그 브리핑 ${day}`, '해당 일자의 브리핑 기록이 없습니다.', day,
       `<div class="eyebrow">MYHOMELOG BRIEFING</div><h1>${esc(day)}</h1>
-       <p style="font-size:13px;color:var(--sub)">이 날짜의 브리핑 기록이 없어요. 아카이브는 서비스가 기록을 시작한 날부터 쌓입니다.</p>
+       <p style="font-size:14px;color:var(--ink3)">이 날짜의 브리핑 기록이 없어요. 아카이브는 서비스가 기록을 시작한 날부터 쌓입니다.</p>
        <div class="nav"><a href="/briefing/${dayNav(day, -1)}">← 전날</a><a href="/briefing/${kstDayString()}">오늘 →</a></div>
        <a class="cta" href="/?briefing=${esc(day)}">앱에서 열기 →</a>`));
   }
@@ -157,30 +159,30 @@ router.get('/:date', async (req, res) => {
   const _l2 = Array.isArray(snap.lines2) && snap.lines2.length ? snap.lines2 : null;
   const lines = _l2
     ? _l2.map((it, i) =>
-      `<div class="ln"><b class="no">${String(i + 1).padStart(2, '0')}</b><span>${esc(it.text || '')}<span style="display:block;margin-top:4px;font-size:10px;color:var(--sub)">출처 ${esc(it.src || '')}${it.date ? ` · 기준 ${esc(String(it.date))}` : ''}</span></span></div>`).join('')
+      `<div class="ln"><b class="no">${String(i + 1).padStart(2, '0')}</b><span>${esc(it.text || '')}<span style="display:block;margin-top:4px;font-size:12px;color:var(--ink3)">출처 ${esc(it.src || '')}${it.date ? ` · 기준 ${esc(String(it.date))}` : ''}</span></span></div>`).join('')
     : (snap.lines || []).map((l, i) =>
       `<div class="ln"><b class="no">${String(i + 1).padStart(2, '0')}</b><span>${esc(l)}</span></div>`).join('');
   // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — p.displayName 이 있으면 그걸(popularService
   //   가 이미 얹어 준다), 없으면(옛 스냅샷) 여기서 계산한다. p.aptName(조회 키)은 바꾸지 않는다.
   const pops = (snap.popular || []).filter(p => p && p.aptName).map((p, i) =>
-    `<div class="pop"><span><b style="color:var(--amb)">${i + 1}</b> ${esc(p.displayName || displayAptName(p.aptName, { umdNm: p.umdNm }))}${p.sigungu ? ` <span style="color:var(--sub);font-size:10.5px">${esc(p.sigungu)}</span>` : ''}</span><span style="color:var(--sub)">${p.dealCount60d != null ? p.dealCount60d + '건' : ''}</span></div>`).join('');
+    `<div class="pop"><span><b style="color:var(--pri)">${i + 1}</b> ${esc(p.displayName || displayAptName(p.aptName, { umdNm: p.umdNm }))}${p.sigungu ? ` <span style="color:var(--ink3);font-size:12px">${esc(p.sigungu)}</span>` : ''}</span><span style="color:var(--ink3)">${p.dealCount60d != null ? p.dealCount60d + '건' : ''}</span></div>`).join('');
 
   // REG-LOG (Sprint NNNNNNN-14): 규제·금융 변동 로그 카드(있을 때만 — 과거 스냅샷은 필드 없음)
   const regs = (snap.regLog || []).slice(0, 4).map(it =>
-    `<div class="ln" style="align-items:baseline"><b class="no" style="font-size:11px;min-width:86px">${esc(String(it.effectiveFrom || '').replace(/-/g, '.'))} 시행</b><span><span style="color:var(--amb);font-size:10.5px;font-weight:700">${esc(it.tag || '')}</span> ${esc(it.note || '')}${it.verifiedAt ? ` <span style="color:var(--sub);font-size:10px">· 확인 ${esc(String(it.verifiedAt).replace(/-/g, '.'))}</span>` : ''}</span></div>`).join('');
+    `<div class="ln" style="align-items:baseline"><b class="no" style="font-size:12px;min-width:86px">${esc(String(it.effectiveFrom || '').replace(/-/g, '.'))} 시행</b><span><span style="color:var(--pri);font-size:12px;font-weight:700">${esc(it.tag || '')}</span> ${esc(it.note || '')}${it.verifiedAt ? ` <span style="color:var(--ink3);font-size:12px">· 확인 ${esc(String(it.verifiedAt).replace(/-/g, '.'))}</span>` : ''}</span></div>`).join('');
 
   // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최근 실거래 최고·최저 경신 카드.
   //   ⚠ '역대'가 아니라 **적재 시작일(sinceDate) 이후** 기록이다 — 문구에 그 날짜를 반드시 박는다.
   //   최고가만 싣지 않고 최저가도 같이 싣는다 — 한쪽만 보이면 그 자체가 매수 신호로 읽힌다(절대 룰 ①).
   const _eok = v => (Number.isFinite(Number(v)) ? (Number(v) / 10000).toFixed(2) + '억' : '');
   const _rec = snap.records;
-  const _recRow = (it, kind) => `<div class="pop"><span>${esc(it.aptName || '')} <span style="color:var(--sub);font-size:10.5px">${esc(it.region || '')}${it.excluUseAr ? ' · 전용 ' + esc(String(it.excluUseAr)) + '㎡' : ''}</span></span><span style="color:var(--sub);white-space:nowrap"><b style="color:var(--amb)">${_eok(it.dealAmount)}</b> <span style="font-size:10px">직전 ${kind === 'high' ? '최고' : '최저'} ${_eok(kind === 'high' ? it.prevMax : it.prevMin)} · ${Number(it.priorCount) || 0}건</span></span></div>`;
+  const _recRow = (it, kind) => `<div class="pop"><span>${esc(it.aptName || '')} <span style="color:var(--ink3);font-size:12px">${esc(it.region || '')}${it.excluUseAr ? ' · 전용 ' + esc(String(it.excluUseAr)) + '㎡' : ''}</span></span><span style="color:var(--ink3);white-space:nowrap"><b style="color:var(--pri)">${_eok(it.dealAmount)}</b> <span style="font-size:12px">직전 ${kind === 'high' ? '최고' : '최저'} ${_eok(kind === 'high' ? it.prevMax : it.prevMin)} · ${Number(it.priorCount) || 0}건</span></span></div>`;
   const recs = (_rec && (Number(_rec.highCount) || Number(_rec.lowCount))) ? `<div class="card">
-      <h2>최근 ${Number(_rec.windowDays)}일 최고·최저 경신 <span style="font-weight:500;color:var(--sub);font-size:10px">같은 단지·같은 전용면적 기준 · ${esc(String(_rec.sinceDate || '').replace(/-/g, '.'))} 이후 적재분 안에서</span></h2>
-      <div style="font-size:12px;color:var(--sub);margin-bottom:8px">비교 가능 거래 ${Number(_rec.comparedCount).toLocaleString()}건 중 최고가 경신 <b style="color:var(--tx)">${Number(_rec.highCount)}건</b> · 최저가 경신 <b style="color:var(--tx)">${Number(_rec.lowCount)}건</b></div>
+      <h2>최근 ${Number(_rec.windowDays)}일 최고·최저 경신 <span style="font-weight:500;color:var(--ink3);font-size:12px">같은 단지·같은 전용면적 기준 · ${esc(String(_rec.sinceDate || '').replace(/-/g, '.'))} 이후 적재분 안에서</span></h2>
+      <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">비교 가능 거래 ${Number(_rec.comparedCount).toLocaleString()}건 중 최고가 경신 <b style="color:var(--ink)">${Number(_rec.highCount)}건</b> · 최저가 경신 <b style="color:var(--ink)">${Number(_rec.lowCount)}건</b></div>
       ${(_rec.high || []).slice(0, 3).map(it => _recRow(it, 'high')).join('')}
       ${(_rec.low || []).slice(0, 3).map(it => _recRow(it, 'low')).join('')}
-      <div style="font-size:10px;color:var(--sub);margin-top:8px">직전 거래 ${Number(_rec.minPrior)}건 이상인 평형만 비교 · 층·향 차이는 보정하지 않음 · 매수·매도 추천이 아닙니다</div>
+      <div style="font-size:12px;color:var(--ink3);margin-top:8px">직전 거래 ${Number(_rec.minPrior)}건 이상인 평형만 비교 · 층·향 차이는 보정하지 않음 · 매수·매도 추천이 아닙니다</div>
     </div>` : '';
 
   const yo = '일월화수목금토'[new Date(day + 'T00:00:00Z').getUTCDay()];
@@ -201,11 +203,11 @@ router.get('/:date', async (req, res) => {
     <div class="eyebrow">MYHOMELOG BRIEFING</div>
     <h1>${esc(day.replace(/-/g, '.'))}(${yo})</h1>
     <div class="tag">실거래·금리·시장 공개 데이터 정리</div>
-    ${tk.length ? `<div class="ticker">${tk.join('<span style="color:var(--bd);margin:0 9px">|</span>')}</div>` : ''}
-    <div class="card"><h2>오늘의 시장</h2>${lines || '<div style="font-size:12px;color:var(--sub)">기록된 시황이 없습니다.</div>'}</div>
+    ${tk.length ? `<div class="ticker">${tk.join('<span style="color:var(--line);margin:0 9px">|</span>')}</div>` : ''}
+    <div class="card"><h2>오늘의 시장</h2>${lines || '<div style="font-size:12px;color:var(--ink3)">기록된 시황이 없습니다.</div>'}</div>
     ${recs}
-    ${pops ? `<div class="card"><h2>인기 단지 TOP5 <span style="font-weight:500;color:var(--sub);font-size:10px">최근 60일 실거래 많은 순 · 매물 광고 아님</span></h2>${pops}</div>` : ''}
-    ${regs ? `<div class="card"><h2>규제·금융 변동 로그 <span style="font-weight:500;color:var(--sub);font-size:10px">금융위·국토부 고시 · 검증된 이벤트만</span></h2>${regs}</div>` : ''}
+    ${pops ? `<div class="card"><h2>인기 단지 TOP5 <span style="font-weight:500;color:var(--ink3);font-size:12px">최근 60일 실거래 많은 순 · 매물 광고 아님</span></h2>${pops}</div>` : ''}
+    ${regs ? `<div class="card"><h2>규제·금융 변동 로그 <span style="font-weight:500;color:var(--ink3);font-size:12px">금융위·국토부 고시 · 검증된 이벤트만</span></h2>${regs}</div>` : ''}
     <div class="nav"><a href="/briefing/${dayNav(day, -1)}">← 전날 브리핑</a>${isToday ? '' : `<a href="/briefing/${dayNav(day, 1)}">다음날 →</a>`}</div>
     ${(() => { const p = pastDaysNav(day); return p.length ? `<div class="nav" aria-label="지난 브리핑">지난 브리핑: ${p.map((x) => `<a href="/briefing/${esc(x.day)}">${esc(x.label)}</a>`).join(' · ')}</div>` : ''; })()}
     <a class="cta" href="/?briefing=${esc(day)}">앱에서 지도·계산기와 함께 보기 →</a>`,

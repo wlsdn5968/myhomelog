@@ -27,6 +27,7 @@ const { displayAptName } = require('../utils/aptDisplayName');
 
 const ORIGIN = 'https://myhomelog.vercel.app';
 
+const { THEME_CSS, FONT_STACK, FONT_LINK } = require('./_ssrTheme'); // Plan 145: 공용 테마
 const { escHtml: esc } = require('../utils/htmlEscape'); // ESC-UNIFY-2026-09-28 (Plan 124)
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 const comma = (v) => Number(v).toLocaleString('ko-KR');
@@ -58,30 +59,31 @@ function pageShell({ title, desc, canonical, body, noindex, image }) {
 <meta name="twitter:description" content="${esc(desc)}">
 <meta name="twitter:image" content="${esc(ogImg)}">
 <meta name="robots" content="${noindex ? 'noindex, follow' : 'index, follow'}">
+${FONT_LINK}
 <style>
-  :root{--bg:#080E18;--card:#101B2B;--bd:#22334A;--tx:#E8EFFA;--sub:#93A4BD;--amb:#FFC93C;--acc:#4C8DFF}
+  ${THEME_CSS}
   *{box-sizing:border-box;margin:0}
-  body{background:var(--bg);color:var(--tx);font-family:Pretendard,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;line-height:1.7;padding:28px 16px}
+  body{background:var(--bg);color:var(--ink);font-family:${FONT_STACK};line-height:1.7;padding:28px 16px}
   main{max-width:680px;margin:0 auto}
-  .eyebrow{color:var(--amb);font-size:11px;font-weight:800;letter-spacing:2px}
+  .eyebrow{color:var(--pri);font-size:12px;font-weight:800;letter-spacing:2px}
   h1{font-size:28px;margin:4px 0 2px;letter-spacing:-.02em}
-  .tag{color:var(--sub);font-size:12px;margin-bottom:18px}
-  .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px 16px;margin-bottom:12px}
-  .card h2{font-size:13px;color:var(--amb);margin-bottom:8px}
-  .src{color:var(--sub);font-size:10px;font-weight:500}
-  .row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--bd);font-size:13px}
+  .tag{color:var(--ink3);font-size:12px;margin-bottom:18px}
+  .card{background:var(--sf);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+  .card h2{font-size:14px;color:var(--pri);margin-bottom:8px}
+  .src{color:var(--ink3);font-size:12px;font-weight:500}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:14px}
   .row:last-child{border-bottom:none}
-  .row .k{color:var(--sub);font-size:12px}
+  .row .k{color:var(--ink3);font-size:12px}
   .num{font-variant-numeric:tabular-nums}
   .kpi{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:4px}
   @media(max-width:520px){.kpi{grid-template-columns:1fr 1fr}}
-  .kpi div b{display:block;font-size:19px;font-weight:800;font-variant-numeric:tabular-nums}
-  .kpi div span{font-size:11px;color:var(--sub)}
-  a{color:var(--acc);text-decoration:none}
+  .kpi div b{display:block;font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
+  .kpi div span{font-size:12px;color:var(--ink3)}
+  a{color:var(--pri);text-decoration:none}
   .links{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px}
-  .links a{font-size:12px;color:var(--sub);border:1px solid var(--bd);border-radius:7px;padding:4px 9px}
-  .foot{color:var(--sub);font-size:10.5px;margin-top:20px;line-height:1.8}
-  .cta{display:inline-block;margin-top:14px;padding:10px 18px;background:var(--amb);color:#1A2436;border-radius:9px;font-weight:700;font-size:13px}
+  .links a{font-size:12px;color:var(--ink3);border:1px solid var(--line2);border-radius:7px;padding:4px 9px}
+  .foot{color:var(--ink3);font-size:12px;margin-top:20px;line-height:1.8}
+  .cta{display:inline-block;margin-top:14px;padding:10px 18px;background:var(--pri);color:var(--onpri);border-radius:9px;font-weight:700;font-size:14px}
 </style></head><body><main>${body}
 <div class="foot">⚠ 국토교통부 실거래가 신고 자료를 정리한 것이며, <strong>매수·매도 추천이 아닙니다</strong>. 미래 가격을 예측하지 않습니다.<br>
 층·향·수리 상태에 따른 가격 차이는 보정하지 않습니다 — 실제 판단은 임장으로 확인하세요.<br>
@@ -334,7 +336,7 @@ router.get('/:aptSeq', async (req, res) => {
       title: '단지를 찾을 수 없습니다 | 내집로그', desc: '요청한 단지 코드에 해당하는 페이지가 없습니다.',
       canonical: `${ORIGIN}/region`, noindex: true,
       body: `<div class="eyebrow">MYHOMELOG APT</div><h1>단지 없음</h1>
-        <p style="font-size:13px;color:var(--sub)">요청한 단지 코드 형식이 올바르지 않아요.</p>
+        <p style="font-size:14px;color:var(--ink3)">요청한 단지 코드 형식이 올바르지 않아요.</p>
         <a class="cta" href="/region">지역별로 찾아보기 →</a>`,
     }));
   }
@@ -347,7 +349,7 @@ router.get('/:aptSeq', async (req, res) => {
       title: '단지를 찾을 수 없습니다 | 내집로그', desc: '요청한 단지의 실거래 기록이 없습니다.',
       canonical: `${ORIGIN}/region`, noindex: true,
       body: `<div class="eyebrow">MYHOMELOG APT</div><h1>기록 없음</h1>
-        <p style="font-size:13px;color:var(--sub)">이 단지의 실거래 기록이 없어요. 값을 지어내지 않고 비워둡니다.</p>
+        <p style="font-size:14px;color:var(--ink3)">이 단지의 실거래 기록이 없어요. 값을 지어내지 않고 비워둡니다.</p>
         <a class="cta" href="/region">지역별로 찾아보기 →</a>`,
     }));
   }
@@ -472,14 +474,14 @@ router.get('/:aptSeq', async (req, res) => {
   //   있을 때만 그 카드 아래 한 줄을 붙인다. 숫자는 dim 행 값 그대로(지어내지 않음).
   const dimDealCount = idx && idx._fromDim ? num(idx.deal_count) : null;
   const histRecoveryLine = (thin && dimDealCount && dimDealCount > 0)
-    ? `<div style="font-size:12.5px;color:var(--sub);margin:-4px 0 12px">2020.09 이후 이력 ${comma(dimDealCount)}건 · 마지막 거래 ${esc(String(idx.last_deal_date || ''))} — 아래 장기 추세에서 볼 수 있어요</div>`
+    ? `<div style="font-size:12px;color:var(--ink3);margin:-4px 0 12px">2020.09 이후 이력 ${comma(dimDealCount)}건 · 마지막 거래 ${esc(String(idx.last_deal_date || ''))} — 아래 장기 추세에서 볼 수 있어요</div>`
     : '';
 
   const body = `<div class="eyebrow">MYHOMELOG APT</div>
     <h1>${esc(displayName)} 실거래가</h1>
     <div class="tag">${esc(region)}${umd ? ' ' + esc(umd) : ''}</div>
     ${cards.length ? cards.join('') : `<div class="card"><h2>최근 거래 없음</h2>
-      <div style="font-size:12.5px;color:var(--sub)">최근 24개월 안에 신고된 거래가 없어요. 값을 지어내지 않고 비워둡니다.</div></div>${histRecoveryLine}`}
+      <div style="font-size:12px;color:var(--ink3)">최근 24개월 안에 신고된 거래가 없어요. 값을 지어내지 않고 비워둡니다.</div></div>${histRecoveryLine}`}
     ${infoCardHtml}
     ${schoolsCardHtml}
     ${sameDongHtml}

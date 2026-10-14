@@ -24,6 +24,7 @@ const { displayAptName } = require('../utils/aptDisplayName');
 
 const ORIGIN = 'https://myhomelog.vercel.app';
 
+const { THEME_CSS, FONT_STACK, FONT_LINK } = require('./_ssrTheme'); // Plan 145: 공용 테마
 const { escHtml: esc } = require('../utils/htmlEscape'); // ESC-UNIFY-2026-09-28 (Plan 124)
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 const comma = (v) => Number(v).toLocaleString('ko-KR');
@@ -57,30 +58,31 @@ function pageShell({ title, desc, canonical, body, image }) {
 <meta name="twitter:description" content="${esc(desc)}">
 <meta name="twitter:image" content="${esc(ogImg)}">
 <meta name="robots" content="index, follow">
+${FONT_LINK}
 <style>
-  :root{--bg:#080E18;--card:#101B2B;--bd:#22334A;--tx:#E8EFFA;--sub:#93A4BD;--amb:#FFC93C;--acc:#4C8DFF}
+  ${THEME_CSS}
   *{box-sizing:border-box;margin:0}
-  body{background:var(--bg);color:var(--tx);font-family:Pretendard,-apple-system,'Apple SD Gothic Neo','Malgun Gothic',sans-serif;line-height:1.7;padding:28px 16px}
+  body{background:var(--bg);color:var(--ink);font-family:${FONT_STACK};line-height:1.7;padding:28px 16px}
   main{max-width:680px;margin:0 auto}
-  .eyebrow{color:var(--amb);font-size:11px;font-weight:800;letter-spacing:2px}
-  h1{font-size:29px;margin:4px 0 2px;letter-spacing:-.02em}
-  .tag{color:var(--sub);font-size:12px;margin-bottom:18px}
-  .card{background:var(--card);border:1px solid var(--bd);border-radius:12px;padding:14px 16px;margin-bottom:12px}
-  .card h2{font-size:13px;color:var(--amb);margin-bottom:8px}
-  .src{color:var(--sub);font-size:10px;font-weight:500}
-  .row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--bd);font-size:13px}
+  .eyebrow{color:var(--pri);font-size:12px;font-weight:800;letter-spacing:2px}
+  h1{font-size:28px;margin:4px 0 2px;letter-spacing:-.02em}
+  .tag{color:var(--ink3);font-size:12px;margin-bottom:18px}
+  .card{background:var(--sf);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+  .card h2{font-size:14px;color:var(--pri);margin-bottom:8px}
+  .src{color:var(--ink3);font-size:12px;font-weight:500}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:14px}
   .row:last-child{border-bottom:none}
-  .row .k{color:var(--sub);font-size:12px}
+  .row .k{color:var(--ink3);font-size:12px}
   .num{font-variant-numeric:tabular-nums}
-  .big{font-size:22px;font-weight:800;font-variant-numeric:tabular-nums}
+  .big{font-size:20px;font-weight:800;font-variant-numeric:tabular-nums}
   .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
   @media(max-width:560px){.grid{grid-template-columns:1fr}}
   .links{display:flex;flex-wrap:wrap;gap:7px;margin-top:6px}
-  .links a{font-size:12px;color:var(--sub);border:1px solid var(--bd);border-radius:7px;padding:4px 9px;text-decoration:none}
-  .links a:hover{border-color:var(--amb);color:var(--tx)}
-  a{color:var(--acc);text-decoration:none}
-  .foot{color:var(--sub);font-size:10.5px;margin-top:20px;line-height:1.8}
-  .cta{display:inline-block;margin-top:14px;padding:10px 18px;background:var(--amb);color:#1A2436;border-radius:9px;font-weight:700;font-size:13px}
+  .links a{font-size:12px;color:var(--ink3);border:1px solid var(--line2);border-radius:7px;padding:4px 9px;text-decoration:none}
+  .links a:hover{border-color:var(--pri);color:var(--ink)}
+  a{color:var(--pri);text-decoration:none}
+  .foot{color:var(--ink3);font-size:12px;margin-top:20px;line-height:1.8}
+  .cta{display:inline-block;margin-top:14px;padding:10px 18px;background:var(--pri);color:var(--onpri);border-radius:9px;font-weight:700;font-size:14px}
 </style></head><body><main>${body}
 <div class="foot">⚠ 공식 통계 수치를 정리한 정보이며, <strong>매수·매도 추천이 아닙니다</strong>. 미래 가격을 예측하지 않습니다.<br>
 출처: 국토교통부 실거래가 · 한국부동산원 R-ONE · 국토교통부 미분양주택현황(KOSIS) · 국가데이터처 국내인구이동통계(KOSIS) · 금융위원회<br>
@@ -220,7 +222,7 @@ router.get('/:lawdCd', async (req, res) => {
       desc: '요청한 지역 코드에 해당하는 페이지가 없습니다.',
       canonical: `${ORIGIN}/region`,
       body: `<div class="eyebrow">MYHOMELOG REGION</div><h1>지역 없음</h1>
-        <p style="font-size:13px;color:var(--sub)">요청한 지역 코드에 해당하는 페이지가 없어요.</p>
+        <p style="font-size:14px;color:var(--ink3)">요청한 지역 코드에 해당하는 페이지가 없어요.</p>
         <a class="cta" href="/region">전체 지역 보기 →</a>`,
     }));
   }
@@ -237,10 +239,10 @@ router.get('/:lawdCd', async (req, res) => {
   const facts = regionFacts(dash, rec, weekly);   // description·OG 카드가 같은 문장을 쓴다(사본 금지)
 
   if (rec && (num(rec.highCount) || num(rec.lowCount))) {
-    const row = (it, kind) => `<div class="row"><span>${esc(it.aptName || '')} <span class="k">${esc(it.umdNm || '')}${it.excluUseAr ? ' · 전용 ' + esc(String(it.excluUseAr)) + '㎡' : ''}</span></span><span class="num" style="white-space:nowrap"><b style="color:var(--amb)">${eok(it.dealAmount)}</b> <span class="k">직전 ${kind === 'high' ? '최고' : '최저'} ${eok(kind === 'high' ? it.prevMax : it.prevMin)} · ${num(it.priorCount) || 0}건</span></span></div>`;
+    const row = (it, kind) => `<div class="row"><span>${esc(it.aptName || '')} <span class="k">${esc(it.umdNm || '')}${it.excluUseAr ? ' · 전용 ' + esc(String(it.excluUseAr)) + '㎡' : ''}</span></span><span class="num" style="white-space:nowrap"><b style="color:var(--pri)">${eok(it.dealAmount)}</b> <span class="k">직전 ${kind === 'high' ? '최고' : '최저'} ${eok(kind === 'high' ? it.prevMax : it.prevMin)} · ${num(it.priorCount) || 0}건</span></span></div>`;
     cards.push(`<div class="card">
       <h2>최근 ${num(rec.windowDays) || 30}일 최고·최저 경신 <span class="src">같은 단지·같은 전용면적 기준 · ${esc(String(rec.sinceDate || '').replace(/-/g, '.'))} 이후 적재분 안에서</span></h2>
-      <div style="font-size:12px;color:var(--sub);margin-bottom:8px">비교 가능 거래 ${comma(num(rec.comparedCount) || 0)}건 중 최고가 경신 <b style="color:var(--tx)">${comma(num(rec.highCount) || 0)}건</b> · 최저가 경신 <b style="color:var(--tx)">${comma(num(rec.lowCount) || 0)}건</b></div>
+      <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">비교 가능 거래 ${comma(num(rec.comparedCount) || 0)}건 중 최고가 경신 <b style="color:var(--ink)">${comma(num(rec.highCount) || 0)}건</b> · 최저가 경신 <b style="color:var(--ink)">${comma(num(rec.lowCount) || 0)}건</b></div>
       ${(rec.high || []).slice(0, 3).map(it => row(it, 'high')).join('')}
       ${(rec.low || []).slice(0, 3).map(it => row(it, 'low')).join('')}
       <div class="src" style="margin-top:8px">직전 거래 ${num(rec.minPrior) || 3}건 이상인 평형만 비교 · 단지당 1건만 표시 · 층·향은 보정하지 않음</div>
@@ -249,7 +251,7 @@ router.get('/:lawdCd', async (req, res) => {
 
   if (weekly && num(weekly.count) > 0) {
     cards.push(`<div class="card"><h2>최근 7일 새로 공개된 실거래 <span class="src">국토교통부 신고 → 공개일 기준 · ${esc(String(weekly.sinceDate || '').replace(/-/g, '.'))} 이후</span></h2>
-      <div class="big">${comma(num(weekly.count))}<span style="font-size:13px;font-weight:600">건</span></div>
+      <div class="big">${comma(num(weekly.count))}<span style="font-size:14px;font-weight:600">건</span></div>
       <div class="src">계약일이 아니라 <b>공개된 시점</b> 기준입니다. 신고·공개 일정에 따라 주별 편차가 크므로 시장의 주간 변동으로 읽지 마세요.</div></div>`);
   }
 
@@ -273,14 +275,14 @@ router.get('/:lawdCd', async (req, res) => {
   const un = dash && dash.unsold;
   if (un && un.latest && num(un.latest.cnt) != null) {
     half.push(`<div class="card"><h2>미분양 <span class="src">${esc(un.source || '')}</span></h2>
-      <div class="big">${comma(num(un.latest.cnt))}<span style="font-size:13px;font-weight:600">호</span></div>
+      <div class="big">${comma(num(un.latest.cnt))}<span style="font-size:14px;font-weight:600">호</span></div>
       <div class="src">${esc(ym(un.latest.ym))} 기준${un.sido ? ` · ${esc(un.sido)} ${esc(un.sigungu || '')}` : ''}</div></div>`);
   }
   const mg = dash && dash.netMigration;
   if (mg && mg.latest && num(mg.latest.net) != null) {
     const n = num(mg.latest.net);
     half.push(`<div class="card"><h2>인구 순이동 <span class="src">${esc(mg.source || '')}</span></h2>
-      <div class="big">${n > 0 ? '+' : ''}${comma(n)}<span style="font-size:13px;font-weight:600">명</span></div>
+      <div class="big">${n > 0 ? '+' : ''}${comma(n)}<span style="font-size:14px;font-weight:600">명</span></div>
       <div class="src">${esc(ym(mg.latest.ym))} 기준${mg.basis ? ` · ${esc(mg.basis)}` : ''}</div></div>`);
   }
   if (half.length) cards.push(`<div class="grid">${half.join('')}</div>`);
@@ -288,7 +290,7 @@ router.get('/:lawdCd', async (req, res) => {
   const rg = dash && dash.regulation;
   if (rg && rg.status) {
     cards.push(`<div class="card"><h2>대출 규제 <span class="src">금융위원회 고시 기준</span></h2>
-      <div class="row"><span class="k">현재 상태</span><span><b style="color:${rg.status === '규제지역' ? 'var(--amb)' : 'var(--sub)'}">${esc(rg.status)}</b>${rg.basis ? ` <span class="k">${esc(rg.basis)}</span>` : ''}</span></div>
+      <div class="row"><span class="k">현재 상태</span><span><b style="color:${rg.status === '규제지역' ? 'var(--pri)' : 'var(--ink3)'}">${esc(rg.status)}</b>${rg.basis ? ` <span class="k">${esc(rg.basis)}</span>` : ''}</span></div>
       <div class="src" style="margin-top:8px">LTV·DSR 은 무주택·생애최초 등 조건에 따라 달라집니다 — 앱의 대출 계산기에서 조건별로 확인하세요.</div></div>`);
   }
 
@@ -316,7 +318,7 @@ router.get('/:lawdCd', async (req, res) => {
   const body = `<div class="eyebrow">MYHOMELOG REGION</div>
     <h1>${esc(label)} 아파트 실거래 데이터</h1>
     <div class="tag">국토교통부 실거래 신고 자료 정리</div>
-    ${cards.length ? cards.join('') : '<div class="card"><h2>준비 중</h2><div style="font-size:12.5px;color:var(--sub)">이 지역의 공식 통계를 아직 불러오지 못했어요. 값을 지어내지 않고 비워둡니다.</div></div>'}
+    ${cards.length ? cards.join('') : '<div class="card"><h2>준비 중</h2><div style="font-size:12px;color:var(--ink3)">이 지역의 공식 통계를 아직 불러오지 못했어요. 값을 지어내지 않고 비워둡니다.</div></div>'}
     <div class="card"><h2>주변 지역</h2><div class="links">${near.map(r => `<a href="/region/${esc(r.lawdCd)}">${esc(r.name)}</a>`).join('')}</div>
       <div style="margin-top:10px"><a href="/region">전국 ${all.length}개 시군구 전체 보기 →</a></div></div>
     <a class="cta" href="${ctaHref}">${esc(label)} 단지 검색·대출 계산 →</a>`;
