@@ -237,7 +237,7 @@ async function backfillDensity(admin, {
  */
 async function run({
   cap = DEFAULT_TOTAL_CAP, budgetMs = 180000,
-  densityCap, densityBudgetMs, densityConcurrency, densityMinIntervalMs, skipCollect = false,
+  densityCap, densityBudgetMs, densityConcurrency, densityMinIntervalMs, skipCollect = false, candidateRetryDelayMs = 2000,
 } = {}) {
   const started = Date.now();
   const admin = adminClient();
@@ -272,13 +272,30 @@ async function run({
   }
 
   // 후보 조회 — Postgres 함수(거래 n>=2 & building_register 미보유). 미생성 시 graceful no-op.
+  // BR-CANDIDATES-RETRY-2026-10-14 (Plan 134): 종전엔 **모든** RPC 오류를 "함수 미생성(게이트)" 으로 보고 조용히 넘겼다.
+  //   실측(postgres 로그): 확인한 6일(2026-10-04·07·09·12·13·14) 모두 06:15Z 회차에서 8초 statement timeout(57014)으로 취소돼
+  //   수집이 매일 0건이었는데 결과에는 gated:true · note '미생성' 만 남았다. 같은 함수가 다른 시각엔 0.3~2초(실측 0.3~9.1초 편차).
+  //   → 함수 미존재(PostgREST PGRST202 — 2026-10-14 실측 · Postgres 42883)만 게이트. 그 밖의 오류는 1회 재시도하고,
+  //   그래도 실패하면 ok:false + error 로 남겨 health(crons['building-register-backfill'])에 보이게 한다.
+  const CANDIDATE_MISSING_CODES = new Set(['PGRST202', '42883']);
   let candidates = [];
   try {
-    const { data, error } = await admin.rpc('get_br_backfill_candidates', { lim: totalCap });
+    let { data, error } = await admin.rpc('get_br_backfill_candidates', { lim: totalCap });
+    if (error && !CANDIDATE_MISSING_CODES.has(String(error.code || ''))) {
+      logger.warn({ err: error.message, code: error.code }, 'building-register 백필: 후보 조회 실패 — 1회 재시도');
+      await new Promise((r) => setTimeout(r, Math.max(0, Number(candidateRetryDelayMs) || 0)));
+      ({ data, error } = await admin.rpc('get_br_backfill_candidates', { lim: totalCap }));
+    }
     if (error) {
-      // 42883: function 미존재 → 게이트 미충족(운영자 SQL 대기)
-      logger.warn({ err: error.message, code: error.code }, 'building-register 백필: 후보 함수 미생성(운영자 SQL 대기) — no-op');
-      return { ok: true, gated: true, processed: 0, brScanned: wb.scanned, brWritten: wb.written, dens, note: 'get_br_backfill_candidates 미생성' };
+      if (CANDIDATE_MISSING_CODES.has(String(error.code || ''))) {
+        logger.warn({ err: error.message, code: error.code }, 'building-register 백필: 후보 함수 미생성(운영자 SQL 대기) — no-op');
+        return { ok: true, gated: true, processed: 0, brScanned: wb.scanned, brWritten: wb.written, dens, note: 'get_br_backfill_candidates 미생성' };
+      }
+      logger.warn({ err: error.message, code: error.code }, 'building-register 백필: 후보 조회 재시도도 실패 — 이번 회차 수집 0');
+      return {
+        ok: false, processed: 0, brScanned: wb.scanned, brWritten: wb.written, dens,
+        error: `get_br_backfill_candidates: ${String(error.message || error.code || 'unknown')}`.slice(0, 120),
+      };
     }
     candidates = Array.isArray(data) ? data : [];
   } catch (e) {
