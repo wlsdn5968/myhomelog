@@ -159,7 +159,7 @@
 - **결제 페이지 CSP 는 보고 전용**(2026-09-02 c8e6137 결정 — 결제 게이트 해제 전 위젯 호스트 측정 불가). 운영자가 결제 주제를 꺼내기 전에는 변경하지 않는다.
 
 ### 🚨 Upstash Redis 무료 한도 초과 (2026-10-14 발견)
-- 운영 Redis 가 **월 500,000 명령**을 넘어 모든 명령이 `ERR max requests limit exceeded` 로 실패 중(Vercel 런타임 로그). 시작 시각·소진 원인·초기화 시점은 **Upstash 콘솔에서만** 보인다(운영자). 유료 전환 금지 방침. 운영자 크롬은 Upstash 콘솔에 로그인돼 있지 않았다(2026-10-14 확인 — 계획자는 로그인하지 않는다).
+- 운영 Redis 가 **월 500,000 명령**을 넘어 모든 명령이 `ERR max requests limit exceeded` 로 실패 중(Vercel 런타임 로그). **쓰기 실패 시작 = 2026-10-05 16:49Z 경**(health 의 cron 기록이 그 시각에서 멈춤, 읽기는 간헐 성공 — 10-14 계획자 실측 10회 중 6회). 소진 원인·초기화 시점은 **Upstash 콘솔에서만** 보인다(운영자). 유료 전환 금지 방침. 운영자 크롬은 Upstash 콘솔에 로그인돼 있지 않았다(2026-10-14 확인 — 계획자는 로그인하지 않는다).
 - 영향(코드 원문 확인): **유료 AI(`/api/report`·`/api/clause`)는 fail-closed 503 으로 막힘**(비용 안전) · 무료 룰베이스 챗도 같은 리미터라 503 → **Plan 133** · 일반·데이터·og·share 요청 제한은 fail-open(제한 없음) · `/api/geocode` 전역 Kakao 일일 상한(8,000)도 fail-open(인스턴스별 일일 60 만 남음) · Redis 2차 캐시 전부 미스(같은 시기 지역 가격 기록 함수 `get_price_records_by_region` 의 시간 초과가 10-04 0건 → 10-11~12 13건으로 늘었다 — 인과는 미확정) · `/api/health` 의 `crons`·`searchDegrade`·`chatIntents` null · `usage.used` 0 표시.
 - 코드상 health 1회 = Redis 명령 8개(웜, 비로그인) — 5분 간격 모니터만으로 월 약 6.9만(한도의 14%). 나머지 소진원은 코드만으로 특정 못 함.
 
@@ -168,6 +168,9 @@
 - **공개 키 노출면 축소(Plan 129·132)**: 공개 키(`index.html` 메타)만으로 대형 테이블을 1,000행씩 무제한 REST 조회할 수 있었다(위험 = 무료 전송량 5GB 소진 → 전 API 402). **1단계 적용 완료(2026-10-02, 운영자 SQL Editor 실행 — 기록 `supabase/migrations/20261002_public_key_surface_stage1.sql`)**: 이력·편의시설·학교·건축물대장 공개 읽기 제거, 백엔드 전용 함수 5개 공개 실행 회수. **2단계 코드 완료(Plan 132, 77833fb)**: 검색·지도·인기 라이브 집계가 service_role 로 읽는다(`backend/test/public-key-surface.test.js` 가 고정 — 공개 키로 되돌리면 DB 권한을 닫은 뒤 42501). 절충(운영자 결정): 사용자 경로 DB 상한 anon 3s → 8s. **2단계 DB SQL(`plans/129` §4) 적용 조건 충족(2026-10-14 게이트웨이 로그 24h: 공개 키로 대상 5개 요청 0건 — 공개 키는 regulations_snapshot·popular_apts_snapshot 만)** — 계획자 시도 4가지가 모두 막힘(2026-10-14): 자동 모드 `apply_migration` declined · 수동 승인 모드 `apply_migration` declined · 수동 모드 `execute_sql` declined(Supabase MCP 가 정책 삭제·권한 회수 문장에 확인을 요구하는데 이 앱은 그 확인 창을 띄우지 못한다) · 운영자 크롬의 SQL Editor 로 가는 것은 자동 모드 분류기가 "안전장치 우회" 로 차단 → **운영자 SQL Editor 실행만 가능**. 공개 유지: `popular_apts_snapshot`·`regulations_snapshot`·`billing_plans`.
 - **개인정보처리방침 §5·§6 사실 불일치(Plan 136, 2026-10-14 대조)**: Anthropic 이전 시점 "AI 채팅" → 실제는 리포트·특약 분석 · Upstash "개인정보 미저장·토큰 해시·최대 24시간" → 실제는 IP/회원 ID 키(당일 자정까지)·답 못 한 챗 질문 80자 최근 50건(만료 없음), §6 국외이전 표에 Upstash 누락 · Sentry "오류 시·90일" → 실제는 오류 + 요청 표본 약 10%, 보관은 요금제별(무료 30일). 수정안은 `plans/136-privacy-policy-facts.md` — **공개 법적 고지라 게시는 운영자 확인 뒤**(Sentry 요금제 확인 1건 필요).
 - **Sentry 프로젝트 설정** — ✅ 2026-10-02 적용: 조직 Security & Privacy 의 "Prevent Storing of IP Addresses" 켬(운영자가 로그인해 둔 크롬에서 계획자가 그 토글 하나만 변경 — 두 프로젝트 `node`·`myhomelog-frontend` 에 잠금 표시로 강제 적용 확인). 프로젝트별 Data Scrubber·Use Default Scrubbers 는 원래 켜져 있었다. ECOS 키 재발급은 선택(노출 범위 = 운영자 Sentry 조직, 저장분 2026-10-21 전후 자동 만료).
+
+### 구성요소 점검 (2026-10-14) — `plans/audit-components-2026-10-14.md`
+- 버려진 대용량 DB 데이터 없음(79% 가 원본·이력, 즉시 회수 가능 0.5MB) · 버전 대체로 최신(미사용 의존성 0, 운영 감사 0) · 최대 문제는 Redis 쓰기 실패(10-05~). 139(Redis 명령 절감)·140(cron·지역 페이지)·141(패치 갱신) 진행.
 
 ### 서비스 전면 검토 (2026-10-14) — `plans/review-2026-10-14.md`
 - 강점: 실거래 181만 건·매일 적재·공식 출처·서버 렌더 SEO. 약점: 첫 화면 과밀, 이모지 552개·글자 크기 30종·인라인 스타일 1,322곳("AI 가 만든 느낌"의 실측 원인), 앱(밝은+금색)과 서버 렌더 페이지(어두운 남색) 테마 불일치, 유료 보고서 503(Redis), 느린 API 3~5초, 키보드 접근성. **디자인 개편은 Claude Design 시안 승인 먼저**(운영자 상시 요구) — 문구 사실·원칙 정정만 Plan 138 로 먼저 반영.
