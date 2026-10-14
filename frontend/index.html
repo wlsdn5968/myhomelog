@@ -813,7 +813,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .mbtn{padding:5px 12px;border-radius:var(--radius-full);font-size:12px;font-weight:600;border:1px solid var(--border-subtle);background:var(--bg-base);color:var(--t2);cursor:pointer;font-family:inherit;transition:all .15s;box-shadow:0 1px 2px rgba(16,24,40,.05)}
 .mbtn:hover{border-color:var(--border-strong);color:var(--text-primary)}.mbtn.on{background:var(--acc-bg);color:var(--acc-ink);border-color:var(--acc);box-shadow:0 2px 7px rgba(23,58,99,.24)}
 .msep{width:1px;height:16px;background:var(--bd)}
-#mapEl{flex:1;min-height:0;background:var(--s2)}
+#mapEl{flex:1;min-height:0;background:var(--s2);isolation:isolate} /* MAP-ISOLATE-2026-10-15: 대체 지도(Leaflet) 조작 버튼(z 1000)이 상세 모달(z 400) 위로 뚫고 나오던 것 — 지도 안 층을 지도 상자에 가둔다 */
 .mhint{position:absolute;bottom:12px;left:50%;transform:translateX(-50%);background:rgba(18,14,8,.78);color:#fff;padding:6px 14px;border-radius:var(--radius-xl);font-size:12px;pointer-events:none;transition:opacity .35s;white-space:nowrap;z-index:10}
 .mhint.h{opacity:0}
 .map-no-key{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:var(--s2);z-index:5}
