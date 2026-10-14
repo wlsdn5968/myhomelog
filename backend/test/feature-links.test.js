@@ -101,7 +101,7 @@ test('_carrySidebarToCalc — 계산기 칸이 비어 있을 때만 사이드바
 test('index.html — goCalcFromDetail·시뮬레이터 링크가 복사를 하고, searchWithBudget 이 연소득을 사이드바로 돌려준다 (Plan 148)', () => {
   assert.ok(extractFn(html, 'goCalcFromDetail').includes('_carrySidebarToCalc(false)'), 'goCalcFromDetail 에 복사가 없다');
   assert.ok(extractFn(html, 'openCalcFromSidebar').includes('_carrySidebarToCalc(true)'), '시뮬레이터 링크 함수에 복사가 없다');
-  assert.ok(html.includes('onclick="openCalcFromSidebar()" style="color:var(--acc);font-weight:700;text-decoration:none">상세 대출 시뮬레이터 →'), '시뮬레이터 링크가 새 함수를 쓰지 않는다');
+  assert.ok(html.includes('onclick="openCalcFromSidebar()" style="color:var(--acc);font-weight:700;text-decoration:none">대출 계산 열기 →'), '시뮬레이터 링크가 새 함수를 쓰지 않는다');
   const sb = extractFn(html, 'searchWithBudget');
   assert.match(sb, /getElementById\('c_i'\)/);
   assert.match(sb, /_incEl\.value=_ci/);

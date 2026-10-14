@@ -53,7 +53,7 @@ const REPORT_SPECIFIC = `## 추가 규칙 (보고서 응답)
 - ⛔ 대출 한도·DSR 분석은 보고서에 포함 X. 정책자금은 "이런 게 있다" 정보만.
 
 ## 톤
-- "회원님" 호칭 사용 (친근하고 전문적)
+- "회원님" 같은 호칭은 쓰지 않고 담백하게 쓴다 (필요하면 "내 가구"처럼 쓴다)
 - 컨설턴트 어투 ("솔직히", "이런 점은", "검토해보세요")
 - 별점 ★★★ ★★ ★ 활용 (PDF 컨설팅 톤)
 - 단지명 정확히 (오타·줄임 X)
@@ -85,7 +85,7 @@ const REPORT_SPECIFIC = `## 추가 규칙 (보고서 응답)
       "location": "역세권·학교·평지",
       "pros": "장점 1줄",
       "cons": "단점 1줄",
-      "priceFit": "매수가 7억 vs 회원님 평형대 평균 8.1억 (16% 초과)",
+      "priceFit": "매수가 7억 vs 내 평형대 평균 8.1억 (16% 초과)",
       "recommendation": "검토 시 21평 또는 다른 단지 비교 권장"
     }
   ],
@@ -364,11 +364,11 @@ router.post('/generate', async (req, res) => {
         // PRICE-BASIS-2026-08-30 (Sprint OOOOOOO): 기준을 `avgPrice`(예산 밴드로 잘린 부분집합 평균)에서
         //   **대표 평형의 밴드 미적용 평균**(avgPriceFull)으로 바꾼다. 옛 기준은 예산을 바꾸면 같은 단지의
         //   "시세"가 따라 움직였다(동탄 실측: 표기 9.69억 vs 실제 10.09억).
-        //   ⚠ 라벨도 '회원님 평형대' → **실제 면적**으로 명시한다 — 어떤 평형의 평균인지 모호하면
+        //   ⚠ 라벨도 '내 평형대' → **실제 면적**으로 명시한다 — 어떤 평형의 평균인지 모호하면
         //     사용자가 다른 평형 가격으로 오해한다(라벨과 모집단이 갈리던 그 결함의 재발 방지).
         const _basis = (c && c.avgPriceFull > 0) ? c.avgPriceFull : (c && c.avgPrice);
         const _areaLabel = (c && c.primaryArea && c.primaryArea.sqm)
-          ? `전용 ${c.primaryArea.sqm}㎡` : '회원님 평형대';
+          ? `전용 ${c.primaryArea.sqm}㎡` : '내 평형대';
         const _pf = _buildPriceFit(_basis, userInput.maxBudget, _areaLabel,
           (c && c.priceSampleFull) || null);
         if (_pf) a.priceFit = _pf;
@@ -518,7 +518,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
       // 잘린 풀에서도 n 은 **하한**이라 '거래 활발'은 여전히 참이다(실제는 더 많다) → 유지.
       (_n >= 20) ? `${_span} 거래 ${_n}건 (거래 활발)` : null,
       f.builder ? `시공 ${f.builder}` : null,
-      f.jeonse_ratio ? `전세가율 ${f.jeonse_ratio} (회원님 평형대 전세 ${f.jeonse_sample}건${f.jeonse_months ? ` · 표본 ${f.jeonse_months}개월` : ''})` : null, // Sprint KKKKK · 표본 개월(JEONSE-FINAL)
+      f.jeonse_ratio ? `전세가율 ${f.jeonse_ratio} (내 평형대 전세 ${f.jeonse_sample}건${f.jeonse_months ? ` · 표본 ${f.jeonse_months}개월` : ''})` : null, // Sprint KKKKK · 표본 개월(JEONSE-FINAL)
     ].filter(Boolean).join(' · ');
     const cons = [
       (age != null && age >= 25) ? `준공 ${age}년차 — 수리·관리 상태 임장 확인 필요` : null,
@@ -603,7 +603,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
     // '추천' 단어는 자체 단언표현 필터(filterAdviceOutputDeep)에 걸림 (라이브 확인) — 필터 안전 문구 사용
     `아래 ${apartments.length}개 단지는 국토교통부 실거래 기준 조건 부합 단지 정리예요 — 의사결정 책임은 본인에게 있어요.`,
     fc.rate
-      ? `현재 금리 기준: ${fc.rate} — 대출 한도·월 상환액은 상단 대출계산 탭에서 이 금리로 계산돼요.`
+      ? `현재 금리 기준: ${fc.rate} — 대출 한도·월 상환액은 상단 대출 계산 화면에서 이 금리로 계산돼요.`
       : 'AI 분석 코멘트는 현재 일시 중단 — 실거래·세대수·주차·규제 등 객관 데이터만 표시해요.',
   ];
   if (fc.unsold) coreMessages.push(`${fc.unsold} — 수치 나열이며 시장 예측이 아니에요.`);
@@ -613,7 +613,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
   const checklist = [
     { text: '등기부등본 최신본 확인 (계약 직전 재확인)', stars: 3 },
     {
-      text: fc.dsr ? `대출 사전심사 — ${fc.dsr}` : '대출 사전심사 — 스트레스 DSR 반영 한도 확인 (상단 대출계산 탭)',
+      text: fc.dsr ? `대출 사전심사 — ${fc.dsr}` : '대출 사전심사 — 스트레스 DSR 반영 한도 확인 (상단 대출 계산)',
       stars: 3,
     },
     // KKKKK-3: fc.ltv 없으면 항목 생략 — fallback 문구가 아래 '규제지역 확인'과 중복되던 것(라이브 발각) 제거.
@@ -631,7 +631,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
     })()),
     { text: '규제지역 여부·전입 의무 확인 (10.15 규제 요약 참고)', stars: 2 },
     { text: '관리비·주차 실태 임장 확인 (임장노트 탭 활용)', stars: 2 },
-    { text: '특약 초안 준비 (특약 탭 — 표준 템플릿 제공)', stars: 1 },
+    { text: '특약 초안 준비 (특약 초안 화면 — 표준 템플릿 제공)', stars: 1 },
   ];
 
   const tips = [
@@ -722,7 +722,7 @@ function stripMarkdownDeep(obj) {
 }
 
 /** PRICE-INTEGRITY-2026-06-14: 예산매칭(priceFit) 결정론 생성 — AI 전사 환각 차단.
- *  @param avgPriceManwon 회원님 평형대 실거래 평균가 (만원, c.avgPrice)
+ *  @param avgPriceManwon 내 평형대 실거래 평균가 (만원, c.avgPrice)
  *  @param maxBudgetEok 매수가 (억, userInput.maxBudget)
  *  운영자 #1 룰(환각 차단·공식 출처): 가격 비교는 AI 가 아니라 DB 실거래 평균으로 보장. */
 function _buildPriceFit(avgPriceManwon, maxBudgetEok, areaLabel, sampleN) {
@@ -734,7 +734,7 @@ function _buildPriceFit(avgPriceManwon, maxBudgetEok, areaLabel, sampleN) {
               : diffPct > 0 ? `${diffPct}% 초과`
               : `${Math.abs(diffPct)}% 여유`;
   // PRICE-BASIS-2026-08-30: 어떤 면적의, 몇 건 평균인지 함께 적는다. 표본 수가 없으면 그 부분만 생략.
-  const who = areaLabel || '회원님 평형대';
+  const who = areaLabel || '내 평형대';
   const n = Number(sampleN) > 0 ? ` · 최근 6개월 ${Number(sampleN)}건` : '';
   return `매수가 ${bud}억 vs ${who} 평균 ${avgEok.toFixed(2)}억${n} (${label})`;
 }
@@ -1206,7 +1206,7 @@ function applyObjectiveScore(c, seoulRegulated = true, regulatedCodes = null) {
     transactions_6mo: c.n,
     new_high_count: c.new_high_count || 0, // Phase 8
     amenities: c.amenities || null,        // Phase 8: { school, mart, hospital, subway, cvs }
-    // Sprint KKKKK: 전세가율 — 회원님 평형대 전세 실거래 중위 환산보증금 / 같은 평형대 매매 평균 (수치만)
+    // Sprint KKKKK: 전세가율 — 내 평형대 전세 실거래 중위 환산보증금 / 같은 평형대 매매 평균 (수치만)
     jeonse_ratio: c.jeonse ? `${c.jeonse.ratio}%` : null,
     jeonse_sample: c.jeonse ? c.jeonse.n : null,
     jeonse_months: null, // JEONSE-FINAL 블록이 최종 후보에 대해 사후 기입(불완전 표본일 때 'n/6')
@@ -1866,7 +1866,7 @@ async function fetchCandidateApts(admin, input, limit) {
   //   avgPrice 가 분모였다(분자 전세는 밴드와 무관 → 비율이 한쪽만 잘렸다).
   //   lawd 당 1회(query '' = 전체 목록)만 조회하고 단지명 필터는 여기서 수행. 콜드 시 구당 6콜(월별), 이후 24h 캐시.
   //   분석탭(analysisService)과 동일 소스·동일 표본 임계(getJeonseReliability NONE: <4건 → 비노출).
-  //   회원님 평형대(±5㎡) 전세만 스코프 — 매매 대표가격(같은 평형대)과 비교 정합.
+  //   내 평형대(±5㎡) 전세만 스코프 — 매매 대표가격(같은 평형대)과 비교 정합.
   //   절대룰: 수치 나열만(전세가율 %·표본수·표본 개월). 판단·전망·갭투자 서술 없음.
   try {
     const { getJeonseByApt } = require('../services/rentService');
@@ -1958,22 +1958,22 @@ function buildReportPrompt(input, policy, candidates, freeCtx) {
       facts.regulation ? `규제: ${facts.regulation}` : null,
       // POOL-COVERAGE-2026-08-17: 신고가 갱신 횟수도 후보 풀 안에서 센 값이다 — 기간을 정확히 적는다.
       facts.new_high_count > 0 ? `${poolSpanLabel(c)} 신고가 ${facts.new_high_count}회 갱신` : null,
-      facts.jeonse_ratio ? `전세가율: ${facts.jeonse_ratio} (회원님 평형대 전세 ${facts.jeonse_sample}건 기준${facts.jeonse_months ? ` · 표본 ${facts.jeonse_months}개월` : ''})` : null, // Sprint KKKKK · 표본 개월(JEONSE-FINAL)
+      facts.jeonse_ratio ? `전세가율: ${facts.jeonse_ratio} (내 평형대 전세 ${facts.jeonse_sample}건 기준${facts.jeonse_months ? ` · 표본 ${facts.jeonse_months}개월` : ''})` : null, // Sprint KKKKK · 표본 개월(JEONSE-FINAL)
       amStr,
     ].filter(Boolean).join(' | ');
     return `${i + 1}. ${displayName} (${c.sigungu} ${c.umd_nm})
    - 준공: ${c.build_year || '미상'}년 / 세대수: ${householdsStr}
-   - 회원님 평형대 (${c.areas.map(a => `${a}㎡(${Math.round(a / PYEONG_M2)}평)`).join(', ')}) 만 노출됨
-   - 회원님 평형대 평균가: ${(c.avgPrice / 10000).toFixed(2)}억원 (해당 평형 ${c.n}건 거래, 최근 ${c.latest})
+   - 내 평형대 (${c.areas.map(a => `${a}㎡(${Math.round(a / PYEONG_M2)}평)`).join(', ')}) 만 노출됨
+   - 내 평형대 평균가: ${(c.avgPrice / 10000).toFixed(2)}억원 (해당 평형 ${c.n}건 거래, 최근 ${c.latest})
    - 객관 fact: ${factsList || '데이터 부족'}
    - 매칭 점수: ${c.score}점 (${breakdownStr})`;
   }).join('\n\n');
 
   // REPORT_SYSTEM_PROMPT 는 callAI options.system 으로 전달됨 (중복 제거)
-  return `## 회원님 가구 상황
+  return `## 내 가구 상황
 - 매수가: ${input.maxBudget}억
 - 자기자본: ${input.myCash || '?'}억
-- 연소득: ${input.annualIncome ? input.annualIncome + '만원' : '미입력'} (참고용 — DSR 계산은 사이드바 대출계산 탭)
+- 연소득: ${input.annualIncome ? input.annualIncome + '만원' : '미입력'} (참고용 — DSR 계산은 사이드바 대출 계산)
 - 보유 주택: ${input.houseStatus || '?'}
 - 생애 최초: ${input.firstBuyerKnown === false ? '미확인 — 일반(비우대) 기준으로 계산했고, 해당 시 우대 가능성만 언급할 것' : (input.isFirstBuyer ? '예' : '아니오')}
 - 희망 지역: ${input.region}
@@ -1995,9 +1995,9 @@ ${_freeBlock ? `\n## 실측 수치 (전부 공식 출처 — 아래 수치만 �
 ${aptList}
 
 ## 작성 지침
-1. coreMessages — 회원님 가구 상황 기반 핵심 방향 3줄
+1. coreMessages — 내 가구 상황 기반 3줄 요약
 2. checklist — 매수·갈아타기 체크리스트 5~7개 + 별점 + 짧은 근거 (필수)
-   ★★★ = 회원님 1순위(${input.priority || '환금성'}) 직접 부합 + 데이터로 입증
+   ★★★ = 내 1순위(${input.priority || '환금성'}) 직접 부합 + 데이터로 입증
    ★★  = 보조 항목 부합 또는 부분 입증
    ★   = 일반 권고 사항
    각 항목 형식: {"text":"항목명 — 근거 (최대 15자)", "stars":N}
@@ -2007,7 +2007,7 @@ ${aptList}
 3. apartments — 위 후보 단지 그대로 (rank·name·areaSqm·areaPyeong·buildYear·households·ratio·location·pros·cons·priceFit·recommendation·matchReason)
    - name 형식: "단지명 (시군구 동)" — 예: "한양아파트 (노원구 상계동)" — 동명 누락 금지 (사용자 식별용)
    - households: 입력 데이터의 세대수 그대로 사용. "미상"이면 "미상"으로 표기 (NaN/null 금지)
-   - priceFit: "매수가 ${input.maxBudget}억 vs 회원님 평형대 평균 X억 (X% 초과/일치/여유)" — 단순 비교만. "단지 평균"이라고 쓰지 말고 "회원님 평형대 평균"이라고 정확히 표기 (단지 전체 평형의 평균이 아니라 회원님 입력 평형대 거래 평균이기 때문)
+   - priceFit: "매수가 ${input.maxBudget}억 vs 내 평형대 평균 X억 (X% 초과/일치/여유)" — 단순 비교만. "단지 평균"이라고 쓰지 말고 "내 평형대 평균"이라고 정확히 표기 (단지 전체 평형의 평균이 아니라 내가 입력한 평형대 거래 평균이기 때문)
    - recommendation: "검토 권장" 또는 "예산 초과 — 다른 단지 비교 권장" — 매수 추천 X
    - matchReason: 매칭 점수 breakdown 을 자연스러운 한 줄로 풀어 씀 (예: "1순위 환금성 부합(거래활발 60점) + 예산 적합(30점)") — 사용자 투명성 핵심
    - location: 입력 데이터의 amenities (지하철·학교·마트·병원·공원 카운트) + 행정구위계만 인용. 도보 거리·구체적 역명·지형(평지/경사) 임의 추정 X (입력 데이터에 없음). "역세권"·"학교 17곳" 같이 카운트 기반 표현만 허용.
@@ -2027,7 +2027,7 @@ ${aptList}
 - 입력 데이터에 없는 거리(km, 도보 분), 지형(평지·경사), 정확한 역명·노선 번호, 재개발 일정 임의 추정 X
 - 입력 데이터의 amenities 카운트 (지하철 N개, 마트 N개 등) 만 인용 가능
 - 시공사/세대수가 입력에 없으면 "미상" 표기 (임의 보강 X)
-- 회원님 평형대 평균이 단지 전체 평균이 아님 — 모든 평균 표기에 "회원님 평형대" 명시
+- 내 평형대 평균이 단지 전체 평균이 아님 — 모든 평균 표기에 "내 평형대" 명시
 
 JSON만 반환. 다른 텍스트 X.`;
 }

@@ -291,7 +291,7 @@ router.get('/:lawdCd', async (req, res) => {
   if (rg && rg.status) {
     cards.push(`<div class="card"><h2>대출 규제 <span class="src">금융위원회 고시 기준</span></h2>
       <div class="row"><span class="k">현재 상태</span><span><b style="color:${rg.status === '규제지역' ? 'var(--pri)' : 'var(--ink3)'}">${esc(rg.status)}</b>${rg.basis ? ` <span class="k">${esc(rg.basis)}</span>` : ''}</span></div>
-      <div class="src" style="margin-top:8px">LTV·DSR은 무주택·생애최초 같은 조건에 따라 달라져요. 앱의 대출 계산기에서 내 조건으로 확인하세요.</div></div>`);
+      <div class="src" style="margin-top:8px">LTV·DSR은 무주택·생애최초 같은 조건에 따라 달라져요. 앱의 대출 계산에서 내 조건으로 확인하세요.</div></div>`);
   }
 
   // 형제 지역 링크 — 크롤러가 118개를 순회할 수 있게(같은 시도 우선, 없으면 앞뒤 이름순)
