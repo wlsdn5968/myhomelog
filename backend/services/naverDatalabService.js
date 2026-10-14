@@ -205,6 +205,25 @@ async function readCache(key) {
   } catch (_) { return undefined; }
 }
 
+// AMENITY-BULK-URL-2026-10-14 (Plan 135): 종전엔 키 200개씩 `in(cache_key, …)` 로 묶었는데, 키가 한글 단지명|시군구|동이라
+//   URL 인코딩 뒤 요청 주소가 27,597~29,574자가 되어 게이트웨이가 400 으로 거절했다(edge 로그: warm-interest 회차마다 10건 —
+//   10-08·10-11·10-13 확인). 응답의 error 를 읽지 않아 전부 "캐시 없음" 으로 처리됐다(워밍이 이미 캐시된 단지에 데이터랩 호출을 씀).
+//   같은 날 성공한 가장 긴 GET 주소는 14,043자 → 개수가 아니라 인코딩 길이로 묶고 8,000자에서 자른다.
+const BULK_URL_BUDGET = 8000;
+function _chunkByEncodedLength(keys, budget = BULK_URL_BUDGET) {
+  const chunks = [];
+  let cur = [];
+  let len = 0;
+  for (const k of keys) {
+    const n = encodeURIComponent(String(k)).length + 9;   // 구분 쉼표(%2C) + 값 따옴표(%22 ×2) 여유
+    if (cur.length && len + n > budget) { chunks.push(cur); cur = []; len = 0; }
+    cur.push(k);
+    len += n;
+  }
+  if (cur.length) chunks.push(cur);
+  return chunks;
+}
+
 /**
  * 캐시 존재 여부를 **한 번의 쿼리로** 확인한다.
  * ⚠ 단건 readCache 를 목록에 돌리면 단지 수만큼 DB 왕복이 생긴다 —
@@ -225,10 +244,13 @@ async function readCacheBulk(keys) {
     const { getSupabaseAdmin } = require('../db/client');
     const admin = getSupabaseAdmin();
     if (!admin) return out;
-    for (let i = 0; i < miss.length; i += 200) {
-      const chunk = miss.slice(i, i + 200);
-      const { data } = await admin.from('apt_amenities')
+    for (const chunk of _chunkByEncodedLength(miss)) {
+      const { data, error } = await admin.from('apt_amenities')
         .select('cache_key, count, fetched_at').in('cache_key', chunk).limit(chunk.length);
+      if (error) {
+        logger.warn({ err: error.message, keys: chunk.length }, '관심도 캐시 일괄 조회 실패 — 이 묶음은 캐시 미스로 진행');
+        continue;
+      }
       for (const row of data || []) {
         const ageDays = (Date.now() - new Date(row.fetched_at).getTime()) / 86400000;
         if (ageDays > CACHE_DAYS) continue;
@@ -336,4 +358,4 @@ function keyShape() {
 
 // TEST-EXPORT-2026-09-20 (Plan 112): writeCache 는 upsert payload 키 집합·null 가드 회귀
 //   테스트용으로 export 한다(동작 불변).
-module.exports = { normalizeAptName, getCachedInterest, warmInterest, hasKeys, keyShape, ANCHOR, fetchBatch, median, writeCache };
+module.exports = { normalizeAptName, getCachedInterest, warmInterest, hasKeys, keyShape, ANCHOR, fetchBatch, median, writeCache, _chunkByEncodedLength, BULK_URL_BUDGET };
