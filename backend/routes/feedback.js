@@ -29,7 +29,7 @@ router.post('/ai', optionalAuth, async (req, res) => {
 
   // 입력 검증
   if (rating !== 1 && rating !== -1) {
-    return res.status(400).json({ error: 'rating은 1(👍) 또는 -1(👎)이어야 해요.' });
+    return res.status(400).json({ error: 'rating은 1(도움됨) 또는 -1(도움 안 됨)이어야 해요.' });
   }
   if (!messageText || typeof messageText !== 'string' || !messageText.trim()) {
     return res.status(400).json({ error: '원본 메시지가 필요해요.' });

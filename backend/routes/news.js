@@ -237,7 +237,7 @@ async function _dataMarketLines() {
  *   그린다(TTL 만료까지 최대 3h). 키를 바꾸는 것이 확실하다.
  */
 router.get('/summary', async (req, res) => {
-  const cacheKey = 'news:summary:v5'; // EMOJI-DATALINE-2026-08-26: 문구 변경 → 구 캐시 무효화 (v4 = REG-STRUCT items 필드 추가)
+  const cacheKey = 'news:summary:v6'; // EMOJI-DATALINE-2026-08-26: 문구 변경 → 구 캐시 무효화 (v4 = REG-STRUCT items 필드 추가)
   // CDN-CACHE-2026-06-14 → NEWS-ZERO-COST: 데이터 시황이 이제 정상 응답이므로 엣지 캐시 대상이다
   //   (종전엔 "AI 성공본만" 캐시하고 폴백은 무캐시였다 — 폴백이 주 경로가 된 지금은 반대가 맞다).
   const SUM_CDN = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=7200';
@@ -267,7 +267,7 @@ router.get('/summary', async (req, res) => {
   }
   // 외부 통계 3종이 모두 실패한 경우 — 캐시하지 않는다(다음 요청서 재시도).
   res.json({
-    summary: ['📌 오늘 뉴스를 불러왔어요. 상세는 아래 목록을 확인하세요.'],
+    summary: ['오늘 뉴스를 불러왔어요. 상세는 아래 목록을 확인하세요.'],
     updatedAt: new Date().toISOString(),
     fromCache: false,
   });

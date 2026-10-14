@@ -311,7 +311,7 @@ function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate, jeonseSa
     volStatus = 'yellow';
     volDesc = '최근 3개월 거래 증가 (성수기 영향 감쇄)';
   } else if (seasonalBias) {
-    volDesc += ' ⚠️ 이사 성수기 영향 가능';
+    volDesc += ' ⚠ 이사 성수기 영향 가능';
   }
   score += volScore;
   conditions.push({ label: '거래량 추이', status: volStatus, desc: volDesc, seasonalBias });

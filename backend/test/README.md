@@ -41,6 +41,7 @@
 | `rent-jeonse.test.js` | 전월세 실거래 조회·캐시·예열 cron |
 | `apt-page.test.js` | 공개 단지 페이지(단지정보 카드·desc·label) |
 | `frontend-contracts.test.js` | 위 주제에 깔끔히 안 들어가는 프론트·품질·보안헤더·SEO·PWA 등 계약 테스트 |
+| `emoji-free-ui.test.js` | 사용자 화면·응답 문자열의 컬러 이모지 0 가드(Plan 143, 주석·AI 프롬프트 제외) |
 
 ## `../testSupport/_helpers.js` 가 왜 `test/` 밖에 있는가
 

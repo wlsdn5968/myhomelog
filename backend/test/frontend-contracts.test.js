@@ -406,7 +406,7 @@ test('시세 "평균"·노후 배지가 실제 계산 기준을 밝힌다 (Sprin
   assert.ok(html.includes('6개월 가중평균(최근 거래 가중)'), '추천 카드 가격 기준 라벨이 부정확하다');
 
   // ② 노후 기준이 화면마다 다르다 — 배지 25년 / 리스크 30년. 배지에 기준을 밝혀 혼선을 없앤다.
-  assert.ok(html.includes("tags.push('🏚 노후 25년+')"), '노후 배지가 기준 연수를 밝히지 않는다');
+  assert.ok(html.includes("tags.push('노후 25년+')"), '노후 배지가 기준 연수를 밝히지 않는다');
   assert.ok(html.includes('age != null && age >= 30'), '리스크 탭의 30년 기준이 바뀌었다 — 배지 표기도 함께 볼 것');
 });
 

@@ -107,13 +107,13 @@
 <body>
 <div class="wrap">
   <div class="hdr">
-    <h1>💳 결제·구독</h1>
+    <h1>결제·구독</h1>
     <a href="/">← 홈으로</a>
   </div>
 
   <!-- PG-MODE-2026-08-28: 테스트 키(test_ck_*)로 붙였을 때만 표시 — 실제 청구가 없음을 분명히 한다 -->
   <div id="pgTestBanner">
-    🧪 <b>테스트 결제 환경</b>입니다. 토스페이먼츠 <b>테스트 키</b>로 동작하며 <b>실제 청구가 발생하지 않습니다.</b>
+    <b>테스트 결제 환경</b>입니다. 토스페이먼츠 <b>테스트 키</b>로 동작하며 <b>실제 청구가 발생하지 않습니다.</b>
     카드번호도 실제 카드가 아닌 테스트 카드만 승인됩니다.
   </div>
 
@@ -315,14 +315,14 @@ async function init(){
 
   // PG-MODE-2026-08-28: 서버 mode 판정별 안내. 차단 사유를 사용자에게 정확히 말한다.
   if(!tossClientKey){
-    setStatus('warn', '⚙ 프로 플랜 정식 출시 준비 중 — 지금은 플랜 안내만 볼 수 있어요.');
+    setStatus('warn', '프로 플랜 정식 출시 준비 중 — 지금은 플랜 안내만 볼 수 있어요.');
   } else if(!confirmEnabled){
-    setStatus('warn', '⚙ 결제 승인 서버 설정 미완료 — 결제는 곧 활성화됩니다.');
+    setStatus('warn', '결제 승인 서버 설정 미완료 — 결제는 곧 활성화됩니다.');
   } else if(window.PG_MODE === 'mismatch'){
     // ck/sk 환경이 엇갈린 상태. 결제는 시작되는데 확정이 실패하는 최악의 조합이라 반드시 막는다.
-    setStatus('warn', '⚙ 결제 설정 점검 중 — 잠시 후 다시 시도해주세요.');
+    setStatus('warn', '결제 설정 점검 중 — 잠시 후 다시 시도해주세요.');
   } else if(window.PG_MODE === 'live_locked'){
-    setStatus('warn', '⚙ 결제 오픈 준비 중 — 최종 점검이 끝나면 바로 열립니다.');
+    setStatus('warn', '결제 오픈 준비 중 — 최종 점검이 끝나면 바로 열립니다.');
   }
 
   // 3) URL 쿼리 — 결제 성공/실패 콜백 처리
@@ -384,7 +384,7 @@ async function loadMe(){
     const me = await r.json();
     document.getElementById('meCard').style.display = '';
     document.getElementById('mePlan').textContent = (me.plan || 'free').toUpperCase();
-    document.getElementById('meStatus').textContent = me.status === 'active' ? '✅ 활성'
+    document.getElementById('meStatus').textContent = me.status === 'active' ? '활성'
       : me.status === 'canceled' ? '⚠ 해지됨 (기간 말까지 유효)' : me.status || '—';
     if(me.current_period_end){
       document.getElementById('mePeriodRow').style.display = '';
@@ -507,11 +507,11 @@ async function startCheckout(planId){
     return false;
   }
   if(!authSession){
-    setStatus('warn', '🔐 결제하려면 먼저 <a href="/">홈에서 로그인</a>해주세요.');
+    setStatus('warn', '결제하려면 먼저 <a href="/">홈에서 로그인</a>해주세요.');
     return;
   }
   if(!tossClientKey){
-    setStatus('warn', '⚙ 결제 시스템 준비 중 — 잠시 후 다시 시도해주세요.');
+    setStatus('warn', '결제 시스템 준비 중 — 잠시 후 다시 시도해주세요.');
     return;
   }
   currentPlan = plansCache.find(p => p.id === planId);
@@ -521,7 +521,7 @@ async function startCheckout(planId){
   let order;
   try {
     const token = await getBillingAccessToken();
-    if(!token){ setStatus('warn', '🔐 세션이 만료되었습니다. <a href="/">홈에서 다시 로그인</a> 후 시도해주세요.'); return; }
+    if(!token){ setStatus('warn', '세션이 만료되었습니다. <a href="/">홈에서 다시 로그인</a> 후 시도해주세요.'); return; }
     const r = await fetch('/api/billing/checkout', {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + token },
@@ -622,13 +622,13 @@ async function handleSuccess(sp){
     return;
   }
   if(!authSession){
-    setStatus('err', '🔐 세션이 만료되었습니다. 다시 로그인 후 확인해주세요.');
+    setStatus('err', '세션이 만료되었습니다. 다시 로그인 후 확인해주세요.');
     return;
   }
   setStatus('info', '<span class="sp"></span> 결제 승인 처리 중...');
   try {
     const token = await getBillingAccessToken();
-    if(!token){ setStatus('err', '🔐 세션이 만료되었습니다. 다시 로그인 후 확인해주세요.'); return; }
+    if(!token){ setStatus('err', '세션이 만료되었습니다. 다시 로그인 후 확인해주세요.'); return; }
     const r = await fetch('/api/billing/confirm', {
       method:'POST',
       headers:{ 'Content-Type':'application/json', 'Authorization':'Bearer ' + token },
@@ -636,13 +636,13 @@ async function handleSuccess(sp){
     });
     const data = await r.json();
     if(!r.ok) throw new Error(data.error || 'HTTP ' + r.status);
-    setStatus('ok', `✅ 결제 완료! <b>${escapeHtml((data.plan||'').toUpperCase())}</b> 플랜이 활성화됐어요. <a href="/">홈으로 돌아가기</a>`);
+    setStatus('ok', `결제 완료! <b>${escapeHtml((data.plan||'').toUpperCase())}</b> 플랜이 활성화됐어요. <a href="/">홈으로 돌아가기</a>`);
     // URL 정리 — 새로고침 시 재전송 방지
     history.replaceState(null, '', '/billing');
     await loadMe();
     await loadPlans();
   } catch(e){
-    setStatus('err', '❌ 결제 승인 실패: ' + escapeHtml(e.message) + '<br>결제가 되었는데 오류가 표시된다면 고객센터에 문의해주세요.');
+    setStatus('err', '결제 승인 실패: ' + escapeHtml(e.message) + '<br>결제가 되었는데 오류가 표시된다면 고객센터에 문의해주세요.');
   }
 }
 
@@ -650,7 +650,7 @@ async function handleSuccess(sp){
 function handleFail(sp){
   const code = sp.get('code') || '알 수 없음';
   const msg = sp.get('message') || '결제가 취소되었거나 실패했습니다.';
-  setStatus('err', `❌ 결제 실패 (${escapeHtml(code)}): ${escapeHtml(msg)}`);
+  setStatus('err', `결제 실패 (${escapeHtml(code)}): ${escapeHtml(msg)}`);
   history.replaceState(null, '', '/billing');
   loadPlans();
   loadMe();
@@ -662,13 +662,13 @@ async function cancelSubscription(){
   if(!confirm('구독을 해지할까요? (현재 결제 주기 말까지는 계속 사용 가능)')) return;
   try {
     const token = await getBillingAccessToken();
-    if(!token){ setStatus('err', '🔐 세션이 만료되었습니다. 다시 로그인해주세요.'); return; }
+    if(!token){ setStatus('err', '세션이 만료되었습니다. 다시 로그인해주세요.'); return; }
     const r = await fetch('/api/billing/cancel', {
       method:'POST',
       headers:{ 'Authorization':'Bearer ' + token },
     });
     if(!r.ok) throw new Error('HTTP ' + r.status);
-    setStatus('ok', '✅ 해지 완료 — 현재 결제 주기 말까지는 계속 이용할 수 있어요.');
+    setStatus('ok', '해지 완료 — 현재 결제 주기 말까지는 계속 이용할 수 있어요.');
     await loadMe();
   } catch(e){
     setStatus('err', '해지 실패: ' + escapeHtml(e.message));
