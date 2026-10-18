@@ -1089,6 +1089,111 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .lgv{padding:16px;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px;overflow-y:auto}
 .lcard{background:var(--s0);border:1px solid var(--bd);border-radius:var(--r);overflow:hidden;cursor:pointer;transition:all .2s;display:flex;flex-direction:column;min-height:170px}
 .lcard:hover{box-shadow:var(--sh2);transform:translateY(-2px)}
+/* LIST-D-2026-10-18 (Plan 163): 시안 화면 D 결과 영역 — 색은 토큰만(다크 모드는 토큰이 바뀐다).
+   #view-list 는 sv() 가 인라인 display(grid/none)를 쓰므로 display 를 건드리지 않고 한 열 그리드로 세로 흐름을 만든다. */
+#view-list.ld-on{grid-template-columns:minmax(0,1fr);align-content:start;gap:0;padding:28px 32px 32px}
+.ld{display:flex;flex-direction:column;gap:16px;min-width:0}
+.ld-sum{display:none}
+.ld-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px}
+.ld-head-l{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ld-k{font-size:14px;color:var(--t3)}
+.ld-h1{margin:0;font-size:28px;font-weight:700;letter-spacing:-.02em;color:var(--t1);line-height:1.25}
+.ld-s{font-size:14px;color:var(--t2)}
+.ld-wide{font-size:12px;font-weight:500;color:var(--t3)}
+.ld-rg{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:2px}
+.ld-rgb{height:36px;padding:0 6px;border:0;background:transparent;color:var(--acc);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit}
+.ld-tools{display:flex;align-items:center;gap:8px;padding:12px 0;border-top:1px solid var(--bd);border-bottom:1px solid var(--bd)}
+.ld-chip{height:36px;padding:0 14px;border-radius:8px;border:1px solid var(--bd2);background:var(--bg-base);color:var(--t1);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;flex:none}
+.ld-chip.on{border-color:var(--acc);background:var(--accent-tint);color:var(--acc)}
+.ld-cnt{margin-left:auto;font-size:14px;color:var(--t3);white-space:nowrap;flex:none}
+.ld-sel{height:36px;padding:0 12px;border-radius:8px;border:1px solid var(--bd2);background:var(--bg-base);color:var(--t1);font-size:14px;font-weight:600;font-family:inherit;cursor:pointer;flex:none}
+.ld-note{display:flex;align-items:center;gap:8px;font-size:14px;color:var(--t2)}
+.ld-note svg{flex:none;color:var(--t3)}
+.ld-list{display:flex;flex-direction:column;gap:10px}
+.ld-card{display:grid;grid-template-columns:minmax(0,1.3fr) 150px minmax(0,1.1fr) 150px 132px;column-gap:24px;align-items:center;padding:20px 24px;background:var(--bg-base);border:1px solid var(--bd);border-radius:8px;cursor:pointer}
+.ld-card:hover{border-color:var(--bd2)}
+.ld-card:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+.ld-c-apt{display:flex;flex-direction:column;gap:6px;min-width:0}
+.ld-nm{font-size:16px;font-weight:600;color:var(--t1);line-height:1.35}
+.ld-sub{font-size:14px;color:var(--t3)}
+.ld-pros{font-size:14px;line-height:1.5;color:var(--t2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.ld-tags{display:flex;flex-wrap:wrap;gap:6px}
+.ld-tag{height:24px;padding:0 8px;border-radius:4px;background:var(--bg-elev-1);color:var(--t2);font-size:12px;font-weight:500;display:inline-flex;align-items:center}
+.ld-c-avg{display:flex;flex-direction:column;gap:4px}
+.ld-m{font-size:12px;font-weight:500;color:var(--t3)}
+.ld-v{font-size:20px;font-weight:700;color:var(--t1)}
+.ld-pyg{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));border:1px solid var(--bd);border-radius:6px}
+.ld-pyg>div{display:flex;flex-direction:column;gap:2px;padding:8px 10px;min-width:0}
+.ld-pyg>div+div{border-left:1px solid var(--bd)}
+.ld-pyg b{font-size:14px;font-weight:600;color:var(--t1)}
+.ld-c-loan{display:flex;flex-direction:column;gap:4px}
+.ld-lm{display:block}
+.ld-lm .ld-m{display:block}
+.ld-mx{font-size:14px;font-weight:600;color:var(--t1)}
+.ld-score{display:flex;align-items:center;gap:8px;margin-top:6px}
+.ld-score b{font-size:14px;font-weight:700;color:var(--t1)}
+.ld-bar{flex:1;height:4px;border-radius:2px;background:var(--bg-elev-1);overflow:hidden;min-width:24px}
+.ld-bar>i{display:block;height:100%;background:var(--acc)}
+.ld-c-cmp{display:flex;justify-content:flex-end}
+.ld-cmp{height:36px;padding:0 12px;border-radius:8px;border:1px solid var(--bd2);background:var(--bg-base);color:var(--t1);font-size:14px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap}
+.ld-cmp[aria-pressed="true"]{border-color:var(--acc);background:var(--accent-tint);color:var(--acc)}
+.ld-cmp svg{display:none}
+.ld-foot{margin-top:8px;font-size:12px;font-weight:500;color:var(--t3)}
+.ld-empty{display:flex;flex-direction:column;align-items:center;text-align:center;gap:12px;padding:32px}
+.ld-empty svg{color:var(--t3)}
+.ld-empty h2,.ld-zero h2{margin:0;font-size:20px;font-weight:700;color:var(--t1)}
+.ld-empty p{margin:0;max-width:480px;font-size:14px;line-height:1.6;color:var(--t2)}
+.ld-zero{display:flex;flex-direction:column;gap:16px}
+.ld-zero h2{font-size:28px;letter-spacing:-.02em}
+.ld-box{padding:24px;background:var(--bg-base);border:1px solid var(--bd);border-radius:8px;display:flex;flex-direction:column;gap:8px}
+.ld-box b{font-size:16px;font-weight:600;color:var(--t1)}
+.ld-box span{font-size:14px;color:var(--t2);line-height:1.5}
+.ld-wait{display:flex;flex-direction:column;gap:16px}
+.ld-wait h2{margin:0;font-size:20px;font-weight:700;color:var(--t1)}
+.ld-wait p{margin:0;font-size:14px;color:var(--t2)}
+.ld-skel{height:72px;padding:0 24px;background:var(--bg-base);border:1px solid var(--bd);border-radius:8px;display:flex;align-items:center;gap:16px}
+.ld-skel i{display:block;height:12px;border-radius:4px;background:var(--bg-elev-1);flex:1}
+.ld-skel i:first-child{flex:2}
+.ld-mob{display:none}
+@media(min-width:701px){ #s3{display:none!important} } /* LIST-D: 결과는 본문 한 곳 — 사이드바 결과 구역은 숨기기만 한다(노드는 doSearch·renderPList 가 읽는다) */
+@media(max-width:700px){
+  #view-list.ld-on{padding:12px 16px}
+  .ld-dsk{display:none}
+  .ld-mob{display:inline}
+  .ld-sum{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:56px;padding:8px 12px;border:1px solid var(--bd2);border-radius:8px;background:var(--bg-base);cursor:pointer;text-align:left;font-family:inherit;width:100%}
+  .ld-sum-t{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .ld-sum-t b{font-size:14px;font-weight:600;color:var(--t1)}
+  .ld-sum-t span{font-size:12px;font-weight:500;color:var(--t3)}
+  .ld-sum-go{font-size:14px;font-weight:600;color:var(--acc);flex:none}
+  .ld-head{display:block}
+  .ld-k,.ld-s,.ld-rg{display:none}
+  .ld-h1{font-size:14px;font-weight:400;letter-spacing:0;color:var(--t2)}
+  .ld-tools{overflow-x:auto;gap:6px;-webkit-overflow-scrolling:touch}
+  .ld-sel{order:-1}
+  .ld-cnt{display:none}
+  .ld-note{display:none}
+  .ld-card{grid-template-columns:minmax(0,1fr) 44px;grid-template-areas:"apt cmp" "avg avg" "loan loan";row-gap:10px;column-gap:8px;padding:14px 16px}
+  .ld-c-apt{grid-area:apt;gap:2px}
+  .ld-c-cmp{grid-area:cmp;align-self:start}
+  .ld-c-avg{grid-area:avg;flex-direction:row;flex-wrap:wrap;align-items:baseline;gap:8px}
+  .ld-c-avg .ld-v{order:1}
+  .ld-c-avg .ld-m{order:2}
+  .ld-sp::before{content:"· "}
+  .ld-c-loan{grid-area:loan;flex-direction:row;align-items:center;gap:8px}
+  .ld-sub{font-size:12px;font-weight:500}
+  .ld-pros,.ld-tags,.ld-pyg{display:none}
+  .ld-lm{display:flex;gap:4px;flex:1;min-width:0;flex-wrap:wrap}
+  .ld-lm .ld-m{display:inline}
+  .ld-mx{font-size:12px;font-weight:500;color:var(--t3)}
+  .ld-mx::before{content:" · "}
+  .ld-score{margin-top:0}
+  .ld-bar{flex:none;width:48px;min-width:0}
+  .ld-cmp{width:44px;height:44px;padding:0;display:inline-flex;align-items:center;justify-content:center}
+  .ld-cmp-t{display:none}
+  .ld-cmp svg{display:block}
+  .ld-skel{padding:0 16px}
+  .ld-zero h2{font-size:20px}
+}
 .lc-top{padding:14px 16px;border-bottom:1px solid var(--bd)}
 .lc-name{font-size:14px;font-weight:700;margin-bottom:4px;line-height:1.35;color:var(--t1)}
 .lc-area{font-size:12px;color:var(--t3);margin-bottom:10px}
@@ -7174,11 +7279,11 @@ async function doSearch(){
   //   그대로 ~10초 유지 → "버튼 안 됨" 체감(운영자 신고 재현). 사이드바 버튼 스피너·hint 토스트(3s)는
   //   시선 밖·짧음 → 본문(목록 영역)에 로딩 카드 즉시 표시. 결과 도착 시 renderListGrid 가 덮어씀.
   const _lg=document.getElementById('view-list');
-  if(_lg) _lg.innerHTML=`<div style="grid-column:1/-1;padding:60px 20px;text-align:center;color:var(--t3)">
-    <div class="spin" style="margin:0 auto 14px"></div>
-    <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px">실거래로 단지를 정리하는 중이에요</div>
-    <div style="font-size:12px;color:var(--t2);line-height:1.6">국토교통부 실거래를 조회하고 단지를 분석한 뒤 위치를 찾아요<br>보통 5~15초 걸려요</div>
-  </div>`;
+  // LIST-D-2026-10-18 (Plan 163): 시안 D "검색 중" — 진행률 막대는 실제 진행률 데이터가 없어 넣지 않는다(빈 카드 3장만).
+  if(_lg){ _lg.classList.add('ld-on'); _lg.innerHTML=`<div class="ld"><div class="ld-wait" role="status" aria-live="polite">
+    <h2>실거래를 모아 단지를 고르고 있어요</h2>
+    <p>보통 5초에서 15초 걸려요. 창을 닫지 않아도 돼요.</p>
+  </div><div class="ld-list" aria-hidden="true">${'<div class="ld-skel"><i></i><i></i><i></i></div>'.repeat(3)}</div></div>`; }
   // METRO-SUB-2026-07-17 (Sprint UUUUU): '지방'만 고르고 세부 미선택 시 backend 가 특정 광역시로 좁힐 수 없어
   //   경기로 오귀속됨 → 조용한 오결과 대신 세부 선택 안내(honest). 세부 선택 시엔 정상 도달.
   if(getRegionForSearch()==='지방'){
@@ -7423,21 +7528,40 @@ function renderPList(){
   }).join('');
 }
 
+// LIST-D-2026-10-18 (Plan 163): 목록 화면 결과 영역을 시안 화면 D 로 — 결과 한 곳·점수는 숫자+막대 한 가지·면책 한 줄.
+//   정렬·필터 로직(_sortMap·window._lstFlt·_isRegProp·_curSortSel)과 _regionLabel·_regionEntry 규칙은 그대로 쓴다.
 function renderListGrid(){
   const g=document.getElementById('view-list');
+  g.classList.add('ld-on');
+  // 모바일 조건 요약 줄(데스크톱은 CSS 로 숨김) — 실제 입력값에서 만들고, 비면 그 항목은 생략한다.
+  const _sum = (() => {
+    let main = '', reg = '';
+    try {
+      const q = (s) => { const e = document.querySelector(s); return e ? String(e.textContent || '').trim() : ''; };
+      const val = (id) => { const e = document.getElementById(id); return e ? String(e.value || '').trim() : ''; };
+      const parts = [];
+      const h = q('#ch-h .chip.on'); if (h) parts.push(h);
+      const bp = val('bp'); if (bp) parts.push(`${bp}억`);
+      const mc = val('mc'); if (mc) parts.push(`자기 자본 ${mc}억`);
+      main = parts.join(' · ');
+      const r = [];
+      const w = q('#ch-r .chip.on'); if (w) r.push(w);
+      const subs = Array.from(document.querySelectorAll('#ch-r-sub .chip.on')).map(e => String(e.textContent || '').trim()).filter(Boolean);
+      if (subs.length) r.push(subs.join(', '));
+      reg = r.join(' ');
+    } catch (_e) {}
+    return `<button type="button" class="ld-sum" onclick="toggleDrawer()"><span class="ld-sum-t"><b>${_escHtml(main || '조건을 넣어 주세요')}</b>${reg ? `<span>${_escHtml(reg)}</span>` : ''}</span><span class="ld-sum-go">조건</span></button>`;
+  })();
   if(!props.length){
-    g.innerHTML=`<div style="grid-column:1/-1;padding:50px 20px;text-align:center;color:var(--t3)">
-      <div style="font-size:14px;font-weight:700;color:var(--t1);margin-bottom:6px">아직 검색 결과가 없어요</div>
-      <!-- KKKKKKK-14: "왼쪽" 은 데스크톱 전제 — 모바일은 좌측 패널이 없어(☰ 드로어) 길 안내가 틀렸다 -->
-      <div style="font-size:12px;color:var(--t2);line-height:1.7;margin-bottom:18px"><b>"내 상황"</b>(PC 왼쪽 패널 · 모바일 ☰ 메뉴) 입력하고 <b>조건에 맞는 단지 찾기</b>를 누르면<br>국토교통부 실거래가로 단지 정보를 정리해요. 매수 추천은 아니에요.</div>
-      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
-        <button class="abtn acc" style="margin:0;padding:8px 16px;font-size:12px;width:auto" onclick="quickSearchPreset('서울 7억 무주택')">빠른 검색: 서울 7억 무주택</button>
-        <button class="abtn a2" style="margin:0;padding:8px 16px;font-size:12px;width:auto" onclick="quickSearchPreset('경기 5억 생애최초')">경기 5억 생애최초</button>
-      </div>
-    </div>`;
+    // 검색 전 — 데스크톱은 왼쪽 패널, 모바일은 ☰ 메뉴가 입력 위치라 문구를 나눈다(KKKKKKK-14)
+    g.innerHTML=`<div class="ld">${_sum}<div class="ld-empty">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>
+      <h2><span class="ld-dsk">왼쪽에서 조건을 넣고 단지 찾기를 눌러 주세요</span><span class="ld-mob">메뉴에서 조건을 넣고 단지 찾기를 눌러 주세요</span></h2>
+      <p>주택 보유, 매수 예정가, 자기 자본, 희망 지역을 넣으면 예산 안에 드는 단지를 실거래가와 함께 정리해 드려요.</p>
+      <div class="ld-foot" style="margin-top:0">매수·매도 추천이 아니에요</div>
+    </div></div>`;
     return;
   }
-  // Agent UX #8 (2026-05-04): 모바일 가로 스크롤 차단 — flex column 으로 줄 분리
   // BROAD-META-2026-09-05: 광역 검색은 시도 전체(서울 25·인천 11·경기 47)를 본다 — 이름 25개를 나열하지 않는다.
   const _regionLabel = (regs) => {
     if (!Array.isArray(regs) || !regs.length) return '';
@@ -7447,9 +7571,24 @@ function renderListGrid(){
     }
     return regs.map(String).join(', ');
   };
-  const metaLine = searchMeta && searchMeta.regions.length
-    ? `<div class="meta-line" style="margin:10px 14px 0;padding:8px 12px;background:var(--info-bg);border:1px solid var(--info-bd);border-radius:var(--radius-base);color:var(--info-tx);font-size:12px;line-height:1.55"><div><b>분석 지역:</b> ${_escHtml(_regionLabel(searchMeta.regions))}</div>${(()=>{try{const _wideOn=document.querySelector('#ch-r .chip.on');const _subOn=document.querySelectorAll('#ch-r-sub .chip.on').length;return (_wideOn&&!_subOn)?`<div style="font-size:12px;opacity:.85">${_escHtml(_wideOn.textContent.trim())} 전체 ${searchMeta.regions.length}개 시군구를 분석했어요. 세부 구를 직접 고르면 그 지역만 분석해요</div>`:'';}catch(_e){return '';}})()}<div>전체 단지 <b>${(Number(searchMeta.totalAptsInRegion)||0).toLocaleString()}개</b> · 예산 매치 <b>${(Number(searchMeta.inBudget)||0).toLocaleString()}건</b></div><div title="analyzeTransactions 가 (단지명·법정동) 기준으로 묶은 결과 수입니다. 거래 건수가 아니라 단지 수예요.">최근 6개월 거래가 있는 단지 ${(Number(searchMeta.totalTx)||0).toLocaleString()}곳 분석</div></div>`
-    : '';
+  const _hasMeta = !!(searchMeta && Array.isArray(searchMeta.regions) && searchMeta.regions.length);
+  const _num = (v) => (v != null && v !== '' && Number.isFinite(Number(v))) ? Number(v).toLocaleString() : '';
+  const headL = (() => {
+    let h = '';
+    if (_hasMeta) h += `<div class="ld-k">분석 지역 ${_escHtml(_regionLabel(searchMeta.regions))}</div>`;
+    const ib = searchMeta ? _num(searchMeta.inBudget) : '';
+    if (ib) h += `<h2 class="ld-h1">예산 안에 드는 단지 ${ib}건</h2>`;
+    const ta = searchMeta ? _num(searchMeta.totalAptsInRegion) : '';
+    if (ta) h += `<div class="ld-s">전체 단지 ${ta}개 중이에요</div>`;
+    if (_hasMeta) {
+      try {
+        const _wideOn = document.querySelector('#ch-r .chip.on');
+        const _subOn = document.querySelectorAll('#ch-r-sub .chip.on').length;
+        if (_wideOn && !_subOn) h += `<div class="ld-wide">${_escHtml(_wideOn.textContent.trim())} 전체 ${searchMeta.regions.length}개 시군구를 분석했어요. 세부 구를 직접 고르면 그 지역만 분석해요</div>`;
+      } catch (_e) {}
+    }
+    return h;
+  })();
   // REGION-ENTRY-2-2026-07-25 (Sprint ZZZZZZ, 기획안 §3 A안의 '추천 결과 상단'분):
   //   결과에 실제로 등장하는 지역만 노출한다. ⚠ searchMeta.regions(이름 배열)를 쓰지 않고
   //   **props 의 lawdCd 로 묶는다** — 이름으로 지역을 특정하면 동명 구 오매칭(Sprint PPPPPP P0).
@@ -7468,44 +7607,38 @@ function renderListGrid(){
     }
     const top = Array.from(cnt.entries()).sort((a, b) => b[1].n - a[1].n).slice(0, 3);
     if (!top.length) return '';
-    return `<div style="margin:0 14px 10px;display:flex;flex-wrap:wrap;gap:6px;align-items:center">
-      <span style="font-size:12px;color:var(--t2);font-weight:600">동네 시장</span>
-      ${top.map(([code, v]) => `<button class="rg-open" title="이 지역의 가격지수·거래량·미분양·인구 순이동·규제 상태를 공식 통계로 봅니다" onclick="openRegionSummary('${_escHtml(code)}','${_escHtml(v.nm)}')">${_escHtml(v.nm || code)} 시장 요약</button>`).join('')}
-    </div>`;
+    return `<div class="ld-rg">${top.map(([code, v]) => `<button type="button" class="ld-rgb" title="이 지역의 가격지수·거래량·미분양·인구 순이동·규제 상태를 공식 통계로 봅니다" onclick="openRegionSummary('${_escHtml(code)}','${_escHtml(v.nm)}')">${_escHtml(v.nm || code)} 시장 요약</button>`).join('')}</div>`;
   })();
   // SORT-RESET-FIX-2026-08-20 (Sprint NNNNNNN-19, 루프 회차 3 실측): innerHTML 재렌더가 셀렉트를
-  //   첫 옵션(score)으로 초기화 — 정렬 변경 직후 표시가 리셋되고, 이어 필터를 누르면 리셋된 값을
-  //   읽어 실제 정렬까지 풀렸다. 재렌더 전에 현재 선택을 읽어 selected 로 되살린다.
+  //   첫 옵션(score)으로 초기화 — 재렌더 전에 현재 선택을 읽어 selected 로 되살린다.
   const _curSortSel = document.getElementById('lstSort')?.value || 'score';
-  const banner=`${metaLine}${_regionEntry}<div style="margin:10px 14px 14px;padding:11px 13px;background:var(--redL);border:1px solid var(--danger-bd);border-radius:var(--radius-base);color:var(--red);font-size:12px;line-height:1.6;font-weight:600">⚠ <u>매수 추천이 아니에요.</u> 아래 점수와 신호는 과거 실거래를 통계로 정리한 것이며, 미래 가격(상승·하락)을 예측하거나 보장하지 않아요. 모든 결정의 책임은 본인에게 있어요. <a href="javascript:openTerms()" style="color:var(--red);text-decoration:underline">자세히</a></div>
-  <!-- Phase 4 (2026-04-26): 정렬·필터 — 추천 결과 비교 핵심 -->
-  <div style="margin:0 14px 12px;display:flex;flex-wrap:wrap;gap:8px;align-items:center">
-    <span style="font-size:12px;color:var(--t2);font-weight:600">정렬</span>
-    <select aria-label="정렬 기준" id="lstSort" onchange="renderListGrid()" style="padding:5px 9px;border:1px solid var(--bd);border-radius:var(--radius-sm);font-size:12px;background:var(--bg-base);cursor:pointer;font-family:inherit">
+  const _flt = window._lstFlt || 'all';
+  const _chip = (id, f, label) => `<button type="button" id="${id}" class="ld-chip${_flt === f ? ' on' : ''}" aria-pressed="${_flt === f ? 'true' : 'false'}" onclick="setLstFilter('${f}')">${label}</button>`;
+  const head = `${_sum}<div class="ld-head"><div class="ld-head-l">${headL}</div>${_regionEntry}</div>
+  <div class="ld-tools">
+    <select aria-label="정렬 기준" id="lstSort" class="ld-sel" onchange="renderListGrid()">
       <option value="score"${_curSortSel==='score'?' selected':''}>점수 높은 순</option>
       <option value="priceAsc"${_curSortSel==='priceAsc'?' selected':''}>가격 낮은 순</option>
       <option value="priceDesc"${_curSortSel==='priceDesc'?' selected':''}>가격 높은 순</option>
       <option value="newBuild"${_curSortSel==='newBuild'?' selected':''}>신축 우선</option>
       <option value="oldBuild"${_curSortSel==='oldBuild'?' selected':''}>구축 우선</option>
     </select>
-    <span style="font-size:12px;color:var(--t2);font-weight:600;margin-left:6px">필터</span>
-    <button id="lstFltAll" onclick="setLstFilter('all', this)" style="padding:5px 11px;border:1px solid var(--acc);background:var(--acc-bg);color:var(--acc-ink);border-radius:var(--radius-xl);font-size:12px;cursor:pointer">전체</button>
-    <button id="lstFltReg" onclick="setLstFilter('regulated', this)" style="padding:5px 11px;border:1px solid var(--bd);background:var(--bg-base);color:var(--t2);border-radius:var(--radius-xl);font-size:12px;cursor:pointer">규제지역</button>
-    <button id="lstFltNon" onclick="setLstFilter('non', this)" style="padding:5px 11px;border:1px solid var(--bd);background:var(--bg-base);color:var(--t2);border-radius:var(--radius-xl);font-size:12px;cursor:pointer">비규제</button>
-    <span style="margin-left:auto;font-size:12px;color:var(--t3)">총 ${props.length}건</span>
-  </div>`;
+    ${_chip('lstFltAll', 'all', '전체')}${_chip('lstFltReg', 'regulated', '규제지역')}${_chip('lstFltNon', 'non', '비규제')}
+    <span class="ld-cnt">총 ${props.length}건</span>
+  </div>
+  <div class="ld-note"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span>점수는 과거 실거래 통계로 0부터 100까지 매긴 값이에요. 가격이 오를지 내릴지를 뜻하지 않아요.</span></div>`;
   // Phase 4 (2026-04-26): 렌더 안전망 + 정렬·필터.
-  let cardsHtml = '';
+  let body = '';
   // PERF-2026-06-13: props.indexOf(p) 가 map 루프 안에서 O(n²) → 객체 식별자 Map 으로 O(1) 조회 (대량 결과 프레임저하 제거)
   const _idxOf = new Map(props.map((p,i)=>[p,i]));
   try {
     // 필터 적용
-    const flt = window._lstFlt || 'all';
+    const flt = _flt;
     let filtered = props.slice();
     if (flt === 'regulated') filtered = filtered.filter(p => _isRegProp(p));
     else if (flt === 'non') filtered = filtered.filter(p => !_isRegProp(p));
     // 정렬 적용
-    const sort = _curSortSel; // SORT-RESET-FIX-2026-08-20: 위에서 읽은 같은 값 — 재렌더 전 DOM 재조회와 동일하나 의도가 명확
+    const sort = _curSortSel;
     // MOB-AUDIT-2026-05-03: STAB #21 — `sortFn?.score` 가 자기 자신 참조 (선언 중) → 알 수 없는 sort 키 입력 시 undefined → 정렬 안 됨
     const _sortMap = {
       score: (a,b) => (Number(b.score)||0) - (Number(a.score)||0),
@@ -7516,75 +7649,63 @@ function renderListGrid(){
     };
     const sortFn = _sortMap[sort] || _sortMap.score;
     filtered.sort(sortFn);
-    cardsHtml = filtered.map((p,_i)=>{
+    const cardsHtml = filtered.map((p,_i)=>{
       if (!p || !p.aptName) return '';
       const realIdx = _idxOf.get(p);
       return _renderListCard(p, realIdx);
     }).filter(Boolean).join('');
     if (!cardsHtml) {
-      cardsHtml = `<div style="grid-column:1/-1;padding:30px 20px;text-align:center;color:var(--t3)">
-        <div style="font-size:14px;font-weight:600;color:var(--t1);margin-bottom:6px">분석은 됐지만 표시할 단지가 없어요</div>
-        <div style="font-size:12px;line-height:1.6">예산과 지역 조건에 맞는 단지가 부족해요. 매수가를 조금 늘리거나 가까운 구도 함께 골라 보세요.</div>
-      </div>`;
+      body = `<div class="ld-zero"><h2>조건에 맞는 단지가 없어요</h2>
+        <div class="ld-box"><b>조건을 하나씩 풀어 보면 결과가 생길 수 있어요</b><span>예산과 지역 조건에 맞는 단지가 부족해요. 매수가를 조금 늘리거나 가까운 구도 함께 골라 보세요.</span></div>
+        <div class="ld-foot" style="margin-top:0">매수·매도 추천이 아니에요</div></div>`;
+    } else {
+      body = `<div class="ld-list">${cardsHtml}</div>
+        <div class="ld-foot"><span class="ld-dsk">매수·매도 추천이 아니에요. 출처 국토교통부 실거래가</span><span class="ld-mob">매수·매도 추천이 아니에요. 점수는 과거 실거래 통계예요</span></div>`;
     }
   } catch (e) {
     console.error('renderListGrid map error:', e, props.slice(0,3));
-    cardsHtml = `<div style="grid-column:1/-1;padding:30px 20px;text-align:center;color:var(--red)">
-      <div style="font-size:14px;font-weight:600;margin-bottom:4px">목록을 보여주지 못했어요</div>
-      <div style="font-size:12px">${_escHtml(String(e.message||e).slice(0,200))}</div>
-    </div>`;
+    body = `<div class="ld-box" role="alert"><b>목록을 보여주지 못했어요</b><span>${_escHtml(String(e.message||e).slice(0,200))}</span></div>`;
   }
-  g.innerHTML = banner + cardsHtml;
+  g.innerHTML = `<div class="ld">${head}${body}</div>`;
   return;
 }
 
 // Phase 4 (2026-04-26): 목록 필터 toggle
-function setLstFilter(f, btn) {
+// LIST-D-2026-10-18 (Plan 163): 선택 표시는 renderListGrid 가 클래스 on 으로 다시 그린다 — 인라인 #fff 는 다크 모드에서 흰 칩이 됐다.
+function setLstFilter(f) {
   window._lstFlt = f;
-  ['lstFltAll','lstFltReg','lstFltNon'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) {
-      el.style.background = '#fff';
-      el.style.color = 'var(--t2)';
-      el.style.borderColor = 'var(--bd)';
-    }
-  });
-  if (btn) {
-    btn.style.background = 'var(--acc)';
-    btn.style.color = '#fff';
-    btn.style.borderColor = 'var(--acc)';
-  }
   renderListGrid();
 }
 
 // 카드 1개 렌더 (renderListGrid 에서 분리 — 안전망 활용)
+// LIST-D-2026-10-18 (Plan 163): 시안 D 카드 — 점수는 숫자+막대 한 가지, 거래량 배지(점수 75·50 기준 "거래활발" 등)는 없앴다.
 function _renderListCard(p, i) {
-  const tags = _renderPTags(p.tags, 3);
-  // 점수 환각 fix (2026-05-05): score 없으면 'unknown' (60 fallback 제거)
-  const _hasS = p.score != null;
-  const s = _hasS ? Number(p.score) : null;
-  const lv = _hasS ? (s >= 75 ? 'safe' : s >= 50 ? 'warn' : 'danger') : 'unknown';
-  const lt = _hasS ? (s >= 75 ? '거래활발' : s >= 50 ? '거래보통' : '거래적음') : '분석 대기';
-  const prosRaw = String(p.pros || '');
-  const prosClamped = prosRaw.length > 62 ? prosRaw.substring(0,62) + '...' : prosRaw;
-  return `<div class="lcard" onclick="showDetail(props[${i}])" style="position:relative">
-    <label class="cmp-chk" onclick="event.stopPropagation()" title="비교 담기">
-      <input type="checkbox" class="cmp-chk-input" data-i="${i}" ${cmpSel.has(i)?'checked':''} onclick="event.stopPropagation();toggleCmp(${i},this.checked)">
-      <span class="cmp-chk-lbl">비교</span>
-    </label>
-    <div class="lc-top" style="background:${_isRegProp(p)?'var(--accL)':'var(--a2L)'}">
-      <div class="lc-name">${_escHtml(p.displayName || _dispAptName(p.aptName, p.umdNm) || '')}</div><div class="lc-area">${_escHtml(_fmtSgg(p.area))} | ${_escHtml(p.buildYear||'')}년</div>
-      <div class="lc-g">${gSVG(s||0,50)}
-        <div><div style="font-size:16px;font-weight:800;color:${_hasS?gc(s):'var(--text-tertiary)'}">${(Number(p.avgPrice)||0).toFixed(2)}억</div>
-        <span class="lvl ${lv}">${lt}</span>
-        <div style="font-size:12px;color:var(--t2);margin-top:2px">LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}${p.maxLoan?` | 최대 ${_escHtml(p.maxLoan)}`:''}</div></div>
-      </div>
+  const _sc = (p.score != null && Number.isFinite(Number(p.score))) ? Math.max(0, Math.min(100, Number(p.score))) : null;
+  const _on = cmpSel.has(i);
+  const _tags = (p.tags || []).slice(0, 3).map(t => {
+    const tx = (typeof t === 'object' && t !== null) ? t.t : t;
+    return tx ? `<span class="ld-tag">${_escHtml(tx)}</span>` : '';
+  }).join('');
+  const _py = (p.currentPriceByPyeong || []).slice(0, 3);
+  const _pyCells = [0, 1, 2].map(k => _py[k]
+    ? `<div><span class="ld-m">${_escHtml(_py[k].pyeong)}평</span><b>${_escHtml(_fmtEok(_py[k].recentAvg, 2))}</b></div>`
+    : `<div><span class="ld-m">—</span><b>—</b></div>`).join('');
+  const _n = Number(p.priceSampleN);
+  const _sub = [_fmtSgg(p.area), p.buildYear ? `${p.buildYear}년` : ''].filter(Boolean).join(' · ');
+  return `<div class="ld-card" role="link" tabindex="0" onclick="showDetail(props[${i}])" onkeydown="if(event.target===event.currentTarget&&event.key==='Enter'){showDetail(props[${i}])}">
+    <div class="ld-c-apt">
+      <div class="ld-nm">${_escHtml(p.displayName || _dispAptName(p.aptName, p.umdNm) || '')}</div>
+      <div class="ld-sub">${_escHtml(_sub)}</div>
+      ${p.pros ? `<div class="ld-pros">${_escHtml(p.pros)}</div>` : ''}
+      ${_tags ? `<div class="ld-tags">${_tags}</div>` : ''}
     </div>
-    <div style="padding:12px 14px">
-      <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:7px">${tags}</div>
-      <div style="font-size:12px;color:var(--t2);line-height:1.65;margin-bottom:6px">${_escHtml(prosClamped)}</div>
-      ${(p.currentPriceByPyeong||[]).length?`<div style="font-size:12px;color:var(--t3);background:var(--bg2);border-radius:var(--radius-sm);padding:5px 8px;line-height:1.5">${p.currentPriceByPyeong.slice(0,3).map(cp=>`<b style="color:var(--t2)">${_escHtml(cp.pyeong)}평</b> ${_escHtml(cp.recentAvg)}억`).join(' · ')}</div>`:''}
+    <div class="ld-c-avg"><span class="ld-m">6개월 평균</span><span class="ld-v">${_escHtml(_fmtEok(p.avgPrice, 2))}</span>${(Number.isFinite(_n) && _n > 0) ? `<span class="ld-m ld-sp">표본 ${_n}건</span>` : ''}</div>
+    <div class="ld-pyg">${_pyCells}</div>
+    <div class="ld-c-loan">
+      <div class="ld-lm"><div class="ld-m">LTV ${_escHtml(p.ltv || _regLtvLabel(p.area, p.lawdCd) || '—')}</div>${p.maxLoan ? `<div class="ld-mx">최대 대출 ${_escHtml(p.maxLoan)}</div>` : ''}</div>
+      <div class="ld-score"><span class="ld-m">점수</span>${_sc != null ? `<b>${Math.round(_sc)}</b><span class="ld-bar" aria-hidden="true"><i style="width:${_sc}%"></i></span>` : '<b>분석 대기</b>'}</div>
     </div>
+    <div class="ld-c-cmp"><button type="button" class="ld-cmp" aria-pressed="${_on ? 'true' : 'false'}" aria-label="비교 담기" onclick="event.stopPropagation();toggleCmp(${i},!cmpSel.has(${i}));renderListGrid()"><span class="ld-cmp-t">${_on ? '담았어요' : '비교 담기'}</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${_on ? '<path d="M5 12l5 5L20 7"/>' : '<path d="M12 5v14M5 12h14"/>'}</svg></button></div>
   </div>`;
 }
 
@@ -7672,6 +7793,8 @@ function clearCmp(){
   for(const k in _cmpExtra) delete _cmpExtra[k]; // Plan 150: 상세에서 담은 항목도 함께 비운다
   document.querySelectorAll('.cmp-chk-input').forEach(cb=>{ cb.checked=false; });
   renderCmpBar();
+  // LIST-D-2026-10-18 (Plan 163): 목록 카드의 비교 버튼 표시는 체크박스가 아니라 다시 그려야 맞는다
+  try{ if(document.getElementById('view-list')?.classList.contains('ld-on')) renderListGrid(); }catch(_){}
 }
 
 function renderCmpBar(){
@@ -11768,6 +11891,8 @@ function nxtToggleCmp(){
     else if(typeof k === 'string') delete _cmpExtra[k];
   }
   if(typeof k === 'number'){ const cb = document.querySelector(`.cmp-chk-input[data-i="${k}"]`); if(cb) cb.checked = cmpSel.has(k); } // 목록 체크박스도 맞춘다
+  // LIST-D-2026-10-18 (Plan 163): 목록 카드는 버튼(aria-pressed)이라 다시 그려 맞춘다
+  try{ if(document.getElementById('view-list')?.classList.contains('ld-on')) renderListGrid(); }catch(_){}
 }
 // "{시도} 청약 일정 보기": 시도 칩을 고른 채 청약 화면을 연다. sv('subs') 가 처음 진입이면 스스로 loadSubs() 를 부르므로(sv 안) 칩을 먼저 바꾸고,
 //   이미 불러온 적이 있을 때만 loadSubs() 를 다시 부른다(두 요청이 엇갈려 칩과 다른 목록이 남는 것을 막는다).
@@ -12804,7 +12929,8 @@ document.addEventListener('click', (e) => {
 //   풀스크린 오버레이 중 z-index 최상단"을 활성 모달로 판정한다. 동적 생성 모달(비교·규제요약)은 ①만 적용.
 (function(){
   // ntcNudge 는 비차단 토스트성(20초 자동 닫힘, z520)이라 트랩 대상에서 제외 — 상세 모달(z400) 위에 떠도 Tab 을 가로채면 안 된다(적대 검증 적발)
-  const MODAL_SEL='.smbg,.dmbg,.rgbg,#ERM,#DSM,#CARDOV,#cmpModal,#regSummaryModal';
+  // LIST-D 동반(감사 백로그): 모바일 도구 시트도 aria-modal 인데 Tab 가두기 대상이 아니었다
+  const MODAL_SEL='.smbg,.dmbg,.rgbg,#ERM,#DSM,#CARDOV,#cmpModal,#regSummaryModal,#toolsSheet';
   const FOCUSABLE='a[href],button:not([disabled]),input:not([disabled]):not([type="hidden"]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])';
   const _vis=el=>{ if(!el||!el.isConnected||el.offsetHeight<=0)return false; const cs=getComputedStyle(el); return cs.display!=='none'&&cs.visibility!=='hidden'; };
   function _activeModal(){
@@ -14196,6 +14322,8 @@ function _popRows(j){
   return (j && j.degraded) ? rs.map(p => Object.assign({}, p, { avgDealAmount: null, dealCount60d: null, _degraded: true })) : rs;
 }
 function _fmtSgg(s){return String(s==null?'':s).replace(/^([가-힣]+?시)([가-힣]+구)(?=\s|$)/,'$1 $2');}
+// LIST-D-2026-10-18 (Plan 163): 억 표기 공용 — 목록 화면부터 사용(다른 화면 이관은 별도). 값이 없거나 0 이하면 '—'.
+function _fmtEok(v, d){ const n = Number(v); if(!Number.isFinite(n) || n <= 0) return '—'; return n.toFixed(d == null ? 2 : d) + '억'; }
 function _escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — data-*/API 호출 인자/비교 키는 이 결과로 바꾸지 않는다.
 //   backend/utils/aptDisplayName.js 와 두 정규식이 문자 그대로 동일해야 한다(드리프트 테스트로 고정).
