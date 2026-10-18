@@ -755,7 +755,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .lpsc{flex:1;overflow-y:auto}.lpsc::-webkit-scrollbar{width:3px}.lpsc::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:2px}
 /* HOME-PANEL-2026-10-18 (Plan 151, 시안 화면 B): 지도 화면 왼쪽 패널·검색 띠. 색은 v2 토큰(sf=--bg-base, sf2=--bg-elev-1,
    line=--bd, line2=--bd2, ink=--t1·2·3, pri=--acc/--acc-bg, prit=--accent-tint, onpri=--acc-ink). 데스크톱(>700px)만 —
-   모바일은 151b 전까지 변화 0. 폭 1000px 이하 340 은 시안에 분기 폭이 없어 계획자 결정(지도 600px 이상 확보). */
+   모바일은 151b 전까지 변화 0. 폭 1199px 이하 340 은 시안에 분기 폭이 없어 계획자 결정(1024 실측: 420 이면 지도 가로 604·툴바 3줄로 지도 높이 343 → 340 으로 684). */
 .hp,#hpBand{display:none}
 @media(min-width:701px){
   body.hp-on .lp{display:none!important}
@@ -764,7 +764,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
   body.hp-on #hpBand{display:block;padding:20px 24px 14px;background:var(--bg-base);border-bottom:1px solid var(--bd);flex-shrink:0}
 }
 .hp{width:420px;flex-shrink:0;flex-direction:column;min-height:0;background:var(--bg-base);border-right:1px solid var(--bd);font-variant-numeric:tabular-nums}
-@media(max-width:1000px){.hp{width:340px}}
+@media(max-width:1199px){.hp{width:340px}}
 .hp-hd{padding:24px 24px 12px}
 .hp-t{margin:0;font-size:20px;font-weight:700;line-height:1.4;color:var(--t1)}
 .hp-s{margin:4px 0 0;font-size:14px;font-weight:400;line-height:1.6;color:var(--t3)}
@@ -1867,6 +1867,8 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         const inp = document.getElementById('hSearchInput');
         if (!inp) return;
         const adjust = () => {
+          // HOME-PANEL-2026-10-18 (Plan 151): 지도 화면 검색 띠로 옮겨져 있으면 띠 문구를 쓴다(창 크기 변경 때 헤더 문구로 깜빡이던 것)
+          if (inp.closest('#hpSearchSlot')) { inp.placeholder = '단지명이나 동 이름을 입력해요'; return; }
           inp.placeholder = window.innerWidth < 480 ? '단지 검색' : '단지명·동명 검색 (예: 마포래미안푸르지오, 공덕동)';
         };
         adjust();
