@@ -9393,8 +9393,9 @@ function _drawRankCard(list){
 }
 async function openRankCard(){
   let ps=window._lastPopular;
-  if(!ps||!ps.length){
-    try{const r=await fetch(CFG.api+'/search/popular');if(r.ok){const t=await r.json();ps=_popRows(t);}}catch(_e){}
+  // RANKCARD-RETRY-2026-10-18 (Plan 160): 저장된 순위가 대체 경로면 한 번 다시 불러온다 — "잠시 뒤 다시" 를 눌러도 재조회가 없었다
+  if(!ps||!ps.length||ps.some(p=>p&&p._degraded)){
+    try{const r=await fetch(CFG.api+'/search/popular');if(r.ok){const t=await r.json();ps=_popRows(t);if(ps.length&&!ps.some(p=>p&&p._degraded))window._lastPopular=ps;}}catch(_e){}
   }
   if(!ps||!ps.length){toast('랭킹 데이터를 불러오지 못했어요');return;}
   // DEGRADED-LABEL-2026-10-18: 카드는 "최근 60일 실거래 많은 순"이라고 적어 공유되는 이미지다 — 대체 경로 순위로는 만들지 않는다
@@ -11955,17 +11956,30 @@ function _wizPlace(v){
 // 법정동코드 앞 2자리 → 시도(backend/routes/region.js SIDO_BY_PREFIX 와 같은 값). 표에 없는 코드는 칩을 만들지 않는다(행은 '전국'에 남음).
 const _HP_SIDO = { '11':'서울','26':'부산','27':'대구','28':'인천','29':'광주','30':'대전','31':'울산','36':'세종','41':'경기',
   '42':'강원','51':'강원','43':'충북','44':'충남','45':'전북','46':'전남','47':'경북','48':'경남','50':'제주' };
-let _hpData = null, _hpReq = null, _hpSido = '전국';
+// POPULAR-SHARED-2026-10-18 (Plan 160): 지도 화면 진입 때 목록 패널과 지도 마커가 같은 인기 12곳 요청을
+//   각각 불렀다(콜드 약 10초 요청 2번). 진행 중·60초 이내 결과를 공유한다. 실패하면 바로 비워 다음 호출이 다시 부른다.
+let _pop12P = null, _pop12At = 0;
+function _popular12(force){
+  if(!force && _pop12P && Date.now() - _pop12At < 60000) return _pop12P;
+  _pop12At = Date.now();
+  _pop12P = fetch(`${CFG.api}/search/popular?limit=12`, { signal: AbortSignal.timeout(12000) })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)))
+    .catch(e => { _pop12P = null; throw e; });
+  return _pop12P;
+}
+let _hpData = null, _hpReq = null, _hpSido = '전국', _hpDataAt = 0;
 function _hpSidoOf(p){ return _HP_SIDO[String((p && p.lawdCd) || '').slice(0,2)] || ''; }
 function _hpLoad(force){
-  if(_hpReq || (_hpData && !force)) return;
+  // HP-DEGRADED-RETRY-2026-10-18 (Plan 160): 대체 응답(degraded)을 세션 내내 붙잡아 장애가 끝나도 평균가·건수가 비어 있었다.
+  //   대체 응답이면 60초가 지난 뒤의 다음 호출(화면 진입 등)에서 다시 부른다 — 창 크기 조절마다 요청이 나가지 않게 60초 간격.
+  const _degOld = !!(_hpData && _hpData.degraded && Date.now() - _hpDataAt > 60000);
+  if(_hpReq || (_hpData && !force && !_degOld)) return;
   const list = document.getElementById('hpList');
   if(force && list) list.innerHTML = '<div class="hp-msg">불러오는 중이에요</div>';
   // 지도 인기 마커와 같은 요청(서버 캐시 키 popular:12) — 지도와 목록이 같은 12곳을 보인다.
-  _hpReq = fetch(`${CFG.api}/search/popular?limit=12`, { signal: AbortSignal.timeout(12000) })
-    .then(r => r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)))
+  _hpReq = _popular12(force)
     .then(j => {
-      _hpData = j || {}; _hpRender();
+      _hpData = j || {}; _hpDataAt = Date.now(); _hpRender();
       // 빈 응답(스냅샷이 잠깐 빈 순간 등)은 붙잡아 두지 않는다 — 다음 지도 진입·버튼으로 다시 부른다
       if(!(Array.isArray(_hpData.results) && _hpData.results.length)){
         _hpData = null;
@@ -11974,6 +11988,7 @@ function _hpLoad(force){
       }
     })
     .catch(() => {
+      if(!force && _hpData && _hpData.degraded){ _hpDataAt = Date.now(); return; }
       _hpData = null;
       const el = document.getElementById('hpList');
       if(el) el.innerHTML = '<div class="hp-msg">목록을 불러오지 못했어요. <button type="button" onclick="_hpLoad(true)">다시 불러오기</button></div>';
@@ -12003,7 +12018,7 @@ function _hpRender(){
   // 서버 실시간 집계가 실패해 최근 거래 표본으로 대신 고른 응답(degraded) — 그 경로의 avgDealAmount 는 최근 1건 가격, dealCount60d 는
   //   약 2주 표본 건수라 "60일 평균가·거래 건수"가 아니다(popularService.buildPopularResults 대체 분기). 칸을 비우고 이유를 적는다.
   const deg = !!_hpData.degraded;
-  const degMsg = deg ? '<div class="hp-msg">지금은 집계가 늦어져 최근 거래 표본으로 골랐어요. 평균가와 건수는 잠시 비워 둬요</div>' : '';
+  const degMsg = deg ? '<div class="hp-msg">지금은 집계가 늦어져 최근 거래 표본으로 골랐어요. 평균가와 건수는 잠시 비워 둬요. <button type="button" onclick="_hpLoad(true)">다시 불러오기</button></div>' : '';
   list.innerHTML = stale + degMsg + rows.map(p => {
     const name = String(p.displayName || _dispAptName(p.aptName, p.umdNm) || '');
     const region = [_hpSidoOf(p), _fmtSgg(String(p.sigungu || '').trim()), String(p.umdNm || '').trim()].filter(Boolean).join(' ');
@@ -13004,9 +13019,7 @@ async function loadPopularMarkers() {
   try {
     // POPULAR-COLD-2026-07-11 (Sprint HHHH): 콜드 origin 실측 10.0s(RPC timeout+fallback+lazy-fill) —
     // 8s 타임아웃이 정상 콜드 응답을 버리고 빈 지도를 만들던 실사고. 12s 로 완화 (서버측 RPC 4s 컷과 세트).
-    const r = await fetch(`${CFG.api}/search/popular?limit=12`, { signal: AbortSignal.timeout(12000) });
-    if (!r.ok) return;
-    const j = await r.json();
+    let j; try { j = await _popular12(); } catch(_) { return; }
     const popular = _popRows(j); // DEGRADED-LABEL-2026-10-18: 대체 경로면 건수를 비워 마커·팝업이 "60일 N건"이라 하지 않게
     if (!popular.length) return;
     if (!window._popMarkers) window._popMarkers = [];
@@ -13708,6 +13721,7 @@ async function chkAPI(_isRetry){
       // Phase 4: 정상 시 apiSt hide, 장애 시만 표시
       el.style.display='none';
       try{ document.body.classList.remove('api-off'); }catch(_){}
+      if(window._apiRecheckT){ clearInterval(window._apiRecheckT); window._apiRecheckT = null; }
       cs.textContent='● 온라인';cs.style.color='var(--grn)';
       if(bs){bs.textContent='연결됨';bs.className='sm-badge';}
       // 사용 한도 표시 (모달 + 헤더 사용량 텍스트)
@@ -13789,6 +13803,9 @@ async function chkAPI(_isRetry){
     try{ document.body.classList.add('api-off'); _hdSyncLine(); }catch(_){}
     cs.textContent='● 오프라인';cs.style.color='var(--red)';
     if(bs){bs.textContent='오프라인';bs.className='sm-badge no';}
+    // API-RECHECK-2026-10-18 (Plan 160): 부팅 때 한 번 실패하면 서버가 살아나도 "서버에 연결되지 않아요"가 세션 내내 남았다.
+    //   실패 상태에서는 60초마다 한 번 다시 확인한다(타이머 하나만, 성공하면 멈춤).
+    if(!window._apiRecheckT) window._apiRecheckT = setInterval(() => { try{ chkAPI(true); }catch(_){} }, 60000);
     return false;
   }
 }
