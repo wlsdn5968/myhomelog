@@ -55,7 +55,7 @@ test('Plan 152 ④: 탭 순서·개수 그대로', () => {
   assert.deepEqual(order.slice(0, 7), ['news', 'map', 'list', 'report', 'clause', 'subs', 'calc']);
 });
 
-test('Plan 152 ⑤: 절대 배치 뷰 상단 = 헤더 64 + 동기화 띠 31', () => {
-  assert.ok(html.includes('@media(min-width:701px){ .clause-view,.biz-view{top:95px} }'));
+test('Plan 152 ⑤: 절대 배치 뷰 상단 = 헤더 64 + 동기화 띠 32(실측 32.2)', () => {
+  assert.ok(html.includes('@media(min-width:701px){ .clause-view,.biz-view{top:96px} }'));
   assert.ok(!html.includes('.clause-view,.biz-view{top:97px}'));
 });
