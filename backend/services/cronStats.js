@@ -20,8 +20,10 @@
  *   섞여도 새어나가지 않게. (health 로 노출되는 경로가 있으므로)
  */
 const { getRedis } = require('../redis');
+const logger = require('../logger');
 
 const KEY = 'cronstat:v1';
+const DB_KEY = 'cronstat:db:v1';
 const KEEP = 14;
 
 /** summary 에서 관측에 필요한 수치만 뽑는다(문자열은 길이 제한). */
@@ -121,26 +123,58 @@ function _pick(summary) {
  * @param {object} summary  job 이 돌려준 요약
  */
 async function recordCronRun(name, summary) {
+  const entry = { name: String(name || '').slice(0, 40), at: new Date().toISOString(), ..._pick(summary) };
   try {
     const r = getRedis();
-    if (!r) return;
-    const entry = { name: String(name || '').slice(0, 40), at: new Date().toISOString(), ..._pick(summary) };
-    const prev = (await r.get(KEY)) || {};
-    const list = Array.isArray(prev[entry.name]) ? prev[entry.name] : [];
-    list.unshift(entry);
-    prev[entry.name] = list.slice(0, KEEP);
-    // TTL 30일 — 방치돼도 스스로 사라진다(관측용 데이터를 영구 보관할 이유 없음).
-    await r.set(KEY, prev, { ex: 30 * 24 * 3600 });
-  } catch (_) { /* 관측 실패가 본 작업을 막아선 안 된다 */ }
+    if (r) {
+      const prev = (await r.get(KEY)) || {};
+      const list = Array.isArray(prev[entry.name]) ? prev[entry.name] : [];
+      list.unshift(entry);
+      prev[entry.name] = list.slice(0, KEEP);
+      // TTL 30일 — 방치돼도 스스로 사라진다(관측용 데이터를 영구 보관할 이유 없음).
+      await r.set(KEY, prev, { ex: 30 * 24 * 3600 });
+    }
+  } catch (e) { logger.warn({ err: e && e.message, name }, 'cron 실행 기록 Redis 저장 실패'); }
+  // CRON-DB-2026-10-18 (Plan 162): Redis(Upstash) 한도 초과로 기록이 사라져 health.crons·안 돈 cron 감시가 멈췄다.
+  //   같은 항목을 DB 스냅샷(computed_snapshots, 키 cronstat:db:v1)에도 남긴다 — 두 저장은 서로를 막지 않는다.
+  try {
+    const { getLastSnapshot, putSnapshot } = require('./snapshotStore');
+    const cur = await getLastSnapshot(DB_KEY);
+    const all = (cur && cur.payload && typeof cur.payload === 'object') ? cur.payload : {};
+    const list = Array.isArray(all[entry.name]) ? all[entry.name] : [];
+    all[entry.name] = [entry, ...list].slice(0, KEEP);
+    await putSnapshot(DB_KEY, all);
+  } catch (e) { logger.warn({ err: e && e.message, name }, 'cron 실행 기록 DB 저장 실패'); }
 }
 
-/** 잡별 최근 실행 이력. 실패 시 null. */
+/** 잡별 최근 실행 이력. Redis·DB 를 합쳐 읽는다. 둘 다 못 읽으면 null. */
 async function getCronRuns() {
+  let redisVal = null, dbVal = null;
   try {
     const r = getRedis();
-    if (!r) return null;
-    return (await r.get(KEY)) || null;
-  } catch (_) { return null; }
+    if (r) redisVal = (await r.get(KEY)) || null;
+  } catch (_) { redisVal = null; }
+  try {
+    const { getLastSnapshot } = require('./snapshotStore');
+    const snap = await getLastSnapshot(DB_KEY);
+    if (snap && snap.payload && typeof snap.payload === 'object') dbVal = snap.payload;
+  } catch (_) { dbVal = null; }
+  if (!redisVal && !dbVal) return null;
+  // CRON-DB-2026-10-18 (Plan 162): Redis 와 DB 중 더 최근 기록이 이긴다 — Redis 읽기만 간헐 성공해 옛 시각이 보이던 오경보·침묵을 막는다.
+  const names = new Set([...Object.keys(redisVal || {}), ...Object.keys(dbVal || {})]);
+  const out = {};
+  for (const n of names) {
+    const seen = new Set();
+    const merged = [];
+    for (const e of [...((redisVal && redisVal[n]) || []), ...((dbVal && dbVal[n]) || [])]) {
+      if (!e || typeof e !== 'object' || seen.has(e.at)) continue;
+      seen.add(e.at);
+      merged.push(e);
+    }
+    merged.sort((x, y) => String(y.at).localeCompare(String(x.at)));
+    if (merged.length) out[n] = merged.slice(0, KEEP);
+  }
+  return Object.keys(out).length ? out : null;
 }
 
 /** 잡별 **최근 1회**만 요약 — health 노출용(응답 비대화 방지). */
