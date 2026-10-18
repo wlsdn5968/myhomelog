@@ -1583,7 +1583,9 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .gn{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
 
 /* toast */
-.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(60px);background:var(--t1);color:#fff;padding:9px 18px;border-radius:var(--radius-xl);font-size:12px;transition:transform .28s;z-index:999;pointer-events:none;white-space:nowrap;box-shadow:var(--sh2)}
+/* TOAST-FIT-2026-10-18: 글자색 고정 #fff → 반전 토큰(다크에선 배경 --t1 이 밝아 대비 1.19:1 이었다) ·
+   한 줄 고정(nowrap) → 화면 폭 안에서 줄바꿈(375 에서 긴 문구가 양쪽 5px 잘렸다) · 숨김 이동은 자기 높이 기준(두 줄이면 60px 로 다 안 내려간다) */
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%) translateY(calc(100% + 40px));background:var(--t1);color:var(--bg-base);padding:9px 18px;border-radius:var(--radius-xl);font-size:12px;line-height:1.5;text-align:center;transition:transform .28s;z-index:999;pointer-events:none;width:max-content;max-width:calc(100vw - 32px);box-sizing:border-box;box-shadow:var(--sh2)}
 .toast.show{transform:translateX(-50%) translateY(0)}
 
 @media(max-width:1100px){.rp{width:290px}}
@@ -1661,12 +1663,11 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .bnav-inner{display:flex}
 .bnav-item{flex:1;padding:10px 4px 8px;text-align:center;cursor:pointer;font-size:12px;font-weight:600;color:var(--t3);border:none;background:transparent;font-family:inherit;transition:all .15s;display:flex;flex-direction:column;align-items:center;gap:3px;position:relative}
 .bnav-item.on{color:var(--acc)}
-/* Phase 3 (2026-04-25): "AI 특약 생성" 단일 가치 강조 — 무료 도구 대비 차별화 핵심 */
-.bnav-item.bnav-feature{color:#1F4F9C}
-.bnav-item.bnav-feature.on{color:var(--acc)}
+/* BNAV-SEL-2026-10-18: 보고서 탭 고정 파랑(#1F4F9C, 4월 특약 강조 잔재) 제거 — 라이트에선 선택 탭과 함께 칠해져
+   선택처럼 보였고, 다크에선 배경 대비 2.12:1 이었다. 선택 표시는 .on 하나로만. */
 .bnav-icon{font-size:16px;line-height:1}
 /* Design Phase 4 (2026-05-31): 모바일 하단 탭 이모지 → inline SVG (데스크톱 nav 일관).
-   currentColor 상속 → off=t3, on=acc(오렌지), bnav-feature=blue 자동 추종. */
+   currentColor 상속 → off=t3, on=acc. */
 .bnav-icon svg{width:21px;height:21px;display:block}
 
 /* P0 Phase 2 R3-B (2026-04-25): 모바일 햄버거 drawer + 검색바 풀폭 + AI floating */
