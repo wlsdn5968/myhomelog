@@ -222,3 +222,12 @@ test('Plan 151b: _hpApply — 모바일 지도 화면이면 시트, 그 밖이�
   assert.ok(apply.includes('else _hpsClear();'));
   assert.ok(apply.includes('_hpSearchPlace(on && desk);'), '검색창은 데스크톱에서만 띠로');
 });
+
+test('Plan 151b: 포인터 캡처는 끌기를 시작한 뒤에만 — 누르자마자 잡으면 click 이 손잡이 버튼에 오지 않는다(375 실측 결함)', () => {
+  const i = html.indexOf("hd.addEventListener('pointerdown'");
+  const down = html.slice(i, html.indexOf("hd.addEventListener('pointermove'", i));
+  assert.ok(i > 0 && !down.includes('setPointerCapture('), 'pointerdown 에서 캡처하면 안 된다');
+  const j = html.indexOf("hd.addEventListener('pointermove'");
+  const move = html.slice(j, html.indexOf('const end = ', j));
+  assert.match(move, /if\(!moved\)\{ moved = true; hp\.classList\.add\('hps-drag'\); try\{ hd\.setPointerCapture\(id\); \}catch\(_\)\{\} \}/);
+});

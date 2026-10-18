@@ -11935,13 +11935,14 @@ function _hpsTap(){
     hd.addEventListener('pointerdown', (e) => {
       if(window.innerWidth > 700 || !document.body.classList.contains('hp-on')) return;
       id = e.pointerId; y0 = e.clientY; h0 = hp.getBoundingClientRect().height; moved = false;
-      try{ hd.setPointerCapture(id); }catch(_){}
+      // 포인터 캡처는 실제로 끌기 시작할 때만 — 누르자마자 잡으면 Chrome 이 click 을 손잡이 버튼이 아니라 hd 로 보내
+      //   "손잡이 누르기"가 동작하지 않았다(미리보기 375 실측).
     });
     hd.addEventListener('pointermove', (e) => {
       if(id !== e.pointerId) return;
       const dy = e.clientY - y0;
       if(!moved && Math.abs(dy) < 6) return;
-      moved = true; hp.classList.add('hps-drag');
+      if(!moved){ moved = true; hp.classList.add('hps-drag'); try{ hd.setPointerCapture(id); }catch(_){} }
       const m = _hpsMetrics();
       document.body.style.setProperty('--hps-h', Math.min(m.max, Math.max(m.min, h0 - dy)) + 'px');
     });
