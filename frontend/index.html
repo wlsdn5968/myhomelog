@@ -753,6 +753,8 @@ header .htabs > .htab.on::before,header .htab-tool.on::before{content:none} /* v
 /* 701~900px(태블릿 세로): 좌우 24·40×40 버튼으로 768 지도 밖 화면(헤더 검색 있음)에서 다크 모드 버튼이 오른쪽 끝(768)에 붙었다(미리보기 실측) —
    이 구간만 여백·간격을 줄인다(시안은 1440 기준이라 이 폭의 값이 없다). */
 @media(min-width:701px) and (max-width:900px){ header:not(.lv-top){padding:0 16px;gap:10px} }
+/* 155: 701px 지도 밖 화면(헤더 검색 있음)에서 로그인 버튼이 8px 넘쳤다(미리보기 실측, 751 은 0) — 760 이하만 검색 최소 폭 170→150 */
+@media(min-width:701px) and (max-width:760px){ header:not(.lv-top) .hsearch{min-width:150px!important} }
 /* 155: 701~900px 는 패널 340 에서 가격 96·건수 64 열이 단지명 칸을 108px 로 눌러 대부분 말줄임됐다(768 실측) —
    모바일 시트와 같은 2단(가격 위·"거래 N건" 아래)으로 건수 열을 접어 단지명 칸을 넓힌다. */
 @media(min-width:701px) and (max-width:900px){ /* 이 블록은 151a·151b 기본 규칙보다 앞에 선언돼 같은 우선순위면 진다(미리보기 실측) — .hp 로 한 단계 올린다 */
@@ -812,8 +814,9 @@ header .htabs > .htab.on::before,header .htab-tool.on::before{content:none} /* v
   html[data-theme="dark"] #apiSt::before{background:var(--red)}
 }
 /* 1120~1279px 지도 밖 화면(헤더 검색 260)에서 장애 칩과 남은 검색 칩이 함께 뜨면 145px 넘쳤다(미리보기 실측, 하나씩은 넘침 0) —
-   서버에 연결되지 않는 동안엔 남은 횟수도 갱신되지 않으므로 이 폭에서만 장애 칩을 우선한다(1280 이상은 시안 C3 처럼 둘 다). */
-@media(min-width:1120px) and (max-width:1279px){ body.api-off #hUsage{display:none!important} }
+   서버에 연결되지 않는 동안엔 남은 횟수도 갱신되지 않으므로 이 폭에서만 장애 칩을 우선한다(155 에서 1439 까지 넓힘 — 1440 이상은 시안 C3 처럼 둘 다). */
+/* 155: 1280 지도 밖 화면은 두 칩이 함께 뜨면 16px 넘쳤다(미리보기 실측 2/5·3/30, 1440 은 0) — 1439 까지 넓힘 */
+@media(min-width:1120px) and (max-width:1439px){ body.api-off #hUsage{display:none!important} }
 /* 701~1119px: 장애 칩 문구(151px)가 768 에서 헤더를 넘겼다(153 리뷰 L1) — 점만 보이고 글자는 접근성 이름·title 로 남긴다 */
 @media(min-width:701px) and (max-width:1119px){ #apiSt{font-size:0;gap:0} }
 

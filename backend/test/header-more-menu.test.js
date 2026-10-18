@@ -96,7 +96,7 @@ test('Plan 153 ⑤: 벨·데이터 상태 숨김은 데스크톱 미디어 안�
 });
 
 test('Plan 153 보정: 1120~1279px 에서 장애·남은 검색 칩이 함께면 장애 칩 우선(넘침 방지)', () => {
-  assert.ok(html.includes('@media(min-width:1120px) and (max-width:1279px){ body.api-off #hUsage{display:none!important} }'));
+  assert.ok(html.includes('@media(min-width:1120px) and (max-width:1439px){ body.api-off #hUsage{display:none!important} }'));
   const chk = extractFn(html, 'chkAPI');
   assert.ok(chk.includes("document.body.classList.add('api-off')") && chk.includes("document.body.classList.remove('api-off')"));
 });

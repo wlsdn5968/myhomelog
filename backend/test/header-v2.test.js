@@ -74,3 +74,7 @@ test('Plan 152 ⑤ → VIEW-TOP: 절대 배치 뷰 위쪽 = 헤더·동기화 �
   assert.ok(fn.includes('offsetTop + h.offsetHeight') && fn.includes('offsetTop + sb.offsetHeight'), '스크롤과 무관한 offset 기준');
   assert.ok(html.includes("const ro = new ResizeObserver(_bizTop);"), '띠가 켜지고 꺼질 때 다시 잰다');
 });
+
+test('155: 701~760px 헤더 검색 최소 폭 150(701 에서 8px 넘침 실측)', () => {
+  assert.ok(html.includes('@media(min-width:701px) and (max-width:760px){ header:not(.lv-top) .hsearch{min-width:150px!important} }'));
+});
