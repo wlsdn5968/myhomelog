@@ -39,6 +39,8 @@ function _pick(summary) {
     'okPruned', 'staleRunningFixed',
     // RUNREC-ERR-2026-10-18 (Plan 158): molit_ingest_runs 기록 쓰기 실패 건수 — 0 이 정상.
     'runRecordFailed',
+    // DBCAP-ERR-2026-10-18 (Plan 158): 용량 RPC 실패(1) — 필드가 없으면 정상, 1 이면 85%·93% 경보 판정이 건너뛰어진 것.
+    'dbCheckFailed',
     // DB-CAPACITY-SERIES-2026-09-20 (Plan 111): 용량 추세를 health 에 남긴다 —
     //   경보(85%)는 임계를 넘어야 울리므로, 그 전에 "차오르는 속도" 를 볼 지표가 따로 필요하다.
     'dbUsedMb', 'dbPct',

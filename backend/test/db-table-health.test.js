@@ -41,10 +41,10 @@ const state = {
 const sentryCalls = [];
 
 /** checkDbCapacity 가 실제로 부르는 admin.rpc 체인만 구현한 최소 스텁. */
-function _makeAdmin({ usedBytes = 100 * 1048576, tableRows = [], tableError = null, tableThrow = false } = {}) {
+function _makeAdmin({ usedBytes = 100 * 1048576, tableRows = [], tableError = null, tableThrow = false, sizeError = null } = {}) {
   return {
     rpc(name) {
-      if (name === 'get_db_size_bytes') return Promise.resolve({ data: usedBytes, error: null });
+      if (name === 'get_db_size_bytes') return Promise.resolve(sizeError ? { data: null, error: sizeError } : { data: usedBytes, error: null });
       if (name === 'get_table_health') {
         if (tableThrow) return Promise.reject(new Error('rpc get_table_health 실패(테스트 주입)'));
         return Promise.resolve({ data: tableRows, error: tableError });
@@ -187,6 +187,15 @@ test('④ get_table_health RPC 가 throw — 예외가 밖으로 안 나가고 u
   assert.equal(out.usedMb, 100, 'RPC 실패와 무관하게 usedMb 는 정상 반환돼야 한다');
   assert.equal(out.tableHealthWarns, 0, 'RPC 실패 시 tableHealthWarns 는 0이어야 한다(지어낸 값이 아니어야 한다)');
   assert.equal(sentryCalls.length, 0, 'RPC 실패는 삼켜야 한다 — 오류 자체로 경보를 내면 안 된다');
+});
+
+test('⑥ get_db_size_bytes 가 {error} — { error } 를 돌려주고(null 아님) Sentry 용량 경보는 0회 (Plan 158)', async () => {
+  state.admin = _makeAdmin({ sizeError: { message: 'timeout' } });
+
+  const out = await cron._checkDbCapacity();
+
+  assert.deepEqual(out, { error: 'timeout' });
+  assert.equal(sentryCalls.length, 0, '용량을 못 읽은 것은 임계 초과가 아니다 — 용량 경보를 내면 안 된다');
 });
 
 test('⑤ 소스 정적 단언 — 임계 상수 3개가 각 1회, monitor 태그가 1회 등장한다', () => {
