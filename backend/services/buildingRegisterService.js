@@ -103,7 +103,28 @@ async function resolveJibun(admin, lawdCd, umdNm, aptName) {
  * 단지 표제부 조회 (캐시 우선). KAPT 없는 단지 fallback 용.
  * @returns {object|null} { bldNm, useAprDay(YYYYMMDD), hhldCnt, grndFlrCnt, ugrndFlrCnt, totArea, mainPurpsCdNm, strctCdNm, dongCnt, jibun, platArea, archArea, bcRat, vlRat } | null
  */
-async function getBuildingTitle({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
+// BR-MISS-MEMO-2026-10-18: 건축물대장에서 못 찾은(null) 단지는 DB 에 남지 않아(성공분만 저장) 같은 단지를 볼 때마다
+//   지번·법정동·표제부 외부 호출을 다시 했다 — 운영 실측 한 건 1.2~3.5초, 추천 보강 단계(facility 6.7초)에서 수십 곳이 동시에.
+//   이 인스턴스 안에서 1시간 동안 "없음"을 기억한다(외부 일시 장애로 생긴 null 도 1시간 뒤엔 다시 시도).
+const BR_MISS_MS = 60 * 60 * 1000;
+const _brMiss = new Map();
+async function getBuildingTitle(args) {
+  const { lawdCd, aptName, aptKey } = args || {};
+  if (!lawdCd || !aptName) return getBuildingTitleUncached(args || {});
+  const key = aptKey || `name:${aptName}|${lawdCd}`;
+  const missAt = _brMiss.get(key);
+  if (missAt && Date.now() - missAt < BR_MISS_MS) return null;
+  const t = await getBuildingTitleUncached(args);
+  if (t == null && getSupabaseAdmin()) {
+    _brMiss.set(key, Date.now());
+    if (_brMiss.size > 5000) _brMiss.delete(_brMiss.keys().next().value);
+  } else if (t != null) {
+    _brMiss.delete(key);
+  }
+  return t;
+}
+
+async function getBuildingTitleUncached({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
   const admin = getSupabaseAdmin();
   if (!admin || !lawdCd || !aptName) return null;
   // BR-MARKER-FIX-2026-07-12: 캐시키를 lawdCd+aptName 기준으로 통일 (지도 마커 경로는 p.sigungu/umd 부재 →

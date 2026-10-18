@@ -10881,13 +10881,11 @@ function renderSavedDeals(){
 // Phase B-3 (2026-05-01): clause + risk 통합 — 한 fetch 로 t2(리스크) + t3(특약) 동시 채움.
 //   기존: loadClause() + loadRisk() 두 fetch (LLM 2회) → 통합 1 fetch (LLM -50%).
 //   cache 도 통합 (단지 단위, 세션 메모리). 두 탭 클릭 시 cache hit.
-let _clauseRiskCache = null;
 let _clauseRiskCacheKey = null;
 
 async function loadClauseAndRisk(p){
   if(!p)return null; // 방어(2026-06-13): null p 호출 시 'reading aptName of null' 크래시 차단 (stb 가드 외 안전망)
   const key=`${p.aptName}:${p.avgPrice||p.price}`;
-  if(_clauseRiskCache&&_clauseRiskCacheKey===key){renderClause(_clauseRiskCache);renderRisk(_clauseRiskCache);return _clauseRiskCache;}
   // DEDUP-2026-06-13: 같은 단지 중복 호출(t2+t3 클릭 등) 은 1 fetch 로 합침 — AI 쿼터·비용 절반.
   // 즉시 placeholder 렌더 (빈 탭/로딩 공백 방지). AI 성공 시 교체, 실패(한도/장애) 시 그대로 유지 — 토스트 없음(백그라운드 로드라 부적절).
   // CLAUSE-RULE-2026-07-11 (Sprint KKKK): 고정 예시 3종 → 단지 조건(소재지 규제판정·연식·보유상태) 반영
@@ -10931,15 +10929,9 @@ function renderRisk(d){
 }
 
 function renderClause(d){
-  if(!d)d={
-    essential:[
-      {title:'대출 미승인 시 계약금 반환',content:'본 계약은 매수인의 주택담보대출 승인을 조건으로 하며, 미승인 시 매수인은 계약을 해제할 수 있고 매도인은 계약금 전액을 즉시 반환한다.',reason:'대출 규제가 강해져서 사전심사가 꼭 필요해요'},
-      {title:'전입 의무 이행 (규제지역)',content:'매수인은 잔금 납부 후 6개월 이내에 해당 주택에 전입신고를 완료한다.',reason:'2025.10.15 이후 규제지역 6개월 전입 의무'},
-      {title:'하자 수리 책임',content:'잔금 지급 전 매수인이 요청하는 시설 하자(누수·균열·전기·배관)에 대해 매도인이 잔금일 전까지 수리 완료한다.',reason:'준공 20년+ 단지 하자 가능성 대비'},
-    ],
-    recommended:[{title:'기존 대출 말소 확인',content:'매도인은 잔금일 전까지 해당 부동산의 모든 담보 대출을 말소하고 등기부등본으로 확인한다.',reason:'근저당 미말소 시 선순위 피해'}],
-    caution:'계약 전에 최신 등기부등본을 꼭 확인하세요. 잔금일은 월초~중순이 좋아요. 중개보수는 계약 전에 협의하세요.'
-  };
+  // CLAUSE-ONE-ENGINE-2026-10-18: 여기 있던 고정 사본(문구·조건이 엔진과 이미 어긋나 있었고 실행되지도 않았다)을 지우고
+  //   빈 입력도 같은 규칙 엔진으로 — 특약 조항은 buildRuleClause 한 곳에서만 만든다.
+  if(!d)d=buildRuleClause({});
   // P0-4 (2026-05-04): clause content/title/reason XSS escape — AI prompt injection 차단
   // P1-A 확장 (2026-05-21): t3 단지 모달 특약 탭 누락분 — 복사버튼 raw onclick→data-clip,
   //   citations(c.law/article/title/summary), d.caution 도 _escHtml. renderClauseResult 와 동일 경로.
@@ -12692,7 +12684,7 @@ function buildRuleClause(b){
   recommended.push({title:'기존 대출 말소 확인',content:'매도인은 잔금일 전까지 해당 부동산의 모든 담보 대출을 말소하고 등기부등본으로 확인한다.',reason:'근저당 미말소 시 선순위 피해'});
   return {
     essential, recommended,
-    caution:'계약 전 등기부등본 최신본 확인 필수. 잔금일 월초~중순 권장. 복비 계약 전 협상. 아래는 입력 조건을 반영한 표준 특약 템플릿이며, 최종 문구는 공인중개사·법무사와 확정하세요.',
+    caution:'계약 전에 최신 등기부등본을 꼭 확인하세요. 잔금일은 월초~중순이 좋아요. 중개보수는 계약 전에 협의하세요. 아래는 입력 조건을 반영한 표준 특약 템플릿이에요. 최종 문구는 공인중개사·법무사와 정하세요.',
     _rule: true,
   };
 }
@@ -12753,17 +12745,9 @@ async function genClause(){
 }
 
 function renderClauseResult(d,aptName){
-  if(!d)d={
-    essential:[
-      {title:'대출 미승인 시 계약금 반환',content:'본 계약은 매수인의 주택담보대출 승인을 조건으로 하며, 대출이 미승인될 경우 매수인은 계약을 해제할 수 있고 매도인은 계약금 전액을 즉시 반환한다.',reason:'대출 규제가 강해져서 사전심사가 꼭 필요해요'},
-      {title:'전입 의무 이행 (규제지역)',content:'매수인은 잔금 납부 후 6개월 이내에 해당 주택에 전입신고를 완료한다.',reason:'2025.10.15 이후 규제지역 6개월 전입 의무'},
-      {title:'하자 수리 책임',content:'잔금 지급 전 매수인이 요청하는 시설 하자(누수·균열·전기·배관)에 대해 매도인이 잔금일 전까지 수리 완료한다.',reason:'준공 20년+ 단지 하자 가능성 대비'},
-    ],
-    recommended:[
-      {title:'기존 대출 말소 확인',content:'매도인은 잔금일 전까지 해당 부동산의 모든 담보 대출을 말소하고 등기부등본으로 확인한다.',reason:'근저당 미말소 시 선순위 피해'},
-    ],
-    caution:'계약 전 등기부등본 최신본 확인 필수. 잔금일 월초~중순 권장. 복비 계약 전 협상.'
-  };
+  // CLAUSE-ONE-ENGINE-2026-10-18: 여기 있던 고정 사본(문구·조건이 엔진과 이미 어긋나 있었고 실행되지도 않았다)을 지우고
+  //   빈 입력도 같은 규칙 엔진으로 — 특약 조항은 buildRuleClause 한 곳에서만 만든다.
+  if(!d)d=buildRuleClause({});
   document.getElementById('cl_result_title').textContent=`${aptName} ${d._rule?'특약 초안 · 조건 반영':'특약 초안'} (필수 ${d.essential?.length||0}개 · 권장 ${d.recommended?.length||0}개)`; // JJJJ: 규칙 생성분은 정직하게 구분 표기
   const mkCard=(arr,badge)=>(arr||[]).map(c=>`<div class="cv-card">
     <div class="cv-card-hdr${badge==='e'?' essential':''}">

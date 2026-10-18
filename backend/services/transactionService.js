@@ -548,10 +548,20 @@ async function getTransactionsByAptInclAliases(lawdCd, aptName, monthsBack = 6) 
 //     [근본원인] propertyService 는 REGION_KEYWORDS 축약명('노원')을 넘기는데 apt_master.sigungu
 //     값은 '노원구' → `.in('sigungu',['노원'])` 0건 → 맵 비어서 풍림아파트A/B relabel 미발동(raw 표시).
 //     lawd_cd 는 숫자코드라 축약/전체명 모호성 없음. apt_master.lawd_cd 10,638/10,638 채움(검증).
+// ALIAS-MEMO-2026-10-18: 운영 스테이지 타이밍(서울 전체 추천, 12:02 UTC) — 거래 질의 3.2초가 끝난 뒤에도 별칭 조회를
+//   1.7초 더 기다렸다(alias 1702ms, 페이지 루프·캐시 없음, Redis 장애와 무관). 별칭은 주 1회 apt-master-sync 의
+//   refresh_molit_aliases() 로만 바뀌므로 지역 묶음별로 1시간 메모한다. 호출자 3곳(추천·보고서·알림)은 맵을 읽기만 한다
+//   (set/delete 0 — grep). node-cache 는 값 복제라 큰 Map 을 매번 복제하지 않도록 모듈 메모를 쓴다. 오류로 빈 맵이면 메모하지 않는다.
+const ALIAS_MEMO_MS = 60 * 60 * 1000;
+const _aliasMemo = new Map();
 async function getAliasCanonicalMap(lawdCds) {
   const admin = dbClient();
   if (!admin || !Array.isArray(lawdCds) || !lawdCds.length) return new Map();
+  const memoKey = [...new Set(lawdCds.filter(Boolean))].sort().join(',');
+  const memo = _aliasMemo.get(memoKey);
+  if (memo && Date.now() - memo.at < ALIAS_MEMO_MS) return memo.map;
   const map = new Map();
+  let failed = false;
   try {
     // REST-CAP-FIX-2026-08-10 (Sprint KKKKKKK-11, 감사 발견 — DB 실측으로 발동 확인):
     //   이 조회에는 `.limit()`/`.range()` 가 없어 PostgREST max-rows(1000)에서 **조용히 잘렸다**.
@@ -584,7 +594,12 @@ async function getAliasCanonicalMap(lawdCds) {
       if (data.length < PAGE) break;   // 마지막 페이지 — 통상 추천 경로(1~3지역)는 여기서 1회 종료
     }
   } catch (e) {
+    failed = true;
     logger.warn({ err: e.message }, 'getAliasCanonicalMap 조회 실패 — 빈 맵');
+  }
+  if (!failed) {
+    _aliasMemo.set(memoKey, { at: Date.now(), map });
+    if (_aliasMemo.size > 200) _aliasMemo.delete(_aliasMemo.keys().next().value);
   }
   return map;
 }

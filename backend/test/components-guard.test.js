@@ -146,5 +146,6 @@ test('vercel.json 의 정적 HSTS 가 1년(31536000)으로 통일되고 옛 180�
   assert.equal((vercelJsonRaw.match(/max-age=15552000/g) || []).length, 0,
     'vercel.json 에 180일(15552000) HSTS 가 남아있다 — API(helmet 기본값 1년)와 다시 갈린다');
   const oneYearCount = (vercelJsonRaw.match(/max-age=31536000; includeSubDomains/g) || []).length;
-  assert.equal(oneYearCount, 5, `vercel.json 의 정적 라우트 5곳이 모두 31536000 이어야 하는데 ${oneYearCount}곳만 그렇다`);
+  // SOFT404-2026-10-18: 첫 화면 라우트를 '/'·'/index.html' 과 정적 404 로 나눠(같은 헤더) 5곳 → 6곳
+  assert.equal(oneYearCount, 6, `vercel.json 의 정적 라우트 6곳이 모두 31536000 이어야 하는데 ${oneYearCount}곳만 그렇다`);
 });
