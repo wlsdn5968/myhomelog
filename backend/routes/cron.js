@@ -199,7 +199,11 @@ async function checkDbCapacity() {
     const admin = getSupabaseAdmin();
     if (!admin) return null;
     const { data, error } = await admin.rpc('get_db_size_bytes');
-    if (error || data == null) return null;
+    if (error || data == null) {
+      // DBCAP-ERR-2026-10-18 (Plan 158): 실패가 null 로 사라져 85%·93% 경보가 흔적 없이 건너뛰어졌다.
+      logger.warn({ err: error && error.message }, 'get_db_size_bytes 실패 — 용량 경보 판정 불가');
+      return { error: (error && error.message) || 'no data' };
+    }
     const usedMb = Math.round(Number(data) / 1048576 * 10) / 10;
     const limitMb = parseInt(process.env.DB_LIMIT_MB || '500', 10);
     const level = dbCapacityLevel(usedMb, limitMb);
@@ -273,6 +277,7 @@ router.post('/retention', async (req, res) => {
       // TABLE-HEALTH-2026-09-26 (Plan 111 2단계): 테이블별 급증·autovacuum 정지 경보 건수.
       summary.tableHealthWarns = _cap.tableHealthWarns;
     }
+    if (_cap && _cap.error) summary.dbCheckFailed = 1; // DBCAP-ERR-2026-10-18 (Plan 158): 용량 조회 실패를 health 에 남긴다
     logger.info({ durationMs: Date.now() - started }, 'cron/retention OK');
     // Sprint MMMMMMM-12: retention 자신의 실행 기록 — 종전엔 popular-snapshot 만 남아
     //   "retention 이 돌았는가" 를 스냅샷 성패로 유추해야 했다.
@@ -333,6 +338,7 @@ router.get('/retention', async (req, res) => {
       // TABLE-HEALTH-2026-09-26 (Plan 111 2단계): 테이블별 급증·autovacuum 정지 경보 건수.
       summary.tableHealthWarns = _cap.tableHealthWarns;
     }
+    if (_cap && _cap.error) summary.dbCheckFailed = 1; // DBCAP-ERR-2026-10-18 (Plan 158): 용량 조회 실패를 health 에 남긴다
     await require('../services/cronStats').recordCronRun('retention', summary).catch(() => {}); // Sprint MMMMMMM-12
     // GET-PARITY-2026-08-09 (Sprint BBBBBBB-5, 실측): popular 스냅샷 계산이 **POST 쌍둥이에만** 있었는데
     //   스냅샷 도입(7/11) 이래 computed_at 이 cron 시각(18:00 UTC)이었던 적이 없다 — Vercel cron 이

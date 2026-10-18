@@ -44,7 +44,7 @@ const state = {
 };
 
 /** getDataCounts 가 실제로 부르는 체인만 구현한 최소 admin 스텁 — from() 호출 테이블과 체인을 기록한다. */
-function _makeFakeAdmin({ txCount = 0, aptCount = 0, ingestResult = { data: null, error: null } } = {}) {
+function _makeFakeAdmin({ txCount = 0, aptCount = 0, ingestResult = { data: null, error: null }, txError = null, aptError = null } = {}) {
   const calls = [];
   function makeChain(table) {
     const ops = [];
@@ -53,8 +53,10 @@ function _makeFakeAdmin({ txCount = 0, aptCount = 0, ingestResult = { data: null
       select(cols, opts) {
         ops.push({ select: cols, opts: opts || null });
         if (opts && opts.count) {
-          const count = table === 'molit_transactions' ? txCount : aptCount;
-          return Promise.resolve({ count, error: null });
+          const isTx = table === 'molit_transactions';
+          const err = isTx ? txError : aptError;
+          if (err) return Promise.resolve({ count: null, error: err });
+          return Promise.resolve({ count: isTx ? txCount : aptCount, error: null });
         }
         return chain;
       },
@@ -203,3 +205,25 @@ test('getDataCounts — Redis 에서 읽은 값의 lastIngestedAt 이 null 이�
     '오염된 Redis 값(tx:1, apt:1)이 아니라 새로 조회한 DB 값을 반환해야 한다'
   );
 });
+
+// COUNTS-ERR-2026-10-18 (Plan 158): 건수 조회 오류를 읽어 0 이 6시간 캐시·Redis 에 굳지 않게 한다.
+for (const which of ['txError', 'aptError']) {
+  test(`getDataCounts — ${which} 이면 lastIngestedAt 이 있어도 캐시 TTL 은 60초 이하이고 Redis rset 은 호출되지 않는다 (Plan 158)`, async () => {
+    const { admin } = _makeFakeAdmin({
+      txCount: 476716, aptCount: 14661,
+      ingestResult: { data: { finished_at: '2026-09-25T17:45:12Z' }, error: null },
+      [which]: { message: 'canceling statement due to statement timeout' },
+    });
+    state.admin = admin;
+    let rsetCalls = 0;
+    state.rset = async () => { rsetCalls++; };
+
+    await app._getDataCounts();
+
+    const ttlAt = app.cache.getTtl(CK);
+    assert.ok(ttlAt, '짧게나마 메모리 캐시에는 들어가야 한다');
+    const remainingMs = ttlAt - Date.now();
+    assert.ok(remainingMs > 0 && remainingMs <= 60 * 1000 + 2000, `TTL 60초 이하여야 한다 (실측 잔여 ${remainingMs}ms)`);
+    assert.equal(rsetCalls, 0, '실패한 건수는 Redis 에 쓰면 안 된다');
+  });
+}

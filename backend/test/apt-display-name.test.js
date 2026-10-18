@@ -238,3 +238,44 @@ test('buildPopularResults — 이름 미등록("(50-5)")은 인기 순위에서 
     if (saved.s) require.cache[svcPath] = saved.s; else delete require.cache[svcPath];
   }
 });
+
+// POPULAR-SEQ-2026-10-18 (Plan 158): apt_seq 는 단지당 1행인 molit_apt_dim 에서 읽고 molit_transactions 는 부르지 않는다.
+test('buildPopularResults — aptSeq 를 molit_apt_dim 에서 얻고 molit_transactions 의 apt_seq 조회는 가지 않는다 (Plan 158)', async () => {
+  const geoPath = require.resolve('../services/geocodeCacheService');
+  const svcPath = require.resolve('../services/popularService');
+  const saved = { g: require.cache[geoPath], s: require.cache[svcPath] };
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = Array.from({ length: 13 }, (_, i) => ({
+    aptName: i === 0 ? '은마' : `단지${i}`, sigungu: i === 0 ? '강남구' : `시군구${i}`, umdNm: i === 0 ? '대치동' : `동${i}`,
+    lawdCd: `111${String(i).padStart(2, '0')}`, buildYear: 2000, recentDealDate: today, dealCount60d: 100 - i, avgDealAmount: 100000,
+  }));
+  const coords = rows.map(r => ({ apt_name: r.aptName, sigungu: r.sigungu, umd_nm: r.umdNm, lat: 37.5, lng: 127.0 }));
+  const tables = [];
+  const client = {
+    rpc: () => ({ abortSignal: () => Promise.resolve({ data: rows, error: null }) }),
+    from: (table) => {
+      tables.push(table);
+      if (table === 'apt_geocache') return { select: () => ({ in: () => Promise.resolve({ data: coords, error: null }) }) };
+      if (table === 'molit_apt_dim') {
+        const dim = [{ apt_name: '은마', sigungu: '강남구', umd_nm: '대치동', apt_seq: '11680-218' }];
+        const chain = { select: () => chain, in: () => chain, limit: () => Promise.resolve({ data: dim, error: null }) };
+        return chain;
+      }
+      throw new Error('예상 밖 테이블 ' + table);
+    },
+  };
+  require.cache[geoPath] = { id: geoPath, filename: geoPath, loaded: true, exports: { resolveCoordBatch: async () => [] } };
+  delete require.cache[svcPath];
+  try {
+    const { buildPopularResults } = require('../services/popularService');
+    const { results } = await buildPopularResults(12, { client });
+    const eun = results.find(r => r.aptName === '은마');
+    assert.ok(eun, '은마 행이 있어야 한다');
+    assert.equal(eun.aptSeq, '11680-218');
+    assert.ok(tables.includes('molit_apt_dim'), 'molit_apt_dim 을 읽어야 한다');
+    assert.ok(!tables.includes('molit_transactions'), 'molit_transactions 의 apt_seq 조회로 가면 안 된다');
+  } finally {
+    if (saved.g) require.cache[geoPath] = saved.g; else delete require.cache[geoPath];
+    if (saved.s) require.cache[svcPath] = saved.s; else delete require.cache[svcPath];
+  }
+});

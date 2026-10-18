@@ -115,7 +115,7 @@ function _fakeIngestAdmin(initialRows, opts = {}) {
               eq(col, val) {
                 const row = rows.find(r => r[col] === val);
                 if (row) Object.assign(row, patch);
-                return Promise.resolve({ error: null });
+                return Promise.resolve({ error: opts.runUpdateError || null });
               },
             };
           },
@@ -493,4 +493,21 @@ test('pickLiveTailYms — 상한(LIVE_TAIL_MAX_MONTHS)과 판정 규칙 (Plan 13
     assert.deepEqual(pick(['202506', '202505'], [ok('202505')]), []);
     assert.deepEqual(pick([], [ok('202506')]), []);
   } finally { restore(); }
+});
+
+// RUNREC-ERR-2026-10-18 (Plan 158): molit_ingest_runs 기록 쓰기 실패를 읽어 표식으로 남긴다.
+test('ingestOne — 기록 update 가 {error} 를 돌려줘도 적재는 ok:true 이고 runRecordFailed:true 가 붙는다 (Plan 158)', async () => {
+  const dgk = _dgkStub();
+  const admin = _fakeIngestAdmin([], { runUpdateError: { message: 'x' } });
+  const { mod, restore } = _loadMolitIngest(dgk.get);
+  try {
+    const r = await mod._ingestOne(admin, '11110', '202509');
+    assert.equal(r.ok, true, '적재 성공 여부는 기록 실패와 무관해야 한다');
+    assert.equal(r.runRecordFailed, true);
+  } finally { restore(); }
+});
+
+test('cronStats._pick — runRecordFailed 숫자를 health 로 통과시킨다 (Plan 158)', () => {
+  const { _pick } = require('../services/cronStats');
+  assert.equal(_pick({ runRecordFailed: 2 }).runRecordFailed, 2);
 });
