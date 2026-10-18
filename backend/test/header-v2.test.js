@@ -75,10 +75,10 @@ test('Plan 152 ⑤ → VIEW-TOP: 절대 배치 뷰 위쪽 = 헤더·동기화 �
   assert.ok(html.includes("const ro = new ResizeObserver(_bizTop);"), '띠가 켜지고 꺼질 때 다시 잰다');
 });
 
-test('155: 701~760px 헤더 검색 최소 폭 150(701 에서 8px 넘침 실측)', () => {
-  assert.ok(html.includes('@media(min-width:701px) and (max-width:760px){ header:not(.lv-top) .hsearch{min-width:150px!important} }'));
+test('155: 701~760px 헤더 검색 최소 폭 140(701 에서 로그인 버튼이 여백을 넘음 실측)', () => {
+  assert.ok(html.includes('@media(min-width:701px) and (max-width:760px){ header:not(.lv-top) .hsearch{min-width:140px!important} }'));
 });
 
-test('155: 701~760px 장애 시 헤더 검색 최소 폭 115(장애 칩 점까지 뜨면 31px 넘침 실측)', () => {
-  assert.ok(html.includes('@media(min-width:701px) and (max-width:760px){ body.api-off header:not(.lv-top) .hsearch{min-width:115px!important} }'));
+test('155: 701~760px 장애 시 헤더 검색 최소 폭 100(장애 칩 점까지 뜨면 넘침 실측)', () => {
+  assert.ok(html.includes('@media(min-width:701px) and (max-width:760px){ body.api-off header:not(.lv-top) .hsearch{min-width:100px!important} }'));
 });
