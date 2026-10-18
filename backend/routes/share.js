@@ -55,6 +55,36 @@ router.get('/', (req, res) => {
   // SHARE-OG-2026-10-18 (plans/166 A3): seq 가 단지 번호 형식이면 단지별 OG 카드(/api/og/apt/:seq)를 미리보기 이미지로
   const seq = /^\d{5}-\d+$/.test(String(req.query.seq || '')) ? String(req.query.seq) : '';
   const cmp = (req.query.cmp || '').toString().slice(0, 2000);
+  // LIST-SHARE-2026-10-18 (plans/166 3-2): 관심 목록 공유 딥링크(?list=) — 크롤러 미리보기 제목만 치환, 복원은 클라이언트 handleListUrl
+  const list = (req.query.list || '').toString().slice(0, 6000);
+  if (!apt && !cmp && list) {
+    let names = [];
+    try {
+      let s = list.replace(/-/g, '+').replace(/_/g, '/');
+      while (s.length % 4) s += '=';
+      const arr = JSON.parse(Buffer.from(s, 'base64').toString('utf8'));
+      if (Array.isArray(arr)) names = arr.map(a => (a && a.aptName) ? String(a.aptName).slice(0, 40) : '').filter(Boolean).slice(0, 30);
+    } catch (_) { names = []; }
+    const n = names.length;
+    const head = n ? `${names.slice(0, 3).join(', ')}${n > 3 ? ` 외 ${n - 3}곳` : ''}` : '관심 단지';
+    const title = n ? `관심 단지 ${n}곳 — 내집로그` : '관심 단지 — 내집로그';
+    const desc = `${head} — 함께 보는 관심 단지 목록이에요(국토교통부 실거래). 매수 추천이 아니에요.`;
+    const origin = `${req.protocol}://${req.get('host')}`;
+    const shareUrl = `${origin}/share?list=${encodeURIComponent(list)}`;
+    const t = escapeHtml(title), d = escapeHtml(desc), u = escapeHtml(shareUrl);
+    const rewritten = html
+      .replace(/<title>[^<]*<\/title>/, lit(`<title>${t}</title>`))
+      .replace(/<meta name="description" content="[^"]*">/, lit(`<meta name="description" content="${d}">`))
+      .replace(/<meta property="og:title" content="[^"]*">/, lit(`<meta property="og:title" content="${t}">`))
+      .replace(/<meta property="og:description" content="[^"]*">/, lit(`<meta property="og:description" content="${d}">`))
+      .replace(/<meta property="og:url" content="[^"]*">/, lit(`<meta property="og:url" content="${u}">`))
+      .replace(/<meta name="twitter:title" content="[^"]*">/, lit(`<meta name="twitter:title" content="${t}">`))
+      .replace(/<meta name="twitter:description" content="[^"]*">/, lit(`<meta name="twitter:description" content="${d}">`))
+      .replace(/<link rel="canonical" href="[^"]*">/, lit(`<link rel="canonical" href="${u}">`))
+      .replace(/<meta name="robots" content="[^"]*">/, lit(`<meta name="robots" content="noindex, follow">`));
+    res.set('Cache-Control', 'public, max-age=600, s-maxage=600');
+    return res.type('html').send(rewritten);
+  }
   // 비교 공유 딥링크(?cmp=) — OG 메타에 단지명 나열 (COMPARE-SHARE-2026-06-21)
   //   복원은 클라이언트 handleCompareUrl 이 수행. 여기선 크롤러 프리뷰 제목만 치환.
   if (!apt && cmp) {

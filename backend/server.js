@@ -90,6 +90,7 @@ app.use(helmet({
         'https://unpkg.com',
         'https://js.tosspayments.com',
         'https://oapi.map.naver.com', // 네이버 지도 SDK 본체
+        'https://t1.kakaocdn.net', // KAKAO-SHARE-2026-10-18: 카카오톡 공유 JS SDK(키 설정 시에만 로드)
         'https://*.pstatic.net',      // 지도 SDK 가 이어서 부르는 스크립트(nrbe/ssl 등 호스트 분산)
       ],
       scriptSrcAttr: ["'unsafe-inline'"], // onclick="" 등 인라인 핸들러

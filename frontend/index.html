@@ -96,6 +96,9 @@
      활성화 방법: 아래 content="" 에 Sentry Browser 프로젝트 DSN 입력.
      미입력 시 fetch 실패 → 앱 정상 동작 (stub 모드).
      ※ Browser DSN 은 공개되어도 안전한 설계 (rate limit + origin 체크).  -->
+<!-- KAKAO-SHARE-2026-10-18 (plans/166 3-2): 카카오톡 공유용 JavaScript 키. 비어 있으면 공유는 종전(OS 공유창/클립보드) 그대로.
+     채우려면 Kakao Developers [앱] > [플랫폼 키] > [JavaScript 키] 와 같은 화면의 [JavaScript SDK 도메인]에 https://myhomelog.vercel.app 등록(공식 문서 getting-started). -->
+<meta name="kakao-js-key" content="">
 <meta name="sentry-dsn" content="https://a9f4f42233be2799aa2b8e12849191eb@o4511268863672320.ingest.us.sentry.io/4511269602394112">
 <meta name="sentry-environment" content="production">
 <meta name="sentry-traces-sample-rate" content="0.1">
@@ -4150,6 +4153,8 @@ window.addEventListener('DOMContentLoaded',()=>{
   setTimeout(handleViewParam, 350);
   // 비교 공유 딥링크 진입 처리 (?cmp=) (COMPARE-SHARE-2026-06-21)
   setTimeout(handleCompareUrl, 350);
+  // LIST-SHARE-2026-10-18: 관심 목록 공유 딥링크 진입 처리 (?list=)
+  setTimeout(handleListUrl, 350);
 
   // 북마크 가격 자동 새로고침 (6시간 이상된 것만, 목표가 달성 배너)
   setTimeout(()=>{if(typeof refreshBookmarkPrices==='function')refreshBookmarkPrices();}, 1800);
@@ -7980,6 +7985,7 @@ async function shareCompare(){
   const names = apts.map(a=>a.aptName).join(' vs ');
   const title = `${names} — 내집로그 평당가 비교`;
   const text = `${names}\n전용면적 기준 평당가·단지정보 비교 (국토부 실거래)\n※ 매수 추천이 아니며 참고용 정보예요.`;
+  if(await _kakaoShare({ title, description: '전용면적 기준 평당가·단지정보 비교 (국토교통부 실거래)', url })) return;
   if(navigator.share){
     try{ await navigator.share({ title, text, url }); return; }catch(e){ if(e.name==='AbortError') return; }
   }
@@ -7993,6 +7999,112 @@ ${url}`, url); // CLIP-FALLBACK-2026-08-20
 }
 
 // 진입 시 ?cmp= 파라미터 → 비교 모달 자동 복원 (handleShareUrl 패턴 미러)
+// KAKAO-SHARE-2026-10-18 (plans/166 3-2): 카카오톡 공유 — <meta name="kakao-js-key"> 가 비어 있지 않을 때만 켜진다.
+//   SDK 는 첫 공유 때 한 번만 로드(공식 다운로드 페이지 2.8.3, 2026-09-03 배포). 무결성 값은 그 CDN 바이트의 sha384 를 직접 계산한 것이다
+//   (페이지가 값을 버튼으로만 제공해 가져오지 못함) — 버전을 바꾸면 반드시 다시 계산할 것.
+const KAKAO_SDK_SRC = 'https://t1.kakaocdn.net/kakao_js_sdk/2.8.3/kakao.min.js';
+const KAKAO_SDK_SRI = 'sha384-oroumrnFVE0xtgqyDZJARgERibXg2C28380uaUZz2kHDS5CR7tu20eGiOU6GkTpy';
+function _kakaoKey(){ try { return String((document.querySelector('meta[name="kakao-js-key"]')||{}).content||'').trim(); } catch(_) { return ''; } }
+async function _kakaoReady(){
+  const key = _kakaoKey(); if (!key) return false;
+  if (window.Kakao && window.Kakao.isInitialized && window.Kakao.isInitialized()) return true;
+  if (!window.Kakao) {
+    await new Promise((res) => { const el = document.createElement('script'); el.src = KAKAO_SDK_SRC; el.integrity = KAKAO_SDK_SRI; el.crossOrigin = 'anonymous'; el.onload = res; el.onerror = res; document.head.appendChild(el); });
+  }
+  try { if (window.Kakao && !window.Kakao.isInitialized()) window.Kakao.init(key); return !!(window.Kakao && window.Kakao.isInitialized()); } catch(_) { return false; }
+}
+// 성공하면 true(카카오 공유창이 열림), 키가 없거나 실패하면 false → 호출자는 종전 흐름으로
+async function _kakaoShare({ title, description, url, imageUrl }){
+  if (!(await _kakaoReady())) return false;
+  try {
+    window.Kakao.Share.sendDefault({
+      objectType: 'feed',
+      content: { title: String(title||'').slice(0,100), description: String(description||'').slice(0,200), imageUrl: imageUrl || (location.origin + '/og.png'), link: { mobileWebUrl: url, webUrl: url } },
+      buttons: [{ title: '자세히 보기', link: { mobileWebUrl: url, webUrl: url } }],
+    });
+    return true;
+  } catch(_) { return false; }
+}
+
+// LIST-SHARE-2026-10-18 (plans/166 3-2 "함께 보기"): 관심 단지 묶음(최대 30)을 비교 링크(?cmp=)와 같은 방식으로 URL 에 담는다.
+//   받는 사람은 로그인 없이 목록을 보고, 단지를 열거나 자기 관심 단지에 한 번에 담을 수 있다. DB 변경 없음.
+const LIST_SHARE_MAX = 30;
+function _listShareItems(arr){
+  return (Array.isArray(arr) ? arr : []).slice(0, LIST_SHARE_MAX).map(a => ({
+    aptName: String((a && a.aptName) || '').slice(0, 40),
+    sigungu: String((a && a.sigungu) || '').slice(0, 20),
+    umdNm:   String((a && a.umdNm) || '').slice(0, 20),
+    lawdCd:  /^\d{5}$/.test(String((a && a.lawdCd) || '')) ? String(a.lawdCd) : '',
+    aptSeq:  /^\d{5}-\d+$/.test(String((a && a.aptSeq) || '')) ? String(a.aptSeq) : '',
+  })).filter(a => a.aptName);
+}
+async function shareBookmarkList(){
+  const items = _listShareItems(getBookmarks().map(b => Object.assign({}, _bookmarkToApt(b), { aptSeq: b.aptSeq })));
+  if (!items.length) { toast('공유할 관심 단지가 없어요'); return; }
+  let enc; try { enc = _b64urlEnc(JSON.stringify(items)); } catch(_) { toast('공유 링크를 만들지 못했어요'); return; }
+  const u = new URL(location.origin + '/share'); u.searchParams.set('list', enc); const url = u.toString();
+  const head = `${items.slice(0, 3).map(a => a.aptName).join(', ')}${items.length > 3 ? ` 외 ${items.length - 3}곳` : ''}`;
+  const title = `관심 단지 ${items.length}곳 — 내집로그`;
+  const text = `${head}\n함께 보는 관심 단지 목록이에요 (국토교통부 실거래). ※ 매수 추천이 아니에요.`;
+  if (await _kakaoShare({ title, description: head + ' · 함께 보는 관심 단지', url })) return;
+  if (navigator.share) { try { await navigator.share({ title, text, url }); return; } catch(e) { if (e.name === 'AbortError') return; } }
+  try { await navigator.clipboard.writeText(`${text}\n${url}`); toast('관심 목록 링크를 복사했어요. 붙여넣어 공유해 보세요'); }
+  catch { _copyFallback(`${text}\n${url}`, url); }
+}
+function handleListUrl(){
+  const sp = new URLSearchParams(location.search); const enc = sp.get('list'); if (!enc) return;
+  let raw; try { raw = JSON.parse(_b64urlDec(enc)); } catch(_) { return; }
+  const items = _listShareItems(raw); if (!items.length) return;
+  window._sharedList = items;
+  document.title = `관심 단지 ${items.length}곳 — 내집로그`;
+  _openSharedListModal(items);
+}
+function _openSharedListModal(items){
+  let m = document.getElementById('sharedListM');
+  if (!m) {
+    m = document.createElement('div'); m.id = 'sharedListM'; m.setAttribute('role', 'dialog'); m.setAttribute('aria-modal', 'true'); m.setAttribute('aria-label', '공유받은 관심 단지');
+    m.style.cssText = 'position:fixed;inset:0;z-index:9995;background:rgba(0,0,0,.42);display:flex;align-items:flex-end;justify-content:center;padding:0';
+    m.addEventListener('click', (e) => { if (e.target === m) _closeSharedListModal(); });
+    document.body.appendChild(m);
+  }
+  const rows = items.map((a, i) => `<li style="display:flex;align-items:center;gap:8px;padding:10px 0;border-bottom:1px solid var(--bd)">
+      <div style="flex:1;min-width:0"><div style="font-weight:700;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(a.aptName)}</div>
+      <div style="font-size:12px;color:var(--t3)">${_escHtml([_fmtSgg(a.sigungu), a.umdNm].filter(Boolean).join(' '))}</div></div>
+      <button type="button" onclick="_openSharedListItem(${i})" style="flex-shrink:0;padding:7px 12px;border:1px solid var(--bd);border-radius:var(--rs);background:var(--bg-base);color:var(--t1);font-size:12px;font-weight:600;cursor:pointer">열기</button>
+    </li>`).join('');
+  m.innerHTML = `<div style="width:100%;max-width:520px;max-height:85vh;overflow:auto;background:var(--bg-base);border-radius:16px 16px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom))">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px">
+        <div style="font-size:16px;font-weight:700">공유받은 관심 단지 ${items.length}곳</div>
+        <button type="button" aria-label="닫기" onclick="_closeSharedListModal()" style="width:36px;height:36px;border:none;background:transparent;font-size:20px;cursor:pointer;color:var(--t2)">✕</button>
+      </div>
+      <div style="font-size:12px;color:var(--t3);margin-bottom:8px">단지를 열어 실거래를 보거나, 내 관심 단지에 한 번에 담을 수 있어요. 매수·매도 추천이 아니에요.</div>
+      <ul style="list-style:none;margin:0;padding:0">${rows}</ul>
+      <button type="button" onclick="_addSharedListToBookmarks()" style="width:100%;margin-top:12px;padding:12px;border:none;border-radius:10px;background:var(--acc);color:var(--acc-ink,#fff);font-size:14px;font-weight:700;cursor:pointer">내 관심 단지에 모두 담기</button>
+    </div>`;
+  m.style.display = 'flex';
+}
+function _closeSharedListModal(){ const m = document.getElementById('sharedListM'); if (m) m.style.display = 'none'; }
+function _openSharedListItem(i){
+  const a = (window._sharedList || [])[i]; if (!a) return;
+  _closeSharedListModal();
+  goSearchResult({ aptName: a.aptName, sigungu: a.sigungu, umdNm: a.umdNm, lawdCd: a.lawdCd, aptSeq: a.aptSeq || null });
+}
+function _addSharedListToBookmarks(){
+  const items = window._sharedList || []; if (!items.length) return;
+  const bks = getBookmarks(); let added = 0;
+  for (const a of items) {
+    const p = { aptName: a.aptName, sigungu: a.sigungu, umdNm: a.umdNm, lawdCd: a.lawdCd, aptSeq: a.aptSeq || null, area: [a.sigungu, a.umdNm].filter(Boolean).join(' ') };
+    if (_bkIndex(bks, p) >= 0) continue;
+    let key = ''; try { key = _aptKey(p); } catch(_) {}
+    bks.unshift({ aptKey: key, kaptCode: null, aptSeq: p.aptSeq, aptName: p.aptName, area: p.area, sigungu: p.sigungu, umdNm: p.umdNm, avgPrice: 0, lawdCd: p.lawdCd, savedAt: Date.now() });
+    added++;
+  }
+  saveBookmarks(bks);
+  try { cmpBkSel.clear(); renderBookmarks(); } catch(_) {}
+  toast(added ? `관심 단지에 ${added}곳을 담았어요` : '이미 모두 관심 단지에 있어요');
+  _closeSharedListModal();
+}
+
 async function handleCompareUrl(){
   const sp = new URLSearchParams(location.search);
   const enc = sp.get('cmp');
@@ -9612,6 +9724,8 @@ async function shareCurrent(){
   // SHARE-ZERO-2026-09-02: 가격이 없을 때 "평균 0.00억" 을 외부로 내보내던 문구 — 점수와 같은 방식으로 생략한다.
   const _shPx=Number(currentDetail.avgPrice) > 0 ? `, 평균 ${Number(currentDetail.avgPrice).toFixed(2)}억` : '';
   const text=`${currentDetail.aptName} (${_fmtSgg(currentDetail.area)})${_shPx}${currentDetail.score?` / 점수 ${currentDetail.score}점`:''}\n※ 매수 추천이 아니라 참고용 정보예요.`;
+  const _seqOk=/^\d{5}-\d+$/.test(String(currentDetail.aptSeq||''));
+  if(await _kakaoShare({ title, description: text.split('\n')[0], url, imageUrl: _seqOk ? `${location.origin}/api/og/apt/${currentDetail.aptSeq}` : undefined })) return;
   // Web Share API (모바일)
   if(navigator.share){
     try{await navigator.share({title,text,url});return;}catch(e){if(e.name==='AbortError')return;}
@@ -10300,7 +10414,9 @@ function renderBookmarks(){
     return;
   }
   const _bkCmpBtn = bks.length>=2 ? `<button id="bkCmpBtn" onclick="openCompareBookmarks()" style="display:none;width:100%;margin-bottom:8px;padding:8px 10px;background:var(--acc-bg);color:var(--acc-ink);border:none;border-radius:var(--radius-base);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">선택 단지 비교 (<span id="bkCmpCnt">0</span>)</button>` : '';
-  el.innerHTML=_pushBtnHtml() + _kkoBtnHtml() + _bkCmpBtn + bks.map((b,i)=>{
+  // LIST-SHARE-2026-10-18: 관심 목록을 링크 하나로 가족·배우자와 같이 본다(받는 사람은 로그인 없이 열람·담기)
+  const _bkShareBtn = `<button type="button" onclick="shareBookmarkList()" style="width:100%;margin-bottom:8px;padding:8px 10px;background:var(--bg2);border:1px solid var(--bd);border-radius:var(--rs);font-size:12px;font-weight:600;color:var(--t1);cursor:pointer">관심 목록 링크로 함께 보기 (${bks.length}곳)</button>`;
+  el.innerHTML=_pushBtnHtml() + _kkoBtnHtml() + _bkShareBtn + _bkCmpBtn + bks.map((b,i)=>{
     const alerts=getAlerts();
     const target=alerts[b.aptName];
     const hasVisit=!!(getNoteForApt(b.aptName)?.visitDate);
