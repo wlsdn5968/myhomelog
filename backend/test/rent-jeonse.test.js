@@ -628,7 +628,7 @@ test('WIRE-JEONSE-SAMPLE-2026-09-06: analyzeApt 가 전세 표본 결측(_jTotal
   saved.set(asPath, require.cache[asPath]);
   delete require.cache[asPath]; // analysisService 자신은 다시 읽어 위 스텁을 보게 한다
 
-  cache.del('analysis:11350:배선단지::'); // 이전 실행의 캐시가 남아있으면 픽스처가 무시된다
+  cache.del('analysis:11350:배선단지:::600'); // 이전 실행의 캐시가 남아있으면 픽스처가 무시된다
 
   try {
     const { analyzeApt } = require(asPath);
@@ -645,4 +645,38 @@ test('WIRE-JEONSE-SAMPLE-2026-09-06: analyzeApt 가 전세 표본 결측(_jTotal
     for (const [p, prev] of saved) { if (prev) require.cache[p] = prev; else delete require.cache[p]; }
     for (const [p, prev] of saved) assert.equal(require.cache[p], prev, `require.cache 복원 실패: ${p}`);
   }
+});
+
+// ANALYSIS-KEY-PRICE-2026-10-18 (Plan 159): 분석 캐시 키에 현재 가격 포함
+test('Plan159: 가격이 다르면 분석 캐시 키가 다르다', () => {
+  const { _internals } = require('../services/analysisService');
+  assert.notEqual(
+    _internals.analysisCacheKey('11680', '은마', '강남구', '대치동', 34.15),
+    _internals.analysisCacheKey('11680', '은마', '강남구', '대치동', 30)
+  );
+});
+
+test('Plan159: 소수 둘째 자리 아래 차이는 같은 캐시 키', () => {
+  const { _internals } = require('../services/analysisService');
+  assert.equal(
+    _internals.analysisCacheKey('11680', '은마', '강남구', '대치동', 34.15),
+    _internals.analysisCacheKey('11680', '은마', '강남구', '대치동', 34.150000001)
+  );
+});
+
+test('Plan159: 0·NaN·음수·undefined 가격은 모두 :0 으로 끝난다', () => {
+  const { _internals } = require('../services/analysisService');
+  for (const v of [0, NaN, -1, undefined]) {
+    assert.ok(_internals.analysisCacheKey('11680', '은마', '강남구', '대치동', v).endsWith(':0'), String(v));
+  }
+});
+
+test('Plan159: analyzeApt 가 키 함수를 쓰고 옛 형식 키 리터럴은 없다', () => {
+  const fs = require('fs');
+  const path = require('path');
+  const src = fs.readFileSync(path.join(__dirname, '../services/analysisService.js'), 'utf8');
+  const start = src.indexOf('async function analyzeApt(');
+  const body = src.slice(start, start + 1500);
+  assert.ok(body.includes('_analysisCacheKey('), 'analyzeApt 본문에 _analysisCacheKey( 없음');
+  assert.equal(src.split("${umdNm||''}`").length - 1, 0, '옛 형식 키 리터럴 잔존');
 });

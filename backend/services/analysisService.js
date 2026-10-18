@@ -528,11 +528,19 @@ function buildMonthlyVolume(transactions, monthCount = 6) {
 }
 
 // ── 단지 종합 분석 (메인) ─────────────────────────────────
+// ANALYSIS-KEY-PRICE-2026-10-18 (Plan 159): 백분위·시장 요약·currentPrice 가 넘겨받은 가격에 따라 달라지는데
+//   키에 가격이 없어, 같은 단지를 다른 가격으로 연 두 번째 사람이 첫 사람 가격의 결과를 받았다.
+//   가격은 억 단위 소수 둘째 자리(만원 100 단위)로 정규화한다 — 0·NaN·음수는 0.
+function _analysisCacheKey(lawdCd, aptName, sigungu, umdNm, currentPrice) {
+  const p = Number(currentPrice);
+  const pk = Number.isFinite(p) && p > 0 ? Math.round(p * 100) : 0;
+  return `analysis:${lawdCd}:${aptName}:${sigungu||''}:${umdNm||''}:${pk}`;
+}
 async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
   if (!lawdCd) lawdCd = '11350'; // fallback
 
   // CROSS-REGION-FIX-2026-06-03: sigungu/umdNm 도 캐시 키 포함 (동별 분리 — 동명 단지 캐시 오염 차단)
-  const cacheKey = `analysis:${lawdCd}:${aptName}:${sigungu||''}:${umdNm||''}`;
+  const cacheKey = _analysisCacheKey(lawdCd, aptName, sigungu, umdNm, currentPrice);
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
@@ -786,5 +794,5 @@ async function compareBatch(apts, opts = {}) {
 module.exports = {
   analyzeApt, calcTotalCost, getLawdCdFromArea, compareBatch,
   // 테스트·디버그 용 — 외부 호출 금지
-  _internals: { calcBuySignal, calcVolumeSignal, calcPricePercentile, filterAnomalies, detectSeasonalBias, getDataReliability, calcGap, compareOne: _compareOne, computeJeonseBasisDesc },
+  _internals: { analysisCacheKey: _analysisCacheKey, calcBuySignal, calcVolumeSignal, calcPricePercentile, filterAnomalies, detectSeasonalBias, getDataReliability, calcGap, compareOne: _compareOne, computeJeonseBasisDesc },
 };
