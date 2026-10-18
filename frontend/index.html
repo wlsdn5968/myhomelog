@@ -755,13 +755,13 @@ header .htabs > .htab.on::before,header .htab-tool.on::before{content:none} /* v
 @media(min-width:701px) and (max-width:900px){ header:not(.lv-top){padding:0 16px;gap:10px} }
 /* 155: 701~900px 는 패널 340 에서 가격 96·건수 64 열이 단지명 칸을 108px 로 눌러 대부분 말줄임됐다(768 실측) —
    모바일 시트와 같은 2단(가격 위·"거래 N건" 아래)으로 건수 열을 접어 단지명 칸을 넓힌다. */
-@media(min-width:701px) and (max-width:900px){
-  .hp-th .c3{display:none} .hp-th .c2{width:auto}
-  .hp-row{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px}
-  .hp-row .hp-c1{grid-row:1/3;align-self:center}
-  .hp-row .hp-pr{width:auto;align-self:end}
-  .hp-row .hp-ct{width:auto;font-size:12px;font-weight:500;color:var(--t3);align-self:start}
-  .hp-ctl{display:inline}
+@media(min-width:701px) and (max-width:900px){ /* 이 블록은 151a·151b 기본 규칙보다 앞에 선언돼 같은 우선순위면 진다(미리보기 실측) — .hp 로 한 단계 올린다 */
+  .hp .hp-th .c3{display:none} .hp .hp-th .c2{width:auto}
+  .hp .hp-row{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px}
+  .hp .hp-row .hp-c1{grid-row:1/3;align-self:center}
+  .hp .hp-row .hp-pr{width:auto;align-self:end}
+  .hp .hp-row .hp-ct{width:auto;font-size:12px;font-weight:500;color:var(--t3);align-self:start}
+  .hp .hp-ctl{display:inline}
 }
 /* HEADER-MORE-2026-10-18 (Plan 153, 시안 C — plans/design-spec-v2-screen-C-header-2026-10-18.md): 더보기·아바타 메뉴, 빨간 점, 남은 검색·장애 칩.
    빨강 #B4473C·#F7E7E5·#8E3128 은 시안 라이트 값 — 시안에 다크 값이 없어 다크는 기존 앱 토큰(--red·--redL·--danger-bd)을 쓴다(계획 153 결정 1). */

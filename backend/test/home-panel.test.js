@@ -262,7 +262,8 @@ test('155: 701~900px 목록 행은 2단(가격 위·"거래 N건" 아래)으로 
   assert.ok(i > 0);
   const blk = html.slice(i, html.indexOf('\n}\n', i));
   assert.ok(blk.includes('@media(min-width:701px) and (max-width:900px){'));
-  assert.ok(blk.includes('.hp-th .c3{display:none}') && blk.includes('.hp-row{display:grid;grid-template-columns:minmax(0,1fr) auto;') && blk.includes('.hp-ctl{display:inline}'));
+  assert.ok(blk.includes('.hp .hp-th .c3{display:none}') && blk.includes('.hp .hp-row{display:grid;grid-template-columns:minmax(0,1fr) auto;') && blk.includes('.hp .hp-ctl{display:inline}'), '.hp 로 한 단계 높여야 뒤에 선언된 151 기본 규칙을 이긴다');
+  assert.ok(i < html.indexOf('HOME-SHEET-2026-10-18 (Plan 151b'), '이 블록이 151b 보다 앞에 있다는 전제(그래서 .hp 접두가 필요)');
 });
 
 test('155: 가로 모드 낮은 화면은 사용자가 손대기 전 접힘으로 시작, 한 번 만지면 그 선택을 따른다', () => {
