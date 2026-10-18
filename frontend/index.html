@@ -602,6 +602,8 @@ html[data-theme="dark"] .ltxt em{color:#7FA1E8}
   .hsearch input::placeholder{color:var(--hd-ph)}
 }
 @media(min-width:1120px){ .hsearch{min-width:260px!important} }
+/* 155: 1120 지도 밖 화면에서 남은 검색 칩이 뜨면 로그인 버튼이 오른쪽 여백을 41px 넘었다(미리보기 실측 — 1160 은 1, 1200 은 0) — 1199 까지만 215 */
+@media(min-width:1120px) and (max-width:1199px){ header:not(.lv-top) .hsearch{min-width:215px!important} }
 /* HDR-DESIGN-2026-08-20 (Sprint NNNNNNN-21): 시안 design.html:13-60 헤더 토큰 코드화 — 기존 --hd-* 토큰 값만 교체(뷰 스코프 패턴).
    시안 원문: bg=--bg(#F2F5FA/#080E18)·line(#DEE5EF/#22334A)·tab=--tx2·활성=5px 골드 점(배경 변화 없음)·pill 버튼(panel+line, 초록 점 --ok)
    ⚠ 시안엔 검색창·로그인·알림·사용량이 없지만 기능 요소는 유지(IA 변경은 운영자 결정) — 외형만 맞춘다. */

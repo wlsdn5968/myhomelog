@@ -82,3 +82,9 @@ test('155: 701~760px 헤더 검색 최소 폭 140(701 에서 로그인 버튼이
 test('155: 701~760px 장애 시 헤더 검색 최소 폭 100(장애 칩 점까지 뜨면 넘침 실측)', () => {
   assert.ok(html.includes('@media(min-width:701px) and (max-width:760px){ body.api-off header:not(.lv-top) .hsearch{min-width:100px!important} }'));
 });
+
+test('155: 1120~1199px 헤더 검색 최소 폭 215(남은 검색 칩이 뜨면 41px 넘침 실측)', () => {
+  assert.ok(html.includes('@media(min-width:1120px) and (max-width:1199px){ header:not(.lv-top) .hsearch{min-width:215px!important} }'));
+  // 260 규칙보다 뒤에 와야 이긴다(같은 !important·특이성은 header 접두로 더 높지만 순서도 고정)
+  assert.ok(html.indexOf('@media(min-width:1120px){ .hsearch{min-width:260px!important} }') < html.indexOf('@media(min-width:1120px) and (max-width:1199px){ header:not(.lv-top) .hsearch{min-width:215px!important} }'));
+});
