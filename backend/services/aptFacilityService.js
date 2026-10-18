@@ -704,10 +704,26 @@ async function getFacilitiesByKaptCodes(kaptCodes) {
  *   호출부(propertyService)가 두 소스를 그대로 합칠 수 있게.
  *   ⚠ PostgREST 는 1000행에서 조용히 잘린다(레포 6회 재발) → range 페이징 + 2차 정렬키.
  */
+// APTLIST-MEMO-2026-10-18: 운영 계측(collectDetail, 14:13 UTC) — 추천 수집 구간의 임계 경로가 구별 거래가 아니라 이 조회였다
+//   (서울 aptListMs 1,752 > 구 최대 1,658 · 경기 2,365 > 2,255). apt_master 는 주 1회(apt-master-sync, 월 20:00 UTC)만 바뀌므로
+//   지역 묶음별로 1시간 메모한다. 호출자(propertyService 1곳)는 목록을 읽기만 한다. 오류로 빈 결과면 메모하지 않는다.
+const APTLIST_MEMO_MS = 60 * 60 * 1000;
+const _aptListMemo = new Map();
 async function getAptListByLawdFromDb(lawdCds) {
   const a = admin();
   const codes = [...new Set((lawdCds || []).map(String).filter(Boolean))];
   if (!a || !codes.length) return [];
+  const memoKey = codes.slice().sort().join(',');
+  const memo = _aptListMemo.get(memoKey);
+  if (memo && Date.now() - memo.at < APTLIST_MEMO_MS) return memo.out;
+  const out = await _getAptListByLawdFromDbUncached(a, codes);
+  if (out && out.length) {
+    _aptListMemo.set(memoKey, { at: Date.now(), out });
+    if (_aptListMemo.size > 200) _aptListMemo.delete(_aptListMemo.keys().next().value);
+  }
+  return out;
+}
+async function _getAptListByLawdFromDbUncached(a, codes) {
   const PAGE = 1000;
   const out = [];
   try {
