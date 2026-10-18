@@ -753,6 +753,54 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 /* LEFT */
 .lp{width:310px;flex-shrink:0;display:flex;flex-direction:column;border-right:1px solid var(--bd);background:var(--s0)}
 .lpsc{flex:1;overflow-y:auto}.lpsc::-webkit-scrollbar{width:3px}.lpsc::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:2px}
+/* HOME-PANEL-2026-10-18 (Plan 151, 시안 화면 B): 지도 화면 왼쪽 패널·검색 띠. 색은 v2 토큰(sf=--bg-base, sf2=--bg-elev-1,
+   line=--bd, line2=--bd2, ink=--t1·2·3, pri=--acc/--acc-bg, prit=--accent-tint, onpri=--acc-ink). 데스크톱(>700px)만 —
+   모바일은 151b 전까지 변화 0. 폭 1000px 이하 340 은 시안에 분기 폭이 없어 계획자 결정(지도 600px 이상 확보). */
+.hp,#hpBand{display:none}
+@media(min-width:701px){
+  body.hp-on .lp{display:none!important}
+  body.hp-on .hp{display:flex}
+  body.hp-on #popTitleCard{display:none!important} /* 같은 설명을 패널이 한다 — DOM 은 유지(popular.test 순서 계약) */
+  #hpBand{display:block;padding:20px 24px 14px;background:var(--bg-base);border-bottom:1px solid var(--bd);flex-shrink:0}
+}
+.hp{width:420px;flex-shrink:0;flex-direction:column;min-height:0;background:var(--bg-base);border-right:1px solid var(--bd);font-variant-numeric:tabular-nums}
+@media(max-width:1000px){.hp{width:340px}}
+.hp-hd{padding:24px 24px 12px}
+.hp-t{margin:0;font-size:20px;font-weight:700;line-height:1.4;color:var(--t1)}
+.hp-s{margin:4px 0 0;font-size:14px;font-weight:400;line-height:1.6;color:var(--t3)}
+.hp-chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 24px 16px}
+.hp-chips:empty{display:none}
+.hp-chip{height:36px;padding:0 12px;border:1px solid var(--bd2);border-radius:8px;background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.hp-chip[aria-pressed="true"]{border-color:var(--acc);background:var(--accent-tint);color:var(--acc)}
+.hp-th{display:flex;align-items:center;gap:12px;padding:8px 24px;background:var(--bg-elev-1);font-size:12px;font-weight:500;line-height:1.5;color:var(--t3)}
+.hp-th .c1{flex:1;min-width:0}.hp-th .c2,.hp-row .hp-pr{width:96px;flex-shrink:0;text-align:right}.hp-th .c3,.hp-row .hp-ct{width:64px;flex-shrink:0;text-align:right}
+.hp-list{flex:1;min-height:0;overflow-y:auto}
+.hp-row{display:flex;align-items:center;gap:12px;width:100%;padding:12px 24px;border:none;border-bottom:1px solid var(--bd);background:none;color:var(--t1);font-family:inherit;text-align:left;cursor:pointer}
+.hp-row:hover{background:var(--bg-elev-1)}
+.hp-row .hp-c1{flex:1;min-width:0}
+.hp-nm,.hp-rg{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.hp-nm{font-size:16px;font-weight:600;line-height:1.6}
+.hp-rg{font-size:14px;font-weight:400;line-height:1.6;color:var(--t3)}
+.hp-pr{font-size:16px;font-weight:600}
+.hp-ct{font-size:14px;color:var(--t2)}
+.hp-msg{padding:20px 24px;font-size:14px;line-height:1.6;color:var(--t3)}
+.hp-msg button,.hp-note button{height:36px;padding:0 4px;border:none;background:none;color:var(--acc);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.hp-note{margin:0 24px 12px;padding:12px 14px;border:1px solid var(--bd);border-radius:8px;background:var(--bg-elev-1);font-size:14px;line-height:1.6;color:var(--t1)}
+.hp-note[hidden]{display:none}
+.hp-note-a{display:flex;flex-wrap:wrap;gap:0 16px;margin-top:2px}
+.hp-rep{padding:16px 24px;border-top:1px solid var(--bd)}
+.hp-rep p{margin:0 0 12px;font-size:14px;line-height:1.6;color:var(--t2)}
+.hp-cta{width:100%;height:48px;border:none;border-radius:8px;background:var(--acc-bg);color:var(--acc-ink);font-family:inherit;font-size:16px;font-weight:600;cursor:pointer}
+.hp-ft{padding:0 24px 16px;font-size:12px;font-weight:500;line-height:1.5;color:var(--t3)}
+.hp-ft a{color:var(--t3)}
+.hp-more{display:flex;align-items:center;flex-wrap:wrap;gap:0 16px;margin-top:10px}
+.hp-more-l{font-size:14px;color:var(--t3)}
+.hp-fb{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 4px;border:none;background:none;color:var(--acc);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.hp-fb svg{width:18px;height:18px;flex-shrink:0}
+/* 헤더 검색창을 띠로 옮겼을 때(시안: 높이 56·좌우 20·1px line2·모서리 12·그림자 없음·아이콘 20·글자 16). 인라인 스타일을 이겨야 해서 !important */
+#hpSearchSlot .hsearch{max-width:none!important;min-width:0!important;margin:0!important}
+#hpSearchSlot .hsearch>svg{left:20px!important;width:20px!important;height:20px!important}
+#hpSearchSlot #hSearchInput{height:56px;padding:0 20px 0 52px!important;font-size:16px!important;border:1px solid var(--bd2);border-radius:12px;box-shadow:none;background:var(--bg-base)}
 .sec{border-bottom:1px solid var(--border-faint)}
 .sh{padding:13px 16px;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;transition:background .15s}
 .sh:hover{background:var(--s1)}
@@ -2089,6 +2137,25 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   </div>
 </div></div>
 
+<!-- HOME-PANEL-2026-10-18 (Plan 151, 시안 화면 B): 지도 화면(데스크톱 >700px)의 왼쪽 패널 — 사이드바(.lp)는 DOM 그대로 두고
+     지도 화면에서만 숨긴다(목록 화면은 사이드바 유지). 내용은 /api/search/popular 실데이터, 가격은 60일 평균가(단건 가격 필드 없음).
+     표시 판정은 _hpApply(v) + body.hp-on. 모바일은 151b 전까지 표시하지 않는다. -->
+<aside class="hp" id="homePanel" aria-labelledby="hpT">
+  <div class="hp-hd">
+    <h2 class="hp-t" id="hpT">최근 거래가 많은 단지</h2>
+    <p class="hp-s" id="hpSub">최근 60일 국토교통부 실거래 신고 기준이에요</p>
+  </div>
+  <div class="hp-note" id="hpNote" hidden></div>
+  <div class="hp-chips" id="hpChips" role="group" aria-label="지역으로 좁히기"></div>
+  <div class="hp-th" aria-hidden="true"><span class="c1">단지명·지역</span><span class="c2">60일 평균가</span><span class="c3">거래 건수</span></div>
+  <div class="hp-list" id="hpList"><div class="hp-msg">불러오는 중이에요</div></div>
+  <div class="hp-rep">
+    <p>보유 주택, 자금, 희망 지역은 보고서 화면에서 입력해요.</p>
+    <button type="button" class="hp-cta" onclick="sv('report')">내 조건으로 맞춤 보고서 받기</button>
+  </div>
+  <div class="hp-ft">매수·매도 추천이 아니에요. 출처 국토교통부 실거래가 · <a href="/terms.html" target="_blank">이용약관</a> · <a href="/privacy.html" target="_blank">개인정보</a></div>
+</aside>
+
 <!-- CENTER -->
 <div class="cp" id="view-map" style="position:relative">
 <style id="mapSkin">
@@ -2134,6 +2201,16 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
 /* AUDIT-FN-2026-08-19 (운영자 제안 검토): 모바일 헤더 공간 — 데이터 상태는 점 아이콘만(기능·신호 유지, 문구는 데스크톱 전용) */
 @media(max-width:700px){ #dataStatusBtn{font-size:0!important;padding:6px 9px!important} #dataStatusBtn span{margin-right:0!important} }
 </style>
+  <!-- HOME-PANEL-2026-10-18 (Plan 151): 검색 띠 — 데스크톱만. 헤더의 .hsearch 노드를 _hpSearchPlace 가 #hpSearchSlot 으로 옮긴다(이중 입력칸 없음). -->
+  <div id="hpBand">
+    <div id="hpSearchSlot"></div>
+    <div class="hp-more"><span class="hp-more-l">다른 기능도 있어요</span>
+      <button type="button" class="hp-fb" onclick="sv('news')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 5h12v14a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1Z"/><path d="M16 8h3a1 1 0 0 1 1 1v9a2 2 0 0 1-2 2"/><path d="M7.5 9h5"/><path d="M7.5 13h5"/><path d="M7.5 16.5h3"/></svg>오늘의 브리핑</button>
+      <button type="button" class="hp-fb" onclick="sv('calc')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg>대출 계산</button>
+      <button type="button" class="hp-fb" onclick="sv('subs')"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18"/><path d="M8 2.5v4"/><path d="M16 2.5v4"/></svg>청약 일정</button>
+      <button type="button" class="hp-fb" onclick="openRegSummary()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3.5v5c0 4.4-3 7.6-7 9.5-4-1.9-7-5.1-7-9.5v-5Z"/></svg>규제 요약</button>
+    </div>
+  </div>
   <div class="mtbar">
     <!-- Sprint PPPPP (시안 컷3): 필터·인기 칩은 검색 결과가 있을 때만 표시(renderMarkers 가 노출) —
          첫 화면에선 규제/비규제/재건축이 눌러도 토스트만 뜨는 죽은 버튼이었음(fm() props 가드 실측).
@@ -2760,7 +2837,7 @@ html[data-theme="dark"] #view-news{
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         <b>방법 1. 위쪽 검색창</b>: "공덕래미안"이나 "공덕동"을 입력하고 자동완성에서 눌러요<br>
         <b>방법 2. 지도 움직이기</b>: 지도를 옮긴 뒤 "이 지역 단지 보기" 버튼을 눌러요<br>
-        <b>방법 3. 왼쪽 입력창에 조건을 넣고 조건에 맞는 단지 찾기</b>: 매수가와 지역에 맞는 실거래 단지를 15개 찾아 줘요<br><br>
+        <b>방법 3. 목록 화면 왼쪽 입력창에 조건을 넣고 조건에 맞는 단지 찾기</b>: 매수가와 지역에 맞는 실거래 단지를 15개 찾아 줘요<br><br>
         <span style="background:var(--info-bg);border:1px solid var(--info-bd);border-radius:var(--radius-sm);padding:6px 10px;display:inline-block;font-size:12px;color:var(--info-tx)">단지를 누르면 <b>실거래가 탭</b>에서 평형 칩으로 내 예산에 맞는 평형만 걸러 볼 수 있어요</span>
       </div>
     </details>
@@ -2821,7 +2898,7 @@ html[data-theme="dark"] #view-news{
     <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-md);padding:13px 16px;margin-bottom:10px">
       <summary style="cursor:pointer;font-size:14px;font-weight:700;color:var(--t1);list-style:none">관심 단지 + 임장노트</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
-        <b>관심 단지</b>: 단지 상세에서 "관심 추가"를 누르면 왼쪽 사이드바(모바일은 ☰ 메뉴)에 쌓여요<br>
+        <b>관심 단지</b>: 단지 상세에서 "관심 추가"를 누르면 목록 화면 왼쪽(모바일은 ☰ 메뉴)과 오른쪽 아래 관심 단지 버튼에 쌓여요<br>
         <b>임장노트</b>: 단지 상세의 임장노트 탭에서 체크리스트, 평점, 메모, 방문일을 적을 수 있어요<br>
         <b>비로그인</b>: 이 기기 브라우저에만 저장<br>
         <b>로그인</b>: <span style="color:var(--grn);font-weight:600">모든 기기에서 자동으로 동기화돼요</span>
@@ -2834,7 +2911,7 @@ html[data-theme="dark"] #view-news{
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         <b>청약 일정</b>: 한국부동산원 청약Home 일정, 가점 계산기(84점), 지역별 당첨 가점 대략 범위를 볼 수 있어요<br>
         <b>브리핑</b>: 부동산 뉴스를 6개 분류로 보여 주고 30분마다 새로 불러와요. 3줄 시황은 공식 통계를 자동으로 정리한 것이며 AI가 쓴 글이 아니에요<br>
-        <b>계약 타임라인</b>: 왼쪽 사이드바(모바일은 ☰ 메뉴)에서 계약일과 잔금일을 입력하면 D-day를 자동으로 계산해요
+        <b>계약 타임라인</b>: 목록 화면 왼쪽(모바일은 ☰ 메뉴)에서 계약일과 잔금일을 입력하면 D-day를 자동으로 계산해요
       </div>
     </details>
 
@@ -3921,6 +3998,8 @@ window.addEventListener('DOMContentLoaded',()=>{
       //   💬 AI 도우미 FAB(.fab-ai 기본 display:none)가 첫 탭 클릭 전까지 숨겨지는 회귀 → 초기 노출 보장.
       //   (AI 챗 = 온디맨드 유지 결정 직결 — 입구가 초기화면에서 보여야 함)
       try { const _fab=document.getElementById('fabAI'); if(_fab) _fab.style.display='flex'; } catch(_){}
+      // HOME-PANEL-2026-10-18 (Plan 151): 같은 이유로 지도 화면 왼쪽 패널도 여기서 켠다(sv() 미호출 진입).
+      try { const _vm=document.getElementById('view-map'); if(_vm && getComputedStyle(_vm).display!=='none') _hpApply('map'); } catch(_){}
     }
   } catch(_){}
 });
@@ -6663,7 +6742,7 @@ function mkNaverIW(p){
   }).join('');
   const scoreLabel = _hasS
     ? `${gSVG(s,38)}<div><div style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--text-primary)">데이터 종합 점수 ${s}/100</div><span class="lvl ${lv}" style="font-family:var(--font-mono);font-size:12px;padding:2px 7px;font-weight:600">${lt}</span></div>`
-    : `<div style="font-family:var(--font-mono);font-size:12px;color:var(--text-tertiary);line-height:1.5">데이터 분석 대기<br><span style="font-size:12px">사이드바에서 검색하면 분석돼요</span></div>`;
+    : `<div style="font-family:var(--font-mono);font-size:12px;color:var(--text-tertiary);line-height:1.5">데이터 분석 대기<br><span style="font-size:12px">목록 화면에서 조건으로 검색하면 분석돼요</span></div>`;
   return`<div style="background:var(--bg-elev-1);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);border:1px solid var(--border-subtle);overflow:hidden">
     <div class="niw" style="position:relative">
       <button onclick="try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_){}" aria-label="닫기" title="닫기" style="position:absolute;top:-3px;right:-3px;width:22px;height:22px;border:none;background:transparent;color:var(--text-tertiary);font-size:14px;line-height:1;cursor:pointer;padding:0;z-index:3">✕</button>
@@ -6729,6 +6808,7 @@ function renderMarkers(data){
     const o=naverReady&&!mapObj?._isLeaflet?mkNaverOverlay(p):mkLeafletMkr(p);
     if(o)overlays.push(o);
   });
+  try{ _hpNote(data); }catch(_){} // HOME-PANEL-2026-10-18 (Plan 151): 검색 결과가 지도에 있다는 안내
 }
 
 // MARKER-STACK-2026-08-17 (Sprint MMMMMMM — 서울 전수조사 4회차 실측):
@@ -6765,7 +6845,7 @@ function _mkStackStyle(p){
 function fm(t,btn){
   // Phase 4-3 UX-1 (2026-05-05): 검색 안 한 상태에서 클릭 시 toast 안내 (인기단지 마커는 ltv/type 데이터 없어 필터 불가)
   if(!props||!props.length){
-    if(typeof toast==='function') toast('먼저 사이드바에서 단지를 검색해 주세요. 검색 결과에 필터가 적용돼요.');
+    if(typeof toast==='function') toast('먼저 목록 화면에서 조건에 맞는 단지를 찾아 주세요. 검색 결과에 필터가 적용돼요.');
     return;
   }
   flt=t;
@@ -6798,6 +6878,7 @@ function showPop(btn){
   // 인기 마커 재로딩 (once 가드·backoff 해제)
   _popularMarkersLoaded=false; _popularMarkersFailedAt=0; window._popMarkersRetry=0;
   try{sessionStorage.removeItem('mhl_popcard_hide')}catch(_){} // Sprint PPPPP: 명시적 재표시 요청이므로 카드 숨김 해제
+  try{ _hpNote(null); }catch(_){} // HOME-PANEL-2026-10-18 (Plan 151): 인기 단지로 되돌렸으니 검색 결과 안내를 내린다
   loadPopularMarkers();
 }
 
@@ -9518,7 +9599,7 @@ function renderAnalysis(d,p){
 function renderAnalysisFallback(p){
   const loanAmt=getLoanAmt();
   document.getElementById('t4').innerHTML=`
-    <div class="ibox b" style="margin-bottom:12px">시세 신호(추이·전세가율·갭)는 사이드바 <b>조건에 맞는 단지 찾기</b> 실행하면 보여요. 아래 실투자금 계산은 지금도 쓸 수 있어요.</div>
+    <div class="ibox b" style="margin-bottom:12px">시세 신호(추이·전세가율·갭)는 목록 화면의 <b>조건에 맞는 단지 찾기</b> 실행하면 보여요. 아래 실투자금 계산은 지금도 쓸 수 있어요.</div>
     <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:7px">실투자금 총비용 계산</div>
     ${calcTotalCostHTML(p.avgPrice||0,loanAmt,gct('ch-h'),gct('ch-f')==='예',(p.area && typeof isRegFront==='function')?isRegFront(p.area,p.lawdCd):undefined)}`;
 }
@@ -10466,7 +10547,7 @@ async function loadClause(p){return loadClauseAndRisk(p);}
 function renderRisk(d){
   if(!d||!d.risks){
     document.getElementById('t2').innerHTML=`
-      <div class="ibox b" style="margin-bottom:12px">아래는 <b>일반적인 매수 위험 예시</b>예요. 사이드바에서 <b>조건에 맞는 단지 찾기</b>를 실행하면 이 단지에 맞는 위험 분석을 볼 수 있어요.</div>
+      <div class="ibox b" style="margin-bottom:12px">아래는 <b>일반적인 매수 위험 예시</b>예요. 목록 화면에서 <b>조건에 맞는 단지 찾기</b>를 실행하면 이 단지에 맞는 위험 분석을 볼 수 있어요.</div>
       <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">시세 하락 위험</div></div><div class="rcard-b">매수 후 금리가 오르거나 규제가 강해지면 가격이 잠시 내려갈 수 있어요.</div><div class="rcard-c">5년 이상 보유를 염두에 두고, 전세로 돌리는 대안도 미리 준비하기</div></div>
       <div class="rcard"><div class="rcard-top"><span class="lvl warn">중간</span><div class="rcard-t">대출 규제 추가 강화</div></div><div class="rcard-b">갈아타는 시점에 LTV 규제가 더 강해질 수 있어요.</div><div class="rcard-c">미리 금융기관에서 DSR 한도를 확인하세요. 기관마다 한도가 달라요</div></div>
       <div class="rcard"><div class="rcard-top"><span class="lvl safe">낮음</span><div class="rcard-t">되팔기 어려울 위험</div></div><div class="rcard-b">세대수 정보가 없어 확인이 필요해요. 300세대 미만 소단지는 팔 때 거래가 드물 수 있어요.</div><div class="rcard-c">공동주택관리정보시스템(K-apt)·건축물대장에서 세대수를 확인하세요</div></div>`;
@@ -11613,7 +11694,7 @@ function getLng(area,i){ if(!area)return null; for(const[k,v]of Object.entries(A
 // ── VIEW SWITCH ───────────────────────────────────────────
 // 탭별 메타: display(뷰 표시 형식), lp(좌측패널 표시), rp(우측 AI채팅 표시)
 const VIEW_DISPLAY={
-  map:   {display:'flex', lp:true,  rp:true},
+  map:   {display:'flex', lp:false, rp:true}, // HOME-PANEL-2026-10-18 (Plan 151): 지도 화면은 사이드바 대신 #homePanel(_hpApply) — 목록 화면은 사이드바 유지
   list:  {display:'grid', lp:true,  rp:false},
   calc:  {display:'flex', lp:false, rp:false},
   clause:{display:'flex', lp:false, rp:false},
@@ -11636,6 +11717,106 @@ function _wizPlace(v){
     if(v==='report' && typeof _updateInputProgress==='function') _updateInputProgress();
   }catch(_){}
 }
+// ── HOME-PANEL-2026-10-18 (Plan 151, 시안 화면 B) ──
+//   지도 화면(데스크톱)의 왼쪽 패널. 사이드바 노드는 지우지 않는다 — doSearch·renderPList·cl·renderBookmarks 가
+//   그 id 들을 널 가드 없이 읽는다(숨김은 안전, 삭제·이동은 오류). 목록 화면은 사이드바 그대로.
+// 법정동코드 앞 2자리 → 시도(backend/routes/region.js SIDO_BY_PREFIX 와 같은 값). 표에 없는 코드는 칩을 만들지 않는다(행은 '전국'에 남음).
+const _HP_SIDO = { '11':'서울','26':'부산','27':'대구','28':'인천','29':'광주','30':'대전','31':'울산','36':'세종','41':'경기',
+  '42':'강원','51':'강원','43':'충북','44':'충남','45':'전북','46':'전남','47':'경북','48':'경남','50':'제주' };
+let _hpData = null, _hpReq = null, _hpSido = '전국';
+function _hpSidoOf(p){ return _HP_SIDO[String((p && p.lawdCd) || '').slice(0,2)] || ''; }
+function _hpLoad(force){
+  if(_hpReq || (_hpData && !force)) return;
+  const list = document.getElementById('hpList');
+  if(force && list) list.innerHTML = '<div class="hp-msg">불러오는 중이에요</div>';
+  // 지도 인기 마커와 같은 요청(서버 캐시 키 popular:12) — 지도와 목록이 같은 12곳을 보인다.
+  _hpReq = fetch(`${CFG.api}/search/popular?limit=12`, { signal: AbortSignal.timeout(12000) })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)))
+    .then(j => { _hpData = j || {}; _hpRender(); })
+    .catch(() => {
+      _hpData = null;
+      const el = document.getElementById('hpList');
+      if(el) el.innerHTML = '<div class="hp-msg">목록을 불러오지 못했어요. <button type="button" onclick="_hpLoad(true)">다시 불러오기</button></div>';
+    })
+    .finally(() => { _hpReq = null; });
+}
+function _hpRender(){
+  const list = document.getElementById('hpList'), chips = document.getElementById('hpChips'), sub = document.getElementById('hpSub');
+  if(!list || !_hpData) return;
+  const all = (Array.isArray(_hpData.results) ? _hpData.results : []).filter(p => p && p.aptName);
+  // 칩: 받은 데이터에 1건 이상 있는 시도만(시안 지역 값은 샘플 — 없는 지역 칩은 빈 목록이 되므로 만들지 않는다)
+  const sidos = [];
+  all.forEach(p => { const s = _hpSidoOf(p); if(s && !sidos.includes(s)) sidos.push(s); });
+  if(_hpSido !== '전국' && !sidos.includes(_hpSido)) _hpSido = '전국';
+  if(chips) chips.innerHTML = sidos.length > 1
+    ? ['전국', ...sidos].map(s => `<button type="button" class="hp-chip" aria-pressed="${s === _hpSido}" onclick="_hpPick(${_jsonAttr(s)})">${_escHtml(s)}</button>`).join('')
+    : '';
+  if(sub){
+    const w = _hpData.window;
+    sub.title = (w && w.since && w.until) ? `집계 ${String(w.since).replace(/-/g,'.')}~${String(w.until).replace(/-/g,'.')} · 최근 21일 안에 거래가 있는 단지를 먼저 보여 주고, 한 시군구가 2곳을 넘지 않게 맞춰요. 좌표가 확인된 단지만 보여요` : '';
+  }
+  const rows = _hpSido === '전국' ? all : all.filter(p => _hpSidoOf(p) === _hpSido);
+  if(!rows.length){ list.innerHTML = '<div class="hp-msg">지금 보여 드릴 단지가 없어요</div>'; return; }
+  const stale = _hpData.stale ? '<div class="hp-msg">집계가 잠시 늦어져 최대 며칠 전 기준이에요</div>' : '';
+  list.innerHTML = stale + rows.map(p => {
+    const name = String(p.displayName || _dispAptName(p.aptName, p.umdNm) || '');
+    const region = [_hpSidoOf(p), _fmtSgg(String(p.sigungu || '').trim()), String(p.umdNm || '').trim()].filter(Boolean).join(' ');
+    const amt = Number(p.avgDealAmount), cnt = Number(p.dealCount60d);
+    const price = Number.isFinite(amt) && amt > 0 ? `${(amt / 10000).toFixed(2)}억` : '';
+    const count = Number.isFinite(cnt) && cnt > 0 ? `${cnt}건` : '';
+    const arg = { aptName:p.aptName, sigungu:p.sigungu, umdNm:p.umdNm, lawdCd:p.lawdCd, buildYear:p.buildYear, recentDealDate:p.recentDealDate, aptSeq:p.aptSeq || null, lat:p.lat, lng:p.lng };
+    const label = [name, region, price && `60일 평균가 ${price}`, count && `거래 ${count}`].filter(Boolean).join(', ');
+    return `<button type="button" class="hp-row" aria-label="${_escHtml(label)}" onclick='goSearchResult(${_jsonAttr(arg)})'>`
+      + `<span class="hp-c1"><span class="hp-nm">${_escHtml(name)}</span><span class="hp-rg">${_escHtml(region)}</span></span>`
+      + `<span class="hp-pr">${price}</span><span class="hp-ct">${count}</span></button>`;
+  }).join('');
+}
+function _hpPick(s){ _hpSido = s; _hpRender(); }
+// 검색 결과가 지도에 있을 때 패널 위 안내(renderMarkers 끝에서 호출). null 이면 숨김(showPop — 인기 단지로 되돌림).
+function _hpNote(data){
+  const el = document.getElementById('hpNote'); if(!el) return;
+  const n = Array.isArray(data) ? data.filter(p => p && !p._notice).length : 0;
+  if(!n){ el.hidden = true; el.innerHTML = ''; return; }
+  el.innerHTML = `조건에 맞는 단지 ${n}곳을 지도에 표시했어요<div class="hp-note-a"><button type="button" onclick="sv('list')">목록에서 보기</button><button type="button" onclick="showPop()">인기 단지 다시 보기</button></div>`;
+  el.hidden = false;
+}
+// 헤더 검색창(.hsearch)을 지도 화면 검색 띠로 옮기거나 되돌린다 — 노드가 하나라 입력값·자동완성이 그대로 이어진다.
+let _hpSearchPh = null;
+function _hpSearchPlace(toBand){
+  try{
+    const hs = document.querySelector('.hsearch'), slot = document.getElementById('hpSearchSlot');
+    const inp = document.getElementById('hSearchInput');
+    if(!hs || !slot) return;
+    if(toBand){
+      if(hs.parentElement === slot) return;
+      _hpSearchPh = _hpSearchPh || document.createComment('hsearch-home');
+      hs.parentNode.insertBefore(_hpSearchPh, hs);
+      slot.appendChild(hs);
+      if(inp) inp.placeholder = '단지명이나 동 이름을 입력해요';
+    } else {
+      if(hs.parentElement !== slot || !_hpSearchPh || !_hpSearchPh.parentNode) return;
+      _hpSearchPh.parentNode.insertBefore(hs, _hpSearchPh);
+      if(inp) inp.placeholder = window.innerWidth < 480 ? '단지 검색' : '단지명·동명 검색 (예: 마포래미안푸르지오, 공덕동)';
+    }
+  }catch(_){}
+}
+let _hpView = 'map';
+function _hpApply(v){
+  try{
+    _hpView = v;
+    const on = v === 'map', desk = window.innerWidth > 700;
+    document.body.classList.toggle('hp-on', on);
+    _hpSearchPlace(on && desk);
+    if(on && desk){
+      // 첫 로드(재방문·링크 진입)는 sv() 를 거치지 않아 .lp 인라인 숨김·관심 단지 FAB 노출이 안 된 상태다 — 여기서 맞춘다.
+      const lp = document.querySelector('.lp'); if(lp) lp.style.setProperty('display','none','important');
+      const fb = document.getElementById('fabBM');
+      if(fb){ fb.style.display = 'flex'; try{ document.getElementById('fabBmCnt').textContent = (getBookmarks()||[]).length||'0'; }catch(_){} }
+      _hpLoad();
+    }
+  }catch(_){}
+}
+window.addEventListener('resize', () => { clearTimeout(window._hpResizeT); window._hpResizeT = setTimeout(() => _hpApply(_hpView), 160); });
 // REPORT-GATE-NOTE-2026-08-29: 보고서 안내 문구를 **로그인 상태에 맞게** 바꾼다.
 //   [왜] 조건을 미리 알리려고 "보고서 생성에는 무료 로그인이 필요해요" 를 넣었는데(9a89160),
 //   **이미 로그인한 사용자에게도 그대로 노출**돼 혼란을 준다(로그인 상태 E2E 실측에서 확인).
@@ -11738,6 +11919,7 @@ function sv(v,btn){
     document.querySelectorAll('#toolsSheet .ts-item[data-tool]').forEach(b=>b.setAttribute('aria-current',b.dataset.tool===v?'true':'false'));
   }catch(_){}
   _wizPlace(v); // Sprint PPPPP: 위저드 코어를 뷰에 맞는 슬롯으로
+  _hpApply(v); // HOME-PANEL-2026-10-18 (Plan 151): 지도 화면 왼쪽 패널·검색 띠
   if(v==='list')renderListGrid();
   if(v==='news' && !document.getElementById('newsList').dataset.loaded){loadNews();}
   // BRIEFING-HOME-2026-08-19: 브리핑 헤더는 진입마다 갱신(날짜·D-day 신선도) — 실패는 조용히
@@ -13281,7 +13463,7 @@ async function sM(){
       addMsg('ai', '데이터 도우미가 일시 중단 상태예요.\n\n' +
         '지금 바로 쓸 수 있는 기능이에요.\n' +
         '· 아래 바로가기 버튼의 대출 계산, 규제 요약, 특약 초안(표준 양식)\n' +
-        '· 사이드바에서 "내 상황 입력"을 한 뒤 "조건에 맞는 단지 찾기"\n' +
+        '· 목록 화면에서 "내 상황 입력"을 한 뒤 "조건에 맞는 단지 찾기"\n' +
         '· 상단 보고서 탭 (객관 데이터 버전)');
       // LEGAL-FALLBACK 제거(Plan 148): /api/legal 은 서버에서 삭제됨(server.js DEAD-ENDPOINT-REMOVED-2026-09-05) — 죽은 호출 삭제.
       replied=true;
@@ -13348,7 +13530,7 @@ async function sM(){
   // MOB-3 (2026-05-03): generic catch fallback — 더 구체적 안내 + 대체 경로 제시
   if(!replied){
     rmTyp();
-    addMsg('ai','응답을 받지 못했어요.\n\n네트워크 또는 서버 일시 오류일 수 있어요. 잠시 뒤 다시 시도해 주세요.\n\n그동안 좌측 사이드바의 "내 상황 입력"과 "단지 검색", 상단 "대출 계산"과 "보고서"는 그대로 쓸 수 있어요.');
+    addMsg('ai','응답을 받지 못했어요.\n\n네트워크 또는 서버 일시 오류일 수 있어요. 잠시 뒤 다시 시도해 주세요.\n\n그동안 목록 화면 왼쪽의 "내 상황 입력"과 "단지 검색", 상단 "대출 계산"과 "보고서"는 그대로 쓸 수 있어요.');
   }
   chatLd=false;
 }
