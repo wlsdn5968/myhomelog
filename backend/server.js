@@ -594,9 +594,13 @@ async function getDataCounts(opts) {
     }
     // SYNC-SOURCE-2026-09-26 (Plan 113): 실패(null)를 6시간 캐시에 굳히지 않는다 — 60초만 메모리에 두고
     //   Redis 에는 쓰지 않아 다음 요청이 곧바로 재시도하게 한다.
-    const ttl = out.lastIngestedAt ? 21600 : 60;
+    // COUNTS-ERR-2026-10-18 (Plan 158): 건수 조회가 실패하면 0 이 6시간 캐시·Redis 에 굳었다(Plan 113 과 같은 클래스).
+    const countsFailed = !!(tx.error || apt.error);
+    if (countsFailed) logger.warn({ txErr: tx.error?.message, aptErr: apt.error?.message }, 'getDataCounts: 건수 조회 실패 — 60초만 캐시');
+    const cacheOk = out.lastIngestedAt && !countsFailed;
+    const ttl = cacheOk ? 21600 : 60;
     cache.set(CK, out, ttl);
-    if (out.lastIngestedAt) redisCache.rset(CK, out, 21600).catch(() => {}); // 인스턴스 간 공유(fire-and-forget)
+    if (cacheOk) redisCache.rset(CK, out, 21600).catch(() => {}); // 인스턴스 간 공유(fire-and-forget)
     return out;
   } catch (e) { return null; }
 }
