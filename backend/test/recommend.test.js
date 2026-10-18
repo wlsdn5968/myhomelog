@@ -431,7 +431,8 @@ test('절대 규칙 — 화면·프롬프트가 추천/예측/대출알선을 �
     '랜딩 카드에 하드코딩 단지명이 되돌아왔다 — 실패 시 가짜 시세가 실시간으로 보인다');
   assert.equal(/id="lv-aptPrice">\d/.test(html), false, '랜딩 카드에 하드코딩 가격이 되돌아왔다');
   assert.match(html, /id="lv-aptMeta">불러오는 중</, '초기 라벨이 플레이스홀더가 아니다');
-  assert.match(html, /_set\('lv-aptMeta', '실시간'\)/, "'실시간' 라벨을 응답 수신 후에 달지 않는다");
+  // 2026-10-18 DEGRADED-LABEL: 대체 경로 응답이면 같은 자리에 '집계 지연' — 응답 수신 후에만 라벨을 단다는 의도는 같다
+  assert.match(html, /_set\('lv-aptMeta', (?:top\._degraded \? '집계 지연' : )?'실시간'\)/, "'실시간' 라벨을 응답 수신 후에 달지 않는다");
 
   // ⑤ 결정론 조건 카드 — 절대 룰 ①을 AI 프롬프트에서만 집행하고 있었다(RULE-DETERMINISTIC-2026-09-06).
   //    aiService.js "단지 정보 정리 기준"(등급 라벨 금지, 위 ③에서 이미 검사)을

@@ -4099,7 +4099,7 @@ async function _landingAsyncRefresh(){
     const r = await fetch(`${CFG.api}/search/popular`, {signal:AbortSignal.timeout(5000)});
     if(r.ok){
       const d = await r.json();
-      top = (d.results || [])[0];
+      top = _popRows(d)[0]; // DEGRADED-LABEL-2026-10-18: 대체 경로면 평균가·건수는 비어 "—" 그대로
       if(top){
         const _set = (id, val) => { const e = document.getElementById(id); if(e && val !== undefined && val !== null) e.textContent = val; };
         _set('lv-aptName', top.aptName);
@@ -4107,7 +4107,7 @@ async function _landingAsyncRefresh(){
         if(top.avgDealAmount) _set('lv-aptPrice', (top.avgDealAmount/10000).toFixed(1) + '억');
         if(top.dealCount60d != null) _set('lv-aptDeals', top.dealCount60d + '건');
         // LANDING-FAKE-2026-08-17: '실시간' 은 **실제 응답이 온 뒤에만** 단다.
-        _set('lv-aptMeta', '실시간');
+        _set('lv-aptMeta', top._degraded ? '집계 지연' : '실시간'); // 대체 경로는 '거래량 상위·최근 60일' 기준이 아니다
       }
     }
   } catch(_){}
@@ -5930,7 +5930,7 @@ async function renderBriefing(){
     //   전 항목 실데이터, 값 없으면 항목째 생략. 델타(전월 대비)는 원자료에 이전 값이 없어 표시하지 않는다(추정 금지).
     const er=h&&h.ecosRates; const dc=h&&h.dataCounts;
     const items=(subs&&subs.items)||[];
-    const ps=(pop&&pop.results)||[];
+    const ps=_popRows(pop); // DEGRADED-LABEL-2026-10-18: 대체 경로면 평균가·건수를 비운다(티커·TOP5·랭킹 카드가 이 배열을 쓴다)
     window._lastPopular=ps; // RANKCARD: 랭킹 카드 재료(재조회 없이 재사용)
     const tk=[];
     if(er&&er.baseRate!=null) tk.push({l:'기준금리',v:_escHtml(String(er.baseRate))+'%',s:'한국은행'});
@@ -5977,7 +5977,7 @@ async function renderBriefing(){
       <div class="brf-card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b class="brf-h2">인기 단지 TOP 5</b><span style="display:flex;gap:10px"><a href="javascript:void(0)" onclick="openRankCard()" style="font-size:12px;color:var(--brf-ac-tx);text-decoration:none;font-weight:700">카드</a><a href="javascript:void(0)" onclick="sv('map')" style="font-size:12px;color:var(--brf-tx3);text-decoration:none">지도 ›</a></span></div>
         ${popHtml}
-        <div style="font-size:12px;color:var(--brf-tx3);margin-top:8px">최근 60일 국토교통부 실거래 건수가 많은 순이에요. 평균가는 60일 기준이고, 매물 광고가 아니에요.</div>
+        <div style="font-size:12px;color:var(--brf-tx3);margin-top:8px">${ps.length&&ps[0]._degraded?'지금은 집계가 늦어져 최근 거래 표본으로 골랐어요. 평균가와 건수는 잠시 비워 둬요. 매물 광고가 아니에요.':'최근 60일 국토교통부 실거래 건수가 많은 순이에요. 평균가는 60일 기준이고, 매물 광고가 아니에요.'}</div>
       </div>`;
     // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최근 실거래 최고·최저 경신 카드.
     //   [왜 양쪽을 같이 싣는가] 최고가만 보여주면 카드 자체가 매수 신호로 읽힌다 — 절대 룰 ①.
@@ -9250,9 +9250,11 @@ function _drawRankCard(list){
 async function openRankCard(){
   let ps=window._lastPopular;
   if(!ps||!ps.length){
-    try{const r=await fetch(CFG.api+'/search/popular');if(r.ok){const t=await r.json();ps=(t&&t.results)||[];}}catch(_e){}
+    try{const r=await fetch(CFG.api+'/search/popular');if(r.ok){const t=await r.json();ps=_popRows(t);}}catch(_e){}
   }
   if(!ps||!ps.length){toast('랭킹 데이터를 불러오지 못했어요');return;}
+  // DEGRADED-LABEL-2026-10-18: 카드는 "최근 60일 실거래 많은 순"이라고 적어 공유되는 이미지다 — 대체 경로 순위로는 만들지 않는다
+  if(ps.some(p=>p&&p._degraded)){toast('지금은 집계가 늦어져 랭킹 카드를 만들 수 없어요. 잠시 뒤 다시 시도해 주세요');return;}
   toast('랭킹 카드 만드는 중…');
   _drawRankCard(ps.slice(0,5));
   const d=new Date();
@@ -12779,7 +12781,7 @@ async function loadPopularMarkers() {
     const r = await fetch(`${CFG.api}/search/popular?limit=12`, { signal: AbortSignal.timeout(12000) });
     if (!r.ok) return;
     const j = await r.json();
-    const popular = j.results || [];
+    const popular = _popRows(j); // DEGRADED-LABEL-2026-10-18: 대체 경로면 건수를 비워 마커·팝업이 "60일 N건"이라 하지 않게
     if (!popular.length) return;
     if (!window._popMarkers) window._popMarkers = [];
     // Sprint JJ #1: Naver / Leaflet 분기 — 이전엔 L.marker 전용이라 Naver 활성 시 인기단지 마커 미표시.
@@ -12819,7 +12821,7 @@ async function loadPopularMarkers() {
               <button onclick="try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_){}" aria-label="닫기" title="닫기" style="position:absolute;top:0;right:2px;width:20px;height:20px;border:none;background:transparent;color:var(--text-tertiary);font-size:14px;line-height:1;cursor:pointer;padding:0">✕</button>
               <div style="font-weight:700">${_escHtml(p.displayName || _dispAptName(p.aptName, p.umdNm))}</div>
               <div style="font-size:12px;color:var(--text-tertiary)">${_escHtml(_fmtSgg(p.sigungu))} ${_escHtml(p.umdNm||'')} · ${p.buildYear||'?'}년</div>
-              <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">최근 60일 거래 <b>${p.dealCount60d}건</b></div>
+              ${p.dealCount60d ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">최근 60일 거래 <b>${p.dealCount60d}건</b></div>` : ''}
               <button onclick='goSearchResult(${_pj})' style="margin-top:6px;padding:5px 10px;background:var(--accent-700);color:#fff;border:none;border-radius:var(--radius-sm);font-size:12px;cursor:pointer">상세 보기 ›</button>
             </div>`,
             maxWidth: 240, borderWidth: 0, disableAnchor: false, backgroundColor: 'transparent', borderColor: 'transparent'
@@ -12853,7 +12855,7 @@ async function loadPopularMarkers() {
             <div style="font-size:12px;line-height:1.6;background:var(--bg-elev-1);padding:10px 12px;color:var(--text-primary)">
               <div style="font-weight:700">${_escHtml(p.displayName || _dispAptName(p.aptName, p.umdNm))}</div>
               <div style="font-size:12px;color:var(--text-tertiary)">${_escHtml(_fmtSgg(p.sigungu))} ${_escHtml(p.umdNm||'')} · ${p.buildYear||'?'}년</div>
-              <div style="font-size:12px;color:var(--text-secondary);margin-top:4px">최근 60일 거래 <b>${p.dealCount60d}건</b></div>
+              ${p.dealCount60d ? `<div style="font-size:12px;color:var(--text-secondary);margin-top:4px">최근 60일 거래 <b>${p.dealCount60d}건</b></div>` : ''}
               <button onclick='goSearchResult(${_jsonAttr({aptName:p.aptName,sigungu:p.sigungu,umdNm:p.umdNm,lawdCd:p.lawdCd,buildYear:p.buildYear,recentDealDate:p.recentDealDate})})' style="margin-top:6px;padding:5px 10px;background:var(--accent-700);color:#fff;border:none;border-radius:var(--radius-sm);font-size:12px;cursor:pointer">상세 보기 ›</button>
             </div>
           `);
@@ -12873,7 +12875,11 @@ async function loadPopularMarkers() {
       //   서버는 정직하게 표기했는데 화면에서 사라져 결국 위장이 된 셈이다(절대룰 ②).
       //   기준을 공개하는 이 범례가 표시 위치로 맞다. 정상 응답이면 아무 변화 없음.
       const _staleEl = document.getElementById('popStaleNote');
-      if (_staleEl) _staleEl.style.display = j.stale ? '' : 'none';
+      // DEGRADED-LABEL-2026-10-18: 대체 경로(degraded)도 같은 자리에서 알린다 — 범례의 "최근 60일 … 많은 순" 기준이 아니다
+      if (_staleEl) {
+        _staleEl.textContent = j.degraded ? '⚠ 집계가 늦어져 최근 거래 표본으로 골랐어요' : '⚠ 집계가 잠시 늦어져 최대 며칠 전 기준이에요';
+        _staleEl.style.display = (j.stale || j.degraded) ? '' : 'none';
+      }
     }
     // POPULAR-WINDOW-2026-09-05: "최근 60일" 이 정확히 어느 기간인지 서버가 준 값으로 적는다.
     //   ⚠ 프론트에서 계산하지 않는다 — 집계 기준일은 DB(UTC)의 CURRENT_DATE 이고 스냅샷 경로는 cron 이
@@ -13935,6 +13941,14 @@ function gt(){const n=new Date();return n.getHours().toString().padStart(2,'0')+
 // SGG-FMT-2026-08-20 (전수조사 잔여 S): MOLIT 원천 시군구는 시 산하 구가 붙어 있다('안양시만안구'). **표시 전용** —
 //   키·매칭·전송(비교 API·북마크·geocode·isRegFront/_regLtvLabel 인자)에는 절대 쓰지 말 것(공백 차이 매칭 사고 이력).
 //   'sigungu umd' 결합 문자열도 첫 토큰만 분리되며 광역시 구('강남구')·구 없는 시('시흥시')는 불변.
+// DEGRADED-LABEL-2026-10-18: 인기 단지 API(/api/search/popular) 응답에서 행을 꺼낸다. 서버 실시간 집계가 실패해 최근 거래 표본으로
+//   고른 응답(degraded:true — backend/routes/search.js DEGRADED-FLAG)은 avgDealAmount 가 그 단지의 최근 1건 가격, dealCount60d 가
+//   약 2주 표본 건수다(popularService 대체 분기). 그대로 쓰면 화면이 "60일 평균가·60일 N건"이라고 잘못 말하므로 두 값을 비우고
+//   _degraded 표식을 단다. 스냅샷은 정상 품질만 저장되므로(computeAndStoreSnapshot) 서버 렌더 브리핑·도우미는 해당 없다.
+function _popRows(j){
+  const rs = (j && Array.isArray(j.results)) ? j.results : [];
+  return (j && j.degraded) ? rs.map(p => Object.assign({}, p, { avgDealAmount: null, dealCount60d: null, _degraded: true })) : rs;
+}
 function _fmtSgg(s){return String(s==null?'':s).replace(/^([가-힣]+?시)([가-힣]+구)(?=\s|$)/,'$1 $2');}
 function _escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}
 // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — data-*/API 호출 인자/비교 키는 이 결과로 바꾸지 않는다.

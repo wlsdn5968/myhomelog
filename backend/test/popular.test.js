@@ -133,7 +133,7 @@ test('인기 단지 응답·화면 — 집계 기간은 서버가 싣고 화면�
   const card = html.slice(html.indexOf('id="popTitleCard"'), html.indexOf('id="mapCtrlStack"'));
   assert.match(card, /id="popWindowNote"/, '인기 카드에 집계 기간 자리가 없다');
   assert.doesNotMatch(card, /20\d\d\.\d\d\.\d\d/, '인기 카드에 날짜가 하드코딩됐다 — 매일 바뀌는 값이라 박으면 안 된다');
-  const fn = html.slice(html.indexOf('async function loadPopularMarkers'), html.indexOf('async function loadPopularMarkers') + 9000);
+  const fn = html.slice(html.indexOf('async function loadPopularMarkers'), html.indexOf('async function loadPopularMarkers') + 12000); // 2026-10-18: 대체 경로 표기(DEGRADED-LABEL) 추가로 본문이 늘어 창을 넓힘
   assert.match(fn, /j\.window/, '프론트가 서버의 window 를 읽지 않는다');
   assert.match(fn, /_pwn\.textContent = [\s\S]{0,240}: ''/, '기간이 없을 때 비우지 않는다(옛 값이 남는다)');
 });
