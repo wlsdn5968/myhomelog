@@ -183,9 +183,9 @@ test('Plan 151b: 모바일 목록 시트 — 시안 값(위 모서리 16·그림
   assert.ok(css.includes('width:36px;height:4px'));
   assert.ok(css.includes('min-height:60px'));
   // 시트가 지도를 덮지 않고 지도를 줄인다 — 지도 출처 표기·로고·이 지역 단지 보기 버튼이 가려지지 않게
-  assert.ok(css.includes('body.hp-on #mapEl{margin-bottom:var(--hps-pad,0px)}'));
+  assert.ok(css.includes('body.hp-on #mapEl{margin-bottom:var(--hps-pad,0px);'));
   for (const sel of ['#mMapCap', '#mhint', '.fab-ai', '.fab-bm', '.bm-pop']) assert.ok(css.includes(`body.hp-on ${sel}{bottom:calc(var(--hps-pad,0px)`), `${sel} 가 시트 위로 오르지 않는다`);
-  assert.ok(css.includes('.app:has(#MSHEET.on) .hp{visibility:hidden}'), '마커 시트가 열리면 목록 시트를 내린다');
+  assert.ok(css.includes('.app:has(#MSHEET.on) .hp,body.ms-open .hp{visibility:hidden}'), '마커 시트가 열리면 목록 시트를 내린다');
   // 시안에 없는 지역 칩·표 머리는 모바일에서 숨김, "거래 N건" 앞말은 모바일에서만
   assert.ok(css.includes('.hp-s,.hp-chips,.hp-th,.hp-rep p,.hp-ft-l{display:none!important}'));
   assert.ok(css.includes('.hp-ctl{display:inline}'));
@@ -223,11 +223,28 @@ test('Plan 151b: _hpApply — 모바일 지도 화면이면 시트, 그 밖이�
   assert.ok(apply.includes('_hpSearchPlace(on && desk);'), '검색창은 데스크톱에서만 띠로');
 });
 
-test('Plan 151b: 포인터 캡처는 끌기를 시작한 뒤에만 — 누르자마자 잡으면 click 이 손잡이 버튼에 오지 않는다(375 실측 결함)', () => {
-  const i = html.indexOf("hd.addEventListener('pointerdown'");
-  const down = html.slice(i, html.indexOf("hd.addEventListener('pointermove'", i));
-  assert.ok(i > 0 && !down.includes('setPointerCapture('), 'pointerdown 에서 캡처하면 안 된다');
-  const j = html.indexOf("hd.addEventListener('pointermove'");
-  const move = html.slice(j, html.indexOf('const end = ', j));
-  assert.match(move, /if\(!moved\)\{ moved = true; hp\.classList\.add\('hps-drag'\); try\{ hd\.setPointerCapture\(id\); \}catch\(_\)\{\} \}/);
+test('Plan 151b: 끌기는 window 에서 이동·놓기를 받고 포인터 캡처를 쓰지 않는다 — 캡처하면 손잡이 click 이 죽고, hd 에만 걸면 마우스 첫 이동을 놓쳤다(375 실측)', () => {
+  const i = html.indexOf("let y0 = 0, h0 = 0, id = null, moved = false, hp = null;");
+  assert.ok(i > 0);
+  const blk = html.slice(i, html.indexOf('})();', i));
+  assert.ok(!blk.includes('setPointerCapture('), '포인터 캡처 금지');
+  assert.ok(blk.includes("window.addEventListener('pointermove', move); window.addEventListener('pointerup', end); window.addEventListener('pointercancel', end);"));
+  assert.ok(blk.includes("window.removeEventListener('pointermove', move);"), '끝나면 window 리스너를 걷는다');
+  assert.ok(blk.includes("if(e.pointerType === 'mouse' && e.buttons === 0){ end(e); return; }"), '놓기를 놓친 마우스는 끌기를 끝낸다');
+});
+
+test('Plan 151b 리뷰: 접힘이면 가려진 본문 숨김 · 홈 바 여백 · 마커 시트 :has 대체 · 지도 줄임 전환 · 손잡이 이름 고정', () => {
+  const i = html.indexOf('HOME-SHEET-2026-10-18 (Plan 151b');
+  const css = html.slice(i, html.indexOf('</style>', i));
+  assert.ok(css.includes('body.hps-min .hp-note,body.hps-min .hp-list,body.hps-min .hp-rep,body.hps-min .hp-ft{visibility:hidden}'));
+  assert.ok(css.includes('body.hp-on .hp{padding-bottom:max(0px,calc(env(safe-area-inset-bottom,0px) - 7px))}'));
+  assert.ok(css.includes('.app:has(#MSHEET.on) .hp,body.ms-open .hp{visibility:hidden}'));
+  assert.ok(css.includes('transition:margin-bottom .2s ease'));
+  assert.ok(extractFn(html, '_mapSheetTry').includes("document.body.classList.add('ms-open')"));
+  assert.ok(extractFn(html, 'closeMapSheet').includes("document.body.classList.remove('ms-open')"));
+  assert.ok(html.includes('id="hpGrab" aria-label="목록 크기 조절" aria-expanded="false"'));
+  assert.ok(html.includes('<span class="hp-sm">최근 60일</span>'), '"최근 60일" 은 스크린리더에도 읽힌다');
+  assert.ok(extractFn(html, '_hpsSet').includes("b.classList.toggle('hps-min', state === 'min');"));
+  // 낮은 화면에서 목록이 0 이 되지 않게 기본 높이 하한
+  assert.ok(extractFn(html, '_hpsMetrics').includes('const floor = min + (rep ? rep.offsetHeight : 0) + (ft ? ft.offsetHeight : 0) + 60;'));
 });
