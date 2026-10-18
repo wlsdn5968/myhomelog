@@ -1097,13 +1097,25 @@ async function getAIRecommendations(userCondition) {
       || lookupByJibun(_jibunIdxRank, apt) || null;
   });
   _mark('rank');
+  // FAC-DETAIL-2026-10-18: facility 구간(운영 6.4~6.7초)의 병목을 추측 없이 가르기 위한 계측 — 동작은 바꾸지 않는다.
+  //   호출 종류별 횟수·최대 ms 와 하위 구간(facDb·enrich·stCoords·subway)을 스테이지 타이밍 로그에 싣는다.
+  const _fd = {};
+  const _tm = async (k, p) => {
+    const s0 = Date.now();
+    try { return await p; } finally {
+      const d = Date.now() - s0;
+      const e = _fd[k] || (_fd[k] = { n: 0, max: 0, sum: 0 });
+      e.n++; e.sum += d; if (d > e.max) e.max = d;
+    }
+  };
   const dbFacMap = await getFacilitiesByKaptCodes([...new Set(preCodes.filter(Boolean))]);
+  _mark('facDb');
   // LLLLLL-3 (운영자 제보 'YM프라젠 83세대 소형이 세대수 null 로 게이트 우회'): KAPT 미매칭·세대수 null 단지는
   //   건축물대장(getBuildingTitle, SSSS 연동)으로 세대수 보강. building_register 캐시 우선 → miss 만
   //   지번(적재분)+Kakao 법정동+건축HUB(graceful 8s). 실패 시 null(기존 동작). 렌즈 합집합 전체(겹침 제외 최대 100 — 15곳 컷은 보강 뒤 :1329)에 대해 실행, Redis 캐시로 콜드 1회만. STALE-COMMENT-2026-09-28 (Plan 123): 종전 "top-15 로 bounded" 는 MULTI-LENS(2026-09-05) 이후 사실이 아니다.
   const _brHh = async (apt) => {
     try {
-      const t = await getBuildingTitle({ lawdCd: apt.lawdCd, sigungu: apt.sigungu || '', umdNm: apt.umdNm || '', aptName: apt.aptName });
+      const t = await _tm('br', getBuildingTitle({ lawdCd: apt.lawdCd, sigungu: apt.sigungu || '', umdNm: apt.umdNm || '', aptName: apt.aptName }));
       return (t && Number.isFinite(t.hhldCnt) && t.hhldCnt > 0) ? t.hhldCnt : null;
     } catch (_) { return null; }
   };
@@ -1117,10 +1129,10 @@ async function getAIRecommendations(userCondition) {
         //   건축물대장 세대수 1개짜리 부실 facility 를 실어 단지정보 탭 전체가 '미상'으로 떴다.
         //   비용: 렌즈 합집합의 미매칭 항목 전체(최대 100 — 15곳 컷은 보강 뒤)에 · 인메모리/DB 캐시 공유 · 실패하면 종전 BR 경로 그대로.
         // NO-LIVE-2026-09-05: 배치 경로는 DB 매처만(라이브 KAPT 목록 조회 생략) — 릴레이 13s 타임아웃이 응답 시간을 먹었다(프로덕션 실측 20.4s).
-        const rf = await resolveFacility({
+        const rf = await _tm('rf', resolveFacility({
           aptName: ranked[i].aptName, sigungu: ranked[i].sigungu || '',
           umdNm: ranked[i].umdNm || '', lawdCd: ranked[i].lawdCd, noLive: true,
-        }).catch(() => null);
+        }).catch(() => null));
         if (rf && rf.kaptCode && rf.raw) {
           const _rfDetail = rf.detail || (rf.raw && rf.raw._dtl) || null;
           const facility = buildFacility(rf.raw, rf.kaptCode, _rfDetail);
@@ -1168,13 +1180,13 @@ async function getAIRecommendations(userCondition) {
       //   조회해 in-memory 캐시 hit 이라 저비용. 미필터 경로·_dtl 보유분은 기존대로(추가 KAPT 콜 0).
       let info, detail;
       if (stored && stored._dtl) { info = stored; detail = stored._dtl; }
-      else if (stored && fMinPark > 0) { info = stored; detail = await getAptDtlInfo(kaptCode).catch(() => null); }
+      else if (stored && fMinPark > 0) { info = stored; detail = await _tm('dtl', getAptDtlInfo(kaptCode).catch(() => null)); }
       else if (stored) { info = stored; detail = null; }
       else {
-        const [_i, _d] = await Promise.all([
+        const [_i, _d] = await _tm('kaptLive', Promise.all([
           getAptBasisInfo(kaptCode),
           getAptDtlInfo(kaptCode).catch(() => null),
-        ]);
+        ]));
         info = _i; detail = _d;
       }
       // FACILITY-HELPER-2026-05-12 + DTL-INFO-2026-05-13: detail 도 buildFacility 에 전달
@@ -1226,6 +1238,7 @@ async function getAIRecommendations(userCondition) {
   // enrich는 항상 recommendations 와 길이 동일
   // COND-FILTER-SSOT-2026-08-30: **여기가 조건 필터의 최종 판정**이다(위 사전 필터는 pool 축소용).
   //   카드에 표시되는 facility 와 같은 객체로 판정하므로 "카드엔 2,490세대인데 필터가 뺀다" 가 불가능하다.
+  _mark('enrich');
   let _rankedF = ranked;
   let enrichedRecs = enriched;
   if (_filterActive) {
@@ -1285,6 +1298,7 @@ async function getAIRecommendations(userCondition) {
       address: rec.facility?.address || null,
     }));
     const stageCoords = await resolveCoordBatch(stageInputs, 8);
+    _mark('stCoords');
     const STAGE_CONC = 8;
     const dists = new Array(enrichedRecs.length).fill(undefined);
     for (let i = 0; i < enrichedRecs.length; i += STAGE_CONC) {
@@ -1294,6 +1308,7 @@ async function getAIRecommendations(userCondition) {
         try { dists[i + k] = await nearestSubway(c.lat, c.lng, 3000); } catch (_) { /* 모름 유지 */ }
       }));
     }
+    _mark('subway');
     let measured = 0;
     for (let i = 0; i < enrichedRecs.length; i++) {
       const ns = dists[i];
@@ -1467,6 +1482,14 @@ async function getAIRecommendations(userCondition) {
       },
       rankFilter: _tt.rank - _tt.collect,
       facility: _tt.facility - _tt.rank,
+      facilityDetail: {
+        facDb: (_tt.facDb || _tt.rank) - _tt.rank,
+        enrich: (_tt.enrich || _tt.facDb || _tt.rank) - (_tt.facDb || _tt.rank),
+        stCoords: _tt.stCoords ? _tt.stCoords - (_tt.enrich || _tt.rank) : null,
+        subway: (_tt.subway && _tt.stCoords) ? _tt.subway - _tt.stCoords : null,
+        rest: _tt.facility - (_tt.subway || _tt.enrich || _tt.rank),
+        calls: _fd,
+      },
       coords: _tt.coords - _tt.facility,
       schools: _tt.schools - _tt.coords,
     }, totalMs: _tt.schools - _tt.start,
