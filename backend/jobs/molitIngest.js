@@ -196,6 +196,15 @@ async function ingestOne(admin, lawdCd, dealYm) {
   }).select('id').single();
 
   const runId = runRes.data?.id;
+  // RUNREC-ERR-2026-10-18 (Plan 158): molit_ingest_runs 기록(running/ok/error) 쓰기 실패가 조용히 버려져
+  //   "빠진 달 찾기·원본 자르기 점검" 이 믿는 숫자가 틀어졌다. 적재 성공(ok)은 바꾸지 않고 실패 표식만 남긴다.
+  let runRecordFailed = false;
+  const _noteRunErr = (err, what) => {
+    runRecordFailed = true;
+    logger.warn({ lawdCd, dealYm, err: err && err.message ? err.message : String(err) }, `molit_ingest_runs 기록 실패 (${what})`);
+  };
+  if (runRes.error) _noteRunErr(runRes.error, 'running insert');
+  else if (!runId) _noteRunErr('no run id', 'running insert');
 
   try {
     const rawRows = await fetchRegionMonth(lawdCd, dealYm);
@@ -248,25 +257,35 @@ async function ingestOne(admin, lawdCd, dealYm) {
       inserted += (count ?? chunk.length);
     }
 
-    await admin.from('molit_ingest_runs')
-      .update({
-        status: 'ok',
-        rows_fetched: rows.length,
-        rows_inserted: inserted,
-        finished_at: new Date().toISOString(),
-      })
-      .eq('id', runId);
+    if (runId) {
+      const okRes = await admin.from('molit_ingest_runs')
+        .update({
+          status: 'ok',
+          rows_fetched: rows.length,
+          rows_inserted: inserted,
+          finished_at: new Date().toISOString(),
+        })
+        .eq('id', runId);
+      if (okRes && okRes.error) _noteRunErr(okRes.error, 'ok update');
+    }
 
-    return { ok: true, lawdCd, dealYm, fetched: rows.length, inserted };
+    const okOut = { ok: true, lawdCd, dealYm, fetched: rows.length, inserted };
+    if (runRecordFailed) okOut.runRecordFailed = true;
+    return okOut;
   } catch (e) {
-    await admin.from('molit_ingest_runs')
-      .update({
-        status: 'error',
-        error_message: String(e.message || e).slice(0, 500),
-        finished_at: new Date().toISOString(),
-      })
-      .eq('id', runId);
-    return { ok: false, lawdCd, dealYm, error: e.message };
+    if (runId) {
+      const errRes = await admin.from('molit_ingest_runs')
+        .update({
+          status: 'error',
+          error_message: String(e.message || e).slice(0, 500),
+          finished_at: new Date().toISOString(),
+        })
+        .eq('id', runId);
+      if (errRes && errRes.error) _noteRunErr(errRes.error, 'error update');
+    }
+    const errOut = { ok: false, lawdCd, dealYm, error: e.message };
+    if (runRecordFailed) errOut.runRecordFailed = true;
+    return errOut;
   }
 }
 
@@ -480,10 +499,12 @@ async function runMolitIngest(opts = {}) {
   // P1 (Agent 3차 audit, 2026-05-04): stale 'running' 정리 — Vercel timeout 시 잔존 row 무한 grow
   //   15분+ 'running' 상태면 timeout 으로 간주하고 정리
   try {
-    await admin.from('molit_ingest_runs')
+    // RUNREC-ERR-2026-10-18 (Plan 158): supabase-js 는 throw 하지 않고 {error} 를 돌려준다 — 아래 catch 는 사실상 죽은 코드였다.
+    const { error: staleErr } = await admin.from('molit_ingest_runs')
       .update({ status: 'timeout', finished_at: new Date().toISOString() })
       .eq('status', 'running')
       .lt('started_at', new Date(Date.now() - 15 * 60 * 1000).toISOString());
+    if (staleErr) logger.warn({ err: staleErr.message }, 'molit_ingest_runs stale 정리 실패 (계속 진행)');
   } catch (e) {
     logger.warn({ err: e.message }, 'molit_ingest_runs stale 정리 실패 (계속 진행)');
   }
@@ -541,6 +562,7 @@ async function runMolitIngest(opts = {}) {
   const ok = results.filter(r => r.ok).length;
   const err = results.filter(r => !r.ok && !r.skipped).length;
   const skipped = results.filter(r => r.skipped).length;
+  const runRecordFailed = results.filter(r => r.runRecordFailed).length; // Plan 158: 적재 기록 쓰기 실패 건수
   // ERR-REASON-2026-08-08 (Sprint AAAAAAA): 대표 실패 사유 1건 — 전 지역이 같은 원인으로 죽는
   //   유형(키 만료·게이트웨이 변경)에서 "err=9" 숫자만으론 진단 불가했던 실사고 후속.
   const firstError = (results.find(r => !r.ok && !r.skipped && r.error) || {}).error || null;
@@ -590,7 +612,7 @@ async function runMolitIngest(opts = {}) {
   }
 
   return {
-    ok, err, skipped, firstError, elapsedMs,
+    ok, err, skipped, runRecordFailed, firstError, elapsedMs,
     monthsCount: months.length,
     monthsRange: months.length ? `${months[months.length - 1]}~${months[0]}` : null,
     gapBackfill, results,
@@ -604,6 +626,7 @@ async function runMolitIngest(opts = {}) {
 // molitErrReason 은 "응답 본문을 통째로 저장하지 않는다(키 에코 차단)" 보안 성질을 테스트로 고정하기 위해 export.
 module.exports = { runMolitIngest, molitErrReason, fetchRegionMonth };
 module.exports._retryFailedGaps = retryFailedGaps; // TEST-EXPORT-2026-09-27 (Plan 119): 구멍 감지 고정용
+module.exports._ingestOne = ingestOne; // TEST-EXPORT-2026-10-18 (Plan 158): 적재 기록 실패 표식 고정용
 // TEST-EXPORT-2026-10-02 (Plan 130): 꼬리 달 판정 고정용
 module.exports._pickLiveTailYms = pickLiveTailYms;
 module.exports._LIVE_TAIL_MAX_MONTHS = LIVE_TAIL_MAX_MONTHS;
