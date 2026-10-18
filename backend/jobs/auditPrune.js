@@ -3,7 +3,7 @@
  *
  * 배경:
  *   migration `20260424000004_audit_log_retention.sql` 가 pg_cron 으로
- *   prune_audit_log() 매일 04:00 KST 실행 — 90일 초과 row 삭제.
+ *   prune_audit_log() 매일 04:00 KST 실행 — 365일 초과 row 삭제(2026-10-18 부터, 종전 90일).
  *   그러나 pg_cron extension 은 Supabase Dashboard 에서 manual enable 필요.
  *   미활성 시 prune 안 됨 → audit_log 무한 grow → 디스크 폭주.
  *
@@ -18,7 +18,11 @@ const logger = require('../logger');
 // SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 (null-게이트 의미 유지)
 const { getSupabaseAdmin } = require('../db/client');
 
-const RETENTION_DAYS = parseInt(process.env.AUDIT_LOG_RETENTION_DAYS || '90', 10);
+// AUDIT-RETAIN-1Y-2026-10-18 (plans/164, 운영자 "권고대로" 승인): 처리방침 "개인정보 처리 시스템 접근 기록 1년 이상 보관"(privacy.html)과
+//   맞춘다 — 종전 90일 삭제는 그 문구와 어긋났다. 환경변수가 더 작게 잡혀 있어도 365일 미만으로는 지우지 않는다.
+//   DB 의 pg_cron prune_audit_log() 도 같은 기준이어야 한다(supabase/migrations/20261018_audit_log_retain_1y.sql).
+const MIN_RETENTION_DAYS = 365;
+const RETENTION_DAYS = Math.max(MIN_RETENTION_DAYS, parseInt(process.env.AUDIT_LOG_RETENTION_DAYS || String(MIN_RETENTION_DAYS), 10) || MIN_RETENTION_DAYS);
 
 // CONSENT-AUDIT-2026-05-10: 영구 보존 화이트리스트
 //   migration `20260424000005_account_soft_delete.sql` 의 prune_audit_log() retain_actions
@@ -85,4 +89,4 @@ async function run() {
   }
 }
 
-module.exports = { run };
+module.exports = { run, RETENTION_DAYS };
