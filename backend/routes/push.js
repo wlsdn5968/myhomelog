@@ -20,6 +20,17 @@ const { getSupabaseAdmin } = require('../db/client');
 
 const router = express.Router();
 
+// PUSH-HOST-2026-10-18: 구독 주소가 아무 https 주소나 되어, 매일 알림 작업이 그 주소로 서버발 요청을 보냈다(보안 감사 #4).
+//   브라우저 푸시 서비스 호스트만 받는다. 근거: 크롬 fcm.googleapis.com(운영 저장 2건 전부) · 파이어폭스 *.push.services.mozilla.com
+//   (Mozilla autopush 문서) · 사파리 *.push.apple.com(Apple WWDC22 "Web Push for Web Apps and Browsers" — 하위 도메인 전체 허용 권고)
+//   · 엣지 *.notify.windows.com(공식 문서 미확인 — 마이크로소프트 소유 도메인이라 외부 서버로 새지 않는다).
+const PUSH_HOST_SUFFIXES = ['fcm.googleapis.com', 'push.services.mozilla.com', 'push.apple.com', 'notify.windows.com'];
+function isPushServiceEndpoint(endpoint) {
+  let host;
+  try { host = new URL(endpoint).hostname.toLowerCase(); } catch (_) { return false; }
+  return PUSH_HOST_SUFFIXES.some(s => host === s || host.endsWith('.' + s));
+}
+
 const VAPID_PUBLIC_KEY = process.env.VAPID_PUBLIC_KEY || null;
 
 function dbClient() {
@@ -53,7 +64,7 @@ router.post('/subscribe', async (req, res) => {
     const endpoint = String(sub?.endpoint || '');
     const p256dh = String(sub?.keys?.p256dh || '');
     const auth = String(sub?.keys?.auth || '');
-    if (!endpoint.startsWith('https://') || endpoint.length > 700 || !p256dh || !auth) {
+    if (!endpoint.startsWith('https://') || endpoint.length > 700 || !p256dh || !auth || !isPushServiceEndpoint(endpoint)) {
       return res.status(400).json({ error: '유효하지 않은 구독 정보' });
     }
     const items = sanitizeItems(req.body?.items);
@@ -93,3 +104,4 @@ router.post('/unsubscribe', async (req, res) => {
 });
 
 module.exports = router;
+module.exports._isPushServiceEndpoint = isPushServiceEndpoint;

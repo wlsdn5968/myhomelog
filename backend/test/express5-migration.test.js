@@ -94,6 +94,7 @@ test('EXPRESS5-A(HTTP): GET /api/transactions?aptName=<script> — 정제값이 
     getRegionRecentTransactions: async () => [],
     getTransactionsByAptSeq: async () => [],
     LAWD_CODES: {}, LAWD_CODE_TO_NAME: {}, RETIRED_LAWD_CODES: new Set(),
+    isKnownLawdCd: (c) => c === '11680', // LAWD-ALLOW-2026-10-18: validation 이 지역 코드 허용 목록을 본다
   });
   const transactionsPath = require.resolve('../routes/transactions');
   delete require.cache[transactionsPath];

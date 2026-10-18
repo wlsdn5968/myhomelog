@@ -64,6 +64,8 @@ function adminClient() {
 //     baseline 은 서버 기록 0 → 실패해도 baseline 보다 나쁘지 않음.
 //
 // 의도적으로 router.use(requireAuth) **앞에** 정의 — consent 는 OAuth 시작 전 시점 호출.
+const CONSENT_DEDUP_MS = 10 * 60 * 1000;
+const _consentSeen = new Map();
 router.post('/consent', async (req, res) => {
   const { age14Plus, terms, privacy, intlTransfer, version, ts } = req.body || {};
   if (age14Plus !== true || terms !== true || privacy !== true || intlTransfer !== true) {
@@ -83,6 +85,15 @@ router.post('/consent', async (req, res) => {
   };
   // writeAudit 가 user_id (req.user?.id || null) · ip_masked · user_agent 자동 수집.
   // 인증 미들웨어 부재 → req.user 는 undefined → user_id null 기록 (anonymous, IP+UA 로 식별).
+  // CONSENT-DEDUP-2026-10-18 (보안 감사 #2): 이 행은 영구 보관인데 로그인 없이 반복 호출로 무한히 쌓을 수 있었다
+  //   (요청 제한은 Redis 장애로 fail-open). 같은 /24 IP·같은 브라우저의 10분 안 반복 동의는 첫 기록이 이미 증빙이므로 건너뛴다.
+  //   인스턴스 메모리라 완전한 차단은 아니지만 한 연결에서의 반복 쓰기를 막는다. 영구 보관 여부 자체는 법적 판단이라 그대로 둔다.
+  const dedupKey = `${maskIp(req.ip || '')}|${String(req.headers['user-agent'] || '').slice(0, 200)}|${meta.version || ''}`;
+  const now = Date.now();
+  const last = _consentSeen.get(dedupKey);
+  if (last && now - last < CONSENT_DEDUP_MS) return res.json({ ok: true, deduped: true });
+  _consentSeen.set(dedupKey, now);
+  if (_consentSeen.size > 5000) { for (const [k, t] of _consentSeen) if (now - t >= CONSENT_DEDUP_MS) _consentSeen.delete(k); }
   await writeAudit(req, 'consent.accept', 'consent', null, meta);
   res.json({ ok: true });
 });

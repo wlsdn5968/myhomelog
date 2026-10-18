@@ -49,23 +49,25 @@ router.post('/recommend', validatePropertySearch, async (req, res) => {
 
 // GET /api/properties/building-register — KAPT 없는 단지(성지 등) 건축물대장 표제부 fallback (SSSS)
 router.get('/building-register', async (req, res) => {
-  const { lawdCd, sigungu, umd, apt, aptKey } = req.query;
+  // BR-KEY-2026-10-18: 공개 요청의 aptKey 는 받지 않는다 — 그대로 캐시 키가 돼 값만 바꿔 외부 API·행 추가를 반복할 수 있었다.
+  //   프런트(index.html _loadBuildingRegister)와 서버 내부 호출 모두 aptKey 를 쓰지 않는다(전수 확인).
+  const { lawdCd, sigungu, umd, apt } = req.query;
   if (!lawdCd || !apt) return res.status(400).json({ error: 'lawdCd, apt 필수' });
+  if (!require('../services/transactionService').isKnownLawdCd(lawdCd)) return res.status(400).json({ error: '지원하지 않는 지역이에요.', title: null });
   try {
     const { getBuildingTitle } = require('../services/buildingRegisterService');
     const title = await getBuildingTitle({
       lawdCd: String(lawdCd),
       sigungu: sigungu ? String(sigungu) : '',
       umdNm: umd ? String(umd) : '',
-      aptName: String(apt),
-      aptKey: aptKey ? String(aptKey) : undefined,
+      aptName: String(apt).slice(0, 80),
     });
     res.json({ title: title || null });
   } catch (e) {
     // SENTRY-GAP-2026-07-17 (Sprint XXXXX): 무로그·무캡처였던 502 — 건축물대장 upstream 실패는 헬퍼가 그룹핑
     require('../logger').warn({ err: e.message }, 'building-register 조회 실패');
     require('../utils/captureError').captureRouteError(e, 'properties/building-register');
-    res.status(502).json({ error: e.message, title: null });
+    res.status(502).json({ error: '건축물대장을 불러오지 못했어요.', title: null });
   }
 });
 

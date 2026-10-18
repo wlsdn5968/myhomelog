@@ -29,6 +29,27 @@ const KEYWORDS = {
   tax: ['취득세', '양도세', '종부세', '부동산 세제'],
 };
 
+// NEWS-REL-2026-10-18: 검색어 일치만 보고 담아 '전세·임대'에 요약에 '전세버스'가 든 테니스 기사, '지역별'에 중국 증시 기사가 섞였다(운영 실측).
+//   제목+요약에서 흔한 오탐어(전세계·전세기·전세버스)를 지운 뒤 분류별 단어가 하나라도 있어야 남긴다. 운영 6개 분류 시험: 무관 기사만 빠짐.
+const _BASE_REL = ['아파트', '부동산', '집값', '주택', '분양', '청약', '전세', '월세', '매매', '시세', '재건축', '재개발', '대출', '주담대', '규제',
+  '토허', '토지거래', 'LTV', 'DSR', '국토부', '국토교통부', '부동산원', '공급', '입주', '임대', '세입자', '보증금', '취득세', '양도세', '종부세', '보유세', '재산세', '공시가'];
+const NEWS_REL = {
+  hot: _BASE_REL,
+  region: _BASE_REL,
+  policy: ['규제', '대출', '주담대', 'LTV', 'DSR', '정책', '대책', '토허', '토지거래', '국토부', '국토교통부', '금융위', '공급', '세제', '세금', '청약', '분양가', 'DTI', '가계부채'],
+  reno: ['재건축', '재개발', '정비사업', '리모델링', '조합', '안전진단'],
+  lease: ['전세', '월세', '전월세', '임대', '임차', '세입자', '보증금', '역전세', '깡통'],
+  tax: ['취득세', '양도세', '양도소득세', '종부세', '종합부동산세', '보유세', '재산세', '세제', '세금', '과세', '공시가', '증여세', '상속세', '중과'],
+};
+const NEWS_NOISE = /전세계|전세기|전세버스|전세 버스/g;
+function _relevantNews(cat, items) {
+  const terms = NEWS_REL[cat] || _BASE_REL;
+  return (items || []).filter(it => {
+    const t = `${it.title || ''} ${it.description || ''}`.replace(NEWS_NOISE, '');
+    return terms.some(k => t.includes(k));
+  });
+}
+
 function stripHtml(s) {
   return (s || '').replace(/<[^>]+>/g, '').replace(/&quot;/g, '"').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&apos;/g, "'");
 }
@@ -95,8 +116,10 @@ async function fetchRssFallback(cat) {
  * GET /api/news?cat=hot|policy|region|reno
  */
 router.get('/', async (req, res) => {
-  const cat = (req.query.cat || 'hot').toLowerCase();
-  const keywords = KEYWORDS[cat] || KEYWORDS.hot;
+  // NEWS-NORM-2026-10-18: 모르는 분류는 hot 으로 — 캐시 키에 임의 값이 들어가 매번 외부 호출이 나갔다(보안 감사 #3)
+  const _c = String(req.query.cat || 'hot').toLowerCase();
+  const cat = Object.prototype.hasOwnProperty.call(KEYWORDS, _c) ? _c : 'hot';
+  const keywords = KEYWORDS[cat];
   const cacheKey = `news:${cat}`;
   const hit = cache.get(cacheKey);
   // CDN-CACHE-2026-06-14: 공개·비개인화 뉴스 → Vercel 엣지가 함수 호출 없이 서빙 → 콜드스타트/캐시미스 latency 제거.
@@ -142,6 +165,7 @@ router.get('/', async (req, res) => {
     items = await fetchRssFallback(cat);
   }
 
+  items = _relevantNews(cat, items);
   const out = {
     cat,
     count: items.length,
@@ -281,3 +305,4 @@ module.exports = router;
 module.exports._dataMarketLines = _dataMarketLines;
 module.exports._dataMarketItems = _dataMarketItems;
 module.exports._deriveMarketLines = _deriveMarketLines;
+module.exports._relevantNews = _relevantNews;

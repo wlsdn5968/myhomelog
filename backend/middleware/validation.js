@@ -60,12 +60,15 @@ function validateTransactionQuery(req, res, next) {
   const { lawdCd, dealYm, aptName } = req.query;
 
   // 법정동코드: 5자리 숫자
-  if (lawdCd && !/^\d{5}$/.test(lawdCd)) {
-    return res.status(400).json({ error: '유효하지 않은 법정동코드입니다.' });
+  if (lawdCd && (!/^\d{5}$/.test(lawdCd) || !require('../services/transactionService').isKnownLawdCd(lawdCd))) {
+    return res.status(400).json({ error: '지원하지 않는 지역이에요.' });
   }
-  // 거래년월: YYYYMM
-  if (dealYm && !/^\d{6}$/.test(dealYm)) {
-    return res.status(400).json({ error: '거래년월 형식: YYYYMM' });
+  // 거래년월: YYYYMM — 달 01~12, 2006년(실거래 공개 시작)부터 올해까지만(임의 조합으로 캐시를 피해 외부 API 를 부르지 못하게)
+  if (dealYm) {
+    const y = Number(String(dealYm).slice(0, 4)), m = Number(String(dealYm).slice(4, 6));
+    if (!/^\d{6}$/.test(dealYm) || m < 1 || m > 12 || y < 2006 || y > new Date().getUTCFullYear()) {
+      return res.status(400).json({ error: '거래년월 형식: YYYYMM' });
+    }
   }
   // EXPRESS5-QUERY-GETTER-2026-09-06 (Plan 073): Express 5부터 req.query 는 접근할 때마다
   //   재파싱되는 getter — 여기서 req.query.aptName 에 정제값을 대입해도 다음 접근(소비자)에서는

@@ -15,6 +15,10 @@ router.get('/', async (req, res) => {
 
   // lawdCd 없으면 area 문자열에서 역조회
   if (!lawdCd && area) lawdCd = getLawdCdFromArea(area);
+  // LAWD-ALLOW-2026-10-18: 알려진 지역 코드만 — 임의 코드는 매 요청 캐시를 피해 국토부 API 를 불렀다
+  if (lawdCd && !require('../services/transactionService').isKnownLawdCd(lawdCd)) {
+    return res.status(400).json({ error: '지원하지 않는 지역이에요.' });
+  }
 
   try {
     // CROSS-REGION-FIX-2026-06-03: sigungu/umdNm 전달 → 가격시그널 표본을 실거래가 탭과 동일 동(umd) 스코프

@@ -3281,7 +3281,7 @@ html[data-theme="dark"] #view-news{
         <b>Q. 도우미 답변이 틀린 것 같아요</b><br>
         답변 옆 엄지 버튼(도움됐어요/아니에요)을 눌러 주세요. 운영자가 매주 검토해 답변을 고쳐 가요. 도우미 답변은 공식 데이터를 정리한 것(AI 생성 아님)이며 항상 <b>참고용</b>이에요. 결정과 책임은 본인에게 있어요.<br><br>
         <b>Q. 프로 플랜 결제는 어떻게 하나요?</b><br>
-        결제 페이지는 사업자등록이 끝난 뒤 열릴 예정이에요. 지금은 무료로 쓸 수 있어요.<br><br>
+        결제 기능은 아직 열지 않았어요. 지금은 무료로 쓸 수 있어요.<br><br>
         <span style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:var(--radius-sm);padding:8px 10px;display:block;font-size:12px;color:var(--red);font-weight:600;line-height:1.6">⚠ <u>본 서비스는 매수·매도를 권유하지 않습니다.</u> 모든 분석과 신호는 과거 실거래 통계를 정리한 것이며 미래 가격을 보장하지 않습니다. 자본시장법상 투자자문업·공인중개사법상 중개업에 해당하지 않습니다.</span>
       </div>
     </details>
@@ -3463,7 +3463,7 @@ html[data-theme="dark"] #view-news{
       <div class="lv-apt-name" id="lv-aptName">—</div>
       <div class="lv-apt-loc" id="lv-aptLoc">&nbsp;</div>
       <div class="lv-apt-stats">
-        <div><div class="lv-apt-stat-v" id="lv-aptPrice">—</div><div class="lv-apt-stat-l">평균</div></div>
+        <div><div class="lv-apt-stat-v" id="lv-aptPrice">—</div><div class="lv-apt-stat-l">60일 평균</div></div>
         <div><div class="lv-apt-stat-v" id="lv-aptDeals">—</div><div class="lv-apt-stat-l">60일 거래</div></div>
       </div>
     </div>
@@ -3699,7 +3699,7 @@ html[data-theme="dark"] #view-news{
       <button onclick="closeDataStatus()" aria-label="데이터 상태 닫기" style="width:30px;height:30px;border-radius:var(--radius-base);background:var(--bg2);border:1px solid var(--bd);color:var(--t2);cursor:pointer;font-size:14px">✕</button>
     </div>
     <div id="dsmBody" style="margin-top:10px"></div>
-    <div style="margin-top:14px;font-size:12px;color:var(--t3);line-height:1.7">정상 기준은 실거래 48시간, 자동 작업 30시간 이내 실행이에요. 동기화가 늦어진 항목은 '— (미확인)'으로 표시하고, 추정치로 채우지 않아요.</div>
+    <div style="margin-top:14px;font-size:12px;color:var(--t3);line-height:1.7">정상 기준은 실거래 48시간, 매일 도는 작업 50시간, 매주 도는 단지 목록 갱신 10일 이내 실행이에요. 동기화가 늦어진 항목은 '— (미확인)'으로 표시하고, 추정치로 채우지 않아요.</div>
   </div>
 </div>
 <!-- DATA-ERR-2026-08-19 (Sprint NNNNNNN-16): 데이터 오류 신고 폼 — mailto 대체(메일 앱 없는 사용자 이탈 방지) -->
@@ -3891,7 +3891,7 @@ html[data-theme="dark"] #view-news{
         · 회원탈퇴를 신청하면 30일 뒤에 데이터를 삭제해요 (실수나 해킹에서 복구할 수 있도록)<br>
         · 단, 결제·동의·법적 보존 의무 기록은 전자상거래법 등 관련 법령에 따라 5년간 보관<br>
         · 외부 위탁 처리(Anthropic·Sentry·Vercel) 데이터는 위탁사 정책에 따라 추가 30~90일 보존<br>
-        · 이메일 외 다른 정보는 수집하지 않아요.
+        · 로그인에는 이메일만 받아요. 이용 중 생기는 접속 기록(IP 일부 가림·기기 정보)은 개인정보 처리방침대로 보관해요.
       </div>
     </div>
   </div>
@@ -4356,7 +4356,7 @@ async function _landingAsyncRefresh(){
         const _set = (id, val) => { const e = document.getElementById(id); if(e && val !== undefined && val !== null) e.textContent = val; };
         _set('lv-aptName', top.aptName);
         _set('lv-aptLoc', `${_fmtSgg(top.sigungu)} ${top.umdNm||''} · ${top.buildYear || '?'}년`);
-        if(top.avgDealAmount) _set('lv-aptPrice', (top.avgDealAmount/10000).toFixed(1) + '억');
+        if(top.avgDealAmount) _set('lv-aptPrice', (top.avgDealAmount/10000).toFixed(2) + '억');
         if(top.dealCount60d != null) _set('lv-aptDeals', top.dealCount60d + '건');
         // LANDING-FAKE-2026-08-17: '실시간' 은 **실제 응답이 온 뒤에만** 단다.
         _set('lv-aptMeta', top._degraded ? '집계 지연' : '실시간'); // 대체 경로는 '거래량 상위·최근 60일' 기준이 아니다
@@ -4790,6 +4790,8 @@ async function loginKakao(){
   const A = window.MHL?.auth;
   if(!A?.ready){ document.getElementById('lmStatus').textContent='로그인 준비 중이에요'; return; }
   document.getElementById('lmStatus').textContent='카카오 로그인 화면으로 가는 중이에요';
+  // CONSENT-KAKAO-2026-10-18: 2026-08-16 재활성화 때 빠진 동의 기록 — 구글·이메일과 같게 리다이렉트 전에 await
+  await _recordConsentAudit();
   try { await A.signInWithKakao(); } catch(e){ document.getElementById('lmStatus').textContent=(e.message||e); }
 }
 async function loginEmail(){
@@ -5396,7 +5398,7 @@ async function generateReport(_isRetry) {
       } else {
         // MOB-AUDIT-2026-05-03: 로그인 사용자 한도 도달 시 Pro 출시 알림 mailto 노출 — 가입 funnel 활성
         const _proMailto = e.plan === 'free' ? `<br><a href="mailto:wlsdn5968@gmail.com?subject=내집로그%20Pro%20출시%20알림%20신청&body=Pro%20플랜%20출시%20시%20알림%20부탁드립니다." style="color:var(--acc);text-decoration:underline" onclick="try{window.va&&window.va('event',{name:'pro_mailto_click',data:{from:'report_limit'}})}catch(_){}">Pro 출시 알림 신청</a>` : '';
-        extraHtml = `<div style="font-size:12px;color:var(--t2);margin-top:8px">매일 자정에 횟수가 새로 채워져요. ${e.plan === 'free' ? '프로 플랜이 나오면 무제한으로 쓸 수 있어요.' : ''}${_proMailto}</div>`;
+        extraHtml = `<div style="font-size:12px;color:var(--t2);margin-top:8px">매일 자정에 횟수가 새로 채워져요. ${e.plan === 'free' ? '프로 플랜이 나오면 하루 횟수가 늘어나요.' : ''}${_proMailto}</div>`;
       }
     } else if (e.status === 503) {
       extraHtml = `<div style="font-size:12px;color:var(--t2);margin-top:8px">AI 답변을 잠시 불러오지 못했어요. 단지 검색과 LTV 계산은 그대로 쓸 수 있어요.</div>`;
@@ -6315,10 +6317,19 @@ async function openDataStatus(){
   regRow('규제지역·대출 규정',rg.housing_loan);
   regRow('취득세 규정',rg.acquisition_tax);
   if(h.crons&&typeof h.crons==='object'){
-    const jobs=Object.values(h.crons).filter(j=>j&&j.at&&!isNaN(new Date(j.at))).sort((a,b)=>String(b.at).localeCompare(String(a.at))).slice(0,6);
+    // JOB-LABEL-2026-10-18: 내부 작업명(rent-live 등)이 그대로 보였고, 사용자 요청 때만 기록되는 조회(ecos·hf·rent-live)까지
+    //   '자동 작업'으로 30시간 기준을 받아 거짓 '확인 필요'가 떴다. 이름표에 있는 정기 작업만, 기준은 backend/services/cronStats.js 의
+    //   CRON_MAX_AGE_H 와 같게(일간 50h · 주간 단지 목록 240h). 이름표를 바꾸면 그쪽도 함께 본다.
+    const JOB_LABEL={'molit-ingest':['실거래가 가져오기',50],'apt-master-sync':['단지 목록 갱신',240],'popular-snapshot':['인기 단지 순위 갱신',50],
+      'retention':['오래된 개인정보 정리',50],'audit-prune':['오래된 이용 기록 정리',50],'regulations-check':['규제 정보 최신 여부 점검',50],
+      'regulations-auto-fetch':['규제 변경 소식 확인',50],'geocache-backfill':['단지 지도 위치 채우기',50],'facility-backfill':['단지 시설 정보 채우기',50],
+      'building-register-backfill':['단지 세대수 채우기',50],'push-notify':['관심 단지 알림 보내기',50],'warm-interest':['검색 관심도 미리 계산',50],
+      'warm-rent':['전월세 자료 미리 받기',50],'molit-hist-backfill':['과거 실거래 이력 채우기',50]};
+    const jobs=Object.values(h.crons).filter(j=>j&&j.at&&JOB_LABEL[j.name]&&!isNaN(new Date(j.at))).sort((a,b)=>String(b.at).localeCompare(String(a.at))).slice(0,6);
     for(const j of jobs){
+      const [label,maxH]=JOB_LABEL[j.name];
       const hrs=Math.round((Date.now()-new Date(j.at).getTime())/3600000);
-      row(`자동 작업 · ${_escHtml(String(j.name||''))}`,'정기 작업 최근 실행 기록',`${hrs}시간 전`,hrs<=30?'정상':'확인 필요',hrs>30);
+      row(`자동 작업 · ${label}`,'정기 작업 최근 실행 기록',`${hrs}시간 전`,hrs<=maxH?'정상':'확인 필요',hrs>maxH);
     }
   }
   body.innerHTML=rows.length?rows.join(''):'<div style="padding:14px 0;color:var(--t3);font-size:12px">표시할 상태 항목이 없어요.</div>';
@@ -7529,7 +7540,7 @@ function renderPList(){
     const tags=_renderPTags(p.tags, 2);
     const rank = p.rank ? _escHtml(p.rank)+'. ' : '';
     return`<div class="pi" id="pi-${i}" onclick="selP(${i})">
-      <div class="pi-top"><div class="pi-name">${rank}${_escHtml(p.aptName||'')}</div><div class="pi-price" title="${_escHtml(p._priceBasis||'평균 실거래')}">${(Number(p.avgPrice)||0).toFixed(1)}억</div></div>
+      <div class="pi-top"><div class="pi-name">${rank}${_escHtml(p.aptName||'')}</div><div class="pi-price" title="${_escHtml(p._priceBasis||'평균 실거래')}">${(Number(p.avgPrice)||0).toFixed(2)}억</div></div>
       <div class="pi-sub">${_escHtml(_fmtSgg(p.area))} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}</div>
       ${(Number(p.priceSampleN) > 0 && Number(p.priceSampleN) <= 2) ? `<div style="font-size:12px;color:var(--warn-ink,#8A6100);background:var(--warn-bg,#FFF6E3);border:1px solid var(--warn-bd,#E8C08A);border-radius:var(--radius-xs);padding:2px 6px;margin-top:4px;display:inline-block">⚠ 이 가격은 6개월 ${Number(p.priceSampleN)}건 기준이라 시세보다 개별 사례에 가까워요</div>` : ''}
       <div class="pi-row">${tags}${p.score!=null?gSVG(Number(p.score),30):''}</div>
@@ -7587,8 +7598,10 @@ function renderListGrid(){
     if (_hasMeta) h += `<div class="ld-k">분석 지역 ${_escHtml(_regionLabel(searchMeta.regions))}</div>`;
     const ib = searchMeta ? _num(searchMeta.inBudget) : '';
     if (ib) h += `<h2 class="ld-h1">예산 안에 드는 단지 ${ib}건</h2>`;
-    const ta = searchMeta ? _num(searchMeta.totalAptsInRegion) : '';
-    if (ta) h += `<div class="ld-s">전체 단지 ${ta}개 중이에요</div>`;
+    // LIST-COUNT-2026-10-18: 예산 매치(inBudget)는 최근 6개월 거래 단지(totalTx)에서 센다 — 단지 목록 수(totalAptsInRegion)의
+    //   부분집합이 아니라 "전체 단지 3,409개 중"이 4,522곳 분석과 모순됐다(운영 실측). 모집단을 그대로 밝힌다.
+    const tt = searchMeta ? _num(searchMeta.totalTx) : '';
+    if (tt) h += `<div class="ld-s">최근 6개월 거래가 있는 단지 ${tt}곳을 살폈어요</div>`;
     if (_hasMeta) {
       try {
         const _wideOn = document.querySelector('#ch-r .chip.on');
@@ -8369,7 +8382,7 @@ function showDetail(p){
           ? `<span class="lvl ${lv}" style="font-size:12px;padding:1px 7px">${s}점 ${lt}</span>`
           : `<span class="lvl unknown" style="font-size:12px;padding:1px 7px">${lt}</span>`)
       + `</div>`
-      + (p.avgPrice ? `<div class="ass-price"><span class="ass-price-v">${(p.avgPrice).toFixed(1)}억</span><span class="ass-price-l">${_escHtml(p._priceBasis||'평균 실거래')}</span></div>` : '');
+      + (p.avgPrice ? `<div class="ass-price"><span class="ass-price-v">${(p.avgPrice).toFixed(2)}억</span><span class="ass-price-l">${_escHtml(p._priceBasis||'평균 실거래')}</span></div>` : '');
 
     // REGION-ENTRY-2026-07-25 (Sprint WWWWWW, 기획안 §3 A안): "단지를 보다 동네가 궁금해지는 순간"에 노출.
     //   탭 신설(B안) 대신 상세 상단 링크 — 탭 과밀 정리(Sprint OOOOO) 역사와 충돌하지 않는다.
@@ -12578,7 +12591,7 @@ function toggleBmPop(){
         const priceNow=b.avgPrice||0;
         return `<div style="padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px" onclick="openBookmark(${i});toggleBmPop();">
           <div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(b.aptName || '')}${b.newDealCount>0?`<span class="bk-new-badge">${b.newDealCount}</span>`:''}</div><div style="font-size:12px;color:var(--t3)">${_escHtml(_fmtSgg(b.area))}</div></div>
-          ${priceNow?`<span style="font-size:12px;font-weight:700;color:var(--acc);flex-shrink:0">${priceNow.toFixed(1)}억</span>`:''}
+          ${priceNow?`<span style="font-size:12px;font-weight:700;color:var(--acc);flex-shrink:0">${priceNow.toFixed(2)}억</span>`:''}
         </div>`;
       }).join('');
     }

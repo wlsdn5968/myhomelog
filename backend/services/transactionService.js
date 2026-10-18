@@ -278,6 +278,10 @@ const LAWD_CODES = {
 //     지역 대시보드(routes/region.js 의 LAWD_CODE_TO_NAME 조회)가 깨진다. 목록엔 남기고 감시만 뺀다.
 //   폐지 근거는 위 INCHEON-REORG-2026-08-10 주석(행정안전부 행정표준코드관리시스템 실조회)과 동일.
 const RETIRED_LAWD_CODES = new Set(['28110', '28140', '28260']);
+// LAWD-ALLOW-2026-10-18: 공개 API 가 받는 지역 코드는 이 집합만 — 임의의 5자리는 DB 에 없어 매번 국토부 API 를 불러
+//   쿼터를 태울 수 있었다(보안 감사 #3). 운영 DB 의 실거래·단지 목록 코드는 전부 이 안에 있다(2026-10-18 조회, 밖 0건).
+const KNOWN_LAWD_CDS = new Set([...Object.values(LAWD_CODES), ...RETIRED_LAWD_CODES]);
+function isKnownLawdCd(c) { return KNOWN_LAWD_CDS.has(String(c || '')); }
 
 function isMolitKeyMissing() {
   const key = process.env.MOLIT_API_KEY;
@@ -914,4 +918,4 @@ async function getTransactionsByAptSeqMerged(aptSeq, monthsBack = 24) {
   });
 }
 
-module.exports = { getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES };
+module.exports = { getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };

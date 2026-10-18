@@ -162,7 +162,7 @@ async function run() {
       if (!entries.length) continue;
       const payload = JSON.stringify({ title: '관심단지 새 실거래', body: buildBody(entries), url: '/' });
       try {
-        await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400 });
+        await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, timeout: 10000 }); // PUSH-TIMEOUT-2026-10-18: 응답 없는 주소가 순차 발송 전체를 멈추지 않게(web-push 3.6.7 timeout 옵션)
         sent += 1;
         if (s.fail_count > 0) await admin.from('push_subscriptions').update({ fail_count: 0 }).eq('id', s.id);
       } catch (e) {

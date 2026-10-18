@@ -27,8 +27,13 @@ function pad(n) { return String(n).padStart(2, '0'); }
  * 향후 N일 이내 분양 공고 목록 (시도별 필터)
  */
 router.get('/', async (req, res) => {
+  // SUBS-NORM-2026-10-18: 캐시 키가 임의 문자열·7~180 아무 값이라 매번 청약 API 를 불렀다(보안 감사 #3).
+  //   시도는 17개 약칭만(화면 칩은 그중 6개), 기간은 화면 칩 값(30·60·90·180) 중 요청 이상인 가장 작은 값으로.
+  const SIDO = ['서울', '부산', '대구', '인천', '광주', '대전', '울산', '세종', '경기', '강원', '충북', '충남', '전북', '전남', '경북', '경남', '제주'];
   const sido = (req.query.sido || '').trim();
-  const days = Math.min(180, Math.max(7, parseInt(req.query.days || '60')));
+  if (sido && !SIDO.includes(sido)) return res.status(400).json({ error: '지원하지 않는 지역이에요.' });
+  const reqDays = parseInt(req.query.days || '60', 10);
+  const days = [30, 60, 90, 180].find(d => d >= (Number.isFinite(reqDays) ? reqDays : 60)) || 180;
   const cacheKey = `subs:${sido}:${days}`;
   const hit = cache.get(cacheKey);
   // CDN-CACHE-2026-06-14: 청약 일정 공개 데이터(6h 갱신) → Vercel 엣지 캐시로 콜드스타트 latency 제거.
