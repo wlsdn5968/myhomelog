@@ -62,15 +62,15 @@ test('LIST-SHARE 프런트: 직렬화는 30개 상한·형식 검증(lawdCd 5자
   const ctx = {}; vm.createContext(ctx);
   vm.runInContext(m[0] + '\nconst LIST_SHARE_MAX = 30; this.f = _listShareItems;', ctx);
   const out = ctx.f([
-    { aptName: '은마', sigungu: '강남구', umdNm: '대치동', lawdCd: '11680', aptSeq: '11680-123' },
+    { aptName: '은마', sigungu: '강남구', umdNm: '대치동', lawdCd: '11680', aptSeq: '11680-123', kaptCode: 'A13583507' },
     { aptName: '', lawdCd: '11680' },
-    { aptName: 'x'.repeat(60), lawdCd: 'abcde', aptSeq: 'bad' },
+    { aptName: 'x'.repeat(60), lawdCd: 'abcde', aptSeq: 'bad', kaptCode: 'bad code!' },
     null,
   ]);
   // vm 컨텍스트의 Object 는 다른 realm 이라 프로토타입이 달라 JSON 왕복으로 비교한다
   assert.deepEqual(JSON.parse(JSON.stringify(out)), [
-    { aptName: '은마', sigungu: '강남구', umdNm: '대치동', lawdCd: '11680', aptSeq: '11680-123' },
-    { aptName: 'x'.repeat(40), sigungu: '', umdNm: '', lawdCd: '', aptSeq: '' },
+    { aptName: '은마', sigungu: '강남구', umdNm: '대치동', lawdCd: '11680', aptSeq: '11680-123', kaptCode: 'A13583507' },
+    { aptName: 'x'.repeat(40), sigungu: '', umdNm: '', lawdCd: '', aptSeq: '', kaptCode: '' },
   ]);
   assert.equal(ctx.f(Array.from({ length: 50 }, (_, i) => ({ aptName: `a${i}` }))).length, 30);
 });
@@ -80,7 +80,9 @@ test('LIST-SHARE 프런트: 진입 시 handleListUrl 이 불리고, 목록 시�
   assert.match(html, /function handleListUrl\(\)\{[\s\S]*?sp\.get\('list'\)[\s\S]*?_openSharedListModal\(items\);/);
   assert.match(html, /onclick="_openSharedListItem\(\$\{i\}\)"/);
   assert.match(html, /onclick="_addSharedListToBookmarks\(\)"/);
-  assert.match(html, /function _addSharedListToBookmarks\(\)\{[\s\S]*?if \(_bkIndex\(bks, p\) >= 0\) continue;[\s\S]*?saveBookmarks\(bks\);/);
+  assert.match(html, /function _addSharedListToBookmarks\(\)\{[\s\S]*?if \(_bkIndex\(bks, p\) >= 0 \|\| bks\.some\(b => b\.aptName === p\.aptName[\s\S]*?saveBookmarks\(bks\);/);
+  // 저장 키는 단지 코드·단지 번호만(합성 키 금지 — 상세의 키와 어긋나 중복 저장됐던 실측)
+  assert.match(html, /const key = a\.kaptCode \|\| a\.aptSeq \|\| '';\r?\n\s*bks\.unshift\(\{ aptKey: key, kaptCode: a\.kaptCode \|\| null,/);
   // 관심 단지 패널 버튼(비교 버튼 앞)
   assert.match(html, /el\.innerHTML=_pushBtnHtml\(\) \+ _kkoBtnHtml\(\) \+ _bkShareBtn \+ _bkCmpBtn \+ bks\.map/);
   assert.match(html, /onclick="shareBookmarkList\(\)"/);

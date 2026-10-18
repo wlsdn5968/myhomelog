@@ -8036,10 +8036,12 @@ function _listShareItems(arr){
     umdNm:   String((a && a.umdNm) || '').slice(0, 20),
     lawdCd:  /^\d{5}$/.test(String((a && a.lawdCd) || '')) ? String(a.lawdCd) : '',
     aptSeq:  /^\d{5}-\d+$/.test(String((a && a.aptSeq) || '')) ? String(a.aptSeq) : '',
+    // 단지 코드(KAPT)가 있으면 같이 보낸다 — 받는 쪽 관심 단지 키가 상세의 키(단지 코드 우선)와 맞아야 중복 저장이 안 된다
+    kaptCode: /^[A-Za-z0-9]{3,20}$/.test(String((a && a.kaptCode) || '')) ? String(a.kaptCode) : '',
   })).filter(a => a.aptName);
 }
 async function shareBookmarkList(){
-  const items = _listShareItems(getBookmarks().map(b => Object.assign({}, _bookmarkToApt(b), { aptSeq: b.aptSeq })));
+  const items = _listShareItems(getBookmarks().map(b => Object.assign({}, _bookmarkToApt(b), { aptSeq: b.aptSeq, kaptCode: b.kaptCode })));
   if (!items.length) { toast('공유할 관심 단지가 없어요'); return; }
   let enc; try { enc = _b64urlEnc(JSON.stringify(items)); } catch(_) { toast('공유 링크를 만들지 못했어요'); return; }
   const u = new URL(location.origin + '/share'); u.searchParams.set('list', enc); const url = u.toString();
@@ -8093,10 +8095,14 @@ function _addSharedListToBookmarks(){
   const items = window._sharedList || []; if (!items.length) return;
   const bks = getBookmarks(); let added = 0;
   for (const a of items) {
-    const p = { aptName: a.aptName, sigungu: a.sigungu, umdNm: a.umdNm, lawdCd: a.lawdCd, aptSeq: a.aptSeq || null, area: [a.sigungu, a.umdNm].filter(Boolean).join(' ') };
-    if (_bkIndex(bks, p) >= 0) continue;
-    let key = ''; try { key = _aptKey(p); } catch(_) {}
-    bks.unshift({ aptKey: key, kaptCode: null, aptSeq: p.aptSeq, aptName: p.aptName, area: p.area, sigungu: p.sigungu, umdNm: p.umdNm, avgPrice: 0, lawdCd: p.lawdCd, savedAt: Date.now() });
+    const p = { aptName: a.aptName, sigungu: a.sigungu, umdNm: a.umdNm, lawdCd: a.lawdCd, aptSeq: a.aptSeq || null, area: [a.sigungu, a.umdNm].filter(Boolean).join(' '),
+      facility: a.kaptCode ? { kaptCode: a.kaptCode } : undefined };
+    // 중복: 키(단지 코드 > 단지 번호) 일치 또는 같은 이름+같은 시군구 코드
+    if (_bkIndex(bks, p) >= 0 || bks.some(b => b.aptName === p.aptName && (!b.lawdCd || !p.lawdCd || String(b.lawdCd) === String(p.lawdCd)))) continue;
+    // 키는 단지 코드·단지 번호가 있을 때만 — 합성 키를 넣으면 상세(단지 코드 키)와 어긋나 "관심 추가" 가 다시 뜨고
+    //   누르면 중복 저장된다(2026-10-18 미리보기 실측). 비워 두면 이름 일치(Plan 157 의 옛 항목 규칙)로 판정한다.
+    const key = a.kaptCode || a.aptSeq || '';
+    bks.unshift({ aptKey: key, kaptCode: a.kaptCode || null, aptSeq: p.aptSeq, aptName: p.aptName, area: p.area, sigungu: p.sigungu, umdNm: p.umdNm, avgPrice: 0, lawdCd: p.lawdCd, savedAt: Date.now() });
     added++;
   }
   saveBookmarks(bks);
