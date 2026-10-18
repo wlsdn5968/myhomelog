@@ -7086,15 +7086,16 @@ function _isReconAge(buildYear){
 }
 function renderMarkers(data){
   // 인기(popular) 마커 제거 — 검색·영역검색 시 인기핀이 안 지워져 결과핀과 중복 누적되던 버그 fix
-  (window._popMarkers||[]).forEach(o=>{ if(o._isNaver)o.setMap&&o.setMap(null); else o.remove&&o.remove(); });
+  // MARKER-SAFE-2026-10-18: 지도 SDK 가 바뀐 뒤(네이버 → 리플릿 폴백) 남은 옛 마커를 지우다 오류가 나면 목록 그리기까지 멈췄다(미리보기 실측) — 마커마다 실패를 삼킨다.
+  (window._popMarkers||[]).forEach(o=>{ try{ if(o._isNaver)o.setMap&&o.setMap(null); else o.remove&&o.remove(); }catch(_){} });
   window._popMarkers=[];
   const _plg=document.getElementById('popLegend'); if(_plg)_plg.style.display='none'; // GGGG: 인기 범례도 함께 숨김
   const _ptc2=document.getElementById('popTitleCard'); if(_ptc2)_ptc2.style.display='none'; // MMMM: 타이틀 카드도
   const _fg=document.getElementById('fltGroup'); if(_fg)_fg.style.display=''; // Sprint PPPPP: 검색 결과가 생겼으니 필터 칩 노출
-  overlays.forEach(o=>{
+  overlays.forEach(o=>{ try{
     if(naverReady&&!mapObj?._isLeaflet)o.setMap&&o.setMap(null);
     else o.remove&&o.remove();
-  });
+  }catch(_){} });
   overlays=[];
   // RECON-FILTER-FIX-2026-07-11 (Sprint MMMM, 실측: 서울 15개 검색에서 재건축 0개 — 47년차 은마도 미포함):
   //   props.type 은 'regulated'|'non' 만 할당돼 'recon' 필터가 항상 빈 결과였음 (죽은 기능).
@@ -7168,7 +7169,8 @@ function showPop(btn){
   overlays.forEach(o=>{ if(naverReady&&!mapObj?._isLeaflet)o.setMap&&o.setMap(null); else o.remove&&o.remove(); });
   overlays=[];
   // 잔존 인기 마커도 제거 (재로딩이 append 라 중복 방지 — renderMarkers 정리와 동일)
-  (window._popMarkers||[]).forEach(o=>{ if(o._isNaver)o.setMap&&o.setMap(null); else o.remove&&o.remove(); });
+  // MARKER-SAFE-2026-10-18: 지도 SDK 가 바뀐 뒤(네이버 → 리플릿 폴백) 남은 옛 마커를 지우다 오류가 나면 목록 그리기까지 멈췄다(미리보기 실측) — 마커마다 실패를 삼킨다.
+  (window._popMarkers||[]).forEach(o=>{ try{ if(o._isNaver)o.setMap&&o.setMap(null); else o.remove&&o.remove(); }catch(_){} });
   window._popMarkers=[];
   // 필터 버튼 활성 해제 (인기는 필터 아님)
   document.querySelectorAll('.mbtn').forEach(b=>b.classList.remove('on'));
@@ -7416,7 +7418,8 @@ async function doSearch(){
       // 기존 대화는 보존, 다음 메시지부터 새 세션으로
       _chatSessionId = null;
     }
-    renderPList();renderMarkers(props);renderListGrid();
+    // MARKER-SAFE-2026-10-18: 지도 표시가 실패해도 목록은 그린다 — 마커 오류 하나가 검색 전체를 "계산 중"에 멈춰 세웠다.
+    renderPList();try{ renderMarkers(props); }catch(e){ console.warn('지도 표시 실패 — 목록은 계속', e); }renderListGrid();
     // SEARCH-RESULT-MOBILE-2026-08-29: 좁은 화면은 사이드바가 **off-canvas**(.lp left:-319)라
     //   renderPList 결과가 화면 밖에 그려진다. 375px 실측 — 검색 성공 15건인데 **보이는 카드 0 ·
     //   지도 마커 0** 이라 사용자에겐 "아무 일도 안 일어난" 것으로 보였다(목록 탭을 직접 눌러야 나옴).

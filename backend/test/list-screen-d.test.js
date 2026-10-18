@@ -129,3 +129,8 @@ test('Plan 163 (g): 소스 고정 — 다크 결함 제거 · 사이드바 결�
   assert.ok(a >= 0 && b > a);
   assert.ok(!/:[^;{}]*#[0-9a-fA-F]{3,8}\b/.test(html.slice(a, b)), '새 CSS 에 hex 색이 있다');
 });
+
+test('검색 — 지도 표시가 실패해도 목록은 그린다(옛 마커 정리 실패 삼킴) (MARKER-SAFE)', () => {
+  assert.ok(html.includes("renderPList();try{ renderMarkers(props); }catch(e){ console.warn('지도 표시 실패 — 목록은 계속', e); }renderListGrid();"));
+  assert.equal(html.split("(window._popMarkers||[]).forEach(o=>{ try{ if(o._isNaver)o.setMap&&o.setMap(null); else o.remove&&o.remove(); }catch(_){} });").length - 1, 2);
+});

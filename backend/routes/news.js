@@ -174,6 +174,8 @@ function _deriveMarketLines(items) {
    이모지는 중복 표식이고, OS·폰트마다 렌더가 흔들리는데 SVG 같은 통제가 없다.
    범위는 '수치가 들어가는 데이터 줄'로 한정 — 집킴이 코너·뉴스 카테고리 칩·경고(⚠)는 그대로 둔다.
    과거 briefing_snapshots 페이로드는 소급 수정하지 않는다(기록 보존) — '어제 브리핑'에는 한동안 이모지가 남는다. */
+// LATEST-PUB-2026-10-18: 운영자 "왜 8월이 나오냐" — 한국은행 가중평균금리·국토부 미분양은 다음 달 말에 공표돼(8월분 금리 9/30 공표)
+//   10월 중순엔 8월분이 가장 최신이다. 수집은 매번 API 의 마지막 달을 읽는다 — 날짜 옆에 '최신 공표' 를 붙여 멈춘 것처럼 보이지 않게 한다.
 async function _dataMarketItems() {
   const items = [];
   try {
@@ -182,7 +184,7 @@ async function _dataMarketItems() {
       const m = String(ecos.mortgageRateMonth || '').replace(/^(\d{4})(\d{2})$/, '$1.$2');
       const parts = [];
       if (ecos.baseRate != null) parts.push(`한국은행 기준금리 ${ecos.baseRate}%`);
-      if (ecos.mortgageRate != null) parts.push(`시중 주담대 평균 ${ecos.mortgageRate}%${m ? ` (${m} 신규취급)` : ''}`);
+      if (ecos.mortgageRate != null) parts.push(`시중 주담대 평균 ${ecos.mortgageRate}%${m ? ` (${m} 신규취급 · 최신 공표)` : ''}`);
       items.push({ text: `${parts.join(' · ')}`, src: '한국은행 ECOS', date: m || null, srcInline: true });
     }
   } catch (e) { logger.warn({ err: e && e.message }, '시황 라인 생략: ECOS 금리 조회 실패'); }
@@ -193,7 +195,7 @@ async function _dataMarketItems() {
       const ym = String(unsold.latest.ym || '').replace(/^(\d{4})(\d{2})$/, '$1.$2');
       const prev = unsold.months && unsold.months.length >= 2 ? unsold.months[unsold.months.length - 2] : null;
       const diff = prev && Number.isFinite(prev.cnt) ? unsold.latest.cnt - prev.cnt : null;
-      items.push({ text: `서울 미분양 ${unsold.latest.cnt.toLocaleString()}호${ym ? ` (${ym})` : ''}${diff != null ? ` · 전월 대비 ${diff >= 0 ? '+' : ''}${diff.toLocaleString()}호` : ''}`, src: '국토부 KOSIS', date: ym || null, srcInline: true });
+      items.push({ text: `서울 미분양 ${unsold.latest.cnt.toLocaleString()}호${ym ? ` (${ym} · 최신 공표)` : ''}${diff != null ? ` · 전월 대비 ${diff >= 0 ? '+' : ''}${diff.toLocaleString()}호` : ''}`, src: '국토부 KOSIS', date: ym || null, srcInline: true });
     }
   } catch (e) { logger.warn({ err: e && e.message }, '시황 라인 생략: 미분양 조회 실패'); }
   try {
