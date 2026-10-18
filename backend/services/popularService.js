@@ -172,7 +172,7 @@ async function buildPopularResults(limit = 12, opts = {}) {
   //   불변값이라 최신순일 필요가 없다. limit 은 안전 상한(흔한 이름은 실거래가 수천 건일 수 있다).
   const seqMap = new Map();
   try {
-    // POPULAR-SEQ-2026-10-18 (Plan 158): molit_transactions 에서 정렬 없이 limit(3000) 으로 읽어 PostgREST 기본 상한(1,000)에
+    // POPULAR-SEQ-2026-10-18 (Plan 158): molit_transactions 에서 정렬 없이 3천 행 상한으로 읽어 PostgREST 기본 상한(1,000)에
     //   조용히 잘릴 수 있었고 오류도 버렸다. 단지당 1행인 molit_apt_dim 에서 이름·시군구로 좁혀 읽는다.
     const sggs = [...new Set(top.map(t => t.sigungu).filter(Boolean))];
     let q = admin.from('molit_apt_dim').select('apt_name, sigungu, umd_nm, apt_seq').in('apt_name', names);
