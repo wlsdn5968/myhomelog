@@ -272,3 +272,17 @@ test('155: 가로 모드 낮은 화면은 사용자가 손대기 전 접힘으�
   assert.ok(extractFn(html, '_hpsTap').includes('_hpsUser = true;'));
   assert.ok(html.includes('_hpsDragged = true; _hpsUser = true;'), '끌기도 사용자 선택');
 });
+
+test('데스크톱 지도 화면은 아래 고지 띠를 숨기고, 띠의 내용은 패널 하단 줄에 빠짐없이 있다(2026-10-18 운영자 요청)', () => {
+  assert.ok(html.includes('@media(min-width:701px){ body.hp-on footer.legal-footer{display:none!important} }'));
+  const s = html.indexOf('<div class="hp-ft">'), e = html.indexOf('</div>', s);
+  const ft = html.slice(s, e);
+  // 띠에 있던 것 전부: 면책 · 전문 보기 · 약관 · 개인정보 · 환불 · 지역별 실거래(앱 안 서버 렌더 페이지 링크) · 브리핑 · 사업자 정보 · ©
+  for (const k of ['매수·매도 추천이 아니에요', 'openTerms()', 'href="/terms.html"', 'href="/privacy.html"', 'href="/refund.html"',
+    'href="/region"', 'href="/briefing"', '사업자등록번호 381-08-03668', '© 2026 내집로그']) assert.ok(ft.includes(k), k);
+  // 사업자 정보는 접힘으로 시작, 버튼이 펼침 상태를 알린다
+  assert.ok(ft.includes('<span id="hpBiz" hidden>'));
+  assert.ok(ft.includes('aria-controls="hpBiz"') && ft.includes('aria-expanded="false"'));
+  // 띠 자체는 지우지 않는다(목록 화면·SEO 링크)
+  assert.ok(html.includes('<footer class="legal-footer">'));
+});
