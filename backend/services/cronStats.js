@@ -33,7 +33,7 @@ function _pick(summary) {
   //   reheal 의 성과가 여기 화이트리스트에 없어 health 로 전혀 보이지 않았다 — run 이 객체
   //   ({reheal},{addrVerify})로 돌려주는데 _pick 은 숫자만 통과시키기 때문. 오염 좌표 948건이
   //   며칠에 걸쳐 실제로 줄고 있는지 측정할 수단이 없어 튜닝이 추측이 된다. 평탄화 키를 추가한다.
-  const NUM = ['processed', 'inserted', 'unchanged', 'failed', 'batches', 'rawPoolSize', 'poolSize',
+  const NUM = ['healthSnapCounts', 'healthSnapFacility', 'processed', 'inserted', 'unchanged', 'failed', 'batches', 'rawPoolSize', 'poolSize',
     // INGEST-RUNS-OBSERV-2026-09-20 (Plan 110): retention 의 molit_ingest_runs 단계 독립 결과
     //   (고아 running 정리 건수 · 프루닝 건수)를 health 로 노출한다.
     'okPruned', 'staleRunningFixed',

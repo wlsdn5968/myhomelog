@@ -278,6 +278,10 @@ router.post('/retention', async (req, res) => {
       summary.tableHealthWarns = _cap.tableHealthWarns;
     }
     if (_cap && _cap.error) summary.dbCheckFailed = 1; // DBCAP-ERR-2026-10-18 (Plan 158): 용량 조회 실패를 health 에 남긴다
+    // HEALTH-SNAPSHOT-2026-10-18 (Plan 161): 하루 1회 건수 스냅샷 갱신 — 실패해도 retention 은 계속(함수가 throw 하지 않는다).
+    const _hs = await require('../services/healthCounts').refreshHealthSnapshots();
+    summary.healthSnapCounts = _hs.counts ? 1 : 0;
+    summary.healthSnapFacility = _hs.facility ? 1 : 0;
     logger.info({ durationMs: Date.now() - started }, 'cron/retention OK');
     // Sprint MMMMMMM-12: retention 자신의 실행 기록 — 종전엔 popular-snapshot 만 남아
     //   "retention 이 돌았는가" 를 스냅샷 성패로 유추해야 했다.
@@ -339,6 +343,10 @@ router.get('/retention', async (req, res) => {
       summary.tableHealthWarns = _cap.tableHealthWarns;
     }
     if (_cap && _cap.error) summary.dbCheckFailed = 1; // DBCAP-ERR-2026-10-18 (Plan 158): 용량 조회 실패를 health 에 남긴다
+    // HEALTH-SNAPSHOT-2026-10-18 (Plan 161): 하루 1회 건수 스냅샷 갱신 — 실패해도 retention 은 계속(함수가 throw 하지 않는다).
+    const _hs = await require('../services/healthCounts').refreshHealthSnapshots();
+    summary.healthSnapCounts = _hs.counts ? 1 : 0;
+    summary.healthSnapFacility = _hs.facility ? 1 : 0;
     await require('../services/cronStats').recordCronRun('retention', summary).catch(() => {}); // Sprint MMMMMMM-12
     // GET-PARITY-2026-08-09 (Sprint BBBBBBB-5, 실측): popular 스냅샷 계산이 **POST 쌍둥이에만** 있었는데
     //   스냅샷 도입(7/11) 이래 computed_at 이 cron 시각(18:00 UTC)이었던 적이 없다 — Vercel cron 이
