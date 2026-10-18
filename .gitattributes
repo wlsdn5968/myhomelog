@@ -1,0 +1,19 @@
+# 줄바꿈 정책 (2026-10-18) — 저장소·작업 트리 모두 LF.
+# 배경: Git for Windows 시스템 설정 core.autocrlf=true 때문에 저장소(인덱스)는 전부 LF 인데 작업 트리는 CRLF 와 LF 가 섞였다
+#   (CRLF 250여 개 · 에이전트가 새로 쓴 파일은 LF). 그 혼재가 실제 재작업을 만들었다 — 테스트가 '\n' 으로 비교해 CRLF 체크아웃에서만
+#   실패(117d1f4), 편집 스크립트 앵커 0매치, CR CR LF 오염 정리(52b350c). 이 파일이 autocrlf 보다 우선해 모든 체크아웃을 LF 로 맞춘다.
+# 측정·판단 근거: 2026-10-18 lint/formatter 병목 실측(스타일 차이는 변경량 1.5% 수준 — 포매터보다 줄바꿈 통일이 먼저).
+* text=auto eol=lf
+
+# 바이너리 — 줄바꿈 변환·diff 대상이 아니다(text=auto 자동 판별에 더해 명시)
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.pdf binary
