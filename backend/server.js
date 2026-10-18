@@ -510,7 +510,7 @@ app.get('/api/health/apis', async (req, res) => {
 // Phase 3.3 + 4.9: 검색·AI 일일 잔량 + 월 예산 잔여 동시 반환 — 헤더 pill / 구독 CTA 용
 const budgetService = require('./services/budgetService');
 
-const { getDataCounts, getFacilityQuality } = require('./services/healthCounts');
+const { getDataCounts, getFacilityQuality, readDataCounts, readFacilityQuality } = require('./services/healthCounts');
 
 // DB-STABILITY-2026-07-11 (Sprint OOOO): 무료 500MB 한도 조기경보 — 초과 시 쓰기 실패=서비스 다운.
 //   pg_database_size 는 RPC(get_db_size_bytes) 필요 — 미생성 시 graceful null(운영자 SQL 실행 전엔 비활성, 무해).
@@ -581,7 +581,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   const _naverMapsClientId = process.env.NAVER_MAPS_CLIENT_ID || null;
   // TX-HIST-MERGE-2026-09-26 (Plan 107b-1/B4): 유일한 실호출부 — 여기서만 이력 합산을 켠다
   //   (CK 캐시를 읽는 briefingService·ogImage·프론트는 이 호출이 채운 캐시를 그대로 재사용한다).
-  const _dataCounts = await getDataCounts({ includeHist: true });
+  const _dataCounts = await readDataCounts();
   // Redis 조회 1회(수 ms). 실패해도 null 로 흘려보낸다 — health 가 이것 때문에 죽으면 안 된다.
   // Plan 139: 사용자별이 아닌 값 — 인스턴스 메모리 5분 캐시(healthObserveCache)
   const _cronLatest = await _healthObs.cronLatest();
@@ -589,8 +589,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   // 데이터 품질 모니터 (Sprint AAAAA) — HOTPATH-NONBLOCK-2026-07-12 (Sprint DDDDD): count 5개가 콜드 health 를
   //   ~2s 느리게 해 chkAPI 5s 타임아웃 오프라인 오표시 유발 → health 핫패스에선 캐시만 읽고, 미스 시 백그라운드
   //   계산 트리거 후 이번엔 null 반환(health 지연 0). 다음 호출부터 값 노출.
-  let _facQuality = cache.get('meta:facilityQuality');
-  if (_facQuality === undefined) { _facQuality = null; getFacilityQuality().catch(() => {}); }
+  const _facQuality = await readFacilityQuality();
   // ECOS-2026-07-13 (Sprint FFFFF): 시중 금리(기준금리·주담대 가중평균) — facilityQuality 와 동일 비차단 패턴.
   let _ecosRates = cache.get('ecos:rates:v1');
   if (_ecosRates === undefined) { _ecosRates = null; try { require('./services/ecosService').getEcosRates().catch(() => {}); } catch (_) { /* 모듈 로드 실패는 health 응답을 막지 않는다 — 비동기 실패는 .catch 가 받는다 */ } }

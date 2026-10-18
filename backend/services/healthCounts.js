@@ -33,12 +33,14 @@ async function getDataCounts(opts) {
   const hit = cache.get(CK);
   if (hit) return hit;
   const redisCache = require('./redisCache');
-  try {
-    const rHit = await redisCache.rget(CK);
-    // SYNC-SOURCE-2026-09-26 (Plan 113): rHit.lastIngestedAt 이 null 이면 과거 실패가 굳은 오염 캐시다 —
-    //   히트로 쓰지 말고 미스로 취급해 아래 DB 재조회로 넘어간다(Redis 오염 복구, 배포 후 6시간 대기 방지).
-    if (rHit && rHit.lastIngestedAt) { cache.set(CK, rHit, 21600); return rHit; }
-  } catch (_) { /* Redis 실패는 무시하고 DB 조회 */ }
+  if (!opts || !opts.skipRedis) {
+    try {
+      const rHit = await redisCache.rget(CK);
+      // SYNC-SOURCE-2026-09-26 (Plan 113): rHit.lastIngestedAt 이 null 이면 과거 실패가 굳은 오염 캐시다 —
+      //   히트로 쓰지 말고 미스로 취급해 아래 DB 재조회로 넘어간다(Redis 오염 복구, 배포 후 6시간 대기 방지).
+      if (rHit && rHit.lastIngestedAt) { cache.set(CK, rHit, 21600); return rHit; }
+    } catch (_) { /* Redis 실패는 무시하고 DB 조회 */ }
+  }
   try {
     const { getSupabaseAdmin } = require('../db/client');
     const admin = getSupabaseAdmin();
@@ -134,6 +136,12 @@ async function getFacilityQuality() {
         .or('facility->>hoCnt.eq.0,facility->>hoCnt.is.null')
         .not('facility->_br', 'is', null),
     ]);
+    // FACQ-ERR-2026-10-18 (Plan 161): count 오류를 || 0 으로 버려 실패 시 0 이 6시간 굳었다(Plan 158 과 같은 클래스).
+    const _errs = [total, facNull, empty, dtlMissing, hhZero, brInEmpty, brInZero].filter(x => x && x.error).map(x => x.error.message);
+    if (_errs.length) {
+      logger.warn({ errs: _errs }, 'facilityQuality: 건수 조회 실패 — 캐시하지 않음');
+      return null;
+    }
     const t = total.count || 0;
     const dtl = dtlMissing.count || 0, hh = hhZero.count || 0, emp = empty.count || 0, fnull = facNull.count || 0;
     const brE = brInEmpty.count || 0, brZ = brInZero.count || 0;
@@ -162,4 +170,54 @@ async function getFacilityQuality() {
   } catch (e) { return null; }
 }
 
-module.exports = { getDataCounts, getFacilityQuality };
+// HEALTH-SNAPSHOT-2026-10-18 (Plan 161): 새 인스턴스가 첫 health 에서 무거운 count 10개를 동시에 날려
+//   배포 직후 DB 가 포화(statement_timeout 8s 초과 500, 운영 로그 실측)됐다. 건수는 하루 1회 적재 뒤에만 바뀌므로
+//   retention cron(18:00 UTC)이 한 번 세어 computed_snapshots 에 두고, health 는 그 한 행만 읽는다.
+const SNAP_COUNTS = 'health:dataCounts:v1';
+const SNAP_FACQ = 'health:facilityQuality:v1';
+
+/** cron 전용 — 캐시를 비우고 실제로 다시 센 뒤 성공한 값만 스냅샷에 둔다. 절대 throw 하지 않는다. */
+async function refreshHealthSnapshots() {
+  const out = { counts: false, facility: false };
+  try {
+    const { putSnapshot } = require('./snapshotStore');
+    cache.del('meta:dataCounts:v2');
+    const dc = await getDataCounts({ includeHist: true, skipRedis: true });
+    // txLive(원본 건수)로 판정 — tx 는 이력 합산이라 원본 count 가 실패(0)해도 양수가 된다.
+    if (dc && dc.lastIngestedAt && Number(dc.txLive != null ? dc.txLive : dc.tx) > 0 && Number(dc.apt) > 0) { await putSnapshot(SNAP_COUNTS, dc); out.counts = true; }
+    cache.del('meta:facilityQuality');
+    const fq = await getFacilityQuality();
+    if (fq && Number(fq.total) > 0) { await putSnapshot(SNAP_FACQ, fq); out.facility = true; }
+  } catch (e) { logger.warn({ err: e && e.message }, 'health 스냅샷 갱신 실패'); }
+  return out;
+}
+
+/** health 전용 — 메모리 → 스냅샷(한 행) → (스냅샷이 아직 없을 때만) 기존 실시간 계산. */
+async function readDataCounts() {
+  const hit = cache.get('meta:dataCounts:v2');
+  if (hit) return hit;
+  try {
+    const { getLastSnapshot } = require('./snapshotStore');
+    const s = await getLastSnapshot(SNAP_COUNTS);
+    if (s && s.payload && s.payload.lastIngestedAt) {
+      cache.set('meta:dataCounts:v2', s.payload, 1800); // 30분 — 같은 키를 읽는 브리핑도 그대로 쓴다
+      return s.payload;
+    }
+  } catch (_) { /* 스냅샷 실패는 아래 기존 경로로 */ }
+  return getDataCounts({ includeHist: true });
+}
+
+/** health 전용 — 메모리 → 스냅샷. 둘 다 없으면 null 을 주고 (스냅샷이 아예 없을 때만) 백그라운드 계산. */
+async function readFacilityQuality() {
+  const hit = cache.get('meta:facilityQuality');
+  if (hit !== undefined) return hit;
+  try {
+    const { getLastSnapshot } = require('./snapshotStore');
+    const s = await getLastSnapshot(SNAP_FACQ);
+    if (s && s.payload) { cache.set('meta:facilityQuality', s.payload, 1800); return s.payload; }
+  } catch (_) { /* 아래로 */ }
+  getFacilityQuality().catch(() => {});
+  return null;
+}
+
+module.exports = { getDataCounts, getFacilityQuality, refreshHealthSnapshots, readDataCounts, readFacilityQuality, SNAP_COUNTS, SNAP_FACQ };
