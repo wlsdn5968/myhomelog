@@ -306,6 +306,7 @@
 | **158** | **백엔드 4곳의 버려진 DB 오류 읽기 — 건수 실패 0 이 6시간 캐시·적재 실행 기록 쓰기 실패·용량 점검 실패 무흔적·인기 aptSeq 1,000행 잘림** (`plans/158-read-ignored-db-errors.md`) | **P1** | S–M | — | **DONE (e94bdbd·e370473·5eb53e5·541f749·5565b28, 운영 c1a8cb7, 2026-10-18)** — 테스트 +6. **운영 실증**: 04:34:57 PostgREST 500 으로 건수 조회 실패 → 예전이면 0 이 6시간 고착, 이번엔 60초 뒤 tx 1,815,735·apt 14,690 회복(경고 로그 "getDataCounts: 건수 조회 실패" 확인). 인기 aptSeq 12/12(배포 전후 동일 — 스냅샷 재계산 때 새 조회 적용) |
 | **159** | **단지 분석 캐시 키에 현재 가격 — 다른 화면 가격의 백분위가 섞임** (`plans/159-analysis-cache-key-price.md`) | P2 | S | — | **DONE (024604f, 운영 c1a8cb7, 2026-10-18)** — 테스트 +4(돌연변이 시 3 실패 확인) |
 | **160** | **장애 뒤 자동 회복 — 첫 화면 목록 대체 응답 고착·서버 연결 표시 고착·랭킹 카드 재조회 없음·인기 요청 중복** (`plans/160-recover-after-outage.md`) | P2 | S | — | **DONE (9964d0b, 운영 c1a8cb7, 2026-10-18)** — 테스트 +5. 미리보기: 지도 진입 인기 요청 2→1, 대체 응답 시 다시 불러오기 버튼, 연결 실패 흉내 → 타이머 생성·성공 시 해제 |
+| **161** | **health 의 무거운 건수 조회(정확 count 10개)를 요청 경로에서 빼고 하루 1회 DB 스냅샷(computed_snapshots)으로 — 배포 직후 새 인스턴스들이 동시에 세어 DB 포화·statement_timeout 500(10-18 14회 실측)** (`plans/161-health-counts-snapshot.md`) | **P1** | M | 158 | **DONE (73fb85c·7e6c214·bca1386, 운영 569a808, 2026-10-18)** — 실행 sonnet, 리뷰 1회 보정(이력 실패 txHistUnknown 이면 저장 안 함), 테스트 +6(739). 배포 직후 500 0. ⚠ 효과는 첫 retention(18:00 UTC) 뒤부터 — 그 전엔 스냅샷이 없어 기존 실시간 경로. 확인: `computed_snapshots` 에 `health:dataCounts:v1`·`health:facilityQuality:v1` 생성 여부 |
 
 ### 051~053 라운드 (2026-09-06, 운영자 실사용 실패 신고에서 출발)
 
@@ -883,4 +884,5 @@ RLS 정책 전문·워크플로). 그럼에도 아래는 여전히 미검증이�
 ### 2026-10-18 실행 결과 (157~160, 운영 c1a8cb7)
 - 4개 계획을 각각 격리 작업 트리에서 sonnet 실행 에이전트가 수행 → 상위 세션이 범위·완료 조건·전체 diff·테스트 단언을 직접 재확인(4건 모두 승인) → ui-155 에 병합(충돌 0) → verify 733 → 미리보기 실측 → 운영 c1a8cb7 · CI 성공.
 - **새로 관측(후속 후보)**: Supabase 게이트웨이 로그에서 count=exact HEAD 요청이 2026-10-18 01:40Z 이후 500 을 14회(molit_transactions 7·apt_master 5·hist 2) 냈다. 같은 표의 다른 요청은 대부분 200/206 정상, DB 안 count 는 즉시 성공(apt_master 14,690·molit_transactions 453,352). 원인 미확정 — 158 덕분에 사용자 표시는 60초 안에 회복된다. 반복되면 count 를 RPC 하나로 묶거나 추정 count 로 바꾸는 계획을 검토.
+- **161 원인 근거(10-18 실측)**: 게이트웨이 로그 count HEAD 500 14회가 모두 8.4~10.9초(statement_timeout 8s)이고 DB 로그 "canceling statement due to statement timeout" 와 동시각, 두 묶음 모두 운영 배포 25~30초 뒤(01:40:18 b8c12c4·04:34:26 c1a8cb7). 그 100초 창에 apt_master HEAD 38·molit_transactions 8·hist 7.
 
