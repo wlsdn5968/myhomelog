@@ -160,7 +160,7 @@ async function run() {
       pushProcessed.push(s.id);
       const entries = matchItems(Array.isArray(s.items) ? s.items : [], rows, aliasMap, sinceOf(s));
       if (!entries.length) continue;
-      const payload = JSON.stringify({ title: '관심단지 새 실거래', body: buildBody(entries), url: '/' });
+      const payload = JSON.stringify({ title: '관심 단지 새 실거래', body: buildBody(entries), url: '/' });
       try {
         await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, timeout: 10000 }); // PUSH-TIMEOUT-2026-10-18: 응답 없는 주소가 순차 발송 전체를 멈추지 않게(web-push 3.6.7 timeout 옵션)
         sent += 1;
@@ -214,7 +214,7 @@ async function run() {
       continue;
     }
 
-    const msg = { title: '내집로그 관심단지 새 실거래', description: buildBody(entries), webUrl: 'https://myhomelog.vercel.app' };
+    const msg = { title: '내집로그 관심 단지 새 실거래', description: buildBody(entries), webUrl: 'https://myhomelog.vercel.app' };
     let r = await sendKakaoMemo({ accessToken, ...msg });
     if (r.needsRefresh && (await doRefresh())) {
       r = await sendKakaoMemo({ accessToken, ...msg });

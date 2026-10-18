@@ -139,7 +139,7 @@ router.get('/', (req, res) => {
   res.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
   res.type('html').send(pageShell({
     title: `지역별 아파트 실거래 데이터 — 전국 ${list.length}개 시군구 | 내집로그`,
-    desc: `전국 ${list.length}개 시군구의 아파트 실거래 거래량·가격지수·미분양·인구 순이동을 공식 통계로 정리했습니다. 매수 추천이 아닙니다.`,
+    desc: `전국 ${list.length}개 시군구의 아파트 실거래 거래량·가격지수·미분양·인구 순이동을 공식 통계로 정리했어요. 매수 추천이 아니에요.`,
     canonical: `${ORIGIN}/region`,
     body,
   }));
@@ -218,7 +218,7 @@ router.get('/:lawdCd', async (req, res) => {
   if (!region) {
     res.set('Cache-Control', 'no-store'); // 없는 지역을 캐시하지 않는다
     return res.status(404).type('html').send(pageShell({
-      title: '지역을 찾을 수 없습니다 | 내집로그',
+      title: '지역을 찾을 수 없어요 | 내집로그',
       desc: '지역 코드에 맞는 페이지가 없어요.',
       canonical: `${ORIGIN}/region`,
       body: `<div class="eyebrow">MYHOMELOG REGION</div><h1>지역 없음</h1>
@@ -325,8 +325,8 @@ router.get('/:lawdCd', async (req, res) => {
 
   const title = `${label} 아파트 실거래 데이터 — 거래량·가격지수·미분양 | 내집로그`;
   const desc = facts.length
-    ? `${label} ${facts.slice(0, 3).join(' · ')}. 국토교통부·한국부동산원 공식 통계 정리 — 매수 추천이 아닙니다.`
-    : `${label} 아파트 실거래 거래량·가격지수·미분양·인구 순이동을 공식 통계로 정리했습니다. 매수 추천이 아닙니다.`;
+    ? `${label} ${facts.slice(0, 3).join(' · ')}. 국토교통부·한국부동산원 공식 통계를 정리했어요. 매수 추천이 아니에요.`
+    : `${label} 아파트 실거래 거래량·가격지수·미분양·인구 순이동을 공식 통계로 정리했어요. 매수 추천이 아니에요.`;
 
   // ⚠ CACHE-POISON-2026-08-29 의 교훈: **열화된 응답에는 긴 캐시를 붙이지 않는다.**
   //   카드가 하나도 없으면 원자료 조회가 통째로 실패한 상태다 — 그걸 하루 굳히면 장애가 하루가 된다.

@@ -309,6 +309,7 @@
 | **161** | **health 의 무거운 건수 조회(정확 count 10개)를 요청 경로에서 빼고 하루 1회 DB 스냅샷(computed_snapshots)으로 — 배포 직후 새 인스턴스들이 동시에 세어 DB 포화·statement_timeout 500(10-18 14회 실측)** (`plans/161-health-counts-snapshot.md`) | **P1** | M | 158 | **DONE (73fb85c·7e6c214·bca1386, 운영 569a808, 2026-10-18)** — 실행 sonnet, 리뷰 1회 보정(이력 실패 txHistUnknown 이면 저장 안 함), 테스트 +6(739). 배포 직후 500 0. ⚠ 효과는 첫 retention(18:00 UTC) 뒤부터 — 그 전엔 스냅샷이 없어 기존 실시간 경로. 확인: `computed_snapshots` 에 `health:dataCounts:v1`·`health:facilityQuality:v1` 생성 여부 |
 | **162** | **cron 실행 기록을 Redis 와 DB 스냅샷(cronstat:db:v1)에 이중 기록, 읽을 때 최신 우선 병합 — Redis 장애 중 감시 침묵·오경보 방지** (`plans/162-cron-runs-db-fallback.md`) | P2 | S–M | 161 | **DONE (89accb1) · 운영 반영 대기** — 리뷰 통과(테스트 32 재실행). ⚠ 2026-10-18 Vercel 하루 배포 한도로 운영 배포 거절 — 한도 해제 뒤 master 재푸시 |
 | **163** | **목록 화면 결과 영역 시안 D — 결과 한 곳(데스크톱 #s3 숨김)·점수 숫자+막대·"6개월 평균·표본 N건"·면책 한 줄·검색 전/중/0건·비교 담기 버튼·`_fmtEok`·도구 시트 Tab 가두기** (`plans/163-list-screen-results.md`) | P1 | M–L | 156 | **DONE (65b25fe + a7f8aa4 지도 오류 방어) · 운영 반영 대기** — 미리보기 실측: 검색 15건 표시·버튼 복귀·비교 담기/비우기·다른 탭 비노출·375 다크(가로 넘침 0). 실행자 판단 2건 수용(다른 탭 노출 막는 CSS·빠른 검색 버튼 제거). 같은 이유로 운영 대기 |
+| **164** | **동의 기록·이용 기록 보관 기간 — 익명 동의 영구 보관 여부, 처리방침 '접근 기록 1년' vs 코드 90일 삭제** (`plans/164-consent-and-audit-retention.md`) | P2 | S | — | **운영자 결정 대기**(코드 변경 없음) |
 
 ### 051~053 라운드 (2026-09-06, 운영자 실사용 실패 신고에서 출발)
 

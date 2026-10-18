@@ -68,7 +68,7 @@ router.post('/subscribe', async (req, res) => {
       return res.status(400).json({ error: '유효하지 않은 구독 정보' });
     }
     const items = sanitizeItems(req.body?.items);
-    if (!items.length) return res.status(400).json({ error: '알림 받을 관심단지가 없어요. 관심단지를 먼저 추가해주세요.' });
+    if (!items.length) return res.status(400).json({ error: '알림 받을 관심 단지가 없어요. 관심 단지를 먼저 추가해주세요.' });
 
     const { error } = await admin.from('push_subscriptions').upsert({
       endpoint, p256dh, auth,

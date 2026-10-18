@@ -134,7 +134,7 @@ router.patch('/:id', async (req, res, next) => {
       .select()
       .maybeSingle();
     if (error) throw error;
-    if (!data) return res.status(404).json({ error: '북마크를 찾을 수 없음' });
+    if (!data) return res.status(404).json({ error: '관심 단지를 찾을 수 없어요' });
     res.json({ bookmark: data });
   } catch (e) { next(e); }
 });

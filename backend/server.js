@@ -199,7 +199,7 @@ const generalLimiter = makeRateLimiter({
   limit: parseInt(process.env.RATE_LIMIT_MAX || '60'),
   windowSec: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000') / 1000,
   scope: 'general',
-  message: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+  message: '요청이 너무 많아요. 잠시 후 다시 시도해주세요.',
 });
 
 const chatLimiter = makeRateLimiter({
@@ -207,7 +207,7 @@ const chatLimiter = makeRateLimiter({
   windowSec: 60,
   scope: 'chat',
   keySuffix: ':chat',
-  message: 'AI 채팅 요청 한도를 초과했습니다. 1분 후 다시 시도해주세요.',
+  message: '맞춤 보고서·특약 초안 요청이 너무 많아요. 1분 뒤 다시 시도해주세요.',
 });
 
 // CHAT-FREE-LIMITER-2026-10-14 (Plan 133): /api/chat 은 룰베이스 데이터 라우터라 유료 AI 호출이 0 이다(CHAT-ZERO-COST-2026-08-12).
@@ -220,14 +220,14 @@ const chatDataLimiter = makeRateLimiter({
   windowSec: 60,
   scope: 'chatdata',
   keySuffix: ':chat',
-  message: '채팅 요청 한도를 초과했습니다. 1분 후 다시 시도해주세요.',
+  message: '채팅 요청 한도를 초과했어요. 1분 후 다시 시도해주세요.',
 });
 
 const dataLimiter = makeRateLimiter({
   limit: 30,
   windowSec: 60,
   scope: 'data',
-  message: '데이터 조회 한도 초과. 잠시 후 다시 시도해주세요.',
+  message: '데이터 조회 한도를 넘었어요. 잠시 후 다시 시도해주세요.',
 });
 
 // SHARE-OG-LIMIT-2026-09-28 (Plan 122): /share 는 /api/ 밖이라 어떤 리미터도 없었고, /api/og 는 PNG 렌더(CPU)가
@@ -235,11 +235,11 @@ const dataLimiter = makeRateLimiter({
 //   링크 미리보기 크롤러는 공유 1건당 1~2회만 가져가므로 아래 한도는 정상 트래픽에 닿지 않는다.
 const shareLimiter = makeRateLimiter({
   limit: 60, windowSec: 60, scope: 'share', keySuffix: ':share',
-  message: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+  message: '요청이 너무 많아요. 잠시 후 다시 시도해주세요.',
 });
 const ogLimiter = makeRateLimiter({
   limit: 30, windowSec: 60, scope: 'og', keySuffix: ':og',
-  message: '미리보기 이미지 요청이 너무 많습니다. 잠시 후 다시 시도해주세요.',
+  message: '미리보기 이미지 요청이 너무 많아요. 잠시 후 다시 시도해주세요.',
 });
 
 // REDIS-BUDGET-2026-10-14 (Plan 139): Upstash 무료 한도(월 500,000 명령) 초과로 2026-10-05 16:49Z 이후 쓰기가 실패했다.
@@ -251,7 +251,7 @@ const healthMemLimiter = rateLimit({
   limit: 60,
   standardHeaders: true,
   legacyHeaders: false,
-  message: { error: '요청이 너무 많습니다. 잠시 후 다시 시도해주세요.' },
+  message: { error: '요청이 너무 많아요. 잠시 후 다시 시도해주세요.' },
 });
 app.use('/api/health', healthMemLimiter);
 app.use('/api/cron', require('./routes/cron'));
@@ -717,7 +717,7 @@ app.use((err, req, res, next) => {
 
 // 404
 app.use((req, res) => {
-  res.status(404).json({ error: '요청한 리소스를 찾을 수 없습니다.' });
+  res.status(404).json({ error: '요청한 정보를 찾을 수 없어요.' });
 });
 
 // Vercel 서버리스 환경에서는 listen 불필요

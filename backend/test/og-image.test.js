@@ -290,7 +290,7 @@ test('브리핑 티커 — briefingTicker 는 페이지와 OG 카드의 단일 �
   });
   assert.deepEqual(tk, [
     { label: '기준금리', value: '2.5%', src: '한국은행' },
-    { label: '주담대 평균', value: '3.9%', src: 'ECOS 2026.07' },
+    { label: '주담대 평균', value: '3.9%', src: '한국은행 2026.07' },
     { label: '실거래 누적', value: '456,561건', src: '국토부 · 09.01 동기화' },
     { label: '대출·규제 기준', value: '2025.10.15 시행', src: '금융위' },
   ]);

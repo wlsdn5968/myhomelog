@@ -86,7 +86,7 @@ ${FONT_LINK}
   .cta{display:inline-block;margin-top:14px;padding:10px 18px;background:var(--pri);color:var(--onpri);border-radius:9px;font-weight:700;font-size:14px}
 </style></head><body><main>${body}
 <div class="foot">매수·매도 추천이 아니고, 미래 가격도 예측하지 않아요. 판단과 책임은 본인에게 있어요.<br>
-출처: 국토교통부 실거래가 · 한국은행 경제통계시스템(ECOS) · KOSIS 국가통계포털 · © 내집로그</div>
+출처: 국토교통부 실거래가 · 한국은행 경제통계시스템 · KOSIS 국가통계포털 · © 내집로그</div>
 </main></body></html>`;
 }
 
@@ -97,7 +97,7 @@ function briefingTicker(snap) {
   if (snap.ecos && snap.ecos.baseRate != null) tk.push({ label: '기준금리', value: `${snap.ecos.baseRate}%`, src: '한국은행' });
   if (snap.ecos && snap.ecos.mortgageRate != null) {
     tk.push({ label: '주담대 평균', value: `${snap.ecos.mortgageRate}%`,
-      src: `ECOS ${String(snap.ecos.mortgageRateMonth || '').replace(/^(\d{4})(\d{2})$/, '$1.$2')}` });
+      src: `한국은행 ${String(snap.ecos.mortgageRateMonth || '').replace(/^(\d{4})(\d{2})$/, '$1.$2')}` });
   }
   if (snap.txTotal) {
     tk.push({ label: '실거래 누적', value: `${Number(snap.txTotal).toLocaleString()}건`,

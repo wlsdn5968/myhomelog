@@ -70,7 +70,7 @@ router.post('/consent', async (req, res) => {
   const { age14Plus, terms, privacy, intlTransfer, version, ts } = req.body || {};
   if (age14Plus !== true || terms !== true || privacy !== true || intlTransfer !== true) {
     return res.status(400).json({
-      error: '필수 동의 항목이 누락되었습니다.',
+      error: '필수 동의 항목이 빠졌어요.',
       code: 'invalid_consent',
     });
   }
@@ -235,7 +235,7 @@ router.post('/delete', async (req, res, next) => {
         ok: true,
         alreadyPending: true,
         scheduled_hard_delete_at: existing.scheduled_hard_delete_at,
-        message: '이미 계정 삭제가 예약되어 있습니다.',
+        message: '이미 계정 삭제가 예약되어 있어요.',
       });
     }
 
@@ -285,7 +285,7 @@ router.post('/delete', async (req, res, next) => {
       scheduled_hard_delete_at: adrRow.scheduled_hard_delete_at,
       graceDays: GRACE_DAYS,
       signedOut,
-      message: `계정 삭제가 예약되었습니다. ${GRACE_DAYS}일 내 재로그인 후 '복구' 를 누르면 즉시 철회할 수 있습니다. 유예기간 종료 시 데이터는 영구 삭제되며, 결제 이력은 전자상거래법상 5년간 익명 상태로 보관됩니다.`,
+      message: `계정 삭제를 예약했어요. ${GRACE_DAYS}일 안에 다시 로그인해서 '복구'를 누르면 바로 취소할 수 있어요. 유예 기간이 끝나면 데이터는 영구 삭제되고, 결제 이력은 전자상거래법에 따라 5년간 익명으로 보관돼요.`,
     });
   } catch (e) {
     next(e);
@@ -307,16 +307,16 @@ router.post('/restore', async (req, res, next) => {
     if (selErr) throw selErr;
 
     if (!existing) {
-      return res.status(404).json({ error: '삭제 요청 기록이 없습니다.' });
+      return res.status(404).json({ error: '삭제 요청 기록이 없어요.' });
     }
     if (existing.status !== 'pending') {
       return res.status(409).json({
-        error: `현재 상태(${existing.status})에서는 복구할 수 없습니다.`,
+        error: `지금 상태에서는 복구할 수 없어요.`,
       });
     }
     if (new Date(existing.scheduled_hard_delete_at).getTime() < Date.now()) {
       return res.status(410).json({
-        error: '유예기간이 만료되었습니다. 복구할 수 없습니다.',
+        error: '유예 기간이 끝났어요. 복구할 수 없어요.',
       });
     }
 
@@ -337,7 +337,7 @@ router.post('/restore', async (req, res, next) => {
 
     res.json({
       ok: true,
-      message: '계정이 복구되었습니다. 모든 데이터가 그대로 유지되며, 정상 이용이 가능합니다.',
+      message: '계정을 복구했어요. 모든 데이터가 그대로 유지돼요. 이제 평소처럼 이용할 수 있어요.',
     });
   } catch (e) {
     next(e);

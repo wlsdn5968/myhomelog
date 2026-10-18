@@ -1026,9 +1026,9 @@ async function getAIRecommendations(userCondition) {
       ltv: ltvInfo.ltv,
       maxLoan: ltvInfo.maxLoan,
       pros: `${p.pyeong}평형 6개월 ${p.dealCount}건 거래 · 평균 ${avgAuk}억 · ${apt.buildYear||'?'}년식`,
-      cons: ageYears >= 30 ? `구축(${ageYears}년) — 재건축연한 도래`
-            : ageYears >= 20 ? `준구축(${ageYears}년) — 인테리어 점검 필요`
-            : `현장 임장으로 동·층·향 확인 필수`,
+      cons: ageYears >= 30 ? `구축(${ageYears}년)이라 재건축연한이 됐어요`
+            : ageYears >= 20 ? `준구축(${ageYears}년)이라 인테리어 점검이 필요해요`
+            : `현장 임장으로 동·층·향을 꼭 확인하세요`,
       strategy: `① 최근 거래 ${p.recentTx.length}건 동·층·향 비교 ② 대출 사전심사 ③ 같은 평형 호가 비교 (네이버부동산/직방)`,
       tags: tags.length ? tags : ['실거래확인'],
       risk: '시세 변동·금리 인상 리스크는 본인 부담 / 미래 가격 예측 불가',
@@ -1531,7 +1531,7 @@ async function getAIRecommendations(userCondition) {
     // 참고단지 기능 제거 (2026-04-25) — 하위 호환 위해 0 유지
     referenceCount: 0,
     coordMissingCount: missingCoords,
-    disclaimer: '본 결과는 국토교통부 실거래가 데이터 기반 정보 정리이며, 매수·매도 추천이 아닙니다. 모든 의사결정의 책임은 본인에게 있습니다.',
+    disclaimer: '본 결과는 국토교통부 실거래가 데이터 기반 정보 정리이며, 매수·매도 추천이 아니에요. 모든 의사결정의 책임은 본인에게 있어요.',
   };
   cache.set(cacheKey, result, 10800); // REC-PERF-2026-07-10 (Sprint EEEE): 30min→3h — 데이터는 daily cron만 갱신, 인기 조합 콜드 빈도 1/6
   require('./redisCache').rset(cacheKey, result, 10800).catch(() => {}); // Sprint AAAAAA — 인스턴스 간 공유(fire-and-forget)
@@ -1559,7 +1559,7 @@ function getNoMatchNotice(budget, region, opts = {}) {
     area: `${region || '서울'} · 예산 ${budget}억 · ${scope}`,
     avgPrice: budget,
     score: 0,
-    pros: analyzed ? `이 지역 최근 6개월 거래 단지 ${analyzed}곳을 살펴봤어요 — 조회는 정상이에요` : '조회는 정상이에요',
+    pros: analyzed ? `이 지역 최근 6개월 거래 단지 ${analyzed}곳을 살펴봤어요. 조회는 정상이에요` : '조회는 정상이에요',
     cons: '예산 범위나 평형 조건이 이 지역 실거래 분포와 맞지 않아요',
     strategy: '예산을 ±20% 넓히거나 평형 조건을 풀어보세요. 지역을 여러 곳 함께 선택할 수도 있어요.',
     tags: ['조건조정필요'],
@@ -1585,7 +1585,7 @@ function getStaticFallback(budget, region) {
     score: 0,
     pros: '국토부 실거래가 API 응답 없음 또는 해당 조건 거래 부재',
     cons: '예산을 ±20% 조정하거나 지역을 변경해 재시도',
-    strategy: '잠시 후 다시 시도하거나 지역/예산 조건을 변경하세요. 공공 API는 트래픽이 몰릴 때 일시 지연될 수 있습니다.',
+    strategy: '잠시 후 다시 시도하거나 지역/예산 조건을 바꿔 보세요. 공공데이터는 접속이 몰릴 때 잠시 느려질 수 있어요.',
     tags: ['재시도필요'],
     risk: '데이터 조회 실패',
     recommend: false,

@@ -333,7 +333,7 @@ router.get('/:aptSeq', async (req, res) => {
   if (!/^\d{5}-\d+$/.test(seq)) {
     res.set('Cache-Control', 'no-store');
     return res.status(404).type('html').send(pageShell({
-      title: '단지를 찾을 수 없습니다 | 내집로그', desc: '단지 코드에 맞는 페이지가 없어요.',
+      title: '단지를 찾을 수 없어요 | 내집로그', desc: '단지 코드에 맞는 페이지가 없어요.',
       canonical: `${ORIGIN}/region`, noindex: true,
       body: `<div class="eyebrow">MYHOMELOG APT</div><h1>단지 없음</h1>
         <p style="font-size:14px;color:var(--ink3)">요청한 단지 코드 형식이 올바르지 않아요.</p>
@@ -346,7 +346,7 @@ router.get('/:aptSeq', async (req, res) => {
   if (!af) {
     res.set('Cache-Control', 'no-store'); // 없는 단지를 캐시하지 않는다
     return res.status(404).type('html').send(pageShell({
-      title: '단지를 찾을 수 없습니다 | 내집로그', desc: '이 단지의 실거래 기록이 없어요.',
+      title: '단지를 찾을 수 없어요 | 내집로그', desc: '이 단지의 실거래 기록이 없어요.',
       canonical: `${ORIGIN}/region`, noindex: true,
       body: `<div class="eyebrow">MYHOMELOG APT</div><h1>기록 없음</h1>
         <p style="font-size:14px;color:var(--ink3)">이 단지의 실거래 기록이 없어요.</p>

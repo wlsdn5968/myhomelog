@@ -746,7 +746,7 @@ function analyzeTransactions(transactions) {
       pyeongStats,
       rawList: sorted.slice(0, 10),
       // P1 (2026-04-25): 층·향 자동 보정 불가 — 사용자에게 "RR/저층 임장 필수" 인지 강제
-      floorAdjustmentNote: '국토교통부 실거래 자료는 층·동·향에 따른 가격 차이를 자동 보정할 수 없습니다. 동·층·향은 현장 확인이 필요합니다.',
+      floorAdjustmentNote: '국토교통부 실거래 자료는 층·동·향에 따른 가격 차이를 자동으로 보정할 수 없어요. 동·층·향은 현장에서 확인해야 해요.',
     };
   }).sort((a, b) => b.dealCount - a.dealCount);
 }

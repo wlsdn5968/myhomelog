@@ -756,7 +756,7 @@ async function _watch(context) {
     }
   }
   return {
-    text: `관심단지 최근 60일 거래 요약 (국토부 신고 기준)\n${lines.join('\n')}\n\n새 거래 배지는 관심단지 목록(별 버튼)에서도 확인할 수 있어요.` + DISCLAIMER,
+    text: `관심 단지 최근 60일 거래 요약 (국토부 신고 기준)\n${lines.join('\n')}\n\n새 거래 배지는 관심 단지 목록(별 버튼)에서도 확인할 수 있어요.` + DISCLAIMER,
     suggestions: [`${names[0]} 시세`],
   };
 }

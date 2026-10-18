@@ -1,7 +1,7 @@
 {
   "name": "내집로그 — 실거래가 부동산 분석",
   "short_name": "내집로그",
-  "description": "국토부 실거래가 + AI 분석. 매수 비용·LTV·DSR·전세가율·맞춤 보고서. 매수 추천 아님 (참고용).",
+  "description": "국토교통부 실거래가로 아파트를 분석해요. 매수 비용·LTV·DSR·전세가율, 맞춤 보고서까지. 매수 추천이 아닌 참고용이에요.",
   "start_url": "/?utm_source=pwa",
   "display": "standalone",
   "orientation": "portrait",

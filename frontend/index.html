@@ -2179,7 +2179,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <!-- HEADER-MORE-2026-10-18 (Plan 153 리뷰 M2): 로그인·계정 메뉴를 화면 순서(다크·더보기 뒤)대로 마크업에서도 뒤로 — 키보드 Tab 순서 = 화면 순서 -->
     <!-- Sprint OOOOO-4 (운영자 지시): 헤더 "맞춤 보고서" CTA 제거 — 보고서 진입점이 랜딩·보고서 탭·
          사이드바·모바일 bnav 에 이미 존재(첫 화면 실측 4중 중복). 탭이 유일한 헤더 진입점. -->
-    <button class="hbtn" id="loginBtn" onclick="openLogin()" title="로그인하면 북마크가 기기 간 동기화돼요">로그인</button>
+    <button class="hbtn" id="loginBtn" onclick="openLogin()" title="로그인하면 관심 단지가 기기 간 동기화돼요">로그인</button>
     <div class="acct-dd" id="acctDd">
       <button class="hbtn-avatar" id="userBtn" onclick="toggleAcctMenu(event)" aria-haspopup="true" aria-expanded="false" aria-label="계정 메뉴" title="계정 메뉴"><span class="avtr" id="userAvatar">·</span><span class="ddcaret">▾</span><span id="userBadge" style="display:none"></span><span class="hd-dot" aria-hidden="true"></span></button>
       <div class="acct-menu" id="acctMenu">
@@ -2267,7 +2267,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         </div>
         <div class="wcard">
           <div class="wchead"><span class="wnum">2</span><span class="wtitle">자금 계획</span><span class="wreq">필수</span></div>
-          <div class="r2"><div><label class="lbl" for="bp">매수 예정가 <span style="color:var(--acc);font-weight:600">(억)</span></label><input class="inp" id="bp" type="number" inputmode="decimal" placeholder="6.8 (6억 8천만원)" step="0.1" min="0.1" max="500" oninput="cl()" title="단위는 억이에요. 예를 들어 6억 8천만원이면 6.8을 입력해요"></div><div><label class="lbl" for="mc">자기 자본 <span style="color:var(--acc);font-weight:600">(억)</span></label><input class="inp" id="mc" type="number" inputmode="decimal" placeholder="3.5 → 3억 5천만원" step="0.1" min="0" max="500" oninput="cl()" title="단위: 억"></div></div>
+          <div class="r2"><div><label class="lbl" for="bp">매수 예정가 <span style="color:var(--acc);font-weight:600">(억)</span></label><input class="inp" id="bp" type="number" inputmode="decimal" placeholder="6.8 (6억 8천만원)" step="0.1" min="0.1" max="500" oninput="cl()" title="단위는 억이에요. 예를 들어 6억 8천만원이면 6.8을 입력해요"></div><div><label class="lbl" for="mc">자기 자본 <span style="color:var(--acc);font-weight:600">(억)</span></label><input class="inp" id="mc" type="number" inputmode="decimal" placeholder="3.5 (3억 5천만원)" step="0.1" min="0" max="500" oninput="cl()" title="단위: 억"></div></div>
         </div>
         <div class="wcard">
           <div class="wchead"><span class="wnum">3</span><span class="wtitle">희망 지역</span><span class="wreq">필수</span></div>
@@ -2325,9 +2325,9 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <!-- Sprint QQQQQ (시안): 검색 흐름 직결 — 필터·검색 버튼을 위저드 직후로, 대출 계산은 접이식 미리보기로 강등 -->
       <div class="mb9"><span class="lbl">단지 조건 <span style="font-weight:400;color:var(--t3);font-size:12px">(선택 · 조건에 맞는 단지만 보기)</span></span>
         <div class="chips" id="ch-flt">
-          <span class="chip" id="flt-hh" onclick="this.classList.toggle('on')" title="세대수 500세대 이상 — 나홀로 단지 제외">500세대+</span>
-          <span class="chip" id="flt-park" onclick="this.classList.toggle('on')" title="세대당 주차 1.2대 이상 — 주차 여유 (법정 최소 1대 대비)">주차 1.2+</span>
-          <span class="chip" id="flt-sale" onclick="this.classList.toggle('on')" title="분양 단지만 — 임대·혼합 제외">분양만</span>
+          <span class="chip" id="flt-hh" onclick="this.classList.toggle('on')" title="세대수 500세대 이상만 보여요. 나홀로 단지는 빠져요">500세대+</span>
+          <span class="chip" id="flt-park" onclick="this.classList.toggle('on')" title="세대당 주차 1.2대 이상이에요. 주차 여유가 있어요 (법정 최소 1대 대비)">주차 1.2+</span>
+          <span class="chip" id="flt-sale" onclick="this.classList.toggle('on')" title="분양 단지만 보여요. 임대·혼합은 빠져요">분양만</span>
         </div>
         <div style="font-size:12px;color:var(--t3);margin-top:3px">※ 이 조건 정보는 공동주택관리정보시스템(K-apt)에 등록된 단지에만 있어요. 켜면 정보가 있는 단지만 보여요.</div>
       </div>
@@ -2383,7 +2383,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <!-- P1 (Phase 2 3-1): Empty state 행동 유도 -->
       <div class="bk-empty">
         관심 단지를 추가하면 여기서 빠르게 확인할 수 있어요.<br><br>
-        <span style="font-size:12px;color:var(--t3)">단지 상세 화면에서 "관심 추가" 버튼을 눌러요. 상세 화면은 지도 마커를 더블클릭하거나 팝업의 상세 리포트로 열어요</span>
+        <span style="font-size:12px;color:var(--t3)">단지 상세 화면에서 "관심 추가" 버튼을 눌러요. 상세 화면은 지도 마커를 더블클릭하거나 팝업의 단지 상세 버튼으로 열어요</span>
       </div>
     </div>
   </div>
@@ -2523,7 +2523,7 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
       <button class="mbtn" onclick="showPop(this)" title="검색 결과 표시를 지우고 인기 단지를 다시 보여 줘요">인기</button>
       <div class="msep"></div>
     </span>
-    <span id="mapHintTxt" style="font-size:12px;color:var(--t3)">마커를 누르면 팝업, 더블클릭하면 상세 리포트</span>
+    <span id="mapHintTxt" style="font-size:12px;color:var(--t3)">마커를 누르면 팝업, 더블클릭하면 단지 상세</span>
     <span id="mapTrustChip">가격은 국토교통부 실거래가예요 <b>(추정가나 호가가 아니에요)</b><span id="mapTrustSync"></span></span>
     <span id="popLegend" title="최근 21일 안에 거래가 있는 단지를 먼저 보여 줘요(신축 단지의 일괄 등기로 거래가 몰려 보이는 것을 막기 위해서예요). 한 시군구가 2곳을 넘지 않게 맞추되, 자리가 남으면 넘는 단지도 채워요. 지도에 표시하려면 좌표가 확인된 단지여야 하고, 확인되지 않은 단지는 다음 순위가 대신해요." style="font-size:12px;color:var(--t3);display:none">숫자 표시는 인기 단지예요 (최근 60일 실거래 건수가 많은 순, 지역이 한쪽에 몰리지 않게 조정)</span>
     <!-- POPULAR-STALE-SURFACE-2026-08-16 (Plan 028): 서버가 stale:true 를 줄 때만 노출.
@@ -2606,8 +2606,8 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
     <div class="r2"><div><label class="lbl" for="c_e">기존 월 원리금(만)</label><input class="inp" id="c_e" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div><div><label class="lbl" for="c_c">보유 현금(억)</label><input class="inp" id="c_c" type="number" inputmode="decimal" placeholder="3.0" oninput="dc()"></div></div>
     <!-- Phase 4 (2026-04-26): 신용대출/전세대출 잔액 — DSR 정확 계산 위해 -->
     <div class="r2">
-      <div><label class="lbl" for="c_cl" onclick="toast(this.title)" title="신용대출 원금 잔액 — 만원 단위. DSR 한도 차감.">신용대출 잔액(만) <span style="cursor:help;color:var(--t3);font-size:12px">ⓘ</span></label><input class="inp" id="c_cl" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div>
-      <div><label class="lbl" for="c_jl" onclick="toast(this.title)" title="전세대출 잔액 — 만원 단위. 규제지역 3억 초과 매수 시 즉시 회수 대상.">전세대출 잔액(만) <span style="cursor:help;color:var(--t3);font-size:12px">ⓘ</span></label><input class="inp" id="c_jl" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div>
+      <div><label class="lbl" for="c_cl" onclick="toast(this.title)" title="신용대출 원금 잔액이에요. 만원 단위로 입력해요. DSR 한도에서 빠져요.">신용대출 잔액(만) <span style="cursor:help;color:var(--t3);font-size:12px">ⓘ</span></label><input class="inp" id="c_cl" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div>
+      <div><label class="lbl" for="c_jl" onclick="toast(this.title)" title="전세대출 잔액이에요. 만원 단위로 입력해요. 규제지역에서 3억 초과 주택을 사면 즉시 회수 대상이에요.">전세대출 잔액(만) <span style="cursor:help;color:var(--t3);font-size:12px">ⓘ</span></label><input class="inp" id="c_jl" type="number" inputmode="decimal" placeholder="0" oninput="dc()"></div>
     </div>
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:11px">
       <div><span class="lbl">주택 보유</span><div class="chips" id="cc-h"><span class="chip on" onclick="cp(this,'cc-h')">무주택</span><span class="chip" onclick="cp(this,'cc-h')">1주택</span><span class="chip" onclick="cp(this,'cc-h')">2주택+</span></div></div>
@@ -2655,7 +2655,7 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
         <tr><td style="white-space:nowrap;padding:5px 4px"><b>신생아 특례</b></td><td style="white-space:nowrap;text-align:center;padding:5px 4px">1.3억↓</td><td style="white-space:nowrap;text-align:center;padding:5px 4px">9억↓</td><td style="white-space:nowrap;text-align:center;padding:5px 4px;font-weight:700">4억</td><td style="white-space:nowrap;text-align:center;padding:5px 4px;color:var(--grn);font-weight:700">1.8~3.5%*</td></tr>
       </tbody>
     </table></div>
-    <div style="font-size:12px;color:var(--t3);margin-top:6px;line-height:1.5">※ 정책자금은 자격과 서류 요건이 따로 있어요. <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:var(--grn);font-weight:700">주택도시기금 (nhuf.molit.go.kr) →</a> · 1599-0001<br>※ <b id="hfRateNote">금리(*)는 2026.7 공시 기준 대략치</b> — 소득·만기·우대에 따라 다르고 매월 변동(신생아 특례는 소득 1.3억↓ 기준). 최신 공시: <a href="https://www.hf.go.kr" target="_blank" rel="noopener" style="color:var(--grn);font-weight:700">주택금융공사(hf.go.kr)</a>·주택도시기금.<br>※ 신생아 특례 LTV는 생애최초 80%(수도권·규제 70%), 일반 70%예요. 주택담보대출 40%보다 유리해요. 2년 내 출산 가구인지 꼭 확인하세요.</div>
+    <div style="font-size:12px;color:var(--t3);margin-top:6px;line-height:1.5">※ 정책자금은 자격과 서류 요건이 따로 있어요. <a href="https://nhuf.molit.go.kr" target="_blank" rel="noopener" style="color:var(--grn);font-weight:700">주택도시기금 (nhuf.molit.go.kr) →</a> · 1599-0001<br>※ <b id="hfRateNote">금리(*)는 2026.7 공시 기준 대략치</b>예요. 소득·만기·우대에 따라 다르고 매월 변동돼요 (신생아 특례는 소득 1.3억↓ 기준). 최신 공시: <a href="https://www.hf.go.kr" target="_blank" rel="noopener" style="color:var(--grn);font-weight:700">주택금융공사(hf.go.kr)</a>·주택도시기금.<br>※ 신생아 특례 LTV는 생애최초 80%(수도권·규제 70%), 일반 70%예요. 주택담보대출 40%보다 유리해요. 2년 내 출산 가구인지 꼭 확인하세요.</div>
   </div>
 
   <!-- Phase 4 (2026-04-26): 부족 자금 해결 시나리오 -->
@@ -2668,11 +2668,11 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
            해당 항목이 없다. 절대 룰 ②(공식 출처만 인용)에 따라 수치를 빼고 확인 경로를 남긴다.
            한도·규제 문구는 2025.10.15 대책이라는 출처가 명시돼 있으므로 그대로 둔다.
            (옛 수치는 계약 테스트의 금지 문자열이라 여기 적지 않는다.) -->
-      <div style="margin-bottom:6px"><b>1. 신용대출 추가</b> — DSR에 여유가 있으면 가능해요. <b>한도는 차주별 연소득 이내로 제한</b>(2025.10.15 대책). 1억원 초과 신용대출 보유 시 대출 실행일부터 1년간 규제지역 주택 매수 제한(기존 규제 연장). 만기 5년 내외이며, 금리는 은행·신용도별 편차가 커 거래 은행에서 직접 확인이 필요해요.</div>
-      <div style="margin-bottom:6px"><b>2. 마이너스 통장</b> — 잠깐 쓰는 용도예요. 한도는 5천만~1억이에요. 금리는 변동이고 쓴 금액에만 이자가 붙어요(금리는 은행마다 달라요).</div>
-      <div style="margin-bottom:6px"><b>3. 가족 차용</b> — <b>차용증과 이자 약정이 꼭 필요해요</b> (증여로 의심받지 않기 위해서예요). 무이자나 낮은 이자로 빌리면, 적정이자율(연 4.6%)로 계산한 이자와의 차액이 연 1,000만원 이상일 때 증여세가 붙어요. 무이자라면 원금 약 2.17억까지는 비과세예요. 매달 이체 기록을 보관하세요.</div>
-      <div style="margin-bottom:6px"><b>4. 매수가 조정 / 평형 변경</b> — 부족한 만큼 평형을 줄이거나 구축으로 바꾸는 방법이에요. 가장 안전해요.</div>
-      <div><b>5. 지역 변경</b> — 비규제 지역은 LTV가 70%예요 (규제지역 40%의 1.75배). 한도 자체가 달라요.</div>
+      <div style="margin-bottom:6px"><b>1. 신용대출 추가</b>: DSR에 여유가 있으면 가능해요. <b>한도는 차주별 연소득 이내로 제한</b>(2025.10.15 대책). 1억원 초과 신용대출 보유 시 대출 실행일부터 1년간 규제지역 주택 매수 제한(기존 규제 연장). 만기 5년 내외이며, 금리는 은행·신용도별 편차가 커 거래 은행에서 직접 확인이 필요해요.</div>
+      <div style="margin-bottom:6px"><b>2. 마이너스 통장</b>: 잠깐 쓰는 용도예요. 한도는 5천만~1억이에요. 금리는 변동이고 쓴 금액에만 이자가 붙어요(금리는 은행마다 달라요).</div>
+      <div style="margin-bottom:6px"><b>3. 가족 차용</b>: <b>차용증과 이자 약정이 꼭 필요해요</b> (증여로 의심받지 않기 위해서예요). 무이자나 낮은 이자로 빌리면, 적정이자율(연 4.6%)로 계산한 이자와의 차액이 연 1,000만원 이상일 때 증여세가 붙어요. 무이자라면 원금 약 2.17억까지는 비과세예요. 매달 이체 기록을 보관하세요.</div>
+      <div style="margin-bottom:6px"><b>4. 매수가 조정 / 평형 변경</b>: 부족한 만큼 평형을 줄이거나 구축으로 바꾸는 방법이에요. 가장 안전해요.</div>
+      <div><b>5. 지역 변경</b>: 비규제 지역은 LTV가 70%예요 (규제지역 40%의 1.75배). 한도 자체가 달라요.</div>
     </div>
     <div style="font-size:12px;color:var(--t3);margin-top:6px;line-height:1.5">※ 이 안내는 정보를 정리한 것이며 세무·법무 자문이 아니에요. 가족 간 차용은 세무사와 꼭 상담하세요 (<b>국세청 차용증 양식</b>을 쓰거나 변호사가 작성하는 것을 권해요).</div>
   </div>
@@ -2720,7 +2720,7 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
     <!-- KKKKKKK-16: 데이터 라우터 전환 — 챗으로 즉답 가능한 주제 2종(금리·인기)을 send 칩으로 추가 -->
     <button class="qb" onclick="qSend('오늘 금리 알려줘')">오늘 금리</button>
     <button class="qb" onclick="qSend('요즘 인기 단지 알려줘')">인기 단지</button>
-    <button class="qb" onclick="qSend('관심단지 소식 알려줘')">관심단지</button><!-- KKKKKKK-20 B -->
+    <button class="qb" onclick="qSend('관심 단지 소식 알려줘')">관심 단지</button><!-- KKKKKKK-20 B -->
 
     <button class="qb" onclick="_closeAiPanel();sv('calc')">대출 계산</button>
     <button class="qb" onclick="_closeAiPanel();openRegSummary()">규제 요약</button>
@@ -2835,7 +2835,7 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
   <div class="biz-section">
     <h3>계약 전 필수 체크리스트</h3>
     <div id="checkList" style="font-size:12px;line-height:2.1;color:var(--t2)">
-      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 대출 사전심사 완료 (가계약 전 필수)</label>
+      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 대출 사전심사 받기 (가계약 전에 꼭 받아요)</label>
       <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 대출 불가 시 계약금 반환 특약 삽입</label>
       <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 실거래가 동호수별 비교 (국토부 실거래가 앱)</label>
       <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 매도인이 급매로 내놓은 이유를 파악해 가격 협상에 활용</label>
@@ -2917,7 +2917,7 @@ html[data-theme="dark"] #view-news{
         <b style="font-size:14px;font-weight:800;letter-spacing:-.02em;color:var(--brf-tx)">오늘의 시장 3줄 <span style="color:var(--brf-tx3);font-weight:500;font-size:12px" id="newsSummaryTime"></span></b>
       </div>
       <div id="newsSummaryLines" style="display:flex;flex-direction:column;gap:10px"></div>
-      <div id="newsSummarySrc" style="font-size:12px;color:var(--brf-tx3);margin-top:10px;line-height:1.5">공식 통계를 자동으로 정리했어요 (한국은행 ECOS, KOSIS 국가통계포털, 국토교통부 실거래가). 매수·매도 추천이 아니에요.</div>
+      <div id="newsSummarySrc" style="font-size:12px;color:var(--brf-tx3);margin-top:10px;line-height:1.5">공식 통계를 자동으로 정리했어요 (한국은행, KOSIS 국가통계포털, 국토교통부 실거래가). 매수·매도 추천이 아니에요.</div>
       <!-- BRF-DESIGN-2026-08-19: 집킴이 코너 — 시안 플레이스홀더(⌂). 캐릭터 원화는 운영자 제공 대기, 외형 추측 금지. -->
       <!-- MASCOT-HIDDEN-2026-09-05 (감사 E·J, 운영자 승인): "(캐릭터 준비 중)" 이라는 미완성 신호를 사용자에게 보이지 않는다.
            캐릭터 원화가 도착하면 아래 display:none 을 flex 로 되돌리기만 하면 된다(마크업·brfMascotMsg 갱신 로직은 그대로). -->
@@ -3174,7 +3174,7 @@ html[data-theme="dark"] #view-news{
       <summary style="cursor:pointer;font-size:14px;font-weight:700;color:var(--t1);list-style:none">표준 특약 초안 (보조 도구)</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         계약 직전에 단지를 정한 뒤 매수 정보를 입력하면 조건을 반영한 표준 특약 초안을 받을 수 있어요<br>
-        ⚠ <b>변호사·공인중개사 최종 검토 필수</b> — <a href="https://www.koreanbar.or.kr" target="_blank" rel="noopener" style="color:var(--acc)">대한변호사협회</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:var(--acc)">한국공인중개사협회</a>
+        ⚠ <b>변호사·공인중개사 최종 검토를 꼭 받으세요</b>: <a href="https://www.koreanbar.or.kr" target="_blank" rel="noopener" style="color:var(--acc)">대한변호사협회</a> · <a href="https://www.kar.or.kr" target="_blank" rel="noopener" style="color:var(--acc)">한국공인중개사협회</a>
       </div>
     </details>
 
@@ -3282,7 +3282,7 @@ html[data-theme="dark"] #view-news{
         답변 옆 엄지 버튼(도움됐어요/아니에요)을 눌러 주세요. 운영자가 매주 검토해 답변을 고쳐 가요. 도우미 답변은 공식 데이터를 정리한 것(AI 생성 아님)이며 항상 <b>참고용</b>이에요. 결정과 책임은 본인에게 있어요.<br><br>
         <b>Q. 프로 플랜 결제는 어떻게 하나요?</b><br>
         결제 기능은 아직 열지 않았어요. 지금은 무료로 쓸 수 있어요.<br><br>
-        <span style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:var(--radius-sm);padding:8px 10px;display:block;font-size:12px;color:var(--red);font-weight:600;line-height:1.6">⚠ <u>본 서비스는 매수·매도를 권유하지 않습니다.</u> 모든 분석과 신호는 과거 실거래 통계를 정리한 것이며 미래 가격을 보장하지 않습니다. 자본시장법상 투자자문업·공인중개사법상 중개업에 해당하지 않습니다.</span>
+        <span style="background:var(--redL);border:1px solid var(--danger-bd);border-radius:var(--radius-sm);padding:8px 10px;display:block;font-size:12px;color:var(--red);font-weight:600;line-height:1.6">⚠ <u>본 서비스는 매수·매도를 권유하지 않아요.</u> 모든 분석과 신호는 과거 실거래 통계를 정리한 것이고 미래 가격을 보장하지 않아요. 자본시장법상 투자자문업이나 공인중개사법상 중개업에 해당하지 않아요.</span>
       </div>
     </details>
 
@@ -3715,7 +3715,7 @@ html[data-theme="dark"] #view-news{
       <option>세대수</option><option>주차</option><option>실거래</option><option>좌표</option><option>학군</option><option selected>기타</option>
     </select>
     <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:6px">내용 <span style="font-weight:500;color:var(--t3)">(올바른 값을 아시면 함께 적어 주세요)</span></div>
-    <textarea aria-label="신고 내용" id="ermDetail" rows="4" maxlength="500" placeholder="예: 세대수가 1,200세대로 나오는데 실제는 2,400세대입니다" style="width:100%;box-sizing:border-box;padding:10px 11px;border:1px solid var(--bd);border-radius:var(--radius-base);background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:12px;line-height:1.6;resize:vertical"></textarea>
+    <textarea aria-label="신고 내용" id="ermDetail" rows="4" maxlength="500" placeholder="예: 세대수가 1,200세대로 나오는데 실제는 2,400세대예요" style="width:100%;box-sizing:border-box;padding:10px 11px;border:1px solid var(--bd);border-radius:var(--radius-base);background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:12px;line-height:1.6;resize:vertical"></textarea>
     <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:12px">
       <button class="bk-btn" onclick="closeErrReport()">취소</button>
       <button class="bk-btn on" id="ermSend" onclick="submitErrReport()">신고 보내기</button>
@@ -3726,12 +3726,12 @@ html[data-theme="dark"] #view-news{
 <div class="dmbg" id="DM">
   <div class="dm">
     <div class="dmhdr">
-      <span class="dmtit" id="dmT">리포트</span>
+      <span class="dmtit" id="dmT">단지 상세</span>
       <div style="display:flex;gap:7px;align-items:center">
         <button class="bk-btn" id="cardBtn" onclick="openShareCard()" title="실거래 팩트 카드 이미지 만들기">카드</button>
         <button class="bk-btn" id="shareBtn" onclick="shareCurrent()" title="이 단지 분석 공유">공유</button>
         <button class="bk-btn" id="bkToggle" onclick="toggleBookmark()">관심 추가</button>
-        <button class="dmx" onclick="cDM()" aria-label="리포트 닫기" title="닫기">✕</button>
+        <button class="dmx" onclick="cDM()" aria-label="단지 상세 닫기" title="닫기">✕</button>
       </div>
     </div>
     <div class="rtabs">
@@ -3796,7 +3796,7 @@ html[data-theme="dark"] #view-news{
       <div class="sm-row">
         <div class="sm-lbl">사용 한도</div>
         <!-- STAB-A P1#25 (2026-05-03): 한도 가독성 강화 — 비로그인·로그인 차이 명시 -->
-        <div class="sm-hint" id="usageInfo">비로그인 하루 5회, 로그인 하루 10회 (단지 검색). 매일 자정에 초기화돼요. 매수특약과 도우미 채팅은 한도가 따로 있어요.</div>
+        <div class="sm-hint" id="usageInfo">비로그인 하루 5회, 로그인 하루 10회 (단지 검색). 매일 자정에 초기화돼요. 특약 초안과 도우미 채팅은 한도가 따로 있어요.</div>
       </div>
       <!-- Sprint OOOOO: 데스크톱 헤더에서 테마 토글 제거(계정 드롭다운으로) — 비로그인 사용자용 전환 창구 -->
       <div class="sm-row">
@@ -3826,7 +3826,7 @@ html[data-theme="dark"] #view-news{
       <button class="smx" onclick="closeNtc()" aria-label="알림 센터 닫기" title="닫기">✕</button>
     </div>
     <div class="smbody" style="max-height:calc(100vh - 180px);overflow:auto">
-      <div class="sm-hint" style="margin-bottom:10px">관심단지에 새 실거래가 반영되면 알려드려요.</div>
+      <div class="sm-hint" style="margin-bottom:10px">관심 단지에 새 실거래가 반영되면 알려드려요.</div>
       <div id="ntcBody"></div>
       <div style="font-size:12px;color:var(--t3);margin-top:12px;line-height:1.5">
         · 실거래 정보 알림이며 매수·매도 추천이 아니에요.<br>
@@ -3847,7 +3847,7 @@ html[data-theme="dark"] #view-news{
       <!-- LOGIN-REASON-2026-08-29: 맥락별 문구. 보고서에서 막혀 온 사용자에게 "북마크 동기화"를
            제안하면 지금 원하는 것과 어긋난다(E2E 실측에서 확인). openLogin(reason) 이 교체한다. -->
       <div class="sm-hint" id="lmHint" style="margin-bottom:12px">
-        로그인하면 북마크와 메모가 모든 기기에서 동기화돼요. <b>저장된 데이터는 본인만 볼 수 있어요.</b>
+        로그인하면 관심 단지와 메모가 모든 기기에서 동기화돼요. <b>저장된 데이터는 본인만 볼 수 있어요.</b>
       </div>
 
       <!-- 필수 동의 체크박스 (PIPA + 약관규제법 준수 — 명시적 개별 동의) -->
@@ -4611,9 +4611,9 @@ function closeSM(){document.getElementById('SM').classList.remove('open');}
 //   있었다. 지금 원하는 것(보고서)과 어긋나 전환이 떨어진다. 기본 문구는 그대로 두고 맥락만 얹는다.
 const _LM_HINTS = {
   report: '로그인하면 <b>맞춤 보고서를 하루 1회 무료</b>로 받을 수 있어요. 저장된 데이터는 본인만 볼 수 있어요.',
-  search: '로그인하면 <b>검색 횟수가 늘어나고</b> 관심단지를 저장할 수 있어요. 저장된 데이터는 본인만 볼 수 있어요.',
+  search: '로그인하면 <b>검색 횟수가 늘어나고</b> 관심 단지를 저장할 수 있어요. 저장된 데이터는 본인만 볼 수 있어요.',
 };
-const _LM_HINT_DEFAULT = '로그인하면 북마크와 메모가 모든 기기에서 동기화돼요. <b>저장된 데이터는 본인만 볼 수 있어요.</b>';
+const _LM_HINT_DEFAULT = '로그인하면 관심 단지와 메모가 모든 기기에서 동기화돼요. <b>저장된 데이터는 본인만 볼 수 있어요.</b>';
 function openLogin(reason){
   document.getElementById('LM').classList.add('open');
   document.getElementById('lmStatus').textContent='';
@@ -4776,7 +4776,7 @@ async function loginGoogle(){
   document.getElementById('lmStatus').textContent='Google 로그인 화면으로 가는 중이에요';
   // CONSENT-AUDIT-2026-05-10 (검토자 fix): redirect 전에 서버 audit 기록 await — fire-and-forget abort 회피.
   await _recordConsentAudit();
-  try { await A.signInWithGoogle(); } catch(e){ document.getElementById('lmStatus').textContent=(e.message||e); }
+  try { await A.signInWithGoogle(); } catch(e){ document.getElementById('lmStatus').textContent='로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.'; }
 }
 async function loginKakao(){
   // 2026-08-16 재활성화. 2026-05-03 부터 막혀 있던 KOE205/KOE006 체인이 전부 해소됐다:
@@ -4792,7 +4792,7 @@ async function loginKakao(){
   document.getElementById('lmStatus').textContent='카카오 로그인 화면으로 가는 중이에요';
   // CONSENT-KAKAO-2026-10-18: 2026-08-16 재활성화 때 빠진 동의 기록 — 구글·이메일과 같게 리다이렉트 전에 await
   await _recordConsentAudit();
-  try { await A.signInWithKakao(); } catch(e){ document.getElementById('lmStatus').textContent=(e.message||e); }
+  try { await A.signInWithKakao(); } catch(e){ document.getElementById('lmStatus').textContent='로그인하지 못했어요. 잠시 뒤 다시 시도해 주세요.'; }
 }
 async function loginEmail(){
   if(!_checkConsent()) return;
@@ -4855,7 +4855,7 @@ async function exportMyAccount(){
     a.download = `myhomelog_export_${Date.now()}.json`;
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
-    if(status) status.textContent = '다운로드 완료';
+    if(status) status.textContent = '다운로드했어요';
     toast('내 데이터를 JSON 파일로 저장했어요');
   } catch(e){
     if(status) status.textContent = (e.message||e);
@@ -4872,7 +4872,7 @@ async function deleteMyAccount(){
   const session = A.getSession ? await A.getSession() : null;
   const token = session?.access_token;
   if(!token){ toast('로그인이 만료됐어요. 다시 로그인해 주세요'); return; }
-  const ok1 = confirm('정말 탈퇴할까요?\n\n- 오늘부터 30일 동안은 유예 기간이에요.\n- 이 기간에는 모든 기기에서 로그아웃되고, 다시 로그인하면 "복구" 버튼이 보여요.\n- 유예 기간이 끝나면 북마크, 검색 이력, 대화가 영구 삭제돼요.\n- 결제 이력은 전자상거래법에 따라 5년간 익명으로 보관돼요.');
+  const ok1 = confirm('정말 탈퇴할까요?\n\n- 오늘부터 30일 동안은 유예 기간이에요.\n- 이 기간에는 모든 기기에서 로그아웃되고, 다시 로그인하면 "복구" 버튼이 보여요.\n- 유예 기간이 끝나면 관심 단지, 검색 이력, 대화가 영구 삭제돼요.\n- 결제 이력은 전자상거래법에 따라 5년간 익명으로 보관돼요.');
   if(!ok1) return;
   // STAB-AUDIT #38 (2026-05-04): prompt() → 모달 input 교체 — 모바일 UX 개선
   //   기존 prompt() 는 모바일에서 키보드 가림 + 한국어 IME 자주 깨짐
@@ -4981,7 +4981,7 @@ async function showAutomatedDecisionExplain(){
     const j = await r.json();
     if(body) body.innerHTML = _renderAutomatedDecision(j);
   } catch(e){
-    if(body) body.textContent = '불러오지 못했어요: ' + (e.message||e);
+    if(body) body.textContent = '불러오지 못했어요. 잠시 뒤 다시 시도해 주세요.';
   }
 }
 function closeAutomatedDecisionModal(){ document.getElementById('ADM')?.classList.remove('open'); }
@@ -5002,7 +5002,7 @@ function _renderAutomatedDecision(j){
       <div style="font-size:12px;color:var(--t2);margin-bottom:6px">${esc(d.purpose)}</div>
       ${d.method ? `<div><strong>방법:</strong> ${esc(d.method)}</div>` : ''}
       ${d.formula ? `<div style="font-family:monospace;background:var(--bg2);padding:4px 6px;border-radius:var(--radius-xs);margin:4px 0;font-size:12px">${esc(d.formula)}</div>` : ''}
-      ${d.factors && d.factors.length ? `<div style="margin-top:6px"><strong>사용한 데이터:</strong><ul style="margin:4px 0 0 18px;padding:0">${d.factors.map(f=>`<li>${esc(f.name)}${f.source?' <span style="color:var(--t3)">(출처: '+esc(f.source)+')</span>':''}${f.rationale?'<br><span style="color:var(--t2);font-size:12px">— '+esc(f.rationale)+'</span>':''}</li>`).join('')}</ul></div>` : ''}
+      ${d.factors && d.factors.length ? `<div style="margin-top:6px"><strong>사용한 데이터:</strong><ul style="margin:4px 0 0 18px;padding:0">${d.factors.map(f=>`<li>${esc(f.name)}${f.source?' <span style="color:var(--t3)">(출처: '+esc(f.source)+')</span>':''}${f.rationale?'<br><span style="color:var(--t2);font-size:12px">'+esc(f.rationale)+'</span>':''}</li>`).join('')}</ul></div>` : ''}
       ${d.safeguards && d.safeguards.length ? `<div style="margin-top:6px"><strong>안전장치:</strong><ul style="margin:4px 0 0 18px;padding:0">${d.safeguards.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
       ${d.notShown && d.notShown.length ? `<div style="margin-top:6px"><strong>제공하지 않는 것:</strong><ul style="margin:4px 0 0 18px;padding:0;color:var(--t2)">${d.notShown.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
       ${d.notUsed && d.notUsed.length ? `<div style="margin-top:6px"><strong>사용하지 않는 데이터:</strong><ul style="margin:4px 0 0 18px;padding:0;color:var(--t2)">${d.notUsed.map(s=>`<li>${esc(s)}</li>`).join('')}</ul></div>` : ''}
@@ -5145,7 +5145,7 @@ async function _migrateBookmarksOnce(){
       if(!r.ok) throw new Error('migrate HTTP ' + r.status);
       const j = await r.json();
       localStorage.setItem(flagKey, '1');
-      if(j.migrated > 0) toast('북마크 ' + j.migrated + '개를 올렸어요');
+      if(j.migrated > 0) toast('관심 단지 ' + j.migrated + '개를 올렸어요');
     }
 
     // ── 2) PULL — 서버 전체 가져와서 localStorage 교체 ──
@@ -5448,7 +5448,7 @@ function _renderReport(data) {
   //   값은 전부 백엔드 실측(dataBasis.txLatest=DB max(deal_date))·기존 정책 스냅샷 — 프론트 하드코딩 아님. 없으면 미표시.
   const _basis = data.dataBasis;
   const _basisHtml = _basis ? `<div style="background:var(--s1);border:1px solid var(--bd);border-radius:var(--radius-md);padding:10px 13px;margin-bottom:12px;font-size:12px;line-height:1.7">
-      <div style="font-weight:700;font-size:12px;color:var(--t1);margin-bottom:4px">검증 기준 <span style="font-weight:400;color:var(--t3)">— 데이터 출처·기준 시점</span></div>
+      <div style="font-weight:700;font-size:12px;color:var(--t1);margin-bottom:4px">검증 기준 <span style="font-weight:400;color:var(--t3)">(데이터 출처·기준 시점)</span></div>
       <div style="color:var(--t2)">
         <span style="margin-right:10px">생성 <b>${_escHtml(new Date(data.generatedAt || Date.now()).toLocaleDateString('ko-KR'))}</b></span>
         ${_basis.txLatestLabel ? `<span style="margin-right:10px">실거래 <b>${_escHtml(_basis.txLatestLabel)}</b></span>` : ''}
@@ -5525,7 +5525,7 @@ function _renderReport(data) {
         <div>⚠ <b>단점</b>: ${_escHtml(a.cons || '')}</div>
         <div style="margin-top:5px;padding-top:5px;border-top:1px dashed var(--bg2)"><b>예산 매칭</b>: ${_escHtml(a.priceFit || '')}</div>
         ${(() => { const l = _peakFloorLine(a); return l ? `<div style="font-size:12px;color:var(--t3);margin-top:4px">${l}</div>` : ''; })()}
-        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구 등급 <b>${_escHtml(f.district)}</b>`:null,f.builder?`시공사 <b>${_escHtml(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>${f.parking_total?` (총 ${_numFmt(f.parking_total)}대)`:''}${f.parking_uncertain?' <span style="color:var(--t3)">— 세대수 불일치로 참고용</span>':''}`:null,f.regulation?`규제 <b>${_escHtml(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>${_escHtml(a.sampleSpan||'최근 6개월')} ${_numFmt(f.new_high_count)}회 갱신</b>`:null].filter(Boolean);const am=f.amenities;
+        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구 등급 <b>${_escHtml(f.district)}</b>`:null,f.builder?`시공사 <b>${_escHtml(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>${f.parking_total?` (총 ${_numFmt(f.parking_total)}대)`:''}${f.parking_uncertain?'<span style="color:var(--t3)">, 세대수가 맞지 않아 참고용이에요</span>':''}`:null,f.regulation?`규제 <b>${_escHtml(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>${_escHtml(a.sampleSpan||'최근 6개월')} ${_numFmt(f.new_high_count)}회 갱신</b>`:null].filter(Boolean);const am=f.amenities;
         /* MOB-AUDIT-2026-05-03: amenities 0 vs undefined 구분 — 좌표 호출 실패 시 "지하철 0개" 오해 차단 */
         const _amOk = am && (am.subway != null || am.mart != null || am.hospital != null || am.school != null);
         const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway,'?')}</b>·마트 <b>${_numFmt(am.mart,'?')}</b>·종합병원 <b>${_numFmt(am.hospital,'?')}</b>·학교 <b>${_numFmt(am.school,'?')}</b>·공원 <b>${_numFmt(am.park,'?')}</b>`:(am?'주변 편의시설 위치를 찾지 못했어요':'');if(!items.length && !amStr)return '';return `<div style="font-size:12px;color:var(--t2);border-left:2px solid var(--acc);padding:2px 0 2px 9px;margin-top:7px"><b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>${amStr}`:''}${a.matchScore?` <span style="color:var(--acc);font-weight:600">· 매칭 ${_numFmt(a.matchScore)}점</span>`:''}</div>`;})()}
@@ -5721,7 +5721,7 @@ function _downloadReportPDF() {
         <div>⚠ <b>단점</b>: ${esc(a.cons||'')}</div>
         <div class="apt-fit"><b>예산 매칭</b>: ${esc(a.priceFit||'')}</div>
         ${(() => { const l = _peakFloorLine(a); return l ? `<div style="font-size:8.5pt;color:#6B5F4D;margin-top:3px">${l}</div>` : ''; })()}
-        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구 등급 <b>${esc(f.district)}</b>`:null,f.builder?`시공사 <b>${esc(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>${f.parking_total?` (총 ${_numFmt(f.parking_total)}대)`:''}${f.parking_uncertain?' <span style="color:var(--t3)">— 세대수 불일치로 참고용</span>':''}`:null,f.regulation?`규제 <b>${esc(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>${esc(a.sampleSpan||'최근 6개월')} ${_numFmt(f.new_high_count)}회</b>`:null].filter(Boolean);const am=f.amenities;const _amOk=am&&(am.subway!=null||am.mart!=null||am.hospital!=null||am.school!=null);const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway,'?')}</b>·마트 <b>${_numFmt(am.mart,'?')}</b>·종합병원 <b>${_numFmt(am.hospital,'?')}</b>·학교 <b>${_numFmt(am.school,'?')}</b>·공원 <b>${_numFmt(am.park,'?')}</b>`:(am?'주변 편의시설 좌표 미해결':'');if(!items.length && !amStr)return '';return `<div class="apt-objfacts"><b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>${amStr}`:''}${a.matchScore?` · 매칭 <b>${_numFmt(a.matchScore)}점</b>`:''}</div>`;})()}
+        ${(()=>{const f=a.objectiveFacts;if(!f)return '';const items=[f.district?`행정구 등급 <b>${esc(f.district)}</b>`:null,f.builder?`시공사 <b>${esc(f.builder)}</b>`:null,f.parking_per_household?`주차 <b>세대당 ${_numFmt(f.parking_per_household)}대</b>${f.parking_total?` (총 ${_numFmt(f.parking_total)}대)`:''}${f.parking_uncertain?'<span style="color:var(--t3)">, 세대수가 맞지 않아 참고용이에요</span>':''}`:null,f.regulation?`규제 <b>${esc(f.regulation)}</b>`:null,f.new_high_count>0?`신고가 <b>${esc(a.sampleSpan||'최근 6개월')} ${_numFmt(f.new_high_count)}회</b>`:null].filter(Boolean);const am=f.amenities;const _amOk=am&&(am.subway!=null||am.mart!=null||am.hospital!=null||am.school!=null);const amStr=_amOk?`반경 1.2~2km: 지하철 <b>${_numFmt(am.subway,'?')}</b>·마트 <b>${_numFmt(am.mart,'?')}</b>·종합병원 <b>${_numFmt(am.hospital,'?')}</b>·학교 <b>${_numFmt(am.school,'?')}</b>·공원 <b>${_numFmt(am.park,'?')}</b>`:(am?'주변 편의시설 좌표 미해결':'');if(!items.length && !amStr)return '';return `<div class="apt-objfacts"><b>단지 객관 정보</b><br>${items.join(' · ')}${amStr?`<br>${amStr}`:''}${a.matchScore?` · 매칭 <b>${_numFmt(a.matchScore)}점</b>`:''}</div>`;})()}
         ${a.matchReason ? `<div class="apt-match"><b>왜 이 순위?</b> ${esc(a.matchReason)}</div>` : ''}
         <div class="apt-rec">${esc(a.recommendation||'')}</div>
       </div>
@@ -5838,7 +5838,7 @@ function _downloadReportPDF() {
         • <b>토지거래허가</b>: ${esc(policy.landTrade||'')}<br>
         • <b>정책자금 종류</b>: ${(policy.policyLoans||[]).map(s=>esc(s)).join(' · ')}
         <div class="policy-note">※ ${esc(policy.note||'')} · 자세한 자격과 신청 방법은 ${esc(policy.policyContact||'')}</div>
-        <div class="policy-note">※ 관련 법령 원문: 주택법 · 지방세법 · 종합부동산세법 · 소득세법 · 주택임대차보호법 — 국가법령정보센터(law.go.kr)</div>
+        <div class="policy-note">※ 관련 법령 원문: 주택법 · 지방세법 · 종합부동산세법 · 소득세법 · 주택임대차보호법. 출처: 국가법령정보센터(law.go.kr)</div>
       </div>
     </div>
 
@@ -5929,14 +5929,14 @@ function openRegSummary(){
         <b>DSR</b>: 은행 40% / 2금융 50% · 스트레스 +3.0%p (수도권) · 만기 30년<br>
         <b>규제지역</b>: 서울 25구 + 경기 15곳 (과천·광명·성남·수원·안양·용인·의왕·하남·구리·화성 동탄 등, 2026.6.30 동탄·기흥·구리 신규)<br>
         <b>토허구역</b>: 규제지역 2년 실거주 의무 (2026.7.5 동탄·기흥·구리 추가)<br>
-        <b>전세대출</b>: 보유자가 규제지역(투기과열지구 등) 내 3억 초과 <b>아파트</b>(분양권·입주권 포함) 매수 시 회수 — 세입자 잔여 임대차기간·불가피한 실수요 등 예외 있음
+        <b>전세대출</b>: 보유자가 규제지역(투기과열지구 등) 내 3억 초과 <b>아파트</b>(분양권·입주권 포함) 매수 시 회수돼요. 세입자 잔여 임대차기간·불가피한 실수요 등은 예외가 있어요
       </div>
       <!-- Sprint QQ (2026-05-19): 10.15 이후 후속 정책 (4.17 만기연장 금지 / 5.10 양도세 중과 / 5.12 보완책) -->
       <div style="background:#FFE8E8;border:1px solid #E8A0A0;border-radius:var(--radius-base);padding:10px 12px;font-size:12px;color:#8B2914;line-height:1.6;margin-bottom:10px">
         <b style="color:var(--red)">10.15 이후 후속 정책</b><br>
         <b>2026.4.17~</b> 다주택자(2주택+) 주담대 만기연장 원칙 금지 (수도권·규제지역, 4조 1,000억 영향)<br>
         <b>2026.5.10~</b> 다주택자 양도세 중과 부활 (2주택 +20%p / 3주택+ +30%p, 5.9까지 양도분 배제·장기보유특별공제 배제)<br>
-        <b>2026.5.12~</b> 보완책 — 매도 규제 일부 완화 (이사 등 실수요 일부 허용)<br>
+        <b>2026.5.12~</b> 보완책: 매도 규제 일부 완화 (이사 등 실수요 일부 허용)<br>
         <b>2026 전체</b> 가계대출 증가율 1.5% 이내 관리 목표
       </div>
       <div style="font-size:12px;color:var(--t3);text-align:center">출처: 금융위 2025.10.15 + 2026.4.1 가계부채 관리방안 (<a href="https://www.korea.kr" target="_blank" rel="noopener" style="color:var(--ac)">korea.kr 정책브리핑</a>) · 바뀔 수 있으니 금융기관에서 꼭 최종 확인해 주세요</div>
@@ -5965,9 +5965,9 @@ const POLICY_TIMELINE = [
   //   · 그래서 "경기 12곳" 목록이 DB regulatedRegions 앞 12개와 일치하는 것도 우연이 아니다.
   //   [교훈] 같은 파일의 다른 문구(구 '강남 일부·송파·용산')와 어긋난다는 이유로 어느 한쪽을 틀렸다고
   //   단정하지 말 것 — 여기서는 **오래된 쪽이 틀렸고 이 문구가 최신이었다**. 공식 출처를 먼저 확인할 것.
-  { date:'2025-10-15', title:'규제지역 확대·DSR 강화 시행', desc:'서울 25개구 + 경기 12곳(발표 당시) 규제지역·토지거래허가구역 동시 지정(효력 10.20) — 현재 경기 15곳', tag:'규제', tone:'red' },
+  { date:'2025-10-15', title:'규제지역 확대·DSR 강화 시행', desc:'서울 25개구 + 경기 12곳(발표 당시) 규제지역·토지거래허가구역 동시 지정(효력 10.20). 현재 경기 15곳', tag:'규제', tone:'red' },
   { date:'2025-10-29', title:'1주택자 전세대출 이자 DSR 반영', desc:'전세대출 이자도 총부채상환비율에 포함', tag:'대출', tone:'amb' },
-  { date:'2026-01-01', title:'은행권 주담대 위험가중치 15%→20%', desc:'은행 주담대 공급 위축·금리 상승 압력', tag:'금융', tone:'a2' },
+  { date:'2026-01-01', title:'은행권 주담대 위험가중치 15%에서 20%로', desc:'은행 주담대 공급 위축·금리 상승 압력', tag:'금융', tone:'a2' },
   { date:'2026-04-17', title:'다주택자 주담대 만기연장 금지', desc:'2주택+ 임대사업자 수도권·규제지역 주담대 만기연장 원칙 금지 (4조 1,000억 / 1.7만 가구)', tag:'대출', tone:'red' },
   { date:'2026-05-10', title:'다주택자 양도세 중과 부활', desc:'2022.5~ 한시 유예 종료(5.9까지 양도분 배제). 2주택 +20%p / 3주택+ +30%p·장특공 배제', tag:'세제', tone:'amb' },
   { date:'2026-05-12', title:'5.12 보완책 시행', desc:'매도 규제 일부 완화 (이사 등 실수요 일부 허용)', tag:'완화', tone:'grn' },
@@ -6077,7 +6077,7 @@ async function loadNewsSummary(){
     const srcEl=document.getElementById('newsSummarySrc');
     if(srcEl){
       const isData = d.mode==='data';
-      srcEl.textContent = isData ? '공식 통계(한국은행 ECOS, KOSIS 국가통계포털, 국토교통부 실거래가)를 자동으로 정리했어요. 매수·매도 추천이 아니에요.' : '';
+      srcEl.textContent = isData ? '공식 통계(한국은행, KOSIS 국가통계포털, 국토교통부 실거래가)를 자동으로 정리했어요. 매수·매도 추천이 아니에요.' : '';
       srcEl.style.display = isData ? '' : 'none';
     }
     const t=d.updatedAt?new Date(d.updatedAt):new Date();
@@ -6190,7 +6190,7 @@ async function renderBriefing(){
     window._lastPopular=ps; // RANKCARD: 랭킹 카드 재료(재조회 없이 재사용)
     const tk=[];
     if(er&&er.baseRate!=null) tk.push({l:'기준금리',v:_escHtml(String(er.baseRate))+'%',s:'한국은행'});
-    if(er&&er.mortgageRate!=null) tk.push({l:'주담대 평균',v:_escHtml(String(er.mortgageRate))+'%',s:'ECOS '+_escHtml(String(er.mortgageRateMonth||'').replace(/^(\d{4})(\d{2})$/,'$1.$2'))});
+    if(er&&er.mortgageRate!=null) tk.push({l:'주담대 평균',v:_escHtml(String(er.mortgageRate))+'%',s:'한국은행 '+_escHtml(String(er.mortgageRateMonth||'').replace(/^(\d{4})(\d{2})$/,'$1.$2'))});
     if(dc&&dc.tx) tk.push({l:'실거래 누적',v:Number(dc.tx).toLocaleString()+'건',s:'국토부'+(dc.lastIngestedAt?' · '+String(dc.lastIngestedAt).slice(5,10).replace('-','.')+' 동기화':'')});
     if(ps.length&&ps[0].dealCount60d) tk.push({l:'실거래 최다·60일',v:_escHtml((ps[0].displayName||_dispAptName(ps[0].aptName, ps[0].umdNm))||'')+' '+ps[0].dealCount60d+'건',s:'국토부'});
     if(items.length&&items[0].name) tk.push({l:'청약 임박',v:_escHtml(items[0].name||''),s:'청약홈'});
@@ -6257,7 +6257,7 @@ async function renderBriefing(){
         const rows=reglog.items.slice(0,4).map(it=>`<div class="brf-row" style="align-items:baseline;gap:12px;flex-wrap:wrap;padding:10px 13px;margin-bottom:8px">
           <span style="font-size:12px;font-weight:700;color:var(--brf-tx3);font-variant-numeric:tabular-nums;flex:0 0 88px">${fm(it.effectiveFrom)} 시행</span>
           <span style="font-size:12px;font-weight:800;padding:3px 7px;border-radius:var(--radius-sm);background:var(--brf-panel);border:1px solid var(--brf-line);color:var(--brf-ac-tx)">${_escHtml(it.tag||'')}</span>
-          <span style="flex:1;min-width:150px;font-size:12px;font-weight:600;color:var(--brf-tx);line-height:1.5">${_escHtml(it.note||'')}${it.supersededAt?` <span style="color:var(--brf-tx3);font-weight:500">(→ ${fm(it.supersededAt)} 대체)</span>`:''}</span>
+          <span style="flex:1;min-width:150px;font-size:12px;font-weight:600;color:var(--brf-tx);line-height:1.5">${_escHtml(it.note||'')}${it.supersededAt?` <span style="color:var(--brf-tx3);font-weight:500">(${fm(it.supersededAt)} 대체)</span>`:''}</span>
           ${it.verifiedAt?`<span style="font-size:12px;color:var(--brf-tx3)">확인 ${fm(it.verifiedAt)}</span>`:''}
         </div>`).join('');
         const cr=(h&&h.crons)||{};
@@ -6275,7 +6275,7 @@ async function renderBriefing(){
     // VERIFY-FIX-2026-08-19: 성공한 원자료만 '기준'으로 명시 — 조회 실패 시에도 3개 기관을 단정하던
     //   모순(적대 검증 적발, 절대룰 '값 없으면 생략'). subs/er/dc 가 null 이면 그 기관은 문장에서 뺀다.
     const _srcs=[];
-    if(er) _srcs.push('한국은행 ECOS');
+    if(er) _srcs.push('한국은행');
     if(dc) _srcs.push('국토부 실거래');
     if(subs) _srcs.push('청약홈');
     if(mm) mm.textContent=(_srcs.length?`오늘 브리핑은 ${_srcs.join('·')} 원자료를 기준으로 했어요.`:'오늘 브리핑 원자료를 잠시 불러오지 못했어요. 확인된 값만 보여줘요.')+(dc&&dc.lastIngestedAt?' 실거래 동기화 '+String(dc.lastIngestedAt).slice(5,10).replace('-','.')+'.':'')+' 값이 없는 항목은 추정하지 않고 비워 둬요.';
@@ -6311,7 +6311,7 @@ async function openDataStatus(){
     row('공동주택 정보',`${Number(dc.apt).toLocaleString()}개 단지 · 주간 목록 동기화`,ah!=null?`${ah}시간 전 실행`:'—',ah==null?'실행 기록 없음':(ah<=192?'정상':'지연'),ah!=null&&ah>192);
   }
   const er=h.ecosRates;
-  if(er&&er.baseRate!=null) row('한국은행 ECOS 금리',`기준금리 ${er.baseRate}%${er.mortgageRate!=null?` · 주담대 ${er.mortgageRate}%`:''}`,er.mortgageRateMonth?('공표월 '+String(er.mortgageRateMonth).replace(/^(\d{4})(\d{2})$/,'$1.$2')):'—','정상',false);
+  if(er&&er.baseRate!=null) row('한국은행 금리',`기준금리 ${er.baseRate}%${er.mortgageRate!=null?` · 주담대 ${er.mortgageRate}%`:''}`,er.mortgageRateMonth?('공표월 '+String(er.mortgageRateMonth).replace(/^(\d{4})(\d{2})$/,'$1.$2')):'—','정상',false);
   const rg=h.regulations||{};
   const regRow=(label,r0)=>{ if(r0&&r0.effectiveDate) row(label,`출처 확인 ${_escHtml(String(r0.effectiveDate))}${(r0.source&&!/^[a-z]{1,8}$/.test(String(r0.source)))?` · ${_escHtml(String(r0.source))}`:''}`,r0.daysSince!=null?`${r0.daysSince}일 경과`:'—',r0.stale?'⚠ 개정 확인 필요':'정상',!!r0.stale); };
   regRow('규제지역·대출 규정',rg.housing_loan);
@@ -6579,11 +6579,11 @@ function updateQuota(usage){
     // 한도 임박 시 숫자만 색으로 신호 (시안: 배경 pill 없음)
     pill.style.color = usage.remaining<=1 ? 'var(--red)' : (usage.remaining<=2 ? 'var(--amb)' : '');
     /* CCCCCC: pill 은 "남은/전체"인데 툴팁은 "사용/전체"라 숫자가 어긋나 보이던 것 — 남은 횟수 기준으로 통일 */
-    if(wrap) wrap.title=`오늘 남은 무료 단지 검색 ${usage.remaining}/${usage.limit}회 — 매일 자정에 다시 채워져요 (누르면 자세히 보기)`;
+    if(wrap) wrap.title=`오늘 남은 무료 단지 검색 ${usage.remaining}/${usage.limit}회예요. 매일 자정에 다시 채워져요 (누르면 자세히 보기)`;
   }
   // USAGE-INFO-2026-07-16 (Sprint SSSSS): 정적 안내("로그인 시 10회/일 · 특약·채팅 별도 한도")가 이 덮어쓰기로 소실되던 것 — 항상 뒤에 유지
   _syncHUsage();
-  if(info)info.textContent = usage.unlimited ? '검색 무제한 (운영자·관리자)' : `오늘 ${usage.used}/${usage.limit}회 사용했어요 (남은 무료 검색 ${usage.remaining}회). 매일 자정에 다시 채워지고, 로그인하면 하루 10회예요. 매수특약과 도우미 채팅은 한도가 따로 있어요.`;
+  if(info)info.textContent = usage.unlimited ? '검색 무제한 (운영자·관리자)' : `오늘 ${usage.used}/${usage.limit}회 사용했어요 (남은 무료 검색 ${usage.remaining}회). 매일 자정에 다시 채워지고, 로그인하면 하루 10회예요. 특약 초안과 도우미 채팅은 한도가 따로 있어요.`;
 }
 async function refreshQuota(){
   try{
@@ -6637,7 +6637,7 @@ function updateAiPill(usage){
   pill.style.color = usage.remaining<=1 ? 'var(--red)' : (usage.remaining<=3 ? 'var(--amb)' : '');
   window._quotaNear.chat = Number(usage.remaining);
   _syncHUsage();
-  pill.title = `오늘 남은 도우미 채팅 ${usage.remaining}/${usage.limit}회 — 매일 자정에 다시 채워져요`; // GGGGGG: pill(남은)과 기준 통일
+  pill.title = `오늘 남은 도우미 채팅 ${usage.remaining}/${usage.limit}회예요. 매일 자정에 다시 채워져요`; // GGGGGG: pill(남은)과 기준 통일
 }
 
 /* QUOTA-REALTIME-2026-08-25 (Sprint NNNNNNN-25): 서버는 **이미** 한도 대상 응답마다
@@ -6700,7 +6700,7 @@ function updateEcosHint(e){
     window._ecosMortgageRate = Number(e.mortgageRate) || null;
     const m = String(e.mortgageRateMonth||'').replace(/^(\d{4})(\d{2})$/,'$1.$2');
     if(el){
-      el.innerHTML = `미입력 시 시중 평균 주담대 <b>${_escHtml(String(e.mortgageRate))}%</b> 적용 <span style="color:var(--t3)">(신규취급 가중평균 · 한국은행 ECOS ${_escHtml(m)}${e.baseRate!=null?` · 기준금리 ${_escHtml(String(e.baseRate))}%`:''})</span>`;
+      el.innerHTML = `미입력 시 시중 평균 주담대 <b>${_escHtml(String(e.mortgageRate))}%</b> 적용 <span style="color:var(--t3)">(신규취급 가중평균 · 한국은행 ${_escHtml(m)}${e.baseRate!=null?` · 기준금리 ${_escHtml(String(e.baseRate))}%`:''})</span>`;
       el.style.display='block';
     }
     const cr = document.getElementById('c_r');
@@ -6984,7 +6984,7 @@ async function loadAptsInBounds(south, west, north, east) {
     if (typeof renderListGrid === 'function') renderListGrid();
     // UX 정리(2026-06-01): 성공 토스트 제거 — 마커가 이미 화면에 표시됨(중복 안내 제거)
   } catch (e) {
-    toast('이 영역을 검색하지 못했어요: ' + e.message);
+    toast('이 영역을 검색하지 못했어요. 잠시 뒤 다시 시도해 주세요');
   }
 }
 
@@ -7066,7 +7066,7 @@ function mkNaverIW(p){
       <div class="niw-m">${_escHtml(_fmtSgg(p.area))} · ${_escHtml(p.buildYear||'')}년 · LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}</div>
       <div class="niw-g">${scoreLabel}</div>
       <div class="niw-tags">${tags}</div>
-      <button class="niw-btn a2" onclick="showDetailById('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}',${p.lat},${p.lng})">상세 리포트</button>
+      <button class="niw-btn a2" onclick="showDetailById('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}',${p.lat},${p.lng})">단지 상세</button>
       <button class="niw-btn acc" onclick="askP('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}','${p.avgPrice||0}','${encodeURIComponent(p.area||'').replace(/'/g,'%27')}')">시세 묻기</button>
     </div>
   </div>`;
@@ -7283,7 +7283,7 @@ async function batchGeocode(items){
 function searchStep(label,n){
   const tx=document.getElementById('srchTx');
   if(tx)tx.textContent=`${n}/3 ${label}`;
-  showHint(`${n}/3 — ${label}`,3000);
+  showHint(`${n}/3: ${label}`,3000);
 }
 
 async function doSearch(){
@@ -7629,7 +7629,7 @@ function renderListGrid(){
     }
     const top = Array.from(cnt.entries()).sort((a, b) => b[1].n - a[1].n).slice(0, 3);
     if (!top.length) return '';
-    return `<div class="ld-rg">${top.map(([code, v]) => `<button type="button" class="ld-rgb" title="이 지역의 가격지수·거래량·미분양·인구 순이동·규제 상태를 공식 통계로 봅니다" onclick="openRegionSummary('${_escHtml(code)}','${_escHtml(v.nm)}')">${_escHtml(v.nm || code)} 시장 요약</button>`).join('')}</div>`;
+    return `<div class="ld-rg">${top.map(([code, v]) => `<button type="button" class="ld-rgb" title="이 지역의 가격지수·거래량·미분양·인구 순이동·규제 상태를 공식 통계로 볼 수 있어요" onclick="openRegionSummary('${_escHtml(code)}','${_escHtml(v.nm)}')">${_escHtml(v.nm || code)} 시장 요약</button>`).join('')}</div>`;
   })();
   // SORT-RESET-FIX-2026-08-20 (Sprint NNNNNNN-19, 루프 회차 3 실측): innerHTML 재렌더가 셀렉트를
   //   첫 옵션(score)으로 초기화 — 재렌더 전에 현재 선택을 읽어 selected 로 되살린다.
@@ -7686,7 +7686,7 @@ function renderListGrid(){
     }
   } catch (e) {
     console.error('renderListGrid map error:', e, props.slice(0,3));
-    body = `<div class="ld-box" role="alert"><b>목록을 보여주지 못했어요</b><span>${_escHtml(String(e.message||e).slice(0,200))}</span></div>`;
+    body = `<div class="ld-box" role="alert"><b>목록을 보여주지 못했어요</b><span>잠시 뒤 다시 시도해 주세요.</span></div>`;
   }
   g.innerHTML = `<div class="ld">${head}${body}</div>`;
   return;
@@ -7877,8 +7877,8 @@ async function _runCompare(apts){
     _cmpData = data; _cmpBand = null; _cmpSort = null;
     renderCompareModal(data, bodyEl);
   }catch(e){
-    const msg = (e&&e.name==='TimeoutError') ? '응답이 너무 늦어요. 잠시 뒤 다시 시도해 주세요.' : String((e&&e.message)||e).slice(0,160);
-    bodyEl.innerHTML = `<div class="ibox y" style="margin:16px">비교 정보를 불러오지 못했어요: ${_escHtml(msg)}</div>`;
+    const msg = (e&&e.name==='TimeoutError') ? '응답이 너무 늦어요. 잠시 뒤 다시 시도해 주세요.' : '잠시 뒤 다시 시도해 주세요.';
+    bodyEl.innerHTML = `<div class="ibox y" style="margin:16px">비교 정보를 불러오지 못했어요. ${_escHtml(msg)}</div>`;
   }
 }
 
@@ -7921,7 +7921,7 @@ function _renderBkCmpBtn(){
 async function openCompareBookmarks(){
   const bks = getBookmarks();
   const apts = [...cmpBkSel].map(i=>bks[i]).filter(Boolean).map(_bookmarkToApt).filter(a=>a.aptName);
-  if(apts.length < 2){ toast('관심단지를 2개 이상 선택해 주세요'); return; }
+  if(apts.length < 2){ toast('관심 단지를 2개 이상 선택해 주세요'); return; }
   return _runCompare(apts);
 }
 
@@ -8546,8 +8546,8 @@ function showDetail(p){
         </div>
         <div style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:var(--radius-sm);padding:7px 10px;font-size:12px;color:var(--accent-700);line-height:1.55;margin-top:4px">
           ${_acqIsReg
-            ? `<b>양도세 중과 (2026.5.10~)</b>: 이 단지는 <b>조정대상지역</b> — 다주택자가 팔면 기본세율에 <b>2주택은 20%p, 3주택 이상은 30%p</b>가 더해져요 (5.9까지 양도분 배제·장특공 배제). 팔기 전에 세무사와 꼭 상담하세요.`
-            : `<b>ℹ 양도세</b>: 이 단지는 <b>비조정지역</b> — 다주택 양도세 중과(+20/+30%p) 미적용, 기본세율 적용. 보유·거주 기간과 주택 수에 따라 달라지니 팔기 전에 세무사와 상담해 보세요.`}
+            ? `<b>양도세 중과 (2026.5.10~)</b>: 이 단지는 <b>조정대상지역</b>이라 다주택자가 팔면 기본세율에 <b>2주택은 20%p, 3주택 이상은 30%p</b>가 더해져요 (5.9까지 양도분 배제·장특공 배제). 팔기 전에 세무사와 꼭 상담하세요.`
+            : `<b>ℹ 양도세</b>: 이 단지는 <b>비조정지역</b>이라 다주택 양도세 중과(+20/+30%p)가 없고, 기본세율을 적용해요. 보유·거주 기간과 주택 수에 따라 달라지니 팔기 전에 세무사와 상담해 보세요.`}
         </div>
         <div style="font-size:12px;color:var(--t3);margin-top:5px">※ <b>대략 추정이에요.</b> 공시가격은 시가의 70%, 공정시장가액비율은 60%로 가정했고 종부세는 누진세율(국세청 2023~)과 표준세율을 가정했어요. 세율은 2025년 기준이에요. 실제 세금은 공시가격 공식 발표, 세대원, 세액공제, 1주택 특례, 조정대상지역에 따라 달라요.<br>※ 출처: 지방세법 §111(재산세)·§11(취득세) / 종합부동산세법 §8·§9. 정확한 계산은 <a href="https://hometax.go.kr" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">홈택스 모의계산</a></div>
       </div>`;
@@ -8926,7 +8926,7 @@ function showDetail(p){
           ? `<span style="color:var(--red)">⚠ 등록된 최고층(${facilityTop})보다 거래 최고층(${maxF})이 높아요. 자료 확인이 필요해요</span>`
           : facilityTop ? `<span style="color:var(--t3)">등록된 최고 ${facilityTop}층과 비교</span>` : '';
         return `<div style="margin-top:14px">
-          <div style="font-weight:700;font-size:12px;color:var(--t1);margin-bottom:6px">실거래 층 분포 <span style="font-weight:400;color:var(--t3);font-size:12px" title="최근 6개월 거래 중 화면에 불러온 표본만 집계합니다(전량이 아닙니다). 표본 수는 아래 표에 표시됩니다.">(최근 6개월 국토교통부 실거래 · 표본 기준)</span></div>
+          <div style="font-weight:700;font-size:12px;color:var(--t1);margin-bottom:6px">실거래 층 분포 <span style="font-weight:400;color:var(--t3);font-size:12px" title="최근 6개월 거래 중 화면에 불러온 표본만 집계해요(전량이 아니에요). 표본 수는 아래 표에 표시돼요.">(최근 6개월 국토교통부 실거래 · 표본 기준)</span></div>
           <table class="dtbl">
             <tr><td>거래 최저층</td><td>${minF}층</td></tr>
             <tr><td>거래 최고층</td><td>${maxF}층</td></tr>
@@ -9567,7 +9567,7 @@ async function shareCurrent(){
   const title=`${currentDetail.aptName} — 내집로그 데이터 분석`;
   // SCORE-HALLUC-FIX-2026-07-16 (Sprint SSSSS): 폐기된 60점 fallback 잔재 — 점수 없으면 표기 생략(외부 공유 텍스트라 특히 중요)
   // SHARE-ZERO-2026-09-02: 가격이 없을 때 "평균 0.00억" 을 외부로 내보내던 문구 — 점수와 같은 방식으로 생략한다.
-  const _shPx=Number(currentDetail.avgPrice) > 0 ? ` — 평균 ${Number(currentDetail.avgPrice).toFixed(2)}억` : '';
+  const _shPx=Number(currentDetail.avgPrice) > 0 ? `, 평균 ${Number(currentDetail.avgPrice).toFixed(2)}억` : '';
   const text=`${currentDetail.aptName} (${_fmtSgg(currentDetail.area)})${_shPx}${currentDetail.score?` / 점수 ${currentDetail.score}점`:''}\n※ 매수 추천이 아니라 참고용 정보예요.`;
   // Web Share API (모바일)
   if(navigator.share){
@@ -9755,7 +9755,7 @@ function renderAnalysis(d,p){
   // P1 D2 + Phase 2 6: 자본시장법 risk + a11y (색약 8% 보호) — 색상에만 의존 X.
   let heroHtml='';
   if(!sig||reliability==='NONE'||reliability==='LOW'){
-    heroHtml=`<div class="sig-hero" role="status" aria-label="시세 요약 보류 — 표본 부족" style="background:var(--s1);border-color:var(--bd)">
+    heroHtml=`<div class="sig-hero" role="status" aria-label="시세 요약 보류, 표본 부족" style="background:var(--s1);border-color:var(--bd)">
       <div class="sig-dot" style="background:var(--bd2);color:var(--t2)" aria-hidden="true">○</div>
       <div><div class="sig-label" style="color:var(--t2)">표본이 부족해 시세 요약을 보여 드리지 않아요</div>
       <div class="sig-sub">${d.txCount||0}건 거래로는 통계로 보기 어려워요 (${reliability==='NONE'?'최소 8건':'25건 이상'} 필요)</div></div>
@@ -9768,7 +9768,7 @@ function renderAnalysis(d,p){
     const sigRatioText = `시세 위치 요약: ${sig.metCount||0}/${sig.totalCount||3}개 데이터 부합`;
     // Phase 4 (2026-04-26): 시그널 ⓘ 툴팁 — 사용자가 "활발=매수적기" 오해 방지
     const tipText = '신호등은 거래량과 가격 통계를 요약한 거예요. ● 활발, ▲ 보통, ■ 신중. 매수 시점 추천이 아니라 데이터 분포만 보여 줘요.';
-    heroHtml=`<div class="sig-hero ${sc}" role="status" aria-label="${ariaTone} — ${sigRatioText}">
+    heroHtml=`<div class="sig-hero ${sc}" role="status" aria-label="${ariaTone}, ${sigRatioText}">
       <div class="sig-dot ${sc}" style="font-size:14px;font-weight:800;padding:0 8px;min-width:60px;text-align:center" aria-hidden="true">${shape}</div>
       <div style="flex:1">
         <div class="sig-label">${sigRatioText} <span style="cursor:help;color:var(--t3);font-size:12px;margin-left:4px" onclick="toast(this.title)" title="${_escHtml(tipText)}">ⓘ</span></div>
@@ -10213,7 +10213,7 @@ function toggleBookmark(){
     const removed = bks[idx];
     bks.splice(idx,1);
     if(removed?._serverId){ _deleteBookmarkOnServer(removed._serverId).catch(()=>{}); }
-    toast('관심 단지 해제');
+    toast('관심 단지에서 해제했어요');
     document.getElementById('bkToggle').textContent='관심 추가';
     document.getElementById('bkToggle').classList.remove('on');
   } else {
@@ -10249,7 +10249,7 @@ function renderBookmarks(){
   document.getElementById('bkCnt').textContent=bks.length||'0';
   const fbc=document.getElementById('fabBmCnt');if(fbc)fbc.textContent=bks.length||'0';
   // WATCH-FEED: 새 거래 있는 관심단지가 있으면 FAB 배지를 적색으로 (시각 신호)
-  if(fbc){const _anyNew=bks.some(b=>b.newDealCount>0);fbc.style.background=_anyNew?'var(--red,#D64545)':'';fbc.title=_anyNew?'관심단지에 새 실거래가 있어요':'';}
+  if(fbc){const _anyNew=bks.some(b=>b.newDealCount>0);fbc.style.background=_anyNew?'var(--red,#D64545)':'';fbc.title=_anyNew?'관심 단지에 새 실거래가 있어요':'';}
   const el=document.getElementById('bkList');
   if(!bks.length){
     // Agent UX #25 (2026-05-04): empty state 두 곳 (HTML 직접 + JS) 일관성 — JS 도 hint 추가
@@ -10273,7 +10273,7 @@ function renderBookmarks(){
       ${target?`<span class="bk-alert-tag ${isHit?'hit':'set'}">${isHit?'목표가':'▼'+target+'억'}</span>`:''}
     </div>
     <div class="bk-memo-row" onclick="event.stopPropagation()" style="display:flex;gap:4px;margin-top:4px">
-      <input aria-label="북마크 메모" type="text" placeholder="메모 (왜 이 가격?)" maxlength="40" value="${_escHtml(b.memo || '')}" id="bk-memo-${i}" oninput="event.stopPropagation()" style="flex:1;font-size:12px;padding:3px 6px;border:1px solid var(--bd);border-radius:var(--radius-sm);background:var(--bg-base);color:var(--t2)">
+      <input aria-label="관심 단지 메모" type="text" placeholder="메모 (왜 이 가격?)" maxlength="40" value="${_escHtml(b.memo || '')}" id="bk-memo-${i}" oninput="event.stopPropagation()" style="flex:1;font-size:12px;padding:3px 6px;border:1px solid var(--bd);border-radius:var(--radius-sm);background:var(--bg-base);color:var(--t2)">
       <button onclick="saveBookmarkMemo(${i},document.getElementById('bk-memo-${i}').value)" style="font-size:12px;padding:3px 8px;background:var(--bg2);border:1px solid var(--bd);border-radius:var(--radius-sm);cursor:pointer;color:var(--t2)">저장</button>
     </div>
     ${lc?`<div style="font-size:12px;color:var(--t3);margin-top:3px;padding-left:2px">${b.lastCheckedCount||0}건${lc}</div>`:''}`;
@@ -10283,7 +10283,7 @@ function renderBookmarks(){
         ${hasVisit?'<div class="bk-visit-dot" title="임장 기록 있음"></div>':''}
         <div><div class="bk-name">${_escHtml(_dispAptName(b.aptName, b.umdNm))}${b.newDealCount>0?`<span class="bk-new-badge" title="마지막 확인 이후 신규 실거래">새 거래 ${b.newDealCount}건</span>`:''}</div><div style="font-size:12px;color:var(--t3)">${_escHtml(_fmtSgg(b.area))}</div>${b.newDealCount>0&&Array.isArray(b.newDeals)&&b.newDeals.length?`<div style="font-size:12px;color:var(--acc);margin-top:1px" title="신규 실거래 요약 (최신 3건, 국토부 실거래가 기준)">${b.newDeals.map(d=>`${_escHtml(String(d.d||''))} ${Number(d.p)||0}억${Number(d.ar)>0?` ${Number(d.ar)}㎡`:''}`).join(' · ')}</div>`:''}</div>
         <span class="bk-price">${priceNow?priceNow.toFixed(1)+'억':''}</span>
-        <button class="bk-del" onclick="delBookmark(event,${i})" aria-label="북마크 삭제">✕</button>
+        <button class="bk-del" onclick="delBookmark(event,${i})" aria-label="관심 단지 삭제">✕</button>
       </div>
       ${alertHtml}
     </div>`;
@@ -10311,7 +10311,7 @@ async function initPush(){
 }
 function _pushBtnHtml(){
   if(!_pushReady)return'';
-  return `<div style="padding:8px 12px;border-bottom:1px solid var(--bd)"><button id="pushToggleBtn" onclick="event.stopPropagation();togglePush()" style="width:100%;padding:7px 10px;border-radius:var(--radius-base);border:1px solid ${_pushOn?'#7FB89A':'var(--bd)'};background:${_pushOn?'var(--grnL,#EAF6EF)':'var(--bg-base)'};color:${_pushOn?'var(--grn,#2E8B57)':'var(--t2)'};font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">${_pushOn?'새 거래 푸시 알림 켜짐 · 누르면 끄기':'새 거래 푸시 알림 켜기'}</button><div style="font-size:12px;color:var(--t3);margin-top:4px;text-align:center">관심단지 새 실거래 반영 시 브라우저 알림 (일 1회 · 무료)</div></div>`;
+  return `<div style="padding:8px 12px;border-bottom:1px solid var(--bd)"><button id="pushToggleBtn" onclick="event.stopPropagation();togglePush()" style="width:100%;padding:7px 10px;border-radius:var(--radius-base);border:1px solid ${_pushOn?'#7FB89A':'var(--bd)'};background:${_pushOn?'var(--grnL,#EAF6EF)':'var(--bg-base)'};color:${_pushOn?'var(--grn,#2E8B57)':'var(--t2)'};font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">${_pushOn?'새 거래 푸시 알림 켜짐 · 누르면 끄기':'새 거래 푸시 알림 켜기'}</button><div style="font-size:12px;color:var(--t3);margin-top:4px;text-align:center">관심 단지 새 실거래 반영 시 브라우저 알림 (일 1회 · 무료)</div></div>`;
 }
 function _pushItems(){
   return getBookmarks().map(b=>({aptName:b.aptName,lawdCd:String(b.lawdCd||''),sigungu:b.sigungu||'',umdNm:b.umdNm||''})).filter(x=>/^\d{5}$/.test(x.lawdCd)).slice(0,30);
@@ -10339,7 +10339,7 @@ async function togglePush(){
     const r=await fetch(`${CFG.api}/push/subscribe`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:sub.toJSON(),items})});
     if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.error||('HTTP '+r.status));}
     _pushOn=true;toast('알림을 켰어요. 새 실거래가 반영되면 알려 드려요');renderBookmarks();
-  }catch(e){toast('알림을 설정하지 못했어요: '+(e&&e.message||'잠시 뒤 다시 시도해 주세요'));}
+  }catch(e){toast('알림을 설정하지 못했어요. 잠시 뒤 다시 시도해 주세요');}
 }
 let _pushSyncT=null;
 function _schedulePushItemsSync(){
@@ -10388,7 +10388,7 @@ async function toggleKakao(){
     if(!r.ok){const j=await r.json().catch(()=>({}));throw new Error(j.error||('HTTP '+r.status));}
     const j=await r.json();
     location.href=j.url; // 카카오 동의 화면으로 이동 → /api/kakao/callback → '/?kakao=linked'
-  }catch(e){toast('카카오 연결에 실패했어요: '+(e&&e.message||'잠시 뒤 다시 시도해 주세요'));}
+  }catch(e){toast('카카오 연결에 실패했어요. 잠시 뒤 다시 시도해 주세요');}
 }
 // 카카오 콜백 복귀 처리 — '/?kakao=linked|no_scope|denied|error|gate'
 function _handleKakaoReturn(){
@@ -10473,13 +10473,13 @@ function renderNtc(){
   </div>
   <div class="ntc-prev">
     <div style="font-size:12px;color:var(--t3);margin-bottom:5px;font-weight:600">내집로그</div>
-    <div class="ntc-bub"><b>내집로그 관심단지 새 실거래</b><br>${_escHtml(prevName)} 새 실거래 2건 · 최고 3.1억</div>
+    <div class="ntc-bub"><b>내집로그 관심 단지 새 실거래</b><br>${_escHtml(prevName)} 새 실거래 2건 · 최고 3.1억</div>
     <div style="font-size:12px;color:var(--t3);margin-top:5px">실제 발송 형식 미리보기예요</div>
   </div>
   <div class="ntc-policy">매일 아침 한 번, 새 실거래가 반영된 날만 보내요. 무료예요</div>
-  <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 6px"><b style="font-size:12px;color:var(--t1)">알림 대상 관심단지 ${bks.length}</b><span style="font-size:12px;color:var(--t3)">최대 30개까지</span></div>
+  <div style="display:flex;justify-content:space-between;align-items:center;margin:8px 0 6px"><b style="font-size:12px;color:var(--t1)">알림 대상 관심 단지 ${bks.length}</b><span style="font-size:12px;color:var(--t3)">최대 30개까지</span></div>
   ${bks.length?`<div class="ntc-list">${bks.slice(0,30).map(b=>`<div class="ntc-li"><span style="color:var(--t1);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${_escHtml(b.aptName||'')}</span><span style="color:var(--t3);font-size:12px;flex-shrink:0;margin-left:8px">${_escHtml(_fmtSgg(((b.sigungu||'')+(b.umdNm?' '+b.umdNm:''))||b.area||''))}</span></div>`).join('')}</div>`
-    :`<div style="font-size:12px;color:var(--t3);padding:14px;text-align:center;border:1px dashed var(--bd);border-radius:var(--radius-md)">관심단지가 아직 없어요. 단지 상세에서 "관심 추가"를 눌러 추가해 주세요</div>`}`;
+    :`<div style="font-size:12px;color:var(--t3);padding:14px;text-align:center;border:1px dashed var(--bd);border-radius:var(--radius-md)">관심 단지가 아직 없어요. 단지 상세에서 "관심 추가"를 눌러 추가해 주세요</div>`}`;
   _updateNtcDot();
 }
 // 구독 넛지 — 관심단지 추가 직후, 미구독 + 7일 쿨다운 + 세션 1회
@@ -10533,7 +10533,7 @@ function delBookmark(e,i){
     document.getElementById('bkToggle').textContent='관심 추가';
     document.getElementById('bkToggle').classList.remove('on');
   }
-  toast('관심 단지 삭제');
+  toast('관심 단지를 삭제했어요');
 }
 
 async function _deleteBookmarkOnServer(id){
@@ -10680,7 +10680,7 @@ function showAlertBanner(hits){
   b.style.cssText='position:fixed;top:14px;left:14px;right:14px;max-width:520px;margin:0 auto;z-index:9999;background:linear-gradient(135deg,var(--accent-50),#FFE4C4);border:1px solid #E8A868;border-radius:var(--radius-lg);padding:14px 18px;box-shadow:0 4px 16px rgba(0,0,0,.14);font-size:14px;font-family:inherit';
   b.innerHTML=`<button onclick="document.getElementById('alertBanner').remove()" style="float:right;background:transparent;border:none;font-size:16px;cursor:pointer;color:#8B5A2B;padding:0 6px;line-height:1" aria-label="닫기">✕</button>
     <div style="font-weight:700;color:#8B5A2B;margin-bottom:6px">목표가 달성 알림 (${hits.length}건)</div>
-    ${hits.map(h=>`<div style="color:#5C3817;line-height:1.6;font-size:12px;margin-bottom:2px">・ <b>${_escHtml(h.name)}</b> — 현재 평균 ${h.price}억 (이전 ${h.prev?h.prev.toFixed(2)+'억':'?'} / 목표 ${h.target}억 이하)</div>`).join('')}
+    ${hits.map(h=>`<div style="color:#5C3817;line-height:1.6;font-size:12px;margin-bottom:2px">・ <b>${_escHtml(h.name)}</b>: 현재 평균 ${h.price}억 (이전 ${h.prev?h.prev.toFixed(2)+'억':'?'} / 목표 ${h.target}억 이하)</div>`).join('')}
     <div style="margin-top:8px;font-size:12px;color:#8B5A2B">※ 국토교통부 실거래 최근 평균가 기준이에요. 매수 추천이 아니에요.</div>`;
   document.body.appendChild(b);
   // 15초 후 자동 숨김
@@ -10905,9 +10905,6 @@ async function loadClauseAndRisk(p){
   return null;
 }
 
-// 기존 호출자 (loadClause/loadRisk) — 통합 함수에 위임 (backward compat)
-async function loadRisk(p){return loadClauseAndRisk(p);}
-async function loadClause(p){return loadClauseAndRisk(p);}
 
 function renderRisk(d){
   if(!d||!d.risks){
@@ -10936,7 +10933,7 @@ function renderRisk(d){
 function renderClause(d){
   if(!d)d={
     essential:[
-      {title:'대출 미승인 시 계약금 반환',content:'본 계약은 매수인의 주택담보대출 승인을 조건으로 하며, 미승인 시 매수인은 계약을 해제할 수 있고 매도인은 계약금 전액을 즉시 반환한다.',reason:'대출 규제 강화로 사전심사 필수'},
+      {title:'대출 미승인 시 계약금 반환',content:'본 계약은 매수인의 주택담보대출 승인을 조건으로 하며, 미승인 시 매수인은 계약을 해제할 수 있고 매도인은 계약금 전액을 즉시 반환한다.',reason:'대출 규제가 강해져서 사전심사가 꼭 필요해요'},
       {title:'전입 의무 이행 (규제지역)',content:'매수인은 잔금 납부 후 6개월 이내에 해당 주택에 전입신고를 완료한다.',reason:'2025.10.15 이후 규제지역 6개월 전입 의무'},
       {title:'하자 수리 책임',content:'잔금 지급 전 매수인이 요청하는 시설 하자(누수·균열·전기·배관)에 대해 매도인이 잔금일 전까지 수리 완료한다.',reason:'준공 20년+ 단지 하자 가능성 대비'},
     ],
@@ -11245,7 +11242,7 @@ function _syncRegionPick(){
   const n = document.querySelectorAll('#ch-r-sub .chip.on').length;
   const el = document.getElementById('ch-r-pick');
   if(!el) return;
-  el.textContent = n ? `${n}곳 선택됨 — 함께 분석해요` : '';
+  el.textContent = n ? `${n}곳을 골랐어요. 함께 분석해요` : '';
   el.style.display = n ? '' : 'none';
 }
 function getRegionForSearch(){
@@ -11392,7 +11389,7 @@ function cp(el,id){
   if(id==='ch-h' && el.textContent.trim()==='2주택+'){
     // UX 정리(2026-06-01): 칩 클릭마다 매번 → 세션당 1회만 (반복 노출 noise 제거)
     if(typeof toast==='function' && !sessionStorage.getItem('mhl_tax_warned')){
-      toast('2026.5.10부터 다주택 양도세 중과가 다시 적용돼요 (2주택 +20%p, 3주택 +30%p). 자세한 내용은 도구▾ 규제 요약에서 확인하세요'); // 2.6초 토스트에 맞게 축약 (Sprint SSSSS)
+      toast('2026.5.10부터 다주택 양도세 중과가 다시 적용돼요 (2주택 +20%p, 3주택 +30%p). 자세한 내용은 도구 메뉴의 규제 요약에서 확인하세요'); // 2.6초 토스트에 맞게 축약 (Sprint SSSSS)
       try{sessionStorage.setItem('mhl_tax_warned','1');}catch(_){}
     }
   }
@@ -11427,8 +11424,8 @@ function _updateInputProgress() {
     const done = n === 3;
     const tx = document.getElementById('wizProgTx');
     if (tx) {
-      tx.textContent = done ? '3/3 입력 완료'
-        : (n === 2 ? `2/3 — ${missing[0]}만 입력하면 돼요` : `${n}/3 — 남은 항목은 ${missing.join(', ')}`);
+      tx.textContent = done ? '3/3 입력했어요'
+        : (n === 2 ? `2/3: ${missing[0]}만 입력하면 돼요` : `${n}/3: 남은 항목은 ${missing.join(', ')}`);
       tx.style.color = done ? 'var(--grn)' : 'var(--acc)';
     }
     const bar = document.getElementById('wizProgBar');
@@ -12047,15 +12044,6 @@ function addClauseIssue(txt){
   if(cur.includes(txt))return;
   e.value=cur?cur+', '+txt:txt;
 }
-// 빈 상태 빠른 검색 프리셋
-function quickSearchPreset(preset){
-  const setChip=(gid,val)=>{document.querySelectorAll('#'+gid+' .chip').forEach(c=>c.classList.toggle('on',c.textContent.trim()===val));};
-  if(preset.includes('서울')){setChip('ch-r','서울');document.getElementById('bp').value='7';document.getElementById('mc').value='3';}
-  else if(preset.includes('경기')){setChip('ch-r','경기');document.getElementById('bp').value='5';document.getElementById('mc').value='2';}
-  setChip('ch-h','무주택');
-  setChip('ch-f',preset.includes('생애최초')?'예':'아니오');
-  if(typeof doSearch==='function')doSearch();
-}
 
 // ── COORDS (백엔드 확정 좌표 신뢰 원칙) ────────────────────
 // 기존 하드코딩 구명 → 중심좌표 + 랜덤 jitter 방식은 제거 (Bug #2 원인):
@@ -12671,34 +12659,34 @@ function buildRuleClause(b){
   const isReg = (typeof isRegFront === 'function' && b.area) ? isRegFront(b.area, b.lawdCd) : null;
   const issues = String(b.issues || '');
   // 1) 대출 특약 — 항상 (기존 표준)
-  essential.push({title:'대출 미승인 시 계약금 반환',content:'본 계약은 매수인의 주택담보대출 승인을 조건으로 하며, 대출이 미승인될 경우 매수인은 계약을 해제할 수 있고 매도인은 계약금 전액을 즉시 반환한다.',reason:'대출 규제 강화 — 사전심사 필수'});
+  essential.push({title:'대출 미승인 시 계약금 반환',content:'본 계약은 매수인의 주택담보대출 승인을 조건으로 하며, 대출이 미승인될 경우 매수인은 계약을 해제할 수 있고 매도인은 계약금 전액을 즉시 반환한다.',reason:'대출 규제가 강해져서 사전심사가 꼭 필요해요'});
   // 2) 전입 의무 — isRegFront 로 소재지 판정 (기존 fallback 은 무조건 표시 → 비규제 단지에 부정확)
   if (isReg === true) {
-    essential.push({title:'전입 의무 이행 (규제지역)',content:'매수인은 잔금 납부 후 6개월 이내에 해당 주택에 전입신고를 완료한다.',reason:`${_fmtSgg(b.area)} — 규제지역 6개월 전입 의무 (2025.10.15~)`});
+    essential.push({title:'전입 의무 이행 (규제지역)',content:'매수인은 잔금 납부 후 6개월 이내에 해당 주택에 전입신고를 완료한다.',reason:`${_fmtSgg(b.area)}: 규제지역 6개월 전입 의무 (2025.10.15~)`});
   } else if (isReg === null) {
-    essential.push({title:'전입 의무 이행 (규제지역 해당 시)',content:'매수인은 잔금 납부 후 6개월 이내에 해당 주택에 전입신고를 완료한다.',reason:'지역 미입력 — 소재지가 규제지역이면 6개월 전입 의무 적용'});
+    essential.push({title:'전입 의무 이행 (규제지역 해당 시)',content:'매수인은 잔금 납부 후 6개월 이내에 해당 주택에 전입신고를 완료한다.',reason:'지역을 입력하지 않았어요. 소재지가 규제지역이면 6개월 전입 의무가 적용돼요'});
   } // isReg === false → 미포함 (비규제)
   // 3) 하자 수리 — 연식 반영
   if (age === null || age >= 15) {
-    essential.push({title:'하자 수리 책임',content:'잔금 지급 전 매수인이 요청하는 시설 하자(누수·균열·전기·배관)에 대해 매도인이 잔금일 전까지 수리 완료한다.',reason: age !== null ? `준공 ${age}년차 — 하자 가능성 대비` : '준공연도 미입력 — 하자 대비 기본 포함'});
+    essential.push({title:'하자 수리 책임',content:'잔금 지급 전 매수인이 요청하는 시설 하자(누수·균열·전기·배관)에 대해 매도인이 잔금일 전까지 수리 완료한다.',reason: age !== null ? `준공 ${age}년차라 하자 가능성에 대비해요` : '준공연도를 입력하지 않아 하자 대비를 기본으로 넣었어요'});
   } else {
-    recommended.push({title:'하자 담보 확인',content:'잔금 지급 전 매수인이 요청하는 시설 하자에 대해 매도인이 잔금일 전까지 수리 완료한다.',reason:`준공 ${age}년차(신축·준신축) — 기본 담보 수준`});
+    recommended.push({title:'하자 담보 확인',content:'잔금 지급 전 매수인이 요청하는 시설 하자에 대해 매도인이 잔금일 전까지 수리 완료한다.',reason:`준공 ${age}년차(신축·준신축): 기본 담보 수준`});
   }
   // 4) 특이사항 칩 조건부 (addClauseIssue 삽입 텍스트와 매칭)
   if (issues.includes('누수')) {
     essential.push({title:'누수 이력 고지·보수 확인',content:'매도인은 누수 발생 이력과 보수 내역을 계약서에 고지하고, 잔금일 전 재점검하여 미보수 누수 발견 시 매도인 부담으로 수리한다.',reason:'입력 특이사항: 누수 이력'});
   }
   if (issues.includes('전세 끼고') || issues.includes('세입자 승계')) {
-    essential.push({title:'임대차 승계 조건 명시',content:'매수인은 현 임대차계약(보증금·계약기간·특약 포함)을 승계하며, 매도인은 임대차계약서 사본과 보증금 반환 채무 내역을 잔금일 전까지 매수인에게 제공한다.',reason:'입력 특이사항: 전세 끼고 매수·세입자 승계 — 승계 조건 서면 명시'});
+    essential.push({title:'임대차 승계 조건 명시',content:'매수인은 현 임대차계약(보증금·계약기간·특약 포함)을 승계하며, 매도인은 임대차계약서 사본과 보증금 반환 채무 내역을 잔금일 전까지 매수인에게 제공한다.',reason:'입력 특이사항: 전세 끼고 매수·세입자 승계. 승계 조건을 서면으로 적어요'});
   }
   if (issues.includes('재건축')) {
-    recommended.push({title:'정비사업 진행사항 고지',content:'매도인은 재건축 등 정비사업 관련하여 통지받은 사항(조합 설립·분담금 등)을 계약 전 고지하며, 중대한 미고지 사항 발견 시 양 당사자가 협의하여 처리한다.',reason:'입력 특이사항: 재건축 추진 중 — 조합원 지위·분담금은 조합/구청 확인 필수'});
+    recommended.push({title:'정비사업 진행사항 고지',content:'매도인은 재건축 등 정비사업 관련하여 통지받은 사항(조합 설립·분담금 등)을 계약 전 고지하며, 중대한 미고지 사항 발견 시 양 당사자가 협의하여 처리한다.',reason:'입력 특이사항: 재건축 추진 중. 조합원 지위·분담금은 조합이나 구청에 꼭 확인하세요'});
   }
   if (issues.includes('확장')) {
-    recommended.push({title:'확장·구조변경 적법성 확인',content:'매도인은 발코니 확장 등 구조 변경의 적법 여부(건축물대장 기재 사항)를 잔금일 전까지 확인하여 고지하고, 위반건축물 등재 시 처리 방안을 양 당사자가 협의한다.',reason:'입력 특이사항: 베란다 확장 — 건축물대장 확인'});
+    recommended.push({title:'확장·구조변경 적법성 확인',content:'매도인은 발코니 확장 등 구조 변경의 적법 여부(건축물대장 기재 사항)를 잔금일 전까지 확인하여 고지하고, 위반건축물 등재 시 처리 방안을 양 당사자가 협의한다.',reason:'입력 특이사항: 베란다 확장. 건축물대장을 확인하세요'});
   }
   if (issues.includes('주차')) {
-    recommended.push({title:'주차 등록 조건 확인',content:'매도인은 현재 사용 중인 주차 등록 대수와 관리규약상 세대당 주차 기준을 계약 전 매수인에게 고지한다.',reason:'입력 특이사항: 주차장 협소 — 관리사무소 확인 병행 권장'});
+    recommended.push({title:'주차 등록 조건 확인',content:'매도인은 현재 사용 중인 주차 등록 대수와 관리규약상 세대당 주차 기준을 계약 전 매수인에게 고지한다.',reason:'입력 특이사항: 주차장 협소. 관리사무소 확인도 함께 하세요'});
   }
   // 5) 기본 권장 (기존 표준)
   recommended.push({title:'기존 대출 말소 확인',content:'매도인은 잔금일 전까지 해당 부동산의 모든 담보 대출을 말소하고 등기부등본으로 확인한다.',reason:'근저당 미말소 시 선순위 피해'});
@@ -12720,7 +12708,7 @@ function buildRuleRisk(p){
   const isReg = (typeof isRegFront === 'function' && p.area) ? isRegFront(p.area, p.lawdCd) : null; // REG-DUAL-PATH-FIX-2026-08-16
   risks.push({level:'중간',title:'시세 하락 위험',probability:'',scenario:'매수 후 금리가 오르거나 규제가 강해지면 가격이 잠시 내려갈 수 있어요.',countermeasure:'5년 이상 보유를 염두에 두고, 전세로 돌리는 대안도 미리 준비하기'});
   if (isReg === true) {
-    risks.push({level:'중간',title:'규제지역 의무·대출 제약',probability:'',scenario:`${_fmtSgg(p.area)} — 규제지역이라 LTV 40%, 잔금 후 6개월 전입 의무 등의 제약이 있어요.`,countermeasure:'대출 계산 화면에서 규제 기준 한도를 확인하고, 전입 계획을 세우세요'});
+    risks.push({level:'중간',title:'규제지역 의무·대출 제약',probability:'',scenario:`${_fmtSgg(p.area)}: 규제지역이라 LTV 40%, 잔금 후 6개월 전입 의무 등의 제약이 있어요.`,countermeasure:'대출 계산 화면에서 규제 기준 한도를 확인하고, 전입 계획을 세우세요'});
   } else {
     risks.push({level:'중간',title:'대출 규제 추가 강화',probability:'',scenario:'갈아타는 시점에 LTV 규제가 더 강해질 수 있어요.',countermeasure:'미리 금융기관에서 DSR 한도를 확인하세요. 기관마다 한도가 달라요'});
   }
@@ -12728,7 +12716,7 @@ function buildRuleRisk(p){
     risks.push({level:'중간',title:'노후 단지 유지·수선',probability:'',scenario:`준공 ${age}년차라 배관·누수 등 수선 문제와 관리비 상승 가능성이 있어요. 재건축을 검토할 수 있는 시점이지만, 추진 여부는 단지마다 달라요.`,countermeasure:'임장할 때 하자·수선 이력을 확인하고, 하자 수리 특약(특약 초안 탭)을 넣어 보세요'});
   }
   if (hh != null && hh < 300) {
-    risks.push({level:'낮음',title:'되팔기 어려울 위험',probability:'',scenario:`세대수 ${hh.toLocaleString()}세대(소단지) — 팔 때 거래가 없을 수 있어요.`,countermeasure:'같은 생활권 대단지 시세와 비교해 보세요'});
+    risks.push({level:'낮음',title:'되팔기 어려울 위험',probability:'',scenario:`세대수 ${hh.toLocaleString()}세대(소단지)라 팔 때 거래가 없을 수 있어요.`,countermeasure:'같은 생활권 대단지 시세와 비교해 보세요'});
   } else if (hh == null) {
     // RISK-HH-2026-09-16 (Plan 093): 세대수를 모를 때만 조건부 일반론. 대단지(≥300)엔 환금성 항목을 넣지 않는다 — 데이터로 아는 사실에 반하는 문장 금지.
     risks.push({level:'낮음',title:'되팔기 어려울 위험',probability:'',scenario:'세대수 정보가 없어 확인이 필요해요. 300세대 미만 소단지는 팔 때 거래가 드물 수 있어요.',countermeasure:'공동주택관리정보시스템(K-apt)·건축물대장에서 세대수를 확인하세요'});
@@ -12767,7 +12755,7 @@ async function genClause(){
 function renderClauseResult(d,aptName){
   if(!d)d={
     essential:[
-      {title:'대출 미승인 시 계약금 반환',content:'본 계약은 매수인의 주택담보대출 승인을 조건으로 하며, 대출이 미승인될 경우 매수인은 계약을 해제할 수 있고 매도인은 계약금 전액을 즉시 반환한다.',reason:'대출 규제 강화 — 사전심사 필수'},
+      {title:'대출 미승인 시 계약금 반환',content:'본 계약은 매수인의 주택담보대출 승인을 조건으로 하며, 대출이 미승인될 경우 매수인은 계약을 해제할 수 있고 매도인은 계약금 전액을 즉시 반환한다.',reason:'대출 규제가 강해져서 사전심사가 꼭 필요해요'},
       {title:'전입 의무 이행 (규제지역)',content:'매수인은 잔금 납부 후 6개월 이내에 해당 주택에 전입신고를 완료한다.',reason:'2025.10.15 이후 규제지역 6개월 전입 의무'},
       {title:'하자 수리 책임',content:'잔금 지급 전 매수인이 요청하는 시설 하자(누수·균열·전기·배관)에 대해 매도인이 잔금일 전까지 수리 완료한다.',reason:'준공 20년+ 단지 하자 가능성 대비'},
     ],
@@ -12849,12 +12837,12 @@ function exportClausePDF(){
   <h1>${safeTitle}</h1>
   <div class="sub">내집로그 표준 특약 초안 · ${new Date().toLocaleDateString('ko-KR')}</div>
   <div class="legal-banner">
-    <b>⚠ 본 문서는 자동 생성 초안이며 법적 효력이 없습니다.</b>
-    실제 계약 체결 전 반드시 <b>변호사·공인중개사·법무사</b> 검토를 받으세요. 본 초안의 오류로 인한 손해는 운영자가 책임지지 않습니다.
+    <b>⚠ 본 문서는 자동 생성 초안이며 법적 효력이 없어요.</b>
+    실제 계약 체결 전 반드시 <b>변호사·공인중개사·법무사</b> 검토를 받으세요. 본 초안의 오류로 인한 손해는 운영자가 책임지지 않아요.
   </div>
   ${content}
   <footer>
-    <b>면책</b>: 본 특약은 자동 생성 초안이며 법적 효력이 없습니다. 실제 계약서 작성 전 변호사·공인중개사·법무사 검토는 필수이며, 본 초안의 오류·법령 변경으로 인한 손해(매매 차손·계약 분쟁·세금 등)에 대해 운영자(내집로그)는 어떠한 책임도 부담하지 않습니다.<br>
+    <b>면책</b>: 본 특약은 자동 생성 초안이며 법적 효력이 없어요. 실제 계약서를 쓰기 전에 변호사·공인중개사·법무사 검토를 꼭 받으세요. 본 초안의 오류·법령 변경으로 인한 손해(매매 차손·계약 분쟁·세금 등)에 대해 운영자(내집로그)는 어떠한 책임도 지지 않아요.<br>
     출력일시: ${new Date().toLocaleString('ko-KR')} · ©내집로그 (https://myhomelog.vercel.app)
   </footer>
   </body></html>`);
@@ -13772,11 +13760,11 @@ function calcSubsScore(){
   //   공고 후에야 확정된다 — 우리가 인용할 수 있는 공시값이 존재하지 않는다.
   //   절대 룰 ②(공식 출처만 인용)에 따라 근거 없는 수치와 단정을 걷어내고 아래 청약Home 안내만 남긴다.
   //   (옛 문구는 계약 테스트의 금지 문자열이라 여기 적지 않는다.)
-  if (total >= 70) tier = '<b style="color:var(--grn)">상위권</b> — 서울 인기 단지 일반공급 지원 가능 구간';
-  else if (total >= 60) tier = '<b style="color:var(--grn)">중상위권</b> — 서울 일반 단지·수도권 인기 분양 도전 가능';
-  else if (total >= 50) tier = '<b style="color:var(--amb)">중위권</b> — 수도권 일반·지방 인기 분양 도전 가능. 서울은 어려워요';
-  else if (total >= 35) tier = '<b style="color:var(--amb)">중하위권</b> — 지방 일반 분양에 도전해 보세요. 특별공급(생애최초·신혼·신생아)을 꼭 활용하세요';
-  else tier = '<b style="color:var(--red)">하위권</b> — 일반공급은 어려워요. <b>특별공급(생애최초·신혼·다자녀·신생아)</b>이나 <b>추첨제 단지</b>를 노려 보세요';
+  if (total >= 70) tier = '<b style="color:var(--grn)">상위권</b>: 서울 인기 단지 일반공급 지원 가능 구간';
+  else if (total >= 60) tier = '<b style="color:var(--grn)">중상위권</b>: 서울 일반 단지·수도권 인기 분양 도전 가능';
+  else if (total >= 50) tier = '<b style="color:var(--amb)">중위권</b>: 수도권 일반·지방 인기 분양 도전 가능. 서울은 어려워요';
+  else if (total >= 35) tier = '<b style="color:var(--amb)">중하위권</b>: 지방 일반 분양에 도전해 보세요. 특별공급(생애최초·신혼·신생아)을 꼭 활용하세요';
+  else tier = '<b style="color:var(--red)">하위권</b>: 일반공급은 어려워요. <b>특별공급(생애최초·신혼·다자녀·신생아)</b>이나 <b>추첨제 단지</b>를 노려 보세요';
   tierEl.innerHTML = `예상 당첨 가능 분양: ${tier}<br><span style="font-size:12px;color:var(--t3)">※ 실제 커트라인은 단지·시점·평형마다 달라요. <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="color:var(--acc)">청약Home</a> 공고를 꼭 확인하세요.</span>`;
 }
 
@@ -13920,11 +13908,11 @@ async function chkAPI(_isRetry){
             // SYNCTIME-FIX-2026-07-25: 갱신 시각을 모르면(_k == null) 그 문구를 통째로 뺀다.
             //   여기서 `${_k}` 를 그대로 쓰면 화면에 "null 갱신" 이 찍힌다 — 출처 표기는 그대로 유지.
             sb.innerHTML = mql.matches
-              ? (_k ? `${_k} 갱신 · 국토부·금융위·KAPT${_n}` : `국토부·금융위·KAPT${_n}`)
+              ? (_k ? `${_k} 갱신 · 국토부·금융위·공동주택 정보${_n}` : `국토부·금융위·공동주택 정보${_n}`)
               : (_k ? `마지막 데이터 동기화: <span id="syncTime">${_k} KST</span> · 출처: 국토교통부 실거래가${_cntTxt} · 금융위 규제${_n}`
                     : `출처: 국토교통부 실거래가${_cntTxt} · 금융위 규제${_n}`);
             // KKKKKK: 모바일은 syncBanner 를 CSS 로 숨기고 지도 좌하단 캡션 칩이 대신 표시 (>700px 는 MQ 차단)
-            try { const cap=document.getElementById('mMapCap'); if(cap){ cap.textContent = _k ? `${_k} 갱신 · 국토부·KAPT${_n?' · ⚠':''}` : `국토부·KAPT${_n?' · ⚠':''}`; cap.classList.add('on'); } } catch(_){}
+            try { const cap=document.getElementById('mMapCap'); if(cap){ cap.textContent = _k ? `${_k} 갱신 · 국토부·공동주택 정보${_n?' · ⚠':''}` : `국토부·공동주택 정보${_n?' · ⚠':''}`; cap.classList.add('on'); } } catch(_){}
             // MAP-SKIN-2026-08-19 (Sprint NNNNNNN-9): 지도 신뢰 배지 — pill 의미 + 동기화일 상시 표기(데스크톱).
             try { const _ts=document.getElementById('mapTrustSync'); if(_ts) _ts.textContent=_k?(' · '+_k+' 동기화'):''; const _tw=document.getElementById('mapTrustChip'); if(_tw) _tw.style.display='inline-flex'; } catch(_){}
           };
