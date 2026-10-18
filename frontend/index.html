@@ -716,6 +716,37 @@ html[data-theme="dark"] .acct-sw .knob{transform:translateX(16px)}
 }
 .hst{font-size:12px;font-weight:600;padding:4px 10px;border-radius:var(--radius-xl);white-space:nowrap}
 .hst.on{background:var(--grnL);color:var(--grn)}.hst.off{background:var(--redL);color:var(--red)}
+/* HEADER-V2-2026-10-18 (Plan 152, 시안 화면 B 헤더): 헤더 전용 토큰(--hd-*)을 v2 토큰에 연결 — 위 두 블록의 골드 테마를 대체.
+   v2 토큰은 다크 값을 스스로 가지므로 라이트·다크를 한 규칙으로 둔다(sf=--bg-base, sf2=--bg-elev-1, line=--bd, line2=--bd2,
+   ink=--t1·2·3, pri=--acc 글자/--acc-bg 배경, prit=--accent-tint, onpri=--acc-ink). 시안에 없는 알림 벨·데이터 상태·사용량·검색은
+   다른 상시 경로가 없어 유지(plans/152-header-v2.md 결정 3). */
+header,html[data-theme="dark"] header{
+  --hd-navy:var(--acc-bg); --hd-ac:var(--acc); --hd-tab:var(--t2); --hd-tab-act:var(--acc); --hd-tab-act-bg:var(--accent-tint);
+  --hd-bd:var(--bd); --hd-search-bg:var(--bg-elev-1); --hd-search-bd:var(--bd); --hd-ph:var(--t3);
+  --hd-usage:var(--t2); --hd-usage-dim:var(--t3); --hd-usage-dot:var(--bd);
+  --hd-menu-bg:var(--bg-base); --hd-menu-tx:var(--t1); --hd-menu-sub:var(--t3); --hd-menu-div:var(--bd);
+  --hd-panel:var(--bg-base); --hd-raise:var(--bg-elev-1); --hd-logo-ink:var(--acc-ink);
+  background:var(--bg-base);border-bottom:1px solid var(--bd);
+}
+.lsub{display:none} /* "HOUSING DATA TERMINAL" — 시안에 없음 */
+header .ltxt,header .ltxt em{color:var(--acc)}
+header .htab,header .htab-tool{color:var(--t2);font-weight:600}
+header .htab:hover,header .htab-tool:hover{background:var(--bg-elev-1);color:var(--t1)}
+header .htab.on,header .htab-tool.on{background:var(--accent-tint);color:var(--acc);font-weight:600}
+header .htabs > .htab.on::before,header .htab-tool.on::before{content:none} /* v1 골드 점 → v2 는 prit 바탕으로 선택 표시 */
+@media(min-width:701px){
+  header{height:64px;padding:0 24px}
+  header .ltxt{font-size:20px;font-weight:700;line-height:1.2;letter-spacing:-.03em} /* 로고 20/700 pri — 모바일(≤700px)은 헤더 폭 예산 때문에 기존 크기 유지 */
+  header .htabs > .htab,header .htab-tool{display:inline-flex;align-items:center;height:36px;padding:0 12px;border-radius:6px;font-size:14px}
+  /* 다크 모드·알림: 아이콘만 있는 텍스트 버튼 40×40(시안 §3) — 마크업 인라인 패딩을 이겨야 해서 !important */
+  #themeToggle,#ntcBell{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;padding:0!important;border:none;background:transparent;color:var(--t2);border-radius:8px}
+  #themeToggle:hover,#ntcBell:hover{background:var(--bg-elev-1);color:var(--t1)}
+  #dataStatusBtn{display:inline-flex;align-items:center;height:40px;padding:0 8px!important;border:none;background:transparent;color:var(--t2);font-size:14px!important;font-weight:600;border-radius:8px}
+  #dataStatusBtn:hover{background:var(--bg-elev-1);color:var(--t1)}
+  /* 로그인 = 보조 버튼 40(시안 §3: sf·1px line2·모서리 8·14/600 ink) */
+  #loginBtn{height:40px;padding:0 16px;border-radius:8px;border:1px solid var(--bd2);background:var(--bg-base);color:var(--t1);font-size:14px;font-weight:600}
+  #loginBtn:hover{border-color:var(--acc);color:var(--acc)}
+}
 
 /* Sprint PPPPP: 보고서 입력 위저드 (Claude Design 시안 「첫사용 동선 재설계」).
    #wizCore 는 사이드바(#wizHome)↔보고서(#wizSlot) 를 오가는 단일 노드 — 컨테이너별 밀도만 분기. */
@@ -1415,7 +1446,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 /* Sprint OOOOO-3 (운영자 발견 "동기화 글자 짤림", 실측): 헤더가 66px(≥701px)로 커진 뒤에도 절대배치 뷰
    top:84px(구 header 54 + syncBanner 30) 고정 → 뷰 흰 배경이 syncBanner 하단 ~12.6px 를 덮어 글자 하단 절단.
    데스크톱 = header 66 + syncBanner ~31 = 97px 보정(모바일은 헤더 54 유지라 84 그대로). */
-@media(min-width:701px){ .clause-view,.biz-view{top:97px} }
+@media(min-width:701px){ .clause-view,.biz-view{top:95px} } /* HEADER-V2-2026-10-18 (Plan 152): 헤더 66→64 — 64 + 동기화 띠 31 */
 .biz-view.active{display:flex}
 /* Phase 5 (2026-04-26): view-report 는 .biz-view 클래스를 쓰지만 사이드바(.lp)와 함께 표시되어야 함
    주의: .biz-view 들은 모두 BODY 직계 자식이고, .lp 는 .app(BODY 자식) 안에 있음 → flex item 으로 만들면 .lp 아래로 떨어짐
