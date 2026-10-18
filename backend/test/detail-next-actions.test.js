@@ -68,7 +68,7 @@ function makeCtx(opts = {}) {
   vm.createContext(ctx);
   // `let`/`const` 최상위 선언은 ctx 프로퍼티로 안 보이므로, 함수와 함께 한 스크립트로 실행한 뒤 전역에 노출한다.
   vm.runInContext(
-    extractFn(html, '_escHtml') + '\n' + extractFn(html, '_fmtSgg') + '\n' + extractFn(html, 'toggleCmp') + '\n' + NXT_JS +
+    extractFn(html, '_escHtml') + '\n' + extractFn(html, '_fmtSgg') + '\n' + extractFn(html, 'toggleCmp') + '\n' + extractFn(html, '_bkIndex') + '\n' + NXT_JS +
     '\nthis._NXT_SIDO=_NXT_SIDO;', ctx);
   return { ctx, log, chips, subsList };
 }
@@ -278,6 +278,25 @@ test('관심 버튼 — 이미 관심이면 "관심 해제" 로 보인다 (Plan 
   assert.ok(ctx._nxtHtml(FULL()).includes('관심 해제'));
   const none = makeCtx();
   assert.ok(none.ctx._nxtHtml(FULL()).includes('관심 추가'));
+});
+
+test('관심 판정 — 같은 이름이라도 저장 항목의 aptKey 가 다르면 "관심 추가" 로 보인다 (Plan 157)', () => {
+  const { ctx } = makeCtx({ bookmarks: [{ aptName: '은마', aptKey: '99999-1' }] });
+  const h = ctx._nxtHtml(FULL());
+  assert.ok(h.includes('관심 추가'));
+  assert.ok(!h.includes('관심 해제'));
+});
+
+test('관심 판정 — 키 없는 옛 항목은 이름으로 맞춰 "관심 해제" 로 보인다 (Plan 157)', () => {
+  const { ctx } = makeCtx({ bookmarks: [{ aptName: '은마' }] });
+  assert.ok(ctx._nxtHtml(FULL()).includes('관심 해제'));
+});
+
+test('관심 판정 — 토글·다음 할 일·상세 헤더가 모두 _bkIndex 를 쓴다 (Plan 157)', () => {
+  assert.ok(extractFn(html, 'toggleBookmark').includes('_bkIndex('));
+  assert.ok(extractFn(html, '_nxtIsBk').includes('_bkIndex('));
+  const m = html.match(/const isBk=[^\n]*/);
+  assert.ok(m && m[0].includes('_bkIndex('));
 });
 
 // ── 8) 모바일: 하단 고정 바 + 더보기 시트 ──────────────────────────────────────────────────
