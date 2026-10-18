@@ -61,3 +61,5 @@ skills-lock.json
 
 # Lint (인라인 JS 추출 산출물 — scripts/extract-inline-js.js)
 .lint-tmp/
+# DB 백업 산출물(plans/168) — 절대 커밋하지 않는다
+.local-backups/
