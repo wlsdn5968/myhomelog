@@ -739,21 +739,67 @@ header .htabs > .htab.on::before,header .htab-tool.on::before{content:none} /* v
   header .hml > .hbtn{flex-shrink:0} /* 사용량이 켜져 줄이 빡빡해도 40×40 버튼이 눌리지 않게(152 리뷰 L4) */
   header .ltxt{font-size:20px;font-weight:700;line-height:1.2;letter-spacing:-.03em} /* 로고 20/700 pri — 모바일(≤700px)은 헤더 폭 예산 때문에 기존 크기 유지 */
   header .htabs > .htab,header .htab-tool{display:inline-flex;align-items:center;height:36px;padding:0 12px;border-radius:6px;font-size:14px}
-  /* 다크 모드·알림: 아이콘만 있는 텍스트 버튼 40×40(시안 §3) — 마크업 인라인 패딩을 이겨야 해서 !important */
-  #themeToggle,#ntcBell{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;padding:0!important;border:none;background:transparent;color:var(--t2);border-radius:8px}
-  #themeToggle:hover,#ntcBell:hover{background:var(--bg-elev-1);color:var(--t1)}
-  #dataStatusBtn{display:inline-flex;align-items:center;height:40px;padding:0 8px!important;border:none;background:transparent;color:var(--t2);font-size:14px!important;font-weight:600;border-radius:8px}
-  #dataStatusBtn:hover{background:var(--bg-elev-1);color:var(--t1)}
+  /* 다크 모드·더보기: 아이콘만 있는 텍스트 버튼 40×40(시안 §3) — 마크업 인라인 패딩을 이겨야 해서 !important */
+  #themeToggle,#moreBtn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;padding:0!important;border:none;background:transparent;color:var(--t2);border-radius:8px;position:relative}
+  #themeToggle:hover,#moreBtn:hover{background:var(--bg-elev-1);color:var(--t1)}
+  #moreBtn svg{width:20px;height:20px}
+  /* HEADER-MORE-2026-10-18 (Plan 153, 시안 C): 데스크톱 헤더에서 알림 벨·데이터 상태 버튼을 빼고 더보기(로그아웃)·아바타 메뉴(로그인)로 옮겼다.
+     모바일(≤700px)은 이 미디어 밖이라 벨·데이터 상태 점이 그대로 남는다. */
+  #ntcBell,#dataStatusBtn{display:none!important}
   /* 로그인 = 보조 버튼 40(시안 §3: sf·1px line2·모서리 8·14/600 ink) */
   #loginBtn{height:40px;padding:0 16px;border-radius:8px;border:1px solid var(--bd2);background:var(--bg-base);color:var(--t1);font-size:14px;font-weight:600}
   #loginBtn:hover{border-color:var(--acc);color:var(--acc)}
 }
 /* 701~900px(태블릿 세로): 좌우 24·40×40 버튼으로 768 지도 밖 화면(헤더 검색 있음)에서 다크 모드 버튼이 오른쪽 끝(768)에 붙었다(미리보기 실측) —
    이 구간만 여백·간격을 줄인다(시안은 1440 기준이라 이 폭의 값이 없다). */
-@media(min-width:701px) and (max-width:900px){ header:not(.lv-top){padding:0 16px;gap:10px} header .hml{gap:6px} }
-/* 계정 메뉴 '다크 모드' 스위치 손잡이: --hd-logo-ink 가 라이트에서 흰색(onpri)이 돼 밝은 바탕(#D6DBE4) 위 1.39:1 로 안 보였다(152 리뷰 M1) —
-   라이트만 ink 로(v1 은 #0B1524 어두운 손잡이였다). 다크는 onpri(#0E1520) on pri(#8DB3E2) 8.44:1 그대로. */
-html:not([data-theme="dark"]) header .acct-sw .knob{background:var(--t1)}
+@media(min-width:701px) and (max-width:900px){ header:not(.lv-top){padding:0 16px;gap:10px} }
+/* HEADER-MORE-2026-10-18 (Plan 153, 시안 C — plans/design-spec-v2-screen-C-header-2026-10-18.md): 더보기·아바타 메뉴, 빨간 점, 남은 검색·장애 칩.
+   빨강 #B4473C·#F7E7E5·#8E3128 은 시안 라이트 값 — 시안에 다크 값이 없어 다크는 기존 앱 토큰(--red·--redL·--danger-bd)을 쓴다(계획 153 결정 1). */
+.more-dd{position:relative;display:none}
+@media(min-width:701px){
+  header .hml{gap:4px} /* 아이콘 버튼끼리 4 */
+  #apiSt{order:1;margin-right:4px} #hUsage{order:2;margin-right:4px} #themeToggle{order:3} .more-dd{order:4;display:flex} #loginBtn{order:5;margin-left:8px} #acctDd{order:5}
+  /* 메뉴 공통: 너비 280·위아래 6·모서리 8·sf·1px line·그림자, 헤더 아래 4px(버튼 40 이 64 헤더 가운데라 버튼 아래 12 + 4) */
+  .more-menu,header .acct-menu{display:none;position:absolute;top:calc(100% + 16px);right:0;width:280px;padding:6px 0;background:var(--bg-base);border:1px solid var(--bd);border-radius:8px;box-shadow:0 8px 24px rgba(20,30,45,.12);z-index:1001}
+  .more-dd.open .more-menu,header .acct-dd.open .acct-menu{display:block}
+  .more-dd.open #moreBtn{background:var(--bg-elev-1)}
+  .hd-mi,header .acct-it{display:flex;align-items:center;gap:12px;width:100%;min-height:44px;padding:0 16px;border:none;border-radius:0;background:none;font-family:inherit;font-size:14px;font-weight:400;line-height:1.5;color:var(--t1);text-align:left;cursor:pointer}
+  .hd-mi:hover,header .acct-it:hover{background:var(--bg-elev-1)}
+  .hd-mi svg,header .acct-it svg{width:18px;height:18px;flex-shrink:0;margin:0;color:var(--t2)}
+  .hd-mi svg *,header .acct-it svg *{stroke-width:1.5}
+  .hd-two{min-height:56px!important;padding-top:8px!important;padding-bottom:8px!important}
+  .hd-mt{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .hd-sub,header .acct-it .acct-sub{display:block;margin:0;font-size:12px;font-weight:500;line-height:1.5;color:var(--t3)}
+  header .acct-it.danger,html[data-theme="dark"] header .acct-it.danger{color:var(--t2)} /* 시안: 로그아웃만 ink2 */
+  .hd-div,header .acct-div{height:1px;margin:6px 0;background:var(--bd)}
+  header .acct-head{padding:10px 16px 12px;gap:12px}
+  header .acct-head + .acct-div{margin-top:0}
+  header .acct-head .avtr{width:40px;height:40px;background:var(--accent-tint);color:var(--acc);font-size:14px;font-weight:600}
+  header .acct-name{font-size:16px;font-weight:600;color:var(--t1)}
+  header .acct-plan{font-size:12px;font-weight:500;color:var(--t3)}
+  /* 아바타 버튼: 40 원·sf2, 안쪽 32·prit·pri 14/600 (화살표 없음) */
+  header .hbtn-avatar{position:relative;width:40px;height:40px;padding:0;border:none;border-radius:50%;background:var(--bg-elev-1);justify-content:center}
+  header .hbtn-avatar .ddcaret{display:none}
+  header .hbtn-avatar .avtr{width:32px;height:32px;background:var(--accent-tint);color:var(--acc);font-size:14px;font-weight:600}
+  /* 빨간 점: 알림이 꺼져 있을 때(body.ntc-unsub — _updateNtcDot) 더보기·아바타 버튼 위 8·오른쪽 8, 8×8, 버튼 바탕색 2px 테두리 */
+  .hd-dot{display:none;position:absolute;top:8px;right:8px;width:8px;height:8px;border-radius:50%;background:#B4473C;box-shadow:0 0 0 2px var(--bg-base)}
+  header .hbtn-avatar .hd-dot{top:0;right:0} /* 원형 40 버튼 — 오른쪽 위 모서리 */
+  body.ntc-unsub .hd-dot{display:block}
+  /* 메뉴 안 알림 상태: "꺼져 있어요" 앞 8px 점, 간격 6, 12/500 ink3 — 알림을 켜면 숨김 */
+  .hd-st{display:none;margin-left:auto;align-items:center;gap:6px;font-size:12px;font-weight:500;color:var(--t3);white-space:nowrap}
+  .hd-st::before{content:"";width:8px;height:8px;border-radius:50%;background:#B4473C}
+  body.ntc-unsub .hd-st{display:inline-flex}
+  html[data-theme="dark"] .hd-dot,html[data-theme="dark"] .hd-st::before{background:var(--red)}
+  /* 남은 검색 칩(시안 C3): 높이 32·좌우 12·모서리 6·1px line2·sf, 12/500 ink2·숫자 700 ink, 아이콘 16 — 표시 조건은 _syncHUsage 그대로 */
+  #hUsage{height:32px;padding:0 12px;border:1px solid var(--bd2);border-radius:6px;background:var(--bg-base);font-size:12px;font-weight:500;color:var(--t2);gap:6px}
+  #hUsage b{font-weight:700;color:var(--t1)}
+  #hUsage .hu-item svg{width:16px;height:16px}
+  /* 장애 칩(시안 C3): 높이 32·좌우 12·모서리 6·1px #B4473C·#F7E7E5·#8E3128 12/600, 앞 8px 점 — 누르면 데이터 상태 */
+  #apiSt{height:32px;padding:0 12px;align-items:center;gap:8px;border:1px solid #B4473C;border-radius:6px;background:#F7E7E5;color:#8E3128;font-family:inherit;font-size:12px;font-weight:600;cursor:pointer}
+  #apiSt::before{content:"";width:8px;height:8px;border-radius:50%;background:#B4473C;flex-shrink:0}
+  html[data-theme="dark"] #apiSt{border-color:var(--danger-bd);background:var(--redL);color:var(--red)}
+  html[data-theme="dark"] #apiSt::before{background:var(--red)}
+}
 
 /* Sprint PPPPP: 보고서 입력 위저드 (Claude Design 시안 「첫사용 동선 재설계」).
    #wizCore 는 사이드바(#wizHome)↔보고서(#wizSlot) 를 오가는 단일 노드 — 컨테이너별 밀도만 분기. */
@@ -1968,20 +2014,23 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <span class="hu-item" id="huChatItem" aria-label="오늘 남은 도우미 채팅"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5.5h16v10H9l-4 3.5v-3.5H4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="hu-lbl">채팅</span><b id="aiPill">—</b></span>
     </div>
     <!-- Phase 4 (2026-04-26): 서버 정상 시 hide, 장애 시만 빨간 표시 — "항상 초록"의 의미 없음 해소 -->
-    <span class="hst off" id="apiSt" style="display:none">확인 중...</span>
+    <button type="button" class="hst off" id="apiSt" style="display:none" onclick="openDataStatus()" title="누르면 데이터 상태를 볼 수 있어요">확인 중...</button>
     <!-- Sprint OOOOO-4 (운영자 지시): 헤더 "맞춤 보고서" CTA 제거 — 보고서 진입점이 랜딩·보고서 탭·
          사이드바·모바일 bnav 에 이미 존재(첫 화면 실측 4중 중복). 탭이 유일한 헤더 진입점. -->
     <button class="hbtn" id="loginBtn" onclick="openLogin()" title="로그인하면 북마크가 기기 간 동기화돼요">로그인</button>
     <div class="acct-dd" id="acctDd">
-      <button class="hbtn-avatar" id="userBtn" onclick="toggleAcctMenu(event)" aria-haspopup="true" aria-expanded="false" title="계정 메뉴"><span class="avtr" id="userAvatar">·</span><span class="ddcaret">▾</span><span id="userBadge" style="display:none"></span></button>
+      <button class="hbtn-avatar" id="userBtn" onclick="toggleAcctMenu(event)" aria-haspopup="true" aria-expanded="false" title="계정 메뉴"><span class="avtr" id="userAvatar">·</span><span class="ddcaret">▾</span><span id="userBadge" style="display:none"></span><span class="hd-dot" aria-hidden="true"></span></button>
       <div class="acct-menu" id="acctMenu">
         <div class="acct-head"><span class="avtr" id="userAvatar2">·</span><div style="min-width:0"><div class="acct-name" id="acctName"></div><div class="acct-plan" id="acctPlan">로그인됨</div></div></div>
         <div class="acct-div"></div>
         <button class="acct-it" onclick="closeAcctMenu();openUserMenu()"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="2"/><path d="M5 20c0-3.9 3.1-6 7-6s7 2.1 7 6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>내 정보</button>
-        <button class="acct-it" onclick="toggleTheme()" aria-label="다크 모드 전환"><svg viewBox="0 0 24 24" fill="none"><path d="M20 13.5A8 8 0 1 1 10.5 4a6.5 6.5 0 0 0 9.5 9.5z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>다크 모드<span class="acct-sw" aria-hidden="true"><span class="knob"></span></span></button>
-        <button class="acct-it" onclick="closeAcctMenu();openSettings();if(window._isAdmin&&typeof showDataQuality==='function')showDataQuality()"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 11v5M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>사용량과 데이터 품질<span class="acct-sub" id="acctDqSub">남은 검색·채팅 횟수와 데이터 출처</span></span></button>
+        <!-- HEADER-MORE-2026-10-18 (Plan 153, 시안 C2): 다크 모드는 헤더 아이콘에 있어 메뉴에서 뺐고, 헤더에서 빠진 알림 설정·데이터 상태를 여기로 -->
+        <button class="acct-it" onclick="closeAcctMenu();openNtc()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><span class="hd-mt">알림 설정</span><span class="hd-st">꺼져 있어요</span></button>
+        <button class="acct-it hd-two" onclick="closeAcctMenu();openDataStatus()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span class="hd-mt">데이터 상태<span class="hd-sub hd-sync">마지막 갱신 시각을 확인하는 중이에요</span></span></button>
         <div class="acct-div"></div>
-        <button class="acct-it" onclick="closeAcctMenu();sv('guide')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5" stroke="currentColor" stroke-width="2"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" stroke-width="2"/></svg>사용법 · 3분 가이드</button>
+        <button class="acct-it hd-two" onclick="closeAcctMenu();openSettings();if(window._isAdmin&&typeof showDataQuality==='function')showDataQuality()"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 11v5M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span>서비스 정보와 사용량<span class="acct-sub" id="acctDqSub">남은 검색·채팅 횟수와 데이터 출처</span></span></button>
+        <button class="acct-it" onclick="closeAcctMenu();sv('guide')"><svg viewBox="0 0 24 24" fill="none"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5" stroke="currentColor" stroke-width="2"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" stroke-width="2"/></svg>사용법</button>
+        <div class="acct-div"></div>
         <button class="acct-it danger" onclick="closeAcctMenu();logout()"><svg viewBox="0 0 24 24" fill="none"><path d="M15 4h3a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1h-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M10 8 6 12l4 4M6 12h10" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>로그아웃</button>
       </div>
     </div>
@@ -1989,6 +2038,18 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button class="hbtn" id="dataStatusBtn" onclick="openDataStatus()" title="데이터가 언제 갱신됐는지 모두 보기" aria-label="데이터 상태" style="min-width:0;padding:6px 10px;font-size:12px"><span class="dsb-dot" style="display:inline-block;width:7px;height:7px;border-radius:var(--radius-full);background:var(--grn);margin-right:5px;vertical-align:1px"></span><span class="dsb-tx">데이터 상태</span></button>
     <button class="hbtn" id="themeToggle" onclick="toggleTheme()" title="다크/라이트 모드 전환" aria-label="테마 전환" style="min-width:0;padding:6px 9px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg></button>
     <button class="hbtn" id="settingsBtn" onclick="openSettings()" aria-label="서비스 정보">ⓘ<span class="sbtn-tx"> 정보</span></button>
+    <!-- HEADER-MORE-2026-10-18 (Plan 153, 시안 C1): 로그아웃 데스크톱의 더보기 — 헤더에서 빠진 알림 설정·데이터 상태와,
+         로그아웃 상태에서 여는 길이 없던 서비스 정보·사용량을 모은다. 로그인하면 _updateAuthUi 가 숨기고 아바타 메뉴가 같은 항목을 맡는다. 모바일은 CSS 로 숨김(☰ 드로어 유지). -->
+    <div class="more-dd" id="moreDd">
+      <button type="button" class="hbtn more-btn" id="moreBtn" onclick="toggleMoreMenu(event)" aria-haspopup="true" aria-expanded="false" aria-label="더보기" title="더보기"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="1.25"/><circle cx="19" cy="12" r="1.25"/><circle cx="5" cy="12" r="1.25"/></svg><span class="hd-dot" aria-hidden="true"></span></button>
+      <div class="more-menu" id="moreMenu">
+        <button type="button" class="hd-mi" onclick="closeMoreMenu();openNtc()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><span class="hd-mt">알림 설정</span><span class="hd-st">꺼져 있어요</span></button>
+        <button type="button" class="hd-mi hd-two" onclick="closeMoreMenu();openDataStatus()"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg><span class="hd-mt">데이터 상태<span class="hd-sub hd-sync">마지막 갱신 시각을 확인하는 중이에요</span></span></button>
+        <div class="hd-div"></div>
+        <button type="button" class="hd-mi" onclick="closeMoreMenu();openSettings()"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2"/><path d="M12 11v5M12 8h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="hd-mt">서비스 정보와 사용량</span></button>
+        <button type="button" class="hd-mi" onclick="closeMoreMenu();sv('guide')"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5" stroke="currentColor" stroke-width="2"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" stroke-width="2"/></svg><span class="hd-mt">사용법</span></button>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -4843,6 +4904,7 @@ function _updateAuthUi(session){
     const _name = (session.user.email||'').split('@')[0];
     loginBtn.style.display='none';
     if(acctDd) acctDd.style.display='flex'; // Sprint OOOOO: userBtn → 계정 아바타 드롭다운(시안)
+    const _md=document.getElementById('moreDd'); if(_md){ _md.style.display='none'; try{ closeMoreMenu(); }catch(_){} } // HEADER-MORE-2026-10-18: 로그인하면 아바타 메뉴가 같은 항목을 맡는다
     const _init = (_name[0]||'?').toUpperCase();
     const av=document.getElementById('userAvatar'); if(av) av.textContent=_init;
     const av2=document.getElementById('userAvatar2'); if(av2) av2.textContent=_init;
@@ -4861,6 +4923,7 @@ function _updateAuthUi(session){
     }
   } else {
     loginBtn.style.display='';
+    { const _md=document.getElementById('moreDd'); if(_md) _md.style.display=''; } // HEADER-MORE-2026-10-18: 표시는 CSS(데스크톱만)
     if(acctDd){ acctDd.style.display='none'; }
     if(typeof closeAcctMenu==='function') closeAcctMenu();
   }
@@ -10171,6 +10234,8 @@ function _updateNtcDot(){
   try{
     const b=document.getElementById('ntcBell');
     if(b)b.classList.toggle('unsub', !_ntcSubscribed());
+    // HEADER-MORE-2026-10-18 (Plan 153): 데스크톱은 벨 대신 더보기·아바타 버튼과 메뉴 안 '꺼져 있어요'가 같은 조건으로 점을 보인다
+    document.body.classList.toggle('ntc-unsub', !_ntcSubscribed());
   }catch(_){}
 }
 function openNtc(){
@@ -12237,6 +12302,7 @@ function toggleAcctMenu(e){
   if(!dd)return;
   const open=dd.classList.toggle('open');
   if(btn)btn.setAttribute('aria-expanded',open?'true':'false');
+  if(open)_hdSyncLine(); // HEADER-MORE-2026-10-18: 아바타 메뉴의 '데이터 상태' 둘째 줄
 }
 function closeAcctMenu(){
   const dd=document.getElementById('acctDd'), btn=document.getElementById('userBtn');
@@ -12245,7 +12311,30 @@ function closeAcctMenu(){
 document.addEventListener('click',function(e){
   const dd=document.getElementById('acctDd');
   if(dd&&dd.classList.contains('open')&&!dd.contains(e.target))closeAcctMenu();
+  const md=document.getElementById('moreDd');
+  if(md&&md.classList.contains('open')&&!md.contains(e.target))closeMoreMenu();
 });
+// HEADER-MORE-2026-10-18 (Plan 153, 시안 C1): 로그아웃 데스크톱 더보기 메뉴 — 계정 메뉴와 같은 여닫기(버튼 토글·바깥 클릭·ESC)
+function toggleMoreMenu(e){
+  if(e)e.stopPropagation();
+  const dd=document.getElementById('moreDd'), btn=document.getElementById('moreBtn');
+  if(!dd)return;
+  const open=dd.classList.toggle('open');
+  if(btn)btn.setAttribute('aria-expanded',open?'true':'false');
+  if(open)_hdSyncLine();
+}
+function closeMoreMenu(){
+  const dd=document.getElementById('moreDd'), btn=document.getElementById('moreBtn');
+  if(dd&&dd.classList.contains('open')){dd.classList.remove('open');if(btn)btn.setAttribute('aria-expanded','false');}
+}
+// 메뉴의 '데이터 상태' 둘째 줄 — 동기화 띠(#syncTime, chkAPI 가 health 로 채운다)와 같은 값. 아직 없으면 확인 중이라고 적는다(지어내지 않음).
+function _hdSyncLine(){
+  try{
+    const t=(document.getElementById('syncTime')?.textContent||'').trim();
+    const line=(t && t!=='—') ? `마지막 갱신 ${t}` : '마지막 갱신 시각을 확인하는 중이에요';
+    document.querySelectorAll('.hd-sync').forEach(el=>{ el.textContent=line; });
+  }catch(_){}
+}
 // 플로팅 관심단지 popover 토글
 function toggleBmPop(){
   const pop=document.getElementById('bmPop');
@@ -12577,6 +12666,9 @@ document.addEventListener('keydown', (e) => {
     // TOOLS-SHEET-2026-09-27 (Plan 116b): 모바일 "도구" 바텀시트(z511) — sv() 가 다른 탭 전환마다
     //   닫으므로 다른 모달과 동시에 열릴 일이 없지만, ESC 는 안전하게 최우선으로 둔다.
     { id: 'toolsSheet', fn: 'closeToolsSheet' },
+    // HEADER-MORE-2026-10-18 (Plan 153): 헤더 더보기·계정 메뉴(드롭다운, open 클래스) — 위에 뜬 작은 메뉴부터 닫는다
+    { id: 'moreDd', fn: 'closeMoreMenu' },
+    { id: 'acctDd', fn: 'closeAcctMenu' },
     // ESC-2026-09-16 (Plan 096): 동적 생성 모달은 open 클래스가 없다 — present:true 는 "요소가 있으면 열림" 판정.
     { id: 'regSummaryModal', fn: '_closeRegSummary', present: true }, // 규제 요약 (z99998, 동적 생성)
     { id: 'cmpModal', fn: '_closeCmpModal', present: true },          // 단지 비교 (z9999, 동적 생성)
@@ -13609,9 +13701,9 @@ async function chkAPI(_isRetry){
     //   첫 health 가 5s 초과하면 오프라인 오표시되던 것 → 1회 재시도(2번째는 웜 lambda) 후에만 오프라인 확정.
     if(!_isRetry){ await new Promise(_r=>setTimeout(_r,1800)); return chkAPI(true); }
     // Phase 4: 장애 시 빨간 표시 + display block
-    el.textContent='● 서버 오프라인';el.className='hst off';
+    // HEADER-MORE-2026-10-18 (Plan 153, 시안 C3): 장애 칩 — 점은 CSS(::before), 색도 CSS(라이트 시안 값·다크 앱 토큰). 인라인 색을 걷었다.
+    el.textContent='서버에 연결되지 않아요';el.className='hst off';
     el.style.display='inline-flex';
-    el.style.background='var(--redL)';el.style.color='var(--red)';
     cs.textContent='● 오프라인';cs.style.color='var(--red)';
     if(bs){bs.textContent='오프라인';bs.className='sm-badge no';}
     return false;

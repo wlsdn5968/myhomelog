@@ -38,13 +38,12 @@ test('Plan 152 ②: 데스크톱 시안 값', () => {
   assert.ok(mq > 0 && hdr > mq && css.slice(mq, hdr).split('{').length - css.slice(mq, hdr).split('}').length === 1, '높이 64 규칙이 ≥701px 블록 안에 있지 않다');
   assert.ok(m.includes('width:40px;height:40px;padding:0!important'), '인라인 padding 을 이기는 !important');
   assert.ok(m.includes('header .hml > .hbtn{flex-shrink:0}'));
-  assert.ok(css.includes('@media(min-width:701px) and (max-width:900px){ header:not(.lv-top){padding:0 16px;gap:10px}'));
-  assert.ok(css.includes('html:not([data-theme="dark"]) header .acct-sw .knob{background:var(--t1)}'), '라이트 스위치 손잡이 대비');
+  assert.ok(css.includes('@media(min-width:701px) and (max-width:900px){ header:not(.lv-top){padding:0 16px;gap:10px} }'));
   assert.ok(m.includes('header .ltxt{font-size:20px;font-weight:700;'));
   assert.ok(m.includes('height:36px;padding:0 12px;border-radius:6px;font-size:14px'));
   assert.ok(css.includes('header .htab.on,header .htab-tool.on{background:var(--accent-tint);color:var(--acc);'));
   assert.ok(css.includes('header .htabs > .htab.on::before,header .htab-tool.on::before{content:none}'), '골드 점 제거');
-  assert.ok(m.includes('#themeToggle,#ntcBell{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;'));
+  assert.ok(m.includes('#themeToggle,#moreBtn{display:inline-flex;align-items:center;justify-content:center;width:40px;height:40px;'), '다크 모드·더보기 40×40 (153 에서 벨 → 더보기)');
   assert.ok(m.includes('#loginBtn{height:40px;padding:0 16px;border-radius:8px;border:1px solid var(--bd2);background:var(--bg-base);color:var(--t1);font-size:14px;font-weight:600}'));
   assert.ok(css.includes('.lsub{display:none}'), '"HOUSING DATA TERMINAL" 부제는 시안에 없다');
 });
