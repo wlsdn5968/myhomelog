@@ -79,6 +79,8 @@ test('LIST-SHARE 프런트: 진입 시 handleListUrl 이 불리고, 목록 시�
   assert.match(html, /setTimeout\(handleCompareUrl, 350\);\r?\n[^\n]*\r?\n  setTimeout\(handleListUrl, 350\);/);
   assert.match(html, /function handleListUrl\(\)\{[\s\S]*?sp\.get\('list'\)[\s\S]*?_openSharedListModal\(items\);/);
   assert.match(html, /onclick="_openSharedListItem\(\$\{i\}\)"/);
+  // 단지 코드가 있는 항목은 source 'master' 로 열어 별칭 거래 병합 조건(openAptDetail)을 탄다
+  assert.match(html, /goSearchResult\(\{ aptName: a\.aptName, sigungu: a\.sigungu, umdNm: a\.umdNm, lawdCd: a\.lawdCd, aptSeq: a\.aptSeq \|\| null, source: a\.kaptCode \? 'master' : null \}\);/);
   assert.match(html, /onclick="_addSharedListToBookmarks\(\)"/);
   assert.match(html, /function _addSharedListToBookmarks\(\)\{[\s\S]*?if \(_bkIndex\(bks, p\) >= 0 \|\| bks\.some\(b => b\.aptName === p\.aptName[\s\S]*?saveBookmarks\(bks\);/);
   // 저장 키는 단지 코드·단지 번호만(합성 키 금지 — 상세의 키와 어긋나 중복 저장됐던 실측)

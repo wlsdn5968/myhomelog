@@ -8090,7 +8090,9 @@ function _closeSharedListModal(){ const m = document.getElementById('sharedListM
 function _openSharedListItem(i){
   const a = (window._sharedList || [])[i]; if (!a) return;
   _closeSharedListModal();
-  goSearchResult({ aptName: a.aptName, sigungu: a.sigungu, umdNm: a.umdNm, lawdCd: a.lawdCd, aptSeq: a.aptSeq || null });
+  // 단지 코드가 있으면 공동주택 정보 단지(source 'master') — openAptDetail 이 정확 이름 거래 0건일 때 같은 동 별칭 거래를 합치는 조건.
+  //   (미리보기 실측 2026-10-19: 공릉풍림아이원이 source 없이 열려 '실거래 없음' — 검색 경로와 달랐다. _isMaster 외 다른 소비처 없음 확인)
+  goSearchResult({ aptName: a.aptName, sigungu: a.sigungu, umdNm: a.umdNm, lawdCd: a.lawdCd, aptSeq: a.aptSeq || null, source: a.kaptCode ? 'master' : null });
 }
 function _addSharedListToBookmarks(){
   const items = window._sharedList || []; if (!items.length) return;
