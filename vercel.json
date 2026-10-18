@@ -14,6 +14,7 @@
     { "src": "/briefing(.*)", "dest": "/api/index.js" },
     { "src": "/region(.*)", "dest": "/api/index.js" },
     { "src": "/apt/(.*)", "dest": "/api/index.js" },
+    { "src": "/data-sources", "dest": "/api/index.js" },
     {
       "src": "/billing(/.*)?",
       "dest": "/frontend/billing.html",

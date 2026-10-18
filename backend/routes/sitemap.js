@@ -31,6 +31,7 @@ const STATIC_URLS = [
   { loc: '/terms.html', lastmod: '2026-05-04', changefreq: 'monthly', priority: '0.3' },
   { loc: '/privacy.html', lastmod: '2026-05-04', changefreq: 'monthly', priority: '0.3' },
   { loc: '/refund.html', lastmod: '2026-05-04', changefreq: 'monthly', priority: '0.3' },
+  { loc: '/data-sources', lastmod: '2026-10-19', changefreq: 'monthly', priority: '0.4' }, // DATA-SOURCES-2026-10-19
 ];
 
 function urlTag({ loc, lastmod, changefreq, priority }) {

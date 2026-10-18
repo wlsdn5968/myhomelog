@@ -362,6 +362,8 @@ app.use('/region', require('./routes/regionPage'));
 // APT-PAGE-2026-08-29 (Sprint NNNNNNN-32): 단지별 서버렌더 페이지 — 한국 검색의 주력은 "단지명 + 실거래가" 다.
 //   ⚠ vercel.json 의 routes 에 `/apt(.*)` 를 넣지 않으면 정적 catch-all 로 빠져 index.html 이 나간다.
 app.use('/apt', require('./routes/aptPage'));
+// DATA-SOURCES-2026-10-19 (plans/167 §1-3): 데이터 출처·갱신 주기 한 페이지. vercel.json 에 `/data-sources` 라우트(404 규칙 앞) 필요.
+app.use('/data-sources', require('./routes/dataSources'));
 // OG-IMAGE-DYNAMIC-2026-09-02 (Sprint RRRRRRR): 단지별 링크 미리보기 이미지.
 //   `/api/(.*)` 가 이미 이 함수로 라우팅되므로 vercel.json 변경은 필요 없다(실측 확인).
 //   satori·resvg 는 렌더 시점에만 지연 로드된다 — 다른 요청의 콜드스타트에 얹히지 않는다.

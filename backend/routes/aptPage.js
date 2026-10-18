@@ -29,6 +29,7 @@ const ORIGIN = 'https://myhomelog.vercel.app';
 
 const { THEME_CSS, FONT_STACK, FONT_LINK } = require('./_ssrTheme'); // Plan 145: 공용 테마
 const { escHtml: esc } = require('../utils/htmlEscape'); // ESC-UNIFY-2026-09-28 (Plan 124)
+const { fmtKst } = require('../utils/fmtKst'); // DATA-BASIS-2026-10-19
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 const comma = (v) => Number(v).toLocaleString('ko-KR');
 const eok = (v) => (Number.isFinite(Number(v)) ? (Number(v) / 10000).toFixed(2) + '억' : '');
@@ -342,6 +343,10 @@ router.get('/:aptSeq', async (req, res) => {
   }
 
   const af = await loadAptFacts(seq);
+  // DATA-BASIS-2026-10-19 (plans/167 §1-1): "최근 거래일"(데이터 기준) 옆에 "실거래 수집 시각"을 함께 보여 준다(아실 식 이중 표기).
+  //   s-maxage 6시간 캐시라 페이지 생성 시점의 값 — 문구도 "기준"으로 쓴다. 못 읽으면 줄을 뺀다(모름을 값으로 만들지 않는다).
+  let syncKst = '';
+  try { const { readDataCounts } = require('../services/healthCounts'); const dc = await readDataCounts(); syncKst = fmtKst(dc && dc.lastIngestedAt); } catch (_) { syncKst = ''; }
 
   if (!af) {
     res.set('Cache-Control', 'no-store'); // 없는 단지를 캐시하지 않는다
@@ -369,6 +374,7 @@ router.get('/:aptSeq', async (req, res) => {
       </div>
       <div class="row"><span class="k">가격 범위</span><span class="num">${eok(stat.minPrice)} ~ ${eok(stat.maxPrice)}</span></div>
       <div class="row"><span class="k">최근 거래일</span><span class="num">${esc(String(stat.recentDeal))}</span></div>
+      ${syncKst ? `<div class="row"><span class="k">실거래 수집</span><span class="num">${esc(syncKst)} 기준</span></div>` : ''}
       ${buildYear ? `<div class="row"><span class="k">준공</span><span class="num">${buildYear}년</span></div>` : ''}
       <div class="src" style="margin-top:8px">평균가는 최근 거래에 비중을 더 둔 값이에요. 절사평균(위아래 10% 제외) ${eok(stat.trimmedAvgPrice)}.</div>
     </div>`);

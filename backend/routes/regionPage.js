@@ -26,6 +26,7 @@ const ORIGIN = 'https://myhomelog.vercel.app';
 
 const { THEME_CSS, FONT_STACK, FONT_LINK } = require('./_ssrTheme'); // Plan 145: 공용 테마
 const { escHtml: esc } = require('../utils/htmlEscape'); // ESC-UNIFY-2026-09-28 (Plan 124)
+const { fmtKst } = require('../utils/fmtKst'); // DATA-BASIS-2026-10-19
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 const comma = (v) => Number(v).toLocaleString('ko-KR');
 const eok = (v) => (Number.isFinite(Number(v)) ? (Number(v) / 10000).toFixed(2) + '억' : '');
@@ -229,6 +230,9 @@ router.get('/:lawdCd', async (req, res) => {
 
   const { regionLabel } = require('../services/priceRecordsService');
   const label = regionLabel(region.lawdCd, region.name);
+  // DATA-BASIS-2026-10-19 (plans/167 §1-1): 지역 페이지는 하나의 "기준일"이 없어(카드마다 기준월·sinceDate 가 다르다) 수집 시각만 머리에 적는다.
+  let syncKst = '';
+  try { const { readDataCounts } = require('../services/healthCounts'); const dc = await readDataCounts(); syncKst = fmtKst(dc && dc.lastIngestedAt); } catch (_) { syncKst = ''; }
 
   // PARALLEL-2026-10-14 (Plan 140): 지역 데이터와 주요 단지 목록은 서로 독립(둘 다 region.lawdCd 만 입력) — 함께 기다린다.
   //   topAptsOfRegion 은 내부 try/catch 로 실패 시 [] 를 돌려주므로 종전과 같은 부분 실패 동작이다.
@@ -317,7 +321,7 @@ router.get('/:lawdCd', async (req, res) => {
 
   const body = `<div class="eyebrow">MYHOMELOG REGION</div>
     <h1>${esc(label)} 아파트 실거래 데이터</h1>
-    <div class="tag">국토교통부 실거래 신고 자료 정리</div>
+    <div class="tag">국토교통부 실거래 신고 자료 정리${syncKst ? ` · 실거래 수집 ${esc(syncKst)} 기준` : ''}</div>
     ${cards.length ? cards.join('') : '<div class="card"><h2>준비 중</h2><div style="font-size:12px;color:var(--ink3)">이 지역의 공식 통계를 아직 불러오지 못했어요.</div></div>'}
     <div class="card"><h2>주변 지역</h2><div class="links">${near.map(r => `<a href="/region/${esc(r.lawdCd)}">${esc(r.name)}</a>`).join('')}</div>
       <div style="margin-top:10px"><a href="/region">전국 ${all.length}개 시군구 전체 보기 →</a></div></div>
