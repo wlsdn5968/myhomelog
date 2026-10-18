@@ -8923,7 +8923,7 @@ function showDetail(p){
   currentDetail=p;
   _bumpActivity('detail_view'); // WRAPPED-B: 상세 열람 카운트(로그인 시만)
   const bks=getBookmarks();
-  const isBk=bks.some(b=>b.aptName===p.aptName);
+  const isBk=_bkIndex(bks, p) >= 0;
   const bkBtn=document.getElementById('bkToggle');
   bkBtn.textContent=isBk?'관심 중':'관심 추가';
   bkBtn.classList.toggle('on',isBk);
@@ -10049,13 +10049,20 @@ function _aptKey(p){
   return `composite:${norm(p.aptName)}|${norm(p.area)}`;
 }
 
+// BK-STATE-2026-10-18 (Plan 157): "관심 단지인가" 판정은 실제 토글(toggleBookmark)과 같은 규칙이어야 한다 —
+//   저장 항목에 aptKey 가 있으면 키만, 없으면(옛 항목) 이름으로. 이름만 보던 표시가 같은 이름 다른 단지에서 "관심 해제"를 띄웠다.
+function _bkIndex(bks, p){
+  let key = ''; try { key = _aptKey(p); } catch(_) {}
+  return (bks || []).findIndex(b => b.aptKey ? b.aptKey === key : b.aptName === p.aptName);
+}
+
 function toggleBookmark(){
   if(!currentDetail)return;
   const p=currentDetail;
   const key = _aptKey(p);
   let bks=getBookmarks();
   // P1: aptKey 우선 매칭, 없으면 레거시 aptName fallback
-  const idx=bks.findIndex(b => b.aptKey ? b.aptKey === key : b.aptName === p.aptName);
+  const idx=_bkIndex(bks, p);
   if(idx>=0){
     const removed = bks[idx];
     bks.splice(idx,1);
@@ -11685,8 +11692,7 @@ function _nxtCmpKey(p){
   return i >= 0 ? i : 'd:' + [p.aptName, p.sigungu||'', p.umdNm||''].join('|');
 }
 function _nxtIsBk(p){
-  let key = ''; try { key = _aptKey(p); } catch(_) {}
-  return getBookmarks().some(b => (b.aptKey && key && b.aptKey === key) || b.aptName === p.aptName);
+  return _bkIndex(getBookmarks(), p) >= 0;
 }
 // 항목 단일 목록 — 데스크톱 영역과 모바일 시트가 같은 순서·같은 동작을 쓴다(사양 시트 순서: 비교 · 관심 · 특약 · 청약 · 시장 요약 · 도우미 · 공유 · 카드 · 단지 페이지)
 function _nxtItems(p){
