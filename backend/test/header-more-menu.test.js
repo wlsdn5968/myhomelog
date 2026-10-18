@@ -131,3 +131,10 @@ test('Plan 153 리뷰 M3·L2: 헤더 메뉴는 하나만 열린다 · 도구 메
   assert.ok(dot.includes("'더보기 (알림이 꺼져 있어요)'") && dot.includes("'계정 메뉴 (알림이 꺼져 있어요)'"));
   assert.ok(html.includes('@media(min-width:701px) and (max-width:1119px){ #apiSt{font-size:0;gap:0} }'), '좁은 폭 장애 칩은 점만');
 });
+
+test('155: 남은 검색 칩은 키보드로 누를 수 있는 button, 숫자 변화 안내는 aria-live 로 유지', () => {
+  assert.ok(header.includes('<button type="button" id="hUsage" onclick="openSettings()"'));
+  assert.ok(/id="hUsage"[^>]*aria-live="polite"/.test(header));
+  assert.ok(!header.includes('<div id="hUsage"'));
+  for (const id of ['huDimLabel', 'huSearchItem', 'huDot', 'huChatItem', 'quotaPill', 'aiPill']) assert.ok(header.includes(`id="${id}"`), id);
+});

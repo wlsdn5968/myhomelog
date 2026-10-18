@@ -753,6 +753,16 @@ header .htabs > .htab.on::before,header .htab-tool.on::before{content:none} /* v
 /* 701~900px(태블릿 세로): 좌우 24·40×40 버튼으로 768 지도 밖 화면(헤더 검색 있음)에서 다크 모드 버튼이 오른쪽 끝(768)에 붙었다(미리보기 실측) —
    이 구간만 여백·간격을 줄인다(시안은 1440 기준이라 이 폭의 값이 없다). */
 @media(min-width:701px) and (max-width:900px){ header:not(.lv-top){padding:0 16px;gap:10px} }
+/* 155: 701~900px 는 패널 340 에서 가격 96·건수 64 열이 단지명 칸을 108px 로 눌러 대부분 말줄임됐다(768 실측) —
+   모바일 시트와 같은 2단(가격 위·"거래 N건" 아래)으로 건수 열을 접어 단지명 칸을 넓힌다. */
+@media(min-width:701px) and (max-width:900px){
+  .hp-th .c3{display:none} .hp-th .c2{width:auto}
+  .hp-row{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px}
+  .hp-row .hp-c1{grid-row:1/3;align-self:center}
+  .hp-row .hp-pr{width:auto;align-self:end}
+  .hp-row .hp-ct{width:auto;font-size:12px;font-weight:500;color:var(--t3);align-self:start}
+  .hp-ctl{display:inline}
+}
 /* HEADER-MORE-2026-10-18 (Plan 153, 시안 C — plans/design-spec-v2-screen-C-header-2026-10-18.md): 더보기·아바타 메뉴, 빨간 점, 남은 검색·장애 칩.
    빨강 #B4473C·#F7E7E5·#8E3128 은 시안 라이트 값 — 시안에 다크 값이 없어 다크는 기존 앱 토큰(--red·--redL·--danger-bd)을 쓴다(계획 153 결정 1). */
 .more-dd{position:relative;display:none}
@@ -792,7 +802,7 @@ header .htabs > .htab.on::before,header .htab-tool.on::before{content:none} /* v
   body.ntc-unsub .hd-st{display:inline-flex}
   html[data-theme="dark"] .hd-dot,html[data-theme="dark"] .hd-st::before{background:var(--red)}
   /* 남은 검색 칩(시안 C3): 높이 32·좌우 12·모서리 6·1px line2·sf, 12/500 ink2·숫자 700 ink, 아이콘 16 — 표시 조건은 _syncHUsage 그대로 */
-  #hUsage{height:32px;padding:0 12px;border:1px solid var(--bd2);border-radius:6px;background:var(--bg-base);font-size:12px;font-weight:500;color:var(--t2);gap:6px}
+  #hUsage{height:32px;padding:0 12px;border:1px solid var(--bd2);border-radius:6px;background:var(--bg-base);font-family:inherit;font-size:12px;font-weight:500;color:var(--t2);gap:6px;cursor:pointer;align-items:center}
   #hUsage b{font-weight:700;color:var(--t1)}
   #hUsage .hu-item svg{width:16px;height:16px}
   /* 장애 칩(시안 C3): 높이 32·좌우 12·모서리 6·1px #B4473C·#F7E7E5·#8E3128 12/600, 앞 8px 점 — 누르면 데이터 상태 */
@@ -2013,14 +2023,14 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button type="button" class="hst off" id="apiSt" style="display:none" onclick="openDataStatus()" title="누르면 데이터 상태를 볼 수 있어요">확인 중...</button>
     <!-- Sprint OOOOO (Claude Design 시안): pill 8→3 — 규제 요약은 도구▾, 데이터 품질·다크·ⓘ는 계정 드롭다운으로.
          quotaPill/aiPill id 는 숫자 표시용 <b> 로 유지(updateQuota/updateAiPill 연속성). -->
-    <div id="hUsage" onclick="openSettings()" title="오늘 쓸 수 있는 무료 횟수예요. 매일 자정에 다시 채워져요. 누르면 자세히 볼 수 있어요." role="status">
+    <button type="button" id="hUsage" onclick="openSettings()" title="오늘 쓸 수 있는 무료 횟수예요. 매일 자정에 다시 채워져요. 누르면 자세히 볼 수 있어요." aria-live="polite"><!-- 155: div(클릭만) → button(키보드로도 누를 수 있게), 숫자 변화 안내는 aria-live 로 유지 -->
       <!-- GGGGGG (운영자 실측 "2/5·2/3 의미 모르겠다"): 숫자만으론 사용/잔여 구분 불가 — '남은' 텍스트 라벨 명시.
            좁은 폭(≤1119px)은 .hu-lbl 숨김(아이콘+숫자 유지) — 헤더 오버플로 방지. -->
       <span class="hu-dim" id="huDimLabel">오늘 남은</span>
       <span class="hu-item" id="huSearchItem" aria-label="오늘 남은 무료 단지 검색"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="2"/><path d="m19.5 19.5-3-3" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg><span class="hu-lbl">검색</span><b id="quotaPill">—</b></span>
       <span class="hu-dot" id="huDot">·</span>
       <span class="hu-item" id="huChatItem" aria-label="오늘 남은 도우미 채팅"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M4 5.5h16v10H9l-4 3.5v-3.5H4z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg><span class="hu-lbl">채팅</span><b id="aiPill">—</b></span>
-    </div>
+    </button>
     <button class="hbtn ntc-bell" id="ntcBell" onclick="openNtc()" title="알림 설정 (관심 단지의 새 실거래 알림)" aria-label="알림 설정" style="min-width:0;padding:6px 9px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10.268 21a2 2 0 0 0 3.464 0"/><path d="M3.262 15.326A1 1 0 0 0 4 17h16a1 1 0 0 0 .74-1.673C19.41 13.956 18 12.499 18 8A6 6 0 0 0 6 8c0 4.499-1.411 5.956-2.738 7.326"/></svg><span class="ntc-dot"></span></button>
     <button class="hbtn" id="dataStatusBtn" onclick="openDataStatus()" title="데이터가 언제 갱신됐는지 모두 보기" aria-label="데이터 상태" style="min-width:0;padding:6px 10px;font-size:12px"><span class="dsb-dot" style="display:inline-block;width:7px;height:7px;border-radius:var(--radius-full);background:var(--grn);margin-right:5px;vertical-align:1px"></span><span class="dsb-tx">데이터 상태</span></button>
     <button class="hbtn" id="themeToggle" onclick="toggleTheme()" title="다크/라이트 모드 전환" aria-label="테마 전환" style="min-width:0;padding:6px 9px"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg></button>
@@ -12010,7 +12020,10 @@ function _hpCtrlTop(){
 try{ if(window.ResizeObserver) window.addEventListener('DOMContentLoaded', () => { const b = document.querySelector('#view-map .mtbar'); if(b) new ResizeObserver(_hpCtrlTop).observe(b); }); }catch(_){}
 // ── HOME-SHEET-2026-10-18 (Plan 151b): 모바일(≤700px) 목록 시트 — 멈춤 3단계 min(제목 줄)·base(지도 영역 52% 지점)·full(위 8px).
 //   시트 높이 = --hps-h, 지도 줄임 = --hps-pad(접힘이면 제목 줄, 기본·펼침이면 기본 높이 — 펼칠 때 지도 크기를 다시 계산하지 않는다).
-let _hpsState = 'base', _hpsPad = -1, _hpsDragged = false;
+let _hpsState = 'base', _hpsPad = -1, _hpsDragged = false, _hpsUser = false;
+// 155: 가로 모드처럼 낮은 화면은 기본(52% 지점)이어도 목록 1행 하한 때문에 지도가 50px 남았다(667×375 실측) —
+//   사용자가 손잡이를 만지기 전에는 접힘으로 시작해 지도를 보인다. 한 번 만지면 그 선택을 따른다.
+function _hpsShort(){ return window.innerHeight <= 480 && window.innerWidth > window.innerHeight; }
 function _hpsMetrics(){
   const app = document.querySelector('.app'), hd = document.getElementById('hpHd');
   const H = app ? app.clientHeight : 0;
@@ -12057,6 +12070,7 @@ function _hpsSet(state){
 // 손잡이 누르기(키보드 포함): 기본 ↔ 펼침, 접힘이면 기본으로. 끌기 직후 따라오는 click 은 무시한다.
 function _hpsTap(){
   if(_hpsDragged){ _hpsDragged = false; return; }
+  _hpsUser = true;
   _hpsSet(_hpsState === 'base' ? 'full' : 'base');
 }
 (function(){
@@ -12078,7 +12092,7 @@ function _hpsTap(){
     id = null; hp.classList.remove('hps-drag');
     window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', end); window.removeEventListener('pointercancel', end);
     if(!moved) return;
-    _hpsDragged = true; setTimeout(() => { _hpsDragged = false; }, 400); // 손잡이 위에서 끝나면 click 이 이어서 온다
+    _hpsDragged = true; _hpsUser = true; setTimeout(() => { _hpsDragged = false; }, 400); // 손잡이 위에서 끝나면 click 이 이어서 온다
     const h = hp.getBoundingClientRect().height, m = _hpsMetrics();
     const near = [['min', m.min], ['base', m.base], ['full', m.max]].sort((a, b) => Math.abs(a[1] - h) - Math.abs(b[1] - h))[0][0];
     _hpsSet(near);
@@ -12118,7 +12132,7 @@ function _hpApply(v){
     _hpSearchPlace(on && desk);
     _hpCtrlTop();
     // 151b: 모바일 지도 화면이면 목록 시트 높이를 맞추고, 그 밖(데스크톱·다른 화면)이면 시트 값과 지도 줄임을 걷는다
-    if(on && !desk){ _hpsSet(_hpsState); _hpLoad(); }
+    if(on && !desk){ _hpsSet(!_hpsUser && _hpsShort() ? 'min' : (_hpsUser ? _hpsState : 'base')); _hpLoad(); }
     else _hpsClear();
     if(on && desk){
       // 모바일에서 ☰ 드로어를 연 채 데스크톱 폭으로 넓히면 딤·스크롤 잠금이 남는다 — 닫고 시작한다

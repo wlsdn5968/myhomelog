@@ -218,7 +218,7 @@ test('Plan 151b: 멈춤 3단계 — 기본은 지도 영역 52% 지점(시트 48
 
 test('Plan 151b: _hpApply — 모바일 지도 화면이면 시트, 그 밖이면 시트 값을 걷는다', () => {
   const apply = extractFn(html, '_hpApply');
-  assert.ok(apply.includes('if(on && !desk){ _hpsSet(_hpsState); _hpLoad(); }'));
+  assert.ok(/if\(on && !desk\)\{ _hpsSet\([^;]+\); _hpLoad\(\); \}/.test(apply), '모바일 지도 화면이면 시트 높이 설정 + 목록 불러오기(155: 시작 단계 선택 포함)');
   assert.ok(apply.includes('else _hpsClear();'));
   assert.ok(apply.includes('_hpSearchPlace(on && desk);'), '검색창은 데스크톱에서만 띠로');
 });
@@ -255,4 +255,19 @@ test('Plan 151b 보정: 지도 영역 크기 변화를 감시해 지도 SDK 에 
   const blk = html.slice(i, i + 300);
   assert.ok(blk.includes('new ResizeObserver(') && blk.includes('setTimeout(_hpMapResize, 60)') && blk.includes('.observe(me)'));
   assert.ok(!extractFn(html, '_hpsSet').includes('setTimeout(_hpMapResize, 220)'));
+});
+
+test('155: 701~900px 목록 행은 2단(가격 위·"거래 N건" 아래)으로 단지명 칸을 넓힌다', () => {
+  const i = html.indexOf('/* 155: 701~900px 는 패널 340');
+  assert.ok(i > 0);
+  const blk = html.slice(i, html.indexOf('\n}\n', i));
+  assert.ok(blk.includes('@media(min-width:701px) and (max-width:900px){'));
+  assert.ok(blk.includes('.hp-th .c3{display:none}') && blk.includes('.hp-row{display:grid;grid-template-columns:minmax(0,1fr) auto;') && blk.includes('.hp-ctl{display:inline}'));
+});
+
+test('155: 가로 모드 낮은 화면은 사용자가 손대기 전 접힘으로 시작, 한 번 만지면 그 선택을 따른다', () => {
+  assert.ok(html.includes("function _hpsShort(){ return window.innerHeight <= 480 && window.innerWidth > window.innerHeight; }"));
+  assert.ok(extractFn(html, '_hpApply').includes("_hpsSet(!_hpsUser && _hpsShort() ? 'min' : (_hpsUser ? _hpsState : 'base'));"));
+  assert.ok(extractFn(html, '_hpsTap').includes('_hpsUser = true;'));
+  assert.ok(html.includes('_hpsDragged = true; _hpsUser = true;'), '끌기도 사용자 선택');
 });
