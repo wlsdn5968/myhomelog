@@ -184,7 +184,8 @@ async function refreshHealthSnapshots() {
     cache.del('meta:dataCounts:v2');
     const dc = await getDataCounts({ includeHist: true, skipRedis: true });
     // txLive(원본 건수)로 판정 — tx 는 이력 합산이라 원본 count 가 실패(0)해도 양수가 된다.
-    if (dc && dc.lastIngestedAt && Number(dc.txLive != null ? dc.txLive : dc.tx) > 0 && Number(dc.apt) > 0) { await putSnapshot(SNAP_COUNTS, dc); out.counts = true; }
+    // 이력 건수 실패(txHistUnknown)면 누적이 줄어든 값이라 저장하지 않는다.
+    if (dc && dc.lastIngestedAt && !dc.txHistUnknown && Number(dc.txLive != null ? dc.txLive : dc.tx) > 0 && Number(dc.apt) > 0) { await putSnapshot(SNAP_COUNTS, dc); out.counts = true; }
     cache.del('meta:facilityQuality');
     const fq = await getFacilityQuality();
     if (fq && Number(fq.total) > 0) { await putSnapshot(SNAP_FACQ, fq); out.facility = true; }

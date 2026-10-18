@@ -124,6 +124,14 @@ test('(d) refreshHealthSnapshots — 정상이면 두 키 각 1회 기록, tx �
   assert.equal(state.puts.filter(k => k === 'health:dataCounts:v1').length, 0);
 });
 
+test('(d2) refreshHealthSnapshots — 이력 count 실패(직전 캐시 없음)면 counts 스냅샷을 저장하지 않는다', async () => {
+  cache.del('meta:dataCounts:txHistCount:v1');
+  state.admin = makeAdmin({ failTable: 'molit_transactions_hist' });
+  const r = await hc.refreshHealthSnapshots();
+  assert.equal(r.counts, false);
+  assert.equal(state.puts.filter(k => k === 'health:dataCounts:v1').length, 0);
+});
+
 test('(e) 소스 고정 — health 핸들러는 스냅샷 읽기 함수를 쓰고 server.js 에 직접 계산 호출이 없다', () => {
   const src = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
   assert.match(src, /await readDataCounts\(\)/);
