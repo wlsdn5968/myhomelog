@@ -153,7 +153,10 @@ if (process.env.VERCEL_ENV === 'preview') {
 app.use(cors({
   origin: (origin, cb) => {
     if (!origin || allowedOrigins.includes(origin)) return cb(null, true);
-    cb(new Error('CORS 차단: 허용되지 않은 출처'));
+    // CORS-403-2026-10-18: 허용 안 된 출처는 서버 고장이 아니다 — 500·error 등급으로 남아 오류 경보를 부풀렸다(운영 실측).
+    const e = new Error('CORS 차단: 허용되지 않은 출처');
+    e.status = 403;
+    cb(e);
   },
   credentials: true,
   // P0-2 (2026-05-04): PATCH/DELETE/PUT 추가 — 북마크/임장노트/챗 세션 수정·삭제 100% 차단 fix
@@ -696,17 +699,18 @@ Sentry.setupExpressErrorHandler(app);
 // ── 전역 에러 핸들러 ───────────────────────────────────────
 app.use((err, req, res, next) => {
   // 에러 로그는 서버에만, 클라이언트엔 최소 정보만 — IP 는 /24 마스킹 (PII 최소화)
-  logger.error({
+  const status = err.status || 500;
+  // 4xx(클라이언트 쪽 문제)는 warn — error 는 서버 고장에만 쓴다.
+  logger[status >= 500 ? 'error' : 'warn']({
     err,
     url: req.url,
     method: req.method,
     ip: maskIp(req.ip),
-    status: err.status || 500,
+    status,
   }, '요청 처리 실패');
-  const status = err.status || 500;
   res.status(status).json({
     error: process.env.NODE_ENV === 'production'
-      ? '서버 오류가 발생했습니다.'
+      ? (status >= 500 ? '서버 오류가 발생했습니다.' : '요청을 처리할 수 없어요.')
       : err.message,
   });
 });

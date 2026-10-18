@@ -1292,7 +1292,10 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .ava{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;flex-shrink:0}
 .ava.ai{background:var(--acc-bg);color:var(--acc-ink)}.ava.user{background:var(--a2-bg);color:#fff}
 .hbtn>svg,.fab-ai>svg,.fab-bm>svg,.ai-fb-btn>svg,.chat-del-btn>svg,#chatHistBtn>svg,.ava>svg,.ntc-ico>svg,.mhc-ico>svg{display:block;flex-shrink:0;pointer-events:none} /* Plan 143: Lucide 선 아이콘 배치 */
-.bbl{max-width:90%;padding:8px 12px;border-radius:var(--radius-lg);font-size:12px;line-height:1.65}
+.msg>div:not(.ava){max-width:90%;min-width:0}
+/* CHAT-WRAP-2026-10-18: 폭 상한을 말풍선(.bbl)이 아니라 바깥 칸에 둔다 — .bbl 의 % 상한은 내용 폭에 맞춰진 바깥 칸의 %라
+   짧은 말도 늘 5~10% 모자라 끝 글자가 줄바꿈됐다(375 실측 "공덕 시세" → "공덕 시/세"). */
+.bbl{padding:8px 12px;border-radius:var(--radius-lg);font-size:12px;line-height:1.65}
 .msg.ai .bbl{background:var(--s1);border:1px solid var(--bd);border-top-left-radius:3px}
 .msg.user .bbl{background:var(--a2-bg);color:#fff;border-top-right-radius:3px}
 .mt{font-size:12px;color:var(--t3);margin-top:2px;padding:0 2px}.msg.user .mt{text-align:right}
@@ -1410,13 +1413,15 @@ html[data-theme="dark"] .dmbg{--dm-ac:#FFC93C}
   .rtabs::after{content:'';position:absolute;right:14px;top:0;bottom:0;width:30px;background:linear-gradient(to right, transparent, var(--s0));pointer-events:none}
   .rpanel{position:relative}
   /* Phase 35 #3 (2026-05-04): 모바일 상세 모달 우측 공백 회귀 fix — edge-to-edge */
-  .dmbg{padding:0!important;align-items:stretch!important}
-  .dm{max-width:100%!important;border-radius:0!important;max-height:100vh!important;height:100vh}
+  /* DM-TOP-2026-10-18: 전체 화면 상세가 헤더(z 1000) 아래에서 y=0 부터 시작해 맨 위 버튼줄(카드·공유·관심·닫기)이
+     헤더에 가려져 닫기를 누르면 데이터 상태 창이 열렸다(375 실측). 헤더·동기화 띠 아래 끝(--biz-top)부터 시작한다. */
+  .dmbg{padding:var(--biz-top,54px) 0 0!important;align-items:stretch!important}
+  .dm{max-width:100%!important;border-radius:0!important;max-height:calc(100vh - var(--biz-top,54px))!important;height:calc(100vh - var(--biz-top,54px))}
   .rpanel{padding:12px!important}
   .dmhdr{padding:12px 14px!important}
   .apt-sticky-summary{padding:8px 12px!important}
   /* 챗 답변 우측 공백 fix — bbl 90% → 95% */
-  .bbl{max-width:95%!important}
+  .msg>div:not(.ava){max-width:95%!important}
 }
 /* Phase 33 #3 (2026-05-04): 단지 sticky header "한줄 요약" — 12 element 스크롤 시 항상 노출 */
 /* 리디자인 import — 단지상세 리치 헤더 (Claude Design 충실 반영): 큰 단지명·배지 좌측 + 큰 평균 실거래가 우측 */
@@ -2196,7 +2201,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 
 <!-- P1 (2026-04-25 Phase 2 1-2): 운영자 디버그 배너 → 사용자에게 의미 있는 메시지 -->
 <!-- API 키 미설정 시점은 backend health 체크로 운영자 대시보드만 노출 -->
-<div class="mock-banner" id="mockBanner" style="display:none">
+<div class="mock-banner" id="mockBanner" role="status">
   ⚠ 일부 데이터가 늦게 표시되고 있어요. 잠시 뒤 새로고침해 주세요.
 </div>
 <!-- P1 (Phase 2 5-1): 데이터 동기화 시각 표시 — 사용자 신뢰 시그널 -->
@@ -2609,7 +2614,7 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
       <div><span class="lbl">생애최초</span><div class="chips" id="cc-f"><span class="chip" onclick="cp(this,'cc-f')">예</span><span class="chip on" onclick="cp(this,'cc-f')">아니오</span></div></div>
       <div><span class="lbl">지역</span><div class="chips" id="cc-r"><span class="chip on" onclick="cp(this,'cc-r')">서울규제</span><span class="chip" onclick="cp(this,'cc-r')">비규제</span><span class="chip" onclick="cp(this,'cc-r')">지방</span></div></div>
     </div>
-    <button class="abtn acc" style="margin-top:0" onclick="dc()">계산하기</button>
+    <button class="abtn acc" style="margin-top:0" onclick="dc(true)">계산하기</button>
   </div>
   <div id="co" style="display:none;max-width:520px">
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
@@ -5479,7 +5484,7 @@ function _renderReport(data) {
   const _cautionsWeb = (r.cautions && r.cautions.length) ? `<div style="margin:14px 0 8px;font-size:14px;font-weight:700;color:var(--t1)">⚠ 매매 시 꼭 확인할 것</div>` +
     r.cautions.map(g => {
       const items = (g.items || []).map(t =>
-        `<li style="margin-bottom:4px">${_escHtml(String(t)).replace(/**([^*]+)**/g, '<b>$1</b>')}</li>`).join('');
+        `<li style="margin-bottom:4px">${_escHtml(String(t)).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>')}</li>`).join('');
       return `<div style="border:1px solid var(--bd);border-left:3px solid var(--warn-bd,#C9973F);border-radius:var(--radius-base);padding:9px 12px;margin-bottom:7px;background:var(--bg2)"><div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:5px">${_escHtml(g.title || '')}</div><ul style="margin:0;padding-left:17px;font-size:12px;line-height:1.65;color:var(--t2)">${items}</ul></div>`;
     }).join('') : '';
 
@@ -5690,7 +5695,7 @@ function _downloadReportPDF() {
   const cautionsHtml = (r.cautions && r.cautions.length) ? r.cautions.map(g => {
     const items = (g.items || []).map(t => {
       // **강조** 만 굵게 — 나머지는 이스케이프 그대로(원문 주입 차단).
-      const safe = esc(String(t)).replace(/**([^*]+)**/g, '<b>$1</b>');
+      const safe = esc(String(t)).replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
       return `<li>${safe}</li>`;
     }).join('');
     return `<div class="caution"><div class="caution-t">${esc(g.title || '')}</div><ul>${items}</ul></div>`;
@@ -6505,7 +6510,7 @@ async function loadSubs(){
           <div><span style="color:var(--t3)">입주예정</span> ${fmtMoveIn(it.moveInPlanned)}</div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:7px;padding-top:7px;border-top:1px solid var(--bdL,var(--bd))">
-          <span style="font-size:12px;color:var(--t3)">시공: ${_escHtml(it.builder || '미상')} · 공급 ${it.sales || '-'}세대</span>
+          <span style="font-size:12px;color:var(--t3)">사업주체: ${_escHtml(it.builder || '미상')} · 공급 ${it.sales || '-'}세대</span>
           ${it.detailUrl && /^https?:\/\//i.test(it.detailUrl) ? `<a href="${_escHtml(it.detailUrl)}" target="_blank" rel="noopener" style="font-size:12px;color:var(--acc);text-decoration:none;white-space:nowrap">공고 ↗</a>` : ''}
         </div>
       </div>
@@ -11654,9 +11659,9 @@ function calcLoanLimitsPure({buy,inc,rate,yrs,exAdded,cash,ltv,cap,isLoc}){
   const dsr=inc>0?Math.round((mo+exAdded)*12/inc*100):0;
   return {lL,dL,dsrState,headroom,fin,mo,need,dsr,dsrExceed:dsr>40};
 }
-function dc(){
+function dc(fromBtn){
   const buy=parseFloat(document.getElementById('c_b')?.value)||0;
-  if(!buy){document.getElementById('co').style.display='none';return;}
+  if(!buy){document.getElementById('co').style.display='none';if(fromBtn===true)toast('매수가를 입력해 주세요');return;}
   // ECOS-2026-07-13 (Sprint FFFFF): 미입력 기본금리 4% 고정 → ECOS 시중 주담대 가중평균(있으면) — placeholder(updateEcosHint)와 표시=계산 일치.
   const inc=parseFloat(document.getElementById('c_i')?.value)||0,rate=(parseFloat(document.getElementById('c_r')?.value)||window._ecosMortgageRate||4)/100,yrs=parseInt(document.getElementById('c_y')?.value)||30,ex=parseFloat(document.getElementById('c_e')?.value)||0,cash=parseFloat(document.getElementById('c_c')?.value)||0;
   // Phase 4 (2026-04-26): 신용대출/전세대출 잔액 → 추정 월원리금 환산해 ex 에 합산
@@ -12156,7 +12161,7 @@ function _hpRender(){
     // 모바일 시트는 시안대로 "거래 N건"(표 머리가 없다) — 앞말은 데스크톱에서 CSS 로 숨긴다
     const count = !deg && Number.isFinite(cnt) && cnt > 0 ? `<span class="hp-ctl">거래 </span>${cnt}건` : '';
     const arg = { aptName:p.aptName, sigungu:p.sigungu, umdNm:p.umdNm, lawdCd:p.lawdCd, buildYear:p.buildYear, recentDealDate:p.recentDealDate, aptSeq:p.aptSeq || null, lat:p.lat, lng:p.lng };
-    const label = [name, region, price && `60일 평균가 ${price}`, count && `거래 ${count}`].filter(Boolean).join(', ');
+    const label = [name, region, price && `60일 평균가 ${price}`, count && `거래 ${cnt}건`].filter(Boolean).join(', ');
     return `<button type="button" class="hp-row" aria-label="${_escHtml(label)}" onclick='goSearchResult(${_jsonAttr(arg)})'>`
       + `<span class="hp-c1"><span class="hp-nm">${_escHtml(name)}</span><span class="hp-rg">${_escHtml(region)}</span></span>`
       + `<span class="hp-pr">${price}</span><span class="hp-ct">${count}</span></button>`;
@@ -12634,6 +12639,8 @@ async function checkMolit(){
     const d=await healthJson(4000);   // PERF-HEALTH-DEDUP-2026-08-28
     if(!d) return;
     if(d && !(Number(d.dataCounts?.tx) > 0))document.getElementById('mockBanner').classList.add('show');
+    // RATES-INIT-2026-10-18: 시중 금리·정책자금 금리는 refreshQuota(목록 검색 끝)에서만 채워져, 바로 대출 계산을 쓰면 4.0% 로 계산됐다
+    try{ if(typeof updateEcosHint==='function') updateEcosHint(d.ecosRates); if(typeof updateHfRates==='function') updateHfRates(d.hfRates); if(typeof dc==='function') dc(); }catch(_){}
   }catch{/* 서버 오프라인이면 배너 표시 불필요 */}
 }
 
@@ -12863,7 +12870,7 @@ function _enhanceA11y() {
   // 주요 모달에 dialog 시맨틱
   // STAB-A P0#4 (2026-05-03): 잘못된 ID (loginM/detailM/usMenu/quotaM) → 실제 ID (LM/DM/UM/QM/SM)
   //   기존: 모든 모달 role=dialog 부여 실패 → 스크린리더 모달 인식 불가 (정보통신접근성법 risk)
-  ['LM', 'DM', 'UM', 'SM', 'QM', 'mockBanner'].forEach(id => {
+  ['LM', 'DM', 'UM', 'SM', 'QM'].forEach(id => {
     const el = document.getElementById(id);
     if (el && !el.getAttribute('role')) {
       el.setAttribute('role', 'dialog');

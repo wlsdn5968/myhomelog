@@ -510,7 +510,7 @@ test('상세 대출계산 — 소득 미입력 / 여력 0 / 양수 한도를 구
   const r0 = fn({ ...base, exAdded: 0, rate: 0 });
   assert.ok(Number.isFinite(r0.fin) && Number.isFinite(r0.mo) && r0.mo > 0, '금리 0 에서 NaN');
   // dc() 가 순수 함수를 쓰고, 옛 결함 패턴이 남아 있지 않다
-  const dcStart = html.indexOf('function dc(){');
+  const dcStart = html.indexOf('function dc(');
   const dcBody = html.slice(dcStart, dcStart + 6000);
   assert.match(dcBody, /const _r=calcLoanLimitsPure\(\{buy,inc,rate,yrs,exAdded,cash,ltv,cap,isLoc\}\);/, 'dc() 가 순수 산식을 쓰지 않는다');
   assert.ok(!/dL>0\?dL:lL/.test(dcBody), '옛 결함 패턴(dL>0?dL:lL)이 남아 있다');
