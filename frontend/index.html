@@ -11912,10 +11912,17 @@ function _hpMapResize(){
     else if(mapObj._isNaver && window.naver?.maps?.Event) naver.maps.Event.trigger(mapObj, 'resize');
   }catch(_){}
 }
+// 지도 영역(#mapEl) 크기가 바뀌면 지도 SDK 에 알린다. 전환(.2s)이 끝나기 전에 고정 타이머(220ms)로 알리면 네이버 지도가 옛 크기
+//   (375×698)를 유지했다(운영 375 실측 — 컨테이너 363 인데 getSize 698). 크기 변화 자체를 보면 시점 경쟁이 없다.
+try{ if(window.ResizeObserver) window.addEventListener('DOMContentLoaded', () => {
+  const me = document.getElementById('mapEl'); if(!me) return;
+  let t = null, h0 = -1;
+  new ResizeObserver(() => { const h = me.clientHeight; if(h === h0) return; h0 = h; clearTimeout(t); t = setTimeout(_hpMapResize, 60); }).observe(me);
+}); }catch(_){}
 function _hpsClear(){
   const b = document.body;
   b.style.removeProperty('--hps-h'); b.style.removeProperty('--hps-pad'); b.classList.remove('hps-full', 'hps-min');
-  if(_hpsPad > 0){ _hpsPad = -1; setTimeout(_hpMapResize, 60); }
+  if(_hpsPad > 0){ _hpsPad = -1; setTimeout(_hpMapResize, 450); } // 크기 변화 감시(아래 ResizeObserver)의 보조
 }
 function _hpsSet(state){
   const b = document.body, m = _hpsMetrics();
@@ -11929,7 +11936,7 @@ function _hpsSet(state){
   b.classList.toggle('hps-min', state === 'min'); // 접힘이면 가려진 목록·버튼을 숨겨 키보드 포커스가 가지 않게
   const g = document.getElementById('hpGrab');
   if(g) g.setAttribute('aria-expanded', state === 'full' ? 'true' : 'false');
-  if(pad !== _hpsPad){ _hpsPad = pad; setTimeout(_hpMapResize, 220); } // 높이 전환(.2s) 뒤 지도 크기 재계산
+  if(pad !== _hpsPad){ _hpsPad = pad; setTimeout(_hpMapResize, 450); } // 크기 변화 감시(아래 ResizeObserver)의 보조
 }
 // 손잡이 누르기(키보드 포함): 기본 ↔ 펼침, 접힘이면 기본으로. 끌기 직후 따라오는 click 은 무시한다.
 function _hpsTap(){

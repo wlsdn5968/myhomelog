@@ -248,3 +248,11 @@ test('Plan 151b 리뷰: 접힘이면 가려진 본문 숨김 · 홈 바 여백 �
   // 낮은 화면에서 목록이 0 이 되지 않게 기본 높이 하한
   assert.ok(extractFn(html, '_hpsMetrics').includes('const floor = min + (rep ? rep.offsetHeight : 0) + (ft ? ft.offsetHeight : 0) + 60;'));
 });
+
+test('Plan 151b 보정: 지도 영역 크기 변화를 감시해 지도 SDK 에 알린다 — 고정 220ms 타이머는 전환(.2s)과 경쟁해 네이버 지도가 옛 크기를 유지했다(운영 실측)', () => {
+  const i = html.indexOf("const me = document.getElementById('mapEl'); if(!me) return;");
+  assert.ok(i > 0);
+  const blk = html.slice(i, i + 300);
+  assert.ok(blk.includes('new ResizeObserver(') && blk.includes('setTimeout(_hpMapResize, 60)') && blk.includes('.observe(me)'));
+  assert.ok(!extractFn(html, '_hpsSet').includes('setTimeout(_hpMapResize, 220)'));
+});
