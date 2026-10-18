@@ -626,11 +626,15 @@ async function getAIRecommendations(userCondition) {
 
   // Step 2: 병렬 조회 — (a) 시군구 전체 단지 목록 + (b) 실거래 내역
   // COLLECT-PAR-2026-07-18 (Sprint DDDDDD): aliasMap 이 대형 병렬 조회 뒤 직렬 1왕복이던 것 — 동시 시작
-  const aliasMapPromise = getAliasCanonicalMap(targetRegions.map(r => r.lawdCd));
+  // COLLECT-DETAIL-2026-10-18: 종전 collectDetail 의 alias·queries 는 '기다린 시간'이라 어느 호출이 느린지 못 가른다 —
+  //   별칭·단지 목록·구별 거래 각각의 실제 소요와 구별 상위 3곳(ms·행 수)을 같은 로그에 싣는다. 동작 변경 없음.
+  const _cq = { regions: [], aliasMs: null, aptListMs: null };
+  const _timed = async (p, set) => { const s0 = Date.now(); try { return await p; } finally { set(Date.now() - s0); } };
+  const aliasMapPromise = _timed(getAliasCanonicalMap(targetRegions.map(r => r.lawdCd)), ms => { _cq.aliasMs = ms; });
   // APTLIST-DB-2026-08-30 (Sprint OOOOOOO): 단지 목록의 **1순위는 DB(apt_master)** 다.
   //   라이브 KAPT 목록만 쓰다가 그 API 가 폐기되자 전국 필터가 0건이 됐다(실측) —
   //   같은 데이터를 DB 가 이미 들고 있었는데도. 두 소스를 합치고 kaptCode 로 중복 제거한다.
-  const dbAptListPromise = getAptListByLawdFromDb(targetRegions.map(r => r.lawdCd));
+  const dbAptListPromise = _timed(getAptListByLawdFromDb(targetRegions.map(r => r.lawdCd)), ms => { _cq.aptListMs = ms; });
   // REC-BROAD-ALL-2026-09-05 광역 모드 비용 통제: 시도 전체(서울 25·인천 11·경기 47)를 볼 때는
   //   ① 라이브 KAPT 시군구 목록(외부 API, 지역당 최대 10페이지)을 생략하고 DB(apt_master)만 쓴다 —
   //      DB 가 1순위 소스다(APTLIST-DB). 미등재 신축은 enrichment 의 resolveFacility 폴백이 받는다.
@@ -643,8 +647,13 @@ async function getAIRecommendations(userCondition) {
     Promise.allSettled(
       // REC-PERF-2026-07-10 (Sprint EEEE): 지역 단일쿼리 우선(12왕복→1왕복/지역, 131ms 실측) —
       //   null(미ingest·실패)이면 기존 월별 경로(MOLIT API 폴백 포함)로 안전 fallback.
-      targetRegions.map(async r => (await getRegionRecentTransactions(r.lawdCd))
-        ?? (_broadMode ? [] : await getTransactionsByApt(r.lawdCd, '')))
+      targetRegions.map(async r => {
+        const s0 = Date.now();
+        const v = (await getRegionRecentTransactions(r.lawdCd))
+          ?? (_broadMode ? [] : await getTransactionsByApt(r.lawdCd, ''));
+        _cq.regions.push({ lawd: r.lawdCd, ms: Date.now() - s0, rows: Array.isArray(v) ? v.length : 0 });
+        return v;
+      })
     ).then(results => results.map((r, i) => {
       if (r.status === 'fulfilled') return r.value;
       logger.warn({
@@ -1490,6 +1499,15 @@ async function getAIRecommendations(userCondition) {
         queries: _tt.collectQ - _tt.start,
         alias: _tt.alias - _tt.collectQ,
         analyze: _tt.collect - _tt.alias,
+        // 실제 소요(대기 시간 아님)
+        aliasMs: _cq.aliasMs, aptListMs: _cq.aptListMs,
+        regions: {
+          n: _cq.regions.length,
+          max: _cq.regions.reduce((m, r) => Math.max(m, r.ms), 0),
+          sum: _cq.regions.reduce((m, r) => m + r.ms, 0),
+          rows: _cq.regions.reduce((m, r) => m + r.rows, 0),
+          top: _cq.regions.slice().sort((a, b) => b.ms - a.ms).slice(0, 3),
+        },
       },
       rankFilter: _tt.rank - _tt.collect,
       facility: _tt.facility - _tt.rank,
