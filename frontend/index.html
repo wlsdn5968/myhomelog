@@ -1219,6 +1219,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .t0-hero .t0h-hd{display:flex;align-items:center;gap:8px;margin-bottom:9px;font-size:12px;font-weight:800;color:var(--t1)}
 .t0-hero .t0h-bdg{font-size:12px;font-weight:700;padding:2px 7px;border-radius:var(--radius-sm);background:var(--bg2);border:1px solid var(--bd);color:var(--t2);font-variant-numeric:tabular-nums}
 .t0-hero .t0h-g{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:7px}
+.t0-hero .t0h-src{margin-top:7px;font-size:12px;color:var(--t3);line-height:1.5}
 .t0-hero .t0h-c{background:var(--bg2);border:1px solid var(--bd);border-radius:var(--radius-base);padding:9px 10px}
 .t0-hero .t0h-l{font-size:12px;color:var(--t3)}
 .t0-hero .t0h-v{margin-top:4px;font-size:16px;font-weight:800;letter-spacing:-.02em;color:var(--t1);font-variant-numeric:tabular-nums}
@@ -8635,9 +8636,14 @@ function showDetail(p){
   if (_t0DealN > 0) _t0Cells.push(_t0hc('거래 건수', `${_t0DealN.toLocaleString()}건`, false, ''));
   if (p.recentDealDate) _t0Cells.push(_t0hc('최근 거래일', _escHtml(String(p.recentDealDate).slice(0,10).replace(/-/g,'.')), false, ''));
   if (p.buildYear) _t0Cells.push(_t0hc('준공년도', `${_escHtml(p.buildYear)}년`, false, '공동주택 정보·건축물대장'));
+  // DATA-BASIS-2026-10-19 (plans/167 §1-1): "최근 거래일"(데이터 기준) 셀 아래 "실거래 수집 시각"을 함께 — 둘 다 모르면 줄을 뺀다.
+  //   수집 시각은 health 의 lastIngestedAt(연도 포함)을 쓰고, 아직 없으면 데이터 상태 띠의 kst(연도 없음)로 대체.
+  const _t0SyncIso=(window._dataCounts&&window._dataCounts.lastIngestedAt)||null;
+  const _t0SyncTxt=_t0SyncIso?_fmtKstFull(_t0SyncIso):((window._syncData&&window._syncData.kst)||'');
   const _heroSection = `<div class="t0-hero">
     <div class="t0h-hd">실거래 요약${_t0DealN>0?`<span class="t0h-bdg">표본 ${_t0DealN.toLocaleString()}건</span>`:''}</div>
     <div class="t0h-g">${_t0Cells.join('')}</div>
+    ${_t0SyncTxt?`<div class="t0h-src">실거래 수집 ${_escHtml(_t0SyncTxt)} 기준 · 국토교통부 신고 자료라 계약 뒤 30일 안 신고분은 늦게 반영될 수 있어요</div>`:''}
   </div>`;
   document.getElementById('t0').innerHTML=`
     ${_heroSection}
@@ -10425,6 +10431,7 @@ function renderBookmarks(){
   el.innerHTML=_pushBtnHtml() + _kkoBtnHtml() + _bkShareBtn + _bkCmpBtn + bks.map((b,i)=>{
     const alerts=getAlerts();
     const target=alerts[b.aptName];
+    const _ntOff=!!getNotifyOff()[b.aptName];
     const hasVisit=!!(getNoteForApt(b.aptName)?.visitDate);
     const priceNow=b.avgPrice||0;
     const isHit=target&&priceNow>0&&priceNow<=target;
@@ -10436,6 +10443,7 @@ function renderBookmarks(){
       <input aria-label="목표가 (억)" class="bk-alert-inp" type="number" inputmode="decimal" step="0.1" placeholder="억" value="${target||''}" id="bk-alert-${i}" oninput="event.stopPropagation()">
       <button class="bk-alert-set" onclick="setAlert(${_aptNameJs},document.getElementById('bk-alert-${i}').value)">설정</button>
       ${target?`<span class="bk-alert-tag ${isHit?'hit':'set'}">${isHit?'목표가':'▼'+target+'억'}</span>`:''}
+      <button type="button" class="bk-alert-set" aria-pressed="${_ntOff?'true':'false'}" aria-label="${_ntOff?'이 단지 알림 켜기':'이 단지 알림 끄기'}" onclick="toggleNotifyOff(${_aptNameJs})" style="margin-left:auto;${_ntOff?'opacity:.55;text-decoration:line-through':''}">알림</button>
     </div>
     <div class="bk-memo-row" onclick="event.stopPropagation()" style="display:flex;gap:4px;margin-top:4px">
       <input aria-label="관심 단지 메모" type="text" placeholder="메모 (왜 이 가격?)" maxlength="40" value="${_escHtml(b.memo || '')}" id="bk-memo-${i}" oninput="event.stopPropagation()" style="flex:1;font-size:12px;padding:3px 6px;border:1px solid var(--bd);border-radius:var(--radius-sm);background:var(--bg-base);color:var(--t2)">
@@ -10479,7 +10487,15 @@ function _pushBtnHtml(){
   return `<div style="padding:8px 12px;border-bottom:1px solid var(--bd)"><button id="pushToggleBtn" onclick="event.stopPropagation();togglePush()" style="width:100%;padding:7px 10px;border-radius:var(--radius-base);border:1px solid ${_pushOn?'#7FB89A':'var(--bd)'};background:${_pushOn?'var(--grnL,#EAF6EF)':'var(--bg-base)'};color:${_pushOn?'var(--grn,#2E8B57)':'var(--t2)'};font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">${_pushOn?'새 거래 푸시 알림 켜짐 · 누르면 끄기':'새 거래 푸시 알림 켜기'}</button><div style="font-size:12px;color:var(--t3);margin-top:4px;text-align:center">관심 단지 새 실거래 반영 시 브라우저 알림 (일 1회 · 무료)</div></div>`;
 }
 function _pushItems(){
-  return getBookmarks().map(b=>({aptName:b.aptName,lawdCd:String(b.lawdCd||''),sigungu:b.sigungu||'',umdNm:b.umdNm||''})).filter(x=>/^\d{5}$/.test(x.lawdCd)).slice(0,30);
+  // TARGET-NOTIFY-2026-10-19 (plans/166 3-3): 목표가(억)와 단지별 알림 끔을 서버 스냅샷에 실어 매일 1회 알림(push-notify)이 판정한다.
+  //   서버 판정은 "신고된 새 거래 중 최저가가 목표가 이하" — 앱 배너(평균가가 목표 이하로 내려온 순간)와 다르다.
+  const alerts=getAlerts(), offs=getNotifyOff();
+  return getBookmarks().map(b=>{
+    const it={aptName:b.aptName,lawdCd:String(b.lawdCd||''),sigungu:b.sigungu||'',umdNm:b.umdNm||''};
+    const t=Number(alerts[b.aptName]); if(t>0) it.targetEok=t;
+    if(offs[b.aptName]) it.off=true;
+    return it;
+  }).filter(x=>/^\d{5}$/.test(x.lawdCd)).slice(0,30);
 }
 function _b64ToU8(base64){
   const pad='='.repeat((4-base64.length%4)%4);
@@ -10771,6 +10787,18 @@ function setAlert(aptName,val){
   if(v>0){a[aptName]=v;toast(`목표가를 ${v}억으로 설정했어요`);}
   else{delete a[aptName];toast('목표가를 해제했어요');}
   localStorage.setItem(ALERT_KEY,JSON.stringify(a));
+  try{ _schedulePushItemsSync(); }catch(_){} // TARGET-NOTIFY-2026-10-19: 목표가 변경을 서버 스냅샷에도 반영
+  renderBookmarks();
+}
+// TARGET-NOTIFY-2026-10-19 (plans/166 3-3): 단지별 알림 끔 — 관심 단지는 유지하고 그 단지의 새 거래·목표가 알림만 멈춘다
+const NOTIFY_OFF_KEY='mhl_notify_off';
+function getNotifyOff(){try{return JSON.parse(localStorage.getItem(NOTIFY_OFF_KEY)||'{}')}catch{return{}}}
+function toggleNotifyOff(aptName){
+  const o=getNotifyOff();
+  if(o[aptName]) delete o[aptName]; else o[aptName]=true;
+  try{ localStorage.setItem(NOTIFY_OFF_KEY,JSON.stringify(o)); }catch(_){}
+  toast(o[aptName]?'이 단지 알림을 껐어요. 관심 단지에는 그대로 있어요':'이 단지 알림을 다시 켰어요');
+  try{ _schedulePushItemsSync(); }catch(_){}
   renderBookmarks();
 }
 
@@ -14512,6 +14540,8 @@ function _popRows(j){
   return (j && j.degraded) ? rs.map(p => Object.assign({}, p, { avgDealAmount: null, dealCount60d: null, _degraded: true })) : rs;
 }
 function _fmtSgg(s){return String(s==null?'':s).replace(/^([가-힣]+?시)([가-힣]+구)(?=\s|$)/,'$1 $2');}
+// DATA-BASIS-2026-10-19: ISO → 'YYYY.MM.DD HH:mm'(KST). backend/utils/fmtKst.js 와 같은 계산(ICU 무관).
+function _fmtKstFull(iso){const d=new Date(iso);if(!iso||isNaN(d))return'';const k=new Date(d.getTime()+9*3600e3),p=n=>String(n).padStart(2,'0');return`${k.getUTCFullYear()}.${p(k.getUTCMonth()+1)}.${p(k.getUTCDate())} ${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`;}
 // LIST-D-2026-10-18 (Plan 163): 억 표기 공용 — 목록 화면부터 사용(다른 화면 이관은 별도). 값이 없거나 0 이하면 '—'.
 function _fmtEok(v, d){ const n = Number(v); if(!Number.isFinite(n) || n <= 0) return '—'; return n.toFixed(d == null ? 2 : d) + '억'; }
 function _escHtml(s){return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');}

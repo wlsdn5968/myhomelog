@@ -33,7 +33,8 @@ test('A2: 알림 URL 은 단지 1곳이면 ?apt=&area= 딥링크, 여럿이면 �
   assert.equal(m._notifyUrl([], ''), '/');
   const rows = [{ ingested_at: '2026-10-18T10:00:00Z', apt_name: '공릉풍림아이원', umd_nm: '공릉동', lawd_cd: '11350', deal_amount: 31000 }];
   const e = m._matchItems([{ aptName: '공릉풍림아이원', lawdCd: '11350', sigungu: '노원구', umdNm: '공릉동' }], rows, new Map(), new Date('2026-10-17T00:00:00Z'));
-  assert.deepEqual(e, [{ name: '공릉풍림아이원', count: 1, maxMan: 31000, area: '노원구 공릉동' }]);
+  // TARGET-NOTIFY-2026-10-19: minMan 추가(목표가 판정용) — targetEok 가 없으면 targetEok/hit 필드는 생기지 않는다
+  assert.deepEqual(e, [{ name: '공릉풍림아이원', count: 1, maxMan: 31000, minMan: 31000, area: '노원구 공릉동' }]);
   const src = read('../jobs/pushNotify.js');
   assert.match(src, /url: notifyUrl\(entries, ''\)/);
   assert.match(src, /webUrl: notifyUrl\(entries, 'https:\/\/myhomelog\.vercel\.app'\)/);

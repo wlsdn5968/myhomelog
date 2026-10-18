@@ -80,6 +80,9 @@ function sanitizeItems(items) {
     lawdCd: /^\d{5}$/.test(String(it?.lawdCd || '')) ? String(it.lawdCd) : null,
     sigungu: String(it?.sigungu || '').slice(0, 20),
     umdNm: String(it?.umdNm || '').slice(0, 20),
+    // TARGET-NOTIFY-2026-10-19 (plans/166 3-3): 목표가(억)·단지별 알림 끔 — 없으면 필드 자체를 두지 않아 구버전과 같다
+    ...(Number.isFinite(+it?.targetEok) && +it.targetEok > 0 ? { targetEok: Math.min(+it.targetEok, 9999) } : {}),
+    ...(it?.off === true ? { off: true } : {}),
   })).filter(it => it.aptName && it.lawdCd);
 }
 

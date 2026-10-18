@@ -43,12 +43,16 @@ async function loadRows(admin, table) {
   return { rows: data || [], missing: false };
 }
 
-/** 구독 1건의 items 를 신규 거래 rows 와 매칭 → [{name, count, maxMan}] (count desc) */
+/** 구독 1건의 items 를 신규 거래 rows 와 매칭 → [{name, count, maxMan, minMan, area, (targetEok, hit)}] (목표가 도달 먼저, 그다음 count desc)
+ *  TARGET-NOTIFY-2026-10-19 (plans/166 3-3 · 167): items 원소의 `off:true` 는 그 단지 알림 끔, `targetEok` 가 있으면
+ *  신규 신고 거래 중 최저가가 목표가 이하일 때 hit — 화면의 "평균가가 목표 이하로 내려온 순간" 과 정의가 다르다(서버에는 직전 평균이 없다).
+ *  필드가 없는 구버전 items 는 종전과 완전히 같이 동작한다. */
 function matchItems(rawItems, rows, aliasMap, since) {
   // DEDUP-2026-07-18 (실측: 카카오 연결 items 에 동일 단지 2건 — 북마크 로컬·서버 병합 중복) —
   //   같은 (aptName, lawdCd) 중복 항목이 거래를 이중 카운트해 '새 실거래 N건'을 부풀리는 것 차단.
   const seen = new Set();
   const items = (rawItems || []).filter(it => {
+    if (it && it.off === true) return false;
     const k = `${nn(it.aptName)}|${it.lawdCd}`;
     if (seen.has(k)) return false;
     seen.add(k);
@@ -62,15 +66,19 @@ function matchItems(rawItems, rows, aliasMap, since) {
       if (it.lawdCd !== r.lawd_cd) continue;
       if (nn(canon) !== nn(it.aptName) && nn(r.apt_name) !== nn(it.aptName)) continue;
       if (it.umdNm && r.umd_nm && norm(it.umdNm) !== norm(r.umd_nm)) continue;
-      const g = perItem.get(it.aptName) || { count: 0, maxMan: 0, area: [it.sigungu, it.umdNm].filter(Boolean).join(' ') };
+      const g = perItem.get(it.aptName) || { count: 0, maxMan: 0, minMan: Infinity, area: [it.sigungu, it.umdNm].filter(Boolean).join(' ') };
       g.count += 1;
-      g.maxMan = Math.max(g.maxMan, Number(r.deal_amount) || 0);
+      const man = Number(r.deal_amount) || 0;
+      g.maxMan = Math.max(g.maxMan, man);
+      if (man > 0) g.minMan = Math.min(g.minMan, man);
+      const target = Number(it.targetEok);
+      if (target > 0) { g.targetEok = target; g.hit = g.hit || (man > 0 && man / 10000 <= target); }
       perItem.set(it.aptName, g);
     }
   }
   return [...perItem.entries()]
-    .map(([name, g]) => ({ name, ...g }))
-    .sort((a, b) => b.count - a.count);
+    .map(([name, g]) => ({ name, ...g, minMan: g.minMan === Infinity ? 0 : g.minMan }))
+    .sort((a, b) => (b.hit === true) - (a.hit === true) || b.count - a.count);
 }
 
 // NOTIFY-DEEPLINK-2026-10-18 (plans/166 A2): 알림을 눌러도 첫 화면('/')으로만 갔다 — 단지 1곳이면 그 단지 상세 딥링크
@@ -87,7 +95,16 @@ function notifyUrl(entries, origin) {
 function buildBody(entries) {
   const top = entries[0];
   const extra = entries.length - 1;
+  if (top.hit === true) {
+    // 목표가 도달이 맨 앞(정렬 보장) — 평균이 아니라 "신고된 거래 중 최저가" 기준임을 문구에 밝힌다(매수 추천 아님은 앱 안내와 동일)
+    // 목표가 비교 문구는 소수 1자리(fmtEok 의 반올림이 29.8 → 30 으로 보여 "30억 이하 · 최저 30억" 처럼 읽히는 것 방지)
+    const minEok = (top.minMan / 10000).toFixed(1).replace(/\.0$/, '');
+    return `${top.name} 목표가 ${top.targetEok}억 이하 거래 신고 · 최저 ${minEok}억 (새 거래 ${top.count}건)${extra > 0 ? ` 외 ${extra}개 단지` : ''}`;
+  }
   return `${top.name} 새 실거래 ${top.count}건 · 최고 ${fmtEok(top.maxMan)}억${extra > 0 ? ` 외 ${extra}개 단지` : ''}`;
+}
+function buildTitle(entries, prefix) {
+  return `${prefix}${entries[0] && entries[0].hit === true ? '관심 단지 목표가 이하 거래' : '관심 단지 새 실거래'}`;
 }
 
 async function run() {
@@ -166,12 +183,14 @@ async function run() {
     } catch (_) { webpush = null; }
   }
   const pushProcessed = [];
+  let targetHits = 0; // TARGET-NOTIFY-2026-10-19: 목표가 도달 알림이 포함된 발송 수(웹푸시+카카오)
   if (webpush) {
     for (const s of push.rows) {
       pushProcessed.push(s.id);
       const entries = matchItems(Array.isArray(s.items) ? s.items : [], rows, aliasMap, sinceOf(s));
       if (!entries.length) continue;
-      const payload = JSON.stringify({ title: '관심 단지 새 실거래', body: buildBody(entries), url: notifyUrl(entries, '') });
+      if (entries[0].hit === true) targetHits += 1;
+      const payload = JSON.stringify({ title: buildTitle(entries, ''), body: buildBody(entries), url: notifyUrl(entries, '') });
       try {
         await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, timeout: 10000 }); // PUSH-TIMEOUT-2026-10-18: 응답 없는 주소가 순차 발송 전체를 멈추지 않게(web-push 3.6.7 timeout 옵션)
         sent += 1;
@@ -225,7 +244,8 @@ async function run() {
       continue;
     }
 
-    const msg = { title: '내집로그 관심 단지 새 실거래', description: buildBody(entries), webUrl: notifyUrl(entries, 'https://myhomelog.vercel.app') };
+    if (entries[0].hit === true) targetHits += 1;
+    const msg = { title: buildTitle(entries, '내집로그 '), description: buildBody(entries), webUrl: notifyUrl(entries, 'https://myhomelog.vercel.app') };
     let r = await sendKakaoMemo({ accessToken, ...msg });
     if (r.needsRefresh && (await doRefresh())) {
       r = await sendKakaoMemo({ accessToken, ...msg });
@@ -246,7 +266,7 @@ async function run() {
 
   const stats = {
     lawds: lawds.length, txScanned: rows.length,
-    subs: push.rows.length, sent, removed, failed,
+    subs: push.rows.length, sent, removed, failed, targetHits,
     webGate: webpush ? 'on' : (push.rows.length ? 'off(VAPID/pkg)' : 'off'),
     kakaoSubs: kakao.rows.length, kakaoSent, kakaoFailed, kakaoRemoved, kakaoRefreshed,
     kakaoGate: isKakaoConfigured() ? (kakao.missing ? 'off(table)' : 'on') : 'off(env)',
@@ -258,3 +278,5 @@ async function run() {
 module.exports = { run };
 module.exports._notifyUrl = notifyUrl;
 module.exports._matchItems = matchItems;
+module.exports._buildBody = buildBody;
+module.exports._buildTitle = buildTitle;
