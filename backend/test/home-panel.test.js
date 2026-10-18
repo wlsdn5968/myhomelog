@@ -273,8 +273,8 @@ test('155: 가로 모드 낮은 화면은 사용자가 손대기 전 접힘으�
   assert.ok(html.includes('_hpsDragged = true; _hpsUser = true;'), '끌기도 사용자 선택');
 });
 
-test('데스크톱 지도 화면은 아래 고지 띠를 숨기고, 띠의 내용은 패널 하단 줄에 빠짐없이 있다(2026-10-18 운영자 요청)', () => {
-  assert.ok(html.includes('@media(min-width:701px){ body.hp-on footer.legal-footer{display:none!important} }'));
+test('데스크톱은 아래 고지 띠를 숨기고(지도 화면), 띠의 내용은 패널 하단 줄에 빠짐없이 있다(2026-10-18 운영자 요청)', () => {
+  assert.ok(html.includes('@media(min-width:701px){ footer.legal-footer{display:none!important} }'));
   const s = html.indexOf('<div class="hp-ft">'), e = html.indexOf('</div>', s);
   const ft = html.slice(s, e);
   // 띠에 있던 것 전부: 면책 · 전문 보기 · 약관 · 개인정보 · 환불 · 지역별 실거래(앱 안 서버 렌더 페이지 링크) · 브리핑 · 사업자 정보 · ©
@@ -285,4 +285,23 @@ test('데스크톱 지도 화면은 아래 고지 띠를 숨기고, 띠의 내�
   assert.ok(ft.includes('aria-controls="hpBiz"') && ft.includes('aria-expanded="false"'));
   // 띠 자체는 지우지 않는다(목록 화면·SEO 링크)
   assert.ok(html.includes('<footer class="legal-footer">'));
+});
+
+test('데스크톱 띠를 없앤 대신 목록 사이드바 끝과 화면별 고지 줄이 띠의 내용을 빠짐없이 담는다(2026-10-18)', () => {
+  // 목록 화면: 사이드바 끝 줄(모바일은 드로어 유틸이 담당해 숨김)
+  const s = html.indexOf('<div class="lp-ft" id="lpLegal">'), e = html.indexOf('</div>', s);
+  assert.ok(s > 0 && html.indexOf('<div id="drawerUtil"') < s, '사이드바(.lpsc) 끝, 드로어 유틸 뒤');
+  const lp = html.slice(s, e);
+  for (const k of ['매수·매도 추천이 아니에요', 'openTerms()', 'href="/terms.html"', 'href="/privacy.html"', 'href="/refund.html"',
+    'href="/region"', 'href="/briefing"', '사업자등록번호 381-08-03668', '© 2026 내집로그', 'aria-controls="lpBiz"', '<span id="lpBiz" hidden>']) assert.ok(lp.includes(k), k);
+  assert.ok(html.includes('@media(max-width:700px){ #lpLegal{display:none!important} }'));
+  // 나머지 화면: 공용 고지 줄에 지역별 실거래·브리핑·사업자 정보
+  const vs = html.indexOf("const line = '<strong>매수·매도 추천이나 미래 가격 예측이 아니에요.</strong>");
+  const ve = html.indexOf('v.appendChild(d);', vs);
+  const vl = html.slice(vs, ve);
+  for (const k of ['href="/terms.html"', 'href="/privacy.html"', 'href="/refund.html"', '© 2026 내집로그',
+    'href="/region"', 'href="/briefing"', '사업자등록번호 381-08-03668', 'toggleBizInfo(this)', "aria-controls=\"biz-' + id + '\""]) assert.ok(vl.includes(k), k);
+  // 공용 펼침 함수는 하나
+  assert.equal((html.match(/function toggleBizInfo\(/g) || []).length, 1);
+  assert.ok(!html.includes("var b=document.getElementById('hpBiz')"), '인라인 토글 제거');
 });

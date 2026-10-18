@@ -905,7 +905,14 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .hp-ft button{background:none;border:0;padding:0;font:inherit;color:var(--t3);text-decoration:underline;cursor:pointer}
 /* 패널 하단 고지(2026-10-18 운영자 요청): 데스크톱 지도 화면은 아래 고지 띠(약 100px)가 지도를 가렸다 — 지도 화면에서만 띠를 숨기고
    띠의 내용(면책·전문 보기·약관·개인정보·환불·지역별 실거래·브리핑·사업자 정보·©)을 왼쪽 패널 하단 줄로 옮긴다. 다른 화면은 그대로 */
-@media(min-width:701px){ body.hp-on footer.legal-footer{display:none!important} }
+@media(min-width:701px){ footer.legal-footer{display:none!important} }
+/* (2026-10-18 보강) 실측: 데스크톱에서 띠가 실제로 보이던 곳은 지도·목록·대출 계산뿐(나머지 화면은 절대 배치 뷰가 덮음), 대출 계산은 자체 고지 줄과 중복이었다.
+   그래서 데스크톱 전체에서 숨기고 — 지도는 패널 하단 줄, 목록은 사이드바 끝 줄(#lpLegal), 나머지 화면은 각 화면 끝 고지 줄(.view-legal-line)이 같은 내용을 담는다 */
+.lp-ft{padding:14px 16px 18px;border-top:1px solid var(--bd);font-size:12px;font-weight:500;line-height:1.6;color:var(--t3)}
+.lp-ft a{color:var(--t3)}
+.lp-ft button,.view-legal-line button{background:none;border:0;padding:0;font:inherit;color:var(--acc);text-decoration:underline;cursor:pointer}
+.lp-ft button{color:var(--t3)}
+@media(max-width:700px){ #lpLegal{display:none!important} }
 .hp-more{display:flex;align-items:center;flex-wrap:wrap;gap:0 16px;margin-top:10px}
 .hp-more-l{font-size:14px;color:var(--t3)}
 .hp-fb{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 4px;border:none;background:none;color:var(--acc);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
@@ -2308,6 +2315,13 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <div class="sh"><span class="st">계정 · 설정</span></div>
     <div class="sb" id="drawerUtilBody" style="padding:10px 12px"></div>
   </div>
+  <!-- 2026-10-18 운영자 요청: 데스크톱 아래 고지 띠를 없애고 목록 화면은 사이드바 끝에 같은 내용을 둔다(모바일은 드로어 유틸이 담당 — 숨김) -->
+  <div class="lp-ft" id="lpLegal">매수·매도 추천이 아니에요. 결정과 책임은 본인에게 있어요. 출처 국토교통부 실거래가
+    · <button type="button" onclick="openTerms()">전문 보기</button>
+    · <a href="/terms.html" target="_blank">이용약관</a> · <a href="/privacy.html" target="_blank">개인정보</a> · <a href="/refund.html" target="_blank">환불</a>
+    <br><a href="/region" target="_blank">지역별 실거래 데이터</a> · <a href="/briefing" target="_blank">오늘의 브리핑</a>
+    · <button type="button" aria-expanded="false" aria-controls="lpBiz" onclick="toggleBizInfo(this)">사업자 정보</button><span id="lpBiz" hidden><br>공명랩 · 대표 우진우 · 사업자등록번호 381-08-03668 · 서울특별시 노원구 섬밭로 139 · <a href="mailto:wlsdn5968@gmail.com">wlsdn5968@gmail.com</a> · © 2026 내집로그</span>
+  </div>
 </div></div>
 
 <!-- HOME-PANEL-2026-10-18 (Plan 151, 시안 화면 B): 지도 화면(데스크톱 >700px)의 왼쪽 패널 — 사이드바(.lp)는 DOM 그대로 두고
@@ -2328,7 +2342,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <p>보유 주택, 자금, 희망 지역은 보고서 화면에서 입력해요.</p>
     <button type="button" class="hp-cta" onclick="sv('report')">내 조건으로 맞춤 보고서 받기</button>
   </div>
-  <div class="hp-ft">매수·매도 추천이 아니에요. 출처 국토교통부 실거래가<span class="hp-ft-l"> · <button type="button" onclick="openTerms()">전문 보기</button> · <a href="/terms.html" target="_blank">이용약관</a> · <a href="/privacy.html" target="_blank">개인정보</a> · <a href="/refund.html" target="_blank">환불</a><br><a href="/region" target="_blank">지역별 실거래 데이터</a> · <a href="/briefing" target="_blank">오늘의 브리핑</a> · <button type="button" id="hpBizT" aria-expanded="false" aria-controls="hpBiz" onclick="var b=document.getElementById('hpBiz'),o=b.hidden;b.hidden=!o;this.setAttribute('aria-expanded',String(o))">사업자 정보</button><span id="hpBiz" hidden><br>공명랩 · 대표 우진우 · 사업자등록번호 381-08-03668 · 서울특별시 노원구 섬밭로 139 · <a href="mailto:wlsdn5968@gmail.com">wlsdn5968@gmail.com</a> · © 2026 내집로그</span></span></div>
+  <div class="hp-ft">매수·매도 추천이 아니에요. 출처 국토교통부 실거래가<span class="hp-ft-l"> · <button type="button" onclick="openTerms()">전문 보기</button> · <a href="/terms.html" target="_blank">이용약관</a> · <a href="/privacy.html" target="_blank">개인정보</a> · <a href="/refund.html" target="_blank">환불</a><br><a href="/region" target="_blank">지역별 실거래 데이터</a> · <a href="/briefing" target="_blank">오늘의 브리핑</a> · <button type="button" id="hpBizT" aria-expanded="false" aria-controls="hpBiz" onclick="toggleBizInfo(this)">사업자 정보</button><span id="hpBiz" hidden><br>공명랩 · 대표 우진우 · 사업자등록번호 381-08-03668 · 서울특별시 노원구 섬밭로 139 · <a href="mailto:wlsdn5968@gmail.com">wlsdn5968@gmail.com</a> · © 2026 내집로그</span></span></div>
 </aside>
 
 <!-- CENTER -->
@@ -6541,13 +6555,14 @@ function updateDataQuality(fq, isAdmin){
   }
   window._dqData = fq;
   sub.textContent = fq.warn
-    ? `⚠ 주차 데이터 누락 ${fq.parkingMissingPct!=null?fq.parkingMissingPct+'%':''} — self-heal 진행 중`
-    : `✓ facility 데이터 정상 (총 ${(fq.total||0).toLocaleString()}개)`;
+    ? `⚠ 주차 정보가 빠진 단지 ${fq.parkingMissingPct!=null?fq.parkingMissingPct+'%':''}, 자동으로 채우는 중이에요`
+    : `✓ 단지 정보 정상이에요 (총 ${(fq.total||0).toLocaleString()}곳)`;
 }
 function showDataQuality(){
   const fq = window._dqData;
-  if(!fq){ if(typeof toast==='function') toast('데이터 품질 정보 없음'); return; }
-  const msg = `facility 데이터 품질 (총 ${(fq.total||0).toLocaleString()}개) — 주차누락 ${fq.parkingMissing.toLocaleString()}(${fq.parkingMissingPct}%)·세대수0 ${fq.householdsZero}·KAPT조회실패 ${fq.emptyFetch}·미적재 ${fq.facilityNull} · ${fq.warn?'⚠ 백필 self-heal 진행중':'✓ 정상'}`;
+  if(!fq){ if(typeof toast==='function') toast('단지 정보 품질을 아직 불러오지 못했어요'); return; }
+  // 2026-10-18: 관리자 화면에도 내부 용어(facility·KAPT·self-heal)를 쓰지 않는다 — 뜻은 그대로(주차 상세 누락·세대수 0·공동주택 정보 조회 실패·정보 없음, 경고 시 자동 보충 중)
+  const msg = `단지 정보 품질 (총 ${(fq.total||0).toLocaleString()}곳): 주차 정보 없음 ${fq.parkingMissing.toLocaleString()}곳(${fq.parkingMissingPct}%) · 세대수 0 ${fq.householdsZero}곳 · 공동주택 정보 조회 실패 ${fq.emptyFetch}곳 · 정보 없음 ${fq.facilityNull}곳. ${fq.warn?'⚠ 자동으로 채우는 중이에요':'✓ 정상이에요'}`;
   if(typeof toast==='function') toast(msg);
 }
 
@@ -11288,18 +11303,32 @@ document.addEventListener('DOMContentLoaded', () => {
       + ' <a href="/terms.html" style="color:var(--acc);text-decoration:underline">이용약관</a>'
       + ' · <a href="/privacy.html" style="color:var(--acc);text-decoration:underline">개인정보</a>'
       + ' · <a href="/refund.html" style="color:var(--acc);text-decoration:underline">환불</a>'
-      + ' · © 2026 내집로그';
+      + ' · © 2026 내집로그'
+      // 2026-10-18: 데스크톱 아래 띠를 없앴으므로 띠에만 있던 지역별 실거래·브리핑 링크와 사업자 정보도 여기 둔다
+      + '<br><a href="/region" style="color:var(--acc);text-decoration:underline">지역별 실거래 데이터</a>'
+      + ' · <a href="/briefing" style="color:var(--acc);text-decoration:underline">오늘의 브리핑</a>';
     ['view-calc','view-clause','view-biz','view-news','view-subs','view-report','view-guide'].forEach(id => {
       const v = document.getElementById(id);
       if (!v || v.querySelector('.view-legal-line')) return;
       const d = document.createElement('div');
       d.className = 'view-legal-line';
       d.style.cssText = 'flex-shrink:0;margin-top:18px;padding:10px 0 4px;border-top:1px solid var(--bd);font-size:12px;color:var(--t3);line-height:1.7;text-align:center';
-      d.innerHTML = line;
+      d.innerHTML = line + ' · <button type="button" aria-expanded="false" aria-controls="biz-' + id + '" onclick="toggleBizInfo(this)">사업자 정보</button>'
+        + '<span id="biz-' + id + '" hidden><br>공명랩 · 대표 우진우 · 사업자등록번호 381-08-03668 · 서울특별시 노원구 섬밭로 139 · <a href="mailto:wlsdn5968@gmail.com" style="color:var(--t3);text-decoration:underline">wlsdn5968@gmail.com</a></span>';
       v.appendChild(d);
     });
   } catch (_) {}
 });
+// 사업자 정보 펼침(패널·사이드바·화면별 고지 줄 공용) — 버튼의 aria-controls 가 가리키는 줄을 열고 닫는다
+function toggleBizInfo(btn){
+  try{
+    const b = document.getElementById(btn.getAttribute('aria-controls'));
+    if(!b) return;
+    const open = b.hidden;
+    b.hidden = !open;
+    btn.setAttribute('aria-expanded', String(open));
+  }catch(_){}
+}
 function getLoanAmt(){const r=calcC();return r?r.fin:0;}
 function calcC(){
   const buy=parseFloat(document.getElementById('bp')?.value)||0,cash=parseFloat(document.getElementById('mc')?.value)||0,inc=parseFloat(document.getElementById('inc')?.value)||0;
