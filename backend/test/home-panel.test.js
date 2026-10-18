@@ -85,7 +85,7 @@ test('Plan 151 ①: 행 가격은 avgDealAmount(만원) → 억, 값이 없으�
   const { els } = runRender(SAMPLE);
   const h = els.hpList.innerHTML;
   assert.ok(h.includes('<span class="hp-pr">5.16억</span>'), h.slice(0, 400));
-  assert.ok(h.includes('<span class="hp-ct">60건</span>'));
+  assert.ok(h.includes('<span class="hp-ct"><span class="hp-ctl">거래 </span>60건</span>'));
   assert.ok(h.includes('<span class="hp-pr"></span>'), '평균가 0 인 행은 빈칸이어야 한다');
   assert.ok(h.includes('경기 수원시 영통구 영통동'), '지역 = 시도 + 시군구 + 동');
   assert.ok(h.includes('부산 남구 대연동'), '같은 이름의 구(남구)는 시도로 구별');
@@ -157,7 +157,7 @@ test('Plan 151 ④: 지도 화면만 사이드바를 숨기고 목록 화면은 
   assert.ok(extractFn(html, 'sv').includes('_hpApply(v);'));
   assert.match(html, /@media\(min-width:701px\)\{\s*\n\s*body\.hp-on \.lp\{display:none!important\}/);
   const apply = extractFn(html, '_hpApply');
-  assert.ok(apply.includes("window.innerWidth > 700"), '모바일(≤700px)에는 패널을 켜지 않는다(151b 전까지)');
+  assert.ok(apply.includes("window.innerWidth > 700"), '데스크톱·모바일 분기는 700px(CSS min-width:701px 와 같은 경계)');
   assert.ok(extractFn(html, 'renderMarkers').includes('_hpNote(fl)'), '안내 개수는 필터 적용 뒤 목록 기준');
   assert.ok(extractFn(html, 'showPop').includes('_hpNote(null)'));
 });
@@ -173,4 +173,52 @@ test('Plan 151: 검색창은 노드 하나를 옮긴다(이중 입력칸 없음)
   assert.equal((html.match(/id="hpSearchSlot"/g) || []).length, 1);
   const place = extractFn(html, '_hpSearchPlace');
   assert.ok(place.includes('slot.appendChild(hs)') && place.includes('insertBefore(hs, _hpSearchPh)'));
+});
+
+test('Plan 151b: 모바일 목록 시트 — 시안 값(위 모서리 16·그림자·손잡이 36×4·행 최소 60)과 지도 줄임', () => {
+  const i = html.indexOf('HOME-SHEET-2026-10-18 (Plan 151b');
+  assert.ok(i > 0);
+  const css = html.slice(i, html.indexOf('</style>', i));
+  assert.ok(css.includes('border-radius:16px 16px 0 0;box-shadow:0 -4px 20px rgba(20,30,45,.1)'));
+  assert.ok(css.includes('width:36px;height:4px'));
+  assert.ok(css.includes('min-height:60px'));
+  // 시트가 지도를 덮지 않고 지도를 줄인다 — 지도 출처 표기·로고·이 지역 단지 보기 버튼이 가려지지 않게
+  assert.ok(css.includes('body.hp-on #mapEl{margin-bottom:var(--hps-pad,0px)}'));
+  for (const sel of ['#mMapCap', '#mhint', '.fab-ai', '.fab-bm', '.bm-pop']) assert.ok(css.includes(`body.hp-on ${sel}{bottom:calc(var(--hps-pad,0px)`), `${sel} 가 시트 위로 오르지 않는다`);
+  assert.ok(css.includes('.app:has(#MSHEET.on) .hp{visibility:hidden}'), '마커 시트가 열리면 목록 시트를 내린다');
+  // 시안에 없는 지역 칩·표 머리는 모바일에서 숨김, "거래 N건" 앞말은 모바일에서만
+  assert.ok(css.includes('.hp-s,.hp-chips,.hp-th,.hp-rep p,.hp-ft-l{display:none!important}'));
+  assert.ok(css.includes('.hp-ctl{display:inline}'));
+  const { els } = runRender(SAMPLE);
+  assert.ok(els.hpList.innerHTML.includes('<span class="hp-ct"><span class="hp-ctl">거래 </span>60건</span>'));
+});
+
+test('Plan 151b: 멈춤 3단계 — 기본은 지도 영역 52% 지점(시트 48%), 펼침은 위 8px, 접힘은 제목 줄 · 펼쳐도 지도는 다시 줄이지 않는다', () => {
+  const props = {}; const cls = new Set(); const grab = { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; } };
+  const ctx = {
+    document: {
+      body: { style: { setProperty: (k, v) => { props[k] = v; }, removeProperty: (k) => { delete props[k]; } }, classList: { toggle: (c, on) => (on ? cls.add(c) : cls.delete(c)), remove: (c) => cls.delete(c) } },
+      querySelector: (s) => (s === '.app' ? { clientHeight: 700 } : null),
+      getElementById: (id) => (id === 'hpHd' ? { offsetTop: 0, offsetHeight: 56 } : id === 'hpGrab' ? grab : null),
+    },
+    setTimeout: () => 0, window: {},
+  };
+  vm.createContext(ctx);
+  vm.runInContext(['let _hpsState = \'base\', _hpsPad = -1, _hpsDragged = false;', ...['_hpsMetrics', '_hpMapResize', '_hpsSet', '_hpsTap'].map(n => extractFn(html, n)),
+    'globalThis.S = _hpsSet; globalThis.T = _hpsTap; globalThis.st = () => _hpsState;'].join('\n'), ctx);
+  ctx.S('base');
+  assert.equal(props['--hps-h'], '336px'); assert.equal(props['--hps-pad'], '336px'); // 700 × 0.48
+  ctx.T();
+  assert.equal(ctx.st(), 'full'); assert.equal(props['--hps-h'], '692px'); assert.equal(props['--hps-pad'], '336px', '펼침은 지도 크기를 바꾸지 않는다');
+  assert.ok(cls.has('hps-full')); assert.equal(grab.attrs['aria-expanded'], 'true');
+  ctx.T(); assert.equal(ctx.st(), 'base');
+  ctx.S('min'); assert.equal(props['--hps-h'], '56px'); assert.equal(props['--hps-pad'], '56px');
+  ctx.T(); assert.equal(ctx.st(), 'base', '접힘에서 누르면 기본으로');
+});
+
+test('Plan 151b: _hpApply — 모바일 지도 화면이면 시트, 그 밖이면 시트 값을 걷는다', () => {
+  const apply = extractFn(html, '_hpApply');
+  assert.ok(apply.includes('if(on && !desk){ _hpsSet(_hpsState); _hpLoad(); }'));
+  assert.ok(apply.includes('else _hpsClear();'));
+  assert.ok(apply.includes('_hpSearchPlace(on && desk);'), '검색창은 데스크톱에서만 띠로');
 });
