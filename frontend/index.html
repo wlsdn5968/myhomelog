@@ -1419,7 +1419,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 
 /* 특약 뷰 — Phase 4 (2026-04-26): absolute fill 로 위 빈 공간 완전 차단.
    .app{position:relative} 와 짝. 위 큰 여백 root cause = flex 자식 정렬 문제. */
-.clause-view{position:absolute;top:84px;left:0;right:0;bottom:0;overflow-y:auto;padding:10px 22px 22px;display:none;flex-direction:column;gap:0;background:var(--bg);z-index:1}
+.clause-view{position:absolute;top:var(--biz-top,84px);left:0;right:0;bottom:0;overflow-y:auto;padding:10px 22px 22px;display:none;flex-direction:column;gap:0;background:var(--bg);z-index:1}
 .clause-view.active{display:flex}
 .cv-hero{background:linear-gradient(135deg,var(--acc-bg),var(--accD));color:var(--acc-ink);border-radius:var(--radius-md);padding:10px 16px;margin-bottom:12px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .cv-hero h2{font-size:14px;font-weight:700;margin:0}
@@ -1449,11 +1449,11 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
    header(54) + syncBanner(30) = 84px 가 view 위에 그려져 첫 child 헤더가 가림.
    변경: top:0 → top:84px (header + syncBanner 합).
    syncBanner dismiss 시 30px 빈 공간 발생하나, 환각·잘림 보다 안전. */
-.biz-view{position:absolute;top:84px;left:0;right:0;bottom:0;overflow-y:auto;padding:10px 22px 22px;display:none;flex-direction:column;gap:0;background:var(--bg);z-index:1}
+.biz-view{position:absolute;top:var(--biz-top,84px);left:0;right:0;bottom:0;overflow-y:auto;padding:10px 22px 22px;display:none;flex-direction:column;gap:0;background:var(--bg);z-index:1}
 /* Sprint OOOOO-3 (운영자 발견 "동기화 글자 짤림", 실측): 헤더가 66px(≥701px)로 커진 뒤에도 절대배치 뷰
    top:84px(구 header 54 + syncBanner 30) 고정 → 뷰 흰 배경이 syncBanner 하단 ~12.6px 를 덮어 글자 하단 절단.
    데스크톱 = header 66 + syncBanner ~31 = 97px 보정(모바일은 헤더 54 유지라 84 그대로). */
-@media(min-width:701px){ .clause-view,.biz-view{top:96px} } /* HEADER-V2-2026-10-18 (Plan 152): 헤더 66→64 — 64 + 동기화 띠 32.2(미리보기 1440 실측, 주석의 ~31 은 옛 값) */
+@media(min-width:701px){ .clause-view,.biz-view{top:var(--biz-top,96px)} } /* VIEW-TOP-2026-10-18: 실제 위치는 _bizTop() 이 헤더·동기화 띠의 아래 끝을 재서 --biz-top 으로 준다. 괄호 안 값은 스크립트 전 기본값(헤더 64 + 띠 32) */
 .biz-view.active{display:flex}
 /* Phase 5 (2026-04-26): view-report 는 .biz-view 클래스를 쓰지만 사이드바(.lp)와 함께 표시되어야 함
    주의: .biz-view 들은 모두 BODY 직계 자식이고, .lp 는 .app(BODY 자식) 안에 있음 → flex item 으로 만들면 .lp 아래로 떨어짐
@@ -12017,6 +12017,22 @@ function _hpsTap(){
     });
   });
 })();
+// VIEW-TOP-2026-10-18: 절대 배치 뷰(.biz-view·.clause-view — 보고서·브리핑·청약·특약·사용법 등)의 위쪽을 헤더와 동기화 띠의
+//   실제 아래 끝에 맞춘다. 고정값(데스크톱 96·모바일 84)은 띠 높이(실측 32.2, 주석은 31)·헤더 높이가 바뀔 때마다 어긋났고,
+//   모바일은 띠가 숨는데도 84(54+30)라 30px 빈 줄이 생겼다. offsetTop 기준이라 스크롤과 무관하다.
+function _bizTop(){
+  try{
+    const h = document.querySelector('header:not(.lv-top)'), sb = document.getElementById('syncBanner');
+    let b = h ? h.offsetTop + h.offsetHeight : 0;
+    if(sb && getComputedStyle(sb).display !== 'none') b = Math.max(b, sb.offsetTop + sb.offsetHeight);
+    if(b > 0) document.documentElement.style.setProperty('--biz-top', Math.round(b) + 'px');
+  }catch(_){}
+}
+try{ window.addEventListener('DOMContentLoaded', () => {
+  _bizTop();
+  if(window.ResizeObserver){ const ro = new ResizeObserver(_bizTop); ['syncBanner'].forEach(id => { const e = document.getElementById(id); if(e) ro.observe(e); }); const h = document.querySelector('header:not(.lv-top)'); if(h) ro.observe(h); }
+  window.addEventListener('resize', _bizTop);
+}); }catch(_){}
 let _hpView = 'map';
 function _hpApply(v){
   try{

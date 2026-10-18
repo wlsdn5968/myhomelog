@@ -63,7 +63,15 @@ test('Plan 152 ④: 탭 순서·개수 그대로', () => {
   assert.deepEqual(order.slice(0, 7), ['news', 'map', 'list', 'report', 'clause', 'subs', 'calc']);
 });
 
-test('Plan 152 ⑤: 절대 배치 뷰 상단 = 헤더 64 + 동기화 띠 32(실측 32.2)', () => {
-  assert.ok(html.includes('@media(min-width:701px){ .clause-view,.biz-view{top:96px} }'));
-  assert.ok(!html.includes('.clause-view,.biz-view{top:97px}'));
+test('Plan 152 ⑤ → VIEW-TOP: 절대 배치 뷰 위쪽 = 헤더·동기화 띠의 실제 아래 끝(고정값 대신 측정)', () => {
+  assert.ok(html.includes('.clause-view{position:absolute;top:var(--biz-top,84px);'));
+  assert.ok(html.includes('.biz-view{position:absolute;top:var(--biz-top,84px);'));
+  assert.ok(html.includes('@media(min-width:701px){ .clause-view,.biz-view{top:var(--biz-top,96px)} }'));
+  assert.ok(!/\.clause-view,\.biz-view\{top:\d+px\}/.test(html), '고정 px 값이 남아 있다');
+  const i = html.indexOf('function _bizTop(){');
+  const fn = html.slice(i, html.indexOf('\n}\n', i));
+  assert.ok(fn.includes("document.querySelector('header:not(.lv-top)')"));
+  assert.ok(fn.includes("getComputedStyle(sb).display !== 'none'"), '띠가 숨으면(모바일) 헤더 아래 끝까지만');
+  assert.ok(fn.includes('offsetTop + h.offsetHeight') && fn.includes('offsetTop + sb.offsetHeight'), '스크롤과 무관한 offset 기준');
+  assert.ok(html.includes("const ro = new ResizeObserver(_bizTop);"), '띠가 켜지고 꺼질 때 다시 잰다');
 });
