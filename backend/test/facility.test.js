@@ -562,7 +562,7 @@ test('_br 보존 — 백필을 실제로 실행해 건축물대장 값이 payloa
 // 여기서 고정하는 것은 "해소분을 어떻게 세는가" 다. 세는 방법을 틀리면 수치가 조용히 거짓이 된다.
 test('facilityQuality — 건축물대장 해소분은 모집단 안에서만 센다', () => {
   const fs = require('fs'); const path = require('path');
-  const src = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
+  const src = fs.readFileSync(path.join(__dirname, '../services/healthCounts.js'), 'utf8');
   const i = src.indexOf('async function getFacilityQuality');
   assert.ok(i >= 0, 'getFacilityQuality 를 못 찾았다');
   const body = src.slice(i, i + 4000);
