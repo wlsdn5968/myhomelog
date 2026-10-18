@@ -1113,9 +1113,20 @@ async function getAIRecommendations(userCondition) {
   // LLLLLL-3 (운영자 제보 'YM프라젠 83세대 소형이 세대수 null 로 게이트 우회'): KAPT 미매칭·세대수 null 단지는
   //   건축물대장(getBuildingTitle, SSSS 연동)으로 세대수 보강. building_register 캐시 우선 → miss 만
   //   지번(적재분)+Kakao 법정동+건축HUB(graceful 8s). 실패 시 null(기존 동작). 렌즈 합집합 전체(겹침 제외 최대 100 — 15곳 컷은 보강 뒤 :1329)에 대해 실행, Redis 캐시로 콜드 1회만. STALE-COMMENT-2026-09-28 (Plan 123): 종전 "top-15 로 bounded" 는 MULTI-LENS(2026-09-05) 이후 사실이 아니다.
+  // BR-BUDGET-2026-10-18: 운영 계측(facilityDetail, 12:48 UTC 서울 전체) — enrich 5,441ms 중 건축물대장 10건 최대 5,311ms
+  //   (rf 12건 최대 230ms·역 거리 454ms). 추천 안에서는 2초까지만 기다리고, 늦으면 이번 응답은 세대수 미확인으로 둔다.
+  //   늦은 조회는 끊지 않는다 — 성공하면 getBuildingTitle 이 building_register 에 저장해 다음 검색부터 DB 로 바로 나온다.
+  //   이렇게 덜 채운 결과는 아래에서 짧게(10분) 캐시한다(3시간 고정 방지).
+  const BR_BUDGET_MS = 2000;
+  const _BR_LATE = Symbol('brLate');
+  let _brLate = 0;
   const _brHh = async (apt) => {
     try {
-      const t = await _tm('br', getBuildingTitle({ lawdCd: apt.lawdCd, sigungu: apt.sigungu || '', umdNm: apt.umdNm || '', aptName: apt.aptName }));
+      const p = _tm('br', getBuildingTitle({ lawdCd: apt.lawdCd, sigungu: apt.sigungu || '', umdNm: apt.umdNm || '', aptName: apt.aptName }));
+      let timer;
+      const t = await Promise.race([p, new Promise(r => { timer = setTimeout(() => r(_BR_LATE), BR_BUDGET_MS); if (timer.unref) timer.unref(); })]);
+      clearTimeout(timer);
+      if (t === _BR_LATE) { _brLate++; p.catch(() => {}); return null; }
       return (t && Number.isFinite(t.hhldCnt) && t.hhldCnt > 0) ? t.hhldCnt : null;
     } catch (_) { return null; }
   };
@@ -1488,6 +1499,7 @@ async function getAIRecommendations(userCondition) {
         stCoords: _tt.stCoords ? _tt.stCoords - (_tt.enrich || _tt.rank) : null,
         subway: (_tt.subway && _tt.stCoords) ? _tt.subway - _tt.stCoords : null,
         rest: _tt.facility - (_tt.subway || _tt.enrich || _tt.rank),
+        brLate: _brLate,
         calls: _fd,
       },
       coords: _tt.coords - _tt.facility,
@@ -1556,8 +1568,10 @@ async function getAIRecommendations(userCondition) {
     coordMissingCount: missingCoords,
     disclaimer: '본 결과는 국토교통부 실거래가 데이터 기반 정보 정리이며, 매수·매도 추천이 아니에요. 모든 의사결정의 책임은 본인에게 있어요.',
   };
-  cache.set(cacheKey, result, 10800); // REC-PERF-2026-07-10 (Sprint EEEE): 30min→3h — 데이터는 daily cron만 갱신, 인기 조합 콜드 빈도 1/6
-  require('./redisCache').rset(cacheKey, result, 10800).catch(() => {}); // Sprint AAAAAA — 인스턴스 간 공유(fire-and-forget)
+  // BR-BUDGET-2026-10-18: 건축물대장을 기다리다 끊은 단지가 있으면 덜 채운 결과라 10분만 캐시한다(늦은 조회가 DB 에 저장된 뒤 다시 계산).
+  const _recTtl = _brLate > 0 ? 600 : 10800;
+  cache.set(cacheKey, result, _recTtl); // REC-PERF-2026-07-10 (Sprint EEEE): 30min→3h — 데이터는 daily cron만 갱신, 인기 조합 콜드 빈도 1/6
+  require('./redisCache').rset(cacheKey, result, _recTtl).catch(() => {}); // Sprint AAAAAA — 인스턴스 간 공유(fire-and-forget)
   return { ...result, fromCache: false };
 }
 

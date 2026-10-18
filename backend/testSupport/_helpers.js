@@ -415,6 +415,7 @@ const _SHARE_EXPAND_PAIR = String.fromCharCode(36) + String.fromCharCode(96);
  *   - coordsByName / subwayByName: 특정 단지에만 좌표·최근접 역 거리를 주고 싶을 때(이름 키).
  *     기본은 전부 좌표 미해결(null) — 대부분의 계약(예산·게이트)엔 좌표가 필요 없다.
  *   - getNearbyAmenitiesFixed: getNearbyAmenities 가 항상 돌려줄 값(기본 null = 중간값 경로).
+ *   - getBuildingTitle: 건축물대장 조회 가짜 함수(기본 즉시 null).
  * @param {(ps: typeof import('../services/propertyService')) => Promise<any>} fn
  */
 async function _withRecStubs(fixture, fn) {
@@ -511,7 +512,8 @@ async function _withRecStubs(fixture, fn) {
       getCachedSchoolsBatch: async (inputs) => inputs.map(() => []), // 전부 히트(빈 배열) → 2차 조회가 안 걸린다
     },
     [brPath]: {
-      getBuildingTitle: async () => null, // 건축물대장 보강도 실패해야 "미확인" 이 끝까지 유지된다
+      // 건축물대장 보강도 실패해야 "미확인" 이 끝까지 유지된다. fixture.getBuildingTitle 로 바꿔 끼울 수 있다(BR-BUDGET 테스트).
+      getBuildingTitle: fixture.getBuildingTitle || (async () => null),
       parseJibun: () => null, resolveBjdong: async () => null, resolveJibun: async () => null, fetchRecapOnly: async () => null,
     },
     [kakaoPath]: {
