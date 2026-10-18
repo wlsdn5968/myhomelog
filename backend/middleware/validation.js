@@ -63,10 +63,11 @@ function validateTransactionQuery(req, res, next) {
   if (lawdCd && (!/^\d{5}$/.test(lawdCd) || !require('../services/transactionService').isKnownLawdCd(lawdCd))) {
     return res.status(400).json({ error: '지원하지 않는 지역이에요.' });
   }
-  // 거래년월: YYYYMM — 달 01~12, 2006년(실거래 공개 시작)부터 올해까지만(임의 조합으로 캐시를 피해 외부 API 를 부르지 못하게)
+  // 거래년월: YYYYMM — 달 01~12, 2006년(실거래 공개 시작)부터 다음 해까지만(임의 조합으로 캐시를 피해 외부 API 를 부르지 못하게).
+  //   상한을 UTC 올해로 두면 프런트가 한국 시간으로 만든 새해 1월(1월 1일 00~09시 KST)이 400 이 된다 — 다음 해까지 허용.
   if (dealYm) {
     const y = Number(String(dealYm).slice(0, 4)), m = Number(String(dealYm).slice(4, 6));
-    if (!/^\d{6}$/.test(dealYm) || m < 1 || m > 12 || y < 2006 || y > new Date().getUTCFullYear()) {
+    if (!/^\d{6}$/.test(dealYm) || m < 1 || m > 12 || y < 2006 || y > new Date().getUTCFullYear() + 1) {
       return res.status(400).json({ error: '거래년월 형식: YYYYMM' });
     }
   }

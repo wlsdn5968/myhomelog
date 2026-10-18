@@ -7600,7 +7600,7 @@ function renderListGrid(){
     if (ib) h += `<h2 class="ld-h1">예산 안에 드는 단지 ${ib}건</h2>`;
     // LIST-COUNT-2026-10-18: 예산 매치(inBudget)는 최근 6개월 거래 단지(totalTx)에서 센다 — 단지 목록 수(totalAptsInRegion)의
     //   부분집합이 아니라 "전체 단지 3,409개 중"이 4,522곳 분석과 모순됐다(운영 실측). 모집단을 그대로 밝힌다.
-    const tt = searchMeta ? _num(searchMeta.totalTx) : '';
+    const tt = searchMeta && Number(searchMeta.totalTx) > 0 ? _num(searchMeta.totalTx) : '';
     if (tt) h += `<div class="ld-s">최근 6개월 거래가 있는 단지 ${tt}곳을 살폈어요</div>`;
     if (_hasMeta) {
       try {

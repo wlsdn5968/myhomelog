@@ -34,7 +34,9 @@ test('validateTransactionQuery — 모르는 지역·말이 안 되는 거래년
   assert.equal(runValidate({ lawdCd: '99999', dealYm: '202609' }).status, 400);
   assert.equal(runValidate({ lawdCd: '11680', dealYm: '202613' }).status, 400);
   assert.equal(runValidate({ lawdCd: '11680', dealYm: '199912' }).status, 400);
-  assert.equal(runValidate({ lawdCd: '11680', dealYm: `${new Date().getUTCFullYear() + 1}01` }).status, 400);
+  // 프런트는 한국 시간으로 이번 달을 만든다 — 1월 1일 00~09시 KST 는 UTC 로 전년이라 다음 해 1월도 받아야 한다
+  assert.deepEqual(runValidate({ lawdCd: '11680', dealYm: `${new Date().getUTCFullYear() + 1}01` }), { status: null, nexted: true });
+  assert.equal(runValidate({ lawdCd: '11680', dealYm: `${new Date().getUTCFullYear() + 2}01` }).status, 400);
 });
 
 test('analysis·building-register 도 알려진 지역 코드만 받고, 공개 aptKey 는 받지 않는다', () => {
@@ -71,6 +73,9 @@ test('동의 기록은 같은 연결의 10분 안 반복을 건너뛴다(영구 
   const acc = read('../routes/account.js');
   assert.match(acc, /const CONSENT_DEDUP_MS = 10 \* 60 \* 1000;/);
   assert.match(acc, /if \(last && now - last < CONSENT_DEDUP_MS\) return res\.json\(\{ ok: true, deduped: true \}\);/);
+  // 전체 IP 로 판정(같은 /24 의 다른 사람을 묶지 않게), 키는 기록한 뒤에 남긴다
+  assert.match(acc, /const dedupKey = `\$\{req\.ip \|\| ''\}\|/);
+  assert.match(acc, /await writeAudit\(req, 'consent\.accept', 'consent', null, meta\);\n\s*_consentSeen\.set\(dedupKey, now\);/);
   // 카카오도 구글·이메일처럼 리다이렉트 전에 동의를 기록한다
   const kakao = html.slice(html.indexOf('async function loginKakao(){'), html.indexOf('async function loginEmail(){'));
   assert.match(kakao, /await _recordConsentAudit\(\);\s*\n\s*try \{ await A\.signInWithKakao\(\); \}/);
@@ -92,6 +97,7 @@ test('뉴스 관련성 — 전세버스·해외 기사는 빠지고 부동산 �
 test("목록 머리말은 '전체 단지 N개 중'(부분집합 아님) 대신 실제 모집단을 밝힌다", () => {
   assert.doesNotMatch(html, /전체 단지 \$\{ta\}개 중이에요/);
   assert.match(html, /최근 6개월 거래가 있는 단지 \$\{tt\}곳을 살폈어요/);
+  assert.match(html, /const tt = searchMeta && Number\(searchMeta\.totalTx\) > 0 \? _num\(searchMeta\.totalTx\) : '';/, '0곳이 표시되면 안 된다');
 });
 
 test('같은 값의 억 표기는 소수 둘째 자리로 통일, 소개 카드는 60일 평균 라벨', () => {

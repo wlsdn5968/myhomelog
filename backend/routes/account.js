@@ -86,15 +86,16 @@ router.post('/consent', async (req, res) => {
   // writeAudit 가 user_id (req.user?.id || null) · ip_masked · user_agent 자동 수집.
   // 인증 미들웨어 부재 → req.user 는 undefined → user_id null 기록 (anonymous, IP+UA 로 식별).
   // CONSENT-DEDUP-2026-10-18 (보안 감사 #2): 이 행은 영구 보관인데 로그인 없이 반복 호출로 무한히 쌓을 수 있었다
-  //   (요청 제한은 Redis 장애로 fail-open). 같은 /24 IP·같은 브라우저의 10분 안 반복 동의는 첫 기록이 이미 증빙이므로 건너뛴다.
+  //   (요청 제한은 Redis 장애로 fail-open). 같은 IP·같은 브라우저·같은 버전의 10분 안 반복 동의는 첫 기록이 이미 증빙이므로 건너뛴다.
+  //   키는 전체 IP(이 인스턴스 메모리에만 — DB 에는 기존대로 /24 마스킹만 저장)라 같은 통신망의 다른 사람은 묶이지 않는다.
   //   인스턴스 메모리라 완전한 차단은 아니지만 한 연결에서의 반복 쓰기를 막는다. 영구 보관 여부 자체는 법적 판단이라 그대로 둔다.
-  const dedupKey = `${maskIp(req.ip || '')}|${String(req.headers['user-agent'] || '').slice(0, 200)}|${meta.version || ''}`;
+  const dedupKey = `${req.ip || ''}|${String(req.headers['user-agent'] || '').slice(0, 200)}|${meta.version || ''}`;
   const now = Date.now();
   const last = _consentSeen.get(dedupKey);
   if (last && now - last < CONSENT_DEDUP_MS) return res.json({ ok: true, deduped: true });
-  _consentSeen.set(dedupKey, now);
-  if (_consentSeen.size > 5000) { for (const [k, t] of _consentSeen) if (now - t >= CONSENT_DEDUP_MS) _consentSeen.delete(k); }
   await writeAudit(req, 'consent.accept', 'consent', null, meta);
+  _consentSeen.set(dedupKey, now); // 기록한 뒤에 남긴다
+  if (_consentSeen.size > 5000) { for (const [k, t] of _consentSeen) if (now - t >= CONSENT_DEDUP_MS) _consentSeen.delete(k); }
   res.json({ ok: true });
 });
 
