@@ -21,7 +21,14 @@ self.addEventListener('notificationclick', e => {
   const url = (e.notification.data && e.notification.data.url) || '/';
   e.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const w of wins) { if ('focus' in w) { await w.focus(); return; } }
+    // NOTIFY-DEEPLINK-2026-10-18: 열린 창은 포커스만 하고 이동하지 않아 "어느 단지인지" 못 봤다 — 같은 출처 창이면 그 주소로 이동
+    for (const w of wins) {
+      if ('focus' in w) {
+        await w.focus();
+        if ('navigate' in w && url && url !== '/') { try { await w.navigate(url); } catch (_) {} }
+        return;
+      }
+    }
     await self.clients.openWindow(url);
   })());
 });

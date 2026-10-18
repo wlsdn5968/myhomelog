@@ -52,6 +52,8 @@ router.get('/', (req, res) => {
   if (!html) return res.redirect(302, '/');
   const apt = (req.query.apt || '').toString().slice(0, 60);
   const area = (req.query.area || '').toString().slice(0, 40);
+  // SHARE-OG-2026-10-18 (plans/166 A3): seq 가 단지 번호 형식이면 단지별 OG 카드(/api/og/apt/:seq)를 미리보기 이미지로
+  const seq = /^\d{5}-\d+$/.test(String(req.query.seq || '')) ? String(req.query.seq) : '';
   const cmp = (req.query.cmp || '').toString().slice(0, 2000);
   // 비교 공유 딥링크(?cmp=) — OG 메타에 단지명 나열 (COMPARE-SHARE-2026-06-21)
   //   복원은 클라이언트 handleCompareUrl 이 수행. 여기선 크롤러 프리뷰 제목만 치환.
@@ -95,11 +97,12 @@ router.get('/', (req, res) => {
   const title = `${apt}${area ? ` · ${area}` : ''} — 내집로그 분석`;
   const desc = `${apt}${area ? ` (${area})` : ''} 국토교통부 실거래로 정리한 평균가, 평형별 시세, 점수 요약. 매수 추천이 아니에요.`;
   const origin = `${req.protocol}://${req.get('host')}`;
-  const shareUrl = `${origin}/share?apt=${encodeURIComponent(apt)}${area ? `&area=${encodeURIComponent(area)}` : ''}`;
+  const shareUrl = `${origin}/share?apt=${encodeURIComponent(apt)}${area ? `&area=${encodeURIComponent(area)}` : ''}${seq ? `&seq=${encodeURIComponent(seq)}` : ''}`;
+  const ogImg = seq ? escapeHtml(`${origin}/api/og/apt/${seq}`) : '';
   const t = escapeHtml(title);
   const d = escapeHtml(desc);
   const u = escapeHtml(shareUrl);
-  const rewritten = html
+  let rewritten = html
     .replace(/<title>[^<]*<\/title>/, lit(`<title>${t}</title>`))
     .replace(/<meta name="description" content="[^"]*">/, lit(`<meta name="description" content="${d}">`))
     .replace(/<meta property="og:title" content="[^"]*">/, lit(`<meta property="og:title" content="${t}">`))
@@ -115,6 +118,12 @@ router.get('/', (req, res) => {
     //   follow 는 유지해 링크 그래프는 살린다.
     .replace(/<meta name="robots" content="[^"]*">/, lit(`<meta name="robots" content="noindex, follow">`));
   // 크롤러 캐시 친화 + 동일 쿼리 재방문 시 빠르게
+  // SHARE-OG-2026-10-18: 단지 번호가 있을 때만 미리보기 이미지를 단지 OG 카드로(치환은 lit() 로 — share-ssr 배선 테스트 기준)
+  if (ogImg) {
+    rewritten = rewritten
+      .replace(/<meta property="og:image" content="[^"]*">/, lit(`<meta property="og:image" content="${ogImg}">`))
+      .replace(/<meta name="twitter:image" content="[^"]*">/, lit(`<meta name="twitter:image" content="${ogImg}">`));
+  }
   res.set('Cache-Control', 'public, max-age=600, s-maxage=600');
   res.type('html').send(rewritten);
 });

@@ -62,7 +62,7 @@ function matchItems(rawItems, rows, aliasMap, since) {
       if (it.lawdCd !== r.lawd_cd) continue;
       if (nn(canon) !== nn(it.aptName) && nn(r.apt_name) !== nn(it.aptName)) continue;
       if (it.umdNm && r.umd_nm && norm(it.umdNm) !== norm(r.umd_nm)) continue;
-      const g = perItem.get(it.aptName) || { count: 0, maxMan: 0 };
+      const g = perItem.get(it.aptName) || { count: 0, maxMan: 0, area: [it.sigungu, it.umdNm].filter(Boolean).join(' ') };
       g.count += 1;
       g.maxMan = Math.max(g.maxMan, Number(r.deal_amount) || 0);
       perItem.set(it.aptName, g);
@@ -71,6 +71,17 @@ function matchItems(rawItems, rows, aliasMap, since) {
   return [...perItem.entries()]
     .map(([name, g]) => ({ name, ...g }))
     .sort((a, b) => b.count - a.count);
+}
+
+// NOTIFY-DEEPLINK-2026-10-18 (plans/166 A2): 알림을 눌러도 첫 화면('/')으로만 갔다 — 단지 1곳이면 그 단지 상세 딥링크
+//   (프런트 ?apt=&area= 처리는 area 문자열에서 시군구를 찾아 실거래를 다시 조회한다), 여럿이면 첫 화면 그대로.
+function notifyUrl(entries, origin) {
+  // origin '' = 상대 주소(웹 푸시 payload — 서비스 워커가 같은 출처 안에서 연다) · 미지정 = 절대 주소(카카오 메시지 링크)
+  const base = (origin === undefined || origin === null) ? 'https://myhomelog.vercel.app' : origin;
+  if (!entries || entries.length !== 1) return base + '/';
+  const e = entries[0];
+  const qs = `apt=${encodeURIComponent(e.name)}${e.area ? `&area=${encodeURIComponent(e.area)}` : ''}`;
+  return `${base}/?${qs}`;
 }
 
 function buildBody(entries) {
@@ -160,7 +171,7 @@ async function run() {
       pushProcessed.push(s.id);
       const entries = matchItems(Array.isArray(s.items) ? s.items : [], rows, aliasMap, sinceOf(s));
       if (!entries.length) continue;
-      const payload = JSON.stringify({ title: '관심 단지 새 실거래', body: buildBody(entries), url: '/' });
+      const payload = JSON.stringify({ title: '관심 단지 새 실거래', body: buildBody(entries), url: notifyUrl(entries, '') });
       try {
         await webpush.sendNotification({ endpoint: s.endpoint, keys: { p256dh: s.p256dh, auth: s.auth } }, payload, { TTL: 86400, timeout: 10000 }); // PUSH-TIMEOUT-2026-10-18: 응답 없는 주소가 순차 발송 전체를 멈추지 않게(web-push 3.6.7 timeout 옵션)
         sent += 1;
@@ -214,7 +225,7 @@ async function run() {
       continue;
     }
 
-    const msg = { title: '내집로그 관심 단지 새 실거래', description: buildBody(entries), webUrl: 'https://myhomelog.vercel.app' };
+    const msg = { title: '내집로그 관심 단지 새 실거래', description: buildBody(entries), webUrl: notifyUrl(entries, 'https://myhomelog.vercel.app') };
     let r = await sendKakaoMemo({ accessToken, ...msg });
     if (r.needsRefresh && (await doRefresh())) {
       r = await sendKakaoMemo({ accessToken, ...msg });
@@ -245,3 +256,5 @@ async function run() {
 }
 
 module.exports = { run };
+module.exports._notifyUrl = notifyUrl;
+module.exports._matchItems = matchItems;

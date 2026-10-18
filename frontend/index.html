@@ -4659,10 +4659,11 @@ async function loadMySearchHistory(){
       const dt = new Date(h.created_at);
       const rel = _relTime(dt);
       const cnt = (typeof h.result_count === 'number') ? ` · ${h.result_count}건` : '';
-      return `<div style="padding:6px 4px;border-bottom:1px solid var(--bd);font-size:12px;display:flex;justify-content:space-between;gap:6px;align-items:center">
+      // HIST-CLICK-2026-10-18 (plans/166 A4): 글자만 있던 이력을 눌러 다시 검색할 수 있게
+      return `<button type="button" class="um-hist-item" onclick="_rerunSearch(${_escHtml(JSON.stringify(h.query||''))})" aria-label="${q} 다시 검색" style="all:unset;cursor:pointer;box-sizing:border-box;width:100%;padding:6px 4px;border-bottom:1px solid var(--bd);font-size:12px;display:flex;justify-content:space-between;gap:6px;align-items:center">
         <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">• ${q}</span>
-        <span style="color:var(--t3);font-size:12px;white-space:nowrap">${rel}${cnt}</span>
-      </div>`;
+        <span style="color:var(--t3);font-size:12px;white-space:nowrap">${rel}${cnt} ›</span>
+      </button>`;
     }).join('');
   } catch(e){
     console.warn('[search history] 로드 실패', e);
@@ -4670,6 +4671,14 @@ async function loadMySearchHistory(){
   }
 }
 
+function _rerunSearch(q){
+  q = String(q || '').trim(); if(!q) return;
+  try { closeUserMenu(); } catch(_){}
+  const inp = document.getElementById('hSearchInput');
+  if (inp) { inp.value = q; inp.focus(); }
+  window._hEnterPending = q; // 결과가 오면 첫 결과를 연다
+  if (typeof onHeaderSearchInput === 'function') onHeaderSearchInput(q);
+}
 function _relTime(d){
   const diff = (Date.now() - d.getTime()) / 1000;
   if(diff < 60) return '방금';
@@ -6585,6 +6594,17 @@ function updateQuota(usage){
   _syncHUsage();
   if(info)info.textContent = usage.unlimited ? '검색 무제한 (운영자·관리자)' : `오늘 ${usage.used}/${usage.limit}회 사용했어요 (남은 무료 검색 ${usage.remaining}회). 매일 자정에 다시 채워지고, 로그인하면 하루 10회예요. 특약 초안과 도우미 채팅은 한도가 따로 있어요.`;
 }
+let _hlthAuthVal = null, _hlthAuthAt = 0, _hlthAuthP = null;
+function _healthAuthJson(headers){
+  if (_hlthAuthVal && (Date.now() - _hlthAuthAt) < HEALTH_TTL_MS) return Promise.resolve(_hlthAuthVal);
+  if (_hlthAuthP) return _hlthAuthP;
+  const p = fetch(`${CFG.api}/health`,{headers, signal:AbortSignal.timeout(5000)}).then(r=>r.ok?r.json():null)
+    .then(d => { if (d) { _hlthAuthVal = d; _hlthAuthAt = Date.now(); } return d; })
+    .catch(() => null)
+    .finally(() => { if (_hlthAuthP === p) _hlthAuthP = null; });
+  _hlthAuthP = p;
+  return p;
+}
 async function refreshQuota(){
   try{
     const A = window.MHL?.auth;
@@ -6595,8 +6615,10 @@ async function refreshQuota(){
     // PERF-HEALTH-DEDUP-2026-08-28: **비로그인이면 인증 응답이 필요 없다** — 공유 캐시를 쓴다.
     //   실측(비로그인 첫 방문): 토큰이 없어도 여기서 health 를 한 번 더 불러 총 2회였다.
     //   토큰이 있을 때만 별도 호출(usage.unlimited·admin 판정이 응답에 반영돼야 하므로 캐시 공유 불가).
+    // HEALTH-AUTH-DEDUP-2026-10-18 (plans/166 3-5): 로그인 사용자는 이 분기가 공유 캐시를 우회해 health 를 부팅 12초 안 5회, 7분 13회
+    //   호출했다(운영 실측, health 1회 = Redis 명령 8개). 인증 응답도 20초 동안 따로 보관하고 진행 중 요청은 합친다.
     const d = tok
-      ? await fetch(`${CFG.api}/health`,{headers, signal:AbortSignal.timeout(5000)}).then(r=>r.ok?r.json():null)
+      ? await _healthAuthJson(headers)
       : await healthJson(5000);
     if(d){
       updateQuota(d.usage);
@@ -7436,6 +7458,7 @@ async function doSearch(){
       _chatSessionId = null;
     }
     // MARKER-SAFE-2026-10-18: 지도 표시가 실패해도 목록은 그린다 — 마커 오류 하나가 검색 전체를 "계산 중"에 멈춰 세웠다.
+    try{ _cmpRestore(); }catch(_){}
     renderPList();try{ renderMarkers(props); }catch(e){ console.warn('지도 표시 실패 — 목록은 계속', e); }renderListGrid();
     // SEARCH-RESULT-MOBILE-2026-08-29: 좁은 화면은 사이드바가 **off-canvas**(.lp left:-319)라
     //   renderPList 결과가 화면 밖에 그려진다. 375px 실측 — 검색 성공 15건인데 **보이는 카드 0 ·
@@ -7794,6 +7817,22 @@ function _ensureCmpStyles(){
   document.head.appendChild(st);
 }
 
+// CMP-KEEP-2026-10-18 (plans/166 A5): 비교 담기(Set, props 인덱스)는 새로고침·재검색마다 사라졌다 — 단지 키(이름|코드)로
+//   세션에 기억해 두고, 결과가 다시 오면 같은 단지를 다시 담는다(인덱스는 결과마다 달라지므로 키로 맞춘다).
+const CMP_KEEP_KEY = 'mhl_cmp_keep';
+function _cmpKeyOf(p){ return p ? `${p.aptName || ''}|${p.lawdCd || ''}|${p.umdNm || ''}` : ''; }
+function _cmpRemember(){
+  try { sessionStorage.setItem(CMP_KEEP_KEY, JSON.stringify([...cmpSel].map(i => _cmpKeyOf(props[i])).filter(Boolean))); } catch(_){}
+}
+function _cmpRestore(){
+  try {
+    const keys = JSON.parse(sessionStorage.getItem(CMP_KEEP_KEY) || '[]');
+    if (!Array.isArray(keys) || !keys.length) return;
+    const want = new Set(keys);
+    props.forEach((p, i) => { if (want.has(_cmpKeyOf(p)) && cmpSel.size < CMP_MAX) cmpSel.add(i); });
+    if (cmpSel.size) renderCmpBar();
+  } catch(_){}
+}
 function toggleCmp(i, checked){
   _ensureCmpStyles();
   if(checked){
@@ -7807,11 +7846,13 @@ function toggleCmp(i, checked){
   } else {
     cmpSel.delete(i);
   }
+  try{ _cmpRemember(); }catch(_){}
   renderCmpBar();
 }
 
 function clearCmp(){
   cmpSel.clear();
+  try { sessionStorage.removeItem(CMP_KEEP_KEY); } catch(_){}
   for(const k in _cmpExtra) delete _cmpExtra[k]; // Plan 150: 상세에서 담은 항목도 함께 비운다
   document.querySelectorAll('.cmp-chk-input').forEach(cb=>{ cb.checked=false; });
   renderCmpBar();
@@ -9563,6 +9604,8 @@ async function shareCurrent(){
   const u=new URL(location.origin+'/share');
   u.searchParams.set('apt', currentDetail.aptName);
   if(currentDetail.area)u.searchParams.set('area', currentDetail.area);
+  // SHARE-OG-2026-10-18 (plans/166 A3): 단지 번호가 있으면 실어 보낸다 — 서버가 단지별 OG 카드를 미리보기 이미지로 붙인다
+  if(/^\d{5}-\d+$/.test(String(currentDetail.aptSeq||''))) u.searchParams.set('seq', String(currentDetail.aptSeq));
   const url=u.toString();
   const title=`${currentDetail.aptName} — 내집로그 데이터 분석`;
   // SCORE-HALLUC-FIX-2026-07-16 (Sprint SSSSS): 폐기된 60점 fallback 잔재 — 점수 없으면 표기 생략(외부 공유 텍스트라 특히 중요)
@@ -10705,8 +10748,31 @@ const FN_CHECKS=[
   {id:'trans',label:'교통 편리'},
 ];
 
+// FN-PULL-2026-10-18 (plans/166 A1): 임장 노트는 서버로 올리기(PUT)만 있고 받아오는 코드가 없어 다른 기기에선 안 보였다 —
+//   화면 안내("모든 기기에서 자동으로 동기화돼요")와 어긋났다. 로그인 상태면 단지마다 한 번 GET 해서, 서버 쪽이 더 새 것이면
+//   로컬에 덮어쓰고 다시 그린다. 실패해도 로컬 값 그대로(흐름 영향 없음).
+const _fnPulled = new Set();
+async function _pullFieldNote(aptName){
+  const A = window.MHL?.auth;
+  if (!A?.user || !A?.session?.access_token || _fnPulled.has(aptName)) return;
+  _fnPulled.add(aptName);
+  try {
+    const r = await fetch(`${CFG.api}/field-notes/${encodeURIComponent(aptName)}`, { headers: await _authHdr({}), signal: AbortSignal.timeout(8000) });
+    if (!r.ok) return;
+    const { note } = await r.json();
+    if (!note) return;
+    const local = getNoteForApt(aptName) || {};
+    const srvAt = note.updated_at ? new Date(note.updated_at).getTime() : 0;
+    if (!(srvAt > (Number(local.savedAt) || 0))) return;
+    saveNoteForApt(aptName, { checks: Array.isArray(note.checks) ? note.checks : [], rating: Number(note.rating) || 0,
+      memo: note.memo || '', visitDate: note.visit_date || '', savedAt: srvAt });
+    if (currentDetail && currentDetail.aptName === aptName) renderFieldNote(currentDetail);
+    try { renderBookmarks(); } catch(_){}
+  } catch(_) {}
+}
 function renderFieldNote(p){
   const n=p.aptName;
+  _pullFieldNote(n);
   const saved=getNoteForApt(n)||{};
   const sc=saved.checks||[];
   const rating=saved.rating||0;
@@ -13396,6 +13462,7 @@ async function onHeaderSearchInput(q) {
       const j = await r.json();
       const results = j.results || [];
       window._hSearchResults = results; // SEARCH-FOCUS-2026-07-12: ENTER 시 첫 결과 선택용
+      if (window._hEnterPending && window._hEnterPending === q) { window._hEnterPending = null; if (results.length) { goSearchResult(results[0]); return; } }
       // DEGRADE-HINT-2026-08-16 (Sprint NNNNNNN): 서버가 강등(일부 출처 실패)을 알려주면 사용자에게도 말한다.
       //   라이브 실측 근거: 콜드 요청이 실제로 강등을 타 "은마"의 **거래 건수가 통째로 빠졌다**.
       //   말하지 않으면 사용자는 "이 단지는 거래가 없구나"로 오해한다 — 절대 룰 ②(정직) 위반이다.
@@ -13469,7 +13536,12 @@ function onHeaderSearchKey(e) {
   // SEARCH-FOCUS-2026-07-12 (운영자 요청): ENTER 시 첫 검색결과 선택 → 지도 이동+상세.
   else if (e.key === 'Enter') {
     const rs = window._hSearchResults;
-    if (rs && rs.length) { e.preventDefault(); goSearchResult(rs[0]); }
+    if (rs && rs.length) { e.preventDefault(); window._hEnterPending = null; goSearchResult(rs[0]); }
+    else {
+      // ENTER-PENDING-2026-10-18 (plans/166 A8): 결과가 오기 전 Enter 는 아무 반응이 없었다 — 안내하고, 도착하면 첫 결과를 연다
+      const q = String(e.target.value || '').trim();
+      if (q.length >= 2) { e.preventDefault(); window._hEnterPending = q; toast('검색 결과를 불러오는 중이에요'); }
+    }
   }
 }
 // AUTH-HDR-2026-05-21 (전수조사: SS-3 동일 클래스 — chat/clause 가 토큰 미전송 → 로그인/admin 도 anonymous 한도):
