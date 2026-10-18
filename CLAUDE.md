@@ -195,6 +195,8 @@
 - **lint·formatter (2026-10-18 실측)**: 스타일 병목 없음(공백성 변경 1.5%, ESLint 는 정확성 규칙만 유지 — 스타일 규칙 추가 안 함). 실제 문제였던 줄바꿈 혼재(Git 시스템 설정 core.autocrlf=true)는 **`.gitattributes`(`* text=auto eol=lf`) 로 해결(773e91b, 인덱스 변화 0)** — 메인·p144 작업 트리도 전부 LF 로 다시 꺼냄, 새 체크아웃은 자동 LF. 포매터는 필요해지면 백엔드 JS 만 `--check` 측정부터, index.html 제외.
 - ⚠ 미리보기 측정 함정: 창이 그려지지 않으면 CSS 전환·ResizeObserver·`:focus` 가 멈춘다 — `getAnimations().finish()` 또는 스크린샷 뒤 재측정.
 - ⚠ 테스트에서 줄바꿈을 `'\n'` 문자로 비교하지 말 것 — Windows 작업 트리는 CRLF 체크아웃이라 실패했다(`\r?\n` 정규식). 2026-10-18 `.gitattributes` 로 작업 트리가 LF 가 됐지만 다른 환경 대비로 `\r?\n` 습관은 유지.
+- **없는 주소는 정적 404(3ca3605, 2026-10-18)**: vercel.json 마지막 라우트를 `/(index\.html)?`→앱 + `/(.*)`→`frontend/404.html`(status 404, 같은 보안 헤더)로 나눴다. 앱 경로는 `/`(쿼리만)뿐 — **frontend/ 에 새 정적 파일을 추가하면 vercel.json 라우트도 추가**해야 404 가 안 난다(`backend/test/soft-404.test.js`).
+- **이용 기록(audit_log) 보관 최소 365일(c3fd731, 2026-10-18)**: JS `auditPrune.js` 와 DB `prune_audit_log()`(pg_cron jobid 1) 두 곳 — 처리방침 "접근 기록 1년 이상". 영구 보관 목록은 두 곳이 같아야 한다(`audit-retention-1y.test.js`). 동의 기록 문구는 `plans/136` §7 v1.4 후보.
 - **세션 예약 점검(세션 전용 — 새 세션에서 다시 등록 필요)**: **10-19 이후 computed_snapshots 에 health 스냅샷 2키 생성·retention 요약 healthSnapCounts=1 확인(Plan 161)** · **11-17 처리방침 v1.3 시행(Plan 136 §6 — preview/privacy-136 합치기·예고 상자 정리)** · 10-28 11:23 express 5.3.0 재검토 · 10-29 10:23 Node 26 전환 조건 · 11-01 13:07 Redis 확인·107c-3(2025-07) 준비 · 11-07 10:17 Sentry 11 전환 조건. (2026-10-18 세션에서 재등록)
 
 ### 서비스 전면 검토 (2026-10-14) — `plans/review-2026-10-14.md`
