@@ -761,7 +761,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
   body.hp-on .lp{display:none!important}
   body.hp-on .hp{display:flex}
   body.hp-on #popTitleCard{display:none!important} /* 같은 설명을 패널이 한다 — DOM 은 유지(popular.test 순서 계약) */
-  #hpBand{display:block;padding:20px 24px 14px;background:var(--bg-base);border-bottom:1px solid var(--bd);flex-shrink:0}
+  body.hp-on #hpBand{display:block;padding:20px 24px 14px;background:var(--bg-base);border-bottom:1px solid var(--bd);flex-shrink:0}
 }
 .hp{width:420px;flex-shrink:0;flex-direction:column;min-height:0;background:var(--bg-base);border-right:1px solid var(--bd);font-variant-numeric:tabular-nums}
 @media(max-width:1000px){.hp{width:340px}}
@@ -772,11 +772,13 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .hp-chips:empty{display:none}
 .hp-chip{height:36px;padding:0 12px;border:1px solid var(--bd2);border-radius:8px;background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
 .hp-chip[aria-pressed="true"]{border-color:var(--acc);background:var(--accent-tint);color:var(--acc)}
-.hp-th{display:flex;align-items:center;gap:12px;padding:8px 24px;background:var(--bg-elev-1);font-size:12px;font-weight:500;line-height:1.5;color:var(--t3)}
+/* 표 머리 글자: 시안은 ink3 이지만 sf2 위 라이트 대비 4.33:1(AA 4.5 미달, 계산값) → ink2(6.95:1). 다크는 ink3 도 5.09:1 이나 한 규칙으로 맞춘다 */
+.hp-th{display:flex;align-items:center;gap:12px;padding:8px 24px;background:var(--bg-elev-1);font-size:12px;font-weight:500;line-height:1.5;color:var(--t2)}
 .hp-th .c1{flex:1;min-width:0}.hp-th .c2,.hp-row .hp-pr{width:96px;flex-shrink:0;text-align:right}.hp-th .c3,.hp-row .hp-ct{width:64px;flex-shrink:0;text-align:right}
 .hp-list{flex:1;min-height:0;overflow-y:auto}
 .hp-row{display:flex;align-items:center;gap:12px;width:100%;padding:12px 24px;border:none;border-bottom:1px solid var(--bd);background:none;color:var(--t1);font-family:inherit;text-align:left;cursor:pointer}
-.hp-row:hover{background:var(--bg-elev-1)}
+.hp-row:hover{background:var(--bg)} /* sf2 위에선 지역 글자(ink3) 4.33:1 — 화면 바탕(bg) 4.57:1 */
+.hp-row:focus-visible{outline:2px solid var(--acc);outline-offset:-2px} /* 목록이 스크롤 상자라 바깥 링은 잘린다 — 안쪽으로 */
 .hp-row .hp-c1{flex:1;min-width:0}
 .hp-nm,.hp-rg{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .hp-nm{font-size:16px;font-weight:600;line-height:1.6}
@@ -801,6 +803,8 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 #hpSearchSlot .hsearch{max-width:none!important;min-width:0!important;margin:0!important}
 #hpSearchSlot .hsearch>svg{left:20px!important;width:20px!important;height:20px!important}
 #hpSearchSlot #hSearchInput{height:56px;padding:0 20px 0 52px!important;font-size:16px!important;border:1px solid var(--bd2);border-radius:12px;box-shadow:none;background:var(--bg-base)}
+/* 위 규칙(ID 2개)이 .inp:focus 의 테두리·링을 덮는다 — 포커스 표시를 같은 강도로 다시 준다(헤더에 있을 때와 같은 모양) */
+#hpSearchSlot #hSearchInput:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--accent-tint-2)}
 .sec{border-bottom:1px solid var(--border-faint)}
 .sh{padding:13px 16px;display:flex;align-items:center;gap:6px;cursor:pointer;user-select:none;transition:background .15s}
 .sh:hover{background:var(--s1)}
@@ -2145,7 +2149,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <h2 class="hp-t" id="hpT">최근 거래가 많은 단지</h2>
     <p class="hp-s" id="hpSub">최근 60일 국토교통부 실거래 신고 기준이에요</p>
   </div>
-  <div class="hp-note" id="hpNote" hidden></div>
+  <div class="hp-note" id="hpNote" role="status" hidden></div>
   <div class="hp-chips" id="hpChips" role="group" aria-label="지역으로 좁히기"></div>
   <div class="hp-th" aria-hidden="true"><span class="c1">단지명·지역</span><span class="c2">60일 평균가</span><span class="c3">거래 건수</span></div>
   <div class="hp-list" id="hpList"><div class="hp-msg">불러오는 중이에요</div></div>
@@ -6808,7 +6812,7 @@ function renderMarkers(data){
     const o=naverReady&&!mapObj?._isLeaflet?mkNaverOverlay(p):mkLeafletMkr(p);
     if(o)overlays.push(o);
   });
-  try{ _hpNote(data); }catch(_){} // HOME-PANEL-2026-10-18 (Plan 151): 검색 결과가 지도에 있다는 안내
+  try{ _hpNote(fl); }catch(_){} // HOME-PANEL-2026-10-18 (Plan 151): 검색 결과가 지도에 있다는 안내(필터 적용 뒤 목록 기준)
 }
 
 // MARKER-STACK-2026-08-17 (Sprint MMMMMMM — 서울 전수조사 4회차 실측):
@@ -6976,6 +6980,7 @@ async function doSearch(){
   // VIEW-GUARD-2026-07-11 (Sprint KKKK): 검색 시작 시점의 활성 탭 기록 — 완료 시 사용자가 다른
   // 탭으로 이동해 있으면 sv('map') 강제 전환을 건너뛰기 위함 (5~15초 검색 중 탭 이동 덮어쓰기 방지).
   window._searchStartView = document.querySelector('.htab.on')?.textContent?.trim() || null;
+  window._searchStartV = (typeof _hpView === 'string') ? _hpView : null; // HOME-PANEL-2026-10-18 (Plan 151): 시작 화면 이름(목록 화면이면 끝나도 지도로 옮기지 않는다)
   // UX-LOADING-2026-07-10 (Sprint DDDD, 실측 근거): 프리셋/검색 클릭 후 본문이 "아직 검색 결과가 없어요"
   //   그대로 ~10초 유지 → "버튼 안 됨" 체감(운영자 신고 재현). 사이드바 버튼 스피너·hint 토스트(3s)는
   //   시선 밖·짧음 → 본문(목록 영역)에 로딩 카드 즉시 표시. 결과 도착 시 renderListGrid 가 덮어씀.
@@ -6989,6 +6994,10 @@ async function doSearch(){
   //   경기로 오귀속됨 → 조용한 오결과 대신 세부 선택 안내(honest). 세부 선택 시엔 정상 도달.
   if(getRegionForSearch()==='지방'){
     btn.classList.remove('ld');sp.style.display='none';
+    // HOME-PANEL-2026-10-18 (Plan 151): 위에서 목록 영역에 깐 로딩 카드를 되돌리고(전엔 그대로 남았다), 데스크톱 지도 화면이면
+    //   세부 지역 칩이 보이는 목록 화면(사이드바)으로 옮긴다 — 지도 화면엔 사이드바가 없어 안내만 뜨고 고를 곳이 없었다(대출 계산의 "이 예산으로 단지 찾기" 경로).
+    try{ if(typeof renderListGrid==='function') renderListGrid(); }catch(_){}
+    try{ if(document.body.classList.contains('hp-on') && window.innerWidth>700) sv('list'); }catch(_){}
     if(typeof toast==='function') toast('지방은 세부 지역(해운대·수영·수성·유성·청주)을 선택해 주세요');
     return;
   }
@@ -7166,7 +7175,13 @@ async function doSearch(){
     // VIEW-GUARD (Sprint KKKK): 검색 중 사용자가 탭을 옮겼으면 지도 강제 전환 스킵 —
     // 결과는 지도·목록에 이미 렌더돼 있어 사용자가 돌아오면 그대로 보임.
     const _nowTab = document.querySelector('.htab.on')?.textContent?.trim() || null;
-    if (_nowTab === window._searchStartView) sv('map',document.querySelector('.htab'));
+    // HOME-PANEL-2026-10-18 (Plan 151): 지도 화면에 사이드바가 없어졌다 — 목록 화면에서 시작한 검색은 목록(사이드바 + 결과)에 머물고,
+    //   실제 단지 없이 안내(_notice)만 온 결과는 데스크톱에서 안내가 보이는 목록 화면으로(지도 화면이면 아무 표시가 없었다).
+    const _realN = (props||[]).filter(p=>p && !p._notice).length;
+    if (_nowTab === window._searchStartView && window._searchStartV !== 'list') {
+      if (!_realN && window.innerWidth > 700) sv('list');
+      else sv('map',document.querySelector('.htab'));
+    }
     const missed = searchMeta.coordMissingCount||0;
     // UX 정리(2026-06-01): 성공 토스트 제거(결과는 마커·목록·건수 pCnt 로 이미 표시) — 좌표 미해결 시에만 안내
     if(missed>0) toast(`${props.length}개 단지를 찾았어요. 위치를 찾지 못한 ${missed}건은 지도에 표시하지 않았어요`);
@@ -11732,7 +11747,15 @@ function _hpLoad(force){
   // 지도 인기 마커와 같은 요청(서버 캐시 키 popular:12) — 지도와 목록이 같은 12곳을 보인다.
   _hpReq = fetch(`${CFG.api}/search/popular?limit=12`, { signal: AbortSignal.timeout(12000) })
     .then(r => r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)))
-    .then(j => { _hpData = j || {}; _hpRender(); })
+    .then(j => {
+      _hpData = j || {}; _hpRender();
+      // 빈 응답(스냅샷이 잠깐 빈 순간 등)은 붙잡아 두지 않는다 — 다음 지도 진입·버튼으로 다시 부른다
+      if(!(Array.isArray(_hpData.results) && _hpData.results.length)){
+        _hpData = null;
+        const el = document.getElementById('hpList');
+        if(el) el.innerHTML = '<div class="hp-msg">지금 보여 드릴 단지가 없어요. <button type="button" onclick="_hpLoad(true)">다시 불러오기</button></div>';
+      }
+    })
     .catch(() => {
       _hpData = null;
       const el = document.getElementById('hpList');
@@ -11753,17 +11776,23 @@ function _hpRender(){
     : '';
   if(sub){
     const w = _hpData.window;
-    sub.title = (w && w.since && w.until) ? `집계 ${String(w.since).replace(/-/g,'.')}~${String(w.until).replace(/-/g,'.')} · 최근 21일 안에 거래가 있는 단지를 먼저 보여 주고, 한 시군구가 2곳을 넘지 않게 맞춰요. 좌표가 확인된 단지만 보여요` : '';
+    // 선정 기준은 지도 범례(#popLegend title)와 같은 문장 — popularService 의 21일 우선·시군구 2곳(자리가 남으면 채움)·좌표 규칙
+    const rule = '최근 21일 안에 거래가 있는 단지를 먼저 보여 줘요. 한 시군구가 2곳을 넘지 않게 맞추되, 자리가 남으면 넘는 단지도 채워요. 지도에 표시하려면 좌표가 확인된 단지여야 하고, 확인되지 않은 단지는 다음 순위가 대신해요.';
+    sub.title = (w && w.since && w.until) ? `집계 기간은 ${String(w.since).replace(/-/g,'.')}부터 ${String(w.until).replace(/-/g,'.')}까지예요. ${rule}` : rule;
   }
   const rows = _hpSido === '전국' ? all : all.filter(p => _hpSidoOf(p) === _hpSido);
   if(!rows.length){ list.innerHTML = '<div class="hp-msg">지금 보여 드릴 단지가 없어요</div>'; return; }
   const stale = _hpData.stale ? '<div class="hp-msg">집계가 잠시 늦어져 최대 며칠 전 기준이에요</div>' : '';
-  list.innerHTML = stale + rows.map(p => {
+  // 서버 실시간 집계가 실패해 최근 거래 표본으로 대신 고른 응답(degraded) — 그 경로의 avgDealAmount 는 최근 1건 가격, dealCount60d 는
+  //   약 2주 표본 건수라 "60일 평균가·거래 건수"가 아니다(popularService.buildPopularResults 대체 분기). 칸을 비우고 이유를 적는다.
+  const deg = !!_hpData.degraded;
+  const degMsg = deg ? '<div class="hp-msg">지금은 집계가 늦어져 최근 거래 표본으로 골랐어요. 평균가와 건수는 잠시 비워 둬요</div>' : '';
+  list.innerHTML = stale + degMsg + rows.map(p => {
     const name = String(p.displayName || _dispAptName(p.aptName, p.umdNm) || '');
     const region = [_hpSidoOf(p), _fmtSgg(String(p.sigungu || '').trim()), String(p.umdNm || '').trim()].filter(Boolean).join(' ');
     const amt = Number(p.avgDealAmount), cnt = Number(p.dealCount60d);
-    const price = Number.isFinite(amt) && amt > 0 ? `${(amt / 10000).toFixed(2)}억` : '';
-    const count = Number.isFinite(cnt) && cnt > 0 ? `${cnt}건` : '';
+    const price = !deg && Number.isFinite(amt) && amt > 0 ? `${(amt / 10000).toFixed(2)}억` : '';
+    const count = !deg && Number.isFinite(cnt) && cnt > 0 ? `${cnt}건` : '';
     const arg = { aptName:p.aptName, sigungu:p.sigungu, umdNm:p.umdNm, lawdCd:p.lawdCd, buildYear:p.buildYear, recentDealDate:p.recentDealDate, aptSeq:p.aptSeq || null, lat:p.lat, lng:p.lng };
     const label = [name, region, price && `60일 평균가 ${price}`, count && `거래 ${count}`].filter(Boolean).join(', ');
     return `<button type="button" class="hp-row" aria-label="${_escHtml(label)}" onclick='goSearchResult(${_jsonAttr(arg)})'>`
@@ -11771,13 +11800,18 @@ function _hpRender(){
       + `<span class="hp-pr">${price}</span><span class="hp-ct">${count}</span></button>`;
   }).join('');
 }
-function _hpPick(s){ _hpSido = s; _hpRender(); }
+function _hpPick(s){
+  _hpSido = s; _hpRender();
+  // 칩 줄을 다시 그리면 누른 버튼이 사라져 키보드 포커스가 body 로 떨어진다 — 같은 지역 칩으로 되돌린다
+  try{ const b = [...document.querySelectorAll('#hpChips .hp-chip')].find(x => x.textContent === s); if(b) b.focus(); }catch(_){}
+}
 // 검색 결과가 지도에 있을 때 패널 위 안내(renderMarkers 끝에서 호출). null 이면 숨김(showPop — 인기 단지로 되돌림).
 function _hpNote(data){
   const el = document.getElementById('hpNote'); if(!el) return;
-  const n = Array.isArray(data) ? data.filter(p => p && !p._notice).length : 0;
+  // 개수 = 실제로 지도에 그린 마커(renderMarkers 가 필터 적용 뒤 좌표 있는 것만 그린다). 조건 검색·이 지역 단지 보기 공통 문구.
+  const n = Array.isArray(data) ? data.filter(p => p && !p._notice && p.lat && p.lng).length : 0;
   if(!n){ el.hidden = true; el.innerHTML = ''; return; }
-  el.innerHTML = `조건에 맞는 단지 ${n}곳을 지도에 표시했어요<div class="hp-note-a"><button type="button" onclick="sv('list')">목록에서 보기</button><button type="button" onclick="showPop()">인기 단지 다시 보기</button></div>`;
+  el.innerHTML = `지도에 단지 ${n}곳을 표시했어요<div class="hp-note-a"><button type="button" onclick="sv('list')">목록에서 보기</button><button type="button" onclick="showPop()">인기 단지 다시 보기</button></div>`;
   el.hidden = false;
 }
 // 헤더 검색창(.hsearch)을 지도 화면 검색 띠로 옮기거나 되돌린다 — 노드가 하나라 입력값·자동완성이 그대로 이어진다.
@@ -11788,11 +11822,12 @@ function _hpSearchPlace(toBand){
     const inp = document.getElementById('hSearchInput');
     if(!hs || !slot) return;
     if(toBand){
+      // 안내 문구는 이미 띠에 있어도 다시 맞춘다 — 헤더용 _adjustHSearchPlaceholder 가 창 크기 변경마다 덮어쓴다(미리보기 실측).
+      if(inp) inp.placeholder = '단지명이나 동 이름을 입력해요';
       if(hs.parentElement === slot) return;
       _hpSearchPh = _hpSearchPh || document.createComment('hsearch-home');
       hs.parentNode.insertBefore(_hpSearchPh, hs);
       slot.appendChild(hs);
-      if(inp) inp.placeholder = '단지명이나 동 이름을 입력해요';
     } else {
       if(hs.parentElement !== slot || !_hpSearchPh || !_hpSearchPh.parentNode) return;
       _hpSearchPh.parentNode.insertBefore(hs, _hpSearchPh);
@@ -11800,6 +11835,17 @@ function _hpSearchPlace(toBand){
     }
   }catch(_){}
 }
+// 위성지도·서울전체 묶음(#mapCtrlStack)은 top:46px(툴바 한 줄 바로 아래)에 고정돼 있었다 — 검색 띠가 생기며 띠와 겹쳤다(미리보기 1440 실측).
+//   데스크톱은 툴바(.mtbar) 아래 끝 + 8px 로 맞춘다(툴바는 검색 결과 필터가 생기면 높이가 바뀐다). 모바일은 기존 CSS(top:108px) 그대로.
+function _hpCtrlTop(){
+  try{
+    const st = document.getElementById('mapCtrlStack'), bar = document.querySelector('#view-map .mtbar');
+    if(!st) return;
+    if(window.innerWidth > 700 && bar && bar.offsetHeight) st.style.top = (bar.offsetTop + bar.offsetHeight + 8) + 'px';
+    else st.style.removeProperty('top');
+  }catch(_){}
+}
+try{ if(window.ResizeObserver) window.addEventListener('DOMContentLoaded', () => { const b = document.querySelector('#view-map .mtbar'); if(b) new ResizeObserver(_hpCtrlTop).observe(b); }); }catch(_){}
 let _hpView = 'map';
 function _hpApply(v){
   try{
@@ -11807,7 +11853,10 @@ function _hpApply(v){
     const on = v === 'map', desk = window.innerWidth > 700;
     document.body.classList.toggle('hp-on', on);
     _hpSearchPlace(on && desk);
+    _hpCtrlTop();
     if(on && desk){
+      // 모바일에서 ☰ 드로어를 연 채 데스크톱 폭으로 넓히면 딤·스크롤 잠금이 남는다 — 닫고 시작한다
+      try{ const _lp0 = document.querySelector('.lp'); if(_lp0 && _lp0.classList.contains('open') && typeof closeDrawer === 'function') closeDrawer(); }catch(_){}
       // 첫 로드(재방문·링크 진입)는 sv() 를 거치지 않아 .lp 인라인 숨김·관심 단지 FAB 노출이 안 된 상태다 — 여기서 맞춘다.
       const lp = document.querySelector('.lp'); if(lp) lp.style.setProperty('display','none','important');
       const fb = document.getElementById('fabBM');

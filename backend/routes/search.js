@@ -742,6 +742,10 @@ router.get('/popular', async (req, res) => {
     const _pcc = usedFallback ? CDN_FALLBACK : CDN_OK;
     res.set('Cache-Control', _pcc);
     const payload = { results: out, window: popularWindow() }; // 라이브 집계 = 지금(UTC) 기준 창
+    // DEGRADED-FLAG-2026-10-18 (Plan 151): 대체 경로(RPC 실패 → 최근 거래 표본)의 avgDealAmount 는 그 단지 최근 1건 가격,
+    //   dealCount60d 는 약 2주 표본 건수다(popularService 대체 분기) — "60일 평균가·건수"로 보이지 않게 표식을 싣는다.
+    //   캐시 봉투(payload)째 저장되므로 로컬 캐시 히트에도 같은 표식이 나간다. 스냅샷은 정상 품질만 저장한다(아래 조건).
+    if (usedFallback) payload.degraded = true;
     if (out.length) cache.set(pck, { payload, cc: _pcc }, usedFallback ? 120 : 1800); // 빈 응답은 캐시 안 함
     // 정상 품질(RPC 성공본)이면 스냅샷도 갱신 — 다음 콜드 사용자를 위해.
     // FREEZE-FIX-2026-08-16 (Plan 011): 종전엔 await 없이 던져만 뒀다. Vercel 서버리스는

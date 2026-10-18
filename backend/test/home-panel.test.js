@@ -91,7 +91,9 @@ test('Plan 151 ①: 행 가격은 avgDealAmount(만원) → 억, 값이 없으�
   assert.ok(h.includes('부산 남구 대연동'), '같은 이름의 구(남구)는 시도로 구별');
   assert.ok(h.includes('goSearchResult('), '행은 단지 상세(goSearchResult)로');
   assert.ok(!/최근 거래가/.test(h));
-  assert.ok(els.hpSub.title.includes('2026.08.18~2026.10.17'), '집계 기간은 서버 window 값');
+  assert.ok(els.hpSub.title.includes('2026.08.18부터 2026.10.17까지'), '집계 기간은 서버 window 값');
+  assert.ok(els.hpSub.title.includes('자리가 남으면 넘는 단지도 채워요'), '선정 기준은 지도 범례와 같은 문장(시군구 2곳 캡의 예외 포함)');
+  assert.ok(runRender({ results: SAMPLE.results }).els.hpSub.title.startsWith('최근 21일'), 'window 가 없어도 선정 기준 문장은 남는다');
 });
 
 test('Plan 151 ②: 지역 칩은 데이터에 있는 시도만 — 서울 0건이면 서울 칩이 없다', () => {
@@ -108,6 +110,30 @@ test('Plan 151 ②: 지역 칩은 데이터에 있는 시도만 — 서울 0건�
   // 시도가 하나뿐이면 칩 줄 자체를 만들지 않는다
   const one = runRender({ results: [SAMPLE.results[0]] });
   assert.equal(one.els.hpChips.innerHTML, '');
+});
+
+test('Plan 151: 대체 경로(degraded) 응답이면 평균가·건수 칸을 비운다 — 그 값은 최근 1건 가격·2주 표본 건수', () => {
+  const h = runRender({ ...SAMPLE, degraded: true }).els.hpList.innerHTML;
+  assert.ok(h.includes('평균가와 건수는 잠시 비워 둬요'));
+  assert.ok(!h.includes('5.16억') && !h.includes('60건'));
+  assert.ok(h.includes('벽적골우성'), '단지 목록 자체는 보인다');
+  const search = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
+  assert.match(search, /const payload = \{ results: out, window: popularWindow\(\) \};[^\n]*\n(?:\s*\/\/[^\n]*\n)*\s*if \(usedFallback\) payload\.degraded = true;/);
+});
+
+test('Plan 151: 목록 화면에서 시작한 검색은 끝나도 지도로 옮기지 않는다 · 단지 없이 안내만 오면 목록 화면으로', () => {
+  const ds = extractFn(html, 'doSearch');
+  assert.ok(ds.includes("window._searchStartV = (typeof _hpView === 'string') ? _hpView : null;"));
+  assert.match(ds, /if \(_nowTab === window\._searchStartView && window\._searchStartV !== 'list'\) \{\s*if \(!_realN && window\.innerWidth > 700\) sv\('list'\);\s*else sv\('map',document\.querySelector\('\.htab'\)\);/);
+  // '지방' 세부 미선택 안내: 로딩 카드 되돌림 + 데스크톱 지도 화면이면 목록 화면(세부 칩이 보이는 곳)으로
+  const i = ds.indexOf("if(getRegionForSearch()==='지방'){");
+  const blk = ds.slice(i, ds.indexOf('return;', i));
+  assert.ok(blk.includes('renderListGrid()') && blk.includes("sv('list')"));
+});
+
+test('Plan 151: 검색 띠는 패널이 켜진 지도 화면에서만(저장소 예외로 hp-on 이 없으면 빈 띠가 보이지 않게)', () => {
+  assert.ok(html.includes('body.hp-on #hpBand{display:block;'));
+  assert.ok(!/\n\s*#hpBand\{display:block/.test(html), '조건 없는 #hpBand 표시 규칙이 남아 있다');
 });
 
 test('Plan 151: 빈 응답·stale 응답 안내', () => {
@@ -132,7 +158,7 @@ test('Plan 151 ④: 지도 화면만 사이드바를 숨기고 목록 화면은 
   assert.match(html, /@media\(min-width:701px\)\{\s*\n\s*body\.hp-on \.lp\{display:none!important\}/);
   const apply = extractFn(html, '_hpApply');
   assert.ok(apply.includes("window.innerWidth > 700"), '모바일(≤700px)에는 패널을 켜지 않는다(151b 전까지)');
-  assert.ok(extractFn(html, 'renderMarkers').includes('_hpNote(data)'));
+  assert.ok(extractFn(html, 'renderMarkers').includes('_hpNote(fl)'), '안내 개수는 필터 적용 뒤 목록 기준');
   assert.ok(extractFn(html, 'showPop').includes('_hpNote(null)'));
 });
 
