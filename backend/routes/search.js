@@ -176,6 +176,25 @@ function _isAbortErr(err) {
 function _observeDegrade(kind) {
   return require('../services/degradeStats').observeDegrade(kind);
 }
+// FUZZY-RETRY-2026-10-21: 0건 검색어의 보조 패턴들(순서대로 시도). 끝말(시세·가격·실거래가·매매·전세·아파트·단지)을 떼고
+//   공백을 지운 뒤 글자 사이에 % 를 넣는다(순서만 맞으면 일치). 그래도 없으면 "○○역" 낱말을 빼고 한 번 더. 3글자 미만은 만들지 않는다.
+function fuzzyPatterns(q) {
+  const NOISE = /\s*(시세|가격|실거래가?|매매가?|전세가?|월세|분양가?|평면도|단지정보|아파트)\s*$/;
+  let s = String(q || '').replace(/[%_\\]/g, '').trim();
+  for (let i = 0; i < 4 && NOISE.test(s); i++) s = s.replace(NOISE, '').trim();
+  const toPat = (t) => {
+    const c = t.replace(/\s+/g, '').replace(/단지$/, '');
+    return c.length >= 3 ? `%${[...c].join('%')}%` : null;
+  };
+  const out = [toPat(s)];
+  const tokens = s.split(/\s+/).filter(Boolean);
+  if (tokens.length > 1) {
+    out.push(toPat(tokens.map((t) => t.replace(/역$/, '')).join('')));  // "안양역 삼성래미안" → 안양삼성래미안(안양동삼성래미안)
+    out.push(toPat(tokens.filter((t) => !/역$/.test(t)).join('')));      // "장지역 송파해링턴타워" → 송파해링턴타워
+  }
+  return [...new Set(out.filter(Boolean))];
+}
+
 router.get('/apt', async (req, res) => {
   const q = String(req.query.q || '').trim();
   const limit = Math.min(parseInt(req.query.limit) || 10, 30);
@@ -442,6 +461,33 @@ router.get('/apt', async (req, res) => {
           _nAll: Number(r.deal_count_all) || 0,
         })));
         masterRes = { data: (masterRes.data || []).concat(_regionRetry.masterRows) };
+      }
+    }
+    // FUZZY-RETRY-2026-10-21: 구글 서치 콘솔 실제 검색어 121개 중 13개가 0건이었다(2026-10-21 실측). 원인 셋 —
+    //   ① 끝말 "시세·가격"(반포리체 시세) ② 역 이름 접두(장지역 송파해링턴타워) ③ 붙여 쓰기·중간 글자 차이
+    //   (병점아이파크캐슬 ↔ 병점역아이파크캐슬, 금화마을3단지 ↔ 금화마을주공3단지). 앞 두 재시도까지 0건일 때만,
+    //   끝말을 떼고 "글자 순서만 맞으면" 찾는 패턴으로 다시 찾는다(이름이 짧을수록 앞). 성공 경로 조회 수는 그대로.
+    if (!molitRows.length && !((masterRes.data || []).length)) {
+      for (const pat of fuzzyPatterns(qApt)) {
+        const [fm, fa] = await Promise.all([
+          _softQuery(admin.from('molit_apt_index')
+            .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, recent_deal_date, deal_count, deal_count_all, apt_seq')
+            .ilike('apt_name', pat).order('deal_count', { ascending: false }).limit(limit * 3)
+            .abortSignal(AbortSignal.timeout(MOLIT_ABORT_MS))),
+          _softQuery(admin.from('apt_master').select(_masterSel).ilike('apt_name', pat).limit(limit * 2)),
+        ]);
+        const fRows = (fm && !fm.error && fm.data) || [];
+        const fMaster = (fa && !fa.error && fa.data) || [];
+        if (!fRows.length && !fMaster.length) continue;
+        molitRows = fRows.map((r) => ({
+          ...r,
+          deal_date: r.recent_deal_date != null ? r.recent_deal_date : r.deal_date,
+          _w: Number(r.deal_count) > 0 ? Number(r.deal_count) : 1,
+          _n: Number(r.deal_count) || 0,
+          _nAll: Number(r.deal_count_all) || 0,
+        }));
+        masterRes = { data: fMaster };
+        break;
       }
     }
 
@@ -1281,3 +1327,4 @@ module.exports._softQuery = _softQuery;
 module.exports._isAbortErr = _isAbortErr;
 module.exports.MOLIT_ABORT_MS = MOLIT_ABORT_MS;
 module.exports._mergeNearDuplicateGroups = mergeNearDuplicateGroups;
+module.exports._fuzzyPatterns = fuzzyPatterns;

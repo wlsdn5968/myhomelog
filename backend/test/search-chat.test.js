@@ -282,6 +282,10 @@ test('Plan 052 ①: 공백 없는 질의는 추가 조회가 붙지 않는다(_q
     // "아파트"로 끝나지 않고 공백도 없는 질의 — _qStrip === q === qApt, normalizeName 도 동일해야 한다.
     await handler({ query: { q: 'PLAN052무공백단지', limit: 10 } }, res, () => {});
     assert.equal(res.statusCode, 200);
+    // FUZZY-RETRY-2026-10-21: 이 스텁은 모든 조회가 0건이라 마지막 보조 검색(글자 순서 패턴)이 돈다 — 그 조회는 빼고 센다.
+    //   보조 검색은 0건일 때만 도는 것이 계약이며(search-fuzzy.test.js), 성공 경로 왕복 수는 그대로다.
+    const fz = new Set(require('../routes/search')._fuzzyPatterns('PLAN052무공백단지'));
+    seen.calls = seen.calls.filter((c) => !fz.has(c.pattern));
     assert.equal(seen.calls.length, 3,
       `공백 없는 질의인데 DB 조회가 3개가 아니다(${seen.calls.length}개) — ` +
       `공백 제거 변형이 조건 없이 추가됐을 수 있다: ${JSON.stringify(seen.calls)}`);
