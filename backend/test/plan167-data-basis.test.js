@@ -29,9 +29,11 @@ test('서버 렌더: 단지 페이지는 최근 거래일 아래 "실거래 수�
 
 test('앱 상세 히어로: 수집 시각 한 줄(lastIngestedAt 우선, 없으면 띠의 kst, 둘 다 없으면 생략) + 지연 안내 문구', () => {
   const html = read('../../frontend/index.html');
-  assert.match(html, /const _t0SyncIso=\(window\._dataCounts&&window\._dataCounts\.lastIngestedAt\)\|\|null;/);
-  assert.match(html, /const _t0SyncTxt=_t0SyncIso\?_fmtKstFull\(_t0SyncIso\):\(\(window\._syncData&&window\._syncData\.kst\)\|\|''\);/);
-  assert.match(html, /\$\{_t0SyncTxt\?`<div class="t0h-src">실거래 수집 \$\{_escHtml\(_t0SyncTxt\)\} 기준 · 국토교통부 신고 자료라 계약 뒤 30일 안 신고분은 늦게 반영될 수 있어요<\/div>`:''\}/);
+  assert.match(html, /const iso=\(window\._dataCounts&&window\._dataCounts\.lastIngestedAt\)\|\|null;\r?\n\s*const t=iso\?_fmtKstFull\(iso\):\(\(window\._syncData&&window\._syncData\.kst\)\|\|''\);/);
+  assert.match(html, /return t\?`<div class="t0h-src">실거래 수집 \$\{_escHtml\(t\)\} 기준 · 국토교통부 신고 자료라 계약 뒤 30일 안 신고분은 늦게 반영될 수 있어요<\/div>`:'';/);
+  assert.match(html, /<div class="t0h-g">\$\{_t0Cells\.join\(''\)\}<\/div>\r?\n\s*\$\{_t0SrcHtml\(\)\}/);
+  // health 가 상세보다 늦게 오면(공유 링크·딥링크) 열린 히어로에 채운다 — 2026-10-20 미리보기 실측
+  assert.match(html, /window\._dataCounts = d\.dataCounts; _applyStatTags\(\); _t0SrcFill\(\);/);
   assert.match(html, /\.t0-hero \.t0h-src\{margin-top:7px;font-size:12px;color:var\(--t3\)/);
   // 프런트 포맷 함수는 서버와 같은 결과
   const fn = html.match(/function _fmtKstFull\(iso\)\{[^\n]*\n/)[0];

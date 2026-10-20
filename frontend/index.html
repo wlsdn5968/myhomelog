@@ -8661,12 +8661,10 @@ function showDetail(p){
   if (p.buildYear) _t0Cells.push(_t0hc('준공년도', `${_escHtml(p.buildYear)}년`, false, '공동주택 정보·건축물대장'));
   // DATA-BASIS-2026-10-19 (plans/167 §1-1): "최근 거래일"(데이터 기준) 셀 아래 "실거래 수집 시각"을 함께 — 둘 다 모르면 줄을 뺀다.
   //   수집 시각은 health 의 lastIngestedAt(연도 포함)을 쓰고, 아직 없으면 데이터 상태 띠의 kst(연도 없음)로 대체.
-  const _t0SyncIso=(window._dataCounts&&window._dataCounts.lastIngestedAt)||null;
-  const _t0SyncTxt=_t0SyncIso?_fmtKstFull(_t0SyncIso):((window._syncData&&window._syncData.kst)||'');
   const _heroSection = `<div class="t0-hero">
     <div class="t0h-hd">실거래 요약${_t0DealN>0?`<span class="t0h-bdg">표본 ${_t0DealN.toLocaleString()}건</span>`:''}</div>
     <div class="t0h-g">${_t0Cells.join('')}</div>
-    ${_t0SyncTxt?`<div class="t0h-src">실거래 수집 ${_escHtml(_t0SyncTxt)} 기준 · 국토교통부 신고 자료라 계약 뒤 30일 안 신고분은 늦게 반영될 수 있어요</div>`:''}
+    ${_t0SrcHtml()}
   </div>`;
   document.getElementById('t0').innerHTML=`
     ${_heroSection}
@@ -14084,7 +14082,7 @@ async function chkAPI(_isRetry){
     if(d){
       // NAVER-MAPS-2026-05-13 (Sprint GG): health 응답 전역 저장 — loadMap() 분기 시점 활용
       window._healthData = d;
-      if(d.dataCounts && d.dataCounts.tx){ window._dataCounts = d.dataCounts; _applyStatTags(); }
+      if(d.dataCounts && d.dataCounts.tx){ window._dataCounts = d.dataCounts; _applyStatTags(); _t0SrcFill(); }
       // Phase 4: 정상 시 apiSt hide, 장애 시만 표시
       el.style.display='none';
       try{ document.body.classList.remove('api-off'); }catch(_){}
@@ -14609,6 +14607,16 @@ function _liveInit(tries){
 }
 setTimeout(() => { _liveInit(0); _loadVisitsToday(); }, 2500);
 setInterval(() => { if (document.visibilityState === 'visible') _loadVisitsToday(); }, 5 * 60 * 1000);
+// DATA-BASIS-2026-10-19: 상세 히어로의 "실거래 수집 … 기준" 줄 — lastIngestedAt(연도 포함) 우선, 없으면 띠의 kst, 둘 다 없으면 ''.
+//   (2026-10-20 미리보기 실측) 공유 링크·딥링크로 health 응답보다 먼저 상세가 열리면 줄이 빠졌다 → health 도착 시 _t0SrcFill 이 채운다.
+function _t0SrcHtml(){
+  const iso=(window._dataCounts&&window._dataCounts.lastIngestedAt)||null;
+  const t=iso?_fmtKstFull(iso):((window._syncData&&window._syncData.kst)||'');
+  return t?`<div class="t0h-src">실거래 수집 ${_escHtml(t)} 기준 · 국토교통부 신고 자료라 계약 뒤 30일 안 신고분은 늦게 반영될 수 있어요</div>`:'';
+}
+function _t0SrcFill(){
+  try{ const h=document.querySelector('#t0 .t0-hero'); if(!h||h.querySelector('.t0h-src')) return; const x=_t0SrcHtml(); if(x) h.insertAdjacentHTML('beforeend', x); }catch(_){}
+}
 function _fmtKstFull(iso){const d=new Date(iso);if(!iso||isNaN(d))return'';const k=new Date(d.getTime()+9*3600e3),p=n=>String(n).padStart(2,'0');return`${k.getUTCFullYear()}.${p(k.getUTCMonth()+1)}.${p(k.getUTCDate())} ${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`;}
 // LIST-D-2026-10-18 (Plan 163): 억 표기 공용 — 목록 화면부터 사용(다른 화면 이관은 별도). 값이 없거나 0 이하면 '—'.
 function _fmtEok(v, d){ const n = Number(v); if(!Number.isFinite(n) || n <= 0) return '—'; return n.toFixed(d == null ? 2 : d) + '억'; }
