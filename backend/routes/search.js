@@ -816,6 +816,32 @@ router.get('/popular', async (req, res) => {
 // ── GET /api/search/in-bounds — 지도 영역 단지 조회 (Phase 4, 2026-04-26) ──
 //   ?south=&west=&north=&east=&limit= → apt_geocache 좌표 기반 영역 필터
 //   사용자가 지도 panning 후 "이 영역 단지 보기" 클릭 → 호갱노노 패턴
+// PIN-DEDUP-2026-10-21: 같은 동·80m 안·이름 핵심이 서로 포함·숫자(단지 번호·차수)가 같으면 같은 단지로 본다.
+//   숫자가 다르면(관저더샵2차 ↔ 관저더샵, e편한세상신촌2단지 ↔ 3단지) 합치지 않는다. 남는 이름은 거래가 많은 쪽(정식 단지 우선).
+function _pinCore(n) { return String(n || '').replace(/\s+/g, '').replace(/\([^)]*\)/g, '').replace(/아파트$/, '').toLowerCase(); }
+function mergeNearDuplicateGroups(list) {
+  const arr = list.slice().sort((a, b) => (b.source === 'master') - (a.source === 'master') || (b.n || 0) - (a.n || 0));
+  const kept = [];
+  for (const g of arr) {
+    const c = _pinCore(g.aptName), d = c.replace(/[^0-9]/g, '');
+    const host = c.length >= 2 && kept.find(k => {
+      if (k.umdNm !== g.umdNm) return false;
+      const kc = _pinCore(k.aptName);
+      if (kc.replace(/[^0-9]/g, '') !== d) return false;
+      if (!(kc.includes(c) || c.includes(kc))) return false;
+      const dy = (k.lat - g.lat) * 111000, dx = (k.lng - g.lng) * 111000 * Math.cos(k.lat * Math.PI / 180);
+      return Math.sqrt(dx * dx + dy * dy) <= 80;
+    });
+    if (host) {
+      host.sum += g.sum; host.n += g.n;
+      if (!host.buildYear) host.buildYear = g.buildYear;
+      if (!host.lawdCd) host.lawdCd = g.lawdCd;
+      (host._mergedNames = host._mergedNames || []).push(g.aptName);
+    } else kept.push(g);
+  }
+  return kept;
+}
+
 router.get('/in-bounds', async (req, res) => {
   const south = parseFloat(req.query.south);
   const west = parseFloat(req.query.west);
@@ -990,7 +1016,9 @@ router.get('/in-bounds', async (req, res) => {
         g.lng = kaptCoord[g.aptSeq].lng;
       }
     }
-    const out = Object.values(groups).map(g => {
+    // PIN-DEDUP-2026-10-21: 같은 단지가 신고 이름이 바뀌어("일산파밀리에4단지"→"하이파크시티일산파밀리에4단지") 좌표 표에
+    //   두 행으로 남으면 같은 자리에 핀이 두 개 찍혔다(2026-10-21 전수: 80m 안 같은 이름 계열 512쌍). 합쳐서 하나로 보인다.
+    const out = mergeNearDuplicateGroups(Object.values(groups).filter(g => g.n && g.sum)).map(g => {
       if (!g.n || !g.sum) return null; // 거래 0건 → 제외
       const avg = +(g.sum / g.n / 10000).toFixed(2);
       if (!avg || avg <= 0) return null;
@@ -1006,6 +1034,7 @@ router.get('/in-bounds', async (req, res) => {
         lawdCd: g.lawdCd || null,
         aptSeq: g.aptSeq || null,
         source: g.source,
+        ...(g._mergedNames ? { mergedNames: g._mergedNames } : {}),
       };
     }).filter(Boolean);
     res.json({ results: out, count: out.length });
@@ -1250,3 +1279,4 @@ module.exports.computeDegrade = computeDegrade;
 module.exports._softQuery = _softQuery;
 module.exports._isAbortErr = _isAbortErr;
 module.exports.MOLIT_ABORT_MS = MOLIT_ABORT_MS;
+module.exports._mergeNearDuplicateGroups = mergeNearDuplicateGroups;

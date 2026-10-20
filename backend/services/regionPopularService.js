@@ -23,7 +23,7 @@ const { getSnapshot, putSnapshot } = require('./snapshotStore');
 const WINDOW_DAYS = 60;
 const TOP_N = 10;
 const SIDOS = { '11': '서울', '41': '경기' };
-const SNAP_KEY = (sido) => `popular:region:v1:${sido}`;
+const SNAP_KEY = (sido) => `popular:region:v2:${sido}`; // v2: BURST-CAP 순위(2026-10-21)
 
 const _cleanName = (n) => String(n || '').replace(/^[가-힣0-9]{1,8}(동|리|가),\s*/, '');
 const _core = (n) => String(n || '').replace(/\s+/g, '').replace(/\([^)]*\)/g, '').replace(/(아파트|APT)$/i, '').toLowerCase();
@@ -69,11 +69,12 @@ function rankLawd(rows, aliasMap, n = TOP_N) {
     let e = g.get(k);
     if (!e) {
       e = { aptName: canon, sigungu: t.sigungu, umdNm: t.umd_nm, lawdCd: t.lawd_cd, buildYear: t.build_year,
-        recentDealDate: t.deal_date, dealCount60d: 0, _sum: 0, _raws: new Set(), _seqC: null, _seqCD: '', _seqA: null, _seqAD: '' };
+        recentDealDate: t.deal_date, dealCount60d: 0, _sum: 0, _raws: new Set(), _perDay: new Map(), _seqC: null, _seqCD: '', _seqA: null, _seqAD: '' };
       g.set(k, e);
     }
     e.dealCount60d += 1;
     e._sum += Number(t.deal_amount) || 0;
+    e._perDay.set(String(t.deal_date), (e._perDay.get(String(t.deal_date)) || 0) + 1);
     e._raws.add(raw);
     if (String(t.deal_date) > String(e.recentDealDate)) e.recentDealDate = t.deal_date;
     // 단지 번호: 정식 이름으로 신고된 거래 중 가장 최근 것 우선, 없으면 별칭 거래 중 가장 최근 것
@@ -83,11 +84,33 @@ function rankLawd(rows, aliasMap, n = TOP_N) {
       else if (d >= e._seqAD) { e._seqA = t.apt_seq; e._seqAD = d; }
     }
   }
-  return [...g.values()]
+  // BURST-CAP-2026-10-21: 순위는 "하루 2건까지만 센 건수" — 신축 일괄 등기처럼 60일 거래가 전부 하루에 몰린 곳
+  //   (서울 실측: 미가마하나임 30건·스마트휴 29건·도무스서초청년주택 22건·상봉생활 21건, 모두 거래일 1일)이 1위를 차지했다.
+  //   일반 단지는 하루 최대 2건(은마 14건/10일). 화면의 "거래 N건"은 실제 건수 그대로 둔다.
+  // NAME-MERGE-2026-10-21: 별칭이 없는 이름 변경(과천 "래미안슈르" ↔ "과천래미안슈르")은 같은 동·같은 건축년도·이름 핵심이 서로 포함·
+  //   숫자(단지 번호·차수)가 같을 때 합친다. 건축년도 조건이 "현대" ↔ "현대힐스테이트" 같은 다른 단지 오합침을 막는다.
+  const merged = [];
+  for (const e of [...g.values()].sort((a, b) => b.dealCount60d - a.dealCount60d)) {
+    const c = _core(e.aptName), d = c.replace(/[^0-9]/g, '');
+    const host = c.length >= 2 && e.buildYear && merged.find((k) => {
+      if (k.umdNm !== e.umdNm || Number(k.buildYear) !== Number(e.buildYear)) return false;
+      const kc = _core(k.aptName);
+      return kc.replace(/[^0-9]/g, '') === d && (kc.includes(c) || c.includes(kc));
+    });
+    if (!host) { merged.push(e); continue; }
+    host.dealCount60d += e.dealCount60d; host._sum += e._sum;
+    for (const r of e._raws) host._raws.add(r);
+    for (const [day, n] of e._perDay) host._perDay.set(day, (host._perDay.get(day) || 0) + n);
+    if (String(e.recentDealDate) > String(host.recentDealDate)) host.recentDealDate = e.recentDealDate;
+    if (!host._seqC && e._seqC) { host._seqC = e._seqC; host._seqCD = e._seqCD; }
+    if (!host._seqA && e._seqA) { host._seqA = e._seqA; host._seqAD = e._seqAD; }
+  }
+  for (const e of merged) { let r = 0; for (const c of e._perDay.values()) r += Math.min(c, 2); e._rankN = r; }
+  return merged
     .filter((e) => !isUnnamedApt(e.aptName))
-    .sort((a, b) => b.dealCount60d - a.dealCount60d || String(b.recentDealDate).localeCompare(String(a.recentDealDate)))
+    .sort((a, b) => b._rankN - a._rankN || b.dealCount60d - a.dealCount60d || String(b.recentDealDate).localeCompare(String(a.recentDealDate)))
     .slice(0, n)
-    .map(({ _seqC, _seqCD, _seqA, _seqAD, ...e }) => ({ ...e, aptSeq: _seqC || _seqA || null, avgDealAmount: Math.round(e._sum / e.dealCount60d), _raws: [...e._raws] }));
+    .map(({ _seqC, _seqCD, _seqA, _seqAD, _perDay, _rankN, ...e }) => ({ ...e, aptSeq: _seqC || _seqA || null, avgDealAmount: Math.round(e._sum / e.dealCount60d), _raws: [...e._raws] }));
 }
 
 async function _attachCoords(admin, items) {

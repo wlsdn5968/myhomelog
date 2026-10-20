@@ -49,7 +49,7 @@ test('라우트·cron 배선: /search/popular-region(서울·경기만, 스냅�
   assert.match(s, /let p = await rp\.readSido\(sido\);/);
   const c = fs.readFileSync(path.join(__dirname, '../routes/cron.js'), 'utf8');
   assert.match(c, /require\('\.\.\/services\/regionPopularService'\)\.computeAndStoreAll\(\)/);
-  assert.equal(rp.SNAP_KEY('11'), 'popular:region:v1:11');
+  assert.equal(rp.SNAP_KEY('11'), 'popular:region:v2:11');
 });
 
 test('프런트: 서울·경기 칩은 항상 · 구 칩 줄 · 전체는 구마다 3곳+모두 보기 · 지도 마커는 같은 .pop-marker · 전국으로 되돌리면 인기 마커 복귀', () => {
@@ -60,4 +60,26 @@ test('프런트: 서울·경기 칩은 항상 · 구 칩 줄 · 전체는 구마
   assert.match(html, /function _hpRegMarkers\(list\)\{/);
   assert.match(html, /else if\(wasReg\) \{ try\{ showPop\(\); \}catch\(_\)\{\} \}/);
   assert.match(html, /try\{ if\(_HP_REG_SIDO\[_hpSido\]\)\{ _hpSido = '전국'; _hpReg = 'all'; _hpRender\(\); \} \}catch\(_\)\{\}/);
+});
+
+test('순위는 하루 2건까지만 센다 — 하루에 몰린 일괄 신고(신축 일괄 등기)가 1위를 차지하지 않는다, 표시 건수는 실제 그대로', () => {
+  const day = (n, d, cnt) => Array.from({ length: cnt }, () => ({ apt_name: n, umd_nm: '응암동', sigungu: '은평구', lawd_cd: '11380', apt_seq: '11380-1', build_year: 2026, deal_date: d, deal_amount: 60000 }));
+  const rows = [...day('미가마하나임', '2026-10-01', 30), ...day('백련산파크자이', '2026-09-01', 1), ...day('백련산파크자이', '2026-09-08', 2), ...day('백련산파크자이', '2026-09-15', 2)];
+  const out = rp.rankLawd(rows, new Map(), 10);
+  assert.equal(out[0].aptName, '백련산파크자이', '거래일이 고른 단지가 앞');
+  assert.equal(out[0].dealCount60d, 5);
+  assert.equal(out[1].aptName, '미가마하나임');
+  assert.equal(out[1].dealCount60d, 30, '표시 건수는 실제 그대로');
+  assert.ok(!('_perDay' in out[0]) && !('_rankN' in out[0]), '내부 필드는 응답에 남기지 않는다');
+});
+
+test('이름이 바뀐 같은 단지(같은 동·같은 건축년도·이름 포함·같은 숫자)는 합친다 — 건축년도·숫자가 다르면 따로', () => {
+  const R = (n, by, d) => ({ apt_name: n, umd_nm: '중앙동', sigungu: '과천시', lawd_cd: '41290', apt_seq: '41290-' + n.length, build_year: by, deal_date: d, deal_amount: 200000 });
+  const rows = [R('과천래미안슈르', 2008, '2026-10-01'), R('과천래미안슈르', 2008, '2026-10-02'), R('래미안슈르', 2008, '2026-10-03'),
+    R('현대', 1985, '2026-10-01'), R('현대힐스테이트', 2010, '2026-10-02'), R('주공8', 1983, '2026-10-01'), R('주공9', 1983, '2026-10-02')];
+  const out = rp.rankLawd(rows, new Map(), 10);
+  const by = Object.fromEntries(out.map((e) => [e.aptName, e.dealCount60d]));
+  assert.equal(by['과천래미안슈르'], 3); assert.ok(!('래미안슈르' in by));
+  assert.equal(by['현대'], 1); assert.equal(by['현대힐스테이트'], 1);
+  assert.equal(by['주공8'], 1); assert.equal(by['주공9'], 1);
 });
