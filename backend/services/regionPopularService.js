@@ -27,6 +27,8 @@ const SNAP_KEY = (sido) => `popular:region:v2:${sido}`; // v2: BURST-CAP 순위(
 
 const _cleanName = (n) => String(n || '').replace(/^[가-힣0-9]{1,8}(동|리|가),\s*/, '');
 const _core = (n) => String(n || '').replace(/\s+/g, '').replace(/\([^)]*\)/g, '').replace(/(아파트|APT)$/i, '').toLowerCase();
+// 이름 합치기용 — 괄호 안(건설사·동 번호)을 남긴다: "후곡마을(대창)" ↔ "후곡마을(동양)" 은 다른 단지(2026-10-21 실측)
+const _mergeCore = (n) => String(n || '').replace(/\s+/g, '').replace(/[()]/g, '').replace(/(아파트|APT)$/i, '').toLowerCase();
 
 /** 시도 앞 2자리 → 그 시도의 현행 시군구 코드(이름순 아님, 코드순) */
 function lawdsOfSido(sido) {
@@ -91,10 +93,10 @@ function rankLawd(rows, aliasMap, n = TOP_N) {
   //   숫자(단지 번호·차수)가 같을 때 합친다. 건축년도 조건이 "현대" ↔ "현대힐스테이트" 같은 다른 단지 오합침을 막는다.
   const merged = [];
   for (const e of [...g.values()].sort((a, b) => b.dealCount60d - a.dealCount60d)) {
-    const c = _core(e.aptName), d = c.replace(/[^0-9]/g, '');
+    const c = _mergeCore(e.aptName), d = c.replace(/[^0-9]/g, '');
     const host = c.length >= 2 && e.buildYear && merged.find((k) => {
       if (k.umdNm !== e.umdNm || Number(k.buildYear) !== Number(e.buildYear)) return false;
-      const kc = _core(k.aptName);
+      const kc = _mergeCore(k.aptName);
       return kc.replace(/[^0-9]/g, '') === d && (kc.includes(c) || c.includes(kc));
     });
     if (!host) { merged.push(e); continue; }

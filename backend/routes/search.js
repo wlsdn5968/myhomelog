@@ -818,7 +818,8 @@ router.get('/popular', async (req, res) => {
 //   사용자가 지도 panning 후 "이 영역 단지 보기" 클릭 → 호갱노노 패턴
 // PIN-DEDUP-2026-10-21: 같은 동·80m 안·이름 핵심이 서로 포함·숫자(단지 번호·차수)가 같으면 같은 단지로 본다.
 //   숫자가 다르면(관저더샵2차 ↔ 관저더샵, e편한세상신촌2단지 ↔ 3단지) 합치지 않는다. 남는 이름은 거래가 많은 쪽(정식 단지 우선).
-function _pinCore(n) { return String(n || '').replace(/\s+/g, '').replace(/\([^)]*\)/g, '').replace(/아파트$/, '').toLowerCase(); }
+// 괄호 안 내용은 지우지 않는다 — "후곡마을(대창)" ↔ "후곡마을(동양)" 은 다른 단지다(미리보기 실측 2026-10-21). 괄호 기호만 뺀다.
+function _pinCore(n) { return String(n || '').replace(/\s+/g, '').replace(/[()]/g, '').replace(/아파트$/, '').toLowerCase(); }
 function mergeNearDuplicateGroups(list) {
   const arr = list.slice().sort((a, b) => (b.source === 'master') - (a.source === 'master') || (b.n || 0) - (a.n || 0));
   const kept = [];

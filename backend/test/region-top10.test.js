@@ -83,3 +83,9 @@ test('이름이 바뀐 같은 단지(같은 동·같은 건축년도·이름 포
   assert.equal(by['현대'], 1); assert.equal(by['현대힐스테이트'], 1);
   assert.equal(by['주공8'], 1); assert.equal(by['주공9'], 1);
 });
+
+test('목록 합치기도 괄호 안 이름이 다르면 따로 — 후곡마을(대창) ↔ 후곡마을(동양)', () => {
+  const R = (n) => ({ apt_name: n, umd_nm: '일산동', sigungu: '고양시일산서구', lawd_cd: '41287', apt_seq: '41287-1', build_year: 1995, deal_date: '2026-10-01', deal_amount: 30000 });
+  const out = rp.rankLawd([R('후곡마을(대창)'), R('후곡마을(동양)')], new Map(), 10);
+  assert.equal(out.length, 2);
+});
