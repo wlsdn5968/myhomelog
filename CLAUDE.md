@@ -204,6 +204,10 @@
 - **이용 기록(audit_log) 보관 최소 365일(c3fd731, 2026-10-18)**: JS `auditPrune.js` 와 DB `prune_audit_log()`(pg_cron jobid 1) 두 곳 — 처리방침 "접근 기록 1년 이상". 영구 보관 목록은 두 곳이 같아야 한다(`audit-retention-1y.test.js`). 동의 기록 문구는 `plans/136` §7 v1.4 후보.
 - **세션 예약 점검(세션 전용 — 새 세션에서 다시 등록 필요)**: **10-19 이후 computed_snapshots 에 health 스냅샷 2키 생성·retention 요약 healthSnapCounts=1 확인(Plan 161)** · **11-17 처리방침 v1.3 시행(Plan 136 §6 — preview/privacy-136 합치기·예고 상자 정리)** · 10-28 11:23 express 5.3.0 재검토 · 10-29 10:23 Node 26 전환 조건 · 11-01 13:07 Redis 확인·107c-3(2025-07) 준비 · 11-07 10:17 Sentry 11 전환 조건. (2026-10-18 세션에서 재등록)
 
+### 방문 현황 (2026-10-20, 운영 c4a0de6)
+- **지금 보는 사람** = Supabase Realtime Presence(공개 채널 `site-presence:<호스트>`, 무료 동시 200 연결, DB 쓰기 0). **오늘 방문** = `visit_attribution` 의 `daily_visit`(운영 도메인에서 브라우저당 하루 1회, 식별자 없음) → `GET /api/visits/today`.
+- 첫 화면 표시는 임계값 이상일 때만(`LIVE_SHOW_MIN 2`·`VISIT_SHOW_MIN 10`) — 평소 하루 방문 3~6건(10월 실측). 데이터 상태 창은 항상 표시. 새 표·Redis 를 쓰지 말 것(Redis 한도 초과·DB 88%).
+
 ### 서비스 전면 검토 (2026-10-14) — `plans/review-2026-10-14.md`
 - 강점: 실거래 181만 건·매일 적재·공식 출처·서버 렌더 SEO. 약점: 첫 화면 과밀, 이모지 552개·글자 크기 30종·인라인 스타일 1,322곳("AI 가 만든 느낌"의 실측 원인), 앱(밝은+금색)과 서버 렌더 페이지(어두운 남색) 테마 불일치, 유료 보고서 503(Redis), 느린 API 3~5초, 키보드 접근성. **디자인 개편은 Claude Design 시안 승인 먼저**(운영자 상시 요구) — 문구 사실·원칙 정정만 Plan 138 로 먼저 반영.
 
