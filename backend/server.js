@@ -336,6 +336,8 @@ app.use('/api/feedback', dataLimiter, require('./routes/feedback'));
 // ATTRIBUTION-2026-08-29 (Sprint NNNNNNN-31): 유입 채널 자체 기록(개인 식별자 미수집).
 //   Vercel Web Analytics 조회 API 가 이 플랜에서 404 라 채널 판단 근거가 없었다.
 app.use('/api/attribution', dataLimiter, require('./routes/attribution'));
+// VISITS-2026-10-20: 오늘 방문 브라우저 수(첫 화면 표시용, 식별자 없음)
+app.use('/api/visits', dataLimiter, require('./routes/visits'));
 // 임장노트 클라우드 동기화 (Phase 4 — 기존 localStorage → DB sync)
 app.use('/api/field-notes', dataLimiter, require('./routes/fieldNotes'));
 // Phase 5 (2026-04-26): 1Page 컨설팅 보고서 자동 생성 — 핵심 USP

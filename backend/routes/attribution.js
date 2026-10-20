@@ -19,7 +19,8 @@ const { getSupabaseAdmin } = require('../db/client');
 const router = express.Router();
 
 // 늘릴 때는 admin 집계 화면도 같이 본다 — 아무 문자열이나 받으면 집계가 쓰레기가 된다.
-const EVENTS = new Set(['first_load', 'signup', 'search', 'report']);
+// VISITS-2026-10-20: daily_visit = 운영 도메인에서 브라우저당 하루 1회(식별자 없음) — /api/visits/today 가 센다.
+const EVENTS = new Set(['first_load', 'signup', 'search', 'report', 'daily_visit']);
 const cut = (v, n) => {
   const s = String(v == null ? '' : v).trim();
   return s ? s.slice(0, n) : null;

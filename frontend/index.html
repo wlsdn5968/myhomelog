@@ -878,6 +878,10 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .hp-hd{padding:24px 24px 12px}
 .hp-t{margin:0;font-size:20px;font-weight:700;line-height:1.4;color:var(--t1)}
 .hp-s{margin:4px 0 0;font-size:14px;font-weight:400;line-height:1.6;color:var(--t3)}
+/* VISITS-2026-10-20: 지금 보는 사람·오늘 방문 — 모바일 시트 머리에서도 보이게 별도 줄(hp-s 는 모바일에서 숨김) */
+.hp-live{display:flex;align-items:center;gap:6px;margin:6px 0 0;font-size:12px;font-weight:500;line-height:1.5;color:var(--t2);font-variant-numeric:tabular-nums}
+.hp-live[hidden]{display:none}
+.hp-live .dot{width:7px;height:7px;border-radius:50%;background:var(--grn,#2A8F3F);flex-shrink:0}
 .hp-chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 24px 16px}
 .hp-chips:empty{display:none}
 .hp-chip{height:36px;padding:0 12px;border:1px solid var(--bd2);border-radius:8px;background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
@@ -2448,6 +2452,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button type="button" class="hp-grab" id="hpGrab" aria-label="목록 크기 조절" aria-expanded="false" aria-controls="hpList" onclick="_hpsTap()"></button>
     <div class="hp-tr"><h2 class="hp-t" id="hpT">최근 거래가 많은 단지</h2><span class="hp-sm">최근 60일</span></div>
     <p class="hp-s" id="hpSub">최근 60일 국토교통부 실거래 신고 기준이에요</p>
+    <p class="hp-live" id="hpLive" role="status" aria-live="polite" hidden></p>
   </div>
   <div class="hp-note" id="hpNote" role="status" hidden></div>
   <div class="hp-chips" id="hpChips" role="group" aria-label="지역으로 좁히기"></div>
@@ -4254,6 +4259,17 @@ window.addEventListener('DOMContentLoaded',()=>{
       window._attr.send('first_load');
     }
   } catch(_) { try { window._attr.send('first_load'); } catch(_e){} }
+  /* VISITS-2026-10-20: "오늘 방문" — 브라우저당 하루(KST) 1회. 저장하는 것은 보낸 날짜뿐(식별자 없음).
+     운영 도메인에서만 보낸다 — 미리보기·로컬도 같은 DB 에 기록돼 점검 방문이 숫자를 부풀렸다(10-12 391·10-18 94건 실측). */
+  try {
+    if (location.hostname === 'myhomelog.vercel.app') {
+      var _vd = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
+      if (localStorage.getItem('mhl_visit_day') !== _vd) {
+        localStorage.setItem('mhl_visit_day', _vd);
+        window._attr.send('daily_visit');
+      }
+    }
+  } catch(_) {}
 
   // Phase 17 (2026-05-03): 세션 길이 측정 (visibility 변경 시점) — retention/이탈 분석
   //   사용자가 탭 떠나는 시점 measure → 평균 세션 길이 = 사용자 가치 측정
@@ -6313,6 +6329,11 @@ async function openDataStatus(){
     <div style="text-align:right;white-space:nowrap"><div style="font-size:12px;font-weight:800;color:var(--t1);font-variant-numeric:tabular-nums">${synced}</div><div style="margin-top:3px;font-size:12px;font-weight:700;color:${warn?'var(--amb)':'var(--t2)'}">${state}</div></div>
   </div>`);
   const dc=h.dataCounts||{};
+  // VISITS-2026-10-20: 방문 현황은 임계값과 무관하게 여기서는 항상 보여 준다(운영자 확인용)
+  try{ await _loadVisitsToday(); }catch(_){}
+  row('방문 현황','오늘 방문은 브라우저 기준 · 지금 보는 사람은 열린 탭 기준',
+    `${window._liveN!=null?`지금 ${Number(window._liveN).toLocaleString()}명`:'지금 —'} · ${window._visitsToday!=null?`오늘 ${Number(window._visitsToday).toLocaleString()}명`:'오늘 —'}`,
+    '실시간', false);
   if(dc.tx){
     const ts=h.dataSyncedAt?new Date(h.dataSyncedAt):null;
     const hrs=(ts&&!isNaN(ts))?Math.round((Date.now()-ts.getTime())/3600000):null;
@@ -14543,6 +14564,51 @@ function _popRows(j){
 }
 function _fmtSgg(s){return String(s==null?'':s).replace(/^([가-힣]+?시)([가-힣]+구)(?=\s|$)/,'$1 $2');}
 // DATA-BASIS-2026-10-19: ISO → 'YYYY.MM.DD HH:mm'(KST). backend/utils/fmtKst.js 와 같은 계산(ICU 무관).
+/* VISITS-2026-10-20: 지금 보는 사람(Supabase Realtime Presence — DB 쓰기 0, 무료 동시 200 연결) + 오늘 방문(GET /api/visits/today).
+   첫 화면은 숫자가 임계값 이상일 때만 보인다 — 실제 하루 방문이 3~6건(2026-10 실측)이라 "1명·3명" 표시는 빈 가게처럼 보인다.
+   운영자는 데이터 상태 창에서 항상 본다. 키는 탭마다 새 난수(저장 안 함), 탭이 1분 넘게 숨겨지면 빠진다. */
+const LIVE_SHOW_MIN = 2, VISIT_SHOW_MIN = 10;
+window._liveN = null; window._visitsToday = null;
+function _renderLive(){
+  const el = document.getElementById('hpLive'); if (!el) return;
+  const n = window._liveN, v = window._visitsToday;
+  const parts = [];
+  if (Number(n) >= LIVE_SHOW_MIN) parts.push(`지금 ${Number(n).toLocaleString()}명이 보고 있어요`);
+  if (Number(v) >= VISIT_SHOW_MIN) parts.push(`오늘 방문 ${Number(v).toLocaleString()}명`);
+  if (!parts.length) { el.hidden = true; el.textContent = ''; return; }
+  el.innerHTML = `${Number(n) >= LIVE_SHOW_MIN ? '<span class="dot" aria-hidden="true"></span>' : ''}${_escHtml(parts.join(' · '))}`;
+  el.title = '오늘 방문은 브라우저 기준이에요(같은 분이 다른 기기로 오면 따로 세요)';
+  el.hidden = false;
+}
+async function _loadVisitsToday(){
+  try {
+    const r = await fetch(`${CFG.api}/visits/today`, { signal: AbortSignal.timeout(5000) });
+    const j = r.ok ? await r.json() : null;
+    window._visitsToday = (j && Number.isFinite(j.today)) ? j.today : null;
+  } catch(_) { window._visitsToday = null; }
+  _renderLive();
+}
+function _liveInit(tries){
+  const c = window.MHL && window.MHL.auth && window.MHL.auth.client;
+  if (!c || typeof c.channel !== 'function') { if ((tries||0) < 20) setTimeout(() => _liveInit((tries||0) + 1), 1500); return; }
+  let key = ''; try { key = window.crypto.randomUUID(); } catch(_) { key = 'k' + Math.random().toString(36).slice(2) + Date.now().toString(36); }
+  const ch = c.channel(`site-presence:${location.hostname}`, { config: { presence: { key } } });
+  let tracked = false, hideT = null;
+  const track = () => { if (!tracked) { tracked = true; ch.track({}).catch(() => { tracked = false; }); } };
+  const untrack = () => { if (tracked) { tracked = false; ch.untrack().catch(() => {}); } };
+  ch.on('presence', { event: 'sync' }, () => {
+    try { window._liveN = Object.keys(ch.presenceState()).length; } catch(_) { window._liveN = null; }
+    _renderLive();
+  });
+  ch.subscribe((st) => { if (st === 'SUBSCRIBED' && document.visibilityState !== 'hidden') track(); });
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') { clearTimeout(hideT); hideT = setTimeout(untrack, 60000); }
+    else { clearTimeout(hideT); track(); }
+  });
+  window._liveCh = ch;
+}
+setTimeout(() => { _liveInit(0); _loadVisitsToday(); }, 2500);
+setInterval(() => { if (document.visibilityState === 'visible') _loadVisitsToday(); }, 5 * 60 * 1000);
 function _fmtKstFull(iso){const d=new Date(iso);if(!iso||isNaN(d))return'';const k=new Date(d.getTime()+9*3600e3),p=n=>String(n).padStart(2,'0');return`${k.getUTCFullYear()}.${p(k.getUTCMonth()+1)}.${p(k.getUTCDate())} ${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`;}
 // LIST-D-2026-10-18 (Plan 163): 억 표기 공용 — 목록 화면부터 사용(다른 화면 이관은 별도). 값이 없거나 0 이하면 '—'.
 function _fmtEok(v, d){ const n = Number(v); if(!Number.isFinite(n) || n <= 0) return '—'; return n.toFixed(d == null ? 2 : d) + '억'; }
