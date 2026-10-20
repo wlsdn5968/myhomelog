@@ -1,0 +1,173 @@
+'use strict';
+/**
+ * REGION-TOP10-2026-10-21 (운영자 요청): 서울 25개 구·경기 시군구(구 단위)마다 "최근 60일 거래가 많은 단지 TOP10".
+ *
+ * [왜] 전국 인기 12곳은 한 시군구 2곳 상한·21일 필터 때문에 지방 신축이 섞이고 서울이 0곳인 날이 있다
+ *   (운영자 "서울이 아예 없으니 허접해 보인다"). 사람들은 "노원구 거래 많은 단지", "수원시 영통구"처럼 구 단위로 본다.
+ * [어떻게] 새 표·새 DB 함수 없이 — 시군구마다 molit_transactions 의 60일 거래를 인덱스(lawd_cd, deal_date)로 읽어
+ *   서버에서 센다. 서울 25회·경기 47회 조회(지역당 대개 1페이지). 매일 retention cron(ingest 1시간 뒤)에서 계산해
+ *   computed_snapshots 에 시도별 한 행으로 둔다. 요청은 메모리 → 스냅샷(36시간) → 즉석 계산 순.
+ * [같은 단지 쪼개짐 방지] 신고 이름이 "풍림아파트A·B" 처럼 갈라진 단지는 별칭(apt_master.molit_aliases)으로
+ *   정식 단지 이름에 합친다(getAliasCanonicalMap — 추천·알림과 같은 규칙). 거래 건수도 합산된다.
+ * [좌표] apt_geocache 의 (이름, 시군구, 동) 정확 키. 근거가 약한 좌표(검증 전 키워드 검색이고 장소 이름에 단지 이름이
+ *   없는 것 — 2026-10-21 실측 514건, 예: "엘리스"→수제화 가게)는 쓰지 않는다 — 틀린 자리에 핀을 찍느니 목록에만 둔다.
+ */
+const logger = require('../logger');
+const { getSupabaseAdmin } = require('../db/client');
+const { LAWD_CODES, RETIRED_LAWD_CODES, getAliasCanonicalMap } = require('./transactionService');
+const { regionLabel } = require('./priceRecordsService');
+const { isUnnamedApt, displayAptName } = require('../utils/aptDisplayName');
+const { isValidKoreaCoord } = require('../utils/geo');
+const { getSnapshot, putSnapshot } = require('./snapshotStore');
+
+const WINDOW_DAYS = 60;
+const TOP_N = 10;
+const SIDOS = { '11': '서울', '41': '경기' };
+const SNAP_KEY = (sido) => `popular:region:v1:${sido}`;
+
+const _cleanName = (n) => String(n || '').replace(/^[가-힣0-9]{1,8}(동|리|가),\s*/, '');
+const _core = (n) => String(n || '').replace(/\s+/g, '').replace(/\([^)]*\)/g, '').replace(/(아파트|APT)$/i, '').toLowerCase();
+
+/** 시도 앞 2자리 → 그 시도의 현행 시군구 코드(이름순 아님, 코드순) */
+function lawdsOfSido(sido) {
+  return [...new Set(Object.values(LAWD_CODES))]
+    .filter((c) => String(c).startsWith(sido) && !RETIRED_LAWD_CODES.has(String(c)))
+    .sort();
+}
+
+/** 근거 있는 좌표인가 — 검증된 출처(kakao-v·kakao-addr 등)이거나, 키워드 검색이라도 장소 이름에 단지 이름이 들어 있을 때 */
+function trustedCoord(c, aptName) {
+  if (!c || !isValidKoreaCoord(Number(c.lat), Number(c.lng))) return false;
+  if (c.source !== 'kakao' && c.source !== 'kakao-sub') return true;
+  const core = _core(aptName);
+  return !!(core && c.place_name && String(c.place_name).replace(/\s+/g, '').toLowerCase().includes(core));
+}
+
+async function _fetchLawdDeals(admin, lawd, sinceIso) {
+  const rows = [];
+  for (let from = 0; from < 20000; from += 1000) {
+    const { data, error } = await admin.from('molit_transactions')
+      .select('apt_name, sigungu, umd_nm, lawd_cd, apt_seq, build_year, deal_date, deal_amount')
+      .eq('lawd_cd', lawd).gte('deal_date', sinceIso)
+      .order('deal_date', { ascending: false }).order('id', { ascending: true })
+      .range(from, from + 999);
+    if (error) throw new Error(`${lawd}: ${error.message}`);
+    rows.push(...(data || []));
+    if (!data || data.length < 1000) break;
+  }
+  return rows;
+}
+
+/** 한 시군구의 60일 TOP N(별칭 합침). 좌표는 아직 없음. */
+function rankLawd(rows, aliasMap, n = TOP_N) {
+  const g = new Map();
+  for (const t of rows) {
+    const raw = _cleanName(t.apt_name);
+    if (!raw) continue;
+    const canon = aliasMap.get(`${t.apt_name}|${t.umd_nm || ''}`) || raw;
+    const k = `${canon}|${t.umd_nm || ''}`;
+    let e = g.get(k);
+    if (!e) {
+      e = { aptName: canon, sigungu: t.sigungu, umdNm: t.umd_nm, lawdCd: t.lawd_cd, buildYear: t.build_year,
+        recentDealDate: t.deal_date, dealCount60d: 0, _sum: 0, _raws: new Set(), _seqC: null, _seqCD: '', _seqA: null, _seqAD: '' };
+      g.set(k, e);
+    }
+    e.dealCount60d += 1;
+    e._sum += Number(t.deal_amount) || 0;
+    e._raws.add(raw);
+    if (String(t.deal_date) > String(e.recentDealDate)) e.recentDealDate = t.deal_date;
+    // 단지 번호: 정식 이름으로 신고된 거래 중 가장 최근 것 우선, 없으면 별칭 거래 중 가장 최근 것
+    if (t.apt_seq) {
+      const d = String(t.deal_date);
+      if (raw === canon) { if (d >= e._seqCD) { e._seqC = t.apt_seq; e._seqCD = d; } }
+      else if (d >= e._seqAD) { e._seqA = t.apt_seq; e._seqAD = d; }
+    }
+  }
+  return [...g.values()]
+    .filter((e) => !isUnnamedApt(e.aptName))
+    .sort((a, b) => b.dealCount60d - a.dealCount60d || String(b.recentDealDate).localeCompare(String(a.recentDealDate)))
+    .slice(0, n)
+    .map(({ _seqC, _seqCD, _seqA, _seqAD, ...e }) => ({ ...e, aptSeq: _seqC || _seqA || null, avgDealAmount: Math.round(e._sum / e.dealCount60d), _raws: [...e._raws] }));
+}
+
+async function _attachCoords(admin, items) {
+  const names = [...new Set(items.flatMap((e) => [e.aptName, ...e._raws]))];
+  const coords = new Map();
+  for (let i = 0; i < names.length; i += 200) {
+    const { data } = await admin.from('apt_geocache')
+      .select('apt_name, sigungu, umd_nm, lat, lng, source, place_name').in('apt_name', names.slice(i, i + 200));
+    for (const c of (data || [])) coords.set(`${c.apt_name}|${c.sigungu || ''}|${c.umd_nm || ''}`, c);
+  }
+  for (const e of items) {
+    let hit = null;
+    for (const nm of [e.aptName, ...e._raws]) {
+      const c = coords.get(`${nm}|${e.sigungu || ''}|${e.umdNm || ''}`);
+      if (c && trustedCoord(c, nm)) { hit = c; break; }
+    }
+    e.lat = hit ? Number(hit.lat) : null;
+    e.lng = hit ? Number(hit.lng) : null;
+  }
+}
+
+/** 시도 하나 계산 — { sido, window, groups:[{lawdCd,label,deals60d,results}] } */
+async function computeSido(sido, { concurrency = 6 } = {}) {
+  const admin = getSupabaseAdmin();
+  if (!admin) throw new Error('DB 미설정');
+  if (!SIDOS[sido]) throw new Error('지원하지 않는 시도');
+  const until = new Date();
+  const since = new Date(until.getTime() - WINDOW_DAYS * 86400e3);
+  const sinceIso = since.toISOString().slice(0, 10);
+  const lawds = lawdsOfSido(sido);
+  let aliasMap = new Map();
+  try { aliasMap = await getAliasCanonicalMap(lawds); } catch (e) { logger.warn({ err: e.message }, 'region top10: 별칭 맵 실패 — 신고 이름 그대로'); }
+
+  const groups = new Array(lawds.length);
+  let i = 0, failed = 0;
+  async function worker() {
+    while (i < lawds.length) {
+      const idx = i++; const lawd = lawds[idx];
+      try {
+        const rows = await _fetchLawdDeals(admin, lawd, sinceIso);
+        const top = rankLawd(rows, aliasMap);
+        await _attachCoords(admin, top);
+        groups[idx] = {
+          lawdCd: lawd, label: regionLabel(lawd, ''), deals60d: rows.length,
+          results: top.map(({ _sum, _raws, ...r }) => ({
+            ...r, aptName: r.aptName, displayName: displayAptName(r.aptName, { umdNm: r.umdNm }),
+          })),
+        };
+      } catch (e) {
+        failed += 1;
+        logger.warn({ err: e.message, lawd }, 'region top10: 시군구 계산 실패(건너뜀)');
+      }
+    }
+  }
+  await Promise.all(Array.from({ length: concurrency }, worker));
+  const ok = groups.filter(Boolean);
+  return {
+    sido, sidoName: SIDOS[sido],
+    window: { days: WINDOW_DAYS, since: sinceIso, until: until.toISOString().slice(0, 10) },
+    groups: ok, failed, computedAt: until.toISOString(),
+  };
+}
+
+/** cron: 시도별 계산·저장. 시군구 실패가 절반을 넘으면 저장하지 않는다(어제 값 유지). */
+async function computeAndStoreAll() {
+  const out = {};
+  for (const sido of Object.keys(SIDOS)) {
+    try {
+      const p = await computeSido(sido);
+      const total = lawdsOfSido(sido).length;
+      if (p.groups.length >= Math.ceil(total / 2)) { await putSnapshot(SNAP_KEY(sido), p); out[sido] = p.groups.length; }
+      else out[sido] = `skip(${p.groups.length}/${total})`;
+    } catch (e) { out[sido] = `err:${e.message}`; }
+  }
+  return out;
+}
+
+async function readSido(sido) {
+  const s = await getSnapshot(SNAP_KEY(sido), 36 * 3600e3);
+  return s ? s.payload : null;
+}
+
+module.exports = { computeSido, computeAndStoreAll, readSido, lawdsOfSido, rankLawd, trustedCoord, SIDOS, SNAP_KEY };

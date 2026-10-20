@@ -300,6 +300,11 @@ router.post('/retention', async (req, res) => {
       error: (popularSnapshot && (popularSnapshot.reason || popularSnapshot.err
         || (popularSnapshot.usedFallback ? 'usedFallback(RPC 실패)' : undefined))) || undefined,
     }).catch(() => {});
+    // REGION-TOP10-2026-10-21: 서울·경기 구별 TOP10 사전 계산(실패해도 retention 은 정상 — 요청 경로가 즉석 계산으로 대체)
+    try {
+      const rt = await require('../services/regionPopularService').computeAndStoreAll();
+      logger.info({ rt }, 'region top10 스냅샷');
+    } catch (e) { logger.warn({ err: e.message }, 'region top10 스냅샷 실패(무시)'); }
     await checkIngestFreshness(); // Sprint AAAAAAA — 적재 정체 감시(실패는 내부에서 삼킴)
     await checkCronStaleness();   // Sprint MMMMMMM-12 — 안 돈 cron 감시
     await checkRegionIngestFreshness(); // Sprint MMMMMMM-22 — 지역 단위 적재 중단 감시

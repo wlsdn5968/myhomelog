@@ -37,7 +37,7 @@ function extractConst(src, name) {
 
 // 가짜 DOM 으로 _hpRender 를 실제 실행한다.
 function runRender(data, sido) {
-  const els = { hpList: { innerHTML: '' }, hpChips: { innerHTML: '' }, hpSub: { title: '' } };
+  const els = { hpList: { innerHTML: '' }, hpChips: { innerHTML: '' }, hpChips2: { innerHTML: '', hidden: true }, hpSub: { title: '' } };
   const ctx = {
     document: { getElementById: (id) => els[id] || null },
     console,
@@ -46,6 +46,9 @@ function runRender(data, sido) {
   const code = [
     extractConst(html, '_HP_SIDO'),
     `let _hpData = null, _hpSido = '전국';`,
+    // REGION-TOP10-2026-10-21: 서울·경기는 지역 목록(_hpRegShow)으로 넘긴다 — 여기서는 넘겼는지만 본다
+    extractConst(html, '_HP_REG_SIDO'), `let _hpReg = 'all'; globalThis.__regShown = 0; function _hpRegShow(){ globalThis.__regShown++; }`,
+    extractFn(html, '_hpRegChips'), extractFn(html, '_hpRegShort'),
     'const UNNAMED_RE = /^\\(?\\s*\\d+(?:-\\d+)?\\s*\\)?$/;',
     'const JIBUN_SUFFIX_RE = /\\s*\\(\\s*(\\d+(?:-\\d+)?)\\s*\\)\\s*$/;',
     ...['_hpSidoOf', '_hpRender', '_escHtml', '_jsonAttr', '_fmtSgg', '_isUnnamedApt', '_dispAptName'].map(n => extractFn(html, n)),
@@ -56,7 +59,7 @@ function runRender(data, sido) {
   vm.runInContext(code, ctx);
   ctx.__set(data, sido || '전국');
   ctx.__render();
-  return { els, sido: ctx.__sido() };
+  return { els, sido: ctx.__sido(), regShown: ctx.__regShown };
 }
 
 const SAMPLE = {
@@ -96,20 +99,26 @@ test('Plan 151 ①: 행 가격은 avgDealAmount(만원) → 억, 값이 없으�
   assert.ok(runRender({ results: SAMPLE.results }).els.hpSub.title.startsWith('최근 21일'), 'window 가 없어도 선정 기준 문장은 남는다');
 });
 
-test('Plan 151 ②: 지역 칩은 데이터에 있는 시도만 — 서울 0건이면 서울 칩이 없다', () => {
+// REGION-TOP10-2026-10-21 (운영자 요청 "서울이 아예 없으니 허접해 보인다"): 계약 변경 —
+//   서울·경기 칩은 전국 12곳에 없어도 항상 있고, 누르면 구별 TOP10(_hpRegShow)으로 넘어간다. 그 밖 시도는 종전대로 데이터에 있을 때만.
+test('Plan 151 ② (2026-10-21 개정): 서울·경기 칩은 항상, 그 밖 시도는 데이터에 있을 때만 · 서울·경기는 구별 목록으로', () => {
   const { els } = runRender(SAMPLE);
   const c = els.hpChips.innerHTML;
-  for (const s of ['전국', '경기', '부산', '인천']) assert.ok(c.includes(`>${s}</button>`), `${s} 칩이 없다`);
-  assert.ok(!c.includes('>서울</button>'), '데이터에 없는 서울 칩이 생겼다');
+  for (const s of ['전국', '서울', '경기', '부산', '인천']) assert.ok(c.includes(`>${s}</button>`), `${s} 칩이 없다`);
+  assert.ok(!c.includes('>대구</button>'), '데이터에 없는 지방 시도 칩이 생겼다');
   assert.ok(c.includes('aria-pressed="true"'));
-  // 칩 필터
+  assert.equal(els.hpChips2.hidden, true, '전국에서는 구 칩 줄을 숨긴다');
+  // 칩 필터(지방 시도)는 종전대로 받은 12곳 안에서
   const busan = runRender(SAMPLE, '부산').els.hpList.innerHTML;
   assert.ok(busan.includes('대연롯데캐슬') && !busan.includes('벽적골우성'));
-  // 사라진 지역이 선택돼 있으면 전국으로 되돌린다
-  assert.equal(runRender(SAMPLE, '서울').sido, '전국');
-  // 시도가 하나뿐이면 칩 줄 자체를 만들지 않는다
+  // 서울·경기는 구별 목록으로 넘긴다(전국 12곳에 서울이 0건이어도)
+  const seoul = runRender(SAMPLE, '서울');
+  assert.equal(seoul.sido, '서울'); assert.equal(seoul.regShown, 1);
+  // 사라진 지방 시도가 선택돼 있으면 전국으로 되돌린다
+  assert.equal(runRender(SAMPLE, '대구').sido, '전국');
+  // 시도가 하나뿐이어도 서울·경기 칩은 남는다
   const one = runRender({ results: [SAMPLE.results[0]] });
-  assert.equal(one.els.hpChips.innerHTML, '');
+  assert.ok(one.els.hpChips.innerHTML.includes('>서울</button>'));
 });
 
 test('Plan 151: 대체 경로(degraded) 응답이면 평균가·건수 칸을 비운다 — 그 값은 최근 1건 가격·2주 표본 건수', () => {
@@ -186,8 +195,9 @@ test('Plan 151b: 모바일 목록 시트 — 시안 값(위 모서리 16·그림
   assert.ok(css.includes('body.hp-on #mapEl{margin-bottom:var(--hps-pad,0px);'));
   for (const sel of ['#mMapCap', '#mhint', '.fab-ai', '.fab-bm', '.bm-pop']) assert.ok(css.includes(`body.hp-on ${sel}{bottom:calc(var(--hps-pad,0px)`), `${sel} 가 시트 위로 오르지 않는다`);
   assert.ok(css.includes('.app:has(#MSHEET.on) .hp,body.ms-open .hp{visibility:hidden}'), '마커 시트가 열리면 목록 시트를 내린다');
-  // 시안에 없는 지역 칩·표 머리는 모바일에서 숨김, "거래 N건" 앞말은 모바일에서만
-  assert.ok(css.includes('.hp-s,.hp-chips,.hp-th,.hp-rep p,.hp-ft-l{display:none!important}'));
+  // 표 머리는 모바일에서 숨김, "거래 N건" 앞말은 모바일에서만 · 지역 칩은 2026-10-21 부터 모바일에서도 가로 스크롤로 보인다(구별 TOP10)
+  assert.ok(css.includes('.hp-s,.hp-th,.hp-rep p,.hp-ft-l{display:none!important}'));
+  assert.ok(css.includes('.hp-chips{flex-wrap:nowrap;overflow-x:auto;'));
   assert.ok(css.includes('.hp-ctl{display:inline}'));
   const { els } = runRender(SAMPLE);
   assert.ok(els.hpList.innerHTML.includes('<span class="hp-ct"><span class="hp-ctl">거래 </span>60건</span>'));

@@ -710,6 +710,41 @@ router.get('/apt', async (req, res) => {
 //   서빙 우선순위: ① 서버 인메모리 캐시 → ② 일별 사전집계 스냅샷(cron 이 저장, 36h 신선) →
 //   ③ 라이브 집계(RPC 7s + 품질 후처리 + 좌표 lazy-fill) + 성공본이면 스냅샷도 갱신.
 //   스냅샷 테이블 미생성(운영자 SQL 전)이어도 ②가 조용히 null → ③ 동작 — 완전 무해.
+// REGION-TOP10-2026-10-21: 서울 25개 구·경기 시군구별 최근 60일 거래 많은 단지 TOP10 (services/regionPopularService).
+//   메모리(30분) → 스냅샷(36시간, 매일 retention cron 이 저장) → 즉석 계산(동시 1건, 성공하면 저장).
+const _regionPopInflight = new Map();
+router.get('/popular-region', async (req, res) => {
+  const rp = require('../services/regionPopularService');
+  const sido = String(req.query.sido || '');
+  if (!rp.SIDOS[sido]) return res.status(400).json({ error: '지원하는 시도는 서울(11)·경기(41)예요' });
+  const ck = `popular-region:${sido}`;
+  const CC_OK = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400';
+  const hit = cache.get(ck);
+  if (hit) { res.set('Cache-Control', CC_OK); return res.json(hit); }
+  try {
+    let p = await rp.readSido(sido);
+    if (!p) {
+      if (!_regionPopInflight.has(sido)) {
+        _regionPopInflight.set(sido, rp.computeSido(sido).then(async (r) => {
+          if (r.groups.length >= Math.ceil(rp.lawdsOfSido(sido).length / 2)) {
+            await require('../services/snapshotStore').putSnapshot(rp.SNAP_KEY(sido), r);
+          }
+          return r;
+        }).finally(() => _regionPopInflight.delete(sido)));
+      }
+      p = await _regionPopInflight.get(sido);
+    }
+    if (!p || !Array.isArray(p.groups) || !p.groups.length) { res.set('Cache-Control', 'no-store'); return res.json({ sido, groups: [] }); }
+    cache.set(ck, p, 1800);
+    res.set('Cache-Control', CC_OK);
+    return res.json(p);
+  } catch (e) {
+    logger.warn({ err: e.message, sido }, 'popular-region 실패');
+    res.set('Cache-Control', 'no-store');
+    return res.status(503).json({ error: '지역별 목록을 잠시 불러오지 못했어요' });
+  }
+});
+
 router.get('/popular', async (req, res) => {
   const limit = Math.min(parseInt(req.query.limit) || 12, 30);
   try {
