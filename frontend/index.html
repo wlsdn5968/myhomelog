@@ -9517,7 +9517,7 @@ async function loadAmenities(p){
       })()
     ]);
     if(!near||!near.available){box.style.display='none';return;}
-    const tranHtml=tran&&tran.available?`<div style="margin-top:4px;font-weight:600;color:var(--a2)">${tran.destinationName} 통근: 대중교통 추정 ~${tran.transitMinutes}분 / 차량 ~${tran.carMinutes}분</div>`:'';
+    const tranHtml=tran&&tran.available?`<div style="margin-top:4px;font-weight:600;color:var(--a2)">${_escHtml(tran.destinationName)} 통근: 대중교통 추정 ~${tran.transitMinutes}분 / 차량 ~${tran.carMinutes}분</div>`:'';
     box.innerHTML=`<div style="background:#F0F7F0;border:1px solid #CFE5CF;border-radius:var(--radius-base);padding:9px 11px;line-height:1.6">
       <div style="font-weight:700;color:var(--t1)">주변 <span style="font-weight:400;color:var(--t3);font-size:12px" title="항목마다 반경이 달라요. 편의점 500m, 학교·지하철·공원 1.2km, 대형마트 1.5km, 종합병원 2km">(항목별 500m~2km)</span></div>
       <div>${(()=>{

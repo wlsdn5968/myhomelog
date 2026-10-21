@@ -57,6 +57,7 @@ router.get('/key', (_req, res) => {
   res.json({ key: VAPID_PUBLIC_KEY });
 });
 
+const PUSH_SUB_CAP = 5000;
 router.post('/subscribe', async (req, res) => {
   try {
     if (!VAPID_PUBLIC_KEY) return res.status(503).json({ error: '푸시 알림이 아직 활성화되지 않았어요.' });
@@ -67,8 +68,18 @@ router.post('/subscribe', async (req, res) => {
     const endpoint = String(sub?.endpoint || '');
     const p256dh = String(sub?.keys?.p256dh || '');
     const auth = String(sub?.keys?.auth || '');
-    if (!endpoint.startsWith('https://') || endpoint.length > 700 || !p256dh || !auth || !isPushServiceEndpoint(endpoint)) {
+    // SEC-2026-10-21 (보안 점검 M1): 키 형식까지 본다 — 브라우저 PushSubscription 의 p256dh 는 P-256 공개키 65바이트(base64url 87자),
+    //   auth 는 16바이트(22자). 형식을 안 보면 아무 문자열로 가짜 구독을 대량 등록해 발송 cron 을 밀어낼 수 있었다.
+    const B64U = /^[A-Za-z0-9_-]+={0,2}$/;
+    if (!endpoint.startsWith('https://') || endpoint.length > 700 || !isPushServiceEndpoint(endpoint)
+      || !B64U.test(p256dh) || p256dh.replace(/=+$/, '').length !== 87 || !B64U.test(auth) || auth.replace(/=+$/, '').length !== 22) {
       return res.status(400).json({ error: '유효하지 않은 구독 정보' });
+    }
+    // 구독 총수 상한 — 새 endpoint 만 막는다(기존 구독 갱신은 통과). 현재 2건(2026-10-21) 대비 넉넉한 값.
+    const { count: subCount } = await admin.from('push_subscriptions').select('endpoint', { count: 'exact', head: true });
+    if (Number(subCount) >= PUSH_SUB_CAP) {
+      const { data: had } = await admin.from('push_subscriptions').select('endpoint').eq('endpoint', endpoint).maybeSingle();
+      if (!had) return res.status(503).json({ error: '지금은 알림 신청이 많아 잠시 받을 수 없어요. 나중에 다시 시도해주세요.' });
     }
     const items = sanitizeItems(req.body?.items);
     if (!items.length) return res.status(400).json({ error: '알림 받을 관심 단지가 없어요. 관심 단지를 먼저 추가해주세요.' });

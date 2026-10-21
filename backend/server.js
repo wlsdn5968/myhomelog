@@ -72,6 +72,8 @@ const cache = require('./cache');
 //   - 외부 연결 대상을 화이트리스트로 좁혀 attack surface 최소화.
 //   - connectSrc 에 Supabase·Toss·Sentry 도메인 명시 (XHR/Fetch 탈출 방지).
 //   - frameSrc 는 Toss Widget 용으로만 허용.
+// SEC-2026-10-21 (보안 점검 L2): 쓰지 않는 브라우저 권한을 끈다(카메라·마이크·위치·USB). 결제 위젯 권한은 건드리지 않는다.
+app.use((req, res, next) => { res.setHeader('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), usb=()'); next(); });
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -391,7 +393,9 @@ app.use('/sitemaps', require('./routes/sitemaps'));
 app.get('/api/health/apis', async (req, res) => {
   const expected = process.env.HEALTH_API_KEY;
   const provided = req.headers['x-health-key'];
-  if (!expected || provided !== expected) {
+  // SEC-2026-10-21 (보안 점검 L3): 상수시간 비교(cron.js authorizeCron 과 같은 방식)
+  const _pb = Buffer.from(String(provided || '')), _eb = Buffer.from(String(expected || ''));
+  if (!expected || _pb.length !== _eb.length || !require('crypto').timingSafeEqual(_pb, _eb)) {
     return res.status(404).json({ error: 'Not Found' });
   }
 

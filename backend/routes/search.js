@@ -196,7 +196,8 @@ function fuzzyPatterns(q) {
 }
 
 router.get('/apt', async (req, res) => {
-  const q = String(req.query.q || '').trim();
+  // SEC-2026-10-21 (보안 점검 L5): ILIKE 와일드카드(%·_)를 뺀다 — "__"·"%%" 2글자가 최소 길이를 통과해 전체 매칭 스캔이 됐다(챗 경로와 같은 규칙)
+  const q = String(req.query.q || '').replace(/[%_\\]/g, '').trim();
   const limit = Math.min(parseInt(req.query.limit) || 10, 30);
   // 2026-05-31: 최소 2글자 — 1글자 ILIKE %x% 는 수천 row 매칭 → cold start 시 DB 부하.
   //   프론트 자동완성(index.html L7958)은 빈 results 를 zero-result 제안 UI 로 정상 처리.
