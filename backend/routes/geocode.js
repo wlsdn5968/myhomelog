@@ -134,6 +134,8 @@ router.post('/', async (req, res) => {
   //   검증된 DB 캐시를 먼저 본다(Kakao 비용 0 → GEOCAP 미소모). 미스일 때만 기존 경로 그대로.
   try {
     const fromDb = await require('../services/geocodeCacheService').resolveCoordFromCacheOnly({ aptName, sigungu: sgg, umdNm: umd });
+    // NAME-HEAL-2026-10-22: 재검색으로도 위치를 확인하지 못한 단지 — 가게 자리에 핀을 찍지 않고 "찾지 못함"으로 답한다(카카오 재호출 없음)
+    if (fromDb && fromDb.untrusted) return res.json({ lat: null, lng: null, error: '위치 확인 중' });
     if (fromDb && fromDb.lat != null) {
       const out = { lat: fromDb.lat, lng: fromDb.lng, address: fromDb.address || null, placeName: fromDb.place_name || fromDb.placeName || null, fromGeocache: true };
       cache.set(ck, out, 86400);
@@ -177,6 +179,7 @@ router.post('/batch', async (req, res) => {
     // CACHE-FIRST-2026-08-19: 단건 라우트와 동일 — 검증된 DB 캐시 선조회(비용 0). 주석은 위 참조.
     try {
       const fromDb = await require('../services/geocodeCacheService').resolveCoordFromCacheOnly({ aptName: item.aptName, sigungu: sgg, umdNm: umd });
+      if (fromDb && fromDb.untrusted) return { id, lat: null, lng: null }; // NAME-HEAL-2026-10-22
       if (fromDb && fromDb.lat != null) {
         const out = { lat: fromDb.lat, lng: fromDb.lng, address: fromDb.address || null, placeName: fromDb.place_name || fromDb.placeName || null, fromGeocache: true };
         cache.set(ck, out, 86400);

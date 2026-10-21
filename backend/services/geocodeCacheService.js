@@ -69,6 +69,9 @@ function buildKey({ kaptCode, aptName, sigungu, umdNm }) {
 }
 
 /** DB 캐시 조회 — 2차 캐시(프로세스 메모리) 활용으로 같은 요청 내 중복 쿼리 방지 */
+const UNTRUSTED = Object.freeze({ untrusted: true });
+const isUntrusted = (r) => !!(r && r.untrusted);
+
 async function getFromDb(key) {
   const mem = cache.get(`geo-db:${key}`);
   if (mem !== undefined) return mem;
@@ -78,9 +81,12 @@ async function getFromDb(key) {
   try {
     const { data } = await admin
       .from('apt_geocache')
-      .select('lat,lng,address,place_name')
+      .select('lat,lng,address,place_name,source')
       .eq('apt_key', key)
       .maybeSingle();
+    // NAME-HEAL-2026-10-22: 재검색으로도 못 찾고 가게·시설 자리로 확인된 좌표(kakao-x) — "있지만 믿을 수 없음" 표시만 돌려준다.
+    //   null 로 돌려주면 호출자가 느슨한 카카오 검색으로 같은 가게 위치를 다시 받아 저장한다.
+    if (data && data.source === 'kakao-x') { cache.set(`geo-db:${key}`, UNTRUSTED, 3600); return UNTRUSTED; }
     // COORD-GUARD-2026-07-25 (Sprint NNNNNN): 저장된 좌표가 한국 범위 밖이면 "캐시 없음"으로 취급.
     //   현재 DB CHECK(lat 33~39·lng 124~132)가 범위를 강제하므로 실질 no-op 이지만, 과거 데이터·
     //   제약 변경·수동 INSERT 등으로 이상 좌표가 들어와도 지도에 찍히지 않게 하는 방어(비용 0).
@@ -286,10 +292,11 @@ async function getFromDbByNameCombo({ aptName, sigungu, umdNm }) {
   const admin = dbClient();
   if (!admin || !aptName) return null;
   try {
-    let q = admin.from('apt_geocache').select('lat,lng,address,place_name').eq('apt_name', aptName);
+    let q = admin.from('apt_geocache').select('lat,lng,address,place_name,source').eq('apt_name', aptName);
     q = sigungu ? q.eq('sigungu', sigungu) : q.is('sigungu', null);
     q = umdNm ? q.eq('umd_nm', umdNm) : q.is('umd_nm', null);
     const { data } = await q.limit(1).maybeSingle();
+    if (data && data.source === 'kakao-x') return UNTRUSTED; // NAME-HEAL-2026-10-22
     if (!data || !isValidKoreaCoord(Number(data.lat), Number(data.lng))) return null;
     return { lat: Number(data.lat), lng: Number(data.lng), address: data.address, placeName: data.place_name };
   } catch (_) { return null; }
@@ -427,10 +434,12 @@ async function resolveCoord(apt, _diag) {
 
   // 1) DB 캐시
   const fromDb = await getFromDb(key);
+  if (isUntrusted(fromDb)) return null; // NAME-HEAL-2026-10-22: 믿을 수 없는 좌표 — 좌표 없음으로, 카카오 재검색·재저장 안 함
   if (fromDb) return fromDb;
 
   // 1.5) 다른 키 네임스페이스(kapt:/name:)로 이미 저장된 동일 단지 재사용 (Sprint IIIII-2)
   const fromCombo = await getFromDbByNameCombo(apt);
+  if (isUntrusted(fromCombo)) return null;
   if (fromCombo) {
     cache.set(`geo-db:${key}`, fromCombo, 3600);
     return fromCombo;
@@ -487,12 +496,13 @@ async function resolveCoordBatch(apts, concurrency = 4, diags) {
     try {
       const { data } = await admin
         .from('apt_geocache')
-        .select('apt_key,lat,lng,address,place_name')
+        .select('apt_key,lat,lng,address,place_name,source')
         .in('apt_key', [...new Set(missIdx.map(i => keys[i]))]);
       const byKey = new Map((data || []).map(r => [r.apt_key, r]));
       remain = [];
       for (const i of missIdx) {
         const r = byKey.get(keys[i]);
+        if (r && r.source === 'kakao-x') { results[i] = UNTRUSTED; cache.set(`geo-db:${keys[i]}`, UNTRUSTED, 3600); continue; } // NAME-HEAL-2026-10-22
         if (r && isValidKoreaCoord(Number(r.lat), Number(r.lng))) {
           results[i] = { lat: Number(r.lat), lng: Number(r.lng), address: r.address, placeName: r.place_name };
           cache.set(`geo-db:${keys[i]}`, results[i], 3600);
@@ -526,7 +536,7 @@ async function resolveCoordBatch(apts, concurrency = 4, diags) {
       dbMs, tailMs: Date.now() - tk, totalMs: Date.now() - t0,
     }, 'resolveCoordBatch 타이밍');
   }
-  return results;
+  return results.map((r) => (isUntrusted(r) ? null : r)); // NAME-HEAL-2026-10-22: 바깥에는 좌표 없음으로
 }
 
 // buildKey·saveToDb 는 백필의 지번 주소 폴백(Sprint CCCCCCC)이 키 규약·저장 경로를 재사용하기 위해 노출.
@@ -537,7 +547,7 @@ async function resolveCoordBatch(apts, concurrency = 4, diags) {
 async function resolveCoordFromCacheOnly(apt) {
   if (!apt || !apt.aptName) return null;
   const fromDb = await getFromDb(buildKey(apt));
-  if (fromDb) return fromDb;
+  if (fromDb) return fromDb;       // { untrusted: true } 도 그대로 — /api/geocode 가 "위치 확인 중"으로 답하고 카카오로 가지 않는다
   const fromCombo = await getFromDbByNameCombo(apt);
   return fromCombo || null;
 }

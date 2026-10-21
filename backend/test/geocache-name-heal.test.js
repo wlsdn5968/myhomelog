@@ -55,3 +55,39 @@ test('배선: 매일 좌표 작업에 재검색 단계(400건·40초) · 통계 
   assert.equal(rp.trustedCoord({ lat: 37.5, lng: 127, source: 'kakao-x', place_name: 'x' }, 'x'), false);
   assert.equal(rp.trustedCoord({ lat: 37.5, lng: 127, source: 'kakao-n' }, '엘리스'), true);
 });
+
+test('믿을 수 없는 좌표(kakao-x): 단건·배치는 좌표 없음(카카오 재검색·재저장 없음), /api/geocode 는 "위치 확인 중"', async () => {
+  const dbc = require('../db/client');
+  const cache = require('../cache');
+  const orig = dbc.getSupabaseAdmin, origEnv = dbc.hasAdminEnv;
+  const writes = [];
+  const row = { apt_key: 'name:엘리스|동작구|신대방동', lat: 37.48, lng: 126.98, address: '서울 동작구 사당동 86-9', place_name: '앨리스성수동수제화', source: 'kakao-x' };
+  const chain = () => { const q = {
+    select() { return q; }, eq() { return q; }, is() { return q; }, limit() { return q; },
+    in() { return Promise.resolve({ data: [row], error: null }); },
+    maybeSingle() { return Promise.resolve({ data: row, error: null }); },
+    upsert(v) { writes.push(v); return Promise.resolve({ error: null }); },
+  }; return q; };
+  try {
+    dbc.getSupabaseAdmin = () => ({ from: chain });
+    dbc.hasAdminEnv = () => true; // 모듈이 불러올 때 DB 사용 여부를 고정하므로 가짜로 켜고 다시 불러온다(안 켜면 모든 경로가 null 로 헛통과)
+    for (const k of cache.keys()) if (String(k).startsWith('geo-db:')) cache.del(k);
+    delete require.cache[require.resolve('../services/geocodeCacheService')];
+    const g = require('../services/geocodeCacheService');
+    const apt = { aptName: '엘리스', sigungu: '동작구', umdNm: '신대방동' };
+    const co0 = await g.resolveCoordFromCacheOnly(apt);
+    assert.equal(co0 && co0.untrusted, true, 'DB 경로를 실제로 탔는지 먼저 확인');
+    assert.equal(await g.resolveCoord(apt), null);
+    assert.deepEqual(await g.resolveCoordBatch([apt]), [null]);
+    const co = await g.resolveCoordFromCacheOnly(apt);
+    assert.equal(co && co.untrusted, true);
+    assert.equal(writes.length, 0, '재저장하지 않는다');
+    const r = fs.readFileSync(path.join(__dirname, '../routes/geocode.js'), 'utf8');
+    assert.match(r, /if \(fromDb && fromDb\.untrusted\) return res\.json\(\{ lat: null, lng: null, error: '위치 확인 중' \}\);/);
+    assert.match(r, /if \(fromDb && fromDb\.untrusted\) return \{ id, lat: null, lng: null \};/);
+  } finally {
+    dbc.getSupabaseAdmin = orig; dbc.hasAdminEnv = origEnv;
+    for (const k of cache.keys()) if (String(k).startsWith('geo-db:')) cache.del(k);
+    delete require.cache[require.resolve('../services/geocodeCacheService')];
+  }
+});
