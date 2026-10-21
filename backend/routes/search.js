@@ -906,6 +906,7 @@ router.get('/in-bounds', async (req, res) => {
     const { data: coords, error } = await admin
       .from('apt_geocache')
       .select('apt_name, sigungu, umd_nm, lat, lng, apt_key, place_name')
+      .neq('source', 'kakao-x') // NAME-HEAL-2026-10-22: 재검색으로도 못 찾고 가게·시설 자리로 확인된 좌표는 핀에서 뺀다
       .gte('lat', south).lte('lat', north)
       .gte('lng', west).lte('lng', east)
       .limit(limit);

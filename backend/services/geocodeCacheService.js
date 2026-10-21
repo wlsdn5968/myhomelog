@@ -542,6 +542,50 @@ async function resolveCoordFromCacheOnly(apt) {
   return fromCombo || null;
 }
 
+/**
+ * NAME-HEAL-2026-10-22: 엄격한 단지 좌표 재검색 — 근거 없는 키워드 좌표(장소 이름에 단지 이름이 없음) 교정용.
+ *   kakaoGeocode 는 동 불일치·비아파트도 점수만 깎고 받아들여 "엘리스"→수제화 가게, "인계푸르지오"→다른 단지 같은 좌표가 들어왔다.
+ *   여기서는 세 조건을 모두 만족하는 장소만 받는다: ① 카테고리에 '아파트' ② 장소 이름(공백·'아파트' 제거)에 단지 이름 핵심이 들어 있음
+ *   — 단, 핵심이 2글자 이하면 정확히 같아야 함("청암" ↔ "청암빌라트" 거부) ③ 지번 주소에 시군구와 법정동이 들어 있음.
+ *   못 찾으면 null(아무것도 바꾸지 않는다).
+ */
+function _healCore(s) { return String(s || '').replace(/\s+/g, '').replace(/\([^)]*\)/g, '').replace(/(아파트|APT)$/i, '').toLowerCase(); }
+function strictAptMatch(doc, { aptName, sigungu, umdNm }) {
+  if (!doc) return false;
+  const cat = String(doc.category_name || '');
+  if (!cat.includes('아파트')) return false;
+  const core = _healCore(normalizeAptName(aptName) || aptName);
+  const place = _healCore(doc.place_name);
+  if (!core || !place) return false;
+  if (core.length <= 2 ? place !== core : !place.includes(core)) return false;
+  const addr = String(doc.address_name || '').replace(/\s+/g, '');
+  const sgg = String(sigungu || '').replace(/\s+/g, '');
+  const dong = String(umdNm || '').trim().split(/\s+/).pop() || '';
+  if (sgg && !addr.includes(sgg)) return false;
+  if (dong && !addr.includes(dong)) return false;
+  const lat = parseFloat(doc.y), lng = parseFloat(doc.x);
+  return isValidKoreaCoord(lat, lng);
+}
+async function kakaoStrictAptSearch({ aptName, sigungu, umdNm }) {
+  if (!KAKAO_ENABLED) return null;
+  const headers = { Authorization: `KakaoAK ${KAKAO_KEY}` };
+  const name = normalizeAptName(aptName) || String(aptName || '');
+  const sgg = String(sigungu || '').trim(), umd = String(umdNm || '').trim();
+  const qs = [`${sgg} ${umd} ${name} 아파트`.trim(), `${umd} ${name}`.trim()];
+  for (const q of [...new Set(qs)]) {
+    try {
+      _trackKakaoCall();
+      const r = await axios.get(KAKAO_KEYWORD, { headers, params: { query: q, size: 15 }, timeout: 5000 });
+      const doc = (r.data?.documents || []).find((d) => strictAptMatch(d, { aptName, sigungu, umdNm }));
+      if (doc) return { lat: parseFloat(doc.y), lng: parseFloat(doc.x), address: doc.address_name, placeName: doc.place_name };
+    } catch (e) {
+      logger.debug({ src: 'kakao-strict', q, err: e.message }, 'Kakao 엄격 재검색 개별 실패');
+      return undefined; // 호출 실패(한도·네트워크)는 "못 찾음"과 구분 — 호출자는 표시를 바꾸지 않는다
+    }
+  }
+  return null;
+}
+
 module.exports = { resolveCoord, resolveCoordBatch, resolveCoordFromCacheOnly, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb, NON_APT_PATTERNS, NON_APT_CATEGORY, AMBIGUOUS_SGG,
   // JIBUN-FIRST-2026-08-10: 백필 잡도 같은 헬퍼를 쓰도록 export(복붙 드리프트 방지)
-  molitJibunAddress, sggWithSpace };
+  molitJibunAddress, sggWithSpace, kakaoStrictAptSearch, strictAptMatch };

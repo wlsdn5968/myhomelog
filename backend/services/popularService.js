@@ -156,13 +156,14 @@ async function buildPopularResults(limit = 12, opts = {}) {
   // ③ apt_geocache 좌표 join — 환각 차단(2026-05-06): (apt_name|sigungu|umd_nm) 정확 키만
   const names = [...new Set(top.map(t => t.apt_name))];
   const { data: coords } = await admin.from('apt_geocache')
-    .select('apt_name, sigungu, umd_nm, lat, lng')
+    .select('apt_name, sigungu, umd_nm, lat, lng, source')
     .in('apt_name', names);
   const coordMap = new Map();
   for (const c of (coords || [])) {
     // COORD-GUARD-2026-07-25 (Sprint NNNNNN): 한국 범위 밖 좌표가 인기 마커로 새어나가지 않게 방어.
     //   미달이면 miss 취급되어 아래 lazy-fill 이 온디맨드 재시도(기존 동작). DB CHECK 와 이중 안전망.
     if (!isValidKoreaCoord(Number(c.lat), Number(c.lng))) continue;
+    if (c.source === 'kakao-x') continue; // NAME-HEAL-2026-10-22: 재검색 실패 + 가게·시설 자리로 확인된 좌표는 인기 마커에 쓰지 않는다
     coordMap.set(`${c.apt_name}|${c.sigungu || ''}|${c.umd_nm || ''}`, c);
   }
   // HERO-REAL-2026-09-27 (Plan 116a): 랜딩 히어로 실거래 카드가 /transactions/history 를 부르려면

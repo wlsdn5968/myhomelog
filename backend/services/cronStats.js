@@ -57,6 +57,8 @@ function _pick(summary) {
     // FAST-VERIFY-2026-08-10 (Sprint KKKKKKK-10): Kakao 무호출 통과분 / 이번 run 이 집은 행 수.
     'verifyFast', 'verifyRows',
     'rehealTried', 'rehealHealed', 'rehealMarked',
+    // NAME-HEAL-2026-10-22: 근거 없는 키워드 좌표 재검색(교정·유지·핀 제외·남은 수)
+    'nameHealTried', 'nameHealHealed', 'nameHealKept', 'nameHealHidden', 'nameHealLeft',
     // ZERO-FETCH-WATCH-2026-08-10 (Sprint KKKKKKK-4): 지역 단위 적재 중단 감시.
     'slot', 'regionsCount', 'zeroFetchRegions',
     // SEARCH-MV-2026-08-16 (Sprint TTTTTTT): 검색용 MV 갱신 소요. 이 값이 사라지면(=필드 부재)

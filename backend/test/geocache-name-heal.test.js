@@ -1,0 +1,57 @@
+/**
+ * backend/test/geocache-name-heal.test.js — NAME-HEAL-2026-10-22: 근거 없는 키워드 좌표 재검색(2026-10-21 전수 514건).
+ */
+'use strict';
+const { test } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const { strictAptMatch } = require('../services/geocodeCacheService');
+const job = require('../jobs/geocacheBackfill');
+
+const D = (place, cat, addr, y = '37.49', x = '126.92') => ({ place_name: place, category_name: cat, address_name: addr, y, x });
+const APT = '부동산 > 주거시설 > 아파트';
+
+test('엄격 판정: 카테고리 아파트 + 장소 이름에 단지 이름 + 지번 주소에 시군구·동', () => {
+  const q = { aptName: '엘리스', sigungu: '동작구', umdNm: '신대방동' };
+  assert.equal(strictAptMatch(D('엘리스아파트', APT, '서울 동작구 신대방동 600'), q), true);
+  assert.equal(strictAptMatch(D('앨리스성수동수제화', '쇼핑 > 패션', '서울 동작구 사당동 86-9'), q), false, '가게');
+  assert.equal(strictAptMatch(D('엘리스아파트', APT, '서울 동작구 사당동 86-9'), q), false, '동이 다르면 거부');
+  const q2 = { aptName: '인계푸르지오', sigungu: '수원시팔달구', umdNm: '인계동' };
+  assert.equal(strictAptMatch(D('수원인계푸르지오아파트', APT, '경기 수원시 팔달구 인계동 1122', '37.27', '127.03'), q2), true);
+  assert.equal(strictAptMatch(D('매교역푸르지오SKVIEW아파트', APT, '경기 수원시 팔달구 매교동 300', '37.27', '127.02'), q2), false, '다른 단지');
+  assert.equal(strictAptMatch(D('수원인계푸르지오주상복합 정문', '교통,수송 > 입출구', '경기 수원시 팔달구 인계동 1122'), q2), false, '출입구는 아파트 카테고리가 아님');
+});
+
+test('짧은 이름(2글자 이하)은 정확히 같아야 — 청암 ↔ 청암빌라트 거부 · 읍면 동은 마지막 낱말로 대조', () => {
+  const q = { aptName: '청암', sigungu: '서초구', umdNm: '방배동' };
+  assert.equal(strictAptMatch(D('청암빌라트', APT, '서울 서초구 방배동 1000'), q), false);
+  assert.equal(strictAptMatch(D('청암아파트', APT, '서울 서초구 방배동 1000'), q), true);
+  const q3 = { aptName: '봉담자이라젠느', sigungu: '화성시효행구', umdNm: '봉담읍 동화리' };
+  assert.equal(strictAptMatch(D('봉담자이라젠느', APT, '경기 화성시 효행구 봉담읍 동화리 100', '37.2', '126.9'), q3), true);
+});
+
+test('대상 판정·대체 표시: 장소 이름에 단지 이름이 없는 kakao·kakao-sub 만 대상 · 못 찾으면 주거시설 이름은 유지(u), 가게는 핀 제외(x)', () => {
+  const U = job._isUntrustedNameCoord, F = job._healFallbackSource;
+  assert.equal(U({ source: 'kakao', apt_name: '엘리스', place_name: '앨리스성수동수제화' }), true);
+  assert.equal(U({ source: 'kakao', apt_name: '상계현대1차', place_name: '상계현대1차 아파트' }), false);
+  assert.equal(U({ source: 'kakao-v', apt_name: '엘리스', place_name: '앨리스성수동수제화' }), false, '검증된 출처는 대상 아님');
+  assert.equal(U({ source: 'kakao-sub', apt_name: '산본세종', place_name: '세종통신' }), true);
+  assert.equal(F('앨리스성수동수제화'), 'kakao-x');
+  assert.equal(F('동원택시'), 'kakao-x');
+  assert.equal(F('세종통신'), 'kakao-x');
+  assert.equal(F('문정동궁리치웰아파트 102동'), 'kakao-u');
+  assert.equal(F('상지리츠빌8차아파트'), 'kakao-u');
+});
+
+test('배선: 매일 좌표 작업에 재검색 단계(400건·40초) · 통계 키 · 핀 3곳에서 kakao-x 제외', () => {
+  const g = fs.readFileSync(path.join(__dirname, '../jobs/geocacheBackfill.js'), 'utf8');
+  assert.match(g, /nameHeal = await rehealUntrustedNames\(admin, \{ cap: 400, budgetMs: 40000 \}\);/);
+  assert.match(g, /nameHealTried: nameHeal\.tried, nameHealHealed: nameHeal\.healed/);
+  assert.match(fs.readFileSync(path.join(__dirname, '../services/cronStats.js'), 'utf8'), /'nameHealTried', 'nameHealHealed', 'nameHealKept', 'nameHealHidden', 'nameHealLeft',/);
+  assert.match(fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8'), /\.neq\('source', 'kakao-x'\) \/\/ NAME-HEAL-2026-10-22/);
+  assert.match(fs.readFileSync(path.join(__dirname, '../services/popularService.js'), 'utf8'), /if \(c\.source === 'kakao-x'\) continue; \/\/ NAME-HEAL-2026-10-22/);
+  const rp = require('../services/regionPopularService');
+  assert.equal(rp.trustedCoord({ lat: 37.5, lng: 127, source: 'kakao-x', place_name: 'x' }, 'x'), false);
+  assert.equal(rp.trustedCoord({ lat: 37.5, lng: 127, source: 'kakao-n' }, '엘리스'), true);
+});

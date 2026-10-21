@@ -19,7 +19,7 @@
  *   - resolveCoord 자체가 saveToDb 진행 → INSERT 자동
  */
 const { getSupabaseAdmin } = require('../db/client');
-const { resolveCoordBatch, kakaoGeocode, getKakaoUsageStats, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb } = require('../services/geocodeCacheService');
+const { resolveCoordBatch, kakaoGeocode, getKakaoUsageStats, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb, kakaoStrictAptSearch } = require('../services/geocodeCacheService');
 const { isValidKoreaCoord } = require('../utils/geo');
 const logger = require('../logger');
 
@@ -345,6 +345,66 @@ function adminClient() {
 //   Kakao 4000×최대4=16K(일한도 100K의 16%, 경고 60K의 27%) — 사용자검색·BR백필 합산해도 안전.
 //   budget 270s 불변(시간이 먼저 끊어 초과 위험 0) — 하루에 다 못 돌면 다음날 이어서.
 //   잔여 병목(Kakao 무매칭 영구 하드페일의 매일 재시도)은 sentinel 도입이 근본책 — DB 영향이라 별도 결정.
+/**
+ * NAME-HEAL-2026-10-22: 근거 없는 키워드 좌표 재검색. 대상 = source kakao·kakao-sub 이고 장소 이름에 단지 이름 핵심이 없는 행
+ *   (2026-10-21 전수 514건 — 이 단지들은 실거래 자료에 지번이 비어 verifyByOfficialAddress 가 대조하지 못한다).
+ *   결과 표시: 엄격 재검색으로 찾으면 좌표를 그 장소로(20m 미만이면 좌표 유지) source='kakao-n'.
+ *   못 찾았는데 지금 장소 이름이 주거시설로 보이면 좌표 유지 source='kakao-u'(다시 시도하지 않음),
+ *   가게·시설 이름이면 source='kakao-x' — 지도 핀(이 지역 단지 보기·인기·구별 TOP10)에서 뺀다. 카카오 호출 실패는 표시를 바꾸지 않는다.
+ */
+const _HEAL_RESIDENTIAL_RE = /아파트|APT|맨션|빌라|빌|타운|하이츠|캐슬|자이|푸르지오|래미안|아이파크|힐스테이트|편한세상|SK뷰|더샵|롯데|주공|휴먼시아|마을|단지|\d+동$/i;
+function _healCore(s) { return String(s || '').replace(/\s+/g, '').replace(/\([^)]*\)/g, '').replace(/(아파트|APT)$/i, '').toLowerCase(); }
+function isUntrustedNameCoord(r) {
+  if (!r || (r.source !== 'kakao' && r.source !== 'kakao-sub')) return false;
+  const core = _healCore(r.apt_name);
+  return !(core && r.place_name && String(r.place_name).replace(/\s+/g, '').toLowerCase().includes(core));
+}
+function healFallbackSource(placeName) {
+  const p = String(placeName || '');
+  return (!REHEAL_NONRES_RE.test(p) && _HEAL_RESIDENTIAL_RE.test(p)) ? 'kakao-u' : 'kakao-x';
+}
+async function rehealUntrustedNames(admin, { cap = 400, budgetMs = 40000 } = {}) {
+  const started = Date.now();
+  const rows = [];
+  for (let from = 0; from < 6000; from += 1000) {
+    const { data, error } = await admin.from('apt_geocache')
+      .select('apt_key, apt_name, sigungu, umd_nm, lat, lng, place_name, address, source')
+      .in('source', ['kakao', 'kakao-sub']).order('apt_key', { ascending: true }).range(from, from + 999);
+    if (error || !data || !data.length) break;
+    rows.push(...data);
+    if (data.length < 1000) break;
+  }
+  const queue = rows.filter(isUntrustedNameCoord).slice(0, cap);
+  let tried = 0, healed = 0, kept = 0, hidden = 0, errors = 0;
+  async function worker() {
+    while (queue.length && (Date.now() - started) < budgetMs) {
+      const r = queue.shift(); tried++;
+      try {
+        const fresh = await kakaoStrictAptSearch({ aptName: r.apt_name, sigungu: r.sigungu, umdNm: r.umd_nm });
+        if (fresh === undefined) { errors++; continue; }
+        if (fresh) {
+          const dx = (fresh.lng - Number(r.lng)) * Math.cos(fresh.lat * Math.PI / 180);
+          const moved = 111000 * Math.sqrt(Math.pow(fresh.lat - Number(r.lat), 2) + Math.pow(dx, 2));
+          const upd = moved >= 20
+            ? { lat: fresh.lat, lng: fresh.lng, place_name: fresh.placeName, address: fresh.address, source: 'kakao-n', cached_at: new Date().toISOString() }
+            : { place_name: fresh.placeName, source: 'kakao-n', cached_at: new Date().toISOString() };
+          await admin.from('apt_geocache').update(upd).eq('apt_key', r.apt_key);
+          healed++;
+          if (moved >= 20) logger.info({ src: 'geocache-name-heal', aptKey: r.apt_key, movedM: Math.round(moved), from: r.place_name, to: fresh.placeName }, `좌표 재검색 교정: ${r.apt_name}`);
+        } else {
+          const src = healFallbackSource(r.place_name);
+          await admin.from('apt_geocache').update({ source: src, cached_at: new Date().toISOString() }).eq('apt_key', r.apt_key);
+          if (src === 'kakao-x') hidden++; else kept++;
+        }
+      } catch (_) { errors++; }
+    }
+  }
+  await Promise.all(Array.from({ length: 6 }, () => worker()));
+  const out = { tried, healed, kept, hidden, errors, candidates: rows.filter(isUntrustedNameCoord).length, elapsedMs: Date.now() - started };
+  logger.info({ source: 'geocache-name-heal', ...out }, `좌표 재검색: 교정 ${healed} / 유지 ${kept} / 핀 제외 ${hidden} / 시도 ${tried}`);
+  return out;
+}
+
 async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, pool = 4000 } = {}) {
   const started = Date.now();
   const admin = adminClient();
@@ -379,6 +439,11 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
   let addrVerify = { tried: 0, verified: 0, fastVerified: 0, corrected: 0, skippedNoAddr: 0 };
   try { addrVerify = await verifyByOfficialAddress(admin, { cap: 4000, budgetMs: 120000 }); }
   catch (e) { logger.warn({ err: e.message }, 'geocache 주소검증 실패(무시)'); }
+
+  // NAME-HEAL-2026-10-22: 근거 없는 키워드 좌표 재검색 — 대상 514건을 하루 400건·40초 안에서. 예산은 아래 신규 백필(sweep) 몫에서 빠진다.
+  let nameHeal = { tried: 0, healed: 0, kept: 0, hidden: 0, errors: 0, candidates: 0 };
+  try { nameHeal = await rehealUntrustedNames(admin, { cap: 400, budgetMs: 40000 }); }
+  catch (e) { logger.warn({ err: e.message }, 'geocache 좌표 재검색 실패(무시)'); }
 
   // 후보 풀 1회 조회 → budget 안에서 batch 순회 (재조회 spin 제거)
   const rawPool = await fetchCandidatePool(admin, pool, since);
@@ -494,6 +559,8 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
     //   verifyRows 대비 비중이 낮으면 지번 커버리지가 모자란 것이므로 원인이 갈린다.
     verifyFast: addrVerify.fastVerified, verifyRows: addrVerify.rows,
     rehealTried: reheal.tried, rehealHealed: reheal.healed, rehealMarked: reheal.marked,
+    nameHealTried: nameHeal.tried, nameHealHealed: nameHeal.healed, nameHealKept: nameHeal.kept,
+    nameHealHidden: nameHeal.hidden, nameHealLeft: Math.max(0, (nameHeal.candidates || 0) - (nameHeal.tried || 0)),
   };
 }
 
@@ -562,3 +629,5 @@ async function fetchCandidatePool(admin, limit, since) {
 
 // addrBonbun 은 "좌표가 남의 단지에 찍혔는지" 판정의 핵심이라 테스트로 고정한다.
 module.exports = { run, addrBonbun, canFastVerify };
+module.exports._isUntrustedNameCoord = isUntrustedNameCoord;
+module.exports._healFallbackSource = healFallbackSource;

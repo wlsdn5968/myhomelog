@@ -41,6 +41,7 @@ function lawdsOfSido(sido) {
 /** 근거 있는 좌표인가 — 검증된 출처(kakao-v·kakao-addr 등)이거나, 키워드 검색이라도 장소 이름에 단지 이름이 들어 있을 때 */
 function trustedCoord(c, aptName) {
   if (!c || !isValidKoreaCoord(Number(c.lat), Number(c.lng))) return false;
+  if (c.source === 'kakao-x') return false; // NAME-HEAL-2026-10-22: 재검색 실패 + 가게·시설 자리
   if (c.source !== 'kakao' && c.source !== 'kakao-sub') return true;
   const core = _core(aptName);
   return !!(core && c.place_name && String(c.place_name).replace(/\s+/g, '').toLowerCase().includes(core));
