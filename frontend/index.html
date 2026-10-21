@@ -878,10 +878,19 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .hp-hd{padding:24px 24px 12px}
 .hp-t{margin:0;font-size:20px;font-weight:700;line-height:1.4;color:var(--t1)}
 .hp-s{margin:4px 0 0;font-size:14px;font-weight:400;line-height:1.6;color:var(--t3)}
-/* VISITS-2026-10-20: 지금 보는 사람·오늘 방문 — 모바일 시트 머리에서도 보이게 별도 줄(hp-s 는 모바일에서 숨김) */
-.hp-live{display:flex;align-items:center;gap:6px;margin:6px 0 0;font-size:12px;font-weight:500;line-height:1.5;color:var(--t2);font-variant-numeric:tabular-nums}
-.hp-live[hidden]{display:none}
-.hp-live .dot{width:7px;height:7px;border-radius:50%;background:var(--grn,#2A8F3F);flex-shrink:0}
+/* SITE-LIVE-2026-10-21 (운영자 요청 — 홈 하단에 "지금 보는 사람·오늘 방문" 배지): 테마 토큰만 써서 라이트·다크 자동.
+   숫자는 숨기지 않는다(2026-10-20 임계값 방식은 사실상 안 보여 운영자가 지적). */
+.site-livebar{display:flex;justify-content:center;padding:12px 24px 6px}
+.site-livebar[hidden]{display:none}
+.site-live{display:inline-flex;align-items:center;gap:8px;max-width:100%;padding:7px 16px;border:1px solid var(--bd);border-radius:999px;background:var(--bg-elev-1);color:var(--t2);font-size:13px;font-weight:500;line-height:1.4;white-space:nowrap;font-variant-numeric:tabular-nums}
+.site-live b{color:var(--t1);font-weight:700}
+.site-live .sep{color:var(--t3)}
+.site-live .dot{position:relative;width:8px;height:8px;border-radius:50%;background:var(--grn,#2A8F3F);flex-shrink:0}
+.site-live .dot::after{content:"";position:absolute;inset:0;border-radius:50%;background:var(--grn,#2A8F3F);opacity:.45;animation:siteLivePulse 2.4s ease-out infinite}
+@keyframes siteLivePulse{0%{transform:scale(1);opacity:.45}70%{transform:scale(2.4);opacity:0}100%{transform:scale(2.4);opacity:0}}
+@media (prefers-reduced-motion:reduce){.site-live .dot::after{animation:none;opacity:0}}
+.legal-footer .site-livebar{padding:2px 0 6px}
+@media(max-width:700px){.site-livebar{padding:10px 16px 4px}.site-live{font-size:12px;padding:6px 14px}}
 .hp-chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 24px 16px}
 .hp-chips:empty{display:none}
 .hp-chip{height:36px;padding:0 12px;border:1px solid var(--bd2);border-radius:8px;background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
@@ -2465,7 +2474,6 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button type="button" class="hp-grab" id="hpGrab" aria-label="목록 크기 조절" aria-expanded="false" aria-controls="hpList" onclick="_hpsTap()"></button>
     <div class="hp-tr"><h2 class="hp-t" id="hpT">최근 거래가 많은 단지</h2><span class="hp-sm">최근 60일</span></div>
     <p class="hp-s" id="hpSub">최근 60일 국토교통부 실거래 신고 기준이에요</p>
-    <p class="hp-live" id="hpLive" role="status" aria-live="polite" hidden></p>
   </div>
   <div class="hp-note" id="hpNote" role="status" hidden></div>
   <div class="hp-chips" id="hpChips" role="group" aria-label="지역으로 좁히기"></div>
@@ -2476,6 +2484,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <p>보유 주택, 자금, 희망 지역은 보고서 화면에서 입력해요.</p>
     <button type="button" class="hp-cta" onclick="sv('report')">내 조건으로 맞춤 보고서 받기</button>
   </div>
+  <div class="site-livebar" hidden><span class="site-live" data-site-live role="status" aria-live="polite"></span></div>
   <div class="hp-ft">매수·매도 추천이 아니에요. 출처 국토교통부 실거래가<span class="hp-ft-l"> · <button type="button" onclick="openTerms()">전문 보기</button> · <a href="/terms.html" target="_blank">이용약관</a> · <a href="/privacy.html" target="_blank">개인정보</a> · <a href="/refund.html" target="_blank">환불</a><br><a href="/region" target="_blank">지역별 실거래 데이터</a> · <a href="/briefing" target="_blank">오늘의 브리핑</a> · <button type="button" id="hpBizT" aria-expanded="false" aria-controls="hpBiz" onclick="toggleBizInfo(this)">사업자 정보</button><span id="hpBiz" hidden><br>공명랩 · 대표 우진우 · 사업자등록번호 381-08-03668 · 서울특별시 노원구 섬밭로 139 · <a href="mailto:wlsdn5968@gmail.com">wlsdn5968@gmail.com</a> · © 2026 내집로그</span></span></div>
 </aside>
 
@@ -3618,6 +3627,7 @@ html[data-theme="dark"] #view-news{
 <!-- STAB-AUDIT #53 (2026-05-03): 600자+ → 1줄 요약 + "전문 보기" 모달 — 모바일 가독성 ↑ -->
 <!-- Agent UX #22 (2026-05-04): footer 에 © 표기 추가 — 브랜드 신뢰도 -->
 <footer class="legal-footer">
+  <div class="site-livebar" hidden><span class="site-live" data-site-live role="status" aria-live="polite"></span></div>
   ⚠ <strong>매수·매도를 추천하지 않고 미래 가격도 예측하지 않아요.</strong> 결정과 책임은 본인에게 있어요.
   <a href="javascript:openTerms()" style="color:var(--acc);text-decoration:underline;cursor:pointer">전문 보기</a>
   · <a href="/terms.html" style="color:var(--acc);text-decoration:underline">이용약관</a>
@@ -14689,20 +14699,28 @@ function _popRows(j){
 function _fmtSgg(s){return String(s==null?'':s).replace(/^([가-힣]+?시)([가-힣]+구)(?=\s|$)/,'$1 $2');}
 // DATA-BASIS-2026-10-19: ISO → 'YYYY.MM.DD HH:mm'(KST). backend/utils/fmtKst.js 와 같은 계산(ICU 무관).
 /* VISITS-2026-10-20: 지금 보는 사람(Supabase Realtime Presence — DB 쓰기 0, 무료 동시 200 연결) + 오늘 방문(GET /api/visits/today).
-   첫 화면은 숫자가 임계값 이상일 때만 보인다 — 실제 하루 방문이 3~6건(2026-10 실측)이라 "1명·3명" 표시는 빈 가게처럼 보인다.
-   운영자는 데이터 상태 창에서 항상 본다. 키는 탭마다 새 난수(저장 안 함), 탭이 1분 넘게 숨겨지면 빠진다. */
-const LIVE_SHOW_MIN = 2, VISIT_SHOW_MIN = 10;
+   SITE-LIVE-2026-10-21 (운영자 지적): 2026-10-20 에는 임계값(지금 2명·오늘 10명 이상)을 걸어 패널 머리 한 줄로 넣었는데 사실상 안 보였다.
+   이제 홈 하단 배지로 숫자를 그대로 보인다(값을 모르면 그 부분만 뺀다 — 모름을 0 으로 만들지 않는다).
+   키는 탭마다 새 난수(저장 안 함), 탭이 1분 넘게 숨겨지면 빠진다. */
 window._liveN = null; window._visitsToday = null;
-function _renderLive(){
-  const el = document.getElementById('hpLive'); if (!el) return;
-  const n = window._liveN, v = window._visitsToday;
+function _siteLiveHtml(n, v){
+  const hasN = Number.isFinite(Number(n)) && Number(n) >= 1, hasV = Number.isFinite(Number(v)) && Number(v) >= 0 && v !== null;
   const parts = [];
-  if (Number(n) >= LIVE_SHOW_MIN) parts.push(`지금 ${Number(n).toLocaleString()}명이 보고 있어요`);
-  if (Number(v) >= VISIT_SHOW_MIN) parts.push(`오늘 방문 ${Number(v).toLocaleString()}명`);
-  if (!parts.length) { el.hidden = true; el.textContent = ''; return; }
-  el.innerHTML = `${Number(n) >= LIVE_SHOW_MIN ? '<span class="dot" aria-hidden="true"></span>' : ''}${_escHtml(parts.join(' · '))}`;
-  el.title = '오늘 방문은 브라우저 기준이에요(같은 분이 다른 기기로 오면 따로 세요)';
-  el.hidden = false;
+  if (hasN) parts.push(`<span class="dot" aria-hidden="true"></span><span><b>${Number(n).toLocaleString()}</b>명 보는 중</span>`);
+  if (hasV) parts.push(`<span>오늘 <b>${Number(v).toLocaleString()}</b>명</span>`);
+  return parts.join('<span class="sep" aria-hidden="true">·</span>');
+}
+function _renderLive(){
+  const n = window._liveN, v = window._visitsToday;
+  const html = _siteLiveHtml(n, v);
+  document.querySelectorAll('[data-site-live]').forEach(el => {
+    const bar = el.parentElement;
+    if (!html) { el.innerHTML = ''; if (bar) bar.hidden = true; return; }
+    el.innerHTML = html;
+    el.setAttribute('aria-label', [Number(n) >= 1 ? `지금 ${n}명이 보고 있어요` : '', v != null ? `오늘 ${v}명이 방문했어요` : ''].filter(Boolean).join(', '));
+    el.title = '지금 보는 사람은 열린 탭 기준, 오늘 방문은 브라우저 기준이에요(같은 분이 다른 기기로 오면 따로 세요)';
+    if (bar) bar.hidden = false;
+  });
 }
 async function _loadVisitsToday(){
   try {

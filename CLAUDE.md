@@ -206,7 +206,7 @@
 
 ### 방문 현황 (2026-10-20, 운영 c4a0de6)
 - **지금 보는 사람** = Supabase Realtime Presence(공개 채널 `site-presence:<호스트>`, 무료 동시 200 연결, DB 쓰기 0). **오늘 방문** = `visit_attribution` 의 `daily_visit`(운영 도메인에서 브라우저당 하루 1회, 식별자 없음) → `GET /api/visits/today`.
-- 첫 화면 표시는 임계값 이상일 때만(`LIVE_SHOW_MIN 2`·`VISIT_SHOW_MIN 10`) — 평소 하루 방문 3~6건(10월 실측). 데이터 상태 창은 항상 표시. 새 표·Redis 를 쓰지 말 것(Redis 한도 초과·DB 88%).
+- **홈 하단 배지**(SITE-LIVE-2026-10-21): "● N명 보는 중 · 오늘 M명" — 지도 홈 패널 맨 아래와 하단 고지 띠 2곳, **숫자를 임계값으로 숨기지 않는다**(2026-10-20 임계값 방식은 사실상 안 보여 운영자 지적). 값을 모르면 그 부분만 뺀다. 데이터 상태 창 "방문 현황" 행도 유지.
 
 ### 구별 TOP10·지도 중복·검색 보조 (2026-10-21)
 - **서울 25구·경기 47시군구 TOP10** = `services/regionPopularService`(60일 거래, 별칭으로 A·B 합침, 순위는 **하루 2건까지만** 센 건수 — 신축 일괄 등기 차단, 이름 변경 단지는 같은 동·같은 건축년도·이름 포함·같은 숫자일 때만 합침). `GET /api/search/popular-region?sido=11|41`, 스냅샷 키 `popular:region:v2:<시도>`(computed_snapshots, retention cron 이 매일 저장).

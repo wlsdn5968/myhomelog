@@ -61,23 +61,23 @@ test('프런트: daily_visit 은 운영 도메인에서만 브라우저당 하�
   assert.match(html, /if \(location\.hostname === 'myhomelog\.vercel\.app'\) \{\r?\n\s*var _vd = new Date\(Date\.now\(\) \+ 9 \* 3600e3\)\.toISOString\(\)\.slice\(0, 10\);\r?\n\s*if \(localStorage\.getItem\('mhl_visit_day'\) !== _vd\) \{\r?\n\s*localStorage\.setItem\('mhl_visit_day', _vd\);\r?\n\s*window\._attr\.send\('daily_visit'\);/);
 });
 
-test('프런트: Presence 는 호스트별 채널 · 탭마다 난수 키 · 숨김 1분 뒤 빠짐 · 임계값 미만이면 줄을 숨긴다', () => {
+test('프런트: Presence 는 호스트별 채널 · 탭마다 난수 키 · 숨김 1분 뒤 빠짐 · 홈 하단 배지 2곳(패널 맨 아래·하단 띠) · 임계값 없음', () => {
   assert.match(html, /const ch = c\.channel\(`site-presence:\$\{location\.hostname\}`, \{ config: \{ presence: \{ key \} \} \}\);/);
   assert.match(html, /hideT = setTimeout\(untrack, 60000\)/);
-  assert.match(html, /const LIVE_SHOW_MIN = 2, VISIT_SHOW_MIN = 10;/);
-  assert.match(html, /<p class="hp-live" id="hpLive" role="status" aria-live="polite" hidden><\/p>/);
-  // 실행 값: 임계값 판정
-  const fn = html.match(/function _renderLive\(\)\{[\s\S]*?\n\}/)[0];
-  const el = { hidden: true, textContent: '', innerHTML: '', title: '' };
-  const run = (n, v) => {
-    const f = new Function('document', 'window', '_escHtml', `const LIVE_SHOW_MIN = 2, VISIT_SHOW_MIN = 10; ${fn}; _renderLive();`);
-    f({ getElementById: () => el }, { _liveN: n, _visitsToday: v }, (s) => String(s));
-    return { hidden: el.hidden, html: el.innerHTML };
-  };
-  assert.equal(run(1, 4).hidden, true);
-  assert.deepEqual(run(3, 4), { hidden: false, html: '<span class="dot" aria-hidden="true"></span>지금 3명이 보고 있어요' });
-  assert.deepEqual(run(1, 12), { hidden: false, html: '오늘 방문 12명' });
-  assert.equal(run(null, null).hidden, true);
+  assert.doesNotMatch(html, /LIVE_SHOW_MIN|VISIT_SHOW_MIN/, 'SITE-LIVE-2026-10-21: 임계값으로 숨기지 않는다(운영자 지적)');
+  assert.doesNotMatch(html, /id="hpLive"/);
+  const bars = html.match(/<div class="site-livebar" hidden><span class="site-live" data-site-live role="status" aria-live="polite"><\/span><\/div>/g) || [];
+  assert.equal(bars.length, 2, '홈 패널 맨 아래와 하단 고지 띠');
+  assert.match(html, /<div class="site-livebar" hidden>[^\n]*<\/div>\r?\n\s*<div class="hp-ft">/);
+  assert.match(html, /@media \(prefers-reduced-motion:reduce\)\{\.site-live \.dot::after\{animation:none;opacity:0\}\}/);
+  // 실행 값
+  const fn = html.match(/function _siteLiveHtml\(n, v\)\{[\s\S]*?\n\}/)[0];
+  const f = new Function(`${fn}; return _siteLiveHtml;`)();
+  assert.equal(f(1, 3), '<span class="dot" aria-hidden="true"></span><span><b>1</b>명 보는 중</span><span class="sep" aria-hidden="true">·</span><span>오늘 <b>3</b>명</span>');
+  assert.equal(f(null, 5), '<span>오늘 <b>5</b>명</span>', '실시간을 모르면 그 부분만 뺀다');
+  assert.equal(f(2, null), '<span class="dot" aria-hidden="true"></span><span><b>2</b>명 보는 중</span>');
+  assert.equal(f(null, null), '');
+  assert.equal(f(1, 0), '<span class="dot" aria-hidden="true"></span><span><b>1</b>명 보는 중</span><span class="sep" aria-hidden="true">·</span><span>오늘 <b>0</b>명</span>', '0 은 아는 값 — 그대로');
 });
 
 test('데이터 상태 창: 방문 현황 행은 임계값과 무관하게 항상', () => {
