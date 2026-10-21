@@ -2257,7 +2257,6 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 <div id="heroBand" class="hero-band" style="display:none" role="region" aria-label="서비스 소개">
   <div class="hero-inner">
     <div class="hero-content">
-      <div class="hero-tag">DATA · <span class="jstxk">1.7M+</span> · <span class="japtk">10K+</span> · DAILY</div>
       <div class="hero-msg">
         <strong>30초 입력으로 받는 <em>맞춤 보고서</em></strong>
       </div>
@@ -3337,237 +3336,120 @@ html[data-theme="dark"] #view-news{
   </div>
 </div>
 
-<!-- ════ Phase 4-3 (2026-05-05): 랜딩 대시보드 view ════
-     첫 방문자 (옵션 A2 — localStorage 'mhl_landing_seen') 만 노출.
-     모든 CSS 클래스에 .lv- prefix + #view-landing scope 격리.
-     사실 정합성 검증 통과 (3 레벨: 코드 존재 + 사용자 즉시 노출 + 단어 정확). -->
+<!-- ════ LANDING-V5-2026-10-21 (운영자 "AI 가 뚝딱 만든 느낌 · 호기심이 안 든다"): 첫 방문 화면 포인트 수정 ════
+     시안: claude.ai/design "내집로그 첫 방문 화면 개선안" → "첫 방문 화면 수정안 v2" (2026-10-21, 운영 API 실데이터로 그림).
+     근거: 호갱노노·아실·KB부동산은 소개 없이 검색·지도로 시작, Zillow 는 큰 검색창 하나가 주인공(2026-10-21 직접 확인).
+     바꾼 것: 영문 고정폭 배지·자간 넓힌 고정폭 한글 라벨·"01 시간/02 효율/03 신뢰" 3단 카드·그라데이션 제거,
+       질문형 제목 + 큰 검색창, 이번 주 최고가·최저가 실제 단지 목록, 서울 구별 거래 1위, 맞춤 보고서는 아래 보조 버튼.
+     지키는 것: Pretendard 한 글꼴(위계는 굵기·크기만) · 남색 하나 + 회색조 · 오르내림에 빨강·파랑 없음 ·
+       최고가만 싣지 않는다(최저가 탭과 건수를 늘 함께 — 한쪽만 보이면 매수 신호로 읽힌다, 절대 룰 ①) ·
+       값은 응답이 온 뒤에만 채우고 실패하면 "불러오지 못했어요"(LANDING-FAKE-2026-08-17 선례, 절대 룰 ②). -->
 <style>
-#view-landing{
-  position:fixed;top:0;left:0;right:0;bottom:0;
-  overflow-y:auto;background:var(--bg-base);
-  z-index:9999;font-family:var(--font-body);display:none;
+#view-landing{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;background:var(--bg-base);z-index:9999;font-family:var(--font-body);color:var(--text-primary);display:none}
+#view-landing .lv-wrap{max-width:1120px;margin:0 auto;padding:0 24px}
+#view-landing .lv-top{border-bottom:1px solid var(--border-faint)}
+#view-landing .lv-top-in{display:flex;align-items:center;height:64px}
+#view-landing .lv-logo{display:flex;align-items:center;gap:8px;background:none;border:0;padding:0;cursor:pointer;font:inherit;font-size:18px;font-weight:800;letter-spacing:-.02em;color:var(--text-primary)}
+#view-landing .lv-logo .lmark{width:28px;height:28px}
+#view-landing .lv-nav{margin-left:auto;display:flex;align-items:center;gap:22px}
+#view-landing .lv-nav button{background:none;border:0;padding:8px 0;font:inherit;font-size:14px;color:var(--text-secondary);cursor:pointer}
+#view-landing .lv-nav button:hover{color:var(--text-primary)}
+#view-landing .lv-nav .lv-skip{color:var(--text-primary);font-weight:600}
+#view-landing .lv-hero{padding:72px 0 40px}
+#view-landing .lv-h1{font-size:clamp(30px,4.4vw,48px);font-weight:800;line-height:1.25;letter-spacing:-.03em;margin:0 0 28px}
+#view-landing .lv-search{display:flex;max-width:780px;border:2px solid var(--acc);border-radius:10px;overflow:hidden;background:var(--bg-base)}
+#view-landing .lv-search:focus-within{box-shadow:0 0 0 4px var(--accent-tint)}
+#view-landing .lv-search input{flex:1;min-width:0;height:56px;padding:0 18px;border:0;outline:none;background:transparent;font:inherit;font-size:16px;color:var(--text-primary)}
+#view-landing .lv-search input::placeholder{color:var(--text-quiet)}
+#view-landing .lv-search button{flex-shrink:0;border:0;padding:0 26px;background:var(--acc-bg);color:var(--acc-ink);font:inherit;font-size:15px;font-weight:700;cursor:pointer}
+#view-landing .lv-sub{margin:12px 0 0;font-size:13px;color:var(--text-tertiary)}
+#view-landing .lv-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:56px;padding:24px 0 48px}
+#view-landing .lv-sec-h{display:flex;align-items:center;justify-content:space-between;gap:12px;padding-bottom:10px;border-bottom:1.5px solid var(--text-primary)}
+#view-landing .lv-sec-h h2{margin:0;font-size:17px;font-weight:700;letter-spacing:-.01em}
+#view-landing .lv-sec-m{font-size:12px;color:var(--text-tertiary)}
+#view-landing .lv-tabs{display:flex;gap:4px}
+#view-landing .lv-tabs button{border:0;background:none;padding:4px 8px;border-radius:6px;font:inherit;font-size:13px;color:var(--text-tertiary);cursor:pointer;font-variant-numeric:tabular-nums}
+#view-landing .lv-tabs button[aria-selected="true"]{color:var(--acc);font-weight:700;background:var(--accent-tint)}
+#view-landing .lv-row{display:flex;justify-content:space-between;align-items:center;gap:16px;width:100%;padding:14px 0;border:0;border-bottom:1px solid var(--border-faint);background:none;font:inherit;color:inherit;text-align:left;cursor:pointer}
+#view-landing .lv-row:hover .lv-nm{text-decoration:underline;text-underline-offset:3px}
+#view-landing .lv-row:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+#view-landing .lv-l{min-width:0}
+#view-landing .lv-nm{display:block;font-size:15px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#view-landing .lv-nm small{margin-left:6px;font-size:13px;font-weight:500;color:var(--text-tertiary)}
+#view-landing .lv-ds{display:block;margin-top:3px;font-size:12px;color:var(--text-tertiary);font-variant-numeric:tabular-nums}
+#view-landing .lv-r{flex-shrink:0;text-align:right}
+#view-landing .lv-amt{display:block;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+#view-landing .lv-note{margin:10px 0 0;font-size:12px;color:var(--text-tertiary)}
+#view-landing .lv-msg{padding:18px 0;font-size:13px;color:var(--text-tertiary)}
+#view-landing .lv-msg button{border:0;background:none;padding:0;font:inherit;color:var(--acc);text-decoration:underline;cursor:pointer}
+#view-landing .lv-report{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:28px 0 36px;border-top:1px solid var(--border-faint)}
+#view-landing .lv-report b{display:block;font-size:15px}
+#view-landing .lv-report span{display:block;margin-top:3px;font-size:13px;color:var(--text-secondary)}
+#view-landing .lv-report button{flex-shrink:0;padding:10px 18px;border:1.5px solid var(--acc);border-radius:8px;background:none;font:inherit;font-weight:700;color:var(--acc);cursor:pointer}
+#view-landing .lv-footer{background:var(--bg-elev-1);border-top:1px solid var(--border-faint)}
+#view-landing .lv-foot-in{display:flex;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:20px;padding-bottom:24px;font-size:12px;color:var(--text-tertiary)}
+#view-landing .lv-footer a{color:inherit}
+@media(max-width:760px){
+  #view-landing .lv-wrap{padding:0 16px}
+  #view-landing .lv-top-in{height:56px}
+  #view-landing .lv-nav .lv-nav-x{display:none}
+  #view-landing .lv-hero{padding:36px 0 28px}
+  #view-landing .lv-h1{margin-bottom:20px}
+  #view-landing .lv-search input{height:50px;padding:0 14px;font-size:15px}
+  #view-landing .lv-search button{padding:0 18px}
+  #view-landing .lv-grid{grid-template-columns:1fr;gap:36px;padding:8px 0 36px}
+  #view-landing .lv-report{flex-direction:column;align-items:stretch}
 }
-#view-landing::before{
-  content:'';position:absolute;inset:0;z-index:0;pointer-events:none;
-  background:
-    radial-gradient(ellipse 800px 600px at 15% -10%, var(--accent-tint), transparent 55%),
-    radial-gradient(ellipse 600px 400px at 90% 30%, var(--accent-tint), transparent 50%);
-}
-#view-landing > *{position:relative;z-index:1}
-#view-landing .lv-top{display:flex;align-items:center;padding:18px 24px;max-width:1280px;margin:0 auto}
-#view-landing .lv-logo{display:flex;align-items:center;gap:9px;background:transparent;border:none;cursor:pointer;font-family:var(--font-body);padding:0}
-#view-landing .lv-mark{width:34px;height:34px;background:linear-gradient(135deg,var(--acc-bg),var(--accent-600));border-radius:var(--radius-md);display:flex;align-items:center;justify-content:center;color:var(--acc-ink);font-weight:800;font-size:16px;font-family:var(--font-display);box-shadow:var(--accent-shadow)}
-#view-landing .lv-text{font-family:var(--font-display);font-size:16px;font-weight:800;color:var(--text-primary);letter-spacing:-.5px}
-#view-landing .lv-text em{font-style:normal;background:linear-gradient(120deg,var(--accent-700),var(--accent-500));-webkit-background-clip:text;background-clip:text;color:transparent}
-#view-landing .lv-skip{margin-left:auto;font-family:var(--font-mono);font-size:12px;color:var(--text-tertiary);padding:8px 14px;border-radius:var(--radius-full);border:1px solid var(--border-faint);background:var(--glass-1);cursor:pointer;transition:all 200ms cubic-bezier(0.16,1,0.3,1)}
-#view-landing .lv-skip:hover{background:var(--glass-2);color:var(--text-primary);border-color:var(--border-subtle)}
-#view-landing .lv-hero{max-width:1280px;margin:0 auto;padding:48px 24px 36px}
-#view-landing .lv-tag{display:inline-block;font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--accent-700);background:var(--accent-tint);border:1px solid var(--accent-tint-2);padding:5px 12px;border-radius:var(--radius-full);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:22px}
-#view-landing .lv-h1{font-family:var(--font-display);font-size:clamp(36px,6vw,72px);font-weight:800;line-height:1.05;letter-spacing:-2px;color:var(--text-primary);margin-bottom:18px;max-width:920px}
-#view-landing .lv-h1 em{font-style:normal;background:linear-gradient(120deg,var(--accent-700),var(--accent-500));-webkit-background-clip:text;background-clip:text;color:transparent}
-#view-landing .lv-hero-sub{font-size:16px;color:var(--text-secondary);max-width:640px;margin-bottom:30px;line-height:1.55}
-#view-landing .lv-cta-row{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
-#view-landing .lv-cta-primary{display:inline-flex;align-items:center;gap:10px;padding:14px 24px;background:linear-gradient(135deg,var(--acc-bg),var(--accent-600));color:var(--acc-ink);border:none;border-radius:var(--radius-md);font-family:var(--font-display);font-size:14px;font-weight:700;cursor:pointer;box-shadow:var(--accent-shadow);transition:all 250ms cubic-bezier(0.16,1,0.3,1)}
-#view-landing .lv-cta-primary:hover{transform:translateY(-2px);box-shadow:var(--accent-shadow-strong)}
-#view-landing .lv-cta-note{font-size:12px;color:var(--text-secondary);margin:10px 0 0;line-height:1.6}
-#view-landing .lv-cta-secondary{font-family:var(--font-display);font-size:14px;font-weight:600;color:var(--text-secondary);background:transparent;border:none;padding:8px 0;border-bottom:1px solid var(--border-subtle);cursor:pointer;transition:all 200ms}
-#view-landing .lv-cta-secondary:hover{color:var(--accent-700);border-color:var(--accent-500)}
-/* Design Phase 5 (2026-05-31): 히어로 CTA 이모지 → inline SVG. currentColor 상속(primary=흰색, secondary=text-secondary→hover accent). */
-#view-landing .lv-cta-ic{width:17px;height:17px;flex-shrink:0;vertical-align:-2px}
-#view-landing .lv-bento{max-width:1280px;margin:0 auto;padding:20px 24px;display:grid;grid-template-columns:repeat(12,1fr);gap:14px}
-#view-landing .lv-card{background:var(--bg-elev-1);border:1px solid var(--border-faint);border-radius:var(--radius-lg);padding:20px;box-shadow:var(--shadow-sm);transition:all 250ms cubic-bezier(0.16,1,0.3,1)}
-#view-landing .lv-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--border-subtle)}
-#view-landing .lv-card-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px}
-#view-landing .lv-card-label{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--text-tertiary);letter-spacing:1.4px;text-transform:uppercase}
-#view-landing .lv-card-meta{font-family:var(--font-mono);font-size:12px;color:var(--text-quiet)}
-#view-landing .lv-card-value{font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--text-primary);letter-spacing:-1px;line-height:1}
-#view-landing .lv-card-value-sm{font-size:20px}
-#view-landing .lv-card-sub{margin-top:6px;font-size:12px;color:var(--text-secondary)}
-#view-landing .lv-bento .lv-chart{grid-column:span 8;grid-row:span 2;min-height:260px;display:flex;flex-direction:column}
-#view-landing .lv-bento .lv-stat{grid-column:span 4}
-#view-landing .lv-bento .lv-apt{grid-column:span 4}
-#view-landing .lv-bento .lv-ltv{grid-column:span 4}
-#view-landing .lv-bento .lv-source{grid-column:span 4}
-#view-landing .lv-bento .lv-updated{grid-column:span 4}
-/* PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최고·최저 경신 요약 밴드.
-   span 12 로 lv-apt 다음에 두면 행이 딱 맞는다 — row1 chart(8)+stat(4) / row2 chart+apt(4)
-   / row3 records(12) / row4 ltv+source+updated(12). 빈칸이 생기지 않는다. */
-#view-landing .lv-bento .lv-records{grid-column:span 12}
-#view-landing .lv-rec-row{display:flex;gap:28px;flex-wrap:wrap;align-items:flex-end}
-#view-landing .lv-rec-item{min-width:104px}
-#view-landing .lv-rec-v{font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--text-primary);letter-spacing:-1px;line-height:1}
-#view-landing .lv-rec-v span{font-size:14px;margin-left:2px;color:var(--text-secondary)}
-#view-landing .lv-rec-l{margin-top:6px;font-size:12px;color:var(--text-secondary)}
-@media(max-width:980px){
-  #view-landing .lv-bento{grid-template-columns:repeat(2,1fr)}
-  #view-landing .lv-bento .lv-chart{grid-column:span 2;grid-row:auto;min-height:220px}
-  #view-landing .lv-bento .lv-stat,#view-landing .lv-bento .lv-apt,#view-landing .lv-bento .lv-ltv,#view-landing .lv-bento .lv-source,#view-landing .lv-bento .lv-updated{grid-column:span 1}
-  #view-landing .lv-bento .lv-records{grid-column:span 2}
-}
-@media(max-width:560px){
-  #view-landing .lv-bento{grid-template-columns:1fr;padding:16px;gap:12px}
-  #view-landing .lv-bento .lv-chart,#view-landing .lv-bento .lv-stat,#view-landing .lv-bento .lv-apt,#view-landing .lv-bento .lv-ltv,#view-landing .lv-bento .lv-source,#view-landing .lv-bento .lv-updated,#view-landing .lv-bento .lv-records{grid-column:auto}
-  #view-landing .lv-bento .lv-chart{min-height:180px}
-  #view-landing .lv-hero{padding:32px 16px 24px}
-  #view-landing .lv-top{padding:14px 16px}
-  #view-landing .lv-card{padding:18px}
-}
-#view-landing .lv-chart-svg{width:100%;flex:1;display:block;min-height:200px}
-#view-landing .lv-chart-grid line{stroke:var(--border-faint);stroke-width:1}
-#view-landing .lv-chart-axis{font-family:var(--font-mono);font-size:12px;fill:var(--text-quiet)}
-#view-landing .lv-chart-line{fill:none;stroke:url(#lvChartGrad);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
-#view-landing .lv-chart-area{fill:url(#lvChartFill)}
-#view-landing .lv-apt-name{font-family:var(--font-display);font-size:16px;font-weight:700;color:var(--text-primary);margin-bottom:4px;letter-spacing:-.4px}
-#view-landing .lv-apt-loc{font-size:12px;color:var(--text-tertiary);margin-bottom:14px}
-#view-landing .lv-apt-stats{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-#view-landing .lv-apt-stat-v{font-family:var(--font-mono);font-size:16px;font-weight:700;color:var(--accent-700);letter-spacing:-.3px}
-#view-landing .lv-apt-stat-l{font-size:12px;color:var(--text-quiet);letter-spacing:.4px;margin-top:2px}
-#view-landing .lv-ltv-row{display:flex;gap:18px;margin-top:6px}
-#view-landing .lv-ltv-item{flex:1}
-#view-landing .lv-ltv-v{font-family:var(--font-mono);font-size:28px;font-weight:700;color:var(--text-primary);letter-spacing:-.5px}
-#view-landing .lv-ltv-v span{font-size:14px;color:var(--text-tertiary);font-weight:600}
-#view-landing .lv-ltv-l{font-family:var(--font-mono);font-size:12px;color:var(--text-quiet);letter-spacing:1px;margin-top:4px}
-#view-landing .lv-src-list{display:flex;flex-direction:column;gap:9px;margin-top:6px}
-#view-landing .lv-src-item{display:flex;align-items:center;gap:10px;font-size:12px;color:var(--text-secondary)}
-#view-landing .lv-src-dot{width:6px;height:6px;border-radius:50%;background:var(--positive);flex-shrink:0;box-shadow:0 0 0 3px rgba(16,185,129,.12)}
-#view-landing .lv-props{max-width:1280px;margin:0 auto;padding:40px 24px 16px;display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-#view-landing .lv-prop{padding:24px 22px;background:var(--bg-elev-1);border:1px solid var(--border-faint);border-radius:var(--radius-lg)}
-#view-landing .lv-prop-num{font-family:var(--font-mono);font-size:14px;font-weight:600;color:var(--accent-700);margin-bottom:10px;letter-spacing:1px}
-#view-landing .lv-prop-h{font-family:var(--font-display);font-size:20px;font-weight:700;color:var(--text-primary);margin-bottom:8px;letter-spacing:-.5px}
-#view-landing .lv-prop-d{font-size:14px;color:var(--text-secondary);line-height:1.55}
-@media(max-width:760px){#view-landing .lv-props{grid-template-columns:1fr;padding:28px 16px 12px}}
-#view-landing .lv-bottom-cta{max-width:1280px;margin:0 auto;padding:36px 24px 28px;text-align:center}
-#view-landing .lv-bottom-cta-h{font-family:var(--font-display);font-size:clamp(22px,3vw,32px);font-weight:800;color:var(--text-primary);margin-bottom:10px;letter-spacing:-1px}
-#view-landing .lv-bottom-cta-d{font-size:14px;color:var(--text-secondary);margin-bottom:22px}
-@media(max-width:560px){#view-landing .lv-bottom-cta{display:none}}
-#view-landing .lv-footer{max-width:1280px;margin:0 auto;padding:32px 24px 36px;border-top:1px solid var(--border-faint);display:flex;justify-content:space-between;align-items:flex-start;gap:24px;flex-wrap:wrap}
-#view-landing .lv-foot-text{font-size:12px;color:var(--text-quiet);line-height:1.7;max-width:580px}
-#view-landing .lv-foot-meta{font-family:var(--font-mono);font-size:12px;color:var(--text-quiet);letter-spacing:.5px}
-@keyframes lvFadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:translateY(0)}}
-#view-landing .lv-tag,#view-landing .lv-h1,#view-landing .lv-hero-sub,#view-landing .lv-cta-row{animation:lvFadeUp 600ms cubic-bezier(0.16,1,0.3,1) backwards}
-#view-landing .lv-tag{animation-delay:0ms}
-#view-landing .lv-h1{animation-delay:80ms}
-#view-landing .lv-hero-sub{animation-delay:160ms}
-#view-landing .lv-cta-row{animation-delay:240ms}
 </style>
 
 <div id="view-landing" style="display:none">
-  <header class="lv-top">
-    <button class="lv-logo" onclick="_landingDismiss('skip')" aria-label="myhomelog 홈">
-      <span class="lv-mark">M</span>
-      <span class="lv-text">my<em>home</em>log</span>
-    </button>
-    <button class="lv-skip" onclick="_landingDismiss('skip')">건너뛰기 ›</button>
-  </header>
+  <header class="lv-top"><div class="lv-wrap lv-top-in">
+    <button type="button" class="lv-logo" onclick="_landingDismiss('skip')" aria-label="내집로그 지도로 가기"><span class="lmark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M3 11.2 12 4l9 7.2" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 9.8V20h13V9.8" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 20v-5h4v5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>내집로그</button>
+    <nav class="lv-nav" aria-label="바로 가기">
+      <button type="button" class="lv-nav-x" onclick="_landingCTA('secondary')">지도</button>
+      <button type="button" class="lv-nav-x" onclick="_landingCTA('primary')">맞춤 보고서</button>
+      <button type="button" class="lv-skip" onclick="_landingDismiss('skip')">건너뛰기</button>
+    </nav>
+  </div></header>
 
-  <section class="lv-hero">
-    <div class="lv-tag">DATA · <span class="jstxk">1.7M+</span> · <span class="japtk">10K+</span> · DAILY</div>
-    <h1 class="lv-h1">30초 입력으로 받는<br><em>맞춤 보고서</em></h1>
-    <p class="lv-hero-sub">국토교통부 실거래 <span class="jstxm">170만+</span>건, 공동주택관리정보시스템(K-apt) <span class="japtm">1만+</span> 단지, 금융위 규제를 모았어요. 실거래 통계로 정리한 의사결정 참고 도구예요.</p>
-    <div class="lv-cta-row">
-      <button class="lv-cta-primary" onclick="_landingCTA('primary')"><svg class="lv-cta-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>맞춤 보고서 시작 <span aria-hidden="true">›</span></button>
-      <button class="lv-cta-secondary" onclick="_landingCTA('secondary')"><svg class="lv-cta-ic" style="margin-right:7px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 4 3 6v14l6-2 6 2 6-2V4l-6 2-6-2Z"/><path d="M9 4v14"/><path d="M15 6v14"/></svg>지도로 둘러보기 ›</button>
-    </div>
-    <!-- TRUTH-CTA-MOBILE-2026-08-29: 하단 CTA 섹션(.lv-bottom-cta)은 **모바일에서 display:none** 이라
-         거기 적은 조건을 모바일 사용자는 볼 수 없다(실측). 히어로에 한 줄로 두어 폭 무관하게 노출한다. -->
-    <p class="lv-cta-note">검색·단지분석은 <b>가입 없이 무료</b> · 맞춤 보고서는 <b>무료 가입 후 하루 1회</b></p>
-  </section>
+  <main class="lv-wrap">
+    <section class="lv-hero">
+      <h1 class="lv-h1">우리 아파트, 최근 얼마에<br>거래됐을까요?</h1>
+      <form class="lv-search" role="search" onsubmit="return _landingSearch(event)">
+        <input id="lvQ" type="search" aria-label="단지명이나 동 이름" placeholder="단지명이나 동 이름을 입력해요 (예: 상계주공7단지, 매탄동)" autocomplete="off" enterkeyhint="search">
+        <button type="submit">검색</button>
+      </form>
+      <p class="lv-sub">국토교통부 실거래 신고 <span class="jstxm">170만+</span>건 · 매일 새벽 갱신 · 검색과 단지 정보는 가입 없이 무료예요</p>
+    </section>
 
-  <section class="lv-bento">
-    <!-- HERO-REAL-2026-09-27 (Plan 116a): 예시(가짜) 카드 2장(가격 흐름 시각화 · 종합 점수 예시)을
-         지우고 TOP 카드와 같은 1위 단지의 실제 24개월 월평균 실거래가 카드로 교체(시안 "내집로그 히어로
-         카드 리디자인"). 초기값은 중립 스켈레톤 — 실제 응답이 온 뒤에만 채운다(LANDING-FAKE-2026-08-17 선례).
-         차트는 상세 모달 장기 추세(Plan 102)의 renderPriceChart 를 그대로 재사용 — _loadHeroChart 참고.
-         ⚠ 종합 점수 라벨 문구는 단지 모달의 실제 점수 기능(Sprint C-2)에서 정당하게 재사용되므로
-         이 파일 전체에서 그 문구를 0 회로 만들면 안 된다 — 지운 것은 lv-stat 클래스의 예시 카드뿐이다. -->
-    <div class="lv-card lv-chart" id="lv-heroChart">
-      <div class="lv-card-head">
-        <span class="lv-card-label">실거래 · <span id="lv-heroName">불러오는 중</span><span style="display:inline-block;margin-left:6px;padding:1px 6px;font-size:12px;font-weight:600;letter-spacing:.2px;color:var(--text-tertiary);background:var(--bg-elev-2);border:1px solid var(--border-faint);border-radius:var(--radius-full);vertical-align:middle">국토부 신고</span></span>
-        <span class="lv-card-meta" id="lv-heroMeta">최근 24개월 —건</span>
-      </div>
-      <div id="lv-heroChartBody" style="flex:1;display:flex;align-items:center;justify-content:center;min-height:150px">
-        <div style="font-size:12px;color:var(--text-tertiary)">불러오는 중</div>
-      </div>
-      <div class="lv-card-sub" id="lv-heroLine" style="margin-top:8px;font-variant-numeric:tabular-nums">&nbsp;</div>
-      <div class="lv-card-sub" id="lv-heroCaption" style="margin-top:2px;font-size:12px;color:var(--text-quiet)">같은 단지 실거래 월별 평균이에요. 참고용이며 매수·매도 추천이 아니에요</div>
+    <div class="lv-grid">
+      <section aria-labelledby="lvRecH">
+        <div class="lv-sec-h">
+          <h2 id="lvRecH">이번 주 새로 나온 기록</h2>
+          <div class="lv-tabs" role="tablist" aria-label="최고가·최저가">
+            <button type="button" role="tab" id="lvTabHi" aria-selected="true" onclick="_lvRecTab('high')">최고가 <span id="lv-recHigh">—</span></button>
+            <button type="button" role="tab" id="lvTabLo" aria-selected="false" onclick="_lvRecTab('low')">최저가 <span id="lv-recLow">—</span></button>
+          </div>
+        </div>
+        <div id="lvRecList" role="tabpanel" aria-labelledby="lvRecH"><div class="lv-msg">불러오는 중이에요</div></div>
+        <p class="lv-note" id="lv-recSub">같은 단지, 같은 면적의 직전 거래와 비교했어요. 매수·매도 추천이 아니에요.</p>
+      </section>
+      <section aria-labelledby="lvRegH">
+        <div class="lv-sec-h"><h2 id="lvRegH">지금 거래 많은 동네</h2><span class="lv-sec-m">서울 · 최근 60일</span></div>
+        <div id="lvRegList"><div class="lv-msg">불러오는 중이에요</div></div>
+      </section>
     </div>
 
-    <div class="lv-card lv-apt">
-      <!-- LANDING-FAKE-2026-08-17 (Sprint MMMMMMM-4, 서울 전수조사 6회차):
-           예전엔 이 자리에 "헬리오시티 / 송파구 가락동 · 2018년 / 29.8억 / 5건" 이 **하드코딩**돼 있었고
-           라벨은 '실시간' 이었다. _landingAsyncRefresh 의 fetch 는 5초 타임아웃 + catch(_){} 라
-           실패하면 그 가짜 숫자가 '실시간' 딱지를 단 채 첫 화면에 남는다 — 존재하지 않는 시세를
-           사용자가 실측값으로 읽는다(운영자 절대 룰 ② 환각 차단 위반).
-           → 초기값을 중립 플레이스홀더로 두고, **실제 응답이 온 뒤에만** 값과 '실시간' 라벨을 채운다. -->
-      <div class="lv-card-head"><span class="lv-card-label">거래량 상위 · 최근 60일</span><span class="lv-card-meta" id="lv-aptMeta">불러오는 중</span></div>
-      <div class="lv-apt-name" id="lv-aptName">—</div>
-      <div class="lv-apt-loc" id="lv-aptLoc">&nbsp;</div>
-      <div class="lv-apt-stats">
-        <div><div class="lv-apt-stat-v" id="lv-aptPrice">—</div><div class="lv-apt-stat-l">60일 평균</div></div>
-        <div><div class="lv-apt-stat-v" id="lv-aptDeals">—</div><div class="lv-apt-stat-l">60일 거래</div></div>
-      </div>
-    </div>
+    <section class="lv-report">
+      <div><b>내 조건에 맞는 단지를 찾고 있다면</b><span>보유 주택, 자금, 희망 지역을 넣으면 대출 한도와 맞는 단지를 정리해 드려요. 무료 가입 후 하루 1회.</span></div>
+      <button type="button" onclick="_landingCTA('bottom')">맞춤 보고서 받기</button>
+    </section>
+  </main>
 
-    <div class="lv-card lv-records">
-      <!-- PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최근 7일 최고·최저가 경신 요약.
-           ⚠ LANDING-FAKE-2026-08-17 선례를 그대로 따른다 — 초기값은 중립 플레이스홀더('—')이고
-             **실제 응답이 온 뒤에만** 숫자와 '실시간' 라벨을 채운다. 실패하면 '불러오지 못함'.
-             (하드코딩 숫자가 '실시간' 딱지를 달고 남으면 절대 룰 ② 위반이다.)
-           ⚠ 최고가만 싣지 않는다 — 한쪽만 보이면 밴드 자체가 매수 신호로 읽힌다(절대 룰 ①).
-           ⚠ '역대'가 아니라 적재 시작일(sinceDate) 이후다. 캡션에 그 날짜를 실제 값으로 박는다. -->
-      <div class="lv-card-head"><span class="lv-card-label">최근 7일 최고 · 최저 경신</span><span class="lv-card-meta" id="lv-recMeta">불러오는 중</span></div>
-      <div class="lv-rec-row">
-        <div class="lv-rec-item"><div class="lv-rec-v" id="lv-recHigh">—</div><div class="lv-rec-l">최고가 경신</div></div>
-        <div class="lv-rec-item"><div class="lv-rec-v" id="lv-recLow">—</div><div class="lv-rec-l">최저가 경신</div></div>
-        <div class="lv-rec-item"><div class="lv-rec-v" id="lv-recCompared">—</div><div class="lv-rec-l">비교 가능 거래</div></div>
-      </div>
-      <div class="lv-card-sub" id="lv-recSub">같은 단지, 같은 전용면적의 직전 거래와 비교했어요. 매수·매도 추천이 아니에요.</div>
-    </div>
-
-    <div class="lv-card lv-ltv">
-      <div class="lv-card-head"><span class="lv-card-label">LTV · DSR · 10.15 규제</span><span class="lv-card-meta">기준</span></div>
-      <div class="lv-ltv-row">
-        <div class="lv-ltv-item"><div class="lv-ltv-v">70<span>%</span></div><div class="lv-ltv-l">LTV</div></div>
-        <div class="lv-ltv-item"><div class="lv-ltv-v">40<span>%</span></div><div class="lv-ltv-l">DSR</div></div>
-      </div>
-      <div class="lv-card-sub">* 무주택 비조정 기준</div>
-    </div>
-
-    <div class="lv-card lv-source">
-      <div class="lv-card-head"><span class="lv-card-label">데이터 출처</span><span class="lv-card-meta">공시</span></div>
-      <div class="lv-src-list">
-        <div class="lv-src-item"><div class="lv-src-dot"></div>국토교통부 실거래가</div>
-        <div class="lv-src-item"><div class="lv-src-dot"></div>공동주택 정보</div>
-        <div class="lv-src-item"><div class="lv-src-dot"></div>금융위원회 규제</div>
-      </div>
-    </div>
-
-    <div class="lv-card lv-updated">
-      <div class="lv-card-head"><span class="lv-card-label">마지막 갱신</span><span class="lv-card-meta">자동</span></div>
-      <div class="lv-card-value lv-card-value-sm" id="lv-syncTime">—</div>
-      <div class="lv-card-sub">매일 자동 갱신</div>
-    </div>
-  </section>
-
-  <section class="lv-props">
-    <div class="lv-prop"><div class="lv-prop-num">01 · 시간</div><div class="lv-prop-h">30초 입력</div><div class="lv-prop-d">필수 3가지만 입력하세요. 매수가, 자기자본, 지역, 평형 등 꼭 필요한 정보만 받아 바로 분석해요.</div></div>
-    <div class="lv-prop"><div class="lv-prop-num">02 · 효율</div><div class="lv-prop-h">맞춤 보고서</div><div class="lv-prop-d">단지 점수, 가격 백분위, 대출 계산, 학군·교통을 한 페이지에 정리해요.</div></div>
-    <div class="lv-prop"><div class="lv-prop-num">03 · 신뢰</div><div class="lv-prop-h">객관적 점수</div><div class="lv-prop-d">국토교통부 실거래만 써요. 호가와 심리 지표는 쓰지 않아요. 매일 갱신되는 데이터예요.</div></div>
-  </section>
-
-  <section class="lv-bottom-cta">
-    <h2 class="lv-bottom-cta-h">지금 바로 시작하기</h2>
-    <!-- TRUTH-CTA-2026-08-29: 종전 "회원가입 없이 무료 분석" 은 **사실이 아니었다** — 보고서는
-         비로그인 0회(dailyLimit limit:0, loggedInBonus:1)라 3가지 입력을 마친 뒤에야 로그인 벽을 만났다.
-         진짜 강점(검색·단지상세가 가입 없이 열린다)을 앞에 두고, 보고서 조건을 정확히 적는다. -->
-    <p class="lv-bottom-cta-d">검색·단지분석은 가입 없이 무료 · 보고서는 무료 가입 후 하루 1회</p>
-    <button class="lv-cta-primary" onclick="_landingCTA('bottom')"><svg class="lv-cta-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>맞춤 보고서 만들기 <span aria-hidden="true">›</span></button>
-  </section>
-
-  <footer class="lv-footer">
-    <div class="lv-foot-text">⚠ 이 서비스는 투자 자문이 아니라 정보를 보여 주는 도구예요. 표시된 가격, 점수, 통계는 국토교통부 실거래가, 공동주택관리정보시스템(K-apt), 금융위 공시자료로 계산했어요. 실제 시장 가격과 다를 수 있어요. 투자 결정은 본인이 하세요.</div>
-    <div class="lv-foot-meta">myhomelog · 2026 · v4.3</div>
-  </footer>
+  <footer class="lv-footer"><div class="lv-wrap lv-foot-in">
+    <span>매수·매도 추천이 아니에요. 출처 국토교통부 실거래가 · 마지막 갱신 <span id="lv-syncTime">—</span></span>
+    <span><a href="/terms.html">이용약관</a> · <a href="/privacy.html">개인정보처리방침</a></span>
+  </div></footer>
 </div>
 
 <!-- 모바일 하단 탭 -->
@@ -4398,182 +4280,115 @@ function _landingCTA(type){
     else sv('map');
   } catch(_){}
 }
-async function _landingAsyncRefresh(){
-  // 인기 단지 1건 갱신
-  let top; // HERO-REAL-2026-09-27 (Plan 116a): try 밖에서도 참조 — 히어로 실거래 카드가 같은 단지를 쓴다.
-  try {
-    const r = await fetch(`${CFG.api}/search/popular`, {signal:AbortSignal.timeout(5000)});
-    if(r.ok){
-      const d = await r.json();
-      top = _popRows(d)[0]; // DEGRADED-LABEL-2026-10-18: 대체 경로면 평균가·건수는 비어 "—" 그대로
-      if(top){
-        const _set = (id, val) => { const e = document.getElementById(id); if(e && val !== undefined && val !== null) e.textContent = val; };
-        _set('lv-aptName', top.aptName);
-        _set('lv-aptLoc', `${_fmtSgg(top.sigungu)} ${top.umdNm||''} · ${top.buildYear || '?'}년`);
-        if(top.avgDealAmount) _set('lv-aptPrice', (top.avgDealAmount/10000).toFixed(2) + '억');
-        if(top.dealCount60d != null) _set('lv-aptDeals', top.dealCount60d + '건');
-        // LANDING-FAKE-2026-08-17: '실시간' 은 **실제 응답이 온 뒤에만** 단다.
-        _set('lv-aptMeta', top._degraded ? '집계 지연' : '실시간'); // 대체 경로는 '거래량 상위·최근 60일' 기준이 아니다
-      }
-    }
-  } catch(_){}
-  // LANDING-FAKE-2026-08-17: 실패·타임아웃이면 값이 플레이스홀더로 남는다 — 그 상태를 사용자에게 밝힌다.
-  //   (예전엔 하드코딩된 가짜 단지가 '실시간' 딱지를 단 채 그대로 보였다.)
-  try {
-    const _m = document.getElementById('lv-aptMeta');
-    if (_m && _m.textContent === '불러오는 중') _m.textContent = '불러오지 못함';
-  } catch(_){}
-  // HERO-REAL-2026-09-27 (Plan 116a): 히어로 실거래 카드 — TOP 카드와 같은 1위 단지.
-  //   top 이 없으면(TOP 카드 자체 실패) 예시로 채우지 않고 바로 실패 문구로 정리한다.
-  //   await 하지 않는다 — 아래 경신 카드 로딩을 기다리게 하지 않기 위한 fire-and-forget.
-  if (top) { _loadHeroChart(top); } else { _heroChartFail(); }
-  // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최고·최저 경신 요약.
-  //   LANDING-FAKE 선례 그대로 — 응답이 실제로 오고 세 값이 전부 유효할 때만 채우고 '실시간'을 단다.
-  //   숫자는 Number 로 강제하므로 innerHTML 에 넣어도 문자열이 마크업으로 새지 않는다(단위 span 때문).
-  //   문자열인 sinceDate 는 textContent 로만 쓴다.
-  // RECORDS-STALE-2026-09-05 (외부 검토 P1 채택): 서버가 마지막 성공 스냅샷(stale)을 주면 '실시간' 대신 기준 시각을 밝히고,
-  //   실패하면 0 으로 꾸미지 않고 클릭으로 다시 시도할 수 있게 한다(함수로 분리 — 재시도가 같은 코드를 탄다).
-  async function _loadPriceRecordsCard(){
-    const _meta = document.getElementById('lv-recMeta');
-    if(_meta){ _meta.textContent='불러오는 중'; _meta.onclick=null; _meta.style.cursor=''; _meta.title=''; }
-    try {
-      const r = await fetch(`${CFG.api}/transactions/records`, {signal:AbortSignal.timeout(5000)});
-      if(r.ok){
-        const d = await r.json();
-        const hi = Number(d.highCount), lo = Number(d.lowCount), cmp = Number(d.comparedCount);
-        if(Number.isFinite(hi) && Number.isFinite(lo) && Number.isFinite(cmp) && cmp > 0){
-          const put = (id, n) => { const e = document.getElementById(id); if(e) e.innerHTML = Number(n).toLocaleString() + '<span>건</span>'; };
-          put('lv-recHigh', hi); put('lv-recLow', lo); put('lv-recCompared', cmp);
-          const sub = document.getElementById('lv-recSub');
-          if(sub) sub.textContent = `같은 단지 · 같은 전용면적의 직전 거래와 비교${d.sinceDate ? ` · ${String(d.sinceDate).replace(/-/g,'.')} 이후 쌓인 데이터 안에서` : ''}. 매수·매도 추천이 아니에요`;
-          if(_meta){
-            const _at = d.computedAt ? new Date(d.computedAt) : null;
-            const _p = (x) => String(x).padStart(2,'0');
-            _meta.textContent = (d.stale && _at && !isNaN(_at)) ? `${_p(_at.getMonth()+1)}.${_p(_at.getDate())} ${_p(_at.getHours())}:${_p(_at.getMinutes())} 기준` : '실시간';
-          }
-          return;
-        }
-      }
-    } catch(_){}
-    if(_meta){ _meta.textContent='불러오지 못함 · 다시 시도'; _meta.style.cursor='pointer'; _meta.title='클릭하면 다시 불러와요'; _meta.onclick=()=>_loadPriceRecordsCard(); }
-  }
-  await _loadPriceRecordsCard();
-  // LAST SYNC 시각 갱신
-  // SYNCTIME-FIX-2026-07-25 (Sprint VVVVVV): 여기도 `d.timestamp`(응답 생성 시각 = 지금)를 쓰면서
-  //   주석엔 "정확값"이라고 적혀 있었다 — 라이브뷰 카드도 배너와 똑같이 항상 현재 시각을 보여줬다.
-  //   실제 적재 시각 `dataSyncedAt` 으로 교체. 모르면 '—' 유지(지어내지 않는다).
-  try {
-    const d = await healthJson(5000);   // PERF-HEALTH-DEDUP-2026-08-28
-    if(d){
-      const e = document.getElementById('lv-syncTime');
-      if(e){
-        const ts = d.dataSyncedAt ? new Date(d.dataSyncedAt) : null;
-        e.textContent = (ts && !isNaN(ts))
-          ? ts.toLocaleString('ko-KR',{timeZone:'Asia/Seoul',hour12:false,month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'})
-          : '—';
-      }
-    }
-  } catch(_){}
+// LANDING-V5-2026-10-21: 검색창이 주인공 — 기존 헤더 검색 흐름(_rerunSearch: 결과가 오면 첫 단지를 연다)을 그대로 탄다.
+function _landingSearch(e){
+  try { e && e.preventDefault && e.preventDefault(); } catch(_){}
+  const inp = document.getElementById('lvQ');
+  const q = String((inp && inp.value) || '').trim();
+  if (q.length < 2) { try { toast('두 글자 이상 입력해 주세요'); if (inp) inp.focus(); } catch(_){} return false; }
+  _landingDismiss('search');
+  setTimeout(() => { try { _rerunSearch(q); } catch(_){} }, 60);
+  return false;
 }
-
-// HERO-REAL-2026-09-27 (Plan 116a): 랜딩 히어로 첫 카드 — TOP 카드와 같은 1위 단지의 실제 24개월
-//   월평균 실거래가. 선그래프 렌더는 상세 모달 장기 추세(Plan 102)의 renderPriceChart 를 그대로
-//   재사용한다(새 차트 스타일 금지). 실패·표본 부족일 때도 값을 지어내지 않는다(운영자 절대 룰 ②).
-const HERO_SAMPLE_MIN = 12; // 24개월 합계 거래건수가 이 미만이면 선그래프 대신 타임라인 상태
-function _heroChartFail(msg){
-  try {
-    const body = document.getElementById('lv-heroChartBody');
-    if (body) body.innerHTML = `<div style="font-size:12px;color:var(--text-tertiary);text-align:center;padding:28px 0">${_escHtml(msg || '실거래 흐름을 불러오지 못했어요')}</div>`;
-    const meta = document.getElementById('lv-heroMeta');
-    if (meta) meta.textContent = '불러오지 못함';
-  } catch(_){}
+// 목록 행 → 그 단지 상세 / 구 → 지도 화면의 구별 목록(구 경계 색 구역)
+function _lvOpen(arg){ _landingDismiss('record'); setTimeout(() => { try { goSearchResult(arg); } catch(_){} }, 60); }
+function _lvRegion(lawd){
+  _landingDismiss('region');
+  setTimeout(() => { try { _hpPick('서울'); _hpReg = String(lawd); _hpRegShow(); } catch(_){} }, 60);
 }
-// /transactions/history 의 (월,평형)별 합계·건수(rows)를 평형 구분 없이 월 단위로 합쳐(거래 가중 평균)
-// 최근 24개월만 남긴다. aptHistoryService.aggregateMonthly 의 반환 필드는 { ym, sqm, sum, n }
-// (avg 가 아니다 — backend/services/aptHistoryService.js:34 실측) 이므로 여기서 sum/n 으로 평균낸다.
-function _heroMonthlyRows(rows){
-  const b = {};
-  for (const r of (Array.isArray(rows) ? rows : [])) {
-    const k = String((r && r.ym) || '');
-    if (!/^\d{4}-\d{2}$/.test(k)) continue;
-    if (!b[k]) b[k] = { ym: k, sum: 0, n: 0 };
-    b[k].sum += Number(r.sum) || 0;
-    b[k].n += Number(r.n) || 0;
-  }
-  return Object.keys(b).sort().filter(k => b[k].n > 0).map(k => b[k]).slice(-24);
+// 만원 → "5억 8,800만" · "6억" · "6,700만"(값이 없으면 빈칸 — 지어내지 않는다)
+function _lvAmt(man){
+  const n = Math.round(Number(man));
+  if (!Number.isFinite(n) || n <= 0) return '';
+  const eok = Math.floor(n / 10000), rest = n % 10000;
+  return [eok ? `${eok}억` : '', rest ? `${rest.toLocaleString()}만` : ''].filter(Boolean).join(' ');
 }
-// 표본 부족(24개월 합계 12건 미만) 상태 — 선그래프 대신 얇은 타임라인(거래 있었던 월에 점).
-function _heroTimelineHtml(months){
-  const withData = (months || []).filter(m => m.n > 0);
-  if (!withData.length) return '';
-  const toIdx = (ym) => Number(ym.slice(0, 4)) * 12 + Number(ym.slice(5, 7));
-  const first = withData[0], last = withData[withData.length - 1];
-  const span = Math.max(toIdx(last.ym) - toIdx(first.ym), 1);
-  const dots = withData.map(m => {
-    const pct = ((toIdx(m.ym) - toIdx(first.ym)) / span) * 100;
-    const label = m.ym.replace('-', '.');
-    return `<span title="${_escHtml(label)} · ${m.n}건" style="position:absolute;left:${pct.toFixed(1)}%;top:50%;transform:translate(-50%,-50%);width:7px;height:7px;border-radius:50%;background:var(--accent-500)"></span>`;
+let _lvRec = null, _lvRecMode = 'high';
+function _lvRecTab(m){
+  _lvRecMode = m === 'low' ? 'low' : 'high';
+  [['lvTabHi', 'high'], ['lvTabLo', 'low']].forEach(([id, k]) => { const b = document.getElementById(id); if (b) b.setAttribute('aria-selected', String(k === _lvRecMode)); });
+  _lvRecRender();
+}
+function _lvRecRender(){
+  const box = document.getElementById('lvRecList'); if (!box || !_lvRec) return;
+  const hi = _lvRecMode === 'high';
+  const rows = (hi ? _lvRec.high : _lvRec.low) || [];
+  if (!rows.length) { box.innerHTML = `<div class="lv-msg">이번 주에는 새 ${hi ? '최고가' : '최저가'} 거래가 없어요</div>`; return; }
+  box.innerHTML = rows.slice(0, 3).map(x => {
+    const name = String(_dispAptName(x.aptName, x.umdNm) || x.aptName || '');
+    const where = [String(x.region || '').trim(), String(x.umdNm || '').trim()].filter(Boolean).join(' ');
+    const area = Number(x.excluUseAr) > 0 ? `${Math.round(Number(x.excluUseAr))}㎡` : '';
+    const amt = _lvAmt(x.dealAmount), prev = _lvAmt(hi ? x.prevMax : x.prevMin);
+    const day = /^\d{4}-\d{2}-\d{2}$/.test(String(x.dealDate || '')) ? String(x.dealDate).slice(5).replace('-', '.') : '';
+    const arg = { aptName: x.aptName, sigungu: x.sigungu, umdNm: x.umdNm, lawdCd: x.lawdCd, buildYear: x.buildYear };
+    const label = [name, where, area, amt && `거래가 ${amt}`, prev && `직전 ${hi ? '최고' : '최저'} ${prev}`, day].filter(Boolean).join(', ');
+    return `<button type="button" class="lv-row" aria-label="${_escHtml(label)}" onclick='_lvOpen(${_jsonAttr(arg)})'>`
+      + `<span class="lv-l"><span class="lv-nm">${_escHtml(name)}</span><span class="lv-ds">${_escHtml([where, area].filter(Boolean).join(' · '))}</span></span>`
+      + `<span class="lv-r"><span class="lv-amt">${_escHtml(amt)}</span><span class="lv-ds">${_escHtml([prev && `직전 ${hi ? '최고' : '최저'} ${prev}`, day].filter(Boolean).join(' · '))}</span></span></button>`;
   }).join('');
-  return `<div style="position:relative;height:32px;margin:20px 6px 6px;border-top:1px solid var(--border-faint)">${dots}</div>
-    <div style="display:flex;justify-content:space-between;font-size:12px;color:var(--text-quiet);padding:0 6px">
-      <span>${_escHtml(first.ym.replace('-', '.'))}</span><span>${_escHtml(last.ym.replace('-', '.'))}</span>
-    </div>`;
 }
-async function _loadHeroChart(top){
-  const nameEl = document.getElementById('lv-heroName');
-  if (nameEl && top && top.aptName) nameEl.textContent = top.aptName;
-  // POPULARSNAP-2026-09-27: 스냅샷이 이 배포 전에 계산됐으면 아직 aptSeq 가 없을 수 있다.
-  // HERO-SEQ-FALLBACK-2026-09-27 (Plan 116a 보완): 인기 스냅샷은 하루 1회라 aptSeq 가 빠질 수 있다(116a 배포 직후 실측) — 검색 API 로 이름→seq 를 해결한다. 값을 지어내지 않는다.
-  if (top && !top.aptSeq && top.aptName) {
-    try {
-      const rs = await fetch(`${CFG.api}/search/apt?q=${encodeURIComponent(top.aptName)}`, {signal: AbortSignal.timeout(8000)});
-      if (rs.ok) {
-        const js = await rs.json();
-        const rows = Array.isArray(js.results) ? js.results : [];
-        const wantSgg = String(top.sigungu || '').replace(/\s+/g, '');
-        let hit = rows.find(row => row.aptName === top.aptName && String(row.sigungu || '').replace(/\s+/g, '') === wantSgg && row.aptSeq);
-        if (!hit) hit = rows.find(row => row.aptName === top.aptName && row.aptSeq);
-        if (hit) top.aptSeq = hit.aptSeq; // 세션 내 재호출 방지 — top 객체에 캐시
-      }
-    } catch (_) { /* 실패하면 아래 가드에서 기존 실패 문구로 정리 */ }
-  }
-  //   여기까지도 aptSeq 가 없으면 예시로 채우지 않고 실패 문구로 정리한다(다음 cron 회차부터 자연 해소).
-  if (!top || !top.aptSeq) { _heroChartFail(); return; }
+async function _loadLandingRecords(){
+  const box = document.getElementById('lvRecList');
+  if (box) box.innerHTML = '<div class="lv-msg">불러오는 중이에요</div>';
   try {
-    const r = await fetch(`${CFG.api}/transactions/history?aptSeq=${encodeURIComponent(top.aptSeq)}`, {signal: AbortSignal.timeout(8000)});
-    if (!r.ok) throw new Error('HTTP ' + r.status);
-    const j = await r.json();
-    const months = _heroMonthlyRows(j.rows);
-    const totalN = months.reduce((s, m) => s + m.n, 0);
-    const metaEl = document.getElementById('lv-heroMeta');
-    if (metaEl) metaEl.textContent = `최근 24개월 ${totalN}건`;
-    const lineEl = document.getElementById('lv-heroLine');
-    const capEl = document.getElementById('lv-heroCaption');
-    const bodyEl = document.getElementById('lv-heroChartBody');
-    if (!months.length || totalN < HERO_SAMPLE_MIN) {
-      // 표본 부족 — 그래프 대신 타임라인, 캡션에서 "월별 평균" 제거
-      if (bodyEl) bodyEl.innerHTML = _heroTimelineHtml(months) || '<div style="font-size:12px;color:var(--text-tertiary);text-align:center;padding:28px 0">최근 24개월 거래가 없어요</div>';
-      if (lineEl) lineEl.textContent = `최근 24개월 거래 ${totalN}건 · 월별 추세를 그리기엔 표본이 적어요`;
-      if (capEl) capEl.textContent = '같은 단지 실거래예요. 참고용이며 매수·매도 추천이 아니에요';
-      return;
+    const r = await fetch(`${CFG.api}/transactions/records`, { signal: AbortSignal.timeout(8000) });
+    if (r.ok) {
+      const d = await r.json();
+      const hiN = Number(d.highCount), loN = Number(d.lowCount), cmp = Number(d.comparedCount);
+      if (Number.isFinite(hiN) && Number.isFinite(loN) && Number.isFinite(cmp) && cmp > 0) {
+        _lvRec = { high: Array.isArray(d.high) ? d.high : [], low: Array.isArray(d.low) ? d.low : [] };
+        const put = (id, n) => { const e = document.getElementById(id); if (e) e.textContent = Number(n).toLocaleString(); };
+        put('lv-recHigh', hiN); put('lv-recLow', loN);
+        const sub = document.getElementById('lv-recSub');
+        if (sub) {
+          const at = d.computedAt ? new Date(d.computedAt) : null;
+          const stale = d.stale && at && !isNaN(at) ? ` · ${at.getMonth() + 1}월 ${at.getDate()}일 기준` : '';
+          sub.textContent = `최근 7일 비교 가능한 거래 ${cmp.toLocaleString()}건 중 최고가 ${hiN.toLocaleString()}건, 최저가 ${loN.toLocaleString()}건이에요. 같은 단지, 같은 면적의 직전 거래와 비교했어요${d.sinceDate ? `(${String(d.sinceDate).replace(/-/g, '.')} 이후 자료)` : ''}${stale}. 매수·매도 추천이 아니에요.`;
+        }
+        _lvRecRender();
+        return;
+      }
     }
-    // 정상 — 장기 추세 차트(Plan 102)의 렌더 함수를 그대로 재사용(새 차트 코드 없음)
-    const chartRows = months.map(m => ({
-      label: m.ym.slice(2, 4) + '.' + m.ym.slice(5, 7),
-      sortKey: Number(m.ym.slice(0, 4)) * 12 + Number(m.ym.slice(5, 7)),
-      avgAuk: (m.sum / m.n) / 10000,
-      count: m.n,
-    }));
-    if (bodyEl) bodyEl.innerHTML = renderPriceChart(chartRows);
-    const lastM = months[months.length - 1];
-    const lastAvgAuk = (lastM.sum / lastM.n) / 10000;
-    const totalSum = months.reduce((s, m) => s + m.sum, 0);
-    const overallAvgAuk = (totalSum / totalN) / 10000;
-    if (lineEl) lineEl.textContent = `${lastM.ym.replace('-', '.')} · 최근월 평균 ${lastAvgAuk.toFixed(1)}억 · 24개월 평균 ${overallAvgAuk.toFixed(1)}억`;
-    if (capEl) capEl.textContent = '같은 단지 실거래 월별 평균이에요. 참고용이며 매수·매도 추천이 아니에요';
-  } catch (_) {
-    _heroChartFail();
-  }
+  } catch(_){}
+  if (box) box.innerHTML = '<div class="lv-msg">불러오지 못했어요. <button type="button" onclick="_loadLandingRecords()">다시 불러오기</button></div>';
+}
+async function _loadLandingRegions(){
+  const box = document.getElementById('lvRegList'); if (!box) return;
+  box.innerHTML = '<div class="lv-msg">불러오는 중이에요</div>';
+  try {
+    const r = await fetch(`${CFG.api}/search/popular-region?sido=11`, { signal: AbortSignal.timeout(15000) });
+    if (r.ok) {
+      const d = await r.json();
+      const groups = (Array.isArray(d && d.groups) ? d.groups : []).filter(g => g && (g.results || []).length).sort((a, b) => (b.deals60d || 0) - (a.deals60d || 0)).slice(0, 4);
+      if (groups.length) {
+        box.innerHTML = groups.map(g => {
+          const p = g.results[0];
+          const gu = _hpRegShort(g.label);
+          const name = String(p.displayName || _dispAptName(p.aptName, p.umdNm) || '');
+          const amt = Number(p.avgDealAmount) > 0 ? `${(Number(p.avgDealAmount) / 10000).toFixed(2)}억` : '';
+          const n = Number(g.deals60d || 0).toLocaleString();
+          return `<button type="button" class="lv-row" aria-label="${_escHtml(`${gu} 최근 60일 거래 ${n}건, 1위 ${name}${amt ? `, 평균 거래가 ${amt}` : ''}`)}" onclick='_lvRegion(${_jsonAttr(g.lawdCd)})'>`
+            + `<span class="lv-l"><span class="lv-nm">${_escHtml(gu)}<small>${n}건</small></span><span class="lv-ds">1위 ${_escHtml(name)}</span></span>`
+            + `<span class="lv-r"><span class="lv-amt">${_escHtml(amt)}</span><span class="lv-ds">${amt ? '평균 거래가' : ''}</span></span></button>`;
+        }).join('');
+        return;
+      }
+    }
+  } catch(_){}
+  box.innerHTML = '<div class="lv-msg">불러오지 못했어요. <button type="button" onclick="_loadLandingRegions()">다시 불러오기</button></div>';
+}
+async function _landingAsyncRefresh(){
+  _loadLandingRegions(); // 기다리지 않는다 — 구별 계산이 늦어도 기록 목록이 먼저 뜬다
+  await _loadLandingRecords();
+  // 마지막 갱신 = 실제 적재 시각(dataSyncedAt). 모르면 '—' 그대로(SYNCTIME-FIX-2026-07-25)
+  try {
+    const d = await healthJson(5000);
+    const e = document.getElementById('lv-syncTime');
+    if (d && e) {
+      const ts = d.dataSyncedAt ? new Date(d.dataSyncedAt) : null;
+      e.textContent = (ts && !isNaN(ts)) ? ts.toLocaleString('ko-KR', { timeZone: 'Asia/Seoul', hour12: false, month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '—';
+    }
+  } catch(_){}
 }
 
 // ── Phase 4-1 단계 1 (2026-05-04): Hero band 노출/dismiss 로직 ──

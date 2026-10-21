@@ -101,8 +101,9 @@ test("목록 머리말은 '전체 단지 N개 중'(부분집합 아님) 대신 �
 });
 
 test('같은 값의 억 표기는 소수 둘째 자리로 통일, 소개 카드는 60일 평균 라벨', () => {
-  assert.match(html, /_set\('lv-aptPrice', \(top\.avgDealAmount\/10000\)\.toFixed\(2\) \+ '억'\)/);
-  assert.match(html, /<div class="lv-apt-stat-l">60일 평균<\/div>/);
+  // LANDING-V5-2026-10-21: 소개 화면의 평균가 칸은 구별 1위 목록으로 옮겼다 — 같은 둘째 자리 표기·라벨
+  assert.match(html, /const amt = Number\(p\.avgDealAmount\) > 0 \? `\$\{\(Number\(p\.avgDealAmount\) \/ 10000\)\.toFixed\(2\)\}억` : '';/);
+  assert.match(html, /<span class="lv-ds">\$\{amt \? '평균 거래가' : ''\}<\/span>/);
   assert.match(html, /<span class="ass-price-v">\$\{\(p\.avgPrice\)\.toFixed\(2\)\}억<\/span>/);
   assert.doesNotMatch(html, /\$\{\(p\.avgPrice\)\.toFixed\(1\)\}억/);
 });

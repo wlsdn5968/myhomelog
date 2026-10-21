@@ -737,9 +737,10 @@ test('경신 카드 — 재계산 실패 시 503 대신 마지막 성공 스냅�
   const route = require('node:fs').readFileSync(require.resolve('../routes/transactions'), 'utf8');
   assert.match(route, /res\.set\('Cache-Control', \(degraded \|\| data\.stale\) \? 'no-store' : CC\);/, 'stale 응답이 엣지 6시간에 굳는다');
   const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
-  assert.match(html, /async function _loadPriceRecordsCard\(\)\{/, '랜딩 경신 카드 로더가 함수가 아니다(재시도 불가)');
-  assert.match(html, /_meta\.textContent = \(d\.stale && _at && !isNaN\(_at\)\) \? `[^`]*기준` : '실시간';/, 'stale 스냅샷을 실시간이라 부른다');
-  assert.match(html, /_meta\.textContent='불러오지 못함 · 다시 시도'; _meta\.style\.cursor='pointer'; _meta\.title='클릭하면 다시 불러와요'; _meta\.onclick=\(\)=>_loadPriceRecordsCard\(\);/, '실패 시 재시도 동작이 없다');
+  // LANDING-V5-2026-10-21: 경신 카드 → 첫 화면 "이번 주 새로 나온 기록" 목록(_loadLandingRecords). 같은 의도를 그대로 고정한다.
+  assert.match(html, /async function _loadLandingRecords\(\)\{/, '랜딩 경신 목록 로더가 함수가 아니다(재시도 불가)');
+  assert.match(html, /const stale = d\.stale && at && !isNaN\(at\) \? ` · \$\{at\.getMonth\(\) \+ 1\}월 \$\{at\.getDate\(\)\}일 기준` : '';/, 'stale 스냅샷의 기준 시각을 밝히지 않는다');
+  assert.match(html, /불러오지 못했어요\. <button type="button" onclick="_loadLandingRecords\(\)">다시 불러오기<\/button>/, '실패 시 재시도 동작이 없다');
 });
 
 

@@ -26,24 +26,18 @@ test('정적 fallback 숫자 — 옛 "27만</span>" 가 0회여야 함 (Plan 118
 });
 
 // ── ② 새 하한 표기 정적 값 6개 확인 ──────────────────
-test('정적 하한 표기 — <span class="jstxk">1.7M+</span> 정확히 2회 (hero-tag·lv-tag, Plan 118)', () => {
-  const count = (html.match(/<span class="jstxk">1\.7M\+<\/span>/g) || []).length;
-  assert.equal(count, 2, `<span class="jstxk">1.7M+</span> 가 ${count}회여야 함 (hero-tag·lv-tag 각 1회씩)`);
+// LANDING-V5-2026-10-21 (운영자 "AI 느낌"): 영문 고정폭 배지 'DATA · 1.7M+ · 10K+ · DAILY'(소개·히어로 띠)를 지웠다 — 남는 정적 하한은
+//   첫 화면 보조 문구의 실거래 건수 한 곳(사실인 하한 "170만+", 응답이 오면 _applyStatTags 가 실제 값으로 바꾼다).
+test('영문 배지 제거 — DATA · … · DAILY 와 jstxk·japtk 칸이 0회 (LANDING-V5)', () => {
+  assert.equal((html.match(/DATA · /g) || []).length, 0);
+  assert.equal((html.match(/<span class="jstxk">/g) || []).length, 0);
+  assert.equal((html.match(/<span class="japtk">/g) || []).length, 0);
 });
 
-test('정적 하한 표기 — <span class="japtk">10K+</span> 정확히 2회 (hero-tag·lv-tag, Plan 118)', () => {
-  const count = (html.match(/<span class="japtk">10K\+<\/span>/g) || []).length;
-  assert.equal(count, 2, `<span class="japtk">10K+</span> 가 ${count}회여야 함 (hero-tag·lv-tag 각 1회씩)`);
-});
-
-test('정적 하한 표기 — <span class="jstxm">170만+</span> 정확히 1회 (lv-hero-sub, Plan 118)', () => {
+test('정적 하한 표기 — <span class="jstxm">170만+</span> 정확히 1회 (첫 화면 보조 문구, Plan 118)', () => {
   const count = (html.match(/<span class="jstxm">170만\+<\/span>/g) || []).length;
-  assert.equal(count, 1, `<span class="jstxm">170만+</span> 가 ${count}회여야 함 (lv-hero-sub 안)`);
-});
-
-test('정적 하한 표기 — <span class="japtm">1만+</span> 정확히 1회 (lv-hero-sub, Plan 118)', () => {
-  const count = (html.match(/<span class="japtm">1만\+<\/span>/g) || []).length;
-  assert.equal(count, 1, `<span class="japtm">1만+</span> 가 ${count}회여야 함 (lv-hero-sub 안)`);
+  assert.equal(count, 1, `<span class="jstxm">170만+</span> 가 ${count}회여야 함 (lv-sub 안)`);
+  assert.match(html, /<p class="lv-sub">국토교통부 실거래 신고 <span class="jstxm">170만\+<\/span>건 · 매일 새벽 갱신/);
 });
 
 // ── ③ 계획서·근거 주석 확인 ──────────────────

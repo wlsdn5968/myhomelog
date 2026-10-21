@@ -43,8 +43,9 @@ test('_popRows — degraded 면 평균가·건수를 비우고 표식, 정상이
 });
 
 test('실시간 응답을 받는 소비자는 모두 _popRows 를 거친다 (소개 화면·브리핑·랭킹 카드·지도 마커)', () => {
-  assert.ok(html.includes('top = _popRows(d)[0];'), '소개 화면');
-  assert.ok(html.includes("_set('lv-aptMeta', top._degraded ? '집계 지연' : '실시간');"));
+  // LANDING-V5-2026-10-21: 소개 화면은 /search/popular 을 더 이상 읽지 않는다(구별 TOP·경신 목록으로 교체) — 다시 읽게 되면 _popRows 를 거쳐야 한다
+  const lr = extractFn(html, '_landingAsyncRefresh');
+  assert.ok(!lr.includes('/search/popular`') || lr.includes('_popRows('), '소개 화면'); 
   assert.ok(html.includes('const ps=_popRows(pop);'), '브리핑(티커·TOP5·랭킹 카드 재료)');
   assert.ok(html.includes('const popular = _popRows(j);'), '지도 마커');
   const rc = extractFn(html, 'openRankCard');

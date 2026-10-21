@@ -427,12 +427,14 @@ test('절대 규칙 — 화면·프롬프트가 추천/예측/대출알선을 �
     '프롬프트가 다시 미래 가격 방어력을 단정한다');
 
   // ④ 랜딩 첫 화면의 가짜 실측값 — API 실패 시 하드코딩 단지가 '실시간' 딱지를 달고 남았다
-  assert.equal(/id="lv-aptName">헬리오시티/.test(html), false,
-    '랜딩 카드에 하드코딩 단지명이 되돌아왔다 — 실패 시 가짜 시세가 실시간으로 보인다');
-  assert.equal(/id="lv-aptPrice">\d/.test(html), false, '랜딩 카드에 하드코딩 가격이 되돌아왔다');
-  assert.match(html, /id="lv-aptMeta">불러오는 중</, '초기 라벨이 플레이스홀더가 아니다');
-  // 2026-10-18 DEGRADED-LABEL: 대체 경로 응답이면 같은 자리에 '집계 지연' — 응답 수신 후에만 라벨을 단다는 의도는 같다
-  assert.match(html, /_set\('lv-aptMeta', (?:top\._degraded \? '집계 지연' : )?'실시간'\)/, "'실시간' 라벨을 응답 수신 후에 달지 않는다");
+  // LANDING-V5-2026-10-21: 첫 화면 목록(경신·구별 1위)은 응답이 온 뒤에만 채운다 — 초기 마크업에 단지명·금액이 박혀 있으면 안 된다
+  const lvStart = html.indexOf('<div id="view-landing"'), lvEnd = html.indexOf('<!-- 모바일 하단 탭 -->', lvStart);
+  const lv = html.slice(lvStart, lvEnd);
+  assert.ok(lvStart > 0 && lvEnd > lvStart, '첫 화면 마크업 구간을 못 찾았다');
+  assert.equal(/헬리오시티|\d+억|\d{1,3}(,\d{3})+만/.test(lv), false, '첫 화면 마크업에 하드코딩 단지·금액이 있다 — 실패 시 가짜 시세가 보인다');
+  assert.match(lv, /<div id="lvRecList"[^>]*><div class="lv-msg">불러오는 중이에요<\/div><\/div>/, '경신 목록 초기값이 플레이스홀더가 아니다');
+  assert.match(lv, /<div id="lvRegList"><div class="lv-msg">불러오는 중이에요<\/div><\/div>/, '구별 목록 초기값이 플레이스홀더가 아니다');
+  assert.match(lv, /<span id="lv-recHigh">—<\/span>/); assert.match(lv, /<span id="lv-recLow">—<\/span>/);
 
   // ⑤ 결정론 조건 카드 — 절대 룰 ①을 AI 프롬프트에서만 집행하고 있었다(RULE-DETERMINISTIC-2026-09-06).
   //    aiService.js "단지 정보 정리 기준"(등급 라벨 금지, 위 ③에서 이미 검사)을
