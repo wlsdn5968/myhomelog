@@ -49,7 +49,7 @@ test('라우트·cron 배선: /search/popular-region(서울·경기만, 스냅�
   assert.match(s, /let p = await rp\.readSido\(sido\);/);
   const c = fs.readFileSync(path.join(__dirname, '../routes/cron.js'), 'utf8');
   assert.match(c, /require\('\.\.\/services\/regionPopularService'\)\.computeAndStoreAll\(\)/);
-  assert.equal(rp.SNAP_KEY('11'), 'popular:region:v3:11');
+  assert.equal(rp.SNAP_KEY('11'), 'popular:region:v4:11');
 });
 
 test('프런트: 서울·경기 칩은 항상 · 구 칩 줄 · 전체는 구마다 3곳+모두 보기 · 지도 마커는 같은 .pop-marker · 전국으로 되돌리면 인기 마커 복귀', () => {
@@ -62,7 +62,7 @@ test('프런트: 서울·경기 칩은 항상 · 구 칩 줄 · 전체는 구마
   assert.match(html, /try\{ if\(_HP_REG_SIDO\[_hpSido\]\)\{ _hpSido = '전국'; _hpReg = 'all'; _hpRender\(\); \} \}catch\(_\)\{\}/);
 });
 
-test('순위는 하루 2건까지만 센다 — 하루에 몰린 일괄 신고(신축 일괄 등기)가 1위를 차지하지 않는다, 표시 건수는 실제 그대로', () => {
+test('순위: 하루 10건 이상인 날만 2건으로 센다 — 하루에 몰린 일괄 신고는 1위가 못 되고, 하루 5~9건인 일반 단지는 실제 건수로', () => {
   const day = (n, d, cnt) => Array.from({ length: cnt }, () => ({ apt_name: n, umd_nm: '응암동', sigungu: '은평구', lawd_cd: '11380', apt_seq: '11380-1', build_year: 2026, deal_date: d, deal_amount: 60000 }));
   const rows = [...day('미가마하나임', '2026-10-01', 30), ...day('백련산파크자이', '2026-09-01', 1), ...day('백련산파크자이', '2026-09-08', 2), ...day('백련산파크자이', '2026-09-15', 2)];
   const out = rp.rankLawd(rows, new Map(), 10);
@@ -103,4 +103,11 @@ test('지번 별칭: 같은 동·같은 지번·건축년도 1년 이내·정식
   const by = Object.fromEntries(out.map((e) => [e.aptName, e.dealCount60d]));
   assert.equal(by['벽적골두산한신우성'], 4, '지번 없는 옛 거래도 같은 이름이면 함께 합산');
   assert.equal(by['청구'], 1);
+});
+
+test('하루 5~9건은 일반 거래로 그대로 센다 — 순위 순서와 화면 건수가 어긋나지 않는다', () => {
+  const day = (n, d, cnt) => Array.from({ length: cnt }, () => ({ apt_name: n, umd_nm: '월계동', sigungu: '노원구', lawd_cd: '11350', apt_seq: '11350-' + n.length, build_year: 1990, deal_date: d, deal_amount: 90000 }));
+  const rows = [...day('월계동신', '2026-10-01', 9), ...day('월계동신', '2026-10-02', 7), ...day('상계주공7단지', '2026-10-03', 3), ...day('상계주공7단지', '2026-10-04', 3), ...day('상계주공7단지', '2026-10-05', 3)];
+  const out = rp.rankLawd(rows, new Map(), 10);
+  assert.deepEqual(out.map((e) => [e.aptName, e.dealCount60d]), [['월계동신', 16], ['상계주공7단지', 9]]);
 });
