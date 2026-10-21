@@ -3347,10 +3347,12 @@ html[data-theme="dark"] #view-news{
 <style>
 #view-landing{position:fixed;top:0;left:0;right:0;bottom:0;overflow-y:auto;background:var(--bg-base);z-index:9999;font-family:var(--font-body);color:var(--text-primary);display:none}
 #view-landing .lv-wrap{max-width:1120px;margin:0 auto;padding:0 24px}
-#view-landing .lv-top{border-bottom:1px solid var(--border-faint)}
+/* 전역 header{display:flex·배경} 이 안쪽 틀을 325px 로 줄여 가운데에 몰았다(로컬 실측) — 소개 화면 머리는 블록으로 되돌린다 */
+#view-landing .lv-top{display:block;position:static;height:auto;padding:0;margin:0;background:var(--bg-base);box-shadow:none;border:0;border-bottom:1px solid var(--border-faint)}
+#view-landing .lv-top-in{width:100%;box-sizing:border-box}
 #view-landing .lv-top-in{display:flex;align-items:center;height:64px}
 #view-landing .lv-logo{display:flex;align-items:center;gap:8px;background:none;border:0;padding:0;cursor:pointer;font:inherit;font-size:18px;font-weight:800;letter-spacing:-.02em;color:var(--text-primary)}
-#view-landing .lv-logo .lmark{width:28px;height:28px}
+#view-landing .lv-logo .lmark{width:28px;height:28px;background:var(--acc-bg);border-radius:var(--radius-base);display:inline-flex;align-items:center;justify-content:center} /* 전역 .lmark 금색 대신 앱 헤더와 같은 남색 */
 #view-landing .lv-nav{margin-left:auto;display:flex;align-items:center;gap:22px}
 #view-landing .lv-nav button{background:none;border:0;padding:8px 0;font:inherit;font-size:14px;color:var(--text-secondary);cursor:pointer}
 #view-landing .lv-nav button:hover{color:var(--text-primary)}
@@ -3416,7 +3418,7 @@ html[data-theme="dark"] #view-news{
     <section class="lv-hero">
       <h1 class="lv-h1">우리 아파트, 최근 얼마에<br>거래됐을까요?</h1>
       <form class="lv-search" role="search" onsubmit="return _landingSearch(event)">
-        <input id="lvQ" type="search" aria-label="단지명이나 동 이름" placeholder="단지명이나 동 이름을 입력해요 (예: 상계주공7단지, 매탄동)" autocomplete="off" enterkeyhint="search">
+        <input id="lvQ" type="search" aria-label="단지명이나 동 이름" placeholder="예: 상계주공7단지, 매탄동" autocomplete="off" enterkeyhint="search">
         <button type="submit">검색</button>
       </form>
       <p class="lv-sub">국토교통부 실거래 신고 <span class="jstxm">170만+</span>건 · 매일 새벽 갱신 · 검색과 단지 정보는 가입 없이 무료예요</p>
@@ -4317,7 +4319,7 @@ function _lvRecRender(){
   box.innerHTML = rows.slice(0, 3).map(x => {
     const name = String(_dispAptName(x.aptName, x.umdNm) || x.aptName || '');
     const where = [String(x.region || '').trim(), String(x.umdNm || '').trim()].filter(Boolean).join(' ');
-    const area = Number(x.excluUseAr) > 0 ? `${Math.round(Number(x.excluUseAr))}㎡` : '';
+    const area = Number(x.excluUseAr) > 0 ? `${Math.floor(Number(x.excluUseAr))}㎡` : ''; // 전용 84.98㎡ → 84㎡형(내림 — 반올림하면 85 로 보였다)
     const amt = _lvAmt(x.dealAmount), prev = _lvAmt(hi ? x.prevMax : x.prevMin);
     const day = /^\d{4}-\d{2}-\d{2}$/.test(String(x.dealDate || '')) ? String(x.dealDate).slice(5).replace('-', '.') : '';
     const arg = { aptName: x.aptName, sigungu: x.sigungu, umdNm: x.umdNm, lawdCd: x.lawdCd, buildYear: x.buildYear };
