@@ -982,6 +982,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
   .hp-chips{flex-wrap:nowrap;overflow-x:auto;gap:6px;padding:0 16px 8px;-webkit-overflow-scrolling:touch}
   .hp-chips .hp-chip{flex-shrink:0;height:32px;font-size:13px}
   .hp-gh{padding:10px 16px 4px}
+  .hp-mx{display:none} /* 지도 위 범례 줄이 같은 설명을 한다 — 좁은 시트에서 목록을 밀어내지 않게 */
   body.hps-min .hp-chips{visibility:hidden}
   .hp-note{margin:0 16px 8px}
   .hp-row{display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:12px;min-height:60px;padding:8px 16px}
@@ -12455,14 +12456,15 @@ function _hpRegLoad(sido){
 }
 function _hpRegChips(groups){
   const el = document.getElementById('hpChips2'); if(!el) return;
-  if(!groups){ el.hidden = true; el.innerHTML = ''; return; }
+  if(!groups){ const was = !el.hidden; el.hidden = true; el.innerHTML = ''; if(was) _hpsRefit(); return; }
   const sorted = groups.slice().sort((a, b) => String(a.label).localeCompare(String(b.label), 'ko'));
   el.innerHTML = [`<button type="button" class="hp-chip" aria-pressed="${_hpReg === 'all'}" onclick="_hpRegPick('all')">전체</button>`]
     .concat(sorted.map(g => `<button type="button" class="hp-chip" aria-pressed="${_hpReg === g.lawdCd}" onclick="_hpRegPick(${_jsonAttr(g.lawdCd)})">${_escHtml(_hpRegShort(g.label))}</button>`)).join('');
-  el.hidden = false;
+  const was = el.hidden; el.hidden = false; if(was) _hpsRefit();
 }
-// "서울 노원구" → "노원구", "수원시 영통구" 는 그대로(시 이름이 있어야 구별된다)
-function _hpRegShort(label){ return String(label || '').replace(/^서울\s+/, ''); }
+function _hpsRefit(){ try{ if(document.body.classList.contains('hp-on') && window.innerWidth <= 700 && _hpsState === 'base') _hpsSet('base'); }catch(_){} }
+// "서울 노원구"·"부산 강서구" → "노원구"·"강서구"(시도는 위 칩에서 이미 골랐다), "수원시 영통구" 는 그대로(시 이름이 있어야 구별된다)
+function _hpRegShort(label){ return String(label || '').replace(/^(서울|부산|대구|인천|광주|대전|울산|세종|경기|강원|충북|충남|전북|전남|경북|경남|제주)\s+/, ''); }
 function _hpRegRow(p, rank){
   const name = String(p.displayName || _dispAptName(p.aptName, p.umdNm) || '');
   const region = [_fmtSgg(String(p.sigungu || '').trim()), String(p.umdNm || '').trim()].filter(Boolean).join(' ');
@@ -12520,7 +12522,7 @@ function _hpRegShow(){
   if(_hpReg === 'all'){
     const byDeals = groups.slice().sort((a, b) => (b.deals60d || 0) - (a.deals60d || 0));
     html = `<div class="hp-msg">${_escHtml(d.sidoName || _hpSido)} ${groups.length}개 ${unit}마다 최근 60일 거래 많은 단지 ${_HP_REG_TOP}곳이에요. 거래가 많은 지역 순이에요.`
-      + (geoOk ? ` 지도의 색 구역이 ${unit}이고, 구마다 1위 단지만 표시해요. 구역이나 아래 이름을 누르면 그 ${unit} 순위를 지도에 모두 보여 드려요.` : '') + '</div>'
+      + (geoOk ? `<span class="hp-mx"> 지도의 색 구역이 ${unit}이고, 구마다 1위 단지만 표시해요. 구역이나 아래 이름을 누르면 그 ${unit} 순위를 지도에 모두 보여 드려요.</span>` : '') + '</div>'
       + byDeals.map(g => `<div class="hp-gh">${_hpGuDot(_hpGuColor(sido, g.lawdCd))}${_escHtml(_hpRegShort(g.label))}<span class="n">60일 거래 ${Number(g.deals60d || 0).toLocaleString()}건</span>`
         + `<button type="button" onclick="_hpRegPick(${_jsonAttr(g.lawdCd)})">${(g.results || []).length}곳 모두 보기</button></div>`
         + (g.results || []).slice(0, _HP_REG_TOP).map((p, i) => _hpRegRow(p, i + 1)).join('')).join('') + attr;
@@ -12698,7 +12700,9 @@ function _hpsMetrics(){
   const min = hd ? Math.round(hd.offsetTop + hd.offsetHeight) : 56;
   // 기본 = 지도 영역 52% 지점(시안). 단 낮은 화면(가로 모드 등)에서 목록이 0 이 되지 않게 아래 고정 영역(보고서 버튼·면책) + 행 1개(60)를 하한으로
   const rep = document.querySelector('#homePanel .hp-rep'), ft = document.querySelector('#homePanel .hp-ft');
-  const floor = min + (rep ? rep.offsetHeight : 0) + (ft ? ft.offsetHeight : 0) + 60;
+  // REGION-SHADE-2026-10-21: 시도·구 칩 줄도 목록 위 고정 영역이다 — 빼먹어 구 칩 줄이 생기면 목록이 15px 이 됐다(375×812 운영 실측)
+  const chipsH = ['hpChips', 'hpChips2'].reduce((n, id) => { const e = document.getElementById(id); return n + (e && !e.hidden ? e.offsetHeight : 0); }, 0);
+  const floor = min + chipsH + (rep ? rep.offsetHeight : 0) + (ft ? ft.offsetHeight : 0) + 60;
   const max = Math.max(min, H - 8);
   return { H, min, base: Math.min(max, Math.max(floor, Math.round(H * 0.48))), max };
 }

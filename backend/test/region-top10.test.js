@@ -65,6 +65,8 @@ test('프런트: 적재 9개 시도 칩은 항상 · 구 칩 줄 · 전체 목�
   assert.match(html, /fetch\(`\$\{CFG\.api\}\/search\/popular-region\?sido=\$\{sido\}`/);
   assert.match(html, /\(g\.results \|\| \[\]\)\.slice\(0, _HP_REG_TOP\)\.map\(\(p, i\) => _hpRegRow\(p, i \+ 1\)\)/);
   assert.match(html, /function _hpRegMarkers\(list, o\)\{/);
+  const short = new Function(`${html.match(/function _hpRegShort\(label\)\{[^\n]*\}/)[0]}; return _hpRegShort;`)();
+  assert.equal(short('서울 노원구'), '노원구'); assert.equal(short('부산 강서구'), '강서구'); assert.equal(short('수원시 영통구'), '수원시 영통구'); assert.equal(short('세종특별자치시'), '세종특별자치시');
   assert.match(html, /else if\(wasReg\) \{ try\{ _hpRegPolysClear\(\); _hpRegLegend\(null\); showPop\(\); \}catch\(_\)\{\} \}/);
   assert.match(html, /try\{ if\(_HP_REG_SIDO\[_hpSido\]\)\{ _hpSido = '전국'; _hpReg = 'all'; _hpRender\(\); \} \}catch\(_\)\{\}/);
 });
