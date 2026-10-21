@@ -12631,11 +12631,16 @@ function _hpRegMarkers(list, o){
     });
     // 맞추기: 색 구역이 있으면 그 범위(고른 구 / 시도 전체), 없으면 마커 범위
     const bb = box || (pts.length ? pts.reduce((b, p) => { const y = Number(p.lat), x = Number(p.lng); if(!b) return [[y, x], [y, x]]; b[0][0] = Math.min(b[0][0], y); b[0][1] = Math.min(b[0][1], x); b[1][0] = Math.max(b[1][0], y); b[1][1] = Math.max(b[1][1], x); return b; }, null) : null);
-    if(bb){
-      if(isNaver) mapObj.fitBounds(new naver.maps.LatLngBounds(new naver.maps.LatLng(bb[0][0], bb[0][1]), new naver.maps.LatLng(bb[1][0], bb[1][1])), { top: 30, right: 30, bottom: 30, left: 30 });
-      else if(window.L) mapObj.fitBounds(L.latLngBounds(bb), { padding: [30, 30] });
-    }
+    window._regFitBB = bb; window._regFitAt = Date.now();
+    _hpRegFit(bb);
     try{ scheduleDeclutter(); }catch(_){}
+  }catch(_){}
+}
+function _hpRegFit(bb){
+  try{
+    if(!bb || typeof mapObj === 'undefined' || !mapObj) return;
+    if(mapObj._isNaver && window.naver && naver.maps) mapObj.fitBounds(new naver.maps.LatLngBounds(new naver.maps.LatLng(bb[0][0], bb[0][1]), new naver.maps.LatLng(bb[1][0], bb[1][1])), { top: 30, right: 30, bottom: 30, left: 30 });
+    else if(window.L && mapObj.fitBounds) mapObj.fitBounds(L.latLngBounds(bb), { padding: [30, 30] });
   }catch(_){}
 }
 function _hpPick(s){
@@ -12698,11 +12703,13 @@ function _hpsMetrics(){
   const app = document.querySelector('.app'), hd = document.getElementById('hpHd');
   const H = app ? app.clientHeight : 0;
   const min = hd ? Math.round(hd.offsetTop + hd.offsetHeight) : 56;
-  // 기본 = 지도 영역 52% 지점(시안). 단 낮은 화면(가로 모드 등)에서 목록이 0 이 되지 않게 아래 고정 영역(보고서 버튼·면책) + 행 1개(60)를 하한으로
-  const rep = document.querySelector('#homePanel .hp-rep'), ft = document.querySelector('#homePanel .hp-ft');
-  // REGION-SHADE-2026-10-21: 시도·구 칩 줄도 목록 위 고정 영역이다 — 빼먹어 구 칩 줄이 생기면 목록이 15px 이 됐다(375×812 운영 실측)
-  const chipsH = ['hpChips', 'hpChips2'].reduce((n, id) => { const e = document.getElementById(id); return n + (e && !e.hidden ? e.offsetHeight : 0); }, 0);
-  const floor = min + chipsH + (rep ? rep.offsetHeight : 0) + (ft ? ft.offsetHeight : 0) + 60;
+  // 기본 = 지도 영역 52% 지점(시안). 단 목록이 0 이 되지 않게 "목록 밖 시트 내용 전부 + 목록 최소 높이"를 하한으로.
+  // REGION-SHADE-2026-10-21: 하나씩 더하던 방식은 칩 줄·방문자 배지를 빼먹어 구별 보기에서 목록이 15px 이 됐다(375×812 운영 실측) —
+  //   목록(#hpList)을 뺀 시트 자식 높이를 모두 더한다. 구 칩 줄이 있으면 구 제목 + 1위 한 줄이 보이게 110, 아니면 행 하나 60.
+  const hp = document.getElementById('homePanel'), list = document.getElementById('hpList');
+  const fixedH = hp ? [...hp.children].reduce((n, e) => n + (e === list ? 0 : e.offsetHeight), 0) : min;
+  const c2 = document.getElementById('hpChips2');
+  const floor = fixedH + (c2 && !c2.hidden ? 110 : 60);
   const max = Math.max(min, H - 8);
   return { H, min, base: Math.min(max, Math.max(floor, Math.round(H * 0.48))), max };
 }
@@ -12711,6 +12718,9 @@ function _hpMapResize(){
     if(typeof mapObj === 'undefined' || !mapObj) return;
     if(mapObj._isLeaflet && mapObj.invalidateSize) mapObj.invalidateSize();
     else if(mapObj._isNaver && window.naver?.maps?.Event) naver.maps.Event.trigger(mapObj, 'resize');
+    // REGION-SHADE-2026-10-21: 구역을 그린 직후 모바일 시트 높이가 바뀌면(구 칩 줄 등장) 옛 지도 크기로 맞춘 것이라 서울이 잘렸다(375 실측) —
+    //   그린 지 2초 안의 크기 변화만 다시 맞춘다(그 뒤 사용자가 옮긴 지도는 건드리지 않는다)
+    if((window._regPolys || []).length && window._regFitBB && Date.now() - (window._regFitAt || 0) < 2000) _hpRegFit(window._regFitBB);
   }catch(_){}
 }
 // 지도 영역(#mapEl) 크기가 바뀌면 지도 SDK 에 알린다. 전환(.2s)이 끝나기 전에 고정 타이머(220ms)로 알리면 네이버 지도가 옛 크기

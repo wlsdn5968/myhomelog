@@ -89,6 +89,7 @@ test('REGION-SHADE: 구 경계 파일 — 9개 시도 전부, 우리 시군구 �
 
 test('REGION-SHADE: 색 구역 — 전체는 모두 옅게, 고른 구만 진하게·나머지 흐리게, 범위는 고른 구 · 실패면 다시 부르지 않음 · 검색·인기 복귀 때 걷기', () => {
   assert.match(html, /const unit = sido === '41' \? '시군구' : \['26', '27', '28', '31'\]\.includes\(sido\) \? '구·군' : '구';/);
+  assert.match(html, /if\(\(window\._regPolys \|\| \[\]\)\.length && window\._regFitBB && Date\.now\(\) - \(window\._regFitAt \|\| 0\) < 2000\) _hpRegFit\(window\._regFitBB\);/);
   assert.match(html, /if\(_hpGeo\[sido\] !== undefined \|\| _hpGeoReq\[sido\]\) return;/);
   assert.match(html, /\.catch\(\(\) => \{ _hpGeo\[sido\] = false; \}\)/);
   // renderMarkers(검색 결과)·showPop(인기 단지로) 둘 다 색 구역과 범례를 되돌린다

@@ -259,9 +259,9 @@ test('Plan 151b 리뷰: 접힘이면 가려진 본문 숨김 · 홈 바 여백 �
   assert.ok(html.includes('<span class="hp-sm">최근 60일</span>'), '"최근 60일" 은 스크린리더에도 읽힌다');
   assert.ok(extractFn(html, '_hpsSet').includes("b.classList.toggle('hps-min', state === 'min');"));
   // 낮은 화면에서 목록이 0 이 되지 않게 기본 높이 하한
-  assert.ok(extractFn(html, '_hpsMetrics').includes('const floor = min + chipsH + (rep ? rep.offsetHeight : 0) + (ft ? ft.offsetHeight : 0) + 60;'));
+  assert.ok(extractFn(html, '_hpsMetrics').includes('const fixedH = hp ? [...hp.children].reduce((n, e) => n + (e === list ? 0 : e.offsetHeight), 0) : min;'));
   // REGION-SHADE-2026-10-21: 시도·구 칩 줄도 고정 영역 — 구 칩 줄이 생기고 사라질 때 기본 높이를 다시 잰다(375 실측: 목록 15px)
-  assert.ok(extractFn(html, '_hpsMetrics').includes("['hpChips', 'hpChips2'].reduce("));
+  assert.ok(extractFn(html, '_hpsMetrics').includes('const floor = fixedH + (c2 && !c2.hidden ? 110 : 60);'));
   assert.ok(extractFn(html, '_hpRegChips').includes('if(was) _hpsRefit();'));
   assert.match(html, /function _hpsRefit\(\)\{ try\{ if\(document\.body\.classList\.contains\('hp-on'\) && window\.innerWidth <= 700 && _hpsState === 'base'\) _hpsSet\('base'\); \}catch\(_\)\{\} \}/);
 });
