@@ -12512,7 +12512,8 @@ function _hpRegShow(){
   _hpRegChips(groups.length > 1 ? groups : null);
   const w = d.window || {};
   if(sub) sub.title = `집계 기간은 ${String(w.since || '').replace(/-/g,'.')}부터 ${String(w.until || '').replace(/-/g,'.')}까지예요. 같은 단지가 신고 이름 둘로 나뉜 경우 하나로 합쳐 세요.`;
-  const unit = sido === '41' ? '시군구' : '구·군';
+  // 군이 있는 시도만 "구·군"(부산 기장군·대구 달성군·인천 강화·옹진군·울산 울주군) — 서울·대전·충북(청주 4구)은 구, 경기는 시군구
+  const unit = sido === '41' ? '시군구' : ['26', '27', '28', '31'].includes(sido) ? '구·군' : '구';
   const geoOk = !!_hpGeo[sido];
   const attr = geoOk ? `<div class="hp-msg hp-attr">${_escHtml(_HP_GEO_ATTR)}</div>` : '';
   let html = '', markers = [];
@@ -12563,9 +12564,10 @@ function _hpRegPolys(sido, sel){
   geo.features.forEach(f => {
     const pr = f.properties || {}; const col = _HP_GU_COLORS[(Number(pr.k) || 0) % _HP_GU_COLORS.length];
     const isSel = sel === pr.c, all = sel === 'all';
-    const fo = all ? (dark ? 0.16 : 0.11) : (isSel ? (dark ? 0.22 : 0.16) : 0.03);
-    const so = all ? 0.55 : (isSel ? 0.95 : 0.22);
-    const sw = isSel ? 2.5 : 1.2;
+    // 운영 실측(2026-10-21): 채움 0.11 은 경기처럼 축척이 작으면 구역이 거의 안 보였다 — 지도 글자가 읽히는 선(0.2)까지 올린다
+    const fo = all ? (dark ? 0.24 : 0.2) : (isSel ? (dark ? 0.3 : 0.26) : 0.05);
+    const so = all ? 0.8 : (isSel ? 1 : 0.3);
+    const sw = isSel ? 3 : 1.5;
     const parts = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates : [];
     parts.forEach(rings => {
       if(!rings || !rings[0]) return;

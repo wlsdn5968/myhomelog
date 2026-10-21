@@ -86,6 +86,7 @@ test('REGION-SHADE: 구 경계 파일 — 9개 시도 전부, 우리 시군구 �
 });
 
 test('REGION-SHADE: 색 구역 — 전체는 모두 옅게, 고른 구만 진하게·나머지 흐리게, 범위는 고른 구 · 실패면 다시 부르지 않음 · 검색·인기 복귀 때 걷기', () => {
+  assert.match(html, /const unit = sido === '41' \? '시군구' : \['26', '27', '28', '31'\]\.includes\(sido\) \? '구·군' : '구';/);
   assert.match(html, /if\(_hpGeo\[sido\] !== undefined \|\| _hpGeoReq\[sido\]\) return;/);
   assert.match(html, /\.catch\(\(\) => \{ _hpGeo\[sido\] = false; \}\)/);
   // renderMarkers(검색 결과)·showPop(인기 단지로) 둘 다 색 구역과 범례를 되돌린다
@@ -114,13 +115,13 @@ test('REGION-SHADE: 색 구역 — 전체는 모두 옅게, 고른 구만 진하
   ].join('\n'), ctx);
   const all = ctx.__polys('11', 'all');
   assert.equal(made.length, 3, 'MultiPolygon 은 조각마다 하나');
-  assert.ok(made.every((p) => p.o.fillOpacity <= 0.16), '전체는 옅게');
+  assert.ok(made.every((p) => p.o.fillOpacity >= 0.15 && p.o.fillOpacity <= 0.25), '전체는 옅게(그래도 보이게 — 0.11 은 안 보였다)');
   assert.equal(JSON.stringify(all), '[[37,126.5],[37.6,127.2]]', '전체 범위 = 시도 전체');
   made.length = 0;
   const one = ctx.__polys('11', 'A');
   const a = made.find((p) => p.o.fillColor === '#3B82F6'), others = made.filter((p) => p !== a);
   assert.ok(a.o.fillOpacity > others[0].o.fillOpacity && a.o.strokeWeight > others[0].o.strokeWeight, '고른 구만 진하게');
-  assert.ok(others.every((p) => p.o.fillOpacity <= 0.03));
+  assert.ok(others.every((p) => p.o.fillOpacity <= 0.05));
   assert.equal(JSON.stringify(one), '[[37,127],[37.1,127.1]]', '범위 = 고른 구');
   made.length = 0;
   ctx.window._regPolys = [];
