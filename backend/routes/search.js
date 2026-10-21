@@ -762,7 +762,7 @@ const _regionPopInflight = new Map();
 router.get('/popular-region', async (req, res) => {
   const rp = require('../services/regionPopularService');
   const sido = String(req.query.sido || '');
-  if (!rp.SIDOS[sido]) return res.status(400).json({ error: '지원하는 시도는 서울(11)·경기(41)예요' });
+  if (!rp.SIDOS[sido]) return res.status(400).json({ error: '지원하지 않는 시도예요' });
   const ck = `popular-region:${sido}`;
   const CC_OK = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400';
   const hit = cache.get(ck);

@@ -902,6 +902,8 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .hp-chips2 .hp-chip{flex-shrink:0;height:32px;font-size:13px}
 .hp-gh{display:flex;align-items:center;gap:8px;padding:12px 24px 6px;font-size:14px;font-weight:700;color:var(--t1);border-top:1px solid var(--bd)}
 .hp-gh .n{font-size:12px;font-weight:500;color:var(--t3)}
+.hp-gdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:2px;flex-shrink:0;vertical-align:middle;box-shadow:0 0 0 2px var(--bg-elev-1,#fff)} /* REGION-SHADE: 지도 색 구역과 같은 색 */
+.hp-msg.hp-attr{font-size:11px;color:var(--t3);padding-top:10px}
 .hp-gh button{margin-left:auto;border:none;background:none;color:var(--acc);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:4px 0}
 .hp-rk{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;margin-right:6px;border-radius:50%;background:var(--bg-elev-1);color:var(--t2);font-size:12px;font-weight:700;flex-shrink:0}
 /* 표 머리 글자: 시안은 ink3 이지만 sf2 위 라이트 대비 4.33:1(AA 4.5 미달, 계산값) → ink2(6.95:1). 다크는 ink3 도 5.09:1 이나 한 규칙으로 맞춘다 */
@@ -1089,6 +1091,10 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .pop-marker .pop-nm{display:inline-block;max-width:160px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
 .pop-marker.pm-mini{padding:4px 6px;gap:0}
 .pop-marker.pm-mini .pop-nm{display:none}
+.pop-marker .pop-gdot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none}
+.pop-marker .pop-gu{font-weight:600;opacity:.72;flex:none}
+.pop-marker.pop-guhead .pop-gu::after{content:" ·"}
+.pop-marker.pm-mini.pop-guhead .pop-gu::after{content:""}
 .pop-marker.pm-hidden{display:none!important}
 .pop-marker[data-more]::after{content:"+" attr(data-more);margin-left:4px;font-size:9px;font-weight:800;color:#fff;background:#98A2B3;border-radius:var(--radius-full);padding:1px 5px}
 @media (max-width:520px){ .pop-marker .pop-nm{max-width:96px} }
@@ -7180,6 +7186,7 @@ function renderMarkers(data){
   // MARKER-SAFE-2026-10-18: 지도 SDK 가 바뀐 뒤(네이버 → 리플릿 폴백) 남은 옛 마커를 지우다 오류가 나면 목록 그리기까지 멈췄다(미리보기 실측) — 마커마다 실패를 삼킨다.
   (window._popMarkers||[]).forEach(o=>{ try{ if(o._isNaver)o.setMap&&o.setMap(null); else o.remove&&o.remove(); }catch(_){} });
   window._popMarkers=[];
+  try{ _hpRegPolysClear(); _hpRegLegend(null); }catch(_){} // REGION-SHADE-2026-10-21: 구 색 구역도 함께 걷는다
   const _plg=document.getElementById('popLegend'); if(_plg)_plg.style.display='none'; // GGGG: 인기 범례도 함께 숨김
   const _ptc2=document.getElementById('popTitleCard'); if(_ptc2)_ptc2.style.display='none'; // MMMM: 타이틀 카드도
   const _fg=document.getElementById('fltGroup'); if(_fg)_fg.style.display=''; // Sprint PPPPP: 검색 결과가 생겼으니 필터 칩 노출
@@ -7272,6 +7279,7 @@ function showPop(btn){
   try{ _hpNote(null); }catch(_){} // HOME-PANEL-2026-10-18 (Plan 151): 인기 단지로 되돌렸으니 검색 결과 안내를 내린다
   // REGION-TOP10-2026-10-21: 지역(서울·경기) 보기 중이었다면 패널도 전국으로 되돌린다(지도와 목록이 같은 것을 보이게)
   try{ if(_HP_REG_SIDO[_hpSido]){ _hpSido = '전국'; _hpReg = 'all'; _hpRender(); } }catch(_){}
+  try{ _hpRegPolysClear(); _hpRegLegend(null); }catch(_){} // REGION-SHADE-2026-10-21
   loadPopularMarkers();
 }
 
@@ -12392,7 +12400,8 @@ function _hpRender(){
   const all = (Array.isArray(_hpData.results) ? _hpData.results : []).filter(p => p && p.aptName);
   // 칩: 받은 데이터에 1건 이상 있는 시도만(시안 지역 값은 샘플 — 없는 지역 칩은 빈 목록이 되므로 만들지 않는다)
   // REGION-TOP10-2026-10-21: 서울·경기 칩은 항상 — 누르면 구(시군구)별 최근 60일 TOP10(/search/popular-region).
-  const sidos = ['서울', '경기'];
+  // REGION-ALL-SIDO-2026-10-21: 실거래를 적재하는 9개 시도 칩은 항상 — 누르면 구(시군구)별 TOP(_hpRegShow)
+  const sidos = Object.keys(_HP_REG_SIDO);
   all.forEach(p => { const s = _hpSidoOf(p); if(s && !sidos.includes(s)) sidos.push(s); });
   if(_hpSido !== '전국' && !sidos.includes(_hpSido)) _hpSido = '전국';
   if(chips) chips.innerHTML = ['전국', ...sidos].map(s => `<button type="button" class="hp-chip" aria-pressed="${s === _hpSido}" onclick="_hpPick(${_jsonAttr(s)})">${_escHtml(s)}</button>`).join('');
@@ -12406,7 +12415,8 @@ function _hpRender(){
   }
   const rows = _hpSido === '전국' ? all : all.filter(p => _hpSidoOf(p) === _hpSido);
   if(!rows.length){ list.innerHTML = '<div class="hp-msg">지금 보여 드릴 단지가 없어요</div>'; return; }
-  const stale = _hpData.stale ? '<div class="hp-msg">집계가 잠시 늦어져 최대 며칠 전 기준이에요</div>' : '';
+  const stale = (_hpData.stale ? '<div class="hp-msg">집계가 잠시 늦어져 최대 며칠 전 기준이에요</div>' : '')
+    + (_hpSido === '전국' ? '<div class="hp-msg">위에서 시도를 누르면 구별로 거래 많은 단지 5곳씩 볼 수 있어요</div>' : '');
   // 서버 실시간 집계가 실패해 최근 거래 표본으로 대신 고른 응답(degraded) — 그 경로의 avgDealAmount 는 최근 1건 가격, dealCount60d 는
   //   약 2주 표본 건수라 "60일 평균가·거래 건수"가 아니다(popularService.buildPopularResults 대체 분기). 칸을 비우고 이유를 적는다.
   const deg = !!_hpData.degraded;
@@ -12427,8 +12437,10 @@ function _hpRender(){
 }
 // ── REGION-TOP10-2026-10-21 (운영자 요청): 서울 구별·경기 시군구별 최근 60일 거래 많은 단지 TOP10 ──
 //   서버가 매일 미리 계산(신고 이름이 A·B 로 갈린 단지는 별칭으로 정식 단지에 합침). 근거 약한 좌표는 서버가 비워 보내
-//   지도에는 빼고 목록에만 둔다. "전체"는 구마다 상위 3곳 + "10곳 모두 보기", 지도에는 모든 구의 TOP10 을 찍는다.
-const _HP_REG_SIDO = { '서울': '11', '경기': '41' };
+//   지도에는 빼고 목록에만 둔다. "전체"는 구마다 상위 5곳 + "10곳 모두 보기", 지도에도 구마다 5곳(2026-10-21 운영자 "구별 TOP5"
+//   — 전 구 TOP10 을 찍으면 겹침 정리로 1위만 남아 구별로 안 보였다). 9개 시도 전부(REGION-ALL-SIDO).
+const _HP_REG_SIDO = { '서울': '11', '경기': '41', '인천': '28', '부산': '26', '대구': '27', '대전': '30', '울산': '31', '세종': '36', '충북': '43' };
+const _HP_REG_TOP = 5; // "전체"에서 구마다 보이는 수(운영자 "구별 TOP5") — 지도에도 구마다 이만큼
 let _hpReg = 'all';
 const _hpRegData = {}, _hpRegReq = {};
 function _hpRegLoad(sido){
@@ -12463,9 +12475,30 @@ function _hpRegRow(p, rank){
     + `<span class="hp-c1" style="display:flex;align-items:center"><span class="hp-rk">${rank}</span><span style="min-width:0"><span class="hp-nm">${_escHtml(name)}</span><span class="hp-rg">${_escHtml(region)}</span></span></span>`
     + `<span class="hp-pr">${price}</span><span class="hp-ct">${count}</span></button>`;
 }
+// ── REGION-SHADE-2026-10-21 (운영자 "구별로 옅은 음영 · 너무 많아서 어지럽다"): 구 경계 색 구역 ──
+//   경계 = frontend/geo/sgg-<시도>.json(scripts/build-sgg-geo.js — 통계청 SGIS 행정동 경계를 vuski/admdongkor 가 가공, CC BY 4.0).
+//   k = 맞닿은 구끼리 겹치지 않는 색 번호(0~5, 빌드 때 검사 — 같은 색 이웃 0). 못 받으면(false) 색 구역 없이 마커만.
+const _HP_GU_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#F43F5E', '#14B8A6'];
+const _HP_GEO_ATTR = '구 경계: 통계청 SGIS(공공누리 제1유형) · 가공 vuski/admdongkor(CC BY 4.0)';
+const _hpGeo = {}, _hpGeoReq = {};
+function _hpGeoLoad(sido){
+  if(_hpGeo[sido] !== undefined || _hpGeoReq[sido]) return; // false(실패)도 다시 부르지 않는다 — 렌더 → 로드 → 렌더 반복 방지
+  _hpGeoReq[sido] = fetch(`/geo/sgg-${sido}.json`, { signal: AbortSignal.timeout(15000) })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)))
+    .then(j => { _hpGeo[sido] = (j && Array.isArray(j.features) && j.features.length) ? j : false; })
+    .catch(() => { _hpGeo[sido] = false; })
+    .finally(() => { _hpGeoReq[sido] = null; if(_HP_REG_SIDO[_hpSido] === sido) _hpRegShow(); });
+}
+function _hpGuColor(sido, lawd){
+  const g = _hpGeo[sido]; if(!g) return '';
+  const f = g.features.find(x => x.properties && x.properties.c === lawd);
+  return f ? _HP_GU_COLORS[(Number(f.properties.k) || 0) % _HP_GU_COLORS.length] : '';
+}
+function _hpGuDot(col){ return col ? `<span class="hp-gdot" style="background:${col}" aria-hidden="true"></span>` : ''; }
 function _hpRegShow(){
   const sido = _HP_REG_SIDO[_hpSido]; const list = document.getElementById('hpList'), sub = document.getElementById('hpSub');
   if(!sido || !list) return;
+  _hpGeoLoad(sido);
   const d = _hpRegData[sido];
   if(!d){
     _hpRegChips(null);
@@ -12474,59 +12507,130 @@ function _hpRegShow(){
   }
   const groups = d.groups || [];
   if(_hpReg !== 'all' && !groups.some(g => g.lawdCd === _hpReg)) _hpReg = 'all';
-  _hpRegChips(groups);
+  // 시군구가 하나뿐인 시도(세종)는 구 칩 없이 바로 그 목록
+  if(groups.length === 1) _hpReg = groups[0].lawdCd;
+  _hpRegChips(groups.length > 1 ? groups : null);
   const w = d.window || {};
   if(sub) sub.title = `집계 기간은 ${String(w.since || '').replace(/-/g,'.')}부터 ${String(w.until || '').replace(/-/g,'.')}까지예요. 같은 단지가 신고 이름 둘로 나뉜 경우 하나로 합쳐 세요.`;
+  const unit = sido === '41' ? '시군구' : '구·군';
+  const geoOk = !!_hpGeo[sido];
+  const attr = geoOk ? `<div class="hp-msg hp-attr">${_escHtml(_HP_GEO_ATTR)}</div>` : '';
   let html = '', markers = [];
   if(_hpReg === 'all'){
     const byDeals = groups.slice().sort((a, b) => (b.deals60d || 0) - (a.deals60d || 0));
-    html = `<div class="hp-msg">${_escHtml(d.sidoName || _hpSido)} ${groups.length}개 ${sido === '11' ? '구' : '시군구'}의 최근 60일 거래 많은 단지예요. 거래가 많은 지역 순이에요.</div>`
-      + byDeals.map(g => `<div class="hp-gh">${_escHtml(_hpRegShort(g.label))}<span class="n">60일 거래 ${Number(g.deals60d || 0).toLocaleString()}건</span>`
+    html = `<div class="hp-msg">${_escHtml(d.sidoName || _hpSido)} ${groups.length}개 ${unit}마다 최근 60일 거래 많은 단지 ${_HP_REG_TOP}곳이에요. 거래가 많은 지역 순이에요.`
+      + (geoOk ? ` 지도의 색 구역이 ${unit}이고, 구마다 1위 단지만 표시해요. 구역이나 아래 이름을 누르면 그 ${unit} 순위를 지도에 모두 보여 드려요.` : '') + '</div>'
+      + byDeals.map(g => `<div class="hp-gh">${_hpGuDot(_hpGuColor(sido, g.lawdCd))}${_escHtml(_hpRegShort(g.label))}<span class="n">60일 거래 ${Number(g.deals60d || 0).toLocaleString()}건</span>`
         + `<button type="button" onclick="_hpRegPick(${_jsonAttr(g.lawdCd)})">${(g.results || []).length}곳 모두 보기</button></div>`
-        + (g.results || []).slice(0, 3).map((p, i) => _hpRegRow(p, i + 1)).join('')).join('');
-    groups.forEach(g => (g.results || []).forEach((p, i) => markers.push(Object.assign({ _rank: i + 1 }, p))));
+        + (g.results || []).slice(0, _HP_REG_TOP).map((p, i) => _hpRegRow(p, i + 1)).join('')).join('') + attr;
+    // 지도: 구마다 1위만(전 구 TOP5 를 찍으면 서울만 125개 — 겹침 정리로 숫자만 남아 무슨 뜻인지 알 수 없었다)
+    groups.forEach(g => { const p = (g.results || [])[0]; if(p) markers.push(Object.assign({ _rank: 1, _gu: _hpRegShort(g.label), _col: _hpGuColor(sido, g.lawdCd) }, p)); });
   } else {
     const g = groups.find(x => x.lawdCd === _hpReg);
     const rows = (g && g.results) || [];
     html = rows.length
-      ? `<div class="hp-msg">${_escHtml(g.label)} 최근 60일 거래 많은 단지 ${rows.length}곳이에요(이 지역 60일 거래 ${Number(g.deals60d || 0).toLocaleString()}건).</div>` + rows.map((p, i) => _hpRegRow(p, i + 1)).join('')
+      ? `<div class="hp-msg">${_hpGuDot(_hpGuColor(sido, g.lawdCd))}${_escHtml(g.label)} 최근 60일 거래 많은 단지 ${rows.length}곳이에요(이 지역 60일 거래 ${Number(g.deals60d || 0).toLocaleString()}건).</div>` + rows.map((p, i) => _hpRegRow(p, i + 1)).join('') + attr
       : '<div class="hp-msg">이 지역은 최근 60일 거래가 없어요</div>';
     rows.forEach((p, i) => markers.push(Object.assign({ _rank: i + 1 }, p)));
   }
   list.innerHTML = html;
-  _hpRegMarkers(markers);
+  _hpRegMarkers(markers, { sido, sel: _hpReg, unit, label: _hpReg === 'all' ? '' : _hpRegShort((groups.find(x => x.lawdCd === _hpReg) || {}).label) });
 }
 function _hpRegPick(code){
   _hpReg = code; _hpRegShow();
-  try{ const b = [...document.querySelectorAll('#hpChips2 .hp-chip')].find(x => x.getAttribute('aria-pressed') === 'true'); if(b){ b.focus(); b.scrollIntoView({ block:'nearest', inline:'center' }); } }catch(_){}
+  try{ const b = [...document.querySelectorAll('#hpChips2 .hp-chip')].find(x => x.getAttribute('aria-pressed') === 'true'); if(b){ b.focus({ preventScroll: true }); b.scrollIntoView({ block:'nearest', inline:'center' }); } }catch(_){}
 }
-// 지도: 기존 인기 마커(_popMarkers)를 지우고 지역 TOP10 을 같은 모양(.pop-marker — 겹침 정리·클릭 시트 공용)으로 찍은 뒤 그 범위로 맞춘다
-function _hpRegMarkers(list){
+// 지도 범례(#popLegend) — 지역 보기 동안 문구를 바꾸고, 인기 단지로 돌아갈 때(null) 원래 문구로 되돌린다
+function _hpRegLegend(text){
+  const lg = document.getElementById('popLegend'); if(!lg) return;
+  if(lg.dataset.origText === undefined){ lg.dataset.origText = lg.textContent; lg.dataset.origTitle = lg.title || ''; }
+  if(text === null){ lg.textContent = lg.dataset.origText; lg.title = lg.dataset.origTitle; return; }
+  lg.textContent = text; lg.title = `${text} · ${_HP_GEO_ATTR}`; lg.style.display = '';
+}
+function _hpRegPolysClear(){
+  (window._regPolys || []).forEach(o => { try{ if(o._isNaver) o.setMap && o.setMap(null); else o.remove && o.remove(); }catch(_){} });
+  window._regPolys = [];
+}
+// 구 색 구역 그리기 — 반환: 맞출 범위 [[남, 서], [북, 동]](전체면 시도 전체, 고른 구면 그 구) 또는 null
+function _hpRegPolys(sido, sel){
+  _hpRegPolysClear();
+  const geo = _hpGeo[sido]; if(!geo || typeof mapObj === 'undefined' || !mapObj) return null;
+  const isNaver = !!(mapObj._isNaver && window.naver && naver.maps && naver.maps.Polygon);
+  if(!isNaver && !window.L) return null;
+  const dark = document.documentElement.getAttribute('data-theme') === 'dark';
+  let b = null;
+  const ext = (ring) => ring.forEach(([x, y]) => { if(!b) b = [[y, x], [y, x]]; b[0][0] = Math.min(b[0][0], y); b[0][1] = Math.min(b[0][1], x); b[1][0] = Math.max(b[1][0], y); b[1][1] = Math.max(b[1][1], x); });
+  geo.features.forEach(f => {
+    const pr = f.properties || {}; const col = _HP_GU_COLORS[(Number(pr.k) || 0) % _HP_GU_COLORS.length];
+    const isSel = sel === pr.c, all = sel === 'all';
+    const fo = all ? (dark ? 0.16 : 0.11) : (isSel ? (dark ? 0.22 : 0.16) : 0.03);
+    const so = all ? 0.55 : (isSel ? 0.95 : 0.22);
+    const sw = isSel ? 2.5 : 1.2;
+    const parts = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates : [];
+    parts.forEach(rings => {
+      if(!rings || !rings[0]) return;
+      if(all || isSel) ext(rings[0]);
+      // 고른 구를 다시 눌러도 그대로(실수로 풀리지 않게) — 다른 구를 누르면 그 구로
+      const pick = () => { if(!isSel) _hpRegPick(pr.c); };
+      if(isNaver){
+        const pg = new naver.maps.Polygon({ map: mapObj, paths: rings.map(r => r.map(([x, y]) => new naver.maps.LatLng(y, x))),
+          fillColor: col, fillOpacity: fo, strokeColor: col, strokeOpacity: so, strokeWeight: sw, clickable: true, zIndex: isSel ? 2 : 1 });
+        naver.maps.Event.addListener(pg, 'click', pick);
+        naver.maps.Event.addListener(pg, 'mouseover', () => { try{ pg.setOptions({ fillOpacity: fo + 0.08 }); }catch(_){} });
+        naver.maps.Event.addListener(pg, 'mouseout', () => { try{ pg.setOptions({ fillOpacity: fo }); }catch(_){} });
+        pg._isNaver = true; window._regPolys.push(pg);
+      } else {
+        const pg = L.polygon(rings.map(r => r.map(([x, y]) => [y, x])), { color: col, opacity: so, weight: sw, fillColor: col, fillOpacity: fo });
+        pg.on('click', pick);
+        pg.on('mouseover', () => pg.setStyle({ fillOpacity: fo + 0.08 }));
+        pg.on('mouseout', () => pg.setStyle({ fillOpacity: fo }));
+        if(pr.n) pg.bindTooltip(String(pr.n), { sticky: true });
+        pg.addTo(mapObj); window._regPolys.push(pg);
+      }
+    });
+  });
+  return b;
+}
+// 지도: 기존 인기 마커(_popMarkers)를 지우고 지역 단지를 같은 모양(.pop-marker — 겹침 정리·클릭 시트 공용)으로 찍은 뒤 맞춘다.
+//   전체 = 구 색 구역 + 구마다 1위(색 점 · 구 이름 · 단지명) · 고른 구 = 그 구만 진하게 + TOP10 순위 숫자.
+function _hpRegMarkers(list, o){
+  o = o || {};
   try{
     if(typeof mapObj === 'undefined' || !mapObj) return;
-    (window._popMarkers || []).forEach(o => { try{ if(o._isNaver) o.setMap && o.setMap(null); else o.remove && o.remove(); }catch(_){} });
+    (window._popMarkers || []).forEach(m => { try{ if(m._isNaver) m.setMap && m.setMap(null); else m.remove && m.remove(); }catch(_){} });
     window._popMarkers = [];
     _popularMarkersLoaded = true; // 지역 보기 동안 전국 인기 마커가 다시 얹히지 않게(전국 칩·인기 단지 다시 보기에서 풀린다)
+    const box = o.sido ? _hpRegPolys(o.sido, o.sel || 'all') : null;
+    if(o.sido) _hpRegLegend(o.sel === 'all'
+      ? (box ? `색 구역은 ${o.unit || '구'}예요 · 구마다 최근 60일 거래가 가장 많은 단지 1곳 · 구역을 누르면 그 ${o.unit || '구'} 순위` : `구마다 최근 60일 거래가 가장 많은 단지 1곳이에요`)
+      : `${o.label || ''} 최근 60일 거래 많은 단지 · 숫자는 순위예요`);
     const pts = list.filter(p => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)) && p.lat && p.lng);
-    if(!pts.length) return;
     const isNaver = !!(mapObj._isNaver && window.naver && naver.maps);
     pts.forEach(p => {
       const nm = String(p.displayName || _dispAptName(p.aptName, p.umdNm) || '');
       const arg = { aptName:p.aptName, sigungu:p.sigungu, umdNm:p.umdNm, lawdCd:p.lawdCd, buildYear:p.buildYear, recentDealDate:p.recentDealDate, aptSeq:p.aptSeq || null, lat:p.lat, lng:p.lng };
       const pj = _jsonAttr(arg);
-      const html = `<div class="pop-marker" ondblclick='goSearchResult(${pj})'><span class="pop-rank">${p._rank}</span><span class="pop-nm">${_escHtml(nm.slice(0,12))}</span></div>`;
+      const head = p._gu
+        ? `${p._col ? `<span class="pop-gdot" style="background:${p._col}"></span>` : ''}<span class="pop-gu">${_escHtml(p._gu)}</span>`
+        : `<span class="pop-rank">${p._rank}</span>`;
+      const html = `<div class="pop-marker${p._gu ? ' pop-guhead' : ''}" ondblclick='goSearchResult(${pj})'>${head}<span class="pop-nm">${_escHtml(nm.slice(0,12))}</span></div>`;
+      const title = p._gu ? `${p._gu} 1위 ${nm}` : `${p._rank}위 ${nm}`;
       if(isNaver){
-        const ov = new naver.maps.Marker({ position: new naver.maps.LatLng(p.lat, p.lng), map: mapObj, title: nm, icon: { content: html, anchor: new naver.maps.Point(0, 0) } });
+        const ov = new naver.maps.Marker({ position: new naver.maps.LatLng(p.lat, p.lng), map: mapObj, title, zIndex: 100, icon: { content: html, anchor: new naver.maps.Point(0, 0) } });
         naver.maps.Event.addListener(ov, 'click', () => { if(_mapSheetTry('pop', p)) return; goSearchResult(arg); });
         ov._isNaver = true; window._popMarkers.push(ov);
       } else if(window.L){
-        const m = L.marker([p.lat, p.lng], { title: nm, icon: L.divIcon({ className: '', html, iconAnchor: [0, 0] }) });
+        const m = L.marker([p.lat, p.lng], { title, icon: L.divIcon({ className: '', html, iconAnchor: [0, 0] }) });
         m.on('click', () => { if(!_mapSheetTry('pop', p)) goSearchResult(arg); });
         m.addTo(mapObj); window._popMarkers.push(m);
       }
     });
-    if(isNaver){ const nb = new naver.maps.LatLngBounds(); pts.forEach(p => nb.extend(new naver.maps.LatLng(p.lat, p.lng))); mapObj.fitBounds(nb); }
-    else if(window.L){ mapObj.fitBounds(L.latLngBounds(pts.map(p => [p.lat, p.lng])), { padding: [40, 40] }); }
+    // 맞추기: 색 구역이 있으면 그 범위(고른 구 / 시도 전체), 없으면 마커 범위
+    const bb = box || (pts.length ? pts.reduce((b, p) => { const y = Number(p.lat), x = Number(p.lng); if(!b) return [[y, x], [y, x]]; b[0][0] = Math.min(b[0][0], y); b[0][1] = Math.min(b[0][1], x); b[1][0] = Math.max(b[1][0], y); b[1][1] = Math.max(b[1][1], x); return b; }, null) : null);
+    if(bb){
+      if(isNaver) mapObj.fitBounds(new naver.maps.LatLngBounds(new naver.maps.LatLng(bb[0][0], bb[0][1]), new naver.maps.LatLng(bb[1][0], bb[1][1])), { top: 30, right: 30, bottom: 30, left: 30 });
+      else if(window.L) mapObj.fitBounds(L.latLngBounds(bb), { padding: [30, 30] });
+    }
     try{ scheduleDeclutter(); }catch(_){}
   }catch(_){}
 }
@@ -12534,7 +12638,7 @@ function _hpPick(s){
   const wasReg = !!_HP_REG_SIDO[_hpSido];
   _hpSido = s; _hpReg = 'all';
   if(_HP_REG_SIDO[s]) _hpRegLoad(_HP_REG_SIDO[s]);
-  else if(wasReg) { try{ showPop(); }catch(_){} }
+  else if(wasReg) { try{ _hpRegPolysClear(); _hpRegLegend(null); showPop(); }catch(_){} }
   _hpRender();
   // 칩 줄을 다시 그리면 누른 버튼이 사라져 키보드 포커스가 body 로 떨어진다 — 같은 지역 칩으로 되돌린다
   try{ const b = [...document.querySelectorAll('#hpChips .hp-chip')].find(x => x.textContent === s); if(b) b.focus(); }catch(_){}

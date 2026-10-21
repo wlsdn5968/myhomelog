@@ -42,7 +42,7 @@ test('trustedCoord: 검증된 출처는 통과 · 키워드 검색 좌표는 장
   assert.equal(rp.trustedCoord({ lat: 10, lng: 10, source: 'kakao-v' }, 'x'), false);
 });
 
-test('라우트·cron 배선: /search/popular-region(서울·경기만, 스냅샷→즉석 계산) · retention 에서 매일 저장', () => {
+test('라우트·cron 배선: /search/popular-region(적재 9개 시도, 스냅샷→즉석 계산) · retention 에서 매일 저장', () => {
   const s = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
   assert.match(s, /router\.get\('\/popular-region', async \(req, res\) => \{/);
   assert.match(s, /if \(!rp\.SIDOS\[sido\]\) return res\.status\(400\)/);
@@ -50,16 +50,83 @@ test('라우트·cron 배선: /search/popular-region(서울·경기만, 스냅�
   const c = fs.readFileSync(path.join(__dirname, '../routes/cron.js'), 'utf8');
   assert.match(c, /require\('\.\.\/services\/regionPopularService'\)\.computeAndStoreAll\(\)/);
   assert.equal(rp.SNAP_KEY('11'), 'popular:region:v5:11');
+  assert.deepEqual(Object.keys(rp.SIDOS).sort(), ['11', '26', '27', '28', '30', '31', '36', '41', '43'], 'REGION-ALL-SIDO: 실거래 적재 시도 전부');
+  for (const k of Object.keys(rp.SIDOS)) assert.ok(rp.lawdsOfSido(k).length >= 1, `${k} 시군구 코드 없음`);
+  assert.match(fs.readFileSync(path.join(__dirname, '../services/regionPopularService.js'), 'utf8'), /if \(Date\.now\(\) - t0 > CRON_BUDGET_MS\) \{ out\[sido\] = 'skip\(time\)'; continue; \}/);
 });
 
-test('프런트: 서울·경기 칩은 항상 · 구 칩 줄 · 전체는 구마다 3곳+모두 보기 · 지도 마커는 같은 .pop-marker · 전국으로 되돌리면 인기 마커 복귀', () => {
-  assert.match(html, /const sidos = \['서울', '경기'\];/);
+test('프런트: 적재 9개 시도 칩은 항상 · 구 칩 줄 · 전체 목록은 구마다 5곳+모두 보기 · 지도는 구마다 1위만 · 전국으로 되돌리면 인기 마커 복귀', () => {
+  assert.match(html, /const sidos = Object\.keys\(_HP_REG_SIDO\);/);
+  assert.match(html, /const _HP_REG_TOP = 5;/);
+  // REGION-SHADE-2026-10-21 (운영자 "너무 많아서 어지럽다"): 전체 보기 지도는 구마다 1위 1곳(색 점·구 이름)
+  assert.match(html, /groups\.forEach\(g => \{ const p = \(g\.results \|\| \[\]\)\[0\]; if\(p\) markers\.push\(Object\.assign\(\{ _rank: 1, _gu: _hpRegShort\(g\.label\), _col: _hpGuColor\(sido, g\.lawdCd\) \}, p\)\); \}\);/);
+  assert.match(html, /if\(groups\.length === 1\) _hpReg = groups\[0\]\.lawdCd;/);
   assert.match(html, /<div class="hp-chips hp-chips2" id="hpChips2" role="group" aria-label="구·시군구 고르기" hidden><\/div>/);
   assert.match(html, /fetch\(`\$\{CFG\.api\}\/search\/popular-region\?sido=\$\{sido\}`/);
-  assert.match(html, /\(g\.results \|\| \[\]\)\.slice\(0, 3\)\.map\(\(p, i\) => _hpRegRow\(p, i \+ 1\)\)/);
-  assert.match(html, /function _hpRegMarkers\(list\)\{/);
-  assert.match(html, /else if\(wasReg\) \{ try\{ showPop\(\); \}catch\(_\)\{\} \}/);
+  assert.match(html, /\(g\.results \|\| \[\]\)\.slice\(0, _HP_REG_TOP\)\.map\(\(p, i\) => _hpRegRow\(p, i \+ 1\)\)/);
+  assert.match(html, /function _hpRegMarkers\(list, o\)\{/);
+  assert.match(html, /else if\(wasReg\) \{ try\{ _hpRegPolysClear\(\); _hpRegLegend\(null\); showPop\(\); \}catch\(_\)\{\} \}/);
   assert.match(html, /try\{ if\(_HP_REG_SIDO\[_hpSido\]\)\{ _hpSido = '전국'; _hpReg = 'all'; _hpRender\(\); \} \}catch\(_\)\{\}/);
+});
+
+test('REGION-SHADE: 구 경계 파일 — 9개 시도 전부, 우리 시군구 코드와 1:1, 색 번호 0~5, 출처 표기', () => {
+  for (const sido of Object.keys(rp.SIDOS)) {
+    const g = JSON.parse(fs.readFileSync(path.join(__dirname, `../../frontend/geo/sgg-${sido}.json`), 'utf8'));
+    assert.deepEqual(g.features.map((f) => f.properties.c), rp.lawdsOfSido(sido), `${sido} 코드 불일치`);
+    assert.match(g.attribution, /통계청 SGIS\(공공누리 제1유형\).*vuski\/admdongkor.*CC BY 4\.0/);
+    for (const f of g.features) {
+      assert.ok(Number.isInteger(f.properties.k) && f.properties.k >= 0 && f.properties.k <= 5, `${f.properties.c} 색 번호`);
+      assert.ok(['Polygon', 'MultiPolygon'].includes(f.geometry.type));
+      assert.ok(f.properties.n, '구 이름');
+    }
+  }
+  const v = fs.readFileSync(path.join(__dirname, '../../vercel.json'), 'utf8');
+  assert.match(v, /"src": "\/geo\/sgg-\(\\\\d\{2\}\)\\\\\.json", "dest": "\/frontend\/geo\/sgg-\$1\.json"/);
+  assert.ok(v.indexOf('/geo/sgg-') < v.indexOf('"dest": "/frontend/404.html"'), '404 잡이보다 앞');
+});
+
+test('REGION-SHADE: 색 구역 — 전체는 모두 옅게, 고른 구만 진하게·나머지 흐리게, 범위는 고른 구 · 실패면 다시 부르지 않음 · 검색·인기 복귀 때 걷기', () => {
+  assert.match(html, /if\(_hpGeo\[sido\] !== undefined \|\| _hpGeoReq\[sido\]\) return;/);
+  assert.match(html, /\.catch\(\(\) => \{ _hpGeo\[sido\] = false; \}\)/);
+  // renderMarkers(검색 결과)·showPop(인기 단지로) 둘 다 색 구역과 범례를 되돌린다
+  assert.equal((html.match(/_hpRegPolysClear\(\); _hpRegLegend\(null\);/g) || []).length, 3);
+  const vm = require('node:vm');
+  const fn = (name) => { const m = html.match(new RegExp(`function ${name}\\([^)]*\\)\\{[\\s\\S]*?\\n\\}`)); assert.ok(m, name); return m[0]; };
+  const made = [];
+  const ctx = {
+    window: {}, document: { documentElement: { getAttribute: () => null } },
+    naver: { maps: {
+      LatLng: function (y, x) { this.y = y; this.x = x; },
+      Polygon: function (o) { this.o = o; made.push(this); this.setMap = () => {}; this.setOptions = () => {}; },
+      Event: { addListener: () => {} },
+    } },
+  };
+  ctx.window.naver = ctx.naver;
+  vm.createContext(ctx);
+  const geo = { features: [
+    { properties: { c: 'A', k: 0, n: '가구' }, geometry: { type: 'Polygon', coordinates: [[[127, 37], [127.1, 37], [127.1, 37.1], [127, 37]]] } },
+    { properties: { c: 'B', k: 1, n: '나구' }, geometry: { type: 'MultiPolygon', coordinates: [[[[127.1, 37], [127.2, 37], [127.2, 37.2], [127.1, 37]]], [[[126.5, 37.5], [126.6, 37.5], [126.6, 37.6], [126.5, 37.5]]]] } },
+  ] };
+  vm.runInContext([
+    "const _HP_GU_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#8B5CF6', '#F43F5E', '#14B8A6'];",
+    'var mapObj = { _isNaver: true };', 'var _hpGeo = { "11": ' + JSON.stringify(geo) + ' };', 'function _hpRegPick(){}',
+    fn('_hpRegPolysClear'), fn('_hpRegPolys'), 'globalThis.__polys = _hpRegPolys;',
+  ].join('\n'), ctx);
+  const all = ctx.__polys('11', 'all');
+  assert.equal(made.length, 3, 'MultiPolygon 은 조각마다 하나');
+  assert.ok(made.every((p) => p.o.fillOpacity <= 0.16), '전체는 옅게');
+  assert.equal(JSON.stringify(all), '[[37,126.5],[37.6,127.2]]', '전체 범위 = 시도 전체');
+  made.length = 0;
+  const one = ctx.__polys('11', 'A');
+  const a = made.find((p) => p.o.fillColor === '#3B82F6'), others = made.filter((p) => p !== a);
+  assert.ok(a.o.fillOpacity > others[0].o.fillOpacity && a.o.strokeWeight > others[0].o.strokeWeight, '고른 구만 진하게');
+  assert.ok(others.every((p) => p.o.fillOpacity <= 0.03));
+  assert.equal(JSON.stringify(one), '[[37,127],[37.1,127.1]]', '범위 = 고른 구');
+  made.length = 0;
+  ctx.window._regPolys = [];
+  vm.runInContext('_hpGeo["11"] = false;', ctx);
+  assert.equal(ctx.__polys('11', 'all'), null, '경계를 못 받으면 색 구역 없이(마커 범위로 맞춘다)');
+  assert.equal(made.length, 0);
 });
 
 test('순위: 하루 10건 이상인 날만 2건으로 센다 — 하루에 몰린 일괄 신고는 1위가 못 되고, 하루 5~9건인 일반 단지는 실제 건수로', () => {

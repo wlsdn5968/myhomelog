@@ -91,6 +91,7 @@
     { "src": "/sitemaps/(.*)", "dest": "/api/index.js" },
     { "src": "/robots\\.txt", "dest": "/frontend/robots.txt", "headers": { "Content-Type": "text/plain" } },
     { "src": "/manifest\\.json", "dest": "/frontend/manifest.json", "headers": { "Content-Type": "application/manifest+json" } },
+    { "src": "/geo/sgg-(\\d{2})\\.json", "dest": "/frontend/geo/sgg-$1.json", "headers": { "Content-Type": "application/json", "Cache-Control": "public, max-age=604800", "X-Content-Type-Options": "nosniff" } },
     { "src": "/sw\\.js", "dest": "/frontend/sw.js", "headers": { "Content-Type": "application/javascript", "Cache-Control": "no-cache" } },
     { "src": "/(icon-192|icon-512|icon-512-maskable|og)\\.png", "dest": "/frontend/$1.png", "headers": { "Content-Type": "image/png", "Cache-Control": "public, max-age=86400" } },
     {

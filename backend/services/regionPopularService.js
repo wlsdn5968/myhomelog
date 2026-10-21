@@ -23,7 +23,10 @@ const { getSnapshot, putSnapshot } = require('./snapshotStore');
 const WINDOW_DAYS = 60;
 const TOP_N = 10;
 const BURST_DAY = 10; // 한 단지 하루 거래가 이 이상이면 일괄 신고로 보고 순위에서 2건으로 센다
-const SIDOS = { '11': '서울', '41': '경기' };
+// REGION-ALL-SIDO-2026-10-21 (운영자 "서울·경기 등등 구별로 TOP5"): 실거래를 적재하는 시도 전부(2026-10-21 실측 9곳 —
+//   molit_transactions 의 lawd_cd 앞 2자리와 LAWD_CODES 가 같은 범위). 광주(29)는 적재 대상이 아니라 없다.
+const SIDOS = { '11': '서울', '41': '경기', '28': '인천', '26': '부산', '27': '대구', '30': '대전', '31': '울산', '36': '세종', '43': '충북' };
+const CRON_BUDGET_MS = 150000; // retention 의 다른 일(경신 워밍·브리핑·금리)이 남도록 — 넘으면 남은 시도는 요청 때 즉석 계산
 const SNAP_KEY = (sido) => `popular:region:v5:${sido}`; // v5: 일괄 등기 단지 제외·BURST-CAP(하루 10건 이상)·JIBUN-ALIAS(2026-10-21)
 
 const _cleanName = (n) => String(n || '').replace(/^[가-힣0-9]{1,8}(동|리|가),\s*/, '');
@@ -213,8 +216,9 @@ async function computeSido(sido, { concurrency = 6 } = {}) {
 
 /** cron: 시도별 계산·저장. 시군구 실패가 절반을 넘으면 저장하지 않는다(어제 값 유지). */
 async function computeAndStoreAll() {
-  const out = {};
+  const out = {}; const t0 = Date.now();
   for (const sido of Object.keys(SIDOS)) {
+    if (Date.now() - t0 > CRON_BUDGET_MS) { out[sido] = 'skip(time)'; continue; }
     try {
       const p = await computeSido(sido);
       const total = lawdsOfSido(sido).length;
@@ -222,6 +226,7 @@ async function computeAndStoreAll() {
       else out[sido] = `skip(${p.groups.length}/${total})`;
     } catch (e) { out[sido] = `err:${e.message}`; }
   }
+  out.ms = Date.now() - t0;
   return out;
 }
 

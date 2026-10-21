@@ -99,26 +99,29 @@ test('Plan 151 ①: 행 가격은 avgDealAmount(만원) → 억, 값이 없으�
   assert.ok(runRender({ results: SAMPLE.results }).els.hpSub.title.startsWith('최근 21일'), 'window 가 없어도 선정 기준 문장은 남는다');
 });
 
-// REGION-TOP10-2026-10-21 (운영자 요청 "서울이 아예 없으니 허접해 보인다"): 계약 변경 —
-//   서울·경기 칩은 전국 12곳에 없어도 항상 있고, 누르면 구별 TOP10(_hpRegShow)으로 넘어간다. 그 밖 시도는 종전대로 데이터에 있을 때만.
-test('Plan 151 ② (2026-10-21 개정): 서울·경기 칩은 항상, 그 밖 시도는 데이터에 있을 때만 · 서울·경기는 구별 목록으로', () => {
+// REGION-TOP10-2026-10-21 → REGION-ALL-SIDO-2026-10-21 (운영자 "서울·경기 등등 구별로 TOP5"): 계약 변경 —
+//   실거래 적재 9개 시도 칩은 전국 12곳에 없어도 항상 있고, 누르면 구별 목록(_hpRegShow)으로 넘어간다.
+//   그 밖 시도(적재 대상이 아닌 곳)는 종전대로 데이터에 있을 때만 · 받은 12곳 안에서 거른다.
+test('Plan 151 ② (2026-10-21 개정): 적재 9개 시도 칩은 항상 · 누르면 구별 목록으로 · 그 밖 시도는 데이터에 있을 때만', () => {
   const { els } = runRender(SAMPLE);
   const c = els.hpChips.innerHTML;
-  for (const s of ['전국', '서울', '경기', '부산', '인천']) assert.ok(c.includes(`>${s}</button>`), `${s} 칩이 없다`);
-  assert.ok(!c.includes('>대구</button>'), '데이터에 없는 지방 시도 칩이 생겼다');
+  for (const s of ['전국', '서울', '경기', '인천', '부산', '대구', '대전', '울산', '세종', '충북']) assert.ok(c.includes(`>${s}</button>`), `${s} 칩이 없다`);
+  assert.ok(!c.includes('>광주</button>'), '적재 대상이 아니고 데이터에도 없는 시도 칩이 생겼다');
   assert.ok(c.includes('aria-pressed="true"'));
   assert.equal(els.hpChips2.hidden, true, '전국에서는 구 칩 줄을 숨긴다');
-  // 칩 필터(지방 시도)는 종전대로 받은 12곳 안에서
-  const busan = runRender(SAMPLE, '부산').els.hpList.innerHTML;
-  assert.ok(busan.includes('대연롯데캐슬') && !busan.includes('벽적골우성'));
-  // 서울·경기는 구별 목록으로 넘긴다(전국 12곳에 서울이 0건이어도)
-  const seoul = runRender(SAMPLE, '서울');
-  assert.equal(seoul.sido, '서울'); assert.equal(seoul.regShown, 1);
-  // 사라진 지방 시도가 선택돼 있으면 전국으로 되돌린다
-  assert.equal(runRender(SAMPLE, '대구').sido, '전국');
-  // 시도가 하나뿐이어도 서울·경기 칩은 남는다
+  assert.ok(els.hpList.innerHTML.includes('시도를 누르면 구별로 거래 많은 단지 5곳씩'), '전국 목록 위에 구별 보기 안내');
+  for (const s of ['서울', '부산', '대구']) {
+    const r = runRender(SAMPLE, s);
+    assert.equal(r.sido, s); assert.equal(r.regShown, 1, `${s} 는 구별 목록으로`);
+  }
+  // 적재 대상이 아닌 시도: 데이터에 있으면 칩 + 받은 12곳 안에서 거르기, 없는데 선택돼 있으면 전국으로
+  const gj = { results: [...SAMPLE.results, { aptName: '광주테스트', lawdCd: '29110', sigungu: '동구', umdNm: '계림동', avgDealAmount: 30000, dealCount60d: 9 }] };
+  const g = runRender(gj, '광주');
+  assert.ok(g.els.hpChips.innerHTML.includes('>광주</button>'));
+  assert.ok(g.els.hpList.innerHTML.includes('광주테스트') && !g.els.hpList.innerHTML.includes('벽적골우성'));
+  assert.equal(runRender(SAMPLE, '광주').sido, '전국');
   const one = runRender({ results: [SAMPLE.results[0]] });
-  assert.ok(one.els.hpChips.innerHTML.includes('>서울</button>'));
+  assert.ok(one.els.hpChips.innerHTML.includes('>충북</button>'));
 });
 
 test('Plan 151: 대체 경로(degraded) 응답이면 평균가·건수 칸을 비운다 — 그 값은 최근 1건 가격·2주 표본 건수', () => {
