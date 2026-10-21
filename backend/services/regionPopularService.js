@@ -23,7 +23,7 @@ const { getSnapshot, putSnapshot } = require('./snapshotStore');
 const WINDOW_DAYS = 60;
 const TOP_N = 10;
 const SIDOS = { '11': '서울', '41': '경기' };
-const SNAP_KEY = (sido) => `popular:region:v2:${sido}`; // v2: BURST-CAP 순위(2026-10-21)
+const SNAP_KEY = (sido) => `popular:region:v3:${sido}`; // v3: BURST-CAP·JIBUN-ALIAS(2026-10-21)
 
 const _cleanName = (n) => String(n || '').replace(/^[가-힣0-9]{1,8}(동|리|가),\s*/, '');
 const _core = (n) => String(n || '').replace(/\s+/g, '').replace(/\([^)]*\)/g, '').replace(/(아파트|APT)$/i, '').toLowerCase();
@@ -49,7 +49,7 @@ async function _fetchLawdDeals(admin, lawd, sinceIso) {
   const rows = [];
   for (let from = 0; from < 20000; from += 1000) {
     const { data, error } = await admin.from('molit_transactions')
-      .select('apt_name, sigungu, umd_nm, lawd_cd, apt_seq, build_year, deal_date, deal_amount')
+      .select('apt_name, sigungu, umd_nm, lawd_cd, apt_seq, build_year, deal_date, deal_amount, jibun')
       .eq('lawd_cd', lawd).gte('deal_date', sinceIso)
       .order('deal_date', { ascending: false }).order('id', { ascending: true })
       .range(from, from + 999);
@@ -61,12 +61,37 @@ async function _fetchLawdDeals(admin, lawd, sinceIso) {
 }
 
 /** 한 시군구의 60일 TOP N(별칭 합침). 좌표는 아직 없음. */
+// JIBUN-ALIAS-2026-10-21: 한 단지가 건설사별 이름으로 나뉘어 신고되는데(벽적골우성·벽적골두산·벽적골한신 — 지번 973-3,
+//   공동주택 정보 "벽적골두산한신우성" 1,842세대) 별칭 함수는 건축년도 = 사용승인 연도를 요구해 1998년인 우성만 빠졌다.
+//   전국 11쌍(서울·경기 7). 같은 동·같은 지번에 별칭으로 묶인 이름이 있고, 건축년도 차 1년 이내이며, 이 이름이 정식 이름의
+//   글자 순서 부분열(벽적골우성 ⊂ 벽적골두산한신우성)일 때만 같은 정식 이름으로 본다. 근본 수정(별칭 함수)은 plans/169 §7.
+function _isSubseq(a, b) { let i = 0; for (const ch of b) { if (ch === a[i]) i++; if (i === a.length) return true; } return a.length === 0; }
+function jibunAliases(rows, aliasMap) {
+  const anchor = new Map();   // umd|jibun → { canon, year }
+  for (const t of rows) {
+    if (!t.jibun) continue;
+    const canon = aliasMap.get(`${t.apt_name}|${t.umd_nm || ''}`);
+    if (canon) anchor.set(`${t.umd_nm || ''}|${t.jibun}`, { canon, year: Number(t.build_year) || 0 });
+  }
+  const out = new Map();      // apt_name|umd → canon
+  for (const t of rows) {
+    const k = `${t.apt_name}|${t.umd_nm || ''}`;
+    if (!t.jibun || aliasMap.has(k) || out.has(k)) continue;
+    const a = anchor.get(`${t.umd_nm || ''}|${t.jibun}`);
+    if (!a || Math.abs((Number(t.build_year) || 0) - a.year) > 1) continue;
+    const raw = _mergeCore(_cleanName(t.apt_name)), canonC = _mergeCore(a.canon);
+    if (raw.length >= 2 && raw !== canonC && _isSubseq(raw, canonC)) out.set(k, a.canon);
+  }
+  return out;
+}
+
 function rankLawd(rows, aliasMap, n = TOP_N) {
+  const jAlias = jibunAliases(rows, aliasMap);
   const g = new Map();
   for (const t of rows) {
     const raw = _cleanName(t.apt_name);
     if (!raw) continue;
-    const canon = aliasMap.get(`${t.apt_name}|${t.umd_nm || ''}`) || raw;
+    const canon = aliasMap.get(`${t.apt_name}|${t.umd_nm || ''}`) || jAlias.get(`${t.apt_name}|${t.umd_nm || ''}`) || raw;
     const k = `${canon}|${t.umd_nm || ''}`;
     let e = g.get(k);
     if (!e) {
@@ -195,4 +220,4 @@ async function readSido(sido) {
   return s ? s.payload : null;
 }
 
-module.exports = { computeSido, computeAndStoreAll, readSido, lawdsOfSido, rankLawd, trustedCoord, SIDOS, SNAP_KEY };
+module.exports = { jibunAliases, computeSido, computeAndStoreAll, readSido, lawdsOfSido, rankLawd, trustedCoord, SIDOS, SNAP_KEY };

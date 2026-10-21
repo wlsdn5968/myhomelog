@@ -49,7 +49,7 @@ test('라우트·cron 배선: /search/popular-region(서울·경기만, 스냅�
   assert.match(s, /let p = await rp\.readSido\(sido\);/);
   const c = fs.readFileSync(path.join(__dirname, '../routes/cron.js'), 'utf8');
   assert.match(c, /require\('\.\.\/services\/regionPopularService'\)\.computeAndStoreAll\(\)/);
-  assert.equal(rp.SNAP_KEY('11'), 'popular:region:v2:11');
+  assert.equal(rp.SNAP_KEY('11'), 'popular:region:v3:11');
 });
 
 test('프런트: 서울·경기 칩은 항상 · 구 칩 줄 · 전체는 구마다 3곳+모두 보기 · 지도 마커는 같은 .pop-marker · 전국으로 되돌리면 인기 마커 복귀', () => {
@@ -88,4 +88,19 @@ test('목록 합치기도 괄호 안 이름이 다르면 따로 — 후곡마을
   const R = (n) => ({ apt_name: n, umd_nm: '일산동', sigungu: '고양시일산서구', lawd_cd: '41287', apt_seq: '41287-1', build_year: 1995, deal_date: '2026-10-01', deal_amount: 30000 });
   const out = rp.rankLawd([R('후곡마을(대창)'), R('후곡마을(동양)')], new Map(), 10);
   assert.equal(out.length, 2);
+});
+
+test('지번 별칭: 같은 동·같은 지번·건축년도 1년 이내·정식 이름의 부분열이면 같은 단지(벽적골우성 → 벽적골두산한신우성), 아니면 따로', () => {
+  const T = (n, y, j, d) => ({ apt_name: n, umd_nm: '영통동', sigungu: '수원시영통구', lawd_cd: '41117', apt_seq: '41117-' + n.length, build_year: y, deal_date: d, deal_amount: 50000, jibun: j });
+  const alias = new Map([['벽적골두산|영통동', '벽적골두산한신우성'], ['벽적골한신|영통동', '벽적골두산한신우성']]);
+  const rows = [T('벽적골두산', 1997, '973-3', '2026-10-01'), T('벽적골한신', 1997, '973-3', '2026-10-02'),
+    T('벽적골우성', 1998, '973-3', '2026-10-03'), T('벽적골우성', 1998, null, '2026-09-03'),
+    T('청구', 1997, '973-3', '2026-10-04'), T('벽적골우성', 2005, '980', '2026-10-05')];
+  const j = rp.jibunAliases(rows, alias);
+  assert.equal(j.get('벽적골우성|영통동'), '벽적골두산한신우성');
+  assert.ok(!j.has('청구|영통동'), '정식 이름의 부분열이 아니면 같은 지번이어도 따로');
+  const out = rp.rankLawd(rows.slice(0, 5), alias, 10);
+  const by = Object.fromEntries(out.map((e) => [e.aptName, e.dealCount60d]));
+  assert.equal(by['벽적골두산한신우성'], 4, '지번 없는 옛 거래도 같은 이름이면 함께 합산');
+  assert.equal(by['청구'], 1);
 });
