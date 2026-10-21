@@ -890,7 +890,8 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 @keyframes siteLivePulse{0%{transform:scale(1);opacity:.45}70%{transform:scale(2.4);opacity:0}100%{transform:scale(2.4);opacity:0}}
 @media (prefers-reduced-motion:reduce){.site-live .dot::after{animation:none;opacity:0}}
 .legal-footer .site-livebar{padding:2px 0 6px}
-@media(max-width:700px){.site-livebar{padding:10px 16px 4px}.site-live{font-size:12px;padding:6px 14px}}
+@media(max-width:700px){.site-livebar{padding:10px 16px 4px}.site-live{font-size:12px;padding:6px 14px;gap:6px}}
+@media(max-width:360px){.site-live .tot,.site-live .tot+.sep,.site-live .sep:has(+.tot){display:none}} /* 아주 좁은 화면은 누적을 접는다(한 줄 유지) */
 .hp-chips{display:flex;flex-wrap:wrap;gap:8px;padding:0 24px 16px}
 .hp-chips:empty{display:none}
 .hp-chip{height:36px;padding:0 12px;border:1px solid var(--bd2);border-radius:8px;background:var(--bg-base);color:var(--t1);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
@@ -14702,23 +14703,26 @@ function _fmtSgg(s){return String(s==null?'':s).replace(/^([가-힣]+?시)([가-
    SITE-LIVE-2026-10-21 (운영자 지적): 2026-10-20 에는 임계값(지금 2명·오늘 10명 이상)을 걸어 패널 머리 한 줄로 넣었는데 사실상 안 보였다.
    이제 홈 하단 배지로 숫자를 그대로 보인다(값을 모르면 그 부분만 뺀다 — 모름을 0 으로 만들지 않는다).
    키는 탭마다 새 난수(저장 안 함), 탭이 1분 넘게 숨겨지면 빠진다. */
-window._liveN = null; window._visitsToday = null;
-function _siteLiveHtml(n, v){
+window._liveN = null; window._visitsToday = null; window._visitsTotal = null; window._visitsSince = null;
+function _siteLiveHtml(n, v, t){
   const hasN = Number.isFinite(Number(n)) && Number(n) >= 1, hasV = Number.isFinite(Number(v)) && Number(v) >= 0 && v !== null;
+  const hasT = t !== null && t !== undefined && Number.isFinite(Number(t)) && Number(t) >= 1;
   const parts = [];
   if (hasN) parts.push(`<span class="dot" aria-hidden="true"></span><span><b>${Number(n).toLocaleString()}</b>명 보는 중</span>`);
   if (hasV) parts.push(`<span>오늘 <b>${Number(v).toLocaleString()}</b>명</span>`);
+  if (hasT) parts.push(`<span class="tot">누적 <b>${Number(t).toLocaleString()}</b>명</span>`);
   return parts.join('<span class="sep" aria-hidden="true">·</span>');
 }
 function _renderLive(){
-  const n = window._liveN, v = window._visitsToday;
-  const html = _siteLiveHtml(n, v);
+  const n = window._liveN, v = window._visitsToday, t = window._visitsTotal;
+  const html = _siteLiveHtml(n, v, t);
+  const since = String(window._visitsSince || '').replace(/^(\d{4})-(\d{2})-(\d{2})$/, '$1.$2.$3');
   document.querySelectorAll('[data-site-live]').forEach(el => {
     const bar = el.parentElement;
     if (!html) { el.innerHTML = ''; if (bar) bar.hidden = true; return; }
     el.innerHTML = html;
-    el.setAttribute('aria-label', [Number(n) >= 1 ? `지금 ${n}명이 보고 있어요` : '', v != null ? `오늘 ${v}명이 방문했어요` : ''].filter(Boolean).join(', '));
-    el.title = '지금 보는 사람은 열린 탭 기준, 오늘 방문은 브라우저 기준이에요(같은 분이 다른 기기로 오면 따로 세요)';
+    el.setAttribute('aria-label', [Number(n) >= 1 ? `지금 ${n}명이 보고 있어요` : '', v != null ? `오늘 ${v}명이 방문했어요` : '', (t != null && since) ? `${since}부터 누적 ${t}명` : ''].filter(Boolean).join(', '));
+    el.title = `지금 보는 사람은 열린 탭 기준, 오늘·누적 방문은 브라우저 기준이에요(같은 분이 다른 기기로 오면 따로 세요)${since ? `. 누적은 ${since}부터 셌어요` : ''}`;
     if (bar) bar.hidden = false;
   });
 }
@@ -14727,7 +14731,9 @@ async function _loadVisitsToday(){
     const r = await fetch(`${CFG.api}/visits/today`, { signal: AbortSignal.timeout(5000) });
     const j = r.ok ? await r.json() : null;
     window._visitsToday = (j && Number.isFinite(j.today)) ? j.today : null;
-  } catch(_) { window._visitsToday = null; }
+    window._visitsTotal = (j && Number.isFinite(j.total)) ? j.total : null;
+    window._visitsSince = (j && /^\d{4}-\d{2}-\d{2}$/.test(String(j.since || ''))) ? j.since : null;
+  } catch(_) { window._visitsToday = null; window._visitsTotal = null; }
   _renderLive();
 }
 function _liveInit(tries){

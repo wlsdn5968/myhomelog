@@ -16,7 +16,7 @@ const cache = require('../cache');
 const { getSupabaseAdmin } = require('../db/client');
 const router = express.Router();
 
-const KEY = 'visits:today:v1';
+const KEY = 'visits:today:v2'; // v2: 누적(total·since) 추가 2026-10-21
 
 /** 지금 시각의 KST 날짜('YYYY-MM-DD')와 그날 0시의 UTC ISO */
 function kstDayStart(nowMs) {
@@ -26,6 +26,8 @@ function kstDayStart(nowMs) {
   return { day, startIso };
 }
 
+const TOTAL_SINCE = '2026-10-20'; // 운영 도메인 daily_visit 첫 기록(2026-10-20 23:43 KST)
+
 router.get('/today', async (req, res) => {
   const { day, startIso } = kstDayStart(Date.now());
   const hit = cache.get(KEY);
@@ -33,21 +35,23 @@ router.get('/today', async (req, res) => {
     res.set('Cache-Control', 'public, max-age=30, s-maxage=60');
     return res.json(hit);
   }
-  let today = null;
+  let today = null, total = null;
   const admin = getSupabaseAdmin();
   if (admin) {
     try {
-      const { count, error } = await admin.from('visit_attribution')
-        .select('id', { count: 'exact', head: true })
-        .eq('event', 'daily_visit')
-        .gte('created_at', startIso);
-      if (error) throw new Error(error.message);
-      today = Number.isFinite(count) ? count : null;
+      const [t, a] = await Promise.all([
+        admin.from('visit_attribution').select('id', { count: 'exact', head: true }).eq('event', 'daily_visit').gte('created_at', startIso),
+        // SITE-LIVE-TOTAL-2026-10-21: 누적 — daily_visit 은 2026-10-20 부터 쌓였다(그 전 first_load 는 탭 세션 기준이라 섞지 않는다)
+        admin.from('visit_attribution').select('id', { count: 'exact', head: true }).eq('event', 'daily_visit'),
+      ]);
+      if (t.error) throw new Error(t.error.message);
+      today = Number.isFinite(t.count) ? t.count : null;
+      if (!a.error && Number.isFinite(a.count)) total = a.count;
     } catch (e) {
       logger.warn({ err: e.message }, 'visits/today 조회 실패 — today:null');
     }
   }
-  const body = { day, today };
+  const body = { day, today, total, since: TOTAL_SINCE };
   if (today != null) {
     cache.set(KEY, body, 60);
     res.set('Cache-Control', 'public, max-age=30, s-maxage=60');

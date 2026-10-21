@@ -30,7 +30,7 @@ test('GET /api/visits/today: daily_visit 을 오늘 0시(KST) 이후로 head cou
   const orig = dbc.getSupabaseAdmin;
   const calls = [];
   try {
-    cache.del('visits:today:v1');
+    cache.del('visits:today:v2');
     dbc.getSupabaseAdmin = () => ({ from(t) { calls.push(['from', t]); const q = {
       select(c, o) { calls.push(['select', c, o]); return q; },
       eq(k, v) { calls.push(['eq', k, v]); return q; },
@@ -45,11 +45,11 @@ test('GET /api/visits/today: daily_visit 을 오늘 0시(KST) 이후로 head cou
     // handler() 가 모듈을 다시 읽어도 캐시는 공용 모듈이라 적중해야 한다
     assert.equal(calls.length, before); assert.equal(res.body.today, 17);
 
-    cache.del('visits:today:v1');
+    cache.del('visits:today:v2');
     dbc.getSupabaseAdmin = () => ({ from() { const q = { select() { return q; }, eq() { return q; }, gte() { return Promise.resolve({ count: null, error: { message: 'boom' } }); } }; return q; } });
     res = mockRes(); await handler()({}, res);
     assert.equal(res.body.today, null); assert.equal(res.headers['Cache-Control'], 'no-store');
-  } finally { dbc.getSupabaseAdmin = orig; cache.del('visits:today:v1'); }
+  } finally { dbc.getSupabaseAdmin = orig; cache.del('visits:today:v2'); }
 });
 
 test('배선: attribution 화이트리스트에 daily_visit · /api/visits 마운트', () => {
@@ -71,13 +71,18 @@ test('프런트: Presence 는 호스트별 채널 · 탭마다 난수 키 · 숨
   assert.match(html, /<div class="site-livebar" hidden>[^\n]*<\/div>\r?\n\s*<div class="hp-ft">/);
   assert.match(html, /@media \(prefers-reduced-motion:reduce\)\{\.site-live \.dot::after\{animation:none;opacity:0\}\}/);
   // 실행 값
-  const fn = html.match(/function _siteLiveHtml\(n, v\)\{[\s\S]*?\n\}/)[0];
+  const fn = html.match(/function _siteLiveHtml\(n, v, t\)\{[\s\S]*?\n\}/)[0];
   const f = new Function(`${fn}; return _siteLiveHtml;`)();
   assert.equal(f(1, 3), '<span class="dot" aria-hidden="true"></span><span><b>1</b>명 보는 중</span><span class="sep" aria-hidden="true">·</span><span>오늘 <b>3</b>명</span>');
   assert.equal(f(null, 5), '<span>오늘 <b>5</b>명</span>', '실시간을 모르면 그 부분만 뺀다');
   assert.equal(f(2, null), '<span class="dot" aria-hidden="true"></span><span><b>2</b>명 보는 중</span>');
   assert.equal(f(null, null), '');
   assert.equal(f(1, 0), '<span class="dot" aria-hidden="true"></span><span><b>1</b>명 보는 중</span><span class="sep" aria-hidden="true">·</span><span>오늘 <b>0</b>명</span>', '0 은 아는 값 — 그대로');
+  // SITE-LIVE-TOTAL-2026-10-21: 누적(기준일부터) — 1 이상일 때만, 모르면 뺀다
+  assert.equal(f(2, 8, 9), '<span class="dot" aria-hidden="true"></span><span><b>2</b>명 보는 중</span><span class="sep" aria-hidden="true">·</span><span>오늘 <b>8</b>명</span><span class="sep" aria-hidden="true">·</span><span class="tot">누적 <b>9</b>명</span>');
+  assert.equal(f(null, 8, null), '<span>오늘 <b>8</b>명</span>');
+  assert.match(html, /누적은 \$\{since\}부터 셌어요/);
+  assert.match(read('../routes/visits.js'), /const body = \{ day, today, total, since: TOTAL_SINCE \};/);
 });
 
 test('데이터 상태 창: 방문 현황 행은 임계값과 무관하게 항상', () => {

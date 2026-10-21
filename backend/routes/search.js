@@ -875,7 +875,10 @@ function mergeNearDuplicateGroups(list) {
       if (k.umdNm !== g.umdNm) return false;
       const kc = _pinCore(k.aptName);
       if (kc.replace(/[^0-9]/g, '') !== d) return false;
-      if (!(kc.includes(c) || c.includes(kc))) return false;
+      // AB-SUFFIX-2026-10-21: "상목에버빌A ↔ 상목에버빌B" 처럼 끝 글자만 다른 신고 이름(전국 40묶음·서울경기 15, 모두 공동주택 정보 없음)
+      const stem = (x) => x.replace(/[a-z가나다라]$/, '');
+      const abPair = /[a-z가나다라]$/.test(c) && /[a-z가나다라]$/.test(kc) && stem(c).length >= 2 && stem(c) === stem(kc);
+      if (!abPair && !(kc.includes(c) || c.includes(kc))) return false;
       const dy = (k.lat - g.lat) * 111000, dx = (k.lng - g.lng) * 111000 * Math.cos(k.lat * Math.PI / 180);
       return Math.sqrt(dx * dx + dy * dy) <= 80;
     });
