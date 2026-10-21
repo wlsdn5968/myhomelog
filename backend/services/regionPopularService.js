@@ -24,7 +24,7 @@ const WINDOW_DAYS = 60;
 const TOP_N = 10;
 const BURST_DAY = 10; // 한 단지 하루 거래가 이 이상이면 일괄 신고로 보고 순위에서 2건으로 센다
 const SIDOS = { '11': '서울', '41': '경기' };
-const SNAP_KEY = (sido) => `popular:region:v4:${sido}`; // v4: BURST-CAP(하루 10건 이상만)·JIBUN-ALIAS(2026-10-21)
+const SNAP_KEY = (sido) => `popular:region:v5:${sido}`; // v5: 일괄 등기 단지 제외·BURST-CAP(하루 10건 이상)·JIBUN-ALIAS(2026-10-21)
 
 const _cleanName = (n) => String(n || '').replace(/^[가-힣0-9]{1,8}(동|리|가),\s*/, '');
 const _core = (n) => String(n || '').replace(/\s+/g, '').replace(/\([^)]*\)/g, '').replace(/(아파트|APT)$/i, '').toLowerCase();
@@ -136,12 +136,17 @@ function rankLawd(rows, aliasMap, n = TOP_N) {
   // BURST-CAP 보정(2026-10-21 운영 실측): 일반 단지도 하루 5~9건이 있다(벽적골우성 5·매교역푸르지오SKVIEW 8). 일괄 신고는 하루 18~36건이
   //   단 하루에 몰린다(미가마하나임 30·도무스서초청년주택 22·파주금촌금호어울림 18). 하루 10건 이상인 날만 2건으로 센다 —
   //   그 밖에는 순위 건수 = 화면 건수(하루 2건 상한은 월계동신 16건이 6위로 보이는 어긋남을 만들었다).
-  for (const e of merged) { let r = 0; for (const c of e._perDay.values()) r += (c >= BURST_DAY ? 2 : c); e._rankN = r; }
+  for (const e of merged) {
+    let r = 0, burst = 0;
+    for (const c of e._perDay.values()) { if (c >= BURST_DAY) { r += 2; burst += c; } else r += c; }
+    e._rankN = r; e._burstShare = e.dealCount60d ? burst / e.dealCount60d : 0;
+  }
+  // 거래의 절반 이상이 일괄 신고일인 단지(신축 일괄 등기 — 도무스서초청년주택 22건 전부 하루)는 "거래 많은 단지"가 아니다 → 빼고 고른다
   return merged
-    .filter((e) => !isUnnamedApt(e.aptName))
+    .filter((e) => !isUnnamedApt(e.aptName) && e._burstShare < 0.5)
     .sort((a, b) => b._rankN - a._rankN || b.dealCount60d - a.dealCount60d || String(b.recentDealDate).localeCompare(String(a.recentDealDate)))
     .slice(0, n)
-    .map(({ _seqC, _seqCD, _seqA, _seqAD, _perDay, _rankN, ...e }) => ({ ...e, aptSeq: _seqC || _seqA || null, avgDealAmount: Math.round(e._sum / e.dealCount60d), _raws: [...e._raws] }));
+    .map(({ _seqC, _seqCD, _seqA, _seqAD, _perDay, _rankN, _burstShare, ...e }) => ({ ...e, aptSeq: _seqC || _seqA || null, avgDealAmount: Math.round(e._sum / e.dealCount60d), _raws: [...e._raws] }));
 }
 
 async function _attachCoords(admin, items) {

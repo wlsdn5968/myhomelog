@@ -49,7 +49,7 @@ test('라우트·cron 배선: /search/popular-region(서울·경기만, 스냅�
   assert.match(s, /let p = await rp\.readSido\(sido\);/);
   const c = fs.readFileSync(path.join(__dirname, '../routes/cron.js'), 'utf8');
   assert.match(c, /require\('\.\.\/services\/regionPopularService'\)\.computeAndStoreAll\(\)/);
-  assert.equal(rp.SNAP_KEY('11'), 'popular:region:v4:11');
+  assert.equal(rp.SNAP_KEY('11'), 'popular:region:v5:11');
 });
 
 test('프런트: 서울·경기 칩은 항상 · 구 칩 줄 · 전체는 구마다 3곳+모두 보기 · 지도 마커는 같은 .pop-marker · 전국으로 되돌리면 인기 마커 복귀', () => {
@@ -68,9 +68,8 @@ test('순위: 하루 10건 이상인 날만 2건으로 센다 — 하루에 몰�
   const out = rp.rankLawd(rows, new Map(), 10);
   assert.equal(out[0].aptName, '백련산파크자이', '거래일이 고른 단지가 앞');
   assert.equal(out[0].dealCount60d, 5);
-  assert.equal(out[1].aptName, '미가마하나임');
-  assert.equal(out[1].dealCount60d, 30, '표시 건수는 실제 그대로');
-  assert.ok(!('_perDay' in out[0]) && !('_rankN' in out[0]), '내부 필드는 응답에 남기지 않는다');
+  assert.equal(out.length, 1, '거래의 절반 이상이 일괄 신고일인 단지(미가마하나임 30건 전부 하루)는 빠진다');
+  assert.ok(!('_perDay' in out[0]) && !('_rankN' in out[0]) && !('_burstShare' in out[0]), '내부 필드는 응답에 남기지 않는다');
 });
 
 test('이름이 바뀐 같은 단지(같은 동·같은 건축년도·이름 포함·같은 숫자)는 합친다 — 건축년도·숫자가 다르면 따로', () => {
