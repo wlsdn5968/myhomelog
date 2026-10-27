@@ -27,7 +27,7 @@ test('공유링크 거래 건수 — 같은 6개월 응답을 3번 합산하지 
   assert.match(svc, /async function getTransactionsByApt\(lawdCd, aptName, monthsBack = 6\)/,
     'getTransactionsByApt 시그니처가 바뀌었다 — 6개월 전량 반환 전제를 다시 확인할 것');
 
-  const m = html.match(/async function fetchRecentTx\(lawdCd, aptName\)\{[\s\S]*?\n\}/);
+  const m = html.match(/async function fetchRecentTx\(lawdCd, aptName, umdNm\)\{[\s\S]*?\n\}/);
   assert.ok(m, 'fetchRecentTx 를 찾지 못했다');
   const fn = m[0];
   assert.match(fn, /if\(aptName\)\{/, 'aptName 단축 경로가 없다 — 3배 합산이 되돌아왔다');

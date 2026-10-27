@@ -904,6 +904,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .hp-gh .n{font-size:12px;font-weight:500;color:var(--t3)}
 .hp-gdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:2px;flex-shrink:0;vertical-align:middle;box-shadow:0 0 0 2px var(--bg-elev-1,#fff)} /* REGION-SHADE: 지도 색 구역과 같은 색 */
 .hp-msg.hp-attr{font-size:11px;color:var(--t3);padding-top:10px}
+.t0-gurank{margin-top:10px;font-size:13px;color:var(--t2);line-height:1.5}.t0-gurank .k{color:var(--t3)}.t0-gurank button{margin-left:8px;border:0;background:none;padding:0;font:inherit;color:var(--acc);text-decoration:underline;cursor:pointer}
 .hp-gh button{margin-left:auto;border:none;background:none;color:var(--acc);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:4px 0}
 .hp-rk{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;margin-right:6px;border-radius:50%;background:var(--bg-elev-1);color:var(--t2);font-size:12px;font-weight:700;flex-shrink:0}
 /* 표 머리 글자: 시안은 ink3 이지만 sf2 위 라이트 대비 4.33:1(AA 4.5 미달, 계산값) → ink2(6.95:1). 다크는 ink3 도 5.09:1 이나 한 규칙으로 맞춘다 */
@@ -1092,6 +1093,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .pop-marker .pop-nm{display:inline-block;max-width:160px;overflow:hidden;text-overflow:ellipsis;vertical-align:bottom}
 .pop-marker.pm-mini{padding:4px 6px;gap:0}
 .pop-marker.pm-mini .pop-nm{display:none}
+.niw-rc{margin:8px 0 6px;padding-top:8px;border-top:1px solid var(--border-faint);font-size:12px;color:var(--text-secondary)}.niw-rc-h{font-weight:700;color:var(--text-primary);margin-bottom:4px}.niw-rc-r{display:flex;justify-content:space-between;gap:10px;line-height:1.7;font-variant-numeric:tabular-nums}.niw-rc-r b{color:var(--text-primary);white-space:nowrap}.niw-rc-l{color:var(--text-tertiary)}
 .pop-marker .pop-gdot{display:inline-block;width:8px;height:8px;border-radius:50%;flex:none}
 .pop-marker .pop-gu{font-weight:600;opacity:.72;flex:none}
 .pop-marker.pop-guhead .pop-gu::after{content:" ·"}
@@ -6940,6 +6942,33 @@ function mkNaverOverlay(p){
   return ov;
 }
 
+// POPUP-RECENT-2026-10-27 (운영자 승인 제안): 지도 팝업에 최근 거래 3건 — 상세를 열지 않아도 실제 거래를 본다.
+//   상세·공유와 같은 조회(/api/transactions, 별칭 정확 매칭 + 동 필터 — 2026-10-27 다른 동 "주공7" 혼입 수정 반영).
+//   팝업이 열린 뒤 채운다(자리만 먼저). 실패·0건이면 줄을 지운다(지어내지 않는다). 같은 단지는 세션 안에서 다시 묻지 않는다.
+let _niwSeq = 0; const _niwRcCache = new Map();
+function _niwRecentSlot(p){
+  if(!p || !p.aptName || !/^\d{5}$/.test(String(p.lawdCd || ''))) return '';
+  const id = 'niwrc' + (++_niwSeq);
+  setTimeout(() => _niwRecentFill(id, p, 0), 60);
+  return `<div class="niw-rc" id="${id}"><span class="niw-rc-l">최근 거래 불러오는 중이에요</span></div>`;
+}
+async function _niwRecentFill(id, p, tries){
+  const el = document.getElementById(id);
+  if(!el){ if(tries < 15) setTimeout(() => _niwRecentFill(id, p, tries + 1), 100); return; }
+  const umd = p.umdNm || _umdFromArea(p.area);
+  const key = `${p.lawdCd}|${p.aptName}|${umd}`;
+  try{
+    let items = _niwRcCache.get(key);
+    if(!items){ items = await fetchRecentTx(String(p.lawdCd), p.aptName, umd); _niwRcCache.set(key, items); }
+    const rows = (Array.isArray(items) ? items : []).filter(t => Number(t.dealAmount) > 0).slice(0, 3);
+    if(!document.getElementById(id)) return;
+    if(!rows.length){ el.remove(); return; }
+    const amt = (m) => { const n = Math.round(Number(m)), e = Math.floor(n / 10000), r = n % 10000; return [e ? `${e}억` : '', r ? `${r.toLocaleString()}만` : ''].filter(Boolean).join(' '); };
+    const d = (t) => `${String(t.dealYear).slice(2)}.${String(t.dealMonth).padStart(2,'0')}.${String(t.dealDay).padStart(2,'0')}`;
+    el.innerHTML = `<div class="niw-rc-h">최근 거래</div>` + rows.map(t => `<div class="niw-rc-r"><span>${_escHtml(d(t))} · ${_escHtml(String(Number(t.excluUseAr)))}㎡${t.floor ? ` · ${_escHtml(String(t.floor))}층` : ''}</span><b>${_escHtml(amt(t.dealAmount))}</b></div>`).join('');
+  }catch(_){ const e2 = document.getElementById(id); if(e2) e2.remove(); }
+}
+
 function mkNaverIW(p){
   // 점수 라벨 사실 진술화 (P1, 2026-04-25): "안전/위험" → "거래활발/거래보통/거래적음"
   // Phase 4-3 후 sprint C-2 P3 (2026-05-05): 디자인 시스템 풀 적용 + "AI 점수" → "데이터 종합 점수" (단지 모달 t0 단어 일치)
@@ -6967,6 +6996,7 @@ function mkNaverIW(p){
       <div class="niw-pr">${(p.avgPrice||p.price||0).toFixed(2)}억</div>
       <div class="niw-m">${_escHtml(_fmtSgg(p.area))} · ${_escHtml(p.buildYear||'')}년 · LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}</div>
       <div class="niw-g">${scoreLabel}</div>
+      ${_niwRecentSlot(p)}
       <div class="niw-tags">${tags}</div>
       <button class="niw-btn a2" onclick="showDetailById('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}',${p.lat},${p.lng})">단지 상세</button>
       <button class="niw-btn acc" onclick="askP('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}','${p.avgPrice||0}','${encodeURIComponent(p.area||'').replace(/'/g,'%27')}')">시세 묻기</button>
@@ -8521,8 +8551,10 @@ function showDetail(p){
   const _heroSection = `<div class="t0-hero">
     <div class="t0h-hd">실거래 요약${_t0DealN>0?`<span class="t0h-bdg">표본 ${_t0DealN.toLocaleString()}건</span>`:''}</div>
     <div class="t0h-g">${_t0Cells.join('')}</div>
+    <div class="t0-gurank" id="t0GuRank" hidden></div>
     ${_t0SrcHtml()}
   </div>`;
+  setTimeout(() => { try { _fillGuRank(p); } catch(_){} }, 0); // GU-RANK-2026-10-27: 아래 innerHTML 이 그려진 뒤 채운다
   document.getElementById('t0').innerHTML=`
     ${_heroSection}
     ${_scoreSection}
@@ -9682,7 +9714,7 @@ async function handleShareUrl(){
     const lawdCd=await resolveLawdCdFromArea(area);
     if(!lawdCd){ _reshow({_txFailed:true, pros:'공유 링크에 지역 정보가 없어 실거래를 조회하지 못했어요.', strategy:'위쪽 검색창에서 단지명을 검색하면 최신 실거래를 볼 수 있어요.'}); return; }
     // 최근 3개월 합산 — 현재 달은 MOLIT 신고 지연으로 거래 거의 없음
-    const items=await fetchRecentTx(lawdCd, apt);
+    const items=await fetchRecentTx(lawdCd, apt, _umdFromArea(area));
     // 공유 링크 진입 — 단지명 검색으로 기록 (실거래 0건이어도 사용자가 그 단지를 찾았다는 신호)
     _logSearch('kapt', apt, items.length);
     if(!items.length){ _reshow({_pxNone:true, lawdCd, pros:'최근 6개월 실거래 신고 내역이 없어요.', strategy:'국토부 실거래는 계약 후 30일 이내 신고라 최근 거래가 늦게 반영될 수 있어요.'}); return; }
@@ -9728,9 +9760,13 @@ function prevYm(monthsBack){
 //   (평균가는 같은 값이 3번 들어가 변하지 않았기에 눈에 안 띄었다 — 건수만 틀렸다.)
 //   [처리] aptName 이 있으면 **1회만** 호출한다. 응답 자체가 이미 6개월치다.
 //   ⚠ aptName 없이 부르는 경로가 생기면 그때는 dealYm 이 실제로 쓰이므로 월별 호출이 맞다.
-async function fetchRecentTx(lawdCd, aptName){
+// UMD-FILTER-2026-10-27 (QA 실측): 동을 넘기지 않으면 같은 구 다른 동의 비슷한 이름 단지 거래가 섞였다
+//   ("상계주공7단지" 조회에 중계동 "주공7" 14건). 지역 문자열 끝의 동·가·리·읍·면을 동 이름으로 넘긴다(서버가 다른 동을 거른다).
+function _umdFromArea(area){ const m = String(area || '').trim().match(/(\S+(?:동|가|리|읍|면))$/); return m ? m[1] : ''; }
+async function fetchRecentTx(lawdCd, aptName, umdNm){
   if(aptName){
     const qs=new URLSearchParams({lawdCd,dealYm:prevYm(1),aptName});
+    if(umdNm) qs.set('umdNm', umdNm);
     const r=await fetch(`${CFG.api}/transactions?${qs}`,{signal:AbortSignal.timeout(10000)})
       .then(x=>x.ok?x.json():null).catch(()=>null);
     return (r && Array.isArray(r.items)) ? r.items : [];
@@ -10696,7 +10732,7 @@ async function refreshBookmarkPrices(){
       if(!lawdCd && b.area){lawdCd=await resolveLawdCdFromArea(b.area);}
       if(!lawdCd)continue;
       // 최근 3개월 합산 — 현재 달은 신고 지연으로 표본 부족
-      const items=await fetchRecentTx(lawdCd, b.aptName);
+      const items=await fetchRecentTx(lawdCd, b.aptName, b.umdNm || _umdFromArea(b.area));
       if(!items.length){
         // 거래 없음 — lastChecked만 갱신해 재호출 스팸 방지
         b.lastChecked=Date.now();b.lastCheckedCount=0;updated=true;
@@ -12359,6 +12395,39 @@ function _hpRegShow(){
   }
   list.innerHTML = html;
   _hpRegMarkers(markers, { sido, sel: _hpReg, unit, label: _hpReg === 'all' ? '' : _hpRegShort((groups.find(x => x.lawdCd === _hpReg) || {}).label) });
+}
+// GU-RANK-2026-10-27 (운영자 승인 제안): 단지 상세에 "○○구 최근 60일 거래 많은 단지 N위" — 매일 계산되는 구별 TOP10
+//   (/search/popular-region, 지도 패널과 같은 응답·같은 캐시 _hpRegData)에 이 단지가 있을 때만 한 줄. 없으면 아무것도 안 보인다(순위를 지어내지 않는다).
+//   짝짓기: 단지 번호가 같거나, 공백을 뺀 이름이 같고 동이 같을 때.
+async function _fillGuRank(p){
+  const el = document.getElementById('t0GuRank'); if(!el || !p) return;
+  const lawd = String(p.lawdCd || ''), sido = lawd.slice(0, 2);
+  const sidoName = Object.keys(_HP_REG_SIDO).find(k => _HP_REG_SIDO[k] === sido);
+  if(!/^\d{5}$/.test(lawd) || !sidoName) return;
+  try{
+    if(!_hpRegData[sido]){
+      const r = await fetch(`${CFG.api}/search/popular-region?sido=${sido}`, { signal: AbortSignal.timeout(15000) });
+      if(!r.ok) return;
+      const j = await r.json();
+      if(!(j && Array.isArray(j.groups) && j.groups.length)) return;
+      _hpRegData[sido] = j;
+    }
+    const g = (_hpRegData[sido].groups || []).find(x => x.lawdCd === lawd); if(!g) return;
+    const nm = (x) => String(x || '').replace(/\s+/g, '');
+    const i = (g.results || []).findIndex(x => (p.aptSeq && x.aptSeq && x.aptSeq === p.aptSeq)
+      || (nm(x.aptName) === nm(p.aptName) && (!x.umdNm || !p.umdNm || x.umdNm === p.umdNm)));
+    if(i < 0 || document.getElementById('t0GuRank') !== el) return; // 그사이 다른 단지를 열었으면 쓰지 않는다
+    const it = g.results[i], n = Number(it.dealCount60d);
+    el.innerHTML = `<b>${_escHtml(_hpRegShort(g.label))}</b> 최근 60일 거래 많은 단지 <b>${i + 1}위</b>${Number.isFinite(n) && n > 0 ? ` <span class="k">(${n.toLocaleString()}건)</span>` : ''}`
+      + `<button type="button" onclick='_guRankOpen(${_jsonAttr(sidoName)}, ${_jsonAttr(lawd)})'>구 순위 보기</button>`;
+    el.title = '국토교통부 실거래 신고 기준 · 하루에 몰린 일괄 신고는 2건으로 셈 · 매수·매도 추천이 아니에요';
+    el.hidden = false;
+  }catch(_){}
+}
+function _guRankOpen(sidoName, lawd){
+  try{ cDM(); }catch(_){}
+  try{ sv('map'); }catch(_){}
+  setTimeout(() => { try{ _hpPick(sidoName); _hpReg = String(lawd); _hpRegShow(); }catch(_){} }, 60);
 }
 function _hpRegPick(code){
   _hpReg = code; _hpRegShow();

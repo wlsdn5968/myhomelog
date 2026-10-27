@@ -31,7 +31,7 @@ test('앱 상세 히어로: 수집 시각 한 줄(lastIngestedAt 우선, 없으�
   const html = read('../../frontend/index.html');
   assert.match(html, /const iso=\(window\._dataCounts&&window\._dataCounts\.lastIngestedAt\)\|\|null;\r?\n\s*const t=iso\?_fmtKstFull\(iso\):\(\(window\._syncData&&window\._syncData\.kst\)\|\|''\);/);
   assert.match(html, /return t\?`<div class="t0h-src">실거래 수집 \$\{_escHtml\(t\)\} 기준 · 국토교통부 신고 자료라 계약 뒤 30일 안 신고분은 늦게 반영될 수 있어요<\/div>`:'';/);
-  assert.match(html, /<div class="t0h-g">\$\{_t0Cells\.join\(''\)\}<\/div>\r?\n\s*\$\{_t0SrcHtml\(\)\}/);
+  assert.match(html, /<div class="t0h-g">\$\{_t0Cells\.join\(''\)\}<\/div>\r?\n\s*<div class="t0-gurank" id="t0GuRank" hidden><\/div>\r?\n\s*\$\{_t0SrcHtml\(\)\}/); // GU-RANK-2026-10-27: 구 순위 줄이 사이에
   // health 가 상세보다 늦게 오면(공유 링크·딥링크) 열린 히어로에 채운다 — 2026-10-20 미리보기 실측
   assert.match(html, /window\._dataCounts = d\.dataCounts; _applyStatTags\(\); _t0SrcFill\(\);/);
   assert.match(html, /\.t0-hero \.t0h-src\{margin-top:7px;font-size:12px;color:var\(--t3\)/);

@@ -88,7 +88,8 @@ test('EXPRESS5-A(HTTP): GET /api/transactions?aptName=<script> — 정제값이 
   const restore = stubModule('../services/transactionService', {
     getTransactions: async () => [],
     getTransactionsByApt: async (lawdCd, aptName) => { seen.push(aptName); return []; },
-    getTransactionsByAptInclAliases: async () => [],
+    // ALIAS-EXACT-2026-10-27: 라우트가 별칭 경로로 바뀌었다 — 정제값이 그 소비자에 도달하는지 같은 방식으로 본다
+    getTransactionsByAptInclAliases: async (lawdCd, aptName) => { seen.push(aptName); return []; },
     getAliasCanonicalMap: async () => ({}),
     analyzeTransactions: async () => ({}),
     getRegionRecentTransactions: async () => [],
@@ -109,7 +110,7 @@ test('EXPRESS5-A(HTTP): GET /api/transactions?aptName=<script> — 정제값이 
       `http://127.0.0.1:${port}/api/transactions?lawdCd=11680&dealYm=202501&aptName=${encodeURIComponent('<script>')}`
     );
     assert.equal(res.status, 200, `기대치 않은 상태 코드: ${res.status}`);
-    assert.equal(seen.length, 1, 'getTransactionsByApt 가 정확히 한 번 호출돼야 한다');
+    assert.equal(seen.length, 1, '단지명 조회 함수가 정확히 한 번 호출돼야 한다');
     // 회귀 시(req.query 재파싱) 이 값은 '<script>' 원문 그대로 나온다.
     assert.equal(seen[0], '&lt;script&gt;',
       `정제값이 소비자(routes/transactions.js)에 도달하지 못했다 — 실제로 받은 값: ${JSON.stringify(seen[0])}`);

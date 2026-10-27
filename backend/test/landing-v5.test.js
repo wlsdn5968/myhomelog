@@ -103,3 +103,15 @@ test('QA 10-27: 지역 페이지는 정식 단지명 · 서버 페이지 라벨 
   assert.doesNotMatch(html, /HOUSING DATA TERMINAL<\/span>/);
   assert.doesNotMatch(html, /30초 만에 만드는 맞춤 보고서|30초 입력으로 받는/);
 });
+
+test('GU-RANK·POPUP-RECENT 10-27: 구 순위는 TOP10 에 있을 때만(단지 번호 또는 이름+동) · 팝업 최근 거래는 같은 조회 경로·실패 시 줄 제거', () => {
+  const gr = fn('_fillGuRank');
+  assert.match(gr, /if\(i < 0 \|\| document\.getElementById\('t0GuRank'\) !== el\) return;/, '없으면 아무것도 쓰지 않는다');
+  assert.match(gr, /\(p\.aptSeq && x\.aptSeq && x\.aptSeq === p\.aptSeq\)/);
+  assert.match(gr, /nm\(x\.aptName\) === nm\(p\.aptName\) && \(!x\.umdNm \|\| !p\.umdNm \|\| x\.umdNm === p\.umdNm\)/);
+  assert.match(html, /setTimeout\(\(\) => \{ try \{ _fillGuRank\(p\); \} catch\(_\)\{\} \}, 0\);/);
+  const rc = fn('_niwRecentFill');
+  assert.match(rc, /fetchRecentTx\(String\(p\.lawdCd\), p\.aptName, umd\)/);
+  assert.match(rc, /if\(!rows\.length\)\{ el\.remove\(\); return; \}/);
+  assert.match(html, /\$\{_niwRecentSlot\(p\)\}/);
+});

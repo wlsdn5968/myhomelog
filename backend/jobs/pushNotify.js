@@ -71,6 +71,8 @@ function matchItems(rawItems, rows, aliasMap, since) {
       const man = Number(r.deal_amount) || 0;
       g.maxMan = Math.max(g.maxMan, man);
       if (man > 0) g.minMan = Math.min(g.minMan, man);
+      // RECORD-NOTIFY-2026-10-27: 같은 면적 이전 최고보다 높은 새 거래(_newHigh — run() 이 미리 판정)
+      if (r._newHigh && man > (g.highMan || 0)) { g.newHigh = true; g.highMan = man; g.prevMan = r._newHigh.prevMan; g.highArea = r.exclu_use_ar; }
       const target = Number(it.targetEok);
       if (target > 0) { g.targetEok = target; g.hit = g.hit || (man > 0 && man / 10000 <= target); }
       perItem.set(it.aptName, g);
@@ -78,7 +80,7 @@ function matchItems(rawItems, rows, aliasMap, since) {
   }
   return [...perItem.entries()]
     .map(([name, g]) => ({ name, ...g, minMan: g.minMan === Infinity ? 0 : g.minMan }))
-    .sort((a, b) => (b.hit === true) - (a.hit === true) || b.count - a.count);
+    .sort((a, b) => (b.hit === true) - (a.hit === true) || (b.newHigh === true) - (a.newHigh === true) || b.count - a.count);
 }
 
 // NOTIFY-DEEPLINK-2026-10-18 (plans/166 A2): 알림을 눌러도 첫 화면('/')으로만 갔다 — 단지 1곳이면 그 단지 상세 딥링크
@@ -101,10 +103,49 @@ function buildBody(entries) {
     const minEok = (top.minMan / 10000).toFixed(1).replace(/\.0$/, '');
     return `${top.name} 목표가 ${top.targetEok}억 이하 거래 신고 · 최저 ${minEok}억 (새 거래 ${top.count}건)${extra > 0 ? ` 외 ${extra}개 단지` : ''}`;
   }
+  if (top.newHigh === true) {
+    // 사실만: 같은 단지·같은 전용면적의 이전 거래 최고값과 비교(층·향 보정 없음). 매수·매도 신호로 쓰지 않도록 '이전 최고' 값을 함께 적는다.
+    const area = Number(top.highArea) > 0 ? `${Number(Number(top.highArea).toFixed(2))}㎡ ` : '';
+    // 만원 → '11억 5,450만' (소수 반올림하면 11.545억이 11.54억으로 보였다 — 첫 화면 _lvAmt 와 같은 정확 표기)
+    const eok = (m) => { const n = Math.round(Number(m) || 0), e = Math.floor(n / 10000), r = n % 10000; return [e ? `${e}억` : '', r ? `${r.toLocaleString('ko-KR')}만` : ''].filter(Boolean).join(' '); };
+    return `${top.name} ${area}같은 면적 최고가 거래 신고 · ${eok(top.highMan)} (이전 최고 ${eok(top.prevMan)}, 새 거래 ${top.count}건)${extra > 0 ? ` 외 ${extra}개 단지` : ''}`;
+  }
   return `${top.name} 새 실거래 ${top.count}건 · 최고 ${fmtEok(top.maxMan)}억${extra > 0 ? ` 외 ${extra}개 단지` : ''}`;
 }
 function buildTitle(entries, prefix) {
-  return `${prefix}${entries[0] && entries[0].hit === true ? '관심 단지 목표가 이하 거래' : '관심 단지 새 실거래'}`;
+  const t = entries[0] || {};
+  return `${prefix}${t.hit === true ? '관심 단지 목표가 이하 거래' : t.newHigh === true ? '관심 단지 같은 면적 최고가 거래' : '관심 단지 새 실거래'}`;
+}
+
+// RECORD-NOTIFY-2026-10-27: 관심 단지와 맞는 새 거래만 골라 "같은 단지·같은 전용면적의 앞선 모든 거래(원본) + 과거 이력 요약(molit_hist_peaks)"보다
+//   높은지 판정한다 — get_price_records(2026-10-27 수정)와 같은 정의, 이전 거래 3건 이상일 때만. 행에 _newHigh = { prevMan } 를 단다.
+//   조회는 후보 행마다 2회(원본 최대·건수 1회 + 이력 요약 1회)라 최대 200행으로 제한한다(평소 구독 지역 신규는 하루 수십 행).
+const RECORD_CHECK_CAP = 200;
+async function markNewHighs(admin, rows, subs, aliasMap) {
+  const want = new Set();
+  for (const s of subs) for (const it of (s.items || [])) if (it && it.off !== true) want.add(`${nn(it.aptName)}|${it.lawdCd}`);
+  const cands = rows.filter(r => {
+    if (!r.apt_seq || !(Number(r.exclu_use_ar) > 0) || !(Number(r.deal_amount) > 0)) return false;
+    const canon = aliasMap.get(`${r.apt_name}|${r.umd_nm || ''}`) || r.apt_name;
+    return want.has(`${nn(canon)}|${r.lawd_cd}`) || want.has(`${nn(r.apt_name)}|${r.lawd_cd}`);
+  }).slice(0, RECORD_CHECK_CAP);
+  let marked = 0;
+  for (const r of cands) {
+    try {
+      const raw = await admin.from('molit_transactions').select('deal_amount', { count: 'exact' })
+        .eq('apt_seq', r.apt_seq).eq('exclu_use_ar', r.exclu_use_ar).lt('deal_date', r.deal_date)
+        .order('deal_amount', { ascending: false }).limit(1);
+      if (raw.error) continue;
+      const hist = await admin.from('molit_hist_peaks').select('mx, n')
+        .eq('apt_seq', r.apt_seq).eq('exclu_use_ar', Math.min(Math.round(Number(r.exclu_use_ar) * 100), 32767)).maybeSingle();
+      const rawMax = raw.data && raw.data[0] ? Number(raw.data[0].deal_amount) : 0;
+      const histMax = hist.data ? Number(hist.data.mx) || 0 : 0;
+      const n = (Number(raw.count) || 0) + (hist.data ? Number(hist.data.n) || 0 : 0);
+      const prev = Math.max(rawMax, histMax);
+      if (n >= 3 && prev > 0 && Number(r.deal_amount) > prev) { r._newHigh = { prevMan: prev }; marked += 1; }
+    } catch (_) { /* 판정 실패는 일반 '새 실거래' 알림으로 둔다 */ }
+  }
+  return { checked: cands.length, marked };
 }
 
 async function run() {
@@ -152,7 +193,7 @@ async function run() {
   for (let from = 0; from <= ROW_CAP - 1000; from += 1000) {
     const { data: page, error } = await admin
       .from('molit_transactions')
-      .select('apt_name, sigungu, umd_nm, lawd_cd, deal_date, deal_amount, exclu_use_ar, ingested_at')
+      .select('apt_name, sigungu, umd_nm, lawd_cd, deal_date, deal_amount, exclu_use_ar, ingested_at, apt_seq')
       .in('lawd_cd', lawds)
       .gte('ingested_at', minSince)
       .order('ingested_at', { ascending: false })
@@ -170,6 +211,8 @@ async function run() {
 
   let aliasMap = new Map();
   try { aliasMap = await getAliasCanonicalMap(lawds); } catch (e) { logger.warn({ err: e && e.message }, '지역 별칭→코드 매핑 실패 — 지역명 그대로 사용'); }
+  let recordCheck = { checked: 0, marked: 0 };
+  try { recordCheck = await markNewHighs(admin, rows, allSubs, aliasMap); } catch (e) { logger.warn({ err: e && e.message }, '최고가 판정 실패 — 일반 알림으로 보냄'); }
 
   // ── 채널 1: 웹푸시 ──
   let sent = 0, removed = 0, failed = 0;
@@ -266,7 +309,7 @@ async function run() {
 
   const stats = {
     lawds: lawds.length, txScanned: rows.length,
-    subs: push.rows.length, sent, removed, failed, targetHits,
+    subs: push.rows.length, sent, removed, failed, targetHits, recordChecked: recordCheck.checked, recordMarked: recordCheck.marked,
     webGate: webpush ? 'on' : (push.rows.length ? 'off(VAPID/pkg)' : 'off'),
     kakaoSubs: kakao.rows.length, kakaoSent, kakaoFailed, kakaoRemoved, kakaoRefreshed,
     kakaoGate: isKakaoConfigured() ? (kakao.missing ? 'off(table)' : 'on') : 'off(env)',
@@ -280,3 +323,4 @@ module.exports._notifyUrl = notifyUrl;
 module.exports._matchItems = matchItems;
 module.exports._buildBody = buildBody;
 module.exports._buildTitle = buildTitle;
+module.exports._markNewHighs = markNewHighs;

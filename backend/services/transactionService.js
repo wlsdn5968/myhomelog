@@ -509,6 +509,9 @@ async function getTransactionsByApt(lawdCd, aptName, monthsBack = 6) {
 
 // (a) 단일 단지: canonical + alias 거래 fetch + 병합 (analysisService 가격시그널용)
 //   COMPARE-12MO-2026-06-21: monthsBack 패스스루 (단지 비교 12개월). 미전달 시 6개월(회귀 0).
+const _nsp = (s) => String(s || '').replace(/\s+/g, '');
+function _filterExactAlias(arr, alias) { const k = _nsp(alias); return (Array.isArray(arr) ? arr : []).filter(t => _nsp(t && t.aptName) === k); }
+
 async function getTransactionsByAptInclAliases(lawdCd, aptName, monthsBack = 6) {
   const base = await getTransactionsByApt(lawdCd, aptName, monthsBack);
   if (!aptName) return base;
@@ -524,8 +527,11 @@ async function getTransactionsByAptInclAliases(lawdCd, aptName, monthsBack = 6) 
     if (!aliases.length) return base;
     // master(공릉풍림아이원)는 canonical 명으로 MOLIT 실거래가 없음(전부 alias 로 신고) → base 의
     //   느슨한 매칭(insertion 등)은 spurious 일 수 있어 제외. alias 거래만 병합(검색 path 와 동일 = 정확).
+    // ALIAS-EXACT-2026-10-27 (QA 실측): getTransactionsByApt 의 양방향 포함 매칭은 별칭 "상계주공7(고층)" 으로 불러도
+    //   같은 구 다른 동의 "주공7"(중계동·1993) 거래를 함께 돌려줬다(6개월 89건 중 14건). 별칭은 신고 원본 이름 그대로라
+    //   **정확히 같은 이름**의 거래만 남긴다.
     const aliasArrays = await Promise.all(
-      aliases.slice(0, 5).map(a => getTransactionsByApt(lawdCd, a, monthsBack).catch(() => []))
+      aliases.slice(0, 5).map(a => getTransactionsByApt(lawdCd, a, monthsBack).then(arr => _filterExactAlias(arr, a)).catch(() => []))
     );
     const merged = [];
     const seen = new Set();
@@ -933,4 +939,4 @@ async function getTransactionsByAptSeqMerged(aptSeq, monthsBack = 24) {
   });
 }
 
-module.exports = { getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };
+module.exports = { _filterExactAlias, getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };

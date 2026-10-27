@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { getTransactions, getTransactionsByApt, analyzeTransactions, LAWD_CODES } = require('../services/transactionService');
+const { getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, analyzeTransactions, LAWD_CODES } = require('../services/transactionService');
 const { validateTransactionQuery } = require('../middleware/validation');
 const { normalizeAptName } = require('../utils/aptName');
 
@@ -41,8 +41,9 @@ router.get('/', validateTransactionQuery, async (req, res) => {
     // SHARECARD-2026-08-19 (Sprint NNNNNNN-7A): 공유 카드 장기 창 — 화이트리스트만(캐시 키 폭발·과도 조회 방지).
     //   그 외 값·미전달은 기존 6개월(회귀 0). 서비스 cacheKey 에 monthsBack 포함돼 분리 캐시(COMPARE-12MO 검증 완료).
     const _mb = aptName && ['12', '15'].includes(String(monthsBack || '')) ? Number(monthsBack) : undefined;
+    // ALIAS-EXACT-2026-10-27: 정식 단지명에 별칭이 있으면 별칭과 같은 이름의 거래만(다른 동 "주공7" 혼입 차단). 별칭이 없으면 종전 매칭.
     let list = aptName
-      ? await getTransactionsByApt(lawdCd, aptName, _mb)
+      ? await getTransactionsByAptInclAliases(lawdCd, aptName, _mb)
       : await getTransactions(lawdCd, dealYm);
     // Sprint MM: sigungu/umdNm 지정 시 결과 추가 필터 — 다른 동 단지 환각 매칭 차단.
     if (sigungu || umdNm) {
