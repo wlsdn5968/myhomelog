@@ -156,7 +156,7 @@ test('APT-PAGE-ENRICH — 학교 캐시 있음: 주변 학교 카드가 초·중
   assert.equal(res.statusCode, 200);
   assert.ok(res.body.includes('주변 학교'), '주변 학교 카드가 없다');
   // SCHOOL-SRC-LABEL-2026-09-06: 학교 캐시는 카카오 지도 검색뿐 — 연동되지 않은 출처(교육청/NEIS)를 라벨에 쓰지 않는다
-  assert.ok(res.body.includes('카카오 지도 검색(캐시)'), '학교 카드 출처 라벨은 카카오 지도 검색(캐시)');
+  assert.ok(res.body.includes('카카오 지도 검색'), '학교 카드 출처 라벨은 카카오 지도 검색');
   assert.ok(!res.body.includes('교육청'), '학교 카드에 미연동 출처(교육청) 표기 금지');
   assert.ok(res.body.includes('대치초등학교') && res.body.includes('320m'), '초등학교 이름·거리가 없다');
   assert.ok(res.body.includes('대치중학교') && res.body.includes('550m'), '중학교 이름·거리가 없다');
@@ -284,9 +284,9 @@ test('APT-PAGE-ENRICH-DESC — 거래 있음 + KAPT fact 있음: desc 출처에 
   const { res } = await _run({ aptMasterRows: [row], idxRow: _idx('팩트있는단지'), statFixture: _STAT });
   assert.equal(res.statusCode, 200);
   const desc = _descOf(res);
-  assert.ok(desc.includes('국토교통부 실거래·K-apt 단지정보 정리'), 'KAPT fact 가 있는데 출처 문구가 안 바뀌었다: ' + desc);
+  assert.ok(desc.includes('국토교통부 실거래·공동주택 단지정보 정리'), 'KAPT fact 가 있는데 출처 문구가 안 바뀌었다: ' + desc);
   assert.ok(desc.includes('900세대'), 'KAPT fact(세대수)가 desc 에서 사라졌다: ' + desc);
-  assert.ok(desc.endsWith('매수 추천이 아닙니다.'), '절대 룰 문구가 사라졌다: ' + desc);
+  assert.ok(desc.endsWith('매수 추천이 아니에요.'), '절대 룰 문구가 사라졌다: ' + desc);
 });
 
 test('APT-PAGE-ENRICH-DESC — 거래 있음 + KAPT fact 없음: 기존 문구를 그대로 쓴다', async () => {
@@ -295,8 +295,8 @@ test('APT-PAGE-ENRICH-DESC — 거래 있음 + KAPT fact 없음: 기존 문구�
   assert.equal(res.statusCode, 200);
   const desc = _descOf(res);
   assert.ok(desc.includes('국토교통부 실거래 신고 자료 정리'), 'KAPT fact 가 없는데 기존 문구가 유지되지 않았다: ' + desc);
-  assert.ok(!desc.includes('K-apt 단지정보 정리'), 'KAPT fact 가 없는데 K-apt 출처 문구가 붙었다: ' + desc);
-  assert.ok(desc.endsWith('매수 추천이 아닙니다.'), '절대 룰 문구가 사라졌다: ' + desc);
+  assert.ok(!desc.includes('공동주택 단지정보 정리'), 'KAPT fact 가 없는데 K-apt 출처 문구가 붙었다: ' + desc);
+  assert.ok(desc.endsWith('매수 추천이 아니에요.'), '절대 룰 문구가 사라졌다: ' + desc);
 });
 
 test('APT-PAGE-ENRICH-DESC — 거래 0 분기(Plan 065)는 이 계획이 손대지 않는다(회귀 확인용)', async () => {
@@ -304,9 +304,9 @@ test('APT-PAGE-ENRICH-DESC — 거래 0 분기(Plan 065)는 이 계획이 손대
   const { res } = await _run({ aptMasterRows: [row], idxRow: _idx('거래0단지'), statFixture: null });
   assert.equal(res.statusCode, 200);
   const desc = _descOf(res);
-  assert.ok(desc.includes('최근 24개월 거래 기록이 없습니다'), '거래 0 사실이 desc 에서 사라졌다: ' + desc);
+  assert.ok(desc.includes('최근 24개월 거래 기록이 없어요'), '거래 0 사실이 desc 에서 사라졌다: ' + desc);
   assert.ok(!desc.includes('국토교통부'), 'Plan 065 가 확정한 "KAPT 출처엔 국토교통부 안 붙임" 규칙이 깨졌다: ' + desc);
-  assert.ok(desc.endsWith('매수 추천이 아닙니다.'));
+  assert.ok(desc.endsWith('매수 추천이 아니에요.'));
 });
 
 // ── ⑦ 소스 계약 — Kakao 호출 함수가 이 파일에서 참조되지 않는다 ─────────────

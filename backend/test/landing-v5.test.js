@@ -46,7 +46,7 @@ test('경신 목록: 최고가·최저가 탭 전환, 직전 값 문구가 탭�
   ctx.render();
   let h = els.lvRecList.innerHTML;
   assert.equal((h.match(/class="lv-row"/g) || []).length, 3, '3줄까지');
-  assert.ok(h.includes('주공그린빌1') && h.includes('5억 8,800만') && h.includes('직전 최고 5억 4,500만 · 10.19') && h.includes('수원시 영통구 매탄동 · 84㎡'));
+  assert.ok(h.includes('주공그린빌1') && h.includes('5억 8,800만') && h.includes('직전 최고 5억 4,500만 · 10.19') && h.includes('수원시 영통구 매탄동 · 84.45㎡'));
   ctx.tab('low');
   h = els.lvRecList.innerHTML;
   assert.equal(els.lvTabLo.a['aria-selected'], 'true'); assert.equal(els.lvTabHi.a['aria-selected'], 'false');
@@ -74,4 +74,32 @@ test('검색: 두 글자 미만은 막고, 넘기면 소개를 닫고 기존 헤
   assert.match(lv, /<form class="lv-search" role="search" onsubmit="return _landingSearch\(event\)">/);
   // 구 행 → 지도 화면의 그 구(구 경계 색 구역 보기)
   assert.match(fn('_lvRegion'), /_hpPick\('서울'\); _hpReg = String\(lawd\); _hpRegShow\(\);/);
+});
+
+// QA-2026-10-27: 전 기능 점검에서 찾은 표시 결함 — 데이터는 맞았고 표기가 틀렸던 것들
+test('QA 10-27: 브리핑 동기화 날짜는 한국 날짜 · 목록 개수는 "N곳 중 상위 M곳" · 가중 평균 표기 · 특약 "전세 낀 집" 인식', () => {
+  const ctx = {}; vm.createContext(ctx);
+  vm.runInContext(`${fn('_kstMD')}; globalThis.f = _kstMD;`, ctx);
+  assert.equal(ctx.f('2026-10-20T17:45:11.648+00:00'), '10.21', '10.21 02:45 KST 적재가 10.20 으로 보였다');
+  assert.equal(ctx.f(''), '');
+  assert.doesNotMatch(html, /String\(dc\.lastIngestedAt\)\.slice\(5,10\)/);
+  assert.match(html, /곳 중 점수 상위 \$\{props\.length\}곳/);
+  assert.match(html, />6개월 가중 평균<\/span>/);
+  assert.doesNotMatch(html, /<span class="ld-m">6개월 평균<\/span>/);
+  assert.match(fs.readFileSync(path.join(__dirname, '../services/propertyService.js'), 'utf8'), /건 거래 · 가중 평균 \$\{avgAuk\}억/);
+  assert.match(html, /if \(\/전세\|세입자\|임차\/\.test\(issues\)\)/);
+});
+
+test('QA 10-27: 지역 페이지는 정식 단지명 · 서버 페이지 라벨 한글 · 지도 팝업은 사실(180일 건수·평균)', () => {
+  const rp = fs.readFileSync(path.join(__dirname, '../routes/regionPage.js'), 'utf8');
+  assert.match(rp, /getAliasCanonicalMap\(\[region\.lawdCd\]\)/);
+  assert.match(rp, /esc\(showName\(it\.aptName, it\.umdNm\)\)/);
+  assert.match(rp, /esc\(showName\(a\.apt_name, a\.umd_nm\)\)/);
+  for (const f of ['aptPage', 'regionPage', 'briefing', 'dataSources']) {
+    assert.doesNotMatch(fs.readFileSync(path.join(__dirname, `../routes/${f}.js`), 'utf8'), /MYHOMELOG [A-Z]+/, `${f} 영문 라벨`);
+  }
+  assert.doesNotMatch(html, /데이터 분석 대기<br>/);
+  assert.match(html, /최근 180일 실거래 <b/);
+  assert.doesNotMatch(html, /HOUSING DATA TERMINAL<\/span>/);
+  assert.doesNotMatch(html, /30초 만에 만드는 맞춤 보고서|30초 입력으로 받는/);
 });

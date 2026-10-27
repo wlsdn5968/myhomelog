@@ -124,7 +124,7 @@ router.get('/:date', async (req, res) => {
       || day < '2026-01-01' || day > kstDayString()) {
     return res.status(404).type('html').send(pageShell(
       '내집로그 브리핑', '이 날짜의 브리핑이 없어요.', kstDayString(),
-      `<div class="eyebrow">MYHOMELOG BRIEFING</div><h1>브리핑 없음</h1>
+      `<div class="eyebrow">내집로그 · 오늘의 브리핑</div><h1>브리핑 없음</h1>
        <p style="font-size:14px;color:var(--ink3)">요청한 날짜의 브리핑이 없어요.</p>
        <a class="cta" href="/briefing/${kstDayString()}">오늘 브리핑 보기 →</a>`));
   }
@@ -136,7 +136,7 @@ router.get('/:date', async (req, res) => {
   if (!snap) {
     return res.status(404).type('html').send(pageShell(
       `내집로그 브리핑 ${day}`, '이 날짜의 브리핑 기록이 없어요.', day,
-      `<div class="eyebrow">MYHOMELOG BRIEFING</div><h1>${esc(day)}</h1>
+      `<div class="eyebrow">내집로그 · 오늘의 브리핑</div><h1>${esc(day)}</h1>
        <p style="font-size:14px;color:var(--ink3)">이 날짜의 브리핑 기록이 없어요. 기록은 저장을 시작한 날부터 쌓여요.</p>
        <div class="nav"><a href="/briefing/${dayNav(day, -1)}">← 전날</a><a href="/briefing/${kstDayString()}">오늘 →</a></div>
        <a class="cta" href="/?briefing=${esc(day)}">앱에서 열기 →</a>`));
@@ -200,7 +200,7 @@ router.get('/:date', async (req, res) => {
     ? 'no-store'
     : (isToday ? 'public, max-age=0, s-maxage=1800' : 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800'));
   res.type('html').send(pageShell(title, desc, day, `
-    <div class="eyebrow">MYHOMELOG BRIEFING</div>
+    <div class="eyebrow">내집로그 · 오늘의 브리핑</div>
     <h1>${esc(day.replace(/-/g, '.'))}(${yo})</h1>
     <div class="tag">실거래·금리·시장 공개 데이터 정리</div>
     ${tk.length ? `<div class="ticker">${tk.join('<span style="color:var(--line);margin:0 9px">|</span>')}</div>` : ''}

@@ -324,7 +324,7 @@ function buildSchoolsCard(schools) {
   const valid = schools.filter((s) => s && s.name && Number.isFinite(Number(s.distance_m)));
   if (!valid.length) return '';
   const sorted = [...valid].sort((a, b) => (TYPE_ORDER[a.type] ?? 9) - (TYPE_ORDER[b.type] ?? 9));
-  return `<div class="card"><h2>주변 학교 <span class="src">카카오 지도 검색(캐시)</span></h2>
+  return `<div class="card"><h2>주변 학교 <span class="src">카카오 지도 검색</span></h2>
     ${sorted.map((s) => `<div class="row"><span class="k">${esc(String(s.type || ''))} ${esc(String(s.name))}</span><span class="num">${comma(Math.round(Number(s.distance_m)))}m</span></div>`).join('')}
   </div>`;
 }
@@ -336,7 +336,7 @@ router.get('/:aptSeq', async (req, res) => {
     return res.status(404).type('html').send(pageShell({
       title: '단지를 찾을 수 없어요 | 내집로그', desc: '단지 코드에 맞는 페이지가 없어요.',
       canonical: `${ORIGIN}/region`, noindex: true,
-      body: `<div class="eyebrow">MYHOMELOG APT</div><h1>단지 없음</h1>
+      body: `<div class="eyebrow">내집로그 · 단지</div><h1>단지 없음</h1>
         <p style="font-size:14px;color:var(--ink3)">요청한 단지 코드 형식이 올바르지 않아요.</p>
         <a class="cta" href="/region">지역별로 찾아보기 →</a>`,
     }));
@@ -353,7 +353,7 @@ router.get('/:aptSeq', async (req, res) => {
     return res.status(404).type('html').send(pageShell({
       title: '단지를 찾을 수 없어요 | 내집로그', desc: '이 단지의 실거래 기록이 없어요.',
       canonical: `${ORIGIN}/region`, noindex: true,
-      body: `<div class="eyebrow">MYHOMELOG APT</div><h1>기록 없음</h1>
+      body: `<div class="eyebrow">내집로그 · 단지</div><h1>기록 없음</h1>
         <p style="font-size:14px;color:var(--ink3)">이 단지의 실거래 기록이 없어요.</p>
         <a class="cta" href="/region">지역별로 찾아보기 →</a>`,
     }));
@@ -376,7 +376,7 @@ router.get('/:aptSeq', async (req, res) => {
       <div class="row"><span class="k">최근 거래일</span><span class="num">${esc(String(stat.recentDeal))}</span></div>
       ${syncKst ? `<div class="row"><span class="k">실거래 수집</span><span class="num">${esc(syncKst)} 기준</span></div>` : ''}
       ${buildYear ? `<div class="row"><span class="k">준공</span><span class="num">${buildYear}년</span></div>` : ''}
-      <div class="src" style="margin-top:8px">평균가는 최근 거래에 비중을 더 둔 값이에요. 절사평균(위아래 10% 제외) ${eok(stat.trimmedAvgPrice)}.</div>
+      <div class="src" style="margin-top:8px">평균가는 최근 거래에 비중을 더 둔 값이에요.${eok(stat.trimmedAvgPrice) ? ` 절사평균(위아래 10% 제외) ${eok(stat.trimmedAvgPrice)}.` : ''}</div>
     </div>`);
     facts.push(`최근 24개월 ${comma(num(stat.dealCount) || 0)}건`);
     facts.push(`평균 ${stat.avgPriceAuk}억`);
@@ -480,10 +480,10 @@ router.get('/:aptSeq', async (req, res) => {
   //   있을 때만 그 카드 아래 한 줄을 붙인다. 숫자는 dim 행 값 그대로(지어내지 않음).
   const dimDealCount = idx && idx._fromDim ? num(idx.deal_count) : null;
   const histRecoveryLine = (thin && dimDealCount && dimDealCount > 0)
-    ? `<div style="font-size:12px;color:var(--ink3);margin:-4px 0 12px">2020.09 이후 이력 ${comma(dimDealCount)}건 · 마지막 거래 ${esc(String(idx.last_deal_date || ''))}. 아래 장기 추세에서 볼 수 있어요</div>`
+    ? `<div style="font-size:12px;color:var(--ink3);margin:-4px 0 12px">2020.09 이후 이력 ${comma(dimDealCount)}건 ${idx.last_deal_date ? ` · 마지막 거래 ${esc(String(idx.last_deal_date))}` : ''}. 아래 장기 추세에서 볼 수 있어요</div>`
     : '';
 
-  const body = `<div class="eyebrow">MYHOMELOG APT</div>
+  const body = `<div class="eyebrow">내집로그 · 단지</div>
     <h1>${esc(displayName)} 실거래가</h1>
     <div class="tag">${esc(region)}${umd ? ' ' + esc(umd) : ''}</div>
     ${cards.length ? cards.join('') : `<div class="card"><h2>최근 거래 없음</h2>
@@ -508,12 +508,12 @@ router.get('/:aptSeq', async (req, res) => {
   //   (세대수·준공)이 하나라도 섞였으면 출처 문구도 그 사실대로 바꾼다 — 지금까지는 K-apt 사실이
   //   있어도 "국토교통부 실거래 신고 자료 정리" 라고만 말했다(사실과 문구 불일치). 거래 0 분기(065)는
   //   그대로 둔다 — 이미 KAPT 출처에 국토교통부를 안 붙이는 문구를 쓰고 있다.
-  const txSourceLabel = hasKaptFact ? '국토교통부 실거래·K-apt 단지정보 정리' : '국토교통부 실거래 신고 자료 정리';
+  const txSourceLabel = hasKaptFact ? '국토교통부 실거래·공동주택 단지정보 정리' : '국토교통부 실거래 신고 자료 정리';
   const desc = !thin
-    ? `${displayName}(${region}${umd ? ' ' + umd : ''}) ${facts.join(' · ')}. ${txSourceLabel} — 매수 추천이 아닙니다.`
+    ? `${displayName}(${region}${umd ? ' ' + umd : ''}) ${facts.join(' · ')}. ${txSourceLabel} — 매수 추천이 아니에요.`
     : (facts.length
-      ? `${displayName}(${region}${umd ? ' ' + umd : ''}) 최근 24개월 거래 기록이 없습니다. K-apt 단지정보 ${facts.join(' · ')} — 매수 추천이 아닙니다.`
-      : `${displayName}(${region}${umd ? ' ' + umd : ''}) 국토교통부 실거래 신고 자료. 최근 24개월 거래 기록이 없습니다 — 매수 추천이 아닙니다.`);
+      ? `${displayName}(${region}${umd ? ' ' + umd : ''}) 최근 24개월 거래 기록이 없어요. 공동주택 단지정보 ${facts.join(' · ')} — 매수 추천이 아니에요.`
+      : `${displayName}(${region}${umd ? ' ' + umd : ''}) 국토교통부 실거래 신고 자료. 최근 24개월 거래 기록이 없어요 — 매수 추천이 아니에요.`);
 
   // APT-PAGE-INFO-2026-09-06: 단지정보/학교/좌표 조회가 "오류로 실패"했을 때도 긴 캐시를 붙이지
   //   않는다 — "있을 수도 있는데 못 읽음"과 "정말 없음"을 구분 못 하면 열화 응답이 엣지에 굳는다

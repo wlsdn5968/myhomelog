@@ -1034,7 +1034,7 @@ async function getAIRecommendations(userCondition) {
       score: 0, // enrichment 에서 확정 — 그 전 값을 쓰면 순위가 뒤집힌다
       ltv: ltvInfo.ltv,
       maxLoan: ltvInfo.maxLoan,
-      pros: `${p.pyeong}평형 6개월 ${p.dealCount}건 거래 · 평균 ${avgAuk}억 · ${apt.buildYear||'?'}년식`,
+      pros: `${p.pyeong}평형 6개월 ${p.dealCount}건 거래 · 가중 평균 ${avgAuk}억 · ${apt.buildYear||'?'}년식`, // 시간 가중 평균(transactionService._weightedMean) — '평균'만 쓰면 단순 평균으로 읽혔다
       cons: ageYears >= 30 ? `구축(${ageYears}년)이라 재건축연한이 됐어요`
             : ageYears >= 20 ? `준구축(${ageYears}년)이라 인테리어 점검이 필요해요`
             : `현장 임장으로 동·층·향을 꼭 확인하세요`,

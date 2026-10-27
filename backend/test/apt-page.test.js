@@ -117,7 +117,7 @@ test('APT-PAGE-INFO — 단지정보 fact 가 더해져도 desc 끝의 절대 �
   assert.ok(m, 'description 메타가 없다');
   const desc = m[1].replace(/&#39;/g, "'").replace(/&amp;/g, '&');
   assert.ok(desc.includes('700세대') || desc.includes('2001년 준공'), '단지정보 fact(세대수·준공년도)가 desc 에 안 들어갔다');
-  assert.ok(desc.endsWith('매수 추천이 아닙니다.'), 'desc 끝의 절대 룰 문구가 사라졌다: ' + desc);
+  assert.ok(desc.endsWith('매수 추천이 아니에요.'), 'desc 끝의 절대 룰 문구가 사라졌다: ' + desc);
 });
 
 
@@ -151,10 +151,10 @@ test('APT-PAGE-DESC — 거래 0 + 단지정보 있음: 거래 없음 사실이 
   const m = res.body.match(/<meta name="description" content="([^"]*)">/);
   assert.ok(m, 'description 메타가 없다');
   const desc = m[1].replace(/&#39;/g, "'").replace(/&amp;/g, '&');
-  assert.ok(desc.includes('최근 24개월 거래 기록이 없습니다'), '거래 0 인데 거래 없음 사실이 desc 에서 사라졌다: ' + desc);
+  assert.ok(desc.includes('최근 24개월 거래 기록이 없어요'), '거래 0 인데 거래 없음 사실이 desc 에서 사라졌다: ' + desc);
   assert.ok(!desc.includes('국토교통부'), 'KAPT 출처 사실(세대수·준공년도)에 국토교통부가 붙었다: ' + desc);
   assert.ok(desc.includes('1,601세대') || desc.includes('2001년 준공'), 'KAPT 단지정보 fact 가 desc 에서 사라졌다: ' + desc);
-  assert.ok(desc.endsWith('매수 추천이 아닙니다.'), '거래 0 + 단지정보 있음 분기에 절대 룰 문구가 없다: ' + desc);
+  assert.ok(desc.endsWith('매수 추천이 아니에요.'), '거래 0 + 단지정보 있음 분기에 절대 룰 문구가 없다: ' + desc);
 });
 
 
@@ -165,8 +165,8 @@ test('APT-PAGE-DESC — 거래 0 + 단지정보 없음: 기존 문구를 유지�
   const m = res.body.match(/<meta name="description" content="([^"]*)">/);
   assert.ok(m, 'description 메타가 없다');
   const desc = m[1].replace(/&#39;/g, "'").replace(/&amp;/g, '&');
-  assert.ok(desc.includes('최근 24개월 거래 기록이 없습니다'), '거래 0 사실이 desc 에서 사라졌다: ' + desc);
-  assert.ok(desc.endsWith('매수 추천이 아닙니다.'), '거래 0 + 단지정보 없음 분기에 절대 룰 문구가 없다: ' + desc);
+  assert.ok(desc.includes('최근 24개월 거래 기록이 없어요'), '거래 0 사실이 desc 에서 사라졌다: ' + desc);
+  assert.ok(desc.endsWith('매수 추천이 아니에요.'), '거래 0 + 단지정보 없음 분기에 절대 룰 문구가 없다: ' + desc);
 });
 
 
@@ -187,6 +187,6 @@ test('APT-PAGE-DESC — 거래 있음: desc 형식이 변하지 않는다(하위
   assert.ok(m, 'description 메타가 없다');
   const desc = m[1].replace(/&#39;/g, "'").replace(/&amp;/g, '&');
   assert.ok(desc.includes('국토교통부 실거래 신고 자료 정리'), '거래 있는 페이지의 desc 형식이 바뀌었다: ' + desc);
-  assert.ok(!desc.includes('거래 기록이 없습니다'), '거래가 있는데 거래 기록 없음 문구가 들어갔다: ' + desc);
-  assert.ok(desc.endsWith('매수 추천이 아닙니다.'), '거래 있는 분기의 절대 룰 문구가 사라졌다: ' + desc);
+  assert.ok(!desc.includes('거래 기록이 없어요'), '거래가 있는데 거래 기록 없음 문구가 들어갔다: ' + desc);
+  assert.ok(desc.endsWith('매수 추천이 아니에요.'), '거래 있는 분기의 절대 룰 문구가 사라졌다: ' + desc);
 });

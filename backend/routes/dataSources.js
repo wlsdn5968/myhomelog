@@ -21,12 +21,12 @@ const SOURCES = [
   { what: '공동주택 기본 정보(세대수·동수·주차·관리방식)', who: '한국부동산원 K-apt', via: '공공데이터포털 공동주택 단지 목록·기본 정보', url: 'https://www.data.go.kr', cycle: '매주 월요일 새벽 5시(KST) 단지 목록 갱신 · 상세는 조회할 때 채우고 보강은 매일 새벽' },
   { what: '건축물대장(세대수 보조 확인)', who: '국토교통부', via: '공공데이터포털 건축HUB 건축물대장', url: 'https://www.data.go.kr', cycle: '조회할 때 · 비어 있는 단지는 매일 새벽 보강' },
   { what: '주택담보대출 규제(LTV·DSR 등)·취득세', who: '금융위원회 · 정책브리핑 · 국가법령정보', via: 'fsc.go.kr · korea.kr · law.go.kr 공고문', url: 'https://www.fsc.go.kr', cycle: '매일 새벽 6시대(KST) 변경 점검 · 변경이 확인되면 사람이 검토한 뒤 반영' },
-  { what: '기준금리·시장금리', who: '한국은행 ECOS', via: 'ecos.bok.or.kr 통계 API', url: 'https://ecos.bok.or.kr', cycle: '조회할 때 갱신(캐시)' },
-  { what: '정책 주택금융 금리', who: '한국주택금융공사', via: '공공데이터포털 공개 API', url: 'https://www.data.go.kr', cycle: '조회할 때 갱신(캐시)' },
+  { what: '기준금리·시장금리', who: '한국은행 ECOS', via: 'ecos.bok.or.kr 통계 API', url: 'https://ecos.bok.or.kr', cycle: '조회할 때 새로 받아와요' },
+  { what: '정책 주택금융 금리', who: '한국주택금융공사', via: '공공데이터포털 공개 API', url: 'https://www.data.go.kr', cycle: '조회할 때 새로 받아와요' },
   { what: '주택가격지수', who: '한국부동산원 R-ONE', via: 'reb.or.kr 공개 통계', url: 'https://www.reb.or.kr', cycle: '지역 페이지를 만들 때 조회' },
   { what: '미분양 주택 · 국내 인구이동', who: 'KOSIS(국가통계포털)', via: 'kosis.kr 공개 API', url: 'https://kosis.kr', cycle: '지역 페이지를 만들 때 조회' },
   { what: '단지 좌표 · 주변 시설(학원·편의시설)', who: '카카오', via: '카카오 로컬 API', url: 'https://developers.kakao.com', cycle: '조회할 때 · 좌표는 매일 새벽 보강' },
-  { what: '학교 정보', who: '나이스 교육정보 개방 포털', via: 'open.neis.go.kr 학교 기본 정보', url: 'https://open.neis.go.kr', cycle: '조회할 때 갱신(캐시)' },
+  { what: '학교 정보', who: '나이스 교육정보 개방 포털', via: 'open.neis.go.kr 학교 기본 정보', url: 'https://open.neis.go.kr', cycle: '조회할 때 새로 받아와요' },
 ];
 
 function pageShell({ title, desc, canonical, body }) {
@@ -80,7 +80,7 @@ router.get('/', async (req, res) => {
     <span class="m">${esc(s.who)} · ${esc(s.via)} · <a href="${esc(s.url)}" rel="noopener" target="_blank">${esc(s.url.replace(/^https?:\/\//, ''))}</a></span><br>
     <span class="c">갱신: ${esc(s.cycle)}</span></div>`).join('');
 
-  const body = `<div class="eyebrow">MYHOMELOG DATA</div>
+  const body = `<div class="eyebrow">내집로그 · 데이터 출처</div>
     <h1>데이터 출처와 갱신 주기</h1>
     <div class="tag">내집로그가 보여 주는 모든 숫자의 출처예요${sync ? ` · 실거래 마지막 수집 ${esc(sync)}(KST)` : ''}</div>
     <div class="card"><h2>원칙</h2>

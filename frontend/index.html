@@ -2133,7 +2133,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 <header>
   <!-- 모바일 햄버거 — 사이드바 (내 상황 입력) drawer 토글 -->
   <button class="hamb" onclick="toggleDrawer()" aria-label="메뉴 열기" title="내 상황, 관심 단지, 계약 타임라인">☰</button>
-  <a class="logo" href="/"><div class="lmark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M3 11.2 12 4l9 7.2" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 9.8V20h13V9.8" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 20v-5h4v5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="ltxt"><span>내집<em>로그</em></span><span class="lsub" aria-hidden="true">HOUSING DATA TERMINAL</span></div></a>
+  <a class="logo" href="/"><div class="lmark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M3 11.2 12 4l9 7.2" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M5.5 9.8V20h13V9.8" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 20v-5h4v5" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div><div class="ltxt"><span>내집<em>로그</em></span></div></a>
   <!-- Sprint OOOOO-3 (운영자 지시): 탭 재배열 — 사용법을 첫 탭으로(헷갈린다는 사용자 다수), 뉴스를 보고서 옆으로,
        대출계산은 도구▾ 안으로. ⚠ sv() 탭 활성은 .htab DOM 순서 = htabOrder 배열 인덱스 매칭 — 여기 순서를 바꾸면
        반드시 htabOrder(sv 함수)도 함께 갱신할 것. 규제 요약(비뷰)은 항상 마지막(인덱스 밖 → 항상 off). -->
@@ -2258,10 +2258,10 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   <div class="hero-inner">
     <div class="hero-content">
       <div class="hero-msg">
-        <strong>30초 입력으로 받는 <em>맞춤 보고서</em></strong>
+        <strong>내 조건으로 만드는 <em>맞춤 보고서</em></strong>
       </div>
       <div class="hero-sub">
-        실거래가, 대출 한도, 최신 규제를 한 곳에 정리해 드려요
+        보유 주택·자금·희망 지역을 넣으면 대출 한도와 맞는 단지를 정리해 드려요
       </div>
     </div>
     <button class="hero-cta" onclick="_heroFunnel('cta_click'); sv('report');" aria-label="맞춤 보고서 만들기">
@@ -2574,15 +2574,15 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
        표시 로직은 기존 heroBand 와 공유: _showHeroNow/dismissHero 가 .on 토글, mhl_hero_dismissed 존중. -->
   <div id="mHeroChip" role="region" aria-label="서비스 소개">
     <span class="mhc-ico" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></span>
-    <button class="mhc-txt" onclick="mHeroExpand()">30초 만에 만드는 맞춤 보고서 <span aria-hidden="true">→</span></button>
+    <button class="mhc-txt" onclick="mHeroExpand()">내 조건으로 맞춤 보고서 만들기 <span aria-hidden="true">→</span></button>
     <button class="mhc-x" onclick="dismissHero()" aria-label="안내 닫기" title="닫기">✕</button>
   </div>
   <div id="mHeroCard" role="dialog" aria-label="맞춤 보고서 소개">
     <div style="display:flex;align-items:flex-start;gap:9px">
       <span class="mhc-ico" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></span>
       <div style="flex:1;min-width:0">
-        <div style="font-size:14px;font-weight:800;color:var(--t1)">30초 만에 만드는 맞춤 보고서</div>
-        <div style="font-size:12px;color:var(--t3);margin-top:3px;line-height:1.5">실거래가, 대출 한도, 최신 규제를<br>한 곳에 정리해 드려요</div>
+        <div style="font-size:14px;font-weight:800;color:var(--t1)">내 조건으로 만드는 맞춤 보고서</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:3px;line-height:1.5">보유 주택·자금·희망 지역을 넣으면<br>대출 한도와 맞는 단지를 정리해 드려요</div>
       </div>
       <button class="mhc-x" onclick="mHeroCollapse()" aria-label="접기" title="접기">✕</button>
     </div>
@@ -3160,7 +3160,7 @@ html[data-theme="dark"] #view-news{
 
     <!-- 1. 30초 가이드 — Phase 5: 보고서 중심 -->
     <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:var(--radius-lg);padding:16px 18px;margin-bottom:18px">
-      <div style="font-size:14px;font-weight:800;color:var(--accent-700);margin-bottom:8px">처음이세요? 30초 가이드</div>
+      <div style="font-size:14px;font-weight:800;color:var(--accent-700);margin-bottom:8px">처음이세요? 이렇게 써 보세요</div>
       <div style="font-size:12px;color:var(--t1);line-height:1.8">
         1. 위쪽 <b>보고서</b> 탭을 누르고 <b>3단계(주택 보유, 자금, 희망 지역)</b>를 입력해요<br>
         2. <b>맞춤 보고서 생성하기</b>를 누르면 AI가 내 가구 상황에 맞춘 <b>맞춤 보고서</b>를 만들어요<br>
@@ -3556,11 +3556,11 @@ html[data-theme="dark"] #view-news{
 
         <h3 style="font-size:14px;margin:14px 0 4px">2. 데이터의 한계</h3>
         <ul style="padding-left:18px">
-          <li>실거래가는 국토교통부 공공데이터를 사용하나, <strong>신고 지연·취소·정정에 따라 변동</strong>될 수 있습니다.</li>
+          <li>실거래가는 국토교통부 공공데이터를 쓰지만, <strong>신고 지연·취소·정정에 따라 변동</strong>될 수 있습니다.</li>
           <li>거래 8건 미만 단지는 통계적 의미가 약하며(95% 신뢰구간 ±20% 이상), 데이터 신뢰도(NONE/LOW/MED/HIGH)를 별도 표시합니다.</li>
           <li>이상거래 필터링(MAD 기반)·계절 편향 경고·시간 가중 평균을 적용하나, <strong>모든 비정상 패턴을 걸러내지는 못합니다.</strong></li>
           <li><strong>층·향(로열층/저층) 자동 보정 불가</strong> — 국토교통부 실거래 자료는 층 정보만 제공, 동·향(남향/북향) 정보 부재. 표시되는 시세는 동일 평형 평균이며 실제 매물의 동·층·향에 따라 ±5~15% 차이 가능. 임장 확인 필수.</li>
-          <li>좌표·면적·연식 등은 카카오 Local API/MOLIT 응답을 그대로 표시하며, <strong>실제와 다를 수 있습니다.</strong></li>
+          <li>좌표·면적·연식 등은 카카오와 국토교통부가 준 값을 그대로 보여 드리며, <strong>실제와 다를 수 있습니다.</strong></li>
         </ul>
 
         <h3 style="font-size:14px;margin:14px 0 4px">3. AI 분석의 한계 — 환각(Hallucination) 위험</h3>
@@ -4319,7 +4319,7 @@ function _lvRecRender(){
   box.innerHTML = rows.slice(0, 3).map(x => {
     const name = String(_dispAptName(x.aptName, x.umdNm) || x.aptName || '');
     const where = [String(x.region || '').trim(), String(x.umdNm || '').trim()].filter(Boolean).join(' ');
-    const area = Number(x.excluUseAr) > 0 ? `${Math.floor(Number(x.excluUseAr))}㎡` : ''; // 전용 84.98㎡ → 84㎡형(내림 — 반올림하면 85 로 보였다)
+    const area = Number(x.excluUseAr) > 0 ? `${Number(Number(x.excluUseAr).toFixed(2))}㎡` : ''; // 비교 기준인 실제 전용면적(84.45㎡) — '84㎡'로 줄이면 같은 단지 다른 84㎡ 타입(84.51㎡ 등)과 헷갈렸다(2026-10-27)
     const amt = _lvAmt(x.dealAmount), prev = _lvAmt(hi ? x.prevMax : x.prevMin);
     const day = /^\d{4}-\d{2}-\d{2}$/.test(String(x.dealDate || '')) ? String(x.dealDate).slice(5).replace('-', '.') : '';
     const arg = { aptName: x.aptName, sigungu: x.sigungu, umdNm: x.umdNm, lawdCd: x.lawdCd, buildYear: x.buildYear };
@@ -6071,7 +6071,7 @@ async function renderBriefing(){
     const tk=[];
     if(er&&er.baseRate!=null) tk.push({l:'기준금리',v:_escHtml(String(er.baseRate))+'%',s:'한국은행'});
     if(er&&er.mortgageRate!=null) tk.push({l:'주담대 평균',v:_escHtml(String(er.mortgageRate))+'%',s:'한국은행 '+_escHtml(String(er.mortgageRateMonth||'').replace(/^(\d{4})(\d{2})$/,'$1.$2'))});
-    if(dc&&dc.tx) tk.push({l:'실거래 누적',v:Number(dc.tx).toLocaleString()+'건',s:'국토부'+(dc.lastIngestedAt?' · '+String(dc.lastIngestedAt).slice(5,10).replace('-','.')+' 동기화':'')});
+    if(dc&&dc.tx) tk.push({l:'실거래 누적',v:Number(dc.tx).toLocaleString()+'건',s:'국토부'+(dc.lastIngestedAt?' · '+_kstMD(dc.lastIngestedAt)+' 동기화':'')});
     if(ps.length&&ps[0].dealCount60d) tk.push({l:'실거래 최다·60일',v:_escHtml((ps[0].displayName||_dispAptName(ps[0].aptName, ps[0].umdNm))||'')+' '+ps[0].dealCount60d+'건',s:'국토부'});
     if(items.length&&items[0].name) tk.push({l:'청약 임박',v:_escHtml(items[0].name||''),s:'청약홈'});
     // REG-LOG: 현행 대출·규제 기준의 시행일(valid_from)·확인일 — 전부 스냅샷 사실값
@@ -6158,7 +6158,7 @@ async function renderBriefing(){
     if(er) _srcs.push('한국은행');
     if(dc) _srcs.push('국토부 실거래');
     if(subs) _srcs.push('청약홈');
-    if(mm) mm.textContent=(_srcs.length?`오늘 브리핑은 ${_srcs.join('·')} 원자료를 기준으로 했어요.`:'오늘 브리핑 원자료를 잠시 불러오지 못했어요. 확인된 값만 보여줘요.')+(dc&&dc.lastIngestedAt?' 실거래 동기화 '+String(dc.lastIngestedAt).slice(5,10).replace('-','.')+'.':'')+' 값이 없는 항목은 추정하지 않고 비워 둬요.';
+    if(mm) mm.textContent=(_srcs.length?`오늘 브리핑은 ${_srcs.join('·')} 원자료를 기준으로 했어요.`:'오늘 브리핑 원자료를 잠시 불러오지 못했어요. 확인된 값만 보여줘요.')+(dc&&dc.lastIngestedAt?' 실거래 동기화 '+_kstMD(dc.lastIngestedAt)+'.':'')+' 값이 없는 항목은 추정하지 않고 비워 둬요.';
   }catch(_e){ /* 브리핑 실패는 조용히 — 뉴스 본체는 정상 */ }
 }
 // ============ DATA-STATUS-2026-08-19 (Sprint NNNNNNN-11): 데이터 상태 모달 ============
@@ -6955,7 +6955,11 @@ function mkNaverIW(p){
   }).join('');
   const scoreLabel = _hasS
     ? `${gSVG(s,38)}<div><div style="font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--text-primary)">데이터 종합 점수 ${s}/100</div><span class="lvl ${lv}" style="font-family:var(--font-mono);font-size:12px;padding:2px 7px;font-weight:600">${lt}</span></div>`
-    : `<div style="font-family:var(--font-mono);font-size:12px;color:var(--text-tertiary);line-height:1.5">데이터 분석 대기<br><span style="font-size:12px">목록 화면에서 조건으로 검색하면 분석돼요</span></div>`;
+    // POPUP-FACTS-2026-10-27 (QA): 점수가 없는 마커(이 지역 단지 보기)는 "데이터 분석 대기"만 보여 막다른 길이었다 —
+    //   이미 받은 사실(최근 180일 실거래 건수·단순 평균, /search/in-bounds 와 같은 값)을 보여 주고 상세로 이끈다. 값이 없으면 안내만.
+    : `<div style="font-size:12px;color:var(--text-secondary);line-height:1.6">${(Number(p.dealCount) > 0 && Number(p.avgPrice) > 0)
+        ? `최근 180일 실거래 <b style="color:var(--text-primary)">${Number(p.dealCount).toLocaleString()}건</b> · 단순 평균 <b style="color:var(--text-primary)">${_escHtml(Number(p.avgPrice).toFixed(2))}억</b>`
+        : '최근 거래 요약을 아직 계산하지 않았어요'}<br><span style="color:var(--text-tertiary)">평형별 실거래는 단지 상세에서 볼 수 있어요</span></div>`;
   return`<div style="background:var(--bg-elev-1);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);border:1px solid var(--border-subtle);overflow:hidden">
     <div class="niw" style="position:relative">
       <button onclick="try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_){}" aria-label="닫기" title="닫기" style="position:absolute;top:-3px;right:-3px;width:22px;height:22px;border:none;background:transparent;color:var(--text-tertiary);font-size:14px;line-height:1;cursor:pointer;padding:0;z-index:3">✕</button>
@@ -7549,7 +7553,7 @@ function renderListGrid(){
       <option value="oldBuild"${_curSortSel==='oldBuild'?' selected':''}>구축 우선</option>
     </select>
     ${_chip('lstFltAll', 'all', '전체')}${_chip('lstFltReg', 'regulated', '규제지역')}${_chip('lstFltNon', 'non', '비규제')}
-    <span class="ld-cnt">총 ${props.length}건</span>
+    <span class="ld-cnt">${(() => { const _ib = searchMeta && Number(searchMeta.inBudget); return (Number.isFinite(_ib) && _ib > props.length) ? `${_ib.toLocaleString()}곳 중 점수 상위 ${props.length}곳` : `총 ${props.length}건`; })()}</span>
   </div>
   <div class="ld-note"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span>점수는 과거 실거래 통계로 0부터 100까지 매긴 값이에요. 가격이 오를지 내릴지를 뜻하지 않아요.</span></div>`;
   // Phase 4 (2026-04-26): 렌더 안전망 + 정렬·필터.
@@ -7624,7 +7628,7 @@ function _renderListCard(p, i) {
       ${p.pros ? `<div class="ld-pros">${_escHtml(p.pros)}</div>` : ''}
       ${_tags ? `<div class="ld-tags">${_tags}</div>` : ''}
     </div>
-    <div class="ld-c-avg"><span class="ld-m">6개월 평균</span><span class="ld-v">${_escHtml(_fmtEok(p.avgPrice, 2))}</span>${(Number.isFinite(_n) && _n > 0) ? `<span class="ld-m ld-sp">표본 ${_n}건</span>` : ''}</div>
+    <div class="ld-c-avg"><span class="ld-m" title="최근 거래일수록 비중을 크게 둔 평균이에요(단순 평균과 다를 수 있어요)">6개월 가중 평균</span><span class="ld-v">${_escHtml(_fmtEok(p.avgPrice, 2))}</span>${(Number.isFinite(_n) && _n > 0) ? `<span class="ld-m ld-sp">표본 ${_n}건</span>` : ''}</div>
     <div class="ld-pyg">${_pyCells}</div>
     <div class="ld-c-loan">
       <div class="ld-lm"><div class="ld-m">LTV ${_escHtml(p.ltv || _regLtvLabel(p.area, p.lawdCd) || '—')}</div>${p.maxLoan ? `<div class="ld-mx">최대 대출 ${_escHtml(p.maxLoan)}</div>` : ''}</div>
@@ -11797,7 +11801,7 @@ function dc(fromBtn){
   const dsrNote=dsrState==='zero'?` · 기존 월상환 ${Math.round(exAdded)}만원이 DSR 40% 허용액(월 ${_allowMan}만원)을 넘어 신규 대출 여력이 없어요`
     :dsr>0?(dsrExceed?` · DSR ${dsr}%로 한도(40%)를 넘어 대출이 거절될 수 있어요`:dsr>=35?` · DSR ${dsr}%로 한도에 가까워요`:` · DSR ${dsr}%로 여유가 있어요`):'';
   const dsrDisclaimer = dsr>0 ? ' · 신용대출·전세대출 잔액은 추정 월 상환액(신용 6%·5년, 전세 4%·2년 가정)으로 반영해서, 금융기관의 실제 심사 결과와 다를 수 있어요' : '';
-  document.getElementById('co_w').textContent=(warn||'')+dsrNote+dsrDisclaimer;
+  document.getElementById('co_w').textContent=[warn, dsrNote, dsrDisclaimer].map(x=>String(x||'').replace(/^\s*·\s*/,'')).filter(Boolean).join(' · '); // warn 이 빈 문자열이면 ' · DSR …' 처럼 구분점으로 시작했다(QA 2026-10-27)
   const mos=[0,.01,.02].map(d2=>fin>0?Math.round(fin*1e8*(rate+d2)/12/(1-Math.pow(1+(rate+d2)/12,-n))/10000):0);
   const mx=Math.max(...mos,1);
   document.getElementById('scnC').innerHTML=mos.map((m,i)=>`<div class="br"><div class="bry">${((rate+[0,.01,.02][i])*100).toFixed(1)}%</div><div class="brb"><div class="brf" style="width:${Math.round(m/mx*100)}%"></div></div><div class="brv">${m}만</div></div>`).join('');
@@ -12979,7 +12983,7 @@ function buildRuleClause(b){
   if (issues.includes('누수')) {
     essential.push({title:'누수 이력 고지·보수 확인',content:'매도인은 누수 발생 이력과 보수 내역을 계약서에 고지하고, 잔금일 전 재점검하여 미보수 누수 발견 시 매도인 부담으로 수리한다.',reason:'입력 특이사항: 누수 이력'});
   }
-  if (issues.includes('전세 끼고') || issues.includes('세입자 승계')) {
+  if (/전세|세입자|임차/.test(issues)) { // 입력 예시가 '전세 낀 집'인데 '전세 끼고'만 알아봤다(2026-10-27 실측)
     essential.push({title:'임대차 승계 조건 명시',content:'매수인은 현 임대차계약(보증금·계약기간·특약 포함)을 승계하며, 매도인은 임대차계약서 사본과 보증금 반환 채무 내역을 잔금일 전까지 매수인에게 제공한다.',reason:'입력 특이사항: 전세 끼고 매수·세입자 승계. 승계 조건을 서면으로 적어요'});
   }
   if (issues.includes('재건축')) {
@@ -14704,6 +14708,8 @@ function _t0SrcHtml(){
 function _t0SrcFill(){
   try{ const h=document.querySelector('#t0 .t0-hero'); if(!h||h.querySelector('.t0h-src')) return; const x=_t0SrcHtml(); if(x) h.insertAdjacentHTML('beforeend', x); }catch(_){}
 }
+// KST-MD-2026-10-27: 적재 시각(UTC ISO)을 한국 날짜 'MM.DD' 로 — 문자열을 그대로 자르면 새벽 적재분이 하루 전 날짜로 보였다(10.21 02:45 KST → '10.20')
+function _kstMD(iso){const d=new Date(iso);if(!iso||isNaN(d))return'';const k=new Date(d.getTime()+9*3600e3),p=n=>String(n).padStart(2,'0');return`${p(k.getUTCMonth()+1)}.${p(k.getUTCDate())}`;}
 function _fmtKstFull(iso){const d=new Date(iso);if(!iso||isNaN(d))return'';const k=new Date(d.getTime()+9*3600e3),p=n=>String(n).padStart(2,'0');return`${k.getUTCFullYear()}.${p(k.getUTCMonth()+1)}.${p(k.getUTCDate())} ${p(k.getUTCHours())}:${p(k.getUTCMinutes())}`;}
 // LIST-D-2026-10-18 (Plan 163): 억 표기 공용 — 목록 화면부터 사용(다른 화면 이관은 별도). 값이 없거나 0 이하면 '—'.
 function _fmtEok(v, d){ const n = Number(v); if(!Number.isFinite(n) || n <= 0) return '—'; return n.toFixed(d == null ? 2 : d) + '억'; }

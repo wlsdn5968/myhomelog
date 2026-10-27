@@ -130,7 +130,7 @@ function regionList() {
 // ── GET /region — 전 지역 허브(크롤러가 118개를 타고 들어갈 입구) ─────────────────
 router.get('/', (req, res) => {
   const list = regionList();
-  const body = `<div class="eyebrow">MYHOMELOG REGION</div>
+  const body = `<div class="eyebrow">내집로그 · 지역</div>
     <h1>지역별 아파트 실거래 데이터</h1>
     <div class="tag">전국 ${list.length}개 시군구 · 국토교통부 실거래 신고 기준</div>
     <div class="card"><h2>지역 선택</h2>
@@ -222,7 +222,7 @@ router.get('/:lawdCd', async (req, res) => {
       title: '지역을 찾을 수 없어요 | 내집로그',
       desc: '지역 코드에 맞는 페이지가 없어요.',
       canonical: `${ORIGIN}/region`,
-      body: `<div class="eyebrow">MYHOMELOG REGION</div><h1>지역 없음</h1>
+      body: `<div class="eyebrow">내집로그 · 지역</div><h1>지역 없음</h1>
         <p style="font-size:14px;color:var(--ink3)">지역 코드에 맞는 페이지가 없어요.</p>
         <a class="cta" href="/region">전체 지역 보기 →</a>`,
     }));
@@ -237,13 +237,18 @@ router.get('/:lawdCd', async (req, res) => {
   // PARALLEL-2026-10-14 (Plan 140): 지역 데이터와 주요 단지 목록은 서로 독립(둘 다 region.lawdCd 만 입력) — 함께 기다린다.
   //   topAptsOfRegion 은 내부 try/catch 로 실패 시 [] 를 돌려주므로 종전과 같은 부분 실패 동작이다.
   const [{ dash, rec, weekly }, apts] = await Promise.all([loadRegionData(region), topAptsOfRegion(region.lawdCd, 30)]);
+  // CANON-NAME-2026-10-27 (QA): 지역 페이지는 실거래 신고 이름("상계주공7(고층)")을 그대로 보여 앱("상계주공7단지")과 달랐다.
+  //   앱·추천·알림과 같은 별칭 대응표(apt_master.molit_aliases)로 정식 이름을 쓴다. 대응이 없으면 종전 표시 이름 그대로.
+  let canon = new Map();
+  try { canon = await require('../services/transactionService').getAliasCanonicalMap([region.lawdCd]); } catch (_) { canon = new Map(); }
+  const showName = (name, umd) => canon.get(`${name}|${umd || ''}`) || displayAptName(name, { umdNm: umd }) || '';
 
   // ── 카드들 — 값이 없으면 카드 자체를 만들지 않는다(0·추정 금지) ──
   const cards = [];
   const facts = regionFacts(dash, rec, weekly);   // description·OG 카드가 같은 문장을 쓴다(사본 금지)
 
   if (rec && (num(rec.highCount) || num(rec.lowCount))) {
-    const row = (it, kind) => `<div class="row"><span>${esc(it.aptName || '')} <span class="k">${esc(it.umdNm || '')}${it.excluUseAr ? ' · 전용 ' + esc(String(it.excluUseAr)) + '㎡' : ''}</span></span><span class="num" style="white-space:nowrap"><b style="color:var(--pri)">${eok(it.dealAmount)}</b> <span class="k">직전 ${kind === 'high' ? '최고' : '최저'} ${eok(kind === 'high' ? it.prevMax : it.prevMin)} · ${num(it.priorCount) || 0}건</span></span></div>`;
+    const row = (it, kind) => `<div class="row"><span>${esc(showName(it.aptName, it.umdNm))} <span class="k">${esc(it.umdNm || '')}${it.excluUseAr ? ' · 전용 ' + esc(String(it.excluUseAr)) + '㎡' : ''}</span></span><span class="num" style="white-space:nowrap"><b style="color:var(--pri)">${eok(it.dealAmount)}</b> <span class="k">직전 ${kind === 'high' ? '최고' : '최저'} ${eok(kind === 'high' ? it.prevMax : it.prevMin)} · ${num(it.priorCount) || 0}건</span></span></div>`;
     cards.push(`<div class="card">
       <h2>최근 ${num(rec.windowDays) || 30}일 최고·최저 경신 <span class="src">같은 단지·같은 전용면적 기준 · ${esc(String(rec.sinceDate || '').replace(/-/g, '.'))} 이후 쌓인 거래 안에서</span></h2>
       <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">비교 가능 거래 ${comma(num(rec.comparedCount) || 0)}건 중 최고가 경신 <b style="color:var(--ink)">${comma(num(rec.highCount) || 0)}건</b> · 최저가 경신 <b style="color:var(--ink)">${comma(num(rec.lowCount) || 0)}건</b></div>
@@ -304,7 +309,7 @@ router.get('/:lawdCd', async (req, res) => {
     // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — a.apt_name(href 의 apt_seq 는 조회 키 그대로)은
     //   링크 텍스트에서만 감싼다.
     cards.push(`<div class="card"><h2>이 지역 주요 단지 <span class="src">최근 실거래 많은 순 · 매물 광고 아님</span></h2>
-      <div class="links">${apts.map(a => `<a href="/apt/${esc(a.apt_seq)}">${esc(displayAptName(a.apt_name, { umdNm: a.umd_nm }) || '')}${a.umd_nm ? ` <span class="k">${esc(a.umd_nm)}</span>` : ''}</a>`).join('')}</div>
+      <div class="links">${apts.map(a => `<a href="/apt/${esc(a.apt_seq)}">${esc(showName(a.apt_name, a.umd_nm))}${a.umd_nm ? ` <span class="k">${esc(a.umd_nm)}</span>` : ''}</a>`).join('')}</div>
       <div class="src" style="margin-top:8px">단지명을 누르면 그 단지의 실거래 요약을 볼 수 있어요.</div></div>`);
   }
 
@@ -319,7 +324,7 @@ router.get('/:lawdCd', async (req, res) => {
   const menuEntry = menuEntryForLawd(region.lawdCd);
   const ctaHref = menuEntry ? `${ORIGIN}/?region=${encodeURIComponent(`${menuEntry.wide} ${menuEntry.label}`)}` : `${ORIGIN}/`;
 
-  const body = `<div class="eyebrow">MYHOMELOG REGION</div>
+  const body = `<div class="eyebrow">내집로그 · 지역</div>
     <h1>${esc(label)} 아파트 실거래 데이터</h1>
     <div class="tag">국토교통부 실거래 신고 자료 정리${syncKst ? ` · 실거래 수집 ${esc(syncKst)} 기준` : ''}</div>
     ${cards.length ? cards.join('') : '<div class="card"><h2>준비 중</h2><div style="font-size:12px;color:var(--ink3)">이 지역의 공식 통계를 아직 불러오지 못했어요.</div></div>'}
