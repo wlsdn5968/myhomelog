@@ -6937,7 +6937,7 @@ function mkNaverOverlay(p){
   naver.maps.Event.addListener(ov,'click',()=>{
     if(_mapSheetTry('search',p))return; // MSHEET (①C): 모바일은 하단 시트
     if(iw.getMap())iw.close();
-    else { try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_){} window._activeMarkerIW=iw; iw.open(mapObj,ov); }
+    else { try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_){} window._activeMarkerIW=iw; iw.open(mapObj,ov); _niwKick(); }
   });
   return ov;
 }
@@ -6945,12 +6945,20 @@ function mkNaverOverlay(p){
 // POPUP-RECENT-2026-10-27 (운영자 승인 제안): 지도 팝업에 최근 거래 3건 — 상세를 열지 않아도 실제 거래를 본다.
 //   상세·공유와 같은 조회(/api/transactions, 별칭 정확 매칭 + 동 필터 — 2026-10-27 다른 동 "주공7" 혼입 수정 반영).
 //   팝업이 열린 뒤 채운다(자리만 먼저). 실패·0건이면 줄을 지운다(지어내지 않는다). 같은 단지는 세션 안에서 다시 묻지 않는다.
-let _niwSeq = 0; const _niwRcCache = new Map();
+//   ⚠ 팝업 내용은 마커를 만들 때 미리 생성된다 — 그때 바로 채우면 팝업이 아직 화면에 없다(운영 실측: 영영 '불러오는 중').
+//   그래서 자리와 단지 정보만 등록해 두고, 팝업을 여는 곳(iw.open 직후 _niwKick)에서 채운다.
+let _niwSeq = 0; const _niwRcCache = new Map(), _niwPending = new Map();
 function _niwRecentSlot(p){
   if(!p || !p.aptName || !/^\d{5}$/.test(String(p.lawdCd || ''))) return '';
   const id = 'niwrc' + (++_niwSeq);
-  setTimeout(() => _niwRecentFill(id, p, 0), 60);
+  _niwPending.set(id, p);
+  if(_niwPending.size > 400) _niwPending.delete(_niwPending.keys().next().value); // 마커를 많이 다시 그려도 무한히 쌓이지 않게
   return `<div class="niw-rc" id="${id}"><span class="niw-rc-l">최근 거래 불러오는 중이에요</span></div>`;
+}
+function _niwKick(){
+  setTimeout(() => {
+    for(const [id, p] of _niwPending){ if(document.getElementById(id)){ _niwPending.delete(id); _niwRecentFill(id, p, 0); } }
+  }, 30);
 }
 async function _niwRecentFill(id, p, tries){
   const el = document.getElementById(id);
@@ -13574,7 +13582,7 @@ async function loadPopularMarkers() {
           naver.maps.Event.addListener(ov, 'click', () => {
             if(_mapSheetTry('pop',p))return; // MSHEET (①C)
             if (iw.getMap()) iw.close();
-            else { try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_){} window._activeMarkerIW=iw; iw.open(mapObj, ov); }
+            else { try{window._activeMarkerIW&&window._activeMarkerIW.close();}catch(_){} window._activeMarkerIW=iw; iw.open(mapObj, ov); _niwKick(); }
           });
           ov._iw = iw; ov._isNaver = true;
           window._popMarkers.push(ov);

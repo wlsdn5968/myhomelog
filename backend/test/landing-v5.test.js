@@ -115,3 +115,9 @@ test('GU-RANK·POPUP-RECENT 10-27: 구 순위는 TOP10 에 있을 때만(단지 
   assert.match(rc, /if\(!rows\.length\)\{ el\.remove\(\); return; \}/);
   assert.match(html, /\$\{_niwRecentSlot\(p\)\}/);
 });
+
+test('POPUP-RECENT 보정: 팝업 내용은 마커 생성 때 미리 만들어지므로, 여는 두 곳에서 채우기를 시작한다', () => {
+  assert.equal((html.match(/iw\.open\(mapObj, ?ov\); _niwKick\(\);/g) || []).length, 2);
+  assert.match(fn('_niwRecentSlot'), /_niwPending\.set\(id, p\);/);
+  assert.doesNotMatch(fn('_niwRecentSlot'), /setTimeout\(\(\) => _niwRecentFill/, '생성 시점에 채우면 팝업이 아직 없다');
+});
