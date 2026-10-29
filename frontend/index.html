@@ -5183,7 +5183,10 @@ async function generateReport(_isRetry) {
 
   // 입력 수집 (사이드바 chip + input)
   const buy = parseFloat(document.getElementById('bp')?.value) || 0;
-  const cash = parseFloat(document.getElementById('mc')?.value) || 0;
+  // CASH-UNKNOWN-2026-10-30 (10-18 전수 점검): 빈칸을 0 으로 보내 보고서 본문이 '자기자본 0억'이라고 사실처럼 썼다
+  //   (같은 입력을 이 화면 요약은 '?억'으로 표시). 빈칸은 null(미입력), 0 을 직접 넣었을 때만 0.
+  const _cashRaw = (document.getElementById('mc')?.value || '').trim();
+  const cash = _cashRaw === '' || !Number.isFinite(parseFloat(_cashRaw)) ? null : parseFloat(_cashRaw);
   const inc = parseFloat(document.getElementById('inc')?.value) || 0;
   const region = getRegionForSearch();
   const houseStatus = gct('ch-h');
@@ -5224,7 +5227,7 @@ async function generateReport(_isRetry) {
   summary.style.display=''; // AUDIT-2026-08-19: 기본 숨김(생성 전 빈 파란 박스 노출 제거) — 채울 때만 표시
   summary.innerHTML = `
     <b>입력 조건</b><br>
-    매수가 <b>${buy}억</b> · 자기자본 ${cash || '?'}억 · 지역 <b>${_escHtml(region)}</b><br>
+    매수가 <b>${buy}억</b> · 자기자본 ${cash == null ? '미입력' : cash + '억'} · 지역 <b>${_escHtml(region)}</b><br>
     보유 ${_escHtml(houseStatus||'?')} · 생애최초 ${firstBuyerKnown ? (isFirstBuyer ? '예' : '아니오') : '미확인(일반 기준)'} · 평형 ${_escHtml(pyeong||'전체')}<br>
     자녀 ${_escHtml(kidPlan)} · 거주 ${_escHtml(stayYears)} · 1순위 <b>${_escHtml(priority)}</b>
   `;
@@ -5657,7 +5660,7 @@ function _downloadReportPDF() {
 
   const inputLine = [
     inp.maxBudget ? `매수가 ${_numFmt(inp.maxBudget)}억` : null,
-    inp.myCash ? `자기자본 ${_numFmt(inp.myCash)}억` : null,
+    inp.myCash != null ? `자기자본 ${_numFmt(inp.myCash)}억` : null, // CASH-UNKNOWN: 0 을 넣었으면 0억, 미입력은 생략
     inp.region ? `지역 ${esc(inp.region)}` : null,
     inp.pyeong ? `평형 ${esc(inp.pyeong)}` : null,
     inp.houseStatus ? `보유 ${esc(inp.houseStatus)}` : null,

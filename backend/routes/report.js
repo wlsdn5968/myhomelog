@@ -118,7 +118,8 @@ router.post('/generate', async (req, res) => {
   // 숫자 — UI 범위 clamp (억 단위). 음수/NaN/과대값 차단.
   userInput.maxBudget = _clamp(_budget, 0.1, 500);
   const _cash = _num(userInput.myCash);
-  userInput.myCash = Number.isFinite(_cash) ? _clamp(_cash, 0, 500) : 0;
+  // CASH-UNKNOWN-2026-10-30: 미입력(null·빈값)은 0 이 아니라 null — 본문이 '자기자본 0억'을 사실처럼 쓰지 않게.
+  userInput.myCash = Number.isFinite(_cash) ? _clamp(_cash, 0, 500) : null;
   // 연소득(만원 단위) — UI 상·하한 미지정 → 보수적 sanity cap(0 ~ 1,000,000만원 = 100억) + 음수/NaN 차단.
   const _inc = _num(userInput.annualIncome);
   userInput.annualIncome = Number.isFinite(_inc) ? _clamp(_inc, 0, 1000000) : 0;
@@ -598,7 +599,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
   //   운영자 방침(AI 비용 지출 최소화)상 이 경로가 상시 노출될 수 있어, 고정 문구 대신 실데이터를 넣어
   //   AI 없이도 정보 밀도를 높인다. 전부 실측값 — 없으면 해당 줄만 생략(graceful).
   const coreMessages = [
-    `매수가 ${userInput.maxBudget}억 · 자기자본 ${userInput.myCash}억 · ${userInput.region} 조건의 최근 6개월 실거래 데이터를 정리했어요.`
+    `매수가 ${userInput.maxBudget}억 · 자기자본 ${userInput.myCash == null ? '미입력' : userInput.myCash + '억'} · ${userInput.region} 조건의 최근 6개월 실거래 데이터를 정리했어요.`
       + (fc.tx ? ` (${fc.tx})` : ''),
     // '추천' 단어는 자체 단언표현 필터(filterAdviceOutputDeep)에 걸림 (라이브 확인) — 필터 안전 문구 사용
     `아래 ${apartments.length}개 단지는 국토교통부 실거래 기준 조건 부합 단지 정리예요 — 의사결정 책임은 본인에게 있어요.`,
@@ -1972,7 +1973,7 @@ function buildReportPrompt(input, policy, candidates, freeCtx) {
   // REPORT_SYSTEM_PROMPT 는 callAI options.system 으로 전달됨 (중복 제거)
   return `## 내 가구 상황
 - 매수가: ${input.maxBudget}억
-- 자기자본: ${input.myCash || '?'}억
+- 자기자본: ${input.myCash == null ? '미입력' : input.myCash + '억'}
 - 연소득: ${input.annualIncome ? input.annualIncome + '만원' : '미입력'} (참고용 — DSR 계산은 도구 › 대출 계산)
 - 보유 주택: ${input.houseStatus || '?'}
 - 생애 최초: ${input.firstBuyerKnown === false ? '미확인 — 일반(비우대) 기준으로 계산했고, 해당 시 우대 가능성만 언급할 것' : (input.isFirstBuyer ? '예' : '아니오')}

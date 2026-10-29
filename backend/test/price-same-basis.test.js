@@ -118,3 +118,15 @@ test('관심 단지 가격 갱신도 대표 평형 평균(목표가 알림 판�
   assert.doesNotMatch(body, /const prices=items\.map\(t=>t\.dealAmount\/10000\);/, '섞은 평균이 남았다');
   assert.match(html, /_priceBasis:b\.priceBasis\|\|undefined/);
 });
+
+// CASH-UNKNOWN-2026-10-30 (10-18 전수 점검 '보고서 자기자본 빈칸 0'): 빈칸은 미입력, 0 을 직접 넣었을 때만 0억
+test('보고서 자기자본: 화면은 빈칸을 null 로 보내고, 요약·PDF·서버 본문·AI 지시문이 모두 미입력과 0억을 구분한다', () => {
+  assert.match(html, /const cash = _cashRaw === '' \|\| !Number\.isFinite\(parseFloat\(_cashRaw\)\) \? null : parseFloat\(_cashRaw\);/);
+  assert.match(html, /자기자본 \$\{cash == null \? '미입력' : cash \+ '억'\}/);
+  assert.match(html, /inp\.myCash != null \? `자기자본/);
+  const rep = fs.readFileSync(path.join(__dirname, '../routes/report.js'), 'utf8');
+  assert.match(rep, /userInput\.myCash = Number\.isFinite\(_cash\) \? _clamp\(_cash, 0, 500\) : null;/);
+  assert.match(rep, /자기자본 \$\{userInput\.myCash == null \? '미입력' : userInput\.myCash \+ '억'\}/);
+  assert.match(rep, /- 자기자본: \$\{input\.myCash == null \? '미입력' : input\.myCash \+ '억'\}/);
+  assert.doesNotMatch(rep, /자기자본 \$\{userInput\.myCash\}억/, '빈칸을 0억으로 쓰는 옛 문구가 남았다');
+});
