@@ -37,6 +37,11 @@ async function _bumpGeoCap() {
   } catch (_) { return null; }
 }
 
+// REGION-CENTROID-2026-10-29: 장소 이름이 없고 주소가 번지(숫자)로 끝나지 않으면 '지역 이름뿐' 결과(동·구 중심점)다.
+function _isRegionOnly(d, addrText) {
+  return !(d && d.place_name) && !/\s\d+(-\d+)?$/.test(String(addrText || '').trim());
+}
+
 // Kakao 좌표 조회: keyword → address fallback
 // STAB-AUDIT-2026-05-06: sigungu·umdNm 명시 시 결과 검증 강제 (동명이지 환각 차단)
 async function kakaoGeocode(key, aptName, area, sigungu, umdNm) {
@@ -82,6 +87,10 @@ async function kakaoGeocode(key, aptName, area, sigungu, umdNm) {
           continue;
         }
         const addrText = d.address_name || d.address?.address_name || '';
+        // REGION-CENTROID-2026-10-29 (운영 실측): 마지막 주소 검색(q=area "노원구 공릉동")은 번지 없는 '지역' 결과 = 동 중심점을
+        //   돌려준다. 그 좌표를 단지 좌표로 답해 공릉풍림아이원 핀이 본체에서 약 800m 떨어진 동 한가운데 찍혔다.
+        //   주소 검색 결과는 번지(숫자)로 끝날 때만 단지 위치로 받는다 — 지역 이름뿐이면 "찾지 못함"이 정직하다.
+        if (_isRegionOnly(d, addrText)) { attempts.push({ skipped: 'region_only', addr: addrText }); continue; }
         const placeName = d.place_name || '';
         const categoryName = d.category_name || '';
         // SIGUNGU-SPACE-FIX-2026-06-14: molit "안양시동안구"(붙임) vs Kakao "안양시 동안구"(띄어쓰기) → 공백 무시 비교 (경기 시+구 좌표 갭 해소)
@@ -208,3 +217,4 @@ router.post('/batch', async (req, res) => {
 module.exports = router;
 // 순수 판정 함수 노출 — 계약 테스트 고정용 (Plan 002)
 module.exports._geocodeCapExceeded = _geocodeCapExceeded;
+module.exports._isRegionOnly = _isRegionOnly;

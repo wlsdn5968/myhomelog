@@ -549,7 +549,23 @@ async function resolveCoordFromCacheOnly(apt) {
   const fromDb = await getFromDb(buildKey(apt));
   if (fromDb) return fromDb;       // { untrusted: true } 도 그대로 — /api/geocode 가 "위치 확인 중"으로 답하고 카카오로 가지 않는다
   const fromCombo = await getFromDbByNameCombo(apt);
-  return fromCombo || null;
+  if (fromCombo) return fromCombo;
+  return (await getFromDbByMasterKapt(apt)) || null;
+}
+
+/** KAPT-KEY-LOOKUP-2026-10-29 (운영 실측): 정식 단지 이름(공릉풍림아이원)으로 오면 이름 키가 없고, 좌표는 단지 코드 키
+ *  (kapt:A13980513, 장소 '공릉풍림아파트')에만 있다 — 이 경로가 그 키를 보지 않아 카카오 검색 → 동 중심점으로 떨어졌다
+ *  (단지 코드 키만 가진 단지 410곳, 2026-10-29 실측). 같은 시군구·동에서 이름이 정확히 같은 단지가 **하나**일 때만 그 코드 키를 읽는다. */
+async function getFromDbByMasterKapt({ aptName, sigungu, umdNm }) {
+  const admin = dbClient();
+  if (!admin || !aptName || !sigungu || !umdNm) return null;
+  try {
+    const { data } = await admin.from('apt_master').select('kapt_code')
+      .eq('apt_name', aptName).eq('sigungu', sigungu).eq('umd_nm', umdNm).limit(2);
+    if (!Array.isArray(data) || data.length !== 1 || !data[0].kapt_code) return null;
+    const r = await getFromDb(`kapt:${data[0].kapt_code}`);
+    return (r && (r.untrusted || r.lat != null)) ? r : null;
+  } catch (_) { return null; }
 }
 
 /**
@@ -596,6 +612,6 @@ async function kakaoStrictAptSearch({ aptName, sigungu, umdNm }) {
   return null;
 }
 
-module.exports = { resolveCoord, resolveCoordBatch, resolveCoordFromCacheOnly, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb, NON_APT_PATTERNS, NON_APT_CATEGORY, AMBIGUOUS_SGG,
+module.exports = { resolveCoord, resolveCoordBatch, resolveCoordFromCacheOnly, getFromDbByMasterKapt, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb, NON_APT_PATTERNS, NON_APT_CATEGORY, AMBIGUOUS_SGG,
   // JIBUN-FIRST-2026-08-10: 백필 잡도 같은 헬퍼를 쓰도록 export(복붙 드리프트 방지)
   molitJibunAddress, sggWithSpace, kakaoStrictAptSearch, strictAptMatch };

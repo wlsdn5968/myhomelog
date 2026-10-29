@@ -512,6 +512,21 @@ async function getTransactionsByApt(lawdCd, aptName, monthsBack = 6) {
 const _nsp = (s) => String(s || '').replace(/\s+/g, '');
 function _filterExactAlias(arr, alias) { const k = _nsp(alias); return (Array.isArray(arr) ? arr : []).filter(t => _nsp(t && t.aptName) === k); }
 
+// ALIAS-SORT-2026-10-29 (운영 실측): 별칭별 배열을 이어 붙이기만 해 "A 전부 → B 전부" 순서였다. 화면은 앞 30건만 써서
+//   공릉풍림아이원의 풍림아파트B(727번지, 31.32㎡) 거래 8건이 통째로 빠졌다. 중복을 지운 뒤 계약일 최신순으로 정렬한다.
+function _mergeAliasTx(arrays) {
+  const merged = [];
+  const seen = new Set();
+  for (const arr of (Array.isArray(arrays) ? arrays : [])) {
+    for (const t of (Array.isArray(arr) ? arr : [])) {
+      const k = `${t.dealYear}|${t.dealMonth}|${t.dealDay}|${t.excluUseAr}|${t.floor}|${t.dealAmount}|${t.aptName}`;
+      if (!seen.has(k)) { seen.add(k); merged.push(t); }
+    }
+  }
+  const _d = (t) => (Number(t.dealYear) || 0) * 10000 + (Number(t.dealMonth) || 0) * 100 + (Number(t.dealDay) || 0);
+  return merged.sort((a, b) => _d(b) - _d(a));
+}
+
 async function getTransactionsByAptInclAliases(lawdCd, aptName, monthsBack = 6) {
   const base = await getTransactionsByApt(lawdCd, aptName, monthsBack);
   if (!aptName) return base;
@@ -533,14 +548,7 @@ async function getTransactionsByAptInclAliases(lawdCd, aptName, monthsBack = 6) 
     const aliasArrays = await Promise.all(
       aliases.slice(0, 5).map(a => getTransactionsByApt(lawdCd, a, monthsBack).then(arr => _filterExactAlias(arr, a)).catch(() => []))
     );
-    const merged = [];
-    const seen = new Set();
-    for (const arr of aliasArrays) {
-      for (const t of arr) {
-        const k = `${t.dealYear}|${t.dealMonth}|${t.dealDay}|${t.excluUseAr}|${t.floor}|${t.dealAmount}|${t.aptName}`;
-        if (!seen.has(k)) { seen.add(k); merged.push(t); }
-      }
-    }
+    const merged = _mergeAliasTx(aliasArrays);
     return merged.length ? merged : base; // alias 거래 0건이면 base fallback
   } catch (e) {
     logger.warn({ err: e.message, lawdCd, aptName }, 'getTransactionsByAptInclAliases alias 병합 실패 — base 반환');
@@ -939,4 +947,4 @@ async function getTransactionsByAptSeqMerged(aptSeq, monthsBack = 24) {
   });
 }
 
-module.exports = { _filterExactAlias, getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };
+module.exports = { _filterExactAlias, _mergeAliasTx, getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };
