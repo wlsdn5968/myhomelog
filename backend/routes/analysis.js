@@ -45,6 +45,17 @@ router.post('/compare', async (req, res) => {
   if (apts.length > 6) {
     return res.status(400).json({ error: '한 번에 최대 6개 단지까지 비교할 수 있어요.' });
   }
+  // SEC-1030-C10 (보안 감사 2026-10-30): GET 만 지역 코드를 검사하고 compare 는 빠져 있었다 — 임의 코드 6개 × 24개월이
+  //   캐시를 피해 요청 1회에 국토부 API 최대 144회를 불렀다. GET 과 같은 허용 목록 + 이름 길이 상한.
+  const { isKnownLawdCd } = require('../services/transactionService');
+  for (const a of apts) {
+    if (!a || typeof a !== 'object' || typeof a.aptName !== 'string' || !a.aptName.trim() || a.aptName.length > 100) {
+      return res.status(400).json({ error: '단지 정보가 올바르지 않아요.' });
+    }
+    if (a.lawdCd != null && a.lawdCd !== '' && !isKnownLawdCd(String(a.lawdCd))) {
+      return res.status(400).json({ error: '지원하지 않는 지역이에요.' });
+    }
+  }
   try {
     const result = await compareBatch(apts, { dealMonths });
     res.json(result);

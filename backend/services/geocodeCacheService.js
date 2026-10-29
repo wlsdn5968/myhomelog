@@ -458,6 +458,13 @@ async function resolveCoord(apt, _diag) {
     // FREEZE-FIX-2026-08-09 (Plan 003): fire-and-forget UPSERT 는 서버리스 동결로 유실될 수 있어
     //   (RATE-WARM-2026-08-08 실측 선례) 저장이 안 되면 같은 단지 재요청마다 Kakao 를 다시 호출한다
     //   — 응답 전에 완주(수십 ms). 실패는 기존대로 삼킨다.
+    // SEC-1030-C12 (보안 감사 2026-10-30): 시군구도 단지 코드도 없으면 카카오 결과를 주소로 검증하지 못한다
+    //   (kakaoGeocode 의 sgg 검사가 빠진다) — 공개 경로에 임의 이름을 넣어 apt_geocache 에 영구 행을 쌓을 수 있었다.
+    //   그런 결과는 응답에만 쓰고 DB 에는 남기지 않는다(같은 인스턴스 재요청은 메모리 캐시 1시간).
+    if (!apt.sigungu && !apt.kaptCode) {
+      cache.set(`geo-db:${key}`, fromKakao, 3600);
+      return fromKakao;
+    }
     await saveToDb(key, { ...apt, ...fromKakao }).catch(() => {});
     return fromKakao;
   }

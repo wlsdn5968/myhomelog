@@ -66,6 +66,8 @@ function adminClient() {
 // 의도적으로 router.use(requireAuth) **앞에** 정의 — consent 는 OAuth 시작 전 시점 호출.
 const CONSENT_DEDUP_MS = 10 * 60 * 1000;
 const _consentSeen = new Map();
+const CONSENT_PER_IP = 5;
+const _consentPerIp = new Map();
 router.post('/consent', async (req, res) => {
   const { age14Plus, terms, privacy, intlTransfer, version, ts } = req.body || {};
   if (age14Plus !== true || terms !== true || privacy !== true || intlTransfer !== true) {
@@ -89,13 +91,22 @@ router.post('/consent', async (req, res) => {
   //   (요청 제한은 Redis 장애로 fail-open). 같은 IP·같은 브라우저·같은 버전의 10분 안 반복 동의는 첫 기록이 이미 증빙이므로 건너뛴다.
   //   키는 전체 IP(이 인스턴스 메모리에만 — DB 에는 기존대로 /24 마스킹만 저장)라 같은 통신망의 다른 사람은 묶이지 않는다.
   //   인스턴스 메모리라 완전한 차단은 아니지만 한 연결에서의 반복 쓰기를 막는다. 영구 보관 여부 자체는 법적 판단이라 그대로 둔다.
-  const dedupKey = `${req.ip || ''}|${String(req.headers['user-agent'] || '').slice(0, 200)}|${meta.version || ''}`;
+  // SEC-1030-C5 (보안 감사 2026-10-30): UA·version 은 요청자가 매번 바꿀 수 있어 위 키만으로는 무한히 쌓였다.
+  //   키를 IP 하나로 줄이면 같은 IP 를 나눠 쓰는 다른 사람(이동통신망 공용 IP)의 동의 증빙이 빠지므로,
+  //   키는 그대로 두고 **IP 당 10분에 새 기록 최대 CONSENT_PER_IP 건** 상한을 더한다(IP 1개 하루 최대 720행).
+  const ip = String(req.ip || '');
+  const dedupKey = `${ip}|${String(req.headers['user-agent'] || '').slice(0, 200)}|${meta.version || ''}`;
   const now = Date.now();
   const last = _consentSeen.get(dedupKey);
   if (last && now - last < CONSENT_DEDUP_MS) return res.json({ ok: true, deduped: true });
+  const ipWin = _consentPerIp.get(ip);
+  const ipCount = ipWin && now - ipWin.start < CONSENT_DEDUP_MS ? ipWin.n : 0;
+  if (ipCount >= CONSENT_PER_IP) return res.json({ ok: true, deduped: true });
   await writeAudit(req, 'consent.accept', 'consent', null, meta);
   _consentSeen.set(dedupKey, now); // 기록한 뒤에 남긴다
+  _consentPerIp.set(ip, ipCount === 0 ? { start: now, n: 1 } : { start: ipWin.start, n: ipCount + 1 });
   if (_consentSeen.size > 5000) { for (const [k, t] of _consentSeen) if (now - t >= CONSENT_DEDUP_MS) _consentSeen.delete(k); }
+  if (_consentPerIp.size > 5000) { for (const [k, w] of _consentPerIp) if (now - w.start >= CONSENT_DEDUP_MS) _consentPerIp.delete(k); }
   res.json({ ok: true });
 });
 
@@ -251,7 +262,7 @@ router.post('/delete', async (req, res, next) => {
         status: 'pending',
         restored_at: null,
         hard_deleted_at: null,
-        reason: reason ? String(reason).slice(0, 500) : null,
+        reason: typeof reason === 'string' ? reason.slice(0, 500) : null,
         email_at_request: userEmail || null,
         ip_masked: ipMasked,
         user_agent: userAgent,
@@ -261,10 +272,19 @@ router.post('/delete', async (req, res, next) => {
     if (adrErr) throw adrErr;
 
     await writeAudit(req, 'account.delete.request', 'user', userId, {
-      email: userEmail,
+      // SEC-1030-C6/C7: audit 는 영구 보관 — 이메일은 기록하지 않고(user_id 는 행에 이미 있음), 사유는 테이블 저장과 같은 규칙(문자열만·500자)
       scheduled_hard_delete_at: adrRow.scheduled_hard_delete_at,
-      reason: reason || null,
+      reason: typeof reason === 'string' ? reason.slice(0, 500) : null,
     });
+
+    // SEC-1030-C8: 유예 중에도 카카오 알림 토큰(OAuth)이 살아 있어 알림이 계속 발송된다 — 삭제 예약 시 즉시 파기.
+    //   실패해도 삭제 예약은 진행(cron hard delete 가 이 표를 다시 지운다).
+    try {
+      const { error: ktErr } = await admin.from('kakao_notify_tokens').delete().eq('user_id', userId);
+      if (ktErr) throw ktErr;
+    } catch (e) {
+      logger.warn({ err: e.message, userId }, '삭제 예약 중 kakao_notify_tokens 삭제 실패 — hard delete 가 재시도');
+    }
 
     // 전역 signOut — 모든 디바이스 세션 무효화 (탈취 대비)
     let signedOut = false;

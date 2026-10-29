@@ -1127,6 +1127,15 @@ router.get('/facility', async (req, res) => {
   //   기본(full)  → 기존 전체 (기존 호출자 회귀 0)
   const mode = String(req.query.mode || 'full');
   if (!aptName) return res.status(400).json({ error: 'aptName 필수' });
+  // SEC-1030-C12 (보안 감사 2026-10-30): 공개 경로인데 입력 검사가 없어 임의 이름·지역 코드로 카카오·KAPT·NEIS 를
+  //   부르고 결과 행을 영구 저장할 수 있었다. 길이 상한 + 알려진 지역 코드만(analysis GET 과 같은 허용 목록).
+  if (aptName.length > 100 || (sigungu && sigungu.length > 40) || (umdNm && umdNm.length > 40)
+      || (aptSeq && aptSeq.length > 40)) {
+    return res.status(400).json({ error: '단지 정보가 올바르지 않아요.' });
+  }
+  if (lawdCd && !require('../services/transactionService').isKnownLawdCd(lawdCd)) {
+    return res.status(400).json({ error: '지원하지 않는 지역이에요.' });
+  }
 
   const admin = adminClient();
   if (!admin) return res.status(503).json({ error: '서비스 일시 불가' });

@@ -29,18 +29,21 @@ const fmtEok = man => (man / 10000).toFixed(man >= 100000 ? 0 : 1); // 만원 �
 
 /** 테이블 로드 — 미생성(42P01)은 [] 로 조용히 처리 */
 async function loadRows(admin, table) {
-  const { data, error } = await admin.from(table).select('*').limit(500);
-  if (error) {
-    if (['42P01','PGRST205'].includes(String(error.code))) return { rows: [], missing: true };
-    throw new Error(`${table}: ${error.message}`);
+  // SEC-1030-C9: limit(500) 은 조용한 상한이라 초과 구독자는 알림을 영영 못 받았다 — 1000행 페이지 반복으로 전체를 읽는다.
+  //   상한 5000(넘으면 경고). 기존 limit 도 무정렬이었으므로 정렬은 추가하지 않는다(표마다 키가 달라 없는 열로 order 하면 조회가 통째로 실패).
+  const PAGE = 1000, MAX = 5000;
+  const rows = [];
+  for (let from = 0; from < MAX; from += PAGE) {
+    const { data, error } = await admin.from(table).select('*').range(from, from + PAGE - 1);
+    if (error) {
+      if (['42P01','PGRST205'].includes(String(error.code))) return { rows: [], missing: true };
+      throw new Error(`${table}: ${error.message}`);
+    }
+    rows.push(...(data || []));
+    if (!data || data.length < PAGE) return { rows, missing: false };
   }
-  // SUBS-CAP-2026-08-17: limit(500) 은 조용한 상한이다 — 구독자가 500 을 넘으면 초과분은
-  //   **알림을 영영 못 받는데 아무 신호도 안 난다**(이 저장소가 반복해서 겪은 PostgREST 행 캡 부류).
-  //   현재 3명이라 여유가 크지만, 늘어난 순간을 알아야 페이징으로 바꿀 수 있다.
-  if ((data || []).length >= 500) {
-    logger.warn({ table, rows: data.length }, '알림 구독자 조회가 상한(500)에 닿음 — 페이징 필요');
-  }
-  return { rows: data || [], missing: false };
+  logger.warn({ table, rows: rows.length }, `알림 구독자 조회가 상한(${MAX})에 닿음 — 초과분은 이번 회차 제외`);
+  return { rows, missing: false };
 }
 
 /** 구독 1건의 items 를 신규 거래 rows 와 매칭 → [{name, count, maxMan, minMan, area, (targetEok, hit)}] (목표가 도달 먼저, 그다음 count desc)
@@ -320,6 +323,7 @@ async function run() {
 
 module.exports = { run };
 module.exports._notifyUrl = notifyUrl;
+module.exports._loadRows = loadRows;
 module.exports._matchItems = matchItems;
 module.exports._buildBody = buildBody;
 module.exports._buildTitle = buildTitle;

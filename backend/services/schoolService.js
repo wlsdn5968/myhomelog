@@ -244,7 +244,9 @@ async function resolveSchools(apt) {
   const schools = await kakaoSearchSchools(apt.lat, apt.lng);
 
   // 4) 캐시 (빈 배열도 90일 — 시골 단지는 학교 없을 수 있음)
-  saveToDb(key, apt, schools);
+  //   SEC-1030-C12: 시군구도 단지 코드도 없는 요청은 좌표가 검증되지 않았으므로 DB 에 남기지 않는다(메모리 1시간만).
+  if (!apt.sigungu && !apt.kaptCode) cache.set(`schools:${key}`, schools, 3600);
+  else saveToDb(key, apt, schools);
   return _normalizeSchoolsList(schools); // 안전 — kakao 새 fetch 도 normalize 한번 더 (이중 안전망)
 }
 

@@ -27,6 +27,7 @@ const { maskIp } = require('../logger');
 //   optionalAuth 이후 마운트된 limiter(dataLimiter/chatLimiter)는 req.user.email 을 가지므로 동기 판정 가능.
 //   generalLimiter 는 optionalAuth 이전(app.use('/api/', ...))이라 req.user 미존재 → 우회 미적용(정상, 60/분은 무해).
 const { isAdminUser } = require('../services/planService');
+const { normalizeIpKey } = require('../utils/ipKey');
 
 /**
  * 식별자 — 로그인 사용자는 userId, 비로그인은 IP.
@@ -34,7 +35,8 @@ const { isAdminUser } = require('../services/planService');
  */
 function getRateLimitIdentity(req) {
   if (req.user?.id) return `u:${req.user.id}`;
-  return `i:${req.ip || 'unknown'}`;
+  // SEC-1030-IPV6 (C14): IPv6 는 /64 로 묶어 주소 회전 우회를 막는다(IPv4 는 그대로).
+  return `i:${normalizeIpKey(req.ip)}`;
 }
 
 // chat 등 비용 수반 scope 는 기본 fail-closed 처리 (호출자가 명시해도 강제 덮어씀)
@@ -97,7 +99,13 @@ function makeRateLimiter({ limit, windowSec, scope, message, keySuffix = '', fai
     const identifier = `${baseId}${keySuffix}`;
 
     try {
-      const { success, limit: lim, remaining, reset } = await rl.limit(identifier);
+      const rlResult = await rl.limit(identifier);
+      // SEC-1030-TIMEOUT (C16): @upstash/ratelimit 은 Redis 응답이 timeout(기본 5초)을 넘으면 예외 없이
+      //   {success:true, reason:'timeout'} 으로 통과시킨다 -> 비용 scope 에선 Redis 장애와 똑같이 fail-closed(503).
+      if (effectiveFailClosed && rlResult && rlResult.reason === 'timeout') {
+        throw new Error('ratelimit timeout (Redis 응답 지연)');
+      }
+      const { success, limit: lim, remaining, reset } = rlResult;
 
       res.setHeader('RateLimit-Limit', String(lim));
       res.setHeader('RateLimit-Remaining', String(Math.max(0, remaining)));
@@ -130,4 +138,4 @@ function makeRateLimiter({ limit, windowSec, scope, message, keySuffix = '', fai
   };
 }
 
-module.exports = { makeRateLimiter, getRateLimitIdentity };
+module.exports = { makeRateLimiter, getRateLimitIdentity, COST_SENSITIVE_SCOPES };

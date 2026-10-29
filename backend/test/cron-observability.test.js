@@ -557,7 +557,8 @@ test('pushNotify — 조회 창을 실제로 계산시켜 확인한다 (72h 바�
         in: () => s,
         gte: (col, val) => { seen.gte.push([col, val]); return s; },
         order: (col, opt) => { seen.order.push([col, opt && opt.ascending]); return s; },
-        range: async () => ({ data: [], error: null }),   // 거래 0건 → 발송 경로는 타지 않는다
+        // SEC-1030-C9: 구독자 표도 range 페이지로 읽는다(첫 페이지에 구독자) · 거래는 0건 → 발송 경로는 타지 않는다
+        range: async (from) => ({ data: table === 'push_subscriptions' && from === 0 ? pushRows : [], error: null }),
         update: () => ({ eq: async () => ({ error: null }), in: async () => ({ error: null }) }),
         delete: () => ({ eq: async () => ({ error: null }) }),
       };
@@ -627,7 +628,9 @@ test('pushNotify — 조회 창을 실제로 계산시켜 확인한다 (72h 바�
   //    (경고 자체는 로그 경로라 소스로 확인한다)
   const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../jobs/pushNotify.js'), 'utf8');
   assert.match(src, /rows\.length >= ROW_CAP/, '거래 조회 캡 도달 경고가 없다');
-  assert.match(src, /상한\(500\)에 닿음/, '구독자 조회 상한 경고가 없다');
+  // SEC-1030-C9: 500 고정 상한 → 1000행 페이지 반복, 상한 MAX(5000)
+  assert.match(src, /const PAGE = 1000, MAX = 5000;/, '구독자 조회 페이지 반복이 없다');
+  assert.match(src, /상한\(\$\{MAX\}\)에 닿음/, '구독자 조회 상한 경고가 없다');
 });
 
 

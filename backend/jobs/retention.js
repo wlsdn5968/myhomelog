@@ -69,7 +69,9 @@ async function hardDeleteUser(admin, userId) {
   // Sprint HHHHHH: kakao_notify_tokens 추가 — 카카오 OAuth 토큰은 탈퇴 즉시 파기 (FK CASCADE 도 있으나 명시 삭제 이중 안전망)
   // VERIFY-FIX-2 (Sprint NNNNNNN-17): activity_counters 누락 — 탈퇴 후 잔존은 PIPA 파기 의무 위반 소지(적대 검증 적발)
   // DER-RETENTION-2026-08-20 (전수검증 코드 대조): data_error_reports(user_id + 자유서술 detail, FK CASCADE 없음) 누락 — 같은 패턴 재발
-  const tables = ['bookmarks', 'search_history', 'chat_sessions', 'user_billing', 'kakao_notify_tokens', 'activity_counters', 'data_error_reports'];
+  const tables = ['bookmarks', 'search_history', 'chat_sessions', 'user_billing', 'kakao_notify_tokens', 'activity_counters', 'data_error_reports',
+    // SEC-1030-C7: user_budget(user_id 별 월 예산 — migration 20260424000006)이 목록에서 빠져 탈퇴 후에도 잔존했다.
+    'user_budget'];
   for (const tbl of tables) {
     try {
       const { error, count } = await admin
@@ -87,29 +89,48 @@ async function hardDeleteUser(admin, userId) {
   let authDeleted = false;
   try {
     const { error } = await admin.auth.admin.deleteUser(userId);
-    if (error) throw error;
+    // SEC-1030-C4: 재시도 회차에서는 auth 사용자가 이미 지워져 있다 — '없음'도 삭제 완료로 본다
+    //   (아니면 한 번 부분 실패한 요청이 영원히 pending 으로 남아 매일 경보를 낸다).
+    if (error && !(error.status === 404 || error.code === 'user_not_found' || /not\s*found/i.test(String(error.message || '')))) throw error;
     authDeleted = true;
   } catch (e) {
     errors.auth_users = e.message;
   }
 
   // 4) account_deletion_requests 상태 전환
-  try {
-    const { error } = await admin
-      .from('account_deletion_requests')
-      .update({
-        status: 'hard_deleted',
-        hard_deleted_at: new Date().toISOString(),
-      })
-      .eq('user_id', userId);
-    if (error) throw error;
-  } catch (e) {
-    errors.adr_update = e.message;
+  // SEC-1030-C4: 표 삭제 실패(errors 비어있지 않음)나 auth.users 삭제 실패인데도 'hard_deleted' 로 바꾸면
+  //   다음 cron 이 pending 만 조회하므로 잔존 데이터가 영영 재시도되지 않는다. 전부 성공했을 때만 전환하고
+  //   아니면 pending 유지 → 다음 cron 이 재시도(삭제는 멱등).
+  // SEC-1030-C7: 전환 시 CS 연락용 개인정보(이메일·IP·UA·사유)를 함께 비운다 — 유예가 끝났으면 보관 목적이 소멸.
+  const failed = Object.keys(errors).length > 0 || !authDeleted;
+  if (!failed) {
+    try {
+      const { error } = await admin
+        .from('account_deletion_requests')
+        .update({
+          status: 'hard_deleted',
+          hard_deleted_at: new Date().toISOString(),
+          email_at_request: null,
+          ip_masked: null,
+          user_agent: null,
+          reason: null,
+        })
+        .eq('user_id', userId);
+      if (error) throw error;
+    } catch (e) {
+      errors.adr_update = e.message;
+    }
+  } else {
+    logger.warn({ userId, errors, authDeleted }, 'retention: hard_delete 일부 실패 — pending 유지(다음 cron 재시도)');
+    try {
+      require('@sentry/node').captureMessage(`retention hard_delete 일부 실패 (${Object.keys(errors).join(',') || 'auth'})`,
+        { level: 'warning', tags: { monitor: 'retention-hard-delete' } });
+    } catch (_) { /* Sentry 미구성이어도 무영향 */ }
   }
 
-  await writeAudit(admin, userId, 'account.hard_delete', { counts, errors, authDeleted });
+  await writeAudit(admin, userId, 'account.hard_delete', { counts, errors, authDeleted, failed: failed || Object.keys(errors).length > 0 });
 
-  return { userId, counts, errors, authDeleted };
+  return { userId, counts, errors, authDeleted, failed: failed || Object.keys(errors).length > 0 };
 }
 
 async function runSoftDeleteExpiry(admin) {
@@ -132,7 +153,9 @@ async function runSoftDeleteExpiry(admin) {
       results.push({ userId: row.user_id, error: e.message });
     }
   }
-  return { processed: results.length, results };
+  // SEC-1030-C4: 실패 건수(예외 + 부분 실패)를 요약에 노출 — pending 으로 남아 다음 cron 이 재시도한다.
+  const failedCount = results.filter(r => r.error || r.failed).length;
+  return { processed: results.length, failed: failedCount, results };
 }
 
 async function runSearchHistoryRetention(admin) {

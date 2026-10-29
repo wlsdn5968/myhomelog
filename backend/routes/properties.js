@@ -3,6 +3,8 @@ const router = express.Router();
 const { getAIRecommendations } = require('../services/propertyService');
 const { getNearbyAmenities, getTransitMinutes, getCarMinutes, keywordToCoord } = require('../services/kakaoService');
 const { validatePropertySearch } = require('../middleware/validation');
+const { dailyLimit } = require('../middleware/dailyLimit');
+const { isValidKoreaCoord } = require('../utils/geo');
 
 // DEAD-ENDPOINT-REMOVED-2026-09-05 (감사 P2-11): GET /info 제거 — 2026-05-13 에 DEPRECATED 로 표기한 뒤 4개월간 프론트 호출 0.
 //   /api/search/facility 가 같은 정보(+altCandidates·nearbySchools)를 준다.
@@ -72,11 +74,16 @@ router.get('/building-register', async (req, res) => {
 });
 
 // GET /api/properties/nearby?lat=..&lng=..  주변 편의시설 카운트
+// SEC-1030-NEARBY (C11): dailyLimit 은 GET 을 건너뛰므로 이 라우트만 includeGet 으로 일일 한도를 건다.
+//   임의 좌표마다 캐시 미스 -> 카카오 호출이 일어나 쿼터를 소모할 수 있다.
+router.use('/nearby', dailyLimit({ limit: 100, scope: 'nearby', loggedInBonus: 100, includeGet: true }));
 router.get('/nearby', async (req, res) => {
   const lat = parseFloat(req.query.lat);
   const lng = parseFloat(req.query.lng);
   if (isNaN(lat) || isNaN(lng)) return res.status(400).json({ error: 'lat,lng 필수' });
-  const data = await getNearbyAmenities(lat, lng);
+  // SEC-1030-NEARBY: 한국 범위 밖은 400, 좌표는 소수 4자리(약 11m)로 반올림 -> 캐시 키 분산(무한 미스) 차단.
+  if (!isValidKoreaCoord(lat, lng)) return res.status(400).json({ error: '한국 범위의 lat,lng 가 필요해요' });
+  const data = await getNearbyAmenities(Math.round(lat * 1e4) / 1e4, Math.round(lng * 1e4) / 1e4);
   if (!data) return res.json({ available: false });
   res.json({ available: true, ...data });
 });

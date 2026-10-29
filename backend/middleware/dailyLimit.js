@@ -16,6 +16,7 @@ const cache = require('../cache'); // in-memory fallback
 const { getRedis } = require('../redis');
 const logger = require('../logger');
 const { maskIp } = require('../logger');
+const { normalizeIpKey } = require('../utils/ipKey');
 
 function getClientIp(req) {
   return (
@@ -123,7 +124,8 @@ async function readUsage(key) {
  */
 function getLimitIdentity(req) {
   if (req.user?.id) return { kind: 'u', value: String(req.user.id) };
-  return { kind: 'i', value: getClientIp(req) };
+  // SEC-1030-IPV6 (C14): IPv6 는 /64 로 정규화(주소 회전으로 일일 한도 우회 방지). IPv4 는 그대로.
+  return { kind: 'i', value: normalizeIpKey(getClientIp(req)) };
 }
 
 // P1 (Phase 2 8-2 2026-04-25): 로그인 사용자 보너스 한도
@@ -134,9 +136,11 @@ function getLimitIdentity(req) {
 //   로그인 team: planLimits (예: 300/150)
 const { getActivePlan, getLimitsForPlan, isAdminUser } = require('../services/planService');
 
-function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
+// SEC-1030-NEARBY (C11): includeGet:true 면 GET 에도 한도를 적용한다(기본은 종전대로 GET 면제 - 'chat' 만 예외).
+//   무한 좌표로 캐시 미스를 만들어 외부 API 를 소모하는 GET 라우트(/api/properties/nearby) 전용.
+function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0, includeGet = false } = {}) {
   return async function (req, res, next) {
-    if (req.method === 'GET' && scope !== 'chat') return next();
+    if (req.method === 'GET' && scope !== 'chat' && !includeGet) return next();
 
     // ADMIN-SYNC-2026-07-12 (운영자 ASSERT "검색은 운영자 계정 아예 리밋 걸지마"):
     //   req.user.email 로 동기 admin 판정 → getActivePlan(getUserById) 호출 전에 즉시 무제한 통과.
@@ -156,7 +160,8 @@ function dailyLimit({ limit = 5, scope = 'global', loggedInBonus = 0 } = {}) {
     let plan = 'free';
     if (req.user?.id) {
       plan = await getActivePlan(req.user.id);
-      if (plan !== 'free') {
+      // SEC-1030-NEARBY: 'nearby' 는 플랜 한도(dailySearch)로 덮지 않는다 - 유료가 오히려 더 낮아지는 역전 방지.
+      if (plan !== 'free' && scope !== 'nearby') {
         const planLimits = getLimitsForPlan(plan);
         const planScopeKey = scope === 'chat' ? 'dailyChat'
                           : scope === 'report' ? 'dailyReport'

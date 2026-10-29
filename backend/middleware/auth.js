@@ -86,12 +86,12 @@ async function verifyToken(token) {
     const { data, error } = await sb.auth.getUser(token);
     if (error || !data?.user) return { user: null, deletionPending: false };
     // ADMIN-VERIFIED-2026-09-05 (감사 H-LOW): admin 판정이 "확인된 이메일" 만 인정하도록 검증 상태를 함께 싣는다.
-    //   Supabase 가 확인한 이메일(email_confirmed_at) 또는 OAuth 제공자가 검증한 이메일(user_metadata.email_verified).
-    //   실측(2026-09-05, auth.users 7명): 전원 confirmed=true·email_verified=true — 이메일 가입자도 확인 절차를 거쳤다.
-    const _mv = data.user.user_metadata && data.user.user_metadata.email_verified;
+    //   SEC-1030-C1 (보안 감사 2026-10-30): 근거는 Supabase 가 기록하는 email_confirmed_at **하나만**. 예전엔 user_metadata.email_verified 도
+    //   인정했는데 user_metadata 는 로그인한 사용자가 auth.updateUser 로 직접 바꿀 수 있다(Supabase 공식 문서: 권한 판단에 쓰지 말 것).
+    //   운영 실측(2026-10-30): 이메일 있는 계정 9개 전원 email_confirmed_at 있음 → 이 변경으로 잠기는 계정 0.
     const user = {
       id: data.user.id, email: data.user.email,
-      emailVerified: Boolean(data.user.email_confirmed_at) || _mv === true || _mv === 'true',
+      emailVerified: Boolean(data.user.email_confirmed_at),
     };
     const deletionPending = await checkDeletionPending(user.id);
 

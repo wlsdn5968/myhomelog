@@ -41,8 +41,8 @@ async function getActivePlan(userId) {
       const { data } = await admin.auth.admin.getUserById(userId);
       const email = data?.user?.email?.toLowerCase();
       // ADMIN-VERIFIED-2026-09-05 (감사 H-LOW): 확인되지 않은 이메일은 admin 이 아니다(아래 isAdminUser 와 같은 규칙).
-      const _mv = data?.user?.user_metadata?.email_verified;
-      const _verified = Boolean(data?.user?.email_confirmed_at) || _mv === true || _mv === 'true';
+      // SEC-1030-C1: 사용자가 직접 바꿀 수 있는 user_metadata.email_verified 는 근거로 쓰지 않는다(auth 미들웨어와 같은 규칙).
+      const _verified = Boolean(data?.user?.email_confirmed_at);
       if (email && ADMIN_EMAILS.includes(email) && _verified) {
         cache.set(memKey, 'admin', 60);
         return 'admin';

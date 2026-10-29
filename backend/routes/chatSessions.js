@@ -39,6 +39,13 @@ const SESSIONS_LIMIT = 30;
 const MESSAGES_LIMIT = 200;
 // 컨텍스트 무결성 (2026-05): 클라이언트가 system role 메시지를 저장하지 못하도록 user|assistant 만 허용
 const ALLOWED_ROLES = new Set(['user', 'assistant']);
+// SEC-1030-C2 (보안 감사 2026-10-30): 저장 상한이 없어 로그인 사용자 1명이 세션·메시지·meta 를 무제한으로 쌓아
+//   무료 DB(500MB) 를 채울 수 있었다(채우면 전 서비스 읽기 전용). 운영 실측 최대치(사용자당 세션 7·세션당 메시지 20·
+//   meta 전부 빈 객체, 2026-10-30)의 수십 배로 잡는다. 메시지 상한은 GET 이 읽는 개수(MESSAGES_LIMIT)와 같다 —
+//   그 너머는 저장해도 다시 보이지 않는다. meta 는 프런트가 보내지 않는다(빈 객체 기본).
+const MAX_SESSIONS_PER_USER = 200;
+const MAX_MESSAGES_PER_SESSION = MESSAGES_LIMIT;
+const MAX_META_BYTES = 2048;
 
 
 router.use(requireAuth);
@@ -62,6 +69,14 @@ router.post('/', async (req, res, next) => {
   try {
     const title = String(req.body?.title || '새 대화').trim().slice(0, MAX_TITLE_LEN);
     const sb = userScopedClient(req.accessToken);
+    // SEC-1030-C2: 사용자당 세션 수 상한 (RLS 로 본인 행만 센다)
+    const { count, error: cntErr } = await sb
+      .from('chat_sessions')
+      .select('id', { count: 'exact', head: true });
+    if (cntErr) throw cntErr;
+    if ((count || 0) >= MAX_SESSIONS_PER_USER) {
+      return res.status(429).json({ error: '저장할 수 있는 대화 수를 넘었어요. 지난 대화를 지운 뒤 다시 시도해 주세요.', code: 'chat_session_cap' });
+    }
     const { data, error } = await sb
       .from('chat_sessions')
       .insert({ user_id: req.user.id, title })
@@ -143,6 +158,11 @@ router.post('/:id/messages', async (req, res, next) => {
       return res.status(400).json({ error: 'content 필수 (string)' });
     }
     const trimmed = content.slice(0, MAX_CONTENT_LEN);
+    // SEC-1030-C2: meta 는 일반 객체 + 직렬화 2KB 이하만
+    if (meta != null && (typeof meta !== 'object' || Array.isArray(meta)
+        || Buffer.byteLength(JSON.stringify(meta), 'utf8') > MAX_META_BYTES)) {
+      return res.status(400).json({ error: 'meta 형식이 올바르지 않아요.' });
+    }
     const validClientId = clientMsgId && UUID_RE.test(String(clientMsgId).trim()) ? String(clientMsgId).trim() : null;
     const sb = userScopedClient(req.accessToken);
 
@@ -157,6 +177,16 @@ router.post('/:id/messages', async (req, res, next) => {
       if (existing) {
         return res.status(200).json({ id: existing.id, createdAt: existing.created_at, dedup: true });
       }
+    }
+
+    // SEC-1030-C2: 세션당 메시지 수 상한 (RLS 로 남의 세션은 0 으로 보이고, 아래 INSERT 가 404 로 막는다)
+    const { count: msgCount, error: msgCntErr } = await sb
+      .from('chat_messages')
+      .select('id', { count: 'exact', head: true })
+      .eq('session_id', id);
+    if (msgCntErr) throw msgCntErr;
+    if ((msgCount || 0) >= MAX_MESSAGES_PER_SESSION) {
+      return res.status(429).json({ error: '한 대화에 저장할 수 있는 메시지 수를 넘었어요. 새 대화를 시작해 주세요.', code: 'chat_message_cap' });
     }
 
     // 메시지 INSERT — RLS WITH CHECK 가 세션 소유권 검증
@@ -198,3 +228,4 @@ router.post('/:id/messages', async (req, res, next) => {
 });
 
 module.exports = router;
+module.exports._limits = { MAX_SESSIONS_PER_USER, MAX_MESSAGES_PER_SESSION, MAX_META_BYTES };
