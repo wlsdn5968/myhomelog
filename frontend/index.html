@@ -4314,6 +4314,22 @@ function _lvAmt(man){
   return [eok ? `${eok}억` : '', rest ? `${rest.toLocaleString()}만` : ''].filter(Boolean).join(' ');
 }
 let _lvRec = null, _lvRecN = { high: null, low: null };
+// RECORDS-FULL-2026-10-29 (시안 F '모두 보기'): 처음 누를 때만 전체 목록(단지당 가장 최근 1건)을 받아 같은 카드로 펼친다.
+let _lvRecFull = null, _lvRecOpen = { high: false, low: false }, _lvRecFullState = '';
+async function _lvRecMore(k){
+  if (_lvRecOpen[k]) { _lvRecOpen[k] = false; _lvRecRender(); return; }
+  if (!_lvRecFull) {
+    _lvRecFullState = 'loading'; _lvRecRender();
+    try {
+      const r = await fetch(`${CFG.api}/transactions/records?full=1`, { signal: AbortSignal.timeout(12000) });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      _lvRecFull = { high: Array.isArray(d.high) ? d.high : [], low: Array.isArray(d.low) ? d.low : [] };
+      _lvRecFullState = '';
+    } catch (_) { _lvRecFullState = 'error'; _lvRecRender(); return; }
+  }
+  _lvRecOpen[k] = true; _lvRecRender();
+}
 // 만원 차이 → "+400만" · "−2,000만" (값이 없으면 빈칸)
 function _lvDiff(a, b){
   if (!(Number(a) > 0) || !(Number(b) > 0)) return ''; // null 을 0 으로 보면 "−1만" 같은 거짓 차이가 나온다
@@ -4343,9 +4359,13 @@ function _lvRecCard(x, hi){
 function _lvRecRender(){
   const box = document.getElementById('lvRecList'); if (!box || !_lvRec) return;
   const grp = (hi) => {
-    const rows = ((hi ? _lvRec.high : _lvRec.low) || []).slice(0, 3);
+    const k = hi ? 'high' : 'low', open = !!(_lvRecOpen[k] && _lvRecFull);
+    const rows = open ? (_lvRecFull[k] || []) : ((hi ? _lvRec.high : _lvRec.low) || []).slice(0, 3);
     const tot = hi ? _lvRecN.high : _lvRecN.low;
-    const head = `<div class="lv-grp">같은 면적 이전 거래보다 ${hi ? '높았어요' : '낮았어요'}${Number.isFinite(tot) ? `<small>${tot.toLocaleString()}건 중 ${rows.length}건</small>` : ''}</div>`;
+    const cnt = Number.isFinite(tot) ? (open ? `${tot.toLocaleString()}건 중 단지 ${rows.length.toLocaleString()}곳 · 같은 단지는 가장 최근 1건` : `${tot.toLocaleString()}건 중 ${rows.length}건`) : '';
+    const more = Number.isFinite(tot) && tot > 3
+      ? `<button type="button" class="lv-more" onclick="_lvRecMore('${k}')" style="margin-left:auto;border:0;background:none;font:inherit;font-size:13px;color:var(--acc);cursor:pointer">${open ? '접기' : _lvRecFullState === 'loading' ? '불러오는 중…' : _lvRecFullState === 'error' ? '불러오지 못했어요 · 다시' : '모두 보기'}</button>` : '';
+    const head = `<div class="lv-grp" style="display:flex;align-items:baseline;gap:6px">같은 면적 이전 거래보다 ${hi ? '높았어요' : '낮았어요'}${cnt ? `<small>${cnt}</small>` : ''}${more}</div>`;
     if (!rows.length) return head + `<div class="lv-msg">이번 주에는 이전 거래보다 ${hi ? '높았던' : '낮았던'} 거래가 없어요</div>`;
     return head + rows.map(x => _lvRecCard(x, hi)).join('');
   };

@@ -33,7 +33,7 @@ function renderCtx() {
   vm.createContext(ctx);
   vm.runInContext([
     ...['_escHtml', '_jsonAttr', '_isUnnamedApt', '_dispAptName', '_lvAmt', '_lvDiff', '_lvRecCard', '_lvRecRender'].map(fn),
-    'let _lvRec = null, _lvRecN = { high: null, low: null };',
+    'let _lvRec = null, _lvRecN = { high: null, low: null }, _lvRecFull = null, _lvRecOpen = { high: false, low: false }, _lvRecFullState = "";',
     'globalThis.set = (r, n) => { _lvRec = r; _lvRecN = n || { high: null, low: null }; }; globalThis.render = _lvRecRender; globalThis.diff = _lvDiff;',
   ].join('\n'), ctx);
   return { ctx, els };
@@ -47,6 +47,7 @@ test('경신 목록(시안 F): 높았던·낮았던 거래를 늘 함께, 한 �
   const h = els.lvRecList.innerHTML;
   assert.equal((h.match(/class="lv-card"/g) || []).length, 4, '높았던 3건 + 낮았던 1건 — 두 묶음을 함께 그린다');
   assert.ok(h.includes('같은 면적 이전 거래보다 높았어요<small>168건 중 3건</small>') && h.includes('같은 면적 이전 거래보다 낮았어요<small>68건 중 1건</small>'));
+  assert.equal((h.match(/onclick="_lvRecMore\('(high|low)'\)"/g) || []).length, 2, '두 묶음 모두 "모두 보기"');
   assert.ok(h.includes('84.45㎡가 5억 8,800만에 거래돼 같은 면적 이전 거래 265건보다 높았어요'));
   assert.ok(h.includes('<span class="lv-chip">+4,300만</span><span>직전 최고 5억 4,500만</span>'));
   assert.ok(h.includes('주공그린빌1 · 수원시 영통구 매탄동 · 10.19 · 7층'));
@@ -122,4 +123,23 @@ test('POPUP-RECENT 보정: 팝업 내용은 마커 생성 때 미리 만들어�
   assert.equal((html.match(/iw\.open\(mapObj, ?ov\); _niwKick\(\);/g) || []).length, 2);
   assert.match(fn('_niwRecentSlot'), /_niwPending\.set\(id, p\);/);
   assert.doesNotMatch(fn('_niwRecentSlot'), /setTimeout\(\(\) => _niwRecentFill/, '생성 시점에 채우면 팝업이 아직 없다');
+});
+
+test('모두 보기(시안 F): 펼치면 전체 목록(단지당 1건)과 "N건 중 단지 M곳", 접기 · 서버는 ?full=1 을 별도 캐시로', () => {
+  const { ctx, els } = renderCtx();
+  const row = (n) => ({ aptName: n, region: '화성시 동탄구', umdNm: '영천동', excluUseAr: 59.98, dealAmount: 119900, prevMax: 119500, prevMin: 56000, dealDate: '2026-10-27', floor: 18, priorCount: 265, lawdCd: '41597', sigungu: '화성시동탄구' });
+  vm.runInContext('globalThis.openAll = (f) => { _lvRecFull = f; _lvRecOpen = { high: true, low: false }; };', ctx);
+  ctx.set({ high: [row('A'), row('B'), row('C'), row('D')], low: [] }, { high: 168, low: 0 });
+  ctx.openAll({ high: Array.from({ length: 160 }, (_, i) => row('H' + i)), low: [] });
+  ctx.render();
+  const h = els.lvRecList.innerHTML;
+  assert.equal((h.match(/class="lv-card"/g) || []).length, 160);
+  assert.ok(h.includes('168건 중 단지 160곳 · 같은 단지는 가장 최근 1건') && h.includes('>접기</button>'));
+  const fs = require('fs'), path = require('path');
+  const svc = fs.readFileSync(path.join(__dirname, '../services/priceRecordsService.js'), 'utf8');
+  assert.ok(svc.includes("const CK_FULL = 'records:price:full:v1';") && svc.includes('p_limit: FULL_LIMIT'));
+  const route = fs.readFileSync(path.join(__dirname, '../routes/transactions.js'), 'utf8');
+  assert.ok(route.includes("if (String(req.query.full || '') === '1') {") && route.includes('svc.canonRecords({ ...full'));
+  const cron = fs.readFileSync(path.join(__dirname, '../routes/cron.js'), 'utf8');
+  assert.equal((cron.match(/getPriceRecordsFull\(\{ force: true \}\)/g) || []).length, 2, '두 cron 경로 모두 전체 목록을 데운다');
 });

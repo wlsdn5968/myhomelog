@@ -109,6 +109,13 @@ router.get('/records', async (req, res) => {
       return res.json(await svc.canonRecords(slice));
     }
 
+    // RECORDS-FULL-2026-10-29: ?full=1 → '모두 보기' 전체 목록(단지당 1건). 지역 목록은 붙이지 않는다.
+    if (String(req.query.full || '') === '1') {
+      const full = await svc.getPriceRecordsFull();
+      if (!full) { res.set('Cache-Control', 'no-store'); return res.status(503).json({ error: '실거래 경신 전체 목록 조회 실패' }); }
+      res.set('Cache-Control', CC);
+      return res.json(await svc.canonRecords({ ...full, scope: 'national' }));
+    }
     const data = await svc.getPriceRecords();
     if (!data) return res.status(503).json({ error: '실거래 경신 집계 조회 실패' });
     let regions = [];

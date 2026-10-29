@@ -318,6 +318,8 @@ router.post('/retention', async (req, res) => {
     try { await require('../services/priceRecordsService').getPriceRecords({ force: true }); } catch (e) { logger.warn({ err: e && e.message }, '경신 카드 워밍 실패(비차단 — 요청 경로가 다시 계산한다)'); }
     // 지역별 블롭(147kB·118개 지역·계산 1.24초)도 같이 데운다 — 사용자 요청 경로에서 계산되면 안 된다.
     try { await require('../services/priceRecordsService').getPriceRecordsByRegion({ force: true }); } catch (e) { logger.warn({ err: e && e.message }, '지역별 경신 블롭 워밍 실패(비차단 — 요청 경로가 다시 계산한다)'); }
+    // RECORDS-FULL-2026-10-29: '모두 보기' 전체 목록도 데운다 — 찬 상태 첫 계산 7.5초 실측(데운 뒤 0.13초).
+    try { await require('../services/priceRecordsService').getPriceRecordsFull({ force: true }); } catch (e) { logger.warn({ err: e && e.message }, '경신 전체 목록 워밍 실패(비차단)'); }
     try { const _bs = require('../services/briefingService'); await _bs.getOrCreateSnapshot(_bs.kstDayString()); } catch (_e) { logger.warn({ err: _e.message }, '브리핑 스냅샷 생성 실패(무시)'); }
     // RATE-WARM-2026-08-08 (Sprint BBBBBBB-3): HF·ECOS 금리 캐시 워밍 — health 의 비차단 백그라운드
     //   갱신은 응답 반환 후 서버리스 동결로 완주가 안 될 수 있다(HF 실측: 12:01 까지 반복 ECONNABORTED,
@@ -379,6 +381,8 @@ router.get('/retention', async (req, res) => {
     try { await require('../services/priceRecordsService').getPriceRecords({ force: true }); } catch (e) { logger.warn({ err: e && e.message }, '경신 카드 워밍 실패(비차단 — 요청 경로가 다시 계산한다)'); }
     // 지역별 블롭(147kB·118개 지역·계산 1.24초)도 같이 데운다 — 사용자 요청 경로에서 계산되면 안 된다.
     try { await require('../services/priceRecordsService').getPriceRecordsByRegion({ force: true }); } catch (e) { logger.warn({ err: e && e.message }, '지역별 경신 블롭 워밍 실패(비차단 — 요청 경로가 다시 계산한다)'); }
+    // RECORDS-FULL-2026-10-29: '모두 보기' 전체 목록도 데운다 — 찬 상태 첫 계산 7.5초 실측(데운 뒤 0.13초).
+    try { await require('../services/priceRecordsService').getPriceRecordsFull({ force: true }); } catch (e) { logger.warn({ err: e && e.message }, '경신 전체 목록 워밍 실패(비차단)'); }
     try { const _bs = require('../services/briefingService'); await _bs.getOrCreateSnapshot(_bs.kstDayString()); } catch (_e) { logger.warn({ err: _e.message }, '브리핑 스냅샷 생성 실패(무시)'); }
     try { await require('../services/hfService').getHfRates({ retries: 1 }); } catch (e) { logger.warn({ err: e && e.message }, 'HF 정책금리 워밍 실패(비차단 — 요청 경로가 다시 계산한다)'); }   // Sprint BBBBBBB-3 워밍
     try { await require('../services/ecosService').getEcosRates(); } catch (e) { logger.warn({ err: e && e.message }, 'ECOS 금리 워밍 실패(비차단 — 요청 경로가 다시 계산한다)'); }

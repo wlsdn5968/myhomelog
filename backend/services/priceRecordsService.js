@@ -188,6 +188,38 @@ async function getPriceRecords({ force = false } = {}) {
   return payload;
 }
 function _withStaleOrNull(last) { return last ? _withStale(last) : null; }
+
+// RECORDS-FULL-2026-10-29 (시안 F '모두 보기'): 첫 화면은 묶음당 5건만 받는다(응답을 가볍게). 사용자가 '모두 보기'를 누를 때만
+//   같은 함수·같은 기준으로 목록 전체(단지당 1건, 상한 300)를 계산한다. 따로 캐시(6시간 인스턴스 + 30시간 공유) — 기존 키와 섞지 않는다.
+const CK_FULL = 'records:price:full:v1';
+const FULL_LIMIT = 300;
+async function getPriceRecordsFull({ force = false } = {}) {
+  if (!force) {
+    const local = cache.get(CK_FULL);
+    if (local !== undefined) return local;
+    try { const shared = await rget(CK_FULL); if (shared) { cache.set(CK_FULL, shared, TTL_LOCAL); return shared; } } catch (_) { /* 계산으로 폴백 */ }
+  }
+  const admin = getSupabaseAdmin();
+  if (!admin) return null;
+  try {
+    const { data, error } = await _rpcWithRetry(admin, 'get_price_records', { p_days: DEF_DAYS, p_min_prior: DEF_MIN_PRIOR, p_limit: FULL_LIMIT }, 0);
+    if (error) throw error;
+    if (!data) return null;
+    const payload = {
+      latestDeal: data.latestDeal || null, sinceDate: data.sinceDate || null,
+      windowDays: data.windowDays || DEF_DAYS, minPrior: data.minPrior || DEF_MIN_PRIOR,
+      comparedCount: Number(data.comparedCount) || 0, highCount: Number(data.highCount) || 0, lowCount: Number(data.lowCount) || 0,
+      high: (data.high || []).map(shapeRow).filter(Boolean), low: (data.low || []).map(shapeRow).filter(Boolean),
+      computedAt: new Date().toISOString(), full: true,
+    };
+    cache.set(CK_FULL, payload, TTL_LOCAL);
+    try { await rset(CK_FULL, payload, TTL_REDIS); } catch (_) { /* 공유 캐시 실패는 삼킨다 */ }
+    return payload;
+  } catch (e) {
+    logger.warn({ err: e.message }, 'price records 전체 목록 조회 실패');
+    return null; // 실패는 캐시하지 않는다
+  }
+}
 /** RPC 1회 + (retries 회) 재시도 — 첫 실행이 버퍼를 데워 두 번째가 시간 안에 끝나는 경우가 있다(워밍 전용). */
 async function _rpcWithRetry(admin, fn, args, retries = 0) {
   let res = await admin.rpc(fn, args);
@@ -316,6 +348,7 @@ async function canonRecords(obj) {
 
 module.exports = {
   canonRecords,
+  getPriceRecordsFull,
   getPriceRecords, getPriceRecordsByRegion, regionMenu, sliceRegion,
   regionLabel, _SIDO_PREFIX: SIDO_PREFIX,
 };
