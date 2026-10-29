@@ -13,7 +13,9 @@ const SERVER_SRC = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8')
 const CRON_SRC = fs.readFileSync(path.join(__dirname, '../routes/cron.js'), 'utf8');
 
 test('(a) server.js — health·cron 마운트가 generalLimiter 마운트보다 앞서고 health 는 메모리 제한이다', () => {
-  const iGeneral = SERVER_SRC.indexOf("app.use('/api/', generalLimiter);");
+  // REDIS-BUDGET-2 (2026-10-30): 마운트 '순서'만 보던 이 검사는 health 가 generalLimiter 를 여전히 타는 결함을 못 잡았다
+  //   (healthMemLimiter 가 next() 로 넘기면 '/api/' 마운트에 또 걸린다). 실제 통과 여부는 redis-budget-limiter.test.js 가 앱을 띄워 센다.
+  const iGeneral = SERVER_SRC.indexOf("app.use('/api/', (req, res, next) => (GENERAL_SKIP_RE.test(req.path) ? next() : generalLimiter(req, res, next)));");
   const iHealth = SERVER_SRC.indexOf("app.use('/api/health', healthMemLimiter);");
   const iCron = SERVER_SRC.indexOf("app.use('/api/cron', require('./routes/cron'));");
   assert.ok(iGeneral > 0 && iHealth > 0 && iCron > 0, '마운트 줄을 찾지 못했다');

@@ -260,7 +260,14 @@ const healthMemLimiter = rateLimit({
 });
 app.use('/api/health', healthMemLimiter);
 app.use('/api/cron', require('./routes/cron'));
-app.use('/api/', generalLimiter);
+// REDIS-BUDGET-2 (2026-10-30, Redis 월 한도 재소진 조사): 위 health 분리는 **작동하지 않았다** — healthMemLimiter 가 next() 로
+//   넘기면 아래 '/api/' 마운트가 같은 요청에 또 걸린다(실제 서버 앱으로 재현: health 1회 = generalLimiter 1회).
+//   또 아래 경로들은 마운트 지점에서 더 엄격한(분당 20~30) Redis 리미터를 반드시 지나므로 generalLimiter(분당 60)는 중복이었다
+//   — 요청당 Redis 호출 2회 → 1회. 이 목록에는 '마운트에서 Redis 리미터가 항상 붙는 경로'만 넣는다:
+//   kakao 는 연결 해제 웹훅이 dataLimiter 앞이라, regulations 는 다른 리미터가 없어 제외(generalLimiter 유지).
+//   새 라우터를 dataLimiter 와 함께 마운트하면 여기에도 추가 — backend/test/redis-budget-limiter.test.js 가 대조한다.
+const GENERAL_SKIP_RE = /^\/(health|chat|transactions|properties|region|clause|geocode|analysis|news|subscription|push|bookmarks|search|billing|feedback|attribution|visits|field-notes|report|account|admin|og)(\/|$)/;
+app.use('/api/', (req, res, next) => (GENERAL_SKIP_RE.test(req.path) ? next() : generalLimiter(req, res, next)));
 
 // ── 라우터 연결 ────────────────────────────────────────────
 const chatRouter = require('./routes/chat');
@@ -746,3 +753,4 @@ module.exports.cache = cache;
 //   Redis 오염 복구·null 캐시 TTL 분기(data-counts-sync.test.js)를 직접 호출로 고정하려면 필요하다.
 //   `_` 접두는 저장소 관례(_dbCapacityLevel·_dbSetAmenityCount 등)와 동일 — 프로덕션 코드는 쓰지 않는다.
 module.exports._getDataCounts = getDataCounts;
+module.exports._GENERAL_SKIP_RE = GENERAL_SKIP_RE;

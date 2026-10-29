@@ -45,7 +45,7 @@ test('server.js — shareLimiter·ogLimiter 정의가 각 1회이고 failClosed 
 
   // 정의부 뒤의 경계 — dataLimiter 정의 바로 뒤에 shareLimiter/ogLimiter 를 두고
   // 그 다음에 generalLimiter 마운트가 오는 구조(계획 122 §2)를 그대로 경계로 쓴다.
-  const end = SERVER_SRC.indexOf("app.use('/api/', generalLimiter);", start);
+  const end = SERVER_SRC.indexOf("app.use('/api/', (req, res, next) => (GENERAL_SKIP_RE.test(req.path) ? next() : generalLimiter(req, res, next)));", start); // REDIS-BUDGET-2: 마운트가 건너뛰기 래퍼로 바뀜
   assert.ok(end > start, 'shareLimiter/ogLimiter 정의부 뒤의 generalLimiter 마운트를 찾지 못했다 — 테스트를 갱신할 것');
   const block = SERVER_SRC.slice(start, end);
   assert.ok(block.includes('const ogLimiter = makeRateLimiter('), 'ogLimiter 정의가 shareLimiter 와 같은 블록에 없다');
