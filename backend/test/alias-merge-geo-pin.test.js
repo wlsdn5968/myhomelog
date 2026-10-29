@@ -112,3 +112,32 @@ test('상세 헤더 평균가 — 전 평형 섞지 않고 거래 최다 평형�
   assert.match(html, /_repArea \? `\$\{_repArea\.sqm\}㎡\(\$\{_repArea\.py\}평\) 최근 \$\{_repArea\.n\}건 평균`/);
   assert.doesNotMatch(html, /`전 평형 최근 \$\{txHistory\.length\}건 평균`/);
 });
+
+test('경신 목록 — 신고 원본 이름을 정식 이름으로(하늘(주공3) → 하늘아파트), 원본은 rawName, 대응표 실패 시 원본 그대로', async () => {
+  const txPath = require.resolve('../services/transactionService');
+  const routePath = require.resolve('../services/priceRecordsService');
+  const saved = require.cache[txPath];
+  const real = require('../services/transactionService');
+  let fail = false;
+  require.cache[txPath] = { id: txPath, filename: txPath, loaded: true, exports: { ...real, getAliasCanonicalMap: async (l) => {
+    if (fail) throw new Error('DB 오류');
+    assert.deepEqual(l.sort(), ['30140', '41390']);
+    return new Map([['하늘(주공3)|중촌동', '하늘아파트']]);
+  } } };
+  delete require.cache[routePath];
+  try {
+    const { canonRecords: _canonRecords } = require('../services/priceRecordsService');
+    const data = { high: [{ aptName: '동진', umdNm: '복현동', lawdCd: '41390' }], low: [{ aptName: '하늘(주공3)', umdNm: '중촌동', lawdCd: '30140' }], highCount: 1 };
+    const out = await _canonRecords(data);
+    assert.equal(out.low[0].aptName, '하늘아파트');
+    assert.equal(out.low[0].rawName, '하늘(주공3)');
+    assert.equal(out.high[0].aptName, '동진'); assert.equal(out.high[0].rawName, undefined);
+    assert.equal(out.highCount, 1);
+    fail = true;
+    assert.deepEqual(await _canonRecords(data), data, '대응표 실패 시 원본 그대로');
+    assert.deepEqual(await _canonRecords({ high: [], low: [] }), { high: [], low: [] });
+  } finally {
+    if (saved) require.cache[txPath] = saved; else delete require.cache[txPath];
+    delete require.cache[routePath];
+  }
+});

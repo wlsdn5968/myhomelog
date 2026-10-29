@@ -72,6 +72,8 @@ async function buildBriefingPayload() {
   // 하루 1회 캐시라 여기서 부르는 비용은 사실상 0. 실패하면 null 로 두고 렌더에서 통째 생략.
   let records = null;
   try { records = await require('./priceRecordsService').getPriceRecords(); } catch (_) { records = null; }
+  // RECORDS-CANON-2026-10-29: 정식 단지 이름으로(실패해도 원본 그대로 — 기록 카드 자체는 막지 않는다)
+  try { const _prs = require('./priceRecordsService'); if (records && typeof _prs.canonRecords === 'function') records = await _prs.canonRecords(records); } catch (_) { /* 원본 유지 */ }
 
   // REG-LOG-2026-08-19 (Sprint NNNNNNN-14): 검증된 규정 이벤트 체인 — 아카이브 카드용(실패 시 빈 배열)
   let regLog = [];

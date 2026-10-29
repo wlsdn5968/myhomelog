@@ -106,7 +106,7 @@ router.get('/records', async (req, res) => {
       // STALE-NOCACHE-2026-09-06: 전국 경로(:110)와 같은 원칙 — 열화 스냅샷을 엣지에 6시간+SWR24시간
       //   굳히지 않는다. sliceRegion 이 blob.stale 을 실어 왔을 때만 no-store.
       res.set('Cache-Control', slice.stale ? 'no-store' : CC);
-      return res.json(slice);
+      return res.json(await svc.canonRecords(slice));
     }
 
     const data = await svc.getPriceRecords();
@@ -129,7 +129,7 @@ router.get('/records', async (req, res) => {
     //   통째로 사라졌다. **열화된 응답은 캐시하지 않는다** — 다음 요청이 다시 계산하게 둔다.
     // RECORDS-STALE-2026-09-05: 마지막 성공 스냅샷(stale)은 다음 요청이 신선한 값을 집도록 엣지에 굳히지 않는다.
     res.set('Cache-Control', (degraded || data.stale) ? 'no-store' : CC);
-    res.json({ ...data, scope: 'national', regions });
+    res.json(await svc.canonRecords({ ...data, scope: 'national', regions }));
   } catch (err) {
     require('../utils/captureError').captureRouteError(err, 'transactions');
     res.status(500).json({ error: '실거래 경신 집계 조회 실패' });

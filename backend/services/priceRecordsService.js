@@ -293,7 +293,29 @@ function sliceRegion(blob, lawdCd) {
   return out;
 }
 
+// RECORDS-CANON-2026-10-29 (운영 실측): 경신 목록이 신고 원본 이름("하늘(주공3)")을 그대로 내보냈다 — 서버 렌더 지역 페이지만
+//   따로 정식 이름으로 바꾸고 첫 화면·브리핑·앱 안 지역 기록은 원본이었다. 같은 별칭 대응표(apt_master.molit_aliases)로
+//   aptName 을 정식 이름으로 바꾸고 원본은 rawName 에 둔다. 대응표 조회가 실패하면 원본 그대로(응답을 막지 않는다).
+async function canonRecords(obj) {
+  if (!obj || typeof obj !== 'object') return obj;
+  const lists = ['high', 'low'].filter(k => Array.isArray(obj[k]));
+  const lawds = [...new Set(lists.flatMap(k => obj[k].map(r => r && r.lawdCd)).filter(c => /^\d{5}$/.test(String(c || ''))))];
+  if (!lawds.length) return obj;
+  let map;
+  try { map = await require('./transactionService').getAliasCanonicalMap(lawds); } catch (_) { return obj; }
+  if (!map || !map.size) return obj;
+  const out = { ...obj };
+  for (const k of lists) {
+    out[k] = obj[k].map(r => {
+      const c = r && map.get(`${r.aptName}|${r.umdNm || ''}`);
+      return c && c !== r.aptName ? { ...r, aptName: c, rawName: r.aptName } : r;
+    });
+  }
+  return out;
+}
+
 module.exports = {
+  canonRecords,
   getPriceRecords, getPriceRecordsByRegion, regionMenu, sliceRegion,
   regionLabel, _SIDO_PREFIX: SIDO_PREFIX,
 };
