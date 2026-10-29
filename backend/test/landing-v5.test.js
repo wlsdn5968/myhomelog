@@ -28,32 +28,34 @@ test('금액 표기: 만원 → "5억 8,800만" · "6억" · "6,700만", 값이 
 });
 
 function renderCtx() {
-  const els = { lvRecList: { innerHTML: '' }, lvTabHi: { a: {}, setAttribute(k, v) { this.a[k] = v; } }, lvTabLo: { a: {}, setAttribute(k, v) { this.a[k] = v; } } };
+  const els = { lvRecList: { innerHTML: '' } };
   const ctx = { document: { getElementById: (id) => els[id] || null } };
   vm.createContext(ctx);
   vm.runInContext([
-    ...['_escHtml', '_jsonAttr', '_isUnnamedApt', '_dispAptName', '_lvAmt', '_lvRecRender', '_lvRecTab'].map(fn),
-    'let _lvRec = null, _lvRecMode = "high";',
-    'globalThis.set = (r) => { _lvRec = r; }; globalThis.tab = _lvRecTab; globalThis.render = _lvRecRender;',
+    ...['_escHtml', '_jsonAttr', '_isUnnamedApt', '_dispAptName', '_lvAmt', '_lvDiff', '_lvRecCard', '_lvRecRender'].map(fn),
+    'let _lvRec = null, _lvRecN = { high: null, low: null };',
+    'globalThis.set = (r, n) => { _lvRec = r; _lvRecN = n || { high: null, low: null }; }; globalThis.render = _lvRecRender; globalThis.diff = _lvDiff;',
   ].join('\n'), ctx);
   return { ctx, els };
 }
 
-test('경신 목록: 최고가·최저가 탭 전환, 직전 값 문구가 탭을 따른다, 3줄까지, 이름은 이스케이프', () => {
+test('경신 목록(시안 F): 높았던·낮았던 거래를 늘 함께, 한 문장·직전 대비 차이·계약일·층, 묶음당 3건, 이름 이스케이프', () => {
   const { ctx, els } = renderCtx();
-  const row = (n, amt, prevMax, prevMin) => ({ aptName: n, region: '수원시 영통구', umdNm: '매탄동', excluUseAr: 84.45, dealAmount: amt, prevMax, prevMin, dealDate: '2026-10-19', lawdCd: '41117', sigungu: '수원시영통구', buildYear: 2002 });
-  ctx.set({ high: [row('주공그린빌1', 58800, 54500, 36000), row('B', 1, 1, 1), row('C', 1, 1, 1), row('D', 1, 1, 1)], low: [row('<b>x</b>', 6700, 12000, 7000)] });
+  const row = (n, amt, prevMax, prevMin, extra) => ({ aptName: n, region: '수원시 영통구', umdNm: '매탄동', excluUseAr: 84.45, dealAmount: amt, prevMax, prevMin, dealDate: '2026-10-19', floor: 7, priorCount: 265, lawdCd: '41117', sigungu: '수원시영통구', buildYear: 2002, ...(extra || {}) });
+  ctx.set({ high: [row('주공그린빌1', 58800, 54500, 36000), row('B', 1, 1, 1), row('C', 1, 1, 1), row('D', 1, 1, 1)], low: [row('<b>x</b>', 6700, 12000, 7000)] }, { high: 168, low: 68 });
   ctx.render();
-  let h = els.lvRecList.innerHTML;
-  assert.equal((h.match(/class="lv-row"/g) || []).length, 3, '3줄까지');
-  assert.ok(h.includes('주공그린빌1') && h.includes('5억 8,800만') && h.includes('직전 최고 5억 4,500만 · 10.19') && h.includes('수원시 영통구 매탄동 · 84.45㎡'));
-  ctx.tab('low');
-  h = els.lvRecList.innerHTML;
-  assert.equal(els.lvTabLo.a['aria-selected'], 'true'); assert.equal(els.lvTabHi.a['aria-selected'], 'false');
-  assert.ok(h.includes('직전 최저 7,000만'), '최저가 탭은 직전 최저와 비교');
+  const h = els.lvRecList.innerHTML;
+  assert.equal((h.match(/class="lv-card"/g) || []).length, 4, '높았던 3건 + 낮았던 1건 — 두 묶음을 함께 그린다');
+  assert.ok(h.includes('같은 면적 이전 거래보다 높았어요<small>168건 중 3건</small>') && h.includes('같은 면적 이전 거래보다 낮았어요<small>68건 중 1건</small>'));
+  assert.ok(h.includes('84.45㎡가 5억 8,800만에 거래돼 같은 면적 이전 거래 265건보다 높았어요'));
+  assert.ok(h.includes('<span class="lv-chip">+4,300만</span><span>직전 최고 5억 4,500만</span>'));
+  assert.ok(h.includes('주공그린빌1 · 수원시 영통구 매탄동 · 10.19 · 7층'));
+  assert.ok(h.includes('6,700만에 거래돼 같은 면적 이전 거래 265건보다 낮았어요') && h.includes('<span class="lv-chip">−300만</span><span>직전 최저 7,000만</span>'), '낮았던 거래는 직전 최저와 비교');
   assert.ok(!h.includes('<b>x</b>') && h.includes('&lt;b&gt;'), '이름 이스케이프');
+  assert.ok(!/역대|신고가/.test(h), '자극 단어 없음');
+  assert.equal(ctx.diff(119900, 119500), '+400만'); assert.equal(ctx.diff(37000, 39000), '−2,000만'); assert.equal(ctx.diff(1, 1), ''); assert.equal(ctx.diff(null, 1), '');
   ctx.set({ high: [], low: [] }); ctx.render();
-  assert.ok(els.lvRecList.innerHTML.includes('이번 주에는 새 최저가 거래가 없어요'));
+  assert.ok(els.lvRecList.innerHTML.includes('이번 주에는 이전 거래보다 높았던 거래가 없어요') && els.lvRecList.innerHTML.includes('이번 주에는 이전 거래보다 낮았던 거래가 없어요'));
 });
 
 test('원칙: 최고가만 싣지 않는다(두 건수 탭 늘 함께) · 빨강·파랑·그라데이션·고정폭·Sora 없음 · 한글 로고', () => {

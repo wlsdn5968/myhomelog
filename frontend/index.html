@@ -3383,6 +3383,15 @@ html[data-theme="dark"] #view-news{
 #view-landing .lv-ds{display:block;margin-top:3px;font-size:12px;color:var(--text-tertiary);font-variant-numeric:tabular-nums}
 #view-landing .lv-r{flex-shrink:0;text-align:right}
 #view-landing .lv-amt{display:block;font-size:16px;font-weight:700;font-variant-numeric:tabular-nums}
+/* REC-CARD-F-2026-10-29 (Claude Design 시안 화면 F): 높았던·낮았던 거래를 늘 함께, 한 문장 + 직전 대비 차이. 좋고 나쁨 색 없이 부호로만 */
+#view-landing .lv-grp{margin:14px 0 4px;font-size:13px;font-weight:700;color:var(--text-secondary)}
+#view-landing .lv-grp small{margin-left:6px;font-weight:500;color:var(--text-tertiary);font-variant-numeric:tabular-nums}
+#view-landing .lv-card{display:block;width:100%;padding:12px 0;border:0;border-bottom:1px solid var(--border-faint);background:none;font:inherit;color:inherit;text-align:left;cursor:pointer}
+#view-landing .lv-card:hover .lv-sen{text-decoration:underline;text-underline-offset:3px}
+#view-landing .lv-card:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+#view-landing .lv-sen{display:block;font-size:15px;font-weight:700;line-height:1.5}
+#view-landing .lv-dl{display:flex;align-items:center;gap:8px;margin-top:4px;font-size:13px;color:var(--text-secondary);font-variant-numeric:tabular-nums}
+#view-landing .lv-chip{display:inline-block;padding:2px 8px;border-radius:6px;background:var(--bg2);color:var(--t1);font-size:12px;font-weight:700}
 #view-landing .lv-note{margin:10px 0 0;font-size:12px;color:var(--text-tertiary)}
 #view-landing .lv-msg{padding:18px 0;font-size:13px;color:var(--text-tertiary)}
 #view-landing .lv-msg button{border:0;background:none;padding:0;font:inherit;color:var(--acc);text-decoration:underline;cursor:pointer}
@@ -3430,12 +3439,9 @@ html[data-theme="dark"] #view-news{
       <section aria-labelledby="lvRecH">
         <div class="lv-sec-h">
           <h2 id="lvRecH">이번 주 새로 나온 기록</h2>
-          <div class="lv-tabs" role="tablist" aria-label="최고가·최저가">
-            <button type="button" role="tab" id="lvTabHi" aria-selected="true" onclick="_lvRecTab('high')">최고가 <span id="lv-recHigh">—</span></button>
-            <button type="button" role="tab" id="lvTabLo" aria-selected="false" onclick="_lvRecTab('low')">최저가 <span id="lv-recLow">—</span></button>
-          </div>
+          <span class="lv-sec-m">최고가 <span id="lv-recHigh">—</span> · 최저가 <span id="lv-recLow">—</span></span>
         </div>
-        <div id="lvRecList" role="tabpanel" aria-labelledby="lvRecH"><div class="lv-msg">불러오는 중이에요</div></div>
+        <div id="lvRecList"><div class="lv-msg">불러오는 중이에요</div></div>
         <p class="lv-note" id="lv-recSub">같은 단지, 같은 면적의 직전 거래와 비교했어요. 매수·매도 추천이 아니에요.</p>
       </section>
       <section aria-labelledby="lvRegH">
@@ -4307,29 +4313,43 @@ function _lvAmt(man){
   const eok = Math.floor(n / 10000), rest = n % 10000;
   return [eok ? `${eok}억` : '', rest ? `${rest.toLocaleString()}만` : ''].filter(Boolean).join(' ');
 }
-let _lvRec = null, _lvRecMode = 'high';
-function _lvRecTab(m){
-  _lvRecMode = m === 'low' ? 'low' : 'high';
-  [['lvTabHi', 'high'], ['lvTabLo', 'low']].forEach(([id, k]) => { const b = document.getElementById(id); if (b) b.setAttribute('aria-selected', String(k === _lvRecMode)); });
-  _lvRecRender();
+let _lvRec = null, _lvRecN = { high: null, low: null };
+// 만원 차이 → "+400만" · "−2,000만" (값이 없으면 빈칸)
+function _lvDiff(a, b){
+  if (!(Number(a) > 0) || !(Number(b) > 0)) return ''; // null 을 0 으로 보면 "−1만" 같은 거짓 차이가 나온다
+  const d = Math.round(Number(a) - Number(b));
+  if (!Number.isFinite(d) || !d) return '';
+  return (d > 0 ? '+' : '−') + _lvAmt(Math.abs(d));
+}
+// REC-CARD-F-2026-10-29 (Claude Design 시안 화면 F): 최고·최저를 늘 함께(절대 룰 ①), 카드 맨 위 한 문장 + 직전 대비 차이.
+//   '역대'·'신고가' 같은 자극 단어와 좋고 나쁨 색은 쓰지 않는다. 비교 기준은 같은 단지·같은 면적의 직전 거래(get_price_records).
+function _lvRecCard(x, hi){
+  const name = String(_dispAptName(x.aptName, x.umdNm) || x.aptName || '');
+  const where = [String(x.region || '').trim(), String(x.umdNm || '').trim()].filter(Boolean).join(' ');
+  const area = Number(x.excluUseAr) > 0 ? `${Number(Number(x.excluUseAr).toFixed(2))}㎡` : ''; // 비교 기준인 실제 전용면적(84.45㎡) — '84㎡'로 줄이면 같은 단지 다른 84㎡ 타입(84.51㎡ 등)과 헷갈렸다(2026-10-27)
+  const amt = _lvAmt(x.dealAmount), prevV = hi ? x.prevMax : x.prevMin, prev = _lvAmt(prevV);
+  const diff = prev ? _lvDiff(x.dealAmount, prevV) : '';
+  const day = /^\d{4}-\d{2}-\d{2}$/.test(String(x.dealDate || '')) ? String(x.dealDate).slice(5).replace('-', '.') : '';
+  const fl = Number.isFinite(Number(x.floor)) && x.floor !== null ? `${Number(x.floor)}층` : '';
+  const n = Number(x.priorCount) > 0 ? Number(x.priorCount) : 0;
+  const sen = `${area || '같은 면적'}${area ? '가' : ''} ${amt}에 거래돼 같은 면적 이전 거래${n ? ` ${n.toLocaleString()}건` : ''}보다 ${hi ? '높았어요' : '낮았어요'}`;
+  const arg = { aptName: x.aptName, sigungu: x.sigungu, umdNm: x.umdNm, lawdCd: x.lawdCd, buildYear: x.buildYear };
+  const label = [sen, diff && `직전 ${hi ? '최고' : '최저'} ${prev}보다 ${diff}`, name, where, day, fl].filter(Boolean).join(', ');
+  return `<button type="button" class="lv-card" aria-label="${_escHtml(label)}" onclick='_lvOpen(${_jsonAttr(arg)})'>`
+    + `<span class="lv-sen">${_escHtml(sen)}</span>`
+    + (prev ? `<span class="lv-dl">${diff ? `<span class="lv-chip">${_escHtml(diff)}</span>` : ''}<span>직전 ${hi ? '최고' : '최저'} ${_escHtml(prev)}</span></span>` : '')
+    + `<span class="lv-ds">${_escHtml([name, where, [day, fl].filter(Boolean).join(' · ')].filter(Boolean).join(' · '))}</span></button>`;
 }
 function _lvRecRender(){
   const box = document.getElementById('lvRecList'); if (!box || !_lvRec) return;
-  const hi = _lvRecMode === 'high';
-  const rows = (hi ? _lvRec.high : _lvRec.low) || [];
-  if (!rows.length) { box.innerHTML = `<div class="lv-msg">이번 주에는 새 ${hi ? '최고가' : '최저가'} 거래가 없어요</div>`; return; }
-  box.innerHTML = rows.slice(0, 3).map(x => {
-    const name = String(_dispAptName(x.aptName, x.umdNm) || x.aptName || '');
-    const where = [String(x.region || '').trim(), String(x.umdNm || '').trim()].filter(Boolean).join(' ');
-    const area = Number(x.excluUseAr) > 0 ? `${Number(Number(x.excluUseAr).toFixed(2))}㎡` : ''; // 비교 기준인 실제 전용면적(84.45㎡) — '84㎡'로 줄이면 같은 단지 다른 84㎡ 타입(84.51㎡ 등)과 헷갈렸다(2026-10-27)
-    const amt = _lvAmt(x.dealAmount), prev = _lvAmt(hi ? x.prevMax : x.prevMin);
-    const day = /^\d{4}-\d{2}-\d{2}$/.test(String(x.dealDate || '')) ? String(x.dealDate).slice(5).replace('-', '.') : '';
-    const arg = { aptName: x.aptName, sigungu: x.sigungu, umdNm: x.umdNm, lawdCd: x.lawdCd, buildYear: x.buildYear };
-    const label = [name, where, area, amt && `거래가 ${amt}`, prev && `직전 ${hi ? '최고' : '최저'} ${prev}`, day].filter(Boolean).join(', ');
-    return `<button type="button" class="lv-row" aria-label="${_escHtml(label)}" onclick='_lvOpen(${_jsonAttr(arg)})'>`
-      + `<span class="lv-l"><span class="lv-nm">${_escHtml(name)}</span><span class="lv-ds">${_escHtml([where, area].filter(Boolean).join(' · '))}</span></span>`
-      + `<span class="lv-r"><span class="lv-amt">${_escHtml(amt)}</span><span class="lv-ds">${_escHtml([prev && `직전 ${hi ? '최고' : '최저'} ${prev}`, day].filter(Boolean).join(' · '))}</span></span></button>`;
-  }).join('');
+  const grp = (hi) => {
+    const rows = ((hi ? _lvRec.high : _lvRec.low) || []).slice(0, 3);
+    const tot = hi ? _lvRecN.high : _lvRecN.low;
+    const head = `<div class="lv-grp">같은 면적 이전 거래보다 ${hi ? '높았어요' : '낮았어요'}${Number.isFinite(tot) ? `<small>${tot.toLocaleString()}건 중 ${rows.length}건</small>` : ''}</div>`;
+    if (!rows.length) return head + `<div class="lv-msg">이번 주에는 이전 거래보다 ${hi ? '높았던' : '낮았던'} 거래가 없어요</div>`;
+    return head + rows.map(x => _lvRecCard(x, hi)).join('');
+  };
+  box.innerHTML = grp(true) + grp(false);
 }
 async function _loadLandingRecords(){
   const box = document.getElementById('lvRecList');
@@ -4342,7 +4362,7 @@ async function _loadLandingRecords(){
       if (Number.isFinite(hiN) && Number.isFinite(loN) && Number.isFinite(cmp) && cmp > 0) {
         _lvRec = { high: Array.isArray(d.high) ? d.high : [], low: Array.isArray(d.low) ? d.low : [] };
         const put = (id, n) => { const e = document.getElementById(id); if (e) e.textContent = Number(n).toLocaleString(); };
-        put('lv-recHigh', hiN); put('lv-recLow', loN);
+        put('lv-recHigh', hiN); put('lv-recLow', loN); _lvRecN = { high: hiN, low: loN };
         const sub = document.getElementById('lv-recSub');
         if (sub) {
           const at = d.computedAt ? new Date(d.computedAt) : null;
