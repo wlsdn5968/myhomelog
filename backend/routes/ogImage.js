@@ -24,7 +24,7 @@ const FALLBACK = '/og.png';
 
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
 const comma = (v) => Number(v).toLocaleString('ko-KR');
-const eok = (v) => (Number.isFinite(Number(v)) ? (Number(v) / 10000).toFixed(1) + '억' : null);
+const eok = (v) => (Number.isFinite(Number(v)) ? (Number(v) / 10000).toFixed(2) + '억' : null); // 억 2자리 — 단지 페이지·앱과 같은 자릿수
 
 /** 정적 이미지로 보낸다 — 열화 상태이므로 절대 캐시하지 않는다. */
 function fallback(res, why) {
@@ -38,18 +38,18 @@ function fallback(res, why) {
  * 첫 줄이 가장 크게 그려지므로 가장 확실한 사실(건수·평균)을 놓는다.
  */
 function buildCard(af) {
-  const { region, aptName, umd, buildYear, stat } = af;
+  const { region, aptName, umd, buildYear, stat, rep } = af;
   const eyebrow = [region, umd].filter(Boolean).join(' · ') || '실거래 기록';
   const lines = [];
   if (stat) {
     const cnt = num(stat.dealCount);
-    const avg = stat.avgPriceAuk;
-    const head = [cnt ? `최근 24개월 ${comma(cnt)}건` : null, avg ? `평균 ${avg}억` : null]
+    // REP-AREA-SSR-2026-10-30: 단지 페이지와 같이 대표 평형(거래 최다) 기준 — 면적이 다른 거래를 섞은 평균은 쓰지 않는다.
+    const head = [cnt ? `최근 24개월 ${comma(cnt)}건` : null, rep ? `${rep.py}평 평균 ${eok(rep.avg)}` : null]
       .filter(Boolean).join(' · ');
     if (head) lines.push(head);
-    const range = (eok(stat.minPrice) && eok(stat.maxPrice)) ? `${eok(stat.minPrice)}~${eok(stat.maxPrice)}` : null;
+    const range = rep && eok(rep.min) && eok(rep.max) ? `${eok(rep.min)}~${eok(rep.max)}` : null;
     const sub = [
-      eok(stat.medianPrice) ? `중앙값 ${eok(stat.medianPrice)}` : null,
+      rep && eok(rep.median) ? `중앙값 ${eok(rep.median)}` : null,
       range,
       stat.recentDeal ? `최근 거래 ${stat.recentDeal}` : null,
     ].filter(Boolean).join(' · ');

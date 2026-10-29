@@ -8350,13 +8350,15 @@ function _pcSeqs(){
   if(!seqs.length && /^\d{5}-\d+$/.test(hint)) seqs.push(hint);
   return seqs.sort();
 }
+// 평형 칩이 '전체'일 때 차트·신고가 추이가 함께 쓰는 대표 평형: 거래가 가장 많은 ㎡(반올림)
+function _pcRepArea(src){ const c={}; (src||[]).forEach(x=>{ const s=Math.round(Number(x.ar)); if(s) c[s]=(c[s]||0)+1; }); return Number(Object.keys(c).sort((a,b)=>c[b]-c[a])[0])||0; }
 function _pcRecentDeals(){
   return (window._curTrendApt||[]).map(t=>({d:`${t.dealYear}-${String(t.dealMonth).padStart(2,'0')}-${String(t.dealDay).padStart(2,'0')}`,ar:Number(t.excluUseAr),a:Number(t.dealAmount),f:t.floor}));
 }
 function _pcHtml(area){
   const L=window._curTrendLong, longOk=!!(L&&L.state==='ok'&&Array.isArray(L.deals)&&L.deals.length);
   const src=(longOk?L.deals:_pcRecentDeals()).filter(x=>Number(x.ar)>0);
-  if(!area){ const c={}; src.forEach(x=>{ const s=Math.round(Number(x.ar)); c[s]=(c[s]||0)+1; }); area=Number(Object.keys(c).sort((a,b)=>c[b]-c[a])[0])||0; }
+  if(!area) area=_pcRepArea(src);
   // 장기 이력이 없으면 최근 거래(최대 30건)만 있다 — 그걸 '3년'이라 부르면 거짓(실측: 3년 최저 5.58억을 7.20억으로 표시). 기간 칩을 숨기고 '최근 거래 N건'으로 부른다.
   const period=longOk?(_PC_PERIODS[window._pcPeriod]?window._pcPeriod:'3y'):'all';
   const chips=Object.keys(_PC_PERIODS).map(k=>`<button type="button" class="pc-period" aria-pressed="${k===period}" onclick="_setPcPeriod('${k}')" style="font-size:12px;padding:5px 12px;border-radius:999px;border:1px solid ${k===period?'var(--acc)':'var(--bd)'};background:${k===period?'var(--acc)':'var(--bg-base)'};color:${k===period?'var(--acc-ink)':'var(--t2)'};cursor:pointer">${_PC_PERIODS[k][0]}</button>`).join('');
@@ -8384,7 +8386,8 @@ async function _pcLoad(){
   const key=_pcSeqs().join(',');
   if(!key){ window._curTrendLong={state:'error',key:''}; return; }
   window._curTrendLong={state:'loading',key};
-  const paint=()=>{ const el=document.getElementById('trendChartBox'); if(el&&typeof window._trendHtml==='function') el.innerHTML=window._trendHtml(window._curTrendArea||0); };
+  const paint=()=>{ const el=document.getElementById('trendChartBox'); if(el&&typeof window._trendHtml==='function') el.innerHTML=window._trendHtml(window._curTrendArea||0);
+    const pk=document.getElementById('peakTrendBox'); if(pk&&typeof window._peakTrendHtml==='function') pk.innerHTML=window._peakTrendHtml(window._curTrendArea||0); };
   try{
     const r=await fetch(`${CFG.api}/transactions/history?deals=1&aptSeq=${encodeURIComponent(key)}`,{signal:AbortSignal.timeout(12000)});
     if(!r.ok)throw new Error('HTTP '+r.status);
@@ -8649,7 +8652,7 @@ function showDetail(p){
       const _box = (title, content) => `<div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-sm);padding:8px 10px;font-size:12px;line-height:1.5;color:var(--t2)"><div style="font-weight:700;color:var(--t1);margin-bottom:3px">${title}</div>${content}</div>`;
       return `<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:var(--radius-base);padding:11px 13px;margin:6px 0 8px;font-size:12px;color:var(--t2);line-height:1.6">
         <div style="font-weight:700;color:var(--t1);margin-bottom:6px">보유 주택 수별 예상 세금</div>
-        <div style="font-size:12px;color:var(--t3);margin-bottom:6px">매매가 ${market.toFixed(1)}억 / 공시가격 추정 ${official.toFixed(1)}억</div>
+        <div style="font-size:12px;color:var(--t3);margin-bottom:6px">매매가 ${market.toFixed(2)}억 / 공시가격 추정 ${official.toFixed(2)}억</div>
         <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:6px">
           ${_box('1주택자', `취득세 <b>${_format(acqTax1H)}만원</b><br>재산세 ${_format(propTaxW)}만원/년<br>종부세 ${_format(compTax1H)}만원/년`)}
           ${_box('2주택자', `취득세 <b style="color:var(--amb)">${_format(acqTax2H)}만원</b> <span style="font-size:12px;color:var(--t3)">(${_acqIsReg?'8% 중과':'비조정 기본세율'})</span><br>재산세 ${_format(propTaxW)}만원/년<br>종부세 <b style="color:var(--amb)">${_format(compTax2H)}만원/년</b>`)}
@@ -8757,59 +8760,57 @@ function showDetail(p){
   // Sprint PP-1 (2026-05-19, 한국도시연구소 100대 아파트 분석 방법론 차용):
   //   단지의 "신고가 경신" 이벤트 추출. cumulative max 갱신 시점만 표시.
   //   매수 추천 X / 가격 예측 X — 과거 신고가 갱신 history 정보 정리.
+  // PEAK-SAME-BASIS-2026-10-30 (10-18 전수 점검 '화면마다 가격이 다름' 후속, 운영 실측 공릉풍림아이원):
+  //   전에는 불러온 최근 30건만, 그것도 모든 면적을 섞어 누적 최고를 셌다 → 115㎡ 거래가 60㎡ 차트 위에서 '신고가'로 보였고
+  //   (차트 60㎡ 최고 8.80억 vs 신고가 10.95억), 안내는 "그 전의 모든 거래" 라 사실과 달랐다.
+  //   이제 가격 차트와 같은 거래 목록(장기 이력, 없으면 최근 거래)·같은 대표 평형(±2㎡)으로 세고, 기준(평형·기간·건수)을 적는다.
   function _peakTrendHtml(area) {
-    const tx = (window._curTrendApt || []).filter(t => !area || Math.round(Number(t.excluUseAr) || 0) === area);
+    const L = window._curTrendLong, longOk = !!(L && L.state === 'ok' && Array.isArray(L.deals) && L.deals.length);
+    const src = (longOk ? L.deals : _pcRecentDeals()).filter(x => Number(x.ar) > 0 && Number(x.a) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(String(x.d)));
+    if (!area) area = _pcRepArea(src);
+    const tx = src.filter(x => area && Math.abs(Math.round(Number(x.ar)) - area) <= 2)
+      .sort((x, y) => (x.d < y.d ? -1 : x.d > y.d ? 1 : 0)); // 날짜 오름차순 (먼저 발생한 거래부터)
+    const py = Math.round(area / 3.3058);
+    const areaLabel = area ? `${area}㎡(${py}평)` : '';
     if (tx.length < 2) {
-      return area
-        ? `<div style="font-size:12px;color:var(--t3);padding:10px 0">${area}㎡ 거래가 적어 신고가 경신 추이를 보여 줄 수 없어요</div>`
-        : '<div style="font-size:12px;color:var(--t3);padding:10px 0">거래가 부족해요</div>';
+      return `<div style="font-size:12px;color:var(--t3);padding:10px 0">${areaLabel ? areaLabel + ' ' : ''}거래가 적어 신고가 경신 추이를 보여 줄 수 없어요</div>`;
     }
-    // 날짜 오름차순 정렬 (먼저 발생한 거래부터)
-    const sorted = [...tx].sort((a, b) => {
-      const da = a.dealYear * 10000 + a.dealMonth * 100 + a.dealDay;
-      const db = b.dealYear * 10000 + b.dealMonth * 100 + b.dealDay;
-      return da - db;
-    });
-    // cumulative max 갱신 시점만 추출
+    // 누적 최고가 갱신 시점만 추출
     const peaks = [];
     let runningMax = 0;
-    for (const t of sorted) {
-      const amt = Number(t.dealAmount) || 0;
-      if (amt > runningMax) {
-        runningMax = amt;
-        peaks.push(t);
-      }
+    for (const t of tx) {
+      if (t.a > runningMax) { runningMax = t.a; peaks.push(t); }
     }
+    const since = tx[0].d.slice(0, 7).replace('-', '.');
+    const basis = longOk ? `${since}부터 거래 ${tx.length}건` : `불러온 최근 거래 ${tx.length}건`;
+    const foot = `<div style="font-size:12px;color:var(--t3);margin-top:6px">※ 신고가는 같은 면적(±2㎡)에서 앞선 거래보다 높은 가격에 거래된 경우예요. ${basis} 기준이라 그보다 이전 거래와는 비교하지 않았어요. 한국도시연구소의 분석 방법을 빌렸어요. 매수 추천이나 가격 예측이 아니에요.</div>`;
     if (peaks.length < 2) {
-      return `<div style="font-size:12px;color:var(--t3);padding:10px 0">신고가 경신 이력이 1건 이하라 추이를 보여 줄 수 없어요</div>`;
+      return `<div style="font-size:12px;color:var(--t3);padding:10px 0">${areaLabel} 신고가 경신 이력이 1건 이하라 추이를 보여 줄 수 없어요</div>${foot}`;
     }
     // 최근부터 역순으로 표시 (최대 10건)
     const reverseList = peaks.slice().reverse().slice(0, 10);
     const first = peaks[0];
     const last = peaks[peaks.length - 1];
-    const firstPrice = (Number(first.dealAmount) / 10000).toFixed(2);
-    const lastPrice = (Number(last.dealAmount) / 10000).toFixed(2);
-    const upPct = first.dealAmount > 0
-      ? (((Number(last.dealAmount) - Number(first.dealAmount)) / Number(first.dealAmount)) * 100).toFixed(1)
-      : '0.0';
+    const firstPrice = (first.a / 10000).toFixed(2);
+    const lastPrice = (last.a / 10000).toFixed(2);
+    const upPct = (((last.a - first.a) / first.a) * 100).toFixed(1);
     return `<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:var(--radius-base);padding:10px 12px;font-size:12px;color:var(--t2);line-height:1.6">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
-        <span style="font-weight:700;color:var(--t1)">신고가 경신 ${peaks.length}회</span>
-        <span style="color:var(--acc);font-weight:600">최초 ${firstPrice}억에서 최근 ${lastPrice}억으로 (+${upPct}%)</span>
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;gap:8px;flex-wrap:wrap">
+        <span style="font-weight:700;color:var(--t1)">${areaLabel} 신고가 경신 ${peaks.length}회</span>
+        <span style="color:var(--acc);font-weight:600">처음 ${firstPrice}억에서 최근 ${lastPrice}억으로 (+${upPct}%)</span>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
         ${reverseList.map((t, i) => {
-          const price = (Number(t.dealAmount) / 10000).toFixed(2);
-          const date = `${t.dealYear}-${String(t.dealMonth).padStart(2,'0')}-${String(t.dealDay).padStart(2,'0')}`;
-          const floor = t.floor ? `${t.floor}층` : '';
+          const price = (t.a / 10000).toFixed(2);
+          const floor = t.f != null && t.f !== '' ? `${t.f}층` : '';
           const isLatest = i === 0;
           return `<div style="display:flex;justify-content:space-between;font-size:12px;${isLatest?'color:var(--acc);font-weight:600':'color:var(--t2)'}">
-            <span>${isLatest?'최근 신고가':''} ${date} ${floor}</span>
+            <span>${isLatest?'최근 신고가':''} ${t.d} ${floor}</span>
             <span>${price}억</span>
           </div>`;
         }).join('')}
       </div>
-      <div style="font-size:12px;color:var(--t3);margin-top:6px">※ 신고가는 그 전의 모든 거래보다 높은 가격에 거래된 경우예요. 한국도시연구소의 분석 방법을 빌렸어요. 매수 추천이나 가격 예측이 아니에요.</div>
+      ${foot}
     </div>`;
   }
   window._peakTrendHtml = _peakTrendHtml;

@@ -137,6 +137,30 @@ async function loadDimRow(aptSeq) {
  *     ([[tax-law-crosscheck-2026-06-24]]). 그래서 페이지와 이미지가 이 함수를 같이 쓴다.
  *   거래도 인덱스도 없으면 null — 호출부가 "없음" 을 각자 표현한다.
  */
+// REP-AREA-SSR-2026-10-30 (10-18 '같은 단지 가격이 화면마다 다름' 후속, 운영 실측 공릉풍림아이원):
+//   이 페이지 첫 요약은 31㎡~115㎡ 거래를 한데 섞은 평균(8.67억)이었고, 앱 상세는 같은 단지를 60㎡ 평균(8.13억)으로 보여 줬다.
+//   섞은 평균은 어느 집 값도 아니다 — 앱(index.html _repAreaOf, REP-AREA-2026-10-29)과 같은 규칙으로 대표 평형을 고른다:
+//   거래가 가장 많은 전용㎡(반올림), 동률이면 가장 최근 거래의 평형. 그 평형 거래만으로 평균·중앙값·범위를 낸다.
+const { toPyeong } = require('../utils/pyeong');
+function repAreaSummary(txs) {
+  const by = {};
+  for (const t of (Array.isArray(txs) ? txs : [])) {
+    const sqm = Math.round(Number(t && t.excluUseAr) || 0);
+    const amt = Number(t && t.dealAmount) || 0;
+    if (!sqm || !(amt > 0)) continue;
+    const d = (Number(t.dealYear) || 0) * 10000 + (Number(t.dealMonth) || 0) * 100 + (Number(t.dealDay) || 0);
+    if (!by[sqm]) by[sqm] = { sqm, prices: [], last: 0 };
+    by[sqm].prices.push(amt);
+    if (d > by[sqm].last) by[sqm].last = d;
+  }
+  const best = Object.values(by).sort((a, b) => b.prices.length - a.prices.length || b.last - a.last)[0];
+  if (!best) return null;
+  const ps = best.prices.slice().sort((a, b) => a - b);
+  const n = ps.length;
+  const median = n % 2 ? ps[(n - 1) / 2] : (ps[n / 2 - 1] + ps[n / 2]) / 2;
+  return { sqm: best.sqm, py: Math.round(toPyeong(best.sqm)), n, avg: ps.reduce((a, b) => a + b, 0) / n, median, min: ps[0], max: ps[n - 1] };
+}
+
 async function loadAptFacts(seq) {
   const svc = require('../services/transactionService');
   let idx = null, txs = null;
@@ -161,7 +185,8 @@ async function loadAptFacts(seq) {
   const buildYear = num(idx && idx.build_year) || num(txs && txs[0] && txs[0].buildYear);
   // analyzeTransactions 는 aptName|lawdCd|umdNm 로 묶는다 — apt_seq 한 건만 넣었으니 그룹은 1개다.
   const stat = (txs && txs.length) ? (svc.analyzeTransactions(txs) || [])[0] : null;
-  return { idx, txs, lawdCd, region, aptName, umd, buildYear, stat, sigungu: sigunguRaw };
+  const rep = (txs && txs.length) ? repAreaSummary(txs) : null;
+  return { idx, txs, lawdCd, region, aptName, umd, buildYear, stat, rep, sigungu: sigunguRaw };
 }
 
 // ── APT-PAGE-INFO-2026-09-06 (Plan 063) ────────────────────────────────────────────
@@ -359,7 +384,7 @@ router.get('/:aptSeq', async (req, res) => {
     }));
   }
 
-  const { idx, txs, lawdCd, region, aptName, umd, buildYear, stat, sigungu } = af;
+  const { idx, txs, lawdCd, region, aptName, umd, buildYear, stat, rep, sigungu } = af;
 
   const cards = [];
   const facts = [];
@@ -368,18 +393,18 @@ router.get('/:aptSeq', async (req, res) => {
     cards.push(`<div class="card">
       <h2>최근 24개월 실거래 요약 <span class="src">국토교통부 실거래 신고</span></h2>
       <div class="kpi">
-        <div><b>${comma(num(stat.dealCount) || 0)}건</b><span>거래 건수</span></div>
-        <div><b>${esc(String(stat.avgPriceAuk))}억</b><span>평균가(시간 가중)</span></div>
-        <div><b>${eok(stat.medianPrice)}</b><span>중앙값</span></div>
+        <div><b>${comma(num(stat.dealCount) || 0)}건</b><span>거래 건수(전 평형)</span></div>
+        ${rep ? `<div><b>${eok(rep.avg)}</b><span>${rep.sqm}㎡(${rep.py}평) 평균</span></div>
+        <div><b>${eok(rep.median)}</b><span>${rep.sqm}㎡(${rep.py}평) 중앙값</span></div>` : ''}
       </div>
-      <div class="row"><span class="k">가격 범위</span><span class="num">${eok(stat.minPrice)} ~ ${eok(stat.maxPrice)}</span></div>
+      ${rep ? `<div class="row"><span class="k">${rep.sqm}㎡(${rep.py}평) 가격 범위</span><span class="num">${eok(rep.min)} ~ ${eok(rep.max)}</span></div>` : ''}
       <div class="row"><span class="k">최근 거래일</span><span class="num">${esc(String(stat.recentDeal))}</span></div>
       ${syncKst ? `<div class="row"><span class="k">실거래 수집</span><span class="num">${esc(syncKst)} 기준</span></div>` : ''}
       ${buildYear ? `<div class="row"><span class="k">준공</span><span class="num">${buildYear}년</span></div>` : ''}
-      <div class="src" style="margin-top:8px">평균가는 최근 거래에 비중을 더 둔 값이에요.${eok(stat.trimmedAvgPrice) ? ` 절사평균(위아래 10% 제외) ${eok(stat.trimmedAvgPrice)}.` : ''}</div>
+      ${rep ? `<div class="src" style="margin-top:8px">평균·중앙값·범위는 거래가 가장 많은 ${rep.sqm}㎡(${rep.py}평) 거래 ${comma(rep.n)}건으로 냈어요. 면적이 다른 집은 섞지 않아요. 다른 평형은 아래 평형별 표에서 볼 수 있어요.</div>` : ''}
     </div>`);
     facts.push(`최근 24개월 ${comma(num(stat.dealCount) || 0)}건`);
-    facts.push(`평균 ${stat.avgPriceAuk}억`);
+    if (rep) facts.push(`${rep.py}평 평균 ${eok(rep.avg)}`);
     if (stat.recentDeal) facts.push(`최근 거래 ${stat.recentDeal}`);
 
     const ps = (stat.pyeongStats || []).filter(p => num(p.dealCount));
@@ -528,3 +553,4 @@ router.get('/:aptSeq', async (req, res) => {
 module.exports = router;
 // 링크 미리보기 이미지 라우트가 같은 사실을 쓰도록 함께 내보낸다 (APT-FACTS-SSOT-2026-09-02)
 module.exports.loadAptFacts = loadAptFacts;
+module.exports._repAreaSummary = repAreaSummary;

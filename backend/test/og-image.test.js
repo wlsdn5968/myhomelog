@@ -22,14 +22,20 @@ test('OG 카드 문구 — 실거래 사실만 싣고, 없는 숫자를 지어�
   const withStat = buildCard({
     region: '서울 성동구', aptName: 'e편한세상옥수파크힐스', umd: '옥수동', buildYear: 2016,
     stat: { dealCount: 63, avgPriceAuk: '19.2', medianPrice: 189000, minPrice: 154000, maxPrice: 231000, recentDeal: '2026-08-20' },
+    // REP-AREA-SSR-2026-10-30: 카드는 전 평형 평균(stat.avgPriceAuk)이 아니라 대표 평형(rep) 값을 싣는다
+    rep: { sqm: 85, py: 26, n: 40, avg: 192000, median: 189000, min: 154000, max: 231000 },
   });
   assert.equal(withStat.title, 'e편한세상옥수파크힐스');
   assert.equal(withStat.eyebrow, '서울 성동구 · 옥수동');
   const joined = withStat.lines.join(' | ');
   assert.match(joined, /최근 24개월 63건/, '거래 건수가 카드에 없다');
-  assert.match(joined, /평균 19.2억/, '평균가가 카드에 없다');
-  assert.match(joined, /중앙값 18.9억/, '중앙값이 만원→억 변환을 안 거쳤다');
-  assert.match(joined, /15.4억~23.1억/, '가격 범위가 없다');
+  assert.match(joined, /26평 평균 19\.20억/, '대표 평형 평균가가 카드에 없다');
+  assert.match(joined, /중앙값 18\.90억/, '중앙값이 만원→억 변환을 안 거쳤다');
+  assert.match(joined, /15\.40억~23\.10억/, '가격 범위가 없다');
+  // 대표 평형 요약이 없으면 평균·범위를 지어내지 않는다(전 평형을 섞은 값으로 대신하지 않는다)
+  const noRep = buildCard({ region: '서울 성동구', aptName: 'X', umd: '', buildYear: null,
+    stat: { dealCount: 3, avgPriceAuk: '9.9', medianPrice: 99000, minPrice: 90000, maxPrice: 110000, recentDeal: '2026-08-20' } });
+  assert.equal(/억/.test(noRep.lines.join(' ')), false, '대표 평형 없이 섞은 평균을 그렸다');
   assert.ok(withStat.lines.length <= 2, '줄이 3개 이상이면 630px 안에서 답답해진다');
   assert.match(withStat.footer, /국토교통부/, '출처가 이미지에 박히지 않는다');
 
