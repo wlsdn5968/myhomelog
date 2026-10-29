@@ -8328,6 +8328,15 @@ function buildPriceTrend(txHistory, areaSqm){
   })).sort((a,b)=>a.sortKey-b.sortKey);
   return rows.slice(-24);
 }
+// REP-AREA-2026-10-29: 거래가 가장 많은 평형(㎡ 반올림 묶음 — 평형별 평균 카드와 같은 기준). 동률이면 가장 최근 거래의 평형.
+function _repAreaOf(tx){
+  const by={};
+  (Array.isArray(tx)?tx:[]).forEach((t,i)=>{const sqm=Math.round(Number(t&&t.excluUseAr)||0);if(!sqm||!(Number(t.dealAmount)>0))return;
+    const d=(Number(t.dealYear)||0)*10000+(Number(t.dealMonth)||0)*100+(Number(t.dealDay)||0);
+    if(!by[sqm])by[sqm]={sqm,n:0,last:0};by[sqm].n++;if(d>by[sqm].last)by[sqm].last=d;});
+  const best=Object.values(by).sort((a,b)=>b.n-a.n||b.last-a.last)[0];
+  return best?{sqm:best.sqm,py:Math.round(best.sqm/3.3058),n:best.n}:null;
+}
 // SVG 라인 + 점 차트 (반응형, inline style — 기존 CSS에 의존 X)
 function renderPriceChart(rows){
   const W=320,H=120,pad={t:12,r:10,b:26,l:30};
@@ -13967,6 +13976,7 @@ async function openAptDetail(r) {
   // 정확 매칭 거래 (lawdCd + aptName) 6개월. 0건이면 빈 배열 → '실거래 데이터 없음' 표시.
   let txHistory = [], avgPrice = 0, minPrice = 0, maxPrice = 0;
   let _aliasUsed = null; // master 단지의 자동 alias 거래 표시용
+  let _repArea = null; // REP-AREA-2026-10-29: 헤더 평균가의 기준 평형
   let _txFetchFailed = false; // TX-RETRY (Sprint IIII): 실패(재시도 후)와 "진짜 0건" 구분
   // SCOPE-FIX-2026-05-12 (Sentry MYHOMELOG-FRONTEND-E 발견):
   //   _facilityRes 가 try { } 안에서 `let` 으로 선언 → block-scoped → 아래 const p = {...} 객체 리터럴에서
@@ -14055,7 +14065,11 @@ async function openAptDetail(r) {
     }
 
     if (txHistory.length) {
-      const prices = txHistory.map(x => Number(x.dealAmount) || 0).filter(x => x > 0);
+      // REP-AREA-2026-10-29 (운영자 지적·실측): 31㎡(3억)~115㎡(10억)를 한데 섞은 "전 평형 평균"(공릉풍림 7.73억)은 어느 집 값도 아니다.
+      //   최근 거래가 가장 많은 평형(동률이면 가장 최근 거래의 평형)만으로 평균·범위를 내고, 라벨에 그 평형을 적는다.
+      _repArea = _repAreaOf(txHistory);
+      const prices = txHistory.filter(x => !_repArea || Math.round(Number(x.excluUseAr) || 0) === _repArea.sqm)
+        .map(x => Number(x.dealAmount) || 0).filter(x => x > 0);
       if (prices.length) {
         avgPrice = prices.reduce((a,b) => a+b, 0) / prices.length / 10000;
         minPrice = Math.min(...prices) / 10000;
@@ -14080,7 +14094,7 @@ async function openAptDetail(r) {
     maxPrice: (_fromRec && Number(r.maxPrice) > 0) ? Number(r.maxPrice) : maxPrice,
     // PRICE-BASIS-2026-07-17 (Sprint XXXXX): 재계산 avgPrice 는 전 평형 최근 거래 평균 — 기준 라벨로 정직 표기.
     _priceBasis: _fromRec ? r._priceBasis
-               : (txHistory.length ? `전 평형 최근 ${txHistory.length}건 평균` : null),
+               : (txHistory.length ? (_repArea ? `${_repArea.sqm}㎡(${_repArea.py}평) 최근 ${_repArea.n}건 평균` : `최근 ${txHistory.length}건 평균`) : null),
     _txFailed: _txFetchFailed, // TX-RETRY (Sprint IIII)
     // STAB-AUDIT-2026-05-07: 검색 → click path score=60 환각 차단
     //   추천 path는 사용자 매칭 점수 (95 등), 검색 path는 default 60 → 환각.

@@ -95,3 +95,20 @@ test('좌표 캐시 — 같은 동에 같은 이름 단지가 둘이면 코드 �
     assert.equal(await svc.getFromDbByMasterKapt({ aptName: '현대', sigungu: '노원구', umdNm: '' }), null); // 동 없으면 조회 안 함
   });
 });
+
+test('상세 헤더 평균가 — 전 평형 섞지 않고 거래 최다 평형만(공릉풍림 30건 재현), 라벨에 평형 표기', () => {
+  const fs = require('fs');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const src = html.match(/function _repAreaOf\(tx\)\{[\s\S]*?\n\}/)[0];
+  const f = new Function(`${src}; return _repAreaOf;`)();
+  const t = (ar, n, m, d) => Array.from({ length: n }, () => ({ excluUseAr: ar, dealAmount: 80000, dealYear: 2026, dealMonth: m, dealDay: d }));
+  // 운영 실측 구성: 31㎡ 5 · 60㎡ 16 · 85㎡ 7 · 115㎡ 2
+  const tx = [...t(31.32, 5, 8, 14), ...t(59.94, 16, 9, 19), ...t(84.99, 7, 10, 2), ...t(114.78, 2, 7, 28)];
+  assert.deepEqual(f(tx), { sqm: 60, py: 18, n: 16 });
+  // 동률이면 가장 최근 거래의 평형
+  assert.equal(f([...t(59.94, 3, 5, 1), ...t(84.99, 3, 9, 1)]).sqm, 85);
+  assert.equal(f([]), null);
+  assert.equal(f([{ excluUseAr: 0, dealAmount: 1 }]), null);
+  assert.match(html, /_repArea \? `\$\{_repArea\.sqm\}㎡\(\$\{_repArea\.py\}평\) 최근 \$\{_repArea\.n\}건 평균`/);
+  assert.doesNotMatch(html, /`전 평형 최근 \$\{txHistory\.length\}건 평균`/);
+});
