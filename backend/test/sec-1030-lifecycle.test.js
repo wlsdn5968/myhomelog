@@ -182,3 +182,39 @@ test('C5: /consent — 같은 IP 의 다른 사람은 기록하되 IP 당 10분 
   assert.equal((await call('A', '8.8.8.8')).deduped, undefined);   // 다른 IP 는 별개
   assert.equal(audits.filter(a => a[1] === 'consent.accept').length, 31);
 });
+
+// 보안 점검 후속(2026-10-30): 계속 실패하는 요청이 앞자리를 막지 않도록 시도 횟수가 적은 것부터, 실패 시 횟수 +1
+test('runSoftDeleteExpiry: 시도 횟수 오름차순 조회, 실패한 요청만 횟수를 올린다', async () => {
+  const { runSoftDeleteExpiry } = fresh('../jobs/retention');
+  const orders = [], attemptUpdates = [];
+  const due = [{ user_id: 'ok1', hard_delete_attempts: 0 }, { user_id: 'bad1', hard_delete_attempts: 2 }];
+  const admin = {
+    from(table) {
+      if (table === 'account_deletion_requests') {
+        const q = {
+          select() { return q; }, eq() { return q; }, lte() { return q; },
+          order(col, opt) { orders.push([col, opt && opt.ascending]); return q; },
+          limit: async () => ({ data: due, error: null }),
+          update(payload) {
+            const rec = { payload, eqs: [] };
+            const chain = { eq(c, v) { rec.eqs.push([c, v]); return chain; }, then(f) { if ('hard_delete_attempts' in payload) attemptUpdates.push(rec); return f({ error: null }); } };
+            return chain;
+          },
+        };
+        return q;
+      }
+      return {
+        update() { return { eq: async () => ({ error: null }) }; },
+        delete() { return { eq: async () => ({ error: null, count: 0 }) }; },
+      };
+    },
+    auth: { admin: { deleteUser: async (id) => (id === 'bad1' ? { error: { status: 500, message: 'boom' } } : { error: null }) } },
+  };
+  const r = await runSoftDeleteExpiry(admin);
+  assert.deepEqual(orders[0], ['hard_delete_attempts', true]);
+  assert.equal(r.processed, 2);
+  assert.equal(r.failed, 1);
+  assert.equal(attemptUpdates.length, 1);
+  assert.equal(attemptUpdates[0].payload.hard_delete_attempts, 3);
+  assert.deepEqual(attemptUpdates[0].eqs[0], ['user_id', 'bad1']);
+});

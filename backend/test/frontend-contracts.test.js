@@ -825,7 +825,11 @@ test('보안 헤더: vercel.json 정적 라우트 CSP 가 server.js helmet CSP �
 
   for (const r of staticRoutes) {
     const csp = r.headers['Content-Security-Policy'] || r.headers['Content-Security-Policy-Report-Only'];
-    const missing = hosts.filter(h => csp.indexOf(h) < 0);
+    // CSP-NARROW-2026-10-30: server.js 가 파일 경로까지 고정한 항목(jsDelivr·unpkg)은 호스트 전체 허용(결제 페이지)으로도 충족된다
+    //   — CSP 규칙상 경로 없는 출처는 그 호스트의 모든 경로를 허용한다. 토큰 단위로 비교한다.
+    const toks = new Set(csp.split(/[\s;]+/));
+    const covered = (h) => toks.has(h) || (/^https:\/\/[^/]+\/.+/.test(h) && toks.has(h.replace(/^(https:\/\/[^/]+)\/.*$/, '$1')));
+    const missing = hosts.filter(h => csp.indexOf(h) < 0 && !covered(h));
     assert.deepEqual(missing, [], `${r.src} CSP 에 server.js 의 호스트가 빠졌다: ${missing.join(', ')}`);
   }
 });

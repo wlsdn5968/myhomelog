@@ -138,21 +138,36 @@ async function hardDeleteUser(admin, userId) {
 async function runSoftDeleteExpiry(admin) {
   const { data: due, error } = await admin
     .from('account_deletion_requests')
-    .select('user_id, requested_at, scheduled_hard_delete_at')
+    .select('user_id, requested_at, scheduled_hard_delete_at, hard_delete_attempts')
     .eq('status', 'pending')
     .lte('scheduled_hard_delete_at', new Date().toISOString())
+    // 시도 횟수가 적은 요청부터 — 계속 실패하는 요청이 앞자리를 막아 정상 요청이 굶지 않게(보안 점검 후속 2026-10-30,
+    //   열은 supabase/migrations/20261030_deletion_attempts.sql)
+    .order('hard_delete_attempts', { ascending: true })
+    .order('scheduled_hard_delete_at', { ascending: true })
     .limit(100); // 한 번에 100명까지 — Vercel 함수 타임아웃 고려
   if (error) throw error;
 
   const results = [];
   for (const row of due || []) {
+    let failed = false;
     try {
       const r = await hardDeleteUser(admin, row.user_id);
       results.push(r);
+      failed = !!r.failed;
       logger.info({ userId: row.user_id, counts: r.counts, errors: r.errors }, 'retention: hard_delete 완료');
     } catch (e) {
+      failed = true;
       logger.error({ err: e.message, userId: row.user_id }, 'retention: hard_delete 실패');
       results.push({ userId: row.user_id, error: e.message });
+    }
+    if (failed) {
+      // 실패 횟수 기록 — 다음 회차에서 뒤로 밀린다. 기록 실패는 무시(다음 회차 재시도는 그대로).
+      try {
+        await admin.from('account_deletion_requests')
+          .update({ hard_delete_attempts: (Number(row.hard_delete_attempts) || 0) + 1 })
+          .eq('user_id', row.user_id).eq('status', 'pending');
+      } catch (_) { /* 무시 */ }
     }
   }
   // SEC-1030-C4: 실패 건수(예외 + 부분 실패)를 요약에 노출 — pending 으로 남아 다음 cron 이 재시도한다.

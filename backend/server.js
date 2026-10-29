@@ -88,8 +88,10 @@ app.use(helmet({
         "'self'",
         "'unsafe-inline'", // index.html 인라인 스크립트 (Phase 4 이후 nonce 로 교체)
         'https://browser.sentry-cdn.com',
-        'https://cdn.jsdelivr.net',
-        'https://unpkg.com',
+        // CSP-NARROW-2026-10-30 (보안 점검 U15): 두 CDN 은 아무 npm 패키지나 내주므로 호스트 전체가 아니라
+        //   화면이 실제로 불러오는 파일만 허용한다. 버전을 바꾸면 여기·vercel.json 도 같이(test/csp-script-pins.test.js 가 고정).
+        'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js',
+        'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js',
         'https://js.tosspayments.com',
         'https://oapi.map.naver.com', // 네이버 지도 SDK 본체
         'https://t1.kakaocdn.net', // KAKAO-SHARE-2026-10-18: 카카오톡 공유 JS SDK(키 설정 시에만 로드)

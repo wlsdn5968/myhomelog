@@ -268,6 +268,7 @@ router.post('/delete', async (req, res, next) => {
         restored_at: null,
         hard_deleted_at: null,
         reason: typeof reason === 'string' ? reason.slice(0, 500) : null,
+        hard_delete_attempts: 0, // 복구 뒤 다시 요청하면 시도 횟수를 새로 센다
         email_at_request: userEmail || null,
         ip_masked: ipMasked,
         user_agent: userAgent,
