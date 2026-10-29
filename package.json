@@ -10,7 +10,7 @@
     "@anthropic-ai/sdk": "^0.132.1",
     "@resvg/resvg-js": "^2.6.2",
     "@sentry/node": "^10.76.2",
-    "@supabase/supabase-js": "^2.117.3",
+    "@supabase/supabase-js": "^2.118.0",
     "@upstash/ratelimit": "^2.2.0",
     "@upstash/redis": "^1.39.0",
     "axios": "^1.20.0",
@@ -34,6 +34,6 @@
     "verify": "npm run lint && node scripts/check-json-config.js && node scripts/check-deps-sync.js && node scripts/check-env-example.js && node scripts/security-regression-check.js && node scripts/run-backend-tests-utc.js"
   },
   "devDependencies": {
-    "eslint": "^10.12.0"
+    "eslint": "^10.13.0"
   }
 }

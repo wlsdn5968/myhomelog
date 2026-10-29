@@ -185,8 +185,8 @@ window.MHL.auth = window.MHL.auth || {
     if (!url || !key) return; // stub 모드
     var s = document.createElement('script');
     // Supabase JS v2 UMD — window.supabase.createClient 노출
-    s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js'; // SRI-2026-09-28 (Plan 126): jsDelivr 자동 압축본(.min.js)은 npm 원본이 아니다 — 원본 파일로 교체
-    s.integrity = 'sha384-BWcjm9OdFth9TbhCxZPdm+gAOUMAzQy9nmTs12ioXdCcbVnJaPMn+fMUoQCLt60R';
+    s.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.js'; // SRI-2026-09-28 (Plan 126): jsDelivr 자동 압축본(.min.js)은 npm 원본이 아니다 — 원본 파일로 교체
+    s.integrity = 'sha384-TcHRA3zBbn+Lexh5n+Oil4guNPOS3rjNDpGRAN46u/s/mB2IZ50ceC6TYDU2yvgK';
     s.crossOrigin = 'anonymous';
     s.onload = function(){
       try {
