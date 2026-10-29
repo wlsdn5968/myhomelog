@@ -87,7 +87,10 @@ async function recordGlobalAiUsage(usage) {
     if (Number(d) === cost) await redis.expire(dk, DAY_TTL);   // 첫 증분 시에만 TTL 설정
     if (Number(m) === cost) await redis.expire(mk, MONTH_TTL);
   } catch (e) {
-    logger.warn({ err: e.message }, 'globalAiBudget: 전역 사용량 증분 실패 (응답은 정상)');
+    // 적대 리뷰 2026-10-30: 증분 실패를 버리면 Redis 읽기가 메모리로 내려갈 때 이번 비용이 0 으로 보인다 — 메모리에도 더한다.
+    cache.set(dk, (cache.get(dk) || 0) + cost, DAY_TTL);
+    cache.set(mk, (cache.get(mk) || 0) + cost, MONTH_TTL);
+    logger.warn({ err: e.message }, 'globalAiBudget: 전역 사용량 증분 실패 — 메모리에 대신 가산 (응답은 정상)');
   }
 }
 

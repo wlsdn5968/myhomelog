@@ -175,3 +175,79 @@ test('C2: DB 길이 CHECK 기록 파일이 API 상한과 맞는다', () => {
   assert.match(route, /MAX_CONTENT_LEN = 8000/);
   assert.match(route, /MAX_TITLE_LEN = 60/);
 });
+
+// ── 적대 리뷰 2026-10-30 후속 ──
+test('특약: price·score 도 정리하고(구분자 깨기 차단), 캐시 키에 프롬프트 입력을 모두 넣는다', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../routes/clause.js'), 'utf8');
+  assert.match(src, /price {8}= _safeStr\(price, 10\);/);
+  assert.match(src, /score {8}= _safeStr\(score, 5\);/);
+  assert.match(src, /isFirstBuyer = isFirstBuyer === true;/);
+  // 정리 줄이 프롬프트 조립보다 앞
+  assert.ok(src.indexOf('price        = _safeStr') < src.indexOf('<data>${price}억원</data>'));
+  const key = src.match(/const cacheKey = `([^`]+)`/)[1];
+  for (const v of ['aptName', 'area', 'price', 'ltv', 'houseStatus', 'isFirstBuyer', 'buildYear', 'score', 'issues']) assert.ok(key.includes(v), v);
+});
+
+test('백업: 카카오 토큰 열은 백업 파일에 쓰지 않는다', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../../scripts/backup-db.js'), 'utf8');
+  assert.match(src, /kakao_notify_tokens: \['access_token', 'refresh_token'\]/);
+  assert.match(src, /JSON\.stringify\(_omitSecrets\(table, row\)\)/);
+  const fnSrc = src.slice(src.indexOf('const SECRET_COLUMNS'), src.indexOf('async function dumpTable'));
+  const omit = new Function(`${fnSrc}; return _omitSecrets;`)();
+  assert.deepEqual(omit('kakao_notify_tokens', { user_id: 'u', access_token: 'a', refresh_token: 'r', linked_at: 't' }), { user_id: 'u', linked_at: 't' });
+  assert.deepEqual(omit('bookmarks', { id: 1 }), { id: 1 });
+});
+
+test('AI 전역 사용량: Redis 증분이 실패하면 메모리에 대신 더한다', async () => {
+  const redisPath = require.resolve('../redis');
+  const savedRedis = require.cache[redisPath];
+  stub(redisPath, { getRedis: () => ({ incrby: async () => { throw new Error('down'); }, expire: async () => {} }) });
+  const cache = require('../cache');
+  try {
+    const g = fresh('../services/globalAiBudget');
+    const keys = cache.keys ? cache.keys().filter(k => /^gai:/.test(k)) : [];
+    for (const k of keys) cache.del(k);
+    await g.recordGlobalAiUsage({ input_tokens: 100000, output_tokens: 100000 });
+    const vals = (cache.keys ? cache.keys() : []).filter(k => /^gai:(day|mon):/.test(k)).map(k => cache.get(k));
+    assert.equal(vals.length, 2);
+    assert.ok(vals.every(v => v > 0));
+  } finally {
+    if (savedRedis) require.cache[redisPath] = savedRedis; else delete require.cache[redisPath];
+    delete require.cache[require.resolve('../services/globalAiBudget')];
+  }
+});
+
+// ── U14 (2026-10-30): 외부 API 오류 로그에 키 원문이 남지 않는다 ──
+test('로거: axios 오류를 err 로 넣어도 serviceKey·Authorization·apikey 원문이 로그에 없다', async () => {
+  const http = require('http');
+  const axios = require('axios');
+  const { Writable } = require('stream');
+  const pino = require('pino');
+  const lp = require.resolve('../logger');
+  delete require.cache[lp];
+  // 같은 설정을 쓰되 출력만 메모리로 받는다
+  let out = '';
+  const realPino = require.cache[require.resolve('pino')].exports;
+  const sink = new Writable({ write(c, _e, cb) { out += c.toString(); cb(); } });
+  const wrapped = Object.assign((opts) => realPino(opts, sink), realPino);
+  require.cache[require.resolve('pino')].exports = wrapped;
+  let logger;
+  try { logger = require('../logger'); } finally { require.cache[require.resolve('pino')].exports = realPino; delete require.cache[lp]; }
+  const srv = http.createServer((_q, r) => { r.statusCode = 500; r.end('x'); });
+  await new Promise(r => srv.listen(0, r));
+  try {
+    await axios.get(`http://127.0.0.1:${srv.address().port}/x`, {
+      params: { serviceKey: 'FAKEKEY123456789ABCDEF' },
+      headers: { Authorization: 'Bearer FAKEJWTSECRETVALUE', apikey: 'FAKEJWTSECRETVALUE' },
+    });
+  } catch (e) { logger.error({ err: e }, 'x'); }
+  finally { srv.close(); }
+  await new Promise(r => setTimeout(r, 0));
+  assert.ok(out.length > 0, '로그 출력이 없다');
+  assert.equal(out.includes('FAKEKEY123456789ABCDEF'), false);
+  assert.equal(out.includes('FAKEJWTSECRETVALUE'), false);
+  const line = JSON.parse(out.trim().split('\n')[0]);
+  assert.equal(line.err.status, 500);
+  assert.equal(line.err.type, 'AxiosError');
+  void pino;
+});

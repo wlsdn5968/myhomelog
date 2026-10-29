@@ -76,13 +76,18 @@ router.get('/building-register', async (req, res) => {
 // GET /api/properties/nearby?lat=..&lng=..  주변 편의시설 카운트
 // SEC-1030-NEARBY (C11): dailyLimit 은 GET 을 건너뛰므로 이 라우트만 includeGet 으로 일일 한도를 건다.
 //   임의 좌표마다 캐시 미스 -> 카카오 호출이 일어나 쿼터를 소모할 수 있다.
-router.use('/nearby', dailyLimit({ limit: 100, scope: 'nearby', loggedInBonus: 100, includeGet: true }));
-router.get('/nearby', async (req, res) => {
+//   입력 검사를 한도보다 먼저 둔다(적대 리뷰 2026-10-30: 거절될 잘못된 입력이 한도를 깎던 것).
+const _nearbyCheck = (req, res, next) => {
   const lat = parseFloat(req.query.lat);
   const lng = parseFloat(req.query.lng);
   if (isNaN(lat) || isNaN(lng)) return res.status(400).json({ error: 'lat,lng 필수' });
   // SEC-1030-NEARBY: 한국 범위 밖은 400, 좌표는 소수 4자리(약 11m)로 반올림 -> 캐시 키 분산(무한 미스) 차단.
   if (!isValidKoreaCoord(lat, lng)) return res.status(400).json({ error: '한국 범위의 lat,lng 가 필요해요' });
+  next();
+};
+router.get('/nearby', _nearbyCheck, dailyLimit({ limit: 100, scope: 'nearby', loggedInBonus: 100, includeGet: true }), async (req, res) => {
+  const lat = parseFloat(req.query.lat);
+  const lng = parseFloat(req.query.lng);
   const data = await getNearbyAmenities(Math.round(lat * 1e4) / 1e4, Math.round(lng * 1e4) / 1e4);
   if (!data) return res.json({ available: false });
   res.json({ available: true, ...data });

@@ -91,7 +91,9 @@ async function hardDeleteUser(admin, userId) {
     const { error } = await admin.auth.admin.deleteUser(userId);
     // SEC-1030-C4: 재시도 회차에서는 auth 사용자가 이미 지워져 있다 — '없음'도 삭제 완료로 본다
     //   (아니면 한 번 부분 실패한 요청이 영원히 pending 으로 남아 매일 경보를 낸다).
-    if (error && !(error.status === 404 || error.code === 'user_not_found' || /not\s*found/i.test(String(error.message || '')))) throw error;
+    //   판정은 auth-js 가 붙이는 code 'user_not_found' 하나만(적대 리뷰 2026-10-30): 메시지·404 만 보면
+    //   'Database error ... not found'(500) 나 게이트웨이 404 같은 진짜 실패를 삭제 완료로 삼켜 재시도가 끊긴다.
+    if (error && error.code !== 'user_not_found') throw error;
     authDeleted = true;
   } catch (e) {
     errors.auth_users = e.message;

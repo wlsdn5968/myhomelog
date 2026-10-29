@@ -59,8 +59,13 @@ router.post('/', async (req, res) => {
   houseStatus = _safeStr(houseStatus, 30);
   buildYear   = _safeStr(buildYear, 10);
   issues      = _safeStr(issues, 300);
+  // 적대 리뷰 2026-10-30: price·score 가 정리 없이 <data> 구분자 안에 들어가 '</data>' 로 구분자를 깰 수 있었다.
+  price        = _safeStr(price, 10);
+  score        = _safeStr(score, 5);
+  isFirstBuyer = isFirstBuyer === true;
 
-  const cacheKey = `clause:v3:${aptName}:${price}:${houseStatus}:${score||''}:${issues||''}`;
+  // 캐시 키에 프롬프트에 들어가는 입력을 모두 넣는다(area·ltv·buildYear·생애최초가 빠져 다른 조건의 답이 재사용됐다 — 감사 C3 정확성 보완).
+  const cacheKey = `clause:v4:${aptName}:${area||''}:${price}:${ltv||''}:${houseStatus}:${isFirstBuyer ? 'Y' : 'N'}:${buildYear||''}:${score||''}:${issues||''}`;
   let cached = cache.get(cacheKey);
   // REDIS-CACHE-2026-07-14 (Sprint KKKKK): AI 특약 응답 인스턴스 간 공유 — 동일 입력 AI 재호출 차단.
   if (!cached) {

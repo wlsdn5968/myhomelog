@@ -92,6 +92,11 @@ test('GET /nearby: 한국 밖 400, 좌표 소수 4자리 반올림', async () =>
     const ok = await fetch(`${base}?lat=37.123456789&lng=127.987654321`);
     assert.equal(ok.status, 200);
     assert.deepEqual(seen[0], [37.1235, 127.9877]);
+    // 적대 리뷰 2026-10-30: 거절되는 잘못된 입력은 일일 한도를 깎지 않는다(검사가 한도보다 앞)
+    const before = Number(ok.headers.get('x-daily-remaining'));
+    for (let i = 0; i < 3; i++) assert.equal((await fetch(`${base}?lat=x&lng=y`)).status, 400);
+    const ok2 = await fetch(`${base}?lat=37.5&lng=127.0`);
+    assert.equal(Number(ok2.headers.get('x-daily-remaining')), before - 1);
   } finally { srv.close(); delete require.cache[rp]; }
 });
 
@@ -107,11 +112,45 @@ test('geocode: Redis 없으면 메모리 카운터가 상한을 적용(fail-open
   g._memCap.n = 0;
 });
 
-test('geocode: 소스 계약 - 시도마다 카운트, 전용 캐시, area 60자', () => {
+test('geocode: 소스 계약 - 전용 캐시, area 60자', () => {
   const src = require('fs').readFileSync(path.join(__dirname, '../routes/geocode.js'), 'utf8');
   assert.doesNotMatch(src, /require\('\.\.\/cache'\)/);
   assert.match(src, /maxKeys: 1000/);
   assert.match(src, /slice\(0, 60\)/);
-  const loopBody = src.slice(src.indexOf('for (const t of tries)'));
-  assert.ok(loopBody.indexOf('_bumpGeoCap()') < loopBody.indexOf('axios.get('));
+});
+
+// 적대 리뷰 2026-10-30: 시도마다 INCR 하면 배치 1회가 Redis 명령 300개 — 항목당 카운터 호출 최대 2회, 상한 뒤엔 0회.
+test('geocode: 카운터는 항목당 최대 2회 갱신, 실제 카카오 시도 수만큼 증가, 상한 도달 뒤엔 카카오·카운터 모두 멈춘다', async () => {
+  const axios = require('axios');
+  const realGet = axios.get;
+  let kakaoCalls = 0;
+  axios.get = async () => { kakaoCalls += 1; return { status: 200, data: { documents: [], meta: { total_count: 0 } } }; };
+  const gp = require.resolve('../routes/geocode');
+  delete require.cache[gp];
+  const g = require('../routes/geocode');
+  const bumps = [];
+  const realBump = g._bumpGeoCap;
+  try {
+    g._memCap.day = ''; g._memCap.n = 0; g._resetCapHit();
+    const kakaoGeocode = g._kakaoGeocode;
+    const st = {};
+    const out = await kakaoGeocode('k', '테스트단지', '노원구 공릉동', '노원구', '공릉동', st);
+    assert.equal(out, null);
+    assert.equal(kakaoCalls, 6);                 // 시도 6단계 전부 빈 결과
+    assert.equal(g._memCap.n, 6);                // 카운터 = 실제 카카오 호출 수
+    // 상한 도달
+    g._memCap.n = g.GEOCODE_GLOBAL_DAILY_CAP;
+    kakaoCalls = 0;
+    const st2 = {};
+    assert.equal(await kakaoGeocode('k', 'A', '', '', '', st2), null);
+    assert.equal(st2.capped, true);
+    assert.equal(kakaoCalls, 0);
+    const before = g._memCap.n;
+    const st3 = {};
+    await kakaoGeocode('k', 'B', '', '', '', st3);
+    assert.equal(st3.capped, true);
+    assert.equal(g._memCap.n, before);           // 상한 표시 뒤엔 카운터도 더 부르지 않는다
+  } finally {
+    axios.get = realGet; g._memCap.n = 0; g._resetCapHit(); delete require.cache[gp];
+  }
 });

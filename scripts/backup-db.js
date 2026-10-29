@@ -57,6 +57,16 @@ async function countRows(table) {
   return count;
 }
 
+// 적대 리뷰 2026-10-30: 카카오 OAuth 토큰이 로컬 백업에 평문으로 남았다 — 재연결로 다시 받을 수 있으므로 백업에서 뺀다.
+const SECRET_COLUMNS = { kakao_notify_tokens: ['access_token', 'refresh_token'] };
+function _omitSecrets(table, row) {
+  const cols = SECRET_COLUMNS[table];
+  if (!cols) return row;
+  const copy = { ...row };
+  for (const c of cols) delete copy[c];
+  return copy;
+}
+
 async function dumpTable(table, order) {
   const out = zlib.createGzip();
   const file = fs.createWriteStream(path.join(dir, `${table}.ndjson.gz`));
@@ -67,7 +77,7 @@ async function dumpTable(table, order) {
     for (const col of order.split(',')) q = q.order(col, { ascending: true });
     const { data, error } = await q.range(from, from + 999);
     if (error) throw new Error(`${table} 읽기 실패(${from}~): ${error.message}`);
-    for (const row of data) out.write(JSON.stringify(row) + '\n');
+    for (const row of data) out.write(JSON.stringify(_omitSecrets(table, row)) + '\n');
     n += data.length;
     if (data.length < 1000) break;
   }

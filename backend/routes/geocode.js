@@ -37,21 +37,26 @@ function _geocodeCapExceeded(count, cap) {
 }
 
 /** Kakao 실호출 직전에만 호출 — 전역 카운터 증가 후 현재값 반환(실패/미설정 시 null) */
-function _bumpMemCap() {
-  const day = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+const _geoDay = () => new Date().toISOString().slice(0, 10).replace(/-/g, '');
+function _bumpMemCap(by = 1) {
+  const day = _geoDay();
   if (_memCap.day !== day) { _memCap.day = day; _memCap.n = 0; }
-  _memCap.n += 1;
+  _memCap.n += by;
   return _memCap.n;
 }
-async function _bumpGeoCap() {
+// SEC-1030-GEOCAP 보정(적대 리뷰 2026-10-30): 시도마다 INCR 하면 배치 1회(50항목 × 시도 6)가 Redis 명령 300개였다
+//   (무료 한도 월 50만 — 2026-10 소진 전례). 항목당 '시작 1회 INCR + 끝난 뒤 남은 시도 INCRBY 1회' 로 최대 2개,
+//   상한에 닿은 날은 이 인스턴스에서 Redis 를 더 부르지 않는다(_capHitDay).
+let _capHitDay = '';
+async function _bumpGeoCap(by = 1) {
   const redis = getRedis();
-  if (!redis) return _bumpMemCap(); // SEC-1030-GEOCAP: Redis 미설정 -> 메모리 카운터
-  try {
-    const key = `geocap:${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`;
-    const n = await redis.incr(key);
-    if (Number(n) === 1) await redis.expire(key, 2 * 24 * 3600); // 첫 증분 시에만 TTL(2일)
-    return Number(n);
-  } catch (_) { return _bumpMemCap(); } // Redis 실패 -> 메모리 카운터
+  if (!redis) return _bumpMemCap(by); // Redis 미설정 -> 메모리 카운터
+  const key = `geocap:${_geoDay()}`;
+  let n;
+  try { n = Number(await redis.incrby(key, by)); } catch (_) { return _bumpMemCap(by); } // Redis 실패 -> 메모리 카운터
+  // 만료 설정 실패는 카운트와 무관 — 메모리 카운터로 내려가 이중 집계하지 않는다(키에 날짜가 있어 고아 키만 남는다)
+  if (n === by) { try { await redis.expire(key, 2 * 24 * 3600); } catch (_) { /* 무시 */ } }
+  return n;
 }
 
 // REGION-CENTROID-2026-10-29: 장소 이름이 없고 주소가 번지(숫자)로 끝나지 않으면 '지역 이름뿐' 결과(동·구 중심점)다.
@@ -62,6 +67,21 @@ function _isRegionOnly(d, addrText) {
 // Kakao 좌표 조회: keyword → address fallback
 // STAB-AUDIT-2026-05-06: sigungu·umdNm 명시 시 결과 검증 강제 (동명이지 환각 차단)
 async function kakaoGeocode(key, aptName, area, sigungu, umdNm, state = {}) {
+  // SEC-1030-GEOCAP: 상한 단위는 카카오 HTTP 호출 수. 시작 전 1을 세어 판정하고, 실제 시도 수는 끝난 뒤 한 번에 더한다.
+  if (_capHitDay === _geoDay()) { state.capped = true; return null; }
+  if (_geocodeCapExceeded(await _bumpGeoCap(1), GEOCODE_GLOBAL_DAILY_CAP)) { _capHitDay = _geoDay(); state.capped = true; return null; }
+  const ctr = { n: 0 };
+  try {
+    return await _kakaoGeocodeTries(key, aptName, area, sigungu, umdNm, ctr);
+  } finally {
+    if (ctr.n > 1) {
+      const total = await _bumpGeoCap(ctr.n - 1);
+      if (_geocodeCapExceeded(total, GEOCODE_GLOBAL_DAILY_CAP)) _capHitDay = _geoDay();
+    }
+  }
+}
+
+async function _kakaoGeocodeTries(key, aptName, area, sigungu, umdNm, ctr) {
   const headers = { Authorization: `KakaoAK ${key}` };
   // sigungu+umdNm 우선 query (가장 정확) → 그 외 fallback
   const sgg = String(sigungu || '').trim();
@@ -77,8 +97,7 @@ async function kakaoGeocode(key, aptName, area, sigungu, umdNm, state = {}) {
   const attempts = [];
   for (const t of tries) {
     if (!t.q) continue;
-    // SEC-1030-GEOCAP: 시도(axios 호출) 1회마다 전역 카운터 증가 - 상한 초과면 호출하지 않고 중단
-    if (_geocodeCapExceeded(await _bumpGeoCap(), GEOCODE_GLOBAL_DAILY_CAP)) { state.capped = true; return null; }
+    ctr.n += 1; // SEC-1030-GEOCAP: 실제 시도 수(카카오 호출) — kakaoGeocode 가 끝난 뒤 전역 카운터에 더한다
     try {
       const r = await axios.get(t.url, { headers, params: { query: t.q, size: 5 }, timeout: 5000 });  // size 1 → 5
       const docs = r.data?.documents || [];
@@ -234,6 +253,8 @@ module.exports = router;
 // 순수 판정 함수 노출 — 계약 테스트 고정용 (Plan 002)
 module.exports._geocodeCapExceeded = _geocodeCapExceeded;
 module.exports._isRegionOnly = _isRegionOnly;
+module.exports._kakaoGeocode = kakaoGeocode;
 module.exports._bumpGeoCap = _bumpGeoCap;
 module.exports._memCap = _memCap;
+module.exports._resetCapHit = () => { _capHitDay = ''; };
 module.exports.GEOCODE_GLOBAL_DAILY_CAP = GEOCODE_GLOBAL_DAILY_CAP;

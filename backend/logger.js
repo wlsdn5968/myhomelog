@@ -51,6 +51,25 @@ function maskIp(ip) {
   return 'unknown';
 }
 
+function _safeErr(e) {
+  if (!e || typeof e !== 'object') return e;
+  const out = {
+    type: e.name || (e.constructor && e.constructor.name) || 'Error',
+    message: typeof e.message === 'string' ? e.message.slice(0, 500) : String(e.message || ''),
+  };
+  if (e.code != null) out.code = e.code;
+  if (e.status != null) out.status = e.status;
+  else if (e.response && e.response.status != null) out.status = e.response.status;
+  if (e.isAxiosError && e.config) {
+    // 호스트·메서드만(경로·쿼리에 키가 들어가는 API 가 있다 — ECOS 는 경로, data.go.kr 은 쿼리)
+    try { out.host = new URL(e.config.url, e.config.baseURL || undefined).host; } catch (_) { /* 무시 */ }
+    if (e.config.method) out.method = String(e.config.method).toUpperCase();
+  }
+  if (typeof e.stack === 'string') out.stack = e.stack.slice(0, 2000);
+  if (e.cause && e.cause !== e && typeof e.cause === 'object') out.cause = { type: e.cause.name, message: String(e.cause.message || '').slice(0, 300), code: e.cause.code };
+  return out;
+}
+
 const logger = pino({
   level: process.env.LOG_LEVEL || (isProd ? 'info' : 'debug'),
   base: {
@@ -66,7 +85,11 @@ const logger = pino({
 
   // ── 직렬화 커스터마이즈 ────────────────────────────────────
   serializers: {
-    err: pino.stdSerializers.err,
+    // LOG-ERR-SAFE-2026-10-30 (보안 점검 U14): 기본 err 직렬화는 axios 오류의 config·request·response 를 통째로 열거해
+    //   serviceKey 원문(URL·원시 요청 헤더)과 릴레이 요청의 Authorization/apikey(service_role 키)까지 로그에 남겼다
+    //   (로컬 재현: 오류 1줄 16KB 에 키 원문 25회·JWT 18회). redact 는 키 이름 일치만 보므로 막지 못한다 →
+    //   안전한 필드만 골라 쓴다. 원인 추적에 필요한 종류·메시지·코드·HTTP 상태·스택은 남긴다.
+    err: _safeErr,
     req(req) {
       return {
         method: req.method,

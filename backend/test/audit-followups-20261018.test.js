@@ -76,7 +76,7 @@ test('동의 기록은 같은 연결의 10분 안 반복을 건너뛴다(영구 
   // 전체 IP 로 판정(같은 /24 의 다른 사람을 묶지 않게), 키는 기록한 뒤에 남긴다
   assert.match(acc, /const ip = String\(req\.ip \|\| ''\);\r?\n\s*const dedupKey = `\$\{ip\}\|/);
   // SEC-1030-C5: UA·version 회전 대비 IP 당 10분 상한도 함께
-  assert.match(acc, /if \(ipCount >= CONSENT_PER_IP\) return res\.json\(\{ ok: true, deduped: true \}\);/);
+  assert.match(acc, /if \(ipCount >= CONSENT_PER_IP\) \{[\s\S]{0,200}?return res\.json\(\{ ok: true, deduped: true \}\);/);
   assert.match(acc, /await writeAudit\(req, 'consent\.accept', 'consent', null, meta\);\n\s*_consentSeen\.set\(dedupKey, now\);/);
   // 카카오도 구글·이메일처럼 리다이렉트 전에 동의를 기록한다
   const kakao = html.slice(html.indexOf('async function loginKakao(){'), html.indexOf('async function loginEmail(){'));

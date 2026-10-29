@@ -89,6 +89,17 @@ test('C4: 재시도 회차에서 auth 사용자가 이미 없으면(404) 삭제 
   assert.equal(admin.log.adrUpdates[0].status, 'hard_deleted');
 });
 
+test('C4: 메시지에 not found 가 있어도 code 가 user_not_found 가 아니면(서버 오류·게이트웨이 404) pending 유지', async () => {
+  const { hardDeleteUser } = fresh('../jobs/retention');
+  for (const authErr of [{ status: 500, message: 'Database error deleting user: row not found' }, { status: 404, message: 'Not Found' }]) {
+    const admin = makeAdmin({ authErr });
+    const r = await hardDeleteUser(admin, 'u1');
+    assert.equal(r.authDeleted, false, authErr.message);
+    assert.equal(r.failed, true);
+    assert.equal(admin.log.adrUpdates.length, 0);
+  }
+});
+
 test('C9: loadRows 가 1000행 페이지를 반복해 전체를 읽는다 / 5000 상한', async () => {
   const mk = n => Array.from({ length: n }, (_, i) => ({ id: i }));
   const { _loadRows } = fresh('../jobs/pushNotify');
@@ -157,7 +168,7 @@ test('C8: kakao 토큰 삭제가 실패해도 삭제 예약은 진행', async ()
   assert.equal(res.body.ok, true);
 });
 
-test('C5: /consent — 같은 IP 의 다른 사람은 기록하되 IP 당 10분 5건 상한, 같은 사람 반복은 건너뛴다', async () => {
+test('C5: /consent — 같은 IP 의 다른 사람은 기록하되 IP 당 10분 30건 상한, 같은 사람 반복은 건너뛴다', async () => {
   const audits = [];
   const router = loadAccountRouter({}, audits);
   const h = findHandler(router, 'post', '/consent');
@@ -165,9 +176,9 @@ test('C5: /consent — 같은 IP 의 다른 사람은 기록하되 IP 당 10분 
   const call = async (ua, ip, version = 'v1') => { const r = mkRes(); await h({ body: { ...body, version }, headers: { 'user-agent': ua }, ip }, r); return r.body; };
   assert.equal((await call('A', '9.9.9.9')).deduped, undefined);
   assert.equal((await call('A', '9.9.9.9')).deduped, true);        // 같은 사람 반복
-  for (const ua of ['B', 'C', 'D', 'E']) assert.equal((await call(ua, '9.9.9.9')).deduped, undefined); // 공용 IP 의 다른 사람 4명
-  assert.equal((await call('F', '9.9.9.9')).deduped, true);        // 6번째 — IP 상한
+  for (let i = 0; i < 29; i++) assert.equal((await call('U' + i, '9.9.9.9')).deduped, undefined); // 공용 IP 의 다른 사람 29명
+  assert.equal((await call('F', '9.9.9.9')).deduped, true);        // 31번째 — IP 상한
   assert.equal((await call('G', '9.9.9.9', 'v9')).deduped, true);  // UA·version 을 바꿔도 상한
   assert.equal((await call('A', '8.8.8.8')).deduped, undefined);   // 다른 IP 는 별개
-  assert.equal(audits.filter(a => a[1] === 'consent.accept').length, 6);
+  assert.equal(audits.filter(a => a[1] === 'consent.accept').length, 31);
 });

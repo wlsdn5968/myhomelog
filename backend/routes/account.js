@@ -66,7 +66,7 @@ function adminClient() {
 // 의도적으로 router.use(requireAuth) **앞에** 정의 — consent 는 OAuth 시작 전 시점 호출.
 const CONSENT_DEDUP_MS = 10 * 60 * 1000;
 const _consentSeen = new Map();
-const CONSENT_PER_IP = 5;
+const CONSENT_PER_IP = 30;
 const _consentPerIp = new Map();
 router.post('/consent', async (req, res) => {
   const { age14Plus, terms, privacy, intlTransfer, version, ts } = req.body || {};
@@ -93,7 +93,9 @@ router.post('/consent', async (req, res) => {
   //   인스턴스 메모리라 완전한 차단은 아니지만 한 연결에서의 반복 쓰기를 막는다. 영구 보관 여부 자체는 법적 판단이라 그대로 둔다.
   // SEC-1030-C5 (보안 감사 2026-10-30): UA·version 은 요청자가 매번 바꿀 수 있어 위 키만으로는 무한히 쌓였다.
   //   키를 IP 하나로 줄이면 같은 IP 를 나눠 쓰는 다른 사람(이동통신망 공용 IP)의 동의 증빙이 빠지므로,
-  //   키는 그대로 두고 **IP 당 10분에 새 기록 최대 CONSENT_PER_IP 건** 상한을 더한다(IP 1개 하루 최대 720행).
+  //   키는 그대로 두고 **IP 당 10분에 새 기록 최대 CONSENT_PER_IP(30) 건** 상한을 더한다(IP 1개 하루 최대 4,320행).
+  //   상한에 닿으면 그 동의는 기록되지 않으므로 경고 로그를 남긴다(공용 IP 의 실제 다수 가입인지 운영자가 볼 수 있게).
+  //   (적대 리뷰 2026-10-30: 5건이면 공용 IP 뒤 6번째 사람부터 증빙이 빠졌다 — 회원 규모상 30 은 정상 사용이 닿지 않는다)
   const ip = String(req.ip || '');
   const dedupKey = `${ip}|${String(req.headers['user-agent'] || '').slice(0, 200)}|${meta.version || ''}`;
   const now = Date.now();
@@ -101,7 +103,10 @@ router.post('/consent', async (req, res) => {
   if (last && now - last < CONSENT_DEDUP_MS) return res.json({ ok: true, deduped: true });
   const ipWin = _consentPerIp.get(ip);
   const ipCount = ipWin && now - ipWin.start < CONSENT_DEDUP_MS ? ipWin.n : 0;
-  if (ipCount >= CONSENT_PER_IP) return res.json({ ok: true, deduped: true });
+  if (ipCount >= CONSENT_PER_IP) {
+    logger.warn({ ip: maskIp(ip), count: ipCount }, '동의 기록 IP 상한 도달 — 이번 동의는 기록하지 않음');
+    return res.json({ ok: true, deduped: true });
+  }
   await writeAudit(req, 'consent.accept', 'consent', null, meta);
   _consentSeen.set(dedupKey, now); // 기록한 뒤에 남긴다
   _consentPerIp.set(ip, ipCount === 0 ? { start: now, n: 1 } : { start: ipWin.start, n: ipCount + 1 });
