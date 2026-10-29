@@ -9745,19 +9745,26 @@ async function handleShareUrl(){
     _logSearch('kapt', apt, items.length);
     if(!items.length){ _reshow({_pxNone:true, lawdCd, pros:'최근 6개월 실거래 신고 내역이 없어요.', strategy:'국토부 실거래는 계약 후 30일 이내 신고라 최근 거래가 늦게 반영될 수 있어요.'}); return; }
     // 최근 평균 계산
-    const prices=items.map(t=>t.dealAmount/10000); // 억
+    // REP-AREA-LINK-2026-10-30 (운영 실측): 검색으로 열면 '60㎡(18평) 최근 16건 평균 8.13억', 링크로 열면 같은 단지가
+    //   31~115㎡ 를 섞은 '평균 실거래 7.62억·2.8~10.9억'이었다 — 10-29 대표 평형 수정(REP-AREA)이 이 경로에 빠졌다.
+    //   검색 경로와 같은 범위(최근 30건)·같은 규칙(_repAreaOf)·같은 라벨로 낸다.
+    const _dn=t=>(Number(t.dealYear)||0)*10000+(Number(t.dealMonth)||0)*100+(Number(t.dealDay)||0);
+    const _recent=items.slice().sort((a,b)=>_dn(b)-_dn(a)).slice(0,30);
+    const _rep=_repAreaOf(_recent);
+    const prices=_recent.filter(t=>!_rep || Math.round(Number(t.excluUseAr)||0)===_rep.sqm).map(t=>t.dealAmount/10000).filter(x=>x>0); // 억
     const avg=prices.reduce((a,b)=>a+b,0)/prices.length;
     const aptEnriched={
       aptName:apt, area:items[0].sigungu ? `${items[0].sigungu} ${items[0].umdNm||''}`.trim() : area,
       avgPrice:+avg.toFixed(2),
       minPrice:+Math.min(...prices).toFixed(2),
       maxPrice:+Math.max(...prices).toFixed(2),
+      _priceBasis:_rep ? `${_rep.sqm}㎡(${_rep.py}평) 최근 ${_rep.n}건 평균` : `최근 ${prices.length}건 평균`,
       buildYear:items[0].buildYear||0,
       // STAB-AUDIT-2026-05-07: 공유 링크 score=60 환각 차단 → null
       score:null, ltv:null, maxLoan:null,
-      pros:`최근 6개월 실거래 ${items.length}건 · 평균 ${avg.toFixed(2)}억`,
+      pros:`최근 6개월 실거래 ${items.length}건 · ${_rep ? `${_rep.py}평 ` : ''}평균 ${avg.toFixed(2)}억`,
       cons:'', strategy:'공유 링크로 본 정보예요. 자세한 분석은 내 조건을 입력하고 조건에 맞는 단지 찾기를 실행해 주세요.',
-      tags:[], txHistory:items.slice(0,30), lawdCd,
+      tags:[], txHistory:_recent, lawdCd,
     };
     // 현재 열린 상세가 동일 단지면 재렌더
     if(currentDetail && currentDetail.aptName===apt){
@@ -10635,7 +10642,7 @@ function openBookmark(i){
   if(b.newDealCount){b.newDealCount=0;b.newDeals=[];saveBookmarks(bks);renderBookmarks();}
   const found=props.find(p=>p.aptName===b.aptName);
   if(found){showDetail(found);}
-  else{showDetail({aptName:b.aptName,area:b.area,avgPrice:b.avgPrice,score:null,tags:[],txHistory:[]});} // score null → "분석 대기" 분기 (60점 환각 fallback 제거)
+  else{showDetail({aptName:b.aptName,area:b.area,avgPrice:b.avgPrice,_priceBasis:b.priceBasis||undefined,score:null,tags:[],txHistory:[]});} // score null → "분석 대기" 분기 (60점 환각 fallback 제거)
 }
 
 function delBookmark(e,i){
@@ -10785,8 +10792,15 @@ async function refreshBookmarkPrices(){
         }
         if(_latest) b.lastLatestDeal=_latest;
       }catch(_){}
-      const prices=items.map(t=>t.dealAmount/10000);
+      // REP-AREA-BOOKMARK-2026-10-30: 면적을 섞은 평균은 작은 평형 거래 하나로 내려가 '목표가 이하' 알림을 잘못 울릴 수 있다 —
+      //   상세와 같은 규칙(최근 30건 중 대표 평형, _repAreaOf)으로 낸다.
+      const _dn=t=>(Number(t.dealYear)||0)*10000+(Number(t.dealMonth)||0)*100+(Number(t.dealDay)||0);
+      const _recent=items.slice().sort((x,y)=>_dn(y)-_dn(x)).slice(0,30);
+      const _rep=_repAreaOf(_recent);
+      const prices=_recent.filter(t=>!_rep || Math.round(Number(t.excluUseAr)||0)===_rep.sqm).map(t=>t.dealAmount/10000).filter(x=>x>0);
+      if(!prices.length){ b.lastChecked=Date.now(); b.lastCheckedCount=items.length; updated=true; continue; }
       const newAvg=+(prices.reduce((s,x)=>s+x,0)/prices.length).toFixed(2);
+      b.priceBasis=_rep ? `${_rep.sqm}㎡(${_rep.py}평) 최근 ${_rep.n}건 평균` : `최근 ${prices.length}건 평균`;
       const prev=b.avgPrice||0;
       const target=alerts[b.aptName];
       if(target && newAvg<=target && prev>target){

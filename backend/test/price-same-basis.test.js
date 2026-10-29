@@ -97,3 +97,24 @@ test('서버 단지 페이지: 첫 요약은 평형을 적고, 섞은 평균(시
   assert.match(src, /\$\{rep\.sqm\}㎡\(\$\{rep\.py\}평\) 평균/);
   assert.match(src, /거래 건수\(전 평형\)/);
 });
+
+test('링크(?apt=)로 연 상세도 검색 경로와 같은 대표 평형·최근 30건·같은 라벨로 평균을 낸다', () => {
+  const i = html.indexOf('async function handleShareUrl(){');
+  const body = html.slice(i, html.indexOf('\n}', i));
+  assert.match(body, /const _rep=_repAreaOf\(_recent\);/);
+  assert.match(body, /Math\.round\(Number\(t\.excluUseAr\)\|\|0\)===_rep\.sqm/);
+  assert.match(body, /_priceBasis:_rep \? `\$\{_rep\.sqm\}㎡\(\$\{_rep\.py\}평\) 최근 \$\{_rep\.n\}건 평균`/);
+  assert.match(body, /\.sort\(\(a,b\)=>_dn\(b\)-_dn\(a\)\)\.slice\(0,30\)/);
+  // 검색 경로 라벨과 문자열이 같다
+  assert.match(html, /`\$\{_repArea\.sqm\}㎡\(\$\{_repArea\.py\}평\) 최근 \$\{_repArea\.n\}건 평균`/);
+});
+
+test('관심 단지 가격 갱신도 대표 평형 평균(목표가 알림 판정에 쓰이므로 면적을 섞지 않는다)', () => {
+  const i = html.indexOf('async function refreshBookmarkPrices(){');
+  const body = html.slice(i, html.indexOf('\n}', i));
+  assert.match(body, /const _rep=_repAreaOf\(_recent\);/);
+  assert.match(body, /Math\.round\(Number\(t\.excluUseAr\)\|\|0\)===_rep\.sqm/);
+  assert.match(body, /b\.priceBasis=_rep \?/);
+  assert.doesNotMatch(body, /const prices=items\.map\(t=>t\.dealAmount\/10000\);/, '섞은 평균이 남았다');
+  assert.match(html, /_priceBasis:b\.priceBasis\|\|undefined/);
+});
