@@ -8317,12 +8317,14 @@ function _pcHtml(area){
   const L=window._curTrendLong, longOk=!!(L&&L.state==='ok'&&Array.isArray(L.deals)&&L.deals.length);
   const src=(longOk?L.deals:_pcRecentDeals()).filter(x=>Number(x.ar)>0);
   if(!area){ const c={}; src.forEach(x=>{ const s=Math.round(Number(x.ar)); c[s]=(c[s]||0)+1; }); area=Number(Object.keys(c).sort((a,b)=>c[b]-c[a])[0])||0; }
-  const period=_PC_PERIODS[window._pcPeriod]?window._pcPeriod:'3y', plabel=_PC_PERIODS[period][0];
+  // 장기 이력이 없으면 최근 거래(최대 30건)만 있다 — 그걸 '3년'이라 부르면 거짓(실측: 3년 최저 5.58억을 7.20억으로 표시). 기간 칩을 숨기고 '최근 거래 N건'으로 부른다.
+  const period=longOk?(_PC_PERIODS[window._pcPeriod]?window._pcPeriod:'3y'):'all';
   const chips=Object.keys(_PC_PERIODS).map(k=>`<button type="button" class="pc-period" aria-pressed="${k===period}" onclick="_setPcPeriod('${k}')" style="font-size:12px;padding:5px 12px;border-radius:999px;border:1px solid ${k===period?'var(--acc)':'var(--bd)'};background:${k===period?'var(--acc)':'var(--bg-base)'};color:${k===period?'var(--acc-ink)':'var(--t2)'};cursor:pointer">${_PC_PERIODS[k][0]}</button>`).join('');
-  const head=`<div role="group" aria-label="차트 기간" style="display:flex;gap:6px;margin:4px 0 10px">${chips}</div>`;
+  const head=longOk?`<div role="group" aria-label="차트 기간" style="display:flex;gap:6px;margin:4px 0 10px">${chips}</div>`:'';
   const note=longOk?'':(L&&L.state==='loading'?'<div style="font-size:12px;color:var(--t3);margin-bottom:6px">예전 거래를 불러오는 중이에요. 지금은 최근 거래만 보여요.</div>':'<div style="font-size:12px;color:var(--t3);margin-bottom:6px">예전 거래를 불러오지 못해 최근 거래만 보여요.</div>');
   const deals=src.filter(x=>area&&Math.abs(Math.round(Number(x.ar))-area)<=2);
   const m=_pcModel(deals, period);
+  const plabel=longOk?_PC_PERIODS[period][0]:'최근 거래';
   if(!m||m.rows.length<2) return head+note+`<div style="font-size:14px;color:var(--t3);padding:14px 8px;text-align:center;background:var(--bg2);border:1px dashed var(--bd);border-radius:var(--radius-base)">${area?area+'㎡ ':''}${plabel} 거래가 ${m?m.rows.length:0}건이라 그래프를 그리지 않아요</div>`;
   const py=Math.round(area/3.3058);
   const cell=(k,v,s,c)=>`<div style="border:1px solid var(--bd);border-radius:8px;padding:8px 10px;min-width:0"><div style="font-size:12px;color:var(--t3)">${k}</div><div style="font-size:18px;font-weight:700;color:${c};margin-top:2px">${v}</div><div style="font-size:12px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s}</div></div>`;
@@ -8331,8 +8333,8 @@ function _pcHtml(area){
   const _bw=(document.getElementById('trendChartBox')||{}).clientWidth||0; // 숨은 탭에서 그리면 0 — 화면 폭으로 대신 잡는다
   const W=Math.max(300,Math.min(760,_bw||Math.min(window.innerWidth||375,700)-48));
   return head+note
-    +`<div style="font-size:16px;font-weight:700;color:var(--t1);line-height:1.5;margin-bottom:10px">${area}㎡(${py}평)가 최근 ${_pcEok(m.now.a)}에 거래됐어요. ${plabel} 중 최고 ${_pcEok(m.hi.a)}, 최저 ${_pcEok(m.lo.a)}이에요.</div>`
-    +`<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:10px">${cell('최근 거래',_pcEok(m.now.a),_pcYmd(m.now.d)+fl(m.now),'var(--acc)')}${cell(plabel+' 최고',_pcEok(m.hi.a),_pcYmd(m.hi.d)+fl(m.hi),'var(--t1)')}${cell(plabel+' 최저',_pcEok(m.lo.a),loSub,'var(--t1)')}</div>`
+    +`<div style="font-size:16px;font-weight:700;color:var(--t1);line-height:1.5;margin-bottom:10px">${area}㎡(${py}평)가 최근 ${_pcEok(m.now.a)}에 거래됐어요. ${longOk?plabel:`최근 거래 ${m.rows.length}건`} 중 최고 ${_pcEok(m.hi.a)}, 최저 ${_pcEok(m.lo.a)}이에요.</div>`
+    +`<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:10px">${cell('최근 거래',_pcEok(m.now.a),_pcYmd(m.now.d)+fl(m.now),'var(--acc)')}${cell(longOk?plabel+' 최고':'최근 거래 중 최고',_pcEok(m.hi.a),_pcYmd(m.hi.d)+fl(m.hi),'var(--t1)')}${cell(longOk?plabel+' 최저':'최근 거래 중 최저',_pcEok(m.lo.a),loSub,'var(--t1)')}</div>`
     +_pcSvg(m,W)
     +`<div id="pcTip" aria-live="polite" style="font-size:12px;color:var(--t2);min-height:18px;margin-top:4px">점을 누르면 거래 내용이 여기에 나와요</div>`
     +`<div style="font-size:12px;color:var(--t3);margin-top:4px;line-height:1.5">점 하나가 거래 1건 · 선은 앞뒤 1개월을 포함한 3개월 중앙값 · ${plabel} ${m.rows.length}건<br>국토교통부 실거래가 · 같은 단지·같은 면적(전용 ${area}㎡ ±2㎡) · 층·향 보정 없음 · 해제 거래 제외 · 매수·매도 추천이 아니에요</div>`;

@@ -2078,3 +2078,11 @@ test('Plan 154 — 가격 차트 v2: 개별 거래 점·3개월 중앙값·최�
   assert.ok(html.includes('층·향 보정 없음 · 해제 거래 제외 · 매수·매도 추천이 아니에요'), '차트 출처·면책 문구가 없다');
   assert.doesNotMatch(html, /_setTrendMode|_longTrendHtml|renderPriceChart\(/, '옛 차트 함수가 남아 있다');
 });
+
+test('Plan 154 — 장기 이력이 없을 때 최근 거래만으로 "3년" 이라 부르지 않는다(실측 오표기: 3년 최저 5.58억을 7.20억으로)', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  assert.ok(html.includes("const period=longOk?(_PC_PERIODS[window._pcPeriod]?window._pcPeriod:'3y'):'all';"), '장기 이력 없으면 기간을 적용하지 않아야 한다');
+  assert.ok(html.includes("const plabel=longOk?_PC_PERIODS[period][0]:'최근 거래';"), '장기 이력 없으면 기간 이름 대신 "최근 거래"');
+  assert.ok(html.includes("const head=longOk?`"), '장기 이력 없으면 기간 칩을 숨겨야 한다');
+});
