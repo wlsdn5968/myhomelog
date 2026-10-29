@@ -37,20 +37,36 @@ function aggregateMonthly(histRows, recentRows) {
   const rows = [...b.values()].sort((x, y) => (x.ym < y.ym ? -1 : x.ym > y.ym ? 1 : x.sqm - y.sqm));
   return { rows, since: rows.length ? rows[0].ym : null, until: rows.length ? rows[rows.length - 1].ym : null, counts: { hist: hist.length, recent: rec.length } };
 }
-async function getAptHistoryMonthly(seqs) {
+// PRICE-CHART-V2-2026-10-29 (Plan 154): 차트에 거래 1건당 점 하나를 찍으려면 월 합계가 아니라 개별 거래가 필요하다.
+//   겹침 규칙은 aggregateMonthly 와 같다(원본이 있는 달부터는 원본만). 반환: 계약일 오름차순 [{ d, ar(㎡), a(만원), f(층) }].
+function collectDeals(histRows, recentRows) {
+  const ok = r => /^\d{4}-\d{2}-\d{2}/.test(String(r.deal_date || '')) && Number(r.deal_amount) > 0;
+  const rec = (recentRows || []).filter(ok);
+  const recentMinYm = rec.length ? rec.map(r => String(r.deal_date).slice(0, 7)).sort()[0] : null;
+  const hist = (histRows || []).filter(r => ok(r) && (!recentMinYm || String(r.deal_date).slice(0, 7) < recentMinYm));
+  const row = (r, ar) => ({ d: String(r.deal_date).slice(0, 10), ar, a: Number(r.deal_amount), f: r.floor == null ? null : Number(r.floor) });
+  const out = [
+    ...hist.map(r => row(r, Math.round(Number(r.exclu_use_ar)) / 100)),
+    ...rec.map(r => row(r, Number(r.exclu_use_ar))),
+  ].filter(x => x.ar > 0);
+  return out.sort((x, y) => (x.d < y.d ? -1 : x.d > y.d ? 1 : 0));
+}
+async function getAptHistoryMonthly(seqs, opts = {}) {
+  const withDeals = !!(opts && opts.deals);
   const admin = getSupabaseAdmin();
   if (!admin) return null;
-  const ck = `txhist:v1:${seqs.join(',')}`;
+  const ck = `txhist:${withDeals ? 'v2d' : 'v1'}:${seqs.join(',')}`;
   const hit = cache.get(ck);
   if (hit !== undefined) return hit;
   try {
-    const h = await pageAll((from, to) => admin.from('molit_transactions_hist').select('deal_date, exclu_use_ar, deal_amount')
+    const h = await pageAll((from, to) => admin.from('molit_transactions_hist').select(withDeals ? 'deal_date, exclu_use_ar, deal_amount, floor' : 'deal_date, exclu_use_ar, deal_amount')
       .in('apt_seq', seqs).order('deal_date', { ascending: true }).order('exclu_use_ar', { ascending: true })
       .order('deal_amount', { ascending: true }).order('floor', { ascending: true }).range(from, to));
-    const w = await pageAll((from, to) => admin.from('molit_transactions').select('deal_date, exclu_use_ar, deal_amount')
+    const w = await pageAll((from, to) => admin.from('molit_transactions').select(withDeals ? 'deal_date, exclu_use_ar, deal_amount, floor' : 'deal_date, exclu_use_ar, deal_amount')
       .in('apt_seq', seqs).order('deal_date', { ascending: true }).order('id', { ascending: true }).range(from, to));
     if (h.capped || w.capped) logger.warn({ seqs, hist: h.rows.length, recent: w.rows.length }, 'apt history 페이지 상한 도달 — 일부 거래 미집계');
     const out = { aptSeqs: seqs, ...aggregateMonthly(h.rows, w.rows), capped: h.capped || w.capped };
+    if (withDeals) out.deals = collectDeals(h.rows, w.rows);
     cache.set(ck, out, 21600);
     return out;
   } catch (e) {
@@ -58,4 +74,4 @@ async function getAptHistoryMonthly(seqs) {
     return null; // 실패는 캐시하지 않는다
   }
 }
-module.exports = { parseSeqs, aggregateMonthly, getAptHistoryMonthly };
+module.exports = { parseSeqs, aggregateMonthly, collectDeals, getAptHistoryMonthly };

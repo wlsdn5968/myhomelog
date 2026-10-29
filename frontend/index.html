@@ -8225,20 +8225,7 @@ function _selectTrendArea(sqm, btn) {
   // 2) 차트 재렌더 (trendChartBox)
   const chartBox = document.getElementById('trendChartBox');
   if (!chartBox) return;
-  if (window._trendMode === 'long') { // Plan 102
-    chartBox.innerHTML = _longTrendHtml(sqm);
-    const _pk = document.getElementById('peakTrendBox');
-    if (_pk && typeof window._peakTrendHtml === 'function') _pk.innerHTML = window._peakTrendHtml(sqm);
-    return;
-  }
-  if (!sqm) {
-    chartBox.innerHTML = '<div style="font-size:12px;color:var(--t3);padding:14px 8px;text-align:center;background:var(--bg2);border:1px dashed var(--bd);border-radius:var(--radius-base)">위에서 평형을 누르면 그 평형의 월별 시세 추이를 볼 수 있어요</div>';
-    return;
-  }
-  const td = buildPriceTrend(window._curTrendApt || [], sqm);
-  chartBox.innerHTML = td.length >= 2
-    ? renderPriceChart(td)
-    : `<div style="font-size:12px;color:var(--t3);padding:10px 0">${sqm}㎡(${Math.round(sqm/3.3058)}평) 시세 추이를 보여 주려면 거래가 있는 달이 2개월 이상 필요해요</div>`;
+  chartBox.innerHTML = window._trendHtml(sqm); // Plan 154: 기간 칩(1년·3년·전체)과 같은 차트
   // Sprint PP-1: 신고가 경신 추이도 평형 필터에 맞춰 재렌더
   const peakBox = document.getElementById('peakTrendBox');
   if (peakBox && typeof window._peakTrendHtml === 'function') {
@@ -8246,20 +8233,76 @@ function _selectTrendArea(sqm, btn) {
   }
 }
 
-// LONG-TREND-2026-09-20 (Plan 102): 장기(2020.09~) 월별 추세 — /api/transactions/history 의 (월, ㎡)별 합계를 칩 규칙(±2㎡)으로 평균.
-function buildLongTrend(rows, areaSqm){
-  if(!Array.isArray(rows)||!rows.length||!areaSqm)return[];
-  const b={};
-  for(const r of rows){
-    const k=String((r&&r.ym)||'');
-    if(!/^\d{4}-\d{2}$/.test(k))continue;
-    if(Math.abs(Number(r.sqm)-areaSqm)>2)continue;
-    if(!b[k])b[k]={sum:0,n:0};
-    b[k].sum+=Number(r.sum)||0; b[k].n+=Number(r.n)||0;
+// PRICE-CHART-V2-2026-10-29 (Plan 154, Claude Design 시안 화면 E — 운영자 "차트가 와닿지 않는다"):
+//   예전 차트는 320×120 월평균 선 하나·9px 글자·세로축 값 2개였다. 이제 거래 1건 = 점 1개, 선 = 앞뒤 1개월을 포함한
+//   3개월 중앙값, 최고·최저·최근 세 점만 강조한다. 최고는 항상 최저와 함께 보인다(절대 룰 ①). 예측선·추세 연장 없음.
+//   데이터: 원본+이력 개별 거래(/api/transactions/history?deals=1, 2020.09~). 그 응답 전·실패 시에는 최근 거래(txHistory)만 쓰고 그렇다고 밝힌다.
+const _PC_PERIODS={'1y':['1년',365],'3y':['3년',1095],'all':['전체 기간',0]};
+function _pcDayNum(d){ return Math.round(Date.parse(String(d)+'T00:00:00Z')/864e5); }
+function _pcEok(m){ return (Number(m)/10000).toFixed(2)+'억'; }
+function _pcYmd(d){ return String(d).slice(2).replace(/-/g,'.'); }
+function _pcMedian(a){ const s=[...a].sort((x,y)=>x-y),n=s.length; return n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2; }
+// 순수 함수: 개별 거래 → 기간 거래·최고·최저(동률 모두)·최근·3개월 중앙값 점(거래 없는 3개월 구간은 null = 선 끊김).
+function _pcModel(deals, period){
+  const all=(Array.isArray(deals)?deals:[]).filter(x=>x&&Number(x.a)>0&&/^\d{4}-\d{2}-\d{2}$/.test(String(x.d))).map(x=>({d:String(x.d),a:Number(x.a),f:(x.f==null||x.f==='')?null:Number(x.f),t:_pcDayNum(x.d)})).sort((x,y)=>x.t-y.t);
+  if(!all.length) return null;
+  const last=all[all.length-1].t, days=(_PC_PERIODS[period]||_PC_PERIODS['3y'])[1];
+  const rows=days?all.filter(x=>x.t>=last-days):all;
+  if(!rows.length) return null;
+  const hiA=Math.max(...rows.map(x=>x.a)), loA=Math.min(...rows.map(x=>x.a));
+  const his=rows.filter(x=>x.a===hiA), los=rows.filter(x=>x.a===loA);
+  const byM={}; rows.forEach(x=>{ const k=x.d.slice(0,7); (byM[k]=byM[k]||[]).push(x.a); });
+  const ym=(k,o)=>new Date(Date.UTC(+k.slice(0,4),+k.slice(5,7)-1+o,1)).toISOString().slice(0,7);
+  const k0=rows[0].d.slice(0,7), k1=rows[rows.length-1].d.slice(0,7), line=[];
+  for(let k=k0, guard=0; k<=k1 && guard<400; k=ym(k,1), guard++){
+    const w=[...(byM[ym(k,-1)]||[]),...(byM[k]||[]),...(byM[ym(k,1)]||[])];
+    line.push(w.length?{t:_pcDayNum(k+'-15'),v:_pcMedian(w)}:null);
   }
-  return Object.keys(b).sort().filter(k=>b[k].n>0).map(k=>({label:k.slice(2,4)+'.'+k.slice(5,7),sortKey:Number(k.slice(0,4))*12+Number(k.slice(5,7)),avgAuk:(b[k].sum/b[k].n)/10000,count:b[k].n}));
+  return { rows, hi:his[his.length-1], hiN:his.length, lo:los[los.length-1], los, loN:los.length, now:rows[rows.length-1], line };
 }
-function _longTrendSeqs(){
+function _pcNiceStep(rangeMan){ const r=rangeMan/10000; for(const s of [0.5,1,2,5,10]) if(r/s<=6) return s*10000; return 200000; }
+function _pcSvg(m, W){
+  const H=W<420?220:250, P={l:44,r:12,t:22,b:26}, iw=W-P.l-P.r, ih=H-P.t-P.b;
+  const step=_pcNiceStep(m.hi.a-m.lo.a), vMin=Math.floor(m.lo.a/step)*step, vMax=Math.max(Math.ceil(m.hi.a/step)*step, vMin+step);
+  const t0=m.rows[0].t, t1=m.rows[m.rows.length-1].t;
+  const X=t=>P.l+(t1===t0?iw/2:iw*(t-t0)/(t1-t0)), Y=v=>P.t+ih*(1-(v-vMin)/(vMax-vMin));
+  let g='';
+  for(let v=vMin; v<=vMax+1; v+=step) g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--bd)" stroke-width="1"/><text x="${P.l-6}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end" font-size="12" style="fill:var(--t3)">${(v/10000).toFixed(step<10000?1:0)}억</text>`;
+  const d0=new Date(t0*864e5), d1=new Date(t1*864e5);
+  if((t1-t0)<=400){
+    for(let d=new Date(Date.UTC(d0.getUTCFullYear(),Math.floor(d0.getUTCMonth()/3)*3+3,1)); d<=d1; d=new Date(Date.UTC(d.getUTCFullYear(),d.getUTCMonth()+3,1))){
+      const x=X(Math.round(d.getTime()/864e5));
+      g+=`<text x="${x.toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="12" style="fill:var(--t3)">${String(d.getUTCFullYear()).slice(2)}.${String(d.getUTCMonth()+1).padStart(2,'0')}</text>`;
+    }
+  } else {
+    for(let y=d0.getUTCFullYear()+1; y<=d1.getUTCFullYear(); y++){
+      const x=X(Math.round(Date.UTC(y,0,1)/864e5));
+      g+=`<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${P.t}" y2="${P.t+ih}" stroke="var(--bd)" stroke-dasharray="2 3"/><text x="${x.toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="12" style="fill:var(--t3)">${y}</text>`;
+    }
+  }
+  let path='', pen=false;
+  for(const p of m.line){ if(!p){ pen=false; continue; } path+=(pen?'L':'M')+X(p.t).toFixed(1)+' '+Y(p.v).toFixed(1)+' '; pen=true; }
+  const loSet=new Set(m.los);
+  const dots=m.rows.map(r=>{
+    const key=r===m.now?'now':r===m.hi?'hi':loSet.has(r)?'lo':'';
+    const tip=`${_pcYmd(r.d)}${r.f!=null?' · '+r.f+'층':''} · ${_pcEok(r.a)}`;
+    return `<circle cx="${X(r.t).toFixed(1)}" cy="${Y(r.a).toFixed(1)}" r="${key?5:3.4}" style="fill:${key==='now'?'var(--acc)':key?'var(--t1)':'var(--t3)'};fill-opacity:${key?1:.45};cursor:pointer" data-tip="${tip}" onclick="_pcTip(this)"><title>${tip}</title></circle>`;
+  }).join('');
+  const lab=(r,txt,above,isNow)=>{
+    const x=X(r.t), y=Y(r.a), anc=x>W-90?'end':x<P.l+50?'start':'middle';
+    const yy=above?Math.max(P.t-6,y-10):Math.min(P.t+ih-4,y+18);
+    return `<text x="${(anc==='end'?x-6:anc==='start'?x+6:x).toFixed(1)}" y="${yy.toFixed(1)}" text-anchor="${anc}" font-size="12" font-weight="700" paint-order="stroke" stroke="var(--bg-base)" stroke-width="4" style="fill:${isNow?'var(--acc)':'var(--t1)'}">${txt}</text>`;
+  };
+  let labels=lab(m.hi,(m.hi===m.now?'최근·':'')+'최고 '+_pcEok(m.hi.a)+(m.hiN>1?` (${m.hiN}건)`:''),true,false)
+    +lab(m.lo,(m.lo===m.now?'최근·':'')+'최저 '+_pcEok(m.lo.a)+(m.loN>1?` (${m.loN}건)`:''),false,false);
+  if(m.now!==m.hi && m.now!==m.lo){
+    const near=Math.abs(X(m.now.t)-X(m.hi.t))<90&&Math.abs(Y(m.now.a)-Y(m.hi.a))<24;
+    labels+=lab(m.now,'최근 '+_pcEok(m.now.a),!near,true);
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;max-width:100%;height:auto" role="img" aria-label="거래 ${m.rows.length}건 가격 차트">${g}<path d="${path}" fill="none" style="stroke:var(--acc)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>${dots}${labels}</svg>`;
+}
+function _pcTip(el){ const b=document.getElementById('pcTip'); if(b&&el) b.textContent=el.getAttribute('data-tip')||''; }
+function _pcSeqs(){
   const c={};
   for(const t of (window._curTrendApt||[])){ const s=String((t&&t.aptSeq)||''); if(/^\d{5}-\d+$/.test(s)) c[s]=(c[s]||0)+1; }
   const seqs=Object.keys(c).sort((a,b)=>c[b]-c[a]).slice(0,3);
@@ -8267,66 +8310,47 @@ function _longTrendSeqs(){
   if(!seqs.length && /^\d{5}-\d+$/.test(hint)) seqs.push(hint);
   return seqs.sort();
 }
-function _longTrendHtml(area){
-  const box=(t)=>`<div style="font-size:12px;color:var(--t3);padding:14px 8px;text-align:center;background:var(--bg2);border:1px dashed var(--bd);border-radius:var(--radius-base)">${t}</div>`;
-  const L=window._curTrendLong;
-  if(!L||L.state==='loading')return box('장기 이력을 불러오는 중…');
-  if(L.state==='error')return box('장기 이력을 불러오지 못했어요. "장기" 버튼을 다시 눌러 주세요.');
-  if(!Array.isArray(L.rows)||!L.rows.length)return box('이 단지는 2020년 9월 이후 거래 이력이 없어요.');
-  if(!area){
-    // 평형 칩이 있으면 고르게 안내. 최근 거래가 없어 칩이 없는 단지는 장기 이력에서 거래가 가장 많은 면적을 자동 선택한다.
-    if(document.querySelector('.trend-area-chip[data-sqm]:not([data-sqm="0"])'))return box('위에서 평형을 누르면 그 평형의 장기 추이를 보여 드려요.');
-    const tot={}; for(const r of L.rows){ tot[r.sqm]=(tot[r.sqm]||0)+(Number(r.n)||0); }
-    area=Number(Object.keys(tot).sort((a,b)=>tot[b]-tot[a])[0]);
-    if(!(area>0))return box('이 단지는 2020년 9월 이후 거래 이력이 없어요.');
-  }
-  const td=buildLongTrend(L.rows,area);
-  if(td.length<2)return `<div style="font-size:12px;color:var(--t3);padding:10px 0">${area}㎡(${Math.round(area/3.3058)}평) 장기 시세 추이를 보여 주려면 거래가 있는 달이 2개월 이상 필요해요</div>`;
-  const since=String(L.since||'').replace('-','.');
-  return renderPriceChart(td)+`<div style="font-size:12px;color:var(--t3);margin-top:4px;line-height:1.5">국토교통부 실거래 · ${_escHtml(since)} 이후 적재분 · 전용 ${area}㎡(±2㎡) 월별 단순평균 · 거래 없는 달은 건너뜀 · 해제 거래 제외 · 매수·매도 추천 아님</div>`;
+function _pcRecentDeals(){
+  return (window._curTrendApt||[]).map(t=>({d:`${t.dealYear}-${String(t.dealMonth).padStart(2,'0')}-${String(t.dealDay).padStart(2,'0')}`,ar:Number(t.excluUseAr),a:Number(t.dealAmount),f:t.floor}));
 }
-async function _setTrendMode(mode){
-  window._trendMode = mode==='long' ? 'long' : 'recent';
-  document.querySelectorAll('.trend-mode-btn').forEach(b=>{ const on=b.dataset.mode===window._trendMode; b.style.background=on?'var(--acc)':'var(--bg-base)'; b.style.color=on?'#fff':'var(--t2)'; b.style.borderColor=on?'var(--acc)':'var(--bd)'; b.setAttribute('aria-pressed',on?'true':'false'); });
-  const paint=()=>{ const el=document.getElementById('trendChartBox'); if(el && typeof window._trendHtml==='function') el.innerHTML=window._trendHtml(window._curTrendArea||0); };
-  if(window._trendMode==='long' && !(window._curTrendLong && window._curTrendLong.state==='ok')){
-    const key=_longTrendSeqs().join(',');
-    if(!key){ window._curTrendLong={state:'error',key:''}; paint(); return; }
-    window._curTrendLong={state:'loading',key}; paint();
-    try{
-      const r=await fetch(`${CFG.api}/transactions/history?aptSeq=${encodeURIComponent(key)}`,{signal:AbortSignal.timeout(12000)});
-      if(!r.ok)throw new Error('HTTP '+r.status);
-      const j=await r.json();
-      if(!window._curTrendLong||window._curTrendLong.key!==key)return; // 그 사이 다른 단지를 열었다
-      window._curTrendLong={state:'ok',key,rows:Array.isArray(j.rows)?j.rows:[],since:j.since||null,until:j.until||null};
-    }catch(_){ if(window._curTrendLong&&window._curTrendLong.key===key) window._curTrendLong={state:'error',key}; }
-  }
+function _pcHtml(area){
+  const L=window._curTrendLong, longOk=!!(L&&L.state==='ok'&&Array.isArray(L.deals)&&L.deals.length);
+  const src=(longOk?L.deals:_pcRecentDeals()).filter(x=>Number(x.ar)>0);
+  if(!area){ const c={}; src.forEach(x=>{ const s=Math.round(Number(x.ar)); c[s]=(c[s]||0)+1; }); area=Number(Object.keys(c).sort((a,b)=>c[b]-c[a])[0])||0; }
+  const period=_PC_PERIODS[window._pcPeriod]?window._pcPeriod:'3y', plabel=_PC_PERIODS[period][0];
+  const chips=Object.keys(_PC_PERIODS).map(k=>`<button type="button" class="pc-period" aria-pressed="${k===period}" onclick="_setPcPeriod('${k}')" style="font-size:12px;padding:5px 12px;border-radius:999px;border:1px solid ${k===period?'var(--acc)':'var(--bd)'};background:${k===period?'var(--acc)':'var(--bg-base)'};color:${k===period?'var(--acc-ink)':'var(--t2)'};cursor:pointer">${_PC_PERIODS[k][0]}</button>`).join('');
+  const head=`<div role="group" aria-label="차트 기간" style="display:flex;gap:6px;margin:4px 0 10px">${chips}</div>`;
+  const note=longOk?'':(L&&L.state==='loading'?'<div style="font-size:12px;color:var(--t3);margin-bottom:6px">예전 거래를 불러오는 중이에요. 지금은 최근 거래만 보여요.</div>':'<div style="font-size:12px;color:var(--t3);margin-bottom:6px">예전 거래를 불러오지 못해 최근 거래만 보여요.</div>');
+  const deals=src.filter(x=>area&&Math.abs(Math.round(Number(x.ar))-area)<=2);
+  const m=_pcModel(deals, period);
+  if(!m||m.rows.length<2) return head+note+`<div style="font-size:14px;color:var(--t3);padding:14px 8px;text-align:center;background:var(--bg2);border:1px dashed var(--bd);border-radius:var(--radius-base)">${area?area+'㎡ ':''}${plabel} 거래가 ${m?m.rows.length:0}건이라 그래프를 그리지 않아요</div>`;
+  const py=Math.round(area/3.3058);
+  const cell=(k,v,s,c)=>`<div style="border:1px solid var(--bd);border-radius:8px;padding:8px 10px;min-width:0"><div style="font-size:12px;color:var(--t3)">${k}</div><div style="font-size:18px;font-weight:700;color:${c};margin-top:2px">${v}</div><div style="font-size:12px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s}</div></div>`;
+  const fl=r=>r.f!=null?` · ${r.f}층`:'';
+  const loSub=m.loN>1?`${m.los.slice(-2).map(r=>_pcYmd(r.d)+fl(r)).join(', ')}${m.loN>2?' 외':''}`:_pcYmd(m.lo.d)+fl(m.lo);
+  const _bw=(document.getElementById('trendChartBox')||{}).clientWidth||0; // 숨은 탭에서 그리면 0 — 화면 폭으로 대신 잡는다
+  const W=Math.max(300,Math.min(760,_bw||Math.min(window.innerWidth||375,700)-48));
+  return head+note
+    +`<div style="font-size:16px;font-weight:700;color:var(--t1);line-height:1.5;margin-bottom:10px">${area}㎡(${py}평)가 최근 ${_pcEok(m.now.a)}에 거래됐어요. ${plabel} 중 최고 ${_pcEok(m.hi.a)}, 최저 ${_pcEok(m.lo.a)}이에요.</div>`
+    +`<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:10px">${cell('최근 거래',_pcEok(m.now.a),_pcYmd(m.now.d)+fl(m.now),'var(--acc)')}${cell(plabel+' 최고',_pcEok(m.hi.a),_pcYmd(m.hi.d)+fl(m.hi),'var(--t1)')}${cell(plabel+' 최저',_pcEok(m.lo.a),loSub,'var(--t1)')}</div>`
+    +_pcSvg(m,W)
+    +`<div id="pcTip" aria-live="polite" style="font-size:12px;color:var(--t2);min-height:18px;margin-top:4px">점을 누르면 거래 내용이 여기에 나와요</div>`
+    +`<div style="font-size:12px;color:var(--t3);margin-top:4px;line-height:1.5">점 하나가 거래 1건 · 선은 앞뒤 1개월을 포함한 3개월 중앙값 · ${plabel} ${m.rows.length}건<br>국토교통부 실거래가 · 같은 단지·같은 면적(전용 ${area}㎡ ±2㎡) · 층·향 보정 없음 · 해제 거래 제외 · 매수·매도 추천이 아니에요</div>`;
+}
+function _setPcPeriod(k){ if(!_PC_PERIODS[k])return; window._pcPeriod=k; const el=document.getElementById('trendChartBox'); if(el&&typeof window._trendHtml==='function') el.innerHTML=window._trendHtml(window._curTrendArea||0); }
+async function _pcLoad(){
+  const key=_pcSeqs().join(',');
+  if(!key){ window._curTrendLong={state:'error',key:''}; return; }
+  window._curTrendLong={state:'loading',key};
+  const paint=()=>{ const el=document.getElementById('trendChartBox'); if(el&&typeof window._trendHtml==='function') el.innerHTML=window._trendHtml(window._curTrendArea||0); };
+  try{
+    const r=await fetch(`${CFG.api}/transactions/history?deals=1&aptSeq=${encodeURIComponent(key)}`,{signal:AbortSignal.timeout(12000)});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    const j=await r.json();
+    if(!window._curTrendLong||window._curTrendLong.key!==key)return; // 그 사이 다른 단지를 열었다
+    window._curTrendLong={state:'ok',key,deals:Array.isArray(j.deals)?j.deals:[],since:j.since||null};
+  }catch(_){ if(window._curTrendLong&&window._curTrendLong.key===key) window._curTrendLong={state:'error',key}; }
   paint();
-}
-// Phase 4 (2026-04-26): areaSqm 인자 — 특정 평형만 필터 (없으면 전체 평균 — 의미 약함)
-function buildPriceTrend(txHistory, areaSqm){
-  if(!Array.isArray(txHistory)||!txHistory.length)return[];
-  const buckets={};
-  for(const t of txHistory){
-    const y=t.dealYear,m=t.dealMonth;
-    if(!y||!m)continue;
-    // 평형 필터 — areaSqm 지정 시 그 면적(±2㎡)만
-    if (areaSqm) {
-      const sqm = Math.round(Number(t.excluUseAr) || 0);
-      if (Math.abs(sqm - areaSqm) > 2) continue;
-    }
-    const key=`${y}-${String(m).padStart(2,'0')}`;
-    if(!buckets[key])buckets[key]={sum:0,n:0,y,m};
-    buckets[key].sum+=(t.dealAmount||0);
-    buckets[key].n++;
-  }
-  const rows=Object.values(buckets).map(b=>({
-    label:`${String(b.y).slice(2)}.${String(b.m).padStart(2,'0')}`,
-    sortKey:b.y*12+b.m,
-    avgAuk:(b.sum/b.n)/10000,
-    count:b.n,
-  })).sort((a,b)=>a.sortKey-b.sortKey);
-  return rows.slice(-24);
 }
 // REP-AREA-2026-10-29: 거래가 가장 많은 평형(㎡ 반올림 묶음 — 평형별 평균 카드와 같은 기준). 동률이면 가장 최근 거래의 평형.
 function _repAreaOf(tx){
@@ -8336,53 +8360,6 @@ function _repAreaOf(tx){
     if(!by[sqm])by[sqm]={sqm,n:0,last:0};by[sqm].n++;if(d>by[sqm].last)by[sqm].last=d;});
   const best=Object.values(by).sort((a,b)=>b.n-a.n||b.last-a.last)[0];
   return best?{sqm:best.sqm,py:Math.round(best.sqm/3.3058),n:best.n}:null;
-}
-// SVG 라인 + 점 차트 (반응형, inline style — 기존 CSS에 의존 X)
-function renderPriceChart(rows){
-  const W=320,H=120,pad={t:12,r:10,b:26,l:30};
-  const innerW=W-pad.l-pad.r, innerH=H-pad.t-pad.b;
-  const vals=rows.map(r=>r.avgAuk);
-  const vMin=Math.min(...vals), vMax=Math.max(...vals);
-  const range=Math.max(vMax-vMin, 0.1);
-  const x=(i)=>pad.l+(rows.length===1?innerW/2:innerW*i/(rows.length-1));
-  const y=(v)=>pad.t+innerH*(1-(v-vMin)/range);
-  const pts=rows.map((r,i)=>[x(i),y(r.avgAuk)]);
-  const pathD=pts.map((p,i)=>(i?'L':'M')+p[0].toFixed(1)+' '+p[1].toFixed(1)).join(' ');
-  const areaD=pathD+` L ${pts[pts.length-1][0].toFixed(1)} ${(pad.t+innerH).toFixed(1)} L ${pts[0][0].toFixed(1)} ${(pad.t+innerH).toFixed(1)} Z`;
-  // X축 레이블: 데이터 포인트가 많으면 일부만
-  const xLabelEvery=rows.length<=8?1:rows.length<=14?2:Math.ceil(rows.length/8);
-  const xLabels=rows.map((r,i)=>(i%xLabelEvery===0||i===rows.length-1)?
-    `<text x="${x(i).toFixed(1)}" y="${(H-8).toFixed(1)}" text-anchor="middle" fill="#888" style="fill:var(--t3)" font-size="9">${r.label}</text>`:'').join('');
-  // Y축: min/max만 표시
-  const yLabels=`
-    <text x="${pad.l-4}" y="${(pad.t+4).toFixed(1)}" text-anchor="end" fill="#888" style="fill:var(--t3)" font-size="9">${vMax.toFixed(1)}</text>
-    <text x="${pad.l-4}" y="${(pad.t+innerH).toFixed(1)}" text-anchor="end" fill="#888" style="fill:var(--t3)" font-size="9">${vMin.toFixed(1)}</text>`;
-  const _dotR = rows.length > 30 ? 1.3 : 2.5; // Plan 102: 장기(수십 개월)에서 점이 겹치지 않게
-  const dots=pts.map((p,i)=>`<circle cx="${p[0].toFixed(1)}" cy="${p[1].toFixed(1)}" r="${_dotR}" fill="#2E7DF0" style="fill:var(--dm-ac,#2E7DF0)"><title>${rows[i].label}: ${rows[i].avgAuk.toFixed(2)}억 (${rows[i].count}건)</title></circle>`).join('');
-  const first=rows[0].avgAuk, last=rows[rows.length-1].avgAuk;
-  const delta=last-first, deltaPct=first>0?(delta/first*100):0;
-  const deltaColor=delta>0.05?'#D94545':delta<-0.05?'#2A8F3F':'#888';
-  const arrow=delta>0.05?'▲':delta<-0.05?'▼':'→';
-  return `
-  <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-base);padding:10px 8px 6px">
-    <svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" style="display:block">
-      <defs>
-        <linearGradient id="pcGrad" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stop-color="#2E7DF0" style="stop-color:var(--dm-ac,#2E7DF0)" stop-opacity="0.25"/>
-          <stop offset="100%" stop-color="#2E7DF0" style="stop-color:var(--dm-ac,#2E7DF0)" stop-opacity="0"/>
-        </linearGradient>
-      </defs>
-      <path d="${areaD}" fill="url(#pcGrad)" stroke="none"/>
-      <path d="${pathD}" fill="none" stroke="#2E7DF0" style="stroke:var(--dm-ac,#2E7DF0)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
-      ${dots}
-      ${yLabels}
-      ${xLabels}
-    </svg>
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 6px 0;font-size:12px;color:var(--t3)">
-      <span>${rows[0].label} ~ ${rows[rows.length-1].label} · ${rows.length}개월</span>
-      <span style="color:${deltaColor};font-weight:700">${arrow} ${delta>=0?'+':''}${delta.toFixed(2)}억 (${deltaPct>=0?'+':''}${deltaPct.toFixed(1)}%)</span>
-    </div>
-  </div>`;
 }
 // DEAD-FN-2026-09-02 (감사 P2-11): renderLegacyPriceBars 제거 — 정의 1회·호출 0회.
 //   주석 스스로 "서버가 priceHistory(지수)로 내려주는 경우만 사용" 이라 적었는데 그 경로가 현재 없다.
@@ -8730,15 +8707,9 @@ function showDetail(p){
   // default = 0 (전체) — 사용자가 모든 평형 보고 자기 예산 평형 클릭
   window._curTrendApt = p.txHistory || [];
   window._curTrendArea = 0;
-  window._trendMode = 'recent'; window._curTrendLong = null; window._curTrendSeqHint = p.aptSeq || null; // Plan 102
+  window._curTrendLong = null; window._curTrendSeqHint = p.aptSeq || null; window._pcPeriod = '3y'; // Plan 154
 
-  function _trendHtml(area) {
-    if (window._trendMode === 'long') return _longTrendHtml(area);
-    if (!area) return '<div style="font-size:12px;color:var(--t3);padding:14px 8px;text-align:center;background:var(--bg2);border:1px dashed var(--bd);border-radius:var(--radius-base)">위에서 평형을 누르면 그 평형의 월별 시세 추이를 볼 수 있어요</div>';
-    const td = buildPriceTrend(window._curTrendApt, area);
-    if (td.length >= 2) return renderPriceChart(td);
-    return `<div style="font-size:12px;color:var(--t3);padding:10px 0">${area}㎡(${Math.round(area/3.3058)}평) 시세 추이를 보여 주려면 거래가 있는 달이 2개월 이상 필요해요</div>`;
-  }
+  function _trendHtml(area) { return _pcHtml(area); } // Plan 154: 평형 칩이 0(전체)이면 거래가 가장 많은 평형
   window._trendHtml = _trendHtml;
 
   // Sprint PP-1 (2026-05-19, 한국도시연구소 100대 아파트 분석 방법론 차용):
@@ -8838,13 +8809,7 @@ function showDetail(p){
     ${_areaChipsHtml}
     <div style="font-size:12px;font-weight:700;color:var(--t2);margin:14px 0 8px">개별 거래 <span style="font-weight:500;color:var(--t3)">(최대 30건)</span></div>
     <div id="txListBox">${_renderTxList(0)}</div>
-    <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin:14px 0 4px">
-      <div style="font-size:12px;font-weight:700;color:var(--t2)">월별 시세 추이</div>
-      <div role="group" aria-label="추이 기간" style="display:flex;gap:4px">
-        <button type="button" class="trend-mode-btn" data-mode="recent" aria-pressed="true" onclick="_setTrendMode('recent')" style="font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--acc);background:var(--acc);color:var(--acc-ink);cursor:pointer">최근</button>
-        <button type="button" class="trend-mode-btn" data-mode="long" aria-pressed="false" onclick="_setTrendMode('long')" style="font-size:12px;padding:3px 9px;border-radius:999px;border:1px solid var(--bd);background:var(--bg-base);color:var(--t2);cursor:pointer">장기</button>
-      </div>
-    </div>
+    <div style="font-size:12px;font-weight:700;color:var(--t2);margin:14px 0 4px">가격 흐름</div>
     <div id="trendChartBox">${_trendHtml(0)}</div>
     <!-- Sprint PP-1 (2026-05-19): 신고가 경신 추이 (한국도시연구소 100대 아파트 방법론) -->
     <div style="font-size:12px;font-weight:700;color:var(--t2);margin:14px 0 4px">신고가 경신 추이</div>
@@ -8857,6 +8822,7 @@ function showDetail(p){
     </div>
     <div class="ibox y" style="margin-top:12px">국토교통부 공공 데이터를 바탕으로 해요. 거래가 없는 달은 값을 채워 넣지 않아요.</div>`;
   try { _rtabsCue(); } catch(_) {}
+  try { _pcLoad(); } catch(_) {} // Plan 154: 차트용 개별 거래(2020.09~)를 화면을 넣은 뒤 불러온다
   const _rtabsEl = document.querySelector('#DM .rtabs'); if (_rtabsEl && !_rtabsEl._cueBound) { _rtabsEl._cueBound = 1; _rtabsEl.addEventListener('scroll', _rtabsCue, { passive: true }); }
 
   document.getElementById('t2').innerHTML=`<div class="tld"><div class="tsp"></div>AI 위험 분석 중...</div>`;

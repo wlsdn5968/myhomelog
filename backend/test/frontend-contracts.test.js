@@ -2043,29 +2043,38 @@ test('Plan 099 — 표시 이름 정책이 리스크 제목·비교 헤더·단�
   assert.equal((html.match(/<div style="font-weight:700">\$\{_escHtml\(p\.aptName\)\}<\/div>/g) || []).length, 0, '원문 단지명 팝업이 남아 있다');
 });
 
-test('Plan 102 — buildLongTrend 은 (월,㎡) 합계를 칩 규칙(±2㎡)으로 평균하고, 장기 추이 UI·분기·점 반지름·면책 문구가 배선돼 있다', () => {
+test('Plan 154 — 가격 차트 v2: 개별 거래 점·3개월 중앙값·최고와 최저 함께·기간 칩·장기 데이터 배선·면책 문구', () => {
   const fs = require('node:fs'), path = require('node:path');
   const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
-  const grab = (re, what) => {
-    const m = html.match(re);
-    assert.ok(m, `frontend/index.html 에서 ${what} 을 찾지 못했다`);
-    return m[0];
-  };
-  const fnSrc = grab(/function buildLongTrend\(rows, areaSqm\)\{[\s\S]*?\n\}/, 'buildLongTrend');
-  const { buildLongTrend } = new Function(`${fnSrc}\nreturn { buildLongTrend };`)();
-
-  const rows = [
-    { ym: '2021-03', sqm: 85, sum: 200000, n: 2 },
-    { ym: '2021-03', sqm: 84, sum: 90000, n: 1 },
-    { ym: '2021-04', sqm: 60, sum: 70000, n: 1 },
+  const grab = (re, what) => { const m = html.match(re); assert.ok(m, `frontend/index.html 에서 ${what} 을 찾지 못했다`); return m[0]; };
+  const src = [
+    grab(/const _PC_PERIODS=\{[^\n]*\};/, '_PC_PERIODS'),
+    grab(/function _pcDayNum\(d\)\{[^\n]*\}/, '_pcDayNum'),
+    grab(/function _pcMedian\(a\)\{[^\n]*\}/, '_pcMedian'),
+    grab(/function _pcModel\(deals, period\)\{[\s\S]*?\n\}/, '_pcModel'),
+  ].join('\n');
+  const { _pcModel } = new Function(`${src}\nreturn { _pcModel };`)();
+  // 공릉풍림아이원 59.94㎡ 실측 일부(2026-10-29 DB): 1년 최저 6.80억이 2건(25.09.20·25.11.20), 최고 8.80억(26.08.12)
+  const deals = [
+    { d: '2024-01-16', a: 55800, f: 2 }, { d: '2025-09-20', a: 68000, f: 2 }, { d: '2025-11-20', a: 68000, f: 4 },
+    { d: '2026-03-06', a: 78000, f: 4 }, { d: '2026-08-12', a: 88000, f: 8 }, { d: '2026-09-19', a: 85000, f: 8 },
   ];
-  const out = buildLongTrend(rows, 84);
-  assert.equal(out.length, 1, '60㎡(±2㎡ 범위 밖)는 제외되고 84·85㎡ 만 84 기준으로 합쳐져 1행이어야 한다');
-  assert.deepEqual(out[0], { label: '21.03', sortKey: 2021 * 12 + 3, avgAuk: (290000 / 3) / 10000, count: 3 });
-
-  // 소스 계약 — 회귀 시 조용히 사라지기 쉬운 배선(버튼 onclick·모드 분기·점 반지름·면책 문구).
-  assert.ok(html.includes("onclick=\"_setTrendMode('long')\""), '장기 버튼 onclick 배선이 없다');
-  assert.ok(html.includes("if (window._trendMode === 'long') return _longTrendHtml(area);"), '_trendHtml 의 장기 분기가 없다');
-  assert.ok(html.includes('r="${_dotR}"'), '점 반지름이 rows.length 에 따른 동적값(_dotR)이 아니다');
-  assert.ok(html.includes('매수·매도 추천 아님'), '장기 추이 캡션에 면책 문구가 없다');
+  const y1 = _pcModel(deals, '1y');
+  assert.equal(y1.rows.length, 5, '1년 = 마지막 거래(26.09.19)부터 365일 — 24.01.16 은 빠진다');
+  assert.equal(y1.hi.a, 88000); assert.equal(y1.lo.a, 68000); assert.equal(y1.loN, 2, '최저 동률 2건을 센다');
+  assert.equal(y1.now.d, '2026-09-19');
+  const all = _pcModel(deals, 'all');
+  assert.equal(all.lo.a, 55800); assert.equal(all.rows.length, 6);
+  assert.ok(all.line.includes(null), '3개월 안에 거래가 없는 달은 선을 끊는다(null)');
+  const firstPt = all.line.find(Boolean);
+  assert.equal(firstPt.v, 55800, '첫 달 중앙값 = 그 3개월 거래의 중앙값');
+  assert.equal(_pcModel([], '3y'), null);
+  // 배선: 장기 개별 거래 경로·기간 칩·화면 삽입 뒤 불러오기·최고와 최저 동시 라벨·면책 문구
+  assert.ok(html.includes('/transactions/history?deals=1&aptSeq='), '차트가 개별 거래 경로(deals=1)를 부르지 않는다');
+  assert.ok(html.includes("onclick=\"_setPcPeriod('${k}')\""), '기간 칩 onclick 배선이 없다');
+  assert.ok(html.includes('try { _pcLoad(); } catch(_) {}'), '상세 화면을 넣은 뒤 _pcLoad 를 부르지 않는다');
+  assert.ok(html.includes("function _trendHtml(area) { return _pcHtml(area); }"), '_trendHtml 이 새 차트를 쓰지 않는다');
+  assert.match(html, /'최고 '\+_pcEok\(m\.hi\.a\)[\s\S]{0,200}'최저 '\+_pcEok\(m\.lo\.a\)/, '최고 라벨과 최저 라벨이 함께 달리지 않는다');
+  assert.ok(html.includes('층·향 보정 없음 · 해제 거래 제외 · 매수·매도 추천이 아니에요'), '차트 출처·면책 문구가 없다');
+  assert.doesNotMatch(html, /_setTrendMode|_longTrendHtml|renderPriceChart\(/, '옛 차트 함수가 남아 있다');
 });

@@ -76,7 +76,7 @@ router.get('/history', async (req, res) => {
   const svc = require('../services/aptHistoryService');
   const seqs = svc.parseSeqs(req.query.aptSeq);
   if (!seqs) return res.status(400).json({ error: 'aptSeq 형식 오류 (예: 11500-10189, 최대 3개)' });
-  const data = await svc.getAptHistoryMonthly(seqs);
+  const data = await svc.getAptHistoryMonthly(seqs, { deals: req.query.deals === '1' }); // Plan 154: 차트용 개별 거래
   if (!data) { res.set('Cache-Control', 'no-store'); return res.status(503).json({ error: '장기 실거래 이력 조회 실패' }); }
   res.set('Cache-Control', data.capped ? 'no-store' : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
   res.json({ ...data, source: '국토교통부 실거래가 공개시스템 (적재분)' });

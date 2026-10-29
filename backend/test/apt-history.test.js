@@ -223,3 +223,50 @@ test('GET /api/transactions/history — 정상 → 200 + s-maxage=21600 + source
     delete require.cache[transactionsPath];
   }
 });
+
+// ── ⑥ Plan 154: 차트용 개별 거래(collectDeals) — 겹침 규칙·면적 환산·정렬 ─────────────
+test('collectDeals — 원본이 있는 달부터는 원본만, 이력 면적은 ÷100, 계약일 오름차순, 금액 0·날짜 이상 행 제외', () => {
+  const { collectDeals } = require('../services/aptHistoryService');
+  const hist = [
+    { deal_date: '2024-01-16', exclu_use_ar: 5994, deal_amount: 55800, floor: 2 },
+    { deal_date: '2025-08-03', exclu_use_ar: 5994, deal_amount: 1, floor: 1 },   // 원본 첫 달(2025-08)과 겹침 → 버린다
+    { deal_date: 'bad', exclu_use_ar: 5994, deal_amount: 60000, floor: 1 },
+  ];
+  const recent = [
+    { deal_date: '2026-09-19', exclu_use_ar: '59.94', deal_amount: 85000, floor: 8 },
+    { deal_date: '2025-08-27', exclu_use_ar: 59.94, deal_amount: 67500, floor: 14 },
+    { deal_date: '2026-01-01', exclu_use_ar: 59.94, deal_amount: 0, floor: 3 },
+  ];
+  const out = collectDeals(hist, recent);
+  assert.deepEqual(out, [
+    { d: '2024-01-16', ar: 59.94, a: 55800, f: 2 },
+    { d: '2025-08-27', ar: 59.94, a: 67500, f: 14 },
+    { d: '2026-09-19', ar: 59.94, a: 85000, f: 8 },
+  ]);
+  assert.deepEqual(collectDeals([], []), []);
+});
+
+test('GET /api/transactions/history?deals=1 — 서비스에 deals 옵션을 넘긴다(없으면 false)', async () => {
+  const seen = [];
+  const restore = stubModule('../services/aptHistoryService', {
+    parseSeqs: () => ['11350-183'],
+    getAptHistoryMonthly: async (seqs, opts) => { seen.push(opts && opts.deals); return { aptSeqs: seqs, rows: [], since: null, until: null, counts: { hist: 0, recent: 0 }, capped: false, deals: [] }; },
+  });
+  const transactionsPath = require.resolve('../routes/transactions');
+  delete require.cache[transactionsPath];
+  const express = require('express');
+  const app = express();
+  app.use('/api/transactions', require('../routes/transactions'));
+  let srv;
+  try {
+    srv = app.listen(0);
+    const port = srv.address().port;
+    await fetch(`http://127.0.0.1:${port}/api/transactions/history?deals=1&aptSeq=11350-183`);
+    await fetch(`http://127.0.0.1:${port}/api/transactions/history?aptSeq=11350-183`);
+    assert.deepEqual(seen, [true, false]);
+  } finally {
+    if (srv) srv.close();
+    restore();
+    delete require.cache[transactionsPath];
+  }
+});
