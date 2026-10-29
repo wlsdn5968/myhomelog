@@ -141,3 +141,17 @@ test('경신 목록 — 신고 원본 이름을 정식 이름으로(하늘(주�
     delete require.cache[routePath];
   }
 });
+
+test('지도 핀 — 동 번호만 다른 신고 이름(같은 동·같은 해·150m 안·공통 이름 3자+)은 공통 이름 핀 하나로', () => {
+  const { _mergeNearDuplicateGroups: m } = require('../routes/search');
+  const g = (n, lat, lng, by, c, src) => ({ aptName: n, umdNm: '죽전동', lat, lng, sum: c * 50000, n: c, source: src || 'molit', buildYear: by || 2001 });
+  let r = m([g('한솔노블(104동)', 37.3200, 127.1000, 0, 2), g('한솔노블(105동)', 37.3205, 127.1003, 0, 1), g('한솔노블(101,102동)', 37.3203, 127.1001, 0, 3)]);
+  assert.equal(r.length, 1); assert.equal(r[0].aptName, '한솔노블'); assert.equal(r[0].n, 6);
+  assert.deepEqual(r[0]._mergedNames.sort(), ['한솔노블(101,102동)', '한솔노블(104동)', '한솔노블(105동)']);
+  assert.equal(m([g('한솔노블(104동)', 37.32, 127.1, 0, 1), g('한솔노블(105동)', 37.33, 127.1, 0, 1)]).length, 2, '150m 밖은 합치지 않는다');
+  assert.equal(m([g('우일(101동)', 37.32, 127.1, 0, 1), g('우일(102동)', 37.3201, 127.1, 0, 1)]).length, 2, '공통 이름 2자는 합치지 않는다');
+  assert.equal(m([g('한솔노블(104동)', 37.32, 127.1, 2001, 1), g('한솔노블(105동)', 37.3201, 127.1, 2003, 1)]).length, 2, '건축년도 다르면 합치지 않는다');
+  assert.equal(m([g('관저더샵2차', 37.32, 127.1, 0, 1), g('관저더샵', 37.3201, 127.1, 0, 1)]).length, 2, '기존 규칙(숫자 다르면 별개) 유지');
+  const master = m([g('당정한솔솔파크', 37.32, 127.1, 2008, 5, 'master'), g('한솔솔파크(101,102동)', 37.3201, 127.1, 2008, 1)]);
+  assert.equal(master[0].aptName, '당정한솔솔파크', '정식 단지 이름은 바꾸지 않는다');
+});

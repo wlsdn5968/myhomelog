@@ -867,6 +867,11 @@ router.get('/popular', async (req, res) => {
 //   숫자가 다르면(관저더샵2차 ↔ 관저더샵, e편한세상신촌2단지 ↔ 3단지) 합치지 않는다. 남는 이름은 거래가 많은 쪽(정식 단지 우선).
 // 괄호 안 내용은 지우지 않는다 — "후곡마을(대창)" ↔ "후곡마을(동양)" 은 다른 단지다(미리보기 실측 2026-10-21). 괄호 기호만 뺀다.
 function _pinCore(n) { return String(n || '').replace(/\s+/g, '').replace(/[()]/g, '').replace(/아파트$/, '').toLowerCase(); }
+// DONG-PIN-2026-10-29: 공동주택 정보에 없는 단지가 동마다 다른 이름으로 신고되면("한솔노블(104동)"·"한솔노블(105동)") 지도에 동마다 핀이 찍혔다.
+//   끝의 동 번호("(104동)", "105동", "(101,102동)")를 뗀 이름이 같으면(3자 이상) 같은 단지로 본다 — 실측: 같은 동·같은 해 묶음 50개 중
+//   핀 사이 최대 거리 100m 이하 47·200m 이하 49 → 150m 안만 합친다. 남는 핀 이름은 동 번호를 뗀 공통 이름(그 이름으로 거래 조회 시 모든 동 거래가 온다 — 실측).
+const _DONG_SUFFIX_RE = /\s*\(?[0-9][0-9,]*동\)?$/;
+function _dongStem(n) { const raw = String(n || ''); return _DONG_SUFFIX_RE.test(raw) ? raw.replace(_DONG_SUFFIX_RE, '').trim() : null; }
 function mergeNearDuplicateGroups(list) {
   const arr = list.slice().sort((a, b) => (b.source === 'master') - (a.source === 'master') || (b.n || 0) - (a.n || 0));
   const kept = [];
@@ -874,6 +879,11 @@ function mergeNearDuplicateGroups(list) {
     const c = _pinCore(g.aptName), d = c.replace(/[^0-9]/g, '');
     const host = c.length >= 2 && kept.find(k => {
       if (k.umdNm !== g.umdNm) return false;
+      const _gs = _dongStem(g.aptName), _ks = _dongStem(k.aptName) || k.aptName;
+      if (_gs && _pinCore(_gs).length >= 3 && _pinCore(_gs) === _pinCore(_ks) && (!g.buildYear || !k.buildYear || g.buildYear === k.buildYear)) {
+        const dy0 = (k.lat - g.lat) * 111000, dx0 = (k.lng - g.lng) * 111000 * Math.cos(k.lat * Math.PI / 180);
+        if (Math.sqrt(dx0 * dx0 + dy0 * dy0) <= 150) return true;
+      }
       const kc = _pinCore(k.aptName);
       if (kc.replace(/[^0-9]/g, '') !== d) return false;
       // AB-SUFFIX-2026-10-21: "상목에버빌A ↔ 상목에버빌B" 처럼 끝 글자만 다른 신고 이름(전국 40묶음·서울경기 15, 모두 공동주택 정보 없음)
@@ -884,6 +894,10 @@ function mergeNearDuplicateGroups(list) {
       return Math.sqrt(dx * dx + dy * dy) <= 80;
     });
     if (host) {
+      const _hs = _dongStem(host.aptName); // 동 이름끼리 합쳐지면 핀 이름은 공통 이름(정식 단지 이름은 그대로)
+      if (_hs && host.source !== 'master' && _dongStem(g.aptName) && _pinCore(_dongStem(g.aptName)) === _pinCore(_hs)) {
+        (host._mergedNames = host._mergedNames || []).push(host.aptName); host.aptName = _hs;
+      }
       host.sum += g.sum; host.n += g.n;
       if (!host.buildYear) host.buildYear = g.buildYear;
       if (!host.lawdCd) host.lawdCd = g.lawdCd;
