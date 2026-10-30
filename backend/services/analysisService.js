@@ -687,6 +687,56 @@ function _withTimeout(promise, ms) {
   return Promise.race([promise, timeout]).finally(() => clearTimeout(to));
 }
 
+// COMPARE-PLUS-2026-10-30 (Plan 156): 비교 창 '가격 흐름' — 최근 dealMonths 개월(한국 시간 기준 이번 달 포함) 'YYYY-MM' 목록.
+function _cmpMonths(dealMonths, now = Date.now()) {
+  const { kstDate } = require('../utils/kstTime');
+  const [y, m] = kstDate(now).split('-').map(Number);
+  const out = [];
+  for (let i = dealMonths - 1; i >= 0; i--) {
+    const d = new Date(Date.UTC(y, m - 1 - i, 1));
+    out.push(`${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}`);
+  }
+  return out;
+}
+// 면적대 거래 → 월별 평당가(전용) 중앙값·건수. 거래 없는 달은 v:null (지어내지 않는다 — 화면이 선을 끊는다).
+function _cmpSeries(txs, months) {
+  const by = {};
+  for (const t of txs) {
+    const ym = `${t.dealYear}-${String(t.dealMonth || 0).padStart(2, '0')}`;
+    (by[ym] = by[ym] || []).push(t.dealAmount / (Number(t.excluUseAr) / _PYEONG_M2));
+  }
+  return months.map(ym => {
+    const a = by[ym] || [];
+    return { ym, v: a.length ? Math.round(_medianNum(a)) : null, n: a.length };
+  });
+}
+// 생활 거리 — 이미 있는 카카오 조회·90일 캐시 재사용. 상태를 구분해 돌려준다(실패를 '없음'으로 읽지 않는다).
+//   역: nearestSubway 직선거리(m). {s:'ok',name|null,m} / {s:'none'}(반경 3km 안 없음) / {s:'fail'}(좌표 없음·조회 실패)
+//   초등학교: resolveSchools(반경 1km). 검색 실패도 빈 목록이라 '없음'과 구분 못 한다 → 빈 목록은 {s:'notfound'}('찾지 못함')
+async function _cmpNear({ aptName, sigungu, umdNm, kaptCode, address }) {
+  const { resolveCoord } = require('./geocodeCacheService');
+  const { nearestSubway } = require('./kakaoService');
+  const { resolveSchools } = require('./schoolService');
+  const fail = { station: { s: 'fail' }, school: { s: 'fail' } };
+  let c = null;
+  try { c = await resolveCoord({ kaptCode: kaptCode || undefined, aptName, sigungu: sigungu || undefined, umdNm: umdNm || undefined, address: address || undefined }); } catch (_) { c = null; }
+  if (!c || c.lat == null || c.lng == null) return fail;
+  const [st, sc] = await Promise.all([
+    nearestSubway(c.lat, c.lng, 3000).catch(() => undefined),
+    resolveSchools({ aptName, sigungu, umdNm, kaptCode, lat: c.lat, lng: c.lng }).catch(() => undefined),
+  ]);
+  const station = st === undefined ? { s: 'fail' }
+    : st === null ? { s: 'none' }
+    : (Number.isFinite(Number(st.distance)) ? { s: 'ok', name: st.name || null, m: Math.round(Number(st.distance)) } : { s: 'fail' });
+  let school;
+  if (!Array.isArray(sc)) school = { s: 'fail' };
+  else {
+    const e = sc.filter(x => x && x.type === '초' && Number.isFinite(Number(x.distance_m))).sort((a, b) => a.distance_m - b.distance_m)[0];
+    school = e ? { s: 'ok', name: e.name, m: Math.round(Number(e.distance_m)) } : { s: 'notfound' };
+  }
+  return { station, school };
+}
+
 async function _compareOne(apt, dealMonths) {
   const aptName = apt && apt.aptName;
   const sigungu = (apt && apt.sigungu) || null;
@@ -695,8 +745,10 @@ async function _compareOne(apt, dealMonths) {
   const out = {
     aptName: aptName || null, sigungu, umdNm, lawdCd: lawdCd || null,
     molitAvailable: true, totalTx: 0, bands: [], facility: null,
+    near: { station: { s: 'fail' }, school: { s: 'fail' } }, months: _cmpMonths(dealMonths),
   };
   if (!aptName) return out;
+  let _kaptCode = null, _addr = null; // 생활 거리 좌표 찾기용(시설 조회에서 채운다)
 
   // 1) 거래 fetch — 검증된 alias 병합·이름매칭 재사용, 12개월 윈도우
   let saleTx = [];
@@ -749,14 +801,17 @@ async function _compareOne(apt, dealMonths) {
       medianDealManwon: Math.round(_medianNum(deals)),
       minDealManwon: Math.min(...deals),
       maxDealManwon: Math.max(...deals),
+      series: _cmpSeries(txs, out.months), // Plan 156 가격 흐름
     };
   }).sort((a, b) => b.n - a.n);
 
   // 6) facility — 검증된 resolveFacility 매칭 재사용. live 호출은 timeout 가드 → 실패 시 '수집 중'.
   try {
     const f = await _withTimeout(resolveFacility({ aptName, sigungu, umdNm, lawdCd }), 3500);
+    if (f && f.kaptCode) _kaptCode = f.kaptCode;
     if (f && f.raw) {
       const built = buildFacility(f.raw, f.kaptCode, f.detail || (f.raw && f.raw._dtl) || null);
+      if (built && built.address) _addr = built.address;
       if (built && !built._partial) {
         const by = built.builtDate ? (parseInt(String(built.builtDate).slice(0, 4), 10) || null) : null;
         out.facility = {
@@ -771,6 +826,11 @@ async function _compareOne(apt, dealMonths) {
       }
     }
   } catch (_) { /* facility 실패/timeout → null 유지 ('수집 중') */ }
+
+  // 7) 생활 거리 — 단지 코드·주소가 있으면 좌표 찾기에 쓴다. 시간 초과면 'fail'('확인 못 함') 유지.
+  try {
+    out.near = await _withTimeout(_cmpNear({ aptName, sigungu, umdNm, kaptCode: _kaptCode, address: _addr }), 4000); // 시설(3.5초)과 합쳐 단지당 최악 7.5초
+  } catch (_) { /* fail 유지 */ }
 
   return out;
 }
@@ -787,12 +847,12 @@ async function compareBatch(apts, opts = {}) {
     results: results.filter(Boolean),
     dealMonths,
     generatedAt: new Date().toISOString(),
-    disclaimer: `평당가는 전용면적 기준으로, 같은 전용면적대의 최근 ${dealMonths}개월 실거래 중앙값이에요. 시점·층·향·동 차이는 반영하지 않았고, 표본이 8건 미만이면 신뢰하기 어려워 값 대신 '표본 부족'으로 표시해요. 매수·매도 추천이 아니며 투자 판단의 근거가 될 수 없어요. 출처: 국토교통부 실거래가·공동주택 기본정보(K-apt).`,
+    disclaimer: `평당가는 전용면적 기준으로, 같은 전용면적대의 최근 ${dealMonths}개월 실거래 중앙값이에요. 시점·층·향·동 차이는 반영하지 않았고, 표본이 8건 미만이면 신뢰하기 어려워 값 대신 '표본 부족'으로 표시해요. 매수·매도 추천이 아니며 투자 판단의 근거가 될 수 없어요. 출처: 국토교통부 실거래가·공동주택 기본정보(K-apt) · 카카오 지도.`,
   };
 }
 
 module.exports = {
   analyzeApt, calcTotalCost, getLawdCdFromArea, compareBatch,
   // 테스트·디버그 용 — 외부 호출 금지
-  _internals: { analysisCacheKey: _analysisCacheKey, calcBuySignal, calcVolumeSignal, calcPricePercentile, filterAnomalies, detectSeasonalBias, getDataReliability, calcGap, compareOne: _compareOne, computeJeonseBasisDesc },
+  _internals: { analysisCacheKey: _analysisCacheKey, calcBuySignal, calcVolumeSignal, calcPricePercentile, filterAnomalies, detectSeasonalBias, getDataReliability, calcGap, compareOne: _compareOne, cmpMonths: _cmpMonths, cmpSeries: _cmpSeries, cmpNear: _cmpNear, computeJeonseBasisDesc },
 };

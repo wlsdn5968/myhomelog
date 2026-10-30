@@ -8069,6 +8069,74 @@ function _ensureCmpStyles(){
 .cmp-disc-top{font-size:12px;color:var(--t2);background:var(--info-bg);border-bottom:1px solid var(--info-bd);padding:9px 16px;line-height:1.55}
 .cmp-disc{font-size:12px;color:var(--t3);line-height:1.6;padding:12px 16px 16px;border-top:1px solid var(--bd);background:var(--s1)}
 @media(max-width:600px){.cmp-bar{bottom:10px;width:94%;justify-content:center}.cmp-chk-lbl{display:none}}
+/* COMPARE-PLUS-2026-10-30 (Plan 156, Claude Design 시안 p/200a4b36 승인): 비교 창 v2 — 이 창 안에서만 쓰는 토큰(전역 오염 금지) */
+#cmpModal{--cm-bg:#F5F5F2;--cm-card:#FFFFFF;--cm-sub:#EFEFEB;--cm-line:#E2E1DC;--cm-line2:#CFCEC7;--cm-t1:#15191F;--cm-t2:#4A515C;--cm-t3:#69707B;--cm-pri:#173A63;--cm-sel:#E7EDF4;--cm-cA:#173A63;--cm-cB:#4F729C;--cm-cC:#7893B5;background:rgba(21,25,31,.45)}
+html[data-theme="dark"] #cmpModal{--cm-bg:#0E1520;--cm-card:#151E2B;--cm-sub:#1B2636;--cm-line:#243246;--cm-line2:#34445B;--cm-t1:#E9EDF2;--cm-t2:#B5BEC9;--cm-t3:#8D97A4;--cm-pri:#8DB3E2;--cm-sel:#1D2D43;--cm-cA:#8DB3E2;--cm-cB:#6489B6;--cm-cC:#C3D5EC;background:rgba(0,0,0,.55)}
+#cmpModal .cmp-box{background:var(--cm-card);color:var(--cm-t1)}
+#cmpModal .cmp-body{font-variant-numeric:tabular-nums}
+#cmpModal .cmp-chips{gap:8px;padding:12px 16px 4px}
+#cmpModal .cmp-chip{min-height:44px;justify-content:center;border-radius:8px;background:var(--cm-card);border:1px solid var(--cm-line2);color:var(--cm-t2);font-weight:500}
+#cmpModal .cmp-chip.on{background:var(--cm-sel);border-color:var(--cm-pri);color:var(--cm-pri);font-weight:700}
+#cmpModal .cmp-acts{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 16px 12px}
+#cmpModal .cmp-btn{height:44px;padding:0 16px;border:1px solid var(--cm-line2);border-radius:8px;background:var(--cm-card);color:var(--cm-t1);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
+#cmpModal .cmp-btn.on{background:var(--cm-sel);border-color:var(--cm-pri);color:var(--cm-pri)}
+#cmpModal .cmp-swipe{display:none}
+#cmpModal .cmp-tw{margin:0 16px;border:1px solid var(--cm-line);border-radius:12px;overflow:auto}
+#cmpModal .cmp-tbl{font-size:16px;min-width:0}
+#cmpModal .cmp-tbl th,#cmpModal .cmp-tbl td{border-bottom:0;border-top:1px solid var(--cm-line);padding:14px 16px;color:var(--cm-t1)}
+#cmpModal .cmp-tbl thead th{border-top:0;background:var(--cm-sub)}
+#cmpModal .cmp-tbl th+th,#cmpModal .cmp-tbl td+td{border-left:1px solid var(--cm-line)}
+#cmpModal .cmp-rl,#cmpModal .cmp-rl-h{width:220px;min-width:220px;font-size:14px;font-weight:400;color:var(--cm-t2);background:var(--cm-card)}
+#cmpModal thead .cmp-rl-h{background:var(--cm-sub);color:var(--cm-t1);font-weight:700}
+#cmpModal .cmp-apt{font-size:16px;font-weight:700;color:var(--cm-t1)}
+#cmpModal .cmp-apt-sub,#cmpModal .cmp-td-sub,#cmpModal .cmp-insuf-sub{font-size:12px;color:var(--cm-t3)}
+#cmpModal .cmp-val{font-size:20px;font-weight:700;color:var(--cm-t1);font-family:inherit}
+#cmpModal .cmp-unit{color:var(--cm-t3)}
+#cmpModal .cmp-track{height:6px;border-radius:3px;background:var(--cm-sub)}
+#cmpModal .cmp-fill{background:var(--cm-pri);border-radius:3px}
+#cmpModal .cmp-na,#cmpModal .cmp-collect,#cmpModal .cmp-insuf{font-size:14px;color:var(--cm-t3);font-style:normal;font-weight:400}
+#cmpModal .cmp-sec td{background:var(--cm-sub);padding:10px 16px;font-size:12px;font-weight:600;color:var(--cm-t2)}
+#cmpModal .cmp-note{margin:8px 16px 0;font-size:12px;line-height:1.6;color:var(--cm-t3)}
+#cmpModal .cmp-disc-top{background:var(--cm-sub);color:var(--cm-t2);border-bottom:1px solid var(--cm-line);font-size:14px}
+#cmpModal .cmp-disc{background:var(--cm-card);color:var(--cm-t3);border-top:1px solid var(--cm-line);margin-top:16px}
+#cmpModal .cmp-chart{margin:16px 16px 0;border:1px solid var(--cm-line);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:16px}
+#cmpModal .cmp-chead{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap}
+#cmpModal .cmp-ct{margin:0;font-size:16px;font-weight:700;color:var(--cm-t1)}
+#cmpModal .cmp-lgs{display:flex;flex-wrap:wrap;gap:20px;font-size:14px;color:var(--cm-t2)}
+#cmpModal .cmp-lg{display:inline-flex;align-items:center;gap:6px}
+#cmpModal .cmp-chart .cmp-note{margin:0}
+#cmpModal .cmp-chartw{position:relative}
+#cmpModal .cmp-svg{display:block;width:100%;height:auto;overflow:visible}
+#cmpModal .cmp-grid{stroke:var(--cm-line);stroke-width:1}
+#cmpModal .cmp-ax{font-size:12px;fill:var(--cm-t3)}
+#cmpModal .cmp-ay{font-size:12px;font-weight:600;fill:var(--cm-t2)}
+#cmpModal .cmp-pt{fill:var(--cm-card);stroke-width:2}
+#cmpModal .cmp-hit{fill:transparent;cursor:pointer;outline:none}
+#cmpModal .cmp-hit:focus-visible{stroke:var(--cm-pri);stroke-width:2}
+#cmpModal .cmp-guide{stroke:var(--cm-line2);stroke-width:1;stroke-dasharray:3 3}
+#cmpModal .cmp-tip{position:absolute;z-index:2;pointer-events:none;background:var(--cm-t1);color:var(--cm-card);border-radius:8px;padding:8px 12px;max-width:260px;display:flex;flex-direction:column;gap:2px}
+#cmpModal .cmp-tip[hidden]{display:none}
+#cmpModal .cmp-tn{font-size:12px;opacity:.8}
+#cmpModal .cmp-tip b{font-size:14px;font-weight:600}
+@media(max-width:700px){
+  #cmpModal .cmp-chips{flex-wrap:nowrap;overflow-x:auto}
+  #cmpModal .cmp-chip{flex:none}
+  #cmpModal .cmp-acts .cmp-btn{flex:1}
+  #cmpModal .cmp-swipe{display:block;margin:0 16px 8px;font-size:12px;color:var(--cm-t3)}
+  #cmpModal .cmp-tbl{width:auto;font-size:14px}
+  #cmpModal .cmp-tbl th,#cmpModal .cmp-tbl td{padding:12px}
+  #cmpModal .cmp-th,#cmpModal .cmp-tbl td:not(.cmp-rl){width:150px;min-width:150px}
+  #cmpModal .cmp-rl,#cmpModal .cmp-rl-h{width:104px;min-width:104px;max-width:104px;white-space:normal;font-size:12px;border-right:1px solid var(--cm-line);z-index:1}
+  #cmpModal .cmp-apt{font-size:14px}
+  #cmpModal .cmp-val{font-size:16px}
+  #cmpModal .cmp-na,#cmpModal .cmp-collect,#cmpModal .cmp-insuf{font-size:12px}
+  #cmpModal .cmp-sec td{padding:8px 12px}
+  #cmpModal .cmp-sec td>span{position:sticky;left:12px;display:inline-block} /* colspan 칸은 sticky 가 안 먹어 글자만 고정 */
+  #cmpModal .cmp-chart{padding:16px;gap:12px}
+  #cmpModal .cmp-ct{font-size:14px}
+  #cmpModal .cmp-chead{flex-direction:column;align-items:flex-start;gap:8px}
+  #cmpModal .cmp-lgs{font-size:12px;gap:12px}
+}
 `;
   document.head.appendChild(st);
 }
@@ -8142,7 +8210,7 @@ function _cmpModalShell(){
   bg.className = 'smbg open';
   // z-index 9999: 지도 컨트롤(Leaflet 줌 1000 / Naver) 위로 — .smbg 기본 500/inline 600은 폴백 Leaflet 컨트롤에 가림(라이브 확인)
   bg.style.cssText = 'z-index:9999;display:flex';
-  bg.innerHTML = `<div class="smbox" style="max-width:880px;width:96%;max-height:92vh;display:flex;flex-direction:column;padding:0;overflow:hidden">
+  bg.innerHTML = `<div class="smbox cmp-box" style="max-width:1104px;width:96%;max-height:92vh;display:flex;flex-direction:column;padding:0;overflow:hidden">
     <div class="smhdr" style="display:flex;justify-content:space-between;align-items:center;padding:14px 16px;border-bottom:1px solid var(--bd)">
       <div class="smtit" style="font-size:14px;font-weight:800">단지 비교 <span style="font-size:12px;font-weight:500;color:var(--t3)">· 평당가(전용) 중심</span></div>
       <button class="smx" onclick="document.getElementById('cmpModal').remove()" aria-label="닫기">✕</button>
@@ -8386,7 +8454,7 @@ async function handleCompareUrl(){
 // 결과들의 밴드를 ±1㎡ 로 클러스터링 → 공통 전용면적대 후보
 function _clusterBands(results){
   const all = [];
-  results.forEach((r,ri)=> (r.bands||[]).forEach(b=> all.push({ band:b.band, n:b.n, reliable:b.reliable, medianPyeongManwon:b.medianPyeongManwon, medianDealManwon:b.medianDealManwon, ri })));
+  results.forEach((r,ri)=> (r.bands||[]).forEach(b=> all.push({ band:b.band, n:b.n, reliable:b.reliable, medianPyeongManwon:b.medianPyeongManwon, medianDealManwon:b.medianDealManwon, series:Array.isArray(b.series)?b.series:null, ri })));
   all.sort((a,b)=> a.band - b.band);
   const clusters = [];
   for(const b of all){
@@ -8409,6 +8477,109 @@ function _clusterBands(results){
   })
   .filter(c=> c.presentCount >= 1)
   .sort((a,b)=> (b.reliableCount-a.reliableCount) || (b.presentCount-a.presentCount) || (b.totalN-a.totalN));
+}
+
+// COMPARE-PLUS-2026-10-30 (Plan 156, Claude Design 시안 p/200a4b36 승인): 생활 거리·가격 흐름.
+//   거리는 카카오 지도 검색의 **직선거리** — 걸어서 몇 분으로 바꾸지 않는다(실측 우회계수 1.40~1.97, kakaoService.nearestSubway 주석).
+function _cmpDist(m){ m=Math.round(Number(m)||0); return m<1000 ? `${m.toLocaleString('ko-KR')}m` : `${(m/1000).toFixed(1)}km`; }
+function _cmpNearText(o, k){
+  if(!o || o.s==='fail') return { ok:false, text:'확인 못 함' };
+  if(o.s==='ok' && Number.isFinite(Number(o.m))) return { ok:true, text: o.name ? `${o.name} · 직선 ${_cmpDist(o.m)}` : `직선 ${_cmpDist(o.m)}` };
+  if(k==='station' && o.s==='none') return { ok:false, text:'3km 안에 없음' };
+  // 학교 검색은 실패해도 빈 목록이라 '없음'과 구분되지 않는다 → 두 경우 모두 맞는 말로
+  if(k==='school' && o.s==='notfound') return { ok:false, text:'1km 안에서 찾지 못함' };
+  return { ok:false, text:'확인 못 함' };
+}
+// y축 눈금: 간격 100에서 시작, 눈금이 6개를 넘으면 2배씩. 범위는 최저−40~최고+40 을 간격에 맞춰 내림·올림(시안 값).
+function _cmpYTicks(min, max){
+  let step=100, lo, hi;
+  for(let k=0;k<20;k++){
+    lo=Math.floor((min-40)/step)*step; hi=Math.ceil((max+40)/step)*step;
+    if((hi-lo)/step+1<=6) break;
+    step*=2;
+  }
+  const t=[]; for(let v=lo; v<=hi+1e-9; v+=step) t.push(v);
+  return { lo, hi, step, ticks:t };
+}
+const _CMP_COL=['var(--cm-cA)','var(--cm-cB)','var(--cm-cC)'], _CMP_DASH=['','9 6','1 6'];
+// 단지 k(원래 담은 순서)의 선 모양: 0~2 는 시안(A 실선 · B 파선 · C 점선), 3~5 는 색과 선 모양의 다른 짝 — 6개까지 겹치지 않는다
+function _cmpStyle(k){ return { c:_CMP_COL[(k+Math.floor(k/3))%3], d:_CMP_DASH[k%3], m:k%3 }; }
+function _cmpMarker(i, x, y, r){
+  const k=i%3;
+  if(k===0) return `<circle cx="${x}" cy="${y}" r="${r||4}"`;
+  if(k===1){ const h=(r?r*0.9:3.6); return `<rect x="${x-h}" y="${y-h}" width="${h*2}" height="${h*2}"`; }
+  const d=(r?r*1.25:5); return `<path d="M${x} ${y-d}L${x+d} ${y}L${x} ${y+d}L${x-d} ${y}Z"`;
+}
+let _cmpChart=null; // 말풍선이 읽는 현재 차트 값
+function _cmpChartHtml(oResults, oPerResult, sel, styleIdx){
+  if(!sel) return '';
+  const months=(oResults.find(r=>r&&Array.isArray(r.months))||{}).months||[];
+  if(months.length<2) return '';
+  const names=oResults.map(r=>r.displayName || _dispAptName(r.aptName, r.umdNm) || '');
+  const sk=oResults.map((r,i)=>_cmpStyle(Array.isArray(styleIdx)&&Number.isInteger(styleIdx[i])?styleIdx[i]:i));
+  const ser=oPerResult.map(b=>(b&&Array.isArray(b.series))?b.series:null);
+  const vals=[]; ser.forEach(s=>(s||[]).forEach(p=>{ if(p&&Number.isFinite(p.v)) vals.push(p.v); }));
+  const E=_escHtml, title=`가격 흐름 · 전용 ${sel.center}㎡ 월별 평당가(중앙값)`;
+  const note='한 달 거래가 적으면 크게 움직여 보여요. 지나간 거래를 정리한 것이고 앞으로의 가격을 뜻하지 않아요.';
+  if(!vals.length) return `<section class="cmp-chart"><h3 class="cmp-ct">${E(title)}</h3><p class="cmp-note">최근 ${months.length}개월 이 면적의 월별 거래가 없어요.</p></section>`;
+  const mob=(()=>{try{return window.matchMedia('(max-width:700px)').matches;}catch(_){return false;}})();
+  const W=mob?324:1008, H=mob?220:300, L=mob?44:56, R=mob?8:16, T=18, B=44;
+  const y=_cmpYTicks(Math.min(...vals), Math.max(...vals));
+  const X=i=>L+i*(W-L-R)/(months.length-1), Y=v=>T+(y.hi-v)*(H-T-B)/(y.hi-y.lo);
+  let g='';
+  y.ticks.forEach(v=>{ g+=`<line x1="${L}" x2="${W-R}" y1="${Y(v)}" y2="${Y(v)}" class="cmp-grid"/><text x="${L-8}" y="${Y(v)+4}" text-anchor="end" class="cmp-ax">${v.toLocaleString('ko-KR')}</text>`; });
+  g+=`<text x="${L-8}" y="${T-6}" text-anchor="end" class="cmp-ax">만/평</text>`;
+  months.forEach((ym,i)=>{
+    const [yy,mm]=ym.split('-').map(Number);
+    if(!mob || i%2===0 || i===months.length-1) g+=`<text x="${X(i)}" y="${H-B+18}" text-anchor="middle" class="cmp-ax">${mm}월</text>`;
+    if(i===0 || mm===1) g+=`<text x="${X(i)}" y="${H-B+34}" text-anchor="middle" class="cmp-ay">${yy}</text>`;
+  });
+  let lines='', pts='';
+  ser.forEach((s,i)=>{
+    if(!s) return;
+    const st=sk[i];
+    let seg=[];
+    const flush=()=>{ if(seg.length>1) lines+=`<polyline points="${seg.join(' ')}" fill="none" style="stroke:${st.c}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"${st.d?` stroke-dasharray="${st.d}"`:''}/>`; seg=[]; };
+    s.forEach((p,j)=>{
+      if(!p || !Number.isFinite(p.v)){ flush(); return; }
+      const px=X(j), py=Y(p.v); seg.push(`${px.toFixed(1)},${py.toFixed(1)}`);
+      const [yy,mm]=String(p.ym||months[j]).split('-').map(Number);
+      const lab=`${names[i]} ${yy}년 ${mm}월 ${p.v.toLocaleString('ko-KR')}만/평 ${p.n}건`;
+      pts+=`${_cmpMarker(st.m,px,py)} class="cmp-pt" style="stroke:${st.c}"/>`
+        +`<circle cx="${px}" cy="${py}" r="12" class="cmp-hit" tabindex="0" role="button" aria-label="${E(lab)}" data-i="${i}" data-j="${j}" onmouseenter="_cmpTip(this)" onfocus="_cmpTip(this)" onclick="_cmpTip(this)" onmouseleave="_cmpTipHide()" onblur="_cmpTipHide()"/>`;
+    });
+    flush();
+  });
+  _cmpChart={ names, ser, months, W, H, X, Y, T, B, mob }; _cmpMobLast=mob;
+  const legend=names.map((n,i)=>(ser[i]&&ser[i].some(p=>p&&Number.isFinite(p.v)))?`<span class="cmp-lg"><svg width="36" height="14" aria-hidden="true"><line x1="2" x2="34" y1="7" y2="7" style="stroke:${sk[i].c}" stroke-width="2.5" stroke-linecap="round"${sk[i].d?` stroke-dasharray="${sk[i].d}"`:''}/>${_cmpMarker(sk[i].m,18,7)} class="cmp-pt" style="stroke:${sk[i].c}"/></svg>${E(n)}</span>`:'').join('');
+  return `<section class="cmp-chart"><div class="cmp-chead"><h3 class="cmp-ct">${E(title)}</h3><div class="cmp-lgs">${legend}</div></div>`
+    +`<div class="cmp-chartw"><svg class="cmp-svg" viewBox="0 0 ${W} ${H}" role="img" aria-label="${E(title)}"><g>${g}</g><line class="cmp-guide" x1="0" x2="0" y1="${T}" y2="${H-B}" style="display:none"/>${lines}${pts}</svg><div class="cmp-tip" hidden></div></div>`
+    +`<p class="cmp-note">${E(note)}</p></section>`;
+}
+function _cmpTip(el){
+  const c=_cmpChart; if(!c||!el) return;
+  const i=+el.dataset.i, j=+el.dataset.j, p=c.ser[i]&&c.ser[i][j]; if(!p) return;
+  const wrap=el.closest('.cmp-chartw'), svg=wrap&&wrap.querySelector('svg'), tip=wrap&&wrap.querySelector('.cmp-tip'); if(!svg||!tip) return;
+  const sc=svg.getBoundingClientRect().width/c.W, x=c.X(j)*sc, y=c.Y(p.v)*sc;
+  const [yy,mm]=String(p.ym).split('-').map(Number);
+  tip.innerHTML=`<span class="cmp-tn">${_escHtml(c.names[i])}</span><b>${yy}년 ${mm}월 · ${p.v.toLocaleString('ko-KR')}만/평 · ${p.n}건</b>`;
+  tip.hidden=false;
+  const tw=tip.offsetWidth, ww=wrap.clientWidth;
+  tip.style.left=Math.max(0, Math.min(ww-tw, x-tw/2))+'px';
+  tip.style.top=(y-64<0 ? y+14 : y-64)+'px'; // 점 위 64, 넘치면 점 아래 14(시안)
+  const gl=svg.querySelector('.cmp-guide'); if(gl){ gl.setAttribute('x1',c.X(j)); gl.setAttribute('x2',c.X(j)); gl.style.display=''; }
+  svg.querySelectorAll('.cmp-pt.on').forEach(e=>{e.classList.remove('on');e.style.fill='';});
+  const mk=el.previousElementSibling; if(mk&&mk.classList.contains('cmp-pt')){ mk.classList.add('on'); mk.style.fill=mk.style.stroke; } // 선색으로 채운 점(시안)
+}
+// 폭이 기준선(700px)을 넘나들면 차트 크기(1008×300 / 324×220)를 다시 정하도록 비교 창을 다시 그린다
+let _cmpMobLast=null;
+window.addEventListener('resize',()=>{ try{ const m=window.matchMedia('(max-width:700px)').matches; if(m===_cmpMobLast) return; _cmpMobLast=m; const modal=document.getElementById('cmpModal'); if(modal&&_cmpData&&_cmpChart) renderCompareModal(_cmpData, modal.querySelector('.cmp-body')); }catch(_){} },{passive:true});
+function _cmpTipHide(){
+  // 모바일은 탭으로 열고 자동으로 닫지 않는다(시안)
+  if(_cmpChart && _cmpChart.mob) return;
+  document.querySelectorAll('#cmpModal .cmp-tip').forEach(t=>t.hidden=true);
+  document.querySelectorAll('#cmpModal .cmp-guide').forEach(g=>g.style.display='none');
+  document.querySelectorAll('#cmpModal .cmp-pt.on').forEach(e=>{e.classList.remove('on');e.style.fill='';});
 }
 
 function renderCompareModal(data, bodyEl){
@@ -8491,30 +8662,38 @@ function renderCompareModal(data, bodyEl){
     });
     return `<tr><td class="cmp-rl">${label}</td>${cells}</tr>`;
   };
+  // COMPARE-PLUS-2026-10-30 (Plan 156): 생활 거리 — 서버가 상태를 구분해 준다(ok/none/notfound/fail). 실패를 '없음'으로 쓰지 않는다.
+  const nearRow = (label, k) => `<tr><td class="cmp-rl">${label}</td>${oResults.map(r=>{const t=_cmpNearText(r&&r.near&&r.near[k],k);return t.ok?`<td>${_escHtml(t.text)}</td>`:`<td class="cmp-na">${_escHtml(t.text)}</td>`;}).join('')}</tr>`;
 
   bodyEl.innerHTML = `
     <div class="cmp-disc-top">전용면적대를 골라 <b>같은 평형끼리</b> 비교하세요. 평당가는 <b>전용면적 기준</b>이라 공급면적 기준보다 높게 보여요.</div>${_cmpBandNote ? `<div class="cmp-disc-top">${_escHtml(_cmpBandNote)}</div>` : ''}
     <div class="cmp-chips">${chips || '<span style="color:var(--t3);font-size:12px">공통 전용면적대가 없어 평당가를 바로 비교하기 어려워요. 단지 정보만 비교해요</span>'}</div>
-    <div style="display:flex;justify-content:space-between;align-items:center;padding:0 16px 8px">
-      <button onclick="shareCompare()" title="이 비교를 링크로 공유" style="font-size:12px;padding:4px 10px;border:1px solid var(--bd);border-radius:var(--radius-base);background:var(--bg-base);color:var(--t2);cursor:pointer;font-family:inherit">비교 공유</button>
-      <button onclick="_cmpToggleSort()" title="평당가 기준 단지 정렬" style="font-size:12px;padding:4px 10px;border:1px solid ${_cmpSort?'var(--acc)':'var(--bd)'};border-radius:var(--radius-base);background:${_cmpSort?'var(--acc)':'var(--bg-base)'};color:${_cmpSort?'#fff':'var(--t2)'};cursor:pointer;font-family:inherit">평당가순 ${_cmpSort==='asc'?'↑ 낮은순':_cmpSort==='desc'?'↓ 높은순':''}</button>
+    <div class="cmp-acts">
+      <button type="button" class="cmp-btn" onclick="shareCompare()" title="이 비교를 링크로 공유">비교 공유</button>
+      <button type="button" class="cmp-btn${_cmpSort?' on':''}" onclick="_cmpToggleSort()" title="평당가 기준 단지 정렬" aria-pressed="${_cmpSort?'true':'false'}">${_cmpSort==='asc'?'평당가 낮은 순':_cmpSort==='desc'?'평당가 높은 순':'평당가 정렬'}</button>
     </div>
-    <div style="overflow:auto">
+    <p class="cmp-swipe">옆으로 넘기면 다른 단지를 볼 수 있어요.</p>
+    <div class="cmp-tw">
     <table class="cmp-tbl">
       <thead><tr><th class="cmp-rl-h">전용 ${sel?sel.center:'-'}㎡ <span style="font-weight:500;color:var(--t3)">(약 ${sel?sel.pyeong:'-'}평)</span></th>${nameCols}</tr></thead>
       <tbody>
         <tr><td class="cmp-rl">평당가(전용)</td>${pyeongRow}</tr>
         <tr><td class="cmp-rl">표본</td>${sampleRow}</tr>
         <tr><td class="cmp-rl">중앙 거래가</td>${dealRow}</tr>
-        <tr class="cmp-sec"><td colspan="${results.length+1}">단지 정보 (공동주택 정보)</td></tr>
+        <tr class="cmp-sec"><td colspan="${results.length+1}"><span>단지 정보 (공동주택 정보)</span></td></tr>
         ${facRow('세대수', f=> f.totalHouseholds? f.totalHouseholds.toLocaleString():null, '세대')}
         ${facRow('주차/세대', f=> f.parkingRatio!=null? f.parkingRatio:null, '대')}
         ${facRow('준공', f=> f.builtYear||null, '년')}
         ${facRow('시공사', f=> f.builder||null, '')}
         ${facRow('동수', f=> f.dongCount? f.dongCount:null, '개동')}
+        <tr class="cmp-sec"><td colspan="${results.length+1}"><span>생활 거리(직선거리, 카카오 지도 검색)</span></td></tr>
+        ${nearRow('가까운 지하철역','station')}
+        ${nearRow('가까운 초등학교','school')}
       </tbody>
     </table>
     </div>
+    <p class="cmp-note">직선거리라 걸어서 가는 길은 더 길어요.</p>
+    ${_cmpChartHtml(oResults, oPerResult, sel, _order)}
     <div class="cmp-disc">${_escHtml((data&&data.disclaimer)||'')}</div>`;
 }
 
