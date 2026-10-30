@@ -8030,9 +8030,9 @@ let _cmpSort = null;   // 평당가 정렬 (null=선택순 | 'asc' 낮은순 | '
 let _cmpData = null;   // 최근 compare 응답 캐시
 let _cmpMonths = 12;   // CMP-PERIOD-2026-10-30 (Plan 160): 비교 기간 12/24개월 — 계산 방법은 그대로, 기간만 고른다
 let _cmpLoading = false; // 기간을 바꿔 다시 받는 중 — 기간에 따라 바뀌는 행·차트만 자리 표시
-// CMP-PERIOD-HOLD-2026-10-30: 24개월은 잠시 숨긴다 — 원본 창(16개월) 밖 8개월(2024-11~2025-06)이 운영에서 전부 조회 실패해
-//   '최근 24개월' 표시 아래 실제로는 약 16개월만 집계됐다(운영 로그 실측). 이력 테이블에서 읽게 고친 뒤 true 로 연다.
-const _CMP_PERIOD_ON = false;
+// CMP-PERIOD-HOLD-2026-10-30: 원본 창(16개월) 밖 달이 국토부 API 조회 실패로 빠져 잠시 숨겼다가(fb7575b),
+//   Plan 170(99e0506)으로 그 달을 이력 테이블에서 읽게 고친 뒤 다시 연다 — 운영 24개월 건수 = DB 직접 집계(공릉동부 23·럭키 33).
+const _CMP_PERIOD_ON = true;
 const _cmpExtra = {};   // Plan 150: 상세에서 담은, 현재 검색 결과(props)에 없는 단지 — cmpSel 에 'd:이름|시군구|동' 문자열 키로 들어가고 여기서 조회한다
 let _cmpApts = null;   // 최근 compare 입력 단지(공유 딥링크 직렬화용) (COMPARE-SHARE-2026-06-21)
 

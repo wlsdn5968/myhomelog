@@ -115,8 +115,8 @@ test('⑥ 기간 선택(Plan 160): 12/24개월 세그먼트는 칩 위, 불러�
   assert.match(html, /role="radio" aria-checked="\$\{_cmpMonths===m\?'true':'false'\}"/);
   // 안내: 12개월 + 표본 부족 단지가 있을 때만, 불러오는 동안 숨김
   assert.match(html, /const _cmpShowHint = _CMP_PERIOD_ON && !_cmpLoading && _cmpMonths===12 && oPerResult\.some\(b=>b && !b\.reliable\);/);
-  // 24개월은 이력 테이블 조회를 고치기 전까지 숨김(원본 창 밖 8개월 조회 실패 — 운영 로그 2026-10-30)
-  assert.match(html, /const _CMP_PERIOD_ON = false;/);
+  // 24개월: 원본 창 밖 달은 이력 테이블에서 읽는다(Plan 170, tx-hist-region.test.js) — 고친 뒤 다시 열었다
+  assert.match(html, /const _CMP_PERIOD_ON = true;/);
   assert.match(html, /\$\{_CMP_PERIOD_ON\?`<div class="cmp-period"/);
   assert.match(html, /표본이 적은 단지는 24개월로 넓혀 볼 수 있어요\./);
   // 불러오는 동안: 표 aria-busy·셀 자리 표시·차트 자리 role=status·칩과 정렬 잠금
