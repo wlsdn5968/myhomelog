@@ -81,6 +81,11 @@ test('배선: 거래 병합·지도·자동완성·인기·보고서·추천·�
   assert.match(inc, /return _yr\.length \? base\.filter\(/, '별칭 거래 0건일 때의 대체 결과에도 다른 연도 단지 거래가 섞이면 안 된다');
   const s = read('../routes/search.js');
   assert.match(s, /const _canon = aliasCanon\(_canonMap, row\.apt_name, row\.umd_nm, row\.build_year\)/);
+  // 공식 단지 결과: 별칭이 있으면 molit_apt_index 의 그 별칭(연도 별칭은 그 연도) 건수만, 이름 조각 맞추기는 별칭 없는 단지에만
+  assert.match(s, /const _masterSel = 'apt_name, sigungu, umd_nm, lawd_cd, kapt_code, molit_aliases';/);
+  assert.match(s, /if \(p\.year && Number\(x\.build_year\) !== p\.year\) continue;/);
+  assert.match(s, /const masterEmpty = out\.filter\(r => r\.source === 'master' && !r\.buildYear && r\.lawdCd && r\.umdNm && !r\._aliasChecked\);/);
+  assert.match(s, /for \(const r of out\) \{ delete r\._aliases; delete r\._aliasChecked; \}/, '내부 필드가 응답에 나가면 안 된다');
   assert.match(s, /if \(p\.year\) \(aliasYearToMaster\[/);
   assert.match(s, /const _ys = aliasYearToMaster\[`\$\{c\.apt_name\}\|\$\{c\.umd_nm\}`\];/);
   assert.match(s, /const st = _mStats\[_pa\.year \? /);

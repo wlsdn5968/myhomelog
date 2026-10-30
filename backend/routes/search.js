@@ -251,7 +251,7 @@ router.get('/apt', async (req, res) => {
     // SEC-ORFILTER-2026-07-17 (Sprint TTTTT): 기존 .or(`apt_name.ilike.%${qApt}%,umd_nm.ilike.%${q}%`) 는
     //   사용자 입력이 PostgREST or= 미니 문법에 원시 삽입돼 콤마 등으로 임의 필터 절 주입 가능(유일한 원시 경로).
     //   → 파라미터 인코딩되는 .ilike() 2회 병렬 + 병합으로 교체 — "상계주공9(고층)" 같은 괄호 검색어도 무손실.
-    const _masterSel = 'apt_name, sigungu, umd_nm, lawd_cd, kapt_code';
+    const _masterSel = 'apt_name, sigungu, umd_nm, lawd_cd, kapt_code, molit_aliases'; // ALIAS-YEAR-2026-10-30: 별칭으로 건수·준공 연도를 정확히 채운다
     const _tQuery = Date.now();
     const [molitRes, masterNameRes, masterUmdRes, molitNoSpaceRes, masterNoSpaceRes] = await Promise.all([
       // SEARCH-MV-2026-08-16 (Sprint TTTTTTT): 조회 대상을 거래 테이블 → **단지 단위 집계 MV** 로 교체.
@@ -632,6 +632,7 @@ router.get('/apt', async (req, res) => {
           source: 'master',
           // APT-DISPLAY-NAME-2026-09-16 (Plan 090): master 행은 이미 KAPT 정식명이라 그대로 얹는다.
           displayName: base,
+          _aliases: Array.isArray(row.molit_aliases) ? row.molit_aliases : [], // 응답 전에 지운다(아래 보충 단계 전용)
         });
         if (out.length >= limit) break;
       }
@@ -640,7 +641,33 @@ router.get('/apt', async (req, res) => {
     // Phase 4 (2026-04-26): master 단지 buildYear/recentDealDate 토큰 매칭 자동 채우기
     // 사용자 지적: '왜 ?년 이지? 정보 못 찾았냐?' — apt_master 에 build_year 컬럼 없음.
     // 같은 (lawd_cd, umd_nm) molit_transactions 중 토큰 매칭 단지의 buildYear/dealDate 사용.
-    const masterEmpty = out.filter(r => r.source === 'master' && !r.buildYear && r.lawdCd && r.umdNm);
+    // ALIAS-YEAR-2026-10-30 (Plan 178): 별칭이 있는 공식 단지는 아래 이름 조각 맞추기 대신 별칭으로 정확히 센다. 조각 맞추기는 같은 동의
+    //   다른 단지 거래까지 더했다(운영 실측: "시흥능곡우남퍼스트빌2차" 가 준공 2008·47건 — 실제 2011·9건). 연도 별칭은 그 연도만.
+    const _masterAliased = out.filter(r => r.source === 'master' && !r.buildYear && r.lawdCd && r.umdNm && r._aliases && r._aliases.length);
+    if (_masterAliased.length) {
+      const _names = [...new Set(_masterAliased.flatMap(r => r._aliases.map(a => parseAlias(a).name)))];
+      const { data: _ix } = await _softQuery(admin.from('molit_apt_index')
+        .select('apt_name, lawd_cd, umd_nm, build_year, recent_deal_date, deal_count')
+        .in('apt_name', _names).in('lawd_cd', [...new Set(_masterAliased.map(r => r.lawdCd))])
+        .limit(1000).abortSignal(AbortSignal.timeout(ENRICH_ABORT_MS)));
+      for (const m of _masterAliased) {
+        let n = 0, top = null, recent = null;
+        for (const a of m._aliases) {
+          const p = parseAlias(a);
+          for (const x of (_ix || [])) {
+            if (x.apt_name !== p.name || x.lawd_cd !== m.lawdCd || x.umd_nm !== m.umdNm) continue;
+            if (p.year && Number(x.build_year) !== p.year) continue;
+            n += Number(x.deal_count) || 0;
+            if (!top || (Number(x.deal_count) || 0) > (Number(top.deal_count) || 0)) top = x;
+            if (x.recent_deal_date && (!recent || String(x.recent_deal_date) > recent)) recent = String(x.recent_deal_date);
+          }
+        }
+        m._aliasChecked = true; // 별칭 행이 없으면(거래 0건) 조각 맞추기로 지어내지 않는다
+        if (top) { m.buildYear = top.build_year; m.recentDealDate = recent; m.dealCount = n; }
+      }
+    }
+    const masterEmpty = out.filter(r => r.source === 'master' && !r.buildYear && r.lawdCd && r.umdNm && !r._aliasChecked);
+    for (const r of out) { delete r._aliases; delete r._aliasChecked; }
     if (masterEmpty.length) {
       // 같은 (lawd_cd, umd_nm) 그룹 별 1번 fetch
       const groups = {};
