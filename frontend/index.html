@@ -8030,6 +8030,9 @@ let _cmpSort = null;   // 평당가 정렬 (null=선택순 | 'asc' 낮은순 | '
 let _cmpData = null;   // 최근 compare 응답 캐시
 let _cmpMonths = 12;   // CMP-PERIOD-2026-10-30 (Plan 160): 비교 기간 12/24개월 — 계산 방법은 그대로, 기간만 고른다
 let _cmpLoading = false; // 기간을 바꿔 다시 받는 중 — 기간에 따라 바뀌는 행·차트만 자리 표시
+// CMP-PERIOD-HOLD-2026-10-30: 24개월은 잠시 숨긴다 — 원본 창(16개월) 밖 8개월(2024-11~2025-06)이 운영에서 전부 조회 실패해
+//   '최근 24개월' 표시 아래 실제로는 약 16개월만 집계됐다(운영 로그 실측). 이력 테이블에서 읽게 고친 뒤 true 로 연다.
+const _CMP_PERIOD_ON = false;
 const _cmpExtra = {};   // Plan 150: 상세에서 담은, 현재 검색 결과(props)에 없는 단지 — cmpSel 에 'd:이름|시군구|동' 문자열 키로 들어가고 여기서 조회한다
 let _cmpApts = null;   // 최근 compare 입력 단지(공유 딥링크 직렬화용) (COMPARE-SHARE-2026-06-21)
 
@@ -8665,7 +8668,7 @@ function renderCompareModal(data, bodyEl){
   const maxVal = reliableVals.length ? Math.max(...reliableVals) : 0;
   let pyeongRow = '', sampleRow = '', dealRow = '';
   // 12개월에서 표본 부족 단지가 있으면 24개월 안내(불러오는 동안 숨김)
-  const _cmpShowHint = !_cmpLoading && _cmpMonths===12 && oPerResult.some(b=>b && !b.reliable);
+  const _cmpShowHint = _CMP_PERIOD_ON && !_cmpLoading && _cmpMonths===12 && oPerResult.some(b=>b && !b.reliable);
   if(_cmpLoading){
     const sk=(h,w)=>`<td><span class="cmp-sk" style="height:${h}px;width:${w}%"></span></td>`;
     oPerResult.forEach(()=>{ pyeongRow+=sk(20,64); sampleRow+=sk(16,40); dealRow+=sk(16,48); });
@@ -8704,7 +8707,7 @@ function renderCompareModal(data, bodyEl){
 
   bodyEl.innerHTML = `
     <div class="cmp-disc-top">전용면적대를 골라 <b>같은 평형끼리</b> 비교하세요. 평당가는 <b>전용면적 기준</b>이라 공급면적 기준보다 높게 보여요.</div>${_cmpBandNote ? `<div class="cmp-disc-top">${_escHtml(_cmpBandNote)}</div>` : ''}
-    <div class="cmp-period" role="radiogroup" aria-label="비교 기간">${[12,24].map(m=>`<button type="button" role="radio" aria-checked="${_cmpMonths===m?'true':'false'}"${_cmpLoading?' disabled':''} onclick="_cmpSetMonths(${m})">최근 ${m}개월</button>`).join('')}</div>
+    ${_CMP_PERIOD_ON?`<div class="cmp-period" role="radiogroup" aria-label="비교 기간">${[12,24].map(m=>`<button type="button" role="radio" aria-checked="${_cmpMonths===m?'true':'false'}"${_cmpLoading?' disabled':''} onclick="_cmpSetMonths(${m})">최근 ${m}개월</button>`).join('')}</div>`:''}
     <div class="cmp-chips">${chips || '<span style="color:var(--t3);font-size:12px">공통 전용면적대가 없어 평당가를 바로 비교하기 어려워요. 단지 정보만 비교해요</span>'}</div>
     ${_cmpShowHint?'<p class="cmp-hint">표본이 적은 단지는 24개월로 넓혀 볼 수 있어요.</p>':''}
     <div class="cmp-acts">
