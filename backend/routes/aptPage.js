@@ -499,6 +499,10 @@ router.get('/:aptSeq', async (req, res) => {
   // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(조회 키·API 인자·deepLink 쿼리)은
   //   위에서 전부 원문 그대로 썼다. 아래 h1·title·desc·OG 카드(ogImage.js)만 이 표시용 이름을 쓴다.
   const displayName = displayAptName(aptName, { umdNm: umd, kaptName: kaptMatchedName });
+  // CTA-NAME-2026-10-30 (소비자 체험 점검): 제목은 '공릉풍림아이원'인데 아래 버튼이 신고 원문 '풍림아파트A'였고, 앱 상세 제목도
+  //   링크로 받은 그 이름이 됐다. 버튼 글자는 표시용 이름, 링크 이름은 단지 기본정보와 정확히 일치한 이름이 있을 때만 그 이름
+  //   (운영 실측: 두 이름 모두 A·B 거래 39건을 같게 조회 — 별칭 병합) · 없으면 조회 키인 원문 그대로.
+  const ctaAptName = kaptMatchedName || aptName;
 
   // DIM-RECOVERY-2026-09-26 (Plan 117): "최근 거래 없음" 카드는 사실이지만 원본(24개월) 창 밖에
   //   이력이 있다는 걸 안 알려준다 — idx 가 molit_apt_dim(3번째 소스)에서 왔고 이력 건수가
@@ -522,7 +526,7 @@ router.get('/:aptSeq', async (req, res) => {
     <!-- DEEPLINK-CTX-2026-09-26 (Plan 115): 종전 href="${ORIGIN}/" 는 구글에서 이 단지 페이지로 온 방문자를
       단지를 잊은 랜딩에 떨어뜨렸다(라이브 실측). SPA 의 handleShareUrl(?apt=&area=)이 상세 모달을 바로
       연다 — /share 가 쓰는 검증된 형식과 동일. area 는 구 이름 부분일치라 region("청주시 청원구")을 쓴다. -->
-    <a class="cta" href="${ORIGIN}/?apt=${encodeURIComponent(aptName)}&area=${encodeURIComponent(region)}&calc=1">${esc(aptName)} 대출 한도·비용 계산 →</a>`;
+    <a class="cta" href="${ORIGIN}/?apt=${encodeURIComponent(ctaAptName)}&area=${encodeURIComponent(region)}&calc=1">${esc(displayName)} 대출 한도·비용 계산 →</a>`;
 
   const title = `${displayName} 실거래가 — ${region}${umd ? ' ' + umd : ''} | 내집로그`;
   // APT-PAGE-DESC-2026-09-06 (Plan 065): 분기는 facts.length 가 아니라 thin(거래 유무, 위에서

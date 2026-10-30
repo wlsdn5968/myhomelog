@@ -6672,7 +6672,7 @@ function updateHfRates(hf){
     if(b && hf.bogeum && fmt(hf.bogeum)){ b.textContent = fmt(hf.bogeum); applied = hf.bogeum.applyDy || applied; }
     if(d && hf.didimdol && fmt(hf.didimdol)){ d.textContent = fmt(hf.didimdol); applied = hf.didimdol.applyDy || applied; }
     const note = document.getElementById('hfRateNote');
-    if(note && applied){ note.textContent = `보금자리론(u-보금자리론)·디딤돌 금리는 한국주택금융공사 공시를 자동으로 반영해요 (적용일 ${ymd(String(applied))}). 신혼·신생아 특례(*)는 2026.7 공시 기준 대략치예요.`; }
+    if(note && applied){ note.textContent = `보금자리론(u-보금자리론)·디딤돌 금리는 한국주택금융공사 공시를 자동으로 반영해요 (적용일 ${ymd(String(applied))}). 신혼·신생아 특례(*)는 2026.7 공시 기준 대략치`; /* 뒤의 고정 문구 '예요.'와 이어진다(끝말 중복 수정, 2026-10-30) */ }
   }catch(_){}
 }
 

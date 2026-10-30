@@ -33,7 +33,7 @@ test('PUBLIC-DEEPLINK — 단지 페이지 CTA 가 /?apt=&area= 딥링크로 가
 
 test('PUBLIC-DEEPLINK — aptPage.js 소스에도 딥링크 템플릿이 있다 (렌더 검증의 보강)', () => {
   const src = fs.readFileSync(path.join(__dirname, '../routes/aptPage.js'), 'utf8');
-  assert.ok(src.includes('href="${ORIGIN}/?apt=${encodeURIComponent(aptName)}&area=${encodeURIComponent(region)}&calc=1"'),
+  assert.ok(src.includes('href="${ORIGIN}/?apt=${encodeURIComponent(ctaAptName)}&area=${encodeURIComponent(region)}&calc=1"') /* CTA-NAME-2026-10-30: 링크 이름은 기본정보 일치 이름 우선 */,
     'aptPage.js 에 딥링크 CTA 템플릿 문자열이 없다');
   assert.ok(!/class="cta" href="\$\{ORIGIN\}\/">/.test(src),
     'aptPage.js 에 여전히 맥락 없는 루트 단독 CTA(href="${ORIGIN}/") 가 남아 있다');

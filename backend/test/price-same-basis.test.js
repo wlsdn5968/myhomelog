@@ -130,3 +130,18 @@ test('보고서 자기자본: 화면은 빈칸을 null 로 보내고, 요약·PD
   assert.match(rep, /- 자기자본: \$\{input\.myCash == null \? '미입력' : input\.myCash \+ '억'\}/);
   assert.doesNotMatch(rep, /자기자본 \$\{userInput\.myCash\}억/, '빈칸을 0억으로 쓰는 옛 문구가 남았다');
 });
+
+// 소비자 체험 점검(2026-10-30) 즉시 수정 2건
+test('정책자금 금리 안내: 공시 반영 문구가 뒤의 고정 "예요."와 겹치지 않는다', () => {
+  assert.match(html, /<b id="hfRateNote">금리\(\*\)는 2026\.7 공시 기준 대략치<\/b>예요\./);
+  const i = html.indexOf('note.textContent = `보금자리론');
+  const seg = html.slice(i, html.indexOf('`;', i));
+  assert.ok(seg.endsWith('대략치'), '공시 반영 문구가 "예요."로 끝나면 화면에 "예요.예요."가 된다');
+});
+
+test('단지 페이지 버튼: 표시용 이름을 쓰고, 링크 이름은 기본정보 일치 이름(없으면 원문)', () => {
+  const src = fs.readFileSync(path.join(__dirname, '../routes/aptPage.js'), 'utf8');
+  assert.match(src, /const ctaAptName = kaptMatchedName \|\| aptName;/);
+  assert.match(src, /\?apt=\$\{encodeURIComponent\(ctaAptName\)\}[^`]*>\$\{esc\(displayName\)\} 대출 한도·비용 계산 →<\/a>/);
+  assert.doesNotMatch(src, /\$\{esc\(aptName\)\} 대출 한도·비용 계산/);
+});
