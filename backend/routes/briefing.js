@@ -109,6 +109,20 @@ function briefingTicker(snap) {
   return tk;
 }
 
+// KST-DATE-2026-10-30: 2026-10-30 이전에 저장된 브리핑의 regLog 시행일은 UTC 날짜라 하루 앞당겨져 있다(2025-10-14 ← 실제 10-15).
+//   같은 이벤트(key)의 현재 기록(regulationsService 가 한국 날짜로 고침)이 정확히 하루 뒤일 때만 그 날짜로 바로잡는다.
+async function fixRegLogDates(snap) {
+  if (!snap || !Array.isArray(snap.regLog) || !snap.regLog.length) return snap;
+  const live = ((await require('../services/regulationsService').getChangeLog()) || {}).items || [];
+  const nextDay = (d) => { const t = Date.parse(String(d) + 'T00:00:00Z'); return Number.isFinite(t) ? new Date(t + 864e5).toISOString().slice(0, 10) : null; };
+  const regLog = snap.regLog.map((it) => {
+    if (!it || !it.effectiveFrom) return it;
+    const hit = live.find((x) => x.key === it.key && x.effectiveFrom === nextDay(it.effectiveFrom));
+    return hit ? { ...it, effectiveFrom: hit.effectiveFrom } : it;
+  });
+  return { ...snap, regLog };
+}
+
 // GET /briefing → 오늘로 리다이렉트
 // EXPRESS5-REDIRECT-2026-09-06 (Plan 073): kstDayString() 이 빈 값이면 '/briefing/undefined' 같은
 //   깨진 경로로 redirect 하지 않도록 가드(5.2.0부터 res.redirect 에 undefined 인자 deprecation 경고).
@@ -133,6 +147,7 @@ router.get('/:date', async (req, res) => {
   try { snap = await getOrCreateSnapshot(day); } catch (e) {
     logger.warn({ err: e.message, day }, '/briefing 스냅샷 실패');
   }
+  if (snap) { try { snap = await fixRegLogDates(snap); } catch (_) { /* 원본 그대로 */ } }
   if (!snap) {
     return res.status(404).type('html').send(pageShell(
       `내집로그 브리핑 ${day}`, '이 날짜의 브리핑 기록이 없어요.', day,
@@ -215,6 +230,7 @@ router.get('/:date', async (req, res) => {
 });
 
 module.exports = router;
+module.exports._fixRegLogDates = fixRegLogDates;
 module.exports.briefingTicker = briefingTicker;   // OG 카드와 공유
 module.exports.mergeLiveCounts = mergeLiveCounts;
 module.exports.pastDaysNav = pastDaysNav;

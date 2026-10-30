@@ -189,6 +189,8 @@ router.get('/briefing/:day', async (req, res) => {
   }
   let snap = null;
   try { snap = await getOrCreateSnapshot(day); } catch (e) { logger.warn({ err: e.message, day }, 'og: 브리핑 스냅샷 실패'); }
+  // KST-DATE-2026-10-30: 페이지와 같은 시행일 보정(옛 저장본의 UTC 날짜)
+  if (snap) { try { snap = await require('./briefing')._fixRegLogDates(snap); } catch (_) { /* 원본 그대로 */ } }
   if (!snap || !Array.isArray(snap.lines) || !snap.lines.length) return fallback(res, 'no-snapshot');
 
   let png;

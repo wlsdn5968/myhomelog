@@ -57,7 +57,8 @@ test('③ 목록 카드 최대 대출: 연소득이 있으면 DSR 한도로 낮�
 test('④ 비교 화면: 고른 평형 범위의 면적 묶음을 먼저 연다', () => {
   const i = html.indexOf('function renderCompareModal(');
   const body = html.slice(i, i + 1500);
-  assert.match(body, /c\.pyeong >= pr\.minArea && c\.pyeong <= pr\.maxArea/);
+  assert.match(body, /c\.pyeong >= pr\.minArea && c\.pyeong <= pr\.maxArea && c\.presentCount === results\.length/);
+  assert.ok(html.includes('함께 비교할 거래가 없어, 거래가 가장 많은 면적으로 보여 드려요'), '범위 안 비교 불가 안내 없음');
 });
 
 test('⑤ 접힌 선택 칸 제목 아래에 적용 중인 평형·생애최초·연소득을 보여 준다', () => {
@@ -108,4 +109,27 @@ test('⑨ 규제 시행일은 한국 날짜 — KST 자정 저장값(전날 15:0
   assert.equal(_kstDay('2025-10-14T15:00:00+00:00'), '2025-10-15');
   assert.equal(_kstDay('2024-12-31T15:00:00Z'), '2025-01-01');
   assert.equal(_kstDay(null), null);
+});
+
+test('⑨-2 옛 브리핑 저장본의 시행일은 같은 이벤트의 현재 기록이 정확히 하루 뒤일 때만 바로잡는다', async () => {
+  const regPath = require.resolve('../services/regulationsService');
+  const saved = require.cache[regPath];
+  const real = require(regPath);
+  require.cache[regPath] = { id: regPath, filename: regPath, loaded: true, exports: { ...real, getChangeLog: async () => ({ items: [
+    { key: 'housing_loan_2025', effectiveFrom: '2025-10-15' }, { key: 'acquisition_tax_2025', effectiveFrom: '2025-01-01' } ] }) } };
+  const bp = require.resolve('../routes/briefing');
+  delete require.cache[bp];
+  try {
+    const { _fixRegLogDates } = require('../routes/briefing');
+    const out = await _fixRegLogDates({ regLog: [
+      { key: 'housing_loan_2025', effectiveFrom: '2025-10-14' },   // UTC 로 하루 앞당겨진 옛 값 → 10-15
+      { key: 'acquisition_tax_2025', effectiveFrom: '2024-12-31' }, // → 2025-01-01
+      { key: 'housing_loan_2025', effectiveFrom: '2025-06-01' },   // 하루 차이가 아니면 그대로
+      { key: 'other', effectiveFrom: '2025-03-03' },
+    ] });
+    assert.deepEqual(out.regLog.map((x) => x.effectiveFrom), ['2025-10-15', '2025-01-01', '2025-06-01', '2025-03-03']);
+  } finally {
+    if (saved) require.cache[regPath] = saved; else delete require.cache[regPath];
+    delete require.cache[bp];
+  }
 });

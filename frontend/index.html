@@ -8138,11 +8138,19 @@ function renderCompareModal(data, bodyEl){
   const clusters = _clusterBands(results);
   // CMP-BAND-PY-2026-10-30 (소비자 체험 점검): 목록에서 '중형 23~33평'을 골랐는데 비교가 표본 많은 59㎡(18평)로 열려
   //   같은 단지가 목록 6.42억·비교 5.15억으로 보였다. 고른 평형 범위에 드는 묶음을 먼저(신뢰도 순서 유지), 없으면 종전대로.
+  //   담은 단지가 모두 거래가 있는 면적만 고른다(운영 실측: 범위 안 79·84·91㎡ 가 전부 한 단지만 거래 → 비교가 반쯤 빔).
+  //   그런 면적이 없으면 종전대로 가장 믿을 만한 면적으로 열고, 그 사실을 한 줄로 알린다.
+  let _cmpBandNote = '';
   if(_cmpBand==null && clusters.length){
     let pick = clusters[0];
     try {
-      const pr = (typeof pyRange === 'function' && gct('ch-py') && !gct('ch-py').startsWith('전체')) ? pyRange() : null;
-      if (pr) { const inR = clusters.find(c => c.pyeong >= pr.minArea && c.pyeong <= pr.maxArea); if (inR) pick = inR; }
+      const sel = gct('ch-py');
+      const pr = (typeof pyRange === 'function' && sel && !sel.startsWith('전체')) ? pyRange() : null;
+      if (pr) {
+        const inR = clusters.find(c => c.pyeong >= pr.minArea && c.pyeong <= pr.maxArea && c.presentCount === results.length);
+        if (inR) pick = inR;
+        else _cmpBandNote = `고른 평형(${sel})에서는 담은 단지를 함께 비교할 거래가 없어, 거래가 가장 많은 면적으로 보여 드려요. 아래에서 면적을 바꿀 수 있어요.`;
+      }
     } catch (_) { /* 평형 칩이 없는 화면(관심 단지 비교)에선 종전대로 */ }
     _cmpBand = pick.center;
   }
@@ -8206,7 +8214,7 @@ function renderCompareModal(data, bodyEl){
   };
 
   bodyEl.innerHTML = `
-    <div class="cmp-disc-top">전용면적대를 골라 <b>같은 평형끼리</b> 비교하세요. 평당가는 <b>전용면적 기준</b>이라 공급면적 기준보다 높게 보여요.</div>
+    <div class="cmp-disc-top">전용면적대를 골라 <b>같은 평형끼리</b> 비교하세요. 평당가는 <b>전용면적 기준</b>이라 공급면적 기준보다 높게 보여요.</div>${_cmpBandNote ? `<div class="cmp-disc-top">${_escHtml(_cmpBandNote)}</div>` : ''}
     <div class="cmp-chips">${chips || '<span style="color:var(--t3);font-size:12px">공통 전용면적대가 없어 평당가를 바로 비교하기 어려워요. 단지 정보만 비교해요</span>'}</div>
     <div style="display:flex;justify-content:space-between;align-items:center;padding:0 16px 8px">
       <button onclick="shareCompare()" title="이 비교를 링크로 공유" style="font-size:12px;padding:4px 10px;border:1px solid var(--bd);border-radius:var(--radius-base);background:var(--bg-base);color:var(--t2);cursor:pointer;font-family:inherit">비교 공유</button>
