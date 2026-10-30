@@ -99,7 +99,7 @@ test('⑦ 신혼부부 예시는 신혼 디딤돌 기준 안 값이라 정책자
 });
 
 test('⑧ 가격 신호: 표본 보통 경고와 아래 "N건 분석 · 표본 보통"이 같은 기준을 말한다', () => {
-  assert.match(html, /⚠ 표본 보통: 거래 \$\{d\.txCount\}건\$\{d\.anomalyCount>0\?` 중 이상 거래 \$\{d\.anomalyCount\}건을 빼고 \$\{d\.filteredTxCount\|\|d\.txCount\}건`:''\}으로 분석해/);
+  assert.match(html, /⚠ 표본 보통: 거래 \$\{d\.txCount\}건\$\{d\.anomalyCount>0\?` 중 동떨어진 거래 \$\{d\.anomalyCount\}건을 빼고 \$\{d\.filteredTxCount\|\|d\.txCount\}건`:''\}으로 분석해/);
   assert.doesNotMatch(html, /건 기준이라 표본이 적어 오차가 있을 수 있어요/);
 });
 

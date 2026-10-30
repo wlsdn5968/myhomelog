@@ -10494,8 +10494,8 @@ function renderAnalysis(d,p){
       <strong>⚠ 표본 부족 (${d.txCount||0}건)</strong> 신호등을 보여 드릴 수 없어요.
       거래 데이터가 ${reliability==='NONE'?'8건 미만':'25건 미만'}이면 오차 범위가 ±20% 이상이라 매수 가격을 판단하는 데 쓰기 어려워요.
     </div>`:
-    (reliability==='MED'?`<div class="ibox y" style="margin-bottom:10px;font-size:12px">⚠ 표본 보통: 거래 ${d.txCount}건${d.anomalyCount>0?` 중 이상 거래 ${d.anomalyCount}건을 빼고 ${d.filteredTxCount||d.txCount}건`:''}으로 분석해 오차가 있을 수 있어요. 참고용으로만 보세요.</div>`:
-    d.anomalyCount>0?`<div class="ibox b" style="margin-bottom:10px;font-size:12px">ℹ 이상 거래 ${d.anomalyCount}건을 빼고 분석했어요 (±30% 초과 가격)</div>`:'');
+    (reliability==='MED'?`<div class="ibox y" style="margin-bottom:10px;font-size:12px">⚠ 표본 보통: 거래 ${d.txCount}건${d.anomalyCount>0?` 중 동떨어진 거래 ${d.anomalyCount}건을 빼고 ${d.filteredTxCount||d.txCount}건`:''}으로 분석해 오차가 있을 수 있어요. 참고용으로만 보세요.</div>`:
+    d.anomalyCount>0?`<div class="ibox b" style="margin-bottom:10px;font-size:12px">ℹ 다른 거래와 동떨어진 거래 ${d.anomalyCount}건을 빼고 분석했어요. 같은 평형의 앞뒤 3개월 거래보다 20% 넘게 벗어난 거래로, 가격 그래프의 빈 원과 같은 기준이에요.</div>`:'');
 
   // ─ 시세 위치 요약 (NONE/LOW = 회색)
   // P1 D2 + Phase 2 6: 자본시장법 risk + a11y (색약 8% 보호) — 색상에만 의존 X.
@@ -10565,7 +10565,7 @@ function renderAnalysis(d,p){
         <div class="pct-pin" style="left:${pct}%"></div>
       </div>
       <div class="pct-labels"><span>최저가</span><span>중간</span><span>최고가</span></div>
-      <div class="pct-result" style="color:${pctColor}">${pctLabel}<br><span style="font-size:12px;color:var(--t3)">${rangeText}${d.anomalyCount>0?' · 이상거래 '+d.anomalyCount+'건 제외':''}</span></div>
+      <div class="pct-result" style="color:${pctColor}">${pctLabel}<br><span style="font-size:12px;color:var(--t3)">${rangeText}${d.anomalyCount>0?' · 동떨어진 거래 '+d.anomalyCount+'건 제외':''}</span></div>
     </div>`;
   }
 

@@ -7,6 +7,7 @@
  * - 실투자금 총비용 계산
  */
 const { getTransactionsByApt, getTransactionsByAptInclAliases, LAWD_CODES } = require('./transactionService');
+const { txWindowMonths } = require('../utils/txWindow');
 const { getJeonseByApt } = require('./rentService');
 const { resolveFacility } = require('./aptFacilityService');
 const { buildFacility } = require('../utils/buildFacility');
@@ -47,63 +48,10 @@ function getJeonseReliability(jeonseTxCount) {
   return 'HIGH';
 }
 
-// ── 이상 거래 필터 ────────────────────────────────────────
-// P1 (2026-04-25): MAD 기반 + 평형(전용면적) 그룹화로 정확도 ↑
-//   - 기존: 전체 거래 median ±30% 고정. 소형/대형 평형 섞이면 정상 거래도 필터.
-//   - 개선:
-//     1) 평형(3.3㎡ 단위)별 그룹화 → 같은 평형끼리만 비교
-//     2) MAD (median absolute deviation) 기반 — 분포 폭 적응형
-//     3) 표본 작으면 (5건 미만) 기존 ±30% fallback (MAD 신뢰 어려움)
-//   - 효과: 강남 단지 84㎡ + 39㎡ 혼재 시 39㎡가 outlier 로 잘못 제거되던 문제 해결.
-//          시세 ±5천만원 오판 가능성 차단 (감사 보고서 2-2).
-function filterAnomalies(transactions) {
-  if (!transactions || transactions.length < 3) {
-    return { filtered: transactions || [], anomalyCount: 0 };
-  }
-
-  // 평형별 그룹화 (3.3㎡ = 1평 기준 반올림)
-  const groups = {};
-  for (const t of transactions) {
-    // PYEONG-M2-2026-08-17 (Sprint MMMMMMM-10): 평↔㎡ 계수가 저장소 안에서 3.3 과 3.3058 로 갈려 있었다.
-    //   정확값은 1평 = 3.305785㎡ 이고, 이미 analysisService 에 _PYEONG_M2 = 3.3058 이 있었는데
-    //   다른 자리들이 어림값 3.3 을 쓰고 있었다. 3.3058 로 통일한다.
-    //   [영향 실측] 20~250㎡ 전 구간에서 반올림 결과가 갈리는 비율 7.2%. 다만 실제 대표 평형
-    //   (59.82·84.92·114.97·134.9·164.9㎡)은 **전부 동일**하고, 불일치는 21~25㎡ 같은 소형 구간에 몰린다.
-    //   ⚠ 회귀 위험: 평형 필터(15~60평) 경계에 걸린 극소수 매물이 들고날 수 있다.
-    const py = Math.round((t.excluUseAr || 0) / _PYEONG_M2);   // PYEONG-CONST-2026-09-02: 리터럴 → 상수
-    if (!groups[py]) groups[py] = [];
-    groups[py].push(t);
-  }
-
-  const allFiltered = [];
-  for (const py of Object.keys(groups)) {
-    const group = groups[py];
-    if (group.length < 3) {
-      // 표본 너무 작음 — 필터 적용 시 더 왜곡, 그대로 통과
-      allFiltered.push(...group);
-      continue;
-    }
-    const prices = group.map(t => t.dealAmount).sort((a, b) => a - b);
-    const median = prices[Math.floor(prices.length / 2)];
-    // MAD 계산
-    const deviations = prices.map(p => Math.abs(p - median)).sort((a, b) => a - b);
-    const mad = deviations[Math.floor(deviations.length / 2)];
-
-    // MAD=0 (모두 동일가) 또는 표본 5건 미만 → 기존 ±30% fallback
-    if (mad === 0 || group.length < 5) {
-      const lower = median * 0.7;
-      const upper = median * 1.3;
-      allFiltered.push(...group.filter(t => t.dealAmount >= lower && t.dealAmount <= upper));
-    } else {
-      // 표본 클수록 엄격(2.5×MAD), 작을수록 보수적(3.5×MAD)
-      const k = group.length >= 20 ? 2.5 : 3.5;
-      const threshold = mad * k;
-      allFiltered.push(...group.filter(t => Math.abs(t.dealAmount - median) <= threshold));
-    }
-  }
-
-  return { filtered: allFiltered, anomalyCount: transactions.length - allFiltered.length };
-}
+// ── 동떨어진 거래 ──────────────────────────────────────────
+// OUTLIER-ONE-RULE-2026-10-30 (Plan 174): 예전 filterAnomalies(같은 평의 표본 전체를 한 번에 MAD, 5건 미만은 ±30%)는
+//   오르는 흐름의 끝까지 걸러 단지 상세 차트(Plan 171)·비교 창(Plan 173)과 다른 거래를 뺐다. 이제 상세 분석도
+//   아래 localOutliers 하나만 쓴다(차트 frontend _pcOutliers 와 같은 규칙 — 대조 테스트 compare-outliers-same-as-chart).
 
 // OUTLIER-SAME-AS-CHART-2026-10-30 (Plan 173): 단지 상세 가격 차트(frontend/index.html _pcOutliers)와 같은 규칙.
 //   같은 평형(전용㎡/3.3058 반올림)에서 앞뒤 90일 거래(3건 미만이면 180일, 자신 빼고 3건 이상)의 중앙값으로부터
@@ -141,8 +89,8 @@ function localOutliers(transactions) {
 function calcPricePercentile(transactions, currentPrice, currentArea = null) {
   // 2026-04-25 P1 (감사 1-2): 최소 8건 (Wilson 95% CI ±20%) 확보 시만 계산.
   if (!transactions || transactions.length < 8) return null;
-  const { filtered } = filterAnomalies(transactions);
-  if (filtered.length < 8) return null;
+  // Plan 174: 입력은 호출부(analyzeApt)가 이미 동떨어진 거래를 뺀 표본이다 — 예전엔 여기서 옛 기준으로 한 번 더 걸렀다(이중 적용).
+  const filtered = transactions;
   // P1-10 (2026-05-04): 평형 기반 필터 — 84㎡ 가격을 39㎡ 분포에 비교 시 잘못된 백분위
   //   currentArea 명시 시 ±10% 평형만 사용 (다른 평형 섞임 차단)
   //   currentArea 없으면 기존 동작 (전체 분포)
@@ -561,8 +509,9 @@ function buildMonthlyVolume(transactions, monthCount = 6) {
 function _analysisCacheKey(lawdCd, aptName, sigungu, umdNm, currentPrice) {
   const p = Number(currentPrice);
   const pk = Number.isFinite(p) && p > 0 ? Math.round(p * 100) : 0;
-  return `analysis:${lawdCd}:${aptName}:${sigungu||''}:${umdNm||''}:${pk}`;
+  return `analysis:v2:${lawdCd}:${aptName}:${sigungu||''}:${umdNm||''}:${pk}`; // v2: Plan 174 동떨어진 거래 기준 변경
 }
+const _ANA_MONTHS = 6, _ANA_CONTEXT_MONTHS = 6;
 async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
   if (!lawdCd) lawdCd = '11350'; // fallback
 
@@ -575,7 +524,8 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
   try {
     [saleTx, jeonseT] = await Promise.all([
       // ALIAS-MERGE-2026-05-21: master 단지(공릉풍림아이원 등) alias 거래까지 포함 → 실거래가 탭과 표본 일치.
-      getTransactionsByAptInclAliases(lawdCd, aptName),
+      // Plan 174: 동떨어진 거래 판정은 앞뒤 최대 180일 이웃을 본다 — 분석 표본(최근 6개월) 앞 6개월을 이웃으로만 더 받는다.
+      getTransactionsByAptInclAliases(lawdCd, aptName, _ANA_MONTHS + _ANA_CONTEXT_MONTHS),
       getJeonseByApt(lawdCd, aptName).catch(() => []),
     ]);
   } catch (err) {
@@ -607,6 +557,10 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
     saleTx = saleTx.filter(_scope);
     jeonseT = jeonseT.filter(_scope);
   }
+  // Plan 174: 판정은 이웃 포함 전체로, 분석 표본은 예전과 같은 최근 6개월(txWindowMonths(6), 한국 시간 기준 달)로 자른다.
+  const _outliers = localOutliers(saleTx);
+  const _anaYm = new Set(txWindowMonths(_ANA_MONTHS));
+  saleTx = saleTx.filter(t => _anaYm.has(`${t.dealYear}${String(t.dealMonth || 0).padStart(2, '0')}`));
 
   // JEONSE-PURE-2026-07-15 (Sprint MMMMM): 전세가율 기준을 보고서(report.js)와 통일 — 순수 전세만.
   //   getJeonseByApt 는 반전세를 환산보증금으로 포함하지만, 소액 보증금 월세가 평균/중위를 끌어내려
@@ -621,8 +575,9 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
   // 가격 단위: currentPrice=억 → 만원 변환
   const priceW = (currentPrice || 0) * 10000;
 
-  // 이상거래 필터 (±30%)
-  const { filtered: filteredTx, anomalyCount } = filterAnomalies(saleTx);
+  // 동떨어진 거래 제외 — 단지 상세 가격 그래프의 빈 원과 같은 기준(Plan 174)
+  const filteredTx = saleTx.filter(t => !_outliers.has(t));
+  const anomalyCount = saleTx.length - filteredTx.length;
 
   // 신뢰도가 NONE이면 백분위·신호 계산 불가
   const percentileObj = reliability !== 'NONE' ? calcPricePercentile(filteredTx, priceW) : null;
@@ -885,5 +840,5 @@ async function compareBatch(apts, opts = {}) {
 module.exports = {
   analyzeApt, calcTotalCost, getLawdCdFromArea, compareBatch,
   // 테스트·디버그 용 — 외부 호출 금지
-  _internals: { analysisCacheKey: _analysisCacheKey, calcBuySignal, calcVolumeSignal, calcPricePercentile, filterAnomalies, detectSeasonalBias, getDataReliability, calcGap, compareOne: _compareOne, cmpMonths: _cmpMonths, cmpSeries: _cmpSeries, cmpNear: _cmpNear, computeJeonseBasisDesc, localOutliers },
+  _internals: { analysisCacheKey: _analysisCacheKey, calcBuySignal, calcVolumeSignal, calcPricePercentile, detectSeasonalBias, getDataReliability, calcGap, compareOne: _compareOne, cmpMonths: _cmpMonths, cmpSeries: _cmpSeries, cmpNear: _cmpNear, computeJeonseBasisDesc, localOutliers },
 };

@@ -63,7 +63,11 @@ test('평↔㎡ 환산 계수가 저장소 전체에서 하나다 (Sprint MMMMMM
   }
   // 정확 계수가 실제로 쓰이고 있는지(전부 지워지는 사고 방지)
   const ana = fs.readFileSync(path.join(__dirname, '../services/analysisService.js'), 'utf8');
-  assert.ok(ana.includes('_PYEONG_M2 = 3.3058'), '기준 상수가 사라졌다');
+  // Plan 174(2026-10-30): 예전엔 이 문자열이 filterAnomalies 안 설명 주석에만 남아 있었다(함수 제거로 사라짐).
+  //   실제 출처(utils/pyeong.js)와 analysisService 의 가져오기를 직접 본다.
+  const pyeong = fs.readFileSync(path.join(__dirname, '../utils/pyeong.js'), 'utf8');
+  assert.ok(pyeong.includes('const PYEONG_M2 = 3.3058;'), '기준 상수가 사라졌다');
+  assert.ok(ana.includes("const { PYEONG_M2: _PYEONG_M2 } = require('../utils/pyeong');"), 'analysisService 가 기준 상수를 가져오지 않는다');
   // PYEONG-CONST-2026-09-02: 리터럴 나눗셈(`/ 3.3058`)을 상수(`/ _PYEONG_M2`)로 바꿨다.
   //   이 단언의 의도는 '계수가 실제로 쓰이는가'(전부 지워지는 사고 방지)이므로, 리터럴이 아니라
   //   **상수를 쓰는 나눗셈이 존재하는가**로 확인한다.

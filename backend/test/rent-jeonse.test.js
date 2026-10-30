@@ -628,7 +628,7 @@ test('WIRE-JEONSE-SAMPLE-2026-09-06: analyzeApt 가 전세 표본 결측(_jTotal
   saved.set(asPath, require.cache[asPath]);
   delete require.cache[asPath]; // analysisService 자신은 다시 읽어 위 스텁을 보게 한다
 
-  cache.del('analysis:11350:배선단지:::600'); // 이전 실행의 캐시가 남아있으면 픽스처가 무시된다
+  cache.del('analysis:v2:11350:배선단지:::600'); // 이전 실행의 캐시가 남아있으면 픽스처가 무시된다
 
   try {
     const { analyzeApt } = require(asPath);
