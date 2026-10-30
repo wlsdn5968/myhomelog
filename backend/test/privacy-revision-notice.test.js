@@ -33,3 +33,11 @@ test('예고의 "현행" 문구는 본문에 그대로 있다(본문은 시행�
     assert.ok(body.includes(cur), `본문에 ${cur}`);
   }
 });
+
+// SENTRY-RETENTION-2026-10-30: 요금제(Developer) 확인 뒤 보유 기간 90일→30일을 예고에 추가 — 본문은 시행일 전까지 90일 유지
+test('Sentry 보유·이용 기간 정정이 예고에 있고(90일→30일), 본문은 시행일 전까지 현행(90일)', () => {
+  assert.match(notice, /<td>5\. 처리 위탁: Sentry 보유 기간<\/td><td>90일<\/td><td>30일<\/td>/);
+  assert.match(notice, /<td>6\. 국외이전: Sentry 이용 기간<\/td><td>90일<\/td><td>30일<\/td>/);
+  assert.ok(notice.includes('2026년 10월 30일 추가 게시'));
+  assert.match(body, /\(Sentry, 미국\)<\/td><td>오류 모니터링 \(PII 마스킹 적용\)<\/td><td>90일<\/td>/);
+});
