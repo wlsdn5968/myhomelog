@@ -19,8 +19,10 @@ test('별칭 v8: 빈 이름 제외·단지/차 번호 포함 관계·손 보정�
   assert.match(sql, /REVOKE ALL ON public\.apt_alias_overrides FROM anon, authenticated;/);
   assert.doesNotMatch(sql, /coalesce\(agg\.aliases, '\[\]'::jsonb\)/, '규칙 결과에 없는 단지의 별칭을 통째로 비우면 정상 연결 176개가 지워진다(실측)');
   const schema = read('../../supabase/schema.sql');
-  const last = schema.lastIndexOf('CREATE OR REPLACE FUNCTION public.refresh_molit_aliases()');
-  assert.ok(schema.indexOf('apt_alias_overrides', last) > last, '기준 스키마의 마지막 별칭 함수가 v8(보정표 적용)이어야 한다 — 옛 판으로 복구되면 다시 되돌아간다');
+  // Plan 177: 마지막 별칭 함수는 v9 본체(_refresh_molit_aliases_core)를 부르는 껍데기 — 보정표 적용은 본체 안에 있다.
+  const last = schema.lastIndexOf('CREATE OR REPLACE FUNCTION public._refresh_molit_aliases_core(');
+  assert.ok(last > 0 && schema.indexOf('apt_alias_overrides', last) > last,
+    '기준 스키마의 마지막 별칭 본체가 보정표를 적용해야 한다 — 옛 판으로 복구되면 다시 되돌아간다');
   assert.match(schema, /CREATE OR REPLACE FUNCTION public\.geocache_in_bounds/);
 });
 

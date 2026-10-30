@@ -36,6 +36,15 @@ let _diagLogged = false; // 한 번만 진단 로그 (전체 backfill 동안)
 //   있어, 뒤이어 도는 별칭 RPC 가 함수 전체 maxDuration(300s) 잔여 예산을 통째로 먹으면 안 된다.
 //   cron.js 의 MV_REFRESH_ABORT_MS 와 같은 상한 규약을 그대로 적용한다.
 const ALIAS_REFRESH_ABORT_MS = 30000;
+// ALIAS-BUDGET-2026-10-30 (Plan 177): 별칭 함수는 실측 35~102초(v8 이전 포함)라 30초 끊기에 늘 걸렸다(DB 는 완료 — 기록만 실패).
+//   v9 로 11~17초가 됐고, 여기서는 함수 전체 한도(300s) 안에서 남은 시간을 주되 120초를 넘기지 않는다.
+//   지역 루프가 마감(250s)까지 썼으면 남은 시간만 준다(300s 넘김 방지).
+const ALIAS_REFRESH_MAX_MS = 120000;
+const FUNCTION_BUDGET_MS = 295000;
+function aliasRefreshAbortMs(elapsedMs) {
+  const left = FUNCTION_BUDGET_MS - elapsedMs;
+  return Math.max(5000, Math.min(ALIAS_REFRESH_MAX_MS, left));
+}
 
 // PACER-2026-08-30 (Sprint OOOOOOO): **워커 공용 페이서.**
 //   [무엇이 있었나] 동시성 5 로 KAPT 를 때리자 릴레이가 `upstream HTTP 429` 를 뱉어
@@ -334,7 +343,7 @@ async function runAptMasterSync() {
   try {
     const { data: _aliasData, error: _aliasErr } = await admin
       .rpc('refresh_molit_aliases')
-      .abortSignal(AbortSignal.timeout(ALIAS_REFRESH_ABORT_MS));
+      .abortSignal(AbortSignal.timeout(aliasRefreshAbortMs(Date.now() - started)));
     if (_aliasErr) _aliasRefreshError = _aliasErr.message;
     else _aliasRefreshed = _aliasData;
   } catch (e) { _aliasRefreshError = e.message; }
