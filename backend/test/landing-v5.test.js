@@ -96,8 +96,8 @@ test('QA 10-27: 브리핑 동기화 날짜는 한국 날짜 · 목록 개수는 
 test('QA 10-27: 지역 페이지는 정식 단지명 · 서버 페이지 라벨 한글 · 지도 팝업은 사실(180일 건수·평균)', () => {
   const rp = fs.readFileSync(path.join(__dirname, '../routes/regionPage.js'), 'utf8');
   assert.match(rp, /getAliasCanonicalMap\(\[region\.lawdCd\]\)/);
-  assert.match(rp, /esc\(showName\(it\.aptName, it\.umdNm\)\)/);
-  assert.match(rp, /esc\(showName\(a\.apt_name, a\.umd_nm\)\)/);
+  assert.match(rp, /esc\(showName\(it\.aptName, it\.umdNm, it\.buildYear\)\)/); // Plan 178: 연도 별칭
+  assert.match(rp, /esc\(showName\(a\.apt_name, a\.umd_nm, a\.build_year\)\)/);
   for (const f of ['aptPage', 'regionPage', 'briefing', 'dataSources']) {
     assert.doesNotMatch(fs.readFileSync(path.join(__dirname, `../routes/${f}.js`), 'utf8'), /MYHOMELOG [A-Z]+/, `${f} 영문 라벨`);
   }

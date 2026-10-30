@@ -132,12 +132,12 @@ async function buildPopularResults(limit = 12, opts = {}) {
   //   별칭 조회가 실패하면 예전처럼 신고 이름 그대로(지어내지 않는다).
   try {
     // 지연 로딩 — 이 모듈을 불러오는 테스트들이 DB 클라이언트를 바꿔 끼우는데, 위에서 불러오면 그 전에 거래 서비스가 실제 클라이언트를 잡는다
-    const { getAliasCanonicalMapEach } = require('./transactionService');
+    const { getAliasCanonicalMapEach, aliasCanon } = require('./transactionService');
     const _amap = await getAliasCanonicalMapEach(top.map(t => t.lawd_cd));
     if (_amap.size) {
       const merged = new Map();
       for (const t of [...top].sort((a, b) => b.count - a.count)) {
-        const canon = _amap.get(`${t.apt_name}|${t.umd_nm}`) || null;
+        const canon = aliasCanon(_amap, t.apt_name, t.umd_nm, t.build_year); // ALIAS-YEAR-2026-10-30 (Plan 178): 연도 별칭은 그 준공 연도 행만
         const k = canon ? `K|${canon}|${t.sigungu}|${t.umd_nm}` : `R|${t.apt_name}|${t.sigungu}|${t.umd_nm}`;
         const g = merged.get(k);
         if (!g) { merged.set(k, { ...t, _canon: canon }); continue; }

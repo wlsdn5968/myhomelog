@@ -12,7 +12,7 @@
  *   이름 매칭은 NAMEFIX 공용 유틸(normalizeAptName) + molit_aliases canonical — 검색/추천과 동일 semantics.
  */
 const logger = require('../logger');
-const { getAliasCanonicalMap } = require('../services/transactionService');
+const { getAliasCanonicalMap, aliasCanon } = require('../services/transactionService');
 const { normalizeAptName } = require('../utils/aptName');
 const { isKakaoConfigured, sendKakaoMemo, refreshKakaoToken } = require('../services/kakaoMemoService');
 // SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리 (null-게이트 의미 유지)
@@ -64,7 +64,7 @@ function matchItems(rawItems, rows, aliasMap, since) {
   const perItem = new Map();
   for (const r of rows) {
     if (new Date(r.ingested_at) <= since) continue;
-    const canon = aliasMap.get(`${r.apt_name}|${r.umd_nm || ''}`) || r.apt_name;
+    const canon = aliasCanon(aliasMap, r.apt_name, r.umd_nm, r.build_year) || r.apt_name; // ALIAS-YEAR-2026-10-30 (Plan 178): 연도 별칭은 그 준공 연도 행만
     for (const it of items) {
       if (it.lawdCd !== r.lawd_cd) continue;
       if (nn(canon) !== nn(it.aptName) && nn(r.apt_name) !== nn(it.aptName)) continue;
@@ -129,7 +129,7 @@ async function markNewHighs(admin, rows, subs, aliasMap) {
   for (const s of subs) for (const it of (s.items || [])) if (it && it.off !== true) want.add(`${nn(it.aptName)}|${it.lawdCd}`);
   const cands = rows.filter(r => {
     if (!r.apt_seq || !(Number(r.exclu_use_ar) > 0) || !(Number(r.deal_amount) > 0)) return false;
-    const canon = aliasMap.get(`${r.apt_name}|${r.umd_nm || ''}`) || r.apt_name;
+    const canon = aliasCanon(aliasMap, r.apt_name, r.umd_nm, r.build_year) || r.apt_name;
     return want.has(`${nn(canon)}|${r.lawd_cd}`) || want.has(`${nn(r.apt_name)}|${r.lawd_cd}`);
   }).slice(0, RECORD_CHECK_CAP);
   let marked = 0;
@@ -196,7 +196,7 @@ async function run() {
   for (let from = 0; from <= ROW_CAP - 1000; from += 1000) {
     const { data: page, error } = await admin
       .from('molit_transactions')
-      .select('apt_name, sigungu, umd_nm, lawd_cd, deal_date, deal_amount, exclu_use_ar, ingested_at, apt_seq')
+      .select('apt_name, sigungu, umd_nm, lawd_cd, deal_date, deal_amount, exclu_use_ar, ingested_at, apt_seq, build_year')
       .in('lawd_cd', lawds)
       .gte('ingested_at', minSince)
       .order('ingested_at', { ascending: false })

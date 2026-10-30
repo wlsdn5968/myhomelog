@@ -60,7 +60,7 @@ const { normalizeName, splitRegionName } = require('../utils/aptNameMatch');
 const { buildPopularResults, readPopularSnapshot, storePopularSnapshot, popularWindow } = require('../services/popularService');
 const { buildFacility } = require('../utils/buildFacility');
 
-const { getAliasCanonicalMapEach } = require('../services/transactionService');
+const { getAliasCanonicalMapEach, aliasCanon, parseAlias } = require('../services/transactionService');
 const router = express.Router();
 
 const ALLOWED_TYPES = new Set(['recommend', 'address', 'kapt', 'keyword']);
@@ -515,7 +515,7 @@ router.get('/apt', async (req, res) => {
     try { _canonMap = await getAliasCanonicalMapEach(molitRows.map(r => r.lawd_cd)); } catch (_) { _canonMap = new Map(); }
     const aptMap = new Map(); // mergeKey → group state
     for (const row of molitRows) {
-      const _canon = _canonMap.get(`${row.apt_name}|${row.umd_nm}`) || null;
+      const _canon = aliasCanon(_canonMap, row.apt_name, row.umd_nm, row.build_year); // ALIAS-YEAR-2026-10-30: 연도 별칭은 그 준공 연도 행만
       const base = _canon || baseAptName(row.apt_name) || normalizeAptName(row.apt_name) || row.apt_name;
       const mergeKey = _canon ? `${base}|${row.sigungu}|${row.umd_nm}|K` : `${base}|${row.sigungu}|${row.umd_nm}|${row.build_year || ''}`;
       // SEARCH-MV-2026-08-16: 종전의 상수 1 을 `row._w`(그 행이 대표하는 거래 건수)로 대체.
@@ -1005,12 +1005,17 @@ router.get('/in-bounds', async (req, res) => {
     };
     const [txs, _masters] = await Promise.all([_fetchTxs(), _fetchMasters()]);
     const aptStats = {};
+    const aptStatsY = {};
     for (const t of (txs || [])) {
       // (apt_name|sigungu|umd_nm) 정확 키 — 동명 타지역 단지 합산 차단
       const _k = `${t.apt_name}|${t.sigungu}|${t.umd_nm}`;
       if (!aptStats[_k]) aptStats[_k] = { sum: 0, n: 0, buildYear: t.build_year, lawdCd: t.lawd_cd };
       aptStats[_k].sum += t.deal_amount || 0;
       aptStats[_k].n++;
+      const _ky = `${_k}|${Number(t.build_year) || 0}`; // ALIAS-YEAR-2026-10-30: 연도 별칭 단지용 준공 연도별 집계
+      if (!aptStatsY[_ky]) aptStatsY[_ky] = { sum: 0, n: 0, buildYear: t.build_year, lawdCd: t.lawd_cd };
+      aptStatsY[_ky].sum += t.deal_amount || 0;
+      aptStatsY[_ky].n++;
     }
 
     // ALIAS-MERGE-2026-05-21 (운영자 발견 "검색 vs 지도 영역보기 매물 불일치"):
@@ -1021,12 +1026,18 @@ router.get('/in-bounds', async (req, res) => {
     //   master 단지는 source:'master' + aptSeq(kaptCode) 부여 → frontend 가 검색과 동일한 상세 모달 fetch 가능.
     //   (umds 는 위 CROSS-REGION-FIX 에서 이미 계산 — 재사용)
     const aliasToMaster = {}; // key: `${alias}|${umd}` → master row
+    const aliasYearToMaster = {}; // key: `${신고 이름}|${umd}` → [{ year, m }] (연도 별칭)
     // PARALLEL-BLOCKS-2026-08-17 (Plan 030): 조회 자체는 위 `_fetchMasters` 가 거래 조회와 병렬로
     //   이미 끝냈다. 여기 남은 것은 순수 계산(역매핑 조립)뿐이다. `umds.length` 게이트는
     //   `_fetchMasters` 안으로 옮겼고, 비면 빈 배열이라 이 루프가 안 돈다 — 동작 동일.
     for (const m of (_masters || [])) {
       const al = Array.isArray(m.molit_aliases) ? m.molit_aliases : [];
-      for (const a of al) aliasToMaster[`${a}|${m.umd_nm}`] = m;
+      for (const a of al) {
+        // ALIAS-YEAR-2026-10-30 (Plan 178): "이름#연도" 별칭은 그 준공 연도 거래만 이 공식 단지로(한 신고 이름에 단지 둘 — 능곡동 우남퍼스트빌).
+        const p = parseAlias(a);
+        if (p.year) (aliasYearToMaster[`${p.name}|${m.umd_nm}`] = aliasYearToMaster[`${p.name}|${m.umd_nm}`] || []).push({ year: p.year, m });
+        else aliasToMaster[`${a}|${m.umd_nm}`] = m;
+      }
     }
 
     // CANON-COORD-FIX-2026-06-03 (운영자 발견 "공릉풍림아이원 마커가 단지 아닌 충전소 위치에 찍힘"):
@@ -1036,7 +1047,8 @@ router.get('/in-bounds', async (req, res) => {
     const kaptCoord = {}; // kaptCode → {lat,lng} (본체 좌표)
     // PIN-ORDER-2026-10-30 (Plan 176 C): 본체 좌표는 영역 조회 결과에 우연히 섞여 있을 때만 쓰였다 — 이제 이 영역 핀이 속한
     //   공식 단지(별칭으로 찾은 것)의 kapt: 키를 직접 읽는다(손으로 고친 manual 좌표도 그대로 읽힌다, kakao-x 만 제외).
-    const _kaptKeys = [...new Set(coords.map(c => aliasToMaster[`${c.apt_name}|${c.umd_nm}`]).filter(m => m && m.kapt_code).map(m => `kapt:${m.kapt_code}`))];
+    const _kaptKeys = [...new Set(coords.flatMap(c => [aliasToMaster[`${c.apt_name}|${c.umd_nm}`], ...(aliasYearToMaster[`${c.apt_name}|${c.umd_nm}`] || []).map(x => x.m)])
+      .filter(m => m && m.kapt_code).map(m => `kapt:${m.kapt_code}`))];
     for (let _ki = 0; _ki < _kaptKeys.length; _ki += 200) {
       const { data: _kr } = await admin.from('apt_geocache').select('apt_key, lat, lng, source')
         .in('apt_key', _kaptKeys.slice(_ki, _ki + 200));
@@ -1058,8 +1070,7 @@ router.get('/in-bounds', async (req, res) => {
     //   avgPrice 0.00억 으로 노출되어 사용자 오인 → 결과에서 제외 (legal 보호)
     // ALIAS-MERGE-2026-05-21: canonical 단지명 기준으로 그룹화 (alias 거래 합산).
     const groups = {};
-    for (const c of coords) {
-      const master = aliasToMaster[`${c.apt_name}|${c.umd_nm}`] || null;
+    const _addCoord = (c, master, s, seenName) => {
       const canonName = master ? master.apt_name : c.apt_name;
       const gkey = `${canonName}|${c.umd_nm}`;
       if (!groups[gkey]) groups[gkey] = {
@@ -1074,9 +1085,7 @@ router.get('/in-bounds', async (req, res) => {
       };
       const g = groups[gkey];
       if (!g._seen) g._seen = new Set();
-      g._seen.add(c.apt_name);
-      // CROSS-REGION-FIX-2026-06-03: 정확 키(name|sigungu|umd)로 조회 — 동명 타지역 stats 상속 차단
-      const s = aptStats[`${c.apt_name}|${c.sigungu}|${c.umd_nm}`];
+      g._seen.add(seenName);
       if (s && s.n && s.sum) {
         g.sum += s.sum; g.n += s.n;
         if (!g.buildYear) g.buildYear = s.buildYear;
@@ -1088,6 +1097,24 @@ router.get('/in-bounds', async (req, res) => {
           g._bestRank = _rank; g._bestN = s.n; g.lat = Number(c.lat); g.lng = Number(c.lng);
         }
       }
+    };
+    for (const c of coords) {
+      // ALIAS-YEAR-2026-10-30 (Plan 178): 연도 별칭 이름은 준공 연도별로 나눠 각 공식 단지에 붙인다. 연도 별칭에 없는 연도의 거래는 신고 이름 그대로.
+      const _ys = aliasYearToMaster[`${c.apt_name}|${c.umd_nm}`];
+      if (_ys && _ys.length) {
+        const _pre = `${c.apt_name}|${c.sigungu}|${c.umd_nm}|`;
+        for (const [k, st] of Object.entries(aptStatsY)) {
+          if (!k.startsWith(_pre)) continue;
+          const y = Number(k.slice(_pre.length)) || 0;
+          const hit = _ys.find(x => x.year === y);
+          _addCoord(c, hit ? hit.m : null, st, hit ? `${c.apt_name}#${y}` : c.apt_name);
+        }
+        for (const x of _ys) _addCoord(c, x.m, null, `${c.apt_name}#${x.year}`); // 이 영역 거래가 없는 연도도 그룹은 만든다(아래 누락 별칭 합산 대상)
+        continue;
+      }
+      const master = aliasToMaster[`${c.apt_name}|${c.umd_nm}`] || null;
+      // CROSS-REGION-FIX-2026-06-03: 정확 키(name|sigungu|umd)로 조회 — 동명 타지역 stats 상속 차단
+      _addCoord(c, master, aptStats[`${c.apt_name}|${c.sigungu}|${c.umd_nm}`], c.apt_name);
     }
     // ALIAS-STATS-2026-10-30 (Plan 176 C 후속, 운영 실측): 거래 많은 순으로 좌표를 고르면 한 공식 단지의 별칭 중 거래가 적은
     //   신고 이름(풍림아파트B)의 좌표 행이 영역 결과 밖으로 밀려, 그 거래가 핀 집계에서 빠졌다(공릉풍림아이원 넓은 영역 30건 vs
@@ -1100,7 +1127,7 @@ router.get('/in-bounds', async (req, res) => {
       for (const a of (_masterByKapt[g.aptSeq].molit_aliases || [])) if (!g._seen.has(a)) _missing.push([g, a]);
     }
     if (_missing.length) {
-      const _mNames = [...new Set(_missing.map(x => x[1]))];
+      const _mNames = [...new Set(_missing.map(x => parseAlias(x[1]).name))];
       const _mUmds = [...new Set(_missing.map(x => x[0].umdNm).filter(Boolean))];
       const _mStats = {};
       for (let _from = 0; _from <= 4000; _from += 1000) {
@@ -1109,14 +1136,16 @@ router.get('/in-bounds', async (req, res) => {
         const { data: _page, error: _me } = await _q.gte('deal_date', _cut180).order('id', { ascending: false }).range(_from, _from + 999);
         if (_me) throw _me;
         for (const t of (_page || [])) {
-          const _k = `${t.apt_name}|${t.umd_nm}`;
-          if (!_mStats[_k]) _mStats[_k] = { sum: 0, n: 0, sigungu: t.sigungu, buildYear: t.build_year, lawdCd: t.lawd_cd };
-          _mStats[_k].sum += t.deal_amount || 0; _mStats[_k].n++;
+          for (const _k of [`${t.apt_name}|${t.umd_nm}`, `${t.apt_name}|${t.umd_nm}|${Number(t.build_year) || 0}`]) { // ALIAS-YEAR-2026-10-30: 연도별 키도
+            if (!_mStats[_k]) _mStats[_k] = { sum: 0, n: 0, sigungu: t.sigungu, buildYear: t.build_year, lawdCd: t.lawd_cd };
+            _mStats[_k].sum += t.deal_amount || 0; _mStats[_k].n++;
+          }
         }
         if (!_page || _page.length < 1000) break;
       }
       for (const [g, a] of _missing) {
-        const st = _mStats[`${a}|${g.umdNm}`];
+        const _pa = parseAlias(a);
+        const st = _mStats[_pa.year ? `${_pa.name}|${g.umdNm}|${_pa.year}` : `${a}|${g.umdNm}`];
         if (!st || (g.sigungu && st.sigungu && st.sigungu !== g.sigungu)) continue; // 같은 시군구만(동명 타지역 차단)
         g.sum += st.sum; g.n += st.n; g._seen.add(a);
         if (!g.buildYear) g.buildYear = st.buildYear;

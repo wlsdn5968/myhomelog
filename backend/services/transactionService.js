@@ -590,6 +590,22 @@ async function getTransactionsByApt(lawdCd, aptName, monthsBack = 6) {
 // (a) 단일 단지: canonical + alias 거래 fetch + 병합 (analysisService 가격시그널용)
 //   COMPARE-12MO-2026-06-21: monthsBack 패스스루 (단지 비교 12개월). 미전달 시 6개월(회귀 0).
 const _nsp = (s) => String(s || '').replace(/\s+/g, '');
+// ALIAS-YEAR-2026-10-30 (Plan 178): 국토부 신고 이름 하나에 준공 연도가 다른 공식 단지 둘이 섞인 경우(시흥 능곡동 "우남퍼스트빌" =
+//   1차 2008년 802번지 + 2차 2011년 493번지, 전국 1건 실측)는 별칭을 "이름#연도" 로 적는다(손 보정표 apt_alias_overrides).
+//   연도를 아는 곳은 그 연도 거래만 그 공식 단지로 묶고, 모르는 곳은 이 별칭이 맞지 않아 신고 이름 그대로 보인다(잘못 묶지 않는다).
+//   실제 신고 이름의 '#' 은 "평택the#" 1건뿐이라 끝이 '#'+숫자 네 자리인 것만 연도로 읽는다.
+const ALIAS_YEAR_RE = /^(.+)#(\d{4})$/;
+function parseAlias(a) {
+  const s = String(a || '');
+  const m = ALIAS_YEAR_RE.exec(s);
+  return m ? { name: m[1], year: Number(m[2]) } : { name: s, year: null };
+}
+// 별칭 대응표 조회: 연도 별칭(이름|동|연도)을 먼저, 없으면 이름|동. 없으면 null.
+function aliasCanon(map, name, umd, year) {
+  if (!map || !name) return null;
+  const y = Number(year) || 0;
+  return (y ? map.get(`${name}|${umd || ''}|${y}`) : undefined) || map.get(`${name}|${umd || ''}`) || null;
+}
 function _filterExactAlias(arr, alias) { const k = _nsp(alias); return (Array.isArray(arr) ? arr : []).filter(t => _nsp(t && t.aptName) === k); }
 
 // ALIAS-SORT-2026-10-29 (운영 실측): 별칭별 배열을 이어 붙이기만 해 "A 전부 → B 전부" 순서였다. 화면은 앞 30건만 써서
@@ -626,10 +642,17 @@ async function getTransactionsByAptInclAliases(lawdCd, aptName, monthsBack = 6) 
     //   같은 구 다른 동의 "주공7"(중계동·1993) 거래를 함께 돌려줬다(6개월 89건 중 14건). 별칭은 신고 원본 이름 그대로라
     //   **정확히 같은 이름**의 거래만 남긴다.
     const aliasArrays = await Promise.all(
-      aliases.slice(0, 5).map(a => getTransactionsByApt(lawdCd, a, monthsBack).then(arr => _filterExactAlias(arr, a)).catch(() => []))
+      aliases.slice(0, 5).map(a => {
+        const p = parseAlias(a); // ALIAS-YEAR-2026-10-30: "이름#연도" 는 그 이름의 그 준공 연도 거래만
+        return getTransactionsByApt(lawdCd, p.name, monthsBack)
+          .then(arr => _filterExactAlias(arr, p.name).filter(t => !p.year || Number(t.buildYear) === p.year)).catch(() => []);
+      })
     );
     const merged = _mergeAliasTx(aliasArrays);
-    return merged.length ? merged : base; // alias 거래 0건이면 base fallback
+    if (merged.length) return merged;
+    // alias 거래 0건이면 base fallback. ALIAS-YEAR-2026-10-30: 연도 별칭의 이름과 같은 이름인데 연도가 다른 거래(다른 공식 단지)는 뺀다.
+    const _yr = aliases.map(parseAlias).filter(p => p.year);
+    return _yr.length ? base.filter(t => !_yr.some(p => _nsp(t.aptName) === _nsp(p.name)) || _yr.some(p => _nsp(t.aptName) === _nsp(p.name) && Number(t.buildYear) === p.year)) : base;
   } catch (e) {
     logger.warn({ err: e.message, lawdCd, aptName }, 'getTransactionsByAptInclAliases alias 병합 실패 — base 반환');
     return base;
@@ -683,7 +706,10 @@ async function getAliasCanonicalMap(lawdCds) {
       if (!data || !data.length) break;
       for (const r of data) {
         const al = Array.isArray(r.molit_aliases) ? r.molit_aliases : [];
-        for (const a of al) map.set(`${a}|${r.umd_nm || ''}`, r.apt_name);
+        for (const a of al) {
+          const p = parseAlias(a); // ALIAS-YEAR-2026-10-30: 연도 별칭은 이름|동|연도 키로만(aliasCanon 으로 읽는다)
+          map.set(p.year ? `${p.name}|${r.umd_nm || ''}|${p.year}` : `${a}|${r.umd_nm || ''}`, r.apt_name);
+        }
       }
       if (data.length < PAGE) break;   // 마지막 페이지 — 통상 추천 경로(1~3지역)는 여기서 1회 종료
     }
@@ -1038,4 +1064,4 @@ async function getTransactionsByAptSeqMerged(aptSeq, monthsBack = 24) {
   });
 }
 
-module.exports = { _filterExactAlias, _mergeAliasTx, getTransactions, getTransactionsFromHist, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, getAliasCanonicalMapEach, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };
+module.exports = { parseAlias, aliasCanon, _filterExactAlias, _mergeAliasTx, getTransactions, getTransactionsFromHist, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, getAliasCanonicalMapEach, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };

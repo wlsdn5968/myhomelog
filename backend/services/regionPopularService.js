@@ -14,7 +14,7 @@
  */
 const logger = require('../logger');
 const { getSupabaseAdmin } = require('../db/client');
-const { LAWD_CODES, RETIRED_LAWD_CODES, getAliasCanonicalMap } = require('./transactionService');
+const { LAWD_CODES, RETIRED_LAWD_CODES, getAliasCanonicalMap, aliasCanon } = require('./transactionService');
 const { regionLabel } = require('./priceRecordsService');
 const { isUnnamedApt, displayAptName } = require('../utils/aptDisplayName');
 const { isValidKoreaCoord } = require('../utils/geo');
@@ -75,13 +75,13 @@ function jibunAliases(rows, aliasMap) {
   const anchor = new Map();   // umd|jibun → { canon, year }
   for (const t of rows) {
     if (!t.jibun) continue;
-    const canon = aliasMap.get(`${t.apt_name}|${t.umd_nm || ''}`);
+    const canon = aliasCanon(aliasMap, t.apt_name, t.umd_nm, t.build_year); // ALIAS-YEAR-2026-10-30 (Plan 178): 연도 별칭은 그 준공 연도 행만
     if (canon) anchor.set(`${t.umd_nm || ''}|${t.jibun}`, { canon, year: Number(t.build_year) || 0 });
   }
   const out = new Map();      // apt_name|umd → canon
   for (const t of rows) {
     const k = `${t.apt_name}|${t.umd_nm || ''}`;
-    if (!t.jibun || aliasMap.has(k) || out.has(k)) continue;
+    if (!t.jibun || aliasCanon(aliasMap, t.apt_name, t.umd_nm, t.build_year) || out.has(k)) continue;
     const a = anchor.get(`${t.umd_nm || ''}|${t.jibun}`);
     if (!a || Math.abs((Number(t.build_year) || 0) - a.year) > 1) continue;
     const raw = _mergeCore(_cleanName(t.apt_name)), canonC = _mergeCore(a.canon);
@@ -96,7 +96,7 @@ function rankLawd(rows, aliasMap, n = TOP_N) {
   for (const t of rows) {
     const raw = _cleanName(t.apt_name);
     if (!raw) continue;
-    const canon = aliasMap.get(`${t.apt_name}|${t.umd_nm || ''}`) || jAlias.get(`${t.apt_name}|${t.umd_nm || ''}`) || raw;
+    const canon = aliasCanon(aliasMap, t.apt_name, t.umd_nm, t.build_year) || jAlias.get(`${t.apt_name}|${t.umd_nm || ''}`) || raw;
     const k = `${canon}|${t.umd_nm || ''}`;
     let e = g.get(k);
     if (!e) {

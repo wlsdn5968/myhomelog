@@ -1477,7 +1477,7 @@ async function fetchCandidateApts(admin, input, limit) {
   // 단지 그룹화 + build_year mode + 신고가 갱신 카운트
   const byApt = {};
   for (const t of txList) {
-    const _canon = _aliasMap.get(`${t.apt_name}|${t.umd_nm}`) || t.apt_name;
+    const _canon = require('../services/transactionService').aliasCanon(_aliasMap, t.apt_name, t.umd_nm, t.build_year) || t.apt_name; // ALIAS-YEAR-2026-10-30 (Plan 178): 연도 별칭은 그 준공 연도 행만
     // SAME-DONG-SPLIT-2026-08-30: 추천 경로(transactionService.analyzeTransactions)와 **같은 정책**.
     //   이름+동이 같아도 준공년도가 다르면 다른 단지다(실측 20그룹·204거래).
     const key = `${_canon}|${t.sigungu}|${t.umd_nm}|${t.build_year || ''}`;
@@ -1740,7 +1740,7 @@ async function fetchCandidateApts(admin, input, limit) {
       for (let from = 0; from <= 9000; from += _PAGE) {
         let qq = admin.from('molit_transactions')
           // PEAK-FLOOR-2026-08-31: 층을 함께 받는다 — 같은 평형이어도 층에 따라 값이 갈린다.
-          .select('apt_name, sigungu, umd_nm, exclu_use_ar, deal_amount, deal_date, floor')
+          .select('apt_name, sigungu, umd_nm, exclu_use_ar, deal_amount, deal_date, floor, build_year')
           .in('apt_name', _names)
           .gte('exclu_use_ar', minSqm).lte('exclu_use_ar', maxSqm)
           .gte('deal_date', _sinceDate);
@@ -1754,7 +1754,7 @@ async function fetchCandidateApts(admin, input, limit) {
       // 후보 키(별칭 반영) → 면적별 버킷
       const _byKey = new Map();
       for (const t of _rows) {
-        const canon = _aliasMap.get(`${t.apt_name}|${t.umd_nm}`) || t.apt_name;
+        const canon = require('../services/transactionService').aliasCanon(_aliasMap, t.apt_name, t.umd_nm, t.build_year) || t.apt_name; // ALIAS-YEAR-2026-10-30 (Plan 178): 연도 별칭은 그 준공 연도 행만
         const k = `${canon}|${t.sigungu}|${t.umd_nm}`;
         if (!_byKey.has(k)) _byKey.set(k, new Map());
         const bySqm = _byKey.get(k);

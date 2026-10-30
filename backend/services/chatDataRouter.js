@@ -302,7 +302,7 @@ async function _market(query, context) {
   // 조회 조건(이름 집합) 하나로 6개월 거래를 가져온다 — Step 4: A/B 는 .in() 으로 합산 조회.
   async function _fetchTx(names, sigunguVal) {
     let tq = admin.from('molit_transactions')
-      .select('apt_name, sigungu, umd_nm, deal_amount, deal_date, exclu_use_ar')
+      .select('apt_name, sigungu, umd_nm, deal_amount, deal_date, exclu_use_ar, build_year')
       .in('apt_name', names)
       .gte('deal_date', since.toISOString().slice(0, 10));
     tq = sigunguVal ? tq.eq('sigungu', sigunguVal) : tq.is('sigungu', null);
@@ -378,9 +378,13 @@ async function _market(query, context) {
     // Step 3: 전개 규칙 — ① alias 확정 ② 정규화 완전일치 확정 ③ 그 외엔 후보만(확정 아님).
     const aliases = Array.isArray(am.molit_aliases) ? am.molit_aliases.filter(a => typeof a === 'string' && a) : [];
     let names = null;
+    // ALIAS-YEAR-2026-10-30 (Plan 178): "이름#연도" 별칭은 그 준공 연도 거래만(한 신고 이름에 공식 단지 둘).
+    const _yearOf = {};
     if (aliases.length) {
-      const aliasSet = new Set(aliases);
-      const hit = [...new Set(dongRows.filter(r => aliasSet.has(r.apt_name)).map(r => r.apt_name))];
+      const { parseAlias } = require('./transactionService');
+      const aliasSet = new Set();
+      for (const a of aliases) { const p = parseAlias(a); if (p.year) _yearOf[p.name] = p.year; else aliasSet.add(a); }
+      const hit = [...new Set(dongRows.filter(r => aliasSet.has(r.apt_name) || (_yearOf[r.apt_name] && Number(r.build_year) === _yearOf[r.apt_name])).map(r => r.apt_name))];
       if (hit.length) names = hit;
     }
     if (!names) {
@@ -407,7 +411,8 @@ async function _market(query, context) {
         suggestions: scored.map(s => `${s.name} 시세`),
       };
     }
-    const { data, error } = await _fetchTx(names, am.sigungu || null);
+    const { data: _txRaw, error } = await _fetchTx(names, am.sigungu || null);
+    const data = (_txRaw || []).filter(r => !_yearOf[r.apt_name] || Number(r.build_year) === _yearOf[r.apt_name]);
     if (error) return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
     if (!data || !data.length) {
       // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — am.apt_name(조회 키)은 그대로, 문구만 감싼다.

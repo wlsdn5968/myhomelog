@@ -339,7 +339,7 @@ async function canonRecords(obj) {
   const out = { ...obj };
   for (const k of lists) {
     out[k] = obj[k].map(r => {
-      const c = r && map.get(`${r.aptName}|${r.umdNm || ''}`);
+      const c = r && require('./transactionService').aliasCanon(map, r.aptName, r.umdNm, r.buildYear); // ALIAS-YEAR-2026-10-30 (Plan 178): 연도 별칭은 그 준공 연도 행만
       return c && c !== r.aptName ? { ...r, aptName: c, rawName: r.aptName } : r;
     });
   }

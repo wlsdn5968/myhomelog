@@ -11,7 +11,7 @@
  * 네이버/KB 부동산 호가는 공식 API 부재 + 스크래핑 ToS 위반으로 미사용.
  * 대신 최신 실거래가가 가장 객관적인 시세 지표로 동등하게 기능함.
  */
-const { getTransactionsByApt, analyzeTransactions, getAliasCanonicalMap, getRegionRecentTransactions } = require('./transactionService');
+const { getTransactionsByApt, analyzeTransactions, getAliasCanonicalMap, aliasCanon, getRegionRecentTransactions } = require('./transactionService');
 const { parseWalkBand, WALK_BAND_LABEL } = require('../utils/walkBand');
 const { turnoverScore, isExcludedAptType, interestScore } = require('../utils/scoreBands');
 const { getAptListBySgg, getAptBasisInfo, getAptDtlInfo } = require('./aptInfoService');
@@ -685,7 +685,7 @@ async function getAIRecommendations(userCondition) {
   const aliasMap = await aliasMapPromise;
   _mark('alias');
   const relabeledTx = aliasMap.size
-    ? allTx.map(t => { const c = aliasMap.get(`${t.aptName}|${t.umdNm || ''}`); return c ? { ...t, aptName: c } : t; })
+    ? allTx.map(t => { const c = aliasCanon(aliasMap, t.aptName, t.umdNm, t.buildYear); /* ALIAS-YEAR-2026-10-30 */ return c ? { ...t, aptName: c } : t; })
     : allTx;
   const analyzed = analyzeTransactions(relabeledTx);
   _mark('collect');

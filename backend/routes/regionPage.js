@@ -241,14 +241,14 @@ router.get('/:lawdCd', async (req, res) => {
   //   앱·추천·알림과 같은 별칭 대응표(apt_master.molit_aliases)로 정식 이름을 쓴다. 대응이 없으면 종전 표시 이름 그대로.
   let canon = new Map();
   try { canon = await require('../services/transactionService').getAliasCanonicalMap([region.lawdCd]); } catch (_) { canon = new Map(); }
-  const showName = (name, umd) => canon.get(`${name}|${umd || ''}`) || displayAptName(name, { umdNm: umd }) || '';
+  const showName = (name, umd, year) => require('../services/transactionService').aliasCanon(canon, name, umd, year) || displayAptName(name, { umdNm: umd }) || '';
 
   // ── 카드들 — 값이 없으면 카드 자체를 만들지 않는다(0·추정 금지) ──
   const cards = [];
   const facts = regionFacts(dash, rec, weekly);   // description·OG 카드가 같은 문장을 쓴다(사본 금지)
 
   if (rec && (num(rec.highCount) || num(rec.lowCount))) {
-    const row = (it, kind) => `<div class="row"><span>${esc(showName(it.aptName, it.umdNm))} <span class="k">${esc(it.umdNm || '')}${it.excluUseAr ? ' · 전용 ' + esc(String(it.excluUseAr)) + '㎡' : ''}</span></span><span class="num" style="white-space:nowrap"><b style="color:var(--pri)">${eok(it.dealAmount)}</b> <span class="k">직전 ${kind === 'high' ? '최고' : '최저'} ${eok(kind === 'high' ? it.prevMax : it.prevMin)} · ${num(it.priorCount) || 0}건</span></span></div>`;
+    const row = (it, kind) => `<div class="row"><span>${esc(showName(it.aptName, it.umdNm, it.buildYear))} <span class="k">${esc(it.umdNm || '')}${it.excluUseAr ? ' · 전용 ' + esc(String(it.excluUseAr)) + '㎡' : ''}</span></span><span class="num" style="white-space:nowrap"><b style="color:var(--pri)">${eok(it.dealAmount)}</b> <span class="k">직전 ${kind === 'high' ? '최고' : '최저'} ${eok(kind === 'high' ? it.prevMax : it.prevMin)} · ${num(it.priorCount) || 0}건</span></span></div>`;
     cards.push(`<div class="card">
       <h2>최근 ${num(rec.windowDays) || 30}일 최고·최저 경신 <span class="src">같은 단지·같은 전용면적 기준 · ${esc(String(rec.sinceDate || '').replace(/-/g, '.'))} 이후 쌓인 거래 안에서</span></h2>
       <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">비교 가능 거래 ${comma(num(rec.comparedCount) || 0)}건 중 최고가 경신 <b style="color:var(--ink)">${comma(num(rec.highCount) || 0)}건</b> · 최저가 경신 <b style="color:var(--ink)">${comma(num(rec.lowCount) || 0)}건</b></div>
@@ -309,7 +309,7 @@ router.get('/:lawdCd', async (req, res) => {
     // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — a.apt_name(href 의 apt_seq 는 조회 키 그대로)은
     //   링크 텍스트에서만 감싼다.
     cards.push(`<div class="card"><h2>이 지역 주요 단지 <span class="src">최근 실거래 많은 순 · 매물 광고 아님</span></h2>
-      <div class="links">${apts.map(a => `<a href="/apt/${esc(a.apt_seq)}">${esc(showName(a.apt_name, a.umd_nm))}${a.umd_nm ? ` <span class="k">${esc(a.umd_nm)}</span>` : ''}</a>`).join('')}</div>
+      <div class="links">${apts.map(a => `<a href="/apt/${esc(a.apt_seq)}">${esc(showName(a.apt_name, a.umd_nm, a.build_year))}${a.umd_nm ? ` <span class="k">${esc(a.umd_nm)}</span>` : ''}</a>`).join('')}</div>
       <div class="src" style="margin-top:8px">단지명을 누르면 그 단지의 실거래 요약을 볼 수 있어요.</div></div>`);
   }
 

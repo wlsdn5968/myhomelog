@@ -200,11 +200,17 @@ async function loadAptFacts(seq) {
 function _normAptName(s) {
   return String(s || '').replace(/\s+/g, '');
 }
-function pickAptMasterMatch(rows, aptName) {
+// ALIAS-YEAR-2026-10-30 (Plan 178): 별칭 "이름#연도"(한 신고 이름에 준공 연도가 다른 공식 단지 둘)는 그 준공 연도 페이지에서만 맞는다.
+//   그런 이름인데 연도가 안 맞으면 이름 완전일치로도 고르지 않는다(1차 이름과 같은 신고 이름의 2차 페이지에 1차 카드가 붙던 것).
+function pickAptMasterMatch(rows, aptName, buildYear) {
   if (!Array.isArray(rows) || !rows.length || !aptName) return null;
-  const aliasMatches = rows.filter((r) => Array.isArray(r.molit_aliases) && r.molit_aliases.includes(aptName));
+  const _y = Number(buildYear) || 0;
+  const _al = (r) => (Array.isArray(r.molit_aliases) ? r.molit_aliases : []);
+  const aliasMatches = rows.filter((r) => _al(r).includes(aptName) || (_y && _al(r).includes(`${aptName}#${_y}`)));
   if (aliasMatches.length === 1) return aliasMatches[0];
   if (aliasMatches.length >= 2) return null; // 후보 2개 이상 — 확신 불가
+  const _yearSplit = rows.some((r) => _al(r).some((a) => typeof a === 'string' && a.startsWith(`${aptName}#`) && /#\d{4}$/.test(a)));
+  if (_yearSplit) return null;
   const target = _normAptName(aptName);
   const nameMatches = rows.filter((r) => _normAptName(r.apt_name) === target);
   if (nameMatches.length === 1) return nameMatches[0];
@@ -219,7 +225,7 @@ function pickAptMasterMatch(rows, aptName) {
  *   errored=false·row=null 은 "조회는 됐는데 정말 매칭이 없다"(또는 후보 2개 이상이라 확신 불가) —
  *   이때는 기존 캐시 정책을 그대로 쓴다.
  */
-async function loadAptMasterMatch(lawdCd, umd, aptName) {
+async function loadAptMasterMatch(lawdCd, umd, aptName, buildYear) {
   const { getSupabaseAdmin } = require('../db/client');
   const admin = getSupabaseAdmin();
   // DB 연결 자체가 안 되면 "정말 없음"과 구분할 수 없다 — 보수적으로 errored 취급.
@@ -232,7 +238,7 @@ async function loadAptMasterMatch(lawdCd, umd, aptName) {
       logger.warn({ err: error.message, lawdCd, umd }, 'APT-PAGE-INFO-2026-09-06: apt_master 조회 실패');
       return { errored: true, row: null };
     }
-    return { errored: false, row: pickAptMasterMatch(data || [], aptName) };
+    return { errored: false, row: pickAptMasterMatch(data || [], aptName, buildYear) };
   } catch (e) {
     logger.warn({ err: e.message, lawdCd, umd }, 'APT-PAGE-INFO-2026-09-06: apt_master 조회 예외');
     return { errored: true, row: null };
@@ -450,7 +456,7 @@ router.get('/:aptSeq', async (req, res) => {
   //   무조건 이걸 쓴다(아래 displayAptName 의 kaptName 인자로 넘김).
   let kaptMatchedName = null;
   if (lawdCd && aptName) {
-    const { errored, row } = await loadAptMasterMatch(lawdCd, umd, aptName);
+    const { errored, row } = await loadAptMasterMatch(lawdCd, umd, aptName, buildYear);
     aptMasterErrored = errored;
     if (row) {
       kaptMatchedName = row.apt_name || null;
@@ -558,3 +564,4 @@ module.exports = router;
 // 링크 미리보기 이미지 라우트가 같은 사실을 쓰도록 함께 내보낸다 (APT-FACTS-SSOT-2026-09-02)
 module.exports.loadAptFacts = loadAptFacts;
 module.exports._repAreaSummary = repAreaSummary;
+module.exports._pickAptMasterMatch = pickAptMasterMatch; // ALIAS-YEAR-2026-10-30 (Plan 178) 테스트용
