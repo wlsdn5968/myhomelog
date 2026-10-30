@@ -42,17 +42,31 @@ async function _dbGetAmenityCount(cacheKey) {
   }
 }
 
-async function _dbSetAmenityCount(cacheKey, lat, lng, category, radius, count) {
+// STATION-NAME-2026-10-30 (Plan 157): 최근접 역 행만 이름까지 읽는다(칸 추가: supabase/migrations/20261030_amenities_station_name.sql).
+async function _dbGetNearestRow(cacheKey) {
+  const a = _dbClient();
+  if (!a) return null;
+  try {
+    const { data } = await a.from('apt_amenities').select('count, name, fetched_at').eq('cache_key', cacheKey).maybeSingle();
+    if (!data) return null;
+    const ageDays = (Date.now() - new Date(data.fetched_at).getTime()) / (1000 * 60 * 60 * 24);
+    if (ageDays > 90) return null;
+    return { count: data.count, name: data.name || null };
+  } catch (e) {
+    return null;
+  }
+}
+
+async function _dbSetAmenityCount(cacheKey, lat, lng, category, radius, count, name) {
   const a = _dbClient();
   if (!a) return;
   try {
     // UNUSED-COL-2026-09-20 (Plan 112): lat/lng/category/radius 는 cache_key
     //   ('35.8663,128.693:MT1:1500') 에 이미 들어 있고 읽는 코드가 0건이라 저장하지 않는다.
     //   시그니처는 유지한다 — 호출부를 건드리지 않기 위해서다(값은 cache_key 를 만들 때 이미 쓰였다).
-    await a.from('apt_amenities').upsert(
-      { cache_key: cacheKey, count, fetched_at: new Date().toISOString(), updated_at: new Date().toISOString() },
-      { onConflict: 'cache_key' }
-    );
+    const row = { cache_key: cacheKey, count, fetched_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    if (typeof name === 'string' && name) row.name = name.slice(0, 100); // 최근접 역만(Plan 157) — 다른 행은 칸을 싣지 않는다
+    await a.from('apt_amenities').upsert(row, { onConflict: 'cache_key' });
   } catch (e) {
     // silent fail — DB 미설정 또는 migration 미적용
   }
@@ -297,7 +311,10 @@ async function keywordToCoord(keyword) {
 /** apt_amenities.count 에 거리를 담을 때 '반경 내 역 없음' 을 뜻하는 표식(거리는 음수가 될 수 없다). */
 const NO_STATION = -1;
 
-async function nearestSubway(lat, lng, radius = 3000) {
+//   opts.needName: 이름이 필요한 호출(비교 창)만 — 캐시에 이름이 없으면(칸 추가 전 저장분) 카카오를 다시 불러 이름을 채운다.
+//     추천 계산처럼 단지가 많은 경로는 기본값(false)이라 호출이 늘지 않는다. 다시 부르다 실패하면 저장된 거리를 그대로 쓴다.
+async function nearestSubway(lat, lng, radius = 3000, opts = {}) {
+  const needName = !!(opts && opts.needName);
   if (isKeyMissing()) return undefined;
   if (lat == null || lng == null) return undefined;
   const lat4 = Number(Number(lat).toFixed(4));
@@ -305,14 +322,17 @@ async function nearestSubway(lat, lng, radius = 3000) {
   const cacheKey = `${lat4},${lng4}:sw8near:${radius}`;
   const ck = `kknear:${cacheKey}`;
   const cached = cache.get(ck);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined && !(needName && cached && !cached.name)) return cached;
   // DB 캐시 — ⚠ count 컬럼에 **미터**를 넣는다(카운트가 아니다). 역이 없으면 NO_STATION(-1).
   //   해석은 반드시 이 두 곳에서만 한다(딴 데서 count 로 읽으면 거리와 개수가 섞인다).
-  const fromDb = await _dbGetAmenityCount(cacheKey);
+  const fromDb = await _dbGetNearestRow(cacheKey);
+  let known;
   if (fromDb !== null) {
-    const out = fromDb === NO_STATION ? null : { name: null, distance: fromDb };
-    cache.set(ck, out, 86400 * 3);
-    return out;
+    known = fromDb.count === NO_STATION ? null : { name: fromDb.name, distance: fromDb.count };
+    if (!(needName && known && !known.name)) {
+      cache.set(ck, known, 86400 * 3);
+      return known;
+    }
   }
   try {
     const r = await axios.get(KAKAO_CAT, {
@@ -324,10 +344,11 @@ async function nearestSubway(lat, lng, radius = 3000) {
     const out = d ? { name: d.place_name, distance: Number(d.distance) } : null;
     cache.set(ck, out, 86400 * 3);
     _dbSetAmenityCount(cacheKey, lat4, lng4, 'sw8_nearest_m', radius,
-      out ? out.distance : NO_STATION).catch(() => {});
+      out ? out.distance : NO_STATION, out ? out.name : undefined).catch(() => {});
     return out;
   } catch (e) {
     logger.warn({ err: e.message, status: e.response?.status }, 'kakao 최근접 지하철역 조회 실패');
+    if (known !== undefined) return known; // 이름만 채우려던 재조회 실패 — 저장된 거리는 사실이므로 그대로
     return undefined; // ⚠ 실패를 "역 없음" 으로 읽으면 안 된다 — 점수에서 최저점이 되어버린다
   }
 }

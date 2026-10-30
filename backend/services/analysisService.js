@@ -722,7 +722,7 @@ async function _cmpNear({ aptName, sigungu, umdNm, kaptCode, address }) {
   try { c = await resolveCoord({ kaptCode: kaptCode || undefined, aptName, sigungu: sigungu || undefined, umdNm: umdNm || undefined, address: address || undefined }); } catch (_) { c = null; }
   if (!c || c.lat == null || c.lng == null) return fail;
   const [st, sc] = await Promise.all([
-    nearestSubway(c.lat, c.lng, 3000).catch(() => undefined),
+    nearestSubway(c.lat, c.lng, 3000, { needName: true }).catch(() => undefined), // Plan 157: 비교 창은 역 이름이 필요
     resolveSchools({ aptName, sigungu, umdNm, kaptCode, lat: c.lat, lng: c.lng }).catch(() => undefined),
   ]);
   const station = st === undefined ? { s: 'fail' }
