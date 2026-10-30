@@ -120,3 +120,10 @@ test('표시 이름: 단지 법정동과 같은 "동," 접두·끝의 (고층)/(
     assert.equal(front(n, u), want, `프런트 ${n}`);
   }
 });
+
+test('지도: 공식 단지 핀은 좌표 행이 영역 결과에 없는 별칭의 거래도 더한다(운영 실측 공릉풍림 30 vs DB 38)', () => {
+  const s = read('../routes/search.js');
+  assert.match(s, /if \(!g\._seen\.has\(a\)\) _missing\.push\(\[g, a\]\);/);
+  assert.match(s, /if \(!st \|\| \(g\.sigungu && st\.sigungu && st\.sigungu !== g\.sigungu\)\) continue;/, '동명 타지역 거래를 더하면 안 된다');
+  assert.match(s, /g\.sum \+= st\.sum; g\.n \+= st\.n; g\._seen\.add\(a\);/);
+});

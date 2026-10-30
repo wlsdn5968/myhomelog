@@ -1073,6 +1073,8 @@ router.get('/in-bounds', async (req, res) => {
         _bestN: -1, _bestRank: -1,
       };
       const g = groups[gkey];
+      if (!g._seen) g._seen = new Set();
+      g._seen.add(c.apt_name);
       // CROSS-REGION-FIX-2026-06-03: 정확 키(name|sigungu|umd)로 조회 — 동명 타지역 stats 상속 차단
       const s = aptStats[`${c.apt_name}|${c.sigungu}|${c.umd_nm}`];
       if (s && s.n && s.sum) {
@@ -1085,6 +1087,40 @@ router.get('/in-bounds', async (req, res) => {
         if (_rank > g._bestRank || (_rank === g._bestRank && s.n > g._bestN)) {
           g._bestRank = _rank; g._bestN = s.n; g.lat = Number(c.lat); g.lng = Number(c.lng);
         }
+      }
+    }
+    // ALIAS-STATS-2026-10-30 (Plan 176 C 후속, 운영 실측): 거래 많은 순으로 좌표를 고르면 한 공식 단지의 별칭 중 거래가 적은
+    //   신고 이름(풍림아파트B)의 좌표 행이 영역 결과 밖으로 밀려, 그 거래가 핀 집계에서 빠졌다(공릉풍림아이원 넓은 영역 30건 vs
+    //   DB 38건). 공식 단지 핀은 좌표 행이 없는 별칭의 최근 180일 거래도 같은 동 범위에서 더한다.
+    const _masterByKapt = {};
+    for (const m of (_masters || [])) if (m.kapt_code) _masterByKapt[m.kapt_code] = m;
+    const _missing = []; // [group, aliasName]
+    for (const g of Object.values(groups)) {
+      if (g.source !== 'master' || !g.aptSeq || !_masterByKapt[g.aptSeq]) continue;
+      for (const a of (_masterByKapt[g.aptSeq].molit_aliases || [])) if (!g._seen.has(a)) _missing.push([g, a]);
+    }
+    if (_missing.length) {
+      const _mNames = [...new Set(_missing.map(x => x[1]))];
+      const _mUmds = [...new Set(_missing.map(x => x[0].umdNm).filter(Boolean))];
+      const _mStats = {};
+      for (let _from = 0; _from <= 4000; _from += 1000) {
+        let _q = admin.from('molit_transactions').select('apt_name, sigungu, umd_nm, deal_amount, build_year, lawd_cd').in('apt_name', _mNames);
+        if (_mUmds.length) _q = _q.in('umd_nm', _mUmds);
+        const { data: _page, error: _me } = await _q.gte('deal_date', _cut180).order('id', { ascending: false }).range(_from, _from + 999);
+        if (_me) throw _me;
+        for (const t of (_page || [])) {
+          const _k = `${t.apt_name}|${t.umd_nm}`;
+          if (!_mStats[_k]) _mStats[_k] = { sum: 0, n: 0, sigungu: t.sigungu, buildYear: t.build_year, lawdCd: t.lawd_cd };
+          _mStats[_k].sum += t.deal_amount || 0; _mStats[_k].n++;
+        }
+        if (!_page || _page.length < 1000) break;
+      }
+      for (const [g, a] of _missing) {
+        const st = _mStats[`${a}|${g.umdNm}`];
+        if (!st || (g.sigungu && st.sigungu && st.sigungu !== g.sigungu)) continue; // 같은 시군구만(동명 타지역 차단)
+        g.sum += st.sum; g.n += st.n; g._seen.add(a);
+        if (!g.buildYear) g.buildYear = st.buildYear;
+        if (!g.lawdCd) g.lawdCd = st.lawdCd;
       }
     }
     // CANON-COORD-FIX-2026-06-03: master 그룹 대표좌표를 kapt 본체 좌표로 교체 (alias 하위시설 오프셋 교정)
