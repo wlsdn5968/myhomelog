@@ -105,6 +105,33 @@ function filterAnomalies(transactions) {
   return { filtered: allFiltered, anomalyCount: transactions.length - allFiltered.length };
 }
 
+// OUTLIER-SAME-AS-CHART-2026-10-30 (Plan 173): 단지 상세 가격 차트(frontend/index.html _pcOutliers)와 같은 규칙.
+//   같은 평형(전용㎡/3.3058 반올림)에서 앞뒤 90일 거래(3건 미만이면 180일, 자신 빼고 3건 이상)의 중앙값으로부터
+//   max(20%, 3.5×MAD) 넘게 벗어난 거래. filterAnomalies(평형 전체를 한 번에 MAD)는 오르는 흐름의 끝까지 걸러
+//   비교 창과 차트가 서로 다른 거래를 뺐다. 두 구현이 같은 답을 내는지는 test/compare-outliers-same-as-chart.test.js 가 대조한다.
+const _OUT_PCT = 0.2, _OUT_MAD_K = 3.5;
+function _outMedian(a) { const s = [...a].sort((x, y) => x - y), n = s.length; return n % 2 ? s[(n - 1) / 2] : (s[n / 2 - 1] + s[n / 2]) / 2; }
+function localOutliers(transactions) {
+  const out = new Set();
+  const groups = {};
+  for (const t of transactions || []) {
+    const py = Math.round((Number(t && t.excluUseAr) || 0) / _PYEONG_M2);
+    if (!py || !(Number(t.dealAmount) > 0) || !t.dealYear) continue;
+    (groups[py] = groups[py] || []).push(t);
+  }
+  for (const rows of Object.values(groups)) {
+    const rs = rows.map(x => ({ x, t: Math.round(Date.UTC(Number(x.dealYear), (Number(x.dealMonth) || 1) - 1, Number(x.dealDay) || 1) / 864e5), a: Number(x.dealAmount) }));
+    const near = (i, w) => { const nb = []; rs.forEach((q, j) => { if (j !== i && Math.abs(q.t - rs[i].t) <= w) nb.push(q.a); }); return nb; };
+    rs.forEach((r, i) => {
+      let nb = near(i, 90); if (nb.length < 3) nb = near(i, 180);
+      if (nb.length < 3) return;
+      const med = _outMedian(nb), mad = _outMedian(nb.map(v => Math.abs(v - med)));
+      if (Math.abs(r.a - med) > Math.max(_OUT_MAD_K * mad, _OUT_PCT * med)) out.add(r.x);
+    });
+  }
+  return out;
+}
+
 // ── 가격 위치 백분위 ──────────────────────────────────────
 // P1 (2026-04-25): 표본 크기 기반 신뢰 구간 동시 반환 (감사 보고서 1-1, T3)
 //   - 기존: 단일 % 반환 → "하위 28%" 정밀도 착시
@@ -669,7 +696,7 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
 //   룰: 전용면적대(round ㎡)·최근 N개월(기본 12)·중앙값·표본 n>=8 만 신뢰값(미만 표본부족).
 //        시점/층/향/동 미보정 라벨 · 점수/등급색/레이더/승자표기 금지 · disclaimer 인라인.
 //   facility(세대수·주차/세대·준공·시공사·동수)는 있으면 표시/없으면 '수집 중'(점진 충실화).
-// 재사용(회귀 0): getTransactionsByAptInclAliases(검증된 alias·이름매칭) + filterAnomalies(평형별 MAD)
+// 재사용: getTransactionsByAptInclAliases(검증된 alias·이름매칭) + localOutliers(Plan 173, 단지 상세 차트와 같은 동떨어진 거래 기준)
 //                + resolveFacility/buildFacility(검증된 KAPT 매칭). 신규 매칭/조인 코드 없음.
 
 
@@ -737,6 +764,7 @@ async function _cmpNear({ aptName, sigungu, umdNm, kaptCode, address }) {
   return { station, school };
 }
 
+const _CMP_CONTEXT_MONTHS = 6;
 async function _compareOne(apt, dealMonths) {
   const aptName = apt && apt.aptName;
   const sigungu = (apt && apt.sigungu) || null;
@@ -750,10 +778,11 @@ async function _compareOne(apt, dealMonths) {
   if (!aptName) return out;
   let _kaptCode = null, _addr = null; // 생활 거리 좌표 찾기용(시설 조회에서 채운다)
 
-  // 1) 거래 fetch — 검증된 alias 병합·이름매칭 재사용, 12개월 윈도우
+  // 1) 거래 fetch — 검증된 alias 병합·이름매칭 재사용. Plan 173: 기간 앞 6개월(180일)은 동떨어진 거래 판정의 이웃으로만 쓴다
+  //   (차트는 전체 이력으로 판정한다 — 기간 첫 달 거래의 판정이 차트와 같아지려면 앞쪽 이웃이 필요하다).
   let saleTx = [];
   try {
-    saleTx = await getTransactionsByAptInclAliases(lawdCd, aptName, dealMonths);
+    saleTx = await getTransactionsByAptInclAliases(lawdCd, aptName, dealMonths + _CMP_CONTEXT_MONTHS);
   } catch (err) {
     if (err.code === 'MOLIT_KEY_MISSING') { out.molitAvailable = false; saleTx = []; }
     else throw err;
@@ -767,7 +796,8 @@ async function _compareOne(apt, dealMonths) {
     ));
   }
 
-  // 3) 최근 dealMonths 윈도우 경계 정확화 (fetch 가 월 단위라 경계 보정)
+  // 3) 동떨어진 거래 판정(Plan 173 — 단지 상세 차트와 같은 규칙, 앞쪽 이웃 포함) 뒤 최근 dealMonths 윈도우로 자른다
+  const _outliers = localOutliers(saleTx);
   const cutoff = new Date();
   cutoff.setMonth(cutoff.getMonth() - dealMonths);
   const cutoffMs = cutoff.getTime();
@@ -777,8 +807,9 @@ async function _compareOne(apt, dealMonths) {
   });
   out.totalTx = saleTx.length;
 
-  // 4) 이상치 제거 — 평형별 MAD (검증된 filterAnomalies 재사용)
-  const { filtered } = filterAnomalies(saleTx);
+  // 4) 동떨어진 거래 제외 — 건수는 화면 안내용으로 돌려준다
+  const filtered = saleTx.filter(t => !_outliers.has(t));
+  out.excludedTx = saleTx.length - filtered.length;
 
   // 5) 전용면적대(round ㎡) 그룹 → 평당가(전용) 중앙값. n>=8 만 신뢰.
   const byBand = {};
@@ -847,12 +878,12 @@ async function compareBatch(apts, opts = {}) {
     results: results.filter(Boolean),
     dealMonths,
     generatedAt: new Date().toISOString(),
-    disclaimer: `평당가는 전용면적 기준으로, 같은 전용면적대의 최근 ${dealMonths}개월 실거래 중앙값이에요. 시점·층·향·동 차이는 반영하지 않았고, 표본이 8건 미만이면 신뢰하기 어려워 값 대신 '표본 부족'으로 표시해요. 매수·매도 추천이 아니며 투자 판단의 근거가 될 수 없어요. 출처: 국토교통부 실거래가·공동주택 기본정보(K-apt) · 카카오 지도.`,
+    disclaimer: `평당가는 전용면적 기준으로, 같은 전용면적대의 최근 ${dealMonths}개월 실거래 중앙값이에요. 시점·층·향·동 차이는 반영하지 않았고, 같은 평형의 앞뒤 3개월 거래보다 20% 넘게 벗어난 거래는 단지 상세 가격 그래프와 같은 기준으로 빼고 셌어요. 표본이 8건 미만이면 신뢰하기 어려워 값 대신 '표본 부족'으로 표시해요. 매수·매도 추천이 아니며 투자 판단의 근거가 될 수 없어요. 출처: 국토교통부 실거래가·공동주택 기본정보(K-apt) · 카카오 지도.`,
   };
 }
 
 module.exports = {
   analyzeApt, calcTotalCost, getLawdCdFromArea, compareBatch,
   // 테스트·디버그 용 — 외부 호출 금지
-  _internals: { analysisCacheKey: _analysisCacheKey, calcBuySignal, calcVolumeSignal, calcPricePercentile, filterAnomalies, detectSeasonalBias, getDataReliability, calcGap, compareOne: _compareOne, cmpMonths: _cmpMonths, cmpSeries: _cmpSeries, cmpNear: _cmpNear, computeJeonseBasisDesc },
+  _internals: { analysisCacheKey: _analysisCacheKey, calcBuySignal, calcVolumeSignal, calcPricePercentile, filterAnomalies, detectSeasonalBias, getDataReliability, calcGap, compareOne: _compareOne, cmpMonths: _cmpMonths, cmpSeries: _cmpSeries, cmpNear: _cmpNear, computeJeonseBasisDesc, localOutliers },
 };
