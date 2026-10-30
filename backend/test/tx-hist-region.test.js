@@ -52,7 +52,9 @@ test('② archived 달: dim 이름류 + ㎡×100 → ㎡ + 날짜 분해, 그 �
   assert.deepEqual(rows, [{ aptName: '단지1', sigungu: '노원구', umdNm: '공릉동', excluUseAr: 84.92, buildYear: 1990, floor: 7, dealYear: 2025, dealMonth: 5, dealDay: 19, dealAmount: 64000, lawdCd: '11350', aptSeq: '11350-1', jibun: '1' }]);
   const h = calls.find(c => c.table === 'molit_transactions_hist');
   assert.deepEqual([h.gte, h.lt], ['2025-05-01', '2025-06-01']);
-  assert.deepEqual(calls.find(c => c.table === 'molit_ingest_runs').eq, { lawd_cd: '11350', deal_ym: '202505', status: 'archived' });
+  // archived 는 지역 무관(한 달을 전 지역에서 한 번에 자른다 — 인천 신설구는 옛 코드로 archived), 이력 backfill 기록은 지역별
+  assert.deepEqual(calls.find(c => c.table === 'molit_ingest_runs').eq, { deal_ym: '202505', status: 'archived' });
+  assert.deepEqual(calls.find(c => c.table === 'molit_hist_runs').eq, { lawd_cd: '11350', deal_ym: '202505' });
   // 12월 → 다음 해 1월 경계
   tables.molit_ingest_runs = []; tables.molit_hist_runs = [{ deal_ym: '202412' }];
   calls.length = 0;

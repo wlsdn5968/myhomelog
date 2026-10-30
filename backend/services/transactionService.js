@@ -115,7 +115,9 @@ async function getTransactionsFromHist(lawdCd, dealYm) {
   if (!admin) return null;
   try {
     const [arch, hr] = await Promise.all([
-      admin.from('molit_ingest_runs').select('deal_ym').eq('lawd_cd', lawdCd).eq('deal_ym', dealYm).eq('status', 'archived').limit(1),
+      // archived 는 지역을 가리지 않는다 — 자르기는 한 달을 전 지역에서 한 번에 옮긴다(107c f 단계). 인천 신설 4구
+      //   (28125·28155·28275·28290)의 2025-05 는 옛 코드 이름으로 archived 됐지만 이력 행은 dim 을 거쳐 그대로 잡힌다(실측 64·105·314·244건).
+      admin.from('molit_ingest_runs').select('deal_ym').eq('deal_ym', dealYm).eq('status', 'archived').limit(1),
       admin.from('molit_hist_runs').select('deal_ym').eq('lawd_cd', lawdCd).eq('deal_ym', dealYm).limit(1),
     ]);
     if (arch.error) throw arch.error;
