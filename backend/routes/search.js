@@ -230,7 +230,7 @@ router.get('/apt', async (req, res) => {
   // SEARCH-REGION-SPLIT-2026-09-06 (Plan 062): v2 → v3. 지역 분리 재시도로 "대치 은마" 같은
   //   질의가 빈 결과 대신 실제 단지를 반환하도록 바뀌었다 — 버전을 안 올리면 이미 캐시된
   //   v2 시절의 "빈 결과"가 같은 만료 시간(서버 10분 + CDN s-maxage 600 + SWR 3600)만큼 계속 나간다.
-  const sck = `searchapt:v3:${q.toLowerCase()}:${limit}`;
+  const sck = `searchapt:v4:${q.toLowerCase()}:${limit}`; // REGION-RANK-2026-10-30 (Plan 179): v3 → v4
   const cached = cache.get(sck);
   if (cached) {
     res.set('Cache-Control', SEARCH_CDN);
@@ -425,7 +425,7 @@ router.get('/apt', async (req, res) => {
       for (const c of splitCandidates) {
         const region = stripWild(c.region), name = stripWild(c.name);
         if (region.length < 2 || name.length < 2) continue;
-        const [byUmd, bySigungu, amByRegion] = await Promise.all([
+        const [byUmd, bySigungu, amByRegion, amBySgg] = await Promise.all([
           _softQuery(admin.from('molit_apt_index')
             .select('apt_name, sigungu, umd_nm, lawd_cd, build_year, recent_deal_date, deal_count, deal_count_all, apt_seq')
             .ilike('umd_nm', `${region}%`).ilike('apt_name', `%${name}%`)
@@ -441,28 +441,47 @@ router.get('/apt', async (req, res) => {
           _softQuery(admin.from('apt_master').select(_masterSel)
             .ilike('umd_nm', `${region}%`).ilike('apt_name', `%${name}%`)
             .limit(limit * 5)),
+          // REGION-RANK-2026-10-30 (Plan 179): 시군구로도 공식 단지를 찾는다("시흥 우남퍼스트빌" — 거래 없는 공식 단지도 나오게).
+          _softQuery(admin.from('apt_master').select(_masterSel)
+            .ilike('sigungu', `${region}%`).ilike('apt_name', `%${name}%`)
+            .limit(limit * 5)),
         ]);
         const rMolitRows = [];
         if (byUmd && !byUmd.error && byUmd.data) rMolitRows.push(...byUmd.data);
         if (bySigungu && !bySigungu.error && bySigungu.data) rMolitRows.push(...bySigungu.data);
-        const rMasterRows = (amByRegion && !amByRegion.error && amByRegion.data) ? amByRegion.data : [];
+        const rMasterRows = [];
+        const _rmSeen = new Set();
+        for (const r of [...((amByRegion && !amByRegion.error && amByRegion.data) || []), ...((amBySgg && !amBySgg.error && amBySgg.data) || [])]) {
+          const k = `${r.apt_name}|${r.lawd_cd}|${r.umd_nm}`;
+          if (!_rmSeen.has(k)) { _rmSeen.add(k); rMasterRows.push(r); }
+        }
         if (rMolitRows.length || rMasterRows.length) return { molitRows: rMolitRows, masterRows: rMasterRows };
       }
       return null;
     }
     // 트리거: 기존 두 출처(molitRows·masterRes.data) 결과가 **둘 다** 비었을 때만 — 성공 경로
     //   (한쪽이라도 결과가 있는 경우)는 이 블록을 절대 통과하지 않는다(왕복 불변 계약).
-    if (!molitRows.length && !((masterRes.data || []).length)) {
+    // REGION-RANK-2026-10-30 (Plan 179, 운영자 승인): 이름만으로 찾은 결과가 있어도 두 어절 이상이면 지역 분리도 함께 찾는다.
+    //   [왜] "능곡 우남퍼스트빌" 은 이름에 "능곡" 이 든 2차만 나오고 1차가 빠졌다(이름 결과가 1건이라 재시도가 안 돌았다).
+    //   카카오맵은 같은 검색어에 1차·2차를 1·2위로 보여 준다(2026-10-30 확인). 같은 행은 한 번만 세고(이름 결과와 겹침),
+    //   지역과 이름이 모두 맞는 단지를 아래 정렬에서 앞에 둔다. 한 어절 검색은 종전과 같다(조회 수 불변).
+    const _regionCands = (masterRes.error ? [] : splitRegionName(qApt).slice(0, 2))
+      .map(c => ({ region: String(c.region).replace(/[%_]/g, ''), name: normalizeName(String(c.name).replace(/[%_]/g, '')) }))
+      .filter(c => c.region.length >= 2 && c.name.length >= 2);
+    if (_regionCands.length || (!molitRows.length && !((masterRes.data || []).length))) {
       const _regionRetry = await _regionSplitRetry();
       if (_regionRetry) {
-        molitRows = molitRows.concat(_regionRetry.molitRows.map((r) => ({
+        const _mk = (r) => `${r.apt_seq || ''}|${r.apt_name}|${r.lawd_cd}|${r.umd_nm}|${r.build_year || ''}`;
+        const _have = new Set(molitRows.map(_mk));
+        molitRows = molitRows.concat(_regionRetry.molitRows.filter((r) => { const k = _mk(r); if (_have.has(k)) return false; _have.add(k); return true; }).map((r) => ({
           ...r,
           deal_date: r.recent_deal_date != null ? r.recent_deal_date : r.deal_date,
           _w: Number(r.deal_count) > 0 ? Number(r.deal_count) : 1,
           _n: Number(r.deal_count) || 0,
           _nAll: Number(r.deal_count_all) || 0,
         })));
-        masterRes = { data: (masterRes.data || []).concat(_regionRetry.masterRows) };
+        const _haveM = new Set((masterRes.data || []).map(r => `${r.apt_name}|${r.lawd_cd}|${r.umd_nm}`));
+        masterRes = { data: (masterRes.data || []).concat(_regionRetry.masterRows.filter(r => !_haveM.has(`${r.apt_name}|${r.lawd_cd}|${r.umd_nm}`))) };
       }
     }
     // FUZZY-RETRY-2026-10-21: 구글 서치 콘솔 실제 검색어 121개 중 13개가 0건이었다(2026-10-21 실측). 원인 셋 —
@@ -562,8 +581,15 @@ router.get('/apt', async (req, res) => {
       const s = String(n || '').replace(/\s+/g, '').toLowerCase();
       return s === _qn ? 0 : (s.startsWith(_qn) ? 1 : 2);
     };
+    // REGION-RANK-2026-10-30 (Plan 179): 지역(동·시군구 앞부분)과 이름이 모두 맞는 단지는 "시작 일치" 와 같은 등급.
+    const _regionHit = (g) => _regionCands.some(c => {
+      const r = g.firstRow || {};
+      if (!(String(r.umd_nm || '').startsWith(c.region) || String(r.sigungu || '').startsWith(c.region))) return false;
+      return [g.baseName, ...(g.rawNames || [])].some(n => normalizeName(n).includes(c.name));
+    });
+    const _rank = (g) => Math.min(_qRank(g.baseName), _regionHit(g) ? 1 : 2);
     const sortedMolit = Array.from(aptMap.values())
-      .sort((a, b) => (_qRank(a.baseName) - _qRank(b.baseName)) || (b.count - a.count) || (String(b.firstRow.deal_date||'').localeCompare(String(a.firstRow.deal_date||''))));
+      .sort((a, b) => (_rank(a) - _rank(b)) || (b.count - a.count) || (String(b.firstRow.deal_date||'').localeCompare(String(a.firstRow.deal_date||''))));
 
     const seen = new Set();
     const out = [];
@@ -749,7 +775,11 @@ router.get('/apt', async (req, res) => {
     // SEARCH-RANK-2026-07-11 (Sprint HHHH 보강): 이 최종 정렬이 위 molit 그룹 rank 정렬을 덮어써
     //   master 병합 항목("시범다은마을월드반도" 60건)이 정확일치 "은마"(44건)를 다시 이기던 것 —
     //   라이브 재검증으로 발각. 일치 등급(정확0·시작1·포함2)을 최종 정렬에서도 최우선으로.
-    out.sort((a, b) => (_qRank(a.aptName) - _qRank(b.aptName)) || ((b.dealCount || 0) - (a.dealCount || 0)));
+    // REGION-RANK-2026-10-30 (Plan 179): 최종 정렬도 지역(동·시군구 앞부분)+이름 일치를 "시작 일치" 등급으로 본다 — 위 그룹 정렬만 바꾸면 여기서 덮인다.
+    const _regionHitOut = (o) => _regionCands.some(c => (String(o.umdNm || '').startsWith(c.region) || String(o.sigungu || '').startsWith(c.region))
+      && [o.aptName, o.displayName, ...(o.aliasNames || [])].some(n => n && normalizeName(n).includes(c.name)));
+    const _rankOut = (o) => Math.min(_qRank(o.aptName), _regionHitOut(o) ? 1 : 2);
+    out.sort((a, b) => (_rankOut(a) - _rankOut(b)) || ((b.dealCount || 0) - (a.dealCount || 0)));
 
     // degraded 를 응답에 명시 — 위장하지 않기 위한 표식이자, 로그가 1시간이면 사라지는 이 경로에서
     //   "이 응답이 반쪽이었나"를 사후에 확인할 유일한 수단이다.

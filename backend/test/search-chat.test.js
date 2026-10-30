@@ -320,14 +320,16 @@ test('Plan 052 ②: 공백 든 질의는 조건부로 조회 2개가 추가되�
     await handler({ query: { q, limit: 10 } }, res, () => {});
     assert.equal(res.statusCode, 200);
 
-    assert.equal(seen.calls.length, 5,
-      `공백 든 질의인데 DB 조회가 5개가 아니다(${seen.calls.length}개): ${JSON.stringify(seen.calls)}`);
-    const molitAptCalls = seen.calls.filter((c) => c.table === 'molit_apt_index' && c.col === 'apt_name');
+    // REGION-RANK-2026-10-30 (Plan 179): 두 어절 질의라 지역 분리 1라운드(4조회, region 'PLAN052' / name '공백질의확인')가 더 돈다.
+    assert.equal(seen.calls.length, 9,
+      `공백 든 두 어절 질의인데 DB 조회가 5 + 지역 분리 4 = 9개가 아니다(${seen.calls.length}개): ${JSON.stringify(seen.calls)}`);
+    const _base = (c) => c.pattern === `%${qApt}%` || c.pattern === `%${qNo}%`;
+    const molitAptCalls = seen.calls.filter((c) => c.table === 'molit_apt_index' && c.col === 'apt_name' && _base(c));
     assert.equal(molitAptCalls.length, 2,
       'molit_apt_index.apt_name 조회가 조건부로 추가되지 않았다(원본 + 공백제거 변형 2개여야 한다)');
     assert.ok(molitAptCalls.some((c) => c.pattern === `%${qNo}%`),
       '공백 제거 패턴(%qNo%)으로 molit_apt_index 를 조회하지 않았다');
-    const masterAptCalls = seen.calls.filter((c) => c.table === 'apt_master' && c.col === 'apt_name');
+    const masterAptCalls = seen.calls.filter((c) => c.table === 'apt_master' && c.col === 'apt_name' && _base(c));
     assert.equal(masterAptCalls.length, 2, 'apt_master.apt_name 조회도 조건부로 2개(원본+공백제거)여야 한다');
 
     // Step 3: 공백 제거 변형으로만 찾힌 단지가 기존 그룹핑(aptMap mergeKey)을 그대로 통과해
@@ -669,15 +671,15 @@ test('검색 자동완성 — "대치 은마"가 지역 분리 재시도로 은�
     assert.equal(res.statusCode, 200);
     assert.ok(res.body.results.some((r) => r.aptName === '은마' && r.sigungu === '강남구'),
       `"대치 은마" 검색 결과에 은마가 없다: ${JSON.stringify(res.body.results)}`);
-    assert.equal(seen.doubleIlikeChains, 3,
-      `지역 분리 재시도는 1라운드(3조회)에서 성공해 멈춰야 한다(${seen.doubleIlikeChains}개) — 왕복 상한 위반`);
+    assert.equal(seen.doubleIlikeChains, 4,
+      `지역 분리 재시도는 1라운드(4조회, Plan 179 에서 시군구 공식 단지 조회 추가)에서 성공해 멈춰야 한다(${seen.doubleIlikeChains}개) — 왕복 상한 위반`);
     assert.equal(res.body.degraded, undefined, '지역 분리 재시도 성공인데 degraded 가 표시됐다');
   });
 });
 
 
 
-test('검색 자동완성 — 원 질의로 이미 찾히면(성공 경로) 지역 분리 재시도가 전혀 돌지 않는다 (Plan 062, 왕복 불변)', async () => {
+test('검색 자동완성 — 한 어절 성공 경로는 재시도가 없고, 두 어절은 원 질의로 찾혀도 지역 분리를 함께 하되 중복 없이 (Plan 062 → 179)', async () => {
   // 케이스 ①: 단일 토큰("은마") — splitRegionName 이 애초에 후보를 안 낸다(토큰 1개).
   await _withSearchDbStubChain(
     [{ table: 'molit_apt_index', ilikes: [{ col: 'apt_name', pattern: '%은마%' }],
@@ -703,9 +705,10 @@ test('검색 자동완성 — 원 질의로 이미 찾히면(성공 경로) 지�
       const res = _mockRes();
       await handler({ query: { q: 'PLAN062 다중토큰직접매치', limit: 10 } }, res, () => {});
       assert.equal(res.statusCode, 200);
-      assert.ok(res.body.results.some((r) => r.aptName === 'PLAN062 다중토큰직접매치'));
-      assert.equal(seen.doubleIlikeChains, 0,
-        '원 질의로 이미 확정됐는데(splitRegionName 은 후보를 내는 질의인데도) 지역 분리 재시도가 실행됐다 — 왕복 계약 위반');
+      assert.equal(res.body.results.filter((r) => r.aptName === 'PLAN062 다중토큰직접매치').length, 1);
+      // REGION-RANK-2026-10-30 (Plan 179, 운영자 승인): 원 질의 결과가 있어도 지역 분리 1라운드(4조회)를 함께 한다
+      //   ("능곡 우남퍼스트빌" 이 이름에 능곡이 든 2차만 주고 1차를 빠뜨렸다). 한 어절(케이스 ①)은 종전처럼 0.
+      assert.equal(seen.doubleIlikeChains, 4, '두 어절 질의는 지역 분리 1라운드(4조회)를 함께 해야 한다');
     }
   );
 });
@@ -728,8 +731,8 @@ test('검색 자동완성 — 3토큰 질의는 최대 2라운드까지만 재�
     await handler({ query: { q: '서울 강남 은마', limit: 10 } }, res, () => {});
     assert.equal(res.statusCode, 200);
     assert.ok(res.body.results.some((r) => r.aptName === '은마'));
-    assert.equal(seen.doubleIlikeChains, 6,
-      `2라운드(6조회)까지만 돌아야 한다(${seen.doubleIlikeChains}개) — 3개 후보를 전부 도는 9조회가 아니다`);
+    assert.equal(seen.doubleIlikeChains, 8,
+      `2라운드(8조회)까지만 돌아야 한다(${seen.doubleIlikeChains}개) — 3개 후보를 전부 도는 12조회가 아니다`);
   });
 });
 
@@ -744,6 +747,8 @@ test('검색 자동완성 — 지역 분리 재시도가 실패해도 500 이 �
       reject: true, error: new Error('PLAN062 주입 실패 — molit sigungu') },
     { table: 'apt_master', ilikes: [{ col: 'umd_nm', pattern: '대치%' }, { col: 'apt_name', pattern: '%없는단지%' }],
       reject: true, error: new Error('PLAN062 주입 실패 — master umd') },
+    { table: 'apt_master', ilikes: [{ col: 'sigungu', pattern: '대치%' }, { col: 'apt_name', pattern: '%없는단지%' }],
+      reject: true, error: new Error('PLAN179 주입 실패 — master sigungu') },
   ];
   await _withSearchDbStubChain(routes, async (handler, seen) => {
     const res = _mockRes();
@@ -751,13 +756,13 @@ test('검색 자동완성 — 지역 분리 재시도가 실패해도 500 이 �
     assert.equal(res.statusCode, 200,
       '지역 분리 재시도 조회의 실패가 500 으로 번졌다 — _softQuery 로 감싸지 않았을 수 있다');
     assert.deepEqual(res.body.results, []);
-    assert.equal(seen.doubleIlikeChains, 3, '유일한 후보 1라운드만 시도하고 끝나야 한다(실패해도 재시도 루프가 멈추지 않으면 안 된다는 뜻은 아니다 — 후보가 1개뿐이라 원래 1라운드)');
+    assert.equal(seen.doubleIlikeChains, 4, '유일한 후보 1라운드(4조회)만 시도하고 끝나야 한다(실패해도 재시도 루프가 멈추지 않으면 안 된다는 뜻은 아니다 — 후보가 1개뿐이라 원래 1라운드)');
   });
 });
 
 
 
-test('검색 자동완성 — 지역 분리 재시도 조회 3개가 모두 _softQuery 로 감싸여 있다(소스 계약, Plan 062)', () => {
+test('검색 자동완성 — 지역 분리 재시도 조회 4개가 모두 _softQuery 로 감싸여 있다(소스 계약, Plan 062·179)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const raw = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
@@ -767,34 +772,64 @@ test('검색 자동완성 — 지역 분리 재시도 조회 3개가 모두 _sof
   assert.ok(startIdx >= 0, '_regionSplitRetry 함수를 찾지 못했다 — 지역 분리 재시도 구조가 바뀌었다');
   // 주석 제거 후에는 "트리거" 같은 설명 주석 텍스트가 사라지므로, 함수 뒤에 이어지는 실제
   // 코드(트리거 if 문)를 경계로 잡는다 — 마커·주석 문자열 자기충돌(6회 재발 전례) 회피.
-  const endIdx = src.indexOf('if (!molitRows.length', startIdx);
+  const endIdx = src.indexOf('const _regionCands', startIdx);
   assert.ok(endIdx > startIdx, '_regionSplitRetry 함수 다음의 트리거 if 문을 찾지 못했다 — 구조가 바뀌었다');
   const block = src.slice(startIdx, endIdx);
   const softCount = (block.match(/_softQuery\(/g) || []).length;
-  assert.equal(softCount, 3,
-    `지역 분리 재시도 조회 중 _softQuery 로 감싸이지 않은 것이 있다(${softCount}/3) — 실패가 500 으로 번질 수 있다`);
+  assert.equal(softCount, 4,
+    `지역 분리 재시도 조회 중 _softQuery 로 감싸이지 않은 것이 있다(${softCount}/4) — 실패가 500 으로 번질 수 있다`);
 });
 
 
 
-test('검색 자동완성 — 지역 분리 재시도 트리거는 기존 두 출처가 둘 다 비었을 때만 실행된다(소스 계약, Plan 062)', () => {
+test('검색 자동완성 — 지역 분리 트리거: 두 어절 이상이거나, 기존 두 출처가 둘 다 비었을 때만 (소스 계약, Plan 062·179)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const raw = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
   const src = raw.split('\n').map((l) => l.replace(/\/\/[^\r\n]*/, '')).join('\n');
-  assert.match(src, /if\s*\(\s*!molitRows\.length\s*&&\s*!\(\(masterRes\.data\s*\|\|\s*\[\]\)\.length\)\s*\)\s*\{[\s\S]{0,40}const _regionRetry = await _regionSplitRetry\(\);/,
-    '지역 분리 재시도 호출이 "molitRows·masterRes.data 둘 다 빈 경우" 게이트 뒤에 있지 않다 — ' +
-    '무조건 실행되면 성공 경로의 조회 수가 늘어난다(완료 기준 위반)');
+  assert.match(src, /if \(_regionCands\.length \|\| \(!molitRows\.length && !\(\(masterRes\.data \|\| \[\]\)\.length\)\)\) \{\s*const _regionRetry = await _regionSplitRetry\(\);/,
+    '지역 분리 재시도 호출 게이트가 바뀌었다 — 한 어절 성공 경로에서도 돌면 조회 수가 늘어난다');
+  assert.match(src, /const _regionCands = \(masterRes\.error \? \[\] : splitRegionName\(qApt\)\.slice\(0, 2\)\)/,
+    '_regionCands 는 splitRegionName(두 어절 이상에서만 후보를 낸다)에서 와야 한다');
 });
 
 
 
-test('검색 자동완성 — 캐시 키 버전이 v3 이다(Plan 062, 엣지 캐시 실사고 방지)', () => {
+test('검색 자동완성 — 캐시 키 버전이 v4 이다(Plan 062 → 179, 엣지 캐시 실사고 방지)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const raw = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
   const src = raw.split('\n').map((l) => l.replace(/\/\/[^\r\n]*/, '')).join('\n');
-  assert.match(src, /const sck = `searchapt:v3:/,
-    '검색 캐시 키가 v3 이 아니다 — 지역 분리 재시도로 응답 모양이 바뀌었는데 캐시 키를 안 올리면 ' +
+  assert.match(src, /const sck = `searchapt:v4:/,
+    '검색 캐시 키가 v4 가 아니다 — 지역 분리 정렬로 응답 모양이 바뀌었는데 캐시 키를 안 올리면 ' +
     '배포 전 캐시된 "빈 결과"가 서버 10분 + CDN s-maxage=600(+SWR 3600) 만큼 계속 나간다');
 });
+
+
+
+test('검색 자동완성 — 지역과 이름이 모두 맞는 단지가 이름만 맞는(거래 더 많은) 단지보다 앞, 겹친 행은 한 번만 (Plan 179, 카카오맵 기준)', async () => {
+  const far = { apt_name: '새PLAN179테스트빌', sigungu: '강남구', umd_nm: '대치동', lawd_cd: '11680', build_year: 2000, recent_deal_date: '2026-09-01', deal_count: 100, apt_seq: 'p179-a' };
+  const near1 = { apt_name: 'PLAN179테스트빌', sigungu: '시흥시', umd_nm: '능곡동', lawd_cd: '41390', build_year: 2008, recent_deal_date: '2026-05-18', deal_count: 4, apt_seq: 'p179-b' };
+  const near2 = { apt_name: 'PLAN179테스트빌', sigungu: '시흥시', umd_nm: '능곡동', lawd_cd: '41390', build_year: 2011, recent_deal_date: '2026-09-04', deal_count: 9, apt_seq: 'p179-c' };
+  const routes = [
+    { table: 'molit_apt_index', ilikes: [{ col: 'apt_name', pattern: '%능곡 PLAN179테스트빌%' }], result: { data: [far], error: null } },
+    { table: 'molit_apt_index', ilikes: [{ col: 'umd_nm', pattern: '능곡%' }, { col: 'apt_name', pattern: '%PLAN179테스트빌%' }],
+      result: { data: [near1, near2], error: null } },
+    { table: 'molit_apt_index', ilikes: [{ col: 'sigungu', pattern: '능곡%' }, { col: 'apt_name', pattern: '%PLAN179테스트빌%' }],
+      result: { data: [near2], error: null } },
+  ];
+  await _withSearchDbStubChain(routes, async (handler) => {
+    const res = _mockRes();
+    await handler({ query: { q: '능곡 PLAN179테스트빌', limit: 10 } }, res, () => {});
+    assert.equal(res.statusCode, 200);
+    const r = res.body.results;
+    const iNear = r.findIndex((x) => x.umdNm === '능곡동');
+    const iFar = r.findIndex((x) => x.umdNm === '대치동');
+    assert.ok(iNear >= 0 && iFar >= 0, JSON.stringify(r));
+    assert.ok(iNear < iFar, `지역이 맞는 단지가 뒤에 있다: ${JSON.stringify(r.map((x) => [x.aptName, x.umdNm, x.dealCount]))}`);
+    const near = r.filter((x) => x.umdNm === '능곡동');
+    const total = near.reduce((a, x) => a + (x.dealCount || 0), 0);
+    assert.equal(total, 13, `동·시군구 두 경로가 같은 행을 두 번 셌다(4 + 9 = 13 이어야): ${JSON.stringify(near)}`);
+  });
+});
+
