@@ -280,7 +280,10 @@ function computeLTV(buyAuk, isRegulated, isFirstBuyer, houseStatus) {
   //   기존: 처분조건부 + isFirstBuyer X → pct=0.4 (잘못 — 처분조건부는 무주택 70%)
   //   변경: isDispose 우선 분기
   if (isDispose) {
-    pct = isRegulated ? 0.7 : 0.8; // 처분조건부 = 무주택 LTV
+    // DISPOSE-LTV-2026-10-30: 금융위 FAQ(fsc.go.kr/po020201/85518) "무주택자(처분조건부 1주택자 포함)가 규제지역 내 주담대
+    //   취급시 강화된 LTV(70→40%)가 적용" — 처분조건부는 '무주택 일반' 기준(규제 40%·비규제 70%). 생애최초 우대(70/80%)는
+    //   주택을 가진 적이 없어야 해 해당 없음. 기존 70/80% 는 한도를 과대 표시했고 화면 계산(calcLTV 40%)과도 갈렸다.
+    pct = isRegulated ? 0.4 : 0.7;
   } else if (isRegulated) {
     pct = isFirstBuyer ? 0.7 : 0.4;
   } else {

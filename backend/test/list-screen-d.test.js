@@ -46,7 +46,7 @@ function run({ props, searchMeta = null, cmp = [], flt = 'all' }) {
   };
   vm.createContext(ctx);
   const code = [
-    ...['_escHtml', '_fmtSgg', '_fmtEok', '_renderListCard', 'renderListGrid'].map((n) => extractFn(html, n)),
+    ...['_escHtml', '_fmtSgg', '_fmtEok', '_cardMaxLoan', '_renderListCard', 'renderListGrid'].map((n) => extractFn(html, n)),
     'globalThis.__render = renderListGrid;',
   ].join('\n');
   vm.runInContext(code, ctx);

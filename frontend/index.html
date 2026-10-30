@@ -2318,7 +2318,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
           <div id="ch-r-none" class="rsub-none" style="display:none">그 이름의 지역이 없어요. 다른 광역 탭도 확인해 보세요</div>
         </div>
         <details class="wopt" id="wizOpt">
-          <summary>＋ 더 정확한 보고서 (선택) <span style="font-weight:400;color:var(--t3);font-size:12px">생애최초, 연소득, 자녀, 거주기간, 우선순위, 평형, 직장</span></summary>
+          <summary>＋ 더 정확한 보고서 (선택) <span style="font-weight:400;color:var(--t3);font-size:12px">생애최초, 연소득, 자녀, 거주기간, 우선순위, 평형, 직장</span><span id="wizOptActive" style="display:block;font-weight:600;color:var(--t2);font-size:12px;margin-top:2px"></span></summary>
           <div style="margin-top:10px">
           <div class="mb9"><span class="lbl">생애 최초 <span class="wi" onclick="toast(this.title)" title="생애최초는 세대원 모두가 지금까지 한 번도 주택을 소유한 적이 없는 경우예요. LTV 우대나 취득세 감면 같은 혜택을 판단할 때 쓰여요.">ⓘ</span></span><div class="chips" id="ch-f"><span class="chip" onclick="cp(this,'ch-f')">예</span><span class="chip" onclick="cp(this,'ch-f')">아니오</span></div></div>
           <details id="polQualBox" style="margin-bottom:9px"><summary style="cursor:pointer;font-size:12px;color:var(--t2);user-select:none;list-style:none">▸ 정책자금 자격 (신혼·신생아 해당 시)</summary>
@@ -6695,7 +6695,9 @@ const PERSONAS = {
   // 칩 값은 실제 칩 텍스트와 정확 일치(1372~1402행 실측): kid 없음/예정/0~6세/초등/중등+ · stay 3년 이하/5~10년/10년+ ·
   // pri 학군/역세권/환금성/조용함/교통/신축/재건축/갭투자 · py 는 '소형/중형/대형' 접두 includes 매칭.
   first:    { label:'생애최초 첫집',   h:'무주택', f:'예',    nw:'아니오', nb:'아니오', bp:5,  mc:1.5, inc:5000,  py:'소형', pri:'역세권', kid:'없음',  stay:'5~10년', sc:'보통' },
-  newlywed: { label:'신혼부부',        h:'무주택', f:'예',    nw:'예',    nb:'아니오', bp:8,  mc:2.5, inc:9000,  py:'중형', pri:'교통',   kid:'예정',  stay:'5~10년', sc:'보통' },
+  // PERSONA-NW-2026-10-30: 종전 8억·연소득 9천만은 신혼 디딤돌 기준(소득 8.5천만↓·집값 6억↓, computePolicyLoan) 밖이라
+  //   예시를 누르면 정책자금이 '자격이 없어요'로 나왔다 — 신혼부부 예시는 그 기준 안 값으로.
+  newlywed: { label:'신혼부부',        h:'무주택', f:'예',    nw:'예',    nb:'아니오', bp:6,  mc:2,   inc:8000,  py:'중형', pri:'교통',   kid:'예정',  stay:'5~10년', sc:'보통' },
   newborn:  { label:'신생아 특례',     h:'무주택', f:'예',    nw:'아니오', nb:'예',    bp:9,  mc:3,   inc:11000, py:'중형', pri:'학군',   kid:'0~6세', stay:'10년+',  sc:'학군 중요' },
   upgrade:  { label:'갈아타기(1주택)', h:'1주택 (처분조건부)', f:'아니오', nw:'아니오', nb:'아니오', bp:12, mc:6, inc:12000, py:'중형', pri:'학군', kid:'초등', stay:'10년+', sc:'학군 중요' },
   school:   { label:'학군 최우선',     h:'무주택', f:'아니오', nw:'아니오', nb:'아니오', bp:10, mc:4,  inc:10000, py:'중형', pri:'학군',   kid:'초등',  stay:'10년+',  sc:'학군 중요' },
@@ -6718,7 +6720,7 @@ function applyPersona(key){
   setChip('ch-py', p.py); setChip('ch-pri', p.pri); setChip('ch-kid', p.kid); setChip('ch-stay', p.stay); setChip('ch-sc', p.sc);
   const _set = (id, v) => { const el = document.getElementById(id); if(el) el.value = String(v); };
   _set('bp', p.bp); _set('mc', p.mc); _set('inc', p.inc);
-  try{ cl(); }catch(_){} try{ dc(); }catch(_){} try{ _updateInputProgress(); }catch(_){}
+  try{ cl(); }catch(_){} try{ dc(); }catch(_){} try{ _updateInputProgress(); }catch(_){} try{ _updWizOptActive(); }catch(_){}
   // Sprint PPPPP-3: 프리셋이 채운 선택 입력(자녀·거주·우선순위 등)이 접힌 채라 "뭐가 채워졌는지" 안 보이던 것 —
   //   선택 접기를 열어 시각 피드백. 신혼/신생아 프리셋이면 정책자금 박스도 함께.
   try{
@@ -7687,6 +7689,16 @@ function setLstFilter(f) {
   renderListGrid();
 }
 
+// CARD-DSR-2026-10-30 (소비자 체험 점검): 서버의 maxLoan 은 LTV 만 반영해, 연소득을 넣어도 카드가 "최대 대출 4.49억"(실제 DSR 한도 2.76억)이었다.
+//   입력한 연소득이 있으면 왼쪽 계산(calcLTV)과 같은 DSR 한도로 낮추고 그 사실을 붙인다. 숫자가 아닌 안내 문구는 그대로.
+function _cardMaxLoan(maxLoan){
+  const ltvEok=parseFloat(String(maxLoan).replace(/[^0-9.]/g,''));
+  if(!/억\s*$/.test(String(maxLoan))||!Number.isFinite(ltvEok)) return String(maxLoan);
+  const inc=parseFloat(document.getElementById('inc')?.value)||0;
+  if(!(inc>0)) return String(maxLoan);
+  const r=calcLTV(ltvEok,0,inc,0,'무주택',false,getRegionForSearch());
+  return (r&&r.dL>0&&r.dL<ltvEok)?`${r.dL.toFixed(2)}억 · 소득 기준`:String(maxLoan);
+}
 // 카드 1개 렌더 (renderListGrid 에서 분리 — 안전망 활용)
 // LIST-D-2026-10-18 (Plan 163): 시안 D 카드 — 점수는 숫자+막대 한 가지, 거래량 배지(점수 75·50 기준 "거래활발" 등)는 없앴다.
 function _renderListCard(p, i) {
@@ -7712,7 +7724,7 @@ function _renderListCard(p, i) {
     <div class="ld-c-avg"><span class="ld-m" title="최근 거래일수록 비중을 크게 둔 평균이에요(단순 평균과 다를 수 있어요)">6개월 가중 평균</span><span class="ld-v">${_escHtml(_fmtEok(p.avgPrice, 2))}</span>${(Number.isFinite(_n) && _n > 0) ? `<span class="ld-m ld-sp">표본 ${_n}건</span>` : ''}</div>
     <div class="ld-pyg">${_pyCells}</div>
     <div class="ld-c-loan">
-      <div class="ld-lm"><div class="ld-m">LTV ${_escHtml(p.ltv || _regLtvLabel(p.area, p.lawdCd) || '—')}</div>${p.maxLoan ? `<div class="ld-mx">최대 대출 ${_escHtml(p.maxLoan)}</div>` : ''}</div>
+      <div class="ld-lm"><div class="ld-m">LTV ${_escHtml(p.ltv || _regLtvLabel(p.area, p.lawdCd) || '—')}</div>${p.maxLoan ? `<div class="ld-mx">최대 대출 ${_escHtml(_cardMaxLoan(p.maxLoan))}</div>` : ''}</div>
       <div class="ld-score"><span class="ld-m">점수</span>${_sc != null ? `<b>${Math.round(_sc)}</b><span class="ld-bar" aria-hidden="true"><i style="width:${_sc}%"></i></span>` : '<b>분석 대기</b>'}</div>
     </div>
     <div class="ld-c-cmp"><button type="button" class="ld-cmp" aria-pressed="${_on ? 'true' : 'false'}" aria-label="비교 담기" onclick="event.stopPropagation();toggleCmp(${i},!cmpSel.has(${i}));renderListGrid()"><span class="ld-cmp-t">${_on ? '담았어요' : '비교 담기'}</span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${_on ? '<path d="M5 12l5 5L20 7"/>' : '<path d="M12 5v14M5 12h14"/>'}</svg></button></div>
@@ -8124,7 +8136,16 @@ function renderCompareModal(data, bodyEl){
   const results = (data && data.results) || [];
   if(results.length < 2){ bodyEl.innerHTML = `<div class="ibox y" style="margin:16px">비교할 단지 데이터가 부족해요.</div>`; return; }
   const clusters = _clusterBands(results);
-  if(_cmpBand==null && clusters.length) _cmpBand = clusters[0].center;
+  // CMP-BAND-PY-2026-10-30 (소비자 체험 점검): 목록에서 '중형 23~33평'을 골랐는데 비교가 표본 많은 59㎡(18평)로 열려
+  //   같은 단지가 목록 6.42억·비교 5.15억으로 보였다. 고른 평형 범위에 드는 묶음을 먼저(신뢰도 순서 유지), 없으면 종전대로.
+  if(_cmpBand==null && clusters.length){
+    let pick = clusters[0];
+    try {
+      const pr = (typeof pyRange === 'function' && gct('ch-py') && !gct('ch-py').startsWith('전체')) ? pyRange() : null;
+      if (pr) { const inR = clusters.find(c => c.pyeong >= pr.minArea && c.pyeong <= pr.maxArea); if (inR) pick = inR; }
+    } catch (_) { /* 평형 칩이 없는 화면(관심 단지 비교)에선 종전대로 */ }
+    _cmpBand = pick.center;
+  }
   const sel = clusters.find(c=>c.center===_cmpBand) || clusters[0] || null;
   const perResult = sel ? sel.perResult : results.map(()=>null);
 
@@ -9867,7 +9888,7 @@ function renderAnalysis(d,p){
       <strong>⚠ 표본 부족 (${d.txCount||0}건)</strong> 신호등을 보여 드릴 수 없어요.
       거래 데이터가 ${reliability==='NONE'?'8건 미만':'25건 미만'}이면 오차 범위가 ±20% 이상이라 매수 가격을 판단하는 데 쓰기 어려워요.
     </div>`:
-    (reliability==='MED'?`<div class="ibox y" style="margin-bottom:10px;font-size:12px">⚠ 거래 ${d.txCount}건 기준이라 표본이 적어 오차가 있을 수 있어요. 참고용으로만 보세요.</div>`:
+    (reliability==='MED'?`<div class="ibox y" style="margin-bottom:10px;font-size:12px">⚠ 표본 보통: 거래 ${d.txCount}건${d.anomalyCount>0?` 중 이상 거래 ${d.anomalyCount}건을 빼고 ${d.filteredTxCount||d.txCount}건`:''}으로 분석해 오차가 있을 수 있어요. 참고용으로만 보세요.</div>`:
     d.anomalyCount>0?`<div class="ibox b" style="margin-bottom:10px;font-size:12px">ℹ 이상 거래 ${d.anomalyCount}건을 빼고 분석했어요 (±30% 초과 가격)</div>`:'');
 
   // ─ 시세 위치 요약 (NONE/LOW = 회색)
@@ -11546,10 +11567,32 @@ function restoreSearchFromUrl(){
     return _hasUrl?'url':'stored';
   }catch(e){return false;}
 }
+// WIZOPT-ACTIVE-2026-10-30 (소비자 체험 점검): 접힌 '더 정확한 보고서(선택)' 안의 평형(기본 '중형')·생애최초·연소득이
+//   검색 결과와 대출 한도를 바꾸는데 접힌 제목에는 안 보였다 — 결과에 영향을 주는 값만 제목 아래에 적는다.
+function _updWizOptActive(){
+  try{
+    const el=document.getElementById('wizOptActive'); if(!el) return;
+    const parts=[];
+    const py=gct('ch-py'); if(py) parts.push(py);
+    if(gct('ch-f')==='예') parts.push('생애최초');
+    if(gct('ch-nw')==='예') parts.push('신혼부부');
+    if(gct('ch-nb')==='예') parts.push('신생아');
+    const inc=parseFloat(document.getElementById('inc')?.value)||0; if(inc>0) parts.push(`연소득 ${Math.round(inc).toLocaleString()}만`);
+    el.textContent=parts.length?`적용 중: ${parts.join(' · ')}`:'';
+  }catch(_){}
+}
+document.addEventListener('DOMContentLoaded',()=>{
+  _updWizOptActive();
+  const i=document.getElementById('inc'); if(i) i.addEventListener('input',_updWizOptActive);
+  // 칩은 cp() 말고도 예시 적용·주소 복원·저장값 복원이 직접 켠다 — 접힌 칸 안의 선택 변화를 감시해 늘 같게.
+  try{ const o=document.getElementById('wizOpt'); if(o&&window.MutationObserver) new MutationObserver(_updWizOptActive).observe(o,{subtree:true,attributes:true,attributeFilter:['class']}); }catch(_){}
+  setTimeout(_updWizOptActive,1500); // 저장된 연소득 복원 뒤
+});
 function cp(el,id){
   document.querySelector(`#${id}`).querySelectorAll('.chip').forEach(c=>c.classList.remove('on'));
   el.classList.add('on');
   if(id==='ch-r')populateRegionSub(el.textContent.trim());
+  if(typeof _updWizOptActive==='function') setTimeout(_updWizOptActive,0);
   // KB 인사이트 3 (2026-05-06): 2주택+ 선택 시 양도세 중과 알림 (regulationsService 출처)
   if(id==='ch-h' && el.textContent.trim()==='2주택+'){
     // UX 정리(2026-06-01): 칩 클릭마다 매번 → 세션당 1회만 (반복 노출 noise 제거)
@@ -11736,6 +11779,8 @@ function computePolicyLoan({ buy, income, isFirstBuyer, isNewlywed, hasNewborn, 
     note: eligible.length === 0 ? '정책자금 자격이 없어요 (소득·주택가격 기준을 넘거나 무주택이 아니에요)' : null,
   };
 }
+// 대출 계산들이 함께 쓰는 기준 금리: 시중 평균 주담대(한국은행, 받았을 때) 없으면 4% — dc() 의 기본값과 같은 규칙
+function _loanBaseRate(){ const r=Number(window._ecosMortgageRate); return (r>0&&r<20)?r/100:0.04; }
 function calcLTV(buy,cash,inc,mo,house,isF,region){
   // 2026-04-25 P0 핫픽스: regulations_snapshot 기반 매칭 (Bug #4 — LTV 오계산)
   // 기존: region==='서울'||region==='경기' → 일산·동두천도 규제, 광명·하남·의왕은 매칭 누락 가능
@@ -11759,7 +11804,9 @@ function calcLTV(buy,cash,inc,mo,house,isF,region){
   //   DSR 한도(dL)는 스트레스금리(sRate), 월상환(mo2)은 실금리(baseRate)로 분리 — dc 와 동일(기존엔 월상환도 스트레스금리로 과대계산).
   // STRESS-METRO-2026-06-27: 스트레스금리는 '수도권 전역(서울·경기·인천)' +3.0%p / 지방 +0.75%p — 금융위 10.15 FAQ Q4-1 '지방만 제외'(비규제 수도권도 포함) 공식검증. LTV/cap 은 규제지역(isR) 기준 별개.
   const isMetro=['서울','경기','인천'].some(k=>String(region||'').includes(k));
-  const lL=Math.min(buy*ltv,cap),baseRate=0.04,sRate=baseRate+(isMetro?0.03:0.0075);
+  // LOAN-ONE-RATE-2026-10-30 (소비자 체험 점검): 기준 금리를 4% 로 고정해 '대출 계산'(dc — 시중 평균 _ecosMortgageRate, 없을 때만 4%)과
+  //   같은 입력에 DSR 한도가 3.01억 vs 2.76억으로 갈렸다(운영 실측). 같은 규칙으로 맞춘다.
+  const lL=Math.min(buy*ltv,cap),baseRate=_loanBaseRate(),sRate=baseRate+(isMetro?0.03:0.0075);
   let dL=0;
   if(inc>0){const dsrMonthly=inc*10000*.4/12;const ef=(mo>0?Math.min(mo*10000,dsrMonthly):dsrMonthly);dL=Math.round(ef*(1-Math.pow(1+sRate/12,-360))/(sRate/12)/1e8*100)/100;}
   const fin=dL>0?Math.min(lL,dL):lL,mo2=fin>0?Math.round(fin*1e8*baseRate/12/(1-Math.pow(1+baseRate/12,-360))/10000):0,need=Math.max(0,buy-cash-fin);
@@ -11878,6 +11925,9 @@ function dc(fromBtn){
   //   exAdded 에 이미 합산됨 — 구 disclaimer "미반영"이 계산 로직과 정반대로 안내되던 것 정정.
   const _allowMan=inc>0?Math.round(inc*.4/12):0;
   const dsrNote=dsrState==='zero'?` · 기존 월상환 ${Math.round(exAdded)}만원이 DSR 40% 허용액(월 ${_allowMan}만원)을 넘어 신규 대출 여력이 없어요`
+    // DSR-BIND-NOTE-2026-10-30: 한도는 스트레스 금리(+3.0%p, 지방 +0.75%p)로 정하고 DSR 비율은 실제 금리로 계산한다 —
+    //   한도를 DSR 이 정했는데 "DSR 29%로 여유가 있어요"라고 말하던 모순(운영 실측). 한도를 정한 기준을 먼저 말한다.
+    :(dsrState==='ok'&&dL<lL&&dsr>0)?` · 소득 기준(스트레스 DSR, 금리 +${isLoc?'0.75':'3.0'}%p 가정)으로 한도가 정해졌어요. 실제 금리로 계산한 DSR은 ${dsr}%예요`
     :dsr>0?(dsrExceed?` · DSR ${dsr}%로 한도(40%)를 넘어 대출이 거절될 수 있어요`:dsr>=35?` · DSR ${dsr}%로 한도에 가까워요`:` · DSR ${dsr}%로 여유가 있어요`):'';
   const dsrDisclaimer = dsr>0 ? ' · 신용대출·전세대출 잔액은 추정 월 상환액(신용 6%·5년, 전세 4%·2년 가정)으로 반영해서, 금융기관의 실제 심사 결과와 다를 수 있어요' : '';
   document.getElementById('co_w').textContent=[warn, dsrNote, dsrDisclaimer].map(x=>String(x||'').replace(/^\s*·\s*/,'')).filter(Boolean).join(' · '); // warn 이 빈 문자열이면 ' · DSR …' 처럼 구분점으로 시작했다(QA 2026-10-27)
@@ -14842,14 +14892,18 @@ function _isUnnamedApt(name){
   return s.replace(/[^가-힣A-Za-z]/g,'').length < 2;
 }
 function _dispAptName(name, umdNm, kaptName){
-  if (kaptName && String(kaptName).trim()) return String(kaptName).trim();
+  // ORG-SUFFIX-2026-10-30: backend/utils/aptDisplayName.js stripOrgSuffix 와 같은 규칙(표시 전용) — 관리 조직 꼬리말 제거.
+  //   함수 안에 둔다: 여러 테스트가 이 함수만 떼어 실행한다.
+  const _ORG_SUFFIX_RE = /\s*(?:\([^()]*(?:입주자대표회의|관리사무소|관리주체)[^()]*\)|(?:제\d+)?(?:입주자대표회의|관리사무소|관리주체))\s*$/;
+  const _stripOrgSuffix = (v) => { const t=String(v==null?'':v).trim(); const r=t.replace(_ORG_SUFFIX_RE,'').trim(); return r||t; };
+  if (kaptName && String(kaptName).trim()) return _stripOrgSuffix(kaptName);
   const s = String(name==null?'':name).trim();
   if (_isUnnamedApt(s)) {
     const jb = (s.match(/\d+(?:-\d+)?/)||[''])[0];
     return [umdNm?String(umdNm).trim():'', jb?`${jb}번지`:'', '단지 (이름 미등록)'].filter(Boolean).join(' ');
   }
   const m = s.match(JIBUN_SUFFIX_RE);
-  return m ? `${s.slice(0,m.index).trim()} (${m[1]}번지)` : s;
+  return m ? `${_stripOrgSuffix(s.slice(0,m.index))} (${m[1]}번지)` : _stripOrgSuffix(s);
 }
 
 /* ── 지역 시장 요약 모달 (Sprint WWWWWW) ───────────────────────────────────────────

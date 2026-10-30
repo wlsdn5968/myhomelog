@@ -49,7 +49,10 @@ test('computeLTV — 무주택 규제/비규제/생애최초', () => {
 test('computeLTV — 1주택/처분조건부/2주택+', () => {
   assert.deepEqual(computeLTV(7, true, false, '1주택'), { ltv: '0% (1주택 규제지역)', maxLoan: '처분조건부 chip 선택 시 무주택 한도' });
   assert.deepEqual(computeLTV(7, false, false, '1주택'), { ltv: '70% (비규제)', maxLoan: '4.90억' });
-  assert.deepEqual(computeLTV(7, true, false, '1주택 (처분조건부)'), { ltv: '70% (규제) · 처분조건부', maxLoan: '4.90억' });
+  // DISPOSE-LTV-2026-10-30: 금융위 FAQ(fsc.go.kr/po020201/85518) "무주택자(처분조건부 1주택자 포함)… 강화된 LTV(70→40%)"
+  assert.deepEqual(computeLTV(7, true, false, '1주택 (처분조건부)'), { ltv: '40% (규제) · 처분조건부', maxLoan: '2.80억' });
+  assert.deepEqual(computeLTV(7, false, false, '1주택 (처분조건부)'), { ltv: '70% (비규제) · 처분조건부', maxLoan: '4.90억' });
+  assert.deepEqual(computeLTV(7, true, true, '1주택 (처분조건부)'), { ltv: '40% (규제) · 처분조건부', maxLoan: '2.80억' }); // 주택 보유자는 생애최초 우대 대상 아님
   assert.deepEqual(computeLTV(7, true, false, '2주택+'), { ltv: '0% (규제)', maxLoan: '0억' });
 });
 

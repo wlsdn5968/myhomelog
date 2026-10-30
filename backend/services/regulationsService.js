@@ -13,6 +13,8 @@
  *     운영자가 DB 에 새 row 넣고 반영이 최대 10분만 지연되는게 합리적.
  */
 const cache = require('../cache');
+const { kstDate } = require('../utils/kstTime');
+const _kstDay = (v) => { if (!v) return null; const t = Date.parse(String(v)); return Number.isFinite(t) ? kstDate(t) : String(v).slice(0, 10); };
 const logger = require('../logger');
 // SSOT-2026-08-09 (Plan 007): 자체 createClient → db/client 팩토리
 const { getSupabaseReadonly } = require('../db/client');
@@ -284,8 +286,10 @@ async function getChangeLog() {
     const items = (data || []).map(r => ({
       key: r.key,
       tag: REG_KEY_LABEL[r.key] || r.key,
-      effectiveFrom: r.valid_from ? String(r.valid_from).slice(0, 10) : null,
-      supersededAt: r.valid_to ? String(r.valid_to).slice(0, 10) : null,
+      // KST-DATE-2026-10-30: valid_from 은 KST 자정(= 전날 15:00 UTC)으로 저장된다 — 문자열 앞 10자는 UTC 날짜라
+      //   화면에 '2025.10.14 시행'(실제 2025-10-15)으로 하루 앞당겨 보였다. 한국 날짜로 바꾼다.
+      effectiveFrom: _kstDay(r.valid_from),
+      supersededAt: _kstDay(r.valid_to),
       verifiedAt: r.source_effective_date || null,
       note: r.note ? String(r.note).split('/')[0].trim() : null,
       sourceUrl: r.source_url || null,
@@ -354,4 +358,5 @@ module.exports = {
   getRegulatedLawdCodes,
   isRegulatedRegion,
   SEOUL_GU_KEYWORDS,
+  _kstDay,
 };
