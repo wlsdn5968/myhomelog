@@ -98,6 +98,9 @@ test('⑤ 화면 연결: 뷰 등록·도구 메뉴·도구 시트·단지 상세
   assert.match(html, /function calcLTV\(buy,cash,inc,mo,house,isF,region,lawdCd\)\{/);
   assert.match(html, /const isR=isRegFront\(region,lawdCd\)/);
   assert.match(html, /'view-deal','view-swap',/);
+  // 일시적 2주택 취득세: 지방세법 §13조의2 ①2호(일시적 2주택은 중과 제외)·시행령 §28조의5 — law.go.kr 원문 확인
+  assert.match(html, /새 집 취득세도 같은 기간 안에 지금 집을 팔면 2주택 중과 대신 기본세율이에요\./);
+  assert.match(html, /\['지방세법 제13조의2',law\('지방세법','제13조의2'\)\],\['지방세법 시행령 제28조의5',law\('지방세법시행령','제28조의5'\)\]/);
   // 리뷰 반영: 손상된 저장값·참고값, 연도 입력 중 값, 지역 메뉴 도착 뒤 재판정, 핵심 숫자만 읽어 주기
   assert.match(fnSrc('_swpLoad'), /!Array\.isArray\(o\)/);
   assert.match(fnSrc('_swpRender'), /\['min','avg','max','n'\]\.every\(k=>Number\.isFinite\(a\.ref\[k\]\)\)/);

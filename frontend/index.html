@@ -662,27 +662,31 @@ header .hbtn:hover{border-color:var(--hd-ac);color:var(--hd-tab-act)}
    칩 선택 상태는 시안 미정의 → 골드 배경+잉크(#0B1524, 대비 6.4:1) — 골드 위 흰 글자(3.3:1)는 AA 미달이라 쓰지 않는다.
    구조(번호 배지·필수 태그·입력창)는 유지. 전역 --acc(네이비)는 건드리지 않는다(다른 뷰 무영향). */
 body .lp{ /* (0,1,1) — 이 블록보다 뒤에 선언된 전역 .lp{background:var(--s0)} 보다 앞에 있어도 이기도록 */
-  --sb-panel:#FFFFFF; --sb-raise:#EFEFEB; --sb-line:#E2E1DC; --sb-tx:#15191F; --sb-tx2:#4A515C; --sb-tx3:#69707B;
-  --sb-ac:#C98A00; --sb-ac2:#A87200; --sb-ink:#0B1524; --sb-ac-tint:rgba(201,138,0,.14);
+  /* SB-V2-2026-10-30 (Plan 159, 2차 소비자 점검 E): 금색(#C98A00 흰 바탕 2.95:1, AA 미달) → v2 남색. 시안 p/65618931 값 그대로.
+     --sb-ac 주색 · --sb-ac2 주 버튼 hover · --sb-ink 주색 위 글자 · --sb-sel 선택 배경 · --sb-line2 칩·입력 테두리 */
+  --sb-panel:#FFFFFF; --sb-raise:#EFEFEB; --sb-line:#E2E1DC; --sb-line2:#CFCEC7; --sb-tx:#15191F; --sb-tx2:#4A515C; --sb-tx3:#69707B;
+  --sb-ac:#173A63; --sb-ac2:#0F2C4D; --sb-ink:#FFFFFF; --sb-sel:#E7EDF4; --sb-ac-tint:rgba(23,58,99,.20);
   background:var(--sb-panel);border-right-color:var(--sb-line);
 }
 html[data-theme="dark"] body .lp{ /* (0,1,2) — 뒤에 오는 전역 .lp{background:var(--s0)} 와 다크 --s0 상속을 이기도록 */
-  --sb-panel:#151E2B; --sb-raise:#1C2736; --sb-line:#263345; --sb-tx:#E8ECF1; --sb-tx2:#B3BDCA; --sb-tx3:#8C97A6;
-  --sb-ac:#FFC93C; --sb-ac2:#F5A524; --sb-ink:#0B1524; --sb-ac-tint:rgba(255,201,60,.16);
+  --sb-panel:#151E2B; --sb-raise:#1B2636; --sb-line:#243246; --sb-line2:#34445B; --sb-tx:#E9EDF2; --sb-tx2:#B5BEC9; --sb-tx3:#8D97A4;
+  --sb-ac:#8DB3E2; --sb-ac2:#A9C6EA; --sb-ink:#0E1520; --sb-sel:#1D2D43; --sb-ac-tint:rgba(141,179,226,.30);
   background:var(--sb-panel);border-right-color:var(--sb-line); /* 기존 다크 .lp 규칙(--s0)이 이기던 갭 — 같은 specificity 뒤 선언 */
 }
 .lp .sec{border-bottom-color:var(--sb-line)}
-.lp .wnum{background:var(--sb-ac);color:var(--sb-ink)}
+.lp .wnum{background:var(--sb-ac);color:var(--sb-ink);width:24px;height:24px;font-size:12px;font-weight:700}
+.lp .wreq,html[data-theme="dark"] .lp .wreq{background:var(--sb-raise);color:var(--sb-tx2);font-weight:500;padding:2px 6px;border-radius:4px} /* '필수' — #69707B 는 보조면 위 4.33:1 이라 보조 글자(6.95:1) */
 .lp .wtitle{color:var(--sb-tx)}
-.lp .chip{background:var(--sb-raise);border-color:var(--sb-line);color:var(--sb-tx2)}
+.lp .chip{background:var(--sb-panel);border-color:var(--sb-line2);color:var(--sb-tx2);font-weight:500;min-height:36px}
 .lp .chip:hover{border-color:var(--sb-ac);color:var(--sb-tx)}
-.lp .chip.on{background:var(--sb-ac);border-color:var(--sb-ac);color:var(--sb-ink)}
-.lp .inp{background:var(--sb-panel);border-color:var(--sb-line);color:var(--sb-tx)}
+.lp .chip.on{background:var(--sb-sel);border-color:var(--sb-ac);color:var(--sb-ac);font-weight:700}
+.lp .inp{background:var(--sb-panel);border-color:var(--sb-line2);color:var(--sb-tx)}
 .lp .inp:focus{border-color:var(--sb-ac);box-shadow:0 0 0 3px var(--sb-ac-tint)}
 .lp .abtn.a2,.lp-cta .abtn.a2{background:var(--sb-ac);color:var(--sb-ink);border-color:var(--sb-ac)}
-.lp .abtn.a2:hover,.lp-cta .abtn.a2:hover{background:var(--sb-ac2)}
-.lp .abtn.acc{background:var(--sb-raise);color:var(--sb-tx);border:1px solid var(--sb-line)}
-.lp .abtn.acc:hover{background:var(--sb-line)} /* 적대 검증: 전역 .abtn.acc:hover(네이비)가 이겨 잉크 글자 대비 붕괴하던 갭 */
+.lp .abtn.a2:hover,.lp-cta .abtn.a2:hover{background:var(--sb-ac2);border-color:var(--sb-ac2)}
+.lp .abtn.acc{background:var(--sb-panel);color:var(--sb-tx);border:1px solid var(--sb-line2)}
+.lp .abtn.acc:hover{background:var(--sb-panel);border-color:var(--sb-ac);color:var(--sb-ac)} /* 보조 버튼 hover = 테두리·글자 주색(시안) */
+@media(max-width:700px){.lp .chip{min-height:44px}} /* 모바일 서랍: 손가락 크기(시안) */
 .lp .lp-cta{border-top-color:var(--sb-line);background:var(--sb-panel)}
 /* 계정 아바타 + 드롭다운 (시안 컷2) */
 .acct-dd{position:relative;display:none}
@@ -2419,7 +2423,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 
   <!-- 북마크 섹션 (IA-2026-07-12: 내 상황 아래로 이동) -->
   <div class="sec" id="s0">
-    <div class="sh" onclick="ts('s0')"><span class="st">관심 단지</span><span id="bkCnt" style="color:var(--amb);font-size:12px;font-weight:700">0</span><span class="sa">▲</span></div>
+    <div class="sh" onclick="ts('s0')"><span class="st">관심 단지</span><span id="bkCnt" style="color:var(--sb-ac,var(--acc));font-size:12px;font-weight:700">0</span><span class="sa">▲</span></div>
     <div class="sb" style="padding:0" id="bkList">
       <!-- P1 (Phase 2 3-1): Empty state 행동 유도 -->
       <div class="bk-empty">
@@ -2510,13 +2514,13 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
 #view-map,.lp{
   --map-panel:#FFFFFF; --map-raise:#EFEFEB; --map-line:#E2E1DC;
   --map-tx:#15191F; --map-tx2:#4A515C; --map-tx3:#69707B;
-  --map-ac:#C98A00;
+  --map-ac:#173A63; --map-onac:#FFFFFF; --map-ac2:#0F2C4D; --map-line2:#CFCEC7; /* SB-V2 (Plan 159): 금색 → v2 남색 */
   --map-shadow:0 1px 2px rgba(11,21,36,.06),0 10px 28px rgba(11,21,36,.07);
 }
 html[data-theme="dark"] #view-map,html[data-theme="dark"] .lp{
   --map-panel:#151E2B; --map-raise:#1C2736; --map-line:#263345;
   --map-tx:#E8ECF1; --map-tx2:#B3BDCA; --map-tx3:#8C97A6;
-  --map-ac:#FFC93C;
+  --map-ac:#8DB3E2; --map-onac:#0E1520; --map-ac2:#A9C6EA; --map-line2:#34445B;
   --map-shadow:0 1px 0 rgba(255,255,255,.03),0 12px 32px rgba(0,0,0,.35);
 }
 /* 가격 pill — 기존 하드코딩(#fff/#19223A/#8A93A3)이 다크모드에서 그대로 남던 갭을 토큰으로 해소.
@@ -2527,8 +2531,13 @@ html[data-theme="dark"] #view-map,html[data-theme="dark"] .lp{
 /* VERIFY-FIX-2026-08-19: ID 스코프(1-1-0)가 .nmap-bub.reg 의 빨간 후광(0-2-0)을 명시성으로 덮던 회귀 — 동일 값 복원 */
 #view-map .nmap-bub.reg{box-shadow:0 3px 11px rgba(229,72,77,.24),0 1px 3px rgba(16,24,40,.10)}
 #view-map .pop-marker{background:var(--map-panel);border:1px solid var(--map-line);color:var(--map-tx);box-shadow:var(--map-shadow)}
-#view-map .pop-marker .pop-rank{background:var(--map-ac)}
-html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
+#view-map .pop-marker .pop-rank{background:var(--map-ac);color:var(--map-onac);min-width:24px;height:24px;font-size:12px;font-weight:700} /* 시안: 숫자 원 24·12/700 — 단지명 옆 구조는 그대로(가격 추가 안 함) */
+#view-map .pop-marker:hover{border-color:var(--map-ac)}
+#_pannBtn{background:var(--map-panel,#fff);color:var(--map-ac,#173A63);border:1px solid var(--map-line2,#CFCEC7);border-radius:8px;min-height:44px;padding:0 20px;font-size:14px;font-weight:700;box-shadow:0 2px 12px rgba(0,0,0,.14)}
+html[data-theme="dark"] #_pannBtn{box-shadow:0 2px 12px rgba(0,0,0,.4)}
+#_pannBtn:hover{border-color:var(--map-ac,#173A63)}
+#msDetailBtn{background:var(--map-ac);color:var(--map-onac);min-height:44px;border-radius:8px;font-weight:700;font-size:16px}
+#msDetailBtn:hover{background:var(--map-ac2)}
 #mapTrustChip{display:none;align-items:baseline;gap:4px;font-size:12px;color:var(--map-tx3);background:var(--map-panel);border:1px solid var(--map-line);border-radius:var(--radius-sm);padding:3px 8px}
 #popLegend::before{content:"| "}
 #mapTrustChip b{color:var(--map-tx2);font-weight:700}
@@ -2623,7 +2632,7 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
   </div>
   <div id="msSrc" style="margin-top:7px;font-size:12px;color:var(--map-tx3)"></div>
   <div style="display:flex;gap:8px;align-items:center;margin-top:10px">
-    <button onclick="_msDetail()" style="flex:1;padding:11px;border-radius:var(--radius-md);background:var(--map-ac);border:none;color:#0B1524;font-weight:800;font-size:14px;font-family:inherit;cursor:pointer">단지 상세 보기</button>
+    <button id="msDetailBtn" onclick="_msDetail()" style="flex:1;padding:0 11px;border:none;font-family:inherit;cursor:pointer">단지 상세 보기</button>
     <a href="javascript:void(0)" onclick="_msReport()" style="font-size:12px;color:var(--map-tx3);flex-shrink:0">오류 신고</a>
     <button onclick="closeMapSheet()" aria-label="시트 닫기" style="width:34px;height:38px;border-radius:var(--radius-md);background:var(--map-raise);border:1px solid var(--map-line);color:var(--map-tx2);cursor:pointer;flex-shrink:0">✕</button>
   </div>
@@ -3100,7 +3109,8 @@ html[data-theme="dark"] input[type=date].swp-inp{color-scheme:dark}
 .swp-lb.law{background:transparent;color:var(--sw-pri);box-shadow:inset 0 0 0 1px var(--sw-pri);padding:1px 7px}
 .swp-lb.off{background:var(--sw-sel);color:var(--sw-pri)}
 .swp-src{background:var(--sw-sub);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--sw-t2);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
-.swp-src[hidden]{display:none} /* display:flex 가 hidden 속성을 덮지 않게 */
+.swp-src[hidden]{display:none}
+.swp-src>div{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;width:100%} /* display:flex 가 hidden 속성을 덮지 않게 */
 .swp-src i{font-style:normal;color:var(--sw-t3)}
 .swp-src a{display:inline-flex;align-items:center;min-height:44px;color:var(--sw-pri);font-weight:700;text-decoration:none}
 .swp-src a:hover{text-decoration:underline}
@@ -7119,7 +7129,7 @@ function _initPannBtn(){
   if (!mapEl) return;
   _pannBtn = document.createElement('button');
   _pannBtn.id = '_pannBtn';
-  _pannBtn.style.cssText = 'position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:350;padding:9px 18px;background:var(--map-ac,var(--acc-bg));color:#0B1524;border:none;border-radius:24px;font-size:12px;font-weight:700;box-shadow:0 4px 14px rgba(0,0,0,0.22);cursor:pointer;font-family:inherit;white-space:nowrap';
+  _pannBtn.style.cssText = 'position:absolute;top:14px;left:50%;transform:translateX(-50%);z-index:350;cursor:pointer;font-family:inherit;white-space:nowrap'; // 색·크기는 #_pannBtn CSS(SB-V2, Plan 159)
   _pannBtn.textContent = '이 지역 단지 보기';
   _pannBtn.onclick = _pannSearchNow;
   mapEl.appendChild(_pannBtn);
@@ -11568,7 +11578,7 @@ function _dclData(){
         {id:'b_loan',t:'대출 가능 금액 미리 확인',lb:'gen',btn:{t:'대출 계산',v:'calc'}},
         {id:'b_reg',t:'등기부로 매도인이 소유자인지 확인',d:'근저당이 있는지도 함께 확인해요.',lb:'off',src:[A,B]},
         {id:'b_land',t:'토지거래허가구역이면 허가 먼저 받기',d:'주거용은 취득일부터 2년 동안 이용 의무가 있어요.',lb:'law',src:[L('부동산거래신고등에관한법률시행령','제14조','부동산 거래신고 등에 관한 법률 시행령 제14조')]},
-        {id:'b_fund',t:'자금조달·입주계획서 제출 대상인지 확인',d:'제출 대상 금액은 바뀔 수 있어 중개사·시군구청에 확인해요.',lb:'off',src:[RPT,L('부동산거래신고등에관한법률시행령','제3조','부동산 거래신고 등에 관한 법률 시행령 제3조')]},
+        {id:'b_fund',t:'자금조달·입주계획서 제출 대상인지 확인',d:'개인은 실거래가 6억 원 이상이거나, 투기과열지구·조정대상지역 주택이면 금액과 관계없이 내요. 기준은 바뀔 수 있어 중개사·시군구청에 확인해요.',lb:'off',src:[{n:"찾기쉬운 생활법령정보(법제처) '부동산거래 신고'",l:'생활법령정보에서 보기',u:'https://www.easylaw.go.kr/CSP/CnpClsMain.laf?csmSeq=649&ccfNo=4&cciNo=2&cnpClsNo=1'},L('부동산거래신고등에관한법률시행령','제3조','부동산 거래신고 등에 관한 법률 시행령 제3조')]},
         {id:'b_disp',t:'처분조건부 대출이면 기존 집 처분 기한 확인',d:'대출 실행일부터 6개월 안에 기존 집을 처분해야 해요. 어기면 대출이 회수돼요. 대출 은행과 확인해요.',lb:'off',src:[F]},
       ]},
       {k:'day',n:'계약 당일',items:[
@@ -11909,17 +11919,19 @@ function _swpRender(){
   const dl=_swpDeadlines(s.bal),today=new Date();
   if(dl){
     const dd=d=>_dclDd(_dclDiff(d,today));
-    const src=(k,name,url)=>`<button type="button" class="swp-more" aria-expanded="${_swpSrcOpen[k]?'true':'false'}" aria-controls="swpSrc${k}" onclick="_swpMore('${k}')">근거 보기</button>`
-      +`<div class="swp-src" id="swpSrc${k}"${_swpSrcOpen[k]?'':' hidden'}><span>${E(name)} <i>· 2026-10-30 확인</i></span><a href="${E(url)}" target="_blank" rel="noopener noreferrer">원문 보기</a></div>`;
+    const law=(n,jo)=>'https://www.law.go.kr/법령/'+encodeURIComponent(n)+'/'+encodeURIComponent(jo);
+    const src=(k,rows)=>`<button type="button" class="swp-more" aria-expanded="${_swpSrcOpen[k]?'true':'false'}" aria-controls="swpSrc${k}" onclick="_swpMore('${k}')">근거 보기</button>`
+      +`<div class="swp-src" id="swpSrc${k}"${_swpSrcOpen[k]?'':' hidden'}>${rows.map(([name,url])=>`<div><span>${E(name)} <i>· 2026-10-30 확인</i></span> <a href="${E(url)}" target="_blank" rel="noopener noreferrer">원문 보기</a></div>`).join('')}</div>`;
     h+=`<section class="swp-card" aria-labelledby="swpR4"><h2 class="swp-ct" id="swpR4">기한</h2>`
       +`<div class="swp-dl"><div class="swp-dh"><span>처분조건부 대출</span><span class="swp-lb off">공식 안내</span><span class="dd">${dd(dl.dispose)}</span></div>`
       +`<div class="swp-dt">${_swpFmtFull(dl.dispose)}까지 지금 집 처분</div>`
       +`<p class="swp-gd">대출 실행일(새 집 잔금일로 가정)부터 6개월. 어기면 대출이 회수돼요.</p>`
-      +src('d','금융위원회 가계대출 관리 강화 FAQ(2025.6.27) 7번','https://www.fsc.go.kr/po020201/84825')+`</div>`
+      +src('d',[['금융위원회 가계대출 관리 강화 FAQ(2025.6.27) 7번','https://www.fsc.go.kr/po020201/84825']])+`</div>`
       +`<div class="swp-dl"><div class="swp-dh"><span>일시적 2주택 비과세</span><span class="swp-lb law">법령</span></div>`
       +`<div class="swp-dt">${_swpFmtFull(dl.tmp3)}까지 팔면 비과세 특례 대상</div>`
       +`<p class="swp-gd">새 집 취득일부터 3년. 두 집 모두 조정대상지역이면 2년(${_swpFmtFull(dl.tmp2)})이에요. 2026년 10월 1일 시행 기준이고, 적용 시점은 세무서와 확인해요.</p>`
-      +src('t','소득세법 시행령 제155조','https://www.law.go.kr/법령/'+encodeURIComponent('소득세법시행령')+'/'+encodeURIComponent('제155조'))+`</div>`
+      +`<p class="swp-gd">새 집 취득세도 같은 기간 안에 지금 집을 팔면 2주택 중과 대신 기본세율이에요.</p>`
+      +src('t',[['소득세법 시행령 제155조',law('소득세법시행령','제155조')],['지방세법 제13조의2',law('지방세법','제13조의2')],['지방세법 시행령 제28조의5',law('지방세법시행령','제28조의5')]])+`</div>`
       +`<div><button type="button" class="swp-btn2" onclick="_swpToDeal()">거래 체크리스트 매도인 보기</button></div></section>`;
   } else {
     h+=`<section class="swp-card"><h2 class="swp-ct">기한</h2><p class="swp-gd">새 집 잔금일을 넣으면 지금 집 처분 기한을 계산해요.</p></section>`;
