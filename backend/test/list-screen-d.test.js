@@ -94,11 +94,14 @@ test('Plan 163 (c): 표본 건수는 priceSampleN 이 있을 때만', () => {
   assert.ok(!cardHtml({ priceSampleN: 0 }).includes('표본'));
 });
 
-test('Plan 163 (d): 평형이 1개뿐이면 나머지 2칸은 —', () => {
+// CARD-PYG-2026-10-30 (2차 소비자 점검): 빈칸 '— —' 를 결함으로 보고·승인 → 있는 평형만 그린다
+test('Plan 163 (d): 평형이 1개뿐이면 그 1칸만(빈칸 — 없음), 없으면 칸 자체를 그리지 않는다', () => {
   const c = cardHtml({ currentPriceByPyeong: [{ pyeong: 25, recentAvg: 11.2 }] });
-  const pyg = c.slice(c.indexOf('<div class="ld-pyg">'), c.indexOf('<div class="ld-c-loan">'));
+  const pyg = c.slice(c.indexOf('<div class="ld-pyg"'), c.indexOf('<div class="ld-c-loan">'));
   assert.ok(pyg.includes('25평') && pyg.includes('11.20억'));
-  assert.equal((pyg.match(/<b>—<\/b>/g) || []).length, 2);
+  assert.equal((pyg.match(/<b>—<\/b>/g) || []).length, 0);
+  assert.ok(pyg.includes('grid-template-columns:repeat(1,'));
+  assert.ok(!cardHtml({ currentPriceByPyeong: [] }).includes('class="ld-pyg"'));
 });
 
 test('Plan 163 (e): 비교 버튼은 aria-pressed · 카드 클릭과 분리 · 담긴 카드는 true', () => {

@@ -559,6 +559,24 @@ const _healthObs = require('./services/healthObserveCache').createHealthObserveC
   getCronLatest: () => require('./services/cronStats').getCronLatest(),
 });
 
+// RATES-STABLE-2026-10-30 (Plan 158, 2차 소비자 점검): health 는 금리를 기다리지 않아(비차단) 새로 뜬 서버 인스턴스의 첫 응답이
+//   늘 null 이었다 — Redis 월 한도 소진으로 인스턴스 간 공유도 끊겨, 같은 세션에서 대출 숫자가 4% 가정 → 4.88% 로 바뀌었다(운영 실측).
+//   이 라우트는 값이 올 때까지 기다리고(각 9초 상한), 하나라도 받으면 엣지(Vercel CDN)에 1시간 캐시해 인스턴스와 무관하게 같은 값을 준다.
+//   둘 다 못 받으면 캐시하지 않는다(빈 값을 1시간 굳히지 않는다). 유료 기능 없음.
+app.get('/api/rates', async (req, res) => {
+  const wait = (p) => Promise.race([p.catch(() => null), new Promise((r) => setTimeout(() => r(null), 9000))]);
+  let ecosRates = null, hfRates = null;
+  try {
+    [ecosRates, hfRates] = await Promise.all([
+      wait(require('./services/ecosService').getEcosRates()),
+      wait(require('./services/hfService').getHfRates()),
+    ]);
+  } catch (_) { /* 둘 다 null 유지 */ }
+  if (ecosRates || hfRates) res.set('Cache-Control', 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400');
+  else res.set('Cache-Control', 'no-store');
+  res.json({ ecosRates: ecosRates || null, hfRates: hfRates || null });
+});
+
 app.get('/api/health', optionalAuth, async (req, res) => {
   const [searchUsed, chatUsed] = await Promise.all([
     getUsage(req, 'search'),

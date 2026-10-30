@@ -4306,6 +4306,7 @@ window.addEventListener('DOMContentLoaded',()=>{
   //   - 없으면 Leaflet/OSM fallback (회귀 0)
   chkAPI().then(ok => {
     if(ok) checkMolit();
+    if(ok) loadRates(); // RATES-STABLE (Plan 158)
     if (typeof loadMap === 'function') loadMap();
     else loadLeaflet(); // safety
   });
@@ -7988,9 +7989,9 @@ function _renderListCard(p, i) {
     return tx ? `<span class="ld-tag">${_escHtml(tx)}</span>` : '';
   }).join('');
   const _py = (p.currentPriceByPyeong || []).slice(0, 3);
-  const _pyCells = [0, 1, 2].map(k => _py[k]
-    ? `<div><span class="ld-m">${_escHtml(_py[k].pyeong)}평</span><b>${_escHtml(_fmtEok(_py[k].recentAvg, 2))}</b></div>`
-    : `<div><span class="ld-m">—</span><b>—</b></div>`).join('');
+  // CARD-PYG-2026-10-30 (2차 소비자 점검): 평형이 1개뿐인 단지가 많아 '— —' 빈칸 2개가 늘 보였다 — 있는 평형만 그린다(칸 수 = 평형 수).
+  const _pyOk = _py.filter(x => x && x.pyeong != null && Number.isFinite(Number(x.recentAvg)));
+  const _pyCells = _pyOk.map(x => `<div><span class="ld-m">${_escHtml(x.pyeong)}평</span><b>${_escHtml(_fmtEok(x.recentAvg, 2))}</b></div>`).join('');
   const _n = Number(p.priceSampleN);
   const _sub = [_fmtSgg(p.area), p.buildYear ? `${p.buildYear}년` : ''].filter(Boolean).join(' · ');
   return `<div class="ld-card" role="link" tabindex="0" onclick="showDetail(props[${i}])" onkeydown="if(event.target===event.currentTarget&&event.key==='Enter'){showDetail(props[${i}])}">
@@ -8001,7 +8002,7 @@ function _renderListCard(p, i) {
       ${_tags ? `<div class="ld-tags">${_tags}</div>` : ''}
     </div>
     <div class="ld-c-avg"><span class="ld-m" title="최근 거래일수록 비중을 크게 둔 평균이에요(단순 평균과 다를 수 있어요)">6개월 가중 평균</span><span class="ld-v">${_escHtml(_fmtEok(p.avgPrice, 2))}</span>${(Number.isFinite(_n) && _n > 0) ? `<span class="ld-m ld-sp">표본 ${_n}건</span>` : ''}</div>
-    <div class="ld-pyg">${_pyCells}</div>
+    ${_pyOk.length ? `<div class="ld-pyg" style="grid-template-columns:repeat(${_pyOk.length},minmax(0,1fr))">${_pyCells}</div>` : ''}
     <div class="ld-c-loan">
       <div class="ld-lm"><div class="ld-m">LTV ${_escHtml(p.ltv || _regLtvLabel(p.area, p.lawdCd) || '—')}</div>${p.maxLoan ? `<div class="ld-mx">최대 대출 ${_escHtml(_cardMaxLoan(p.maxLoan))}</div>` : ''}</div>
       <div class="ld-score"><span class="ld-m">점수</span>${_sc != null ? `<b>${Math.round(_sc)}</b><span class="ld-bar" aria-hidden="true"><i style="width:${_sc}%"></i></span>` : '<b>분석 대기</b>'}</div>
@@ -9038,7 +9039,7 @@ function showDetail(p){
   const _scoreSection = _hasScore
     ? `<div class="gbw">${gSVG(s,90)}
         <div class="gi"><div class="gi-t">데이터 종합 점수 ${s}/100</div><span class="lvl ${lv}">${lt}</span>
-          <div class="gi-s">${_escHtml(_fmtSgg(p.area))} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}${p.maxLoan?` | 최대 ${_escHtml(p.maxLoan)}`:''}</div>
+          <div class="gi-s">${_escHtml(_fmtSgg(p.area))} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}${p.maxLoan?` | 최대 ${_escHtml(_cardMaxLoan(p.maxLoan))}`:''}</div>
         </div>
       </div>${_scoreDetail}`
     : `<a href="javascript:void(0)" class="t0-rep-link" onclick="cDM();sv('report')">자금·가족·희망지역을 입력하면 이 단지의 맞춤 보고서를 만들 수 있어요 →</a>`;
@@ -11557,6 +11558,10 @@ function _dclData(){
   const RESC=L('민법','제565조','민법 제565조');
   const SEAL=[E,L('부동산등기규칙','제60조','부동산등기규칙 제60조'),L('부동산등기규칙','제62조','부동산등기규칙 제62조')];
   const FEE=L('공동주택관리법','제30조','공동주택관리법 제30조');
+  // 중개보수: 지급 시기(약정 없으면 거래대금 지급 완료일, 공인중개사법 §32③) — 생활법령정보 '부동산 중개보수 산정' 본문,
+  //   상한 요율 안에서 협의(시행규칙 §20①) — law.go.kr 원문. 둘 다 2026-10-30 계획자 확인(2차 소비자 점검 후속).
+  const COMM=[{n:"찾기쉬운 생활법령정보(법제처) '부동산 중개보수 산정'",l:'생활법령정보에서 보기',u:'https://www.easylaw.go.kr/CSP/CnpClsMain.laf?popMenu=ov&csmSeq=649&ccfNo=2&cciNo=2&cnpClsNo=2'},L('공인중개사법시행규칙','제20조','공인중개사법 시행규칙 제20조')];
+  const COMM_D='약정이 없으면 거래대금을 다 치른 날에 줘요. 상한 요율 안에서 중개사와 협의해 정해요.';
   return {
     b:[
       {k:'pre',n:'가계약·계약 전',items:[
@@ -11580,6 +11585,7 @@ function _dclData(){
         {id:'b_reg2',t:'잔금 직전 등기부 다시 보기',lb:'gen'},
         {id:'b_seal',t:'매도인에게 등기필정보·인감증명서 받기',d:'인감증명서는 3개월 이내 발급분이어야 해요.',lb:'off',src:SEAL},
         {id:'b_fee',t:'관리비·장기수선충당금 정산',d:'장기수선충당금은 소유자가 부담해요.',lb:'off',src:[FEE]},
+        {id:'b_comm',t:'중개보수 주기',d:COMM_D,lb:'off',src:COMM,btn:{t:'중개보수 계산',v:'biz'}},
       ]},
       {k:'reg',n:'등기·세금',items:[
         {id:'b_xfer',t:'소유권이전등기 신청',d:'잔금일부터 60일 이내에 해야 해요.',lb:'dl',due:{f:'b',n:60},src:[L('부동산등기특별조치법','제2조','부동산등기 특별조치법 제2조')]},
@@ -11607,6 +11613,7 @@ function _dclData(){
         {id:'s_seal',t:'등기필정보·인감증명서 준비',d:'인감증명서는 3개월 이내 발급분으로 준비해요.',lb:'off',src:SEAL},
         {id:'s_lien',t:'근저당 말소',lb:'gen'},
         {id:'s_fee',t:'관리비·장기수선충당금 정산',d:'장기수선충당금은 소유자가 부담해요.',lb:'off',src:[FEE]},
+        {id:'s_comm',t:'중개보수 주기',d:COMM_D,lb:'off',src:COMM,btn:{t:'중개보수 계산',v:'biz'}},
       ]},
       {k:'tax',n:'세금 신고',items:[
         {id:'s_cgt',t:'양도소득세 예정신고',d:'양도일이 속한 달 말일부터 2개월 이내예요. 양도일은 잔금일과 등기접수일 중 빠른 날이에요.',lb:'dl',due:{f:'cgt'},as:'잔금일을 양도일로 보고 계산했어요',src:[L('소득세법','제105조','소득세법 제105조')]},
@@ -12889,13 +12896,33 @@ function goClauseFromDetail(aptName,area,price,excluUseAr,buildYear){
 // CALC-CARRY-2026-10-14 (Plan 148): 사이드바 입력 → 계산기 이어 주기. 단위가 두 칸에서 같다(소스 확인):
 //   #bp 매수 예정가(억)=c_b 매수가(억) · #mc 자기 자본(억)=c_c 보유 현금(억) · #inc 연 소득(만원)=c_i 연소득(만).
 //   계산기 칸이 비어 있을 때만 복사한다(이미 입력한 값은 덮지 않음).
-function _carrySidebarToCalc(withBuy){
+// LOAN-CARRY-2026-10-30 (Plan 158, 2차 소비자 점검): 금액만 옮기고 주택 보유·생애최초·지역 칩은 안 옮겨, 생애최초 '예'로 찾은 단지가
+//   대출 계산에선 '아니오'(LTV 40%)로 열렸다 — 같은 단지가 카드 4.01억·대출 계산 2.32억(운영 실측). 칩도 같은 조건으로 맞춘다.
+//   ctx(단지 상세에서 올 때) = { area, lawdCd } — 규제 여부는 그 단지의 시군구 코드로(isRegFront 와 같은 근거).
+//   처분조건부는 대출 계산에 칩이 없고 금융위 FAQ 상 무주택과 같은 한도라 '무주택'으로 맞춘다.
+function _calcChip(gid,label){
+  const ch=[...document.querySelectorAll(`#${gid} .chip`)].find(x=>x.textContent.trim()===label);
+  if(ch&&!ch.classList.contains('on')&&typeof cp==='function')cp(ch,gid);
+}
+function _carrySidebarToCalc(withBuy,ctx){
   const pairs=[['c_c','mc'],['c_i','inc']];
   if(withBuy)pairs.unshift(['c_b','bp']);
   pairs.forEach(([cid,sid])=>{
     const c=document.getElementById(cid),sb=document.getElementById(sid);
     if(c&&sb&&!c.value&&parseFloat(sb.value)>0)c.value=sb.value;
   });
+  try{
+    const h=gct('ch-h');
+    if(h) _calcChip('cc-h', h==='2주택+'?'2주택+':h==='1주택'?'1주택':'무주택');
+    const f=gct('ch-f');
+    if(f==='예'||f==='아니오') _calcChip('cc-f', f);
+    const lawd=String((ctx&&ctx.lawdCd)||(ctx?'':(getRegionLawdCd()||'').split(',')[0])||'').trim();
+    const area=ctx?String(ctx.area||''):getRegionForSearch();
+    const isR=isRegFront(area,lawd);
+    const isLoc=lawd?!['11','41','28'].includes(lawd.slice(0,2)):(!ctx&&gct('ch-r')==='지방');
+    if(isR) _calcChip('cc-r','서울규제');
+    else if(lawd||!ctx) _calcChip('cc-r', isLoc?'지방':'비규제'); // 코드도 없는 단지는 지역 칩을 바꾸지 않는다(모르는 값을 단정하지 않음)
+  }catch(_){}
   if(typeof dc==='function')dc();
 }
 function openCalcFromSidebar(){
@@ -12907,11 +12934,12 @@ function goCalcFromDetail(price){
   sv('calc',document.querySelectorAll('.htab')[2]);
   setTimeout(()=>{
     const cb=document.getElementById('c_b');if(cb&&price){cb.value=price.toFixed(2);}
-    _carrySidebarToCalc(false);
+    const _d=(typeof currentDetail!=='undefined'&&currentDetail)?currentDetail:null;
+    _carrySidebarToCalc(false,_d?{area:[_d.sigungu||'',_d.area||''].join(' ').trim(),lawdCd:_d.lawdCd||''}:null);
     if(typeof cDM==='function')cDM();
     if(typeof dc==='function')dc();
     document.getElementById('c_b')?.scrollIntoView({behavior:'smooth',block:'center'});
-    toast('매수가를 자동으로 채웠어요');
+    toast('매수가와 내 조건(주택 보유·생애최초·지역)을 채웠어요');
   },180);
 }
 // ════ NEXT-ACTIONS-2026-10-15 (Plan 150): 단지 상세 "다음에 할 일" ════
@@ -14013,6 +14041,23 @@ function ts(id){document.getElementById(id)?.classList.toggle('cl');}
 // MOLIT-CHECK-LIGHT-2026-07-11 (Sprint IIII): 기존엔 /transactions?lawdCd=11350&dealYm=202412 를
 //   로드마다 호출 — 서버가 215건 해제 필터링까지 수행 (실측 2.9~4.3s, "정체불명 고정 호출" 로그의 정체).
 //   /health 의 dataCounts.tx 로 대체 — 실거래 데이터가 아예 없을 때만 mock 배너 (기존 목적 동일, 서버비용 ~0).
+// RATES-STABLE-2026-10-30 (Plan 158, 2차 소비자 점검): health 의 금리는 새 서버 인스턴스에서 첫 응답이 null 이라
+//   같은 세션에서 대출 숫자가 4% 가정 → 시중 평균(4.88%)으로 바뀌었다. /api/rates 는 값을 기다려 주고 엣지에 캐시된다.
+//   받은 뒤에는 이미 그려진 대출 숫자(대출 계산·목록 카드·갈아타기)를 같은 금리로 다시 계산한다.
+async function loadRates(){
+  try{
+    const r=await fetch(`${CFG.api}/rates`,{signal:AbortSignal.timeout(12000)});
+    if(!r.ok) return;
+    const d=await r.json();
+    const before=window._ecosMortgageRate;
+    if(d.ecosRates) updateEcosHint(d.ecosRates);
+    if(d.hfRates) updateHfRates(d.hfRates);
+    if(window._ecosMortgageRate===before) return;
+    try{ if(typeof dc==='function') dc(); }catch(_){}
+    try{ const g=document.getElementById('view-list'); if(g&&g.classList.contains('ld-on')&&Array.isArray(props)&&props.length) renderListGrid(); }catch(_){}
+    try{ const sw=document.getElementById('view-swap'); if(sw&&getComputedStyle(sw).display!=='none') _swpRender(); }catch(_){}
+  }catch(_){ /* 못 받으면 health 값 또는 4% 가정 그대로 — 화면에 그 사실이 이미 표시된다 */ }
+}
 async function checkMolit(){
   try{
     const d=await healthJson(4000);   // PERF-HEALTH-DEDUP-2026-08-28

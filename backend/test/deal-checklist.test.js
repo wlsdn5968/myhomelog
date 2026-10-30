@@ -28,9 +28,9 @@ const data = F._dclData();
 const all = (r) => data[r].flatMap((s) => s.items);
 const item = (id) => [...all('b'), ...all('s')].find((x) => x.id === id);
 
-test('① 항목 규칙: 매수인 20·매도인 11, id 중복 없음, 법정 기한만 마감일, 일반 안내만 근거 없음', () => {
-  assert.equal(all('b').length, 20);
-  assert.equal(all('s').length, 11);
+test('① 항목 규칙: 매수인 21·매도인 12(중개보수 주기 추가), id 중복 없음, 법정 기한만 마감일, 일반 안내만 근거 없음', () => {
+  assert.equal(all('b').length, 21);
+  assert.equal(all('s').length, 12);
   const ids = [...all('b'), ...all('s')].map((x) => x.id);
   assert.equal(new Set(ids).size, ids.length);
   for (const it of [...all('b'), ...all('s')]) {
@@ -39,7 +39,7 @@ test('① 항목 규칙: 매수인 20·매도인 11, id 중복 없음, 법정 �
     if (it.lb === 'gen') assert.ok(!it.src, `${it.id}: 일반 안내는 근거를 붙이지 않는다`);
     else assert.ok(it.src && it.src.length, `${it.id}: 근거 없음`);
     for (const s of it.src || []) {
-      assert.match(s.u, /^https:\/\/www\.(law\.go\.kr\/법령\/|easylaw\.go\.kr$|iros\.go\.kr$|fsc\.go\.kr\/po020201\/84825$|nts\.go\.kr$|gov\.kr$|hometax\.go\.kr$)/, `${it.id}: ${s.u}`);
+      assert.match(s.u, /^https:\/\/www\.(law\.go\.kr\/법령\/|easylaw\.go\.kr(\/CSP\/CnpClsMain\.laf\?popMenu=ov&csmSeq=649&ccfNo=2&cciNo=2&cnpClsNo=2)?$|iros\.go\.kr$|fsc\.go\.kr\/po020201\/84825$|nts\.go\.kr$|gov\.kr$|hometax\.go\.kr$)/, `${it.id}: ${s.u}`);
     }
   }
   // 법령 링크는 원문을 열어 본 '법령/<이름>/<조>' 형식
@@ -98,6 +98,8 @@ test('④ 원문으로 바로잡은 문구가 화면 데이터에 있다', () =>
   assert.match(item('b_first').d, /인구감소지역이면 300만 원/);
   // 민법 제565조: 매도인은 배액 상환
   assert.match(item('s_resc').d, /두 배를 돌려주고 해제/);
+  // 2차 소비자 점검 후속: 중개보수 지급 시기(§32③)·상한 요율 협의(시행규칙 §20①), 복비 계산 연결
+  for (const id of ['b_comm', 's_comm']) { assert.deepEqual(item(id).btn, { t: '중개보수 계산', v: 'biz' }); assert.match(item(id).d, /약정이 없으면 거래대금을 다 치른 날에 줘요/); }
   // 근거 없는 옛 항목과 옛 요건은 화면에 없다
   assert.doesNotMatch(html, /잔금일을 월초~중순으로 정하기/);
   assert.doesNotMatch(html, /id="checkList"/);
