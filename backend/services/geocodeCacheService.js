@@ -27,6 +27,8 @@ const { getSupabaseAdmin, hasAdminEnv } = require('../db/client');
 const KAKAO_KEY = process.env.KAKAO_REST_API_KEY;
 
 const DB_ENABLED = hasAdminEnv();
+// Plan 176: 사람이 공식 주소로 대조해 고친 좌표의 출처 값 — 자동 작업(저장·검증·재검색)이 덮어쓰지 않는다.
+const MANUAL_SOURCE = 'manual';
 const KAKAO_ENABLED = !!KAKAO_KEY && KAKAO_KEY !== 'your_kakao_rest_key';
 
 const KAKAO_KEYWORD = 'https://dapi.kakao.com/v2/local/search/keyword.json';
@@ -307,6 +309,11 @@ async function saveToDb(key, entry) {
   const admin = dbClient();
   if (!admin) return;
   try {
+    // MANUAL-COORD-2026-10-30 (Plan 176): 사람이 공식 주소로 대조해 고친 좌표(source='manual')는 자동 저장으로 덮어쓰지 않는다.
+    //   일일 검증·재검색 작업은 출처 목록(kakao·kakao-sub·kakao-v·kakao-addr)으로만 고르므로 manual 은 원래 대상이 아니다
+    //   (geocacheBackfill.js) — 여기가 남은 유일한 덮어쓰기 경로다.
+    const { data: cur } = await admin.from('apt_geocache').select('source').eq('apt_key', key).maybeSingle();
+    if (cur && cur.source === MANUAL_SOURCE) return;
     await admin.from('apt_geocache').upsert({
       apt_key: key,
       apt_name: entry.aptName,
@@ -619,6 +626,6 @@ async function kakaoStrictAptSearch({ aptName, sigungu, umdNm }) {
   return null;
 }
 
-module.exports = { resolveCoord, resolveCoordBatch, resolveCoordFromCacheOnly, getFromDbByMasterKapt, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb, NON_APT_PATTERNS, NON_APT_CATEGORY, AMBIGUOUS_SGG,
+module.exports = { MANUAL_SOURCE, resolveCoord, resolveCoordBatch, resolveCoordFromCacheOnly, getFromDbByMasterKapt, getKakaoUsageStats, kakaoGeocode, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb, NON_APT_PATTERNS, NON_APT_CATEGORY, AMBIGUOUS_SGG,
   // JIBUN-FIRST-2026-08-10: 백필 잡도 같은 헬퍼를 쓰도록 export(복붙 드리프트 방지)
   molitJibunAddress, sggWithSpace, kakaoStrictAptSearch, strictAptMatch };

@@ -18,9 +18,19 @@ function stripOrgSuffix(v) {
   const r = t.replace(ORG_SUFFIX_RE, '').trim();
   return r || t;
 }
+// NAME-TIDY-2026-10-30 (Plan 176): 국토부 신고 이름의 '그 단지 법정동 + 쉼표' 접두("산척동,동탄호수공원…")와 끝의 층 구분
+//   ("상계주공7(고층)")을 표시할 때만 뗀다. 접두는 단지의 법정동과 **정확히 같을 때만**(넓게 지우면 "산장아파트가동,나동" → "나동").
+//   동 번호 범위("퇴계주공(351~359동)")는 서로 다른 공식 단지를 가르는 정보라 그대로 둔다.
+function tidyMolitName(v, umdNm) {
+  let t = String(v == null ? '' : v).trim();
+  const u = String(umdNm == null ? '' : umdNm).trim();
+  if (u && t.startsWith(u + ',')) { const r = t.slice(u.length + 1).trim(); if (r) t = r; }
+  const r2 = t.replace(/\s*\((?:고층|저층|중층)\)\s*$/, '').trim();
+  return r2 || t;
+}
 function displayAptName(name, { umdNm, jibun, kaptName } = {}) {
   if (kaptName && String(kaptName).trim()) return stripOrgSuffix(kaptName);
-  const s = String(name == null ? '' : name).trim();
+  const s = tidyMolitName(name, umdNm);
   if (isUnnamedApt(s)) {
     const jb = (jibun && String(jibun).trim()) || (s.match(/\d+(?:-\d+)?/) || [''])[0];
     return [umdNm ? String(umdNm).trim() : '', jb ? `${jb}번지` : '', '단지 (이름 미등록)'].filter(Boolean).join(' ');
@@ -28,4 +38,4 @@ function displayAptName(name, { umdNm, jibun, kaptName } = {}) {
   const m = s.match(JIBUN_SUFFIX_RE);
   return m ? `${stripOrgSuffix(s.slice(0, m.index))} (${m[1]}번지)` : stripOrgSuffix(s);
 }
-module.exports = { isUnnamedApt, displayAptName, stripOrgSuffix, UNNAMED_RE, JIBUN_SUFFIX_RE, ORG_SUFFIX_RE };
+module.exports = { isUnnamedApt, displayAptName, stripOrgSuffix, tidyMolitName, UNNAMED_RE, JIBUN_SUFFIX_RE, ORG_SUFFIX_RE };

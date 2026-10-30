@@ -1135,3 +1135,207 @@ CREATE OR REPLACE FUNCTION public.db_size_mb()
  SET search_path TO 'public'
 AS $function$ select round(sum(pg_database_size(datname)) / 1048576.0, 1) from pg_database $function$
 ;
+
+
+-- ============ ALIAS OVERRIDES · REFRESH v8 · PIN ORDER (Plan 176, 2026-10-30 프로덕션 적용) ============
+-- 출처: supabase/migrations/20261030_alias_overrides_refresh_v8.sql · 20261030_geocache_in_bounds.sql (적용 원문).
+--   ⚠ 위(FUNCTIONS 구역 880행 근처)의 refresh_molit_aliases 는 옛 판이다 — 이 파일을 위에서부터 실행하면 아래 정의가 덮어쓴다.
+--   기존 내용은 바꾸지 않고 append 만 한다(MOLIT HIST BACKFILL 구역의 방침과 같다).
+create table if not exists public.apt_alias_overrides (
+  id bigint default nextval('apt_alias_overrides_id_seq'::regclass) not null,
+  kapt_code text not null,
+  molit_name text not null,
+  action text not null,
+  reason text not null,
+  created_at timestamp with time zone default now() not null
+);
+
+alter table public.apt_alias_overrides add constraint apt_alias_overrides_pkey PRIMARY KEY (id);
+alter table public.apt_alias_overrides add constraint apt_alias_overrides_kapt_code_molit_name_key UNIQUE (kapt_code, molit_name);
+alter table public.apt_alias_overrides add constraint apt_alias_overrides_action_check CHECK ((action = ANY (ARRAY['add'::text, 'remove'::text])));
+alter table public.apt_alias_overrides enable row level security;
+-- 정책 0 · anon/authenticated 권한 회수 = service_role 만(내부 전용).
+
+CREATE OR REPLACE FUNCTION public.refresh_molit_aliases()
+ RETURNS integer
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+ SET statement_timeout TO '300s'
+AS $function$
+DECLARE n integer;
+BEGIN
+  WITH mj AS MATERIALIZED (
+    SELECT lawd_cd, umd_nm, apt_name, build_year, jibun
+    FROM (SELECT lawd_cd, umd_nm, apt_name, build_year, jibun,
+                 row_number() OVER (PARTITION BY lawd_cd,umd_nm,apt_name,build_year ORDER BY cnt DESC, jibun) AS rn
+          FROM (SELECT lawd_cd,umd_nm,apt_name,build_year,jibun,count(*) cnt FROM molit_transactions
+                WHERE jibun IS NOT NULL AND jibun<>'' GROUP BY 1,2,3,4,5) t) r
+    WHERE rn = 1
+  ), jn AS MATERIALIZED (
+    SELECT lawd_cd, umd_nm, apt_name, build_year, count(DISTINCT jibun) AS nj FROM molit_transactions
+    WHERE jibun IS NOT NULL AND jibun<>'' GROUP BY 1,2,3,4
+  ), m AS MATERIALIZED (
+    SELECT kapt_code, apt_name, lawd_cd, umd_nm,
+           left(facility->>'kaptUsedate',4)::int AS yr,
+           (regexp_match(facility->>'kaptAddr','(?:^|\s)([0-9]+(?:-[0-9]+)?)(?:\s|$)'))[1] AS jb,
+           regexp_replace(replace(apt_name,' ',''),'\([^)]*\)','','g') AS nn,
+           (SELECT array_agg(z[1]) FROM regexp_matches(apt_name,'([0-9]+)\s*(?:단지|차)','g') z) AS dset
+    FROM apt_master WHERE facility->>'kaptUsedate' ~ '^[0-9]{8}'
+  ), i AS MATERIALIZED (
+    SELECT apt_name, lawd_cd, umd_nm, build_year,
+           regexp_replace(replace(apt_name,' ',''),'\([^)]*\)','','g') AS nn,
+           (SELECT array_agg(z[1]) FROM regexp_matches(apt_name,'([0-9]+)\s*(?:단지|차)','g') z) AS dset
+    FROM molit_apt_index
+  ), cand AS (
+    SELECT m.kapt_code, m.apt_name AS master, m.lawd_cd, m.umd_nm, i.apt_name AS molit, i.build_year,
+           (mj.jibun IS NOT NULL) AS by_jibun,
+           (replace(m.apt_name,' ','')=replace(i.apt_name,' ','')) AS name_exact,
+           (i.nn <> '' AND m.nn <> '' AND (m.nn=i.nn OR starts_with(i.nn,m.nn) OR starts_with(m.nn,i.nn))
+            AND (m.dset IS NULL OR i.dset IS NULL OR m.dset <@ i.dset OR i.dset <@ m.dset)) AS by_name,
+           (regexp_replace(m.nn,'[^0-9]','','g')=regexp_replace(i.nn,'[^0-9]','','g')
+            OR regexp_replace(m.nn,'[^0-9]','','g')='' OR regexp_replace(i.nn,'[^0-9]','','g')='') AS digits_ok,
+           (regexp_replace(m.apt_name,'[^0-9]','','g')<>'' AND regexp_replace(m.apt_name,'[^0-9]','','g')=regexp_replace(i.apt_name,'[^0-9]','','g')) AS digits_full_eq
+    FROM m JOIN i ON i.lawd_cd=m.lawd_cd AND i.umd_nm=m.umd_nm AND i.build_year=m.yr
+    LEFT JOIN mj ON mj.lawd_cd=m.lawd_cd AND mj.umd_nm=m.umd_nm
+                AND mj.build_year=m.yr AND mj.apt_name=i.apt_name AND mj.jibun=m.jb
+  ), acc0 AS (
+    SELECT * FROM cand
+    WHERE (by_jibun OR (by_name AND digits_ok))
+      AND molit !~ '상가|근린|근생|판매시설|오피스텔'
+  ), acc AS (
+    SELECT * FROM acc0 WHERE (molit,lawd_cd,umd_nm) NOT IN
+      (SELECT molit,lawd_cd,umd_nm FROM acc0 GROUP BY 1,2,3 HAVING count(DISTINCT kapt_code)>1)
+  ), tie0 AS (
+    SELECT a.* FROM acc0 a
+    JOIN (SELECT molit,lawd_cd,umd_nm FROM acc0 GROUP BY 1,2,3 HAVING count(DISTINCT kapt_code)>1) c USING (molit,lawd_cd,umd_nm)
+    WHERE a.by_name AND a.by_jibun AND a.digits_full_eq AND NOT (a.master ~ '임대' AND a.molit !~ '임대')
+  ), tie AS (
+    SELECT * FROM tie0 WHERE (molit,lawd_cd,umd_nm) IN
+      (SELECT molit,lawd_cd,umd_nm FROM tie0 GROUP BY 1,2,3 HAVING count(DISTINCT kapt_code)=1)
+  ), tjb0 AS (
+    SELECT a.* FROM acc0 a
+    JOIN (SELECT molit,lawd_cd,umd_nm FROM acc0 GROUP BY 1,2,3 HAVING count(DISTINCT kapt_code)>1) c USING (molit,lawd_cd,umd_nm)
+    JOIN jn ON jn.lawd_cd=a.lawd_cd AND jn.umd_nm=a.umd_nm AND jn.apt_name=a.molit AND jn.build_year=a.build_year
+    WHERE a.by_jibun AND jn.nj = 1 AND NOT (a.master ~ '임대' AND a.molit !~ '임대')
+      AND NOT EXISTS (SELECT 1 FROM acc0 o WHERE o.molit=a.molit AND o.lawd_cd=a.lawd_cd AND o.umd_nm=a.umd_nm AND o.kapt_code<>a.kapt_code AND o.name_exact)
+  ), tjb AS (
+    SELECT * FROM tjb0 WHERE (molit,lawd_cd,umd_nm) IN
+      (SELECT molit,lawd_cd,umd_nm FROM tjb0 GROUP BY 1,2,3 HAVING count(DISTINCT kapt_code)=1)
+  ), near0 AS (
+    SELECT DISTINCT m.kapt_code, m.lawd_cd, m.umd_nm, i.apt_name AS molit
+    FROM m JOIN i ON i.lawd_cd=m.lawd_cd AND i.umd_nm=m.umd_nm AND abs(i.build_year - m.yr) = 1
+    JOIN mj ON mj.lawd_cd=m.lawd_cd AND mj.umd_nm=m.umd_nm AND mj.build_year=i.build_year AND mj.apt_name=i.apt_name AND mj.jibun=m.jb
+    WHERE i.apt_name !~ '상가|근린|근생|판매시설|오피스텔'
+      AND NOT EXISTS (SELECT 1 FROM acc0 a WHERE a.molit=i.apt_name AND a.lawd_cd=m.lawd_cd AND a.umd_nm=m.umd_nm)
+  ), near AS (
+    SELECT * FROM near0 WHERE (molit,lawd_cd,umd_nm) NOT IN
+      (SELECT molit,lawd_cd,umd_nm FROM near0 GROUP BY 1,2,3 HAVING count(DISTINCT kapt_code)>1)
+  ), sib AS (
+    SELECT DISTINCT a.kapt_code, s.apt_name AS molit
+    FROM acc a
+    JOIN molit_apt_index base ON base.lawd_cd=a.lawd_cd AND base.umd_nm=a.umd_nm AND base.apt_name=a.molit
+    JOIN molit_apt_index s ON s.lawd_cd=a.lawd_cd AND s.umd_nm=a.umd_nm AND s.build_year=base.build_year
+    WHERE base.apt_name ~ '[A-Za-z가나다라]$' AND s.apt_name ~ '[A-Za-z가나다라]$'
+      AND length(regexp_replace(base.apt_name,'[A-Za-z가나다라]$','')) >= 2
+      AND regexp_replace(base.apt_name,'[A-Za-z가나다라]$','') = regexp_replace(s.apt_name,'[A-Za-z가나다라]$','')
+      AND right(base.apt_name,1) <> right(s.apt_name,1)
+      AND s.apt_name !~ '상가|근린|근생|판매시설|오피스텔'
+  ), sibd0 AS (
+    SELECT DISTINCT a.kapt_code, a.lawd_cd, a.umd_nm, s.apt_name AS molit
+    FROM (SELECT kapt_code, lawd_cd, umd_nm, molit FROM acc UNION SELECT kapt_code, lawd_cd, umd_nm, molit FROM tie) a
+    JOIN molit_apt_index base ON base.lawd_cd=a.lawd_cd AND base.umd_nm=a.umd_nm AND base.apt_name=a.molit
+    JOIN molit_apt_index s ON s.lawd_cd=a.lawd_cd AND s.umd_nm=a.umd_nm AND s.build_year=base.build_year
+    WHERE base.apt_name ~ '[0-9]+동$' AND s.apt_name ~ '[0-9]+동$'
+      AND length(regexp_replace(base.apt_name,'[0-9]+동$','')) >= 2
+      AND regexp_replace(base.apt_name,'[0-9]+동$','') = regexp_replace(s.apt_name,'[0-9]+동$','')
+      AND s.apt_name <> base.apt_name
+      AND s.apt_name !~ '상가|근린|근생|판매시설|오피스텔'
+      AND NOT EXISTS (SELECT 1 FROM acc0 x WHERE x.molit=s.apt_name AND x.lawd_cd=a.lawd_cd AND x.umd_nm=a.umd_nm AND x.kapt_code<>a.kapt_code)
+  ), sibd AS (
+    SELECT * FROM sibd0 WHERE (molit,lawd_cd,umd_nm) IN
+      (SELECT molit,lawd_cd,umd_nm FROM sibd0 GROUP BY 1,2,3 HAVING count(DISTINCT kapt_code)=1)
+  ), sbase0 AS (
+    SELECT DISTINCT m.kapt_code, i.lawd_cd, i.umd_nm, i.apt_name AS molit
+    FROM (SELECT x.*, regexp_replace(replace(regexp_replace(x.apt_name,'\(?[0-9,]+동\)?$',''),' ',''),'\([^)]*\)','','g') AS base,
+                 left((regexp_match(x.apt_name,'([0-9]+)[0-9,]*동\)?$'))[1],1) AS d1
+          FROM molit_apt_index x WHERE x.apt_name ~ '[0-9]+동\)?$') i
+    JOIN (SELECT mm.*, (SELECT array_agg(z[1]) FROM regexp_matches(mm.apt_name,'([0-9]+)\s*(?:단지|차)','g') z) AS ph FROM m mm) m
+      ON m.lawd_cd=i.lawd_cd AND m.umd_nm=i.umd_nm AND m.yr=i.build_year AND position(i.base in m.nn) > 0
+    WHERE length(i.base) >= 3
+      AND m.apt_name !~ '[0-9]+\s*(~|,)\s*[0-9]+\s*동'
+      AND (i.base ~ '[0-9]' OR m.ph IS NULL OR i.d1 = ANY(m.ph))
+      AND i.apt_name !~ '상가|근린|근생|판매시설|오피스텔'
+      AND NOT EXISTS (SELECT 1 FROM acc0 a WHERE a.molit=i.apt_name AND a.lawd_cd=i.lawd_cd AND a.umd_nm=i.umd_nm)
+      AND NOT EXISTS (SELECT 1 FROM sibd s WHERE s.molit=i.apt_name AND s.lawd_cd=i.lawd_cd AND s.umd_nm=i.umd_nm)
+      AND NOT EXISTS (SELECT 1 FROM near0 n WHERE n.molit=i.apt_name AND n.lawd_cd=i.lawd_cd AND n.umd_nm=i.umd_nm)
+  ), sbase AS (
+    SELECT * FROM sbase0 WHERE (molit,lawd_cd,umd_nm) IN
+      (SELECT molit,lawd_cd,umd_nm FROM sbase0 GROUP BY 1,2,3 HAVING count(DISTINCT kapt_code)=1)
+  ), fin AS (
+    SELECT kapt_code, molit FROM acc
+    UNION SELECT kapt_code, molit FROM tie
+    UNION SELECT kapt_code, molit FROM tjb
+    UNION SELECT kapt_code, molit FROM sib
+    UNION SELECT kapt_code, molit FROM sibd
+    UNION SELECT kapt_code, molit FROM sbase
+    UNION SELECT kapt_code, molit FROM near
+  ), fin2 AS (
+    SELECT kapt_code, molit FROM fin
+    WHERE NOT EXISTS (SELECT 1 FROM apt_alias_overrides o WHERE o.action='remove' AND o.kapt_code=fin.kapt_code AND o.molit_name=fin.molit)
+    UNION SELECT o.kapt_code, o.molit_name FROM apt_alias_overrides o JOIN apt_master am ON am.kapt_code=o.kapt_code WHERE o.action='add'
+  ), agg AS (
+    SELECT kapt_code, jsonb_agg(DISTINCT molit ORDER BY molit) AS aliases FROM fin2 GROUP BY kapt_code
+  ), cur AS MATERIALIZED (
+    SELECT a.kapt_code, a.apt_name, x.molit FROM apt_master a
+    CROSS JOIN LATERAL jsonb_array_elements_text(CASE WHEN jsonb_typeof(a.molit_aliases)='array' THEN a.molit_aliases ELSE '[]'::jsonb END) x(molit)
+  ), miss AS (
+    SELECT kapt_code, molit FROM cur EXCEPT SELECT kapt_code, molit FROM fin2
+  ), bad AS (
+    SELECT c.kapt_code, c.molit FROM cur c JOIN miss USING (kapt_code, molit)
+    CROSS JOIN LATERAL (SELECT (SELECT array_agg(z[1]) FROM regexp_matches(c.apt_name,'([0-9]+)\s*(?:단지|차)','g') z) AS pa,
+                               (SELECT array_agg(z[1]) FROM regexp_matches(c.molit,'([0-9]+)\s*(?:단지|차)','g') z) AS px) p
+    WHERE (regexp_replace(replace(c.molit,' ',''),'\([^)]*\)','','g') = ''
+           OR EXISTS (SELECT 1 FROM apt_alias_overrides o WHERE o.action='remove' AND o.kapt_code=c.kapt_code AND o.molit_name=c.molit)
+           OR NOT (p.pa IS NULL OR p.px IS NULL OR p.pa <@ p.px OR p.px <@ p.pa))
+      AND NOT EXISTS (SELECT 1 FROM apt_alias_overrides o WHERE o.action='add' AND o.kapt_code=c.kapt_code AND o.molit_name=c.molit)
+  ), tgt AS (
+    SELECT kapt_code, aliases FROM agg
+    UNION ALL
+    SELECT b.kapt_code, coalesce((SELECT jsonb_agg(DISTINCT c.molit ORDER BY c.molit) FROM cur c
+                                  WHERE c.kapt_code=b.kapt_code AND (c.kapt_code, c.molit) NOT IN (SELECT kapt_code, molit FROM bad)), '[]'::jsonb)
+    FROM (SELECT DISTINCT kapt_code FROM bad) b LEFT JOIN agg g ON g.kapt_code=b.kapt_code
+    WHERE g.kapt_code IS NULL
+  )
+  UPDATE apt_master a
+  SET molit_aliases = tgt.aliases, updated_at = now()
+  FROM tgt
+  WHERE a.kapt_code = tgt.kapt_code
+    AND a.molit_aliases IS DISTINCT FROM tgt.aliases;
+  GET DIAGNOSTICS n = ROW_COUNT;
+  RETURN n;
+END
+$function$
+;
+
+CREATE OR REPLACE FUNCTION public.geocache_in_bounds(p_south double precision, p_west double precision,
+                                                     p_north double precision, p_east double precision, p_limit integer)
+RETURNS TABLE (apt_name text, sigungu text, umd_nm text, lat numeric, lng numeric, apt_key text, place_name text, deal_count bigint)
+LANGUAGE sql STABLE
+SET search_path TO 'public'
+AS $$
+  SELECT g.apt_name, g.sigungu, g.umd_nm, g.lat, g.lng, g.apt_key, g.place_name, coalesce(s.dc, 0) AS deal_count
+  FROM apt_geocache g
+  LEFT JOIN LATERAL (
+    SELECT sum(i.deal_count)::bigint AS dc FROM molit_apt_index i
+    WHERE i.apt_name = g.apt_name AND i.umd_nm = g.umd_nm AND i.sigungu = g.sigungu
+  ) s ON true
+  WHERE g.apt_key LIKE 'name:%'
+    AND g.source IS DISTINCT FROM 'kakao-x'
+    AND g.lat BETWEEN p_south AND p_north
+    AND g.lng BETWEEN p_west AND p_east
+  ORDER BY coalesce(s.dc, 0) DESC, g.apt_key
+  LIMIT least(greatest(coalesce(p_limit, 50), 1), 200)
+$$;
+;
+-- geocache_in_bounds 실행 권한: service_role 만(anon·authenticated 회수).

@@ -49,7 +49,11 @@ test('배선: 매일 좌표 작업에 재검색 단계(400건·40초) · 통계 
   assert.match(g, /nameHeal = await rehealUntrustedNames\(admin, \{ cap: 400, budgetMs: 40000 \}\);/);
   assert.match(g, /nameHealTried: nameHeal\.tried, nameHealHealed: nameHeal\.healed/);
   assert.match(fs.readFileSync(path.join(__dirname, '../services/cronStats.js'), 'utf8'), /'nameHealTried', 'nameHealHealed', 'nameHealKept', 'nameHealHidden', 'nameHealLeft',/);
-  assert.match(fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8'), /\.neq\('source', 'kakao-x'\) \/\/ NAME-HEAL-2026-10-22/);
+  // Plan 176 C(2026-10-30): 지도 영역 좌표는 DB 함수 geocache_in_bounds 가 거래 많은 순으로 고르고, kakao-x 제외도 그 함수 안에 있다.
+  const _sr = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
+  assert.match(_sr, /admin\.rpc\('geocache_in_bounds'/);
+  assert.match(_sr, /if \(c\.source === 'kakao-x' \|\| c\.lat == null \|\| c\.lng == null\) continue;/, '본체(kapt:) 좌표 직접 조회도 kakao-x 를 뺀다');
+  assert.match(fs.readFileSync(path.join(__dirname, '../../supabase/migrations/20261030_geocache_in_bounds.sql'), 'utf8'), /AND g\.source IS DISTINCT FROM 'kakao-x'/);
   assert.match(fs.readFileSync(path.join(__dirname, '../services/popularService.js'), 'utf8'), /if \(c\.source === 'kakao-x'\) continue; \/\/ NAME-HEAL-2026-10-22/);
   const rp = require('../services/regionPopularService');
   assert.equal(rp.trustedCoord({ lat: 37.5, lng: 127, source: 'kakao-x', place_name: 'x' }, 'x'), false);

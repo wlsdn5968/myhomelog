@@ -15992,7 +15992,11 @@ function _dispAptName(name, umdNm, kaptName){
   const _ORG_SUFFIX_RE = /\s*(?:\([^()]*(?:입주자대표회의|관리사무소|관리주체)[^()]*\)|(?:제\d+)?(?:입주자대표회의|관리사무소|관리주체))\s*$/;
   const _stripOrgSuffix = (v) => { const t=String(v==null?'':v).trim(); const r=t.replace(_ORG_SUFFIX_RE,'').trim(); return r||t; };
   if (kaptName && String(kaptName).trim()) return _stripOrgSuffix(kaptName);
-  const s = String(name==null?'':name).trim();
+  // NAME-TIDY-2026-10-30 (Plan 176): backend tidyMolitName 과 같은 규칙 — 단지 법정동과 정확히 같은 '동,' 접두와 끝의 (고층)/(저층)/(중층)만 뗀다.
+  let s = String(name==null?'':name).trim();
+  const _u = String(umdNm==null?'':umdNm).trim();
+  if (_u && s.startsWith(_u + ',')) { const _r = s.slice(_u.length + 1).trim(); if (_r) s = _r; }
+  s = s.replace(/\s*\((?:고층|저층|중층)\)\s*$/, '').trim() || s;
   if (_isUnnamedApt(s)) {
     const jb = (s.match(/\d+(?:-\d+)?/)||[''])[0];
     return [umdNm?String(umdNm).trim():'', jb?`${jb}번지`:'', '단지 (이름 미등록)'].filter(Boolean).join(' ');

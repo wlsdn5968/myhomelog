@@ -698,6 +698,17 @@ async function getAliasCanonicalMap(lawdCds) {
   return map;
 }
 
+// ALIAS-EACH-2026-10-30 (Plan 176 E): 검색 자동완성·인기 TOP12 는 결과마다 지역 묶음이 달라 위 함수의 묶음 단위 기억이
+//   거의 재사용되지 않는다(자주 불리는 경로). 지역 코드 하나씩 위 함수를 불러(각각 1시간 기억) 합친다.
+//   실패한 지역은 빈 맵 — 그 지역은 예전처럼 신고 이름 그대로 보인다(지어내지 않는다).
+async function getAliasCanonicalMapEach(lawdCds) {
+  const uniq = [...new Set((lawdCds || []).filter(Boolean))];
+  const maps = await Promise.all(uniq.map(c => getAliasCanonicalMap([c]).catch(() => new Map())));
+  const out = new Map();
+  for (const m of maps) for (const [k, v] of m) out.set(k, v);
+  return out;
+}
+
 // ── 통계 헬퍼 (P1 2026-04-25) ───────────────────────────────────
 // 감사 보고서 1-3 (🔴 치명):
 //   - 기존: 단순 산술평균. 30억 이상치 1건이 8억 단지 평균 +10% 왜곡.
@@ -1027,4 +1038,4 @@ async function getTransactionsByAptSeqMerged(aptSeq, monthsBack = 24) {
   });
 }
 
-module.exports = { _filterExactAlias, _mergeAliasTx, getTransactions, getTransactionsFromHist, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };
+module.exports = { _filterExactAlias, _mergeAliasTx, getTransactions, getTransactionsFromHist, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, getAliasCanonicalMapEach, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };

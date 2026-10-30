@@ -60,6 +60,7 @@ const { normalizeName, splitRegionName } = require('../utils/aptNameMatch');
 const { buildPopularResults, readPopularSnapshot, storePopularSnapshot, popularWindow } = require('../services/popularService');
 const { buildFacility } = require('../utils/buildFacility');
 
+const { getAliasCanonicalMapEach } = require('../services/transactionService');
 const router = express.Router();
 
 const ALLOWED_TYPES = new Set(['recommend', 'address', 'kapt', 'keyword']);
@@ -507,10 +508,16 @@ router.get('/apt', async (req, res) => {
     //     - buildYear / lawdCd / sigungu / umd_nm: group key 동일
     //     - aptSeq: 거래 가장 많은 row 의 apt_seq (KAPT 직접 호출 대표값)
     //     - aliasNames: 합쳐진 원본 raw 이름들 (운영자 디버깅 + frontend 거래 fetch 시 base 매칭 보강용)
+    // SEARCH-ALIAS-2026-10-30 (Plan 176 E): 자동완성은 별칭을 쓰지 않아, 공식 단지 하나가 신고 이름별로 갈라지거나(풍림아파트A·B
+    //   → "풍림아파트") 공식 이름과 다른 이름으로 보였다(지도·상세·구별 순위는 별칭으로 합친다). 신고 이름이 공식 단지의 별칭이면
+    //   공식 이름으로 묶는다(건축년도가 달라도 — 별칭 함수가 이미 같은 단지로 판정). 조회 실패면 예전 규칙 그대로.
+    let _canonMap = new Map();
+    try { _canonMap = await getAliasCanonicalMapEach(molitRows.map(r => r.lawd_cd)); } catch (_) { _canonMap = new Map(); }
     const aptMap = new Map(); // mergeKey → group state
     for (const row of molitRows) {
-      const base = baseAptName(row.apt_name) || normalizeAptName(row.apt_name) || row.apt_name;
-      const mergeKey = `${base}|${row.sigungu}|${row.umd_nm}|${row.build_year || ''}`;
+      const _canon = _canonMap.get(`${row.apt_name}|${row.umd_nm}`) || null;
+      const base = _canon || baseAptName(row.apt_name) || normalizeAptName(row.apt_name) || row.apt_name;
+      const mergeKey = _canon ? `${base}|${row.sigungu}|${row.umd_nm}|K` : `${base}|${row.sigungu}|${row.umd_nm}|${row.build_year || ''}`;
       // SEARCH-MV-2026-08-16: 종전의 상수 1 을 `row._w`(그 행이 대표하는 거래 건수)로 대체.
       //   MV 이전엔 행 1개가 거래 1건이라 1 이 맞았다. 지금은 행 1개가 단지 1개(= _w 건)다.
       //   이 치환이 빠지면 dealCount 와 대표 apt_seq 선택이 **거래량이 아니라 행수 기준**이 되어
@@ -536,6 +543,7 @@ router.get('/apt', async (req, res) => {
         const seqCounts = new Map();
         if (row.apt_seq) seqCounts.set(row.apt_seq, _w);
         aptMap.set(mergeKey, {
+          mergeKey, canon: _canon,
           count: (row._n ?? row._w),
           countAll: (row._nAll ?? 0),
           firstRow: row,
@@ -564,7 +572,7 @@ router.get('/apt', async (req, res) => {
     // NAME-MERGE-2026-05-12 (Sprint S): baseAptName 으로 동/letter 까지 통합.
     for (const grp of sortedMolit) {
       const row = grp.firstRow;
-      const key = `${grp.baseName}|${row.sigungu}|${row.umd_nm}|${row.build_year||''}`;
+      const key = grp.mergeKey;
       if (seen.has(key)) continue;
       seen.add(key);
       // 대표 apt_seq: 거래 가장 많은 raw row 의 것
@@ -587,7 +595,7 @@ router.get('/apt', async (req, res) => {
         // NAME-MERGE 디버깅 + 거래 fetch 시 base 매칭 보강
         aliasNames: grp.rawNames.size > 1 ? Array.from(grp.rawNames) : undefined,
         // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(위, 조회 키)은 그대로 두고 별도 필드로만 얹는다.
-        displayName: displayAptName(grp.baseName, { umdNm: row.umd_nm }),
+        displayName: grp.canon || displayAptName(grp.baseName, { umdNm: row.umd_nm }),
       });
       if (out.length >= limit) break;
     }
@@ -921,13 +929,12 @@ router.get('/in-bounds', async (req, res) => {
 
   try {
     // apt_geocache 좌표 범위 필터 + molit_transactions 평균가 join
-    const { data: coords, error } = await admin
-      .from('apt_geocache')
-      .select('apt_name, sigungu, umd_nm, lat, lng, apt_key, place_name')
-      .neq('source', 'kakao-x') // NAME-HEAL-2026-10-22: 재검색으로도 못 찾고 가게·시설 자리로 확인된 좌표는 핀에서 뺀다
-      .gte('lat', south).lte('lat', north)
-      .gte('lng', west).lte('lng', east)
-      .limit(limit);
+    // PIN-ORDER-2026-10-30 (Plan 176 C): 예전엔 정렬 없이 limit(50) — 넓은 영역에서 어떤 단지가 보일지 무작위였다
+    //   (운영 실측: 공릉·하계 일대 쓸 수 있는 좌표 261건 중 50건만 읽혀 공릉풍림아이원 누락). 이제 DB 함수가 신고 이름 좌표를
+    //   최근 거래 수 내림차순으로 준다(kakao-x 제외는 함수 안). KAPT 본체 좌표(kapt:)는 아래에서 별칭으로 찾은 단지만 따로 읽는다.
+    const { data: coords, error } = await admin.rpc('geocache_in_bounds', {
+      p_south: south, p_west: west, p_north: north, p_east: east, p_limit: limit,
+    });
     if (error) throw error;
     if (!coords?.length) return res.json({ results: [] });
 
@@ -1027,10 +1034,15 @@ router.get('/in-bounds', async (req, res) => {
     //   오프셋 좌표(본체에서 158~392m). 같은 단지의 kapt 키(kapt:kaptCode) 좌표는 place_name=단지 본체("공릉풍림아파트")로
     //   정확. master 그룹 대표좌표를 kapt 본체 좌표로 교체(아래 grouping 후).
     const kaptCoord = {}; // kaptCode → {lat,lng} (본체 좌표)
-    for (const c of coords) {
-      if (typeof c.apt_key === 'string' && c.apt_key.startsWith('kapt:') && c.lat != null && c.lng != null) {
-        const _kc = c.apt_key.slice(5);
-        if (_kc) kaptCoord[_kc] = { lat: Number(c.lat), lng: Number(c.lng) };
+    // PIN-ORDER-2026-10-30 (Plan 176 C): 본체 좌표는 영역 조회 결과에 우연히 섞여 있을 때만 쓰였다 — 이제 이 영역 핀이 속한
+    //   공식 단지(별칭으로 찾은 것)의 kapt: 키를 직접 읽는다(손으로 고친 manual 좌표도 그대로 읽힌다, kakao-x 만 제외).
+    const _kaptKeys = [...new Set(coords.map(c => aliasToMaster[`${c.apt_name}|${c.umd_nm}`]).filter(m => m && m.kapt_code).map(m => `kapt:${m.kapt_code}`))];
+    for (let _ki = 0; _ki < _kaptKeys.length; _ki += 200) {
+      const { data: _kr } = await admin.from('apt_geocache').select('apt_key, lat, lng, source')
+        .in('apt_key', _kaptKeys.slice(_ki, _ki + 200));
+      for (const c of (_kr || [])) {
+        if (c.source === 'kakao-x' || c.lat == null || c.lng == null) continue;
+        kaptCoord[c.apt_key.slice(5)] = { lat: Number(c.lat), lng: Number(c.lng) };
       }
     }
     // CANON-COORD-FIX-2026-06-03: 하위시설 place_name (단지 본체서 오프셋된 좌표) 판별 — 대표좌표 선택 시 deprioritize.

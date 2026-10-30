@@ -126,6 +126,32 @@ async function buildPopularResults(limit = 12, opts = {}) {
   }
   if (!top || !top.length) return { results: [], usedFallback };
 
+  // POPULAR-ALIAS-2026-10-30 (Plan 176 E): 인기 순위는 국토부 신고 이름 단위였다 — 한 단지가 두 이름(풍림아파트A·B)으로 신고되면
+  //   두 줄로 따로 세어졌다(지도·상세·구별 순위는 별칭으로 합치는데 여기만 안 합쳤다). 같은 공식 단지(apt_master 별칭)로 다시 묶어
+  //   건수는 더하고 평균가는 건수 가중, 대표 신고 이름(거래 가장 많은 것)은 좌표·단지 번호 조회 키로만 쓴다.
+  //   별칭 조회가 실패하면 예전처럼 신고 이름 그대로(지어내지 않는다).
+  try {
+    // 지연 로딩 — 이 모듈을 불러오는 테스트들이 DB 클라이언트를 바꿔 끼우는데, 위에서 불러오면 그 전에 거래 서비스가 실제 클라이언트를 잡는다
+    const { getAliasCanonicalMapEach } = require('./transactionService');
+    const _amap = await getAliasCanonicalMapEach(top.map(t => t.lawd_cd));
+    if (_amap.size) {
+      const merged = new Map();
+      for (const t of [...top].sort((a, b) => b.count - a.count)) {
+        const canon = _amap.get(`${t.apt_name}|${t.umd_nm}`) || null;
+        const k = canon ? `K|${canon}|${t.sigungu}|${t.umd_nm}` : `R|${t.apt_name}|${t.sigungu}|${t.umd_nm}`;
+        const g = merged.get(k);
+        if (!g) { merged.set(k, { ...t, _canon: canon }); continue; }
+        const cnt = g.count + t.count;
+        if (g.deal_amount != null && t.deal_amount != null && cnt > 0) {
+          g.deal_amount = Math.round((Number(g.deal_amount) * g.count + Number(t.deal_amount) * t.count) / cnt);
+        }
+        g.count = cnt;
+        if (String(t.latest || '') > String(g.latest || '')) g.latest = t.latest;
+      }
+      top = [...merged.values()].sort((a, b) => b.count - a.count);
+    }
+  } catch (e) { logger.warn({ err: e.message }, 'popular: 별칭 묶기 실패 — 신고 이름 그대로 진행'); }
+
   // POPULAR-QUALITY (c): MOLIT raw 접두("산척동,") 제거 — 표시용만 (좌표 join 키는 raw 유지)
   const _cleanName = (n) => String(n || '').replace(/^[가-힣0-9]{1,8}(동|리|가),\s*/, '');
 
@@ -150,7 +176,7 @@ async function buildPopularResults(limit = 12, opts = {}) {
   //   실거래는 있어도 인기 순위 노출에서 뺀다(검색·상세는 2번 라벨로 그대로 노출 — 여긴 순위만의 예외).
   //   위 21일 필터·시군구 캡과 같은 패턴: 필터 후에도 limit 을 채울 만큼 남을 때만 적용하고,
   //   limit+6 후보로 넉넉히 남겨 아래 좌표 매칭에서 일부가 또 빠져도 여유를 준다.
-  const named = top.filter(t => !isUnnamedApt(_cleanName(t.apt_name)));
+  const named = top.filter(t => !isUnnamedApt(t._canon || _cleanName(t.apt_name)));
   if (named.length >= limit) top = named.slice(0, limit + 6);
 
   // ③ apt_geocache 좌표 join — 환각 차단(2026-05-06): (apt_name|sigungu|umd_nm) 정확 키만
@@ -187,12 +213,13 @@ async function buildPopularResults(limit = 12, opts = {}) {
     }
   } catch (_) { /* aptSeq 는 부가 정보 — 실패해도 인기 목록 자체는 그대로 낸다(프론트는 null 이면 실패 문구) */ }
   const _row = (t, c) => ({
-    aptName: _cleanName(t.apt_name), sigungu: t.sigungu, umdNm: t.umd_nm,
+    // Plan 176 E: 공식 단지로 묶인 행은 공식 이름이 조회 키(상세가 별칭 거래까지 합쳐 연다)이자 표시 이름이다.
+    aptName: t._canon || _cleanName(t.apt_name), sigungu: t.sigungu, umdNm: t.umd_nm,
     lawdCd: t.lawd_cd, buildYear: t.build_year,
     recentDealDate: t.latest, dealCount60d: t.count, avgDealAmount: t.deal_amount,
     lat: Number(c.lat), lng: Number(c.lng),
     // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(위, 조회 키)은 그대로 두고 별도 필드로만 얹는다.
-    displayName: displayAptName(_cleanName(t.apt_name), { umdNm: t.umd_nm }),
+    displayName: t._canon || displayAptName(_cleanName(t.apt_name), { umdNm: t.umd_nm }),
     // HERO-REAL-2026-09-27 (Plan 116a): 랜딩 히어로 실거래 카드용 — 없으면 null(프론트가 실패 문구로 처리, 지어내지 않음).
     aptSeq: seqMap.get(`${t.apt_name}|${t.sigungu || ''}|${t.umd_nm || ''}`) || null,
   });
