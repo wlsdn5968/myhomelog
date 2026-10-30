@@ -2151,13 +2151,14 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button class="htab" onclick="sv('list',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>목록</button>
     <button class="htab htab-feature" onclick="sv('report',this)" title="내 상황으로 만드는 맞춤 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서</button>
     <div class="htab-dd" id="htabToolDd">
-      <button class="htab-tool" id="htabToolBtn" onclick="toggleToolMenu(event)" aria-haspopup="true" aria-expanded="false" title="특약 초안, 청약 일정, 대출 계산, 복비 계산, 사용법, 규제 요약"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>도구 <span class="ddcaret">▾</span></button>
+      <button class="htab-tool" id="htabToolBtn" onclick="toggleToolMenu(event)" aria-haspopup="true" aria-expanded="false" title="특약 초안, 청약 일정, 대출 계산, 복비 계산, 거래 체크리스트, 사용법, 규제 요약"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>도구 <span class="ddcaret">▾</span></button>
       <div class="htab-menu" id="htabToolMenu">
     <button class="htab" onclick="sv('clause',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>특약</button>
     <button class="htab" onclick="sv('subs',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18"/><path d="M8 2.5v4"/><path d="M16 2.5v4"/></svg>청약</button>
     <button class="htab" onclick="sv('calc',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg>대출 계산</button>
     <!-- TOOLMENU-EXPOSE-2026-10-14 (Plan 148): 복비 계산·사용법 진입 — 로그아웃 데스크톱엔 사용법 경로가 없었다. 인덱스(htabOrder) 밖이라 항상 off. -->
     <button class="htab" onclick="sv('biz',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg>복비 계산</button>
+    <button class="htab" onclick="sv('deal',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>거래 체크리스트</button>
     <button class="htab" onclick="sv('guide',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>사용법</button>
     <!-- Sprint OOOOO: 규제 요약(비뷰 버튼) — 반드시 마지막 유지(인덱스 밖 → 항상 off) -->
     <button class="htab" onclick="closeToolMenu();openRegSummary()" title="부동산 규제 요약 (2025.10.15 대책 + 2026 후속 반영)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3.5v5c0 4.4-3 7.6-7 9.5-4-1.9-7-5.1-7-9.5v-5Z"/></svg>규제 요약</button>
@@ -2440,6 +2441,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       </div>
       <div id="deal-days" style="margin-top:8px"></div>
       <button class="abtn acc" style="margin-top:8px" onclick="saveDeal()">저장</button>
+      <button type="button" class="abtn" style="margin-top:6px;min-height:44px" onclick="sv('deal')">단계별 거래 체크리스트 보기</button>
       <div id="deal-saved" style="margin-top:10px"></div>
     </div>
   </div>
@@ -2722,7 +2724,7 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
     <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:10px">계약 직전 도구</div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
       <button class="abtn" style="margin:0;background:var(--accent-50);color:var(--accent-700);border:1px solid var(--accent-100);font-size:12px" onclick="sv('biz')">복비 계산기</button>
-      <button class="abtn" style="margin:0;background:var(--info-bg);color:var(--a2);border:1px solid var(--info-bd);font-size:12px" onclick="sv('biz');setTimeout(()=>document.getElementById('checkList')?.scrollIntoView({behavior:'smooth',block:'start'}),200)">계약 체크리스트</button>
+      <button class="abtn" style="margin:0;background:var(--info-bg);color:var(--a2);border:1px solid var(--info-bd);font-size:12px" onclick="sv('deal')">거래 체크리스트</button>
     </div>
   </div>
 </div>
@@ -2873,19 +2875,154 @@ html[data-theme="dark"] #view-map .pop-marker .pop-rank{color:#0B1524}
       <div class="comm-strat" id="commStrat"></div>
     </div>
   </div>
+  <!-- DEAL-CHECKLIST-2026-10-30 (Plan 154): 옛 '계약 전 필수 체크리스트' 10개는 근거 없는 항목(잔금일 월초~중순 등)이 섞여 있어
+       공식 근거를 단 '거래 체크리스트' 화면(#view-deal)으로 옮겼다. -->
   <div class="biz-section">
-    <h3>계약 전 필수 체크리스트</h3>
-    <div id="checkList" style="font-size:12px;line-height:2.1;color:var(--t2)">
-      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 대출 사전심사 받기 (가계약 전에 꼭 받아요)</label>
-      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 대출 불가 시 계약금 반환 특약 삽입</label>
-      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 실거래가 동호수별 비교 (국토부 실거래가 앱)</label>
-      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 매도인이 급매로 내놓은 이유를 파악해 가격 협상에 활용</label>
-      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> RR(로열동·로열호) 여부 확인</label>
-      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 토지거래허가구역 여부 확인 (2년 실거주 의무)</label>
-      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 전세대출이 있다면 즉시 회수될 위험이 없는지 확인</label>
-      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 복비 계약 전 협상 (법정 상한 이하)</label>
-      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 잔금일을 월초~중순으로 정하기 (금융 일정에 유리)</label>
-      <label style="display:flex;align-items:center;gap:7px;cursor:pointer"><input type="checkbox"> 취득세 신고 기한 확인 (취득일로부터 60일)</label>
+    <h3>거래 체크리스트</h3>
+    <p style="font-size:14px;color:var(--t2);margin:0 0 12px;line-height:1.6">가계약부터 입주까지 할 일을 단계별로 정리했어요. 법정 기한은 계약일과 잔금일로 계산해 드려요.</p>
+    <button class="abtn" style="margin:0;width:auto;padding:0 16px;min-height:44px;font-size:14px" onclick="sv('deal')">거래 체크리스트 열기</button>
+  </div>
+</div>
+
+<!-- 거래 체크리스트 뷰 — DEAL-CHECKLIST-2026-10-30 (Plan 154, Claude Design 시안 p/f9e2563d 승인) -->
+<div class="biz-view" id="view-deal">
+<style id="dclStyles">
+/* 시안 값만 사용. 전역 토큰 오염 금지 — 이 화면 스코프 변수. 다크 값은 시안 8번 표. */
+#view-deal{
+  --dl-bg:#F5F5F2; --dl-card:#FFFFFF; --dl-sub:#EFEFEB; --dl-line:#E2E1DC; --dl-line2:#CFCEC7;
+  --dl-t1:#15191F; --dl-t2:#4A515C; --dl-t3:#69707B; --dl-pri:#173A63; --dl-onpri:#FFFFFF; --dl-sel:#E7EDF4;
+  background:var(--dl-bg); color:var(--dl-t1); font-variant-numeric:tabular-nums;
+}
+html[data-theme="dark"] #view-deal{
+  --dl-bg:#0E1520; --dl-card:#151E2B; --dl-sub:#1B2636; --dl-line:#243246; --dl-line2:#34445B;
+  --dl-t1:#E9EDF2; --dl-t2:#B5BEC9; --dl-t3:#8D97A4; --dl-pri:#8DB3E2; --dl-onpri:#0E1520; --dl-sel:#1D2D43;
+}
+.dcl{width:100%;max-width:960px;margin:0 auto;padding:48px 0 64px}
+.dcl-top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:24px}
+.dcl-h1{margin:0;font-size:28px;font-weight:700;letter-spacing:-.02em;color:var(--dl-t1)}
+.dcl-seg{display:inline-flex;gap:4px;padding:4px;background:var(--dl-sub);border-radius:8px}
+.dcl-seg button{height:36px;padding:0 20px;border:0;border-radius:6px;background:transparent;color:var(--dl-t2);font-family:inherit;font-size:16px;font-weight:600;cursor:pointer}
+.dcl-seg button[aria-pressed="true"]{background:var(--dl-card);color:var(--dl-t1);box-shadow:0 1px 3px rgba(21,25,31,.14)}
+.dcl-card{background:var(--dl-card);border:1px solid var(--dl-line);border-radius:8px}
+.dcl-dates{display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px;padding:24px;margin-bottom:32px}
+.dcl-dates>div{min-width:0} /* 날짜 입력칸의 기본 최소 폭이 좁은 화면에서 카드 밖으로 넘치지 않게 */
+.dcl-dates label{display:block;font-size:14px;font-weight:600;color:var(--dl-t2);margin-bottom:8px}
+.dcl-dates input[type=date]{width:100%;height:44px;padding:0 12px;border:1px solid var(--dl-line2);border-radius:8px;background:var(--dl-card);color:var(--dl-t1);font-size:16px;font-family:inherit;font-variant-numeric:tabular-nums;color-scheme:light;box-sizing:border-box;min-width:0}
+html[data-theme="dark"] .dcl-dates input[type=date]{color-scheme:dark}
+.dcl-prog-l{font-size:14px;font-weight:600;color:var(--dl-t2);margin-bottom:8px}
+.dcl-prog-n{font-size:20px;font-weight:700;color:var(--dl-t1)}
+.dcl-bar{height:8px;border-radius:4px;background:var(--dl-sub);overflow:hidden;margin-top:10px}
+.dcl-bar>i{display:block;height:100%;background:var(--dl-pri);border-radius:4px}
+.dcl-share{grid-column:1/-1;font-size:12px;color:var(--dl-t3);margin:-8px 0 0}
+.dcl-stage{display:grid;grid-template-columns:24px 1fr;gap:16px;padding-bottom:32px;position:relative}
+.dcl-rail{position:relative}
+.dcl-dot{display:block;width:14px;height:14px;border-radius:50%;border:2px solid var(--dl-line2);background:var(--dl-card);margin:7px auto 0;box-sizing:border-box}
+.dcl-stage[data-st="done"] .dcl-dot{background:var(--dl-pri);border-color:var(--dl-pri)}
+.dcl-stage[data-st="now"] .dcl-dot,.dcl-stage[data-st="late"] .dcl-dot{border-color:var(--dl-pri)}
+.dcl-stage:not(:last-child) .dcl-rail::after{content:"";position:absolute;left:11px;top:27px;bottom:-32px;width:2px;background:var(--dl-line)}
+.dcl-sh{display:flex;align-items:center;gap:12px;flex-wrap:wrap;width:100%;min-height:28px;padding:0;margin-bottom:12px;background:none;border:0;text-align:left;font-family:inherit;color:var(--dl-t1);cursor:default}
+.dcl-sn{font-size:20px;font-weight:700}
+.dcl-sd{font-size:14px;color:var(--dl-t2)}
+.dcl-badge{font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px;background:var(--dl-sel);color:var(--dl-pri)}
+.dcl-badge.past{background:var(--dl-sub);color:var(--dl-t3)}
+.dcl-ss{margin-left:auto;font-size:14px;color:var(--dl-t2)}
+.dcl-chev{display:none}
+.dcl-items{list-style:none;margin:0;padding:0}
+.dcl-it+.dcl-it{border-top:1px solid var(--dl-line)}
+.dcl-row{display:grid;grid-template-columns:44px 1fr auto 44px;gap:8px;padding:12px 12px 12px 8px;min-height:68px;box-sizing:border-box}
+.dcl-cbw{display:flex;align-items:center;justify-content:center;width:44px;height:44px;cursor:pointer}
+.dcl-cb{appearance:none;-webkit-appearance:none;width:22px;height:22px;margin:0;border:1.5px solid var(--dl-line2);border-radius:6px;background:var(--dl-card);cursor:pointer;display:grid;place-items:center}
+.dcl-cb:checked{background:var(--dl-pri);border-color:var(--dl-pri)}
+.dcl-cb:checked::after{content:"";width:6px;height:11px;border:solid var(--dl-onpri);border-width:0 2px 2px 0;transform:translateY(-1px) rotate(45deg)}
+.dcl-txt{padding-top:10px;min-width:0}
+.dcl-t{font-size:16px;font-weight:600;color:var(--dl-t1)}
+.dcl-it.on .dcl-t{color:var(--dl-t3)}
+.dcl-d{font-size:14px;line-height:1.5;color:var(--dl-t2);margin-top:4px;white-space:pre-line}
+.dcl-act{margin-top:8px}
+.dcl-right{display:flex;flex-direction:column;align-items:flex-end;gap:6px;padding-top:10px;min-width:120px;text-align:right}
+.dcl-lb{display:inline-block;font-size:12px;font-weight:700;padding:3px 8px;border-radius:6px;white-space:nowrap}
+.dcl-lb.dl{background:var(--dl-pri);color:var(--dl-onpri);box-shadow:inset 0 0 0 1px var(--dl-pri)}
+.dcl-lb.law{background:transparent;color:var(--dl-pri);box-shadow:inset 0 0 0 1px var(--dl-pri)}
+.dcl-lb.off{background:var(--dl-sel);color:var(--dl-pri);box-shadow:inset 0 0 0 1px var(--dl-sel)}
+.dcl-lb.gen{background:var(--dl-sub);color:var(--dl-t3);box-shadow:inset 0 0 0 1px var(--dl-sub)}
+.dcl-due{font-size:14px;font-weight:600;color:var(--dl-t1);white-space:nowrap}
+.dcl-dd{font-size:12px;color:var(--dl-t3)}
+.dcl-dd.near{color:var(--dl-pri)}
+.dcl-as{font-size:12px;line-height:1.4;color:var(--dl-t3);max-width:168px}
+.dcl-more{width:44px;height:44px;border:0;background:none;color:var(--dl-t3);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0}
+.dcl-more svg{transition:transform .15s}
+.dcl-more[aria-expanded="true"] svg{transform:rotate(180deg)}
+.dcl-more.none{visibility:hidden;pointer-events:none}
+.dcl-src{background:var(--dl-sub);border-radius:8px;padding:4px 16px;margin:0 56px 16px 60px}
+.dcl-srow{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:44px;font-size:14px;color:var(--dl-t1)}
+.dcl-srow i{font-style:normal;color:var(--dl-t3)}
+.dcl-lnk{display:inline-flex;align-items:center;min-height:44px;padding:0 8px;border-radius:8px;color:var(--dl-pri);font-size:14px;font-weight:600;text-decoration:none;white-space:nowrap}
+.dcl-lnk:hover{text-decoration:underline}
+.dcl-btn2{display:inline-flex;align-items:center;height:44px;padding:0 16px;border:1px solid var(--dl-line2);border-radius:8px;background:var(--dl-card);color:var(--dl-t1);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.dcl-foot{border-top:1px solid var(--dl-line);padding-top:20px;display:flex;flex-direction:column;gap:6px}
+.dcl-foot p{margin:0;font-size:14px;color:var(--dl-t2);line-height:1.6}
+.dcl-foot p.s{font-size:12px;color:var(--dl-t3)}
+@media(max-width:700px){
+  .dcl{padding:8px 0 112px} /* 시안 32 + 떠 있는 관심·챗 버튼(오른쪽 아래) 높이 — 마지막 안내 줄을 버튼 위로 올려 읽을 수 있게 */
+  .dcl-top{margin-bottom:16px}
+  .dcl-h1{font-size:20px}
+  .dcl-seg{display:flex;width:100%}
+  .dcl-seg button{flex:1;padding:0;height:44px}
+  .dcl-dates{grid-template-columns:1fr 1fr;gap:8px;padding:16px;margin-bottom:16px}
+  .dcl-dates label{font-size:12px}
+  .dcl-progw{grid-column:1/-1}
+  .dcl-prog-l{margin:8px 0 0}
+  .dcl-prog-n{font-size:14px}
+  .dcl-bar{height:6px;border-radius:3px}
+  .dcl-share{display:none}
+  .dcl-stage{display:block;padding:0;margin-bottom:8px;background:var(--dl-card);border:1px solid var(--dl-line);border-radius:8px}
+  .dcl-rail{display:none}
+  .dcl-sh{min-height:60px;padding:0 0 0 14px;margin:0;gap:8px;flex-wrap:nowrap;cursor:pointer}
+  .dcl-sh::before{content:"";flex:none;width:10px;height:10px;border-radius:50%;border:2px solid var(--dl-line2);background:var(--dl-card);box-sizing:border-box}
+  .dcl-stage[data-st="done"] .dcl-sh::before{background:var(--dl-pri);border-color:var(--dl-pri)}
+  .dcl-stage[data-st="now"] .dcl-sh::before,.dcl-stage[data-st="late"] .dcl-sh::before{border-color:var(--dl-pri)}
+  .dcl-shm{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .dcl-sn{font-size:16px}
+  .dcl-sd{font-size:12px}
+  .dcl-badge{background:none!important;padding:0}
+  .dcl-sw{display:none}
+  .dcl-chev{display:flex;width:44px;height:44px;align-items:center;justify-content:center;color:var(--dl-t3);flex:none}
+  .dcl-chev svg{transition:transform .15s}
+  .dcl-stage.open .dcl-chev svg{transform:rotate(180deg)}
+  .dcl-stage:not(.open) .dcl-body{display:none}
+  .dcl-body.dcl-card{border:0;border-top:1px solid var(--dl-line);border-radius:0 0 8px 8px}
+  .dcl-row{grid-template-columns:44px 1fr 44px;gap:4px;padding:8px 14px 12px 4px}
+  .dcl-right{grid-column:2;grid-row:2;flex-direction:row;flex-wrap:wrap;align-items:center;gap:8px;padding-top:0;min-width:0;text-align:left}
+  .dcl-due{font-size:12px}
+  .dcl-as{flex-basis:100%;max-width:none}
+  .dcl-more{grid-column:3;grid-row:1}
+  .dcl-src{margin:0 14px 12px;padding:6px 12px}
+  .dcl-srow{flex-direction:column;align-items:flex-start;gap:0;padding-top:6px}
+  .dcl-lnk{padding:0}
+  .dcl-foot{border-top:0;padding:8px 4px 0}
+}
+@media(min-width:701px){.dcl-shm{display:contents}}
+@media(prefers-reduced-motion:reduce){.dcl-more svg,.dcl-chev svg{transition:none}}
+</style>
+  <div class="dcl">
+    <div class="dcl-top">
+      <h1 class="dcl-h1">거래 체크리스트</h1>
+      <div class="dcl-seg" role="group" aria-label="보기 선택">
+        <button type="button" data-role="b" aria-pressed="true" onclick="_dclSetRole('b')">매수인</button>
+        <button type="button" data-role="s" aria-pressed="false" onclick="_dclSetRole('s')">매도인</button>
+      </div>
+    </div>
+    <div class="dcl-card dcl-dates">
+      <div><label for="dcl-contract">계약일</label><input id="dcl-contract" type="date" onchange="_dclDateChange()"></div>
+      <div><label for="dcl-balance">잔금일</label><input id="dcl-balance" type="date" onchange="_dclDateChange()"></div>
+      <div class="dcl-progw"><div class="dcl-prog-l">전체 진행률 <span class="dcl-prog-n" id="dclProgN">0/0</span></div><div class="dcl-bar" role="progressbar" aria-label="전체 진행률" id="dclBar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><i style="width:0%"></i></div></div>
+      <p class="dcl-share">계약 타임라인과 같은 날짜를 써요. 여기서 바꾸면 타임라인에도 반영돼요.</p>
+    </div>
+    <div id="dclList"></div>
+    <div class="dcl-foot">
+      <p>법령과 기준은 바뀔 수 있어요. 최종 판단은 공인중개사·법무사·세무서와 확인하세요.</p>
+      <p>마감일이 토요일이나 공휴일이면 기한은 다음 날까지예요(민법 제161조). 표시한 날짜는 미루기 전 날짜예요.</p>
+      <p class="s">체크 상태는 이 기기에만 저장돼요.</p>
     </div>
   </div>
 </div>
@@ -3252,7 +3389,8 @@ html[data-theme="dark"] #view-news{
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         <b>청약 일정</b>: 한국부동산원 청약Home 일정, 가점 계산기(84점), 지역별 당첨 가점 대략 범위를 볼 수 있어요<br>
         <b>브리핑</b>: 부동산 뉴스를 6개 분류로 보여 주고 30분마다 새로 불러와요. 3줄 시황은 공식 통계를 자동으로 정리한 것이며 AI가 쓴 글이 아니에요<br>
-        <b>계약 타임라인</b>: 목록 화면 왼쪽(모바일은 ☰ 메뉴)에서 계약일과 잔금일을 입력하면 D-day를 자동으로 계산해요
+        <b>계약 타임라인</b>: 목록 화면 왼쪽(모바일은 ☰ 메뉴)에서 계약일과 잔금일을 입력하면 D-day를 자동으로 계산해요<br>
+        <b>거래 체크리스트</b>: 도구 메뉴에서 열어요. 가계약부터 입주까지 매수인·매도인이 할 일을 단계별로 보여 주고, 계약 타임라인 날짜로 법정 기한을 계산해요
       </div>
     </details>
 
@@ -3506,6 +3644,12 @@ html[data-theme="dark"] #view-news{
   <button type="button" class="ts-item" data-tool="biz" aria-current="false" onclick="closeToolsSheet();sv('biz',this)">
     <span class="ts-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg></span>
     <span class="ts-body"><span class="ts-title">복비 계산</span><span class="ts-desc">공인중개사법 시행규칙 기준</span></span>
+    <span class="ts-check" aria-hidden="true">✓</span>
+    <span class="ts-arrow" aria-hidden="true">→</span>
+  </button>
+  <button type="button" class="ts-item" data-tool="deal" aria-current="false" onclick="closeToolsSheet();sv('deal',this)">
+    <span class="ts-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg></span>
+    <span class="ts-body"><span class="ts-title">거래 체크리스트</span><span class="ts-desc">가계약부터 입주까지 할 일과 법정 기한</span></span>
     <span class="ts-check" aria-hidden="true">✓</span>
     <span class="ts-arrow" aria-hidden="true">→</span>
   </button>
@@ -11050,6 +11194,7 @@ function renderDealDays(){
     }
   }
   el.innerHTML=rows.join('');
+  try{_dclFromTimeline();}catch(_){} // DEAL-CHECKLIST (Plan 154): 같은 날짜를 거래 체크리스트에도
 }
 
 function saveDeal(){
@@ -11078,6 +11223,261 @@ function renderSavedDeals(){
       ${d.balance?`<div class="deal-row"><span class="deal-lbl">잔금일</span><span class="deal-day ${balanceD!==null&&balanceD<=30&&balanceD>0?'soon':'ok'}">${fmtD(balanceD)}</span></div>`:''}
     </div>`;
   }).join('');
+}
+
+// ── 거래 체크리스트 ─────────────────────────────────────────
+// DEAL-CHECKLIST-2026-10-30 (Plan 154, Claude Design 시안 p/f9e2563d 승인): 가계약부터 입주까지 할 일.
+//   항목·숫자는 plans/154-deal-checklist-content.md 에서 법령 원문(law.go.kr)·공식 기관 페이지로 확인한 것만 쓴다.
+//   라벨: dl=법정 기한(마감일 계산) · law=법령(날짜 없음) · off=공식 안내 · gen=일반 안내(근거 없음, 펼치기 없음).
+//   날짜는 계약 타임라인(#deal-contract/#deal-balance)과 공유, 체크 상태는 이 기기(localStorage)에만 저장.
+function _dclData(){
+  const L=(law,jo,name)=>({n:name,l:'국가법령정보센터에서 보기',u:'https://www.law.go.kr/법령/'+encodeURIComponent(law)+'/'+encodeURIComponent(jo)});
+  const A={n:"찾기쉬운 생활법령정보(법제처) '부동산 매매'",l:'생활법령정보에서 보기',u:'https://www.easylaw.go.kr'};
+  const B={n:'대법원 인터넷등기소',l:'인터넷등기소 열기',u:'https://www.iros.go.kr'};
+  const E={n:"찾기쉬운 생활법령정보(법제처) '소유권이전등기'",l:'생활법령정보에서 보기',u:'https://www.easylaw.go.kr'};
+  const F={n:'금융위원회 가계대출 관리 강화 FAQ(2025.6.27) 7번',l:'금융위원회에서 보기',u:'https://www.fsc.go.kr/po020201/84825'};
+  const G={n:'국세청 양도소득세 안내',l:'국세청에서 보기',u:'https://www.nts.go.kr'};
+  const H={n:'정부24',l:'정부24 열기',u:'https://www.gov.kr'};
+  const I={n:'국세청 안내',l:'홈택스 열기',u:'https://www.hometax.go.kr'};
+  const RPT=L('부동산거래신고등에관한법률','제3조','부동산 거래신고 등에 관한 법률 제3조');
+  const RESC=L('민법','제565조','민법 제565조');
+  const SEAL=[E,L('부동산등기규칙','제60조','부동산등기규칙 제60조'),L('부동산등기규칙','제62조','부동산등기규칙 제62조')];
+  const FEE=L('공동주택관리법','제30조','공동주택관리법 제30조');
+  return {
+    b:[
+      {k:'pre',n:'가계약·계약 전',items:[
+        {id:'b_loan',t:'대출 가능 금액 미리 확인',lb:'gen',btn:{t:'대출 계산',v:'calc'}},
+        {id:'b_reg',t:'등기부로 매도인이 소유자인지 확인',d:'근저당이 있는지도 함께 확인해요.',lb:'off',src:[A,B]},
+        {id:'b_land',t:'토지거래허가구역이면 허가 먼저 받기',d:'주거용은 취득일부터 2년 동안 이용 의무가 있어요.',lb:'law',src:[L('부동산거래신고등에관한법률시행령','제14조','부동산 거래신고 등에 관한 법률 시행령 제14조')]},
+        {id:'b_fund',t:'자금조달·입주계획서 제출 대상인지 확인',d:'제출 대상 금액은 바뀔 수 있어 중개사·시군구청에 확인해요.',lb:'off',src:[RPT,L('부동산거래신고등에관한법률시행령','제3조','부동산 거래신고 등에 관한 법률 시행령 제3조')]},
+        {id:'b_disp',t:'처분조건부 대출이면 기존 집 처분 기한 확인',d:'대출 실행일부터 6개월 안에 기존 집을 처분해야 해요. 어기면 대출이 회수돼요. 대출 은행과 확인해요.',lb:'off',src:[F]},
+      ]},
+      {k:'day',n:'계약 당일',items:[
+        {id:'b_id',t:'신분증으로 매도인 본인 확인',d:'대리인이면 위임장과 인감증명서를 확인해요.',lb:'off',src:[A]},
+        {id:'b_match',t:'계약서 부동산 표시가 등기부와 같은지 확인',lb:'off',src:[A,B]},
+        {id:'b_expl',t:'중개대상물 확인·설명서 받기',lb:'off',src:[L('공인중개사법','제25조','공인중개사법 제25조')]},
+        {id:'b_resc',t:'계약금 해제 규칙 알아두기',d:'상대가 이행에 착수하기 전까지는 계약금을 포기하고 해제할 수 있어요.',lb:'law',src:[RESC]},
+        {id:'b_rpt',t:'부동산 거래신고',d:'계약일부터 30일 이내예요. 중개 거래는 중개사가 신고해요.',lb:'dl',due:{f:'c',n:30},src:[RPT]},
+      ]},
+      {k:'mid',n:'중도금',items:[
+        {id:'b_mid',t:'중도금 내기 전 해제 규칙 다시 보기',d:'중도금을 내면 계약금만으로 해제하기 어려워질 수 있어요.',lb:'law',src:[RESC]},
+      ]},
+      {k:'bal',n:'잔금일',items:[
+        {id:'b_reg2',t:'잔금 직전 등기부 다시 보기',lb:'gen'},
+        {id:'b_seal',t:'매도인에게 등기필정보·인감증명서 받기',d:'인감증명서는 3개월 이내 발급분이어야 해요.',lb:'off',src:SEAL},
+        {id:'b_fee',t:'관리비·장기수선충당금 정산',d:'장기수선충당금은 소유자가 부담해요.',lb:'off',src:[FEE]},
+      ]},
+      {k:'reg',n:'등기·세금',items:[
+        {id:'b_xfer',t:'소유권이전등기 신청',d:'잔금일부터 60일 이내에 해야 해요.',lb:'dl',due:{f:'b',n:60},src:[L('부동산등기특별조치법','제2조','부동산등기 특별조치법 제2조')]},
+        {id:'b_acq',t:'취득세 신고·납부',d:'취득일(보통 잔금일)부터 60일 이내에 신고하고 내야 해요.',lb:'dl',due:{f:'b',n:60},src:[L('지방세법','제20조','지방세법 제20조')]},
+        {id:'b_first',t:'생애최초 취득세 감면 확인',d:'12억 원 이하 주택이 대상이고, 아파트는 200만 원 한도예요. 3년 안에 팔거나 임대하면 추징돼요.\n아파트도 인구감소지역이면 300만 원이에요.',lb:'law',src:[L('지방세특례제한법','제36조의3','지방세특례제한법 제36조의3')]},
+        {id:'b_bond',t:'등기할 때 국민주택채권 매입',lb:'off',src:[L('주택도시기금법','제8조','주택도시기금법 제8조')]},
+      ]},
+      {k:'move',n:'입주',items:[
+        {id:'b_move',t:'전입신고',d:'전입한 날부터 14일 이내예요. 정부24에서 온라인으로도 할 수 있어요.',lb:'dl',due:{f:'b',n:14},as:'잔금일에 전입한다고 보고 계산했어요',src:[L('주민등록법','제16조','주민등록법 제16조'),H]},
+        {id:'b_disp2',t:'처분조건부면 기존 집 처분 증빙',lb:'off',src:[F]},
+      ]},
+    ],
+    s:[
+      {k:'pre',n:'가계약·계약 전',items:[
+        {id:'s_one',t:'1주택 비과세 요건 확인',d:'2년 이상 보유해야 해요. 살 때 조정대상지역이었다면 보유 기간 중 2년 이상 살아야 해요. 12억 원 초과분은 과세돼요.',lb:'off',src:[L('소득세법시행령','제154조','소득세법 시행령 제154조'),G]},
+        {id:'s_tmp',t:'일시적 2주택이면 처분 기한 확인',d:'새 집 취득일부터 3년 안에 기존 집을 팔아야 해요. 두 집이 모두 조정대상지역이면 2년이에요(2026년 10월 1일 시행). 적용 시점은 세무서와 확인해요.',lb:'law',src:[L('소득세법시행령','제155조','소득세법 시행령 제155조')]},
+        {id:'s_loan',t:'남은 대출 상환액 은행에 확인',lb:'gen'},
+      ]},
+      {k:'day',n:'계약 당일',items:[
+        {id:'s_id',t:'매수인 본인 확인',lb:'off',src:[A]},
+        {id:'s_resc',t:'계약금 해제 규칙 알아두기',d:'상대가 이행에 착수하기 전까지는 매도인은 받은 계약금의 두 배를 돌려주고 해제할 수 있어요.',lb:'law',src:[RESC]},
+        {id:'s_rpt',t:'부동산 거래신고',d:'계약일부터 30일 이내예요. 중개 거래는 중개사가 신고해요.',lb:'dl',due:{f:'c',n:30},src:[RPT]},
+      ]},
+      {k:'bal',n:'잔금일',items:[
+        {id:'s_seal',t:'등기필정보·인감증명서 준비',d:'인감증명서는 3개월 이내 발급분으로 준비해요.',lb:'off',src:SEAL},
+        {id:'s_lien',t:'근저당 말소',lb:'gen'},
+        {id:'s_fee',t:'관리비·장기수선충당금 정산',d:'장기수선충당금은 소유자가 부담해요.',lb:'off',src:[FEE]},
+      ]},
+      {k:'tax',n:'세금 신고',items:[
+        {id:'s_cgt',t:'양도소득세 예정신고',d:'양도일이 속한 달 말일부터 2개월 이내예요. 양도일은 잔금일과 등기접수일 중 빠른 날이에요.',lb:'dl',due:{f:'cgt'},as:'잔금일을 양도일로 보고 계산했어요',src:[L('소득세법','제105조','소득세법 제105조')]},
+        {id:'s_sim',t:'홈택스 양도소득세 모의계산',d:'홈택스에서 세금신고, 양도소득세 신고, 모의계산, 양도소득세 자동계산 순서로 들어가요.',lb:'off',src:[I]},
+      ]},
+    ],
+  };
+}
+const DCL_KEY='mhl_deal_cl';
+const DCL_LB={dl:'법정 기한',law:'법령',off:'공식 안내',gen:'일반 안내'};
+const DCL_ST={done:'완료',now:'진행 중',late:'남은 항목 있음',todo:'예정'};
+// 'YYYY-MM-DD' → 로컬 자정(DDAY-TZ-FIX 와 같은 이유로 'T00:00:00'). 잘못된 값은 null.
+function _dclParse(s){
+  if(!s||!/^\d{4}-\d{2}-\d{2}$/.test(s))return null;
+  const d=new Date(s+'T00:00:00');return isNaN(d)?null:d;
+}
+function _dclAdd(d,n){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()+n);return x;}
+function _dclDiff(d,today){
+  const a=Date.UTC(d.getFullYear(),d.getMonth(),d.getDate()),b=Date.UTC(today.getFullYear(),today.getMonth(),today.getDate());
+  return Math.round((a-b)/86400000);
+}
+// 마감일: 기준일 + N일(초일 불산입과 같은 결과). 양도세는 양도일(=잔금일 가정)이 속한 달 말일부터 2개월 → 두 달 뒤 달의 말일.
+//   민법 제161조(말일이 토요일·공휴일이면 다음 날)는 화면 안내로만 — 공휴일 달력을 만들지 않는다.
+function _dclDue(it,c,b){
+  if(!it||!it.due)return null;
+  if(it.due.f==='c')return c?_dclAdd(c,it.due.n):null;
+  if(it.due.f==='b')return b?_dclAdd(b,it.due.n):null;
+  if(it.due.f==='cgt')return b?new Date(b.getFullYear(),b.getMonth()+3,0):null;
+  return null;
+}
+function _dclFmt(d,today){
+  const md=`${d.getMonth()+1}월 ${d.getDate()}일`;
+  return d.getFullYear()===today.getFullYear()?md:`${d.getFullYear()}년 ${md}`;
+}
+function _dclWd(d){return '('+'일월화수목금토'[d.getDay()]+')';}
+function _dclDd(n){return n>0?`D-${n}`:n===0?'D-day':`D+${-n}`;}
+// 단계 머리(날짜 문구·배지)와 상태. 상태: 다 체크=완료 / 기간이 지났는데 남음=남은 항목 있음 / 기간 안=진행 중 / 그 전=예정.
+function _dclStage(sg,c,b,today,done){
+  const m=sg.items.length,n=sg.items.filter(it=>done[it.id]).length;
+  const dues=sg.items.map(it=>_dclDue(it,c,b)).filter(Boolean);
+  const maxDue=dues.length?new Date(Math.max(...dues.map(d=>d.getTime()))):null;
+  let start=null,end=null,txt='',badge=null;
+  const bd=(lbl,d)=>{const x=_dclDiff(d,today);return {t:`${lbl} ${_dclDd(x)}`,past:x<0};};
+  if(sg.k==='pre'){ if(c){end=_dclAdd(c,-1);txt=`${_dclFmt(end,today)}까지`;badge=bd('계약',c);} }
+  else if(sg.k==='day'){ if(c){start=end=c;txt=`${_dclFmt(c,today)} ${_dclWd(c)}`;badge=bd('계약',c);} }
+  else if(sg.k==='mid'){ txt='계약일과 잔금일 사이'; if(c&&b){start=_dclAdd(c,1);end=_dclAdd(b,-1);} if(b)badge=bd('잔금',b); }
+  else if(sg.k==='bal'){ if(b){start=end=b;txt=`${_dclFmt(b,today)} ${_dclWd(b)}`;badge=bd('잔금',b);} }
+  else if(sg.k==='reg'||sg.k==='tax'){ if(b&&maxDue){start=b;end=maxDue;txt=`${_dclFmt(maxDue,today)}까지`;badge=bd('마감',maxDue);} }
+  else if(sg.k==='move'){ txt='잔금일 이후'; if(b){start=b;end=maxDue||b;badge=bd('잔금',b);} }
+  let st;
+  if(n===m)st='done';
+  else if(!end)st=n>0?'now':'todo';
+  else if(_dclDiff(end,today)<0)st='late';
+  else if(!start||_dclDiff(start,today)<=0)st='now';
+  else st='todo';
+  return {txt,badge,st,n,m};
+}
+function _dclLoad(){
+  try{const o=JSON.parse(localStorage.getItem(DCL_KEY)||'{}');return {r:o.r==='s'?'s':'b',c:typeof o.c==='string'?o.c:'',b:typeof o.b==='string'?o.b:'',done:(o.done&&typeof o.done==='object')?o.done:{}};}
+  catch(_){return {r:'b',c:'',b:'',done:{}};}
+}
+function _dclSave(s){try{localStorage.setItem(DCL_KEY,JSON.stringify(s));}catch(_){}}
+let _dclOpenSet=null; // 모바일 단계 펼침 — 사용자가 누른 상태를 렌더 사이에 유지(역할을 바꾸면 초기화)
+const _dclSrcOpen=new Set(); // 펼친 근거 패널 — 체크로 다시 그려도 접히지 않게
+const _DCL_CHEV='<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>';
+function _dclRender(){
+  const box=document.getElementById('dclList');if(!box)return;
+  const s=_dclLoad(),data=_dclData(),stages=data[s.r],today=new Date();
+  const c=_dclParse(s.c),b=_dclParse(s.b);
+  const ic=document.getElementById('dcl-contract'),ib=document.getElementById('dcl-balance');
+  if(ic&&ic.value!==s.c)ic.value=s.c;
+  if(ib&&ib.value!==s.b)ib.value=s.b;
+  document.querySelectorAll('#view-deal .dcl-seg button').forEach(x=>x.setAttribute('aria-pressed',x.dataset.role===s.r?'true':'false'));
+  const all=stages.flatMap(sg=>sg.items),nd=all.filter(it=>s.done[it.id]).length,pct=all.length?Math.round(nd/all.length*100):0;
+  const pn=document.getElementById('dclProgN');if(pn)pn.textContent=`${nd}/${all.length}`;
+  const bar=document.getElementById('dclBar');if(bar){bar.setAttribute('aria-valuenow',String(pct));const i=bar.querySelector('i');if(i)i.style.width=pct+'%';}
+  const infos=stages.map(sg=>_dclStage(sg,c,b,today,s.done));
+  if(!_dclOpenSet){
+    _dclOpenSet=new Set(stages.filter((sg,i)=>infos[i].st==='now'||infos[i].st==='late').map(sg=>sg.k));
+    if(!_dclOpenSet.size){const f=stages.find((sg,i)=>infos[i].st!=='done');if(f)_dclOpenSet.add(f.k);}
+  }
+  const E=_escHtml,mob=_dclMob();_dclMobLast=mob;
+  box.innerHTML=stages.map((sg,i)=>{
+    const inf=infos[i],open=_dclOpenSet.has(sg.k);
+    const items=sg.items.map(it=>{
+      const on=!!s.done[it.id],due=_dclDue(it,c,b);
+      let right=`<span class="dcl-lb ${it.lb}">${DCL_LB[it.lb]}</span>`;
+      if(it.due){
+        if(due){const x=_dclDiff(due,today);right+=`<span class="dcl-due">${E(_dclFmt(due,today))}까지</span><span class="dcl-dd${!on&&x<=30?' near':''}">${on?'완료':_dclDd(x)}</span>`;}
+        else right+=`<span class="dcl-dd">${it.due.f==='c'?'계약일':'잔금일'}을 넣으면 계산해요</span>`;
+        if(it.as&&due)right+=`<span class="dcl-as">${E(it.as)}</span>`;
+      }
+      const has=!!(it.src&&it.src.length),sid='dcls-'+it.id,so=has&&_dclSrcOpen.has(it.id);
+      return `<li class="dcl-it${on?' on':''}">
+        <div class="dcl-row">
+          <label class="dcl-cbw"><input type="checkbox" class="dcl-cb" data-id="${it.id}" aria-label="${E(it.t)}"${on?' checked':''} onchange="_dclToggle('${it.id}',this.checked)"></label>
+          <div class="dcl-txt"><div class="dcl-t">${E(it.t)}</div>${it.d?`<div class="dcl-d">${E(it.d)}</div>`:''}${it.btn?`<div class="dcl-act"><button type="button" class="dcl-btn2" onclick="sv('${it.btn.v}')">${E(it.btn.t)}</button></div>`:''}</div>
+          <div class="dcl-right">${right}</div>
+          <button type="button" class="dcl-more${has?'':' none'}"${has?` aria-expanded="${so?'true':'false'}" aria-controls="${sid}" aria-label="${E(it.t)} 근거 보기" onclick="_dclMore(this)"`:' tabindex="-1" aria-hidden="true"'}>${_DCL_CHEV}</button>
+        </div>
+        ${has?`<div class="dcl-src" id="${sid}"${so?'':' hidden'}>${it.src.map(x=>`<div class="dcl-srow"><span>${E(x.n)}<i> · 2026-10-30 확인</i></span><a class="dcl-lnk" href="${E(x.u)}" target="_blank" rel="noopener noreferrer">${E(x.l)}</a></div>`).join('')}</div>`:''}
+      </li>`;
+    }).join('');
+    const bdg=inf.badge?`<span class="dcl-badge${inf.badge.past?' past':''}">${E(inf.badge.t)}</span>`:'';
+    return `<section class="dcl-stage${open?' open':''}" data-st="${inf.st}" data-k="${sg.k}">
+      <div class="dcl-rail"><span class="dcl-dot"></span></div>
+      <div>
+        <${mob?'button':'div'} class="dcl-sh"${mob?` type="button" aria-expanded="${open?'true':'false'}" aria-controls="dclb-${sg.k}" onclick="_dclStageToggle('${sg.k}')"`:''}>
+          <span class="dcl-shm"><span class="dcl-sn">${E(sg.n)}</span><span>${inf.txt?`<span class="dcl-sd">${E(inf.txt)}</span> `:''}${bdg}</span></span>
+          <span class="dcl-ss"><span class="dcl-sw">${DCL_ST[inf.st]} · </span>${inf.n}/${inf.m}</span>
+          <span class="dcl-chev">${_DCL_CHEV}</span>
+        </${mob?'button':'div'}>
+        <ul class="dcl-items dcl-body dcl-card" id="dclb-${sg.k}">${items}</ul>
+      </div>
+    </section>`;
+  }).join('');
+}
+// 단계 접기는 좁은 화면(≤700px, 시안 1c)에서만 — 데스크톱은 늘 펼친 타임라인이라 버튼으로 만들지 않는다.
+function _dclMob(){try{return window.matchMedia('(max-width:700px)').matches;}catch(_){return false;}}
+// 폭이 기준선을 넘나들면 다시 그린다. MediaQueryList 를 변수로 잡아 둔다(참조가 없으면 감지기가 정리될 수 있다 — 실측: 모바일로
+//   줄인 뒤 단계 머리가 div 로 남아 펼칠 수 없었다). resize 도 함께 — 직전 상태와 다를 때만.
+let _dclMobLast=null;
+function _dclMobSync(){const m=_dclMob();if(m===_dclMobLast)return;_dclMobLast=m;if(_dclVisible())_dclRender();}
+const _dclMq=(()=>{try{return window.matchMedia('(max-width:700px)');}catch(_){return null;}})();
+try{if(_dclMq)_dclMq.addEventListener('change',_dclMobSync);}catch(_){}
+window.addEventListener('resize',_dclMobSync,{passive:true});
+function _dclVisible(){const v=document.getElementById('view-deal');return !!v&&getComputedStyle(v).display!=='none';}
+function _dclSetRole(r){const s=_dclLoad();if(s.r===r)return;s.r=r==='s'?'s':'b';_dclSave(s);_dclOpenSet=null;_dclRender();}
+function _dclToggle(id,on){
+  const s=_dclLoad();if(on)s.done[id]=true;else delete s.done[id];_dclSave(s);_dclRender();
+  // 다시 그리면 DOM 이 바뀌어 키보드 포커스가 사라진다 — 같은 체크박스로 돌려놓는다
+  const cb=document.querySelector(`#dclList .dcl-cb[data-id="${id}"]`);if(cb)try{cb.focus({preventScroll:true});}catch(_){cb.focus();}
+}
+function _dclMore(btn){
+  const id=btn.getAttribute('aria-controls'),el=id&&document.getElementById(id);if(!el)return;
+  const open=btn.getAttribute('aria-expanded')!=='true';btn.setAttribute('aria-expanded',open?'true':'false');el.hidden=!open;
+  const iid=id.replace(/^dcls-/,'');if(open)_dclSrcOpen.add(iid);else _dclSrcOpen.delete(iid);
+}
+function _dclStageToggle(k){
+  if(!_dclOpenSet)_dclOpenSet=new Set();
+  if(_dclOpenSet.has(k))_dclOpenSet.delete(k);else _dclOpenSet.add(k);
+  const sec=document.querySelector(`#dclList .dcl-stage[data-k="${k}"]`);
+  if(sec){const o=_dclOpenSet.has(k);sec.classList.toggle('open',o);const h=sec.querySelector('.dcl-sh');if(h)h.setAttribute('aria-expanded',o?'true':'false');}
+}
+// 여기서 바꾼 날짜는 계약 타임라인 입력칸에도 넣는다(시안: "여기서 바꾸면 타임라인에도 반영돼요").
+function _dclDateChange(){
+  const s=_dclLoad();
+  s.c=(document.getElementById('dcl-contract')||{}).value||'';
+  s.b=(document.getElementById('dcl-balance')||{}).value||'';
+  _dclSave(s);_dclOpenSet=null;
+  const tc=document.getElementById('deal-contract'),tb=document.getElementById('deal-balance');
+  if(tc)tc.value=s.c;if(tb)tb.value=s.b;
+  try{renderDealDays();}catch(_){}
+  _dclRender();
+}
+// 계약 타임라인에서 날짜를 바꾸면(지운 것 포함) 체크리스트도 같은 날짜를 쓴다(renderDealDays 끝에서 호출).
+//   두 곳이 같은 값에서 출발하도록 페이지를 열 때 _dclInitTimeline 이 타임라인 칸을 저장값으로 먼저 채운다
+//   — 그렇지 않으면 빈 타임라인에서 한쪽만 바꿀 때 체크리스트의 다른 쪽 날짜가 지워진다.
+function _dclFromTimeline(){
+  const ic=document.getElementById('deal-contract'),ib=document.getElementById('deal-balance');
+  if(!ic||!ib)return;
+  const s=_dclLoad();
+  if(ic.value===s.c&&ib.value===s.b)return;
+  s.c=ic.value||'';s.b=ib.value||'';
+  _dclSave(s);_dclOpenSet=null;
+  if(_dclVisible())_dclRender();
+}
+function _dclInitTimeline(){
+  const s=_dclLoad(),ic=document.getElementById('deal-contract'),ib=document.getElementById('deal-balance');
+  if(!ic||!ib||(!s.c&&!s.b)||ic.value||ib.value)return;
+  ic.value=s.c;ib.value=s.b;
+  try{renderDealDays();}catch(_){}
+}
+if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{try{_dclInitTimeline();}catch(_){}});else{try{_dclInitTimeline();}catch(_){}}
+// 화면을 열 때: 체크리스트에 날짜가 없으면 타임라인 입력칸, 그다음 저장된 최근 계약 일정에서 가져온다.
+function _dclOpen(){
+  const s=_dclLoad();
+  if(!s.c&&!s.b){
+    const tc=(document.getElementById('deal-contract')||{}).value||'',tb=(document.getElementById('deal-balance')||{}).value||'';
+    const d0=getDeals()[0];
+    const src=(tc||tb)?{contract:tc,balance:tb}:((d0&&typeof d0==='object')?d0:null);
+    if(src){s.c=src.contract||'';s.b=src.balance||'';_dclSave(s);}
+  }
+  _dclOpenSet=null;
+  _dclRender();
 }
 
 // Phase B-3 (2026-05-01): clause + risk 통합 — 한 fetch 로 t2(리스크) + t3(특약) 동시 채움.
@@ -11673,7 +12073,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // 2026-10-18: 데스크톱 아래 띠를 없앴으므로 띠에만 있던 지역별 실거래·브리핑 링크와 사업자 정보도 여기 둔다
       + '<br><a href="/region" style="color:var(--acc);text-decoration:underline">지역별 실거래 데이터</a>'
       + ' · <a href="/briefing" style="color:var(--acc);text-decoration:underline">오늘의 브리핑</a>';
-    ['view-calc','view-clause','view-biz','view-news','view-subs','view-report','view-guide'].forEach(id => {
+    ['view-calc','view-clause','view-biz','view-deal','view-news','view-subs','view-report','view-guide'].forEach(id => {
       const v = document.getElementById(id);
       if (!v || v.querySelector('.view-legal-line')) return;
       const d = document.createElement('div');
@@ -12290,6 +12690,7 @@ const VIEW_DISPLAY={
   calc:  {display:'flex', lp:false, rp:false},
   clause:{display:'flex', lp:false, rp:false},
   biz:   {display:'flex', lp:false, rp:false},
+  deal:  {display:'flex', lp:false, rp:false}, // DEAL-CHECKLIST-2026-10-30 (Plan 154) 거래 체크리스트
   news:  {display:'flex', lp:false, rp:false},
   subs:  {display:'flex', lp:false, rp:false},
   guide: {display:'flex', lp:false, rp:false},
@@ -12918,7 +13319,7 @@ function sv(v,btn){
   // "도구 ▾" 드롭다운 버튼 — 도구 뷰(특약·청약·대출계산) 활성 시 하이라이트 + 탭 전환 시 메뉴 닫기 (OOOOO-3: 뉴스·사용법 승격, calc 편입)
   try{
     const _toolBtn=document.getElementById('htabToolBtn');
-    if(_toolBtn)_toolBtn.classList.toggle('on',['clause','subs','calc','biz','guide'].includes(v));
+    if(_toolBtn)_toolBtn.classList.toggle('on',['clause','subs','calc','biz','deal','guide'].includes(v));
     closeToolMenu();
   }catch(_){}
   // 모바일 하단 탭 활성화
@@ -12928,11 +13329,12 @@ function sv(v,btn){
   //   시트 안 항목의 체크(aria-current)도 같은 기준으로 매번 재계산.
   try{
     const _bnavTools=document.getElementById('bnavToolsBtn');
-    if(_bnavTools)_bnavTools.classList.toggle('on',['clause','subs','calc','biz','guide'].includes(v));
+    if(_bnavTools)_bnavTools.classList.toggle('on',['clause','subs','calc','biz','deal','guide'].includes(v));
     document.querySelectorAll('#toolsSheet .ts-item[data-tool]').forEach(b=>b.setAttribute('aria-current',b.dataset.tool===v?'true':'false'));
   }catch(_){}
   _wizPlace(v); // Sprint PPPPP: 위저드 코어를 뷰에 맞는 슬롯으로
   _hpApply(v); // HOME-PANEL-2026-10-18 (Plan 151): 지도 화면 왼쪽 패널·검색 띠
+  if(v==='deal'){try{_dclOpen();}catch(_){}} // DEAL-CHECKLIST (Plan 154): 열 때 타임라인 날짜 가져오기 + 렌더
   if(v==='list')renderListGrid();
   if(v==='news' && !document.getElementById('newsList').dataset.loaded){loadNews();}
   // BRIEFING-HOME-2026-08-19: 브리핑 헤더는 진입마다 갱신(날짜·D-day 신선도) — 실패는 조용히

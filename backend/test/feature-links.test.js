@@ -117,7 +117,8 @@ test('index.html — 도구▾ 메뉴와 모바일 도구 시트에 복비 계�
     '복비 계산·사용법 항목이 calc 뒤, 규제 요약(항상 마지막 — htabOrder 인덱스 밖) 앞에 있어야 한다');
   assert.match(html, /data-tool="biz"[^>]*onclick="closeToolsSheet\(\);sv\('biz',this\)"/);
   assert.match(html, /data-tool="guide"[^>]*onclick="closeToolsSheet\(\);sv\('guide',this\)"/);
-  assert.equal((html.match(/\['clause','subs','calc','biz','guide'\]\.includes\(v\)/g) || []).length, 2, '데스크톱 도구 버튼·모바일 도구 탭 하이라이트 목록 둘 다 biz·guide 를 포함해야 한다');
+  // Plan 154: 거래 체크리스트(deal)도 도구 뷰
+  assert.equal((html.match(/\['clause','subs','calc','biz','deal','guide'\]\.includes\(v\)/g) || []).length, 2, '데스크톱 도구 버튼·모바일 도구 탭 하이라이트 목록 둘 다 biz·deal·guide 를 포함해야 한다');
   // htabOrder 는 7개 — 새 .htab 두 개는 인덱스 밖이라 항상 off 다.
   assert.match(html, /const htabOrder=\['news','map','list','report','clause','subs','calc'\];/);
 });
