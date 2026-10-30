@@ -8028,6 +8028,8 @@ const CMP_MAX = 6;
 let _cmpBand = null;   // 현재 선택된 비교 전용㎡ 밴드
 let _cmpSort = null;   // 평당가 정렬 (null=선택순 | 'asc' 낮은순 | 'desc' 높은순)
 let _cmpData = null;   // 최근 compare 응답 캐시
+let _cmpMonths = 12;   // CMP-PERIOD-2026-10-30 (Plan 160): 비교 기간 12/24개월 — 계산 방법은 그대로, 기간만 고른다
+let _cmpLoading = false; // 기간을 바꿔 다시 받는 중 — 기간에 따라 바뀌는 행·차트만 자리 표시
 const _cmpExtra = {};   // Plan 150: 상세에서 담은, 현재 검색 결과(props)에 없는 단지 — cmpSel 에 'd:이름|시군구|동' 문자열 키로 들어가고 여기서 조회한다
 let _cmpApts = null;   // 최근 compare 입력 단지(공유 딥링크 직렬화용) (COMPARE-SHARE-2026-06-21)
 
@@ -8088,6 +8090,16 @@ html[data-theme="dark"] #cmpModal{--cm-bg:#0E1520;--cm-card:#151E2B;--cm-sub:#1B
 #cmpModal .cmp-chips{gap:8px;padding:12px 16px 4px}
 #cmpModal .cmp-chip{min-height:44px;justify-content:center;border-radius:8px;background:var(--cm-card);border:1px solid var(--cm-line2);color:var(--cm-t2);font-weight:500}
 #cmpModal .cmp-chip.on{background:var(--cm-sel);border-color:var(--cm-pri);color:var(--cm-pri);font-weight:700}
+#cmpModal .cmp-period{display:inline-flex;margin:12px 16px 0}
+#cmpModal .cmp-period button{height:44px;padding:0 20px;border:1px solid var(--cm-line2);background:var(--cm-card);color:var(--cm-t2);font-family:inherit;font-size:14px;font-weight:500;cursor:pointer}
+#cmpModal .cmp-period button+button{margin-left:-1px}
+#cmpModal .cmp-period button:first-child{border-radius:8px 0 0 8px}
+#cmpModal .cmp-period button:last-child{border-radius:0 8px 8px 0}
+#cmpModal .cmp-period button[aria-checked="true"]{background:var(--cm-sel);border-color:var(--cm-pri);color:var(--cm-pri);font-weight:700;position:relative;z-index:1}
+#cmpModal .cmp-period button:disabled,#cmpModal .cmp-chip:disabled,#cmpModal .cmp-btn:disabled{opacity:.5;cursor:default}
+#cmpModal .cmp-hint{margin:0 16px;font-size:12px;color:var(--cm-t3)}
+#cmpModal .cmp-sk{display:inline-block;border-radius:4px;background:var(--cm-sub);vertical-align:middle}
+#cmpModal .cmp-chart-sk{height:300px;border-radius:8px;background:var(--cm-sub);display:flex;align-items:center;justify-content:center;font-size:14px;color:var(--cm-t3)}
 #cmpModal .cmp-acts{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 16px 12px}
 #cmpModal .cmp-btn{height:44px;padding:0 16px;border:1px solid var(--cm-line2);border-radius:8px;background:var(--cm-card);color:var(--cm-t1);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
 #cmpModal .cmp-btn.on{background:var(--cm-sel);border-color:var(--cm-pri);color:var(--cm-pri)}
@@ -8133,6 +8145,10 @@ html[data-theme="dark"] #cmpModal{--cm-bg:#0E1520;--cm-card:#151E2B;--cm-sub:#1B
   #cmpModal .cmp-chips{flex-wrap:nowrap;overflow-x:auto}
   #cmpModal .cmp-chip{flex:none}
   #cmpModal .cmp-acts .cmp-btn{flex:1}
+  #cmpModal .cmp-period{display:flex;margin:12px 16px 0}
+  #cmpModal .cmp-period button{flex:1;padding:0}
+  #cmpModal .cmp-chart-sk{height:220px}
+  #cmpModal .cmp-hint{margin-top:-4px}
   #cmpModal .cmp-swipe{display:block;margin:0 16px 8px;font-size:12px;color:var(--cm-t3)}
   #cmpModal .cmp-tbl{width:auto;font-size:14px}
   #cmpModal .cmp-tbl th,#cmpModal .cmp-tbl td{padding:12px}
@@ -8246,11 +8262,12 @@ async function _runCompare(apts){
     const res = await fetch(`${CFG.api}/analysis/compare`,{
       method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ apts: apts.slice(0,CMP_MAX), dealMonths: 12 }),
+      // 새 비교는 늘 12개월에서 시작(_cmpMonths 초기화는 아래 성공 시)
       signal: AbortSignal.timeout(30000)
     });
     if(!res.ok){ const e=await res.json().catch(()=>({})); throw new Error(e.error||`HTTP ${res.status}`); }
     const data = await res.json();
-    _cmpData = data; _cmpBand = null; _cmpSort = null;
+    _cmpData = data; _cmpBand = null; _cmpSort = null; _cmpMonths = 12; _cmpLoading = false;
     renderCompareModal(data, bodyEl);
   }catch(e){
     const msg = (e&&e.name==='TimeoutError') ? '응답이 너무 늦어요. 잠시 뒤 다시 시도해 주세요.' : '잠시 뒤 다시 시도해 주세요.';
@@ -8542,7 +8559,9 @@ function _cmpChartHtml(oResults, oPerResult, sel, styleIdx){
   g+=`<text x="${L-8}" y="${T-6}" text-anchor="end" class="cmp-ax">만/평</text>`;
   months.forEach((ym,i)=>{
     const [yy,mm]=ym.split('-').map(Number);
-    if(!mob || i%2===0 || i===months.length-1) g+=`<text x="${X(i)}" y="${H-B+18}" text-anchor="middle" class="cmp-ax">${mm}월</text>`;
+    const long=months.length>12, step=long?(mob?6:3):(mob?2:1);
+    const show=long?((mm-1)%step===0):(!mob || i%2===0 || i===months.length-1);
+    if(show) g+=`<text x="${X(i)}" y="${H-B+18}" text-anchor="middle" class="cmp-ax">${mm}월</text>`;
     if(i===0 || mm===1) g+=`<text x="${X(i)}" y="${H-B+34}" text-anchor="middle" class="cmp-ay">${yy}</text>`;
   });
   let lines='', pts='';
@@ -8556,8 +8575,9 @@ function _cmpChartHtml(oResults, oPerResult, sel, styleIdx){
       const px=X(j), py=Y(p.v); seg.push(`${px.toFixed(1)},${py.toFixed(1)}`);
       const [yy,mm]=String(p.ym||months[j]).split('-').map(Number);
       const lab=`${names[i]} ${yy}년 ${mm}월 ${p.v.toLocaleString('ko-KR')}만/평 ${p.n}건`;
-      pts+=`${_cmpMarker(st.m,px,py)} class="cmp-pt" style="stroke:${st.c}"/>`
-        +`<circle cx="${px}" cy="${py}" r="12" class="cmp-hit" tabindex="0" role="button" aria-label="${E(lab)}" data-i="${i}" data-j="${j}" onmouseenter="_cmpTip(this)" onfocus="_cmpTip(this)" onclick="_cmpTip(this)" onmouseleave="_cmpTipHide()" onblur="_cmpTipHide()"/>`;
+      const sm=(mob&&months.length>12);
+      pts+=`${_cmpMarker(st.m,px,py,sm?3:0)} class="cmp-pt" style="stroke:${st.c}"/>`
+        +`<circle cx="${px}" cy="${py}" r="${sm?8:12}" class="cmp-hit" tabindex="0" role="button" aria-label="${E(lab)}" data-i="${i}" data-j="${j}" onmouseenter="_cmpTip(this)" onfocus="_cmpTip(this)" onclick="_cmpTip(this)" onmouseleave="_cmpTipHide()" onblur="_cmpTipHide()"/>`;
     });
     flush();
   });
@@ -8636,7 +8656,7 @@ function renderCompareModal(data, bodyEl){
 
   const chips = clusters.slice(0,8).map(c=>{
     const active = sel && c.center===sel.center;
-    return `<button class="cmp-chip ${active?'on':''}" onclick="_cmpPickBand(${c.center})">전용 ${c.center}㎡<span class="cmp-chip-sub">신뢰 ${c.reliableCount}/${results.length}</span></button>`;
+    return `<button class="cmp-chip ${active?'on':''}"${_cmpLoading?' disabled':''} onclick="_cmpPickBand(${c.center})">전용 ${c.center}㎡<span class="cmp-chip-sub">신뢰 ${c.reliableCount}/${results.length}</span></button>`;
   }).join('');
 
   const nameCols = oResults.map(r=> `<th class="cmp-th"><div class="cmp-apt">${_escHtml(r.displayName || _dispAptName(r.aptName, r.umdNm) || '')}</div><div class="cmp-apt-sub">${_escHtml(_fmtSgg(r.sigungu)+(r.umdNm?(' '+r.umdNm):''))}</div></th>`).join('');
@@ -8644,6 +8664,12 @@ function renderCompareModal(data, bodyEl){
   const reliableVals = oPerResult.filter(b=>b&&b.reliable).map(b=>b.medianPyeongManwon);
   const maxVal = reliableVals.length ? Math.max(...reliableVals) : 0;
   let pyeongRow = '', sampleRow = '', dealRow = '';
+  // 12개월에서 표본 부족 단지가 있으면 24개월 안내(불러오는 동안 숨김)
+  const _cmpShowHint = !_cmpLoading && _cmpMonths===12 && oPerResult.some(b=>b && !b.reliable);
+  if(_cmpLoading){
+    const sk=(h,w)=>`<td><span class="cmp-sk" style="height:${h}px;width:${w}%"></span></td>`;
+    oPerResult.forEach(()=>{ pyeongRow+=sk(20,64); sampleRow+=sk(16,40); dealRow+=sk(16,48); });
+  } else
   oPerResult.forEach(b=>{
     if(!b){
       pyeongRow += `<td class="cmp-na">해당 평형<br>거래 없음</td>`;
@@ -8678,14 +8704,16 @@ function renderCompareModal(data, bodyEl){
 
   bodyEl.innerHTML = `
     <div class="cmp-disc-top">전용면적대를 골라 <b>같은 평형끼리</b> 비교하세요. 평당가는 <b>전용면적 기준</b>이라 공급면적 기준보다 높게 보여요.</div>${_cmpBandNote ? `<div class="cmp-disc-top">${_escHtml(_cmpBandNote)}</div>` : ''}
+    <div class="cmp-period" role="radiogroup" aria-label="비교 기간">${[12,24].map(m=>`<button type="button" role="radio" aria-checked="${_cmpMonths===m?'true':'false'}"${_cmpLoading?' disabled':''} onclick="_cmpSetMonths(${m})">최근 ${m}개월</button>`).join('')}</div>
     <div class="cmp-chips">${chips || '<span style="color:var(--t3);font-size:12px">공통 전용면적대가 없어 평당가를 바로 비교하기 어려워요. 단지 정보만 비교해요</span>'}</div>
+    ${_cmpShowHint?'<p class="cmp-hint">표본이 적은 단지는 24개월로 넓혀 볼 수 있어요.</p>':''}
     <div class="cmp-acts">
       <button type="button" class="cmp-btn" onclick="shareCompare()" title="이 비교를 링크로 공유">비교 공유</button>
-      <button type="button" class="cmp-btn${_cmpSort?' on':''}" onclick="_cmpToggleSort()" title="평당가 기준 단지 정렬" aria-pressed="${_cmpSort?'true':'false'}">${_cmpSort==='asc'?'평당가 낮은 순':_cmpSort==='desc'?'평당가 높은 순':'평당가 정렬'}</button>
+      <button type="button" class="cmp-btn${_cmpSort?' on':''}"${_cmpLoading?' disabled':''} onclick="_cmpToggleSort()" title="평당가 기준 단지 정렬" aria-pressed="${_cmpSort?'true':'false'}">${_cmpSort==='asc'?'평당가 낮은 순':_cmpSort==='desc'?'평당가 높은 순':'평당가 정렬'}</button>
     </div>
     <p class="cmp-swipe">옆으로 넘기면 다른 단지를 볼 수 있어요.</p>
     <div class="cmp-tw">
-    <table class="cmp-tbl">
+    <table class="cmp-tbl" aria-busy="${_cmpLoading?'true':'false'}">
       <thead><tr><th class="cmp-rl-h">전용 ${sel?sel.center:'-'}㎡ <span style="font-weight:500;color:var(--t3)">(약 ${sel?sel.pyeong:'-'}평)</span></th>${nameCols}</tr></thead>
       <tbody>
         <tr><td class="cmp-rl">평당가(전용)</td>${pyeongRow}</tr>
@@ -8704,11 +8732,42 @@ function renderCompareModal(data, bodyEl){
     </table>
     </div>
     <p class="cmp-note">직선거리라 걸어서 가는 길은 더 길어요.</p>
-    ${_cmpChartHtml(oResults, oPerResult, sel, _order)}
+    ${_cmpLoading?`<section class="cmp-chart"><div class="cmp-chart-sk" role="status">불러오는 중이에요</div></section>`:_cmpChartHtml(oResults, oPerResult, sel, _order)}
     <div class="cmp-disc">${_escHtml((data&&data.disclaimer)||'')}</div>`;
 }
 
+// CMP-PERIOD-2026-10-30 (Plan 160, Claude Design 시안 p/200a4b36 2차 컷 승인): 기간만 바꿔 같은 단지를 다시 받는다.
+//   받는 동안 평당가·표본·중앙 거래가 행과 차트만 자리 표시, 면적 칩·정렬은 잠근다. 실패하면 이전 기간 화면으로 되돌린다.
+async function _cmpSetMonths(m){
+  m = m===24 ? 24 : 12;
+  if(_cmpLoading || m===_cmpMonths || !Array.isArray(_cmpApts) || _cmpApts.length<2) return;
+  const modal = document.getElementById('cmpModal'); if(!modal || !_cmpData) return;
+  const body = modal.querySelector('.cmp-body');
+  const prev = _cmpMonths;
+  _cmpMonths = m; _cmpLoading = true;
+  renderCompareModal(_cmpData, body);
+  try{
+    const res = await fetch(`${CFG.api}/analysis/compare`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ apts: _cmpApts.slice(0,CMP_MAX), dealMonths: m }),
+      signal: AbortSignal.timeout(30000)
+    });
+    if(!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    if(!document.getElementById('cmpModal')) return; // 받는 사이 창을 닫았다
+    const keep = _cmpBand;
+    _cmpData = data; _cmpLoading = false;
+    _cmpBand = (keep!=null && _clusterBands(data.results||[]).some(c=>c.center===keep)) ? keep : null; // 고른 면적이 새 기간에도 있으면 유지
+    renderCompareModal(data, document.getElementById('cmpModal').querySelector('.cmp-body'));
+  }catch(_){
+    _cmpMonths = prev; _cmpLoading = false;
+    const md = document.getElementById('cmpModal');
+    if(md) renderCompareModal(_cmpData, md.querySelector('.cmp-body'));
+    toast('기간을 바꿔 불러오지 못했어요. 잠시 뒤 다시 시도해 주세요');
+  }
+}
 function _cmpPickBand(b){
+  if(_cmpLoading) return;
   _cmpBand = b;
   const modal = document.getElementById('cmpModal');
   if(modal && _cmpData) renderCompareModal(_cmpData, modal.querySelector('.cmp-body'));
@@ -8716,6 +8775,7 @@ function _cmpPickBand(b){
 
 // 평당가 정렬 토글: 선택순 → 낮은순 → 높은순 → 선택순. 무값은 항상 뒤(렌더에서 처리).
 function _cmpToggleSort(){
+  if(_cmpLoading) return;
   _cmpSort = (_cmpSort==='asc') ? 'desc' : (_cmpSort==='desc') ? null : 'asc';
   const modal = document.getElementById('cmpModal');
   if(modal && _cmpData) renderCompareModal(_cmpData, modal.querySelector('.cmp-body'));

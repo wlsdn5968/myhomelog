@@ -101,7 +101,30 @@ test('④-2 단지 6개까지 선 모양(색·선·점)이 모두 다르고, 정
   const keys = [0, 1, 2, 3, 4, 5].map((k) => { const s = S(k); return `${s.c}|${s.d}`; });
   assert.equal(new Set(keys).size, 6, keys.join(' / '));
   assert.deepEqual([S(0), S(1), S(2)].map((s) => [s.c, s.d]), [['A', ''], ['B', '9 6'], ['C', '1 6']], '앞의 3개는 시안 그대로');
-  assert.match(html, /\$\{_cmpChartHtml\(oResults, oPerResult, sel, _order\)\}/);
+  assert.match(html, /:_cmpChartHtml\(oResults, oPerResult, sel, _order\)\}/);
+});
+
+test('⑥ 기간 선택(Plan 160): 12/24개월 세그먼트는 칩 위, 불러오는 동안 자리 표시·잠금, 실패하면 되돌림, 24개월 눈금', () => {
+  const f = html.slice(html.indexOf('async function _cmpSetMonths('), html.indexOf('function _cmpPickBand('));
+  assert.match(f, /body: JSON\.stringify\(\{ apts: _cmpApts\.slice\(0,CMP_MAX\), dealMonths: m \}\)/);
+  assert.match(f, /_cmpMonths = prev; _cmpLoading = false;/, '실패 시 이전 기간으로');
+  assert.match(f, /_cmpBand = \(keep!=null && _clusterBands\(data\.results\|\|\[\]\)\.some\(c=>c\.center===keep\)\) \? keep : null;/);
+  // 세그먼트가 면적 칩보다 앞(위)
+  const seg = html.indexOf('<div class="cmp-period" role="radiogroup" aria-label="비교 기간">');
+  assert.ok(seg > 0 && seg < html.indexOf('<div class="cmp-chips">${chips ||'));
+  assert.match(html, /role="radio" aria-checked="\$\{_cmpMonths===m\?'true':'false'\}"/);
+  // 안내: 12개월 + 표본 부족 단지가 있을 때만, 불러오는 동안 숨김
+  assert.match(html, /const _cmpShowHint = !_cmpLoading && _cmpMonths===12 && oPerResult\.some\(b=>b && !b\.reliable\);/);
+  assert.match(html, /표본이 적은 단지는 24개월로 넓혀 볼 수 있어요\./);
+  // 불러오는 동안: 표 aria-busy·셀 자리 표시·차트 자리 role=status·칩과 정렬 잠금
+  assert.match(html, /<table class="cmp-tbl" aria-busy="\$\{_cmpLoading\?'true':'false'\}">/);
+  assert.match(html, /<div class="cmp-chart-sk" role="status">불러오는 중이에요<\/div>/);
+  assert.match(html, /function _cmpPickBand\(b\)\{\n\s*if\(_cmpLoading\) return;/);
+  assert.match(html, /function _cmpToggleSort\(\)\{\n\s*if\(_cmpLoading\) return;/);
+  // 24개월 눈금: 데스크톱 3개월·모바일 6개월(1월 기준), 모바일 24개월 점 0.75배·탭 영역 8
+  assert.match(html, /const long=months\.length>12, step=long\?\(mob\?6:3\):\(mob\?2:1\);/);
+  assert.match(html, /_cmpMarker\(st\.m,px,py,sm\?3:0\)/);
+  assert.match(html, /r="\$\{sm\?8:12\}" class="cmp-hit"/);
 });
 
 test('⑤ 통근 추정값(자동차×1.6+5분)을 비교에 넣지 않는다, 면책에 카카오 지도 출처', () => {
