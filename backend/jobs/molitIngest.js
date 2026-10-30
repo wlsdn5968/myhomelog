@@ -155,9 +155,16 @@ async function fetchRegionMonth(lawdCd, dealYm) {
       'molit-ingest: MAX_PAGES 캡 도달 — 일부 거래 미수집. MAX_PAGES 상향 검토 필요');
   }
 
-  return all
-    .filter(item => !isCanceled(item)) // 해제 거래 제외
-    .map(item => {
+  // CANCEL-SYNC-2026-10-30 (Plan 172): 해제 거래는 적재하지 않지만, 이미 적재된 뒤 해제된 거래를 지울 수 있게
+  //   해제 행도 같은 모양으로 따로 넘긴다(배열의 열거되지 않는 속성 — 다른 호출처의 반복·길이에는 영향 없음).
+  const out = all.filter(item => !isCanceled(item)).map(_toRow).filter(_validRow);
+  //   응답이 페이지 상한에서 잘렸으면 같은 키의 유효 거래를 못 받았을 수 있다 — 그때는 해제 정리를 하지 않는다(교차 검토 2026-10-30).
+  const _truncated = _hitPageCap && totalCount != null && all.length < totalCount;
+  Object.defineProperty(out, 'canceled', { value: _truncated ? [] : all.filter(isCanceled).map(_toRow).filter(_validRow), enumerable: false });
+  return out;
+
+  function _validRow(t) { return t.apt_name && t.deal_date && t.deal_amount > 0; }
+  function _toRow(item) {
       const dy = parseInt(item.dealYear) || 0;
       const dm = parseInt(item.dealMonth) || 0;
       const dd = parseInt(item.dealDay) || 0;
@@ -180,8 +187,51 @@ async function fetchRegionMonth(lawdCd, dealYm) {
           : null,
         deal_amount: parseAmountManwon(item.dealAmount),
       };
-    })
-    .filter(t => t.apt_name && t.deal_date && t.deal_amount > 0);
+  }
+}
+
+// 적재 키(dedup_key 와 같은 구성 — 아래 ingestOne 의 seen 키와 같은 식)
+function _rowKey(r) {
+  const seq = (r.apt_seq == null) ? `${r.apt_name}:${r.umd_nm ?? ''}` : String(r.apt_seq);
+  const fl = (r.floor == null) ? 0 : Number(r.floor);
+  return `${seq}|${Number(r.exclu_use_ar).toFixed(2)}|${Number(r.deal_year)}-${Number(r.deal_month)}-${Number(r.deal_day)}|${fl}`;
+}
+
+/**
+ * CANCEL-SYNC-2026-10-30 (Plan 172): 이번 응답에서 해제로 표시된 거래를 원본에서 지운다.
+ *   - apt_seq 가 있는 행만(이름 기반 키는 다른 단지와 겹칠 수 있다).
+ *   - 같은 응답에 같은 키의 유효 거래가 있으면 건너뛴다(정정 신고로 다시 살아난 거래).
+ *   - 단지·면적·계약일·층·금액이 모두 같은 행만 지운다. 실패는 적재 결과를 바꾸지 않는다(경고만).
+ *   - 호출 수: (지역, 월)마다 후보 조회 1회 + 지울 행이 있을 때만 id 로 삭제 1회(교차 검토 2026-10-30 —
+ *     해제 건마다 delete 를 부르면 이미 지운 건까지 매일 다시 불러 시간 예산을 잡아먹는다).
+ * @returns {number} 지운 행 수
+ */
+async function _removeCanceled(admin, canceled, activeByKey, lawdCd, dealYm) {
+  const targets = canceled.filter(c => c.apt_seq && !activeByKey.has(_rowKey(c)));
+  if (!targets.length) return 0;
+  const want = new Set(targets.map(c => `${_rowKey(c)}|${Number(c.deal_amount)}`));
+  const seqs = [...new Set(targets.map(c => c.apt_seq))];
+  const dates = targets.map(c => c.deal_date).sort();
+  try {
+    const ids = [];
+    for (let i = 0; i < seqs.length; i += 100) {
+      const { data, error } = await admin.from('molit_transactions')
+        .select('id,apt_seq,apt_name,umd_nm,exclu_use_ar,deal_year,deal_month,deal_day,floor,deal_amount')
+        .in('apt_seq', seqs.slice(i, i + 100))
+        .gte('deal_date', dates[0]).lte('deal_date', dates[dates.length - 1]);
+      if (error) throw error;
+      for (const r of data || []) if (want.has(`${_rowKey(r)}|${Number(r.deal_amount)}`)) ids.push(r.id);
+    }
+    if (!ids.length) return 0;
+    const { error, count } = await admin.from('molit_transactions').delete({ count: 'exact' }).in('id', ids);
+    if (error) throw error;
+    const removed = count || 0;
+    if (removed) logger.info({ source: 'molit-ingest', lawdCd, dealYm, removed }, '적재 뒤 해제된 거래 정리');
+    return removed;
+  } catch (e) {
+    logger.warn({ lawdCd, dealYm, err: e && e.message ? e.message : String(e) }, 'molit-ingest: 해제 거래 정리 실패 (적재는 계속)');
+    return 0;
+  }
 }
 
 /**
@@ -222,14 +272,12 @@ async function ingestOne(admin, lawdCd, dealYm) {
     //   2 row 가 같은 conflict 키 → DO UPDATE 실패 → 해당 region-month 전체 적재 누락.
     //   해결: DB ::text 캐스팅과 동일하게 정규화(면적 toFixed(2), 정수 Number, apt_seq COALESCE 의미).
     const seen = new Map();
-    for (const r of rawRows) {
-      const seq = (r.apt_seq == null) ? `${r.apt_name}:${r.umd_nm ?? ''}` : String(r.apt_seq); // COALESCE(apt_seq, ...)
-      const area = Number(r.exclu_use_ar).toFixed(2);       // numeric(7,2)::text
-      const fl = (r.floor == null) ? 0 : Number(r.floor);   // COALESCE(floor,0)::int
-      const k = `${seq}|${area}|${Number(r.deal_year)}-${Number(r.deal_month)}-${Number(r.deal_day)}|${fl}`;
-      seen.set(k, r); // 같은 키면 후행(정정 후) 덮어씀
-    }
+    for (const r of rawRows) seen.set(_rowKey(r), r); // 같은 키면 후행(정정 후) 덮어씀 — 키 식은 _rowKey 한 곳(Plan 172)
     const rows = Array.from(seen.values());
+    // CANCEL-SYNC-2026-10-30 (Plan 172): 적재 뒤 해제된 거래 정리. 전에는 가져올 때만 해제 거래를 걸러,
+    //   이미 넣은 거래가 나중에 해제되면 원본에 영구히 남았다(운영 '해제 거래 제외' 문구와 어긋남).
+    //   같은 응답에 같은 키의 유효 거래가 있으면 지우지 않는다. 키 + 금액까지 같은 행만 지운다(보수적).
+    const canceledRemoved = await _removeCanceled(admin, rawRows.canceled || [], seen, lawdCd, dealYm);
 
     let inserted = 0;
     // batch UPSERT … ON CONFLICT (dedup_key) DO UPDATE
@@ -269,7 +317,7 @@ async function ingestOne(admin, lawdCd, dealYm) {
       if (okRes && okRes.error) _noteRunErr(okRes.error, 'ok update');
     }
 
-    const okOut = { ok: true, lawdCd, dealYm, fetched: rows.length, inserted };
+    const okOut = { ok: true, lawdCd, dealYm, fetched: rows.length, inserted, canceledRemoved };
     if (runRecordFailed) okOut.runRecordFailed = true;
     return okOut;
   } catch (e) {
@@ -563,6 +611,7 @@ async function runMolitIngest(opts = {}) {
   const err = results.filter(r => !r.ok && !r.skipped).length;
   const skipped = results.filter(r => r.skipped).length;
   const runRecordFailed = results.filter(r => r.runRecordFailed).length; // Plan 158: 적재 기록 쓰기 실패 건수
+  const canceledRemoved = results.reduce((n, r) => n + (Number(r.canceledRemoved) || 0), 0); // Plan 172
   // ERR-REASON-2026-08-08 (Sprint AAAAAAA): 대표 실패 사유 1건 — 전 지역이 같은 원인으로 죽는
   //   유형(키 만료·게이트웨이 변경)에서 "err=9" 숫자만으론 진단 불가했던 실사고 후속.
   const firstError = (results.find(r => !r.ok && !r.skipped && r.error) || {}).error || null;
@@ -612,7 +661,7 @@ async function runMolitIngest(opts = {}) {
   }
 
   return {
-    ok, err, skipped, runRecordFailed, firstError, elapsedMs,
+    ok, err, skipped, runRecordFailed, canceledRemoved, firstError, elapsedMs,
     monthsCount: months.length,
     monthsRange: months.length ? `${months[months.length - 1]}~${months[0]}` : null,
     gapBackfill, results,
@@ -624,7 +673,7 @@ async function runMolitIngest(opts = {}) {
 }
 
 // molitErrReason 은 "응답 본문을 통째로 저장하지 않는다(키 에코 차단)" 보안 성질을 테스트로 고정하기 위해 export.
-module.exports = { runMolitIngest, molitErrReason, fetchRegionMonth };
+module.exports = { runMolitIngest, molitErrReason, fetchRegionMonth, _removeCanceled, _rowKey };
 module.exports._retryFailedGaps = retryFailedGaps; // TEST-EXPORT-2026-09-27 (Plan 119): 구멍 감지 고정용
 module.exports._ingestOne = ingestOne; // TEST-EXPORT-2026-10-18 (Plan 158): 적재 기록 실패 표식 고정용
 // TEST-EXPORT-2026-10-02 (Plan 130): 꼬리 달 판정 고정용

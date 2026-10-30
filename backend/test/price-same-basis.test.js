@@ -18,9 +18,12 @@ function loadPeak(win) {
   const recentSrc = html.slice(r, html.indexOf('\n}', r) + 2);
   const p = html.indexOf('  function _peakTrendHtml(area) {');
   const peakSrc = html.slice(p, html.indexOf('\n  window._peakTrendHtml = _peakTrendHtml;', p));
-  assert.ok(a > 0 && r > 0 && p > 0, '함수를 찾지 못했다 — 테스트를 갱신할 것');
+  // Plan 171: 신고가 추이가 가격 차트와 같은 평형(평 반올림)·동떨어진 거래 판정을 쓴다
+  const h = html.indexOf('function _pcDayNum(d)');
+  const helperSrc = html.slice(h, html.indexOf('\n// 순수 함수: 개별 거래', h));
+  assert.ok(a > 0 && r > 0 && p > 0 && h > 0, '함수를 찾지 못했다 — 테스트를 갱신할 것');
   // eslint-disable-next-line no-new-func
-  return new Function('window', `${repSrc}\n${recentSrc}\n${peakSrc}\nreturn _peakTrendHtml;`)(win);
+  return new Function('window', `${helperSrc}\n${repSrc}\n${recentSrc}\n${peakSrc}\nreturn _peakTrendHtml;`)(win);
 }
 
 // 공릉풍림 모양: 60㎡ 가 가장 많고, 115㎡ 가 더 비싸다
@@ -45,7 +48,7 @@ test('신고가 추이: 평형 "전체"면 차트와 같은 대표 평형(거래
   assert.doesNotMatch(out, /그 전의 모든 거래/, '사실과 다른 옛 안내가 남았다');
 });
 
-test('신고가 추이: 평형을 고르면 그 평형(±2㎡)만', () => {
+test('신고가 추이: 평형을 고르면 그 평형(전용면적을 평으로 반올림)만', () => {
   const peak = loadPeak({ _curTrendLong: { state: 'ok', deals: LONG }, _curTrendApt: [] });
   const out = peak(115);
   assert.match(out, /115㎡\(35평\) 신고가 경신 2회/);

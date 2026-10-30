@@ -2079,7 +2079,7 @@ test('Plan 154 — 가격 차트 v2: 개별 거래 점·3개월 중앙값·최�
   assert.ok(html.includes('try { _pcLoad(); } catch(_) {}'), '상세 화면을 넣은 뒤 _pcLoad 를 부르지 않는다');
   assert.ok(html.includes("function _trendHtml(area) { return _pcHtml(area); }"), '_trendHtml 이 새 차트를 쓰지 않는다');
   assert.match(html, /'최고 '\+_pcEok\(m\.hi\.a\)[\s\S]{0,200}'최저 '\+_pcEok\(m\.lo\.a\)/, '최고 라벨과 최저 라벨이 함께 달리지 않는다');
-  assert.ok(html.includes('층·향 보정 없음 · 해제 거래 제외 · 매수·매도 추천이 아니에요'), '차트 출처·면책 문구가 없다');
+  assert.ok(html.includes('층·향 보정 없음 · 해제 거래 제외(계약한 달 포함 3개월 안에 해제 신고된 거래) · 매수·매도 추천이 아니에요'), '차트 출처·면책 문구가 없다');
   assert.doesNotMatch(html, /_setTrendMode|_longTrendHtml|renderPriceChart\(/, '옛 차트 함수가 남아 있다');
 });
 

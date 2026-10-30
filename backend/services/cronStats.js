@@ -86,7 +86,9 @@ function _pick(summary) {
     // SILENT-HOLE-2026-09-27 (Plan 119): molit_ingest_runs 에 행 자체가 없는 "조용한 구멍"(회로차단
     //   skipped·backfill offset 경계) 후보 총수 — retryFailedGaps 의 기존 gaps(오류 기반)와 별개로
     //   health 에 노출해 매일 줄어드는지(0 도달) 관측한다.
-    'gapHoles'];
+    'gapHoles',
+    // CANCEL-SYNC-2026-10-30 (Plan 172): 적재 뒤 해제돼 원본에서 지운 거래 수(0 이 흔하다 — 필드 부재와 구별).
+    'canceledRemoved'];
   const out = {};
   for (const k of NUM) {
     const v = summary[k];

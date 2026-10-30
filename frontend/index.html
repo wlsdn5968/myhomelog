@@ -324,6 +324,8 @@ window.MHL.auth = window.MHL.auth || {
   /* ════ Phase 4-2 단계 1 (2026-05-04): Concept C Light tokens ════ */
   /* Background scale (white-based) */
   --bg-base:        #FFFFFF;
+  /* Plan 171 평형별 가격 선 — dataviz 기준 팔레트(validate_palette 밝은 #FFFFFF 통과, 대비 3:1 미만 3색은 선 끝 이름표로 보완) */
+  --pc-1:#2a78d6; --pc-2:#eb6834; --pc-3:#1baf7a; --pc-4:#eda100; --pc-5:#e87ba4; --pc-6:#008300; --pc-7:#6250d6;
   --bg-elev-1:      #EFEFEB;
   --bg-elev-2:      #EFEFEB;
   --bg-elev-3:      #EFEFEF;
@@ -473,6 +475,7 @@ window.MHL.auth = window.MHL.auth || {
 }
 /* ── 다크 모드 (리디자인 — 토글식, 라이트 기본) · 의미 토큰 오버라이드 ───── */
 html[data-theme="dark"]{
+  --pc-1:#3987e5; --pc-2:#d95926; --pc-3:#199e70; --pc-4:#c98500; --pc-5:#d55181; --pc-6:#008300; --pc-7:#9085e9; /* Plan 171 어두운 #151E2B 통과 */
   --bg-base:#151E2B; --bg-elev-1:#1C2736; --bg-elev-2:#1C2736; --bg:#0E1520; --bg2:#1C2736;
   --text-primary:#E8ECF1; --text-secondary:#B3BDCA; --text-tertiary:#8C97A6; --text-quiet:#8C97A6; --text-faint:#8C97A6;  /* A11Y-2026-08-25: 다크 오버라이드가 없어 라이트값(#71717A)이 그대로 쓰여 3.06:1 이었다 */ /* A11Y-2026-08-25: #7E8694 는 패널 3.56:1·틴트 2.86:1 로 미달 */
   --border-faint:rgba(255,255,255,0.06); --border-subtle:#263345;
@@ -8808,8 +8811,9 @@ function showDetailById(n, lat, lng){
 // ── 시세 추이 차트 (SVG) ─────────────────────────────────
 // txHistory를 월별 평균으로 집계 (최근 24개월, 거래 있는 월만)
 // Phase 4 (2026-04-26): 평형 chip — 거래 리스트 + 차트 둘 다 필터
-function _selectTrendArea(sqm, btn) {
+function _selectTrendArea(sqm, btn, py) {
   window._curTrendArea = sqm;
+  window._pcSelPy = py || 0; // Plan 171: 범례로 고르면 평을 직접 기억한다(칩은 ㎡ — 0 이면 ㎡ 로 평을 찾는다)
   // chip 토글
   document.querySelectorAll('.trend-area-chip').forEach(c => {
     c.style.background = 'var(--bg-base)'; // DM-SKIN-2026-08-19: 다크모드 흰 칩 갭
@@ -8846,29 +8850,55 @@ function _pcDayNum(d){ return Math.round(Date.parse(String(d)+'T00:00:00Z')/864e
 function _pcEok(m){ return (Number(m)/10000).toFixed(2)+'억'; }
 function _pcYmd(d){ return String(d).slice(2).replace(/-/g,'.'); }
 function _pcMedian(a){ const s=[...a].sort((x,y)=>x-y),n=s.length; return n%2?s[(n-1)/2]:(s[n/2-1]+s[n/2])/2; }
+// PRICE-CHART-AREA-COLOR-2026-10-30 (Plan 171, 운영자 "평형대별로 색을 다르게 — 어떤 평형인지 한눈에"):
+//   평형 = 전용면적을 평으로 반올림(이상치 필터 analysisService.filterAnomalies·평형 칩의 '(N평)' 과 같은 식).
+//   예전 '±2㎡' 는 평형끼리 범위가 겹쳐(41·46·50㎡ 단지) 색을 나눌 수 없었다.
+const _PC_PY=3.3058;
+function _pcPy(ar){ return Math.round(Number(ar)/_PC_PY); }
+// 동떨어진 거래: 같은 평형의 앞뒤 90일 거래(3건 미만이면 180일, 자신 빼고 3건 이상)의 중앙값에서 20%와 '보통 차이(MAD)의 3.5배' 중
+//   큰 값보다 더 벗어난 거래. 3년을 한 번에 보면 오르는 흐름의 끝(최고가)까지 걸리므로 시점마다 이웃과 비교한다.
+//   실측(2026-10-30 운영 이력): 상계주공7 14평 26.01.29 3.60억 · 공릉 동부 26평 26.09.10 4.20억 · 도봉 럭키 26평 24.03.12 3.50억.
+function _pcOutliers(rows){
+  const out=new Set(), rs=rows.map(x=>({x,t:_pcDayNum(x.d),a:Number(x.a)}));
+  const near=(i,w)=>{ const nb=[]; rs.forEach((q,j)=>{ if(j!==i&&Math.abs(q.t-rs[i].t)<=w) nb.push(q.a); }); return nb; };
+  rs.forEach((r,i)=>{
+    let nb=near(i,90); if(nb.length<3) nb=near(i,180);
+    if(nb.length<3) return;
+    const med=_pcMedian(nb), mad=_pcMedian(nb.map(v=>Math.abs(v-med)));
+    if(Math.abs(r.a-med)>Math.max(3.5*mad,0.2*med)) out.add(r.x);
+  });
+  return out;
+}
 // 순수 함수: 개별 거래 → 기간 거래·최고·최저(동률 모두)·최근·3개월 중앙값 점(거래 없는 3개월 구간은 null = 선 끊김).
 function _pcModel(deals, period){
-  const all=(Array.isArray(deals)?deals:[]).filter(x=>x&&Number(x.a)>0&&/^\d{4}-\d{2}-\d{2}$/.test(String(x.d))).map(x=>({d:String(x.d),a:Number(x.a),f:(x.f==null||x.f==='')?null:Number(x.f),t:_pcDayNum(x.d)})).sort((x,y)=>x.t-y.t);
+  const all=(Array.isArray(deals)?deals:[]).filter(x=>x&&Number(x.a)>0&&/^\d{4}-\d{2}-\d{2}$/.test(String(x.d))).map(x=>({d:String(x.d),a:Number(x.a),f:(x.f==null||x.f==='')?null:Number(x.f),t:_pcDayNum(x.d),o:!!x.o})).sort((x,y)=>x.t-y.t);
   if(!all.length) return null;
   const last=all[all.length-1].t, days=(_PC_PERIODS[period]||_PC_PERIODS['3y'])[1];
   const rows=days?all.filter(x=>x.t>=last-days):all;
   if(!rows.length) return null;
-  const hiA=Math.max(...rows.map(x=>x.a)), loA=Math.min(...rows.map(x=>x.a));
-  const his=rows.filter(x=>x.a===hiA), los=rows.filter(x=>x.a===loA);
-  const byM={}; rows.forEach(x=>{ const k=x.d.slice(0,7); (byM[k]=byM[k]||[]).push(x.a); });
+  // PRICE-CHART-AREA-COLOR-2026-10-30 (Plan 171): 동떨어진 거래(o)는 점으로 남기되 최고·최저·중앙값 선에서 뺀다(전부 동떨어졌으면 빼지 않는다)
+  const base=rows.filter(x=>!x.o), use=base.length?base:rows;
+  if(!base.length) rows.forEach(x=>{ x.o=false; }); // 빼지 않았으면 빈 원으로도 그리지 않는다
+  const hiA=Math.max(...use.map(x=>x.a)), loA=Math.min(...use.map(x=>x.a));
+  const his=use.filter(x=>x.a===hiA), los=use.filter(x=>x.a===loA);
+  const byM={}; use.forEach(x=>{ const k=x.d.slice(0,7); (byM[k]=byM[k]||[]).push(x.a); });
   const ym=(k,o)=>new Date(Date.UTC(+k.slice(0,4),+k.slice(5,7)-1+o,1)).toISOString().slice(0,7);
   const k0=rows[0].d.slice(0,7), k1=rows[rows.length-1].d.slice(0,7), line=[];
   for(let k=k0, guard=0; k<=k1 && guard<400; k=ym(k,1), guard++){
     const w=[...(byM[ym(k,-1)]||[]),...(byM[k]||[]),...(byM[ym(k,1)]||[])];
     line.push(w.length?{t:_pcDayNum(k+'-15'),v:_pcMedian(w)}:null);
   }
-  return { rows, hi:his[his.length-1], hiN:his.length, lo:los[los.length-1], los, loN:los.length, now:rows[rows.length-1], line };
+  return { rows, hi:his[his.length-1], hiN:his.length, lo:los[los.length-1], los, loN:los.length, now:rows[rows.length-1], line, out:use===rows?[]:rows.filter(x=>x.o) };
 }
 function _pcNiceStep(rangeMan){ const r=rangeMan/10000; for(const s of [0.5,1,2,5,10]) if(r/s<=6) return s*10000; return 200000; }
-function _pcSvg(m, W){
-  const H=W<420?220:250, P={l:44,r:12,t:22,b:26}, iw=W-P.l-P.r, ih=H-P.t-P.b;
-  const step=_pcNiceStep(m.hi.a-m.lo.a), vMin=Math.floor(m.lo.a/step)*step, vMax=Math.max(Math.ceil(m.hi.a/step)*step, vMin+step);
-  const t0=m.rows[0].t, t1=m.rows[m.rows.length-1].t;
+function _pcSvg(m, W, series){
+  // series: [{py,label,color,line,sel}] — 평형마다 3개월 중앙값 선. 점은 고른 평형(m)만.
+  const H=W<420?230:260, P={l:44,r:46,t:22,b:26}, iw=W-P.l-P.r, ih=H-P.t-P.b;
+  const vals=m.rows.map(r=>r.a), ts=m.rows.map(r=>r.t);
+  (series||[]).forEach(q=>q.line.forEach(p=>{ if(p){ vals.push(p.v); ts.push(p.t); } }));
+  const lo=Math.min(...vals), hi=Math.max(...vals);
+  const step=_pcNiceStep(hi-lo), vMin=Math.floor(lo/step)*step, vMax=Math.max(Math.ceil(hi/step)*step, vMin+step);
+  const t0=Math.min(...ts), t1=Math.max(...ts);
   const X=t=>P.l+(t1===t0?iw/2:iw*(t-t0)/(t1-t0)), Y=v=>P.t+ih*(1-(v-vMin)/(vMax-vMin));
   let g='';
   for(let v=vMin; v<=vMax+1; v+=step) g+=`<line x1="${P.l}" x2="${W-P.r}" y1="${Y(v).toFixed(1)}" y2="${Y(v).toFixed(1)}" stroke="var(--bd)" stroke-width="1"/><text x="${P.l-6}" y="${(Y(v)+4).toFixed(1)}" text-anchor="end" font-size="12" style="fill:var(--t3)">${(v/10000).toFixed(step<10000?1:0)}억</text>`;
@@ -8884,26 +8914,35 @@ function _pcSvg(m, W){
       g+=`<line x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${P.t}" y2="${P.t+ih}" stroke="var(--bd)" stroke-dasharray="2 3"/><text x="${x.toFixed(1)}" y="${H-8}" text-anchor="middle" font-size="12" style="fill:var(--t3)">${y}</text>`;
     }
   }
-  let path='', pen=false;
-  for(const p of m.line){ if(!p){ pen=false; continue; } path+=(pen?'L':'M')+X(p.t).toFixed(1)+' '+Y(p.v).toFixed(1)+' '; pen=true; }
+  const pathOf=line=>{ let d='', pen=false; for(const p of line){ if(!p){ pen=false; continue; } d+=(pen?'L':'M')+X(p.t).toFixed(1)+' '+Y(p.v).toFixed(1)+(pen?' ':' l0.01 0 '); pen=true; } return d; }; // 한 달뿐인 구간도 둥근 끝으로 점처럼 보인다
+  const selS=(series||[]).find(q=>q.sel)||{color:'var(--acc)',line:m.line,label:'',py:''};
+  // 다른 평형 선 먼저(얇게), 고른 평형 선을 맨 위에
+  let lines='';
+  (series||[]).filter(q=>!q.sel).forEach(q=>{ lines+=`<path d="${pathOf(q.line)}" fill="none" style="stroke:${q.color}" stroke-width="1.75" stroke-opacity=".9" stroke-linejoin="round" stroke-linecap="round"><title>${q.label} 3개월 중앙값</title></path>`; });
+  lines+=`<path d="${pathOf(selS.line)}" fill="none" style="stroke:${selS.color}" stroke-width="2.6" stroke-linejoin="round" stroke-linecap="round"/>`;
+  // 선 끝 이름표(평형) — 색만으로 구분하지 않는다(밝은 화면에서 대비 3:1 미만 색 3개). 겹치면 14px 간격으로 민다.
+  const ends=(series||[]).map(q=>{ const p=[...q.line].reverse().find(Boolean); return p?{q,y:Y(p.v)}:null; }).filter(Boolean).sort((a,b)=>a.y-b.y);
+  for(let k=1;k<ends.length;k++) if(ends[k].y-ends[k-1].y<14) ends[k].y=ends[k-1].y+14;
+  const endLab=ends.length>1?ends.map(e=>`<text x="${(W-P.r+4).toFixed(1)}" y="${(e.y+4).toFixed(1)}" font-size="12" font-weight="${e.q.sel?700:500}" style="fill:${e.q.sel?'var(--t1)':'var(--t2)'}">${e.q.py}평</text>`).join(''):'';
   const loSet=new Set(m.los);
   const dots=m.rows.map(r=>{
     const key=r===m.now?'now':r===m.hi?'hi':loSet.has(r)?'lo':'';
-    const tip=`${_pcYmd(r.d)}${r.f!=null?' · '+r.f+'층':''} · ${_pcEok(r.a)}`;
-    return `<circle cx="${X(r.t).toFixed(1)}" cy="${Y(r.a).toFixed(1)}" r="${key?5:3.4}" style="fill:${key==='now'?'var(--acc)':key?'var(--t1)':'var(--t3)'};fill-opacity:${key?1:.45};cursor:pointer" data-tip="${tip}" onclick="_pcTip(this)"><title>${tip}</title></circle>`;
+    const tip=`${_pcYmd(r.d)}${r.f!=null?' · '+r.f+'층':''} · ${_pcEok(r.a)}${r.o?' · 다른 거래와 동떨어짐':''}`;
+    const st=r.o?`fill:var(--bg-base);stroke:${selS.color};stroke-width:1.6`:key?`fill:${selS.color};stroke:var(--bg-base);stroke-width:2`:`fill:${selS.color};fill-opacity:.4`;
+    return `<circle cx="${X(r.t).toFixed(1)}" cy="${Y(r.a).toFixed(1)}" r="${key?5.5:r.o?4:3.4}" style="${st};cursor:pointer" data-tip="${tip}" onclick="_pcTip(this)"><title>${tip}</title></circle>`;
   }).join('');
-  const lab=(r,txt,above,isNow)=>{
-    const x=X(r.t), y=Y(r.a), anc=x>W-90?'end':x<P.l+50?'start':'middle';
+  const lab=(r,txt,above)=>{
+    const x=X(r.t), y=Y(r.a), anc=x>W-P.r-60?'end':x<P.l+50?'start':'middle';
     const yy=above?Math.max(P.t-6,y-10):Math.min(P.t+ih-4,y+18);
-    return `<text x="${(anc==='end'?x-6:anc==='start'?x+6:x).toFixed(1)}" y="${yy.toFixed(1)}" text-anchor="${anc}" font-size="12" font-weight="700" paint-order="stroke" stroke="var(--bg-base)" stroke-width="4" style="fill:${isNow?'var(--acc)':'var(--t1)'}">${txt}</text>`;
+    return `<text x="${(anc==='end'?x-6:anc==='start'?x+6:x).toFixed(1)}" y="${yy.toFixed(1)}" text-anchor="${anc}" font-size="12" font-weight="700" paint-order="stroke" stroke="var(--bg-base)" stroke-width="4" style="fill:var(--t1)">${txt}</text>`;
   };
-  let labels=lab(m.hi,(m.hi===m.now?'최근·':'')+'최고 '+_pcEok(m.hi.a)+(m.hiN>1?` (${m.hiN}건)`:''),true,false)
-    +lab(m.lo,(m.lo===m.now?'최근·':'')+'최저 '+_pcEok(m.lo.a)+(m.loN>1?` (${m.loN}건)`:''),false,false);
+  let labels=lab(m.hi,(m.hi===m.now?'최근·':'')+'최고 '+_pcEok(m.hi.a)+(m.hiN>1?` (${m.hiN}건)`:''),true)
+    +lab(m.lo,(m.lo===m.now?'최근·':'')+'최저 '+_pcEok(m.lo.a)+(m.loN>1?` (${m.loN}건)`:''),false);
   if(m.now!==m.hi && m.now!==m.lo){
     const near=Math.abs(X(m.now.t)-X(m.hi.t))<90&&Math.abs(Y(m.now.a)-Y(m.hi.a))<24;
-    labels+=lab(m.now,'최근 '+_pcEok(m.now.a),!near,true);
+    labels+=lab(m.now,'최근 '+_pcEok(m.now.a),!near);
   }
-  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;max-width:100%;height:auto" role="img" aria-label="거래 ${m.rows.length}건 가격 차트">${g}<path d="${path}" fill="none" style="stroke:var(--acc)" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>${dots}${labels}</svg>`;
+  return `<svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" style="display:block;max-width:100%;height:auto" role="img" aria-label="${selS.label} 거래 ${m.rows.length}건과 평형별 가격 흐름">${g}${lines}${dots}${labels}${endLab}</svg>`;
 }
 function _pcTip(el){ const b=document.getElementById('pcTip'); if(b&&el) b.textContent=el.getAttribute('data-tip')||''; }
 function _pcSeqs(){
@@ -8919,31 +8958,55 @@ function _pcRepArea(src){ const c={}; (src||[]).forEach(x=>{ const s=Math.round(
 function _pcRecentDeals(){
   return (window._curTrendApt||[]).map(t=>({d:`${t.dealYear}-${String(t.dealMonth).padStart(2,'0')}-${String(t.dealDay).padStart(2,'0')}`,ar:Number(t.excluUseAr),a:Number(t.dealAmount),f:t.floor}));
 }
+// 평형 묶음(전체 기간 기준 — 기간 칩을 바꿔도 색이 바뀌지 않게): 거래 많은 순 6개(+고른 평형), 색은 평형 오름차순 고정 순서.
+function _pcGroups(src, selPy){
+  const by={}; src.forEach(x=>{ const py=_pcPy(x.ar); if(!py) return; const g=by[py]=by[py]||{py,n:0,sq:{}}; g.n++; const q=Math.round(Number(x.ar)); g.sq[q]=(g.sq[q]||0)+1; });
+  const gs=Object.values(by).sort((a,b)=>b.n-a.n);
+  const top=gs.slice(0,6); if(selPy&&by[selPy]&&!top.includes(by[selPy])) top[top.length-1]=by[selPy];
+  top.sort((a,b)=>a.py-b.py).forEach((g,k)=>{ g.color=`var(--pc-${k+1})`; const sq=Object.keys(g.sq).sort((a,b)=>g.sq[b]-g.sq[a]); g.sqm=Number(sq[0]); g.sqs=sq.map(Number).sort((a,b)=>a-b).slice(0,3); });
+  return { shown:top, hidden:gs.length-top.length };
+}
+function _pcPickPy(py, sqm){ const b=document.querySelector(`.trend-area-chip[data-sqm="${sqm}"]`); _selectTrendArea(sqm, b||null, py); }
 function _pcHtml(area){
   const L=window._curTrendLong, longOk=!!(L&&L.state==='ok'&&Array.isArray(L.deals)&&L.deals.length);
-  const src=(longOk?L.deals:_pcRecentDeals()).filter(x=>Number(x.ar)>0);
+  const src=(longOk?L.deals:_pcRecentDeals()).filter(x=>Number(x.ar)>0&&Number(x.a)>0&&/^\d{4}-\d{2}-\d{2}$/.test(String(x.d)));
   if(!area) area=_pcRepArea(src);
   // 장기 이력이 없으면 최근 거래(최대 30건)만 있다 — 그걸 '3년'이라 부르면 거짓(실측: 3년 최저 5.58억을 7.20억으로 표시). 기간 칩을 숨기고 '최근 거래 N건'으로 부른다.
   const period=longOk?(_PC_PERIODS[window._pcPeriod]?window._pcPeriod:'3y'):'all';
   const chips=Object.keys(_PC_PERIODS).map(k=>`<button type="button" class="pc-period" aria-pressed="${k===period}" onclick="_setPcPeriod('${k}')" style="font-size:12px;padding:5px 12px;border-radius:999px;border:1px solid ${k===period?'var(--acc)':'var(--bd)'};background:${k===period?'var(--acc)':'var(--bg-base)'};color:${k===period?'var(--acc-ink)':'var(--t2)'};cursor:pointer">${_PC_PERIODS[k][0]}</button>`).join('');
   const head=longOk?`<div role="group" aria-label="차트 기간" style="display:flex;gap:6px;margin:4px 0 10px">${chips}</div>`:'';
   const note=longOk?'':(L&&L.state==='loading'?'<div style="font-size:12px;color:var(--t3);margin-bottom:6px">예전 거래를 불러오는 중이에요. 지금은 최근 거래만 보여요.</div>':'<div style="font-size:12px;color:var(--t3);margin-bottom:6px">예전 거래를 불러오지 못해 최근 거래만 보여요.</div>');
-  const deals=src.filter(x=>area&&Math.abs(Math.round(Number(x.ar))-area)<=2);
-  const m=_pcModel(deals, period);
+  // 고른 평형: 평형 칩(㎡ 반올림)에 해당하는 거래들이 가장 많이 속한 평
+  const selCnt={}; src.forEach(x=>{ if(Math.round(Number(x.ar))===area){ const q=_pcPy(x.ar); selCnt[q]=(selCnt[q]||0)+1; } });
+  const py=(window._pcSelPy&&window._curTrendArea===area&&window._pcSelPy)||Number(Object.keys(selCnt).sort((a,b)=>selCnt[b]-selCnt[a])[0])||_pcPy(area);
+  const G=_pcGroups(src, py);
+  // 기간은 단지 전체의 마지막 거래 기준(평형마다 기준이 다르면 가로축이 어긋난다)
+  const lastT=src.reduce((mx,x)=>Math.max(mx,_pcDayNum(x.d)),0), days=_PC_PERIODS[period][1];
+  const inP=x=>!days||_pcDayNum(x.d)>=lastT-days;
+  const mark=q=>{ const rows=src.filter(x=>_pcPy(x.ar)===q); const o=_pcOutliers(rows); return rows.map(x=>Object.assign({},x,{o:o.has(x)})); };
+  const m=_pcModel(mark(py).filter(inP), 'all');
   const plabel=longOk?_PC_PERIODS[period][0]:'최근 거래';
-  if(!m||m.rows.length<2) return head+note+`<div style="font-size:14px;color:var(--t3);padding:14px 8px;text-align:center;background:var(--bg2);border:1px dashed var(--bd);border-radius:var(--radius-base)">${area?area+'㎡ ':''}${plabel} 거래가 ${m?m.rows.length:0}건이라 그래프를 그리지 않아요</div>`;
-  const py=Math.round(area/3.3058);
+  const selG=G.shown.find(g=>g.py===py);
+  const sqLabel=selG?selG.sqs.join('·'):String(area);
+  if(!m||m.rows.length<2) return head+note+`<div style="font-size:14px;color:var(--t3);padding:14px 8px;text-align:center;background:var(--bg2);border:1px dashed var(--bd);border-radius:var(--radius-base)">${py?sqLabel+'㎡('+py+'평) ':''}${longOk?plabel+' 거래가':'최근 거래가'} ${m?m.rows.length:0}건이라 그래프를 그리지 않아요</div>`;
+  const series=G.shown.map(g=>{ const mm=g.py===py?m:_pcModel(mark(g.py).filter(inP),'all'); return mm?{py:g.py,sqm:g.sqm,label:`${g.sqs.join('·')}㎡(${g.py}평)`,color:g.color,line:mm.line,n:mm.rows.length,sel:g.py===py}:null; }).filter(Boolean);
   const cell=(k,v,s,c)=>`<div style="border:1px solid var(--bd);border-radius:8px;padding:8px 10px;min-width:0"><div style="font-size:12px;color:var(--t3)">${k}</div><div style="font-size:18px;font-weight:700;color:${c};margin-top:2px">${v}</div><div style="font-size:12px;color:var(--t3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s}</div></div>`;
   const fl=r=>r.f!=null?` · ${r.f}층`:'';
   const loSub=m.loN>1?`${m.los.slice(-2).map(r=>_pcYmd(r.d)+fl(r)).join(', ')}${m.loN>2?' 외':''}`:_pcYmd(m.lo.d)+fl(m.lo);
   const _bw=(document.getElementById('trendChartBox')||{}).clientWidth||0; // 숨은 탭에서 그리면 0 — 화면 폭으로 대신 잡는다
   const W=Math.max(300,Math.min(760,_bw||Math.min(window.innerWidth||375,700)-48));
+  const legend=series.length>1?`<div role="group" aria-label="평형 고르기" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px">${series.map(q=>`<button type="button" class="pc-leg" aria-pressed="${q.sel}" onclick="_pcPickPy(${q.py},${q.sqm})" style="display:inline-flex;align-items:center;gap:6px;font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid ${q.sel?'var(--t2)':'var(--bd)'};background:var(--bg-base);color:${q.sel?'var(--t1)':'var(--t2)'};font-weight:${q.sel?700:500};cursor:pointer;font-family:inherit"><span aria-hidden="true" style="width:14px;height:3px;border-radius:2px;background:${q.color}"></span>${q.label} ${q.n}건</button>`).join('')}</div>`
+    +`<div style="font-size:12px;color:var(--t3);margin-top:4px">색 이름표를 누르면 그 평형의 거래 점과 최근·최고·최저가 보여요.${G.hidden?` 거래가 적은 평형 ${G.hidden}개는 선을 그리지 않았어요(위 평형 필터에서 고를 수 있어요).`:''}</div>`:'';
+  const outN=m.out.length;
+  const outNote=outN?`<div style="font-size:12px;color:var(--t2);margin-top:6px;line-height:1.5">빈 원 ${outN}건은 같은 평형의 앞뒤 3개월 거래보다 20% 넘게, 평소 차이보다 훨씬 크게 벗어난 거래라 선과 최고·최저 계산에서 뺐어요: ${m.out.slice(-3).map(r=>_pcYmd(r.d)+fl(r)+' '+_pcEok(r.a)).join(', ')}${outN>3?' 외':''}. 왜 다른지는 국토부 자료에 나오지 않아요.</div>`:'';
   return head+note
-    +`<div style="font-size:16px;font-weight:700;color:var(--t1);line-height:1.5;margin-bottom:10px">${area}㎡(${py}평)가 최근 ${_pcEok(m.now.a)}에 거래됐어요. ${longOk?plabel:`최근 거래 ${m.rows.length}건`} 중 최고 ${_pcEok(m.hi.a)}, 최저 ${_pcEok(m.lo.a)}이에요.</div>`
+    +`<div style="font-size:16px;font-weight:700;color:var(--t1);line-height:1.5;margin-bottom:10px">${sqLabel}㎡(${py}평)가 최근 ${_pcEok(m.now.a)}에 거래됐어요. ${longOk?plabel:`최근 거래 ${m.rows.length}건`} 중 최고 ${_pcEok(m.hi.a)}, 최저 ${_pcEok(m.lo.a)}이에요.</div>`
     +`<div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;margin-bottom:10px">${cell('최근 거래',_pcEok(m.now.a),_pcYmd(m.now.d)+fl(m.now),'var(--acc)')}${cell(longOk?plabel+' 최고':'최근 거래 중 최고',_pcEok(m.hi.a),_pcYmd(m.hi.d)+fl(m.hi),'var(--t1)')}${cell(longOk?plabel+' 최저':'최근 거래 중 최저',_pcEok(m.lo.a),loSub,'var(--t1)')}</div>`
-    +_pcSvg(m,W)
-    +`<div id="pcTip" aria-live="polite" style="font-size:12px;color:var(--t2);min-height:18px;margin-top:4px">점을 누르면 거래 내용이 여기에 나와요</div>`
-    +`<div style="font-size:12px;color:var(--t3);margin-top:4px;line-height:1.5">점 하나가 거래 1건 · 선은 앞뒤 1개월을 포함한 3개월 중앙값 · ${plabel} ${m.rows.length}건<br>국토교통부 실거래가 · 같은 단지·같은 면적(전용 ${area}㎡ ±2㎡) · 층·향 보정 없음 · 해제 거래 제외 · 매수·매도 추천이 아니에요</div>`;
+    +_pcSvg(m,W,series)
+    +legend
+    +`<div id="pcTip" aria-live="polite" style="font-size:12px;color:var(--t2);min-height:18px;margin-top:6px">점을 누르면 거래 내용이 여기에 나와요</div>`
+    +outNote
+    +`<div style="font-size:12px;color:var(--t3);margin-top:4px;line-height:1.5">점 하나가 고른 평형의 거래 1건 · 선은 평형마다 앞뒤 1개월을 포함한 3개월 중앙값 · ${plabel} ${m.rows.length}건<br>국토교통부 실거래가 · 같은 단지·같은 평형(전용면적을 평으로 반올림) · 층·향 보정 없음 · 해제 거래 제외(계약한 달 포함 3개월 안에 해제 신고된 거래) · 매수·매도 추천이 아니에요</div>`;
 }
 function _setPcPeriod(k){ if(!_PC_PERIODS[k])return; window._pcPeriod=k; const el=document.getElementById('trendChartBox'); if(el&&typeof window._trendHtml==='function') el.innerHTML=window._trendHtml(window._curTrendArea||0); }
 async function _pcLoad(){
@@ -9315,7 +9378,7 @@ function showDetail(p){
     .sort((a, b) => a.sqm - b.sqm); // 면적 오름차순 (작은 평형부터)
   // default = 0 (전체) — 사용자가 모든 평형 보고 자기 예산 평형 클릭
   window._curTrendApt = p.txHistory || [];
-  window._curTrendArea = 0;
+  window._curTrendArea = 0; window._pcSelPy = 0;
   window._curTrendLong = null; window._curTrendSeqHint = p.aptSeq || null; window._pcPeriod = '3y'; // Plan 154
 
   function _trendHtml(area) { return _pcHtml(area); } // Plan 154: 평형 칩이 0(전체)이면 거래가 가장 많은 평형
@@ -9332,9 +9395,12 @@ function showDetail(p){
     const L = window._curTrendLong, longOk = !!(L && L.state === 'ok' && Array.isArray(L.deals) && L.deals.length);
     const src = (longOk ? L.deals : _pcRecentDeals()).filter(x => Number(x.ar) > 0 && Number(x.a) > 0 && /^\d{4}-\d{2}-\d{2}$/.test(String(x.d)));
     if (!area) area = _pcRepArea(src);
-    const tx = src.filter(x => area && Math.abs(Math.round(Number(x.ar)) - area) <= 2)
+    // Plan 171: 가격 차트와 같은 평형(평 반올림)·같은 동떨어진 거래 제외 — 3.60억 같은 거래가 신고가 기준을 흔들지 않게
+    const selCnt = {}; src.forEach(x => { if (Math.round(Number(x.ar)) === area) { const q = _pcPy(x.ar); selCnt[q] = (selCnt[q] || 0) + 1; } });
+    const py = (window._pcSelPy && window._curTrendArea === area && window._pcSelPy) || Number(Object.keys(selCnt).sort((a, b) => selCnt[b] - selCnt[a])[0]) || _pcPy(area);
+    const grp = src.filter(x => area && _pcPy(x.ar) === py), _out = _pcOutliers(grp);
+    const tx = grp.filter(x => !_out.has(x))
       .sort((x, y) => (x.d < y.d ? -1 : x.d > y.d ? 1 : 0)); // 날짜 오름차순 (먼저 발생한 거래부터)
-    const py = Math.round(area / 3.3058);
     const areaLabel = area ? `${area}㎡(${py}평)` : '';
     if (tx.length < 2) {
       return `<div style="font-size:12px;color:var(--t3);padding:10px 0">${areaLabel ? areaLabel + ' ' : ''}거래가 적어 신고가 경신 추이를 보여 줄 수 없어요</div>`;
@@ -9347,7 +9413,7 @@ function showDetail(p){
     }
     const since = tx[0].d.slice(0, 7).replace('-', '.');
     const basis = longOk ? `${since}부터 거래 ${tx.length}건` : `불러온 최근 거래 ${tx.length}건`;
-    const foot = `<div style="font-size:12px;color:var(--t3);margin-top:6px">※ 신고가는 같은 면적(±2㎡)에서 앞선 거래보다 높은 가격에 거래된 경우예요. ${basis} 기준이라 그보다 이전 거래와는 비교하지 않았어요. 한국도시연구소의 분석 방법을 빌렸어요. 매수 추천이나 가격 예측이 아니에요.</div>`;
+    const foot = `<div style="font-size:12px;color:var(--t3);margin-top:6px">※ 신고가는 같은 평형(전용면적을 평으로 반올림)에서 앞선 거래보다 높은 가격에 거래된 경우예요. 가격 그래프의 빈 원(다른 거래와 동떨어진 거래)은 빼고 셌어요. ${basis} 기준이라 그보다 이전 거래와는 비교하지 않았어요. 한국도시연구소의 분석 방법을 빌렸어요. 매수 추천이나 가격 예측이 아니에요.</div>`;
     if (peaks.length < 2) {
       return `<div style="font-size:12px;color:var(--t3);padding:10px 0">${areaLabel} 신고가 경신 이력이 1건 이하라 추이를 보여 줄 수 없어요</div>${foot}`;
     }
@@ -9366,7 +9432,7 @@ function showDetail(p){
       <div style="display:flex;flex-direction:column;gap:4px;margin-top:6px">
         ${reverseList.map((t, i) => {
           const price = (t.a / 10000).toFixed(2);
-          const floor = t.f != null && t.f !== '' ? `${t.f}층` : '';
+          const floor = t.f != null && t.f !== '' && Number.isFinite(Number(t.f)) ? `${Number(t.f)}층` : ''; // 숫자만(교차 검토 2026-10-30)
           const isLatest = i === 0;
           return `<div style="display:flex;justify-content:space-between;font-size:12px;${isLatest?'color:var(--acc);font-weight:600':'color:var(--t2)'}">
             <span>${isLatest?'최근 신고가':''} ${t.d} ${floor}</span>
