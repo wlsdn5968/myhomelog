@@ -2151,7 +2151,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button class="htab" onclick="sv('list',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 6h12"/><path d="M8 12h12"/><path d="M8 18h12"/><path d="M3.5 6h.01"/><path d="M3.5 12h.01"/><path d="M3.5 18h.01"/></svg>목록</button>
     <button class="htab htab-feature" onclick="sv('report',this)" title="내 상황으로 만드는 맞춤 보고서"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 21h18"/><path d="M5 21V11"/><path d="M12 21V4"/><path d="M19 21v-6"/></svg>보고서</button>
     <div class="htab-dd" id="htabToolDd">
-      <button class="htab-tool" id="htabToolBtn" onclick="toggleToolMenu(event)" aria-haspopup="true" aria-expanded="false" title="특약 초안, 청약 일정, 대출 계산, 복비 계산, 거래 체크리스트, 사용법, 규제 요약"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>도구 <span class="ddcaret">▾</span></button>
+      <button class="htab-tool" id="htabToolBtn" onclick="toggleToolMenu(event)" aria-haspopup="true" aria-expanded="false" title="특약 초안, 청약 일정, 대출 계산, 복비 계산, 거래 체크리스트, 갈아타기 계산, 사용법, 규제 요약"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>도구 <span class="ddcaret">▾</span></button>
       <div class="htab-menu" id="htabToolMenu">
     <button class="htab" onclick="sv('clause',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>특약</button>
     <button class="htab" onclick="sv('subs',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4.5" width="18" height="16" rx="2"/><path d="M3 9.5h18"/><path d="M8 2.5v4"/><path d="M16 2.5v4"/></svg>청약</button>
@@ -2159,6 +2159,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <!-- TOOLMENU-EXPOSE-2026-10-14 (Plan 148): 복비 계산·사용법 진입 — 로그아웃 데스크톱엔 사용법 경로가 없었다. 인덱스(htabOrder) 밖이라 항상 off. -->
     <button class="htab" onclick="sv('biz',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg>복비 계산</button>
     <button class="htab" onclick="sv('deal',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>거래 체크리스트</button>
+    <button class="htab" onclick="sv('swap',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>갈아타기 계산</button>
     <button class="htab" onclick="sv('guide',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>사용법</button>
     <!-- Sprint OOOOO: 규제 요약(비뷰 버튼) — 반드시 마지막 유지(인덱스 밖 → 항상 off) -->
     <button class="htab" onclick="closeToolMenu();openRegSummary()" title="부동산 규제 요약 (2025.10.15 대책 + 2026 후속 반영)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3.5v5c0 4.4-3 7.6-7 9.5-4-1.9-7-5.1-7-9.5v-5Z"/></svg>규제 요약</button>
@@ -3027,6 +3028,134 @@ html[data-theme="dark"] .dcl-dates input[type=date]{color-scheme:dark}
   </div>
 </div>
 
+<!-- 갈아타기 계산 뷰 — SWAP-HELPER-2026-10-30 (Plan 155, Claude Design 시안 p/07b5c734 승인) -->
+<div class="biz-view" id="view-swap">
+<style id="swpStyles">
+/* 시안 값만 사용. 토큰은 거래 체크리스트와 같은 v2(화면 스코프 변수 — 전역 토큰 오염 금지). */
+#view-swap{
+  --sw-bg:#F5F5F2; --sw-card:#FFFFFF; --sw-sub:#EFEFEB; --sw-line:#E2E1DC; --sw-line2:#CFCEC7;
+  --sw-t1:#15191F; --sw-t2:#4A515C; --sw-t3:#69707B; --sw-pri:#173A63; --sw-onpri:#FFFFFF; --sw-sel:#E7EDF4;
+  background:var(--sw-bg); color:var(--sw-t1); font-variant-numeric:tabular-nums; letter-spacing:-.01em;
+}
+html[data-theme="dark"] #view-swap{
+  --sw-bg:#0E1520; --sw-card:#151E2B; --sw-sub:#1B2636; --sw-line:#243246; --sw-line2:#34445B;
+  --sw-t1:#E9EDF2; --sw-t2:#B5BEC9; --sw-t3:#8D97A4; --sw-pri:#8DB3E2; --sw-onpri:#0E1520; --sw-sel:#1D2D43;
+}
+.swp{width:100%;max-width:960px;margin:0 auto;padding:64px 0 80px}
+.swp-h1{margin:0 0 8px;font-size:28px;font-weight:700;color:var(--sw-t1)}
+.swp-lead{margin:0 0 32px;font-size:16px;line-height:1.6;color:var(--sw-t2)}
+.swp-cols{display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap}
+.swp-in{flex:1 1 360px;min-width:0;display:flex;flex-direction:column;gap:16px}
+.swp-out{flex:1 1 480px;min-width:0;display:flex;flex-direction:column;gap:16px}
+.swp-card{background:var(--sw-card);border:1px solid var(--sw-line);border-radius:8px;padding:20px;display:flex;flex-direction:column;gap:20px;min-width:0}
+.swp-out .swp-card{gap:12px}
+.swp-ct{margin:0;font-size:20px;font-weight:700;color:var(--sw-t1)}
+.swp-f{display:flex;flex-direction:column;gap:8px;min-width:0}
+.swp-f>label,.swp-lbl{font-size:14px;font-weight:700;color:var(--sw-t2)}
+.swp-row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.swp-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+.swp-inp{height:44px;padding:0 12px;border:1px solid var(--sw-line2);border-radius:8px;background:var(--sw-card);color:var(--sw-t1);font-size:16px;font-family:inherit;font-variant-numeric:tabular-nums;min-width:0;box-sizing:border-box;width:100%}
+.swp-u{display:flex;align-items:center;gap:8px;min-width:120px;flex:1}
+.swp-u span{font-size:14px;color:var(--sw-t2);white-space:nowrap}
+select.swp-inp{appearance:auto}
+input[type=date].swp-inp{color-scheme:light}
+html[data-theme="dark"] input[type=date].swp-inp{color-scheme:dark}
+.swp-apt{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;padding:0 12px;border:1px solid var(--sw-line2);border-radius:8px;font-size:16px;color:var(--sw-t1)}
+.swp-apt.none{color:var(--sw-t3)}
+.swp-ref{background:var(--sw-sub);border-radius:8px;padding:12px;font-size:14px;line-height:1.6;color:var(--sw-t2)}
+.swp-ref b{display:block;font-size:12px;font-weight:700;color:var(--sw-t3);margin-bottom:2px}
+.swp-help{margin:0;font-size:12px;line-height:1.5;color:var(--sw-t3)}
+.swp-btn2{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 16px;border:1px solid var(--sw-line2);border-radius:8px;background:var(--sw-card);color:var(--sw-t1);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+.swp-btn2:disabled{opacity:.4;cursor:default}
+.swp-tbtn{display:inline-flex;align-items:center;min-height:44px;padding:0 6px;border:0;background:none;color:var(--sw-pri);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
+.swp-chip{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--sw-sub);color:var(--sw-t2)}
+.swp-seg{display:flex;gap:4px;padding:4px;background:var(--sw-sub);border-radius:8px}
+.swp-seg button{flex:1;height:44px;border:0;border-radius:6px;background:transparent;color:var(--sw-t2);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer}
+.swp-seg button[aria-pressed="true"]{background:var(--sw-sel);color:var(--sw-pri);box-shadow:inset 0 0 0 1px var(--sw-pri)}
+.swp-tbl{display:flex;flex-direction:column}
+.swp-tr{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:12px 0;border-bottom:1px solid var(--sw-line);font-size:14px;color:var(--sw-t2)}
+.swp-tr .v{font-size:16px;color:var(--sw-t1);white-space:nowrap}
+.swp-tr.cash{border-bottom-color:var(--sw-line2)}
+.swp-tr.dim{opacity:.35}
+.swp-tr.sum{border-bottom:0;font-size:16px;font-weight:700;color:var(--sw-t1)}
+.swp-tr.sum .v{font-size:20px;font-weight:700}
+.swp-ln{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:12px;border-radius:8px;font-size:14px;color:var(--sw-t2)}
+.swp-ln .v{font-size:16px;color:var(--sw-t1);white-space:nowrap}
+.swp-ln.on{background:var(--sw-sel)}
+.swp-ln.fin{font-weight:700;color:var(--sw-t1)}
+.swp-ln.fin .v{font-size:20px;font-weight:700}
+.swp-ln small{display:block;font-size:12px;font-weight:400;color:var(--sw-t3);margin-top:2px}
+.swp-gap{background:var(--sw-sel);box-shadow:inset 0 0 0 1px var(--sw-pri);border:0}
+.swp-gap.ok{background:var(--sw-card);box-shadow:none;border:1px solid var(--sw-line)}
+.swp-gl{font-size:16px;font-weight:700;color:var(--sw-pri)}
+.swp-gap.ok .swp-gl{color:var(--sw-t1)}
+.swp-gn{font-size:40px;font-weight:700;line-height:1.2;letter-spacing:-.02em;color:var(--sw-pri);white-space:nowrap}
+.swp-gap.ok .swp-gn{color:var(--sw-t1)}
+.swp-gd{margin:0;font-size:14px;line-height:1.6;color:var(--sw-t2)}
+.swp-dl{background:var(--sw-card);border:1px solid var(--sw-line);border-radius:8px;padding:16px;display:flex;flex-direction:column;gap:8px}
+.swp-dh{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:14px;color:var(--sw-t2)}
+.swp-dh .dd{margin-left:auto;font-size:20px;font-weight:700;color:var(--sw-pri)}
+.swp-dt{font-size:16px;font-weight:700;color:var(--sw-t1)}
+.swp-lb{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;white-space:nowrap}
+.swp-lb.law{background:transparent;color:var(--sw-pri);box-shadow:inset 0 0 0 1px var(--sw-pri);padding:1px 7px}
+.swp-lb.off{background:var(--sw-sel);color:var(--sw-pri)}
+.swp-src{background:var(--sw-sub);border-radius:8px;padding:8px 12px;font-size:12px;color:var(--sw-t2);display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.swp-src[hidden]{display:none} /* display:flex 가 hidden 속성을 덮지 않게 */
+.swp-src i{font-style:normal;color:var(--sw-t3)}
+.swp-src a{display:inline-flex;align-items:center;min-height:44px;color:var(--sw-pri);font-weight:700;text-decoration:none}
+.swp-src a:hover{text-decoration:underline}
+.swp-more{align-self:flex-start;min-height:44px;padding:0;border:0;background:none;color:var(--sw-pri);font-family:inherit;font-size:12px;font-weight:700;cursor:pointer}
+.swp-live{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap} /* 화면 낭독기에만 — 입력마다 결과 전체를 읽지 않게 핵심 숫자 한 줄 */
+.swp-foot{margin-top:32px;display:flex;flex-direction:column;gap:6px}
+.swp-foot p{margin:0;font-size:14px;line-height:1.6;color:var(--sw-t2)}
+.swp-foot p.s{font-size:12px;color:var(--sw-t3)}
+@media(max-width:700px){
+  .swp{padding:24px 0 112px} /* 시안 48 + 떠 있는 관심·챗 버튼 높이 */
+  .swp-cols{flex-direction:column;align-items:stretch}
+  .swp-in,.swp-out{flex:none}
+}
+</style>
+  <div class="swp">
+    <h1 class="swp-h1">갈아타기 계산</h1>
+    <p class="swp-lead">지금 집을 먼저 두고 새 집을 사는 경우(처분조건부 대출·일시적 2주택)를 계산해요.</p>
+    <div class="swp-cols">
+      <div class="swp-in">
+        <section class="swp-card" aria-labelledby="swpT1">
+          <h2 class="swp-ct" id="swpT1">지금 집</h2>
+          <div class="swp-f"><span class="swp-lbl">단지</span><div id="swpApt"></div></div>
+          <div id="swpRef"></div>
+          <div class="swp-f"><label for="swp-sell">팔 가격</label>
+            <div class="swp-row"><div class="swp-u"><input class="swp-inp" id="swp-sell" type="number" inputmode="decimal" step="0.01" min="0" oninput="_swpInput()"><span>억</span></div>
+            <button type="button" class="swp-btn2" id="swpFillAvg" onclick="_swpFillAvg()">최근 평균 실거래가 넣기</button></div></div>
+          <div class="swp-f"><label for="swp-debt">남은 대출</label><div class="swp-u"><input class="swp-inp" id="swp-debt" type="number" inputmode="decimal" step="0.01" min="0" oninput="_swpInput()"><span>억</span></div></div>
+          <div class="swp-f"><label for="swp-cgt">양도소득세 (선택)</label><div class="swp-u"><input class="swp-inp" id="swp-cgt" type="number" inputmode="numeric" step="1" min="0" oninput="_swpInput()"><span>만 원</span></div>
+            <p class="swp-help">홈택스 모의계산 결과를 넣어요. 1주택 비과세 요건은 거래 체크리스트 매도인에서 확인해요.</p></div>
+        </section>
+        <section class="swp-card" aria-labelledby="swpT2">
+          <h2 class="swp-ct" id="swpT2">새 집</h2>
+          <div class="swp-f"><label for="swp-buy">매수가</label><div class="swp-u"><input class="swp-inp" id="swp-buy" type="number" inputmode="decimal" step="0.01" min="0" oninput="_swpInput()"><span>억</span></div></div>
+          <div class="swp-f"><span class="swp-lbl" id="swpRegL">지역</span>
+            <div class="swp-2"><select class="swp-inp" id="swp-wide" aria-labelledby="swpRegL" onchange="_swpWide()"></select><select class="swp-inp" id="swp-sgg" aria-label="시군구" onchange="_swpInput()"></select></div>
+            <div><span class="swp-chip" id="swpRegChip"></span></div></div>
+          <div class="swp-2">
+            <div class="swp-f"><label for="swp-inc">연소득</label><div class="swp-u"><input class="swp-inp" id="swp-inc" type="number" inputmode="numeric" step="100" min="0" oninput="_swpInput()"><span>만 원</span></div></div>
+            <div class="swp-f"><label for="swp-cash">지금 가진 현금</label><div class="swp-u"><input class="swp-inp" id="swp-cash" type="number" inputmode="decimal" step="0.01" min="0" oninput="_swpInput()"><span>억</span></div></div>
+          </div>
+          <div class="swp-f"><label for="swp-bal">새 집 잔금일</label><input class="swp-inp" id="swp-bal" type="date" onchange="_swpInput()"></div>
+          <div class="swp-f"><span class="swp-lbl" id="swpUseQ">새 집 잔금 때 지금 집 판 돈을 쓸 수 있나요?</span>
+            <div class="swp-seg" role="group" aria-labelledby="swpUseQ"><button type="button" data-use="y" aria-pressed="true" onclick="_swpUse('y')">쓸 수 있어요</button><button type="button" data-use="n" aria-pressed="false" onclick="_swpUse('n')">아직 못 써요</button></div></div>
+        </section>
+      </div>
+      <div class="swp-out" id="swpOut"></div>
+      <p class="swp-live" id="swpLive" aria-live="polite"></p>
+    </div>
+    <div class="swp-foot">
+      <p>계산은 입력한 값과 공개된 규정으로 만든 참고용이에요. 실제 대출 한도는 은행 심사로 정해지고, 세금은 세무서·홈택스에서 확인하세요.</p>
+      <p class="s">입력값은 이 기기에만 저장돼요.</p>
+    </div>
+  </div>
+</div>
+
 <!-- 부동산 뉴스 뷰 -->
 <div class="biz-view" id="view-news" style="display:none">
 <style id="brfStyles">
@@ -3650,6 +3779,12 @@ html[data-theme="dark"] #view-news{
   <button type="button" class="ts-item" data-tool="deal" aria-current="false" onclick="closeToolsSheet();sv('deal',this)">
     <span class="ts-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg></span>
     <span class="ts-body"><span class="ts-title">거래 체크리스트</span><span class="ts-desc">가계약부터 입주까지 할 일과 법정 기한</span></span>
+    <span class="ts-check" aria-hidden="true">✓</span>
+    <span class="ts-arrow" aria-hidden="true">→</span>
+  </button>
+  <button type="button" class="ts-item" data-tool="swap" aria-current="false" onclick="closeToolsSheet();sv('swap',this)">
+    <span class="ts-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg></span>
+    <span class="ts-body"><span class="ts-title">갈아타기 계산</span><span class="ts-desc">지금 집을 두고 새 집을 살 때 자금과 기한</span></span>
     <span class="ts-check" aria-hidden="true">✓</span>
     <span class="ts-arrow" aria-hidden="true">→</span>
   </button>
@@ -11307,6 +11442,7 @@ const DCL_ST={done:'완료',now:'진행 중',late:'남은 항목 있음',todo:'�
 // 'YYYY-MM-DD' → 로컬 자정(DDAY-TZ-FIX 와 같은 이유로 'T00:00:00'). 잘못된 값은 null.
 function _dclParse(s){
   if(!s||!/^\d{4}-\d{2}-\d{2}$/.test(s))return null;
+  const y=+s.slice(0,4);if(y<2000||y>2100)return null; // 연도를 치는 중('0002-…')인 값은 계산하지 않는다
   const d=new Date(s+'T00:00:00');return isNaN(d)?null:d;
 }
 function _dclAdd(d,n){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()+n);return x;}
@@ -11478,6 +11614,185 @@ function _dclOpen(){
   }
   _dclOpenSet=null;
   _dclRender();
+}
+
+// ── 갈아타기 계산 ─────────────────────────────────────────
+// SWAP-HELPER-2026-10-30 (Plan 155, Claude Design 시안 p/07b5c734 승인): 지금 집을 둔 채 새 집을 먼저 사는 경우.
+//   가격 예측 없음 — 팔 가격은 사용자가 넣고, 최근 실거래는 대표 평형(_repAreaOf)의 최저·평균·최고를 함께 참고로만.
+//   계산은 기존 규칙 재사용: 대출 = calcLTV(…,'1주택 (처분조건부)',…) · 파는 쪽 중개보수 = 복비 계산기와 같은 매매 상한요율표.
+//   사는 비용(취득세 등)은 여기서 계산하지 않는다(일시적 2주택 세율 처리 원문 미확인) — '빼기 전'이라고 밝히고 대출 계산으로 넘긴다.
+const SWP_KEY='mhl_swap';
+// 공인중개사법 시행규칙 제20조 ①·별표 1 매매·교환 상한요율(구간 '이상~미만', 한도액 만 원) — calcComm 의 매매 표와 같은 값
+//   (2026-10-30 생활법령정보 '부동산 중개보수 산정' 본문으로 6구간 대조). 반환: 억.
+function _swpComm(eok){
+  const w=(Number(eok)||0)*10000; if(!(w>0))return 0;
+  const T=[[5000,0.006,25],[20000,0.005,80],[90000,0.004,null],[120000,0.005,null],[150000,0.006,null],[Infinity,0.007,null]];
+  const t=T.find(x=>w<x[0]);let c=w*t[1];if(t[2])c=Math.min(c,t[2]);
+  return Math.round(c)/10000;
+}
+// 억 → '8억 5,000만' · '5,240만' · '6억'. 만 원 단위 반올림.
+function _swpWon(eok){
+  const m=Math.round(Math.abs(Number(eok)||0)*10000),a=Math.floor(m/10000),r=m%10000;
+  if(!m)return '0';
+  if(!a)return `${r.toLocaleString('ko-KR')}만`;
+  return r?`${a}억 ${r.toLocaleString('ko-KR')}만`:`${a}억`;
+}
+// 월 더하기. 그 달에 같은 날이 없으면 그 달 말일(예: 8월 31일 + 6개월 = 2월 말일).
+function _swpAddMonths(d,n){
+  const y=d.getFullYear(),m=d.getMonth()+n,last=new Date(y,m+1,0).getDate();
+  return new Date(y,m,Math.min(d.getDate(),last));
+}
+function _swpFmtFull(d){return `${d.getFullYear()}년 ${d.getMonth()+1}월 ${d.getDate()}일`;}
+// 계산 본체(입력 → 숫자). region 은 '서울 마포구' 형식, lawd 는 시군구 코드(있으면 규제 판정에 우선).
+function _swpCalc(s){
+  const num=v=>{const x=parseFloat(v);return Number.isFinite(x)&&x>0?x:0;};
+  const sell=num(s.sell),debt=num(s.debt),cgt=num(s.cgt)/10000,cash=num(s.cash),buy=num(s.buy),inc=num(s.inc);
+  const comm=_swpComm(sell),use=s.use!=='n';
+  const avail=+(use?(sell-debt-comm-cgt+cash):cash).toFixed(4);
+  const region=[s.wide,s.sgg].filter(Boolean).join(' ');
+  if(!buy)return {sell,debt,comm,cgt,cash,use,avail,buy:0,region};
+  const r=calcLTV(buy,avail,inc,0,'1주택 (처분조건부)',false,region,s.lawd||'');
+  const lL=+(buy*r.ltv).toFixed(4),capOn=Number.isFinite(r.cap);
+  const by=(r.dL>0&&r.dL<Math.min(lL,r.cap))?'inc':(capOn&&r.cap<lL)?'cap':'ltv';
+  return {sell,debt,comm,cgt,cash,use,avail,buy,inc,region,isR:r.isR,isMetro:r.isMetro,ltv:r.ltv,lL,cap:capOn?r.cap:null,dL:r.dL,fin:r.fin,mo:r.mo,by,gap:+(buy-avail-r.fin).toFixed(4)};
+}
+// 기한: 처분조건부 = 대출 실행일(새 집 잔금일 가정) + 6개월(금융위 2025.6.27 FAQ 7번),
+//   일시적 2주택 = 새 집 취득일(잔금일 가정) + 3년, 두 집 모두 조정대상지역이면 2년(소득세법 시행령 제155조 ①, 2026-10-01 시행).
+function _swpDeadlines(bal){
+  const b=_dclParse(bal);if(!b)return null;
+  return {dispose:_swpAddMonths(b,6),tmp3:_swpAddMonths(b,36),tmp2:_swpAddMonths(b,24)};
+}
+function _swpLoad(){
+  try{const o=JSON.parse(localStorage.getItem(SWP_KEY)||'{}');return (o&&typeof o==='object'&&!Array.isArray(o))?o:{};}catch(_){return {};}
+}
+function _swpSave(s){try{localStorage.setItem(SWP_KEY,JSON.stringify(s));}catch(_){}}
+const _SWP_FIELDS=['sell','debt','cgt','buy','inc','cash','bal'];
+let _swpSrcOpen={d:false,t:false};
+function _swpFillRegion(s){
+  const w=document.getElementById('swp-wide'),g=document.getElementById('swp-sgg');if(!w||!g)return;
+  const wides=Object.keys(REGION_MENU||{});
+  if(!s.wide||!wides.includes(s.wide))s.wide=wides[0]||'';
+  w.innerHTML=wides.map(x=>`<option value="${_escHtml(x)}"${x===s.wide?' selected':''}>${_escHtml(x)}</option>`).join('');
+  const items=(REGION_MENU[s.wide]||[]);
+  if(!items.some(it=>it.label===s.sgg))s.sgg=items[0]?items[0].label:'';
+  const it=items.find(x=>x.label===s.sgg);s.lawd=it&&it.lawdCd?it.lawdCd:'';
+  g.innerHTML=items.map(x=>`<option value="${_escHtml(x.label)}"${x.label===s.sgg?' selected':''}>${_escHtml(x.label)}</option>`).join('');
+}
+function _swpRender(){
+  const out=document.getElementById('swpOut');if(!out)return;
+  const s=_swpLoad();if(s.use!=='n')s.use='y';
+  _SWP_FIELDS.forEach(k=>{const el=document.getElementById('swp-'+k);if(el&&document.activeElement!==el)el.value=s[k]!=null?s[k]:'';});
+  _swpFillRegion(s);_swpSave(s);
+  document.querySelectorAll('#view-swap .swp-seg button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.use===s.use?'true':'false'));
+  const E=_escHtml,a=s.apt&&typeof s.apt==='object'&&!Array.isArray(s.apt)?s.apt:null;
+  const ref=a&&a.ref&&['min','avg','max','n'].every(k=>Number.isFinite(a.ref[k]))?a.ref:null; // 손상된 저장값이면 참고 줄을 그리지 않는다
+  document.getElementById('swpApt').innerHTML=a
+    ?`<div class="swp-apt"><span>${E(a.name||'')}</span><button type="button" class="swp-tbtn" onclick="_swpPickApt()">단지 바꾸기</button></div>`
+    :`<div class="swp-apt none"><span>고르지 않아도 계산돼요</span><button type="button" class="swp-tbtn" onclick="_swpPickApt()">단지 고르기</button></div>`;
+  document.getElementById('swpRef').innerHTML=ref
+    ?`<div class="swp-ref"><b>참고</b>${Number(ref.sqm)>0?`${Math.round(ref.sqm)}㎡(${Math.round(Number(ref.py)||0)}평) `:''}최근 ${Math.round(ref.n)}건 실거래 · 최저 ${ref.min.toFixed(2).replace(/\.?0+$/,'')}억 · 평균 ${ref.avg.toFixed(2).replace(/\.?0+$/,'')}억 · 최고 ${ref.max.toFixed(2).replace(/\.?0+$/,'')}억</div>`:'';
+  const fb=document.getElementById('swpFillAvg');if(fb)fb.disabled=!(ref&&ref.avg>0);
+  const c=_swpCalc(s);
+  const chip=document.getElementById('swpRegChip');if(chip)chip.textContent=c.region?(isRegFront(c.region,s.lawd)?'규제지역':'비규제지역'):'';
+  const dim=c.use?'':' dim';
+  let h=`<section class="swp-card" aria-labelledby="swpR1"><h2 class="swp-ct" id="swpR1">쓸 수 있는 돈</h2>`
+    +(c.use?'':`<p class="swp-help">흐린 줄은 새 집 잔금 때 반영하지 않아요.</p>`)
+    +`<div class="swp-tbl">`
+    +`<div class="swp-tr${dim}"><span>팔 가격</span><span class="v">${_swpWon(c.sell)}</span></div>`
+    +`<div class="swp-tr${dim}"><span>남은 대출 갚기</span><span class="v">−${_swpWon(c.debt)}</span></div>`
+    +`<div class="swp-tr${dim}"><span>파는 쪽 중개보수(법정 상한${c.sell?' '+_swpCommPct(c.sell):''})</span><span class="v">−${_swpWon(c.comm)}</span></div>`
+    +`<div class="swp-tr${dim}"><span>양도소득세${c.cgt?'':' · 입력 안 함'}</span><span class="v">−${_swpWon(c.cgt)}</span></div>`
+    +`<div class="swp-tr cash"><span>가진 현금</span><span class="v">+${_swpWon(c.cash)}</span></div>`
+    +`<div class="swp-tr sum"><span>쓸 수 있는 돈</span><span class="v">${c.avail<0?'−':''}${_swpWon(c.avail)}</span></div></div></section>`;
+  if(!c.buy){
+    h+=`<section class="swp-card"><p class="swp-gd">새 집 매수가를 넣으면 대출과 부족한 돈을 계산해요.</p></section>`;
+  } else {
+    const st=c.isMetro?'3.0':'0.75';
+    h+=`<section class="swp-card" aria-labelledby="swpR2"><h2 class="swp-ct" id="swpR2">새 집 대출 · 처분조건부 기준</h2>`
+      +`<div class="swp-ln${c.by==='ltv'?' on':''}"><span>담보 기준(LTV ${Math.round(c.ltv*100)}%)</span><span class="v">${_swpWon(c.lL)}</span></div>`
+      +`<div class="swp-ln${c.by==='cap'?' on':''}"><span>고가주택 한도</span><span class="v">${c.cap!=null?_swpWon(c.cap):'해당 없음'}</span></div>`
+      +`<div class="swp-ln${c.by==='inc'?' on':''}"><span>소득 기준(스트레스 DSR, 금리 +${st}%p 가정)</span><span class="v">${c.inc?_swpWon(c.dL):'연소득을 넣으면 계산해요'}</span></div>`
+      +`<div class="swp-ln fin"><span>최종 대출<small>${c.by==='inc'?'소득 기준으로 정해졌어요':c.by==='cap'?'고가주택 한도로 정해졌어요':'담보 기준으로 정해졌어요'}</small></span><span class="v">${_swpWon(c.fin)}</span></div>`
+      +`<div class="swp-ln"><span>월 상환 · 금리 ${(_loanBaseRate()*100).toFixed(1)}%, 30년 가정</span><span class="v">약 ${Math.round(c.mo).toLocaleString('ko-KR')}만</span></div></section>`;
+    const short=c.gap>0;
+    h+=`<section class="swp-card swp-gap${short?'':' ok'}" aria-labelledby="swpR3"><span class="swp-gl" id="swpR3">${short?'부족해요':'남아요'}</span><span class="swp-gn">${_swpWon(c.gap)}</span>`
+      +`<p class="swp-gd">${c.use?`매수가 ${_swpWon(c.buy)}에서 쓸 수 있는 돈 ${c.avail<0?'−':''}${_swpWon(c.avail)}과 대출 ${_swpWon(c.fin)}을 뺀 금액이에요.`:'지금 집이 팔리기 전 잔금이면 그만큼 다른 자금이 필요해요.'}</p>`
+      +`<p class="swp-help">사는 비용(취득세·중개보수 등)은 빼기 전이에요.</p>`
+      +`<div><button type="button" class="swp-btn2" onclick="_swpToCalc()">대출 계산에서 사는 비용까지 보기</button></div></section>`;
+  }
+  const dl=_swpDeadlines(s.bal),today=new Date();
+  if(dl){
+    const dd=d=>_dclDd(_dclDiff(d,today));
+    const src=(k,name,url)=>`<button type="button" class="swp-more" aria-expanded="${_swpSrcOpen[k]?'true':'false'}" aria-controls="swpSrc${k}" onclick="_swpMore('${k}')">근거 보기</button>`
+      +`<div class="swp-src" id="swpSrc${k}"${_swpSrcOpen[k]?'':' hidden'}><span>${E(name)} <i>· 2026-10-30 확인</i></span><a href="${E(url)}" target="_blank" rel="noopener noreferrer">원문 보기</a></div>`;
+    h+=`<section class="swp-card" aria-labelledby="swpR4"><h2 class="swp-ct" id="swpR4">기한</h2>`
+      +`<div class="swp-dl"><div class="swp-dh"><span>처분조건부 대출</span><span class="swp-lb off">공식 안내</span><span class="dd">${dd(dl.dispose)}</span></div>`
+      +`<div class="swp-dt">${_swpFmtFull(dl.dispose)}까지 지금 집 처분</div>`
+      +`<p class="swp-gd">대출 실행일(새 집 잔금일로 가정)부터 6개월. 어기면 대출이 회수돼요.</p>`
+      +src('d','금융위원회 가계대출 관리 강화 FAQ(2025.6.27) 7번','https://www.fsc.go.kr/po020201/84825')+`</div>`
+      +`<div class="swp-dl"><div class="swp-dh"><span>일시적 2주택 비과세</span><span class="swp-lb law">법령</span></div>`
+      +`<div class="swp-dt">${_swpFmtFull(dl.tmp3)}까지 팔면 비과세 특례 대상</div>`
+      +`<p class="swp-gd">새 집 취득일부터 3년. 두 집 모두 조정대상지역이면 2년(${_swpFmtFull(dl.tmp2)})이에요. 2026년 10월 1일 시행 기준이고, 적용 시점은 세무서와 확인해요.</p>`
+      +src('t','소득세법 시행령 제155조','https://www.law.go.kr/법령/'+encodeURIComponent('소득세법시행령')+'/'+encodeURIComponent('제155조'))+`</div>`
+      +`<div><button type="button" class="swp-btn2" onclick="_swpToDeal()">거래 체크리스트 매도인 보기</button></div></section>`;
+  } else {
+    h+=`<section class="swp-card"><h2 class="swp-ct">기한</h2><p class="swp-gd">새 집 잔금일을 넣으면 지금 집 처분 기한을 계산해요.</p></section>`;
+  }
+  out.innerHTML=h;
+  const lv=document.getElementById('swpLive');
+  if(lv){const t=c.buy?`${c.gap>0?'부족해요':'남아요'} ${_swpWon(c.gap)}`:'';clearTimeout(_swpLiveT);_swpLiveT=setTimeout(()=>{lv.textContent=t;},600);}
+}
+let _swpLiveT=0;
+function _swpCommPct(eok){const w=eok*10000;const r=w<5000?0.6:w<20000?0.5:w<90000?0.4:w<120000?0.5:w<150000?0.6:0.7;return r+'%';}
+function _swpInput(){
+  const s=_swpLoad();
+  _SWP_FIELDS.forEach(k=>{const el=document.getElementById('swp-'+k);if(el)s[k]=el.value;});
+  const w=document.getElementById('swp-wide'),g=document.getElementById('swp-sgg');
+  if(w&&w.value)s.wide=w.value;if(g&&g.value)s.sgg=g.value;
+  _swpSave(s);_swpRender();
+}
+function _swpWide(){const s=_swpLoad();const w=document.getElementById('swp-wide');s.wide=w?w.value:s.wide;s.sgg='';_swpSave(s);_swpRender();}
+function _swpUse(v){const s=_swpLoad();s.use=v==='n'?'n':'y';_swpSave(s);_swpRender();}
+function _swpMore(k){_swpSrcOpen[k]=!_swpSrcOpen[k];_swpRender();const b=document.querySelector(`#swpOut [aria-controls="swpSrc${k}"]`);if(b)b.focus();}
+function _swpFillAvg(){
+  const s=_swpLoad(),ref=s.apt&&s.apt.ref;if(!(ref&&Number.isFinite(ref.avg)&&ref.avg>0))return;
+  s.sell=String(+ref.avg.toFixed(2));_swpSave(s);_swpRender();
+  toast('최근 평균 실거래가를 넣었어요. 실제 팔 가격과 다를 수 있어요');
+}
+function _swpPickApt(){
+  sv('map');
+  toast('단지를 검색해 상세에서 \'지금 집으로 갈아타기 계산\'을 눌러 주세요');
+}
+// 대출 계산으로: 매수가·쓸 수 있는 돈(보유 현금)·연소득과 주택 보유 '무주택'(처분조건부는 무주택과 같은 한도 — 금융위 10·15 FAQ),
+//   지역 칩은 규제 판정대로. 사는 비용(취득세·중개보수)은 그 화면이 계산한다.
+function _swpToCalc(){
+  const s=_swpLoad(),c=_swpCalc(s);if(!c.buy)return;
+  sv('calc');
+  setTimeout(()=>{
+    const set=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v;};
+    set('c_b',c.buy.toFixed(2));set('c_c',Math.max(0,c.avail).toFixed(2));set('c_i',c.inc?String(c.inc):'');
+    const pick=(gid,label)=>{const ch=[...document.querySelectorAll(`#${gid} .chip`)].find(x=>x.textContent.trim()===label);if(ch)cp(ch,gid);};
+    pick('cc-h','무주택');
+    pick('cc-r',isRegFront(c.region,s.lawd)?'서울규제':(s.wide==='지방'?'지방':'비규제'));
+    if(typeof dc==='function')dc();
+    toast('처분조건부는 무주택과 같은 한도로 계산해요');
+  },180);
+}
+function _swpToDeal(){
+  const d=_dclLoad();d.r='s';_dclSave(d);_dclOpenSet=null;
+  sv('deal');
+}
+// 단지 상세 → '지금 집으로 갈아타기 계산': 상세의 최근 거래에서 대표 평형(_repAreaOf)만 골라 최저·평균·최고를 참고값으로 넘긴다.
+//   거래 이력이 없으면 참고값 없이 단지 이름만(가격을 지어내지 않는다).
+function goSwapFromCurrentDetail(){
+  const p=currentDetail;if(!p)return;
+  const tx=Array.isArray(p.txHistory)?p.txHistory:[];
+  const rep=_repAreaOf(tx);
+  const prices=tx.filter(t=>!rep||Math.round(Number(t.excluUseAr)||0)===rep.sqm).map(t=>Number(t.dealAmount)/10000).filter(x=>x>0);
+  const ref=prices.length?{sqm:rep?rep.sqm:0,py:rep?rep.py:0,n:prices.length,min:Math.min(...prices),max:Math.max(...prices),avg:prices.reduce((a,b)=>a+b,0)/prices.length}:null;
+  const s=_swpLoad(),same=s.apt&&s.apt.name===p.aptName;s.apt={name:String(p.aptName||''),area:p.area||'',ref};if(!same)s.sell='';_swpSave(s); // 다른 단지면 이전 팔 가격을 지운다
+  try{cDM();}catch(_){}
+  sv('swap');
 }
 
 // Phase B-3 (2026-05-01): clause + risk 통합 — 한 fetch 로 t2(리스크) + t3(특약) 동시 채움.
@@ -11757,6 +12072,7 @@ async function loadRegionMenu(){
     // 빈 응답을 그대로 채택하면 지역 선택기가 통째로 사라진다([[degraded-response-cached-at-edge]]).
     if(!Object.keys(next).length) throw new Error('빈 메뉴');
     REGION_MENU = next; _regionMenuLoaded = true;
+    try{const sw=document.getElementById('view-swap');if(sw&&getComputedStyle(sw).display!=='none')_swpRender();}catch(_){} // 갈아타기 계산: 대체 표(코드 없음) 판정을 코드로 다시
     const on = document.querySelector('#ch-r .chip.on');
     if(on){
       // REGION-SUB-RESTORE-2026-09-28 (Plan 125): [근본 원인] 이 콜백은 restoreSearchFromUrl()
@@ -12073,7 +12389,7 @@ document.addEventListener('DOMContentLoaded', () => {
       // 2026-10-18: 데스크톱 아래 띠를 없앴으므로 띠에만 있던 지역별 실거래·브리핑 링크와 사업자 정보도 여기 둔다
       + '<br><a href="/region" style="color:var(--acc);text-decoration:underline">지역별 실거래 데이터</a>'
       + ' · <a href="/briefing" style="color:var(--acc);text-decoration:underline">오늘의 브리핑</a>';
-    ['view-calc','view-clause','view-biz','view-deal','view-news','view-subs','view-report','view-guide'].forEach(id => {
+    ['view-calc','view-clause','view-biz','view-deal','view-swap','view-news','view-subs','view-report','view-guide'].forEach(id => {
       const v = document.getElementById(id);
       if (!v || v.querySelector('.view-legal-line')) return;
       const d = document.createElement('div');
@@ -12189,11 +12505,11 @@ function computePolicyLoan({ buy, income, isFirstBuyer, isNewlywed, hasNewborn, 
 }
 // 대출 계산들이 함께 쓰는 기준 금리: 시중 평균 주담대(한국은행, 받았을 때) 없으면 4% — dc() 의 기본값과 같은 규칙
 function _loanBaseRate(){ const r=Number(window._ecosMortgageRate); return (r>0&&r<20)?r/100:0.04; }
-function calcLTV(buy,cash,inc,mo,house,isF,region){
+function calcLTV(buy,cash,inc,mo,house,isF,region,lawdCd){
   // 2026-04-25 P0 핫픽스: regulations_snapshot 기반 매칭 (Bug #4 — LTV 오계산)
   // 기존: region==='서울'||region==='경기' → 일산·동두천도 규제, 광명·하남·의왕은 매칭 누락 가능
   // 개선: window.__REG_KW (snapshot 키워드) 로 정확 매칭. 미로드 시 fallback 보수적.
-  const isR=isRegFront(region),isLoc=region==='지방';
+  const isR=isRegFront(region,lawdCd),isLoc=region==='지방'; // lawdCd 는 선택(갈아타기 계산이 시군구 코드를 넘긴다)
   // P1 D 추가 (2026-04-25 감사 2-5): 처분조건부 = 무주택 LTV 적용 (6개월 내 기존 처분 약정)
   const isDispose = house === '1주택 (처분조건부)';
   let ltv=0,cap=Infinity,warn='';
@@ -12436,7 +12752,8 @@ const _NXT_IC = {
   share:'<circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" x2="15.42" y1="13.51" y2="17.49"/><line x1="15.41" x2="8.59" y1="6.51" y2="10.49"/>',
   card:'<path d="M10.3 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v10l-3.1-3.1a2 2 0 0 0-2.814.014L6 21"/><path d="m14 19 3 3v-5.5"/><path d="m17 22 3-3"/><circle cx="9" cy="9" r="2"/>',
   page:'<path d="M15 3h6v6"/><path d="M10 14 21 3"/><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>',
-  more:'<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>'
+  more:'<circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/>',
+  swap:'<path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/>'
 };
 function _nxtIc(k){ return `<svg class="nx-ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${_NXT_IC[k]||''}</svg>`; }
 // 청약 화면 시도 칩에 있는 시도만(칩 목록은 #subs-sido .chip[data-sido] 가 근거 — 없으면 '' → 버튼 숨김)
@@ -12473,6 +12790,7 @@ function _nxtItems(p){
     const nm = _fmtSgg(String(p.sigungu || '').trim()) || _sggFromArea(p.area);
     items.push({ k:'region', tier:'txt', l: (nm ? nm + ' ' : '') + '시장 요약', oc:'nxtOpenRegion()' });
   }
+  items.push({ k:'swap', tier:'txt', l:'지금 집으로 갈아타기 계산', oc:'goSwapFromCurrentDetail()' }); // SWAP-HELPER (Plan 155)
   items.push({ k:'ask', tier:'txt', l:'데이터 도우미에게 시세 묻기',
     oc:`askP('${encodeURIComponent(p.aptName).replace(/'/g,'%27')}','${p.avgPrice||0}','${encodeURIComponent(p.area||'').replace(/'/g,'%27')}');cDM()` });
   items.push({ k:'share', tier:'txt', l:'공유', oc:'shareCurrent()' });
@@ -12691,6 +13009,7 @@ const VIEW_DISPLAY={
   clause:{display:'flex', lp:false, rp:false},
   biz:   {display:'flex', lp:false, rp:false},
   deal:  {display:'flex', lp:false, rp:false}, // DEAL-CHECKLIST-2026-10-30 (Plan 154) 거래 체크리스트
+  swap:  {display:'flex', lp:false, rp:false}, // SWAP-HELPER-2026-10-30 (Plan 155) 갈아타기 계산
   news:  {display:'flex', lp:false, rp:false},
   subs:  {display:'flex', lp:false, rp:false},
   guide: {display:'flex', lp:false, rp:false},
@@ -13319,7 +13638,7 @@ function sv(v,btn){
   // "도구 ▾" 드롭다운 버튼 — 도구 뷰(특약·청약·대출계산) 활성 시 하이라이트 + 탭 전환 시 메뉴 닫기 (OOOOO-3: 뉴스·사용법 승격, calc 편입)
   try{
     const _toolBtn=document.getElementById('htabToolBtn');
-    if(_toolBtn)_toolBtn.classList.toggle('on',['clause','subs','calc','biz','deal','guide'].includes(v));
+    if(_toolBtn)_toolBtn.classList.toggle('on',['clause','subs','calc','biz','deal','swap','guide'].includes(v));
     closeToolMenu();
   }catch(_){}
   // 모바일 하단 탭 활성화
@@ -13329,12 +13648,13 @@ function sv(v,btn){
   //   시트 안 항목의 체크(aria-current)도 같은 기준으로 매번 재계산.
   try{
     const _bnavTools=document.getElementById('bnavToolsBtn');
-    if(_bnavTools)_bnavTools.classList.toggle('on',['clause','subs','calc','biz','deal','guide'].includes(v));
+    if(_bnavTools)_bnavTools.classList.toggle('on',['clause','subs','calc','biz','deal','swap','guide'].includes(v));
     document.querySelectorAll('#toolsSheet .ts-item[data-tool]').forEach(b=>b.setAttribute('aria-current',b.dataset.tool===v?'true':'false'));
   }catch(_){}
   _wizPlace(v); // Sprint PPPPP: 위저드 코어를 뷰에 맞는 슬롯으로
   _hpApply(v); // HOME-PANEL-2026-10-18 (Plan 151): 지도 화면 왼쪽 패널·검색 띠
-  if(v==='deal'){try{_dclOpen();}catch(_){}} // DEAL-CHECKLIST (Plan 154): 열 때 타임라인 날짜 가져오기 + 렌더
+  if(v==='deal'){try{_dclOpen();}catch(_){}}
+  if(v==='swap'){try{_swpRender();}catch(_){}} // SWAP-HELPER (Plan 155) // DEAL-CHECKLIST (Plan 154): 열 때 타임라인 날짜 가져오기 + 렌더
   if(v==='list')renderListGrid();
   if(v==='news' && !document.getElementById('newsList').dataset.loaded){loadNews();}
   // BRIEFING-HOME-2026-08-19: 브리핑 헤더는 진입마다 갱신(날짜·D-day 신선도) — 실패는 조용히

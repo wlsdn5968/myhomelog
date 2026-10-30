@@ -109,7 +109,7 @@ test('⑤ 화면 연결: 뷰 등록, 헤더 도구 메뉴·모바일 도구 시�
   assert.match(html, /deal: {2}\{display:'flex', lp:false, rp:false\}/);
   assert.match(html, /<button class="htab" onclick="sv\('deal',this\)">/);
   assert.match(html, /class="ts-item" data-tool="deal"/);
-  assert.equal((html.match(/\['clause','subs','calc','biz','deal','guide'\]\.includes\(v\)/g) || []).length, 2);
+  assert.equal((html.match(/\['clause','subs','calc','biz','deal','swap','guide'\]\.includes\(v\)/g) || []).length, 2);
   assert.match(html, /if\(v==='deal'\)\{try\{_dclOpen\(\);\}catch\(_\)\{\}\}/);
   assert.match(html, /onclick="sv\('deal'\)">거래 체크리스트<\/button>/);
   assert.match(html, /onclick="sv\('deal'\)">단계별 거래 체크리스트 보기<\/button>/);
@@ -124,7 +124,7 @@ test('⑤ 화면 연결: 뷰 등록, 헤더 도구 메뉴·모바일 도구 시�
   // 데스크톱 단계 머리는 버튼이 아니다(접히지 않으니 aria-expanded 를 주지 않는다)
   assert.match(fnSrc('_dclRender'), /<\$\{mob\?'button':'div'\} class="dcl-sh"/);
   // 다른 도구 화면과 같은 법적 고지 줄
-  assert.match(html, /\['view-calc','view-clause','view-biz','view-deal','view-news','view-subs','view-report','view-guide'\]\.forEach\(/);
+  assert.match(html, /\['view-calc','view-clause','view-biz','view-deal','view-swap','view-news','view-subs','view-report','view-guide'\]\.forEach\(/);
   // 규제 요약(비뷰 버튼)은 도구 메뉴 마지막 유지
   const menu = html.slice(html.indexOf('id="htabToolMenu"'), html.indexOf('</div>', html.indexOf('openRegSummary()" title=')));
   assert.ok(menu.indexOf("sv('deal',this)") < menu.indexOf('openRegSummary()'));

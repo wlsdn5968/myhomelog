@@ -103,11 +103,11 @@ test('_nxtHtml — 제목·주 행동 띠·보조 4·텍스트 5·푸터가 사�
   const labels = [...out.matchAll(/<span class="nx-l">([^<]*)<\/span>/g)].map((m) => m[1]);
   assert.deepEqual(labels, [
     '비교에 담기', '관심 추가', '특약 초안 만들기', '서울 청약 일정 보기',
-    '강남구 시장 요약', '데이터 도우미에게 시세 묻기', '공유', '실거래 카드 저장', '단지 페이지 열기',
+    '강남구 시장 요약', '지금 집으로 갈아타기 계산', '데이터 도우미에게 시세 묻기', '공유', '실거래 카드 저장', '단지 페이지 열기',
   ]);
   // 보조 4(.nx-b) 와 텍스트 5(.nx-t) 의 구분
   assert.equal((out.match(/class="nx-b[ "]/g) || []).length, 4);
-  assert.equal((out.match(/class="nx-t[ "]/g) || []).length, 5);
+  assert.equal((out.match(/class="nx-t[ "]/g) || []).length, 6); // Plan 155: 지금 집으로 갈아타기 계산
   assert.ok(out.includes('매수·매도 추천이 아니에요. 출처 국토교통부 실거래가'));
   assert.ok(out.includes('최근 거래 2026.10.02'));
   assert.ok(out.includes('<span class="nx-n">새 탭</span>'));
@@ -315,7 +315,7 @@ test('모바일 — 더보기 시트의 행 순서가 사양과 같고, 하단 �
   const labels = [...els.dmNxtRows.innerHTML.matchAll(/<span class="nx-l">([^<]*)<\/span>/g)].map((m) => m[1]);
   assert.deepEqual(labels, [
     '비교에 담기', '관심 추가', '특약 초안 만들기', '서울 청약 일정 보기', '강남구 시장 요약',
-    '데이터 도우미에게 시세 묻기', '공유', '실거래 카드 저장', '단지 페이지 열기',
+    '지금 집으로 갈아타기 계산', '데이터 도우미에게 시세 묻기', '공유', '실거래 카드 저장', '단지 페이지 열기',
   ], '더보기 시트 순서가 사양과 다르다');
   assert.ok(els.dmNxtRows.innerHTML.includes('onclick="closeDmNxtSheet(true);nxtToggleCmp()"'), '행을 누르면 시트를 닫고 동작을 부른다');
   assert.ok(els.dmNxtSheetF.innerHTML.includes('평균가로 대출 계산') && els.dmNxtSheetF.innerHTML.includes('매수·매도 추천이 아니에요'));
@@ -362,5 +362,5 @@ test('새 영역 마크업 — 이모지·화살표·줄표 나열 없이 Lucide
   const { ctx } = makeCtx();
   const out = ctx._nxtHtml(FULL());
   assert.ok(!/[→←↗↘▶▲▼✓✕]|—|–|\p{Extended_Pictographic}/u.test(out.replace(/<svg[\s\S]*?<\/svg>/g, '')), '화살표·줄표·이모지가 있다');
-  assert.equal((out.match(/<svg class="nx-ic"[^>]*aria-hidden="true"/g) || []).length, 10, '버튼 9개와 주 버튼의 아이콘이 모두 장식(aria-hidden)이어야 한다');
+  assert.equal((out.match(/<svg class="nx-ic"[^>]*aria-hidden="true"/g) || []).length, 11, '버튼 10개와 주 버튼의 아이콘이 모두 장식(aria-hidden)이어야 한다');
 });

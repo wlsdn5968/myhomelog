@@ -118,7 +118,7 @@ test('index.html — 도구▾ 메뉴와 모바일 도구 시트에 복비 계�
   assert.match(html, /data-tool="biz"[^>]*onclick="closeToolsSheet\(\);sv\('biz',this\)"/);
   assert.match(html, /data-tool="guide"[^>]*onclick="closeToolsSheet\(\);sv\('guide',this\)"/);
   // Plan 154: 거래 체크리스트(deal)도 도구 뷰
-  assert.equal((html.match(/\['clause','subs','calc','biz','deal','guide'\]\.includes\(v\)/g) || []).length, 2, '데스크톱 도구 버튼·모바일 도구 탭 하이라이트 목록 둘 다 biz·deal·guide 를 포함해야 한다');
+  assert.equal((html.match(/\['clause','subs','calc','biz','deal','swap','guide'\]\.includes\(v\)/g) || []).length, 2, '데스크톱 도구 버튼·모바일 도구 탭 하이라이트 목록 둘 다 biz·deal·guide 를 포함해야 한다');
   // htabOrder 는 7개 — 새 .htab 두 개는 인덱스 밖이라 항상 off 다.
   assert.match(html, /const htabOrder=\['news','map','list','report','clause','subs','calc'\];/);
 });
