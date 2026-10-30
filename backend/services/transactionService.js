@@ -100,6 +100,79 @@ async function getTransactionsFromDb(lawdCd, dealYm) {
 }
 
 /**
+ * TX-HIST-REGION-2026-10-30 (Plan 170): 원본 창(16개월) 밖 달을 이력에서 읽는다.
+ *   [근본 원인 — 운영 로그 2026-10-30 08:03Z] 비교 24개월이 2024-11~2025-06 을 getTransactions 로 읽으면
+ *   원본에 ok 기록이 없어 국토부 API 로 갔고 8개월이 전부 실패했다 → '최근 24개월' 아래 실제 약 16개월.
+ *   [대상] 그 (지역, 월)이 이력에 있다고 기록된 경우만 — molit_ingest_runs 'archived'(107c 로 옮긴 달) 또는
+ *   molit_hist_runs(이력 backfill 이 채운 달). 그 밖(아직 적재 안 된 최신 달 등)은 null → 기존 API 경로 그대로.
+ *   [형태] getTransactionsFromDb 와 같은 행. 이력은 협폭(apt_seq·deal_date·㎡×100·금액·층)이라 이름류는
+ *   molit_apt_dim(lawd_cd 로 지역 단지 목록)에서 채운다 — getTransactionsByAptSeqMerged 와 같은 관행.
+ *   apt_seq IN 목록은 URL 에 실리므로 100개씩(molitHistBackfill SEQ_CHUNK 와 같다).
+ *   실측(2026-10-30): 지역당 dim 최대 679행, 강남구 한 달 조인 105ms — 새 인덱스 없이 충분.
+ */
+async function getTransactionsFromHist(lawdCd, dealYm) {
+  const admin = dbClient();
+  if (!admin) return null;
+  try {
+    const [arch, hr] = await Promise.all([
+      admin.from('molit_ingest_runs').select('deal_ym').eq('lawd_cd', lawdCd).eq('deal_ym', dealYm).eq('status', 'archived').limit(1),
+      admin.from('molit_hist_runs').select('deal_ym').eq('lawd_cd', lawdCd).eq('deal_ym', dealYm).limit(1),
+    ]);
+    if (arch.error) throw arch.error;
+    if (hr.error) throw hr.error;
+    if (!(arch.data && arch.data.length) && !(hr.data && hr.data.length)) return null; // 이력에 없는 달 → 기존 경로
+
+    const dims = [];
+    for (let from = 0; from <= 5000; from += 1000) {
+      const { data, error } = await admin.from('molit_apt_dim')
+        .select('apt_seq, apt_name, sigungu, umd_nm, build_year, jibun')
+        .eq('lawd_cd', lawdCd).order('apt_seq').range(from, from + 999);
+      if (error) throw error;
+      if (data && data.length) dims.push(...data);
+      if (!data || data.length < 1000) break;
+    }
+    if (!dims.length) return null;
+    const dimBySeq = new Map(dims.map(d => [d.apt_seq, d]));
+
+    const dy = parseInt(dealYm.slice(0, 4), 10);
+    const dm = parseInt(dealYm.slice(4, 6), 10);
+    const _mFrom = `${dy}-${String(dm).padStart(2, '0')}-01`;
+    const _mNext = dm === 12 ? `${dy + 1}-01-01` : `${dy}-${String(dm + 1).padStart(2, '0')}-01`;
+    const seqs = [...dimBySeq.keys()];
+    const chunks = [];
+    for (let i = 0; i < seqs.length; i += 100) chunks.push(seqs.slice(i, i + 100));
+    const pages = await Promise.all(chunks.map(async (c) => {
+      const { data, error } = await admin.from('molit_transactions_hist')
+        .select('apt_seq, deal_date, exclu_use_ar, deal_amount, floor')
+        .in('apt_seq', c).gte('deal_date', _mFrom).lt('deal_date', _mNext)
+        .limit(5000); // 단지 100곳 한 달 — 지역 한 달 최대 실측(화성동탄 1,905건)보다 넉넉
+      if (error) throw error;
+      return data || [];
+    }));
+    return pages.flat().map((r) => {
+      const d = dimBySeq.get(r.apt_seq) || {};
+      const [y, m, day] = String(r.deal_date || '').split('-').map(Number);
+      return {
+        aptName: d.apt_name,
+        sigungu: d.sigungu || '',
+        umdNm: d.umd_nm || '',
+        excluUseAr: (Number(r.exclu_use_ar) || 0) / 100, // ㎡×100 → ㎡ (20260916_molit_hist.sql)
+        buildYear: d.build_year || 0,
+        floor: r.floor || 0,
+        dealYear: y, dealMonth: m, dealDay: day,
+        dealAmount: Number(r.deal_amount) || 0,
+        lawdCd,
+        aptSeq: r.apt_seq || '',
+        jibun: d.jibun || '',
+      };
+    }).sort((a, b) => (b.dealDay - a.dealDay));
+  } catch (e) {
+    logger.warn({ err: e.message, lawdCd, dealYm }, '이력 월 조회 실패 → API fallback');
+    return null;
+  }
+}
+
+/**
  * REC-PERF-2026-07-10 (Sprint EEEE): 지역 최근 N개월 거래를 단일 쿼리로 — recommend 전용.
  *   [근본원인 실측] recommend 콜드 22.4s 중 ~10.8s가 "지역 집계" 단계. 기존 경로는
  *   getTransactionsByApt(lawd,'') → 월별 getTransactions × 6 → 각 월마다 ingest-run 확인 1 + 데이터 1
@@ -304,6 +377,11 @@ async function getTransactions(lawdCd, dealYm) {
       return fromDb;
     }
     // fromDb === null (미ingest 또는 실패) 또는 빈 배열 → API fallback 으로 진행
+    // Plan 170: 원본 창 밖(이력으로 옮긴 달·이력 backfill 달)은 이력에서 — 이력에 기록된 달이면 0건도 답이다
+    if (fromDb === null) {
+      const fromHist = await getTransactionsFromHist(lawdCd, dealYm);
+      if (fromHist) { cache.set(cacheKey, fromHist, 21600); return fromHist; }
+    }
   }
 
   if (isMolitKeyMissing()) {
@@ -947,4 +1025,4 @@ async function getTransactionsByAptSeqMerged(aptSeq, monthsBack = 24) {
   });
 }
 
-module.exports = { _filterExactAlias, _mergeAliasTx, getTransactions, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };
+module.exports = { _filterExactAlias, _mergeAliasTx, getTransactions, getTransactionsFromHist, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };
