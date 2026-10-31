@@ -58,7 +58,13 @@ async function countRows(table) {
 }
 
 // 적대 리뷰 2026-10-30: 카카오 OAuth 토큰이 로컬 백업에 평문으로 남았다 — 재연결로 다시 받을 수 있으므로 백업에서 뺀다.
-const SECRET_COLUMNS = { kakao_notify_tokens: ['access_token', 'refresh_token'] };
+// Plan 183: 결제·푸시 키도 재등록·재구독으로 다시 받는다 — 백업에 두지 않는다.
+const SECRET_COLUMNS = {
+  kakao_notify_tokens: ['access_token', 'refresh_token'],
+  push_subscriptions: ['p256dh', 'auth'],
+  user_billing: ['toss_billing_key', 'toss_customer_key'],
+  payments: ['toss_payment_key', 'raw_response'],
+};
 function _omitSecrets(table, row) {
   const cols = SECRET_COLUMNS[table];
   if (!cols) return row;
