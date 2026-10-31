@@ -86,6 +86,10 @@ test('배선: 거래 병합·지도·자동완성·인기·보고서·추천·�
   assert.match(s, /if \(p\.year && Number\(x\.build_year\) !== p\.year\) continue;/);
   assert.match(s, /const masterEmpty = out\.filter\(r => r\.source === 'master' && !r\.buildYear && r\.lawdCd && r\.umdNm && !r\._aliasChecked\);/);
   assert.match(s, /for \(const r of out\) \{ delete r\._aliases; delete r\._aliasChecked; \}/, '내부 필드가 응답에 나가면 안 된다');
+  // Plan 181: 보충 조회 실패는 열화 응답(캐시 금지)으로 알린다
+  assert.match(s, /const \{ data: _ix, error: _ixErr \} = await _softQuery\(/);
+  assert.match(s, /if \(_ixErr\) _enrichFailed = true;/);
+  assert.match(s, /const _degradedOut = _degraded \|\| _enrichFailed;/);
   assert.match(s, /if \(p\.year\) \(aliasYearToMaster\[/);
   assert.match(s, /const _ys = aliasYearToMaster\[`\$\{c\.apt_name\}\|\$\{c\.umd_nm\}`\];/);
   assert.match(s, /const st = _mStats\[_pa\.year \? /);

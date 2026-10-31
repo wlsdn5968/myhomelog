@@ -670,12 +670,14 @@ router.get('/apt', async (req, res) => {
     // ALIAS-YEAR-2026-10-30 (Plan 178): 별칭이 있는 공식 단지는 아래 이름 조각 맞추기 대신 별칭으로 정확히 센다. 조각 맞추기는 같은 동의
     //   다른 단지 거래까지 더했다(운영 실측: "시흥능곡우남퍼스트빌2차" 가 준공 2008·47건 — 실제 2011·9건). 연도 별칭은 그 연도만.
     const _masterAliased = out.filter(r => r.source === 'master' && !r.buildYear && r.lawdCd && r.umdNm && r._aliases && r._aliases.length);
+    let _enrichFailed = false; // 보충 조회 실패 -> 열화 응답(캐시 금지, Plan 181)
     if (_masterAliased.length) {
       const _names = [...new Set(_masterAliased.flatMap(r => r._aliases.map(a => parseAlias(a).name)))];
-      const { data: _ix } = await _softQuery(admin.from('molit_apt_index')
+      const { data: _ix, error: _ixErr } = await _softQuery(admin.from('molit_apt_index')
         .select('apt_name, lawd_cd, umd_nm, build_year, recent_deal_date, deal_count')
         .in('apt_name', _names).in('lawd_cd', [...new Set(_masterAliased.map(r => r.lawdCd))])
         .limit(1000).abortSignal(AbortSignal.timeout(ENRICH_ABORT_MS)));
+      if (_ixErr) _enrichFailed = true;
       for (const m of _masterAliased) {
         let n = 0, top = null, recent = null;
         for (const a of m._aliases) {
@@ -786,8 +788,9 @@ router.get('/apt', async (req, res) => {
     //   ⚠ **프론트가 이 필드를 실제로 소비한다**(frontend/index.html 의 `j.degraded` → "⚠ 일부 데이터를
     //   불러오지 못해 결과가 불완전해요" 배너, Sprint NNNNNNN-3). 이 필드를 지우면 사용자 고지가
     //   조용히 사라진다 — 관측용이라고만 보고 정리하지 말 것.
-    const payload = _degraded ? { results: out, query: q, degraded: true } : { results: out, query: q };
-    if (_degraded) {
+    const _degradedOut = _degraded || _enrichFailed;
+    const payload = _degradedOut ? { results: out, query: q, degraded: true } : { results: out, query: q };
+    if (_degradedOut) {
       // 강등 응답은 서버 캐시·CDN 어디에도 굳히지 않는다 — 3초 타임아웃 한 번이 10분(+SWR 1시간)
       //   동안 전 사용자에게 반쪽 결과를 고정시키는 것을 막는다. 다음 요청이 정상 경로를 다시 탄다.
       res.set('Cache-Control', 'no-store');
