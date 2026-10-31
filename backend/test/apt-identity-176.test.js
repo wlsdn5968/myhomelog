@@ -97,7 +97,8 @@ test('자동완성·지도: 별칭 묶기와 거래 많은 순 핀 배선', () =
   assert.match(s, /const mergeKey = _canon \? `\$\{base\}\|\$\{row\.sigungu\}\|\$\{row\.umd_nm\}\|K`/);
   assert.match(s, /displayName: grp\.canon \|\| displayAptName/);
   assert.match(s, /admin\.rpc\('geocache_in_bounds'/);
-  assert.doesNotMatch(s.slice(s.indexOf("router.get('/in-bounds'"), s.indexOf("router.get('/in-bounds'") + 4000), /\.from\('apt_geocache'\)\s*\.select\('apt_name, sigungu, umd_nm, lat, lng, apt_key, place_name'\)/, '정렬 없는 limit 조회가 돌아왔다');
+  // Plan 185: 공식 단지 키(kapt:) 좌표를 더 읽는 조회는 허용(같은 열 목록) — 막는 것은 이름 좌표를 정렬 없이 범위로만 자르던 옛 모양.
+  assert.doesNotMatch(s.slice(s.indexOf("router.get('/in-bounds'"), s.indexOf("router.get('/in-bounds'") + 6000), /\.from\('apt_geocache'\)\s*\.select\('apt_name, sigungu, umd_nm, lat, lng, apt_key, place_name'\)\s*\.gte\(/, '정렬 없는 limit 조회가 돌아왔다');
   const sql = read('../../supabase/migrations/20261030_geocache_in_bounds.sql');
   assert.match(sql, /ORDER BY coalesce\(s\.dc, 0\) DESC, g\.apt_key/);
   assert.match(sql, /REVOKE ALL ON FUNCTION public\.geocache_in_bounds[\s\S]*FROM PUBLIC, anon, authenticated;/);

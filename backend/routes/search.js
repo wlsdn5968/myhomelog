@@ -992,11 +992,25 @@ router.get('/in-bounds', async (req, res) => {
     // PIN-ORDER-2026-10-30 (Plan 176 C): 예전엔 정렬 없이 limit(50) — 넓은 영역에서 어떤 단지가 보일지 무작위였다
     //   (운영 실측: 공릉·하계 일대 쓸 수 있는 좌표 261건 중 50건만 읽혀 공릉풍림아이원 누락). 이제 DB 함수가 신고 이름 좌표를
     //   최근 거래 수 내림차순으로 준다(kakao-x 제외는 함수 안). KAPT 본체 좌표(kapt:)는 아래에서 별칭으로 찾은 단지만 따로 읽는다.
-    const { data: coords, error } = await admin.rpc('geocache_in_bounds', {
+    const { data: _nameCoords, error } = await admin.rpc('geocache_in_bounds', {
       p_south: south, p_west: west, p_north: north, p_east: east, p_limit: limit,
     });
     if (error) throw error;
-    if (!coords?.length) return res.json({ results: [] });
+    // KAPT-PIN-2026-10-31 (Plan 185, 운영 실측): 공식 단지 이름과 신고 이름이 같은 단지(헬리오시티·잠실엘스·리센츠·파크리오 등)는
+    //   좌표가 공식 단지 키(kapt:) 한 행뿐이다 — 좌표 표의 (이름·시군구·동) 유일 제약 때문에 신고 이름 키(name:) 행을 따로 둘 수 없고,
+    //   좌표 작업은 그 kapt: 행을 재사용해 "찾음"으로 센다(GEO-KEY-MERGE). 지도는 name: 만 읽어 이 단지들에 핀이 없었다
+    //   (2026-10-31: 최근 180일 거래가 있는데 핀 없는 신고 이름 192개 중 161개, 색인 거래 13,844건). 영역 안의 kapt: 좌표도
+    //   (시군구·동이 있는 것만) 이름 좌표 뒤에 붙인다 — 뒤에 둬야 별칭 묶음이 먼저 만들어진다. 거래가 없으면 아래에서 걸러진다.
+    const { data: _kaptCoords, error: _kErr } = await admin.from('apt_geocache')
+      .select('apt_name, sigungu, umd_nm, lat, lng, apt_key, place_name')
+      .like('apt_key', 'kapt:%').neq('source', 'kakao-x')
+      .not('sigungu', 'is', null).not('umd_nm', 'is', null)
+      .gte('lat', south).lte('lat', north).gte('lng', west).lte('lng', east)
+      .order('apt_key', { ascending: true }).limit(1000);
+    if (_kErr) throw _kErr;
+    const _haveCombo = new Set((_nameCoords || []).map(c => `${c.apt_name}|${c.sigungu}|${c.umd_nm}`));
+    const coords = [...(_nameCoords || []), ...(_kaptCoords || []).filter(c => !_haveCombo.has(`${c.apt_name}|${c.sigungu}|${c.umd_nm}`))];
+    if (!coords.length) return res.json({ results: [] });
 
     // 단지별 최근 거래 평균가 fetch
     const names = [...new Set(coords.map(c => c.apt_name))];
@@ -1239,7 +1253,9 @@ router.get('/in-bounds', async (req, res) => {
         source: g.source,
         ...(g._mergedNames ? { mergedNames: g._mergedNames } : {}),
       };
-    }).filter(Boolean);
+    }).filter(Boolean)
+      // KAPT-PIN-2026-10-31: 공식 단지 좌표를 더한 만큼 넓은 영역에서 핀이 늘 수 있다 — 거래 많은 순 limit 개(예전 DB 함수 상한과 같은 의미).
+      .sort((a, b) => (b.dealCount || 0) - (a.dealCount || 0)).slice(0, limit);
     res.json({ results: out, count: out.length });
   } catch (e) {
     logger.warn({ err: e.message }, '영역 검색 실패');
