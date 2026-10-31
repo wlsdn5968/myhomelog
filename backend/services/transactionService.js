@@ -505,6 +505,27 @@ async function getTransactions(lawdCd, dealYm) {
  *         활성단지 n>=8 충족률 32% 에 그쳐(12개월=54%) 룰을 못 지킴 → 12개월 옵션 필요.
  *   하위호환: 미전달 호출자는 6개월 유지(회귀 0). cacheKey 에 monthsBack 포함해 6/12 분리 캐시.
  */
+// 단지 이름 → 신고 이름 일치 판정(getTransactionsByApt 의 필터 그대로 — Plan 185 에서 함수로 떼어 지도 핀 합치기 안전 판정에도 쓴다).
+function aptNameMatcher(aptName) {
+  const qStripped = String(aptName).replace(/\s/g, '');
+  const qBase = baseAptName(aptName).replace(/\s/g, '');
+  return (raw) => {
+    const rawName = String(raw || '');
+    const rawStripped = rawName.replace(/\s/g, '');
+    const rawBase = baseAptName(rawName).replace(/\s/g, '');
+    // 1) 양방향 contains (raw ↔ query, base 양쪽)
+    if (rawStripped.includes(qStripped)) return true;
+    if (qStripped.length >= 3 && qStripped.includes(rawStripped) && rawStripped.length >= 3) return true;
+    if (rawBase.includes(qBase) && qBase.length >= 3) return true;
+    if (qBase.includes(rawBase) && rawBase.length >= 3) return true;
+    // 2) LCS insertion (서강쌍용예가↔서강예가 같이 builder/지역명 중간 삽입 case)
+    //    Sprint Z+ (2026-05-13) — Sprint T 의 KAPT-LOOKUP 알고리즘과 동일.
+    //    sigungu 안에서만 적용되니 false-positive 위험 미미.
+    if (isInsertionMatch(aptName, rawName)) return true;
+    return false;
+  };
+}
+
 async function getTransactionsByApt(lawdCd, aptName, monthsBack = 6) {
   if (isMolitKeyMissing()) {
     const err = new Error('국토부 실거래가 API 키 미설정');
@@ -550,23 +571,8 @@ async function getTransactionsByApt(lawdCd, aptName, monthsBack = 6) {
   //     - normalize 후 길이 >= 3 만 매칭 (너무 짧은 단지명 차단)
   let filtered = flat;
   if (aptName) {
-    const qStripped = String(aptName).replace(/\s/g, '');
-    const qBase = baseAptName(aptName).replace(/\s/g, '');
-    filtered = flat.filter(t => {
-      const rawName = String(t.aptName || '');
-      const rawStripped = rawName.replace(/\s/g, '');
-      const rawBase = baseAptName(rawName).replace(/\s/g, '');
-      // 1) 양방향 contains (raw ↔ query, base 양쪽)
-      if (rawStripped.includes(qStripped)) return true;
-      if (qStripped.length >= 3 && qStripped.includes(rawStripped) && rawStripped.length >= 3) return true;
-      if (rawBase.includes(qBase) && qBase.length >= 3) return true;
-      if (qBase.includes(rawBase) && rawBase.length >= 3) return true;
-      // 2) LCS insertion (서강쌍용예가↔서강예가 같이 builder/지역명 중간 삽입 case)
-      //    Sprint Z+ (2026-05-13) — Sprint T 의 KAPT-LOOKUP 알고리즘과 동일.
-      //    sigungu 안에서만 적용되니 false-positive 위험 미미.
-      if (isInsertionMatch(aptName, rawName)) return true;
-      return false;
-    });
+    const _matches = aptNameMatcher(aptName);
+    filtered = flat.filter(t => _matches(t.aptName));
   }
 
   const sorted = filtered.sort((a, b) => {
@@ -1064,4 +1070,4 @@ async function getTransactionsByAptSeqMerged(aptSeq, monthsBack = 24) {
   });
 }
 
-module.exports = { parseAlias, aliasCanon, _filterExactAlias, _mergeAliasTx, getTransactions, getTransactionsFromHist, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, getAliasCanonicalMapEach, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };
+module.exports = { parseAlias, aliasCanon, aptNameMatcher, _filterExactAlias, _mergeAliasTx, getTransactions, getTransactionsFromHist, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, getAliasCanonicalMapEach, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };

@@ -60,7 +60,7 @@ const { normalizeName, splitRegionName } = require('../utils/aptNameMatch');
 const { buildPopularResults, readPopularSnapshot, storePopularSnapshot, popularWindow } = require('../services/popularService');
 const { buildFacility } = require('../utils/buildFacility');
 
-const { getAliasCanonicalMapEach, aliasCanon, parseAlias } = require('../services/transactionService');
+const { getAliasCanonicalMapEach, aliasCanon, parseAlias, aptNameMatcher, LAWD_CODE_TO_NAME } = require('../services/transactionService');
 const router = express.Router();
 
 const ALLOWED_TYPES = new Set(['recommend', 'address', 'kapt', 'keyword']);
@@ -940,10 +940,59 @@ function _pinCore(n) { return String(n || '').replace(/\s+/g, '').replace(/[()]/
 //   핀 사이 최대 거리 100m 이하 47·200m 이하 49 → 150m 안만 합친다. 남는 핀 이름은 동 번호를 뗀 공통 이름(그 이름으로 거래 조회 시 모든 동 거래가 온다 — 실측).
 const _DONG_SUFFIX_RE = /\s*\(?[0-9][0-9,]*동\)?$/;
 function _dongStem(n) { const raw = String(n || ''); return _DONG_SUFFIX_RE.test(raw) ? raw.replace(_DONG_SUFFIX_RE, '').trim() : null; }
-// ⚠ 끝에 지번을 괄호로 단 이름("롯데캐슬(1057-0)"·"(1057-1)")은 일부러 합치지 않는다(Plan 185, 2026-10-31 실측): 합친 핀 이름을 뼈대("롯데캐슬")로
-//   바꾸면 상세의 이름 포함 조회가 같은 동의 다른 단지(수명산롯데캐슬 2008·롯데캐슬 2014)까지 끌어오고, 이름을 안 바꾸면 핀 건수와 상세 건수가 어긋난다.
-//   상세의 이름 조회 여러 곳(거래·추이·분석·가격 기록)이 합친 이름 목록을 함께 쓰게 된 뒤에 넣는다.
-function mergeNearDuplicateGroups(list) {
+// JIBUN-PIN-2026-10-31 (Plan 185): 끝에 지번이나 동 번호를 괄호로 단 신고 이름("백영쑥골마을(534-15)"·"(534-16)", "동궁리치웰문정(101)"·"(102)").
+//   운영 실측: 같은 동·같은 뼈대 이름 쌍 중 150m 안 27쌍. 합친 핀 이름은 뼈대가 되는데, 상세(거래·분석)는 이름 포함 조회라
+//   "롯데캐슬" 처럼 짧은 뼈대는 같은 동의 다른 단지(수명산롯데캐슬 2008·롯데캐슬 2014)까지 끌어온다.
+//   그래서 그 동의 신고 이름 전체(molit_apt_dim)를 상세와 같은 일치 함수(aptNameMatcher)로 대조해, 뼈대로 걸리는 이름이
+//   모두 같은 뼈대·같은 준공 연도일 때만 합친다(_jibunSafeStems). 괄호 숫자 1~2자리는 차수·단지일 수 있어(유림2차(1)·(2)는 공식상 다른 단지) 뺀다.
+const _JIBUN_SUFFIX_RE = /\s*\((?:[0-9]+-[0-9]+|[0-9]{3,})\)$/;
+function _jibunStem(n) { const raw = String(n || ''); return _JIBUN_SUFFIX_RE.test(raw) ? raw.replace(_JIBUN_SUFFIX_RE, '').trim() : null; }
+// SAFE-STEM (Plan 185 검토 반영): 동 번호 이름("롯데캐슬101동"·"롯데캐슬")도 같은 위험이 있어(재현: 핀 이름 "롯데캐슬" 로 합쳐짐) 같은 판정을 거친다.
+function _sibStem(n) { return _dongStem(n) || _jibunStem(n); }
+const _jibunKey = (g, core) => `${g.lawdCd}|${g.umdNm}|${core}|${Number(g.buildYear) || 0}`;
+const _SAFE_STEM_MAX_DONGS = 8; // 한 요청에서 신고 이름을 대조할 동 수 상한(넘는 동은 합치지 않는다)
+async function _jibunSafeStems(admin, list) {
+  const byKey = new Map();
+  for (const g of list) {
+    if (g.source === 'master' || !g.lawdCd || !g.umdNm || !g.buildYear) continue;
+    const sib = _sibStem(g.aptName);
+    const stem = sib || g.aptName;
+    const core = _pinCore(stem);
+    if (core.length < 3) continue;
+    const k = _jibunKey(g, core);
+    const e = byKey.get(k) || { lawdCd: g.lawdCd, umdNm: g.umdNm, stem, year: Number(g.buildYear), n: 0, suffixed: 0, deals: 0 };
+    e.n++; e.deals += Number(g.n) || 0; if (sib) { e.suffixed++; e.stem = stem; }
+    byKey.set(k, e);
+  }
+  const cands = [...byKey.entries()].filter(([, e]) => e.n >= 2 && e.suffixed >= 1);
+  const safe = new Set();
+  if (!cands.length) return safe;
+  // 상한을 넘으면 거래가 많은 동부터(같은 영역이면 같은 결과 — 조회 순서에 따라 핀이 합쳐졌다 갈라지지 않게)
+  const _dd = new Map();
+  for (const [, e] of cands) { const dk = `${e.lawdCd}|${e.umdNm}`; const x = _dd.get(dk) || { lawdCd: e.lawdCd, umdNm: e.umdNm, deals: 0 }; x.deals += e.deals; _dd.set(dk, x); }
+  const dongs = [..._dd.values()].sort((a, b) => b.deals - a.deals || (a.lawdCd + a.umdNm).localeCompare(b.lawdCd + b.umdNm)).slice(0, _SAFE_STEM_MAX_DONGS);
+  const [dims, masters] = await Promise.all([
+    Promise.all(dongs.map(e => admin.from('molit_apt_dim').select('apt_name, build_year')
+      .eq('lawd_cd', e.lawdCd).eq('umd_nm', e.umdNm).limit(1000))),
+    admin.from('apt_master').select('apt_name, sigungu').in('apt_name', [...new Set(cands.map(([, e]) => e.stem))]).limit(1000),
+  ]);
+  if (masters.error || dims.some(r => r.error)) return safe; // 판정 못 하면 합치지 않는다
+  const dimOf = new Map(dongs.map((e, i) => [`${e.lawdCd}|${e.umdNm}`, dims[i].data || []]));
+  for (const [k, e] of cands) {
+    // 상세 거래 조회(getTransactionsByAptInclAliases)는 같은 이름의 공식 단지 별칭부터 본다 — 그 함수와 같은 조건(LAWD_CODE_TO_NAME 시군구, 없으면 전체)으로 확인.
+    const _sig = LAWD_CODE_TO_NAME[e.lawdCd] || null;
+    if ((masters.data || []).some(m => m.apt_name === e.stem && (!_sig || m.sigungu === _sig))) continue;
+    const rows = dimOf.get(`${e.lawdCd}|${e.umdNm}`);
+    if (!rows || rows.length >= 1000) continue;
+    const match = aptNameMatcher(e.stem);
+    const ok = rows.every(r => !match(r.apt_name)
+      || (_pinCore(_sibStem(r.apt_name) || r.apt_name) === _pinCore(e.stem) && Number(r.build_year) === e.year));
+    if (ok) safe.add(k);
+  }
+  return safe;
+}
+function mergeNearDuplicateGroups(list, opts = {}) {
+  const _jSafe = opts.jibunSafe || null;
   const arr = list.slice().sort((a, b) => (b.source === 'master') - (a.source === 'master') || (b.n || 0) - (a.n || 0));
   const kept = [];
   for (const g of arr) {
@@ -951,12 +1000,14 @@ function mergeNearDuplicateGroups(list) {
     const host = c.length >= 2 && kept.find(k => {
       if (k.umdNm !== g.umdNm) return false;
       // DONG-PIN-SYM-2026-10-31 (Plan 185): 한쪽만 동 번호가 붙은 경우("강산마을코오롱대성107동" 30건 ↔ "강산마을코오롱대성" 6건, 같은 좌표에 핀 둘)도 합친다.
-      //   예전엔 들어오는 쪽(거래 적은 쪽)에 번호가 있어야만 봤다.
-      const _gs = _dongStem(g.aptName), _ks = _dongStem(k.aptName);
-      const _gc = _pinCore(_gs || g.aptName), _kc = _pinCore(_ks || k.aptName);
-      if ((_gs || _ks) && _gc.length >= 3 && _gc === _kc && (!g.buildYear || !k.buildYear || g.buildYear === k.buildYear)) {
-        const dy0 = (k.lat - g.lat) * 111000, dx0 = (k.lng - g.lng) * 111000 * Math.cos(k.lat * Math.PI / 180);
-        if (Math.sqrt(dx0 * dx0 + dy0 * dy0) <= 150) return true;
+      //   예전엔 들어오는 쪽(거래 적은 쪽)에 번호가 있어야만 봤다. 동 번호·괄호 지번 모두 안전 판정(_jibunSafeStems)을 통과한 뼈대만 합친다.
+      const _gs = _sibStem(g.aptName), _ks = _sibStem(k.aptName);
+      if (_jSafe && (_gs || _ks) && g.buildYear && g.buildYear === k.buildYear && g.lawdCd === k.lawdCd) {
+        const _sc = _pinCore(_gs || g.aptName);
+        if (_sc === _pinCore(_ks || k.aptName) && _jSafe.has(_jibunKey(g, _sc))) {
+          const dy0 = (k.lat - g.lat) * 111000, dx0 = (k.lng - g.lng) * 111000 * Math.cos(k.lat * Math.PI / 180);
+          if (Math.sqrt(dx0 * dx0 + dy0 * dy0) <= 150) return true;
+        }
       }
       const kc = _pinCore(k.aptName);
       if (kc.replace(/[^0-9]/g, '') !== d) return false;
@@ -968,8 +1019,9 @@ function mergeNearDuplicateGroups(list) {
       return Math.sqrt(dx * dx + dy * dy) <= 80;
     });
     if (host) {
-      const _hs = _dongStem(host.aptName); // 동 이름끼리(또는 동 이름과 공통 이름이) 합쳐지면 핀 이름은 공통 이름(정식 단지 이름은 그대로)
-      if (_hs && host.source !== 'master' && _pinCore(_dongStem(g.aptName) || g.aptName) === _pinCore(_hs)) {
+      const _hs = _sibStem(host.aptName); // 동 번호·괄호 지번 이름끼리 합쳐지면 핀 이름은 뼈대(안전 판정 통과분만, 정식 단지 이름은 그대로)
+      if (_hs && _jSafe && host.source !== 'master' && _pinCore(_sibStem(g.aptName) || g.aptName) === _pinCore(_hs)
+        && _jSafe.has(_jibunKey(host, _pinCore(_hs)))) {
         (host._mergedNames = host._mergedNames || []).push(host.aptName); host.aptName = _hs;
       }
       host.sum += g.sum; host.n += g.n;
@@ -1241,7 +1293,9 @@ router.get('/in-bounds', async (req, res) => {
     }
     // PIN-DEDUP-2026-10-21: 같은 단지가 신고 이름이 바뀌어("일산파밀리에4단지"→"하이파크시티일산파밀리에4단지") 좌표 표에
     //   두 행으로 남으면 같은 자리에 핀이 두 개 찍혔다(2026-10-21 전수: 80m 안 같은 이름 계열 512쌍). 합쳐서 하나로 보인다.
-    const out = mergeNearDuplicateGroups(Object.values(groups).filter(g => g.n && g.sum)).map(g => {
+    const _pinList = Object.values(groups).filter(g => g.n && g.sum);
+    const _jibunSafe = await _jibunSafeStems(admin, _pinList).catch(() => new Set()); // JIBUN-PIN: 판정 실패면 합치지 않는다
+    const out = mergeNearDuplicateGroups(_pinList, { jibunSafe: _jibunSafe }).map(g => {
       if (!g.n || !g.sum) return null; // 거래 0건 → 제외
       const avg = +(g.sum / g.n / 10000).toFixed(2);
       if (!avg || avg <= 0) return null;
@@ -1514,4 +1568,5 @@ module.exports._softQuery = _softQuery;
 module.exports._isAbortErr = _isAbortErr;
 module.exports.MOLIT_ABORT_MS = MOLIT_ABORT_MS;
 module.exports._mergeNearDuplicateGroups = mergeNearDuplicateGroups;
+module.exports._jibunSafeStems = _jibunSafeStems;
 module.exports._fuzzyPatterns = fuzzyPatterns;
