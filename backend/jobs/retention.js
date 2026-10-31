@@ -265,7 +265,9 @@ async function runAttributionRetention(admin) {
     const cut = new Date(Date.now() - ATTRIBUTION_RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const { count, error } = await admin.from('visit_attribution')
       .delete({ count: 'exact' })
-      .lt('created_at', cut);
+      .lt('created_at', cut)
+      // Plan 184: daily_visit 은 화면의 "2026-10-20 이후 누적" 이 센다 — 지우면 누적이 줄어든다. 브라우저당 하루 1행이라 작다.
+      .neq('event', 'daily_visit');
     if (error) throw error;
     out.pruned = count ?? 0;
     logger.info({ ...out, retentionDays: ATTRIBUTION_RETENTION_DAYS }, 'retention: visit_attribution 정리');
