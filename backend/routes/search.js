@@ -940,6 +940,9 @@ function _pinCore(n) { return String(n || '').replace(/\s+/g, '').replace(/[()]/
 //   핀 사이 최대 거리 100m 이하 47·200m 이하 49 → 150m 안만 합친다. 남는 핀 이름은 동 번호를 뗀 공통 이름(그 이름으로 거래 조회 시 모든 동 거래가 온다 — 실측).
 const _DONG_SUFFIX_RE = /\s*\(?[0-9][0-9,]*동\)?$/;
 function _dongStem(n) { const raw = String(n || ''); return _DONG_SUFFIX_RE.test(raw) ? raw.replace(_DONG_SUFFIX_RE, '').trim() : null; }
+// ⚠ 끝에 지번을 괄호로 단 이름("롯데캐슬(1057-0)"·"(1057-1)")은 일부러 합치지 않는다(Plan 185, 2026-10-31 실측): 합친 핀 이름을 뼈대("롯데캐슬")로
+//   바꾸면 상세의 이름 포함 조회가 같은 동의 다른 단지(수명산롯데캐슬 2008·롯데캐슬 2014)까지 끌어오고, 이름을 안 바꾸면 핀 건수와 상세 건수가 어긋난다.
+//   상세의 이름 조회 여러 곳(거래·추이·분석·가격 기록)이 합친 이름 목록을 함께 쓰게 된 뒤에 넣는다.
 function mergeNearDuplicateGroups(list) {
   const arr = list.slice().sort((a, b) => (b.source === 'master') - (a.source === 'master') || (b.n || 0) - (a.n || 0));
   const kept = [];
@@ -947,8 +950,11 @@ function mergeNearDuplicateGroups(list) {
     const c = _pinCore(g.aptName), d = c.replace(/[^0-9]/g, '');
     const host = c.length >= 2 && kept.find(k => {
       if (k.umdNm !== g.umdNm) return false;
-      const _gs = _dongStem(g.aptName), _ks = _dongStem(k.aptName) || k.aptName;
-      if (_gs && _pinCore(_gs).length >= 3 && _pinCore(_gs) === _pinCore(_ks) && (!g.buildYear || !k.buildYear || g.buildYear === k.buildYear)) {
+      // DONG-PIN-SYM-2026-10-31 (Plan 185): 한쪽만 동 번호가 붙은 경우("강산마을코오롱대성107동" 30건 ↔ "강산마을코오롱대성" 6건, 같은 좌표에 핀 둘)도 합친다.
+      //   예전엔 들어오는 쪽(거래 적은 쪽)에 번호가 있어야만 봤다.
+      const _gs = _dongStem(g.aptName), _ks = _dongStem(k.aptName);
+      const _gc = _pinCore(_gs || g.aptName), _kc = _pinCore(_ks || k.aptName);
+      if ((_gs || _ks) && _gc.length >= 3 && _gc === _kc && (!g.buildYear || !k.buildYear || g.buildYear === k.buildYear)) {
         const dy0 = (k.lat - g.lat) * 111000, dx0 = (k.lng - g.lng) * 111000 * Math.cos(k.lat * Math.PI / 180);
         if (Math.sqrt(dx0 * dx0 + dy0 * dy0) <= 150) return true;
       }
@@ -962,8 +968,8 @@ function mergeNearDuplicateGroups(list) {
       return Math.sqrt(dx * dx + dy * dy) <= 80;
     });
     if (host) {
-      const _hs = _dongStem(host.aptName); // 동 이름끼리 합쳐지면 핀 이름은 공통 이름(정식 단지 이름은 그대로)
-      if (_hs && host.source !== 'master' && _dongStem(g.aptName) && _pinCore(_dongStem(g.aptName)) === _pinCore(_hs)) {
+      const _hs = _dongStem(host.aptName); // 동 이름끼리(또는 동 이름과 공통 이름이) 합쳐지면 핀 이름은 공통 이름(정식 단지 이름은 그대로)
+      if (_hs && host.source !== 'master' && _pinCore(_dongStem(g.aptName) || g.aptName) === _pinCore(_hs)) {
         (host._mergedNames = host._mergedNames || []).push(host.aptName); host.aptName = _hs;
       }
       host.sum += g.sum; host.n += g.n;
