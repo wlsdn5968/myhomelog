@@ -10,6 +10,7 @@
  * 4. 적용 기록 파일 20260926_apt_dim_recovery_queue.sql 이 없음
  *
  * 운영 값은 2026-09-28 pg_catalog 실측 — 운영 함수가 바뀌면 이 테스트도 같은 커밋에서 갱신.
+ * 단언 5(Plan 182)의 운영 값은 2026-10-30 pg_catalog 조회.
  */
 'use strict';
 const { test } = require('node:test');
@@ -107,4 +108,27 @@ test('migrations 단언 4 — 20260926_apt_dim_recovery_queue.sql 파일 존재 
   const content = fs.readFileSync(filePath, 'utf8');
   assert.match(content, /create table if not exists public\.apt_dim_recovery_queue/i,
     '적용 기록 파일에 apt_dim_recovery_queue 테이블 정의가 없다');
+});
+
+// ══════════════════════════════════════════════════════════════════════════
+// 단언 5 (Plan 182): 2026-10-18~30 운영 적용분이 기준 스키마에 있다
+// ══════════════════════════════════════════════════════════════════════════
+test('schema.sql 단언 5 — 10-18~30 운영 적용분(보관 365일·열 2·CHECK·권한 회수)', () => {
+  const schema = _schemaSrc();
+  const count = (s) => schema.split(s).length - 1;
+  assert.ok(count('hard_delete_attempts') >= 1, 'hard_delete_attempts 열이 없다');
+  assert.ok(count("INTERVAL '365 days'") >= 1, "INTERVAL '365 days' 가 없다");
+  assert.ok(count('chat_messages_content_len_chk') >= 1, 'chat_messages_content_len_chk 가 없다');
+  assert.ok(count('chat_messages_meta_size_chk') >= 1, 'chat_messages_meta_size_chk 가 없다');
+  assert.ok(count('chat_sessions_title_len_chk') >= 1, 'chat_sessions_title_len_chk 가 없다');
+  assert.ok(count('ai_feedback_comment_len_chk') >= 1, 'ai_feedback_comment_len_chk 가 없다');
+  assert.ok(count('ai_feedback_reply_preview_len_chk') >= 1, 'ai_feedback_reply_preview_len_chk 가 없다');
+  assert.ok(/apt_amenities add column if not exists name text/i.test(schema), 'apt_amenities.name 열이 없다');
+  assert.equal(count('REVOKE ALL ON FUNCTION public.geocache_in_bounds'), 1);
+  assert.ok(count('REVOKE ALL ON public.apt_alias_overrides FROM anon, authenticated') >= 1,
+    'apt_alias_overrides 권한 회수 문장이 없다');
+  const i = schema.lastIndexOf('FUNCTION public.prune_audit_log');
+  assert.ok(schema.slice(i, i + 1500).includes("'365 days'"), '마지막 prune_audit_log 정의가 365일이 아니다');
+  const j = schema.lastIndexOf('FUNCTION public.get_price_records(');
+  assert.ok(schema.slice(j, j + 4000).includes('win_max'), '마지막 get_price_records 가 기간 안 앞선 거래 판정판이 아니다');
 });
