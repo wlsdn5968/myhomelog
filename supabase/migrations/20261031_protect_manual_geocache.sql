@@ -8,7 +8,8 @@
 --     - source 를 manual 로 유지한 채 고치는 것(손 보정끼리의 수정)은 허용.
 --   [풀기] 운영자가 정말 manual 을 풀거나 지울 때만, 같은 트랜잭션에서:
 --     set local myhomelog.allow_manual_geocache_change = 'on';
--- [적용 상태] 2026-10-31 apply_migration 이 거절되어(declined) 운영자 Supabase SQL Editor 실행 대기. 적용 뒤 schema.sql 끝에 덧붙인다.
+-- [적용 상태] 2026-10-31 운영자 Supabase SQL Editor 실행 완료(apply_migration 은 거절됨). 확인: pg_trigger 에 trg_protect_manual_geocache(BEFORE DELETE OR UPDATE, 켜짐),
+--   함수 본문 공백 제거 md5 f367738fab5289d898c1246a475901e3 = 이 파일, anon·authenticated 실행 권한 없음. schema.sql 끝에 덧붙임.
 -- ============================================================================
 CREATE OR REPLACE FUNCTION public.protect_manual_geocache()
  RETURNS trigger

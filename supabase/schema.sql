@@ -1725,3 +1725,31 @@ GRANT EXECUTE ON FUNCTION public.geocache_in_bounds(double precision, double pre
 
 -- 20261030_alias_overrides_refresh_v8.sql:20 — 공개 키 접근 회수
 REVOKE ALL ON public.apt_alias_overrides FROM anon, authenticated;
+
+-- ── 2026-10-31 Plan 185: 손 보정 좌표(source=manual) DB 잠금 (운영자 SQL Editor 적용, 원본 supabase/migrations/20261031_protect_manual_geocache.sql) ──
+CREATE OR REPLACE FUNCTION public.protect_manual_geocache()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SET search_path TO 'public'
+AS $function$
+BEGIN
+  IF coalesce(current_setting('myhomelog.allow_manual_geocache_change', true), '') = 'on' THEN
+    IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+    RETURN NEW;
+  END IF;
+  IF TG_OP = 'DELETE' THEN
+    IF OLD.source = 'manual' THEN RETURN NULL; END IF;
+    RETURN OLD;
+  END IF;
+  IF OLD.source = 'manual' AND NEW.source IS DISTINCT FROM 'manual' THEN
+    RETURN NULL;
+  END IF;
+  RETURN NEW;
+END
+$function$;
+REVOKE ALL ON FUNCTION public.protect_manual_geocache() FROM PUBLIC, anon, authenticated;
+
+DROP TRIGGER IF EXISTS trg_protect_manual_geocache ON public.apt_geocache;
+CREATE TRIGGER trg_protect_manual_geocache
+  BEFORE UPDATE OR DELETE ON public.apt_geocache
+  FOR EACH ROW EXECUTE FUNCTION public.protect_manual_geocache();
