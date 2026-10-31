@@ -53,6 +53,8 @@ test('손 보정 좌표(source=manual)는 자동 저장이 덮어쓰지 않는�
   }
   const job = read('../jobs/geocacheBackfill.js');
   for (const m of job.matchAll(/\.in\('source', \[([^\]]*)\]\)|\.eq\('source', '([^']*)'\)/g)) {
+    // LOCK-CHECK-2026-10-31: 행 수만 세는 조회(head: true)는 대상 선택이 아니다.
+    if (/head: true \}\)\s*$/.test(job.slice(Math.max(0, m.index - 120), m.index))) continue;
     assert.doesNotMatch(m[0], /manual/, `일일 좌표 작업이 manual 행을 대상으로 고르면 안 된다: ${m[0]}`);
   }
 });

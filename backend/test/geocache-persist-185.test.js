@@ -57,3 +57,27 @@ test('손 보정 보호 트리거 마이그레이션 파일(DB 수준 잠금, �
   assert.match(m, /BEFORE UPDATE OR DELETE ON public\.apt_geocache/);
   assert.match(m, /myhomelog\.allow_manual_geocache_change/);
 });
+
+test('LOCK-GUARD: 좌표 작업의 모든 수정문은 고칠 때도 손 보정·숨김 행을 다시 확인한다(고른 뒤 사람이 바꾼 행 보호)', () => {
+  const src = read('../jobs/geocacheBackfill.js');
+  assert.match(src, /const LOCKED_SOURCES = '\(manual,kakao-x\)';/);
+  let i = 0, n = 0, guarded = 0;
+  while ((i = src.indexOf("from('apt_geocache')", i)) >= 0) {
+    const stmt = src.slice(i, src.indexOf(';', i) + 1);
+    if (/\.update\(/.test(stmt)) { n++; if (/\.not\('source', 'in', LOCKED_SOURCES\)/.test(stmt)) guarded++; }
+    i += 10;
+  }
+  assert.equal(n, 8); assert.equal(guarded, n, '출처 재확인 없는 수정문이 생겼다');
+  const g = read('../services/geocodeCacheService.js');
+  assert.match(g, /cur\.source === MANUAL_SOURCE \|\| cur\.source === 'kakao-x'\)\) return;/, '저장 함수가 손 보정·숨김 행을 건너뛴다');
+});
+
+test('LOCK-CHECK: 매일 손 보정·숨김 행 수, 매주 별칭 보정표 누락 수를 남기고 health 로 보인다', () => {
+  const g = read('../jobs/geocacheBackfill.js');
+  assert.match(g, /lockedManual/); assert.match(g, /lockedHidden/);
+  const a = read('../jobs/aptMasterSync.js');
+  assert.match(a, /overridesMissing/);
+  assert.match(a, /captureMessage\(`별칭 보정표 누락/);
+  const { _pick } = require('../services/cronStats');
+  assert.deepEqual(_pick({ lockedManual: 90, lockedHidden: 1200, overridesMissing: 0 }), { lockedManual: 90, lockedHidden: 1200, overridesMissing: 0 });
+});

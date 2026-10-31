@@ -19,6 +19,9 @@
  *   - resolveCoord 자체가 saveToDb 진행 → INSERT 자동
  */
 const { getSupabaseAdmin } = require('../db/client');
+// LOCK-GUARD-2026-10-31 (운영자 "업데이트가 되더라도 고친게 이어지도록"): 아래 작업들은 출처 목록으로 대상 행을 고른 뒤 apt_key 로 고친다.
+//   고른 뒤 고치기 전 사이에 사람이 손 보정(manual)·숨김(kakao-x)으로 바꾼 행은 덮지 않도록, 고칠 때도 출처를 다시 확인한다.
+const LOCKED_SOURCES = '(manual,kakao-x)';
 const { resolveCoordBatch, kakaoGeocode, getKakaoUsageStats, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb, kakaoStrictAptSearch } = require('../services/geocodeCacheService');
 const { isValidKoreaCoord } = require('../utils/geo');
 const logger = require('../logger');
@@ -132,14 +135,14 @@ async function rehealSubfeatures(admin, { cap = 300, budgetMs = 120000 } = {}) {
           if (related && moved >= 20 && moved <= 2000) {
             await admin.from('apt_geocache').update({
               lat: fresh.lat, lng: fresh.lng, place_name: fresh.placeName, address: fresh.address, source: 'kakao',
-            }).eq('apt_key', r.apt_key);
+            }).eq('apt_key', r.apt_key).not('source', 'in', LOCKED_SOURCES);
             healed++; didHeal = true;
           }
         }
         // 개선 불가/관련성 미달 → 좌표 불변, source 마킹해 다음 run 제외(무한 재시도 방지).
         //   단, fresh=null(Kakao 일시실패/쿼터소진/페널티거부)은 마킹 안 함 → 다음 run 재시도(false-마킹 방지).
         if (!didHeal && fresh) {
-          await admin.from('apt_geocache').update({ source: 'kakao-sub' }).eq('apt_key', r.apt_key);
+          await admin.from('apt_geocache').update({ source: 'kakao-sub' }).eq('apt_key', r.apt_key).not('source', 'in', LOCKED_SOURCES);
           marked++;
         }
       } catch (_) { /* 개별 실패(Kakao 일시오류 등) 무시 — source 유지 → 다음 run 재시도 */ }
@@ -224,7 +227,7 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
   //   갱신해도 한 바퀴 뒤에 다시 시도되므로 "다음 run 재시도" 의도는 유지된다.
   const _now = () => new Date().toISOString();
   const _touch = async (aptKey) => {
-    try { await admin.from('apt_geocache').update({ cached_at: _now() }).eq('apt_key', aptKey); }
+    try { await admin.from('apt_geocache').update({ cached_at: _now() }).eq('apt_key', aptKey).not('source', 'in', LOCKED_SOURCES); }
     catch (_) { /* 진행 보장용 — 실패해도 본 작업엔 영향 없음 */ }
   };
   async function worker() {
@@ -264,7 +267,7 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
           addrFromMolit, storedAddress: r.address, officialAddress: addr, placeName: r.place_name,
         })) {
           await admin.from('apt_geocache')
-            .update({ source: 'kakao-v', cached_at: _now() }).eq('apt_key', r.apt_key);
+            .update({ source: 'kakao-v', cached_at: _now() }).eq('apt_key', r.apt_key).not('source', 'in', LOCKED_SOURCES);
           verified++; fastVerified++;
           continue;
         }
@@ -289,13 +292,13 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
         const oldBon = addrBonbun(r.address), newBon = addrBonbun(addr);
         const jibunMismatch = !!(oldBon && newBon && oldBon !== newBon);
         if (moved <= 300 && !nonRes && !jibunMismatch) {
-          await admin.from('apt_geocache').update({ source: 'kakao-v', cached_at: _now() }).eq('apt_key', r.apt_key);
+          await admin.from('apt_geocache').update({ source: 'kakao-v', cached_at: _now() }).eq('apt_key', r.apt_key).not('source', 'in', LOCKED_SOURCES);
           verified++;
         } else {
           await admin.from('apt_geocache').update({
             lat: fresh.lat, lng: fresh.lng, address: fresh.address, place_name: null, source: 'kakao-addr',
             cached_at: _now(),
-          }).eq('apt_key', r.apt_key);
+          }).eq('apt_key', r.apt_key).not('source', 'in', LOCKED_SOURCES);
           corrected++;
           logger.info({ source: 'geocache-addr-verify', aptKey: r.apt_key, movedM: Math.round(moved), addr },
             `좌표 교정: ${r.apt_name} ${Math.round(moved)}m 이동 (공식주소 기반)`);
@@ -388,12 +391,12 @@ async function rehealUntrustedNames(admin, { cap = 400, budgetMs = 40000 } = {})
           const upd = moved >= 20
             ? { lat: fresh.lat, lng: fresh.lng, place_name: fresh.placeName, address: fresh.address, source: 'kakao-n', cached_at: new Date().toISOString() }
             : { place_name: fresh.placeName, source: 'kakao-n', cached_at: new Date().toISOString() };
-          await admin.from('apt_geocache').update(upd).eq('apt_key', r.apt_key);
+          await admin.from('apt_geocache').update(upd).eq('apt_key', r.apt_key).not('source', 'in', LOCKED_SOURCES);
           healed++;
           if (moved >= 20) logger.info({ src: 'geocache-name-heal', aptKey: r.apt_key, movedM: Math.round(moved), from: r.place_name, to: fresh.placeName }, `좌표 재검색 교정: ${r.apt_name}`);
         } else {
           const src = healFallbackSource(r.place_name);
-          await admin.from('apt_geocache').update({ source: src, cached_at: new Date().toISOString() }).eq('apt_key', r.apt_key);
+          await admin.from('apt_geocache').update({ source: src, cached_at: new Date().toISOString() }).eq('apt_key', r.apt_key).not('source', 'in', LOCKED_SOURCES);
           if (src === 'kakao-x') hidden++; else kept++;
         }
       } catch (_) { errors++; }
@@ -545,8 +548,22 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
     batches, rawPoolSize: rawPool.length, poolSize: candidates.length, skippedKnownFail,
     totalProcessed, totalInserted, totalFailed, totalSentinel, elapsedMs: elapsed,
   }, `geocache backfill: ${batches} batches, ${totalInserted}/${totalProcessed} 백필 (풀 ${rawPool.length}→${candidates.length}, 기지실패제외 ${skippedKnownFail}, sentinel ${totalSentinel}) (${elapsed}ms)`);
+  // LOCK-CHECK-2026-10-31: 손 보정(manual)·숨김(kakao-x) 행 수를 매일 남긴다 — 이 수가 줄면 어떤 경로가 덮은 것이다
+  //   (자동 작업은 이 두 출처를 만들지 않으니 손 보정 수는 사람이 고칠 때만 늘고 줄지 않아야 한다). 실패면 필드 생략.
+  let lockedManual, lockedHidden;
+  try {
+    const [_m, _h] = await Promise.all([
+      admin.from('apt_geocache').select('apt_key', { count: 'exact', head: true }).eq('source', 'manual'),
+      admin.from('apt_geocache').select('apt_key', { count: 'exact', head: true }).eq('source', 'kakao-x'),
+    ]);
+    if (!_m.error) lockedManual = _m.count;
+    if (!_h.error) lockedHidden = _h.count;
+    logger.info({ source: 'geocache-lock-check', lockedManual, lockedHidden }, `손 보정 ${lockedManual} · 숨김 ${lockedHidden}`);
+  } catch (_) { /* 관측용 — 실패해도 본 작업엔 영향 없음 */ }
   // KAKAO-DIAG-2026-07-10 (Sprint CCCC): 실패 사유 원격 확정용 — 이 run 인스턴스의 Kakao ok/무매칭/에러코드 분포 동봉.
   return {
+    ...(lockedManual != null ? { lockedManual } : {}),
+    ...(lockedHidden != null ? { lockedHidden } : {}),
     ok: true, reheal, addrVerify, batches,
     rawPoolSize: rawPool.length, poolSize: candidates.length, skippedKnownFail,
     processed: totalProcessed, inserted: totalInserted, failed: totalFailed, sentinelMarked: totalSentinel,

@@ -348,6 +348,34 @@ async function runAptMasterSync() {
     else _aliasRefreshed = _aliasData;
   } catch (e) { _aliasRefreshError = e.message; }
 
+  // LOCK-CHECK-2026-10-31 (운영자 "업데이트가 되더라도 고친게 이어지도록"): 별칭 보정표(apt_alias_overrides)가
+  //   갱신 뒤에도 그대로 반영됐는지 매주 센다 — add 인데 별칭에 없거나 remove 인데 남아 있으면 누락. 0 이 정상, 1 이상이면 Sentry 경보.
+  let _overridesMissing;
+  try {
+    const { data: _ov, error: _ovErr } = await admin.from('apt_alias_overrides').select('kapt_code, molit_name, action').limit(5000);
+    if (!_ovErr) {
+      const _codes = [...new Set((_ov || []).map(o => o.kapt_code))];
+      const _have = new Map();
+      for (let i = 0; i < _codes.length; i += 200) {
+        const { data: _ms, error: _mErr } = await admin.from('apt_master').select('kapt_code, molit_aliases').in('kapt_code', _codes.slice(i, i + 200));
+        if (_mErr) throw _mErr;
+        for (const r of (_ms || [])) _have.set(r.kapt_code, new Set(Array.isArray(r.molit_aliases) ? r.molit_aliases : []));
+      }
+      const _miss = (_ov || []).filter(o => {
+        const s = _have.get(o.kapt_code);
+        if (!s) return false; // 공식 단지가 사라졌으면 갱신 함수도 적용하지 않는다(함수와 같은 조건)
+        return o.action === 'add' ? !s.has(o.molit_name) : s.has(o.molit_name);
+      });
+      _overridesMissing = _miss.length;
+      if (_miss.length) {
+        logger.error({ missing: _miss.slice(0, 10) }, 'apt-master-sync: 별칭 보정표가 반영되지 않은 항목이 있다');
+        try {
+          require('@sentry/node').captureMessage(`별칭 보정표 누락 ${_miss.length}건`, { level: 'warning', tags: { monitor: 'alias-overrides' } });
+        } catch (_) { /* Sentry 미구성이어도 무영향 */ }
+      }
+    }
+  } catch (e) { logger.warn({ err: e.message }, 'apt-master-sync: 별칭 보정표 점검 실패(무시)'); }
+
   const fetchedTotal = results.reduce((s, r) => s + (r.fetched || 0), 0);
   const insertedTotal = results.reduce((s, r) => s + (r.inserted || 0), 0);
   const errCount = results.filter(r => r.error || r.fetchError).length;
@@ -380,6 +408,7 @@ async function runAptMasterSync() {
     elapsedMs, remaining: queue.length,
     ...(_aliasRefreshed != null ? { aliasRefreshed: _aliasRefreshed } : {}),
     ...(_aliasRefreshError ? { aliasRefreshError: _aliasRefreshError } : {}),
+    ...(_overridesMissing != null ? { overridesMissing: _overridesMissing } : {}),
   };
 }
 

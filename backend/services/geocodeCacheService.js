@@ -313,7 +313,8 @@ async function saveToDb(key, entry) {
     //   일일 검증·재검색 작업은 출처 목록(kakao·kakao-sub·kakao-v·kakao-addr)으로만 고르므로 manual 은 원래 대상이 아니다
     //   (geocacheBackfill.js) — 여기가 남은 유일한 덮어쓰기 경로다.
     const { data: cur } = await admin.from('apt_geocache').select('source').eq('apt_key', key).maybeSingle();
-    if (cur && cur.source === MANUAL_SOURCE) return;
+    // LOCK-GUARD-2026-10-31: 숨김(kakao-x)도 사람이 내린 판정이라 자동 저장으로 되살리지 않는다(지금 호출처는 모두 숨김 행을 피하지만 이중 안전장치).
+    if (cur && (cur.source === MANUAL_SOURCE || cur.source === 'kakao-x')) return;
     await admin.from('apt_geocache').upsert({
       apt_key: key,
       apt_name: entry.aptName,
