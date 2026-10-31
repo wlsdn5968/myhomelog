@@ -7,7 +7,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const pn = require('../jobs/pushNotify');
 
-function fakeAdmin({ rawMax, rawCount, histMx, histN }) {
+function fakeAdmin({ rawMax, rawCount, histMx, histN, histError }) {
   const calls = [];
   return {
     calls,
@@ -17,7 +17,7 @@ function fakeAdmin({ rawMax, rawCount, histMx, histN }) {
         eq(k, v) { q._f[k] = v; return q; }, lt(k, v) { q._f['lt_' + k] = v; return q; },
         order() { return q; },
         limit() { calls.push(['raw', q._f]); return Promise.resolve({ data: rawMax == null ? [] : [{ deal_amount: rawMax }], count: rawCount, error: null }); },
-        maybeSingle() { calls.push(['hist', q._f]); return Promise.resolve({ data: histMx == null ? null : { mx: histMx, n: histN }, error: null }); },
+        maybeSingle() { calls.push(['hist', q._f]); if (histError) return Promise.resolve({ data: null, error: histError }); return Promise.resolve({ data: histMx == null ? null : { mx: histMx, n: histN }, error: null }); },
       };
       return q;
     },
@@ -74,4 +74,16 @@ test('별칭 거래는 이름이 정확히 같은 것만 · 라우트는 별칭 
   assert.equal(f('노원구 상계동'), '상계동'); assert.equal(f('중구 을지로3가'), '을지로3가'); assert.equal(f('노원구'), ''); assert.equal(f(''), '');
   assert.match(html, /fetchRecentTx\(lawdCd, apt, _umdFromArea\(area\)\)/);
   assert.match(html, /fetchRecentTx\(lawdCd, b\.aptName, b\.umdNm \|\| _umdFromArea\(b\.area\)\)/);
+});
+
+test('이력 요약 조회가 실패하면 최고가로 단정하지 않는다(Plan 180)', async () => {
+  const r = row(116000); const a = fakeAdmin({ rawMax: 115450, rawCount: 7, histError: { message: 'boom' } });
+  const out = await pn._markNewHighs(a, [r], sub, new Map());
+  assert.equal(r._newHigh, undefined); assert.equal(out.marked, 0);
+});
+
+test('이력이 정말 없으면(오류 없음) 원본 기준으로 계속 판정한다(Plan 180)', async () => {
+  const r = row(116000); const a = fakeAdmin({ rawMax: 115450, rawCount: 7, histMx: null });
+  const out = await pn._markNewHighs(a, [r], sub, new Map());
+  assert.deepEqual(r._newHigh, { prevMan: 115450 }); assert.equal(out.marked, 1);
 });

@@ -141,6 +141,7 @@ async function markNewHighs(admin, rows, subs, aliasMap) {
       if (raw.error) continue;
       const hist = await admin.from('molit_hist_peaks').select('mx, n')
         .eq('apt_seq', r.apt_seq).eq('exclu_use_ar', Math.min(Math.round(Number(r.exclu_use_ar) * 100), 32767)).maybeSingle();
+      if (hist.error) continue; // 이력 요약을 못 읽으면 과거 최고를 모른다 — 최고가로 단정하지 않고 일반 알림으로(Plan 180)
       const rawMax = raw.data && raw.data[0] ? Number(raw.data[0].deal_amount) : 0;
       const histMax = hist.data ? Number(hist.data.mx) || 0 : 0;
       const n = (Number(raw.count) || 0) + (hist.data ? Number(hist.data.n) || 0 : 0);
