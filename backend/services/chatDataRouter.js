@@ -22,6 +22,15 @@ const { normalizeName, stripAptSuffix, siblingKey, groupSiblings, dice, splitReg
 // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(조회 키)은 바꾸지 않는다.
 const { displayAptName } = require('../utils/aptDisplayName');
 
+// JOSA-2026-10-31 (서비스 점검 실측: "잠실엘스"을 검색해 보세요): 끝 글자 받침으로 을/를을 고른다. 한글·숫자가 아니면 "을(를)".
+function _eulReul(word) {
+  const ch = String(word || '').trim().slice(-1);
+  const code = ch.charCodeAt(0);
+  if (code >= 0xAC00 && code <= 0xD7A3) return (code - 0xAC00) % 28 ? '을' : '를';
+  if (/[0-9]/.test(ch)) return '013678'.includes(ch) ? '을' : '를';
+  return '을(를)';
+}
+
 // ── 의도 분류 (순수 함수 — characterization 테스트 고정 대상) ─────────────────
 // 순서 중요: 구체적 의도(특약·금리·정책자금·규제·한도·인기·전세)를 먼저, 시세(광범위)는 뒤에.
 const INTENT_RULES = [
@@ -430,7 +439,7 @@ async function _market(query, context) {
   const recent = txs.slice(0, 3)
     .map(t => `· ${mmdd(t.deal_date)} · 전용 ${Number(t.exclu_use_ar || 0).toFixed(0)}㎡ · ${eok(t.deal_amount)}`)
     .join('\n');
-  let out = `${displayName} (${sigungu}${txs[0].umd_nm ? ' ' + txs[0].umd_nm : ''}) — 최근 6개월 국토부 실거래\n` +
+  let out = `${displayName} (${sigungu}${txs[0].umd_nm ? ' ' + txs[0].umd_nm : ''}) 최근 6개월 국토부 실거래\n` +
     `${recent}\n거래 ${txs.length}건 · 단순평균 ${eok(avg)}`;
   // 실측상 닿지 않는 상한이지만, 닿았다면 그 사실을 숨기지 않는다(조용한 절단 재발 방지).
   if (txs.length >= TX_CAP) out += `\n(최신 ${TX_CAP}건까지만 집계한 값이에요)`;
@@ -445,7 +454,7 @@ async function _market(query, context) {
     const others = ranked.slice(1, 3).map(c => `${displayAptName(c.aptName, { umdNm: c.umdNm })}(${c.sigungu || '지역미상'})`).join(' · ');
     out += `\n\n같은 이름의 다른 단지도 있어요: ${others}\n지역명을 함께 적어 주시면 좁혀 드려요.`;
   }
-  out += `\n\n전세가율·연식·학군 등 상세는 상단 검색창에서 "${displayName}"을 검색해 보세요.`;
+  out += `\n\n전세가율·연식·학군 등 상세는 상단 검색창에서 "${displayName}"${_eulReul(displayName)} 검색해 보세요.`;
   // 후속 질문 칩 — 그 단지의 동네로 시야 확장 + 동명 단지 바로가기 (KKKKKKK-19)
   const sug = [];
   if (sigungu) sug.push(`${sigungu} 인기단지`);
@@ -504,7 +513,7 @@ async function _regulation(message) {
   } catch (_) { /* snapshot 실패 → 일반 안내 */ }
   const basis = '(2025.10.15 대책 + 2026.6.30 확대 기준)';
   if (kw) {
-    return `"${kw}" — 현행 규제지역 목록에 있는 지역이에요 ${basis}\n` +
+    return `"${kw}": 현행 규제지역 목록에 있는 지역이에요 ${basis}\n` +
       '· 투기과열지구·조정대상지역에는 LTV 40%(무주택 기준), 대출 한도 제한, 전입 의무 등이 적용돼요\n' +
       '· 상세 항목별 내용은 규제 요약 버튼(아래)에서 표로 볼 수 있어요.' + DISCLAIMER;
   }
@@ -560,7 +569,7 @@ async function _popularNationwide() {
       // APT-DISPLAY-NAME-2026-09-16 (Plan 090): popularService 가 이미 displayName 을 얹어 준다 —
       //   없는(옛 캐시) 경우에만 여기서 계산한다.
       const rows = snap.map((p, i) =>
-        `${i + 1}. ${p.displayName || displayAptName(p.aptName, { umdNm: p.umdNm })} (${p.sigungu}) — 최근 60일 ${p.dealCount60d}건 · 평균 ${eok(p.avgDealAmount)}`).join('\n');
+        `${i + 1}. ${p.displayName || displayAptName(p.aptName, { umdNm: p.umdNm })} (${p.sigungu}) 최근 60일 ${p.dealCount60d}건 · 평균 ${eok(p.avgDealAmount)}`).join('\n');
       return `지금 인기 단지 상위 5곳 (최근 60일 국토교통부 실거래 건수가 많은 순, 최근 21일 거래 단지 우선, 한 지역에 쏠리지 않게 조정)\n${rows}\n\n지도 탭에서 위치와 함께 전체 12곳을 볼 수 있어요.` + DISCLAIMER;
     }
   } catch (_) { /* 아래 안내 */ }
@@ -647,7 +656,7 @@ function _topGroups(rows, n) {
 const _groupLines = (top) => top.map(([k, v], i) => {
   const [name, , umd] = k.split('|');
   const avg = v.reduce((s, t) => s + Number(t.deal_amount || 0), 0) / v.length;
-  return `${i + 1}. ${name}${umd ? ` (${umd})` : ''} — ${v.length}건 · 평균 ${eok(avg)}`;
+  return `${i + 1}. ${name}${umd ? ` (${umd})` : ''}: ${v.length}건 · 평균 ${eok(avg)}`;
 }).join('\n');
 
 async function _regionPopular(regionQuery) {
@@ -755,9 +764,9 @@ async function _watch(context) {
     }
     if (data && data.length) {
       const avg = data.reduce((s, t) => s + Number(t.deal_amount || 0), 0) / data.length;
-      lines.push(`· ${n} — ${data.length}건 · 평균 ${eok(avg)} · 최근 ${mmdd(data[0].deal_date)}`);
+      lines.push(`· ${n}: ${data.length}건 · 평균 ${eok(avg)} · 최근 ${mmdd(data[0].deal_date)}`);
     } else {
-      lines.push(`· ${n} — 최근 60일 신고 거래 없음`);
+      lines.push(`· ${n}: 최근 60일 신고 거래 없음`);
     }
   }
   return {
@@ -845,4 +854,4 @@ async function route(message, context) {
   }
 }
 
-module.exports = { route, classifyIntent };
+module.exports = { route, classifyIntent, _eulReul };

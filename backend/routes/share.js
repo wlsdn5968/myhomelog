@@ -67,7 +67,7 @@ router.get('/', (req, res) => {
     } catch (_) { names = []; }
     const n = names.length;
     const head = n ? `${names.slice(0, 3).join(', ')}${n > 3 ? ` 외 ${n - 3}곳` : ''}` : '관심 단지';
-    const title = n ? `관심 단지 ${n}곳 — 내집로그` : '관심 단지 — 내집로그';
+    const title = n ? `관심 단지 ${n}곳 | 내집로그` : '관심 단지 | 내집로그';
     const desc = `${head} — 함께 보는 관심 단지 목록이에요(국토교통부 실거래). 매수 추천이 아니에요.`;
     const origin = `${req.protocol}://${req.get('host')}`;
     const shareUrl = `${origin}/share?list=${encodeURIComponent(list)}`;
@@ -96,7 +96,7 @@ router.get('/', (req, res) => {
       if (Array.isArray(arr)) names = arr.map(a => (a && a.aptName) ? String(a.aptName).slice(0, 40) : '').filter(Boolean).slice(0, 6);
     } catch (_) { names = []; }
     const label = names.length >= 2 ? names.join(' vs ') : '단지';
-    const title = `${label} — 내집로그 평당가 비교`;
+    const title = `${label} 평당가 비교 | 내집로그`;
     const desc = `${label} 전용면적 기준 평당가와 단지정보 비교(국토교통부 실거래). 매수 추천이 아니에요.`;
     const origin = `${req.protocol}://${req.get('host')}`;
     const shareUrl = `${origin}/share?cmp=${encodeURIComponent(cmp)}`;
@@ -124,7 +124,7 @@ router.get('/', (req, res) => {
     res.set('Cache-Control', 'public, max-age=300'); // 5분
     return res.type('html').send(html);
   }
-  const title = `${apt}${area ? ` · ${area}` : ''} — 내집로그 분석`;
+  const title = `${apt}${area ? ` · ${area}` : ''} | 내집로그`;
   const desc = `${apt}${area ? ` (${area})` : ''} 국토교통부 실거래로 정리한 평균가, 평형별 시세, 점수 요약. 매수 추천이 아니에요.`;
   const origin = `${req.protocol}://${req.get('host')}`;
   const shareUrl = `${origin}/share?apt=${encodeURIComponent(apt)}${area ? `&area=${encodeURIComponent(area)}` : ''}${seq ? `&seq=${encodeURIComponent(seq)}` : ''}`;

@@ -174,7 +174,7 @@ risks: 매수 시 발생 가능한 리스크 시나리오 3~4개 (현실적이�
     return res.status(503).json({
       code: upstream ? 'ai_upstream_down' : 'ai_error',
       error: upstream
-        ? 'AI 서비스가 일시 점검 중이에요. 보통 5~10분 내 복구돼요. 단지 검색·LTV 계산은 정상 이용 가능합니다.'
+        ? 'AI 서비스가 일시 점검 중이에요. 보통 5~10분 내 복구돼요. 단지 검색과 대출 계산은 그대로 쓸 수 있어요.'
         : '특약 생성 중 오류가 발생했어요. 잠시 후 다시 시도해주세요.',
       retryAfterSec: upstream ? 300 : 30,
     });

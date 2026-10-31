@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<meta name="description" content="내집로그 — 국토교통부 실거래가로 아파트를 분석해요. 매수 비용, LTV, DSR, 전세가율, 갭, 특약 초안까지 한곳에서 볼 수 있어요. 매수 추천이 아닌 참고용이에요.">
+<meta name="description" content="내집로그는 국토교통부 실거래가로 아파트를 분석해요. 매수 비용, LTV, DSR, 전세가율, 갭, 특약 초안까지 한곳에서 볼 수 있어요. 매수 추천이 아닌 참고용이에요.">
 <meta name="keywords" content="아파트 실거래가, 부동산 분석, LTV 계산, DSR, 전세가율, 매수 비용, 부동산 특약, 임장 체크리스트">
 <meta name="robots" content="index, follow">
 <meta name="author" content="내집로그">
@@ -16,7 +16,7 @@
 
 <!-- Open Graph -->
 <meta property="og:type" content="website">
-<meta property="og:title" content="내집로그 — 실거래가로 확인하는 부동산 정보">
+<meta property="og:title" content="내집로그: 실거래가로 확인하는 부동산 정보">
 <meta property="og:description" content="국토교통부 실거래가, LTV, DSR, 전세가율을 한곳에서 볼 수 있어요. 매수 추천이 아닌 참고용 정보예요.">
 <meta property="og:url" content="https://myhomelog.vercel.app/">
 <meta property="og:site_name" content="내집로그">
@@ -27,7 +27,7 @@
 
 <!-- Twitter Card -->
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:title" content="내집로그 — 실거래가로 확인하는 부동산 정보">
+<meta name="twitter:title" content="내집로그: 실거래가로 확인하는 부동산 정보">
 <meta name="twitter:description" content="국토교통부 실거래가, LTV, DSR, 전세가율을 한곳에서 볼 수 있어요. 매수 추천이 아닌 참고용 정보예요.">
 <meta name="twitter:image" content="https://myhomelog.vercel.app/og.png">
 
@@ -66,7 +66,7 @@
 }
 </script>
 
-<title>내집로그 — 실거래가로 확인하는 부동산 정보</title>
+<title>내집로그: 실거래가로 확인하는 부동산 정보</title>
 
 <!-- MOB-AUDIT-2026-05-03: LCP 최적화 — 첫 paint 직후 사용되는 외부 리소스 preconnect/preload -->
 <!-- PERF-PRECONNECT-2026-08-28: 첫 화면은 **지도**인데 네이버 지도 도메인이 빠져 있었다.
@@ -1202,6 +1202,18 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .ld-skel i:first-child{flex:2}
 .ld-mob{display:none}
 @media(min-width:701px){ #s3{display:none!important} } /* LIST-D: 결과는 본문 한 곳 — 사이드바 결과 구역은 숨기기만 한다(노드는 doSearch·renderPList 가 읽는다) */
+/* LIST-CARD-FIT-2026-10-31: 5칸 카드는 고정 폭(150+150+132px+간격)이 약 580px 라 결과 영역이 좁으면 단지 이름 칸이 0~31px 로 눌렸다
+   (운영 실측: 창 800px 0px, 1024px 31px). 카드 폭에 맞춰 두 줄(880px 미만), 세 줄(560px 미만)로 다시 놓는다. 휴대폰(700px 이하) 규칙은 그대로. */
+.ld-list{container-type:inline-size}
+@media(min-width:701px){
+  @container (max-width:879px){
+    .ld-card{grid-template-columns:minmax(0,1fr) 150px 132px;grid-template-areas:"apt avg cmp" "pyg loan cmp";row-gap:12px}
+    .ld-c-apt{grid-area:apt}.ld-c-avg{grid-area:avg}.ld-pyg{grid-area:pyg}.ld-c-loan{grid-area:loan}.ld-c-cmp{grid-area:cmp}
+  }
+  @container (max-width:559px){
+    .ld-card{grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"apt cmp" "avg avg" "pyg pyg" "loan loan"}
+  }
+}
 @media(max-width:700px){
   #view-list.ld-on{padding:12px 16px}
   .ld-dsk{display:none}
@@ -8411,7 +8423,7 @@ function handleListUrl(){
   let raw; try { raw = JSON.parse(_b64urlDec(enc)); } catch(_) { return; }
   const items = _listShareItems(raw); if (!items.length) return;
   window._sharedList = items;
-  document.title = `관심 단지 ${items.length}곳 — 내집로그`;
+  document.title = `관심 단지 ${items.length}곳 | 내집로그`;
   _openSharedListModal(items);
 }
 function _openSharedListModal(items){
@@ -8481,7 +8493,7 @@ async function handleCompareUrl(){
     lawdCd:  String((a&&a.lawdCd)||'').slice(0,10)
   })).filter(a=>a.aptName);
   if(apts.length < 2) return;
-  document.title = `${apts.map(a=>a.aptName).join(' vs ')} — 내집로그 비교`;
+  document.title = `${apts.map(a=>a.aptName).join(' vs ')} 비교 | 내집로그`;
   _runCompare(apts);
 }
 
@@ -9114,9 +9126,11 @@ function showDetail(p){
       + `<span class="ass-name">${_escHtml(p.displayName || _dispAptName(p.aptName, p.umdNm) || '')}</span>`
       + (p.area ? `<span class="ass-area">${_escHtml(_fmtSgg(p.area))}</span>` : '')
       + _badge
+      // NO-PENDING-2026-10-31 (서비스 점검): 검색·지도로 연 단지는 점수가 원래 없다(목록 맞춤 찾기에서만 계산) — "분석 대기"를 붙이면
+      //   끝나지 않는 대기처럼 보였다(운영 실측: 상계주공7단지·잠실엘스). 점수가 없으면 표시하지 않는다.
       + (_hasScore
           ? `<span class="lvl ${lv}" style="font-size:12px;padding:1px 7px">${s}점 ${lt}</span>`
-          : `<span class="lvl unknown" style="font-size:12px;padding:1px 7px">${lt}</span>`)
+          : '')
       + `</div>`
       + (p.avgPrice ? `<div class="ass-price"><span class="ass-price-v">${(p.avgPrice).toFixed(2)}억</span><span class="ass-price-l">${_escHtml(p._priceBasis||'평균 실거래')}</span></div>` : '');
 
@@ -10351,7 +10365,7 @@ async function handleShareUrl(){
   //   채운 뒤(found 또는 실거래 조회 성공) 그 가격으로 계산기를 연다. 평균가를 못 구하면(avgPrice 0) 상세에 머문다.
   const wantCalc=sp.get('calc')==='1';
   // 탭 타이틀 동기화 (브라우저·북마크 가독성)
-  document.title=`${apt}${area?` · ${area}`:''} — 내집로그 분석`;
+  document.title=`${apt}${area?` · ${area}`:''} | 내집로그`;
   // props에 이미 있으면 즉시 표시
   const found=props.find(p=>p.aptName===apt);
   if(found){showDetail(found);if(wantCalc&&found.avgPrice>0)goCalcFromDetail(found.avgPrice);return;}
@@ -10809,7 +10823,8 @@ function calcTotalCostHTML(price,loan,houseStatus,isFirstBuyer,isRegulated){
   const total=Math.round(gap*10000)+acq+edu+spcl+comm+reg;
   const marginW = 1500; // ±1,500만원
   const fmt=v=>parseFloat((v/10000).toFixed(2))+'억';
-  const totalLowAuk  = parseFloat(((total - marginW)/10000).toFixed(2));
+  // CASH-RANGE-2026-10-31 (서비스 점검 실측: 매매가 6.18억인데 "약 6.16~6.46억"): 오차는 부대비용 쪽에만 있다 — 하한이 (매매가 − 대출)보다 낮아지지 않게.
+  const totalLowAuk  = parseFloat(((Math.round(gap*10000) + Math.max(0, total - Math.round(gap*10000) - marginW))/10000).toFixed(2));
   const totalHighAuk = parseFloat(((total + marginW)/10000).toFixed(2));
   const sourceTag = tc ? '' : ` <span style="font-size:12px;color:var(--t3)">(최신 세율표를 불러오지 못해 기본 세율로 계산)</span>`;
 

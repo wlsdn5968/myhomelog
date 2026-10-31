@@ -85,6 +85,18 @@ function makeRateLimiter({ limit, windowSec, scope, message, keySuffix = '', fai
     };
   }
 
+  // RL-MEM-FALLBACK-2026-10-31 (서비스 점검, 운영 로그 실측): Upstash 월 한도 초과(ERR max requests limit exceeded)로
+  //   general·data·chatdata 제한이 모두 fail-open — 사실상 요청 제한이 없었다(외부 API 를 부르는 facility·geocode 포함).
+  //   fail-open 범위는 통과시키는 대신 인스턴스 메모리 제한으로 내려간다(인스턴스별이라 느슨하지만 0 보다 낫다). fail-closed 범위는 그대로 503.
+  const memFallback = rateLimit({
+    windowMs: windowSec * 1000,
+    max: limit,
+    message: { error: message },
+    standardHeaders: true,
+    legacyHeaders: false,
+    keyGenerator: (req) => `${getRateLimitIdentity(req)}${keySuffix}`,
+  });
+
   // ── 정상: @upstash/ratelimit sliding window ────────────────
   const rl = new Ratelimit({
     redis,
@@ -132,8 +144,8 @@ function makeRateLimiter({ limit, windowSec, scope, message, keySuffix = '', fai
           code: 'ratelimit_unavailable',
         });
       }
-      logger.warn({ err: e.message, scope }, 'Upstash ratelimit 장애 — fail-open');
-      return next();
+      logger.warn({ err: e.message, scope }, 'Upstash ratelimit 장애 — 메모리 제한으로 대체');
+      return memFallback(req, res, next);
     }
   };
 }

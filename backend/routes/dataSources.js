@@ -93,7 +93,7 @@ router.get('/', async (req, res) => {
 
   res.set('Cache-Control', 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400');
   return res.type('html').send(pageShell({
-    title: '데이터 출처와 갱신 주기 — 내집로그',
+    title: '데이터 출처와 갱신 주기 | 내집로그',
     desc: '국토교통부 실거래가·한국부동산원 공동주택 정보·금융위원회 규제 등 내집로그가 쓰는 공식 데이터의 출처와 갱신 주기예요.',
     canonical: `${ORIGIN}/data-sources`,
     body,

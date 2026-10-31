@@ -50,7 +50,7 @@ test('/data-sources: 라우터가 출처 목록·원칙·robots index 를 내고
   const res = { headers: {}, body: null, set(k, v) { this.headers[k] = v; return this; }, type() { return this; }, send(b) { this.body = b; return this; }, status() { return this; } };
   await handle({}, res);
   assert.equal(typeof res.body, 'string');
-  assert.match(res.body, /<title>데이터 출처와 갱신 주기 — 내집로그<\/title>/);
+  assert.match(res.body, /<title>데이터 출처와 갱신 주기 \| 내집로그<\/title>/);
   assert.match(res.body, /<meta name="robots" content="index, follow">/);
   assert.match(res.body, /<link rel="canonical" href="https:\/\/myhomelog\.vercel\.app\/data-sources">/);
   for (const name of ['국토교통부', '한국부동산원 K-apt', '금융위원회', '한국은행 ECOS', '한국주택금융공사', 'KOSIS', '카카오', '나이스 교육정보 개방 포털']) {

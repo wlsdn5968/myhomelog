@@ -25,8 +25,8 @@ test('LIST-SHARE 서버: ?list= 는 단지 이름으로 제목·설명을 만들
   const res = _shareMockRes();
   handle(req, res);
   assert.equal(typeof res.body, 'string');
-  assert.match(res.body, /<title>관심 단지 4곳 — 내집로그<\/title>/);
-  assert.match(res.body, /<meta property="og:title" content="관심 단지 4곳 — 내집로그">/);
+  assert.match(res.body, /<title>관심 단지 4곳 \| 내집로그<\/title>/);
+  assert.match(res.body, /<meta property="og:title" content="관심 단지 4곳 \| 내집로그">/);
   assert.match(res.body, /<meta property="og:description" content="은마, 래미안대치팰리스, &lt;b&gt;x&lt;\/b&gt; 외 1곳 — 함께 보는 관심 단지 목록이에요/);
   assert.match(res.body, /<meta name="robots" content="noindex, follow">/);
   assert.match(res.body, /<meta property="og:url" content="https:\/\/myhomelog.example\/share\?list=/);
@@ -37,10 +37,10 @@ test('LIST-SHARE 서버: 깨진 list 도 200 으로 일반 제목을 주고, apt
   const handle = _shareHandler();
   let res = _shareMockRes();
   handle({ query: { apt: '', list: '%%%not-base64' }, protocol: 'https', get: () => 'h' }, res);
-  assert.match(res.body, /<title>관심 단지 — 내집로그<\/title>/);
+  assert.match(res.body, /<title>관심 단지 \| 내집로그<\/title>/);
   res = _shareMockRes();
   handle({ query: { apt: '', list: b64url({ aptName: '객체' }) }, protocol: 'https', get: () => 'h' }, res);
-  assert.match(res.body, /<title>관심 단지 — 내집로그<\/title>/, '배열이 아니면 이름 0');
+  assert.match(res.body, /<title>관심 단지 \| 내집로그<\/title>/, '배열이 아니면 이름 0');
   res = _shareMockRes();
   handle({ query: { apt: '반포자이', list: b64url([{ aptName: '은마' }]) }, protocol: 'https', get: () => 'h' }, res);
   assert.match(res.body, /<title>반포자이[^<]*<\/title>/);
@@ -52,7 +52,7 @@ test('LIST-SHARE 서버: 이름 31개 이상은 30개까지만 세고, 응답 �
   const arr = Array.from({ length: 45 }, (_, i) => ({ aptName: `단지${i}` }));
   const res = _shareMockRes();
   handle({ query: { apt: '', list: b64url(arr) }, protocol: 'https', get: () => 'h' }, res);
-  assert.match(res.body, /<title>관심 단지 30곳 — 내집로그<\/title>/);
+  assert.match(res.body, /<title>관심 단지 30곳 \| 내집로그<\/title>/);
   assert.ok(res.body.length <= originalLen + 4096);
 });
 
