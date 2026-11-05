@@ -23,6 +23,21 @@ const { normalizeName, stripAptSuffix, siblingKey, groupSiblings, dice, splitReg
 const { displayAptName } = require('../utils/aptDisplayName');
 
 // JOSA-2026-10-31 (서비스 점검 실측: "잠실엘스"을 검색해 보세요): 끝 글자 받침으로 을/를을 고른다. 한글·숫자가 아니면 "을(를)".
+// REP-AREA-CHAT-2026-11-05 (기능별 불일치 전수조사, 운영 실측: 공릉풍림아이원 상세 8.12억, 도우미 7.91억): 상세 헤더와 같은 규칙.
+//   최근 30건 중 거래가 가장 많은 평형(동률이면 가장 최근 거래의 평형)만으로 평균을 낸다. txs 는 최신순이다.
+function _repAreaLine(txs) {
+  const by = new Map();
+  for (const t of (txs || []).slice(0, 30)) {
+    const sqm = Math.round(Number(t.exclu_use_ar) || 0), a = Number(t.deal_amount) || 0;
+    if (!sqm || !a) continue;
+    if (!by.has(sqm)) by.set(sqm, { sqm, n: 0, sum: 0 });
+    const g = by.get(sqm); g.n++; g.sum += a;
+  }
+  const best = [...by.values()].sort((x, y) => y.n - x.n)[0]; // sort 는 안정 정렬: 동률이면 먼저(최근에) 나온 평형
+  if (!best) return null;
+  return `${best.sqm}㎡(${Math.round(require('../utils/pyeong').toPyeong(best.sqm))}평) 최근 ${best.n}건 평균 ${(best.sum / best.n / 10000).toFixed(2)}억`;
+}
+
 function _eulReul(word) {
   const ch = String(word || '').trim().slice(-1);
   const code = ch.charCodeAt(0);
@@ -443,7 +458,7 @@ async function _market(query, context) {
     .map(t => `· ${mmdd(t.deal_date)} · 전용 ${Number(t.exclu_use_ar || 0).toFixed(0)}㎡ · ${eok(t.deal_amount)}`)
     .join('\n');
   let out = `${displayName} (${sigungu}${txs[0].umd_nm ? ' ' + txs[0].umd_nm : ''}) 최근 6개월 국토부 실거래\n` +
-    `${recent}\n거래 ${txs.length}건 · 단순평균 ${eok(avg)}`;
+    `${recent}\n거래 ${txs.length}건 · ${_repAreaLine(txs) || `전 평형 평균 ${eok(avg)}`}`;
   // 실측상 닿지 않는 상한이지만, 닿았다면 그 사실을 숨기지 않는다(조용한 절단 재발 방지).
   if (txs.length >= TX_CAP) out += `\n(최신 ${TX_CAP}건까지만 집계한 값이에요)`;
   // Step 4: 합산했으면 어떤 원본명을 합쳤는지 밝힌다 — 값이 왜 그런지 모르는 게 값이 틀린 것보다 나쁘다.
@@ -857,4 +872,4 @@ async function route(message, context) {
   }
 }
 
-module.exports = { route, classifyIntent, _eulReul };
+module.exports = { route, classifyIntent, _eulReul, _repAreaLine };

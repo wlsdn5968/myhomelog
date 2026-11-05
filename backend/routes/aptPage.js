@@ -169,6 +169,16 @@ async function loadAptFacts(seq) {
   //   병합판을 쓴다 — 107c 로 원본 창이 24개월보다 짧아져도 요약 건수가 줄지 않게 한다.
   //   오늘은 원본이 16.6개월이라 이력이 붙는 달이 0개 = 동작 변화 0(배선만).
   try { txs = await svc.getTransactionsByAptSeqMerged(seq, 24); } catch (e) { logger.warn({ err: e.message, seq }, '/apt 거래 예외'); }
+  // ALIAS-SEQ-MERGE-2026-11-05 (기능별 불일치 전수조사, 운영 실측): /apt/11350-183 은 제목이 공릉풍림아이원인데 풍림아파트A 거래만 세어 B동(31㎡)이 표에서 빠졌다.
+  //   공식 단지 이름을 달면 그 단지의 다른 신고 이름 거래도 합친다. 실패하면 이 번호 거래만으로 낸다(예전과 같음).
+  try {
+    const _sib = await _aliasSiblingSeqs(seq, idx, txs);
+    if (_sib.seqs.length) {
+      const more = await Promise.all(_sib.seqs.map(s => svc.getTransactionsByAptSeqMerged(s, 24).catch(() => [])));
+      const _d = t => (Number(t.dealYear) || 0) * 10000 + (Number(t.dealMonth) || 0) * 100 + (Number(t.dealDay) || 0);
+      txs = [...(txs || []), ...more.flat()].sort((a, b) => _d(b) - _d(a)).map(t => ({ ...t, aptName: _sib.name, _aliased: true }));
+    }
+  } catch (e) { logger.warn({ err: e.message, seq }, '/apt 같은 단지 신고 이름 합치기 실패'); }
   // APT-DIM-FALLBACK-2026-09-20 (Plan 107a): MV 에 없을 때만 차원 테이블을 본다.
   if (!idx) { try { idx = await loadDimRow(seq); } catch (e) { logger.warn({ err: e.message, seq }, '/apt 차원 예외'); } }
   if (!idx && (!txs || !txs.length)) return null;
@@ -225,6 +235,31 @@ function pickAptMasterMatch(rows, aptName, buildYear) {
  *   errored=false·row=null 은 "조회는 됐는데 정말 매칭이 없다"(또는 후보 2개 이상이라 확신 불가) —
  *   이때는 기존 캐시 정책을 그대로 쓴다.
  */
+// 이 신고 번호가 공식 단지의 별칭이면 같은 단지의 다른 신고 번호를 돌려준다(연도 별칭은 그 연도만). name 은 집계 묶음용 표시 이름.
+async function _aliasSiblingSeqs(seq, idx, txs) {
+  const none = { seqs: [], name: null };
+  const t0 = (txs && txs[0]) || {};
+  const lawd = String((idx && idx.lawd_cd) || t0.lawdCd || '').trim();
+  const umd = (idx && idx.umd_nm) || t0.umdNm || '';
+  const name = (idx && idx.apt_name) || t0.aptName || '';
+  const by = num(idx && idx.build_year) || num(t0.buildYear);
+  if (!lawd || !umd || !name) return none;
+  const { row } = await loadAptMasterMatch(lawd, umd, name, by);
+  const aliases = (row && Array.isArray(row.molit_aliases)) ? row.molit_aliases : [];
+  if (aliases.length < 2) return none;
+  const { parseAlias } = require('../services/transactionService');
+  const parsed = aliases.map(parseAlias);
+  const { getSupabaseAdmin } = require('../db/client');
+  const admin = getSupabaseAdmin();
+  if (!admin) return none;
+  const { data, error } = await admin.from('molit_apt_dim').select('apt_seq, apt_name, build_year')
+    .eq('lawd_cd', lawd).eq('umd_nm', umd).in('apt_name', [...new Set(parsed.map(p => p.name))]).limit(50);
+  if (error || !data) return none;
+  const ok = data.filter(d => parsed.some(p => p.name === d.apt_name && (!p.year || p.year === Number(d.build_year))));
+  if (!ok.some(d => d.apt_seq === seq)) return none; // 이 번호가 그 단지 별칭이 아니면 합치지 않는다
+  return { seqs: [...new Set(ok.map(d => d.apt_seq))].filter(s => s !== seq).slice(0, 12), name: row.apt_name };
+}
+
 async function loadAptMasterMatch(lawdCd, umd, aptName, buildYear) {
   const { getSupabaseAdmin } = require('../db/client');
   const admin = getSupabaseAdmin();

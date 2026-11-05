@@ -102,7 +102,7 @@ test('QA 10-27: 지역 페이지는 정식 단지명 · 서버 페이지 라벨 
     assert.doesNotMatch(fs.readFileSync(path.join(__dirname, `../routes/${f}.js`), 'utf8'), /MYHOMELOG [A-Z]+/, `${f} 영문 라벨`);
   }
   assert.doesNotMatch(html, /데이터 분석 대기<br>/);
-  assert.match(html, /최근 180일 실거래 <b/);
+  assert.match(html, /최근 6개월 실거래 <b/);
   assert.doesNotMatch(html, /HOUSING DATA TERMINAL<\/span>/);
   assert.doesNotMatch(html, /30초 만에 만드는 맞춤 보고서|30초 입력으로 받는/);
 });

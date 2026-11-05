@@ -1087,7 +1087,8 @@ router.get('/in-bounds', async (req, res) => {
     //   캡 — 실측(상위 100단지 180일 거래 8,881건)상 밀집/광역 viewport 에서 최신 일부만 집계돼
     //   마커 평균가·건수가 왜곡됐다. range 페이징(상한 10,000)으로 전량 수집 — 통상 viewport 는
     //   1페이지(<1000)로 끝나 왕복 증가 없음. 2차 정렬키 id 로 페이지 경계 안정화.
-    const _cut180 = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    // WINDOW-ONE-2026-11-05 (기능별 불일치 전수조사, 운영 실측: 공릉풍림아이원 지도 37건, 상세·가격 신호·도우미 27건): 상세와 같은 6개월 창(달 첫날부터)으로 센다.
+    const _cut180 = require('../utils/txWindow').txWindowStart(6);
     // PARALLEL-BLOCKS-2026-08-17 (Plan 030): 아래 거래 페이징과 alias 페이징은 **서로의 결과를
     //   전혀 참조하지 않는다**(둘 다 위에서 이미 계산된 names/umds 만 읽고, 합치는 코드는 양쪽이
     //   다 끝난 뒤에 온다). 순차로 돌 이유가 없어 Promise.all 로 겹친다. 지도를 움직일 때마다
