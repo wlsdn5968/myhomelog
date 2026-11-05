@@ -526,7 +526,7 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
     [saleTx, jeonseT] = await Promise.all([
       // ALIAS-MERGE-2026-05-21: master 단지(공릉풍림아이원 등) alias 거래까지 포함 → 실거래가 탭과 표본 일치.
       // Plan 174: 동떨어진 거래 판정은 앞뒤 최대 180일 이웃을 본다 — 분석 표본(최근 6개월) 앞 6개월을 이웃으로만 더 받는다.
-      getTransactionsByAptInclAliases(lawdCd, aptName, _ANA_MONTHS + _ANA_CONTEXT_MONTHS),
+      getTransactionsByAptInclAliases(lawdCd, aptName, _ANA_MONTHS + _ANA_CONTEXT_MONTHS, { umdNm }),
       getJeonseByApt(lawdCd, aptName).catch(() => []),
     ]);
   } catch (err) {
@@ -738,7 +738,7 @@ async function _compareOne(apt, dealMonths) {
   //   (차트는 전체 이력으로 판정한다 — 기간 첫 달 거래의 판정이 차트와 같아지려면 앞쪽 이웃이 필요하다).
   let saleTx = [];
   try {
-    saleTx = await getTransactionsByAptInclAliases(lawdCd, aptName, dealMonths + _CMP_CONTEXT_MONTHS);
+    saleTx = await getTransactionsByAptInclAliases(lawdCd, aptName, dealMonths + _CMP_CONTEXT_MONTHS, { umdNm });
   } catch (err) {
     if (err.code === 'MOLIT_KEY_MISSING') { out.molitAvailable = false; saleTx = []; }
     else throw err;

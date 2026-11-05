@@ -212,11 +212,11 @@ test('단지 식별 — 이름·동이 같아도 준공년도가 다르면 다�
   const rpt = fs2.readFileSync(path2.join(__dirname, '../routes/report.js'), 'utf8');
 
   // ① 추천 경로
-  assert.match(tx, /const gkey = `\$\{t\.aptName\}\|\$\{t\.lawdCd \|\| ''\}\|\$\{t\.umdNm \|\| ''\}\|\$\{t\.buildYear \|\| ''\}`/,
+  assert.match(tx, /const gkey = `\$\{t\.aptName\}\|\$\{t\.lawdCd \|\| ''\}\|\$\{t\.umdNm \|\| ''\}\|\$\{t\._aliased \? '' : \(t\.buildYear \|\| ''\)\}`/,
     '거래 집계 키에 준공년도가 없다 — 1995년 단지와 2006년 단지가 한 평균으로 합쳐진다');
 
   // ② 보고서 경로도 **같은 정책**이어야 한다(두 경로가 갈리면 또 어긋난다).
-  assert.match(rpt, /const key = `\$\{_canon\}\|\$\{t\.sigungu\}\|\$\{t\.umd_nm\}\|\$\{t\.build_year \|\| ''\}`/,
+  assert.match(rpt, /const key = `\$\{_canon\}\|\$\{t\.sigungu\}\|\$\{t\.umd_nm\}\|\$\{_canonHit \? '' : \(t\.build_year \|\| ''\)\}`/,
     '보고서 집계 키가 추천 경로와 다르다 — 같은 단지가 두 화면에서 다른 값을 갖는다');
 
   // ③ 관심도 캐시 키에도 동이 들어가야 한다(같은 구 동명 단지 340건).

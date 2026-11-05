@@ -54,9 +54,9 @@ test('aptPage.js + index.html — 단지 CTA 는 &calc=1 을 달고, 앱은 상�
   assert.match(apt, /&area=\$\{encodeURIComponent\(region\)\}&calc=1">\$\{esc\(displayName\)\} 대출 한도·비용 계산 →<\/a>/, '단지 CTA 에 &calc=1 이 없다');
   const fn = extractFn(html, 'handleShareUrl');
   assert.ok(fn.includes("sp.get('calc')==='1'"), "handleShareUrl 이 calc=1 을 읽지 않는다");
-  // 두 경로(props 에서 찾은 경우 / 실거래 조회로 만든 aptEnriched) 모두 avgPrice>0 일 때만 계산기로 보낸다.
-  assert.ok(fn.includes('wantCalc&&found.avgPrice>0)goCalcFromDetail(found.avgPrice)'), 'found 경로의 계산기 연결이 없다');
-  assert.ok(fn.includes('wantCalc&&aptEnriched.avgPrice>0)goCalcFromDetail(aptEnriched.avgPrice)'), '실거래 조회 경로의 계산기 연결이 없다');
+  // 두 경로(props 에서 찾은 경우 / 검색과 같은 길로 다시 연 경우, DETAIL-GATE) 모두 평균가>0 일 때만 계산기로 보낸다.
+  assert.ok(fn.includes('wantCalc&&_c.avgPrice>0)goCalcFromDetail(_c.avgPrice)'), 'found 경로의 계산기 연결이 없다');
+  assert.ok(fn.includes('wantCalc&&currentDetail&&currentDetail.avgPrice>0)goCalcFromDetail(currentDetail.avgPrice)'), '실거래 조회 경로의 계산기 연결이 없다');
   // 평균가를 못 구하는 stub(avgPrice:0) 경로에는 calc 호출이 없어야 한다 — 0원으로 계산기를 채우지 않는다.
   assert.equal((fn.match(/goCalcFromDetail\(/g) || []).length, 2, 'goCalcFromDetail 호출은 정확히 2곳이어야 한다');
 });

@@ -67,7 +67,7 @@ test('별칭 거래는 이름이 정확히 같은 것만 · 라우트는 별칭 
   const { _filterExactAlias } = require('../services/transactionService');
   const arr = [{ aptName: '상계주공7(고층)' }, { aptName: '주공7' }, { aptName: '상계주공7 (고층)' }];
   assert.deepEqual(_filterExactAlias(arr, '상계주공7(고층)').map(t => t.aptName), ['상계주공7(고층)', '상계주공7 (고층)']);
-  assert.match(fs.readFileSync(path.join(__dirname, '../routes/transactions.js'), 'utf8'), /\? await getTransactionsByAptInclAliases\(lawdCd, aptName, _mb\)/);
+  assert.match(fs.readFileSync(path.join(__dirname, '../routes/transactions.js'), 'utf8'), /\? await getTransactionsByAptInclAliases\(lawdCd, aptName, _mb, \{ umdNm \}\)/);
   const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
   const fn = html.match(/function _umdFromArea\(area\)\{[^\n]*\}/)[0];
   const f = new Function(`${fn}; return _umdFromArea;`)();

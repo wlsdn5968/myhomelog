@@ -117,7 +117,8 @@ async function _market(query, context) {
   if (regionAns) return regionAns;
   const admin = getSupabaseAdmin();
   if (!admin) return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
-  const since = new Date(); since.setMonth(since.getMonth() - 6);
+  // TXWINDOW-CHAT-2026-11-05: 상세·분석·추천과 같은 6개월 창(달 첫날부터, KST). 예전엔 오늘부터 6개월이라 시작일이 며칠 달랐다.
+  const since = require('../utils/txWindow').txWindowStart(6);
   const _safeQ = q.replace(/[%_]/g, '');
   // APT-RESOLVE-2026-09-06: 공백 제거판 — MOLIT 이름의 99.2%는 공백이 없어 "지역 단지명"
   //   형태(예: "공릉 풍림아이원")는 _safeQ 로는 원리적으로 0건이다. _nq 가 그걸 잡는다.
@@ -309,12 +310,14 @@ async function _market(query, context) {
 
   const TX_CAP = 400;   // 단지 하나(또는 A/B 합산) 기준 실측 최대 209건(400 초과 0곳).
   // 조회 조건(이름 집합) 하나로 6개월 거래를 가져온다 — Step 4: A/B 는 .in() 으로 합산 조회.
-  async function _fetchTx(names, sigunguVal) {
+  // SAME-DONG-2026-11-05 (기능별 불일치 전수조사): 상세·분석·지도는 같은 동만 세는데 도우미만 시군구 전체를 세어 같은 구의 동명 단지(노원구 "현대" 하계동·중계동)가 합쳐졌다.
+  async function _fetchTx(names, sigunguVal, umdVal) {
     let tq = admin.from('molit_transactions')
       .select('apt_name, sigungu, umd_nm, deal_amount, deal_date, exclu_use_ar, build_year')
       .in('apt_name', names)
-      .gte('deal_date', since.toISOString().slice(0, 10));
+      .gte('deal_date', since);
     tq = sigunguVal ? tq.eq('sigungu', sigunguVal) : tq.is('sigungu', null);
+    if (umdVal) tq = tq.eq('umd_nm', umdVal);
     return tq.order('deal_date', { ascending: false }).limit(TX_CAP);
   }
 
@@ -345,7 +348,7 @@ async function _market(query, context) {
     }
     const attempts = [{ c: top, names }, ...ranked.slice(1, 3).map(c => ({ c, names: [c.aptName] }))];
     for (const a of attempts) {
-      const { data, error } = await _fetchTx(a.names, a.c.sigungu);
+      const { data, error } = await _fetchTx(a.names, a.c.sigungu, a.c.umdNm);
       if (error) return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
       if (data && data.length) { picked = a.c; txs = data; if (a.names !== names) { mergedNote = null; mergedGroup = null; } break; }
     }
@@ -420,7 +423,7 @@ async function _market(query, context) {
         suggestions: scored.map(s => `${s.name} 시세`),
       };
     }
-    const { data: _txRaw, error } = await _fetchTx(names, am.sigungu || null);
+    const { data: _txRaw, error } = await _fetchTx(names, am.sigungu || null, am.umd_nm || null);
     const data = (_txRaw || []).filter(r => !_yearOf[r.apt_name] || Number(r.build_year) === _yearOf[r.apt_name]);
     if (error) return '지금 실거래 조회가 잠시 어려워요. 상단 검색창에서 단지명을 검색해 보세요.';
     if (!data || !data.length) {

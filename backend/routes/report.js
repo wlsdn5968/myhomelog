@@ -1477,10 +1477,11 @@ async function fetchCandidateApts(admin, input, limit) {
   // 단지 그룹화 + build_year mode + 신고가 갱신 카운트
   const byApt = {};
   for (const t of txList) {
-    const _canon = require('../services/transactionService').aliasCanon(_aliasMap, t.apt_name, t.umd_nm, t.build_year) || t.apt_name; // ALIAS-YEAR-2026-10-30 (Plan 178): 연도 별칭은 그 준공 연도 행만
+    const _canonHit = require('../services/transactionService').aliasCanon(_aliasMap, t.apt_name, t.umd_nm, t.build_year); const _canon = _canonHit || t.apt_name; // ALIAS-YEAR-2026-10-30 (Plan 178): 연도 별칭은 그 준공 연도 행만
     // SAME-DONG-SPLIT-2026-08-30: 추천 경로(transactionService.analyzeTransactions)와 **같은 정책**.
     //   이름+동이 같아도 준공년도가 다르면 다른 단지다(실측 20그룹·204거래).
-    const key = `${_canon}|${t.sigungu}|${t.umd_nm}|${t.build_year || ''}`;
+    // ALIAS-ONE-COMPLEX-2026-11-05: 공식 단지 별칭으로 묶인 거래는 준공 연도가 달라도 한 단지(analyzeTransactions 와 같은 규칙).
+    const key = `${_canon}|${t.sigungu}|${t.umd_nm}|${_canonHit ? '' : (t.build_year || '')}`;
     if (!byApt[key]) byApt[key] = {
       apt_name: _canon, sigungu: t.sigungu, umd_nm: t.umd_nm,
       lawd_cd: t.lawd_cd,

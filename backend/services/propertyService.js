@@ -685,7 +685,7 @@ async function getAIRecommendations(userCondition) {
   const aliasMap = await aliasMapPromise;
   _mark('alias');
   const relabeledTx = aliasMap.size
-    ? allTx.map(t => { const c = aliasCanon(aliasMap, t.aptName, t.umdNm, t.buildYear); /* ALIAS-YEAR-2026-10-30 */ return c ? { ...t, aptName: c } : t; })
+    ? allTx.map(t => { const c = aliasCanon(aliasMap, t.aptName, t.umdNm, t.buildYear); /* ALIAS-YEAR-2026-10-30 */ return c ? { ...t, aptName: c, _aliased: true } : t; })
     : allTx;
   const analyzed = analyzeTransactions(relabeledTx);
   _mark('collect');

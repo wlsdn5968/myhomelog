@@ -584,7 +584,8 @@ async function getTransactionsByApt(lawdCd, aptName, monthsBack = 6) {
   // P1-12 (2026-05-04): cache TTL 3600s → 1800s (30분)
   //   기존: 1시간 — 신규 거래 발생 시 1시간 stale data 노출
   //   변경: 30분 — 매일 17:00 UTC molit-ingest 후 30분이면 모든 사용자가 최신 받음
-  cache.set(cacheKey, sorted, 1800);
+  // PARTIAL-NOCACHE-2026-11-05: 달 일부를 못 읽은 결과를 30분 굳히면 그동안 건수가 줄어든 채 고정된다.
+  if (!_failedMonths.length) cache.set(cacheKey, sorted, 1800);
   return sorted;
 }
 
@@ -629,18 +630,28 @@ function _mergeAliasTx(arrays) {
   return merged.sort((a, b) => _d(b) - _d(a));
 }
 
-async function getTransactionsByAptInclAliases(lawdCd, aptName, monthsBack = 6) {
+// SAME-NAME-MASTER-2026-11-05 (기능별 불일치 전수조사, 운영 재현): 같은 시군구 이름에 같은 이름의 공식 단지가 둘이면(신도림현대 구로동·신도림동, 대경넥스빌 대구·울산 동구 등)
+//   limit(1) 이 아무 단지의 별칭이나 집어 신도림동 "신도림현대"가 거래 5건인데 0건으로 나왔다. 지역 코드와 동으로 고른다.
+//   동을 받았는데 그 동의 단지가 후보에 없으면 다른 동 단지의 별칭을 쓰지 않는다(이름 조회로 돌아간다).
+function _pickMasterRow(rows, lawdCd, umdNm) {
+  const list = Array.isArray(rows) ? rows : [];
+  const sgg = LAWD_CODE_TO_NAME[lawdCd] || null;
+  const same = list.filter(r => (r.lawd_cd && r.lawd_cd === lawdCd) || (!r.lawd_cd && sgg && r.sigungu === sgg));
+  const pool = same.length ? same : list.filter(r => sgg && r.sigungu === sgg);
+  if (umdNm) return pool.find(r => r.umd_nm === umdNm) || null;
+  return pool[0] || null;
+}
+
+async function getTransactionsByAptInclAliases(lawdCd, aptName, monthsBack = 6, opts = {}) {
   const base = await getTransactionsByApt(lawdCd, aptName, monthsBack);
   if (!aptName) return base;
   const admin = dbClient();
   if (!admin) return base;
   try {
-    const sigungu = LAWD_CODE_TO_NAME[lawdCd] || null;
-    let q = admin.from('apt_master').select('molit_aliases')
-      .eq('apt_name', aptName).not('molit_aliases', 'is', null).limit(1);
-    if (sigungu) q = q.eq('sigungu', sigungu);
-    const { data } = await q;
-    const aliases = (data && data[0] && Array.isArray(data[0].molit_aliases)) ? data[0].molit_aliases : [];
+    const { data } = await admin.from('apt_master').select('molit_aliases, lawd_cd, sigungu, umd_nm')
+      .eq('apt_name', aptName).not('molit_aliases', 'is', null).limit(20);
+    const row = _pickMasterRow(data, lawdCd, opts.umdNm);
+    const aliases = (row && Array.isArray(row.molit_aliases)) ? row.molit_aliases : [];
     if (!aliases.length) return base;
     // master(공릉풍림아이원)는 canonical 명으로 MOLIT 실거래가 없음(전부 alias 로 신고) → base 의
     //   느슨한 매칭(insertion 등)은 spurious 일 수 있어 제외. alias 거래만 병합(검색 path 와 동일 = 정확).
@@ -648,7 +659,8 @@ async function getTransactionsByAptInclAliases(lawdCd, aptName, monthsBack = 6) 
     //   같은 구 다른 동의 "주공7"(중계동·1993) 거래를 함께 돌려줬다(6개월 89건 중 14건). 별칭은 신고 원본 이름 그대로라
     //   **정확히 같은 이름**의 거래만 남긴다.
     const aliasArrays = await Promise.all(
-      aliases.slice(0, 5).map(a => {
+      // ALIAS-ALL-2026-11-05: 지도는 별칭을 전부 더하는데 여기만 앞 5개였다(운영 재현: 당정한솔솔파크 (601,602동), 당정대원칸타빌 (107동) 거래 누락). 운영 최대 7개.
+      aliases.slice(0, 20).map(a => {
         const p = parseAlias(a); // ALIAS-YEAR-2026-10-30: "이름#연도" 는 그 이름의 그 준공 연도 거래만
         return getTransactionsByApt(lawdCd, p.name, monthsBack)
           .then(arr => _filterExactAlias(arr, p.name).filter(t => !p.year || Number(t.buildYear) === p.year)).catch(() => []);
@@ -796,7 +808,9 @@ function analyzeTransactions(transactions) {
     //   전수: 다중 aptSeq 그룹 31 중 **준공년도까지 다른 것 20그룹·204거래**(최대 30년 차이).
     //   ⚠ apt_seq 로 나누지 않는다 — 한 단지에 여러 seq 가 붙는 경우(11그룹)까지 쪼개진다.
     //     준공년도는 "다르면 확실히 별개" 라는 **결정적 증거**이고, 과분할은 2그룹뿐이다(실측).
-    const gkey = `${t.aptName}|${t.lawdCd || ''}|${t.umdNm || ''}|${t.buildYear || ''}`;
+    // ALIAS-ONE-COMPLEX-2026-11-05 (기능별 불일치 전수조사): 공식 단지 별칭으로 묶인 거래는 준공 연도가 달라도 한 단지다(동별 준공, 예: 신도림대림1,2차 1999·2001 같은 지번 642).
+    //   지도·검색·인기는 한 줄인데 맞춤 찾기만 같은 이름 두 줄로 나왔다. 연도로 나누는 규칙은 별칭이 없는 같은 이름에만 쓴다.
+    const gkey = `${t.aptName}|${t.lawdCd || ''}|${t.umdNm || ''}|${t._aliased ? '' : (t.buildYear || '')}`;
     if (!byApt[gkey]) byApt[gkey] = [];
     byApt[gkey].push(t);
   }
@@ -1070,4 +1084,4 @@ async function getTransactionsByAptSeqMerged(aptSeq, monthsBack = 24) {
   });
 }
 
-module.exports = { parseAlias, aliasCanon, aptNameMatcher, _filterExactAlias, _mergeAliasTx, getTransactions, getTransactionsFromHist, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, getAliasCanonicalMapEach, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };
+module.exports = { parseAlias, aliasCanon, aptNameMatcher, _pickMasterRow, _filterExactAlias, _mergeAliasTx, getTransactions, getTransactionsFromHist, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, getAliasCanonicalMapEach, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };

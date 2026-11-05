@@ -43,7 +43,7 @@ router.get('/', validateTransactionQuery, async (req, res) => {
     const _mb = aptName && ['12', '15'].includes(String(monthsBack || '')) ? Number(monthsBack) : undefined;
     // ALIAS-EXACT-2026-10-27: 정식 단지명에 별칭이 있으면 별칭과 같은 이름의 거래만(다른 동 "주공7" 혼입 차단). 별칭이 없으면 종전 매칭.
     let list = aptName
-      ? await getTransactionsByAptInclAliases(lawdCd, aptName, _mb)
+      ? await getTransactionsByAptInclAliases(lawdCd, aptName, _mb, { umdNm })
       : await getTransactions(lawdCd, dealYm);
     // Sprint MM: sigungu/umdNm 지정 시 결과 추가 필터 — 다른 동 단지 환각 매칭 차단.
     if (sigungu || umdNm) {

@@ -341,7 +341,7 @@ test('기간·금리 표기가 실제와 일치한다 (Sprint MMMMMMM-5)', () =>
 
   // ① 가격 위치 백분위 — 표본은 6개월인데 표기는 1년이었다.
   //    전제: percentile 은 calcPricePercentile(filteredTx)로 계산되고 그 원천이 monthsBack=6 이다.
-  assert.match(tx, /async function getTransactionsByAptInclAliases\(lawdCd, aptName, monthsBack = 6\)/,
+  assert.match(tx, /async function getTransactionsByAptInclAliases\(lawdCd, aptName, monthsBack = 6, opts = \{\}\)/,
     '표본 기간 전제가 바뀌었다 — 표기도 함께 다시 판단할 것');
   assert.match(ana, /calcPricePercentile\(filteredTx/, '백분위 입력이 filteredTx 가 아니다');
   for (const bad of ['최근 1년 하위', '최근 1년 상위', '가격 위치 (최근 1년']) {
@@ -437,7 +437,7 @@ test('표본·범위 표기가 실제 집계와 맞다 (Sprint MMMMMMM-11)', () 
   assert.equal(html.includes('주변 (반경 800m~1km)'), false, '단일 반경 표기가 되돌아왔다');
 
   // ③ 층 분포는 전량이 아니라 화면에 불러온 표본 기준이다
-  assert.ok(html.includes('최근 6개월 국토교통부 실거래 · 표본 기준'), '층 분포가 전량 집계처럼 표기된다');
+  assert.ok(html.includes('국토교통부 실거래 최근 ${tx.length}건 기준'), '층 분포가 전량 집계처럼 표기된다');
 });
 
 
