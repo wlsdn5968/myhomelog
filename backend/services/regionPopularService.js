@@ -19,6 +19,7 @@ const { regionLabel } = require('./priceRecordsService');
 const { isUnnamedApt, displayAptName } = require('../utils/aptDisplayName');
 const { isValidKoreaCoord } = require('../utils/geo');
 const { getSnapshot, putSnapshot } = require('./snapshotStore');
+const { repAreaStats, sortRecentFirst } = require('../utils/repArea');
 
 const WINDOW_DAYS = 60;
 const TOP_N = 10;
@@ -54,7 +55,7 @@ async function _fetchLawdDeals(admin, lawd, sinceIso) {
   const rows = [];
   for (let from = 0; from < 20000; from += 1000) {
     const { data, error } = await admin.from('molit_transactions')
-      .select('apt_name, sigungu, umd_nm, lawd_cd, apt_seq, build_year, deal_date, deal_amount, jibun')
+      .select('apt_name, sigungu, umd_nm, lawd_cd, apt_seq, build_year, deal_date, deal_amount, jibun, exclu_use_ar')
       .eq('lawd_cd', lawd).gte('deal_date', sinceIso)
       .order('deal_date', { ascending: false }).order('id', { ascending: true })
       .range(from, from + 999);
@@ -101,11 +102,12 @@ function rankLawd(rows, aliasMap, n = TOP_N) {
     let e = g.get(k);
     if (!e) {
       e = { aptName: canon, sigungu: t.sigungu, umdNm: t.umd_nm, lawdCd: t.lawd_cd, buildYear: t.build_year,
-        recentDealDate: t.deal_date, dealCount60d: 0, _sum: 0, _raws: new Set(), _perDay: new Map(), _seqC: null, _seqCD: '', _seqA: null, _seqAD: '' };
+        recentDealDate: t.deal_date, dealCount60d: 0, _sum: 0, _rows: [], _raws: new Set(), _perDay: new Map(), _seqC: null, _seqCD: '', _seqA: null, _seqAD: '' };
       g.set(k, e);
     }
     e.dealCount60d += 1;
     e._sum += Number(t.deal_amount) || 0;
+    e._rows.push(t);
     e._perDay.set(String(t.deal_date), (e._perDay.get(String(t.deal_date)) || 0) + 1);
     e._raws.add(raw);
     if (String(t.deal_date) > String(e.recentDealDate)) e.recentDealDate = t.deal_date;
@@ -131,6 +133,7 @@ function rankLawd(rows, aliasMap, n = TOP_N) {
     });
     if (!host) { merged.push(e); continue; }
     host.dealCount60d += e.dealCount60d; host._sum += e._sum;
+    host._rows.push(...e._rows);
     for (const r of e._raws) host._raws.add(r);
     for (const [day, n] of e._perDay) host._perDay.set(day, (host._perDay.get(day) || 0) + n);
     if (String(e.recentDealDate) > String(host.recentDealDate)) host.recentDealDate = e.recentDealDate;
@@ -150,7 +153,14 @@ function rankLawd(rows, aliasMap, n = TOP_N) {
     .filter((e) => !isUnnamedApt(e.aptName) && e._burstShare < 0.5)
     .sort((a, b) => b._rankN - a._rankN || b.dealCount60d - a.dealCount60d || String(b.recentDealDate).localeCompare(String(a.recentDealDate)))
     .slice(0, n)
-    .map(({ _seqC, _seqCD, _seqA, _seqAD, _perDay, _rankN, _burstShare, ...e }) => ({ ...e, aptSeq: _seqC || _seqA || null, avgDealAmount: Math.round(e._sum / e.dealCount60d), _raws: [...e._raws] }));
+    .map(({ _seqC, _seqCD, _seqA, _seqAD, _perDay, _rankN, _burstShare, _rows, ...e }) => {
+      // REP-AREA-ONE-2026-11-06: 상세 헤더와 같은 대표 평형 평균. 평형을 모르는 거래뿐이면 예전 평균.
+      const rep = repAreaStats(sortRecentFirst(_rows));
+      return { ...e, aptSeq: _seqC || _seqA || null,
+        avgDealAmount: Math.round(rep ? rep.avg : e._sum / e.dealCount60d),
+        repArea: rep ? { sqm: rep.sqm, py: rep.py, n: rep.n } : null,
+        _raws: [...e._raws] };
+    });
 }
 
 async function _attachCoords(admin, items) {

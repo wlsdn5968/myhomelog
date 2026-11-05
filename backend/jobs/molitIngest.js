@@ -57,6 +57,14 @@ function recentYearMonths(months = 3) {
   return out;
 }
 
+// 오늘 다시 볼 오래된 달: 4~15개월 전(원본 창 16개월 안, 곧 잘릴 가장 오래된 달은 뺀다). 같은 날 세 슬롯은 같은 달을 본다.
+const CANCEL_TAIL_FROM = 3;
+const CANCEL_TAIL_SPAN = 12;
+function cancelTailMonth(nowMs = Date.now()) {
+  const idx = Math.floor(nowMs / 86400000) % CANCEL_TAIL_SPAN;
+  return recentYearMonths(CANCEL_TAIL_FROM + CANCEL_TAIL_SPAN)[CANCEL_TAIL_FROM + idx];
+}
+
 /**
  * 1개 region-month 만큼 MOLIT fetch + parse.
  *   - 페이지별 재시도 (3회, 지수백오프 300/600/1200ms) — 5xx/timeout 방어
@@ -562,6 +570,9 @@ async function runMolitIngest(opts = {}) {
   // Sprint AAAA: onlyLawds 지정 시 해당 코드만 (admin targeted ingest). 검증은 admin route 에서 화이트리스트로 수행.
   const onlySet = Array.isArray(opts.onlyLawds) && opts.onlyLawds.length
     ? new Set(opts.onlyLawds.map(String)) : null;
+  // CANCEL-TAIL-2026-11-06 (기능별 불일치 전수조사 후속): 해제 정리(Plan 172)는 다시 받는 달에서만 돈다. 일일 적재가 최근 3개월만 받아
+  //   4개월 넘은 거래가 나중에 해제되면 원본에 남았다. 기본 일일 회차에만 오래된 달 하나를 돌아가며 더 받는다(12일에 한 바퀴, 지역당 호출 1회 추가).
+  if (!opts.months && !offsetMonths && !onlySet) months.push(cancelTailMonth());
   // REGION-CHUNK-2026-07-12 (Sprint VVVV): 지역 자동분할. slotCount>1 이면 인덱스 기준 disjoint partition
   //   (idx % slotCount === slot) → 여러 cron 슬롯이 전체 지역을 정확히 분담(중복·누락 0). 커버리지 확장으로
   //   지역수가 늘어도 각 슬롯이 1/slotCount 만 처리해 maxDuration 300s 내 유지. slotCount 미지정=1=기존 동작 불변.
@@ -679,6 +690,7 @@ module.exports._ingestOne = ingestOne; // TEST-EXPORT-2026-10-18 (Plan 158): 적
 // TEST-EXPORT-2026-10-02 (Plan 130): 꼬리 달 판정 고정용
 module.exports._pickLiveTailYms = pickLiveTailYms;
 module.exports._LIVE_TAIL_MAX_MONTHS = LIVE_TAIL_MAX_MONTHS;
+module.exports._cancelTailMonth = cancelTailMonth;
 
 // CLI: node backend/jobs/molitIngest.js
 if (require.main === module) {

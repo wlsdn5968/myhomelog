@@ -169,7 +169,7 @@ test('AI 도우미 시세 — 같은 단지가 두 출처(molit_apt_index·apt_m
     assert.equal(/찾지 못했어요/.test(reply), false);
     assert.match(reply, /거래 1건/, '되묻지 않고 실거래 데이터로 바로 답해야 한다');
     assert.match(reply, /은마 \(강남구 대치동\)/);
-    assert.equal(tracker.doubleIlikeChains, 3, '1라운드(3조회)에서 성공해 멈춰야 한다 — 왕복 상한 불변(Plan 059 는 조회 구성을 건드리지 않는다)');
+    assert.equal(tracker.doubleIlikeChains, 4, '1라운드(4조회, 2026-11-06 공식 단지 시군구 조회 추가)에서 성공해 멈춰야 한다 — 왕복 상한 불변(Plan 059 는 조회 구성을 건드리지 않는다)');
     assert.equal(_NO_PROMO.test(reply), false);
     assert.ok(Array.isArray(suggestions));
   } finally { restore(); }

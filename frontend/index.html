@@ -926,6 +926,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .hp-nm{font-size:16px;font-weight:600;line-height:1.6}
 .hp-rg{font-size:14px;font-weight:400;line-height:1.6;color:var(--t3)}
 .hp-pr{font-size:16px;font-weight:600}
+.hp-ar{display:block;font-size:12px;font-weight:500;color:var(--t3)}
 .hp-ct{font-size:14px;color:var(--t2)}
 .hp-msg{padding:20px 24px;font-size:14px;line-height:1.6;color:var(--t3)}
 .hp-msg button,.hp-note button{height:36px;padding:0 4px;border:none;background:none;color:var(--acc);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
@@ -4718,7 +4719,7 @@ async function _loadLandingRegions(){
           const n = Number(g.deals60d || 0).toLocaleString();
           return `<button type="button" class="lv-row" aria-label="${_escHtml(`${gu} 최근 60일 거래 ${n}건, 1위 ${name}${amt ? `, 평균 거래가 ${amt}` : ''}`)}" onclick='_lvRegion(${_jsonAttr(g.lawdCd)})'>`
             + `<span class="lv-l"><span class="lv-nm">${_escHtml(gu)}<small>${n}건</small></span><span class="lv-ds">1위 ${_escHtml(name)}</span></span>`
-            + `<span class="lv-r"><span class="lv-amt">${_escHtml(amt)}</span><span class="lv-ds">${amt ? '평균 거래가' : ''}</span></span></button>`;
+            + `<span class="lv-r"><span class="lv-amt">${_escHtml(amt)}</span><span class="lv-ds">${amt ? (p.repArea ? `${Number(p.repArea.sqm)}㎡ 평균` : '평균 거래가') : ''}</span></span></button>`;
         }).join('');
         return;
       }
@@ -6451,7 +6452,7 @@ async function renderBriefing(){
       popHtml=ps.slice(0,5).map((p2,i)=>`<button class="brf-top" onclick='goSearchResult(${_jsonAttr({aptName:p2.aptName,sigungu:p2.sigungu,umdNm:p2.umdNm,lawdCd:p2.lawdCd,buildYear:p2.buildYear,recentDealDate:p2.recentDealDate})})'>
         <span style="flex:0 0 18px;font-size:12px;font-weight:800;color:var(--brf-tx3);font-variant-numeric:tabular-nums">${i+1}</span>
         <span style="flex:1;min-width:0"><span class="brf-ell" style="display:block;font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(p2.displayName || _dispAptName(p2.aptName, p2.umdNm) || '')}</span><span style="display:block;margin-top:2px;font-size:12px;color:var(--brf-tx3)">${_escHtml(_fmtSgg(p2.sigungu))}</span></span>
-        <span style="text-align:right;flex-shrink:0">${Number.isFinite(Number(p2.avgDealAmount))&&Number(p2.avgDealAmount)>0?`<span style="display:block;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums">${(Number(p2.avgDealAmount)/10000).toFixed(2)}억</span>`:''}<span style="display:block;margin-top:2px;font-size:12px;font-weight:700;color:var(--brf-tx2);font-variant-numeric:tabular-nums">${p2.dealCount60d?p2.dealCount60d+'건':''}</span></span>
+        <span style="text-align:right;flex-shrink:0">${Number.isFinite(Number(p2.avgDealAmount))&&Number(p2.avgDealAmount)>0?`<span style="display:block;font-size:12px;font-weight:800;font-variant-numeric:tabular-nums">${(Number(p2.avgDealAmount)/10000).toFixed(2)}억</span>`:''}<span style="display:block;margin-top:2px;font-size:12px;font-weight:700;color:var(--brf-tx2);font-variant-numeric:tabular-nums">${p2.repArea?Number(p2.repArea.sqm)+'㎡ 평균 · ':''}${p2.dealCount60d?p2.dealCount60d+'건':''}</span></span>
       </button>`).join('');
     } else { popHtml=`<div style="font-size:12px;color:var(--brf-tx3);padding:6px 0">불러오지 못했어요</div>`; }
     w.innerHTML=`
@@ -6629,7 +6630,7 @@ function _mapSheetTry(kind,p){
     const sub=_fmtSgg([(p.sigungu||''),(p.umdNm||'')].filter(Boolean).join(' ')||String(p.area||''));
     let priceV='',priceL='';
     if(kind==='pop'){
-      if(Number.isFinite(Number(p.avgDealAmount))&&Number(p.avgDealAmount)>0){priceV=(Number(p.avgDealAmount)/10000).toFixed(2)+'억';priceL='최근 60일 실거래 평균';}
+      if(Number.isFinite(Number(p.avgDealAmount))&&Number(p.avgDealAmount)>0){priceV=(Number(p.avgDealAmount)/10000).toFixed(2)+'억';priceL=p.repArea?`최근 60일 ${p.repArea.sqm}㎡ 실거래 평균`:'최근 60일 실거래 평균';}
       else if(p.dealCount60d){priceV=p.dealCount60d+'건';priceL='최근 60일 실거래';}
     }else{
       const v=Number(p.avgPrice||p.price||0);
@@ -7345,7 +7346,7 @@ function mkNaverIW(p){
     // POPUP-FACTS-2026-10-27 (QA): 점수가 없는 마커(이 지역 단지 보기)는 "데이터 분석 대기"만 보여 막다른 길이었다 —
     //   이미 받은 사실(최근 180일 실거래 건수·단순 평균, /search/in-bounds 와 같은 값)을 보여 주고 상세로 이끈다. 값이 없으면 안내만.
     : `<div style="font-size:12px;color:var(--text-secondary);line-height:1.6">${(Number(p.dealCount) > 0 && Number(p.avgPrice) > 0)
-        ? `최근 6개월 실거래 <b style="color:var(--text-primary)">${Number(p.dealCount).toLocaleString()}건</b> · 전 평형 평균 <b style="color:var(--text-primary)">${_escHtml(Number(p.avgPrice).toFixed(2))}억</b>`
+        ? `최근 6개월 실거래 <b style="color:var(--text-primary)">${Number(p.dealCount).toLocaleString()}건</b> · ${p.repArea?_escHtml(`${p.repArea.sqm}㎡(${p.repArea.py}평) 최근 ${p.repArea.n}건 평균`):'전 평형 평균'} <b style="color:var(--text-primary)">${_escHtml(Number(p.avgPrice).toFixed(2))}억</b>`
         : '최근 거래 요약을 아직 계산하지 않았어요'}<br><span style="color:var(--text-tertiary)">평형별 실거래는 단지 상세에서 볼 수 있어요</span></div>`;
   return`<div style="background:var(--bg-elev-1);border-radius:var(--radius-md);box-shadow:var(--shadow-lg);border:1px solid var(--border-subtle);overflow:hidden">
     <div class="niw" style="position:relative">
@@ -10280,7 +10281,7 @@ function _drawRankCard(list){
       x.fillText((Number(p.avgDealAmount)/10000).toFixed(2)+'억',W-80,y+2);
     }
     x.fillStyle='#93A4BD';x.font='700 26px "Pretendard Variable", Pretendard, system-ui, sans-serif';
-    x.fillText((p.dealCount60d?p.dealCount60d+'건':''),W-80,y+54);
+    x.fillText((p.repArea?Number(p.repArea.sqm)+'㎡ 평균 · ':'')+(p.dealCount60d?p.dealCount60d+'건':''),W-80,y+54);
     x.textAlign='left';
     if(i<list.length-1){x.fillStyle='#22344E';x.fillRect(80,y+112,W-160,1);}
     y+=138;
@@ -13465,11 +13466,12 @@ function _hpRender(){
     const name = String(p.displayName || _dispAptName(p.aptName, p.umdNm) || '');
     const region = [_hpSidoOf(p), _fmtSgg(String(p.sigungu || '').trim()), String(p.umdNm || '').trim()].filter(Boolean).join(' ');
     const amt = Number(p.avgDealAmount), cnt = Number(p.dealCount60d);
-    const price = !deg && Number.isFinite(amt) && amt > 0 ? `${(amt / 10000).toFixed(2)}억` : '';
+    // REP-AREA-ONE-2026-11-06: 인기 목록의 평균은 그 단지에서 거래가 가장 많은 평형만으로 낸다. 어느 평형 값인지 가격 아래에 적는다.
+    const price = !deg && Number.isFinite(amt) && amt > 0 ? `${(amt / 10000).toFixed(2)}억${p.repArea ? `<small class="hp-ar">${Number(p.repArea.sqm)}㎡</small>` : ''}` : '';
     // 모바일 시트는 시안대로 "거래 N건"(표 머리가 없다) — 앞말은 데스크톱에서 CSS 로 숨긴다
     const count = !deg && Number.isFinite(cnt) && cnt > 0 ? `<span class="hp-ctl">거래 </span>${cnt}건` : '';
     const arg = { aptName:p.aptName, sigungu:p.sigungu, umdNm:p.umdNm, lawdCd:p.lawdCd, buildYear:p.buildYear, recentDealDate:p.recentDealDate, aptSeq:p.aptSeq || null, lat:p.lat, lng:p.lng };
-    const label = [name, region, price && `60일 평균가 ${price}`, count && `거래 ${cnt}건`].filter(Boolean).join(', ');
+    const label = [name, region, price && `60일 ${p.repArea ? `${p.repArea.sqm}제곱미터 ` : ''}평균가 ${(amt / 10000).toFixed(2)}억`, count && `거래 ${cnt}건`].filter(Boolean).join(', ');
     return `<button type="button" class="hp-row" aria-label="${_escHtml(label)}" onclick='goSearchResult(${_jsonAttr(arg)})'>`
       + `<span class="hp-c1"><span class="hp-nm">${_escHtml(name)}</span><span class="hp-rg">${_escHtml(region)}</span></span>`
       + `<span class="hp-pr">${price}</span><span class="hp-ct">${count}</span></button>`;
@@ -13508,10 +13510,10 @@ function _hpRegRow(p, rank){
   const name = String(p.displayName || _dispAptName(p.aptName, p.umdNm) || '');
   const region = [_fmtSgg(String(p.sigungu || '').trim()), String(p.umdNm || '').trim()].filter(Boolean).join(' ');
   const amt = Number(p.avgDealAmount), cnt = Number(p.dealCount60d);
-  const price = Number.isFinite(amt) && amt > 0 ? `${(amt / 10000).toFixed(2)}억` : '';
+  const price = Number.isFinite(amt) && amt > 0 ? `${(amt / 10000).toFixed(2)}억${p.repArea ? `<small class="hp-ar">${Number(p.repArea.sqm)}㎡</small>` : ''}` : '';
   const count = Number.isFinite(cnt) && cnt > 0 ? `<span class="hp-ctl">거래 </span>${cnt}건` : '';
   const arg = { aptName:p.aptName, sigungu:p.sigungu, umdNm:p.umdNm, lawdCd:p.lawdCd, buildYear:p.buildYear, recentDealDate:p.recentDealDate, aptSeq:p.aptSeq || null, lat:p.lat, lng:p.lng };
-  const label = [`${rank}위`, name, region, price && `60일 평균가 ${price}`, count && `거래 ${cnt}건`, p.lat ? '' : '지도 위치 확인 중'].filter(Boolean).join(', ');
+  const label = [`${rank}위`, name, region, price && `60일 ${p.repArea ? `${p.repArea.sqm}제곱미터 ` : ''}평균가 ${(amt / 10000).toFixed(2)}억`, count && `거래 ${cnt}건`, p.lat ? '' : '지도 위치 확인 중'].filter(Boolean).join(', ');
   return `<button type="button" class="hp-row" aria-label="${_escHtml(label)}" onclick='goSearchResult(${_jsonAttr(arg)})'>`
     + `<span class="hp-c1" style="display:flex;align-items:center"><span class="hp-rk">${rank}</span><span style="min-width:0"><span class="hp-nm">${_escHtml(name)}</span><span class="hp-rg">${_escHtml(region)}</span></span></span>`
     + `<span class="hp-pr">${price}</span><span class="hp-ct">${count}</span></button>`;

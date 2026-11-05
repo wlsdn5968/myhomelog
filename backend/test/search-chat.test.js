@@ -449,7 +449,7 @@ test('AI 도우미 시세 — "대치 은마 시세"가 지역 분리 재시도�
     assert.match(reply, /거래 1건/);
     assert.equal(/찾지 못했어요/.test(reply), false, 'Plan 057 이전엔 이 문구가 나왔다 — 재현이 안 되면 STOP 대상');
     assert.equal(/동탄시범다은마을/.test(reply), false, '지역으로 좁히지 않고 전국 부분일치로 갔다면 반송동 잡음이 섞였을 것');
-    assert.equal(tracker.doubleIlikeChains, 3, '지역 분리 재시도는 1라운드(3조회)에서 성공해 멈춰야 한다 — 왕복 상한 위반(2라운드까지 돌았다)');
+    assert.equal(tracker.doubleIlikeChains, 4, '지역 분리 재시도는 1라운드(4조회, 2026-11-06 공식 단지 시군구 조회 추가)에서 성공해 멈춰야 한다 — 왕복 상한 위반(2라운드까지 돌았다)');
     assert.equal(_NO_PROMO.test(reply), false);
     assert.ok(Array.isArray(suggestions));
   } finally { restore(); }
@@ -530,7 +530,7 @@ test('AI 도우미 시세 — 지역으로 좁혀도 후보가 2곳 이상이면
     assert.equal(/찾지 못했어요/.test(reply), false);
     assert.ok(suggestions.length >= 1 && suggestions.length <= 3);
     assert.ok(suggestions.every(s => /시세$/.test(s)));
-    assert.equal(tracker.doubleIlikeChains, 3, '되묻기 전까지 1라운드만 돌아야 한다');
+    assert.equal(tracker.doubleIlikeChains, 4, '되묻기 전까지 1라운드만 돌아야 한다');
     assert.equal(_NO_PROMO.test(reply), false);
   } finally { restore(); }
 });
@@ -646,7 +646,7 @@ test('AI 도우미 시세 — 지역 분리 재시도에서 진짜로 다른 두
     assert.equal(secondIdx, -1, '같은 표시 문자열이 목록에 두 번 나왔다 — 중복 제거가 깨졌다');
     assert.match(reply, /은마타운\(강남구\)/, '두 번째(실제로 다른) 단지 은마타운이 목록에서 빠졌다');
     assert.equal(new Set(suggestions).size, suggestions.length, 'suggestions 에 중복이 있다');
-    assert.equal(tracker.doubleIlikeChains, 3, '되묻기 전까지 1라운드만 돌아야 한다');
+    assert.equal(tracker.doubleIlikeChains, 4, '되묻기 전까지 1라운드만 돌아야 한다');
     assert.equal(_NO_PROMO.test(reply), false);
   } finally { restore(); }
 });

@@ -273,7 +273,7 @@ test('buildPopularResults — aptSeq 를 molit_apt_dim 에서 얻고 molit_trans
     assert.ok(eun, '은마 행이 있어야 한다');
     assert.equal(eun.aptSeq, '11680-218');
     assert.ok(tables.includes('molit_apt_dim'), 'molit_apt_dim 을 읽어야 한다');
-    assert.ok(!tables.includes('molit_transactions'), 'molit_transactions 의 apt_seq 조회로 가면 안 된다');
+    // POPULAR-RECOUNT-2026-11-06: 건수와 대표 평형은 원본을 다시 읽는다. 단지 번호는 그 조회가 실패해도(여기 스텁처럼) dim 에서 온다.
   } finally {
     if (saved.g) require.cache[geoPath] = saved.g; else delete require.cache[geoPath];
     if (saved.s) require.cache[svcPath] = saved.s; else delete require.cache[svcPath];

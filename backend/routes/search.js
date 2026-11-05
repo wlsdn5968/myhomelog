@@ -1025,6 +1025,7 @@ function mergeNearDuplicateGroups(list, opts = {}) {
         (host._mergedNames = host._mergedNames || []).push(host.aptName); host.aptName = _hs;
       }
       host.sum += g.sum; host.n += g.n;
+      if (g._rows) (host._rows = host._rows || []).push(...g._rows);
       if (!host.buildYear) host.buildYear = g.buildYear;
       if (!host.lawdCd) host.lawdCd = g.lawdCd;
       (host._mergedNames = host._mergedNames || []).push(g.aptName);
@@ -1033,6 +1034,7 @@ function mergeNearDuplicateGroups(list, opts = {}) {
   return kept;
 }
 
+const { repAreaStats, sortRecentFirst } = require('../utils/repArea');
 router.get('/in-bounds', async (req, res) => {
   const south = parseFloat(req.query.south);
   const west = parseFloat(req.query.west);
@@ -1102,7 +1104,7 @@ router.get('/in-bounds', async (req, res) => {
       for (let _from = 0; _from <= 9000; _from += 1000) {
         let _q = admin
           .from('molit_transactions')
-          .select('apt_name, sigungu, umd_nm, deal_amount, build_year, deal_date, lawd_cd')
+          .select('apt_name, sigungu, umd_nm, deal_amount, build_year, deal_date, lawd_cd, exclu_use_ar')
           .in('apt_name', names);
         if (umds.length) _q = _q.in('umd_nm', umds); // 동 스코프 — 전국 동명 충돌 차단 + row budget 보호
         const { data: _page } = await _q
@@ -1142,13 +1144,15 @@ router.get('/in-bounds', async (req, res) => {
     for (const t of (txs || [])) {
       // (apt_name|sigungu|umd_nm) 정확 키 — 동명 타지역 단지 합산 차단
       const _k = `${t.apt_name}|${t.sigungu}|${t.umd_nm}`;
-      if (!aptStats[_k]) aptStats[_k] = { sum: 0, n: 0, buildYear: t.build_year, lawdCd: t.lawd_cd };
+      if (!aptStats[_k]) aptStats[_k] = { sum: 0, n: 0, buildYear: t.build_year, lawdCd: t.lawd_cd, rows: [] };
       aptStats[_k].sum += t.deal_amount || 0;
       aptStats[_k].n++;
+      aptStats[_k].rows.push(t); // REP-AREA-MAP-2026-11-06: 대표 평형 계산용
       const _ky = `${_k}|${Number(t.build_year) || 0}`; // ALIAS-YEAR-2026-10-30: 연도 별칭 단지용 준공 연도별 집계
-      if (!aptStatsY[_ky]) aptStatsY[_ky] = { sum: 0, n: 0, buildYear: t.build_year, lawdCd: t.lawd_cd };
+      if (!aptStatsY[_ky]) aptStatsY[_ky] = { sum: 0, n: 0, buildYear: t.build_year, lawdCd: t.lawd_cd, rows: [] };
       aptStatsY[_ky].sum += t.deal_amount || 0;
       aptStatsY[_ky].n++;
+      aptStatsY[_ky].rows.push(t);
     }
 
     // ALIAS-MERGE-2026-05-21 (운영자 발견 "검색 vs 지도 영역보기 매물 불일치"):
@@ -1211,7 +1215,7 @@ router.get('/in-bounds', async (req, res) => {
         sigungu: master ? master.sigungu : c.sigungu,
         umdNm: c.umd_nm,
         lat: Number(c.lat), lng: Number(c.lng),
-        sum: 0, n: 0, buildYear: null, lawdCd: null,
+        sum: 0, n: 0, buildYear: null, lawdCd: null, _rows: [],
         aptSeq: master ? (master.kapt_code || null) : null,
         source: master ? 'master' : 'molit',
         _bestN: -1, _bestRank: -1,
@@ -1221,6 +1225,7 @@ router.get('/in-bounds', async (req, res) => {
       g._seen.add(seenName);
       if (s && s.n && s.sum) {
         g.sum += s.sum; g.n += s.n;
+        if (s.rows) g._rows.push(...s.rows);
         if (!g.buildYear) g.buildYear = s.buildYear;
         if (!g.lawdCd) g.lawdCd = s.lawdCd;
         // CANON-COORD-FIX-2026-06-03: 대표 좌표 = 본체 우선(비하위시설 > 하위시설), 동순위는 거래량.
@@ -1264,14 +1269,14 @@ router.get('/in-bounds', async (req, res) => {
       const _mUmds = [...new Set(_missing.map(x => x[0].umdNm).filter(Boolean))];
       const _mStats = {};
       for (let _from = 0; _from <= 4000; _from += 1000) {
-        let _q = admin.from('molit_transactions').select('apt_name, sigungu, umd_nm, deal_amount, build_year, lawd_cd').in('apt_name', _mNames);
+        let _q = admin.from('molit_transactions').select('apt_name, sigungu, umd_nm, deal_amount, build_year, lawd_cd, deal_date, exclu_use_ar').in('apt_name', _mNames);
         if (_mUmds.length) _q = _q.in('umd_nm', _mUmds);
         const { data: _page, error: _me } = await _q.gte('deal_date', _cut180).order('id', { ascending: false }).range(_from, _from + 999);
         if (_me) throw _me;
         for (const t of (_page || [])) {
           for (const _k of [`${t.apt_name}|${t.umd_nm}`, `${t.apt_name}|${t.umd_nm}|${Number(t.build_year) || 0}`]) { // ALIAS-YEAR-2026-10-30: 연도별 키도
-            if (!_mStats[_k]) _mStats[_k] = { sum: 0, n: 0, sigungu: t.sigungu, buildYear: t.build_year, lawdCd: t.lawd_cd };
-            _mStats[_k].sum += t.deal_amount || 0; _mStats[_k].n++;
+            if (!_mStats[_k]) _mStats[_k] = { sum: 0, n: 0, sigungu: t.sigungu, buildYear: t.build_year, lawdCd: t.lawd_cd, rows: [] };
+            _mStats[_k].sum += t.deal_amount || 0; _mStats[_k].n++; _mStats[_k].rows.push(t);
           }
         }
         if (!_page || _page.length < 1000) break;
@@ -1281,6 +1286,7 @@ router.get('/in-bounds', async (req, res) => {
         const st = _mStats[_pa.year ? `${_pa.name}|${g.umdNm}|${_pa.year}` : `${a}|${g.umdNm}`];
         if (!st || (g.sigungu && st.sigungu && st.sigungu !== g.sigungu)) continue; // 같은 시군구만(동명 타지역 차단)
         g.sum += st.sum; g.n += st.n; g._seen.add(a);
+        if (st.rows) g._rows.push(...st.rows);
         if (!g.buildYear) g.buildYear = st.buildYear;
         if (!g.lawdCd) g.lawdCd = st.lawdCd;
       }
@@ -1298,7 +1304,10 @@ router.get('/in-bounds', async (req, res) => {
     const _jibunSafe = await _jibunSafeStems(admin, _pinList).catch(() => new Set()); // JIBUN-PIN: 판정 실패면 합치지 않는다
     const out = mergeNearDuplicateGroups(_pinList, { jibunSafe: _jibunSafe }).map(g => {
       if (!g.n || !g.sum) return null; // 거래 0건 → 제외
-      const avg = +(g.sum / g.n / 10000).toFixed(2);
+      // REP-AREA-MAP-2026-11-06 (운영 실측: 공릉풍림아이원 상세 8.12억, 지도 7.91억): 전 평형을 섞은 평균은 어느 집 값도 아니다. 상세 헤더와 같은 대표 평형 규칙.
+      //   평형을 모르는 거래뿐이면 예전 평균을 그대로 쓰고 repArea 를 비운다(화면이 "전 평형 평균"으로 적는다).
+      const _rep = repAreaStats(sortRecentFirst(g._rows));
+      const avg = +((_rep ? _rep.avg : g.sum / g.n) / 10000).toFixed(2);
       if (!avg || avg <= 0) return null;
       return {
         aptName: g.aptName,
@@ -1307,6 +1316,7 @@ router.get('/in-bounds', async (req, res) => {
         lat: g.lat,
         lng: g.lng,
         avgPrice: avg,
+        repArea: _rep ? { sqm: _rep.sqm, py: _rep.py, n: _rep.n } : null,
         dealCount: g.n,
         buildYear: g.buildYear || null,
         lawdCd: g.lawdCd || null,

@@ -29,6 +29,7 @@ const { resolveCoordBatch } = require('./geocodeCacheService');
 const { isValidKoreaCoord } = require('../utils/geo');
 // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(조회 키)은 바꾸지 않는다.
 const { isUnnamedApt, displayAptName } = require('../utils/aptDisplayName');
+const { repAreaStats, sortRecentFirst } = require('../utils/repArea');
 
 const SNAPSHOT_MAX_AGE_MS = 36 * 60 * 60 * 1000; // 36시간 — daily cron 1회 실패까지 허용
 
@@ -58,6 +59,81 @@ const SNAPSHOT_MIN_ROWS = 8; // SNAP-SLACK-2026-09-16 (Plan 097): 스냅샷이 �
 const anonClient = () => getSupabaseReadonly();
 const serviceClient = () => getSupabaseAdmin();
 
+const RPC_CANDIDATES = 400;
+const RECOUNT_HEAD = 60;
+const RECOUNT_MAX_ROWS = 20000;
+
+/**
+ * POPULAR-RECOUNT-2026-11-06 (기능별 불일치 전수조사 후속): 합친 뒤 상위 단지의 60일 거래를 원본에서 다시 읽는다.
+ *   1) 순위 밖으로 잘린 신고 이름의 거래까지 건수에 넣는다(공식 단지의 모든 별칭을 읽는다).
+ *   2) 평균가를 상세 헤더와 같은 대표 평형 규칙으로 낸다. 기간은 60일 그대로 두고 평형을 함께 적는다.
+ *   조회가 실패하면 RPC 값을 그대로 쓴다(repArea 없음, 화면은 예전 라벨).
+ * @returns {Array} 건수 내림차순으로 다시 정렬한 top (head 밖 행은 뒤에 그대로)
+ */
+async function recountTop(admin, top, aliasMap, headN) {
+  try {
+    const { aliasCanon, parseAlias } = require('./transactionService');
+    const head = top.slice(0, headN);
+    const rest = top.slice(headN);
+    const canonKey = (canon, umd, sgg) => `${canon}|${sgg || ''}|${umd || ''}`;
+    const wanted = new Set(head.filter(t => t._canon).map(t => canonKey(t._canon, t.umd_nm, t.sigungu)));
+    const names = new Set(head.map(t => t.apt_name));
+    if (aliasMap && aliasMap.size) {
+      const umds = new Set(head.filter(t => t._canon).map(t => `${t._canon}|${t.umd_nm || ''}`));
+      for (const [k, canon] of aliasMap) {
+        const [nm, umd] = String(k).split('|');
+        if (umds.has(`${canon}|${umd || ''}`)) names.add(parseAlias(nm).name);
+      }
+    }
+    const since = new Date(Date.now() - POPULAR_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
+    const headUmds = [...new Set(head.map(t => t.umd_nm).filter(Boolean))];
+    const nameList = [...names];
+    const rows = [];
+    for (let i = 0; i < nameList.length; i += 200) {
+      for (let from = 0; from < RECOUNT_MAX_ROWS; from += 1000) {
+        let q = admin.from('molit_transactions')
+          .select('apt_name, sigungu, umd_nm, build_year, deal_date, deal_amount, exclu_use_ar')
+          .in('apt_name', nameList.slice(i, i + 200));
+        if (headUmds.length) q = q.in('umd_nm', headUmds);
+        const { data, error } = await q.gte('deal_date', since)
+          .order('deal_date', { ascending: false }).order('id', { ascending: false })
+          .range(from, from + 999);
+        if (error) throw new Error(error.message);
+        if (data && data.length) rows.push(...data);
+        if (!data || data.length < 1000) break;
+      }
+    }
+    const byCanon = new Map();
+    const byRaw = new Map();
+    for (const r of rows) {
+      const canon = aliasCanon(aliasMap, r.apt_name, r.umd_nm, r.build_year);
+      const ck = canon && canonKey(canon, r.umd_nm, r.sigungu);
+      if (ck && wanted.has(ck)) (byCanon.get(ck) || byCanon.set(ck, []).get(ck)).push(r);
+      else {
+        const rk = `${r.apt_name}|${r.sigungu || ''}|${r.umd_nm || ''}`;
+        (byRaw.get(rk) || byRaw.set(rk, []).get(rk)).push(r);
+      }
+    }
+    for (const t of head) {
+      const list = t._canon ? byCanon.get(canonKey(t._canon, t.umd_nm, t.sigungu))
+        : byRaw.get(`${t.apt_name}|${t.sigungu || ''}|${t.umd_nm || ''}`);
+      if (!list || !list.length) continue;
+      const sorted = sortRecentFirst(list);
+      t.count = sorted.length;
+      t.latest = sorted[0].deal_date || t.latest;
+      const rep = repAreaStats(sorted);
+      if (rep) {
+        t.deal_amount = Math.round(rep.avg);
+        t.repArea = { sqm: rep.sqm, py: rep.py, n: rep.n };
+      }
+    }
+    return [...head.sort((a, b) => b.count - a.count), ...rest];
+  } catch (e) {
+    logger.warn({ err: e.message }, 'popular: 다시 세기 실패, 집계 값 그대로 진행');
+    return top;
+  }
+}
+
 /**
  * 인기 단지 라이브 집계 — search.js /popular 에서 이동 (Sprint LLLL, 로직 무변경).
  * @param {number} limit
@@ -73,8 +149,10 @@ async function buildPopularResults(limit = 12, opts = {}) {
   // ① 전국 60일 실거래량 top — RPC 집계 (정직한 거래량순)
   //   GEOCODE-ROBUST-2026-06-14: 라이브 지오코딩(lazy-fill)이 불안정해도 마커를 꽉 채우기 위해
   //   limit 보다 넉넉히(×5, 최대 80) 받아 → 좌표 보유 단지를 거래량 순서대로 limit 개 선택.
-  const fetchN = Math.min(limit * 5, 80);
+  // POPULAR-RECOUNT-2026-11-06: 신고 이름별 순위라 80위(운영 실측 21건) 밑으로 갈린 단지는 합치기 전에 잘렸다. 400위(약 13건)까지 받아 합친 뒤 고른다. 결과 행만 늘고 집계 비용은 같다.
+  const fetchN = Math.max(Math.min(limit * 5, 80), RPC_CANDIDATES);
   let top = null;
+  let aliasMap = null;
   let usedFallback = false;
   // ② RPC 7초 컷 — POPULAR-QUALITY-FIX-2026-07-11: 4초 컷이 콜드 RPC 를 성급히 끊어
   //   저품질 fallback 을 장기 캐시에 박제한 회귀의 재발 방지 균형점.
@@ -134,6 +212,7 @@ async function buildPopularResults(limit = 12, opts = {}) {
     // 지연 로딩 — 이 모듈을 불러오는 테스트들이 DB 클라이언트를 바꿔 끼우는데, 위에서 불러오면 그 전에 거래 서비스가 실제 클라이언트를 잡는다
     const { getAliasCanonicalMapEach, aliasCanon } = require('./transactionService');
     const _amap = await getAliasCanonicalMapEach(top.map(t => t.lawd_cd));
+    aliasMap = _amap;
     if (_amap.size) {
       const merged = new Map();
       for (const t of [...top].sort((a, b) => b.count - a.count)) {
@@ -151,6 +230,9 @@ async function buildPopularResults(limit = 12, opts = {}) {
       top = [...merged.values()].sort((a, b) => b.count - a.count);
     }
   } catch (e) { logger.warn({ err: e.message }, 'popular: 별칭 묶기 실패 — 신고 이름 그대로 진행'); }
+
+  // 대체 경로(최근 거래 표본)는 어차피 화면이 평균가와 건수를 비운다. 정상 경로만 다시 센다.
+  if (!usedFallback) top = await recountTop(admin, top, aliasMap, Math.max(limit * 3, RECOUNT_HEAD));
 
   // POPULAR-QUALITY (c): MOLIT raw 접두("산척동,") 제거 — 표시용만 (좌표 join 키는 raw 유지)
   const _cleanName = (n) => String(n || '').replace(/^[가-힣0-9]{1,8}(동|리|가),\s*/, '');
@@ -217,6 +299,7 @@ async function buildPopularResults(limit = 12, opts = {}) {
     aptName: t._canon || _cleanName(t.apt_name), sigungu: t.sigungu, umdNm: t.umd_nm,
     lawdCd: t.lawd_cd, buildYear: t.build_year,
     recentDealDate: t.latest, dealCount60d: t.count, avgDealAmount: t.deal_amount,
+    repArea: t.repArea || null,
     lat: Number(c.lat), lng: Number(c.lng),
     // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — aptName(위, 조회 키)은 그대로 두고 별도 필드로만 얹는다.
     displayName: t._canon || displayAptName(_cleanName(t.apt_name), { umdNm: t.umd_nm }),

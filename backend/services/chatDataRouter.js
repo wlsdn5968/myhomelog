@@ -26,16 +26,9 @@ const { displayAptName } = require('../utils/aptDisplayName');
 // REP-AREA-CHAT-2026-11-05 (기능별 불일치 전수조사, 운영 실측: 공릉풍림아이원 상세 8.12억, 도우미 7.91억): 상세 헤더와 같은 규칙.
 //   최근 30건 중 거래가 가장 많은 평형(동률이면 가장 최근 거래의 평형)만으로 평균을 낸다. txs 는 최신순이다.
 function _repAreaLine(txs) {
-  const by = new Map();
-  for (const t of (txs || []).slice(0, 30)) {
-    const sqm = Math.round(Number(t.exclu_use_ar) || 0), a = Number(t.deal_amount) || 0;
-    if (!sqm || !a) continue;
-    if (!by.has(sqm)) by.set(sqm, { sqm, n: 0, sum: 0 });
-    const g = by.get(sqm); g.n++; g.sum += a;
-  }
-  const best = [...by.values()].sort((x, y) => y.n - x.n)[0]; // sort 는 안정 정렬: 동률이면 먼저(최근에) 나온 평형
+  const best = require('../utils/repArea').repAreaStats(txs);
   if (!best) return null;
-  return `${best.sqm}㎡(${Math.round(require('../utils/pyeong').toPyeong(best.sqm))}평) 최근 ${best.n}건 평균 ${(best.sum / best.n / 10000).toFixed(2)}억`;
+  return `${best.sqm}㎡(${best.py}평) 최근 ${best.n}건 평균 ${(best.avg / 10000).toFixed(2)}억`;
 }
 
 function _eulReul(word) {
@@ -256,15 +249,18 @@ async function _market(query, context) {
     for (const c of splitCandidates) {
       const region = stripWild(c.region), name = stripWild(c.name);
       if (region.length < 2 || name.length < 2) continue;
-      const [byUmd, bySigungu, amByRegion] = await Promise.all([
+      // AM-SIGUNGU-2026-11-06 (운영 실측: "노원구 공릉풍림아이원 가격"이 찾지 못함으로 나왔다. "공릉풍림아이원 가격"은 답한다):
+      //   공식 단지 이름은 신고 이름 표에 없을 수 있어 공식 단지 표를 시군구로도 찾아야 한다. 예전엔 동으로만 찾았다.
+      const [byUmd, bySigungu, amByRegion, amBySigungu] = await Promise.all([
         _mv().ilike('umd_nm', `${region}%`).ilike('apt_name', `%${name}%`).order('deal_count', { ascending: false }).limit(100),
         _mv().ilike('sigungu', `${region}%`).ilike('apt_name', `%${name}%`).order('deal_count', { ascending: false }).limit(100),
         _am().ilike('umd_nm', `${region}%`).ilike('apt_name', `%${name}%`).limit(50),
+        _am().ilike('sigungu', `${region}%`).ilike('apt_name', `%${name}%`).limit(50),
       ]);
       const rMolitRows = [];
       if (byUmd && !byUmd.error && byUmd.data) rMolitRows.push(...byUmd.data);
       if (bySigungu && !bySigungu.error && bySigungu.data) rMolitRows.push(...bySigungu.data);
-      const rAmRows = (amByRegion && !amByRegion.error && amByRegion.data) ? amByRegion.data : [];
+      const rAmRows = [amByRegion, amBySigungu].flatMap(r => ((r && !r.error && r.data) ? r.data : []));
       if (rMolitRows.length || rAmRows.length) return { molitRows: rMolitRows, amRows: rAmRows, name };
     }
     return null;
@@ -587,7 +583,7 @@ async function _popularNationwide() {
       // APT-DISPLAY-NAME-2026-09-16 (Plan 090): popularService 가 이미 displayName 을 얹어 준다 —
       //   없는(옛 캐시) 경우에만 여기서 계산한다.
       const rows = snap.map((p, i) =>
-        `${i + 1}. ${p.displayName || displayAptName(p.aptName, { umdNm: p.umdNm })} (${p.sigungu}) 최근 60일 ${p.dealCount60d}건 · 평균 ${eok(p.avgDealAmount)}`).join('\n');
+        `${i + 1}. ${p.displayName || displayAptName(p.aptName, { umdNm: p.umdNm })} (${p.sigungu}) 최근 60일 ${p.dealCount60d}건 · ${p.repArea ? `${p.repArea.sqm}㎡ ` : ''}평균 ${eok(p.avgDealAmount)}`).join('\n');
       return `지금 인기 단지 상위 5곳 (최근 60일 국토교통부 실거래 건수가 많은 순, 최근 21일 거래 단지 우선, 한 지역에 쏠리지 않게 조정)\n${rows}\n\n지도 탭에서 위치와 함께 전체 12곳을 볼 수 있어요.` + DISCLAIMER;
     }
   } catch (_) { /* 아래 안내 */ }
@@ -626,7 +622,7 @@ async function _resolveRegionRows(regionQuery) {
     const out = []; const PAGE = 1000;
     for (let from = 0; from < 3000; from += PAGE) {
       const { data, error } = await admin.from('molit_transactions')
-        .select('apt_name, sigungu, umd_nm, lawd_cd, deal_amount')
+        .select('apt_name, sigungu, umd_nm, lawd_cd, deal_amount, exclu_use_ar, build_year')
         .ilike(col, `${safe}%`).gte('deal_date', sinceStr)
         .order('deal_date', { ascending: false }).order('id', { ascending: true })
         .range(from, from + PAGE - 1);
@@ -671,11 +667,27 @@ function _topGroups(rows, n) {
   }
   return [...groups.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, n);
 }
+// REP-AREA-ONE-2026-11-06: 단지 한 줄의 평균도 상세와 같은 대표 평형 규칙. 평형을 모르면 예전 평균. v 는 최신순(조회 정렬 그대로).
 const _groupLines = (top) => top.map(([k, v], i) => {
   const [name, , umd] = k.split('|');
+  const rep = require('../utils/repArea').repAreaStats(v);
   const avg = v.reduce((s, t) => s + Number(t.deal_amount || 0), 0) / v.length;
-  return `${i + 1}. ${name}${umd ? ` (${umd})` : ''}: ${v.length}건 · 평균 ${eok(avg)}`;
+  return `${i + 1}. ${name}${umd ? ` (${umd})` : ''}: ${v.length}건 · ${rep ? `${rep.sqm}㎡ 평균 ${eok(rep.avg)}` : `평균 ${eok(avg)}`}`;
 }).join('\n');
+
+// REGION-ALIAS-CHAT-2026-11-06: 지역 인기·지역 시세 답이 신고 이름 그대로 세어 한 단지가 두 줄(풍림아파트A, 풍림아파트B)로 나뉘었다. 화면의 구별 순위와 같은 공식 단지로 묶는다.
+//   별칭 조회가 실패하면 신고 이름 그대로(지어내지 않는다).
+async function _canonRows(rows) {
+  try {
+    const { getAliasCanonicalMapEach, aliasCanon } = require('./transactionService');
+    const map = await getAliasCanonicalMapEach(rows.map(t => t.lawd_cd));
+    if (!map.size) return rows;
+    return rows.map(t => {
+      const canon = aliasCanon(map, t.apt_name, t.umd_nm, t.build_year);
+      return canon ? { ...t, apt_name: canon } : t;
+    });
+  } catch (_) { return rows; }
+}
 
 async function _regionPopular(regionQuery) {
   const res = await _resolveRegionRows(regionQuery);
@@ -687,7 +699,7 @@ async function _regionPopular(regionQuery) {
       suggestions: res.ambiguousSidos.slice(0, 3).map(s => `${s} ${res.token} 인기단지`),
     };
   }
-  const top = _topGroups(res.rows, 5);
+  const top = _topGroups(await _canonRows(res.rows), 5);
   const top1 = top[0][0].split('|')[0];
   return {
     text: `${res.scopeLabel} 최근 60일 거래 많은 단지 상위 ${top.length}곳 (국토부 실거래 ${res.rows.length}건 기준)\n${_groupLines(top)}` + DISCLAIMER,
@@ -712,7 +724,7 @@ async function _regionMarket(regionQuery) {
   if (!amounts.length) return null;
   const avg = amounts.reduce((s, v) => s + v, 0) / amounts.length;
   const min = Math.min(...amounts), max = Math.max(...amounts);
-  const top = _topGroups(res.rows, 3);
+  const top = _topGroups(await _canonRows(res.rows), 3);
   const top1 = top[0][0].split('|')[0];
   return {
     text: `${res.scopeLabel} 최근 60일 실거래 요약 (국토부 ${res.rows.length}건)\n` +
