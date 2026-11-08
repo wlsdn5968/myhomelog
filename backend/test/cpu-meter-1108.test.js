@@ -12,6 +12,15 @@ test('경로 묶기: 숫자 칸은 :id, 질의 문자열은 남기지 않는다'
   assert.equal(routeKey('/'), '/');
 });
 
+test('봇 이름만 뽑고 UA 전체는 남기지 않는다', () => {
+  const { botName } = require('../middleware/cpuMeter');
+  assert.equal(botName('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'), 'Googlebot');
+  assert.equal(botName('Mozilla/5.0 (compatible; Yeti/1.1; +https://naver.me/spd)'), 'Yeti');
+  assert.equal(botName('Mozilla/5.0 (compatible; AhrefsBot/7.0; +http://ahrefs.com/robot/)'), 'AhrefsBot');
+  assert.equal(botName('Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/130.0 Safari/537.36'), null);
+  assert.equal(botName(''), null);
+});
+
 test('응답이 끝나면 한 줄 남기고, finish 와 close 가 둘 다 와도 한 번만', () => {
   const lines = [];
   const logger = { info: (o, m) => lines.push([o, m]) };

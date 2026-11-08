@@ -15,6 +15,13 @@ function routeKey(url) {
   return '/' + seg.join('/');
 }
 
+// 봇 이름만 뽑는다(전체 UA 문자열은 남기지 않는다). 예: "Googlebot", "Yeti", "AhrefsBot". 못 찾으면 null.
+const BOT_NAME_RE = /([A-Za-z][A-Za-z0-9._-]*(?:bot|crawler|spider|slurp|scrap|preview))|\b(Yeti|Daum|HeadlessChrome)\b/i;
+function botName(ua) {
+  const m = String(ua || '').match(BOT_NAME_RE);
+  return m ? (m[1] || m[2]).slice(0, 40) : null;
+}
+
 let inflight = 0;
 function cpuMeter(logger) {
   return (req, res, next) => {
@@ -29,12 +36,14 @@ function cpuMeter(logger) {
       inflight -= 1;
       try {
         const d = process.cpuUsage(c0);
+        const ua = String(req.get('user-agent') || '');
         logger.info({ cpuMeter: {
+          botName: botName(ua),
           route: routeKey(req.originalUrl),
           ms: Math.round((d.user + d.system) / 1000),
           wallMs: Date.now() - t0,
           status: res.statusCode,
-          bot: BOT_RE.test(String(req.get('user-agent') || '')),
+          bot: BOT_RE.test(ua),
           inflight: peak.n,
         } }, 'cpu-meter');
       } catch (_) { /* 측정 실패는 응답에 영향 없다 */ }
@@ -48,4 +57,4 @@ function cpuMeter(logger) {
   };
 }
 
-module.exports = { cpuMeter, routeKey, BOT_RE };
+module.exports = { cpuMeter, routeKey, botName, BOT_RE };
