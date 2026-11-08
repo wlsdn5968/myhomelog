@@ -1327,10 +1327,15 @@ router.get('/in-bounds', async (req, res) => {
     }).filter(Boolean)
       // KAPT-PIN-2026-10-31: 공식 단지 좌표를 더한 만큼 넓은 영역에서 핀이 늘 수 있다 — 거래 많은 순 limit 개(예전 DB 함수 상한과 같은 의미).
       .sort((a, b) => (b.dealCount || 0) - (a.dealCount || 0)).slice(0, limit);
+    // INBOUNDS-CDN-2026-11-08 (Vercel Hobby Active CPU 초과로 팀 정지): 지도를 움직일 때마다 거래 최대 1만 행을 다시 집계했고 캐시 헤더가 없었다.
+    //   거래는 하루 한 번 적재되므로 결과가 있을 때만 5분 공유 캐시. 빈 결과는 캐시하지 않는다(일시 장애와 구분할 수 없다). 실패는 아래에서 no-store.
+    if (out.length) res.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=1800');
+    else res.set('Cache-Control', 'no-store');
     res.json({ results: out, count: out.length });
   } catch (e) {
     logger.warn({ err: e.message }, '영역 검색 실패');
     captureRouteError(e, 'search/in-bounds');
+    res.set('Cache-Control', 'no-store');
     res.status(500).json({ error: '영역 검색 실패' });
   }
 });

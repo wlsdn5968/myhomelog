@@ -121,7 +121,8 @@ router.get('/', (req, res) => {
   }
   // 쿼리 없으면 원본 그대로
   if (!apt) {
-    res.set('Cache-Control', 'public, max-age=300'); // 5분
+    // SHARE-CDN-2026-11-08: s-maxage 가 없어 공유 캐시가 보장되지 않았고, 매번 함수가 1.28MB 원본을 보냈다.
+    res.set('Cache-Control', 'public, max-age=300, s-maxage=300'); // 5분
     return res.type('html').send(html);
   }
   const title = `${apt}${area ? ` · ${area}` : ''} | 내집로그`;

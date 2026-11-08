@@ -7204,7 +7204,9 @@ function initLeaflet(){
 async function loadAptsInBounds(south, west, north, east) {
   toast('이 영역의 단지를 찾는 중이에요');
   try {
-    const url = `${CFG.api}/search/in-bounds?south=${south}&west=${west}&north=${north}&east=${east}&limit=50`;
+    // INBOUNDS-CDN-2026-11-08: 같은 영역이 같은 주소가 되게 소수 셋째 자리(약 100m)로 바깥쪽으로 넓혀 맞춘다(서버가 5분 공유 캐시).
+    const _f = v => Math.floor(Number(v) * 1000) / 1000, _c = v => Math.ceil(Number(v) * 1000) / 1000;
+    const url = `${CFG.api}/search/in-bounds?south=${_f(south)}&west=${_f(west)}&north=${_c(north)}&east=${_c(east)}&limit=50`;
     const r = await fetch(url, { signal: AbortSignal.timeout(15000) });
     if (!r.ok) { toast('이 영역을 검색하지 못했어요'); return; }
     const j = await r.json();
