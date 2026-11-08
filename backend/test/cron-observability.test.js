@@ -270,15 +270,9 @@ test('vercel.json cron 스케줄 — Hobby 플랜 계약: 전부 하루 1회 · 
   //   (GitHub 상태 "Deployment failed", Vercel 에 배포 기록 없음 — 951d341·d5924bb 실사례). 분·시가 숫자여야 하루 1회다.
   const DAILY = /^\d{1,2} \d{1,2} (\*|\d{1,2}) (\*|\d{1,2}) (\*|[0-6])$/;
   for (const c of vercel.crons) assert.match(c.schedule, DAILY, `하루 1회가 아닌 cron: ${c.path} "${c.schedule}" — Hobby 플랜은 배포가 거부된다`);
-  const hist = vercel.crons.filter(c => c.path.startsWith('/api/cron/molit-hist-backfill'));
-  assert.ok(hist.length >= 2, 'hist-backfill 일일 슬롯이 2개 미만이다');
-  assert.equal(new Set(hist.map(c => c.path)).size, hist.length, '슬롯 경로(?slot=N)가 중복된다');
-  const hours = hist.map(c => Number(c.schedule.split(' ')[1])).sort((a, b) => a - b);
-  for (let i = 0; i < hours.length; i++) {
-    const next = i + 1 < hours.length ? hours[i + 1] : hours[0] + 24;
-    assert.ok(next - hours[i] >= 2, `슬롯 간격이 2시간 미만(${hours[i]}h→${next % 24}h) — ±59분 지터에 두 실행이 겹쳐 중복 삽입 위험`);
-    assert.ok(hours[i] !== 17 && hours[i] !== 18, `슬롯 ${hours[i]}h 는 일간 적재(molit-ingest 17:00~17:30 UTC, 지터 포함 18:29) 창과 겹친다 — MOLIT 쿼터 경쟁`);
-  }
+  // HIST-CRON-OFF-2026-11-08 (Vercel Hobby Active CPU 초과 후속): 이력 backfill 은 동결 뒤 할 일이 없어 예약에서 뺐다.
+  //   다시 넣으면 할 일 없이 매일 돈다 — 필요하면 손으로 부른다(cron.js 라우트는 남아 있다).
+  assert.equal(vercel.crons.filter(c => c.path.startsWith('/api/cron/molit-hist-backfill')).length, 0);
 });
 
 

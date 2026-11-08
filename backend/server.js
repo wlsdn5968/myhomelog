@@ -27,6 +27,9 @@ const app = express();
 // Vercel/프록시 환경에서 X-Forwarded-For 신뢰 (express-rate-limit 호환)
 app.set('trust proxy', 1);
 
+// CPU-METER-2026-11-08: 기능별 CPU 시간 측정(plans/188). 가장 앞에 둬야 모든 처리 시간이 들어간다.
+app.use(require('./middleware/cpuMeter').cpuMeter(require('./logger')));
+
 // ── TRACE-FALLBACK-2026-08-09 (Sprint JJJJJJJ): Vercel 프로덕션 HTTP 스팬 수동 폴백 ──
 //   v10 업그레이드 후 프로덕션에서만 트랜잭션 스팬 0건(FFFFFFF 판별: 로컬은 정상 생성 →
 //   SDK·설정 정상, Vercel 환경에서 OTel 자동 계측 미부착). 활성 span 이 이미 있으면

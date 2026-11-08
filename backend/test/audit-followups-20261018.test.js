@@ -114,7 +114,8 @@ test('데이터 상태 창 — 내부 작업명 대신 한글 이름표, 기준�
   const cron = read('../services/cronStats.js');
   const block = html.slice(html.indexOf('const JOB_LABEL={'), html.indexOf('};', html.indexOf('const JOB_LABEL={')));
   const pairs = [...block.matchAll(/'([a-z-]+)':\['[^']+',(\d+)\]/g)].map(m => [m[1], Number(m[2])]);
-  assert.ok(pairs.length >= 14, '이름표가 비었다');
+  assert.ok(pairs.length >= 13, '이름표가 비었다'); // 2026-11-08 과거 이력 채우기 예약 제거로 14 → 13
+  assert.ok(!pairs.some(([n]) => n === 'molit-hist-backfill'), '예약에서 뺀 작업이 상태 창에 남으면 이틀 뒤 거짓 "확인 필요"가 뜬다');
   for (const [name, h] of pairs) {
     const m = cron.match(new RegExp(`'${name}':\\s*(\\d+)`));
     assert.ok(m, `cronStats CRON_MAX_AGE_H 에 ${name} 이 없다`);

@@ -6560,7 +6560,7 @@ async function openDataStatus(){
       'retention':['오래된 개인정보 정리',50],'audit-prune':['오래된 이용 기록 정리',50],'regulations-check':['규제 정보 최신 여부 점검',50],
       'regulations-auto-fetch':['규제 변경 소식 확인',50],'geocache-backfill':['단지 지도 위치 채우기',50],'facility-backfill':['단지 시설 정보 채우기',50],
       'building-register-backfill':['단지 세대수 채우기',50],'push-notify':['관심 단지 알림 보내기',50],'warm-interest':['검색 관심도 미리 계산',50],
-      'warm-rent':['전월세 자료 미리 받기',50],'molit-hist-backfill':['과거 실거래 이력 채우기',50]};
+      'warm-rent':['전월세 자료 미리 받기',50]}; // HIST-CRON-OFF-2026-11-08: 과거 이력 채우기는 완료돼 예약에서 뺐다(남기면 이틀 뒤 거짓 "확인 필요")
     const jobs=Object.values(h.crons).filter(j=>j&&j.at&&JOB_LABEL[j.name]&&!isNaN(new Date(j.at))).sort((a,b)=>String(b.at).localeCompare(String(a.at))).slice(0,6);
     for(const j of jobs){
       const [label,maxH]=JOB_LABEL[j.name];

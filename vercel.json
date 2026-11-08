@@ -193,14 +193,6 @@
     {
       "path": "/api/cron/warm-rent",
       "schedule": "30 20 * * *"
-    },
-    {
-      "path": "/api/cron/molit-hist-backfill?slot=0",
-      "schedule": "20 19 * * *"
-    },
-    {
-      "path": "/api/cron/molit-hist-backfill?slot=1",
-      "schedule": "20 21 * * *"
     }
   ]
 }
