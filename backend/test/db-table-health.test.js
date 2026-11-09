@@ -28,7 +28,7 @@ const path = require('node:path');
 
 const DB_CLIENT_PATH = require.resolve('../db/client');
 const REDIS_CACHE_PATH = require.resolve('../services/redisCache');
-const SENTRY_PATH = require.resolve('@sentry/node');
+const SENTRY_PATH = require.resolve('../sentry'); // SENTRY-CORE-2026-11-10
 const CRON_PATH = require.resolve('../routes/cron');
 
 // 여러 test() 가 한 프로세스(이 파일)를 공유하므로, 매 테스트가 admin/redis 동작을 바꿔치기할

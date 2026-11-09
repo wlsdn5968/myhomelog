@@ -25,7 +25,7 @@ const axios = require('axios');
 const { getUserScopedClient: userScopedClient, getSupabasePublic } = require('../db/client');
 const { requireAuth } = require('../middleware/auth');
 // MOB-AUDIT-2026-05-03: 결제 실패는 사용자 직격 → Sentry 즉시 알림 (logger.error 외 추가)
-const Sentry = require('@sentry/node');
+const Sentry = require('../sentry');
 const { getSupabaseAdmin } = require('../db/client');
 const logger = require('../logger');
 

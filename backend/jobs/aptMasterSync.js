@@ -370,7 +370,7 @@ async function runAptMasterSync() {
       if (_miss.length) {
         logger.error({ missing: _miss.slice(0, 10) }, 'apt-master-sync: 별칭 보정표가 반영되지 않은 항목이 있다');
         try {
-          require('@sentry/node').captureMessage(`별칭 보정표 누락 ${_miss.length}건`, { level: 'warning', tags: { monitor: 'alias-overrides' } });
+          require('../sentry').captureMessage(`별칭 보정표 누락 ${_miss.length}건`, { level: 'warning', tags: { monitor: 'alias-overrides' } });
         } catch (_) { /* Sentry 미구성이어도 무영향 */ }
       }
     }

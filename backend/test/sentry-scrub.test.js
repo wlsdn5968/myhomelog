@@ -307,8 +307,10 @@ test('실제 SDK 경유 E2E — 오류·성능 envelope 어디에도 본문·쿠
   // @sentry/node 11.0.0 은 성능 데이터를 transaction 이 아니라 span 항목으로 보내고, 그 항목은
   // beforeSendTransaction 을 거치지 않는다(2026-09-28 실측 — IP·본문·경로 비밀값이 그대로 나감).
   // 여기서 실패하면 SDK 메이저를 올린 것이다: span 항목 스크러빙을 먼저 넣고 이 단언을 고칠 것(plans/128 §6).
-  assert.ok(tx, `POST /boom 성능 이벤트(transaction)가 도착하지 않았다 — 받은 항목: ${items.map((i) => i.type).join(',')}. ` +
-    'span 항목만 왔다면 SDK 메이저 변경으로 성능 데이터 형식이 바뀐 것이다(plans/128 §6)');
+  // SENTRY-CORE-2026-11-10: 가벼운 판(@sentry/node-core)으로 바꾸고 성능 추적을 껐다(표본율 1 을 줘도). 성능 항목이 하나라도 오면
+  //   설정이 되살아난 것이다 — 그때는 transaction 과 span 항목 스크러빙을 먼저 확인하고 이 단언을 고칠 것(plans/128 §6).
+  assert.equal(tx, undefined, '성능 이벤트가 나갔다 — 추적이 다시 켜졌다');
+  assert.ok(!items.some((i) => i.type === 'transaction' || i.type === 'span'), `성능 항목이 있다: ${items.map((i) => i.type).join(',')}`);
 
   for (const [label, marker] of Object.entries(M)) {
     assert.ok(!all.includes(marker), `envelope 에 ${label} 표지가 남아 있다`);
@@ -317,7 +319,6 @@ test('실제 SDK 경유 E2E — 오류·성능 envelope 어디에도 본문·쿠
   // 과잉 삭제·공허한 통과 방지: 허용 헤더는 남고, 인증 헤더는 존재만, 경로 비밀값 자리는 [Filtered].
   assert.ok(all.includes('scrub-e2e-agent'), 'user-agent 까지 지워졌다(허용목록 헤더는 남아야 한다)');
   assert.equal(event.payload.request.headers.authorization, '[Filtered]');
-  assert.equal(tx.payload.request && tx.payload.request.headers && tx.payload.request.headers.authorization, '[Filtered]');
   assert.ok(all.includes('KeyStatisticList/[Filtered]/json'), 'ECOS 경로 호출 기록이 없거나 비밀값 자리가 치환되지 않았다');
   assert.ok(all.includes('user_id=eq.[Filtered]'), 'Supabase 조회 기록이 없거나 사용자 ID 자리가 치환되지 않았다');
 });

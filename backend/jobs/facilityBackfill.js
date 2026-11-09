@@ -139,7 +139,7 @@ async function run({ chunk = DEFAULT_CHUNK, budgetMs = 240000 } = {}) {
       const fnPct = t > 0 ? Math.round((fn / t) * 100) : 0;
       // 임계: 비율 기반(신규 단지 대량 유입 시에도 절대수 아닌 비율로 판단) — 주차누락 ≥15% OR 미적재 ≥10%
       if (dtlPct >= 15 || fnPct >= 10) {
-        const Sentry = require('@sentry/node');
+        const Sentry = require('../sentry');
         Sentry.captureMessage(
           `facility 품질 (daily): 주차누락 ${dm}(${dtlPct}%)·미적재 ${fn}(${fnPct}%) — 백필 진행 중`,
           { level: 'warning', tags: { monitor: 'facility-quality-daily' } }

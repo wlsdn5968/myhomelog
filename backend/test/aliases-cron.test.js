@@ -109,7 +109,7 @@ test('molit_aliases 자동 갱신 — RPC 호출 자체가 reject 해도(네트�
 //   (인증 자체는 이 저장소의 기존 계약 테스트가 별도로 고정한다).
 function _requireCronAptMasterHandler(summary) {
   const jobPath = require.resolve('../jobs/aptMasterSync');
-  const sentryPath = require.resolve('@sentry/node');
+  const sentryPath = require.resolve('../sentry'); // SENTRY-CORE-2026-11-10: 백엔드는 ../sentry(light 판)만 부른다
   const statsPath = require.resolve('../services/cronStats');
   const cronPath = require.resolve('../routes/cron');
   const saved = {

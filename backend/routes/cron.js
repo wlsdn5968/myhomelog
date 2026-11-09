@@ -31,7 +31,7 @@ const { run: runFacilityBackfill } = require('../jobs/facilityBackfill');
 // POPULAR-SNAPSHOT-2026-07-11 (Sprint LLLL): 인기 단지 일별 사전집계 (retention cron 에 편승)
 const { computeAndStoreSnapshot: computePopularSnapshot } = require('../services/popularService');
 // MOB-AUDIT-2026-05-03: cron 실패는 운영자 즉시 알림 — Sentry capture (logger.error 외 추가)
-const Sentry = require('@sentry/node');
+const Sentry = require('../sentry');
 
 // MV-ABORT-2026-08-16 (Plan 011): 검색용 MV 갱신 RPC 의 상한.
 //   [측정] `REFRESH MATERIALIZED VIEW CONCURRENTLY molit_apt_index` 실소요 = **11,451ms**

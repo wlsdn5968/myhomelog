@@ -11,7 +11,11 @@
  *   VERCEL_ENV             — Vercel 이 자동 주입 (production/preview/development)
  *   VERCEL_GIT_COMMIT_SHA  — release 버전 tag 용
  */
-const Sentry = require('@sentry/node');
+// SENTRY-CORE-2026-11-10 (Vercel Active CPU, plans/188): @sentry/node 는 OpenTelemetry 자동 계측을 함께 읽어 인스턴스 시작마다 CPU 가 컸다
+//   (로컬 8회 중앙값 require 737ms, node-core 444ms). 오류 수집만 쓰는 가벼운 판으로 바꾸고 성능 추적은 끈다.
+//   일반 node-core 는 OpenTelemetry 설정 없이는 요청 분리(scope isolation)가 없다(README 원문). light 판은 Node 22+ 에서 요청 분리를 자동으로 한다.
+//   light 는 실험 기능이라 작은 판 올림에도 바뀔 수 있다(README) -> package.json 에서 판 번호를 정확히 고정한다.
+const Sentry = require('@sentry/node-core/light');
 
 // IGNORE-CONTRACT-2026-09-02 (감사 P0-4): Sentry 가 **무엇을 안 보고할지**는 조용히 넓어지기 쉬운 설정이다.
 //   너무 넓은 패턴 하나가 진짜 장애를 통째로 삼킬 수 있어, 배열을 상수로 뽑아 계약 테스트로 고정한다.
@@ -190,8 +194,8 @@ if (dsn) {
       return breadcrumb && breadcrumb.category === 'console' ? null : breadcrumb;
     },
 
-    // 트레이싱 (성능 모니터링) — 비용 때문에 10% 만
-    tracesSampleRate: parseFloat(process.env.SENTRY_TRACES_SAMPLE_RATE || '0.1'),
+    // 트레이싱(성능 추적)은 끈다(SENTRY-CORE-2026-11-10). node-core 는 OpenTelemetry 설정 없이 성능 데이터를 보내지 않는다.
+    //   tracesSampleRate 를 비워 두면 성능 이벤트가 생기지 않는다. beforeSendTransaction 스크러빙은 다시 켤 때를 위해 남긴다.
 
     // 프로파일링은 Vercel serverless 에선 부적합 — 끔
     profilesSampleRate: 0,
@@ -223,7 +227,17 @@ if (dsn) {
   });
 }
 
+// SENTRY-CORE-2026-11-10: node-core 에는 setupExpressErrorHandler 가 없다. @sentry/node 의 기본과 같이 상태 500 이상(또는 상태 없음)인 오류만 보낸다.
+function setupExpressErrorHandler(app) {
+  app.use(function sentryErrorHandler(err, req, res, next) {
+    const status = Number(err && (err.status || err.statusCode || (err.output && err.output.statusCode))) || 500;
+    if (status >= 500) { try { Sentry.captureException(err); } catch (_) { /* 수집 실패는 응답을 막지 않는다 */ } }
+    next(err);
+  });
+}
+
 module.exports = Sentry;
+module.exports.setupExpressErrorHandler = setupExpressErrorHandler;
 module.exports.isEnabled = !!dsn;
 // TEST-EXPORT-2026-09-02: 무시 목록이 과도하게 넓어지는지 계약 테스트가 실제 배열로 검사한다.
 module.exports.IGNORED_ERROR_PATTERNS = IGNORED_ERROR_PATTERNS;

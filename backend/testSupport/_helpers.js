@@ -906,7 +906,7 @@ function _mockCronAdmin({ rpcError, mvDate, txDate, mvErr, txErr } = {}) {
 function _requireCronMolitHandler(admin) {
   const dbPath = require.resolve('../db/client');
   const jobPath = require.resolve('../jobs/molitIngest');
-  const sentryPath = require.resolve('@sentry/node');
+  const sentryPath = require.resolve('../sentry'); // SENTRY-CORE-2026-11-10: 백엔드는 ../sentry(light 판)만 부른다
   const statsPath = require.resolve('../services/cronStats');
   const cronPath = require.resolve('../routes/cron');
   const saved = {

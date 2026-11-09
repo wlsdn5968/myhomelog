@@ -14,7 +14,7 @@
 const express = require('express');
 const crypto = require('crypto');
 // MOB-AUDIT-2026-05-03: feedback insert 실패 시 사용자엔 200 응답 → 운영자 정량 데이터 누락
-const Sentry = require('@sentry/node');
+const Sentry = require('../sentry');
 const { getSupabaseAdmin } = require('../db/client');
 const { optionalAuth } = require('../middleware/auth');
 const logger = require('../logger');

@@ -125,7 +125,7 @@ async function hardDeleteUser(admin, userId) {
   } else {
     logger.warn({ userId, errors, authDeleted }, 'retention: hard_delete 일부 실패 — pending 유지(다음 cron 재시도)');
     try {
-      require('@sentry/node').captureMessage(`retention hard_delete 일부 실패 (${Object.keys(errors).join(',') || 'auth'})`,
+      require('../sentry').captureMessage(`retention hard_delete 일부 실패 (${Object.keys(errors).join(',') || 'auth'})`,
         { level: 'warning', tags: { monitor: 'retention-hard-delete' } });
     } catch (_) { /* Sentry 미구성이어도 무영향 */ }
   }

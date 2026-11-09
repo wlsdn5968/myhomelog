@@ -40,7 +40,9 @@ app.use((req, res, next) => {
   let nextCalled = false;
   const safeNext = () => { if (!nextCalled) { nextCalled = true; next(); } };
   try {
-    if (!Sentry.isEnabled || typeof Sentry.startSpan !== 'function' || Sentry.getActiveSpan()) {
+    // SENTRY-CORE-2026-11-10: light 판은 성능 추적을 하지 않는다(tracesSampleRate 미설정). 추적이 꺼져 있으면 요청마다 빈 구간을 만들지 않는다.
+    const _traceOn = (() => { try { const o = Sentry.getClient && Sentry.getClient() && Sentry.getClient().getOptions(); return !!(o && (o.tracesSampleRate || o.tracesSampler)); } catch (_) { return false; } })();
+    if (!_traceOn || !Sentry.isEnabled || typeof Sentry.startSpan !== 'function' || Sentry.getActiveSpan()) {
       return safeNext();
     }
     Sentry.startSpan(
