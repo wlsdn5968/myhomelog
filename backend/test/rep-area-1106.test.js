@@ -101,6 +101,14 @@ test('화면: 지도 팝업과 인기 목록이 어느 평형 값인지 적는�
   assert.match(html, /최근 60일 \$\{p\.repArea\.sqm\}㎡ 실거래 평균/);
 });
 
+test('지도 영역 조회 결과를 화면 목록에 옮길 때 평형 정보도 옮긴다(빠지면 팝업이 대표 평형 값에 "전 평형 평균" 이름표를 단다)', () => {
+  const i = html.indexOf('async function loadAptsInBounds(');
+  const body = html.slice(i, html.indexOf('renderMarkers(props);', i));
+  assert.match(body, /repArea: p\.repArea \|\| null,/);
+  // 화면이 실제로 쓰는 팝업 함수가 그 값을 읽어 이름표를 고른다
+  assert.match(html, /\$\{p\.repArea\?_escHtml\(`\$\{p\.repArea\.sqm\}㎡/);
+});
+
 test('도우미: 지역과 공식 단지 이름을 함께 물어도 공식 단지 표를 시군구로 찾는다', () => {
   const src = fs.readFileSync(path.join(__dirname, '../services/chatDataRouter.js'), 'utf8');
   assert.match(src, /_am\(\)\.ilike\('sigungu', `\$\{region\}%`\)\.ilike\('apt_name', `%\$\{name\}%`\)/);

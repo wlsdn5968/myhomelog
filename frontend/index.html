@@ -7220,6 +7220,8 @@ async function loadAptsInBounds(south, west, north, east) {
       aptName: p.aptName, sigungu: p.sigungu, umdNm: p.umdNm,
       area: `${p.sigungu||''} ${p.umdNm||''}`.trim(),
       avgPrice: p.avgPrice || 0,
+      // REP-AREA-PROP-2026-11-09 (운영 재현: 팝업이 "전 평형 평균 8.12억"이라 적었는데 값은 60㎡ 대표 평형 평균): 평형 정보도 옮겨 담는다.
+      repArea: p.repArea || null,
       dealCount: p.dealCount || p.cnt || 0, // 거래 건수 (마커 표시)
       _areaSearch: true, // 마커 렌더 시 "60점" 대신 거래량 표시
       ltv: '', maxLoan: '',
