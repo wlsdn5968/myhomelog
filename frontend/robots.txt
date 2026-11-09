@@ -31,5 +31,12 @@ Disallow: /
 User-agent: Google-Extended
 Disallow: /
 
+# ROBOTS-EXA-2026-11-10: AI 검색 수집기. 2026-11-09 운영 측정 14분에 단지 페이지 26건(CPU 2초). 위와 같은 운영자 데이터 보호 원칙.
+User-agent: ExaSearchBot
+Disallow: /
+
+User-agent: exauser.crawler
+Disallow: /
+
 # Sitemap
 Sitemap: https://myhomelog.vercel.app/sitemap.xml
