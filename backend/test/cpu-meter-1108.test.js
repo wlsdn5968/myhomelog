@@ -45,3 +45,12 @@ test('서버 진입부 가장 앞에 붙어 있다', () => {
   const i = src.indexOf("app.use(require('./middleware/cpuMeter').cpuMeter(");
   assert.ok(i > 0 && i < src.indexOf('app.use((req, res, next) => {'), '다른 미들웨어보다 앞이어야 한다');
 });
+
+test('서버가 뜰 때 AI 모듈과 표 정의를 읽지 않는다(필요할 때만)', () => {
+  const fs = require('node:fs'), path = require('node:path');
+  const rd = (p) => fs.readFileSync(path.join(__dirname, p), 'utf8');
+  assert.doesNotMatch(rd('../routes/clause.js'), /^const \{[^}]*\} = require\('\.\.\/services\/aiService'\);/m);
+  assert.doesNotMatch(rd('../routes/report.js'), /^const \{[^}]*\} = require\('\.\.\/services\/aiService'\);/m);
+  assert.doesNotMatch(rd('../db/client.js'), /^const schema = require\('\.\/schema'\);/m);
+  assert.match(rd('../db/client.js'), /get schema\(\) \{ return require\('\.\/schema'\); \}/);
+});

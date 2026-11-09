@@ -15,7 +15,7 @@
  */
 const { createClient } = require('@supabase/supabase-js');
 const logger = require('../logger');
-const schema = require('./schema');
+// LAZY-SCHEMA-2026-11-08 (Vercel Active CPU, plans/188): 표 정의(drizzle)는 drizzle-kit 과 참조용이고 실행 코드는 쓰지 않는다(2026-11-08 검색 0곳). 서버가 뜰 때 읽지 않게 필요할 때만 읽는다.
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_PUBLISHABLE_KEY = process.env.SUPABASE_PUBLISHABLE_KEY;
@@ -106,5 +106,5 @@ module.exports = {
   requireSupabaseAdmin,
   hasAdminEnv,
   _pickReadonlyKey,
-  schema,
+  get schema() { return require('./schema'); },
 };

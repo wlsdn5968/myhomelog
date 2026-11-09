@@ -4,7 +4,8 @@
  */
 const express = require('express');
 const router = express.Router();
-const { callAI, BudgetExceededError, GlobalAiBudgetExceededError } = require('../services/aiService');
+// LAZY-AI-2026-11-08 (Vercel Active CPU, plans/188): AI 모듈(@anthropic-ai/sdk 포함)은 이 기능을 쓸 때만 읽는다. 서버가 뜰 때마다 읽으면 시작 CPU 가 는다.
+const _ai = () => require('../services/aiService');
 const { filterAdviceOutputDeep, CLAUSE_FILTER_FIELDS } = require('../services/aiOutputFilter');
 const { getCitationsForIssues } = require('../services/legalService');
 const cache = require('../cache');
@@ -119,7 +120,7 @@ risks: 매수 시 발생 가능한 리스크 시나리오 3~4개 (현실적이�
 
   try {
     // Phase B-3: max_tokens 1500 → 2500 (essential + recommended + risks 합산 출력 증가)
-    const result = await callAI([{ role: 'user', content: prompt }], false, { userId: req.user?.id, maxTokens: 2500 });
+    const result = await _ai().callAI([{ role: 'user', content: prompt }], false, { userId: req.user?.id, maxTokens: 2500 });
     const cleaned = result.content.replace(/```json|```/g, '').trim();
     const parsed = JSON.parse(cleaned);
 
@@ -155,10 +156,10 @@ risks: 매수 시 발생 가능한 리스크 시나리오 3~4개 (현실적이�
     require('../services/redisCache').rset(cacheKey, parsed, 7200); // Sprint KKKKK — 인스턴스 간 공유
     res.json(parsed);
   } catch (e) {
-    if (e instanceof BudgetExceededError) {
+    if (e instanceof _ai().BudgetExceededError) {
       return res.status(429).json({ error: '이번 달 AI 사용 한도에 도달했어요.', code: 'budget_exceeded', budget: e.info });
     }
-    if (e instanceof GlobalAiBudgetExceededError) {
+    if (e instanceof _ai().GlobalAiBudgetExceededError) {
       return res.status(503).json({ code: 'ai_globally_paused', error: 'AI 기능이 오늘 많이 사용되어 잠시 멈췄어요. 잠시 후 다시 시도해주세요. (단지 검색·LTV 계산은 정상)', retryAfterSec: 1800 });
     }
     // STAB-1 (2026-05-03): chat.js 패턴 — upstream 장애 판별 + Sentry 캡처용 logger.error

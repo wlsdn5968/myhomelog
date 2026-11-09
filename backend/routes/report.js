@@ -22,7 +22,8 @@
  *   - 출력: JSON 5섹션 (핵심방향·정책환경·체크리스트·단지·갈아타기·TIP)
  */
 const express = require('express');
-const { callAI } = require('../services/aiService');
+// LAZY-AI-2026-11-08 (Vercel Active CPU, plans/188): AI 모듈(@anthropic-ai/sdk 포함)은 이 기능을 쓸 때만 읽는다. 서버가 뜰 때마다 읽으면 시작 CPU 가 는다.
+const callAI = (...a) => require('../services/aiService').callAI(...a);
 const { filterAdviceOutputDeep, REPORT_FILTER_FIELDS } = require('../services/aiOutputFilter');
 const { getSupabaseAdmin } = require('../db/client');
 const { getSnapshot } = require('../services/regulationsService');
