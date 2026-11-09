@@ -7929,7 +7929,7 @@ function renderListGrid(){
     }
     const top = Array.from(cnt.entries()).sort((a, b) => b[1].n - a[1].n).slice(0, 3);
     if (!top.length) return '';
-    return `<div class="ld-rg">${top.map(([code, v]) => `<button type="button" class="ld-rgb" title="이 지역의 가격지수·거래량·미분양·인구 순이동·규제 상태를 공식 통계로 볼 수 있어요" onclick="openRegionSummary('${_escHtml(code)}','${_escHtml(v.nm)}')">${_escHtml(v.nm || code)} 시장 요약</button>`).join('')}</div>`;
+    return `<div class="ld-rg">${top.map(([code, v]) => `<button type="button" class="ld-rgb" title="이 지역의 가격지수·거래량·미분양·인구 순이동·규제 상태를 공식 통계로 볼 수 있어요" onclick="openRegionSummary(${_jsonAttr(code)},${_jsonAttr(v.nm)})">${_escHtml(v.nm || code)} 시장 요약</button>`).join('')}</div>`;
   })();
   // SORT-RESET-FIX-2026-08-20 (Sprint NNNNNNN-19, 루프 회차 3 실측): innerHTML 재렌더가 셀렉트를
   //   첫 옵션(score)으로 초기화 — 재렌더 전에 현재 선택을 읽어 selected 로 되살린다.

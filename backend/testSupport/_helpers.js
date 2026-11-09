@@ -57,6 +57,7 @@ function _mockAdmin({ payRow, casRows, billingRow, listRows, upsertError }) {
   const upChain = (patch) => {
     const c = {
       eq: (col, val) => { seen.updateFilters.push([col, val]); return c; },
+      in: (col, vals) => { seen.updateFilters.push([col, vals]); return c; },
       select: async () => ({ data: casRows, error: null }),
       then: (res, rej) => Promise.resolve({ data: null, error: null }).then(res, rej),
     };

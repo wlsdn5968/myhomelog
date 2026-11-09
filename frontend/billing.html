@@ -667,7 +667,7 @@ async function cancelSubscription(){
       method:'POST',
       headers:{ 'Authorization':'Bearer ' + token },
     });
-    if(!r.ok) throw new Error('HTTP ' + r.status);
+    if(!r.ok){ const j = await r.json().catch(()=>({})); throw new Error(j.error || ('HTTP ' + r.status)); }
     setStatus('ok', '해지했어요. 지금 결제 주기가 끝날 때까지는 계속 쓸 수 있어요.');
     await loadMe();
   } catch(e){

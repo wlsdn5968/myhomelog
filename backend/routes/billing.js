@@ -72,18 +72,35 @@ const TOSS_API_BASE = 'https://api.tosspayments.com';
  * 실패해도 응답은 막지 않는다 — 다음 재시도(사용자 새로고침·Toss webhook 재전송)가 또 시도한다.
  * @returns {Promise<'repaired'|'ok'|'skipped'>}
  */
+const REPAIR_GRACE_MS = 30000;
+const REPAIR_WAIT_MS = Math.max(0, parseInt(process.env.BILLING_REPAIR_WAIT_MS || '5000', 10) || 0);
+const _sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 async function ensureBillingActive(admin, userId, plan, approvedAtIso) {
   if (!admin || !userId || !plan) return 'skipped';
   try {
-    const { data: row, error } = await admin.from('user_billing')
-      .select('plan, status, current_period_end, updated_at').eq('user_id', userId).maybeSingle();
-    if (error) throw error;
     const approvedAt = approvedAtIso ? new Date(approvedAtIso) : null;
-    const updatedAt = row && row.updated_at ? new Date(row.updated_at) : null;
-    const neverApplied = !row
-      || (approvedAt && Number.isFinite(approvedAt.getTime())
-          && (!updatedAt || !Number.isFinite(updatedAt.getTime()) || approvedAt > updatedAt));
-    if (!neverApplied) return 'ok';
+    const readRow = async () => {
+      const { data, error } = await admin.from('user_billing')
+        .select('plan, status, current_period_end, updated_at').eq('user_id', userId).maybeSingle();
+      if (error) throw error;
+      return data;
+    };
+    const isNeverApplied = (r) => {
+      const updatedAt = r && r.updated_at ? new Date(r.updated_at) : null;
+      return !r || (approvedAt && Number.isFinite(approvedAt.getTime())
+        && (!updatedAt || !Number.isFinite(updatedAt.getTime()) || approvedAt > updatedAt));
+    };
+    let row = await readRow();
+    // SEC-AUDIT-2026-11-10 (보안 점검 run-1, billing/confirm-cas-loser-repair-double-extension): confirm 과 웹훅이 겹치면 CAS 에서 진 쪽이
+    //   이긴 쪽의 이용권 기록(user_billing upsert, updated_at 트리거)보다 먼저 보정해 30일을 더하고 이긴 쪽이 또 30일을 더했다.
+    //   승인 직후(REPAIR_GRACE_MS 안)면 이긴 쪽 기록을 REPAIR_WAIT_MS 까지 기다렸다가, 그래도 없을 때만 보정한다(이긴 쪽이 죽은 경우 즉시 복구).
+    if (isNeverApplied(row) && approvedAt && Number.isFinite(approvedAt.getTime()) && Date.now() - approvedAt.getTime() < REPAIR_GRACE_MS) {
+      for (let waited = 0; waited < REPAIR_WAIT_MS && isNeverApplied(row); waited += 500) {
+        await _sleep(Math.min(500, REPAIR_WAIT_MS - waited));
+        row = await readRow();
+      }
+    }
+    if (!isNeverApplied(row)) return 'ok';
 
     const now = new Date();
     const periodEnd = require('../services/planService').computePeriodEnd(row && row.current_period_end, now);
@@ -306,7 +323,7 @@ router.post('/confirm', async (req, res, next) => {
       await admin.from('payments').update({
         status: 'failed',
         failure_reason: 'amount_mismatch', // P2-5: 정확 값 제외
-      }).eq('order_id', orderId);
+      }).eq('order_id', orderId).eq('status', 'requested'); // SEC-AUDIT-2026-11-10: 병렬 confirm 의 한쪽이 이미 captured 로 바꾼 행을 failed 로 덮지 않는다
       return res.status(400).json({ error: '결제 금액 불일치' });
     }
 
@@ -332,7 +349,7 @@ router.post('/confirm', async (req, res, next) => {
       const data = err.response?.data || {};
       await admin.from('payments')
         .update({ status: 'failed', failure_reason: data.message || err.message, raw_response: data })
-        .eq('order_id', orderId);
+        .eq('order_id', orderId).eq('status', 'requested'); // SEC-AUDIT-2026-11-10: captured 를 failed 로 덮으면 환불이 막힌다
       logger.error({ userId: req.user.id, orderId, status, data }, 'Toss confirm 실패');
       try { Sentry.captureException(new Error(data.message || 'Toss confirm 실패'), { tags: { route: 'billing.confirm' }, extra: { orderId, status } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 — 본 처리를 막지 않는다 */ }
       return res.status(status).json({ error: data.message || '결제 승인 실패', code: data.code });
@@ -348,13 +365,24 @@ router.post('/confirm', async (req, res, next) => {
       method: tossData.method || null,
       approved_at: tossData.approvedAt || new Date().toISOString(),
       raw_response: tossData,
-    }).eq('order_id', orderId).eq('status', 'requested').select();
+      // SEC-AUDIT-2026-11-10 (반증 검토): Toss 호출이 시간 초과로 실패 기록(failed)된 뒤 실제로는 승인됐다면, 재시도의 승인 성공을
+      //   requested 만 받는 CAS 가 놓쳐 결제는 됐는데 이용권이 없었다. Toss 승인과 금액 대조를 통과했으니 failed 도 captured 로 바꾼다.
+    }).eq('order_id', orderId).in('status', ['requested', 'failed']).select();
     if (capErr) throw capErr;
     if (!capRows || capRows.length === 0) {
       // webhook 이 이미 처리함 — 멱등 응답
       logger.info({ userId: req.user.id, orderId }, 'confirm: 이미 처리됨 (멱등)');
       // webhook 이 CAS 만 성공시키고 user_billing 직전에 죽었다면 이 분기가 그 구멍을 은폐한다(감사 P1-6).
-      await ensureBillingActive(admin, req.user.id, pay.plan, pay.approved_at || new Date().toISOString());
+      // SEC-AUDIT-2026-11-10 (보안 점검 run-1, billing/confirm-cas-loser-repair-double-extension): 예전엔 pay(CAS 전에 읽은 값,
+      //   requested 라 approved_at 이 비어 있다) 대신 현재 시각을 넘겨, 승자가 이미 이용권을 늘린 뒤에도 "미반영"으로 판정해 30일을 한 번 더 더했다.
+      //   승자가 기록한 실제 승인 시각을 다시 읽어 넘긴다. captured 가 아니면(승자 없음, 실패) 보정하지 않는다.
+      const { data: cur, error: curErr } = await admin.from('payments').select('status, approved_at').eq('order_id', orderId).eq('user_id', req.user.id).maybeSingle();
+      if (curErr) throw curErr;
+      if (!cur || cur.status !== 'captured') {
+        logger.warn({ userId: req.user.id, orderId, status: cur && cur.status }, 'confirm: CAS 0행인데 captured 가 아님');
+        return res.status(409).json({ error: '결제 상태를 확인하지 못했어요. 잠시 뒤 다시 시도해 주세요.', code: 'payment_state_conflict', status: cur ? cur.status : null });
+      }
+      await ensureBillingActive(admin, req.user.id, pay.plan, cur.approved_at || null);
       return res.json({ status: 'captured', plan: pay.plan, note: 'already processed' });
     }
 
@@ -512,7 +540,7 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
         method: tossData.method || null,
         approved_at: tossData.approvedAt || new Date().toISOString(),
         raw_response: tossData,
-      }).eq('order_id', orderId).eq('status', 'requested').select();
+      }).eq('order_id', orderId).in('status', ['requested', 'failed']).select(); // SEC-AUDIT-2026-11-10: confirm 과 같은 이유로 failed 도 받는다
       if (!capRows || capRows.length === 0) {
         logger.info({ orderId }, 'webhook: 이미 captured (멱등 — confirm 이 먼저 처리)');
         // confirm 이 CAS 만 성공시키고 user_billing 직전에 죽었을 수 있다(감사 P1-6).
@@ -552,15 +580,20 @@ router.post('/webhook', express.json({ limit: '32kb' }), async (req, res) => {
       } else if (pay.status === 'captured') {
         // Toss 측 취소(콘솔 등) 또는 refund endpoint 의 DB 반영 누락 보정 → refunded 로 정합 (CAS: captured 만).
         //   payments.status='refunded' 채택 이유: refund endpoint·planService(refunded→free) 와 동일 상태 체계.
-        await admin.from('payments').update({
+        const { error: _wpErr } = await admin.from('payments').update({
           status: 'refunded',
           failure_reason: 'toss_canceled',
           raw_response: tossData,
         }).eq('order_id', orderId).eq('status', 'captured');
-        await admin.from('user_billing').update({
+        const { error: _wbErr } = await admin.from('user_billing').update({
           status: 'refunded',
           canceled_at: new Date().toISOString(),
         }).eq('user_id', pay.user_id);
+        // SEC-AUDIT-2026-11-10: 예전엔 두 갱신의 오류를 보지 않아, DB 제약 위반 같은 실패가 조용히 묻히고 환불 뒤에도 이용권이 남았다.
+        if (_wpErr || _wbErr) {
+          logger.error({ orderId, userId: pay.user_id, payErr: _wpErr?.message, billErr: _wbErr?.message }, 'webhook CANCELED: 환불 정합 DB 반영 실패 — 수동 정합 필요');
+          try { Sentry.captureException(new Error('webhook CANCELED reconcile failed'), { tags: { route: 'billing.webhook' }, extra: { orderId } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 */ }
+        }
         try {
           const { invalidatePlanCache } = require('../services/planService');
           invalidatePlanCache(pay.user_id);
@@ -596,11 +629,14 @@ router.post('/cancel', async (req, res, next) => {
   try {
     const admin = getSupabaseAdmin();
     if (!admin) return res.status(503).json({ error: '결제 시스템 초기화 중' });
-    const { error } = await admin.from('user_billing').update({
+    // SEC-AUDIT-2026-11-10 (보안 점검 run-1, billing/cancel-overwrites-refunded-restores-entitlement): 예전엔 현재 상태를 보지 않고 canceled 로 덮어,
+    //   환불(refunded)로 회수한 이용권이 해지 호출로 기간 끝까지 되살아났다. 진행 중인 구독(active)만 해지한다.
+    const { data: canRows, error } = await admin.from('user_billing').update({
       status: 'canceled',
       canceled_at: new Date().toISOString(),
-    }).eq('user_id', req.user.id);
+    }).eq('user_id', req.user.id).eq('status', 'active').select('user_id');
     if (error) throw error;
+    if (!canRows || canRows.length === 0) return res.status(409).json({ error: '해지할 수 있는 구독이 없어요', code: 'no_active_subscription' });
     try {
       const { invalidatePlanCache } = require('../services/planService');
       invalidatePlanCache(req.user.id);
@@ -692,10 +728,17 @@ router.post('/payments/:id/refund', async (req, res, next) => {
     // 7) user_billing 다운그레이드 — 환불=즉시 권한 회수 (canceled 의 "기간 말까지 유지" 와 달리 즉시).
     //    현재 스키마는 user 당 단일 구독(user_billing 1 row) — 별도 동시 active 결제 개념 없음.
     //    status='refunded' 는 planService entitlement(active|canceled) 에 미포함 → 즉시 free.
-    await admin.from('user_billing').update({
+    const { error: _rbErr } = await admin.from('user_billing').update({
       status: 'refunded',
       canceled_at: new Date().toISOString(),
     }).eq('user_id', req.user.id);
+    // SEC-AUDIT-2026-11-10 (보안 점검 run-1, billing/refund-status-check-constraint-mismatch-keeps-entitlement): 예전엔 이 갱신의 오류를 보지 않아
+    //   실패해도 "환불 완료"를 돌려주고 이용권은 그대로 남았다. 실패를 드러내 수동 정합 대상으로 남긴다.
+    if (_rbErr) {
+      logger.error({ userId: req.user.id, paymentId: pay.id, err: _rbErr.message }, '환불 뒤 이용권 회수 실패 — 수동 정합 필요');
+      try { Sentry.captureException(new Error('refund user_billing downgrade failed'), { tags: { route: 'billing.refund' }, extra: { paymentId: pay.id } }); } catch (_) { /* 텔레메트리 실패는 삼킨다 */ }
+      return res.status(500).json({ error: '환불은 접수됐으나 이용권 정리에 실패했어요. 고객센터로 문의해주세요.', code: 'refund_billing_failed' });
+    }
     try {
       const { invalidatePlanCache } = require('../services/planService');
       invalidatePlanCache(req.user.id);

@@ -99,8 +99,10 @@ test('billing/confirm — captured 전환은 status=requested CAS 로만 (webhoo
     // ★ 핵심: 이 두 필터가 함께 걸려야 "requested 인 것만 captured 로" 가 성립한다.
     assert.ok(_hasFilter(seen.updateFilters, 'order_id', 'o1'),
       `CAS update 에 order_id 필터가 없다: ${JSON.stringify(seen.updateFilters)}`);
-    assert.ok(_hasFilter(seen.updateFilters, 'status', 'requested'),
-      'CAS 가드(.eq("status","requested")) 가 없다 — webhook 이 먼저 captured 시켜도 confirm 이 덮어쓴다: '
+    // SEC-AUDIT-2026-11-10: CAS 는 requested 와 failed(시간 초과 뒤 실제 승인)만 captured 로 바꾼다. captured, refunded 는 받지 않는다.
+    const _st = seen.updateFilters.find(([c, v]) => c === 'status' && Array.isArray(v));
+    assert.ok(_st && _st[1].includes('requested') && !_st[1].includes('captured') && !_st[1].includes('refunded'),
+      'CAS 가드(status in requested, failed) 가 없다 — webhook 이 먼저 captured 시켜도 confirm 이 덮어쓴다: '
       + JSON.stringify(seen.updateFilters));
   });
 });

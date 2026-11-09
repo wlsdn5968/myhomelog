@@ -420,7 +420,7 @@ alter table public.molit_ingest_runs add constraint molit_ingest_runs_status_chk
 alter table public.molit_transactions add constraint molit_transactions_pkey PRIMARY KEY (id);
 alter table public.payments add constraint payments_order_id_key UNIQUE (order_id);
 alter table public.payments add constraint payments_pkey PRIMARY KEY (id);
-alter table public.payments add constraint payments_status_check CHECK ((status = ANY (ARRAY['requested'::text, 'authorized'::text, 'captured'::text, 'canceled'::text, 'failed'::text])));
+alter table public.payments add constraint payments_status_check CHECK ((status = ANY (ARRAY['requested'::text, 'authorized'::text, 'captured'::text, 'canceled'::text, 'failed'::text, 'refunded'::text]))); -- 2026-11-10 refunded 추가(migrations/20261110_billing_refunded_status.sql)
 alter table public.payments add constraint payments_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 alter table public.popular_apts_snapshot add constraint popular_apts_snapshot_id_check CHECK ((id = 1));
 alter table public.popular_apts_snapshot add constraint popular_apts_snapshot_pkey PRIMARY KEY (id);
@@ -433,7 +433,7 @@ alter table public.search_history add constraint search_history_query_type_check
 alter table public.search_history add constraint search_history_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 alter table public.user_billing add constraint user_billing_pkey PRIMARY KEY (user_id);
 alter table public.user_billing add constraint user_billing_plan_check CHECK ((plan = ANY (ARRAY['free'::text, 'pro'::text, 'team'::text])));
-alter table public.user_billing add constraint user_billing_status_check CHECK ((status = ANY (ARRAY['active'::text, 'past_due'::text, 'canceled'::text, 'incomplete'::text])));
+alter table public.user_billing add constraint user_billing_status_check CHECK ((status = ANY (ARRAY['active'::text, 'past_due'::text, 'canceled'::text, 'incomplete'::text, 'refunded'::text]))); -- 2026-11-10 refunded 추가
 alter table public.user_billing add constraint user_billing_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE;
 alter table public.user_budget add constraint user_budget_pkey PRIMARY KEY (user_id, month);
 alter table public.visit_attribution add constraint visit_attribution_pkey PRIMARY KEY (id);
