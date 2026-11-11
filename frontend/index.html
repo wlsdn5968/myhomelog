@@ -939,6 +939,56 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .hp-ft{padding:0 24px 16px;font-size:12px;font-weight:500;line-height:1.5;color:var(--t3)}
 .hp-ft a{color:var(--t3)}
 .hp-ft button{background:none;border:0;padding:0;font:inherit;color:var(--t3);text-decoration:underline;cursor:pointer}
+/* HOME-192 (plans/192 1단계 A, 2026-11-11 시안 '내집로그 개선 3차'): 데스크톱 첫 화면에서 목록과 지도가 화면을 더 쓰게 고정 구역을 줄인다.
+   실측(1440x709, 적용 전 -> 운영 화면에 같은 규칙을 임시로 입혀 잰 값): 목록 155 -> 353 이상, 지도 408 -> 532.
+   제목과 기준 설명은 한 줄, 지역 칩은 한 줄과 '더보기', 보고서 안내 문장은 버튼의 title 로, 방문 표시와 고지는 얇은 두 줄,
+   지도 위에는 검색과 가격 출처 한 줄만 남긴다(기능 링크는 헤더와 도구에 있다). 모바일은 건드리지 않는다. */
+.hp-chip-more,.hp-ft-more{display:none}
+@media(min-width:701px){
+  body.hp-on .hp-hd{display:flex;align-items:baseline;gap:0 8px;padding:16px 24px 10px}
+  body.hp-on .hp-t{flex-shrink:0}
+  body.hp-on .hp-s{flex:1;min-width:0;margin:0;font-size:12px;line-height:1.5;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  body.hp-on #hpChips{position:relative;flex-wrap:nowrap;overflow:hidden;padding:0 104px 8px 24px}
+  body.hp-on #hpChips.open{flex-wrap:wrap}
+  body.hp-on #hpChips .hp-chip{flex-shrink:0}
+  body.hp-on #hpChips .hp-chip-more{display:inline-flex;align-items:center;justify-content:flex-end;position:absolute;top:0;right:0;width:104px;padding:0 24px 0 0;border:0;border-radius:0;background:var(--bg-base);color:var(--acc)} /* 오른쪽 끝까지 덮어 잘린 칩이 비치지 않게 */
+  body.hp-on #hpChips .hp-chip-more[hidden]{display:none}
+  body.hp-on .hp-row{padding:8px 24px}
+  body.hp-on .hp-list>.hp-msg:first-child{padding:8px 24px;font-size:12px}
+  body.hp-on .hp-rep{padding:8px 24px}
+  body.hp-on .hp-rep p{display:none}
+  body.hp-on .hp .site-livebar{justify-content:flex-start;padding:0 24px 2px}
+  body.hp-on .hp .site-live{border:0;background:none;padding:0;font-size:12px}
+  body.hp-on .hp-ft{padding:0 24px 8px}
+  body.hp-on .hp-ft:not(.open) .hp-ft-l{display:none}
+  body.hp-on .hp-ft .hp-ft-more{display:inline;margin-left:6px}
+  body.hp-on #hpBand{padding:12px 24px}
+  body.hp-on #hpBand .hp-more{display:none}
+  /* 지도 위 띠에는 검색 결과용 필터(#fltGroup), 가격 출처 문구(#mapTrustChip), 경고(#popStaleNote)가 있어 띠는 남긴다. 조작 안내와 범례 글만 접는다(둘 다 title 에 같은 설명이 있다). */
+  body.hp-on #mapHintTxt,body.hp-on #popLegend{display:none!important}
+}
+/* HOME-192 1단계 B(모바일 지도 화면, 시안 B): 기본 높이의 시트에서 단지 3행이 보이게 한다.
+   실측(375x812, 적용 전): 시트 335 중 목록 67. 목록 첫 칸의 안내 문장 77 과 3줄짜리 행 86 때문에 단지가 한 줄도 안 보였다.
+   안내 문장은 행이 있을 때 숨기고, 평형은 가격 옆으로 붙여 행을 2줄로, 방문 표시는 시트를 펼쳤을 때만 보인다. 고지 줄은 그대로 둔다. */
+@media(max-width:700px){
+  body.hp-on .hp-list>.hp-msg:first-child:not(:only-child){display:none}
+  body.hp-on .hp-row .hp-ar{display:inline;margin-left:4px}
+  body.hp-on:not(.hps-full) .hp .site-livebar{display:none}
+  body.hp-on .hp-chips{scrollbar-width:none}
+  body.hp-on .hp-chips::-webkit-scrollbar{display:none}
+  body.hp-on .hp-rep{padding:4px 16px}
+  body.hp-on .hp-hd{padding-bottom:4px}
+  body.hp-on .hp-grab{height:16px}
+  body.hp-on .hp-grab::before{top:6px}
+  body.hp-on .hp-chips{padding-bottom:6px}
+  body.hp-on .hp-row{min-height:56px;padding:6px 16px;row-gap:0} /* 시안 B: 행 56 */
+  body.hp-on .hp-ft{padding:0 16px 6px}
+  /* 관심, 채팅 버튼이 지도 버튼 묶음(위성지도, 서울전체)과 겹쳤다(적용 전 실측: 묶음 아래 끝 256, 관심 버튼 위 끝 237).
+     시트 위 여백을 72 -> 40 으로 낮춘다. 40 은 지도 오른쪽 아래 로고를 가리지 않는 높이다. */
+  body.hp-on .fab-ai{bottom:calc(var(--hps-pad,0px) + 40px)}
+  body.hp-on .fab-bm{bottom:calc(var(--hps-pad,0px) + 100px)}
+  body.hp-on .bm-pop{bottom:calc(var(--hps-pad,0px) + 154px)}
+}
 /* 패널 하단 고지(2026-10-18 운영자 요청): 데스크톱 지도 화면은 아래 고지 띠(약 100px)가 지도를 가렸다 — 지도 화면에서만 띠를 숨기고
    띠의 내용(면책·전문 보기·약관·개인정보·환불·지역별 실거래·브리핑·사업자 정보·©)을 왼쪽 패널 하단 줄로 옮긴다. 다른 화면은 그대로 */
 @media(min-width:701px){ footer.legal-footer{display:none!important} }
@@ -2514,10 +2564,10 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   <div class="hp-list" id="hpList"><div class="hp-msg">불러오는 중이에요</div></div>
   <div class="hp-rep">
     <p>보유 주택, 자금, 희망 지역은 보고서 화면에서 입력해요.</p>
-    <button type="button" class="hp-cta" onclick="sv('report')">내 조건으로 맞춤 보고서 받기</button>
+    <button type="button" class="hp-cta" title="보유 주택, 자금, 희망 지역은 보고서 화면에서 입력해요." onclick="sv('report')">내 조건으로 맞춤 보고서 받기</button>
   </div>
   <div class="site-livebar" hidden><span class="site-live" data-site-live role="status" aria-live="polite"></span></div>
-  <div class="hp-ft">매수·매도 추천이 아니에요. 출처 국토교통부 실거래가<span class="hp-ft-l"> · <button type="button" onclick="openTerms()">전문 보기</button> · <a href="/terms.html" target="_blank">이용약관</a> · <a href="/privacy.html" target="_blank">개인정보</a> · <a href="/refund.html" target="_blank">환불</a><br><a href="/region" target="_blank">지역별 실거래 데이터</a> · <a href="/briefing" target="_blank">오늘의 브리핑</a> · <button type="button" id="hpBizT" aria-expanded="false" aria-controls="hpBiz" onclick="toggleBizInfo(this)">사업자 정보</button><span id="hpBiz" hidden><br>공명랩 · 대표 우진우 · 사업자등록번호 381-08-03668 · 서울특별시 노원구 섬밭로 139 · <a href="mailto:wlsdn5968@gmail.com">wlsdn5968@gmail.com</a> · © 2026 내집로그</span></span></div>
+  <div class="hp-ft">매수·매도 추천이 아니에요. 출처 국토교통부 실거래가<button type="button" class="hp-ft-more" aria-expanded="false" onclick="_hpFtMore(this)">약관과 사업자 정보</button><span class="hp-ft-l"> · <button type="button" onclick="openTerms()">전문 보기</button> · <a href="/terms.html" target="_blank">이용약관</a> · <a href="/privacy.html" target="_blank">개인정보</a> · <a href="/refund.html" target="_blank">환불</a><br><a href="/region" target="_blank">지역별 실거래 데이터</a> · <a href="/briefing" target="_blank">오늘의 브리핑</a> · <button type="button" id="hpBizT" aria-expanded="false" aria-controls="hpBiz" onclick="toggleBizInfo(this)">사업자 정보</button><span id="hpBiz" hidden><br>공명랩 · 대표 우진우 · 사업자등록번호 381-08-03668 · 서울특별시 노원구 섬밭로 139 · <a href="mailto:wlsdn5968@gmail.com">wlsdn5968@gmail.com</a> · © 2026 내집로그</span></span></div>
 </aside>
 
 <!-- CENTER -->
@@ -12747,6 +12797,39 @@ document.addEventListener('DOMContentLoaded', () => {
   } catch (_) {}
 });
 // 사업자 정보 펼침(패널·사이드바·화면별 고지 줄 공용) — 버튼의 aria-controls 가 가리키는 줄을 열고 닫는다
+// HOME-192: 지역 칩 한 줄. 넘치는 칩은 '더보기'로 펼친다. 고른 칩이 가려지는 폭이면 펼친 채로 둔다. 한 줄에 다 들어가면 버튼을 숨긴다.
+function _hpChipsFit(){
+  try{
+    const c = document.getElementById('hpChips'); if(!c) return;
+    const more = c.querySelector('.hp-chip-more'); if(!more) return;
+    const chips = [...c.querySelectorAll('.hp-chip:not(.hp-chip-more)')];
+    if(!chips.length || !c.clientWidth) return;
+    const limit = c.getBoundingClientRect().right - 104; // 오른쪽 '더보기' 자리
+    const firstTop = chips[0].offsetTop;
+    const over = chips.some(b => b.offsetTop > firstTop + 4 || b.getBoundingClientRect().right > limit + 1);
+    const picked = chips.find(b => b.getAttribute('aria-pressed') === 'true');
+    if(!c.classList.contains('open') && picked && picked.getBoundingClientRect().right > limit + 1){ c.classList.add('open'); more.textContent = '접기'; more.setAttribute('aria-expanded', 'true'); }
+    more.hidden = !over && !c.classList.contains('open');
+  }catch(_){}
+}
+function _hpChipsMore(btn){
+  try{
+    const c = document.getElementById('hpChips'); if(!c) return;
+    const open = !c.classList.contains('open');
+    c.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', String(open));
+    btn.textContent = open ? '접기' : '더보기';
+  }catch(_){}
+}
+function _hpFtMore(btn){
+  try{
+    const f = btn.closest('.hp-ft'); if(!f) return;
+    const open = !f.classList.contains('open');
+    f.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', String(open));
+    btn.textContent = open ? '접기' : '약관과 사업자 정보';
+  }catch(_){}
+}
 function toggleBizInfo(btn){
   try{
     const b = document.getElementById(btn.getAttribute('aria-controls'));
@@ -13449,7 +13532,12 @@ function _hpRender(){
   const sidos = Object.keys(_HP_REG_SIDO);
   all.forEach(p => { const s = _hpSidoOf(p); if(s && !sidos.includes(s)) sidos.push(s); });
   if(_hpSido !== '전국' && !sidos.includes(_hpSido)) _hpSido = '전국';
-  if(chips) chips.innerHTML = ['전국', ...sidos].map(s => `<button type="button" class="hp-chip" aria-pressed="${s === _hpSido}" onclick="_hpPick(${_jsonAttr(s)})">${_escHtml(s)}</button>`).join('');
+  if(chips){
+    const _chOpen = !!(chips.classList && chips.classList.contains('open')); // HOME-192: 펼친 상태는 다시 그려도 유지
+    chips.innerHTML = ['전국', ...sidos].map(s => `<button type="button" class="hp-chip" aria-pressed="${s === _hpSido}" onclick="_hpPick(${_jsonAttr(s)})">${_escHtml(s)}</button>`).join('')
+      + `<button type="button" class="hp-chip hp-chip-more" aria-expanded="${_chOpen}" aria-controls="hpChips" onclick="_hpChipsMore(this)">${_chOpen ? '접기' : '더보기'}</button>`;
+    if(typeof _hpChipsFit === 'function') _hpChipsFit();
+  }
   if(_HP_REG_SIDO[_hpSido]) { _hpRegShow(); return; }
   _hpRegChips(null);
   if(sub){
@@ -13787,7 +13875,8 @@ function _hpsMetrics(){
   const hp = document.getElementById('homePanel'), list = document.getElementById('hpList');
   const fixedH = hp ? [...hp.children].reduce((n, e) => n + (e === list ? 0 : e.offsetHeight), 0) : min;
   const c2 = document.getElementById('hpChips2');
-  const floor = fixedH + (c2 && !c2.hidden ? 110 : 60);
+  // HOME-192: 기본 높이에서 단지 3행(행 56)이 보이게 하한을 올린다(전에는 1행 60).
+  const floor = fixedH + (c2 && !c2.hidden ? 110 : 168);
   const max = Math.max(min, H - 8);
   return { H, min, base: Math.min(max, Math.max(floor, Math.round(H * 0.48))), max };
 }

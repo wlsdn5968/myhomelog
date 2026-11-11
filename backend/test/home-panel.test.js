@@ -261,7 +261,7 @@ test('Plan 151b 리뷰: 접힘이면 가려진 본문 숨김 · 홈 바 여백 �
   // 낮은 화면에서 목록이 0 이 되지 않게 기본 높이 하한
   assert.ok(extractFn(html, '_hpsMetrics').includes('const fixedH = hp ? [...hp.children].reduce((n, e) => n + (e === list ? 0 : e.offsetHeight), 0) : min;'));
   // REGION-SHADE-2026-10-21: 시도·구 칩 줄도 고정 영역 — 구 칩 줄이 생기고 사라질 때 기본 높이를 다시 잰다(375 실측: 목록 15px)
-  assert.ok(extractFn(html, '_hpsMetrics').includes('const floor = fixedH + (c2 && !c2.hidden ? 110 : 60);'));
+  assert.ok(extractFn(html, '_hpsMetrics').includes('const floor = fixedH + (c2 && !c2.hidden ? 110 : 168);')); // HOME-192: 기본 높이에서 3행(행 56)
   assert.ok(extractFn(html, '_hpRegChips').includes('if(was) _hpsRefit();'));
   assert.match(html, /function _hpsRefit\(\)\{ try\{ if\(document\.body\.classList\.contains\('hp-on'\) && window\.innerWidth <= 700 && _hpsState === 'base'\) _hpsSet\('base'\); \}catch\(_\)\{\} \}/);
 });
@@ -321,4 +321,51 @@ test('데스크톱 띠를 없앤 대신 목록 사이드바 끝과 화면별 고
   // 공용 펼침 함수는 하나
   assert.equal((html.match(/function toggleBizInfo\(/g) || []).length, 1);
   assert.ok(!html.includes("var b=document.getElementById('hpBiz')"), '인라인 토글 제거');
+});
+
+// ── HOME-192 (plans/192 1단계 A, B. 시안 '내집로그 개선 3차') ─────────────────────────────────────────────
+test('HOME-192: 데스크톱 첫 화면은 고정 구역을 줄여 목록과 지도에 자리를 준다', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const i = html.indexOf('/* HOME-192 (plans/192 1단계 A');
+  assert.ok(i > 0);
+  const blk = html.slice(i, html.indexOf('/* HOME-192 1단계 B', i));
+  for (const rule of [
+    'body.hp-on #hpChips{position:relative;flex-wrap:nowrap;overflow:hidden',
+    'body.hp-on #hpChips.open{flex-wrap:wrap}',
+    'body.hp-on .hp-rep p{display:none}',
+    'body.hp-on .hp-ft:not(.open) .hp-ft-l{display:none}',
+    'body.hp-on #hpBand .hp-more{display:none}',
+    'body.hp-on #mapHintTxt,body.hp-on #popLegend{display:none!important}',
+  ]) assert.ok(blk.includes(rule), rule);
+  assert.match(blk, /@media\(min-width:701px\)\{/);
+  // 지도 위 띠는 숨기지 않는다: 검색 결과용 필터(#fltGroup)와 가격 출처 문구(#mapTrustChip)가 그 안에 있다.
+  assert.ok(!/\.mtbar\{display:none/.test(blk), '지도 위 띠를 통째로 숨기면 필터 버튼이 사라진다');
+  // 고지 문장과 보고서 버튼은 그대로 있고, 접힌 링크는 버튼으로 펼친다.
+  assert.match(html, /<div class="hp-ft">매수·매도 추천이 아니에요\. 출처 국토교통부 실거래가<button type="button" class="hp-ft-more" aria-expanded="false" onclick="_hpFtMore\(this\)">약관과 사업자 정보<\/button><span class="hp-ft-l">/);
+  assert.match(html, /class="hp-cta" title="보유 주택, 자금, 희망 지역은 보고서 화면에서 입력해요\." onclick="sv\('report'\)"/);
+});
+
+test('HOME-192: 지역 칩 더보기는 펼친 상태를 다시 그려도 유지하고, 고른 칩이 가려지면 펼친다', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const fit = extractFn(html, '_hpChipsFit'), more = extractFn(html, '_hpChipsMore'), ft = extractFn(html, '_hpFtMore');
+  assert.ok(fit.includes("more.hidden = !over && !c.classList.contains('open');"));
+  assert.ok(fit.includes("picked.getBoundingClientRect().right > limit + 1"));
+  assert.ok(more.includes("btn.setAttribute('aria-expanded', String(open));"));
+  assert.ok(ft.includes("f.classList.toggle('open', open);"));
+  assert.ok(extractFn(html, '_hpRender').includes("const _chOpen = !!(chips.classList && chips.classList.contains('open'));"));
+});
+
+test('HOME-192: 모바일 시트는 기본 높이에서 3행이 보이고, 지도 버튼과 관심·채팅 버튼이 겹치지 않는다', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const i = html.indexOf('/* HOME-192 1단계 B');
+  const blk = html.slice(i, i + 2500);
+  for (const rule of [
+    'body.hp-on .hp-list>.hp-msg:first-child:not(:only-child){display:none}',
+    'body.hp-on .hp-row{min-height:56px;padding:6px 16px;row-gap:0}',
+    'body.hp-on:not(.hps-full) .hp .site-livebar{display:none}',
+    'body.hp-on .fab-ai{bottom:calc(var(--hps-pad,0px) + 40px)}',
+    'body.hp-on .fab-bm{bottom:calc(var(--hps-pad,0px) + 100px)}',
+  ]) assert.ok(blk.includes(rule), rule);
+  // 고지 줄은 모바일에서도 숨기지 않는다(절대 규칙: 화면마다 면책 표시).
+  assert.ok(!/\.hp-ft\{[^}]*display:none/.test(blk));
 });
