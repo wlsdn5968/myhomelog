@@ -15,7 +15,7 @@ const THEME_CSS = `:root{--bg:#F5F5F2;--sf:#FFFFFF;--sf2:#EFEFEB;--line:#E2E1DC;
   @media (prefers-color-scheme:dark){:root{--bg:#0E1520;--sf:#151E2B;--sf2:#1C2736;--line:#263345;--line2:#34445A;--ink:#E8ECF1;--ink2:#B3BDCA;--ink3:#8C97A6;--pri:#8DB3E2;--prit:#1E3150;--onpri:#0E1520;--map:#18222F}}`;
 
 // §6: Pretendard Variable → system-ui → sans-serif
-const FONT_STACK = "Pretendard,system-ui,sans-serif";
+const FONT_STACK = "\"Pretendard Variable\",Pretendard,system-ui,sans-serif";
 
 // frontend/index.html 의 stylesheet 링크와 동일(URL·integrity·crossorigin 그대로).
 const FONT_LINK = '<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css" integrity="sha384-5BlC3z5PiUASCwi5iNqbsXbtE1SBi8nn1Upz4JWJg2upbZKNNDXLRPKEcn79qArn" crossorigin="anonymous">';
