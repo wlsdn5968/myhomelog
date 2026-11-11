@@ -4322,12 +4322,22 @@ function _bgApi(task){
   _bgChain = _bgChain.then(function(){ try{ return Promise.resolve(task()).catch(function(){}); }catch(_){ return null; } });
   return _bgChain;
 }
+// BG-QUEUE 2단계 (2026-11-12): 첫 화면에서 인기 목록, 상태 확인, 규제 요약, 지역 메뉴 네 개가 같은 순간(운영 실측 95~101ms)에 나갔다.
+//   세 개는 CDN 이 답하지만 저장분이 오래됐으면 CDN 이 그 순간 서버에 다시 물어서(stale-while-revalidate) 서버가 그 수만큼 뜬다.
+//   화면에 바로 보이는 인기 목록만 먼저 보내고, 상태 확인은 화면이 열린 지 0.9초 뒤에(서버 시작이 약 0.8초),
+//   규제 요약과 지역 메뉴는 상태 확인 뒤에 위의 줄을 따라 하나씩 보낸다. 나중에 사용자가 누를 때의 호출은 기다리지 않는다.
+const _pageT0 = (window.performance && window.performance.now) ? window.performance.now() : 0;
+function _afterWarmup(){
+  const now = (window.performance && window.performance.now) ? window.performance.now() : 1e9;
+  const w = 900 - (now - _pageT0);
+  return w > 0 ? new Promise(function(res){ setTimeout(res, w); }) : Promise.resolve();
+}
 const HEALTH_TTL_MS = 20000;
 let _hlthVal = null, _hlthAt = 0, _hlthP = null;
 function healthJson(timeoutMs, force){
   if (!force && _hlthVal && (Date.now() - _hlthAt) < HEALTH_TTL_MS) return Promise.resolve(_hlthVal);
   if (!force && _hlthP) return _hlthP;
-  const p = fetch(`${CFG.api}/health`, { signal: AbortSignal.timeout(timeoutMs || 5000) })
+  const p = _afterWarmup().then(() => fetch(`${CFG.api}/health`, { signal: AbortSignal.timeout(timeoutMs || 5000) }))
     .then(r => r.ok ? r.json() : null)
     .then(d => { if (d) { _hlthVal = d; _hlthAt = Date.now(); } return d; })
     .catch(() => null)
@@ -12337,8 +12347,8 @@ const SEOUL_GU_KW = ['강남','강동','강북','강서','관악','광진','구�
   '영등포','용산','은평','종로','중랑'];
 async function loadRegulatedKeywords(){
   try{
-    const r = await fetch(`${CFG.api}/regulations`, { signal: AbortSignal.timeout(4000) });
-    if(!r.ok) return;
+    const r = await _bgApi(() => fetch(`${CFG.api}/regulations`, { signal: AbortSignal.timeout(4000) })); // BG-QUEUE: 상태 확인 뒤 차례로
+    if(!r || !r.ok) return;
     const d = await r.json();
     const reg = d.regulatedRegions || {};
     const seoulRegulated = !!reg.seoul;
@@ -12514,8 +12524,8 @@ let _regionMenuLoaded = false;
 async function loadRegionMenu(){
   if(_regionMenuLoaded) return;
   try{
-    const r = await fetch(`${CFG.api}/region/menu`);
-    if(!r.ok) throw new Error('HTTP '+r.status);
+    const r = await _bgApi(() => fetch(`${CFG.api}/region/menu`)); // BG-QUEUE: 상태 확인 뒤 차례로
+    if(!r || !r.ok) throw new Error('HTTP '+(r ? r.status : 0));
     const j = await r.json();
     const next = {};
     for(const g of (j.groups||[])){

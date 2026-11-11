@@ -135,7 +135,7 @@ test('Sentry 가동 감시 봇은 첫 화면 대신 2바이트 응답을 받는�
 
 test('BG-QUEUE: 방문 기록 전송은 첫 상태 확인 뒤에 한 번에 하나씩 나간다(동시 호출로 서버가 여러 개 뜨지 않게)', async () => {
   const html = read('frontend/index.html');
-  const i = html.indexOf('// BG-QUEUE-2026-11-12'), j = html.indexOf('const HEALTH_TTL_MS = 20000;');
+  const i = html.indexOf('// BG-QUEUE-2026-11-12'), j = html.indexOf('// BG-QUEUE 2단계');
   assert.ok(i > 0 && j > i);
   // 줄 세우기 코드만 떼어 실행해 순서를 확인한다
   const code = html.slice(i, j).replace("try{ window.addEventListener('pagehide', function(){ _bgGateOpen(); }); }catch(_){}", '');
@@ -152,4 +152,25 @@ test('BG-QUEUE: 방문 기록 전송은 첫 상태 확인 뒤에 한 번에 하�
   assert.ok(html.includes("if (typeof _bgApi === 'function') _bgApi(_send); else _send();"));
   assert.ok(html.includes('_bgGateOpen(); }); // BG-QUEUE'));
   assert.ok(html.includes("window.addEventListener('pagehide', function(){ _bgGateOpen(); });"));
+});
+
+test('BG-QUEUE 2단계: 상태 확인은 화면이 열린 지 0.9초 뒤에, 규제 요약과 지역 메뉴는 줄을 따라 나간다', async () => {
+  const html = read('frontend/index.html');
+  const i = html.indexOf('const _pageT0 = '), j = html.indexOf('const HEALTH_TTL_MS = 20000;');
+  assert.ok(i > 0 && j > i);
+  let now = 100;
+  const fakeWindow = { performance: { now: () => now } };
+  const afterWarmup = new Function('window', `${html.slice(i, j)}; return _afterWarmup;`)(fakeWindow);
+  // 화면이 열린 직후(100ms 시점에 기준을 잡고 150ms 가 지난 때)에는 기다린다
+  now = 250; let done = false; const t0 = Date.now();
+  await afterWarmup().then(() => { done = true; });
+  assert.ok(done && Date.now() - t0 >= 600, '0.9초가 되기 전에 나갔다');
+  // 0.9초가 지난 뒤(사용자가 나중에 누른 경우)에는 기다리지 않는다
+  now = 5000; const t1 = Date.now(); await afterWarmup();
+  assert.ok(Date.now() - t1 < 50, '나중 호출까지 늦췄다');
+  assert.ok(html.includes('const p = _afterWarmup().then(() => fetch(`${CFG.api}/health`'));
+  assert.ok(html.includes('await _bgApi(() => fetch(`${CFG.api}/regulations`'));
+  assert.ok(html.includes('await _bgApi(() => fetch(`${CFG.api}/region/menu`))'));
+  // 화면에 바로 보이는 인기 목록은 줄을 서지 않는다
+  assert.ok(html.includes('_pop12P = fetch(`${CFG.api}/search/popular?limit=12`'));
 });
