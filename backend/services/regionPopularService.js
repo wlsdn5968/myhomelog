@@ -186,7 +186,7 @@ async function _attachCoords(admin, items) {
 async function computeSido(sido, { concurrency = 6 } = {}) {
   const admin = getSupabaseAdmin();
   if (!admin) throw new Error('DB 미설정');
-  if (!SIDOS[sido]) throw new Error('지원하지 않는 시도');
+  if (!Object.hasOwn(SIDOS, sido)) throw new Error('지원하지 않는 시도');
   const until = new Date();
   const since = new Date(until.getTime() - WINDOW_DAYS * 86400e3);
   const sinceIso = since.toISOString().slice(0, 10);

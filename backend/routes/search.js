@@ -831,7 +831,7 @@ const _regionPopInflight = new Map();
 router.get('/popular-region', async (req, res) => {
   const rp = require('../services/regionPopularService');
   const sido = String(req.query.sido || '');
-  if (!rp.SIDOS[sido]) return res.status(400).json({ error: '지원하지 않는 시도예요' });
+  if (!Object.hasOwn(rp.SIDOS, sido)) return res.status(400).json({ error: '지원하지 않는 시도예요' });
   const ck = `popular-region:${sido}`;
   const CC_OK = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400';
   const hit = cache.get(ck);
@@ -1401,7 +1401,7 @@ router.get('/facility', async (req, res) => {
     const _schoolsBlock = async () => {
     // AUDIT-CAPS-1111: 이 요청의 Kakao 호출(좌표·학교·학원)은 /api/geocode 와 같은 전역 일일 상한을 한 번 거친다.
     //   상한에 닿으면 Kakao 를 부르지 않고 좌표 없음 경로로 간다(오류 응답 아님). 캐시 히트는 관문을 거치지 않는다.
-    const kakaoGate = require('./geocode').createKakaoGate();
+    const kakaoGate = require('./geocode').createKakaoGate(undefined, req);
     if (mode !== 'basic') try { // FACILITY-SPLIT (Sprint IIII): basic 은 Kakao/NEIS 콜 전부 스킵
       const coord = await resolveCoord({
         kaptCode: facility?.kaptCode,

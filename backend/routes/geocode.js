@@ -99,17 +99,35 @@ async function _addIpAttempts(ip, by) {
   m.set(ip, n);
   return n;
 }
-/** 요청 1건의 IP 별 Kakao 시도 예산. ensure() 는 처음 Kakao 가 필요할 때 1회만 읽고, flush() 는 요청 끝에 쓴 만큼 더한다. */
-function createIpBudget(req, cap = GEOCODE_IP_DAILY_KAKAO_CAP) {
+/**
+ * 요청 1건의 IP 별 Kakao 시도 예산.
+ * AUDIT2-1111 (보안 점검 run-2, geocode-global-cap-exhaustible-by-few-ips 갱신): 처음에는 요청 시작에 읽고 끝에 더했다.
+ *   그러면 같은 IP 의 동시 요청이 모두 "아직 남았다"고 읽어 상한을 넘긴다. 이제 Kakao 가 처음 필요할 때
+ *   이 요청이 쓸 수 있는 최대치(reserve)를 먼저 더해 자리를 잡고(INCRBY 1회, 원자적), 끝에 안 쓴 만큼 돌려준다(INCRBY 1회).
+ *   동시 요청은 서로의 예약분을 보므로 합계가 상한을 넘지 못한다. Redis 명령 수는 전과 같다(2회).
+ */
+function createIpBudget(req, cap = GEOCODE_IP_DAILY_KAKAO_CAP, reserve = 6) {
   const ip = normalizeIpKey(getClientIp(req));
   let init = null;
+  let reserved = 0;
   const b = {
     left: Infinity, used: 0,
     ensure() {
-      if (!init) init = _readIpAttempts(ip).then((n) => { b.left = cap - n; }).catch(() => { b.left = cap; });
+      if (!init) {
+        init = _addIpAttempts(ip, reserve).then((n) => {
+          reserved = reserve;
+          const before = n - reserve;
+          b.left = before >= cap ? 0 : Math.min(reserve, cap - before);
+        }).catch(() => { b.left = reserve; });
+      }
       return init;
     },
-    async flush() { if (b.used > 0) { const u = b.used; b.used = 0; try { await _addIpAttempts(ip, u); } catch (_) { /* 무시 */ } } },
+    async flush() {
+      if (!reserved) return;
+      const back = reserved - b.used;
+      reserved = 0;
+      if (back > 0) { try { await _addIpAttempts(ip, -back); } catch (_) { /* 무시 */ } }
+    },
   };
   return b;
 }
@@ -119,12 +137,20 @@ function createIpBudget(req, cap = GEOCODE_IP_DAILY_KAKAO_CAP) {
 //   한 요청이 Kakao 를 부르는 단계는 좌표(최대 4회) + 학교(3회) + 학원(1회)이라 FACILITY_KAKAO_WEIGHT 를 4 로 센다(실제 호출 수는 캐시에 따라 이보다 적다).
 //   false 면 호출부는 Kakao 를 부르지 않고 '좌표 없음/학교 없음' 열화 경로로 간다. 캐시 히트는 관문을 안 거친다.
 const FACILITY_KAKAO_WEIGHT = 4;
-function createKakaoGate(weight = FACILITY_KAKAO_WEIGHT) {
+// AUDIT2-1111 (run-2, facility-gate-spends-global-geocode-cap-without-ip-budget): 관문이 전역 계수기만 올리면
+//   IP 하나가 시설 조회만으로 전역 상한을 채워 지도 지오코딩까지 막을 수 있다. req 를 받으면 같은 IP 예산을 먼저 쓴다.
+function createKakaoGate(weight = FACILITY_KAKAO_WEIGHT, req = null) {
   let p = null;
   return function gate() {
     if (!p) {
       p = (async () => {
         if (_capHitDay === _geoDay()) return false;
+        if (req) {
+          const ipb = createIpBudget(req, GEOCODE_IP_DAILY_KAKAO_CAP, weight);
+          await ipb.ensure();
+          if (ipb.left < weight) { await ipb.flush(); return false; }
+          ipb.used = weight; // 관문은 가중치만큼 쓴 것으로 센다(돌려주지 않는다)
+        }
         let n;
         try { n = await _bumpGeoCap(weight); } catch (_) { return true; }
         if (_geocodeCapExceeded(n, GEOCODE_GLOBAL_DAILY_CAP)) { _capHitDay = _geoDay(); return false; }
@@ -273,7 +299,7 @@ router.post('/', async (req, res) => {
   const key = process.env.KAKAO_REST_API_KEY;
   if (!key || key === 'your_kakao_rest_key') return res.json({ lat: null, lng: null, error: 'KAKAO_REST_API_KEY 미설정' });
   // GEOCAP-2026-08-09 (Plan 002): 캐시 히트는 무과금 - 전역 카운터는 kakaoGeocode 의 시도마다 올린다(SEC-1030-GEOCAP)
-  const st = { ipBudget: createIpBudget(req) };
+  const st = { ipBudget: createIpBudget(req, GEOCODE_IP_DAILY_KAKAO_CAP, 6) }; // 단건 최대 시도 6
   let out;
   try { out = await kakaoGeocode(key, aptName, area, sgg, umd, st); } finally { await st.ipBudget.flush(); }
   if (st.capped) return res.json({ lat: null, lng: null, error: 'quota' });
@@ -296,7 +322,7 @@ router.post('/batch', async (req, res) => {
     return res.status(400).json({ error: 'too_many_items', max: MAX_BATCH_ITEMS });
   }
   const key = process.env.KAKAO_REST_API_KEY;
-  const ipBudget = createIpBudget(req); // AUDIT-CAPS-1111: 요청 안 모든 항목이 하나의 IP 예산을 공유한다
+  const ipBudget = createIpBudget(req, GEOCODE_IP_DAILY_KAKAO_CAP, Math.max(6, items.length * 6)); // AUDIT-CAPS-1111: 요청 안 모든 항목이 하나의 IP 예산을 공유한다(항목당 최대 시도 6)
   const geocodeOne = async (item) => {
     // STAB-AUDIT-2026-05-06: 캐시 키 + Kakao 검색에 sigungu·umdNm 추가 — 동명 환각 차단
     const sgg = String(item.sigungu || '').trim();

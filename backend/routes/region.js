@@ -29,11 +29,12 @@ const TTL = 6 * 3600;
 /** 입력(lawdCd 또는 name) → { lawdCd, name } 정규화. 이름은 표시용. */
 function resolveRegion({ lawdCd, name }) {
   const code = String(lawdCd || '').trim();
-  if (code && LAWD_CODE_TO_NAME[code]) return { lawdCd: code, name: LAWD_CODE_TO_NAME[code] };
+  // AUDIT2-1111 (보안 점검 run-2): 객체를 허용 목록으로 쓸 때 constructor 같은 상속 키가 통과하지 않게 자기 키만 본다.
+  if (code && Object.hasOwn(LAWD_CODE_TO_NAME, code)) return { lawdCd: code, name: LAWD_CODE_TO_NAME[code] };
   const n = String(name || '').trim();
   if (n) {
     // 정확 키 일치만 허용 — 부분일치는 동명 오매칭 위험(‘중구’)이라 쓰지 않는다.
-    if (LAWD_CODES[n]) return { lawdCd: String(LAWD_CODES[n]), name: n };
+    if (Object.hasOwn(LAWD_CODES, n)) return { lawdCd: String(LAWD_CODES[n]), name: n };
   }
   return null;
 }

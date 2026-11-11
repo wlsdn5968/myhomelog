@@ -57,7 +57,9 @@ router.post('/compare', async (req, res) => {
     }
   }
   try {
-    const result = await compareBatch(apts, { dealMonths });
+    // AUDIT2-1111 (보안 점검 run-2): 비교의 Kakao 호출(단지당 좌표, 지하철, 학교)도 IP 예산과 전역 일일 상한을 거친다.
+    const kakaoGate = require('./geocode').createKakaoGate(apts.length * 4, req);
+    const result = await compareBatch(apts, { dealMonths, kakaoGate });
     res.json(result);
   } catch (err) {
     const isProd = process.env.NODE_ENV === 'production';

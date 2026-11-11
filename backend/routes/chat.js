@@ -24,7 +24,10 @@ const PII_PATTERNS = {
 };
 function detectPII(text) {
   // PII-DATE-2026-09-16 (Plan 098): ISO 날짜(2026-09-15)가 bankAcct 패턴(\d{3,6}-\d{2,6}-\d{2,7})에 걸려 "계좌번호" 오탐 — 날짜를 지운 뒤 검사한다.
-  const t = String(text || '').replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ');
+  // AUDIT2-1111 (보안 점검 run-2, chat-pii-regex-quadratic-backtracking): 아래 패턴의 \s* 는 숫자 뒤에 공백이 수만 자 이어지면
+  //   되짚기가 제곱으로 늘어난다(로컬 재현: 숫자 6자리 + 공백 49,000자에 계좌 1,856ms, 주민번호 519ms. 본문 한도 50kb 안).
+  //   연속 공백을 3칸으로 줄인 뒤 검사한다. 패턴은 공백 0칸 이상을 허용하므로 잡히는 대상은 그대로다.
+  const t = String(text || '').replace(/\s{4,}/g, '   ').replace(/\b\d{4}-\d{2}-\d{2}\b/g, ' ');
   const found = [];
   for (const [k, { re, label }] of Object.entries(PII_PATTERNS)) {
     if (re.test(t)) found.push(label);

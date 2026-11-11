@@ -696,14 +696,18 @@ function _cmpSeries(txs, months) {
 // 생활 거리 — 이미 있는 카카오 조회·90일 캐시 재사용. 상태를 구분해 돌려준다(실패를 '없음'으로 읽지 않는다).
 //   역: nearestSubway 직선거리(m). {s:'ok',name|null,m} / {s:'none'}(반경 3km 안 없음) / {s:'fail'}(좌표 없음·조회 실패)
 //   초등학교: resolveSchools(반경 1km). 검색 실패도 빈 목록이라 '없음'과 구분 못 한다 → 빈 목록은 {s:'notfound'}('찾지 못함')
-async function _cmpNear({ aptName, sigungu, umdNm, kaptCode, address }) {
+// AUDIT2-1111 (보안 점검 run-2, facility-kakao-uncapped 갱신): 단지 비교도 좌표, 지하철, 학교를 Kakao 로 찾는다.
+//   공개 POST 라 시설 조회와 같은 관문(kakaoGate: IP 예산 + 전역 일일 상한)을 거친다. 관문이 닫히면 '확인 못 함'으로 답한다.
+async function _cmpNear({ aptName, sigungu, umdNm, kaptCode, address, kakaoGate }) {
   const { resolveCoord } = require('./geocodeCacheService');
   const { nearestSubway } = require('./kakaoService');
   const { resolveSchools } = require('./schoolService');
   const fail = { station: { s: 'fail' }, school: { s: 'fail' } };
   let c = null;
-  try { c = await resolveCoord({ kaptCode: kaptCode || undefined, aptName, sigungu: sigungu || undefined, umdNm: umdNm || undefined, address: address || undefined }); } catch (_) { c = null; }
+  try { c = await resolveCoord({ kaptCode: kaptCode || undefined, aptName, sigungu: sigungu || undefined, umdNm: umdNm || undefined, address: address || undefined }, undefined, kakaoGate ? { kakaoGate } : undefined); } catch (_) { c = null; }
   if (!c || c.lat == null || c.lng == null) return fail;
+  // 관문이 닫혔으면 지하철, 학교를 찾지 않는다. '없음'이 아니라 '확인 못 함'으로 답해야 하므로 여기서 끝낸다.
+  if (kakaoGate && !(await kakaoGate())) return fail;
   const [st, sc] = await Promise.all([
     nearestSubway(c.lat, c.lng, 3000, { needName: true }).catch(() => undefined), // Plan 157: 비교 창은 역 이름이 필요
     resolveSchools({ aptName, sigungu, umdNm, kaptCode, lat: c.lat, lng: c.lng }).catch(() => undefined),
@@ -721,7 +725,7 @@ async function _cmpNear({ aptName, sigungu, umdNm, kaptCode, address }) {
 }
 
 const _CMP_CONTEXT_MONTHS = 6;
-async function _compareOne(apt, dealMonths) {
+async function _compareOne(apt, dealMonths, kakaoGate) {
   const aptName = apt && apt.aptName;
   const sigungu = (apt && apt.sigungu) || null;
   const umdNm = (apt && apt.umdNm) || null;
@@ -816,7 +820,7 @@ async function _compareOne(apt, dealMonths) {
 
   // 7) 생활 거리 — 단지 코드·주소가 있으면 좌표 찾기에 쓴다. 시간 초과면 'fail'('확인 못 함') 유지.
   try {
-    out.near = await _withTimeout(_cmpNear({ aptName, sigungu, umdNm, kaptCode: _kaptCode, address: _addr }), 4000); // 시설(3.5초)과 합쳐 단지당 최악 7.5초
+    out.near = await _withTimeout(_cmpNear({ aptName, sigungu, umdNm, kaptCode: _kaptCode, address: _addr, kakaoGate }), 4000); // 시설(3.5초)과 합쳐 단지당 최악 7.5초
   } catch (_) { /* fail 유지 */ }
 
   return out;
@@ -829,7 +833,7 @@ async function _compareOne(apt, dealMonths) {
 async function compareBatch(apts, opts = {}) {
   const dealMonths = Math.min(Math.max(parseInt(opts.dealMonths, 10) || 12, 6), 24);
   const list = (Array.isArray(apts) ? apts : []).slice(0, 6);
-  const results = await Promise.all(list.map(a => _compareOne(a, dealMonths).catch(() => null)));
+  const results = await Promise.all(list.map(a => _compareOne(a, dealMonths, opts.kakaoGate).catch(() => null)));
   return {
     results: results.filter(Boolean),
     dealMonths,

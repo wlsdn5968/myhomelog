@@ -78,7 +78,7 @@ test('1: resolveSchools·resolveAcademies 도 관문이 false 면 Kakao 를 부�
 
 test('1: search.js facility 경로가 관문을 좌표·학교·학원 호출에 모두 넘긴다', () => {
   const src = read('../routes/search.js');
-  assert.match(src, /createKakaoGate\(\)/);
+  assert.match(src, /createKakaoGate\(undefined, req\)/);
   assert.match(src, /undefined, \{ kakaoGate \}\)/);
   assert.match(src, /resolveSchools\([^\r\n]*\{ kakaoGate \}\)/);
   assert.match(src, /resolveAcademies\([^\r\n]*kakaoGate \}\)/);
@@ -95,7 +95,7 @@ test('2: IP 예산이 바닥나면 Kakao 를 더 부르지 않고 capped 로 끝
   const s = stubAxios();
   try {
     const req = { ip: '203.0.113.7', headers: {} };
-    const b = geocode.createIpBudget(req, 8);
+    const b = geocode.createIpBudget(req, 8, 8); // 상한 8, 이 요청의 예약 8
     await geocode._kakaoGeocode('k', '가나다', '시험구 시험동', '시험구', '시험동', { ipBudget: b }); // 시도 6
     assert.equal(s.calls.length, 6);
     await geocode._kakaoGeocode('k', '라마바', '시험구 시험동', '시험구', '시험동', { ipBudget: b }); // 남은 2 에서 멈춤
@@ -109,21 +109,21 @@ test('2: IP 예산이 바닥나면 Kakao 를 더 부르지 않고 capped 로 끝
     assert.equal(geocode._memCap.n, globalBefore);
     // flush 가 쓴 만큼 저장하고 같은 IP 의 다음 요청 예산에 반영된다
     await b.flush();
-    const b2 = geocode.createIpBudget(req, 8);
+    const b2 = geocode.createIpBudget(req, 8, 6);
     await b2.ensure();
     assert.equal(b2.left, 0);
-    const other = geocode.createIpBudget({ ip: '203.0.113.8', headers: {} }, 8);
+    const other = geocode.createIpBudget({ ip: '203.0.113.8', headers: {} }, 8, 6);
     await other.ensure();
-    assert.equal(other.left, 8, '다른 IP 는 영향 없음');
+    assert.equal(other.left, 6, '다른 IP 는 영향 없음(예약분 6 만큼 쓸 수 있다)');
   } finally { s.restore(); resetCaps(); }
 });
 
 test('2: batch·단건 라우트가 요청 하나당 IP 예산 하나를 만들어 쓰고 flush 한다', () => {
   const src = read('../routes/geocode.js');
-  assert.match(src, /const ipBudget = createIpBudget\(req\)/);
+  assert.match(src, /const ipBudget = createIpBudget\(req, GEOCODE_IP_DAILY_KAKAO_CAP, Math\.max\(6, items\.length \* 6\)\)/);
   assert.match(src, /\{ ipBudget \}\)/);
   assert.match(src, /await ipBudget\.flush\(\)/);
-  assert.match(src, /ipBudget: createIpBudget\(req\)/);
+  assert.match(src, /ipBudget: createIpBudget\(req, GEOCODE_IP_DAILY_KAKAO_CAP, 6\)/);
 });
 
 // ── 3번 ─────────────────────────────────────────────
@@ -182,4 +182,65 @@ test('3: visit_attribution 은 기존 180일 정리를 그대로 둔다(daily_vi
   const ret = read('../jobs/retention.js');
   assert.match(ret, /ATTRIBUTION_RETENTION_DAYS = 180/);
   assert.match(ret, /\.neq\('event', 'daily_visit'\)/);
+});
+
+// ── 보안 점검 run-2 (2026-11-11) 후속 ─────────────────────────────────────────────
+test('run-2: 같은 IP 의 동시 요청은 예약분을 서로 보므로 합계가 상한을 넘지 못한다', async () => {
+  resetCaps();
+  try {
+    const req = { ip: '203.0.113.20', headers: {} };
+    const bs = Array.from({ length: 5 }, () => geocode.createIpBudget(req, 10, 6));
+    await Promise.all(bs.map((b) => b.ensure()));
+    const total = bs.reduce((a, b) => a + b.left, 0);
+    assert.ok(total <= 10, `동시 요청 5개가 받은 예산 합계 ${total} 가 상한 10 을 넘었다`);
+    // 안 쓴 예약분은 돌려준다: 전부 0 을 쓰고 끝내면 다음 요청이 다시 6 을 받는다
+    await Promise.all(bs.map((b) => b.flush()));
+    const next = geocode.createIpBudget(req, 10, 6);
+    await next.ensure();
+    assert.equal(next.left, 6);
+    await next.flush();
+  } finally { resetCaps(); }
+});
+
+test('run-2: 관문은 req 를 받으면 IP 예산을 먼저 쓰고, 예산이 모자라면 전역 계수기를 올리지 않는다', async () => {
+  resetCaps();
+  try {
+    const req = { ip: '203.0.113.30', headers: {} };
+    const cap = geocode.GEOCODE_IP_DAILY_KAKAO_CAP;
+    const fill = geocode.createIpBudget(req, cap, cap - 2); // 이 IP 의 예산을 2 만 남긴다
+    await fill.ensure(); fill.used = cap - 2; await fill.flush();
+    const before = geocode._memCap.n;
+    assert.equal(await geocode.createKakaoGate(4, req)(), false);
+    assert.equal(geocode._memCap.n, before, '예산이 모자란 IP 가 전역 계수기를 올렸다');
+    assert.equal(await geocode.createKakaoGate(4, { ip: '203.0.113.31', headers: {} })(), true);
+    assert.equal(geocode._memCap.n, before + 4);
+  } finally { resetCaps(); }
+});
+
+test('run-2: 단지 비교와 시설 조회가 req 가 붙은 관문을 쓴다', () => {
+  assert.match(read('../routes/analysis.js'), /createKakaoGate\(apts\.length \* 4, req\)/);
+  assert.match(read('../routes/analysis.js'), /compareBatch\(apts, \{ dealMonths, kakaoGate \}\)/);
+  const svc = read('../services/analysisService.js');
+  assert.match(svc, /_compareOne\(a, dealMonths, opts\.kakaoGate\)/);
+  assert.match(svc, /if \(kakaoGate && !\(await kakaoGate\(\)\)\) return fail;/);
+});
+
+test('run-2: 채팅 개인정보 검사는 공백이 수만 자여도 빨리 끝나고, 잡던 것은 그대로 잡는다', () => {
+  const chat = require('../routes/chat');
+  const detect = chat._pii.detectPII;
+  assert.equal(typeof detect, 'function');
+  const t0 = Date.now();
+  assert.deepEqual(detect('123456' + ' '.repeat(49000) + 'x'), []);
+  assert.ok(Date.now() - t0 < 200, `검사가 ${Date.now() - t0}ms 걸렸다`);
+  assert.ok(detect('900101-1234567').includes('주민등록번호'));
+  assert.ok(detect('900101      -      1234567').includes('주민등록번호'), '공백이 많아도 잡아야 한다');
+  assert.ok(detect('010 1234 5678').includes('휴대전화번호'));
+  assert.deepEqual(detect('2026-11-11 에 거래된 84.97 타입'), []);
+});
+
+test('run-2: 지역과 시도 허용 목록은 상속 키(constructor 등)를 통과시키지 않는다', () => {
+  assert.match(read('../routes/region.js'), /Object\.hasOwn\(LAWD_CODE_TO_NAME, code\)/);
+  assert.match(read('../routes/region.js'), /Object\.hasOwn\(LAWD_CODES, n\)/);
+  assert.match(read('../routes/search.js'), /Object\.hasOwn\(rp\.SIDOS, sido\)/);
+  assert.match(read('../services/regionPopularService.js'), /Object\.hasOwn\(SIDOS, sido\)/);
 });

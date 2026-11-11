@@ -45,7 +45,7 @@ test('trustedCoord: 검증된 출처는 통과 · 키워드 검색 좌표는 장
 test('라우트·cron 배선: /search/popular-region(적재 9개 시도, 스냅샷→즉석 계산) · retention 에서 매일 저장', () => {
   const s = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
   assert.match(s, /router\.get\('\/popular-region', async \(req, res\) => \{/);
-  assert.match(s, /if \(!rp\.SIDOS\[sido\]\) return res\.status\(400\)/);
+  assert.match(s, /if \(!Object\.hasOwn\(rp\.SIDOS, sido\)\) return res\.status\(400\)/); // AUDIT2-1111: 상속 키 차단
   assert.match(s, /let p = await rp\.readSido\(sido\);/);
   const c = fs.readFileSync(path.join(__dirname, '../routes/cron.js'), 'utf8');
   assert.match(c, /require\('\.\.\/services\/regionPopularService'\)\.computeAndStoreAll\(\)/);
