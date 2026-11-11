@@ -19,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node 24 (프로덕션 런타임과 일치)
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -68,10 +68,10 @@ jobs:
     #   보안 취약점 가시성은 install-audit job 이 계속 빨간불로 유지하고(별도 판단 대상),
     #   코드 품질 게이트는 그와 독립적으로 항상 돌아야 한다.
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node 24 (프로덕션 런타임과 일치)
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -192,10 +192,10 @@ jobs:
     #   [범위] 정확성 규칙만. 스타일 규칙 0개(들여쓰기·따옴표 논쟁으로 배포가 멈추면 안 된다).
     #   도입 시점 실측: backend/scripts/api 에러 0, 프론트 인라인 에러 1(의도된 카카오 게이트, disable 주석 처리).
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Setup Node 24 (프로덕션 런타임과 일치)
-        uses: actions/setup-node@v7
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
         with:
           node-version: '24'
           cache: 'npm'
@@ -217,12 +217,17 @@ jobs:
         # 에러만 CI 를 막고 경고는 막지 않는다.
         run: npm run lint
 
+      # REGEXP-RATCHET-2026-11-11 (plans/194): 긴 입력에서 제곱 시간으로 느려질 수 있는 정규식이 새로 늘면 막는다.
+      #   바로 위 lint 단계가 만든 .lint-tmp(화면 파일의 인라인 스크립트)도 함께 본다.
+      - name: Regexp ratchet
+        run: node scripts/check-regexp-ratchet.js
+
   gitleaks:
     name: Secret Scan (gitleaks)
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           fetch-depth: 0  # gitleaks 가 과거 커밋까지 스캔
 
@@ -261,7 +266,7 @@ jobs:
     timeout-minutes: 8
     needs: [syntax-check]
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Wait for Vercel prod redeploy (up to 5min) + probe /api/health
         run: bash scripts/prod-smoke.sh

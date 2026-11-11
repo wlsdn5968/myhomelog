@@ -1,0 +1,29 @@
+{
+  "total": 74,
+  "files": {
+    ".lint-tmp/index-block7.js": 13,
+    "backend/jobs/geocacheBackfill.js": 4,
+    "backend/middleware/cpuMeter.js": 1,
+    "backend/routes/admin.js": 3,
+    "backend/routes/chat.js": 8,
+    "backend/routes/kakaoWebhook.js": 1,
+    "backend/routes/news.js": 2,
+    "backend/routes/push.js": 2,
+    "backend/routes/region.js": 1,
+    "backend/routes/report.js": 1,
+    "backend/routes/search.js": 5,
+    "backend/sentry.js": 1,
+    "backend/services/aptFacilityService.js": 7,
+    "backend/services/chatDataRouter.js": 3,
+    "backend/services/geocodeCacheService.js": 2,
+    "backend/services/naverDatalabService.js": 4,
+    "backend/services/priceRecordsService.js": 1,
+    "backend/services/propertyService.js": 1,
+    "backend/services/regionPopularService.js": 1,
+    "backend/services/schoolNeisService.js": 1,
+    "backend/services/schoolService.js": 2,
+    "backend/utils/aptDisplayName.js": 3,
+    "backend/utils/aptName.js": 6,
+    "backend/utils/aptNameMatch.js": 1
+  }
+}

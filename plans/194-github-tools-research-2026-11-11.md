@@ -71,3 +71,18 @@
 - cloudflare/security-audit-skill(69,930, MIT): 이번에 세 번 썼다.
 - epoko77-ai/im-not-ai(6,510, MIT): 문구 정리에 썼다.
 - OWASP/CheatSheetSeries(34,019): 문서 모음.
+
+## 7. 진행 결과 (2026-11-11, 운영자 기준: 서비스에 문제를 만들 수 있는 것은 제외)
+
+| 항목 | 결정 | 이유와 확인 |
+|---|---|---|
+| eslint-plugin-regexp 3.3.3 | 도입 | 개발 의존성. 기존 코드에서 106건(운영 코드 74건)이 걸려 오류로 켜지 않고 기준선 방식으로 넣었다. scripts/check-regexp-ratchet.js 가 파일별 건수를 scripts/regexp-baseline.json 과 비교해 늘면 실패한다. 채팅 사고와 같은 정규식을 넣어 막히는 것을 확인했다. verify 와 CI 에 연결. |
+| CI 액션 커밋 고정 | 진행 | zizmor 를 받는 대신 직접 했다. actions/checkout v7 은 3d3c42e, actions/setup-node v7 은 949feb2 (git ls-remote 로 조회). dependabot 의 github-actions 설정이 주간으로 갱신한다. |
+| follow-redirects 1.16.1 -> 1.16.3 | 진행(조사 중 발견) | npm audit 에 높음 1건(GHSA-mrwp-f3q8-3g9p, axios 의 전이 의존성). 두 잠금 파일 모두 올렸고 운영 의존성 취약점 0건. 서버 로드 확인. |
+| esbuild | 제외 | 배포 방식이 바뀌고 공개 권고에 높음 등급이 있다. |
+| zizmor | 제외 | 받은 실행 파일을 돌려야 하고 공개 권고가 1건 있다. |
+| playwright, axe-core | 제외 | 브라우저 수백 MB 내려받기. 지금은 앱 내 미리보기로 재고 있다. |
+| @sentry/node 제거 | 제외 | 보안 검사(components-guard)가 그 의존성의 판 번호를 기준으로 삼는다. 운영 의존성 목록이 바뀌는데 CPU 나 DB 이득이 없다. |
+| lighthouse-ci, autocannon, osv-scanner, eslint-plugin-security | 보류 | 지금 필요가 분명하지 않다. |
+
+남은 일: 기준선 74건을 입력 길이가 묶여 있는지 파일별로 확인해 줄인다(백엔드 23개 파일, 화면 스크립트 1개).
