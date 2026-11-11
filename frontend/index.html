@@ -1540,6 +1540,18 @@ html[data-theme="dark"] .dmbg{--dm-ac:#FFC93C}
 .apt-sticky-summary .ass-name{color:var(--t1);font-weight:800;font-size:16px;letter-spacing:-.4px;white-space:nowrap}
 .apt-sticky-summary .ass-area{color:var(--t3);font-size:12px;font-weight:600;white-space:nowrap}
 .apt-sticky-summary .ass-sep{display:none}
+/* DM-192 (plans/192 1단계 C, D. 시안 '내집로그 개선 3차'): 단지 이름은 창 머리(#dmT)에 한 번만. 요약 줄은 지역, 연식 표시, 가격으로 시작한다. */
+.apt-sticky-summary .ass-name{display:none}
+/* 단지를 못 찾았거나 불러오지 못한 링크: 탭과 요약 줄, 머리의 행동 버튼을 숨기고 제목, 이유 한 줄, 버튼 하나만 보인다.
+   전에는 오류 문구가 '장점', '전략' 칸에 들어가 정상 화면처럼 보였다(2026-11-11 운영 실측). */
+.dm-empty-pane{display:none}
+#DM.dm-empty .rtabs,#DM.dm-empty .rpanel,#DM.dm-empty #aptStickySummary,#DM.dm-empty #cardBtn,#DM.dm-empty #shareBtn,#DM.dm-empty #bkToggle{display:none!important}
+#DM.dm-empty .dm-empty-pane{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:320px;padding:48px 24px;text-align:center}
+.dm-empty-pane svg{width:28px;height:28px;color:var(--t2)}
+.dm-empty-t{margin:0;font-size:20px;font-weight:700;line-height:1.4;color:var(--t1)}
+.dm-empty-d{margin:0;font-size:14px;line-height:1.6;color:var(--t2)}
+.dm-empty-b{height:44px;margin-top:8px;padding:0 18px;border:none;border-radius:8px;background:var(--acc-bg);color:var(--acc-ink);font-family:inherit;font-size:14px;font-weight:600;cursor:pointer}
+.dm-empty-b:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
 .apt-sticky-summary .ass-price{margin-left:auto;text-align:right;display:flex;flex-direction:column;line-height:1.15;white-space:nowrap}
 .apt-sticky-summary .ass-price-v{font-size:20px;font-weight:800;color:var(--acc);letter-spacing:-.3px}
 .apt-sticky-summary .ass-price-l{font-size:12px;color:var(--t3);font-weight:600}
@@ -4022,6 +4034,7 @@ html[data-theme="dark"] #view-news{
         <button class="dmx" onclick="cDM()" aria-label="단지 상세 닫기" title="닫기">✕</button>
       </div>
     </div>
+    <div class="dm-empty-pane" id="dmEmpty" role="status"></div>
     <div class="rtabs">
       <button class="rtab on" onclick="stb(this,'t0')">종합의견</button>
       <button class="rtab" onclick="stb(this,'t1')">실거래가</button>
@@ -9154,6 +9167,7 @@ function _schoolsSectionHtml(schools, pending){
 
 function showDetail(p){
   if(!p)return;
+  try{ document.getElementById('DM').classList.remove('dm-empty'); }catch(_){} // DM-192: 정상 화면을 그릴 때는 오류 전용 화면을 걷는다
   // Day 1-② Vercel Analytics — APT_DETAIL funnel event (단지 상세 클릭)
   try { window.va && window.va('event', { name: 'apt_detail_open', data: { aptName: String(p.aptName||'').slice(0,40), sigungu: p.sigungu||'' } }); } catch(_){}
   // APT-DISPLAY-NAME-2026-09-16 (Plan 090): 표시 전용 — p.aptName(조회 키·API 인자)은 그대로 두고
@@ -10131,7 +10145,31 @@ function _rtabsCue(){
   el.classList.toggle('has-more', more);
 }
 function stb(btn,id){document.querySelectorAll('.rtab').forEach(b=>b.classList.remove('on'));document.querySelectorAll('.tp').forEach(t=>t.classList.remove('on'));btn.classList.add('on');document.getElementById(id).classList.add('on');/* LAZY-2026-06-13: 리스크(t2)·특약(t3) 탭을 처음 열 때만 AI 로드 */if((id==='t2'||id==='t3')&&currentDetail)loadClauseAndRisk(currentDetail);try { btn.scrollIntoView({ block: 'nearest', inline: 'nearest' }); _rtabsCue(); } catch(_) {}}
+// DM-192: 단지를 못 찾았거나 불러오지 못한 링크의 전용 화면. kind = 'notfound' | 'failed'
+function _dmEmpty(kind){
+  try{
+    const dm = document.getElementById('DM'), pane = document.getElementById('dmEmpty');
+    if(!dm || !pane) return;
+    const failed = kind === 'failed';
+    const icon = failed
+      ? '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>'
+      : '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5M9 9l4 4M13 9l-4 4"/></svg>';
+    pane.innerHTML = icon
+      + `<h3 class="dm-empty-t">${failed ? '단지 정보를 불러오지 못했어요' : '단지를 찾지 못했어요'}</h3>`
+      + `<p class="dm-empty-d">${failed ? '잠시 뒤 다시 시도해 주세요.' : '링크에 지역 정보가 없거나 주소가 바뀌었어요.'}</p>`
+      + (failed
+        ? '<button type="button" class="dm-empty-b" onclick="location.reload()">다시 불러오기</button>'
+        : '<button type="button" class="dm-empty-b" onclick="_dmEmptyToSearch()">단지 검색으로 가기</button>');
+    const t = document.getElementById('dmT'); if(t) t.textContent = '단지 상세';
+    dm.classList.add('dm-empty');
+    try{ _nxtClear(); }catch(_){} // 모바일 하단 행동 바도 걷는다
+  }catch(_){}
+}
+function _dmEmptyToSearch(){
+  try{ cDM(); const i = document.getElementById('hSearchInput'); if(i){ i.focus(); } }catch(_){}
+}
 function cDM(){document.getElementById('DM').classList.remove('open');currentDetail=null;
+  try{ document.getElementById('DM').classList.remove('dm-empty'); }catch(_){}
   try{ _nxtClear(); }catch(_){} // Plan 150: 모바일 하단 바·시트 정리
   // URL의 ?apt= 파라미터 정리
   if(history.replaceState){const u=new URL(location.href);u.searchParams.delete('apt');u.searchParams.delete('area');history.replaceState(null,'',u);}
@@ -10449,7 +10487,7 @@ async function handleShareUrl(){
   // area에서 구 추출 → lawdCd 매핑 후 실거래 조회 시도
   try{
     const lawdCd=await resolveLawdCdFromArea(area);
-    if(!lawdCd){ _reshow({_txFailed:true, pros:'공유 링크에 지역 정보가 없어 실거래를 조회하지 못했어요.', strategy:'위쪽 검색창에서 단지명을 검색하면 최신 실거래를 볼 수 있어요.'}); return; }
+    if(!lawdCd){ _reshow({_txFailed:true, pros:'공유 링크에 지역 정보가 없어 실거래를 조회하지 못했어요.', strategy:'위쪽 검색창에서 단지명을 검색하면 최신 실거래를 볼 수 있어요.'}); _dmEmpty('notfound'); return; }
     // 최근 3개월 합산 — 현재 달은 MOLIT 신고 지연으로 거래 거의 없음
     const items=await fetchRecentTx(lawdCd, apt, _umdFromArea(area));
     // 공유 링크 진입 — 단지명 검색으로 기록 (실거래 0건이어도 사용자가 그 단지를 찾았다는 신호)
@@ -10464,6 +10502,7 @@ async function handleShareUrl(){
   }catch{
     // 조용히 삼키면 "조회 중…" 문구가 영구히 남는다 — 사용자에게 상태를 알린다.
     _reshow({_txFailed:true, pros:'실거래를 불러오지 못했어요.', strategy:'잠시 뒤 다시 시도하거나 위쪽 검색창에서 단지명을 검색해 주세요.'});
+    if(currentDetail && currentDetail.aptName===apt) _dmEmpty('failed');
   }
 }
 // DEAD-FN-2026-09-02 (감사 P2-11): currentYm 제거 — 정의 1회·호출 0회. prevYm 만 실제로 쓰인다.

@@ -369,3 +369,20 @@ test('HOME-192: 모바일 시트는 기본 높이에서 3행이 보이고, 지�
   // 고지 줄은 모바일에서도 숨기지 않는다(절대 규칙: 화면마다 면책 표시).
   assert.ok(!/\.hp-ft\{[^}]*display:none/.test(blk));
 });
+
+// ── DM-192 (plans/192 1단계 C, D) ─────────────────────────────────────────────
+test('DM-192: 단지 이름은 창 머리에 한 번만 보이고, 못 찾은 링크는 전용 화면으로 답한다', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  assert.ok(html.includes('.apt-sticky-summary .ass-name{display:none}'), '요약 줄이 이름을 다시 보여 주면 이름이 두 번 나온다');
+  assert.ok(html.includes('#DM.dm-empty .rtabs,#DM.dm-empty .rpanel,#DM.dm-empty #aptStickySummary,#DM.dm-empty #cardBtn,#DM.dm-empty #shareBtn,#DM.dm-empty #bkToggle{display:none!important}'));
+  assert.ok(html.includes('<div class="dm-empty-pane" id="dmEmpty" role="status"></div>'));
+  const fn = extractFn(html, '_dmEmpty');
+  assert.ok(fn.includes("'단지 정보를 불러오지 못했어요' : '단지를 찾지 못했어요'"));
+  assert.ok(fn.includes("dm.classList.add('dm-empty');"));
+  // 정상 화면을 그리거나 창을 닫으면 전용 화면이 걷힌다(다음 단지에 남으면 탭이 사라진 채로 열린다).
+  assert.ok(extractFn(html, 'showDetail').includes("document.getElementById('DM').classList.remove('dm-empty');"));
+  assert.ok(extractFn(html, 'cDM').includes("classList.remove('dm-empty')"));
+  // 두 실패 분기에서 부른다. 실패 표식(_txFailed)은 그대로 넘긴다(0건처럼 보이지 않게 하는 기존 계약).
+  assert.ok(html.includes("_dmEmpty('notfound'); return; }"));
+  assert.ok(html.includes("if(currentDetail && currentDetail.aptName===apt) _dmEmpty('failed');"));
+});
