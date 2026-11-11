@@ -4308,6 +4308,20 @@ let CFG = { api: DEFAULT_API };
 //   공유가 불가능하다. 호출부는 `if (d)` 로 실패(null)를 판정한다.
 // ⚠ 인증 헤더를 넘기는 호출부(도우미 채팅 잔여)는 응답 내용이 달라지므로 **공유하지 않는다**.
 // ⚠ 재시도 경로는 force=true 로 캐시를 건너뛴다 — 캐시가 재시도를 무의미하게 만들면 안 된다.
+// BG-QUEUE-2026-11-12 (plans/190, Vercel Active CPU): 화면이 열릴 때 API 여러 개가 같은 순간에 나가면 서버가 그 수만큼 새로 뜬다.
+//   운영 로그(2026-11-11 14:32~15:22 UTC, 50분): 서버 시작 24회 약 21초. 화면 한 번에 3~5개가 같은 0.05초 안에 떴고,
+//   요청이 하나씩 올 때(수집 봇, 가동 감시)는 새로 뜨지 않았다. 시작 한 번이 CPU 약 0.75~1.0초다.
+//   화면에 바로 필요하지 않은 호출(방문 기록 전송)은 첫 상태 확인(/api/health)이 끝난 뒤, 한 번에 하나씩 보낸다.
+//   상태 확인이 늦어도 2.5초 뒤에는 보낸다. 화면을 떠날 때(pagehide)는 기다리지 않고 바로 보낸다(keepalive).
+let _bgGateOpen = function(){};
+const _bgGate = new Promise(function(res){ _bgGateOpen = res; });
+setTimeout(function(){ _bgGateOpen(); }, 2500);
+try{ window.addEventListener('pagehide', function(){ _bgGateOpen(); }); }catch(_){}
+let _bgChain = _bgGate;
+function _bgApi(task){
+  _bgChain = _bgChain.then(function(){ try{ return Promise.resolve(task()).catch(function(){}); }catch(_){ return null; } });
+  return _bgChain;
+}
 const HEALTH_TTL_MS = 20000;
 let _hlthVal = null, _hlthAt = 0, _hlthP = null;
 function healthJson(timeoutMs, force){
@@ -4317,7 +4331,7 @@ function healthJson(timeoutMs, force){
     .then(r => r.ok ? r.json() : null)
     .then(d => { if (d) { _hlthVal = d; _hlthAt = Date.now(); } return d; })
     .catch(() => null)
-    .finally(() => { if (_hlthP === p) _hlthP = null; });
+    .finally(() => { if (_hlthP === p) _hlthP = null; _bgGateOpen(); }); // BG-QUEUE: 첫 응답 뒤에 배경 호출을 푼다
   if (!force) _hlthP = p;
   return p;
 }
@@ -4505,11 +4519,15 @@ window.addEventListener('DOMContentLoaded',()=>{
       // 실패는 조용히 — 계측이 사용자 경험을 막으면 안 된다.
       send: function(event){
         try {
-          fetch(`${CFG.api}/attribution`, {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(Object.assign({ event: event }, a)),
-            keepalive: true,
-          }).catch(function(){});
+          var _send = function(){
+            return fetch(`${CFG.api}/attribution`, {
+              method: 'POST', headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(Object.assign({ event: event }, a)),
+              keepalive: true,
+            }).catch(function(){});
+          };
+          // BG-QUEUE: 첫 화면의 다른 호출과 같은 순간에 나가지 않게 줄을 세운다(줄이 비어 있으면 바로 나간다)
+          if (typeof _bgApi === 'function') _bgApi(_send); else _send();
         } catch(_){}
       },
       // ATTR-ACTIVATION-2026-09-06:

@@ -132,3 +132,24 @@ test('Sentry 가동 감시 봇은 첫 화면 대신 2바이트 응답을 받는�
   assert.ok(src.test('/') && src.test('/index.html') && !src.test('/api/health') && !src.test('/apt/1'));
   assert.ok(fs.statSync(path.join(ROOT, 'frontend/up.txt')).size < 16);
 });
+
+test('BG-QUEUE: 방문 기록 전송은 첫 상태 확인 뒤에 한 번에 하나씩 나간다(동시 호출로 서버가 여러 개 뜨지 않게)', async () => {
+  const html = read('frontend/index.html');
+  const i = html.indexOf('// BG-QUEUE-2026-11-12'), j = html.indexOf('const HEALTH_TTL_MS = 20000;');
+  assert.ok(i > 0 && j > i);
+  // 줄 세우기 코드만 떼어 실행해 순서를 확인한다
+  const code = html.slice(i, j).replace("try{ window.addEventListener('pagehide', function(){ _bgGateOpen(); }); }catch(_){}", '');
+  const api = new Function(`${code}; return { _bgApi, open: () => _bgGateOpen() };`)();
+  const log = []; let running = 0, maxRunning = 0;
+  const task = (name, ms) => () => new Promise((r) => { running++; maxRunning = Math.max(maxRunning, running); log.push('start ' + name); setTimeout(() => { running--; log.push('end ' + name); r(); }, ms); });
+  api._bgApi(task('a', 30)); api._bgApi(task('b', 10)); api._bgApi(() => { throw new Error('x'); }); const last = api._bgApi(task('c', 5));
+  await new Promise((r) => setTimeout(r, 40));
+  assert.deepEqual(log, [], '상태 확인이 끝나기 전에는 나가지 않는다');
+  api.open();
+  await last;
+  assert.deepEqual(log, ['start a', 'end a', 'start b', 'end b', 'start c', 'end c']);
+  assert.equal(maxRunning, 1, '동시에 둘 이상 나갔다');
+  assert.ok(html.includes("if (typeof _bgApi === 'function') _bgApi(_send); else _send();"));
+  assert.ok(html.includes('_bgGateOpen(); }); // BG-QUEUE'));
+  assert.ok(html.includes("window.addEventListener('pagehide', function(){ _bgGateOpen(); });"));
+});
