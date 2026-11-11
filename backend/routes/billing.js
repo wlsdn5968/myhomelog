@@ -224,10 +224,10 @@ router.post('/checkout', async (req, res, next) => {
     //   **서버가 같은 판정(_pgMode)으로 막는다** — 판정 규칙 사본을 만들지 않는다.
     const _mode = _pgMode();
     if (_mode !== 'test' && _mode !== 'live') {
-      return res.status(503).json({ error: '결제 시스템 준비 중 — 잠시 후 다시 시도해주세요.', code: 'pg_not_ready' });
+      return res.status(503).json({ error: '결제 시스템 준비 중이에요. 잠시 후 다시 시도해주세요.', code: 'pg_not_ready' });
     }
     if (!process.env.TOSS_SECRET_KEY) {
-      return res.status(503).json({ error: '결제 시스템 준비 중 — 잠시 후 다시 시도해주세요.', code: 'pg_not_ready' });
+      return res.status(503).json({ error: '결제 시스템 준비 중이에요. 잠시 후 다시 시도해주세요.', code: 'pg_not_ready' });
     }
     const { plan } = req.body || {};
     if (!plan || !['pro', 'team'].includes(plan)) {
@@ -237,7 +237,7 @@ router.post('/checkout', async (req, res, next) => {
     // admin 으로 플랜 가격 조회 (사용자가 price 를 위조하지 못하도록 서버가 결정)
     const admin = getSupabaseAdmin();
     if (!admin) {
-      return res.status(503).json({ error: '결제 시스템 준비 중 — 잠시 후 다시 시도해주세요.' }); // 내부 용어 제거
+      return res.status(503).json({ error: '결제 시스템 준비 중이에요. 잠시 후 다시 시도해주세요.' }); // 내부 용어 제거
     }
     const { data: planRow, error: planErr } = await admin
       .from('billing_plans')
@@ -678,7 +678,7 @@ router.post('/payments/:id/refund', async (req, res, next) => {
       return res.status(409).json({ error: `환불 불가 상태 (${pay.status})`, code: 'not_refundable' });
     }
     if (!pay.toss_payment_key) {
-      return res.status(409).json({ error: '결제 키 누락 — 환불 불가', code: 'no_payment_key' });
+      return res.status(409).json({ error: '결제 키 누락, 환불 불가', code: 'no_payment_key' });
     }
     // 4) 7일 청약철회 기간 — approved_at 우선, 없으면 created_at
     const paidAt = new Date(pay.approved_at || pay.created_at);

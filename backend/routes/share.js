@@ -68,7 +68,7 @@ router.get('/', (req, res) => {
     const n = names.length;
     const head = n ? `${names.slice(0, 3).join(', ')}${n > 3 ? ` 외 ${n - 3}곳` : ''}` : '관심 단지';
     const title = n ? `관심 단지 ${n}곳 | 내집로그` : '관심 단지 | 내집로그';
-    const desc = `${head} — 함께 보는 관심 단지 목록이에요(국토교통부 실거래). 매수 추천이 아니에요.`;
+    const desc = `${head}. 함께 보는 관심 단지 목록이에요(국토교통부 실거래). 매수 추천이 아니에요.`;
     const origin = `${req.protocol}://${req.get('host')}`;
     const shareUrl = `${origin}/share?list=${encodeURIComponent(list)}`;
     const t = escapeHtml(title), d = escapeHtml(desc), u = escapeHtml(shareUrl);

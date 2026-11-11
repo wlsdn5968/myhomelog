@@ -442,7 +442,7 @@ router.get('/:aptSeq', async (req, res) => {
       <div class="row"><span class="k">최근 거래일</span><span class="num">${esc(String(stat.recentDeal))}</span></div>
       ${syncKst ? `<div class="row"><span class="k">실거래 수집</span><span class="num">${esc(syncKst)} 기준</span></div>` : ''}
       ${buildYear ? `<div class="row"><span class="k">준공</span><span class="num">${buildYear}년</span></div>` : ''}
-      ${rep ? `<div class="src" style="margin-top:8px">평균·중앙값·범위는 거래가 가장 많은 ${rep.sqm}㎡(${rep.py}평) 거래 ${comma(rep.n)}건으로 냈어요. 면적이 다른 집은 섞지 않아요. 다른 평형은 아래 평형별 표에서 볼 수 있어요.</div>` : ''}
+      ${rep ? `<div class="src" style="margin-top:8px">평균, 중앙값, 범위는 거래가 가장 많은 ${rep.sqm}㎡(${rep.py}평) 거래 ${comma(rep.n)}건으로 냈어요. 면적이 다른 집은 섞지 않아요. 다른 평형은 아래 평형별 표에서 볼 수 있어요.</div>` : ''}
     </div>`);
     facts.push(`최근 24개월 ${comma(num(stat.dealCount) || 0)}건`);
     if (rep) facts.push(`${rep.py}평 평균 ${eok(rep.avg)}`);
@@ -580,10 +580,10 @@ router.get('/:aptSeq', async (req, res) => {
   //   그대로 둔다 — 이미 KAPT 출처에 국토교통부를 안 붙이는 문구를 쓰고 있다.
   const txSourceLabel = hasKaptFact ? '국토교통부 실거래·공동주택 단지정보 정리' : '국토교통부 실거래 신고 자료 정리';
   const desc = !thin
-    ? `${displayName}(${region}${umd ? ' ' + umd : ''}) ${facts.join(' · ')}. ${txSourceLabel} — 매수 추천이 아니에요.`
+    ? `${displayName}(${region}${umd ? ' ' + umd : ''}) ${facts.join(' · ')}. ${txSourceLabel}. 매수 추천이 아니에요.`
     : (facts.length
-      ? `${displayName}(${region}${umd ? ' ' + umd : ''}) 최근 24개월 거래 기록이 없어요. 공동주택 단지정보 ${facts.join(' · ')} — 매수 추천이 아니에요.`
-      : `${displayName}(${region}${umd ? ' ' + umd : ''}) 국토교통부 실거래 신고 자료. 최근 24개월 거래 기록이 없어요 — 매수 추천이 아니에요.`);
+      ? `${displayName}(${region}${umd ? ' ' + umd : ''}) 최근 24개월 거래 기록이 없어요. 공동주택 단지정보 ${facts.join(' · ')}. 매수 추천이 아니에요.`
+      : `${displayName}(${region}${umd ? ' ' + umd : ''}) 국토교통부 실거래 신고 자료. 최근 24개월 거래 기록이 없어요. 매수 추천이 아니에요.`);
 
   // APT-PAGE-INFO-2026-09-06: 단지정보/학교/좌표 조회가 "오류로 실패"했을 때도 긴 캐시를 붙이지
   //   않는다 — "있을 수도 있는데 못 읽음"과 "정말 없음"을 구분 못 하면 열화 응답이 엣지에 굳는다

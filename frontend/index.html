@@ -2335,7 +2335,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <strong>내 조건으로 만드는 <em>맞춤 보고서</em></strong>
       </div>
       <div class="hero-sub">
-        보유 주택·자금·희망 지역을 넣으면 대출 한도와 맞는 단지를 정리해 드려요
+        보유 주택, 자금, 희망 지역을 넣으면 대출 한도와 맞는 단지를 정리해 드려요
       </div>
     </div>
     <button class="hero-cta" onclick="_heroFunnel('cta_click'); sv('report');" aria-label="맞춤 보고서 만들기">
@@ -2434,7 +2434,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         </details>
       </div></div>
       <!-- Sprint QQQQQ (시안): 검색 흐름 직결 — 필터·검색 버튼을 위저드 직후로, 대출 계산은 접이식 미리보기로 강등 -->
-      <div class="mb9"><span class="lbl">단지 조건 <span style="font-weight:400;color:var(--t3);font-size:12px">(선택 · 조건에 맞는 단지만 보기)</span></span>
+      <div class="mb9"><span class="lbl">단지 조건 <span style="font-weight:400;color:var(--t3);font-size:12px">(선택, 조건에 맞는 단지만 보기)</span></span>
         <div class="chips" id="ch-flt">
           <span class="chip" id="flt-hh" onclick="this.classList.toggle('on')" title="세대수 500세대 이상만 보여요. 나홀로 단지는 빠져요">500세대+</span>
           <span class="chip" id="flt-park" onclick="this.classList.toggle('on')" title="세대당 주차 1.2대 이상이에요. 주차 여유가 있어요 (법정 최소 1대 대비)">주차 1.2+</span>
@@ -2484,7 +2484,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
          동작은 그대로 두고 이름만 실제 하는 일(조건 매칭)에 맞춘다. -->
     <div class="sh" onclick="ts('s3')"><span class="st">조건 맞는 단지</span><span id="pCnt" style="color:var(--acc);font-size:12px;font-weight:700">0건</span><span class="sa">▲</span></div>
     <div id="fltTrust" style="display:none"></div>
-    <div id="pList"><div style="padding:20px;text-align:center;color:var(--t3);font-size:12px;line-height:2.1">위에서 단지를 찾으면<br>국토교통부 실거래가를 바탕으로<br>여기에 결과를 보여 드려요</div></div>
+    <div id="pList"><div style="padding:20px;text-align:center;color:var(--t3);font-size:12px;line-height:2.1">위에서 단지를 찾으면<br>국토교통부 실거래가로<br>여기에 결과를 보여 드려요</div></div>
   </div>
 
   <!-- 북마크 섹션 (IA-2026-07-12: 내 상황 아래로 이동) -->
@@ -2662,7 +2662,7 @@ html[data-theme="dark"] #_pannBtn{box-shadow:0 2px 12px rgba(0,0,0,.4)}
       <span class="mhc-ico" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></span>
       <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:800;color:var(--t1)">내 조건으로 만드는 맞춤 보고서</div>
-        <div style="font-size:12px;color:var(--t3);margin-top:3px;line-height:1.5">보유 주택·자금·희망 지역을 넣으면<br>대출 한도와 맞는 단지를 정리해 드려요</div>
+        <div style="font-size:12px;color:var(--t3);margin-top:3px;line-height:1.5">보유 주택, 자금, 희망 지역을 넣으면<br>대출 한도와 맞는 단지를 정리해 드려요</div>
       </div>
       <button class="mhc-x" onclick="mHeroCollapse()" aria-label="접기" title="접기">✕</button>
     </div>
@@ -2818,7 +2818,7 @@ html[data-theme="dark"] #_pannBtn{box-shadow:0 2px 12px rgba(0,0,0,.4)}
   </div>
   <div class="cmsgs" id="cMsgs">
     <div class="msg ai"><div class="ava ai"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 3v16a2 2 0 0 0 2 2h16"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/></svg></div><div><!-- BADGE-TRUTH-2026-08-16: 정적 환영 메시지 아바타도 addMsg 와 동일하게 -->
-      <div class="bbl">안녕하세요. 국토교통부 실거래, 한국은행 금리 같은 <b>공식 데이터로 바로</b> 답해 드려요.<br><br>아래 예시를 <b>눌러 보세요</b>. 단지명, 동네, 구 단위 모두 물어볼 수 있어요.<br><span style="font-size:12px;color:var(--t3)">※ 매수·매도를 추천하지 않아요. 공식 데이터를 바탕으로 답해요.</span>
+      <div class="bbl">안녕하세요. 국토교통부 실거래, 한국은행 금리 같은 <b>공식 데이터로 바로</b> 답해 드려요.<br><br>아래 예시를 <b>눌러 보세요</b>. 단지명, 동네, 구 단위 모두 물어볼 수 있어요.<br><span style="font-size:12px;color:var(--t3)">※ 매수·매도를 추천하지 않아요. 공식 데이터로 답해요.</span>
       <!-- KKKKKKK-19 (운영자 "예시로 어디까지 되는지 알게"): 커버 범위가 다른 예시 6종을 탭 즉시 전송 칩으로.
            의도적으로 유형을 섞음 — 단지(은마)·동(공덕)·구+인기(노원구)·규제(동탄)·한도(숫자)·정책자금 -->
       <div style="margin-top:9px;display:flex;flex-wrap:wrap;gap:6px">
@@ -3529,7 +3529,7 @@ html[data-theme="dark"] #view-news{
     <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-md);padding:13px 16px;margin-bottom:10px">
       <summary style="cursor:pointer;font-size:14px;font-weight:700;color:var(--t1);list-style:none">대출 계산 (2025.10.15 대책, 2026.6.30 확대 반영)</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
-        매수가, 연소득, 기존 대출(신용·전세)을 입력하면 <b>LTV·DSR·적용 한도·월 원리금</b>을 바로 계산해요<br>
+        매수가, 연소득, 기존 대출(신용, 전세)을 입력하면 <b>LTV·DSR·적용 한도·월 원리금</b>을 바로 계산해요<br>
         <b>정책자금 4종 비교</b>: 보금자리, 디딤돌, 신혼 디딤돌, 신생아 특례의 한도와 금리<br>
         <b>부족한 자금을 채우는 방법</b>: 신용대출, 마이너스통장, 가족 간 차용 등 합법적인 방법 5가지<br><br>
         <span style="font-size:12px;color:var(--t3)">⚠ 이 계산은 참고용이에요. 실제 한도는 금융기관 심사로 정해져요.</span>
@@ -3842,7 +3842,7 @@ html[data-theme="dark"] #view-news{
   </button>
   <button type="button" class="ts-item" data-tool="calc" aria-current="false" onclick="closeToolsSheet();sv('calc',this)">
     <span class="ts-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="3" width="16" height="18" rx="2"/><path d="M8 7h8"/><path d="M8 12h.01"/><path d="M12 12h.01"/><path d="M16 12h.01"/><path d="M8 16h.01"/><path d="M12 16h.01"/><path d="M16 16h.01"/></svg></span>
-    <span class="ts-body"><span class="ts-title">대출 계산</span><span class="ts-desc">LTV·DSR·정책자금 4종</span></span>
+    <span class="ts-body"><span class="ts-title">대출 계산</span><span class="ts-desc">LTV, DSR, 정책자금 4종</span></span>
     <span class="ts-check" aria-hidden="true">✓</span>
     <span class="ts-arrow" aria-hidden="true">→</span>
   </button>
@@ -3987,7 +3987,7 @@ html[data-theme="dark"] #view-news{
       <button onclick="closeDataStatus()" aria-label="데이터 상태 닫기" style="width:30px;height:30px;border-radius:var(--radius-base);background:var(--bg2);border:1px solid var(--bd);color:var(--t2);cursor:pointer;font-size:14px">✕</button>
     </div>
     <div id="dsmBody" style="margin-top:10px"></div>
-    <div style="margin-top:14px;font-size:12px;color:var(--t3);line-height:1.7">정상 기준은 실거래 48시간, 매일 도는 작업 50시간, 매주 도는 단지 목록 갱신 10일 이내 실행이에요. 동기화가 늦어진 항목은 '— (미확인)'으로 표시하고, 추정치로 채우지 않아요.</div>
+    <div style="margin-top:14px;font-size:12px;color:var(--t3);line-height:1.7">정상 기준은 실거래 48시간, 매일 도는 작업 50시간, 매주 도는 단지 목록 갱신 10일 이내 실행이에요. 동기화가 늦어진 항목은 '— (미확인)'으로 표시하고 추정치로 채우지 않아요.</div>
   </div>
 </div>
 <!-- DATA-ERR-2026-08-19 (Sprint NNNNNNN-16): 데이터 오류 신고 폼 — mailto 대체(메일 앱 없는 사용자 이탈 방지) -->
@@ -5570,7 +5570,7 @@ async function generateReport(_isRetry) {
   }
   // METRO-SUB-2026-07-17 (Sprint UUUUU): '지방'만 선택·세부 미선택 시 특정 광역시로 좁힐 수 없음 → 세부 선택 안내
   if (region === '지방') {
-    toast('지방은 세부 지역(해운대·수영·수성·유성·청주)을 선택해 주세요');
+    toast('지방은 세부 지역(해운대, 수영, 수성, 유성, 청주)을 선택해 주세요');
     return;
   }
   // P1-14: 미지원 광역도 사전 차단 — backend 0건 후 generic error 차단
@@ -6514,7 +6514,7 @@ async function renderBriefing(){
       <div class="brf-card">
         <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px"><b class="brf-h2">인기 단지 TOP 5</b><span style="display:flex;gap:10px"><a href="javascript:void(0)" onclick="openRankCard()" style="font-size:12px;color:var(--brf-ac-tx);text-decoration:none;font-weight:700">카드</a><a href="javascript:void(0)" onclick="sv('map')" style="font-size:12px;color:var(--brf-tx3);text-decoration:none">지도 ›</a></span></div>
         ${popHtml}
-        <div style="font-size:12px;color:var(--brf-tx3);margin-top:8px">${ps.length&&ps[0]._degraded?'지금은 집계가 늦어져 최근 거래 표본으로 골랐어요. 평균가와 건수는 잠시 비워 둬요. 매물 광고가 아니에요.':'최근 60일 국토교통부 실거래 건수가 많은 순이에요. 평균가는 60일 기준이고, 매물 광고가 아니에요.'}</div>
+        <div style="font-size:12px;color:var(--brf-tx3);margin-top:8px">${ps.length&&ps[0]._degraded?'지금은 집계가 늦어져 최근 거래 표본으로 골랐어요. 평균가와 건수는 잠시 비워 둬요. 매물 광고가 아니에요.':'최근 60일 국토교통부 실거래 건수가 많은 순이에요. 평균가는 60일 기준이고 매물 광고가 아니에요.'}</div>
       </div>`;
     // PRICE-RECORDS-2026-08-29 (Sprint NNNNNNN-30): 최근 실거래 최고·최저 경신 카드.
     //   [왜 양쪽을 같이 싣는가] 최고가만 보여주면 카드 자체가 매수 신호로 읽힌다 — 절대 룰 ①.
@@ -6546,7 +6546,7 @@ async function renderBriefing(){
         const watch=[];
         if(cr['regulations-auto-fetch']&&cr['regulations-auto-fetch'].at){const g=_ago(cr['regulations-auto-fetch'].at);if(g!=null)watch.push(`정부 공지 대조 ${g}시간 전`);}
         if(cr['regulations-check']&&cr['regulations-check'].at){const g=_ago(cr['regulations-check'].at);if(g!=null)watch.push(`저장해 둔 규제 정보 점검 ${g}시간 전`);}
-        lg.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><b class="brf-h2">규제·금융 변동 로그</b><span style="font-size:12px;color:var(--brf-tx3)">금융위·국토부 고시 기준이고, 확인된 변동만 기록해요</span></div>
+        lg.innerHTML=`<div style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:10px"><b class="brf-h2">규제·금융 변동 로그</b><span style="font-size:12px;color:var(--brf-tx3)">금융위·국토부 고시 기준이고 확인된 변동만 기록해요</span></div>
           ${rows}
           ${watch.length?`<div style="font-size:12px;color:var(--brf-tx3);margin-top:2px">점검 내역: ${watch.join(', ')}. 새 고시는 확인을 거쳐 이 로그에 추가돼요.</div>`:''}`;
         lg.style.display='block';
@@ -6559,7 +6559,7 @@ async function renderBriefing(){
     if(er) _srcs.push('한국은행');
     if(dc) _srcs.push('국토부 실거래');
     if(subs) _srcs.push('청약홈');
-    if(mm) mm.textContent=(_srcs.length?`오늘 브리핑은 ${_srcs.join('·')} 원자료를 기준으로 했어요.`:'오늘 브리핑 원자료를 잠시 불러오지 못했어요. 확인된 값만 보여줘요.')+(dc&&dc.lastIngestedAt?' 실거래 동기화 '+_kstMD(dc.lastIngestedAt)+'.':'')+' 값이 없는 항목은 추정하지 않고 비워 둬요.';
+    if(mm) mm.textContent=(_srcs.length?`오늘 브리핑은 ${_srcs.join(', ')} 원자료를 기준으로 했어요.`:'오늘 브리핑 원자료를 잠시 불러오지 못했어요. 확인된 값만 보여줘요.')+(dc&&dc.lastIngestedAt?' 실거래 동기화 '+_kstMD(dc.lastIngestedAt)+'.':'')+' 값이 없는 항목은 추정하지 않고 비워 둬요.';
   }catch(_e){ /* 브리핑 실패는 조용히 — 뉴스 본체는 정상 */ }
 }
 // ============ DATA-STATUS-2026-08-19 (Sprint NNNNNNN-11): 데이터 상태 모달 ============
@@ -7660,7 +7660,7 @@ async function doSearch(){
     //   세부 지역 칩이 보이는 목록 화면(사이드바)으로 옮긴다 — 지도 화면엔 사이드바가 없어 안내만 뜨고 고를 곳이 없었다(대출 계산의 "이 예산으로 단지 찾기" 경로).
     try{ if(typeof renderListGrid==='function') renderListGrid(); }catch(_){}
     try{ if(document.body.classList.contains('hp-on') && window.innerWidth>700) sv('list'); }catch(_){}
-    if(typeof toast==='function') toast('지방은 세부 지역(해운대·수영·수성·유성·청주)을 선택해 주세요');
+    if(typeof toast==='function') toast('지방은 세부 지역(해운대, 수영, 수성, 유성, 청주)을 선택해 주세요');
     return;
   }
   searchStep('조건을 정리하는 중이에요', 1);
@@ -7695,7 +7695,7 @@ async function doSearch(){
     //   dealCount·buildYear 산식이고, 소스 주석도 'AI 호출 없음, 즉시 응답' 이라고 적혀 있다.
     //   '점수 계산' 은 사실이지만 'AI 분석' 은 아니다 — 사용자가 모델이 판단한 결과로 오해한다.
     //   ⚠ 함수명 getAIRecommendations 는 과거 LLM 경로의 잔재다(이름 변경은 파급이 커 보류).
-    setTimeout(()=>{if(btn.classList.contains('ld'))searchStep('조건 매칭·점수 계산 중...', 3);}, 3500);
+    setTimeout(()=>{if(btn.classList.contains('ld'))searchStep('조건 매칭, 점수 계산 중...', 3);}, 3500);
     // MOB-FIX-2026-05-03: 로그인 사용자 토큰 주입 → backend 가 user 한도(10/일) 적용 (이전: anonymous 5/일 잘못 적용)
     const _hdr={'Content-Type':'application/json'};
     // TOKEN-FRESH-2026-05-21: 만료된 캐시 토큰 방지 — 신선한 토큰 확보.
@@ -7748,7 +7748,7 @@ async function doSearch(){
       };
       success=true;
       // FILTER-2026-07-12: 조건 필터로 결과 0이면 완화 안내
-      if(data.filteredOut){ try{ toast('선택한 단지 조건에 맞는 결과가 없어요. 필터(세대수·주차·분양) 조건을 낮춰 보세요.'); }catch(_){} }
+      if(data.filteredOut){ try{ toast('선택한 단지 조건에 맞는 결과가 없어요. 필터(세대수, 주차, 분양) 조건을 낮춰 보세요.'); }catch(_){} }
       // 로그인 사용자면 검색 이력 기록 (fire-and-forget — 실패해도 UX 영향 X)
       _logSearch('recommend', body.region || '', (data.recommendations||[]).length);
       // ATTR-ACTIVATION-2026-09-06: 검색 성공 이벤트 — 세션당 1회.
@@ -8330,7 +8330,7 @@ async function _runCompare(apts){
   _cmpApts = apts.slice(0, CMP_MAX);   // 공유 딥링크 직렬화용 (목록·관심단지·딥링크 모든 경로 공통)
   const modal = _cmpModalShell();
   const bodyEl = modal.querySelector('.cmp-body');
-  bodyEl.innerHTML = `<div style="padding:48px 20px;text-align:center;color:var(--t3)"><div class="spin" style="margin:0 auto 12px"></div>실거래 평당가·단지정보를 불러오는 중…</div>`;
+  bodyEl.innerHTML = `<div style="padding:48px 20px;text-align:center;color:var(--t3)"><div class="spin" style="margin:0 auto 12px"></div>실거래 평당가, 단지정보를 불러오는 중…</div>`;
   try{
     const res = await fetch(`${CFG.api}/analysis/compare`,{
       method:'POST', headers:{'Content-Type':'application/json'},
@@ -8406,9 +8406,9 @@ async function shareCompare(){
   u.searchParams.set('cmp', enc);
   const url = u.toString();
   const names = apts.map(a=>a.aptName).join(' vs ');
-  const title = `${names} — 내집로그 평당가 비교`;
-  const text = `${names}\n전용면적 기준 평당가·단지정보 비교 (국토부 실거래)\n※ 매수 추천이 아니며 참고용 정보예요.`;
-  if(await _kakaoShare({ title, description: '전용면적 기준 평당가·단지정보 비교 (국토교통부 실거래)', url })) return;
+  const title = `${names} | 내집로그 평당가 비교`;
+  const text = `${names}\n전용면적 기준 평당가, 단지정보 비교 (국토부 실거래)\n※ 매수 추천이 아니며 참고용 정보예요.`;
+  if(await _kakaoShare({ title, description: '전용면적 기준 평당가, 단지정보 비교 (국토교통부 실거래)', url })) return;
   if(navigator.share){
     try{ await navigator.share({ title, text, url }); return; }catch(e){ if(e.name==='AbortError') return; }
   }
@@ -8469,7 +8469,7 @@ async function shareBookmarkList(){
   let enc; try { enc = _b64urlEnc(JSON.stringify(items)); } catch(_) { toast('공유 링크를 만들지 못했어요'); return; }
   const u = new URL(location.origin + '/share'); u.searchParams.set('list', enc); const url = u.toString();
   const head = `${items.slice(0, 3).map(a => a.aptName).join(', ')}${items.length > 3 ? ` 외 ${items.length - 3}곳` : ''}`;
-  const title = `관심 단지 ${items.length}곳 — 내집로그`;
+  const title = `관심 단지 ${items.length}곳 | 내집로그`;
   const text = `${head}\n함께 보는 관심 단지 목록이에요 (국토교통부 실거래). ※ 매수 추천이 아니에요.`;
   if (await _kakaoShare({ title, description: head + ' · 함께 보는 관심 단지', url })) return;
   if (navigator.share) { try { await navigator.share({ title, text, url }); return; } catch(e) { if (e.name === 'AbortError') return; } }
@@ -9259,7 +9259,7 @@ function showDetail(p){
           <div class="gi-s">${_escHtml(_fmtSgg(p.area))} | ${_escHtml(p.buildYear||'')}년 | LTV ${_escHtml(p.ltv||_regLtvLabel(p.area, p.lawdCd)||'—')}${p.maxLoan?` | 최대 ${_escHtml(_cardMaxLoan(p.maxLoan))}`:''}</div>
         </div>
       </div>${_scoreDetail}`
-    : `<a href="javascript:void(0)" class="t0-rep-link" onclick="cDM();sv('report')">자금·가족·희망지역을 입력하면 이 단지의 맞춤 보고서를 만들 수 있어요 →</a>`;
+    : `<a href="javascript:void(0)" class="t0-rep-link" onclick="cDM();sv('report')">자금, 가족, 희망지역을 입력하면 이 단지의 맞춤 보고서를 만들 수 있어요 →</a>`;
 
   // T0-HERO-2026-09-05: 실거래 요약 히어로 — **값이 있는 셀만** 만든다(미확인 원칙).
   //   평균가 라벨은 진입 경로가 세팅한 _priceBasis 를 그대로 쓴다(추천 경로 = "내 평형대 · 6개월 가중평균",
@@ -9425,7 +9425,7 @@ function showDetail(p){
        backend/utils/molitParse.js:25-28 isCanceled(cdealType) 판정을 molitIngest.js:156 ·
        transactionService.js:342-353 · rentService.js:117-126 세 경로가 모두 매핑 전에 적용한다.
        "평균·추정가 미제공"은 절대 룰(미래 가격 예측 금지) 그대로다. */
-    const _TX_NOTE = '<div style="font-size:12px;color:var(--t3);line-height:1.5;padding:7px 2px 0">신고된 계약 값을 그대로 보여 줘요. 해제된 거래는 빼고, 평균가와 추정가는 보여 주지 않아요.</div>';
+    const _TX_NOTE = '<div style="font-size:12px;color:var(--t3);line-height:1.5;padding:7px 2px 0">신고된 계약 값을 그대로 보여 줘요. 해제된 거래는 빼고 평균가와 추정가는 보여 주지 않아요.</div>';
     // DM-SKIN-2026-08-19 (Sprint NNNNNNN-10): 시안 실거래 표 — 그리드 4열(계약일/전용/층/거래금액)+헤더, tabular-nums.
     const _hd='<div class="dm-txgrid hd"><span>계약일</span><span>전용</span><span style="text-align:right">층</span><span style="text-align:right">거래금액</span></div>';
     return _hd + filtered.slice(0,30).map(t => {
@@ -10378,7 +10378,7 @@ async function shareCurrent(){
   // SHARE-OG-2026-10-18 (plans/166 A3): 단지 번호가 있으면 실어 보낸다 — 서버가 단지별 OG 카드를 미리보기 이미지로 붙인다
   if(/^\d{5}-\d+$/.test(String(currentDetail.aptSeq||''))) u.searchParams.set('seq', String(currentDetail.aptSeq));
   const url=u.toString();
-  const title=`${currentDetail.aptName} — 내집로그 데이터 분석`;
+  const title=`${currentDetail.aptName} | 내집로그 데이터 분석`;
   // SCORE-HALLUC-FIX-2026-07-16 (Sprint SSSSS): 폐기된 60점 fallback 잔재 — 점수 없으면 표기 생략(외부 공유 텍스트라 특히 중요)
   // SHARE-ZERO-2026-09-02: 가격이 없을 때 "평균 0.00억" 을 외부로 내보내던 문구 — 점수와 같은 방식으로 생략한다.
   const _shPx=Number(currentDetail.avgPrice) > 0 ? `, 평균 ${Number(currentDetail.avgPrice).toFixed(2)}억` : '';
@@ -11797,7 +11797,7 @@ function _dclData(){
       {k:'reg',n:'등기·세금',items:[
         {id:'b_xfer',t:'소유권이전등기 신청',d:'잔금일부터 60일 이내에 해야 해요.',lb:'dl',due:{f:'b',n:60},src:[L('부동산등기특별조치법','제2조','부동산등기 특별조치법 제2조')]},
         {id:'b_acq',t:'취득세 신고·납부',d:'취득일(보통 잔금일)부터 60일 이내에 신고하고 내야 해요.',lb:'dl',due:{f:'b',n:60},src:[L('지방세법','제20조','지방세법 제20조')]},
-        {id:'b_first',t:'생애최초 취득세 감면 확인',d:'12억 원 이하 주택이 대상이고, 아파트는 200만 원 한도예요. 3년 안에 팔거나 임대하면 추징돼요.\n아파트도 인구감소지역이면 300만 원이에요.',lb:'law',src:[L('지방세특례제한법','제36조의3','지방세특례제한법 제36조의3')]},
+        {id:'b_first',t:'생애최초 취득세 감면 확인',d:'12억 원 이하 주택이 대상이고 아파트는 200만 원 한도예요. 3년 안에 팔거나 임대하면 추징돼요.\n아파트도 인구감소지역이면 300만 원이에요.',lb:'law',src:[L('지방세특례제한법','제36조의3','지방세특례제한법 제36조의3')]},
         {id:'b_bond',t:'등기할 때 국민주택채권 매입',lb:'off',src:[L('주택도시기금법','제8조','주택도시기금법 제8조')]},
       ]},
       {k:'move',n:'입주',items:[
@@ -12678,7 +12678,7 @@ function restoreSearchFromUrl(){
           bp.style.transition='box-shadow 300ms cubic-bezier(0.16,1,0.3,1)';
           bp.style.boxShadow='0 0 0 3px var(--accent-tint-2)';
           setTimeout(()=>{bp.style.boxShadow='';try{bp.focus();}catch(_){}},1800);
-          if(typeof toast==='function') toast('매수가와 자기자본을 입력하면 LTV·DSR·정책자금을 자동으로 계산해요');
+          if(typeof toast==='function') toast('매수가와 자기자본을 입력하면 LTV, DSR, 정책자금을 자동으로 계산해요');
         }catch(_){}
       },800);
     }
@@ -12744,7 +12744,7 @@ function _updateInputProgress() {
     if (!checks.budget) missing.push('매수가');
     if (!checks.region) missing.push('희망 지역');
     // Sprint QQQQQ (정직화): doSearch 는 미입력도 기본값으로 진행 — "필수/완료"가 아니라 "맞춤 정확도" 지표로 표기
-    el.textContent = n === 3 ? '맞춤 정확도 3/3' : `맞춤 정확도 ${n}/3 (${missing.join('·')})`;
+    el.textContent = n === 3 ? '맞춤 정확도 3/3' : `맞춤 정확도 ${n}/3 (${missing.join(', ')})`;
     el.style.color = n === 3 ? 'var(--grn)' : (n >= 1 ? 'var(--amb)' : 'var(--t3)');
     // Sprint PPPPP (시안 컷2): 보고서 위저드 진행바 + 생성 버튼 사전 게이트 — "에러 토스트"를 "사전 안내"로.
     //   기존엔 빈 입력으로 버튼을 눌러야 "매수가를 입력해주세요(좌측 사이드바)" 토스트 = 시작 즉시 실패 경험.
@@ -13181,7 +13181,7 @@ function goCalcFromDetail(price){
     if(typeof cDM==='function')cDM();
     if(typeof dc==='function')dc();
     document.getElementById('c_b')?.scrollIntoView({behavior:'smooth',block:'center'});
-    toast('매수가와 내 조건(주택 보유·생애최초·지역)을 채웠어요');
+    toast('매수가와 내 조건(주택 보유, 생애최초, 지역)을 채웠어요');
   },180);
 }
 // ════ NEXT-ACTIONS-2026-10-15 (Plan 150): 단지 상세 "다음에 할 일" ════
@@ -13655,7 +13655,7 @@ function _hpRegShow(){
   if(_hpReg === 'all'){
     const byDeals = groups.slice().sort((a, b) => (b.deals60d || 0) - (a.deals60d || 0));
     html = `<div class="hp-msg">${_escHtml(d.sidoName || _hpSido)} ${groups.length}개 ${unit}마다 최근 60일 거래 많은 단지 ${_HP_REG_TOP}곳이에요. 거래가 많은 지역 순이에요.`
-      + (geoOk ? `<span class="hp-mx"> 지도의 색 구역이 ${unit}이고, 구마다 1위 단지만 표시해요. 구역이나 아래 이름을 누르면 그 ${unit} 순위를 지도에 모두 보여 드려요.</span>` : '') + '</div>'
+      + (geoOk ? `<span class="hp-mx"> 지도의 색 구역이 ${unit}이고 구마다 1위 단지만 표시해요. 구역이나 아래 이름을 누르면 그 ${unit} 순위를 지도에 모두 보여 드려요.</span>` : '') + '</div>'
       + byDeals.map(g => `<div class="hp-gh">${_hpGuDot(_hpGuColor(sido, g.lawdCd))}${_escHtml(_hpRegShort(g.label))}<span class="n">60일 거래 ${Number(g.deals60d || 0).toLocaleString()}건</span>`
         + `<button type="button" onclick="_hpRegPick(${_jsonAttr(g.lawdCd)})">${(g.results || []).length}곳 모두 보기</button></div>`
         + (g.results || []).slice(0, _HP_REG_TOP).map((p, i) => _hpRegRow(p, i + 1)).join('')).join('') + attr;
@@ -15438,8 +15438,8 @@ function calcSubsScore(){
   //   절대 룰 ②(공식 출처만 인용)에 따라 근거 없는 수치와 단정을 걷어내고 아래 청약Home 안내만 남긴다.
   //   (옛 문구는 계약 테스트의 금지 문자열이라 여기 적지 않는다.)
   if (total >= 70) tier = '<b style="color:var(--grn)">상위권</b>: 서울 인기 단지 일반공급 지원 가능 구간';
-  else if (total >= 60) tier = '<b style="color:var(--grn)">중상위권</b>: 서울 일반 단지·수도권 인기 분양 도전 가능';
-  else if (total >= 50) tier = '<b style="color:var(--amb)">중위권</b>: 수도권 일반·지방 인기 분양 도전 가능. 서울은 어려워요';
+  else if (total >= 60) tier = '<b style="color:var(--grn)">중상위권</b>: 서울 일반 단지, 수도권 인기 분양 도전 가능';
+  else if (total >= 50) tier = '<b style="color:var(--amb)">중위권</b>: 수도권 일반, 지방 인기 분양 도전 가능. 서울은 어려워요';
   else if (total >= 35) tier = '<b style="color:var(--amb)">중하위권</b>: 지방 일반 분양에 도전해 보세요. 특별공급(생애최초·신혼·신생아)을 꼭 활용하세요';
   else tier = '<b style="color:var(--red)">하위권</b>: 일반공급은 어려워요. <b>특별공급(생애최초·신혼·다자녀·신생아)</b>이나 <b>추첨제 단지</b>를 노려 보세요';
   tierEl.innerHTML = `예상 당첨 가능 분양: ${tier}<br><span style="font-size:12px;color:var(--t3)">※ 실제 커트라인은 단지·시점·평형마다 달라요. <a href="https://www.applyhome.co.kr" target="_blank" rel="noopener" style="color:var(--acc)">청약Home</a> 공고를 꼭 확인하세요.</span>`;
@@ -15568,7 +15568,7 @@ async function chkAPI(_isRetry){
           if (reg.housing_loan?.stale) _staleKeys.push('주담대');
           if (reg.acquisition_tax?.stale) _staleKeys.push('취득세');
           if (_staleKeys.length) {
-            _staleNote = ` · ⚠ ${_staleKeys.join('·')} 정책은 갱신 검토 중`;
+            _staleNote = ` · ⚠ ${_staleKeys.join(', ')} 정책은 갱신 검토 중`;
             syncBanner.style.background = '#FFF6E3';
             syncBanner.style.borderBottomColor = '#F0D998';
             syncBanner.style.color = '#7A5500';

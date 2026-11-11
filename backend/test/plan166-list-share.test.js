@@ -27,7 +27,7 @@ test('LIST-SHARE 서버: ?list= 는 단지 이름으로 제목·설명을 만들
   assert.equal(typeof res.body, 'string');
   assert.match(res.body, /<title>관심 단지 4곳 \| 내집로그<\/title>/);
   assert.match(res.body, /<meta property="og:title" content="관심 단지 4곳 \| 내집로그">/);
-  assert.match(res.body, /<meta property="og:description" content="은마, 래미안대치팰리스, &lt;b&gt;x&lt;\/b&gt; 외 1곳 — 함께 보는 관심 단지 목록이에요/);
+  assert.match(res.body, /<meta property="og:description" content="은마, 래미안대치팰리스, &lt;b&gt;x&lt;\/b&gt; 외 1곳\. 함께 보는 관심 단지 목록이에요/);
   assert.match(res.body, /<meta name="robots" content="noindex, follow">/);
   assert.match(res.body, /<meta property="og:url" content="https:\/\/myhomelog.example\/share\?list=/);
   assert.doesNotMatch(res.body, /<b>x<\/b>/, '단지 이름이 이스케이프 없이 들어갔다');

@@ -140,7 +140,7 @@ router.get('/', (req, res) => {
   res.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
   res.type('html').send(pageShell({
     title: `지역별 아파트 실거래 데이터 — 전국 ${list.length}개 시군구 | 내집로그`,
-    desc: `전국 ${list.length}개 시군구의 아파트 실거래 거래량·가격지수·미분양·인구 순이동을 공식 통계로 정리했어요. 매수 추천이 아니에요.`,
+    desc: `전국 ${list.length}개 시군구의 아파트 실거래 거래량, 가격지수, 미분양, 인구 순이동을 공식 통계로 정리했어요. 매수 추천이 아니에요.`,
     canonical: `${ORIGIN}/region`,
     body,
   }));
@@ -254,7 +254,7 @@ router.get('/:lawdCd', async (req, res) => {
       <div style="font-size:12px;color:var(--ink3);margin-bottom:8px">비교 가능 거래 ${comma(num(rec.comparedCount) || 0)}건 중 최고가 경신 <b style="color:var(--ink)">${comma(num(rec.highCount) || 0)}건</b> · 최저가 경신 <b style="color:var(--ink)">${comma(num(rec.lowCount) || 0)}건</b></div>
       ${(rec.high || []).slice(0, 3).map(it => row(it, 'high')).join('')}
       ${(rec.low || []).slice(0, 3).map(it => row(it, 'low')).join('')}
-      <div class="src" style="margin-top:8px">직전 거래 ${num(rec.minPrior) || 3}건 이상인 평형만 비교 · 단지당 1건만 표시 · 층·향은 보정하지 않음</div>
+      <div class="src" style="margin-top:8px">직전 거래 ${num(rec.minPrior) || 3}건 이상인 평형만 비교, 단지당 1건만 표시, 층·향은 보정하지 않음</div>
     </div>`);
   }
 
@@ -335,7 +335,7 @@ router.get('/:lawdCd', async (req, res) => {
   const title = `${label} 아파트 실거래 데이터 — 거래량·가격지수·미분양 | 내집로그`;
   const desc = facts.length
     ? `${label} ${facts.slice(0, 3).join(' · ')}. 국토교통부·한국부동산원 공식 통계를 정리했어요. 매수 추천이 아니에요.`
-    : `${label} 아파트 실거래 거래량·가격지수·미분양·인구 순이동을 공식 통계로 정리했어요. 매수 추천이 아니에요.`;
+    : `${label} 아파트 실거래 거래량, 가격지수, 미분양, 인구 순이동을 공식 통계로 정리했어요. 매수 추천이 아니에요.`;
 
   // ⚠ CACHE-POISON-2026-08-29 의 교훈: **열화된 응답에는 긴 캐시를 붙이지 않는다.**
   //   카드가 하나도 없으면 원자료 조회가 통째로 실패한 상태다 — 그걸 하루 굳히면 장애가 하루가 된다.

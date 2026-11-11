@@ -56,8 +56,8 @@ test('C: percentile 80(veto 조건 성립)+거래량 up(green)+전세 70(green) 
   // 들어가지 못한다 — vetoApplied 는 항상 false. 이 산식에서 veto 가 실제로 "강등"한 적은 없다.
   assert.equal(r.vetoApplied, false);
   assert.equal(r.tone, 'neutral');
-  assert.equal(r.signalDesc, '3개 조건 중 2개 긍정 · ⚠ 시세 상단 — 매수 단가 주의');
-  assert.equal(r.summaryDesc, '3개 조건 중 2개 데이터 부합 · ⚠ 시세 상단 — 매수 단가 주의');
+  assert.equal(r.signalDesc, '3개 조건 중 2개 긍정 · ⚠ 시세 상단, 매수 단가 주의');
+  assert.equal(r.summaryDesc, '3개 조건 중 2개 데이터 부합 · ⚠ 시세 상단, 매수 단가 주의');
 });
 
 test('D: percentile 50(yellow)+거래량 neutral 문자열 인자(yellow)+전세 50(yellow) → 3/6 yellow, metCount 0', () => {
@@ -112,7 +112,7 @@ test('H: percentile 80(veto 조건 성립)+거래량 up(green)+전세 null(조�
   // 조건이 2개뿐이라도(전세 없음) 만점 2/4=0.5 는 여전히 0.67 미만이다 — veto 는 여기서도 불가능.
   assert.equal(r.vetoApplied, false);
   assert.equal(r.tone, 'neutral');
-  assert.equal(r.signalDesc, '2개 조건 중 1개 긍정 · ⚠ 시세 상단 — 매수 단가 주의');
+  assert.equal(r.signalDesc, '2개 조건 중 1개 긍정 · ⚠ 시세 상단, 매수 단가 주의');
 });
 
 test('경계값 — 가격 위치 percentile 30/31/65/66 (green/yellow/yellow/red 전환)', () => {

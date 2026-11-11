@@ -468,7 +468,7 @@ async function _market(query, context) {
     const others = ranked.slice(1, 3).map(c => `${displayAptName(c.aptName, { umdNm: c.umdNm })}(${c.sigungu || '지역미상'})`).join(' · ');
     out += `\n\n같은 이름의 다른 단지도 있어요: ${others}\n지역명을 함께 적어 주시면 좁혀 드려요.`;
   }
-  out += `\n\n전세가율·연식·학군 등 상세는 상단 검색창에서 "${displayName}"${_eulReul(displayName)} 검색해 보세요.`;
+  out += `\n\n전세가율, 연식, 학군 등 상세는 상단 검색창에서 "${displayName}"${_eulReul(displayName)} 검색해 보세요.`;
   // 후속 질문 칩 — 그 단지의 동네로 시야 확장 + 동명 단지 바로가기 (KKKKKKK-19)
   const sug = [];
   if (sigungu) sug.push(`${sigungu} 인기단지`);
@@ -491,7 +491,7 @@ async function _rates() {
   if (!lines.length) {
     return '지금 금리 공시 조회가 잠시 어려워요. 잠시 뒤 다시 물어봐 주세요. 도구 › 대출 계산 화면의 정책자금 비교표에서도 볼 수 있어요.';
   }
-  return `오늘의 금리 (공식 공시 기준)\n${lines.join('\n')}\n\n개인 조건(소득·만기·우대)에 따라 실제 금리는 달라요. 대출 계산 화면에서 내 조건으로 계산해 보세요.`;
+  return `오늘의 금리 (공식 공시 기준)\n${lines.join('\n')}\n\n개인 조건(소득, 만기, 우대)에 따라 실제 금리는 달라요. 대출 계산 화면에서 내 조건으로 계산해 보세요.`;
 }
 
 async function _policyLoan() {
@@ -556,7 +556,7 @@ function _loanLimit(message) {
       '· 실제 한도는 소득 기반 스트레스 DSR 심사로 이보다 줄 수 있어요.\n';
   }
   out += '\n연소득까지 넣은 계산은 대출 계산 화면에서 바로 할 수 있어요 (생애최초·정책자금 조건 반영).\n' +
-    '참고용 계산이고, 실제 한도는 금융기관 심사로 정해져요.';
+    '참고용 계산이고 실제 한도는 금융기관 심사로 정해져요.';
   // KKKKKKK-20 제안 C: 한도 질문자는 보고서 퍼널의 최적 진입점 — 이동형 칩(view) 동봉
   return { text: out, suggestions: [
     { label: '내 조건 맞춤 보고서 만들기', view: 'report' },

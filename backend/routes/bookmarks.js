@@ -80,7 +80,7 @@ router.post('/', async (req, res, next) => {
     // P1 (Agent 3차): PII 차단 + 길이 제한
     if (_detectPII(memo) || _detectPII(address)) {
       return res.status(400).json({
-        error: '메모·주소에 주민번호·계좌·카드 같은 개인정보는 입력하지 말아주세요.',
+        error: '메모·주소에 주민번호, 계좌, 카드 같은 개인정보는 입력하지 말아주세요.',
         code: 'pii_blocked',
       });
     }

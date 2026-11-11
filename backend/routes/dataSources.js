@@ -17,15 +17,15 @@ const ORIGIN = 'https://myhomelog.vercel.app';
 
 // 갱신 주기는 vercel.json crons(UTC) 를 KST 로 옮긴 값. 바꾸면 backend/test/plan167-data-basis.test.js 가 대조한다.
 const SOURCES = [
-  { what: '아파트 매매 실거래가', who: '국토교통부', via: '공공데이터포털(apis.data.go.kr) 아파트 매매 실거래가 상세자료', url: 'https://www.data.go.kr', cycle: '매일 새벽 2시대(KST) 자동 수집 · 신고는 계약 뒤 30일 안이라 최근 거래가 늦게 반영될 수 있어요' },
-  { what: '공동주택 기본 정보(세대수·동수·주차·관리방식)', who: '한국부동산원 K-apt', via: '공공데이터포털 공동주택 단지 목록·기본 정보', url: 'https://www.data.go.kr', cycle: '매주 월요일 새벽 5시(KST) 단지 목록 갱신 · 상세는 조회할 때 채우고 보강은 매일 새벽' },
-  { what: '건축물대장(세대수 보조 확인)', who: '국토교통부', via: '공공데이터포털 건축HUB 건축물대장', url: 'https://www.data.go.kr', cycle: '조회할 때 · 비어 있는 단지는 매일 새벽 보강' },
-  { what: '주택담보대출 규제(LTV·DSR 등)·취득세', who: '금융위원회 · 정책브리핑 · 국가법령정보', via: 'fsc.go.kr · korea.kr · law.go.kr 공고문', url: 'https://www.fsc.go.kr', cycle: '매일 새벽 6시대(KST) 변경 점검 · 변경이 확인되면 사람이 검토한 뒤 반영' },
+  { what: '아파트 매매 실거래가', who: '국토교통부', via: '공공데이터포털(apis.data.go.kr) 아파트 매매 실거래가 상세자료', url: 'https://www.data.go.kr', cycle: '매일 새벽 2시대(KST) 자동 수집. 신고는 계약 뒤 30일 안이라 최근 거래가 늦게 반영될 수 있어요' },
+  { what: '공동주택 기본 정보(세대수·동수·주차·관리방식)', who: '한국부동산원 K-apt', via: '공공데이터포털 공동주택 단지 목록·기본 정보', url: 'https://www.data.go.kr', cycle: '매주 월요일 새벽 5시(KST) 단지 목록 갱신. 상세는 조회할 때 채우고 보강은 매일 새벽' },
+  { what: '건축물대장(세대수 보조 확인)', who: '국토교통부', via: '공공데이터포털 건축HUB 건축물대장', url: 'https://www.data.go.kr', cycle: '조회할 때, 비어 있는 단지는 매일 새벽 보강' },
+  { what: '주택담보대출 규제(LTV·DSR 등)·취득세', who: '금융위원회 · 정책브리핑 · 국가법령정보', via: 'fsc.go.kr · korea.kr · law.go.kr 공고문', url: 'https://www.fsc.go.kr', cycle: '매일 새벽 6시대(KST) 변경 점검. 변경이 확인되면 사람이 검토한 뒤 반영' },
   { what: '기준금리·시장금리', who: '한국은행 ECOS', via: 'ecos.bok.or.kr 통계 API', url: 'https://ecos.bok.or.kr', cycle: '조회할 때 새로 받아와요' },
   { what: '정책 주택금융 금리', who: '한국주택금융공사', via: '공공데이터포털 공개 API', url: 'https://www.data.go.kr', cycle: '조회할 때 새로 받아와요' },
   { what: '주택가격지수', who: '한국부동산원 R-ONE', via: 'reb.or.kr 공개 통계', url: 'https://www.reb.or.kr', cycle: '지역 페이지를 만들 때 조회' },
   { what: '미분양 주택 · 국내 인구이동', who: 'KOSIS(국가통계포털)', via: 'kosis.kr 공개 API', url: 'https://kosis.kr', cycle: '지역 페이지를 만들 때 조회' },
-  { what: '단지 좌표 · 주변 시설(학원·편의시설)', who: '카카오', via: '카카오 로컬 API', url: 'https://developers.kakao.com', cycle: '조회할 때 · 좌표는 매일 새벽 보강' },
+  { what: '단지 좌표 · 주변 시설(학원·편의시설)', who: '카카오', via: '카카오 로컬 API', url: 'https://developers.kakao.com', cycle: '조회할 때, 좌표는 매일 새벽 보강' },
   { what: '학교 정보', who: '나이스 교육정보 개방 포털', via: 'open.neis.go.kr 학교 기본 정보', url: 'https://open.neis.go.kr', cycle: '조회할 때 새로 받아와요' },
 ];
 

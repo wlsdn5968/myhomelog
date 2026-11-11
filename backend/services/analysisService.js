@@ -306,7 +306,7 @@ function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate, jeonseSa
       score += 1;
       conditions.push({ label: '전세가율', status: 'yellow', desc: `${jeonseRate}% (${jeonseBasisDesc})` });
     } else {
-      conditions.push({ label: '전세가율', status: 'red', desc: `${jeonseRate}% (${jeonseBasisDesc}) — 역전세 위험 확인 필요` });
+      conditions.push({ label: '전세가율', status: 'red', desc: `${jeonseRate}% (${jeonseBasisDesc}), 역전세 위험 확인 필요` });
     }
   }
 
@@ -336,7 +336,7 @@ function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate, jeonseSa
     }
     // green/yellow 모두 사용자에게 시세 상단 경고 (red 는 이미 강한 경고이므로 중복 회피)
     if (signal !== 'red') {
-      signalDesc += ' · ⚠ 시세 상단 — 매수 단가 주의';
+      signalDesc += ' · ⚠ 시세 상단, 매수 단가 주의';
     }
   }
 

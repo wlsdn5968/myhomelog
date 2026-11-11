@@ -456,7 +456,7 @@ function _freeContextLines(policy, freeCtx) {
     const seq = us.months
       .map(m => `${String(m.ym).slice(4, 6).replace(/^0/, '')}월 ${Number(m.cnt).toLocaleString()}호`)
       .join(' → ');
-    out.unsold = `${us.sigungu} 미분양 ${seq} — ${us.source}`;
+    out.unsold = `${us.sigungu} 미분양 ${seq}, ${us.source}`;
   }
   // Sprint KKKKK: 지역 월별 거래량 추이 (자체 DB 집계 — 최근 월은 신고 지연분 존재)
   const rt = (freeCtx && freeCtx.regionTxTrend) || null;
@@ -464,11 +464,11 @@ function _freeContextLines(policy, freeCtx) {
     const seq = rt.months
       .map(m => `${String(m.ym).slice(4, 6).replace(/^0/, '')}월 ${Number(m.n).toLocaleString()}건`)
       .join(' → ');
-    out.txTrend = `${rt.sigungu} 매매 거래량 ${seq} (국토교통부 실거래 신고 기준 · 최근 월은 신고 지연으로 집계 중)`;
+    out.txTrend = `${rt.sigungu} 매매 거래량 ${seq} (국토교통부 실거래 신고 기준, 최근 월은 신고 지연으로 집계 중)`;
   }
   // Sprint KKKKK-2: 준공연차 구간별 평당가 (전용면적 환산 기준 — 시장 관례 공급면적 평당가와 다름 명시)
   if (rt && Array.isArray(rt.ageBands) && rt.ageBands.length >= 2) {
-    out.agePrice = `${rt.sigungu} 준공연차별 평당가(전용면적 환산·최근 6개월 중위): `
+    out.agePrice = `${rt.sigungu} 준공연차별 평당가(전용면적 환산, 최근 6개월 중위): `
       + rt.ageBands.map(b => `${b.band} ${b.medianPyeong.toLocaleString()}만원(${b.n}건)`).join(' · ');
   }
   return out;
@@ -520,14 +520,14 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
       // 잘린 풀에서도 n 은 **하한**이라 '거래 활발'은 여전히 참이다(실제는 더 많다) → 유지.
       (_n >= 20) ? `${_span} 거래 ${_n}건 (거래 활발)` : null,
       f.builder ? `시공 ${f.builder}` : null,
-      f.jeonse_ratio ? `전세가율 ${f.jeonse_ratio} (내 평형대 전세 ${f.jeonse_sample}건${f.jeonse_months ? ` · 표본 ${f.jeonse_months}개월` : ''})` : null, // Sprint KKKKK · 표본 개월(JEONSE-FINAL)
+      f.jeonse_ratio ? `전세가율 ${f.jeonse_ratio} (내 평형대 전세 ${f.jeonse_sample}건${f.jeonse_months ? `, 표본 ${f.jeonse_months}개월` : ''})` : null, // Sprint KKKKK · 표본 개월(JEONSE-FINAL)
     ].filter(Boolean).join(' · ');
     const cons = [
-      (age != null && age >= 25) ? `준공 ${age}년차 — 수리·관리 상태 임장 확인 필요` : null,
+      (age != null && age >= 25) ? `준공 ${age}년차, 수리·관리 상태 임장 확인 필요` : null,
       // ⚠ 반대로 '표본 적음'은 잘린 풀에서 **거짓 경고**가 된다 — 실제로 30건인 단지가 풀에선 3건일 수
       //   있고, 그때 "시세 판단 주의"를 붙이면 없는 위험을 만든다. 잘렸으면 이 판정을 하지 않는다.
       //   (모르는 것은 말하지 않는다 — 억지로 반대쪽 단정을 넣지도 않는다.)
-      (!c._poolTruncated && _n <= 5) ? `최근 6개월 거래 ${_n}건 — 표본 적음(시세 판단 주의)` : null,
+      (!c._poolTruncated && _n <= 5) ? `최근 6개월 거래 ${_n}건, 표본 적음(시세 판단 주의)` : null,
     ].filter(Boolean).join(' · ');
     return {
       rank: i + 1,
@@ -600,22 +600,22 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
   //   운영자 방침(AI 비용 지출 최소화)상 이 경로가 상시 노출될 수 있어, 고정 문구 대신 실데이터를 넣어
   //   AI 없이도 정보 밀도를 높인다. 전부 실측값 — 없으면 해당 줄만 생략(graceful).
   const coreMessages = [
-    `매수가 ${userInput.maxBudget}억 · 자기자본 ${userInput.myCash == null ? '미입력' : userInput.myCash + '억'} · ${userInput.region} 조건의 최근 6개월 실거래 데이터를 정리했어요.`
+    `매수가 ${userInput.maxBudget}억, 자기자본 ${userInput.myCash == null ? '미입력' : userInput.myCash + '억'}, ${userInput.region} 조건의 최근 6개월 실거래 데이터를 정리했어요.`
       + (fc.tx ? ` (${fc.tx})` : ''),
     // '추천' 단어는 자체 단언표현 필터(filterAdviceOutputDeep)에 걸림 (라이브 확인) — 필터 안전 문구 사용
-    `아래 ${apartments.length}개 단지는 국토교통부 실거래 기준 조건 부합 단지 정리예요 — 의사결정 책임은 본인에게 있어요.`,
+    `아래 ${apartments.length}개 단지는 국토교통부 실거래 기준 조건 부합 단지 정리예요. 의사결정 책임은 본인에게 있어요.`,
     fc.rate
-      ? `현재 금리 기준: ${fc.rate} — 대출 한도·월 상환액은 도구 › 대출 계산 화면에서 이 금리로 계산돼요.`
-      : 'AI 분석 코멘트는 현재 일시 중단 — 실거래·세대수·주차·규제 등 객관 데이터만 표시해요.',
+      ? `현재 금리 기준: ${fc.rate}. 대출 한도·월 상환액은 도구 › 대출 계산 화면에서 이 금리로 계산돼요.`
+      : 'AI 분석 코멘트는 현재 일시 중단 상태예요. 실거래, 세대수, 주차, 규제 등 객관 데이터만 표시해요.',
   ];
-  if (fc.unsold) coreMessages.push(`${fc.unsold} — 수치 나열이며 시장 예측이 아니에요.`);
-  if (fc.txTrend) coreMessages.push(`${fc.txTrend} — 수치 나열이며 시장 예측이 아니에요.`);
-  if (userInput.firstBuyerKnown === false) coreMessages.push('생애최초 여부를 선택하지 않아 일반(비우대) 기준으로 정리했어요 — 생애최초에 해당하면 LTV·취득세 우대가 달라질 수 있어요.');
+  if (fc.unsold) coreMessages.push(`${fc.unsold}. 수치 나열이며 시장 예측이 아니에요.`);
+  if (fc.txTrend) coreMessages.push(`${fc.txTrend}. 수치 나열이며 시장 예측이 아니에요.`);
+  if (userInput.firstBuyerKnown === false) coreMessages.push('생애최초 여부를 선택하지 않아 일반(비우대) 기준으로 정리했어요. 생애최초에 해당하면 LTV·취득세 우대가 달라질 수 있어요.');
 
   const checklist = [
     { text: '등기부등본 최신본 확인 (계약 직전 재확인)', stars: 3 },
     {
-      text: fc.dsr ? `대출 사전심사 — ${fc.dsr}` : '대출 사전심사 — 스트레스 DSR 반영 한도 확인 (도구 › 대출 계산)',
+      text: fc.dsr ? `대출 사전심사: ${fc.dsr}` : '대출 사전심사: 스트레스 DSR 반영 한도 확인 (도구 › 대출 계산)',
       stars: 3,
     },
     // KKKKK-3: fc.ltv 없으면 항목 생략 — fallback 문구가 아래 '규제지역 확인'과 중복되던 것(라이브 발각) 제거.
@@ -627,22 +627,22 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
       const rows = policy.ltv.filter(r => r && r.condition && r.ltv != null && r.condition.includes(_kw));
       if (!rows.length) return [];
       return [{
-        text: `LTV 한도 확인 — ${rows.map(r => `${r.condition} ${r.ltv}%`).join(' · ')}`,
+        text: `LTV 한도 확인: ${rows.map(r => `${r.condition} ${r.ltv}%`).join(', ')}`,
         stars: 3,
       }];
     })()),
     { text: '규제지역 여부·전입 의무 확인 (10.15 규제 요약 참고)', stars: 2 },
     { text: '관리비·주차 실태 임장 확인 (임장노트 탭 활용)', stars: 2 },
-    { text: '특약 초안 준비 (특약 초안 화면 — 표준 템플릿 제공)', stars: 1 },
+    { text: '특약 초안 준비 (특약 초안 화면, 표준 템플릿 제공)', stars: 1 },
   ];
 
   const tips = [
-    '실거래는 신고 후 해제되는 경우가 있어요 — 단지 상세의 거래 해제 안내를 참고하세요.',
-    '같은 단지도 평형·층에 따라 가격 차가 커요 — 실거래가 탭의 평형 필터로 확인하세요.',
+    '실거래는 신고 후 해제되는 경우가 있어요. 단지 상세의 거래 해제 안내를 참고하세요.',
+    '같은 단지도 평형·층에 따라 가격 차가 커요. 실거래가 탭의 평형 필터로 확인하세요.',
     '정책자금(디딤돌·신생아 특례) 해당 여부는 사이드바 정책자금 자격에서 확인하세요.',
   ];
-  if (fc.tx) tips.push(`본 정리의 실거래 기준: ${fc.tx} (국토교통부 신고 자료 · 신고 지연분은 이후 반영돼요).`);
-  if (fc.agePrice) tips.push(`${fc.agePrice} — 과거 실거래 분포이며 특정 연차 단지 권유가 아니에요.`);
+  if (fc.tx) tips.push(`본 정리의 실거래 기준: ${fc.tx} (국토교통부 신고 자료, 신고 지연분은 이후 반영돼요).`);
+  if (fc.agePrice) tips.push(`${fc.agePrice}. 과거 실거래 분포이며 특정 연차 단지 권유가 아니에요.`);
 
   // REPORT-DEPTH-2026-08-31 (Sprint PPPPPPP, 운영자: "예전에 받았던 컨설팅 보고서처럼
   //   요약 총평·매매 시 주의할 점·뭘 봐야 하는지·어떤 집을 피해야 하는지가 들어가면 좋겠다"):
@@ -657,31 +657,31 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
       title: '계약 전에 반드시 끝내야 할 것',
       items: [
         '가계약 전에 대출 한도·가능 여부를 은행에서 확정하세요. 확정 전이라면 "대출 미승인 시 계약금 반환" 특약을 계약서에 넣는 것이 안전해요.',
-        '등기부등본은 계약 직전에 다시 떼세요 — 근저당·가압류는 하루 사이에도 바뀝니다.',
+        '등기부등본은 계약 직전에 다시 떼세요. 근저당·가압류는 하루 사이에도 바뀝니다.',
         '전입 의무·실거주 의무가 붙는 지역인지 확인하세요(규제지역·토지거래허가구역).',
       ],
     },
     {
       title: '같은 단지라도 매물마다 값이 다릅니다',
       items: [
-        '같은 평형이어도 동·층·향에 따라 실거래가가 갈립니다. 계약 전 **비슷한 동·층의 최근 실거래**를 찾아 비교하세요(단지 상세 → 실거래가 탭의 평형·층 필터).',
-        '저층·최상층·1층·도로변 동은 같은 평형 대비 낮은 가격에 거래되는 경우가 많습니다 — 그 차이를 알고 값을 조율하세요.',
+        '같은 평형이어도 동·층·향에 따라 실거래가가 갈립니다. 계약 전 **비슷한 동·층의 최근 실거래**를 찾아 비교하세요(단지 상세의 실거래가 탭에 있는 평형·층 필터).',
+        '저층·최상층·1층·도로변 동은 같은 평형 대비 낮은 가격에 거래되는 경우가 많습니다. 그 차이를 알고 값을 조율하세요.',
         '매도자가 왜 파는지 물어보세요. 사정을 알면 가격 조율의 근거가 생깁니다.',
       ],
     },
     {
-      title: '숫자로 확인할 것 — 이 보고서가 재 준 것들',
+      title: '숫자로 확인할 것(이 보고서가 재 준 것들)',
       items: [
-        '**회전율(세대수 대비 거래건수)** — 팔고 나갈 수 있는가를 보는 지표예요. 거래 건수만 보면 대단지가 무조건 유리해 보입니다.',
-        '**표본 수** — 평균가 옆의 거래 건수를 보세요. 1~2건 평균은 시세라기보다 개별 사례에 가깝습니다.',
-        '**지하철역까지 실제 거리** — 관리사무소 신고 도보시간은 실측과 자주 어긋납니다. 이 보고서는 잰 직선거리를 씁니다.',
+        '**회전율(세대수 대비 거래건수)**: 팔고 나갈 수 있는가를 보는 지표예요. 거래 건수만 보면 대단지가 무조건 유리해 보입니다.',
+        '**표본 수**: 평균가 옆의 거래 건수를 보세요. 1~2건 평균은 시세라기보다 개별 사례에 가깝습니다.',
+        '**지하철역까지 실제 거리**: 관리사무소 신고 도보시간은 실측과 자주 어긋납니다. 이 보고서는 잰 직선거리를 씁니다.',
       ],
     },
     {
       title: '피하기보다 확인할 것',
       items: [
         '거래가 거의 없는 단지는 시세를 확인하기 어렵고, 되팔 때도 시간이 걸립니다.',
-        '세대수가 아주 적은 단지는 관리비 부담이 상대적으로 큰 경우가 있어요 — 관리비 고지서를 직접 확인하세요.',
+        '세대수가 아주 적은 단지는 관리비 부담이 상대적으로 큰 경우가 있어요. 관리비 고지서를 직접 확인하세요.',
         '주차 대수가 세대당 1대 미만이면 실제 주차 상황을 저녁 시간대에 직접 보고 판단하세요.',
         '⚠ 위 항목은 일반적인 확인 사항이며 특정 단지에 대한 매수·매도 권유가 아니에요.',
       ],

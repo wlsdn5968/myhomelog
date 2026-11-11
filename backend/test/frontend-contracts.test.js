@@ -315,7 +315,7 @@ test('결정론 조건 카드 — desc 가 실제로 계산된 값을 담고 런
   const jeonse2 = r2.conditions.find(c => c.label === '전세가율');
   assert.match(price2.desc, /최근 6개월 상위 20%/);
   assert.equal(vol2.desc, '거래량 감소');
-  assert.match(jeonse2.desc, /30% \(최근 6개월 전세 실거래 기준\) — 역전세 위험 확인 필요/);
+  assert.match(jeonse2.desc, /30% \(최근 6개월 전세 실거래 기준\), 역전세 위험 확인 필요/);
 
   // status 매핑은 이 계획에서 건드리지 않았다 — green/yellow/red 값 그대로인지 확인
   assert.equal(price1.status, 'green');
@@ -385,7 +385,7 @@ test('매칭 0건 안내가 단지 건수로 세어지지 않는다 + 진행 문
     assert.equal(svc.includes(k), false,
       `propertyService 에 ${k} 가 생겼다 — LLM 을 쓴다면 진행 문구도 다시 판단할 것`);
   }
-  assert.ok(html.includes("searchStep('조건 매칭·점수 계산 중...', 3)"), '진행 문구가 사실과 다르다');
+  assert.ok(html.includes("searchStep('조건 매칭, 점수 계산 중...', 3)"), '진행 문구가 사실과 다르다');
   assert.equal(html.includes("searchStep('AI 분석·점수 계산 중...', 3)"), false,
     '추천 진행 문구에 AI 표현이 되돌아왔다');
 });
@@ -1448,7 +1448,7 @@ test('상세 첫 탭 — 실거래 요약이 기본, 점수 없으면 큰 CTA �
   assert.match(html, /\$\{_heroSection\}\s*\$\{_scoreSection\}/, '히어로가 첫 자리가 아니다');
   // ② 점수 없음 = 큰 CTA 카드 금지(시안 명세) — score-pending 은 저장소에서 사라져야 한다
   assert.equal(/class="score-pending"/.test(html), false, '"분석 대기" 전면 CTA 카드가 되살아났다 — 검색 진입자의 첫 화면이 다시 dead-end 가 된다');
-  assert.match(html, /class="t0-rep-link" onclick="cDM\(\);sv\('report'\)">자금·가족·희망지역을 입력하면/, '보고서 유도 링크 한 줄이 없다');
+  assert.match(html, /class="t0-rep-link" onclick="cDM\(\);sv\('report'\)">자금, 가족, 희망지역을 입력하면/, '보고서 유도 링크 한 줄이 없다');
   // ③ 값이 있는 셀만 — 건수·최근 거래일·준공년도는 각각 값 가드 뒤에서만 push 된다
   assert.match(blk, /if \(_t0DealN > 0\) _t0Cells\.push\(_t0hc\('거래 건수'/, '건수 셀이 값 가드 없이 그려진다(0건이 값처럼 보인다)');
   assert.match(blk, /if \(p\.recentDealDate\) _t0Cells\.push\(_t0hc\('최근 거래일'/, '최근 거래일 셀 가드가 없다');

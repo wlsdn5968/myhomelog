@@ -38,13 +38,13 @@ function turnoverScore(deals, households, max) {
     const frac = Math.min(fracRatio, fracCount);
     const why = hhEff === hh
       ? `6개월 회전율 ${tr.toFixed(1)}% (${d}건 / ${hh}세대)`
-      : `6개월 회전율 ${tr.toFixed(1)}% (${d}건 / ${hh}세대 — 100세대 기준 환산)`;
+      : `6개월 회전율 ${tr.toFixed(1)}% (${d}건 / ${hh}세대, 100세대 기준 환산)`;
     return { score: Math.round(max * frac), turnover: tr, why };
   }
   // ⚠ 세대수를 모르면 회전율을 만들 수 없다. 중간값 부근만 주고 0 으로 떨어뜨리지 않는다
   //   ([[unknown-treated-as-value]]).
   const frac = d >= 20 ? 0.643 : d >= 8 ? 0.5 : 0.357;
-  return { score: Math.round(max * frac), turnover: null, why: `6개월 거래 ${d}건 (세대수 미확인 — 회전율 산출 불가)` };
+  return { score: Math.round(max * frac), turnover: null, why: `6개월 거래 ${d}건 (세대수 미확인, 회전율 산출 불가)` };
 }
 
 /**

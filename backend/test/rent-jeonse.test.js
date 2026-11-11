@@ -365,7 +365,7 @@ test('전세가율 표본 완전성 — 결측 달이 있으면 실제 개월 �
   // ⑥ red 분기의 "역전세 위험 확인 필요" 는 041 이 의도적으로 남긴 문구 — 표본 표기가 바뀌어도 유지.
   const rRed = calcBuySignal(50, { signal: 'neutral' }, 30, { total: 6, failed: 2 });
   const jeonseRed = rRed.conditions.find(c => c.label === '전세가율');
-  assert.match(jeonseRed.desc, /30% \(전세 실거래 4\/6개월 표본\) — 역전세 위험 확인 필요/,
+  assert.match(jeonseRed.desc, /30% \(전세 실거래 4\/6개월 표본\), 역전세 위험 확인 필요/,
     'red 분기의 역전세 위험 확인 필요 문구가 표본 표기와 함께 유지돼야 한다');
 });
 

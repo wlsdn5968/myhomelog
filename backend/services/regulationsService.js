@@ -41,7 +41,7 @@ const FALLBACK_BY_KEY = {
     },
     ltvTable: [
       { condition: '무주택 — 규제지역', ltv: 40, cap: [{ under: 15, max: 6 }, { under: 25, max: 4 }, { over: 25, max: 2 }] },
-      { condition: '생애최초 — 규제지역', ltv: 70, cap: [{ under: 15, max: 6 }, { under: 25, max: 4 }, { over: 25, max: 2 }], note: '6개월 이내 전입 의무 · 한도는 주택가격 차등(정액 6억 아님, 금융위 10.15 FAQ 2026-06-24 검증)' },
+      { condition: '생애최초 — 규제지역', ltv: 70, cap: [{ under: 15, max: 6 }, { under: 25, max: 4 }, { over: 25, max: 2 }], note: '6개월 이내 전입 의무, 한도는 주택가격 차등(정액 6억 아님, 금융위 10.15 FAQ 2026-06-24 검증)' },
       { condition: '무주택 — 비규제', ltv: 70, cap: null },
       { condition: '생애최초 — 비규제', ltv: 80, cap: null },
       { condition: '지방 생애최초', ltv: 80, cap: null },

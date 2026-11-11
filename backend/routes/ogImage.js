@@ -114,7 +114,7 @@ function buildRegionCard(label, facts) {
     eyebrow: '지역 실거래 · 공식 통계',
     title: label || '지역',
     lines: [tx, rest].filter(Boolean),
-    footer: '국토교통부 · 한국부동산원 · KOSIS 공식 통계 정리 — 매수 추천이 아닙니다',
+    footer: '국토교통부 · 한국부동산원 · KOSIS 공식 통계 정리. 매수 추천이 아닙니다',
   };
 }
 
@@ -177,7 +177,7 @@ function buildBriefingCard(day, snap) {
     eyebrow: '일일 부동산 데이터 브리핑',
     title: `${day.replace(/-/g, '.')}(${yo}) 브리핑`,
     lines,
-    footer: '국토교통부 실거래가 · 한국은행 ECOS · 공식 통계 — 매수·매도 추천이 아닙니다',
+    footer: '국토교통부 실거래가 · 한국은행 ECOS · 공식 통계. 매수·매도 추천이 아닙니다',
   };
 }
 
