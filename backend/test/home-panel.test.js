@@ -393,3 +393,16 @@ test('BRF-V2: 브리핑 강조색은 금색이 아니라 v2 주색이다(밝은 
   assert.ok(html.includes('  --brf-ac:#8DB3E2;'));
   assert.ok(!/--brf-ac(-tx)?:#(C98A00|FFC93C|8A5C00)/i.test(html), '브리핑에 금색이 남아 있다');
 });
+
+test('A11Y-192: 버튼이 아닌 조작 요소는 키보드로 누를 수 있고, 창 바깥 어두운 면은 초점 대상이 아니다', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const m = /const _A11Y_SEL = '([^']+)';/.exec(html);
+  assert.ok(m, '조작 요소 목록이 없다');
+  const sel = m[1].split(',');
+  for (const s of ['.chip[onclick]', '.sh[onclick]', '.bk-item[onclick]', '#syncBanner[onclick]']) assert.ok(sel.includes(s), s);
+  for (const bad of ['drawer-bg', 'tsheet-dim', 'nxs-dim', 'rgbg', 'CARDOV', 'dmbg', 'DSM', 'ERM']) assert.ok(!m[1].includes(bad), `${bad} 는 누르면 닫히는 배경이라 초점을 받으면 안 된다`);
+  const fn = extractFn(html, '_a11yEnhance');
+  assert.ok(fn.includes("el.setAttribute('role', 'button')") && fn.includes("el.setAttribute('tabindex', '0')"));
+  // 버튼, 링크, 입력칸은 브라우저가 처리하므로 표식이 있는 요소만 넘긴다(두 번 눌리지 않게).
+  assert.ok(html.includes("if(!t || !t.matches || !t.hasAttribute('data-a11y')) return;"));
+});

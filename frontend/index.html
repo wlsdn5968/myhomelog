@@ -12836,6 +12836,41 @@ document.addEventListener('DOMContentLoaded', () => {
   } catch (_) {}
 });
 // 사업자 정보 펼침(패널·사이드바·화면별 고지 줄 공용) — 버튼의 aria-controls 가 가리키는 줄을 열고 닫는다
+// A11Y-192 (plans/192 3단계): 버튼이 아닌데 누를 수 있는 요소(선택 칩, 접는 섹션 머리, 도움말 표시, 목록 항목)를 키보드로도 누를 수 있게 한다.
+//   2026-11-11 집계: onclick 이 달린 div, span, label 123개 중 role 과 tabindex 가 있는 것은 3개였다(선택 칩 88개 포함).
+//   모양은 바꾸지 않는다. role=button 과 tabindex=0 을 붙이고 Enter, Space 를 click 으로 넘긴다.
+//   창 바깥 어두운 면(.drawer-bg, .tsheet-dim, .nxs-dim, .rgbg, #CARDOV 등)과 전파만 막는 줄은 초점 대상이 아니라서 목록에 넣지 않는다.
+const _A11Y_SEL = '.chip[onclick],.sh[onclick],.lil[onclick],.wi[onclick],label.lbl[onclick],.pi[onclick],.bk-item[onclick],.fn-check[onclick],.fn-star[onclick],#syncBanner[onclick]';
+function _a11yEnhance(root){
+  try{
+    const list = (root || document).querySelectorAll(_A11Y_SEL);
+    for(const el of list){
+      if(el.hasAttribute('data-a11y')) continue;
+      el.setAttribute('data-a11y', '1');
+      if(!el.hasAttribute('role')) el.setAttribute('role', 'button');
+      if(!el.hasAttribute('tabindex')) el.setAttribute('tabindex', '0');
+    }
+  }catch(_){}
+}
+(function(){
+  try{
+    let queued = false;
+    const run = () => { queued = false; _a11yEnhance(document); };
+    const schedule = () => { if(queued) return; queued = true; (window.requestAnimationFrame || setTimeout)(run, 50); };
+    const start = () => {
+      _a11yEnhance(document);
+      try{ new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true }); }catch(_){}
+    };
+    if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
+    document.addEventListener('keydown', (e) => {
+      if(e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
+      const t = e.target;
+      if(!t || !t.matches || !t.hasAttribute('data-a11y')) return; // 버튼, 링크, 입력칸은 브라우저가 처리한다
+      e.preventDefault();
+      t.click();
+    });
+  }catch(_){}
+})();
 // HOME-192: 지역 칩 한 줄. 넘치는 칩은 '더보기'로 펼친다. 고른 칩이 가려지는 폭이면 펼친 채로 둔다. 한 줄에 다 들어가면 버튼을 숨긴다.
 function _hpChipsFit(){
   try{
