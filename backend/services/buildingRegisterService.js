@@ -63,7 +63,42 @@ async function resolveBjdong(sigungu, umdNm, jibun) {
 }
 
 // 단지 지번 확보: 적재분(molit_transactions.jibun) 우선 → 없으면 MOLIT 라이브(최근 6개월 중 1건).
-async function resolveJibun(admin, lawdCd, umdNm, aptName) {
+// AUDIT2-BR-1111 (보안 점검 run-2, properties-building-register-six-sequential-molit-calls-per-miss):
+//   라이브 대체 경로는 (지역, 월) 전체 목록을 6번 받아 그 안에서 단지 이름을 찾는다. 이름과 상관없이 같은 응답이라
+//   이름만 바꿔 요청하면 요청마다 국토부 호출 6회가 나갔다(공개 GET, IP 당 분당 30회 -> 분당 180회. 매일 적재와 같은 인증키를 쓴다).
+//   1) (지역, 월) 응답을 인스턴스에서 6시간 기억한다. 필요한 세 값(이름, 동, 지번)만 남긴다. 최대 150칸.
+//   2) 공개 경로(opts.limited)는 실제 호출 수를 인스턴스당 1시간 120회로 묶는다. 넘으면 '못 찾음'으로 답한다(기존 열화 경로).
+//      예약 작업과 보고서 경로는 묶지 않는다(같은 기억을 써서 호출은 줄어든다).
+const BR_MONTH_TTL_MS = 6 * 60 * 60 * 1000;
+const BR_MONTH_MAX = 150;
+const BR_LIVE_PER_HOUR = 120;
+const _brMonth = new Map();
+const _brLive = { hour: 0, n: 0 };
+function _brLiveAllow(now = Date.now()) {
+  const h = Math.floor(now / 3600000);
+  if (_brLive.hour !== h) { _brLive.hour = h; _brLive.n = 0; }
+  if (_brLive.n >= BR_LIVE_PER_HOUR) return false;
+  _brLive.n += 1;
+  return true;
+}
+async function _brMonthRows(lawdCd, ym, key, limited) {
+  const ck = `${lawdCd}|${ym}`;
+  const hit = _brMonth.get(ck);
+  if (hit && Date.now() - hit.at < BR_MONTH_TTL_MS) return hit.rows;
+  if (limited && !_brLiveAllow()) return null; // 한도 초과: 이 달은 건너뛴다
+  const r = await dgk.get(MOLIT_DETAIL_URL, {
+    params: { serviceKey: key, LAWD_CD: lawdCd, DEAL_YMD: ym, numOfRows: 1000, pageNo: 1, _type: 'json' },
+    timeout: 7000, headers: { Accept: 'application/json' },
+  });
+  const rows = itemArray(r.data?.response?.body?.items?.item)
+    .map((it) => ({ a: (it.aptNm || '').trim(), u: (it.umdNm || '').trim(), j: String(it.jibun || '').trim(), s: (it.sggNm || '').trim() }))
+    .filter((x) => x.a && x.j);
+  _brMonth.set(ck, { at: Date.now(), rows });
+  if (_brMonth.size > BR_MONTH_MAX) _brMonth.delete(_brMonth.keys().next().value);
+  return rows;
+}
+
+async function resolveJibun(admin, lawdCd, umdNm, aptName, opts) {
   try {
     let q = admin.from('molit_transactions').select('jibun, sigungu, umd_nm')
       .eq('lawd_cd', lawdCd).eq('apt_name', aptName).not('jibun', 'is', null).limit(1);
@@ -87,13 +122,10 @@ async function resolveJibun(admin, lawdCd, umdNm, aptName) {
     const d = new Date(now.getFullYear(), now.getMonth() - back, 1);
     const ym = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}`;
     try {
-      const r = await dgk.get(MOLIT_DETAIL_URL, {
-        params: { serviceKey: key, LAWD_CD: lawdCd, DEAL_YMD: ym, numOfRows: 1000, pageNo: 1, _type: 'json' },
-        timeout: 7000, headers: { Accept: 'application/json' },
-      });
-      const arr = itemArray(r.data?.response?.body?.items?.item);
-      const hit = arr.find((it) => (it.aptNm || '').trim() === aptName && (!umdNm || (it.umdNm || '').trim() === umdNm) && String(it.jibun || '').trim());
-      if (hit) return { jibun: String(hit.jibun).trim(), sigungu: (hit.sggNm || '').trim(), umdNm: (hit.umdNm || '').trim() };
+      const rows = await _brMonthRows(lawdCd, ym, key, !!(opts && opts.limited));
+      if (!rows) continue;
+      const hit = rows.find((x) => x.a === aptName && (!umdNm || x.u === umdNm));
+      if (hit) return { jibun: hit.j, sigungu: hit.s, umdNm: hit.u };
     } catch (_) { /* try previous month */ }
   }
   return null;
@@ -124,7 +156,7 @@ async function getBuildingTitle(args) {
   return t;
 }
 
-async function getBuildingTitleUncached({ lawdCd, sigungu, umdNm, aptName, aptKey }) {
+async function getBuildingTitleUncached({ lawdCd, sigungu, umdNm, aptName, aptKey, limited }) {
   const admin = getSupabaseAdmin();
   if (!admin || !lawdCd || !aptName) return null;
   // BR-MARKER-FIX-2026-07-12: 캐시키를 lawdCd+aptName 기준으로 통일 (지도 마커 경로는 p.sigungu/umd 부재 →
@@ -137,7 +169,7 @@ async function getBuildingTitleUncached({ lawdCd, sigungu, umdNm, aptName, aptKe
   } catch (_) { /* no cache */ }
 
   // MOLIT 원본에서 지번+시군구+동 자체 확보 → 호출자가 sigungu/umd 를 안 넘겨도 동작(마커 경로 버그 수정).
-  const ji = await resolveJibun(admin, lawdCd, umdNm, aptName);
+  const ji = await resolveJibun(admin, lawdCd, umdNm, aptName, { limited: !!limited });
   if (!ji || !ji.jibun) return null;
   const rSgg = ji.sigungu || sigungu || '';
   const rUmd = ji.umdNm || umdNm || '';
@@ -302,4 +334,4 @@ async function fetchRecapOnly({ sigunguCd, bjdongCd, bun, ji, onFail }) {
   }
 }
 
-module.exports = { getBuildingTitle, parseJibun, resolveBjdong, resolveJibun, fetchRecapOnly };
+module.exports = { getBuildingTitle, parseJibun, resolveBjdong, resolveJibun, fetchRecapOnly, _brMonth, _brLive, BR_LIVE_PER_HOUR };

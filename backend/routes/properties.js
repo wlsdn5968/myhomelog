@@ -63,6 +63,7 @@ router.get('/building-register', async (req, res) => {
       sigungu: sigungu ? String(sigungu) : '',
       umdNm: umd ? String(umd) : '',
       aptName: String(apt).slice(0, 80),
+      limited: true, // AUDIT2-BR-1111: 공개 경로는 국토부 라이브 호출 수를 묶는다
     });
     res.json({ title: title || null });
   } catch (e) {
