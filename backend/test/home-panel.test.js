@@ -386,3 +386,10 @@ test('DM-192: 단지 이름은 창 머리에 한 번만 보이고, 못 찾은 �
   assert.ok(html.includes("_dmEmpty('notfound'); return; }"));
   assert.ok(html.includes("if(currentDetail && currentDetail.aptName===apt) _dmEmpty('failed');"));
 });
+
+test('BRF-V2: 브리핑 강조색은 금색이 아니라 v2 주색이다(밝은 테마 173A63, 다크 8DB3E2)', () => {
+  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  assert.ok(html.includes('  --brf-ac:#173A63;'));
+  assert.ok(html.includes('  --brf-ac:#8DB3E2;'));
+  assert.ok(!/--brf-ac(-tx)?:#(C98A00|FFC93C|8A5C00)/i.test(html), '브리핑에 금색이 남아 있다');
+});

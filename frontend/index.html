@@ -3252,14 +3252,14 @@ html[data-theme="dark"] input[type=date].swp-inp{color-scheme:dark}
    전역 토큰(--t1/--acc 등) 오염 금지 — 이 뷰 밖 화면은 무변경. */
 #view-news{
   --brf-panel:#FFFFFF; --brf-raise:#EFEFEB; --brf-line:#E2E1DC;
-  --brf-tx:#15191F; --brf-tx2:#4A515C; --brf-tx3:#69707B; --brf-ac-tx:#8A5C00;  /* 골드를 글자로 쓸 때 — #C98A00 은 흰 배경 2.95:1 (AA 미달) */ --brf-ink:#0B1524;  /* 골드 '배경' 위에 얹는 글자 — 라이트 6.21:1 */
-  --brf-ac:#C98A00;
+  --brf-tx:#15191F; --brf-tx2:#4A515C; --brf-tx3:#69707B; --brf-ac-tx:#173A63;  /* BRF-V2-2026-11-11 (plans/192 2단계): 브리핑 강조색을 금색에서 v2 주색으로. 흰 바탕 위 11.53:1 */ --brf-ink:#FFFFFF;  /* 주색 배경 위 글자 11.53:1 */
+  --brf-ac:#173A63;
   --brf-shadow:0 1px 2px rgba(11,21,36,.06),0 10px 28px rgba(11,21,36,.07);
 }
 html[data-theme="dark"] #view-news{
   --brf-panel:#151E2B; --brf-raise:#1C2736; --brf-line:#263345;
-  --brf-tx:#E8ECF1; --brf-tx2:#B3BDCA; --brf-tx3:#8C97A6; --brf-ac-tx:#FFC93C;  /* 다크는 밝은 골드가 어두운 배경에서 그대로 통과 */ --brf-ink:#0B1524;  /* 다크 골드(#FFC93C) 위에도 잉크 — 12.01:1 */
-  --brf-ac:#FFC93C;
+  --brf-tx:#E8ECF1; --brf-tx2:#B3BDCA; --brf-tx3:#8C97A6; --brf-ac-tx:#8DB3E2;  /* 다크의 v2 주색 */ --brf-ink:#0E1520;  /* 다크 주색 배경 위 글자 8.44:1 */
+  --brf-ac:#8DB3E2;
   --brf-shadow:0 1px 0 rgba(255,255,255,.03),0 12px 32px rgba(0,0,0,.35);
 }
 @keyframes brfTape{from{transform:translateX(0)}to{transform:translateX(-50%)}}
@@ -3317,7 +3317,7 @@ html[data-theme="dark"] #view-news{
       <!-- MASCOT-HIDDEN-2026-09-05 (감사 E·J, 운영자 승인): "(캐릭터 준비 중)" 이라는 미완성 신호를 사용자에게 보이지 않는다.
            캐릭터 원화가 도착하면 아래 display:none 을 flex 로 되돌리기만 하면 된다(마크업·brfMascotMsg 갱신 로직은 그대로). -->
       <div style="margin-top:12px;display:none;gap:12px;align-items:flex-start;padding:12px 14px;border:1px dashed var(--brf-line);border-radius:var(--radius-md)">
-        <div style="flex:0 0 38px;height:38px;border-radius:var(--radius-md);background:var(--brf-ac);display:grid;place-items:center;color:#0B1524;font-size:16px;font-weight:800">⌂</div>
+        <div style="flex:0 0 38px;height:38px;border-radius:var(--radius-md);background:var(--brf-ac);display:grid;place-items:center;color:var(--brf-ink);font-size:16px;font-weight:800">⌂</div>
         <div>
           <div style="font-size:12px;font-weight:700;color:var(--brf-tx)">집킴이 코너 <span style="color:var(--brf-tx3);font-weight:600">(캐릭터 준비 중)</span></div>
           <div id="brfMascotMsg" style="margin-top:4px;font-size:12px;color:var(--brf-tx2);line-height:1.5">값이 없는 항목은 추정하지 않고 비워 둬요.</div>
