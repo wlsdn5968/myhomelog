@@ -372,24 +372,35 @@ app.use('/api/admin', dataLimiter, require('./routes/admin'));
 // 공유 딥링크 — 크롤러용 OG 메타 치환 (HTML 서빙)
 app.use('/share', shareLimiter, shareRouter);
 // BRIEFING-ARCHIVE-2026-08-19 (Sprint NNNNNNN-6): 날짜별 서버렌더 브리핑(SEO·공유 실체) — /share 와 같은 계열.
-app.use('/briefing', require('./routes/briefing'));
+// AUDIT3-SSR-1112 (보안 점검 run-3, ssr-public-routes-no-limiter-cache-bust): 서버 렌더 경로에는 요청 제한이 없었다.
+//   쿼리를 바꿔 CDN 저장분을 피하면 한 곳에서 함수와 DB 를 계속 부를 수 있었다. Redis 를 쓰지 않는 인스턴스 메모리 제한을 건다
+//   (IP 당 분당 120회. 2026-11-11 운영 로그에서 가장 몰린 수집기가 1초에 8건이었고 분당으로는 이 값에 한참 못 미친다).
+//   CDN 이 답한 요청은 함수까지 오지 않으므로 세지 않는다.
+const ssrMemLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: '요청이 너무 많아요. 잠시 후 다시 시도해주세요.',
+});
+app.use('/briefing', ssrMemLimiter, require('./routes/briefing'));
 // REGION-PAGE-2026-08-29 (Sprint NNNNNNN-31): 서버렌더 지역 페이지 118개 — /briefing 과 같은 계열.
 //   실측 배경: sitemap 이 16개 URL 뿐이었다(단지·지역 페이지 0개). SEO 유입과 SNS 링크 도착지를 동시에 만든다.
 //   ⚠ vercel.json 의 routes 에 `/region(.*)` 를 넣지 않으면 정적 catch-all 로 빠져 index.html 이 나간다.
-app.use('/region', require('./routes/regionPage'));
+app.use('/region', ssrMemLimiter, require('./routes/regionPage'));
 // APT-PAGE-2026-08-29 (Sprint NNNNNNN-32): 단지별 서버렌더 페이지 — 한국 검색의 주력은 "단지명 + 실거래가" 다.
 //   ⚠ vercel.json 의 routes 에 `/apt(.*)` 를 넣지 않으면 정적 catch-all 로 빠져 index.html 이 나간다.
-app.use('/apt', require('./routes/aptPage'));
+app.use('/apt', ssrMemLimiter, require('./routes/aptPage'));
 // DATA-SOURCES-2026-10-19 (plans/167 §1-3): 데이터 출처·갱신 주기 한 페이지. vercel.json 에 `/data-sources` 라우트(404 규칙 앞) 필요.
-app.use('/data-sources', require('./routes/dataSources'));
+app.use('/data-sources', ssrMemLimiter, require('./routes/dataSources'));
 // OG-IMAGE-DYNAMIC-2026-09-02 (Sprint RRRRRRR): 단지별 링크 미리보기 이미지.
 //   `/api/(.*)` 가 이미 이 함수로 라우팅되므로 vercel.json 변경은 필요 없다(실측 확인).
 //   satori·resvg 는 렌더 시점에만 지연 로드된다 — 다른 요청의 콜드스타트에 얹히지 않는다.
 app.use('/api/og', ogLimiter, require('./routes/ogImage'));
 // SITEMAP-DYNAMIC-2026-08-19 (Sprint NNNNNNN-7B): /sitemap.xml 동적 생성 — briefing 아카이브 반영(정적 파일 대체).
-app.use('/sitemap.xml', require('./routes/sitemap'));
+app.use('/sitemap.xml', ssrMemLimiter, require('./routes/sitemap'));
 // SITEMAP-INDEX-SPLIT-2026-09-16 (Plan 087): 유형별 sitemap(apt/region/briefing/static) — 위 인덱스가 가리킨다.
-app.use('/sitemaps', require('./routes/sitemaps'));
+app.use('/sitemaps', ssrMemLimiter, require('./routes/sitemaps'));
 
 // STAB-3 (2026-05-03): /api/admin/kapt-diag endpoint 제거
 //   사유: KAPT API 키 진단용 임시 endpoint. 활용신청 확인 후 역할 종료.

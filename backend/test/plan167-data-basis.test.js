@@ -74,6 +74,6 @@ test('/data-sources 배선: vercel.json 라우트(404 규칙 앞) · server.js �
   const last = v.routes.length - 1;
   assert.ok(idx > -1, 'vercel.json 에 /data-sources 라우트 없음');
   assert.ok(idx < last && v.routes[last].src === '/(.*)' && v.routes[last].status === 404, '404 규칙보다 앞에 있어야 한다');
-  assert.match(read('../server.js'), /app\.use\('\/data-sources', require\('\.\/routes\/dataSources'\)\);/);
+  assert.match(read('../server.js'), /app\.use\('\/data-sources', ssrMemLimiter, require\('\.\/routes\/dataSources'\)\);/); // AUDIT3-SSR-1112: 요청 제한 추가
   assert.match(read('../routes/sitemap.js'), /\{ loc: '\/data-sources', lastmod: '2026-10-19', changefreq: 'monthly', priority: '0\.4' \}/);
 });

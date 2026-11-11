@@ -328,3 +328,28 @@ test('run-3: 피드백과 오류 신고는 보내는 쪽마다 하루 30건으�
   }
   assert.equal(passed, 30); assert.equal(blocked, 3);
 });
+
+test('run-3: 서버 렌더 경로 여섯 곳에 메모리 요청 제한이 걸려 있고, 실제로 분당 한도를 넘으면 429 다', async () => {
+  const src = read('../server.js');
+  for (const p of ['/briefing', '/region', '/apt', '/data-sources', '/sitemap.xml', '/sitemaps']) {
+    assert.ok(src.includes(`app.use('${p}', ssrMemLimiter, require(`), `${p} 에 제한이 없다`);
+  }
+  assert.match(src, /const ssrMemLimiter = rateLimit\(\{\s+windowMs: 60 \* 1000,\s+limit: 120,/);
+  // 같은 설정의 제한기가 한도를 넘는 요청을 막는지 작은 앱으로 확인(한도만 3 으로 줄여서)
+  const express = require('express'); const rateLimit = require('express-rate-limit'); const http = require('node:http');
+  const app = express();
+  app.use('/apt', rateLimit({ windowMs: 60 * 1000, limit: 3, standardHeaders: true, legacyHeaders: false, message: 'x' }), (req, res) => res.send('ok'));
+  const server = app.listen(0, '127.0.0.1'); await new Promise((r) => server.once('listening', r));
+  const get = () => new Promise((resolve, reject) => { http.get({ host: '127.0.0.1', port: server.address().port, path: '/apt/1' }, (rs) => { rs.resume(); rs.on('end', () => resolve(rs.statusCode)); }).on('error', reject); });
+  try {
+    const codes = []; for (let i = 0; i < 5; i++) codes.push(await get());
+    assert.deepEqual(codes, [200, 200, 200, 429, 429]);
+  } finally { await new Promise((r) => server.close(r)); }
+});
+
+test('run-3: 알림 구독 등록은 IP 하나가 하루 20번까지', () => {
+  const src = read('../routes/push.js');
+  assert.ok(src.includes('const PUSH_SUB_IP_DAILY = 20;'));
+  assert.ok(src.indexOf('dl:pushsub:') < src.indexOf('const sub = req.body?.subscription;'), '구독 내용을 읽기 전에 센다');
+  assert.ok(src.includes('if (used > PUSH_SUB_IP_DAILY) return res.status(429)'));
+});

@@ -61,11 +61,21 @@ router.get('/key', (_req, res) => {
 });
 
 const PUSH_SUB_CAP = 5000;
+const PUSH_SUB_IP_DAILY = 20;
 router.post('/subscribe', async (req, res) => {
   try {
     if (!VAPID_PUBLIC_KEY) return res.status(503).json({ error: '푸시 알림이 아직 활성화되지 않았어요.' });
     const admin = dbClient();
     if (!admin) return res.status(503).json({ error: '서버 설정 미완료' });
+
+    // AUDIT3-PUSH-1112 (보안 점검 run-3, push-subscribe-cap-exhaustion-unpruned-fake-subs): 구독은 전체 5,000건 상한뿐이라
+    //   형식만 맞는 가짜 구독으로 상한을 채우면 새 구독이 막혔다. IP 하나가 하루 20번까지만 구독을 등록한다(정상은 기기당 한두 번).
+    try {
+      const { incrementUsage, getClientIp, todayKey, secondsUntilMidnight } = require('../middleware/dailyLimit');
+      const ip = require('../utils/ipKey').normalizeIpKey(getClientIp(req));
+      const { used } = await incrementUsage(`dl:pushsub:${todayKey()}:${ip}`, secondsUntilMidnight());
+      if (used > PUSH_SUB_IP_DAILY) return res.status(429).json({ error: '오늘은 알림 등록을 더 할 수 없어요. 내일 다시 시도해 주세요.' });
+    } catch (_) { /* 세지 못하면 막지 않는다 */ }
 
     const sub = req.body?.subscription;
     const endpoint = String(sub?.endpoint || '');
