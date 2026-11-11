@@ -35,3 +35,10 @@
 - 11-11 17:00~17:45 UTC 적재 뒤: rows_inserted 가 rows_fetched 보다 훨씬 작은지, DB 가 다시 늘지 않는지.
 - 11-16 20:00 UTC apt-master-sync: 11-09 회차는 250초 동안 0건(이전 3주는 약 55초에 정상). 외부 API 장애로 보이나 미확인.
 - 차단 route 가 운영에서 403 을 주는지, 검색엔진 UA 는 200 인지.
+
+## 같은 날 추가 (크롬으로 Vercel 사용량 확인 뒤)
+- Vercel 사용량 화면(10-12~11-11): 팀 CPU 9시간 6분(한도 4시간, 12-08 까지 임시 12시간). 내집로그 3시간 16분, portai 3시간 19분, salon 1시간 30분, wellness-platform 1시간.
+- 전송량 팀 67.22GB(한도 100GB) 중 내집로그 58.68GB. 방화벽 트래픽 화면 하루 약 5천 건: SentryUptimeBot 약 1,500, BacklinkDiscovery 779, Yeti 550, facebookexternalhit 519, Googlebot 347. 요청 경로 1위는 / (2.1천).
+- 조치(17131f8): SentryUptimeBot 의 / 요청은 frontend/up.txt(3바이트, 200), BacklinkDiscovery 는 차단. 운영 확인 완료.
+- 보안 점검 run-2(9754f53): 채팅 검사 지연, IP 예산 경쟁, 단지 비교 관문, 허용 목록 상속 키 수정. 기록 C:/Users/Woo/security-audit-skill/myhomelog/run-2/REPORT.md.
+- 디자인: 기획 문서 plans/192. 승인 전 시안과 구현 없음.
