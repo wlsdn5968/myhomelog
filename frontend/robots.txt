@@ -45,5 +45,9 @@ Disallow: /
 User-agent: Bytespider
 Disallow: /
 
+# ROBOTS-BACKLINK-2026-11-11: 링크 수집기. Vercel 방화벽 화면에서 하루 779건(전체 약 5천 건 중).
+User-agent: BacklinkDiscovery
+Disallow: /
+
 # Sitemap
 Sitemap: https://myhomelog.vercel.app/sitemap.xml

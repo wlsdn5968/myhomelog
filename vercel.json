@@ -9,7 +9,8 @@
     }
   },
   "routes": [
-    { "src": "/(?!robots\\.txt$).*", "has": [{ "type": "header", "key": "user-agent", "value": ".*(Bytespider|ExaSearchBot|exauser\\.crawler|GPTBot|ClaudeBot|Claude-Web|anthropic-ai|CCBot).*" }], "mitigate": { "action": "deny" } },
+    { "src": "/(?!robots\\.txt$).*", "has": [{ "type": "header", "key": "user-agent", "value": ".*(Bytespider|BacklinkDiscovery|ExaSearchBot|exauser\\.crawler|GPTBot|ClaudeBot|Claude-Web|anthropic-ai|CCBot).*" }], "mitigate": { "action": "deny" } },
+    { "src": "/(index\\.html)?", "has": [{ "type": "header", "key": "user-agent", "value": ".*SentryUptimeBot.*" }], "dest": "/frontend/up.txt", "headers": { "Content-Type": "text/plain", "Cache-Control": "public, max-age=0, must-revalidate", "X-Content-Type-Options": "nosniff" } },
     { "src": "/api/(.*)", "dest": "/api/index.js" },
     { "src": "/share(.*)", "dest": "/api/index.js" },
     { "src": "/briefing(.*)", "dest": "/api/index.js" },

@@ -118,3 +118,17 @@ test('알림 공개 키 응답은 키가 있을 때만 CDN 에 저장된다', ()
   const src = read('backend/routes/push.js');
   assert.match(src, /router\.get\('\/key'[\s\S]{0,500}res\.set\('Cache-Control', VAPID_PUBLIC_KEY \? 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400' : 'no-store'\);/);
 });
+
+test('Sentry 가동 감시 봇은 첫 화면 대신 2바이트 응답을 받는다(감시는 200 유지, 전송량만 줄인다)', () => {
+  // 2026-11-11 Vercel 방화벽 화면: SentryUptimeBot 하루 약 1,500건이 첫 화면(1.28MB)을 받아 갔다. 팀 전송량 67GB 중 내집로그 58.7GB.
+  const vercel = JSON.parse(read('vercel.json'));
+  const r = vercel.routes[1];
+  assert.equal(r.dest, '/frontend/up.txt');
+  assert.equal(r.status, undefined, '상태 코드를 바꾸면 감시가 장애로 본다');
+  const ua = new RegExp(`^${r.has[0].value}$`);
+  const src = new RegExp(`^${r.src}$`);
+  assert.ok(ua.test('SentryUptimeBot/1.0 (+http://docs.sentry.io/product/alerts/uptime-monitoring/)'));
+  assert.ok(!ua.test('Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36'));
+  assert.ok(src.test('/') && src.test('/index.html') && !src.test('/api/health') && !src.test('/apt/1'));
+  assert.ok(fs.statSync(path.join(ROOT, 'frontend/up.txt')).size < 16);
+});
