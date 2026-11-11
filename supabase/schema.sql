@@ -483,6 +483,8 @@ CREATE UNIQUE INDEX uq_molit_apt_index ON public.molit_apt_index USING btree (ap
 CREATE UNIQUE INDEX uq_molit_dedup ON public.molit_transactions USING btree (dedup_key);
 -- AUTOVACUUM-2026-09-20 (Plan 106): 기본 임계(20% ≈ 94,510 죽은 튜플)에 못 미쳐 autovacuum 이 08-22 이후 0회였다 — 가시성 맵이 낡아 경신 집계가 콜드 9.3초(8초 제한 초과). 2% 로 낮춰 하루 한 번꼴로 돌게 한다.
 alter table public.molit_transactions set (autovacuum_vacuum_scale_factor = 0.02, autovacuum_analyze_scale_factor = 0.02);
+-- SKIP-SAME-2026-11-11 (migrations/20261111_molit_skip_same_update.sql): 값이 완전히 같은 갱신은 건너뛴다(매일 적재의 헛쓰기 차단).
+create trigger zz_skip_same before update on public.molit_transactions for each row execute function suppress_redundant_updates_trigger();
 
 -- ============ MATERIALIZED VIEWS ============
 -- DIM-BASED-MV-2026-09-27 (Plan 107b-2/D2, B1 — 리뷰어 적용): 옛 정의는 molit_transactions 만

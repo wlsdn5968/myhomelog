@@ -1399,19 +1399,22 @@ router.get('/facility', async (req, res) => {
     //   ⚠ nearbySchools/schoolDistrict/nearbyAcademies 는 상위 스코프 let 에 그대로 대입한다
     //     (응답 조립부를 건드리지 않는 것이 우선).
     const _schoolsBlock = async () => {
+    // AUDIT-CAPS-1111: 이 요청의 Kakao 호출(좌표·학교·학원)은 /api/geocode 와 같은 전역 일일 상한을 한 번 거친다.
+    //   상한에 닿으면 Kakao 를 부르지 않고 좌표 없음 경로로 간다(오류 응답 아님). 캐시 히트는 관문을 거치지 않는다.
+    const kakaoGate = require('./geocode').createKakaoGate();
     if (mode !== 'basic') try { // FACILITY-SPLIT (Sprint IIII): basic 은 Kakao/NEIS 콜 전부 스킵
       const coord = await resolveCoord({
         kaptCode: facility?.kaptCode,
         aptName, sigungu, umdNm,
         address: facility?.raw?.doroJuso || facility?.raw?.kaptAddr,
-      });
+      }, undefined, { kakaoGate });
       if (coord?.lat && coord?.lng) {
         // P0: 반경 1km 학교 fetch + 학원 fetch (병렬 P1·P2 와 함께)
         // Sprint OO+ (2026-05-19 verify): 각 promise .catch 추가 — 학원 실패가 학교 실패 캐스케이드 차단
         const [schools, district, academies] = await Promise.all([
-          resolveSchools({ kaptCode: facility?.kaptCode, aptName, sigungu, umdNm, lat: coord.lat, lng: coord.lng }).catch(e => { logger.debug({err:e.message},'학교 실패'); return []; }),
+          resolveSchools({ kaptCode: facility?.kaptCode, aptName, sigungu, umdNm, lat: coord.lat, lng: coord.lng }, { kakaoGate }).catch(e => { logger.debug({err:e.message},'학교 실패'); return []; }),
           resolveSchoolDistrict({ lat: coord.lat, lng: coord.lng, sigungu, umdNm }).catch(e => { logger.debug({err:e.message},'학구도 실패'); return null; }),
-          resolveAcademies({ kaptCode: facility?.kaptCode, aptName, sigungu, umdNm, lat: coord.lat, lng: coord.lng }).catch(e => { logger.debug({err:e.message},'학원 실패'); return null; }),
+          resolveAcademies({ kaptCode: facility?.kaptCode, aptName, sigungu, umdNm, lat: coord.lat, lng: coord.lng, kakaoGate }).catch(e => { logger.debug({err:e.message},'학원 실패'); return null; }),
         ]);
         // P1: 학교알리미 NEIS 풍부화 (학생수·학급수)
         const enriched = schools && schools.length

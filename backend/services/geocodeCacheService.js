@@ -436,7 +436,7 @@ async function molitJibunAddress({ aptName, sigungu, umdNm }) {
  * @param {Object} apt - { kaptCode?, aptName, sigungu?, umdNm?, address? }
  * @returns {Promise<{lat, lng}|null>}
  */
-async function resolveCoord(apt, _diag) {
+async function resolveCoord(apt, _diag, opts) {
   if (!apt || !apt.aptName) return null;
   const key = buildKey(apt);
 
@@ -461,6 +461,8 @@ async function resolveCoord(apt, _diag) {
     const jibunAddr = await molitJibunAddress(apt);
     if (jibunAddr) target = { ...apt, address: jibunAddr };
   }
+  // AUDIT-CAPS-1111: 공개 경로가 넘긴 관문(opts.kakaoGate)이 false 면 Kakao 를 부르지 않고 '좌표 없음'으로 끝낸다(음성 캐시도 남기지 않는다).
+  if (opts && opts.kakaoGate && !(await opts.kakaoGate())) { if (_diag) _diag.outcome = 'error'; return null; }
   const fromKakao = await kakaoGeocode(target, _diag);
   if (fromKakao) {
     // FREEZE-FIX-2026-08-09 (Plan 003): fire-and-forget UPSERT 는 서버리스 동결로 유실될 수 있어

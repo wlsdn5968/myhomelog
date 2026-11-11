@@ -226,7 +226,7 @@ function _normalizeSchoolsList(schools) {
   return out;
 }
 
-async function resolveSchools(apt) {
+async function resolveSchools(apt, opts) {
   if (!apt || !apt.aptName) return [];
   const key = buildKey(apt);
 
@@ -239,6 +239,9 @@ async function resolveSchools(apt) {
     logger.debug({ key }, 'resolveSchools: 단지 좌표 없음 — skip');
     return [];
   }
+
+  // AUDIT-CAPS-1111: 공개 경로의 관문(opts.kakaoGate)이 false 면 Kakao 를 부르지 않고 학교 없음([])으로 답한다(저장 안 함).
+  if (opts && opts.kakaoGate && !(await opts.kakaoGate())) return [];
 
   // 3) 카카오 검색 (kakaoSearchSchools 가 이미 base name 으로 저장)
   const schools = await kakaoSearchSchools(apt.lat, apt.lng);

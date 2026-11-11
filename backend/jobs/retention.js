@@ -277,6 +277,35 @@ async function runAttributionRetention(admin) {
   }
   return out;
 }
+
+// AUDIT-CAPS-1111 (보안 점검 anon-append-tables-unbounded-growth): 익명도 쓸 수 있는 추가 전용 표의 총량 상한.
+//   visit_attribution 은 위 runAttributionRetention 이 이미 180일 지난 행을 지운다(daily_visit 만 의도적으로 제외, Plan 184).
+//   ai_feedback(최대 한 행 약 1KB 안팎 문자열)·data_error_reports(detail 500자)는 정리가 없었다(탈퇴 사용자 행 삭제뿐).
+//   운영자가 읽어야 하는 신고·평가라 나이로 지우지 않고, 표별 총 행 수 상한을 넘는 분량만 오래된 것(id 작은 것)부터 지운다.
+//   정상 사용량으로는 닿지 않는 크기로 잡았다(무료 DB 500MB 대비 각 표 몇 MB 이내).
+const ANON_TABLE_ROW_CAPS = { ai_feedback: 10000, data_error_reports: 5000 };
+async function _trimTableToCap(admin, table, cap) {
+  const { count, error } = await admin.from(table).select('id', { count: 'exact', head: true });
+  if (error) throw error;
+  if (!count || count <= cap) return 0;
+  // 최신 cap 번째 행의 id 보다 작은 행이 초과분이다
+  const { data, error: e2 } = await admin.from(table).select('id').order('id', { ascending: false }).range(cap - 1, cap - 1);
+  if (e2) throw e2;
+  const edge = data && data[0] && data[0].id;
+  if (edge === undefined || edge === null) return 0;
+  const { count: del, error: e3 } = await admin.from(table).delete({ count: 'exact' }).lt('id', edge);
+  if (e3) throw e3;
+  return del ?? 0;
+}
+async function runAnonTableCaps(admin) {
+  const out = { aiFeedbackTrimmed: 0, dataErrorTrimmed: 0, error: null };
+  // 표마다 독립 try: 한 표 실패가 다른 표 정리를 막지 않는다
+  try { out.aiFeedbackTrimmed = await _trimTableToCap(admin, 'ai_feedback', ANON_TABLE_ROW_CAPS.ai_feedback); }
+  catch (e) { out.error = `ai_feedback: ${e.message}`; logger.warn({ err: e.message }, 'retention: ai_feedback 상한 정리 실패 (계속 진행)'); }
+  try { out.dataErrorTrimmed = await _trimTableToCap(admin, 'data_error_reports', ANON_TABLE_ROW_CAPS.data_error_reports); }
+  catch (e) { out.error = out.error ? `${out.error} | data_error_reports: ${e.message}` : `data_error_reports: ${e.message}`; logger.warn({ err: e.message }, 'retention: data_error_reports 상한 정리 실패 (계속 진행)'); }
+  return out;
+}
 async function run() {
   const started = Date.now();
   const admin = adminClient();
@@ -287,6 +316,7 @@ async function run() {
   const chatResult = await runChatRetention(admin);
   const ingestRunsResult = await runIngestRunsRetention(admin);
   const attributionResult = await runAttributionRetention(admin);
+  const anonCapResult = await runAnonTableCaps(admin); // AUDIT-CAPS-1111
 
   const summary = {
     durationMs: Date.now() - started,
@@ -299,13 +329,17 @@ async function run() {
     //   성과·실패가 health.crons['retention'] 에 90일간 한 번도 안 보였다. 평탄화 키를 함께 싣는다.
     okPruned: ingestRunsResult && ingestRunsResult.okPruned,
     staleRunningFixed: ingestRunsResult && ingestRunsResult.staleRunningFixed,
-    ...(ingestRunsResult && ingestRunsResult.error ? { error: ingestRunsResult.error } : {}),
+    // AUDIT-CAPS-1111: 익명 추가 전용 표 상한 정리 결과(평탄 키, cronStats NUM 등록)
+    aiFeedbackTrimmed: anonCapResult.aiFeedbackTrimmed,
+    dataErrorTrimmed: anonCapResult.dataErrorTrimmed,
+    ...(ingestRunsResult && ingestRunsResult.error ? { error: ingestRunsResult.error }
+      : (anonCapResult.error ? { error: anonCapResult.error } : {})),
   };
   logger.info(summary, 'retention job 완료');
   return summary;
 }
 
-module.exports = { run, hardDeleteUser, runAttributionRetention, runSoftDeleteExpiry, runSearchHistoryRetention, runChatRetention, runIngestRunsRetention };
+module.exports = { run, runAnonTableCaps, ANON_TABLE_ROW_CAPS, hardDeleteUser, runAttributionRetention, runSoftDeleteExpiry, runSearchHistoryRetention, runChatRetention, runIngestRunsRetention };
 
 // CLI 실행 지원
 if (require.main === module) {

@@ -582,6 +582,11 @@ app.get('/api/rates', async (req, res) => {
   res.json({ ecosRates: ecosRates || null, hfRates: hfRates || null });
 });
 
+// HEALTH-HEAD-2026-11-11 (Vercel Active CPU, plans/190): 가동 감시(UptimeRobot)는 5분마다 HEAD 로 부른다.
+//   Express 는 HEAD 를 GET 처리부로 넘겨 본문을 다 만든 뒤 버린다(2026-11-11 운영 47분 측정: 10회, 회당 CPU 46~125ms, Redis 조회 포함).
+//   GET 응답은 항상 200 이라 HEAD 가 주는 신호는 "함수가 살아 있다" 하나뿐이다. 본문 계산 없이 같은 신호만 준다.
+app.head('/api/health', (req, res) => { res.set('Cache-Control', 'no-store'); res.status(200).end(); });
+
 app.get('/api/health', optionalAuth, async (req, res) => {
   const [searchUsed, chatUsed] = await Promise.all([
     getUsage(req, 'search'),

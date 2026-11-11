@@ -38,5 +38,12 @@ Disallow: /
 User-agent: exauser.crawler
 Disallow: /
 
+# ROBOTS-BYTESPIDER-2026-11-11: 학습용 수집기. 위와 같은 원칙.
+#   이 파일에서 Disallow 한 수집기는 vercel.json 첫 route 가 함수 실행 전에 막는다(이 파일만 예외로 읽게 둔다).
+#   2026-11-11 운영 측정: exauser.crawler 는 Disallow 하루 뒤에도 47분에 10건을 가져갔다.
+#   목록을 바꾸면 vercel.json 의 user-agent 목록도 같이 바꾼다(backend/test/ops-1111.test.js 가 대조).
+User-agent: Bytespider
+Disallow: /
+
 # Sitemap
 Sitemap: https://myhomelog.vercel.app/sitemap.xml

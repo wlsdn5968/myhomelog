@@ -42,6 +42,8 @@ function _pick(summary) {
     // INGEST-RUNS-OBSERV-2026-09-20 (Plan 110): retention 의 molit_ingest_runs 단계 독립 결과
     //   (고아 running 정리 건수 · 프루닝 건수)를 health 로 노출한다.
     'okPruned', 'staleRunningFixed',
+    // AUDIT-CAPS-1111: retention 의 익명 추가 전용 표(ai_feedback·data_error_reports) 상한 초과분 삭제 건수 — 0 이 정상.
+    'aiFeedbackTrimmed', 'dataErrorTrimmed',
     // TARGET-NOTIFY-2026-10-19 (plans/166 3-3): 목표가 도달 알림이 포함된 발송 수 — 0 이 정상(도달 없음), 필드 없음 = 구버전.
     'targetHits', 'recordChecked', 'recordMarked',
     // RUNREC-ERR-2026-10-18 (Plan 158): molit_ingest_runs 기록 쓰기 실패 건수 — 0 이 정상.

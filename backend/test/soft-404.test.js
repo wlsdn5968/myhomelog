@@ -14,7 +14,8 @@ const path = require('node:path');
 
 const v = JSON.parse(fs.readFileSync(path.join(__dirname, '../../vercel.json'), 'utf8'));
 const routes = v.routes;
-const match = (p) => routes.find(r => new RegExp(`^${r.src}$`).test(p));
+// 요청 헤더 조건(has)이 붙은 route(막은 수집기 차단, ops-1111.test.js)는 일반 요청에 걸리지 않으므로 건너뛴다.
+const match = (p) => routes.find(r => !r.has && new RegExp(`^${r.src}$`).test(p));
 
 test('첫 화면은 / 와 /index.html 만, 없는 주소는 정적 404', () => {
   for (const p of ['/', '/index.html']) {

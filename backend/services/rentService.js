@@ -135,6 +135,22 @@ async function getRentTransactions(lawdCd, dealYm) {
   return p;
 }
 
+// RENT-LIVE-RECORD-2026-11-11 (plans/190): 외부 조회 1건마다 기록을 남기면 예열 한 회차에 5초 동안 14번 넘게 쓴다
+//   (운영 기록 2026-11-10 21:09:35~40 에 14건). 기록 함수는 한 키를 읽고 고쳐 다시 쓰는 방식이라, 같은 때 끝난
+//   warm-rent 자신의 기록이 덮여 사라졌다(11-02, 04, 05, 07, 08, 10 회차 누락). 기록 1건은 Redis 명령 2개와 DB 쓰기 1번이다.
+//   같은 내용(성공, 또는 같은 실패 사유)은 인스턴스에서 10분에 한 번만 남긴다. 사유가 바뀌면 바로 남긴다.
+const RENT_LIVE_RECORD_GAP_MS = 10 * 60 * 1000;
+const _rentLiveLast = new Map();
+function _recordRentLive(summary, now = Date.now()) {
+  const sig = summary && summary.ok === false ? `err:${summary.error || ''}` : 'ok';
+  const last = _rentLiveLast.get(sig);
+  if (last != null && now - last < RENT_LIVE_RECORD_GAP_MS) return false;
+  if (_rentLiveLast.size > 50) _rentLiveLast.clear();
+  _rentLiveLast.set(sig, now);
+  try { require('./cronStats').recordCronRun('rent-live', summary).catch(() => {}); } catch (_) { /* 관측 기록 실패는 본 기능을 막지 않는다 */ }
+  return true;
+}
+
 async function _fetchRentMonth(lawdCd, dealYm) {
   if (isMolitKeyMissing()) {
     const err = new Error('MOLIT API 키 미설정');
@@ -256,7 +272,7 @@ async function _fetchRentMonth(lawdCd, dealYm) {
     // OBSERV-SUCCESS-2026-08-12 (Sprint KKKKKKK-13b): ecos/hf 와 동일 — 성공도 기록. 실패만 남기면
     //   429 가 해소돼도 health 에 옛 실패가 영구 잔류해 "아직도 429" 로 오판하게 만든다.
     //   실제 외부 fetch 성공 지점(캐시 히트 아님)에만 찍는다.
-    require('./cronStats').recordCronRun('rent-live', { ok: 1 }).catch(() => {});
+    _recordRentLive({ ok: 1 });
     return result;
   } catch (err) {
     if (err.code === 'MOLIT_KEY_MISSING') throw err;
@@ -266,7 +282,7 @@ async function _fetchRentMonth(lawdCd, dealYm) {
     let brief = null;
     try {
       brief = require('../jobs/molitIngest').molitErrReason(err);
-      require('./cronStats').recordCronRun('rent-live', { ok: false, error: brief }).catch(() => {});
+      _recordRentLive({ ok: false, error: brief });
     } catch (_) { /* 관측 기록 실패는 본 기능을 막지 않는다 */ }
     // 에러 캐시 5분 — 일시적 5xx/timeout 시 매 요청마다 외부 API 두드리는 부하 방지.
     // RENT-DEGRADED-2026-09-06: 빈 배열이 아니라 실패 표식을 심는다 — 위 캐시 히트 경로들이
@@ -343,4 +359,4 @@ async function getJeonseByApt(lawdCd, aptName) {
   return sorted;
 }
 
-module.exports = { getRentTransactions, getJeonseByApt, monthsWindow, rentTtlSec, isRentCached };
+module.exports = { getRentTransactions, getJeonseByApt, monthsWindow, rentTtlSec, isRentCached, _recordRentLive, _rentLiveLast };

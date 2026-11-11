@@ -54,6 +54,9 @@ function sanitizeItems(items) {
 }
 
 router.get('/key', (_req, res) => {
+  // PUSH-KEY-CDN-2026-11-11 (plans/190): 공개 키는 배포 환경값이라 요청마다 같다. 첫 화면이 열릴 때마다 함수를 부르지 않게 CDN 에 둔다.
+  //   배포가 바뀌면 CDN 저장분도 새로 만들어진다. 키가 없을 때(null)는 저장하지 않는다.
+  res.set('Cache-Control', VAPID_PUBLIC_KEY ? 'public, max-age=0, s-maxage=3600, stale-while-revalidate=86400' : 'no-store');
   res.json({ key: VAPID_PUBLIC_KEY });
 });
 

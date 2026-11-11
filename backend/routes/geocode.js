@@ -12,6 +12,8 @@ const cache = {
 const logger = require('../logger');
 const { isValidKoreaCoord } = require('../utils/geo');
 const { getRedis } = require('../redis');
+const { getClientIp } = require('../middleware/dailyLimit');
+const { normalizeIpKey } = require('../utils/ipKey');
 // GEO-VALIDATE-SSOT-2026-08-09 (Sprint GGGGGGG): 이 라우트의 kakaoGeocode 는 서비스 경로
 //   (geocodeCacheService)의 복붙본으로 ca9fcf7(Sprint LL) 1회 동기화 후 방치 — 충전소·주차장·
 //   중개사 차단, AMBIGUOUS_SGG(동명 구) umd 하드필터, 상가 소프트 강등이 빠진 채 드리프트됨.
@@ -59,6 +61,80 @@ async function _bumpGeoCap(by = 1) {
   return n;
 }
 
+// AUDIT-CAPS-1111 (보안 점검 geocode-global-cap-exhaustible-by-few-ips): 전역 상한 20,000 을 소수 IP 가 소진하지 못하게
+//   IP 1개의 하루 Kakao 시도(HTTP 호출) 수를 전역 상한의 7.5%로 막는다.
+//   종전: server.js 의 dailyLimit({limit:60, scope:'geocode'}) 는 요청 수만 센다. 배치 1회 = 최대 50항목 x 시도 6 = 300 호출이라
+//   IP 1개가 하루 60 x 300 = 18,000 호출(전역 상한의 90%)까지 쓸 수 있어 IP 2개면 상한이 바닥났다.
+//   정상 사용(코드 확인): frontend/index.html batchGeocode 는 검색 1회당 1번, 백엔드가 좌표를 못 구한 단지(needGeo)만 보낸다.
+//   단건 POST /api/geocode 도 단지 1건씩이다. 이미 캐시(apt_geocache)에 있는 단지는 Kakao 를 안 부르므로 이 예산을 쓰지 않는다.
+//   1,500 이면 배치가 전부 미스인 최악(300 호출)도 하루 5번 가능 - 지도 한 화면에서 배치 몇 번은 막히지 않는다.
+//   예산은 Kakao 가 실제로 필요한 요청에서만 읽는다(GET 1회). 요청이 끝날 때 쓴 만큼 한 번에 더한다(INCRBY 1회, 첫 사용 때 EXPIRE 1회).
+//   Redis 미설정/실패 시엔 전역 상한과 같은 방침으로 인스턴스 메모리 카운터를 쓴다(fail-open 아님).
+const GEOCODE_IP_DAILY_KAKAO_CAP = 1500;
+const _memIp = { day: '', m: new Map() };
+function _memIpMap() {
+  const day = _geoDay();
+  if (_memIp.day !== day || _memIp.m.size > 5000) { _memIp.day = day; _memIp.m = new Map(); }
+  return _memIp.m;
+}
+async function _readIpAttempts(ip) {
+  const redis = getRedis();
+  if (redis) {
+    try { return Number(await redis.get(`geoip:${_geoDay()}:${ip}`)) || 0; } catch (_) { /* 메모리로 */ }
+  }
+  return _memIpMap().get(ip) || 0;
+}
+async function _addIpAttempts(ip, by) {
+  const redis = getRedis();
+  if (redis) {
+    const key = `geoip:${_geoDay()}:${ip}`;
+    try {
+      const n = Number(await redis.incrby(key, by));
+      if (n === by) { try { await redis.expire(key, 2 * 24 * 3600); } catch (_) { /* 무시 */ } }
+      return n;
+    } catch (_) { /* 메모리로 */ }
+  }
+  const m = _memIpMap();
+  const n = (m.get(ip) || 0) + by;
+  m.set(ip, n);
+  return n;
+}
+/** 요청 1건의 IP 별 Kakao 시도 예산. ensure() 는 처음 Kakao 가 필요할 때 1회만 읽고, flush() 는 요청 끝에 쓴 만큼 더한다. */
+function createIpBudget(req, cap = GEOCODE_IP_DAILY_KAKAO_CAP) {
+  const ip = normalizeIpKey(getClientIp(req));
+  let init = null;
+  const b = {
+    left: Infinity, used: 0,
+    ensure() {
+      if (!init) init = _readIpAttempts(ip).then((n) => { b.left = cap - n; }).catch(() => { b.left = cap; });
+      return init;
+    },
+    async flush() { if (b.used > 0) { const u = b.used; b.used = 0; try { await _addIpAttempts(ip, u); } catch (_) { /* 무시 */ } } },
+  };
+  return b;
+}
+
+// AUDIT-CAPS-1111 (보안 점검 facility-kakao-uncapped-quota-and-persistent-rows): 공개 GET /api/search/facility 의 Kakao 호출도
+//   위 전역 일일 계수기를 거치게 하는 요청별 관문. 첫 호출 때만 계수기를 올리고(Redis INCRBY 1개) 판정을 기억한다.
+//   한 요청이 Kakao 를 부르는 단계는 좌표(최대 4회) + 학교(3회) + 학원(1회)이라 FACILITY_KAKAO_WEIGHT 를 4 로 센다(실제 호출 수는 캐시에 따라 이보다 적다).
+//   false 면 호출부는 Kakao 를 부르지 않고 '좌표 없음/학교 없음' 열화 경로로 간다. 캐시 히트는 관문을 안 거친다.
+const FACILITY_KAKAO_WEIGHT = 4;
+function createKakaoGate(weight = FACILITY_KAKAO_WEIGHT) {
+  let p = null;
+  return function gate() {
+    if (!p) {
+      p = (async () => {
+        if (_capHitDay === _geoDay()) return false;
+        let n;
+        try { n = await _bumpGeoCap(weight); } catch (_) { return true; }
+        if (_geocodeCapExceeded(n, GEOCODE_GLOBAL_DAILY_CAP)) { _capHitDay = _geoDay(); return false; }
+        return true;
+      })();
+    }
+    return p;
+  };
+}
+
 // REGION-CENTROID-2026-10-29: 장소 이름이 없고 주소가 번지(숫자)로 끝나지 않으면 '지역 이름뿐' 결과(동·구 중심점)다.
 function _isRegionOnly(d, addrText) {
   return !(d && d.place_name) && !/\s\d+(-\d+)?$/.test(String(addrText || '').trim());
@@ -68,9 +144,12 @@ function _isRegionOnly(d, addrText) {
 // STAB-AUDIT-2026-05-06: sigungu·umdNm 명시 시 결과 검증 강제 (동명이지 환각 차단)
 async function kakaoGeocode(key, aptName, area, sigungu, umdNm, state = {}) {
   // SEC-1030-GEOCAP: 상한 단위는 카카오 HTTP 호출 수. 시작 전 1을 세어 판정하고, 실제 시도 수는 끝난 뒤 한 번에 더한다.
+  // AUDIT-CAPS-1111: IP 별 예산을 먼저 본다(소진된 IP 가 전역 계수기를 올리지 않게)
+  const ipb = state.ipBudget;
+  if (ipb) { await ipb.ensure(); if (ipb.left <= 0) { state.capped = true; return null; } }
   if (_capHitDay === _geoDay()) { state.capped = true; return null; }
   if (_geocodeCapExceeded(await _bumpGeoCap(1), GEOCODE_GLOBAL_DAILY_CAP)) { _capHitDay = _geoDay(); state.capped = true; return null; }
-  const ctr = { n: 0 };
+  const ctr = { n: 0, budget: ipb || null };
   try {
     return await _kakaoGeocodeTries(key, aptName, area, sigungu, umdNm, ctr);
   } finally {
@@ -97,6 +176,7 @@ async function _kakaoGeocodeTries(key, aptName, area, sigungu, umdNm, ctr) {
   const attempts = [];
   for (const t of tries) {
     if (!t.q) continue;
+    if (ctr.budget) { if (ctr.budget.left <= 0) break; ctr.budget.left -= 1; ctr.budget.used += 1; } // AUDIT-CAPS-1111: IP 예산
     ctr.n += 1; // SEC-1030-GEOCAP: 실제 시도 수(카카오 호출) — kakaoGeocode 가 끝난 뒤 전역 카운터에 더한다
     try {
       const r = await axios.get(t.url, { headers, params: { query: t.q, size: 5 }, timeout: 5000 });  // size 1 → 5
@@ -193,8 +273,9 @@ router.post('/', async (req, res) => {
   const key = process.env.KAKAO_REST_API_KEY;
   if (!key || key === 'your_kakao_rest_key') return res.json({ lat: null, lng: null, error: 'KAKAO_REST_API_KEY 미설정' });
   // GEOCAP-2026-08-09 (Plan 002): 캐시 히트는 무과금 - 전역 카운터는 kakaoGeocode 의 시도마다 올린다(SEC-1030-GEOCAP)
-  const st = {};
-  const out = await kakaoGeocode(key, aptName, area, sgg, umd, st);
+  const st = { ipBudget: createIpBudget(req) };
+  let out;
+  try { out = await kakaoGeocode(key, aptName, area, sgg, umd, st); } finally { await st.ipBudget.flush(); }
   if (st.capped) return res.json({ lat: null, lng: null, error: 'quota' });
   if (!out) return res.json({ lat: null, lng: null, error: '결과없음' });
   cache.set(ck, out, 86400);
@@ -215,6 +296,7 @@ router.post('/batch', async (req, res) => {
     return res.status(400).json({ error: 'too_many_items', max: MAX_BATCH_ITEMS });
   }
   const key = process.env.KAKAO_REST_API_KEY;
+  const ipBudget = createIpBudget(req); // AUDIT-CAPS-1111: 요청 안 모든 항목이 하나의 IP 예산을 공유한다
   const geocodeOne = async (item) => {
     // STAB-AUDIT-2026-05-06: 캐시 키 + Kakao 검색에 sigungu·umdNm 추가 — 동명 환각 차단
     const sgg = String(item.sigungu || '').trim();
@@ -235,7 +317,7 @@ router.post('/batch', async (req, res) => {
     } catch (_) { /* 미스/실패 → 기존 경로 */ }
     if (!key || key === 'your_kakao_rest_key') return { id, lat: null, lng: null };
     // GEOCAP-2026-08-09 (Plan 002): 캐시 히트 무과금 - 카운트는 kakaoGeocode 시도마다(SEC-1030-GEOCAP), 초과 시 null 반환
-    const out = await kakaoGeocode(key, item.aptName, item.area, sgg, umd);
+    const out = await kakaoGeocode(key, item.aptName, item.area, sgg, umd, { ipBudget });
     if (!out) return { id, lat: null, lng: null };
     cache.set(ck, out, 86400);
     return { id, ...out };
@@ -246,6 +328,7 @@ router.post('/batch', async (req, res) => {
     const chunkResults = await Promise.all(items.slice(i, i + BATCH_CONCURRENCY).map(geocodeOne));
     results.push(...chunkResults);
   }
+  await ipBudget.flush();
   res.json({ results });
 });
 
@@ -256,5 +339,10 @@ module.exports._isRegionOnly = _isRegionOnly;
 module.exports._kakaoGeocode = kakaoGeocode;
 module.exports._bumpGeoCap = _bumpGeoCap;
 module.exports._memCap = _memCap;
+module.exports.createIpBudget = createIpBudget;
+module.exports.createKakaoGate = createKakaoGate;
+module.exports.GEOCODE_IP_DAILY_KAKAO_CAP = GEOCODE_IP_DAILY_KAKAO_CAP;
+module.exports.FACILITY_KAKAO_WEIGHT = FACILITY_KAKAO_WEIGHT;
+module.exports._memIp = _memIp;
 module.exports._resetCapHit = () => { _capHitDay = ''; };
 module.exports.GEOCODE_GLOBAL_DAILY_CAP = GEOCODE_GLOBAL_DAILY_CAP;

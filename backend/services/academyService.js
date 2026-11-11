@@ -62,7 +62,7 @@ function cacheKey({ kaptCode, aptName, sigungu, umdNm }) {
  * 단지 인근 학원 list
  * @returns {Promise<{ total, byCategory, top }>}
  */
-async function resolveAcademies({ kaptCode, aptName, sigungu, umdNm, lat, lng }) {
+async function resolveAcademies({ kaptCode, aptName, sigungu, umdNm, lat, lng, kakaoGate }) {
   if (!isValidKoreaCoord(lat, lng)) return null;
   const key = cacheKey({ kaptCode, aptName, sigungu, umdNm });
   const cached = cache.get(key);
@@ -72,6 +72,8 @@ async function resolveAcademies({ kaptCode, aptName, sigungu, umdNm, lat, lng })
     logger.debug('Kakao 키 미설정 — 학원 검색 skip');
     return null;
   }
+  // AUDIT-CAPS-1111: 공개 경로의 관문이 false 면 Kakao 를 부르지 않는다(null = 학원 정보 없음, 캐시 안 함).
+  if (kakaoGate && !(await kakaoGate())) return null;
 
   try {
     const headers = { Authorization: `KakaoAK ${KAKAO_KEY}` };

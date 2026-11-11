@@ -287,6 +287,8 @@ async function ingestOne(admin, lawdCd, dealYm) {
     //   같은 응답에 같은 키의 유효 거래가 있으면 지우지 않는다. 키 + 금액까지 같은 행만 지운다(보수적).
     const canceledRemoved = await _removeCanceled(admin, rawRows.canceled || [], seen, lawdCd, dealYm);
 
+    // SKIP-SAME-2026-11-11 (plans/190): 표의 zz_skip_same 트리거가 값이 같은 갱신을 건너뛴다. 그래서 아래 count 는
+    //   "받은 행 수"가 아니라 "새로 들어오거나 값이 바뀐 행 수"다(rows_fetched 가 받은 행 수). 0 이어도 정상이다.
     let inserted = 0;
     // batch UPSERT … ON CONFLICT (dedup_key) DO UPDATE
     // ignoreDuplicates:false 로 deal_amount 갱신 (정정거래 처리).
