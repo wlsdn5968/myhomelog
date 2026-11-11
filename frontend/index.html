@@ -16390,7 +16390,7 @@ function addMsg(role,text){
   const c=document.getElementById('cMsgs'),d=document.createElement('div');d.className='msg '+role;
   // XSS 방어: 먼저 escape → 그 다음 \n→<br>, **bold** 변환, ## 헤더 변환 (이스케이프된 ** ## 는 안전)
   // MOB-AUDIT-2026-05-03: AI 답변에 `## 핵심 결론` 노출 시 plain text → <b> 변환
-  const safe=_escHtml(text).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/(?:^|<br>)#{1,4}\s+(.+?)(?=<br>|$)/g, (m,$1)=>(m.startsWith('<br>')?'<br>':'')+'<b>'+$1+'</b>');
+  const safe=_escHtml(text).replace(/\n/g,'<br>').replace(/\*\*(.*?)\*\*/g,'<b>$1</b>').replace(/(?:^|<br>)#{1,4}\s+(\S.*?)(?=<br>|$)/g, (m,$1)=>(m.startsWith('<br>')?'<br>':'')+'<b>'+$1+'</b>');
   // AI 응답에는 매번 안내 배지 부착 (Phase 2.14)
   const badge = role === 'ai' ? _renderAIBadge() : '';
   // Phase 3 (2026-04-25): AI 답변 👍/👎 피드백 (사용자/세션 페어 추적용)

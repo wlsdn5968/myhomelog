@@ -276,3 +276,15 @@ test('run-3: 채팅 이력에 null 항목이 있어도 500 이 아니다', () =>
 test('run-3: 알림 구독의 지역 코드는 적재하는 지역만 받는다', () => {
   assert.ok(read('../routes/push.js').includes("const items = sanitizeItems(req.body?.items).map((it) => (it.lawdCd && !isKnownLawdCd(it.lawdCd) ? { ...it, lawdCd: null } : it));"));
 });
+
+test('run-3 후속: 단지 검색어는 100자로 자르고, 채팅 제목 변환 정규식은 공백 뒤 첫 글자를 고정한다', () => {
+  assert.ok(read('../routes/search.js').includes("String(req.query.q || '').slice(0, 100).replace("));
+  const html = read('../../frontend/index.html');
+  assert.ok(html.includes(String.raw`#{1,4}\s+(\S.*?)(?=<br>|$)/g`));
+  // 같은 정규식으로 긴 공백 입력이 빨리 끝나는지 확인
+  const re = /(?:^|<br>)#{1,4}\s+(\S.*?)(?=<br>|$)/g;
+  const t0 = process.hrtime.bigint();
+  ('#' + ' '.repeat(20000) + '\u2028').replace(re, '$1');
+  assert.ok(Number(process.hrtime.bigint() - t0) / 1e6 < 50);
+  assert.equal('## 둘째 제목<br>본문'.replace(re, '[$1]'), '[둘째 제목]<br>본문');
+});

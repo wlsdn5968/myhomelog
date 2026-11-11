@@ -1,7 +1,7 @@
 {
-  "total": 74,
+  "total": 73,
   "files": {
-    ".lint-tmp/index-block7.js": 13,
+    ".lint-tmp/index-block7.js": 12,
     "backend/jobs/geocacheBackfill.js": 4,
     "backend/middleware/cpuMeter.js": 1,
     "backend/routes/admin.js": 3,
