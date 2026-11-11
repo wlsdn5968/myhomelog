@@ -84,7 +84,9 @@ router.post('/subscribe', async (req, res) => {
       const { data: had } = await admin.from('push_subscriptions').select('endpoint').eq('endpoint', endpoint).maybeSingle();
       if (!had) return res.status(503).json({ error: '지금은 알림 신청이 많아 잠시 받을 수 없어요. 나중에 다시 시도해주세요.' });
     }
-    const items = sanitizeItems(req.body?.items);
+    // AUDIT3-1111 (보안 점검 run-3): 다섯 자리 숫자면 다 받던 지역 코드를 적재하는 지역으로만 좁힌다(가짜 구독이 알림 작업의 조회 조건을 부풀리지 못하게).
+    const { isKnownLawdCd } = require('../services/transactionService');
+    const items = sanitizeItems(req.body?.items).map((it) => (it.lawdCd && !isKnownLawdCd(it.lawdCd) ? { ...it, lawdCd: null } : it));
     if (!items.length) return res.status(400).json({ error: '알림 받을 관심 단지가 없어요. 관심 단지를 먼저 추가해주세요.' });
 
     const { error } = await admin.from('push_subscriptions').upsert({

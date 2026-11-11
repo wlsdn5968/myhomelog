@@ -244,3 +244,35 @@ test('run-2: 지역과 시도 허용 목록은 상속 키(constructor 등)를 �
   assert.match(read('../routes/search.js'), /Object\.hasOwn\(rp\.SIDOS, sido\)/);
   assert.match(read('../services/regionPopularService.js'), /Object\.hasOwn\(SIDOS, sido\)/);
 });
+
+// ── 보안 점검 run-3 (2026-11-11) 후속 ─────────────────────────────────────────────
+test('run-3: CPU 측정 미들웨어의 봇 이름 찾기는 긴 식별 문자열에서도 빨리 끝난다', () => {
+  const { botName } = require('../middleware/cpuMeter');
+  const t0 = process.hrtime.bigint();
+  assert.equal(botName('Mozilla/5.0 ' + 'a'.repeat(15000)), null);
+  const ms = Number(process.hrtime.bigint() - t0) / 1e6;
+  assert.ok(ms < 20, `봇 이름 찾기가 ${ms.toFixed(1)}ms 걸렸다`);
+  assert.equal(botName('Mozilla/5.0 (compatible; Yeti/1.1; +https://naver.me/spd)'), 'Yeti');
+  assert.equal(botName('Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)'), 'Googlebot');
+  assert.match(read('../middleware/cpuMeter.js'), /String\(req\.get\('user-agent'\) \|\| ''\)\.slice\(0, 256\)/);
+});
+
+test('run-3: 분석 조회는 100자가 넘는 단지 이름을 받지 않는다, 검색은 별표와 음수 limit 을 막는다', () => {
+  assert.match(read('../routes/analysis.js'), /if \(typeof aptName !== 'string' \|\| aptName\.length > 100\) return res\.status\(400\)/);
+  const s = read('../routes/search.js');
+  assert.ok(s.includes(String.raw`replace(/[%_\\*]/g, '')`));
+  assert.ok(s.includes('Math.max(1, Math.min(parseInt(req.query.limit) || 10, 30))'));
+});
+
+test('run-3: 채팅 이력에 null 항목이 있어도 500 이 아니다', () => {
+  const { validateChatInput } = require('../middleware/validation');
+  const req = { body: { message: '안녕하세요', context: { history: [null, 'x', { role: 'user', content: '질문' }] } } };
+  let nexted = false; const res = { status: () => ({ json: () => {} }) };
+  validateChatInput(req, res, () => { nexted = true; });
+  assert.equal(nexted, true);
+  assert.deepEqual(req.body.context.history, [{ role: 'user', content: '질문' }]);
+});
+
+test('run-3: 알림 구독의 지역 코드는 적재하는 지역만 받는다', () => {
+  assert.ok(read('../routes/push.js').includes("const items = sanitizeItems(req.body?.items).map((it) => (it.lawdCd && !isKnownLawdCd(it.lawdCd) ? { ...it, lawdCd: null } : it));"));
+});

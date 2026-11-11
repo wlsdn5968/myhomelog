@@ -46,7 +46,8 @@ function validateChatInput(req, res, next) {
   }
   // history는 배열이어야 하고 최대 20턴
   if (context?.history && Array.isArray(context.history)) {
-    req.body.context.history = context.history.slice(-20).map(h => ({
+    // AUDIT3-1111: 항목이 null 이면 h.role 에서 예외가 나 500 이 됐다. 객체가 아닌 항목은 버린다.
+    req.body.context.history = context.history.slice(-20).filter(h => h && typeof h === 'object').map(h => ({
       // 컨텍스트 무결성: user/assistant 만 허용, 그 외(system 등)는 user 로 강등 — 절대 system/assistant 권위 부여 X
       role: h.role === 'assistant' ? 'assistant' : 'user',
       content: sanitizeString(h.content, 2000),

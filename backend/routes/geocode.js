@@ -351,8 +351,11 @@ router.post('/batch', async (req, res) => {
   // 동시성 제한 — BATCH_CONCURRENCY 개씩 청크 순차 처리 (전체 Promise.all fan-out 제거). 순서 보존.
   const results = [];
   for (let i = 0; i < items.length; i += BATCH_CONCURRENCY) {
-    const chunkResults = await Promise.all(items.slice(i, i + BATCH_CONCURRENCY).map(geocodeOne));
-    results.push(...chunkResults);
+    // AUDIT3-1111: 중간에 예외가 나도 예약한 IP 예산을 돌려준다
+    try {
+      const chunkResults = await Promise.all(items.slice(i, i + BATCH_CONCURRENCY).map(geocodeOne));
+      results.push(...chunkResults);
+    } catch (e) { await ipBudget.flush(); throw e; }
   }
   await ipBudget.flush();
   res.json({ results });

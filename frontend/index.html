@@ -6761,7 +6761,7 @@ function fmtSubsDate(s){
   // YYYYMMDD or YYYY-MM-DD → MM/DD
   if(!s) return '-';
   const t = String(s).replace(/[^0-9]/g,'');
-  if(t.length<8) return s;
+  if(t.length<8) return _escHtml(String(s)); // AUDIT3-1111: 형식이 다른 값은 원문을 돌려주므로 HTML 에 넣기 전에 이스케이프한다
   return `${t.slice(4,6)}/${t.slice(6,8)}`;
 }
 function fmtMoveIn(s){
@@ -12866,6 +12866,7 @@ function _a11yEnhance(root){
       if(e.key !== 'Enter' && e.key !== ' ' && e.key !== 'Spacebar') return;
       const t = e.target;
       if(!t || !t.matches || !t.hasAttribute('data-a11y')) return; // 버튼, 링크, 입력칸은 브라우저가 처리한다
+      if(t.classList && t.classList.contains('chip')) return; // 칩은 _enhanceA11y 의 리스너가 누른다(두 번 눌리지 않게)
       e.preventDefault();
       t.click();
     });
@@ -14600,12 +14601,17 @@ function _enhanceA11y() {
     if (!c.getAttribute('aria-label')) c.setAttribute('aria-label', c.textContent.trim());
   });
   // chip 키보드 활성화 (Enter / Space)
-  document.addEventListener('keydown', (e) => {
-    if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('chip')) {
-      e.preventDefault();
-      e.target.click();
-    }
-  });
+  // A11Y-ONCE-2026-11-11 (보안 점검 run-3 참고 사항, 코드로 확인): 이 함수는 화면이 바뀔 때마다 다시 불린다(아래 MutationObserver).
+  //   그때마다 리스너를 또 달아서 Enter 한 번에 click 이 여러 번 나갔다. 켜고 끄는 칩은 짝수 번 눌려 선택이 풀릴 수 있었다. 한 번만 단다.
+  if (!window._a11yKeyBound) {
+    window._a11yKeyBound = true;
+    document.addEventListener('keydown', (e) => {
+      if ((e.key === 'Enter' || e.key === ' ') && e.target.classList && e.target.classList.contains('chip')) {
+        e.preventDefault();
+        e.target.click();
+      }
+    });
+  }
   // 주요 모달에 dialog 시맨틱
   // STAB-A P0#4 (2026-05-03): 잘못된 ID (loginM/detailM/usMenu/quotaM) → 실제 ID (LM/DM/UM/QM/SM)
   //   기존: 모든 모달 role=dialog 부여 실패 → 스크린리더 모달 인식 불가 (정보통신접근성법 risk)

@@ -405,4 +405,9 @@ test('A11Y-192: 버튼이 아닌 조작 요소는 키보드로 누를 수 있고
   assert.ok(fn.includes("el.setAttribute('role', 'button')") && fn.includes("el.setAttribute('tabindex', '0')"));
   // 버튼, 링크, 입력칸은 브라우저가 처리하므로 표식이 있는 요소만 넘긴다(두 번 눌리지 않게).
   assert.ok(html.includes("if(!t || !t.matches || !t.hasAttribute('data-a11y')) return;"));
+  // 칩은 기존 리스너 하나만 누른다. 그 리스너는 화면이 바뀔 때마다 다시 달리지 않는다(Enter 한 번에 click 한 번).
+  assert.ok(html.includes("if(t.classList && t.classList.contains('chip')) return;"));
+  const old = extractFn(html, '_enhanceA11y');
+  assert.ok(old.includes('if (!window._a11yKeyBound) {') && old.includes('window._a11yKeyBound = true;'));
+  assert.equal((old.match(/addEventListener\('keydown'/g) || []).length, 1);
 });

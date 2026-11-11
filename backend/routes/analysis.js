@@ -12,6 +12,9 @@ router.get('/', async (req, res) => {
   let { lawdCd } = req.query;
 
   if (!aptName) return res.status(400).json({ error: 'aptName 필수' });
+  // AUDIT3-1111 (보안 점검 run-3, 로컬 재현): 이름 길이 제한이 없어 괄호 수천 자짜리 이름이 거래 행마다 정규식을 제곱 시간으로 돌렸다
+  //   (괄호 4,000자에 행당 4ms). compare 는 이미 100자로 막는다. 같은 상한을 쓴다.
+  if (typeof aptName !== 'string' || aptName.length > 100) return res.status(400).json({ error: '단지 이름이 너무 길어요.' });
 
   // lawdCd 없으면 area 문자열에서 역조회
   if (!lawdCd && area) lawdCd = getLawdCdFromArea(area);

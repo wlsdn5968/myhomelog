@@ -18,7 +18,7 @@ function routeKey(url) {
 // 봇 이름만 뽑는다(전체 UA 문자열은 남기지 않는다). 예: "Googlebot", "Yeti", "AhrefsBot". 못 찾으면 null.
 const BOT_NAME_RE = /([A-Za-z][A-Za-z0-9._-]*(?:bot|crawler|spider|slurp|scrap|preview))|\b(Yeti|Daum|HeadlessChrome)\b/i;
 function botName(ua) {
-  const m = String(ua || '').match(BOT_NAME_RE);
+  const m = String(ua || '').slice(0, 256).match(BOT_NAME_RE);
   return m ? (m[1] || m[2]).slice(0, 40) : null;
 }
 
@@ -36,7 +36,9 @@ function cpuMeter(logger) {
       inflight -= 1;
       try {
         const d = process.cpuUsage(c0);
-        const ua = String(req.get('user-agent') || '');
+        // AUDIT3-1111 (보안 점검 run-3, 로컬 재현): 봇 이름 정규식은 긴 문자열에서 제곱으로 느려진다(15,000자에 140ms. 측정 장치가 CPU 를 쓴 셈).
+        //   식별 문자열은 앞 256자만 본다. 실제 봇 이름은 그 안에 있다.
+        const ua = String(req.get('user-agent') || '').slice(0, 256);
         logger.info({ cpuMeter: {
           botName: botName(ua),
           route: routeKey(req.originalUrl),
