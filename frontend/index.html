@@ -910,7 +910,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .hp-gh{display:flex;align-items:center;gap:8px;padding:12px 24px 6px;font-size:14px;font-weight:700;color:var(--t1);border-top:1px solid var(--bd)}
 .hp-gh .n{font-size:12px;font-weight:500;color:var(--t3)}
 .hp-gdot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:2px;flex-shrink:0;vertical-align:middle;box-shadow:0 0 0 2px var(--bg-elev-1,#fff)} /* REGION-SHADE: 지도 색 구역과 같은 색 */
-.hp-msg.hp-attr{font-size:11px;color:var(--t3);padding-top:10px}
+.hp-msg.hp-attr{font-size:12px;color:var(--t3);padding-top:10px}
 .t0-gurank{margin-top:10px;font-size:13px;color:var(--t2);line-height:1.5}.t0-gurank .k{color:var(--t3)}.t0-gurank button{margin-left:8px;border:0;background:none;padding:0;font:inherit;color:var(--acc);text-decoration:underline;cursor:pointer}
 .hp-gh button{margin-left:auto;border:none;background:none;color:var(--acc);font-family:inherit;font-size:13px;font-weight:600;cursor:pointer;padding:4px 0}
 .hp-rk{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;margin-right:6px;border-radius:50%;background:var(--bg-elev-1);color:var(--t2);font-size:12px;font-weight:700;flex-shrink:0}
@@ -1131,7 +1131,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .nmap-bub{display:inline-flex;align-items:baseline;gap:5px;white-space:nowrap;background:#fff;border-radius:var(--radius-full);padding:5px 11px;border:1px solid rgba(16,24,40,.07);box-shadow:0 3px 10px rgba(16,24,40,.16),0 1px 3px rgba(16,24,40,.10);position:relative}
 .nmap-bub.reg{box-shadow:0 3px 11px rgba(229,72,77,.24),0 1px 3px rgba(16,24,40,.10)}
 .nmap-pr{font-size:13px;font-weight:800;color:#19223A;line-height:1.1;letter-spacing:-.2px}
-.nmap-sc{font-size:10px;font-weight:600;color:#8A93A3;line-height:1.1}
+.nmap-sc{font-size:10px;font-weight:600;color:#69707B;line-height:1.1} /* A11Y-192: #8A93A3 은 흰 바탕 3.10:1 이라 4.99:1 인 값으로 */
 .nmap-bub.reg::after,.nmap-bub.recon::after{content:'';position:absolute;top:-4px;right:-4px;width:9px;height:9px;border-radius:50%;border:1.5px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,.22)}
 .nmap-bub.reg::after{background:#E5484D}
 .nmap-bub.recon::after{background:var(--amb)}
@@ -1157,7 +1157,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .pop-marker.pop-guhead .pop-gu::after{content:" ·"}
 .pop-marker.pm-mini.pop-guhead .pop-gu::after{content:""}
 .pop-marker.pm-hidden{display:none!important}
-.pop-marker[data-more]::after{content:"+" attr(data-more);margin-left:4px;font-size:9px;font-weight:800;color:#fff;background:#98A2B3;border-radius:var(--radius-full);padding:1px 5px}
+.pop-marker[data-more]::after{content:"+" attr(data-more);margin-left:4px;font-size:9px;font-weight:800;color:#fff;background:#69707B;border-radius:var(--radius-full);padding:1px 5px}
 @media (max-width:520px){ .pop-marker .pop-nm{max-width:96px} }
 
 /* 인포윈도우 */
@@ -6001,7 +6001,7 @@ function _downloadReportPDF() {
     const n = Math.max(1, Math.min(3, c.stars||1));
     const stars = '★'.repeat(n) + '☆'.repeat(3-n);
     return `<div class="ck"><span class="ckstars">${stars}</span> ${esc(c.text||'')}</div>`;
-  }).join('') : '<div style="padding:6px 0;color:var(--t3);font-size:11px">체크리스트 항목이 없어요.</div>';
+  }).join('') : '<div style="padding:6px 0;color:var(--t3);font-size:12px">체크리스트 항목이 없어요.</div>';
   const aptsHtml = (r.apartments || []).map(a => {
     const hN = Number(a.households);
     const hStr = (a.households && Number.isFinite(hN)) ? `${hN.toLocaleString()}세대` : '세대수 미상';
@@ -6041,11 +6041,11 @@ function _downloadReportPDF() {
   w.document.write(`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8">
     <title>내집로그 맞춤 보고서</title>
     <style>
-      @page { margin: 16mm 14mm; @bottom-center { content: "내집로그 맞춤 보고서 · 매수·매도 추천 아님 · 미래 예측 아님 · " counter(page) "/" counter(pages); font-size: 8.5pt; color: #98938A; } }
+      @page { margin: 16mm 14mm; @bottom-center { content: "내집로그 맞춤 보고서 · 매수·매도 추천 아님 · 미래 예측 아님 · " counter(page) "/" counter(pages); font-size: 8.5pt; color: #69707B; } }
       * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
       body { font-family: 'Malgun Gothic','맑은 고딕',sans-serif; padding: 0; margin: 0; font-size: 10.5pt; line-height: 1.55; color: #18160F; }
       h1 { font-size: 17pt; font-weight: 700; margin: 0 0 4px; color: #173A63; letter-spacing: -0.3px; }
-      .meta { font-size: 9pt; color: #98938A; margin-bottom: 12px; padding-bottom: 7px; border-bottom: 1px solid #E2DDD5; }
+      .meta { font-size: 9pt; color: #69707B; margin-bottom: 12px; padding-bottom: 7px; border-bottom: 1px solid #E2DDD5; }
       .meta b { color: #18160F; }
       .sec { margin-bottom: 11px; page-break-inside: avoid; }
       .sec-title { font-size: 11.5pt; font-weight: 700; color: #18160F; margin-bottom: 6px; padding-left: 5px; border-left: 3px solid #173A63; }
@@ -6053,14 +6053,14 @@ function _downloadReportPDF() {
       .core ol { margin: 0; padding-left: 20px; font-size: 10.5pt; line-height: 1.7; }
       .core li { margin-bottom: 3px; }
       .policy { background: #F8F8F6; border: 1px solid #E2DDD5; border-radius: 5px; padding: 9px 13px; font-size: 9.5pt; line-height: 1.7; }
-      .policy-note { font-size: 8.5pt; color: #98938A; margin-top: 4px; }
+      .policy-note { font-size: 8.5pt; color: #69707B; margin-top: 4px; }
       .ck { padding: 3px 4px; font-size: 10pt; border-bottom: 1px dashed #E8E5E0; line-height: 1.5; }
       .ck:last-child { border-bottom: none; }
       .ckstars { color: #D4922A; font-weight: 700; min-width: 38px; display: inline-block; font-size: 10pt; }
       .apt { border: 1px solid #E2DDD5; border-radius: 5px; padding: 9px 13px; margin-bottom: 7px; page-break-inside: avoid; background: #fff; }
       .apt-name { font-size: 11pt; font-weight: 700; margin-bottom: 3px; color: #18160F; }
-      .apt-area { font-size: 9.5pt; font-weight: 500; color: #98938A; }
-      .apt-meta { font-size: 9pt; color: #98938A; margin-bottom: 5px; }
+      .apt-area { font-size: 9.5pt; font-weight: 500; color: #69707B; }
+      .apt-meta { font-size: 9pt; color: #69707B; margin-bottom: 5px; }
       .apt-body { font-size: 9.5pt; line-height: 1.65; color: #3A3530; }
       .apt-body div { margin-bottom: 1px; }
       .apt-fit { margin-top: 4px; padding-top: 4px; border-top: 1px dashed #E8E5E0; }
@@ -6068,7 +6068,7 @@ function _downloadReportPDF() {
       .apt-objfacts { font-size: 8.5pt; color: #3A3530; background: #F5F2EC; border: 1px solid #E2DDD5; border-radius: 3px; padding: 4px 7px; margin-top: 4px; line-height: 1.5; }
       .apt-rec { color: #173A63; font-weight: 600; margin-top: 2px; }
       .longterm { background: #F0F7FF; border: 1px solid #BFD7F7; border-radius: 5px; padding: 9px 13px; font-size: 10pt; line-height: 1.7; color: #1B4F8A; }
-      .longterm-warn { font-size: 8.5pt; color: #98938A; margin-top: 5px; }
+      .longterm-warn { font-size: 8.5pt; color: #69707B; margin-top: 5px; }
       .caution { border: 1px solid #E2DDD5; border-left: 3px solid #C9973F; border-radius: 4px; padding: 8px 12px; margin-bottom: 7px; background: #FDFBF6; page-break-inside: avoid; }
       .caution-t { font-size: 10pt; font-weight: 700; color: #6B4E14; margin-bottom: 4px; }
       .caution ul { margin: 0; padding-left: 18px; font-size: 9.5pt; line-height: 1.65; color: #3A3530; }
@@ -6082,14 +6082,14 @@ function _downloadReportPDF() {
       .brandbar .bmark { width: 26px; height: 26px; border-radius: 6px; background: #173A63; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
       .brandbar .bname { font-size: 12pt; font-weight: 800; color: #18160F; letter-spacing: -.02em; }
       .brandbar .bname em { font-style: normal; color: #173A63; }
-      .brandbar .btag { font-size: 7.5pt; color: #98938A; letter-spacing: .08em; margin-left: 2px; }
+      .brandbar .btag { font-size: 7.5pt; color: #69707B; letter-spacing: .08em; margin-left: 2px; }
       /* 워터마크 — 인쇄·화면 모두. 내용 위에 얇게 깔리되 클릭·선택을 막지 않는다. */
       .wmark { position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden; }
       .wmark span { position: absolute; top: 42%; left: 50%; transform: translate(-50%,-50%) rotate(-24deg);
         font-size: 58pt; font-weight: 800; color: #173A63; opacity: .05; white-space: nowrap; letter-spacing: .02em; }
       body > *:not(.wmark) { position: relative; z-index: 1; }
       /* 인쇄 시 매 페이지 하단에 출처를 남긴다 — PDF 가 단독으로 돌아다녀도 출처가 붙어 있게. */
-      .pfoot { margin-top: 16px; padding-top: 8px; border-top: 1px solid #E2DDD5; font-size: 8pt; color: #98938A; display: flex; justify-content: space-between; }
+      .pfoot { margin-top: 16px; padding-top: 8px; border-top: 1px solid #E2DDD5; font-size: 8pt; color: #69707B; display: flex; justify-content: space-between; }
       @media print { .wmark span { opacity: .06; } }
       @media print { body { padding: 0; margin: 0; } .noprint { display: none !important; } }
       /* MOB-AUDIT-2026-05-03: 모바일 print 가독성 — iOS Safari 폰 print 시 폰트·여백 보강 */
@@ -6161,7 +6161,7 @@ function _downloadReportPDF() {
       <span>내집로그 · myhomelog.com · ${esc(ts)}</span>
       <span>${_issuedTo ? esc('발급 대상 ' + _issuedTo.label + ' (' + _issuedTo.tag + ')') : ''}</span>
     </div>
-    <div style="font-size:8pt;color:#98938A;margin-top:4px">본 보고서는 위 계정에 발급된 문서예요. 다른 사람에게 공개하거나 다시 배포하지 말아 주세요.</div>
+    <div style="font-size:8pt;color:#69707B;margin-top:4px">본 보고서는 위 계정에 발급된 문서예요. 다른 사람에게 공개하거나 다시 배포하지 말아 주세요.</div>
 
     <div class="disclaimer">
       <b>⚠ 이 보고서는 정보를 정리한 것이며 투자자문업·중개업·대출모집인업이 아니에요.</b>
@@ -7319,7 +7319,7 @@ function gSVG(score,sz){
     </svg>
     <div class="gn" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center">
       <div style="font-size:${sz<50?11:sz<80?14:22}px;font-weight:800;color:${c};line-height:1">${score}</div>
-      <div style="font-size:10px;color:var(--t3);margin-top:1px">점</div>
+      <div style="font-size:12px;color:var(--t3);margin-top:1px">점</div>
     </div>
   </div>`;
 }
@@ -14555,7 +14555,7 @@ function exportClausePDF(){
     /* 컨텐츠는 워터마크 위에 */
     h1, .sub, .cv-card, .cv-caution, footer, .legal-banner { position: relative; z-index: 1; }
     h1{font-size:16px;font-weight:700;margin-bottom:4px;color:#173A63}
-    .sub{font-size:11px;color:#98938A;margin-bottom:14px}
+    .sub{font-size:11px;color:#69707B;margin-bottom:14px}
     .legal-banner{background:#FAEBEB;border:2px solid #173A63;border-radius:8px;padding:12px 14px;margin-bottom:18px;font-size:12px;color:#A82525;line-height:1.7}
     .legal-banner b{font-size:13px;display:block;margin-bottom:4px}
     .cv-card{border:1px solid #E2DDD5;border-radius:8px;margin-bottom:8px;overflow:hidden;page-break-inside:avoid;background:var(--bg-base)}
@@ -14564,12 +14564,12 @@ function exportClausePDF(){
     .cv-card-title{font-size:12px;font-weight:700}
     .cv-card-body{padding:10px 12px}
     .cv-card-content{font-size:11px;line-height:1.75;background:#F4F2ED;border-radius:6px;padding:8px 10px;margin-bottom:6px;white-space:pre-wrap}
-    .cv-card-reason{font-size:10px;color:#98938A}
+    .cv-card-reason{font-size:10px;color:#69707B}
     .cv-caution{background:#FAF0E2;border:1px solid #E8C08A;border-radius:8px;padding:10px 12px;font-size:11px;color:var(--amb);margin-bottom:12px}
     .rtag{display:inline-block;padding:2px 6px;border-radius:8px;font-size:10px;font-weight:700}
     .rtag.r{background:#FAEBEB;color:var(--red)}.rtag.y{background:#FAF0E2;color:var(--amb)}
     .cpybtn{display:none}
-    footer{margin-top:24px;font-size:10px;color:#98938A;border-top:1px solid #E2DDD5;padding-top:8px;line-height:1.7}
+    footer{margin-top:24px;font-size:10px;color:#69707B;border-top:1px solid #E2DDD5;padding-top:8px;line-height:1.7}
     footer b{color:var(--red)}
   </style></head><body>
   <h1>${safeTitle}</h1>
