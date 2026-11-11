@@ -24,7 +24,21 @@ const router = express.Router();
 const MAX_COMMENT_LEN = 500;
 const MAX_PREVIEW_LEN = 200;
 
-router.post('/ai', optionalAuth, async (req, res) => {
+// AUDIT3-CAP-1112 (보안 점검 run-3, anon-table-row-cap-fifo-evicts-legit-rows): 두 표는 총 행 수 상한(retention)만 있어
+//   한 곳에서 대량으로 넣으면 오래된 정상 신고가 밀려났다(로컬 재현: 정상 50행 뒤 1만 행이면 정상 0행).
+//   보내는 쪽(로그인 사용자 또는 IP)마다 하루 30건으로 묶는다. Redis 가 안 되면 인스턴스 메모리로 센다.
+const FEEDBACK_DAILY_CAP = 30;
+async function feedbackCap(req, res, next) {
+  try {
+    const { incrementUsage, getLimitIdentity, todayKey, secondsUntilMidnight } = require('../middleware/dailyLimit');
+    const id = getLimitIdentity(req);
+    const { used } = await incrementUsage(`dl:feedback:${todayKey()}:${id.kind}:${id.value}`, secondsUntilMidnight());
+    if (used > FEEDBACK_DAILY_CAP) return res.status(429).json({ error: '오늘은 더 보낼 수 없어요. 내일 다시 보내 주세요.' });
+  } catch (_) { /* 세지 못하면 막지 않는다 */ }
+  next();
+}
+
+router.post('/ai', optionalAuth, feedbackCap, async (req, res) => {
   const { rating, messageText, replyPreview, comment, source } = req.body || {};
 
   // 입력 검증
@@ -75,12 +89,12 @@ router.post('/ai', optionalAuth, async (req, res) => {
 // 스팸 방지: IP 당 30초 1회(인스턴스 로컬 — 완화 목적이지 보안 경계 아님) + 길이 제한.
 const _errRateCache = require('../cache');
 const ERR_FIELDS = ['세대수', '주차', '실거래', '좌표', '학군', '기타'];
-router.post('/data-error', optionalAuth, async (req, res) => {
+router.post('/data-error', optionalAuth, feedbackCap, async (req, res) => {
   const { aptName, lawdCd, field, detail, page } = req.body || {};
   if (!detail || typeof detail !== 'string' || detail.trim().length < 5) {
     return res.status(400).json({ error: '내용을 5자 이상 적어 주세요.' });
   }
-  const ip = String(req.headers['x-forwarded-for'] || req.ip || '').split(',')[0].trim();
+  const ip = String(req.ip || req.headers['x-forwarded-for'] || '').split(',')[0].trim(); // AUDIT3: 헤더보다 req.ip 를 먼저(trust proxy 1)
   const rk = 'errRate:' + ip;
   if (_errRateCache.get(rk)) return res.status(429).json({ error: '잠시 뒤 다시 신고해 주세요.' });
   _errRateCache.set(rk, 1, 30);

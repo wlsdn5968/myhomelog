@@ -233,4 +233,4 @@ async function getUsage(req, scope = 'search') {
 }
 
 // todayKey/secondsUntilMidnight 도 export — KST 경계 계약을 테스트로 고정하기 위함(Sprint OOOOOOO).
-module.exports = { dailyLimit, getUsage, getClientIp, getLimitIdentity, todayKey, secondsUntilMidnight, decrementUsage };
+module.exports = { dailyLimit, getUsage, getClientIp, getLimitIdentity, todayKey, secondsUntilMidnight, decrementUsage, incrementUsage };

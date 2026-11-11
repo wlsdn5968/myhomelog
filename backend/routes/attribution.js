@@ -21,6 +21,7 @@ const router = express.Router();
 // 늘릴 때는 admin 집계 화면도 같이 본다 — 아무 문자열이나 받으면 집계가 쓰레기가 된다.
 // VISITS-2026-10-20: daily_visit = 운영 도메인에서 브라우저당 하루 1회(식별자 없음) — /api/visits/today 가 센다.
 const EVENTS = new Set(['first_load', 'signup', 'search', 'report', 'daily_visit']);
+const DAILY_VISIT_IP_CAP = 30;
 const cut = (v, n) => {
   const s = String(v == null ? '' : v).trim();
   return s ? s.slice(0, n) : null;
@@ -34,6 +35,18 @@ router.post('/', async (req, res) => {
 
   const admin = getSupabaseAdmin();
   if (!admin) return res.status(204).end();
+
+  // AUDIT3-CAP-1112 (보안 점검 run-3, daily-visit-event-inflation): daily_visit 는 화면의 "오늘 방문", "누적 방문" 숫자가 된다.
+  //   인증도 일일 한도도 없어 한 곳에서 계속 보내면 숫자를 부풀릴 수 있었다. IP 하나가 하루 30건까지만 센다.
+  //   30 은 같은 IP 를 여러 사람이 쓰는 경우(공유기, 통신사)를 막지 않으려는 값이다. 넘으면 조용히 버린다(204).
+  if (event === 'daily_visit') {
+    try {
+      const { incrementUsage, getClientIp, todayKey, secondsUntilMidnight } = require('../middleware/dailyLimit');
+      const ip = require('../utils/ipKey').normalizeIpKey(getClientIp(req));
+      const { used } = await incrementUsage(`dl:dvisit:${todayKey()}:${ip}`, secondsUntilMidnight());
+      if (used > DAILY_VISIT_IP_CAP) return res.status(204).end();
+    } catch (_) { /* 세지 못하면 막지 않는다 */ }
+  }
 
   try {
     await admin.from('visit_attribution').insert({

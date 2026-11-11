@@ -288,3 +288,43 @@ test('run-3 후속: 단지 검색어는 100자로 자르고, 채팅 제목 변�
   assert.ok(Number(process.hrtime.bigint() - t0) / 1e6 < 50);
   assert.equal('## 둘째 제목<br>본문'.replace(re, '[$1]'), '[둘째 제목]<br>본문');
 });
+
+// ── 보안 점검 run-3 남은 항목 (2026-11-12) ─────────────────────────────────────────────
+function routeHandlers(router, method, p) {
+  const layer = router.stack.find((l) => l.route && l.route.path === p && l.route.methods[method]);
+  return layer.route.stack.map((s) => s.handle);
+}
+test('run-3: 방문 기록(daily_visit)은 IP 하나가 하루 30건까지만 쌓인다, 다른 이벤트는 그대로', async () => {
+  const dbClient = require('../db/client');
+  const orig = dbClient.getSupabaseAdmin;
+  const inserted = [];
+  dbClient.getSupabaseAdmin = () => ({ from: () => ({ insert: async (row) => { inserted.push(row.event); return { error: null }; } }) });
+  delete require.cache[require.resolve('../routes/attribution')];
+  try {
+    const router = require('../routes/attribution');
+    const handler = routeHandlers(router, 'post', '/').pop();
+    const call = async (event, ip) => { const res = { status() { return this; }, end() {}, json() {} }; await handler({ body: { event }, ip, headers: {} }, res); };
+    for (let i = 0; i < 35; i++) await call('daily_visit', '203.0.113.50');
+    assert.equal(inserted.filter((e) => e === 'daily_visit').length, 30, `쌓인 daily_visit ${inserted.length}건`);
+    await call('daily_visit', '203.0.113.51');
+    assert.equal(inserted.filter((e) => e === 'daily_visit').length, 31, '다른 IP 는 영향 없음');
+    for (let i = 0; i < 40; i++) await call('search', '203.0.113.50');
+    assert.equal(inserted.filter((e) => e === 'search').length, 40, '다른 이벤트에는 상한을 걸지 않는다');
+  } finally { dbClient.getSupabaseAdmin = orig; delete require.cache[require.resolve('../routes/attribution')]; }
+});
+
+test('run-3: 피드백과 오류 신고는 보내는 쪽마다 하루 30건으로 묶인다', async () => {
+  const router = require('../routes/feedback');
+  for (const p of ['/ai', '/data-error']) {
+    const names = routeHandlers(router, 'post', p).map((h) => h.name);
+    assert.ok(names.includes('feedbackCap'), `${p} 에 상한이 없다`);
+    assert.ok(names.indexOf('feedbackCap') > names.indexOf('optionalAuth') || names.indexOf('optionalAuth') === -1, '로그인 확인 뒤에 세어야 사용자 단위로 묶인다');
+  }
+  const cap = routeHandlers(router, 'post', '/ai').find((h) => h.name === 'feedbackCap');
+  let passed = 0, blocked = 0;
+  for (let i = 0; i < 33; i++) {
+    const res = { status(c) { this.c = c; return this; }, json() { blocked++; } };
+    await cap({ ip: '203.0.113.60', headers: {} }, res, () => { passed++; });
+  }
+  assert.equal(passed, 30); assert.equal(blocked, 3);
+});
