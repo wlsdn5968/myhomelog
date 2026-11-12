@@ -1354,7 +1354,14 @@ async function fetchCandidateApts(admin, input, limit) {
   let txs = [], poolComplete = false;
   {
     // ① 첫 페이지 단독 — 콜드 경합 방지. 여기서 덜 차면(구 단위 선택 등) 더 볼 것도 없다.
-    const { data: first, error: firstErr } = await _newPageQuery().range(0, PAGE - 1);
+    let { data: first, error: firstErr } = await _newPageQuery().range(0, PAGE - 1);
+    // COLD-RETRY-2026-11-13 (운영 실측): 서울 전체 첫 페이지가 차가운 상태에서 8초 제한(57014)을 넘어 보고서가 500 이었다.
+    //   실행 계획: 날짜 인덱스로 전국 9.2만 행을 훑으며 거른다. 같은 쿼리가 데워진 뒤에는 106ms, 운영에서도 재시도는 성공했다.
+    //   인덱스 추가는 DB 용량(82%) 부담이라 하지 않고, 시간 초과일 때만 한 번 다시 묻는다(화면 제한 90초 안).
+    if (firstErr && /statement timeout|57014/i.test(`${firstErr.code || ''} ${firstErr.message || ''}`)) {
+      logger.warn({ region }, '보고서 후보 첫 페이지 시간 초과 — 한 번 다시 시도');
+      ({ data: first, error: firstErr } = await _newPageQuery().range(0, PAGE - 1));
+    }
     if (firstErr) throw firstErr;
     txs = first || [];
     if (txs.length < PAGE) poolComplete = true;
