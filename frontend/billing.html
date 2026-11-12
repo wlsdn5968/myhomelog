@@ -315,7 +315,7 @@ async function init(){
 
   // PG-MODE-2026-08-28: 서버 mode 판정별 안내. 차단 사유를 사용자에게 정확히 말한다.
   if(!tossClientKey){
-    setStatus('warn', '프로 플랜은 정식 출시를 준비하고 있어요. 지금은 플랜 안내만 볼 수 있어요.');
+    setStatus('warn', '내집로그는 무료 서비스라 결제를 받지 않아요.');
   } else if(!confirmEnabled){
     setStatus('warn', '결제 승인 설정을 마무리하고 있어요. 곧 결제할 수 있어요.');
   } else if(window.PG_MODE === 'mismatch'){

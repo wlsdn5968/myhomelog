@@ -22,6 +22,9 @@ const router = express.Router();
 // VISITS-2026-10-20: daily_visit = 운영 도메인에서 브라우저당 하루 1회(식별자 없음) — /api/visits/today 가 센다.
 const EVENTS = new Set(['first_load', 'signup', 'search', 'report', 'daily_visit']);
 const DAILY_VISIT_IP_CAP = 30;
+// 한 시간 방문 경보 기준 40. 근거(visit_attribution 실측): 10-20~11-11 정상 방문은 하루 1~69건, 한 시간 최대 8건.
+//   수집기가 온 11-12 는 하루 977건, 한 시간 최대 97건. 정상 최대의 5배라 사람 방문으로는 울리지 않는다.
+const VISIT_SURGE_HOURLY = Math.max(10, parseInt(process.env.VISIT_SURGE_HOURLY || '40', 10) || 40);
 const cut = (v, n) => {
   const s = String(v == null ? '' : v).trim();
   return s ? s.slice(0, n) : null;
@@ -45,6 +48,17 @@ router.post('/', async (req, res) => {
       const ip = require('../utils/ipKey').normalizeIpKey(getClientIp(req));
       const { used } = await incrementUsage(`dl:dvisit:${todayKey()}:${ip}`, secondsUntilMidnight());
       if (used > DAILY_VISIT_IP_CAP) return res.status(204).end();
+      // SURGE-ALERT-2026-11-13 (중국 클라우드 수집기 사고 후속): 2026-11-12 에 방문이 하루 25 → 950 으로 뛰었는데
+      //   알려 주는 장치가 없어 운영자가 화면을 보고서야 알았다. 한 시간 방문 수가 기준을 넘는 순간 Sentry 경보(운영자 메일)를 한 번 보낸다.
+      //   계수는 이미 쓰는 Redis INCR 한 번이라 비용이 거의 없다. 기준 10배를 넘으면 한 번 더 보낸다.
+      const hourKey = new Date().toISOString().slice(0, 13).replace(/\D/g, '');
+      const { used: hourUsed } = await incrementUsage(`dl:dvisit-hour:${hourKey}`, 7200);
+      if (hourUsed === VISIT_SURGE_HOURLY || hourUsed === VISIT_SURGE_HOURLY * 10) {
+        require('../sentry').captureMessage(`방문 급증: 이번 시간(UTC ${hourKey}) 방문 기록 ${hourUsed}건 — 수집기 의심, Vercel 방화벽 트래픽에서 AS 확인`, {
+          level: hourUsed >= VISIT_SURGE_HOURLY * 10 ? 'error' : 'warning',
+          tags: { monitor: 'visit-surge', country: String(req.headers['x-vercel-ip-country'] || '').slice(0, 2) },
+        });
+      }
     } catch (_) { /* 세지 못하면 막지 않는다 */ }
   }
 

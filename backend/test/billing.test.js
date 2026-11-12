@@ -379,7 +379,8 @@ test('billing 라우터 배선 — requireAuth 게이트가 보호 대상 라우
   const lines = src.split('\n');
 
   // 1) 게이트 존재 — router.use(...) 블록 안에서 requireAuth 를 호출한다
-  const useIdx = lines.findIndex((l) => /^\s*router\.use\(/.test(l));
+  // NO-BILLING-2026-11-13: 결제 쓰기 경로 차단(router.use)이 인증 게이트 앞에 하나 더 있다 — requireAuth 를 부르는 router.use 를 찾는다.
+  const useIdx = lines.findIndex((l, i) => /^\s*router\.use\(/.test(l) && /requireAuth\s*\(/.test(lines.slice(i, i + 6).join(' ')));
   assert.ok(useIdx >= 0, 'billing.js 에 router.use 게이트가 없다 — 결제 라우트가 무인증으로 열린다');
   const gateBlock = lines.slice(useIdx, useIdx + 6).join('\n');
   assert.match(gateBlock, /requireAuth\s*\(/,
@@ -496,4 +497,39 @@ test('billing.html — "PG 심사 진행 중" 안내는 서버 mode 차단(body.
   assert.match(html, /body:not\(\.pg-blocked\) \.pg-blocked-only \{ display:none \}/, '스코프 CSS 규칙이 없다');
   assert.match(html, /<div(?: style="[^"]*")?>· 상호: <span id="bizName">/, '표시의무 항목(상호)이 조건부로 바뀌었다 — 항상 노출이어야 한다');
   assert.doesNotMatch(html, /class="pg-blocked-only"[^>]*>· (상호|대표자|사업장 소재지|고객센터)/, '표시의무 항목이 pg-blocked-only 안에 들어갔다');
+});
+
+// NO-BILLING-2026-11-13 (운영자 지시: 무료 서비스, 결제 경로 차단): 결제 요청, 승인, 웹훅, 환불은 BILLING_ENABLED 가 없으면
+//   토스 키가 있어도 인증보다 먼저 410 이다. 실제 express 앱에 붙여 요청으로 확인한다.
+test('결제 쓰기 경로는 BILLING_ENABLED 없이 410, 조회 경로는 막지 않는다', async () => {
+  const express = require('express');
+  const http = require('node:http');
+  const prev = { b: process.env.BILLING_ENABLED, t: process.env.TOSS_SECRET_KEY };
+  delete process.env.BILLING_ENABLED;
+  process.env.TOSS_SECRET_KEY = 'test_sk_dummy_for_gate_check';
+  const app = express();
+  app.use(express.json());
+  app.use('/api/billing', require('../routes/billing'));
+  const srv = app.listen(0);
+  const port = srv.address().port;
+  const call = (method, p) => new Promise((resolve, reject) => {
+    const r = http.request({ host: '127.0.0.1', port, path: p, method, headers: { 'content-type': 'application/json', 'content-length': 2 } }, (res) => {
+      let b = ''; res.on('data', (c) => { b += c; }); res.on('end', () => resolve({ status: res.statusCode, body: b }));
+    });
+    r.on('error', reject); r.end('{}');
+  });
+  try {
+    for (const p of ['/api/billing/checkout', '/api/billing/confirm', '/api/billing/webhook', '/api/billing/payments/abc/refund']) {
+      const r = await call('POST', p);
+      assert.equal(r.status, 410, `${p} 가 410 이 아니다: ${r.status}`);
+      assert.match(r.body, /billing_disabled/);
+    }
+    // 조회와 해지는 이 차단에 걸리지 않는다(로그인 없으면 인증 게이트의 401).
+    assert.equal((await call('GET', '/api/billing/me')).status, 401);
+    assert.equal((await call('POST', '/api/billing/cancel')).status, 401);
+  } finally {
+    srv.close();
+    if (prev.b === undefined) delete process.env.BILLING_ENABLED; else process.env.BILLING_ENABLED = prev.b;
+    if (prev.t === undefined) delete process.env.TOSS_SECRET_KEY; else process.env.TOSS_SECRET_KEY = prev.t;
+  }
 });

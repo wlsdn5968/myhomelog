@@ -620,7 +620,7 @@ app.get('/api/health', optionalAuth, async (req, res) => {
   }
 
   // MOB-AUDIT-2026-05-03: STAB #42 — ai_ready·deploy version 추가 (운영자 키 만료·배포 추적)
-  const _aiReady = !!process.env.ANTHROPIC_API_KEY;
+  const _aiReady = false; // NO-PAID-AI-2026-11-13: 유료 AI 를 쓰지 않는다(키가 남아 있어도 읽지 않는다)
   const _deploy = process.env.VERCEL_GIT_COMMIT_SHA ? process.env.VERCEL_GIT_COMMIT_SHA.slice(0, 7) : null;
   // MOB-AUDIT-2026-05-03: regulations stale 알림 — 6개월(180일) 초과 시 운영자 갱신 신호
   let _regulations = null;

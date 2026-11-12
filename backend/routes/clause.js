@@ -6,6 +6,7 @@ const express = require('express');
 const router = express.Router();
 // LAZY-AI-2026-11-08 (Vercel Active CPU, plans/188): AI 모듈(@anthropic-ai/sdk 포함)은 이 기능을 쓸 때만 읽는다. 서버가 뜰 때마다 읽으면 시작 CPU 가 는다.
 const _ai = () => require('../services/aiService');
+const CLAUSE_AI_REMOVED = true; // NO-PAID-AI-2026-11-13
 const { filterAdviceOutputDeep, CLAUSE_FILTER_FIELDS } = require('../services/aiOutputFilter');
 const { getCitationsForIssues } = require('../services/legalService');
 const cache = require('../cache');
@@ -33,6 +34,12 @@ router.post('/', async (req, res) => {
   // EXPRESS5-BODY-2026-09-06 (Plan 073): body-parser 2.x 는 파싱 안 되면 req.body 가 undefined.
   let { aptName, area, price, ltv, houseStatus, isFirstBuyer, buildYear, issues, score } = req.body || {};
   if (!aptName) return res.status(400).json({ error: 'aptName 필수' });
+
+  // NO-PAID-AI-2026-11-13 (운영자 지시 "유료 api 아예 못쓰도록 우리 서버에서도 없애버려"): AI 특약은 영구 중단.
+  //   운영자, 프로 플랜 누구도 통과하지 않는다. 화면의 특약 초안은 규칙 템플릿(buildRuleClause)이라 영향이 없다.
+  if (CLAUSE_AI_REMOVED) {
+    return res.status(410).json({ code: 'ai_removed', error: 'AI 특약은 제공하지 않아요. 특약 초안 화면의 표준 특약 템플릿을 이용해 주세요.' });
+  }
 
   // PRO-GATE-2026-08-19 (Sprint NNNNNNN-3, 사업기획 v2): 무료 경로의 AI 특약 제거.
   //   프론트는 이번 스프린트부터 규칙 엔진(buildRuleClause)을 기본으로 렌더하고 이 라우트를 부르지

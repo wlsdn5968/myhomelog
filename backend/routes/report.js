@@ -23,7 +23,6 @@
  */
 const express = require('express');
 // LAZY-AI-2026-11-08 (Vercel Active CPU, plans/188): AI 모듈(@anthropic-ai/sdk 포함)은 이 기능을 쓸 때만 읽는다. 서버가 뜰 때마다 읽으면 시작 CPU 가 는다.
-const callAI = (...a) => require('../services/aiService').callAI(...a);
 const { filterAdviceOutputDeep, REPORT_FILTER_FIELDS } = require('../services/aiOutputFilter');
 const { getSupabaseAdmin } = require('../db/client');
 const { getSnapshot } = require('../services/regulationsService');
@@ -149,7 +148,7 @@ router.post('/generate', async (req, res) => {
   //   점수·표시 규칙을 바꾸면 이 값을 올릴 것.
   //   v2 감사 P0-2(카카오 실패 null) · v3 감사 P1-5(모름 보너스 중간값) — 올릴 때 사유를 한 줄 추가할 것.
   const SCORE_VERSION = 'v4'; // DISTRICT-SCALE-2026-09-05 위계 가점 축소
-  const cacheKey = `report:${SCORE_VERSION}:${crypto.createHash('sha256').update(JSON.stringify(_sortedInput)).digest('hex').slice(0, 16)}`;
+  const cacheKey = `report:${SCORE_VERSION}:noai:${crypto.createHash('sha256').update(JSON.stringify(_sortedInput)).digest('hex').slice(0, 16)}`;
   let hit = cache.get(cacheKey);
   // REDIS-CACHE-2026-07-14 (Sprint KKKKK): 로컬 미스 시 Redis 2차 조회 — 다른 인스턴스가 만든 보고서
   //   재사용(동일 입력의 AI 재호출 차단). 미설정/오류 시 undefined → 기존 흐름 그대로.
@@ -235,84 +234,10 @@ router.post('/generate', async (req, res) => {
     ]);
     const _freeCtx = { dataBasis: _dataBasis, unsoldTrend: _unsold, regionTxTrend: _regionTrend };
 
-    // 3) AI prompt 작성
-    const prompt = buildReportPrompt(userInput, policyData, candidates, _freeCtx);
-
-    // 4) AI 호출 — REPORT_SPECIFIC 을 systemSpecific 으로 명시 전달
-    //    Phase 6 (2026-04-26): 4500 → 6500 (단지 확장 후 6087자 잘림 실측 대응)
-    //    Phase B-1 (2026-04-29): 출력 분량 제약 강화 + 6500 → 5500 (1차 조정, -15%)
-    //    Phase B-2 (2026-05-01): SHARED_BASE + REPORT_SPECIFIC 분리 — endpoint 간 cache 공유 + ttl 1h
-    //    P2-3 (2026-05-04): maxTokens 단지 수 비례 — 단지 7개+amenities 풍부 시 잘림 차단
-    //      base 1500 (longTerm + tips + 헤더) + 단지당 600 → 7단지 = 5700
-    const _candidatesCount = Array.isArray(candidates) ? candidates.length : 7;
-    const _maxTokens = Math.min(7000, 1500 + _candidatesCount * 600);
-    // AI-DEGRADE-2026-07-11 (Sprint HHHH, 운영자 "유료 API 없이 살리는 방법 우선"):
-    //   기존엔 AI 실패(크레딧 소진·429·503·파싱 실패) 시 보고서 전체가 죽고, 이미 수집한
-    //   candidates(MOLIT+KAPT+Kakao 결정론 데이터)를 통째로 버렸음 (라이브 재현: Anthropic
-    //   credit balance too low → 500). AI 는 문장 생성만 담당하므로 실패 시
-    //   buildDataOnlyReport() 로 데이터 전용 보고서를 반환 — 핵심 가치(단지 정리·객관정보·
-    //   정책 컨텍스트·priceFit)는 AI 없이 유지. 응답에 aiUnavailable 플래그로 정직하게 표시.
-    let parsed;
-    let _aiDown = null;
-    try {
-    const result = await callAI(
-      [{ role: 'user', content: prompt }],
-      false,
-      { userId, systemSpecific: REPORT_SPECIFIC, maxTokens: _maxTokens }
-    );
-    const cleaned = String(result.content || '').replace(/```json|```/g, '').trim();
-
-    // Phase B-2 (2026-05-01): char 기반 → token 기반 임계 (시나리오 B 5723 char vs 4167 token 단위 불일치 fix)
-    //   max_tokens 5500 의 95% = 5225 token. cleaned_len 도 진단용으로 함께 기록.
-    if ((result.usage?.output_tokens || 0) > 5225) {
-      logger.warn({
-        cleaned_len: cleaned.length,
-        usage: result.usage,
-        max_tokens: 5500,
-        threshold_tokens: 5225,
-      }, '보고서 출력이 max_tokens 95% 도달 — 잘림 risk');
-    }
-    // MOB-AUDIT-2026-05-03: 그리디 매칭 → 응답 끝 부가 텍스트 시 invalid JSON
-    //   → balanced brace counter 로 정확 매칭 (첫 { 부터 brace 0 도달 위치까지)
-    let jsonStr = cleaned;
-    const _firstBrace = cleaned.indexOf('{');
-    if (_firstBrace >= 0) {
-      let depth = 0, inStr = false, esc = false, end = -1;
-      for (let i = _firstBrace; i < cleaned.length; i++) {
-        const ch = cleaned[i];
-        if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; }
-        else if (ch === '"') inStr = true;
-        else if (ch === '{') depth++;
-        else if (ch === '}') { depth--; if (depth === 0) { end = i; break; } }
-      }
-      if (end >= 0) jsonStr = cleaned.slice(_firstBrace, end + 1);
-    }
-    try {
-      parsed = JSON.parse(jsonStr);
-    } catch (e) {
-      // 진단 로그 — sample_head/tail 은 운영자 디버그용 유지 (response body 의 _debug 는 제거)
-      logger.error({
-        err: e.message,
-        sample_head: cleaned.slice(0, 800),
-        sample_tail: cleaned.slice(-400),
-        cleaned_len: cleaned.length,
-      }, '보고서 AI JSON 파싱 실패');
-      throw e; // AI-DEGRADE: 기존 502 대신 데이터 전용 보고서로 degrade
-    }
-    } catch (aiErr) {
-      // AI 실패 전 분류: 사용자 월예산(budget) vs 그 외(upstream — 크레딧 소진·503·타임아웃·파싱)
-      const { BudgetExceededError: _BE } = require('../services/aiService');
-      _aiDown = aiErr instanceof _BE ? 'budget' : 'upstream';
-      logger.warn({ err: aiErr.message, mode: _aiDown, userId: userId || null },
-        '보고서 AI 실패 — 데이터 전용 보고서로 degrade');
-      // SENTRY-EXPECTED-2026-09-02 (감사 P0-4): 이 열화는 **설계된 정상 경로**다(사용자는 데이터판 보고서를 받는다).
-      //   그런데 Sentry 의 Anthropic 자동 계측(mechanism: auto.ai.anthropic, handled:no)이 우리 catch 보다
-      //   먼저 잡아 error 로 올려, "신규 오류 0건" 감시를 오염시켰다(NODE-7 36건).
-      //   → Sentry 에서는 걸러내되(sentry.js IGNORED_ERROR_PATTERNS) **가시성은 여기서 유지**한다:
-      //     observeDegrade 는 Redis 21일 카운터라 /api/health 의 searchDegrade 로 그대로 보인다.
-      try { await require('../services/degradeStats').observeDegrade(`report-ai-${_aiDown}`); } catch (_) { /* 관측 실패가 보고서를 막지 않는다 */ }
-      parsed = buildDataOnlyReport(userInput, candidates, policyData, _freeCtx);
-    }
+    // NO-PAID-AI-2026-11-13 (운영자 지시): 유료 AI 를 부르지 않는다. 보고서는 늘 데이터 전용판이다
+    //   (MOLIT, KAPT, Kakao 결정론 데이터와 정책 맥락). AI 가 빠진 것이 "일시"가 아니라 설계라 aiUnavailable 표시도 하지 않는다.
+    const _aiDown = null;
+    const parsed = buildDataOnlyReport(userInput, candidates, policyData, _freeCtx);
 
     // 안전망: markdown 강조 표기 (** __ ##) 자동 제거 — prompt 가 금지해도 가끔 새어나옴
     stripMarkdownDeep(parsed);
@@ -606,7 +531,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
     `아래 ${apartments.length}개 단지는 국토교통부 실거래 기준 조건 부합 단지 정리예요. 의사결정 책임은 본인에게 있어요.`,
     fc.rate
       ? `현재 금리 기준: ${fc.rate}. 대출 한도·월 상환액은 도구 › 대출 계산 화면에서 이 금리로 계산돼요.`
-      : 'AI 분석 코멘트는 현재 일시 중단 상태예요. 실거래, 세대수, 주차, 규제 등 객관 데이터만 표시해요.',
+      : '실거래, 세대수, 주차, 규제 등 공공 데이터만으로 정리했어요.',
   ];
   if (fc.unsold) coreMessages.push(`${fc.unsold}. 수치 나열이며 시장 예측이 아니에요.`);
   if (fc.txTrend) coreMessages.push(`${fc.txTrend}. 수치 나열이며 시장 예측이 아니에요.`);
@@ -693,7 +618,7 @@ function buildDataOnlyReport(userInput, candidates, policy, freeCtx) {
     checklist,
     cautions,
     apartments,
-    longTermView: 'AI 시나리오 분석이 일시 중단 상태예요. 단지별 실거래 추이·신고가 이력은 각 단지 상세의 실거래가·가격 시그널 탭에서 확인할 수 있어요.',
+    longTermView: '단지별 실거래 추이와 신고가 이력은 각 단지 상세의 실거래가, 가격 신호 탭에서 확인할 수 있어요.',
     tips,
     _dataOnly: true,
   };
@@ -2041,6 +1966,7 @@ JSON만 반환. 다른 텍스트 X.`;
 //   유료 호출 없이 전수 확인이 가능하다. router 동작은 그대로다(export 추가뿐).
 module.exports = router;
 module.exports.fetchCandidateApts = fetchCandidateApts;
+module.exports._buildReportPrompt = buildReportPrompt; // NO-PAID-AI-2026-11-13: 호출하지 않는다(기록과 계약 테스트용)
 // TEST-EXPORT-2026-09-02 (감사 P0-2): 회귀 주입 실측 결과 이 함수의 null 가드가 **무커버리지**였다
 //   (가드를 지우고 테스트를 돌렸더니 136 pass 로 그냥 통과했다). 순수 함수라 export 해서 실제 실행으로 고정한다.
 module.exports.applyObjectiveScore = applyObjectiveScore;

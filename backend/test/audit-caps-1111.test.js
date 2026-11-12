@@ -413,3 +413,36 @@ test('run-3: 단지 이름 없는 월별 실거래 조회는 최근 36개월 안
   const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
   assert.ok(html.includes('const months=[prevYm(1), prevYm(2), prevYm(3)];'), '화면의 이름 없는 조회 범위가 바뀌었다면 상한도 다시 볼 것');
 });
+
+// SURGE-ALERT-2026-11-13: 방문이 한 시간 기준(40)을 넘는 순간 Sentry 경보를 한 번 보낸다(10배에서 한 번 더).
+test('방문 급증 경보: 한 시간 방문 기록이 기준에 닿으면 Sentry 경보가 정확히 한 번 나간다', async () => {
+  const sentryPath = require.resolve('../sentry');
+  const dlPath = require.resolve('../middleware/dailyLimit');
+  const dbPath = require.resolve('../db/client');
+  const routePath = require.resolve('../routes/attribution');
+  const saved = { s: require.cache[sentryPath], dl: require.cache[dlPath], db: require.cache[dbPath], r: require.cache[routePath] };
+  const sent = [];
+  const counts = new Map();
+  const realDl = require('../middleware/dailyLimit');
+  require.cache[sentryPath] = { id: sentryPath, filename: sentryPath, loaded: true, exports: { captureMessage: (m, o) => sent.push({ m, o }), captureException() {} } };
+  require.cache[dlPath] = { id: dlPath, filename: dlPath, loaded: true, exports: { ...realDl,
+    incrementUsage: async (k) => { const n = (counts.get(k) || 0) + 1; counts.set(k, n); return { used: n }; } } };
+  require.cache[dbPath] = { id: dbPath, filename: dbPath, loaded: true, exports: { getSupabaseAdmin: () => ({ from: () => ({ insert: async () => ({}) }) }) } };
+  delete require.cache[routePath];
+  try {
+    const router = require('../routes/attribution');
+    const layer = router.stack.find((l) => l.route && l.route.path === '/' && l.route.methods.post);
+    const handle = layer.route.stack[layer.route.stack.length - 1].handle;
+    for (let i = 0; i < 45; i++) {
+      const req = { body: { event: 'daily_visit' }, headers: { 'x-forwarded-for': `10.0.${Math.floor(i / 250)}.${i % 250}`, 'x-vercel-ip-country': 'CN' }, ip: `10.0.0.${i}`, socket: {} };
+      const res = { statusCode: 200, status(c) { this.statusCode = c; return this; }, end() { return this; }, json() { return this; } };
+      await handle(req, res);
+    }
+    const surge = sent.filter((x) => x.o && x.o.tags && x.o.tags.monitor === 'visit-surge');
+    assert.equal(surge.length, 1, `경보 ${surge.length}건`);
+    assert.match(surge[0].m, /방문 급증: 이번 시간\(UTC \d{10}\) 방문 기록 40건/);
+    assert.equal(surge[0].o.level, 'warning');
+  } finally {
+    for (const [p, v] of [[sentryPath, saved.s], [dlPath, saved.dl], [dbPath, saved.db], [routePath, saved.r]]) { if (v) require.cache[p] = v; else delete require.cache[p]; }
+  }
+});

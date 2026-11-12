@@ -434,3 +434,21 @@ test('사실과 다른 안내 문구 정정: 광역 분석 범위, 복비 기준
   assert.ok(!html.includes('2025년 현행'));
   assert.ok(html.includes('공인중개사법 시행규칙 별표 1 상한요율 기준이에요'));
 });
+
+// NO-PAID-AI / NO-BILLING-2026-11-13 (운영자 지시: 무료 서비스, 유료 AI 와 결제 차단): 화면이 없는 기능을 약속하지 않는다.
+test('무료 서비스 문구: AI 생성, 유료 플랜 출시 약속, Anthropic 표기가 화면과 고지에 남지 않는다', () => {
+  const fs2 = require('node:fs');
+  const path2 = require('node:path');
+  const rd = (f) => fs2.readFileSync(path2.join(__dirname, '../../frontend', f), 'utf8');
+  const idx = rd('index.html');
+  for (const bad of ['AI가 한 장 분량의', 'AI로 분석해요', 'AI 위험 분석 중', '· AI 분석: Anthropic Claude', 'AI 맞춤 초안은 프로 플랜에서 준비 중',
+    '유료%20플랜%20출시%20알림', '프로 플랜이 나오면 하루 횟수가 늘어나요', 'Supabase·Vercel·Anthropic', 'AI(Anthropic Claude) 응답은']) {
+    assert.ok(!idx.includes(bad), `index.html 에 남았다: ${bad}`);
+  }
+  assert.ok(idx.includes('아니에요. 내집로그는 무료 서비스라 결제를 받지 않아요.'));
+  assert.ok(rd('billing.html').includes("setStatus('warn', '내집로그는 무료 서비스라 결제를 받지 않아요.');"));
+  const terms = rd('terms.html');
+  assert.ok(!/AI 기반|AI 응답/.test(terms), '약관에 AI 표현이 남았다');
+  // 개인정보처리방침은 사전 공지 의무 때문에 예고 표에 삭제를 싣고 본문은 11-17 개정 때 함께 바꾼다.
+  assert.ok(rd('privacy.html').includes('<td>6. 국외이전: Anthropic, PBC</td><td>이전 시점: AI 채팅 사용 시</td><td>삭제 (2026년 11월 13일부터 이전하지 않아요)</td>'));
+});

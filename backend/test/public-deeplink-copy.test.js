@@ -46,8 +46,10 @@ test('PUBLIC-DEEPLINK-COPY — index.html 에 "AI 특약 초안" 문구가 남�
   assert.equal(count, 0,
     `"AI 특약 초안" 이 ${count}회 남아 있다 — 무료 경로는 규칙 엔진 템플릿(clause.js 는 pro/admin 외 403)이라 AI 라고 쓰면 안 된다`);
   // 약관의 AI 면책(:3136-3138 부근)은 "AI가 잘못된 …·AI 환각으로…" 형태라 위 문자열과 겹치지 않는다 — 그대로 유지돼야 한다.
-  assert.ok(html.includes('AI 환각으로 발생한 잘못된 특약 문구'),
-    '약관의 AI 면책 문구(보고서는 실제 LLM 사용 — 사실)가 사라졌다. 이 문구는 Plan 115 범위 밖이라 건드리면 안 된다');
+  // NO-PAID-AI-2026-11-13: 유료 AI 제거 뒤 약관 면책은 "자동 정리의 한계" 로 바뀌었다(면책 범위는 유지).
+  assert.ok(html.includes('자동으로 만든 특약 문구, 법령 안내, 세금 계산, 대출 한도 추정의 오류로 인한 손해'),
+    '약관의 자동 정리 면책 문구가 사라졌다');
+  assert.ok(!html.includes('AI(Anthropic Claude) 응답은'), '쓰지 않는 AI 를 약관이 설명한다');
   // COPY-FACT-2026-09-26 (코디네이터 지적, Plan 115 추가분): exportClausePDF() 는 같은 무료 규칙 엔진
   //   템플릿 결과를 PDF 로 내보낼 뿐인데 워터마크·면책에서 "AI 가 만들었다"고 말했다 — P4-① 과 동일 오류.
   //   함수 구간만 잘라 확인한다(:3143 약관 "AI가 생성한 모든 콘텐츠…"는 보고서 LLM 을 덮는 문구라 범위 밖).

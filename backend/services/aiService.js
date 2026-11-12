@@ -11,14 +11,13 @@
  *   - SDK 인스턴스 생성 실패 = ANTHROPIC_API_KEY 누락이거나 패키지 손상.
  *     이 경우엔 빠르게 throw 해서 부팅 시점에 알아채는 편이 더 안전.
  */
-const Anthropic = require('@anthropic-ai/sdk');
-const crypto = require('crypto');
-const logger = require('../logger');
-const cache = require('../cache');
-const budget = require('./budgetService');
-const globalAiBudget = require('./globalAiBudget'); // 전역 지출 상한 (kill-switch)
+// NO-PAID-AI-2026-11-13 (운영자 지시 "유료 api 아예 못쓰도록 우리 서버에서도 없애버려"):
+//   Anthropic SDK 와 클라이언트를 지웠다. callAI 는 네트워크에 나가지 않고 바로 AiDisabledError 를 던진다.
+//   보고서는 데이터 전용 보고서(report.js buildDataOnlyReport)만 만들고, AI 특약(clause.js)은 410 이다.
+//   아래 프롬프트 상수는 문구 규칙 검사(테스트)와 기록용으로만 남는다. 다시 켜려면 이 파일을 되돌리고 의존성을 다시 설치해야 한다.
+const globalAiBudget = require('./globalAiBudget'); // 오류 클래스 내보내기(하위 호환)만 쓴다
 
-// 예산 초과 전용 에러 — 상위(라우터)에서 status 429 로 변환
+// 예산 초과 전용 에러 — 하위 호환용으로 남긴다(지금은 던지는 곳이 없다)
 class BudgetExceededError extends Error {
   constructor(info) {
     super('월간 AI 예산 한도에 도달했습니다.');
@@ -27,19 +26,12 @@ class BudgetExceededError extends Error {
   }
 }
 
-let anthropicClient;
-try {
-  // P0 (Agent 3차 audit, 2026-05-04): timeout 명시 — SDK default 600s 가 Vercel maxDuration 300s 와 충돌
-  //   기존: timeout 옵션 없음 → SDK 가 600s 대기 → Vercel 함수 강제 종료 → 사용자 502 + 비용 누적
-  //   변경: timeout 60s + maxRetries 2 → 함수 timeout 전에 retry 또는 명확 에러
-  anthropicClient = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-    timeout: 60000, // 60s
-    maxRetries: 2,
-  });
-} catch (e) {
-  // 부팅 시점 경고만 — callAI 호출 시 명확한 에러 발생.
-  logger.error({ err: e }, 'Anthropic SDK 초기화 실패 — ANTHROPIC_API_KEY 확인 필요');
+// 유료 AI 를 쓰지 않는다는 뜻의 오류
+class AiDisabledError extends Error {
+  constructor() {
+    super('유료 AI 호출은 이 서비스에서 제거됐습니다.');
+    this.code = 'ai_disabled';
+  }
 }
 
 // ── 시스템 프롬프트 ────────────────────────────────────────
@@ -168,127 +160,9 @@ const SYSTEM_PROMPT = SHARED_BASE + '\n\n' + SYSTEM_SPECIFIC_DEFAULT;
 //   2) post-call: response.usage 를 user_budget 테이블에 원자 증분
 //
 // 캐시 히트 시점에도 비용은 $0 이지만 사용량 증분은 수행하지 않음 (호출 자체가 없었으므로).
+// eslint-disable-next-line no-unused-vars
 async function callAI(messages, useCache = true, opts = {}) {
-  const userId = opts.userId || null;
-
-  // ── 1) 월간 예산 pre-check (로그인 사용자 한정) ────────────
-  if (userId) {
-    const b = await budget.checkBudget(userId);
-    if (b && !b.allowed) {
-      throw new BudgetExceededError({
-        used: budget.formatUsd(b.usedX1000),
-        limit: budget.formatUsd(b.limitX1000),
-        resetAt: b.resetAt.toISOString(),
-      });
-    }
-  }
-
-  // 캐시 키: SHA-256 hex (Phase 1.7 — base64.slice(0,40) 충돌 제거)
-  // P1-3 (2026-05-04): cache key 에 systemSpecific + systemAppend 포함
-  //   기존: lastMsg 만 → report 의 JSON 응답이 chat 의 같은 lastMsg 에 cache hit 충돌
-  //   변경: 전체 컨텍스트 hash (system 다르면 다른 cache)
-  const lastMsg = messages[messages.length - 1]?.content || '';
-  const cacheCtx = (opts.systemSpecific || '') + '|' + (opts.systemAppend || '') + '|' + (opts.system || '') + '|' + lastMsg;
-  const cacheKey = `ai:${crypto.createHash('sha256').update(cacheCtx).digest('hex')}`;
-
-  if (useCache && messages.length === 1) {
-    const cached = cache.get(cacheKey);
-    if (cached) {
-      logger.debug({ cacheKey }, 'AI 캐시 히트');
-      return { ...cached, fromCache: true };
-    }
-  }
-
-  // ── 1.5) 전역 AI 지출 상한 (kill-switch, 2026-06-01) ──────────
-  //   캐시 미스(=신규 과금 호출)에만 적용. 익명 포함 전체 합산이 일/월 상한 초과 시 차단.
-  //   라우터(chat/clause/report)가 GlobalAiBudgetExceededError → 친절 503 변환.
-  const _gb = await globalAiBudget.checkGlobalAiBudget();
-  if (!_gb.allowed) {
-    logger.warn({ scope: _gb.scope, dayUsedX1000: _gb.dayUsedX1000, monthUsedX1000: _gb.monthUsedX1000,
-      dayCapX1000: _gb.dayCapX1000, monthCapX1000: _gb.monthCapX1000 }, '전역 AI 지출 상한 도달 — 신규 호출 차단');
-    throw new globalAiBudget.GlobalAiBudgetExceededError(_gb);
-  }
-
-  // Phase 3.1: Anthropic Prompt Caching (~86% input cost 절감)
-  // Phase 5+ (2026-04-26): claude-sonnet-4-20250514 deprecated → claude-sonnet-4-5 (latest stable alias)
-  // ENV override: ANTHROPIC_MODEL 로 특정 버전 고정 가능
-  // Phase B-2 (2026-05-01): SHARED_BASE + endpoint specific 두 블록 분리 + ttl 1h
-  //   - opts.systemSpecific 명시 → SHARED_BASE + 해당 specific (report 등). cache 공유 가능
-  //   - opts.system 명시 (legacy) → 단일 블록. backward compat. cache 공유 X
-  //   - 기본 → SHARED_BASE + SYSTEM_SPECIFIC_DEFAULT (chat·clause·news)
-  let systemBlocks;
-  if (opts.system) {
-    systemBlocks = [
-      { type: 'text', text: opts.system, cache_control: { type: 'ephemeral', ttl: '1h' } },
-    ];
-  } else {
-    let specific = opts.systemSpecific || SYSTEM_SPECIFIC_DEFAULT;
-    // Phase B-7 (2026-05-01): opts.systemAppend — 동적 컨텍스트(chat 의 sessionContext 등)를 default 뒤에 append.
-    //   같은 사용자 동일 컨텍스트면 1h cache_read 적중 (두 번째 메시지부터 input 토큰 -30%).
-    //   컨텍스트 변경 시 cache_creation 1회 → 이후 1시간 cache_read.
-    if (opts.systemAppend) {
-      specific = specific + '\n\n' + opts.systemAppend;
-    }
-    systemBlocks = [
-      { type: 'text', text: SHARED_BASE, cache_control: { type: 'ephemeral', ttl: '1h' } },
-      { type: 'text', text: specific, cache_control: { type: 'ephemeral', ttl: '1h' } },
-    ];
-  }
-  const payload = {
-    model: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-5',
-    max_tokens: opts.maxTokens || 1500,
-    system: systemBlocks,
-    messages,
-  };
-
-  if (!anthropicClient) {
-    throw new Error('Anthropic SDK 미초기화 — ANTHROPIC_API_KEY 환경변수가 설정돼 있는지 확인하세요.');
-  }
-  const response = await anthropicClient.messages.create(payload);
-  const result = {
-    content: response.content[0]?.text || '',
-    usage: response.usage,
-    model: response.model,
-  };
-
-  // MOB-AUDIT-2026-05-03: prompt cache 적중률 운영 모니터링 — 비용 50%+ 절감 효과 측정
-  //   cache_creation_input_tokens > 0 = miss (1회만 ↑) / cache_read_input_tokens > 0 = hit (90% 절감)
-  try {
-    const u = response.usage || {};
-    const cacheRead = u.cache_read_input_tokens || 0;
-    const cacheCreation = u.cache_creation_input_tokens || 0;
-    const baseInput = u.input_tokens || 0;
-    const totalInput = cacheRead + cacheCreation + baseInput;
-    const hitPct = totalInput > 0 ? Math.round((cacheRead / totalInput) * 100) : 0;
-    logger.info({
-      model: response.model,
-      input: baseInput,
-      cache_creation: cacheCreation,
-      cache_read: cacheRead,
-      output: u.output_tokens || 0,
-      cache_hit_pct: hitPct,
-      endpoint: opts.systemSpecific ? 'specific' : (opts.system ? 'legacy' : 'default'),
-    }, 'AI usage');
-  } catch (_) { /* 사용량 로그 실패는 삼킨다 */ }
-
-  // ── 2) post-call 사용량 기록 — await (실패는 삼킴, 응답은 정상) ──
-  // FREEZE-FIX-2026-08-09 (Plan 003): 기존 fire-and-forget 은 응답 반환 후 서버리스 동결로 완주
-  //   보장이 없었다(RATE-WARM-2026-08-08 의 HF 실측 선례와 동일 클래스). 비용 카운터가 유실되면
-  //   사용자 월예산·전역 kill-switch 상한이 "구조적 보장"이 아니게 되므로 응답 전에 완주시킨다.
-  if (userId && response.usage) {
-    await budget.recordUsage(userId, response.usage).catch(() => { /* already logged */ });
-  }
-  // 전역 누적 기록 (익명 포함 전체 — kill-switch 카운터)
-  if (response.usage) {
-    await globalAiBudget.recordGlobalAiUsage(response.usage).catch(() => { /* already logged */ });
-  }
-
-  // 단답 질문만 캐시
-  if (useCache && messages.length === 1) {
-    cache.set(cacheKey, result, 1800);
-  }
-
-  return result;
+  throw new AiDisabledError();
 }
 
 // Phase B-8 (2026-05-01): analyzeProperty 함수 제거 — dead code (호출처 0건 검증).
@@ -296,4 +170,4 @@ async function callAI(messages, useCache = true, opts = {}) {
 //   유지비용: 코드 부채 + 잠재 호출 시 입력 비용 risk. 제거가 안전.
 //   필요 시 git history 에서 복원 (commit 직전 ~30일 보존).
 
-module.exports = { callAI, SYSTEM_PROMPT, BudgetExceededError, GlobalAiBudgetExceededError: globalAiBudget.GlobalAiBudgetExceededError };
+module.exports = { callAI, SYSTEM_PROMPT, BudgetExceededError, AiDisabledError, GlobalAiBudgetExceededError: globalAiBudget.GlobalAiBudgetExceededError };

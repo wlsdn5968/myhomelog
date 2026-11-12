@@ -164,6 +164,17 @@ router.get('/plans', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+// NO-BILLING-2026-11-13 (운영자 지시: 서비스는 무료, 결제 경로를 막는다): 돈이 오가는 쓰기 경로
+//   (결제 요청, 승인, 토스 웹훅, 환불)는 BILLING_ENABLED='true' 가 아니면 인증보다 먼저 410 으로 끝낸다.
+//   토스 키가 실수로 들어가도 결제가 열리지 않게 하는 이중 잠금이다. 조회(/config, /plans, /me, /payments)와 해지는 그대로.
+const _MONEY_PATHS = /^\/(checkout|confirm|webhook|payments\/[^/]+\/refund)\/?$/;
+router.use((req, res, next) => {
+  if (req.method === 'POST' && _MONEY_PATHS.test(req.path) && process.env.BILLING_ENABLED !== 'true') {
+    return res.status(410).json({ code: 'billing_disabled', error: '내집로그는 무료 서비스라 결제를 받지 않아요.' });
+  }
+  return next();
+});
+
 // 이하 엔드포인트는 전부 인증 필요 — 단 /webhook 은 예외.
 // AUTH-FIX-2026-05-21 (Codex 지적 + 라인 재검증 확인):
 //   기존: router.use(requireAuth) 가 /webhook(아래 L~)보다 앞 → Toss 서버 호출(JWT 없음)이 401 로 차단.

@@ -666,13 +666,21 @@ test('Sentry 무시 목록: 예상된 AI 열화만 걸러내고 진짜 장애는
 
 
 
-test('보고서 AI 열화는 Sentry 대신 degrade 카운터로 관측된다', () => {
+// NO-PAID-AI-2026-11-13 (운영자 지시): 보고서는 유료 AI 를 부르지 않는다 — 열화 경로 자체가 없어져 관측할 것도 없다.
+//   대신 AI 를 다시 부르는 코드가 들어오지 않았는지와 데이터 전용판을 바로 쓰는지를 고정한다.
+test('보고서는 유료 AI 를 부르지 않고 데이터 전용 보고서를 바로 만든다', () => {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
   const src = fs2.readFileSync(path2.join(__dirname, '../routes/report.js'), 'utf8');
-  // Sentry 에서 걸러내는 대신 관측 경로를 남겨야 한다 — 둘 다 없으면 크레딧 소진이 무성지대가 된다.
-  assert.ok(/observeDegrade\(`report-ai-/.test(src),
-    'AI 열화 지점에 observeDegrade 기록이 없다 — Sentry 에서 걸러내면 관측 수단이 사라진다');
+  assert.doesNotMatch(src, /callAI\(/, 'report.js 가 callAI 를 부른다');
+  assert.match(src, /const parsed = buildDataOnlyReport\(userInput, candidates, policyData, _freeCtx\);/);
+  const ai = fs2.readFileSync(path2.join(__dirname, '../services/aiService.js'), 'utf8');
+  assert.doesNotMatch(ai, /require\('@anthropic-ai\/sdk'\)/, 'aiService 가 Anthropic SDK 를 읽는다');
+  assert.match(ai, /async function callAI\(messages, useCache = true, opts = \{\}\) \{\r?\n\s*throw new AiDisabledError\(\);/);
+  for (const f of ['../../package.json', '../package.json']) {
+    const pkg = JSON.parse(fs2.readFileSync(path2.join(__dirname, f), 'utf8'));
+    assert.ok(!(pkg.dependencies || {})['@anthropic-ai/sdk'], `${f} 에 Anthropic SDK 의존성이 남았다`);
+  }
 });
 
 
