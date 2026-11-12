@@ -406,13 +406,25 @@ async function runAptMasterSync() {
     errors: errCount, renamed: renamedTotal, unchanged: unchangedTotal, throttleHits: _throttleHits,
     intervalMs: _interval, failedLawds: failedLawds.slice(0, 40),
     elapsedMs, remaining: queue.length,
+    // APT-SYNC-OBSERV-2026-11-13: 첫 실패 사유 1건을 health 에 남긴다(Hobby 로그 1시간 보관이라 다음 날엔 못 본다).
+    //   serviceKey 같은 쿼리 값이 섞이지 않게 `키=값` 모양을 지운다.
+    ...(_firstFetchError(results) ? { fetchErrorSample: _firstFetchError(results) } : {}),
     ...(_aliasRefreshed != null ? { aliasRefreshed: _aliasRefreshed } : {}),
     ...(_aliasRefreshError ? { aliasRefreshError: _aliasRefreshError } : {}),
     ...(_overridesMissing != null ? { overridesMissing: _overridesMissing } : {}),
   };
 }
 
+function _firstFetchError(results) {
+  const r = (results || []).find(x => x && (x.fetchError || x.error));
+  if (!r) return null;
+  // 정규식 없이: 공백으로 나눈 조각 중 '=' 가 든 것(쿼리 값)을 통째로 지운다.
+  return String(r.fetchError || r.error).slice(0, 400).split(' ')
+    .map(w => (w.includes('=') ? '[값]' : w)).join(' ').slice(0, 120);
+}
+
 module.exports = { runAptMasterSync };
+module.exports._firstFetchError = _firstFetchError; // 테스트용
 module.exports._syncOneSgg = syncOneSgg; // 테스트용
 
 if (require.main === module) {

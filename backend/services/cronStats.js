@@ -92,6 +92,10 @@ function _pick(summary) {
     //   skipped·backfill offset 경계) 후보 총수 — retryFailedGaps 의 기존 gaps(오류 기반)와 별개로
     //   health 에 노출해 매일 줄어드는지(0 도달) 관측한다.
     'gapHoles',
+    // APT-SYNC-OBSERV-2026-11-13: 11-09 apt-master-sync 가 125개 중 35개 지역만 돌고 받은 행 0 으로 끝났는데
+    //   health 에 inserted·unchanged 만 있어 받아 오기 실패인지(fetched 0, errors>0), 429 인지(throttleHits) 알 수 없었다.
+    //   Hobby 런타임 로그는 1시간만 남아 다음 날엔 원인을 볼 수 없다. 숫자를 health 에 남긴다.
+    'fetched', 'errors', 'throttleHits', 'intervalMs',
     // CANCEL-SYNC-2026-10-30 (Plan 172): 적재 뒤 해제돼 원본에서 지운 거래 수(0 이 흔하다 — 필드 부재와 구별).
     'canceledRemoved'];
   const out = {};
@@ -118,6 +122,8 @@ function _pick(summary) {
     out.mvRefreshError = summary.mvRefreshError.slice(0, 120);
   }
   if (typeof summary.aliasRefreshError === 'string' && summary.aliasRefreshError.trim()) out.aliasRefreshError = summary.aliasRefreshError.slice(0, 120); // ALIAS-REFRESH-2026-09-06 (Plan 067)
+  // APT-SYNC-OBSERV-2026-11-13: 받아 오기 실패 사유 1건(예: timeout, 429). 잡이 키 모양 문자열을 지운 뒤 넘긴다.
+  if (typeof summary.fetchErrorSample === 'string' && summary.fetchErrorSample.trim()) out.fetchErrorSample = summary.fetchErrorSample.slice(0, 120);
   // HIST-BACKFILL-2026-09-16 (Plan 091): stopped/reason 은 boolean·범주형 문자열이라 위 NUM 루프(숫자
   //   전용)를 못 탄다. stopped 는 true(정지)·false(정상 진행) 둘 다 의미가 있어 ok 와 달리 양쪽 다 남긴다.
   //   reason 은 'db-size'|'complete' 고정값(자유 입력 아님)이라 error 류보다 짧게 제한한다.
