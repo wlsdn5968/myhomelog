@@ -395,3 +395,21 @@ test('run-3: 인증은 모양이 아니거나 만료된 토큰은 외부 호출 
     delete require.cache[authPath];
   }
 });
+
+test('run-3: 단지 이름 없는 월별 실거래 조회는 최근 36개월 안의 달만 받는다', async () => {
+  const router = require('../routes/transactions');
+  const layer = router.stack.find((l) => l.route && l.route.path === '/' && l.route.methods.get);
+  const handler = layer.route.stack[layer.route.stack.length - 1].handle;
+  const call = async (q) => { const res = { code: 200, status(c) { this.code = c; return this; }, json(b) { this.body = b; return this; } }; await handler({ query: q, sanitized: undefined }, res); return res; };
+  const kst = new Date(Date.now() + 9 * 3600 * 1000);
+  const ym = (back) => { const d = new Date(Date.UTC(kst.getUTCFullYear(), kst.getUTCMonth() - back, 1)); return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, '0')}`; };
+  const old = await call({ lawdCd: '11680', dealYm: ym(37) });
+  assert.equal(old.code, 400, '37개월 전 달을 받았다');
+  const veryOld = await call({ lawdCd: '11680', dealYm: '200801' });
+  assert.equal(veryOld.code, 400);
+  // 최근 달과 단지 이름이 있는 조회는 이 검사에 걸리지 않는다(서비스 호출까지 가므로 400 이 아닌 다른 결과)
+  const src = require('node:fs').readFileSync(require('node:path').join(__dirname, '../routes/transactions.js'), 'utf8');
+  assert.ok(src.includes('if (!aptName) {') && src.includes('if (back > 36 || back < -1) return res.status(400)'));
+  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  assert.ok(html.includes('const months=[prevYm(1), prevYm(2), prevYm(3)];'), '화면의 이름 없는 조회 범위가 바뀌었다면 상한도 다시 볼 것');
+});

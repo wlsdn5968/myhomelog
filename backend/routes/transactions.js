@@ -36,6 +36,17 @@ router.get('/', validateTransactionQuery, async (req, res) => {
   //   안 일어난 falsy 원문) req.query.aptName 그대로(둘 다 falsy 라 안전).
   const aptName = req.sanitized?.aptName !== undefined ? req.sanitized.aptName : req.query.aptName;
   if (!lawdCd || !dealYm) return res.status(400).json({ error: 'lawdCd, dealYm 필수' });
+  // AUDIT3-TX-1112 (보안 점검 run-3, transactions.live-molit.uncapped-month-space): 단지 이름 없는 월별 조회는 DB 와 이력에 없는 달이면
+  //   매번 국토부를 불렀다(2006년부터 다음 해까지 약 250개 지역 x 수백 달 = 캐시를 피하는 조합이 수만 개).
+  //   화면이 이 형태로 부르는 것은 최근 1~3개월뿐이고(frontend fetchRecentTx 의 prevYm(1~3)), 서버 내부도 최근 창 안에서만 부른다.
+  //   최근 36개월(한국 시간 기준 이번 달 포함) 밖의 달은 받지 않는다. 단지 이름이 있는 조회는 그대로다.
+  if (!aptName) {
+    const kst = new Date(Date.now() + 9 * 3600 * 1000);
+    const nowIdx = kst.getUTCFullYear() * 12 + kst.getUTCMonth();
+    const y = Number(String(dealYm).slice(0, 4)), m = Number(String(dealYm).slice(4, 6));
+    const back = nowIdx - (y * 12 + (m - 1));
+    if (back > 36 || back < -1) return res.status(400).json({ error: '최근 3년 안의 달만 조회할 수 있어요.' });
+  }
 
   try {
     // SHARECARD-2026-08-19 (Sprint NNNNNNN-7A): 공유 카드 장기 창 — 화이트리스트만(캐시 키 폭발·과도 조회 방지).
