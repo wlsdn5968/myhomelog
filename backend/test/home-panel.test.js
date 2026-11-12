@@ -411,3 +411,26 @@ test('A11Y-192: 버튼이 아닌 조작 요소는 키보드로 누를 수 있고
   assert.ok(old.includes('if (!window._a11yKeyBound) {') && old.includes('window._a11yKeyBound = true;'));
   assert.equal((old.match(/addEventListener\('keydown'/g) || []).length, 1);
 });
+
+// LIST-NOTICE-1112, LIST-WP-1112 (2026-11-12 운영 크롬 실측): 서울, 6억, 23~33평에 저장된 직장 위치 "강남구"로 검색하니
+//   서버는 강남만 보고 0건(안내 항목 1개)을 줬는데, 목록 화면이 "총 1건", 예산 6억을 "6개월 가중 평균"으로 보인 가짜 카드,
+//   "서울 전체 1개 시군구를 분석했어요"를 그렸다.
+test('목록 화면: 안내 항목은 단지 카드나 건수가 아니고, 광역 전체 문구는 실제로 전체를 봤을 때만', () => {
+  const fn = extractFn(html, 'renderListGrid');
+  assert.ok(fn.includes('const _realProps = props.filter(p => p && !p._notice);'));
+  assert.ok(fn.includes('let filtered = _realProps.slice();'), '정렬과 필터는 안내 항목을 뺀 목록으로');
+  assert.ok(fn.includes('`총 ${_realProps.length}건`') && !fn.includes('`총 ${props.length}건`'), '건수에 안내 항목을 세지 않는다');
+  assert.ok(fn.includes('if (!cardsHtml && _notice && !_realProps.length)'), '0건이면 서버 안내 문구를 안내 상자로');
+  assert.ok(fn.includes('searchMeta.regions.length >= 7) h += `<div class="ld-wide">'), '광역 전체 문구는 7곳 이상일 때만');
+  assert.ok(fn.includes('직장 위치(${_escHtml(_wpV.slice(0, 30))})가 있어서 그 지역만 분석했어요'));
+});
+
+// COPY-FACT-1112 (2026-11-12 운영 크롬 실측과 코드 대조): 화면 문구가 실제 동작과 맞아야 한다.
+test('사실과 다른 안내 문구 정정: 광역 분석 범위, 복비 기준, 준공년도 출처', () => {
+  // 광역만 고르면 서버(propertyService.pickRegions 2단계, report.js 광역 분기)는 그 시도 전체를 본다. "인기 구"가 아니다.
+  assert.ok(!html.includes('광역의 인기 구를 분석해요'));
+  assert.ok(html.includes('(고르지 않으면 서울, 경기, 인천은 전체를 분석해요. 지방은 세부 지역을 골라 주세요)'));
+  // 요율 표는 시행규칙 별표 1 값이다. 근거 없는 연도("2025년 현행")를 적지 않는다.
+  assert.ok(!html.includes('2025년 현행'));
+  assert.ok(html.includes('공인중개사법 시행규칙 별표 1 상한요율 기준이에요'));
+});

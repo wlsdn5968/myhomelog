@@ -86,7 +86,7 @@ test('QA 10-27: 브리핑 동기화 날짜는 한국 날짜 · 목록 개수는 
   assert.equal(ctx.f('2026-10-20T17:45:11.648+00:00'), '10.21', '10.21 02:45 KST 적재가 10.20 으로 보였다');
   assert.equal(ctx.f(''), '');
   assert.doesNotMatch(html, /String\(dc\.lastIngestedAt\)\.slice\(5,10\)/);
-  assert.match(html, /곳 중 점수 상위 \$\{props\.length\}곳/);
+  assert.match(html, /곳 중 점수 상위 \$\{_realProps\.length\}곳/); // LIST-NOTICE-1112: 안내 항목은 세지 않는다
   assert.match(html, />6개월 가중 평균<\/span>/);
   assert.doesNotMatch(html, /<span class="ld-m">6개월 평균<\/span>/);
   assert.match(fs.readFileSync(path.join(__dirname, '../services/propertyService.js'), 'utf8'), /건 거래 · 가중 평균 \$\{avgAuk\}억/);

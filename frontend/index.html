@@ -2395,7 +2395,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
         <div class="wcard">
           <div class="wchead"><span class="wnum">3</span><span class="wtitle">희망 지역</span><span class="wreq">필수</span></div>
           <div class="chips" id="ch-r"><span class="chip on" onclick="cp(this,'ch-r')">서울</span><span class="chip" onclick="cp(this,'ch-r')">경기</span><span class="chip" onclick="cp(this,'ch-r')">인천</span><span class="chip" onclick="cp(this,'ch-r')">지방</span></div>
-          <div style="font-size:12px;color:var(--t3);margin:4px 0 3px">세부 지역을 골라 주세요. <b>여러 곳도 고를 수 있어요.</b> (고르지 않으면 선택한 광역의 인기 구를 분석해요)</div>
+          <div style="font-size:12px;color:var(--t3);margin:4px 0 3px">세부 지역을 골라 주세요. <b>여러 곳도 고를 수 있어요.</b> (고르지 않으면 서울, 경기, 인천은 전체를 분석해요. 지방은 세부 지역을 골라 주세요)</div>
           <input aria-label="지역 이름으로 좁히기" id="ch-r-find" class="rsub-find" type="search" placeholder="지역 이름으로 좁히기 (예: 동탄)" oninput="filterRegionSub(this.value)" autocomplete="off">
           <div class="chips rsub-box" id="ch-r-sub" style="margin-top:2px"></div>
           <div id="ch-r-pick" class="rsub-pick" style="display:none"></div>
@@ -2934,7 +2934,7 @@ html[data-theme="dark"] #_pannBtn{box-shadow:0 2px 12px rgba(0,0,0,.4)}
   <div style="margin-bottom:12px"><button class="abtn" style="margin:0;width:auto;padding:6px 12px;font-size:12px;background:transparent;color:var(--t2);border:1px solid var(--bd)" onclick="sv('calc')">← 대출 계산으로</button></div>
   <div class="biz-section">
     <h3>중개보수(복비) 계산기</h3>
-    <p style="font-size:12px;color:var(--t3);margin-bottom:13px">공인중개사법 시행규칙 기준 · 2025년 현행</p>
+    <p style="font-size:12px;color:var(--t3);margin-bottom:13px">공인중개사법 시행규칙 별표 1 상한요율 기준이에요</p>
     <div class="cv-r2" style="margin-bottom:9px">
       <div><label class="lbl" for="biz_price">거래금액 (억)</label><input class="inp" id="biz_price" type="number" inputmode="decimal" placeholder="8.5" step="0.1" oninput="calcComm()"></div>
       <div>
@@ -7983,6 +7983,10 @@ function renderListGrid(){
     return regs.map(String).join(', ');
   };
   const _hasMeta = !!(searchMeta && Array.isArray(searchMeta.regions) && searchMeta.regions.length);
+  // LIST-NOTICE-1112 (운영 크롬 실측): 서버 안내 항목(_notice)은 단지가 아니다. Plan 163 개편 때 이 구분이 빠져
+  //   0건 결과에 "총 1건"과 예산(6억)을 "6개월 가중 평균"으로 보여 주는 가짜 카드, 점수 0, 비교 담기 버튼이 나왔다.
+  const _realProps = props.filter(p => p && !p._notice);
+  const _notice = props.find(p => p && p._notice) || null;
   const _num = (v) => (v != null && v !== '' && Number.isFinite(Number(v))) ? Number(v).toLocaleString() : '';
   const headL = (() => {
     let h = '';
@@ -7997,7 +8001,11 @@ function renderListGrid(){
       try {
         const _wideOn = document.querySelector('#ch-r .chip.on');
         const _subOn = document.querySelectorAll('#ch-r-sub .chip.on').length;
-        if (_wideOn && !_subOn) h += `<div class="ld-wide">${_escHtml(_wideOn.textContent.trim())} 전체 ${searchMeta.regions.length}개 시군구를 분석했어요. 세부 구를 직접 고르면 그 지역만 분석해요</div>`;
+        // LIST-WP-1112 (운영 크롬 실측): 광역만 골라도 직장 위치에 구 이름(예: 강남구)이 있으면 서버가 그 구만 본다(pickRegions 1단계).
+        //   그때 "서울 전체 1개 시군구"라고 쓰면 사실과 다르다. 광역 전체(7곳 이상)일 때만 전체라고 쓰고, 아니면 직장 위치 기준임을 밝힌다.
+        const _wpV = String(document.getElementById('wp')?.value || '').trim();
+        if (_wideOn && !_subOn && searchMeta.regions.length >= 7) h += `<div class="ld-wide">${_escHtml(_wideOn.textContent.trim())} 전체 ${searchMeta.regions.length}개 시군구를 분석했어요. 세부 구를 직접 고르면 그 지역만 분석해요</div>`;
+        else if (_wideOn && !_subOn && _wpV) h += `<div class="ld-wide">직장 위치(${_escHtml(_wpV.slice(0, 30))})가 있어서 그 지역만 분석했어요. ${_escHtml(_wideOn.textContent.trim())} 전체를 보려면 직장 위치를 비워 주세요</div>`;
       } catch (_e) {}
     }
     return h;
@@ -8037,7 +8045,7 @@ function renderListGrid(){
       <option value="oldBuild"${_curSortSel==='oldBuild'?' selected':''}>구축 우선</option>
     </select>
     ${_chip('lstFltAll', 'all', '전체')}${_chip('lstFltReg', 'regulated', '규제지역')}${_chip('lstFltNon', 'non', '비규제')}
-    <span class="ld-cnt">${(() => { const _ib = searchMeta && Number(searchMeta.inBudget); return (Number.isFinite(_ib) && _ib > props.length) ? `${_ib.toLocaleString()}곳 중 점수 상위 ${props.length}곳` : `총 ${props.length}건`; })()}</span>
+    <span class="ld-cnt">${(() => { const _ib = searchMeta && Number(searchMeta.inBudget); return (Number.isFinite(_ib) && _ib > _realProps.length) ? `${_ib.toLocaleString()}곳 중 점수 상위 ${_realProps.length}곳` : `총 ${_realProps.length}건`; })()}</span>
   </div>
   <div class="ld-note"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span>점수는 과거 실거래 통계로 0부터 100까지 매긴 값이에요. 가격이 오를지 내릴지를 뜻하지 않아요.</span></div>`;
   // Phase 4 (2026-04-26): 렌더 안전망 + 정렬·필터.
@@ -8047,7 +8055,7 @@ function renderListGrid(){
   try {
     // 필터 적용
     const flt = _flt;
-    let filtered = props.slice();
+    let filtered = _realProps.slice();
     if (flt === 'regulated') filtered = filtered.filter(p => _isRegProp(p));
     else if (flt === 'non') filtered = filtered.filter(p => !_isRegProp(p));
     // 정렬 적용
@@ -8067,7 +8075,12 @@ function renderListGrid(){
       const realIdx = _idxOf.get(p);
       return _renderListCard(p, realIdx);
     }).filter(Boolean).join('');
-    if (!cardsHtml) {
+    if (!cardsHtml && _notice && !_realProps.length) {
+      // 서버 안내 문구를 그대로 보여 준다(조건 미매칭과 조회 실패를 서버가 구분해 준다).
+      body = `<div class="ld-zero"><h2>${_escHtml(_notice.aptName || '조건에 맞는 단지가 없어요')}</h2>
+        <div class="ld-box"><b>${_escHtml(_notice.strategy || '조건을 하나씩 풀어 보면 결과가 생길 수 있어요')}</b><span>${_escHtml([_notice.cons, _notice.pros].filter(Boolean).join('. '))}</span></div>
+        <div class="ld-foot" style="margin-top:0">매수·매도 추천이 아니에요</div></div>`;
+    } else if (!cardsHtml) {
       body = `<div class="ld-zero"><h2>조건에 맞는 단지가 없어요</h2>
         <div class="ld-box"><b>조건을 하나씩 풀어 보면 결과가 생길 수 있어요</b><span>예산과 지역 조건에 맞는 단지가 부족해요. 매수가를 조금 늘리거나 가까운 구도 함께 골라 보세요.</span></div>
         <div class="ld-foot" style="margin-top:0">매수·매도 추천이 아니에요</div></div>`;
@@ -9334,7 +9347,8 @@ function showDetail(p){
   }
   if (_t0DealN > 0) _t0Cells.push(_t0hc('거래 건수', `${_t0DealN.toLocaleString()}건`, false, ''));
   if (p.recentDealDate) _t0Cells.push(_t0hc('최근 거래일', _escHtml(String(p.recentDealDate).slice(0,10).replace(/-/g,'.')), false, ''));
-  if (p.buildYear) _t0Cells.push(_t0hc('준공년도', `${_escHtml(p.buildYear)}년`, false, '공동주택 정보·건축물대장'));
+  // SRC-BY-1112: 값은 국토부 실거래 신고의 건축년도(build_year)다. 공동주택 정보의 사용승인일과 1년 다를 수 있어 출처를 사실대로 적는다.
+  if (p.buildYear) _t0Cells.push(_t0hc('준공년도', `${_escHtml(p.buildYear)}년`, false, '국토교통부 실거래 신고'));
   // DATA-BASIS-2026-10-19 (plans/167 §1-1): "최근 거래일"(데이터 기준) 셀 아래 "실거래 수집 시각"을 함께 — 둘 다 모르면 줄을 뺀다.
   //   수집 시각은 health 의 lastIngestedAt(연도 포함)을 쓰고, 아직 없으면 데이터 상태 띠의 kst(연도 없음)로 대체.
   const _heroSection = `<div class="t0-hero">

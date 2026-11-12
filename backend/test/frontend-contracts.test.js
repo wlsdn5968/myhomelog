@@ -1453,6 +1453,8 @@ test('상세 첫 탭 — 실거래 요약이 기본, 점수 없으면 큰 CTA �
   assert.match(blk, /if \(_t0DealN > 0\) _t0Cells\.push\(_t0hc\('거래 건수'/, '건수 셀이 값 가드 없이 그려진다(0건이 값처럼 보인다)');
   assert.match(blk, /if \(p\.recentDealDate\) _t0Cells\.push\(_t0hc\('최근 거래일'/, '최근 거래일 셀 가드가 없다');
   assert.match(blk, /if \(p\.buildYear\) _t0Cells\.push\(_t0hc\('준공년도'/, '준공년도 셀 가드가 없다');
+  // SRC-BY-1112: buildYear 는 국토부 실거래 표의 build_year 라 출처를 공동주택 정보로 적지 않는다(운영 크롬 실측: 1998 대 사용승인 1997.12.16)
+  assert.match(blk, /_t0hc\('준공년도', `\$\{_escHtml\(p\.buildYear\)\}년`, false, '국토교통부 실거래 신고'\)/);
   // ④ 평균가 라벨은 경로가 세팅한 _priceBasis — "최근 24개월"·"시간 가중" 같은 창 단정을 하드코딩하면
   //    추천 경로(6개월 가중)에서 거짓 라벨이 된다
   assert.match(blk, /_t0hc\(_escHtml\(p\._priceBasis\|\|'평균 실거래'\)/, '평균가 라벨이 _priceBasis 를 쓰지 않는다');
