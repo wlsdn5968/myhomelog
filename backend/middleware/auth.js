@@ -73,18 +73,45 @@ function _jwtExpMs(token) {
   }
 }
 
+// AUDIT3-AUTH-1112 (보안 점검 run-3, optionalauth-failed-token-uncached-supabase-call): 성공한 토큰만 기억해서
+//   가짜 토큰을 붙인 요청마다 Supabase 인증 서버를 불렀다. 결과는 같게 두고 외부 호출만 줄인다.
+//   1) JWT 모양(세 부분)이 아니거나 너무 긴 값은 부르지 않고 무효로 본다.
+//   2) 토큰 안의 만료 시각이 이미 지났으면(시계 차이 30초 여유) 부르지 않고 무효로 본다. Supabase 도 같은 토큰을 401 로 거절한다.
+//   3) Supabase 가 무효라고 답한 토큰(401, 403, 400)은 5초 동안 무효로 기억한다. 네트워크 오류처럼 일시적인 실패는 기억하지 않는다.
+const JWT_SHAPE = /^[A-Za-z0-9_-]{8,2048}\.[A-Za-z0-9_-]{8,8192}\.[A-Za-z0-9_-]{8,2048}$/;
+const CLOCK_LEEWAY_MS = 30 * 1000;
+const NEG_CACHE = new Map(); // token -> expiresAt
+function _negHit(token) {
+  const t = NEG_CACHE.get(token);
+  if (t && t > Date.now()) return true;
+  if (t) NEG_CACHE.delete(token);
+  return false;
+}
+function _negSet(token) {
+  NEG_CACHE.set(token, Date.now() + TTL_MS);
+  if (NEG_CACHE.size > 2000) { let n = 0; for (const k of NEG_CACHE.keys()) { NEG_CACHE.delete(k); if (++n >= 500) break; } }
+}
+
 async function verifyToken(token) {
   const cached = TOKEN_CACHE.get(token);
   if (cached && cached.expiresAt > Date.now()) {
     return { user: cached.user, deletionPending: cached.deletionPending };
   }
+  if (typeof token !== 'string' || !JWT_SHAPE.test(token)) return { user: null, deletionPending: false };
+  const exp = _jwtExpMs(token);
+  if (exp != null && exp + CLOCK_LEEWAY_MS < Date.now()) return { user: null, deletionPending: false };
+  if (_negHit(token)) return { user: null, deletionPending: false };
 
   const sb = getSupabasePublic();
   if (!sb) return { user: null, deletionPending: false };
 
   try {
     const { data, error } = await sb.auth.getUser(token);
-    if (error || !data?.user) return { user: null, deletionPending: false };
+    if (error || !data?.user) {
+      const st = Number(error && error.status);
+      if (!error || st === 400 || st === 401 || st === 403) _negSet(token); // 무효 판정만 기억(일시 오류는 기억하지 않음)
+      return { user: null, deletionPending: false };
+    }
     // ADMIN-VERIFIED-2026-09-05 (감사 H-LOW): admin 판정이 "확인된 이메일" 만 인정하도록 검증 상태를 함께 싣는다.
     //   SEC-1030-C1 (보안 감사 2026-10-30): 근거는 Supabase 가 기록하는 email_confirmed_at **하나만**. 예전엔 user_metadata.email_verified 도
     //   인정했는데 user_metadata 는 로그인한 사용자가 auth.updateUser 로 직접 바꿀 수 있다(Supabase 공식 문서: 권한 판단에 쓰지 말 것).

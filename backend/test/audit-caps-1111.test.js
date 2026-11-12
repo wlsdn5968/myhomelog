@@ -353,3 +353,45 @@ test('run-3: 알림 구독 등록은 IP 하나가 하루 20번까지', () => {
   assert.ok(src.indexOf('dl:pushsub:') < src.indexOf('const sub = req.body?.subscription;'), '구독 내용을 읽기 전에 센다');
   assert.ok(src.includes('if (used > PUSH_SUB_IP_DAILY) return res.status(429)'));
 });
+
+test('run-3: 인증은 모양이 아니거나 만료된 토큰은 외부 호출 없이 거절하고, 무효 판정만 잠깐 기억한다', async () => {
+  const client = require('../db/client');
+  const origPub = client.getSupabasePublic, origAdmin = client.getSupabaseAdmin;
+  let calls = 0; let mode = 'invalid';
+  client.getSupabasePublic = () => ({ auth: { getUser: async () => {
+    calls++;
+    if (mode === 'invalid') return { data: null, error: { status: 401, message: 'invalid JWT' } };
+    if (mode === 'network') return { data: null, error: { name: 'AuthRetryableFetchError', message: 'fetch failed' } };
+    return { data: { user: { id: 'u1', email: 'a@b.c', email_confirmed_at: '2026-01-01' } }, error: null };
+  } } });
+  client.getSupabaseAdmin = () => null;
+  const authPath = require.resolve('../middleware/auth');
+  delete require.cache[authPath];
+  try {
+    const { verifyToken } = require('../middleware/auth');
+    const b64 = (o) => Buffer.from(JSON.stringify(o)).toString('base64url');
+    const jwt = (exp, tag) => `${b64({ alg: 'HS256', typ: 'JWT' })}.${b64({ sub: 'x', exp, tag })}.${'s'.repeat(43)}`;
+    const future = Math.floor(Date.now() / 1000) + 3600;
+    // 1) 모양이 아님, 2) 이미 만료: 호출 0
+    assert.equal((await verifyToken('not-a-jwt')).user, null);
+    assert.equal((await verifyToken(jwt(Math.floor(Date.now() / 1000) - 3600, 'old'))).user, null);
+    assert.equal(calls, 0, '모양이 아니거나 만료된 토큰에 외부 호출을 했다');
+    // 3) 무효 판정은 5초 기억
+    const bad = jwt(future, 'bad');
+    await verifyToken(bad); await verifyToken(bad);
+    assert.equal(calls, 1, '무효 토큰을 두 번 물었다');
+    // 4) 일시 오류는 기억하지 않는다
+    mode = 'network'; calls = 0;
+    const flaky = jwt(future, 'flaky');
+    await verifyToken(flaky); await verifyToken(flaky);
+    assert.equal(calls, 2, '일시 오류를 무효로 기억했다(다음 요청도 막힌다)');
+    // 5) 정상 토큰은 사용자를 돌려준다
+    mode = 'ok'; calls = 0;
+    const good = jwt(future, 'good');
+    assert.equal((await verifyToken(good)).user.id, 'u1');
+    assert.equal(calls, 1);
+  } finally {
+    client.getSupabasePublic = origPub; client.getSupabaseAdmin = origAdmin;
+    delete require.cache[authPath];
+  }
+});
