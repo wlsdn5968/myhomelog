@@ -67,6 +67,8 @@ function adminClient() {
 const CONSENT_DEDUP_MS = 10 * 60 * 1000;
 const _consentSeen = new Map();
 const CONSENT_PER_IP = 30;
+const CONSENT_IP_DAILY = 60;   // AUDIT4-1114: IP 하나 하루 최대 기록 수
+const CONSENT_ALL_DAILY = 500; // AUDIT4-1114: 서비스 전체 하루 최대 기록 수
 const _consentPerIp = new Map();
 router.post('/consent', async (req, res) => {
   const { age14Plus, terms, privacy, intlTransfer, version, ts } = req.body || {};
@@ -107,6 +109,20 @@ router.post('/consent', async (req, res) => {
     logger.warn({ ip: maskIp(ip), count: ipCount }, '동의 기록 IP 상한 도달 — 이번 동의는 기록하지 않음');
     return res.json({ ok: true, deduped: true });
   }
+  // AUDIT4-1114 (anon-consent-audit-log-permanent-row-accumulation): 위 상한은 인스턴스 메모리라 인스턴스와 IP 수만큼 곱해졌고
+  //   이 행은 영구 보관이다. 방문 기록과 같은 Redis 하루 계수기로 IP별(정규화, IPv6 /64) 과 전체 하루 상한을 더한다.
+  //   운영 실측 2026-11-14: consent.accept 누적 12행이라 정상 사용은 닿지 않는다. 계수기를 못 쓰면 막지 않는다(기존과 같은 열린 실패).
+  try {
+    const { incrementUsage, getClientIp, todayKey, secondsUntilMidnight } = require('../middleware/dailyLimit');
+    const ipK = require('../utils/ipKey').normalizeIpKey(getClientIp(req));
+    const ttl = secondsUntilMidnight();
+    const { used: ipDay } = await incrementUsage(`dl:consent:${todayKey()}:${ipK}`, ttl);
+    const { used: allDay } = ipDay > CONSENT_IP_DAILY ? { used: 0 } : await incrementUsage(`dl:consent-all:${todayKey()}`, ttl);
+    if (ipDay > CONSENT_IP_DAILY || allDay > CONSENT_ALL_DAILY) {
+      logger.warn({ ip: maskIp(ip), ipDay, allDay }, '동의 기록 하루 상한 도달 — 이번 동의는 기록하지 않음');
+      return res.json({ ok: true, deduped: true });
+    }
+  } catch (_) { /* 계수기 실패는 막지 않는다 */ }
   await writeAudit(req, 'consent.accept', 'consent', null, meta);
   _consentSeen.set(dedupKey, now); // 기록한 뒤에 남긴다
   _consentPerIp.set(ip, ipCount === 0 ? { start: now, n: 1 } : { start: ipWin.start, n: ipCount + 1 });

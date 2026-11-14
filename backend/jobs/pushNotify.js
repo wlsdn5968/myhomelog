@@ -180,7 +180,10 @@ async function run() {
     return (w && w > floorTs) ? w : floorTs;
   };
   const allSubs = [...push.rows, ...kakao.rows];
-  const lawds = [...new Set(allSubs.flatMap(s => (s.items || []).map(it => it.lawdCd)).filter(c => /^\d{5}$/.test(String(c))))];
+  // AUDIT4-1114: 등록 경로가 놓친 값이나 예전에 저장된 값이 있어도 in 조회에는 적재하는 지역 코드만 넣는다(목록 크기 상한 = 지역 수).
+  const _tsvc = require('../services/transactionService');
+  const isKnownLawdCd = typeof _tsvc.isKnownLawdCd === 'function' ? _tsvc.isKnownLawdCd : () => true; // 모듈을 바꿔 끼운 테스트에서는 형식 검사만
+  const lawds = [...new Set(allSubs.flatMap(s => (s.items || []).map(it => it.lawdCd)).filter(c => /^\d{5}$/.test(String(c)) && isKnownLawdCd(String(c))))];
   if (!lawds.length) return { subs: push.rows.length, kakaoSubs: kakao.rows.length, sent: 0, kakaoSent: 0, note: '유효 lawdCd 없음' };
   const minSince = new Date(Math.min(...allSubs.map(s => sinceOf(s).getTime()))).toISOString();
 

@@ -64,7 +64,10 @@ router.get('/building-register', async (req, res) => {
       umdNm: umd ? String(umd) : '',
       aptName: String(apt).slice(0, 80),
       limited: true, // AUDIT2-BR-1111: 공개 경로는 국토부 라이브 호출 수를 묶는다
+      kakaoGate: require('./geocode').createKakaoGate(1, req), // AUDIT4-1114: Kakao 주소검색 1회를 IP 예산과 전역 일일 상한에 넣는다
     });
+    // AUDIT4-1114: 관문(오늘 조회 한도)에 막힌 것은 '없음'과 구별해 알린다(화면이 '정보 없음'으로 잘못 안내하지 않게)
+    if (title && title._gated) return res.json({ title: null, limited: true });
     res.json({ title: title || null });
   } catch (e) {
     // SENTRY-GAP-2026-07-17 (Sprint XXXXX): 무로그·무캡처였던 502 — 건축물대장 upstream 실패는 헬퍼가 그룹핑

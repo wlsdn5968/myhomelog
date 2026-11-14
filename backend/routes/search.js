@@ -862,7 +862,9 @@ router.get('/popular-region', async (req, res) => {
 });
 
 router.get('/popular', async (req, res) => {
-  const limit = Math.min(parseInt(req.query.limit) || 12, 30);
+  // AUDIT4-1114 (search.popular.negative-limit-unclamped-cache-and-lazyfill): 하한이 없어 음수 limit 이 캐시 키를 계속 만들고
+  //   스냅샷이 낡았을 때 slice(0, 음수) 로 후보 거의 전부가 지연 지오코딩 대상이 됐다. /apt 와 같은 1~30 으로 묶는다.
+  const limit = Math.max(1, Math.min(parseInt(req.query.limit) || 12, 30));
   try {
     const CDN_OK = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400';
     const CDN_FALLBACK = 'public, max-age=0, s-maxage=120, stale-while-revalidate=600';

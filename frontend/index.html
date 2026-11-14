@@ -9649,6 +9649,10 @@ function showDetail(p){
       const t = j && j.title;
       const el = document.getElementById('t6brBox');
       if (!el) return;
+      if (!t && j && j.limited) {
+        el.innerHTML = `<div class="ibox y" style="line-height:1.6">오늘은 건축물대장 조회가 많아 잠시 쉬고 있어요.<br><span style="font-size:12px;color:var(--t3)">내일 다시 확인해 주세요. 실거래가와 가격 시그널 탭은 정상이에요.</span></div>`;
+        return;
+      }
       if (!t) {
         el.innerHTML = `<div class="ibox y" style="line-height:1.6">이 단지는 상세 기본정보가 없어요.<br><span style="font-size:12px;color:var(--t3)">공동주택 정보와 건축물대장 모두에서 찾지 못했어요. <b>실거래가·가격 시그널 탭은 정상</b>이에요.</span></div>`;
         return;

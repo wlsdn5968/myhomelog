@@ -86,6 +86,13 @@ function sanitizeItems(items) {
   })).filter(it => it.aptName && it.lawdCd);
 }
 
+// AUDIT4-1114 (push-items-lawdcd-unallowlisted-cron-in-url-overflow): 푸시 등록(push.js)과 같게 적재하는 지역 코드만 저장한다.
+//   형식만 보면 없는 코드가 알림 cron 의 in 조회 목록을 키울 수 있었다.
+function allowedItems(items) {
+  const { isKnownLawdCd } = require('../services/transactionService');
+  return sanitizeItems(items).filter((it) => isKnownLawdCd(it.lawdCd));
+}
+
 // ── 연결 상태 ──
 router.get('/status', requireAuth, async (req, res) => {
   try {
@@ -162,7 +169,7 @@ router.post('/items', requireAuth, async (req, res) => {
   try {
     const admin = dbClient();
     if (!admin) return res.json({ ok: true });
-    const items = sanitizeItems(req.body?.items);
+    const items = allowedItems(req.body?.items);
     const { error } = await admin.from('kakao_notify_tokens').update({ items, updated_at: new Date().toISOString() }).eq('user_id', req.user.id);
     if (error && !['42P01','PGRST205'].includes(String(error.code))) throw new Error(error.message);
     return res.json({ ok: true, items: items.length });
@@ -182,3 +189,4 @@ router.post('/disconnect', requireAuth, async (req, res) => {
 });
 
 module.exports = router;
+module.exports._allowedItems = allowedItems; // 테스트용(AUDIT4-1114)

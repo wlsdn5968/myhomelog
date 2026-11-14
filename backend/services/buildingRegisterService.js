@@ -146,7 +146,11 @@ async function getBuildingTitle(args) {
   const key = aptKey || `name:${aptName}|${lawdCd}`;
   const missAt = _brMiss.get(key);
   if (missAt && Date.now() - missAt < BR_MISS_MS) return null;
-  const t = await getBuildingTitleUncached(args);
+  const st = {};
+  const t = await getBuildingTitleUncached({ ...args, _state: st });
+  // AUDIT4-1114: 관문에 막힌 것은 '없음'으로 기억하지 않고(정상 조회가 1시간 막히지 않게), 호출자가 구별하도록 표시를 돌려준다.
+  //   관문은 공개 경로(properties.js)만 넘기므로 cron 과 내부 호출은 이 값을 받지 않는다.
+  if (t == null && st.gated) return { _gated: true };
   if (t == null && getSupabaseAdmin()) {
     _brMiss.set(key, Date.now());
     if (_brMiss.size > 5000) _brMiss.delete(_brMiss.keys().next().value);
@@ -156,7 +160,7 @@ async function getBuildingTitle(args) {
   return t;
 }
 
-async function getBuildingTitleUncached({ lawdCd, sigungu, umdNm, aptName, aptKey, limited }) {
+async function getBuildingTitleUncached({ lawdCd, sigungu, umdNm, aptName, aptKey, limited, kakaoGate, _state }) {
   const admin = getSupabaseAdmin();
   if (!admin || !lawdCd || !aptName) return null;
   // BR-MARKER-FIX-2026-07-12: 캐시키를 lawdCd+aptName 기준으로 통일 (지도 마커 경로는 p.sigungu/umd 부재 →
@@ -173,6 +177,9 @@ async function getBuildingTitleUncached({ lawdCd, sigungu, umdNm, aptName, aptKe
   if (!ji || !ji.jibun) return null;
   const rSgg = ji.sigungu || sigungu || '';
   const rUmd = ji.umdNm || umdNm || '';
+  // AUDIT4-1114 (properties.building-register.public-kakao-hub-no-budget): 공개 경로가 넘긴 관문(IP 예산 + Kakao 전역 일일 상한)이
+  //   닫히면 Kakao 주소검색과 건축HUB 호출을 하지 않는다. 캐시 적중과 내부(cron) 호출은 관문이 없어 그대로다.
+  if (kakaoGate && !(await kakaoGate())) { if (_state) _state.gated = true; return null; }
   const region = await resolveBjdong(rSgg, rUmd, ji.jibun);
   if (!region) return null;
   const parsed = parseJibun(ji.jibun);
