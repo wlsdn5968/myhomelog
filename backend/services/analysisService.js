@@ -733,6 +733,17 @@ async function _cmpNear({ aptName, sigungu, umdNm, kaptCode, address, kakaoGate 
 }
 
 const _CMP_CONTEXT_MONTHS = 6;
+// CMP-CUTOFF-2026-11-14: setMonth 를 바로 하면 31일에 달이 넘쳤다(5/31 에서 3개월 = "2/31" = 3/3, 창 앞 사흘 거래가 빠짐).
+//   날짜를 1일로 둔 뒤 달을 옮기고, 그 달의 마지막 날로 자른다. 거래 날짜(new Date(y, m-1, d))와 같은 서버 시각 기준이다.
+function _monthsAgoClamped(months, now = new Date()) {
+  const c = new Date(now.getTime());
+  const day = c.getDate();
+  c.setDate(1);
+  c.setMonth(c.getMonth() - months);
+  const last = new Date(c.getFullYear(), c.getMonth() + 1, 0).getDate();
+  c.setDate(Math.min(day, last));
+  return c;
+}
 async function _compareOne(apt, dealMonths, kakaoGate) {
   const aptName = apt && apt.aptName;
   const sigungu = (apt && apt.sigungu) || null;
@@ -766,9 +777,7 @@ async function _compareOne(apt, dealMonths, kakaoGate) {
 
   // 3) 동떨어진 거래 판정(Plan 173 — 단지 상세 차트와 같은 규칙, 앞쪽 이웃 포함) 뒤 최근 dealMonths 윈도우로 자른다
   const _outliers = localOutliers(saleTx);
-  const cutoff = new Date();
-  cutoff.setMonth(cutoff.getMonth() - dealMonths);
-  const cutoffMs = cutoff.getTime();
+  const cutoffMs = _monthsAgoClamped(dealMonths).getTime();
   saleTx = saleTx.filter(t => {
     const d = new Date(t.dealYear, (t.dealMonth || 1) - 1, t.dealDay || 1).getTime();
     return d >= cutoffMs;
@@ -853,5 +862,5 @@ async function compareBatch(apts, opts = {}) {
 module.exports = {
   analyzeApt, calcTotalCost, getLawdCdFromArea, compareBatch,
   // 테스트·디버그 용 — 외부 호출 금지
-  _internals: { analysisCacheKey: _analysisCacheKey, calcBuySignal, calcVolumeSignal, calcPricePercentile, detectSeasonalBias, getDataReliability, calcGap, compareOne: _compareOne, cmpMonths: _cmpMonths, cmpSeries: _cmpSeries, cmpNear: _cmpNear, computeJeonseBasisDesc, localOutliers },
+  _internals: { analysisCacheKey: _analysisCacheKey, calcBuySignal, calcVolumeSignal, calcPricePercentile, detectSeasonalBias, getDataReliability, calcGap, compareOne: _compareOne, cmpMonths: _cmpMonths, cmpSeries: _cmpSeries, cmpNear: _cmpNear, monthsAgoClamped: _monthsAgoClamped, computeJeonseBasisDesc, localOutliers },
 };

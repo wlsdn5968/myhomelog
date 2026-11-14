@@ -32,8 +32,8 @@ const REC = { windowDays: 30, highCount: 11, lowCount: 3, comparedCount: 99, sin
 const APT_ROWS = [{ apt_seq: '11680-1', apt_name: '테스트단지가나다', umd_nm: '대치동', build_year: 2001, deal_count: 50 }];
 
 /** getSupabaseAdmin 가짜 — molit_transactions(count 쿼리)와 molit_apt_index(단지 목록)를 구분해 답한다. */
-function fakeAdmin({ weeklyCount = 1234, weeklyThrows = false, aptsThrows = false, onStart, delayMs = 0 } = {}) {
-  const wait = () => new Promise(r => setTimeout(r, delayMs));
+function fakeAdmin({ weeklyCount = 1234, weeklyThrows = false, aptsThrows = false, onStart, delayMs = 0, gate } = {}) {
+  const wait = () => (gate ? gate() : new Promise(r => setTimeout(r, delayMs)));
   return {
     from(table) {
       const q = {
@@ -55,16 +55,16 @@ function fakeAdmin({ weeklyCount = 1234, weeklyThrows = false, aptsThrows = fals
   };
 }
 
-async function render({ dashFails = false, recFails = false, weeklyThrows = false, aptsThrows = false, onStart, delays = {} } = {}) {
+async function render({ dashFails = false, recFails = false, weeklyThrows = false, aptsThrows = false, onStart, delays = {}, gate } = {}) {
   const saved = {
     build: regionRoutes.buildDashboard, get: priceSvc.getPriceRecordsByRegion, slice: priceSvc.sliceRegion, admin: dbClient.getSupabaseAdmin,
   };
-  const sleep = (ms) => new Promise(r => setTimeout(r, ms || 0));
+  const sleep = (ms) => (gate ? gate() : new Promise(r => setTimeout(r, ms || 0)));
   try {
     regionRoutes.buildDashboard = async () => { onStart && onStart('dash'); await sleep(delays.dash); if (dashFails) throw new Error('dash boom'); return DASH; };
     priceSvc.getPriceRecordsByRegion = async () => { onStart && onStart('rec'); await sleep(delays.rec); if (recFails) throw new Error('rec boom'); return { fake: true }; };
     priceSvc.sliceRegion = () => REC;
-    dbClient.getSupabaseAdmin = () => fakeAdmin({ weeklyThrows, aptsThrows, onStart, delayMs: delays.db });
+    dbClient.getSupabaseAdmin = () => fakeAdmin({ weeklyThrows, aptsThrows, onStart, delayMs: delays.db, gate });
     const res = { code: 200, headers: {}, html: null, set(k, v) { this.headers[k] = v; return this; }, status(c) { this.code = c; return this; }, type() { return this; }, send(b) { this.html = b; return this; } };
     await handle({ params: { lawdCd: '11680' } }, res, (e) => { throw e || new Error('next 호출'); });
     return res;
@@ -113,8 +113,21 @@ test('병렬화 확인 — 네 조회(대시보드·경신·주간 공개·주�
   // 직렬이면 dash 가 끝나기 전에 rec 가 시작되지 않는다 — 시작 기록은 4개 모두 있어야 하고,
   // 첫 40ms 안에 전부 시작됐는지는 총 소요 시간으로 본다(직렬이면 4×40=160ms 이상).
   assert.deepEqual([...new Set(started)].sort(), ['dash', 'molit_apt_index', 'molit_transactions', 'rec']);
-  const t0 = Date.now();
-  await render({ delays: { dash: 60, rec: 60, db: 60 } });
-  const ms = Date.now() - t0;
-  assert.ok(ms < 60 * 4 - 20, `조회가 직렬로 보인다: ${ms}ms (병렬이면 ≈60ms, 직렬이면 ≥240ms)`);
+  // FLAKY-TIMING-2026-11-14: 예전엔 실제 걸린 시간(220ms 미만)으로 봤는데 전체 검증 중 부하로 358ms 가 나와 실패했다.
+  //   이제 시간 대신 순서로 본다: 각 조회는 네 조회가 모두 시작될 때까지 기다린다. 직렬이면 첫 조회가 영영 풀리지 않아
+  //   안전 시간(2초)이 지나고, 그 사실을 단언한다. 부하와 관계없이 결과가 같다.
+  let n = 0, timedOut = false, release;
+  const all = new Promise((r) => { release = r; });
+  const timers = [];
+  const gate = () => {
+    n += 1;
+    if (n === 4) release();
+    return Promise.race([all, new Promise((r) => { timers.push(setTimeout(() => { timedOut = true; r(); }, 2000)); })]);
+  };
+  try {
+    const r = await render({ gate });
+    assert.equal(r.code, 200);
+  } finally { timers.forEach(clearTimeout); }
+  assert.equal(n, 4, `조회 시작 수 ${n}`);
+  assert.equal(timedOut, false, '네 조회가 동시에 시작되지 않았다(직렬로 보인다)');
 });

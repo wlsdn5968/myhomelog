@@ -46,7 +46,7 @@ cp .env.example .env
 
 `backend/.env.example` 이 유일한 환경변수 선언 목록입니다:
 
-- **필수** — PORT, NODE_ENV, ANTHROPIC_API_KEY, MOLIT_API_KEY, KAKAO_REST_API_KEY, SUPABASE_*, DATABASE_URL, JWT_SECRET, ALLOWED_ORIGINS
+- **필수** — PORT, NODE_ENV, MOLIT_API_KEY, KAKAO_REST_API_KEY, SUPABASE_*, DATABASE_URL, JWT_SECRET, ALLOWED_ORIGINS
 - **결제** — TOSS_SECRET_KEY, TOSS_CLIENT_KEY, TOSS_WEBHOOK_SECRET, PAYMENTS_LIVE_ENABLED
 - **관측** — SENTRY_DSN, UPSTASH_REDIS_*, ECOS_API_KEY, KOSIS_API_KEY, LAW_GO_KR_OC
 - **알림** — VAPID_*, KAKAO_*
@@ -58,7 +58,6 @@ cp .env.example .env
 |-----|--------|---------|
 | 국토부 실거래가 | [data.go.kr](https://www.data.go.kr) 검색: "아파트매매 실거래가 상세자료" | ✅ 무료 |
 | 카카오 지오코딩 | [developers.kakao.com](https://developers.kakao.com) → REST API 키 | ✅ 무료 (월 30만건) |
-| Anthropic Claude | [console.anthropic.com](https://console.anthropic.com) | 유료 (사용량 기반) |
 | 네이버 지도 | [console.ncloud.com](https://console.ncloud.com) → Maps | 월 100만건 무료 (기본 지도 엔진 — `NAVER_MAPS_CLIENT_ID` 설정 시. 미설정·인증 실패 시 Leaflet/OSM 자동 폴백) |
 
 ### 3. 백엔드 실행
@@ -118,7 +117,7 @@ vercel domains add myhomelog.com
 ```
 
 Vercel Dashboard → Settings → Environment Variables 등록 키:
-- 필수 — `ANTHROPIC_API_KEY`, `MOLIT_API_KEY`, `KAKAO_REST_API_KEY`
+- 필수 — `MOLIT_API_KEY`, `KAKAO_REST_API_KEY`
 - Supabase — `SUPABASE_URL`, `SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SERVICE_ROLE_KEY`
 - 선택 — `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` (분산 rate-limit. 미설정 시 in-memory fallback)
 - 운영 — `CRON_SECRET` (cron 인증), `ADMIN_EMAILS` (admin endpoint 화이트리스트), `HEALTH_API_KEY`, `ALLOWED_ORIGINS`
@@ -135,7 +134,7 @@ cron 은 `vercel.json` 의 `crons` 배열로 자동 등록됩니다 — retentio
 npm i -g @railway/cli
 cd backend
 railway login && railway init && railway up
-railway variables set ANTHROPIC_API_KEY=sk-ant-... MOLIT_API_KEY=... KAKAO_REST_API_KEY=...
+railway variables set MOLIT_API_KEY=... KAKAO_REST_API_KEY=...
 railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 ```
 
@@ -152,12 +151,13 @@ railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 | GET | /api/health | optional | 서버 상태 |
 | GET | /api/health/apis | x-health-key 헤더 | 외부 API 활성화 진단 (운영자 전용) |
 
-### AI 비용 경로 (chat scope rate-limit + daily limit)
+### 도우미·보고서·특약 (chat scope rate-limit + daily limit)
+
+> 2026-11-13 부터 유료 AI 를 쓰지 않는다(`ANTHROPIC_API_KEY` 불필요, 넣어도 읽지 않음). 도우미는 공식 데이터 조회 규칙으로만 답하고, 보고서는 늘 데이터 전용판, AI 특약은 410 이다.
 | Method | Path | Auth | 설명 |
 |--------|------|------|------|
-| POST | /api/chat | optional | AI 채팅 (PII 차단 + filterAdviceOutput) |
-| POST | /api/clause | optional | 맞춤 특약 + 리스크 통합 (Phase B-3) |
-| POST | /api/clause/risk | optional | 리스크 시나리오 (legacy) |
+| POST | /api/chat | optional | 데이터 도우미(규칙 기반 공식 데이터 조회, LLM 호출 없음, PII 차단) |
+| POST | /api/clause | optional | 410 `ai_removed` (AI 특약 중단. 화면의 특약 초안은 규칙 템플릿) |
 | POST | /api/report/generate | optional (비로그인 0/일 차단) | 1Page 정리 보고서. server.js mount = `optionalAuth + chatLimiter + dailyLimit{limit:0,scope:'report',loggedInBonus:1}` — 비로그인은 0/일 → 사실상 로그인 필수, 로그인 시 dailyLimit 모듈이 plan별 한도 적용 |
 | POST | /api/feedback/ai | optional | 답변 👍/👎 |
 
@@ -168,7 +168,6 @@ railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 | GET | /api/properties/nearby | optional | 주변 단지 |
 | POST | /api/properties/transit | optional | 교통 분석 |
 | GET | /api/transactions(?...) | — | 실거래가 조회 |
-| GET | /api/transactions/analyze | — | 실거래 통계 |
 | GET | /api/transactions/codes | — | 시군구 코드 |
 | GET | /api/regulations | — | 현행 규제 (LTV·DSR snapshot) |
 | POST | /api/geocode, /api/geocode/batch | — | 카카오 지오코딩 |

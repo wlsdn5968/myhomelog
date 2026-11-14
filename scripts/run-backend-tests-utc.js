@@ -58,7 +58,7 @@ if (probe.error || probe.status !== 0) {
   process.exit(probe.status == null ? 1 : probe.status);
 }
 
-// 2. backend 테스트(backend/package.json 의 "test": "node --test")를 같은 TZ=UTC 환경에서 실행.
+// 2. backend 테스트(node --test)를 같은 TZ=UTC 환경에서 실행. backend/package.json 의 "test" 도 이 스크립트를 부른다(2026-11-14, cd backend && npm test 도 UTC).
 console.log('[run-backend-tests-utc] backend test 를 TZ=UTC 로 실행한다 (프로덕션 런타임과 일치)');
 const result = spawnSync(process.execPath, ['--test'], {
   cwd: BACKEND_DIR,
