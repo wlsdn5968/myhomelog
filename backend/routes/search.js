@@ -1041,6 +1041,8 @@ const { repAreaStats, sortRecentFirst } = require('../utils/repArea');
 // AUDIT4-1114 (search.in-bounds.uncached-heavy-aggregation-cpu): 서버 캐시가 없어 좌표 소수점 아래만 바꾼 주소가 매번 무거운 집계를 돌렸다.
 //   프런트(loadAptsInBounds)와 같은 규칙으로 소수 셋째 자리(약 100m) 바깥쪽 반올림을 서버에서도 하고, 같은 영역 결과를 5분 기억한다.
 //   정상 화면은 이미 반올림한 값을 보내므로 결과가 같다. 기억 수는 300개로 묶어 메모리를 키우지 않는다.
+// UMD-RENAME-2026-11-14: 이름이 바뀐 읍면 맞춤(공용 utils/umdRename, 상세 조회와 같은 규칙)
+const { umdCanon: _umdCanon, umdWithLegacy: _umdWithLegacy } = require('../utils/umdRename');
 const _IB_TTL_MS = 5 * 60 * 1000;
 const _IB_MAX = 300;
 const _ibMemo = new Map();
@@ -1103,7 +1105,25 @@ router.get('/in-bounds', async (req, res) => {
     //     검색(/search/apt)이 molit row 자신의 sigungu/umd 로 스코프하는 것과 동일 기준 → 두 path 일관.
     //   [회귀 위험] geocache triple 8878 중 8816(99.3%)이 동일 (name,sigungu,umd) molit row 보유 →
     //     정상 단지 영향 0. 자기 지역 매칭 없는 유령 마커(예: 공릉동 "풍림아파트" — 실제는 공릉풍림아이원)만 사라짐.
+    // UMD-RENAME-2026-11-14: 국토부 원본이 2025-10 부터 달성군 구지면을 구지읍으로 바꿔 보내 같은 단지 거래가 두 동 이름으로 나뉘었다
+    //   (운영 실측: 구지면 3개 리 93행, 구지읍 191행, 지오코드 9행이 옛 이름). 원본은 두고 지도 집계에서만 새 이름으로 맞추고, 조회는 두 이름을 함께 넣는다.
+    //   독립 검토(2026-11-14) 반영: 운영 지오코드에 9개 단지가 옛 이름 행과 새 이름 행을 함께 가지고 있어, 이름을 맞춘 뒤 같은 키가 둘이 되면
+    //   거래가 두 번 더해졌다(고치기 전에는 같은 단지 핀이 둘). 맞춘 뒤 (이름, 시군구, 동)으로 다시 하나만 남기고, 원래 새 이름이던 행을 우선한다.
+    {
+      const _seen = new Map();
+      for (const c of coords) {
+        const canon = _umdCanon(c.sigungu, c.umd_nm);
+        const legacy = canon !== c.umd_nm;
+        c.umd_nm = canon;
+        const k = `${c.apt_name}|${c.sigungu}|${c.umd_nm}`;
+        const prev = _seen.get(k);
+        if (!prev || (prev.legacy && !legacy)) _seen.set(k, { c, legacy });
+      }
+      const _keep = new Set([..._seen.values()].map((v) => v.c));
+      for (let i = coords.length - 1; i >= 0; i--) if (!_keep.has(coords[i])) coords.splice(i, 1);
+    }
     const umds = [...new Set(coords.map(c => c.umd_nm).filter(Boolean))];
+    const umdsQ = _umdWithLegacy(umds);
     // REST-CAP-FIX-2026-08-09 (Sprint GGGGGGG): 기존 .limit(1000) 단일 쿼리는 PostgREST 1000행
     //   캡 — 실측(상위 100단지 180일 거래 8,881건)상 밀집/광역 viewport 에서 최신 일부만 집계돼
     //   마커 평균가·건수가 왜곡됐다. range 페이징(상한 10,000)으로 전량 수집 — 통상 viewport 는
@@ -1125,7 +1145,7 @@ router.get('/in-bounds', async (req, res) => {
           .from('molit_transactions')
           .select('apt_name, sigungu, umd_nm, deal_amount, build_year, deal_date, lawd_cd, exclu_use_ar')
           .in('apt_name', names);
-        if (umds.length) _q = _q.in('umd_nm', umds); // 동 스코프 — 전국 동명 충돌 차단 + row budget 보호
+        if (umds.length) _q = _q.in('umd_nm', umdsQ); // 동 스코프 — 전국 동명 충돌 차단 + row budget 보호
         const { data: _page } = await _q
           .gte('deal_date', _cut180)
           .order('deal_date', { ascending: false })
@@ -1148,7 +1168,7 @@ router.get('/in-bounds', async (req, res) => {
         const { data: _mp } = await admin
           .from('apt_master')
           .select('apt_name, sigungu, umd_nm, kapt_code, molit_aliases')
-          .in('umd_nm', umds)
+          .in('umd_nm', umdsQ)
           .not('molit_aliases', 'is', null)
           .order('kapt_code', { ascending: true })
           .range(_mf, _mf + 999);
@@ -1158,6 +1178,8 @@ router.get('/in-bounds', async (req, res) => {
       return masters;
     };
     const [txs, _masters] = await Promise.all([_fetchTxs(), _fetchMasters()]);
+    for (const t of (txs || [])) t.umd_nm = _umdCanon(t.sigungu, t.umd_nm);
+    for (const m of (_masters || [])) m.umd_nm = _umdCanon(m.sigungu, m.umd_nm);
     const aptStats = {};
     const aptStatsY = {};
     for (const t of (txs || [])) {
@@ -1289,10 +1311,11 @@ router.get('/in-bounds', async (req, res) => {
       const _mStats = {};
       for (let _from = 0; _from <= 4000; _from += 1000) {
         let _q = admin.from('molit_transactions').select('apt_name, sigungu, umd_nm, deal_amount, build_year, lawd_cd, deal_date, exclu_use_ar').in('apt_name', _mNames);
-        if (_mUmds.length) _q = _q.in('umd_nm', _mUmds);
+        if (_mUmds.length) _q = _q.in('umd_nm', _umdWithLegacy(_mUmds));
         const { data: _page, error: _me } = await _q.gte('deal_date', _cut180).order('id', { ascending: false }).range(_from, _from + 999);
         if (_me) throw _me;
         for (const t of (_page || [])) {
+          t.umd_nm = _umdCanon(t.sigungu, t.umd_nm);
           for (const _k of [`${t.apt_name}|${t.umd_nm}`, `${t.apt_name}|${t.umd_nm}|${Number(t.build_year) || 0}`]) { // ALIAS-YEAR-2026-10-30: 연도별 키도
             if (!_mStats[_k]) _mStats[_k] = { sum: 0, n: 0, sigungu: t.sigungu, buildYear: t.build_year, lawdCd: t.lawd_cd, rows: [] };
             _mStats[_k].sum += t.deal_amount || 0; _mStats[_k].n++; _mStats[_k].rows.push(t);

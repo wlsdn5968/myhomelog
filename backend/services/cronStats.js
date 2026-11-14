@@ -96,6 +96,8 @@ function _pick(summary) {
     //   health 에 inserted·unchanged 만 있어 받아 오기 실패인지(fetched 0, errors>0), 429 인지(throttleHits) 알 수 없었다.
     //   Hobby 런타임 로그는 1시간만 남아 다음 날엔 원인을 볼 수 없다. 숫자를 health 에 남긴다.
     'fetched', 'errors', 'throttleHits', 'intervalMs',
+    // AUDIT4-1114: retention 의 가짜 푸시 구독 정리 수 — 0 이 정상
+    'fakePushPruned',
     // CANCEL-SYNC-2026-10-30 (Plan 172): 적재 뒤 해제돼 원본에서 지운 거래 수(0 이 흔하다 — 필드 부재와 구별).
     'canceledRemoved'];
   const out = {};

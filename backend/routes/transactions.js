@@ -58,9 +58,11 @@ router.get('/', validateTransactionQuery, async (req, res) => {
       : await getTransactions(lawdCd, dealYm);
     // Sprint MM: sigungu/umdNm 지정 시 결과 추가 필터 — 다른 동 단지 환각 매칭 차단.
     if (sigungu || umdNm) {
+      const { umdCanon: _umdCanon } = require('../utils/umdRename');
       list = list.filter(t => {
         if (sigungu && t.sigungu && t.sigungu !== sigungu) return false;
-        if (umdNm && t.umdNm && t.umdNm !== umdNm) return false;
+        // UMD-RENAME-2026-11-14: 이름이 바뀐 읍면(달성군 구지면 -> 구지읍)은 같은 동으로 본다(지도 집계와 같은 규칙)
+        if (umdNm && t.umdNm && _umdCanon(t.sigungu, t.umdNm) !== _umdCanon(t.sigungu, umdNm)) return false;
         return true;
       });
     }

@@ -297,6 +297,62 @@ async function _trimTableToCap(admin, table, cap) {
   if (e3) throw e3;
   return del ?? 0;
 }
+// AUDIT4-1114 (push-subscribe-cap-exhaustion-unpruned-fake-subs): 여러 IP 가 없는 단지 이름으로 구독을 만들면 알림 대상이 아니라
+//   발송 실패 정리에도 걸리지 않고 5,000건 상한을 영구히 채울 수 있었다. 가짜만 겨냥해 지운다:
+//   만든 지 30일 넘고, 항목 중 그 지역의 실거래 단지명(molit_apt_index), 단지 마스터 이름, 별칭(molit_aliases)과 맞는 것이 하나도 없는 구독.
+//   이름 비교는 알림 매칭(pushNotify matchItems)과 같은 정규화(normalizeAptName 뒤 공백 제거, 소문자, NFC)를 쓴다.
+//   독립 검토(2026-11-14) 반영: last_notified_at 은 알림 작업이 알림을 안 보낸 구독까지 갱신하므로 조건에서 뺐다.
+//   안전장치: 조회가 하나라도 실패하면 아무것도 지우지 않는다. 그 지역 단지 목록이 비어 있으면 그 지역 항목은 '맞음'으로 본다.
+//   운영 실측 2026-11-14: 구독 2건 모두 실제 단지.
+const PUSH_FAKE_MIN_AGE_DAYS = 30;
+const _pushNn = (s) => String(require('../utils/aptName').normalizeAptName(String(s || ''))).normalize('NFC').replace(/\s+/g, '').toLowerCase();
+async function _lawdNameSet(admin, lawd) {
+  const set = new Set();
+  for (const [table, cols] of [['molit_apt_index', 'apt_name'], ['apt_master', 'apt_name, molit_aliases']]) {
+    for (let from = 0; from <= 9000; from += 1000) {
+      const { data, error } = await admin.from(table).select(cols).eq('lawd_cd', lawd).range(from, from + 999);
+      if (error) throw error;
+      for (const r of (data || [])) {
+        set.add(_pushNn(r.apt_name));
+        for (const a of (Array.isArray(r.molit_aliases) ? r.molit_aliases : [])) set.add(_pushNn(String(a).split('#')[0]));
+      }
+      if (!data || data.length < 1000) break;
+    }
+  }
+  return set;
+}
+async function runFakePushPrune(admin) {
+  const out = { fakePushPruned: 0, error: null };
+  try {
+    const cutoff = new Date(Date.now() - PUSH_FAKE_MIN_AGE_DAYS * 86400000).toISOString();
+    const { data: subs, error } = await admin.from('push_subscriptions').select('id, items')
+      .lt('created_at', cutoff).limit(5000);
+    if (error) throw error;
+    if (!subs || !subs.length) return out;
+    const lawds = new Set();
+    for (const s of subs) for (const it of (Array.isArray(s.items) ? s.items : [])) if (it && it.lawdCd) lawds.add(String(it.lawdCd));
+    const namesByLawd = new Map();
+    for (const lawd of lawds) namesByLawd.set(lawd, await _lawdNameSet(admin, lawd));
+    const itemKnown = (it) => {
+      if (!it || !it.lawdCd || !it.aptName) return false;
+      const set = namesByLawd.get(String(it.lawdCd));
+      if (!set || set.size === 0) return true; // 목록을 못 얻은 지역은 맞음으로 본다(지우지 않음)
+      return set.has(_pushNn(it.aptName));
+    };
+    const fake = subs.filter((s) => !(Array.isArray(s.items) && s.items.some(itemKnown))).map((s) => s.id);
+    for (let i = 0; i < fake.length; i += 200) {
+      const { count, error: de } = await admin.from('push_subscriptions').delete({ count: 'exact' }).in('id', fake.slice(i, i + 200));
+      if (de) throw de;
+      out.fakePushPruned += count ?? 0;
+    }
+    if (out.fakePushPruned) logger.info({ pruned: out.fakePushPruned }, 'retention: 가짜 푸시 구독 정리');
+  } catch (e) {
+    out.error = `push_subscriptions: ${e.message}`;
+    logger.warn({ err: e.message }, 'retention: 가짜 푸시 구독 정리 실패 (계속 진행)');
+  }
+  return out;
+}
+
 async function runAnonTableCaps(admin) {
   const out = { aiFeedbackTrimmed: 0, dataErrorTrimmed: 0, error: null };
   // 표마다 독립 try: 한 표 실패가 다른 표 정리를 막지 않는다
@@ -317,6 +373,7 @@ async function run() {
   const ingestRunsResult = await runIngestRunsRetention(admin);
   const attributionResult = await runAttributionRetention(admin);
   const anonCapResult = await runAnonTableCaps(admin); // AUDIT-CAPS-1111
+  const fakePushResult = await runFakePushPrune(admin); // AUDIT4-1114
 
   const summary = {
     durationMs: Date.now() - started,
@@ -332,14 +389,16 @@ async function run() {
     // AUDIT-CAPS-1111: 익명 추가 전용 표 상한 정리 결과(평탄 키, cronStats NUM 등록)
     aiFeedbackTrimmed: anonCapResult.aiFeedbackTrimmed,
     dataErrorTrimmed: anonCapResult.dataErrorTrimmed,
+    fakePushPruned: fakePushResult.fakePushPruned, // AUDIT4-1114: 가짜 푸시 구독 정리 수(0 이 정상)
     ...(ingestRunsResult && ingestRunsResult.error ? { error: ingestRunsResult.error }
-      : (anonCapResult.error ? { error: anonCapResult.error } : {})),
+      : (anonCapResult.error ? { error: anonCapResult.error }
+        : (fakePushResult.error ? { error: fakePushResult.error } : {}))),
   };
   logger.info(summary, 'retention job 완료');
   return summary;
 }
 
-module.exports = { run, runAnonTableCaps, ANON_TABLE_ROW_CAPS, hardDeleteUser, runAttributionRetention, runSoftDeleteExpiry, runSearchHistoryRetention, runChatRetention, runIngestRunsRetention };
+module.exports = { run, runAnonTableCaps, runFakePushPrune, ANON_TABLE_ROW_CAPS, hardDeleteUser, runAttributionRetention, runSoftDeleteExpiry, runSearchHistoryRetention, runChatRetention, runIngestRunsRetention };
 
 // CLI 실행 지원
 if (require.main === module) {
