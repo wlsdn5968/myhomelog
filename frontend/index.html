@@ -7199,9 +7199,10 @@ function initNaverMap(){
     return;
   }
   naverReady=true;
+  const _sv0=_mapStartView(); // MAP-HOME-1114
   mapObj=new naver.maps.Map('mapEl',{
-    center:new naver.maps.LatLng(37.565,127.02),
-    zoom:12,
+    center:new naver.maps.LatLng(_sv0.lat,_sv0.lng),
+    zoom:_sv0.zoom,
     mapTypeId:naver.maps.MapTypeId.NORMAL,
     scaleControl:false,
     logoControl:true,
@@ -7216,7 +7217,8 @@ function initNaverMap(){
 
   // PANN-PERSIST-2026-06-14: "이 지역 단지 보기" 버튼 상시 노출 (init 1회 생성, 모달 시만 숨김).
   _initPannBtn();
-  naver.maps.Event.addListener(mapObj, 'idle', () => { window._pannBtnShow(); });
+  naver.maps.Event.addListener(mapObj, 'idle', () => { window._pannBtnShow(); _mapSaveView(); });
+  _mapHookUserMove(); _mapApplyHome();
 }
 
 // MOBILE-2026-06-13: "이 영역 단지 보기" 줌 임계값 — 모바일은 작은 화면+핀치줌 마찰로 기본 zoom 12 에 머물러
@@ -7269,8 +7271,91 @@ function loadLeaflet(){
   const sc=document.createElement('script');sc.src='https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';sc.integrity='sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH';sc.crossOrigin='anonymous';sc.onload=initLeaflet;document.head.appendChild(sc);
 }
 
+// MAP-HOME-1114 (운영자 지적 "처음 열면 지도가 이상한 곳에 포커싱"): 첫 화면 위치가 그날 거래 많은 단지 12곳에 맞춰
+//   다시 잡혀서, 그 12곳에 서울 단지가 없던 날(운영 실측 2026-11-14) 중심이 화성 서쪽(37.266, 126.867, 확대 10)으로 가고
+//   서울이 화면 위로 잘렸다. 이제 처음 온 사람은 서울을 가운데 둔 수도권 화면에서 시작하고(서울 25개 구 전체가 들어온다),
+//   지도를 직접 움직인 적이 있는 사람은 마지막으로 보던 위치에서 시작한다. 위치는 이 브라우저에만 저장한다.
+const MAP_HOME = { lat: 37.47, lng: 126.98, zoom: 10 };
+const MAP_VIEW_KEY = 'mhl_map_view';
+function _mapViewValid(v){
+  return !!v && Number.isFinite(v.lat) && Number.isFinite(v.lng) && Number.isFinite(v.zoom)
+    && v.lat >= 33 && v.lat <= 38.7 && v.lng >= 124.5 && v.lng <= 131 && v.zoom >= 6 && v.zoom <= 19;
+}
+function _mapStartView(){
+  try {
+    const v = JSON.parse(localStorage.getItem(MAP_VIEW_KEY) || 'null');
+    if (_mapViewValid(v)) return { lat: v.lat, lng: v.lng, zoom: Math.round(v.zoom), saved: true };
+  } catch(_) {}
+  return { lat: MAP_HOME.lat, lng: MAP_HOME.lng, zoom: MAP_HOME.zoom, saved: false };
+}
+// 사용자가 지도를 직접 만진 뒤에만 저장한다(자동 이동만 있었던 방문은 다음 방문의 시작 위치를 바꾸지 않는다).
+function _mapSaveView(){
+  try {
+    if (!window._mapUserMoved || !mapObj || !mapObj.getCenter) return;
+    const c = mapObj.getCenter();
+    const lat = typeof c.lat === 'function' ? c.lat() : c.lat;
+    const lng = typeof c.lng === 'function' ? c.lng() : c.lng;
+    const v = { lat: +Number(lat).toFixed(5), lng: +Number(lng).toFixed(5), zoom: mapObj.getZoom() };
+    if (_mapViewValid(v)) localStorage.setItem(MAP_VIEW_KEY, JSON.stringify(v));
+  } catch(_) {}
+}
+// 독립 검토 반영(MAP-HOME-1114): 사용자 이동 감지와 시작 화면 맞춤이 인기 단지 로더 안에서만 걸려 있어,
+//   인기 단지 API 가 실패하거나 0건이면 둘 다 동작하지 않았다. 지도 초기화 직후에 건다.
+function _mapHookUserMove(){
+  try {
+    const me = document.getElementById('mapEl');
+    if (me && !window._mapMoveHooked) {
+      window._mapMoveHooked = true;
+      ['pointerdown','wheel','touchstart'].forEach(ev => me.addEventListener(ev, () => { window._mapUserMoved = true; }, { passive: true }));
+    }
+  } catch(_) {}
+}
+// sv('map') 이 보류된 맞춤을 다시 부르는 진입점. 인기 단지 로더와 무관하게 항상 있다.
+window._fitPopularMetro = function(){ _mapApplyHome(); };
+
+// 지도 높이에 맞춘 시작 중심 위도(확대 10 기준). 높이가 넉넉하면 MAP_HOME.lat(수원까지 보임), 낮으면 서울이 잘리지 않는 쪽으로 옮긴다.
+//   서울 경계는 frontend/geo/sgg-11.json 기준 남 37.4297, 북 37.7010. 모바일은 목록 시트가 자리 잡은 뒤 지도가 363px 로 줄어
+//   고정 위도(37.47)로는 서울 북쪽이 0.032도 잘렸다(375x812 미리보기 실측).
+function _mapHomeLat(hPx){
+  const half = (hPx / 2) * (360 / (256 * Math.pow(2, MAP_HOME.zoom))) * Math.cos(37.5 * Math.PI / 180);
+  const lo = 37.745 - half; // 서울 북쪽 끝이 여유를 두고 들어오려면 중심이 이 값 이상
+  const hi = 37.405 + half; // 서울 남쪽 끝이 들어오려면 중심이 이 값 이하
+  if (lo > hi) return 37.565; // 지도가 아주 낮으면 서울 한가운데
+  return Math.min(hi, Math.max(lo, MAP_HOME.lat));
+}
+// 처음 온 사람의 시작 화면을 지도 실제 크기에 맞춘다. 지도가 보이기 전(크기 0)에는 보류하고, 보인 뒤에는
+//   크기가 바뀔 때(모바일 시트가 자리 잡을 때, 창 크기를 바꿀 때) 다시 맞춘다. 사용자가 무엇이든 누르면 더는 손대지 않는다.
+//   시간 제한은 두지 않는다(느린 기기에서 시트가 늦게 자리 잡아도 맞추기 위해). 대신 아래 조건으로 다른 이동을 가린다.
+//   확대 단계가 시작값과 다르면 검색이나 공유 주소로 이미 다른 곳을 보는 것이므로 건드리지 않는다.
+function _mapApplyHome(){
+  try {
+    if (!mapObj || window._mapUserMoved || window._mapHomeLocked) return;
+    if (_mapStartView().saved) return;
+    const me = document.getElementById('mapEl'); const rc = me && me.getBoundingClientRect();
+    if (!rc || rc.width < 50 || rc.height < 50) { window._popFitPending = true; return; }
+    window._popFitPending = false;
+    if (!window._mapHomeHooked) {
+      window._mapHomeHooked = true;
+      ['pointerdown','keydown','touchstart','wheel'].forEach(ev => document.addEventListener(ev, () => { window._mapHomeLocked = true; }, { capture: true, passive: true, once: true }));
+      if (window.ResizeObserver) { let t = null; new ResizeObserver(() => { clearTimeout(t); t = setTimeout(_mapApplyHome, 120); }).observe(me); }
+    }
+    if (mapObj.getZoom() !== MAP_HOME.zoom) return;
+    // 독립 검토 반영: 첫 화면에서 검색해 들어오면 검색 결과에 맞춘 이동이 확대 10 으로 끝날 수 있다. 그 위치를 되돌리지 않도록,
+    //   지금 중심이 시작 위치에서 벗어났으면 손대지 않는다. 지도 높이만 바뀐 경우(경도는 그대로, 위도는 조금)만 다시 맞춘다.
+    const _c = mapObj.getCenter();
+    const _cLat = typeof _c.lat === 'function' ? _c.lat() : _c.lat, _cLng = typeof _c.lng === 'function' ? _c.lng() : _c.lng;
+    if (Math.abs(_cLng - MAP_HOME.lng) > 0.01 || Math.abs(_cLat - MAP_HOME.lat) > 0.25) return;
+    const lat = _mapHomeLat(rc.height);
+    if (mapObj._isNaver) mapObj.setCenter(new naver.maps.LatLng(lat, MAP_HOME.lng));
+    else if (mapObj.setView) mapObj.setView([lat, MAP_HOME.lng], MAP_HOME.zoom, { animate: false });
+  } catch(_) {}
+}
+
 function initLeaflet(){
-  mapObj=L.map('mapEl',{center:[37.565,127.02],zoom:12});
+  const _sv0=_mapStartView(); // MAP-HOME-1114
+  mapObj=L.map('mapEl',{center:[_sv0.lat,_sv0.lng],zoom:_sv0.zoom});
+  mapObj.on('moveend', _mapSaveView);
+  _mapHookUserMove(); _mapApplyHome();
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(mapObj);
   mapObj._isLeaflet=true;
   // MAP-INVALIDATE-2026-05-13 (Sprint FF — 운영자 발견 "지도 깨짐"):
@@ -15084,31 +15169,9 @@ async function loadPopularMarkers() {
     //   API 실측: LatLngBounds ctor/extend/fitBounds/hasLatLng 존재 확인, fitBounds 후 줌10·10/10 가시 검증.
     // MAP-FIT-DEFER-2026-09-16 (Plan 082): 랜딩 표시 중엔 지도 뷰가 display:none(0×0)이라 fitBounds 가
     //   전국 축척으로 떨어진다(첫 방문 데스크탑 실측). 크기가 없으면 보류했다가 sv('map') 에서 1회 수행.
-    window._fitPopularMetro = function(){
-      try {
-        if (window._mapUserMoved) return;
-        const me = document.getElementById('mapEl'); const rc = me && me.getBoundingClientRect();
-        if (!rc || rc.width < 50 || rc.height < 50) { window._popFitPending = true; return; }
-        window._popFitPending = false;
-        const metro = popular.filter(p => p.lat >= 36.9 && p.lat <= 37.85 && p.lng >= 126.35 && p.lng <= 127.45);
-        let vis = 0;
-        const b = mapObj.getBounds && mapObj.getBounds();
-        if (b) {
-          vis = popular.filter(p => isNaver
-            ? b.hasLatLng(new naver.maps.LatLng(p.lat, p.lng))
-            : (b.contains && b.contains([p.lat, p.lng]))).length;
-        }
-        if (!vis && metro.length >= 3) {
-          if (isNaver) {
-            const nb = new naver.maps.LatLngBounds();
-            metro.forEach(p => nb.extend(new naver.maps.LatLng(p.lat, p.lng)));
-            mapObj.fitBounds(nb);
-          } else if (window.L) {
-            mapObj.fitBounds(L.latLngBounds(metro.map(p => [p.lat, p.lng])), { padding: [40, 40] });
-          }
-        }
-      } catch(_) {}
-    };
+    // MAP-HOME-1114: 예전에는 여기서 수도권 안의 거래 많은 단지에 맞춰 지도를 다시 잡았다(fitBounds).
+    //   첫 화면 위치가 날마다 달라지는 원인이어서 없앴다. 시작 위치는 _mapStartView() 와 _mapApplyHome() 이 정한다.
+    //   window._fitPopularMetro 는 지도 초기화 쪽에서 한 번 정의한다(인기 단지 API 가 실패해도 동작하게).
     window._fitPopularMetro();
     // MARKER-DECLUTTER-2026-08-16: 최초 1회 + 지도 이동/줌/리사이즈마다 라벨 겹침 재정리.
     //   Naver 는 'idle'(팬·줌 종료), Leaflet 은 moveend/zoomend. 리스너는 1회만 건다.
