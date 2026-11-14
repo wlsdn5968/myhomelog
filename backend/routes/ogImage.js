@@ -81,6 +81,10 @@ router.get('/apt/:aptSeq', async (req, res) => {
     return fallback(res, 'facts-error');
   }
   if (!af) return fallback(res, 'not-found');
+  // OG-THIN-STATIC-2026-11-14 (운영자 결정 B): 거래 통계가 없으면(진짜 0건인지 일시 조회 실패인지 구분 못 함) 카드를 그리지 않고
+  //   정적 이미지로 보낸다. 예전엔 "준비 중" 카드를 매번 그렸다(약 200ms, no-store 라 같은 링크도 매번). 캐시하지 않는 원칙(Plan 070)은 그대로.
+  //   단지 페이지는 이미 이 경우 og:image 를 동적 카드로 가리키지 않는다(aptPage.js 의 `image: thin ? null :`).
+  if (!af.stat) return fallback(res, 'thin');
 
   let png;
   try {
@@ -98,8 +102,8 @@ router.get('/apt/:aptSeq', async (req, res) => {
   //   getTransactionsByAptSeq 가 각자 catch 로 실패를 삼키므로(aptPage.js:119-120) "진짜 거래 0건"과
   //   "일시적 조회 실패"를 여기서 구분할 수 없다 — aptPage.js 가 이미 같은 값으로 thin 페이지를
   //   no-store 하는 것과 동일하게, 이 이미지도 보수적으로 캐시하지 않는다.
-  const thin = !af.stat;
-  res.set('Cache-Control', thin ? 'no-store' : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
+  // (stat 이 없으면 위에서 정적 이미지로 이미 보냈다 — 여기까지 오면 통계가 있는 카드다)
+  res.set('Cache-Control', 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
   res.set('Content-Type', 'image/png');
   return res.send(png);
 });

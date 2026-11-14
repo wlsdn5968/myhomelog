@@ -199,13 +199,14 @@ test('sitemap typed GET /apt.xml — 조회 성공(1건)이면 기존 6시간 �
 // ── ogImage.js GET '/apt/:aptSeq' ────────────────────────────────────────
 // ogImage.js 는 aptPage.loadAptFacts·ogImageService.renderCard 를 매 요청마다 인라인 require() 하므로
 // (모듈 최상단 구조분해가 아니다) 라우터 자체를 재로드할 필요 없이 require.cache 만 갈아치우면 된다.
-async function _withOgAptStub({ facts, renderFail }, fn) {
+async function _withOgAptStub({ facts, renderFail, onRender }, fn) {
   const aptPagePath = require.resolve('../routes/aptPage');
   const ogSvcPath = require.resolve('../services/ogImageService');
   const saved = { a: require.cache[aptPagePath], o: require.cache[ogSvcPath] };
   _stubModule(aptPagePath, { loadAptFacts: async () => facts });
   _stubModule(ogSvcPath, {
     renderCard: async () => {
+      if (onRender) onRender();
       if (renderFail) throw new Error('렌더 실패 주입(Plan 070 회귀 테스트)');
       // ⚠ SCHEMA-SNAPSHOT-SCAN (frontend-contracts.test.js, TABLE_REF_RE): 소스 전체에서 `.from('…')` 을
       //   테이블 참조로 모은다. Plan 076 부터 `Buffer.from` 은 lookbehind 로 제외되지만, 여기는 그 스캔과
@@ -239,12 +240,18 @@ test('ogImage GET /apt/:aptSeq — 실거래 통계(stat)가 있으면 기존 6�
 test('ogImage GET /apt/:aptSeq — stat 이 없으면(거래 0건·조회 실패를 구분할 수 없음) no-store', async () => {
   // aptPage.js 는 같은 신호(stat 없음 = thin)로 페이지 자체를 이미 no-store 한다 — OG 카드도 같은 값을
   // 쓰는데 여기만 무조건 긴 캐시를 붙이던 것이 Plan 070 이 찾은 결함이다.
+  // OG-THIN-STATIC-2026-11-14: 이제 카드를 그리지 않고 정적 이미지로 보낸다(그리는 비용 0, no-store 는 유지).
+  let renders = 0;
   await _withOgAptStub({
     facts: { region: '서울 노원구', aptName: '테스트단지', umd: '공릉동', buildYear: 1999, stat: null },
+    onRender: () => { renders += 1; },
   }, async (handler) => {
     const res = _mockRes();
     await handler({ params: { aptSeq: '11350-1' } }, res, () => {});
     assert.equal(res.headers['Cache-Control'], 'no-store', 'stat 없는(thin) OG 이미지에 긴 캐시가 붙었다');
+    assert.equal(res.redirected, '/og.png', '거래 통계가 없는데 정적 이미지로 보내지 않았다');
+    assert.equal(res.headers['X-Og-Fallback'], 'thin');
+    assert.equal(renders, 0, '거래 통계가 없는데 카드를 그렸다');
   });
 });
 
