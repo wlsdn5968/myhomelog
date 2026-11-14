@@ -536,7 +536,6 @@ test('생애최초 — 접힌 선택 항목의 기본값이 우대(예)가 아�
   const rpt = require('node:fs').readFileSync(require.resolve('../routes/report'), 'utf8');
   assert.match(rpt, /userInput\.firstBuyerKnown = userInput\.firstBuyerKnown !== false;/, '백엔드가 미확인 플래그를 받지 않는다');
   assert.match(rpt, /if \(userInput\.firstBuyerKnown === false\) coreMessages\.push\('생애최초 여부를 선택하지 않아/, '데이터판이 미확인을 밝히지 않는다');
-  assert.match(rpt, /생애 최초: \$\{input\.firstBuyerKnown === false \? '미확인/, 'AI 프롬프트가 미확인을 밝히지 않는다');
 });
 
 

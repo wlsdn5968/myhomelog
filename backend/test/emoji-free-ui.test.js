@@ -31,7 +31,6 @@ const _isSymbol = s => SYMBOL_ALLOW.has([...s][0]) && !s.includes(ZWJ) && !s.inc
 const PROMPT_ALLOW = {
   'backend/services/aiService.js': new Set(['⛔']),
   'backend/routes/report.js': new Set(['⛔']),
-  'backend/routes/clause.js': new Set(['⛔']),
 };
 
 // 글자마다 주석/문자열/템플릿/HTML 텍스트를 판정하는 상태기계 (HTML 은 <script>·<style> 안까지 내려간다).

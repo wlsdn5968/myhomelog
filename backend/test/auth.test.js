@@ -145,7 +145,7 @@ test('admin 판정 — 이메일이 맞아도 확인되지 않은 이메일(emai
   const fs = require('node:fs'), path = require('node:path');
   const auth = fs.readFileSync(path.join(__dirname, '../middleware/auth.js'), 'utf8');
   assert.match(auth, /emailVerified: Boolean\(data\.user\.email_confirmed_at\)/, 'auth 미들웨어가 검증 상태를 싣지 않는다');
-  for (const f of ['../middleware/dailyLimit.js', '../middleware/rateLimit.js', '../routes/clause.js', '../server.js']) {
+  for (const f of ['../middleware/dailyLimit.js', '../middleware/rateLimit.js', '../server.js']) {
     const src = fs.readFileSync(path.join(__dirname, f), 'utf8');
     assert.equal(src.includes('isAdminEmail(req.user?.email)'), false, f + ' 가 문자열 판정으로 되돌아갔다');
     assert.ok(src.includes('isAdminUser(req.user)'), f + ' 가 isAdminUser 를 쓰지 않는다');

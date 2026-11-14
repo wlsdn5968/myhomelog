@@ -90,7 +90,7 @@ test('보고서 전세가율 — 최종 limit 곳에 대해서만 조회하고(�
   const writes = rpt.match(/c\.(\w+)\.jeonse_ratio = /g) || [];
   assert.ok(writes.length >= 1, '전세가율 사후 기입이 없다');
   for (const w of writes) assert.equal(w, `c.${builderProp}.jeonse_ratio = `, '사후 기입 속성명이 빌더와 다르다(매달린 참조): ' + w);
-  for (const rd of ['const f = c.objectiveFacts || {};', 'const facts = c.objectiveFacts || {};']) assert.ok(rpt.includes(rd.replace('objectiveFacts', builderProp)), '읽는 쪽 속성명이 빌더와 다르다: ' + rd);
+  for (const rd of ['const f = c.objectiveFacts || {};']) assert.ok(rpt.includes(rd.replace('objectiveFacts', builderProp)), '읽는 쪽 속성명이 빌더와 다르다: ' + rd);
 });
 
 

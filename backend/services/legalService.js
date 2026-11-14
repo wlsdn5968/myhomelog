@@ -1,16 +1,8 @@
 /**
  * 한국 법령 인용 서비스 (특약 작성 강화용)
- * - 국가법령정보 공공 API (law.go.kr) DRF 사용
- * - 이슈 키워드 → 관련 조문/판례 스니펫 매핑
- *
- * 주의: law.go.kr API는 OC 파라미터(이메일 아이디)만으로 동작하는 개방 API.
- * 본 서비스는 예산/인프라 미설정 시에도 정적 매핑으로 폴백함.
+ * - 이슈 키워드 → 관련 조문/판례 스니펫 정적 매핑(law.go.kr 로 검증한 조문만)
+ * - 외부 API 는 부르지 않는다(법령 검색 함수 searchLaw 는 호출처가 없어 지웠다).
  */
-const axios = require('axios');
-const cache = require('../cache');
-
-const LAW_LIST = 'https://www.law.go.kr/DRF/lawSearch.do';
-const LAW_TEXT = 'https://www.law.go.kr/DRF/lawService.do';
 
 /**
  * 이슈 → 대표 법령·조문 정적 매핑
@@ -97,26 +89,4 @@ function getCitationsForIssues(issues = '') {
   return Array.from(hits.values()).slice(0, 6);
 }
 
-/**
- * law.go.kr DRF API 기반 법령 검색 (선택적 — OC 환경변수 있을 때만 활성화)
- */
-async function searchLaw(keyword) {
-  const oc = process.env.LAW_GO_KR_OC;
-  if (!oc) return null;
-  const ck = `law:search:${keyword}`;
-  const cached = cache.get(ck);
-  if (cached !== undefined) return cached;
-  try {
-    const r = await axios.get(LAW_LIST, {
-      params: { OC: oc, target: 'law', type: 'JSON', query: keyword, display: 5 },
-      timeout: 6000,
-    });
-    const list = r.data?.LawSearch?.law || [];
-    cache.set(ck, list, 86400 * 30);
-    return list;
-  } catch (e) {
-    return null;
-  }
-}
-
-module.exports = { getCitationsForIssues, searchLaw };
+module.exports = { getCitationsForIssues };

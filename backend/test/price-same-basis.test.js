@@ -128,7 +128,6 @@ test('보고서 자기자본: 화면은 빈칸을 null 로 보내고, 요약·PD
   const rep = fs.readFileSync(path.join(__dirname, '../routes/report.js'), 'utf8');
   assert.match(rep, /userInput\.myCash = Number\.isFinite\(_cash\) \? _clamp\(_cash, 0, 500\) : null;/);
   assert.match(rep, /자기자본 \$\{userInput\.myCash == null \? '미입력' : userInput\.myCash \+ '억'\}/);
-  assert.match(rep, /- 자기자본: \$\{input\.myCash == null \? '미입력' : input\.myCash \+ '억'\}/);
   assert.doesNotMatch(rep, /자기자본 \$\{userInput\.myCash\}억/, '빈칸을 0억으로 쓰는 옛 문구가 남았다');
 });
 

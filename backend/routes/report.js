@@ -43,56 +43,6 @@ const crypto = require('crypto');
 
 const router = express.Router();
 
-// Phase B-2 (2026-05-01): REPORT_SYSTEM_PROMPT → REPORT_SPECIFIC 으로 변환.
-//   SHARED_BASE (services/aiService.js) 가 callAI 안에서 자동 prepend → endpoint 간 cache 공유.
-//   REPORT_SPECIFIC 만 report 전용 톤·출력 형식 정의 (~800 토큰).
-//   기존 절대 금지 5개는 SHARED_BASE 의 10개 rule 에 통합됨.
-const REPORT_SPECIFIC = `## 추가 규칙 (보고서 응답)
-- ⛔ "추천", "사세요", "매수하세요" 등 권유 표현 금지. 대신 "조건 부합 단지", "탐색 후보" 사용.
-- ⛔ 미래 가격 예측 금지 ("N억 오를 것", "5년 후 N억"). 정성적 안내만 ("자녀 학교 시기 갈아타기 권장").
-- ⛔ 대출 한도·DSR 분석은 보고서에 포함 X. 정책자금은 "이런 게 있다" 정보만.
-
-## 톤
-- "회원님" 같은 호칭은 쓰지 않고 담백하게 쓴다 (필요하면 "내 가구"처럼 쓴다)
-- 컨설턴트 어투 ("솔직히", "이런 점은", "검토해보세요")
-- 별점 ★★★ ★★ ★ 활용 (PDF 컨설팅 톤)
-- 단지명 정확히 (오타·줄임 X)
-- ⛔ markdown 문법 사용 금지 — **굵게**, __강조__, # 제목, \` 코드, --- 구분선 등 X
-   - 별 두 개 (\`**\`) 가 plain text 로 그대로 노출되어 가독성 망침
-   - 강조가 필요하면 핵심 단어를 문장 자연스러운 위치에 배치하거나, 별점 ★ 활용
-- 각 문장 80자 이내 권장 (가독성)
-
-## 출력 분량 제약 (Phase B-1, 2026-04-29 — 비용 절감 + 잘림 방지)
-- ⛔ 출력은 5500 토큰 이내. 초과 위험 시 tips 후순위부터 생략 (5번째→6번째 순).
-- ⛔ markdown 헤더는 H2(##) 까지만. H3(###) 이하 금지.
-- ⛔ 이모지·인사말("안녕하세요")·맺음말("감사합니다") 금지.
-- ⛔ 단지별 분석(pros/cons/location/recommendation/matchReason 합산) 단지당 200자 이내.
-- ⛔ JSON 외 부가 설명 텍스트 금지 (JSON 앞뒤로 코멘트 X).
-
-## 출력 형식 (반드시 JSON, 그 외 텍스트 금지)
-{
-  "coreMessages": ["1줄...", "2줄...", "3줄..."],
-  "checklist": [{"text":"회전율 (환금성)", "stars":3}, ...],
-  "apartments": [
-    {
-      "rank": 1,
-      "name": "단지명",
-      "areaSqm": 84,
-      "areaPyeong": 25,
-      "buildYear": 2001,
-      "households": 1676,
-      "ratio": "회전율 ★★★ (대단지)",
-      "location": "역세권·학교·평지",
-      "pros": "장점 1줄",
-      "cons": "단점 1줄",
-      "priceFit": "매수가 7억 vs 내 평형대 평균 8.1억 (16% 초과)",
-      "recommendation": "검토 시 21평 또는 다른 단지 비교 권장"
-    }
-  ],
-  "longTermView": "5년 갈아타기 정성적 시나리오 (가격 수치 X, 자녀 학교 시기 + 권역 권장)",
-  "tips": ["실무 TIP 1", "실무 TIP 2", ...]
-}`;
-
 router.post('/generate', async (req, res) => {
   const userInput = req.body || {};
   const userId = req.user?.id || null;
@@ -1837,7 +1787,7 @@ async function fetchCandidateApts(admin, input, limit) {
       c.jeonse = { medianDeposit: med, n: deps.length, ratio, monthsSampled: _tot - _failed, monthsTotal: _tot };
       // objectiveFacts 는 applyObjectiveScore 가 이미 만들었다(전세는 점수에 쓰이지 않으므로 사후 기입이 안전).
       //   ⚠ 2026-09-05 라이브 실측: 처음엔 c.facts 로 적어 **한 번도 기입되지 않았고 오류도 없었다**(속성명 매달림) —
-      //   buildDataOnlyReport(490)·buildReportPrompt(1947) 가 읽는 이름과 같아야 한다. 계약 테스트가 두 이름을 묶는다.
+      //   buildDataOnlyReport 가 읽는 이름과 같아야 한다. 계약 테스트가 이름을 묶는다.
       if (c.objectiveFacts) {
         c.objectiveFacts.jeonse_ratio = `${ratio}%`;
         c.objectiveFacts.jeonse_sample = deps.length;
@@ -1860,120 +1810,12 @@ async function fetchCandidateApts(admin, input, limit) {
   return finalOut;
 }
 
-/** AI prompt 빌드 — 사용자 입력 + 정책 + 단지 정보 + 점수 breakdown + 객관 fact (Phase 7)
- *  Sprint JJJJJ: freeCtx(이미 무료로 확보한 ECOS 금리·KOSIS 미분양·실거래 최신월) + 정책 LTV/DSR 실수치 주입. */
-function buildReportPrompt(input, policy, candidates, freeCtx) {
-  const fc = _freeContextLines(policy || {}, freeCtx || {});
-  const _freeBlock = [
-    fc.ltv ? `- LTV 한도(정부 공시 스냅샷): ${fc.ltv}` : null,
-    fc.dsr ? `- DSR 규제: ${fc.dsr}` : null,
-    fc.rate ? `- 시중 금리(실측): ${fc.rate}` : null,
-    fc.unsold ? `- 대상 지역 미분양 추이(실측): ${fc.unsold}` : null,
-    fc.txTrend ? `- 대상 지역 매매 거래량 추이(실측): ${fc.txTrend}` : null,
-    fc.agePrice ? `- 대상 지역 준공연차별 평당가(실측): ${fc.agePrice}` : null,
-    fc.tx ? `- 실거래 데이터 기준: ${fc.tx}` : null,
-  ].filter(Boolean).join('\n');
-  const aptList = candidates.map((c, i) => {
-    const householdsStr = (c.households && Number.isFinite(Number(c.households))) ? `${c.households}세대` : '미상';
-    // RISK-6 fix (2026-05-02): displayName 단순화 — c.master_name (KAPT facility 매칭 결과) 무시
-    //   문제: master_name 매칭이 잘못되면 다른 단지의 정식명이 displayName 으로 노출 → 사용자에게
-    //         "마포한강아이파크 (실제는 휴먼빌) 평균 7.95억" 같은 거짓 정보.
-    //   해결: c.apt_name 만 표시 — 거래 데이터의 실제 단지명. KAPT score 임계 3 상향과 동시 적용.
-    const displayName = c.apt_name;
-    const breakdownStr = Object.entries(c.scoreBreakdown || {})
-      .map(([k, v]) => `${k}=${v}`).join(', ');
-    const facts = c.objectiveFacts || {};
-    const am = facts.amenities;
-    const amStr = am ? `반경 1.2~2km: 학교 ${am.school}·마트 ${am.mart}·종합병원 ${am.hospital}·지하철역 ${am.subway}·공원 ${am.park||0}` : null;
-    const factsList = [
-      facts.district ? `행정구위계: ${facts.district}` : null,
-      facts.builder ? `시공사: ${facts.builder}` : null,
-      facts.parking_per_household ? `주차: 세대당 ${facts.parking_per_household}대${facts.parking_total ? ` (총 ${facts.parking_total}대)` : ''}` : null,
-      facts.age_years != null ? `노후도: ${facts.age_years}년차` : null,
-      facts.regulation ? `규제: ${facts.regulation}` : null,
-      // POOL-COVERAGE-2026-08-17: 신고가 갱신 횟수도 후보 풀 안에서 센 값이다 — 기간을 정확히 적는다.
-      facts.new_high_count > 0 ? `${poolSpanLabel(c)} 신고가 ${facts.new_high_count}회 갱신` : null,
-      facts.jeonse_ratio ? `전세가율: ${facts.jeonse_ratio} (내 평형대 전세 ${facts.jeonse_sample}건 기준${facts.jeonse_months ? ` · 표본 ${facts.jeonse_months}개월` : ''})` : null, // Sprint KKKKK · 표본 개월(JEONSE-FINAL)
-      amStr,
-    ].filter(Boolean).join(' | ');
-    return `${i + 1}. ${displayName} (${c.sigungu} ${c.umd_nm})
-   - 준공: ${c.build_year || '미상'}년 / 세대수: ${householdsStr}
-   - 내 평형대 (${c.areas.map(a => `${a}㎡(${Math.round(a / PYEONG_M2)}평)`).join(', ')}) 만 노출됨
-   - 내 평형대 평균가: ${(c.avgPrice / 10000).toFixed(2)}억원 (해당 평형 ${c.n}건 거래, 최근 ${c.latest})
-   - 객관 fact: ${factsList || '데이터 부족'}
-   - 매칭 점수: ${c.score}점 (${breakdownStr})`;
-  }).join('\n\n');
-
-  // REPORT_SYSTEM_PROMPT 는 callAI options.system 으로 전달됨 (중복 제거)
-  return `## 내 가구 상황
-- 매수가: ${input.maxBudget}억
-- 자기자본: ${input.myCash == null ? '미입력' : input.myCash + '억'}
-- 연소득: ${input.annualIncome ? input.annualIncome + '만원' : '미입력'} (참고용 — DSR 계산은 도구 › 대출 계산)
-- 보유 주택: ${input.houseStatus || '?'}
-- 생애 최초: ${input.firstBuyerKnown === false ? '미확인 — 일반(비우대) 기준으로 계산했고, 해당 시 우대 가능성만 언급할 것' : (input.isFirstBuyer ? '예' : '아니오')}
-- 희망 지역: ${input.region}
-- 평형: ${input.pyeong || '전체'}
-- 학군 중요도: ${input.schoolNeeded ? '중요' : '보통'}
-- 자녀 계획: ${input.kidPlan || '없음'}
-- 거주 기간 목표: ${input.stayYears || '5~10년'}
-- 우선순위 1순위: ${input.priority || '환금성'}
-- 직장 위치: ${input.workplaceArea || '미입력'}
-
-## 현재 부동산 정책 환경 (${policy.snapshot})
-- 규제지역: ${policy.regulatedAreas}
-- 토지거래허가: ${policy.landTrade}
-- 정책자금 종류: ${(policy.policyLoans || []).join(', ')} (자세한 자격·신청은 ${policy.policyContact})
-- ※ ${policy.note}
-${_freeBlock ? `\n## 실측 수치 (전부 공식 출처 — 아래 수치만 인용 가능, 임의 변형·추정 금지)\n${_freeBlock}` : ''}
-
-## 단지 정보 (${candidates.length}개 후보, ${poolSpanLabel(candidates[0])} 실거래 기반)
-${aptList}
-
-## 작성 지침
-1. coreMessages — 내 가구 상황 기반 3줄 요약
-2. checklist — 매수·갈아타기 체크리스트 5~7개 + 별점 + 짧은 근거 (필수)
-   ★★★ = 내 1순위(${input.priority || '환금성'}) 직접 부합 + 데이터로 입증
-   ★★  = 보조 항목 부합 또는 부분 입증
-   ★   = 일반 권고 사항
-   각 항목 형식: {"text":"항목명 — 근거 (최대 15자)", "stars":N}
-   예: {"text":"회전율 — 6개월 17건·대단지", "stars":3}
-        {"text":"역세권 — 7호선 도보 8분", "stars":3}
-        {"text":"준공연도 — 1999년 노후도 중간", "stars":2}
-3. apartments — 위 후보 단지 그대로 (rank·name·areaSqm·areaPyeong·buildYear·households·ratio·location·pros·cons·priceFit·recommendation·matchReason)
-   - name 형식: "단지명 (시군구 동)" — 예: "한양아파트 (노원구 상계동)" — 동명 누락 금지 (사용자 식별용)
-   - households: 입력 데이터의 세대수 그대로 사용. "미상"이면 "미상"으로 표기 (NaN/null 금지)
-   - priceFit: "매수가 ${input.maxBudget}억 vs 내 평형대 평균 X억 (X% 초과/일치/여유)" — 단순 비교만. "단지 평균"이라고 쓰지 말고 "내 평형대 평균"이라고 정확히 표기 (단지 전체 평형의 평균이 아니라 내가 입력한 평형대 거래 평균이기 때문)
-   - recommendation: "검토 권장" 또는 "예산 초과 — 다른 단지 비교 권장" — 매수 추천 X
-   - matchReason: 매칭 점수 breakdown 을 자연스러운 한 줄로 풀어 씀 (예: "1순위 환금성 부합(거래활발 60점) + 예산 적합(30점)") — 사용자 투명성 핵심
-   - location: 입력 데이터의 amenities (지하철·학교·마트·병원·공원 카운트) + 행정구위계만 인용. 도보 거리·구체적 역명·지형(평지/경사) 임의 추정 X (입력 데이터에 없음). "역세권"·"학교 17곳" 같이 카운트 기반 표현만 허용.
-   ※ pros/cons/location 작성 시 위 '객관 fact' 의 시공사·세대수·주차·노후도·규제 정보를 적극 활용 (예: pros 에 "삼성 1군 브랜드, 세대당 1.3대 주차" 같이 구체적 fact 인용)
-   ★ 응답 길이 절약: location/pros/cons/recommendation/matchReason 각각 60자 이내, ratio 30자 이내 (응답 토큰 부족시 잘림 방지)
-4. longTermView — 자녀 시점 기반 갈아타기 시나리오 (가격 수치 X, 권역만)
-5. tips — 실무 TIP 5~6개 (회전율·RR·복비·잔금·임장)
-
-[실측 수치 활용 — Sprint JJJJJ]
-- 위 '실측 수치' 블록(LTV·DSR·금리·미분양·실거래 기준월)이 있으면 checklist/coreMessages 의 근거로 인용할 것
-  (예: checklist {"text":"대출한도 — 생애최초 규제지역 LTV 70%","stars":3} / {"text":"금리 — 시중 주담대 4.32% 기준 상환액 확인","stars":3})
-- 그 블록에 없는 수치(LTV·DSR·금리·미분양 값)는 절대 임의로 쓰지 말 것. 블록이 없으면 해당 수치 언급 자체를 생략.
-- 미분양·거래량 수치는 나열만. "미분양이 늘어 가격이 …" "거래가 줄어 …" 같은 인과·전망 서술 절대 금지.
-- 전세가율은 객관 fact 에 있을 때만 그 값 그대로 인용 (예: "전세가율 62%, 전세 8건 기준"). 갭투자·역전세 예측 서술 금지 — 전세 표본이 적으면 그 사실만 언급.
-
-[환각 차단 절대 규칙]
-- 입력 데이터에 없는 거리(km, 도보 분), 지형(평지·경사), 정확한 역명·노선 번호, 재개발 일정 임의 추정 X
-- 입력 데이터의 amenities 카운트 (지하철 N개, 마트 N개 등) 만 인용 가능
-- 시공사/세대수가 입력에 없으면 "미상" 표기 (임의 보강 X)
-- 내 평형대 평균이 단지 전체 평균이 아님 — 모든 평균 표기에 "내 평형대" 명시
-
-JSON만 반환. 다른 텍스트 X.`;
-}
-
 // REPORT-DRYRUN-2026-08-30 (Sprint OOOOOOO): 보고서의 **단지 선별 단계만** 따로 부를 수 있게 export.
 //   전 지역이 보고서를 낼 수 있는지 확인하려면 119곳을 돌려봐야 하는데, /generate 는 매 건 유료
 //   AI 를 호출한다. 후보가 0이면 그 자리에서 404 가 나므로 **결함은 이 단계에서 전부 드러난다** —
 //   유료 호출 없이 전수 확인이 가능하다. router 동작은 그대로다(export 추가뿐).
 module.exports = router;
 module.exports.fetchCandidateApts = fetchCandidateApts;
-module.exports._buildReportPrompt = buildReportPrompt; // NO-PAID-AI-2026-11-13: 호출하지 않는다(기록과 계약 테스트용)
 // TEST-EXPORT-2026-09-02 (감사 P0-2): 회귀 주입 실측 결과 이 함수의 null 가드가 **무커버리지**였다
 //   (가드를 지우고 테스트를 돌렸더니 136 pass 로 그냥 통과했다). 순수 함수라 export 해서 실제 실행으로 고정한다.
 module.exports.applyObjectiveScore = applyObjectiveScore;
