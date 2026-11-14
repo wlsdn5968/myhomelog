@@ -290,6 +290,7 @@ async function ingestOne(admin, lawdCd, dealYm) {
     // SKIP-SAME-2026-11-11 (plans/190): 표의 zz_skip_same 트리거가 값이 같은 갱신을 건너뛴다. 그래서 아래 count 는
     //   "받은 행 수"가 아니라 "새로 들어오거나 값이 바뀐 행 수"다(rows_fetched 가 받은 행 수). 0 이어도 정상이다.
     let inserted = 0;
+    let rowFailed = 0; let rowFailSample = null;
     // batch UPSERT … ON CONFLICT (dedup_key) DO UPDATE
     // ignoreDuplicates:false 로 deal_amount 갱신 (정정거래 처리).
     for (let i = 0; i < rows.length; i += BATCH_INSERT_SIZE) {
@@ -306,13 +307,19 @@ async function ingestOne(admin, lawdCd, dealYm) {
             const { error: e1 } = await admin
               .from('molit_transactions')
               .upsert([row], { onConflict: 'dedup_key', ignoreDuplicates: false });
-            if (!e1) inserted += 1;
+            if (e1) { rowFailed += 1; if (!rowFailSample) rowFailSample = e1.message || String(e1); }
+            else inserted += 1;
           }
           continue;
         }
         throw error;
       }
       inserted += (count ?? chunk.length);
+    }
+
+    // Plan 198: 행 단위 재시도 실패를 조용히 버리면 그 달이 ok 로 남아 빠진 행이 다시 채워지지 않는다 → 실패로 기록(retryFailedGaps 가 다시 적재).
+    if (rowFailed > 0) {
+      throw new Error(`행 단위 재시도 ${rowFailed}건 실패: ${String(rowFailSample).slice(0, 200)}`);
     }
 
     if (runId) {

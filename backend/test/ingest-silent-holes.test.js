@@ -64,6 +64,7 @@ function _dgkStub() {
  * 낸다(기존 실패/성공 목록 조회는 그대로 성공) — 계획서 단언 6 전용.
  */
 function _fakeIngestAdmin(initialRows, opts = {}) {
+  // opts.txUpsert(chunk, o) 가 있으면 molit_transactions upsert 를 그 함수로 대신한다(Plan 198)
   const rows = initialRows.map(r => ({ ...r }));
   let nextId = rows.reduce((m, r) => Math.max(m, r.id || 0), 0) + 1;
 
@@ -93,6 +94,7 @@ function _fakeIngestAdmin(initialRows, opts = {}) {
   }
 
   return {
+    _runs() { return rows; },
     from(table) {
       if (table === 'molit_ingest_runs') {
         return {
@@ -122,7 +124,7 @@ function _fakeIngestAdmin(initialRows, opts = {}) {
         };
       }
       if (table === 'molit_transactions') {
-        return { upsert: () => Promise.resolve({ error: null, count: 0 }) }; // 이 스위트에서는 rows=0 이라 호출되지 않는다
+        return { upsert: (chunk, o) => (opts.txUpsert ? opts.txUpsert(chunk, o) : Promise.resolve({ error: null, count: 0 })) }; // 이 스위트에서는 rows=0 이라 호출되지 않는다
       }
       throw new Error('_fakeIngestAdmin: 예상 밖 테이블 — ' + table);
     },
@@ -510,4 +512,47 @@ test('ingestOne — 기록 update 가 {error} 를 돌려줘도 적재는 ok:true
 test('cronStats._pick — runRecordFailed 숫자를 health 로 통과시킨다 (Plan 158)', () => {
   const { _pick } = require('../services/cronStats');
   assert.equal(_pick({ runRecordFailed: 2 }).runRecordFailed, 2);
+});
+
+// Plan 198: 행 단위 재시도가 실패하면 그 달은 error 로 기록돼야 retryFailedGaps 가 다시 채운다.
+function _dgkTwoItems() {
+  const mk = (floor, amt) => ({ aptNm: '상계주공7(고층)', aptSeq: '11350-41', sggNm: '노원구', umdNm: '상계동', excluUseAr: '45.55',
+    buildYear: '1988', floor, dealYear: '2025', dealMonth: '9', dealDay: '10', dealAmount: amt, cdealType: '' });
+  const items = [mk('7', '36,000'), mk('11', '54,000')];
+  return (_url, _config) => Promise.resolve({
+    data: { response: { header: { resultCode: '000', resultMsg: 'OK' }, body: { items: { item: items }, totalCount: 2 } } },
+  });
+}
+
+test('ingestOne — 21000 뒤 행 단위 재시도가 실패하면 status=error 로 기록하고 ok:false (Plan 198)', async () => {
+  let rowCalls = 0;
+  const admin = _fakeIngestAdmin([], {
+    txUpsert: (chunk) => {
+      if (chunk.length > 1) return Promise.resolve({ error: { code: '21000', message: 'x' } });
+      rowCalls += 1;
+      return Promise.resolve({ error: rowCalls === 1 ? { message: 'row fail' } : null });
+    },
+  });
+  const { mod, restore } = _loadMolitIngest(_dgkTwoItems());
+  try {
+    const r = await mod._ingestOne(admin, '11110', '202509');
+    assert.equal(r.ok, false);
+    const rec = admin._runs().find(x => x.lawd_cd === '11110' && x.deal_ym === '202509');
+    assert.equal(rec.status, 'error');
+    assert.match(rec.error_message, /행 단위 재시도 1건 실패/);
+  } finally { restore(); }
+});
+
+test('ingestOne — 21000 뒤 행 단위 재시도가 모두 성공하면 status=ok, inserted=2 (Plan 198)', async () => {
+  const admin = _fakeIngestAdmin([], {
+    txUpsert: (chunk) => Promise.resolve(chunk.length > 1 ? { error: { code: '21000', message: 'x' } } : { error: null }),
+  });
+  const { mod, restore } = _loadMolitIngest(_dgkTwoItems());
+  try {
+    const r = await mod._ingestOne(admin, '11110', '202509');
+    assert.equal(r.ok, true);
+    assert.equal(r.inserted, 2);
+    const rec = admin._runs().find(x => x.lawd_cd === '11110' && x.deal_ym === '202509');
+    assert.equal(rec.status, 'ok');
+  } finally { restore(); }
 });
