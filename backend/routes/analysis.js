@@ -25,7 +25,10 @@ router.get('/', async (req, res) => {
 
   try {
     // CROSS-REGION-FIX-2026-06-03: sigungu/umdNm 전달 → 가격시그널 표본을 실거래가 탭과 동일 동(umd) 스코프
-    const result = await analyzeApt(lawdCd, aptName, parseFloat(price) || 0, sigungu || null, umdNm || null);
+    // Plan 196: 대표 평형(㎡). 숫자이고 10~400 일 때만 쓰고 아니면 전체 분포(하위 호환)
+    const _ea = Number(req.query.exclArea);
+    const exclArea = Number.isFinite(_ea) && _ea >= 10 && _ea <= 400 ? Math.round(_ea) : null;
+    const result = await analyzeApt(lawdCd, aptName, parseFloat(price) || 0, sigungu || null, umdNm || null, exclArea);
     res.json(result);
   } catch (err) {
     // MOB-AUDIT-2026-05-03: production 에선 generic 메시지 — 내부 에러 노출 차단

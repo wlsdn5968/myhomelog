@@ -10610,9 +10610,10 @@ async function resolveLawdCdFromArea(area){
 // ── 가격 시그널 분석 로드 ───────────────────────────────────
 async function loadAnalysis(p){
   const lawdCd=p.lawdCd||p.txHistory?.[0]?.lawdCd||'';
+  const _sqm=Number(p._repSqm)||0; // Plan 196: 대표 평형(㎡), 없으면 전체 분포
   try{
     // CROSS-REGION-FIX-2026-06-03: sigungu/umdNm 전달 → 가격시그널 표본을 실거래가 탭과 동일 동 스코프 (동명 단지 과합산 차단)
-    const url=`${CFG.api}/analysis?aptName=${encodeURIComponent(p.aptName)}&area=${encodeURIComponent(p.area||'')}&price=${p.avgPrice||0}${lawdCd?'&lawdCd='+lawdCd:''}${p.sigungu?'&sigungu='+encodeURIComponent(p.sigungu):''}${p.umdNm?'&umdNm='+encodeURIComponent(p.umdNm):''}`;
+    const url=`${CFG.api}/analysis?aptName=${encodeURIComponent(p.aptName)}&area=${encodeURIComponent(p.area||'')}&price=${p.avgPrice||0}${lawdCd?'&lawdCd='+lawdCd:''}${p.sigungu?'&sigungu='+encodeURIComponent(p.sigungu):''}${p.umdNm?'&umdNm='+encodeURIComponent(p.umdNm):''}${_sqm>0?'&exclArea='+Math.round(_sqm):''}`;
     const r=await fetch(url,{signal:AbortSignal.timeout(20000)});
     if(!r.ok)throw new Error('fail');
     renderAnalysis(await r.json(),p);
@@ -15495,6 +15496,7 @@ async function openAptDetail(r) {
     umdNm: r.umdNm,
     area: `${r.sigungu||''} ${r.umdNm||''}`.trim(),
     avgPrice: _fromRec ? Number(r.avgPrice) : avgPrice,
+    _repSqm: _fromRec ? null : (_repArea ? _repArea.sqm : null), // Plan 196: 가격 위치 백분위 비교 평형
     minPrice: (_fromRec && Number(r.minPrice) > 0) ? Number(r.minPrice) : minPrice,
     maxPrice: (_fromRec && Number(r.maxPrice) > 0) ? Number(r.maxPrice) : maxPrice,
     // PRICE-BASIS-2026-07-17 (Sprint XXXXX): 재계산 avgPrice 는 전 평형 최근 거래 평균 — 기준 라벨로 정직 표기.

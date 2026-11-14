@@ -49,5 +49,5 @@ test('옛 기준(filterAnomalies·±30%)이 코드와 화면에 남아 있지 �
   assert.match(ana, /function calcPricePercentile\(transactions, currentPrice, currentArea = null\) \{[\s\S]{0,400}const filtered = transactions;/);
   assert.doesNotMatch(html, /±30% 초과 가격|이상거래 '\+d\.anomalyCount/);
   assert.match(html, /가격 그래프의 빈 원과 같은 기준이에요/);
-  assert.match(ana, /return `analysis:v2:/, '기준이 바뀌었으니 분석 캐시 키 판을 올린다');
+  assert.match(ana, /return `analysis:v3:/, '기준이 바뀌었으니 분석 캐시 키 판을 올린다');
 });

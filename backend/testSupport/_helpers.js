@@ -1217,7 +1217,7 @@ function _plan064ExtractNoneReliability() {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
   const src = fs2.readFileSync(path2.join(__dirname, '../services/analysisService.js'), 'utf8');
-  const startTok = "const percentileObj = reliability !== 'NONE' ? calcPricePercentile(filteredTx, priceW) : null;";
+  const startTok = "const percentileObj = reliability !== 'NONE' ? calcPricePercentile(filteredTx, priceW, exclArea) : null;";
   const endTok = 'const buySignal = marketSummary; // 하위 호환';
   const s = src.indexOf(startTok);
   if (s < 0) throw new Error('Plan 064 NONE 테스트: 시작 토큰을 못 찾았다 — 소스가 옮겨졌다');
@@ -1237,13 +1237,13 @@ function _plan064RunNoneReliability(opts) {
   const priceW = 85000;
   const fn = new Function(
     'reliability', 'calcPricePercentile', 'calcVolumeSignal', 'calcGap', 'computeJeonseBasisDesc',
-    'summarizeMarketSignal', 'saleTx', 'filteredTx', 'jeonsePure', 'priceW', '_jTotal', '_jFailed',
+    'summarizeMarketSignal', 'saleTx', 'filteredTx', 'jeonsePure', 'priceW', '_jTotal', '_jFailed', 'exclArea',
     block + '\nreturn { gapData, marketSummary };'
   );
   return fn(
     opts.reliability, _internals.calcPricePercentile, _internals.calcVolumeSignal, _internals.calcGap,
     _internals.computeJeonseBasisDesc, _internals.calcBuySignal, saleTx, filteredTx, jeonsePure, priceW,
-    opts.jTotal, opts.jFailed
+    opts.jTotal, opts.jFailed, null
   );
 }
 

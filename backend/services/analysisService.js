@@ -507,17 +507,17 @@ function buildMonthlyVolume(transactions, monthCount = 6) {
 // ANALYSIS-KEY-PRICE-2026-10-18 (Plan 159): 백분위·시장 요약·currentPrice 가 넘겨받은 가격에 따라 달라지는데
 //   키에 가격이 없어, 같은 단지를 다른 가격으로 연 두 번째 사람이 첫 사람 가격의 결과를 받았다.
 //   가격은 억 단위 소수 둘째 자리(만원 100 단위)로 정규화한다 — 0·NaN·음수는 0.
-function _analysisCacheKey(lawdCd, aptName, sigungu, umdNm, currentPrice) {
+function _analysisCacheKey(lawdCd, aptName, sigungu, umdNm, currentPrice, exclArea) {
   const p = Number(currentPrice);
   const pk = Number.isFinite(p) && p > 0 ? Math.round(p * 100) : 0;
-  return `analysis:v2:${lawdCd}:${aptName}:${sigungu||''}:${umdNm||''}:${pk}`; // v2: Plan 174 동떨어진 거래 기준 변경
+  return `analysis:v3:${lawdCd}:${aptName}:${sigungu||''}:${umdNm||''}:a${exclArea||''}:${pk}`; // v3: Plan 196 대표 평형 칸 추가 (v2: Plan 174 동떨어진 거래 기준 변경)
 }
 const _ANA_MONTHS = 6, _ANA_CONTEXT_MONTHS = 6;
-async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
+async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm, exclArea = null) {
   if (!lawdCd) lawdCd = '11350'; // fallback
 
   // CROSS-REGION-FIX-2026-06-03: sigungu/umdNm 도 캐시 키 포함 (동별 분리 — 동명 단지 캐시 오염 차단)
-  const cacheKey = _analysisCacheKey(lawdCd, aptName, sigungu, umdNm, currentPrice);
+  const cacheKey = _analysisCacheKey(lawdCd, aptName, sigungu, umdNm, currentPrice, exclArea);
   const cached = cache.get(cacheKey);
   if (cached) return { ...cached, fromCache: true };
 
@@ -581,7 +581,7 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
   const anomalyCount = saleTx.length - filteredTx.length;
 
   // 신뢰도가 NONE이면 백분위·신호 계산 불가
-  const percentileObj = reliability !== 'NONE' ? calcPricePercentile(filteredTx, priceW) : null;
+  const percentileObj = reliability !== 'NONE' ? calcPricePercentile(filteredTx, priceW, exclArea) : null;
   const percentile = percentileObj?.value ?? null;
   const volumeSignalObj = calcVolumeSignal(saleTx);
   // P0-3 (2026-05-04): saleTx (filter X) → filteredTx (이상거래 제외)
@@ -627,6 +627,7 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm) {
     percentileLow:  percentileObj?.low  ?? null,
     percentileHigh: percentileObj?.high ?? null,
     percentileN:    percentileObj?.n    ?? null,
+    percentileArea: (exclArea && percentileObj && percentileObj.n < filteredTx.length) ? exclArea : null, // Plan 196: 평형 필터가 실제로 걸렸을 때만
     volumeSignal: volumeSignalObj.signal,
     volumeSeasonalBias: volumeSignalObj.seasonalBias,
     // P1 (2026-04-25): MOLIT 시차 보정 결과 노출 — 프론트가 "최근 거래일 N일 전" 표시
