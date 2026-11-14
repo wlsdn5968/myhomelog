@@ -733,7 +733,7 @@ test('추천 후보 컷 — 임시 점수·거래 건수·확인된 세대수 �
   // ⚠ 함수 범위로 한정 — 다른 함수(getTransactionsByAptSeq)의 같은 매핑 줄이 검사를 대신 통과시켰다(주입 실측 MISSED).
   const rrt = txs.indexOf('async function getRegionRecentTransactions(');
   assert.ok(rrt > 0, 'getRegionRecentTransactions 가 없다');
-  const rrtBody = txs.slice(rrt, txs.indexOf('cache.set(ck, mapped, 21600)', rrt) + 40);
+  const rrtBody = txs.slice(rrt, txs.indexOf('cache.setRows(ck, mapped, 21600)', rrt) + 40);
   assert.match(rrtBody, /deal_amount, lawd_cd, apt_seq, jibun'\)/, '지역 단일쿼리 select 에 jibun 이 없다 — 추천 경로 지번 매칭이 죽는다');
   assert.match(rrtBody, /jibun: r\.jibun \|\| '',/, '지역 단일쿼리 매핑에 jibun 이 없다');
   // 컷 전 소형 게이트 — TRANSIT-STAGE 보다 앞

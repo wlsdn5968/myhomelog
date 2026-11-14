@@ -82,5 +82,5 @@ test('④ 실패는 null(예외 없음) — dim 이 비어도 null', async () =>
 
 test('⑤ getTransactions 는 원본에 ok 기록이 없을 때(null)만 이력을 본다', () => {
   const src = require('fs').readFileSync(require.resolve('../services/transactionService'), 'utf8');
-  assert.match(src, /if \(fromDb === null\) \{\n\s*const fromHist = await getTransactionsFromHist\(lawdCd, dealYm\);\n\s*if \(fromHist\) \{ cache\.set\(cacheKey, fromHist, 21600\); return fromHist; \}/);
+  assert.match(src, /if \(fromDb === null\) \{\n\s*const fromHist = await getTransactionsFromHist\(lawdCd, dealYm\);\n\s*if \(fromHist\) \{ cache\.setRows\(cacheKey, fromHist, 21600\); return fromHist; \}/);
 });

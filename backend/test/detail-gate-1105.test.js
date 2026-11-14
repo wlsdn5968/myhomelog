@@ -69,7 +69,7 @@ test('같은 이름 공식 단지는 지역 코드와 동으로 고른다(신도
   assert.equal(pick([], '11530', '구로동'), null);
   const src = fs.readFileSync(path.join(__dirname, '../services/transactionService.js'), 'utf8');
   assert.match(src, /aliases\.slice\(0, 20\)\.map/, '별칭을 앞 5개만 읽으면 안 된다(당정한솔솔파크 (601,602동) 누락 재현)');
-  assert.match(src, /if \(!_failedMonths\.length\) cache\.set\(cacheKey, sorted, 1800\);/);
+  assert.match(src, /if \(!_failedMonths\.length\) cache\.setRows\(cacheKey, sorted, 1800\);/);
   const route = fs.readFileSync(path.join(__dirname, '../routes/transactions.js'), 'utf8');
   assert.match(route, /getTransactionsByAptInclAliases\(lawdCd, aptName, _mb, \{ umdNm \}\)/);
   const ana = fs.readFileSync(path.join(__dirname, '../services/analysisService.js'), 'utf8');

@@ -187,7 +187,7 @@ async function getRegionRecentTransactions(lawdCd, monthsBack = 6) {
   const admin = dbClient();
   if (!admin) return null;
   const ck = `txregion:${lawdCd}:${monthsBack}`;
-  const hit = cache.get(ck);
+  const hit = cache.getRows(ck);
   if (hit !== undefined) return hit;
   try {
     const sinceStr = txWindowStart(monthsBack);   // 규칙은 utils/txWindow 한 곳에만
@@ -227,7 +227,7 @@ async function getRegionRecentTransactions(lawdCd, monthsBack = 6) {
         if (short) break;
       }
     }
-    if (!data.length) { cache.set(ck, null, 300); return null; } // 미ingest → 기존 경로 폴백
+    if (!data.length) { cache.setRows(ck, null, 300); return null; } // 미ingest → 기존 경로 폴백
     const mapped = data.map(r => ({
       aptName: r.apt_name,
       sigungu: r.sigungu || '',
@@ -243,7 +243,7 @@ async function getRegionRecentTransactions(lawdCd, monthsBack = 6) {
       aptSeq: r.apt_seq || '',
       jibun: r.jibun || '', // JIBUN-COL-2026-09-05
     }));
-    cache.set(ck, mapped, 21600); // 6h — daily ingest 주기 기준
+    cache.setRows(ck, mapped, 21600); // 6h — daily ingest 주기 기준
     return mapped;
   } catch (e) {
     logger.warn({ err: e.message, lawdCd }, 'txregion 단일쿼리 실패 → 기존 월별 경로 폴백');
@@ -368,21 +368,21 @@ function isMolitKeyMissing() {
  */
 async function getTransactions(lawdCd, dealYm) {
   const cacheKey = `tx:${lawdCd}:${dealYm}`;
-  const cached = cache.get(cacheKey);
+  const cached = cache.getRows(cacheKey);
   if (cached !== undefined) return cached || []; // null/[] 캐시도 hit 처리
 
   // ── DB-first: ingest 된 region-month 은 DB 로만 응답 (latency ~20ms) ──
   if (DB_FIRST) {
     const fromDb = await getTransactionsFromDb(lawdCd, dealYm);
     if (fromDb && fromDb.length > 0) {
-      cache.set(cacheKey, fromDb, 21600); // REC-PERF-2026-07-10 (Sprint EEEE): 1h→6h — 데이터는 daily cron(17:00 UTC)만 갱신, 콜드 빈도 축소
+      cache.setRows(cacheKey, fromDb, 21600); // REC-PERF-2026-07-10 (Sprint EEEE): 1h→6h — 데이터는 daily cron(17:00 UTC)만 갱신, 콜드 빈도 축소
       return fromDb;
     }
     // fromDb === null (미ingest 또는 실패) 또는 빈 배열 → API fallback 으로 진행
     // Plan 170: 원본 창 밖(이력으로 옮긴 달·이력 backfill 달)은 이력에서 — 이력에 기록된 달이면 0건도 답이다
     if (fromDb === null) {
       const fromHist = await getTransactionsFromHist(lawdCd, dealYm);
-      if (fromHist) { cache.set(cacheKey, fromHist, 21600); return fromHist; }
+      if (fromHist) { cache.setRows(cacheKey, fromHist, 21600); return fromHist; }
     }
   }
 
@@ -485,12 +485,12 @@ async function getTransactions(lawdCd, dealYm) {
         'MOLIT 해제 거래 필터링');
     }
 
-    cache.set(cacheKey, result, 86400);
+    cache.setRows(cacheKey, result, 86400);
     return result;
   } catch (err) {
     if (err.code === 'MOLIT_KEY_MISSING') throw err;
     // 에러 캐시 5분 — 일시적 5xx/timeout 시 매 요청마다 외부 API 두드리는 부하 방지
-    cache.set(cacheKey, [], 300);
+    cache.setRows(cacheKey, [], 300);
     const apiErr = new Error(`국토부 API 호출 실패: ${err.message}`);
     apiErr.code = 'MOLIT_API_ERROR';
     apiErr.status = 502;
@@ -541,7 +541,7 @@ async function getTransactionsByApt(lawdCd, aptName, monthsBack = 6) {
   // TXWINDOW-TWIN-2026-09-06 (Plan 055): 창 산식이 바뀌었다 — v2 로 올려 옛(버그) 결과가
   //   TTL(1800s)만큼 남는 것을 막는다. 다른 소비자 없음(grep 확인).
   const cacheKey = `txapt:v2:${lawdCd}:${aptName}:${monthsBack}`;
-  const cached = cache.get(cacheKey);
+  const cached = cache.getRows(cacheKey);
   if (cached) return cached;
 
   // TXWINDOW-TWIN-2026-09-06 (Plan 055): getFullYear()/getMonth() 는 호스트 로컬 TZ 라
@@ -589,7 +589,7 @@ async function getTransactionsByApt(lawdCd, aptName, monthsBack = 6) {
   //   기존: 1시간 — 신규 거래 발생 시 1시간 stale data 노출
   //   변경: 30분 — 매일 17:00 UTC molit-ingest 후 30분이면 모든 사용자가 최신 받음
   // PARTIAL-NOCACHE-2026-11-05: 달 일부를 못 읽은 결과를 30분 굳히면 그동안 건수가 줄어든 채 고정된다.
-  if (!_failedMonths.length) cache.set(cacheKey, sorted, 1800); else _markPartial(sorted);
+  if (!_failedMonths.length) cache.setRows(cacheKey, sorted, 1800); else _markPartial(sorted);
   return sorted;
 }
 
@@ -959,7 +959,7 @@ async function getTransactionsByAptSeq(aptSeq, monthsBack = 24) {
   // TXWINDOW-TWIN-2026-09-06 (Plan 055): 창 산식이 바뀌었다 — v2 로 올려 옛(버그) 결과가
   //   TTL(6h)만큼 공개 단지 페이지에 남는 것을 막는다. 다른 소비자 없음(grep 확인).
   const ck = `txseq:v2:${seq}:${monthsBack}`;
-  const hit = cache.get(ck);
+  const hit = cache.getRows(ck);
   if (hit !== undefined) return hit;
   try {
     // TXWINDOW-TWIN-2026-09-06 (Plan 055): setMonth 를 setDate(1) 보다 먼저 호출하면 31일인 달에서
@@ -980,7 +980,7 @@ async function getTransactionsByAptSeq(aptSeq, monthsBack = 24) {
     if (rows.length >= LIM) {
       logger.warn({ aptSeq: seq, limit: LIM }, 'apt_seq 거래가 조회 상한에 닿음 — 페이징 필요');
     }
-    if (!rows.length) { cache.set(ck, null, 600); return null; }
+    if (!rows.length) { cache.setRows(ck, null, 600); return null; }
     // JIBUN-COL-2026-09-06 (Plan 048): jibun 이 빠져 있었다 — analyzeTransactions 가 단지 지번(최빈값)을 여기서
     //   만들고, 추천 경로의 JIBUN-MATCH(게이트·카드) 는 그 값으로 KAPT 를 찾는다. 컬럼이 없으니 지번 매칭이 한 번도
     //   성립한 적이 없었다 → 세대수 확인 감소. 직전 2026-09-05 스프린트가 두 번째 사본(:132)을 고쳤는데
@@ -1000,7 +1000,7 @@ async function getTransactionsByAptSeq(aptSeq, monthsBack = 24) {
       aptSeq: r.apt_seq || seq,
       jibun: r.jibun || '',
     }));
-    cache.set(ck, mapped, 21600); // 6h — daily ingest 주기 기준(getRegionRecentTransactions 와 동일)
+    cache.setRows(ck, mapped, 21600); // 6h — daily ingest 주기 기준(getRegionRecentTransactions 와 동일)
     return mapped;
   } catch (e) {
     logger.warn({ err: e.message, aptSeq: seq }, 'apt_seq 거래 조회 실패');
