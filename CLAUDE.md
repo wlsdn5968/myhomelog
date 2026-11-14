@@ -154,6 +154,7 @@
 
 ### 보안 — 운영자 결정 대기 (2026-09-28)
 - 자세한 기록(원문 그대로): `docs/ops/security.md`. 아래는 그 기록 가운데 경고, 금지, 꼭 알아야 할 규칙만 남긴 것이다.
+- **공개 입력을 저장하거나 캐시 키로 쓸 때(run-6, 2026-11-14)**: 시군구와 동 이름은 `utils/regionText.js` 의 `isSafeRegionText` 를 거친다. Kakao 를 부르는 공개 경로는 `createKakaoGate` 로 IP 예산과 전역 일일 상한에 넣는다. 자유 입력으로 만든 캐시 키 접두어를 새로 만들면 `cache.js` 의 `FREE_TEXT_PREFIXES` 에 더한다. 결제를 다시 켜기 전에 `docs/ops/security.md` 의 run-6 결제 4건부터 정한다.
 - **공개 키 노출면 축소(Plan 129·132)**: 공개 키(`index.html` 메타)만으로 대형 테이블을 1,000행씩 무제한 REST 조회할 수 있었다(위험 = 무료 전송량 5GB 소진 → 전 API 402). **1단계 적용 완료(2026-10-02, 운영자 SQL Editor 실행 — 기록 `supabase/migrations/20261002_public_key_surface_stage1.sql`)**: 이력·편의시설·학교·건축물대장 공개 읽기 제거, 백엔드 전용 함수 5개 공개 실행 회수. **2단계 코드 완료(Plan 132, 77833fb)**: 검색·지도·인기 라이브 집계가 service_role 로 읽는다(`backend/test/public-key-surface.test.js` 가 고정 — 공개 키로 되돌리면 DB 권한을 닫은 뒤 42501). 절충(운영자 결정): 사용자 경로 DB 상한 anon 3s → 8s. **2단계 DB SQL(`plans/129` §4) 적용 조건 충족(2026-10-14 게이트웨이 로그 24h: 공개 키로 대상 5개 요청 0건 — 공개 키는 regulations_snapshot·popular_apts_snapshot 만)** — 계획자 시도 4가지가 모두 막힘(2026-10-14): 자동 모드 `apply_migration` declined · 수동 승인 모드 `apply_migration` declined · 수동 모드 `execute_sql` declined(Supabase MCP 가 정책 삭제·권한 회수 문장에 확인을 요구하는데 이 앱은 그 확인 창을 띄우지 못한다) · 운영자 크롬의 SQL Editor 로 가는 것은 자동 모드 분류기가 "안전장치 우회" 로 차단 → **운영자 SQL Editor 실행만 가능**. 공개 유지: `popular_apts_snapshot`·`regulations_snapshot`·`billing_plans`.
 
 ### 구성요소 점검 (2026-10-14) — `plans/audit-components-2026-10-14.md`

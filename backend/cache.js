@@ -15,6 +15,20 @@ const cache = new NodeCache({
   maxKeys: parseInt(process.env.CACHE_MAX_KEYS || '2000'),
 });
 
+// AUDIT6-1114 (보안 점검 run-6, search.shared-cache.free-text-key-eviction): 가득 차면 가장 오래된 키 10% 를 지웠는데,
+//   익명 입력 문자열(검색어, 단지 이름, 직장 이름)로 만든 키가 계속 들어오면 다른 기능의 값진 항목(월별 거래, 길찾기, KAPT)이 밀려났다.
+//   이제 자유 입력으로 만든 키부터 지운다(먼저 만들어진 순 — node-cache 의 keys() 는 생성 순서다). 모자랄 때만 나머지에서 먼저 만들어진 것을 지운다.
+//   새 자유 입력 키 접두어를 만들면 여기에 더할 것. kkkw:cnt: 는 좌표 격자 키라 자유 입력이 아니다.
+//   geo-db: 는 단지 이름이 들어가는 좌표 조회 키다(DB 에도 있어 다시 읽으면 된다). 일일 계수 키(dl:)는 넣지 않는다(지우면 한도가 풀린다).
+const FREE_TEXT_PREFIXES = ['searchapt:', 'txapt:', 'analysis:', 'kkkw:', 'geo-db:'];
+const _isFreeTextKey = (k) => typeof k === 'string' && !k.startsWith('kkkw:cnt:') && FREE_TEXT_PREFIXES.some((p) => k.startsWith(p));
+function _pickEvictions(keys) {
+  const need = Math.max(1, Math.floor(keys.length / 10));
+  const free = keys.filter(_isFreeTextKey).slice(0, need);
+  if (free.length >= need) return free;
+  return free.concat(keys.filter((k) => !_isFreeTextKey(k)).slice(0, need - free.length));
+}
+
 const _origSet = cache.set.bind(cache);
 cache.set = function safeSet(key, value, ttl) {
   const call = () => (ttl === undefined ? _origSet(key, value) : _origSet(key, value, ttl));
@@ -24,8 +38,7 @@ cache.set = function safeSet(key, value, ttl) {
     const isFull = e && (e.errorcode === 'ECACHEFULL' || e.name === 'ECACHEFULL' || /ECACHEFULL|max keys/i.test(e.message || ''));
     if (isFull) {
       try {
-        const keys = cache.keys();
-        cache.del(keys.slice(0, Math.max(1, Math.floor(keys.length / 10))));
+        cache.del(_pickEvictions(cache.keys()));
         return call();
       } catch (_) { /* fall through */ }
     }
@@ -54,4 +67,5 @@ cache.getRows = function getRows(key) {
   return (typeof v === 'function' && v[ROWS_BOX]) ? v() : v;
 };
 
+cache._pickEvictions = _pickEvictions; // 테스트용
 module.exports = cache;

@@ -81,11 +81,13 @@ function isKeyMissing() {
  * 두 좌표간 자동차 경로 시간(분) — Kakao 모빌리티 v1 directions
  * 대중교통 비즈니스 키가 없을 때 차량 시간 × 1.6 으로 대중교통 추정
  */
-async function getCarMinutes(originLat, originLng, destLat, destLng) {
+// AUDIT6-1114 (run-6): gate 는 공개 라우트가 넘기는 Kakao 일일 관문. 캐시에 없을 때만 묻고, 막히면 모름(null)으로 돌려주며 캐시에 남기지 않는다.
+async function getCarMinutes(originLat, originLng, destLat, destLng, gate = null) {
   if (isKeyMissing()) return null;
   const ck = `kkdir:${originLat.toFixed(4)},${originLng.toFixed(4)}->${destLat.toFixed(4)},${destLng.toFixed(4)}`;
   const cached = cache.get(ck);
   if (cached !== undefined) return cached;
+  if (gate && !(await gate())) return null;
   try {
     const r = await axios.get(KAKAO_DIRECTIONS, {
       headers: { Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}` },
@@ -110,8 +112,8 @@ async function getCarMinutes(originLat, originLng, destLat, destLng) {
  * 대중교통 추정 시간 = 자동차 시간 × 1.6 + 환승 보정 5분
  * (수도권 평균 비율 — 후속에 실제 ODsay/Kakao 모빌리티 비즈니스 연동 필요)
  */
-async function getTransitMinutes(originLat, originLng, destLat, destLng) {
-  const car = await getCarMinutes(originLat, originLng, destLat, destLng);
+async function getTransitMinutes(originLat, originLng, destLat, destLng, gate = null) {
+  const car = await getCarMinutes(originLat, originLng, destLat, destLng, gate);
   if (car == null || !Number.isFinite(car)) return null;
   const mins = Math.round(car * 1.6 + 5);
   return Number.isFinite(mins) ? mins : null;
@@ -121,7 +123,7 @@ async function getTransitMinutes(originLat, originLng, destLat, destLng) {
  * 주변 카테고리 시설 개수 검색 (반경 미터)
  * 카테고리: SC4(학교) MT1(대형마트) HP8(병원) SW8(지하철역) CS2(편의점)
  */
-async function countNearby(lat, lng, categoryCode, radius = 800) {
+async function countNearby(lat, lng, categoryCode, radius = 800, gate = null) {
   // NULL-NOT-ZERO-2026-09-02 (감사 P0-2): 키가 없으면 **조회를 못 한 것**이지 시설이 없는 게 아니다.
   //   0 을 돌려주면 소비자가 그걸 "반경 안에 0곳"이라는 사실로 읽는다(아래 catch 도 동일).
   if (isKeyMissing()) return null;
@@ -140,6 +142,8 @@ async function countNearby(lat, lng, categoryCode, radius = 800) {
     return fromDb;
   }
   // 3) Kakao API
+  // AUDIT6-1114 (run-6): 관문이 있으면 캐시와 DB 에 없을 때만 묻는다. 막히면 모름(null) — 0 으로 만들지 않는다.
+  if (gate && !(await gate())) return null;
   try {
     const r = await axios.get(KAKAO_CAT, {
       headers: { Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}` },
@@ -170,7 +174,7 @@ async function countNearby(lat, lng, categoryCode, radius = 800) {
 /**
  * 키워드 검색 카운트 (반경 m) — 카테고리 없는 시설 (종합병원·공원 등)
  */
-async function countNearbyKeyword(lat, lng, keyword, radius = 1200) {
+async function countNearbyKeyword(lat, lng, keyword, radius = 1200, gate = null) {
   // NULL-NOT-ZERO-2026-09-02: catch 는 2026-08-30 에 null 로 고쳤지만 이 경로만 0 이 남아 있었다.
   if (isKeyMissing()) return null;
   // Phase B-6: 좌표 정규화 + DB cache
@@ -185,6 +189,7 @@ async function countNearbyKeyword(lat, lng, keyword, radius = 1200) {
     cache.set(ck, fromDb, 86400 * 3);
     return fromDb;
   }
+  if (gate && !(await gate())) return null; // AUDIT6-1114 (run-6)
   try {
     const r = await axios.get(KAKAO_KEY_SEARCH, {
       headers: { Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}` },
@@ -224,16 +229,18 @@ async function countNearbyKeyword(lat, lng, keyword, radius = 1200) {
  * 한 단지 좌표에 대해 주요 시설 카운트 일괄
  * Phase 8+ (2026-04-26): 반경 1200m (도보 15분), 종합병원/공원은 keyword 검색
  */
-async function getNearbyAmenities(lat, lng) {
+// AUDIT6-1114 (run-6): opts.gate 는 공개 라우트가 넘기는 Kakao 일일 관문(IP 예산과 전역 상한). 서버 내부 호출(보고서, 추천)은 넘기지 않는다.
+async function getNearbyAmenities(lat, lng, opts = {}) {
   if (lat == null || lng == null) return null;
+  const gate = (opts && opts.gate) || null;
   const [school, mart, hospital_general, subway, cvs, park, nearest] = await Promise.all([
-    countNearby(lat, lng, 'SC4', 1200),         // 학교 (초중고)
-    countNearby(lat, lng, 'MT1', 1500),         // 대형마트
-    countNearbyKeyword(lat, lng, '종합병원', 2000),  // 종합병원 (HP8 의원 노이즈 제거)
-    countNearby(lat, lng, 'SW8', 1200),         // 지하철역
-    countNearby(lat, lng, 'CS2', 500),          // 편의점
-    countNearbyKeyword(lat, lng, '공원', 1200),  // 공원
-    nearestSubway(lat, lng, 3000),              // TRANSIT-TRUTH: 최근접 역 직선거리(신고값보다 우선)
+    countNearby(lat, lng, 'SC4', 1200, gate),         // 학교 (초중고)
+    countNearby(lat, lng, 'MT1', 1500, gate),         // 대형마트
+    countNearbyKeyword(lat, lng, '종합병원', 2000, gate),  // 종합병원 (HP8 의원 노이즈 제거)
+    countNearby(lat, lng, 'SW8', 1200, gate),         // 지하철역
+    countNearby(lat, lng, 'CS2', 500, gate),          // 편의점
+    countNearbyKeyword(lat, lng, '공원', 1200, gate),  // 공원
+    nearestSubway(lat, lng, 3000, { gate }),              // TRANSIT-TRUTH: 최근접 역 직선거리(신고값보다 우선)
   ]);
   // ⚠ nearest === undefined 는 **조회 실패**, null 은 **반경 3km 내 역 없음**. 섞지 말 것.
   return {
@@ -246,13 +253,14 @@ async function getNearbyAmenities(lat, lng) {
 /**
  * 키워드 → 좌표 (직장 입력값 등 자유로운 텍스트)
  */
-async function keywordToCoord(keyword) {
+async function keywordToCoord(keyword, gate = null) {
   if (!keyword || isKeyMissing()) return null;
   const q = String(keyword).trim();
   if (!q) return null;
   const ck = `kkkw:${q}`;
   const cached = cache.get(ck);
   if (cached !== undefined) return cached;
+  if (gate && !(await gate())) return null; // AUDIT6-1114 (run-6)
   try {
     const r = await axios.get(KAKAO_KEY_SEARCH, {
       headers: { Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}` },
@@ -334,6 +342,7 @@ async function nearestSubway(lat, lng, radius = 3000, opts = {}) {
       return known;
     }
   }
+  if (opts && opts.gate && !(await opts.gate())) return undefined; // AUDIT6-1114 (run-6): 막히면 모름(undefined)
   try {
     const r = await axios.get(KAKAO_CAT, {
       headers: { Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}` },

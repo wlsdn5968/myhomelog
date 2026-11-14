@@ -22,6 +22,11 @@ const router = express.Router();
 // VISITS-2026-10-20: daily_visit = 운영 도메인에서 브라우저당 하루 1회(식별자 없음) — /api/visits/today 가 센다.
 const EVENTS = new Set(['first_load', 'signup', 'search', 'report', 'daily_visit']);
 const DAILY_VISIT_IP_CAP = 30;
+// AUDIT6-1114 (보안 점검 run-6, anon-attribution-nondaily-events-no-row-cap): daily_visit 말고 다른 이벤트는 하루 상한이 없어
+//   IP 를 나눠 보내면 행이 180일 동안 쌓였다(분당 30건 제한뿐). 화면은 first_load, signup 을 방문당 한두 번만 보낸다.
+//   IP 하나가 하루 30건, 서비스 전체가 하루 2,000건까지만 쌓는다(정상 방문 실측 하루 1~69건). 넘으면 조용히 버린다(204).
+const EVENT_IP_DAILY_CAP = 30;
+const EVENT_ALL_DAILY_CAP = 2000;
 // 한 시간 방문 경보 기준 40. 근거(visit_attribution 실측): 10-20~11-11 정상 방문은 하루 1~69건, 한 시간 최대 8건.
 //   수집기가 온 11-12 는 하루 977건, 한 시간 최대 97건. 정상 최대의 5배라 사람 방문으로는 울리지 않는다.
 const VISIT_SURGE_HOURLY = Math.max(10, parseInt(process.env.VISIT_SURGE_HOURLY || '40', 10) || 40);
@@ -59,6 +64,17 @@ router.post('/', async (req, res) => {
           tags: { monitor: 'visit-surge', country: String(req.headers['x-vercel-ip-country'] || '').slice(0, 2) },
         });
       }
+    } catch (_) { /* 세지 못하면 막지 않는다 */ }
+  }
+
+  if (event !== 'daily_visit') {
+    try {
+      const { incrementUsage, getClientIp, todayKey, secondsUntilMidnight } = require('../middleware/dailyLimit');
+      const ip = require('../utils/ipKey').normalizeIpKey(getClientIp(req));
+      const { used } = await incrementUsage(`dl:attr:${todayKey()}:${ip}`, secondsUntilMidnight());
+      if (used > EVENT_IP_DAILY_CAP) return res.status(204).end();
+      const { used: all } = await incrementUsage(`dl:attr-all:${todayKey()}`, secondsUntilMidnight());
+      if (all > EVENT_ALL_DAILY_CAP) return res.status(204).end();
     } catch (_) { /* 세지 못하면 막지 않는다 */ }
   }
 

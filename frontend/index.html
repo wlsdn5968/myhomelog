@@ -2441,7 +2441,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
             </div>
           </div>
           <div class="mb9"><span class="lbl">희망 평형</span><div class="chips" id="ch-py"><span class="chip" onclick="cp(this,'ch-py')">소형 15~22평</span><span class="chip on" onclick="cp(this,'ch-py')">중형 23~33평</span><span class="chip" onclick="cp(this,'ch-py')" title="34~60평을 조회해요. '+'는 상한이 없다는 뜻이 아니라 60평까지예요.">대형 34~60평</span><span class="chip" onclick="cp(this,'ch-py')" title="15~60평을 조회해요. 오피스텔, 초소형(15평 미만), 60평 초과는 제외돼요.">전체(15~60평)</span></div></div>
-          <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원 단위, 1.2억은 12000)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000 (만원)" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 또는 관심 구 <span style="color:var(--t3);font-weight:400">(보고서에서 통근시간을 분석해요)</span></label><input class="inp" id="wp" type="text" placeholder="예: 강남구, 노원구, 분당"></div></div>
+          <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원 단위, 1.2억은 12000)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000 (만원)" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 또는 관심 구 <span style="color:var(--t3);font-weight:400">(보고서에서 통근시간을 분석해요)</span></label><input class="inp" id="wp" type="text" maxlength="60" placeholder="예: 강남구, 노원구, 분당"></div></div>
           </div>
         </details>
       </div></div>

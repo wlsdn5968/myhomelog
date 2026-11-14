@@ -294,7 +294,7 @@ function routeHandlers(router, method, p) {
   const layer = router.stack.find((l) => l.route && l.route.path === p && l.route.methods[method]);
   return layer.route.stack.map((s) => s.handle);
 }
-test('run-3: 방문 기록(daily_visit)은 IP 하나가 하루 30건까지만 쌓인다, 다른 이벤트는 그대로', async () => {
+test('run-3: 방문 기록(daily_visit)은 IP 하나가 하루 30건까지만 쌓인다, 다른 이벤트도 IP 하루 30건(run-6)', async () => {
   const dbClient = require('../db/client');
   const orig = dbClient.getSupabaseAdmin;
   const inserted = [];
@@ -308,8 +308,11 @@ test('run-3: 방문 기록(daily_visit)은 IP 하나가 하루 30건까지만 �
     assert.equal(inserted.filter((e) => e === 'daily_visit').length, 30, `쌓인 daily_visit ${inserted.length}건`);
     await call('daily_visit', '203.0.113.51');
     assert.equal(inserted.filter((e) => e === 'daily_visit').length, 31, '다른 IP 는 영향 없음');
+    // AUDIT6-1114 (run-6): 다른 이벤트도 IP 하나가 하루 30건까지만 쌓인다(예전에는 상한이 없었다)
     for (let i = 0; i < 40; i++) await call('search', '203.0.113.50');
-    assert.equal(inserted.filter((e) => e === 'search').length, 40, '다른 이벤트에는 상한을 걸지 않는다');
+    assert.equal(inserted.filter((e) => e === 'search').length, 30, '다른 이벤트도 IP 하루 30건');
+    await call('first_load', '203.0.113.52');
+    assert.equal(inserted.filter((e) => e === 'first_load').length, 1, '다른 IP 는 영향 없음');
   } finally { dbClient.getSupabaseAdmin = orig; delete require.cache[require.resolve('../routes/attribution')]; }
 });
 

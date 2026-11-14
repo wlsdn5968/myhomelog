@@ -1043,6 +1043,7 @@ const { repAreaStats, sortRecentFirst } = require('../utils/repArea');
 //   정상 화면은 이미 반올림한 값을 보내므로 결과가 같다. 기억 수는 300개로 묶어 메모리를 키우지 않는다.
 // UMD-RENAME-2026-11-14: 이름이 바뀐 읍면 맞춤(공용 utils/umdRename, 상세 조회와 같은 규칙)
 const { umdCanon: _umdCanon, umdWithLegacy: _umdWithLegacy } = require('../utils/umdRename');
+const { isSafeRegionText: _isSafeRegionText } = require('../utils/regionText');
 const _IB_TTL_MS = 5 * 60 * 1000;
 const _IB_MAX = 300;
 const _ibMemo = new Map();
@@ -1090,7 +1091,9 @@ router.get('/in-bounds', async (req, res) => {
       .order('apt_key', { ascending: true }).limit(1000);
     if (_kErr) throw _kErr;
     const _haveCombo = new Set((_nameCoords || []).map(c => `${c.apt_name}|${c.sigungu}|${c.umd_nm}`));
-    const coords = [...(_nameCoords || []), ...(_kaptCoords || []).filter(c => !_haveCombo.has(`${c.apt_name}|${c.sigungu}|${c.umd_nm}`))];
+    // AUDIT6-1114 (run-6 반증 검토): 동 이름이 지역 이름 글자가 아닌 좌표 행은 여기서 뺀다. 아래 두 in 목록(거래, 보충 거래)과 핀이 모두 이 목록에서 나온다.
+    const coords = [...(_nameCoords || []), ...(_kaptCoords || []).filter(c => !_haveCombo.has(`${c.apt_name}|${c.sigungu}|${c.umd_nm}`))]
+      .filter(c => !c.umd_nm || _isSafeRegionText(c.umd_nm));
     if (!coords.length) return res.json({ results: [] });
 
     // 단지별 최근 거래 평균가 fetch
@@ -1122,7 +1125,7 @@ router.get('/in-bounds', async (req, res) => {
       const _keep = new Set([..._seen.values()].map((v) => v.c));
       for (let i = coords.length - 1; i >= 0; i--) if (!_keep.has(coords[i])) coords.splice(i, 1);
     }
-    const umds = [...new Set(coords.map(c => c.umd_nm).filter(Boolean))];
+    const umds = [...new Set(coords.map(c => c.umd_nm).filter(Boolean))].filter(_isSafeRegionText); // AUDIT6-1114 (run-6): 지역 이름이 아닌 값은 in 목록에 넣지 않는다(목록 구문 보호)
     const umdsQ = _umdWithLegacy(umds);
     // REST-CAP-FIX-2026-08-09 (Sprint GGGGGGG): 기존 .limit(1000) 단일 쿼리는 PostgREST 1000행
     //   캡 — 실측(상위 100단지 180일 거래 8,881건)상 밀집/광역 viewport 에서 최신 일부만 집계돼
@@ -1416,6 +1419,10 @@ router.get('/facility', async (req, res) => {
   }
   if (lawdCd && !require('../services/transactionService').isKnownLawdCd(lawdCd)) {
     return res.status(400).json({ error: '지원하지 않는 지역이에요.' });
+  }
+  // AUDIT6-1114 (run-6): 시군구와 동 이름은 지역 이름에 쓰는 글자만 받는다(따옴표, 쉼표, 괄호 등은 400). 이 값은 좌표 표에 저장될 수 있다.
+  if ((sigungu && !_isSafeRegionText(sigungu)) || (umdNm && !_isSafeRegionText(umdNm))) {
+    return res.status(400).json({ error: '단지 정보가 올바르지 않아요.' });
   }
 
   const admin = adminClient();

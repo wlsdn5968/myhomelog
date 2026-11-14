@@ -532,8 +532,10 @@ async function resolveFacility({ aptName, sigungu, umdNm, aptSeq /* deprecated, 
           kapt_code: lookup.kaptCode,
           apt_name: lookup.kaptName,
           lawd_cd: lawdCd,
-          sigungu: sigungu || null,
-          umd_nm: umdNm || (lookup.as3 || null),
+          // AUDIT6-1114 (run-6, search.facility.kapt-lookup-upsert-free-text-region): 예전엔 요청이 보낸 시군구와 동을 그대로 넣었다.
+          //   주간 동기화(aptMasterSync)와 같은 출처를 쓴다: 시군구는 지역 코드 표, 동은 KAPT 응답(as3).
+          sigungu: require('./transactionService').LAWD_CODE_TO_NAME[lawdCd] || null,
+          umd_nm: lookup.as3 ? String(lookup.as3).trim() : null,
           source: 'kapt-lookup-runtime',
         }, { onConflict: 'kapt_code', ignoreDuplicates: true }).then(() => {}, () => {});
       }

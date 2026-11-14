@@ -308,6 +308,14 @@ async function getFromDbByNameCombo({ aptName, sigungu, umdNm }) {
 async function saveToDb(key, entry) {
   const admin = dbClient();
   if (!admin) return;
+  // AUDIT6-1114 (run-6): 지역 이름이 아닌 값(따옴표, 쉼표, 괄호 등)이 든 시군구나 동은 저장하지 않는다.
+  //   공개 /facility, /geocode 입력이 여기로 온다. 좌표는 호출자에게 그대로 돌려주고 저장만 건너뛴다.
+  const { isSafeRegionText } = require('../utils/regionText');
+  if ((entry.sigungu && !isSafeRegionText(String(entry.sigungu))) || (entry.umdNm && !isSafeRegionText(String(entry.umdNm)))) {
+    // DB 에는 안 남기되 같은 인스턴스의 재요청은 1시간 기억한다(같은 입력으로 Kakao 를 매번 다시 부르지 않게)
+    cache.set(`geo-db:${key}`, { lat: entry.lat, lng: entry.lng, address: entry.address, placeName: entry.placeName }, 3600);
+    return;
+  }
   try {
     // MANUAL-COORD-2026-10-30 (Plan 176): 사람이 공식 주소로 대조해 고친 좌표(source='manual')는 자동 저장으로 덮어쓰지 않는다.
     //   일일 검증·재검색 작업은 출처 목록(kakao·kakao-sub·kakao-v·kakao-addr)으로만 고르므로 manual 은 원래 대상이 아니다

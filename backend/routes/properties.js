@@ -92,7 +92,8 @@ const _nearbyCheck = (req, res, next) => {
 router.get('/nearby', _nearbyCheck, dailyLimit({ limit: 100, scope: 'nearby', loggedInBonus: 100, includeGet: true }), async (req, res) => {
   const lat = parseFloat(req.query.lat);
   const lng = parseFloat(req.query.lng);
-  const data = await getNearbyAmenities(Math.round(lat * 1e4) / 1e4, Math.round(lng * 1e4) / 1e4);
+  // AUDIT6-1114 (run-6): 캐시와 DB 에 없는 좌표만 Kakao 를 부르는데, 그 호출(최대 7회)을 IP 예산과 전역 일일 상한에 넣는다.
+  const data = await getNearbyAmenities(Math.round(lat * 1e4) / 1e4, Math.round(lng * 1e4) / 1e4, { gate: require('./geocode').createKakaoGate(7, req) });
   if (!data) return res.json({ available: false });
   res.json({ available: true, ...data });
 });
@@ -105,12 +106,25 @@ router.post('/transit', async (req, res) => {
   if (!aptLat || !aptLng || !workplace) {
     return res.status(400).json({ error: 'aptLat,aptLng,workplace 필수' });
   }
-  const dest = await keywordToCoord(workplace);
-  if (!dest) return res.json({ available: false, error: '직장 좌표 조회 실패' });
-  const [carMin, transitMin] = await Promise.all([
-    getCarMinutes(parseFloat(aptLat), parseFloat(aptLng), dest.lat, dest.lng),
-    getTransitMinutes(parseFloat(aptLat), parseFloat(aptLng), dest.lat, dest.lng),
-  ]);
+  // AUDIT6-1114 (보안 점검 run-6, properties.kakao-directions-no-global-budget): 좌표 범위와 직장 이름 길이를 보지 않았고,
+  //   Kakao 키워드 검색과 길찾기가 전역 일일 상한 밖에서 나갔다(IP 하루 5회뿐). 같은 길찾기도 동시에 두 번 불렀다.
+  //   한국 범위 좌표만 받고 4자리로 맞춘다(nearby 와 같은 규칙). 직장 이름은 60자까지. Kakao 호출 2회분을 IP 예산과 전역 상한에 넣는다.
+  const lat = parseFloat(aptLat), lng = parseFloat(aptLng);
+  if (!isValidKoreaCoord(lat, lng)) return res.status(400).json({ error: '한국 범위의 aptLat,aptLng 가 필요해요' });
+  const wp = typeof workplace === 'string' ? workplace.trim() : '';
+  if (!wp) return res.status(400).json({ error: '직장 이름을 넣어 주세요' });
+  if (wp.length > 60) return res.status(400).json({ error: '직장 이름은 60자까지 넣을 수 있어요' });
+  // 관문은 캐시에 없어 Kakao 를 실제로 부를 때만 쓰인다(서비스 함수가 캐시 확인 뒤에 묻는다). 막혔는지는 여기서 기억한다.
+  const _gate = require('./geocode').createKakaoGate(2, req);
+  let gated = false;
+  const gate = async () => { const ok = await _gate(); if (!ok) gated = true; return ok; };
+  const dest = await keywordToCoord(wp, gate);
+  if (!dest) return res.json(gated ? { available: false, limited: true } : { available: false, error: '직장 좌표 조회 실패' });
+  const oLat = Math.round(lat * 1e4) / 1e4, oLng = Math.round(lng * 1e4) / 1e4;
+  // 차량 시간을 먼저 받아 캐시에 넣은 뒤 대중교통 추정을 낸다(안에서 같은 길찾기를 다시 읽는다 — 동시에 부르면 두 번 나갔다)
+  const carMin = await getCarMinutes(oLat, oLng, dest.lat, dest.lng, gate);
+  const transitMin = await getTransitMinutes(oLat, oLng, dest.lat, dest.lng, gate);
+  if (carMin == null && gated) return res.json({ available: false, limited: true });
   res.json({
     available: carMin != null,
     destinationName: dest.name,
