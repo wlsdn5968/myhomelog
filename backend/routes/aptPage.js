@@ -35,7 +35,26 @@ const comma = (v) => Number(v).toLocaleString('ko-KR');
 const eok = (v) => (Number.isFinite(Number(v)) ? (Number(v) / 10000).toFixed(2) + '억' : '');
 
 /** /briefing·/region 과 동일한 단일 테마 셸 — 의도된 커미트먼트. */
-function pageShell({ title, desc, canonical, body, noindex, image }) {
+// APT-JSONLD-1114 (감사 10번): 단지 페이지에 구조화 데이터가 0개였다. 화면에 이미 있는 이동 경로(내집로그, 전국 시군구,
+//   지역, 단지)만 BreadcrumbList 로 싣는다. 가격이나 평가 같은 값은 넣지 않는다.
+//   '<' 를 유니코드 이스케이프(역슬래시와 u003c, 여섯 글자)로 바꿔 단지 이름에 어떤 글자가 와도 script 블록이 끊기지 않게 한다.
+function jsonLdTag(obj) {
+  if (!obj) return '';
+  const LT = String.fromCharCode(92) + 'u003c';
+  return `<script type="application/ld+json">${JSON.stringify(obj).split('<').join(LT)}</script>`;
+}
+function aptBreadcrumb({ displayName, region, lawdCd, canonical }) {
+  const items = [{ name: '내집로그', item: `${ORIGIN}/` }, { name: '전국 시군구', item: `${ORIGIN}/region` }];
+  if (lawdCd && region) items.push({ name: region, item: `${ORIGIN}/region/${encodeURIComponent(lawdCd)}` });
+  items.push({ name: displayName, item: canonical });
+  return {
+    '@context': 'https://schema.org',
+    '@type': 'BreadcrumbList',
+    itemListElement: items.map((it, i) => ({ '@type': 'ListItem', position: i + 1, name: it.name, item: it.item })),
+  };
+}
+
+function pageShell({ title, desc, canonical, body, noindex, image, jsonLd }) {
   // OG-IMAGE-DYNAMIC-2026-09-02: 단지 사실이 있으면 그 단지 카드를, 없으면 기본 이미지를 쓴다.
   //   `image` 를 안 넘긴 호출(404 셸 등)은 종전대로 정적 og.png 를 쓴다.
   const ogImg = image || `${ORIGIN}/og.png`;
@@ -60,6 +79,7 @@ function pageShell({ title, desc, canonical, body, noindex, image }) {
 <meta name="twitter:description" content="${esc(desc)}">
 <meta name="twitter:image" content="${esc(ogImg)}">
 <meta name="robots" content="${noindex ? 'noindex, follow' : 'index, follow'}">
+${jsonLdTag(jsonLd)}
 ${FONT_LINK}
 <style>
   ${THEME_CSS}
@@ -591,6 +611,7 @@ router.get('/:aptSeq', async (req, res) => {
   const cacheUnsafe = thin || aptMasterErrored || enrichErrored || sameDongErrored;
   res.set('Cache-Control', cacheUnsafe ? 'no-store' : 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
   res.type('html').send(pageShell({ title, desc, canonical: `${ORIGIN}/apt/${seq}`, body, noindex: thin,
+    jsonLd: thin ? null : aptBreadcrumb({ displayName, region, lawdCd, canonical: `${ORIGIN}/apt/${seq}` }),
     // 얇은 페이지(거래 0)는 카드에 쓸 숫자가 없으므로 기본 이미지를 유지한다.
     image: thin ? null : `${ORIGIN}/api/og/apt/${encodeURIComponent(seq)}` }));
 });
@@ -598,5 +619,7 @@ router.get('/:aptSeq', async (req, res) => {
 module.exports = router;
 // 링크 미리보기 이미지 라우트가 같은 사실을 쓰도록 함께 내보낸다 (APT-FACTS-SSOT-2026-09-02)
 module.exports.loadAptFacts = loadAptFacts;
+module.exports._jsonLdTag = jsonLdTag;
+module.exports._aptBreadcrumb = aptBreadcrumb;
 module.exports._repAreaSummary = repAreaSummary;
 module.exports._pickAptMasterMatch = pickAptMasterMatch; // ALIAS-YEAR-2026-10-30 (Plan 178) 테스트용

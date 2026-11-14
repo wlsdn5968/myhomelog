@@ -136,3 +136,25 @@ test('서버 렌더 제목에 긴 줄표가 없다', () => {
     for (const l of titles) assert.doesNotMatch(l, /[—–]/, `${f}: ${l.trim().slice(0, 60)}`);
   }
 });
+
+test('단지 페이지: 이동 경로 구조화 데이터가 실리고 script 블록이 끊기지 않는다', () => {
+  const ap = require('../routes/aptPage');
+  const ld = ap._aptBreadcrumb({ displayName: '은마', region: '강남구', lawdCd: '11680', canonical: 'https://x.test/apt/11680-1' });
+  assert.equal(ld['@type'], 'BreadcrumbList');
+  assert.deepEqual(ld.itemListElement.map((i) => i.position), [1, 2, 3, 4]);
+  assert.equal(ld.itemListElement[3].name, '은마');
+  assert.match(ld.itemListElement[2].item, /\/region\/11680$/);
+  // 지역 코드가 없으면 지역 단계를 빼고 번호를 다시 매긴다
+  const ld2 = ap._aptBreadcrumb({ displayName: 'A', region: '', lawdCd: '', canonical: 'c' });
+  assert.deepEqual(ld2.itemListElement.map((i) => i.position), [1, 2, 3]);
+  // 이름에 </script> 가 들어 있어도 블록이 닫히지 않고, 다시 읽으면 원래 값이다
+  const evil = '</script><script>alert(1)</script>';
+  const tag = ap._jsonLdTag(ap._aptBreadcrumb({ displayName: evil, region: 'r', lawdCd: '1', canonical: 'c' }));
+  assert.equal(tag.split('</script>').length - 1, 1, 'script 블록이 중간에 닫힌다');
+  assert.ok(!tag.slice(0, -9).includes('<script>alert'));
+  const inner = tag.replace(/^<script type="application\/ld\+json">/, '').replace(/<\/script>$/, '');
+  assert.equal(JSON.parse(inner).itemListElement[3].name, evil);
+  assert.equal(ap._jsonLdTag(null), '');
+  // 거래 없는 얇은 페이지에는 싣지 않는다
+  assert.match(rd('routes/aptPage.js'), /jsonLd: thin \? null : aptBreadcrumb\(/);
+});
