@@ -56,6 +56,8 @@ router.get('/', validateTransactionQuery, async (req, res) => {
     let list = aptName
       ? await getTransactionsByAptInclAliases(lawdCd, aptName, _mb, { umdNm })
       : await getTransactions(lawdCd, dealYm);
+    // PARTIAL-FLAG-2026-11 (Plan 200): 일부 달을 못 읽은 표본이면 CDN 에 굳히지 않는다. 아래 filter 가 표식을 지우므로 먼저 읽는다(import 없이 속성만).
+    const _partial = !!(list && list.partial === true);
     // Sprint MM: sigungu/umdNm 지정 시 결과 추가 필터 — 다른 동 단지 환각 매칭 차단.
     if (sigungu || umdNm) {
       const { umdCanon: _umdCanon } = require('../utils/umdRename');
@@ -69,6 +71,7 @@ router.get('/', validateTransactionQuery, async (req, res) => {
     // NAMEFIX-2026-05-11: 사용자 응답 시점에 aptName 정규화 — MOLIT raw "(고층)/(중층)/(저층)" suffix 제거.
     //   DB raw 는 그대로 유지 (transactionService 내부 매칭 호환).
     const items = list.map(t => ({ ...t, aptName: normalizeAptName(t.aptName) }));
+    res.set('Cache-Control', (!_partial && items.length > 0) ? 'public, max-age=0, s-maxage=1800, stale-while-revalidate=3600' : 'no-store');
     res.json({ count: items.length, items, isMock: false });
   } catch (err) {
     handleMolitError(err, res);

@@ -7,6 +7,9 @@ const router = express.Router();
 const { analyzeApt, getLawdCdFromArea, compareBatch } = require('../services/analysisService');
 
 // GET /api/analysis
+// PARTIAL-FLAG-2026-11 (Plan 200): 완전한 응답만 CDN 에 30분. 빈 표본·일부 달 누락은 굳히지 않는다.
+const CC = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=3600';
+
 router.get('/', async (req, res) => {
   const { aptName, area, price, sigungu, umdNm } = req.query;
   let { lawdCd } = req.query;
@@ -29,8 +32,10 @@ router.get('/', async (req, res) => {
     const _ea = Number(req.query.exclArea);
     const exclArea = Number.isFinite(_ea) && _ea >= 10 && _ea <= 400 ? Math.round(_ea) : null;
     const result = await analyzeApt(lawdCd, aptName, parseFloat(price) || 0, sigungu || null, umdNm || null, exclArea);
+    res.set('Cache-Control', (result.molitAvailable && !result.samplePartial && !result.jeonsePartial && (result.txCount || 0) > 0) ? CC : 'no-store');
     res.json(result);
   } catch (err) {
+    res.set('Cache-Control', 'no-store');
     // MOB-AUDIT-2026-05-03: production 에선 generic 메시지 — 내부 에러 노출 차단
     const isProd = process.env.NODE_ENV === 'production';
     res.status(err.status || 500).json({

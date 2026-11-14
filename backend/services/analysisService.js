@@ -537,12 +537,17 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm, exclAre
     }
   }
 
+  // PARTIAL-FLAG-2026-11 (Plan 200): 매매 표본에서 못 읽은 달이 있었는지. 아래 filter 가 표식을 지우므로 먼저 읽는다(모듈 import 없이 속성만 본다).
+  const _samplePartial = !!(saleTx && saleTx.partial === true);
+
   // JEONSE-SAMPLE-2026-09-06:
   // [왜] getJeonseByApt 는 monthsTotal·monthsFailed 를 **배열 속성**으로 싣는데,
   //   아래 filter 가 새 배열을 만들면서 그 속성이 사라진다. 반드시 여기서 꺼내 둔다.
   //   전체 실패(.catch(() => [])) 면 속성 자체가 없다 → 모름으로 둔다(0 으로 만들지 않는다).
   const _jTotal = Number.isFinite(jeonseT.monthsTotal) ? jeonseT.monthsTotal : null;
   const _jFailed = Array.isArray(jeonseT.monthsFailed) ? jeonseT.monthsFailed.length : null;
+  // PARTIAL-FLAG-2026-11 (Plan 200): 전세 표본이 통째로 실패(속성 없음)했거나 일부 달이 빠졌으면 완전하지 않은 응답이다.
+  const _jeonsePartial = _jTotal === null || (_jFailed || 0) > 0;
 
   // CROSS-REGION-FIX-2026-06-03 (운영자 발견 클래스 — 가격시그널이 실거래가 탭과 표본 불일치):
   //   analyzeApt 가 lawdCd(구)+aptName 으로만 거래 fetch → "현대"/"벽산"/"청구" 등 generic 이름이
@@ -639,12 +644,14 @@ async function analyzeApt(lawdCd, aptName, currentPrice, sigungu, umdNm, exclAre
     marketSummary,                          // P1 D2 (자본시장법 risk 차단) 신규 명칭
     monthlyVolume,
     txCount: saleTx.length,
+    samplePartial: _samplePartial,
+    jeonsePartial: _jeonsePartial,
     filteredTxCount: filteredTx.length,
     jeonseCount: jeonsePure.length,        // Sprint MMMMM — '전세 N건' 라벨과 정합(월세 미포함)
     recentJeonseTx: jeonsePure.slice(0, 5), // '최근 전세 거래' 목록에 월세 보증금 혼입 차단
   };
 
-  if (molitAvailable) cache.set(cacheKey, result, 3600);
+  if (molitAvailable && !_samplePartial && !_jeonsePartial) cache.set(cacheKey, result, 3600);
   return { ...result, fromCache: false };
 }
 

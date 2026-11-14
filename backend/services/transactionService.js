@@ -526,6 +526,10 @@ function aptNameMatcher(aptName) {
   };
 }
 
+// PARTIAL-FLAG-2026-11 (Plan 200): 일부 달을 못 읽은 표본. 열거되지 않는 속성이라 JSON 과 펼치기에는 안 따라간다. 반환 직후 읽을 것.
+function _markPartial(arr) { Object.defineProperty(arr, 'partial', { value: true, enumerable: false }); return arr; }
+function isPartialSample(arr) { return !!(arr && arr.partial); }
+
 async function getTransactionsByApt(lawdCd, aptName, monthsBack = 6) {
   if (isMolitKeyMissing()) {
     const err = new Error('국토부 실거래가 API 키 미설정');
@@ -585,7 +589,7 @@ async function getTransactionsByApt(lawdCd, aptName, monthsBack = 6) {
   //   기존: 1시간 — 신규 거래 발생 시 1시간 stale data 노출
   //   변경: 30분 — 매일 17:00 UTC molit-ingest 후 30분이면 모든 사용자가 최신 받음
   // PARTIAL-NOCACHE-2026-11-05: 달 일부를 못 읽은 결과를 30분 굳히면 그동안 건수가 줄어든 채 고정된다.
-  if (!_failedMonths.length) cache.set(cacheKey, sorted, 1800);
+  if (!_failedMonths.length) cache.set(cacheKey, sorted, 1800); else _markPartial(sorted);
   return sorted;
 }
 
@@ -644,15 +648,17 @@ function _pickMasterRow(rows, lawdCd, umdNm) {
 
 async function getTransactionsByAptInclAliases(lawdCd, aptName, monthsBack = 6, opts = {}) {
   const base = await getTransactionsByApt(lawdCd, aptName, monthsBack);
+  let partial = isPartialSample(base); // PARTIAL-FLAG-2026-11 (Plan 200)
   if (!aptName) return base;
   const admin = dbClient();
   if (!admin) return base;
   try {
-    const { data } = await admin.from('apt_master').select('molit_aliases, lawd_cd, sigungu, umd_nm')
+    const { data, error: _amErr } = await admin.from('apt_master').select('molit_aliases, lawd_cd, sigungu, umd_nm')
       .eq('apt_name', aptName).not('molit_aliases', 'is', null).limit(20);
+    if (_amErr) partial = true;
     const row = _pickMasterRow(data, lawdCd, opts.umdNm);
     const aliases = (row && Array.isArray(row.molit_aliases)) ? row.molit_aliases : [];
-    if (!aliases.length) return base;
+    if (!aliases.length) return (partial && !isPartialSample(base)) ? _markPartial([...base]) : base;
     // master(공릉풍림아이원)는 canonical 명으로 MOLIT 실거래가 없음(전부 alias 로 신고) → base 의
     //   느슨한 매칭(insertion 등)은 spurious 일 수 있어 제외. alias 거래만 병합(검색 path 와 동일 = 정확).
     // ALIAS-EXACT-2026-10-27 (QA 실측): getTransactionsByApt 의 양방향 포함 매칭은 별칭 "상계주공7(고층)" 으로 불러도
@@ -663,17 +669,21 @@ async function getTransactionsByAptInclAliases(lawdCd, aptName, monthsBack = 6, 
       aliases.slice(0, 20).map(a => {
         const p = parseAlias(a); // ALIAS-YEAR-2026-10-30: "이름#연도" 는 그 이름의 그 준공 연도 거래만
         return getTransactionsByApt(lawdCd, p.name, monthsBack)
-          .then(arr => _filterExactAlias(arr, p.name).filter(t => !p.year || Number(t.buildYear) === p.year)).catch(() => []);
+          .then(arr => { if (isPartialSample(arr)) partial = true; return _filterExactAlias(arr, p.name).filter(t => !p.year || Number(t.buildYear) === p.year); })
+          .catch(() => { partial = true; return []; });
       })
     );
     const merged = _mergeAliasTx(aliasArrays);
-    if (merged.length) return merged;
+    if (merged.length) return partial ? _markPartial(merged) : merged;
     // alias 거래 0건이면 base fallback. ALIAS-YEAR-2026-10-30: 연도 별칭의 이름과 같은 이름인데 연도가 다른 거래(다른 공식 단지)는 뺀다.
     const _yr = aliases.map(parseAlias).filter(p => p.year);
-    return _yr.length ? base.filter(t => !_yr.some(p => _nsp(t.aptName) === _nsp(p.name)) || _yr.some(p => _nsp(t.aptName) === _nsp(p.name) && Number(t.buildYear) === p.year)) : base;
+    const _keep = t => !_yr.some(p => _nsp(t.aptName) === _nsp(p.name)) || _yr.some(p => _nsp(t.aptName) === _nsp(p.name) && Number(t.buildYear) === p.year);
+    // PARTIAL-FLAG-2026-11 (Plan 200): 못 읽은 달이 있었으면 새 배열에 표식을 단다(캐시에서 온 base 에는 속성을 달지 않는다).
+    if (partial) return _markPartial(_yr.length ? base.filter(_keep) : [...base]);
+    return _yr.length ? base.filter(_keep) : base;
   } catch (e) {
     logger.warn({ err: e.message, lawdCd, aptName }, 'getTransactionsByAptInclAliases alias 병합 실패 — base 반환');
-    return base;
+    return _markPartial([...base]);
   }
 }
 
@@ -1084,4 +1094,4 @@ async function getTransactionsByAptSeqMerged(aptSeq, monthsBack = 24) {
   });
 }
 
-module.exports = { parseAlias, aliasCanon, aptNameMatcher, _pickMasterRow, _filterExactAlias, _mergeAliasTx, getTransactions, getTransactionsFromHist, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, getAliasCanonicalMapEach, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };
+module.exports = { _markPartial, isPartialSample, parseAlias, aliasCanon, aptNameMatcher, _pickMasterRow, _filterExactAlias, _mergeAliasTx, getTransactions, getTransactionsFromHist, getTransactionsByApt, getTransactionsByAptInclAliases, getAliasCanonicalMap, getAliasCanonicalMapEach, analyzeTransactions, getRegionRecentTransactions, getTransactionsByAptSeq, getTransactionsByAptSeqMerged, LAWD_CODES, LAWD_CODE_TO_NAME, RETIRED_LAWD_CODES, isKnownLawdCd };
