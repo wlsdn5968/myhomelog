@@ -57,7 +57,9 @@ test('C: percentile 80(veto 조건 성립)+거래량 up(green)+전세 70(green) 
   assert.equal(r.vetoApplied, false);
   assert.equal(r.tone, 'neutral');
   assert.equal(r.signalDesc, '3개 조건 중 2개 긍정 · ⚠ 시세 상단, 매수 단가 주의');
-  assert.equal(r.summaryDesc, '3개 조건 중 2개 데이터 부합 · ⚠ 시세 상단, 매수 단가 주의');
+  // SUMMARY-NEUTRAL-1114: 화면에 나가는 요약에는 판단 표현('매수 단가 주의')과 '긍정'이 없다
+  assert.equal(r.summaryDesc, '3개 조건 중 2개 데이터 부합. 최근 6개월 거래 가운데 높은 가격대예요');
+  assert.doesNotMatch(r.summaryDesc, /긍정|주의|·/);
 });
 
 test('D: percentile 50(yellow)+거래량 neutral 문자열 인자(yellow)+전세 50(yellow) → 3/6 yellow, metCount 0', () => {

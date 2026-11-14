@@ -22,6 +22,13 @@ const { getUserScopedClient: userScopedClient } = require('../db/client');
 const router = express.Router();
 router.use(requireAuth);
 
+// NOTE-INPUT-1114: 방문일은 실제로 있는 YYYY-MM-DD 날짜만 받는다(2026-02-30 같은 값은 거절).
+function isValidVisitDate(v) {
+  if (typeof v !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(v)) return false;
+  const d = new Date(`${v}T00:00:00Z`);
+  return !Number.isNaN(d.getTime()) && d.toISOString().slice(0, 10) === v;
+}
+
 function _client(req) {
   const token = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
   return userScopedClient(token);
@@ -71,6 +78,15 @@ router.put('/:aptName', async (req, res) => {
     // 독립 검토(2026-11-14) 반영: 잘라서 저장하면 GET/DELETE(원문 이름)와 어긋나므로 100자를 넘으면 거절한다
     const aptName = String(req.params.aptName || '');
     if (!aptName || aptName.length > 100) return res.status(400).json({ error: '단지 이름은 1~100자여야 해요.' });
+    // NOTE-INPUT-1114 (감사 9번, 운영 재현): 방문일에 날짜가 아닌 값을 보내면 DB 오류로 500 이 났고,
+    //   평점에 글자를 보내면 NaN 이 그대로 넘어갔다. 저장 전에 400 으로 거절한다.
+    if (visitDate != null && visitDate !== '' && !isValidVisitDate(visitDate)) {
+      return res.status(400).json({ error: '방문일은 YYYY-MM-DD 형식의 날짜여야 해요.' });
+    }
+    // 독립 검토 반영: parseInt 는 "3abc" 를 3 으로 읽는다. 0~5 정수(숫자나 숫자 문자열)만 받는다.
+    if (rating != null && rating !== '' && !/^[0-5]$/.test(typeof rating === 'number' ? String(rating) : (typeof rating === 'string' ? rating.trim() : 'x'))) {
+      return res.status(400).json({ error: '평점은 0~5 사이 숫자여야 해요.' });
+    }
     const { data: exists } = await sb.from('field_notes').select('apt_name').eq('user_id', req.user.id).eq('apt_name', aptName).limit(1);
     if (!(exists && exists.length)) {
       const { count, error: cErr } = await sb.from('field_notes').select('apt_name', { count: 'exact', head: true }).eq('user_id', req.user.id);
@@ -114,3 +130,4 @@ router.delete('/:aptName', async (req, res) => {
 });
 
 module.exports = router;
+module.exports.isValidVisitDate = isValidVisitDate;

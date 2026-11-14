@@ -435,17 +435,17 @@ router.get('/:aptSeq', async (req, res) => {
       <h2>최근 24개월 실거래 요약 <span class="src">국토교통부 실거래 신고</span></h2>
       <div class="kpi">
         <div><b>${comma(num(stat.dealCount) || 0)}건</b><span>거래 건수(전 평형)</span></div>
-        ${rep ? `<div><b>${eok(rep.avg)}</b><span>${rep.sqm}㎡(${rep.py}평) 평균</span></div>
-        <div><b>${eok(rep.median)}</b><span>${rep.sqm}㎡(${rep.py}평) 중앙값</span></div>` : ''}
+        ${rep ? `<div><b>${eok(rep.avg)}</b><span>${rep.sqm}㎡(전용 ${rep.py}평) 평균</span></div>
+        <div><b>${eok(rep.median)}</b><span>${rep.sqm}㎡(전용 ${rep.py}평) 중앙값</span></div>` : ''}
       </div>
-      ${rep ? `<div class="row"><span class="k">${rep.sqm}㎡(${rep.py}평) 가격 범위</span><span class="num">${eok(rep.min)} ~ ${eok(rep.max)}</span></div>` : ''}
+      ${rep ? `<div class="row"><span class="k">${rep.sqm}㎡(전용 ${rep.py}평) 가격 범위</span><span class="num">${eok(rep.min)} ~ ${eok(rep.max)}</span></div>` : ''}
       <div class="row"><span class="k">최근 거래일</span><span class="num">${esc(String(stat.recentDeal))}</span></div>
       ${syncKst ? `<div class="row"><span class="k">실거래 수집</span><span class="num">${esc(syncKst)} 기준</span></div>` : ''}
       ${buildYear ? `<div class="row"><span class="k">준공</span><span class="num">${buildYear}년</span></div>` : ''}
-      ${rep ? `<div class="src" style="margin-top:8px">평균, 중앙값, 범위는 거래가 가장 많은 ${rep.sqm}㎡(${rep.py}평) 거래 ${comma(rep.n)}건으로 냈어요. 면적이 다른 집은 섞지 않아요. 다른 평형은 아래 평형별 표에서 볼 수 있어요.</div>` : ''}
+      ${rep ? `<div class="src" style="margin-top:8px">평균, 중앙값, 범위는 거래가 가장 많은 ${rep.sqm}㎡(전용 ${rep.py}평) 거래 ${comma(rep.n)}건으로 냈어요. 면적이 다른 집은 섞지 않아요. 다른 평형은 아래 평형별 표에서 볼 수 있어요.</div>` : ''}
     </div>`);
     facts.push(`최근 24개월 ${comma(num(stat.dealCount) || 0)}건`);
-    if (rep) facts.push(`${rep.py}평 평균 ${eok(rep.avg)}`);
+    if (rep) facts.push(`전용 ${rep.py}평 평균 ${eok(rep.avg)}`);
     if (stat.recentDeal) facts.push(`최근 거래 ${stat.recentDeal}`);
 
     const ps = (stat.pyeongStats || []).filter(p => num(p.dealCount));

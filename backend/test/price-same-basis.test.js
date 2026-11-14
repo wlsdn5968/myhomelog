@@ -41,7 +41,7 @@ const LONG = [
 test('신고가 추이: 평형 "전체"면 차트와 같은 대표 평형(거래 최다)만으로 센다 — 다른 면적이 끼지 않는다', () => {
   const peak = loadPeak({ _curTrendLong: { state: 'ok', deals: LONG }, _curTrendApt: [] });
   const out = peak(0);
-  assert.match(out, /60㎡\(18평\) 신고가 경신 3회/);
+  assert.match(out, /60㎡\(전용 18평\) 신고가 경신 3회/);
   assert.match(out, /처음 7\.00억에서 최근 8\.80억으로/);
   assert.doesNotMatch(out, /10\.95억|10\.48억|9\.00억/, '다른 면적 거래가 신고가로 끼었다');
   assert.match(out, /2021\.01부터 거래 5건 기준/);
@@ -51,7 +51,7 @@ test('신고가 추이: 평형 "전체"면 차트와 같은 대표 평형(거래
 test('신고가 추이: 평형을 고르면 그 평형(전용면적을 평으로 반올림)만', () => {
   const peak = loadPeak({ _curTrendLong: { state: 'ok', deals: LONG }, _curTrendApt: [] });
   const out = peak(115);
-  assert.match(out, /115㎡\(35평\) 신고가 경신 2회/);
+  assert.match(out, /115㎡\(전용 35평\) 신고가 경신 2회/);
   assert.match(out, /10\.95억/);
 });
 
@@ -97,7 +97,7 @@ test('서버 단지 페이지: 대표 평형 = 거래 최다(동률이면 최근
 test('서버 단지 페이지: 첫 요약은 평형을 적고, 섞은 평균(시간 가중)을 쓰지 않는다', () => {
   const src = fs.readFileSync(path.join(__dirname, '../routes/aptPage.js'), 'utf8');
   assert.doesNotMatch(src, /평균가\(시간 가중\)/);
-  assert.match(src, /\$\{rep\.sqm\}㎡\(\$\{rep\.py\}평\) 평균/);
+  assert.match(src, /\$\{rep\.sqm\}㎡\(전용 \$\{rep\.py\}평\) 평균/);
   assert.match(src, /거래 건수\(전 평형\)/);
 });
 
@@ -107,7 +107,7 @@ test('링크(?apt=)로 연 상세도 검색과 같은 길(openAptDetail)로 평�
   assert.match(body, /await openAptDetail\(\{aptName:apt,/);
   assert.doesNotMatch(body, /_repAreaOf\(/, '평균 계산 사본이 되돌아왔다');
   // 검색 경로 라벨과 문자열이 같다
-  assert.match(html, /`\$\{_repArea\.sqm\}㎡\(\$\{_repArea\.py\}평\) 최근 \$\{_repArea\.n\}건 평균`/);
+  assert.match(html, /`\$\{_repArea\.sqm\}㎡\(전용 \$\{_repArea\.py\}평\) 최근 \$\{_repArea\.n\}건 평균`/);
 });
 
 test('관심 단지 가격 갱신도 대표 평형 평균(목표가 알림 판정에 쓰이므로 면적을 섞지 않는다)', () => {

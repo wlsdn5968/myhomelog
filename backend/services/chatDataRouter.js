@@ -28,7 +28,7 @@ const { displayAptName } = require('../utils/aptDisplayName');
 function _repAreaLine(txs) {
   const best = require('../utils/repArea').repAreaStats(txs);
   if (!best) return null;
-  return `${best.sqm}㎡(${best.py}평) 최근 ${best.n}건 평균 ${(best.avg / 10000).toFixed(2)}억`;
+  return `${best.sqm}㎡(전용 ${best.py}평) 최근 ${best.n}건 평균 ${(best.avg / 10000).toFixed(2)}억`;
 }
 
 function _eulReul(word) {

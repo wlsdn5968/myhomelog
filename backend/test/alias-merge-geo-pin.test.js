@@ -109,7 +109,7 @@ test('상세 헤더 평균가 — 전 평형 섞지 않고 거래 최다 평형�
   assert.equal(f([...t(59.94, 3, 5, 1), ...t(84.99, 3, 9, 1)]).sqm, 85);
   assert.equal(f([]), null);
   assert.equal(f([{ excluUseAr: 0, dealAmount: 1 }]), null);
-  assert.match(html, /_repArea \? `\$\{_repArea\.sqm\}㎡\(\$\{_repArea\.py\}평\) 최근 \$\{_repArea\.n\}건 평균`/);
+  assert.match(html, /_repArea \? `\$\{_repArea\.sqm\}㎡\(전용 \$\{_repArea\.py\}평\) 최근 \$\{_repArea\.n\}건 평균`/);
   assert.doesNotMatch(html, /`전 평형 최근 \$\{txHistory\.length\}건 평균`/);
 });
 

@@ -347,7 +347,9 @@ function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate, jeonseSa
   return {
     signal, signalDesc, score, maxScore, conditions, metCount, totalCount, vetoApplied,
     tone,
-    summaryDesc: signalDesc.replace('긍정', '데이터 부합'),
+    // SUMMARY-NEUTRAL-1114 (감사 6번, 독립 검토): 화면에 나가는 요약에서 '매수 단가 주의' 같은 판단 표현과
+    //   가운뎃점 나열을 뺀다. percentile 은 최근 6개월 거래 안에서의 위치다. signalDesc 는 호환용으로 그대로 둔다.
+    summaryDesc: signalDesc.replace('긍정', '데이터 부합').replace(' · ⚠ 시세 상단, 매수 단가 주의', '. 최근 6개월 거래 가운데 높은 가격대예요'),
   };
 }
 

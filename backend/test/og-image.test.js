@@ -29,7 +29,7 @@ test('OG 카드 문구 — 실거래 사실만 싣고, 없는 숫자를 지어�
   assert.equal(withStat.eyebrow, '서울 성동구 · 옥수동');
   const joined = withStat.lines.join(' | ');
   assert.match(joined, /최근 24개월 63건/, '거래 건수가 카드에 없다');
-  assert.match(joined, /26평 평균 19\.20억/, '대표 평형 평균가가 카드에 없다');
+  assert.match(joined, /전용 26평 평균 19\.20억/, '대표 평형 평균가가 카드에 없다');
   assert.match(joined, /중앙값 18\.90억/, '중앙값이 만원→억 변환을 안 거쳤다');
   assert.match(joined, /15\.40억~23\.10억/, '가격 범위가 없다');
   // 대표 평형 요약이 없으면 평균·범위를 지어내지 않는다(전 평형을 섞은 값으로 대신하지 않는다)

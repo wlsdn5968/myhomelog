@@ -98,8 +98,8 @@ test('공식 단지 별칭으로 묶인 거래는 준공 연도가 달라도 한
 test('도우미 평균은 상세 헤더와 같은 대표 평형 규칙, 지도는 상세와 같은 6개월 창', () => {
   const { _repAreaLine: f } = require('../services/chatDataRouter');
   const tx = (ar, amt) => ({ exclu_use_ar: ar, deal_amount: amt });
-  assert.equal(f([tx(84.99, 98500), tx(31, 32000), tx(59.94, 80000), tx(59.94, 82000)]), '60㎡(18평) 최근 2건 평균 8.10억');
-  assert.equal(f([tx(84.99, 90000), tx(59.94, 80000)]), '85㎡(26평) 최근 1건 평균 9.00억', '동률이면 가장 최근 거래의 평형');
+  assert.equal(f([tx(84.99, 98500), tx(31, 32000), tx(59.94, 80000), tx(59.94, 82000)]), '60㎡(전용 18평) 최근 2건 평균 8.10억');
+  assert.equal(f([tx(84.99, 90000), tx(59.94, 80000)]), '85㎡(전용 26평) 최근 1건 평균 9.00억', '동률이면 가장 최근 거래의 평형');
   assert.equal(f([]), null);
   const s = fs.readFileSync(path.join(__dirname, '../routes/search.js'), 'utf8');
   assert.match(s, /const _cut180 = require\('\.\.\/utils\/txWindow'\)\.txWindowStart\(6\);/);

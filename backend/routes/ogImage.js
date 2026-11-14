@@ -44,7 +44,7 @@ function buildCard(af) {
   if (stat) {
     const cnt = num(stat.dealCount);
     // REP-AREA-SSR-2026-10-30: 단지 페이지와 같이 대표 평형(거래 최다) 기준 — 면적이 다른 거래를 섞은 평균은 쓰지 않는다.
-    const head = [cnt ? `최근 24개월 ${comma(cnt)}건` : null, rep ? `${rep.py}평 평균 ${eok(rep.avg)}` : null]
+    const head = [cnt ? `최근 24개월 ${comma(cnt)}건` : null, rep ? `전용 ${rep.py}평 평균 ${eok(rep.avg)}` : null]
       .filter(Boolean).join(' · ');
     if (head) lines.push(head);
     const range = rep && eok(rep.min) && eok(rep.max) ? `${eok(rep.min)}~${eok(rep.max)}` : null;

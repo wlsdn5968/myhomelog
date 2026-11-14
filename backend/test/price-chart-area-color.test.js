@@ -77,7 +77,7 @@ test('차트 화면: 평형마다 선, 선 끝 평형 이름표, 범례 버튼, 
   // eslint-disable-next-line no-new-func
   const f = new Function('window', 'document', `${html.slice(a, b)}\nreturn _pcHtml;`)(win, { getElementById: () => null, querySelector: () => null });
   const out = f(46);
-  assert.match(out, /46㎡\(14평\)가 최근 5\.80억에 거래됐어요/);
+  assert.match(out, /46㎡\(전용 14평\)가 최근 5\.80억에 거래됐어요/);
   assert.match(out, /stroke:var\(--pc-1\)/); assert.match(out, /stroke:var\(--pc-2\)/);
   assert.match(out, />12평<\/text>/); assert.match(out, />14평<\/text>/);
   assert.match(out, /onclick="_pcPickPy\(12,41\)"/);
@@ -100,9 +100,9 @@ test('범례는 평을 직접 고른다 — 83.6㎡(25평)·84.4㎡(26평)가 �
   const win = { _curTrendLong: { state: 'ok', deals }, _curTrendApt: [], _pcPeriod: 'all', innerWidth: 700, _curTrendArea: 84, _pcSelPy: 26 };
   // eslint-disable-next-line no-new-func
   const f = new Function('window', 'document', `${html.slice(a, b)}\nreturn _pcHtml;`)(win, { getElementById: () => null, querySelector: () => null });
-  assert.match(f(84), /84㎡\(26평\)가 최근 9\.15억/);
+  assert.match(f(84), /84㎡\(전용 26평\)가 최근 9\.15억/);
   assert.match(f(84), /onclick="_pcPickPy\(25,84\)"/);
   win._pcSelPy = 0;
-  assert.match(f(84), /84㎡\(25평\)가 최근/, '칩(㎡)으로 고르면 거래가 많은(동률이면 먼저) 평');
+  assert.match(f(84), /84㎡\(전용 25평\)가 최근/, '칩(㎡)으로 고르면 거래가 많은(동률이면 먼저) 평');
   assert.match(html, /function _selectTrendArea\(sqm, btn, py\) \{\n  window\._curTrendArea = sqm;\n  window\._pcSelPy = py \|\| 0;/);
 });

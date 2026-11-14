@@ -95,7 +95,7 @@ test('해제 정리: 일일 적재가 오래된 달 하나를 돌아가며 더 �
 });
 
 test('화면: 지도 팝업과 인기 목록이 어느 평형 값인지 적는다', () => {
-  assert.match(html, /p\.repArea\.sqm\}㎡\(\$\{p\.repArea\.py\}평\) 최근 \$\{p\.repArea\.n\}건 평균`\):'전 평형 평균'/);
+  assert.match(html, /p\.repArea\.sqm\}㎡\(전용 \$\{p\.repArea\.py\}평\) 최근 \$\{p\.repArea\.n\}건 평균`\):'전 평형 평균'/);
   assert.equal((html.match(/<small class="hp-ar">/g) || []).length, 2);
   assert.match(html, /\.hp-ar\{/);
   assert.match(html, /최근 60일 \$\{p\.repArea\.sqm\}㎡ 실거래 평균/);
