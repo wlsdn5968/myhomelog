@@ -848,7 +848,9 @@ RLS 정책 전문·워크플로). 그럼에도 아래는 여전히 미검증이�
 - 처리: 부하에서 흔들리던 `test/region-page-parallel.test.js` 를 시간 대신 시작 순서로 단언(풀림 조건 주입 시 실패 확인). `backend/package.json` 의 test 를 `scripts/run-backend-tests-utc.js` 로 연결(`cd backend && npm test` 도 UTC, 1144 통과 확인). 단지 비교 기간 시작일 달 넘침 수정(`_monthsAgoClamped`, 5/31 에서 3개월이 3/3 이던 것을 2/28 로, `test/cmp-cutoff-1114.test.js`). README 의 유료 AI 필수 안내, 없는 엔드포인트(`/api/clause/risk`, `/api/transactions/analyze`) 정리, `.env.example` 의 AI 예산과 법령 OC 설명을 사실대로.
 - 기각: 적재할 달을 KST 로 바꾸기(`jobs/molitIngest.js:50-58`). 매달 1일 02시 KST 적재 때 신고가 거의 없는 새 달이 들어오는 대신 3개월 창의 가장 오래된 달이 하루 일찍 빠지고, 빈틈 재적재와 해제 정리 기준 달도 함께 움직인다. 이득이 거의 없고 위험이 있다.
 - 처리(2차): 거래 목록 캐시의 깊은 복제를 행 단위 얕은 복사로(`cache.setRows/getRows`, `transactionService.js` 13곳). 로컬 실측 get 1,000행 8.3ms→0.5ms, 6,000행 72.4ms→0.5ms. 행이 숫자·문자열뿐인 것을 다섯 경로에서 확인, sonnet 반증 검토에서 동작 차이 없음(배열 추가 속성은 이 키들에 없음). `test/cache-rows-1114.test.js`.
-- 남음: 거래 0건 단지 OG 이미지 no-store(설계 원칙 Plan 070 과 맞물려 운영자 판단), 죽은 AI 코드 정리(테스트 4개와 함께 M), CLAUDE.md 정리, schema.sql 중복 정의.
+- 처리(3차): 유료 AI 중단 뒤 실행되지 않던 코드 507줄 삭제(edb2859, sonnet 실행, 상위 세션 검토). `routes/clause.js` 는 400/410 만(응답 본문 그대로), `report.js` 의 buildReportPrompt·REPORT_SPECIFIC, `globalAiBudget.js` 는 오류 클래스만, `legalService.searchLaw`. 지운 코드만 고정하던 테스트 2개와 단언 4줄 정리, verify 1148, CI 특약 XSS 검사 OK. 남긴 것: `aiService.js`(테스트가 프롬프트 규칙 문구를 지킴), `budgetService.js`(health), `legalService.getCitationsForIssues`(검증된 조문 데이터, 이제 호출처 0).
+- 보류: `supabase/schema.sql` 중복 정의 4개 함수(get_price_records, get_price_records_by_region, prune_audit_log, refresh_molit_aliases). 이 파일은 운영 적용 뒤 아래에 덧붙여 덮어쓰는 설계이고(1144행 경고, 1541행 Plan 182) 테스트도 마지막 정의를 읽는다(lastIndexOf). 옛 판을 지우려면 마지막 판이 운영과 같은지 카탈로그 대조가 먼저인데 얻는 것은 문서 정리뿐.
+- 남음: 거래 0건 단지 OG 이미지 no-store(설계 원칙 Plan 070 과 맞물려 운영자 판단), CLAUDE.md 정리, schema.sql 중복 정의.
 
 ### 미확인 (점검 보고만 있고 상위 세션이 열어 보지 못함)
 - 전월세 이름 매칭에 별칭이 빠진다, 푸시 기준 시각, 보고서 연도 계산의 호스트 시각, 지역 월별 집계가 0건 달을 건너뛴다. 다음 라운드에서 코드로 확인부터.
