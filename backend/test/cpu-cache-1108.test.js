@@ -11,7 +11,7 @@ const read = (p) => fs.readFileSync(path.join(__dirname, p), 'utf8');
 test('지도 영역 조회: 결과가 있을 때만 5분 공유 캐시, 빈 결과와 실패는 저장하지 않는다', () => {
   const s = read('../routes/search.js');
   const body = s.slice(s.indexOf("router.get('/in-bounds'"), s.indexOf("router.get('/facility'"));
-  assert.match(body, /if \(out\.length\) res\.set\('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=1800'\);\s*else res\.set\('Cache-Control', 'no-store'\);/);
+  assert.match(body, /if \(out\.length && !_ibNoCache\) res\.set\('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=1800'\);\s*else res\.set\('Cache-Control', 'no-store'\);/);
   assert.match(body, /res\.set\('Cache-Control', 'no-store'\);\s*res\.status\(500\)/);
 });
 

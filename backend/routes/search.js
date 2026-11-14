@@ -1146,11 +1146,12 @@ router.get('/in-bounds', async (req, res) => {
           .select('apt_name, sigungu, umd_nm, deal_amount, build_year, deal_date, lawd_cd, exclu_use_ar')
           .in('apt_name', names);
         if (umds.length) _q = _q.in('umd_nm', umdsQ); // 동 스코프 — 전국 동명 충돌 차단 + row budget 보호
-        const { data: _page } = await _q
+        const { data: _page, error: _pe } = await _q
           .gte('deal_date', _cut180)
           .order('deal_date', { ascending: false })
           .order('id', { ascending: false })
           .range(_from, _from + 999);
+        if (_pe) throw _pe;
         if (_page && _page.length) txs.push(..._page);
         if (!_page || _page.length < 1000) break;
       }
@@ -1165,13 +1166,14 @@ router.get('/in-bounds', async (req, res) => {
       //   정렬 + range 페이징(상한 5,000).
       const masters = [];
       for (let _mf = 0; _mf <= 4000; _mf += 1000) {
-        const { data: _mp } = await admin
+        const { data: _mp, error: _mpe } = await admin
           .from('apt_master')
           .select('apt_name, sigungu, umd_nm, kapt_code, molit_aliases')
           .in('umd_nm', umdsQ)
           .not('molit_aliases', 'is', null)
           .order('kapt_code', { ascending: true })
           .range(_mf, _mf + 999);
+        if (_mpe) throw _mpe;
         if (_mp && _mp.length) masters.push(..._mp);
         if (!_mp || _mp.length < 1000) break;
       }
@@ -1222,14 +1224,16 @@ router.get('/in-bounds', async (req, res) => {
     //   geocache 의 alias 좌표(풍림아파트A/B)는 Kakao 가 '전기차충전소'·'B상가주차장' 같은 하위시설로 매칭한
     //   오프셋 좌표(본체에서 158~392m). 같은 단지의 kapt 키(kapt:kaptCode) 좌표는 place_name=단지 본체("공릉풍림아파트")로
     //   정확. master 그룹 대표좌표를 kapt 본체 좌표로 교체(아래 grouping 후).
+    let _ibNoCache = false; // 본체 좌표 조회가 실패하면 이번 응답은 캐시하지 않는다
     const kaptCoord = {}; // kaptCode → {lat,lng} (본체 좌표)
     // PIN-ORDER-2026-10-30 (Plan 176 C): 본체 좌표는 영역 조회 결과에 우연히 섞여 있을 때만 쓰였다 — 이제 이 영역 핀이 속한
     //   공식 단지(별칭으로 찾은 것)의 kapt: 키를 직접 읽는다(손으로 고친 manual 좌표도 그대로 읽힌다, kakao-x 만 제외).
     const _kaptKeys = [...new Set(coords.flatMap(c => [aliasToMaster[`${c.apt_name}|${c.umd_nm}`], ...(aliasYearToMaster[`${c.apt_name}|${c.umd_nm}`] || []).map(x => x.m)])
       .filter(m => m && m.kapt_code).map(m => `kapt:${m.kapt_code}`))];
     for (let _ki = 0; _ki < _kaptKeys.length; _ki += 200) {
-      const { data: _kr } = await admin.from('apt_geocache').select('apt_key, lat, lng, source')
+      const { data: _kr, error: _krErr } = await admin.from('apt_geocache').select('apt_key, lat, lng, source')
         .in('apt_key', _kaptKeys.slice(_ki, _ki + 200));
+      if (_krErr) { _ibNoCache = true; logger.warn({ err: _krErr.message }, 'in-bounds: 본체 좌표 조회 실패(이번 응답은 캐시 안 함)'); }
       for (const c of (_kr || [])) {
         if (c.source === 'kakao-x' || c.lat == null || c.lng == null) continue;
         kaptCoord[c.apt_key.slice(5)] = { lat: Number(c.lat), lng: Number(c.lng) };
@@ -1371,10 +1375,10 @@ router.get('/in-bounds', async (req, res) => {
       .sort((a, b) => (b.dealCount || 0) - (a.dealCount || 0)).slice(0, limit);
     // INBOUNDS-CDN-2026-11-08 (Vercel Hobby Active CPU 초과로 팀 정지): 지도를 움직일 때마다 거래 최대 1만 행을 다시 집계했고 캐시 헤더가 없었다.
     //   거래는 하루 한 번 적재되므로 결과가 있을 때만 5분 공유 캐시. 빈 결과는 캐시하지 않는다(일시 장애와 구분할 수 없다). 실패는 아래에서 no-store.
-    if (out.length) res.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=1800');
+    if (out.length && !_ibNoCache) res.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=1800');
     else res.set('Cache-Control', 'no-store');
     const _ibBody = { results: out, count: out.length };
-    if (out.length) { // 빈 결과는 기억하지 않는다(CDN 규칙과 같음)
+    if (out.length && !_ibNoCache) { // 빈 결과는 기억하지 않는다(CDN 규칙과 같음)
       _ibMemo.delete(_ibKey);
       _ibMemo.set(_ibKey, { at: Date.now(), body: _ibBody });
       if (_ibMemo.size > _IB_MAX) _ibMemo.delete(_ibMemo.keys().next().value);
