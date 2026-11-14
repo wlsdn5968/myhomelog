@@ -25,7 +25,8 @@ test('search.js — 공개 데이터 조회는 service_role(getSupabaseAdmin), �
     'search.js 가 공개 키 클라이언트(getSupabaseReadonly)를 다시 호출한다');
   assert.equal((src.match(/userScopedClient\(req\.accessToken\)/g) || []).length, 3,
     'search_history 3곳(저장·조회·삭제)은 사용자 토큰 클라이언트(RLS)여야 한다 — service_role 로 바꾸면 남의 기록을 읽고 쓸 수 있다');
-  assert.equal((src.match(/\.from\('search_history'\)/g) || []).length, 3);
+  // AUDIT4-1114: 저장 뒤 최근 500건만 남기는 정리(조회 1, 삭제 1)가 같은 사용자 토큰 클라이언트(sb)로 더해져 5곳이다.
+  assert.equal((src.match(/\.from\('search_history'\)/g) || []).length, 5);
 });
 
 // popularService 를 추적용 스텁 클라이언트로 불러 어느 역할이 무엇을 불렀는지 기록한다.

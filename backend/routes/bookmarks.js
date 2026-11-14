@@ -71,6 +71,19 @@ router.get('/', async (req, res, next) => {
 const _PII_RE = /(\d{6}\s*-\s*[1-4]\d{6}|\d{3,4}-\d{3,4}-\d{4}|\d{4}-\d{2,4}-\d{2,4}-\d{4})/;
 function _detectPII(s) { return typeof s === 'string' && _PII_RE.test(s); }
 
+// AUDIT4-1114 (user-owned-tables-unbounded-rows-and-size): 사용자당 행 수 상한이 없고 PATCH, migrate 는 길이 제한과 개인정보 검사가 없었다.
+//   세 경로가 같은 길이 규칙을 쓰고 사용자당 500개로 묶는다(운영 실측 2026-11-14: 사용자당 최대 1개).
+const BOOKMARK_MAX = 500;
+const _clipName = (s) => String(s).trim().slice(0, 100);
+const _clipAddr = (s) => (s ? String(s).slice(0, 200) : null);
+const _clipMemo = (s) => (s ? String(s).slice(0, 500) : null);
+const _clipTags = (t) => (Array.isArray(t) ? t.slice(0, 20).map((x) => String(x).slice(0, 40)) : []);
+async function _bookmarkCount(sb) {
+  const { count, error } = await sb.from('bookmarks').select('id', { count: 'exact', head: true });
+  if (error) throw error;
+  return count || 0;
+}
+
 router.post('/', async (req, res, next) => {
   try {
     const { kapt_code, display_name, address, memo, tags, avg_price } = req.body || {};
@@ -87,15 +100,18 @@ router.post('/', async (req, res, next) => {
     const sb = userScopedClient(req.accessToken);
     const normalizedKapt = normalizeKaptCode({ kapt_code, display_name, address });
     if (!normalizedKapt) return res.status(400).json({ error: 'kapt_code 정규화 실패' });
+    if ((await _bookmarkCount(sb)) >= BOOKMARK_MAX) {
+      return res.status(429).json({ error: `관심 단지는 ${BOOKMARK_MAX}개까지 저장할 수 있어요. 안 보는 단지를 지운 뒤 다시 시도해 주세요.`, code: 'bookmark_cap' });
+    }
     const { data, error } = await sb
       .from('bookmarks')
       .insert({
         user_id: req.user.id, // RLS 가 동일성 검증
-        kapt_code: normalizedKapt,
-        display_name: String(display_name).trim(),
-        address: address ? String(address).slice(0, 200) : null, // 길이 제한
-        memo: memo ? String(memo).slice(0, 500) : null, // P1: 500자 제한
-        tags: Array.isArray(tags) ? tags.slice(0, 20).map(String) : [],
+        kapt_code: normalizedKapt.slice(0, 300),
+        display_name: _clipName(display_name),
+        address: _clipAddr(address), // 길이 제한
+        memo: _clipMemo(memo), // P1: 500자 제한
+        tags: _clipTags(tags),
         avg_price: typeof avg_price === 'number' && isFinite(avg_price) ? avg_price : null,
       })
       .select()
@@ -113,11 +129,15 @@ router.patch('/:id', async (req, res, next) => {
   try {
     const id = String(req.params.id);
     const { memo, tags, display_name, address, avg_price } = req.body || {};
+    // AUDIT4-1114: POST 와 같은 개인정보 검사와 길이 제한
+    if (_detectPII(memo) || _detectPII(address)) {
+      return res.status(400).json({ error: '메모·주소에 주민번호, 계좌, 카드 같은 개인정보는 입력하지 말아주세요.', code: 'pii_blocked' });
+    }
     const patch = {};
-    if (memo !== undefined) patch.memo = memo || null;
-    if (tags !== undefined) patch.tags = Array.isArray(tags) ? tags.slice(0, 20).map(String) : [];
-    if (display_name !== undefined) patch.display_name = String(display_name).trim();
-    if (address !== undefined) patch.address = address || null;
+    if (memo !== undefined) patch.memo = _clipMemo(memo);
+    if (tags !== undefined) patch.tags = _clipTags(tags);
+    if (display_name !== undefined) patch.display_name = _clipName(display_name);
+    if (address !== undefined) patch.address = _clipAddr(address);
     if (avg_price !== undefined) patch.avg_price = typeof avg_price === 'number' && isFinite(avg_price) ? avg_price : null;
     if (Object.keys(patch).length === 0) {
       return res.status(400).json({ error: '업데이트할 필드 없음' });
@@ -159,14 +179,15 @@ router.post('/migrate', async (req, res, next) => {
     if (items.length > 200) return res.status(413).json({ error: '한 번에 200개 초과 불가' });
 
     const rows = items
+      // AUDIT4-1114: POST 와 같은 길이 제한, 개인정보가 든 메모와 주소는 비운다
       .filter(it => it && it.kapt_code && it.display_name)
       .map(it => ({
         user_id: req.user.id,
-        kapt_code: normalizeKaptCode(it),  // P1: 동명 단지 충돌 방지
-        display_name: String(it.display_name).trim(),
-        address: it.address || null,
-        memo: it.memo || null,
-        tags: Array.isArray(it.tags) ? it.tags.slice(0, 20).map(String) : [],
+        kapt_code: (normalizeKaptCode(it) || '').slice(0, 300) || null,  // P1: 동명 단지 충돌 방지
+        display_name: _clipName(it.display_name),
+        address: _detectPII(it.address) ? null : _clipAddr(it.address),
+        memo: _detectPII(it.memo) ? null : _clipMemo(it.memo),
+        tags: _clipTags(it.tags),
         avg_price: typeof it.avg_price === 'number' && isFinite(it.avg_price) ? it.avg_price : null,
       }))
       .filter(r => r.kapt_code);  // normalize 실패 항목 제외
@@ -181,6 +202,10 @@ router.post('/migrate', async (req, res, next) => {
     if (dedupedRows.length === 0) return res.json({ migrated: 0, skipped: items.length, items: [] });
 
     const sb = userScopedClient(req.accessToken);
+    // AUDIT4-1114: 이관 뒤 합계가 상한을 넘으면 받지 않는다(이미 있는 단지 갱신분도 새 행으로 쳐서 보수적으로 판정)
+    if ((await _bookmarkCount(sb)) + dedupedRows.length > BOOKMARK_MAX) {
+      return res.status(429).json({ error: `관심 단지는 ${BOOKMARK_MAX}개까지 저장할 수 있어요.`, code: 'bookmark_cap' });
+    }
     // upsert on (user_id, kapt_code) — 중복은 갱신 (PIPA 관점에서 user_id 일치만 보장)
     // 반환 컬럼: 클라가 _serverId 매핑할 수 있도록 전체 필드 반환
     const { data, error } = await sb

@@ -1038,14 +1038,30 @@ function mergeNearDuplicateGroups(list, opts = {}) {
 }
 
 const { repAreaStats, sortRecentFirst } = require('../utils/repArea');
+// AUDIT4-1114 (search.in-bounds.uncached-heavy-aggregation-cpu): 서버 캐시가 없어 좌표 소수점 아래만 바꾼 주소가 매번 무거운 집계를 돌렸다.
+//   프런트(loadAptsInBounds)와 같은 규칙으로 소수 셋째 자리(약 100m) 바깥쪽 반올림을 서버에서도 하고, 같은 영역 결과를 5분 기억한다.
+//   정상 화면은 이미 반올림한 값을 보내므로 결과가 같다. 기억 수는 300개로 묶어 메모리를 키우지 않는다.
+const _IB_TTL_MS = 5 * 60 * 1000;
+const _IB_MAX = 300;
+const _ibMemo = new Map();
+// 독립 검토(2026-11-14) 반영: 프런트가 이미 반올림한 값(예 128.003)을 다시 반올림하면 부동소수점 오차로 한 칸 밀렸다
+//   (경도 124~132 범위 8천 개 중 741개 실측). 1e-6 만큼 흡수해 격자 위 값은 그대로 둔다(보정 뒤 0개).
+function _ibQuant(v, up) { const n = Number(v) * 1000; return (up ? Math.ceil(n - 1e-6) : Math.floor(n + 1e-6)) / 1000; }
 router.get('/in-bounds', async (req, res) => {
-  const south = parseFloat(req.query.south);
-  const west = parseFloat(req.query.west);
-  const north = parseFloat(req.query.north);
-  const east = parseFloat(req.query.east);
-  const limit = Math.min(parseInt(req.query.limit) || 50, 100);
+  const south = _ibQuant(parseFloat(req.query.south), false);
+  const west = _ibQuant(parseFloat(req.query.west), false);
+  const north = _ibQuant(parseFloat(req.query.north), true);
+  const east = _ibQuant(parseFloat(req.query.east), true);
+  const limit = Math.max(1, Math.min(parseInt(req.query.limit) || 50, 100));
   if (!south || !west || !north || !east) return res.status(400).json({ error: 'bounds 필수' });
   if (north - south > 1 || east - west > 1) return res.status(400).json({ error: '영역 너무 큼 (1도 이내)' });
+
+  const _ibKey = `${south},${west},${north},${east},${limit}`;
+  const _ibHit = _ibMemo.get(_ibKey);
+  if (_ibHit && Date.now() - _ibHit.at < _IB_TTL_MS) {
+    res.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=1800');
+    return res.json(_ibHit.body);
+  }
 
   const admin = adminClient();
   if (!admin) return res.status(503).json({ error: '서비스 일시 불가' });
@@ -1334,7 +1350,13 @@ router.get('/in-bounds', async (req, res) => {
     //   거래는 하루 한 번 적재되므로 결과가 있을 때만 5분 공유 캐시. 빈 결과는 캐시하지 않는다(일시 장애와 구분할 수 없다). 실패는 아래에서 no-store.
     if (out.length) res.set('Cache-Control', 'public, max-age=0, s-maxage=300, stale-while-revalidate=1800');
     else res.set('Cache-Control', 'no-store');
-    res.json({ results: out, count: out.length });
+    const _ibBody = { results: out, count: out.length };
+    if (out.length) { // 빈 결과는 기억하지 않는다(CDN 규칙과 같음)
+      _ibMemo.delete(_ibKey);
+      _ibMemo.set(_ibKey, { at: Date.now(), body: _ibBody });
+      if (_ibMemo.size > _IB_MAX) _ibMemo.delete(_ibMemo.keys().next().value);
+    }
+    res.json(_ibBody);
   } catch (e) {
     logger.warn({ err: e.message }, '영역 검색 실패');
     captureRouteError(e, 'search/in-bounds');
@@ -1546,9 +1568,17 @@ router.post('/history', async (req, res, next) => {
       .select('id, created_at')
       .single();
     if (error) throw error;
+    // AUDIT4-1114 (user-owned-tables-unbounded-rows-and-size): 사용자당 행 수 상한이 없었다. 최근 500건만 남기고 오래된 것을 지운다
+    //   (화면은 최근 50건만 보여 준다. 운영 실측 2026-11-14: 사용자당 최대 42건). 정리 실패는 저장 결과를 바꾸지 않는다.
+    try {
+      const { data: old } = await sb.from('search_history').select('id')
+        .order('created_at', { ascending: false }).range(SEARCH_HISTORY_KEEP, SEARCH_HISTORY_KEEP + 199);
+      if (old && old.length) await sb.from('search_history').delete().in('id', old.map((r) => r.id));
+    } catch (_) { /* 정리 실패는 무시 */ }
     res.status(201).json({ id: data.id, createdAt: data.created_at });
   } catch (e) { next(e); }
 });
+const SEARCH_HISTORY_KEEP = 500;
 
 // ── GET: 최근 50건 ────────────────────────────────────────
 router.get('/history', async (req, res, next) => {

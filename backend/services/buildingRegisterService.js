@@ -143,7 +143,8 @@ const _brMiss = new Map();
 async function getBuildingTitle(args) {
   const { lawdCd, aptName, aptKey } = args || {};
   if (!lawdCd || !aptName) return getBuildingTitleUncached(args || {});
-  const key = aptKey || `name:${aptName}|${lawdCd}`;
+  // AUDIT4-1114: '없음' 기억도 동별로 나눈다(다른 동의 실패가 이 동 조회를 1시간 막지 않게)
+  const key = aptKey || `name:${aptName}|${lawdCd}|${args.umdNm || ''}`;
   const missAt = _brMiss.get(key);
   if (missAt && Date.now() - missAt < BR_MISS_MS) return null;
   const st = {};
@@ -165,11 +166,28 @@ async function getBuildingTitleUncached({ lawdCd, sigungu, umdNm, aptName, aptKe
   if (!admin || !lawdCd || !aptName) return null;
   // BR-MARKER-FIX-2026-07-12: 캐시키를 lawdCd+aptName 기준으로 통일 (지도 마커 경로는 p.sigungu/umd 부재 →
   //   기존 sigungu/umd 포함 키가 검색 경로와 달라져 캐시/조회가 어긋났음).
-  const cacheKey = aptKey || `name:${aptName}|${lawdCd}`;
+  const nameKey = aptKey || `name:${aptName}|${lawdCd}`;
+  let cacheKey = nameKey;
 
   try {
-    const { data } = await admin.from('building_register').select('title').eq('apt_key', cacheKey).limit(1);
-    if (data && data[0] && data[0].title) return { ...data[0].title, cached: true };
+    const { data } = await admin.from('building_register').select('title, bun, ji').eq('apt_key', nameKey).limit(1);
+    const row = data && data[0];
+    if (row && row.title) {
+      // AUDIT4-1114 (building-register.cache-key-omits-umd.cross-user-poison): 키에 동이 없어, 같은 시군구 같은 이름 단지가
+      //   여러 동에 있으면(운영 531조합) 먼저 저장된 다른 동 건물 정보가 나갔다. 요청에 동이 있으면 그 동의 지번(원본 표 한 번 조회,
+      //   외부 호출 없음)과 저장된 행의 지번을 비교해, 다르면 동을 붙인 별도 키를 쓴다. 지번을 못 구하면 예전처럼 저장된 값을 쓴다.
+      if (aptKey || !umdNm) return { ...row.title, cached: true };
+      let pU = null;
+      try {
+        const { data: tx } = await admin.from('molit_transactions').select('jibun')
+          .eq('lawd_cd', lawdCd).eq('apt_name', aptName).eq('umd_nm', umdNm).not('jibun', 'is', null).limit(1);
+        pU = tx && tx[0] && parseJibun(tx[0].jibun);
+      } catch (_) { pU = null; }
+      if (!pU || (String(row.bun) === pU.bun && String(row.ji) === pU.ji)) return { ...row.title, cached: true };
+      cacheKey = `${nameKey}|${umdNm}`;
+      const { data: d2 } = await admin.from('building_register').select('title').eq('apt_key', cacheKey).limit(1);
+      if (d2 && d2[0] && d2[0].title) return { ...d2[0].title, cached: true };
+    }
   } catch (_) { /* no cache */ }
 
   // MOLIT 원본에서 지번+시군구+동 자체 확보 → 호출자가 sigungu/umd 를 안 넘겨도 동작(마커 경로 버그 수정).

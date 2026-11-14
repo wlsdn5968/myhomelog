@@ -61,13 +61,29 @@ router.get('/:aptName', async (req, res) => {
 });
 
 // PUT /:aptName — upsert
+// AUDIT4-1114 (user-owned-tables-unbounded-rows-and-size): 단지 이름을 바꿔 가며 행을 무한히 만들 수 있었고 checks 는 길이 제한이 없었다.
+//   이름 100자, checks 50개(각 200자), 사용자당 300개로 묶는다(운영 실측 2026-11-14: 현장 메모 0행).
+const FIELD_NOTE_MAX = 300;
 router.put('/:aptName', async (req, res) => {
   const { checks, rating, memo, visitDate } = req.body || {};
   try {
     const sb = _client(req);
+    // 독립 검토(2026-11-14) 반영: 잘라서 저장하면 GET/DELETE(원문 이름)와 어긋나므로 100자를 넘으면 거절한다
+    const aptName = String(req.params.aptName || '');
+    if (!aptName || aptName.length > 100) return res.status(400).json({ error: '단지 이름은 1~100자여야 해요.' });
+    const { data: exists } = await sb.from('field_notes').select('apt_name').eq('user_id', req.user.id).eq('apt_name', aptName).limit(1);
+    if (!(exists && exists.length)) {
+      const { count, error: cErr } = await sb.from('field_notes').select('apt_name', { count: 'exact', head: true }).eq('user_id', req.user.id);
+      if (cErr) throw cErr;
+      if ((count || 0) >= FIELD_NOTE_MAX) return res.status(429).json({ error: `현장 메모는 ${FIELD_NOTE_MAX}개까지 저장할 수 있어요.`, code: 'field_note_cap' });
+    }
     const payload = {
-      apt_name: req.params.aptName,
-      checks: Array.isArray(checks) ? checks : [],
+      apt_name: aptName,
+      checks: Array.isArray(checks)
+        ? checks.slice(0, 50)
+          .map((c) => (typeof c === 'string' ? c.slice(0, 200) : c))
+          .filter((c) => typeof c !== 'object' || c === null || JSON.stringify(c).length <= 400)
+        : [],
       rating: rating ? Math.max(0, Math.min(5, parseInt(rating))) : null,
       memo: typeof memo === 'string' ? memo.slice(0, 2000) : null,
       visit_date: visitDate || null,

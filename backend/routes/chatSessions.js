@@ -45,6 +45,8 @@ const ALLOWED_ROLES = new Set(['user', 'assistant']);
 //   그 너머는 저장해도 다시 보이지 않는다. meta 는 프런트가 보내지 않는다(빈 객체 기본).
 const MAX_SESSIONS_PER_USER = 200;
 const MAX_MESSAGES_PER_SESSION = MESSAGES_LIMIT;
+const MAX_MESSAGES_PER_USER = 1000;     // AUDIT4-1114: 사용자 전체 저장 메시지 수
+const MAX_MESSAGES_PER_USER_DAY = 200;  // AUDIT4-1114: 사용자 하루 저장 메시지 수
 const MAX_META_BYTES = 2048;
 
 
@@ -188,6 +190,22 @@ router.post('/:id/messages', async (req, res, next) => {
     if ((msgCount || 0) >= MAX_MESSAGES_PER_SESSION) {
       return res.status(429).json({ error: '한 대화에 저장할 수 있는 메시지 수를 넘었어요. 새 대화를 시작해 주세요.', code: 'chat_message_cap' });
     }
+    // AUDIT4-1114 (chat-sessions-total-storage-cap-exceeds-free-db): 세션 수와 세션당 수만 있어 곱(200x200x8000자)이 무료 DB 보다 컸다.
+    //   사용자 전체 저장 수(RLS 라 본인 세션의 메시지만 센다)와 하루 저장 수를 묶는다(운영 실측 2026-11-14: 사용자당 최대 47건).
+    const { count: allCount, error: allErr } = await sb
+      .from('chat_messages')
+      .select('id', { count: 'exact', head: true });
+    if (allErr) throw allErr;
+    if ((allCount || 0) >= MAX_MESSAGES_PER_USER) {
+      return res.status(429).json({ error: '저장할 수 있는 대화 양을 넘었어요. 지난 대화를 지운 뒤 다시 시도해 주세요.', code: 'chat_total_cap' });
+    }
+    try {
+      const { incrementUsage, todayKey, secondsUntilMidnight } = require('../middleware/dailyLimit');
+      const { used } = await incrementUsage(`dl:chatmsg:${todayKey()}:${req.user.id}`, secondsUntilMidnight());
+      if (used > MAX_MESSAGES_PER_USER_DAY) {
+        return res.status(429).json({ error: '오늘 저장할 수 있는 대화 수를 넘었어요. 내일 다시 저장돼요.', code: 'chat_daily_cap' });
+      }
+    } catch (_) { /* 계수기 실패는 막지 않는다 */ }
 
     // 메시지 INSERT — RLS WITH CHECK 가 세션 소유권 검증
     const insertRow = { session_id: id, role, content: trimmed, meta: meta || {} };

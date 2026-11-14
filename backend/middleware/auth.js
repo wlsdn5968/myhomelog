@@ -99,7 +99,10 @@ async function verifyToken(token) {
   }
   if (typeof token !== 'string' || !JWT_SHAPE.test(token)) return { user: null, deletionPending: false };
   const exp = _jwtExpMs(token);
-  if (exp != null && exp + CLOCK_LEEWAY_MS < Date.now()) return { user: null, deletionPending: false };
+  // AUDIT4-1114 (optionalauth-failed-token-uncached-supabase-call): Supabase 액세스 토큰에는 항상 exp 가 있다.
+  //   exp 가 없거나 읽히지 않는 값은 부르지 않고 무효로 본다(예전엔 null 이라 만료 검사를 건너뛰고 외부 호출을 했다).
+  if (exp == null) return { user: null, deletionPending: false };
+  if (exp + CLOCK_LEEWAY_MS < Date.now()) return { user: null, deletionPending: false };
   if (_negHit(token)) return { user: null, deletionPending: false };
 
   const sb = getSupabasePublic();
@@ -109,7 +112,10 @@ async function verifyToken(token) {
     const { data, error } = await sb.auth.getUser(token);
     if (error || !data?.user) {
       const st = Number(error && error.status);
-      if (!error || st === 400 || st === 401 || st === 403) _negSet(token); // 무효 판정만 기억(일시 오류는 기억하지 않음)
+      if (!error || st === 400 || st === 401 || st === 403) {
+        _negSet(token); // 무효 판정만 기억(일시 오류는 기억하지 않음)
+        return { user: null, deletionPending: false, remoteInvalid: true }; // AUDIT4-1114: IP 실패 계수는 이 경우만 센다
+      }
       return { user: null, deletionPending: false };
     }
     // ADMIN-VERIFIED-2026-09-05 (감사 H-LOW): admin 판정이 "확인된 이메일" 만 인정하도록 검증 상태를 함께 싣는다.
@@ -157,11 +163,38 @@ function isDeletionAllowed(req) {
   return DELETION_ALLOWED_PATHS.has(p);
 }
 
+// AUDIT4-1114 (optionalauth-failed-token-uncached-supabase-call): 값을 바꿔 가며 보낸 가짜 토큰은 무효 기억(토큰 문자열 키)을 피해
+//   요청마다 Supabase 인증 서버를 불렀고, 일부 경로는 이 인증 해석이 요청 제한보다 앞이다. IP 별로 최근 1분 실패 수를 세어
+//   20번을 넘으면 그 IP 의 토큰은 외부에 묻지 않고 무효로 본다(로그인 사용자 정상 요청은 실패하지 않으므로 닿지 않는다).
+//   인스턴스 메모리라 완전한 차단은 아니지만 IP 하나가 만들 수 있는 외부 호출 수를 묶는다.
+const AUTH_FAIL_WIN_MS = 60 * 1000;
+const AUTH_FAIL_MAX = 20;
+const _authFail = new Map(); // ipKey -> { start, n }
+function _failKey(req) { try { return require('../utils/ipKey').normalizeIpKey(String(req.ip || '')); } catch (_) { return String(req.ip || ''); } }
+function _authBlocked(req) {
+  const w = _authFail.get(_failKey(req));
+  return !!(w && Date.now() - w.start < AUTH_FAIL_WIN_MS && w.n >= AUTH_FAIL_MAX);
+}
+function _authFailed(req) {
+  const k = _failKey(req); const now = Date.now(); const w = _authFail.get(k);
+  if (!w || now - w.start >= AUTH_FAIL_WIN_MS) _authFail.set(k, { start: now, n: 1 }); else w.n += 1;
+  if (_authFail.size > 5000) { for (const [kk, ww] of _authFail) if (now - ww.start >= AUTH_FAIL_WIN_MS) _authFail.delete(kk); }
+}
+// 이미 성공해 기억된 토큰은 실패 수와 상관없이 통과시킨다(같은 IP 의 정상 사용자 보호).
+// 독립 검토(2026-11-14) 반영: 실패 계수는 Supabase 가 실제로 무효라고 답한 경우(remoteInvalid)만 센다.
+//   만료 토큰, 모양 오류, exp 없음은 외부에 묻지 않으므로 세지 않고, 일시 오류도 세지 않는다(오래 연 탭의 정상 사용자가 막히지 않게).
+function _verifyGuarded(req, token) {
+  const c = TOKEN_CACHE.get(token);
+  if (c && c.expiresAt > Date.now()) return verifyToken(token);
+  if (_authBlocked(req)) return Promise.resolve({ user: null, deletionPending: false });
+  return verifyToken(token).then((r) => { if (!r.user && r.remoteInvalid) _authFailed(req); return r; });
+}
+
 function requireAuth(req, res, next) {
   const token = extractToken(req);
   if (!token) return res.status(401).json({ error: '로그인이 필요합니다.' });
 
-  verifyToken(token).then(({ user, deletionPending }) => {
+  _verifyGuarded(req, token).then(({ user, deletionPending }) => {
     if (!user) return res.status(401).json({ error: '세션이 만료되었거나 유효하지 않습니다.' });
     req.user = user;
     req.accessToken = token;
@@ -183,7 +216,7 @@ function optionalAuth(req, res, next) {
   const token = extractToken(req);
   if (!token) return next();
 
-  verifyToken(token).then(({ user, deletionPending }) => {
+  _verifyGuarded(req, token).then(({ user, deletionPending }) => {
     if (user) {
       req.user = user;
       req.accessToken = token;
@@ -194,3 +227,5 @@ function optionalAuth(req, res, next) {
 }
 
 module.exports = { requireAuth, optionalAuth, verifyToken };
+module.exports._authFail = _authFail; // 테스트용(AUDIT4-1114)
+module.exports.AUTH_FAIL_MAX = AUTH_FAIL_MAX;
