@@ -93,7 +93,7 @@ test('현장 메모: 방문일은 실제 날짜만, 평점은 숫자만 받는�
   assert.ok(put.indexOf(m[0]) < put.indexOf('.upsert('), '평점 확인이 저장보다 뒤에 있다');
 });
 
-test('도우미: 구 이름이 아닌 낱말은 시군구 조회를 건너뛴다(운영 실측 3,401ms 조회)', () => {
+test('도우미: 구 이름이 아닌 낱말은 시군구 조회를 건너뛴다(운영 누적 통계 평균 1,982ms 조회)', () => {
   const s = rd('services/chatDataRouter.js');
   const m = s.match(/function _matchesKnownSigungu\(safe\) \{[\s\S]*?\n\}/);
   assert.ok(m, '_matchesKnownSigungu 가 없다');

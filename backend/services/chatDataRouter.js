@@ -647,7 +647,9 @@ async function _resolveRegionRows(regionQuery) {
 
   // ① 구 이름 우선 → ② 동 이름 폴백 (실측: "공덕"은 sigungu 에 없고 umd 공덕동에만 있다)
   // SGG-PREFILTER-1114 (운영 실측): sigungu 에는 인덱스가 없어, 구 이름이 아닌 낱말("은마")이면 60일치 42,877행을
-  //   훑고 0행을 돌려주는 데 3,401ms 가 걸렸다(버퍼가 모두 데워진 상태). 단지 이름으로 시세를 물을 때마다 드는 비용이었다.
+  //   훑고 0행을 돌려준다. 앱이 보낸 이 조회의 누적 통계(pg_stat_statements, 2026-11-14)는 79회, 평균 1,982ms,
+  //   최소 67ms, 최대 6,147ms 였다. 단지 이름으로 시세를 물을 때마다 드는 비용이었다.
+  //   ⚠ explain analyze 로 재면 3.4~4.5초로 부풀려 나온다(timing off 로는 73ms). 이 조회의 시간은 누적 통계로 볼 것.
   //   시군구 이름은 지역 코드 표에 다 있으므로(운영 DB 107개 전부 포함, 2026-11-14 대조) 접두가 하나도 안 맞으면 조회를 건너뛴다.
   let rows = _matchesKnownSigungu(safe) ? await fetchBy('sigungu') : [];
   if (rows.length) {
