@@ -139,7 +139,7 @@ router.get('/', (req, res) => {
     <a class="cta" href="${ORIGIN}/">지도·계산기와 함께 보기 →</a>`;
   res.set('Cache-Control', 'public, max-age=0, s-maxage=86400, stale-while-revalidate=604800');
   res.type('html').send(pageShell({
-    title: `지역별 아파트 실거래 데이터 — 전국 ${list.length}개 시군구 | 내집로그`,
+    title: `지역별 아파트 실거래 데이터, 전국 ${list.length}개 시군구 | 내집로그`,
     desc: `전국 ${list.length}개 시군구의 아파트 실거래 거래량, 가격지수, 미분양, 인구 순이동을 공식 통계로 정리했어요. 매수 추천이 아니에요.`,
     canonical: `${ORIGIN}/region`,
     body,
@@ -332,7 +332,7 @@ router.get('/:lawdCd', async (req, res) => {
       <div style="margin-top:10px"><a href="/region">전국 ${all.length}개 시군구 전체 보기 →</a></div></div>
     <a class="cta" href="${ctaHref}">${esc(label)} 단지 찾아보기 →</a>`;
 
-  const title = `${label} 아파트 실거래 데이터 — 거래량·가격지수·미분양 | 내집로그`;
+  const title = `${label} 아파트 실거래 데이터: 거래량, 가격지수, 미분양 | 내집로그`;
   const desc = facts.length
     ? `${label} ${facts.slice(0, 3).join(' · ')}. 국토교통부·한국부동산원 공식 통계를 정리했어요. 매수 추천이 아니에요.`
     : `${label} 아파트 실거래 거래량, 가격지수, 미분양, 인구 순이동을 공식 통계로 정리했어요. 매수 추천이 아니에요.`;

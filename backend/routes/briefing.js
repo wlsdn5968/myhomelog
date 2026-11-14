@@ -201,7 +201,7 @@ router.get('/:date', async (req, res) => {
     </div>` : '';
 
   const yo = '일월화수목금토'[new Date(day + 'T00:00:00Z').getUTCDay()];
-  const title = `내집로그 브리핑 ${day.replace(/-/g, '.')}(${yo}) — 실거래·금리·시장 데이터`;
+  const title = `내집로그 브리핑 ${day.replace(/-/g, '.')}(${yo}): 실거래, 금리, 시장 데이터`;
   const desc = (snap.lines && snap.lines[0]) ? String(snap.lines[0]).slice(0, 120) : '국토교통부 실거래와 한국은행 금리로 정리한 일일 부동산 브리핑';
 
   // 과거 날짜는 불변 기록 — 엣지 캐시 길게. 오늘은 30분.

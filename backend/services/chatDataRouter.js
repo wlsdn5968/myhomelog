@@ -605,6 +605,17 @@ const SIDO_NAME_TO_PREFIX = { '서울': '11', '부산': '26', '대구': '27', '�
  *   되묻는다(region-judgment-by-lawdcd 원칙: 판정은 lawd_cd 로, 이름은 표시용).
  * @returns {Promise<null | {ambiguousSidos: string[], token: string} | {rows, scopeLabel}>}
  */
+// SGG-PREFILTER-1114: ilike '낱말%' 와 같은 판정(대소문자 무시 접두 일치)을 지역 코드 표로 먼저 한다.
+//   표를 못 읽으면 true 를 돌려 종전대로 DB 에 묻는다(조용히 지역 답을 잃지 않게).
+function _matchesKnownSigungu(safe) {
+  try {
+    const names = Object.values(require('./transactionService').LAWD_CODE_TO_NAME || {});
+    if (!names.length) return true;
+    const t = String(safe || '').toLowerCase();
+    return names.some((n) => String(n).toLowerCase().startsWith(t));
+  } catch (_) { return true; }
+}
+
 async function _resolveRegionRows(regionQuery) {
   const admin = getSupabaseAdmin();
   if (!admin) return null;
@@ -635,7 +646,10 @@ async function _resolveRegionRows(regionQuery) {
   };
 
   // ① 구 이름 우선 → ② 동 이름 폴백 (실측: "공덕"은 sigungu 에 없고 umd 공덕동에만 있다)
-  let rows = await fetchBy('sigungu');
+  // SGG-PREFILTER-1114 (운영 실측): sigungu 에는 인덱스가 없어, 구 이름이 아닌 낱말("은마")이면 60일치 42,877행을
+  //   훑고 0행을 돌려주는 데 3,401ms 가 걸렸다(버퍼가 모두 데워진 상태). 단지 이름으로 시세를 물을 때마다 드는 비용이었다.
+  //   시군구 이름은 지역 코드 표에 다 있으므로(운영 DB 107개 전부 포함, 2026-11-14 대조) 접두가 하나도 안 맞으면 조회를 건너뛴다.
+  let rows = _matchesKnownSigungu(safe) ? await fetchBy('sigungu') : [];
   if (rows.length) {
     // 동명 시군구 검사 — 시도 prefix 가 2개 이상이면 단정하지 않고 되묻는다
     const sidos = [...new Set(rows.map(t => String(t.lawd_cd || '').slice(0, 2)))];

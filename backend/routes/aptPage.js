@@ -569,7 +569,7 @@ router.get('/:aptSeq', async (req, res) => {
       연다 — /share 가 쓰는 검증된 형식과 동일. area 는 구 이름 부분일치라 region("청주시 청원구")을 쓴다. -->
     <a class="cta" href="${ORIGIN}/?apt=${encodeURIComponent(ctaAptName)}&area=${encodeURIComponent(region)}&calc=1">${esc(displayName)} 대출 한도·비용 계산 →</a>`;
 
-  const title = `${displayName} 실거래가 — ${region}${umd ? ' ' + umd : ''} | 내집로그`;
+  const title = `${displayName} 실거래가, ${region}${umd ? ' ' + umd : ''} | 내집로그`;
   // APT-PAGE-DESC-2026-09-06 (Plan 065): 분기는 facts.length 가 아니라 thin(거래 유무, 위에서
   //   이미 확정됨)으로 가른다 — Plan 063 은 facts.length 로 갈라서, 거래가 0건인데 K-apt 세대수·
   //   준공년도 fact 만으로 facts.length>0 이 돼 "국토교통부 실거래 신고 자료 정리" 분기를 탔다.

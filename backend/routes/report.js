@@ -119,10 +119,13 @@ router.post('/generate', async (req, res) => {
     if (!admin) return res.status(503).json({ error: 'DB 미설정' });
 
     // 1) 정부 정책 최신 스냅샷
+    const _rt = _stageTimer(); // REPORT-STAGE-1114
     const policyData = await getPolicyContext().catch(() => ({}));
+    _rt.mark('policy');
 
     // 2) 추천 단지 fetch (기존 propertyService 우선, 없으면 단순 query)
     const candidates = await fetchCandidateApts(admin, userInput, 7);
+    _rt.mark('candidates');
     if (!candidates.length) {
       return res.status(404).json({ error: '입력 조건에 맞는 단지가 없어요. 매수가나 지역을 조정해보세요.' });
     }
@@ -183,6 +186,9 @@ router.post('/generate', async (req, res) => {
       })(),
     ]);
     const _freeCtx = { dataBasis: _dataBasis, unsoldTrend: _unsold, regionTxTrend: _regionTrend };
+    _rt.mark('context');
+    // REPORT-STAGE-1114: 캐시 미스로 실제 생성한 요청의 단계별 소요(ms). 사용자 입력은 싣지 않는다.
+    logger.info({ source: 'report-stages', stages: _rt.done(), candidateStages: candidates._stages || null }, '보고서 단계별 소요');
 
     // NO-PAID-AI-2026-11-13 (운영자 지시): 유료 AI 를 부르지 않는다. 보고서는 늘 데이터 전용판이다
     //   (MOLIT, KAPT, Kakao 결정론 데이터와 정책 맥락). AI 가 빠진 것이 "일시"가 아니라 설계라 aiUnavailable 표시도 하지 않는다.
@@ -1092,8 +1098,19 @@ function applyObjectiveScore(c, seoulRegulated = true, regulatedCodes = null) {
   c.score = Math.round(c.score);
 }
 
+// REPORT-STAGE-1114 (감사 1번): 보고서 한 번이 26.5초 걸렸는데(운영 실측) 어느 단계가 느린지 기록이 없었다.
+//   mark(이름)은 직전 mark 부터 지금까지를 그 이름에 더한다. 동작에는 관여하지 않는다.
+function _stageTimer() {
+  const t0 = Date.now(); let last = t0; const st = {};
+  return {
+    mark(name) { const n = Date.now(); st[name] = (st[name] || 0) + (n - last); last = n; },
+    done() { return { ...st, totalMs: Date.now() - t0 }; },
+  };
+}
+
 /** 추천 단지 후보 fetch — molit + apt_master 통합 + 점수 매칭 + 다양성 */
 async function fetchCandidateApts(admin, input, limit) {
+  const _st = _stageTimer(); // REPORT-STAGE-1114: 단계별 소요 계측(동작은 그대로)
   const buy = parseFloat(input.maxBudget) || 0;
   const region = String(input.region || '').trim();
   // REGION-CODE-2026-08-30 (Sprint OOOOOOO): 프론트 지역 칩이 실어 보내는 시군구 코드.
@@ -1350,6 +1367,7 @@ async function fetchCandidateApts(admin, input, limit) {
 
   // ALIAS-MERGE-2026-05-21 (전수조사: BUG2 동일 클래스): raw MOLIT명(풍림아파트A/B) →
   //   canonical master명(공릉풍림아이원) relabel → 보고서 후보도 1개 단지로 병합 (검색/지도/단지정리와 동일 식별).
+  _st.mark('pool');
   const txList = txs || [];
   let _aliasMap = new Map();
   try {
@@ -1465,6 +1483,7 @@ async function fetchCandidateApts(admin, input, limit) {
   // Phase 6+ (2026-04-26): KAPT API 통합 — 선정된 N개 단지만 facility 병렬 fetch
   //   resolveFacility() 가 ILIKE 토큰 매칭 + KAPT API + DB 캐시 (90일) 다 처리.
   //   첫 호출: API 호출 → DB 저장 (응답 +5~10초). 두 번째: cache hit (0초).
+  _st.mark('aliasAndGroup');
   await Promise.all(out.map(async (c) => {
     try {
       const f = await resolveFacility({ aptName: c.apt_name, sigungu: c.sigungu, umdNm: c.umd_nm });
@@ -1538,6 +1557,7 @@ async function fetchCandidateApts(admin, input, limit) {
   //   아래 HH-GATE 가 100세대 미만을 정확히 제외. top out(~20) bounded, graceful(실패 시 기존 null 유지).
   try {
     const { getBuildingTitle } = require('../services/buildingRegisterService');
+    _st.mark('facility');
     await Promise.all(out.map(async (c) => {
       if (Number.isFinite(c.households) && c.households > 0) return;
       try {
@@ -1560,6 +1580,7 @@ async function fetchCandidateApts(admin, input, limit) {
       sigungu: c.sigungu,
       umdNm: c.umd_nm,
     }));
+    _st.mark('building');
     const coords = await resolveCoordBatch(aptsForGeo, 4);
     // coords 와 out 의 인덱스 일치 가정 (resolveCoordBatch 가 보장하는지 확인 필요 — 일단 동일 길이 매칭)
     for (let i = 0; i < out.length; i++) {
@@ -1573,6 +1594,7 @@ async function fetchCandidateApts(admin, input, limit) {
     // FANOUT-CAP-2026-08-28 (Plan 032): 콜드 캐시일 때 out(최대 20) × Kakao 6콜 = 최대 120 동시 호출이
     //   나갔다. 이 저장소의 다른 외부 API 팬아웃은 전부 동시성을 명시 제한한다(molitIngest 3, 지오코딩 4~8).
     //   getNearbyAmenities 내부 캐시(3일)가 있어 캐시가 더운 경우엔 체감 변화가 없다 — 콜드 버스트만 막는다.
+    _st.mark('coord');
     const AMENITY_CONCURRENCY = 4;
     for (let i = 0; i < out.length; i += AMENITY_CONCURRENCY) {
       await Promise.all(out.slice(i, i + AMENITY_CONCURRENCY).map(async (c) => {
@@ -1621,6 +1643,7 @@ async function fetchCandidateApts(admin, input, limit) {
     if (_names.length) {
       const _PAGE = 1000;
       const _rows = [];
+      _st.mark('amenity');
       for (let from = 0; from <= 9000; from += _PAGE) {
         let qq = admin.from('molit_transactions')
           // PEAK-FLOOR-2026-08-31: 층을 함께 받는다 — 같은 평형이어도 층에 따라 값이 갈린다.
@@ -1756,6 +1779,7 @@ async function fetchCandidateApts(admin, input, limit) {
   try {
     const { getJeonseByApt } = require('../services/rentService');
     const _lawds = [...new Set(finalOut.map(c => c.lawd_cd).filter(Boolean))];
+    _st.mark('reaggAndSelect');
     const _rentByLawd = new Map();
     await Promise.all(_lawds.map(async (l) => {
       try { _rentByLawd.set(l, await getJeonseByApt(l, '')); } // query '' → 전체 목록 (includes('') 항상 true)
@@ -1807,6 +1831,8 @@ async function fetchCandidateApts(admin, input, limit) {
     })),
   }, '보고서 후보 매칭 (Phase 9)');
 
+  _st.mark('rent');
+  Object.defineProperty(finalOut, '_stages', { value: _st.done(), enumerable: false });
   return finalOut;
 }
 

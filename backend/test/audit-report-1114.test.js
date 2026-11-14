@@ -92,3 +92,47 @@ test('현장 메모: 방문일은 실제 날짜만, 평점은 숫자만 받는�
   for (const v of [0, 3, 5, '3', ' 4 ', null, undefined, '']) assert.equal(bad(v), false, `${JSON.stringify(v)} 를 거절한다`);
   assert.ok(put.indexOf(m[0]) < put.indexOf('.upsert('), '평점 확인이 저장보다 뒤에 있다');
 });
+
+test('도우미: 구 이름이 아닌 낱말은 시군구 조회를 건너뛴다(운영 실측 3,401ms 조회)', () => {
+  const s = rd('services/chatDataRouter.js');
+  const m = s.match(/function _matchesKnownSigungu\(safe\) \{[\s\S]*?\n\}/);
+  assert.ok(m, '_matchesKnownSigungu 가 없다');
+  // 실제 지역 코드 표로 실행한다
+  const tx = require('../services/transactionService');
+  const names = Object.values(tx.LAWD_CODE_TO_NAME);
+  assert.ok(names.length >= 100, '지역 이름 표가 비었다');
+  const fn = new Function('require', `${m[0]}; return _matchesKnownSigungu;`)(() => tx);
+  for (const q of ['은마', '잠실엘스', '공덕', '래미안']) assert.equal(fn(q), false, `${q} 가 시군구로 판정된다`);
+  for (const q of ['강남', '강남구', '노원구', '수원시', '중구', '해운대', '세종']) assert.equal(fn(q), true, `${q} 가 시군구가 아니라고 판정된다`);
+  // 표에 있는 이름은 전부 자기 자신과 앞 두 글자로 통과한다(ilike '낱말%' 와 같은 판정)
+  for (const n of names) { assert.equal(fn(n), true); assert.equal(fn(n.slice(0, 2)), true); }
+  // 표를 못 읽으면 종전대로 DB 에 묻는다
+  const fnBroken = new Function('require', `${m[0]}; return _matchesKnownSigungu;`)(() => ({}));
+  assert.equal(fnBroken('은마'), true);
+  assert.match(s, /let rows = _matchesKnownSigungu\(safe\) \? await fetchBy\('sigungu'\) : \[\];/);
+});
+
+test('보고서: 단계별 소요를 한 줄로 남긴다(동작은 그대로)', () => {
+  const s = rd('routes/report.js');
+  const m = s.match(/function _stageTimer\(\) \{[\s\S]*?\n\}/);
+  assert.ok(m);
+  const t = new Function(`${m[0]}; return _stageTimer;`)()();
+  t.mark('a'); t.mark('b'); t.mark('a');
+  const d = t.done();
+  assert.deepEqual(Object.keys(d).sort(), ['a', 'b', 'totalMs']);
+  assert.ok(d.a >= 0 && d.b >= 0 && d.totalMs >= d.a + d.b - 1);
+  for (const k of ['pool', 'aliasAndGroup', 'facility', 'building', 'coord', 'amenity', 'reaggAndSelect', 'rent']) {
+    assert.equal(s.split(`_st.mark('${k}');`).length - 1, 1, `${k} 계측이 한 번이 아니다`);
+  }
+  assert.match(s, /source: 'report-stages', stages: _rt\.done\(\), candidateStages: candidates\._stages \|\| null/);
+  // 단계 기록은 응답 JSON 에 섞이지 않는다(열거되지 않는 속성)
+  assert.match(s, /Object\.defineProperty\(finalOut, '_stages', \{ value: _st\.done\(\), enumerable: false \}\);/);
+});
+
+test('서버 렌더 제목에 긴 줄표가 없다', () => {
+  for (const f of ['routes/aptPage.js', 'routes/regionPage.js', 'routes/briefing.js']) {
+    const titles = rd(f).split('\n').filter((l) => /^\s*(const title = |title: )`/.test(l));
+    assert.ok(titles.length >= 1, `${f} 에서 제목 줄을 못 찾았다`);
+    for (const l of titles) assert.doesNotMatch(l, /[—–]/, `${f}: ${l.trim().slice(0, 60)}`);
+  }
+});
