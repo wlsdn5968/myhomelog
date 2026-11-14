@@ -27,6 +27,17 @@ function loadHtml() {
   }
 }
 
+// SHARE-HEAD-199 (Plan 199): 치환 대상 태그는 모두 </head> 앞에 있다 — 머리(약 159KB)만 치환하고 뒤를 이어 붙인다.
+let cachedSplit = null;
+function loadSplit() {
+  if (cachedSplit) return cachedSplit;
+  const html = loadHtml();
+  if (!html) return null;
+  const i = html.indexOf('</head>');
+  cachedSplit = i > 0 ? { head: html.slice(0, i), tail: html.slice(i), html } : { head: html, tail: '', html };
+  return cachedSplit;
+}
+
 function escapeHtml(s) {
   // SHARE-REPLACE-LITERAL-2026-09-06: `$` 도 함께 이스케이프한다 — 아래 lit() 이 이미 확장을
   //   막지만, 나중에 문자열 형태 치환이 다시 들어와도 안전하도록 두 겹으로 둔다.
@@ -47,9 +58,29 @@ function escapeHtml(s) {
 // [해결] replacement 를 **함수**로 준다 — 함수 반환값은 절대 재스캔되지 않는다.
 const lit = (s) => () => s;
 
+// 세 갈래(목록·비교·단지)가 공통으로 쓰는 9개 치환. 머리 문자열만 받아 치환해 돌려준다.
+function rewriteHead(head, t, d, u) {
+  return head
+    .replace(/<title>[^<]*<\/title>/, lit(`<title>${t}</title>`))
+    .replace(/<meta name="description" content="[^"]*">/, lit(`<meta name="description" content="${d}">`))
+    .replace(/<meta property="og:title" content="[^"]*">/, lit(`<meta property="og:title" content="${t}">`))
+    .replace(/<meta property="og:description" content="[^"]*">/, lit(`<meta property="og:description" content="${d}">`))
+    .replace(/<meta property="og:url" content="[^"]*">/, lit(`<meta property="og:url" content="${u}">`))
+    .replace(/<meta name="twitter:title" content="[^"]*">/, lit(`<meta name="twitter:title" content="${t}">`))
+    .replace(/<meta name="twitter:description" content="[^"]*">/, lit(`<meta name="twitter:description" content="${d}">`))
+    .replace(/<link rel="canonical" href="[^"]*">/, lit(`<link rel="canonical" href="${u}">`))
+    // SHARE-NOINDEX-2026-09-02 (감사 P1-8): robots.txt 가 /share 를 Disallow 하고 있어서
+    //   카카오톡·X·스레드의 링크 미리보기 크롤러가 이 페이지를 아예 못 읽었다 — OG 메타를
+    //   동적 치환하는 라우트인데 정작 그 목적이 막혀 있던 셈이다(운영자 SNS 자동화와 직결).
+    //   → robots.txt 에서 Disallow 를 풀고, 대신 여기서 noindex 로 **중복 색인만** 막는다.
+    //   follow 는 유지해 링크 그래프는 살린다.
+    .replace(/<meta name="robots" content="[^"]*">/, lit(`<meta name="robots" content="noindex, follow">`));
+}
+
 router.get('/', (req, res) => {
-  const html = loadHtml();
-  if (!html) return res.redirect(302, '/');
+  const sp = loadSplit();
+  if (!sp) return res.redirect(302, '/');
+  const html = sp.html;
   const apt = (req.query.apt || '').toString().slice(0, 60);
   const area = (req.query.area || '').toString().slice(0, 40);
   // SHARE-OG-2026-10-18 (plans/166 A3): seq 가 단지 번호 형식이면 단지별 OG 카드(/api/og/apt/:seq)를 미리보기 이미지로
@@ -72,16 +103,7 @@ router.get('/', (req, res) => {
     const origin = `${req.protocol}://${req.get('host')}`;
     const shareUrl = `${origin}/share?list=${encodeURIComponent(list)}`;
     const t = escapeHtml(title), d = escapeHtml(desc), u = escapeHtml(shareUrl);
-    const rewritten = html
-      .replace(/<title>[^<]*<\/title>/, lit(`<title>${t}</title>`))
-      .replace(/<meta name="description" content="[^"]*">/, lit(`<meta name="description" content="${d}">`))
-      .replace(/<meta property="og:title" content="[^"]*">/, lit(`<meta property="og:title" content="${t}">`))
-      .replace(/<meta property="og:description" content="[^"]*">/, lit(`<meta property="og:description" content="${d}">`))
-      .replace(/<meta property="og:url" content="[^"]*">/, lit(`<meta property="og:url" content="${u}">`))
-      .replace(/<meta name="twitter:title" content="[^"]*">/, lit(`<meta name="twitter:title" content="${t}">`))
-      .replace(/<meta name="twitter:description" content="[^"]*">/, lit(`<meta name="twitter:description" content="${d}">`))
-      .replace(/<link rel="canonical" href="[^"]*">/, lit(`<link rel="canonical" href="${u}">`))
-      .replace(/<meta name="robots" content="[^"]*">/, lit(`<meta name="robots" content="noindex, follow">`));
+    const rewritten = rewriteHead(sp.head, t, d, u) + sp.tail;
     res.set('Cache-Control', 'public, max-age=600, s-maxage=600');
     return res.type('html').send(rewritten);
   }
@@ -101,21 +123,7 @@ router.get('/', (req, res) => {
     const origin = `${req.protocol}://${req.get('host')}`;
     const shareUrl = `${origin}/share?cmp=${encodeURIComponent(cmp)}`;
     const t = escapeHtml(title), d = escapeHtml(desc), u = escapeHtml(shareUrl);
-    const rewritten = html
-      .replace(/<title>[^<]*<\/title>/, lit(`<title>${t}</title>`))
-      .replace(/<meta name="description" content="[^"]*">/, lit(`<meta name="description" content="${d}">`))
-      .replace(/<meta property="og:title" content="[^"]*">/, lit(`<meta property="og:title" content="${t}">`))
-      .replace(/<meta property="og:description" content="[^"]*">/, lit(`<meta property="og:description" content="${d}">`))
-      .replace(/<meta property="og:url" content="[^"]*">/, lit(`<meta property="og:url" content="${u}">`))
-      .replace(/<meta name="twitter:title" content="[^"]*">/, lit(`<meta name="twitter:title" content="${t}">`))
-      .replace(/<meta name="twitter:description" content="[^"]*">/, lit(`<meta name="twitter:description" content="${d}">`))
-      .replace(/<link rel="canonical" href="[^"]*">/, lit(`<link rel="canonical" href="${u}">`))
-    // SHARE-NOINDEX-2026-09-02 (감사 P1-8): robots.txt 가 /share 를 Disallow 하고 있어서
-    //   카카오톡·X·스레드의 링크 미리보기 크롤러가 이 페이지를 아예 못 읽었다 — OG 메타를
-    //   동적 치환하는 라우트인데 정작 그 목적이 막혀 있던 셈이다(운영자 SNS 자동화와 직결).
-    //   → robots.txt 에서 Disallow 를 풀고, 대신 여기서 noindex 로 **중복 색인만** 막는다.
-    //   follow 는 유지해 링크 그래프는 살린다.
-    .replace(/<meta name="robots" content="[^"]*">/, lit(`<meta name="robots" content="noindex, follow">`));
+    const rewritten = rewriteHead(sp.head, t, d, u) + sp.tail;
     res.set('Cache-Control', 'public, max-age=600, s-maxage=600');
     return res.type('html').send(rewritten);
   }
@@ -133,21 +141,7 @@ router.get('/', (req, res) => {
   const t = escapeHtml(title);
   const d = escapeHtml(desc);
   const u = escapeHtml(shareUrl);
-  let rewritten = html
-    .replace(/<title>[^<]*<\/title>/, lit(`<title>${t}</title>`))
-    .replace(/<meta name="description" content="[^"]*">/, lit(`<meta name="description" content="${d}">`))
-    .replace(/<meta property="og:title" content="[^"]*">/, lit(`<meta property="og:title" content="${t}">`))
-    .replace(/<meta property="og:description" content="[^"]*">/, lit(`<meta property="og:description" content="${d}">`))
-    .replace(/<meta property="og:url" content="[^"]*">/, lit(`<meta property="og:url" content="${u}">`))
-    .replace(/<meta name="twitter:title" content="[^"]*">/, lit(`<meta name="twitter:title" content="${t}">`))
-    .replace(/<meta name="twitter:description" content="[^"]*">/, lit(`<meta name="twitter:description" content="${d}">`))
-    .replace(/<link rel="canonical" href="[^"]*">/, lit(`<link rel="canonical" href="${u}">`))
-    // SHARE-NOINDEX-2026-09-02 (감사 P1-8): robots.txt 가 /share 를 Disallow 하고 있어서
-    //   카카오톡·X·스레드의 링크 미리보기 크롤러가 이 페이지를 아예 못 읽었다 — OG 메타를
-    //   동적 치환하는 라우트인데 정작 그 목적이 막혀 있던 셈이다(운영자 SNS 자동화와 직결).
-    //   → robots.txt 에서 Disallow 를 풀고, 대신 여기서 noindex 로 **중복 색인만** 막는다.
-    //   follow 는 유지해 링크 그래프는 살린다.
-    .replace(/<meta name="robots" content="[^"]*">/, lit(`<meta name="robots" content="noindex, follow">`));
+  let rewritten = rewriteHead(sp.head, t, d, u);
   // 크롤러 캐시 친화 + 동일 쿼리 재방문 시 빠르게
   // SHARE-OG-2026-10-18: 단지 번호가 있을 때만 미리보기 이미지를 단지 OG 카드로(치환은 lit() 로 — share-ssr 배선 테스트 기준)
   if (ogImg) {
@@ -155,6 +149,7 @@ router.get('/', (req, res) => {
       .replace(/<meta property="og:image" content="[^"]*">/, lit(`<meta property="og:image" content="${ogImg}">`))
       .replace(/<meta name="twitter:image" content="[^"]*">/, lit(`<meta name="twitter:image" content="${ogImg}">`));
   }
+  rewritten += sp.tail;
   res.set('Cache-Control', 'public, max-age=600, s-maxage=600');
   res.type('html').send(rewritten);
 });

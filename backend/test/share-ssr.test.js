@@ -170,8 +170,8 @@ test('share.js 방어 배선 — lit() 함수형 치환과 escapeHtml $ 이스�
   //     escapeHtml 자신의 .replace(/[<>"'&$]/g, c => ...) 도 대괄호로 시작해 범위 밖이다 — 오탐 아님)
   const TAG_REPLACE_RE = /\.replace\(\/<(?:\\.|[^\\/])*\/[a-z]*\s*,\s*(lit\()?/g;
   const calls = [...src.matchAll(TAG_REPLACE_RE)];
-  assert.ok(calls.length >= 18,
-    `HTML 태그 치환(.replace(/<...)) 호출이 ${calls.length}건뿐이다 — 기대 18건(분기 2개 × 9치환). `
+  assert.ok(calls.length >= 11,
+    `HTML 태그 치환(.replace(/<...)) 호출이 ${calls.length}건뿐이다 — 기대 11건(공통 9치환 + OG 이미지 2). `
     + '치환 블록 자체가 줄었다면 이 기대치부터 갱신하고 원인을 확인할 것.');
   const bare = calls.filter((m) => !m[1]).length;
   assert.equal(bare, 0,
@@ -181,8 +181,8 @@ test('share.js 방어 배선 — lit() 함수형 치환과 escapeHtml $ 이스�
     + '못 잡는다(리뷰어 실측: lit() 만 제거 → 기존 테스트 fail 0) — 그래서 이 배선 자체를 고정한다.');
 
   const litRefs = (src.match(/\blit\(/g) || []).length;
-  assert.ok(litRefs >= 19,
-    `lit( 참조가 ${litRefs}건 — 기대 19건 이상(치환 18 + 헬퍼 정의/주석 참조). `
+  assert.ok(litRefs >= 12,
+    `lit( 참조가 ${litRefs}건 — 기대 12건 이상(치환 11 + 헬퍼 정의/주석 참조). `
     + '줄었다면 어딘가의 lit(...) 호출이 문자열 치환으로 되돌아간 것이다.');
 
   // lit 헬퍼 자신이 "인자 없는 함수를 반환하는 함수" 모양이어야 한다 — 호출부가 전부
