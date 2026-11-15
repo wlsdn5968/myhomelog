@@ -1157,6 +1157,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .pop-marker.pop-guhead .pop-gu::after{content:" ·"}
 .pop-marker.pm-mini.pop-guhead .pop-gu::after{content:""}
 .pop-marker.pm-hidden{display:none!important}
+.pop-marker.pop-ctr{transform:translate(-50%,-50%)} /* GU-LABEL-1115: 구역 한가운데에 놓는 이름표는 가운데 맞춤 */
 .pop-marker[data-more]::after{content:"+" attr(data-more);margin-left:4px;font-size:9px;font-weight:800;color:#fff;background:#69707B;border-radius:var(--radius-full);padding:1px 5px}
 @media (max-width:520px){ .pop-marker .pop-nm{max-width:96px} }
 
@@ -2252,7 +2253,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   <!-- HEADER-SQUEEZE-2026-07-15 (Sprint MMMMM, 실측): pill 8개(admin) 시 검색창 173px·1050px 창 44px 붕괴 → min-width 확보 -->
   <div class="hsearch" style="position:relative;flex:1;min-width:170px;max-width:480px;margin:0 4px">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" style="position:absolute;left:11px;top:50%;transform:translateY(-50%);width:15px;height:15px;color:var(--text-faint);pointer-events:none;z-index:1"><circle cx="11" cy="11" r="7"/><path d="m21 21-4.35-4.35"/></svg>
-    <input aria-label="단지명·동명 검색" id="hSearchInput" class="inp" type="text" placeholder="단지명·동명 검색 (예: 마포래미안푸르지오, 공덕동)" style="margin:0;font-size:14px;padding:7px 10px 7px 34px" oninput="onHeaderSearchInput(this.value)" onkeydown="onHeaderSearchKey(event)" onfocus="if(this.value)onHeaderSearchInput(this.value)" onblur="setTimeout(()=>document.getElementById('hSearchDrop').style.display='none',200)" autocomplete="off">
+    <input aria-label="단지명·동명 검색" id="hSearchInput" class="inp" type="text" placeholder="단지명·동명 검색 (예: 마포래미안푸르지오, 공덕동)" style="margin:0;font-size:14px;padding:7px 10px 7px 34px" oninput="onHeaderSearchInput(this.value)" onkeydown="onHeaderSearchKey(event)" onfocus="_hSearchRefocus(this)" onblur="setTimeout(()=>document.getElementById('hSearchDrop').style.display='none',200)" autocomplete="off">
     <script>
     // Agent UX #11 (2026-05-04): 모바일 ≤480px placeholder 잘림 → JS 로 단순화
     (function _adjustHSearchPlaceholder(){
@@ -8110,7 +8111,7 @@ function renderListGrid(){
         //   그때 "서울 전체 1개 시군구"라고 쓰면 사실과 다르다. 광역 전체(7곳 이상)일 때만 전체라고 쓰고, 아니면 직장 위치 기준임을 밝힌다.
         const _wpV = String(document.getElementById('wp')?.value || '').trim();
         if (_wideOn && !_subOn && searchMeta.regions.length >= 7) h += `<div class="ld-wide">${_escHtml(_wideOn.textContent.trim())} 전체 ${searchMeta.regions.length}개 시군구를 분석했어요. 세부 구를 직접 고르면 그 지역만 분석해요</div>`;
-        else if (_wideOn && !_subOn && _wpV) h += `<div class="ld-wide">직장 위치(${_escHtml(_wpV.slice(0, 30))})가 있어서 그 지역만 분석했어요. ${_escHtml(_wideOn.textContent.trim())} 전체를 보려면 직장 위치를 비워 주세요</div>`;
+        else if (_wideOn && !_subOn && _wpV) h += `<div class="ld-wide">직장 위치(${_escHtml(_wpV.slice(0, 30))})가 있어서 그 지역만 분석했어요. ${_escHtml(_wideOn.textContent.trim())} 전체를 보려면 직장 위치를 비워 주세요 <button type="button" class="ld-wpbtn" onclick="_wpClearSearch()" style="margin-left:6px;padding:4px 10px;border:1px solid var(--bd);border-radius:var(--radius-sm);background:var(--bg-elev-1);color:var(--text-primary);font-size:12px;font-weight:600;cursor:pointer">직장 위치 빼고 ${_escHtml(_wideOn.textContent.trim())} 전체로 다시 찾기</button></div>`;
       } catch (_e) {}
     }
     return h;
@@ -13793,7 +13794,10 @@ function _popular12(force){
     .catch(e => { _pop12P = null; throw e; });
   return _pop12P;
 }
-let _hpData = null, _hpReq = null, _hpSido = '전국', _hpDataAt = 0;
+// HOME-SEOUL-1115 (운영자 "지도 첫 화면이 서울 권역이 표시된 지도면 좋겠어"): 처음 뜨는 지역은 서울 구별 보기다.
+//   전에는 전국 인기 12곳이 목록에 뜨고 지도는 서울이라, 목록(경기와 인천 단지)과 지도가 서로 다른 곳을 보였다(운영 크롬 실측 11-15).
+//   _hpAuto 는 사람이 지역을 고르기 전이라는 표시다. 그동안은 지난번에 보던 지도 위치(MAP-HOME-1114)를 덮어쓰지 않는다.
+let _hpData = null, _hpReq = null, _hpSido = '서울', _hpDataAt = 0, _hpAuto = true;
 function _hpSidoOf(p){ return _HP_SIDO[String((p && p.lawdCd) || '').slice(0,2)] || ''; }
 function _hpLoad(force){
   // HP-DEGRADED-RETRY-2026-10-18 (Plan 160): 대체 응답(degraded)을 세션 내내 붙잡아 장애가 끝나도 평균가·건수가 비어 있었다.
@@ -13837,7 +13841,11 @@ function _hpRender(){
       + `<button type="button" class="hp-chip hp-chip-more" aria-expanded="${_chOpen}" aria-controls="hpChips" onclick="_hpChipsMore(this)">${_chOpen ? '접기' : '더보기'}</button>`;
     if(typeof _hpChipsFit === 'function') _hpChipsFit();
   }
-  if(_HP_REG_SIDO[_hpSido]) { _hpRegShow(); return; }
+  if(_HP_REG_SIDO[_hpSido]) {
+    // 처음부터 지역 보기로 시작하면 아직 그 시도의 구별 자료가 없다. 없으면 여기서 부른다(받으면 _hpRegShow 가 다시 그린다).
+    _hpRegEnsure();
+    return;
+  }
   _hpRegChips(null);
   if(sub){
     const w = _hpData.window;
@@ -13952,13 +13960,15 @@ function _hpRegShow(){
   let html = '', markers = [];
   if(_hpReg === 'all'){
     const byDeals = groups.slice().sort((a, b) => (b.deals60d || 0) - (a.deals60d || 0));
-    html = `<div class="hp-msg">${_escHtml(d.sidoName || _hpSido)} ${groups.length}개 ${unit}마다 최근 60일 거래 많은 단지 ${_HP_REG_TOP}곳이에요. 거래가 많은 지역 순이에요.`
-      + (geoOk ? `<span class="hp-mx"> 지도의 색 구역이 ${unit}이고 구마다 1위 단지만 표시해요. 구역이나 아래 이름을 누르면 그 ${unit} 순위를 지도에 모두 보여 드려요.</span>` : '') + '</div>'
+    html = `<div class="hp-msg">${_escHtml(d.sidoName || _hpSido)} ${groups.length}개 ${unit}마다 최근 60일 동안 거래가 많았던 단지를 ${_HP_REG_TOP}곳씩 보여 드려요. 거래가 많은 ${unit}부터 나와요.`
+      + (geoOk ? `<span class="hp-mx"> 지도에서 색칠된 구역이 ${unit}이고 이름표는 그 ${unit}의 1위 단지예요. 구역이나 아래 ${unit} 이름을 누르면 10곳을 모두 볼 수 있어요.</span>` : '') + '</div>'
       + byDeals.map(g => `<div class="hp-gh">${_hpGuDot(_hpGuColor(sido, g.lawdCd))}${_escHtml(_hpRegShort(g.label))}<span class="n">60일 거래 ${Number(g.deals60d || 0).toLocaleString()}건</span>`
         + `<button type="button" onclick="_hpRegPick(${_jsonAttr(g.lawdCd)})">${(g.results || []).length}곳 모두 보기</button></div>`
         + (g.results || []).slice(0, _HP_REG_TOP).map((p, i) => _hpRegRow(p, i + 1)).join('')).join('') + attr;
     // 지도: 구마다 1위만(전 구 TOP5 를 찍으면 서울만 125개 — 겹침 정리로 숫자만 남아 무슨 뜻인지 알 수 없었다)
     groups.forEach(g => { const p = (g.results || [])[0]; if(p) markers.push(Object.assign({ _rank: 1, _gu: _hpRegShort(g.label), _col: _hpGuColor(sido, g.lawdCd) }, p)); });
+    // GU-LABEL-1115: 이름표는 구역 한가운데에 둔다(단지 위치가 아니다). 누르면 여는 단지와 그 좌표는 그대로다.
+    markers.forEach(m => { const c = _hpGuCenter(sido, m.lawdCd); if(c) m._at = c; });
   } else {
     const g = groups.find(x => x.lawdCd === _hpReg);
     const rows = (g && g.results) || [];
@@ -14002,6 +14012,7 @@ function _guRankOpen(sidoName, lawd){
   setTimeout(() => { try{ _hpPick(sidoName); _hpReg = String(lawd); _hpRegShow(); }catch(_){} }, 60);
 }
 function _hpRegPick(code){
+  _hpAuto = false;
   _hpReg = code; _hpRegShow();
   try{ const b = [...document.querySelectorAll('#hpChips2 .hp-chip')].find(x => x.getAttribute('aria-pressed') === 'true'); if(b){ b.focus({ preventScroll: true }); b.scrollIntoView({ block:'nearest', inline:'center' }); } }catch(_){}
 }
@@ -14009,7 +14020,7 @@ function _hpRegPick(code){
 function _hpRegLegend(text){
   const lg = document.getElementById('popLegend'); if(!lg) return;
   if(lg.dataset.origText === undefined){ lg.dataset.origText = lg.textContent; lg.dataset.origTitle = lg.title || ''; }
-  if(text === null){ lg.textContent = lg.dataset.origText; lg.title = lg.dataset.origTitle; return; }
+  if(text === null){ lg.textContent = lg.dataset.origText; lg.title = lg.dataset.origTitle; try{ _hpRegNote(null); }catch(_){} return; }
   lg.textContent = text; lg.title = `${text} · ${_HP_GEO_ATTR}`; lg.style.display = '';
 }
 function _hpRegPolysClear(){
@@ -14070,7 +14081,7 @@ function _hpRegMarkers(list, o){
     if(o.sido) _hpRegLegend(o.sel === 'all'
       ? (box ? `색 구역은 ${o.unit || '구'}예요 · 구마다 최근 60일 거래가 가장 많은 단지 1곳 · 구역을 누르면 그 ${o.unit || '구'} 순위` : `구마다 최근 60일 거래가 가장 많은 단지 1곳이에요`)
       : `${o.label || ''} 최근 60일 거래 많은 단지 · 숫자는 순위예요`);
-    const pts = list.filter(p => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)) && p.lat && p.lng);
+    const pts = list.filter(p => p._at || (Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)) && p.lat && p.lng));
     const isNaver = !!(mapObj._isNaver && window.naver && naver.maps);
     pts.forEach(p => {
       const nm = String(p.displayName || _dispAptName(p.aptName, p.umdNm) || '');
@@ -14079,33 +14090,82 @@ function _hpRegMarkers(list, o){
       const head = p._gu
         ? `${p._col ? `<span class="pop-gdot" style="background:${p._col}"></span>` : ''}<span class="pop-gu">${_escHtml(p._gu)}</span>`
         : `<span class="pop-rank">${p._rank}</span>`;
-      const html = `<div class="pop-marker${p._gu ? ' pop-guhead' : ''}" ondblclick='goSearchResult(${pj})'>${head}<span class="pop-nm">${_escHtml(nm.slice(0,12))}</span></div>`;
-      const title = p._gu ? `${p._gu} 1위 ${nm}` : `${p._rank}위 ${nm}`;
+      const html = `<div class="pop-marker${p._gu ? ' pop-guhead' : ''}${p._at ? ' pop-ctr' : ''}" ondblclick='goSearchResult(${pj})'>${head}<span class="pop-nm">${_escHtml(nm.slice(0,12))}</span></div>`;
+      const title = p._gu ? `${p._gu}에서 최근 60일 거래가 가장 많은 단지: ${nm}` : `${p._rank}위 ${nm}`;
+      const at = p._at || [Number(p.lat), Number(p.lng)];
       if(isNaver){
-        const ov = new naver.maps.Marker({ position: new naver.maps.LatLng(p.lat, p.lng), map: mapObj, title, zIndex: 100, icon: { content: html, anchor: new naver.maps.Point(0, 0) } });
+        const ov = new naver.maps.Marker({ position: new naver.maps.LatLng(at[0], at[1]), map: mapObj, title, zIndex: 100, icon: { content: html, anchor: new naver.maps.Point(0, 0) } });
         naver.maps.Event.addListener(ov, 'click', () => { if(_mapSheetTry('pop', p)) return; goSearchResult(arg); });
         ov._isNaver = true; window._popMarkers.push(ov);
       } else if(window.L){
-        const m = L.marker([p.lat, p.lng], { title, icon: L.divIcon({ className: '', html, iconAnchor: [0, 0] }) });
+        const m = L.marker(at, { title, icon: L.divIcon({ className: '', html, iconAnchor: [0, 0] }) });
         m.on('click', () => { if(!_mapSheetTry('pop', p)) goSearchResult(arg); });
         m.addTo(mapObj); window._popMarkers.push(m);
       }
     });
     // 맞추기: 색 구역이 있으면 그 범위(고른 구 / 시도 전체), 없으면 마커 범위
     const bb = box || (pts.length ? pts.reduce((b, p) => { const y = Number(p.lat), x = Number(p.lng); if(!b) return [[y, x], [y, x]]; b[0][0] = Math.min(b[0][0], y); b[0][1] = Math.min(b[0][1], x); b[1][0] = Math.max(b[1][0], y); b[1][1] = Math.max(b[1][1], x); return b; }, null) : null);
-    window._regFitBB = bb; window._regFitAt = Date.now();
-    _hpRegFit(bb);
+    // 처음 뜬 화면(사람이 지역을 고르기 전)이고 지난번에 보던 위치가 저장돼 있으면 지도를 옮기지 않는다
+    let _keep = false; try{ _keep = _hpAuto && !!_mapStartView().saved; }catch(_){}
+    if(!_keep){ window._regFitBB = bb; window._regFitAt = Date.now(); _hpRegFit(bb); }
+    try{ _hpRegNote(o); }catch(_){}
+    try{ _declutterHook(); }catch(_){}
     try{ scheduleDeclutter(); }catch(_){}
   }catch(_){}
+}
+// 지금 고른 시도의 구별 자료가 없으면 부르고(받으면 _hpRegShow 가 그린다), 있으면 바로 그린다
+function _hpRegEnsure(){
+  const c = _HP_REG_SIDO[_hpSido]; if(!c) return;
+  if(!_hpRegData[c] && !_hpRegReq[c]) _hpRegLoad(c); else _hpRegShow();
+}
+// GU-LABEL-1115: 구 이름표를 놓을 자리. 1위 단지의 위치에 두면 구 경계 근처로 몰려 서로 가렸다(운영 크롬 실측: 서울 25개 가운데
+//   이름까지 보인 것 5, 구 이름만 3, 숨은 것 17). 구역 한가운데(가장 큰 조각의 무게중심)에 두면 고르게 퍼진다. 경계를 못 받았으면 null.
+function _hpGuCenter(sido, lawd){
+  const g = _hpGeo[sido]; if(!g) return null;
+  const f = g.features.find(x => x.properties && x.properties.c === lawd); if(!f || !f.geometry) return null;
+  const parts = f.geometry.type === 'Polygon' ? [f.geometry.coordinates] : f.geometry.type === 'MultiPolygon' ? f.geometry.coordinates : [];
+  let best = null, bestA = 0;
+  parts.forEach(rings => {
+    const r = rings && rings[0]; if(!r || r.length < 3) return;
+    let a = 0, cx = 0, cy = 0;
+    for(let i = 0, j = r.length - 1; i < r.length; j = i++){
+      const k = r[j][0] * r[i][1] - r[i][0] * r[j][1];
+      a += k; cx += (r[j][0] + r[i][0]) * k; cy += (r[j][1] + r[i][1]) * k;
+    }
+    if(Math.abs(a) > bestA && a !== 0){ bestA = Math.abs(a); best = [cy / (3 * a), cx / (3 * a)]; }
+  });
+  return best && Number.isFinite(best[0]) && Number.isFinite(best[1]) ? best : null;
+}
+// MAP-NOTE-1115 (운영자 "무슨 의미로 이렇게 해놨는지 알 수 있으면 좋겠어"): 지역 보기 동안 지도 왼쪽 아래에 뜻을 한두 줄로 적는다.
+//   같은 설명이 왼쪽 목록 위에도 있지만 작은 회색 글씨라 지도만 보는 사람에게는 닿지 않았다. 좁은 화면은 목록 시트의 설명을 쓴다.
+function _hpRegNote(o){
+  const host = document.getElementById('mapEl'); if(!host) return;
+  let el = document.getElementById('regMapNote');
+  if(!o || !o.sido || window.innerWidth <= 700){ if(el) el.remove(); return; }
+  if(!el){
+    el = document.createElement('div'); el.id = 'regMapNote'; el.setAttribute('role', 'note');
+    el.style.cssText = 'position:absolute;left:12px;bottom:36px;z-index:900;max-width:330px;padding:9px 12px;border-radius:var(--radius-sm);background:var(--bg-elev-1);color:var(--text-primary);border:1px solid var(--bd);box-shadow:0 2px 8px rgba(0,0,0,.12);font-size:12px;line-height:1.55;pointer-events:none';
+    host.appendChild(el);
+  }
+  const unit = o.unit || '구';
+  el.textContent = o.sel === 'all'
+    ? `색칠된 구역이 ${unit}예요. 이름표는 그 ${unit}에서 최근 60일 동안 거래가 가장 많았던 단지예요. 구역을 누르면 그 ${unit}의 순위 10곳을 볼 수 있어요.`
+    : `${o.label || ''}에서 최근 60일 동안 거래가 많았던 단지예요. 숫자는 순위예요. 이름표를 누르면 단지 정보를 볼 수 있어요.`;
 }
 function _hpRegFit(bb){
   try{
     if(!bb || typeof mapObj === 'undefined' || !mapObj) return;
-    if(mapObj._isNaver && window.naver && naver.maps) mapObj.fitBounds(new naver.maps.LatLngBounds(new naver.maps.LatLng(bb[0][0], bb[0][1]), new naver.maps.LatLng(bb[1][0], bb[1][1])), { top: 30, right: 30, bottom: 30, left: 30 });
-    else if(window.L && mapObj.fitBounds) mapObj.fitBounds(L.latLngBounds(bb), { padding: [30, 30] });
+    // 첫 방문 화면이 떠 있는 동안에는 지도가 숨겨져 크기가 0 이다. 그때 맞추면 확대가 끝까지 들어간다(미리보기 실측: 확대 19).
+    //   지도가 보일 때(sv('map'))로 미룬다.
+    const _rc = (document.getElementById('mapEl') || {}).getBoundingClientRect ? document.getElementById('mapEl').getBoundingClientRect() : null;
+    if(!_rc || _rc.width < 50 || _rc.height < 50){ window._regFitPending = bb; return; }
+    window._regFitPending = null;
+    if(mapObj._isNaver && window.naver && naver.maps) mapObj.fitBounds(new naver.maps.LatLngBounds(new naver.maps.LatLng(bb[0][0], bb[0][1]), new naver.maps.LatLng(bb[1][0], bb[1][1])), { top: 6, right: 6, bottom: 6, left: 6 });
+    else if(window.L && mapObj.fitBounds) mapObj.fitBounds(L.latLngBounds(bb), { padding: [6, 6] });
   }catch(_){}
 }
 function _hpPick(s){
+  _hpAuto = false;
   const wasReg = !!_HP_REG_SIDO[_hpSido];
   _hpSido = s; _hpReg = 'all';
   if(_HP_REG_SIDO[s]) _hpRegLoad(_HP_REG_SIDO[s]);
@@ -14348,6 +14408,7 @@ function sv(v,btn){
     } catch(_){}
     // MAP-FIT-DEFER-2026-09-16 (Plan 082): 랜딩 중 보류된 인기 마커 맞춤을 지도가 보일 때 1회 수행.
     if (window._popFitPending && typeof window._fitPopularMetro === 'function') setTimeout(() => { try { window._fitPopularMetro(); } catch(_) {} }, 60);
+    if (window._regFitPending) setTimeout(() => { try { _hpRegFit(window._regFitPending); scheduleDeclutter(); } catch(_) {} }, 80); // HOME-SEOUL-1115: 숨겨진 동안 미뤄 둔 구역 맞춤
   }, 100);
   // Phase 5+ (2026-04-26): 보고서 탭에서는 #s3 (추천 단지 0건 — AI 단지 검색 기능 안내) hide — 보고서와 무관해서 노이즈
   const s3 = document.getElementById('s3');
@@ -15151,6 +15212,9 @@ async function loadPopularMarkers() {
     return;
   }
   _popularMarkersLoaded = true;
+  // HOME-SEOUL-1115: 지역 보기(처음 화면의 서울 포함) 중이면 전국 인기 마커 대신 그 지역의 구역과 이름표를 그린다.
+  //   지도가 늦게 뜬 경우(구별 자료가 먼저 도착) 여기서 한 번 더 그려 준다.
+  try { if (_HP_REG_SIDO[_hpSido]) { _hpRegEnsure(); return; } } catch(_) {}
   // GGGG-2: 사용자 지도 조작 감지 (DOM 레벨 — Naver/Leaflet 공통) → 자동 뷰 조정 차단 플래그
   try {
     const _me = document.getElementById('mapEl');
@@ -15291,23 +15355,7 @@ async function loadPopularMarkers() {
     //   Naver 는 'idle'(팬·줌 종료), Leaflet 은 moveend/zoomend. 리스너는 1회만 건다.
     try {
       scheduleDeclutter();
-      if (!window._declutterHooked) {
-        window._declutterHooked = true;
-        if (isNaver) {
-          naver.maps.Event.addListener(mapObj, 'idle', scheduleDeclutter);
-        } else if (mapObj.on) {
-          mapObj.on('moveend', scheduleDeclutter);
-          mapObj.on('zoomend', scheduleDeclutter);
-        }
-        window.addEventListener('resize', scheduleDeclutter, { passive: true });
-        // 모바일 실측: 마커는 **지도 탭이 숨겨진 동안**(랜딩 화면) 이미 생성된다 → 폭 0 이라
-        //   최초 declutter 가 아무것도 못 한다. 탭 전환으로 #mapEl 이 0→실측폭이 되는 순간을
-        //   ResizeObserver 로 잡는다(뷰 전환 함수 sv() 에 손대지 않아 결합도 0).
-        const _mapEl = document.getElementById('mapEl');
-        if (_mapEl && window.ResizeObserver) {
-          new ResizeObserver(scheduleDeclutter).observe(_mapEl);
-        }
-      }
+      _declutterHook();
     } catch(_) {}
   } catch(_) {
     _popularMarkersLoaded = false;
@@ -15328,6 +15376,27 @@ async function loadPopularMarkers() {
 //   ① 축약(pm-mini — 순위 뱃지만) → ② 그래도 겹치면 숨김(pm-hidden)하고 가린 쪽에 "+N".
 //   숨김은 은폐가 아니다 — "+N" 으로 존재를 알리고, 줌인하면 좌표가 벌어져 자동 복귀한다.
 // 같은 실측 스크립트 재측정 결과: 겹친 쌍 6 → **0**, 표시 10/12(전체라벨 7·축약 3), "+2" 1개.
+// 지도 이동, 확대, 크기 변화 때 이름표 겹침을 다시 정리하도록 한 번만 건다.
+//   HOME-SEOUL-1115: 전에는 전국 인기 마커를 그릴 때만 걸었다. 처음부터 지역 보기로 시작하면 걸리지 않아, 지도가 확대된 뒤에도
+//   줄어든 이름표가 그대로였다(미리보기 실측: 확대 11 에서 숨은 구 12개). 지역 이름표를 그릴 때도 부른다.
+function _declutterHook() {
+  try {
+    if (typeof mapObj === 'undefined' || !mapObj) return;
+    if (!window._declutterHooked) {
+      window._declutterHooked = true;
+      if (mapObj._isNaver && window.naver && naver.maps) naver.maps.Event.addListener(mapObj, 'idle', scheduleDeclutter);
+      else if (mapObj.on) { mapObj.on('moveend', scheduleDeclutter); mapObj.on('zoomend', scheduleDeclutter); }
+    }
+    if (!window._declutterWinHooked) {
+      window._declutterWinHooked = true;
+      window.addEventListener('resize', scheduleDeclutter, { passive: true });
+      // 모바일 실측: 마커는 지도 탭이 숨겨진 동안(첫 방문 화면) 이미 만들어진다. 폭이 0 이라 처음 정리가 아무것도 못 한다.
+      //   #mapEl 이 0 에서 실제 폭이 되는 순간을 ResizeObserver 로 잡는다.
+      const _mapEl = document.getElementById('mapEl');
+      if (_mapEl && window.ResizeObserver) new ResizeObserver(scheduleDeclutter).observe(_mapEl);
+    }
+  } catch (_) {}
+}
 function declutterPopMarkers() {
   try {
     const els = Array.prototype.slice.call(document.querySelectorAll('.pop-marker'));
@@ -15339,9 +15408,25 @@ function declutterPopMarkers() {
       .filter(o => o.e.getBoundingClientRect().width > 0)
       .sort((a, b) => a.rank - b.rank);
     const placed = [];
-    const findHit = (r) => placed.find(p =>
-      Math.min(p.r.right, r.right) - Math.max(p.r.left, r.left) > 0 &&
-      Math.min(p.r.bottom, r.bottom) - Math.max(p.r.top, r.top) > 0);
+    const _ov = (a, b) => Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0 && Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top) > 0;
+    const findHit = (r) => placed.find(p => _ov(p.r, r));
+    // GU-LABEL-1115: 구 이름표(시도 전체 보기)는 순서를 바꾼다. 먼저 모두 구 이름만으로 줄여 놓아 구가 최대한 많이 보이게 하고,
+    //   그다음 자리가 남는 곳만 단지 이름까지 편다. 전에는 먼저 놓인 긴 이름표가 뒤의 구를 통째로 가렸다(운영 실측: 25개 중 17개 숨음).
+    if (items.length && items.every(o => o.e.classList.contains('pop-guhead'))) {
+      items.forEach(o => o.e.classList.add('pm-mini'));
+      for (const o of items) {
+        const r = o.e.getBoundingClientRect();
+        const hit = findHit(r);
+        if (hit) { o.e.classList.add('pm-hidden'); hit.more = (hit.more || 0) + 1; hit.el.setAttribute('data-more', String(hit.more)); continue; }
+        placed.push({ r, el: o.e, more: 0 });
+      }
+      for (const p of placed) {
+        p.el.classList.remove('pm-mini');
+        const r = p.el.getBoundingClientRect();
+        if (placed.some(q => q !== p && _ov(q.r, r))) p.el.classList.add('pm-mini'); else p.r = r;
+      }
+      return;
+    }
     for (const o of items) {
       let r = o.e.getBoundingClientRect();
       if (findHit(r)) { o.e.classList.add('pm-mini'); r = o.e.getBoundingClientRect(); }
@@ -15472,6 +15557,27 @@ async function onHeaderSearchInput(q) {
     }
   }, 250); // 250ms debounce
 }
+// WP-CLEAR-1115 (운영 크롬 실측): 직장 위치 칸에 예전 값이 남아 있으면 "서울 9억"이 0건이었고(비우면 806건), 그 칸은 접힌 구역 안이라
+//   안내대로 비우기가 어려웠다. 안내 옆 단추 하나로 비우고 다시 찾는다. 직장 위치로 지역을 좁히는 규칙 자체는 그대로다(운영자 방침 사항).
+function _wpClearSearch(){
+  try{ const e = document.getElementById('wp'); if(e){ e.value = ''; e.dispatchEvent(new window.Event('input', { bubbles: true })); } }catch(_){}
+  try{ localStorage.removeItem('mhl_search_wp'); }catch(_){}
+  try{ doSearch(); }catch(_){}
+}
+// SEARCH-DROP-CLOSE-1115 (운영 크롬 실측): 검색 목록에서 Enter 로 단지를 연 뒤 상세를 닫으면 포커스가 검색창으로 돌아오면서 같은 목록이
+//   다시 떴고, 바깥을 누르거나 Esc 를 눌러도 닫히지 않은 채 다른 화면(대출 계산 입력 칸 위)까지 따라왔다. 같은 요청도 한 번 더 나갔다.
+//   고른 이름 그대로 포커스가 돌아온 경우는 다시 묻지 않고, 목록 바깥을 누르거나 Esc 를 누르면 어디서든 닫는다.
+function _hSearchRefocus(el){ if(el && el.value && el.value !== window._hSearchChosen) onHeaderSearchInput(el.value); }
+document.addEventListener('pointerdown', (e) => {
+  const d = document.getElementById('hSearchDrop'); if(!d || d.style.display === 'none') return;
+  const t = e.target;
+  if(t && t.closest && (t.closest('#hSearchDrop') || t.id === 'hSearchInput')) return;
+  d.style.display = 'none';
+}, true);
+document.addEventListener('keydown', (e) => {
+  if(e.key !== 'Escape') return;
+  const d = document.getElementById('hSearchDrop'); if(d && d.style.display !== 'none') d.style.display = 'none';
+}, true);
 function onHeaderSearchKey(e) {
   if (e.key === 'Escape') { document.getElementById('hSearchDrop').style.display='none'; e.target.blur(); }
   // SEARCH-FOCUS-2026-07-12 (운영자 요청): ENTER 시 첫 검색결과 선택 → 지도 이동+상세.
@@ -15507,6 +15613,7 @@ async function goSearchResult(r) {
   if (drop) drop.style.display='none';
   const input = document.getElementById('hSearchInput');
   if (input) input.value = r.aptName;
+  window._hSearchChosen = r.aptName; // SEARCH-DROP-CLOSE-1115: 이 이름 그대로 포커스가 돌아오면 목록을 다시 띄우지 않는다
   focusMapOnApt(r); // SEARCH-FOCUS-2026-07-12 (운영자 요청): 검색 단지로 지도 이동+핀 (상세 모달과 병행)
   return openAptDetail(r);
 }

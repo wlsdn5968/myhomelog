@@ -48,6 +48,9 @@ function runRender(data, sido) {
     `let _hpData = null, _hpSido = '전국';`,
     // REGION-TOP10-2026-10-21: 서울·경기는 지역 목록(_hpRegShow)으로 넘긴다 — 여기서는 넘겼는지만 본다
     extractConst(html, '_HP_REG_SIDO'), `let _hpReg = 'all'; globalThis.__regShown = 0; function _hpRegShow(){ globalThis.__regShown++; }`,
+    // HOME-SEOUL-1115: 패널은 _hpRegEnsure 를 거친다(자료가 있으면 바로 _hpRegShow). 여기서는 자료가 이미 있는 것으로 둔다
+    `const _hpRegData = new Proxy({}, { get: () => ({ groups: [] }) }), _hpRegReq = {}; function _hpRegLoad(){}`,
+    extractFn(html, '_hpRegEnsure'),
     extractFn(html, '_hpRegChips'), extractFn(html, '_hpRegShort'),
     'const UNNAMED_RE = /^\\(?\\s*\\d+(?:-\\d+)?\\s*\\)?$/;',
     'const JIBUN_SUFFIX_RE = /\\s*\\(\\s*(\\d+(?:-\\d+)?)\\s*\\)\\s*$/;',
