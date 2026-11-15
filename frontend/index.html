@@ -7195,6 +7195,7 @@ function loadNaverMap(clientId){
     try {
       mapObj = null; window._popMarkers = []; _popularMarkersLoaded = false;
       window._popMarkersRetry = 0; window._declutterHooked = false;
+      window._regFitKey = null; // 대체 지도는 새 지도다. 지역 범위 맞춤을 다시 한다
       setTimeout(() => { try { loadPopularMarkers(); } catch (_) {} }, 0);
     } catch (_) {}
     loadLeaflet();
@@ -7599,6 +7600,9 @@ function renderMarkers(data){
   (window._popMarkers||[]).forEach(o=>{ try{ if(o._isNaver)o.setMap&&o.setMap(null); else o.remove&&o.remove(); }catch(_){} });
   window._popMarkers=[];
   try{ _hpRegPolysClear(); _hpRegLegend(null); }catch(_){} // REGION-SHADE-2026-10-21: 구 색 구역도 함께 걷는다
+  // HOME-SEOUL-1115 (독립 검토): 검색 결과가 지도에 있는 동안 늦게 도착한 구별 자료가 구역과 이름표를 다시 깔고 서울로 되돌리지 않게 한다.
+  //   사람이 지역 칩이나 구를 고르거나 인기 단지로 되돌리면 풀린다.
+  window._hpRegOff = true; window._regFitPending = null;
   const _plg=document.getElementById('popLegend'); if(_plg)_plg.style.display='none'; // GGGG: 인기 범례도 함께 숨김
   const _ptc2=document.getElementById('popTitleCard'); if(_ptc2)_ptc2.style.display='none'; // MMMM: 타이틀 카드도
   const _fg=document.getElementById('fltGroup'); if(_fg)_fg.style.display=''; // Sprint PPPPP: 검색 결과가 생겼으니 필터 칩 노출
@@ -7692,6 +7696,7 @@ function showPop(btn){
   // REGION-TOP10-2026-10-21: 지역(서울·경기) 보기 중이었다면 패널도 전국으로 되돌린다(지도와 목록이 같은 것을 보이게)
   try{ if(_HP_REG_SIDO[_hpSido]){ _hpSido = '전국'; _hpReg = 'all'; _hpRender(); } }catch(_){}
   try{ _hpRegPolysClear(); _hpRegLegend(null); }catch(_){} // REGION-SHADE-2026-10-21
+  window._hpRegOff = false;
   loadPopularMarkers();
 }
 
@@ -13814,11 +13819,13 @@ function _hpLoad(force){
       if(!(Array.isArray(_hpData.results) && _hpData.results.length)){
         _hpData = null;
         const el = document.getElementById('hpList');
-        if(el) el.innerHTML = '<div class="hp-msg">지금 보여 드릴 단지가 없어요. <button type="button" onclick="_hpLoad(true)">다시 불러오기</button></div>';
+        if(el && !_HP_REG_SIDO[_hpSido]) el.innerHTML = '<div class="hp-msg">지금 보여 드릴 단지가 없어요. <button type="button" onclick="_hpLoad(true)">다시 불러오기</button></div>';
       }
     })
     .catch(() => {
       if(!force && _hpData && _hpData.degraded){ _hpDataAt = Date.now(); return; }
+      // 독립 검토: 지역 보기 중이면 전국 목록이 실패해도 지역 목록을 덮지 않고, 시도 칩 줄만 빈 자료로 그려 둔다
+      if(_HP_REG_SIDO[_hpSido]){ _hpData = { results: [] }; try{ _hpRender(); }catch(_){} _hpData = null; return; }
       _hpData = null;
       const el = document.getElementById('hpList');
       if(el) el.innerHTML = '<div class="hp-msg">목록을 불러오지 못했어요. <button type="button" onclick="_hpLoad(true)">다시 불러오기</button></div>';
@@ -13889,7 +13896,11 @@ function _hpRegLoad(sido){
   const list = document.getElementById('hpList');
   if(list) list.innerHTML = '<div class="hp-msg">구별 목록을 불러오는 중이에요</div>';
   _hpRegReq[sido] = _regPopJson(sido, 30000)
-    .then(j => { if(j && Array.isArray(j.groups) && j.groups.length) _hpRegData[sido] = j; })
+    .then(j => {
+      if(j && Array.isArray(j.groups) && j.groups.length) _hpRegData[sido] = j;
+      // 서버가 시간에 걸려 일부 구만 준 응답은 5분 뒤 버려 다음에 다시 묻는다(서버도 5분만 기억한다)
+      if(j && j.timedOut) setTimeout(() => { if(_hpRegData[sido] === j) delete _hpRegData[sido]; }, 300000);
+    })
     .catch(() => {})
     .finally(() => { _hpRegReq[sido] = null; if(_HP_REG_SIDO[_hpSido] === sido) _hpRegShow(); });
 }
@@ -13943,6 +13954,8 @@ function _hpRegShow(){
   const d = _hpRegData[sido];
   if(!d){
     _hpRegChips(null);
+    // 독립 검토: 처음 화면(사람이 고르기 전)에서 구별 자료를 못 받으면 빈 지도만 남았다. 전처럼 전국 인기 단지로 되돌린다.
+    if(!_hpRegReq[sido] && _hpAuto){ _hpSido = '전국'; _hpReg = 'all'; _popularMarkersLoaded = false; window._popMarkersRetry = 0; _hpRender(); try{ loadPopularMarkers(); }catch(_){} return; }
     if(!_hpRegReq[sido]) list.innerHTML = '<div class="hp-msg">구별 목록을 불러오지 못했어요. <button type="button" onclick="_hpRegLoad(' + _jsonAttr(sido) + ')">다시 불러오기</button></div>';
     return;
   }
@@ -14012,7 +14025,7 @@ function _guRankOpen(sidoName, lawd){
   setTimeout(() => { try{ _hpPick(sidoName); _hpReg = String(lawd); _hpRegShow(); }catch(_){} }, 60);
 }
 function _hpRegPick(code){
-  _hpAuto = false;
+  _hpAuto = false; window._hpRegOff = false; window._regFitKey = null;
   _hpReg = code; _hpRegShow();
   try{ const b = [...document.querySelectorAll('#hpChips2 .hp-chip')].find(x => x.getAttribute('aria-pressed') === 'true'); if(b){ b.focus({ preventScroll: true }); b.scrollIntoView({ block:'nearest', inline:'center' }); } }catch(_){}
 }
@@ -14074,6 +14087,7 @@ function _hpRegMarkers(list, o){
   o = o || {};
   try{
     if(typeof mapObj === 'undefined' || !mapObj) return;
+    if(window._hpRegOff) return; // 검색 결과가 지도에 있는 동안은 그리지 않는다
     (window._popMarkers || []).forEach(m => { try{ if(m._isNaver) m.setMap && m.setMap(null); else m.remove && m.remove(); }catch(_){} });
     window._popMarkers = [];
     _popularMarkersLoaded = true; // 지역 보기 동안 전국 인기 마커가 다시 얹히지 않게(전국 칩·인기 단지 다시 보기에서 풀린다)
@@ -14107,7 +14121,11 @@ function _hpRegMarkers(list, o){
     const bb = box || (pts.length ? pts.reduce((b, p) => { const y = Number(p.lat), x = Number(p.lng); if(!b) return [[y, x], [y, x]]; b[0][0] = Math.min(b[0][0], y); b[0][1] = Math.min(b[0][1], x); b[1][0] = Math.max(b[1][0], y); b[1][1] = Math.max(b[1][1], x); return b; }, null) : null);
     // 처음 뜬 화면(사람이 지역을 고르기 전)이고 지난번에 보던 위치가 저장돼 있으면 지도를 옮기지 않는다
     let _keep = false; try{ _keep = _hpAuto && !!_mapStartView().saved; }catch(_){}
-    if(!_keep){ window._regFitBB = bb; window._regFitAt = Date.now(); _hpRegFit(bb); }
+    // 독립 검토: 이 함수는 구별 자료 도착, 경계 도착, 전국 목록 도착 때마다 불린다. 같은 지역은 한 번만 맞춘다(경계가 뒤늦게 오면 한 번 더).
+    //   처음 뜬 화면에서 사람이 이미 지도를 움직였으면 맞추지 않는다. 그러지 않으면 나중에 도착한 자료가 지도를 서울로 다시 튀게 한다.
+    const _fk = `${o.sido || ''}|${o.sel || ''}|${box ? 1 : 0}`;
+    if(_hpAuto && window._mapUserMoved) _keep = true;
+    if(!_keep && window._regFitKey !== _fk){ window._regFitKey = _fk; window._regFitBB = bb; window._regFitAt = Date.now(); _hpRegFit(bb); }
     try{ _hpRegNote(o); }catch(_){}
     try{ _declutterHook(); }catch(_){}
     try{ scheduleDeclutter(); }catch(_){}
@@ -14165,7 +14183,7 @@ function _hpRegFit(bb){
   }catch(_){}
 }
 function _hpPick(s){
-  _hpAuto = false;
+  _hpAuto = false; window._hpRegOff = false; window._regFitKey = null;
   const wasReg = !!_HP_REG_SIDO[_hpSido];
   _hpSido = s; _hpReg = 'all';
   if(_HP_REG_SIDO[s]) _hpRegLoad(_HP_REG_SIDO[s]);
@@ -14408,7 +14426,7 @@ function sv(v,btn){
     } catch(_){}
     // MAP-FIT-DEFER-2026-09-16 (Plan 082): 랜딩 중 보류된 인기 마커 맞춤을 지도가 보일 때 1회 수행.
     if (window._popFitPending && typeof window._fitPopularMetro === 'function') setTimeout(() => { try { window._fitPopularMetro(); } catch(_) {} }, 60);
-    if (window._regFitPending) setTimeout(() => { try { _hpRegFit(window._regFitPending); scheduleDeclutter(); } catch(_) {} }, 80); // HOME-SEOUL-1115: 숨겨진 동안 미뤄 둔 구역 맞춤
+    if (window._regFitPending) setTimeout(() => { try { if (window._regFitPending && !window._hpRegOff && _HP_REG_SIDO[_hpSido]) { _hpRegFit(window._regFitPending); scheduleDeclutter(); } } catch(_) {} }, 80); // HOME-SEOUL-1115: 숨겨진 동안 미뤄 둔 구역 맞춤
   }, 100);
   // Phase 5+ (2026-04-26): 보고서 탭에서는 #s3 (추천 단지 0건 — AI 단지 검색 기능 안내) hide — 보고서와 무관해서 노이즈
   const s3 = document.getElementById('s3');
@@ -15623,6 +15641,7 @@ async function goSearchResult(r) {
 //   상세 모달(openAptDetail)과 병행 — 모달 닫으면 지도가 그 단지에 있음. 좌표 못 구하면 조용히 skip.
 async function focusMapOnApt(r) {
   try {
+    window._regFitPending = null; // HOME-SEOUL-1115 (독립 검토): 단지로 옮기는 중이면 미뤄 둔 서울 범위 맞춤을 버린다(첫 방문 화면에서 기록 행을 누른 경우)
     if (typeof sv === 'function') { try { sv('map'); } catch(_){} } // 지도 뷰 전환(모달 닫으면 보이도록)
     if (typeof mapObj === 'undefined' || !mapObj) return;
     let lat = (r && r.lat != null) ? Number(r.lat) : null;

@@ -44,9 +44,6 @@ test('첫 화면: 처음 뜨는 지역은 서울이고, 구별 자료가 없으�
 test('첫 화면: 사람이 지역을 고르기 전이고 지난번 위치가 저장돼 있으면 지도를 옮기지 않는다. 고르면 그때부터 옮긴다', () => {
   const src = fnSrc('_hpRegMarkers');
   assert.match(src, /let _keep = false; try\{ _keep = _hpAuto && !!_mapStartView\(\)\.saved; \}catch\(_\)\{\}/);
-  assert.match(src, /if\(!_keep\)\{ window\._regFitBB = bb; window\._regFitAt = Date\.now\(\); _hpRegFit\(bb\); \}/);
-  assert.match(fnSrc('_hpPick'), /^function _hpPick\(s\)\{\r?\n\s*_hpAuto = false;/);
-  assert.match(fnSrc('_hpRegPick'), /^function _hpRegPick\(code\)\{\r?\n\s*_hpAuto = false;/);
 });
 
 test('첫 화면: 지도가 숨겨져 크기가 0 일 때는 범위 맞춤을 미루고, 지도가 보일 때 한다', () => {
@@ -64,7 +61,6 @@ test('첫 화면: 지도가 숨겨져 크기가 0 일 때는 범위 맞춤을 �
   env.rect = { width: 1020, height: 512 };
   fit(bb);
   assert.equal(calls.length, 1); assert.equal(env.window._regFitPending, null);
-  assert.match(fnSrc('sv'), /if \(window\._regFitPending\) setTimeout\(\(\) => \{ try \{ _hpRegFit\(window\._regFitPending\); scheduleDeclutter\(\); \} catch\(_\) \{\} \}, 80\);/);
 });
 
 test('구 이름표: 놓는 자리는 구역 가장 큰 조각의 무게중심이고, 경계가 없으면 null', () => {
@@ -186,4 +182,45 @@ test('목록: 직장 위치 때문에 좁혀진 안내 옆에 비우고 다시 �
   };
   new Function('env', `with(env){ ${fnSrc('_wpClearSearch')}; _wpClearSearch(); }`)(env);
   assert.deepEqual(log, ['input', 'rm:mhl_search_wp', 'search:']);
+});
+
+// ── 독립 검토 반영 ───────────────────────────────────────────────
+test('독립 검토: 검색 결과가 지도에 있는 동안은 지역을 다시 그리지 않고, 지역이나 구를 고르면 풀린다', () => {
+  assert.match(fnSrc('renderMarkers'), /window\._hpRegOff = true; window\._regFitPending = null;/);
+  assert.match(fnSrc('_hpRegMarkers'), /if\(window\._hpRegOff\) return;/);
+  assert.match(fnSrc('_hpPick'), /_hpAuto = false; window\._hpRegOff = false; window\._regFitKey = null;/);
+  assert.match(fnSrc('_hpRegPick'), /_hpAuto = false; window\._hpRegOff = false; window\._regFitKey = null;/);
+});
+
+test('독립 검토: 같은 지역은 한 번만 맞추고, 처음 화면에서 사람이 지도를 움직였으면 맞추지 않는다. 단지로 옮길 때는 미뤄 둔 맞춤을 버린다', () => {
+  const src = fnSrc('_hpRegMarkers');
+  assert.match(src, /if\(_hpAuto && window\._mapUserMoved\) _keep = true;/);
+  assert.match(src, /if\(!_keep && window\._regFitKey !== _fk\)\{ window\._regFitKey = _fk;/);
+  assert.match(fnSrc('focusMapOnApt'), /window\._regFitPending = null;[^\n]*\r?\n\s*if \(typeof sv === 'function'\)/);
+  assert.match(fnSrc('sv'), /if \(window\._regFitPending && !window\._hpRegOff && _HP_REG_SIDO\[_hpSido\]\) \{ _hpRegFit\(window\._regFitPending\);/);
+});
+
+test('독립 검토: 처음 화면에서 구별 자료를 못 받으면 전국 인기 단지로 되돌리고, 사람이 고른 뒤에는 다시 불러오기 안내를 보인다', () => {
+  const mk = (auto) => {
+    const log = []; const list = { innerHTML: '' };
+    const env = {
+      _HP_REG_SIDO: { 서울: '11' }, _hpSido: '서울', _hpReg: 'all', _hpAuto: auto, _hpRegData: {}, _hpRegReq: {}, _popularMarkersLoaded: true,
+      window: {}, document: { getElementById: (id) => (id === 'hpList' ? list : null) },
+      _hpGeoLoad: () => {}, _hpRegChips: () => {}, _jsonAttr: (v) => JSON.stringify(v),
+      _hpRender: () => log.push('render:' + env._hpSido), loadPopularMarkers: () => log.push('pop'),
+    };
+    new Function('env', `with(env){ ${fnSrc('_hpRegShow')}; _hpRegShow(); }`)(env);
+    return { log, list, env };
+  };
+  const a = mk(true);
+  assert.deepEqual(a.log, ['render:전국', 'pop']); assert.equal(a.env._popularMarkersLoaded, false); assert.equal(a.list.innerHTML, '');
+  const b = mk(false);
+  assert.deepEqual(b.log, []); assert.match(b.list.innerHTML, /구별 목록을 불러오지 못했어요/); assert.equal(b.env._hpSido, '서울');
+});
+
+test('독립 검토: 전국 목록 요청의 실패나 빈 응답이 지역 목록을 덮지 않고, 덜 끝난 구별 응답은 5분 뒤 버린다', () => {
+  const src = fnSrc('_hpLoad');
+  assert.match(src, /if\(el && !_HP_REG_SIDO\[_hpSido\]\) el\.innerHTML = '<div class="hp-msg">지금 보여 드릴 단지가 없어요\./);
+  assert.match(src, /if\(_HP_REG_SIDO\[_hpSido\]\)\{ _hpData = \{ results: \[\] \}; try\{ _hpRender\(\); \}catch\(_\)\{\} _hpData = null; return; \}/);
+  assert.match(fnSrc('_hpRegLoad'), /if\(j && j\.timedOut\) setTimeout\(\(\) => \{ if\(_hpRegData\[sido\] === j\) delete _hpRegData\[sido\]; \}, 300000\);/);
 });
