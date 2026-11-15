@@ -152,6 +152,7 @@ async function markNewHighs(admin, rows, subs, aliasMap) {
   return { checked: cands.length, marked };
 }
 
+const SEND_BUDGET_MS = 240000; // 함수 한도 300초에서 마무리 여유 60초
 async function run() {
   const admin = dbClient();
   if (!admin) return { skipped: 'DB 미설정' };
@@ -164,6 +165,10 @@ async function run() {
   }
 
   const now = Date.now();
+  // PUSH-BUDGET-1115: 발송은 구독자마다 차례로 기다린다(건당 최대 10초). 전체 시간 상한이 없어 구독이 늘면 함수 한도 300초를 채울 수 있었다.
+  //   SEND_BUDGET_MS 를 넘으면 남은 구독은 이번 회차에 보내지 않는다. 처리 표시(last_notified_at)를 남기지 않으므로 다음 회차가 이어서 보낸다.
+  let budgetHit = false;
+  const overBudget = () => { if (Date.now() - now > SEND_BUDGET_MS) budgetHit = true; return budgetHit; };
   // CRON-MISS-2026-08-17 (Sprint MMMMMMM-24): 바닥을 48h → 72h.
   //   [근거] Vercel 공식 문서: cron 전달은 **best effort** 라 회차가 통째로 누락될 수 있고
   //     (그때 런타임 로그도 안 남는다) 실패해도 재시도하지 않는다. 즉 누락은 예외가 아니라 정상 범위다.
@@ -236,6 +241,7 @@ async function run() {
   let targetHits = 0; // TARGET-NOTIFY-2026-10-19: 목표가 도달 알림이 포함된 발송 수(웹푸시+카카오)
   if (webpush) {
     for (const s of push.rows) {
+      if (overBudget()) break;
       pushProcessed.push(s.id);
       const entries = matchItems(Array.isArray(s.items) ? s.items : [], rows, aliasMap, sinceOf(s));
       if (!entries.length) continue;
@@ -267,6 +273,7 @@ async function run() {
   let kakaoSent = 0, kakaoFailed = 0, kakaoRemoved = 0, kakaoRefreshed = 0;
   const kakaoProcessed = [];
   for (const t of kakao.rows) {
+    if (overBudget()) break;
     kakaoProcessed.push(t.user_id);
     const entries = matchItems(Array.isArray(t.items) ? t.items : [], rows, aliasMap, sinceOf(t));
     if (!entries.length) continue;
@@ -315,7 +322,7 @@ async function run() {
   }
 
   const stats = {
-    lawds: lawds.length, txScanned: rows.length,
+    lawds: lawds.length, txScanned: rows.length, budgetHit,
     subs: push.rows.length, sent, removed, failed, targetHits, recordChecked: recordCheck.checked, recordMarked: recordCheck.marked,
     webGate: webpush ? 'on' : (push.rows.length ? 'off(VAPID/pkg)' : 'off'),
     kakaoSubs: kakao.rows.length, kakaoSent, kakaoFailed, kakaoRemoved, kakaoRefreshed,
@@ -326,6 +333,7 @@ async function run() {
 }
 
 module.exports = { run };
+module.exports.SEND_BUDGET_MS = SEND_BUDGET_MS;
 module.exports._notifyUrl = notifyUrl;
 module.exports._loadRows = loadRows;
 module.exports._matchItems = matchItems;

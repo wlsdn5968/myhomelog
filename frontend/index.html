@@ -4793,13 +4793,24 @@ async function _loadLandingRecords(){
   } catch(_){}
   if (box) box.innerHTML = '<div class="lv-msg">불러오지 못했어요. <button type="button" onclick="_loadLandingRecords()">다시 불러오기</button></div>';
 }
+// REGPOP-SHARE-1115: 구별 순위(/search/popular-region)를 첫 화면, 지도 패널, 단지 상세 세 곳이 따로 불렀다.
+//   받은 응답과 진행 중인 요청을 한 곳에서 나눠 써 같은 시도는 한 번만 묻는다. 빈 응답은 기억하지 않는다(다음에 다시 묻는다).
+function _regPopJson(sido, timeoutMs){
+  const st = (window._regPopSt = window._regPopSt || { data: {}, req: {} });
+  if(st.data[sido]) return Promise.resolve(st.data[sido]);
+  if(st.req[sido]) return st.req[sido];
+  st.req[sido] = fetch(`${CFG.api}/search/popular-region?sido=${sido}`, { signal: AbortSignal.timeout(timeoutMs || 15000) })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)))
+    .then(j => { if(j && Array.isArray(j.groups) && j.groups.length) st.data[sido] = j; return j; })
+    .finally(() => { st.req[sido] = null; });
+  return st.req[sido];
+}
 async function _loadLandingRegions(){
   const box = document.getElementById('lvRegList'); if (!box) return;
   box.innerHTML = '<div class="lv-msg">불러오는 중이에요</div>';
   try {
-    const r = await fetch(`${CFG.api}/search/popular-region?sido=11`, { signal: AbortSignal.timeout(15000) });
-    if (r.ok) {
-      const d = await r.json();
+    const d = await _regPopJson('11', 15000).catch(() => null);
+    if (d) {
       const groups = (Array.isArray(d && d.groups) ? d.groups : []).filter(g => g && (g.results || []).length).sort((a, b) => (b.deals60d || 0) - (a.deals60d || 0)).slice(0, 4);
       if (groups.length) {
         box.innerHTML = groups.map(g => {
@@ -7500,7 +7511,7 @@ async function _niwRecentFill(id, p, tries){
   const key = `${p.lawdCd}|${p.aptName}|${umd}`;
   try{
     let items = _niwRcCache.get(key);
-    if(!items){ items = await fetchRecentTx(String(p.lawdCd), p.aptName, umd); _niwRcCache.set(key, items); }
+    if(!items){ items = await fetchRecentTx(String(p.lawdCd), p.aptName, umd); _niwRcCache.set(key, items); if(_niwRcCache.size > 200) _niwRcCache.delete(_niwRcCache.keys().next().value); } // NIW-CAP-1115: 상한이 없어 마커를 열 때마다 쌓였다
     const rows = (Array.isArray(items) ? items : []).filter(t => Number(t.dealAmount) > 0).slice(0, 3);
     if(!document.getElementById(id)) return;
     if(!rows.length){ el.remove(); return; }
@@ -13045,12 +13056,11 @@ function _a11yEnhance(root){
 }
 (function(){
   try{
-    let queued = false;
-    const run = () => { queued = false; _a11yEnhance(document); };
-    const schedule = () => { if(queued) return; queued = true; (window.requestAnimationFrame || setTimeout)(run, 50); };
     const start = () => {
       _a11yEnhance(document);
-      try{ new MutationObserver(schedule).observe(document.body, { childList: true, subtree: true }); }catch(_){}
+      // A11Y-ONE-OBSERVER-1115: body 전체 감시가 둘이었다(여기와 아래 _enhanceA11y 쪽). 여기 것은 변화가 있는 프레임마다
+      //   문서 전체에서 선택자 10개를 찾았다(미리보기 실측 한 번에 0.49ms, 요소 2,402개). 지도를 움직이면 지도 요소가 계속 바뀐다.
+      //   감시는 아래 하나만 두고, 변화가 200ms 멎은 뒤 두 함수를 함께 부른다.
     };
     if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start); else start();
     document.addEventListener('keydown', (e) => {
@@ -13863,8 +13873,7 @@ function _hpRegLoad(sido){
   if(_hpRegData[sido] || _hpRegReq[sido]) return;
   const list = document.getElementById('hpList');
   if(list) list.innerHTML = '<div class="hp-msg">구별 목록을 불러오는 중이에요</div>';
-  _hpRegReq[sido] = fetch(`${CFG.api}/search/popular-region?sido=${sido}`, { signal: AbortSignal.timeout(30000) })
-    .then(r => r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)))
+  _hpRegReq[sido] = _regPopJson(sido, 30000)
     .then(j => { if(j && Array.isArray(j.groups) && j.groups.length) _hpRegData[sido] = j; })
     .catch(() => {})
     .finally(() => { _hpRegReq[sido] = null; if(_HP_REG_SIDO[_hpSido] === sido) _hpRegShow(); });
@@ -13964,9 +13973,7 @@ async function _fillGuRank(p){
   if(!/^\d{5}$/.test(lawd) || !sidoName) return;
   try{
     if(!_hpRegData[sido]){
-      const r = await fetch(`${CFG.api}/search/popular-region?sido=${sido}`, { signal: AbortSignal.timeout(15000) });
-      if(!r.ok) return;
-      const j = await r.json();
+      const j = await _regPopJson(sido, 15000).catch(() => null);
       if(!(j && Array.isArray(j.groups) && j.groups.length)) return;
       _hpRegData[sido] = j;
     }
@@ -14990,7 +14997,7 @@ window.addEventListener('DOMContentLoaded', () => setTimeout(_enhanceA11y, 100))
 })();
 // MutationObserver — chip 동적 추가 감지 (검색 결과·세부구·플랜 목록 등)
 if (window.MutationObserver) {
-  const _mo = new MutationObserver(() => clearTimeout(window._a11yT) || (window._a11yT = setTimeout(_enhanceA11y, 200)));
+  const _mo = new MutationObserver(() => clearTimeout(window._a11yT) || (window._a11yT = setTimeout(() => { _enhanceA11y(); try{ _a11yEnhance(document); }catch(_){} }, 200)));
   window.addEventListener('DOMContentLoaded', () => _mo.observe(document.body, { childList: true, subtree: true }));
 }
 

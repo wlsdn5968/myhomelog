@@ -178,7 +178,11 @@ function _authBlocked(req) {
 function _authFailed(req) {
   const k = _failKey(req); const now = Date.now(); const w = _authFail.get(k);
   if (!w || now - w.start >= AUTH_FAIL_WIN_MS) _authFail.set(k, { start: now, n: 1 }); else w.n += 1;
-  if (_authFail.size > 5000) { for (const [kk, ww] of _authFail) if (now - ww.start >= AUTH_FAIL_WIN_MS) _authFail.delete(kk); }
+  if (_authFail.size > 5000) {
+    for (const [kk, ww] of _authFail) if (now - ww.start >= AUTH_FAIL_WIN_MS) _authFail.delete(kk);
+    // MAP-CAP-1115: 만료분만 지우면 창 안의 새 IP 가 5000 을 넘을 때 요청마다 전체를 훑고도 줄지 않았다. 오래된 것부터 4000 까지 줄인다.
+    for (const kk of _authFail.keys()) { if (_authFail.size <= 4000) break; _authFail.delete(kk); }
+  }
 }
 // 이미 성공해 기억된 토큰은 실패 수와 상관없이 통과시킨다(같은 IP 의 정상 사용자 보호).
 // 독립 검토(2026-11-14) 반영: 실패 계수는 Supabase 가 실제로 무효라고 답한 경우(remoteInvalid)만 센다.
@@ -229,3 +233,4 @@ function optionalAuth(req, res, next) {
 module.exports = { requireAuth, optionalAuth, verifyToken };
 module.exports._authFail = _authFail; // 테스트용(AUDIT4-1114)
 module.exports.AUTH_FAIL_MAX = AUTH_FAIL_MAX;
+module.exports._authFailed = _authFailed; // 테스트용(MAP-CAP-1115)

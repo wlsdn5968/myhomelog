@@ -126,8 +126,9 @@ router.post('/consent', async (req, res) => {
   await writeAudit(req, 'consent.accept', 'consent', null, meta);
   _consentSeen.set(dedupKey, now); // 기록한 뒤에 남긴다
   _consentPerIp.set(ip, ipCount === 0 ? { start: now, n: 1 } : { start: ipWin.start, n: ipCount + 1 });
-  if (_consentSeen.size > 5000) { for (const [k, t] of _consentSeen) if (now - t >= CONSENT_DEDUP_MS) _consentSeen.delete(k); }
-  if (_consentPerIp.size > 5000) { for (const [k, w] of _consentPerIp) if (now - w.start >= CONSENT_DEDUP_MS) _consentPerIp.delete(k); }
+  // MAP-CAP-1115: 만료분을 지운 뒤에도 5000 을 넘으면 오래된 것부터 4000 까지 줄인다(요청마다 전체를 훑고도 줄지 않던 것).
+  if (_consentSeen.size > 5000) { for (const [k, t] of _consentSeen) if (now - t >= CONSENT_DEDUP_MS) _consentSeen.delete(k); for (const k of _consentSeen.keys()) { if (_consentSeen.size <= 4000) break; _consentSeen.delete(k); } }
+  if (_consentPerIp.size > 5000) { for (const [k, w] of _consentPerIp) if (now - w.start >= CONSENT_DEDUP_MS) _consentPerIp.delete(k); for (const k of _consentPerIp.keys()) { if (_consentPerIp.size <= 4000) break; _consentPerIp.delete(k); } }
   res.json({ ok: true });
 });
 
