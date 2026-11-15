@@ -239,6 +239,17 @@ const dataLimiter = makeRateLimiter({
   scope: 'data',
   message: '데이터 조회 한도를 넘었어요. 잠시 후 다시 시도해주세요.',
 });
+// ME-LIMIT-1115 (전면 감사 1번): 계정, 메모, 관심 단지 같은 "내 데이터" 경로가 실거래 조회와 같은 분당 30건 묶음을 썼다.
+//   첫 화면 적재에 4건(탈퇴 상태, 관심 단지, 카카오 상태, 푸시 키), 단지 상세마다 2건(활동 기록, 메모)이 조회 몫을 먹어
+//   평범한 사용에서 조회가 429 로 막혔다(운영 재현). 한도와 창은 같고 묶음 키만 나눈다.
+//   scope 는 'data' 그대로라 Redis 호출 수(요청당 1회)와 장애 시 동작은 변하지 않는다.
+const meLimiter = makeRateLimiter({
+  limit: 30,
+  windowSec: 60,
+  scope: 'data',
+  keySuffix: ':me',
+  message: '요청이 잠시 몰렸어요. 잠시 후 다시 시도해주세요.',
+});
 
 // SHARE-OG-LIMIT-2026-09-28 (Plan 122): /share 는 /api/ 밖이라 어떤 리미터도 없었고, /api/og 는 PNG 렌더(CPU)가
 //   general(60/분)만 거쳐 서로 다른 aptSeq 를 돌면 엣지 캐시가 소용없었다. 둘 다 유료 AI 가 아니라 fail-open(가용성 우선) —
@@ -307,7 +318,7 @@ const DAILY_CHAT_LIMIT = _parseIntSafe(process.env.DAILY_CHAT_LIMIT, 30);
 const DAILY_CLAUSE_LIMIT = _parseIntSafe(process.env.DAILY_CLAUSE_LIMIT, 3); // 기존 유료 한도 그대로
 
 // 채팅 세션/메시지 저장 (Supabase — JWT 필수, RLS 적용) — /api/chat 보다 먼저 마운트
-app.use('/api/chat/sessions', dataLimiter, chatSessionsRouter);
+app.use('/api/chat/sessions', meLimiter, chatSessionsRouter);
 // AI 엔드포인트: optionalAuth 를 앞단에 — 로그인 유저는 userId 기반 dailyLimit + 월 예산 가드,
 // 비로그인은 IP 기반 dailyLimit 만 (월 예산은 로그인 유저 한정).
 // P1 (2026-04-25 Phase 2 8-2): 로그인 사용자 보너스 — 비로그인은 base, 로그인 +N
@@ -333,16 +344,16 @@ app.use('/api/analysis', dataLimiter, analysisRouter);
 app.use('/api/news', optionalAuth, dataLimiter, newsRouter);
 app.use('/api/subscription', dataLimiter, subscriptionRouter);
 // 웹푸시 구독 (Sprint EEEEEE — 익명 동작, VAPID/테이블 게이트 미충족 시 no-op)
-app.use('/api/push', dataLimiter, require('./routes/push'));
+app.use('/api/push', meLimiter, require('./routes/push'));
 // 카카오 연결 해제 웹훅 (Sprint NNNNNNN-22) — 카카오 서버가 호출하는 엔드포인트.
 //   ⚠ dataLimiter 앞에 마운트하는 이유: 카카오는 3초 내 200 을 요구하고, 비-200 이 반복되면 웹훅을
 //     비활성화한다. 사용자 IP 기준 레이트리밋에 걸려 429 가 나가면 그 자체로 웹훅이 죽는다.
 //     대신 Authorization(어드민 키) 검증이 라우트 내부의 실질 게이트다.
 app.use('/api/kakao/unlink-callback', require('./routes/kakaoWebhook'));
 // 카카오톡 알림 연결 (Sprint FFFFFF — portai Memo API 패턴, 콘솔/테이블 게이트 미충족 시 no-op)
-app.use('/api/kakao', dataLimiter, require('./routes/kakao'));
+app.use('/api/kakao', meLimiter, require('./routes/kakao'));
 // 북마크 (Supabase 백엔드 — JWT 필수, RLS 적용)
-app.use('/api/bookmarks', dataLimiter, bookmarksRouter);
+app.use('/api/bookmarks', meLimiter, bookmarksRouter);
 // 검색 이력 (Supabase 백엔드 — JWT 필수, RLS 적용)
 app.use('/api/search', dataLimiter, searchRouter);
 // 결제/구독 (Toss Payments — JWT 필수, service_role 전용 쓰기)
@@ -355,15 +366,15 @@ app.use('/api/attribution', dataLimiter, require('./routes/attribution'));
 // VISITS-2026-10-20: 오늘 방문 브라우저 수(첫 화면 표시용, 식별자 없음)
 app.use('/api/visits', dataLimiter, require('./routes/visits'));
 // 임장노트 클라우드 동기화 (Phase 4 — 기존 localStorage → DB sync)
-app.use('/api/field-notes', dataLimiter, require('./routes/fieldNotes'));
+app.use('/api/field-notes', meLimiter, require('./routes/fieldNotes'));
 // Phase 5 (2026-04-26): 1Page 컨설팅 보고서 자동 생성 — 핵심 USP
 // Phase B-5 (2026-05-01): chat scope → 별도 'report' scope. 비용 4배 단가에 맞는 한도 분리.
 //   비로그인: 0 (로그인 유도) / 로그인 free: 1/일 (체험) / pro: 5/일 / team: 15/일
 app.use('/api/report', optionalAuth, chatLimiter, dailyLimit({ limit: 0, scope: 'report', loggedInBonus: 1 }), require('./routes/report'));
 // 계정 데이터 자기결정권 (PIPA 제35·36조 / GDPR Art.15·17) — JWT 필수
 // GDPR Art.22 / PIPA 자동화 결정 설명권 — JWT 필수 (account 보다 먼저 마운트: prefix 세부 우선)
-app.use('/api/account/automated-decision', dataLimiter, automatedDecisionRouter);
-app.use('/api/account', dataLimiter, accountRouter);
+app.use('/api/account/automated-decision', meLimiter, automatedDecisionRouter);
+app.use('/api/account', meLimiter, accountRouter);
 // Cron 엔드포인트 — Vercel Cron 에서 호출 (CRON_SECRET 필수)
 // (/api/cron 은 generalLimiter 보다 앞에서 마운트했다 — Plan 139)
 // 관리자 전용 엔드포인트 — ADMIN_EMAILS 화이트리스트 인증

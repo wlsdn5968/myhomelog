@@ -53,7 +53,7 @@ test('건너뛰기 목록의 모든 경로는 server.js 마운트에서 Redis �
   const re = app._GENERAL_SKIP_RE;
   const names = re.source.match(/\(([a-z|-]+)\)/)[1].split('|').filter(n => n !== 'health');
   for (const n of names) {
-    const mount = new RegExp(`app\\.use\\('/api/${n}(?:/[a-z-]+)?',[^\\n]*\\b(dataLimiter|chatDataLimiter|chatLimiter|ogLimiter)\\b`);
+    const mount = new RegExp(`app\\.use\\('/api/${n}(?:/[a-z-]+)?',[^\\n]*\\b(dataLimiter|meLimiter|chatDataLimiter|chatLimiter|ogLimiter)\\b`);
     assert.match(src, mount, `/api/${n} 에 Redis 리미터 마운트가 없는데 generalLimiter 를 건너뛴다`);
   }
   // 반대로: dataLimiter 로 마운트된 경로는 목록에 있다(kakao 는 웹훅 때문에 의도적으로 제외)

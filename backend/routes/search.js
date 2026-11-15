@@ -55,7 +55,7 @@ const { displayAptName } = require('../utils/aptDisplayName');
 // SEARCH-REGION-SPLIT-2026-09-06 (Plan 062): splitRegionName 도 같은 파일에서 가져온다 — 챗
 //   (057/059, backend/services/chatDataRouter.js)이 이미 쓰는 순수 함수를 그대로 재사용한다.
 //   이 파일은 읽기(임포트)만 한다 — 구현은 여기서 고치지 않는다(챗도 같은 함수를 쓰기 때문).
-const { normalizeName, splitRegionName } = require('../utils/aptNameMatch');
+const { normalizeName, splitRegionName, stripAptSuffix } = require('../utils/aptNameMatch');
 // SNAPSHOT-2026-07-11 (Sprint LLLL): 인기 단지 집계 서비스 분리 + 일별 사전집계 스냅샷
 const { buildPopularResults, readPopularSnapshot, storePopularSnapshot, popularWindow } = require('../services/popularService');
 const { buildFacility } = require('../utils/buildFacility');
@@ -577,9 +577,13 @@ router.get('/apt', async (req, res) => {
     // SEARCH-RANK-2026-07-11 (Sprint HHHH, 라이브 재현 "은마" → 1위 화성 '시범다은마을월드반도'):
     //   부분매칭+거래량순뿐이라 정확일치 단지가 밀림 → 정확일치(0)·시작일치(1)·포함(2) 등급을 최우선.
     //   동명(umd) 검색은 전부 2등급 동률이라 기존 순서 그대로 (회귀 없음).
-    const _qn = String(q).replace(/\s+/g, '').toLowerCase();
+    // SUFFIX-RANK-1115 (전면 감사 2번, 운영 재현): "헬리오시티" 검색에서 거래 0건인 부천 "헬리오시티"가 정확 일치라 1위,
+    //   거래 213건인 송파 "헬리오시티아파트"는 시작 일치라 2위였다. 끝의 "아파트", "아파트단지"는 신고 이름마다 붙기도 빠지기도 하므로
+    //   떼고 비교한다. 같은 등급 안에서는 아래 정렬이 이미 거래 건수로 가른다.
+    const _rankKey = (v) => stripAptSuffix(String(v || '').replace(/\s+/g, '')).toLowerCase();
+    const _qn = _rankKey(q);
     const _qRank = (n) => {
-      const s = String(n || '').replace(/\s+/g, '').toLowerCase();
+      const s = _rankKey(n);
       return s === _qn ? 0 : (s.startsWith(_qn) ? 1 : 2);
     };
     // REGION-RANK-2026-10-30 (Plan 179): 지역(동·시군구 앞부분)과 이름이 모두 맞는 단지는 "시작 일치" 와 같은 등급.

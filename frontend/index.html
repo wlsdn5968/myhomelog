@@ -2881,7 +2881,7 @@ html[data-theme="dark"] #_pannBtn{box-shadow:0 2px 12px rgba(0,0,0,.4)}
   <div class="cv-form">
     <h3>매매 기본 정보</h3>
     <div class="cv-r2">
-      <div><label class="lbl" for="cl_apt">단지명 *</label><input class="inp" id="cl_apt" placeholder="예: 래미안 대치팰리스"></div>
+      <div><label class="lbl" for="cl_apt">단지명 *</label><input class="inp" id="cl_apt" maxlength="60" placeholder="예: 래미안 대치팰리스"></div>
       <div><label class="lbl" for="cl_area">지역</label><input class="inp" id="cl_area" placeholder="예: 강남구 대치동"></div>
     </div>
     <div class="cv-r3">
@@ -2958,6 +2958,7 @@ html[data-theme="dark"] #_pannBtn{box-shadow:0 2px 12px rgba(0,0,0,.4)}
         </div>
       </div>
     </div>
+    <div id="biz_err" role="alert" style="display:none;margin:8px 0;font-size:13px;line-height:1.5;color:var(--red)"></div>
     <div class="comm-result" id="commResult">
       <div class="cv-section-title" style="margin-top:8px">법정 상한 요율표</div>
       <div id="commTiers"></div>
@@ -10034,7 +10035,7 @@ function showDetail(p){
   try { window._pannBtnHide && window._pannBtnHide(); } catch(_){}
   renderFieldNote(p); // 임장 노트는 즉시 렌더 (로컬 데이터)
   // LAZY-2026-06-13: 특약·리스크는 탭(t2/t3) 클릭 시에만 로드 — 상세 열 때마다 AI 쿼터(3회/일) 소진하던 근본 문제 제거.
-  loadAnalysis(p);loadAmenities(p);loadFacility(p);
+  loadAnalysis(p);_lazyAmenities(p);loadFacility(p);
 }
 
 // ── 단지 facility 풍부화 (Phase 4, 2026-04-26) ────────────
@@ -10227,6 +10228,63 @@ function _fillDetailSchoolBoxes(r){
 }
 
 // ── 주변 편의시설 + 통근시간 비동기 로드 ────────────
+// DETAIL-REQ-1115 (전면 감사 1번, 운영 재현): 단지 상세 한 번에 API 요청이 12건 나갔고 조회 경로 제한은 분당 30건이라,
+//   단지 세 곳을 약 45초 안에 열면 세 번째에서 분석과 주변 시설이 429 로 막혔다(안내 없음).
+//   ① 같은 단지의 좌표 변환은 한 번만 부른다(검색에서 열 때와 주변 시설 조회가 같은 요청을 따로 보냈다).
+//   ② 주변 시설(좌표, 주변, 통근 3건)은 그 상자가 화면에 들어올 때 부른다. 결과는 그 상자에만 쓰인다.
+//   ③ 429 를 받으면 한 번 안내한다(아래 _notify429).
+const _geoMemo = new Map();
+function _geocodeOnce(body){
+  const k = JSON.stringify([body.aptName||'', body.sigungu||'', body.umdNm||'', body.sigungu ? '' : (body.area||'')]);
+  const hit = _geoMemo.get(k);
+  if (hit && Date.now() - hit.at < 600000) return hit.p;
+  const p = fetch(`${CFG.api}/geocode`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(8000)})
+    .then(r=>r.json()).catch(()=>null)
+    .then(g=>{ if((!g || g.lat==null) && _geoMemo.get(k) && _geoMemo.get(k).p === p) _geoMemo.delete(k); return g; }); // 실패나 제한 응답은 기억하지 않는다(그사이 새로 들어온 항목은 지우지 않는다)
+  _geoMemo.set(k, { at: Date.now(), p });
+  if (_geoMemo.size > 50) _geoMemo.delete(_geoMemo.keys().next().value);
+  return p;
+}
+function _lazyAmenities(p){
+  const box = document.getElementById('amenityBox');
+  if (!box || !window.IntersectionObserver) { loadAmenities(p); return; }
+  try { if (window._amenIO) window._amenIO.disconnect(); } catch(_) {}
+  const io = new window.IntersectionObserver((es) => {
+    if (!es.some(e => e.isIntersecting)) return;
+    io.disconnect();
+    if (!currentDetail || currentDetail.aptName === p.aptName) loadAmenities(p); // 그사이 다른 단지를 열었으면 부르지 않는다
+  }, { rootMargin: '200px' });
+  window._amenIO = io;
+  io.observe(box);
+}
+// 요청 제한(429) 안내. 15초에 한 번만 띄운다. 하루 한도 초과(한도 창이 따로 뜬다)와 신고 화면은 각자 안내가 있어 건드리지 않는다.
+let _last429 = 0;
+function _notify429(url){
+  try {
+    if (!/\/api\/(search|transactions|analysis|properties|geocode|region|subscription|news|account|field-notes|bookmarks)/.test(String(url||''))) return;
+    if (Date.now() - _last429 < 15000) return;
+    _last429 = Date.now();
+    if (typeof toast === 'function') toast('요청이 잠시 몰렸어요. 1분쯤 뒤에 다시 열면 빠진 정보가 채워져요');
+  } catch(_) {}
+}
+(function(){
+  if (window._fetch429Hooked || typeof window.fetch !== 'function') return;
+  window._fetch429Hooked = true;
+  const _f = window.fetch;
+  window.fetch = function(input){
+    const pr = _f.apply(this, arguments);
+    try {
+      const url = (input && typeof input === 'object' && input.url) ? input.url : input;
+      pr.then(r => {
+        if (!r || r.status !== 429) return;
+        // 하루 한도 초과는 응답 본문의 error 값으로 구분한다(그쪽은 한도 창이 따로 뜬다)
+        r.clone().json().then(j => { if (!j || j.error !== 'DAILY_LIMIT_EXCEEDED') _notify429(url); }).catch(() => _notify429(url));
+      }).catch(() => {});
+    } catch(_) {}
+    return pr;
+  };
+})();
+
 async function loadAmenities(p){
   const box=document.getElementById('amenityBox');if(!box)return;
   try{
@@ -10237,7 +10295,7 @@ async function loadAmenities(p){
     //   (셋 다 `if (sgg && ...)` 조건부다). 그러면 점수가 0 동점이 되고 `score > bestScore` 라
     //   Kakao 관련도 1순위가 그대로 채택된다 — 실호출에서 '반포자이'→"반포자이플라자"(상가),
     //   '은마'→"은마아파트입구교차로" 가 나온 경로가 이것이다. batch 경로는 이미 넘기고 있었다.
-    const g=await fetch(`${CFG.api}/geocode`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({aptName:p.aptName,area:p.area,sigungu:p.sigungu||null,umdNm:p.umdNm||null}),signal:AbortSignal.timeout(8000)}).then(r=>r.json()).catch(()=>null);
+    const g=await _geocodeOnce({aptName:p.aptName,area:p.area,sigungu:p.sigungu||null,umdNm:p.umdNm||null});
     if(!g||!g.lat){box.style.display='none';return;}
     const [near,tran]=await Promise.all([
       fetch(`${CFG.api}/properties/nearby?lat=${g.lat}&lng=${g.lng}`, { signal: AbortSignal.timeout(8000) }).then(r=>r.json()).catch(()=>null),
@@ -14638,6 +14696,8 @@ async function genClause(){
     isFirstBuyer:gct('cl-f')==='예',
     issues:document.getElementById('cl_issues').value.trim(),
   };
+  const _clProb=clauseInputProblem(body);
+  if(_clProb){toast(_clProb);return;}
   // CLAUSE-TEMPLATE-DEFAULT-2026-08-19 (Sprint NNNNNNN-3, 사업기획 v2): 무료 경로에서 AI 호출 제거.
   //   기본은 검증된 규칙 엔진(buildRuleClause — 규제 판정·연식·특이사항 반영, 문구는 기존 검증분만).
   //   AI 맞춤 초안은 프로 개통 시 재배선(backend /api/clause 는 pro/admin 게이트로 막아둠).
@@ -15401,7 +15461,7 @@ async function focusMapOnApt(r) {
       // GEO-SGG-2026-08-17 (Sprint MMMMMMM): area 문자열만 넘기면 백엔드의 sigungu/umd 하드필터가
       //   꺼진다(loadAmenities 쪽 주석 참조). 여기 r 은 이미 sigungu·umdNm 을 들고 있다 — 그대로 넘긴다.
       //   이 경로는 **좌표 없는 단지를 검색으로 찾아 지도로 가는** 주 경로라 정확도 영향이 가장 크다.
-      const g = await fetch(`${CFG.api}/geocode`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ aptName:r.aptName, area, sigungu:r.sigungu||null, umdNm:r.umdNm||null }), signal:AbortSignal.timeout(8000) }).then(x=>x.json()).catch(()=>null);
+      const g = await _geocodeOnce({ aptName:r.aptName, area, sigungu:r.sigungu||null, umdNm:r.umdNm||null });
       if (!g || g.lat == null || g.lng == null) { if (typeof toast === 'function') toast('이 단지의 지도 위치를 찾지 못했어요. 상세 정보는 그대로 볼 수 있어요'); return; }
       lat = Number(g.lat); lng = Number(g.lng);
     }
@@ -15653,10 +15713,29 @@ function calcSubsScore(){
 
 // ── 복비 계산기 ────────────────────────────────────────────
 // P1 D 추가 (2026-04-25): 주택/오피스텔/주택 외 분기 + VAT 별도 표기 강화
+// INPUT-RANGE-1115 (전면 감사 6번, 7번, 운영 재현): 복비 계산에 -3 을 넣으면 "법정 상한 복비: -270만원" 이 나왔고
+//   특약 초안은 음수 매수가와 준공연도 99999 를 그대로 받았다. 범위를 벗어나면 '' 가 아닌 안내 문구를 돌려준다.
+function bizInputProblem(price){
+  if (typeof price === 'number' && price < 0) return '0보다 작은 금액은 계산할 수 없어요. 입력한 숫자를 확인해 주세요';
+  if (price > 1000) return '거래금액은 1,000억 이하로 입력해 주세요';
+  return '';
+}
+function clauseInputProblem(v){
+  if (String(v.aptName || '').length > 60) return '단지명은 60자 이하로 입력해 주세요';
+  if (v.price < 0 || v.excluUseAr < 0) return '0보다 작은 값은 넣을 수 없어요. 입력한 숫자를 확인해 주세요';
+  if (v.price > 1000) return '매수가는 1,000억 이하로 입력해 주세요';
+  if (v.excluUseAr > 1000) return '면적은 1,000㎡ 이하로 입력해 주세요';
+  if (v.buildYear && (v.buildYear < 1950 || v.buildYear > new Date().getFullYear() + 5)) return '준공연도를 다시 확인해 주세요';
+  return '';
+}
 function calcComm(){
   const price=parseFloat(document.getElementById('biz_price').value)||0;
   const type=gct('biz-type');
   const prop=gct('biz-prop')||'주택 (아파트·빌라·단독)';
+  const _bErr=document.getElementById('biz_err');
+  if(_bErr){_bErr.style.display='none';_bErr.textContent='';}
+  const _bProb=bizInputProblem(price);
+  if(_bProb){document.getElementById('commResult').classList.remove('show');if(_bErr){_bErr.textContent=_bProb;_bErr.style.display='block';}return;}
   if(!price){document.getElementById('commResult').classList.remove('show');return;}
   const priceW=price*10000; // 만원 단위
   let tiers;

@@ -115,8 +115,14 @@ test('geocode 단건 호출 3경로가 모두 sigungu·umdNm 을 넘긴다 (배�
   const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
   // /geocode 와 /geocode/batch 호출의 body 를 전부 뽑아 하나도 빠짐없이 검사한다
   //   (한 곳만 고치고 나머지를 놓치는 것이 이 저장소의 반복 실패 모드였다).
-  const calls = [...html.matchAll(/\$\{CFG\.api\}\/geocode(?:\/batch)?`[\s\S]{0,420}?JSON\.stringify\(\{[\s\S]{0,300}?\}\)/g)]
-    .map(m => m[0]);
+  // DETAIL-REQ-1115: 단건 호출 두 곳은 이제 _geocodeOnce({...}) 를 거친다(같은 단지를 한 번만 묻기 위해).
+  //   묶음 호출(/geocode/batch)의 본문과 _geocodeOnce 에 넘기는 객체를 모두 모아 같은 계약을 확인한다.
+  //   _geocodeOnce 자신은 받은 객체를 그대로 본문으로 보낸다(JSON.stringify(body)).
+  const calls = [
+    ...[...html.matchAll(/\$\{CFG\.api\}\/geocode\/batch`[\s\S]{0,420}?JSON\.stringify\(\{[\s\S]{0,300}?\}\)/g)].map(m => m[0]),
+    ...[...html.matchAll(/_geocodeOnce\(\{[^}]{0,200}\}\)/g)].map(m => m[0]),
+  ];
+  assert.match(html, /function _geocodeOnce\(body\)\{[\s\S]{0,700}?body:JSON\.stringify\(body\)/, '_geocodeOnce 가 받은 객체를 그대로 보내지 않는다');
   assert.ok(calls.length >= 3, `geocode 호출을 ${calls.length}곳만 찾았다 — 형태가 바뀌었다면 이 테스트도 갱신할 것`);
   for (const c of calls) {
     assert.match(c, /sigungu\s*:/, `sigungu 를 안 넘기는 geocode 호출이 있다:\n${c.slice(0, 160)}`);
