@@ -3155,7 +3155,7 @@ html[data-theme="dark"] input[type=date].swp-inp{color-scheme:dark}
 .swp-ref b{display:block;font-size:12px;font-weight:700;color:var(--sw-t3);margin-bottom:2px}
 .swp-help{margin:0;font-size:12px;line-height:1.5;color:var(--sw-t3)}
 .swp-btn2{display:inline-flex;align-items:center;justify-content:center;height:44px;padding:0 16px;border:1px solid var(--sw-line2);border-radius:8px;background:var(--sw-card);color:var(--sw-t1);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
-.swp-btn2:disabled{opacity:.4;cursor:default}
+.swp-btn2:disabled,.swp-btn2[aria-disabled="true"]{opacity:.4;cursor:default}
 .swp-tbtn{display:inline-flex;align-items:center;min-height:44px;padding:0 6px;border:0;background:none;color:var(--sw-pri);font-family:inherit;font-size:14px;font-weight:700;cursor:pointer;white-space:nowrap}
 .swp-chip{display:inline-block;font-size:12px;font-weight:700;padding:2px 8px;border-radius:6px;background:var(--sw-sub);color:var(--sw-t2)}
 .swp-seg{display:flex;gap:4px;padding:4px;background:var(--sw-sub);border-radius:8px}
@@ -4281,9 +4281,9 @@ html[data-theme="dark"] #view-news{
       <button class="smx" onclick="closeQuotaModal()" aria-label="닫기" title="닫기">✕</button>
     </div>
     <div class="smbody">
-      <p id="qmMsg" style="margin:0 0 12px 0;font-size:14px;line-height:1.6;color:var(--t1)">무료 플랜 한도를 모두 썼어요.</p>
+      <p id="qmMsg" style="margin:0 0 12px 0;font-size:14px;line-height:1.6;color:var(--t1)">오늘 한도를 모두 썼어요.</p>
       <div style="background:var(--bg2);border:1px solid var(--bd);border-radius:var(--radius-base);padding:12px;margin-bottom:12px">
-        <div style="font-size:12px;color:var(--t1);line-height:1.7">매일 자정(한국 시간)에 한도가 자동으로 초기화돼요.<br>로그인하면 한도가 더 늘어나요.</div>
+        <div style="font-size:12px;color:var(--t1);line-height:1.7">매일 자정(한국 시간)에 한도가 자동으로 초기화돼요.<span id="qmLoginHint"><br>로그인하면 한도가 더 늘어나요.</span></div>
       </div>
       <button class="sm-save" onclick="closeQuotaModal()" style="background:var(--bg2);color:var(--t2);border:1px solid var(--bd);margin-top:6px">닫기</button>
       <div id="qmReset" style="font-size:12px;color:var(--t3);text-align:center;margin-top:8px"></div>
@@ -7145,10 +7145,12 @@ function openQuotaModal(reason, msg, resetAt){
     if(msgEl) msgEl.textContent = msg || '오늘 무료 도우미 채팅 한도를 다 썼어요. 내일 자정에 다시 채워져요.';
     if(resetEl) resetEl.textContent = '매일 자정(KST)에 자동으로 다시 채워져요';
   } else {
-    if(tit) tit.textContent = '무료 플랜 사용량';
+    if(tit) tit.textContent = '오늘 사용량';
     if(msgEl) msgEl.textContent = msg || '';
     if(resetEl) resetEl.textContent = '';
   }
+  // QM-COPY-1115 (전면 감사 11번): 이미 로그인한 사람에게 "로그인하면 한도가 더 늘어나요"가 보였다.
+  try{ const _lh=document.getElementById('qmLoginHint'); if(_lh) _lh.style.display = (window.MHL && window.MHL.auth && window.MHL.auth.user) ? 'none' : ''; }catch(_){}
   document.getElementById('QM')?.classList.add('open');
 }
 function closeQuotaModal(){ document.getElementById('QM')?.classList.remove('open'); }
@@ -12312,7 +12314,7 @@ function _swpRender(){
     :`<div class="swp-apt none"><span>고르지 않아도 계산돼요</span><button type="button" class="swp-tbtn" onclick="_swpPickApt()">단지 고르기</button></div>`;
   document.getElementById('swpRef').innerHTML=ref
     ?`<div class="swp-ref"><b>참고</b>${Number(ref.sqm)>0?`${Math.round(ref.sqm)}㎡(전용 ${Math.round(Number(ref.py)||0)}평) `:''}최근 ${Math.round(ref.n)}건 실거래 · 최저 ${ref.min.toFixed(2).replace(/\.?0+$/,'')}억 · 평균 ${ref.avg.toFixed(2).replace(/\.?0+$/,'')}억 · 최고 ${ref.max.toFixed(2).replace(/\.?0+$/,'')}억</div>`:'';
-  const fb=document.getElementById('swpFillAvg');if(fb)fb.disabled=!(ref&&ref.avg>0);
+  const fb=document.getElementById('swpFillAvg');if(fb)fb.setAttribute('aria-disabled',String(!(ref&&ref.avg>0))); // SWAP-FILL-1115: disabled 면 눌러도 안내가 안 떠서 aria-disabled 로 바꿨다
   const c=_swpCalc(s);
   const chip=document.getElementById('swpRegChip');if(chip)chip.textContent=c.region?(isRegFront(c.region,s.lawd)?'규제지역':'비규제지역'):'';
   const dim=c.use?'':' dim';
@@ -12378,7 +12380,7 @@ function _swpWide(){const s=_swpLoad();const w=document.getElementById('swp-wide
 function _swpUse(v){const s=_swpLoad();s.use=v==='n'?'n':'y';_swpSave(s);_swpRender();}
 function _swpMore(k){_swpSrcOpen[k]=!_swpSrcOpen[k];_swpRender();const b=document.querySelector(`#swpOut [aria-controls="swpSrc${k}"]`);if(b)b.focus();}
 function _swpFillAvg(){
-  const s=_swpLoad(),ref=s.apt&&s.apt.ref;if(!(ref&&Number.isFinite(ref.avg)&&ref.avg>0))return;
+  const s=_swpLoad(),ref=s.apt&&s.apt.ref;if(!(ref&&Number.isFinite(ref.avg)&&ref.avg>0)){toast('먼저 단지를 골라 주세요. 위의 단지 고르기를 누르면 돼요');return;} // SWAP-FILL-1115 (전면 감사 8번): 무반응이었다
   s.sell=String(+ref.avg.toFixed(2));_swpSave(s);_swpRender();
   toast('최근 평균 실거래가를 넣었어요. 실제 팔 가격과 다를 수 있어요');
 }
@@ -15321,11 +15323,19 @@ function scheduleDeclutter() {
 // 단지명·동명 매칭 결과 즉시 노출 → 클릭 시 상세 모달.
 let _hSearchTimer = null;
 let _hSearchAbort = null;
+function _searchSkipQuery(q){
+  const t = String(q || '').trim();
+  return t.length < 2 || /[ㄱ-ㆎ]/.test(t); // 2글자 미만이거나 낱자음, 낱모음이 섞인 조합 중 상태
+}
 async function onHeaderSearchInput(q) {
   const drop = document.getElementById('hSearchDrop');
   if (!drop) return;
   q = String(q || '').trim();
   if (q.length < 1) { drop.style.display = 'none'; return; }
+  // SEARCH-TYPING-1115 (효율화): 서버는 2글자 미만이면 빈 결과만 돌려주는데 화면은 1글자부터 요청을 보냈고,
+  //   한글을 조합하는 중간 글자(예: 'ㅈ', '잠ㅅ')에서도 보냈다. 둘 다 결과가 쓸모없고 조회 한도(분당 30건)만 쓴다.
+  //   이럴 때는 보내지 않고 앞서 띄운 목록을 그대로 둔다. 글자가 완성되면 평소처럼 보낸다.
+  if (_searchSkipQuery(q)) return;
   if (_hSearchTimer) clearTimeout(_hSearchTimer);
   if (_hSearchAbort) _hSearchAbort.abort();
   // MOB-AUDIT-2026-05-04: 사용자 빠른 타이핑 시 fetch 폭주 차단 + 응답 늦음 인지 차단
@@ -15418,8 +15428,10 @@ function onHeaderSearchKey(e) {
     if (rs && rs.length) { e.preventDefault(); window._hEnterPending = null; goSearchResult(rs[0]); }
     else {
       // ENTER-PENDING-2026-10-18 (plans/166 A8): 결과가 오기 전 Enter 는 아무 반응이 없었다 — 안내하고, 도착하면 첫 결과를 연다
-      const q = String(e.target.value || '').trim();
-      if (q.length >= 2) { e.preventDefault(); window._hEnterPending = q; toast('검색 결과를 불러오는 중이에요'); }
+      // SEARCH-TYPING-1115: 조합 중인 낱자음, 낱모음은 떼고 찾는다(그 상태로는 요청을 보내지 않으므로 기다려도 답이 오지 않는다).
+      const _raw = String(e.target.value || '').trim();
+      const q = _raw.replace(/[ㄱ-ㆎ]/g, '').trim();
+      if (q.length >= 2) { e.preventDefault(); window._hEnterPending = q; toast('검색 결과를 불러오는 중이에요'); if (q !== _raw) onHeaderSearchInput(q); }
     }
   }
 }
@@ -15854,9 +15866,10 @@ async function chkAPI(_isRetry){
           if (reg.acquisition_tax?.stale) _staleKeys.push('취득세');
           if (_staleKeys.length) {
             _staleNote = ` · ⚠ ${_staleKeys.join(', ')} 정책은 갱신 검토 중`;
-            syncBanner.style.background = '#FFF6E3';
-            syncBanner.style.borderBottomColor = '#F0D998';
-            syncBanner.style.color = '#7A5500';
+            // BANNER-THEME-1115 (전면 감사 12번): 직접 넣은 색(#FFF6E3 등)은 다크 모드에서도 밝게 남았다. 테마 변수를 쓴다.
+            syncBanner.style.background = 'var(--ambL)';
+            syncBanner.style.borderBottomColor = 'var(--bd)';
+            syncBanner.style.color = 'var(--amb)';
           }
           // Phase 4-2 단계 1 미세 SY (2026-05-05): matchMedia 패턴 — viewport 변경 시 자동 갱신
           // 기존 (단순 _isMobile 1회 평가) 는 page load 시점에만 분기 → DevTools 모바일 모드 전환·orientation 변경 시 미반응
@@ -15978,7 +15991,7 @@ async function sM(){
       const reason = j.code === 'budget_exceeded' ? 'monthly' : 'daily';
       const resetAt = j.budget?.resetAt || null;
       // MOB-4 (2026-05-03): j.message (사용자 친화) 우선 — j.error 는 보통 코드 (DAILY_LIMIT_EXCEEDED 등)
-      let aiMsg = j.message || j.error || '무료 플랜 한도에 도달했어요.';
+      let aiMsg = j.message || j.error || '오늘 한도에 도달했어요.';
       if (j.canBoostByLogin) {
         // 비로그인 사용자 → 가입 유도 (Pro 강요 X)
         // STAB-AUDIT #67 + #72 (2026-05-03): 비로그인 챗 한도 도달 시 inline 로그인 버튼 + 이력 가치 강조

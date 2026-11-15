@@ -70,7 +70,8 @@ test('A5: 비교 담기는 단지 키로 세션에 기억하고 결과가 오면
 });
 
 test('A8: 결과 도착 전 Enter 는 안내하고, 도착하면 첫 결과를 연다', () => {
-  assert.match(html, /if \(q\.length >= 2\) \{ e\.preventDefault\(\); window\._hEnterPending = q; toast\('검색 결과를 불러오는 중이에요'\); \}/);
+  // SEARCH-TYPING-1115: 조합 중 글자를 뗀 검색어로 다시 묻는 한 줄이 뒤에 붙었다
+  assert.match(html, /if \(q\.length >= 2\) \{ e\.preventDefault\(\); window\._hEnterPending = q; toast\('검색 결과를 불러오는 중이에요'\);(?: if \(q !== _raw\) onHeaderSearchInput\(q\);)? \}/);
   assert.match(html, /if \(window\._hEnterPending && window\._hEnterPending === q\) \{ window\._hEnterPending = null; if \(results\.length\) \{ goSearchResult\(results\[0\]\); return; \} \}/);
 });
 

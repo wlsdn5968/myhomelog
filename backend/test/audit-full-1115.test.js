@@ -182,3 +182,26 @@ test('요청 제한 묶음: 내 데이터 묶음으로 건 경로도 공용 제�
     assert.ok(skip.test('/' + m[1]), `/api/${m[1]} 는 meLimiter 가 있는데 건너뛰기 목록에 없어 Redis 를 두 번 쓴다`);
   }
 });
+
+test('검색창: 2글자 미만이거나 한글 조합 중이면 요청을 보내지 않는다', () => {
+  const skip = new Function(`${body('_searchSkipQuery')} return _searchSkipQuery;`)();
+  for (const q of ['', '은', 'ㅈ', '잠ㅅ', '잠실ㅇ', 'ㅏ', '헬리오ㅅ']) assert.equal(skip(q), true, `${q} 에 요청을 보낸다`);
+  for (const q of ['은마', '잠실', '잠실엘스', '공덕동', 'e편한세상', 'SK뷰', '래미안 대치']) assert.equal(skip(q), false, `${q} 를 막는다`);
+  const fn = html.slice(html.indexOf('async function onHeaderSearchInput('), html.indexOf('async function onHeaderSearchInput(') + 3000);
+  assert.ok(fn.indexOf('_searchSkipQuery(q)') > 0 && fn.indexOf('_searchSkipQuery(q)') < fn.indexOf('fetch('), '요청보다 뒤에서 확인한다');
+  // 서버도 2글자 미만은 빈 결과를 돌려준다(화면 규칙과 같은 기준)
+  assert.match(rd('routes/search.js'), /if \(q\.length < 2\) return res\.json\(\{ results: \[\] \}\);/);
+});
+
+test('작은 항목: 상단 띠는 테마 변수로 칠하고, 한도 창과 갈아타기 버튼이 안내를 준다', () => {
+  assert.ok(html.includes("syncBanner.style.background = 'var(--ambL)';"));
+  assert.ok(!html.includes("syncBanner.style.background = '#FFF6E3';"));
+  // 한도 창과 한도 안내에는 '플랜'이라는 말을 쓰지 않는다(계정 메뉴의 '무료 플랜 · 로그인됨' 표시는 승인된 시안이라 그대로)
+  assert.ok(html.includes("tit.textContent = '오늘 사용량';"));
+  assert.ok(!html.includes('무료 플랜 사용량') && !html.includes('무료 플랜 한도'));
+  assert.ok(html.includes('id="qmLoginHint"'));
+  assert.match(body('_swpFillAvg'), /toast\('먼저 단지를 골라 주세요/);
+  // 미리보기에서 확인: disabled 버튼은 눌러도 함수가 불리지 않아 안내가 뜨지 않았다. aria-disabled 로 흐리게만 한다.
+  assert.ok(html.includes("fb.setAttribute('aria-disabled'"));
+  assert.ok(!html.includes('fb.disabled='));
+});
