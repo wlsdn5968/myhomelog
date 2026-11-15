@@ -605,15 +605,15 @@ const SIDO_NAME_TO_PREFIX = { '서울': '11', '부산': '26', '대구': '27', '�
  *   되묻는다(region-judgment-by-lawdcd 원칙: 판정은 lawd_cd 로, 이름은 표시용).
  * @returns {Promise<null | {ambiguousSidos: string[], token: string} | {rows, scopeLabel}>}
  */
-// SGG-PREFILTER-1114: ilike '낱말%' 와 같은 판정(대소문자 무시 접두 일치)을 지역 코드 표로 먼저 한다.
-//   표를 못 읽으면 true 를 돌려 종전대로 DB 에 묻는다(조용히 지역 답을 잃지 않게).
-function _matchesKnownSigungu(safe) {
+// SGG-PREFILTER-1114: ilike '낱말%' 와 같은 판정(대소문자 무시 접두 일치)을 지역 코드 표로 먼저 하고,
+//   맞는 시군구의 지역 코드 목록을 돌려준다. 맞는 것이 없으면 빈 배열, 표를 못 읽으면 null(종전대로 DB 에 이름으로 묻는다).
+function _sigunguCodes(safe) {
   try {
-    const names = Object.values(require('./transactionService').LAWD_CODE_TO_NAME || {});
-    if (!names.length) return true;
+    const entries = Object.entries(require('./transactionService').LAWD_CODE_TO_NAME || {});
+    if (!entries.length) return null;
     const t = String(safe || '').toLowerCase();
-    return names.some((n) => String(n).toLowerCase().startsWith(t));
-  } catch (_) { return true; }
+    return entries.filter(([, n]) => String(n).toLowerCase().startsWith(t)).map(([c]) => c);
+  } catch (_) { return null; }
 }
 
 async function _resolveRegionRows(regionQuery) {
@@ -629,12 +629,16 @@ async function _resolveRegionRows(regionQuery) {
   const sinceStr = since.toISOString().slice(0, 10);
 
   // 페이지 루프 (PostgREST 1000행 캡 — 실측 최대 구가 60일 ~1천 건대라 3페이지면 충분, 도달 시 로그)
-  const fetchBy = async (col) => {
+  const fetchBy = async (col, codes) => {
     const out = []; const PAGE = 1000;
     for (let from = 0; from < 3000; from += PAGE) {
-      const { data, error } = await admin.from('molit_transactions')
-        .select('apt_name, sigungu, umd_nm, lawd_cd, deal_amount, exclu_use_ar, build_year')
-        .ilike(col, `${safe}%`).gte('deal_date', sinceStr)
+      // SGG-BY-CODE-1115: 구 이름 질문("노원구 시세")이 배포 뒤에도 5,943ms 였다(운영 실측). sigungu 에는 인덱스가 없고
+      //   lawd_cd 에는 있다(idx_molit_lawd_date). 최근 60일 거래의 (지역 코드, 시군구 이름) 121쌍이 지역 코드 표와
+      //   모두 같으므로(2026-11-15 대조, 불일치 0) 이름 접두 일치를 코드 목록 일치로 바꿔도 같은 행이 나온다.
+      //   노원구 실측: 602행, 35ms.
+      const base = admin.from('molit_transactions')
+        .select('apt_name, sigungu, umd_nm, lawd_cd, deal_amount, exclu_use_ar, build_year');
+      const { data, error } = await (codes ? base.in('lawd_cd', codes) : base.ilike(col, `${safe}%`)).gte('deal_date', sinceStr)
         .order('deal_date', { ascending: false }).order('id', { ascending: true })
         .range(from, from + PAGE - 1);
       if (error || !data || !data.length) break;
@@ -651,7 +655,8 @@ async function _resolveRegionRows(regionQuery) {
   //   최소 67ms, 최대 6,147ms 였다. 단지 이름으로 시세를 물을 때마다 드는 비용이었다.
   //   ⚠ explain analyze 로 재면 3.4~4.5초로 부풀려 나온다(timing off 로는 73ms). 이 조회의 시간은 누적 통계로 볼 것.
   //   시군구 이름은 지역 코드 표에 다 있으므로(운영 DB 107개 전부 포함, 2026-11-14 대조) 접두가 하나도 안 맞으면 조회를 건너뛴다.
-  let rows = _matchesKnownSigungu(safe) ? await fetchBy('sigungu') : [];
+  const _sggCodes = _sigunguCodes(safe);
+  let rows = _sggCodes === null ? await fetchBy('sigungu') : (_sggCodes.length ? await fetchBy('sigungu', _sggCodes) : []);
   if (rows.length) {
     // 동명 시군구 검사 — 시도 prefix 가 2개 이상이면 단정하지 않고 되묻는다
     const sidos = [...new Set(rows.map(t => String(t.lawd_cd || '').slice(0, 2)))];

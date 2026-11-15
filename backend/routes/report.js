@@ -1375,6 +1375,7 @@ async function fetchCandidateApts(admin, input, limit) {
     _aliasMap = await getAliasCanonicalMap([...new Set(txList.map(t => t.lawd_cd).filter(Boolean))]); // ALIAS-REGION-FIX-2026-07-12: sigungu 명→lawd_cd (getAliasCanonicalMap 조회키 통일)
   } catch (e) { logger.warn({ err: e && e.message }, '지역 별칭→코드 매핑 실패 — 지역명 그대로 사용'); }
 
+  _st.mark('alias'); // REPORT-STAGE-1115: 첫 실측에서 별칭 조회와 묶기 계산이 한 칸(2,805ms)에 섞여 있어 나눈다
   // 단지 그룹화 + build_year mode + 신고가 갱신 카운트
   const byApt = {};
   for (const t of txList) {
@@ -1483,7 +1484,7 @@ async function fetchCandidateApts(admin, input, limit) {
   // Phase 6+ (2026-04-26): KAPT API 통합 — 선정된 N개 단지만 facility 병렬 fetch
   //   resolveFacility() 가 ILIKE 토큰 매칭 + KAPT API + DB 캐시 (90일) 다 처리.
   //   첫 호출: API 호출 → DB 저장 (응답 +5~10초). 두 번째: cache hit (0초).
-  _st.mark('aliasAndGroup');
+  _st.mark('group');
   await Promise.all(out.map(async (c) => {
     try {
       const f = await resolveFacility({ aptName: c.apt_name, sigungu: c.sigungu, umdNm: c.umd_nm });
