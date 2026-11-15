@@ -1,0 +1,38 @@
+# 운영 규칙 원문: CPU 한도, 2026-11-11 규칙, 2026-11-12~13 규칙
+
+> 2026-11-15 정기 점검에서 저장소 CLAUDE.md 의 "진행 중 / 운영자 결정 대기" 구역에 있던 문장을 원문 그대로 옮겼다(내용 변경 없음).
+> 금지 문장은 CLAUDE.md 의 "금지 사항"에 한 줄씩 남아 있다. 새 기록은 이 파일에 덧붙이고, 새 금지 규칙은 CLAUDE.md 에도 한 줄 남긴다.
+
+## 2026-11-15 에 확인한 정정
+
+- 아래 "개인정보처리방침 11-17 시행" 줄의 로컬 브랜치 커밋 9355c94 는 지금 c0fd32f 다(2026-11-15 `git log -1 privacy-1117`).
+- 아래 "화면 변경 확인 방법"의 launch 설정 `home-preview` 는 저장소 안이 아니라 한 단계 위 폴더 `C:\Users\Woo\Downloads\myhomelog_deploy_1\.claude\launch.json` 에 있다(2026-11-15 확인). 저장소 안 `.claude/launch.json` 에는 `frontend-static` 만 있다.
+- 아래 "자원 실측(10-12~11-11)"의 최신 값은 "CPU 한도" 절과 `AUDIT_REPORT.md` 11절에 있다(11-15: 팀 9시간 10분, 내집로그 3시간 26분).
+
+### CPU 한도 (2026-11-15, AUDIT_REPORT.md 11절)
+- **Vercel 팀 Active CPU 는 30일 합계 4시간이다. 순간 부하가 아니라 누적으로 판단할 것.** 11-15 실측: 팀 9시간 10분, 내집로그 3시간 26분. 조용한 날 내집로그는 하루 약 3분이고 튄 여섯 날(배포 71회, 운영 점검, 수집기)이 30일의 44%였다. 팀 합계가 하루 평균 8분을 넘으면 한도를 넘는다.
+- **하루 CPU 합계 장치를 지우지 말 것**: `backend/services/cpuBudget.js`(5분에 한 번 Redis 날짜 키에 더함, 5분에 Sentry 경고 `monitor:cpu-budget`, 8분에 검색 로봇의 /briefing, /region, /apt 를 503 으로 미룸). health 의 `cpuDay`, `crons.retention.cpuYesterdayMs`, `crons.<이름>.cpuMs` 로 본다. 검사 `backend/test/cpu-budget-1115.test.js`.
+- **새 예약 작업이나 무거운 경로를 넣기 전에 CPU 를 먼저 잰다.** 작업 시작 때 사용량 화면(vercel.com/gyeollab/~/usage 의 Fluid Active CPU)을 본다.
+- **점검은 운영 함수를 아껴서 한다**: 미리보기 대리 서버가 운영 응답을 600초 기억한다(방금 값이 필요하면 주소에 `_fresh=1`). 운영 주소를 직접 두드리는 점검과 배포는 묶어서 한다.
+
+### 2026-11-11 에 생긴 규칙 (plans/190~194)
+- **자원 실측(Vercel 사용량 화면, 10-12~11-11)**: 팀 CPU 9시간 6분(한도 4시간, 12-08 까지 임시 12시간) 중 내집로그 3시간 16분. 전송량 팀 67GB 중 내집로그 58.7GB — 원인은 Sentry 가동 감시 봇이 1분마다 첫 화면(1.28MB)을 받아 간 것. `vercel.json` 첫 두 route 가 막은 수집기 차단과 감시 봇용 작은 응답(`frontend/up.txt`)을 한다. **이 두 route 를 지우거나 순서를 바꾸지 말 것**(`backend/test/ops-1111.test.js`).
+- **원본 표의 `zz_skip_same` 트리거를 지우지 말 것**: 값이 같은 갱신을 건너뛰어 인덱스가 불어나지 않게 한다(위 DB 용량 절).
+- **느린 정규식 기준선**: `scripts/check-regexp-ratchet.js` 가 verify 와 CI 에서 돈다. 새 정규식이 걸리면 입력을 먼저 자르거나(.slice) 반복에 상한을 둔다. 정규식을 고쳐 건수가 줄면 `node scripts/check-regexp-ratchet.js --update`.
+- **화면 변경 확인 방법**: launch 설정 `home-preview`(= `scripts/dev-preview-proxy.cjs`, 화면 파일은 로컬·API 는 운영으로 넘김)로 띄워 1440x709 와 375x812 에서 잰다. 기준과 실측표는 `plans/192` 8절.
+- **문구**: 문장 안 긴 줄표·가운뎃점으로 이은 나열·짧은 절 사이 연결어미 뒤 쉼표를 쓰지 않는다(`plans/193`). 면책 문장과 법적 고지는 글자 그대로 둔다.
+- **Claude Design**: 시안 요청 전에 기획 문서 승인이 먼저다. 모델 표시가 바뀐 것을 확인한 뒤 보낸다(2026-11-11 두 번 실수).
+- **보안 점검 산출물**: `C:/Users/Woo/security-audit-skill/myhomelog/run-1~3`. 결제를 열기 전에 반드시: payments 의 user_id 외래 키가 CASCADE 라 탈퇴 때 결제 기록이 지워진다(5년 보관 고지와 충돌, run-3).
+
+### 2026-11-12~13 에 생긴 규칙 (plans/195, 중국 클라우드 수집기 사고)
+- **서비스는 무료다(운영자 확정 2026-11-13)**: 유료 AI(Anthropic)는 서버에서 제거됐다(SDK 의존성 삭제, `aiService.callAI` 는 네트워크 없이 `AiDisabledError`). 맞춤 보고서는 늘 데이터 전용판(`buildDataOnlyReport`), `/api/clause` 는 410. **유료 API 를 다시 붙이지 말 것.** 결제 쓰기 경로(checkout, confirm, webhook, refund)는 `BILLING_ENABLED='true'` 가 아니면 410(`routes/billing.js` NO-BILLING). 화면에 "유료 플랜 출시", "AI 가 만든다" 문구를 쓰지 않는다(`backend/test/home-panel.test.js` 가 막는다).
+- **Vercel 방화벽 규칙 "Block China and scraper ASNs"(Deny)**: 국가 CN, HK, MO + ASN 20개(Tencent 132203·45090·132591·133478, Huawei 136907·55990·131444·141180, Alibaba 45102·37963·134963, Baidu 38365, Volcano Engine 137718, BytePlus 150436, UCloud HK 135377, 중국 통신 4134·4837·9808·17621·63835). ASN 은 RIPE `stat.ripe.net/data/as-overview` 로 소유 회사를 확인한 것만 넣는다. 이 프로젝트는 Vercel API 로 방화벽 설정을 읽고 쓸 수 없다(404 Seawall Config not found) — **크롬의 Firewall > Rules 화면에서만** 고친다. Hobby 는 사용자 규칙 3개, 속도 제한 규칙 3개, IP 차단 10개까지.
+- **두 번째 방화벽 규칙 "Challenge non-KR traffic with restrictions"(Challenge, 2026-11-13 00:39 KST 게시)**: 국가가 KR 이 아니고, 경로가 `/api/cron` 으로 시작하지 않고, `/api/health` 가 아니고, UA 가 `(bot|Bot|BOT|crawl|Crawl|spider|Spider|Slurp|Yeti|Daum|Google|google|bing|Bing|Sentry|sentry|vercel|facebookexternalhit|kakaotalk|KAKAOTALK|curl)` 에 맞지 않으면 도전 과제를 낸다. 근거: 중국 차단 뒤에도 미국, 프랑스, 스웨덴, 영국, 세르비아 등 가정용 회선 수십 곳(Verizon, Comcast, Charter, AT&T, Bouygues, SFR …)이 평범한 크롬 UA 로 나눠 들어와 방문 기록이 시간당 26~89건(정상 최대 8)이었다(11-12 하루 2,080건). 게시 뒤 규칙 일치가 바로 잡혔고 방문 기록이 멈췄다. Vercel 규칙 입력 칸은 `(?i)` 를 받지 않는다. 해외 정상 호출(Sentry 감시 봇, GitHub CI 의 curl, Vercel 예약 작업, 검색 로봇)을 새로 붙이면 이 예외에 들어가는지 먼저 본다.
+- **이상 트래픽 감지**: 방문 기록이 한 시간에 40건(`VISIT_SURGE_HOURLY`, 정상 최대 8건의 5배)에 닿으면 Sentry 경보 `monitor:visit-surge`, 400건에서 한 번 더(`routes/attribution.js` SURGE-ALERT). 경보가 오면 방화벽 Traffic 화면의 AS 이름 상위를 보고 바로 차단한다. 수집기는 평범한 크롬 UA 와 흔한 JA4 를 써서 UA, JA4 로는 못 가른다. ASN 으로 막는다.
+- **수집기 사고 사실(2026-11-12)**: Tencent 1.5만, Huawei 7.5천 건/24시간, 공개 API 만 호출, 회원·DB 직접 접근 0, 개인정보 유출 흔적 없음. 방문 수 977(정상 1~69). 이 날의 visit_attribution 행은 지우지 않았다(누적 방문 표시에 섞여 있음).
+- **보고서 후보 첫 페이지 재시도**: 서울 전체 첫 페이지가 차가운 DB 에서 8초(57014)를 넘으면 한 번만 다시 묻는다(COLD-RETRY). 인덱스 추가는 DB 용량 때문에 하지 않았다.
+- **개인정보처리방침 11-17 시행 개정 때 할 일**: 예고 표대로 본문에서 Anthropic 위탁(5절)·국외이전(6절) 행을 지우고, 1절 "AI 기반 정보 정리"를 "공공 데이터 정보 정리"로 바꾼다. 초안 브랜치 `preview/privacy-136`(adb4859) 에도 같은 수정이 필요하다. → 2026-11-13 현재 main 위에 시행본을 로컬 브랜치 `privacy-1117`(9355c94, 작업 폴더 `.claude/worktrees/privacy-1117`, 원격 미게시)로 준비했다. 11-17 KST 에 그 커밋을 main 에 합쳐 배포한다(시행일 전 배포 금지).
+- **apt-master-sync 관측(2026-11-13)**: 11-09 회차는 125개 중 35개 지역만 돌고 받은 행 0 으로 295초에 끝났다(원인은 Hobby 로그 1시간 보관이라 미확인). health 의 `crons['apt-master-sync']` 에 이제 `fetched`, `errors`, `throttleHits`, `intervalMs`, `fetchErrorSample` 이 실린다. `cronStats` NUM 의 마지막 항목은 `canceledRemoved` 로 둔다(`molit-cancel-sync.test.js` 가 확인).
+- **운영자에게 남은 일(2026-11-13 기준)**: (완료: Anthropic 키는 운영자가 2026-11-14 모두 지웠다고 확인, Vercel 변수 `ANTHROPIC_API_KEY` 는 11-13 삭제 확인), Vercel 2단계 인증, GitHub 2단계 인증 확인, 저장소 공개 여부 결정(지금 공개, 비밀값 0), NCP 지도 과금 확인.
+- **보안 점검 run-4(2026-11-13~14, quick)**: 산출물 `C:/Users/Woo/security-audit-skill/myhomelog/run-4`. 이 호스트는 OS 강제 샌드박스를 만들 수 없어 확정 0, 검증 필요 15. 공식 검증기는 Windows 에 O_NOFOLLOW 가 없어 파일을 못 연다(공식 검사 함수를 부르는 감싸개로 검증). 소스로 확인된 7건을 고쳤다(AUDIT4-1114, `backend/test/audit4-1114.test.js`): 결제 410 차단 대소문자(고치기 전 /CONFIRM 이 410 이 아닌 것을 로컬 실행으로 재현), 인기 단지 limit 하한, 카카오 items 와 푸시 cron 의 지역 코드 허용 목록, 익명 동의 기록 Redis 하루 상한(IP 60, 전체 500), 공개 건축물대장 Kakao 관문, bump_activity_counter 회수 기록(운영은 이미 회수됨). 2차(AUDIT4B-1114, `backend/test/audit4b-1114.test.js`): in-bounds 서버 반올림(1e-6 오차 흡수, 경도에서 9% 한 칸 밀림을 독립 검토가 찾음)과 5분 기억 300개, 인증 IP 실패 계수(Supabase 가 무효라고 답한 경우만 1분 20번, exp 없는 토큰은 외부 미호출), 건축물대장 동별 키(지번 비교), 북마크 500, 현장 메모 300과 이름 100자 초과 거절, 검색 기록 최근 500건, 대화 전체 1000건과 하루 200건, search_popular_apts 회수 기록. 보안 점검 run-5(미뤄 둔 5개 영역, 8b9e7ef 고정 폴더 audit-8b9e7ef): 후보 1(결제 재개 시 등급 섞임, 결제 410 이라 지금 도달 불가). 3차: 가짜 푸시 구독 정리(retention runFakePushPrune: 30일 넘고 항목이 그 지역 실거래 이름, 마스터 이름, 별칭과 알림 매칭과 같은 정규화로 하나도 안 맞는 구독만, 조회 실패나 빈 지역이면 안 지움), 달성군 구지면 -> 구지읍 이름 변경 맞춤(`backend/utils/umdRename.js`, 지도 집계와 상세 거래 필터, 원본은 그대로, 이름 맞춘 뒤 좌표 중복 제거). 남은 것: payments FK CASCADE 와 결제 등급 정산(결제 재개 전), geocache_in_bounds DB 함수의 동 이름 비교(구지 9개 단지 거래 수 0 정렬).
+- **편집 도구 함정**: Windows 에서 Python heredoc 으로 정규식이나 `\n` 이 든 문자열을 바꾸면 이스케이프가 깨진다(이 세션에서 세 번). 정규식 줄은 Edit 도구나 node `String.raw` 로 바꾼다.

@@ -22,3 +22,7 @@
 - 결제를 다시 켜기 전에 정할 것 4건: 결제 행 CASCADE 삭제와 5년 보관 고지, 등급 전환 때 남은 기간, 환불 뒤 기간 이월, 환불 조건(서버는 사용 여부를 안 봄)과 안내 문구.
 - 운영자 확인(읽기만): Supabase Edge Functions 의 `datagokr-proxy` Verify JWT 설정, Authentication 의 가입 제한.
 - 다음 회차로 미룬 단위: 추천 계산, 공개 health 응답의 운영 수치, 챗 미응답 원문 보존, 카카오 웹훅의 요청 제한, 공개 API CDN 캐시 키, 관리자 GET 부작용, 크론 작업 본문 2개.
+
+## CLAUDE.md 에 있던 문장(2026-11-15 옮김, 원문 그대로)
+
+- **공개 입력을 저장하거나 캐시 키로 쓸 때(run-6, 2026-11-14)**: 시군구와 동 이름은 `utils/regionText.js` 의 `isSafeRegionText` 를 거친다. Kakao 를 부르는 공개 경로는 `createKakaoGate` 로 IP 예산과 전역 일일 상한에 넣는다. 자유 입력으로 만든 캐시 키 접두어를 새로 만들면 `cache.js` 의 `FREE_TEXT_PREFIXES` 에 더한다. 결제를 다시 켜기 전에 `docs/ops/security.md` 의 run-6 결제 4건부터 정한다.
