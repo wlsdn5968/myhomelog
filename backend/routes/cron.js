@@ -79,6 +79,15 @@ function authorizeCron(req, res, next) {
 }
 
 router.use(authorizeCron);
+// CRON-CPU-1115: 인증을 통과한 작업의 시작 CPU 를 적어 둔다. recordCronRun 이 같은 이름으로 끝낼 때 cpuMs, wallMs 를 실행 기록에 붙인다.
+//   경로 첫 칸이 곧 기록 이름이다(retention, molit-ingest ...). 실패해도 작업은 그대로 돈다.
+router.use((req, _res, next) => {
+  try { require('../services/cronStats').markCronStart(String(req.path || '').split('/').filter(Boolean)[0]); } catch (_) { /* 실패해도 본 처리는 계속 */ }
+  next();
+});
+// CPU-BUDGET-1115: 응답 직전에 하루 CPU 합계를 기록한다(최대 1.5초 기다림). cpuMs 는 recordCronRun 시점까지의 값이라
+//   보존 작업처럼 기록 뒤에도 계산이 이어지는 작업은 cpuMs 보다 하루 합계 쪽이 더 정확하다.
+router.use(require('../services/cpuBudget').flushBeforeJson());
 
 // FRESHNESS-2026-08-08 (Sprint AAAAAAA): 실거래 적재 신선도 감시 — retention cron(18:00 UTC, molit 1h 후)에 편승.
 //   실사고: 08-02 부터 molit ingest 가 전면 실패(적재 0)했는데 6일간 아무도 몰랐다. cron 자체가 안 도는
@@ -282,6 +291,8 @@ router.post('/retention', async (req, res) => {
     const _hs = await require('../services/healthCounts').refreshHealthSnapshots();
     summary.healthSnapCounts = _hs.counts ? 1 : 0;
     summary.healthSnapFacility = _hs.facility ? 1 : 0;
+    // CPU-BUDGET-1115: 어제(UTC) 하루 CPU 합계를 실행 기록에 남긴다. 못 읽으면 필드를 뺀다.
+    try { const _cb = require('../services/cpuBudget'); const _y = await _cb.readDay(_cb.yesterdayOf()); if (_y != null) summary.cpuYesterdayMs = _y; } catch (_) { /* 실패해도 본 처리는 계속 */ }
     logger.info({ durationMs: Date.now() - started }, 'cron/retention OK');
     // Sprint MMMMMMM-12: retention 자신의 실행 기록 — 종전엔 popular-snapshot 만 남아
     //   "retention 이 돌았는가" 를 스냅샷 성패로 유추해야 했다.
@@ -354,6 +365,8 @@ router.get('/retention', async (req, res) => {
     const _hs = await require('../services/healthCounts').refreshHealthSnapshots();
     summary.healthSnapCounts = _hs.counts ? 1 : 0;
     summary.healthSnapFacility = _hs.facility ? 1 : 0;
+    // CPU-BUDGET-1115: 어제(UTC) 하루 CPU 합계를 실행 기록에 남긴다. 못 읽으면 필드를 뺀다.
+    try { const _cb = require('../services/cpuBudget'); const _y = await _cb.readDay(_cb.yesterdayOf()); if (_y != null) summary.cpuYesterdayMs = _y; } catch (_) { /* 실패해도 본 처리는 계속 */ }
     await require('../services/cronStats').recordCronRun('retention', summary).catch(() => {}); // Sprint MMMMMMM-12
     // GET-PARITY-2026-08-09 (Sprint BBBBBBB-5, 실측): popular 스냅샷 계산이 **POST 쌍둥이에만** 있었는데
     //   스냅샷 도입(7/11) 이래 computed_at 이 cron 시각(18:00 UTC)이었던 적이 없다 — Vercel cron 이

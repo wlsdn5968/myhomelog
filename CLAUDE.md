@@ -160,6 +160,12 @@
 ### 구성요소 점검 (2026-10-14) — `plans/audit-components-2026-10-14.md`
 - 자세한 기록(원문 그대로): `docs/ops/components.md`.
 
+### CPU 한도 (2026-11-15, AUDIT_REPORT.md 11절)
+- **Vercel 팀 Active CPU 는 30일 합계 4시간이다. 순간 부하가 아니라 누적으로 판단할 것.** 11-15 실측: 팀 9시간 10분, 내집로그 3시간 26분. 조용한 날 내집로그는 하루 약 3분이고 튄 여섯 날(배포 71회, 운영 점검, 수집기)이 30일의 44%였다. 팀 합계가 하루 평균 8분을 넘으면 한도를 넘는다.
+- **하루 CPU 합계 장치를 지우지 말 것**: `backend/services/cpuBudget.js`(5분에 한 번 Redis 날짜 키에 더함, 5분에 Sentry 경고 `monitor:cpu-budget`, 8분에 검색 로봇의 /briefing, /region, /apt 를 503 으로 미룸). health 의 `cpuDay`, `crons.retention.cpuYesterdayMs`, `crons.<이름>.cpuMs` 로 본다. 검사 `backend/test/cpu-budget-1115.test.js`.
+- **새 예약 작업이나 무거운 경로를 넣기 전에 CPU 를 먼저 잰다.** 작업 시작 때 사용량 화면(vercel.com/gyeollab/~/usage 의 Fluid Active CPU)을 본다.
+- **점검은 운영 함수를 아껴서 한다**: 미리보기 대리 서버가 운영 응답을 600초 기억한다(방금 값이 필요하면 주소에 `_fresh=1`). 운영 주소를 직접 두드리는 점검과 배포는 묶어서 한다.
+
 ### 2026-11-11 에 생긴 규칙 (plans/190~194)
 - **자원 실측(Vercel 사용량 화면, 10-12~11-11)**: 팀 CPU 9시간 6분(한도 4시간, 12-08 까지 임시 12시간) 중 내집로그 3시간 16분. 전송량 팀 67GB 중 내집로그 58.7GB — 원인은 Sentry 가동 감시 봇이 1분마다 첫 화면(1.28MB)을 받아 간 것. `vercel.json` 첫 두 route 가 막은 수집기 차단과 감시 봇용 작은 응답(`frontend/up.txt`)을 한다. **이 두 route 를 지우거나 순서를 바꾸지 말 것**(`backend/test/ops-1111.test.js`).
 - **원본 표의 `zz_skip_same` 트리거를 지우지 말 것**: 값이 같은 갱신을 건너뛰어 인덱스가 불어나지 않게 한다(위 DB 용량 절).

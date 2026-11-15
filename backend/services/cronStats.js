@@ -98,6 +98,8 @@ function _pick(summary) {
     'fetched', 'errors', 'throttleHits', 'intervalMs',
     // AUDIT4-1114: retention 의 가짜 푸시 구독 정리 수 — 0 이 정상
     'fakePushPruned',
+    // CPU-BUDGET-1115: 어제(UTC) 하루 동안 함수가 쓴 CPU(ms). 30일 합계 한도(팀 4시간)를 날마다 따라가기 위한 값.
+    'cpuYesterdayMs',
     // CANCEL-SYNC-2026-10-30 (Plan 172): 적재 뒤 해제돼 원본에서 지운 거래 수(0 이 흔하다 — 필드 부재와 구별).
     'canceledRemoved'];
   const out = {};
@@ -141,8 +143,28 @@ function _pick(summary) {
  * @param {string} name  잡 이름 (예: 'geocache-backfill')
  * @param {object} summary  job 이 돌려준 요약
  */
+// CRON-CPU-1115: 예약 작업이 쓴 CPU 를 실행 기록에 남긴다.
+//   Vercel Hobby 는 Active CPU 를 30일 합계로 제한하고(팀 4시간) 함수 기록은 1시간만 남는다. 밤에 도는 작업이
+//   CPU 를 얼마나 쓰는지 다음 날에는 볼 수 없었다(11-15 실측: 좌표 검증 12.6초만 확인, 나머지 13개는 미확인).
+//   프로세스 전체 CPU 라 같은 인스턴스에서 다른 요청이 겹치면 그만큼 섞인다. 추세를 보는 값이다.
+const _cronStarts = new Map();
+function markCronStart(name) {
+  const k = String(name || '').slice(0, 40);
+  if (!k) return;
+  if (_cronStarts.size > 50) _cronStarts.clear(); // 기록 없이 끝난 작업이 쌓이지 않게
+  _cronStarts.set(k, { cpu: process.cpuUsage(), t: Date.now() });
+}
+function _takeCronCost(name) {
+  const s = _cronStarts.get(name);
+  if (!s) return {};
+  _cronStarts.delete(name);
+  const d = process.cpuUsage(s.cpu);
+  return { cpuMs: Math.round((d.user + d.system) / 1000), wallMs: Date.now() - s.t };
+}
+
 async function recordCronRun(name, summary) {
-  const entry = { name: String(name || '').slice(0, 40), at: new Date().toISOString(), ..._pick(summary) };
+  const _nm = String(name || '').slice(0, 40);
+  const entry = { name: _nm, at: new Date().toISOString(), ..._pick(summary), ..._takeCronCost(_nm) };
   try {
     const r = getRedis();
     if (r) {
@@ -341,7 +363,7 @@ function pickStaleRegions(latestByCode, retired, nowMs, staleDays) {
 
 // _pick 은 "민감 필드가 health 로 새지 않는다"는 보안 성질을 담당하므로 테스트에서 직접 고정한다.
 module.exports = {
-  recordCronRun, getCronRuns, getCronLatest, _pick,
+  recordCronRun, markCronStart, _takeCronCost, getCronRuns, getCronLatest, _pick,
   CRON_MAX_AGE_H, CRON_PATH_TO_JOBS, findStaleCrons,
   REGION_STALE_DAYS, pickStaleRegions,
 };

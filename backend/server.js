@@ -29,6 +29,7 @@ app.set('trust proxy', 1);
 
 // CPU-METER-2026-11-08: 기능별 CPU 시간 측정(plans/188). 가장 앞에 둬야 모든 처리 시간이 들어간다.
 app.use(require('./middleware/cpuMeter').cpuMeter(require('./logger')));
+app.use(require('./services/cpuBudget').gate()); // CPU-BUDGET-1115: 하루 CPU 합계 기록(5분에 한 번)
 
 // ── TRACE-FALLBACK-2026-08-09 (Sprint JJJJJJJ): Vercel 프로덕션 HTTP 스팬 수동 폴백 ──
 //   v10 업그레이드 후 프로덕션에서만 트랜잭션 스팬 0건(FFFFFFF 판별: 로컬은 정상 생성 →
@@ -394,6 +395,11 @@ const ssrMemLimiter = rateLimit({
   legacyHeaders: false,
   message: '요청이 너무 많아요. 잠시 후 다시 시도해주세요.',
 });
+// CPU-BUDGET-1115: 하루 CPU 가 차단 기준을 넘은 날에는 검색 로봇의 서버 렌더 페이지 요청을 503 과 Retry-After 로 미룬다.
+//   링크 미리보기(카카오톡, 페이스북)와 사람 방문은 막지 않는다. 기준과 이유는 services/cpuBudget.js.
+//   판정은 수집 로봇 이름만 본다. 'bot' 이 든 이름을 전부 잡으면 Twitterbot, Slackbot, Applebot(iMessage 미리보기)과 CUBOT 휴대폰까지 걸린다(독립 검토에서 확인).
+const _shedCrawlers = require('./services/cpuBudget').shedBots((ua) => /googlebot|bingbot|yeti|daumoa|oai-searchbot|gptbot|claudebot|perplexitybot|amazonbot|ahrefsbot|semrushbot|mj12bot|dotbot|petalbot|bytespider|yandexbot|baiduspider|duckduckbot|ccbot/i.test(ua));
+app.use(['/briefing', '/region', '/apt'], _shedCrawlers);
 app.use('/briefing', ssrMemLimiter, require('./routes/briefing'));
 // REGION-PAGE-2026-08-29 (Sprint NNNNNNN-31): 서버렌더 지역 페이지 118개 — /briefing 과 같은 계열.
 //   실측 배경: sitemap 이 16개 URL 뿐이었다(단지·지역 페이지 0개). SEO 유입과 SNS 링크 도착지를 동시에 만든다.
@@ -732,6 +738,8 @@ app.get('/api/health', optionalAuth, async (req, res) => {
     //   admin 전용으로 두면 진단 때마다 운영자를 거쳐야 해서 health 에 **건수만** 싣는다.
     //   민감값 없음(cronStats._pick 이 숫자 필드만 통과시킨다). Redis 미설정·실패 시 null.
     crons: _cronLatest,
+    // CPU-BUDGET-1115: 이 인스턴스가 아는 오늘(UTC) CPU 합계. 아직 기록 전이면 ms 가 null. 어제 하루 값은 crons.retention.cpuYesterdayMs.
+    cpuDay: require('./services/cpuBudget').snapshot(), // 기준값은 싣지 않는다(공개 응답)
     db: _dbUsage,
     facilityQuality: _facQuality,
     ecosRates: _ecosRates,
