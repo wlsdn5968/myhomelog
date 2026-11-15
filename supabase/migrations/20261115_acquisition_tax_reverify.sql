@@ -20,7 +20,7 @@
 -- [이번에 원문으로 확인하지 못한 것] 같은 행에 들어 있는 중개보수 요율표(공인중개사법 시행규칙 별표 1)와 등기 비용,
 --   농어촌특별세 비과세 대상 서민주택의 범위(농어촌특별세법 시행령). 중개보수 요율표는 2026-10-29~30 점검에서 확인한 기록이 있다(저장소 CLAUDE.md).
 --
--- [함께 알아 둘 것] 코드의 부대 세금 근사가 법과 다른 곳이 있다(값 저장과는 별개, AUDIT_REPORT.md 16절).
+-- [함께 알아 둘 것] 코드의 부대 세금 근사가 법과 다른 곳이 있다(값 저장과는 별개, docs/audit/AUDIT_REPORT_2026-11-14_light.md 16절).
 --
 -- 실행 전 확인: 대상이 정확히 1행인지 본다.
 --   select id, key, source_effective_date, left(note, 80) from public.regulations_snapshot where key = 'acquisition_tax_2025' and valid_to is null;
