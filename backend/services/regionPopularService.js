@@ -51,9 +51,11 @@ function trustedCoord(c, aptName) {
   return !!(core && c.place_name && String(c.place_name).replace(/\s+/g, '').toLowerCase().includes(core));
 }
 
-async function _fetchLawdDeals(admin, lawd, sinceIso) {
+async function _fetchLawdDeals(admin, lawd, sinceIso, stopAt = Infinity) {
   const rows = [];
   for (let from = 0; from < 20000; from += 1000) {
+    // 시간 상한은 새 시군구를 시작할 때만 보면 이미 시작한 곳이 20쪽까지 읽고 끝난다. 둘째 쪽부터는 쪽마다 다시 본다.
+    if (from > 0 && Date.now() > stopAt) { const e = new Error(`${lawd}: 시간 상한`); e.deadline = true; throw e; }
     const { data, error } = await admin.from('molit_transactions')
       .select('apt_name, sigungu, umd_nm, lawd_cd, apt_seq, build_year, deal_date, deal_amount, jibun, exclu_use_ar')
       .eq('lawd_cd', lawd).gte('deal_date', sinceIso)
@@ -183,11 +185,15 @@ async function _attachCoords(admin, items) {
 }
 
 /** 시도 하나 계산 — { sido, window, groups:[{lawdCd,label,deals60d,results}] } */
-async function computeSido(sido, { concurrency = 6 } = {}) {
+// REGION-DEADLINE-1115 (부하 정리): 요청 경로에서 즉석 계산할 때는 deadlineMs 를 준다. 시간이 지나면 남은 시군구를 시작하지 않고
+//   그때까지 끝난 것만 돌려준다(timedOut 에 못 한 수). 예약 작업은 시도 사이의 CRON_BUDGET_MS 로 이미 묶여 있어 주지 않는다.
+async function computeSido(sido, { concurrency = 6, deadlineMs = 0 } = {}) {
   const admin = getSupabaseAdmin();
   if (!admin) throw new Error('DB 미설정');
   if (!Object.hasOwn(SIDOS, sido)) throw new Error('지원하지 않는 시도');
   const until = new Date();
+  const stopAt = deadlineMs > 0 ? until.getTime() + deadlineMs : Infinity;
+  let timedOut = 0;
   const since = new Date(until.getTime() - WINDOW_DAYS * 86400e3);
   const sinceIso = since.toISOString().slice(0, 10);
   const lawds = lawdsOfSido(sido);
@@ -198,9 +204,10 @@ async function computeSido(sido, { concurrency = 6 } = {}) {
   let i = 0, failed = 0;
   async function worker() {
     while (i < lawds.length) {
+      if (Date.now() > stopAt) { timedOut += lawds.length - i; i = lawds.length; break; }
       const idx = i++; const lawd = lawds[idx];
       try {
-        const rows = await _fetchLawdDeals(admin, lawd, sinceIso);
+        const rows = await _fetchLawdDeals(admin, lawd, sinceIso, stopAt);
         const top = rankLawd(rows, aliasMap);
         await _attachCoords(admin, top);
         groups[idx] = {
@@ -210,6 +217,7 @@ async function computeSido(sido, { concurrency = 6 } = {}) {
           })),
         };
       } catch (e) {
+        if (e && e.deadline) { timedOut += 1; continue; } // 읽다가 시간에 걸린 곳은 실패가 아니라 못 한 곳으로 센다
         failed += 1;
         logger.warn({ err: e.message, lawd }, 'region top10: 시군구 계산 실패(건너뜀)');
       }
@@ -220,7 +228,7 @@ async function computeSido(sido, { concurrency = 6 } = {}) {
   return {
     sido, sidoName: SIDOS[sido],
     window: { days: WINDOW_DAYS, since: sinceIso, until: until.toISOString().slice(0, 10) },
-    groups: ok, failed, computedAt: until.toISOString(),
+    groups: ok, failed, ...(timedOut ? { timedOut } : {}), computedAt: until.toISOString(),
   };
 }
 

@@ -832,7 +832,13 @@ router.get('/apt', async (req, res) => {
 //   스냅샷 테이블 미생성(운영자 SQL 전)이어도 ②가 조용히 null → ③ 동작 — 완전 무해.
 // REGION-TOP10-2026-10-21: 서울 25개 구·경기 시군구별 최근 60일 거래 많은 단지 TOP10 (services/regionPopularService).
 //   메모리(30분) → 스냅샷(36시간, 매일 retention cron 이 저장) → 즉석 계산(동시 1건, 성공하면 저장).
+// REGION-DEADLINE-1115 (부하 정리): 스냅샷이 없을 때의 즉석 계산은 시군구마다 조회를 돌린다(경기 47곳). 실패하면 다음 요청이
+//   처음부터 다시 계산해, DB 가 느린 동안 요청마다 같은 계산이 되풀이됐다. 이제 한 번에 20초까지만 계산하고,
+//   실패하거나 빈 결과였던 시도는 5분 동안 다시 계산하지 않는다(그동안은 바로 빈 응답). 키는 검증된 시도 코드 9개뿐이다.
 const _regionPopInflight = new Map();
+const _regionPopFailAt = new Map();
+const REGION_POP_DEADLINE_MS = 20000;
+const REGION_POP_COOLDOWN_MS = 5 * 60 * 1000;
 router.get('/popular-region', async (req, res) => {
   const rp = require('../services/regionPopularService');
   const sido = String(req.query.sido || '');
@@ -844,9 +850,13 @@ router.get('/popular-region', async (req, res) => {
   try {
     let p = await rp.readSido(sido);
     if (!p) {
+      if (Date.now() - (_regionPopFailAt.get(sido) || 0) < REGION_POP_COOLDOWN_MS) {
+        res.set('Cache-Control', 'no-store'); return res.json({ sido, groups: [] });
+      }
       if (!_regionPopInflight.has(sido)) {
-        _regionPopInflight.set(sido, rp.computeSido(sido).then(async (r) => {
-          if (r.groups.length >= Math.ceil(rp.lawdsOfSido(sido).length / 2)) {
+        _regionPopInflight.set(sido, rp.computeSido(sido, { deadlineMs: REGION_POP_DEADLINE_MS }).then(async (r) => {
+          // 시간에 걸려 덜 끝난 결과는 스냅샷으로 남기지 않는다(36시간 동안 일부 구만 보이게 된다)
+          if (!r.timedOut && r.groups.length >= Math.ceil(rp.lawdsOfSido(sido).length / 2)) {
             await require('../services/snapshotStore').putSnapshot(rp.SNAP_KEY(sido), r);
           }
           return r;
@@ -854,11 +864,16 @@ router.get('/popular-region', async (req, res) => {
       }
       p = await _regionPopInflight.get(sido);
     }
-    if (!p || !Array.isArray(p.groups) || !p.groups.length) { res.set('Cache-Control', 'no-store'); return res.json({ sido, groups: [] }); }
-    cache.set(ck, p, 1800);
-    res.set('Cache-Control', CC_OK);
+    if (!p || !Array.isArray(p.groups) || !p.groups.length) {
+      _regionPopFailAt.set(sido, Date.now());
+      res.set('Cache-Control', 'no-store'); return res.json({ sido, groups: [] });
+    }
+    // 덜 끝난 결과는 5분만 기억하고 CDN 에도 짧게 둔다. 그 뒤 요청이 다시 계산한다(역시 20초 상한).
+    cache.set(ck, p, p.timedOut ? 300 : 1800);
+    res.set('Cache-Control', p.timedOut ? 'public, max-age=0, s-maxage=120' : CC_OK);
     return res.json(p);
   } catch (e) {
+    _regionPopFailAt.set(sido, Date.now());
     logger.warn({ err: e.message, sido }, 'popular-region 실패');
     res.set('Cache-Control', 'no-store');
     return res.status(503).json({ error: '지역별 목록을 잠시 불러오지 못했어요' });

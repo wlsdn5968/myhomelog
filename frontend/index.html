@@ -4403,7 +4403,7 @@ window.addEventListener('DOMContentLoaded',()=>{
         var u = new URL(window.location.href);
         ['error','error_code','error_description','msg'].forEach(function(k){ u.searchParams.delete(k); });
         u.hash = '';
-        history.replaceState(null, '', u.toString());
+        history.replaceState(history.state, '', u.toString());
       } catch(_) {}
     }
   } catch(_) {}
@@ -4801,7 +4801,7 @@ function _regPopJson(sido, timeoutMs){
   if(st.req[sido]) return st.req[sido];
   st.req[sido] = fetch(`${CFG.api}/search/popular-region?sido=${sido}`, { signal: AbortSignal.timeout(timeoutMs || 15000) })
     .then(r => r.ok ? r.json() : Promise.reject(new Error('http ' + r.status)))
-    .then(j => { if(j && Array.isArray(j.groups) && j.groups.length) st.data[sido] = j; return j; })
+    .then(j => { if(j && Array.isArray(j.groups) && j.groups.length && !j.timedOut) st.data[sido] = j; return j; }) // 서버가 시간에 걸려 일부 구만 준 응답은 기억하지 않는다(다음에 다시 물음)
     .finally(() => { st.req[sido] = null; });
   return st.req[sido];
 }
@@ -7189,6 +7189,13 @@ function loadNaverMap(clientId){
     // Naver SDK 가 그린 깨진 타일들 청소
     const el = document.getElementById('mapEl');
     if (el) el.innerHTML = '';
+    // FALLBACK-MARKERS-1115: 네이버 지도에 이미 그린 인기 마커는 위에서 지도와 함께 사라진다. 그린 것으로 표시된 채라
+    //   대체 지도에는 마커가 하나도 없었다(미리보기 실측: 만든 마커 12, 지도 위 0). 표시를 풀고 대체 지도가 뜨면 다시 그린다.
+    try {
+      mapObj = null; window._popMarkers = []; _popularMarkersLoaded = false;
+      window._popMarkersRetry = 0; window._declutterHooked = false;
+      setTimeout(() => { try { loadPopularMarkers(); } catch (_) {} }, 0);
+    } catch (_) {}
     loadLeaflet();
   };
   const sc = document.createElement('script');
@@ -10373,7 +10380,7 @@ function cDM(){document.getElementById('DM').classList.remove('open');currentDet
   try{ document.getElementById('DM').classList.remove('dm-empty'); }catch(_){}
   try{ _nxtClear(); }catch(_){} // Plan 150: 모바일 하단 바·시트 정리
   // URL의 ?apt= 파라미터 정리
-  if(history.replaceState){const u=new URL(location.href);u.searchParams.delete('apt');u.searchParams.delete('area');history.replaceState(null,'',u);}
+  if(history.replaceState){const u=new URL(location.href);u.searchParams.delete('apt');u.searchParams.delete('area');history.replaceState(history.state,'',u);}
   // Phase 35 #1 (2026-05-04): DM 닫힘 시 _pannBtn 다시 노출 가능 (zoom>=13 + 모달 X 일 때만)
   try { window._pannBtnShow && window._pannBtnShow(); } catch(_){}
   // MAP-INVALIDATE-2026-05-13 (Sprint FF + GG): 모달 닫힌 후 지도 size 재계산 → tile rendering 정상화
@@ -10636,7 +10643,7 @@ async function shareCurrent(){
     _copyFallback(`${text}
 ${url}`, url); // CLIP-FALLBACK-2026-08-20
   }
-  if(history.replaceState)history.replaceState(null,'',url);
+  if(history.replaceState)history.replaceState(history.state,'',url);
 }
 
 // PWA-SHORTCUT-2026-09-02 (감사 P2-11): manifest.json 의 바로가기 2개가 `/?view=report`·`/?view=chat`
@@ -11457,7 +11464,7 @@ function _handleKakaoReturn(){
     const st=q.get('kakao');
     if(!st)return;
     q.delete('kakao');
-    history.replaceState(null,'',location.pathname+(q.toString()?'?'+q.toString():'')+location.hash);
+    history.replaceState(history.state,'',location.pathname+(q.toString()?'?'+q.toString():'')+location.hash);
     if(st==='linked'){
       toast('카카오톡 알림을 연결했어요. 새 실거래가 반영되면 나와의 채팅으로 알려 드려요');
       _kkoLinked=true;_kkoConfigured=true;
@@ -12847,7 +12854,7 @@ function persistSearchToUrl(body){
     if(body.firstBuyerKnown!==false)s.set('first',body.isFirstBuyer?'1':'0'); // FIRST-UNKNOWN: 미확인은 기록하지 않는다
     if(body.schoolNeeded)s.set('school','1');
     const pyChip=gct('ch-py');if(pyChip)s.set('py',pyChip);
-    history.replaceState(null,'',u.toString());
+    history.replaceState(history.state,'',u.toString());
   }catch(e){/* no-op */}
 }
 function restoreSearchFromUrl(){
@@ -14307,6 +14314,7 @@ function _syncReportGateNote(){
     : '필수 3가지만 입력하면 바로 생성돼요. <b>보고서를 만들려면 무료 로그인이 필요해요. 하루 1회 쓸 수 있어요.</b> (비공개, 정부 정책 최신 반영)';
 }
 function sv(v,btn){
+  try{ _svSeed(); }catch(_){}
   if (v === 'report') { try { _syncReportGateNote(); } catch (_) {} }
   // Phase 35 #5 (2026-05-04): DM 모달 열린 상태에서 헤더 탭 (특히 주황 보고서) 클릭 시 모달 close
   //   기존 회귀: 모바일에서 헤더 보고서 버튼 클릭해도 DM 가린 채로 view 전환 → "동작 X" 보임
@@ -14325,6 +14333,9 @@ function sv(v,btn){
     const el=document.getElementById('view-'+id);
     if(el)el.style.display=id===v?meta.display:'none';
   });
+  try{ _svHist(v); }catch(_){} // VIEW-HISTORY-1115: 화면이 바뀐 바로 뒤에 적는다. 아래 그리기 함수가 예외를 내도 기록과 화면이 어긋나지 않게
+
+
   // TAB-SCROLL-RESET-2026-08-20 (18 전수조사 잔여, 라이브 실측: #view-news scrollTop 500 이 탭 전환 후에도 유지돼
   //   브리핑 중간 진입): 각 뷰가 자체 overflow 컨테이너라 display 토글만으론 위치가 남는다 — 탭 전환=새 컨텍스트, 상단으로.
   try { const _tv=document.getElementById('view-'+v); if(_tv&&!_wasActive) _tv.scrollTop=0; } catch(_){}
@@ -14406,6 +14417,40 @@ function sv(v,btn){
   if(v==='news'){ try{ renderBriefing(); }catch(_e){} }
   if(v==='subs' && !document.getElementById('subsList').dataset.loaded){loadSubs();}
 }
+// VIEW-HISTORY-1115 (전면 감사 3번): 화면을 바꿔도 방문 기록이 쌓이지 않아 브라우저 뒤로 가기 한 번에 서비스 밖으로 나갔다.
+//   사람이 누르거나 친 뒤의 화면 전환은 기록을 하나 쌓고 주소에 ?view= 를 맞춘다(지도는 기본이라 뺀다. 읽는 쪽은 handleViewParam).
+//   첫 적재 때 코드가 스스로 부르는 전환은 지금 기록에 표시만 하고 주소는 건드리지 않는다(바로가기 주소 ?view=report 를 지우지 않게).
+//   다른 곳의 replaceState 는 history.state 를 그대로 넘겨 이 표시를 지우지 않는다.
+let _svCur=null,_svPop=false,_svUser=false;
+['pointerdown','keydown'].forEach(t=>window.addEventListener(t,()=>{_svUser=true;},{capture:true,passive:true}));
+function _svUrl(v){
+  const u=new URL(location.href);
+  if(v==='map')u.searchParams.delete('view');else u.searchParams.set('view',v);
+  return u.pathname+u.search+u.hash;
+}
+// 첫 화면(지도)은 sv 를 거치지 않고 떠 있다. 첫 전환 직전에 지금 보이는 화면을 현재 기록에 표시해 둬야 뒤로 가기가 그 화면으로 돌아온다.
+function _svSeed(){
+  if(_svCur!==null||!history.replaceState)return;
+  const cur=Object.keys(VIEW_DISPLAY).find(id=>{const e=document.getElementById('view-'+id);return !!e&&getComputedStyle(e).display!=='none';});
+  if(!cur)return;
+  _svCur=cur;
+  // 새로고침하면 브라우저가 이 기록의 옛 표시를 그대로 돌려준다. 지금 보이는 화면과 다를 수 있어 늘 다시 적는다.
+  if(!(history.state&&history.state.mhlView===cur))history.replaceState(Object.assign({},history.state||{},{mhlView:cur}),'');
+}
+function _svHist(v){
+  if(!VIEW_DISPLAY[v]||!history.pushState)return;
+  const prev=_svCur;_svCur=v;
+  if(_svPop||prev===v)return;
+  const st=Object.assign({},history.state||{},{mhlView:v});
+  if(prev===null||!_svUser)history.replaceState(st,'');
+  else history.pushState(st,'',_svUrl(v));
+}
+window.addEventListener('popstate',e=>{
+  const v=e.state&&e.state.mhlView;
+  if(!v||!VIEW_DISPLAY[v]||v===_svCur)return;
+  _svPop=true;
+  try{sv(v);}finally{_svPop=false;}
+});
 // IA-2026-07-12 (Sprint QQQQ): 상단 "도구 ▾" 드롭다운 열기/닫기 (데스크톱 전용 — .htabs 는 ≤700px 숨김)
 function toggleToolMenu(e){
   if(e)e.stopPropagation();
