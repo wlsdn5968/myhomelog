@@ -1,7 +1,7 @@
 {
   "total": 73,
   "files": {
-    ".lint-tmp/index-block7.js": 12,
+    ".lint-tmp/index-block7.js": 9,
     "backend/jobs/geocacheBackfill.js": 4,
     "backend/middleware/cpuMeter.js": 1,
     "backend/routes/admin.js": 3,
@@ -24,6 +24,7 @@
     "backend/services/schoolService.js": 2,
     "backend/utils/aptDisplayName.js": 3,
     "backend/utils/aptName.js": 6,
-    "backend/utils/aptNameMatch.js": 1
+    "backend/utils/aptNameMatch.js": 1,
+    "frontend/js/swap-checklist.js": 3
   }
 }

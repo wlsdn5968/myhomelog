@@ -157,6 +157,11 @@ jobs:
           process.exit(errs ? 1 : 0);
           SCRIPT
 
+      - name: Frontend external JS syntax check (frontend/js)
+        # SPLIT-1116 (plans/202): index.html 에서 옮긴 스크립트는 위 인라인 검사가 보지 못한다.
+        run: |
+          node -e "const fs=require('fs'),vm=require('vm'),p='frontend/js';let n=0;for(const f of (fs.existsSync(p)?fs.readdirSync(p):[]).filter(x=>x.endsWith('.js'))){new vm.Script(fs.readFileSync(p+'/'+f,'utf8'),{filename:f});n++;}console.log('frontend/js syntax ok: '+n)"
+
       - name: Clause XSS raw-pattern guard (P1 regression)
         # P1-A/t3 에서 escape 한 clause 렌더 패턴이 raw 로 재유입됐는지 정적 검사 (fallback 포함).
         # raw ${c.title}, ${c.title||''}, ${c.content || ''}, ${d.caution ?? ''} 등 → 실패.

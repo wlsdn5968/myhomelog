@@ -26,7 +26,7 @@ async function count() {
     cwd: ROOT,
     overrideConfigFile: true,
     overrideConfig: [{
-      files: ['backend/**/*.js', 'scripts/**/*.js', 'api/**/*.js', '.lint-tmp/**/*.js'],
+      files: ['backend/**/*.js', 'scripts/**/*.js', 'api/**/*.js', '.lint-tmp/**/*.js', 'frontend/js/**/*.js'], // SPLIT-1116: 옮긴 스크립트 포함
       ignores: ['**/node_modules/**', 'backend/test/**', 'backend/testSupport/**'],
       languageOptions: { ecmaVersion: 2023, sourceType: 'commonjs' },
       linterOptions: { reportUnusedDisableDirectives: 'off' },
@@ -34,7 +34,7 @@ async function count() {
       rules: Object.fromEntries(RULES.map((r) => [r, 'error'])),
     }],
   });
-  const results = await eslint.lintFiles(['backend', 'scripts', 'api', '.lint-tmp']);
+  const results = await eslint.lintFiles(['backend', 'scripts', 'api', '.lint-tmp', 'frontend/js']);
   const byFile = {};
   for (const r of results) {
     const rel = path.relative(ROOT, r.filePath).split(path.sep).join('/');

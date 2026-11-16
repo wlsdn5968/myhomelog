@@ -151,6 +151,11 @@ function main() {
         process.exit(1);
       }
       cache[c.file] = fs.readFileSync(abs, 'utf8').split('\n');
+      // SPLIT-1116 (plans/202): index.html 에서 옮긴 스크립트도 같은 패턴으로 본다. 줄 번호는 index.html 뒤에 이어 붙인 순서다.
+      if (c.file === 'frontend/index.html') {
+        const jsDir = path.join(ROOT, 'frontend', 'js');
+        if (fs.existsSync(jsDir)) for (const f of fs.readdirSync(jsDir).filter((x) => x.endsWith('.js')).sort()) cache[c.file] = cache[c.file].concat(fs.readFileSync(path.join(jsDir, f), 'utf8').split('\n'));
+      }
     }
     const isComment = (ln) => { const t = ln.trim(); return t.startsWith('//') || t.startsWith('*') || t.startsWith('/*'); };
     if (c.mustExist) {

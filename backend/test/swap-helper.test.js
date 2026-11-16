@@ -9,13 +9,13 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
-const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+const html = require('../testSupport/readFrontend').readFrontend(); // SPLIT-1116: index.html 과 frontend/js 를 함께 읽는다
 const fnSrc = (name) => {
   const i = html.indexOf(`\nfunction ${name}(`);
   assert.ok(i >= 0, `${name} 없음`);
   const rest = html.slice(i + 1);
   const m = rest.slice(1).search(/\n(?:function |const |let |\/\/ )/);
-  return rest.slice(0, m + 1);
+  return m < 0 ? rest : rest.slice(0, m + 1); // SPLIT-1116: 파일의 마지막 함수는 뒤에 다음 선언이 없다
 };
 const NAMES = ['_loanBaseRate', 'calcLTV', '_swpComm', '_swpWon', '_swpAddMonths', '_swpFmtFull', '_swpCalc', '_dclParse', '_swpDeadlines', '_dclDiff'];
 // 규제 판정은 실제 함수 대신 고정 — 이 테스트는 계산 배선을 본다(규제 판정 자체는 regulation 테스트들이 고정)

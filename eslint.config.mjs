@@ -81,7 +81,8 @@ export default [
     //   그대로 frontend/<base>.html 의 줄번호로 읽으면 된다.
     //   MULTI-HTML-2026-08-28: index.html 외에 billing·terms·privacy·refund.html 도 대상이다
     //   (그전까지 그 4개는 로컬 lint·CI 어디서도 검사되지 않았다 — 결제 코드가 그 안에 있다).
-    files: ['.lint-tmp/**/*.js'],
+    // SPLIT-1116 (plans/202): index.html 에서 옮긴 일반 스크립트(frontend/js)도 같은 규칙으로 본다.
+    files: ['.lint-tmp/**/*.js', 'frontend/js/**/*.js'],
     languageOptions: {
       ecmaVersion: 2023,
       sourceType: 'script',
@@ -129,5 +130,20 @@ export default [
       'no-sparse-arrays': 'error',
       'no-setter-return': 'error',
     },
+  },
+  {
+    // SPLIT-1116 (plans/202 1단계): 본체 스크립트가 부르는 frontend/js/swap-checklist.js 의 함수.
+    //   일반 스크립트는 전역을 함께 쓰므로 실행에는 문제가 없다. 린트가 파일을 따로 보기 때문에 적어 준다(2026-11-16 린트 출력으로 센 이름).
+    files: ['.lint-tmp/**/*.js'],
+    languageOptions: { globals: { _dclFromTimeline: 'readonly', _dclOpen: 'readonly', _swpRender: 'readonly' } },
+  },
+  {
+    // 반대 방향: swap-checklist.js 가 실행 시점에 부르는 본체의 함수와 값.
+    files: ['frontend/js/swap-checklist.js'],
+    languageOptions: { globals: {
+      _escHtml: 'readonly', renderDealDays: 'readonly', getDeals: 'readonly', calcLTV: 'readonly', REGION_MENU: 'readonly',
+      isRegFront: 'readonly', _loanBaseRate: 'readonly', toast: 'readonly', sv: 'readonly', cp: 'readonly', dc: 'readonly',
+      currentDetail: 'readonly', _repAreaOf: 'readonly', cDM: 'readonly',
+    } },
   },
 ];

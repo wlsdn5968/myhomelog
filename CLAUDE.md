@@ -177,6 +177,7 @@ DB
 - 사이드바 노드와 고지 띠 노드는 지우지 말 것(숨김만). 헤더 넘침은 `header.scrollWidth` 로 재지 말 것. 캐시 키 `meta:dataCounts:v2` 이름을 바꾸지 말 것. → `docs/ops/ui-design-v2.md`
 - 인기 단지 실시간 응답을 쓰는 화면은 반드시 `_popRows(j)` 를 거칠 것. → `docs/ops/ui-design-v2.md`
 - 테스트에서 줄바꿈을 `'\n'` 문자로 비교하지 말 것(`\r?\n`). Windows 에서 heredoc 으로 정규식이나 `\n` 이 든 문자열을 바꾸지 말 것(Edit 도구나 node 스크립트 파일). → `docs/ops/ui-design-v2.md`, `docs/ops/operations-rules.md`
+- `frontend/js` 의 스크립트를 모듈(`type=module`)이나 `defer` 로 바꾸지 말 것. HTML 의 onclick 407곳이 전역 이름을 부르고, 본체보다 먼저 실행돼야 한다. 화면 코드를 글자로 읽는 새 검사는 `backend/testSupport/readFrontend.js` 를 쓴다. 파일 사이에 새 전역 이름을 쓰면 `eslint.config.mjs` 끝의 두 묶음에 적는다. → `plans/202-frontend-split.md`, `backend/test/split-1116.test.js`
 
 문구와 화면
 - 화면 문구는 **해요체 · 문장 속 화살표/줄표 나열 금지 · 내부 용어(KAPT·MOLIT·캐시·세션) 금지**. 면책 문장과 법적 고지는 글자 그대로 둔다. → `docs/ops/ui-design-v2.md`, `docs/ops/operations-rules.md`
@@ -203,7 +204,7 @@ DB
 
 ## 📂 핵심 구조와 상세 문서
 
-- 화면: `frontend/index.html` (단일 파일 SPA), `frontend/sw.js`, 구 경계 `frontend/geo/`
+- 화면: `frontend/index.html`(본체), `frontend/js/*.js`(본체에서 옮긴 일반 스크립트. 지금은 `swap-checklist.js` 하나, 계획은 `plans/202-frontend-split.md`), `frontend/sw.js`, 구 경계 `frontend/geo/`
 - 서버: `backend/server.js`, `backend/routes/`, `backend/services/`, `backend/jobs/`(예약 작업), `backend/middleware/`, 진입점 `api/index.js`
 - 예약 작업과 경로 연결: `vercel.json` (예약 작업 14개)
 - 검사: `backend/test/`, 묶음 실행은 `scripts/run-backend-tests-utc.js`

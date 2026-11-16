@@ -10,7 +10,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const path = require('path');
 
-const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+const html = require('../testSupport/readFrontend').readFrontend(); // SPLIT-1116: index.html 과 frontend/js 를 함께 읽는다
 // 최상위 함수 하나를 다음 최상위 선언 전까지 떼어 낸다(한 줄 함수도 포함).
 const fnSrc = (name) => {
   const i = html.indexOf(`\nfunction ${name}(`);

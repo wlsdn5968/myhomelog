@@ -7,7 +7,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const html = fs.readFileSync(path.join(__dirname, '..', '..', 'frontend', 'index.html'), 'utf8');
+const html = require('../testSupport/readFrontend').readFrontend(); // SPLIT-1116: index.html 과 frontend/js 를 함께 읽는다
 const rd = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 
 function body(name) {
