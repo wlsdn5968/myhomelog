@@ -13,7 +13,7 @@
 동작하는 것 (확인됨)
 - 2026-11-16 밤 갱신(아래 줄보다 우선): 운영 배포본은 86cb8e1(11-16 배포 1회 사용). 로컬은 그보다 앞서 있고 미배포다(전면 감사 발견 처리, 모바일 지도, 정책 문구 원문 대조, 화면 파일 나누기 0단계와 1단계, 정책 변화 한 장 요약 화면. verify 1,262). 감사 기록은 `AUDIT_REPORT.md` 15절, 정책 변화는 `plans/203-policy-changes.md`.
   - 운영자가 실행한 것: `supabase/migrations/20261116_revoke_unused_write_grants.sql`(11-16, 조회로 확인: anon 쓰기 권한 0, authenticated 는 5개 표만).
-  - 운영자 실행 대기 SQL: `supabase/migrations/20261116_policy_rules_wording.sql`(저장된 정책 안내 두 줄을 법령과 국토교통부 원문에 맞춤).
+  - 운영자가 실행한 것(11-16 저녁): `supabase/migrations/20261116_policy_rules_wording.sql`. DB 조회로 확인(16줄 그대로, 두 줄이 새 문장). 운영자 실행 대기 SQL 은 없다. `/api/regulations` 는 CDN 이 30분 기억하므로 응답에는 조금 뒤에 반영된다.
   - 배포 직후 가장 먼저: `https://myhomelog.vercel.app/js/swap-checklist.js` 가 200 과 `application/javascript` 로 오는지, 도구의 갈아타기 계산과 거래 체크리스트가 뜨는지. 이 경로는 운영에서 처음 쓰인다. 안 되면 화면 나누기 커밋을 되돌린다.
   - 배포 뒤 운영에서 볼 것: 로그인한 계정의 서비스 정보 창 사용량 문구(관리자는 "검색 무제한"), 대출 계산 타임라인(8.13, 5.10, 5.12 항목), `?view=constructor` 가 지도로 뜨는지, 휴대폰 폭의 네이버 지도에서 서울이 순위 시트 위에 다 보이는지(로컬은 대체 지도로만 확인했다).
   - 정책 변화(plans/203) 배포 뒤 볼 것: `/policy` 가 200 으로 뜨고 카드가 45장인지, `/js/policy-data.js` 와 `/js/policy.js` 가 200 인지, 앱의 도구 메뉴 "정책 변화"와 대출 계산의 "최근 정책 변화" 상자, 규제 요약 창의 단추.
