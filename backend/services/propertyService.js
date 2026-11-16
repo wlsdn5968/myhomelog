@@ -268,7 +268,7 @@ function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '', lawdCd 
 //     사용자가 계약금 걸고 은행 가서 실제 40% 만 나오는 손실 시나리오.
 //   - 개선: 호출자가 미리 isRegulatedRegion() 으로 boolean 만 계산해서
 //     주입 → per-row 비용은 0 (closure 변수 read 만), 정확도는 snapshot 기준.
-function computeLTV(buyAuk, isRegulated, isFirstBuyer, houseStatus) {
+function computeLTV(buyAuk, isRegulated, isFirstBuyer, houseStatus, isMetro = false) {
   // REG-LABEL-FIX-2026-07-25 (Sprint UUUUUU): 2주택+ 는 isRegulated 와 무관하게 '(규제)' 를 붙이고
   //   있었다 → **비규제 지역 단지에 "규제" 라고 표기**되는 사실 오류(다른 모든 분기는 지역 상태를
   //   정확히 반영한다). LTV 0% 자체는 유지 — 2주택 이상은 규제지역·수도권 구입 불가(스냅샷 note).
@@ -290,9 +290,15 @@ function computeLTV(buyAuk, isRegulated, isFirstBuyer, houseStatus) {
   } else if (isRegulated) {
     pct = isFirstBuyer ? 0.7 : 0.4;
   } else {
-    pct = isFirstBuyer ? 0.8 : 0.7;
+    // FIRST-METRO-1116 (금융위 원문 전수 대조 2026-11-16): 생애최초 LTV 는 "수도권·규제지역 70%, 그 외 80%"다
+  //   (2026-08-13 금융 종합대책 안건 인쇄 13쪽과 16쪽, fsc.go.kr/no010101/87517 첨부). 전에는 규제지역만 70%로 보고 수도권 비규제(인천, 경기 일부)를 80%로 계산했다.
+  //   "수도권·규제지역"은 한도와 스트레스 금리에서와 같이 수도권 전체와 규제지역을 함께 가리키는 것으로 읽는다(신생아 특례 안내도 같은 기준).
+    pct = isFirstBuyer ? (isMetro ? 0.7 : 0.8) : 0.7;
   }
-  const cap = isRegulated ? (buyAuk <= 15 ? 6 : buyAuk <= 25 ? 4 : 2) : Infinity;
+  // CAP-METRO-1116 (금융위 원문 전수 대조 2026-11-16, fsc.go.kr/no010101/85432): 주담대 한도는 "수도권·규제지역"에 적용된다
+  //   ("수도권·규제지역의 시가 15억원 이하 주택의 주담대 한도는 현행과 동일한 6억원, 15억원 초과～25억원 이하 4억원, 25억원 초과 2억원").
+  //   전에는 규제지역에만 한도를 걸어, 수도권이면서 규제지역이 아닌 곳(인천, 경기 일부)의 한도를 크게 보였다(예: 인천 10억 무주택 7억 → 원문대로면 6억).
+  const cap = (isRegulated || isMetro) ? (buyAuk <= 15 ? 6 : buyAuk <= 25 ? 4 : 2) : Infinity;
   const loan = Math.min(buyAuk * pct, cap);
   return {
     ltv: `${(pct * 100).toFixed(0)}% ${isRegulated ? '(규제)' : '(비규제)'}${isDispose ? ' · 처분조건부' : ''}`,
@@ -1015,7 +1021,8 @@ async function getAIRecommendations(userCondition) {
     const maxAuk = parseFloat((p.maxPrice / 10000).toFixed(2));
     // 단지 실제 위치(MOLIT sggNm + lawdCd)로 규제 판정 — 사용자 입력 region 보다 정확
     const aptIsRegulated = matchRegulated(apt.sigungu || region || '', apt.lawdCd);
-    const ltvInfo = computeLTV(avgAuk, aptIsRegulated, isFirstBuyer, houseStatus);
+    // CAP-METRO-1116: 수도권(서울 11, 경기 41, 인천 28)은 규제지역이 아니어도 주담대 한도가 걸린다
+    const ltvInfo = computeLTV(avgAuk, aptIsRegulated, isFirstBuyer, houseStatus, /^(11|41|28)/.test(String(apt.lawdCd || '')));
     const tags = buildTags(apt);
     const ageYears = new Date().getFullYear() - (apt.buildYear || 0);
 

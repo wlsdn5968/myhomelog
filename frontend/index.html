@@ -2538,7 +2538,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
       <table class="rtbl"><thead><tr><th>구분</th><th>LTV</th><th>한도</th><th></th></tr></thead><tbody>
         <tr><td><b>무주택 규제</b></td><td style="color:var(--red);font-weight:700">40%</td><td style="font-size:12px">15억 이하 6억<br>15억 초과~25억 이하 4억<br>25억 초과 2억</td><td><span class="rtag r">강화</span></td></tr>
         <tr><td>생애최초 규제</td><td style="color:var(--amb);font-weight:700">70%</td><td style="font-size:12px">한도 6억<br>전입 의무</td><td><span class="rtag y">조건</span></td></tr>
-        <tr><td>비규제</td><td style="color:var(--grn);font-weight:700">70%</td><td>LTV</td><td><span class="rtag g">일반</span></td></tr>
+        <tr><td>비규제</td><td style="color:var(--grn);font-weight:700">70%</td><td style="font-size:12px">수도권은 한도<br>6억, 4억, 2억</td><td><span class="rtag g">일반</span></td></tr>
         <tr><td>1주택 추가</td><td style="color:var(--red);font-weight:700">0%</td><td>불가</td><td><span class="rtag r">금지</span></td></tr>
         <tr><td>2주택+</td><td style="color:var(--red);font-weight:700">0%</td><td>불가</td><td><span class="rtag r">금지</span></td></tr>
         <tr><td>지방 생애최초</td><td style="color:var(--grn);font-weight:700">80%</td><td>LTV</td><td><span class="rtag g">완화</span></td></tr>
@@ -2745,7 +2745,7 @@ html[data-theme="dark"] #_pannBtn{box-shadow:0 2px 12px rgba(0,0,0,.4)}
     <div style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:11px">
       <div><span class="lbl">주택 보유</span><div class="chips" id="cc-h"><span class="chip on" onclick="cp(this,'cc-h')">무주택</span><span class="chip" onclick="cp(this,'cc-h')">1주택</span><span class="chip" onclick="cp(this,'cc-h')">2주택+</span></div></div>
       <div><span class="lbl">생애최초</span><div class="chips" id="cc-f"><span class="chip" onclick="cp(this,'cc-f')">예</span><span class="chip on" onclick="cp(this,'cc-f')">아니오</span></div></div>
-      <div><span class="lbl">지역</span><div class="chips" id="cc-r"><span class="chip on" onclick="cp(this,'cc-r')">서울규제</span><span class="chip" onclick="cp(this,'cc-r')">비규제</span><span class="chip" onclick="cp(this,'cc-r')">지방</span></div></div>
+      <div><span class="lbl">지역</span><div class="chips" id="cc-r"><span class="chip on" onclick="cp(this,'cc-r')">서울규제</span><span class="chip" onclick="cp(this,'cc-r')" title="수도권이면서 규제지역이 아닌 곳이에요. 한도 6억, 4억, 2억은 수도권 전체에 적용돼요">비규제</span><span class="chip" onclick="cp(this,'cc-r')">지방</span></div></div>
     </div>
     <button class="abtn acc" style="margin-top:0" onclick="dc(true)">계산하기</button>
     <div id="c_err" role="alert" style="display:none;margin-top:8px;font-size:13px;line-height:1.5;color:var(--red)"></div>
@@ -6309,12 +6309,15 @@ function openRegSummary(){
       <!-- Sprint QQ (2026-05-19): 10.15 이후 후속 정책 (4.17 만기연장 금지 / 5.10 양도세 중과 / 5.12 보완책) -->
       <div style="background:#FFE8E8;border:1px solid #E8A0A0;border-radius:var(--radius-base);padding:10px 12px;font-size:12px;color:#8B2914;line-height:1.6;margin-bottom:10px">
         <b style="color:var(--red)">10.15 이후 후속 정책</b><br>
-        <b>2026.4.17~</b> 다주택자(2주택+) 주담대 만기연장 원칙 금지 (수도권·규제지역, 4조 1,000억 영향)<br>
+        <b>2026.4.17~</b> 다주택자(2주택 이상)와 임대사업자의 수도권·규제지역 아파트 담보대출 만기연장 원칙 금지. 임차인이 있으면 임대차 계약이 끝나는 날까지는 연장돼요<br>
         <b>2026.5.10~</b> 다주택자 양도세 중과 부활 (2주택 +20%p / 3주택+ +30%p, 5.9까지 양도분 배제·장기보유특별공제 배제)<br>
         <b>2026.5.12~</b> 보완책: 매도 규제 일부 완화 (이사 등 실수요 일부 허용)<br>
-        <b>2026 전체</b> 가계대출 증가율 1.5% 이내 관리 목표
+        <b>2026 전체</b> 가계대출 증가율 3% 수준 관리 (2026.8.13 대책에서 당초 1.5%를 올림)<br>
+        <b>2026.8.31~</b> 생애최초는 불가피한 사유(예: 미성년 때 상속받은 지분)가 있으면 금융회사 심사를 거쳐 인정받을 수 있어요. 무주택 청년 근로자는 장래소득 인정기준을 적용할 수 있는지 금융회사가 꼭 알려 줘야 해요<br>
+        <b>2026.10~</b> 보금자리론: 신혼부부는 부부 가운데 한 사람의 연소득이 7,000만원 이하여도 대출을 받을 수 있어요(부부 합산 8,500만원 이하도 그대로)<br>
+        <b>2027.1.1~ 예정</b> 수도권·규제지역 아파트를 가진 1주택자가 그 집에 살아 본 적 없이 세를 주고 있으면 전세대출 신규와 만기연장이 원칙적으로 막혀요. 1주택자의 전세대출 보증비율도 수도권·규제지역 70%, 그 밖 80%로 줄어요
       </div>
-      <div style="font-size:12px;color:var(--t3);text-align:center">출처: 금융위 2025.10.15 + 2026.4.1 가계부채 관리방안 (<a href="https://www.korea.kr" target="_blank" rel="noopener" style="color:var(--ac)">korea.kr 정책브리핑</a>) · 바뀔 수 있으니 금융기관에서 꼭 최종 확인해 주세요</div>
+      <div style="font-size:12px;color:var(--t3);text-align:center">출처: 금융위 2025.10.15 대책, 2026.4.1 가계부채 관리방안, 2026.8.13 금융 종합대책 (원문 대조 2026.11.16) (<a href="https://www.korea.kr" target="_blank" rel="noopener" style="color:var(--ac)">korea.kr 정책브리핑</a>) · 바뀔 수 있으니 금융기관에서 꼭 최종 확인해 주세요</div>
     </div>`;
     m.addEventListener('click', e => { if (e.target === m) m.remove(); });
     document.body.appendChild(m);
@@ -13279,7 +13282,15 @@ function calcLTV(buy,cash,inc,mo,house,isF,region,lawdCd){
     warn='처분조건부가 적용돼요. 6개월 안에 기존 주택을 처분한다는 약정이 필요하고, 어기면 대출을 회수당해요.';
   }
   else{ltv=isLoc?(isF?.8:.7):!isR?(isF?.8:.7):(isF?.7:.4);warn=isR&&isF?'생애최초 LTV 70%예요. 6개월 안에 전입해야 해요':isR?'⚠ 무주택 규제지역 LTV 40% (2025.10.15~)':'';}
-  if(isR)cap=buy<=15?6:buy<=25?4:2;
+  // FIRST-METRO-1116 (금융위 원문 전수 대조 2026-11-16): 생애최초 LTV 는 "수도권·규제지역 70%, 그 외 80%"다
+  //   (2026-08-13 금융 종합대책 안건 인쇄 13쪽과 16쪽, fsc.go.kr/no010101/87517 첨부). 전에는 규제지역만 70%로 보고 수도권 비규제(인천, 경기 일부)를 80%로 계산했다.
+  //   "수도권·규제지역"은 한도와 스트레스 금리에서와 같이 수도권 전체와 규제지역을 함께 가리키는 것으로 읽는다(신생아 특례 안내도 같은 기준).
+  if((house==='무주택'||!house)&&isF&&!isR&&!isLoc&&(['서울','경기','인천'].some(k=>String(region||'').includes(k))||/^(11|41|28)/.test(String(lawdCd||'')))){ltv=.7;warn='수도권 생애최초 LTV 70%예요';}
+  // CAP-METRO-1116 (금융위 원문 전수 대조 2026-11-16, fsc.go.kr/no010101/85432): 주담대 한도는 "수도권·규제지역"에 적용된다
+  //   ("수도권·규제지역의 시가 15억원 이하 주택의 주담대 한도는 현행과 동일한 6억원, 15억원 초과～25억원 이하 4억원, 25억원 초과 2억원").
+  //   전에는 규제지역에만 한도를 걸어, 수도권이면서 규제지역이 아닌 곳(인천, 경기 일부)의 한도를 크게 보였다(예: 인천 10억 무주택 7억 → 원문대로면 6억).
+  const _capMetro=['서울','경기','인천'].some(k=>String(region||'').includes(k))||/^(11|41|28)/.test(String(lawdCd||''));
+  if(isR||_capMetro)cap=buy<=15?6:buy<=25?4:2;
   // CALC-CONSIST-2026-06-27: dc() 상세계산기와 금리 모델 통일 — 기준금리 4%(dc c_r 기본값과 일치)
   //   + 스트레스 가산(규제 3.0%p / 그 외 0.75%p, 금융위 10.15 대책·dc smr 정합).
   //   기존 rt=5.5/4.75(=4%+구 스트레스 1.5/0.75)는 규제 스트레스가 옛 1.5%p라 dc(3.0%p) 대비 한도 과대표시였음.
@@ -13397,7 +13408,15 @@ function dc(fromBtn){
   else if(house==='1주택'&&isR){ltv=0;warn='1주택 규제지역 추가 대출 불가';}
   else if(house==='1주택'){ltv=.7;warn='1주택 비규제 LTV 70%';}  // calcLTV와 일치 — 1주택은 생애최초 가산(0.8) 대상 아님
   else{ltv=isLoc?(isF?.8:.7):!isR?(isF?.8:.7):(isF?.7:.4);warn=isR&&isF?'생애최초 70%: 6개월 전입의무':isR?'무주택 규제지역 LTV 40%':'';}
-  if(isR)cap=buy<=15?6:buy<=25?4:2;
+  // FIRST-METRO-1116 (금융위 원문 전수 대조 2026-11-16): 생애최초 LTV 는 "수도권·규제지역 70%, 그 외 80%"다
+  //   (2026-08-13 금융 종합대책 안건 인쇄 13쪽과 16쪽, fsc.go.kr/no010101/87517 첨부). 전에는 규제지역만 70%로 보고 수도권 비규제(인천, 경기 일부)를 80%로 계산했다.
+  //   "수도권·규제지역"은 한도와 스트레스 금리에서와 같이 수도권 전체와 규제지역을 함께 가리키는 것으로 읽는다(신생아 특례 안내도 같은 기준).
+  if(house==='무주택'&&isF&&!isR&&!isLoc){ltv=.7;warn='수도권 생애최초 LTV 70%';}
+  // CAP-METRO-1116 (금융위 원문 전수 대조 2026-11-16, fsc.go.kr/no010101/85432): 주담대 한도는 "수도권·규제지역"에 적용된다
+  //   ("수도권·규제지역의 시가 15억원 이하 주택의 주담대 한도는 현행과 동일한 6억원, 15억원 초과～25억원 이하 4억원, 25억원 초과 2억원").
+  //   전에는 규제지역에만 한도를 걸어, 수도권이면서 규제지역이 아닌 곳(인천, 경기 일부)의 한도를 크게 보였다(예: 인천 10억 무주택 7억 → 원문대로면 6억).
+  //   이 계산기의 지역 칩은 서울규제, 비규제, 지방 셋이다. '비규제'는 수도권 비규제를 뜻한다(스트레스 금리도 지방이 아니면 수도권으로 계산한다).
+  if(isR||!isLoc)cap=buy<=15?6:buy<=25?4:2;
   // STRESS-DSR-2026-06-24: 규제지역 스트레스금리 하한 1.5%→3.0% (금융위 10.15 대책, 변동형 기준). 기존 1.5%는 규제지역 한도 과대표시.
   // DSR-STATE-2026-09-05 (외부 검토 P1 재현·확정): 소득을 입력했는데 기존 월상환이 DSR 40% 허용액을 넘으면 신규 여력은 0이다.
   //   종전 `Math.min(lL, dL>0 ? dL : lL)` 은 계산 결과 0 을 '소득 미입력'과 같은 값으로 읽어 LTV 한도를 대표값으로 되돌렸다
