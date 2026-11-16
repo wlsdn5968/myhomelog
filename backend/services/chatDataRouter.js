@@ -50,6 +50,10 @@ const INTENT_RULES = [
   { intent: 'rates',      re: /금리|이자율|기준\s*금리/ },
   { intent: 'regulation', re: /규제|조정\s*대상|투기\s*과열|토지\s*거래\s*허가|토허/ },
   { intent: 'loanLimit',  re: /대출|한도|DSR|LTV|얼마.*빌릴/i },
+  // BUDGET-FIND-1116 (plans/201 1번, 운영자 승인): "9억으로 서울에서 살 수 있는 아파트" 같은 예산 질문은 답을 못 하고 끝났다(운영 실측 11-15).
+  //   같은 일을 하는 목록 화면으로 넘기는 단추를 준다. 대출과 한도 질문은 위 loanLimit 가 먼저 잡는다.
+  //   느린 정규식 기준선(check-regexp-ratchet) 때문에 한 식으로 잇지 않고, 상한을 둔 짧은 식 두 개를 함께 본다.
+  { intent: 'budgetFind', re: { test: (m) => /\d\s{0,3}억/.test(m) && /살\s?수\s?있|살\s?만\s?한|구할\s?수|갈\s?수\s?있|예산/.test(m) } },
   { intent: 'popular',    re: /인기\s*단지|인기\s*아파트|거래\s*많은|요즘\s*(핫|뜨는|인기)/ },
   { intent: 'jeonse',     re: /전세가율|갭\s*투자|갭이|전세/ },
   { intent: 'market',     re: /시세|실거래|매매가|평당가|가격|얼마/ },
@@ -79,6 +83,11 @@ function classifyIntent(message) {
         //   상투어를 걷어낸 잔여 토큰을 지역 후보로 — 실제 판정은 데이터(sigungu/umd_nm 매칭)가 한다.
         const q = m.replace(POPULAR_STOPWORDS, ' ').replace(/[?!.~,]/g, ' ').replace(/\s+/g, ' ').trim();
         return { intent: 'popular', query: q.length >= 2 ? q : null };
+      }
+      if (r.intent === 'budgetFind') {
+        const b = Number((m.match(/(\d{1,4}(?:\.\d{1,2})?)\s{0,3}억/) || [])[1]);
+        const rg = (m.match(/서울|경기|인천/) || [])[0] || null;
+        return { intent: 'budgetFind', budget: Number.isFinite(b) && b >= 0.5 && b <= 300 ? b : null, region: rg };
       }
       if (r.intent === 'market' || r.intent === 'jeonse') {
         let q = m.replace(MARKET_STOPWORDS, ' ').replace(/[?!.~,]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -833,6 +842,19 @@ function _recommendAsk() {
     '· 요즘 거래 많은 곳: "인기 단지" 라고 물어보세요\n\n판단에 필요한 공식 데이터를 정리해 드리는 게 제 역할이에요.';
 }
 
+// BUDGET-FIND-1116: 도우미가 단지를 직접 골라 답하지 않는다(추천으로 읽히지 않게, 무거운 조회가 붙지 않게). 목록 화면으로 넘긴다.
+function _budgetFind(budget, region) {
+  const cond = [budget ? `${budget}억` : null, region].filter(Boolean).join(', ');
+  return {
+    text: '예산으로 단지를 고르는 일은 목록 화면에서 할 수 있어요.\n\n매물 추천은 하지 않고, 국토교통부 실거래 기준으로 조건에 드는 단지를 정리해 드려요.'
+      + (cond ? `\n아래 단추를 누르면 ${cond} 조건을 채워서 찾아요.` : '\n아래 단추를 누르면 목록 화면으로 가요.') + DISCLAIMER,
+    suggestions: [
+      Object.assign({ label: cond ? `${cond} 조건으로 목록에서 찾기` : '목록에서 조건으로 찾기', view: 'list' }, budget ? { budget } : {}, region ? { region } : {}),
+      budget ? `${budget}억이면 대출 얼마까지 돼?` : '5억이면 대출 얼마까지 돼?',
+    ],
+  };
+}
+
 function _fallback() {
   return `그 질문은 제가 가진 공식 데이터로는 정확히 답하기 어려워요\n\n${EXAMPLES}\n\n매물 추천·가격 전망은 정책상 다루지 않아요 (정보 정리 도구).`;
 }
@@ -854,6 +876,7 @@ const DEFAULT_SUG = {
   market:     ['노원구 인기단지', '오늘 금리'],
   howto:      ['은마 시세', '노원구 인기단지', '오늘 금리'],
   recommendAsk: ['노원구 인기단지', '은마 시세'],
+  budgetFind: ['노원구 인기단지', '오늘 금리'],
   watch:      ['노원구 인기단지', '은마 시세'],
   fallback:   ['은마 시세', '노원구 인기단지', '오늘 금리'],
 };
@@ -885,7 +908,7 @@ async function _observe(intent, message) {
 }
 
 async function route(message, context) {
-  const { intent, query } = classifyIntent(message);
+  const { intent, query, budget, region } = classifyIntent(message);
   logger.info({ source: 'chat-data-router', intent, hasQuery: !!query }, '데이터 도우미 의도 분류');
   await _observe(intent, message);
   switch (intent) {
@@ -901,6 +924,7 @@ async function route(message, context) {
     case 'market':     return _norm(await _market(query, context), intent);
     case 'howto':      return _norm(_howto(), intent);
     case 'recommendAsk': return _norm(_recommendAsk(), intent);
+    case 'budgetFind': return _norm(_budgetFind(budget, region), intent);
     default:           return _norm(_fallback(), 'fallback');
   }
 }

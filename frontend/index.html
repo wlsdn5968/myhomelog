@@ -1157,6 +1157,7 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
 .pop-marker.pop-guhead .pop-gu::after{content:" ·"}
 .pop-marker.pm-mini.pop-guhead .pop-gu::after{content:""}
 .pop-marker.pm-hidden{display:none!important}
+body.cmp-off .cmp-bar{display:none!important} /* CMP-BAR-SCOPE-1116: 목록과 지도 밖에서는 비교 담기 막대를 숨김 */
 .pop-marker.pop-ctr{transform:translate(-50%,-50%)} /* GU-LABEL-1115: 구역 한가운데에 놓는 이름표는 가운데 맞춤 */
 .pop-marker[data-more]::after{content:"+" attr(data-more);margin-left:4px;font-size:9px;font-weight:800;color:#fff;background:#69707B;border-radius:var(--radius-full);padding:1px 5px}
 @media (max-width:520px){ .pop-marker .pop-nm{max-width:96px} }
@@ -13397,6 +13398,19 @@ function dc(fromBtn){
   }
 }
 // 대출계산 → 지도 검색 컨텍스트 전달
+// BUDGET-FIND-1116 (plans/201 1번): 도우미의 "N억, 서울 조건으로 목록에서 찾기" 단추. 매수 예정가와 광역 지역만 채우고 나머지 입력은 그대로 둔다.
+//   값은 서버가 숫자 범위와 허용 목록으로 거른 것이고, 여기서도 한 번 더 본다.
+function _chatBudgetSearch(budget, region){
+  const b = Number(budget);
+  if(Number.isFinite(b) && b >= 0.5 && b <= 300){ const e = document.getElementById('bp'); if(e) e.value = b; }
+  if(['서울','경기','인천'].includes(region)){
+    document.querySelectorAll('#ch-r .chip').forEach(c => c.classList.toggle('on', c.textContent.trim() === region));
+    try{ document.querySelectorAll('#ch-r-sub .chip.on').forEach(c => c.classList.remove('on')); }catch(_){}
+  }
+  try{ if(typeof cl === 'function') cl(); }catch(_){}
+  sv('list');
+  setTimeout(() => { if(typeof doSearch === 'function') doSearch(); }, 200);
+}
 function searchWithBudget(buy,cash,loan,house,isFirst,regStr){
   // 내 상황 섹션에 값 채움
   const bpEl=document.getElementById('bp');if(bpEl)bpEl.value=buy;
@@ -14410,6 +14424,9 @@ function sv(v,btn){
     if(el)el.style.display=id===v?meta.display:'none';
   });
   try{ _svHist(v); }catch(_){} // VIEW-HISTORY-1115: 화면이 바뀐 바로 뒤에 적는다. 아래 그리기 함수가 예외를 내도 기록과 화면이 어긋나지 않게
+  // CMP-BAR-SCOPE-1116 (plans/201 3번, 운영자 승인): 비교 담기 막대는 목록과 지도 화면에서만 보인다. 다른 화면에서는 아래 내용과 단추를 가렸다
+  //   (운영 실측 11-15: 보고서, 청약, 특약, 체크리스트, 갈아타기, 브리핑). 담아 둔 단지는 그대로라 돌아오면 다시 보인다.
+  try{ document.body.classList.toggle('cmp-off', !(v === 'list' || v === 'map')); }catch(_){}
 
 
   // TAB-SCROLL-RESET-2026-08-20 (18 전수조사 잔여, 라이브 실측: #view-news scrollTop 500 이 탭 전환 후에도 유지돼
@@ -16223,7 +16240,7 @@ async function sM(){
               b.style.cssText = 'font-size:12px;padding:5px 10px' + (isNav ? ';font-weight:700' : '');
               b.textContent = label.slice(0, 34);
               b.addEventListener('click', isNav
-                ? () => { try{_closeAiPanel();}catch(_){ } VIEW_ACTS[s.view](); }
+                ? () => { try{_closeAiPanel();}catch(_){ } if (s.view === 'list' && (s.budget || s.region)) _chatBudgetSearch(s.budget, s.region); else VIEW_ACTS[s.view](); }
                 : () => qSend(label.slice(0, 100)));
               wrap.appendChild(b);
             }

@@ -102,7 +102,16 @@ router.post('/', validateChatInput, async (req, res) => {
       ? suggestions.map(s => {
           if (typeof s === 'string' && s.trim().length >= 2) return s.slice(0, 40);
           if (s && typeof s === 'object' && typeof s.label === 'string' && s.label.trim().length >= 2
-              && ALLOWED_VIEWS.has(s.view)) return { label: s.label.slice(0, 40), view: s.view };
+              && ALLOWED_VIEWS.has(s.view)) {
+            const out = { label: s.label.slice(0, 40), view: s.view };
+            // BUDGET-FIND-1116: 목록 이동 칩은 예산(억)과 광역 지역만 함께 넘길 수 있다(숫자 범위와 허용 목록으로 거른다)
+            if (s.view === 'list') {
+              const b = Number(s.budget);
+              if (Number.isFinite(b) && b >= 0.5 && b <= 300) out.budget = b;
+              if (['서울', '경기', '인천'].includes(s.region)) out.region = s.region;
+            }
+            return out;
+          }
           return null;
         }).filter(Boolean).slice(0, 3)
       : [];
