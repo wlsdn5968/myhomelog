@@ -652,7 +652,7 @@ async function getDataBasis() {
     const out = {
       txLatest: latest,                                   // 예: '2026-07-07'
       txLatestLabel: latest ? `${latest.slice(0, 7)} 실거래까지 반영` : null,
-      regulationBasis: '2025.10.15 주택시장 안정화 대책 (금융위) · 2026.6.30 규제지역 확대 반영',
+      regulationBasis: '2025.10.15 주택시장 안정화 대책 (금융위)부터 2026.8.13 금융 종합대책까지 반영',
       rateBasis,
       sources: ['국토교통부 실거래가', 'K-apt 공동주택', '건축물대장(건축HUB)', '학교알리미·NEIS', '카카오맵', '국가법령정보', '금융위원회', ...(ecosSource ? ['한국은행 ECOS'] : [])],
     };

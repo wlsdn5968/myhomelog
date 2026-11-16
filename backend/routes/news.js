@@ -234,7 +234,7 @@ async function _dataMarketItems() {
         cache.set(CK, latest, 21600);
       }
       // 종전 문자열엔 출처 표기가 없던 라인 — 구조화로 처음 출처가 생긴다(srcInline:false 라 문자열은 불변).
-      items.push({ text: `2025.10.15 안정화 대책 · 2026.6.30 규제지역 확대 적용 중${latest ? ` · 실거래 ${latest.slice(0, 7).replace('-', '.')}월분까지 반영` : ''}`, src: '금융위·국토부 고시', date: latest ? latest.slice(0, 7).replace('-', '.') : null, srcInline: false });
+      items.push({ text: `2025.10.15 안정화 대책부터 2026.8.13 금융 종합대책까지 적용 중${latest ? ` · 실거래 ${latest.slice(0, 7).replace('-', '.')}월분까지 반영` : ''}`, src: '금융위·국토부 고시', date: latest ? latest.slice(0, 7).replace('-', '.') : null, srcInline: false });
     }
   } catch (e) { logger.warn({ err: e && e.message }, '시황 라인 생략: 규제·적재 시점 조회 실패'); }
   return items;

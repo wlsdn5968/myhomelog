@@ -130,16 +130,16 @@ test('화면 기록: 코드가 스스로 부른 첫 전환은 기록을 쌓지 �
 });
 
 test('화면 기록: 사람이 누른 뒤의 전환은 기록을 하나 쌓고 주소에 ?view= 를 맞춘다. 지도는 기본이라 뺀다. 같은 화면은 쌓지 않는다', () => {
-  const e = _historyEnv('map', 'https://x.test/?region=%EC%84%9C%EC%9A%B8');
+  const e = _historyEnv('map', 'https://x.test/?apt=A1&region=%EC%84%9C%EC%9A%B8');
   e.fire('pointerdown');
   e.sv('calc');
   assert.equal(e.pushed.length, 1);
-  assert.equal(e.pushed[0].url, '/?region=%EC%84%9C%EC%9A%B8&view=calc', '다른 주소 값은 그대로');
+  assert.equal(e.pushed[0].url, '/?apt=A1&view=calc', '다른 주소 값은 그대로 두고, 목록 조건(region)만 목록 밖 화면에서 뺀다(URL-CLEAN-1116)');
   assert.deepEqual(e.pushed[0].st, { mhlView: 'calc' });
   e.sv('calc');
   assert.equal(e.pushed.length, 1);
   e.sv('map');
-  assert.equal(e.pushed[1].url, '/?region=%EC%84%9C%EC%9A%B8');
+  assert.equal(e.pushed[1].url, '/?apt=A1');
 });
 
 test('화면 기록: 뒤로 가기는 기록에 표시된 화면을 다시 열고 새 기록을 쌓지 않는다. 표시가 없거나 모르는 화면이면 아무것도 하지 않는다', () => {

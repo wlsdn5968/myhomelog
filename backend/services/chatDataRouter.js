@@ -534,7 +534,7 @@ async function _regulation(message) {
     sample = list.filter(k => k.length >= 2).slice(0, 8);
     kw = list.find(k => k.length >= 2 && message.includes(k)) || null;
   } catch (_) { /* snapshot 실패 → 일반 안내 */ }
-  const basis = '(2025.10.15 대책 + 2026.6.30 확대 기준)';
+  const basis = '(2025.10.15 대책부터 2026.6.30 규제지역 확대까지 기준)';
   if (kw) {
     return `"${kw}": 현행 규제지역 목록에 있는 지역이에요 ${basis}\n` +
       '· 투기과열지구·조정대상지역에는 LTV 40%(무주택 기준), 대출 한도 제한, 전입 의무 등이 적용돼요\n' +

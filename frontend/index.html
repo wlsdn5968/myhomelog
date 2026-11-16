@@ -209,6 +209,8 @@ window.MHL.auth = window.MHL.auth || {
           A.session = r.data?.session || null;
           A.user = A.session?.user || null;
           A._emit();
+          // USAGE-LOGIN-1116: 저장된 로그인이 복원될 때는 SIGNED_IN 이 오지 않을 수 있어, 한도 표시가 비로그인 값으로 남았다.
+          try { if (A.session && typeof refreshQuota === 'function') setTimeout(refreshQuota, 300); } catch(_){}
         });
         sb.auth.onAuthStateChange(function(event, session){
           A.session = session || null;
@@ -2726,7 +2728,7 @@ html[data-theme="dark"] #_pannBtn{box-shadow:0 2px 12px rgba(0,0,0,.4)}
   <h2>대출 계산</h2>
   <!-- KKKKKKK-14: "2025.10.15 규제 기준" 단독 표기는 낡아 보임 — 실제로는 2026.6.30 확대(동탄·기흥·구리)까지
        반영돼 있으므로(규제요약 헤더 표현과 통일) 사실 그대로 표기 -->
-  <p>2025.10.15 대책과 2026.6.30 확대 내용을 반영했어요. 참고용이며 실제 한도는 금융기관에서 꼭 확인하세요.</p>
+  <p>2025.10.15 대책부터 2026.8.13 금융 종합대책까지 반영했어요. 참고용이며 실제 한도는 금융기관에서 꼭 확인하세요.</p>
   <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:var(--radius-md);padding:13px 15px;margin-bottom:14px;max-width:520px">
     <div style="font-size:12px;font-weight:700;color:var(--accent-700);margin-bottom:9px;letter-spacing:.3px">부동산 정책 타임라인 <span style="font-weight:500;color:var(--t3);font-size:12px">· D-day는 자동으로 계산돼요 (D+는 이미 지난 일정)</span></div>
     <div id="policyTimeline" style="display:flex;flex-direction:column;gap:7px"></div>
@@ -3543,7 +3545,7 @@ html[data-theme="dark"] #view-news{
 
     <!-- 3. 대출 한도 계산 -->
     <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-md);padding:13px 16px;margin-bottom:10px">
-      <summary style="cursor:pointer;font-size:14px;font-weight:700;color:var(--t1);list-style:none">대출 계산 (2025.10.15 대책, 2026.6.30 확대 반영)</summary>
+      <summary style="cursor:pointer;font-size:14px;font-weight:700;color:var(--t1);list-style:none">대출 계산 (2025.10.15 대책부터 2026.8.13 대책까지 반영)</summary>
       <div style="margin-top:10px;font-size:12px;color:var(--t2);line-height:1.85">
         매수가, 연소득, 기존 대출(신용, 전세)을 입력하면 <b>LTV·DSR·적용 한도·월 원리금</b>을 바로 계산해요<br>
         <b>정책자금 4종 비교</b>: 보금자리, 디딤돌, 신혼 디딤돌, 신생아 특례의 한도와 금리<br>
@@ -4112,8 +4114,8 @@ html[data-theme="dark"] #view-news{
         <div class="sm-lbl">데이터 출처</div>
         <div class="sm-hint">
           · 실거래가: 국토교통부 (data.go.kr)<br>
-          · 지도: 네이버 지도 (NCP)<br>
-          · 좌표·학교·편의시설: 카카오맵 Local API<br>
+          · 지도: 네이버 지도<br>
+          · 좌표·학교·편의시설: 카카오맵<br>
         </div>
       </div>
       <button class="sm-save" onclick="closeSM()">확인</button>
@@ -6264,7 +6266,7 @@ function openRegSummary(){
     m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:99998;display:flex;align-items:center;justify-content:center;padding:20px';
     m.innerHTML = `<div style="background:var(--bg-base);border-radius:var(--radius-lg);max-width:520px;width:100%;max-height:85vh;overflow-y:auto;padding:20px 22px;box-shadow:0 12px 40px rgba(0,0,0,0.3)">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-        <h3 style="margin:0;font-size:16px;color:var(--t1)">부동산 규제 요약 <span style="font-size:12px;font-weight:500;color:var(--t3)">2025.10.15 대책 + 2026.6.30 확대 반영</span></h3>
+        <h3 style="margin:0;font-size:16px;color:var(--t1)">부동산 규제 요약 <span style="font-size:12px;font-weight:500;color:var(--t3)">2025.10.15 대책부터 2026.8.13 대책까지 반영</span></h3>
         <button onclick="document.getElementById('regSummaryModal').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--t3)" aria-label="닫기">✕</button>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:14px">
@@ -6346,10 +6348,14 @@ const POLICY_TIMELINE = [
   { date:'2025-10-15', title:'규제지역 확대·DSR 강화 시행', desc:'서울 25개구 + 경기 12곳(발표 당시) 규제지역·토지거래허가구역 동시 지정(효력 10.20). 현재 경기 15곳', tag:'규제', tone:'red' },
   { date:'2025-10-29', title:'1주택자 전세대출 이자 DSR 반영', desc:'전세대출 이자도 총부채상환비율에 포함', tag:'대출', tone:'amb' },
   { date:'2026-01-01', title:'은행권 주담대 위험가중치 15%에서 20%로', desc:'은행 주담대 공급 위축·금리 상승 압력', tag:'금융', tone:'a2' },
-  { date:'2026-04-17', title:'다주택자 주담대 만기연장 금지', desc:'2주택+ 임대사업자 수도권·규제지역 주담대 만기연장 원칙 금지 (4조 1,000억 / 1.7만 가구)', tag:'대출', tone:'red' },
+  { date:'2026-04-17', title:'다주택자 주담대 만기연장 금지', desc:'2주택+ 임대사업자 수도권·규제지역 주담대 만기연장 원칙 금지. 임차인이 있으면 임대차 계약이 끝나는 날까지는 연장', tag:'대출', tone:'red' },
   { date:'2026-05-10', title:'다주택자 양도세 중과 부활', desc:'2022.5~ 한시 유예 종료(5.9까지 양도분 배제). 2주택 +20%p / 3주택+ +30%p·장특공 배제', tag:'세제', tone:'amb' },
   { date:'2026-05-12', title:'5.12 보완책 시행', desc:'매도 규제 일부 완화 (이사 등 실수요 일부 허용)', tag:'완화', tone:'grn' },
   { date:'2026-06-30', title:'규제지역 추가 지정 (동탄·기흥·구리)', desc:'화성 동탄구·용인 기흥구·구리시 투기과열+조정대상(7.1 효력)·토허구역(7.5~2027말). 국토부 6.29 주거정책심의위 의결', tag:'규제', tone:'red' },
+  // TIMELINE-0813-1116 (전면 감사 발견 2, 3): 계산식은 8.13 대책까지 반영됐는데 타임라인은 6.30 에서 멈춰 있었다.
+  //   근거: 금융위 2026-08-13 보도자료 본문("금년도 가계부채 총량 증가율은 3% 수준 (당초 1.5%)")과 첨부 안건 13쪽, 16쪽(fsc.go.kr/no010101/87517).
+  //   4.17 항목에 있던 영향 금액과 가구 수는 2026-11-16 원문 대조에서 근거를 찾지 못해 뺐다.
+  { date:'2026-08-13', title:'부동산 시장 안정을 위한 금융 종합대책', desc:'올해 가계부채 증가율 관리 목표를 3% 수준으로 올림(당초 1.5%). 생애최초 LTV는 수도권·규제지역 70%, 그 밖 80%. 1주택자 전세대출 제한은 2027.1.1 예정. 금융위 8.13 발표', tag:'대출', tone:'amb' },
 ];
 
 function renderPolicyTimeline(){
@@ -6966,7 +6972,9 @@ function updateQuota(usage){
   }
   // USAGE-INFO-2026-07-16 (Sprint SSSSS): 정적 안내("로그인 시 10회/일 · 특약·채팅 별도 한도")가 이 덮어쓰기로 소실되던 것 — 항상 뒤에 유지
   _syncHUsage();
-  if(info)info.textContent = usage.unlimited ? '검색 무제한 (운영자·관리자)' : `오늘 ${usage.used}/${usage.limit}회 사용했어요 (남은 무료 검색 ${usage.remaining}회). 매일 자정에 다시 채워지고, 로그인하면 하루 10회예요. 특약 초안과 도우미 채팅은 한도가 따로 있어요.`;
+  // USAGE-LOGIN-1116 (전면 감사 발견 5): 이미 로그인한 사람에게도 "로그인하면 하루 10회예요"가 보였다.
+  const _uIn = !!(window.MHL && window.MHL.auth && window.MHL.auth.user);
+  if(info)info.textContent = usage.unlimited ? '검색 무제한 (운영자·관리자)' : `오늘 ${usage.used}/${usage.limit}회 사용했어요 (남은 무료 검색 ${usage.remaining}회). ${_uIn ? '매일 자정에 다시 채워져요.' : '매일 자정에 다시 채워지고, 로그인하면 하루 10회예요.'} 특약 초안과 도우미 채팅은 한도가 따로 있어요.`;
 }
 let _hlthAuthVal = null, _hlthAuthAt = 0, _hlthAuthP = null;
 function _healthAuthJson(headers){
@@ -7418,12 +7426,33 @@ function _mapApplyHome(){
   } catch(_) {}
 }
 
+function _mapFailNote(){
+  try{
+    const host=document.getElementById('mapEl');
+    if(!host||document.getElementById('mapFailNote'))return;
+    const n=document.createElement('div');
+    n.id='mapFailNote';n.setAttribute('role','status');
+    n.style.cssText='position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);z-index:1000;max-width:300px;background:var(--bg1,#fff);color:var(--t1,#111);border:1px solid var(--bd,#ccc);border-radius:12px;padding:14px 16px;font-size:13px;line-height:1.6;text-align:center;box-shadow:0 4px 16px rgba(0,0,0,.12)';
+    const p=document.createElement('div');
+    p.textContent='지도 배경을 불러오지 못했어요. 순위 목록과 단지 검색은 그대로 쓸 수 있어요.';
+    const b=document.createElement('button');
+    b.type='button';b.className='hbtn';b.textContent='다시 시도';b.style.cssText='margin-top:10px;padding:6px 14px';
+    b.addEventListener('click',()=>{location.reload();});
+    n.appendChild(p);n.appendChild(b);host.appendChild(n);
+    if(window.Sentry)window.Sentry.captureMessage('Fallback map tiles blocked: notice shown');
+  }catch(_){ /* 안내를 못 띄워도 지도 밖 기능은 그대로다 */ }
+}
 function initLeaflet(){
   const _sv0=_mapStartView(); // MAP-HOME-1114
   mapObj=L.map('mapEl',{center:[_sv0.lat,_sv0.lng],zoom:_sv0.zoom});
   mapObj.on('moveend', _mapSaveView);
   _mapHookUserMove(); _mapApplyHome();
-  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(mapObj);
+  const _tl=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(mapObj);
+  // MAP-FAIL-NOTE-1116 (전면 감사 발견 1): 운영 도메인에서 이 배경 그림이 전부 403 으로 막혀 빈 지도만 보였다(2026-11-16 운영 크롬 확인).
+  //   한 장도 못 받은 채 실패가 4번 쌓이면 지도 위에 안내와 다시 시도 단추를 띄운다. 순위 목록과 검색은 지도 없이도 쓸 수 있다.
+  let _tOk=0,_tErr=0;
+  _tl.on('tileload',()=>{_tOk++;const n=document.getElementById('mapFailNote');if(n)n.remove();});
+  _tl.on('tileerror',()=>{_tErr++;if(_tOk===0&&_tErr===4)_mapFailNote();});
   mapObj._isLeaflet=true;
   // MAP-INVALIDATE-2026-05-13 (Sprint FF — 운영자 발견 "지도 깨짐"):
   //   Leaflet 의 invalidateSize() 누락 → 모달/사이드바/리사이즈 후 tile 일부만 로드 + 회색 영역.
@@ -10708,7 +10737,8 @@ function handleViewParam(){
       if (fab) { fab.click(); return true; }
       return false;
     }
-    if (typeof VIEW_DISPLAY === 'object' && VIEW_DISPLAY && VIEW_DISPLAY[v] && typeof sv === 'function') {
+    // VIEW-OWN-1116 (전면 감사 발견 4): VIEW_DISPLAY[v] 만 보면 ?view=constructor 같은 객체 기본 속성 이름이 통과해 모든 화면이 숨었다(운영 확인).
+    if (typeof VIEW_DISPLAY === 'object' && VIEW_DISPLAY && Object.hasOwn(VIEW_DISPLAY, v) && typeof sv === 'function') {
       sv(v);
       return true;
     }
@@ -14581,6 +14611,8 @@ let _svCur=null,_svPop=false,_svUser=false;
 function _svUrl(v){
   const u=new URL(location.href);
   if(v==='map')u.searchParams.delete('view');else u.searchParams.set('view',v);
+  // URL-CLEAN-1116 (전면 감사 발견 9): 목록 조건(지역, 주택 보유 등)이 브리핑 같은 다른 화면 주소에도 붙어 다녔다. 목록 화면 주소에만 둔다.
+  if(v!=='list')['region','house','first','school','py'].forEach(k=>u.searchParams.delete(k));
   return u.pathname+u.search+u.hash;
 }
 // 첫 화면(지도)은 sv 를 거치지 않고 떠 있다. 첫 전환 직전에 지금 보이는 화면을 현재 기록에 표시해 둬야 뒤로 가기가 그 화면으로 돌아온다.
@@ -14593,7 +14625,7 @@ function _svSeed(){
   if(!(history.state&&history.state.mhlView===cur))history.replaceState(Object.assign({},history.state||{},{mhlView:cur}),'');
 }
 function _svHist(v){
-  if(!VIEW_DISPLAY[v]||!history.pushState)return;
+  if(!Object.hasOwn(VIEW_DISPLAY,v)||!history.pushState)return;
   const prev=_svCur;_svCur=v;
   if(_svPop||prev===v)return;
   const st=Object.assign({},history.state||{},{mhlView:v});
@@ -14602,7 +14634,7 @@ function _svHist(v){
 }
 window.addEventListener('popstate',e=>{
   const v=e.state&&e.state.mhlView;
-  if(!v||!VIEW_DISPLAY[v]||v===_svCur)return;
+  if(!v||!Object.hasOwn(VIEW_DISPLAY,v)||v===_svCur)return;
   _svPop=true;
   try{sv(v);}finally{_svPop=false;}
 });
@@ -16049,7 +16081,7 @@ function calcComm(){
     <div>법정 상한 복비: <b style="color:var(--acc)">${commMax.toLocaleString()}만원</b></div>
     <div style="font-size:12px;color:var(--t2);margin-top:3px">+ 부가세 (VAT 10%): <b>${vatAmount.toLocaleString()}만원</b></div>
     <div style="font-size:12px;margin-top:3px">= 실 결제 예상: <b style="color:var(--acc)">${totalWithVat.toLocaleString()}만원</b> <span style="font-size:12px;color:var(--t3)">(중개사가 일반과세자인 경우)</span></div>
-    <div style="margin-top:8px;padding-top:6px;border-top:1px dotted var(--bd)">협상 목표가: <b style="color:var(--grn)">${commNeg.toLocaleString()}만원</b> 이하 권장 (+VAT)</div>
+    <div style="margin-top:8px;padding-top:6px;border-top:1px dotted var(--bd)">참고로 상한의 70%는 <b style="color:var(--grn)">${commNeg.toLocaleString()}만원</b>이에요 (+VAT)</div>
     <div style="font-size:12px;margin-top:5px">법정 상한 이하로 협상할 수 있어요. 계약서를 쓰기 전에 협의하세요 (공인중개사법 제32조)<br>※ 간이과세자 중개사는 VAT가 면제될 수 있어요. 사업자등록을 확인하세요.</div>`;
   document.getElementById('commResult').classList.add('show');
 }
@@ -16084,7 +16116,11 @@ async function chkAPI(_isRetry){
       cs.textContent='● 온라인';cs.style.color='var(--grn)';
       if(bs){bs.textContent='연결됨';bs.className='sm-badge';}
       // 사용 한도 표시 (모달 + 헤더 사용량 텍스트)
-      if(d.usage){
+      // USAGE-LOGIN-1116: 이 응답은 로그인 정보 없이 받은 것이다. 로그인한 사람에게 그리면 관리자와 로그인 사용자의 한도가
+      //   비로그인 값(0/5)으로 덮였다(운영 확인: 토큰을 실은 health 는 무제한, 화면은 0/5). 로그인 상태면 토큰을 실어 다시 받는다.
+      if(window.MHL && window.MHL.auth && window.MHL.auth.session){
+        try{ refreshQuota(); }catch(_){}
+      } else if(d.usage){
         updateQuota(d.usage);
       }
       // Sprint OOOOO-2: 익명 세션은 auth 이벤트 기반 refreshQuota 가 안 돌아 채팅 잔여가 "—"로 남음
