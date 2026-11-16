@@ -188,6 +188,7 @@ DB
 정책 기준
 - 작업을 시작할 때 health 의 `crons['regulations-auto-fetch'].pendingReview` 를 본다. 0 이 아니면 그 보도자료의 원문(본문과 첨부)을 열어 저장값과 대조한다. 제목만 보고 넘어가지 않는다. 180일 경고 띠를 기다리지 않는다. → `docs/ops/operations-rules.md` 끝(2026-11-16 운영자 지적)
 - 주담대 한도와 생애최초 LTV 는 수도권 전체에 적용된다("수도권·규제지역"). 계산식 세 곳(화면 calcLTV, 상세 계산기 dc, 서버 computeLTV)을 같이 고친다. → `backend/test/cap-metro-1116.test.js`
+- 정책 변화 화면의 자료는 `backend/data/policy-changes.json` 하나다. `frontend/js/policy-data.js` 는 직접 고치지 않고 `node scripts/build-policy-data.js` 로 만든다. 원문 본문을 열어 대조한 것만 넣고, 정부안은 "안"으로 표시한다. 전체를 다시 대조한 날에만 `checked` 를 고친다. → `plans/203-policy-changes.md`
 
 일정이 걸린 것
 - 개인정보처리방침 시행본(`privacy-1117`)은 2026-11-17 KST 전에 배포하지 않는다. 그 브랜치와 작업 폴더를 지우지 말 것. → `HANDOFF.md`
@@ -204,7 +205,7 @@ DB
 
 ## 📂 핵심 구조와 상세 문서
 
-- 화면: `frontend/index.html`(본체), `frontend/js/*.js`(본체에서 옮긴 일반 스크립트. 지금은 `swap-checklist.js` 하나, 계획은 `plans/202-frontend-split.md`), `frontend/sw.js`, 구 경계 `frontend/geo/`
+- 화면: `frontend/index.html`(본체), `frontend/js/*.js`(본체 앞에서 부르는 일반 스크립트: `swap-checklist.js`, `policy.js`, 자료 `policy-data.js`. 계획은 `plans/202-frontend-split.md`), `frontend/sw.js`, 구 경계 `frontend/geo/`
 - 서버: `backend/server.js`, `backend/routes/`, `backend/services/`, `backend/jobs/`(예약 작업), `backend/middleware/`, 진입점 `api/index.js`
 - 예약 작업과 경로 연결: `vercel.json` (예약 작업 14개)
 - 검사: `backend/test/`, 묶음 실행은 `scripts/run-backend-tests-utc.js`

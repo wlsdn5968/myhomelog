@@ -113,7 +113,7 @@ test('⑤ 화면 연결: 뷰 등록, 헤더 도구 메뉴·모바일 도구 시�
   assert.match(html, /deal: {2}\{display:'flex', lp:false, rp:false\}/);
   assert.match(html, /<button class="htab" onclick="sv\('deal',this\)">/);
   assert.match(html, /class="ts-item" data-tool="deal"/);
-  assert.equal((html.match(/\['clause','subs','calc','biz','deal','swap','guide'\]\.includes\(v\)/g) || []).length, 2);
+  assert.equal((html.match(/\['clause','subs','calc','biz','deal','swap','guide','policy'\]\.includes\(v\)/g) || []).length, 2);
   assert.match(html, /if\(v==='deal'\)\{try\{_dclOpen\(\);\}catch\(_\)\{\}\}/);
   assert.match(html, /onclick="sv\('deal'\)">거래 체크리스트<\/button>/);
   assert.match(html, /onclick="sv\('deal'\)">단계별 거래 체크리스트 보기<\/button>/);

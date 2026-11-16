@@ -410,6 +410,8 @@ app.use('/region', ssrMemLimiter, require('./routes/regionPage'));
 app.use('/apt', ssrMemLimiter, require('./routes/aptPage'));
 // DATA-SOURCES-2026-10-19 (plans/167 §1-3): 데이터 출처·갱신 주기 한 페이지. vercel.json 에 `/data-sources` 라우트(404 규칙 앞) 필요.
 app.use('/data-sources', ssrMemLimiter, require('./routes/dataSources'));
+// POLICY-CHANGES-1116 (plans/203): 정책 변화 한 장 요약. DB 와 외부 API 를 부르지 않는다. vercel.json 에 `/policy` 라우트(404 규칙 앞) 필요.
+app.use('/policy', ssrMemLimiter, require('./routes/policyPage'));
 // OG-IMAGE-DYNAMIC-2026-09-02 (Sprint RRRRRRR): 단지별 링크 미리보기 이미지.
 //   `/api/(.*)` 가 이미 이 함수로 라우팅되므로 vercel.json 변경은 필요 없다(실측 확인).
 //   satori·resvg 는 렌더 시점에만 지연 로드된다 — 다른 요청의 콜드스타트에 얹히지 않는다.

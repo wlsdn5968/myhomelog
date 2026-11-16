@@ -135,7 +135,7 @@ export default [
     // SPLIT-1116 (plans/202 1단계): 본체 스크립트가 부르는 frontend/js/swap-checklist.js 의 함수.
     //   일반 스크립트는 전역을 함께 쓰므로 실행에는 문제가 없다. 린트가 파일을 따로 보기 때문에 적어 준다(2026-11-16 린트 출력으로 센 이름).
     files: ['.lint-tmp/**/*.js'],
-    languageOptions: { globals: { _dclFromTimeline: 'readonly', _dclOpen: 'readonly', _swpRender: 'readonly' } },
+    languageOptions: { globals: { _dclFromTimeline: 'readonly', _dclOpen: 'readonly', _swpRender: 'readonly', _polOpen: 'readonly', _polRecent: 'readonly' } },
   },
   {
     // 반대 방향: swap-checklist.js 가 실행 시점에 부르는 본체의 함수와 값.

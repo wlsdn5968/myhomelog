@@ -32,6 +32,7 @@ const STATIC_URLS = [
   { loc: '/privacy.html', lastmod: '2026-05-04', changefreq: 'monthly', priority: '0.3' },
   { loc: '/refund.html', lastmod: '2026-05-04', changefreq: 'monthly', priority: '0.3' },
   { loc: '/data-sources', lastmod: '2026-10-19', changefreq: 'monthly', priority: '0.4' }, // DATA-SOURCES-2026-10-19
+  { loc: '/policy', lastmod: require('../data/policy-changes.json').checked, changefreq: 'weekly', priority: '0.7' }, // POLICY-CHANGES-1116 (plans/203): 마지막 원문 확인일
 ];
 
 function urlTag({ loc, lastmod, changefreq, priority }) {

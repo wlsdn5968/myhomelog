@@ -92,7 +92,7 @@ test('⑤ 화면 연결: 뷰 등록·도구 메뉴·도구 시트·단지 상세
   assert.match(html, /swap: {2}\{display:'flex', lp:false, rp:false\}/);
   assert.match(html, /<button class="htab" onclick="sv\('swap',this\)">/);
   assert.match(html, /class="ts-item" data-tool="swap"/);
-  assert.equal((html.match(/\['clause','subs','calc','biz','deal','swap','guide'\]\.includes\(v\)/g) || []).length, 2);
+  assert.equal((html.match(/\['clause','subs','calc','biz','deal','swap','guide','policy'\]\.includes\(v\)/g) || []).length, 2);
   assert.match(html, /if\(v==='swap'\)\{try\{_swpRender\(\);\}catch\(_\)\{\}\}/);
   assert.match(html, /k:'swap', tier:'txt', l:'지금 집으로 갈아타기 계산', oc:'goSwapFromCurrentDetail\(\)'/);
   assert.match(html, /function calcLTV\(buy,cash,inc,mo,house,isF,region,lawdCd\)\{/);

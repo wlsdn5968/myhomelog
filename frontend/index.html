@@ -2248,6 +2248,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
     <button class="htab" onclick="sv('deal',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/><path d="M13 6h8"/><path d="M13 12h8"/><path d="M13 18h8"/></svg>거래 체크리스트</button>
     <button class="htab" onclick="sv('swap',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></svg>갈아타기 계산</button>
     <button class="htab" onclick="sv('guide',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg>사용법</button>
+    <button class="htab" onclick="sv('policy',this)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg>정책 변화</button>
     <!-- Sprint OOOOO: 규제 요약(비뷰 버튼) — 반드시 마지막 유지(인덱스 밖 → 항상 off) -->
     <button class="htab" onclick="closeToolMenu();openRegSummary()" title="부동산 규제 요약 (2025.10.15 대책 + 2026 후속 반영)"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3.5v5c0 4.4-3 7.6-7 9.5-4-1.9-7-5.1-7-9.5v-5Z"/></svg>규제 요약</button>
       </div>
@@ -2731,9 +2732,9 @@ html[data-theme="dark"] #_pannBtn{box-shadow:0 2px 12px rgba(0,0,0,.4)}
        반영돼 있으므로(규제요약 헤더 표현과 통일) 사실 그대로 표기 -->
   <p>2025.10.15 대책부터 2026.8.13 금융 종합대책까지 반영했어요. 참고용이며 실제 한도는 금융기관에서 꼭 확인하세요.</p>
   <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:var(--radius-md);padding:13px 15px;margin-bottom:14px;max-width:520px">
-    <div style="font-size:12px;font-weight:700;color:var(--accent-700);margin-bottom:9px;letter-spacing:.3px">부동산 정책 타임라인 <span style="font-weight:500;color:var(--t3);font-size:12px">· D-day는 자동으로 계산돼요 (D+는 이미 지난 일정)</span></div>
+    <div id="policyTimelineHead" style="font-size:12px;font-weight:700;color:var(--accent-700);margin-bottom:9px;letter-spacing:.3px">부동산 정책 타임라인 <span style="font-weight:500;color:var(--t3);font-size:12px">· D-day는 자동으로 계산돼요 (D+는 이미 지난 일정)</span></div>
     <div id="policyTimeline" style="display:flex;flex-direction:column;gap:7px"></div>
-    <div style="font-size:12px;color:var(--t3);margin-top:8px;line-height:1.5">출처: 금융위원회, 국토교통부 발표. 시행일은 바뀔 수 있으니 공식 공고를 확인하세요.</div>
+    <div id="policyTimelineFoot" style="font-size:12px;color:var(--t3);margin-top:8px;line-height:1.5;clear:both">출처: 금융위원회, 국토교통부 발표. 시행일은 바뀔 수 있으니 공식 공고를 확인하세요.</div>
   </div>
   <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--r);padding:17px;margin-bottom:14px;max-width:520px;box-shadow:var(--sh)">
     <div class="r2"><div><label class="lbl" for="c_b">매수가(억)</label><input class="inp" id="c_b" type="number" inputmode="decimal" placeholder="7.0" oninput="dc()"></div><div><label class="lbl" for="c_i">연소득(만)</label><input class="inp" id="c_i" type="number" inputmode="decimal" placeholder="5000" oninput="dc()"></div></div>
@@ -3515,6 +3516,94 @@ html[data-theme="dark"] #view-news{
   </div>
 </div>
 
+<style id="polStyles">
+/* POLICY-CHANGES-1116 (plans/203): 정책 변화 화면. 시안 https://claude.ai/design/p/630c0f3a-88f5-4245-aa88-9e7872eef676 */
+#view-policy{flex-direction:column;overflow-y:auto;background:var(--bg)}
+#polRoot{width:100%;max-width:1040px;margin:0 auto;padding:28px 24px 96px}
+.pol-head{display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+.pol-h1{font-size:30px;font-weight:800;letter-spacing:-.02em;color:var(--t1);margin:0 0 6px}
+.pol-sub{font-size:15px;color:var(--t2);margin:0}
+.pol-info{font-size:13px;color:var(--t3);white-space:nowrap}
+.pol-cats,.pol-states{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pol-states{margin-top:12px;gap:4px}
+.pol-states-lb{font-size:13px;color:var(--t3);margin-right:8px}
+.pol-btn{font:inherit;font-size:14px;color:var(--t1);background:var(--s0);border:1px solid var(--bd);border-radius:999px;padding:8px 16px;min-height:40px;cursor:pointer}
+.pol-btn.on{background:var(--accent-600,#17335A);border-color:var(--accent-600,#17335A);color:#fff;font-weight:700}
+.pol-states .pol-btn{border-color:transparent;background:transparent;color:var(--t2);border-radius:8px;padding:6px 12px;min-height:36px}
+.pol-states .pol-btn.on{background:var(--bg2);color:var(--t1);font-weight:700}
+.pol-sum{display:flex;gap:16px;align-items:center;margin-top:14px;font-size:14px;color:var(--t1)}
+.pol-link{font:inherit;font-size:14px;color:var(--accent-700);background:none;border:none;text-decoration:underline;cursor:pointer;padding:6px 0;min-height:36px}
+.pol-year{display:flex;align-items:center;gap:16px;margin:28px 0 14px;padding-top:18px;border-top:1px solid var(--bd)}
+.pol-year h2{font-size:22px;font-weight:800;color:var(--t1);margin:0}
+.pol-list{position:relative}
+.pol-row{display:grid;grid-template-columns:64px 1fr;gap:20px;position:relative;padding-bottom:16px}
+.pol-row::before{content:"";position:absolute;left:84px;top:0;bottom:0;width:1px;background:var(--bd)}
+.pol-day{font-size:14px;font-weight:700;color:var(--t1);padding-top:22px;position:relative}
+.pol-day::after{content:"";position:absolute;left:80px;top:28px;width:9px;height:9px;border-radius:50%;background:var(--accent-600,#17335A)}
+.pol-row .pol-card{margin-left:22px}
+.pol-card{background:var(--s0);border:1px solid var(--bd);border-radius:12px;padding:20px 22px;min-width:0}
+.pol-card.pol-ended{opacity:.6}
+.pol-meta{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:13px;color:var(--t2)}
+.pol-sep{color:var(--t3)}
+.pol-chip{font-size:12px;color:var(--t1);background:var(--bg2);border-radius:6px;padding:2px 8px;white-space:nowrap}
+.pol-st-on{background:var(--accent-600,#17335A);color:#fff;font-weight:700}
+.pol-st-soon{background:transparent;border:1px solid var(--accent-600,#17335A);color:var(--accent-700);font-weight:700}
+.pol-st-plan{background:transparent;border:1px solid var(--bd);color:var(--t2)}
+.pol-st-end{background:var(--bg2);color:var(--t3)}
+.pol-title{font-size:19px;font-weight:800;color:var(--t1);margin:8px 0 12px;letter-spacing:-.01em;line-height:1.4}
+.pol-draft{font-size:13px;font-weight:700;color:var(--accent-700);border:1px solid var(--accent-600,#17335A);border-radius:8px;padding:8px 12px;margin-bottom:10px}
+.pol-ba{display:grid;grid-template-columns:1fr 28px 1fr;gap:8px;align-items:stretch}
+.pol-ba.pol-one{grid-template-columns:1fr}
+.pol-box{border-radius:10px;padding:12px 14px;min-width:0}
+.pol-before{background:var(--bg2)}
+.pol-after{background:var(--accent-50)}
+.pol-lb{font-size:12px;color:var(--t3);margin-bottom:4px}
+.pol-after .pol-lb{color:var(--accent-700)}
+.pol-tx{font-size:15px;line-height:1.55;color:var(--t2);word-break:keep-all;overflow-wrap:anywhere}
+.pol-after .pol-tx{color:var(--t1);font-weight:700}
+.pol-arrow{position:relative}
+.pol-arrow::before{content:"→";position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:var(--t3);font-size:16px}
+.pol-rows{margin:12px 0 0;display:grid;gap:4px}
+.pol-rows>div{display:grid;grid-template-columns:64px 1fr;gap:8px;font-size:14px}
+.pol-rows dt{color:var(--t3)}
+.pol-rows dd{margin:0;color:var(--t1)}
+.pol-note{font-size:13px;color:var(--t3);margin:10px 0 0;line-height:1.55}
+.pol-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-top:14px;padding-top:12px;border-top:1px solid var(--bd)}
+.pol-srcs{display:flex;gap:18px;flex-wrap:wrap}
+.pol-src{font-size:14px;font-weight:700;color:var(--accent-700);text-decoration:none;padding:6px 0;min-height:36px;display:inline-flex;align-items:center;gap:4px}
+.pol-src:hover{text-decoration:underline}
+.pol-chk{font-size:13px;color:var(--t3)}
+.pol-fold{padding:14px 22px}
+.pol-fold-t{font-size:15px;font-weight:700;color:var(--t1);margin-left:4px;flex:1;min-width:120px}
+.pol-tog{font:inherit;font-size:14px;font-weight:700;color:var(--accent-700);background:none;border:none;cursor:pointer;margin-left:auto;padding:6px 0;min-height:36px}
+.pol-empty{border:1px dashed var(--bd);border-radius:12px;padding:56px 20px;text-align:center;margin-top:24px}
+.pol-empty p{font-size:16px;font-weight:700;color:var(--t1);margin:0 0 14px}
+.pol-solid,.pol-ghost{font:inherit;font-size:14px;font-weight:700;border-radius:8px;padding:10px 20px;min-height:40px;cursor:pointer}
+.pol-solid{background:var(--accent-600,#17335A);color:#fff;border:1px solid var(--accent-600,#17335A)}
+.pol-ghost{background:var(--s0);color:var(--t1);border:1px solid var(--bd)}
+.pol-disc{font-size:13px;color:var(--t3);margin:28px 0 0;padding-top:18px;border-top:1px solid var(--bd);line-height:1.6}
+.pol-mini{display:flex;flex-direction:column}
+.pol-mini-row{display:grid;grid-template-columns:84px 1fr;gap:8px;font-size:13px;padding:7px 0;border-top:1px solid var(--bd);color:var(--t1)}
+.pol-mini-row:first-child{border-top:none}
+.pol-mini-row span:first-child{color:var(--t3)}
+.pol-mini-all{font:inherit;font-size:13px;font-weight:700;color:var(--accent-700);background:none;border:none;cursor:pointer;padding:4px 0;min-height:32px;float:right}
+@media(max-width:700px){
+  #polRoot{padding:18px 16px 110px}
+  .pol-h1{font-size:24px}
+  .pol-cats{flex-wrap:nowrap;overflow-x:auto;margin:0 -16px;padding:0 16px 4px;scrollbar-width:none}
+  .pol-cats .pol-btn{flex:0 0 auto}
+  .pol-row{display:block;padding-bottom:12px}
+  .pol-row::before,.pol-day{display:none}
+  .pol-row .pol-card{margin-left:0}
+  .pol-card{padding:16px}
+  .pol-ba{grid-template-columns:1fr}
+  .pol-arrow{height:20px}
+  .pol-arrow::before{content:"↓"}
+  .pol-title{font-size:17px}
+}
+</style>
+<div class="biz-view" id="view-policy" style="display:none"><div id="polRoot"></div></div>
+
 <!-- 사용법 탭 (Phase 4, 2026-04-26) — 8섹션 가이드 -->
 <div class="biz-view" id="view-guide" style="display:none">
   <div class="biz-section" style="max-width:780px;margin:0 auto">
@@ -3886,6 +3975,12 @@ html[data-theme="dark"] #view-news{
   <button type="button" class="ts-item" data-tool="guide" aria-current="false" onclick="closeToolsSheet();sv('guide',this)">
     <span class="ts-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5V5a2 2 0 0 1 2-2h13a1 1 0 0 1 1 1v14a1 1 0 0 1-1 1H6.5"/><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/></svg></span>
     <span class="ts-body"><span class="ts-title">사용법</span><span class="ts-desc">3분 가이드와 자주 묻는 질문</span></span>
+    <span class="ts-check" aria-hidden="true">✓</span>
+    <span class="ts-arrow" aria-hidden="true">→</span>
+  </button>
+  <button type="button" class="ts-item" data-tool="policy" aria-current="false" onclick="closeToolsSheet();sv('policy',this)">
+    <span class="ts-ic" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg></span>
+    <span class="ts-body"><span class="ts-title">정책 변화</span><span class="ts-desc">정부 발표로 바뀐 것을 날짜순으로</span></span>
     <span class="ts-check" aria-hidden="true">✓</span>
     <span class="ts-arrow" aria-hidden="true">→</span>
   </button>
@@ -4300,6 +4395,8 @@ html[data-theme="dark"] #view-news{
 
 <!-- SPLIT-1116 (plans/202): 본체보다 먼저 불러야 한다. 경로와 캐시 헤더는 vercel.json 의 /js/ 항목. -->
 <script src="/js/swap-checklist.js"></script>
+<script src="/js/policy-data.js"></script>
+<script src="/js/policy.js"></script>
 <script>
 // ── CONFIG & STATE ─────────────────────────────────────────
 // BYOK 제거: 모든 API 호출은 항상 자체 백엔드를 경유. 사용자는 키를 입력할 필요가 없음.
@@ -6323,6 +6420,7 @@ function openRegSummary(){
         <b>2027.1.1~ 예정</b> 수도권·규제지역 아파트를 가진 1주택자가 그 집에 살아 본 적 없이 세를 주고 있으면 전세대출 신규와 만기연장이 원칙적으로 막혀요. 1주택자의 전세대출 보증비율도 수도권·규제지역 70%, 그 밖 80%로 줄어요
       </div>
       <div style="font-size:12px;color:var(--t3);text-align:center">출처: 금융위 2025.10.15 대책, 2026.4.1 가계부채 관리방안, 2026.8.13 금융 종합대책 (원문 대조 2026.11.16) (<a href="https://www.korea.kr" target="_blank" rel="noopener" style="color:var(--ac)">korea.kr 정책브리핑</a>) · 바뀔 수 있으니 금융기관에서 꼭 최종 확인해 주세요</div>
+      <div style="text-align:center;margin-top:12px"><button type="button" class="hbtn" style="padding:8px 16px" onclick="document.getElementById('regSummaryModal').remove();sv('policy')">바뀐 내용 날짜순으로 보기</button></div>
     </div>`;
     m.addEventListener('click', e => { if (e.target === m) m.remove(); });
     document.body.appendChild(m);
@@ -6366,6 +6464,17 @@ const POLICY_TIMELINE = [
 function renderPolicyTimeline(){
   const box=document.getElementById('policyTimeline');
   if(!box) return;
+  // POLICY-CHANGES-1116 (plans/203): 날짜순 전체는 정책 변화 화면에 있다. 여기서는 최근 3건만 보여 주고 그 화면으로 보낸다.
+  //   자료 파일을 못 받았으면 아래의 옛 타임라인으로 그린다.
+  try{
+    const rec=typeof _polRecent==='function'?_polRecent(3):[];
+    if(rec.length){
+      const hd=document.getElementById('policyTimelineHead');if(hd)hd.textContent='최근 정책 변화';
+      box.innerHTML='<div class="pol-mini">'+rec.map(r=>`<div class="pol-mini-row"><span>${_escHtml(r.date)}</span><span>${_escHtml(r.title)}</span></div>`).join('')+'</div><div><button type="button" class="pol-mini-all" onclick="sv(\'policy\')">전체 보기</button></div>';
+      const ft=document.getElementById('policyTimelineFoot');if(ft)ft.textContent='출처: 정책브리핑, 금융위원회, 국가법령정보센터. 자세한 내용은 전체 보기에서 원문과 함께 볼 수 있어요.';
+      return;
+    }
+  }catch(_){ /* 아래 옛 타임라인으로 */ }
   const today=new Date(); today.setHours(0,0,0,0);
   // UX-FOLD-2026-07-10 (Sprint DDDD, 실측 근거): 지난 이벤트 7건(D+268~)이 항상 펼쳐져 화면 절반 점유 —
   //   가장 최근 과거 1건(맥락)만 노출, 나머지 과거는 <details> 접기. 미래·D-DAY 는 전부 표시.
@@ -13439,6 +13548,7 @@ const VIEW_DISPLAY={
   news:  {display:'flex', lp:false, rp:false},
   subs:  {display:'flex', lp:false, rp:false},
   guide: {display:'flex', lp:false, rp:false},
+  policy:{display:'flex', lp:false, rp:false}, // POLICY-CHANGES-1116 (plans/203) 정책 변화 한 장 요약
   report:{display:'flex', lp:false, rp:false}, // Sprint PPPPP — 입력 위저드가 본문으로 이동(시안), 사이드바 숨김
   landing:{display:'block', lp:false, rp:false}, // Phase 4-3 (2026-05-05) — 랜딩 대시보드 첫 방문 (옵션 A2)
 };
@@ -14183,7 +14293,7 @@ function sv(v,btn){
   // "도구 ▾" 드롭다운 버튼 — 도구 뷰(특약·청약·대출계산) 활성 시 하이라이트 + 탭 전환 시 메뉴 닫기 (OOOOO-3: 뉴스·사용법 승격, calc 편입)
   try{
     const _toolBtn=document.getElementById('htabToolBtn');
-    if(_toolBtn)_toolBtn.classList.toggle('on',['clause','subs','calc','biz','deal','swap','guide'].includes(v));
+    if(_toolBtn)_toolBtn.classList.toggle('on',['clause','subs','calc','biz','deal','swap','guide','policy'].includes(v));
     closeToolMenu();
   }catch(_){}
   // 모바일 하단 탭 활성화
@@ -14193,7 +14303,7 @@ function sv(v,btn){
   //   시트 안 항목의 체크(aria-current)도 같은 기준으로 매번 재계산.
   try{
     const _bnavTools=document.getElementById('bnavToolsBtn');
-    if(_bnavTools)_bnavTools.classList.toggle('on',['clause','subs','calc','biz','deal','swap','guide'].includes(v));
+    if(_bnavTools)_bnavTools.classList.toggle('on',['clause','subs','calc','biz','deal','swap','guide','policy'].includes(v));
     document.querySelectorAll('#toolsSheet .ts-item[data-tool]').forEach(b=>b.setAttribute('aria-current',b.dataset.tool===v?'true':'false'));
   }catch(_){}
   _wizPlace(v); // Sprint PPPPP: 위저드 코어를 뷰에 맞는 슬롯으로
@@ -14201,6 +14311,7 @@ function sv(v,btn){
   // SPLIT-1116: 갈아타기와 체크리스트는 /js/swap-checklist.js 에 있다. 그 파일을 못 받았으면 빈 화면 대신 알린다.
   if((v==='deal'||v==='swap')&&typeof _dclOpen!=='function'){try{toast('화면 일부를 불러오지 못했어요. 새로 고침해 주세요');if(window.Sentry&&!window._splitMissSent){window._splitMissSent=true;window.Sentry.captureMessage('swap-checklist.js not loaded');}}catch(_){}}
   if(v==='deal'){try{_dclOpen();}catch(_){}}
+  if(v==='policy'){if(typeof _polOpen==='function'){try{_polOpen();}catch(_){}}else{try{toast('화면 일부를 불러오지 못했어요. 새로 고침해 주세요');}catch(_){}}} // POLICY-CHANGES-1116
   if(v==='swap'){try{_swpRender();}catch(_){}} // SWAP-HELPER (Plan 155) // DEAL-CHECKLIST (Plan 154): 열 때 타임라인 날짜 가져오기 + 렌더
   if(v==='list')renderListGrid();
   if(v==='news' && !document.getElementById('newsList').dataset.loaded){loadNews();}
