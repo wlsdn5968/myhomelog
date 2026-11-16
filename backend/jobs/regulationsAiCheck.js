@@ -56,8 +56,59 @@ async function loadCurrentSnapshot() {
 // 새 정책 key 를 추가하고 이 표를 깜빡해도 **누락이 아니라 과보고** 쪽으로 실패하게 하기 위함.
 const KEY_TOPIC_KEYWORDS = {
   acquisition_tax_2025: ['취득세', '양도세', '종부세', '종합부동산세', '주택세', '부동산세', '중과'],
-  housing_loan_2025: ['LTV', 'DSR', '주담대', '주택담보', '대출', '규제지역', '스트레스', '디딤돌', '보금자리', '가계부채', '만기연장'],
+  housing_loan_2025: ['LTV', 'DSR', '주담대', '주택담보', '대출', '규제지역', '스트레스', '디딤돌', '보금자리', '가계부채', '만기연장', '주택', '부동산', '전세', '가계대출', '토지거래허가'],
 };
+
+// ── POLICY-MISS-1116: 감지한 보도자료를 남겨 둔다 ─────────────────────────────
+// [왜] 감지 결과는 경고 로그 한 번으로 끝났다. 함수 로그는 1시간만 남고 다음 날 실행 기록이 앞의 것을 덮어서,
+//   그날 아무도 보지 않으면 사라졌다. 2026-08-13 대책이 석 달 동안 반영되지 않은 까닭 가운데 하나다(11-16 확인).
+// [어떻게] 감지한 글을 computed_snapshots 한 행(DETECTED_KEY)에 모아 둔다. 같은 글은 한 번만, 최근 300건, 400일까지.
+//   스냅샷마다 "마지막 검증일 뒤에 나온 관련 글 수"(pendingReview)를 세어 예약 작업 기록과 health 에 남긴다.
+//   운영자나 작업 세션이 원문을 대조하고 검증일을 고치면 그 수가 0 으로 돌아간다.
+const DETECTED_KEY = 'regulations:detected:v1';
+const DETECTED_MAX = 300;
+const DETECTED_KEEP_MS = 400 * 86400000;
+function mergeDetected(prevItems, sources, nowMs) {
+  const out = []; const seen = new Set();
+  const idOf = (it) => String(it.link || '') || String(it.title || '');
+  const add = (it) => { const id = idOf(it); if (!id || seen.has(id)) return; seen.add(id); out.push(it); };
+  for (const src of sources || []) {
+    for (const m of (src && src.matched) || []) {
+      add({ source: src.name, title: String(m.title || '').slice(0, 200), link: String(m.link || '').slice(0, 300),
+        pubDate: m.pubDate ? new Date(m.pubDate).toISOString() : null, hits: (m.hits || []).slice(0, 8), firstSeen: new Date(nowMs).toISOString() });
+    }
+  }
+  for (const it of Array.isArray(prevItems) ? prevItems : []) add(it); // 이미 있던 글은 처음 본 시각을 유지한다(새 것보다 뒤에 넣어도 id 가 같으면 위에서 걸러진다)
+  // 같은 글이 이번에도 잡혔으면 위에서 새 firstSeen 으로 들어갔다. 예전 기록의 firstSeen 으로 되돌린다.
+  const oldFirst = new Map((Array.isArray(prevItems) ? prevItems : []).map((it) => [idOf(it), it.firstSeen]));
+  for (const it of out) { const f = oldFirst.get(idOf(it)); if (f) it.firstSeen = f; }
+  const when = (it) => Date.parse(it.pubDate || it.firstSeen || '') || 0;
+  return out.filter((it) => nowMs - when(it) <= DETECTED_KEEP_MS).sort((a, b) => when(b) - when(a)).slice(0, DETECTED_MAX);
+}
+// 스냅샷 key 마다, 마지막 검증일 뒤에 나온 관련 글 수
+function pendingCounts(items, snapshots) {
+  const out = {};
+  for (const s of snapshots || []) {
+    const topic = KEY_TOPIC_KEYWORDS[s.key] || null;
+    const since = Date.parse(String(s.source_effective_date || '')) || 0;
+    out[s.key] = (items || []).filter((it) => {
+      const t = Date.parse(it.pubDate || it.firstSeen || '') || 0;
+      if (t <= since + 86400000) return false; // 검증일 당일 글은 이미 본 것으로 친다
+      if (!topic) return true;
+      const hay = `${it.title} ${(it.hits || []).join(' ')}`;
+      return topic.some((k) => hay.includes(k));
+    }).length;
+  }
+  return out;
+}
+async function persistDetected(sources, snapshots) {
+  const { getLastSnapshot, putSnapshot } = require('../services/snapshotStore');
+  const prev = await getLastSnapshot(DETECTED_KEY); // 읽기 실패는 null(절대 throw 하지 않는다)
+  const items = mergeDetected(prev && prev.payload && prev.payload.items, sources, Date.now());
+  await putSnapshot(DETECTED_KEY, { items });
+  const byKey = pendingCounts(items, snapshots);
+  return { stored: items.length, byKey, total: Object.values(byKey).reduce((a, b) => a + b, 0) };
+}
 
 /**
  * RSS 매칭 항목 ↔ 현재 snapshot 대조 (룰베이스 · 외부 유료 호출 0).
@@ -172,6 +223,14 @@ async function runFullCheck() {
     }, '📌 정책 관련 보도자료 감지 — 운영자 확인 필요 (변경 확정 아님)');
   }
 
+  // POLICY-MISS-1116: 감지한 글을 남기고, 마지막 검증일 뒤에 쌓인 글이 있으면 날마다 경고한다(한 번 울리고 사라지지 않게).
+  let pending = { stored: 0, byKey: {}, total: 0 };
+  try { pending = await persistDetected(rssSummary.sources, currentSnapshot); } catch (e) { logger.warn({ err: e && e.message }, 'regulationsAiCheck: 감지 기록 저장 실패'); }
+  if (pending.total > 0) {
+    logger.warn({ pendingByKey: pending.byKey, stored: pending.stored },
+      '📌 정책 기준 검증일 뒤에 나온 관련 보도자료가 쌓여 있어요. 원문 대조와 검증일 갱신이 필요해요');
+  }
+
   logger.info({
     durationMs: Date.now() - started,
     rssMatched: rssSummary.totalMatched,
@@ -188,10 +247,13 @@ async function runFullCheck() {
       note: s.note,
     })),
     timestamp: new Date().toISOString(),
+    pendingReview: pending.total,
+    pendingByKey: pending.byKey,
   };
 }
 
 module.exports = {
+  mergeDetected, pendingCounts, DETECTED_KEY,
   runFullCheck,
   analyzeRegulations,
   loadCurrentSnapshot,

@@ -648,6 +648,7 @@ async function handleRegulationsAutoFetch(req, res) {
     }, 'cron/regulations-auto-fetch OK');
     await require('../services/cronStats').recordCronRun('regulations-auto-fetch', {   // Sprint MMMMMMM-12
       ok: 1, processed: result.rssResults && result.rssResults.totalMatched,
+      pendingReview: result.pendingReview, // POLICY-MISS-1116: 검증일 뒤에 쌓인 관련 보도자료 수(0 이 정상)
     }).catch(() => {});
     res.json({ ok: true, ...result });
   } catch (e) {

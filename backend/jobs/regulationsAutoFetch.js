@@ -38,7 +38,10 @@ const RSS_SOURCES = [
   {
     name: '금융위원회',
     url: 'https://www.fsc.go.kr/about/fsc_bbs_rss/?fid=0111', // 보도자료 RSS (검증 2026-06-13: 구 wsbiz/rss/in.do 404 → 본 경로 ~10건 유효, dc:date)
-    keywords: ['LTV', 'DSR', '주담대', '대출', '주택담보', '규제지역', '스트레스', '디딤돌', '보금자리', '가계부채', '만기연장'],
+    // POLICY-MISS-1116 (운영자 지적 "왜 현재까지 대책을 못 따라가는거야"): 2026-08-13 「부동산 시장 안정을 위한 금융 종합대책」의
+    //   보도자료 제목은 "수도권 23만호+α 추가 공급, 주택 공급 촉진 및 청년 등 실수요자 금융지원 강화"였다. 아래 낱말 가운데
+    //   하나도 제목에 없어 감지되지 않았다(11-16 확인). '주택', '부동산', '전세', '가계대출'을 더하고 제목과 요약을 함께 본다.
+    keywords: ['LTV', 'DSR', '주담대', '대출', '주택담보', '규제지역', '스트레스', '디딤돌', '보금자리', '가계부채', '만기연장', '주택', '부동산', '전세', '가계대출'],
   },
   {
     name: '국토교통부',
@@ -82,6 +85,15 @@ function parseRss(xml) {
     const pubM = block.match(/<pubDate[^>]*>([\s\S]*?)<\/pubDate>/i)
       || block.match(/<dc:date[^>]*>([\s\S]*?)<\/dc:date>/i);
     const title = titleM ? titleM[1].trim().replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>') : '';
+    // POLICY-MISS-1116: 요약(description)도 낱말 대조에 쓴다. 제목에 정책 낱말이 없는 발표를 놓치지 않기 위해서다.
+    //   느린 정규식을 늘리지 않으려고 위치로 잘라 낸다(앞 600자만).
+    let desc = '';
+    const _lower = block.toLowerCase();
+    const _di = _lower.indexOf('<description');
+    if (_di >= 0) {
+      const _ds = block.indexOf('>', _di) + 1, _de = _lower.indexOf('</description>', _ds);
+      if (_ds > 0 && _de > _ds) desc = block.slice(_ds, _de).replace('<![CDATA[', '').replace(']]>', '').replace(/<[^>]{0,300}>/g, ' ').replace(/&[a-z]{2,6};/g, ' ').slice(0, 600);
+    }
     const link = linkM ? linkM[1].trim() : '';
     const pubStr = pubM ? pubM[1].trim() : '';
     let pubDate = null;
@@ -89,7 +101,7 @@ function parseRss(xml) {
       const d = new Date(pubStr);
       if (!isNaN(d)) pubDate = d;
     }
-    if (title) items.push({ title, link, pubDate });
+    if (title) items.push({ title, link, pubDate, desc });
   }
   return items;
 }
@@ -115,9 +127,10 @@ async function fetchSource(src) {
       // 최근 7일 안 항목만
       if (it.pubDate && it.pubDate.getTime() < cutoff) continue;
       // 키워드 매칭
-      const hits = src.keywords.filter(k => it.title.includes(k));
+      const _hay = it.title + ' ' + (it.desc || '');
+      const hits = src.keywords.filter(k => _hay.includes(k));
       if (hits.length) {
-        matched.push({ ...it, hits });
+        matched.push({ title: it.title, link: it.link, pubDate: it.pubDate, hits });
       }
     }
     return { name: src.name, total: items.length, matched, error: null };

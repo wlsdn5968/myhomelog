@@ -38,6 +38,8 @@ function _pick(summary) {
   const NUM = [
     // LOCK-CHECK-2026-10-31: 손 보정·숨김 좌표 행 수(줄면 덮인 것), 별칭 보정표 누락 수(0 이 정상).
     'lockedManual', 'lockedHidden', 'overridesMissing',
+    // POLICY-MISS-1116: 정책 기준의 마지막 검증일 뒤에 나온 관련 보도자료 수. 0 이 정상이고, 0 이 아니면 원문 대조가 밀린 것이다.
+    'pendingReview',
     'healthSnapCounts', 'healthSnapFacility', 'processed', 'inserted', 'unchanged', 'failed', 'batches', 'rawPoolSize', 'poolSize',
     // INGEST-RUNS-OBSERV-2026-09-20 (Plan 110): retention 의 molit_ingest_runs 단계 독립 결과
     //   (고아 running 정리 건수 · 프루닝 건수)를 health 로 노출한다.
