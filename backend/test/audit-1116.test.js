@@ -96,3 +96,37 @@ test('발견 10: 권하는 말투와 내부 용어를 쓰지 않는다', () => {
   assert.ok(!html.includes('네이버 지도 (NCP)'));
   assert.ok(!html.includes('카카오맵 Local API'));
 });
+
+// ── 2026-11-16 오후: 발견 6, 7, 8 과 정책 문구 원문 대조 ──
+test('발견 7: 모바일에서 순위 시트가 지도를 덮은 만큼 아래 여백을 주고, 옆 패널(데스크톱)에는 주지 않는다', () => {
+  const mk = (hpRect) => new Function('document', `${fnSrc('_hpRegFitPad')}; return _hpRegFitPad;`)({ getElementById: (id) => (id === 'homePanel' ? { getBoundingClientRect: () => hpRect } : null) });
+  const map = { top: 54, bottom: 752, width: 375, height: 698 };
+  assert.deepEqual(mk({ top: 417, width: 375, height: 335 })(map), { top: 30, bottom: 341 }, '미리보기 실측값(지도 54~752, 시트 417~752)');
+  assert.deepEqual(mk({ top: 100, width: 320, height: 500 })({ top: 96, bottom: 675, width: 1020, height: 579 }), { top: 6, bottom: 6 }, '옆 패널은 지도 폭의 90% 에 못 미친다');
+  assert.deepEqual(mk({ top: 120, width: 375, height: 632 })(map), { top: 6, bottom: 6 }, '시트가 지도를 거의 다 덮으면 여백을 주지 않는다');
+  assert.deepEqual(mk(null)(map), { top: 6, bottom: 6 });
+  const fit = fnSrc('_hpRegFit');
+  assert.ok(fit.includes('{ top: _pad.top, right: 6, bottom: _pad.bottom, left: 6 }'), '네이버 지도도 같은 여백');
+  assert.ok(fit.includes('mapObj.invalidateSize({ animate: false })'), '대체 지도는 맞추기 전에 지도 크기를 다시 읽는다');
+  assert.ok(fit.includes("if(typeof mapObj === 'undefined' || !mapObj){ window._regFitPending = bb; return; }"), '지도가 아직 없으면 미뤄 둔다');
+  assert.equal((html.match(/if\(window\._regFitPending\) setTimeout\(\(\) => \{ try\{ if\(window\._regFitPending && !window\._hpRegOff\) _hpRegFit\(window\._regFitPending\); \}catch\(_\)\{\} \}, 0\);/g) || []).length, 2, '네이버 지도와 대체 지도가 생길 때 미뤄 둔 맞춤을 적용한다');
+  assert.ok(fnSrc('_mapApplyHome').includes('if (window._regFitAt && !window._regFitPending) return;'), '구별 보기가 맞춘 뒤에는 시작 위치로 되돌리지 않는다');
+});
+
+test('발견 7, 8: 모바일 안내 줄은 짧게, 대체 지도 확대 단추는 안내 줄 아래, 도우미 창은 헤더 아래', () => {
+  assert.ok(html.includes("window.innerWidth <= 700 ? `색 구역은 ${o.unit || '구'}예요 · 누르면 그 ${o.unit || '구'} 순위가 나와요`"));
+  assert.ok(html.includes('#view-map .leaflet-top.leaflet-left{top:30px}'));
+  assert.ok(html.includes('height:min(560px,calc(100vh - 160px));'));
+  assert.ok(html.includes('height: min(560px, calc(100dvh - 160px));'));
+  assert.ok(!html.includes('calc(100vh - 120px));z-index:900'));
+});
+
+test('정책 문구: 양도세 중과와 5.12 발표, 일시적 2주택 2년 조건이 원문과 같다', () => {
+  assert.ok(!html.includes('매도 규제 일부 완화'), '5.12 발표는 매도 규제 완화가 아니라 매수자 실거주 의무 유예 확대였다');
+  assert.ok(!html.includes('5.12 보완책 시행'));
+  assert.ok(html.includes("{ date:'2026-05-12', title:'토지거래허가구역 실거주 유예 확대'"));
+  assert.ok(html.includes("{ date:'2026-05-10', title:'조정대상지역 다주택자 양도세 중과 다시 적용'"));
+  assert.ok(html.includes('새 집을 2026년 8월 4일 이후에 샀다면 2년이에요(2026년 10월 1일 시행). 8월 3일 이전에 사거나 계약금을 냈다면 3년이에요.'));
+  const sql = fs.readFileSync(path.join(__dirname, '../../supabase/migrations/20261116_policy_rules_wording.sql'), 'utf8');
+  assert.ok(sql.includes("when t.val like '2026.5.12: 보완책%'"));
+});

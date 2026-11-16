@@ -52,6 +52,8 @@ test('첫 화면: 지도가 숨겨져 크기가 0 일 때는 범위 맞춤을 �
     window: {}, rect: { width: 0, height: 0 },
     document: { getElementById: () => ({ getBoundingClientRect: () => env.rect }) },
     mapObj: { fitBounds: (b) => calls.push(b) }, L: { latLngBounds: (b) => b },
+    // MOB-MAP-1116: 맞춤이 여백 계산과 뒤늦은 재확인 예약을 쓴다. 이 검사는 미루기만 본다(여백은 audit-1116.test.js).
+    _hpRegFitPad: () => ({ top: 6, bottom: 6 }), setTimeout: () => 0,
   };
   env.window.L = env.L;
   const fit = new Function('env', `with(env){ ${fnSrc('_hpRegFit')}; return _hpRegFit; }`)(env);

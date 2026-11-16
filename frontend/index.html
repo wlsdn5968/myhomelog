@@ -1343,7 +1343,7 @@ body.cmp-off .cmp-bar{display:none!important} /* CMP-BAR-SCOPE-1116: 목록과 �
 /* RIGHT CHAT */
 .rp{width:340px;flex-shrink:0;display:flex;flex-direction:column;border-left:1px solid var(--bd);background:var(--s0)}
 /* .rp 오버레이 (플로팅 💬 버튼에서 호출) */
-.rp.rp-overlay{position:fixed;right:20px;bottom:84px;top:auto;width:360px;max-width:calc(100vw - 40px);height:min(560px,calc(100vh - 120px));z-index:900;border:1px solid var(--bd);border-radius:var(--radius-lg);box-shadow:0 12px 40px rgba(0,0,0,.22);overflow:hidden}
+.rp.rp-overlay{position:fixed;right:20px;bottom:84px;top:auto;width:360px;max-width:calc(100vw - 40px);height:min(560px,calc(100vh - 160px));z-index:900;border:1px solid var(--bd);border-radius:var(--radius-lg);box-shadow:0 12px 40px rgba(0,0,0,.22);overflow:hidden}
 /* 플로팅 AI 버튼 */
 .fab-ai{position:fixed;right:24px;bottom:24px;width:56px;height:56px;border-radius:50%;background:var(--acc-bg);color:var(--acc-ink);border:none;cursor:pointer;display:none;align-items:center;justify-content:center;font-size:20px;box-shadow:0 6px 18px rgba(0,0,0,.22);z-index:850;transition:transform .15s,box-shadow .15s}
 .fab-ai:hover{transform:translateY(-2px);box-shadow:0 10px 24px rgba(0,0,0,.28)}
@@ -1886,6 +1886,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
   #view-map .mtbar{position:absolute;top:0;left:0;right:0;z-index:25;background:transparent;border-bottom:none;box-shadow:none;pointer-events:none;flex-wrap:nowrap;overflow:hidden}
   #view-map .mtbar>*{pointer-events:auto}
   #view-map .mtbar #popLegend{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;min-width:0}
+  #view-map .leaflet-top.leaflet-left{top:30px} /* MOB-MAP-1116: 대체 지도의 확대 단추가 안내 줄(0~28px)을 덮었다 */
   #mapHintTxt{display:none} /* '마커클릭=팝업 | 더블클릭' — 터치 환경에서 무의미 */
   #popTitleCard{display:none!important} /* mtbar 범례(#popLegend)와 동일 정보 — 모바일은 중복 제거 */
   #mHeroChip.on{display:flex}
@@ -2025,7 +2026,7 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
    - 100dvh: 모바일 브라우저 chrome 가변 높이 대응 (vh 의 한계 해결)
 */
 @supports (height: 100dvh) {
-  .rp.rp-overlay { height: min(560px, calc(100dvh - 120px)); }
+  .rp.rp-overlay { height: min(560px, calc(100dvh - 160px)); } /* CHAT-TOP-1116: 아래 84px 띄운 창의 윗줄이 헤더(66px) 뒤로 들어가지 않게 160 */
   .bm-pop { max-height: min(460px, calc(100dvh - 200px)); }
 }
 @media (max-width: 640px) {
@@ -6312,8 +6313,8 @@ function openRegSummary(){
       <div style="background:#FFE8E8;border:1px solid #E8A0A0;border-radius:var(--radius-base);padding:10px 12px;font-size:12px;color:#8B2914;line-height:1.6;margin-bottom:10px">
         <b style="color:var(--red)">10.15 이후 후속 정책</b><br>
         <b>2026.4.17~</b> 다주택자(2주택 이상)와 임대사업자의 수도권·규제지역 아파트 담보대출 만기연장 원칙 금지. 임차인이 있으면 임대차 계약이 끝나는 날까지는 연장돼요<br>
-        <b>2026.5.10~</b> 다주택자 양도세 중과 부활 (2주택 +20%p / 3주택+ +30%p, 5.9까지 양도분 배제·장기보유특별공제 배제)<br>
-        <b>2026.5.12~</b> 보완책: 매도 규제 일부 완화 (이사 등 실수요 일부 허용)<br>
+        <b>2026.5.10~</b> 조정대상지역 다주택자 양도세 중과가 다시 적용돼요. 2주택은 기본세율에 20%p, 3주택 이상은 30%p를 더하고 장기보유특별공제를 받지 못해요. 2년 이상 보유한 주택을 5.9까지 팔았거나, 5.9까지 계약하거나 토지거래허가를 신청하고 정해진 기한 안에 판 경우는 빠져요<br>
+        <b>2026.5.12</b> 토지거래허가구역에서 세입자가 있는 집을 사는 무주택자는 임대차 계약이 끝나는 날까지 입주를 미룰 수 있게 대상을 넓혔어요(국토교통부 발표, 발표 당시 2026.12.31 신청분까지)<br>
         <b>2026 전체</b> 가계대출 증가율 3% 수준 관리 (2026.8.13 대책에서 당초 1.5%를 올림)<br>
         <b>2026.8.31~</b> 생애최초는 불가피한 사유(예: 미성년 때 상속받은 지분)가 있으면 금융회사 심사를 거쳐 인정받을 수 있어요. 무주택 청년 근로자는 장래소득 인정기준을 적용할 수 있는지 금융회사가 꼭 알려 줘야 해요<br>
         <b>2026.10~</b> 보금자리론: 신혼부부는 부부 가운데 한 사람의 연소득이 7,000만원 이하여도 대출을 받을 수 있어요(부부 합산 8,500만원 이하도 그대로)<br>
@@ -6349,8 +6350,10 @@ const POLICY_TIMELINE = [
   { date:'2025-10-29', title:'1주택자 전세대출 이자 DSR 반영', desc:'전세대출 이자도 총부채상환비율에 포함', tag:'대출', tone:'amb' },
   { date:'2026-01-01', title:'은행권 주담대 위험가중치 15%에서 20%로', desc:'은행 주담대 공급 위축·금리 상승 압력', tag:'금융', tone:'a2' },
   { date:'2026-04-17', title:'다주택자 주담대 만기연장 금지', desc:'2주택+ 임대사업자 수도권·규제지역 주담대 만기연장 원칙 금지. 임차인이 있으면 임대차 계약이 끝나는 날까지는 연장', tag:'대출', tone:'red' },
-  { date:'2026-05-10', title:'다주택자 양도세 중과 부활', desc:'2022.5~ 한시 유예 종료(5.9까지 양도분 배제). 2주택 +20%p / 3주택+ +30%p·장특공 배제', tag:'세제', tone:'amb' },
-  { date:'2026-05-12', title:'5.12 보완책 시행', desc:'매도 규제 일부 완화 (이사 등 실수요 일부 허용)', tag:'완화', tone:'grn' },
+  // POLICY-SRC-1116: 소득세법 제104조 제7항(조정대상지역, 20%p와 30%p), 시행령 제167조의3 제1항 제12호의2(2026년 5월 9일)를 law.go.kr 에서 2026-11-16 에 직접 확인.
+  { date:'2026-05-10', title:'조정대상지역 다주택자 양도세 중과 다시 적용', desc:'한시 배제가 5.9에 끝남. 조정대상지역 2주택은 기본세율에 20%p, 3주택 이상은 30%p를 더하고 장기보유특별공제 배제. 5.9까지 계약하거나 허가 신청한 뒤 기한 안에 판 경우는 제외', tag:'세제', tone:'amb' },
+  // POLICY-SRC-1116: 전에는 파는 쪽 규제를 푼 보완책이라고 적었는데 원문과 달랐다(매수자의 실거주 의무 유예 확대). 정책브리핑 2026.05.12 국토교통부 글(newsId=148964215)을 직접 확인.
+  { date:'2026-05-12', title:'토지거래허가구역 실거주 유예 확대', desc:'세입자가 있는 집을 사는 무주택자는 임대차 계약이 끝나는 날까지 입주를 미룰 수 있게 대상을 넓힘. 발표 당시 2026.12.31 신청분까지. 국토부 5.12 발표', tag:'완화', tone:'grn' },
   { date:'2026-06-30', title:'규제지역 추가 지정 (동탄·기흥·구리)', desc:'화성 동탄구·용인 기흥구·구리시 투기과열+조정대상(7.1 효력)·토허구역(7.5~2027말). 국토부 6.29 주거정책심의위 의결', tag:'규제', tone:'red' },
   // TIMELINE-0813-1116 (전면 감사 발견 2, 3): 계산식은 8.13 대책까지 반영됐는데 타임라인은 6.30 에서 멈춰 있었다.
   //   근거: 금융위 2026-08-13 보도자료 본문("금년도 가계부채 총량 증가율은 3% 수준 (당초 1.5%)")과 첨부 안건 13쪽, 16쪽(fsc.go.kr/no010101/87517).
@@ -7294,6 +7297,7 @@ function initNaverMap(){
   _initPannBtn();
   naver.maps.Event.addListener(mapObj, 'idle', () => { window._pannBtnShow(); _mapSaveView(); });
   _mapHookUserMove(); _mapApplyHome();
+  if(window._regFitPending) setTimeout(() => { try{ if(window._regFitPending && !window._hpRegOff) _hpRegFit(window._regFitPending); }catch(_){} }, 0); // FIT-PENDING-1116
 }
 
 // MOBILE-2026-06-13: "이 영역 단지 보기" 줌 임계값 — 모바일은 작은 화면+핀치줌 마찰로 기본 zoom 12 에 머물러
@@ -7406,6 +7410,9 @@ function _mapApplyHome(){
   try {
     if (!mapObj || window._mapUserMoved || window._mapHomeLocked) return;
     if (_mapStartView().saved) return;
+    // MOB-MAP-1116: 구별 보기가 지도를 이미 맞췄으면 시작 위치로 되돌리지 않는다. 모바일에서 시트에 가린 만큼 남쪽으로 내린 맞춤이
+    //   확대 10, 시작 위치 근처라는 이유로 다시 시작 위치로 돌아가 서울 남쪽이 시트 뒤로 갔다(미리보기 실측 375x812).
+    if (window._regFitAt && !window._regFitPending) return;
     const me = document.getElementById('mapEl'); const rc = me && me.getBoundingClientRect();
     if (!rc || rc.width < 50 || rc.height < 50) { window._popFitPending = true; return; }
     window._popFitPending = false;
@@ -7447,6 +7454,7 @@ function initLeaflet(){
   mapObj=L.map('mapEl',{center:[_sv0.lat,_sv0.lng],zoom:_sv0.zoom});
   mapObj.on('moveend', _mapSaveView);
   _mapHookUserMove(); _mapApplyHome();
+  if(window._regFitPending) setTimeout(() => { try{ if(window._regFitPending && !window._hpRegOff) _hpRegFit(window._regFitPending); }catch(_){} }, 0); // FIT-PENDING-1116
   const _tl=L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap',maxZoom:19}).addTo(mapObj);
   // MAP-FAIL-NOTE-1116 (전면 감사 발견 1): 운영 도메인에서 이 배경 그림이 전부 403 으로 막혀 빈 지도만 보였다(2026-11-16 운영 크롬 확인).
   //   한 장도 못 받은 채 실패가 4번 쌓이면 지도 위에 안내와 다시 시도 단추를 띄운다. 순위 목록과 검색은 지도 없이도 쓸 수 있다.
@@ -9606,7 +9614,7 @@ function showDetail(p){
         </div>
         <div style="background:var(--accent-50);border:1px solid var(--accent-100);border-radius:var(--radius-sm);padding:7px 10px;font-size:12px;color:var(--accent-700);line-height:1.55;margin-top:4px">
           ${_acqIsReg
-            ? `<b>양도세 중과 (2026.5.10~)</b>: 이 단지는 <b>조정대상지역</b>이라 다주택자가 팔면 기본세율에 <b>2주택은 20%p, 3주택 이상은 30%p</b>가 더해져요 (5.9까지 양도분 배제·장특공 배제). 팔기 전에 세무사와 꼭 상담하세요.`
+            ? `<b>양도세 중과 (2026.5.10~)</b>: 이 단지는 <b>조정대상지역</b>이라 다주택자가 팔면 기본세율에 <b>2주택은 20%p, 3주택 이상은 30%p</b>가 더해져요 (장기보유특별공제도 받지 못해요. 5.9까지 계약하거나 허가를 신청하고 기한 안에 판 경우는 빠져요). 팔기 전에 세무사와 꼭 상담하세요.`
             : `<b>ℹ 양도세</b>: 이 단지는 <b>비조정지역</b>이라 다주택 양도세 중과(+20/+30%p)가 없고, 기본세율을 적용해요. 보유·거주 기간과 주택 수에 따라 달라지니 팔기 전에 세무사와 상담해 보세요.`}
         </div>
         <div style="font-size:12px;color:var(--t3);margin-top:5px">※ <b>대략 추정이에요.</b> 공시가격은 시가의 70%, 공정시장가액비율은 60%로 가정했고 종부세는 누진세율(국세청 2023~)과 표준세율을 가정했어요. 세율은 2025년 기준이에요. 실제 세금은 공시가격 공식 발표, 세대원, 세액공제, 1주택 특례, 조정대상지역에 따라 달라요.<br>※ 출처: 지방세법 §111(재산세)·§11(취득세) / 종합부동산세법 §8·§9. 정확한 계산은 <a href="https://hometax.go.kr" target="_blank" rel="noopener" style="color:var(--ac);text-decoration:underline">홈택스 모의계산</a></div>
@@ -12136,7 +12144,7 @@ function _dclData(){
     s:[
       {k:'pre',n:'가계약·계약 전',items:[
         {id:'s_one',t:'1주택 비과세 요건 확인',d:'2년 이상 보유해야 해요. 살 때 조정대상지역이었다면 보유 기간 중 2년 이상 살아야 해요. 12억 원 초과분은 과세돼요.',lb:'off',src:[L('소득세법시행령','제154조','소득세법 시행령 제154조'),G]},
-        {id:'s_tmp',t:'일시적 2주택이면 처분 기한 확인',d:'새 집 취득일부터 3년 안에 기존 집을 팔아야 해요. 두 집이 모두 조정대상지역이면 2년이에요(2026년 10월 1일 시행). 적용 시점은 세무서와 확인해요.',lb:'law',src:[L('소득세법시행령','제155조','소득세법 시행령 제155조')]},
+        {id:'s_tmp',t:'일시적 2주택이면 처분 기한 확인',d:'새 집 취득일부터 3년 안에 기존 집을 팔아야 해요. 두 집이 모두 조정대상지역이고 새 집을 2026년 8월 4일 이후에 샀다면 2년이에요(2026년 10월 1일 시행). 8월 3일 이전에 사거나 계약금을 냈다면 3년이에요. 적용 시점은 세무서와 확인해요.',lb:'law',src:[L('소득세법시행령','제155조','소득세법 시행령 제155조')]},
         {id:'s_loan',t:'남은 대출 상환액 은행에 확인',lb:'gen'},
       ]},
       {k:'day',n:'계약 당일',items:[
@@ -12454,7 +12462,7 @@ function _swpRender(){
       +src('d',[['금융위원회 가계대출 관리 강화 FAQ(2025.6.27) 7번','https://www.fsc.go.kr/po020201/84825']])+`</div>`
       +`<div class="swp-dl"><div class="swp-dh"><span>일시적 2주택 비과세</span><span class="swp-lb law">법령</span></div>`
       +`<div class="swp-dt">${_swpFmtFull(dl.tmp3)}까지 팔면 비과세 특례 대상</div>`
-      +`<p class="swp-gd">새 집 취득일부터 3년. 두 집 모두 조정대상지역이면 2년(${_swpFmtFull(dl.tmp2)})이에요. 2026년 10월 1일 시행 기준이고, 적용 시점은 세무서와 확인해요.</p>`
+      +`<p class="swp-gd">새 집 취득일부터 3년. 두 집 모두 조정대상지역이고 새 집을 2026년 8월 4일 이후에 샀다면 2년(${_swpFmtFull(dl.tmp2)})이에요. 2026년 10월 1일 시행 기준이고, 적용 시점은 세무서와 확인해요.</p>`
       +`<p class="swp-gd">새 집 취득세도 같은 기간 안에 지금 집을 팔면 2주택 중과 대신 기본세율이에요.</p>`
       +src('t',[['소득세법 시행령 제155조',law('소득세법시행령','제155조')],['지방세법 제13조의2',law('지방세법','제13조의2')],['지방세법 시행령 제28조의5',law('지방세법시행령','제28조의5')]])+`</div>`
       +`<div><button type="button" class="swp-btn2" onclick="_swpToDeal()">거래 체크리스트 매도인 보기</button></div></section>`;
@@ -14196,7 +14204,7 @@ function _hpRegMarkers(list, o){
     _popularMarkersLoaded = true; // 지역 보기 동안 전국 인기 마커가 다시 얹히지 않게(전국 칩·인기 단지 다시 보기에서 풀린다)
     const box = o.sido ? _hpRegPolys(o.sido, o.sel || 'all') : null;
     if(o.sido) _hpRegLegend(o.sel === 'all'
-      ? (box ? `색 구역은 ${o.unit || '구'}예요 · 구마다 최근 60일 거래가 가장 많은 단지 1곳 · 구역을 누르면 그 ${o.unit || '구'} 순위` : `구마다 최근 60일 거래가 가장 많은 단지 1곳이에요`)
+      ? (box ? (window.innerWidth <= 700 ? `색 구역은 ${o.unit || '구'}예요 · 누르면 그 ${o.unit || '구'} 순위가 나와요` : `색 구역은 ${o.unit || '구'}예요 · 구마다 최근 60일 거래가 가장 많은 단지 1곳 · 구역을 누르면 그 ${o.unit || '구'} 순위`) : `구마다 최근 60일 거래가 가장 많은 단지 1곳이에요`)
       : `${o.label || ''} 최근 60일 거래 많은 단지 · 숫자는 순위예요`);
     const pts = list.filter(p => p._at || (Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng)) && p.lat && p.lng));
     const isNaver = !!(mapObj._isNaver && window.naver && naver.maps);
@@ -14273,16 +14281,51 @@ function _hpRegNote(o){
     ? `색칠된 구역이 ${unit}예요. 이름표는 그 ${unit}에서 최근 60일 동안 거래가 가장 많았던 단지예요. 구역을 누르면 그 ${unit}의 순위 10곳을 볼 수 있어요.`
     : `${o.label || ''}에서 최근 60일 동안 거래가 많았던 단지예요. 숫자는 순위예요. 이름표를 누르면 단지 정보를 볼 수 있어요.`;
 }
-function _hpRegFit(bb){
+// 지도 위를 덮은 것만큼의 여백. 시트가 지도 폭의 90% 이상을 덮고 지도 아래쪽에 걸쳐 있을 때만 센다(데스크톱은 옆 패널이라 해당 없음).
+function _hpRegFitPad(rc){
+  const pad = { top: 6, bottom: 6 };
   try{
-    if(!bb || typeof mapObj === 'undefined' || !mapObj) return;
+    const hp = document.getElementById('homePanel');
+    const r = hp && hp.getBoundingClientRect ? hp.getBoundingClientRect() : null;
+    if(r && r.height > 0 && r.width >= rc.width * 0.9 && r.top > rc.top && r.top < rc.bottom){
+      const cover = Math.round(rc.bottom - r.top);
+      // 시트가 지도를 거의 다 덮으면(남는 높이 120px 미만) 여백을 주지 않는다. 맞출 자리가 없어 확대가 지나치게 빠진다.
+      if(rc.height - cover - 30 >= 120){ pad.bottom = cover + 6; pad.top = 30; }
+    }
+  }catch(_){}
+  return pad;
+}
+function _hpRegFit(bb, _again){
+  try{
+    if(!bb) return;
+    // FIT-PENDING-1116: 지도가 아직 없을 때(대체 지도를 불러오는 중) 불리면 맞춤이 그냥 사라졌다. 같은 지역은 다시 맞추지 않으므로
+    //   새 지도가 시작 위치에 그대로 남았다(미리보기 실측 375x812). 지도가 생기면 맞추도록 미뤄 둔다.
+    if(typeof mapObj === 'undefined' || !mapObj){ window._regFitPending = bb; return; }
     // 첫 방문 화면이 떠 있는 동안에는 지도가 숨겨져 크기가 0 이다. 그때 맞추면 확대가 끝까지 들어간다(미리보기 실측: 확대 19).
     //   지도가 보일 때(sv('map'))로 미룬다.
     const _rc = (document.getElementById('mapEl') || {}).getBoundingClientRect ? document.getElementById('mapEl').getBoundingClientRect() : null;
     if(!_rc || _rc.width < 50 || _rc.height < 50){ window._regFitPending = bb; return; }
     window._regFitPending = null;
-    if(mapObj._isNaver && window.naver && naver.maps) mapObj.fitBounds(new naver.maps.LatLngBounds(new naver.maps.LatLng(bb[0][0], bb[0][1]), new naver.maps.LatLng(bb[1][0], bb[1][1])), { top: 6, right: 6, bottom: 6, left: 6 });
-    else if(window.L && mapObj.fitBounds) mapObj.fitBounds(L.latLngBounds(bb), { padding: [6, 6] });
+    // MOB-MAP-1116 (전면 감사 발견 7): 모바일에서는 순위 시트(#homePanel)가 지도 아래쪽을 덮는다. 덮인 만큼 아래 여백을 줘야 서울이 시트 위에 보인다
+    //   (미리보기 실측 375x812: 지도 54~752, 시트 417~752. 여백 없이 맞추면 서울 절반이 시트 뒤로 갔다). 위쪽은 안내 줄 30px.
+    const _pad = _hpRegFitPad(_rc);
+    if(mapObj._isNaver && window.naver && naver.maps) mapObj.fitBounds(new naver.maps.LatLngBounds(new naver.maps.LatLng(bb[0][0], bb[0][1]), new naver.maps.LatLng(bb[1][0], bb[1][1])), { top: _pad.top, right: 6, bottom: _pad.bottom, left: 6 });
+    else if(window.L && mapObj.fitBounds){
+      // 대체 지도는 만들 때의 크기를 기억한다. 그 뒤 화면 배치가 바뀌었으면 옛 크기로 계산해 위치가 어긋난다(미리보기 기록: 여백 341 로 맞췄는데 서울 남쪽이 23px 가림).
+      try{ mapObj.invalidateSize({ animate: false }); }catch(_){}
+      mapObj.fitBounds(L.latLngBounds(bb), { paddingTopLeft: [6, _pad.top], paddingBottomRight: [6, _pad.bottom], animate: false });
+    }
+    // 시트는 순위 목록이 도착하면 높이가 달라진다(미리보기 실측 375x812: 시트 높이가 뒤늦게 바뀌면 서울 남쪽 끝이 가릴 수 있다).
+    //   0.8초, 2초, 4초 뒤에 덮인 높이가 20px 넘게 달라졌고 사람이 지도를 움직이지 않았으면 다시 맞춘다. 다시 맞춘 쪽은 더 예약하지 않는다.
+    if(!_again){
+      const _tk = window._regFitTick = (window._regFitTick || 0) + 1;
+      let _last = _pad.bottom;
+      [800, 2000, 4000].forEach(ms => setTimeout(() => { try{
+        if(window._regFitTick !== _tk || window._mapUserMoved || window._regFitBB !== bb) return;
+        const b2 = _hpRegFitPad(document.getElementById('mapEl').getBoundingClientRect()).bottom;
+        if(Math.abs(b2 - _last) > 20){ _last = b2; _hpRegFit(bb, true); }
+      }catch(_){} }, ms));
+    }
   }catch(_){}
 }
 function _hpPick(s){
