@@ -207,7 +207,10 @@ function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '', lawdCd 
   // "강북" 같은 NFC 키워드와 문자열 비교 실패하는 버그 방지
   const r = String(userRegion || '').normalize('NFC').replace(/\s+/g,'');
   const wp = String(workplaceArea || '').normalize('NFC').replace(/\s+/g,'');
-  const combined = r + ' ' + wp;
+  // WP-COMMUTE-ONLY-1116 (운영자 승인 2026-11-16, 전면 감사 5번): 직장 위치는 통근 계산에만 쓰고 분석 지역을 좁히지 않는다.
+  //   전에는 희망 지역이 '서울'이어도 직장 위치에 '강남구'가 있으면 강남만 봤다(운영 실측 11-15: 서울 9억이 0건, 직장 위치를 비우면 806건).
+  //   희망 지역을 아예 주지 않은 호출만 예전처럼 직장 위치를 단서로 쓴다.
+  const hay = r ? r : wp;
   logger.debug({ userRegion, r, wp, maxBudget }, 'pickRegions 진입');
   // 0) 광역 접두가 있으면 그 시도 범위로 먼저 확정 — 동명 구('중구'·'서구'…) 환각 차단.
   //    userRegion 만 본다(workplaceArea 는 자유 입력이라 광역 판정 근거로 쓰기엔 신뢰도가 낮다).
@@ -216,7 +219,7 @@ function pickRegions(userRegion = '', maxBudget = 0, workplaceArea = '', lawdCd 
   // 1) 사용자 입력에서 구 단위 키워드 매칭 (광역 키워드는 후순위)
   const SKIP_GLOBAL = new Set(['서울','경기','인천']);
   for (const [kw, codes] of Object.entries(REGION_KEYWORDS)) {
-    if (!SKIP_GLOBAL.has(kw) && combined.includes(kw)) {
+    if (!SKIP_GLOBAL.has(kw) && hay.includes(kw)) {
       return codes.map(c => ({ lawdCd: c, name: kw }));
     }
   }
@@ -587,7 +590,8 @@ async function getAIRecommendations(userCondition) {
   const normWp = String(workplaceArea || '').normalize('NFC').trim();
   // MULTI-REGION-2026-08-30: 콤마 구분 다중 코드 허용("41597,41595"). 캐시 키에도 그대로 실린다.
   const _lawd = String(lawdCd || '').split(',').map(x => x.trim()).filter(x => /^\d{5}$/.test(x)).join(',');
-  const cacheKey = `rec:v29:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
+  // WP-COMMUTE-ONLY-1116: 희망 지역이 있으면 직장 위치는 결과에 영향이 없다. 키에서 빼 같은 결과를 직장 위치마다 따로 계산하지 않는다.
+  const cacheKey = `rec:v30:${_lawd}:${normReg}:${maxBudget}:${houseStatus}:${isFirstBuyer}:${normReg ? '' : normWp}:${minPy}:${maxPy}:${fMinHh}:${fMinPark}:${fSaleOnly}`;
   // 버전 이력(산식·표시가 바뀌면 반드시 올릴 것 — 안 올리면 최대 3h 동안 옛 점수가 그대로 나간다):
   //   v29 NO-LIVE — 배치 복원 경로가 라이브 KAPT 목록을 건너뛴다(결과 집합이 달라질 수 있어 분리).
   //   v28 JIBUN-COL·LENS-UNVERIFIED — 지역 단일쿼리에 jibun 복원(지번 매칭 부활), 미확인 거래 상위 렌즈 추가.

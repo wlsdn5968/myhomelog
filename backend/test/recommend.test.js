@@ -832,7 +832,7 @@ test('광역 검색 — 시도 전체 시군구를 본다(서울 25·인천·경
   assert.match(src, /\?\? \(_broadMode \? \[\] : await getTransactionsByApt\(r\.lawdCd, ''\)\)/,
     '광역 모드에서 MOLIT 월별 API 폴백(지역당 6콜)을 막지 않는다');
   assert.ok(!src.includes('pickBroadRegionsByBudget('), '예산 밴드 구 선정 호출이 남아 있다');
-  assert.ok(src.includes('rec:v29:'), '캐시 키 버전이 v29 가 아니다 — 옛 결과가 3시간 서빙된다');
+  assert.ok(src.includes('rec:v30:'), '캐시 키 버전이 v30 이 아니다. 옛 결과가 3시간 서빙된다(v30: WP-COMMUTE-ONLY-1116, 직장 위치로 좁혀진 옛 결과를 내보내지 않게)');
 });
 
 

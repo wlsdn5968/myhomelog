@@ -2442,7 +2442,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
             </div>
           </div>
           <div class="mb9"><span class="lbl">희망 평형</span><div class="chips" id="ch-py"><span class="chip" onclick="cp(this,'ch-py')">소형 15~22평</span><span class="chip on" onclick="cp(this,'ch-py')">중형 23~33평</span><span class="chip" onclick="cp(this,'ch-py')" title="34~60평을 조회해요. '+'는 상한이 없다는 뜻이 아니라 60평까지예요.">대형 34~60평</span><span class="chip" onclick="cp(this,'ch-py')" title="15~60평을 조회해요. 오피스텔, 초소형(15평 미만), 60평 초과는 제외돼요.">전체(15~60평)</span></div></div>
-          <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원 단위, 1.2억은 12000)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000 (만원)" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 또는 관심 구 <span style="color:var(--t3);font-weight:400">(보고서에서 통근시간을 분석해요)</span></label><input class="inp" id="wp" type="text" maxlength="60" placeholder="예: 강남구, 노원구, 분당"></div></div>
+          <div class="r2"><div><label class="lbl" for="inc">연 소득 (만원 단위, 1.2억은 12000)</label><input class="inp" id="inc" type="number" inputmode="decimal" placeholder="5000 (만원)" oninput="cl()"></div><div><label class="lbl" for="wp">직장 위치 <span style="color:var(--t3);font-weight:400">(보고서에서 통근시간을 분석해요. 분석 지역은 위의 희망 지역대로예요)</span></label><input class="inp" id="wp" type="text" maxlength="60" placeholder="예: 강남구, 노원구, 분당"></div></div>
           </div>
         </details>
       </div></div>
@@ -8112,11 +8112,9 @@ function renderListGrid(){
       try {
         const _wideOn = document.querySelector('#ch-r .chip.on');
         const _subOn = document.querySelectorAll('#ch-r-sub .chip.on').length;
-        // LIST-WP-1112 (운영 크롬 실측): 광역만 골라도 직장 위치에 구 이름(예: 강남구)이 있으면 서버가 그 구만 본다(pickRegions 1단계).
+        // LIST-WP-1112: 광역 전체(7곳 이상)일 때만 전체라고 쓴다. WP-COMMUTE-ONLY-1116 뒤로 직장 위치는 지역을 좁히지 않는다.
         //   그때 "서울 전체 1개 시군구"라고 쓰면 사실과 다르다. 광역 전체(7곳 이상)일 때만 전체라고 쓰고, 아니면 직장 위치 기준임을 밝힌다.
-        const _wpV = String(document.getElementById('wp')?.value || '').trim();
         if (_wideOn && !_subOn && searchMeta.regions.length >= 7) h += `<div class="ld-wide">${_escHtml(_wideOn.textContent.trim())} 전체 ${searchMeta.regions.length}개 시군구를 분석했어요. 세부 구를 직접 고르면 그 지역만 분석해요</div>`;
-        else if (_wideOn && !_subOn && _wpV) h += `<div class="ld-wide">직장 위치(${_escHtml(_wpV.slice(0, 30))})가 있어서 그 지역만 분석했어요. ${_escHtml(_wideOn.textContent.trim())} 전체를 보려면 직장 위치를 비워 주세요 <button type="button" class="ld-wpbtn" onclick="_wpClearSearch()" style="margin-left:6px;padding:4px 10px;border:1px solid var(--bd);border-radius:var(--radius-sm);background:var(--bg-elev-1);color:var(--text-primary);font-size:12px;font-weight:600;cursor:pointer">직장 위치 빼고 ${_escHtml(_wideOn.textContent.trim())} 전체로 다시 찾기</button></div>`;
       } catch (_e) {}
     }
     return h;
@@ -15574,13 +15572,6 @@ async function onHeaderSearchInput(q) {
       drop.style.display = 'block';
     }
   }, 250); // 250ms debounce
-}
-// WP-CLEAR-1115 (운영 크롬 실측): 직장 위치 칸에 예전 값이 남아 있으면 "서울 9억"이 0건이었고(비우면 806건), 그 칸은 접힌 구역 안이라
-//   안내대로 비우기가 어려웠다. 안내 옆 단추 하나로 비우고 다시 찾는다. 직장 위치로 지역을 좁히는 규칙 자체는 그대로다(운영자 방침 사항).
-function _wpClearSearch(){
-  try{ const e = document.getElementById('wp'); if(e){ e.value = ''; e.dispatchEvent(new window.Event('input', { bubbles: true })); } }catch(_){}
-  try{ localStorage.removeItem('mhl_search_wp'); }catch(_){}
-  try{ doSearch(); }catch(_){}
 }
 // SEARCH-DROP-CLOSE-1115 (운영 크롬 실측): 검색 목록에서 Enter 로 단지를 연 뒤 상세를 닫으면 포커스가 검색창으로 돌아오면서 같은 목록이
 //   다시 떴고, 바깥을 누르거나 Esc 를 눌러도 닫히지 않은 채 다른 화면(대출 계산 입력 칸 위)까지 따라왔다. 같은 요청도 한 번 더 나갔다.

@@ -6,7 +6,7 @@
  *   GU-LABEL            구 이름표는 구역 한가운데, 먼저 구 이름만으로 모두 놓고 자리가 남는 곳만 단지 이름까지
  *   MAP-NOTE            지역 보기 동안 지도 위 안내
  *   SEARCH-DROP-CLOSE   고른 뒤 포커스가 돌아와도 목록을 다시 띄우지 않고, 바깥을 누르거나 Esc 로 닫힘
- *   WP-CLEAR            직장 위치 때문에 좁혀진 결과에서 단추 하나로 비우고 다시 찾기
+ *   WP-COMMUTE-ONLY     직장 위치는 통근 계산에만 쓰고 분석 지역을 좁히지 않음(2026-11-16 운영자 승인)
  */
 'use strict';
 const { test } = require('node:test');
@@ -173,15 +173,20 @@ test('검색 목록: 바깥을 누르거나 Esc 를 누르면 어디서든 닫�
   handlers.keydown({ key: 'Escape' }); assert.equal(drop.style.display, 'none');
 });
 
-test('목록: 직장 위치 때문에 좁혀진 안내 옆에 비우고 다시 찾는 단추가 있고, 누르면 칸과 저장값을 비운 뒤 다시 찾는다', () => {
-  assert.match(html, /직장 위치를 비워 주세요 <button type="button" class="ld-wpbtn" onclick="_wpClearSearch\(\)"/);
-  const log = []; const wp = { value: '강남구', dispatchEvent: () => log.push('input') };
-  const env = {
-    document: { getElementById: (id) => (id === 'wp' ? wp : null) }, window: { Event: function Event() {} },
-    localStorage: { removeItem: (k) => log.push('rm:' + k) }, doSearch: () => log.push('search:' + wp.value),
-  };
-  new Function('env', `with(env){ ${fnSrc('_wpClearSearch')}; _wpClearSearch(); }`)(env);
-  assert.deepEqual(log, ['input', 'rm:mhl_search_wp', 'search:']);
+test('직장 위치는 통근 계산에만 쓴다: 희망 지역이 있으면 지역을 좁히지 않고, 희망 지역이 없을 때만 단서로 쓴다 (WP-COMMUTE-ONLY-1116)', () => {
+  const { pickRegions } = require('../services/propertyService');
+  const seoul = pickRegions('서울', 9, '', '');
+  const seoulWp = pickRegions('서울', 9, '강남구', '');
+  assert.ok(seoul.length >= 20, '서울 전체');
+  assert.deepEqual(seoulWp.map((x) => x.lawdCd).sort(), seoul.map((x) => x.lawdCd).sort(), '직장 위치가 있어도 서울 전체 그대로');
+  const nowon = pickRegions('노원구', 9, '강남구', '');
+  assert.ok(nowon.length >= 1 && nowon.every((x) => x.lawdCd === '11350'), '희망 지역이 구이면 그 구만(직장 위치의 구로 바뀌지 않는다)');
+  const onlyWp = pickRegions('', 9, '강남구', '');
+  assert.ok(onlyWp.length >= 1 && onlyWp.every((x) => x.lawdCd === '11680'), '희망 지역을 주지 않은 호출은 예전처럼 직장 위치를 단서로');
+  const src = fs.readFileSync(path.join(__dirname, '../services/propertyService.js'), 'utf8');
+  assert.ok(src.includes(":${normReg ? '' : normWp}:"), '희망 지역이 있으면 캐시 키에 직장 위치를 넣지 않는다');
+  assert.ok(html.includes('직장 위치 <span style="color:var(--t3);font-weight:400">(보고서에서 통근시간을 분석해요. 분석 지역은 위의 희망 지역대로예요)</span>'));
+  assert.ok(!html.includes('_wpClearSearch') && !html.includes('그 지역만 분석했어요'));
 });
 
 // ── 독립 검토 반영 ───────────────────────────────────────────────

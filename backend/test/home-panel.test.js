@@ -425,7 +425,8 @@ test('목록 화면: 안내 항목은 단지 카드나 건수가 아니고, 광�
   assert.ok(fn.includes('`총 ${_realProps.length}건`') && !fn.includes('`총 ${props.length}건`'), '건수에 안내 항목을 세지 않는다');
   assert.ok(fn.includes('if (!cardsHtml && _notice && !_realProps.length)'), '0건이면 서버 안내 문구를 안내 상자로');
   assert.ok(fn.includes('searchMeta.regions.length >= 7) h += `<div class="ld-wide">'), '광역 전체 문구는 7곳 이상일 때만');
-  assert.ok(fn.includes('직장 위치(${_escHtml(_wpV.slice(0, 30))})가 있어서 그 지역만 분석했어요'));
+  // WP-COMMUTE-ONLY-1116: 직장 위치는 더 이상 지역을 좁히지 않는다. 그 안내와 비우기 단추는 없앴다
+  assert.ok(!fn.includes('그 지역만 분석했어요') && !html.includes('_wpClearSearch'));
 });
 
 // COPY-FACT-1112 (2026-11-12 운영 크롬 실측과 코드 대조): 화면 문구가 실제 동작과 맞아야 한다.
