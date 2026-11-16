@@ -116,3 +116,39 @@ test('가격 신호 문구: 도움말에 적은 기준 숫자가 실제 계산�
   assert.equal(r.summaryDesc, '', '가격대 안내가 없으면 요약 줄은 비운다');
   assert.equal(summarizeMarketSignal(80, { signal: 'up', seasonalBias: false }, 70).summaryDesc, '최근 6개월 거래 가운데 높은 가격대예요');
 });
+
+// ── RPT-FUND-1116, RPT-ORDER-1116 (plans/201 2번): 보고서 맨 위 자금 요약과 순서 ──
+test('보고서 자금 요약: 숫자는 대출 계산과 같은 식에서 오고, 모자랄 때와 아닐 때와 자기 자본을 안 넣었을 때를 가려 말한다', () => {
+  const src = fnSrc('_rptFundHtml');
+  const mk = (calc) => new Function('calcLTV', '_escHtml', `${src}; return _rptFundHtml;`)(calc, (x) => String(x));
+  const text = (h) => h.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+  const calls = [];
+  const calc = (buy, cash, inc, mo, house, isF, region) => { calls.push([buy, cash, inc, mo, house, isF, region]); return { ltv: 0.4, lL: 3.6, dL: 3.68, fin: 3.6, need: Math.max(0, buy - cash - 3.6), isR: true }; };
+  const a = text(mk(calc)({ buy: 9, cash: 0, inc: 8000, region: '서울', houseStatus: '무주택', isFirstBuyer: false }));
+  assert.deepEqual(calls[0], [9, 0, 8000, 0, '무주택', false, '서울'], '대출 계산과 같은 인자로 calcLTV 를 부른다');
+  assert.match(a, /매수가 9억이면 대출 한도는 최대 3\.60억쯤이에요\(무주택, 규제지역, LTV 40% 기준\)\./);
+  assert.match(a, /자기 자본이 5\.40억보다 적으면 돈이 모자라요\. 지금 입력한 자기 자본은 0억이라 5\.40억이 모자라요\./);
+  assert.match(a, /취득세와 중개보수 같은 사는 비용은 빼기 전이에요\./);
+  const b = text(mk(calc)({ buy: 9, cash: 6, inc: 8000, region: '서울', houseStatus: '무주택', isFirstBuyer: false }));
+  assert.match(b, /입력한 자기 자본 6억이면 매수가를 채울 수 있어요\./); assert.doesNotMatch(b, /모자라요/);
+  const c = text(mk(calc)({ buy: 9, cash: null, inc: 0, region: '서울', houseStatus: '무주택', isFirstBuyer: false }));
+  assert.match(c, /자기 자본이 5\.40억은 있어야 해요\. 자기 자본을 입력하면 모자라는지 알려 드려요\./); assert.match(c, /입력 안 함/);
+  const dsr = text(mk(() => ({ ltv: 0.4, lL: 2, dL: 1.38, fin: 1.38, need: 2.62, isR: true }))({ buy: 5, cash: 1, inc: 3000, region: '서울', houseStatus: '무주택' }));
+  assert.match(dsr, /연소득 기준\(DSR\)/, '소득 때문에 한도가 정해졌으면 그렇게 적는다');
+  assert.equal(mk(calc)(null), ''); assert.equal(mk(calc)({ buy: 0 }), '');
+  assert.doesNotMatch(src, /[—–→]/);
+});
+
+test('보고서 순서: 자금 요약, 요약, 단지 목록, 접어 둔 구역(지역 통계, 정책, 계약 전 확인 목록), 맨 끝에 출처', () => {
+  const src = fnSrc('_renderReport');
+  const order = ['${_rptFundHtml(window._rptInput)}', '내 상황 기준 요약', '조건에 드는 단지 ${(r.apartments || []).length}곳', '${aptsHtml}',
+    '매수 예정가 안에 드는 단지를 먼저 보여 드려요. 수가 모자라면 매수 예정가보다 20%까지 비싼 단지도 함께 넣어요.',
+    '지역 통계 (미분양, 월별 거래량, 준공 연차별 평당가)', '현재 부동산 정책 (', '계약 전 확인 목록', '갈아타기 관점 (장기)', '    ${_basisHtml}'];
+  const tpl = src.slice(src.indexOf('result.innerHTML = `'));
+  let last = -1;
+  for (const k of order) { const i = tpl.indexOf(k); assert.ok(i > last, `순서가 어긋났다: ${k}`); last = i; }
+  assert.ok(src.includes('const coreHtml = _aiBanner + (r.coreMessages || [])'), '요약 상자에는 요약만 넣는다');
+  assert.ok(html.includes('window._rptInput = { buy, cash, inc, region, houseStatus, isFirstBuyer };'));
+  // 안내 문구의 20% 는 서버의 실제 범위와 같아야 한다
+  assert.ok(read('../routes/report.js').includes('const maxAmt = Math.round(buy * 1.2 * 10000);'));
+});

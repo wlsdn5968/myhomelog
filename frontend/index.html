@@ -5633,6 +5633,8 @@ async function generateReport(_isRetry) {
     return;
   }
 
+  // RPT-FUND-1116 (plans/201 2번): 보고서 맨 위 자금 요약이 대출 계산과 같은 식(calcLTV)으로 계산할 수 있게 이번 요청의 입력값을 남긴다
+  window._rptInput = { buy, cash, inc, region, houseStatus, isFirstBuyer };
   // 입력 요약
   summary.style.display=''; // AUDIT-2026-08-19: 기본 숨김(생성 전 빈 파란 박스 노출 제거) — 채울 때만 표시
   summary.innerHTML = `
@@ -5768,6 +5770,33 @@ const _peakFloorLine = (a) => {
   return bits.length ? bits.join(' | ') : '';
 };
 
+// RPT-FUND-1116 (plans/201 2번, 운영자 승인, 시안 claude.ai/design/p/208f6f86): 보고서가 돈이 모자란 것을 말하지 않았다
+//   (운영 실측 11-15: 매수가 9억, 자기 자본 0억인데 본문에 부족 안내 0건. 같은 값에 대출 계산은 부족 5.40억).
+//   숫자는 대출 계산과 같은 calcLTV 에서 가져온다. 두 화면의 숫자가 갈리지 않게 여기서 따로 계산하지 않는다.
+function _rptFundHtml(inp){
+  if(!inp || !(Number(inp.buy) > 0) || typeof calcLTV !== 'function') return '';
+  const buy = Number(inp.buy), cashKnown = inp.cash != null && Number.isFinite(Number(inp.cash)), cash = cashKnown ? Number(inp.cash) : 0;
+  const c = calcLTV(buy, cash, Number(inp.inc) || 0, 0, inp.houseStatus, !!inp.isFirstBuyer, inp.region);
+  const f2 = (n) => (Math.round(Number(n) * 100) / 100).toFixed(2);
+  const own = Math.max(0, buy - c.fin);
+  const byDsr = c.dL > 0 && c.dL < c.lL;
+  const basis = [_escHtml(String(inp.houseStatus || '')), c.isR ? '규제지역' : '', byDsr ? '연소득 기준(DSR)' : `LTV ${Math.round(c.ltv * 100)}% 기준`].filter(Boolean).join(', ');
+  const short = cashKnown && c.need > 0;
+  const line1 = c.fin > 0 ? `매수가 ${buy}억이면 대출 한도는 최대 ${f2(c.fin)}억쯤이에요(${basis}).` : `매수가 ${buy}억에 받을 수 있는 주택담보대출이 없어요(${basis}).`;
+  const line2 = short ? ` <span style="background:var(--ambL);color:var(--amb);padding:0 3px;border-radius:var(--radius-xs)">자기 자본이 ${f2(own)}억보다 적으면 돈이 모자라요.</span> 지금 입력한 자기 자본은 ${cash}억이라 ${f2(c.need)}억이 모자라요.`
+    : cashKnown ? ` 입력한 자기 자본 ${cash}억이면 매수가를 채울 수 있어요.`
+    : ` 자기 자본이 ${f2(own)}억은 있어야 해요. 자기 자본을 입력하면 모자라는지 알려 드려요.`;
+  const tile = (lbl, val, warn) => `<div style="flex:1;min-width:92px;padding:10px 12px;border-radius:var(--radius-base);background:${warn ? 'var(--ambL)' : 'var(--s1)'};border:1px solid ${warn ? 'var(--amb)' : 'var(--bd)'}"><div style="font-size:12px;color:var(--t2)">${lbl}</div><div style="font-size:20px;font-weight:800;color:${warn ? 'var(--amb)' : 'var(--accent-700)'};margin-top:2px">${val}</div></div>`;
+  return `<div id="rptFund" style="background:var(--bg-base);border:2px solid var(--accent-700);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--accent-700);margin-bottom:6px">자금 요약</div>
+      <div style="font-size:14px;font-weight:700;color:var(--t1);line-height:1.7">${line1}${line2}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-top:10px">
+        ${tile('대출 한도', f2(c.fin) + '억', false)}${tile('필요한 자기 자본', f2(own) + '억', false)}${tile('입력한 자기 자본', cashKnown ? cash + '억' : '입력 안 함', short)}
+      </div>
+      <div style="font-size:12px;color:var(--t3);margin-top:8px">취득세와 중개보수 같은 사는 비용은 빼기 전이에요. 실제 한도는 금융기관 심사로 정해져요.</div>
+      <button type="button" style="margin:10px 0 0;padding:8px 14px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;border:none;border-radius:var(--radius-sm);background:var(--accent-700);color:#fff" onclick="sv('calc')">대출 계산에서 자세히 보기</button>
+    </div>`;
+}
 function _renderReport(data) {
   const r = data.report || {};
   const policy = data.policyContext || {};
@@ -5810,7 +5839,7 @@ function _renderReport(data) {
       <div style="font-size:12px;color:var(--t3)">국토교통부 실거래 신고 기준 · 목록 첫 단지의 지역 기준 · ${_escHtml(_tt.note||'최근 월은 신고 지연으로 집계 중일 수 있어요')} · 수치를 나열한 것이며 시장 예측이 아니에요</div>
     </div>` : '';
 
-  const coreHtml = _basisHtml + _usHtml + _ttHtml + _aiBanner + (r.coreMessages || []).map((m, i) =>
+  const coreHtml = _aiBanner + (r.coreMessages || []).map((m, i) =>
     `<div style="display:flex;gap:8px;margin-bottom:6px;font-size:12px;line-height:1.7">
       <span style="color:var(--acc);font-weight:700;flex-shrink:0">${i+1}.</span>
       <span>${_escHtml(m)}</span>
@@ -5875,11 +5904,23 @@ function _renderReport(data) {
   ).join('');
 
   result.innerHTML = `
+    ${_rptFundHtml(window._rptInput)}
     <!-- 핵심 방향 3줄 -->
     <div style="background:linear-gradient(135deg,var(--accent-50),var(--bg-base));border:1px solid var(--accent-100);border-radius:var(--radius-lg);padding:14px 16px;margin-bottom:12px;box-shadow:0 1px 3px rgba(16,24,40,.04)">
       <div style="font-size:12px;font-weight:700;color:var(--accent-700);margin-bottom:8px">내 상황 기준 요약</div>
       ${coreHtml}
     </div>
+
+    <!-- 단지 후보: RPT-ORDER-1116 요약 바로 아래로 올렸다(전에는 통계, 정책, 체크리스트 뒤였다) -->
+    <div style="font-size:14px;font-weight:700;color:var(--t1);margin:14px 0 2px">조건에 드는 단지 ${(r.apartments || []).length}곳</div>
+    <div style="font-size:12px;color:var(--t3);margin-bottom:8px">국토교통부 실거래 기준으로 정리했어요. 추천이 아니에요.</div>
+    ${aptsHtml}
+    <div style="font-size:12px;color:var(--t3);margin:-2px 0 14px">매수 예정가 안에 드는 단지를 먼저 보여 드려요. 수가 모자라면 매수 예정가보다 20%까지 비싼 단지도 함께 넣어요.</div>
+
+    ${(_usHtml || _ttHtml) ? `<details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:10px">
+      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--t1);list-style:none">지역 통계 (미분양, 월별 거래량, 준공 연차별 평당가)</summary>
+      <div style="margin-top:8px">${_usHtml}${_ttHtml}</div>
+    </details>` : ''}
 
     <!-- 정부 정책 환경 -->
     <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:10px">
@@ -5899,17 +5940,15 @@ function _renderReport(data) {
       </div>
     </details>
 
-    <!-- 매수 체크리스트 -->
-    <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-md);padding:13px 15px;margin-bottom:12px">
-      <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px">매수·갈아타기 체크리스트</div>
-      ${checklistHtml}
-    </div>
-
-    ${_cautionsWeb}
-
-    <!-- 단지 후보 -->
-    <div style="font-size:14px;font-weight:700;color:var(--t1);margin:14px 0 8px">내 조건 부합 단지 ${(r.apartments || []).length}개</div>
-    ${aptsHtml}
+    <!-- 계약 전 확인 목록 -->
+    <details style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-md);padding:12px 14px;margin-bottom:12px">
+      <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--t1);list-style:none">계약 전 확인 목록</summary>
+      <div style="margin-top:8px">
+        <div style="font-size:12px;font-weight:700;color:var(--t1);margin-bottom:8px">매수·갈아타기 체크리스트</div>
+        ${checklistHtml}
+        ${_cautionsWeb}
+      </div>
+    </details>
 
     <!-- 갈아타기 시나리오 -->
     <div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-md);padding:13px 15px;margin-bottom:12px">
@@ -5934,6 +5973,7 @@ function _renderReport(data) {
       </div>
     </div>
 
+    ${_basisHtml}
     <div style="font-size:12px;color:var(--t3);margin-top:8px;text-align:center">생성: ${_escHtml(data.generatedAt || '')}</div>
   `;
   // 보고서 데이터 저장 (PDF·관심추가용)
