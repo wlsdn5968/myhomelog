@@ -5,6 +5,35 @@ window.MHL_POLICY = {
  "checked": "2026-11-16",
  "items": [
   {
+   "date": "2025-01-09",
+   "effective": "2025-01-13",
+   "org": "금융위원회",
+   "cat": "loan",
+   "status": "시행",
+   "title": "중도상환수수료율 인하",
+   "before": "주택담보대출 중도상환수수료율 고정금리 1.4%, 변동금리 1.2%",
+   "after": "고정금리와 변동금리 모두 0.65%. 2025.1.13 이후 새로 맺는 계약부터",
+   "who": "대출을 새로 받는 사람",
+   "note": "발표에 실린 평균값이에요. 실제 수수료율은 금융회사와 상품마다 달라요",
+   "src": [
+    "https://www.korea.kr/news/policyNewsView.do?newsId=148938404"
+   ]
+  },
+  {
+   "date": "2025-01-20",
+   "effective": "2025-01-21",
+   "org": "국토교통부",
+   "cat": "supply",
+   "status": "시행",
+   "title": "도시형 생활주택 면적 제한 완화",
+   "before": "소형 주택은 건축 면적 제한이 있었음",
+   "after": "면적 제한 규정을 없앰. 전용 85㎡ 이하 세대로 5층 이상 아파트 형태로 지을 수 있음",
+   "who": "도시형 생활주택을 짓는 사업자, 3~4인 가구",
+   "src": [
+    "https://www.korea.kr/news/policyNewsView.do?newsId=148938798"
+   ]
+  },
+  {
    "date": "2025-02-11",
    "effective": null,
    "org": "국토교통부",
@@ -343,14 +372,15 @@ window.MHL_POLICY = {
    "effective": null,
    "org": "국토교통부",
    "cat": "supply",
-   "status": "시행",
+   "status": "종료",
    "title": "청약예금, 부금의 종합저축 전환 기한 연장",
    "before": "전환 기한 2025.9.30",
    "after": "1년 연장",
    "who": "청약예금, 청약부금 가입자",
-   "note": "2026.9.23에 2027.9.30까지 1년 더 연장한다는 발표가 있었어요(제목만 확인)",
+   "note": "2026.9.23 발표로 2027.9.30까지 1년 더 늘었어요",
    "src": [
-    "https://www.korea.kr/news/policyNewsView.do?newsId=148958747"
+    "https://www.korea.kr/news/policyNewsView.do?newsId=148958747",
+    "https://www.korea.kr/news/policyNewsView.do?newsId=148972533"
    ]
   },
   {
@@ -448,6 +478,20 @@ window.MHL_POLICY = {
    ]
   },
   {
+   "date": "2026-06-29",
+   "effective": "2026-07-01",
+   "org": "금융위원회",
+   "cat": "loan",
+   "status": "시행",
+   "title": "은행 대출 가산금리에 법정 출연금 반영 제한",
+   "before": "은행이 가산금리에 법정 출연금을 반영",
+   "after": "지급준비금, 예금자보험료, 서민금융진흥원 출연금은 반영 금지. 보증부대출은 보증기관 출연금의 50% 이상 반영 금지",
+   "who": "2026.7.1 이후 은행 대출 계약을 맺거나 갱신하는 사람",
+   "src": [
+    "https://www.fsc.go.kr/no010101/87204"
+   ]
+  },
+  {
    "date": "2026-06-30",
    "effective": "2026-07-01",
    "org": "국토교통부, 금융위원회",
@@ -472,9 +516,10 @@ window.MHL_POLICY = {
    "before": "1세대 1주택 종부세 기본공제 공시가격 12억 원",
    "after": "14억 원으로. 다주택자 양도세 중과는 2028년까지 한시 완화. 종부세는 내년부터 단계 시행, 양도세 개편은 2028년부터 적용",
    "who": "집을 가진 사람, 집을 팔려는 사람",
-   "note": "정부안이에요. 국회를 통과해야 확정돼요. 통과 여부는 확인하지 못했어요",
+   "note": "정부안이에요. 국회 심의와 의결에서 내용이나 시행 시기가 달라질 수 있어요. 통과 여부는 2026.11.16 현재 공식 글로 확인하지 못했어요",
    "src": [
-    "https://www.korea.kr/news/policyNewsView.do?newsId=148969278"
+    "https://www.korea.kr/news/policyNewsView.do?newsId=148969278",
+    "https://www.korea.kr/news/policyNewsView.do?newsId=148969870"
    ]
   },
   {
@@ -537,6 +582,20 @@ window.MHL_POLICY = {
    ]
   },
   {
+   "date": "2026-09-23",
+   "effective": null,
+   "org": "국토교통부",
+   "cat": "supply",
+   "status": "시행",
+   "title": "청약예금, 부금의 종합저축 전환 기한 1년 더 연장",
+   "before": "전환 기한 2026.9.30",
+   "after": "2027.9.30까지. 전환하면 종전 가입기간을 인정해 최고금리 3.1% 적용",
+   "who": "청약예금, 청약부금, 청약저축 가입자",
+   "src": [
+    "https://www.korea.kr/news/policyNewsView.do?newsId=148972533"
+   ]
+  },
+  {
    "date": "2026-09-29",
    "effective": "2026-10-01",
    "org": "재정경제부",
@@ -564,6 +623,48 @@ window.MHL_POLICY = {
    "who": "신혼부부, 무주택 청년",
    "src": [
     "https://www.fsc.go.kr/no010101/87939"
+   ]
+  },
+  {
+   "date": "2026-10-29",
+   "effective": null,
+   "org": "국토교통부",
+   "cat": "supply",
+   "status": "계획",
+   "title": "수도권 신규택지 6곳 7만 6,700호 추가",
+   "before": null,
+   "after": "김포아라 3만 7,000호 등 수도권 6곳에 7만 6,700호. 앞서 발표한 곳을 더하면 10만 3,900호",
+   "who": "수도권에서 집을 구하는 사람",
+   "src": [
+    "https://www.korea.kr/news/policyNewsView.do?newsId=148974548"
+   ]
+  },
+  {
+   "date": "2026-11-03",
+   "effective": "2026-11-12",
+   "org": "국토교통부",
+   "cat": "supply",
+   "status": "시행",
+   "title": "다세대, 다가구주택 면적 제한 완화",
+   "before": "면적 660㎡. 다가구주택 3층",
+   "after": "면적 1,000㎡. 다가구주택 4층",
+   "who": "다세대, 다가구주택을 짓는 사람",
+   "src": [
+    "https://www.korea.kr/news/policyNewsView.do?newsId=148974876"
+   ]
+  },
+  {
+   "date": "2026-11-09",
+   "effective": "2026-11-13",
+   "org": "국토교통부",
+   "cat": "rent",
+   "status": "시행",
+   "title": "전세사기 피해자 최소보장제",
+   "before": null,
+   "after": "피해 회복 금액이 보증금의 3분의 1에 못 미치면 부족분을 현금으로 지원. 온라인 신청은 11.10부터",
+   "who": "전세사기 피해자로 결정된 사람",
+   "src": [
+    "https://www.korea.kr/news/policyNewsView.do?newsId=148975298"
    ]
   }
  ]
