@@ -68,8 +68,11 @@ test('문구: 추천과 예측으로 읽히는 표현이 화면 소스에 없다
   assert.doesNotMatch(html, /5년 이상 보유를 염두/);
   assert.doesNotMatch(html, /시세 하락 위험/);
   // 가격 신호 요약 줄은 서버의 중립 문구(summaryDesc)를 쓴다
-  assert.match(html, /sig\.summaryDesc\|\|sig\.signalDesc/);
-  assert.match(rd('services/analysisService.js'), /summaryDesc: signalDesc\.replace\('긍정', '데이터 부합'\)/);
+  //   SIGNAL-COPY-1116: 판단 표현이 든 signalDesc 로는 물러서지 않는다(summaryDesc 가 없으면 그 줄을 그리지 않는다)
+  assert.ok(html.includes("(typeof sig.summaryDesc==='string'&&sig.summaryDesc)?"));
+  assert.doesNotMatch(html, /sig\.summaryDesc\|\|sig\.signalDesc/);
+  // SIGNAL-COPY-1116: 요약에는 가격대 안내만 남긴다(개수는 화면 머리가 말한다)
+  assert.match(rd('services/analysisService.js'), /summaryDesc: signalDesc\.includes\('시세 상단'\) \? '최근 6개월 거래 가운데 높은 가격대예요' : '',/);
 });
 
 test('현장 메모: 방문일은 실제 날짜만, 평점은 숫자만 받는다', () => {

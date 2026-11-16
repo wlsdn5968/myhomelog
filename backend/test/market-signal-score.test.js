@@ -43,7 +43,7 @@ test('B: percentile 20(green)+거래량 up/성수기 감쇄(yellow)+전세 70(gr
   // 성수기 감쇄로 거래량 조건 자체가 green→yellow 로 내려간 것이 metCount=2(3 아님)의 근거.
   const vol = r.conditions.find(c => c.label === '거래량 추이');
   assert.equal(vol.status, 'yellow');
-  assert.equal(vol.desc, '최근 3개월 거래 증가 (성수기 영향 감쇄)');
+  assert.equal(vol.desc, '최근 3개월 거래가 늘었어요. 이사철이 끼어 있어 실제보다 많아 보일 수 있어요');
 });
 
 test('C: percentile 80(veto 조건 성립)+거래량 up(green)+전세 70(green) → 4/6=0.6667<0.67 라 green 불가 — veto 강등 도달 불가(yellow+경고문구만)', () => {
@@ -58,7 +58,7 @@ test('C: percentile 80(veto 조건 성립)+거래량 up(green)+전세 70(green) 
   assert.equal(r.tone, 'neutral');
   assert.equal(r.signalDesc, '3개 조건 중 2개 긍정 · ⚠ 시세 상단, 매수 단가 주의');
   // SUMMARY-NEUTRAL-1114: 화면에 나가는 요약에는 판단 표현('매수 단가 주의')과 '긍정'이 없다
-  assert.equal(r.summaryDesc, '3개 조건 중 2개 데이터 부합. 최근 6개월 거래 가운데 높은 가격대예요');
+  assert.equal(r.summaryDesc, '최근 6개월 거래 가운데 높은 가격대예요');
   assert.doesNotMatch(r.summaryDesc, /긍정|주의|·/);
 });
 

@@ -284,9 +284,10 @@ function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate, jeonseSa
     // up → neutral 수준으로 감쇄. green → yellow.
     volScore = 1;
     volStatus = 'yellow';
-    volDesc = '최근 3개월 거래 증가 (성수기 영향 감쇄)';
+    // SIGNAL-COPY-1116 (plans/201 4번, 운영자 승인): 뜻을 알기 어려운 말을 쉬운 말로. 점수와 색은 그대로다.
+    volDesc = '최근 3개월 거래가 늘었어요. 이사철이 끼어 있어 실제보다 많아 보일 수 있어요';
   } else if (seasonalBias) {
-    volDesc += ' ⚠ 이사 성수기 영향 가능';
+    volDesc += '. 이사철이 끼어 있어요';
   }
   score += volScore;
   conditions.push({ label: '거래량 추이', status: volStatus, desc: volDesc, seasonalBias });
@@ -349,7 +350,8 @@ function summarizeMarketSignal(percentile, volumeSignalObj, jeonseRate, jeonseSa
     tone,
     // SUMMARY-NEUTRAL-1114 (감사 6번, 독립 검토): 화면에 나가는 요약에서 '매수 단가 주의' 같은 판단 표현과
     //   가운뎃점 나열을 뺀다. percentile 은 최근 6개월 거래 안에서의 위치다. signalDesc 는 호환용으로 그대로 둔다.
-    summaryDesc: signalDesc.replace('긍정', '데이터 부합').replace(' · ⚠ 시세 상단, 매수 단가 주의', '. 최근 6개월 거래 가운데 높은 가격대예요'),
+    // SIGNAL-COPY-1116: "N개 조건 중 M개"는 화면 머리가 이미 말한다(같은 말이 두 번 나왔다). 요약에는 가격대 안내만 남긴다.
+    summaryDesc: signalDesc.includes('시세 상단') ? '최근 6개월 거래 가운데 높은 가격대예요' : '',
   };
 }
 

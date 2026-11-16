@@ -90,3 +90,29 @@ test('비교 담기 막대: 목록과 지도 화면에서만 보이고, 다른 �
   assert.ok(sv.indexOf("classList.toggle('cmp-off'") > 0, '화면 전환 함수 안에서 건다');
   assert.ok(!/cmp-off[\s\S]{0,200}cmpSel\.clear\(\)/.test(sv), '숨길 때 담은 단지를 비우지 않는다');
 });
+
+// ── SIGNAL-COPY-1116 (plans/201 4번): 가격 신호 탭의 말을 쉬운 말로. 계산과 색은 그대로 ──
+test('가격 신호 문구: 무엇을 센 것인지 밝히고, 어려운 말(데이터 부합, 성수기 영향 감쇄, RR, 신뢰 구간)을 쓰지 않는다', () => {
+  assert.ok(html.includes('가지 기준 가운데 ${sig.metCount||0}가지에 해당해요'));
+  assert.ok(html.includes('기준은 세 가지예요. 가격이 최근 6개월 거래의 낮은 쪽 30% 안인지, 최근 3개월 거래가 늘었는지, 전세가율이 60% 이상인지.'));
+  assert.ok(html.includes('과거 거래를 센 것이고 매수 시점 추천이 아니에요.'));
+  assert.ok(html.includes('같은 평형이어도 층과 방향에 따라 값이 달라요. 이 숫자는 그 차이를 반영하지 못해요.'));
+  assert.ok(html.includes('이사철(3, 4, 9, 10월)이 비교 기간에 들어 있어 거래가 실제보다 많아 보일 수 있어요.'));
+  assert.ok(html.includes('평형을 가리지 않고 최근 거래를 10건까지 평균한 값이에요'));
+  for (const old of ['데이터 부합', '성수기 영향 감쇄', 'RR/저층', '95% 신뢰 구간', '이사 성수기(3·4·9·10월)가 비교 구간']) {
+    assert.ok(!html.includes(old), `옛 문구가 남아 있다: ${old}`);
+  }
+  // 위험 고지는 그대로 둔다
+  assert.ok(read('../services/analysisService.js').includes('역전세 위험 확인 필요'));
+});
+
+test('가격 신호 문구: 도움말에 적은 기준 숫자가 실제 계산식과 같다(30%, 60%, 거래 증가)', () => {
+  const _in = require('../services/analysisService')._internals; const summarizeMarketSignal = _in.summarizeMarketSignal || _in.calcBuySignal;
+  const green = (p, v, j) => summarizeMarketSignal(p, { signal: v, seasonalBias: false }, j).conditions.map((c) => c.status === 'green');
+  assert.deepEqual(green(30, 'up', 60), [true, true, true]);
+  assert.deepEqual(green(31, 'neutral', 59), [false, false, false]);
+  const r = summarizeMarketSignal(20, { signal: 'up', seasonalBias: true }, 70);
+  assert.equal(r.conditions[1].desc, '최근 3개월 거래가 늘었어요. 이사철이 끼어 있어 실제보다 많아 보일 수 있어요');
+  assert.equal(r.summaryDesc, '', '가격대 안내가 없으면 요약 줄은 비운다');
+  assert.equal(summarizeMarketSignal(80, { signal: 'up', seasonalBias: false }, 70).summaryDesc, '최근 6개월 거래 가운데 높은 가격대예요');
+});

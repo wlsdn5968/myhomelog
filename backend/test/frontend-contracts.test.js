@@ -1863,8 +1863,9 @@ test('Plan 056 ①-a: pctHtml — 041 이 지운 등급 표현이 프론트 사�
 test('Plan 056 ①-a: pctHtml — 등급 표현을 지워도 백분위 수치·신뢰구간·표본 건수는 그대로다', () => {
   const low = _plan056RunPct(20);
   assert.ok(low.indexOf('하위 20%') >= 0, '백분위 라벨(하위 20%)이 사라졌다');
-  assert.ok(low.indexOf('95% 신뢰 구간 15~25%') >= 0, '신뢰구간 수치가 사라졌다');
-  assert.ok(low.indexOf('표본 40건') >= 0, '표본 건수가 사라졌다');
+  // SIGNAL-COPY-1116: 같은 수치를 쉬운 말로 적는다(범위와 건수는 그대로)
+  assert.ok(low.indexOf('오차를 감안하면 15~25% 사이예요') >= 0, '신뢰구간 수치가 사라졌다');
+  assert.ok(low.indexOf('거래 40건으로 계산했고') >= 0, '표본 건수가 사라졌다');
 
   const high = _plan056RunPct(80);
   assert.ok(high.indexOf('상위 20%') >= 0, '50% 초과 시 상위 % 전환(PCT-LABEL-2026-07-15)이 사라졌다');
