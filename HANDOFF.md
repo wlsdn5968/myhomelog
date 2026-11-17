@@ -1,52 +1,42 @@
 # 내집로그 인계 문서 (새 세션에 그대로 붙여 넣는 프롬프트)
 
-작성: 2026-11-15 KST, 정기 점검 끝(같은 날 저녁 남은 일 처리분 반영). 이 문서의 내용은 모두 그날 명령, 조회, 화면으로 확인한 것이다. 확인하지 못한 것은 "확인 불가"로 적었다.
+작성: 2026-11-17 밤 KST, 정기 점검 끝. 이 문서의 내용은 그날 명령, 조회, 화면으로 확인한 것이다. 확인하지 못한 것은 "확인 불가"로 적었다. 옛 판은 `docs/ops/handoff-archive-2026-11-17.md` 에 글자 그대로 있다.
 
 너는 내집로그(myhomelog) 운영 작업을 이어받는다. 아래를 읽고 "2. 먼저 읽을 파일"부터 연 다음 "6. 남은 일"의 1번부터 진행해라.
 
 ## 1. 프로젝트와 지금 상태
 
 - 내집로그(myhomelog.vercel.app)는 공공 실거래 자료로 아파트 정보를 정리해 보여 주는 무료 서비스다. 매수와 매도 추천, 가격 예측은 하지 않는다.
-- 구조: 화면 `frontend/index.html`(단일 파일), 서버 Express 를 Vercel Hobby 함수 하나(`api/index.js`)로 실행, 자료 Supabase(`brxorvxdfrbxcavufspe`), 요청 제한과 계수는 Upstash Redis, 오류 수집 Sentry.
+- 구조: 화면 `frontend/index.html`(본체)과 `frontend/js/*.js`(본체 앞에서 부르는 일반 스크립트), 서버 Express 를 Vercel Hobby 함수 하나(`api/index.js`)로 실행, 자료 Supabase(`brxorvxdfrbxcavufspe`), 요청 제한과 계수는 Upstash Redis, 오류 수집 Sentry.
 - 작업 폴더: `C:\Users\Woo\Downloads\myhomelog_deploy_1\myhomelog\.claude\worktrees\p144` (브랜치 `ui-155`). Vercel projectId `prj_eYOJDb65wMQqbL5dAKo1pwaitiwW`, team `gyeollab`.
 
-동작하는 것 (확인됨)
-- 2026-11-17 밤 갱신(아래 줄보다 우선): 운영 배포본은 5ab0d91(11-17 23:14 KST 배포, 그날 1회 사용). 11-16 에 쌓인 것 전부와 개인정보처리방침 v1.3 시행본(`privacy-1117`, c0fd32f)을 합쳐 올렸다. 그 뒤 화면 파일 나누기 2단계(계산 함수 여섯 개를 `frontend/js/calc.js` 로, `plans/202-frontend-split.md` 끝)를 했고 이어서 3단계(단지 상세의 세금 계산을 `calcHoldingTaxes` 로, 평 환산을 `_sqmToPy` 로 뽑음)도 했다. 이 두 단계만 미배포다(verify 1,268). 배포하면 `/js/calc.js` 가 200 과 `application/javascript` 인지, 대출 계산과 단지 상세의 "보유 주택 수별 예상 세금" 표, 평형 표기가 나오는지부터 본다. 배포 전 verify 1,262 통과.
-  - 배포 뒤 운영에서 확인한 것: `/js/swap-checklist.js`, `/js/policy-data.js`, `/js/policy.js` 가 200 과 `application/javascript`, `/policy` 200 과 카드 45장, 앱 `?view=policy` 카드 45장과 조건 고르기와 되돌리기, 들어가는 길 3곳, 갈아타기와 체크리스트 화면, 대출 계산의 "최근 정책 변화" 상자, `/privacy.html` 의 v1.3, `/api/regulations` 의 5.10 과 5.12 새 문장, 데스크톱 네이버 지도의 서울 구별 첫 화면, 콘솔 오류 없음(브라우저 확장 오류만), Sentry 최근 1시간 새 문제 0건, health 의 cpuDay 73,321ms(11-17 하루 합계, 배포 직후).
-  - 확인하지 못한 것: 휴대폰 폭의 네이버 지도(크롬 창 크기를 바꿀 수 없음), 낮은 화면의 도우미 창, `?view=constructor` 주소 정리, 로그인 안 한 상태의 사용량 문구(운영자 계정이라 무제한으로 나옴), 보고서 1회 생성.
-  - 메인 폴더는 5ab0d91 로 맞췄다(`.claude/launch.json` 의 로컬 수정은 그대로 둠).
-- 2026-11-16 밤 갱신(아래 줄보다 우선): 운영 배포본은 86cb8e1(11-16 배포 1회 사용). 로컬은 그보다 앞서 있고 미배포다(전면 감사 발견 처리, 모바일 지도, 정책 문구 원문 대조, 화면 파일 나누기 0단계와 1단계, 정책 변화 한 장 요약 화면. verify 1,262). 감사 기록은 `AUDIT_REPORT.md` 15절, 정책 변화는 `plans/203-policy-changes.md`.
-  - 운영자가 실행한 것: `supabase/migrations/20261116_revoke_unused_write_grants.sql`(11-16, 조회로 확인: anon 쓰기 권한 0, authenticated 는 5개 표만).
-  - 운영자가 실행한 것(11-16 저녁): `supabase/migrations/20261116_policy_rules_wording.sql`. DB 조회로 확인(16줄 그대로, 두 줄이 새 문장). 운영자 실행 대기 SQL 은 없다. `/api/regulations` 는 CDN 이 30분 기억하므로 응답에는 조금 뒤에 반영된다.
-  - 배포 직후 가장 먼저: `https://myhomelog.vercel.app/js/swap-checklist.js` 가 200 과 `application/javascript` 로 오는지, 도구의 갈아타기 계산과 거래 체크리스트가 뜨는지. 이 경로는 운영에서 처음 쓰인다. 안 되면 화면 나누기 커밋을 되돌린다.
-  - 배포 뒤 운영에서 볼 것: 로그인한 계정의 서비스 정보 창 사용량 문구(관리자는 "검색 무제한"), 대출 계산 타임라인(8.13, 5.10, 5.12 항목), `?view=constructor` 가 지도로 뜨는지, 휴대폰 폭의 네이버 지도에서 서울이 순위 시트 위에 다 보이는지(로컬은 대체 지도로만 확인했다).
-  - 정책 변화(plans/203) 배포 뒤 볼 것: `/policy` 가 200 으로 뜨고 카드가 45장인지, `/js/policy-data.js` 와 `/js/policy.js` 가 200 인지, 앱의 도구 메뉴 "정책 변화"와 대출 계산의 "최근 정책 변화" 상자, 규제 요약 창의 단추.
-  - 12월에 꼭 볼 것: 서울 전역과 경기 12곳 토지거래허가구역(2026-12-31 까지)의 연장 공고, 2026년 세제개편안의 국회 통과. 확인되면 `backend/data/policy-changes.json` 과 규제 요약 창을 고친다.
-  - Claude Design 은 2026-12-14 에 옮겨 간다는 안내가 떠 있다. 프로젝트를 옮기는 단추는 운영자가 누른다(시안: 맞춤 보고서, 정책 변화).
-  - 그대로 둔 것: 저장된 지도 위치가 있는 사람은 그 위치에서 시작한다(운영자 지시로 만든 동작이라 바꾸지 않았다. 확대 10 에서는 구 이름표 일부가 겹쳐 숨는다).
-  - 다음 계획: `plans/202-frontend-split.md` 2단계(DOM 을 읽지 않는 계산 함수를 `frontend/js/calc.js` 로). 1단계 배포가 운영에서 확인된 뒤, 운영자 결정으로 시작한다.
-  - 크롬 창 크기는 바뀌지 않는다. 모바일과 태블릿은 로컬 미리보기(`home-preview`)의 화면 크기 바꾸기로 본다. 미리보기 탭은 에이전트와 함께 쓰이므로 크기 설정과 확인을 한 번의 묶음 호출로 한다.
-- 운영 배포본은 d2fd864(2026-11-15 첫 번째 배포). 그날 배포는 1회 썼다.
-- `npm run verify` 1,238건 통과, 실패 0건(로컬, 미배포분 포함).
-- DB 413.7MB(한도 500MB 의 82.7%, 경보선 85%). 연결 15개(최대 60). 2MB 넘는 인덱스는 모두 쓰이고 있다.
+동작하는 것 (확인됨, 2026-11-17)
+- 운영 배포본은 5ab0d91(11-17 23:14 KST 배포, 그날 1회 사용). 정책 변화 화면(`?view=policy`, 카드 45장)과 서버 페이지 `/policy`, 화면 파일 나누기 0단계와 1단계, 개인정보처리방침 v1.3 이 들어 있다.
+- 배포 뒤 운영에서 확인한 것: `/js/swap-checklist.js`, `/js/policy-data.js`, `/js/policy.js` 가 200 과 `application/javascript`, `/policy` 200 과 카드 45장, 앱의 정책 변화 화면과 들어가는 길 3곳, 갈아타기와 체크리스트 화면, 대출 계산의 "최근 정책 변화" 상자, `/privacy.html` 의 v1.3, `/api/regulations` 의 5.10 과 5.12 새 문장, 데스크톱 네이버 지도의 서울 구별 첫 화면, 콘솔 오류 없음(브라우저 확장 오류만), Sentry 최근 1시간 새 문제 0건.
+- 로컬은 운영보다 앞서 있다. 미배포 코드는 두 커밋이다: 7134848(나누기 2단계, 계산 함수 여섯 개를 `frontend/js/calc.js` 로)과 2f64f0e(3단계, 단지 상세의 세금 계산 `calcHoldingTaxes` 와 평 환산 `_sqmToPy`). 그 뒤는 문서 커밋이다. `npm run verify` 1,268개 통과.
+- 예약 작업 14개. 11-17 조회: apt-master-sync `fetched` 5028, `errors` 0, `throttleHits` 0. `regulations-auto-fetch` 의 `pendingReview` 0. 하루 CPU 합계 73.3초(11-17 23:15 조회).
+- DB: health 기준 413.9MB(한도 500MB 의 83%, 경보선 85%). 11-11 411MB, 11-15 413.7MB 에서 거의 늘지 않았다. 연결 active 2, idle 15. 200KB 넘는 안 쓰는 인덱스 없음.
+- 운영자 실행 대기 SQL 은 없다(11-16 에 세 건 모두 실행했고 조회로 확인했다).
 
-안 되는 것, 위험한 것 (확인됨)
-- Vercel 팀 Active CPU 가 30일 합계 9시간 10분이다(기본 한도 4시간, 임시 12시간은 2026-12-08 까지). 내집로그 3시간 26분, portai 3시간 18분, salon 1시간 19분, wellness-platform 1시간 6분.
-- 조용한 날에도 팀 합계가 하루 약 11분(portai 약 5.5, 내집로그 약 3, wellness 약 2, salon 약 0.7)이라 30일 5시간 30분 속도다. 한도를 지키려면 팀 합계 하루 평균 8분 이하, 12-08 당일 창에는 11-09~12 의 튄 날이 들어 있어 그때까지는 하루 약 5분 이하여야 한다. 내집로그만 줄여서는 부족하다.
-- 로컬이 운영보다 23커밋 앞서 있고 미배포다(아래 4절). 하루 CPU 합계 장치와 부하 정리가 여기에 들어 있다.
+안 되는 것, 위험한 것
+- Vercel 팀 Active CPU 는 30일 합계로 본다. 2026-11-15 에 잰 값은 팀 합계 9시간 10분(기본 한도 4시간, 임시 12시간은 2026-12-08 까지)이고 내집로그 3시간 26분, portai 3시간 18분, salon 1시간 19분, wellness-platform 1시간 6분이었다. 그 뒤로 다시 재지 않았다. 한도를 지키려면 팀 합계 하루 평균 8분 이하여야 한다. 내집로그만 줄여서는 부족하다.
+- DB 에서 무거운 것(`pg_stat_statements`, 2026-11-17): `refresh_molit_apt_dim` 평균 18.2초(150회), `refresh_molit_apt_index` 평균 10.0초(213회), `refresh_molit_aliases` 평균 32초(11회). 죽은 행은 `molit_hist_peaks` 11,007개, `apt_master` 2,770개.
 
 확인 불가
-- 예약 작업 14개 가운데 좌표 검증(12.6초) 말고 나머지의 CPU. 함수 기록이 1시간만 남는다. 미배포분을 배포한 다음 날 health 의 `crons.<이름>.cpuMs` 로 볼 수 있다.
-- 하루 CPU 합계 장치의 값과 Vercel 사용량 화면 값의 차이. 배포 뒤 며칠 대조해야 한다.
-- 화면 쪽 CPU 와 메모리. 측정하지 못했고 코드상 패턴만 확인했다.
-- 단지 페이지 한 건의 CPU(27~114ms) 세부 원인. 로컬에 DB 연결 값이 없다.
+- 휴대폰 폭의 네이버 지도에서 서울이 순위 시트 위에 다 보이는지(크롬 창 크기를 바꿀 수 없다. 로컬은 대체 지도로만 봤다), 낮은 화면의 도우미 창.
+- `?view=constructor` 가 지도로 뜨고 주소가 정리되는지, 로그인 안 한 상태의 사용량 문구(운영자 계정은 무제한으로 나온다), 보고서 1회 생성 뒤 자금 요약.
+- 운영에서의 `/js/calc.js`(미배포).
+- 하루 CPU 합계 장치의 값과 Vercel 사용량 화면 값의 차이. 화면 쪽 CPU 와 메모리(측정하지 못했고 코드상 패턴만 확인했다).
+- 옛 판 6절 1번의 배포 뒤 확인 목록 가운데 "헬리오시티" 검색 1위, 연달아 열기 429, 도우미 응답 시간, `cache.stats` 는 확인했다는 기록을 찾지 못했다(목록은 보관본에 있다).
+- 서울 전역과 경기 12곳 토지거래허가구역(2026-12-31 까지)의 연장 공고, 2026년 세제개편안의 국회 통과. 11-16 에 공식 글을 찾지 못했다.
 
 ## 2. 먼저 읽을 파일 (순서대로)
 
 1. `CLAUDE.md` : 원칙, 명령, 구조, 금지 사항
-2. `AUDIT_REPORT.md` 9~11절 : 묶음 A 처리, 효율화 실측, CPU 한도 재측정과 방지 장치
-3. `docs/ops/operations-rules.md` : CPU 한도, 방화벽, 이상 트래픽, 2026-11-11 과 11-12~13 규칙 원문
-4. 필요할 때: `docs/ops/db-capacity.md`, `docs/ops/security.md`, `docs/ops/ui-design-v2.md`, `docs/ops/feature-history.md`, `plans/README.md`
+2. `plans/README.md` : 지금 열려 있는 계획. 이어서 `plans/202-frontend-split.md`(화면 파일 나누기)와 `plans/203-policy-changes.md`(정책 변화 자료)
+3. `docs/ops/operations-rules.md` : CPU 한도, 방화벽, 이상 트래픽, 정책 전수 대조 규칙
+4. `AUDIT_REPORT.md` 15절 : 2026-11-16 전면 감사 발견과 처리
+5. 필요할 때: `docs/ops/db-capacity.md`, `docs/ops/security.md`, `docs/ops/ui-design-v2.md`, `docs/ops/feature-history.md`, `docs/ops/handoff-archive-2026-11-17.md`
 
 ## 3. 운영자 원칙 (원문 그대로)
 
@@ -64,6 +54,7 @@
 - "저번에도 메모리랑 cpu, db많이 사용해서 vercel 제한당했잖아. 그런일 없도록 잘 하라니까??" (2026-11-15)
 - "운영 DB 는 조회만. 쓰기 SQL 은 나에게 준다." (2026-11-15)
 - "유료 서비스 금지. .env.local 읽지 않기." (2026-11-15)
+- "정책 변화 화면은 당연히 먼저 어떻게 시안 작성할건지 기획부터 한 다음에 https://claude.ai/design 여기서 진행하는거 알지?" (2026-11-16)
 
 글쓰기와 일하는 방식의 전체 원칙은 전역 지침 `C:\Users\Woo\.claude\CLAUDE.md` 에 있다(한국어, 굵게와 긴 줄표와 가운뎃점 나열 금지, 추측 금지, 교차 확인, 낮은 등급 모델 병렬, 직접 끝까지, 결론과 근거와 남은 일 순서).
 
@@ -128,78 +119,72 @@
 - 세션을 정리하고 clear 하겠다고 하면 주요 내용과 원칙을 알맞은 곳(전역 지침, 프로젝트 CLAUDE.md, 메모리, 저장소 문서)에 저장하고, 새 세션 첫 칸에 붙여 넣을 프롬프트를 써 준다.
 - 세부 근거와 사례는 메모리 feedback-* 메모에 있다.
 
-## 4. 이번(2026-11-15)에 한 일과 바꾼 파일, 검증 결과
+## 4. 이번(2026-11-16~17)에 한 일과 바꾼 파일, 검증 결과
 
-미배포 커밋 (오래된 것부터)
-- b5caf8f 도우미의 구 이름 질문을 지역 코드로 조회, 보고서 단계 계측 세분화
-- 54468a6 취득세 검증일 갱신 SQL 과 재검증 기록(`supabase/migrations/20261115_acquisition_tax_reverify.sql`, 운영자 실행 대기)
-- 38d412f 전면 감사 보고서 `AUDIT_REPORT.md`
-- a3ac8e1 묶음 A: 단지 상세 요청 12건에서 6~7건, 내 데이터용 요청 제한 묶음(`meLimiter`), 429 안내, 검색 순위, 복비와 특약 입력 범위
-- 6468d5b 검색창이 한글 조합 중이거나 2글자 미만이면 요청 생략, 띠 색, 한도 창 문구, 갈아타기 버튼 안내
-- 5718135 하루 CPU 합계와 경보(5분)와 검색 로봇 차단(8분) `backend/services/cpuBudget.js`, 예약 작업 CPU 기록, 미리보기 대리 서버 응답 기억
-- 36e8d9b 부하 정리: 화면 body 감시 하나로, 구별 순위 요청 공유(`_regPopJson`), 말풍선 기억 상한, 푸시 작업 시간 상한, 계수 Map 상한
-- ba40f38 정기 점검 문서 재구성(이 문서, `CLAUDE.md`, `docs/ops/`, `plans/README.md`)
-- 마지막 커밋(11-15 밤): 지도 첫 화면을 서울 구별 보기로, 구 이름표를 구역 한가운데에 놓고 25개 구가 다 보이게, 지도 위 안내, 검색 목록 닫힘, 직장 위치 비우고 다시 찾기 단추. 운영 크롬 시나리오 12개 점검 결과와 남긴 제안은 `AUDIT_REPORT.md` 13절, 검사 `backend/test/home-seoul-1115.test.js`
-- de4c84b(11-15 저녁): 구별 순위 즉석 계산 20초 상한과 실패 뒤 5분 쉬기, 브라우저 뒤로 가기와 주소 `?view=`(감사 3번), 대체 지도에 인기 마커 다시 그리기. 기록은 `AUDIT_REPORT.md` 12절, 검사 `backend/test/load-history-1115.test.js`
+배포된 것(5ab0d91)
+- 전면 감사 발견 처리(`AUDIT_REPORT.md` 15절), 모바일 지도 맞춤, 정책 문구 원문 대조.
+- 화면 파일 나누기 0단계와 1단계: `frontend/js/swap-checklist.js`, 검사 도우미 `backend/testSupport/readFrontend.js`, `vercel.json` 의 `/js/` 경로.
+- 정책 변화 한 장 요약: 자료 `backend/data/policy-changes.json`(45건), 만드는 스크립트 `scripts/build-policy-data.js`, 화면 `frontend/js/policy.js` 와 `policy-data.js`, 서버 페이지 `backend/routes/policyPage.js`. 시안 https://claude.ai/design/p/630c0f3a-88f5-4245-aa88-9e7872eef676
+- 개인정보처리방침 v1.3(`frontend/privacy.html`).
+- 운영자가 실행한 SQL: `supabase/migrations/20261116_housing_loan_reverify.sql`, `20261115_acquisition_tax_reverify.sql`, `20261116_revoke_unused_write_grants.sql`, `20261116_policy_rules_wording.sql`.
 
-정기 점검에서 바꾼 문서
-- `CLAUDE.md` 263줄 42,790바이트에서 227줄 16,299바이트로. 날짜별 기록과 경고 원문은 `docs/ops/` 로 옮겼다. 옛 파일의 모든 규칙 문장이 새 `CLAUDE.md` 또는 `docs/ops/` 에 글자 그대로 있는 것을 스크립트로 대조했다(빠진 25줄은 모두 안내 줄과 파일 위치 줄).
-- 새 파일 `docs/ops/operations-rules.md`. `db-capacity.md`, `redis.md` 에 2026-11-15 정정 절 추가.
-- `plans/README.md` 883줄에서 27줄로(지금 열려 있는 것만). 지난 표는 `plans/STATUS-HISTORY.md` 로 원문 그대로. 계획 파일은 옮기지 않았다.
+미배포(로컬 커밋)
+- 7134848: `_pickTierRate`, `_pickTierRateUnder`, `computePolicyLoan`, `_loanBaseRate`, `calcLoanLimitsPure`, `calcInputProblem` 을 `frontend/js/calc.js` 로 글자 그대로 옮김. 검사 7개 파일이 `readFrontend()` 로 읽게 고침. 새 검사 `backend/test/split-1117.test.js`.
+- 2f64f0e: 단지 상세의 세금 계산을 `calcHoldingTaxes(market, isReg)` 로, 평 환산 3.3058 을 `PYEONG_M2` 와 `_sqmToPy` 로 뽑음. 뽑기 전 계산과 2,288건 대조해 값이 같았다. 검사 4개 파일이 `pyeongPrelude()` 를 쓴다.
+
+정기 점검(2026-11-17)에서 바꾼 것
+- `HANDOFF.md` 를 다시 썼다. 옛 판은 `docs/ops/handoff-archive-2026-11-17.md` 에 글자 그대로 있다.
+- `CLAUDE.md` 세 줄: 운영자 원문 한 줄 추가(시안 기획 먼저), 방침 배포 줄, 마지막 갱신 줄.
+- 작업 폴더 `privacy-1117` 과 로컬 브랜치 `privacy-1117` 을 지웠다(운영자 승인. 커밋 c0fd32f 는 master 에 들어 있다).
+- 하지 않은 것: 계획 문서 보관 이동(검사 27개 파일이 `plans/` 경로를 읽는다), 죽은 행 청소 SQL, 원격 브랜치 `preview/privacy-136` 과 `preview/ui-151` 정리(끝난 것인지 확인하지 못했다).
 
 검증
-- `npm run verify` 1,203건 통과, 실패 0건.
-- 미리보기에서 확인(11-15 저녁): 탭을 눌러 지도, 브리핑, 지도 순으로 간 뒤 뒤로 가기 두 번에 브리핑, 지도로 돌아오고 주소가 따라 바뀜. `/?view=report` 주소 유지. 대체 지도에 인기 마커 12개.
-- 미리보기에서 확인: 검색창 8단계 입력에 요청 3건, 구별 순위 요청 공유(요청 1건으로 지도 패널과 첫 화면 목록이 모두 그려짐), 새로 그린 칩에 키보드 속성이 200ms 뒤 붙음, 갈아타기 버튼 안내.
-- 검증 못 함: 운영에서의 동작 전부(미배포). 화면 쪽 부하의 실제 크기.
+- `npm run verify` 1,268개 통과, 실패 0(2026-11-17, 3단계 커밋 뒤).
+- 로컬 미리보기: 스크립트 순서(calc, swap-checklist, policy-data, policy), 대출 계산, 정책자금, 갈아타기, 상계주공7단지 상세의 세금 표(취득세 813만, 5,124만, 7,685만)와 평형 표기.
+- 검증 못 함: 미배포 두 커밋의 운영 동작.
 
-복구 지점: 로컬 태그 `backup/pre-cleanup-1115-ui155`(5718135), `backup/pre-cleanup-1114-ui155`(4374b53), `backup/pre-cleanup-1114-main`(b53c6e5).
+복구 지점: 로컬 태그 `backup/pre-cleanup-1117-ui155`(2f64f0e), `backup/pre-cleanup-1115-ui155`, `backup/pre-cleanup-1114-ui155`, `backup/pre-cleanup-1114-main`.
 
 ## 5. 알려진 문제와 주의점, 건드리면 안 되는 것
 
-- 배포는 운영자가 배포를 가리킨 한 줄("배포해")이 있을 때만 한다. "권고대로 진행"으로 푸시하면 자동 권한 검사가 막는다(2026-11-15 두 번 확인). 푸시마다 한 줄이 따로 필요하다. 막히면 우회하지 않는다.
-- 운영 DB 는 조회만 한다. 쓰기 SQL 은 운영자에게 주고 운영자가 실행한다.
+- 배포는 운영자가 배포를 가리킨 한 줄("배포해")이 있을 때만 한다. "권고대로 진행"으로는 올리지 않는다. 푸시마다 한 줄이 따로 필요하다. 자동 권한 검사가 막으면 우회하지 않는다.
+- 운영 DB 는 조회만 한다. 쓰기 SQL 은 운영자에게 주고 운영자가 실행한다(SQL Editor: https://supabase.com/dashboard/project/brxorvxdfrbxcavufspe/sql/new).
 - `.env` 로 시작하는 비밀 파일은 읽지 않는다. 그래서 로컬에서는 DB 가 붙지 않는다.
 - 이 DB 에서 `explain analyze` 시간은 부풀려 나온다. `pg_stat_statements` 평균과 최소, 최대로 본다. 측정 조회는 하나씩 돌린다.
-- 미리보기 창이 숨겨져 있으면 프레임 단위 동작(requestAnimationFrame, CSS 전환, ResizeObserver)이 멈춘다. 그 상태로 잰 값을 믿지 않는다.
-- 미리보기 서버(`home-preview`, 4179)는 이 문서를 쓸 때 옛 대리 서버 코드로 떠 있었다. 다시 띄워야 응답 기억이 켜진다.
-- 화면의 토스트(`#tst`)는 고정 위치라 offsetParent 로 보이는지 판정하면 놓친다.
-- Git Bash heredoc 은 역슬래시와 `\u` 를 삼킨다. 정규식이 든 치환은 스크립트 파일로 한다.
-- 지우면 안 되는 것: `backend/services/cpuBudget.js`, 원본 표의 `zz_skip_same` 트리거, `vercel.json` 첫 두 route, 브랜치와 작업 폴더 `privacy-1117`(c0fd32f), 위 복구 태그. 나머지 금지 사항은 `CLAUDE.md` 의 "금지 사항".
-- 메인 폴더(`...\myhomelog`)의 `CLAUDE.md` 는 아직 옛 판(b1cc128)이다. 배포로 master 가 바뀐 뒤 메인 폴더를 origin/master 로 맞추면 해결된다.
-- 삭제 승인을 받지 않아 그대로 둔 것: `backend/services/legalService.js`(어디서도 부르지 않음), `scripts/make-kakao-icon.js` 와 `frontend/kakao-app-icon-128.png`(저장소 안 참조 없음, 카카오 콘솔 사용 여부 확인 불가), 의존성 `@sentry/node`(require 0건).
+- `frontend/js` 의 스크립트를 모듈이나 `defer` 로 바꾸지 않는다. 파일 사이에 새 전역 이름을 쓰면 `eslint.config.mjs` 끝의 묶음에 적는다. 화면 코드를 글자로 읽는 검사는 `readFrontend()` 를, 화면 함수를 잘라 실행하는 검사는 `pyeongPrelude()` 를 쓴다.
+- 정책 변화 자료는 `backend/data/policy-changes.json` 만 고치고 `node scripts/build-policy-data.js` 를 돌린다. 원문 본문을 열어 대조한 것만 넣는다.
+- Git Bash heredoc 은 역슬래시와 `\n` 을 바꾼다. 정규식이나 역슬래시가 든 치환은 Write 도구로 `.cjs` 파일을 만들어 실행한다.
+- 시각은 PowerShell `Get-Date` 로 확인한다(Git Bash 의 date 는 UTC 를 보여 준다).
+- 크롬 창 크기는 바뀌지 않는다. 모바일과 태블릿은 로컬 미리보기(`home-preview`)의 화면 크기 바꾸기로 보고, 크기 설정과 확인을 한 번의 묶음 호출로 한다. 미리보기는 대체 지도라 네이버 지도는 운영에서만 볼 수 있다.
+- 미리보기 창이 숨겨져 있으면 프레임 단위 동작이 멈춘다. 그 상태로 잰 값을 믿지 않는다. 화면의 토스트(`#tst`)는 고정 위치라 offsetParent 로 판정하면 놓친다.
+- 지도는 다른 화면에서 넘어온 첫 번째에 몇 초 늦게 뜬다(11-17 운영에서 4초에는 비어 있었고 7초에는 떴다).
+- 저장된 지도 위치가 있는 사람은 그 위치에서 시작한다(운영자 지시로 만든 동작이라 바꾸지 않는다).
+- 지우면 안 되는 것: `backend/services/cpuBudget.js`, 원본 표의 `zz_skip_same` 트리거, `vercel.json` 첫 두 route, 위 복구 태그. 나머지는 `CLAUDE.md` 의 "금지 사항".
+- 삭제 승인을 받지 않아 그대로 둔 것: `backend/services/legalService.js`(어디서도 부르지 않음), `scripts/make-kakao-icon.js` 와 `frontend/kakao-app-icon-128.png`(저장소 안 참조 없음, 카카오 콘솔 사용 여부 확인 불가), 개발용 의존성 `drizzle-kit`(`backend/package.json` 의 `db:*` 명령에서만 쓰임).
+- Claude Design 은 2026-12-14 에 옮겨 간다는 안내가 떠 있다. 프로젝트를 옮기는 단추는 운영자가 누른다(시안: 맞춤 보고서, 정책 변화).
 
 ## 6. 남은 일 (우선순위 순)
 
-1. 다음에 바로 할 첫 작업: 운영자가 "배포해"라고 하면 작업 폴더에서 `git push origin HEAD:master` 를 한 번 한다. 그 뒤 확인한다.
-   - `/api/health` 의 deploy 값이 새 커밋인지, 런타임 오류가 없는지
-   - "헬리오시티" 검색 1위가 송파 단지인지
-   - 로그인 상태에서 단지 세 곳을 연달아 열어 429 가 안 나는지, 좌표 변환이 한 번만 나가는지
-   - 도우미 "노원구 시세" 응답 시간(배포 전 5,943ms), 보고서 1회 생성 뒤 함수 기록 `report-stages` 의 alias 와 group
-   - 탭을 두세 번 옮긴 뒤 브라우저 뒤로 가기가 앞 화면으로 돌아오는지, 로그인 복귀 뒤에도 되는지
-   - health 의 `cache.stats`(키 수와 값 크기 추정)를 적어 둔다. 공유 캐시 값 크기 상한을 넣을지 정하는 근거다
-   - 지도 첫 화면이 서울 구별 보기로 뜨는지, 네이버 지도에서 구 이름표 25개가 구역 가운데에 보이는지, 왼쪽 아래 안내가 지도 조작을 가리지 않는지(미리보기는 대체 지도라 네이버 지도에서는 미확인)
-   - 검색해서 단지를 연 뒤 상세를 닫았을 때 검색 목록이 다시 뜨지 않는지
-   - 목록에서 희망 지역 서울, 직장 위치 강남구로 찾았을 때 서울 전체가 분석되는지
-   - 도우미에 "9억으로 서울에서 살 수 있는 아파트"를 물어 목록으로 넘기는 단추가 나오고 눌렀을 때 조건이 채워져 찾는지, 비교에 담은 뒤 보고서나 청약 화면에서 막대가 숨는지
-   - 보고서를 1회 만들어 맨 위 자금 요약의 숫자가 대출 계산과 같은지, 단지 목록이 요약 바로 아래에 오는지. 단지 상세 가격 신호 탭의 새 문구
-   - 대출 계산에서 인천 10억 무주택이 한도 6억으로, 인천 5억 생애최초가 LTV 70%로 나오는지. 다음 날 health 의 crons['regulations-auto-fetch'].pendingReview 값
-   - 메인 폴더를 origin/master 로 맞춘다
-2. 배포 다음 날: health 의 `crons.<이름>.cpuMs` 와 `crons.retention.cpuYesterdayMs` 를 Vercel 사용량 화면(vercel.com/gyeollab/~/usage 의 Fluid Active CPU)과 대조한다. CPU 가 큰 예약 작업부터 줄이고, 경보 5분과 차단 8분 기준을 실측에 맞춘다.
-3. 팀 CPU: portai, wellness-platform, salon 을 같은 방식으로 재고 줄인다. 운영자가 작업 폴더를 알려 주면 시작한다. 12-08 전에 팀 합계를 하루 8분 아래로 내려야 한다.
-4. (확인 끝, 2026-11-17 23:10 KST health 조회) apt-master-sync 2026-11-16 20:47 UTC 회차: `fetched` 5028, `errors` 0, `throttleHits` 0, `remaining` 0, `inserted` 19, cpuMs 1513. 같은 조회에서 `pendingReview` 0, retention 의 `dbPct` 83(413.9MB).
-5-1. 2026-12 중: 서울 전역과 경기 12곳의 토지거래허가구역 지정이 2026-12-31 에 끝난다. 연장 여부 발표를 국토교통부와 정책브리핑에서 확인해 화면 문구와 저장값을 맞춘다. 12월 말 은행연합회 스트레스금리 공시(portal.kfb.or.kr/compare/stress_loan.php)로 2027년 상반기 지방 스트레스 금리도 맞춘다.
-5. (끝, 2026-11-17 23:14 KST) `privacy-1117` 을 합쳐 5ab0d91 로 배포했고 운영 `/privacy.html` 에서 v1.3 을 확인했다. 브랜치와 작업 폴더는 지우지 않았다(지우려면 운영자 승인).
-6. 운영자 몫: (2026-11-16 운영자가 취득세 검증일 SQL 과 주담대 기준 SQL 을 실행했고 DB 조회로 확인했다: 취득세 2026-11-15, 주담대 2026-11-16, 규칙 16줄) 주담대 기준 갱신 SQL 기록(`supabase/migrations/20261116_housing_loan_reverify.sql`. 2026-11-16 에 금융위 보도자료 19건과 8.13 대책 안건을 전수 대조했다. 원인과 규칙은 `docs/ops/operations-rules.md` 끝), Vercel 2단계 인증, GitHub 2단계 인증, 저장소 공개 여부, NCP 지도 과금 확인, DB 백업(주 1회, `plans/168-backup-runbook.md`). 죽은 행 청소를 한다면 적재 시간(UTC 17~19시)을 피해 `VACUUM (ANALYZE) public.apt_master;` 와 `VACUUM (ANALYZE) public.molit_hist_peaks;`.
-7. 남은 감사 항목: 직장 위치(5번)는 2026-11-16 운영자 승인으로 통근 계산에만 쓰게 고쳤다(`AUDIT_REPORT.md` 14절). 부대 세금 근사(26번, 시행령의 서민주택 범위와 12% 중과 계산의 법문 해석이 먼저). 주소와 뒤로 가기(3번)는 11-15 저녁에 처리했다. 단지 상세를 연 채 뒤로 가기로 상세만 닫는 동작은 넣지 않았다. 단지 페이지 개편, 내 거래 계획, 화면 파일 분할은 시안 승인이 먼저다.
-9. 11-15 밤 시나리오 점검에서 남긴 제안은 기획 문서 `plans/201-ux-followups-1116.md` 로 정리했다(2026-11-16). 운영자가 2026-11-16 네 항목 모두 권고안으로 승인했다. 1번(도우미 예산 질문 단추)과 3번(비교 담기 막대)은 구현 끝(efa24e3). 4번(가격 신호 탭 문구)은 승인된 대조표대로 구현 끝(6b36b1b). 2번(보고서 자금 요약과 순서)은 Claude Design 시안(https://claude.ai/design/p/208f6f86-e9c4-4d12-998a-af18a2aaf6fe)대로 구현 끝(041026e). 네 항목 모두 미배포다. 항목: 도우미의 예산 질문을 목록 화면으로 넘기기, 보고서의 부족 자금 안내, 비교 담기 막대 범위, 가격 신호 탭 말 다듬기(시안 먼저).
-8. 부하 항목: 구별 TOP10 즉석 계산의 시간 상한은 11-15 저녁에 넣었다. 지도 이름표 정리는 재 보니 마커 12개에 한 번 4.5ms 라 그대로 뒀다. 공유 캐시의 값 크기 상한(`backend/cache.js`)은 배포 뒤 health 의 `cache.stats` 를 보고 정한다.
+1. 다음에 바로 할 첫 작업: 작업을 시작하면 health 의 `crons['regulations-auto-fetch'].pendingReview` 를 본다. 운영자가 "배포해"라고 하면 작업 폴더에서 `git push origin HEAD:master` 를 한 번 한다. 그 뒤 확인한다.
+   - `/api/health` 의 deploy 값이 새 커밋인지, Sentry 새 문제가 없는지
+   - `/js/calc.js` 가 200 과 `application/javascript` 인지. 안 되면 바로 알리고 2단계와 3단계 커밋 되돌리기를 권한다
+   - 대출 계산 화면, 단지 상세의 "보유 주택 수별 예상 세금" 표와 평형 표기, 갈아타기 계산
+   - 같이 볼 것: `?view=constructor`, 보고서 1회 생성 뒤 자금 요약, health 의 `cpuDay` 와 `cache.stats`
+   - 메인 폴더를 origin/master 로 맞춘다(`.claude/launch.json` 의 로컬 수정은 그대로 둔다)
+2. 휴대폰 폭의 네이버 지도 확인. 운영자가 휴대폰으로 첫 화면을 열어 서울이 순위 시트 위에 다 보이는지 본다.
+3. 화면 파일 나누기 4단계(`plans/202-frontend-split.md`): 정책 타임라인 같은 자료 상수, 그다음 청약, 브리핑, 도우미. 2단계와 3단계가 운영에서 확인된 뒤 시작한다. `calcLTV` 는 금리와 규제 판정을 인자로 받게 바꾼 뒤에 옮긴다.
+4. 팀 CPU: health 의 `crons.<이름>.cpuMs` 와 `cpuDay` 를 Vercel 사용량 화면(vercel.com/gyeollab/~/usage 의 Fluid Active CPU)과 대조한다. portai, wellness-platform, salon 은 운영자가 작업 폴더를 알려 주면 시작한다. 2026-12-08 전에 팀 합계를 하루 8분 아래로 내려야 한다.
+5. 2026-12 중: 서울 전역과 경기 12곳 토지거래허가구역 연장 공고, 2026년 세제개편안 국회 통과를 국토교통부와 정책브리핑 원문으로 확인해 `backend/data/policy-changes.json` 과 규제 요약 창을 고친다. 12월 말 은행연합회 스트레스금리 공시(portal.kfb.or.kr/compare/stress_loan.php)로 2027년 상반기 지방 스트레스 금리도 맞춘다.
+6. 운영자 몫: Vercel 2단계 인증, GitHub 2단계 인증, 저장소 공개 여부, NCP 지도 과금 확인, DB 백업(주 1회, `plans/168-backup-runbook.md`), Supabase 의 유출 비밀번호 검사 켜기(보안 권고 WARN). 죽은 행 청소를 한다면 적재 시간(UTC 17~19시)을 피해 `VACUUM (ANALYZE) public.apt_master;` 와 `VACUUM (ANALYZE) public.molit_hist_peaks;`. 원격 브랜치 `preview/privacy-136`, `preview/ui-151` 을 지울지.
+7. 남은 감사 항목: 부대 세금 근사(26번, 시행령의 서민주택 범위와 12% 중과 계산의 법문 해석이 먼저). 단지 상세를 연 채 뒤로 가기로 상세만 닫는 동작은 넣지 않았다. 단지 페이지 개편과 내 거래 계획은 시안 승인이 먼저다. 공유 캐시의 값 크기 상한(`backend/cache.js`)은 health 의 `cache.stats` 를 보고 정한다.
+8. 정책 변화 자료에서 계속 보류한 후보 3건(신생아 특례대출 소득 2.5억, 2026.6.18 스트레스 DSR 변경, 민간임대 관리비 신고)은 본문을 찾으면 넣는다. 이유는 자료 파일의 `held` 에 있다.
 
 ## 7. 명령
 
 - 검증: 작업 폴더 루트에서 `npm run verify` (무거운 명령은 한 번에 하나)
-- 검사 하나: `cd backend` 뒤 `node --test test/<파일>.test.js`
-- 화면 확인: launch 설정 `home-preview`(설정 파일 `C:\Users\Woo\Downloads\myhomelog_deploy_1\.claude\launch.json`). 서버를 Bash 로 띄우지 않는다.
+- 검사 하나: `cd backend` 뒤 `node --test test/<파일>.test.js` (시간대는 UTC)
+- 정책 변화 자료 다시 만들기: `node scripts/build-policy-data.js`
+- 화면 확인: launch 설정 `home-preview`(설정 파일 `C:\Users\Woo\Downloads\myhomelog_deploy_1\.claude\launch.json`, 포트 4179). 서버를 Bash 로 띄우지 않는다.
 - 배포: 작업 폴더에서 `git push origin HEAD:master` (KST 하루 3회 이하, 운영자 지시 한 줄 필요)
 - 빌드 단계는 없다(Vercel 이 푸시 때 배포한다).
 
@@ -209,6 +194,7 @@
 - 추측하지 않는다. 명령 출력, 파일, 실행 결과로만 말하고 근거를 붙인다. 확인하지 못한 것은 "확인 불가"라고 쓴다.
 - 굵게, 긴 줄표, 가운뎃점 나열을 쓰지 않는다.
 - 되돌리기 어려운 일(배포, 운영 DB 적용, 브랜치 병합, 삭제)은 운영자 승인 뒤에 한다. 그 밖의 일은 묶어서 끝까지 하고 한 번 보고한다.
+- UI 개편과 새 화면은 기획 문서(그릴 화면과 상태 목록 포함), 그다음 claude.ai/design 시안, 그다음 구현 순서다.
 - 병렬 작업은 낮은 등급 모델 에이전트에게 원문 규칙과 근거를 그대로 넘기고, 돌아온 지적은 직접 재현해 진짜만 고친 뒤 회귀 검사로 남긴다.
 - 무거운 명령은 한 번에 하나, 운영 주소는 필요한 만큼만 요청한다. 유료 서비스는 쓰지 않는다.
-- 보고는 결론, 근거, 남은 일 순서로 쓴다.
+- 보고는 결론, 근거, 남은 일 순서로 쓰고 끝에 "📌 후속 / 미완료 작업 (우선순위 순)" 표를 붙인다.
