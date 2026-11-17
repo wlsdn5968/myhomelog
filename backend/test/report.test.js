@@ -18,7 +18,7 @@ test('보고서 일괄 관심추가가 정식 북마크 형태를 만든다 (Spr
   // "N단지 관심 추가 완료" 토스트만 뜨고 **알림에서는 조용히 빠진다**.
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const rep = fs.readFileSync(path.join(__dirname, '../routes/report.js'), 'utf8');
 
   // 전제 ①: 보고서 응답이 식별 필드를 실제로 내려준다
@@ -173,7 +173,7 @@ test('보고서 지역 분기 — 검증된 매핑을 재사용하고 광역 폴
 test('보고서 최고가·층별 가격대 — 기간을 속이지 않고, 표본이 얇으면 만들지 않는다', () => {
   const fs2 = require('node:fs'); const path2 = require('node:path');
   const rpt = fs2.readFileSync(path2.join(__dirname, '../routes/report.js'), 'utf8');
-  const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const fe = require('../testSupport/readFrontend').readFrontend();
 
   // ① 값이 만들어지고 응답에 실린다.
   assert.match(rpt, /c\.peak6m = stats\[0\]\.max;/, '대표 평형 최고가를 계산하지 않는다');
@@ -228,7 +228,7 @@ test('보고서 최고가·층별 가격대 — 기간을 속이지 않고, 표�
 //   마스킹된 아이디(본인 식별) + 해시 8자(운영자가 DB 대조로 특정) 조합을 쓴다.
 test('워터마크 — 발급 대상을 특정할 수 있되 이메일 전문은 노출하지 않는다', () => {
   const fs2 = require('node:fs'); const path2 = require('node:path');
-  const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const fe = require('../testSupport/readFrontend').readFrontend();
 
   const m = fe.match(/const _issuedTo = \(\(\) => \{[\s\S]*?\}\)\(\);/);
   assert.ok(m, '발급 대상 식별자 생성 블록을 찾지 못했다');
@@ -311,7 +311,7 @@ test('대표 평형 — 표본이 충분한 평형을 우선하되, 없으면 �
   assert.equal(only.pyeong, 16, '표본이 모두 부족할 때 예산 근접 폴백이 동작하지 않는다');
 
   // ⑤ 화면이 표본 적음을 밝힌다.
-  const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const fe = require('../testSupport/readFrontend').readFrontend();
   assert.match(fe, /Number\(p\.priceSampleN\) <= 2/,
     '표본 1~2건인 가격에 아무 표시가 없다 — 사용자가 시세로 읽는다');
 });
@@ -474,7 +474,7 @@ test('보고서 점수: 데이터가 없다는 이유로 순위가 밀리지 않
 //   외부 검토(Codex) 재현: 7억·연소득 5,000·기존 월 200만원·현금 3억·무주택·생애최초·서울규제 → 추천한도 4.90억 · 부족 '충분' · DSR 104%.
 //   원인: dc() 의 `Math.min(lL, dL>0 ? dL : lL)` 이 계산값 0 을 소득 미입력으로 읽었다.
 test('상세 대출계산 — 소득 미입력 / 여력 0 / 양수 한도를 구분하고 대표 숫자·월상환·부족자금이 같은 상태에서 나온다', () => {
-  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const m = html.match(/function calcLoanLimitsPure\(\{[\s\S]*?\r?\n\}\r?\n/);
   assert.ok(m, '순수 산식 calcLoanLimitsPure 가 없다');
   const fn = new Function(`${m[0]}; return calcLoanLimitsPure;`)();
@@ -522,7 +522,7 @@ test('상세 대출계산 — 소득 미입력 / 여력 0 / 양수 한도를 구
 
 // ── FIRST-UNKNOWN-2026-09-05 ──────────────────────────────────────────────────────
 test('생애최초 — 접힌 선택 항목의 기본값이 우대(예)가 아니고, 미선택은 미확인으로 요약·보고서에 드러난다', () => {
-  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const chf = html.match(/<div class="chips" id="ch-f">[\s\S]*?<\/div>/);
   assert.ok(chf, 'ch-f 칩 그룹이 없다');
   assert.ok(!/chip on/.test(chf[0]), '보고서·검색 폼의 생애최초가 기본 선택돼 있다(외부 검토 재현: 확인 없이 우대 조건 적용)');
@@ -542,7 +542,7 @@ test('생애최초 — 접힌 선택 항목의 기본값이 우대(예)가 아�
 
 // ── LOGIN-GATE + REPORT-TIMEOUT-2026-09-05 ─────────────────────────────────────────
 test('보고서 — 익명은 요청 전에 로그인으로 잇고(입력 보존), 제한 시간과 안내 문구는 한 상수에서 나온다', () => {
-  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const g = html.indexOf('async function generateReport(_isRetry) {');
   const body = html.slice(g, g + 9000);
   const gate = body.indexOf("if (!(window.MHL && window.MHL.auth && window.MHL.auth.user)) {");

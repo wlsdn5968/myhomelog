@@ -7,7 +7,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const html = fs.readFileSync(path.join(__dirname, '..', '..', 'frontend', 'index.html'), 'utf8');
+const html = require('../testSupport/readFrontend').readFrontend();
 const rd = (f) => fs.readFileSync(path.join(__dirname, '..', f), 'utf8');
 
 // 실제 소스에서 함수를 꺼내 실행한다

@@ -261,7 +261,7 @@ test('중개보수 tier — 스냅샷 경로와 법정 폴백이 모든 경계�
     : p < 12 ? 0.005 : p < 15 ? 0.006 : 0.007);
 
   const grabFront = (name) => {
-    const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+    const html = require('../testSupport/readFrontend').readFrontend();
     const m = html.match(new RegExp('function ' + name + '\\([\\s\\S]*?\\n\\}'));
     assert.ok(m, `frontend/index.html 에서 ${name} 을 찾지 못했다`);
     return new Function(`${m[0]}; return ${name};`)();
@@ -310,7 +310,7 @@ test('중개보수 tier — 스냅샷 경로와 법정 폴백이 모든 경계�
   //   [실측 근거] 위 단언들만 있을 때 회귀 주입(호출부를 `_pickTierRateUnder` → `_pickTierRate` 로
   //   되돌림)을 했더니 **65개 전부 통과했다** — 원래 사고를 그대로 되돌려도 못 잡았다.
   //   함수 단위 테스트는 "함수가 옳은가"만 보고 "누가 그 함수를 쓰는가"는 안 본다.
-  const feSrc = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const feSrc = require('../testSupport/readFrontend').readFrontend();
   const feCall = feSrc.split('\n').find((l) => /cr\s*=\s*_pickTierRate\w*\(tc\.commission/.test(l));
   assert.ok(feCall, '프론트에서 중개보수 요율 선택 호출부를 찾지 못했다 (형태 변경 시 이 테스트도 갱신할 것)');
   assert.match(feCall, /_pickTierRateUnder\(tc\.commission/,
@@ -396,7 +396,7 @@ test('추천 조건 필터 — 실제로 실행해 판정을 확인한다 (모�
 test('절대 규칙 — 화면·프롬프트가 추천/예측/대출알선을 하지 않는다 (Sprint MMMMMMM-4)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const ai = fs.readFileSync(path.join(__dirname, '../services/aiService.js'), 'utf8');
   const clause = fs.readFileSync(path.join(__dirname, '../routes/clause.js'), 'utf8');
   const ana = fs.readFileSync(path.join(__dirname, '../services/analysisService.js'), 'utf8');
@@ -476,7 +476,7 @@ test('보고서 확인사항 — 실무 항목만 넣고 추천·예측 표현�
     '확인사항이 권유가 아니라는 문장이 없다 — 조언으로 읽힐 수 있다');
 
   // ③ 화면·인쇄 **양쪽** 에 그려야 한다(한쪽만 그리면 PDF 와 화면이 갈린다).
-  const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const fe = require('../testSupport/readFrontend').readFrontend();
   assert.match(fe, /const cautionsHtml =/, '인쇄 보고서가 확인사항을 그리지 않는다');
   assert.match(fe, /const _cautionsWeb =/, '화면 보고서가 확인사항을 그리지 않는다');
 
@@ -864,7 +864,7 @@ test('회전율 — 100세대 미만은 분모를 100으로 올려 잰다(17세�
 
 // ── BROAD-META-2026-09-05 ──────────────────────────────────────────────────────
 test('분석 지역 안내 — 광역 검색은 시군구 이름을 나열하지 않고 "전체 N개 시군구" 로 말한다', () => {
-  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   assert.match(html, /const _regionLabel = \(regs\) => \{/, '지역 라벨 헬퍼가 없다');
   assert.match(html, /전체 \$\{regs\.length\}개 시군구/, '광역 라벨이 "전체 N개 시군구" 가 아니다');
   assert.ok(!html.includes('전체 중 예산에 맞는 구를 골라 분석했어요'), '옛 안내("예산에 맞는 구를 골라")가 남아 있다 — 사실과 다르다');
@@ -957,7 +957,7 @@ test('광역 전수 조회 경량화 — 별칭은 비어 있지 않은 행만, 
 test('T0-HERO-FIELD (Plan 038) — 추천 응답 dealCount6m을 히어로가 읽고, 렌더 순서가 올바르다', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
 
   // 결함: 추천 경로는 dealCount6m 으로, 검색·지도 경로는 dealCount 로 응답하는데,
   //   히어로가 dealCount 만 읽어 추천 카드의 거래 건수·표본 배지가 통째로 빠졌다.

@@ -124,7 +124,7 @@ test('pickTierRate — snapshot 경로 취득세 경계 (6억 이하 1% / 6 초�
 test('_isRegProp(프론트) — computeLTV 전 조합에서 규제/비규제 분류가 어긋나지 않는다', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const m = html.match(/function _isRegProp\(p\)\{[\s\S]*?\n\}/);
   assert.ok(m, 'frontend/index.html 에서 _isRegProp 를 찾지 못했다 (함수명 변경 시 이 테스트도 갱신할 것)');
   // 폴백 분기용 스텁 — 이 테스트는 "라벨 → 규제 여부" 승계만 검증한다(위치 판정은 별도 관심사).
@@ -154,7 +154,7 @@ test('_isRegProp(프론트) — computeLTV 전 조합에서 규제/비규제 분
 test('_regLtvLabel(프론트) — lawd_cd 스코프 가드로 지방 동명 구 오판정 차단', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const m = html.match(/function _regLtvLabel\(area, lawdCd\)\{[\s\S]*?\n\}/);
   assert.ok(m, 'frontend/index.html 에서 _regLtvLabel 를 찾지 못했다');
   // isRegFront 는 "이름이 규제 키워드에 걸리면 true" — 최악 조건으로 **항상 true** 스텁을 주고,
@@ -214,7 +214,7 @@ test('isRegulatedRegion — 서울/규제 키워드/비규제/빈 문자열 경�
 test('_pickTierRate(프론트) — 취득세 경계가 백엔드와 같은 값을 낸다 (6억 이하 1%)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const m = html.match(/function _pickTierRate\([\s\S]*?\n\}/);
   assert.ok(m, 'frontend/index.html 에서 _pickTierRate 를 찾지 못했다 (함수명 변경 시 이 테스트도 갱신할 것)');
   const _pickTierRate = new Function(`${m[0]}; return _pickTierRate;`)();
@@ -258,7 +258,7 @@ test('_pickTierRate(프론트) — 취득세 경계가 백엔드와 같은 값�
 test('취득세 누진 구간(6억 초과~9억 이하) — 프론트 2사본·백엔드가 모두 같은 법정식', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const feSrc = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const feSrc = require('../testSupport/readFrontend').readFrontend();
   const beSrc = fs.readFileSync(path.join(__dirname, '../services/analysisService.js'), 'utf8');
 
   // 공백만 제거해 정규화 — `2/3` 과 `2 / 3` 을 같은 식으로 본다
@@ -441,7 +441,7 @@ test('취득세: 2주택+ 는 주택수 불확정 — 조정/비조정 무관 �
 test('취득세: 프론트 계산기도 같은 시그니처를 쓰고(사본 드리프트 차단), 2주택+ 에 지역 분기가 없다', () => {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
-  const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const fe = require('../testSupport/readFrontend').readFrontend();
   const be = fs2.readFileSync(path2.join(__dirname, '../services/analysisService.js'), 'utf8');
 
   // 두 사본 모두 isRegulated 인자를 계속 받아야 한다(각주가 여전히 그 개념을 설명한다 — 시그니처는 유지)
@@ -491,7 +491,7 @@ test('마이그레이션 기록: 생애최초 취득세 현행 필드가 사후 
 test('취득세 사본 — 프론트 계산기를 실제로 실행해 백엔드와 전 조합 대조 (모양이 아니라 값)', () => {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
-  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
 
   const grab = (name) => {
     const m = html.match(new RegExp('function ' + name + '\\([\\s\\S]*?\\n\\}'));
@@ -566,7 +566,7 @@ test('취득세 사본 — 프론트 계산기를 실제로 실행해 백엔드�
 test('취득세: 2주택+ 는 주택수 불확정 — 프론트·백엔드 실행값이 조정/비조정 무관 8%로 일치(Plan 036)', () => {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
-  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const { calcTotalCost } = require('../services/analysisService');
 
   const grab = (name) => {

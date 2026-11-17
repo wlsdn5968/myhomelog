@@ -10,7 +10,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+const html = require('../testSupport/readFrontend').readFrontend();
 const { computeLTV } = require('../services/propertyService');
 
 function fnSrc(name) {

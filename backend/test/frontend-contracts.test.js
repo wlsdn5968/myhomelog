@@ -239,7 +239,7 @@ test('지도 마커 — 좌표가 같은 단지는 세로로 쌓여 서로를 �
   //   → 98% 포개져 하나만 클릭 가능했다. 전국 209그룹·450단지 중 241단지가 가려져 있었다.
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const grab = (re, what) => {
     const m = html.match(re);
     assert.ok(m, `frontend/index.html 에서 ${what} 을 찾지 못했다`);
@@ -335,7 +335,7 @@ test('결정론 조건 카드 — desc 가 실제로 계산된 값을 담고 런
 test('기간·금리 표기가 실제와 일치한다 (Sprint MMMMMMM-5)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const ana = fs.readFileSync(path.join(__dirname, '../services/analysisService.js'), 'utf8');
   const tx = fs.readFileSync(path.join(__dirname, '../services/transactionService.js'), 'utf8');
 
@@ -369,7 +369,7 @@ test('기간·금리 표기가 실제와 일치한다 (Sprint MMMMMMM-5)', () =>
 test('매칭 0건 안내가 단지 건수로 세어지지 않는다 + 진행 문구가 실제와 맞다 (Sprint MMMMMMM-7)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const svc = fs.readFileSync(path.join(__dirname, '../services/propertyService.js'), 'utf8');
 
   // ① 안내 항목은 단지가 아니다 — 예전엔 표식이 없어 '추천 단지 1건' 으로 세어졌다
@@ -395,7 +395,7 @@ test('매칭 0건 안내가 단지 건수로 세어지지 않는다 + 진행 문
 test('시세 "평균"·노후 배지가 실제 계산 기준을 밝힌다 (Sprint MMMMMMM-9)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const tx = fs.readFileSync(path.join(__dirname, '../services/transactionService.js'), 'utf8');
 
   // ① 시세는 단순평균이 아니라 반감기 90일 가중평균이다 — 화면의 거래 목록으로 재현되지 않는다.
@@ -415,7 +415,7 @@ test('시세 "평균"·노후 배지가 실제 계산 기준을 밝힌다 (Sprin
 test('표본·범위 표기가 실제 집계와 맞다 (Sprint MMMMMMM-11)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const svc = fs.readFileSync(path.join(__dirname, '../services/propertyService.js'), 'utf8');
   const txs = fs.readFileSync(path.join(__dirname, '../services/transactionService.js'), 'utf8');
   const kakao = fs.readFileSync(path.join(__dirname, '../services/kakaoService.js'), 'utf8');
@@ -463,7 +463,7 @@ test('poolSpanLabel — 잘리지 않으면 6개월, 잘리면 실제 커버 일
 test('출처 없는 단정·수치가 화면에 없다 (청약 커트라인·신용대출 금리·권유 단어)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
 
   // ① 청약 가점 — 당락 단정 + 근거 없는 커트라인 점수.
   //    커트라인은 단지·공급유형·평형마다 다르고 공고 후 확정된다. 인용할 공시값이 없다.
@@ -500,7 +500,7 @@ test('출처 없는 단정·수치가 화면에 없다 (청약 커트라인·신
 test('단지 카드 — 기간 라벨은 서버 값을 쓰고, 세대당 주차에는 총량이 함께 붙는다', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const rep = fs.readFileSync(path.join(__dirname, '../routes/report.js'), 'utf8');
 
   // ① 서버가 기간 라벨을 내려보낸다. 프론트가 자기 문자열로 다시 만들면 잘림 표기가 조용히 갈린다
@@ -557,7 +557,7 @@ test('eslint 에 no-undef 가 켜져 있다 (매달린 참조 차단)', () => {
 test('지역 세부 칩 전부가 광역보다 좁게 해석된다 (프론트 칩 목록 기준 전수)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   // REGION-MENU-2026-08-30: 칩 목록은 이제 `/api/region/menu`(LAWD_CODES 파생)에서 온다.
   //   index.html 에 남은 표는 **네트워크 실패 시 폴백**이다 — 그것도 여전히 해석돼야 하므로 같이 검사한다.
   const m = html.match(/const REGION_SUB_FALLBACK = (\{[\s\S]*?\});/);
@@ -679,7 +679,7 @@ test('복수 지역 선택 — 화이트리스트·중복제거·상한을 지�
 test('프론트 지역 칩이 다중 선택을 보낸다', () => {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
-  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   // getRegionLawdCd 가 **모든** 선택 칩을 모아 콤마로 잇는다(querySelector 단건이 아니다).
   assert.match(html, /function getRegionLawdCd\(\)\{[\s\S]{0,240}querySelectorAll\('#ch-r-sub \.chip\.on'\)/,
     'getRegionLawdCd 가 칩 하나만 읽는다 — 복수 선택이 백엔드에 전달되지 않는다');
@@ -898,7 +898,7 @@ test('주변시설: 카카오 키가 없으면 0 이 아니라 null(모름) 을 
 test('규제 요약 표: 스냅샷으로 그리되, 미로드 시 정적 표로 떨어진다', () => {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
-  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
 
   assert.ok(html.indexOf('window.__REG_FULL = d;') >= 0,
     '규제 스냅샷 전문을 보존하지 않는다 — 표를 동적으로 그릴 데이터가 없어진다');
@@ -968,7 +968,7 @@ test('SEO: 지역 페이지가 단지 페이지로 내부 링크를 만든다', 
 test('진입 소개: 히어로를 닫으면 랜딩도 본 것으로 기록한다 (같은 메시지 재노출 차단)', () => {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
-  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const i = html.indexOf('function dismissHero()');
   assert.ok(i > 0, 'dismissHero 를 찾지 못했다 — 테스트를 갱신할 것');
   const body = html.slice(i, i + 900);
@@ -982,7 +982,7 @@ test('진입 소개: 히어로를 닫으면 랜딩도 본 것으로 기록한다
 test('진입 소개: 제거된 온보딩 모달(OB)을 기다리는 죽은 코드가 없다', () => {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
-  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   // id="OB" 는 OB-REMOVE-2026-07-17 에 사라졌다 — 그걸 참조하는 **코드**가 남으면 도달 불가 분기다.
   // ⚠ 단순 문자열 검색은 **이 수정의 설명 주석**까지 잡는다(실제로 한 번 오탐이 났다).
   //   실제 마크업만 보도록 태그 문맥을 요구한다.
@@ -1010,7 +1010,7 @@ test('진입 소개: 제거된 온보딩 모달(OB)을 기다리는 죽은 코�
 test('헤더 한도: 근접했을 때만 보이고, 한쪽만 보일 때 구분점이 남지 않는다', () => {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
-  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
 
   // 항목별 토글이 가능하려면 id 가 있어야 한다(종전엔 wrap 하나뿐이라 개별 제어 자체가 불가능했다).
   for (const id of ['huSearchItem', 'huChatItem', 'huDot', 'huDimLabel']) {
@@ -1072,7 +1072,7 @@ test('PWA 바로가기: manifest 의 view 값을 코드가 실제로 처리한�
   const fs2 = require('node:fs');
   const path2 = require('node:path');
   const manifest = JSON.parse(fs2.readFileSync(path2.join(__dirname, '../../frontend/manifest.json'), 'utf8'));
-  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
 
   const shortcuts = manifest.shortcuts || [];
   assert.ok(shortcuts.length > 0, 'PWA 바로가기가 사라졌다 — 이 테스트의 전제를 갱신할 것');
@@ -1111,7 +1111,7 @@ test('PWA 바로가기: manifest 의 view 값을 코드가 실제로 처리한�
 test('죽은 코드: 호출되지 않던 함수 3종이 되살아나지 않는다', () => {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
-  const html = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   // 정의가 다시 생기면(=주석이 아니라 실제 function 선언) 실패한다.
   for (const fn of ['_pannMinZoom', 'renderLegacyPriceBars', 'currentYm']) {
     const re = new RegExp('function\\s+' + fn + '\\s*\\(');
@@ -1278,7 +1278,7 @@ test('모바일 탭 타깃 — 44px 하한이 모바일에서만, 그리고 .chi
 
 // ── ESC-SERVER-VALUES-2026-09-05 (감사 H-LOW) ─────────────────────────────────────
 test('서버 통제값도 이스케이프 — 청약 sido · 지역 칩 label', () => {
-  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   assert.equal((html.match(/\$\{d\.sido\}/g) || []).length, 0, '청약 sido 가 생으로 삽입된다');
   assert.equal((html.match(/\$\{_escHtml\(d\.sido\)\}/g) || []).length, 2);
   assert.ok(html.includes('onclick="cpSub(this)">${_escHtml(g.label)}</span>'), '지역 칩 label 이 생으로 삽입된다');
@@ -1289,7 +1289,7 @@ test('서버 통제값도 이스케이프 — 청약 sido · 지역 칩 label', 
 // ── A11Y-LABELS-2026-09-05 (감사 E 접근성: 이름 없는 입력 19개 → 0) ─────────────────
 //   [왜 소스 검사인가] "입력에 이름이 있는가"는 마크업의 형태 자체가 요구사항이다.
 test('접근성 — 이름 없는 입력 요소 0개 (aria-label · label[for] · 부모 label 중 하나)', () => {
-  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const labelFor = new Set([...html.matchAll(/<label[^>]*\bfor="([^"]+)"/g)].map(m => m[1]));
   const re = /<(input|select|textarea)\b([^>]*)>/g;
   const bad = []; let m;
@@ -1322,7 +1322,7 @@ test('CI — .env.example 드리프트 검사는 차단 게이트다 (|| true �
 
 // ── MASCOT-HIDDEN-2026-09-05 (감사 E·J) ───────────────────────────────────────────
 test('브리핑 — "(캐릭터 준비 중)" 플레이스홀더는 사용자에게 보이지 않는다', () => {
-  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const i = html.indexOf('MASCOT-HIDDEN-2026-09-05');
   assert.ok(i > 0, '집킴이 코너 숨김 마커가 사라졌다');
   assert.match(html.slice(i, i + 800), /<div style="margin-top:12px;display:none;/, '집킴이 코너가 다시 보인다(캐릭터 원화 도착 전)');
@@ -1440,7 +1440,7 @@ test('브리핑 스냅샷 — 결손 재료는 partial 로 남고, 30분 뒤 더
 // ── T0-HERO-2026-09-05 (감사 P1-5, claude.ai/design 시안 코드화: 첫 탭 = 실거래 요약 기본) ──────────
 //   [왜 소스 검사인가] 마크업 구조(무엇이 항상 있고, 무엇이 조건부인가) 자체가 요구사항이다.
 test('상세 첫 탭 — 실거래 요약이 기본, 점수 없으면 큰 CTA 카드가 아니라 링크 한 줄', () => {
-  const html = require('node:fs').readFileSync(require('node:path').join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const i = html.indexOf('T0-HERO-2026-09-05: 실거래 요약 히어로');
   assert.ok(i > 0, '히어로 빌더가 사라졌다');
   const blk = html.slice(i, i + 2600);
@@ -1535,7 +1535,7 @@ test('ATTR-ACTIVATION-2026-09-06: 화이트리스트 이벤트가 전부 프론�
   const events = eventsStr.match(/'([^']+)'/g).map(s => s.slice(1, -1));
   assert.ok(events.length >= 4, '화이트리스트가 4종 미만이다');
 
-  const htmlSrc = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const htmlSrc = require('../testSupport/readFrontend').readFrontend();
   // GATE-LIVE-CALL-2026-09-06 (Plan 060 ⑤): 원문 문자열 존재만 보면 **주석 처리된 호출**도 통과한다
   //   (`sendOnce('report')` 호출 줄을 `//` 로 지워도 pass 249 / fail 0 이었다 — 감사자 실측).
   //   줄 주석을 지운 뒤에 검사한다 — CRLF 라 줄 끝 '\r' 이 남으므로 '$' 없이 '//'~줄 끝까지 지운다
@@ -1985,7 +1985,7 @@ test('Plan 061 ④: sendOnce — 스토리지 차단 상태에서도 서로 다�
 test('Plan 061 ⑤: sendOnce 주변에 "가드 없이 1회 보낸다" 라는 사실과 다른 옛 주석이 더 이상 없다', () => {
   const fs2 = require('node:fs');
   const path2 = require('node:path');
-  const fe = fs2.readFileSync(path2.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const fe = require('../testSupport/readFrontend').readFrontend();
   // ⚠ 줄 주석을 지우면 검사 대상(주석 문구 자체)까지 사라져 이 테스트가 무력화된다 — 그래서
   // 여기서는 줄 주석 제거 없이, 옛 catch 블록의 정확한 원문(따옴표·괄호·em dash 포함)을
   // 문자열 그대로 탐색한다. 이 정확한 문구는 이 계획의 정정 설명(재인용 시에도 표현을 바꿔 씀)
@@ -2002,7 +2002,7 @@ test('Plan 061 ⑤: sendOnce 주변에 "가드 없이 1회 보낸다" 라는 사
 test('Plan 093 — 세대수 아는 대단지에 "세대수 적을 경우" 일반론 표시 안 함', () => {
   const fs = require('node:fs');
   const path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   
   // 옛 일반론 문자열은 없어야 함 — 세대수를 아는 경우에만 환금성 리스크를 표시해야 한다
   assert.equal(html.includes('세대수 적을 경우 매도 시 거래 부재.'), false,
@@ -2015,7 +2015,7 @@ test('Plan 093 — 세대수 아는 대단지에 "세대수 적을 경우" 일�
 
 test('Plan 096 — Escape 핸들러가 알림 센터·드로어·규제 요약·단지 비교도 닫는다', () => {
   const fs = require('node:fs'), path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const m = html.match(/const closers = \[[\s\S]*?\n  \];/);
   assert.ok(m, 'Escape 핸들러의 closers 배열을 찾지 못했다');
   const src = m[0];
@@ -2033,7 +2033,7 @@ test('Plan 096 — Escape 핸들러가 알림 센터·드로어·규제 요약·
 
 test('Plan 098 — 챗 비-OK 응답은 서버 사유를 그대로 보여주고, 실패 말풍선은 한 번만 붙는다', () => {
   const fs = require('node:fs'), path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   assert.equal((html.match(/CHAT-ERR-HONEST-2026-09-16/g) || []).length, 1, '비-OK 분기 패치 마크가 정확히 1회여야 한다');
   assert.ok(!html.includes("throw new Error('http_' + r.status)"), '400 을 예외로 던져 "일시 오류"로 위장하는 옛 분기가 남아 있다');
   assert.match(html, /addMsg\('ai', userMsg\);\s*\n\s*replied=true;/, 'catch 에서 replied=true 를 안 세우면 "응답을 받지 못했어요" 가 두 번째 말풍선으로 붙는다');
@@ -2041,7 +2041,7 @@ test('Plan 098 — 챗 비-OK 응답은 서버 사유를 그대로 보여주고,
 
 test('Plan 099 — 표시 이름 정책이 리스크 제목·비교 헤더·단지정보 단지명·마커 팝업·유사 단지 목록에도 적용된다', () => {
   const fs = require('node:fs'), path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   assert.ok(html.includes("summary:`${_dispAptName(p.aptName, p.umdNm)||'이 단지'} 조건(연식·세대수·규제 여부)"), '리스크 탭 제목이 원문 단지명을 쓴다');
   assert.ok(html.includes('<div class="cmp-apt">${_escHtml(r.displayName || _dispAptName(r.aptName, r.umdNm) || \'\')}</div>'), '단지 비교 헤더가 원문 단지명을 쓴다');
   assert.ok(html.includes('<tr><td>단지명</td><td>${_v(_dispAptName(p.aptName, p.umdNm))}</td></tr>'), '단지정보 표 단지명이 원문을 쓴다');
@@ -2052,7 +2052,7 @@ test('Plan 099 — 표시 이름 정책이 리스크 제목·비교 헤더·단�
 
 test('Plan 154 — 가격 차트 v2: 개별 거래 점·3개월 중앙값·최고와 최저 함께·기간 칩·장기 데이터 배선·면책 문구', () => {
   const fs = require('node:fs'), path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   const grab = (re, what) => { const m = html.match(re); assert.ok(m, `frontend/index.html 에서 ${what} 을 찾지 못했다`); return m[0]; };
   const src = [
     grab(/const _PC_PERIODS=\{[^\n]*\};/, '_PC_PERIODS'),
@@ -2088,7 +2088,7 @@ test('Plan 154 — 가격 차트 v2: 개별 거래 점·3개월 중앙값·최�
 
 test('Plan 154 — 장기 이력이 없을 때 최근 거래만으로 "3년" 이라 부르지 않는다(실측 오표기: 3년 최저 5.58억을 7.20억으로)', () => {
   const fs = require('node:fs'), path = require('node:path');
-  const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+  const html = require('../testSupport/readFrontend').readFrontend();
   assert.ok(html.includes("const period=longOk?(_PC_PERIODS[window._pcPeriod]?window._pcPeriod:'3y'):'all';"), '장기 이력 없으면 기간을 적용하지 않아야 한다');
   assert.ok(html.includes("const plabel=longOk?_PC_PERIODS[period][0]:'최근 거래';"), '장기 이력 없으면 기간 이름 대신 "최근 거래"');
   assert.ok(html.includes("const head=longOk?`"), '장기 이력 없으면 기간 칩을 숨겨야 한다');

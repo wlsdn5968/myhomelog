@@ -4394,6 +4394,7 @@ html[data-theme="dark"] #view-news{
 <div class="toast" id="tst"></div>
 
 <!-- SPLIT-1116 (plans/202): 본체보다 먼저 불러야 한다. 경로와 캐시 헤더는 vercel.json 의 /js/ 항목. -->
+<script src="/js/calc.js"></script>
 <script src="/js/swap-checklist.js"></script>
 <script src="/js/policy-data.js"></script>
 <script src="/js/policy.js"></script>
@@ -11220,31 +11221,7 @@ function renderAnalysisFallback(p){
 //   그때 "프론트는 이미 맞다"고 본 근거가 아래 하드코딩 폴백(`price<=6?.01`)이라 **이 주 경로는 누락**됐다.
 //   window.__TAX_CONFIG 가 로드된 정상 상태에서 상시 타는 쪽이 여기다. 두 사본은 같은 값을 내야 하며
 //   그 계약은 characterization.test.js 의 '_pickTierRate(프론트) ↔ 백엔드' 테스트가 고정한다.
-// ⚠⚠ TIER-BOUNDARY-SPLIT-2026-08-16 (Plan 023) — **경계 의미가 표마다 반대다. 헬퍼를 공유하지 마라.**
-//   같은 `underAuk` 필드를 쓰는 두 tier 표가 법령상 서로 다른 경계를 갖는다:
-//     · 취득세      지방세법 §11①8호        — "6억원 **이하** 1%"   → `<=` (아래 _pickTierRate)
-//     · 중개보수    공인중개사법 시행규칙 별표1 — "2억~9억원 **미만** 0.4%" → `<`  (아래 _pickTierRateUnder)
-//   [실사고] 계획 008(02f4a26)이 취득세 경계를 `<`→`<=` 로 고쳤는데, 그 한 줄이 **같은 헬퍼를 쓰던
-//     중개보수까지 바꿔** 0.5·2·9·12·15억 정확히 5개 지점에서 법정 요율과 어긋났다
-//     (라이브 실측: 9억 −90만 · 12억 −120만 · 15억 −150만 **과소**, 0.5억 +5만 · 2억 +20만 과대).
-//     커밋 메시지엔 "경계값 하나만 바뀌고 회귀 위험 낮음"이라 적혀 있었다 — **공유 헬퍼의 두 번째
-//     소비처를 확인하지 않은 것**이 근본 원인이다.
-//   [설계 원칙] 경계 의미가 다르면 **함수를 나눈다**. 기본값 인자로 구분하면 새 호출부가 조용히
-//     틀린 쪽을 고른다. 이름에 경계를 박아 호출부에서 법령이 보이게 한다.
-/** "N억 **이하**" 경계 (취득세 — 지방세법 §11①8호) */
-function _pickTierRate(tiers, priceAuk, fallbackRate){
-  for (const t of (tiers||[])) {
-    if (priceAuk <= (t.underAuk||0)) return t.rate ?? fallbackRate;
-  }
-  return fallbackRate;
-}
-/** "N억 **미만**" 경계 (중개보수 — 공인중개사법 시행규칙 별표1). 필드명 `underAuk` 의 문자 그대로. */
-function _pickTierRateUnder(tiers, priceAuk, fallbackRate){
-  for (const t of (tiers||[])) {
-    if (priceAuk < (t.underAuk||0)) return t.rate ?? fallbackRate;
-  }
-  return fallbackRate;
-}
+// SPLIT-1117: _pickTierRate(이하 경계), _pickTierRateUnder(미만 경계)는 frontend/js/calc.js 로 옮겼다. 경계 설명도 그 파일에 있다.
 // ACQ-REG-CALC-2026-09-02 (감사 후속, 이 함수에서는 폐기됨 → 아래 ACQ-UNKNOWN-COUNT-2026-09-06 이
 //   되돌렸다): 다주택 취득세 중과는 조정대상지역 기준이라(지방세법 §13-2), 이 계산기가 2주택+ 를
 //   지역과 무관하게 항상 8% 로 계산하는 게 한때 문제로 지적됐다 — 세금 시뮬레이션 카드(_acqIsReg,
@@ -12903,77 +12880,7 @@ function calcC(){
   return r;
 }
 
-// P1 D4: 정책자금 4종 계산 — 일반 주담대보다 한도·금리 유리
-//   - 보금자리:    소득 7천↓, 주택 6억↓, LTV 70%, 한도 일반 3.6억/생초 4.2억(특례보금자리 5억 종료), 금리 ~4%
-//   - 디딤돌:      소득 6천↓ (생초 7천), 주택 5억↓, LTV 일반70/생초80(수도권·규제70), 한도 일반 2억/생초 2.4억(2025.6.28~), 금리 ~3%
-//   - 신혼 디딤돌: 소득 8.5천↓ (혼인 7년↓), 주택 6억↓, 한도 3.2억(2025.6.27~ 계약), 금리 ~2.8%
-//   - 신생아 특례: 소득 1.3억↓ (2년 내 출산), 주택 9억↓, 한도 4억, 금리 ~1.6~3.3%
-// Sprint PP-3 (2026-05-19): 신생아 특례 정확화
-//   - 2026년 기준 정정: 대출 한도 5억 → 4억, LTV 수도권 70%/비수도권 80% 차등
-//   - DSR 아닌 DTI 60% 기준 심사 (디딤돌 특성)
-//   - 출처: 정부 공식 가이드 (younju 이미지 참조, 2026년 기준)
-// 모두 무주택 + 본인 거주 의무. 입력은 만원 단위 income.
-function computePolicyLoan({ buy, income, isFirstBuyer, isNewlywed, hasNewborn, houseStatus, region }) {
-  if (houseStatus !== '무주택') return { eligible: [], maxLoan: 0, bestName: null, note: '정책자금은 무주택자만 신청 가능' };
-  const eligible = [];
-  // Sprint PP-3: 수도권 (서울/경기/인천) vs 비수도권 LTV 차등
-  const isMetro = ['서울', '경기', '인천'].some(k => String(region || '').includes(k));  // 부분일치(getRegionForSearch가 '서울 강남구' 형태로 넘김 — calcLTV의 isRegFront와 동일 정책)
-  // 신생아 특례 LTV: 생애최초 80%(수도권·규제 70%) / 비생애최초 70% — 출처 myhome.go.kr (2026-06-21 재검증)
-  const newbornLtv = isFirstBuyer ? (isMetro ? 0.70 : 0.80) : 0.70;
-  const NEWBORN_REGION_HINT = !isFirstBuyer ? '비생애최초 LTV 70%' : (isMetro ? '수도권·규제 LTV 70%' : '비수도권 LTV 80%');
-
-  // 1) 신생아 특례 (가장 유리 — 1순위)
-  if (hasNewborn && income > 0 && income <= 13000 && buy <= 9) {
-    eligible.push({
-      name: '신생아 특례',
-      maxLoan: Math.min(4, buy * newbornLtv), // 4억 한도 (이전 5억은 잘못된 값)
-      ltv: Math.round(newbornLtv * 100),
-      rate: '1.6~3.3%',
-      note: `2년 내 출산 부부, 부부합산 1.3억 이하 (맞벌이 2억). 주택가 9억 이하·전용 85㎡ 이하·자산 5.11억 이하. ${NEWBORN_REGION_HINT}. 한도 4억. DSR 아닌 DTI 60% 기준 심사.`,
-    });
-  }
-  // 2) 신혼 디딤돌
-  if (isNewlywed && income > 0 && income <= 8500 && buy <= 6) {
-    eligible.push({
-      name: '신혼 디딤돌',
-      maxLoan: Math.min(3.2, buy * 0.7),
-      ltv: 70, rate: '1.8~3.1%',
-      note: '혼인 7년 이내, 부부합산 8,500만원 이하, 주택가격 6억 이하. 한도 3.2억(2025.6.27~ 계약).',
-    });
-  }
-  // 3) 디딤돌 — 일반 vs 생애최초 한도·LTV 차등 (공식 myhome·hf·금융위 2025.6.28~: 일반 2억/LTV70, 생애최초 2.4억/LTV80(수도권·규제 70))
-  const dimdolIncomeCap = isFirstBuyer ? 7000 : 6000;
-  if (income > 0 && income <= dimdolIncomeCap && buy <= 5) {
-    const dimdolCap = isFirstBuyer ? 2.4 : 2.0;
-    const dimdolLtv = isFirstBuyer ? (isMetro ? 0.70 : 0.80) : 0.70;
-    eligible.push({
-      name: '디딤돌',
-      maxLoan: Math.min(dimdolCap, buy * dimdolLtv),
-      ltv: Math.round(dimdolLtv * 100), rate: _polRate('didimdol', '2.85~4.15%'), // 2026.7 공시
-      note: `부부합산 ${dimdolIncomeCap}만원 이하, 주택가격 5억 이하. 한도 ${dimdolCap}억${isFirstBuyer ? '(생애최초)' : ''}.`,
-    });
-  }
-  // 4) 보금자리론 — 일반 3.6억 / 생애최초 4.2억 (공식 hf.go.kr 2026-06-21 재검증; 특례보금자리 5억은 2024.1 종료)
-  if (income > 0 && income <= 7000 && buy <= 6) {
-    const bogeumCap = isFirstBuyer ? 4.2 : 3.6;
-    eligible.push({
-      name: '보금자리론',
-      maxLoan: Math.min(bogeumCap, buy * 0.7),
-      ltv: 70, rate: _polRate('bogeum', '4.9~5.3%'), // 2026.7 공시 (예전 3.6~4.2% 는 stale — 한도 3.6/4.2억 과 숫자가 겹쳐 혼동을 키웠다)
-      note: `부부합산 7천만원 이하, 주택가격 6억 이하. 한도 ${bogeumCap}억${isFirstBuyer ? '(생애최초)' : ''}.`,
-    });
-  }
-
-  const maxItem = eligible.reduce((best, x) => (!best || x.maxLoan > best.maxLoan) ? x : best, null);
-  return {
-    eligible,
-    maxLoan: maxItem ? maxItem.maxLoan : 0,
-    bestName: maxItem ? maxItem.name : null,
-    note: eligible.length === 0 ? '정책자금 자격이 없어요 (소득·주택가격 기준을 넘거나 무주택이 아니에요)' : null,
-  };
-}
-// 대출 계산들이 함께 쓰는 기준 금리: 시중 평균 주담대(한국은행, 받았을 때) 없으면 4% — dc() 의 기본값과 같은 규칙
-function _loanBaseRate(){ const r=Number(window._ecosMortgageRate); return (r>0&&r<20)?r/100:0.04; }
+// SPLIT-1117: computePolicyLoan, _loanBaseRate 는 frontend/js/calc.js 로 옮겼다(plans/202 2단계).
 function calcLTV(buy,cash,inc,mo,house,isF,region,lawdCd){
   // 2026-04-25 P0 핫픽스: regulations_snapshot 기반 매칭 (Bug #4 — LTV 오계산)
   // 기존: region==='서울'||region==='경기' → 일산·동두천도 규제, 광명·하남·의왕은 매칭 누락 가능
@@ -13062,37 +12969,7 @@ function cl_inner(buy){
     }
   }
 }
-// DSR-STATE-2026-09-05: 상세 대출계산의 순수 산식. DOM 을 만지지 않으므로 테스트가 입력→출력으로 직접 실행한다.
-//   단위: buy·cash·lL·dL·fin 억 / inc 만원(연) / exAdded 만원(월) / rate 소수(0.04) / mo 만원(월) / dsr %.
-//   dsrState — 'none': 소득 미입력(DSR 미반영, LTV 한도만) · 'zero': 소득 입력·신규 여력 없음(한도 0) · 'ok': 양수 한도.
-function calcLoanLimitsPure({buy,inc,rate,yrs,exAdded,cash,ltv,cap,isLoc}){
-  const n=Math.max(1,Math.round((yrs||30)*12)),mr=(rate||0)/12,smr=((rate||0)+(isLoc?.0075:.03))/12;
-  const lL=Math.min(buy*ltv,cap);
-  const annuity=(monthly,r)=>(r>0?monthly*(1-Math.pow(1+r,-n))/r:monthly*n);             // 월 납입액 → 원금(원)
-  const payment=(principalEok,r)=>(principalEok>0?(r>0?principalEok*1e8*r/(1-Math.pow(1+r,-n)):principalEok*1e8/n)/10000:0); // 원금(억) → 월 납입(만원)
-  let dsrState='none',dL=0,headroom=null;
-  if(inc>0){
-    headroom=inc*10000*.4/12-exAdded*10000;                                               // 신규 여력(원/월)
-    if(headroom>0){dL=Math.round(annuity(headroom,smr)/1e8*100)/100;dsrState=dL>0?'ok':'zero';}
-    else dsrState='zero';
-  }
-  const fin=ltv===0?0:(dsrState==='ok'?Math.min(lL,dL):dsrState==='zero'?0:lL);
-  const mo=Math.round(payment(fin,mr));
-  const need=Math.max(0,buy-cash-fin);
-  const dsr=inc>0?Math.round((mo+exAdded)*12/inc*100):0;
-  return {lL,dL,dsrState,headroom,fin,mo,need,dsr,dsrExceed:dsr>40};
-}
-// CALC-INPUT-1114 (감사 7번, 운영 재현): 음수를 넣으면 "LTV 한도 -2.00억", 금리 "-1.0%" 가 그대로 나왔고
-//   매수가 99,999,999억, 금리 500% 도 계산됐다. 계산 전에 입력 범위를 본다. 문제가 없으면 '' 를 돌려준다.
-//   값은 입력 칸 숫자 그대로다(매수가와 현금은 억, 소득과 잔액은 만원, 금리는 %, 기간은 년). 빈 칸은 NaN 으로 온다.
-function calcInputProblem(v){
-  const vals=[v.buy,v.inc,v.ratePct,v.yrs,v.ex,v.cash,v.cl,v.jl];
-  if(vals.some(x=>typeof x==='number'&&x<0))return '0보다 작은 값은 계산할 수 없어요. 입력한 숫자를 확인해 주세요';
-  if(v.buy>1000)return '매수가는 1,000억 이하로 입력해 주세요';
-  if(v.ratePct>30)return '금리는 30% 이하로 입력해 주세요';
-  if(v.yrs>50)return '기간은 50년 이하로 입력해 주세요';
-  return '';
-}
+// SPLIT-1117: calcLoanLimitsPure, calcInputProblem 은 frontend/js/calc.js 로 옮겼다(plans/202 2단계).
 function dc(fromBtn){
   const buy=parseFloat(document.getElementById('c_b')?.value)||0;
   const _cErr=document.getElementById('c_err');
@@ -14310,6 +14187,8 @@ function sv(v,btn){
   _hpApply(v); // HOME-PANEL-2026-10-18 (Plan 151): 지도 화면 왼쪽 패널·검색 띠
   // SPLIT-1116: 갈아타기와 체크리스트는 /js/swap-checklist.js 에 있다. 그 파일을 못 받았으면 빈 화면 대신 알린다.
   if((v==='deal'||v==='swap')&&typeof _dclOpen!=='function'){try{toast('화면 일부를 불러오지 못했어요. 새로 고침해 주세요');if(window.Sentry&&!window._splitMissSent){window._splitMissSent=true;window.Sentry.captureMessage('swap-checklist.js not loaded');}}catch(_){}}
+  // SPLIT-1117 (plans/202 2단계): 계산 함수 파일을 못 받았으면 한 번만 알린다(대출 계산, 취득세, 정책자금이 이 함수를 쓴다).
+  if(typeof calcLoanLimitsPure!=='function'&&!window._calcMissSent){window._calcMissSent=true;try{toast('화면 일부를 불러오지 못했어요. 새로 고침해 주세요');if(window.Sentry)window.Sentry.captureMessage('calc.js not loaded');}catch(_){}}
   if(v==='deal'){try{_dclOpen();}catch(_){}}
   if(v==='policy'){if(typeof _polOpen==='function'){try{_polOpen();}catch(_){}}else{try{toast('화면 일부를 불러오지 못했어요. 새로 고침해 주세요');}catch(_){}}} // POLICY-CHANGES-1116
   if(v==='swap'){try{_swpRender();}catch(_){}} // SWAP-HELPER (Plan 155) // DEAL-CHECKLIST (Plan 154): 열 때 타임라인 날짜 가져오기 + 렌더

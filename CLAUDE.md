@@ -205,7 +205,7 @@ DB
 
 ## 📂 핵심 구조와 상세 문서
 
-- 화면: `frontend/index.html`(본체), `frontend/js/*.js`(본체 앞에서 부르는 일반 스크립트: `swap-checklist.js`, `policy.js`, 자료 `policy-data.js`. 계획은 `plans/202-frontend-split.md`), `frontend/sw.js`, 구 경계 `frontend/geo/`
+- 화면: `frontend/index.html`(본체), `frontend/js/*.js`(본체 앞에서 부르는 일반 스크립트: `calc.js`, `swap-checklist.js`, `policy.js`, 자료 `policy-data.js`. 계획은 `plans/202-frontend-split.md`), `frontend/sw.js`, 구 경계 `frontend/geo/`
 - 서버: `backend/server.js`, `backend/routes/`, `backend/services/`, `backend/jobs/`(예약 작업), `backend/middleware/`, 진입점 `api/index.js`
 - 예약 작업과 경로 연결: `vercel.json` (예약 작업 14개)
 - 검사: `backend/test/`, 묶음 실행은 `scripts/run-backend-tests-utc.js`
