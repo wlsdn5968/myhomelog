@@ -183,7 +183,7 @@
    - 메인 폴더를 origin/master 로 맞춘다
 2. 배포 다음 날: health 의 `crons.<이름>.cpuMs` 와 `crons.retention.cpuYesterdayMs` 를 Vercel 사용량 화면(vercel.com/gyeollab/~/usage 의 Fluid Active CPU)과 대조한다. CPU 가 큰 예약 작업부터 줄이고, 경보 5분과 차단 8분 기준을 실측에 맞춘다.
 3. 팀 CPU: portai, wellness-platform, salon 을 같은 방식으로 재고 줄인다. 운영자가 작업 폴더를 알려 주면 시작한다. 12-08 전에 팀 합계를 하루 8분 아래로 내려야 한다.
-4. 2026-11-16 20:00 UTC: apt-master-sync 회차의 `fetched`, `errors`, `throttleHits`.
+4. (확인 끝, 2026-11-17 23:10 KST health 조회) apt-master-sync 2026-11-16 20:47 UTC 회차: `fetched` 5028, `errors` 0, `throttleHits` 0, `remaining` 0, `inserted` 19, cpuMs 1513. 같은 조회에서 `pendingReview` 0, retention 의 `dbPct` 83(413.9MB).
 5-1. 2026-12 중: 서울 전역과 경기 12곳의 토지거래허가구역 지정이 2026-12-31 에 끝난다. 연장 여부 발표를 국토교통부와 정책브리핑에서 확인해 화면 문구와 저장값을 맞춘다. 12월 말 은행연합회 스트레스금리 공시(portal.kfb.or.kr/compare/stress_loan.php)로 2027년 상반기 지방 스트레스 금리도 맞춘다.
 5. 2026-11-17 KST: `privacy-1117` 을 master 에 합쳐 배포(시행일 전 배포 금지, 운영자가 그날 지시).
 6. 운영자 몫: (2026-11-16 운영자가 취득세 검증일 SQL 과 주담대 기준 SQL 을 실행했고 DB 조회로 확인했다: 취득세 2026-11-15, 주담대 2026-11-16, 규칙 16줄) 주담대 기준 갱신 SQL 기록(`supabase/migrations/20261116_housing_loan_reverify.sql`. 2026-11-16 에 금융위 보도자료 19건과 8.13 대책 안건을 전수 대조했다. 원인과 규칙은 `docs/ops/operations-rules.md` 끝), Vercel 2단계 인증, GitHub 2단계 인증, 저장소 공개 여부, NCP 지도 과금 확인, DB 백업(주 1회, `plans/168-backup-runbook.md`). 죽은 행 청소를 한다면 적재 시간(UTC 17~19시)을 피해 `VACUUM (ANALYZE) public.apt_master;` 와 `VACUUM (ANALYZE) public.molit_hist_peaks;`.
