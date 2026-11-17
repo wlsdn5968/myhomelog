@@ -13,7 +13,7 @@ function frontOutliers() {
   const a = html.indexOf('function _pcDayNum(d)');
   const src = html.slice(a, html.indexOf('\n// 순수 함수: 개별 거래', a));
   // eslint-disable-next-line no-new-func
-  return new Function(`${src}\nreturn { _pcOutliers, _pcPy };`)();
+  return new Function(`${require('../testSupport/readFrontend').pyeongPrelude()}${src}\nreturn { _pcOutliers, _pcPy };`)();
 }
 const { localOutliers } = require('../services/analysisService')._internals;
 

@@ -23,7 +23,7 @@ function loadPeak(win) {
   const helperSrc = html.slice(h, html.indexOf('\n// 순수 함수: 개별 거래', h));
   assert.ok(a > 0 && r > 0 && p > 0 && h > 0, '함수를 찾지 못했다 — 테스트를 갱신할 것');
   // eslint-disable-next-line no-new-func
-  return new Function('window', `${helperSrc}\n${repSrc}\n${recentSrc}\n${peakSrc}\nreturn _peakTrendHtml;`)(win);
+  return new Function('window', `${require('../testSupport/readFrontend').pyeongPrelude()}${helperSrc}\n${repSrc}\n${recentSrc}\n${peakSrc}\nreturn _peakTrendHtml;`)(win);
 }
 
 // 공릉풍림 모양: 60㎡ 가 가장 많고, 115㎡ 가 더 비싸다

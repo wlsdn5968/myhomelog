@@ -11,7 +11,7 @@
 - 작업 폴더: `C:\Users\Woo\Downloads\myhomelog_deploy_1\myhomelog\.claude\worktrees\p144` (브랜치 `ui-155`). Vercel projectId `prj_eYOJDb65wMQqbL5dAKo1pwaitiwW`, team `gyeollab`.
 
 동작하는 것 (확인됨)
-- 2026-11-17 밤 갱신(아래 줄보다 우선): 운영 배포본은 5ab0d91(11-17 23:14 KST 배포, 그날 1회 사용). 11-16 에 쌓인 것 전부와 개인정보처리방침 v1.3 시행본(`privacy-1117`, c0fd32f)을 합쳐 올렸다. 그 뒤 화면 파일 나누기 2단계(계산 함수 여섯 개를 `frontend/js/calc.js` 로, `plans/202-frontend-split.md` 끝)를 했고 이것만 미배포다. 배포하면 `/js/calc.js` 가 200 과 `application/javascript` 인지, 대출 계산과 단지 상세의 취득세 표가 나오는지부터 본다. 배포 전 verify 1,262 통과.
+- 2026-11-17 밤 갱신(아래 줄보다 우선): 운영 배포본은 5ab0d91(11-17 23:14 KST 배포, 그날 1회 사용). 11-16 에 쌓인 것 전부와 개인정보처리방침 v1.3 시행본(`privacy-1117`, c0fd32f)을 합쳐 올렸다. 그 뒤 화면 파일 나누기 2단계(계산 함수 여섯 개를 `frontend/js/calc.js` 로, `plans/202-frontend-split.md` 끝)를 했고 이어서 3단계(단지 상세의 세금 계산을 `calcHoldingTaxes` 로, 평 환산을 `_sqmToPy` 로 뽑음)도 했다. 이 두 단계만 미배포다(verify 1,268). 배포하면 `/js/calc.js` 가 200 과 `application/javascript` 인지, 대출 계산과 단지 상세의 "보유 주택 수별 예상 세금" 표, 평형 표기가 나오는지부터 본다. 배포 전 verify 1,262 통과.
   - 배포 뒤 운영에서 확인한 것: `/js/swap-checklist.js`, `/js/policy-data.js`, `/js/policy.js` 가 200 과 `application/javascript`, `/policy` 200 과 카드 45장, 앱 `?view=policy` 카드 45장과 조건 고르기와 되돌리기, 들어가는 길 3곳, 갈아타기와 체크리스트 화면, 대출 계산의 "최근 정책 변화" 상자, `/privacy.html` 의 v1.3, `/api/regulations` 의 5.10 과 5.12 새 문장, 데스크톱 네이버 지도의 서울 구별 첫 화면, 콘솔 오류 없음(브라우저 확장 오류만), Sentry 최근 1시간 새 문제 0건, health 의 cpuDay 73,321ms(11-17 하루 합계, 배포 직후).
   - 확인하지 못한 것: 휴대폰 폭의 네이버 지도(크롬 창 크기를 바꿀 수 없음), 낮은 화면의 도우미 창, `?view=constructor` 주소 정리, 로그인 안 한 상태의 사용량 문구(운영자 계정이라 무제한으로 나옴), 보고서 1회 생성.
   - 메인 폴더는 5ab0d91 로 맞췄다(`.claude/launch.json` 의 로컬 수정은 그대로 둠).

@@ -100,7 +100,7 @@ test('상세 헤더 평균가 — 전 평형 섞지 않고 거래 최다 평형�
   const fs = require('fs');
   const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
   const src = html.match(/function _repAreaOf\(tx\)\{[\s\S]*?\n\}/)[0];
-  const f = new Function(`${src}; return _repAreaOf;`)();
+  const f = new Function(`${require('../testSupport/readFrontend').pyeongPrelude()}${src}; return _repAreaOf;`)();
   const t = (ar, n, m, d) => Array.from({ length: n }, () => ({ excluUseAr: ar, dealAmount: 80000, dealYear: 2026, dealMonth: m, dealDay: d }));
   // 운영 실측 구성: 31㎡ 5 · 60㎡ 16 · 85㎡ 7 · 115㎡ 2
   const tx = [...t(31.32, 5, 8, 14), ...t(59.94, 16, 9, 19), ...t(84.99, 7, 10, 2), ...t(114.78, 2, 7, 28)];

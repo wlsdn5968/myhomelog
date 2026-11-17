@@ -132,3 +132,50 @@ function calcInputProblem(v){
   if(v.yrs>50)return '기간은 50년 이하로 입력해 주세요';
   return '';
 }
+
+// SPLIT-1117b (plans/202 3단계): 단지 상세(showDetail)의 "보유 주택 수별 예상 세금" 계산을 글자 그대로 뽑았다.
+//   market 은 시가(억), isReg 는 조정대상지역 여부. 돌려주는 세액은 만원, official 은 억이다.
+function calcHoldingTaxes(market, isReg){
+  const official = market * 0.70;        // 공시가격 = 시가의 약 70%
+  const marketW = market * 10000;        // 시가 만원 단위
+  const officialW = official * 10000;    // 공시 만원 단위
+  // ── TAX-FIX-2026-06-14 (라이브 실측 후 근본수정): 3대 버그 정정 —
+  //   (1) [단위] 전 세액이 만원 단위인데 "원"으로 표시 → 1만배 과소(취득세 "8,622원"=실제 8,622만원). 계산·표시 모두 만원으로 통일.
+  //   (2) [종부세 공제] 1주택 9억→12억(종부세법 §8①1호)·다주택 6억→9억(§8①3호, 2023 개정~). 기존은 2022 이전 stale.
+  //   (3) [공정시장가액비율] 재산세·종부세 과세표준에 60%(2024~) 미적용 → 과대. 적용.
+  //   재산세는 표준 주택세율(지방세법 §111①3호)로 통일(1주택 특례는 disclaimer 안내). 단위: marketW·officialW 는 만원.
+  const FAIR = 0.6;                          // 공정시장가액비율 (주택, 2024~)
+  const propBase = officialW * FAIR;         // 재산세 과세표준 (만원)
+  let propTaxW = 0;                           // 만원
+  if (propBase <= 6000)        propTaxW = propBase * 0.001;
+  else if (propBase <= 15000)  propTaxW = 6 + (propBase - 6000) * 0.0015;
+  else if (propBase <= 30000)  propTaxW = 19.5 + (propBase - 15000) * 0.0025;
+  else                         propTaxW = 57 + (propBase - 30000) * 0.004;
+  // 종부세 (만원): 공제 1주택 12억·다주택 9억, 과세표준×60%, 국세청 2023~ 주택분 누진세율 (2026-06-22 nts.go.kr 검증)
+  //   2주택 이하=일반(0.5~2.7%)·3주택 이상=중과(0.5~5.0%, 과표 12억 초과부터 일반과 갈림). 초과누진, 구간경계(만원): 3·6·12·25·50·94억.
+  const _jongbuTax = (baseW, heavy) => {
+    if (baseW <= 0) return 0;
+    const br = heavy
+      ? [[30000,.005],[60000,.007],[120000,.010],[250000,.020],[500000,.030],[940000,.040],[Infinity,.050]]
+      : [[30000,.005],[60000,.007],[120000,.010],[250000,.013],[500000,.015],[940000,.020],[Infinity,.027]];
+    let tax = 0, prev = 0;
+    for (const [cap, r] of br) { if (baseW <= prev) break; tax += (Math.min(baseW, cap) - prev) * r; prev = cap; }
+    return tax;
+  };
+  const compTax1H = official > 12 ? _jongbuTax((official - 12) * 10000 * FAIR, false) : 0;  // 1주택: 공제 12억·일반세율
+  const compTax2H = official > 9  ? _jongbuTax((official - 9)  * 10000 * FAIR, false) : 0;  // 2주택: 공제 9억·일반세율(조정 2주택 중과 폐지)
+  const compTax3H = official > 9  ? _jongbuTax((official - 9)  * 10000 * FAIR, true)  : 0;  // 3주택+: 공제 9억·중과세율
+  // 취득세 (시가 기준 만원): 1주택 6억↓1%/6~9억 누진(1~3%, 지방세법 §11①8호 (가액×2/3억-3)/100)/9억↑3%, 2주택 8%·3주택+ 12% 중과
+  let acqTax1H = 0;
+  if (market <= 6) acqTax1H = marketW * 0.01;
+  else if (market <= 9) acqTax1H = marketW * ((market * 2/3 - 3) / 100);
+  else acqTax1H = marketW * 0.03;
+  // 다주택 취득세 중과(지방세법 §13의2)는 조정대상지역만 적용한다. 판정은 부르는 쪽(showDetail 의 _acqIsReg)이 한다.
+  const acqTax2H = isReg ? marketW * 0.08 : acqTax1H;        // 조정 2주택 8% / 비조정 2주택 기본세율
+  const acqTax3H = isReg ? marketW * 0.12 : marketW * 0.08;  // 조정 3주택+ 12% / 비조정 3주택 8% (4주택+ 12%는 주택수 구간 한계로 8% 보수 표기)
+  return { official, propTaxW, compTax1H, compTax2H, compTax3H, acqTax1H, acqTax2H, acqTax3H };
+}
+
+// 평 환산: 1평 = 3.3058㎡ (서버는 backend/utils/pyeong.js 가 같은 값을 쓴다). 화면 여러 곳에 흩어져 있던 숫자를 한곳에 둔다.
+const PYEONG_M2 = 3.3058;
+function _sqmToPy(sqm){ return Math.round(sqm / PYEONG_M2); }

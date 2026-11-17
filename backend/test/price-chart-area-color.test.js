@@ -16,7 +16,7 @@ function load() {
   const b = html.indexOf('function _setPcPeriod(k)');
   assert.ok(a > 0 && b > a, '차트 함수 구간을 찾지 못했다 — 테스트를 갱신할 것');
   // eslint-disable-next-line no-new-func
-  return new Function('window', 'document', `${html.slice(a, b)}\nreturn { _pcModel, _pcOutliers, _pcPy, _pcGroups, _pcHtml };`)(
+  return new Function('window', 'document', `${require('../testSupport/readFrontend').pyeongPrelude()}${html.slice(a, b)}\nreturn { _pcModel, _pcOutliers, _pcPy, _pcGroups, _pcHtml };`)(
     { _curTrendApt: [], innerWidth: 700 }, { getElementById: () => null, querySelector: () => null });
 }
 
@@ -75,7 +75,7 @@ test('차트 화면: 평형마다 선, 선 끝 평형 이름표, 범례 버튼, 
   const a = html.indexOf('const _PC_PERIODS'), b = html.indexOf('function _setPcPeriod(k)');
   const win = { _curTrendLong: { state: 'ok', deals: src }, _curTrendApt: [], _pcPeriod: 'all', innerWidth: 700 };
   // eslint-disable-next-line no-new-func
-  const f = new Function('window', 'document', `${html.slice(a, b)}\nreturn _pcHtml;`)(win, { getElementById: () => null, querySelector: () => null });
+  const f = new Function('window', 'document', `${require('../testSupport/readFrontend').pyeongPrelude()}${html.slice(a, b)}\nreturn _pcHtml;`)(win, { getElementById: () => null, querySelector: () => null });
   const out = f(46);
   assert.match(out, /46㎡\(전용 14평\)가 최근 5\.80억에 거래됐어요/);
   assert.match(out, /stroke:var\(--pc-1\)/); assert.match(out, /stroke:var\(--pc-2\)/);
@@ -99,7 +99,7 @@ test('범례는 평을 직접 고른다 — 83.6㎡(25평)·84.4㎡(26평)가 �
   ['2026-01-10', '2026-02-10', '2026-03-10', '2026-04-10'].forEach((d, k) => { deals.push({ d, a: 80000 + k * 500, ar: 83.6 }); deals.push({ d, a: 90000 + k * 500, ar: 84.4 }); });
   const win = { _curTrendLong: { state: 'ok', deals }, _curTrendApt: [], _pcPeriod: 'all', innerWidth: 700, _curTrendArea: 84, _pcSelPy: 26 };
   // eslint-disable-next-line no-new-func
-  const f = new Function('window', 'document', `${html.slice(a, b)}\nreturn _pcHtml;`)(win, { getElementById: () => null, querySelector: () => null });
+  const f = new Function('window', 'document', `${require('../testSupport/readFrontend').pyeongPrelude()}${html.slice(a, b)}\nreturn _pcHtml;`)(win, { getElementById: () => null, querySelector: () => null });
   assert.match(f(84), /84㎡\(전용 26평\)가 최근 9\.15억/);
   assert.match(f(84), /onclick="_pcPickPy\(25,84\)"/);
   win._pcSelPy = 0;

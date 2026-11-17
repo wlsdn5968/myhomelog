@@ -21,4 +21,14 @@ function readFrontend() {
   return [readIndexHtml()].concat(frontendJsFiles().map((f) => `\n// ── frontend/js/${f} ──\n` + readFrontendJs(f))).join('');
 }
 
-module.exports = { readFrontend, readIndexHtml, readFrontendJs, frontendJsFiles };
+// SPLIT-1117b (plans/202 3단계): 화면 함수를 잘라 new Function 으로 실행하는 검사가 앞에 붙여 쓰는 평 환산 두 줄.
+//   calc.js 에서 그대로 읽어 온다(검사 안에 숫자를 따로 적지 않는다).
+function pyeongPrelude() {
+  const src = readFrontendJs('calc.js');
+  const a = src.match(/^const PYEONG_M2 = [0-9.]+;$/m);
+  const b = src.match(/^function _sqmToPy\(sqm\)\{[^\n]*\}$/m);
+  if (!a || !b) throw new Error('calc.js 에서 평 환산을 찾지 못했다');
+  return a[0] + b[0] + ';';
+}
+
+module.exports = { readFrontend, readIndexHtml, readFrontendJs, frontendJsFiles, pyeongPrelude };

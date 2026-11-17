@@ -8933,7 +8933,7 @@ function _clusterBands(results){
     const reliableCount = perResult.filter(b=>b&&b.reliable).length;
     const presentCount = perResult.filter(Boolean).length;
     const totalN = perResult.reduce((s,b)=> s+(b?b.n:0),0);
-    return { center:c.center, pyeong: Math.round(c.center/3.3058), perResult, reliableCount, presentCount, totalN };
+    return { center:c.center, pyeong: _sqmToPy(c.center), perResult, reliableCount, presentCount, totalN };
   })
   .filter(c=> c.presentCount >= 1)
   .sort((a,b)=> (b.reliableCount-a.reliableCount) || (b.presentCount-a.presentCount) || (b.totalN-a.totalN));
@@ -9288,7 +9288,7 @@ function _pcMedian(a){ const s=[...a].sort((x,y)=>x-y),n=s.length; return n%2?s[
 // PRICE-CHART-AREA-COLOR-2026-10-30 (Plan 171, 운영자 "평형대별로 색을 다르게 — 어떤 평형인지 한눈에"):
 //   평형 = 전용면적을 평으로 반올림(이상치 필터 analysisService.filterAnomalies·평형 칩의 '(N평)' 과 같은 식).
 //   예전 '±2㎡' 는 평형끼리 범위가 겹쳐(41·46·50㎡ 단지) 색을 나눌 수 없었다.
-const _PC_PY=3.3058;
+const _PC_PY=PYEONG_M2;
 function _pcPy(ar){ return Math.round(Number(ar)/_PC_PY); }
 // 동떨어진 거래: 같은 평형의 앞뒤 90일 거래(3건 미만이면 180일, 자신 빼고 3건 이상)의 중앙값에서 20%와 '보통 차이(MAD)의 3.5배' 중
 //   큰 값보다 더 벗어난 거래. 3년을 한 번에 보면 오르는 흐름의 끝(최고가)까지 걸리므로 시점마다 이웃과 비교한다.
@@ -9466,7 +9466,7 @@ function _repAreaOf(tx){
     const d=(Number(t.dealYear)||0)*10000+(Number(t.dealMonth)||0)*100+(Number(t.dealDay)||0);
     if(!by[sqm])by[sqm]={sqm,n:0,last:0};by[sqm].n++;if(d>by[sqm].last)by[sqm].last=d;});
   const best=Object.values(by).sort((a,b)=>b.n-a.n||b.last-a.last)[0];
-  return best?{sqm:best.sqm,py:Math.round(best.sqm/3.3058),n:best.n}:null;
+  return best?{sqm:best.sqm,py:_sqmToPy(best.sqm),n:best.n}:null;
 }
 // DEAD-FN-2026-09-02 (감사 P2-11): renderLegacyPriceBars 제거 — 정의 1회·호출 0회.
 //   주석 스스로 "서버가 priceHistory(지수)로 내려주는 경우만 사용" 이라 적었는데 그 경로가 현재 없다.
@@ -9672,48 +9672,14 @@ function showDetail(p){
     <!-- Sprint PP-4 (2026-05-19) + 작업 A 확장 (2026-05-20): 보유 주택수별 세금 시뮬레이션 (취득세·재산세·종부세·양도세 중과) -->
     ${p.avgPrice && p.avgPrice > 0 ? (() => {
       const market = p.avgPrice;             // 시가 (억)
-      const official = market * 0.70;        // 공시가격 = 시가의 약 70%
-      const marketW = market * 10000;        // 시가 만원 단위
-      const officialW = official * 10000;    // 공시 만원 단위
-      // ── TAX-FIX-2026-06-14 (라이브 실측 후 근본수정): 3대 버그 정정 —
-      //   (1) [단위] 전 세액이 만원 단위인데 "원"으로 표시 → 1만배 과소(취득세 "8,622원"=실제 8,622만원). 계산·표시 모두 만원으로 통일.
-      //   (2) [종부세 공제] 1주택 9억→12억(종부세법 §8①1호)·다주택 6억→9억(§8①3호, 2023 개정~). 기존은 2022 이전 stale.
-      //   (3) [공정시장가액비율] 재산세·종부세 과세표준에 60%(2024~) 미적용 → 과대. 적용.
-      //   재산세는 표준 주택세율(지방세법 §111①3호)로 통일(1주택 특례는 disclaimer 안내). 단위: marketW·officialW 는 만원.
-      const FAIR = 0.6;                          // 공정시장가액비율 (주택, 2024~)
-      const propBase = officialW * FAIR;         // 재산세 과세표준 (만원)
-      let propTaxW = 0;                           // 만원
-      if (propBase <= 6000)        propTaxW = propBase * 0.001;
-      else if (propBase <= 15000)  propTaxW = 6 + (propBase - 6000) * 0.0015;
-      else if (propBase <= 30000)  propTaxW = 19.5 + (propBase - 15000) * 0.0025;
-      else                         propTaxW = 57 + (propBase - 30000) * 0.004;
-      // 종부세 (만원): 공제 1주택 12억·다주택 9억, 과세표준×60%, 국세청 2023~ 주택분 누진세율 (2026-06-22 nts.go.kr 검증)
-      //   2주택 이하=일반(0.5~2.7%)·3주택 이상=중과(0.5~5.0%, 과표 12억 초과부터 일반과 갈림). 초과누진, 구간경계(만원): 3·6·12·25·50·94억.
-      const _jongbuTax = (baseW, heavy) => {
-        if (baseW <= 0) return 0;
-        const br = heavy
-          ? [[30000,.005],[60000,.007],[120000,.010],[250000,.020],[500000,.030],[940000,.040],[Infinity,.050]]
-          : [[30000,.005],[60000,.007],[120000,.010],[250000,.013],[500000,.015],[940000,.020],[Infinity,.027]];
-        let tax = 0, prev = 0;
-        for (const [cap, r] of br) { if (baseW <= prev) break; tax += (Math.min(baseW, cap) - prev) * r; prev = cap; }
-        return tax;
-      };
-      const compTax1H = official > 12 ? _jongbuTax((official - 12) * 10000 * FAIR, false) : 0;  // 1주택: 공제 12억·일반세율
-      const compTax2H = official > 9  ? _jongbuTax((official - 9)  * 10000 * FAIR, false) : 0;  // 2주택: 공제 9억·일반세율(조정 2주택 중과 폐지)
-      const compTax3H = official > 9  ? _jongbuTax((official - 9)  * 10000 * FAIR, true)  : 0;  // 3주택+: 공제 9억·중과세율
-      // 취득세 (시가 기준 만원): 1주택 6억↓1%/6~9억 누진(1~3%, 지방세법 §11①8호 (가액×2/3억-3)/100)/9억↑3%, 2주택 8%·3주택+ 12% 중과
-      let acqTax1H = 0;
-      if (market <= 6) acqTax1H = marketW * 0.01;
-      else if (market <= 9) acqTax1H = marketW * ((market * 2/3 - 3) / 100);
-      else acqTax1H = marketW * 0.03;
       // ACQ-REG-2026-06-24 (운영자 "지역별 차이를 매물에 반영"): 다주택 취득세 중과(지방세법 §13의2)는
       //   '조정대상지역'만 적용 — 비조정지역은 2주택 기본세율·3주택 8%(4주택+ 12%). 조정대상지역=규제지역(공식검증 동일범위).
       //   단지 소재지(p.area)로 isRegFront 판정. area 미상이면 기존 동작(중과) 유지 — 회귀 최소화.
       //   REG-DUAL-PATH-FIX-2026-08-16: lawdCd 동반 — 바로 위 LTV 라벨(_regLtvLabel(p.area, p.lawdCd))과
       //   같은 근거로 판정해야 한 화면에서 "비규제 LTV 70%" + "조정지역 취득세 8%" 모순이 안 생긴다.
       const _acqIsReg = (p.area && typeof isRegFront === 'function') ? isRegFront(p.area, p.lawdCd) : true;
-      const acqTax2H = _acqIsReg ? marketW * 0.08 : acqTax1H;        // 조정 2주택 8% / 비조정 2주택 기본세율
-      const acqTax3H = _acqIsReg ? marketW * 0.12 : marketW * 0.08;  // 조정 3주택+ 12% / 비조정 3주택 8% (4주택+ 12%는 주택수 구간 한계로 8% 보수 표기)
+      // SPLIT-1117b (plans/202 3단계): 계산은 frontend/js/calc.js 의 calcHoldingTaxes 로 뽑았다(값 그대로).
+      const { official, propTaxW, compTax1H, compTax2H, compTax3H, acqTax1H, acqTax2H, acqTax3H } = calcHoldingTaxes(market, _acqIsReg);
       const _format = w => Math.round(w).toLocaleString();   // 만원 단위 값
       const _box = (title, content) => `<div style="background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-sm);padding:8px 10px;font-size:12px;line-height:1.5;color:var(--t2)"><div style="font-weight:700;color:var(--t1);margin-bottom:3px">${title}</div>${content}</div>`;
       return `<div style="background:var(--bg2);border:1px solid var(--bd);border-radius:var(--radius-base);padding:11px 13px;margin:6px 0 8px;font-size:12px;color:var(--t2);line-height:1.6">
@@ -9753,7 +9719,7 @@ function showDetail(p){
   for (const t of txAll) {
     const sqm = Math.round(Number(t.excluUseAr) || 0);
     if (!sqm) continue;
-    const py = Math.round(sqm / 3.3058);  // PYEONG-M2-2026-08-17: 1평=3.305785㎡ 로 통일
+    const py = _sqmToPy(sqm);  // PYEONG-M2-2026-08-17: 1평=3.305785㎡ 로 통일
     const key = `${sqm}㎡(전용 ${py}평)`;
     if (!byArea[key]) byArea[key] = { sqm, py, prices: [] };
     byArea[key].prices.push(Number(t.dealAmount) || 0);
@@ -9788,7 +9754,7 @@ function showDetail(p){
     const _hd='<div class="dm-txgrid hd"><span>계약일</span><span>전용</span><span style="text-align:right">층</span><span style="text-align:right">거래금액</span></div>';
     return _hd + filtered.slice(0,30).map(t => {
       const sqm = Math.round(Number(t.excluUseAr) || 0);
-      const py = sqm ? Math.round(sqm / 3.3058) : 0;  // PYEONG-M2-2026-08-17
+      const py = sqm ? _sqmToPy(sqm) : 0;  // PYEONG-M2-2026-08-17
       return `<div class="dm-txgrid">
         <span style="color:var(--t2);font-weight:600">${t.dealYear}.${String(t.dealMonth||1).padStart(2,'0')}.${String(t.dealDay||1).padStart(2,'0')}</span>
         <span style="color:var(--a2);font-weight:600">${sqm?sqm+'㎡(전용 '+py+'평)':'—'}</span>
@@ -9887,7 +9853,7 @@ function showDetail(p){
     ? `<div style="display:flex;flex-wrap:wrap;gap:5px;margin:6px 0 10px">
         <button class="trend-area-chip" data-sqm="0" onclick="_selectTrendArea(0, this)" style="padding:4px 10px;border-radius:var(--radius-lg);border:1px solid var(--acc);font-size:12px;cursor:pointer;font-family:inherit;background:var(--acc-bg);color:var(--acc-ink)">전체 ${(p.txHistory||[]).length}건</button>
         ${_areaList.map(a => {
-          const py = Math.round(a.sqm / 3.3058);  // PYEONG-M2-2026-08-17
+          const py = _sqmToPy(a.sqm);  // PYEONG-M2-2026-08-17
           return `<button class="trend-area-chip" data-sqm="${a.sqm}" onclick="_selectTrendArea(${a.sqm}, this)" style="padding:4px 10px;border-radius:var(--radius-lg);border:1px solid var(--bd);font-size:12px;cursor:pointer;font-family:inherit;background:var(--bg-base);color:var(--t2)">${a.sqm}㎡(전용 ${py}평) <span style="opacity:0.7;font-size:12px">${a.n}건</span></button>`;
         }).join('')}
       </div>`
@@ -10603,7 +10569,7 @@ function _buildCardStats(items){
   for(const t of (items||[])){
     const sqm=parseFloat(t.excluUseAr);const amt=Number(t.dealAmount);
     if(!isFinite(sqm)||sqm<=0||!isFinite(amt)||amt<=0||!t.dealYear)continue;
-    const py=Math.round(sqm/3.3058); // PYEONG-M2-2026-08-17: 앱 전체와 동일 상수
+    const py=_sqmToPy(sqm); // PYEONG-M2-2026-08-17: 앱 전체와 동일 상수
     const ago=nowIdx-(t.dealYear*12+((t.dealMonth||1)-1));
     const b=byPy[py]||(byPy[py]={o:[],n:[],r6:[]});
     const rec={amt,y:t.dealYear,m:t.dealMonth||1};
