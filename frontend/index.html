@@ -4395,6 +4395,7 @@ html[data-theme="dark"] #view-news{
 
 <!-- SPLIT-1116 (plans/202): 본체보다 먼저 불러야 한다. 경로와 캐시 헤더는 vercel.json 의 /js/ 항목. -->
 <script src="/js/calc.js"></script>
+<script src="/js/data.js"></script>
 <script src="/js/swap-checklist.js"></script>
 <script src="/js/policy-data.js"></script>
 <script src="/js/policy.js"></script>
@@ -6432,35 +6433,7 @@ function _closeRegSummary(){ const m=document.getElementById('regSummaryModal');
 function closeTerms(){document.getElementById('TM').classList.remove('open');}
 
 // ── 정책 타임라인 ─────────────────────────────────────
-// Sprint QQ (2026-05-19): 4.17 만기연장 금지 + 5.10 양도세 중과 부활 + 5.12 보완책 추가
-//   - 공식 출처 검증: 4.17 = korea.kr 정책브리핑 / 5.10 = 다주택자 양도세 중과 부활(5.9까지 양도분 배제, 2026-06-22 재검증 socialfocus·KB·세무법인)
-const POLICY_TIMELINE = [
-  // REG-LABEL-2026-08-16 (Sprint OOOOOOO-3, **자체 오판 정정**): 이 desc 의 '토지거래허가구역'을
-  //   "제도 오기"로 보고 '규제지역 지정'으로 바꿨었으나(494a71a) **그 판단이 틀렸다.** 원문이 옳았다.
-  //   공식 확인(2026-08-16): 국토부 보도자료 제목이 "**규제지역 및 토지거래허가구역** 서울 전역 및
-  //   경기 12개 지역 확대 지정"이고, 정책브리핑(korea.kr 148950973)은 서울 21개 자치구를 신규 지정
-  //   (기존 강남·서초·송파·용산 유지 → **서울 25개구 전체**) + 경기 12곳(과천·광명·성남 분당/수정/중원·
-  //   수원 영통/장안/팔달·안양 동안·용인 수지·의왕·하남)을 명시한다. 즉 10.15 대책은 규제지역과
-  //   토지거래허가구역을 **같은 지역에 함께** 지정했다(효력 10.20 = 공고일+5일).
-  //   · 대상 물건: 투기과열지구와 동일 지역의 **아파트 + 동일 단지 내 아파트 1개 동 이상 포함된
-  //     연립·다세대** (전 부동산이 아니다).
-  //   · 그래서 "경기 12곳" 목록이 DB regulatedRegions 앞 12개와 일치하는 것도 우연이 아니다.
-  //   [교훈] 같은 파일의 다른 문구(구 '강남 일부·송파·용산')와 어긋난다는 이유로 어느 한쪽을 틀렸다고
-  //   단정하지 말 것 — 여기서는 **오래된 쪽이 틀렸고 이 문구가 최신이었다**. 공식 출처를 먼저 확인할 것.
-  { date:'2025-10-15', title:'규제지역 확대·DSR 강화 시행', desc:'서울 25개구 + 경기 12곳(발표 당시) 규제지역·토지거래허가구역 동시 지정(효력 10.20). 현재 경기 15곳', tag:'규제', tone:'red' },
-  { date:'2025-10-29', title:'1주택자 전세대출 이자 DSR 반영', desc:'전세대출 이자도 총부채상환비율에 포함', tag:'대출', tone:'amb' },
-  { date:'2026-01-01', title:'은행권 주담대 위험가중치 15%에서 20%로', desc:'은행 주담대 공급 위축·금리 상승 압력', tag:'금융', tone:'a2' },
-  { date:'2026-04-17', title:'다주택자 주담대 만기연장 금지', desc:'2주택+ 임대사업자 수도권·규제지역 주담대 만기연장 원칙 금지. 임차인이 있으면 임대차 계약이 끝나는 날까지는 연장', tag:'대출', tone:'red' },
-  // POLICY-SRC-1116: 소득세법 제104조 제7항(조정대상지역, 20%p와 30%p), 시행령 제167조의3 제1항 제12호의2(2026년 5월 9일)를 law.go.kr 에서 2026-11-16 에 직접 확인.
-  { date:'2026-05-10', title:'조정대상지역 다주택자 양도세 중과 다시 적용', desc:'한시 배제가 5.9에 끝남. 조정대상지역 2주택은 기본세율에 20%p, 3주택 이상은 30%p를 더하고 장기보유특별공제 배제. 5.9까지 계약하거나 허가 신청한 뒤 기한 안에 판 경우는 제외', tag:'세제', tone:'amb' },
-  // POLICY-SRC-1116: 전에는 파는 쪽 규제를 푼 보완책이라고 적었는데 원문과 달랐다(매수자의 실거주 의무 유예 확대). 정책브리핑 2026.05.12 국토교통부 글(newsId=148964215)과 기한 연장을 알린 2026.09.17 글(newsId=148972092)을 직접 확인.
-  { date:'2026-05-12', title:'토지거래허가구역 실거주 유예 확대', desc:'세입자가 있는 집을 사는 무주택자는 임대차 계약이 끝나는 날까지 입주를 미룰 수 있게 대상을 넓힘. 신청 기한은 9.17 발표로 2027.12.31까지 연장. 국토부 5.12 발표', tag:'완화', tone:'grn' },
-  { date:'2026-06-30', title:'규제지역 추가 지정 (동탄·기흥·구리)', desc:'화성 동탄구·용인 기흥구·구리시 투기과열+조정대상(7.1 효력)·토허구역(7.5~2027말). 국토부 6.29 주거정책심의위 의결', tag:'규제', tone:'red' },
-  // TIMELINE-0813-1116 (전면 감사 발견 2, 3): 계산식은 8.13 대책까지 반영됐는데 타임라인은 6.30 에서 멈춰 있었다.
-  //   근거: 금융위 2026-08-13 보도자료 본문("금년도 가계부채 총량 증가율은 3% 수준 (당초 1.5%)")과 첨부 안건 13쪽, 16쪽(fsc.go.kr/no010101/87517).
-  //   4.17 항목에 있던 영향 금액과 가구 수는 2026-11-16 원문 대조에서 근거를 찾지 못해 뺐다.
-  { date:'2026-08-13', title:'부동산 시장 안정을 위한 금융 종합대책', desc:'올해 가계부채 증가율 관리 목표를 3% 수준으로 올림(당초 1.5%). 생애최초 LTV는 수도권·규제지역 70%, 그 밖 80%. 1주택자 전세대출 제한은 2027.1.1 예정. 금융위 8.13 발표', tag:'대출', tone:'amb' },
-];
+// SPLIT-1118 (plans/202 4단계): POLICY_TIMELINE 은 frontend/js/data.js 로 옮겼다(자료 파일을 못 받았을 때만 쓰는 대체용 그대로).
 
 function renderPolicyTimeline(){
   const box=document.getElementById('policyTimeline');
@@ -7264,21 +7237,7 @@ function _polRate(key, fallback){
   return fallback;
 }
 
-// PERSONA-PRESET-2026-07-13 (Sprint GGGGG, 집사닷컴 벤치마킹): 상황 예시 클릭 채우기.
-//   값은 "입력 예시"일 뿐(데이터 주장 아님) — 사용자가 본인 상황으로 수정 전제(토스트 안내).
-//   지역(ch-r/서브)·직장(wp)·단지조건(flt-*)은 안 건드림(사용자 선택 존중) · 자동 검색 안 함.
-const PERSONAS = {
-  // 칩 값은 실제 칩 텍스트와 정확 일치(1372~1402행 실측): kid 없음/예정/0~6세/초등/중등+ · stay 3년 이하/5~10년/10년+ ·
-  // pri 학군/역세권/환금성/조용함/교통/신축/재건축/갭투자 · py 는 '소형/중형/대형' 접두 includes 매칭.
-  first:    { label:'생애최초 첫집',   h:'무주택', f:'예',    nw:'아니오', nb:'아니오', bp:5,  mc:1.5, inc:5000,  py:'소형', pri:'역세권', kid:'없음',  stay:'5~10년', sc:'보통' },
-  // PERSONA-NW-2026-10-30: 종전 8억·연소득 9천만은 신혼 디딤돌 기준(소득 8.5천만↓·집값 6억↓, computePolicyLoan) 밖이라
-  //   예시를 누르면 정책자금이 '자격이 없어요'로 나왔다 — 신혼부부 예시는 그 기준 안 값으로.
-  newlywed: { label:'신혼부부',        h:'무주택', f:'예',    nw:'예',    nb:'아니오', bp:6,  mc:2,   inc:8000,  py:'중형', pri:'교통',   kid:'예정',  stay:'5~10년', sc:'보통' },
-  newborn:  { label:'신생아 특례',     h:'무주택', f:'예',    nw:'아니오', nb:'예',    bp:9,  mc:3,   inc:11000, py:'중형', pri:'학군',   kid:'0~6세', stay:'10년+',  sc:'학군 중요' },
-  upgrade:  { label:'갈아타기(1주택)', h:'1주택 (처분조건부)', f:'아니오', nw:'아니오', nb:'아니오', bp:12, mc:6, inc:12000, py:'중형', pri:'학군', kid:'초등', stay:'10년+', sc:'학군 중요' },
-  school:   { label:'학군 최우선',     h:'무주택', f:'아니오', nw:'아니오', nb:'아니오', bp:10, mc:4,  inc:10000, py:'중형', pri:'학군',   kid:'초등',  stay:'10년+',  sc:'학군 중요' },
-  senior:   { label:'다운사이징',      h:'1주택 (처분조건부)', f:'아니오', nw:'아니오', nb:'아니오', bp:6, mc:5, inc:4000, py:'소형', pri:'조용함', kid:'없음', stay:'10년+', sc:'보통' },
-};
+// SPLIT-1118 (plans/202 4단계): PERSONAS(상황 예시 값)는 frontend/js/data.js 로 옮겼다.
 function applyPersona(key){
   const p = PERSONAS[key]; if(!p) return;
   // 그룹 칩 설정: 정확 일치 우선 → 부분 일치(칩 라벨에 부가 텍스트 있어도 매칭: '중형 23~33평' 등)
@@ -11929,16 +11888,7 @@ function getNoteForApt(n){return getAllNotes()[n]||null}
 function saveNoteForApt(n,d){const all=getAllNotes();all[n]=d;localStorage.setItem(NOTE_KEY,JSON.stringify(all))}
 function deleteNoteForApt(n){const all=getAllNotes();delete all[n];localStorage.setItem(NOTE_KEY,JSON.stringify(all))}
 
-const FN_CHECKS=[
-  {id:'light',label:'채광 양호'},
-  {id:'noise',label:'소음 낮음'},
-  {id:'park', label:'주차 여유'},
-  {id:'elev', label:'엘리베이터'},
-  {id:'mgmt', label:'관리 양호'},
-  {id:'store',label:'편의시설'},
-  {id:'school',label:'학교 근접'},
-  {id:'trans',label:'교통 편리'},
-];
+// SPLIT-1118 (plans/202 4단계): FN_CHECKS(임장 노트 점검 항목)는 frontend/js/data.js 로 옮겼다.
 
 // FN-PULL-2026-10-18 (plans/166 A1): 임장 노트는 서버로 올리기(PUT)만 있고 받아오는 코드가 없어 다른 기기에선 안 보였다 —
 //   화면 안내("모든 기기에서 자동으로 동기화돼요")와 어긋났다. 로그인 상태면 단지마다 한 번 GET 해서, 서버 쪽이 더 새 것이면
@@ -14155,6 +14105,8 @@ function sv(v,btn){
   if((v==='deal'||v==='swap')&&typeof _dclOpen!=='function'){try{toast('화면 일부를 불러오지 못했어요. 새로 고침해 주세요');if(window.Sentry&&!window._splitMissSent){window._splitMissSent=true;window.Sentry.captureMessage('swap-checklist.js not loaded');}}catch(_){}}
   // SPLIT-1117 (plans/202 2단계): 계산 함수 파일을 못 받았으면 한 번만 알린다(대출 계산, 취득세, 정책자금이 이 함수를 쓴다).
   if(typeof calcLoanLimitsPure!=='function'&&!window._calcMissSent){window._calcMissSent=true;try{toast('화면 일부를 불러오지 못했어요. 새로 고침해 주세요');if(window.Sentry)window.Sentry.captureMessage('calc.js not loaded');}catch(_){}}
+  // SPLIT-1118 (plans/202 4단계): 자료 상수 파일을 못 받았으면 한 번만 알린다(상황 예시, 임장 노트 점검 항목, 옛 정책 타임라인이 이 자료를 쓴다).
+  if(typeof PERSONAS==='undefined'&&!window._dataMissSent){window._dataMissSent=true;try{toast('화면 일부를 불러오지 못했어요. 새로 고침해 주세요');if(window.Sentry)window.Sentry.captureMessage('data.js not loaded');}catch(_){}}
   if(v==='deal'){try{_dclOpen();}catch(_){}}
   if(v==='policy'){if(typeof _polOpen==='function'){try{_polOpen();}catch(_){}}else{try{toast('화면 일부를 불러오지 못했어요. 새로 고침해 주세요');}catch(_){}}} // POLICY-CHANGES-1116
   if(v==='swap'){try{_swpRender();}catch(_){}} // SWAP-HELPER (Plan 155) // DEAL-CHECKLIST (Plan 154): 열 때 타임라인 날짜 가져오기 + 렌더

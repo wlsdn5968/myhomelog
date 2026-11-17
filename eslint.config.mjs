@@ -138,7 +138,9 @@ export default [
     languageOptions: { globals: { _dclFromTimeline: 'readonly', _dclOpen: 'readonly', _swpRender: 'readonly', _polOpen: 'readonly', _polRecent: 'readonly',
       // SPLIT-1117 (plans/202 2단계): frontend/js/calc.js 의 계산 함수
       _pickTierRate: 'readonly', _pickTierRateUnder: 'readonly', computePolicyLoan: 'readonly', _loanBaseRate: 'readonly', calcLoanLimitsPure: 'readonly', calcInputProblem: 'readonly',
-      calcHoldingTaxes: 'readonly', _sqmToPy: 'readonly', PYEONG_M2: 'readonly' } },
+      calcHoldingTaxes: 'readonly', _sqmToPy: 'readonly', PYEONG_M2: 'readonly',
+      // SPLIT-1118 (plans/202 4단계): frontend/js/data.js 의 자료 상수
+      POLICY_TIMELINE: 'readonly', PERSONAS: 'readonly', FN_CHECKS: 'readonly' } },
   },
   {
     // 반대 방향: swap-checklist.js 가 실행 시점에 부르는 본체의 함수와 값.
