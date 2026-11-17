@@ -191,7 +191,7 @@ DB
 - 정책 변화 화면의 자료는 `backend/data/policy-changes.json` 하나다. `frontend/js/policy-data.js` 는 직접 고치지 않고 `node scripts/build-policy-data.js` 로 만든다. 원문 본문을 열어 대조한 것만 넣고, 정부안은 "안"으로 표시한다. 전체를 다시 대조한 날에만 `checked` 를 고친다. → `plans/203-policy-changes.md`
 
 일정이 걸린 것
-- 개인정보처리방침 시행본(`privacy-1117`)은 2026-11-17 KST 전에 배포하지 않는다. 그 브랜치와 작업 폴더를 지우지 말 것. → `HANDOFF.md`
+- 개인정보처리방침 시행본(`privacy-1117`)은 2026-11-17 에 배포했다(5ab0d91). 그 브랜치와 작업 폴더는 운영자 승인 없이 지우지 말 것. → `HANDOFF.md`
 - 결제를 다시 켜기 전에 `docs/ops/security.md` 의 run-6 결제 4건부터 정한다.
 
 ### 폐기 (운영자 방침·판정)

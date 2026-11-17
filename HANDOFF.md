@@ -11,6 +11,10 @@
 - 작업 폴더: `C:\Users\Woo\Downloads\myhomelog_deploy_1\myhomelog\.claude\worktrees\p144` (브랜치 `ui-155`). Vercel projectId `prj_eYOJDb65wMQqbL5dAKo1pwaitiwW`, team `gyeollab`.
 
 동작하는 것 (확인됨)
+- 2026-11-17 밤 갱신(아래 줄보다 우선): 운영 배포본은 5ab0d91(11-17 23:14 KST 배포, 그날 1회 사용). 11-16 에 쌓인 것 전부와 개인정보처리방침 v1.3 시행본(`privacy-1117`, c0fd32f)을 합쳐 올렸다. 미배포 코드는 없다. 배포 전 verify 1,262 통과.
+  - 배포 뒤 운영에서 확인한 것: `/js/swap-checklist.js`, `/js/policy-data.js`, `/js/policy.js` 가 200 과 `application/javascript`, `/policy` 200 과 카드 45장, 앱 `?view=policy` 카드 45장과 조건 고르기와 되돌리기, 들어가는 길 3곳, 갈아타기와 체크리스트 화면, 대출 계산의 "최근 정책 변화" 상자, `/privacy.html` 의 v1.3, `/api/regulations` 의 5.10 과 5.12 새 문장, 데스크톱 네이버 지도의 서울 구별 첫 화면, 콘솔 오류 없음(브라우저 확장 오류만), Sentry 최근 1시간 새 문제 0건, health 의 cpuDay 73,321ms(11-17 하루 합계, 배포 직후).
+  - 확인하지 못한 것: 휴대폰 폭의 네이버 지도(크롬 창 크기를 바꿀 수 없음), 낮은 화면의 도우미 창, `?view=constructor` 주소 정리, 로그인 안 한 상태의 사용량 문구(운영자 계정이라 무제한으로 나옴), 보고서 1회 생성.
+  - 메인 폴더는 5ab0d91 로 맞췄다(`.claude/launch.json` 의 로컬 수정은 그대로 둠).
 - 2026-11-16 밤 갱신(아래 줄보다 우선): 운영 배포본은 86cb8e1(11-16 배포 1회 사용). 로컬은 그보다 앞서 있고 미배포다(전면 감사 발견 처리, 모바일 지도, 정책 문구 원문 대조, 화면 파일 나누기 0단계와 1단계, 정책 변화 한 장 요약 화면. verify 1,262). 감사 기록은 `AUDIT_REPORT.md` 15절, 정책 변화는 `plans/203-policy-changes.md`.
   - 운영자가 실행한 것: `supabase/migrations/20261116_revoke_unused_write_grants.sql`(11-16, 조회로 확인: anon 쓰기 권한 0, authenticated 는 5개 표만).
   - 운영자가 실행한 것(11-16 저녁): `supabase/migrations/20261116_policy_rules_wording.sql`. DB 조회로 확인(16줄 그대로, 두 줄이 새 문장). 운영자 실행 대기 SQL 은 없다. `/api/regulations` 는 CDN 이 30분 기억하므로 응답에는 조금 뒤에 반영된다.
@@ -185,7 +189,7 @@
 3. 팀 CPU: portai, wellness-platform, salon 을 같은 방식으로 재고 줄인다. 운영자가 작업 폴더를 알려 주면 시작한다. 12-08 전에 팀 합계를 하루 8분 아래로 내려야 한다.
 4. (확인 끝, 2026-11-17 23:10 KST health 조회) apt-master-sync 2026-11-16 20:47 UTC 회차: `fetched` 5028, `errors` 0, `throttleHits` 0, `remaining` 0, `inserted` 19, cpuMs 1513. 같은 조회에서 `pendingReview` 0, retention 의 `dbPct` 83(413.9MB).
 5-1. 2026-12 중: 서울 전역과 경기 12곳의 토지거래허가구역 지정이 2026-12-31 에 끝난다. 연장 여부 발표를 국토교통부와 정책브리핑에서 확인해 화면 문구와 저장값을 맞춘다. 12월 말 은행연합회 스트레스금리 공시(portal.kfb.or.kr/compare/stress_loan.php)로 2027년 상반기 지방 스트레스 금리도 맞춘다.
-5. 2026-11-17 KST: `privacy-1117` 을 master 에 합쳐 배포(시행일 전 배포 금지, 운영자가 그날 지시).
+5. (끝, 2026-11-17 23:14 KST) `privacy-1117` 을 합쳐 5ab0d91 로 배포했고 운영 `/privacy.html` 에서 v1.3 을 확인했다. 브랜치와 작업 폴더는 지우지 않았다(지우려면 운영자 승인).
 6. 운영자 몫: (2026-11-16 운영자가 취득세 검증일 SQL 과 주담대 기준 SQL 을 실행했고 DB 조회로 확인했다: 취득세 2026-11-15, 주담대 2026-11-16, 규칙 16줄) 주담대 기준 갱신 SQL 기록(`supabase/migrations/20261116_housing_loan_reverify.sql`. 2026-11-16 에 금융위 보도자료 19건과 8.13 대책 안건을 전수 대조했다. 원인과 규칙은 `docs/ops/operations-rules.md` 끝), Vercel 2단계 인증, GitHub 2단계 인증, 저장소 공개 여부, NCP 지도 과금 확인, DB 백업(주 1회, `plans/168-backup-runbook.md`). 죽은 행 청소를 한다면 적재 시간(UTC 17~19시)을 피해 `VACUUM (ANALYZE) public.apt_master;` 와 `VACUUM (ANALYZE) public.molit_hist_peaks;`.
 7. 남은 감사 항목: 직장 위치(5번)는 2026-11-16 운영자 승인으로 통근 계산에만 쓰게 고쳤다(`AUDIT_REPORT.md` 14절). 부대 세금 근사(26번, 시행령의 서민주택 범위와 12% 중과 계산의 법문 해석이 먼저). 주소와 뒤로 가기(3번)는 11-15 저녁에 처리했다. 단지 상세를 연 채 뒤로 가기로 상세만 닫는 동작은 넣지 않았다. 단지 페이지 개편, 내 거래 계획, 화면 파일 분할은 시안 승인이 먼저다.
 9. 11-15 밤 시나리오 점검에서 남긴 제안은 기획 문서 `plans/201-ux-followups-1116.md` 로 정리했다(2026-11-16). 운영자가 2026-11-16 네 항목 모두 권고안으로 승인했다. 1번(도우미 예산 질문 단추)과 3번(비교 담기 막대)은 구현 끝(efa24e3). 4번(가격 신호 탭 문구)은 승인된 대조표대로 구현 끝(6b36b1b). 2번(보고서 자금 요약과 순서)은 Claude Design 시안(https://claude.ai/design/p/208f6f86-e9c4-4d12-998a-af18a2aaf6fe)대로 구현 끝(041026e). 네 항목 모두 미배포다. 항목: 도우미의 예산 질문을 목록 화면으로 넘기기, 보고서의 부족 자금 안내, 비교 담기 막대 범위, 가격 신호 탭 말 다듬기(시안 먼저).
