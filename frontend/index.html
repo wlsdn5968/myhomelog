@@ -7099,11 +7099,6 @@ async function refreshQuota(){
       const _plan=document.getElementById('acctPlan'); if(_plan) _plan.textContent = window._isAdmin ? '관리자 · 무제한' : '무료 플랜 · 로그인됨';
       updateEcosHint(d.ecosRates); // ECOS 시중금리 힌트 + dc() 기본금리 (Sprint FFFFF)
       updateHfRates(d.hfRates); // HF 정책자금 공시 금리 — 표 자동 갱신 (Sprint HHHHH)
-      // 월 예산 90% 초과 시 선제적 경고 (아직 차단 전)
-      if(d.monthlyBudget && !d.monthlyBudget.exceeded && d.monthlyBudget.remainingPct <= 10){
-        const pill = document.getElementById('aiPill');
-        if(pill) pill.title += `\n⚠ 이번 달 예산을 ${100-d.monthlyBudget.remainingPct}% 썼어요. 다 쓰면 서비스가 제한돼요`;
-      }
     }
   }catch{}
 }

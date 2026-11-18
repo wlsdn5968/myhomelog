@@ -564,7 +564,6 @@ app.get('/api/health/apis', async (req, res) => {
 // 헬스체크 (사용 한도 잔량 포함 — 프론트 사용 한도 표시에 사용)
 // getUsage 가 Redis 연동으로 async 가 되었으므로 핸들러도 async
 // Phase 3.3 + 4.9: 검색·AI 일일 잔량 + 월 예산 잔여 동시 반환 — 헤더 pill / 구독 CTA 용
-const budgetService = require('./services/budgetService');
 
 const { getDataCounts, getFacilityQuality, readDataCounts, readFacilityQuality } = require('./services/healthCounts');
 
@@ -623,20 +622,8 @@ app.get('/api/health', optionalAuth, async (req, res) => {
     getUsage(req, 'chat'),
   ]);
 
-  // 월 예산 (로그인 사용자 한정)
-  let monthlyBudget = null;
-  if (req.user?.id) {
-    const b = await budgetService.checkBudget(req.user.id);
-    if (b) {
-      monthlyBudget = {
-        usedUsd: (b.usedX1000 / 1000 / 1000).toFixed(3),
-        limitUsd: (b.limitX1000 / 1000 / 1000).toFixed(2),
-        remainingPct: Math.max(0, Math.round((1 - b.usedX1000 / b.limitX1000) * 100)),
-        resetAt: b.resetAt.toISOString(),
-        exceeded: !b.allowed,
-      };
-    }
-  }
+  // BUDGET-OFF-1118 (plans/210): 월 예산 조회를 뺐다. 유료 호출이 없어 사용량을 적는 곳(budgetService.recordUsage)을 부르는 코드가 없고,
+  //   값이 쌓이지 않는데 로그인한 사람의 health 마다 요금제 확인과 user_budget 조회가 돌았다.
 
   // MOB-AUDIT-2026-05-03: STAB #42 — ai_ready·deploy version 추가 (운영자 키 만료·배포 추적)
   const _aiReady = false; // NO-PAID-AI-2026-11-13: 유료 AI 를 쓰지 않는다(키가 남아 있어도 읽지 않는다)
@@ -754,7 +741,6 @@ app.get('/api/health', optionalAuth, async (req, res) => {
     chat: _unlimited
       ? { used: chatUsed, limit: '무제한', remaining: '무제한', unlimited: true }
       : { used: chatUsed, limit: _chatLimit, remaining: Math.max(0, _chatLimit - chatUsed) },
-    monthlyBudget,
     chatIntents: _chatIntents, // KKKKKKK-20: 도우미 의도 분포 + 미매칭 원문(다음 인텐트 결정 재료)
     searchDegrade: _searchDegrade, // LLLLLLL: 검색 molit 타임아웃 강등 · 인기단지 stale 폴백 빈도
     // kakaoQuota: geocodeCacheService 좌표해결 경로의 부분 지표 (_trackKakaoCall 집계분).
