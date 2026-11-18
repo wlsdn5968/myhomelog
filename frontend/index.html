@@ -15619,7 +15619,9 @@ function calcComm(){
   // P1 (Phase 2 5번 보강): VAT 10% 별도 명시 + 9억 이상 "협의" 강조
   const vatAmount = Math.round(commMax * 0.1);
   const totalWithVat = commMax + vatAmount;
-  const isNegotiableTier = price >= 9 || (tier.label && /협의|9억|12억|15억/.test(tier.label));
+  // COMM-NEG-1118 (사용자 시나리오 점검): 라벨 '2억 ~ 9억'이 아래 정규식의 '9억'에 걸려 매매 5억에도 협의 구간 표시가 붙었다(전세 3억은 '1억 ~ 6억'이라 안 붙음).
+  //   위 주석의 의도(9억 이상 강조)대로 가격만 본다. 모든 구간이 상한이라는 안내는 아래 문장이 이미 모든 경우에 한다.
+  const isNegotiableTier = price >= 9;
   document.getElementById('commStrat').innerHTML=`
     <div style="font-size:12px;font-weight:700;margin-bottom:6px">${price}억 ${type} 기준 적용 요율: ${(tier.rate*100).toFixed(1)}%${isNegotiableTier?' <span style="color:var(--amb);font-size:12px">(협의 구간이에요. 상한 이하에서 자유롭게 협의할 수 있어요)</span>':''}</div>
     <div>법정 상한 복비: <b style="color:var(--acc)">${commMax.toLocaleString()}만원</b></div>

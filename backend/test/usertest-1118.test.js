@@ -103,3 +103,18 @@ test('CHAT-CLOSE-1118: 떠 있는 채팅 창 머리에 닫기 버튼이 있다',
   assert.ok(html.includes('.rp.rp-overlay .chat-x{display:inline-flex}'));
   assert.ok(/\.chat-x\{display:none;[^}]*width:44px;height:44px/.test(html), '누르는 자리 44px');
 });
+
+test('COMM-NEG-1118: 복비의 협의 구간 표시는 9억 이상에만 붙는다(라벨 "2억 ~ 9억"에 걸리지 않는다)', () => {
+  const html = readIndexHtml();
+  assert.ok(html.includes('const isNegotiableTier = price >= 9;'));
+  assert.ok(!html.includes("/협의|9억|12억|15억/.test(tier.label)"));
+});
+
+test('POLICY-1118: 실거주 유예 연장 카드는 법령 원문(시행령 제14조의2)으로 시행을 확인했다고 적는다', () => {
+  const j = require('../data/policy-changes.json');
+  const it = j.items.find((x) => x.title === '실거주 유예 신청 기한 1년 연장');
+  assert.ok(it);
+  assert.ok(!/확인하지 못했/.test(it.note));
+  assert.ok(it.src.some((u) => u.startsWith('https://www.law.go.kr/') && u.includes('제14조의2')));
+  assert.match(it.after, /2027\.12\.31/);
+});
