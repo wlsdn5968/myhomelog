@@ -19,6 +19,18 @@ const { itemArray, parseAmountManwon, isCanceled } = require('../utils/molitPars
 const MOLIT_DETAIL_URL = 'https://apis.data.go.kr/1613000/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev';
 // MOLIT API 성공 코드: '00'(구버전) 또는 '000'(신버전) — 다른 서비스에서도 재사용
 const MOLIT_OK_CODES = new Set(['00', '000']);
+// TX-FAIL-MARK-1118 (plans/204): 실패를 빈 배열로 기억하면 5분 안의 다음 조회가 예외 없이 [] 를 받고,
+//   getTransactionsByApt 의 _failedMonths 가 비어 "일부 달 누락" 표시가 사라진다(전월세 쪽 RENT-DEGRADED-2026-09-06 과 같은 문제).
+//   5분 동안 외부 API 를 다시 두드리지 않는 것은 그대로 두고, 실패였다는 사실을 캐시에 담는다.
+const TX_FAIL = Symbol.for('myhomelog.tx.fail');
+const _txFailMark = (reason) => ({ [TX_FAIL]: true, reason: reason || null });
+const _isTxFailMark = (v) => !!(v && typeof v === 'object' && !Array.isArray(v) && v[TX_FAIL]);
+function _throwTxFailMark(mark) {
+  const err = new Error(`국토부 API 호출 실패(5분 캐시된 실패): ${mark.reason || ''}`);
+  err.code = 'MOLIT_API_ERROR';
+  err.status = 502;
+  throw err;
+}
 
 // DB 사용 여부 — Supabase 설정되어 있고, MOLIT_DB_FIRST 가 'false' 가 아니면 DB 우선
 const DB_FIRST = (process.env.MOLIT_DB_FIRST !== 'false') && hasAdminEnv();
@@ -369,7 +381,10 @@ function isMolitKeyMissing() {
 async function getTransactions(lawdCd, dealYm) {
   const cacheKey = `tx:${lawdCd}:${dealYm}`;
   const cached = cache.getRows(cacheKey);
-  if (cached !== undefined) return cached || []; // null/[] 캐시도 hit 처리
+  if (cached !== undefined) {
+    if (_isTxFailMark(cached)) _throwTxFailMark(cached); // TX-FAIL-MARK-1118: 캐시된 실패도 실패로 던진다
+    return cached || []; // null/[] 캐시도 hit 처리
+  }
 
   // ── DB-first: ingest 된 region-month 은 DB 로만 응답 (latency ~20ms) ──
   if (DB_FIRST) {
@@ -430,13 +445,14 @@ async function getTransactions(lawdCd, dealYm) {
           source: 'molit', lawdCd, dealYm, pageNo,
           resultCode: header.resultCode, resultMsg: header.resultMsg,
         }, 'MOLIT 거래 조회 비정상 응답코드');
-        break; // 에러 응답이면 페이지 루프 중단
+        // TX-FAIL-MARK-1118: 종전엔 break 라 비정상 응답이 정상 0건으로 흘러 24시간 기억됐다. 던져서 아래 catch 가 5분 실패 표식을 심게 한다.
+        throw new Error(`MOLIT 거래 resultCode=${header.resultCode} msg=${header.resultMsg || ''}`);
       } else if (!header && typeof response.data === 'string') {
         logger.warn({
           source: 'molit', lawdCd, dealYm, pageNo,
           sample: String(response.data).slice(0, 200),
         }, 'MOLIT 거래 비-JSON 응답');
-        break;
+        throw new Error('MOLIT 거래 비-JSON 응답');
       }
 
       allItems.push(...pageItems);
@@ -490,8 +506,8 @@ async function getTransactions(lawdCd, dealYm) {
   } catch (err) {
     if (err.code === 'MOLIT_KEY_MISSING') throw err;
     // 에러 캐시 5분 — 일시적 5xx/timeout 시 매 요청마다 외부 API 두드리는 부하 방지
-    cache.setRows(cacheKey, [], 300);
-    const apiErr = new Error(`국토부 API 호출 실패: ${err.message}`);
+    cache.setRows(cacheKey, _txFailMark(err.message), 300); // TX-FAIL-MARK-1118: 빈 배열이 아니라 실패 표식
+    const apiErr = new Error(`국토부 API 호출 실패:${err.message}`);
     apiErr.code = 'MOLIT_API_ERROR';
     apiErr.status = 502;
     throw apiErr;
