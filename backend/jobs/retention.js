@@ -367,7 +367,17 @@ async function run() {
   const admin = adminClient();
   logger.info('retention job 시작');
 
-  const softDeleteResult = await runSoftDeleteExpiry(admin);
+  // RETENTION-ISOLATE-1118 (plans/208): 이 단계만 감싸지 않아서, 대상 조회가 한 번 실패하면 run() 이 통째로 던지고
+  //   같은 예약 작업에 얹힌 집계와 감시(인기 단지, 구별 순위, 용량 점검, 적재 감시)가 그날 하나도 돌지 않았다.
+  //   실패는 요약에 남기고 계속한다. 계정 삭제는 다음 날 같은 대상을 다시 집는다(상태가 pending 으로 남는다).
+  let softDeleteResult;
+  try {
+    softDeleteResult = await runSoftDeleteExpiry(admin);
+  } catch (e) {
+    softDeleteResult = { processed: 0, failed: 0, results: [], error: e && e.message ? e.message : String(e) };
+    logger.error({ err: softDeleteResult.error }, 'retention: 계정 삭제 단계 실패 (나머지 단계는 계속 진행)');
+    try { require('../sentry').captureException(e, { tags: { route: 'cron.retention', step: 'soft-delete' } }); } catch (_) { /* 알림 실패가 본 처리를 막지 않는다 */ }
+  }
   const searchHistResult = await runSearchHistoryRetention(admin);
   const chatResult = await runChatRetention(admin);
   const ingestRunsResult = await runIngestRunsRetention(admin);
@@ -390,9 +400,10 @@ async function run() {
     aiFeedbackTrimmed: anonCapResult.aiFeedbackTrimmed,
     dataErrorTrimmed: anonCapResult.dataErrorTrimmed,
     fakePushPruned: fakePushResult.fakePushPruned, // AUDIT4-1114: 가짜 푸시 구독 정리 수(0 이 정상)
-    ...(ingestRunsResult && ingestRunsResult.error ? { error: ingestRunsResult.error }
-      : (anonCapResult.error ? { error: anonCapResult.error }
-        : (fakePushResult.error ? { error: fakePushResult.error } : {}))),
+    ...(softDeleteResult && softDeleteResult.error ? { error: `soft-delete: ${softDeleteResult.error}` }
+      : (ingestRunsResult && ingestRunsResult.error ? { error: ingestRunsResult.error }
+        : (anonCapResult.error ? { error: anonCapResult.error }
+          : (fakePushResult.error ? { error: fakePushResult.error } : {})))),
   };
   logger.info(summary, 'retention job 완료');
   return summary;
