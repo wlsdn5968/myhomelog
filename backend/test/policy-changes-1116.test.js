@@ -28,7 +28,8 @@ test('자료: 다섯 분류와 네 가지 넘는 상태가 실제로 쓰이고, 
   assert.deepEqual([...new Set(data.items.map((x) => x.cat))].sort(), [...CATS].sort());
   for (const s of new Set(data.items.map((x) => x.status))) assert.ok(STATUSES.includes(s));
   const plans = data.items.filter((x) => x.status === '안');
-  assert.ok(plans.length >= 3);
+  // POLICY-1118b: 세컨드홈 특례와 1월 시행령 개정안이 법령 원문 확인으로 '시행'이 되어 정부안은 1장(세제개편안)이 남았다. 전엔 3장 이상이었다.
+  assert.ok(plans.length >= 1);
   for (const it of plans) assert.ok(it.note && /(정부안|발표 내용|입법예고)/.test(it.note), `${it.title}: 확정 전이라는 덧붙임이 있어야 한다`);
 });
 

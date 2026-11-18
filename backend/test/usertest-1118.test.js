@@ -118,3 +118,17 @@ test('POLICY-1118: 실거주 유예 연장 카드는 법령 원문(시행령 제
   assert.ok(it.src.some((u) => u.startsWith('https://www.law.go.kr/') && u.includes('제14조의2')));
   assert.match(it.after, /2027\.12\.31/);
 });
+
+test('POLICY-1118b: 세컨드홈 특례와 시행령 개정 카드는 법령 원문 링크와 함께 시행으로, 세제개편안은 현행 종부세법 대조를 적는다', () => {
+  const j = require('../data/policy-changes.json');
+  const find = (t) => j.items.find((x) => x.title === t);
+  const second = find('세컨드홈 세제 특례 확대(지방 건설투자 보강방안)');
+  assert.equal(second.status, '시행');
+  assert.ok(second.src.some((u) => u.includes('조세특례제한법시행령/제68조의2')));
+  const decree = find('월세 세액공제 확대, 지방 미분양 특례 기준 상향(시행령 개정)');
+  assert.equal(decree.status, '시행');
+  assert.ok(decree.src.some((u) => u.includes('소득세법시행령/제167조의3')));
+  const reform = find('2026년 세제개편안');
+  assert.equal(reform.status, '안');
+  assert.match(reform.note, /2026\.11\.18/);
+});
