@@ -208,6 +208,10 @@ async function run() {
       matchedAll: r.matched.map(_slim),
       error: r.error,
     })),
+    // POLICY-SRC-FAIL-1118 (plans/212): 못 읽은 소스 수. 오류가 났거나 항목이 0개인 소스를 센다.
+    //   종전에는 경고 로그만 남아서, 네 곳을 모두 못 읽은 날도 실행 기록은 성공이고 대기 수는 0 이었다.
+    sourcesTotal: results.length,
+    sourcesFailed: results.filter(r => r.error || r.total === 0).length,
     totalMatched,
     topAlert,
   };

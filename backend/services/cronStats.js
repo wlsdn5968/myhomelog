@@ -102,6 +102,8 @@ function _pick(summary) {
     'fakePushPruned',
     // CPU-BUDGET-1115: 어제(UTC) 하루 동안 함수가 쓴 CPU(ms). 30일 합계 한도(팀 4시간)를 날마다 따라가기 위한 값.
     'cpuYesterdayMs',
+    // POLICY-SRC-FAIL-1118 (plans/212): 정책 보도자료 소스 가운데 못 읽은 수와 전체 수. sourcesFailed 가 0 이 아니면 pendingReview 를 믿으면 안 된다.
+    'sourcesFailed', 'sourcesTotal',
     // CANCEL-SYNC-2026-10-30 (Plan 172): 적재 뒤 해제돼 원본에서 지운 거래 수(0 이 흔하다 — 필드 부재와 구별).
     'canceledRemoved'];
   const out = {};

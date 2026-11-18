@@ -649,7 +649,19 @@ async function handleRegulationsAutoFetch(req, res) {
     await require('../services/cronStats').recordCronRun('regulations-auto-fetch', {   // Sprint MMMMMMM-12
       ok: 1, processed: result.rssResults && result.rssResults.totalMatched,
       pendingReview: result.pendingReview, // POLICY-MISS-1116: 검증일 뒤에 쌓인 관련 보도자료 수(0 이 정상)
+      sourcesFailed: result.sourcesFailed, sourcesTotal: result.sourcesTotal, // POLICY-SRC-FAIL-1118: 못 읽은 소스 수(0 이 정상)
     }).catch(() => {});
+    // POLICY-SRC-FAIL-1118 (plans/212): 소스를 하나라도 못 읽었으면 날마다 알린다. 문장은 고정하고(한 문제로 묶임) 수는 extra 에 넣는다.
+    //   이 알림이 오는 동안에는 pendingReview 0 이 "새 발표 없음"을 뜻하지 않는다. 원문을 직접 확인해야 한다.
+    if (Number(result.sourcesFailed) > 0) {
+      try {
+        Sentry.captureMessage('정책 감지: 정부 보도자료 소스를 읽지 못함 — 소스 주소와 대체 경로 확인 필요', {
+          level: 'error', tags: { route: 'cron.regulations-auto-fetch', monitor: 'policy-sources' },
+          extra: { sourcesFailed: result.sourcesFailed, sourcesTotal: result.sourcesTotal,
+            failed: ((result.rssResults && result.rssResults.sources) || []).filter(s => s.error || s.total === 0).map(s => ({ name: s.name, error: s.error ? String(s.error).slice(0, 120) : 'items=0' })) },
+        });
+      } catch (_) { /* 알림 실패가 본 처리를 막지 않는다 */ }
+    }
     res.json({ ok: true, ...result });
   } catch (e) {
     logger.error({ err: e.message, stack: e.stack }, 'cron/regulations-auto-fetch 실패');

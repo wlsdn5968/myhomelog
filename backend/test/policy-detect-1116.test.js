@@ -120,3 +120,54 @@ test('POLICY-NOCUT-1118: 한 소스에서 8건이 걸려도 8건이 저장되고
   const counts = pendingCounts(items, [{ key: 'housing_loan_2025', source_effective_date: '2026-11-10' }]);
   assert.equal(counts.housing_loan_2025, 8);
 });
+
+// POLICY-SRC-FAIL-1118 (plans/212): 소스를 못 읽은 수가 run() 반환에 남는다. 가짜 axios 만 쓰고 정부 주소는 부르지 않는다.
+async function _runWithFakeAxios(get) {
+  const axiosPath = require.resolve('axios');
+  const afPath = require.resolve('../jobs/regulationsAutoFetch');
+  const saved = { axios: require.cache[axiosPath], af: require.cache[afPath] };
+  require.cache[axiosPath] = { id: axiosPath, filename: axiosPath, loaded: true, exports: { get } };
+  try {
+    delete require.cache[afPath];
+    const af = require('../jobs/regulationsAutoFetch');
+    return { out: await af.run(), total: af.RSS_SOURCES.length };
+  } finally {
+    if (saved.axios) require.cache[axiosPath] = saved.axios; else delete require.cache[axiosPath];
+    if (saved.af) require.cache[afPath] = saved.af; else delete require.cache[afPath];
+  }
+}
+
+test('POLICY-SRC-FAIL-1118: 모든 소스가 오류이거나 항목 0개이면 못 읽은 수가 전체와 같고, 항목이 있으면 0 이다', async () => {
+  const a = await _runWithFakeAxios(async () => { throw new Error('Request failed with status code 404'); });
+  assert.equal(a.out.sourcesTotal, a.total);
+  assert.equal(a.out.sourcesFailed, a.total);
+  assert.equal(a.out.totalMatched, 0);
+  const b = await _runWithFakeAxios(async () => ({ status: 200, data: '<rss><channel></channel></rss>' }));
+  assert.equal(b.out.sourcesFailed, b.total, '항목 0개도 못 읽은 것으로 센다');
+  const now = new Date().toUTCString();
+  const xml = `<rss><item><title>주택 정책 발표</title><link>https://x/1</link><pubDate>${now}</pubDate></item></rss>`;
+  const c = await _runWithFakeAxios(async () => ({ status: 200, data: xml }));
+  assert.equal(c.out.sourcesTotal, c.total);
+  assert.equal(c.out.sourcesFailed, 0);
+});
+
+test('POLICY-SRC-FAIL-1118: 실행 기록이 못 읽은 수를 통과시킨다', () => {
+  const { _pick } = require('../services/cronStats');
+  const p = _pick({ ok: 1, processed: 0, pendingReview: 0, sourcesFailed: 4, sourcesTotal: 4 });
+  assert.equal(p.sourcesFailed, 4);
+  assert.equal(p.sourcesTotal, 4);
+  const stats = fs.readFileSync(path.join(__dirname, '../services/cronStats.js'), 'utf8');
+  assert.ok(stats.includes("'canceledRemoved'];"));
+});
+
+test('POLICY-SRC-FAIL-1118: 배선. 처리기가 기록하고 알리되 소스 실패로 500 을 주지 않는다', () => {
+  const cron = fs.readFileSync(path.join(__dirname, '../routes/cron.js'), 'utf8');
+  assert.ok(cron.includes('sourcesFailed: result.sourcesFailed'));
+  assert.ok(cron.includes("monitor: 'policy-sources'"));
+  const check = fs.readFileSync(path.join(__dirname, '../jobs/regulationsAiCheck.js'), 'utf8');
+  assert.ok(check.includes('sourcesFailed: rssSummary.sourcesFailed'));
+  const s = cron.indexOf('async function handleRegulationsAutoFetch');
+  const e = cron.indexOf("router.post('/regulations-auto-fetch'");
+  assert.ok(s >= 0 && e > s);
+  assert.equal(cron.slice(s, e).split('res.status(500)').length - 1, 1, '기존 catch 의 한 번만 있어야 한다');
+});

@@ -250,6 +250,9 @@ async function runFullCheck() {
     })),
     timestamp: new Date().toISOString(),
     pendingReview: pending.total,
+    // POLICY-SRC-FAIL-1118 (plans/212): 못 읽은 소스 수(0 이 정상). 0 이 아니면 pendingReview 0 을 "새 발표 없음"으로 읽으면 안 된다.
+    sourcesTotal: rssSummary.sourcesTotal,
+    sourcesFailed: rssSummary.sourcesFailed,
     pendingByKey: pending.byKey,
   };
 }
