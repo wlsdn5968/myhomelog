@@ -14,7 +14,8 @@
 - 운영 배포본은 81e9f6d(11-18 00:03 KST 배포, 11-18 의 1회 사용). 화면 파일 나누기 2단계와 3단계(`/js/calc.js`)가 들어갔다. 그 앞 배포본 5ab0d91(11-17 23:14 KST)에는 정책 변화 화면(`?view=policy`, 카드 45장)과 서버 페이지 `/policy`, 화면 파일 나누기 0단계와 1단계, 개인정보처리방침 v1.3 이 들어 있다.
 - 배포 뒤 운영에서 확인한 것: `/js/swap-checklist.js`, `/js/policy-data.js`, `/js/policy.js` 가 200 과 `application/javascript`, `/policy` 200 과 카드 45장, 앱의 정책 변화 화면과 들어가는 길 3곳, 갈아타기와 체크리스트 화면, 대출 계산의 "최근 정책 변화" 상자, `/privacy.html` 의 v1.3, `/api/regulations` 의 5.10 과 5.12 새 문장, 데스크톱 네이버 지도의 서울 구별 첫 화면, 콘솔 오류 없음(브라우저 확장 오류만), Sentry 최근 1시간 새 문제 0건.
 - 81e9f6d 배포 뒤 운영에서 확인한 것(11-18 00:04~00:08 KST): `/js/calc.js` 가 200 과 `application/javascript; charset=utf-8` 이고 로컬 파일과 내용이 같다. health 의 deploy 81e9f6d. Sentry 최근 2시간 새 문제 0건. 스크립트 순서(calc, swap-checklist, policy-data, policy)와 함수 여덟 개. 상계주공7단지 상세의 세금 표(매매가 6.40억, 취득세 813만, 5,124만, 7,685만, 재산세 49만)와 평형 표기("46m²(전용 14평)"). 대출 계산(10억, 소득 8,000만, 현금 3억에서 LTV 한도 4.00억, DSR 한도 3.68억, 월 195만). 갈아타기 계산(15억 사기, 대출 3억 6,800만, 부족 10억 3,200만). 보고서 1회 생성 뒤 맨 위 자금 요약(7억, 자기 자본 3억에서 대출 한도 2.80억, 필요한 자기 자본 4.20억, 1.20억 부족). `?view=constructor` 는 지도로 뜬다(주소의 `?view=constructor` 는 그대로 남는다. `handleViewParam` 에 주소를 지우는 줄은 없다). 콘솔 오류는 브라우저 확장 것뿐.
-- 로컬은 운영보다 앞서 있다. 미배포 코드는 한 커밋이다: a5cf67f(나누기 4단계 첫 묶음, 자료 상수 `POLICY_TIMELINE`, `PERSONAS`, `FN_CHECKS` 를 `frontend/js/data.js` 로). 그 뒤는 문서 커밋이다. `npm run verify` 1,274개 통과. 메인 폴더는 81e9f6d 로 맞췄다(`.claude/launch.json` 로컬 수정은 그대로).
+- 2026-11-18 밤 배포에 들어간 것(운영자 지시 "병합하고 배포해"): a5cf67f(나누기 4단계 첫 묶음, 자료 상수 세 개를 `frontend/js/data.js` 로)와 improve 감사 계획 204~212 아홉 건(커밋 f0ee72a 부터 4bd723a 까지, 실행자 에이전트가 고치고 검토 승인한 것, `plans/README.md` 에 계획별 판정). `npm run verify` 1,293개 통과. 병합 전 복구 태그 `backup/pre-merge-1118-ui155`(55c56b4).
+- 정책 감지 소스 네 곳이 모두 죽어 있다(2026-11-18 확인). 정책브리핑 RSS 세 곳은 2026-07-01 제공 중단(공지 https://www.korea.kr/etc/noticeView.do?newsId=132038885 ), 금융위원회 RSS 는 503 "점검 중". 그래서 `pendingReview` 0 은 "새 발표 없음"이 아니다. 계획 212 가 health 의 `crons['regulations-auto-fetch'].sourcesFailed` 와 Sentry 알림(`monitor: policy-sources`)으로 드러낸다. 대체 소스는 운영자 결정 대기. 그때까지 정부 누리집을 직접 대조한다(마지막 전체 대조 2026-11-16).
 - 예약 작업 14개. 11-17 조회: apt-master-sync `fetched` 5028, `errors` 0, `throttleHits` 0. `regulations-auto-fetch` 의 `pendingReview` 0(11-18 00:01 다시 조회). 하루 CPU 합계 73.3초(11-17 23:15 조회), 같은 날짜 칸이 11-18 00:01 에 81.6초, 00:04 에 89.3초, 00:08 에 88.4초였다(값이 줄어든 이유는 확인 불가. 날짜 칸은 KST 11-18 에도 20261117 이었다).
 - DB: health 기준 413.9MB(한도 500MB 의 83%, 경보선 85%). 11-11 411MB, 11-15 413.7MB 에서 거의 늘지 않았다. 연결 active 2, idle 15. 200KB 넘는 안 쓰는 인덱스 없음.
 - 운영자 실행 대기 SQL 은 없다(11-16 에 세 건 모두 실행했고 조회로 확인했다).
@@ -187,11 +188,11 @@
 
 ## 6. 남은 일 (우선순위 순)
 
-1. 다음에 바로 할 첫 작업: 작업을 시작하면 health 의 `crons['regulations-auto-fetch'].pendingReview` 를 본다. 운영자가 "배포해"라고 하면 작업 폴더에서 `git push origin HEAD:master` 를 한 번 한다. 그 뒤 확인한다.
-   - `/api/health` 의 deploy 값이 새 커밋인지, Sentry 새 문제가 없는지
-   - `/js/data.js` 가 200 과 `application/javascript` 인지. 안 되면 바로 알리고 a5cf67f 되돌리기를 권한다
-   - 보고서 화면의 상황 예시 단추, 단지 상세 임장노트 탭의 점검 항목 8개, 대출 계산의 "최근 정책 변화" 상자
-   - 메인 폴더를 origin/master 로 맞춘다(`.claude/launch.json` 의 로컬 수정은 그대로 둔다)
+1. 다음에 바로 할 첫 작업: 작업을 시작하면 health 의 `crons['regulations-auto-fetch']` 에서 `pendingReview` 와 `sourcesFailed` 를 같이 본다. `sourcesFailed` 가 0 이 아니면 `pendingReview` 0 을 믿지 않는다. 11-18 밤 배포의 예약 작업 결과는 다음 날 아침에야 생긴다. 그때 볼 것:
+   - `crons['warm-rent']`(UTC 20:30, KST 05:30): `fetched` 가 계획 건수에 가깝고 `skipped` 가 작은지, `stopped` 가 없는지(`quota` 면 국토부 일일 한도. 계획 206 의 "뒤에 맡을 사람에게")
+   - `crons['regulations-auto-fetch']`(UTC 21:30, KST 06:30): `sourcesFailed`, `sourcesTotal` 칸이 생겼는지. Sentry 에 `monitor: policy-sources` 알림이 왔는지(소스가 죽어 있으니 오는 것이 정상)
+   - `crons['retention']`(UTC 18:00): `error` 칸이 없는지. 있고 `soft-delete:` 로 시작하면 계정 삭제 단계 실패다
+   - 단지 이름 없는 월별 조회(`/api/transactions?lawdCd=..&dealYm=..`)가 국토부 한도 날 오류를 줄 때 화면이 어떻게 보이는지(계획 204)
 2. 휴대폰 폭의 네이버 지도 확인. 운영자가 휴대폰으로 첫 화면을 열어 서울이 순위 시트 위에 다 보이는지 본다.
 3. 화면 파일 나누기 4단계(`plans/202-frontend-split.md`): 자료 상수 첫 묶음은 끝났다(a5cf67f, 미배포). 다음은 청약, 브리핑, 도우미 순서다. 첫 묶음이 운영에서 확인된 뒤 시작한다. `calcLTV` 는 금리와 규제 판정을 인자로 받게 바꾼 뒤에 옮긴다.
 4. 내집로그 CPU: 11-18 에 사용량 화면에서 하루 단위로 다시 쟀다(1절의 표). 내집로그는 11-13 부터 하루 3분 안팎이다. 다른 프로젝트(portai, wellness-platform, salon)는 보지 않는다. 운영자 지시(2026-11-18): "우리 프로젝트만 봐." 표의 다른 프로젝트 숫자는 그날 화면에 보인 값을 적어 둔 것일 뿐이고 할 일이 아니다. 다음 작업 때 health 의 `crons.retention.cpuYesterdayMs` 가 있는지 보고, 있으면 사용량 화면의 내집로그 같은 날 값과 견준다.
