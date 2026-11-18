@@ -48,6 +48,8 @@ const _inflight = new Map(); // cacheKey → Promise (같은 (구,월) 동시 �
 //   예열 크론(jobs/rentWarm.js)이 Redis 에 채운 (구,월) 을 어느 인스턴스든 읽는다. 로컬 미스일 때만 1회 조회(fail-open).
 //   TTL: 최근 2개월은 30h(매일 예열·계약 등록 지연 반영), 그 이전 달은 8일(등록은 계약 후 30일 안이라 두 달 지나면 거의 고정,
 //   예열이 지역을 7조로 나눠 주 1회 갱신). 로컬 캐시는 종전대로 24h.
+// RENT-NOCLONE-1118 (plans/205): 월별 목록은 cache.setRows/getRows 로 넣고 꺼낸다(깊은 복제 대신 행마다 얕은 복사, backend/cache.js 의 ROWS-NOCLONE-2026-11-14).
+//   행은 숫자와 문자열 필드만 가진 객체라 조건에 맞는다. 행에 객체나 배열 값을 더하면 이 방식을 쓸 수 없다.
 const RENT_MEM_TTL_S = 86400;
 // KST-SSOT-2026-09-06 (Plan 047): 종전엔 getFullYear()/getMonth() 로 **호스트 로컬 TZ** 를 썼다.
 //   프로덕션(Vercel, TZ=UTC)에서 매월 1일 KST 00~09시(=UTC 로 전달 15~24시)엔 이 시각이 아직
@@ -90,7 +92,7 @@ async function isRentCached(lawdCd, dealYm) {
   //   건너뛰어 오염이 스스로 복구되지 않는다(rentWarm.js 의 skipped 경로). 빈 결과는 "실제로 거래가
   //   0건인 달을 매일 다시 조회" 하는 비용을 치르더라도 캐시로 치지 않는다 — 비용은 하루 몇 콜
   //   수준이고(그런 달은 소수), 조용한 오염이 TTL(최대 8일) 동안 지속되는 것보다 낫다.
-  const local = cache.get(key);
+  const local = cache.getRows(key);
   if (Array.isArray(local) && local.length) return true;
   const shared = await rget(key);
   return Array.isArray(shared) && shared.length > 0;
@@ -111,7 +113,7 @@ function isMolitKeyMissing() {
  */
 async function getRentTransactions(lawdCd, dealYm) {
   const key = `rent:${lawdCd}:${dealYm}`;
-  const hit = cache.get(key);
+  const hit = cache.getRows(key);
   if (hit !== undefined) {
     if (_isFailMark(hit)) _throwFailMark(hit); // RENT-DEGRADED-2026-09-06: 캐시된 실패도 실패로 던진다
     return hit || [];
@@ -123,7 +125,7 @@ async function getRentTransactions(lawdCd, dealYm) {
     //   로 쓰기 측만 막아서, 배포 이전에 이미 Redis 에 굳은 오염된 [] 는 여기서 그대로 히트가 됐다.
     //   isRentCached(:89-92) 와 같은 판단을 따른다: "그 달 실제 거래 0건" 은 업스트림을 다시 불러도 된다
     //   (그런 달은 다시 [] 를 받을 뿐) — 그 비용이 최대 8일 조용한 오염보다 낫다.
-    if (Array.isArray(shared) && shared.length) { cache.set(key, shared, RENT_MEM_TTL_S); return shared; }
+    if (Array.isArray(shared) && shared.length) { cache.setRows(key, shared, RENT_MEM_TTL_S); return shared; }
     const rows = await _fetchRentMonth(lawdCd, dealYm);
     // RENT-DEGRADED-2026-09-06: 빈 결과는 공유 캐시에 쓰지 않는다. Step 1 이 열화를 예외로 올렸지만,
     //   "그 달에 실제로 거래가 0건" 인 경우와 구별이 안 되는 값을 전 인스턴스에 최대 8일 심는 것은
@@ -160,7 +162,7 @@ async function _fetchRentMonth(lawdCd, dealYm) {
   }
 
   const cacheKey = `rent:${lawdCd}:${dealYm}`;
-  const cached = cache.get(cacheKey);
+  const cached = cache.getRows(cacheKey);
   if (cached !== undefined) {
     if (_isFailMark(cached)) _throwFailMark(cached); // RENT-DEGRADED-2026-09-06: 캐시된 실패도 실패로 던진다
     return cached || [];
@@ -268,7 +270,7 @@ async function _fetchRentMonth(lawdCd, dealYm) {
       }, 'MOLIT 전월세 해제 거래 필터링');
     }
 
-    cache.set(cacheKey, result, 86400);
+    cache.setRows(cacheKey, result, 86400);
     // OBSERV-SUCCESS-2026-08-12 (Sprint KKKKKKK-13b): ecos/hf 와 동일 — 성공도 기록. 실패만 남기면
     //   429 가 해소돼도 health 에 옛 실패가 영구 잔류해 "아직도 429" 로 오판하게 만든다.
     //   실제 외부 fetch 성공 지점(캐시 히트 아님)에만 찍는다.
@@ -287,6 +289,7 @@ async function _fetchRentMonth(lawdCd, dealYm) {
     // 에러 캐시 5분 — 일시적 5xx/timeout 시 매 요청마다 외부 API 두드리는 부하 방지.
     // RENT-DEGRADED-2026-09-06: 빈 배열이 아니라 실패 표식을 심는다 — 위 캐시 히트 경로들이
     // 이 표식을 만나면 다시 던진다(백오프는 유지하되 실패를 실패로 남긴다).
+    // RENT-NOCLONE-1118: 실패 표식은 배열이 아니라서 setRows 로 넣지 않는다(getRows 는 이 값을 그대로 돌려준다).
     cache.set(cacheKey, _failMark(brief), 300);
     const apiErr = new Error(`국토부 전월세 API 호출 실패: ${err.message}`);
     apiErr.code = 'MOLIT_RENT_API_ERROR';

@@ -51,3 +51,15 @@ test('거래 서비스의 거래 목록 캐시는 모두 getRows/setRows 를 쓴
   for (const k of ['`txregion:', '`tx:', '`txapt:v2:', '`txseq:v2:']) assert.ok(s.includes(k), k);
   assert.equal((s.match(/cache\.getRows\((ck|cacheKey)\)/g) || []).length, 4, '네 키의 읽기가 모두 getRows 여야 한다');
 });
+
+test('전월세 서비스의 월별 목록 캐시도 getRows/setRows 를 쓴다(실패 표식만 cache.set)', () => {
+  const s = fs.readFileSync(path.join(__dirname, '../services/rentService.js'), 'utf8');
+  // 주석 줄(설명 글 속의 cache.set 언급)은 세지 않는다
+  const code = s.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
+  assert.equal((code.match(/cache\.get\(/g) || []).length, 0, 'cache.get 으로 읽으면 깊은 복제가 다시 생긴다');
+  assert.equal((code.match(/cache\.getRows\(/g) || []).length, 3);
+  assert.equal((code.match(/cache\.setRows\(/g) || []).length, 2);
+  const sets = code.split('\n').filter((l) => /cache\.set\(/.test(l));
+  assert.equal(sets.length, 1);
+  assert.ok(sets[0].includes('_failMark('), '남은 cache.set 은 실패 표식뿐이어야 한다');
+});
