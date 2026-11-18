@@ -7,8 +7,9 @@ const router = express.Router();
 const { analyzeApt, getLawdCdFromArea, compareBatch } = require('../services/analysisService');
 
 // GET /api/analysis
-// PARTIAL-FLAG-2026-11 (Plan 200): 완전한 응답만 CDN 에 30분. 빈 표본·일부 달 누락은 굳히지 않는다.
-const CC = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=3600';
+// PARTIAL-FLAG-2026-11 (Plan 200): 완전한 응답만 CDN 에 둔다. 빈 표본·일부 달 누락은 굳히지 않는다.
+// CDN-6H-1118 (plans/207): 30분에서 6시간으로. 실거래는 밤 적재 한 번, 전월세는 하루 한 번 예열로만 바뀐다.
+const CC = 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400';
 
 router.get('/', async (req, res) => {
   const { aptName, area, price, sigungu, umdNm } = req.query;

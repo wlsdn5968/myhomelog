@@ -844,7 +844,7 @@ router.get('/popular-region', async (req, res) => {
   const sido = String(req.query.sido || '');
   if (!Object.hasOwn(rp.SIDOS, sido)) return res.status(400).json({ error: '지원하지 않는 시도예요' });
   const ck = `popular-region:${sido}`;
-  const CC_OK = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400';
+  const CC_OK = 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400'; // CDN-6H-1118 (plans/207): 하루 한 번 만드는 집계라 6시간
   const hit = cache.get(ck);
   if (hit) { res.set('Cache-Control', CC_OK); return res.json(hit); }
   try {
@@ -885,7 +885,7 @@ router.get('/popular', async (req, res) => {
   //   스냅샷이 낡았을 때 slice(0, 음수) 로 후보 거의 전부가 지연 지오코딩 대상이 됐다. /apt 와 같은 1~30 으로 묶는다.
   const limit = Math.max(1, Math.min(parseInt(req.query.limit) || 12, 30));
   try {
-    const CDN_OK = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400';
+    const CDN_OK = 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400'; // CDN-6H-1118 (plans/207): 하루 한 번 만드는 집계라 6시간
     const CDN_FALLBACK = 'public, max-age=0, s-maxage=120, stale-while-revalidate=600';
     // ① 서버 인메모리 캐시 (Sprint HHHH)
     const pck = `popular:${limit}`;

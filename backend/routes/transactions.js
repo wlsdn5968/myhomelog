@@ -71,7 +71,8 @@ router.get('/', validateTransactionQuery, async (req, res) => {
     // NAMEFIX-2026-05-11: 사용자 응답 시점에 aptName 정규화 — MOLIT raw "(고층)/(중층)/(저층)" suffix 제거.
     //   DB raw 는 그대로 유지 (transactionService 내부 매칭 호환).
     const items = list.map(t => ({ ...t, aptName: normalizeAptName(t.aptName) }));
-    res.set('Cache-Control', (!_partial && items.length > 0) ? 'public, max-age=0, s-maxage=1800, stale-while-revalidate=3600' : 'no-store');
+    // CDN-6H-1118 (plans/207): 자료는 밤 적재(UTC 17시대) 한 번으로만 바뀐다. 서버 메모리 캐시(6시간)와 맞춰 CDN 도 6시간. 못 읽은 달이 있거나 빈 응답은 종전대로 no-store.
+    res.set('Cache-Control', (!_partial && items.length > 0) ? 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400' : 'no-store');
     res.json({ count: items.length, items, isMock: false });
   } catch (err) {
     handleMolitError(err, res);

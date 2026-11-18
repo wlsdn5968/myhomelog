@@ -67,7 +67,8 @@ async function runAnalysis(fixture) {
 
 test('PARTIAL-200: GET /api/analysis 캐시 헤더', async () => {
   const ok = { molitAvailable: true, samplePartial: false, jeonsePartial: false, txCount: 5 };
-  assert.match(await runAnalysis(ok), /s-maxage=1800/);
+  assert.match(await runAnalysis(ok), /s-maxage=21600/);
+  assert.match(await runAnalysis(ok), /stale-while-revalidate=86400/);
   assert.equal(await runAnalysis({ ...ok, samplePartial: true }), 'no-store');
   assert.equal(await runAnalysis({ ...ok, jeonsePartial: true }), 'no-store');
   assert.equal(await runAnalysis({ ...ok, txCount: 0 }), 'no-store');

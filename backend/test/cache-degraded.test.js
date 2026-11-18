@@ -278,12 +278,12 @@ function _popularHandler() {
   return _routeHandler(router, '/popular');
 }
 
-test("search GET /popular — 캐시 히트가 성공 품질(cc)이면 기존 30분 캐시를 재사용하고 응답 모양이 그대로다", async () => {
+test("search GET /popular — 캐시 히트가 성공 품질(cc)이면 기존 6시간 캐시를 재사용하고 응답 모양이 그대로다", async () => {
   const cache = require('../cache');
   const handler = _popularHandler();
   const key = 'popular:27';
   const payload = { results: [{ aptName: 'CACHETEST-OK' }], window: { days: 60 } };
-  const CDN_OK = 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400';
+  const CDN_OK = 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400';
   cache.set(key, { payload, cc: CDN_OK }, 60);
   try {
     const res = _mockRes();
@@ -354,7 +354,7 @@ test('search GET /popular — 라이브 집계가 usedFallback:true 면 짧은 �
   });
 });
 
-test('search GET /popular — 라이브 집계가 정상(usedFallback:false)이면 기존 30분 캐시가 붙는다', async () => {
+test('search GET /popular — 라이브 집계가 정상(usedFallback:false)이면 기존 6시간 캐시가 붙는다', async () => {
   const cache = require('../cache');
   await _withPopularServiceStub({
     snapshot: null,
@@ -363,7 +363,7 @@ test('search GET /popular — 라이브 집계가 정상(usedFallback:false)이�
     const res = _mockRes();
     try {
       await handler({ query: { limit: '20' } }, res, () => {});
-      assert.equal(res.headers['Cache-Control'], 'public, max-age=0, s-maxage=1800, stale-while-revalidate=86400');
+      assert.equal(res.headers['Cache-Control'], 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400');
       const stored = cache.get('popular:20');
       assert.ok(stored, '결과가 캐시에 저장되지 않았다');
       assert.equal(stored.cc, res.headers['Cache-Control']);
