@@ -507,7 +507,7 @@ async function getTransactions(lawdCd, dealYm) {
     if (err.code === 'MOLIT_KEY_MISSING') throw err;
     // 에러 캐시 5분 — 일시적 5xx/timeout 시 매 요청마다 외부 API 두드리는 부하 방지
     cache.setRows(cacheKey, _txFailMark(err.message), 300); // TX-FAIL-MARK-1118: 빈 배열이 아니라 실패 표식
-    const apiErr = new Error(`국토부 API 호출 실패:${err.message}`);
+    const apiErr = new Error(`국토부 API 호출 실패: ${err.message}`);
     apiErr.code = 'MOLIT_API_ERROR';
     apiErr.status = 502;
     throw apiErr;
