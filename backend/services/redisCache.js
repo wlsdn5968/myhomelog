@@ -42,4 +42,20 @@ async function rset(key, value, ttlSec) {
   }
 }
 
-module.exports = { rget, rset };
+/**
+ * RENT-FRESH-1118 (plans/206): 키의 남은 수명(초). 값을 내려받지 않는다.
+ * @returns 남은 초(0 이상) | -2(키 없음) | -1(수명 없는 키) | undefined(Redis 미설정 또는 오류)
+ */
+async function rttl(key) {
+  try {
+    const r = getRedis();
+    if (!r) return undefined;
+    const v = Number(await r.ttl(PREFIX + key));
+    return Number.isFinite(v) ? v : undefined;
+  } catch (e) {
+    logger.warn({ err: e.message, key }, 'redisCache ttl 실패 (무시)');
+    return undefined;
+  }
+}
+
+module.exports = { rget, rset, rttl };

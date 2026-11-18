@@ -7,7 +7,8 @@
  *   하루 한 조(주 1회) — Redis TTL(최근 30h · 이전 8일)과 맞물린다. 하루 ≈ 124×2 + 18×4 ≈ 320콜 × 350ms ≈ 2분.
  * [한도] 국토부 일 트래픽 한도는 운영자 콘솔에서만 보인다 — 일 한도 초과(code=22)를 만나면 즉시 멈추고 사유를 남긴다.
  *   시간 예산 240s(함수 상한 300s 안). 초당 한도(code=23)는 rentService 의 페이서·1회 재시도가 맡고, 그래도 실패면 그 달만 건너뛴다.
- * [멱등] 이미 캐시된 (구,월)은 건너뛴다 → Hobby cron 이 두 번 불려도 부작용 없음(같은 날 재실행은 대부분 skip).
+ * [멱등] 최근 12시간 안에 받은 (구,월)은 건너뛴다(RENT-FRESH-1118, plans/206) → Hobby cron 이 같은 날 두 번 불려도 대부분 skip.
+ *   값이 남아 있어도 그보다 오래됐으면 다시 받는다. 그래야 다음 방문 전에 수명이 끝나 캐시가 비는 일이 없다.
  */
 const logger = require('../logger');
 
@@ -44,8 +45,8 @@ async function run({ codes, now = new Date(), dayIdx, budgetMs = 240000, concurr
       if (Date.now() - t0 >= budgetMs) { out.stopped = 'budget'; break; }
       const [code, ym] = tasks[idx++];
       try {
-        if (await rent.isRentCached(code, ym)) { out.skipped++; continue; }
-        await rent.getRentTransactions(code, ym);
+        if (await rent.isRentFresh(code, ym, now)) { out.skipped++; continue; } // RENT-FRESH-1118: 오늘 받은 값만 건너뛴다
+        await rent.refreshRentMonth(code, ym);
         out.fetched++;
       } catch (e) {
         out.failed++;

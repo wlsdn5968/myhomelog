@@ -12,7 +12,7 @@
  */
 const dgk = require('./dataGoKrClient'); // RELAY-2026-08-08 (Sprint BBBBBBB): 직접+Edge 릴레이
 const cache = require('../cache');
-const { rget, rset } = require('./redisCache'); // RENT-REDIS-2026-09-05: 인스턴스 공유 2차 캐시(예열 크론이 채운다)
+const { rget, rset, rttl } = require('./redisCache'); // RENT-REDIS-2026-09-05: 인스턴스 공유 2차 캐시(예열 크론이 채운다)
 const logger = require('../logger');
 const { itemArray, parseAmountManwon, isCanceled } = require('../utils/molitParse');
 
@@ -96,6 +96,31 @@ async function isRentCached(lawdCd, dealYm) {
   if (Array.isArray(local) && local.length) return true;
   const shared = await rget(key);
   return Array.isArray(shared) && shared.length > 0;
+}
+
+// RENT-FRESH-1118 (plans/206): 예열 작업 전용 판정. "값이 있다"가 아니라 "최근 12시간 안에 받았다"일 때만 참이다.
+//   [왜] 값이 있으면 건너뛰던 때에는 수명이 다 돼 가는 값도 건너뛰어서, 다음 방문까지 캐시가 비어 있었다
+//     (그 이전 달: 14일 가운데 엿새. 최근 두 달: 계산상 이틀 가운데 18시간). 빈 동안은 사용자 요청이 국토부를 바로 불렀다.
+//   [어떻게] Redis 의 남은 수명만 묻는다(목록을 내려받지 않는다). 남은 수명이 "전체 수명 - 12시간"보다 길면 방금 받은 것이다.
+//     Redis 를 쓸 수 없으면 예전 판정(isRentCached)으로 돌아간다.
+const RENT_FRESH_WINDOW_S = 12 * 3600;
+async function isRentFresh(lawdCd, dealYm, now = new Date()) {
+  const remain = await rttl(`rent:${lawdCd}:${dealYm}`);
+  if (remain === undefined) return isRentCached(lawdCd, dealYm);
+  if (remain < 0) return false;
+  return remain > rentTtlSec(dealYm, now) - RENT_FRESH_WINDOW_S;
+}
+
+// RENT-FRESH-1118: 예열 작업 전용. 로컬과 Redis 에 값이 남아 있어도 국토부에서 다시 받아 둘 다 고쳐 쓴다.
+//   5분 실패 표식이 있으면 그대로 던진다(실패 직후 다시 두드리지 않는다). 빈 결과는 종전대로 Redis 에 쓰지 않는다.
+async function refreshRentMonth(lawdCd, dealYm) {
+  const key = `rent:${lawdCd}:${dealYm}`;
+  const local = cache.getRows(key);
+  if (_isFailMark(local)) _throwFailMark(local);
+  cache.del(key);
+  const rows = await _fetchRentMonth(lawdCd, dealYm);
+  if (rows.length) await rset(key, rows, rentTtlSec(dealYm));
+  return rows;
 }
 // 국토부 JSON 은 숫자처럼 보이는 값을 숫자로 내려준다 — 단지명 '101' 이 number 로 와서 .trim() 이 TypeError 를 내고
 // 그 달 전체가 유실됐다(영등포 202608·202606 실측). 항상 문자열로 정규화한다.
@@ -362,4 +387,4 @@ async function getJeonseByApt(lawdCd, aptName) {
   return sorted;
 }
 
-module.exports = { getRentTransactions, getJeonseByApt, monthsWindow, rentTtlSec, isRentCached, _recordRentLive, _rentLiveLast };
+module.exports = { getRentTransactions, getJeonseByApt, monthsWindow, rentTtlSec, isRentCached, isRentFresh, refreshRentMonth, _recordRentLive, _rentLiveLast };

@@ -57,7 +57,7 @@ test('전월세 서비스의 월별 목록 캐시도 getRows/setRows 를 쓴다(
   // 주석 줄(설명 글 속의 cache.set 언급)은 세지 않는다
   const code = s.split(/\r?\n/).filter((l) => !/^\s*\/\//.test(l)).join('\n');
   assert.equal((code.match(/cache\.get\(/g) || []).length, 0, 'cache.get 으로 읽으면 깊은 복제가 다시 생긴다');
-  assert.equal((code.match(/cache\.getRows\(/g) || []).length, 3);
+  assert.equal((code.match(/cache\.getRows\(/g) || []).length, 4);
   assert.equal((code.match(/cache\.setRows\(/g) || []).length, 2);
   const sets = code.split('\n').filter((l) => /cache\.set\(/.test(l));
   assert.equal(sets.length, 1);

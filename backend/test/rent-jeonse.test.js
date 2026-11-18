@@ -152,7 +152,7 @@ test('전세 실거래 조회 — 로컬 미스면 Redis 공유 캐시를 먼저
 
 
 // ── 전월세 예열 크론 (2026-09-05) ────────────────────────────────────────────────────
-test('전월세 예열 cron — 최근 2개월은 전 지역, 이전 4개월은 7조 중 오늘 조만, 캐시된 달은 건너뛰고, 일 한도(code=22)를 만나면 멈춘다', async () => {
+test('전월세 예열 cron — 최근 2개월은 전 지역, 이전 4개월은 7조 중 오늘 조만, 오늘 받은 달은 건너뛰고, 일 한도(code=22)를 만나면 멈춘다', async () => {
   const rentPath = require.resolve('../services/rentService');
   const jobPath = require.resolve('../jobs/rentWarm');
   const saved = { rent: require.cache[rentPath], job: require.cache[jobPath] };
@@ -161,8 +161,8 @@ test('전월세 예열 cron — 최근 2개월은 전 지역, 이전 4개월은 
   let quotaAt = null;
   const stub = {
     monthsWindow: () => ['202609', '202608', '202607', '202606', '202605', '202604'],
-    isRentCached: async (c, ym) => cached.has(c + ':' + ym),
-    getRentTransactions: async (c, ym) => { calls.push(c + ':' + ym); if (quotaAt && c + ':' + ym === quotaAt) { const e = new Error('국토부 전월세 API 호출 실패: Request failed with status code 429'); e.reason = 'HTTP 429 LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR code=22'; throw e; } return []; },
+    isRentFresh: async (c, ym) => cached.has(c + ':' + ym),
+    refreshRentMonth: async (c, ym) => { calls.push(c + ':' + ym); if (quotaAt && c + ':' + ym === quotaAt) { const e = new Error('국토부 전월세 API 호출 실패: Request failed with status code 429'); e.reason = 'HTTP 429 LIMITED_NUMBER_OF_SERVICE_REQUESTS_EXCEEDS_ERROR code=22'; throw e; } return []; },
   };
   require.cache[rentPath] = { id: rentPath, filename: rentPath, loaded: true, exports: stub };
   try {
@@ -202,6 +202,96 @@ test('전월세 예열 cron — 최근 2개월은 전 지역, 이전 4개월은 
   assert.equal(wr.schedule, '30 20 * * *', '스케줄이 하루 1회(20:30 UTC = 05:30 KST)가 아니다');
   const rentSrc = require('node:fs').readFileSync(require.resolve('../services/rentService'), 'utf8');
   assert.match(rentSrc, /apiErr\.reason = brief;/, '일 한도 판별용 reason 이 오류에 실리지 않는다(예열이 한도를 인식 못 한다)');
+});
+
+
+
+// ── 예열 판정은 남은 수명만 묻는다 (2026-11-18, RENT-FRESH-1118, plans/206) ──────────────────
+test('전월세 예열 판정 — 최근 12시간 안에 받은 값만 참이고, 목록을 내려받지 않으며, Redis 가 없으면 예전 판정으로 돌아간다', async () => {
+  const rcPath = require.resolve('../services/redisCache');
+  const rentPath = require.resolve('../services/rentService');
+  const saved = { rc: require.cache[rcPath], rent: require.cache[rentPath] };
+  let remain = -2;
+  let rgets = 0;
+  const rcStub = { rget: async () => { rgets++; return undefined; }, rset: async () => {}, rttl: async () => remain };
+  require.cache[rcPath] = { id: rcPath, filename: rcPath, loaded: true, exports: rcStub };
+  const cache = require('../cache');
+  const lawd = '99994';
+  try {
+    delete require.cache[rentPath];
+    const rent = require('../services/rentService');
+    const recent = rent.monthsWindow()[0];
+    const older = rent.monthsWindow()[4];
+    assert.equal(rent.rentTtlSec(recent), 108000);
+    assert.equal(rent.rentTtlSec(older), 691200);
+    remain = 107000; assert.equal(await rent.isRentFresh(lawd, recent), true, '방금 받은 최근 달이 참이 아니다');
+    remain = 21600; assert.equal(await rent.isRentFresh(lawd, recent), false, '어제 받은 최근 달이 거짓이 아니다');
+    remain = 86400; assert.equal(await rent.isRentFresh(lawd, older), false, '지난주에 받은 이전 달이 거짓이 아니다');
+    remain = 690000; assert.equal(await rent.isRentFresh(lawd, older), true, '방금 받은 이전 달이 참이 아니다');
+    remain = -2; assert.equal(await rent.isRentFresh(lawd, recent), false, '키가 없는데 참이다');
+    assert.equal(rgets, 0, '판정이 Redis 에서 목록을 내려받았다');
+    // Redis 를 쓸 수 없으면(rttl 이 undefined) 예전 판정: 로컬에 행이 있으면 참, 없으면 거짓
+    remain = undefined;
+    assert.equal(await rent.isRentFresh(lawd, recent), false, '로컬에도 없는데 참이다');
+    cache.setRows(`rent:${lawd}:${recent}`, [{ aptName: '가' }], 60);
+    assert.equal(await rent.isRentFresh(lawd, recent), true, '로컬에 행이 있는데 예전 판정으로 돌아가지 않았다');
+  } finally {
+    for (const k of cache.keys()) if (k.startsWith('rent:99994:')) cache.del(k);
+    if (saved.rc) require.cache[rcPath] = saved.rc; else delete require.cache[rcPath];
+    if (saved.rent) require.cache[rentPath] = saved.rent; else delete require.cache[rentPath];
+  }
+});
+
+test('전월세 예열 받기 — 값이 남아 있어도 국토부를 다시 부르고, 실패 표식이 있으면 다시 두드리지 않는다', async () => {
+  const dgkPath = require.resolve('../services/dataGoKrClient');
+  const rcPath = require.resolve('../services/redisCache');
+  const rentPath = require.resolve('../services/rentService');
+  const saved = { dgk: require.cache[dgkPath], rc: require.cache[rcPath], rent: require.cache[rentPath], key: process.env.MOLIT_API_KEY, gap: process.env.RENT_MIN_GAP_MS };
+  let dgkCalls = 0;
+  let code = '000';
+  const dgkStub = {
+    get: async () => {
+      dgkCalls++;
+      if (code !== '000') return { status: 200, data: { response: { header: { resultCode: code, resultMsg: '일 트래픽 제한 초과' }, body: {} } } };
+      return { status: 200, data: { response: { header: { resultCode: '000', resultMsg: 'OK' }, body: { totalCount: 1, items: { item: [{ aptNm: '새단지', umdNm: '동', excluUseAr: '84', floor: '1', dealYear: '2026', dealMonth: '1', dealDay: '1', deposit: '10,000', monthlyRent: '0' }] } } } } };
+    },
+    _isBlockedPattern: () => false, _buildFullUrl: () => '', ALLOWED_HOSTS: new Set(),
+  };
+  const rsets = [];
+  const rcStub = { rget: async () => undefined, rset: async (k, v, ttl) => { rsets.push([k, Array.isArray(v) ? v.length : v, ttl]); }, rttl: async () => undefined };
+  process.env.MOLIT_API_KEY = 'xxxxxxxx-test-molit-key';
+  process.env.RENT_MIN_GAP_MS = '0';
+  require.cache[dgkPath] = { id: dgkPath, filename: dgkPath, loaded: true, exports: dgkStub };
+  require.cache[rcPath] = { id: rcPath, filename: rcPath, loaded: true, exports: rcStub };
+  const cache = require('../cache');
+  try {
+    delete require.cache[rentPath];
+    const rent = require('../services/rentService');
+    const ym = rent.monthsWindow()[0];
+    // ① 로컬에 옛 행이 남아 있어도 국토부를 1번 부르고, 새 행을 돌려주고, Redis 에 그 키와 수명으로 1번 쓴다
+    cache.setRows(`rent:99995:${ym}`, [{ aptName: '옛단지' }], 60);
+    const rows = await rent.refreshRentMonth('99995', ym);
+    assert.equal(dgkCalls, 1, '값이 남아 있는데 국토부를 부르지 않았다');
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].aptName, '새단지', '옛 행이 돌아왔다');
+    assert.deepEqual(rsets, [[`rent:99995:${ym}`, 1, rent.rentTtlSec(ym)]], 'Redis 쓰기가 키나 수명이 다르다');
+    // ② 비정상 응답코드는 거절되고 reason 이 있다. 곧바로 다시 부르면 국토부를 부르지 않고 거절된다(5분 실패 표식)
+    code = '22'; dgkCalls = 0;
+    let err1;
+    await assert.rejects(rent.refreshRentMonth('99996', ym), (e) => { err1 = e; return true; });
+    assert.ok(err1.reason, '오류에 reason 이 비어 있다');
+    const after = dgkCalls;
+    assert.ok(after >= 1, '국토부를 부르지 않았다');
+    await assert.rejects(rent.refreshRentMonth('99996', ym), /MOLIT/);
+    assert.equal(dgkCalls, after, '실패 표식이 있는데 국토부를 다시 불렀다');
+  } finally {
+    for (const k of cache.keys()) if (k.startsWith('rent:99995:') || k.startsWith('rent:99996:')) cache.del(k);
+    if (saved.dgk) require.cache[dgkPath] = saved.dgk; else delete require.cache[dgkPath];
+    if (saved.rc) require.cache[rcPath] = saved.rc; else delete require.cache[rcPath];
+    if (saved.rent) require.cache[rentPath] = saved.rent; else delete require.cache[rentPath];
+    if (saved.key === undefined) delete process.env.MOLIT_API_KEY; else process.env.MOLIT_API_KEY = saved.key;
+    if (saved.gap === undefined) delete process.env.RENT_MIN_GAP_MS; else process.env.RENT_MIN_GAP_MS = saved.gap;
+  }
 });
 
 
