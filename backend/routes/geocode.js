@@ -279,7 +279,9 @@ router.post('/', async (req, res) => {
   const sgg = String(sigungu || '').trim();
   const umd = String(umdNm || '').trim();
   // SEC-1030-GEOCACHE: area 는 DB 캐시 조회에 안 쓰이므로 길이 60 으로 잘라 키 폭주를 막는다
-  const ck = `geo:${aptName}|${sgg}|${umd}|${String(area||'').slice(0, 60)}`.trim();
+  // GEO-KEY-1118 (plans/211): 키에 쓰는 글자는 길이를 묶는다(단지 이름 100자, 시군구와 동 40자, 면적 60자). 긴 글자로 큰 키를 만들지 못하게 한다.
+  //   카카오 검색과 DB 조회에는 종전 값을 그대로 넘긴다.
+  const ck = `geo:${String(aptName).slice(0, 100)}|${sgg.slice(0, 40)}|${umd.slice(0, 40)}|${String(area||'').slice(0, 60)}`.trim();
   const hit = cache.get(ck);
   if (hit) return res.json({ ...hit, fromCache: true });
   // CACHE-FIRST-2026-08-19 (Sprint NNNNNNN-3, 라이브 실측 확정 결함): 반포자이 요청이 캐시의
@@ -328,7 +330,7 @@ router.post('/batch', async (req, res) => {
     const sgg = String(item.sigungu || '').trim();
     const umd = String(item.umdNm || '').trim();
     const id = item.id || `${item.aptName}|${sgg}|${umd}`;
-    const ck = `geo:${item.aptName}|${sgg}|${umd}|${String(item.area||'').slice(0, 60)}`.trim();
+    const ck = `geo:${String(item.aptName).slice(0, 100)}|${sgg.slice(0, 40)}|${umd.slice(0, 40)}|${String(item.area||'').slice(0, 60)}`.trim(); // GEO-KEY-1118
     const hit = cache.get(ck);
     if (hit) return { id, ...hit };
     // CACHE-FIRST-2026-08-19: 단건 라우트와 동일 — 검증된 DB 캐시 선조회(비용 0). 주석은 위 참조.

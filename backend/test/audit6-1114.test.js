@@ -178,3 +178,31 @@ test('공유 캐시: 가득 차면 자유 입력 키부터 지우고 다른 기�
     if (saved) require.cache[cachePath] = saved; else delete require.cache[cachePath];
   }
 });
+
+test('GEO-1118: geo: 좌표 조회 키가 캐시를 채워도 다른 기능의 거래 키는 남는다', () => {
+  const cachePath = require.resolve('../cache');
+  const saved = require.cache[cachePath];
+  const savedEnv = process.env.CACHE_MAX_KEYS;
+  process.env.CACHE_MAX_KEYS = '20';
+  delete require.cache[cachePath];
+  try {
+    const c = require('../cache');
+    for (let i = 0; i < 8; i++) c.set(`tx:11350:2026${String(i + 1).padStart(2, '0')}`, [i], 600); // 먼저 넣음 = 가장 오래됨
+    for (let i = 0; i < 60; i++) assert.notEqual(c.set(`geo:단지${i}|노원구|상계동|`, { i }, 600), false);
+    for (let i = 0; i < 8; i++) assert.notEqual(c.get(`tx:11350:2026${String(i + 1).padStart(2, '0')}`), undefined, `거래 키 ${i} 가 밀려났다`);
+    assert.ok(c.keys().length <= 20);
+    assert.deepEqual(c._pickEvictions(['geo:x|a|b|', 'kapt:1', 'tx:1', 'a', 'b', 'c', 'd', 'e', 'f', 'g']), ['geo:x|a|b|']);
+  } finally {
+    if (savedEnv === undefined) delete process.env.CACHE_MAX_KEYS; else process.env.CACHE_MAX_KEYS = savedEnv;
+    if (saved) require.cache[cachePath] = saved; else delete require.cache[cachePath];
+  }
+});
+
+test('GEO-1118: 좌표 조회 경로가 캐시 키에 쓰는 글자 길이를 묶는다', () => {
+  const lines = rd('routes/geocode.js').split(/\r?\n/).filter((l) => l.includes('`geo:${'));
+  assert.equal(lines.length, 2, 'geo: 키를 만드는 줄은 단건과 묶음 두 곳이다');
+  for (const l of lines) {
+    assert.ok(l.includes('.slice(0, 100)'), `단지 이름 길이 상한이 없다: ${l.trim()}`);
+    assert.ok(l.includes('.slice(0, 40)'), `시군구, 동 길이 상한이 없다: ${l.trim()}`);
+  }
+});

@@ -20,7 +20,9 @@ const cache = new NodeCache({
 //   이제 자유 입력으로 만든 키부터 지운다(먼저 만들어진 순 — node-cache 의 keys() 는 생성 순서다). 모자랄 때만 나머지에서 먼저 만들어진 것을 지운다.
 //   새 자유 입력 키 접두어를 만들면 여기에 더할 것. kkkw:cnt: 는 좌표 격자 키라 자유 입력이 아니다.
 //   geo-db: 는 단지 이름이 들어가는 좌표 조회 키다(DB 에도 있어 다시 읽으면 된다). 일일 계수 키(dl:)는 넣지 않는다(지우면 한도가 풀린다).
-const FREE_TEXT_PREFIXES = ['searchapt:', 'txapt:', 'analysis:', 'kkkw:', 'geo-db:'];
+//   GEO-KEY-1118 (plans/211): geo: 는 좌표 조회 경로(routes/geocode.js)가 요청 본문의 단지 이름, 시군구, 동, 면적 글자로 만드는 키다.
+//     목록에 빠져 있어 이 키가 캐시를 채우면 다른 기능의 항목이 먼저 지워졌다. 값은 DB 좌표 표에서 다시 읽을 수 있다.
+const FREE_TEXT_PREFIXES = ['searchapt:', 'txapt:', 'analysis:', 'kkkw:', 'geo-db:', 'geo:'];
 const _isFreeTextKey = (k) => typeof k === 'string' && !k.startsWith('kkkw:cnt:') && FREE_TEXT_PREFIXES.some((p) => k.startsWith(p));
 function _pickEvictions(keys) {
   const need = Math.max(1, Math.floor(keys.length / 10));
