@@ -4322,7 +4322,7 @@ html[data-theme="dark"] #view-news{
         </div>
         <div id="umHistList" class="sm-hint" style="margin-top:4px;max-height:160px;overflow-y:auto">불러오는 중이에요</div>
       </div>
-      <a href="/billing" class="sm-save" onclick="try{window.va&&window.va('event',{name:'billing_click',data:{from:'settings'}})}catch(_){}" style="text-decoration:none;text-align:center;display:block;background:var(--acc-bg);color:var(--acc-ink);margin-bottom:6px">결제/구독 관리</a>
+      <!-- BILLING-LINK-1118 (2차 감사 발견 5): 무료 서비스라 결제가 꺼져 있는데(routes/billing.js 410) "결제/구독 관리" 링크가 테스트 결제 페이지로 보냈다. 링크를 뺐다. /billing 페이지 자체는 남겨 두었다(결제 재개 결정 전). -->
       <div class="sm-row" style="margin-top:8px;border-top:1px solid var(--bd);padding-top:8px">
         <div class="sm-lbl">내 개인정보 권리 (개인정보 보호법 제35·36조, GDPR 제15·17·22조)</div>
         <div id="umDeletionBanner" style="display:none;margin:6px 0;padding:8px;background:#fff3cd;border:1px solid #ffc107;border-radius:var(--radius-sm);font-size:12px;color:#856404"></div>
@@ -4884,7 +4884,8 @@ async function _loadLandingRecords(){
       const hiN = Number(d.highCount), loN = Number(d.lowCount), cmp = Number(d.comparedCount);
       if (Number.isFinite(hiN) && Number.isFinite(loN) && Number.isFinite(cmp) && cmp > 0) {
         _lvRec = { high: Array.isArray(d.high) ? d.high : [], low: Array.isArray(d.low) ? d.low : [] };
-        const put = (id, n) => { const e = document.getElementById(id); if (e) e.textContent = Number(n).toLocaleString(); };
+        // LANDING-UNIT-1118 (2차 감사 발견 7): "최고가 160 · 최저가 65"가 가격처럼 읽혔다. 건수라는 것을 숫자에 붙인다(못 받으면 — 그대로).
+        const put = (id, n) => { const e = document.getElementById(id); if (e) e.textContent = Number(n).toLocaleString() + '건'; };
         put('lv-recHigh', hiN); put('lv-recLow', loN); _lvRecN = { high: hiN, low: loN };
         const sub = document.getElementById('lv-recSub');
         if (sub) {
@@ -12925,7 +12926,8 @@ function dc(fromBtn){
   document.getElementById('co').style.display='block';
   document.getElementById('co_l').textContent=ltv===0?'불가':lL.toFixed(2)+'억';
   document.getElementById('co_d').textContent=dsrState==='none'?'소득 입력 필요':dsrState==='zero'?'0원 (기존 부채로 여력 없음)':dL.toFixed(2)+'억';
-  document.getElementById('co_f').textContent=ltv===0?'불가':dsrState==='zero'?'0원 (DSR 초과)':fin.toFixed(2)+'억';
+  // INCOME-NONE-1118 (2차 감사 발견 4): 소득이 비면(dsrState 'none') 적용 한도는 LTV 한도만 본 값이다. 계산은 그대로 두고, 소득을 반영하지 않은 값이라는 것을 숫자 옆에 적는다.
+  document.getElementById('co_f').textContent=ltv===0?'불가':dsrState==='zero'?'0원 (DSR 초과)':fin.toFixed(2)+'억'+(dsrState==='none'?' (소득 반영 전)':'');
   document.getElementById('co_m').textContent=mo?mo+'만원':'—';
   document.getElementById('co_n').textContent=need>0?need.toFixed(2)+'억 부족':'충분';
   document.getElementById('co_p').textContent=buy>0?Math.round(fin/buy*100)+'%':'—';

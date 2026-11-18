@@ -719,7 +719,8 @@ async function getAptListByLawdFromDb(lawdCds) {
   const memo = _aptListMemo.get(memoKey);
   if (memo && Date.now() - memo.at < APTLIST_MEMO_MS) return memo.out;
   const out = await _getAptListByLawdFromDbUncached(a, codes);
-  if (out && out.length) {
+  // APTLIST-PARTIAL-1118 (2차 감사 발견 21): 둘째 쪽부터 실패하면 그때까지 모은 일부가 돌아온다. 그 요청에는 쓰되 1시간 기억하지는 않는다.
+  if (out && out.length && !out.partial) {
     _aptListMemo.set(memoKey, { at: Date.now(), out });
     if (_aptListMemo.size > 200) _aptListMemo.delete(_aptListMemo.keys().next().value);
   }
@@ -768,7 +769,8 @@ async function _getAptListByLawdFromDbUncached(a, codes) {
     }
     return out;
   } catch (e) {
-    logger.warn({ err: e.message, codes: codes.length }, 'apt_master 단지목록 조회 실패 — 라이브 목록만 사용');
+    logger.warn({ err: e.message, codes: codes.length, got: out.length }, 'apt_master 단지목록 조회 실패 — 라이브 목록만 사용');
+    Object.defineProperty(out, 'partial', { value: true, enumerable: false }); // APTLIST-PARTIAL-1118: 메모하지 않게 표시(보이지 않는 속성이라 비교와 JSON 에 끼지 않는다)
     return out;
   }
 }

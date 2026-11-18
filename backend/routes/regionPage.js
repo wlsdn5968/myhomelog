@@ -343,7 +343,8 @@ router.get('/:lawdCd', async (req, res) => {
   //   가 재계산 실패 시 돌려주는 마지막 성공 스냅샷, sliceRegion 이 Plan 054 에서 그 표식을 보존하도록
   //   고쳤다)이면 그 숫자 자체가 낡은 것이다. cards.length 만 보면 이 열화를 못 잡고 6시간+SWR 24시간이
   //   그대로 굳는다 — "장애"가 아니라 "낡은 값을 정상처럼 보여주는 상태"가 하루 넘게 지속된다.
-  const isStale = !!(rec && rec.stale);
+  // REGION-PARTIAL-1118 (2차 감사 발견 22): 대시보드 원천 가운데 예외로 빠진 칸이 있으면 그 페이지도 CDN 에 굳히지 않는다.
+  const isStale = !!(rec && rec.stale) || !!(dash && Array.isArray(dash.partial) && dash.partial.length);
   res.set('Cache-Control', (cards.length && !isStale)
     ? 'public, max-age=0, s-maxage=21600, stale-while-revalidate=86400'
     : 'no-store');

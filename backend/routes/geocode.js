@@ -5,9 +5,22 @@ const NodeCache = require('node-cache');
 // SEC-1030-GEOCACHE (C15): 공용 cache.js(maxKeys 2000, 40+ 호출부 공유)를 쓰면 요청 텍스트로 키를 무한 생성해
 //   다른 서비스의 장기 캐시(KAPT 30일 등)를 밀어낸다 -> 이 라우트 전용 캐시로 분리. 가득 차면 set 실패는 삼킨다(최적화일 뿐).
 const _geoMem = new NodeCache({ stdTTL: 86400, checkperiod: 600, maxKeys: 1000 });
+// GEO-EVICT-1118 (2차 감사 발견 19, 20): 가득 차면 set 이 실패하고 아무것도 지우지 않아, 익명 입력으로 1,000개가 차면 그 인스턴스는
+//   최대 24시간 동안 좌표를 기억하지 못하고 DB 와 카카오를 다시 불렀다. 가득 차면 먼저 넣은 순으로 10% 를 지우고 한 번 더 넣는다
+//   (node-cache 의 keys() 는 넣은 순서다). 11-18 의 plans/211 은 공용 캐시(backend/cache.js)만 고쳐 이 캐시에는 효과가 없었다.
+function _geoSet(k, v, ttl) {
+  const put = () => (ttl === undefined ? _geoMem.set(k, v) : _geoMem.set(k, v, ttl));
+  try { return put(); } catch (_) {
+    try {
+      const keys = _geoMem.keys();
+      _geoMem.del(keys.slice(0, Math.max(1, Math.floor(keys.length / 10))));
+      return put();
+    } catch (_e) { return false; } // 캐시 실패 ≠ 기능 실패
+  }
+}
 const cache = {
   get: (k) => _geoMem.get(k),
-  set: (k, v, ttl) => { try { return ttl === undefined ? _geoMem.set(k, v) : _geoMem.set(k, v, ttl); } catch (_) { return false; } },
+  set: _geoSet,
 };
 const logger = require('../logger');
 const { isValidKoreaCoord } = require('../utils/geo');
@@ -375,5 +388,6 @@ module.exports.createKakaoGate = createKakaoGate;
 module.exports.GEOCODE_IP_DAILY_KAKAO_CAP = GEOCODE_IP_DAILY_KAKAO_CAP;
 module.exports.FACILITY_KAKAO_WEIGHT = FACILITY_KAKAO_WEIGHT;
 module.exports._memIp = _memIp;
+module.exports._geoCache = { set: _geoSet, mem: _geoMem }; // GEO-EVICT-1118: 검사용
 module.exports._resetCapHit = () => { _capHitDay = ''; };
 module.exports.GEOCODE_GLOBAL_DAILY_CAP = GEOCODE_GLOBAL_DAILY_CAP;

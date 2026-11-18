@@ -60,11 +60,14 @@ async function buildDashboard(region) {
   } catch (_) { /* Redis 실패는 무시하고 계산 경로로 */ }
 
   const started = Date.now();
+  // REGION-PARTIAL-1118 (2차 감사 발견 22): 원천이 예외로 실패한 칸도 '자료 없음'과 같은 null 이 되어 6시간 메모리와 Redis 에 굳었다.
+  //   예외가 난 칸 이름을 모아, 하나라도 있으면 짧게(5분) 이 인스턴스에만 기억하고 Redis 와 지역 페이지 CDN 에는 굳히지 않는다.
+  const _failed = [];
   const [priceIndex, txTrend, unsold, netMigration, regulation] = await Promise.all([
     // ① R-ONE 가격지수 (신규)
     (async () => {
       try { return await require('../services/roneService').getRegionIndex(region.lawdCd, { months: 6 }); }
-      catch (_) { return null; }
+      catch (_e) { _failed.push('priceIndex'); return null; }
     })(),
     // ② 월별 거래량 + ④ 연차별 평당가 — 자체 DB (report.js 와 동일 소스·캐시 공유)
     (async () => {
@@ -79,7 +82,7 @@ async function buildDashboard(region) {
         }
         const months = Object.keys(byMonth).sort().map(ym => ({ ym, n: byMonth[ym] }));
         return { months, note: '최근 월은 신고 지연으로 집계 중일 수 있어요', source: '국토교통부 실거래 신고' };
-      } catch (_) { return null; }
+      } catch (_e) { _failed.push('txTrend'); return null; }
     })(),
     // ③ KOSIS 미분양
     // UNSOLD-FIX-2026-08-08 (Sprint BBBBBBB-2, 라이브 실측): 첫 인자를 '' 로 넘겨 sido 매칭이 항상
@@ -92,7 +95,7 @@ async function buildDashboard(region) {
           45: '전북', 46: '전남', 47: '경북', 48: '경남', 50: '제주' };
         const sido = SIDO_BY_PREFIX[region.lawdCd.slice(0, 2)] || '';
         return await require('../services/kosisService').getUnsoldTrend(sido, region.name);
-      } catch (_) { return null; }
+      } catch (_e) { _failed.push('unsold'); return null; }
     })(),
     // ⑥ 인구 순이동 — KOSIS 국내인구이동통계(Sprint YYYYYY, 실호출로 명세 확정 후 배선)
     //    ★ lawd_cd 를 그대로 키로 쓴다(KOSIS C1 = 우리 lawd_cd 5자리 동일) — 이름 매칭 없음.
@@ -115,7 +118,7 @@ async function buildDashboard(region) {
           }
         }
         return mig;
-      } catch (_) { return null; }
+      } catch (_e) { _failed.push('netMigration'); return null; }
     })(),
     // ⑤ 규제 상태 — 스냅샷 기준(서울은 lawd_cd 11 prefix 로 확정, 그 외는 스냅샷 키워드)
     (async () => {
@@ -134,7 +137,7 @@ async function buildDashboard(region) {
           };
         }
         return { status: '고시된 규제지역 목록에 없음', basis: null }; // 단정하지 않음 — "비규제" 라고 쓰지 않는다
-      } catch (_) { return null; }
+      } catch (_e) { _failed.push('regulation'); return null; }
     })(),
   ]);
 
@@ -146,6 +149,7 @@ async function buildDashboard(region) {
     netMigration,
     regulation,
     generatedAt: new Date().toISOString(),
+    ...(_failed.length ? { partial: _failed } : {}), // REGION-PARTIAL-1118: 예외로 빠진 칸(자료가 없어 빈 칸과 구별)
     disclaimer: '공식 통계 수치를 정리한 정보이며, 매수·매도 추천이나 가격 예측이 아닙니다.',
   };
   logger.info({
@@ -154,8 +158,12 @@ async function buildDashboard(region) {
     ms: Date.now() - started,
   }, '지역 대시보드 조립');
 
-  cache.set(ck, payload, TTL);
-  require('../services/redisCache').rset(ck, payload, TTL).catch(() => {}); // 인스턴스 간 공유(fire-and-forget)
+  if (_failed.length) {
+    cache.set(ck, payload, 300); // REGION-PARTIAL-1118: 일시 오류를 6시간 굳히지 않는다
+  } else {
+    cache.set(ck, payload, TTL);
+    require('../services/redisCache').rset(ck, payload, TTL).catch(() => {}); // 인스턴스 간 공유(fire-and-forget)
+  }
   return payload;
 }
 

@@ -170,7 +170,14 @@ router.get('/export', async (req, res, next) => {
       pageAll('user_billing', '*', 'user_id'),   // PK user_id · 사용자당 1행
       pageAll('payments', 'id, order_id, amount, currency, status, plan, method, created_at, approved_at', 'id'),
       pageAll('field_notes', '*', 'created_at'), // id 없음 — (user_id,apt_name) 유니크·RLS 로 본인 행만
-      pageAll('activity_counters', 'year, kind, cnt, updated_at', 'year'), // VERIFY-FIX-2: 열람권 '전부' 고지 정합
+      // EXPORT-ACT-1118 (2차 감사 발견 3): 이 표에는 사용자 조회 정책이 없어(운영 pg_policies 0건, 2026-11-18 조회) 사용자 토큰으로 읽으면
+      //   오류 없이 늘 빈 배열이 나갔다. GET /activity 와 같이 서버 권한으로 읽되 본인 행만 고른다. 행은 연도와 종류별 몇 줄뿐이다.
+      (async () => {
+        const { data, error } = await adminClient().from('activity_counters')
+          .select('year, kind, cnt, updated_at').eq('user_id', userId).order('year', { ascending: true }).limit(1000);
+        if (error) throw new Error(`activity_counters 조회 실패: ${error.message}`); // 부분 export 위장 방지 — 실패는 실패로
+        return data || [];
+      })(),
     ]);
 
     const payload = {

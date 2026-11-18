@@ -24,13 +24,14 @@ const router = express.Router();
 
 const ORIGIN = 'https://myhomelog.vercel.app';
 
-// 정적 페이지 — 구 frontend/sitemap.xml 의 5개 항목 그대로(법적 문서 lastmod 는 실제 변경일 유지)
+// 정적 페이지 — 구 frontend/sitemap.xml 의 항목에서 /billing 을 뺐다(SITEMAP-1118). 법적 문서 lastmod 는 본문의 최종 개정일을 따른다.
 const STATIC_URLS = [
   { loc: '/', changefreq: 'daily', priority: '1.0' }, // lastmod 는 렌더 시점의 오늘(브리핑이 매일 갱신)
-  { loc: '/billing', lastmod: '2026-05-04', changefreq: 'weekly', priority: '0.6' },
-  { loc: '/terms.html', lastmod: '2026-05-04', changefreq: 'monthly', priority: '0.3' },
-  { loc: '/privacy.html', lastmod: '2026-05-04', changefreq: 'monthly', priority: '0.3' },
-  { loc: '/refund.html', lastmod: '2026-05-04', changefreq: 'monthly', priority: '0.3' },
+  // SITEMAP-1118 (2차 감사 발견 5, 12): 무료 서비스라 결제 페이지(/billing)를 검색 로봇에게 알리지 않는다.
+  //   법적 문서의 lastmod 는 본문의 최종 개정일에 맞췄다(약관과 환불 v1.1 2026-08-09, 개인정보처리방침 v1.3 2026-11-17).
+  { loc: '/terms.html', lastmod: '2026-08-09', changefreq: 'monthly', priority: '0.3' },
+  { loc: '/privacy.html', lastmod: '2026-11-17', changefreq: 'monthly', priority: '0.3' },
+  { loc: '/refund.html', lastmod: '2026-08-09', changefreq: 'monthly', priority: '0.3' },
   { loc: '/data-sources', lastmod: '2026-10-19', changefreq: 'monthly', priority: '0.4' }, // DATA-SOURCES-2026-10-19
   { loc: '/policy', lastmod: require('../data/policy-changes.json').checked, changefreq: 'weekly', priority: '0.7' }, // POLICY-CHANGES-1116 (plans/203): 마지막 원문 확인일
 ];
