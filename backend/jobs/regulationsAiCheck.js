@@ -204,12 +204,14 @@ async function runFullCheck() {
 
   // 1. RSS fetch + 키워드 매칭 (Phase 20)
   const rssSummary = await runRssAutoFetch();
+  // POLICY-NOCUT-1118 (plans/209): 견주기와 저장에는 자르지 않은 목록을 쓴다(없으면 종전 목록).
+  const fullSources = (rssSummary.sources || []).map((s) => ({ ...s, matched: Array.isArray(s.matchedAll) ? s.matchedAll : s.matched }));
 
   // 2. 현재 snapshot 로드
   const currentSnapshot = await loadCurrentSnapshot();
 
   // 3. 룰베이스 대조 (외부 유료 호출 0)
-  const aiResults = await analyzeRegulations(rssSummary.sources, currentSnapshot);
+  const aiResults = await analyzeRegulations(fullSources, currentSnapshot);
 
   // 4. 확인 필요 항목이 있으면 운영자 알림
   //    문구 주의: '변경 감지'가 아니라 '관련 보도자료 감지'다 — 룰베이스는 변경을 판정하지 않는다.
@@ -225,7 +227,7 @@ async function runFullCheck() {
 
   // POLICY-MISS-1116: 감지한 글을 남기고, 마지막 검증일 뒤에 쌓인 글이 있으면 날마다 경고한다(한 번 울리고 사라지지 않게).
   let pending = { stored: 0, byKey: {}, total: 0 };
-  try { pending = await persistDetected(rssSummary.sources, currentSnapshot); } catch (e) { logger.warn({ err: e && e.message }, 'regulationsAiCheck: 감지 기록 저장 실패'); }
+  try { pending = await persistDetected(fullSources, currentSnapshot); } catch (e) { logger.warn({ err: e && e.message }, 'regulationsAiCheck: 감지 기록 저장 실패'); }
   if (pending.total > 0) {
     logger.warn({ pendingByKey: pending.byKey, stored: pending.stored },
       '📌 정책 기준 검증일 뒤에 나온 관련 보도자료가 쌓여 있어요. 원문 대조와 검증일 갱신이 필요해요');
@@ -239,7 +241,7 @@ async function runFullCheck() {
   }, 'regulationsAiCheck OK');
 
   return {
-    rssResults: rssSummary,
+    rssResults: { ...rssSummary, sources: (rssSummary.sources || []).map(({ matchedAll, ...rest }) => rest) }, // POLICY-NOCUT-1118: 응답에는 소스당 5건만
     aiResults,
     currentSnapshot: currentSnapshot.map(s => ({
       key: s.key,

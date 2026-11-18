@@ -78,7 +78,7 @@ test('검증 대기 수: 마지막 검증일 뒤에 나온 관련 글만 세고,
 
 test('배선: 예약 작업이 감지 기록을 저장하고 대기 수를 실행 기록에 남기며, 대기가 있으면 날마다 경고한다', () => {
   const ai = fs.readFileSync(path.join(__dirname, '../jobs/regulationsAiCheck.js'), 'utf8');
-  assert.ok(ai.includes('pending = await persistDetected(rssSummary.sources, currentSnapshot);'));
+  assert.ok(ai.includes('pending = await persistDetected(fullSources, currentSnapshot);'));
   assert.ok(ai.includes('if (pending.total > 0) {'));
   assert.ok(ai.includes('pendingReview: pending.total,'));
   const cron = fs.readFileSync(path.join(__dirname, '../routes/cron.js'), 'utf8');
@@ -88,4 +88,35 @@ test('배선: 예약 작업이 감지 기록을 저장하고 대기 수를 실�
   // cronStats 가 실제로 이 값을 통과시킨다
   const { _pick } = require('../services/cronStats');
   if (typeof _pick === 'function') assert.equal(_pick({ ok: 1, processed: 3, pendingReview: 2 }).pendingReview, 2);
+});
+
+test('POLICY-NOCUT-1118: run() 은 응답용 matched 를 5건으로 자르되 저장과 계수용 matchedAll 에는 걸린 글 전부를 담는다', async () => {
+  const axiosPath = require.resolve('axios');
+  const afPath = require.resolve('../jobs/regulationsAutoFetch');
+  const saved = { axios: require.cache[axiosPath], af: require.cache[afPath] };
+  const now = new Date().toUTCString();
+  const xml = '<rss>' + Array.from({ length: 8 }, (_, i) => `<item><title>주택 정책 발표 ${i}</title><link>https://x/${i}</link><pubDate>${now}</pubDate></item>`).join('') + '</rss>';
+  const axiosStub = { get: async () => ({ status: 200, data: xml }) }; // 가짜: 실제 정부 주소를 부르지 않는다
+  require.cache[axiosPath] = { id: axiosPath, filename: axiosPath, loaded: true, exports: axiosStub };
+  try {
+    delete require.cache[afPath];
+    const af = require('../jobs/regulationsAutoFetch');
+    const out = await af.run();
+    const molit = out.sources.find((s) => s.name === '국토교통부');
+    assert.equal(molit.matched.length, 5, '응답은 종전대로 5건');
+    assert.equal(molit.matchedAll.length, 8, '저장과 계수용 목록은 전부');
+    assert.equal(molit.matched_count, 8);
+  } finally {
+    if (saved.axios) require.cache[axiosPath] = saved.axios; else delete require.cache[axiosPath];
+    if (saved.af) require.cache[afPath] = saved.af; else delete require.cache[afPath];
+  }
+});
+
+test('POLICY-NOCUT-1118: 한 소스에서 8건이 걸려도 8건이 저장되고 대기 수에도 8건이 세어진다', () => {
+  const now = Date.parse('2026-11-18T00:00:00Z');
+  const matched = Array.from({ length: 8 }, (_, i) => ({ title: '주택 정책 발표 ' + i, link: 'https://x/n' + i, pubDate: '2026-11-17T00:00:00.000Z', hits: ['주택'] }));
+  const items = mergeDetected([], [{ name: '국토교통부', matched }], now);
+  assert.equal(items.length, 8);
+  const counts = pendingCounts(items, [{ key: 'housing_loan_2025', source_effective_date: '2026-11-10' }]);
+  assert.equal(counts.housing_loan_2025, 8);
 });

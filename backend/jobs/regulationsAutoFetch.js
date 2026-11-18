@@ -190,17 +190,22 @@ async function run() {
     ? `최근 ${LOOK_BACK_DAYS}일 정책 변경 의심 ${totalMatched}건 — Sentry 또는 logs 확인`
     : null;
 
+  // POLICY-NOCUT-1118 (plans/209): 응답은 종전대로 소스당 5건만 싣는다. 저장과 계수는 걸린 글 전부(matchedAll)를 쓴다.
+  //   종전에는 5건으로 자른 목록이 저장(persistDetected)과 대기 수(pendingReview)까지 그대로 갔다.
+  //   한 소스에서 한 번에 6건 넘게 걸리면 6번째부터는 저장되지 않았다.
+  const _slim = (m) => ({
+    title: m.title.slice(0, 200),
+    link: m.link,
+    pubDate: m.pubDate ? m.pubDate.toISOString() : null,
+    hits: m.hits,
+  });
   return {
     sources: results.map(r => ({
       name: r.name,
       total: r.total,
       matched_count: r.matched.length,
-      matched: r.matched.slice(0, 5).map(m => ({ // 최대 5건만 응답
-        title: m.title.slice(0, 200),
-        link: m.link,
-        pubDate: m.pubDate ? m.pubDate.toISOString() : null,
-        hits: m.hits,
-      })),
+      matched: r.matched.slice(0, 5).map(_slim), // 최대 5건만 응답
+      matchedAll: r.matched.map(_slim),
       error: r.error,
     })),
     totalMatched,
