@@ -987,9 +987,14 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
   body.hp-on .hp-ft{padding:0 16px 6px}
   /* 관심, 채팅 버튼이 지도 버튼 묶음(위성지도, 서울전체)과 겹쳤다(적용 전 실측: 묶음 아래 끝 256, 관심 버튼 위 끝 237).
      시트 위 여백을 72 -> 40 으로 낮춘다. 40 은 지도 오른쪽 아래 로고를 가리지 않는 높이다. */
-  body.hp-on .fab-ai{bottom:calc(var(--hps-pad,0px) + 40px)}
-  body.hp-on .fab-bm{bottom:calc(var(--hps-pad,0px) + 100px)}
-  body.hp-on .bm-pop{bottom:calc(var(--hps-pad,0px) + 154px)}
+  /* FAB-SHEET-1118 (사용자 시나리오 점검 2026-11-18): 위 두 줄(+40, +100)은 아래 HOME-SHEET 묶음의 +72, +132 에 덮여 적용된 적이 없었다
+     (실측 375x667: 채팅 버튼 180~232 가 위성지도와 서울전체 묶음 162~256 을 덮음. 375x812: 관심 버튼 196~244 가 서울전체를 덮음).
+     지도에 남는 높이가 190~260px 이라 지도 위에서는 자리가 없다. 두 버튼을 44px 로 줄여 나란히 두고, 목록 시트 머리 오른쪽(제목 옆 빈 곳) 안에 넣는다.
+     시트 위 끝은 바닥에서 --hps-pad + 60px(하단 탭)이므로 아래 끝을 +12px 에 두면 위 끝이 시트 위 끝보다 4px 아래다. HOME-SHEET 묶음의 같은 규칙은 지웠다. */
+  body.hp-on .fab-ai{bottom:calc(var(--hps-pad,0px) + 12px);width:44px;height:44px}
+  body.hp-on .fab-bm{bottom:calc(var(--hps-pad,0px) + 12px);right:68px;width:44px;height:44px}
+  body.hp-on .bm-pop{bottom:calc(var(--hps-pad,0px) + 68px)}
+  body.ms-open .fab-ai,body.ms-open .fab-bm,body.ms-open .bm-pop{visibility:hidden} /* 마커 시트가 목록 시트 자리를 덮는 동안 */
 }
 /* 패널 하단 고지(2026-10-18 운영자 요청): 데스크톱 지도 화면은 아래 고지 띠(약 100px)가 지도를 가렸다 — 지도 화면에서만 띠를 숨기고
    띠의 내용(면책·전문 보기·약관·개인정보·환불·지역별 실거래·브리핑·사업자 정보·©)을 왼쪽 패널 하단 줄로 옮긴다. 다른 화면은 그대로 */
@@ -1028,9 +1033,6 @@ html[data-theme="dark"] .wreq{background:rgba(194,65,12,.2);color:#F0A882}
   body.hp-on #mapEl{margin-bottom:var(--hps-pad,0px);transition:margin-bottom .2s ease}
   body.hp-on #mMapCap{bottom:calc(var(--hps-pad,0px) + 8px)}
   body.hp-on #mhint{bottom:calc(var(--hps-pad,0px) + 12px)}
-  body.hp-on .fab-ai{bottom:calc(var(--hps-pad,0px) + 72px)}
-  body.hp-on .fab-bm{bottom:calc(var(--hps-pad,0px) + 132px)}
-  body.hp-on .bm-pop{bottom:calc(var(--hps-pad,0px) + 186px)}
   body.hp-on.hps-full .fab-ai,body.hp-on.hps-full .fab-bm{visibility:hidden} /* 펼침이면 시트 위에 떠서 목록을 가린다 */
   .hp-hd{padding:0 16px 8px;touch-action:none;cursor:grab}
   .hp-grab{display:block;width:100%;height:24px;margin:0;padding:0;border:none;background:none;cursor:grab;position:relative}
@@ -1350,6 +1352,9 @@ body.cmp-off .cmp-bar{display:none!important} /* CMP-BAR-SCOPE-1116: 목록과 �
 /* 플로팅 관심단지 버튼 */
 .fab-bm{position:fixed;right:24px;bottom:92px;width:48px;height:48px;border-radius:50%;background:var(--bg-base);color:var(--t1);border:1px solid var(--bd);cursor:pointer;display:none;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 14px rgba(0,0,0,.15);z-index:850;transition:transform .15s,box-shadow .15s}
 .fab-bm:hover{transform:translateY(-2px);box-shadow:0 8px 20px rgba(0,0,0,.20)}
+.chat-x{display:none;align-items:center;justify-content:center;width:44px;height:44px;margin:-10px -10px -10px 0;background:none;border:none;color:var(--t2);cursor:pointer;border-radius:var(--radius-base)}
+.rp.rp-overlay .chat-x{display:inline-flex} /* CHAT-CLOSE-1118: 떠 있는 창일 때만 */
+.chat-x:focus-visible{outline:2px solid var(--acc);outline-offset:-4px}
 .fab-bm .fab-bm-cnt{position:absolute;top:-4px;right:-4px;background:var(--amb,#f5a623);color:#fff;font-size:12px;font-weight:700;min-width:18px;height:18px;border-radius:var(--radius-base);display:flex;align-items:center;justify-content:center;padding:0 4px;border:2px solid #fff}
 /* 관심단지 popover */
 .bm-pop{position:fixed;right:24px;bottom:150px;width:320px;max-width:calc(100vw - 40px);max-height:min(460px,calc(100vh - 200px));background:var(--bg-base);border:1px solid var(--bd);border-radius:var(--radius-lg);box-shadow:0 12px 36px rgba(0,0,0,.2);z-index:860;display:none;flex-direction:column;overflow:hidden}
@@ -2833,6 +2838,8 @@ html[data-theme="dark"] #_pannBtn{box-shadow:0 2px 12px rgba(0,0,0,.4)}
       <button id="chatHistBtn" onclick="openChatHistory()" title="대화 이력" aria-label="저장된 대화 이력 열기" style="background:none;border:none;color:var(--t2);cursor:pointer;font-size:14px;padding:2px 6px;display:none"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/></svg></button>
       <button id="chatNewBtn" onclick="newChatSession()" title="새 대화" aria-label="새 대화 시작" style="background:none;border:none;color:var(--t2);cursor:pointer;font-size:14px;padding:2px 6px;display:none">✚</button>
       <span class="cst off" id="cSt">● 연결 중...</span>
+      <!-- CHAT-CLOSE-1118 (사용자 시나리오 점검): 휴대폰에서 창이 여는 버튼을 거의 다 덮었고(375x812 실측: 버튼 아래 12px 만 남음) 창 안에 닫는 방법이 없었다. -->
+      <button type="button" class="chat-x" onclick="_closeAiPanel()" title="닫기" aria-label="데이터 도우미 닫기"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
     </span>
   </div>
   <div class="cmsgs" id="cMsgs">
@@ -11006,8 +11013,15 @@ function renderAnalysis(d,p){
     const maxVol=Math.max(...vol.map(v=>v.count),1);
     const seasonNote=d.volumeSeasonalBias?`<div class="ibox y" style="margin-top:6px;font-size:12px">이사철(3, 4, 9, 10월)이 비교 기간에 들어 있어 거래가 실제보다 많아 보일 수 있어요.</div>`:'';
     // 최근 거래일 정보 — MOLIT 시차 인지
+    // ANCHOR-DAYS-1118: 서버 값은 UTC 시각 차이를 반올림해 KST 저녁에 하루 많게 나왔고(11-18 밤 11-12 거래가 "7일 전"), CDN 6시간 캐시로 더 늦을 수 있다.
+    //   거래일 날짜와 오늘 한국 날짜의 차이로 화면에서 다시 센다. 날짜를 못 읽으면 서버 값을 쓴다.
+    const _anchorDays = (() => {
+      const a = Date.parse(String(d.volumeAnchorDate || '') + 'T00:00:00Z');
+      const t = Date.parse(new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10) + 'T00:00:00Z');
+      return Number.isFinite(a) && Number.isFinite(t) ? Math.max(0, Math.round((t - a) / 864e5)) : d.volumeDaysSinceAnchor;
+    })();
     const anchorNote = d.volumeAnchorDate
-      ? `<div style="font-size:12px;color:var(--t3);margin-top:6px">최근 거래일: ${d.volumeAnchorDate} (${d.volumeDaysSinceAnchor}일 전) · 국토교통부 신고(30일 이내)와 반영 시차(약 2주)를 고려해야 해요</div>`
+      ? `<div style="font-size:12px;color:var(--t3);margin-top:6px">최근 거래일: ${d.volumeAnchorDate} (${_anchorDays === 0 ? '오늘' : _anchorDays + '일 전'}) · 국토교통부 신고(30일 이내)와 반영 시차(약 2주)를 고려해야 해요</div>`
       : '';
     const staleNote = d.volumeDataStale
       ? `<div class="ibox r" style="margin-top:6px;font-size:12px">⚠ 최근 60일 동안 새 거래가 없어 거래량 추이는 보여 드리지 않아요 (자료가 오래됐어요)</div>`
@@ -11099,8 +11113,8 @@ function renderAnalysis(d,p){
     gapHtml=`<div class="ibox y">실거래 자료를 불러오지 못해 전세가율·갭 분석을 표시할 수 없어요. 잠시 후 다시 열어 주세요.</div>`;
   }
 
-  // ─ 실투자금 계산기
-  const loanAmt=getLoanAmt();
+  // ─ 실투자금 계산기 (DETAIL-LOAN-1118: 이 단지 가격 기준 한도)
+  const loanAmt=getLoanAmtFor(p);
   const houseS=gct('ch-h');
   const isF=gct('ch-f')==='예';
   const pr=p.avgPrice||0;
@@ -11124,7 +11138,7 @@ function renderAnalysis(d,p){
 }
 
 function renderAnalysisFallback(p){
-  const loanAmt=getLoanAmt();
+  const loanAmt=getLoanAmtFor(p);
   document.getElementById('t4').innerHTML=`
     <div class="ibox b" style="margin-bottom:12px">시세 신호(추이·전세가율·갭)는 목록 화면의 <b>조건에 맞는 단지 찾기</b> 실행하면 보여요. 아래 실투자금 계산은 지금도 쓸 수 있어요.</div>
     <div style="font-size:12px;font-weight:700;color:var(--t2);margin-bottom:7px">실투자금 총비용 계산</div>
@@ -12770,6 +12784,20 @@ function toggleBizInfo(btn){
   }catch(_){}
 }
 function getLoanAmt(){const r=calcC();return r?r.fin:0;}
+// DETAIL-LOAN-1118 (사용자 시나리오 점검 2026-11-18): 단지 상세의 실투자금은 사이드바 매수가(기본 7억)로 낸 한도를 썼다.
+//   실측: 상계주공7단지 6.38억에 대출 2.80억(7억의 40%), 은마 31.38억에 로그인 기기 2.80억과 다른 기기 0억. 대출 계산 화면은 같은 단지에 2.00억.
+//   이 단지 가격과 시군구 코드로 같은 calcLTV 를 다시 부른다. 현금, 소득, 보유 상태는 사이드바 값을 그대로 쓴다.
+function getLoanAmtFor(p){
+  const price=Number(p&&p.avgPrice)||0;
+  if(!(price>0))return 0;
+  const cash=parseFloat(document.getElementById('mc')?.value)||0,inc=parseFloat(document.getElementById('inc')?.value)||0;
+  const lc=String((p&&(p.lawdCd||p.txHistory?.[0]?.lawdCd))||'');
+  const sido={'11':'서울','41':'경기','28':'인천'}[lc.slice(0,2)]||'';
+  const area=String((p&&p.area)||'');
+  const region=area?((sido&&!area.includes(sido))?sido+' '+area:area):getRegionForSearch();
+  const r=calcLTV(price,cash,inc,0,gct('ch-h'),gct('ch-f')==='예',region,lc||undefined);
+  return r?r.fin:0;
+}
 function calcC(){
   const buy=parseFloat(document.getElementById('bp')?.value)||0,cash=parseFloat(document.getElementById('mc')?.value)||0,inc=parseFloat(document.getElementById('inc')?.value)||0;
   if(!buy)return null;
@@ -14381,7 +14409,12 @@ function buildRuleClause(b){
     essential.push({title:'누수 이력 고지·보수 확인',content:'매도인은 누수 발생 이력과 보수 내역을 계약서에 고지하고, 잔금일 전 재점검하여 미보수 누수 발견 시 매도인 부담으로 수리한다.',reason:'입력 특이사항: 누수 이력'});
   }
   if (/전세|세입자|임차/.test(issues)) { // 입력 예시가 '전세 낀 집'인데 '전세 끼고'만 알아봤다(2026-10-27 실측)
-    essential.push({title:'임대차 승계 조건 명시',content:'매수인은 현 임대차계약(보증금·계약기간·특약 포함)을 승계하며, 매도인은 임대차계약서 사본과 보증금 반환 채무 내역을 잔금일 전까지 매수인에게 제공한다.',reason:'입력 특이사항: 전세 끼고 매수·세입자 승계. 승계 조건을 서면으로 적어요'});
+    // LEASE-TOHEO-1118 (사용자 시나리오 점검): 규제지역에 '전세 낀 집'을 넣으면 6개월 전입 특약과 세입자 승계 특약이 함께 나오고
+    //   토지거래허가 이야기는 없었다. 같은 화면의 규제 요약과 정책 변화 자료(국토교통부 2026-05-12, 09-17 발표, policy-changes.json)에 있는 내용만 덧붙인다.
+    const _leaseReason = isReg === true
+      ? '입력 특이사항: 전세 끼고 매수·세입자 승계. 승계 조건을 서면으로 적어요. 지금 규제지역 아파트는 토지거래허가구역이기도 해서 구청 허가가 먼저이고 2년 실거주 의무가 있어요. 세입자가 있는 집은 무주택자만 임대차가 끝날 때까지 입주를 미룰 수 있어요(국토교통부 2026.5.12 발표, 신청 기한 2027.12.31). 대출을 받으면 전입 기한과 세입자 계약 기간이 맞는지 구청과 은행에 먼저 확인하세요'
+      : '입력 특이사항: 전세 끼고 매수·세입자 승계. 승계 조건을 서면으로 적어요';
+    essential.push({title:'임대차 승계 조건 명시',content:'매수인은 현 임대차계약(보증금·계약기간·특약 포함)을 승계하며, 매도인은 임대차계약서 사본과 보증금 반환 채무 내역을 잔금일 전까지 매수인에게 제공한다.',reason:_leaseReason});
   }
   if (issues.includes('재건축')) {
     recommended.push({title:'정비사업 진행사항 고지',content:'매도인은 재건축 등 정비사업 관련하여 통지받은 사항(조합 설립·분담금 등)을 계약 전 고지하며, 중대한 미고지 사항 발견 시 양 당사자가 협의하여 처리한다.',reason:'입력 특이사항: 재건축 추진 중. 조합원 지위·분담금은 조합이나 구청에 꼭 확인하세요'});

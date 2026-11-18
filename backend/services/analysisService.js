@@ -154,7 +154,9 @@ function calcVolumeSignal(transactions) {
     if (ms > anchorMs) anchorMs = ms;
   }
   const anchor = new Date(anchorMs);
-  const daysSinceAnchor = Math.round((Date.now() - anchorMs) / (1000 * 60 * 60 * 24));
+  // ANCHOR-DAYS-1118: 시각 차이를 반올림하면 UTC 정오 뒤(KST 21시 뒤)에 하루 많게 나왔다. 한국 날짜끼리 뺀다.
+  const _kstToday = Date.parse(new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10) + 'T00:00:00Z');
+  const daysSinceAnchor = Math.max(0, Math.round((_kstToday - Date.UTC(anchor.getFullYear(), anchor.getMonth(), anchor.getDate())) / (1000 * 60 * 60 * 24)));
 
   // anchor 가 60일 이상 옛날 → 데이터 자체 stale, 신호 의미 없음
   if (daysSinceAnchor > 60) {

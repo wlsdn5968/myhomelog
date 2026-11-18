@@ -42,11 +42,18 @@ const NEWS_REL = {
   tax: ['취득세', '양도세', '양도소득세', '종부세', '종합부동산세', '보유세', '재산세', '세제', '세금', '과세', '공시가', '증여세', '상속세', '중과'],
 };
 const NEWS_NOISE = /전세계|전세기|전세버스|전세 버스/g;
+// NEWS-REL-1118 (사용자 시나리오 점검 2026-11-18): 요약에 단어가 한 번만 나와도 남겨 브리핑 '그 밖의 소식'에
+//   경찰청장 청문회("부동산 보유 등 청문회"), 예능 프로그램, 체납자 명단 기사가 섞였다(운영 6개 분류 실측: 새 기준이면 97건 중 45건이 빠진다).
+//   이제 제목에 부동산 단어(공통 + 분류별)가 있거나, 요약에 분류 단어가 서로 다른 것으로 3개 이상 있어야 남긴다.
+//   같은 실측에서 분류마다 6~11건이 남았고, 빠진 것은 거의 무관 기사였다(관련 기사도 몇 건 빠진다: 제목에 단어가 없는 칼럼 등).
 function _relevantNews(cat, items) {
   const terms = NEWS_REL[cat] || _BASE_REL;
+  const titleTerms = [...new Set([..._BASE_REL, ...terms])];
   return (items || []).filter(it => {
-    const t = `${it.title || ''} ${it.description || ''}`.replace(NEWS_NOISE, '');
-    return terms.some(k => t.includes(k));
+    const ti = String(it.title || '').replace(NEWS_NOISE, '');
+    if (titleTerms.some(k => ti.includes(k))) return true;
+    const de = String(it.description || '').replace(NEWS_NOISE, '');
+    return terms.filter(k => de.includes(k)).length >= 3;
   });
 }
 

@@ -199,7 +199,9 @@ test('Plan 151b: 모바일 목록 시트 — 시안 값(위 모서리 16·그림
   assert.ok(css.includes('min-height:60px'));
   // 시트가 지도를 덮지 않고 지도를 줄인다 — 지도 출처 표기·로고·이 지역 단지 보기 버튼이 가려지지 않게
   assert.ok(css.includes('body.hp-on #mapEl{margin-bottom:var(--hps-pad,0px);'));
-  for (const sel of ['#mMapCap', '#mhint', '.fab-ai', '.fab-bm', '.bm-pop']) assert.ok(css.includes(`body.hp-on ${sel}{bottom:calc(var(--hps-pad,0px)`), `${sel} 가 시트 위로 오르지 않는다`);
+  for (const sel of ['#mMapCap', '#mhint']) assert.ok(css.includes(`body.hp-on ${sel}{bottom:calc(var(--hps-pad,0px)`), `${sel} 가 시트 위로 오르지 않는다`);
+  // FAB-SHEET-1118: 관심, 채팅 버튼 규칙은 HOME-192 묶음 한 곳으로 옮겼다(여기 있던 같은 규칙이 그쪽을 덮었다). usertest-1118.test.js 가 한 곳인지 센다.
+  for (const sel of ['.fab-ai', '.fab-bm', '.bm-pop']) assert.ok(html.includes(`body.hp-on ${sel}{bottom:calc(var(--hps-pad,0px)`), `${sel} 가 시트를 따라 움직인다`);
   assert.ok(css.includes('.app:has(#MSHEET.on) .hp,body.ms-open .hp{visibility:hidden}'), '마커 시트가 열리면 목록 시트를 내린다');
   // 표 머리는 모바일에서 숨김, "거래 N건" 앞말은 모바일에서만 · 지역 칩은 2026-10-21 부터 모바일에서도 가로 스크롤로 보인다(구별 TOP10)
   assert.ok(css.includes('.hp-s,.hp-th,.hp-rep p,.hp-ft-l{display:none!important}'));
@@ -366,8 +368,9 @@ test('HOME-192: 모바일 시트는 기본 높이에서 3행이 보이고, 지�
     'body.hp-on .hp-list>.hp-msg:first-child:not(:only-child){display:none}',
     'body.hp-on .hp-row{min-height:56px;padding:6px 16px;row-gap:0}',
     'body.hp-on:not(.hps-full) .hp .site-livebar{display:none}',
-    'body.hp-on .fab-ai{bottom:calc(var(--hps-pad,0px) + 40px)}',
-    'body.hp-on .fab-bm{bottom:calc(var(--hps-pad,0px) + 100px)}',
+    // FAB-SHEET-1118: 겹침을 다시 고쳤다(두 버튼을 목록 시트 머리 안에 나란히). 자세한 검사는 usertest-1118.test.js.
+    'body.hp-on .fab-ai{bottom:calc(var(--hps-pad,0px) + 12px);width:44px;height:44px}',
+    'body.hp-on .fab-bm{bottom:calc(var(--hps-pad,0px) + 12px);right:68px;width:44px;height:44px}',
   ]) assert.ok(blk.includes(rule), rule);
   // 고지 줄은 모바일에서도 숨기지 않는다(절대 규칙: 화면마다 면책 표시).
   assert.ok(!/\.hp-ft\{[^}]*display:none/.test(blk));
