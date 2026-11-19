@@ -24,15 +24,15 @@
 - DB: health 기준 416MB / 500MB(83%), `pg_database_size` 401MB, 연결 16(활동 1, 최대 60).
 
 안 되는 것, 위험한 것
-- Fast Data Transfer 가 30일 46.92GB 로 무료 한도 100GB 의 47%다. 첫 화면 한 번에 413KB(압축 뒤), 캐시 헤더 `public, max-age=0, must-revalidate`. 어느 경로가 전송량을 쓰는지는 확인 불가(Vercel Observability 의 경로별 전송량을 아직 보지 않았다).
+- Fast Data Transfer 가 30일 46.92GB 로 무료 한도 100GB 의 47%다. 다만 11-19 밤에 날짜별로 보니 11-11 까지 하루 1.5~2.5GB, 11-15 부터는 하루 145~163MB 다. 최근 12시간 87MB 가운데 86.14MB 가 첫 화면(`/frontend/index.html`, 191회, 한 번 약 451KB)이다(`AUDIT_REPORT.md` 17-7). 사람과 봇의 비율은 확인 불가(무료 화면에서 잠김).
 - 단지 표 시설 조건 건수 조회가 DB 실행 시간 상위 1~7위(평균 1.2~1.8초). 5월부터의 누적값이라 하루 횟수는 확인 불가. 기준값은 `AUDIT_REPORT.md` 17-5 의 queryid 8개(11-19 11:43 UTC).
 - Vercel 팀 Active CPU 는 팀 전체 30일 합계로 한도를 본다(기본 4시간, 임시 12시간은 2026-12-08 까지). 다른 프로젝트는 조사하거나 권하지 않는다(운영자 지시 2026-11-18 "우리 프로젝트만 봐").
 - 죽은 행: `molit_hist_peaks` 11,007, `apt_master` 2,775(운영자 몫).
 
 확인 불가
-- 새 정책 감지 소스의 운영 첫 실행 결과. 예약은 매일 21:30 UTC(KST 06:30)이고 수동 실행에는 비밀값이 필요하다. 11-20 아침 health 의 `crons['regulations-auto-fetch'].sourcesFailed` 로 본다.
+- 새 정책 감지 소스의 운영 첫 실행 결과. 예약은 매일 21:30 UTC(KST 06:30)이고 수동 실행에는 비밀값이 필요하다. 11-20 아침 health 의 `crons['regulations-auto-fetch'].sourcesFailed` 로 본다. 11-19 밤 로컬 실행은 실패 0/4 였고, 같은 코드로 계산한 `pendingReview` 는 1(대출, 11-17 「주택법 시행령」 개정안)이다(`AUDIT_REPORT.md` 17-7).
+- 그 「주택법 시행령」 개정안의 첨부(pdf 209KB)를 읽어 대출 저장값과 대조하는 일. 본문은 소제목뿐이고 대출 낱말 0건이다. 첨부 내려받기는 운영자 허락 대기.
 - 실제 휴대폰 기기의 화면(앱 안 브라우저의 휴대폰 흉내로만 봤다).
-- 전송량을 쓰는 경로(위).
 - 서울 전역과 경기 12곳 토지거래허가구역(2026-12-31 까지)의 연장 공고, 2026년 세제개편안의 국회 통과(11-18 현행 종합부동산세법은 기본공제 12억 원).
 
 ## 2. 먼저 읽을 파일 (순서대로)
@@ -157,7 +157,7 @@
 
 ## 5. 알려진 문제와 주의점, 건드리면 안 되는 것
 
-- 배포는 운영자가 배포를 가리킨 문장("배포해", "마지막에 배포하면 될거 같아")이 있을 때만 한다. 하루 횟수는 3-3 이 정해질 때까지 1회를 넘기기 전에 묻는다. 문서만 바뀐 커밋은 다음 코드 배포에 묶는다. 지금 로컬은 운영보다 정기 점검 커밋들이 앞서 있다(문서와 보관만).
+- 배포는 운영자가 배포를 가리킨 문장("배포해", "마지막에 배포하면 될거 같아")이 있을 때만 한다. 하루 횟수는 3-3 이 정해질 때까지 1회를 넘기기 전에 묻는다. 문서만 바뀐 커밋은 다음 코드 배포에 묶는다. 지금 로컬은 운영보다 정기 점검 커밋들(문서와 보관)과 청약 옮기기 6e073ba(화면 코드)가 앞서 있다.
 - 운영 DB 는 조회만 한다. 쓰기 SQL 은 운영자에게 주고 운영자가 실행한다(SQL Editor: https://supabase.com/dashboard/project/brxorvxdfrbxcavufspe/sql/new).
 - `.env` 로 시작하는 파일은 열지 않는다(`.env.example` 도). 그래서 로컬에서는 DB 가 붙지 않는다. 화면 확인은 launch 설정 `home-preview`(화면은 로컬 파일, API 는 운영)로 한다.
 - 정책 감지 소스는 기관 누리집 목록 HTML 이다. 기관이 목록 모양을 바꾸면 그 소스가 0건이 되어 `sourcesFailed` 와 Sentry `monitor: policy-sources` 로 드러난다. 그때 `backend/jobs/regulationsAutoFetch.js` 의 `LIST_PARSERS` 를 고친다. 국토교통부는 첫 요청이 쿠키를 심고 같은 주소로 307 을 준다.
@@ -176,11 +176,12 @@
 
 ## 6. 남은 일 (우선순위 순)
 
-1. 다음에 바로 할 첫 작업: 시각을 확인하고 health 의 `crons['regulations-auto-fetch']` 를 본다. 11-20 06:30 KST 뒤라면 새 소스의 첫 운영 실행이다. `sourcesFailed` 0, `sourcesTotal` 4 인지, `processed`(걸린 글 수)와 `pendingReview` 를 확인한다. `sourcesFailed` 가 0 이 아니면 Sentry `monitor: policy-sources` 알림의 `failed` 목록에서 어느 기관인지 보고 그 목록 페이지를 직접 받아 `LIST_PARSERS` 와 대조한다. `pendingReview` 가 0 이 아니면 원문 대조.
+1. 다음에 바로 할 첫 작업: 시각을 확인하고 health 의 `crons['regulations-auto-fetch']` 를 본다. 11-20 06:30 KST 뒤라면 새 소스의 첫 운영 실행이다. `sourcesFailed` 0, `sourcesTotal` 4 인지, `processed`(걸린 글 수)와 `pendingReview` 를 확인한다. 11-19 밤 계산으로는 `pendingReview` 1(대출, 국토교통부 11-17 「주택법 시행령」 개정안, `AUDIT_REPORT.md` 17-7)이 나와야 맞다. `sourcesFailed` 가 0 이 아니면 Sentry `monitor: policy-sources` 알림의 `failed` 목록에서 어느 기관인지 보고 그 목록 페이지를 직접 받아 `LIST_PARSERS` 와 대조한다.
+1-2. 그 「주택법 시행령」 개정안 첨부(pdf 209KB, molit.go.kr 상세 id=95092610)를 운영자 허락을 받아 읽고 대출 저장값에 닿는 숫자가 있는지 대조한다. 닿지 않으면 검증일을 2026-11-17 로 올리는 SQL 을 운영자에게 준다(그래야 대기 수가 0 으로 돌아간다). 닿으면 값을 고치는 SQL 을 쓴다.
 2. 운영자 결정 받기: 3-3 의 배포 횟수 규칙.
-3. 전송량 원인 확인(읽기 전용): Vercel Observability 에서 경로별 전송량을 보고, 첫 화면 413KB 가 얼마나 되풀이되는지(봇 포함) 확인한다. 줄일 방법은 계획으로 써서 운영자 승인을 받는다.
+3. 전송량: 원인 확인은 끝났다(`AUDIT_REPORT.md` 17-7, 11-12 부터 하루 150~170MB). 12월 중순에 30일 합계가 내려왔는지만 본다.
 4. 11-21 뒤: `AUDIT_REPORT.md` 17-5 의 queryid 8개로 시설 조건 건수 조회의 하루 횟수를 계산한다. 많으면 `backend/services/healthCounts.js:123-134`, `backend/jobs/facilityBackfill.js:133-135` 를 줄이는 계획을 쓴다.
-5. 화면 파일 나누기 4단계 나머지(`plans/202-frontend-split.md`): 청약, 브리핑, 도우미 순서. `calcLTV` 는 금리와 규제 판정을 인자로 받게 바꾼 뒤에 옮긴다.
+5. 화면 파일 나누기 4단계 나머지(`plans/202-frontend-split.md`): 청약은 6e073ba 로 끝났다(미배포, 다음 코드 배포에 묶는다. 배포 뒤 `/js/subs.js` 200 확인). 남은 것은 브리핑, 도우미 순서이고 청약 묶음이 운영에서 확인된 뒤 시작한다. `calcLTV` 는 금리와 규제 판정을 인자로 받게 바꾼 뒤에 옮긴다.
 6. 2026-12 중: 토지거래허가구역 연장 공고와 세제개편안 국회 통과를 국토교통부, 재정경제부, 국가법령정보센터 원문으로 확인해 `backend/data/policy-changes.json` 과 규제 요약 창을 고친다. 12월 말 은행연합회 스트레스금리 공시로 2027년 상반기 지방 스트레스 금리도 맞춘다.
 7. 실제 휴대폰 기기로 지도와 도우미 화면 확인(운영자 기기).
 8. 운영자 몫: Supabase 임시 Edge Function `gwcheck-temp` 삭제, 죽은 행 청소(적재 시간 UTC 17~19시를 피해 `VACUUM (ANALYZE) public.apt_master;`, `VACUUM (ANALYZE) public.molit_hist_peaks;`), 유출 비밀번호 검사 켜기(보안 권고 WARN), 이메일 확인 설정, Vercel 과 GitHub 2단계 인증, DB 백업 주 1회(`plans/168-backup-runbook.md`), 원격 브랜치 정리 여부.

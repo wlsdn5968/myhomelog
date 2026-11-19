@@ -1,4 +1,4 @@
-# 202. 화면 한 파일 나누기 (3단계까지 배포됨, 4단계 첫 묶음 구현 끝 미배포)
+# 202. 화면 한 파일 나누기 (4단계 첫 묶음까지 배포됨, 4단계 둘째 묶음 청약 구현 끝 미배포)
 
 작성 2026-11-16. 출처는 전면 감사 발견 18(`AUDIT_REPORT.md` 15절). 운영자 승인 "권고대로 진행"에 따라 계획만 세웠고 코드는 바꾸지 않았다. 실행은 단계마다 운영자 승인 뒤에 한다.
 
@@ -91,3 +91,13 @@
 - 확인: `npm run verify` 1,274개 통과. 로컬 미리보기에서 스크립트 순서(calc, data, swap-checklist, policy-data, policy), 신혼부부 예시(6억, 2억, 8,000만과 칩), 임장 노트 점검 항목 8개, 정책 자료를 못 받은 것으로 꾸몄을 때의 옛 타임라인 표시, 콘솔 스크립트 오류 없음.
 - 확인하지 못한 것: 운영에서의 `/js/data.js`(배포 뒤 200 과 형식부터 본다).
 - 다음: 청약, 브리핑, 도우미. 이 묶음이 운영에서 확인된 뒤 시작한다.
+- 운영 확인(2026-11-19 22시대 KST): 배포본 75aeff8 에서 `/js/data.js` 200, `application/javascript`, 4,830자, 세 상수 정의가 있다.
+
+## 4단계 둘째 묶음 결과: 청약 (2026-11-19, 커밋 6e073ba, 미배포)
+
+- 옮긴 것(98줄, 글자 그대로): `cpSubs`, `fmtMoveIn`, `loadSubs`, `calcSubsScore`(그 위 출처 설명 주석 포함). 새 파일 `frontend/js/subs.js`, 스크립트 태그는 `data.js` 바로 뒤. 옮기는 스크립트가 줄 범위의 첫 줄과 끝 줄을 확인하고, 옮긴 조각이 새 파일에 글자 그대로 있는지와 본체에 정의가 남지 않았는지 대조했다.
+- 옮기지 않은 것과 이유: `fmtSubsDate`, `dDayLabel` 은 브리핑의 "청약 임박" 카드도 쓴다(`index.html` 의 `renderBriefing` 부근). 새 파일에 두면 그 파일을 못 받을 때 브리핑까지 깨진다. `nxtOpenSubs` 는 단지 상세의 "다음 할 일" 기능이라 그대로 뒀다(`detail-next-actions.test.js` 가 본체에서 잘라 실행한다).
+- 더한 것: 화면 전환 함수 `sv` 에서 청약 화면일 때 `loadSubs` 가 없으면 알리고 그 자리에서 돌아가는 줄(`_subsMissSent`), 린트 전역 `loadSubs` 와 subs.js 가 부르는 본체 이름 넷(`CFG`, `_escHtml`, `fmtSubsDate`, `dDayLabel`), 회귀 검사 `backend/test/split-1119.test.js`(5개). `split-1116.test.js` 파일 목록에 `subs.js`. `first-user-audit-fixes.test.js` 가 `index.html` 만 읽어 청약 문구 검사가 실패해서 `readFrontend()` 로 바꿨다.
+- 확인: `npm run verify` 1,320개 통과. 로컬 미리보기(`home-preview`)에서 스크립트 순서(calc, data, subs, swap-checklist, policy-data, policy), 청약 목록 10건, 서울 칩 2건, 180일 칩, 가점 계산(38점 중하위권), 브리핑 "청약 임박" 카드. 우리 요청(`/api`, `/js`)에 실패 없음. 콘솔의 401 두세 건은 요청 목록에 잡히지 않아 출처는 확인 불가.
+- 확인하지 못한 것: 운영에서의 `/js/subs.js`(배포 뒤 200 과 형식부터 본다).
+- 다음: 브리핑, 도우미. 이 묶음이 운영에서 확인된 뒤 시작한다.
