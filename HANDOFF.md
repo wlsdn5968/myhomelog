@@ -7,11 +7,12 @@
 ## 1. 프로젝트와 지금 상태
 
 - 내집로그(myhomelog.vercel.app)는 공공 실거래 자료로 아파트 정보를 정리해 보여 주는 무료 서비스다. 매수와 매도 추천, 가격 예측은 하지 않는다.
-- 구조: 화면 `frontend/index.html`(본체, 1.3MB)과 `frontend/js/*.js`(본체 앞에서 부르는 일반 스크립트: calc, data, swap-checklist, policy-data, policy). 서버는 Express 를 Vercel Hobby 함수 하나(`api/index.js`, 지역 icn1)로 실행. 자료는 Supabase(`brxorvxdfrbxcavufspe`), 요청 제한과 계수는 Upstash Redis, 오류 수집은 Sentry(조직 myhomelog).
+- 구조: 화면 `frontend/index.html`(본체, 1.3MB)과 `frontend/js/*.js`(본체 앞에서 부르는 일반 스크립트: calc, data, subs, briefing, swap-checklist, policy-data, policy). 서버는 Express 를 Vercel Hobby 함수 하나(`api/index.js`, 지역 icn1)로 실행. 자료는 Supabase(`brxorvxdfrbxcavufspe`), 요청 제한과 계수는 Upstash Redis, 오류 수집은 Sentry(조직 myhomelog).
 - 작업 폴더: `C:\Users\Woo\Downloads\myhomelog_deploy_1\myhomelog\.claude\worktrees\p144` (브랜치 `ui-155`). Vercel projectId `prj_eYOJDb65wMQqbL5dAKo1pwaitiwW`, team `gyeollab`.
 
 동작하는 것 (확인됨)
-- 운영 배포본 75aeff8(2026-11-19 21시대 KST, 11-19 의 2회째 배포). 그 앞 db5c00a(같은 날 19시대). health 의 deploy 값 75aeff8, 첫 화면과 `/policy` 200, 배포 뒤 1시간 Sentry 새 문제 0건(11-19 확인).
+- 운영 배포본 1280ad4(2026-11-20 00:56 KST, 11-20 의 2회째 배포, 운영자 결정 "지금 배포"). 그 앞 dbee6ce(11-20 00:01, 청약 subs.js, 정책 자료 47건과 항목별 확인일), 75aeff8(11-19 21시대). 
+- 1280ad4 운영 확인(11-20 01시대): `/js/briefing.js` 200, 첫 화면에 태그와 로고 이름. 크롬 로그인 계정으로 임장노트 저장, 삭제(서버 DELETE 200), 새로고침 뒤 다시 열기에서 메모 없음, DB `field_notes` 0행. 검색어 `"'; drop table x;--` 200 빈 결과, "역삼I'PARK" 1건. 브리핑 화면, 약관 창 Escape(실제 키), 대출 계산 출처 줄 정상, 페이지 오류 0. 배포 뒤 Sentry 새 문제 0, 런타임 오류 0(1시간).
 - db5c00a 에 들어간 것: 2차 전면 감사 수정(내보내기 활동 기록, 소득 0 표시, 결제 링크와 사이트맵, 첫 화면 단위, 매수가 하한, 좌표 전용 캐시, 부분 결과 기억), 사용자 시나리오 점검 수정 8건(단지 상세 실투자금 대출액, 최근 거래일 경과일, 규제지역 전세 낀 집 특약 안내, 브리핑 뉴스 거르기, 휴대폰 지도 관심과 채팅 버튼 겹침, 도우미 창 닫기, 복비 협의 구간 표기, 정책 카드 법령 대조 4장). 운영에서 휴대폰 흉내 375x812 로 눌러 확인했다(`AUDIT_REPORT.md` 17절).
 - 75aeff8 에 들어간 것: 정책 감지 소스를 금융위원회, 국토교통부, 재정경제부, 국세청의 보도자료 목록(HTML)으로 바꿨다. 옛 RSS 는 정책브리핑이 2026-07-01 제공 중단(404), 금융위원회가 503 점검 중이었다. 로컬에서 실제 누리집으로 돌려 네 곳 모두 읽혔다(실패 0, 1.6초). 대기 수 계산을 한국 날짜 비교로 고쳤다(`AUDIT_REPORT.md` 17-6).
 - 11-19 아침 예약 작업(health): warm-rent fetched 310, skipped 2, 멈춤 없음. retention 오류 없음, `cpuYesterdayMs` 154,131. regulations-auto-fetch 는 옛 소스라 `sourcesFailed` 4/4 와 Sentry NODE-M(계획 212 가 의도한 알림).
@@ -178,7 +179,7 @@
 
 1. 다음에 바로 할 첫 작업: 시각을 확인하고 health 의 `crons['regulations-auto-fetch']` 를 본다. 11-20 06:30 KST 뒤라면 새 소스의 첫 운영 실행이다. `sourcesFailed` 0, `sourcesTotal` 4 인지, `processed`(걸린 글 수)와 `pendingReview` 를 확인한다. 11-19 밤 계산으로는 `pendingReview` 1(대출, 국토교통부 11-17 「주택법 시행령」 개정안, `AUDIT_REPORT.md` 17-7)이 나와야 맞다. `sourcesFailed` 가 0 이 아니면 Sentry `monitor: policy-sources` 알림의 `failed` 목록에서 어느 기관인지 보고 그 목록 페이지를 직접 받아 `LIST_PARSERS` 와 대조한다.
 1-2. (끝남) 첨부를 읽었고 대출 내용이 없었다. 11-15~11-19 네 기관 발표를 전수 대조해 검증일을 11-19 로 올리는 SQL 을 운영자가 실행했다(11-20 00시대, 조회로 확인). 「주택법 시행령」 개정이 공포되면(국가법령정보센터 현행 판이 2026. 9. 8. 에서 바뀌면) 정책 변화 자료의 리모델링 카드 상태와 덧붙임을 고친다.
-1-3. 감사 3차(`AUDIT_REPORT.md` 18절) 첫 묶음은 66fa2d0, 5146875 로 고쳤다(18-9). 배포 뒤 운영 크롬(로그인)에서 임장노트 저장, 삭제, 다시 열기로 서버 기록이 지워지는지와 DB `field_notes` 0행을 확인한다. 검색어 `"'; drop table x;--` 가 500 대신 빈 결과인지도 한 번만 본다(같은 요청을 반복하지 않는다). 남은 감사 항목 9~13 은 기획과 시안 순서, 13(관심 추가 때 푸시 구독 요청)은 의도 여부 확인부터.
+1-3. 감사 3차(`AUDIT_REPORT.md` 18절) 첫 묶음은 66fa2d0, 5146875 로 고쳤고 1280ad4 로 배포해 운영에서 확인했다(1절, 18-9). 남은 감사 항목 9~12 는 기획과 시안 순서, 13(관심 추가와 해제 때 푸시 구독 요청)은 의도 여부 확인부터. 임장노트 저장 직후 "기록 삭제" 단추가 상세를 다시 열어야 보이는 것도 다음 기획 때 같이 본다(11-20 운영 확인 중 발견, 이번 수정과 무관한 원래 동작).
 2. 운영자 결정 받기: 3-3 의 배포 횟수 규칙. 11-20 00:01 배포(dbee6ce)는 11-20 의 첫 배포다.
 3. 전송량: 원인 확인은 끝났다(`AUDIT_REPORT.md` 17-7, 11-12 부터 하루 150~170MB). 12월 중순에 30일 합계가 내려왔는지만 본다.
 4. 11-21 뒤: `AUDIT_REPORT.md` 17-5 의 queryid 8개로 시설 조건 건수 조회의 하루 횟수를 계산한다. 많으면 `backend/services/healthCounts.js:123-134`, `backend/jobs/facilityBackfill.js:133-135` 를 줄이는 계획을 쓴다.
