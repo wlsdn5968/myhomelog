@@ -6,7 +6,7 @@
  *    수시로 너가 정부 정책이나 제도 개편등을 파악해서 업데이트 해줘야돼."
  *
  * 하는 일:
- *   1) regulationsAutoFetch 가 정부 RSS(금융위·국토부·국세청·정책브리핑)를 최근 7일치 fetch +
+ *   1) regulationsAutoFetch 가 정부 보도자료 목록(금융위·국토부·재정경제부·국세청, 2026-11-19 부터 RSS 대신 누리집 목록)을 최근 7일치 fetch +
  *      부동산 정책 키워드 매칭
  *   2) 활성 regulations_snapshot 각 key 에 대해, 그 정책 주제 키워드에 걸린 보도자료를 대조
  *   3) 걸린 게 있으면 증거(제목·링크·일자)와 함께 운영자 확인 요청 로그
@@ -90,10 +90,14 @@ function pendingCounts(items, snapshots) {
   const out = {};
   for (const s of snapshots || []) {
     const topic = KEY_TOPIC_KEYWORDS[s.key] || null;
-    const since = Date.parse(String(s.source_effective_date || '')) || 0;
+    // PENDING-KST-1119: 검증일과 글 날짜를 한국 날짜(YYYY-MM-DD)로 견준다. 검증일 당일 글은 이미 본 것으로 친다.
+    //   종전에는 '검증일 UTC 0시 + 24시간' 이전을 모두 뺐는데, 2026-11-19 부터 소스가 날짜만 있는 보도자료 목록이라
+    //   글 시각이 그날 0시(KST) = 전날 15시(UTC)로 들어온다. 그러면 검증일 다음 날(KST) 글이 빠졌다.
+    const since = String(s.source_effective_date || '').slice(0, 10);
     out[s.key] = (items || []).filter((it) => {
       const t = Date.parse(it.pubDate || it.firstSeen || '') || 0;
-      if (t <= since + 86400000) return false; // 검증일 당일 글은 이미 본 것으로 친다
+      if (!t) return false;
+      if (since && new Date(t + 9 * 3600e3).toISOString().slice(0, 10) <= since) return false;
       if (!topic) return true;
       const hay = `${it.title} ${(it.hits || []).join(' ')}`;
       return topic.some((k) => hay.includes(k));

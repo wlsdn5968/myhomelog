@@ -2,7 +2,7 @@
  * 정책 변경 자동 감지 cron (Phase 20, 2026-05-04)
  *
  * 목적:
- *   금융위·국토교통부·국세청 보도자료 RSS 매주 fetch.
+ *   금융위·국토교통부·재정경제부·국세청 보도자료 목록을 매일 읽는다(2026-11-19 부터 RSS 대신 누리집 목록, 아래 POLICY-SRC-HTML-1119).
  *   부동산 정책 키워드 (LTV·DSR·취득세·양도세·종부세·생애최초·청약·디딤돌·보금자리·규제지역)
  *   매칭 시 운영자 즉시 알림 (Sentry warn).
  *
@@ -32,12 +32,18 @@ const logger = require('../logger');
 // 금융위원회 / 국토교통부 / 국세청 RSS URL
 // 변경 시 본 객체만 수정 — endpoint/parser 영향 X
 // Sprint QQ (2026-05-19): 한국부동산원 + 정책브리핑 추가 — 2026.4.17 만기연장 금지 등 누락 방지
+// POLICY-SRC-HTML-1119 (운영자 승인 "권고대로 진행", 2026-11-19): 아래 RSS 네 곳이 모두 죽었다(11-18 확인).
+//   정책브리핑 RSS 세 곳(dept_molit, dept_nts, policy)은 2026-07-01 제공 중단(공지 korea.kr newsId=132038885), 지금 404.
+//   금융위원회 RSS 는 503 "현재 RSS 서비스 점검 중입니다"(11-18, 11-19 재확인).
+//   그래서 기관 누리집의 보도자료 목록(HTML)을 직접 읽는다. 2026-11-19 에 네 곳 모두 아래 주소로 200, 상세 주소도 GET 으로 그 글이 열리는 것을 확인했다.
+//   robots.txt: 국토교통부(이 경로 제한 없음), 금융위원회(Allow: /), 재정경제부(검색과 설문만 제한), 국세청(Allow: /).
+//   예약 작업은 하루 한 번이라 첫 쪽만 읽는다(11-19 실측: 국토부 하루 최대 6건이라 40건(약 7일), 금융위 10건이 약 6일, 재정경제부 10건이 약 4일, 국세청 10건이 약 한 달).
+//   목록에서 0건이면 RSS 로도 해석해 본다(기관이 RSS 를 되살리면 그대로 읽힌다).
 const RSS_SOURCES = [
-  // ── 2026-06-13 전수 재검증 (구 4개 URL 전부 사망 확인: 금융위 404 · 국토부 무한리다이렉트 · 국세청 HTML · korea.kr 삭제) ──
-  //   교체 URL 은 모두 실제 WebFetch 로 유효 RSS(<item>+최근 날짜) 확인 후 반영.
   {
     name: '금융위원회',
-    url: 'https://www.fsc.go.kr/about/fsc_bbs_rss/?fid=0111', // 보도자료 RSS (검증 2026-06-13: 구 wsbiz/rss/in.do 404 → 본 경로 ~10건 유효, dc:date)
+    url: 'https://www.fsc.go.kr/no010101',
+    parse: 'fsc',
     // POLICY-MISS-1116 (운영자 지적 "왜 현재까지 대책을 못 따라가는거야"): 2026-08-13 「부동산 시장 안정을 위한 금융 종합대책」의
     //   보도자료 제목은 "수도권 23만호+α 추가 공급, 주택 공급 촉진 및 청년 등 실수요자 금융지원 강화"였다. 아래 낱말 가운데
     //   하나도 제목에 없어 감지되지 않았다(11-16 확인). '주택', '부동산', '전세', '가계대출'을 더하고 제목과 요약을 함께 본다.
@@ -45,19 +51,22 @@ const RSS_SOURCES = [
   },
   {
     name: '국토교통부',
-    url: 'https://www.korea.kr/rss/dept_molit.xml', // korea.kr 부처별 피드 (검증 2026-06-13: molit.go.kr 자체 RSS 무한리다이렉트 → korea.kr proxy 50건, 부동산 정책 확인)
+    url: 'https://www.molit.go.kr/USR/NEWS/m_71/lst.jsp?psize=40&lcmspage=1',
+    parse: 'molit',
+    cookieRetry: true, // 첫 요청은 쿠키를 심고 같은 주소로 307 을 돌려준다(쿠키 없이 따라가면 끝없이 돈다)
     keywords: ['주택', '부동산', '규제지역', '청약', '재건축', '재개발', '분양', 'LTV', 'DSR', '토지거래허가'],
   },
   {
-    name: '국세청',
-    url: 'https://www.korea.kr/rss/dept_nts.xml', // korea.kr 부처별 피드 (검증 2026-06-13: nts.go.kr 자체 RSS 없음 → korea.kr proxy 50건)
-    keywords: ['취득세', '양도세', '종부세', '종합부동산세', '주택세', '부동산세', '중과'],
+    name: '재정경제부',
+    url: 'https://mofe.go.kr/nw/nes/nesdta.do?bbsId=MOSFBBS_000000000028&menuNo=4010100',
+    parse: 'mofe',
+    keywords: ['부동산', '주택', '세제', '세법', '양도소득세', '양도세', '종합부동산세', '종부세', '취득세', '가계부채', '전세'],
   },
-  // Sprint QQ: 정책브리핑 (korea.kr) — 부처 종합 정책 발표, 4.17 만기연장 같은 직접 발표 cover
   {
-    name: '정책브리핑',
-    url: 'https://www.korea.kr/rss/policy.xml', // 정책뉴스 RSS (검증 2026-06-13: 구 rssList.do?section= 삭제 → 정적 .xml 30건 유효)
-    keywords: ['부동산', '주택', '대출', '가계부채', 'LTV', 'DSR', '청약', '취득세', '양도세'],
+    name: '국세청',
+    url: 'https://www.nts.go.kr/nts/na/ntt/selectNttList.do?mi=2201&bbsId=1028',
+    parse: 'nts',
+    keywords: ['취득세', '양도세', '양도소득세', '종부세', '종합부동산세', '주택세', '부동산세', '중과', '기준시가'],
   },
 ];
 
@@ -106,6 +115,80 @@ function parseRss(xml) {
   return items;
 }
 
+// POLICY-SRC-HTML-1119: 보도자료 목록 해석. 긴 정규식 대신 줄 단위로 잘라 짧은 패턴만 쓴다(느린 정규식 방지).
+//   날짜는 목록에 적힌 한국 날짜(YYYY-MM-DD 또는 YYYY.MM.DD.)를 그날 0시(KST)로 읽는다.
+function _kstDay(str) {
+  const m = String(str || '').match(/(20\d{2})[.-](\d{1,2})[.-](\d{1,2})/);
+  if (!m) return null;
+  const d = new Date(`${m[1]}-${m[2].padStart(2, '0')}-${m[3].padStart(2, '0')}T00:00:00+09:00`);
+  return isNaN(d) ? null : d;
+}
+function _clean(t) {
+  return String(t || '').replace(/<[^>]{0,300}>/g, ' ').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&middot;/g, '·').replace(/\s+/g, ' ').trim();
+}
+const LIST_PARSERS = {
+  // 국토교통부: <tr> 안에 <td class="bd_title"><a href="dtl.jsp?lcmspage=1&amp;id=95092623">제목</a> ... <td class="bd_date">2026-11-19</td>
+  molit(html) {
+    const out = [];
+    for (const row of String(html || '').split(/<tr[\s>]/i)) {
+      const ti = row.indexOf('class="bd_title"');
+      if (ti < 0) continue;
+      const id = (row.slice(ti, ti + 400).match(/dtl\.jsp\?[^"]{0,80}?id=(\d{1,12})/) || [])[1];
+      const as = row.indexOf('>', row.indexOf('<a', ti)) + 1, ae = row.indexOf('</a>', as);
+      const di = row.indexOf('class="bd_date"');
+      if (!id || as <= 0 || ae < as) continue;
+      const title = _clean(row.slice(as, ae).replace(/<i>[\s\S]{0,300}?<\/i>/gi, ''));
+      if (title) out.push({ title, link: `https://www.molit.go.kr/USR/NEWS/m_71/dtl.jsp?id=${id}`, pubDate: di >= 0 ? _kstDay(row.slice(di, di + 60)) : null, desc: '' });
+    }
+    return out;
+  },
+  // 금융위원회: <li> 안에 <a href="/no010101/88173?..." title="제목"> ... <div class="day">2026-11-19
+  fsc(html) {
+    const out = [];
+    for (const li of String(html || '').split(/<li[\s>]/i)) {
+      const m = li.match(/href="\/no010101\/(\d{1,10})[^"]{0,200}"\s+title="([^"]{1,400})"/);
+      const di = li.indexOf('class="day"');
+      if (!m || di < 0) continue;
+      out.push({ title: _clean(m[2]), link: `https://www.fsc.go.kr/no010101/${m[1]}`, pubDate: _kstDay(li.slice(di, di + 40)), desc: '' });
+    }
+    return out;
+  },
+  // 재정경제부: <li> 안에 <a href="javascript:fn_egov_select('MOSF_000000000080007');">제목</a> ... <span class="date">2026.11.19.</span>
+  mofe(html) {
+    const out = [];
+    for (const li of String(html || '').split(/<li[\s>]/i)) {
+      const m = li.match(/fn_egov_select\('([A-Z_0-9]{5,40})'\);">([^<]{1,400})<\/a>/);
+      const di = li.indexOf('class="date"');
+      if (!m || di < 0) continue;
+      out.push({ title: _clean(m[2]), link: `https://mofe.go.kr/nw/nes/detailNesDtaView.do?searchBbsId1=MOSFBBS_000000000028&searchNttId1=${m[1]}&menuNo=4010100`, pubDate: _kstDay(li.slice(di, di + 40)), desc: '' });
+    }
+    return out;
+  },
+  // 국세청: <tr> 안에 <a href="javascript:;" data-id="1356171" title="제목" class="nttInfoBtn"> ... <td data-table="date">2026.11.17.</td>
+  nts(html) {
+    const out = [];
+    for (const row of String(html || '').split(/<tr[\s>]/i)) {
+      const m = row.match(/data-id="(\d{1,12})"\s+title="([^"]{1,400})"\s+class="nttInfoBtn"/);
+      const di = row.indexOf('data-table="date"');
+      if (!m || di < 0) continue;
+      out.push({ title: _clean(m[2]), link: `https://www.nts.go.kr/nts/na/ntt/selectNttInfo.do?mi=2201&bbsId=1028&nttSn=${m[1]}`, pubDate: _kstDay(row.slice(di, di + 40)), desc: '' });
+    }
+    return out;
+  },
+};
+
+/**
+ * 국토교통부처럼 첫 응답에서 쿠키를 심고 같은 주소로 돌려보내는 곳: 쿠키를 받아 한 번만 다시 부른다.
+ */
+async function _getWithCookie(url, headers) {
+  const first = await axios.get(url, { timeout: FETCH_TIMEOUT_MS, headers, responseType: 'text', maxRedirects: 0, validateStatus: (s) => s >= 200 && s < 400 });
+  if (first.status < 300) return first;
+  const set = [].concat((first.headers && first.headers['set-cookie']) || []).map((c) => String(c).split(';')[0]).filter(Boolean);
+  if (!set.length) throw new Error(`redirect ${first.status} without cookie`);
+  return axios.get(url, { timeout: FETCH_TIMEOUT_MS, headers: { ...headers, Cookie: set.join('; ') }, responseType: 'text', maxRedirects: 2 });
+}
+
 /**
  * 한 RSS 소스 fetch + 키워드 매칭.
  *
@@ -114,13 +197,13 @@ function parseRss(xml) {
  */
 async function fetchSource(src) {
   try {
-    const resp = await axios.get(src.url, {
-      timeout: FETCH_TIMEOUT_MS,
-      headers: { 'User-Agent': 'myhomelog-bot/1.0 (regulations monitoring)' },
-      responseType: 'text',
-      // RSS 가 아니어도 HTML 응답 받아서 키워드 매칭 가능
-    });
-    const items = parseRss(resp.data);
+    const headers = { 'User-Agent': 'myhomelog-bot/1.0 (regulations monitoring)' };
+    const resp = src.cookieRetry
+      ? await _getWithCookie(src.url, headers)
+      : await axios.get(src.url, { timeout: FETCH_TIMEOUT_MS, headers, responseType: 'text' });
+    // POLICY-SRC-HTML-1119: 목록 해석이 먼저, 0건이면 RSS 로 해석한다.
+    let items = (src.parse && LIST_PARSERS[src.parse]) ? LIST_PARSERS[src.parse](resp.data) : [];
+    if (!items.length) items = parseRss(resp.data);
     const cutoff = Date.now() - LOOK_BACK_DAYS * 86400000;
     const matched = [];
     for (const it of items) {
@@ -219,4 +302,4 @@ async function run() {
 
 // LOOK_BACK_DAYS 도 export — regulationsAiCheck 가 사용자 노출 문구("최근 N일")에 쓴다.
 //   상수를 복제하면 한쪽만 바뀌어 문구가 거짓이 되므로 여기가 단일 출처.
-module.exports = { run, parseRss, RSS_SOURCES, LOOK_BACK_DAYS };
+module.exports = { run, parseRss, RSS_SOURCES, LOOK_BACK_DAYS, LIST_PARSERS };
