@@ -11693,7 +11693,8 @@ async function _syncFieldNote(aptName, saved) {
 async function clearFieldNote(aptName){
   if(!confirm('임장 기록을 삭제할까요?'))return;
   const A = window.MHL?.auth;
-  if (A?.user && A?.session?.access_token) {
+  // 로그인 사용자면 토큰이 잠시 비어 있어도 서버 삭제를 시도한다(_authHdr 가 토큰을 다시 받는다). 건너뛰면 서버 기록이 남아 되살아난다(2026-11-20 반증 검토 지적).
+  if (A?.user) {
     let ok = false;
     try {
       const r = await fetch(`${CFG.api}/field-notes/${encodeURIComponent(aptName)}`, { method: 'DELETE', headers: await _authHdr({}), signal: AbortSignal.timeout(8000) });

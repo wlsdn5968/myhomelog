@@ -73,13 +73,29 @@ test('1. 로그아웃 상태는 서버를 부르지 않고 이 기기 기록만 
   assert.deepEqual(c.deleted, ['상계벽산']);
 });
 
-test('2. 검색어 정리: 따옴표, 세미콜론, 백틱, 줄표 두 개를 빼고 와일드카드 제거는 그대로', () => {
+test('1. 로그인은 됐는데 토큰이 잠시 비어 있어도 서버 삭제를 시도한다(건너뛰면 서버 기록이 되살아난다)', async () => {
+  const calls = { fetch: [], deleted: [] };
+  const sb = {
+    window: { MHL: { auth: { user: { id: 'u' }, session: null } } }, CFG: { api: '/api' }, confirm: () => true,
+    AbortSignal: { timeout: () => undefined }, _authHdr: async (h) => h,
+    fetch: async (url, opt) => { calls.fetch.push(opt && opt.method); return { ok: true }; },
+    deleteNoteForApt: (n) => calls.deleted.push(n), toast: () => {}, currentDetail: null, renderFieldNote: () => {}, renderBookmarks: () => {}, encodeURIComponent,
+  };
+  vm.runInNewContext(extractFn(html, 'clearFieldNote', 'async function') + '\nthis.f = clearFieldNote;', sb);
+  await sb.f('x');
+  assert.deepEqual(calls.fetch, ['DELETE']);
+  assert.deepEqual(calls.deleted, ['x']);
+});
+
+test('2. 검색어 정리: 세미콜론과 줄표 두 개만 빼고, 실제 단지명의 따옴표와 백틱은 남긴다', () => {
   const line = searchSrc.split(/\r?\n/).find((l) => /^\s*const q = String\(req\.query\.q/.test(l));
   assert.ok(line, '검색어 정리 줄');
   const clean = new Function('req', line.replace(/\/\/.*$/, '') + '\nreturn q;');
   const q = (s) => clean({ query: { q: s } });
-  assert.equal(q(`"'; drop table x;--`), 'drop table x');
+  assert.equal(q(`"'; drop table x;--`), `"' drop table x`);
   assert.equal(q('은마'), '은마');
+  // 2026-11-20 운영 DB 에 있는 이름(반증 검토 지적으로 조회): 따옴표를 빼면 이 단지들을 찾지 못한다
+  for (const n of ["역삼I'PARK", "대공원 I'PARK", "1'st이지움", '루원시티2차SKLeaders`VIEW']) assert.equal(q(n), n);
   assert.equal(q('한일(A,B)'), '한일(A,B)', '괄호와 쉼표는 단지명에 쓰인다');
   assert.equal(q('a%_*b'), 'ab');
   assert.equal(q('래미안-원베일리'), '래미안-원베일리', '줄표 하나는 남긴다');
@@ -92,6 +108,7 @@ test('2. 외부 방어벽 HTML 은 빈 결과로 답하고 Sentry 로 보내지 
   assert.equal(f(new Error(cf)), true);
   assert.equal(f(new Error('statement timeout')), false);
   assert.equal(f(new Error('<!DOCTYPE html><title>Bad Gateway</title>')), false, '다른 HTML 오류는 그대로 오류로 다룬다');
+  assert.equal(f(new Error('<!DOCTYPE html><title>supabase.co | 522: Connection timed out</title> cloudflare')), false, 'Cloudflare 장애 페이지는 숨기지 않는다(500 과 Sentry 로 드러나야 한다)');
   const catchBlock = searchSrc.slice(searchSrc.indexOf('if (isUpstreamBlock(e))'), searchSrc.indexOf("'단지 검색 실패'"));
   assert.ok(catchBlock.includes("res.set('Cache-Control', 'no-store')") && catchBlock.includes('return res.json({ results: [], query: q })'));
   assert.ok(!catchBlock.includes('captureRouteError'), '막힌 검색어는 Sentry 로 보내지 않는다');

@@ -178,7 +178,7 @@ DB
 - 사이드바 노드와 고지 띠 노드는 지우지 말 것(숨김만). 헤더 넘침은 `header.scrollWidth` 로 재지 말 것. 캐시 키 `meta:dataCounts:v2` 이름을 바꾸지 말 것. → `docs/ops/ui-design-v2.md`
 - 인기 단지 실시간 응답을 쓰는 화면은 반드시 `_popRows(j)` 를 거칠 것. → `docs/ops/ui-design-v2.md`
 - 테스트에서 줄바꿈을 `'\n'` 문자로 비교하지 말 것(`\r?\n`). Windows 에서 heredoc 으로 정규식이나 `\n` 이 든 문자열을 바꾸지 말 것(Edit 도구나 node 스크립트 파일). → `docs/ops/ui-design-v2.md`, `docs/ops/operations-rules.md`
-- `frontend/js` 의 스크립트를 모듈(`type=module`)이나 `defer` 로 바꾸지 말 것. HTML 의 onclick 407곳이 전역 이름을 부르고, 본체보다 먼저 실행돼야 한다. 본체가 실행되는 순간(함수 밖) 읽는 값은 `frontend/js` 로 옮기지 않는다(파일을 못 받으면 본체가 통째로 멈춘다. `backend/test/split-1118.test.js`). 화면 코드를 글자로 읽는 새 검사는 `backend/testSupport/readFrontend.js` 를 쓴다. 파일 사이에 새 전역 이름을 쓰면 `eslint.config.mjs` 끝의 두 묶음에 적는다. → `plans/202-frontend-split.md`, `backend/test/split-1116.test.js`
+- `frontend/js` 의 스크립트를 모듈(`type=module`)이나 `defer` 로 바꾸지 말 것. HTML 의 onclick 407곳이 전역 이름을 부르고, 본체보다 먼저 실행돼야 한다. 본체가 실행되는 순간(함수 밖) 읽는 값은 `frontend/js` 로 옮기지 않는다(파일을 못 받으면 본체가 통째로 멈춘다. `backend/test/split-1118.test.js`). 화면 코드를 글자로 읽는 새 검사는 `backend/testSupport/readFrontend.js` 를 쓴다. 파일 사이에 새 전역 이름을 쓰면 `eslint.config.mjs` 끝의 두 묶음에 적는다. 함수를 옮길 때 `/* … */` 블록 주석을 반만 옮기지 말 것(본체에 닫히지 않은 주석이 남으면 화면 전체가 멈춘다. 옮기는 스크립트는 미리 보기로 범위부터 본다, 2026-11-20). → `plans/202-frontend-split.md`, `backend/test/split-1116.test.js`, `backend/test/split-1120.test.js`
 
 문구와 화면
 - 화면 문구는 **해요체 · 문장 속 화살표/줄표 나열 금지 · 내부 용어(KAPT·MOLIT·캐시·세션) 금지**. 면책 문장과 법적 고지는 글자 그대로 둔다. → `docs/ops/ui-design-v2.md`, `docs/ops/operations-rules.md`
@@ -205,7 +205,7 @@ DB
 
 ## 📂 핵심 구조와 상세 문서
 
-- 화면: `frontend/index.html`(본체), `frontend/js/*.js`(본체 앞에서 부르는 일반 스크립트: `calc.js`, `data.js`, `swap-checklist.js`, `policy.js`, 자료 `policy-data.js`. 계획은 `plans/202-frontend-split.md`), `frontend/sw.js`, 구 경계 `frontend/geo/`
+- 화면: `frontend/index.html`(본체), `frontend/js/*.js`(본체 앞에서 부르는 일반 스크립트: `calc.js`, `data.js`, `subs.js`, `briefing.js`, `swap-checklist.js`, `policy.js`, 자료 `policy-data.js`. 계획은 `plans/202-frontend-split.md`), `frontend/sw.js`, 구 경계 `frontend/geo/`
 - 서버: `backend/server.js`, `backend/routes/`, `backend/services/`, `backend/jobs/`(예약 작업), `backend/middleware/`, 진입점 `api/index.js`
 - 예약 작업과 경로 연결: `vercel.json` (예약 작업 14개)
 - 검사: `backend/test/`, 묶음 실행은 `scripts/run-backend-tests-utc.js`
@@ -214,7 +214,7 @@ DB
 - 감사 기록: `AUDIT_REPORT.md`(최근 감사, 지금은 11-18 2차 감사와 사용자 시나리오 점검), `docs/audit/`(지난 감사 보관, 11-15 와 11-16 감사는 `AUDIT_REPORT_2026-11-15_16.md`)
 - 주제별 기록 `docs/ops/`: `db-capacity.md`(DB 용량, 원본 창 자르기) · `components.md`(구성요소 버전, 점검) · `redis.md`(Upstash 한도) · `security.md`(보안 결정) · `ui-design-v2.md`(문구 규칙, 디자인 v2 화면) · `feature-history.md`(기능별 변경) · `done-history.md`(완료 항목) · `operations-rules.md`(CPU 한도, 2026-11-11 과 11-12~13 규칙 원문)
   새 기록은 맞는 파일에 덧붙이고, 새 금지 규칙은 이 파일 "금지 사항"에도 한 줄 남긴다. 한 파일에 몰지 않는다.
-- 계획 문서: `plans/README.md`(지금 열려 있는 것), `plans/STATUS-HISTORY.md`(지난 실행 순서와 상태 표), 개별 계획 `plans/<번호>-*.md`. 다음 새 계획 번호는 213부터.
+- 계획 문서: `plans/README.md`(지금 열려 있는 것), `plans/STATUS-HISTORY.md`(지난 실행 순서와 상태 표), 개별 계획 `plans/<번호>-*.md`. 다음 새 계획 번호는 214부터(2026-11-20 에 213 을 씀).
 - Sprint 기록: `.local-notes/SPRINT_NOTES_20260512.md` (gitignored, 메인 폴더에만 있음)
 - NCP setup: `.local-notes/NAVER_MAPS_SETUP_GUIDE.md`
 

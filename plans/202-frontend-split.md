@@ -1,4 +1,4 @@
-# 202. 화면 한 파일 나누기 (4단계 첫 묶음까지 배포됨, 4단계 둘째 묶음 청약 구현 끝 미배포)
+# 202. 화면 한 파일 나누기 (4단계 둘째 묶음 청약까지 배포됨, 셋째 묶음 브리핑 구현 끝)
 
 작성 2026-11-16. 출처는 전면 감사 발견 18(`AUDIT_REPORT.md` 15절). 운영자 승인 "권고대로 진행"에 따라 계획만 세웠고 코드는 바꾸지 않았다. 실행은 단계마다 운영자 승인 뒤에 한다.
 
@@ -101,3 +101,13 @@
 - 확인: `npm run verify` 1,320개 통과. 로컬 미리보기(`home-preview`)에서 스크립트 순서(calc, data, subs, swap-checklist, policy-data, policy), 청약 목록 10건, 서울 칩 2건, 180일 칩, 가점 계산(38점 중하위권), 브리핑 "청약 임박" 카드. 우리 요청(`/api`, `/js`)에 실패 없음. 콘솔의 401 두세 건은 요청 목록에 잡히지 않아 출처는 확인 불가.
 - 확인하지 못한 것: 운영에서의 `/js/subs.js`(배포 뒤 200 과 형식부터 본다).
 - 다음: 브리핑, 도우미. 이 묶음이 운영에서 확인된 뒤 시작한다.
+- 운영 확인(2026-11-20 00:02 KST): 배포본 dbee6ce 에서 `/js/subs.js` 200, `application/javascript`, 6,859자, `loadSubs` 정의 있음. 첫 화면에 태그 있음.
+
+## 4단계 셋째 묶음 결과: 브리핑 (2026-11-20, 커밋 66fa2d0)
+
+- 옮긴 것(280줄, 글자 그대로): `loadNews`, `loadNewsSummary`, `_renderRecordsCard`(위 블록 주석과 브리핑 구역 머리 주석 포함), `_recPickRegion`, `renderBriefing`, `openYesterdayBrief`, `copyBriefLink`. 새 파일 `frontend/js/briefing.js`, 태그는 `subs.js` 바로 뒤.
+- 옮기는 스크립트를 먼저 미리 보기로만 돌렸고, 두 가지를 잡았다. 블록 주석(`/* PRICE-RECORDS … */`)의 끝 줄만 잡혀 본체에 닫히지 않은 주석이 남을 뻔했고, 지도 시트 구역 끝 표시(`// ============ /MSHEET ============`)가 같이 옮겨질 뻔했다. 범위를 직접 지정해 고친 뒤 적용했다.
+- 옮기지 않은 것: 같은 구역에 섞여 있던 데이터 상태(`openDataStatus`), 오류 신고, 활동 기록(`_bumpActivity`), 지도 시트 함수, 최상위 `let _ermCtx`, `let _actLast`. 청약과 브리핑이 함께 쓰는 `fmtSubsDate`, `dDayLabel` 은 본체에 그대로 둔다.
+- 더한 것: 화면 전환 함수 `sv` 에서 브리핑 화면일 때 `loadNews` 가 없으면 알리고 돌아가는 줄(`_brfMissSent`), 린트 전역 이름(본체가 부르는 2개, briefing.js 가 부르는 본체 이름 11개), 회귀 검사 `backend/test/split-1120.test.js`(5개). `split-1116.test.js` 파일 목록에 `briefing.js`. `popular-degraded-label.test.js` 가 `index.html` 만 읽어 실패해서 `readFrontend()` 로 바꿨다(지키는 내용은 그대로).
+- 확인: `npm run verify` 1,337개 통과. 로컬 미리보기에서 스크립트 순서(calc, data, subs, briefing, swap-checklist, policy-data, policy), 브리핑 날짜, 띠, 시장 3줄, 청약 임박, 인기 단지 TOP 5, 경신 카드, 뉴스와 분류 단추, 오류 0.
+- 다음: 도우미. 이 묶음이 운영에서 확인된 뒤 시작한다.
