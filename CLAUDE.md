@@ -139,7 +139,7 @@
 | 좌표 | Kakao Map API | apt_geocache (Sprint LL 점수 매칭) |
 | 학교 | Kakao + NEIS 학교알리미 | nearbySchools |
 | 학원 | Kakao Map API | nearbyAcademies (Sprint OO) |
-| 정책/규제 | korea.kr 정책브리핑 + 금융위 RSS | regulations_snapshot (Sprint QQ) |
+| 정책/규제 | 금융위원회, 국토교통부, 재정경제부, 국세청 보도자료 목록(2026-11-19 부터, 옛 RSS 는 중단과 점검으로 죽음) | regulations_snapshot (Sprint QQ), 감지는 `backend/jobs/regulationsAutoFetch.js` |
 
 ---
 
@@ -187,7 +187,7 @@ DB
 - 배포 뒤 운영 실측으로 "화면이 말하는 기간 = 실제 집계"를 확인할 것. 가짜 응답 미리보기는 서버 데이터 경로를 검증하지 못한다. → `docs/ops/feature-history.md`
 
 정책 기준
-- 작업을 시작할 때 health 의 `crons['regulations-auto-fetch'].pendingReview` 를 본다. 0 이 아니면 그 보도자료의 원문(본문과 첨부)을 열어 저장값과 대조한다. 제목만 보고 넘어가지 않는다. 180일 경고 띠를 기다리지 않는다. 같은 기록의 `sourcesFailed` 가 0 이 아니면 소스를 못 읽은 것이라 `pendingReview` 0 을 믿지 않고 정부 누리집에서 직접 확인한다(2026-07-01 정책브리핑 RSS 중단, plans/212). → `docs/ops/operations-rules.md` 끝(2026-11-16 운영자 지적)
+- 작업을 시작할 때 health 의 `crons['regulations-auto-fetch'].pendingReview` 를 본다. 0 이 아니면 그 보도자료의 원문(본문과 첨부)을 열어 저장값과 대조한다. 제목만 보고 넘어가지 않는다. 180일 경고 띠를 기다리지 않는다. 같은 기록의 `sourcesFailed` 가 0 이 아니면 소스를 못 읽은 것이라 `pendingReview` 0 을 믿지 않고 정부 누리집에서 직접 확인한다(2026-07-01 정책브리핑 RSS 중단, plans/212). 2026-11-19 부터 소스는 네 기관 누리집의 보도자료 목록이다(POLICY-SRC-HTML-1119). 기관이 목록 모양을 바꾸면 그 소스가 0건이 되어 `sourcesFailed` 로 드러난다. → `docs/ops/operations-rules.md` 끝(2026-11-16 운영자 지적)
 - 주담대 한도와 생애최초 LTV 는 수도권 전체에 적용된다("수도권·규제지역"). 계산식 세 곳(화면 calcLTV, 상세 계산기 dc, 서버 computeLTV)을 같이 고친다. → `backend/test/cap-metro-1116.test.js`
 - 정책 변화 화면의 자료는 `backend/data/policy-changes.json` 하나다. `frontend/js/policy-data.js` 는 직접 고치지 않고 `node scripts/build-policy-data.js` 로 만든다. 원문 본문을 열어 대조한 것만 넣고, 정부안은 "안"으로 표시한다. 전체를 다시 대조한 날에만 `checked` 를 고친다. → `plans/203-policy-changes.md`
 
