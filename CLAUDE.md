@@ -155,7 +155,7 @@
 ## 🚫 금지 사항 (이유와 원문은 옆 문서)
 
 자원과 비용
-- Vercel 팀 Active CPU 는 30일 합계 4시간이다. 순간 부하가 아니라 누적으로 판단한다. 새 예약 작업이나 무거운 경로를 넣기 전에 CPU 를 먼저 잰다. → `docs/ops/operations-rules.md`, `AUDIT_REPORT.md` 11절
+- Vercel 팀 Active CPU 는 30일 합계 4시간이다. 순간 부하가 아니라 누적으로 판단한다. 새 예약 작업이나 무거운 경로를 넣기 전에 CPU 를 먼저 잰다. → `docs/ops/operations-rules.md`, `docs/audit/AUDIT_REPORT_2026-11-15_16.md` 11절
 - 하루 CPU 합계 장치(`backend/services/cpuBudget.js`)를 지우지 말 것. → `docs/ops/operations-rules.md`
 - 서비스는 무료다. 유료 API 를 다시 붙이지 말 것. 화면에 "유료 플랜 출시", "AI 가 만든다" 문구를 쓰지 않는다. → `docs/ops/operations-rules.md`
 - `vercel.json` 첫 두 route(수집기 차단, 감시 봇용 작은 응답)를 지우거나 순서를 바꾸지 말 것. → `docs/ops/operations-rules.md`
@@ -212,7 +212,7 @@ DB
 - 검사: `backend/test/`, 묶음 실행은 `scripts/run-backend-tests-utc.js`
 - DB 변경 기록: `supabase/migrations/`
 - 인계 문서: `HANDOFF.md`. 새 세션은 이 파일부터 읽는다.
-- 감사 기록: `AUDIT_REPORT.md`(2026-11-15 전면 감사와 CPU 재측정), `docs/audit/`(지난 감사 보관)
+- 감사 기록: `AUDIT_REPORT.md`(최근 감사, 지금은 11-18 2차 감사와 사용자 시나리오 점검), `docs/audit/`(지난 감사 보관, 11-15 와 11-16 감사는 `AUDIT_REPORT_2026-11-15_16.md`)
 - 주제별 기록 `docs/ops/`: `db-capacity.md`(DB 용량, 원본 창 자르기) · `components.md`(구성요소 버전, 점검) · `redis.md`(Upstash 한도) · `security.md`(보안 결정) · `ui-design-v2.md`(문구 규칙, 디자인 v2 화면) · `feature-history.md`(기능별 변경) · `done-history.md`(완료 항목) · `operations-rules.md`(CPU 한도, 2026-11-11 과 11-12~13 규칙 원문)
   새 기록은 맞는 파일에 덧붙이고, 새 금지 규칙은 이 파일 "금지 사항"에도 한 줄 남긴다. 한 파일에 몰지 않는다.
 - 계획 문서: `plans/README.md`(지금 열려 있는 것), `plans/STATUS-HISTORY.md`(지난 실행 순서와 상태 표), 개별 계획 `plans/<번호>-*.md`. 다음 새 계획 번호는 213부터.

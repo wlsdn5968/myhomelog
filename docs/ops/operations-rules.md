@@ -7,9 +7,9 @@
 
 - 아래 "개인정보처리방침 11-17 시행" 줄의 로컬 브랜치 커밋 9355c94 는 지금 c0fd32f 다(2026-11-15 `git log -1 privacy-1117`).
 - 아래 "화면 변경 확인 방법"의 launch 설정 `home-preview` 는 저장소 안이 아니라 한 단계 위 폴더 `C:\Users\Woo\Downloads\myhomelog_deploy_1\.claude\launch.json` 에 있다(2026-11-15 확인). 저장소 안 `.claude/launch.json` 에는 `frontend-static` 만 있다.
-- 아래 "자원 실측(10-12~11-11)"의 최신 값은 "CPU 한도" 절과 `AUDIT_REPORT.md` 11절에 있다(11-15: 팀 9시간 10분, 내집로그 3시간 26분).
+- 아래 "자원 실측(10-12~11-11)"의 최신 값은 "CPU 한도" 절과 `docs/audit/AUDIT_REPORT_2026-11-15_16.md` 11절에 있다(11-15: 팀 9시간 10분, 내집로그 3시간 26분).
 
-### CPU 한도 (2026-11-15, AUDIT_REPORT.md 11절)
+### CPU 한도 (2026-11-15, docs/audit/AUDIT_REPORT_2026-11-15_16.md 11절)
 - **Vercel 팀 Active CPU 는 30일 합계 4시간이다. 순간 부하가 아니라 누적으로 판단할 것.** 11-15 실측: 팀 9시간 10분, 내집로그 3시간 26분. 조용한 날 내집로그는 하루 약 3분이고 튄 여섯 날(배포 71회, 운영 점검, 수집기)이 30일의 44%였다. 팀 합계가 하루 평균 8분을 넘으면 한도를 넘는다.
 - **하루 CPU 합계 장치를 지우지 말 것**: `backend/services/cpuBudget.js`(5분에 한 번 Redis 날짜 키에 더함, 5분에 Sentry 경고 `monitor:cpu-budget`, 8분에 검색 로봇의 /briefing, /region, /apt 를 503 으로 미룸). health 의 `cpuDay`, `crons.retention.cpuYesterdayMs`, `crons.<이름>.cpuMs` 로 본다. 검사 `backend/test/cpu-budget-1115.test.js`.
 - **새 예약 작업이나 무거운 경로를 넣기 전에 CPU 를 먼저 잰다.** 작업 시작 때 사용량 화면(vercel.com/gyeollab/~/usage 의 Fluid Active CPU)을 본다.

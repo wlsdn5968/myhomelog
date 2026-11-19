@@ -1,7 +1,7 @@
 /**
  * backend/test/audit-1116.test.js
  *
- * 2026-11-16 전면 감사(AUDIT_REPORT.md 15절)에서 운영 화면으로 확인한 것을 고친 뒤의 회귀 검사.
+ * 2026-11-16 전면 감사(docs/audit/AUDIT_REPORT_2026-11-15_16.md 15절, 2026-11-19 에 옮김)에서 운영 화면으로 확인한 것을 고친 뒤의 회귀 검사.
  */
 'use strict';
 const { test } = require('node:test');
