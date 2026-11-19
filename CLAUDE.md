@@ -191,8 +191,7 @@ DB
 - 주담대 한도와 생애최초 LTV 는 수도권 전체에 적용된다("수도권·규제지역"). 계산식 세 곳(화면 calcLTV, 상세 계산기 dc, 서버 computeLTV)을 같이 고친다. → `backend/test/cap-metro-1116.test.js`
 - 정책 변화 화면의 자료는 `backend/data/policy-changes.json` 하나다. `frontend/js/policy-data.js` 는 직접 고치지 않고 `node scripts/build-policy-data.js` 로 만든다. 원문 본문을 열어 대조한 것만 넣고, 정부안은 "안"으로 표시한다. 전체를 다시 대조한 날에만 `checked` 를 고친다. → `plans/203-policy-changes.md`
 
-일정이 걸린 것
-- 개인정보처리방침 v1.3 은 2026-11-17 에 배포했다(5ab0d91). `privacy-1117` 브랜치와 작업 폴더는 운영자 승인으로 지웠다(커밋 c0fd32f 는 master 에 있다). → `HANDOFF.md`
+결제
 - 결제를 다시 켜기 전에 `docs/ops/security.md` 의 run-6 결제 4건부터 정한다.
 
 ### 폐기 (운영자 방침·판정)
@@ -231,4 +230,4 @@ DB
 
 ---
 
-마지막 갱신: 2026-11-18 (81e9f6d 배포와 화면 파일 나누기 4단계 첫 묶음, 테스트 1,274). 그 앞: 2026-11-17 (정기 점검: 인계 문서를 지금 상태로 다시 쓰고 옛 판은 `docs/ops/handoff-archive-2026-11-17.md` 로 보관 · 운영자 원문 한 줄 추가 · 화면 파일 나누기 3단계까지 · 정책 변화 화면 · 테스트 1,268). 이전 갱신: 2026-11-15 정기 점검(날짜별 기록을 docs/ops 로 옮김), 그 앞은 `docs/ops/done-history.md` 끝.
+마지막 갱신: 2026-11-19 (정기 점검: 감사 보고서 1~15절을 `docs/audit/AUDIT_REPORT_2026-11-15_16.md` 로, 끝난 일정 한 줄과 옛 갱신 이력을 `docs/ops/done-history.md` 로 옮김, 인계 문서를 지금 상태로 다시 씀. 배포본 75aeff8, 테스트 1,315). 그 앞 이력은 `docs/ops/done-history.md` 끝.
