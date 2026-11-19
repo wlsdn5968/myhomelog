@@ -13,13 +13,15 @@ const path = require('node:path');
 const vm = require('node:vm');
 const ROOT = path.join(__dirname, '../..');
 const data = JSON.parse(fs.readFileSync(path.join(ROOT, 'backend/data/policy-changes.json'), 'utf8'));
-const { validate, render, CATS, STATUSES } = require('../../scripts/build-policy-data');
+const { validate, render, CATS, STATUSES, SRC_HOSTS } = require('../../scripts/build-policy-data');
 
 test('자료: 모양 검사를 통과하고, 항목마다 공식 출처와 확인일이 있다', () => {
   assert.deepEqual(validate(data), []);
   assert.ok(data.items.length >= 30, '2025년부터 모은 항목');
   for (const it of data.items) {
-    assert.ok(it.src.every((u) => /^https:\/\/www\.(korea\.kr|fsc\.go\.kr|law\.go\.kr)\//.test(u)), `${it.title}: 지금 자료의 출처는 정책브리핑, 금융위, 국가법령정보센터뿐이다`);
+    // POLICY-1119: 국토교통부 보도자료 원문(첨부까지 읽음)을 출처로 넣으면서, 검증 함수의 공식 출처 목록(SRC_HOSTS)과 같은 기준으로 본다.
+    //   고치기 전에는 정책브리핑, 금융위, 국가법령정보센터 세 곳만 허용했다.
+    assert.ok(it.src.every((u) => u.startsWith('https://') && SRC_HOSTS.includes(new URL(u).host)), `${it.title}: 출처는 정부 공식 누리집(SRC_HOSTS)이어야 한다`);
   }
   assert.ok(new Date(data.checked) <= new Date(), '확인일이 미래가 아니다');
 });

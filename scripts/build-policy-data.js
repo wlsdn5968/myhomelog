@@ -31,6 +31,8 @@ function validate(data) {
     const at = `items[${i}] ${it && it.date} ${it && it.title}`;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(String(it.date || ''))) errs.push(`${at}: date 형식`);
     if (it.effective != null && !/^\d{4}-\d{2}-\d{2}$/.test(String(it.effective))) errs.push(`${at}: effective 형식`);
+    // POLICY-CHK-1119: 항목별 원문 확인일(선택). 전체 대조일(checked) 뒤에 넣은 항목에 붙인다. 발표일보다 앞이면 틀린 기록이다.
+    if (it.checked != null && (!/^\d{4}-\d{2}-\d{2}$/.test(String(it.checked)) || String(it.checked) < String(it.date))) errs.push(`${at}: checked 형식이나 발표일보다 앞`);
     if (!CATS.includes(it.cat)) errs.push(`${at}: cat`);
     if (!STATUSES.includes(it.status)) errs.push(`${at}: status`);
     for (const k of ['org', 'title', 'after', 'who']) if (typeof it[k] !== 'string' || !it[k].trim()) errs.push(`${at}: ${k} 없음`);

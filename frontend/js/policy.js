@@ -47,7 +47,8 @@ function _polCard(it, idx, checked){
     + (st === '안' ? '<div class="pol-draft">아직 확정되지 않았어요</div>' : '')
     + ba + rows
     + (it.note ? `<p class="pol-note">${_polEsc(it.note)}</p>` : '')
-    + `<div class="pol-foot"><span class="pol-srcs">${_polSrcLinks(it)}</span><span class="pol-chk">확인 ${_polEsc(_polDot(checked))}</span></div>`
+    // POLICY-CHK-1119: 항목에 자기 원문 확인일(it.checked)이 있으면 그것을 쓴다. 전체 대조일보다 뒤에 넣은 항목이 "확인 11.16"처럼 발표 전 날짜로 보였다.
+    + `<div class="pol-foot"><span class="pol-srcs">${_polSrcLinks(it)}</span><span class="pol-chk">확인 ${_polEsc(_polDot(it.checked || checked))}</span></div>`
     + '</article>';
 }
 function _polBtns(list, cur, fn){

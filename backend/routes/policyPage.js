@@ -17,7 +17,8 @@ const ORIGIN = 'https://myhomelog.vercel.app';
 const CATS = [['loan', '대출'], ['zone', '규제지역·토지거래허가'], ['tax', '세금'], ['supply', '청약·공급'], ['rent', '전월세']];
 const STATUS_LABEL = { '시행': '시행', '예정': '예정', '안': '정부안', '계획': '계획', '종료': '끝남' };
 const STATUS_CLASS = { '시행': 'on', '예정': 'soon', '안': 'soon', '계획': 'plan', '종료': 'end' };
-const SRC_NAME = { 'www.korea.kr': '정책브리핑', 'www.fsc.go.kr': '금융위원회', 'www.law.go.kr': '국가법령정보센터' };
+// POLICY-CHK-1119: 화면 쪽 POL_SRC_NAME(frontend/js/policy.js)과 같은 표. 국토교통부 원문을 출처로 넣으면서 맞췄다.
+const SRC_NAME = { 'www.korea.kr': '정책브리핑', 'www.fsc.go.kr': '금융위원회', 'www.law.go.kr': '국가법령정보센터', 'www.molit.go.kr': '국토교통부', 'www.mois.go.kr': '행정안전부', 'www.nts.go.kr': '국세청', 'www.mofe.go.kr': '재정경제부' };
 const dot = (d) => String(d || '').replace(/-/g, '.');
 const catLabel = (c) => (CATS.find((x) => x[0] === c) || [])[1] || '';
 
@@ -41,7 +42,7 @@ function card(it) {
     ${ba}
     <dl><div><dt>누구에게</dt><dd>${esc(it.who)}</dd></div>${it.effective ? `<div><dt>시행</dt><dd>${esc(dot(it.effective))}</dd></div>` : ''}</dl>
     ${it.note ? `<p class="note">${esc(it.note)}</p>` : ''}
-    <div class="cfoot"><span class="srcs">${links}</span><span class="chk">확인 ${esc(dot(DATA.checked))}</span></div>
+    <div class="cfoot"><span class="srcs">${links}</span><span class="chk">확인 ${esc(dot(it.checked || DATA.checked))}</span></div>
   </article>`;
 }
 
@@ -127,7 +128,7 @@ ${FONT_LINK}
 <nav class="cats" aria-label="분류로 바로 가기">${nav}</nav>
 ${body}
 <div class="foot">참고용 정리예요. 실제 적용은 원문과 담당 기관에서 꼭 확인하세요. <strong>매수·매도 추천이 아니에요.</strong><br>
-출처: 정책브리핑, 금융위원회, 국가법령정보센터 · 원문 확인 ${esc(dot(DATA.checked))} · ${items.length}건<br>
+출처: 정책브리핑, 금융위원회, 국토교통부, 국가법령정보센터 · 원문 확인 ${esc(dot(DATA.checked))} · ${items.length}건<br>
 © 내집로그 · <a href="${ORIGIN}/?view=policy">앱에서 분류별로 보기</a> · <a href="${ORIGIN}/data-sources">데이터 출처</a></div>
 </main></body></html>`;
 }
