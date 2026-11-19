@@ -12,7 +12,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+// SPLIT-1120 (plans/202 4단계): 브리핑 함수가 frontend/js/briefing.js 로 옮겨 가서 화면 코드 전체를 읽는다.
+const html = require('../testSupport/readFrontend').readFrontend();
 const read = (rel) => fs.readFileSync(path.join(__dirname, rel), 'utf8');
 
 function extractFn(src, name) {

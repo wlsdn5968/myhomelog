@@ -142,7 +142,15 @@ export default [
       // SPLIT-1118 (plans/202 4단계): frontend/js/data.js 의 자료 상수
       POLICY_TIMELINE: 'readonly', PERSONAS: 'readonly', FN_CHECKS: 'readonly',
       // SPLIT-1119 (plans/202 4단계 둘째 묶음): frontend/js/subs.js 의 청약 함수
-      loadSubs: 'readonly' } },
+      loadSubs: 'readonly',
+      // SPLIT-1120 (plans/202 4단계 셋째 묶음): frontend/js/briefing.js 의 브리핑 함수(2026-11-20 린트 출력으로 센 이름)
+      loadNews: 'readonly', renderBriefing: 'readonly' } },
+  },
+  {
+    // SPLIT-1120: briefing.js 가 실행 시점에 부르는 본체의 함수와 값(2026-11-20 린트 출력으로 센 11개).
+    files: ['frontend/js/briefing.js'],
+    languageOptions: { globals: { CFG: 'readonly', _dispAptName: 'readonly', _escHtml: 'readonly', _fmtSgg: 'readonly', _jsonAttr: 'readonly',
+      _kstMD: 'readonly', _popRows: 'readonly', dDayLabel: 'readonly', fmtSubsDate: 'readonly', healthJson: 'readonly', toast: 'readonly' } },
   },
   {
     // SPLIT-1119: subs.js 가 실행 시점에 부르는 본체의 함수와 값.

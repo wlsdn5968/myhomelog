@@ -184,7 +184,8 @@ router.use((req, res, next) => {
 //   변경: blanket requireAuth 에서 POST /webhook 만 예외 처리 (그 외 라우트는 그대로 requireAuth — secure-by-default 유지).
 //   (현재 TOSS_* 키 미설정 → 결제 비활성 latent. 결제 활성화 전 필수 수정.)
 router.use((req, res, next) => {
-  if (req.method === 'POST' && req.path.endsWith('/webhook')) return next();
+  // BILLING-WEBHOOK-EXACT-1120 (감사 18-3 의 16): 끝 글자 비교(endsWith)는 나중에 '/x/webhook' 경로가 생기면 인증이 빠진다. 정확히 같을 때만.
+  if (req.method === 'POST' && req.path === '/webhook') return next();
   return requireAuth(req, res, next);
 });
 

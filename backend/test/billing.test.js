@@ -390,8 +390,10 @@ test('billing 라우터 배선 — requireAuth 게이트가 보호 대상 라우
   //    (Toss 서버가 JWT 없이 호출하므로 이 예외 자체는 의도된 설계 — AUTH-FIX-2026-05-21)
   assert.match(gateBlock, /req\.method\s*===\s*'POST'/,
     'webhook 예외에 method 조건이 없다 — GET 으로도 인증을 우회할 수 있다');
-  assert.match(gateBlock, /req\.path\.endsWith\('\/webhook'\)/,
-    "webhook 예외가 endsWith('/webhook') 가 아니다 — 경로 조건이 느슨하면 다른 라우트도 열린다");
+  // BILLING-WEBHOOK-EXACT-1120: endsWith 에서 정확한 비교로 좁혔다(감사 18-3 의 16). 느슨한 endsWith 로 되돌아가면 실패한다.
+  assert.match(gateBlock, /req\.path\s*===\s*'\/webhook'/,
+    "webhook 예외가 req.path === '/webhook' 이 아니다 — 경로 조건이 느슨하면 다른 라우트도 열린다");
+  assert.doesNotMatch(gateBlock, /req\.path\.endsWith\(/, 'endsWith 로 경로를 비교하면 /x/webhook 같은 새 경로도 인증이 빠진다');
 
   // 3) 게이트보다 **앞에** 정의된 라우트는 공개가 의도된 것만이어야 한다.
   //    새 라우트를 위쪽에 추가하면 조용히 무인증이 되므로 허용 목록으로 못 박는다.

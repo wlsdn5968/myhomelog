@@ -27,7 +27,8 @@ test('L5 단지 검색: ILIKE 와일드카드(%·_·\\)를 빼고 나서 최소 
   const s = read('../routes/search.js');
   const i = s.indexOf("router.get('/apt', async (req, res) => {");
   const body = s.slice(i, i + 1200);
-  assert.match(body, /const q = String\(req\.query\.q \|\| ''\)\.slice\(0, 100\)\.replace\(\/\[%_\\\\\*\]\/g, ''\)\.trim\(\);/);
+  // SEARCH-WAF-1120: 와일드카드 제거 뒤에 따옴표, 세미콜론 정리가 붙었다(audit3-1120.test.js). 와일드카드 제거와 trim 이 한 줄에 있는지만 본다.
+  assert.match(body, /const q = String\(req\.query\.q \|\| ''\)\.slice\(0, 100\)\.replace\(\/\[%_\\\\\*\]\/g, ''\)[^\n]*\.trim\(\);/);
   assert.ok(body.indexOf('.replace(/[%_\\\\*]/g') < body.indexOf('if (q.length < 2)'), '제거가 길이 검사보다 먼저');
   const strip = (x) => String(x).replace(/[%_\\]/g, '').trim();
   assert.equal(strip('__'), ''); assert.equal(strip('%%'), ''); assert.equal(strip('은마'), '은마');
