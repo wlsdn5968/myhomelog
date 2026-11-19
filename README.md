@@ -177,6 +177,9 @@ railway variables set ALLOWED_ORIGINS=https://myhomelog.vercel.app
 | POST·GET·DELETE | /api/search/history | JWT | 본인 검색 이력 |
 
 ### 결제·구독·즐겨찾기
+
+> 서비스는 무료다(2026-11-13 확정). 아래 결제 경로 가운데 돈이 오가는 POST(결제 요청, 승인, 토스 웹훅, 환불)는 `BILLING_ENABLED='true'` 가 아니면 인증보다 먼저 410 을 돌려준다(`backend/routes/billing.js` 의 `_MONEY_PATHS`). 조회와 해지는 그대로 열려 있다. 화면의 결제 링크는 2026-11-18 에 뺐다.
+
 | Method | Path | Auth | 설명 |
 |--------|------|------|------|
 | GET | /api/billing/config, /api/billing/plans | — | Toss SDK 설정 / 플랜 |
