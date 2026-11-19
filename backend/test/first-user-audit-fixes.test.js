@@ -18,7 +18,8 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
+// SPLIT-1119 (plans/202 4단계): 청약 목록 함수가 frontend/js/subs.js 로 옮겨 가서 화면 코드 전체를 읽는다.
+const html = require('../testSupport/readFrontend').readFrontend();
 const server = fs.readFileSync(path.join(__dirname, '../server.js'), 'utf8');
 
 test('DM-TOP: 모바일 상세는 헤더 아래 끝(--biz-top)부터 시작한다', () => {

@@ -140,7 +140,14 @@ export default [
       _pickTierRate: 'readonly', _pickTierRateUnder: 'readonly', computePolicyLoan: 'readonly', _loanBaseRate: 'readonly', calcLoanLimitsPure: 'readonly', calcInputProblem: 'readonly',
       calcHoldingTaxes: 'readonly', _sqmToPy: 'readonly', PYEONG_M2: 'readonly',
       // SPLIT-1118 (plans/202 4단계): frontend/js/data.js 의 자료 상수
-      POLICY_TIMELINE: 'readonly', PERSONAS: 'readonly', FN_CHECKS: 'readonly' } },
+      POLICY_TIMELINE: 'readonly', PERSONAS: 'readonly', FN_CHECKS: 'readonly',
+      // SPLIT-1119 (plans/202 4단계 둘째 묶음): frontend/js/subs.js 의 청약 함수
+      loadSubs: 'readonly' } },
+  },
+  {
+    // SPLIT-1119: subs.js 가 실행 시점에 부르는 본체의 함수와 값.
+    files: ['frontend/js/subs.js'],
+    languageOptions: { globals: { CFG: 'readonly', _escHtml: 'readonly', fmtSubsDate: 'readonly', dDayLabel: 'readonly' } },
   },
   {
     // 반대 방향: swap-checklist.js 가 실행 시점에 부르는 본체의 함수와 값.
