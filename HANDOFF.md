@@ -172,12 +172,12 @@
 3. 화면 파일 나누기 도우미 묶음은 2026-11-27 배포(697f704)와 운영 확인까지 끝났다(위 1절). 다음은 5단계(지도와 단지 상세, `showDetail` 을 안에서 먼저 나눈다).
 4. 계획 213: 1단계 측정 끝(2026-11-27 11:14 KST 운영 실측, 두 경로 모두 이미 있던 단계 로그로 읽음). 보고서 23.7초 중 후보 풀 DB 조회 10.8초, 별칭 3.4초. 단지 찾기 6.4초 중 별칭과 단지 목록 각 약 4.0초. 2단계 후보 1(보고서 후보 풀을 구별 거래 기억으로) 구현 끝, 2026-11-27 배포(697f704, 계획 문서 "2단계 후보 1 구현"). 아직 운영 실측 전이다(운영자 계정의 오늘 보고서 1회를 측정에 썼다). 다음 보고서 회차의 report-stages 의 pool 과 poolViaRegion 을 11-27 실측과 견준다. 후보 2(별칭과 단지 목록을 Redis 로)는 측정 뒤 보류(계획 문서 "후보 2 측정과 판단": 단독 조회는 1초 미만이라 대기는 경합 몫으로 보이고, Redis 무료 월 전송량 10GB 와 10월 한도 초과 이력 때문).
 5. 계획 214 방안 A 는 2026-11-27 배포(697f704, 운영자 승인 "권고대로 진행"). 첫 회차는 매일 04:0x UTC(13시대 KST)이고 배포 뒤 첫 회차부터 health 의 verifyRows, verifyCpuMs, verifyMs, cpuMs 를 11-26 회차(4,000행, 37,023ms, 10,868ms)와 견준다. 11-28 까지는 대상이 거의 0행인 것이 정상(계획 문서 구현 메모).
-6. 감사 3차 남은 항목: 다크 기본값, 본문 바로가기, 대출 계산 입력 안내(금리 0, 기간 0), 특약 초안 오류 때 이전 초안 숨김, 관심 단지 목록 가격 면적 표기, 임장노트 저장 직후 "기록 삭제" 단추(기획과 시안 순서), 관심 추가와 해제 때 푸시 구독 요청의 의도 확인.
+6. 감사 3차 남은 항목은 기획 초안을 썼다(`plans/215-audit3-remaining-ux.md`, 2026-11-27): 본문 바로가기, 다크 기본값, 대출 입력 안내, 특약 초안 오류 때 이전 초안, 관심 단지 가격 기준 표기, 임장노트 저장 직후 기록 삭제 단추. 운영자 승인과 선택(10, 11, 12번) 뒤 claude.ai/design 시안. 13(관심 추가와 해제 때 알림 구독 요청)은 의도된 동기화로 확인했고, 조사 중 관심 단지를 모두 지우면 서버 알림 목록이 남는 버그를 고쳤다(PUSH-EMPTY-1127, 미배포).
 7. 2026-12 중: 토지거래허가구역 연장 공고와 세제개편안 국회 통과를 원문으로 확인해 `backend/data/policy-changes.json` 과 규제 요약을 고친다. 12월 말 은행연합회 스트레스금리 공시로 2027년 상반기 지방 스트레스 금리도 맞춘다. 「주택법 시행령」 개정이 공포되면(국가법령정보센터 현행 판이 2026. 9. 8. 에서 바뀌면) 리모델링 카드를 고친다.
 7-2. 2026-12-08 전: 팀 Active CPU 임시 12시간이 끝난다. 내집로그 하루 CPU(`crons.retention.cpuYesterdayMs`)를 보고, 12월 중순에 Fast Data Transfer 30일 합계가 내려왔는지 본다.
 7-3. 2026-12-14: Claude Design 이 옮겨 간다는 안내가 떠 있다. 옮기는 단추는 운영자가 누른다(시안: 맞춤 보고서, 정책 변화).
 8. 실제 휴대폰 기기로 지도와 도우미 화면 확인(운영자 기기).
-9. 운영자 몫: Supabase 임시 Edge Function `gwcheck-temp` 삭제, 죽은 행 청소(적재 시간 UTC 17~19시를 피해 `VACUUM (ANALYZE) public.apt_master;`, `VACUUM (ANALYZE) public.molit_hist_peaks;`, `VACUUM (ANALYZE) public.molit_apt_index;`), 유출 비밀번호 검사 켜기(보안 권고 WARN), 이메일 확인 설정, Vercel 과 GitHub 2단계 인증, DB 백업 주 1회(`plans/168-backup-runbook.md`), 원격 브랜치 정리 여부.
+9. 운영자 몫: Supabase 임시 Edge Function `gwcheck-temp` 삭제, 죽은 행 청소(적재 시간 UTC 17~19시를 피해 `VACUUM (ANALYZE) public.apt_master;`, `VACUUM (ANALYZE) public.molit_hist_peaks;`, `VACUUM (ANALYZE) public.molit_apt_index;`), 이메일 확인 설정, Vercel 과 GitHub 2단계 인증, DB 백업 주 1회(`plans/168-backup-runbook.md`), 원격 브랜치 정리 여부. (2026-11-27: 유출 비밀번호 검사는 Supabase 공식 문서에 "Leaked password protection is available on the Pro Plan and above." 라 유료 금지 원칙으로 뺐다. 보안 권고 WARN 은 남는다. gwcheck-temp 는 같은 날 목록 조회로 아직 ACTIVE.)
 10. 제안만 한 것(범위 밖): `drizzle-orm` 을 개발 의존성으로 옮기기.
 
 ## 7. 명령

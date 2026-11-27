@@ -11192,9 +11192,14 @@ function _schedulePushItemsSync(){
         const reg=await navigator.serviceWorker.getRegistration('/sw.js');
         const sub=reg&&await reg.pushManager.getSubscription();
         if(sub&&items.length)fetch(`${CFG.api}/push/subscribe`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({subscription:sub.toJSON(),items})}).catch(()=>{});
+        // PUSH-EMPTY-1127 (감사 3차 13 조사): 관심 단지를 모두 지우면 종전엔 아무것도 보내지 않아 서버에 마지막 목록이 남았고,
+        //   매일 알림(jobs/pushNotify.js 가 저장된 items 로 대상을 고른다)이 지운 단지 소식을 계속 보낼 수 있었다.
+        //   서버 구독 경로는 빈 목록을 400 으로 거절하므로 서버 구독만 지운다. 이 기기 구독은 남겨 두어 다시 단지를 담으면 위 줄이 새로 만든다.
+        else if(sub&&!items.length)fetch(`${CFG.api}/push/unsubscribe`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({endpoint:sub.endpoint})}).catch(()=>{});
       }
       // KAKAO-NOTIFY (Sprint FFFFFF): 카카오 연결 유저는 관심단지 스냅샷도 동기화
-      if(_kkoLinked&&items.length){
+      // PUSH-EMPTY-1127: 빈 목록도 보낸다(서버 /api/kakao/items 는 빈 목록을 그대로 저장해 지운 단지 알림이 멈춘다).
+      if(_kkoLinked){
         fetch(`${CFG.api}/kakao/items`,{method:'POST',headers:await _authHdr({'Content-Type':'application/json'}),body:JSON.stringify({items})}).catch(()=>{});
       }
     }catch(_){}

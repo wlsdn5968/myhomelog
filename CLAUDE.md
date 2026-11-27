@@ -214,7 +214,7 @@ DB
 - 감사 기록: `AUDIT_REPORT.md`(최근 감사, 지금은 18절 11-20 전면 감사 3차와 19절 11-27 정책 대기 대조), `docs/audit/`(지난 감사 보관, 11-15 와 11-16 감사는 `AUDIT_REPORT_2026-11-15_16.md`, 11-18 2차 감사와 11-18~19 시나리오 점검은 `AUDIT_REPORT_2026-11-18_19.md`)
 - 주제별 기록 `docs/ops/`: `db-capacity.md`(DB 용량, 원본 창 자르기) · `components.md`(구성요소 버전, 점검) · `redis.md`(Upstash 한도) · `security.md`(보안 결정) · `ui-design-v2.md`(문구 규칙, 디자인 v2 화면) · `feature-history.md`(기능별 변경) · `done-history.md`(완료 항목) · `operations-rules.md`(CPU 한도, 2026-11-11 과 11-12~13 규칙 원문)
   새 기록은 맞는 파일에 덧붙이고, 새 금지 규칙은 이 파일 "금지 사항"에도 한 줄 남긴다. 한 파일에 몰지 않는다.
-- 계획 문서: `plans/README.md`(지금 열려 있는 것), `plans/STATUS-HISTORY.md`(지난 실행 순서와 상태 표), 개별 계획 `plans/<번호>-*.md`. 다음 새 계획 번호는 215부터(2026-11-27 에 214 를 씀).
+- 계획 문서: `plans/README.md`(지금 열려 있는 것), `plans/STATUS-HISTORY.md`(지난 실행 순서와 상태 표), 개별 계획 `plans/<번호>-*.md`. 다음 새 계획 번호는 216부터(2026-11-27 에 215 를 씀).
 - Sprint 기록: `.local-notes/SPRINT_NOTES_20260512.md` (gitignored, 메인 폴더에만 있음)
 - NCP setup: `.local-notes/NAVER_MAPS_SETUP_GUIDE.md`
 
