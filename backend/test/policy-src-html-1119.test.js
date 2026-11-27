@@ -114,7 +114,9 @@ async function runWith(get) {
 
 test('POLICY-SRC-HTML-1119: 국토교통부는 첫 307 의 쿠키를 받아 한 번만 다시 부르고, 쿠키가 없으면 실패로 센다', async () => {
   const today = new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10);
-  const molitHtml = MOLIT.replace('2026-11-19', today);
+  // TIMEBOMB-1127: "주택" 낱말이 든 둘째 줄(2026-11-16)도 오늘로 바꾼다. 고정 날짜는 감지 창(LOOK_BACK_DAYS 7일)을 지나면 걸리지 않아
+  //   2026-11-23 무렵부터 이 검사가 실패했다(2026-11-27 정기 점검에서 발견).
+  const molitHtml = MOLIT.replace('2026-11-19', today).replace('2026-11-16', today);
   const calls = [];
   const out = await runWith(async (url, opts) => {
     calls.push({ url, cookie: opts.headers && opts.headers.Cookie, maxRedirects: opts.maxRedirects });

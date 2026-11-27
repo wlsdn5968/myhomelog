@@ -1,54 +1,51 @@
 # 내집로그 인계 문서 (새 세션에 그대로 붙여 넣는 프롬프트)
 
-작성: 2026-11-19 밤 KST, 정기 점검 끝. 이 문서의 사실은 그날 명령, 조회, 화면으로 확인한 것이다. 확인하지 못한 것은 "확인 불가"로 적었다. 옛 판은 `docs/ops/handoff-archive-2026-11-19.md`(11-17~11-19 기록), 그 앞 판은 `docs/ops/handoff-archive-2026-11-17.md` 에 글자 그대로 있다.
+작성: 2026-11-27 KST 정기 점검 끝. 이 문서의 사실은 그날 명령, 조회, 화면으로 확인한 것이다. 확인하지 못한 것은 "확인 불가"로 적었다. 옛 판은 `docs/ops/handoff-archive-2026-11-27.md`(11-19 ~ 11-20 기록), 그 앞 판은 `docs/ops/handoff-archive-2026-11-19.md`, `docs/ops/handoff-archive-2026-11-17.md` 에 글자 그대로 있다.
 
 너는 내집로그(myhomelog) 운영 작업을 이어받는다. 아래를 읽고 "2. 먼저 읽을 파일"을 연 다음 "6. 남은 일"의 1번부터 진행해라.
 
 ## 1. 프로젝트와 지금 상태
 
 - 내집로그(myhomelog.vercel.app)는 공공 실거래 자료로 아파트 정보를 정리해 보여 주는 무료 서비스다. 매수와 매도 추천, 가격 예측은 하지 않는다.
-- 구조: 화면 `frontend/index.html`(본체, 1.3MB)과 `frontend/js/*.js`(본체 앞에서 부르는 일반 스크립트: calc, data, subs, briefing, swap-checklist, policy-data, policy). 서버는 Express 를 Vercel Hobby 함수 하나(`api/index.js`, 지역 icn1)로 실행. 자료는 Supabase(`brxorvxdfrbxcavufspe`), 요청 제한과 계수는 Upstash Redis, 오류 수집은 Sentry(조직 myhomelog).
-- 작업 폴더: `C:\Users\Woo\Downloads\myhomelog_deploy_1\myhomelog\.claude\worktrees\p144` (브랜치 `ui-155`). Vercel projectId `prj_eYOJDb65wMQqbL5dAKo1pwaitiwW`, team `gyeollab`.
+- 구조: 화면 `frontend/index.html`(본체, 1.28MB)과 `frontend/js/*.js`(본체 앞에서 부르는 일반 스크립트: calc, data, subs, briefing, swap-checklist, policy-data, policy). 서버는 Express 를 Vercel Hobby 함수 하나(`api/index.js`, 지역 icn1)로 실행. 자료는 Supabase(`brxorvxdfrbxcavufspe`), 요청 제한과 계수는 Upstash Redis, 오류 수집은 Sentry(조직 myhomelog).
+- 작업 폴더: `C:\Users\Woo\Downloads\myhomelog_deploy_1\myhomelog\.claude\worktrees\p144` (브랜치 `ui-155`). Vercel projectId `prj_eYOJDb65wMQqbL5dAKo1pwaitiwW`, team `gyeollab`(팀 번호 `team_LEOHwN6yFTWrPGOycSJKQ3OC`).
 
-동작하는 것 (확인됨)
-- 운영 배포본 1280ad4(2026-11-20 00:56 KST, 11-20 의 2회째 배포, 운영자 결정 "지금 배포"). 그 앞 dbee6ce(11-20 00:01, 청약 subs.js, 정책 자료 47건과 항목별 확인일), 75aeff8(11-19 21시대). 
-- 1280ad4 운영 확인(11-20 01시대): `/js/briefing.js` 200, 첫 화면에 태그와 로고 이름. 크롬 로그인 계정으로 임장노트 저장, 삭제(서버 DELETE 200), 새로고침 뒤 다시 열기에서 메모 없음, DB `field_notes` 0행. 검색어 `"'; drop table x;--` 200 빈 결과, "역삼I'PARK" 1건. 브리핑 화면, 약관 창 Escape(실제 키), 대출 계산 출처 줄 정상, 페이지 오류 0. 배포 뒤 Sentry 새 문제 0, 런타임 오류 0(1시간).
-- db5c00a 에 들어간 것: 2차 전면 감사 수정(내보내기 활동 기록, 소득 0 표시, 결제 링크와 사이트맵, 첫 화면 단위, 매수가 하한, 좌표 전용 캐시, 부분 결과 기억), 사용자 시나리오 점검 수정 8건(단지 상세 실투자금 대출액, 최근 거래일 경과일, 규제지역 전세 낀 집 특약 안내, 브리핑 뉴스 거르기, 휴대폰 지도 관심과 채팅 버튼 겹침, 도우미 창 닫기, 복비 협의 구간 표기, 정책 카드 법령 대조 4장). 운영에서 휴대폰 흉내 375x812 로 눌러 확인했다(`AUDIT_REPORT.md` 17절).
-- 75aeff8 에 들어간 것: 정책 감지 소스를 금융위원회, 국토교통부, 재정경제부, 국세청의 보도자료 목록(HTML)으로 바꿨다. 옛 RSS 는 정책브리핑이 2026-07-01 제공 중단(404), 금융위원회가 503 점검 중이었다. 로컬에서 실제 누리집으로 돌려 네 곳 모두 읽혔다(실패 0, 1.6초). 대기 수 계산을 한국 날짜 비교로 고쳤다(`AUDIT_REPORT.md` 17-6).
-- 11-19 아침 예약 작업(health): warm-rent fetched 310, skipped 2, 멈춤 없음. retention 오류 없음, `cpuYesterdayMs` 154,131. regulations-auto-fetch 는 옛 소스라 `sourcesFailed` 4/4 와 Sentry NODE-M(계획 212 가 의도한 알림).
-- 내보내기 파일의 활동 기록: 응답 2행, 같은 계정 DB 2행으로 일치(11-19 20시대, 크롬 로그인 계정).
-- 운영자 실행 대기 SQL 은 없다. `supabase/migrations/20261119_housing_loan_verified_1119.sql` 은 운영자가 11-20 00시대에 실행했고 조회로 확인했다(대출 검증일 2026-11-19, note 720자, 중복 문단 1개).
+동작하는 것 (확인됨, 2026-11-27)
+- 운영 배포본 1280ad4(2026-11-20 00:56 KST). health 의 deploy 값 1280ad4. 로컬은 문서만 바뀐 커밋 여러 개가 앞서 있다(다음 코드 배포에 묶는다).
+- 1280ad4 에 들어간 것: 전면 감사 3차 첫 수정 묶음(임장 기록 삭제가 서버에도 반영, 검색어의 세미콜론과 `--` 제거와 Supabase 앞단 Cloudflare 차단 페이지는 빈 결과, 약관과 자동 결정 설명과 대화 이력 창 Escape, 대출 계산 출처 줄, 로고 링크 이름, 결제 웹훅 경로 정확 비교)과 화면 나누기 브리핑 묶음(`frontend/js/briefing.js`). 그 앞 dbee6ce(청약 `subs.js`, 정책 변화 자료 47건과 항목별 확인일). 운영 확인 기록은 `AUDIT_REPORT.md` 18-9.
+- 정책 감지(네 기관 보도자료 목록): 2026-11-26 21:55 UTC 회차 `sourcesFailed` 0/4, `processed` 6, `pendingReview` 8. 대기 8건은 원문 대조를 마쳤고 저장값을 바꿀 발표가 없었다(`AUDIT_REPORT.md` 19절).
+- 최근 7일 Sentry 미해결 문제 0, Vercel 런타임 오류 0(11-27 조회).
+- 예약 작업 14개의 마지막 기록에 오류 없음. 어제(UTC) CPU 합계 166,089ms(`crons.retention.cpuYesterdayMs`), 11-19 측정은 154,131ms.
+- DB 403MB(`pg_database_size`), health 기준 417MB / 500MB(83%), 연결 22(최대 60). DB 안 예약 작업은 감사 기록 정리 1개(7일 7회 성공).
 
-자원 실측 (2026-11-19)
-- Vercel 사용량 화면(내집로그 한 프로젝트, 10-20 06시 ~ 11-19 05시): Fluid Active CPU 3시간 5분, 함수 호출 9.4만 회, Fast Data Transfer 46.92GB / 100GB, CDN 요청 17.1만, Fluid Provisioned Memory 42.8 GB-Hrs.
-- health: 오늘(UTC) CPU 합계 84.5초, 어제 154초. 무거운 예약 작업은 geocache-backfill 9.6초, warm-rent 7.0초.
-- DB: health 기준 416MB / 500MB(83%), `pg_database_size` 401MB, 연결 16(활동 1, 최대 60).
+운영자 실행 대기 SQL 1개
+- `supabase/migrations/20261127_regulations_verified_1127.sql`: 대출 검증일 11-19, 세금 검증일 11-15 를 11-27 로 올린다(저장값은 그대로, note 에 대조 범위, 되돌리는 SQL 포함). 실행 전과 뒤 확인 조회가 파일 안에 있다. 실행하면 대기 수가 0 이 된다.
 
 안 되는 것, 위험한 것
-- Fast Data Transfer 가 30일 46.92GB 로 무료 한도 100GB 의 47%다. 다만 11-19 밤에 날짜별로 보니 11-11 까지 하루 1.5~2.5GB, 11-15 부터는 하루 145~163MB 다. 최근 12시간 87MB 가운데 86.14MB 가 첫 화면(`/frontend/index.html`, 191회, 한 번 약 451KB)이다(`AUDIT_REPORT.md` 17-7). 사람과 봇의 비율은 확인 불가(무료 화면에서 잠김).
-- 단지 표 시설 조건 건수 조회가 DB 실행 시간 상위 1~7위(평균 1.2~1.8초). 5월부터의 누적값이라 하루 횟수는 확인 불가. 기준값은 `AUDIT_REPORT.md` 17-5 의 queryid 8개(11-19 11:43 UTC).
-- Vercel 팀 Active CPU 는 팀 전체 30일 합계로 한도를 본다(기본 4시간, 임시 12시간은 2026-12-08 까지). 다른 프로젝트는 조사하거나 권하지 않는다(운영자 지시 2026-11-18 "우리 프로젝트만 봐").
-- 죽은 행: `molit_hist_peaks` 11,007, `apt_master` 2,775(운영자 몫).
+- 좌표 채우기 예약 작업이 날마다 이미 검증한 좌표 4,000행을 다시 확인하고(verifyRows 4000, 그중 고친 것 2, verifyMs 37,023) CPU 10,868ms 를 쓴다. 예약 작업 가운데 가장 크다(health 11-26 회차). 줄이는 계획은 아직 없다.
+- 조건 맞는 단지 찾기 7.95초, 맞춤 보고서 22.7초(각 1회 측정, 보고서는 CPU 1.5초에 나머지가 대기). 계획 `plans/213-recommend-report-speed.md`(측정 먼저).
+- 죽은 행: molit_hist_peaks 11,007, molit_apt_index 3,114, apt_master 2,896(운영자 몫 VACUUM).
+- 배포 횟수 규칙이 두 문서에서 다르다(3-3).
 
 확인 불가
-- 새 정책 감지 소스의 운영 첫 실행 결과. 예약은 매일 21:30 UTC(KST 06:30)이고 수동 실행에는 비밀값이 필요하다. 11-20 아침 health 의 `crons['regulations-auto-fetch'].sourcesFailed` 로 본다. 11-19 밤 로컬 실행은 실패 0/4 였고, 같은 코드로 계산한 `pendingReview` 는 1(대출, 11-17 「주택법 시행령」 개정안)이다(`AUDIT_REPORT.md` 17-7).
-- 11-20 06:30 회차의 `pendingReview`. 대출 검증일이 11-19 로 올라가 0 이어야 맞다(11-19 에 걸린 글 두 건이 모두 검증일 이전).
-- 실제 휴대폰 기기의 화면(앱 안 브라우저의 휴대폰 흉내로만 봤다).
-- 서울 전역과 경기 12곳 토지거래허가구역(2026-12-31 까지)의 연장 공고, 2026년 세제개편안의 국회 통과(11-18 현행 종합부동산세법은 기본공제 12억 원).
+- Vercel 사용량 화면의 30일 CPU 와 전송량(11-27 에 프로젝트 거름 여부를 글자로 확인하지 못했고 캡처가 회색으로만 나옴).
+- 정책 대기 글 가운데 국토부 한글 첨부(hwpx)와 재정경제부 종부세 고지 첨부의 숫자.
+- 실제 휴대폰 기기의 화면, 다른 사용자 계정으로 남의 자료 접근.
+- 서울 전역과 경기 12곳 토지거래허가구역(2026-12-31 까지)의 연장 공고, 2026년 세제개편안의 국회 통과.
 
 ## 2. 먼저 읽을 파일 (순서대로)
 
 1. `CLAUDE.md` : 원칙, 명령, 구조, 금지 사항
-2. `AUDIT_REPORT.md` : 최근 감사(16절 2차 전면 감사, 17절 사용자 시나리오 점검과 후속 17-4~17-6)
-3. `plans/README.md` : 열려 있는 계획. 화면 파일 나누기는 `plans/202-frontend-split.md`, 정책 변화 자료는 `plans/203-policy-changes.md`
+2. `AUDIT_REPORT.md` : 최근 감사(18절 전면 감사 3차와 처리 결과 18-9, 19절 정책 대기 대조)
+3. `plans/README.md` : 열려 있는 계획. 화면 파일 나누기는 `plans/202-frontend-split.md`, 속도는 `plans/213-recommend-report-speed.md`, 정책 변화 자료는 `plans/203-policy-changes.md`
 4. `docs/ops/operations-rules.md` : CPU 한도, 방화벽, 이상 트래픽, 정책 전수 대조 규칙
-5. 필요할 때: `docs/audit/AUDIT_REPORT_2026-11-15_16.md`(11-15 와 11-16 감사, CPU 재측정 11절), `docs/ops/db-capacity.md`, `docs/ops/security.md`, `docs/ops/ui-design-v2.md`, `docs/ops/feature-history.md`, `docs/archive/code/README.md`
+5. 필요할 때: `docs/audit/`(지난 감사: 11-14, 11-15~16, 11-18~19), `docs/ops/db-capacity.md`, `docs/ops/security.md`, `docs/ops/ui-design-v2.md`, `docs/ops/feature-history.md`, `docs/ops/cleanup-2026-11-27.md`(이번 정리 대조표)
 
 ## 3. 운영자 원칙 (원문 그대로)
 
-아래 3-1 과 3-2 는 파일에서 줄 범위로 그대로 옮겼다. 전체 원칙의 다른 원문은 `docs/ops/operations-rules.md` 와 메모리 `C:\Users\Woo\.claude\projects\C--Users-Woo\memory\feedback-*.md` 14개에 있다.
+아래 3-1 과 3-2 는 파일에서 줄 범위로 그대로 옮겼다(생성 스크립트가 원본에서 잘라 넣음). 전체 원칙의 다른 원문은 `docs/ops/operations-rules.md` 와 메모리 `C:\Users\Woo\.claude\projects\C--Users-Woo\memory\feedback-*.md` 14개에 있다.
 
-### 3-1. 저장소 CLAUDE.md 8~41줄과 197~203줄
+### 3-1. 저장소 CLAUDE.md 8~41줄과 197~202줄
 
 ## 📌 고정 규칙 (2026-11-15 정기 점검에서 운영자 지시로 넣음)
 
@@ -135,65 +132,50 @@
 
 - 전역 지침 3절: "상시 제약(배포 하루 1회, 유료 서비스 금지, 비밀값 출력 금지, 파일 다운로드는 이름·출처·크기를 밝히고 허락받기)은 그대로 지킨다."
 - 저장소 `CLAUDE.md` 배포 예산: "운영 푸시는 하루 3회 이하"
-- 2026-11-19 정기 점검에서 운영자에게 물었고 아직 답이 없다. 그래서 두 문장 모두 고치지 않았다. 11-19 는 저장소 규칙대로 2회 배포했다. 정해지기 전에는 하루 1회를 넘기는 배포를 운영자에게 먼저 묻는다.
+- 아직 정하지 않았다. 정해지기 전에는 하루 1회를 넘기는 배포를 운영자에게 먼저 묻는다(11-20 에 한 번 물었고 운영자가 "지금 배포"를 골랐다. 규칙 자체를 정한 것은 아니다).
 
-## 4. 이번(2026-11-18 ~ 11-19)에 한 일과 바꾼 파일, 검증 결과
+## 4. 이번(2026-11-27 정기 점검)에 한 일과 바꾼 파일, 검증 결과
 
-배포된 것
-- db5c00a, 75aeff8 의 내용은 1절. 자세한 기록은 `AUDIT_REPORT.md` 16절, 17절.
-- 새 검사: `backend/test/audit2-1118.test.js`, `usertest-1118.test.js`, `policy-src-html-1119.test.js`.
-- 정책 자료 `backend/data/policy-changes.json`: "확인하지 못했어요" 카드 4장을 국가법령정보센터 현행 조문으로 대조했다(시행령 제14조의2, 조세특례제한법 제71조의2와 시행령 제68조의2, 같은 시행령 제95조, 소득세법 시행령 제167조의3, 종합부동산세법 제8조). 전체 대조일 `checked` 는 2026-11-16 그대로다.
-
-정기 점검(2026-11-19)에서 바꾼 것 (미배포, 문서와 보관만)
-- `AUDIT_REPORT.md` 1~15절을 `docs/audit/AUDIT_REPORT_2026-11-15_16.md` 로 글자 그대로 옮겼다(`diff` 로 같음 확인). 그 절을 가리키던 `CLAUDE.md` 두 곳, `docs/ops/operations-rules.md` 두 곳, `backend/test/audit-1116.test.js` 주석 한 곳의 경로를 고쳤다.
-- `CLAUDE.md`: 끝난 일정(개인정보처리방침 배포) 한 줄과 옛 "마지막 갱신" 줄을 `docs/ops/done-history.md` 끝으로 옮기고 새 갱신 줄을 썼다. 원칙 문장은 고치지 않았다.
-- `README.md`: 결제 절에 "돈이 오가는 POST 는 `BILLING_ENABLED` 가 꺼져 있으면 410" 한 단락을 넣었다(`backend/routes/billing.js` 의 `_MONEY_PATHS`).
-- 부르는 곳이 없는 `backend/services/legalService.js` 와 `scripts/make-kakao-icon.js` 를 `docs/archive/code/` 로 옮겼다(안내 `docs/archive/code/README.md`). `backend/services/budgetService.js` 는 `backend/.env.example` 주석이 줄 번호를 가리키는데 `.env` 로 시작하는 파일은 고치지 않아 제자리에 뒀다.
-- 이 문서를 다시 썼다. 옛 판은 `docs/ops/handoff-archive-2026-11-19.md`. 원칙 대조표와 문서별 줄 수는 `docs/ops/cleanup-2026-11-19.md`.
-- 점검 중 실수: 2026-11-19 `budgetService` 참조를 보다가 `backend/.env.example` 50~60줄을 읽었다(자리 표시 값뿐인 추적 파일이지만 규칙 위반). 그 뒤로 열지 않았다.
-
-검증
-- `npm run verify` 1,315개 통과, 실패 0(정기 점검의 각 변경 뒤마다 돌렸다).
-- 복구 지점: 로컬 태그 `backup/pre-cleanup-1119`(75aeff8). 그 앞 태그 `backup/pre-cleanup-1117-ui155`, `backup/pre-merge-1118-ui155`, `backup/pre-audit2-fix-1118`, `backup/pre-cleanup-1115-ui155`, `backup/pre-cleanup-1114-ui155`, `backup/pre-cleanup-1114-main`.
+- 정책 대기 8건 원문 대조(`AUDIT_REPORT.md` 19절): 네 기관 11-19~11-27 글 전부를 뽑고 관련 가능 글은 본문을 읽었다(낮은 등급 에이전트, 핵심 근거는 직접 재확인). 운영자 허락으로 국토부 브리핑문 pdf 1개(94,156바이트)를 내려받아 8쪽을 읽었다. 국가법령정보센터 현행 판으로 지방세법, 지방세특례제한법, 종합부동산세법이 11-15 검증 뒤 바뀌지 않았음을 확인했다. 결과로 검증일 SQL 을 만들었다(위).
+- 감사 보고서 16·17절(278줄)을 `docs/audit/AUDIT_REPORT_2026-11-18_19.md` 로 글자 그대로 옮겼다(git 옛 판과 한 줄씩 같음 확인). `AUDIT_REPORT.md` 는 443줄에서 177줄. 가리키던 곳 두 곳(검사 주석 1, 계획 목록 1)을 고쳤다. 지난 인계 문서와 지난 SQL 은 그때의 기록이라 그대로 두고, 보관 문서 머리에 "같은 번호를 가리킨다"는 안내를 달았다.
+- `CLAUDE.md` 낡은 설명 세 곳(verify 7단계, 감사 보고서 범위, 마지막 갱신). 원칙 문장은 고치지 않았다.
+- `docs/ops/operations-rules.md` 34줄 끝에 "끝난 일" 덧붙임(원문 그대로 둠). 근거 `docs/ops/done-history.md:25`, git 으로 c0fd32f 가 5ab0d91 안에 있음 확인.
+- 이 문서를 다시 썼다. 옛 판은 `docs/ops/handoff-archive-2026-11-27.md`. 정리 전후 대조표와 문서별 줄 수는 `docs/ops/cleanup-2026-11-27.md`.
+- 조사로 확인한 것(1단계): 추적 파일 836개 11.6MB, 추적 안 된 파일 0, 잘못 들어간 산출물 0. 실행 경로에서 쓰지 않는 의존성은 `drizzle-orm`(`backend/db/schema.js` 만, 그 파일을 부르는 곳 0)과 `@sentry/node`(검사에서만). 화면 반복 실행 3개, 서버 1개(모두 조건부). 시설 조건 건수 조회 8개는 11-19 기준 뒤 7.6일 동안 76회(하루 약 10회, 하루 DB 시간 약 16초)라 계획이 필요 없다.
+- 검증: `npm run verify` 1,338개 통과, 실패 0. 처음에는 날짜가 지나 깨진 검사 하나(`backend/test/policy-src-html-1119.test.js`, 감지 창 7일 밖의 고정 날짜)가 실패해서 그 검사의 날짜 한 줄만 고쳤다(범위 밖 수정, 자세한 것은 `docs/ops/cleanup-2026-11-27.md`). 지금 날짜와 고정 날짜를 함께 쓰는 검사 5개는 지금 통과하지만 나중에 깨질 수 있는지 확인 불가. 복구 지점: 로컬 태그 `backup/pre-cleanup-1127`(de33ddd). 그 앞 태그 `backup/pre-deploy-1120b`, `backup/pre-audit3-fix-1120`, `backup/pre-deploy-1120`, `backup/pre-cleanup-1119` 등.
 
 ## 5. 알려진 문제와 주의점, 건드리면 안 되는 것
 
-- 배포는 운영자가 배포를 가리킨 문장("배포해", "마지막에 배포하면 될거 같아")이 있을 때만 한다. 하루 횟수는 3-3 이 정해질 때까지 1회를 넘기기 전에 묻는다. 문서만 바뀐 커밋은 다음 코드 배포에 묶는다. 지금 로컬은 운영보다 정기 점검 커밋들(문서와 보관)과 청약 옮기기 6e073ba(화면 코드)가 앞서 있다.
+- 배포는 운영자가 배포를 가리킨 문장("배포해", "마지막에 배포하면 될거 같아")이 있을 때만 한다. 하루 횟수는 3-3. 문서만 바뀐 커밋은 다음 코드 배포에 묶는다.
 - 운영 DB 는 조회만 한다. 쓰기 SQL 은 운영자에게 주고 운영자가 실행한다(SQL Editor: https://supabase.com/dashboard/project/brxorvxdfrbxcavufspe/sql/new).
-- `.env` 로 시작하는 파일은 열지 않는다(`.env.example` 도). 그래서 로컬에서는 DB 가 붙지 않는다. 화면 확인은 launch 설정 `home-preview`(화면은 로컬 파일, API 는 운영)로 한다.
-- 정책 감지 소스는 기관 누리집 목록 HTML 이다. 기관이 목록 모양을 바꾸면 그 소스가 0건이 되어 `sourcesFailed` 와 Sentry `monitor: policy-sources` 로 드러난다. 그때 `backend/jobs/regulationsAutoFetch.js` 의 `LIST_PARSERS` 를 고친다. 국토교통부는 첫 요청이 쿠키를 심고 같은 주소로 307 을 준다.
-- `pendingReview` 가 0 이 아니면 그 보도자료 원문(본문과 첨부)을 열어 저장값과 대조한다. 검증일은 DB `regulations_snapshot.source_effective_date`(대출 2026-11-16, 세금 2026-11-15)이고 고치는 SQL 은 운영자가 실행한다.
-- 정책 변화 자료는 `backend/data/policy-changes.json` 만 고치고 `node scripts/build-policy-data.js` 를 돌린다. 원문 본문을 열어 대조한 것만 넣는다.
-- 이 DB 에서 `explain analyze` 시간은 부풀려 나온다. `pg_stat_statements` 로 보고, 측정 조회는 하나씩 돌린다. 통계는 2026-05-21 이후 초기화되지 않았다.
-- `frontend/js` 의 스크립트를 모듈이나 `defer` 로 바꾸지 않는다. 화면 코드를 글자로 읽는 검사는 `readFrontend()`, 화면 함수를 잘라 실행하는 검사는 `pyeongPrelude()` 를 쓴다.
-- 크롬 확장은 창 크기를 바꾸지 못한다. 휴대폰 화면은 앱 안 브라우저(`mcp__Claude_Browser__*`)의 `resize_window` preset mobile 로 운영 주소를 본다. 그 브라우저의 type 동작은 검색창 입력 이벤트를 보내지 않으니 `input` 이벤트를 직접 보낸다. 크롬 확장이 끊기면 다시 연결될 때까지 앱 안 브라우저를 쓴다(로그인이 필요한 확인은 크롬 확장으로).
-- Git Bash heredoc 은 역슬래시와 `\n` 을 바꾼다. 정규식이나 역슬래시가 든 치환은 `.cjs` 파일을 만들어 실행한다.
-- 시각은 PowerShell `Get-Date` 로 확인한다.
-- `git commit -am` 은 새 파일을 넣지 않는다(11-19 정기 점검에서 보관 문서가 한 번 빠졌다). 새 파일은 `git add` 로 넣는다.
+- `.env` 로 시작하는 파일은 열지 않는다(`.env.example` 도). 로컬에서는 DB 가 붙지 않으니 화면 확인은 launch 설정 `home-preview`(화면은 로컬 파일, API 는 운영)로 한다.
+- 정책 감지 소스는 기관 누리집 목록 HTML 이다. 목록 모양이 바뀌면 그 소스가 0건이 되어 `sourcesFailed` 와 Sentry `monitor: policy-sources` 로 드러난다. 그때 `backend/jobs/regulationsAutoFetch.js` 의 `LIST_PARSERS` 를 고친다. 국토교통부는 첫 요청이 쿠키를 심고 같은 주소로 307 을 준다. 국토부 별첨 파일은 본문 pdf 와 달리 `/LCMS/DWN.jsp` 주소가 아니라 `FilePath=…&FileName=(별첨…)` 를 담은 다른 주소로 나온다(11-27 확인, 링크를 href 의 `.pdf` 로 찾고 FileName 으로 고른다).
+- `pendingReview` 가 0 이 아니면 그 보도자료 원문(본문과 첨부)을 열어 대조한다. 검증일을 올리려면 마지막 검증일부터 그날까지 네 기관 발표 전부를 본다. 취득세(지방세법)는 감지 소스 밖이라 국가법령정보센터 현행 판으로 따로 본다. 첨부 내려받기는 파일마다 이름, 출처, 크기를 밝히고 허락을 받는다.
+- 검색어 정리에서 따옴표와 백틱은 지우지 않는다. 실제 단지명에 있다("역삼I'PARK", "1'st이지움" 등 11개, 11-20 DB 조회).
+- 화면 함수를 `frontend/js` 로 옮길 때 블록 주석을 반만 옮기지 말 것. 옮기는 스크립트는 미리 보기로 범위부터 본다. `frontend/js` 스크립트를 모듈이나 `defer` 로 바꾸지 않는다. 글자로 읽는 검사는 `readFrontend()`.
+- 크롬 확장은 브라우저 기본 확인창(confirm)을 누르지 못한다. 시험 때만 그 페이지의 `window.confirm` 을 바꾸고 바로 되돌린다. 토큰을 읽는 스크립트는 도구가 막는다(쓰지 않는다).
+- PowerShell 변수 이름은 대소문자를 가리지 않는다(`$L` 과 `$l` 이 같은 변수). 복잡한 처리는 node 스크립트 파일로 한다. Windows 명령 해석기로 넘기는 `git grep` 에 `|` 가 들어가면 파이프로 읽힌다.
+- 시각은 PowerShell `Get-Date` 로 확인한다. `git commit -am` 은 새 파일을 넣지 않는다. 새 파일은 `git add` 로 넣는다. 커밋 메시지에 큰따옴표가 있으면 `-F 파일` 로 넘긴다.
 - 지우면 안 되는 것: `backend/services/cpuBudget.js`, 원본 표의 `zz_skip_same` 트리거, `vercel.json` 첫 두 route, 위 복구 태그. 나머지는 `CLAUDE.md` 의 "금지 사항".
-- 그대로 둔 것: `frontend/kakao-app-icon-128.png`(카카오 개발자 콘솔 사용 여부 확인 불가), 계획 문서 201개(세션마다 읽히지 않고, 옮기면 경로를 가리키는 35줄을 고쳐야 해서 운영자 승인으로 그대로 둠), 원격 브랜치 `preview/privacy-136`, `preview/ui-151`, `chore/ci-deps-sync-smoke`, `concept-preview-redesign`, dependabot 브랜치(끝난 것인지 확인 안 함).
-- health 의 `crons` 에 예약 목록에 없는 `apt-dim-recovery`(11-06, ok=0)와 `molit-hist-backfill` 기록이 남아 있다. 동결된 이력 채우기 경로의 옛 기록이다(`backend/routes/cron.js:851` 부근). 부하는 없다.
-- Claude Design 은 2026-12-14 에 옮겨 간다는 안내가 떠 있다. 옮기는 단추는 운영자가 누른다(시안: 맞춤 보고서, 정책 변화).
+- 그대로 둔 것: 계획 문서 202개와 `plans/STATUS-HISTORY.md`(세션마다 읽히지 않고, 경로를 가리키는 곳이 많아 2026-11-19 운영자 승인으로 그대로 둠), `frontend/kakao-app-icon-128.png`, 원격 브랜치 `preview/privacy-136`, `preview/ui-151`, `chore/ci-deps-sync-smoke`, `concept-preview-redesign`, dependabot 브랜치.
 
 ## 6. 남은 일 (우선순위 순)
 
-1. 다음에 바로 할 첫 작업: 시각을 확인하고 health 의 `crons['regulations-auto-fetch']` 를 본다. 11-20 06:30 KST 뒤라면 새 소스의 첫 운영 실행이다. `sourcesFailed` 0, `sourcesTotal` 4 인지, `processed`(걸린 글 수)와 `pendingReview` 를 확인한다. 11-19 밤 계산으로는 `pendingReview` 1(대출, 국토교통부 11-17 「주택법 시행령」 개정안, `AUDIT_REPORT.md` 17-7)이 나와야 맞다. `sourcesFailed` 가 0 이 아니면 Sentry `monitor: policy-sources` 알림의 `failed` 목록에서 어느 기관인지 보고 그 목록 페이지를 직접 받아 `LIST_PARSERS` 와 대조한다.
-1-2. (끝남) 첨부를 읽었고 대출 내용이 없었다. 11-15~11-19 네 기관 발표를 전수 대조해 검증일을 11-19 로 올리는 SQL 을 운영자가 실행했다(11-20 00시대, 조회로 확인). 「주택법 시행령」 개정이 공포되면(국가법령정보센터 현행 판이 2026. 9. 8. 에서 바뀌면) 정책 변화 자료의 리모델링 카드 상태와 덧붙임을 고친다.
-1-3. 감사 3차(`AUDIT_REPORT.md` 18절) 첫 묶음은 66fa2d0, 5146875 로 고쳤고 1280ad4 로 배포해 운영에서 확인했다(1절, 18-9). 남은 감사 항목 9~12 는 기획과 시안 순서, 13(관심 추가와 해제 때 푸시 구독 요청)은 의도 여부 확인부터. 임장노트 저장 직후 "기록 삭제" 단추가 상세를 다시 열어야 보이는 것도 다음 기획 때 같이 본다(11-20 운영 확인 중 발견, 이번 수정과 무관한 원래 동작).
-2. 운영자 결정 받기: 3-3 의 배포 횟수 규칙. 11-20 00:01 배포(dbee6ce)는 11-20 의 첫 배포다.
-3. 전송량: 원인 확인은 끝났다(`AUDIT_REPORT.md` 17-7, 11-12 부터 하루 150~170MB). 12월 중순에 30일 합계가 내려왔는지만 본다.
-4. 11-21 뒤: `AUDIT_REPORT.md` 17-5 의 queryid 8개로 시설 조건 건수 조회의 하루 횟수를 계산한다. 많으면 `backend/services/healthCounts.js:123-134`, `backend/jobs/facilityBackfill.js:133-135` 를 줄이는 계획을 쓴다.
-5. 화면 파일 나누기 4단계 나머지(`plans/202-frontend-split.md`): 청약(dbee6ce, 운영 확인), 브리핑(66fa2d0)까지 끝났다. 배포 뒤 `/js/briefing.js` 200 과 브리핑 화면을 확인하고, 그다음 도우미 묶음을 시작한다. `calcLTV` 는 금리와 규제 판정을 인자로 받게 바꾼 뒤에 옮긴다.
-5-2. 계획 213(조건 맞는 단지 찾기 7.95초, 보고서 22.7초): 측정 먼저(`plans/213-recommend-report-speed.md`).
-6. 2026-12 중: 토지거래허가구역 연장 공고와 세제개편안 국회 통과를 국토교통부, 재정경제부, 국가법령정보센터 원문으로 확인해 `backend/data/policy-changes.json` 과 규제 요약 창을 고친다. 12월 말 은행연합회 스트레스금리 공시로 2027년 상반기 지방 스트레스 금리도 맞춘다.
-7. 실제 휴대폰 기기로 지도와 도우미 화면 확인(운영자 기기).
-8. 운영자 몫: Supabase 임시 Edge Function `gwcheck-temp` 삭제, 죽은 행 청소(적재 시간 UTC 17~19시를 피해 `VACUUM (ANALYZE) public.apt_master;`, `VACUUM (ANALYZE) public.molit_hist_peaks;`), 유출 비밀번호 검사 켜기(보안 권고 WARN), 이메일 확인 설정, Vercel 과 GitHub 2단계 인증, DB 백업 주 1회(`plans/168-backup-runbook.md`), 원격 브랜치 정리 여부.
-9. 정책 변화 자료: 자료 후보 2건(리모델링 동의율, 고양창릉 지분적립형)은 11-19 에 원문으로 확인해 넣었다(47건, `plans/203-policy-changes.md` 끝 절). 보류 후보 3건(신생아 특례대출 소득 2.5억, 2026.6.18 스트레스 DSR 변경, 민간임대 관리비 신고)은 원문 본문을 확인하면 넣는다.
+1. 다음에 바로 할 첫 작업: 시각을 확인하고 health 의 `crons['regulations-auto-fetch']` 를 본다. 운영자가 `20261127_regulations_verified_1127.sql` 을 실행했으면(DB `regulations_snapshot` 두 행 모두 2026-11-27) 다음 06:30 KST 회차부터 `pendingReview` 가 0 이어야 한다. 0 이 아니면 새 글이니 원문 대조. 실행하지 않았으면 운영자에게 다시 알린다.
+2. 운영자 결정: 3-3 배포 횟수 규칙.
+3. 화면 파일 나누기 다음 묶음: 도우미(`plans/202-frontend-split.md`). 브리핑 묶음은 운영 확인이 끝났다.
+4. 계획 213 측정(목록 찾기와 보고서의 조회별 시간).
+5. 좌표 채우기의 재확인 범위 줄이기 계획(하루 CPU 가장 큼, `backend/jobs/geocacheBackfill.js` 의 verify 부분). 기능이 바뀌는 일이라 계획부터 쓴다.
+6. 감사 3차 남은 항목: 다크 기본값, 본문 바로가기, 대출 계산 입력 안내(금리 0, 기간 0), 특약 초안 오류 때 이전 초안 숨김, 관심 단지 목록 가격 면적 표기, 임장노트 저장 직후 "기록 삭제" 단추(기획과 시안 순서), 관심 추가와 해제 때 푸시 구독 요청의 의도 확인.
+7. 2026-12 중: 토지거래허가구역 연장 공고와 세제개편안 국회 통과를 원문으로 확인해 `backend/data/policy-changes.json` 과 규제 요약을 고친다. 12월 말 은행연합회 스트레스금리 공시로 2027년 상반기 지방 스트레스 금리도 맞춘다. 「주택법 시행령」 개정이 공포되면(국가법령정보센터 현행 판이 2026. 9. 8. 에서 바뀌면) 리모델링 카드를 고친다.
+8. 실제 휴대폰 기기로 지도와 도우미 화면 확인(운영자 기기).
+9. 운영자 몫: Supabase 임시 Edge Function `gwcheck-temp` 삭제, 죽은 행 청소(적재 시간 UTC 17~19시를 피해 `VACUUM (ANALYZE) public.apt_master;`, `VACUUM (ANALYZE) public.molit_hist_peaks;`, `VACUUM (ANALYZE) public.molit_apt_index;`), 유출 비밀번호 검사 켜기(보안 권고 WARN), 이메일 확인 설정, Vercel 과 GitHub 2단계 인증, DB 백업 주 1회(`plans/168-backup-runbook.md`), 원격 브랜치 정리 여부.
+10. 제안만 한 것(범위 밖): `drizzle-orm` 을 개발 의존성으로 옮기기.
 
 ## 7. 명령
 
 - 검증: 작업 폴더 루트에서 `npm run verify` (무거운 명령은 한 번에 하나)
-- 검사 하나: `cd backend` 뒤 `node --test test/<파일>.test.js` (시간대는 UTC: `TZ=UTC`)
+- 검사 하나: `cd backend` 뒤 `node --test test/<파일>.test.js` (시간대는 UTC: PowerShell 에서 `$env:TZ='UTC'`)
 - 정책 변화 자료 다시 만들기: `node scripts/build-policy-data.js`
 - 화면 확인: launch 설정 `home-preview`(설정 파일 `C:\Users\Woo\Downloads\myhomelog_deploy_1\.claude\launch.json`, 포트 4179). 서버를 Bash 로 띄우지 않는다.
 - 배포: 작업 폴더에서 `git push origin HEAD:master`. 확인은 `https://api.github.com/repos/wlsdn5968/myhomelog/commits/<sha>/status` 가 success 가 된 뒤 `/api/health` 의 deploy 값.
