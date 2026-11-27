@@ -102,7 +102,7 @@
 
 ### 검증 체크리스트
 
-**로컬**: `npm run verify` (린트·JSON·의존성·환경·보안·backend test 6종 게이트)
+**로컬**: `npm run verify` (린트, 느린 정규식 기준선, JSON, 의존성, 환경, 보안, backend test 7단계. `package.json` 의 verify, 2026-11-27 확인)
 
 ⚠ backend test 는 `scripts/run-backend-tests-utc.js` 래퍼로 **TZ=UTC** 강제 실행된다 —
 프로덕션(Vercel) 런타임이 UTC 고정인데 개발 호스트는 Asia/Seoul(KST)이라, 호스트 TZ 로만
@@ -211,7 +211,7 @@ DB
 - 검사: `backend/test/`, 묶음 실행은 `scripts/run-backend-tests-utc.js`
 - DB 변경 기록: `supabase/migrations/`
 - 인계 문서: `HANDOFF.md`. 새 세션은 이 파일부터 읽는다.
-- 감사 기록: `AUDIT_REPORT.md`(최근 감사, 지금은 11-18 2차 감사와 사용자 시나리오 점검), `docs/audit/`(지난 감사 보관, 11-15 와 11-16 감사는 `AUDIT_REPORT_2026-11-15_16.md`)
+- 감사 기록: `AUDIT_REPORT.md`(최근 감사, 지금은 18절 11-20 전면 감사 3차와 19절 11-27 정책 대기 대조), `docs/audit/`(지난 감사 보관, 11-15 와 11-16 감사는 `AUDIT_REPORT_2026-11-15_16.md`, 11-18 2차 감사와 11-18~19 시나리오 점검은 `AUDIT_REPORT_2026-11-18_19.md`)
 - 주제별 기록 `docs/ops/`: `db-capacity.md`(DB 용량, 원본 창 자르기) · `components.md`(구성요소 버전, 점검) · `redis.md`(Upstash 한도) · `security.md`(보안 결정) · `ui-design-v2.md`(문구 규칙, 디자인 v2 화면) · `feature-history.md`(기능별 변경) · `done-history.md`(완료 항목) · `operations-rules.md`(CPU 한도, 2026-11-11 과 11-12~13 규칙 원문)
   새 기록은 맞는 파일에 덧붙이고, 새 금지 규칙은 이 파일 "금지 사항"에도 한 줄 남긴다. 한 파일에 몰지 않는다.
 - 계획 문서: `plans/README.md`(지금 열려 있는 것), `plans/STATUS-HISTORY.md`(지난 실행 순서와 상태 표), 개별 계획 `plans/<번호>-*.md`. 다음 새 계획 번호는 214부터(2026-11-20 에 213 을 씀).
@@ -230,4 +230,4 @@ DB
 
 ---
 
-마지막 갱신: 2026-11-19 (정기 점검: 감사 보고서 1~15절을 `docs/audit/AUDIT_REPORT_2026-11-15_16.md` 로, 끝난 일정 한 줄과 옛 갱신 이력을 `docs/ops/done-history.md` 로 옮김, 인계 문서를 지금 상태로 다시 씀. 배포본 75aeff8, 테스트 1,315). 그 앞 이력은 `docs/ops/done-history.md` 끝.
+마지막 갱신: 2026-11-27 (정기 점검: 감사 보고서 16·17절을 `docs/audit/AUDIT_REPORT_2026-11-18_19.md` 로 옮김, 인계 문서를 다시 씀, 대조표 `docs/ops/cleanup-2026-11-27.md`. 배포본 1280ad4, 테스트 1,338). 그 앞: 2026-11-19 정기 점검(감사 보고서 1~15절 보관, 배포본 75aeff8, 테스트 1,315). 그 앞 이력은 `docs/ops/done-history.md` 끝.
