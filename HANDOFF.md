@@ -11,7 +11,7 @@
 - 작업 폴더: `C:\Users\Woo\Downloads\myhomelog_deploy_1\myhomelog\.claude\worktrees\p144` (브랜치 `ui-155`). Vercel projectId `prj_eYOJDb65wMQqbL5dAKo1pwaitiwW`, team `gyeollab`(팀 번호 `team_LEOHwN6yFTWrPGOycSJKQ3OC`).
 
 동작하는 것 (확인됨, 2026-11-27)
-- 운영 배포본 1280ad4(2026-11-20 00:56 KST). health 의 deploy 값 1280ad4. 로컬은 문서만 바뀐 커밋 여러 개가 앞서 있다(다음 코드 배포에 묶는다).
+- 운영 배포본 1280ad4(2026-11-20 00:56 KST). health 의 deploy 값 1280ad4. 로컬은 서비스 코드는 그대로이고 문서, 검사 파일 둘(`backend/test/audit2-1118.test.js` 주석, `policy-src-html-1119.test.js` 날짜 한 줄), SQL 한 개가 바뀐 커밋들이 앞서 있다(다음 코드 배포에 묶는다).
 - 1280ad4 에 들어간 것: 전면 감사 3차 첫 수정 묶음(임장 기록 삭제가 서버에도 반영, 검색어의 세미콜론과 `--` 제거와 Supabase 앞단 Cloudflare 차단 페이지는 빈 결과, 약관과 자동 결정 설명과 대화 이력 창 Escape, 대출 계산 출처 줄, 로고 링크 이름, 결제 웹훅 경로 정확 비교)과 화면 나누기 브리핑 묶음(`frontend/js/briefing.js`). 그 앞 dbee6ce(청약 `subs.js`, 정책 변화 자료 47건과 항목별 확인일). 운영 확인 기록은 `AUDIT_REPORT.md` 18-9.
 - 정책 감지(네 기관 보도자료 목록): 2026-11-26 21:55 UTC 회차 `sourcesFailed` 0/4, `processed` 6, `pendingReview` 8. 대기 8건은 원문 대조를 마쳤고 저장값을 바꿀 발표가 없었다(`AUDIT_REPORT.md` 19절).
 - 최근 7일 Sentry 미해결 문제 0, Vercel 런타임 오류 0(11-27 조회).
@@ -26,6 +26,8 @@
 - 조건 맞는 단지 찾기 7.95초, 맞춤 보고서 22.7초(각 1회 측정, 보고서는 CPU 1.5초에 나머지가 대기). 계획 `plans/213-recommend-report-speed.md`(측정 먼저).
 - 죽은 행: molit_hist_peaks 11,007, molit_apt_index 3,114, apt_master 2,896(운영자 몫 VACUUM).
 - 배포 횟수 규칙이 두 문서에서 다르다(3-3).
+- Vercel 팀 Active CPU 는 팀 전체 30일 합계로 한도를 본다(기본 4시간, 임시 12시간은 2026-12-08 까지). 다른 프로젝트는 조사하거나 권하지 않는다(운영자 지시 2026-11-18 "우리 프로젝트만 봐").
+- Fast Data Transfer: 11-19 측정으로 30일 46.92GB / 100GB(47%)였고, 11-15 부터는 하루 145~163MB 였다. 11-11 이전 큰 날들이 30일 창에서 빠지는 12월 중순에 합계가 내려왔는지 본다(지난 기록 `docs/audit/AUDIT_REPORT_2026-11-18_19.md` 17-7). 11-27 값은 확인 불가(아래).
 
 확인 불가
 - Vercel 사용량 화면의 30일 CPU 와 전송량(11-27 에 프로젝트 거름 여부를 글자로 확인하지 못했고 캡처가 회색으로만 나옴).
@@ -137,11 +139,11 @@
 ## 4. 이번(2026-11-27 정기 점검)에 한 일과 바꾼 파일, 검증 결과
 
 - 정책 대기 8건 원문 대조(`AUDIT_REPORT.md` 19절): 네 기관 11-19~11-27 글 전부를 뽑고 관련 가능 글은 본문을 읽었다(낮은 등급 에이전트, 핵심 근거는 직접 재확인). 운영자 허락으로 국토부 브리핑문 pdf 1개(94,156바이트)를 내려받아 8쪽을 읽었다. 국가법령정보센터 현행 판으로 지방세법, 지방세특례제한법, 종합부동산세법이 11-15 검증 뒤 바뀌지 않았음을 확인했다. 결과로 검증일 SQL 을 만들었다(위).
-- 감사 보고서 16·17절(278줄)을 `docs/audit/AUDIT_REPORT_2026-11-18_19.md` 로 글자 그대로 옮겼다(git 옛 판과 한 줄씩 같음 확인). `AUDIT_REPORT.md` 는 443줄에서 177줄. 가리키던 곳 두 곳(검사 주석 1, 계획 목록 1)을 고쳤다. 지난 인계 문서와 지난 SQL 은 그때의 기록이라 그대로 두고, 보관 문서 머리에 "같은 번호를 가리킨다"는 안내를 달았다.
+- 감사 보고서 16·17절(278줄)을 `docs/audit/AUDIT_REPORT_2026-11-18_19.md` 로 글자 그대로 옮겼다(git 옛 판과 한 줄씩 같음 확인). `AUDIT_REPORT.md` 는 442줄에서 177줄(PowerShell `Get-Content` 줄 수). 가리키던 곳 두 곳(검사 주석 1, 계획 목록 1)을 고쳤다. 지난 인계 문서와 지난 SQL 은 그때의 기록이라 그대로 두고, 보관 문서 머리에 "같은 번호를 가리킨다"는 안내를 달았다.
 - `CLAUDE.md` 낡은 설명 세 곳(verify 7단계, 감사 보고서 범위, 마지막 갱신). 원칙 문장은 고치지 않았다.
 - `docs/ops/operations-rules.md` 34줄 끝에 "끝난 일" 덧붙임(원문 그대로 둠). 근거 `docs/ops/done-history.md:25`, git 으로 c0fd32f 가 5ab0d91 안에 있음 확인.
 - 이 문서를 다시 썼다. 옛 판은 `docs/ops/handoff-archive-2026-11-27.md`. 정리 전후 대조표와 문서별 줄 수는 `docs/ops/cleanup-2026-11-27.md`.
-- 조사로 확인한 것(1단계): 추적 파일 836개 11.6MB, 추적 안 된 파일 0, 잘못 들어간 산출물 0. 실행 경로에서 쓰지 않는 의존성은 `drizzle-orm`(`backend/db/schema.js` 만, 그 파일을 부르는 곳 0)과 `@sentry/node`(검사에서만). 화면 반복 실행 3개, 서버 1개(모두 조건부). 시설 조건 건수 조회 8개는 11-19 기준 뒤 7.6일 동안 76회(하루 약 10회, 하루 DB 시간 약 16초)라 계획이 필요 없다.
+- 조사로 확인한 것(1단계): 추적 파일 836개 11.6MB, 추적 안 된 파일 0, 잘못 들어간 산출물 0. 서버 실행 중에는 쓰지 않는 의존성은 `drizzle-orm`(`backend/db/schema.js` 에서만 require. 그 파일을 가리키는 곳은 `backend/db/client.js:109` 의 지연 getter 와 `backend/drizzle.config.js:17` 이고, getter 를 부르는 곳은 0)과 `@sentry/node`(검사에서만). 화면 반복 실행 3개, 서버 1개(모두 조건부). 시설 조건 건수 조회 8개는 11-19 기준 뒤 7.6일 동안 76회(하루 약 10회, 하루 DB 시간 약 16초)라 계획이 필요 없다.
 - 검증: `npm run verify` 1,338개 통과, 실패 0. 처음에는 날짜가 지나 깨진 검사 하나(`backend/test/policy-src-html-1119.test.js`, 감지 창 7일 밖의 고정 날짜)가 실패해서 그 검사의 날짜 한 줄만 고쳤다(범위 밖 수정, 자세한 것은 `docs/ops/cleanup-2026-11-27.md`). 지금 날짜와 고정 날짜를 함께 쓰는 검사 5개는 지금 통과하지만 나중에 깨질 수 있는지 확인 불가. 복구 지점: 로컬 태그 `backup/pre-cleanup-1127`(de33ddd). 그 앞 태그 `backup/pre-deploy-1120b`, `backup/pre-audit3-fix-1120`, `backup/pre-deploy-1120`, `backup/pre-cleanup-1119` 등.
 
 ## 5. 알려진 문제와 주의점, 건드리면 안 되는 것
@@ -151,13 +153,17 @@
 - `.env` 로 시작하는 파일은 열지 않는다(`.env.example` 도). 로컬에서는 DB 가 붙지 않으니 화면 확인은 launch 설정 `home-preview`(화면은 로컬 파일, API 는 운영)로 한다.
 - 정책 감지 소스는 기관 누리집 목록 HTML 이다. 목록 모양이 바뀌면 그 소스가 0건이 되어 `sourcesFailed` 와 Sentry `monitor: policy-sources` 로 드러난다. 그때 `backend/jobs/regulationsAutoFetch.js` 의 `LIST_PARSERS` 를 고친다. 국토교통부는 첫 요청이 쿠키를 심고 같은 주소로 307 을 준다. 국토부 별첨 파일은 본문 pdf 와 달리 `/LCMS/DWN.jsp` 주소가 아니라 `FilePath=…&FileName=(별첨…)` 를 담은 다른 주소로 나온다(11-27 확인, 링크를 href 의 `.pdf` 로 찾고 FileName 으로 고른다).
 - `pendingReview` 가 0 이 아니면 그 보도자료 원문(본문과 첨부)을 열어 대조한다. 검증일을 올리려면 마지막 검증일부터 그날까지 네 기관 발표 전부를 본다. 취득세(지방세법)는 감지 소스 밖이라 국가법령정보센터 현행 판으로 따로 본다. 첨부 내려받기는 파일마다 이름, 출처, 크기를 밝히고 허락을 받는다.
+- 정책 변화 자료는 `backend/data/policy-changes.json` 만 고치고 `node scripts/build-policy-data.js` 를 돌린다. 원문 본문을 열어 대조한 것만 넣는다. 보류 후보 3건(신생아 특례대출 소득 2.5억, 2026.6.18 스트레스 DSR 변경, 민간임대 관리비 신고)은 11-19 재조사에서도 정부 원문을 못 찾아 넣지 않기로 했다(`plans/203-policy-changes.md` 끝 절).
+- 이 DB 에서 `explain analyze` 시간은 부풀려 나온다. 시간은 `pg_stat_statements` 평균과 최소, 최대로 보고, 측정 조회는 하나씩 돌린다. 통계는 2026-05-21 이후 초기화되지 않았다(11-27 에도 `stats_reset` 그대로). 저장소 `CLAUDE.md` 금지 사항의 이 줄이 이 문서를 가리킨다.
+- health 의 `crons` 에 예약 목록에 없는 `apt-dim-recovery`(11-06, ok=0)와 `molit-hist-backfill` 기록이 남아 있다(11-27 health 에도 있음). 동결된 이력 채우기 경로의 옛 기록이다(`backend/routes/cron.js` 의 이력 채우기 부분). 부하는 없다.
 - 검색어 정리에서 따옴표와 백틱은 지우지 않는다. 실제 단지명에 있다("역삼I'PARK", "1'st이지움" 등 11개, 11-20 DB 조회).
 - 화면 함수를 `frontend/js` 로 옮길 때 블록 주석을 반만 옮기지 말 것. 옮기는 스크립트는 미리 보기로 범위부터 본다. `frontend/js` 스크립트를 모듈이나 `defer` 로 바꾸지 않는다. 글자로 읽는 검사는 `readFrontend()`.
 - 크롬 확장은 브라우저 기본 확인창(confirm)을 누르지 못한다. 시험 때만 그 페이지의 `window.confirm` 을 바꾸고 바로 되돌린다. 토큰을 읽는 스크립트는 도구가 막는다(쓰지 않는다).
+- 크롬 확장은 창 크기를 바꾸지 못한다. 휴대폰 화면은 앱 안 브라우저(`mcp__Claude_Browser__*`)의 `resize_window` preset mobile 로 운영 주소를 본다. 그 브라우저의 type 동작은 검색창 입력 이벤트를 보내지 않으니 `input` 이벤트를 직접 보낸다. 화면 함수를 잘라 실행하는 검사는 `pyeongPrelude()` 를 쓴다. Git Bash heredoc 은 역슬래시와 `\n` 을 바꾸니 정규식이나 역슬래시가 든 치환은 `.cjs` 파일을 만들어 실행한다.
 - PowerShell 변수 이름은 대소문자를 가리지 않는다(`$L` 과 `$l` 이 같은 변수). 복잡한 처리는 node 스크립트 파일로 한다. Windows 명령 해석기로 넘기는 `git grep` 에 `|` 가 들어가면 파이프로 읽힌다.
 - 시각은 PowerShell `Get-Date` 로 확인한다. `git commit -am` 은 새 파일을 넣지 않는다. 새 파일은 `git add` 로 넣는다. 커밋 메시지에 큰따옴표가 있으면 `-F 파일` 로 넘긴다.
 - 지우면 안 되는 것: `backend/services/cpuBudget.js`, 원본 표의 `zz_skip_same` 트리거, `vercel.json` 첫 두 route, 위 복구 태그. 나머지는 `CLAUDE.md` 의 "금지 사항".
-- 그대로 둔 것: 계획 문서 202개와 `plans/STATUS-HISTORY.md`(세션마다 읽히지 않고, 경로를 가리키는 곳이 많아 2026-11-19 운영자 승인으로 그대로 둠), `frontend/kakao-app-icon-128.png`, 원격 브랜치 `preview/privacy-136`, `preview/ui-151`, `chore/ci-deps-sync-smoke`, `concept-preview-redesign`, dependabot 브랜치.
+- 그대로 둔 것: 계획 문서 202개와 `plans/STATUS-HISTORY.md`(세션마다 읽히지 않고, 경로를 가리키는 곳이 많아 2026-11-19 운영자 승인으로 그대로 둠), `frontend/kakao-app-icon-128.png`(카카오 개발자 콘솔에서 쓰는지 확인 불가), 원격 브랜치 `preview/privacy-136`, `preview/ui-151`, `chore/ci-deps-sync-smoke`, `concept-preview-redesign`, dependabot 브랜치.
 
 ## 6. 남은 일 (우선순위 순)
 
@@ -168,6 +174,8 @@
 5. 좌표 채우기의 재확인 범위 줄이기 계획(하루 CPU 가장 큼, `backend/jobs/geocacheBackfill.js` 의 verify 부분). 기능이 바뀌는 일이라 계획부터 쓴다.
 6. 감사 3차 남은 항목: 다크 기본값, 본문 바로가기, 대출 계산 입력 안내(금리 0, 기간 0), 특약 초안 오류 때 이전 초안 숨김, 관심 단지 목록 가격 면적 표기, 임장노트 저장 직후 "기록 삭제" 단추(기획과 시안 순서), 관심 추가와 해제 때 푸시 구독 요청의 의도 확인.
 7. 2026-12 중: 토지거래허가구역 연장 공고와 세제개편안 국회 통과를 원문으로 확인해 `backend/data/policy-changes.json` 과 규제 요약을 고친다. 12월 말 은행연합회 스트레스금리 공시로 2027년 상반기 지방 스트레스 금리도 맞춘다. 「주택법 시행령」 개정이 공포되면(국가법령정보센터 현행 판이 2026. 9. 8. 에서 바뀌면) 리모델링 카드를 고친다.
+7-2. 2026-12-08 전: 팀 Active CPU 임시 12시간이 끝난다. 내집로그 하루 CPU(`crons.retention.cpuYesterdayMs`)를 보고, 12월 중순에 Fast Data Transfer 30일 합계가 내려왔는지 본다.
+7-3. 2026-12-14: Claude Design 이 옮겨 간다는 안내가 떠 있다. 옮기는 단추는 운영자가 누른다(시안: 맞춤 보고서, 정책 변화).
 8. 실제 휴대폰 기기로 지도와 도우미 화면 확인(운영자 기기).
 9. 운영자 몫: Supabase 임시 Edge Function `gwcheck-temp` 삭제, 죽은 행 청소(적재 시간 UTC 17~19시를 피해 `VACUUM (ANALYZE) public.apt_master;`, `VACUUM (ANALYZE) public.molit_hist_peaks;`, `VACUUM (ANALYZE) public.molit_apt_index;`), 유출 비밀번호 검사 켜기(보안 권고 WARN), 이메일 확인 설정, Vercel 과 GitHub 2단계 인증, DB 백업 주 1회(`plans/168-backup-runbook.md`), 원격 브랜치 정리 여부.
 10. 제안만 한 것(범위 밖): `drizzle-orm` 을 개발 의존성으로 옮기기.
