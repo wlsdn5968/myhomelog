@@ -63,6 +63,8 @@ function _pick(summary) {
     'verifyTried', 'verifyOk', 'verifyFixed', 'verifyNoAddr', 'verifyMs',
     // FAST-VERIFY-2026-08-10 (Sprint KKKKKKK-10): Kakao 무호출 통과분 / 이번 run 이 집은 행 수.
     'verifyFast', 'verifyRows',
+    // VERIFY-SCOPE-1127 (plans/214): 주소 재확인 단계만의 CPU(ms). 작업 전체 cpuMs 와 견준다.
+    'verifyCpuMs',
     'rehealTried', 'rehealHealed', 'rehealMarked',
     // NAME-HEAL-2026-10-22: 근거 없는 키워드 좌표 재검색(교정·유지·핀 제외·남은 수)
     'nameHealTried', 'nameHealHealed', 'nameHealKept', 'nameHealHidden', 'nameHealLeft',

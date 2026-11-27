@@ -22,6 +22,8 @@ const { getSupabaseAdmin } = require('../db/client');
 // LOCK-GUARD-2026-10-31 (운영자 "업데이트가 되더라도 고친게 이어지도록"): 아래 작업들은 출처 목록으로 대상 행을 고른 뒤 apt_key 로 고친다.
 //   고른 뒤 고치기 전 사이에 사람이 손 보정(manual)·숨김(kakao-x)으로 바꾼 행은 덮지 않도록, 고칠 때도 출처를 다시 확인한다.
 const LOCKED_SOURCES = '(manual,kakao-x)';
+// VERIFY-SCOPE-1127 (plans/214 방안 A): 주소 재확인을 다시 하는 주기(일). passed = 이미 통과한 kakao-v, other = kakao, kakao-sub, kakao-addr.
+const VERIFY_RECHECK_DAYS = Object.freeze({ passed: 30, other: 7 });
 const { resolveCoordBatch, kakaoGeocode, getKakaoUsageStats, kakaoAddressGeocode, markGeoFail, filterOutGeoFailed, buildKey, saveToDb, kakaoStrictAptSearch } = require('../services/geocodeCacheService');
 const { isValidKoreaCoord } = require('../utils/geo');
 const logger = require('../logger');
@@ -187,22 +189,38 @@ async function verifyByOfficialAddress(admin, { cap = 300, budgetMs = 60000 } = 
   //   주석 참조). cap 을 올려도 1,000행만 와서 상향이 통째로 무효가 되므로 페이지 루프로 받는다.
   //   ⚠ 2차 정렬키(apt_key)가 필수 — cached_at 이 같은 행이 몰려 있으면 페이지 경계에서 순서가
   //     흔들려 중복 수신·누락이 생긴다.
+  // VERIFY-SCOPE-1127 (plans/214 방안 A, 운영자 승인 "권고대로 진행" 2026-11-27): 다시 보는 주기를 source 별로 둔다.
+  //   [근거] 11-26 회차 4,000행을 다시 봐서 2행을 고쳤고(verifyMs 37,023 = 작업 전체의 74%), 대상 22,608행이
+  //   전부 최근 7일 안에 다시 확인됐다(약 5.7일에 한 바퀴, 2026-11-27 DB 조회).
+  //   이미 통과한 행(kakao-v)은 cached_at 이 30일 지난 것만, 나머지(kakao, kakao-sub, kakao-addr)는 7일 지난 것만 본다.
+  //   순환은 그대로다(2026-08-10 "모든 좌표 전수조사"): 한 번 통과한 행도 30일마다 다시 본다. 통과 전 행을 먼저 집는다.
+  //   cached_at 이 비어 있는 행은 대상에서 빠진다. 2026-11-27 조회로 0행이고 열 기본값이 now() 이며, 코드에 비우는 곳이 없다(grep).
+  //   정렬(cached_at, apt_key)과 페이지 루프는 그대로.
   const PAGE = 1000;
   const rows = [];
-  for (let from = 0; from < cap; from += PAGE) {
-    const to = Math.min(from + PAGE, cap) - 1;
-    const { data, error } = await admin
-      .from('apt_geocache')
-      .select('apt_key, apt_name, sigungu, umd_nm, lat, lng, place_name, address')
-      .in('source', ['kakao', 'kakao-sub', 'kakao-v', 'kakao-addr'])
-      .order('cached_at', { ascending: true, nullsFirst: true })
-      .order('apt_key', { ascending: true })
-      .range(from, to);
-    if (error || !data || !data.length) break;
-    rows.push(...data);
-    if (data.length < (to - from + 1)) break;   // 마지막 페이지
+  const _ago = (days) => new Date(started - days * 86400000).toISOString();
+  const groups = [
+    { sources: ['kakao', 'kakao-sub', 'kakao-addr'], before: _ago(VERIFY_RECHECK_DAYS.other) },
+    { sources: ['kakao-v'], before: _ago(VERIFY_RECHECK_DAYS.passed) },
+  ];
+  for (const g of groups) {
+    for (let from = 0; rows.length < cap; from += PAGE) {
+      const want = Math.min(PAGE, cap - rows.length);
+      const to = from + want - 1;
+      const { data, error } = await admin
+        .from('apt_geocache')
+        .select('apt_key, apt_name, sigungu, umd_nm, lat, lng, place_name, address')
+        .in('source', g.sources)
+        .lt('cached_at', g.before)
+        .order('cached_at', { ascending: true, nullsFirst: true })
+        .order('apt_key', { ascending: true })
+        .range(from, to);
+      if (error || !data || !data.length) break;
+      rows.push(...data);
+      if (data.length < want) break;   // 이 묶음의 마지막 페이지
+    }
   }
-  if (!rows.length) return { tried: 0, verified: 0, fastVerified: 0, corrected: 0, skippedNoAddr: 0, rows: 0 };
+  if (!rows.length) return { tried: 0, verified: 0, fastVerified: 0, corrected: 0, skippedNoAddr: 0, rows: 0, elapsedMs: Date.now() - started };
 
   // kapt: 키의 공식 주소 배치 조회 (N+1 회피)
   const kaptCodes = rows.filter(r => r.apt_key.startsWith('kapt:')).map(r => r.apt_key.slice(5));
@@ -440,8 +458,12 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
   //   위 FAST-VERIFY 로 행당 Kakao 왕복이 대상의 ~90% 에서 사라져 같은 120s 에 훨씬 더 많이 훑는다.
   //   Kakao 호출량은 오히려 **감소**한다(종전 1,000회 → 불일치 의심분만).
   let addrVerify = { tried: 0, verified: 0, fastVerified: 0, corrected: 0, skippedNoAddr: 0 };
+  // VERIFY-SCOPE-1127 (plans/214 1단계): 재확인 단계의 CPU 를 따로 잰다(작업 전체 cpuMs 만으로는 몫을 알 수 없었다).
+  const _vCpu0 = process.cpuUsage();
   try { addrVerify = await verifyByOfficialAddress(admin, { cap: 4000, budgetMs: 120000 }); }
   catch (e) { logger.warn({ err: e.message }, 'geocache 주소검증 실패(무시)'); }
+  const _vCpu = process.cpuUsage(_vCpu0);
+  const verifyCpuMs = Math.round((_vCpu.user + _vCpu.system) / 1000);
 
   // NAME-HEAL-2026-10-22: 근거 없는 키워드 좌표 재검색 — 대상 514건을 하루 400건·40초 안에서. 예산은 아래 신규 백필(sweep) 몫에서 빠진다.
   let nameHeal = { tried: 0, healed: 0, kept: 0, hidden: 0, errors: 0, candidates: 0 };
@@ -574,7 +596,7 @@ async function run({ chunk = DEFAULT_CHUNK, daysBack = 180, budgetMs = 270000, p
     verifyNoAddr: addrVerify.skippedNoAddr, verifyMs: addrVerify.elapsedMs,
     // verifyFast: Kakao 호출 없이 본번 대조만으로 통과시킨 수 — 스윕 가속이 실제로 먹었는지의 지표.
     //   verifyRows 대비 비중이 낮으면 지번 커버리지가 모자란 것이므로 원인이 갈린다.
-    verifyFast: addrVerify.fastVerified, verifyRows: addrVerify.rows,
+    verifyFast: addrVerify.fastVerified, verifyRows: addrVerify.rows, verifyCpuMs,
     rehealTried: reheal.tried, rehealHealed: reheal.healed, rehealMarked: reheal.marked,
     nameHealTried: nameHeal.tried, nameHealHealed: nameHeal.healed, nameHealKept: nameHeal.kept,
     nameHealHidden: nameHeal.hidden, nameHealLeft: Math.max(0, (nameHeal.candidates || 0) - (nameHeal.tried || 0)),
@@ -648,3 +670,5 @@ async function fetchCandidatePool(admin, limit, since) {
 module.exports = { run, addrBonbun, canFastVerify };
 module.exports._isUntrustedNameCoord = isUntrustedNameCoord;
 module.exports._healFallbackSource = healFallbackSource;
+module.exports._verifyByOfficialAddress = verifyByOfficialAddress; // VERIFY-SCOPE-1127: 가짜 DB 검사용
+module.exports.VERIFY_RECHECK_DAYS = VERIFY_RECHECK_DAYS;
