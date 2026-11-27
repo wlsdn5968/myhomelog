@@ -216,7 +216,9 @@ async function getRegionRecentTransactions(lawdCd, monthsBack = 6) {
         // JIBUN-COL-2026-09-05: jibun 이 빠져 있었다 — analyzeTransactions 가 단지 지번(최빈값)을 여기서 만들고,
         //   추천 경로의 JIBUN-MATCH(게이트·카드) 는 그 값으로 KAPT 를 찾는다. 컬럼이 없으니 지번 매칭이 **한 번도 성립한 적이
         //   없었다**(프리뷰 실측: 서울 6.5억 후보 258곳 중 세대수 확인 45곳 = 이름 정확일치 비율 그대로).
-        .select('apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_amount, lawd_cd, apt_seq, jibun')
+        // REPORT-POOL-1127 (plans/213 2단계): id 와 deal_date 를 함께 받는다. 보고서 후보 풀이 이 기억을 함께 쓸 때
+        //   종전 풀과 같은 순서(deal_date desc, id desc)를 그대로 재현하려면 둘이 필요하다. 추천 경로는 이 둘을 읽지 않는다.
+        .select('id, apt_name, sigungu, umd_nm, exclu_use_ar, build_year, floor, deal_year, deal_month, deal_day, deal_date, deal_amount, lawd_cd, apt_seq, jibun')
         .eq('lawd_cd', lawdCd)
         .gte('deal_date', sinceStr)
         .order('deal_date', { ascending: false })
@@ -254,6 +256,7 @@ async function getRegionRecentTransactions(lawdCd, monthsBack = 6) {
       lawdCd: r.lawd_cd || lawdCd,
       aptSeq: r.apt_seq || '',
       jibun: r.jibun || '', // JIBUN-COL-2026-09-05
+      id: r.id, dealDate: r.deal_date, // REPORT-POOL-1127: 보고서 후보 풀의 순서 재현용
     }));
     cache.setRows(ck, mapped, 21600); // 6h — daily ingest 주기 기준
     return mapped;

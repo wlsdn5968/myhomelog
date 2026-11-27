@@ -1108,6 +1108,50 @@ function _stageTimer() {
   };
 }
 
+// REPORT-POOL-1127 (plans/213 2단계): 지역 적용 함수(_regionOp)가 lawd_cd 목록 하나로만 거르는지 읽어 그 목록을 돌려준다.
+//   함수를 기록용 가짜 빌더에 한 번 적용해 본다. in('lawd_cd', 목록) 하나뿐일 때만 목록, 그 밖(like, 다른 조건, 없음)은 null.
+function _lawdCodesOfRegionOp(op) {
+  if (typeof op !== 'function') return null;
+  let codes = null, other = false;
+  const stub = new Proxy({}, {
+    get: (_t, prop) => (...args) => {
+      if (prop === 'in' && args[0] === 'lawd_cd' && Array.isArray(args[1]) && codes === null) codes = args[1].map(String);
+      else other = true;
+      return stub;
+    },
+  });
+  try { op(stub); } catch (_) { return null; }
+  return (!other && codes && codes.length) ? codes : null;
+}
+
+// REPORT-POOL-1127: 구별 거래 기억(getRegionRecentTransactions 반환 모양)에서 후보 풀을 만든다.
+//   결과는 아래 _newPageQuery 조회와 같은 열, 같은 조건, 같은 순서(deal_date desc, id desc), 같은 상한이다.
+//   같다고 장담할 수 없는 경우는 null(호출부가 종전 조회로 간다): 구 하나라도 못 받음, 구 하나가 12,000행 이상(그 기억은
+//   12쪽에서 잘렸을 수 있다), 빈 값이 든 행(기억이 '' 나 0 으로 바꿔 담아 원래 빈 값인지 구별할 수 없다), id 나 deal_date 없음.
+//   complete 는 종전과 같은 뜻이다: 상한보다 적게 담았을 때만 true(상한과 같으면 종전 조회도 다음 쪽이 있는지 몰라 false).
+function _poolFromRegionRows(perGu, { minSqm, maxSqm, minAmt, maxAmt, since, max }) {
+  const GU_CAP = 12000;
+  const out = [];
+  for (const rows of perGu) {
+    if (!Array.isArray(rows) || rows.length >= GU_CAP) return null;
+    for (const r of rows) {
+      if (!r || r.id == null || !r.dealDate || !r.aptName || !r.sigungu || !r.umdNm || !r.lawdCd
+        || !r.aptSeq || !r.jibun || !r.buildYear || !r.excluUseAr || !r.dealAmount) return null;
+      if (r.excluUseAr < minSqm || r.excluUseAr > maxSqm) continue;
+      if (r.dealAmount < minAmt || r.dealAmount > maxAmt) continue;
+      if (r.dealDate < since) continue;
+      out.push({
+        apt_name: r.aptName, sigungu: r.sigungu, umd_nm: r.umdNm, lawd_cd: r.lawdCd, build_year: r.buildYear,
+        exclu_use_ar: r.excluUseAr, deal_amount: r.dealAmount, deal_date: r.dealDate, apt_seq: r.aptSeq, jibun: r.jibun,
+        _id: Number(r.id),
+      });
+    }
+  }
+  out.sort((a, b) => (a.deal_date < b.deal_date ? 1 : a.deal_date > b.deal_date ? -1 : b._id - a._id));
+  const rows = out.slice(0, max).map(({ _id, ...rest }) => rest);
+  return { rows, complete: out.length < max };
+}
+
 /** 추천 단지 후보 fetch — molit + apt_master 통합 + 점수 매칭 + 다양성 */
 async function fetchCandidateApts(admin, input, limit) {
   const _st = _stageTimer(); // REPORT-STAGE-1114: 단계별 소요 계측(동작은 그대로)
@@ -1319,7 +1363,27 @@ async function fetchCandidateApts(admin, input, limit) {
   const PAGE = 1000, POOL_MAX = 12000, POOL_BUDGET_MS = 25000, POOL_CONCURRENCY = 4;
   const _poolStart = Date.now();
   let txs = [], poolComplete = false;
+  // REPORT-POOL-1127 (plans/213 2단계, 운영자 승인 "권고대로 진행" 2026-11-27): 구별 거래 기억을 함께 쓴다.
+  //   [실측] 2026-11-27 운영 보고서 23,703ms 중 이 풀 조회가 10,805ms(46%). 같은 서울 6개월 거래를 추천 경로는
+  //   구별 기억(getRegionRecentTransactions, 인스턴스 6시간)으로 읽는다(그날 25구 최대 2,885ms, 합 23,369행).
+  //   [같은 결과 보장] 지역 판정 분기는 한 글자도 바꾸지 않고, 그 결과(_regionOp)에서 lawd_cd 목록만 읽는다.
+  //   그 목록이 25개 이하이고 모든 구를 받았을 때만 이 길로 간다. 걸러 내는 조건(면적, 가격, 시작일)과 순서
+  //   (deal_date desc, id desc), 상한(POOL_MAX)은 아래 조회와 같다. 빈 값이 하나라도 있으면(기억은 빈 값을 '' 나 0 으로
+  //   담아 구별할 수 없다) 쓰지 않고 아래 조회로 간다(2026-11-27 6개월 창 150,544행에 빈 값 0, 조회 확인).
+  //   차이 하나: 기억이 최대 6시간 묵을 수 있다. 보고서 응답 기억도 6시간(21600초)이라 같은 범위 안이다.
+  let _poolVia = 'query';
   {
+    const _poolCodes = _lawdCodesOfRegionOp(_regionOp);
+    if (_poolCodes && _poolCodes.length <= 25) {
+      try {
+        const { getRegionRecentTransactions } = require('../services/transactionService');
+        const perGu = await Promise.all(_poolCodes.map(c => getRegionRecentTransactions(c, 6)));
+        const got = _poolFromRegionRows(perGu, { minSqm, maxSqm, minAmt, maxAmt, since: _sinceDate, max: POOL_MAX });
+        if (got) { txs = got.rows; poolComplete = got.complete; _poolVia = 'region'; }
+      } catch (e) { logger.warn({ region, err: e && e.message }, '구별 거래 기억으로 풀 만들기 실패, 조회로 진행'); }
+    }
+  }
+  if (_poolVia === 'query') {
     // ① 첫 페이지 단독 — 콜드 경합 방지. 여기서 덜 차면(구 단위 선택 등) 더 볼 것도 없다.
     let { data: first, error: firstErr } = await _newPageQuery().range(0, PAGE - 1);
     // COLD-RETRY-2026-11-13 (운영 실측): 서울 전체 첫 페이지가 차가운 상태에서 8초 제한(57014)을 넘어 보고서가 500 이었다.
@@ -1335,6 +1399,7 @@ async function fetchCandidateApts(admin, input, limit) {
   }
   // ② 이후는 배치 병렬. 결과는 offsets 순서로 돌아오므로 concat 만으로 정렬이 보존된다.
   for (let from = PAGE; from < POOL_MAX && !poolComplete; from += PAGE * POOL_CONCURRENCY) {
+    if (_poolVia !== 'query') break;   // REPORT-POOL-1127: 기억으로 만든 풀은 이미 상한까지 담았다(잘렸어도 더 읽지 않는다)
     if (Date.now() - _poolStart > POOL_BUDGET_MS) break;   // 예산 초과 → 잘린 상태로 진행
     const offsets = [];
     for (let i = 0; i < POOL_CONCURRENCY; i++) {
@@ -1368,6 +1433,7 @@ async function fetchCandidateApts(admin, input, limit) {
   // ALIAS-MERGE-2026-05-21 (전수조사: BUG2 동일 클래스): raw MOLIT명(풍림아파트A/B) →
   //   canonical master명(공릉풍림아이원) relabel → 보고서 후보도 1개 단지로 병합 (검색/지도/단지정리와 동일 식별).
   _st.mark('pool');
+  if (_poolVia === 'region') _st.mark('poolViaRegion'); // REPORT-POOL-1127: 기억으로 만든 회차 표시(0ms 에 가까운 칸 하나)
   const txList = txs || [];
   let _aliasMap = new Map();
   try {
@@ -1843,6 +1909,8 @@ async function fetchCandidateApts(admin, input, limit) {
 //   유료 호출 없이 전수 확인이 가능하다. router 동작은 그대로다(export 추가뿐).
 module.exports = router;
 module.exports.fetchCandidateApts = fetchCandidateApts;
+module.exports._lawdCodesOfRegionOp = _lawdCodesOfRegionOp; // REPORT-POOL-1127: 동등성 검사용
+module.exports._poolFromRegionRows = _poolFromRegionRows;
 // TEST-EXPORT-2026-09-02 (감사 P0-2): 회귀 주입 실측 결과 이 함수의 null 가드가 **무커버리지**였다
 //   (가드를 지우고 테스트를 돌렸더니 136 pass 로 그냥 통과했다). 순수 함수라 export 해서 실제 실행으로 고정한다.
 module.exports.applyObjectiveScore = applyObjectiveScore;

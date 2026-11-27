@@ -1077,7 +1077,8 @@ async function getAIRecommendations(userCondition) {
         avgPrice: parseFloat((p.avgPrice / 10000).toFixed(2)),
         floorBands: p.floorBands || null, // Sprint LLLLL — fit 평형 밖(대형 등)도 층별 중위가 열람 가능하게
       })).sort((a, b) => a.excluUseAr - b.excluUseAr),
-      txHistory: apt.rawList || [],
+      // REPORT-POOL-1127: 구별 거래 기억에 보고서용 id, dealDate 를 더했다. 응답(과 그 기억)에는 종전 모양 그대로 싣는다(DB 기본키 노출 방지).
+      txHistory: (apt.rawList || []).map(({ id: _id, dealDate: _dd, ...t }) => t),
       dealCount6m: apt.dealCount,
       recentDeal: apt.recentDeal,
     };
