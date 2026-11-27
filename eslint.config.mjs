@@ -144,7 +144,17 @@ export default [
       // SPLIT-1119 (plans/202 4단계 둘째 묶음): frontend/js/subs.js 의 청약 함수
       loadSubs: 'readonly',
       // SPLIT-1120 (plans/202 4단계 셋째 묶음): frontend/js/briefing.js 의 브리핑 함수(2026-11-20 린트 출력으로 센 이름)
-      loadNews: 'readonly', renderBriefing: 'readonly' } },
+      loadNews: 'readonly', renderBriefing: 'readonly',
+      // SPLIT-1127 (plans/202 4단계 넷째 묶음): frontend/js/chat.js 의 도우미 함수(2026-11-27 린트 출력으로 센 이름)
+      closeChatHistory: 'readonly' } },
+  },
+  {
+    // SPLIT-1127: chat.js 가 실행 시점에 부르는 본체의 함수와 값(2026-11-27 린트 출력으로 센 23개). 세 값은 chat.js 가 바꾼다.
+    files: ['frontend/js/chat.js'],
+    languageOptions: { globals: { chatH: 'writable', chatLd: 'writable', _chatSessionId: 'writable',
+      CFG: 'readonly', _authHdr: 'readonly', _chatBudgetSearch: 'readonly', _closeAiPanel: 'readonly', _escHtml: 'readonly', _logSearch: 'readonly',
+      _relTime: 'readonly', _rpOverlay: 'readonly', _syncQuotaFromRes: 'readonly', closeDrawer: 'readonly', currentDetail: 'readonly', gct: 'readonly',
+      getBookmarks: 'readonly', gt: 'readonly', openQuotaModal: 'readonly', props: 'readonly', sv: 'readonly', toast: 'readonly', toggleRpOverlay: 'readonly' } },
   },
   {
     // SPLIT-1120: briefing.js 가 실행 시점에 부르는 본체의 함수와 값(2026-11-20 린트 출력으로 센 11개).

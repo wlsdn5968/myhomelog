@@ -1,4 +1,4 @@
-# 202. 화면 한 파일 나누기 (4단계 둘째 묶음 청약까지 배포됨, 셋째 묶음 브리핑 구현 끝)
+# 202. 화면 한 파일 나누기 (4단계 셋째 묶음 브리핑까지 배포됨, 넷째 묶음 도우미 구현 끝)
 
 작성 2026-11-16. 출처는 전면 감사 발견 18(`AUDIT_REPORT.md` 15절). 운영자 승인 "권고대로 진행"에 따라 계획만 세웠고 코드는 바꾸지 않았다. 실행은 단계마다 운영자 승인 뒤에 한다.
 
@@ -111,3 +111,15 @@
 - 더한 것: 화면 전환 함수 `sv` 에서 브리핑 화면일 때 `loadNews` 가 없으면 알리고 돌아가는 줄(`_brfMissSent`), 린트 전역 이름(본체가 부르는 2개, briefing.js 가 부르는 본체 이름 11개), 회귀 검사 `backend/test/split-1120.test.js`(5개). `split-1116.test.js` 파일 목록에 `briefing.js`. `popular-degraded-label.test.js` 가 `index.html` 만 읽어 실패해서 `readFrontend()` 로 바꿨다(지키는 내용은 그대로).
 - 확인: `npm run verify` 1,337개 통과. 로컬 미리보기에서 스크립트 순서(calc, data, subs, briefing, swap-checklist, policy-data, policy), 브리핑 날짜, 띠, 시장 3줄, 청약 임박, 인기 단지 TOP 5, 경신 카드, 뉴스와 분류 단추, 오류 0.
 - 다음: 도우미. 이 묶음이 운영에서 확인된 뒤 시작한다.
+- 운영 확인: 배포본 1280ad4(2026-11-20)로 끝났다(`HANDOFF.md` 6절 3번, `AUDIT_REPORT.md` 18-9).
+
+## 4단계 넷째 묶음 결과: 도우미 (2026-11-27, 미배포)
+
+- 옮긴 것(427줄, 다섯 덩어리, 글자 그대로): 보내기(`buildChatContext`, `qSend`, `sM`), 대화 저장(`_ensureChatSession`, `_genUuid`, `_persistChatMessage`), 대화 이력 창(`openChatHistory`, `closeChatHistory`, `filterChatHistory`, `loadChatSession`, `deleteChatSession`, `newChatSession`), 빠른 질문과 입력칸(`sQ`, `askP`, `hk`, `ah`), 말풍선(`_renderAIBadge`, `addMsg`, `sendAIFeedback`, `showTyp`, `rmTyp`). 새 파일 `frontend/js/chat.js`(436줄), 태그는 `briefing.js` 바로 뒤.
+- 옮기는 스크립트는 다섯 범위의 첫 줄과 끝 줄, 앞뒤 줄, 남길 줄이 범위 밖인지를 미리 보기로 확인한 뒤 적용했다. 옮긴 조각이 새 파일에 글자 그대로 있는지, 본체에 정의가 남지 않았는지 대조했다. 옮긴 범위에 블록 주석은 없다.
+- 옮기지 않은 것과 이유: 실행 순간 도는 줄(`let _chatSessionId`, 로그인 변화 등록 블록, 이력 창 바깥 클릭 등록)은 본체에 둔다(본체 7752줄 근처 검색 초기화가 `_chatSessionId` 를 읽는다). 그 블록이 부르는 `_toggleChatHistoryButtons`, 첫 화면 시각에도 쓰는 `gt`, 공용 `toast`, `_jsonAttr`, `_numFmt` 도 본체에 둔다. 도우미 패널 여닫기(`toggleRpOverlay`, `_closeAiPanel`, `_renderChatQuotaHint`)와 남은 횟수 표시는 화면 전환과 얽혀 있어 그대로 뒀다.
+- 더한 것: 파일을 못 받았을 때 한 번 알리는 줄(`_chatMissSent`)을 화면 전환 `sv` 와 `toggleRpOverlay` 에 하나씩(데스크톱은 패널이 열린 채로 보이는 화면이 있어 둘 다 둔다). 린트 전역 이름(본체가 부르는 `closeChatHistory` 1개, chat.js 가 부르는 본체 이름 23개, 그중 값을 바꾸는 `chatH`, `chatLd`, `_chatSessionId` 는 writable). 회귀 검사 `backend/test/split-1127.test.js`(6개). `split-1116.test.js` 파일 목록에 `chat.js`.
+- 검사: 처음 5개가 실패했다. 본체만 읽던 세 곳(`audit-caps-1111` 채팅 제목 정규식, `audit3-1120` 이력 창 닫는 함수, `plan201-1116` 목록 이동 칩)을 `readFrontend()` 로 바꿨다. `landing-v5` 두 개는 함수 뽑는 정규식이 한 줄 함수 `_jsonAttr` 에서 다음 `\n}` 까지 넘겨 잡던 것이 옮긴 함수가 빠지며 끝을 못 찾은 것이라, 원래 정규식이 못 찾을 때만 그 한 줄을 잡게 했다(처음에 한 줄 형태를 먼저 잡게 했더니 `_escHtml` 이 뒤의 `UNNAMED_RE` 를 함께 잡아 오던 것이 빠져 다시 고쳤다). 지키는 내용은 바꾸지 않았다.
+- 확인: `npm run verify` 1,344개 통과, CI 화면 구문 검사 두 가지와 보안 회귀 검사 통과. 로컬 미리보기(`home-preview`)에서 스크립트 순서(calc, data, subs, briefing, chat, swap-checklist, policy-data, policy), 옮긴 함수와 남긴 함수 24개 정의, 도우미 열기와 남은 횟수 안내, 칩으로 질문 보내기. 미리보기 대리 서버는 POST 를 넘기지 않고 204 를 돌려줘서(`scripts/dev-preview-proxy.cjs` 38행) 응답 경로는 그 페이지의 fetch 를 잠깐 바꿔 확인했다: Enter 로 보내기, 글 이스케이프(`<img>` 가 글자로 나옴), 굵게, 추천 칩 2개, 배지, 엄지 단추, 새 대화 초기화, 로그인 전 이력 단추 숨김. 콘솔 오류는 전부터 있던 401 한 건뿐.
+- 확인하지 못한 것: 운영에서의 `/js/chat.js`(배포 뒤 200 과 형식부터 본다), 로그인 상태의 대화 저장과 이력 창(로컬은 로그인 시험을 하지 않았다), 실제 서버 응답으로 받은 답.
+- 다음: 5단계(지도와 단지 상세). 이 묶음이 운영에서 확인된 뒤 시작한다. `showDetail` 은 옮기기 전에 안에서 먼저 나눈다.

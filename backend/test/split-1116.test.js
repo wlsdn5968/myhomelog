@@ -32,7 +32,7 @@ test('옮긴 함수는 새 파일에만 있고, 본체에는 남아 있지 않�
   }
   assert.doesNotThrow(() => new vm.Script(js, { filename: 'swap-checklist.js' }), '구문 오류가 없다');
   assert.ok(readFrontend().includes('function _swpCalc('), '검사 도우미가 두 파일을 함께 돌려준다');
-  assert.deepEqual(frontendJsFiles(), ['briefing.js', 'calc.js', 'data.js', 'policy-data.js', 'policy.js', 'subs.js', 'swap-checklist.js'], '새 파일을 더하면 index.html 의 script 태그와 eslint.config.mjs 의 전역 목록도 같이 본다');
+  assert.deepEqual(frontendJsFiles(), ['briefing.js', 'calc.js', 'chat.js', 'data.js', 'policy-data.js', 'policy.js', 'subs.js', 'swap-checklist.js'], '새 파일을 더하면 index.html 의 script 태그와 eslint.config.mjs 의 전역 목록도 같이 본다');
 });
 
 test('새 파일은 맨 위에서 본체의 값을 읽지 않는다(본체보다 먼저 실행된다)', () => {

@@ -10,7 +10,10 @@ const vm = require('node:vm');
 
 const html = fs.readFileSync(path.join(__dirname, '../../frontend/index.html'), 'utf8');
 const fn = (name) => {
-  const m = html.match(new RegExp(`(?:async )?function ${name}\\([^)]*\\)\\{[\\s\\S]*?\\n\\}`));
+  // SPLIT-1127: 원래 정규식은 다음 "\n}" 까지 넘겨 잡는다(_escHtml 은 뒤의 UNNAMED_RE 상수까지 함께 잡아 와서 그대로 둔다).
+  //   한 줄 함수 _jsonAttr 은 뒤에 있던 말풍선 함수가 frontend/js/chat.js 로 옮겨 가 끝을 못 찾으므로, 그때만 그 한 줄을 잡는다.
+  const m = html.match(new RegExp(`(?:async )?function ${name}\\([^)]*\\)\\{[\\s\\S]*?\\n\\}`))
+    || html.match(new RegExp(`^(?:async )?function ${name}\\([^)]*\\)\\{[^\\n]*\\}$`, 'm'));
   assert.ok(m, `${name} 없음`); return m[0];
 };
 const lvStart = html.indexOf('<div id="view-landing"');

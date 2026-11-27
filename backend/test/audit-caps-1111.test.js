@@ -279,7 +279,8 @@ test('run-3: 알림 구독의 지역 코드는 적재하는 지역만 받는다'
 
 test('run-3 후속: 단지 검색어는 100자로 자르고, 채팅 제목 변환 정규식은 공백 뒤 첫 글자를 고정한다', () => {
   assert.ok(read('../routes/search.js').includes("String(req.query.q || '').slice(0, 100).replace("));
-  const html = read('../../frontend/index.html');
+  // SPLIT-1127: 말풍선 함수(addMsg)는 frontend/js/chat.js 로 옮겼다. 화면 코드 전체를 읽는다.
+  const html = require('../testSupport/readFrontend').readFrontend();
   assert.ok(html.includes(String.raw`#{1,4}\s+(\S.*?)(?=<br>|$)/g`));
   // 같은 정규식으로 긴 공백 입력이 빨리 끝나는지 확인
   const re = /(?:^|<br>)#{1,4}\s+(\S.*?)(?=<br>|$)/g;

@@ -123,7 +123,8 @@ test('7. 약관, 자동 결정 설명, 대화 이력 창이 Escape 닫기 목록
   const block = html.slice(html.indexOf('const closers = ['), html.indexOf('for (const { id, fn, present } of closers)'));
   for (const [id, fn] of [['TM', 'closeTerms'], ['ADM', 'closeAutomatedDecisionModal'], ['CH', 'closeChatHistory']]) {
     assert.ok(block.includes(`{ id: '${id}', fn: '${fn}' }`), `${id} 가 닫기 목록에 없다`);
-    assert.ok(new RegExp(`function ${fn}\\(\\)`).test(html), `${fn} 함수가 없다`);
+    // SPLIT-1127: closeChatHistory 는 frontend/js/chat.js 로 옮겼다. 함수가 있는지는 화면 코드 전체에서 본다.
+    assert.ok(new RegExp(`function ${fn}\\(\\)`).test(require('../testSupport/readFrontend').readFrontend()), `${fn} 함수가 없다`);
     assert.ok(html.includes(`class="smbg" id="${id}"`), `${id} 창이 없다`);
   }
 });

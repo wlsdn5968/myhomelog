@@ -65,7 +65,8 @@ test('도우미: 서버는 목록 이동 칩의 예산과 지역을 숫자 범�
 });
 
 test('도우미 화면: 목록 이동 칩에 예산이나 지역이 있으면 조건을 채워 찾고, 없으면 화면만 옮긴다', () => {
-  assert.ok(html.includes("if (s.view === 'list' && (s.budget || s.region)) _chatBudgetSearch(s.budget, s.region); else VIEW_ACTS[s.view]();"));
+  // SPLIT-1127: 이 칩을 만드는 sM 은 frontend/js/chat.js 로 옮겼다(_chatBudgetSearch 는 본체에 남는다).
+  assert.ok(require('../testSupport/readFrontend').readFrontend().includes("if (s.view === 'list' && (s.budget || s.region)) _chatBudgetSearch(s.budget, s.region); else VIEW_ACTS[s.view]();"));
   const mkChip = (t, on) => ({ textContent: t, _on: on, classList: { toggle(_c, v) { this._p._on = v; }, remove() { this._p._on = false; } } });
   const run = (budget, region) => {
     const bp = { value: '' }; const log = [];
