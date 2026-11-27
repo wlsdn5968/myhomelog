@@ -124,7 +124,7 @@
 - 검증: 루트에서 `npm run verify` (한 번에 하나만 돌린다)
 - 검사 하나만: `cd backend` 뒤 `node --test test/<파일>.test.js` (시간대는 UTC 로 맞춘다)
 - 화면 확인: launch 설정 `home-preview`(`scripts/dev-preview-proxy.cjs`, 화면 파일은 로컬, API 는 운영으로 넘기고 응답을 600초 기억). 설정 파일은 `C:\Users\Woo\Downloads\myhomelog_deploy_1\.claude\launch.json`. 방금 운영 값이 필요하면 주소에 `_fresh=1`.
-- 배포: 작업 폴더에서 `git push origin HEAD:master`. KST 하루 3회 이하. 운영자가 배포를 가리킨 한 줄("배포해")이 있을 때만 한다. "권고대로 진행"으로는 자동 권한 검사가 막는다.
+- 배포: 작업 폴더에서 `git push origin HEAD:master`. 횟수는 KST 하루 1회가 기본이고, 버그 수정 배포만 하루 3회까지 더할 수 있다(2026-11-27 운영자 승인 "권고대로 진행해줘. 승인할게", 권고 원문 "기본 하루 1회, 버그 수정은 하루 3회까지"). (고치기 전 문장: "KST 하루 3회 이하.") 운영자가 배포를 가리킨 한 줄("배포해")이 있을 때만 한다. "권고대로 진행"으로는 자동 권한 검사가 막는다.
 - 배포 뒤: `/api/health` 의 deploy 값, 런타임 오류, `cpuDay` 와 `crons.<이름>.cpuMs`.
 - 운영 DB: 조회만 한다. 쓰기 SQL 은 운영자에게 주고 운영자가 SQL Editor 에서 실행한다.
 
