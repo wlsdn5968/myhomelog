@@ -1,7 +1,7 @@
 /**
  * backend/test/audit2-1118.test.js
  *
- * 2026-11-18 2차 전면 감사(AUDIT_REPORT.md 16절)에서 고친 것을 고정한다.
+ * 2026-11-18 2차 전면 감사(docs/audit/AUDIT_REPORT_2026-11-18_19.md 16절, 2026-11-27 에 옮김)에서 고친 것을 고정한다.
  *   발견 3  내보내기의 활동 기록(EXPORT-ACT-1118)
  *   발견 4  소득이 비었을 때 적용 한도 표시(INCOME-NONE-1118)
  *   발견 5, 12  결제 링크와 사이트맵(BILLING-LINK-1118, SITEMAP-1118)
