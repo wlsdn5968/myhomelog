@@ -24,7 +24,7 @@
 안 되는 것, 위험한 것
 - 좌표 채우기 예약 작업이 날마다 이미 검증한 좌표 4,000행을 다시 확인하고(verifyRows 4000, 그중 고친 것 2, verifyMs 37,023) CPU 10,868ms 를 쓴다. 예약 작업 가운데 가장 크다(health 11-26 회차). 줄이는 계획은 아직 없다.
 - 조건 맞는 단지 찾기 7.95초, 맞춤 보고서 22.7초(각 1회 측정, 보고서는 CPU 1.5초에 나머지가 대기). 계획 `plans/213-recommend-report-speed.md`(측정 먼저).
-- 죽은 행: molit_hist_peaks 11,007, molit_apt_index 3,114, apt_master 2,896(운영자 몫 VACUUM).
+- 죽은 행: 2026-11-27 운영자 VACUUM 으로 apt_master, molit_hist_peaks 모두 0.
 - 배포 횟수 규칙이 두 문서에서 다르다(3-3).
 - Vercel 팀 Active CPU 는 팀 전체 30일 합계로 한도를 본다(기본 4시간, 임시 12시간은 2026-12-08 까지). 다른 프로젝트는 조사하거나 권하지 않는다(운영자 지시 2026-11-18 "우리 프로젝트만 봐").
 - Fast Data Transfer: 11-19 측정으로 30일 46.92GB / 100GB(47%)였고, 11-15 부터는 하루 145~163MB 였다. 11-11 이전 큰 날들이 30일 창에서 빠지는 12월 중순에 합계가 내려왔는지 본다(지난 기록 `docs/audit/AUDIT_REPORT_2026-11-18_19.md` 17-7). 11-27 값은 확인 불가(아래).
@@ -177,7 +177,7 @@
 7-2. 2026-12-08 전: 팀 Active CPU 임시 12시간이 끝난다. 내집로그 하루 CPU(`crons.retention.cpuYesterdayMs`)를 보고, 12월 중순에 Fast Data Transfer 30일 합계가 내려왔는지 본다.
 7-3. 2026-12-14: Claude Design 이 옮겨 간다는 안내가 떠 있다. 옮기는 단추는 운영자가 누른다(시안: 맞춤 보고서, 정책 변화).
 8. 실제 휴대폰 기기로 지도와 도우미 화면 확인(운영자 기기).
-9. 운영자 몫: Supabase 임시 Edge Function `gwcheck-temp` 삭제, 죽은 행 청소(적재 시간 UTC 17~19시를 피해 `VACUUM (ANALYZE) public.apt_master;`, `VACUUM (ANALYZE) public.molit_hist_peaks;`, `VACUUM (ANALYZE) public.molit_apt_index;`), 이메일 확인 설정, Vercel 과 GitHub 2단계 인증, DB 백업 주 1회(`plans/168-backup-runbook.md`), 원격 브랜치 정리 여부. (2026-11-27: 유출 비밀번호 검사는 Supabase 공식 문서에 "Leaked password protection is available on the Pro Plan and above." 라 유료 금지 원칙으로 뺐다. 보안 권고 WARN 은 남는다. gwcheck-temp 는 같은 날 운영자가 지웠고 목록 조회로 datagokr-proxy 하나만 남은 것을 확인했다. 죽은 행 청소는 SQL 화면에서 세 줄을 한 번에 실행해 "VACUUM cannot run inside a transaction block" 오류가 났다. 한 줄씩 따로 실행해야 한다.)
+9. 운영자 몫: Supabase 임시 Edge Function `gwcheck-temp` 삭제, 죽은 행 청소(적재 시간 UTC 17~19시를 피해 `VACUUM (ANALYZE) public.apt_master;`, `VACUUM (ANALYZE) public.molit_hist_peaks;`, `VACUUM (ANALYZE) public.molit_apt_index;`), 이메일 확인 설정, Vercel 과 GitHub 2단계 인증, DB 백업 주 1회(`plans/168-backup-runbook.md`), 원격 브랜치 정리 여부. (2026-11-27: 유출 비밀번호 검사는 Supabase 공식 문서에 "Leaked password protection is available on the Pro Plan and above." 라 유료 금지 원칙으로 뺐다. 보안 권고 WARN 은 남는다. gwcheck-temp 는 같은 날 운영자가 지웠고 목록 조회로 datagokr-proxy 하나만 남은 것을 확인했다. 죽은 행 청소는 SQL 화면에서 세 줄을 한 번에 실행하면 "VACUUM cannot run inside a transaction block" 오류가 난다. 운영자가 한 줄씩 다시 실행했고 12:50~12:51 KST 에 끝났다(apt_master 죽은 행 2,897 에서 0, molit_hist_peaks 11,007 에서 0, molit_apt_index 통계 갱신, pg_stat_user_tables 조회).)
 10. 제안만 한 것(범위 밖): `drizzle-orm` 을 개발 의존성으로 옮기기.
 
 ## 7. 명령
