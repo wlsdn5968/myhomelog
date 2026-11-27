@@ -167,7 +167,7 @@
 
 ## 6. 남은 일 (우선순위 순)
 
-1. 다음에 바로 할 첫 작업: 시각을 확인하고 health 의 `crons['regulations-auto-fetch']` 를 본다. 운영자가 `20261127_regulations_verified_1127.sql` 을 실행했으면(DB `regulations_snapshot` 두 행 모두 2026-11-27) 다음 06:30 KST 회차부터 `pendingReview` 가 0 이어야 한다. 0 이 아니면 새 글이니 원문 대조. 실행하지 않았으면 운영자에게 다시 알린다. (2026-11-27 10:47 KST 조회: 아직 실행 안 됨, 대출 11-19, 세금 11-15. 운영자에게 다시 알렸다.)
+1. 다음에 바로 할 첫 작업: 시각을 확인하고 health 의 `crons['regulations-auto-fetch']` 를 본다. 운영자가 `20261127_regulations_verified_1127.sql` 을 실행했으면(DB `regulations_snapshot` 두 행 모두 2026-11-27) 다음 06:30 KST 회차부터 `pendingReview` 가 0 이어야 한다. 0 이 아니면 새 글이니 원문 대조. 실행하지 않았으면 운영자에게 다시 알린다. (2026-11-27 12:47 KST 조회: 운영자가 실행해 두 행 모두 2026-11-27, note 끝 문단 들어감. 다음은 11-28 06:30 KST 회차 pendingReview 0 확인.)
 2. 운영자 결정: 3-3 배포 횟수 규칙.
 3. 화면 파일 나누기 도우미 묶음은 2026-11-27 배포(697f704)와 운영 확인까지 끝났다(위 1절). 다음은 5단계(지도와 단지 상세, `showDetail` 을 안에서 먼저 나눈다).
 4. 계획 213: 1단계 측정 끝(2026-11-27 11:14 KST 운영 실측, 두 경로 모두 이미 있던 단계 로그로 읽음). 보고서 23.7초 중 후보 풀 DB 조회 10.8초, 별칭 3.4초. 단지 찾기 6.4초 중 별칭과 단지 목록 각 약 4.0초. 2단계 후보 1(보고서 후보 풀을 구별 거래 기억으로) 구현 끝, 2026-11-27 배포(697f704, 계획 문서 "2단계 후보 1 구현"). 아직 운영 실측 전이다(운영자 계정의 오늘 보고서 1회를 측정에 썼다). 다음 보고서 회차의 report-stages 의 pool 과 poolViaRegion 을 11-27 실측과 견준다. 후보 2(별칭과 단지 목록을 Redis 로)는 측정 뒤 보류(계획 문서 "후보 2 측정과 판단": 단독 조회는 1초 미만이라 대기는 경합 몫으로 보이고, Redis 무료 월 전송량 10GB 와 10월 한도 초과 이력 때문).
@@ -177,7 +177,7 @@
 7-2. 2026-12-08 전: 팀 Active CPU 임시 12시간이 끝난다. 내집로그 하루 CPU(`crons.retention.cpuYesterdayMs`)를 보고, 12월 중순에 Fast Data Transfer 30일 합계가 내려왔는지 본다.
 7-3. 2026-12-14: Claude Design 이 옮겨 간다는 안내가 떠 있다. 옮기는 단추는 운영자가 누른다(시안: 맞춤 보고서, 정책 변화).
 8. 실제 휴대폰 기기로 지도와 도우미 화면 확인(운영자 기기).
-9. 운영자 몫: Supabase 임시 Edge Function `gwcheck-temp` 삭제, 죽은 행 청소(적재 시간 UTC 17~19시를 피해 `VACUUM (ANALYZE) public.apt_master;`, `VACUUM (ANALYZE) public.molit_hist_peaks;`, `VACUUM (ANALYZE) public.molit_apt_index;`), 이메일 확인 설정, Vercel 과 GitHub 2단계 인증, DB 백업 주 1회(`plans/168-backup-runbook.md`), 원격 브랜치 정리 여부. (2026-11-27: 유출 비밀번호 검사는 Supabase 공식 문서에 "Leaked password protection is available on the Pro Plan and above." 라 유료 금지 원칙으로 뺐다. 보안 권고 WARN 은 남는다. gwcheck-temp 는 같은 날 목록 조회로 아직 ACTIVE.)
+9. 운영자 몫: Supabase 임시 Edge Function `gwcheck-temp` 삭제, 죽은 행 청소(적재 시간 UTC 17~19시를 피해 `VACUUM (ANALYZE) public.apt_master;`, `VACUUM (ANALYZE) public.molit_hist_peaks;`, `VACUUM (ANALYZE) public.molit_apt_index;`), 이메일 확인 설정, Vercel 과 GitHub 2단계 인증, DB 백업 주 1회(`plans/168-backup-runbook.md`), 원격 브랜치 정리 여부. (2026-11-27: 유출 비밀번호 검사는 Supabase 공식 문서에 "Leaked password protection is available on the Pro Plan and above." 라 유료 금지 원칙으로 뺐다. 보안 권고 WARN 은 남는다. gwcheck-temp 는 같은 날 운영자가 지웠고 목록 조회로 datagokr-proxy 하나만 남은 것을 확인했다. 죽은 행 청소는 SQL 화면에서 세 줄을 한 번에 실행해 "VACUUM cannot run inside a transaction block" 오류가 났다. 한 줄씩 따로 실행해야 한다.)
 10. 제안만 한 것(범위 밖): `drizzle-orm` 을 개발 의존성으로 옮기기.
 
 ## 7. 명령
