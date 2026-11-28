@@ -2205,6 +2205,10 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 .rsub-none{font-size:12px;color:var(--t3);padding:6px 2px}
 .rsub-pick{font-size:12px;font-weight:700;color:var(--acc);padding:4px 2px 0}
 @media (max-width:768px){.rsub-box{max-height:150px}.rsub-find{padding:10px 9px}}
+/* SKIP-LINK-1128 (plans/215 8번, 감사 3차 발견 8): 본문 바로가기. 평소에는 화면 밖에 두고 Tab 으로 닿으면 왼쪽 위에 보인다. */
+.skip-link{position:absolute;left:8px;top:-60px;z-index:100001;background:var(--acc-bg);color:var(--acc-ink);padding:8px 14px;border-radius:var(--radius-base);font-size:14px;font-weight:700;text-decoration:none}
+.skip-link:focus{top:8px;outline:3px solid var(--acc);outline-offset:2px}
+#appMain:focus,[id^="view-"][tabindex="-1"]:focus{outline:none}
 </style>
 <!-- Vercel Web Analytics — 30일 검증 모드 계측 (2026-05-02 ~ 2026-06-01) -->
 <!-- Day 30 후 GO/PIVOT/STOP 결정에 사용 — 그 전엔 funnel 데이터만 수집 -->
@@ -2215,13 +2219,26 @@ html[data-theme="dark"] .ibox.y{border-color:rgba(217,119,6,.40)}
 </head>
 <body>
 <script>
-/* 리디자인 — 다크모드 토글(라이트 기본·localStorage). 저장값 즉시 적용(FOUC 방지) */
-(function(){try{if(localStorage.getItem('mhl_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(_){}})();
+/* 리디자인 — 다크모드 토글(라이트 기본·localStorage). 저장값 즉시 적용(FOUC 방지). DARK-DEFAULT-1128 (plans/215 9번): 저장값이 없으면 시스템 다크 설정을 따르고 주소창 색도 맞춘다. */
+(function(){try{var t=localStorage.getItem('mhl_theme');if(t==='dark'||(!t&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.setAttribute('data-theme','dark');var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content','#0F131A');}}catch(_){}})();
+// SKIP-LINK-1128: 주소에 #appMain 을 남기지 않는다(첫 화면 코드는 주소에 해시가 있으면 소개 화면을 건너뛴다, _hasParams).
+//   지금 보이는 화면(view-…, 소개 화면 포함)으로 초점을 옮긴다. 소개 화면은 본문 틀(appMain) 밖에 있다.
+function _skipToMain(e){
+  try{
+    if(e)e.preventDefault();
+    var v=[].slice.call(document.querySelectorAll('[id^="view-"]')).filter(function(el){return getComputedStyle(el).display!=='none';})[0];
+    var t=v||document.getElementById('appMain');
+    if(!t.hasAttribute('tabindex'))t.setAttribute('tabindex','-1');
+    t.focus();
+  }catch(_){}
+  return false;
+}
 var _MHL_ICO={moon:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.985 12.486a9 9 0 1 1-9.473-9.472c.405-.022.617.46.402.803a6 6 0 0 0 8.268 8.268c.344-.215.825-.004.803.401"/></svg>',sun:'<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>'};function toggleTheme(){var dark=document.documentElement.getAttribute('data-theme')==='dark';if(dark){document.documentElement.removeAttribute('data-theme');}else{document.documentElement.setAttribute('data-theme','dark');}try{localStorage.setItem('mhl_theme',dark?'light':'dark');}catch(_){}var b=document.getElementById('themeToggle');if(b)b.innerHTML=dark?_MHL_ICO.moon:_MHL_ICO.sun;try{var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',dark?'#173A63':'#0F131A');}catch(_){}}
 document.addEventListener('DOMContentLoaded',function(){var b=document.getElementById('themeToggle');if(b)b.innerHTML=document.documentElement.getAttribute('data-theme')==='dark'?_MHL_ICO.sun:_MHL_ICO.moon;});
 </script>
 
 <!-- P0 Phase 2 R3-B (2026-04-25): 모바일 drawer 백그라운드 -->
+<a class="skip-link" href="#appMain" onclick="return _skipToMain(event)">본문으로 건너뛰기</a>
 <div class="drawer-bg" id="drawerBg" onclick="closeDrawer()" aria-hidden="true"></div>
 
 <header>
@@ -2368,7 +2385,7 @@ document.addEventListener('DOMContentLoaded',function(){var b=document.getElemen
   </div>
 </div>
 
-<div class="app">
+<div class="app" id="appMain" tabindex="-1">
 
 <!-- LEFT -->
 <div class="lp"><div class="lpsc">
@@ -2758,6 +2775,7 @@ html[data-theme="dark"] #_pannBtn{box-shadow:0 2px 12px rgba(0,0,0,.4)}
     </div>
     <button class="abtn acc" style="margin-top:0" onclick="dc(true)">계산하기</button>
     <div id="c_err" role="alert" style="display:none;margin-top:8px;font-size:13px;line-height:1.5;color:var(--red)"></div>
+    <div id="c_note" role="status" style="display:none;margin-top:8px;font-size:13px;line-height:1.5;color:var(--t2)"></div>
   </div>
   <div id="co" style="display:none;max-width:520px">
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
@@ -2932,6 +2950,7 @@ html[data-theme="dark"] #_pannBtn{box-shadow:0 2px 12px rgba(0,0,0,.4)}
     <button class="abtn acc" id="clBtn" onclick="genClause()" style="margin-top:4px">
       <div class="spin" id="clSp"></div><span id="clTx">특약 초안 생성</span>
     </button>
+    <div id="cl_err" role="alert" style="display:none;margin-top:8px;font-size:13px;line-height:1.5;color:var(--red)"></div>
     <div id="cl_hist"></div>
   </div>
   <div class="cv-result" id="cl_result" style="display:none">
@@ -5651,6 +5670,8 @@ async function _migrateBookmarksOnce(){
         aptKey: lb?.aptKey || (_isCanonKey(s._kapt) ? s._kapt : undefined),
         kaptCode: lb?.kaptCode || (/^[A-Z]\d{6,}$/.test(s._kapt) ? s._kapt : null),
         avgPrice: (lb?.avgPrice > 0) ? lb.avgPrice : (s.avgPrice || 0),
+        // BK-BASIS-1128 (plans/215 12번): 가격의 기준 문구는 이 기기에만 있다. 이 기기 가격을 쓸 때만 그 기준도 함께 옮긴다(서버 값을 쓰면 기준을 모르므로 비움).
+        priceBasis: (lb?.avgPrice > 0 && lb?.priceBasis) ? lb.priceBasis : undefined,
         lawdCd: lb?.lawdCd || '',
         lastChecked: lb?.lastChecked,
         lastCheckedCount: lb?.lastCheckedCount,
@@ -11056,6 +11077,9 @@ function toggleBookmark(){
       sigungu: p.sigungu||'',
       umdNm: p.umdNm||'',
       avgPrice: p.avgPrice||0,
+      // BK-BASIS-1128 (plans/215 12번, 감사 3차 발견 12): 같은 단지라도 목록에서 열면 "내 평형대 6개월 가중평균", 검색에서 열면 "○㎡ 최근 n건 평균"이라
+      //   값이 달랐는데 무엇의 평균인지 저장하지 않았다. 상세 가격 칸이 쓰는 기준 문구를 함께 저장해 관심 단지 목록과 팝오버에 보인다.
+      priceBasis: (p.avgPrice>0 && p._priceBasis) ? String(p._priceBasis) : undefined,
       lawdCd: p.lawdCd || p.txHistory?.[0]?.lawdCd || '',
       savedAt: Date.now(),
     });
@@ -11115,7 +11139,7 @@ function renderBookmarks(){
         <label onclick="event.stopPropagation()" title="비교 선택" style="display:flex;align-items:center;flex-shrink:0;cursor:pointer"><input type="checkbox" class="cmp-bk-input" data-i="${i}" ${cmpBkSel.has(i)?'checked':''} onclick="event.stopPropagation();toggleCmpBk(${i},this.checked)" style="width:14px;height:14px;cursor:pointer;accent-color:var(--acc);margin:0"></label>
         ${hasVisit?'<div class="bk-visit-dot" title="임장 기록 있음"></div>':''}
         <div><div class="bk-name">${_escHtml(_dispAptName(b.aptName, b.umdNm))}${b.newDealCount>0?`<span class="bk-new-badge" title="마지막 확인 이후 신규 실거래">새 거래 ${b.newDealCount}건</span>`:''}</div><div style="font-size:12px;color:var(--t3)">${_escHtml(_fmtSgg(b.area))}</div>${b.newDealCount>0&&Array.isArray(b.newDeals)&&b.newDeals.length?`<div style="font-size:12px;color:var(--acc);margin-top:1px" title="신규 실거래 요약 (최신 3건, 국토부 실거래가 기준)">${b.newDeals.map(d=>`${_escHtml(String(d.d||''))} ${Number(d.p)||0}억${Number(d.ar)>0?` ${Number(d.ar)}㎡`:''}`).join(' · ')}</div>`:''}</div>
-        <span class="bk-price">${priceNow?priceNow.toFixed(1)+'억':''}</span>
+        <span class="bk-price">${priceNow?priceNow.toFixed(2)+'억':''}${priceNow&&b.priceBasis?`<span style="display:block;max-width:150px;margin-left:auto;white-space:normal;word-break:keep-all;font-size:11px;font-weight:400;color:var(--t3);text-align:right;line-height:1.3">${_escHtml(b.priceBasis)}</span>`:''}</span><!-- BK-BASIS-1128: 소수 둘째 자리로 팝오버와 맞추고 기준 문구를 아래에 -->
         <button class="bk-del" onclick="delBookmark(event,${i})" aria-label="관심 단지 삭제">✕</button>
       </div>
       ${alertHtml}
@@ -11636,7 +11660,7 @@ function renderFieldNote(p){
     </div>
     <div style="display:flex;align-items:center;justify-content:space-between">
       <button class="fn-save" onclick='saveFieldNote(${nJs},${sidJs})'>저장</button>
-      ${hasNote?`<button onclick='clearFieldNote(${nJs})' style="background:none;border:none;font-size:12px;color:var(--t3);cursor:pointer;font-family:inherit;padding:6px">기록 삭제</button>`:''}
+      <span id="fn-del-${safeId}">${hasNote?_fnDelBtnHtml(nJs):''}</span>
     </div>
     <div class="ibox b" style="margin-top:12px;font-size:12px">${(window.MHL?.auth?.user)?'모든 기기에서 자동으로 동기화돼요':'로그인하지 않으면 이 기기에만 저장돼요. 로그인하면 모든 기기에서 자동으로 동기화돼요'}</div>`;
 }
@@ -11662,6 +11686,10 @@ function setFnRating(aptName,rating,safeId){
   }
 }
 
+// FN-DELBTN-1128 (plans/215 14번): "기록 삭제" 단추 모양을 한 곳에 둔다(칸을 그릴 때와 저장 직후가 같은 단추를 쓴다).
+function _fnDelBtnHtml(nJs){
+  return `<button onclick='clearFieldNote(${nJs})' style="background:none;border:none;font-size:12px;color:var(--t3);cursor:pointer;font-family:inherit;padding:6px">기록 삭제</button>`;
+}
 function saveFieldNote(aptName,safeId){
   const saved=getNoteForApt(aptName)||{};
   saved.memo=(document.getElementById(`fn-memo-${safeId}`)?.value||'').trim();
@@ -11669,6 +11697,13 @@ function saveFieldNote(aptName,safeId){
   saved.savedAt=Date.now();
   saveNoteForApt(aptName,saved);
   toast('임장 노트를 저장했어요');
+  // FN-DELBTN-1128 (plans/215 14번, 11-20 운영 확인 중 발견): 칸을 처음 그릴 때만 단추를 넣어서 처음 저장한 직후에는 "기록 삭제"가 없고
+  //   상세를 다시 열어야 보였다. 저장한 기록이 있으면 단추 자리만 채운다(입력 중인 메모와 날짜 칸은 건드리지 않는다).
+  try{
+    const _slot=document.getElementById(`fn-del-${safeId}`);
+    const _has=(saved.checks||[]).length>0||String(saved.memo||'').trim()||saved.visitDate;
+    if(_slot&&_has&&!_slot.innerHTML.trim())_slot.innerHTML=_fnDelBtnHtml(_escHtml(JSON.stringify(aptName||'')));
+  }catch(_){}
   renderBookmarks();
   // Phase 4 (2026-04-26): 로그인 사용자는 클라우드 동기화 (fire-and-forget)
   _syncFieldNote(aptName, saved);
@@ -12595,10 +12630,20 @@ function dc(fromBtn){
   const buy=parseFloat(document.getElementById('c_b')?.value)||0;
   const _cErr=document.getElementById('c_err');
   if(_cErr){_cErr.style.display='none';_cErr.textContent='';}
+  // ZERO-NOTE-1128 (plans/215 10번 A안, 감사 3차 발견 10): 금리나 기간에 0 을 넣으면 종전처럼 기본값(공시 평균 금리, 30년)으로 계산하되 그렇게 했다고 한 줄로 알린다.
+  //   빈칸은 금리 칸 아래 기존 안내("미입력 시 시중 평균 주담대 …% 적용")가 이미 알리므로 여기서는 0 을 직접 넣은 경우만 본다.
+  const _cNote=document.getElementById('c_note');
+  if(_cNote){_cNote.style.display='none';_cNote.textContent='';}
   if(!buy){document.getElementById('co').style.display='none';if(fromBtn===true)toast('매수가를 입력해 주세요');return;}
   const _num=id=>parseFloat(document.getElementById(id)?.value);
   const _prob=calcInputProblem({buy,inc:_num('c_i'),ratePct:_num('c_r'),yrs:_num('c_y'),ex:_num('c_e'),cash:_num('c_c'),cl:_num('c_cl'),jl:_num('c_jl')});
   if(_prob){document.getElementById('co').style.display='none';if(_cErr){_cErr.textContent=_prob;_cErr.style.display='block';}if(fromBtn===true)toast(_prob);return;}
+  if(_cNote){
+    const _notes=[];
+    if(_num('c_r')===0)_notes.push(`금리가 0이라 시중 평균 ${window._ecosMortgageRate||4}% 로 계산했어요`);
+    if(parseInt(document.getElementById('c_y')?.value)===0)_notes.push('기간이 0년이라 30년으로 계산했어요'); // 계산 줄과 같은 parseInt 기준(0.5년도 30년이 된다)
+    if(_notes.length){_cNote.textContent=_notes.join('. ');_cNote.style.display='block';}
+  }
   // ECOS-2026-07-13 (Sprint FFFFF): 미입력 기본금리 4% 고정 → ECOS 시중 주담대 가중평균(있으면) — placeholder(updateEcosHint)와 표시=계산 일치.
   const inc=parseFloat(document.getElementById('c_i')?.value)||0,rate=(parseFloat(document.getElementById('c_r')?.value)||window._ecosMortgageRate||4)/100,yrs=parseInt(document.getElementById('c_y')?.value)||30,ex=parseFloat(document.getElementById('c_e')?.value)||0,cash=parseFloat(document.getElementById('c_c')?.value)||0;
   // Phase 4 (2026-04-26): 신용대출/전세대출 잔액 → 추정 월원리금 환산해 ex 에 합산
@@ -13004,6 +13049,8 @@ function loadClauseHistory(id){
   setChip('cl-h',it.inputs.house);setChip('cl-f',it.inputs.isFirst);
   document.getElementById('cl_result_title').textContent=it.title;
   document.getElementById('cl_output').innerHTML=it.html;
+  // CLAUSE-ERR-1128 (반증 검토 지적 A): 입력 오류 줄이 떠 있는 채로 이력을 불러오면 오류와 초안이 함께 보였다. 불러올 때 지운다.
+  {const _e=document.getElementById('cl_err');if(_e){_e.style.display='none';_e.textContent='';}}
   document.getElementById('cl_result').style.display='block';
   document.getElementById('cl_result').scrollIntoView({behavior:'smooth',block:'start'});
   toast('이력을 불러왔어요');
@@ -13981,7 +14028,7 @@ function toggleBmPop(){
         const priceNow=b.avgPrice||0;
         return `<div style="padding:10px 14px;border-bottom:1px solid var(--bd);display:flex;justify-content:space-between;align-items:center;cursor:pointer;gap:8px" onclick="openBookmark(${i});toggleBmPop();">
           <div style="min-width:0;flex:1"><div style="font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${_escHtml(b.aptName || '')}${b.newDealCount>0?`<span class="bk-new-badge">${b.newDealCount}</span>`:''}</div><div style="font-size:12px;color:var(--t3)">${_escHtml(_fmtSgg(b.area))}</div></div>
-          ${priceNow?`<span style="font-size:12px;font-weight:700;color:var(--acc);flex-shrink:0">${priceNow.toFixed(2)}억</span>`:''}
+          ${priceNow?`<span style="font-size:12px;font-weight:700;color:var(--acc);flex-shrink:0;text-align:right">${priceNow.toFixed(2)}억${b.priceBasis?`<span style="display:block;text-align:right;max-width:150px;margin-left:auto;white-space:normal;word-break:keep-all;font-size:11px;font-weight:400;color:var(--t3);line-height:1.3">${_escHtml(b.priceBasis)}</span>`:''}</span>`:''}
         </div>`;
       }).join('');
     }
@@ -14158,7 +14205,13 @@ function buildRuleRisk(p){
 // ── 특약 생성 ─────────────────────────────────────────────
 async function genClause(){
   const apt=document.getElementById('cl_apt').value.trim();
-  if(!apt){toast('단지명을 입력해 주세요');return;}
+  // CLAUSE-ERR-1128 (반증 검토 지적 B): 단지명을 비운 경우도 입력 오류와 같이 이전 초안을 숨기고 오류 줄을 보인다(알림 문구는 그대로).
+  if(!apt){
+    const _r=document.getElementById('cl_result'),_e=document.getElementById('cl_err');
+    if(_r)_r.style.display='none';
+    if(_e){_e.textContent='단지명을 입력해 주세요';_e.style.display='block';}
+    toast('단지명을 입력해 주세요');return;
+  }
   const btn=document.getElementById('clBtn'),sp=document.getElementById('clSp'),tx=document.getElementById('clTx');
   const body={
     aptName:apt,
@@ -14171,7 +14224,16 @@ async function genClause(){
     issues:document.getElementById('cl_issues').value.trim(),
   };
   const _clProb=clauseInputProblem(body);
-  if(_clProb){toast(_clProb);return;}
+  // CLAUSE-ERR-1128 (plans/215 11번, 감사 3차 발견 11): 입력 오류 때 알림만 띄우고 끝나 앞서 만든 초안이 화면에 남아,
+  //   새 입력의 결과로 오해할 수 있었다. 오류면 이전 초안을 숨기고 단추 아래 오류 줄에 같은 문구를 보인다.
+  const _clErr=document.getElementById('cl_err');
+  if(_clErr){_clErr.style.display='none';_clErr.textContent='';}
+  if(_clProb){
+    const _clRes=document.getElementById('cl_result');
+    if(_clRes)_clRes.style.display='none';
+    if(_clErr){_clErr.textContent=_clProb;_clErr.style.display='block';}
+    toast(_clProb);return;
+  }
   // CLAUSE-TEMPLATE-DEFAULT-2026-08-19 (Sprint NNNNNNN-3, 사업기획 v2): 무료 경로에서 AI 호출 제거.
   //   기본은 검증된 규칙 엔진(buildRuleClause — 규제 판정·연식·특이사항 반영, 문구는 기존 검증분만).
   //   AI 맞춤 초안은 프로 개통 시 재배선(backend /api/clause 는 pro/admin 게이트로 막아둠).

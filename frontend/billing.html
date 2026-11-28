@@ -54,7 +54,7 @@
 <!-- Supabase 공개 설정 — index.html 과 동일한 meta 태그 (세션 storage 공유) -->
 <meta name="supabase-url" content="https://brxorvxdfrbxcavufspe.supabase.co">
 <meta name="supabase-publishable-key" content="sb_publishable_fqEpRTSJjPrwwhN8j4JqNA_zhTEzDDo">
-<script>(function(){try{if(localStorage.getItem('mhl_theme')==='dark')document.documentElement.setAttribute('data-theme','dark');}catch(_){}})();</script> <!-- 적대 검증: body 끝에 있으면 라이트 플래시(FOUC) -->
+<script>(function(){try{var t=localStorage.getItem('mhl_theme');if(t==='dark'||(!t&&window.matchMedia&&window.matchMedia('(prefers-color-scheme: dark)').matches)){document.documentElement.setAttribute('data-theme','dark');var m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content','#0F131A');}}catch(_){}})();</script> <!-- 적대 검증: body 끝에 있으면 라이트 플래시(FOUC) -->
 <!-- LEGAL-THEME-2026-08-25 (Sprint NNNNNNN-22): font-family 에 "Pretendard Variable" 을 적어두고도 정작
      폰트를 로드하지 않아, index.html 을 거치지 않고 이 페이지에 바로 들어오면 system-ui 로 폴백됐다. -->
 <link rel="preload" as="style" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable.css" integrity="sha384-5BlC3z5PiUASCwi5iNqbsXbtE1SBi8nn1Upz4JWJg2upbZKNNDXLRPKEcn79qArn" crossorigin="anonymous">

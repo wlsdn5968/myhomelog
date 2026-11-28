@@ -83,7 +83,8 @@ test('Plan 151 ①: 패널 마크업 — 가격 칸은 "60일 평균가", "최�
   assert.ok(aside[0].includes('매수·매도 추천이 아니에요'), '면책 문구');
   assert.ok(aside[0].includes(`onclick="sv('report')">내 조건으로 맞춤 보고서 받기</button>`));
   // 위치: .app 안, 사이드바(.lp) 뒤·지도 화면 앞 (flex 가로 배치)
-  const iApp = html.indexOf('<div class="app">'), iLp = html.indexOf('<div class="lp">'), iHp = html.indexOf('id="homePanel"'), iMap = html.indexOf('id="view-map"');
+  // SKIP-LINK-1128: 본문 틀에 id 와 tabindex 가 붙어 여는 태그 끝 '>' 없이 찾는다.
+  const iApp = html.indexOf('<div class="app"'), iLp = html.indexOf('<div class="lp">'), iHp = html.indexOf('id="homePanel"'), iMap = html.indexOf('id="view-map"');
   assert.ok(iApp < iLp && iLp < iHp && iHp < iMap, '패널 위치가 .lp 와 #view-map 사이가 아니다');
 });
 
